@@ -107,7 +107,7 @@
         </ul>
       </details>
 
-      <details>
+      <details open>
         <summary><span class="ver-badge">v2.360</span> J標第5批次 — 8組效果</summary>
         <ul>
           <li>波爾凱尼恩｜強力蒸汽：每次正面 +90 傷（依水能量數量擲幣）</li>
@@ -434,4 +434,28 @@
   .btn-cancel {
     background: #f0f0f0;
     border: 1px solid #ccc;
-    color:
+    color: #333;
+  }
+  .btn-submit {
+    background: #0066cc;
+    border: 1px solid #005bb5;
+    color: white;
+  }
+  .btn-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .success-msg {
+    color: #2c7a3c;
+    background: #e6f6e6;
+    padding: 1rem;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: 500;
+  }
+  .error-msg {
+    color: #c00;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+  }
+</style>
