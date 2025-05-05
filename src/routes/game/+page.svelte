@@ -815,6 +815,11 @@
       //     卡住玩家無法 END_TURN（因為 engine 端 END_TURN gate 要求對手 active 不為 null）。
       if (g.players[ai].active === null && g.players[ai].bench.length > 0) return true;
 
+      // Bug fix (#21): 席多藍恩打死喵喵ex後 — end 階段但對手 active 為空，
+      // 等對手先送出新寶可夢，AI 此時不行動（避免 END_TURN 被 engine 拒絕的無限迴圈）
+      const dIdx = (1 - ai) as 0 | 1;
+      if (g.turnPhase === 'end' && g.players[dIdx].active === null) return false;
+
       // 正常輪到自己
       return g.activePlayerIndex === ai;
     })();
@@ -859,6 +864,9 @@
       if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
       // v2.145：active===null 不論 turnPhase 都立即遞補（特性 KO 對手後也要立刻動）
       if (g.players[ai].active === null && g.players[ai].bench.length > 0) return true;
+      // Bug fix (#21): end 階段但對手 active 為空 → 等對手補場，AI 不排程（避免迴圈）
+      const dIdxE = (1 - ai) as 0 | 1;
+      if (g.turnPhase === 'end' && g.players[dIdxE].active === null) return false;
       return g.activePlayerIndex === ai;
     })();
 
@@ -1121,6 +1129,15 @@
             return !!card && card.supertype === 'Pokemon' && !card.evolvesFrom;
           });
         }
+        // Bug fix (#19 金屬怪): 牌庫頂 4 張中的基本【鋼】能量（不顯示整個牌庫）
+        if (f === 'BasicMetalEnergy:TOP4') {
+          const top4 = new Set<string>((pendingSelection.params?.top4Iids as string[]) ?? []);
+          return src.deck.filter(c => {
+            if (!top4.has(c.iid)) return false;
+            const card = pool.get(c.cardId);
+            return !!card && isBasicEnergyOfType(card, 'Metal');
+          });
+        }
         // v2.211 壯偉碩木 step 1：牌庫中 evolvesFrom 對得上場上某基底的 Stage1
         if (f === 'SturdyMightTree:Stage1') {
           const baseNames = (pendingSelection.params?.baseNames as string[] | undefined) ?? [];
@@ -1150,7 +1167,8 @@
             if (!top7.has(c.iid)) return false;
             const card = pool.get(c.cardId);
             if (!card) return false;
-            if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
+            // Bug fix (#20): 捕蟲組合卡面寫「【草】寶可夢卡」= 任何階段，移除 !evolvesFrom 限制
+            if (card.supertype === 'Pokemon' && card.pokemonType === 'Grass') return true;
             if (card.supertype === 'Energy' && card.subtype === 'Basic') {
               if (card.pokemonType === 'Grass') return true;
               if (card.name.includes('【草】')) return true;
@@ -1254,8 +1272,8 @@
             return card.supertype === 'Trainer';
           }
           if (f === 'GrassBasicOrGrassEnergy') {
-            // 捕蟲組合：基本【草】寶可夢 or 基本【草】能量
-            if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
+            // Bug fix (#20): 捕蟲組合「【草】寶可夢卡」= 任何階段（非限基本），移除 !evolvesFrom
+            if (card.supertype === 'Pokemon' && card.pokemonType === 'Grass') return true;
             if (card.supertype === 'Energy' && card.subtype === 'Basic') {
               if (card.pokemonType === 'Grass') return true;
               if (card.name.includes('【草】')) return true;
@@ -3612,7 +3630,8 @@
         {#if pendingSelection.type==='deck-search' && game && /:TOP\d+$/.test(pendingSelection.filter ?? '')}
           {@const srcP2 = game.players[pendingSelection.sourcePlayerIdx]}
           {@const peekIids = new Set<string>(
-            (pendingSelection.params?.top6Iids as string[] | undefined)
+            (pendingSelection.params?.top4Iids as string[] | undefined)
+            ?? (pendingSelection.params?.top6Iids as string[] | undefined)
             ?? (pendingSelection.params?.top7Iids as string[] | undefined)
             ?? (pendingSelection.params?.top8Iids as string[] | undefined)
             ?? []

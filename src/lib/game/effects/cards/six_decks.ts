@@ -1030,10 +1030,12 @@ regPre('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool, action) => {
   const copiedPre = ATTACK_PRE.get(copiedKey);
   if (copiedPre) {
     const sub = copiedPre(s, aIdx, pool, action);
+    // Bug fix (#18): 複製招式時，弱點/抗性必須以使用者（N的索羅亞克ex＝惡屬性）的屬性計算
+    // 不繼承被複製招式的 skipWeakRes — 否則若複製到「不計算弱點」招式會錯誤跳過弱點
     return {
       state: sub.state,
       damage: sub.damage,
-      skipWeakRes: sub.skipWeakRes,
+      skipWeakRes: false,
       skipDefEffects: sub.skipDefEffects,
     };
   }

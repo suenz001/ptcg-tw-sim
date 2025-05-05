@@ -199,7 +199,21 @@ regR('discard-to-hand', (st, idx, iids, _params, pool) => {
   }
   return updatePlayer(st, idx, (p) => {
     const picked = p.discard.filter(c => iids.includes(c.iid));
-    return { ...p, discard: p.discard.filter(c => !iids.includes(c.iid)), hand: [...p.hand, ...picked] };
+    // Bug fix (#17 擔架): 寶可夢從棄牌區回到手牌時，必須清除戰鬥狀態
+    // 否則上場後會保留被昏厥前的特殊狀態/傷害/附加能量等殘留資訊
+    const cleanedPicked = picked.map(c => {
+      const card = pool.get(c.cardId);
+      if (card?.supertype !== 'Pokemon') return c;
+      // 保留 iid / cardId；清除所有戰場狀態欄位
+      return {
+        iid: c.iid,
+        cardId: c.cardId,
+        damage: 0,
+        energyAttached: [],
+        // toolAttached, evolvedFromStack, status, secondaryStatus 等皆不帶回
+      } as typeof c;
+    });
+    return { ...p, discard: p.discard.filter(c => !iids.includes(c.iid)), hand: [...p.hand, ...cleanedPicked] };
   });
 });
 

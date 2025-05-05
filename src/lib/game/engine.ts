@@ -1454,7 +1454,12 @@ function handlePlaying(
     const card = pool.get(inst.cardId);
     if (!isBasicPokemonCard(card)) return state;
 
-    const placed = { ...inst, justPlaced: true, playedFromHand: true };
+    // Bug fix (#17 擔架): 從手牌放出時清除任何殘留的戰鬥狀態
+    // (正常流程不應有殘留，但若卡片曾透過擔架從棄牌取回，防禦性清除)
+    const placed = { ...inst, justPlaced: true, playedFromHand: true,
+      status: undefined, secondaryStatus: undefined,
+      damage: 0, energyAttached: [], toolAttached: undefined,
+      evolvedFromStack: undefined };
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
     attacker.bench = [...attacker.bench, placed];
     players[aIdx] = attacker;

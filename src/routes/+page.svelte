@@ -97,6 +97,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v2.361</span> Bug 修復批次 — 5項修正</summary>
+        <ul>
+          <li>Bug #17 擔架：棄牌區寶可夢取回後，清除 KO 前的狀態異常與傷害指示物</li>
+          <li>Bug #18 借用技能（耀閃挑戰/暗黑底牌）：弱點/抗性改依使用者屬性計算</li>
+          <li>Bug #19 金屬怪特性：查看牌庫頂 4 張，不再顯示整個牌庫</li>
+          <li>Bug #20 捕蟲組合：草系寶可夢（含進化）可正常選取</li>
+          <li>Bug #21 AI 卡住：席多藍恩打死對手後，AI 等待對手補場再繼續</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.360</span> J標第5批次 — 8組效果</summary>
         <ul>
           <li>波爾凱尼恩｜強力蒸汽：每次正面 +90 傷（依水能量數量擲幣）</li>
@@ -423,28 +434,4 @@
   .btn-cancel {
     background: #f0f0f0;
     border: 1px solid #ccc;
-    color: #333;
-  }
-  .btn-submit {
-    background: #0066cc;
-    border: 1px solid #005bb5;
-    color: white;
-  }
-  .btn-submit:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .success-msg {
-    color: #2c7a3c;
-    background: #e6f6e6;
-    padding: 1rem;
-    border-radius: 6px;
-    text-align: center;
-    font-weight: 500;
-  }
-  .error-msg {
-    color: #c00;
-    margin-bottom: 1rem;
-    font-size: 0.9rem;
-  }
-</style>
+    color:

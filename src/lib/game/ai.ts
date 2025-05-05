@@ -64,6 +64,10 @@ export function getAIAction(
 
   // 4. END 階段 → 結束回合
   if (state.turnPhase === 'end') {
+    // Bug fix (#21): 席多藍恩打死喵喵ex後 — 若對手 active 為空（尚未送出新寶可夢），
+    // 不能 END_TURN，否則 engine 會拒絕並讓 AI 陷入無限迴圈。
+    const dIdx = (1 - myIdx) as 0 | 1;
+    if (state.players[dIdx].active === null) return null;
     return { type: 'END_TURN' };
   }
 
