@@ -107,7 +107,7 @@
         </ul>
       </details>
 
-      <details open>
+      <details
         <summary><span class="ver-badge">v2.360</span> J標第5批次 — 8組效果</summary>
         <ul>
           <li>波爾凱尼恩｜強力蒸汽：每次正面 +90 傷（依水能量數量擲幣）</li>
