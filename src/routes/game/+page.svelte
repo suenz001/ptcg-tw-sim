@@ -2499,11 +2499,11 @@
         <input class="name-input" placeholder="玩家名稱" bind:value={p1Name} />
         <select bind:value={p1DeckId}>
           <option value="">— 選擇牌組 —</option>
-          {#if PRESET_DECKS.length > 0}
-            <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-          {/if}
           {#if decks.length > 0}
             <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+          {/if}
+          {#if PRESET_DECKS.length > 0}
+            <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
         </select>
       </div>
@@ -2522,11 +2522,11 @@
         {/if}
         <select bind:value={p2DeckId}>
           <option value="">— 選擇牌組 —</option>
-          {#if PRESET_DECKS.length > 0}
-            <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-          {/if}
           {#if decks.length > 0}
             <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+          {/if}
+          {#if PRESET_DECKS.length > 0}
+            <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
         </select>
       </div>
@@ -2652,11 +2652,11 @@
                         onchange={handleDeckChange}
                         disabled={s.ready}>
                         <option value="">— 選擇牌組 —</option>
-                        {#if PRESET_DECKS.length > 0}
-                          <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-                        {/if}
                         {#if decks.length > 0}
                           <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                        {/if}
+                        {#if PRESET_DECKS.length > 0}
+                          <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
                         {/if}
                       </select>
                       {#if hasValidDeck}
