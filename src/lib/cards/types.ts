@@ -46,3 +46,13 @@ export interface Card {
   sourceUrl: string;
   scrapedAt: string;
 }
+
+/** Entry in static/cards/index.json — summary of a single expansion set. */
+export interface SetSummary {
+  code: string;
+  name: string;
+  cardCount: number;
+  supertypeCounts: Partial<Record<Supertype, number>>;
+  coverImageUrl: string;
+  scrapedAt: string | null;
+}

@@ -57,8 +57,8 @@
   <section>
     <h2>卡牌資料庫</h2>
     <p>
-      <a href="{base}/cards">瀏覽 SV10 火箭隊的榮耀 →</a>
-      <span class="hint">（132 張卡，繁體中文）</span>
+      <a href="{base}/cards">瀏覽所有卡包 →</a>
+      <span class="hint">（SV / M 系列，繁體中文）</span>
     </p>
   </section>
 

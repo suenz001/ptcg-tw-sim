@@ -1,17 +1,27 @@
 <script lang="ts">
   import { base } from '$app/paths';
-  import type { Card } from '$lib/cards/types';
+  import type { Card, SetSummary } from '$lib/cards/types';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
 
-  let { data }: { data: { cards: Card[]; setCode: string } } = $props();
+  type LoadData =
+    | { mode: 'index'; sets: SetSummary[] }
+    | { mode: 'set'; setCode: string; cards: Card[] };
 
+  let { data }: { data: LoadData } = $props();
+
+  // ─── Set-index mode state ────────────────────────────────────────────
+  // (declared at top level so Svelte 5 $state works; only used when data.mode === 'index')
+
+  // ─── Single-set browser state ────────────────────────────────────────
   let query = $state('');
   let supertypeFilter = $state<'All' | 'Pokemon' | 'Trainer' | 'Energy'>('All');
   let selected = $state<Card | null>(null);
 
+  const setCards = $derived(data.mode === 'set' ? data.cards : []);
   const filtered = $derived.by(() => {
+    if (data.mode !== 'set') return [];
     const q = query.trim().toLowerCase();
-    return data.cards.filter((c) => {
+    return setCards.filter((c) => {
       if (supertypeFilter !== 'All' && c.supertype !== supertypeFilter) return false;
       if (!q) return true;
       return (
@@ -29,146 +39,173 @@
 </script>
 
 <svelte:head>
-  <title>卡牌瀏覽 · {data.setCode} · PTCG 對戰模擬器</title>
+  <title>
+    {data.mode === 'set' ? `${data.setCode} 卡牌瀏覽` : '卡牌資料庫'} · PTCG 對戰模擬器
+  </title>
 </svelte:head>
 
-<header>
-  <a class="back" href="{base}/">← 首頁</a>
-  <h1>卡牌瀏覽 — {data.setCode}</h1>
-  <p class="meta">共 {data.cards.length} 張卡 · 顯示 {filtered.length} 張</p>
-</header>
+{#if data.mode === 'index'}
+  <!-- ═══════════════════════ Set picker ═══════════════════════ -->
+  <header>
+    <a class="back" href="{base}/">← 首頁</a>
+    <h1>卡牌資料庫</h1>
+    <p class="meta">
+      {data.sets.length} 個卡包 · 共 {data.sets.reduce((n, s) => n + s.cardCount, 0)} 張卡
+    </p>
+  </header>
 
-<div class="controls">
-  <input type="search" bind:value={query} placeholder="搜尋卡名、招式、特性、卡號..." aria-label="搜尋" />
-  <div class="filters" role="tablist">
-    {#each ['All', 'Pokemon', 'Trainer', 'Energy'] as st (st)}
-      <button
-        class="filter"
-        class:active={supertypeFilter === st}
-        onclick={() => (supertypeFilter = st as typeof supertypeFilter)}
-      >
-        {st === 'All' ? '全部' : st === 'Pokemon' ? '寶可夢' : st === 'Trainer' ? '訓練家' : '能量'}
+  <div class="setGrid">
+    {#each data.sets as set (set.code)}
+      <a class="setTile" href="{base}/cards?set={set.code}">
+        <img src={set.coverImageUrl} alt="" loading="lazy" />
+        <div class="setInfo">
+          <div class="setCode">{set.code}</div>
+          <div class="setName">{set.name}</div>
+          <div class="setCount">{set.cardCount} 張</div>
+        </div>
+      </a>
+    {/each}
+  </div>
+{:else}
+  <!-- ═══════════════════════ Card grid ═══════════════════════ -->
+  <header>
+    <a class="back" href="{base}/cards">← 卡包列表</a>
+    <h1>{data.setCode}</h1>
+    <p class="meta">共 {setCards.length} 張卡 · 顯示 {filtered.length} 張</p>
+  </header>
+
+  <div class="controls">
+    <input type="search" bind:value={query} placeholder="搜尋卡名、招式、特性、卡號..." aria-label="搜尋" />
+    <div class="filters" role="tablist">
+      {#each ['All', 'Pokemon', 'Trainer', 'Energy'] as st (st)}
+        <button
+          class="filter"
+          class:active={supertypeFilter === st}
+          onclick={() => (supertypeFilter = st as typeof supertypeFilter)}
+        >
+          {st === 'All' ? '全部' : st === 'Pokemon' ? '寶可夢' : st === 'Trainer' ? '訓練家' : '能量'}
+        </button>
+      {/each}
+    </div>
+  </div>
+
+  <div class="grid">
+    {#each filtered as card (card.id)}
+      <button class="cardBtn" onclick={() => (selected = card)} aria-label={card.name}>
+        <img src={card.imageUrl} alt={card.name} loading="lazy" />
+        <span class="cardLabel">
+          <span class="num">{card.collectorNumber}</span>
+          <span class="name">{card.name}</span>
+        </span>
       </button>
     {/each}
   </div>
-</div>
 
-<div class="grid">
-  {#each filtered as card (card.id)}
-    <button class="cardBtn" onclick={() => (selected = card)} aria-label={card.name}>
-      <img src={card.imageUrl} alt={card.name} loading="lazy" />
-      <span class="cardLabel">
-        <span class="num">{card.collectorNumber}</span>
-        <span class="name">{card.name}</span>
-      </span>
-    </button>
-  {/each}
-</div>
-
-{#if selected}
-  <div class="modal" role="dialog" aria-modal="true" onclick={closeModal}>
-    <div class="modalInner" onclick={(e) => e.stopPropagation()} role="document">
-      <button class="close" onclick={closeModal} aria-label="關閉">×</button>
-      <div class="detailGrid">
-        <img class="detailImg" src={selected.imageUrl} alt={selected.name} />
-        <div class="detailInfo">
-          <h2>{selected.name}</h2>
-          <p class="tag">
-            {selected.supertype} / {selected.subtype}
-            {#if selected.hp}· HP {selected.hp}{/if}
-            {#if selected.pokemonType}
-              · <span class="energy" style:background={ENERGY_COLOR[selected.pokemonType]}>
-                {ENERGY_LABEL[selected.pokemonType]}
-              </span>
+  {#if selected}
+    <div class="modal" role="dialog" aria-modal="true" onclick={closeModal}>
+      <div class="modalInner" onclick={(e) => e.stopPropagation()} role="document">
+        <button class="close" onclick={closeModal} aria-label="關閉">×</button>
+        <div class="detailGrid">
+          <img class="detailImg" src={selected.imageUrl} alt={selected.name} />
+          <div class="detailInfo">
+            <h2>{selected.name}</h2>
+            <p class="tag">
+              {selected.supertype} / {selected.subtype}
+              {#if selected.hp}· HP {selected.hp}{/if}
+              {#if selected.pokemonType}
+                · <span class="energy" style:background={ENERGY_COLOR[selected.pokemonType]}>
+                  {ENERGY_LABEL[selected.pokemonType]}
+                </span>
+              {/if}
+            </p>
+            {#if selected.evolvesFrom}
+              <p class="evo">從「{selected.evolvesFrom}」進化</p>
             {/if}
-          </p>
-          {#if selected.evolvesFrom}
-            <p class="evo">從「{selected.evolvesFrom}」進化</p>
-          {/if}
 
-          {#if selected.abilities?.length}
-            <section>
-              <h3>特性</h3>
-              {#each selected.abilities as ab}
-                <div class="skill">
-                  <div class="skillHead">
-                    <span class="abilityLabel">[{ab.label}]</span>
-                    <span class="skillName">{ab.name}</span>
+            {#if selected.abilities?.length}
+              <section>
+                <h3>特性</h3>
+                {#each selected.abilities as ab}
+                  <div class="skill">
+                    <div class="skillHead">
+                      <span class="abilityLabel">[{ab.label}]</span>
+                      <span class="skillName">{ab.name}</span>
+                    </div>
+                    <p class="skillEffect">{ab.effect}</p>
                   </div>
-                  <p class="skillEffect">{ab.effect}</p>
-                </div>
-              {/each}
-            </section>
-          {/if}
+                {/each}
+              </section>
+            {/if}
 
-          {#if selected.attacks?.length}
-            <section>
-              <h3>招式</h3>
-              {#each selected.attacks as atk}
-                <div class="skill">
-                  <div class="skillHead">
-                    <span class="cost">
-                      {#each atk.cost as e}<span
-                          class="energyDot"
-                          style:background={ENERGY_COLOR[e]}
-                          title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
+            {#if selected.attacks?.length}
+              <section>
+                <h3>招式</h3>
+                {#each selected.attacks as atk}
+                  <div class="skill">
+                    <div class="skillHead">
+                      <span class="cost">
+                        {#each atk.cost as e}<span
+                            class="energyDot"
+                            style:background={ENERGY_COLOR[e]}
+                            title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                      </span>
+                      <span class="skillName">{atk.name}</span>
+                      {#if atk.damage}<span class="damage">{atk.damage}</span>{/if}
+                    </div>
+                    {#if atk.effect}<p class="skillEffect">{atk.effect}</p>{/if}
+                  </div>
+                {/each}
+              </section>
+            {/if}
+
+            {#if selected.rulesText}
+              <section>
+                <h3>效果</h3>
+                <p class="rules">{selected.rulesText}</p>
+              </section>
+            {/if}
+
+            {#if selected.weakness || selected.resistance || selected.retreatCost}
+              <section class="stats">
+                {#if selected.weakness}
+                  <div>
+                    <strong>弱點</strong>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.weakness.type]}>
+                      {ENERGY_LABEL[selected.weakness.type]}
                     </span>
-                    <span class="skillName">{atk.name}</span>
-                    {#if atk.damage}<span class="damage">{atk.damage}</span>{/if}
+                    {selected.weakness.value}
                   </div>
-                  {#if atk.effect}<p class="skillEffect">{atk.effect}</p>{/if}
-                </div>
-              {/each}
-            </section>
-          {/if}
+                {/if}
+                {#if selected.resistance}
+                  <div>
+                    <strong>抵抗力</strong>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.resistance.type]}>
+                      {ENERGY_LABEL[selected.resistance.type]}
+                    </span>
+                    {selected.resistance.value}
+                  </div>
+                {/if}
+                {#if selected.retreatCost}
+                  <div>
+                    <strong>撤退</strong>
+                    {#each selected.retreatCost as e}<span
+                        class="energyDot small"
+                        style:background={ENERGY_COLOR[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                  </div>
+                {/if}
+              </section>
+            {/if}
 
-          {#if selected.rulesText}
-            <section>
-              <h3>效果</h3>
-              <p class="rules">{selected.rulesText}</p>
-            </section>
-          {/if}
-
-          {#if selected.weakness || selected.resistance || selected.retreatCost}
-            <section class="stats">
-              {#if selected.weakness}
-                <div>
-                  <strong>弱點</strong>
-                  <span class="energy" style:background={ENERGY_COLOR[selected.weakness.type]}>
-                    {ENERGY_LABEL[selected.weakness.type]}
-                  </span>
-                  {selected.weakness.value}
-                </div>
-              {/if}
-              {#if selected.resistance}
-                <div>
-                  <strong>抵抗力</strong>
-                  <span class="energy" style:background={ENERGY_COLOR[selected.resistance.type]}>
-                    {ENERGY_LABEL[selected.resistance.type]}
-                  </span>
-                  {selected.resistance.value}
-                </div>
-              {/if}
-              {#if selected.retreatCost}
-                <div>
-                  <strong>撤退</strong>
-                  {#each selected.retreatCost as e}<span
-                      class="energyDot small"
-                      style:background={ENERGY_COLOR[e]}>{ENERGY_LABEL[e]}</span>{/each}
-                </div>
-              {/if}
-            </section>
-          {/if}
-
-          <p class="foot">
-            {selected.setCode} · {selected.collectorNumber}
-            {#if selected.regulationMark}· {selected.regulationMark}{/if}
-            {#if selected.illustrator}· 繪師 {selected.illustrator}{/if}
-          </p>
+            <p class="foot">
+              {selected.setCode} · {selected.collectorNumber}
+              {#if selected.regulationMark}· {selected.regulationMark}{/if}
+              {#if selected.illustrator}· 繪師 {selected.illustrator}{/if}
+            </p>
+          </div>
         </div>
       </div>
     </div>
-  </div>
+  {/if}
 {/if}
 
 <style>
@@ -198,6 +235,61 @@
     font-size: 0.9rem;
   }
 
+  /* ── Set-index grid ── */
+  .setGrid {
+    max-width: 1200px;
+    margin: 1.5rem auto 3rem;
+    padding: 0 1rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+    font-family: system-ui, 'Microsoft JhengHei', sans-serif;
+  }
+  .setTile {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.08s, box-shadow 0.08s;
+  }
+  .setTile:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  .setTile img {
+    width: 70px;
+    aspect-ratio: 0.71;
+    object-fit: cover;
+    background: #eee;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .setInfo {
+    min-width: 0;
+  }
+  .setCode {
+    font-size: 0.75rem;
+    color: #888;
+    font-variant-numeric: tabular-nums;
+  }
+  .setName {
+    font-weight: 600;
+    margin: 0.1rem 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .setCount {
+    font-size: 0.8rem;
+    color: #666;
+  }
+
+  /* ── Single-set browser ── */
   .controls {
     max-width: 1200px;
     margin: 1rem auto;

@@ -1,0 +1,84 @@
+[
+  {
+    "code": "SV2a",
+    "name": "閃之怪奇",
+    "cardCount": 363,
+    "supertypeCounts": {
+      "Pokemon": 335,
+      "Trainer": 27,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008124.png",
+    "scrapedAt": "2026-04-16T07:34:03.202Z"
+  },
+  {
+    "code": "SV3",
+    "name": "烈空凱VSTAR UNIVERSE",
+    "cardCount": 141,
+    "supertypeCounts": {
+      "Pokemon": 126,
+      "Trainer": 14,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008484.png",
+    "scrapedAt": "2026-04-16T07:38:49.977Z"
+  },
+  {
+    "code": "SV3a",
+    "name": "黑色閃焰的支配者",
+    "cardCount": 92,
+    "supertypeCounts": {
+      "Pokemon": 77,
+      "Trainer": 13,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008788.png",
+    "scrapedAt": "2026-04-16T07:40:38.726Z"
+  },
+  {
+    "code": "SV4a",
+    "name": "夢幻",
+    "cardCount": 20,
+    "supertypeCounts": {
+      "Pokemon": 20
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009029.png",
+    "scrapedAt": "2026-04-16T07:44:34.605Z"
+  },
+  {
+    "code": "SV4K",
+    "name": "基鬧夫ex",
+    "cardCount": 95,
+    "supertypeCounts": {
+      "Pokemon": 84,
+      "Trainer": 10,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008885.png",
+    "scrapedAt": "2026-04-16T07:43:06.990Z"
+  },
+  {
+    "code": "SV4M",
+    "name": "邦基拉斯ex",
+    "cardCount": 95,
+    "supertypeCounts": {
+      "Pokemon": 83,
+      "Trainer": 11,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008951.png",
+    "scrapedAt": "2026-04-16T07:41:51.409Z"
+  },
+  {
+    "code": "SV10",
+    "name": "火箭隊的榮耀",
+    "cardCount": 132,
+    "supertypeCounts": {
+      "Pokemon": 112,
+      "Trainer": 19,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012751.png",
+    "scrapedAt": "2026-04-16T07:11:55.699Z"
+  }
+]
