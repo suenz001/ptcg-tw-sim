@@ -1,5 +1,41 @@
 [
   {
+    "code": "SV1a",
+    "name": "三位一體的大師",
+    "cardCount": 103,
+    "supertypeCounts": {
+      "Pokemon": 87,
+      "Trainer": 14,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00007868.png",
+    "scrapedAt": "2026-04-16T08:46:07.050Z"
+  },
+  {
+    "code": "SV1S",
+    "name": "朱",
+    "cardCount": 108,
+    "supertypeCounts": {
+      "Pokemon": 93,
+      "Trainer": 14,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00007571.png",
+    "scrapedAt": "2026-04-16T08:43:15.899Z"
+  },
+  {
+    "code": "SV1V",
+    "name": "紫",
+    "cardCount": 108,
+    "supertypeCounts": {
+      "Pokemon": 91,
+      "Trainer": 16,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00007649.png",
+    "scrapedAt": "2026-04-16T08:44:41.004Z"
+  },
+  {
     "code": "SV2a",
     "name": "閃之怪奇",
     "cardCount": 363,
@@ -10,6 +46,30 @@
     },
     "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008124.png",
     "scrapedAt": "2026-04-16T07:34:03.202Z"
+  },
+  {
+    "code": "SV2D",
+    "name": "未來的一閃",
+    "cardCount": 99,
+    "supertypeCounts": {
+      "Pokemon": 88,
+      "Trainer": 9,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008012.png",
+    "scrapedAt": "2026-04-16T08:48:52.177Z"
+  },
+  {
+    "code": "SV2P",
+    "name": "古代的咆哮",
+    "cardCount": 99,
+    "supertypeCounts": {
+      "Pokemon": 87,
+      "Trainer": 10,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00007941.png",
+    "scrapedAt": "2026-04-16T08:47:28.225Z"
   },
   {
     "code": "SV3",
@@ -38,9 +98,11 @@
   {
     "code": "SV4a",
     "name": "夢幻",
-    "cardCount": 20,
+    "cardCount": 360,
     "supertypeCounts": {
-      "Pokemon": 20
+      "Pokemon": 322,
+      "Trainer": 35,
+      "Energy": 3
     },
     "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009029.png",
     "scrapedAt": "2026-04-16T07:44:34.605Z"
@@ -70,6 +132,134 @@
     "scrapedAt": "2026-04-16T07:41:51.409Z"
   },
   {
+    "code": "SV5a",
+    "name": "賽場激鬥",
+    "cardCount": 96,
+    "supertypeCounts": {
+      "Pokemon": 77,
+      "Trainer": 17,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010248.png",
+    "scrapedAt": "2026-04-16T07:51:42.989Z"
+  },
+  {
+    "code": "SV5K",
+    "name": "雷公",
+    "cardCount": 100,
+    "supertypeCounts": {
+      "Pokemon": 87,
+      "Trainer": 12,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009758.png",
+    "scrapedAt": "2026-04-16T07:50:24.999Z"
+  },
+  {
+    "code": "SV5M",
+    "name": "水君",
+    "cardCount": 100,
+    "supertypeCounts": {
+      "Pokemon": 87,
+      "Trainer": 12,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009842.png",
+    "scrapedAt": "2026-04-16T07:49:06.962Z"
+  },
+  {
+    "code": "SV6",
+    "name": "變幻的假面",
+    "cardCount": 133,
+    "supertypeCounts": {
+      "Pokemon": 115,
+      "Trainer": 17,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010415.png",
+    "scrapedAt": "2026-04-16T07:53:00.895Z"
+  },
+  {
+    "code": "SV6a",
+    "name": "夜晚的鐵拳",
+    "cardCount": 94,
+    "supertypeCounts": {
+      "Pokemon": 79,
+      "Trainer": 15
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010583.png",
+    "scrapedAt": "2026-04-16T07:54:43.541Z"
+  },
+  {
+    "code": "SV7",
+    "name": "樂園的龍咆哮",
+    "cardCount": 135,
+    "supertypeCounts": {
+      "Pokemon": 119,
+      "Trainer": 16
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010896.png",
+    "scrapedAt": "2026-04-16T07:56:01.174Z"
+  },
+  {
+    "code": "SV7a",
+    "name": "百合根",
+    "cardCount": 94,
+    "supertypeCounts": {
+      "Pokemon": 76,
+      "Trainer": 16,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011031.png",
+    "scrapedAt": "2026-04-16T07:57:46.945Z"
+  },
+  {
+    "code": "SV8",
+    "name": "超電磁閃光",
+    "cardCount": 138,
+    "supertypeCounts": {
+      "Pokemon": 122,
+      "Trainer": 16
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011181.png",
+    "scrapedAt": "2026-04-16T07:59:02.734Z"
+  },
+  {
+    "code": "SV8a",
+    "name": "熱風的競技場",
+    "cardCount": 381,
+    "supertypeCounts": {
+      "Pokemon": 289,
+      "Trainer": 87,
+      "Energy": 5
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011526.png",
+    "scrapedAt": "2026-04-16T08:01:07.033Z"
+  },
+  {
+    "code": "SV9",
+    "name": "戰鬥伙伴",
+    "cardCount": 132,
+    "supertypeCounts": {
+      "Pokemon": 117,
+      "Trainer": 13,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012463.png",
+    "scrapedAt": "2026-04-16T08:05:56.176Z"
+  },
+  {
+    "code": "SV9a",
+    "name": "黑暗的王者",
+    "cardCount": 92,
+    "supertypeCounts": {
+      "Pokemon": 80,
+      "Trainer": 12
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012659.png",
+    "scrapedAt": "2026-04-16T08:07:38.291Z"
+  },
+  {
     "code": "SV10",
     "name": "火箭隊的榮耀",
     "cardCount": 132,
@@ -80,5 +270,146 @@
     },
     "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012751.png",
     "scrapedAt": "2026-04-16T07:11:55.699Z"
+  },
+  {
+    "code": "SV11B",
+    "name": "黑炎的指導者",
+    "cardCount": 254,
+    "supertypeCounts": {
+      "Pokemon": 237,
+      "Trainer": 15,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012943.png",
+    "scrapedAt": "2026-04-16T08:12:18.580Z"
+  },
+  {
+    "code": "SV11W",
+    "name": "白熱的仕女",
+    "cardCount": 254,
+    "supertypeCounts": {
+      "Pokemon": 237,
+      "Trainer": 15,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013029.png",
+    "scrapedAt": "2026-04-16T08:08:59.091Z"
+  },
+  {
+    "code": "M1L",
+    "name": "Mega 旋律",
+    "cardCount": 92,
+    "supertypeCounts": {
+      "Pokemon": 78,
+      "Trainer": 14
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013958.png",
+    "scrapedAt": "2026-04-16T08:16:43.852Z"
+  },
+  {
+    "code": "M1S",
+    "name": "Mega 進化",
+    "cardCount": 92,
+    "supertypeCounts": {
+      "Pokemon": 77,
+      "Trainer": 15
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014021.png",
+    "scrapedAt": "2026-04-16T08:15:30.428Z"
+  },
+  {
+    "code": "M2",
+    "name": "Mega 之星",
+    "cardCount": 80,
+    "supertypeCounts": {
+      "Pokemon": 73,
+      "Trainer": 7
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014319.png",
+    "scrapedAt": "2026-04-16T08:17:56.312Z"
+  },
+  {
+    "code": "M2a",
+    "name": "Mega 彩焰",
+    "cardCount": 486,
+    "supertypeCounts": {
+      "Pokemon": 434,
+      "Trainer": 49,
+      "Energy": 3
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014661.png",
+    "scrapedAt": "2026-04-16T08:19:18.390Z"
+  },
+  {
+    "code": "M3",
+    "name": "Mega 天際",
+    "cardCount": 117,
+    "supertypeCounts": {
+      "Pokemon": 92,
+      "Trainer": 22,
+      "Energy": 3
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017978.png",
+    "scrapedAt": "2026-04-16T08:25:27.486Z"
+  },
+  {
+    "code": "M4",
+    "name": "Mega 火力",
+    "cardCount": 83,
+    "supertypeCounts": {
+      "Pokemon": 71,
+      "Trainer": 9,
+      "Energy": 3
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018421.png",
+    "scrapedAt": "2026-04-16T08:26:58.977Z"
+  },
+  {
+    "code": "MBD",
+    "name": "Mega 增強包 D",
+    "cardCount": 24,
+    "supertypeCounts": {
+      "Pokemon": 12,
+      "Trainer": 11,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014105.png",
+    "scrapedAt": "2026-04-16T08:28:01.888Z"
+  },
+  {
+    "code": "MBG",
+    "name": "Mega 增強包 G",
+    "cardCount": 24,
+    "supertypeCounts": {
+      "Pokemon": 13,
+      "Trainer": 10,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014129.png",
+    "scrapedAt": "2026-04-16T08:28:21.248Z"
+  },
+  {
+    "code": "MC",
+    "name": "Mega Classic",
+    "cardCount": 902,
+    "supertypeCounts": {
+      "Pokemon": 774,
+      "Trainer": 105,
+      "Energy": 23
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00016472.png",
+    "scrapedAt": "2026-04-16T08:29:24.027Z"
+  },
+  {
+    "code": "MJ",
+    "name": "Mega Jumbo",
+    "cardCount": 24,
+    "supertypeCounts": {
+      "Pokemon": 16,
+      "Trainer": 6,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018360.png",
+    "scrapedAt": "2026-04-16T08:40:39.689Z"
   }
 ]

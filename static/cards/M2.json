@@ -1,0 +1,2974 @@
+[
+  {
+    "id": "14319",
+    "name": "走路草",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "001/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014319.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14319/",
+    "scrapedAt": "2026-04-16T08:17:56.312Z",
+    "hp": 50,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "種子炸彈",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 43,
+    "species": "雜草寶可夢",
+    "illustrator": "MINAMINAMI Take"
+  },
+  {
+    "id": "14320",
+    "name": "臭臭花",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "002/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014320.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14320/",
+    "scrapedAt": "2026-04-16T08:17:57.076Z",
+    "hp": 70,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "灑口水",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "20",
+        "effect": "雙方的所有備戰寶可夢也各受到20點傷害。[在備戰區不計算弱點・抵抗力。]"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 44,
+    "species": "雜草寶可夢",
+    "evolvesFrom": "走路草",
+    "illustrator": "Yoriyuki Ikegami"
+  },
+  {
+    "id": "14321",
+    "name": "霸王花",
+    "supertype": "Pokemon",
+    "subtype": "Stage2",
+    "setCode": "",
+    "collectorNumber": "003/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014321.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14321/",
+    "scrapedAt": "2026-04-16T08:17:57.854Z",
+    "hp": 150,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "花粉炸彈",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "30",
+        "effect": "將對手的戰鬥寶可夢【中毒】與【睡眠】。"
+      },
+      {
+        "name": "活潑鮮花",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "60+",
+        "effect": "在這個回合，若這隻寶可夢恢復了HP，則增加120點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 45,
+    "species": "花寶可夢",
+    "evolvesFrom": "臭臭花",
+    "illustrator": "Shibuzoh."
+  },
+  {
+    "id": "14322",
+    "name": "超級赫拉克羅斯ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "",
+    "collectorNumber": "004/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014322.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14322/",
+    "scrapedAt": "2026-04-16T08:17:58.563Z",
+    "hp": 280,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "重裝角擊",
+        "cost": [
+          "Grass",
+          "Grass"
+        ],
+        "damage": "100+",
+        "effect": "增加與在上個對手的回合這隻寶可夢受到的招式的傷害相同數值的傷害。"
+      },
+      {
+        "name": "推山",
+        "cost": [
+          "Grass",
+          "Grass",
+          "Grass"
+        ],
+        "damage": "170",
+        "effect": "將對手的牌庫上方2張卡丟棄。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "14323",
+    "name": "蓮葉童子",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "005/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014323.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14323/",
+    "scrapedAt": "2026-04-16T08:17:59.259Z",
+    "hp": 70,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "頭錘",
+        "cost": [
+          "Grass",
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 270,
+    "species": "浮萍寶可夢",
+    "illustrator": "Wintr Wandr"
+  },
+  {
+    "id": "14324",
+    "name": "蓮帽小童",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "006/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014324.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14324/",
+    "scrapedAt": "2026-04-16T08:18:00.016Z",
+    "hp": 90,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "超級吸取",
+        "cost": [
+          "Grass",
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect": "將這隻寶可夢恢復「30」HP。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 271,
+    "species": "爽朗寶可夢",
+    "evolvesFrom": "蓮葉童子",
+    "illustrator": "Shigenori Negishi"
+  },
+  {
+    "id": "14325",
+    "name": "樂天河童",
+    "supertype": "Pokemon",
+    "subtype": "Stage2",
+    "setCode": "",
+    "collectorNumber": "007/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014325.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14325/",
+    "scrapedAt": "2026-04-16T08:18:00.717Z",
+    "hp": 160,
+    "pokemonType": "Grass",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "激動治癒",
+        "effect": "若自己的場上有【草】屬性的「超級進化寶可夢【ex】」，則在自己的回合時可使用1次。將自己的1隻寶可夢恢復「60」HP。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "撞倒",
+        "cost": [
+          "Grass",
+          "Colorless"
+        ],
+        "damage": "120",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 272,
+    "species": "樂天寶可夢",
+    "evolvesFrom": "蓮帽小童",
+    "illustrator": "Anesaki Dynamic"
+  },
+  {
+    "id": "14326",
+    "name": "蓋諾賽克特",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "008/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014326.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14326/",
+    "scrapedAt": "2026-04-16T08:18:01.421Z",
+    "hp": 120,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "昆蟲加農炮",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "",
+        "effect": "對手的1隻寶可夢，受到這隻寶可夢身上附加的【草】能量的數量×20點傷害。[在備戰區不計算弱點・抵抗力。]"
+      },
+      {
+        "name": "高速攻擊",
+        "cost": [
+          "Grass",
+          "Grass",
+          "Colorless"
+        ],
+        "damage": "110",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 649,
+    "species": "古生代寶可夢",
+    "illustrator": "Mitsuhiro Arita"
+  },
+  {
+    "id": "14327",
+    "name": "豆蟋蟀",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "009/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014327.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14327/",
+    "scrapedAt": "2026-04-16T08:18:02.170Z",
+    "hp": 50,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "躍動",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "10×",
+        "effect": "擲3次硬幣，造成正面出現的次數×10點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 919,
+    "species": "蝗蟲寶可夢",
+    "illustrator": "Yuka Morii"
+  },
+  {
+    "id": "14328",
+    "name": "烈腿蝗",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "010/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014328.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14328/",
+    "scrapedAt": "2026-04-16T08:18:03.028Z",
+    "hp": 120,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "踢倒",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "30",
+        "effect": ""
+      },
+      {
+        "name": "跳躍射擊",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "150",
+        "effect": "將這隻寶可夢與附加的卡全部放回牌庫並重洗。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 920,
+    "species": "蝗蟲寶可夢",
+    "evolvesFrom": "豆蟋蟀",
+    "illustrator": "Taiga Kasai"
+  },
+  {
+    "id": "14329",
+    "name": "小火龍",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "011/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014329.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14329/",
+    "scrapedAt": "2026-04-16T08:18:03.746Z",
+    "hp": 80,
+    "pokemonType": "Fire",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "一身輕",
+        "effect": "若這隻寶可夢身上沒有附加能量卡，則這隻寶可夢【撤退】所需的能量全部消除。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "火種",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 4,
+    "species": "蜥蜴寶可夢",
+    "illustrator": "HYOGONOSUKE"
+  },
+  {
+    "id": "14330",
+    "name": "火恐龍",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "012/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014330.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14330/",
+    "scrapedAt": "2026-04-16T08:18:04.519Z",
+    "hp": 110,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "吐火",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "40",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 5,
+    "species": "火焰寶可夢",
+    "evolvesFrom": "小火龍",
+    "illustrator": "Uninori"
+  },
+  {
+    "id": "14331",
+    "name": "超級噴火龍Xex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "",
+    "collectorNumber": "013/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014331.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14331/",
+    "scrapedAt": "2026-04-16T08:18:05.360Z",
+    "hp": 360,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "烈獄狂火X",
+        "cost": [
+          "Fire",
+          "Fire"
+        ],
+        "damage": "90×",
+        "effect": "將自己的場上寶可夢身上附加的任意數量的【火】能量卡丟棄，造成其張數×90點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom": "噴火龍ex",
+    "illustrator": "takuyoa"
+  },
+  {
+    "id": "14332",
+    "name": "火焰鳥",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "014/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014332.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14332/",
+    "scrapedAt": "2026-04-16T08:18:06.160Z",
+    "hp": 120,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "鬥志之翼",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "20+",
+        "effect": "若對手的戰鬥寶可夢為「寶可夢【ex】」，則增加90點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 146,
+    "species": "火焰寶可夢",
+    "illustrator": "Kazumasa Yasukuni"
+  },
+  {
+    "id": "14333",
+    "name": "火紅不倒翁",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "015/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014333.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14333/",
+    "scrapedAt": "2026-04-16T08:18:06.917Z",
+    "hp": 80,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "火炎球",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "10+",
+        "effect": "增加這隻寶可夢身上附加的【火】能量的數量×20點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 554,
+    "species": "不倒翁寶可夢",
+    "illustrator": "NC Empire"
+  },
+  {
+    "id": "14334",
+    "name": "達摩狒狒",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "016/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014334.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14334/",
+    "scrapedAt": "2026-04-16T08:18:07.607Z",
+    "hp": 150,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "火炎球",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "40+",
+        "effect": "增加這隻寶可夢身上附加的【火】能量的數量×40點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 555,
+    "species": "爆燃寶可夢",
+    "evolvesFrom": "火紅不倒翁",
+    "illustrator": "Uta"
+  },
+  {
+    "id": "14335",
+    "name": "萊希拉姆",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "017/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014335.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14335/",
+    "scrapedAt": "2026-04-16T08:18:08.313Z",
+    "hp": 130,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "烈焰",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "30",
+        "effect": ""
+      },
+      {
+        "name": "燃燒閃焰",
+        "cost": [
+          "Fire",
+          "Fire",
+          "Fire",
+          "Fire"
+        ],
+        "damage": "240",
+        "effect": "這隻寶可夢也受到60點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 643,
+    "species": "白陽寶可夢",
+    "illustrator": "AKIRA EGAWA"
+  },
+  {
+    "id": "14336",
+    "name": "花舞鳥ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "",
+    "collectorNumber": "018/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014336.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14336/",
+    "scrapedAt": "2026-04-16T08:18:09.145Z",
+    "hp": 190,
+    "pokemonType": "Fire",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "激動渦輪",
+        "effect": "若自己的場上有【火】屬性的「超級進化寶可夢【ex】」，則在自己的回合時，可不限次數使用。從自己的手牌選擇1張「基本【火】能量」卡，附於備戰區的【火】寶可夢身上。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "火焰之翼",
+        "cost": [
+          "Fire",
+          "Fire",
+          "Colorless"
+        ],
+        "damage": "110",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "illustrator": "akagi"
+  },
+  {
+    "id": "14337",
+    "name": "炭小侍",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "019/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014337.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14337/",
+    "scrapedAt": "2026-04-16T08:18:09.927Z",
+    "hp": 70,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "集力",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫選擇最多2張基本能量卡，在給對手看過後加入手牌。並且重洗牌庫。"
+      },
+      {
+        "name": "劈打",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "10",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 935,
+    "species": "小火星寶可夢",
+    "illustrator": "Tomokazu Komiya"
+  },
+  {
+    "id": "14338",
+    "name": "蒼炎刃鬼",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "020/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014338.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14338/",
+    "scrapedAt": "2026-04-16T08:18:10.646Z",
+    "hp": 140,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "煉獄斬",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "220",
+        "effect": "從自己的手牌選擇4張「基本【火】能量」卡，將其丟棄。若無法丟棄4張卡，則這個招式失敗。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 937,
+    "species": "火劍士寶可夢",
+    "evolvesFrom": "紅蓮鎧騎",
+    "illustrator": "Gemi"
+  },
+  {
+    "id": "14339",
+    "name": "小海獅",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "021/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014339.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14339/",
+    "scrapedAt": "2026-04-16T08:18:11.413Z",
+    "hp": 80,
+    "pokemonType": "Water",
+    "attacks": [
+      {
+        "name": "泡沫吸取",
+        "cost": [
+          "Water",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": "將這隻寶可夢恢復「20」HP。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 86,
+    "species": "海獅寶可夢",
+    "illustrator": "svlt"
+  },
+  {
+    "id": "14340",
+    "name": "白海獅",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "022/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014340.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14340/",
+    "scrapedAt": "2026-04-16T08:18:12.123Z",
+    "hp": 130,
+    "pokemonType": "Water",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "厚脂肪",
+        "effect": "這隻寶可夢受到對手的【火】或者【水】寶可夢招式的傷害「-30」點。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "摔打",
+        "cost": [
+          "Water",
+          "Colorless"
+        ],
+        "damage": "70×",
+        "effect": "擲2次硬幣，造成正面出現的次數×70點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 87,
+    "species": "海獅寶可夢",
+    "evolvesFrom": "小海獅",
+    "illustrator": "Taira Akitsu"
+  },
+  {
+    "id": "14341",
+    "name": "小山豬",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "023/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014341.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14341/",
+    "scrapedAt": "2026-04-16T08:18:12.881Z",
+    "hp": 70,
+    "pokemonType": "Water",
+    "attacks": [
+      {
+        "name": "踩",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "10",
+        "effect": ""
+      },
+      {
+        "name": "雪花冰",
+        "cost": [
+          "Water",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 220,
+    "species": "小豬寶可夢",
+    "illustrator": "imoniii"
+  },
+  {
+    "id": "14342",
+    "name": "長毛豬",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "024/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014342.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14342/",
+    "scrapedAt": "2026-04-16T08:18:13.664Z",
+    "hp": 100,
+    "pokemonType": "Water",
+    "attacks": [
+      {
+        "name": "上衝",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "30+",
+        "effect": "擲1次硬幣若為正面，則增加30點傷害。"
+      },
+      {
+        "name": "冰霜粉碎",
+        "cost": [
+          "Water",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "70",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 221,
+    "species": "野豬寶可夢",
+    "evolvesFrom": "小山豬",
+    "illustrator": "Shinya Komatsu"
+  },
+  {
+    "id": "14343",
+    "name": "象牙豬",
+    "supertype": "Pokemon",
+    "subtype": "Stage2",
+    "setCode": "",
+    "collectorNumber": "025/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014343.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14343/",
+    "scrapedAt": "2026-04-16T08:18:14.451Z",
+    "hp": 180,
+    "pokemonType": "Water",
+    "attacks": [
+      {
+        "name": "摧毀",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "120+",
+        "effect": "若場上有競技場卡，則增加120點傷害。然後，將那張競技場卡丟棄。"
+      },
+      {
+        "name": "暴雪刀鋒",
+        "cost": [
+          "Water",
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "200",
+        "effect": "選擇2個這隻寶可夢身上附加的能量，將其丟棄。"
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 473,
+    "species": "雙牙寶可夢",
+    "evolvesFrom": "長毛豬",
+    "illustrator": "Takumi Wada"
+  },
+  {
+    "id": "14344",
+    "name": "水君",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "026/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014344.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14344/",
+    "scrapedAt": "2026-04-16T08:18:15.154Z",
+    "hp": 130,
+    "pokemonType": "Water",
+    "attacks": [
+      {
+        "name": "水晶墜落",
+        "cost": [
+          "Water",
+          "Water"
+        ],
+        "damage": "30+",
+        "effect": "若自己的場上的【水】能量有4個以上，則增加90點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 245,
+    "species": "極光寶可夢",
+    "illustrator": "Takeshi Nakamura"
+  },
+  {
+    "id": "14345",
+    "name": "波加曼",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "027/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014345.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14345/",
+    "scrapedAt": "2026-04-16T08:18:15.921Z",
+    "hp": 70,
+    "pokemonType": "Water",
+    "attacks": [
+      {
+        "name": "朋友呼喚",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫選擇1張支援者卡，在給對手看過後加入手牌。並且重洗牌庫。"
+      },
+      {
+        "name": "撞擊",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 393,
+    "species": "企鵝寶可夢",
+    "illustrator": "Hideki Ishikawa"
+  },
+  {
+    "id": "14346",
+    "name": "波皇子",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "028/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014346.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14346/",
+    "scrapedAt": "2026-04-16T08:18:16.688Z",
+    "hp": 100,
+    "pokemonType": "Water",
+    "attacks": [
+      {
+        "name": "啄",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": ""
+      },
+      {
+        "name": "瞄準俯衝",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "對手的1隻備戰寶可夢受到70點傷害。[在備戰區不計算弱點・抵抗力。]"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 394,
+    "species": "企鵝寶可夢",
+    "evolvesFrom": "波加曼",
+    "illustrator": "Atsuya Uki"
+  },
+  {
+    "id": "14347",
+    "name": "洛托姆ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "",
+    "collectorNumber": "029/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014347.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14347/",
+    "scrapedAt": "2026-04-16T08:18:17.389Z",
+    "hp": 190,
+    "pokemonType": "Lightning",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "多重轉接",
+        "effect": "只要這隻寶可夢在場上，名稱中有「洛托姆」的自己的所有寶可夢，各自身上最多可附有2張「寶可夢道具」卡。（這個特性消除時，將身上多附的「寶可夢道具」卡丟棄。）"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "十萬伏特",
+        "cost": [
+          "Lightning",
+          "Colorless"
+        ],
+        "damage": "130",
+        "effect": "將這隻寶可夢身上附加的能量卡全部丟棄。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "14348",
+    "name": "來電汪",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "030/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014348.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14348/",
+    "scrapedAt": "2026-04-16T08:18:18.144Z",
+    "hp": 70,
+    "pokemonType": "Lightning",
+    "attacks": [
+      {
+        "name": "嬉鬧",
+        "cost": [
+          "Lightning",
+          "Colorless"
+        ],
+        "damage": "20+",
+        "effect": "擲1次硬幣若為正面，則增加20點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 835,
+    "species": "小狗寶可夢",
+    "illustrator": "Ayako Ozaki"
+  },
+  {
+    "id": "14349",
+    "name": "逐電犬",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "031/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014349.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14349/",
+    "scrapedAt": "2026-04-16T08:18:18.836Z",
+    "hp": 130,
+    "pokemonType": "Lightning",
+    "attacks": [
+      {
+        "name": "電氣狂奔",
+        "cost": [
+          "Lightning",
+          "Colorless"
+        ],
+        "damage": "70+",
+        "effect": "擲1次硬幣若為正面，則增加70點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 836,
+    "species": "狗寶可夢",
+    "evolvesFrom": "來電汪",
+    "illustrator": "Orca"
+  },
+  {
+    "id": "14350",
+    "name": "布撥",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "032/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014350.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14350/",
+    "scrapedAt": "2026-04-16T08:18:19.549Z",
+    "hp": 60,
+    "pokemonType": "Lightning",
+    "attacks": [
+      {
+        "name": "叫聲",
+        "cost": [
+          "Lightning"
+        ],
+        "damage": "",
+        "effect": "在下個對手的回合，受到這個招式的寶可夢使用招式的傷害「-30」點。"
+      },
+      {
+        "name": "小電氣",
+        "cost": [
+          "Lightning"
+        ],
+        "damage": "10",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 921,
+    "species": "鼠寶可夢",
+    "illustrator": "Shimaris Yukichi"
+  },
+  {
+    "id": "14351",
+    "name": "布土撥",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "033/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014351.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14351/",
+    "scrapedAt": "2026-04-16T08:18:20.327Z",
+    "hp": 90,
+    "pokemonType": "Lightning",
+    "attacks": [
+      {
+        "name": "麻麻拳",
+        "cost": [
+          "Lightning",
+          "Lightning"
+        ],
+        "damage": "60",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 922,
+    "species": "鼠寶可夢",
+    "evolvesFrom": "布撥",
+    "illustrator": "Taiga Kayama"
+  },
+  {
+    "id": "14352",
+    "name": "巴布土撥",
+    "supertype": "Pokemon",
+    "subtype": "Stage2",
+    "setCode": "",
+    "collectorNumber": "034/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014352.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14352/",
+    "scrapedAt": "2026-04-16T08:18:21.133Z",
+    "hp": 140,
+    "pokemonType": "Lightning",
+    "attacks": [
+      {
+        "name": "怒氣拳",
+        "cost": [
+          "Lightning",
+          "Lightning"
+        ],
+        "damage": "130",
+        "effect": "若希望，這隻寶可夢也受到60點傷害，將對手的戰鬥寶可夢【麻痺】。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 923,
+    "species": "押掌寶可夢",
+    "evolvesFrom": "布土撥",
+    "illustrator": "satoma"
+  },
+  {
+    "id": "14353",
+    "name": "夢妖",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "035/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014353.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14353/",
+    "scrapedAt": "2026-04-16T08:18:21.903Z",
+    "hp": 70,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "咒怨一下",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 200,
+    "species": "夜啼寶可夢",
+    "illustrator": "Mousho"
+  },
+  {
+    "id": "14354",
+    "name": "夢妖魔ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "",
+    "collectorNumber": "036/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014354.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14354/",
+    "scrapedAt": "2026-04-16T08:18:22.671Z",
+    "hp": 260,
+    "pokemonType": "Psychic",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "漩渦言靈",
+        "effect": "只要這隻寶可夢在戰鬥場上，在對手的回合，每次對手的戰鬥寶可夢回到備戰區時，將新上場的寶可夢【混亂】。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "六之魔法",
+        "cost": [
+          "Psychic",
+          "Psychic"
+        ],
+        "damage": "150",
+        "effect": "若希望，從牌庫抽卡直到自己的手牌滿6張為止。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "evolvesFrom": "夢妖魔",
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "14355",
+    "name": "木棉球",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "037/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014355.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14355/",
+    "scrapedAt": "2026-04-16T08:18:23.363Z",
+    "hp": 60,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "呼喚",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫抽出1張卡。"
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 546,
+    "species": "棉球寶可夢",
+    "illustrator": "Kariya"
+  },
+  {
+    "id": "14356",
+    "name": "風妖精",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "038/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014356.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14356/",
+    "scrapedAt": "2026-04-16T08:18:24.079Z",
+    "hp": 90,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "治癒棉絮",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "將自己的1隻備戰寶可夢的HP全部恢復。"
+      },
+      {
+        "name": "急速折返",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "50",
+        "effect": "將這隻寶可夢與備戰寶可夢互換。"
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 547,
+    "species": "風隱寶可夢",
+    "evolvesFrom": "木棉球",
+    "illustrator": "Yuka Tanaka"
+  },
+  {
+    "id": "14357",
+    "name": "蒼響",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "039/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014357.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14357/",
+    "scrapedAt": "2026-04-16T08:18:24.768Z",
+    "hp": 130,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "界限破壞",
+        "cost": [
+          "Psychic",
+          "Colorless"
+        ],
+        "damage": "50+",
+        "effect": "若對手剩餘獎賞卡的張數為3張以下，則增加90點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 888,
+    "species": "強者寶可夢",
+    "illustrator": "kawayoo"
+  },
+  {
+    "id": "14358",
+    "name": "納噬草",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "040/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014358.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14358/",
+    "scrapedAt": "2026-04-16T08:18:25.527Z",
+    "hp": 50,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "悄聲加害",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "",
+        "effect": "在對手的1隻寶可夢身上放置1個傷害指示物。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 946,
+    "species": "滾草寶可夢",
+    "illustrator": "Takeshi Nakamura"
+  },
+  {
+    "id": "14359",
+    "name": "怖納噬草",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "041/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014359.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14359/",
+    "scrapedAt": "2026-04-16T08:18:26.293Z",
+    "hp": 100,
+    "pokemonType": "Psychic",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "恐慌牢籠",
+        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。將對手的戰鬥寶可夢【混亂】。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "‌念動彈",
+        "cost": [
+          "Psychic",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "80",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 947,
+    "species": "滾草寶可夢",
+    "evolvesFrom": "納噬草",
+    "illustrator": "Tetsu Kayama"
+  },
+  {
+    "id": "14360",
+    "name": "帕底亞 肯泰羅",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "042/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014360.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14360/",
+    "scrapedAt": "2026-04-16T08:18:26.991Z",
+    "hp": 130,
+    "pokemonType": "Fighting",
+    "attacks": [
+      {
+        "name": "憤怒猛撞",
+        "cost": [
+          "Fighting"
+        ],
+        "damage": "40×",
+        "effect": "造成自己的場上的，身上放置有傷害指示物的名稱中有「肯泰羅」的寶可夢的數量×40點傷害。"
+      },
+      {
+        "name": "捨身衝撞",
+        "cost": [
+          "Fighting",
+          "Fighting"
+        ],
+        "damage": "70",
+        "effect": "這隻寶可夢也受到20點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Psychic",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 128,
+    "species": "暴牛寶可夢",
+    "illustrator": "Souichirou Gunjima"
+  },
+  {
+    "id": "14361",
+    "name": "天蠍",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "043/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014361.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14361/",
+    "scrapedAt": "2026-04-16T08:18:27.695Z",
+    "hp": 70,
+    "pokemonType": "Fighting",
+    "attacks": [
+      {
+        "name": "毒擊",
+        "cost": [
+          "Fighting"
+        ],
+        "damage": "10",
+        "effect": "將對手的戰鬥寶可夢【中毒】。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 207,
+    "species": "飛蠍寶可夢",
+    "illustrator": "Kazumasa Yasukuni"
+  },
+  {
+    "id": "14362",
+    "name": "天蠍王",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "044/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014362.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14362/",
+    "scrapedAt": "2026-04-16T08:18:28.396Z",
+    "hp": 120,
+    "pokemonType": "Fighting",
+    "attacks": [
+      {
+        "name": "毒陣",
+        "cost": [
+          "Fighting"
+        ],
+        "damage": "50",
+        "effect": "將對手的戰鬥寶可夢【中毒】。在下個對手的回合，受到這個招式的寶可夢無法撤退。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 472,
+    "species": "牙蠍寶可夢",
+    "evolvesFrom": "天蠍",
+    "illustrator": "Dsuke"
+  },
+  {
+    "id": "14363",
+    "name": "大顎蟻",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "045/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014363.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14363/",
+    "scrapedAt": "2026-04-16T08:18:29.103Z",
+    "hp": 70,
+    "pokemonType": "Fighting",
+    "attacks": [
+      {
+        "name": "二連頭錘",
+        "cost": [
+          "Fighting"
+        ],
+        "damage": "10×",
+        "effect": "擲2次硬幣，造成正面出現的次數×10點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 328,
+    "species": "蟻獅寶可夢",
+    "illustrator": "Uta"
+  },
+  {
+    "id": "14364",
+    "name": "超音波幼蟲",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "046/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014364.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14364/",
+    "scrapedAt": "2026-04-16T08:18:29.872Z",
+    "hp": 90,
+    "pokemonType": "Fighting",
+    "attacks": [
+      {
+        "name": "超震動",
+        "cost": [
+          "Fighting",
+          "Fighting"
+        ],
+        "damage": "60",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 329,
+    "species": "震動寶可夢",
+    "evolvesFrom": "大顎蟻",
+    "illustrator": "Miki Tanaka"
+  },
+  {
+    "id": "14365",
+    "name": "沙漠蜻蜓",
+    "supertype": "Pokemon",
+    "subtype": "Stage2",
+    "setCode": "",
+    "collectorNumber": "047/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014365.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14365/",
+    "scrapedAt": "2026-04-16T08:18:30.640Z",
+    "hp": 150,
+    "pokemonType": "Fighting",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "沙之羽擊",
+        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，與這隻寶可夢在戰鬥場上受到對手的招式的傷害而【昏厥】時，各可使用1次。將對手的牌庫上方2張卡丟棄。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "利刃之風",
+        "cost": [
+          "Fighting",
+          "Fighting"
+        ],
+        "damage": "130",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 330,
+    "species": "神秘寶可夢",
+    "evolvesFrom": "超音波幼蟲",
+    "illustrator": "Jerky"
+  },
+  {
+    "id": "14366",
+    "name": "狃拉",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "048/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014366.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14366/",
+    "scrapedAt": "2026-04-16T08:18:31.332Z",
+    "hp": 70,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "豎爪",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "10",
+        "effect": ""
+      },
+      {
+        "name": "抓",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "30",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 215,
+    "species": "鉤爪寶可夢",
+    "illustrator": "Souichirou Gunjima"
+  },
+  {
+    "id": "14367",
+    "name": "瑪狃拉",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "049/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014367.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14367/",
+    "scrapedAt": "2026-04-16T08:18:32.030Z",
+    "hp": 90,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "報應爪",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "20+",
+        "effect": "若這隻寶可夢的剩餘HP為「50」以下，則增加170點傷害。"
+      },
+      {
+        "name": "居合斬",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "60",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 461,
+    "species": "鉤爪寶可夢",
+    "evolvesFrom": "狃拉",
+    "illustrator": "matazo"
+  },
+  {
+    "id": "14368",
+    "name": "利牙魚",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "050/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014368.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14368/",
+    "scrapedAt": "2026-04-16T08:18:32.730Z",
+    "hp": 70,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "突擊",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "30",
+        "effect": "這隻寶可夢也受到10點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 318,
+    "species": "凶猛寶可夢",
+    "illustrator": "Shin Nagasawa"
+  },
+  {
+    "id": "14369",
+    "name": "超級巨牙鯊ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "",
+    "collectorNumber": "051/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014369.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14369/",
+    "scrapedAt": "2026-04-16T08:18:33.481Z",
+    "hp": 330,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "貪心之牙",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "70",
+        "effect": "從自己的牌庫抽出2張卡。"
+      },
+      {
+        "name": "飢渴下巴",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "120+",
+        "effect": "若這隻寶可夢身上放置有傷害指示物，則增加150點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "evolvesFrom": "巨牙鯊",
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "14370",
+    "name": "飯匙蛇",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "052/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014370.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14370/",
+    "scrapedAt": "2026-04-16T08:18:34.174Z",
+    "hp": 120,
+    "pokemonType": "Darkness",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "激動力量",
+        "effect": "若自己的場上有【惡】屬性的「超級進化寶可夢【ex】」，則這隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害「+120」點。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "漆黑之牙",
+        "cost": [
+          "Darkness",
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "120",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 336,
+    "species": "牙蛇寶可夢",
+    "illustrator": "hncl"
+  },
+  {
+    "id": "14371",
+    "name": "黑眼鱷",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "053/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014371.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14371/",
+    "scrapedAt": "2026-04-16T08:18:34.879Z",
+    "hp": 70,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "衝撞",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "10",
+        "effect": ""
+      },
+      {
+        "name": "後踢",
+        "cost": [
+          "Darkness",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 551,
+    "species": "沙漠鱷魚寶可夢",
+    "illustrator": "Taiga Kasai"
+  },
+  {
+    "id": "14372",
+    "name": "混混鱷",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "054/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014372.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14372/",
+    "scrapedAt": "2026-04-16T08:18:35.651Z",
+    "hp": 100,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "咬住",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "30",
+        "effect": ""
+      },
+      {
+        "name": "正面對決",
+        "cost": [
+          "Darkness",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "60",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 552,
+    "species": "沙漠鱷魚寶可夢",
+    "evolvesFrom": "黑眼鱷",
+    "illustrator": "Uninori"
+  },
+  {
+    "id": "14373",
+    "name": "流氓鱷",
+    "supertype": "Pokemon",
+    "subtype": "Stage2",
+    "setCode": "",
+    "collectorNumber": "055/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014373.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14373/",
+    "scrapedAt": "2026-04-16T08:18:36.420Z",
+    "hp": 170,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "復仇獠牙",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "60+",
+        "effect": "在上個對手的回合，若自己的寶可夢因招式的傷害而【昏厥】了，則增加160點傷害。"
+      },
+      {
+        "name": "頭突",
+        "cost": [
+          "Darkness",
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "160",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 553,
+    "species": "威嚇寶可夢",
+    "evolvesFrom": "混混鱷",
+    "illustrator": "Ryuta Fuse"
+  },
+  {
+    "id": "14374",
+    "name": "毒電嬰",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "056/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014374.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14374/",
+    "scrapedAt": "2026-04-16T08:18:37.194Z",
+    "hp": 70,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "呼朋引伴",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫選擇最多2張【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。"
+      },
+      {
+        "name": "調皮踢",
+        "cost": [
+          "Darkness",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 848,
+    "species": "嬰兒寶可夢",
+    "illustrator": "OKACHEKE"
+  },
+  {
+    "id": "14375",
+    "name": "顫弦蠑螈",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "057/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014375.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14375/",
+    "scrapedAt": "2026-04-16T08:18:37.886Z",
+    "hp": 140,
+    "pokemonType": "Darkness",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "惡棍衝天",
+        "effect": "在自己的回合時可使用1次。從自己的牌庫選擇1張「基本【惡】能量」卡，附於備戰區的【惡】寶可夢身上。並且重洗牌庫。然後，在附上那張卡的寶可夢身上放置2個傷害指示物。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "重摑",
+        "cost": [
+          "Darkness",
+          "Darkness",
+          "Colorless"
+        ],
+        "damage": "100",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 849,
+    "species": "龐克寶可夢",
+    "evolvesFrom": "毒電嬰",
+    "illustrator": "DOM"
+  },
+  {
+    "id": "14376",
+    "name": "帝王拿波ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "",
+    "collectorNumber": "058/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014376.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14376/",
+    "scrapedAt": "2026-04-16T08:18:38.593Z",
+    "hp": 320,
+    "pokemonType": "Metal",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "皇帝之勢",
+        "effect": "這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "鐵羽毛",
+        "cost": [
+          "Metal",
+          "Metal",
+          "Colorless"
+        ],
+        "damage": "210",
+        "effect": "在下個對手的回合，這隻寶可夢受到招式的傷害「-60」點。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom": "帝王拿波",
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "14377",
+    "name": "銅鏡怪",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "059/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014377.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14377/",
+    "scrapedAt": "2026-04-16T08:18:39.361Z",
+    "hp": 80,
+    "pokemonType": "Metal",
+    "attacks": [
+      {
+        "name": "鐵壁",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "擲1次硬幣若為正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害。"
+      },
+      {
+        "name": "滾動",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 436,
+    "species": "青銅寶可夢",
+    "illustrator": "OKUBO"
+  },
+  {
+    "id": "14378",
+    "name": "青銅鐘",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "060/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014378.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14378/",
+    "scrapedAt": "2026-04-16T08:18:40.055Z",
+    "hp": 140,
+    "pokemonType": "Metal",
+    "attacks": [
+      {
+        "name": "三重抽出",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫抽出3張卡。"
+      },
+      {
+        "name": "道具擊落",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "40×",
+        "effect": "造成雙方的所有寶可夢身上附加的「寶可夢道具」卡的數量×40點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 437,
+    "species": "銅鐘寶可夢",
+    "evolvesFrom": "銅鏡怪",
+    "illustrator": "Masako Tomii"
+  },
+  {
+    "id": "14379",
+    "name": "托戈德瑪爾",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "061/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014379.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14379/",
+    "scrapedAt": "2026-04-16T08:18:40.755Z",
+    "hp": 80,
+    "pokemonType": "Metal",
+    "attacks": [
+      {
+        "name": "尋找朋友",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。"
+      },
+      {
+        "name": "咬",
+        "cost": [
+          "Metal"
+        ],
+        "damage": "30",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 777,
+    "species": "蜷縮寶可夢",
+    "illustrator": "Bun Toujo"
+  },
+  {
+    "id": "14380",
+    "name": "鋁鋼龍",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "062/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014380.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14380/",
+    "scrapedAt": "2026-04-16T08:18:41.507Z",
+    "hp": 130,
+    "pokemonType": "Metal",
+    "attacks": [
+      {
+        "name": "破壞光線",
+        "cost": [
+          "Metal",
+          "Metal",
+          "Metal"
+        ],
+        "damage": "70",
+        "effect": "選擇1個對手的戰鬥寶可夢身上附加的能量，將其丟棄。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 884,
+    "species": "合金寶可夢",
+    "illustrator": "Shinji Kanda"
+  },
+  {
+    "id": "14381",
+    "name": "鋁鋼橋龍",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "063/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014381.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14381/",
+    "scrapedAt": "2026-04-16T08:18:42.268Z",
+    "hp": 180,
+    "pokemonType": "Metal",
+    "attacks": [
+      {
+        "name": "塗層攻擊",
+        "cost": [
+          "Metal",
+          "Metal",
+          "Metal"
+        ],
+        "damage": "120",
+        "effect": "在下個對手的回合，這隻寶可夢不會受到【基礎】寶可夢招式的傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 1018,
+    "species": "合金寶可夢",
+    "evolvesFrom": "鋁鋼龍",
+    "illustrator": "toriyufu"
+  },
+  {
+    "id": "14382",
+    "name": "胖丁",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "064/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014382.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14382/",
+    "scrapedAt": "2026-04-16T08:18:42.972Z",
+    "hp": 70,
+    "pokemonType": "Colorless",
+    "attacks": [
+      {
+        "name": "滾球",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "20×",
+        "effect": "擲硬幣直到出現反面，造成正面出現的次數×20點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 39,
+    "species": "氣球寶可夢",
+    "illustrator": "Naoyo Kimura"
+  },
+  {
+    "id": "14383",
+    "name": "胖可丁",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "065/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014383.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14383/",
+    "scrapedAt": "2026-04-16T08:18:43.763Z",
+    "hp": 120,
+    "pokemonType": "Colorless",
+    "attacks": [
+      {
+        "name": "輪唱",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "40×",
+        "effect": "造成自己的場上的，持有「輪唱」招式的寶可夢的數量×40點傷害。"
+      },
+      {
+        "name": "地球上投",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "100",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 40,
+    "species": "氣球寶可夢",
+    "evolvesFrom": "胖丁",
+    "illustrator": "En Morikura"
+  },
+  {
+    "id": "14384",
+    "name": "長尾怪手",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "066/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014384.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14384/",
+    "scrapedAt": "2026-04-16T08:18:44.460Z",
+    "hp": 70,
+    "pokemonType": "Colorless",
+    "attacks": [
+      {
+        "name": "驚嚇",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": "在不看正面的情況下，從對手的手牌選擇1張，查看那張卡的正面後放回對手的牌庫並重洗。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 190,
+    "species": "長尾寶可夢",
+    "illustrator": "Saboteri"
+  },
+  {
+    "id": "14385",
+    "name": "雙尾怪手",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "067/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014385.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14385/",
+    "scrapedAt": "2026-04-16T08:18:45.151Z",
+    "hp": 110,
+    "pokemonType": "Colorless",
+    "attacks": [
+      {
+        "name": "巴掌",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect": ""
+      },
+      {
+        "name": "雙尾",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "將2個這隻寶可夢身上附加的能量丟棄，對手的2隻寶可夢各受到60點傷害。[在備戰區不計算弱點・抵抗力。]"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 424,
+    "species": "長尾寶可夢",
+    "evolvesFrom": "長尾怪手",
+    "illustrator": "hncl"
+  },
+  {
+    "id": "14386",
+    "name": "圖圖犬",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "068/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014386.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14386/",
+    "scrapedAt": "2026-04-16T08:18:45.848Z",
+    "hp": 80,
+    "pokemonType": "Colorless",
+    "attacks": [
+      {
+        "name": "能量寫生",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "擲3次硬幣，從自己的棄牌區選擇最多與正面出現的次數相同數量的基本能量卡，以任意方式附於備戰寶可夢身上。"
+      },
+      {
+        "name": "鉤住",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "40",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 235,
+    "species": "畫畫寶可夢",
+    "illustrator": "REND"
+  },
+  {
+    "id": "14387",
+    "name": "蛇紋熊",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "069/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014387.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14387/",
+    "scrapedAt": "2026-04-16T08:18:46.607Z",
+    "hp": 70,
+    "pokemonType": "Colorless",
+    "attacks": [
+      {
+        "name": "偷襲",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect": "擲1次硬幣若為反面，則這個招式失敗。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 263,
+    "species": "豆貍寶可夢",
+    "illustrator": "Dsuke"
+  },
+  {
+    "id": "14388",
+    "name": "直衝熊",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "070/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014388.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14388/",
+    "scrapedAt": "2026-04-16T08:18:47.309Z",
+    "hp": 100,
+    "pokemonType": "Colorless",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "激動衝刺",
+        "effect": "若這隻寶可夢在備戰區，且自己的場上有「超級進化寶可夢【ex】」，則在自己的回合時可使用1次。將這隻寶可夢與戰鬥寶可夢互換。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "劈開",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "70",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 264,
+    "species": "猛衝寶可夢",
+    "evolvesFrom": "蛇紋熊",
+    "illustrator": "nagimiso"
+  },
+  {
+    "id": "14389",
+    "name": "捲捲耳",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "071/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014389.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14389/",
+    "scrapedAt": "2026-04-16T08:18:48.067Z",
+    "hp": 70,
+    "pokemonType": "Colorless",
+    "attacks": [
+      {
+        "name": "雀躍",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "將這隻寶可夢與備戰寶可夢互換。"
+      },
+      {
+        "name": "踢",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 427,
+    "species": "兔子寶可夢",
+    "illustrator": "tono"
+  },
+  {
+    "id": "14390",
+    "name": "超級長耳兔ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "",
+    "collectorNumber": "072/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014390.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14390/",
+    "scrapedAt": "2026-04-16T08:18:48.862Z",
+    "hp": 330,
+    "pokemonType": "Colorless",
+    "attacks": [
+      {
+        "name": "疾風直撞",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "60+",
+        "effect": "在這個回合，若從備戰區將這隻寶可夢放置於戰鬥場，則增加170點傷害。"
+      },
+      {
+        "name": "跳躍扣殺",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "160",
+        "effect": "這個招式的傷害不計算對手的戰鬥寶可夢身上的附加效果。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "evolvesFrom": "長耳兔",
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "14391",
+    "name": "超大冰淇淋",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "",
+    "collectorNumber": "073/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014391.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14391/",
+    "scrapedAt": "2026-04-16T08:18:49.592Z",
+    "rulesText": "將自己的身上附有3個以上能量的戰鬥寶可夢恢復「80」HP。",
+    "illustrator": "AYUMI ODASHIMA"
+  },
+  {
+    "id": "14392",
+    "name": "高溫燃燒器",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "",
+    "collectorNumber": "074/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014392.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14392/",
+    "scrapedAt": "2026-04-16T08:18:50.276Z",
+    "rulesText": "這張卡必須從自己的手牌將1張「基本【火】能量」卡丟棄才可使用。\n\n從對手的場上寶可夢身上附加的「寶可夢道具」卡「特殊能量」卡與場上的「競技場」卡中選擇1張，將其丟棄。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "14393",
+    "name": "神聖護符",
+    "supertype": "Pokemon",
+    "subtype": "Other",
+    "setCode": "",
+    "collectorNumber": "075/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014393.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14393/",
+    "scrapedAt": "2026-04-16T08:18:50.988Z",
+    "rulesText": "附有這張卡的寶可夢，受到對手的擁有特性的寶可夢招式的傷害「-30」點。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "14394",
+    "name": "越橘的一步棋",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "",
+    "collectorNumber": "076/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014394.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14394/",
+    "scrapedAt": "2026-04-16T08:18:51.674Z",
+    "rulesText": "查看自己的牌庫上方7張卡，從其中選擇1張【惡】寶可夢卡，放置於備戰區。將剩餘卡全部翻回反面並重洗，放回牌庫下方。（無法在自己的最初回合使用。）",
+    "illustrator": "GIDORA"
+  },
+  {
+    "id": "14395",
+    "name": "小光",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "",
+    "collectorNumber": "077/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014395.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14395/",
+    "scrapedAt": "2026-04-16T08:18:52.393Z",
+    "rulesText": "從自己的牌庫選擇「【基礎】寶可夢」卡「【1階進化】寶可夢」卡「【2階進化】寶可夢」卡各一張，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Yuu Nishida"
+  },
+  {
+    "id": "14396",
+    "name": "吹火人",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "",
+    "collectorNumber": "078/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014396.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14396/",
+    "scrapedAt": "2026-04-16T08:18:53.080Z",
+    "rulesText": "從自己的牌庫選擇最多7張「基本【火】能量」卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Naoki Saito"
+  },
+  {
+    "id": "14397",
+    "name": "對戰圓形競技場",
+    "supertype": "Trainer",
+    "subtype": "Stadium",
+    "setCode": "",
+    "collectorNumber": "079/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014397.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14397/",
+    "scrapedAt": "2026-04-16T08:18:53.755Z",
+    "rulesText": "雙方的所有備戰寶可夢，不會因對手的招式與特性的效果而被放置傷害指示物。[會受到招式的傷害。]",
+    "illustrator": "MARINA Chikazawa"
+  },
+  {
+    "id": "14398",
+    "name": "暈眩山谷",
+    "supertype": "Trainer",
+    "subtype": "Stadium",
+    "setCode": "",
+    "collectorNumber": "080/080",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014398.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14398/",
+    "scrapedAt": "2026-04-16T08:18:54.478Z",
+    "rulesText": "雙方的【混亂】的寶可夢，就算進化・退化，【混亂】也不會恢復。",
+    "illustrator": "AYUMI ODASHIMA"
+  }
+]

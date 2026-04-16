@@ -1,0 +1,617 @@
+[
+  {
+    "id": "14105",
+    "name": "布魯",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "001/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014105.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14105/",
+    "scrapedAt": "2026-04-16T08:28:01.888Z",
+    "hp": 70,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "撞擊",
+        "cost": [
+          "Psychic",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 209,
+    "species": "妖精寶可夢",
+    "illustrator": "Gapao"
+  },
+  {
+    "id": "14106",
+    "name": "布魯皇",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "002/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014106.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14106/",
+    "scrapedAt": "2026-04-16T08:28:02.605Z",
+    "hp": 130,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "咬住",
+        "cost": [
+          "Psychic",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect": ""
+      },
+      {
+        "name": "致命刺擊",
+        "cost": [
+          "Psychic",
+          "Psychic",
+          "Colorless"
+        ],
+        "damage": "90+",
+        "effect": "若對手的戰鬥寶可夢身上放置有傷害指示物，則增加90點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 210,
+    "species": "妖精寶可夢",
+    "evolvesFrom": "布魯",
+    "illustrator": "Ryuta Fuse"
+  },
+  {
+    "id": "14107",
+    "name": "拉帝亞斯ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "",
+    "collectorNumber": "003/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014107.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14107/",
+    "scrapedAt": "2026-04-16T08:28:03.357Z",
+    "hp": 210,
+    "pokemonType": "Psychic",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "天空徑線",
+        "effect": "只要這隻寶可夢在場上，自己的所有【基礎】寶可夢【撤退】所需的能量全部消除。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "無限之刃",
+        "cost": [
+          "Psychic",
+          "Psychic",
+          "Colorless"
+        ],
+        "damage": "200",
+        "effect": "在下個自己的回合，這隻寶可夢無法使用招式。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "illustrator": "takuyoa"
+  },
+  {
+    "id": "14108",
+    "name": "克雷色利亞",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "004/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014108.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14108/",
+    "scrapedAt": "2026-04-16T08:28:04.118Z",
+    "hp": 120,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "充溢之光",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫選擇最多2張「基本【超】能量」卡，附於這隻寶可夢身上。並且重洗牌庫。"
+      },
+      {
+        "name": "極光束",
+        "cost": [
+          "Psychic",
+          "Psychic",
+          "Colorless"
+        ],
+        "damage": "90",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 488,
+    "species": "新月寶可夢",
+    "illustrator": "Raita Kazama"
+  },
+  {
+    "id": "14109",
+    "name": "美洛耶塔",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "005/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014109.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14109/",
+    "scrapedAt": "2026-04-16T08:28:04.818Z",
+    "hp": 90,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "治癒旋律",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "",
+        "effect": "將自己的備戰區的1隻【超】寶可夢恢復「120」HP。"
+      },
+      {
+        "name": "魔法射擊",
+        "cost": [
+          "Psychic",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 648,
+    "species": "旋律寶可夢",
+    "illustrator": "MINAMINAMI Take"
+  },
+  {
+    "id": "14110",
+    "name": "超級蒂安希ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "",
+    "collectorNumber": "006/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014110.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14110/",
+    "scrapedAt": "2026-04-16T08:28:05.666Z",
+    "hp": 270,
+    "pokemonType": "Psychic",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "鑽石膜",
+        "effect": "這隻寶可夢受到招式的傷害「-30」點。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "花冠射線",
+        "cost": [
+          "Psychic",
+          "Psychic"
+        ],
+        "damage": "120×",
+        "effect": "將最多2張這隻寶可夢身上附加的能量卡丟棄，造成其張數×120點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "illustrator": "aky CG Works"
+  },
+  {
+    "id": "14111",
+    "name": "謎擬Q",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "007/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014111.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14111/",
+    "scrapedAt": "2026-04-16T08:28:06.354Z",
+    "hp": 70,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "呼朋引伴",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫選擇1張【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。"
+      },
+      {
+        "name": "抓",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 778,
+    "species": "畫皮寶可夢",
+    "illustrator": "miki kudo"
+  },
+  {
+    "id": "14112",
+    "name": "小仙奶",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "008/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014112.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14112/",
+    "scrapedAt": "2026-04-16T08:28:07.113Z",
+    "hp": 50,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "吸取之吻",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "10",
+        "effect": "將這隻寶可夢恢復「10」HP。"
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 868,
+    "species": "鮮奶油寶可夢",
+    "illustrator": "Taiga Kayama"
+  },
+  {
+    "id": "14113",
+    "name": "霜奶仙",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "",
+    "collectorNumber": "009/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014113.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14113/",
+    "scrapedAt": "2026-04-16T08:28:07.860Z",
+    "hp": 90,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "甜點圓陣",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "20×",
+        "effect": "造成自己的場上寶可夢的數量×20點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 869,
+    "species": "鮮奶油寶可夢",
+    "evolvesFrom": "小仙奶",
+    "illustrator": "Narumi Sato"
+  },
+  {
+    "id": "14114",
+    "name": "米立龍",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "010/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014114.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14114/",
+    "scrapedAt": "2026-04-16T08:28:08.629Z",
+    "hp": 70,
+    "pokemonType": "Dragon",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "集客",
+        "effect": "若這隻寶可夢在戰鬥場上，則在自己的回合時可使用1次。查看自己的牌庫上方6張卡，從其中選擇1張支援者卡，在給對手看過後加入手牌。將剩餘卡放回牌庫並重洗。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "衝浪",
+        "cost": [
+          "Fire",
+          "Water"
+        ],
+        "damage": "50",
+        "effect": ""
+      }
+    ],
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 978,
+    "species": "擬態寶可夢",
+    "illustrator": "Jerky"
+  },
+  {
+    "id": "14115",
+    "name": "不公印章",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "",
+    "collectorNumber": "011/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014115.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14115/",
+    "scrapedAt": "2026-04-16T08:28:09.354Z",
+    "rulesText": "這張卡必須在上個對手的回合自己的寶可夢【昏厥】了才可使用。\n \n雙方玩家各自將手牌全部放回牌庫並重洗。然後，從牌庫抽卡，自己抽出5張，對手抽出2張。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "14116",
+    "name": "能量回收器",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "",
+    "collectorNumber": "012/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014116.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14116/",
+    "scrapedAt": "2026-04-16T08:28:10.102Z",
+    "rulesText": "從自己的棄牌區選擇最多5張基本能量卡，在給對手看過後放回牌庫並重洗。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "14117",
+    "name": "好友寶芬",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "",
+    "collectorNumber": "013/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014117.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14117/",
+    "scrapedAt": "2026-04-16T08:28:10.849Z",
+    "rulesText": "從自己的牌庫選擇最多2張HP為「70」以下的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。",
+    "illustrator": "AYUMI ODASHIMA"
+  },
+  {
+    "id": "14118",
+    "name": "高級球",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "",
+    "collectorNumber": "014/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014118.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14118/",
+    "scrapedAt": "2026-04-16T08:28:11.548Z",
+    "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。\n \n從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Ayaka Yoshida"
+  },
+  {
+    "id": "14119",
+    "name": "超級信號",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "",
+    "collectorNumber": "015/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014119.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14119/",
+    "scrapedAt": "2026-04-16T08:28:12.282Z",
+    "rulesText": "從自己的牌庫選擇1張「超級進化寶可夢【ex】」，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "inose yukie"
+  },
+  {
+    "id": "14120",
+    "name": "夜間擔架",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "",
+    "collectorNumber": "016/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014120.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14120/",
+    "scrapedAt": "2026-04-16T08:28:13.007Z",
+    "rulesText": "從自己的棄牌區選擇1張寶可夢卡或者基本能量卡，在給對手看過後加入手牌。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "14121",
+    "name": "奇跡修正檔",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "",
+    "collectorNumber": "017/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014121.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14121/",
+    "scrapedAt": "2026-04-16T08:28:13.726Z",
+    "rulesText": "從自己的棄牌區選擇1張「基本【超】能量」卡，附於備戰區的【超】寶可夢身上。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "14122",
+    "name": "氣球",
+    "supertype": "Pokemon",
+    "subtype": "Other",
+    "setCode": "",
+    "collectorNumber": "018/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014122.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14122/",
+    "scrapedAt": "2026-04-16T08:28:14.453Z",
+    "rulesText": "附有這張卡的寶可夢，【撤退】所需的能量減少2個。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "14123",
+    "name": "艾莉絲的鬥志",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "",
+    "collectorNumber": "019/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014123.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14123/",
+    "scrapedAt": "2026-04-16T08:28:15.130Z",
+    "rulesText": "這張卡必須將自己的1張手牌丟棄才可使用。\n\n從牌庫抽卡直到自己的手牌滿6張為止。",
+    "illustrator": "yuu"
+  },
+  {
+    "id": "14124",
+    "name": "老大的指令",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "",
+    "collectorNumber": "020/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014124.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14124/",
+    "scrapedAt": "2026-04-16T08:28:15.852Z",
+    "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
+    "illustrator": "NC Empire"
+  },
+  {
+    "id": "14125",
+    "name": "莉莉艾的決意",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "",
+    "collectorNumber": "021/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014125.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14125/",
+    "scrapedAt": "2026-04-16T08:28:16.542Z",
+    "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
+    "illustrator": "Atsushi Furusawa"
+  },
+  {
+    "id": "14126",
+    "name": "神秘花園",
+    "supertype": "Trainer",
+    "subtype": "Stadium",
+    "setCode": "",
+    "collectorNumber": "022/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014126.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14126/",
+    "scrapedAt": "2026-04-16T08:28:17.231Z",
+    "rulesText": "雙方玩家在每個自己的回合時，可使用1次，若從手牌將1張能量卡丟棄，則可從牌庫抽卡直到自己手牌的張數與自己場上【超】寶可夢的數量相同為止。",
+    "illustrator": "AYUMI ODASHIMA"
+  },
+  {
+    "id": "14127",
+    "name": "美洛耶塔",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "023/022",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014127.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14127/",
+    "scrapedAt": "2026-04-16T08:28:17.979Z",
+    "hp": 90,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "治癒旋律",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "",
+        "effect": "將自己的備戰區的1隻【超】寶可夢恢復「120」HP。"
+      },
+      {
+        "name": "魔法射擊",
+        "cost": [
+          "Psychic",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 648,
+    "species": "旋律寶可夢",
+    "illustrator": "Keisin"
+  },
+  {
+    "id": "14128",
+    "name": "基本【超】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "",
+    "collectorNumber": "PSY",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014128.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14128/",
+    "scrapedAt": "2026-04-16T08:28:18.710Z"
+  }
+]
