@@ -17,5 +17,5 @@ Thumbs.db
 .claude/
 
 # Scrape outputs — logs and in-progress files (final JSONs ARE committed)
-data/cards/*.log
-data/cards/*.tmp
+static/cards/*.log
+static/cards/*.tmp

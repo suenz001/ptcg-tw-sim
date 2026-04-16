@@ -22,7 +22,9 @@ import { parseCard } from './parse-card.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../..');
-const OUT_DIR = path.join(REPO_ROOT, 'data', 'cards');
+// Cards are written under static/ so SvelteKit serves them as-is at /cards/*.json.
+// One source of truth — no duplicate data/ + static/ copies.
+const OUT_DIR = path.join(REPO_ROOT, 'static', 'cards');
 
 const BASE = 'https://asia.pokemon-card.com';
 const UA = 'Mozilla/5.0 (PTCG-TW-Sim scraper; contact: github.com/suenz001/ptcg-tw-sim)';

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { base } from '$app/paths';
   import { auth } from '$lib/firebase';
   import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
 
@@ -51,6 +52,14 @@
         <dd class="error">{error}</dd>
       {/if}
     </dl>
+  </section>
+
+  <section>
+    <h2>卡牌資料庫</h2>
+    <p>
+      <a href="{base}/cards">瀏覽 SV10 火箭隊的榮耀 →</a>
+      <span class="hint">（132 張卡，繁體中文）</span>
+    </p>
   </section>
 
   <section>
@@ -125,5 +134,18 @@
   }
   li {
     margin-bottom: 0.25rem;
+  }
+  a {
+    color: #0066cc;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+  .hint {
+    color: #888;
+    font-size: 0.85rem;
+    margin-left: 0.5rem;
   }
 </style>
