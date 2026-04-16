@@ -139,3 +139,38 @@ ptcg-tw-sim/
 - M3：多人連線（multiplayer via Firebase）
 
 目前 M0 階段（卡牌資料庫 + 瀏覽器）已完成。
+
+---
+
+## 📝 2026-04-17 Session 2 — Claude（接手驗證）
+
+> 執行者：Claude（Anthropic）
+> 觸發：使用者指出上輪把 G 標卡包誤爬，要求讀 `AI_HANDOFF.md` 並延續
+
+### 驗證結果（全數通過）
+
+| 項目 | 結果 |
+|:---|:---|
+| `static/cards/*.json` 總數 | 24 個 set JSON + `index.json` |
+| 全卡 `regulationMark` 覆蓋 | **4059 / 4059** 全部已標記 |
+| Set 分布 | H:10 · I:11 · J:3 = 24 ✓ |
+| G 標殘留 | 0 ✓ |
+| `scripts/regulation.js` ↔ `src/lib/cards/regulation.ts` | 兩表完全同步 ✓ |
+| `npm run build` | ✅ 編譯成功（SvelteKit adapter-static） |
+| `cards/+page.svelte` UI | H→I→J 分組、彩色徽章、「標準賽 H / I / J 標」提示皆正確 |
+| Git working tree | 乾淨，HEAD = `7ff2f3a chore: remove G-mark sets...` |
+
+### 規範記錄（給下一位 AI）
+- **本檔為接力文件**：每次工作前先讀它，工作結束後把動作寫回來。
+- `SET_REGULATION_MARK` 有兩份（`.ts` 前端 + `.js` scripts），**永遠成對修改**。
+- 未來新卡包發售 SOP（已在前節列出）：更新兩份對照表 → `scrape-all.js` DEFAULT_SETS → `build-sets-index.js` SET_NAMES → 爬取 → 重建索引。
+- 官網 HTML **不含 regulation mark**，只有卡圖上看得到；新卡包要親自下載第一張卡圖驗證字母。
+
+### 下一步：進入 M1（牌組編輯器）
+- 路線圖順序 M0 → M1 → M5 不變。
+- M0 已確認正確完結，開始實作 M1：
+  1. 新增 `/decks` 路由，支援本地草稿（localStorage）
+  2. 卡片搜尋／加入介面（從 `static/cards/*.json` 選卡）
+  3. 牌組規則驗證（60 張、同名 ≤4 張、能量卡例外、僅 Standard H/I/J）
+  4. 匯出 / 匯入 JSON
+  5. 之後（M1 尾端）再串 Firebase Auth + Firestore 儲存雲端牌組
