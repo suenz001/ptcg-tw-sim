@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SET_REGULATION_MARK } from './regulation.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -18,18 +19,8 @@ const CARDS_DIR = path.join(REPO_ROOT, 'static', 'cards');
 // Human-readable zh-TW expansion names. Covers the sets we explicitly scrape;
 // anything else falls back to just the code.
 // Kept here (not in the scraper) because it's display metadata, not card data.
+// Only standard-legal sets (H / I / J marks). G-mark sets removed.
 const SET_NAMES = {
-  SV1S: '朱',
-  SV1V: '紫',
-  SV1a: '三位一體的大師',
-  SV2P: '古代的咆哮',
-  SV2D: '未來的一閃',
-  SV2a: '閃之怪奇',
-  SV3: '烈空凱VSTAR UNIVERSE',
-  SV3a: '黑色閃焰的支配者',
-  SV4M: '邦基拉斯ex',
-  SV4K: '基鬧夫ex',
-  SV4a: '夢幻',
   SV5M: '水君',
   SV5K: '雷公',
   SV5a: '賽場激鬥',
@@ -80,6 +71,7 @@ function main() {
     return {
       code,
       name: SET_NAMES[code] ?? code,
+      regulationMark: SET_REGULATION_MARK[code] ?? null,
       cardCount: cards.length,
       supertypeCounts,
       coverImageUrl: coverCard?.imageUrl ?? '',

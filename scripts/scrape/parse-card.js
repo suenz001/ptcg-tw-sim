@@ -8,6 +8,7 @@
  */
 
 import * as cheerio from 'cheerio';
+import { SET_REGULATION_MARK } from '../regulation.js';
 
 /** Energy image filename (e.g. "Water.png") -> our EnergyType string */
 const ENERGY_FROM_FILENAME = {
@@ -126,9 +127,15 @@ export function parseCard(html, id, sourceUrl) {
   const colNum = $('.collectorNumber').first().text().trim().replace(/\s+/g, '');
   if (colNum) card.collectorNumber = colNum;
 
-  // --- Regulation mark (single letter like "I") ---
+  // --- Regulation mark ---
+  // The TW site does not display regulation marks in the HTML, so we look it
+  // up from our verified set-code → mark mapping table instead.
   const regLabel = $('.regulationLabel, .regulation').first().text().trim();
-  if (regLabel && /^[A-Z]$/.test(regLabel)) card.regulationMark = regLabel;
+  if (regLabel && /^[A-Z]$/.test(regLabel)) {
+    card.regulationMark = regLabel;
+  } else if (card.setCode && SET_REGULATION_MARK[card.setCode]) {
+    card.regulationMark = SET_REGULATION_MARK[card.setCode];
+  }
 
   if (isPokemon) {
     card.supertype = 'Pokemon';

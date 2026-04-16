@@ -51,6 +51,7 @@ export interface Card {
 export interface SetSummary {
   code: string;
   name: string;
+  regulationMark?: string;
   cardCount: number;
   supertypeCounts: Partial<Record<Supertype, number>>;
   coverImageUrl: string;

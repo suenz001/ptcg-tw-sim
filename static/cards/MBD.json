@@ -31,7 +31,8 @@
     ],
     "pokedexNumber": 209,
     "species": "妖精寶可夢",
-    "illustrator": "Gapao"
+    "illustrator": "Gapao",
+    "regulationMark": "I"
   },
   {
     "id": "14106",
@@ -77,7 +78,8 @@
     "pokedexNumber": 210,
     "species": "妖精寶可夢",
     "evolvesFrom": "布魯",
-    "illustrator": "Ryuta Fuse"
+    "illustrator": "Ryuta Fuse",
+    "regulationMark": "I"
   },
   {
     "id": "14107",
@@ -122,7 +124,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "takuyoa"
+    "illustrator": "takuyoa",
+    "regulationMark": "I"
   },
   {
     "id": "14108",
@@ -169,7 +172,8 @@
     ],
     "pokedexNumber": 488,
     "species": "新月寶可夢",
-    "illustrator": "Raita Kazama"
+    "illustrator": "Raita Kazama",
+    "regulationMark": "I"
   },
   {
     "id": "14109",
@@ -215,7 +219,8 @@
     ],
     "pokedexNumber": 648,
     "species": "旋律寶可夢",
-    "illustrator": "MINAMINAMI Take"
+    "illustrator": "MINAMINAMI Take",
+    "regulationMark": "I"
   },
   {
     "id": "14110",
@@ -254,7 +259,8 @@
     "retreatCost": [
       "Colorless"
     ],
-    "illustrator": "aky CG Works"
+    "illustrator": "aky CG Works",
+    "regulationMark": "I"
   },
   {
     "id": "14111",
@@ -295,7 +301,8 @@
     ],
     "pokedexNumber": 778,
     "species": "畫皮寶可夢",
-    "illustrator": "miki kudo"
+    "illustrator": "miki kudo",
+    "regulationMark": "I"
   },
   {
     "id": "14112",
@@ -328,7 +335,8 @@
     ],
     "pokedexNumber": 868,
     "species": "鮮奶油寶可夢",
-    "illustrator": "Taiga Kayama"
+    "illustrator": "Taiga Kayama",
+    "regulationMark": "I"
   },
   {
     "id": "14113",
@@ -362,7 +370,8 @@
     "pokedexNumber": 869,
     "species": "鮮奶油寶可夢",
     "evolvesFrom": "小仙奶",
-    "illustrator": "Narumi Sato"
+    "illustrator": "Narumi Sato",
+    "regulationMark": "I"
   },
   {
     "id": "14114",
@@ -399,7 +408,8 @@
     ],
     "pokedexNumber": 978,
     "species": "擬態寶可夢",
-    "illustrator": "Jerky"
+    "illustrator": "Jerky",
+    "regulationMark": "I"
   },
   {
     "id": "14115",
@@ -412,7 +422,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14115/",
     "scrapedAt": "2026-04-16T08:28:09.354Z",
     "rulesText": "這張卡必須在上個對手的回合自己的寶可夢【昏厥】了才可使用。\n \n雙方玩家各自將手牌全部放回牌庫並重洗。然後，從牌庫抽卡，自己抽出5張，對手抽出2張。",
-    "illustrator": "Toyste Beach"
+    "illustrator": "Toyste Beach",
+    "regulationMark": "I"
   },
   {
     "id": "14116",
@@ -425,7 +436,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14116/",
     "scrapedAt": "2026-04-16T08:28:10.102Z",
     "rulesText": "從自己的棄牌區選擇最多5張基本能量卡，在給對手看過後放回牌庫並重洗。",
-    "illustrator": "Toyste Beach"
+    "illustrator": "Toyste Beach",
+    "regulationMark": "I"
   },
   {
     "id": "14117",
@@ -438,7 +450,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14117/",
     "scrapedAt": "2026-04-16T08:28:10.849Z",
     "rulesText": "從自己的牌庫選擇最多2張HP為「70」以下的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。",
-    "illustrator": "AYUMI ODASHIMA"
+    "illustrator": "AYUMI ODASHIMA",
+    "regulationMark": "I"
   },
   {
     "id": "14118",
@@ -451,7 +464,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14118/",
     "scrapedAt": "2026-04-16T08:28:11.548Z",
     "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。\n \n從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
-    "illustrator": "Ayaka Yoshida"
+    "illustrator": "Ayaka Yoshida",
+    "regulationMark": "I"
   },
   {
     "id": "14119",
@@ -464,7 +478,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14119/",
     "scrapedAt": "2026-04-16T08:28:12.282Z",
     "rulesText": "從自己的牌庫選擇1張「超級進化寶可夢【ex】」，在給對手看過後加入手牌。並且重洗牌庫。",
-    "illustrator": "inose yukie"
+    "illustrator": "inose yukie",
+    "regulationMark": "I"
   },
   {
     "id": "14120",
@@ -477,7 +492,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14120/",
     "scrapedAt": "2026-04-16T08:28:13.007Z",
     "rulesText": "從自己的棄牌區選擇1張寶可夢卡或者基本能量卡，在給對手看過後加入手牌。",
-    "illustrator": "Toyste Beach"
+    "illustrator": "Toyste Beach",
+    "regulationMark": "I"
   },
   {
     "id": "14121",
@@ -490,7 +506,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14121/",
     "scrapedAt": "2026-04-16T08:28:13.726Z",
     "rulesText": "從自己的棄牌區選擇1張「基本【超】能量」卡，附於備戰區的【超】寶可夢身上。",
-    "illustrator": "Studio Bora Inc."
+    "illustrator": "Studio Bora Inc.",
+    "regulationMark": "I"
   },
   {
     "id": "14122",
@@ -503,7 +520,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14122/",
     "scrapedAt": "2026-04-16T08:28:14.453Z",
     "rulesText": "附有這張卡的寶可夢，【撤退】所需的能量減少2個。",
-    "illustrator": "Studio Bora Inc."
+    "illustrator": "Studio Bora Inc.",
+    "regulationMark": "I"
   },
   {
     "id": "14123",
@@ -516,7 +534,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14123/",
     "scrapedAt": "2026-04-16T08:28:15.130Z",
     "rulesText": "這張卡必須將自己的1張手牌丟棄才可使用。\n\n從牌庫抽卡直到自己的手牌滿6張為止。",
-    "illustrator": "yuu"
+    "illustrator": "yuu",
+    "regulationMark": "I"
   },
   {
     "id": "14124",
@@ -529,7 +548,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14124/",
     "scrapedAt": "2026-04-16T08:28:15.852Z",
     "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
-    "illustrator": "NC Empire"
+    "illustrator": "NC Empire",
+    "regulationMark": "I"
   },
   {
     "id": "14125",
@@ -542,7 +562,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14125/",
     "scrapedAt": "2026-04-16T08:28:16.542Z",
     "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
-    "illustrator": "Atsushi Furusawa"
+    "illustrator": "Atsushi Furusawa",
+    "regulationMark": "I"
   },
   {
     "id": "14126",
@@ -555,7 +576,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14126/",
     "scrapedAt": "2026-04-16T08:28:17.231Z",
     "rulesText": "雙方玩家在每個自己的回合時，可使用1次，若從手牌將1張能量卡丟棄，則可從牌庫抽卡直到自己手牌的張數與自己場上【超】寶可夢的數量相同為止。",
-    "illustrator": "AYUMI ODASHIMA"
+    "illustrator": "AYUMI ODASHIMA",
+    "regulationMark": "I"
   },
   {
     "id": "14127",
@@ -601,7 +623,8 @@
     ],
     "pokedexNumber": 648,
     "species": "旋律寶可夢",
-    "illustrator": "Keisin"
+    "illustrator": "Keisin",
+    "regulationMark": "I"
   },
   {
     "id": "14128",
@@ -612,6 +635,7 @@
     "collectorNumber": "PSY",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014128.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14128/",
-    "scrapedAt": "2026-04-16T08:28:18.710Z"
+    "scrapedAt": "2026-04-16T08:28:18.710Z",
+    "regulationMark": "I"
   }
 ]

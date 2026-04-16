@@ -30,7 +30,8 @@
     ],
     "pokedexNumber": 540,
     "species": "裁縫寶可夢",
-    "illustrator": "Oswaldo KATO"
+    "illustrator": "Oswaldo KATO",
+    "regulationMark": "I"
   },
   {
     "id": "13030",
@@ -73,7 +74,8 @@
     "pokedexNumber": 541,
     "species": "足不出葉寶可夢",
     "evolvesFrom": "蟲寶包",
-    "illustrator": "Oswaldo KATO"
+    "illustrator": "Oswaldo KATO",
+    "regulationMark": "I"
   },
   {
     "id": "13031",
@@ -116,7 +118,8 @@
     "pokedexNumber": 542,
     "species": "育兒寶可夢",
     "evolvesFrom": "寶包繭",
-    "illustrator": "Oswaldo KATO"
+    "illustrator": "Oswaldo KATO",
+    "regulationMark": "I"
   },
   {
     "id": "13032",
@@ -149,7 +152,8 @@
     ],
     "pokedexNumber": 546,
     "species": "棉球寶可夢",
-    "illustrator": "sui"
+    "illustrator": "sui",
+    "regulationMark": "I"
   },
   {
     "id": "13033",
@@ -186,7 +190,8 @@
       "value": "×2"
     },
     "evolvesFrom": "風妖精GX",
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "regulationMark": "I"
   },
   {
     "id": "13034",
@@ -220,7 +225,8 @@
     ],
     "pokedexNumber": 585,
     "species": "季節寶可夢",
-    "illustrator": "Narano"
+    "illustrator": "Narano",
+    "regulationMark": "I"
   },
   {
     "id": "13035",
@@ -266,7 +272,8 @@
     "pokedexNumber": 586,
     "species": "季節寶可夢",
     "evolvesFrom": "四季鹿",
-    "illustrator": "Narano"
+    "illustrator": "Narano",
+    "regulationMark": "I"
   },
   {
     "id": "13036",
@@ -308,7 +315,8 @@
     ],
     "pokedexNumber": 616,
     "species": "蝸牛寶可夢",
-    "illustrator": "Saboteri"
+    "illustrator": "Saboteri",
+    "regulationMark": "I"
   },
   {
     "id": "13037",
@@ -342,7 +350,8 @@
     "pokedexNumber": 617,
     "species": "脫殼寶可夢",
     "evolvesFrom": "小嘴蝸",
-    "illustrator": "Saboteri"
+    "illustrator": "Saboteri",
+    "regulationMark": "I"
   },
   {
     "id": "13038",
@@ -385,7 +394,8 @@
     ],
     "pokedexNumber": 640,
     "species": "草原寶可夢",
-    "illustrator": "Felicia Chen"
+    "illustrator": "Felicia Chen",
+    "regulationMark": "I"
   },
   {
     "id": "13039",
@@ -427,7 +437,8 @@
     ],
     "pokedexNumber": 498,
     "species": "火豬寶可夢",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "regulationMark": "I"
   },
   {
     "id": "13040",
@@ -473,7 +484,8 @@
     "pokedexNumber": 499,
     "species": "火豬寶可夢",
     "evolvesFrom": "暖暖豬",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "regulationMark": "I"
   },
   {
     "id": "13041",
@@ -520,7 +532,8 @@
     "pokedexNumber": 500,
     "species": "大火豬寶可夢",
     "evolvesFrom": "炒炒豬",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "regulationMark": "I"
   },
   {
     "id": "13042",
@@ -562,7 +575,8 @@
     ],
     "pokedexNumber": 513,
     "species": "高溫寶可夢",
-    "illustrator": "Julie Hang"
+    "illustrator": "Julie Hang",
+    "regulationMark": "I"
   },
   {
     "id": "13043",
@@ -597,7 +611,8 @@
     "pokedexNumber": 514,
     "species": "火花寶可夢",
     "evolvesFrom": "爆香猴",
-    "illustrator": "Julie Hang"
+    "illustrator": "Julie Hang",
+    "regulationMark": "I"
   },
   {
     "id": "13044",
@@ -640,7 +655,8 @@
     ],
     "pokedexNumber": 631,
     "species": "食蟻獸寶可夢",
-    "illustrator": "Minahamu"
+    "illustrator": "Minahamu",
+    "regulationMark": "I"
   },
   {
     "id": "13045",
@@ -683,7 +699,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "regulationMark": "I"
   },
   {
     "id": "13046",
@@ -725,7 +742,8 @@
     ],
     "pokedexNumber": 501,
     "species": "海獺寶可夢",
-    "illustrator": "rika"
+    "illustrator": "rika",
+    "regulationMark": "I"
   },
   {
     "id": "13047",
@@ -759,7 +777,8 @@
     "pokedexNumber": 502,
     "species": "修行寶可夢",
     "evolvesFrom": "水水獺",
-    "illustrator": "rika"
+    "illustrator": "rika",
+    "regulationMark": "I"
   },
   {
     "id": "13048",
@@ -801,7 +820,8 @@
     "pokedexNumber": 503,
     "species": "威嚴寶可夢",
     "evolvesFrom": "雙刃丸",
-    "illustrator": "rika"
+    "illustrator": "rika",
+    "regulationMark": "I"
   },
   {
     "id": "13049",
@@ -842,7 +862,8 @@
     ],
     "pokedexNumber": 550,
     "species": "粗暴寶可夢",
-    "illustrator": "KEIICHIRO ITO"
+    "illustrator": "KEIICHIRO ITO",
+    "regulationMark": "I"
   },
   {
     "id": "13050",
@@ -888,7 +909,8 @@
     ],
     "pokedexNumber": 580,
     "species": "水鳥寶可夢",
-    "illustrator": "Mizue"
+    "illustrator": "Mizue",
+    "regulationMark": "I"
   },
   {
     "id": "13051",
@@ -936,7 +958,8 @@
     "pokedexNumber": 581,
     "species": "白鳥寶可夢",
     "evolvesFrom": "鴨寶寶",
-    "illustrator": "Mizue"
+    "illustrator": "Mizue",
+    "regulationMark": "I"
   },
   {
     "id": "13052",
@@ -978,7 +1001,8 @@
     ],
     "pokedexNumber": 582,
     "species": "新雪寶可夢",
-    "illustrator": "cochi8i"
+    "illustrator": "cochi8i",
+    "regulationMark": "I"
   },
   {
     "id": "13053",
@@ -1024,7 +1048,8 @@
     "pokedexNumber": 583,
     "species": "冰雪寶可夢",
     "evolvesFrom": "迷你冰",
-    "illustrator": "cochi8i"
+    "illustrator": "cochi8i",
+    "regulationMark": "I"
   },
   {
     "id": "13054",
@@ -1070,7 +1095,8 @@
     "pokedexNumber": 584,
     "species": "暴風雪寶可夢",
     "evolvesFrom": "多多冰",
-    "illustrator": "cochi8i"
+    "illustrator": "cochi8i",
+    "regulationMark": "I"
   },
   {
     "id": "13055",
@@ -1113,7 +1139,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "PLANETA Yamashita"
+    "illustrator": "PLANETA Yamashita",
+    "regulationMark": "I"
   },
   {
     "id": "13056",
@@ -1155,7 +1182,8 @@
     ],
     "pokedexNumber": 522,
     "species": "帶電寶可夢",
-    "illustrator": "Mugi Hamada"
+    "illustrator": "Mugi Hamada",
+    "regulationMark": "I"
   },
   {
     "id": "13057",
@@ -1199,7 +1227,8 @@
     "pokedexNumber": 523,
     "species": "雷電寶可夢",
     "evolvesFrom": "斑斑馬",
-    "illustrator": "Mugi Hamada"
+    "illustrator": "Mugi Hamada",
+    "regulationMark": "I"
   },
   {
     "id": "13058",
@@ -1232,7 +1261,8 @@
     ],
     "pokedexNumber": 595,
     "species": "吸附寶可夢",
-    "illustrator": "Shimaris Yukichi"
+    "illustrator": "Shimaris Yukichi",
+    "regulationMark": "I"
   },
   {
     "id": "13059",
@@ -1266,7 +1296,8 @@
     "pokedexNumber": 596,
     "species": "電蜘蛛寶可夢",
     "evolvesFrom": "電電蟲",
-    "illustrator": "Shimaris Yukichi"
+    "illustrator": "Shimaris Yukichi",
+    "regulationMark": "I"
   },
   {
     "id": "13060",
@@ -1309,7 +1340,8 @@
     ],
     "pokedexNumber": 618,
     "species": "陷阱寶可夢",
-    "illustrator": "Yuya Oka"
+    "illustrator": "Yuya Oka",
+    "regulationMark": "I"
   },
   {
     "id": "13061",
@@ -1346,7 +1378,8 @@
     ],
     "pokedexNumber": 527,
     "species": "蝙蝠寶可夢",
-    "illustrator": "Wintr Wandr"
+    "illustrator": "Wintr Wandr",
+    "regulationMark": "I"
   },
   {
     "id": "13062",
@@ -1393,7 +1426,8 @@
     "pokedexNumber": 528,
     "species": "求愛寶可夢",
     "evolvesFrom": "滾滾蝙蝠",
-    "illustrator": "Wintr Wandr"
+    "illustrator": "Wintr Wandr",
+    "regulationMark": "I"
   },
   {
     "id": "13063",
@@ -1440,7 +1474,8 @@
     ],
     "pokedexNumber": 561,
     "species": "似鳥寶可夢",
-    "illustrator": "Krgc"
+    "illustrator": "Krgc",
+    "regulationMark": "I"
   },
   {
     "id": "13064",
@@ -1479,7 +1514,8 @@
     ],
     "pokedexNumber": 562,
     "species": "魂寶可夢",
-    "illustrator": "Bun Toujo"
+    "illustrator": "Bun Toujo",
+    "regulationMark": "I"
   },
   {
     "id": "13065",
@@ -1529,7 +1565,8 @@
     "pokedexNumber": 563,
     "species": "棺木寶可夢",
     "evolvesFrom": "哭哭面具",
-    "illustrator": "Bun Toujo"
+    "illustrator": "Bun Toujo",
+    "regulationMark": "I"
   },
   {
     "id": "13066",
@@ -1566,7 +1603,8 @@
     ],
     "pokedexNumber": 574,
     "species": "凝視寶可夢",
-    "illustrator": "Mousho"
+    "illustrator": "Mousho",
+    "regulationMark": "I"
   },
   {
     "id": "13067",
@@ -1613,7 +1651,8 @@
     "pokedexNumber": 575,
     "species": "操縱寶可夢",
     "evolvesFrom": "哥德寶寶",
-    "illustrator": "Mousho"
+    "illustrator": "Mousho",
+    "regulationMark": "I"
   },
   {
     "id": "13068",
@@ -1660,7 +1699,8 @@
     "pokedexNumber": 576,
     "species": "天體寶可夢",
     "evolvesFrom": "哥德小童",
-    "illustrator": "Mousho"
+    "illustrator": "Mousho",
+    "regulationMark": "I"
   },
   {
     "id": "13069",
@@ -1699,7 +1739,8 @@
     ],
     "pokedexNumber": 592,
     "species": "漂浮寶可夢",
-    "illustrator": "MARINA Chikazawa"
+    "illustrator": "MARINA Chikazawa",
+    "regulationMark": "I"
   },
   {
     "id": "13070",
@@ -1745,7 +1786,8 @@
       "Colorless"
     ],
     "evolvesFrom": "胖嘟嘟",
-    "illustrator": "PLANETA Igarashi"
+    "illustrator": "PLANETA Igarashi",
+    "regulationMark": "I"
   },
   {
     "id": "13071",
@@ -1788,7 +1830,8 @@
     ],
     "pokedexNumber": 524,
     "species": "地幔寶可夢",
-    "illustrator": "Anesaki Dynamic"
+    "illustrator": "Anesaki Dynamic",
+    "regulationMark": "I"
   },
   {
     "id": "13072",
@@ -1834,7 +1877,8 @@
     "pokedexNumber": 525,
     "species": "礦石寶可夢",
     "evolvesFrom": "石丸子",
-    "illustrator": "Anesaki Dynamic"
+    "illustrator": "Anesaki Dynamic",
+    "regulationMark": "I"
   },
   {
     "id": "13073",
@@ -1880,7 +1924,8 @@
     "pokedexNumber": 526,
     "species": "高壓寶可夢",
     "evolvesFrom": "地幔岩",
-    "illustrator": "Anesaki Dynamic"
+    "illustrator": "Anesaki Dynamic",
+    "regulationMark": "I"
   },
   {
     "id": "13074",
@@ -1921,7 +1966,8 @@
     ],
     "pokedexNumber": 539,
     "species": "空手道寶可夢",
-    "illustrator": "Dsuke"
+    "illustrator": "Dsuke",
+    "regulationMark": "I"
   },
   {
     "id": "13075",
@@ -1955,7 +2001,8 @@
     ],
     "pokedexNumber": 566,
     "species": "遠古鳥寶可夢",
-    "illustrator": "Haru Akasaka"
+    "illustrator": "Haru Akasaka",
+    "regulationMark": "I"
   },
   {
     "id": "13076",
@@ -1997,7 +2044,8 @@
     "pokedexNumber": 567,
     "species": "遠古鳥寶可夢",
     "evolvesFrom": "始祖小鳥",
-    "illustrator": "Haru Akasaka"
+    "illustrator": "Haru Akasaka",
+    "regulationMark": "I"
   },
   {
     "id": "13077",
@@ -2030,7 +2078,8 @@
     ],
     "pokedexNumber": 619,
     "species": "武術寶可夢",
-    "illustrator": "Keisin"
+    "illustrator": "Keisin",
+    "regulationMark": "I"
   },
   {
     "id": "13078",
@@ -2073,7 +2122,8 @@
     "pokedexNumber": 620,
     "species": "武術寶可夢",
     "evolvesFrom": "功夫鼬",
-    "illustrator": "Keisin"
+    "illustrator": "Keisin",
+    "regulationMark": "I"
   },
   {
     "id": "13079",
@@ -2119,7 +2169,8 @@
     ],
     "pokedexNumber": 639,
     "species": "岩窟寶可夢",
-    "illustrator": "Tonji Matsuno"
+    "illustrator": "Tonji Matsuno",
+    "regulationMark": "I"
   },
   {
     "id": "13080",
@@ -2152,7 +2203,8 @@
     ],
     "pokedexNumber": 509,
     "species": "壞心眼寶可夢",
-    "illustrator": "Yuu Nishida"
+    "illustrator": "Yuu Nishida",
+    "regulationMark": "I"
   },
   {
     "id": "13081",
@@ -2186,7 +2238,8 @@
     "pokedexNumber": 510,
     "species": "冷酷寶可夢",
     "evolvesFrom": "扒手貓",
-    "illustrator": "Yuu Nishida"
+    "illustrator": "Yuu Nishida",
+    "regulationMark": "I"
   },
   {
     "id": "13082",
@@ -2228,7 +2281,8 @@
     ],
     "pokedexNumber": 559,
     "species": "蛻皮寶可夢",
-    "illustrator": "osare"
+    "illustrator": "osare",
+    "regulationMark": "I"
   },
   {
     "id": "13083",
@@ -2264,7 +2318,8 @@
     "pokedexNumber": 560,
     "species": "惡黨寶可夢",
     "evolvesFrom": "滑滑小子",
-    "illustrator": "osare"
+    "illustrator": "osare",
+    "regulationMark": "I"
   },
   {
     "id": "13084",
@@ -2307,7 +2362,8 @@
     ],
     "pokedexNumber": 568,
     "species": "垃圾袋寶可夢",
-    "illustrator": "OKUBO"
+    "illustrator": "OKUBO",
+    "regulationMark": "I"
   },
   {
     "id": "13085",
@@ -2353,7 +2409,8 @@
     "pokedexNumber": 569,
     "species": "垃圾場寶可夢",
     "evolvesFrom": "破破袋",
-    "illustrator": "OKUBO"
+    "illustrator": "OKUBO",
+    "regulationMark": "I"
   },
   {
     "id": "13086",
@@ -2386,7 +2443,8 @@
     ],
     "pokedexNumber": 570,
     "species": "惡狐寶可夢",
-    "illustrator": "akagi"
+    "illustrator": "akagi",
+    "regulationMark": "I"
   },
   {
     "id": "13087",
@@ -2430,7 +2488,8 @@
     "pokedexNumber": 571,
     "species": "妖狐寶可夢",
     "evolvesFrom": "索羅亞",
-    "illustrator": "akagi"
+    "illustrator": "akagi",
+    "regulationMark": "I"
   },
   {
     "id": "13088",
@@ -2475,7 +2534,8 @@
     ],
     "pokedexNumber": 633,
     "species": "粗魯寶可夢",
-    "illustrator": "kodama"
+    "illustrator": "kodama",
+    "regulationMark": "I"
   },
   {
     "id": "13089",
@@ -2523,7 +2583,8 @@
     "pokedexNumber": 634,
     "species": "粗暴寶可夢",
     "evolvesFrom": "單首龍",
-    "illustrator": "kodama"
+    "illustrator": "kodama",
+    "regulationMark": "I"
   },
   {
     "id": "13090",
@@ -2568,7 +2629,8 @@
       "Colorless"
     ],
     "evolvesFrom": "三首惡龍",
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "regulationMark": "I"
   },
   {
     "id": "13091",
@@ -2616,7 +2678,8 @@
     ],
     "pokedexNumber": 597,
     "species": "刺果寶可夢",
-    "illustrator": "Hasuno"
+    "illustrator": "Hasuno",
+    "regulationMark": "I"
   },
   {
     "id": "13092",
@@ -2667,7 +2730,8 @@
     "pokedexNumber": 598,
     "species": "刺球寶可夢",
     "evolvesFrom": "種子鐵球",
-    "illustrator": "Hasuno"
+    "illustrator": "Hasuno",
+    "regulationMark": "I"
   },
   {
     "id": "13093",
@@ -2704,7 +2768,8 @@
     ],
     "pokedexNumber": 599,
     "species": "齒輪寶可夢",
-    "illustrator": "Amelicart"
+    "illustrator": "Amelicart",
+    "regulationMark": "I"
   },
   {
     "id": "13094",
@@ -2744,7 +2809,8 @@
     "pokedexNumber": 600,
     "species": "齒輪寶可夢",
     "evolvesFrom": "齒輪兒",
-    "illustrator": "Amelicart"
+    "illustrator": "Amelicart",
+    "regulationMark": "I"
   },
   {
     "id": "13095",
@@ -2793,7 +2859,8 @@
     "pokedexNumber": 601,
     "species": "齒輪寶可夢",
     "evolvesFrom": "齒輪組",
-    "illustrator": "Amelicart"
+    "illustrator": "Amelicart",
+    "regulationMark": "I"
   },
   {
     "id": "13096",
@@ -2839,7 +2906,8 @@
     ],
     "pokedexNumber": 632,
     "species": "鐵蟻寶可夢",
-    "illustrator": "Yuka Morii"
+    "illustrator": "Yuka Morii",
+    "regulationMark": "I"
   },
   {
     "id": "13097",
@@ -2879,7 +2947,8 @@
     ],
     "pokedexNumber": 621,
     "species": "洞穴寶可夢",
-    "illustrator": "Nurikabe"
+    "illustrator": "Nurikabe",
+    "regulationMark": "I"
   },
   {
     "id": "13098",
@@ -2920,7 +2989,8 @@
     ],
     "pokedexNumber": 504,
     "species": "放哨寶可夢",
-    "illustrator": "Ounishi"
+    "illustrator": "Ounishi",
+    "regulationMark": "I"
   },
   {
     "id": "13099",
@@ -2962,7 +3032,8 @@
     "pokedexNumber": 505,
     "species": "警戒寶可夢",
     "evolvesFrom": "探探鼠",
-    "illustrator": "Ounishi"
+    "illustrator": "Ounishi",
+    "regulationMark": "I"
   },
   {
     "id": "13100",
@@ -2995,7 +3066,8 @@
     ],
     "pokedexNumber": 506,
     "species": "小狗寶可夢",
-    "illustrator": "sowsow"
+    "illustrator": "sowsow",
+    "regulationMark": "I"
   },
   {
     "id": "13101",
@@ -3039,7 +3111,8 @@
     "pokedexNumber": 507,
     "species": "忠犬寶可夢",
     "evolvesFrom": "小約克",
-    "illustrator": "sowsow"
+    "illustrator": "sowsow",
+    "regulationMark": "I"
   },
   {
     "id": "13102",
@@ -3087,7 +3160,8 @@
     "pokedexNumber": 508,
     "species": "寬大寶可夢",
     "evolvesFrom": "哈約克",
-    "illustrator": "sowsow"
+    "illustrator": "sowsow",
+    "regulationMark": "I"
   },
   {
     "id": "13103",
@@ -3128,7 +3202,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "PLANETA Tsuji"
+    "illustrator": "PLANETA Tsuji",
+    "regulationMark": "I"
   },
   {
     "id": "13104",
@@ -3174,7 +3249,8 @@
     ],
     "pokedexNumber": 627,
     "species": "雛鷹寶可夢",
-    "illustrator": "Kedamahadaitai Yawarakai"
+    "illustrator": "Kedamahadaitai Yawarakai",
+    "regulationMark": "I"
   },
   {
     "id": "13105",
@@ -3223,7 +3299,8 @@
     "pokedexNumber": 628,
     "species": "勇猛寶可夢",
     "evolvesFrom": "毛頭小鷹",
-    "illustrator": "Kedamahadaitai Yawarakai"
+    "illustrator": "Kedamahadaitai Yawarakai",
+    "regulationMark": "I"
   },
   {
     "id": "13106",
@@ -3270,7 +3347,8 @@
     ],
     "pokedexNumber": 641,
     "species": "旋風寶可夢",
-    "illustrator": "Nisota Niso"
+    "illustrator": "Nisota Niso",
+    "regulationMark": "I"
   },
   {
     "id": "13107",
@@ -3283,7 +3361,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13107/",
     "scrapedAt": "2026-04-16T08:09:56.675Z",
     "rulesText": "從自己的棄牌區選擇最多2張基本能量卡，在給對手看過後加入手牌。",
-    "illustrator": "Studio Bora Inc."
+    "illustrator": "Studio Bora Inc.",
+    "regulationMark": "I"
   },
   {
     "id": "13108",
@@ -3296,7 +3375,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13108/",
     "scrapedAt": "2026-04-16T08:09:57.395Z",
     "rulesText": "選擇最多2張雙方的場上寶可夢身上附加的「寶可夢道具」卡，將其丟棄。",
-    "illustrator": "Studio Bora Inc."
+    "illustrator": "Studio Bora Inc.",
+    "regulationMark": "I"
   },
   {
     "id": "13109",
@@ -3309,7 +3389,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13109/",
     "scrapedAt": "2026-04-16T08:09:58.113Z",
     "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。若在自己的回合中，則可將場上的這張卡丟棄。\n\n只要這隻寶可夢在備戰區，不會受到對手的寶可夢招式的傷害。",
-    "illustrator": "AYUMI ODASHIMA"
+    "illustrator": "AYUMI ODASHIMA",
+    "regulationMark": "I"
   },
   {
     "id": "13110",
@@ -3322,7 +3403,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13110/",
     "scrapedAt": "2026-04-16T08:09:58.832Z",
     "rulesText": "附有這張卡的寶可夢（「擁有規則的寶可夢」除外）使用的招式，對對手的戰鬥場的「寶可夢【ex】」造成的傷害「+30」點。",
-    "illustrator": "Toyste Beach"
+    "illustrator": "Toyste Beach",
+    "regulationMark": "I"
   },
   {
     "id": "13111",
@@ -3335,7 +3417,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13111/",
     "scrapedAt": "2026-04-16T08:09:59.560Z",
     "rulesText": "雙方玩家各將手牌全部放回牌庫並重洗。然後，自己擲1次硬幣，若為正面，則從牌庫抽卡，自己抽出5張，對手抽出3張。若為反面，則從牌庫抽卡，自己抽出3張，對手抽出5張。",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "regulationMark": "I"
   },
   {
     "id": "13112",
@@ -3348,7 +3431,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13112/",
     "scrapedAt": "2026-04-16T08:10:00.245Z",
     "rulesText": "從自己的牌庫抽出3張卡。",
-    "illustrator": "Atsushi Furusawa"
+    "illustrator": "Atsushi Furusawa",
+    "regulationMark": "I"
   },
   {
     "id": "13113",
@@ -3361,7 +3445,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13113/",
     "scrapedAt": "2026-04-16T08:10:00.981Z",
     "rulesText": "從自己的牌庫選擇進化寶可夢卡與能量卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
-    "illustrator": "yuu"
+    "illustrator": "yuu",
+    "regulationMark": "I"
   },
   {
     "id": "13114",
@@ -3373,7 +3458,8 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013114.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13114/",
     "scrapedAt": "2026-04-16T08:10:01.667Z",
-    "rulesText": "將附於寶可夢身上的這張卡，在自己的回合結束時丟棄。\n\n只要這張卡附於寶可夢身上，視為提供1個【無】能量。\n\n若附於進化寶可夢身上，則視為提供3個【無】能量。"
+    "rulesText": "將附於寶可夢身上的這張卡，在自己的回合結束時丟棄。\n\n只要這張卡附於寶可夢身上，視為提供1個【無】能量。\n\n若附於進化寶可夢身上，則視為提供3個【無】能量。",
+    "regulationMark": "I"
   },
   {
     "id": "13358",
@@ -3406,7 +3492,8 @@
     ],
     "pokedexNumber": 540,
     "species": "裁縫寶可夢",
-    "illustrator": "Oswaldo KATO"
+    "illustrator": "Oswaldo KATO",
+    "regulationMark": "I"
   },
   {
     "id": "13359",
@@ -3449,7 +3536,8 @@
     "pokedexNumber": 541,
     "species": "足不出葉寶可夢",
     "evolvesFrom": "蟲寶包",
-    "illustrator": "Oswaldo KATO"
+    "illustrator": "Oswaldo KATO",
+    "regulationMark": "I"
   },
   {
     "id": "13360",
@@ -3492,7 +3580,8 @@
     "pokedexNumber": 542,
     "species": "育兒寶可夢",
     "evolvesFrom": "寶包繭",
-    "illustrator": "Oswaldo KATO"
+    "illustrator": "Oswaldo KATO",
+    "regulationMark": "I"
   },
   {
     "id": "13361",
@@ -3525,7 +3614,8 @@
     ],
     "pokedexNumber": 546,
     "species": "棉球寶可夢",
-    "illustrator": "sui"
+    "illustrator": "sui",
+    "regulationMark": "I"
   },
   {
     "id": "13363",
@@ -3559,7 +3649,8 @@
     ],
     "pokedexNumber": 585,
     "species": "季節寶可夢",
-    "illustrator": "Narano"
+    "illustrator": "Narano",
+    "regulationMark": "I"
   },
   {
     "id": "13364",
@@ -3605,7 +3696,8 @@
     "pokedexNumber": 586,
     "species": "季節寶可夢",
     "evolvesFrom": "四季鹿",
-    "illustrator": "Narano"
+    "illustrator": "Narano",
+    "regulationMark": "I"
   },
   {
     "id": "13365",
@@ -3647,7 +3739,8 @@
     ],
     "pokedexNumber": 616,
     "species": "蝸牛寶可夢",
-    "illustrator": "Saboteri"
+    "illustrator": "Saboteri",
+    "regulationMark": "I"
   },
   {
     "id": "13366",
@@ -3681,7 +3774,8 @@
     "pokedexNumber": 617,
     "species": "脫殼寶可夢",
     "evolvesFrom": "小嘴蝸",
-    "illustrator": "Saboteri"
+    "illustrator": "Saboteri",
+    "regulationMark": "I"
   },
   {
     "id": "13367",
@@ -3724,7 +3818,8 @@
     ],
     "pokedexNumber": 640,
     "species": "草原寶可夢",
-    "illustrator": "Felicia Chen"
+    "illustrator": "Felicia Chen",
+    "regulationMark": "I"
   },
   {
     "id": "13368",
@@ -3766,7 +3861,8 @@
     ],
     "pokedexNumber": 498,
     "species": "火豬寶可夢",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "regulationMark": "I"
   },
   {
     "id": "13369",
@@ -3812,7 +3908,8 @@
     "pokedexNumber": 499,
     "species": "火豬寶可夢",
     "evolvesFrom": "暖暖豬",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "regulationMark": "I"
   },
   {
     "id": "13370",
@@ -3859,7 +3956,8 @@
     "pokedexNumber": 500,
     "species": "大火豬寶可夢",
     "evolvesFrom": "炒炒豬",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "regulationMark": "I"
   },
   {
     "id": "13371",
@@ -3901,7 +3999,8 @@
     ],
     "pokedexNumber": 513,
     "species": "高溫寶可夢",
-    "illustrator": "Julie Hang"
+    "illustrator": "Julie Hang",
+    "regulationMark": "I"
   },
   {
     "id": "13372",
@@ -3936,7 +4035,8 @@
     "pokedexNumber": 514,
     "species": "火花寶可夢",
     "evolvesFrom": "爆香猴",
-    "illustrator": "Julie Hang"
+    "illustrator": "Julie Hang",
+    "regulationMark": "I"
   },
   {
     "id": "13373",
@@ -3979,7 +4079,8 @@
     ],
     "pokedexNumber": 631,
     "species": "食蟻獸寶可夢",
-    "illustrator": "Minahamu"
+    "illustrator": "Minahamu",
+    "regulationMark": "I"
   },
   {
     "id": "13375",
@@ -4021,7 +4122,8 @@
     ],
     "pokedexNumber": 501,
     "species": "海獺寶可夢",
-    "illustrator": "rika"
+    "illustrator": "rika",
+    "regulationMark": "I"
   },
   {
     "id": "13376",
@@ -4055,7 +4157,8 @@
     "pokedexNumber": 502,
     "species": "修行寶可夢",
     "evolvesFrom": "水水獺",
-    "illustrator": "rika"
+    "illustrator": "rika",
+    "regulationMark": "I"
   },
   {
     "id": "13377",
@@ -4097,7 +4200,8 @@
     "pokedexNumber": 503,
     "species": "威嚴寶可夢",
     "evolvesFrom": "雙刃丸",
-    "illustrator": "rika"
+    "illustrator": "rika",
+    "regulationMark": "I"
   },
   {
     "id": "13378",
@@ -4138,7 +4242,8 @@
     ],
     "pokedexNumber": 550,
     "species": "粗暴寶可夢",
-    "illustrator": "KEIICHIRO ITO"
+    "illustrator": "KEIICHIRO ITO",
+    "regulationMark": "I"
   },
   {
     "id": "13379",
@@ -4184,7 +4289,8 @@
     ],
     "pokedexNumber": 580,
     "species": "水鳥寶可夢",
-    "illustrator": "Mizue"
+    "illustrator": "Mizue",
+    "regulationMark": "I"
   },
   {
     "id": "13380",
@@ -4232,7 +4338,8 @@
     "pokedexNumber": 581,
     "species": "白鳥寶可夢",
     "evolvesFrom": "鴨寶寶",
-    "illustrator": "Mizue"
+    "illustrator": "Mizue",
+    "regulationMark": "I"
   },
   {
     "id": "13381",
@@ -4274,7 +4381,8 @@
     ],
     "pokedexNumber": 582,
     "species": "新雪寶可夢",
-    "illustrator": "cochi8i"
+    "illustrator": "cochi8i",
+    "regulationMark": "I"
   },
   {
     "id": "13382",
@@ -4320,7 +4428,8 @@
     "pokedexNumber": 583,
     "species": "冰雪寶可夢",
     "evolvesFrom": "迷你冰",
-    "illustrator": "cochi8i"
+    "illustrator": "cochi8i",
+    "regulationMark": "I"
   },
   {
     "id": "13383",
@@ -4366,7 +4475,8 @@
     "pokedexNumber": 584,
     "species": "暴風雪寶可夢",
     "evolvesFrom": "多多冰",
-    "illustrator": "cochi8i"
+    "illustrator": "cochi8i",
+    "regulationMark": "I"
   },
   {
     "id": "13385",
@@ -4408,7 +4518,8 @@
     ],
     "pokedexNumber": 522,
     "species": "帶電寶可夢",
-    "illustrator": "Mugi Hamada"
+    "illustrator": "Mugi Hamada",
+    "regulationMark": "I"
   },
   {
     "id": "13386",
@@ -4452,7 +4563,8 @@
     "pokedexNumber": 523,
     "species": "雷電寶可夢",
     "evolvesFrom": "斑斑馬",
-    "illustrator": "Mugi Hamada"
+    "illustrator": "Mugi Hamada",
+    "regulationMark": "I"
   },
   {
     "id": "13387",
@@ -4485,7 +4597,8 @@
     ],
     "pokedexNumber": 595,
     "species": "吸附寶可夢",
-    "illustrator": "Shimaris Yukichi"
+    "illustrator": "Shimaris Yukichi",
+    "regulationMark": "I"
   },
   {
     "id": "13388",
@@ -4519,7 +4632,8 @@
     "pokedexNumber": 596,
     "species": "電蜘蛛寶可夢",
     "evolvesFrom": "電電蟲",
-    "illustrator": "Shimaris Yukichi"
+    "illustrator": "Shimaris Yukichi",
+    "regulationMark": "I"
   },
   {
     "id": "13389",
@@ -4562,7 +4676,8 @@
     ],
     "pokedexNumber": 618,
     "species": "陷阱寶可夢",
-    "illustrator": "Yuya Oka"
+    "illustrator": "Yuya Oka",
+    "regulationMark": "I"
   },
   {
     "id": "13390",
@@ -4599,7 +4714,8 @@
     ],
     "pokedexNumber": 527,
     "species": "蝙蝠寶可夢",
-    "illustrator": "Wintr Wandr"
+    "illustrator": "Wintr Wandr",
+    "regulationMark": "I"
   },
   {
     "id": "13391",
@@ -4646,7 +4762,8 @@
     "pokedexNumber": 528,
     "species": "求愛寶可夢",
     "evolvesFrom": "滾滾蝙蝠",
-    "illustrator": "Wintr Wandr"
+    "illustrator": "Wintr Wandr",
+    "regulationMark": "I"
   },
   {
     "id": "13392",
@@ -4693,7 +4810,8 @@
     ],
     "pokedexNumber": 561,
     "species": "似鳥寶可夢",
-    "illustrator": "Krgc"
+    "illustrator": "Krgc",
+    "regulationMark": "I"
   },
   {
     "id": "13393",
@@ -4732,7 +4850,8 @@
     ],
     "pokedexNumber": 562,
     "species": "魂寶可夢",
-    "illustrator": "Bun Toujo"
+    "illustrator": "Bun Toujo",
+    "regulationMark": "I"
   },
   {
     "id": "13395",
@@ -4769,7 +4888,8 @@
     ],
     "pokedexNumber": 574,
     "species": "凝視寶可夢",
-    "illustrator": "Mousho"
+    "illustrator": "Mousho",
+    "regulationMark": "I"
   },
   {
     "id": "13396",
@@ -4816,7 +4936,8 @@
     "pokedexNumber": 575,
     "species": "操縱寶可夢",
     "evolvesFrom": "哥德寶寶",
-    "illustrator": "Mousho"
+    "illustrator": "Mousho",
+    "regulationMark": "I"
   },
   {
     "id": "13397",
@@ -4863,7 +4984,8 @@
     "pokedexNumber": 576,
     "species": "天體寶可夢",
     "evolvesFrom": "哥德小童",
-    "illustrator": "Mousho"
+    "illustrator": "Mousho",
+    "regulationMark": "I"
   },
   {
     "id": "13398",
@@ -4902,7 +5024,8 @@
     ],
     "pokedexNumber": 592,
     "species": "漂浮寶可夢",
-    "illustrator": "MARINA Chikazawa"
+    "illustrator": "MARINA Chikazawa",
+    "regulationMark": "I"
   },
   {
     "id": "13400",
@@ -4945,7 +5068,8 @@
     ],
     "pokedexNumber": 524,
     "species": "地幔寶可夢",
-    "illustrator": "Anesaki Dynamic"
+    "illustrator": "Anesaki Dynamic",
+    "regulationMark": "I"
   },
   {
     "id": "13401",
@@ -4991,7 +5115,8 @@
     "pokedexNumber": 525,
     "species": "礦石寶可夢",
     "evolvesFrom": "石丸子",
-    "illustrator": "Anesaki Dynamic"
+    "illustrator": "Anesaki Dynamic",
+    "regulationMark": "I"
   },
   {
     "id": "13402",
@@ -5037,7 +5162,8 @@
     "pokedexNumber": 526,
     "species": "高壓寶可夢",
     "evolvesFrom": "地幔岩",
-    "illustrator": "Anesaki Dynamic"
+    "illustrator": "Anesaki Dynamic",
+    "regulationMark": "I"
   },
   {
     "id": "13403",
@@ -5078,7 +5204,8 @@
     ],
     "pokedexNumber": 539,
     "species": "空手道寶可夢",
-    "illustrator": "Dsuke"
+    "illustrator": "Dsuke",
+    "regulationMark": "I"
   },
   {
     "id": "13404",
@@ -5112,7 +5239,8 @@
     ],
     "pokedexNumber": 566,
     "species": "遠古鳥寶可夢",
-    "illustrator": "Haru Akasaka"
+    "illustrator": "Haru Akasaka",
+    "regulationMark": "I"
   },
   {
     "id": "13405",
@@ -5154,7 +5282,8 @@
     "pokedexNumber": 567,
     "species": "遠古鳥寶可夢",
     "evolvesFrom": "始祖小鳥",
-    "illustrator": "Haru Akasaka"
+    "illustrator": "Haru Akasaka",
+    "regulationMark": "I"
   },
   {
     "id": "13406",
@@ -5187,7 +5316,8 @@
     ],
     "pokedexNumber": 619,
     "species": "武術寶可夢",
-    "illustrator": "Keisin"
+    "illustrator": "Keisin",
+    "regulationMark": "I"
   },
   {
     "id": "13407",
@@ -5230,7 +5360,8 @@
     "pokedexNumber": 620,
     "species": "武術寶可夢",
     "evolvesFrom": "功夫鼬",
-    "illustrator": "Keisin"
+    "illustrator": "Keisin",
+    "regulationMark": "I"
   },
   {
     "id": "13408",
@@ -5276,7 +5407,8 @@
     ],
     "pokedexNumber": 639,
     "species": "岩窟寶可夢",
-    "illustrator": "Tonji Matsuno"
+    "illustrator": "Tonji Matsuno",
+    "regulationMark": "I"
   },
   {
     "id": "13409",
@@ -5309,7 +5441,8 @@
     ],
     "pokedexNumber": 509,
     "species": "壞心眼寶可夢",
-    "illustrator": "Yuu Nishida"
+    "illustrator": "Yuu Nishida",
+    "regulationMark": "I"
   },
   {
     "id": "13410",
@@ -5343,7 +5476,8 @@
     "pokedexNumber": 510,
     "species": "冷酷寶可夢",
     "evolvesFrom": "扒手貓",
-    "illustrator": "Yuu Nishida"
+    "illustrator": "Yuu Nishida",
+    "regulationMark": "I"
   },
   {
     "id": "13411",
@@ -5385,7 +5519,8 @@
     ],
     "pokedexNumber": 559,
     "species": "蛻皮寶可夢",
-    "illustrator": "osare"
+    "illustrator": "osare",
+    "regulationMark": "I"
   },
   {
     "id": "13412",
@@ -5421,7 +5556,8 @@
     "pokedexNumber": 560,
     "species": "惡黨寶可夢",
     "evolvesFrom": "滑滑小子",
-    "illustrator": "osare"
+    "illustrator": "osare",
+    "regulationMark": "I"
   },
   {
     "id": "13413",
@@ -5464,7 +5600,8 @@
     ],
     "pokedexNumber": 568,
     "species": "垃圾袋寶可夢",
-    "illustrator": "OKUBO"
+    "illustrator": "OKUBO",
+    "regulationMark": "I"
   },
   {
     "id": "13414",
@@ -5510,7 +5647,8 @@
     "pokedexNumber": 569,
     "species": "垃圾場寶可夢",
     "evolvesFrom": "破破袋",
-    "illustrator": "OKUBO"
+    "illustrator": "OKUBO",
+    "regulationMark": "I"
   },
   {
     "id": "13415",
@@ -5543,7 +5681,8 @@
     ],
     "pokedexNumber": 570,
     "species": "惡狐寶可夢",
-    "illustrator": "akagi"
+    "illustrator": "akagi",
+    "regulationMark": "I"
   },
   {
     "id": "13416",
@@ -5587,7 +5726,8 @@
     "pokedexNumber": 571,
     "species": "妖狐寶可夢",
     "evolvesFrom": "索羅亞",
-    "illustrator": "akagi"
+    "illustrator": "akagi",
+    "regulationMark": "I"
   },
   {
     "id": "13417",
@@ -5632,7 +5772,8 @@
     ],
     "pokedexNumber": 633,
     "species": "粗魯寶可夢",
-    "illustrator": "kodama"
+    "illustrator": "kodama",
+    "regulationMark": "I"
   },
   {
     "id": "13418",
@@ -5680,7 +5821,8 @@
     "pokedexNumber": 634,
     "species": "粗暴寶可夢",
     "evolvesFrom": "單首龍",
-    "illustrator": "kodama"
+    "illustrator": "kodama",
+    "regulationMark": "I"
   },
   {
     "id": "13420",
@@ -5728,7 +5870,8 @@
     ],
     "pokedexNumber": 597,
     "species": "刺果寶可夢",
-    "illustrator": "Hasuno"
+    "illustrator": "Hasuno",
+    "regulationMark": "I"
   },
   {
     "id": "13421",
@@ -5779,7 +5922,8 @@
     "pokedexNumber": 598,
     "species": "刺球寶可夢",
     "evolvesFrom": "種子鐵球",
-    "illustrator": "Hasuno"
+    "illustrator": "Hasuno",
+    "regulationMark": "I"
   },
   {
     "id": "13422",
@@ -5816,7 +5960,8 @@
     ],
     "pokedexNumber": 599,
     "species": "齒輪寶可夢",
-    "illustrator": "Amelicart"
+    "illustrator": "Amelicart",
+    "regulationMark": "I"
   },
   {
     "id": "13423",
@@ -5856,7 +6001,8 @@
     "pokedexNumber": 600,
     "species": "齒輪寶可夢",
     "evolvesFrom": "齒輪兒",
-    "illustrator": "Amelicart"
+    "illustrator": "Amelicart",
+    "regulationMark": "I"
   },
   {
     "id": "13424",
@@ -5905,7 +6051,8 @@
     "pokedexNumber": 601,
     "species": "齒輪寶可夢",
     "evolvesFrom": "齒輪組",
-    "illustrator": "Amelicart"
+    "illustrator": "Amelicart",
+    "regulationMark": "I"
   },
   {
     "id": "13425",
@@ -5951,7 +6098,8 @@
     ],
     "pokedexNumber": 632,
     "species": "鐵蟻寶可夢",
-    "illustrator": "Yuka Morii"
+    "illustrator": "Yuka Morii",
+    "regulationMark": "I"
   },
   {
     "id": "13426",
@@ -5991,7 +6139,8 @@
     ],
     "pokedexNumber": 621,
     "species": "洞穴寶可夢",
-    "illustrator": "Nurikabe"
+    "illustrator": "Nurikabe",
+    "regulationMark": "I"
   },
   {
     "id": "13427",
@@ -6032,7 +6181,8 @@
     ],
     "pokedexNumber": 504,
     "species": "放哨寶可夢",
-    "illustrator": "Ounishi"
+    "illustrator": "Ounishi",
+    "regulationMark": "I"
   },
   {
     "id": "13428",
@@ -6074,7 +6224,8 @@
     "pokedexNumber": 505,
     "species": "警戒寶可夢",
     "evolvesFrom": "探探鼠",
-    "illustrator": "Ounishi"
+    "illustrator": "Ounishi",
+    "regulationMark": "I"
   },
   {
     "id": "13429",
@@ -6107,7 +6258,8 @@
     ],
     "pokedexNumber": 506,
     "species": "小狗寶可夢",
-    "illustrator": "sowsow"
+    "illustrator": "sowsow",
+    "regulationMark": "I"
   },
   {
     "id": "13430",
@@ -6151,7 +6303,8 @@
     "pokedexNumber": 507,
     "species": "忠犬寶可夢",
     "evolvesFrom": "小約克",
-    "illustrator": "sowsow"
+    "illustrator": "sowsow",
+    "regulationMark": "I"
   },
   {
     "id": "13431",
@@ -6199,7 +6352,8 @@
     "pokedexNumber": 508,
     "species": "寬大寶可夢",
     "evolvesFrom": "哈約克",
-    "illustrator": "sowsow"
+    "illustrator": "sowsow",
+    "regulationMark": "I"
   },
   {
     "id": "13433",
@@ -6245,7 +6399,8 @@
     ],
     "pokedexNumber": 627,
     "species": "雛鷹寶可夢",
-    "illustrator": "Kedamahadaitai Yawarakai"
+    "illustrator": "Kedamahadaitai Yawarakai",
+    "regulationMark": "I"
   },
   {
     "id": "13434",
@@ -6294,7 +6449,8 @@
     "pokedexNumber": 628,
     "species": "勇猛寶可夢",
     "evolvesFrom": "毛頭小鷹",
-    "illustrator": "Kedamahadaitai Yawarakai"
+    "illustrator": "Kedamahadaitai Yawarakai",
+    "regulationMark": "I"
   },
   {
     "id": "13435",
@@ -6341,7 +6497,8 @@
     ],
     "pokedexNumber": 641,
     "species": "旋風寶可夢",
-    "illustrator": "Nisota Niso"
+    "illustrator": "Nisota Niso",
+    "regulationMark": "I"
   },
   {
     "id": "13436",
@@ -6354,7 +6511,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13436/",
     "scrapedAt": "2026-04-16T08:10:54.646Z",
     "rulesText": "從自己的棄牌區選擇最多2張基本能量卡，在給對手看過後加入手牌。",
-    "illustrator": "Studio Bora Inc."
+    "illustrator": "Studio Bora Inc.",
+    "regulationMark": "I"
   },
   {
     "id": "13437",
@@ -6367,7 +6525,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13437/",
     "scrapedAt": "2026-04-16T08:10:55.371Z",
     "rulesText": "選擇最多2張雙方的場上寶可夢身上附加的「寶可夢道具」卡，將其丟棄。",
-    "illustrator": "Studio Bora Inc."
+    "illustrator": "Studio Bora Inc.",
+    "regulationMark": "I"
   },
   {
     "id": "13438",
@@ -6380,7 +6539,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13438/",
     "scrapedAt": "2026-04-16T08:10:56.096Z",
     "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。若在自己的回合中，則可將場上的這張卡丟棄。\n\n只要這隻寶可夢在備戰區，不會受到對手的寶可夢招式的傷害。",
-    "illustrator": "AYUMI ODASHIMA"
+    "illustrator": "AYUMI ODASHIMA",
+    "regulationMark": "I"
   },
   {
     "id": "13439",
@@ -6393,7 +6553,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13439/",
     "scrapedAt": "2026-04-16T08:10:56.817Z",
     "rulesText": "附有這張卡的寶可夢（「擁有規則的寶可夢」除外）使用的招式，對對手的戰鬥場的「寶可夢【ex】」造成的傷害「+30」點。",
-    "illustrator": "Toyste Beach"
+    "illustrator": "Toyste Beach",
+    "regulationMark": "I"
   },
   {
     "id": "13440",
@@ -6406,7 +6567,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13440/",
     "scrapedAt": "2026-04-16T08:10:57.543Z",
     "rulesText": "雙方玩家各將手牌全部放回牌庫並重洗。然後，自己擲1次硬幣，若為正面，則從牌庫抽卡，自己抽出5張，對手抽出3張。若為反面，則從牌庫抽卡，自己抽出3張，對手抽出5張。",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "regulationMark": "I"
   },
   {
     "id": "13441",
@@ -6419,7 +6581,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13441/",
     "scrapedAt": "2026-04-16T08:10:58.231Z",
     "rulesText": "從自己的牌庫抽出3張卡。",
-    "illustrator": "Atsushi Furusawa"
+    "illustrator": "Atsushi Furusawa",
+    "regulationMark": "I"
   },
   {
     "id": "13442",
@@ -6432,7 +6595,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13442/",
     "scrapedAt": "2026-04-16T08:10:58.960Z",
     "rulesText": "從自己的牌庫選擇進化寶可夢卡與能量卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
-    "illustrator": "yuu"
+    "illustrator": "yuu",
+    "regulationMark": "I"
   },
   {
     "id": "13443",
@@ -6444,7 +6608,8 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013443.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13443/",
     "scrapedAt": "2026-04-16T08:10:59.674Z",
-    "rulesText": "將附於寶可夢身上的這張卡，在自己的回合結束時丟棄。\n\n只要這張卡附於寶可夢身上，視為提供1個【無】能量。\n\n若附於進化寶可夢身上，則視為提供3個【無】能量。"
+    "rulesText": "將附於寶可夢身上的這張卡，在自己的回合結束時丟棄。\n\n只要這張卡附於寶可夢身上，視為提供1個【無】能量。\n\n若附於進化寶可夢身上，則視為提供3個【無】能量。",
+    "regulationMark": "I"
   },
   {
     "id": "13779",
@@ -6477,7 +6642,8 @@
     ],
     "pokedexNumber": 540,
     "species": "裁縫寶可夢",
-    "illustrator": "nisimono"
+    "illustrator": "nisimono",
+    "regulationMark": "I"
   },
   {
     "id": "13780",
@@ -6520,7 +6686,8 @@
     "pokedexNumber": 541,
     "species": "足不出葉寶可夢",
     "evolvesFrom": "蟲寶包",
-    "illustrator": "313"
+    "illustrator": "313",
+    "regulationMark": "I"
   },
   {
     "id": "13781",
@@ -6563,7 +6730,8 @@
     "pokedexNumber": 542,
     "species": "育兒寶可夢",
     "evolvesFrom": "寶包繭",
-    "illustrator": "mashu"
+    "illustrator": "mashu",
+    "regulationMark": "I"
   },
   {
     "id": "13782",
@@ -6596,7 +6764,8 @@
     ],
     "pokedexNumber": 546,
     "species": "棉球寶可夢",
-    "illustrator": "Keisin"
+    "illustrator": "Keisin",
+    "regulationMark": "I"
   },
   {
     "id": "13783",
@@ -6630,7 +6799,8 @@
     ],
     "pokedexNumber": 585,
     "species": "季節寶可夢",
-    "illustrator": "takashi shiraishi"
+    "illustrator": "takashi shiraishi",
+    "regulationMark": "I"
   },
   {
     "id": "13784",
@@ -6676,7 +6846,8 @@
     "pokedexNumber": 586,
     "species": "季節寶可夢",
     "evolvesFrom": "四季鹿",
-    "illustrator": "Yano Keiji"
+    "illustrator": "Yano Keiji",
+    "regulationMark": "I"
   },
   {
     "id": "13785",
@@ -6718,7 +6889,8 @@
     ],
     "pokedexNumber": 616,
     "species": "蝸牛寶可夢",
-    "illustrator": "Mékayu"
+    "illustrator": "Mékayu",
+    "regulationMark": "I"
   },
   {
     "id": "13786",
@@ -6752,7 +6924,8 @@
     "pokedexNumber": 617,
     "species": "脫殼寶可夢",
     "evolvesFrom": "小嘴蝸",
-    "illustrator": "Taiga Kasai"
+    "illustrator": "Taiga Kasai",
+    "regulationMark": "I"
   },
   {
     "id": "13787",
@@ -6795,7 +6968,8 @@
     ],
     "pokedexNumber": 640,
     "species": "草原寶可夢",
-    "illustrator": "kodama"
+    "illustrator": "kodama",
+    "regulationMark": "I"
   },
   {
     "id": "13788",
@@ -6837,7 +7011,8 @@
     ],
     "pokedexNumber": 498,
     "species": "火豬寶可夢",
-    "illustrator": "Orca"
+    "illustrator": "Orca",
+    "regulationMark": "I"
   },
   {
     "id": "13789",
@@ -6883,7 +7058,8 @@
     "pokedexNumber": 499,
     "species": "火豬寶可夢",
     "evolvesFrom": "暖暖豬",
-    "illustrator": "Masa"
+    "illustrator": "Masa",
+    "regulationMark": "I"
   },
   {
     "id": "13790",
@@ -6930,7 +7106,8 @@
     "pokedexNumber": 500,
     "species": "大火豬寶可夢",
     "evolvesFrom": "炒炒豬",
-    "illustrator": "NC Empire"
+    "illustrator": "NC Empire",
+    "regulationMark": "I"
   },
   {
     "id": "13791",
@@ -6972,7 +7149,8 @@
     ],
     "pokedexNumber": 513,
     "species": "高溫寶可夢",
-    "illustrator": "GOTO minori"
+    "illustrator": "GOTO minori",
+    "regulationMark": "I"
   },
   {
     "id": "13792",
@@ -7007,7 +7185,8 @@
     "pokedexNumber": 514,
     "species": "火花寶可夢",
     "evolvesFrom": "爆香猴",
-    "illustrator": "sowsow"
+    "illustrator": "sowsow",
+    "regulationMark": "I"
   },
   {
     "id": "13793",
@@ -7050,7 +7229,8 @@
     ],
     "pokedexNumber": 631,
     "species": "食蟻獸寶可夢",
-    "illustrator": "Kariya"
+    "illustrator": "Kariya",
+    "regulationMark": "I"
   },
   {
     "id": "13794",
@@ -7092,7 +7272,8 @@
     ],
     "pokedexNumber": 501,
     "species": "海獺寶可夢",
-    "illustrator": "OKACHEKE"
+    "illustrator": "OKACHEKE",
+    "regulationMark": "I"
   },
   {
     "id": "13795",
@@ -7126,7 +7307,8 @@
     "pokedexNumber": 502,
     "species": "修行寶可夢",
     "evolvesFrom": "水水獺",
-    "illustrator": "Taira Akitsu"
+    "illustrator": "Taira Akitsu",
+    "regulationMark": "I"
   },
   {
     "id": "13796",
@@ -7168,7 +7350,8 @@
     "pokedexNumber": 503,
     "species": "威嚴寶可夢",
     "evolvesFrom": "雙刃丸",
-    "illustrator": "DOM"
+    "illustrator": "DOM",
+    "regulationMark": "I"
   },
   {
     "id": "13797",
@@ -7209,7 +7392,8 @@
     ],
     "pokedexNumber": 550,
     "species": "粗暴寶可夢",
-    "illustrator": "Nakamura Ippan"
+    "illustrator": "Nakamura Ippan",
+    "regulationMark": "I"
   },
   {
     "id": "13798",
@@ -7255,7 +7439,8 @@
     ],
     "pokedexNumber": 580,
     "species": "水鳥寶可夢",
-    "illustrator": "GIDORA"
+    "illustrator": "GIDORA",
+    "regulationMark": "I"
   },
   {
     "id": "13799",
@@ -7303,7 +7488,8 @@
     "pokedexNumber": 581,
     "species": "白鳥寶可夢",
     "evolvesFrom": "鴨寶寶",
-    "illustrator": "Gemi"
+    "illustrator": "Gemi",
+    "regulationMark": "I"
   },
   {
     "id": "13800",
@@ -7345,7 +7531,8 @@
     ],
     "pokedexNumber": 582,
     "species": "新雪寶可夢",
-    "illustrator": "Mina Nakai"
+    "illustrator": "Mina Nakai",
+    "regulationMark": "I"
   },
   {
     "id": "13801",
@@ -7391,7 +7578,8 @@
     "pokedexNumber": 583,
     "species": "冰雪寶可夢",
     "evolvesFrom": "迷你冰",
-    "illustrator": "Yoko Hishida"
+    "illustrator": "Yoko Hishida",
+    "regulationMark": "I"
   },
   {
     "id": "13802",
@@ -7437,7 +7625,8 @@
     "pokedexNumber": 584,
     "species": "暴風雪寶可夢",
     "evolvesFrom": "多多冰",
-    "illustrator": "aoki"
+    "illustrator": "aoki",
+    "regulationMark": "I"
   },
   {
     "id": "13803",
@@ -7479,7 +7668,8 @@
     ],
     "pokedexNumber": 522,
     "species": "帶電寶可夢",
-    "illustrator": "Natsumi Miyanose"
+    "illustrator": "Natsumi Miyanose",
+    "regulationMark": "I"
   },
   {
     "id": "13804",
@@ -7523,7 +7713,8 @@
     "pokedexNumber": 523,
     "species": "雷電寶可夢",
     "evolvesFrom": "斑斑馬",
-    "illustrator": "REND"
+    "illustrator": "REND",
+    "regulationMark": "I"
   },
   {
     "id": "13805",
@@ -7556,7 +7747,8 @@
     ],
     "pokedexNumber": 595,
     "species": "吸附寶可夢",
-    "illustrator": "HYOGONOSUKE"
+    "illustrator": "HYOGONOSUKE",
+    "regulationMark": "I"
   },
   {
     "id": "13806",
@@ -7590,7 +7782,8 @@
     "pokedexNumber": 596,
     "species": "電蜘蛛寶可夢",
     "evolvesFrom": "電電蟲",
-    "illustrator": "Akira Komayama"
+    "illustrator": "Akira Komayama",
+    "regulationMark": "I"
   },
   {
     "id": "13807",
@@ -7633,7 +7826,8 @@
     ],
     "pokedexNumber": 618,
     "species": "陷阱寶可夢",
-    "illustrator": "Toshinao Aoki"
+    "illustrator": "Toshinao Aoki",
+    "regulationMark": "I"
   },
   {
     "id": "13808",
@@ -7670,7 +7864,8 @@
     ],
     "pokedexNumber": 527,
     "species": "蝙蝠寶可夢",
-    "illustrator": "Shibuzoh."
+    "illustrator": "Shibuzoh.",
+    "regulationMark": "I"
   },
   {
     "id": "13809",
@@ -7717,7 +7912,8 @@
     "pokedexNumber": 528,
     "species": "求愛寶可夢",
     "evolvesFrom": "滾滾蝙蝠",
-    "illustrator": "Saboteri"
+    "illustrator": "Saboteri",
+    "regulationMark": "I"
   },
   {
     "id": "13810",
@@ -7764,7 +7960,8 @@
     ],
     "pokedexNumber": 561,
     "species": "似鳥寶可夢",
-    "illustrator": "mingo"
+    "illustrator": "mingo",
+    "regulationMark": "I"
   },
   {
     "id": "13811",
@@ -7803,7 +8000,8 @@
     ],
     "pokedexNumber": 562,
     "species": "魂寶可夢",
-    "illustrator": "YASHIRO Nanaco"
+    "illustrator": "YASHIRO Nanaco",
+    "regulationMark": "I"
   },
   {
     "id": "13812",
@@ -7853,7 +8051,8 @@
     "pokedexNumber": 563,
     "species": "棺木寶可夢",
     "evolvesFrom": "哭哭面具",
-    "illustrator": "Haru Akasaka"
+    "illustrator": "Haru Akasaka",
+    "regulationMark": "I"
   },
   {
     "id": "13813",
@@ -7890,7 +8089,8 @@
     ],
     "pokedexNumber": 574,
     "species": "凝視寶可夢",
-    "illustrator": "Kanami Ogata"
+    "illustrator": "Kanami Ogata",
+    "regulationMark": "I"
   },
   {
     "id": "13814",
@@ -7937,7 +8137,8 @@
     "pokedexNumber": 575,
     "species": "操縱寶可夢",
     "evolvesFrom": "哥德寶寶",
-    "illustrator": "Terada Tera"
+    "illustrator": "Terada Tera",
+    "regulationMark": "I"
   },
   {
     "id": "13815",
@@ -7984,7 +8185,8 @@
     "pokedexNumber": 576,
     "species": "天體寶可夢",
     "evolvesFrom": "哥德小童",
-    "illustrator": "IKEDA Saki"
+    "illustrator": "IKEDA Saki",
+    "regulationMark": "I"
   },
   {
     "id": "13816",
@@ -8023,7 +8225,8 @@
     ],
     "pokedexNumber": 592,
     "species": "漂浮寶可夢",
-    "illustrator": "Shinya Komatsu"
+    "illustrator": "Shinya Komatsu",
+    "regulationMark": "I"
   },
   {
     "id": "13817",
@@ -8066,7 +8269,8 @@
     ],
     "pokedexNumber": 524,
     "species": "地幔寶可夢",
-    "illustrator": "Yuriko Akase"
+    "illustrator": "Yuriko Akase",
+    "regulationMark": "I"
   },
   {
     "id": "13818",
@@ -8112,7 +8316,8 @@
     "pokedexNumber": 525,
     "species": "礦石寶可夢",
     "evolvesFrom": "石丸子",
-    "illustrator": "Krgc"
+    "illustrator": "Krgc",
+    "regulationMark": "I"
   },
   {
     "id": "13819",
@@ -8158,7 +8363,8 @@
     "pokedexNumber": 526,
     "species": "高壓寶可夢",
     "evolvesFrom": "地幔岩",
-    "illustrator": "toi8"
+    "illustrator": "toi8",
+    "regulationMark": "I"
   },
   {
     "id": "13820",
@@ -8199,7 +8405,8 @@
     ],
     "pokedexNumber": 539,
     "species": "空手道寶可夢",
-    "illustrator": "nagimiso"
+    "illustrator": "nagimiso",
+    "regulationMark": "I"
   },
   {
     "id": "13821",
@@ -8233,7 +8440,8 @@
     ],
     "pokedexNumber": 566,
     "species": "遠古鳥寶可夢",
-    "illustrator": "Ounishi"
+    "illustrator": "Ounishi",
+    "regulationMark": "I"
   },
   {
     "id": "13822",
@@ -8275,7 +8483,8 @@
     "pokedexNumber": 567,
     "species": "遠古鳥寶可夢",
     "evolvesFrom": "始祖小鳥",
-    "illustrator": "Jerky"
+    "illustrator": "Jerky",
+    "regulationMark": "I"
   },
   {
     "id": "13823",
@@ -8308,7 +8517,8 @@
     ],
     "pokedexNumber": 619,
     "species": "武術寶可夢",
-    "illustrator": "Iori Suzuki"
+    "illustrator": "Iori Suzuki",
+    "regulationMark": "I"
   },
   {
     "id": "13824",
@@ -8351,7 +8561,8 @@
     "pokedexNumber": 620,
     "species": "武術寶可夢",
     "evolvesFrom": "功夫鼬",
-    "illustrator": "Atsuya Uki"
+    "illustrator": "Atsuya Uki",
+    "regulationMark": "I"
   },
   {
     "id": "13825",
@@ -8397,7 +8608,8 @@
     ],
     "pokedexNumber": 639,
     "species": "岩窟寶可夢",
-    "illustrator": "Shiburingaru"
+    "illustrator": "Shiburingaru",
+    "regulationMark": "I"
   },
   {
     "id": "13826",
@@ -8430,7 +8642,8 @@
     ],
     "pokedexNumber": 509,
     "species": "壞心眼寶可夢",
-    "illustrator": "Mugi Hamada"
+    "illustrator": "Mugi Hamada",
+    "regulationMark": "I"
   },
   {
     "id": "13827",
@@ -8464,7 +8677,8 @@
     "pokedexNumber": 510,
     "species": "冷酷寶可夢",
     "evolvesFrom": "扒手貓",
-    "illustrator": "matazo"
+    "illustrator": "matazo",
+    "regulationMark": "I"
   },
   {
     "id": "13828",
@@ -8506,7 +8720,8 @@
     ],
     "pokedexNumber": 559,
     "species": "蛻皮寶可夢",
-    "illustrator": "Nelnal"
+    "illustrator": "Nelnal",
+    "regulationMark": "I"
   },
   {
     "id": "13829",
@@ -8542,7 +8757,8 @@
     "pokedexNumber": 560,
     "species": "惡黨寶可夢",
     "evolvesFrom": "滑滑小子",
-    "illustrator": "Tetsu Kayama"
+    "illustrator": "Tetsu Kayama",
+    "regulationMark": "I"
   },
   {
     "id": "13830",
@@ -8585,7 +8801,8 @@
     ],
     "pokedexNumber": 568,
     "species": "垃圾袋寶可夢",
-    "illustrator": "Oswaldo KATO"
+    "illustrator": "Oswaldo KATO",
+    "regulationMark": "I"
   },
   {
     "id": "13831",
@@ -8631,7 +8848,8 @@
     "pokedexNumber": 569,
     "species": "垃圾場寶可夢",
     "evolvesFrom": "破破袋",
-    "illustrator": "Gapao"
+    "illustrator": "Gapao",
+    "regulationMark": "I"
   },
   {
     "id": "13832",
@@ -8664,7 +8882,8 @@
     ],
     "pokedexNumber": 570,
     "species": "惡狐寶可夢",
-    "illustrator": "Naoki Saito"
+    "illustrator": "Naoki Saito",
+    "regulationMark": "I"
   },
   {
     "id": "13833",
@@ -8708,7 +8927,8 @@
     "pokedexNumber": 571,
     "species": "妖狐寶可夢",
     "evolvesFrom": "索羅亞",
-    "illustrator": "Iwamoto05"
+    "illustrator": "Iwamoto05",
+    "regulationMark": "I"
   },
   {
     "id": "13834",
@@ -8753,7 +8973,8 @@
     ],
     "pokedexNumber": 633,
     "species": "粗魯寶可夢",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "regulationMark": "I"
   },
   {
     "id": "13835",
@@ -8801,7 +9022,8 @@
     "pokedexNumber": 634,
     "species": "粗暴寶可夢",
     "evolvesFrom": "單首龍",
-    "illustrator": "Kyoko Umemoto"
+    "illustrator": "Kyoko Umemoto",
+    "regulationMark": "I"
   },
   {
     "id": "13836",
@@ -8849,7 +9071,8 @@
     ],
     "pokedexNumber": 597,
     "species": "刺果寶可夢",
-    "illustrator": "Nurikabe"
+    "illustrator": "Nurikabe",
+    "regulationMark": "I"
   },
   {
     "id": "13837",
@@ -8900,7 +9123,8 @@
     "pokedexNumber": 598,
     "species": "刺球寶可夢",
     "evolvesFrom": "種子鐵球",
-    "illustrator": "Minahamu"
+    "illustrator": "Minahamu",
+    "regulationMark": "I"
   },
   {
     "id": "13838",
@@ -8937,7 +9161,8 @@
     ],
     "pokedexNumber": 599,
     "species": "齒輪寶可夢",
-    "illustrator": "Nobuhiro Imagawa"
+    "illustrator": "Nobuhiro Imagawa",
+    "regulationMark": "I"
   },
   {
     "id": "13839",
@@ -8977,7 +9202,8 @@
     "pokedexNumber": 600,
     "species": "齒輪寶可夢",
     "evolvesFrom": "齒輪兒",
-    "illustrator": "okayamatakatoshi"
+    "illustrator": "okayamatakatoshi",
+    "regulationMark": "I"
   },
   {
     "id": "13840",
@@ -9026,7 +9252,8 @@
     "pokedexNumber": 601,
     "species": "齒輪寶可夢",
     "evolvesFrom": "齒輪組",
-    "illustrator": "Yuka Morii"
+    "illustrator": "Yuka Morii",
+    "regulationMark": "I"
   },
   {
     "id": "13841",
@@ -9072,7 +9299,8 @@
     ],
     "pokedexNumber": 632,
     "species": "鐵蟻寶可夢",
-    "illustrator": "Scav"
+    "illustrator": "Scav",
+    "regulationMark": "I"
   },
   {
     "id": "13842",
@@ -9112,7 +9340,8 @@
     ],
     "pokedexNumber": 621,
     "species": "洞穴寶可夢",
-    "illustrator": "Kamome Shirahama"
+    "illustrator": "Kamome Shirahama",
+    "regulationMark": "I"
   },
   {
     "id": "13843",
@@ -9153,7 +9382,8 @@
     ],
     "pokedexNumber": 504,
     "species": "放哨寶可夢",
-    "illustrator": "Yukihiro Tada"
+    "illustrator": "Yukihiro Tada",
+    "regulationMark": "I"
   },
   {
     "id": "13844",
@@ -9195,7 +9425,8 @@
     "pokedexNumber": 505,
     "species": "警戒寶可夢",
     "evolvesFrom": "探探鼠",
-    "illustrator": "Mousho"
+    "illustrator": "Mousho",
+    "regulationMark": "I"
   },
   {
     "id": "13845",
@@ -9228,7 +9459,8 @@
     ],
     "pokedexNumber": 506,
     "species": "小狗寶可夢",
-    "illustrator": "Narumi Sato"
+    "illustrator": "Narumi Sato",
+    "regulationMark": "I"
   },
   {
     "id": "13846",
@@ -9272,7 +9504,8 @@
     "pokedexNumber": 507,
     "species": "忠犬寶可夢",
     "evolvesFrom": "小約克",
-    "illustrator": "Makura Tami"
+    "illustrator": "Makura Tami",
+    "regulationMark": "I"
   },
   {
     "id": "13847",
@@ -9320,7 +9553,8 @@
     "pokedexNumber": 508,
     "species": "寬大寶可夢",
     "evolvesFrom": "哈約克",
-    "illustrator": "Eri Kamei"
+    "illustrator": "Eri Kamei",
+    "regulationMark": "I"
   },
   {
     "id": "13848",
@@ -9366,7 +9600,8 @@
     ],
     "pokedexNumber": 627,
     "species": "雛鷹寶可夢",
-    "illustrator": "Miki Tanaka"
+    "illustrator": "Miki Tanaka",
+    "regulationMark": "I"
   },
   {
     "id": "13849",
@@ -9415,7 +9650,8 @@
     "pokedexNumber": 628,
     "species": "勇猛寶可夢",
     "evolvesFrom": "毛頭小鷹",
-    "illustrator": "kamonabe"
+    "illustrator": "kamonabe",
+    "regulationMark": "I"
   },
   {
     "id": "13850",
@@ -9462,7 +9698,8 @@
     ],
     "pokedexNumber": 641,
     "species": "旋風寶可夢",
-    "illustrator": "Kouki Saitou"
+    "illustrator": "Kouki Saitou",
+    "regulationMark": "I"
   },
   {
     "id": "13851",
@@ -9499,7 +9736,8 @@
       "value": "×2"
     },
     "evolvesFrom": "風妖精GX",
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "regulationMark": "I"
   },
   {
     "id": "13852",
@@ -9542,7 +9780,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "regulationMark": "I"
   },
   {
     "id": "13853",
@@ -9585,7 +9824,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "N-DESIGN Inc."
+    "illustrator": "N-DESIGN Inc.",
+    "regulationMark": "I"
   },
   {
     "id": "13854",
@@ -9631,7 +9871,8 @@
       "Colorless"
     ],
     "evolvesFrom": "胖嘟嘟",
-    "illustrator": "N-DESIGN Inc."
+    "illustrator": "N-DESIGN Inc.",
+    "regulationMark": "I"
   },
   {
     "id": "13855",
@@ -9676,7 +9917,8 @@
       "Colorless"
     ],
     "evolvesFrom": "三首惡龍",
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "regulationMark": "I"
   },
   {
     "id": "13856",
@@ -9717,7 +9959,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "N-DESIGN Inc."
+    "illustrator": "N-DESIGN Inc.",
+    "regulationMark": "I"
   },
   {
     "id": "13857",
@@ -9730,7 +9973,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13857/",
     "scrapedAt": "2026-04-16T08:11:58.301Z",
     "rulesText": "雙方玩家各將手牌全部放回牌庫並重洗。然後，自己擲1次硬幣，若為正面，則從牌庫抽卡，自己抽出5張，對手抽出3張。若為反面，則從牌庫抽卡，自己抽出3張，對手抽出5張。",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "regulationMark": "I"
   },
   {
     "id": "13858",
@@ -9743,7 +9987,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13858/",
     "scrapedAt": "2026-04-16T08:11:58.981Z",
     "rulesText": "從自己的牌庫選擇進化寶可夢卡與能量卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
-    "illustrator": "yuu"
+    "illustrator": "yuu",
+    "regulationMark": "I"
   },
   {
     "id": "13859",
@@ -9780,7 +10025,8 @@
       "value": "×2"
     },
     "evolvesFrom": "風妖精GX",
-    "illustrator": "mele"
+    "illustrator": "mele",
+    "regulationMark": "I"
   },
   {
     "id": "13860",
@@ -9823,7 +10069,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "kawayoo"
+    "illustrator": "kawayoo",
+    "regulationMark": "I"
   },
   {
     "id": "13861",
@@ -9866,7 +10113,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "Yuu Nishida"
+    "illustrator": "Yuu Nishida",
+    "regulationMark": "I"
   },
   {
     "id": "13862",
@@ -9912,7 +10160,8 @@
       "Colorless"
     ],
     "evolvesFrom": "胖嘟嘟",
-    "illustrator": "Narano"
+    "illustrator": "Narano",
+    "regulationMark": "I"
   },
   {
     "id": "13863",
@@ -9957,7 +10206,8 @@
       "Colorless"
     ],
     "evolvesFrom": "三首惡龍",
-    "illustrator": "Takumi Wada"
+    "illustrator": "Takumi Wada",
+    "regulationMark": "I"
   },
   {
     "id": "13864",
@@ -9998,7 +10248,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "Rianti Hidayat"
+    "illustrator": "Rianti Hidayat",
+    "regulationMark": "I"
   },
   {
     "id": "13865",
@@ -10011,7 +10262,8 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13865/",
     "scrapedAt": "2026-04-16T08:12:04.262Z",
     "rulesText": "從自己的牌庫選擇進化寶可夢卡與能量卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
-    "illustrator": "Naoki Saito"
+    "illustrator": "Naoki Saito",
+    "regulationMark": "I"
   },
   {
     "id": "13955",
@@ -10061,7 +10313,8 @@
     "pokedexNumber": 563,
     "species": "棺木寶可夢",
     "evolvesFrom": "哭哭面具",
-    "illustrator": "Bun Toujo"
+    "illustrator": "Bun Toujo",
+    "regulationMark": "I"
   },
   {
     "id": "13956",
@@ -10104,6 +10357,7 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "regulationMark": "I"
   }
 ]

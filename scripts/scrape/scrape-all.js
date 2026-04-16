@@ -21,25 +21,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const OUT_DIR = path.join(REPO_ROOT, 'static', 'cards');
 
-// Main SV series expansions + M-series Mega sets.
+// Standard-legal sets only (H / I / J regulation marks).
+// G-mark sets (SV1S~SV4a) are rotated out of Standard as of 2026-02-06.
 // Ordered roughly chronologically so early failures hit older stuff first.
 const DEFAULT_SETS = [
-  // SV main expansions (Japanese numbering, matches the TW release cadence)
-  'SV1S', 'SV1V', 'SV1a',
-  'SV2P', 'SV2D', 'SV2a',
-  'SV3', 'SV3a',
-  'SV4M', 'SV4K', 'SV4a',
+  // H mark
   'SV5M', 'SV5K', 'SV5a',
   'SV6', 'SV6a',
   'SV7', 'SV7a',
   'SV8', 'SV8a',
+  'MJ',
+  // I mark
   'SV9', 'SV9a',
-  // SV10 already scraped; keep it in the list so --force re-scrapes would work.
   'SV10',
   'SV11W', 'SV11B',
-  // M-series (Mega evolution return)
-  'M1S', 'M1L', 'M2', 'M2a', 'M3', 'M4',
-  'MBD', 'MBG', 'MC', 'MJ'
+  'M1S', 'M1L', 'M2', 'M2a',
+  'MBD', 'MBG',
+  // J mark
+  'MC', 'M3', 'M4'
 ];
 
 function parseArgs(argv) {

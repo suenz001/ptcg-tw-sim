@@ -46,26 +46,55 @@
 
 {#if data.mode === 'index'}
   <!-- ═══════════════════════ Set picker ═══════════════════════ -->
+  {@const markGroups = (() => {
+    const groups = new Map();
+    for (const set of data.sets) {
+      const m = set.regulationMark ?? '?';
+      if (!groups.has(m)) groups.set(m, []);
+      groups.get(m).push(set);
+    }
+    // Ensure H → I → J order
+    const ordered = [];
+    for (const mark of ['H', 'I', 'J']) {
+      if (groups.has(mark)) ordered.push([mark, groups.get(mark)]);
+    }
+    // Anything else
+    for (const [mark, sets] of groups) {
+      if (!['H', 'I', 'J'].includes(mark)) ordered.push([mark, sets]);
+    }
+    return ordered;
+  })()}
+
   <header>
     <a class="back" href="{base}/">← 首頁</a>
     <h1>卡牌資料庫</h1>
     <p class="meta">
       {data.sets.length} 個卡包 · 共 {data.sets.reduce((n, s) => n + s.cardCount, 0)} 張卡
+      <span class="hint">（標準賽 H / I / J 標）</span>
     </p>
   </header>
 
-  <div class="setGrid">
-    {#each data.sets as set (set.code)}
-      <a class="setTile" href="{base}/cards?set={set.code}">
-        <img src={set.coverImageUrl} alt="" loading="lazy" />
-        <div class="setInfo">
-          <div class="setCode">{set.code}</div>
-          <div class="setName">{set.name}</div>
-          <div class="setCount">{set.cardCount} 張</div>
-        </div>
-      </a>
-    {/each}
-  </div>
+  {#each markGroups as [mark, sets] (mark)}
+    <div class="markSection">
+      <h2 class="markHeader">
+        <span class="markBadge mark-{mark}">{mark}</span>
+        <span>{mark} 標 · {sets.length} 個卡包</span>
+      </h2>
+      <div class="setGrid">
+        {#each sets as set (set.code)}
+          <a class="setTile" href="{base}/cards?set={set.code}">
+            <img src={set.coverImageUrl} alt="" loading="lazy" />
+            <div class="setInfo">
+              <span class="markDot mark-{mark}">{mark}</span>
+              <div class="setCode">{set.code}</div>
+              <div class="setName">{set.name}</div>
+              <div class="setCount">{set.cardCount} 張</div>
+            </div>
+          </a>
+        {/each}
+      </div>
+    </div>
+  {/each}
 {:else}
   <!-- ═══════════════════════ Card grid ═══════════════════════ -->
   <header>
@@ -237,9 +266,6 @@
 
   /* ── Set-index grid ── */
   .setGrid {
-    max-width: 1200px;
-    margin: 1.5rem auto 3rem;
-    padding: 0 1rem;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 1rem;
@@ -269,9 +295,6 @@
     border-radius: 4px;
     flex-shrink: 0;
   }
-  .setInfo {
-    min-width: 0;
-  }
   .setCode {
     font-size: 0.75rem;
     color: #888;
@@ -288,6 +311,54 @@
     font-size: 0.8rem;
     color: #666;
   }
+
+  /* ── Regulation mark sections ── */
+  .markSection {
+    max-width: 1200px;
+    margin: 0 auto 2rem;
+    padding: 0 1rem;
+    font-family: system-ui, 'Microsoft JhengHei', sans-serif;
+  }
+  .markHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+    color: #555;
+    font-weight: 500;
+  }
+  .markBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6em;
+    height: 1.6em;
+    border-radius: 4px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .markDot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3em;
+    height: 1.3em;
+    border-radius: 3px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.65rem;
+    position: absolute;
+    top: 0.3rem;
+    right: 0.3rem;
+  }
+  .setInfo {
+    position: relative;
+  }
+  .mark-H { background: #3b82f6; }
+  .mark-I { background: #8b5cf6; }
+  .mark-J { background: #f59e0b; }
 
   /* ── Single-set browser ── */
   .controls {
