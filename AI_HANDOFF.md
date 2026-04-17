@@ -613,8 +613,9 @@ M1 全部 4 個 Phase 已完成。下一個里程碑是 **M2（對戰引擎）**
 - `evolvedThisTurn` 在 EVOLVE 時設置，END_TURN 清除 → 防止同回合再進化
 - 第一回合 (`isFirstTurn`) 完全禁止進化
 
-### Commit
+### Commits
 - `5ceb89c` feat(game): M2 Phase C — evolve, retreat, play basic, trainer effects
+- `6ea8b71` feat(game): built-in preset decks for testing (MBG / MBD)
 
 ### 給下一位 AI
 1. **effects.ts 擴充**：新卡效果只需在 `effects.ts` 加 `reg('卡名', fn)` 即可，不用動引擎
@@ -622,3 +623,37 @@ M1 全部 4 個 Phase 已完成。下一個里程碑是 **M2（對戰引擎）**
 3. **搜尋效果分頁**：目前 PendingSelection deck-search 會把整個牌庫顯示出來（可能幾十張），UI 沒有分頁；大型牌庫時 scroll 即可，M3 如需優化可加
 4. **未實裝效果**：遇到不在 `TRAINER_EFFECTS` 登錄的卡名 → `applyAction` 只棄置卡片並 log「效果尚未實裝」，不影響遊戲進行
 5. **下一步**：M3 連線對戰系統，或繼續補充更多卡效果
+
+---
+
+## 📝 2026-04-17 Session 11 — 內建預設測試牌組（MBG / MBD）
+
+### 目的
+讓遊戲 Lobby 直接提供兩套可選的官方預組牌組，不需玩家先去建立牌組即可測試對戰。
+
+### 新增檔案
+| 檔案 | 用途 |
+|:---|:---|
+| `src/lib/decks/presets.ts` | 兩副官方預組牌表（各 60 張）＋ `PRESET_DECKS: Deck[]`、`PRESET_IDS: Set<string>` |
+
+### 修改檔案
+| 檔案 | 變更 |
+|:---|:---|
+| `src/routes/game/+page.svelte` | import PRESET_DECKS；`allDecks = [...PRESET_DECKS, ...decks]` derived；Lobby 選單加 `<optgroup label="🎴 內建預組">` 分類；`startGame()` 改從 `allDecks` 查找 |
+
+### 牌組內容
+| 牌組 | ID | 寶可夢 | 訓練家 | 能量 |
+|:---|:---|:---:|:---:|:---:|
+| 超級耿鬼ex（MBG）| `__preset_mbg__` | 18 | 28 | 14 惡 |
+| 超級蒂安希ex（MBD）| `__preset_mbd__` | 17 | 29 | 14 超 |
+
+### 預組不存 localStorage
+預設牌組是純靜態常數（`PRESET_IDS` 的 id 以 `__preset_` 開頭），不寫入 localStorage，也不會上傳 Firestore，不影響使用者的雲端牌組。
+
+### Commit
+- `6ea8b71` feat(game): built-in preset decks for testing (MBG / MBD)
+
+### 給下一位 AI
+- 若要新增更多預組，只需在 `presets.ts` 的 `PRESET_DECKS` 陣列加入新的 Deck 物件即可
+- `PRESET_IDS` 用來判斷是否為內建牌組（方便之後在牌組編輯器中標示「內建」badge 或禁止刪除）
+- 卡片 ID 格式為純數字字串（如 `'14129'`），與 `buildCardIndex` 的 key 格式一致
