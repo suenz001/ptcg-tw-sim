@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
   import type { Card } from '$lib/cards/types';
+  import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import { loadAllSets, loadIndex, buildCardIndex } from '$lib/cards/pool';
   import {
     loadDecks,
@@ -26,13 +27,35 @@
   let supertypeFilter = $state<'All' | 'Pokemon' | 'Trainer' | 'Energy'>('All');
   let setFilter = $state<string>('');
   let markFilter = $state<'All' | 'H' | 'I' | 'J'>('All');
+  let pickerPreview = $state<Card | null>(null);
 
   // ── Derived ────────────────────────────────────────────────────────────
   const active = $derived(decks.find((d) => d.id === activeId) ?? null);
 
+  /** 目前預覽的卡片在作用中牌組裡的張數 */
+  const previewCount = $derived(
+    pickerPreview && active
+      ? (active.entries.find((e) => e.cardId === pickerPreview!.id)?.count ?? 0)
+      : 0
+  );
+
   const validation = $derived(
     active ? validateDeck(active, poolById) : null
   );
+
+  /** 各類型張數統計，用於牌組摘要列 */
+  const deckStats = $derived.by(() => {
+    if (!active || !poolReady) return { Pokemon: 0, Trainer: 0, Energy: 0 };
+    let p = 0, t = 0, e = 0;
+    for (const entry of active.entries) {
+      const card = poolById.get(entry.cardId);
+      if (!card) continue;
+      if (card.supertype === 'Pokemon') p += entry.count;
+      else if (card.supertype === 'Trainer') t += entry.count;
+      else e += entry.count;
+    }
+    return { Pokemon: p, Trainer: t, Energy: e };
+  });
 
   const filteredPool = $derived.by(() => {
     if (!poolReady) return [] as Card[];
@@ -160,6 +183,14 @@
     input.value = '';
   }
 
+  // ── Card preview ───────────────────────────────────────────────────────
+  function openPreview(card: Card) { pickerPreview = card; }
+  function closePreview() { pickerPreview = null; }
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') closePreview();
+  }
+
   // Sum of the active deck, used for the running count in the header.
   const totalCount = $derived(
     active ? active.entries.reduce((n, e) => n + e.count, 0) : 0
@@ -184,6 +215,8 @@
     return result;
   });
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <main>
   <header class="page-head">
@@ -260,13 +293,35 @@
           </div>
         {/if}
 
+        <!-- Deck stats bar -->
+        <div class="stats-bar">
+          <span class="stat pokemon">寶可夢 {deckStats.Pokemon}</span>
+          <span class="stat trainer">訓練家 {deckStats.Trainer}</span>
+          <span class="stat energy">能量 {deckStats.Energy}</span>
+          {#if totalCount > 0}
+            <div class="stat-track" title="寶可夢 / 訓練家 / 能量">
+              {#if deckStats.Pokemon > 0}
+                <div class="stat-seg poke" style="width:{(deckStats.Pokemon/60*100).toFixed(1)}%"></div>
+              {/if}
+              {#if deckStats.Trainer > 0}
+                <div class="stat-seg train" style="width:{(deckStats.Trainer/60*100).toFixed(1)}%"></div>
+              {/if}
+              {#if deckStats.Energy > 0}
+                <div class="stat-seg ene" style="width:{(deckStats.Energy/60*100).toFixed(1)}%"></div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+
         {#if active.entries.length === 0}
           <p class="empty">尚未加入任何卡片。請從右側搜尋並點擊「+」加入。</p>
         {:else}
           <ul class="deck-entries">
             {#each activeEntries as { entry, card } (card.id)}
               <li class="entry" data-st={card.supertype}>
-                <img src={card.imageUrl} alt={card.name} loading="lazy" />
+                <button class="entry-thumb" onclick={() => openPreview(card)} title="查看詳情">
+                  <img src={card.imageUrl} alt={card.name} loading="lazy" />
+                </button>
                 <div class="entry-meta">
                   <div class="entry-name">{card.name}</div>
                   <div class="entry-sub">
@@ -328,9 +383,11 @@
         <p class="muted">符合 {filteredPool.length} 張</p>
         <ul class="picker-list">
           {#each filteredPool.slice(0, 120) as card (card.id)}
-            <li>
-              <img src={card.imageUrl} alt={card.name} loading="lazy" />
-              <div class="pick-meta">
+            <li class:previewing={pickerPreview?.id === card.id}>
+              <button class="pick-thumb" onclick={() => openPreview(card)} title="查看詳情">
+                <img src={card.imageUrl} alt={card.name} loading="lazy" />
+              </button>
+              <button class="pick-meta" onclick={() => openPreview(card)}>
                 <div class="pick-name">{card.name}</div>
                 <div class="pick-sub">
                   {card.setCode} · {card.collectorNumber}
@@ -338,8 +395,8 @@
                     <span class="mark mark-{card.regulationMark}">{card.regulationMark}</span>
                   {/if}
                 </div>
-              </div>
-              <button class="icon" onclick={() => addCard(card)}>+</button>
+              </button>
+              <button class="icon add-btn" onclick={() => addCard(card)} title="加入牌組">+</button>
             </li>
           {/each}
         </ul>
@@ -350,6 +407,135 @@
     </section>
   </div>
 </main>
+
+<!-- ── Card preview modal ──────────────────────────────────────────────── -->
+{#if pickerPreview}
+  {@const pv = pickerPreview}
+  {@const pvCount = previewCount}
+  {@const pvMax = maxCopies(pv)}
+  <div class="pv-overlay" role="dialog" aria-modal="true" aria-label="卡片詳情"
+    onclick={closePreview}>
+    <div class="pv-inner" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={closePreview} aria-label="關閉">×</button>
+
+      <!-- Top: image + quick info -->
+      <div class="pv-top">
+        <img class="pv-img" src={pv.imageUrl} alt={pv.name} />
+
+        <div class="pv-info">
+          <h2 class="pv-name">{pv.name}</h2>
+
+          <!-- badges row -->
+          <div class="pv-badges">
+            {#if pv.pokemonType}
+              <span class="type-badge" style="background:{ENERGY_COLOR[pv.pokemonType]}">
+                {ENERGY_LABEL[pv.pokemonType]}
+              </span>
+            {/if}
+            <span class="sub-badge">{pv.subtype}</span>
+            {#if pv.hp}
+              <span class="hp-badge">HP {pv.hp}</span>
+            {/if}
+            {#if pv.regulationMark}
+              <span class="mark mark-{pv.regulationMark}">{pv.regulationMark}</span>
+            {/if}
+          </div>
+
+          {#if pv.evolvesFrom}
+            <p class="pv-evolve">進化自：{pv.evolvesFrom}</p>
+          {/if}
+
+          <!-- Abilities -->
+          {#if pv.abilities?.length}
+            <div class="pv-section">
+              {#each pv.abilities as ab}
+                <div class="pv-ability">
+                  <span class="ab-label">{ab.label}</span>
+                  <strong class="ab-name">{ab.name}</strong>
+                  <p class="ab-effect">{ab.effect}</p>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Attacks -->
+          {#if pv.attacks?.length}
+            <div class="pv-section">
+              {#each pv.attacks as atk}
+                <div class="pv-attack">
+                  <div class="atk-head">
+                    <span class="atk-cost">
+                      {#each atk.cost as e}
+                        <span class="energy-pip" style="background:{ENERGY_COLOR[e]}" title={ENERGY_LABEL[e]}>
+                          {ENERGY_LABEL[e]}
+                        </span>
+                      {/each}
+                    </span>
+                    <strong class="atk-name">{atk.name}</strong>
+                    {#if atk.damage}
+                      <span class="atk-dmg">{atk.damage}</span>
+                    {/if}
+                  </div>
+                  {#if atk.effect}
+                    <p class="atk-effect">{atk.effect}</p>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Rules text (Trainer / Energy) -->
+          {#if pv.rulesText}
+            <div class="pv-section pv-rules">{pv.rulesText}</div>
+          {/if}
+
+          <!-- Weakness / Resistance / Retreat -->
+          {#if pv.weakness || pv.resistance || pv.retreatCost?.length}
+            <div class="pv-wrc">
+              {#if pv.weakness}
+                <span>弱點：
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.weakness.type]}">
+                    {ENERGY_LABEL[pv.weakness.type]}
+                  </span>
+                  {pv.weakness.value}
+                </span>
+              {/if}
+              {#if pv.resistance}
+                <span>抵抗力：
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.resistance.type]}">
+                    {ENERGY_LABEL[pv.resistance.type]}
+                  </span>
+                  {pv.resistance.value}
+                </span>
+              {/if}
+              {#if pv.retreatCost?.length}
+                <span>撤退：
+                  {#each pv.retreatCost as e}
+                    <span class="energy-pip sm" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>
+                  {/each}
+                </span>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Set info -->
+          <p class="pv-setinfo">{pv.setCode} · {pv.collectorNumber}</p>
+
+          <!-- Deck counter -->
+          <div class="pv-counter">
+            {#if active}
+              <span class="pv-count-label">牌組中：<strong>{pvCount} / {pvMax}</strong></span>
+              <button class="icon" onclick={() => removeCard(pv.id)} disabled={pvCount <= 0}>−</button>
+              <button class="icon" onclick={() => addCard(pv)} disabled={!isBasicEnergy(pv) && pvCount >= pvMax}>+</button>
+            {:else}
+              <span class="pv-count-label muted">請先選擇牌組</span>
+            {/if}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   :global(body) {
@@ -689,5 +875,301 @@
   button.icon:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.5rem 0 0.25rem;
+    flex-wrap: wrap;
+  }
+  .stat {
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+  }
+  .stat.pokemon { background: #d4edda; color: #1a6b2e; }
+  .stat.trainer { background: #e8d4f0; color: #5a1a80; }
+  .stat.energy  { background: #fff0d0; color: #7a4a00; }
+  .stat-track {
+    flex: 1;
+    min-width: 80px;
+    height: 6px;
+    background: #eee;
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+  }
+  .stat-seg { height: 100%; }
+  .stat-seg.poke  { background: #2c7a3c; }
+  .stat-seg.train { background: #8a3a80; }
+  .stat-seg.ene   { background: #c77a00; }
+
+  /* Entry thumbnail as button */
+  .entry-thumb {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: zoom-in;
+    border-radius: 2px;
+  }
+  .entry-thumb img {
+    display: block;
+    width: 40px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 2px;
+  }
+
+  /* Picker enhancements */
+  .pick-thumb {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: zoom-in;
+    flex-shrink: 0;
+  }
+  .pick-thumb img {
+    display: block;
+    width: 40px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 2px;
+  }
+  .pick-meta {
+    flex: 1;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    min-width: 0;
+  }
+  .picker-list li.previewing {
+    background: #eef4ff;
+    outline: 2px solid #4a7fd4;
+    outline-offset: -1px;
+    border-radius: 4px;
+  }
+  .add-btn {
+    flex-shrink: 0;
+  }
+
+  /* ── Preview modal ───────────────────────────────────────────────────── */
+  .pv-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    cursor: zoom-out;
+  }
+  .pv-inner {
+    background: #fff;
+    border-radius: 12px;
+    max-width: 760px;
+    width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+    position: relative;
+    padding: 1.5rem;
+    cursor: default;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+  .pv-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    border: 1px solid #ddd;
+    background: #f4f4f4;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 1;
+  }
+  .pv-close:hover { background: #e8e8e8; }
+
+  .pv-top {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+  @media (max-width: 560px) {
+    .pv-top { grid-template-columns: 1fr; }
+    .pv-img { width: 140px; }
+  }
+  .pv-img {
+    width: 180px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  .pv-name {
+    margin: 0 0 0.5rem;
+    font-size: 1.3rem;
+  }
+  .pv-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+  }
+  .type-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+  .sub-badge {
+    padding: 0.15rem 0.5rem;
+    background: #eee;
+    border-radius: 4px;
+    font-size: 0.8rem;
+  }
+  .hp-badge {
+    padding: 0.15rem 0.5rem;
+    background: #ffe5e5;
+    color: #c00;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+  .pv-evolve {
+    margin: 0.25rem 0 0.5rem;
+    font-size: 0.85rem;
+    color: #666;
+  }
+  .pv-setinfo {
+    margin: 0.5rem 0 0;
+    font-size: 0.8rem;
+    color: #999;
+  }
+
+  /* Sections */
+  .pv-section {
+    border-top: 1px solid #eee;
+    margin-top: 0.75rem;
+    padding-top: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .pv-rules {
+    font-size: 0.9rem;
+    color: #444;
+    white-space: pre-wrap;
+  }
+
+  /* Ability */
+  .pv-ability {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.2rem 0.5rem;
+    align-items: baseline;
+  }
+  .ab-label {
+    grid-row: 1;
+    background: #c00;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    align-self: center;
+  }
+  .ab-name {
+    grid-row: 1;
+    font-size: 0.95rem;
+  }
+  .ab-effect {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 0.85rem;
+    color: #444;
+  }
+
+  /* Attack */
+  .pv-attack { display: flex; flex-direction: column; gap: 0.2rem; }
+  .atk-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .atk-cost { display: flex; gap: 0.2rem; flex-wrap: wrap; }
+  .atk-name { font-size: 0.95rem; }
+  .atk-dmg {
+    margin-left: auto;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .atk-effect {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #444;
+  }
+
+  /* Energy pip */
+  .energy-pip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3rem;
+    height: 1.3rem;
+    border-radius: 50%;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .energy-pip.sm {
+    width: 1.1rem;
+    height: 1.1rem;
+    font-size: 0.6rem;
+  }
+
+  /* Weakness / Resistance / Retreat */
+  .pv-wrc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #555;
+    align-items: center;
+  }
+  .pv-wrc span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  /* Deck counter in preview */
+  .pv-counter {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .pv-count-label {
+    font-size: 0.9rem;
+    margin-right: auto;
   }
 </style>
