@@ -42,6 +42,16 @@ export interface CardInstance {
   evolvedFromIid?: string;
   /** 特殊狀態（M4 實裝） */
   status?: SpecialCondition;
+  /**
+   * 本回合剛從手牌打出到備戰區（PLAY_BASIC），不可進化。
+   * 在 END_TURN 時清除。
+   */
+  justPlaced?: boolean;
+  /**
+   * 本回合已進化過，不可再次進化。
+   * 在 END_TURN 時清除。
+   */
+  evolvedThisTurn?: boolean;
 }
 
 export type SpecialCondition =
@@ -67,6 +77,29 @@ export interface PlayerState {
   energyAttachedThisTurn: boolean;
   /** 本回合是否已打出支援者 */
   supporterPlayedThisTurn: boolean;
+  /** 本回合是否已撤退 */
+  retreatedThisTurn: boolean;
+}
+
+// ── 待選擇狀態（訓練家/招式效果需要玩家做決定時）──────────────────────────
+
+export interface PendingSelection {
+  /** 選擇類型 */
+  type: 'deck-search' | 'bench-choose' | 'hand-discard' | 'heal-target';
+  /** 需要做選擇的玩家 */
+  actorIdx: 0 | 1;
+  /** 來源牌堆/目標的玩家（通常等於 actorIdx） */
+  sourcePlayerIdx: 0 | 1;
+  /** 篩選條件（'Basic', 'Pokemon', 'Energy', 'TOP6', 'Basic:HP70' 等） */
+  filter?: string;
+  /** 最少選取數 */
+  minCount: number;
+  /** 最多選取數 */
+  maxCount: number;
+  /** 效果繼續 key（在 RESOLVERS 登錄表中查找） */
+  effectKey: string;
+  /** 額外傳遞給 resolver 的參數 */
+  params?: Record<string, unknown>;
 }
 
 // ── 遊戲狀態 ────────────────────────────────────────────────────────────────
@@ -83,8 +116,7 @@ export interface GameState {
   /** 回合數（從 1 開始，P1 第一回合 = 1） */
   turn: number;
   /**
-   * 第一回合旗標：P1 第一回合不能攻擊
-   * （規則：先手玩家第 1 回合不能使用招式）
+   * 第一回合旗標：P1 第一回合不能攻擊也不能進化（Setup 寶可夢限制）
    */
   isFirstTurn: boolean;
   /** 等待 P1 or P2 在 setup 選完備戰區後，另一方是否也已完成 */
@@ -99,6 +131,11 @@ export interface GameState {
    * M2 只用到 1（一般擊倒），ex 系列為 2（M4 處理）
    */
   pendingPrizes: number;
+  /**
+   * 待處理的互動選擇（訓練家效果觸發時設定）
+   * 設定後 UI 必須顯示選擇介面，玩家透過 RESOLVE_SELECTION 繼續
+   */
+  pendingSelection?: PendingSelection;
 }
 
 export interface LogEntry {
@@ -109,42 +146,29 @@ export interface LogEntry {
 
 // ── 動作 ────────────────────────────────────────────────────────────────────
 
-/**
- * 所有合法動作。引擎是純函式：
- *   applyAction(state, action, pool) → GameState
- *
- * 未來 M3 多人連線只需把動作序列化後送到 Firestore，對方收到後 replay 即可。
- */
 export type GameAction =
   // setup 階段
-  | { type: 'PLACE_ACTIVE'; iid: string }       // 選出場寶可夢
-  | { type: 'BENCH_POKEMON'; iid: string }      // 選備戰區寶可夢
-  | { type: 'FINISH_SETUP' }                    // 完成本方 setup
+  | { type: 'PLACE_ACTIVE'; iid: string }
+  | { type: 'BENCH_POKEMON'; iid: string }
+  | { type: 'FINISH_SETUP' }
 
   // 正式對戰
-  | { type: 'DRAW_CARD' }                       // 抽 1 張牌
-  | { type: 'ATTACH_ENERGY'; energyIid: string; targetIid: string } // 附加能量
-  | { type: 'ATTACK'; attackIndex: number }     // 宣告招式
-  | { type: 'TAKE_PRIZES'; count: number }      // 取獎勵牌（擊倒後）
-  | { type: 'SEND_NEW_ACTIVE'; iid: string }    // 出場寶可夢被擊倒後，送出新的
-  | { type: 'END_TURN' }                        // 結束回合
-
-  // 未來插槽（M3/M4）
-  | { type: 'PLAY_TRAINER'; iid: string; params?: Record<string, unknown> }
+  | { type: 'DRAW_CARD' }
+  | { type: 'PLAY_BASIC'; iid: string }          // 從手牌打出基礎寶可夢到備戰區
+  | { type: 'ATTACH_ENERGY'; energyIid: string; targetIid: string }
   | { type: 'EVOLVE'; fromIid: string; toIid: string }
-  | { type: 'RETREAT'; newActiveIid: string };
+  | { type: 'RETREAT'; newActiveIid: string }
+  | { type: 'PLAY_TRAINER'; iid: string; params?: Record<string, unknown> }
+  | { type: 'RESOLVE_SELECTION'; selectedIids: string[] }
+  | { type: 'ATTACK'; attackIndex: number }
+  | { type: 'TAKE_PRIZES'; count: number }
+  | { type: 'SEND_NEW_ACTIVE'; iid: string }
+  | { type: 'END_TURN' };
 
 // ── 效果腳本插槽（M3/M4 填入） ─────────────────────────────────────────────
 
-/**
- * 每張訓練家/招式效果的執行描述。
- * M2 先留空，M3 起逐步填入常用卡效果。
- * 引擎在 PLAY_TRAINER / ATTACK 時呼叫對應的 EffectScript。
- */
 export interface EffectScript {
-  /** 是否已實裝（false = 顯示「效果尚未支援」提示） */
   implemented: boolean;
-  /** 執行效果，直接修改並回傳新 state（pure） */
   execute?: (
     state: GameState,
     actorIndex: 0 | 1,

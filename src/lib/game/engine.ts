@@ -13,6 +13,7 @@ import type {
   GameState, GameAction, CardInstance,
   PlayerState, LogEntry, TurnPhase
 } from './types';
+import { TRAINER_EFFECTS, RESOLVERS } from './effects';
 
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
@@ -131,7 +132,17 @@ function emptyPlayer(name: string): PlayerState {
     bench: [], discard: [], prizes: [],
     energyAttachedThisTurn: false,
     supporterPlayedThisTurn: false,
+    retreatedThisTurn: false,
   };
+}
+
+/** 清除 CardInstance 上的回合旗標 */
+function clearTurnFlags(c: CardInstance): CardInstance {
+  if (!c.justPlaced && !c.evolvedThisTurn) return c;
+  const n = { ...c };
+  delete n.justPlaced;
+  delete n.evolvedThisTurn;
+  return n;
 }
 
 /** 加一筆 log */
@@ -300,6 +311,163 @@ function handlePlaying(
   const players = [...state.players] as [PlayerState, PlayerState];
   const attacker = { ...players[aIdx], energyAttached: players[aIdx].energyAttached ?? [] };
   const defender = { ...players[dIdx] };
+
+  // ── 若有待選擇，只允許 RESOLVE_SELECTION ────────────────────────────────
+  if (state.pendingSelection && action.type !== 'RESOLVE_SELECTION') return state;
+
+  // ── 選擇解析 ──────────────────────────────────────────────────────────────
+  if (action.type === 'RESOLVE_SELECTION') {
+    if (!state.pendingSelection) return state;
+    const { effectKey, actorIdx, params } = state.pendingSelection;
+    const resolver = RESOLVERS.get(effectKey);
+    const newState: GameState = { ...state, pendingSelection: undefined };
+    if (resolver) {
+      return resolver(newState, actorIdx, action.selectedIids, params, pool);
+    }
+    return newState;
+  }
+
+  // ── 從手牌打出基礎寶可夢到備戰區 ─────────────────────────────────────────
+  if (action.type === 'PLAY_BASIC') {
+    if (state.turnPhase !== 'main') return state;
+    if (attacker.bench.length >= 5) return state;
+    const hIdx = attacker.hand.findIndex(c => c.iid === action.iid);
+    if (hIdx < 0) return state;
+    const inst = attacker.hand[hIdx];
+    const card = pool.get(inst.cardId);
+    if (!card || card.supertype !== 'Pokemon' || card.subtype !== 'Basic') return state;
+
+    const placed = { ...inst, justPlaced: true };
+    attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
+    attacker.bench = [...attacker.bench, placed];
+    players[aIdx] = attacker;
+    return addLog(
+      { ...state, players },
+      `${attacker.name} 將 ${card.name} 放到備戰區`,
+      aIdx
+    );
+  }
+
+  // ── 進化 ──────────────────────────────────────────────────────────────────
+  if (action.type === 'EVOLVE') {
+    if (state.turnPhase !== 'main') return state;
+    if (state.isFirstTurn) return state; // 第一回合不能進化
+
+    // 在手牌找進化卡
+    const evoHIdx = attacker.hand.findIndex(c => c.iid === action.toIid);
+    if (evoHIdx < 0) return state;
+    const evoInst = attacker.hand[evoHIdx];
+    const evoCard = pool.get(evoInst.cardId);
+    if (!evoCard || evoCard.supertype !== 'Pokemon' || !evoCard.evolvesFrom) return state;
+
+    // 在場上（出場或備戰）找基底
+    let basePoke: CardInstance | null = null;
+    let isActive = false;
+    if (attacker.active?.iid === action.fromIid) {
+      basePoke = attacker.active; isActive = true;
+    } else {
+      basePoke = attacker.bench.find(c => c.iid === action.fromIid) ?? null;
+    }
+    if (!basePoke) return state;
+    if (basePoke.justPlaced || basePoke.evolvedThisTurn) return state;
+
+    const baseCard = pool.get(basePoke.cardId);
+    if (!baseCard) return state;
+    if (evoCard.evolvesFrom !== baseCard.name) return state;
+
+    // 進化：繼承傷害、能量、狀態
+    const evolved: CardInstance = {
+      ...evoInst,
+      damage: basePoke.damage,
+      energyAttached: basePoke.energyAttached,
+      toolAttached: basePoke.toolAttached,
+      status: basePoke.status,
+      evolvedFromIid: basePoke.iid,
+      evolvedThisTurn: true,
+      justPlaced: false,
+    };
+
+    attacker.hand = attacker.hand.filter((_, i) => i !== evoHIdx);
+    if (isActive) {
+      attacker.active = evolved;
+    } else {
+      attacker.bench = attacker.bench.map(c => c.iid === action.fromIid ? evolved : c);
+    }
+    players[aIdx] = attacker;
+    return addLog(
+      { ...state, players },
+      `${attacker.name} 的 ${baseCard.name} 進化為 ${evoCard.name}！`,
+      aIdx
+    );
+  }
+
+  // ── 撤退 ──────────────────────────────────────────────────────────────────
+  if (action.type === 'RETREAT') {
+    if (state.turnPhase !== 'main') return state;
+    if (attacker.retreatedThisTurn) return state;
+    if (!attacker.active) return state;
+    if (attacker.bench.length === 0) return state;
+
+    const bIdx = attacker.bench.findIndex(c => c.iid === action.newActiveIid);
+    if (bIdx < 0) return state;
+
+    const activeCard = pool.get(attacker.active.cardId);
+    const retreatCost = activeCard?.retreatCost?.length ?? 0;
+    if (attacker.active.energyAttached.length < retreatCost) return state;
+
+    // 自動丟棄能量（從後方取）
+    const discardE = attacker.active.energyAttached.slice(-retreatCost);
+    const keepE = attacker.active.energyAttached.slice(0, attacker.active.energyAttached.length - retreatCost);
+    const retreatingPoke = { ...attacker.active, energyAttached: keepE };
+    const newActive = { ...attacker.bench[bIdx] };
+    const newBench = attacker.bench.filter((_, i) => i !== bIdx);
+    newBench.push(retreatingPoke);
+
+    attacker.active = newActive;
+    attacker.bench = newBench;
+    attacker.discard = [...attacker.discard, ...discardE];
+    attacker.retreatedThisTurn = true;
+    players[aIdx] = attacker;
+
+    const newActiveCard = pool.get(newActive.cardId);
+    return addLog(
+      { ...state, players },
+      `${attacker.name} 的 ${activeCard?.name ?? '?'} 撤退，${newActiveCard?.name ?? '?'} 上場！`,
+      aIdx
+    );
+  }
+
+  // ── 打出訓練家牌 ──────────────────────────────────────────────────────────
+  if (action.type === 'PLAY_TRAINER') {
+    if (state.turnPhase !== 'main') return state;
+    const hIdx = attacker.hand.findIndex(c => c.iid === action.iid);
+    if (hIdx < 0) return state;
+    const trainerInst = attacker.hand[hIdx];
+    const trainerCard = pool.get(trainerInst.cardId);
+    if (!trainerCard || trainerCard.supertype !== 'Trainer') return state;
+
+    // 支援者限制：每回合只能打 1 張
+    if (trainerCard.subtype === 'Supporter' && attacker.supporterPlayedThisTurn) return state;
+
+    // 移出手牌 → 棄牌區，並標記支援者
+    attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
+    attacker.discard = [...attacker.discard, trainerInst];
+    if (trainerCard.subtype === 'Supporter') attacker.supporterPlayedThisTurn = true;
+    players[aIdx] = attacker;
+
+    let newState: GameState = { ...state, players };
+
+    const effectFn = TRAINER_EFFECTS.get(trainerCard.name);
+    if (effectFn) {
+      return effectFn(newState, aIdx, pool);
+    }
+    // 效果尚未實裝
+    return addLog(
+      newState,
+      `${trainerCard.name}（${trainerCard.subtype}）效果尚未實裝，已棄置`,
+      aIdx
+    );
+  }
 
   // ── 抽牌 ──────────────────────────────────────────────────────────────────
   if (action.type === 'DRAW_CARD') {
@@ -484,10 +652,10 @@ function handlePlaying(
 
   // ── 結束回合 ──────────────────────────────────────────────────────────────
   if (action.type === 'END_TURN') {
-    if (state.pendingPrizes > 0) return state; // 取獎勵前不能結束
+    if (state.pendingPrizes > 0) return state;  // 取獎勵前不能結束
     if (defender.active === null) return state; // 對手必須先送出寶可夢
 
-    // 勝利條件：對手備戰區也空了
+    // 勝利條件：對手備戰區也空了（雙重保險）
     if (defender.bench.length === 0 && defender.active === null) {
       return {
         ...state, phase: 'game-over',
@@ -496,10 +664,20 @@ function handlePlaying(
       };
     }
 
-    // 切換玩家
+    // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn）
+    const currentPlayer = { ...players[aIdx] };
+    currentPlayer.active = currentPlayer.active ? clearTurnFlags(currentPlayer.active) : null;
+    currentPlayer.bench = currentPlayer.bench.map(clearTurnFlags);
+    players[aIdx] = currentPlayer;
+
+    // 重置次方玩家的回合限制旗標
     const nextIdx = dIdx;
-    const nextPlayer = { ...players[nextIdx], energyAttachedThisTurn: false, supporterPlayedThisTurn: false };
-    players[nextIdx] = nextPlayer;
+    players[nextIdx] = {
+      ...players[nextIdx],
+      energyAttachedThisTurn: false,
+      supporterPlayedThisTurn: false,
+      retreatedThisTurn: false,
+    };
 
     const newTurn = aIdx === 1 ? state.turn + 1 : state.turn;
     return addLog(
@@ -511,7 +689,7 @@ function handlePlaying(
         isFirstTurn: false,
         turnPhase: 'draw',
       },
-      `回合結束，換 ${nextPlayer.name} 行動。`,
+      `回合結束，換 ${players[nextIdx].name} 行動。`,
       null
     );
   }
@@ -564,5 +742,88 @@ export function getAvailableAttacks(
 /** 判斷是否有待處理的緊急事項（需要先解決才能 END_TURN） */
 export function hasPendingActions(state: GameState): boolean {
   return state.pendingPrizes > 0 ||
+    !!state.pendingSelection ||
     state.players[state.activePlayerIndex].active === null;
+}
+
+/**
+ * 列出目前行動玩家場上每隻寶可夢可接受哪些進化。
+ * 回傳 { fromIid: 場上寶可夢 iid, toIids: 手牌中可進化的卡片 iid[] }[]
+ */
+export function getEvolvableTargets(
+  state: GameState,
+  pool: Map<string, Card>
+): Array<{ fromIid: string; toIids: string[] }> {
+  if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
+  if (state.isFirstTurn) return [];
+  const player = state.players[state.activePlayerIndex];
+
+  // 手牌中的進化牌（有 evolvesFrom 且非基礎）
+  const handEvos = player.hand.filter(inst => {
+    const c = pool.get(inst.cardId);
+    return c?.supertype === 'Pokemon' && c.evolvesFrom;
+  });
+  if (handEvos.length === 0) return [];
+
+  const fieldPokemon: CardInstance[] = [
+    ...(player.active ? [player.active] : []),
+    ...player.bench,
+  ];
+
+  const result: Array<{ fromIid: string; toIids: string[] }> = [];
+  for (const fp of fieldPokemon) {
+    if (fp.justPlaced || fp.evolvedThisTurn) continue;
+    const fpCard = pool.get(fp.cardId);
+    if (!fpCard) continue;
+    const validEvos = handEvos.filter(evo => pool.get(evo.cardId)?.evolvesFrom === fpCard.name);
+    if (validEvos.length > 0) {
+      result.push({ fromIid: fp.iid, toIids: validEvos.map(e => e.iid) });
+    }
+  }
+  return result;
+}
+
+/**
+ * 目前行動玩家是否可以撤退出場寶可夢。
+ */
+export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
+  if (state.phase !== 'playing' || state.turnPhase !== 'main') return false;
+  const player = state.players[state.activePlayerIndex];
+  if (player.retreatedThisTurn || !player.active || player.bench.length === 0) return false;
+  const card = pool.get(player.active.cardId);
+  const cost = card?.retreatCost?.length ?? 0;
+  return player.active.energyAttached.length >= cost;
+}
+
+/**
+ * 列出手牌中可打出的訓練家牌 iid（考慮支援者限制）。
+ */
+export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): string[] {
+  if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
+  if (state.pendingSelection) return [];
+  const player = state.players[state.activePlayerIndex];
+  return player.hand
+    .filter(inst => {
+      const c = pool.get(inst.cardId);
+      if (!c || c.supertype !== 'Trainer') return false;
+      if (c.subtype === 'Supporter' && player.supporterPlayedThisTurn) return false;
+      return true;
+    })
+    .map(inst => inst.iid);
+}
+
+/**
+ * 列出手牌中可打出到備戰區的基礎寶可夢 iid。
+ */
+export function getPlayableBasics(state: GameState, pool: Map<string, Card>): string[] {
+  if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
+  if (state.pendingSelection) return [];
+  const player = state.players[state.activePlayerIndex];
+  if (player.bench.length >= 5) return [];
+  return player.hand
+    .filter(inst => {
+      const c = pool.get(inst.cardId);
+      return c?.supertype === 'Pokemon' && c.subtype === 'Basic';
+    })
+    .map(inst => inst.iid);
 }
