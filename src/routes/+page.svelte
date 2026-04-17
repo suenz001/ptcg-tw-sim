@@ -71,11 +71,19 @@
   </section>
 
   <section>
+    <h2>⚔️ 對戰</h2>
+    <p>
+      <a href="{base}/game">開始對戰 →</a>
+      <span class="hint">（本機雙人傳遞對戰，實驗性）</span>
+    </p>
+  </section>
+
+  <section>
     <h2>開發路線圖</h2>
     <ol>
       <li><strong>M0 ✅</strong> 卡牌資料管線（繁中卡名 + 效果）</li>
       <li><strong>M1 ✅</strong> 牌組編輯器 + Firebase Auth + 雲端同步</li>
-      <li><strong>M2</strong> 最小規則引擎（20 張卡）</li>
+      <li><strong>M2 🚧</strong> 最小規則引擎（本機雙人對戰）</li>
       <li><strong>M3</strong> 配對 + 連線對戰</li>
       <li><strong>M4</strong> 規則引擎擴充</li>
       <li><strong>M5</strong> 卡池擴充</li>
