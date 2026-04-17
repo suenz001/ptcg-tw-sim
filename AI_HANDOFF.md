@@ -580,4 +580,45 @@ M1 全部 4 個 Phase 已完成。下一個里程碑是 **M2（對戰引擎）**
 3. **EffectScript 插槽**：`types.ts` 中定義了 `EffectScript` interface，M3/M4 逐張卡實裝時填入 `src/lib/game/effects/` 目錄
 4. **EX 判斷**：`engine.ts` 中用 `card.subtype === 'ex'` 判斷是否扣 2 張獎勵牌；目前台灣官網資料的 subtype 欄位需確認格式是否一致
 5. **先手第 1 回合限制**：`isFirstTurn` 在 P1 第一次 END_TURN 時清除（在 `handlePlaying` 的 `END_TURN` case 中）
-6. **下一步 M2 Phase C**：勝負條件邊界測試（獎勵牌剛好清空、牌庫清空等）+ 進化/撤退/訓練家基本流程
+6. **M2 Phase C 已完成**（見下方 Session 10）
+
+---
+
+## 📝 2026-04-17 Session 10 — M2 Phase C（進化 / 撤退 / 打出基礎 / 訓練家）
+
+### 新增檔案
+| 檔案 | 用途 |
+|:---|:---|
+| `src/lib/game/effects.ts` | 訓練家效果登錄表（`TRAINER_EFFECTS` / `RESOLVERS` Map），含 15+ 種常見卡效果 |
+
+### 修改檔案
+| 檔案 | 變更摘要 |
+|:---|:---|
+| `src/lib/game/types.ts` | `CardInstance` 加 `justPlaced?` / `evolvedThisTurn?`；`PlayerState` 加 `retreatedThisTurn`；新增 `PendingSelection` interface；`GameState` 加 `pendingSelection?`；`GameAction` 加 `PLAY_BASIC` / `RESOLVE_SELECTION` |
+| `src/lib/game/engine.ts` | 加入 PLAY_BASIC / EVOLVE / RETREAT / PLAY_TRAINER / RESOLVE_SELECTION 處理；END_TURN 清除 `justPlaced`/`evolvedThisTurn`；export `getEvolvableTargets` / `canRetreat` / `getPlayableTrainers` / `getPlayableBasics` |
+| `src/lib/game/actions.ts` | 加入 `playBasic` / `evolve` / `retreat` / `resolveSelection` |
+| `src/routes/game/+page.svelte` | 手牌新增「上備戰」/ 訓練家「使用」按鈕；出場/備戰寶可夢新增進化下拉選單；出場寶可夢新增撤退選擇器；主階段新增 `PendingSelection` 互動疊層（卡片 grid + 選擇確認） |
+
+### 效果已實裝清單（`effects.ts`）
+**即時支援者**（無互動）：管理員、帕底亞的夥伴、納莉、丹瑜、紫竽、松葉的信心、枇琶
+**互動支援者**：艾莉絲的鬥志（丟1抽至6）、探險家的嚮導（看頂6選2）、小剛的發掘（搜尋基礎）
+**切換物品**：寶可夢交替、急進開關
+**回復物品**：好傷藥（回60丟1能量）、龍之秘藥（回120）
+**搜尋物品**：好友寶芬（HP≤70基礎到備戰）、赫普的包包（任意基礎到備戰）、甜蜜球/黑暗球（搜寶可夢加手牌）
+
+### 系統設計
+- `PendingSelection.effectKey` → `RESOLVERS.get(key)` 找到 resolve 函式，在 `RESOLVE_SELECTION` 時執行
+- 支援者每回合限打 1 張（`supporterPlayedThisTurn`）
+- `justPlaced` 僅在 PLAY_BASIC 時設置，END_TURN 清除 → 防止同回合進化
+- `evolvedThisTurn` 在 EVOLVE 時設置，END_TURN 清除 → 防止同回合再進化
+- 第一回合 (`isFirstTurn`) 完全禁止進化
+
+### Commit
+- `5ceb89c` feat(game): M2 Phase C — evolve, retreat, play basic, trainer effects
+
+### 給下一位 AI
+1. **effects.ts 擴充**：新卡效果只需在 `effects.ts` 加 `reg('卡名', fn)` 即可，不用動引擎
+2. **互動效果流程**：`PLAY_TRAINER` → 呼叫 `effectFn` → 回傳含 `pendingSelection` 的 state → UI 顯示選擇 → `RESOLVE_SELECTION` → 呼叫 `resolver` → 繼續
+3. **搜尋效果分頁**：目前 PendingSelection deck-search 會把整個牌庫顯示出來（可能幾十張），UI 沒有分頁；大型牌庫時 scroll 即可，M3 如需優化可加
+4. **未實裝效果**：遇到不在 `TRAINER_EFFECTS` 登錄的卡名 → `applyAction` 只棄置卡片並 log「效果尚未實裝」，不影響遊戲進行
+5. **下一步**：M3 連線對戰系統，或繼續補充更多卡效果
