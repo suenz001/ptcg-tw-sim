@@ -297,3 +297,27 @@ ptcg-tw-sim/
 ### 最終封面狀態（24 sets 全部有圖）
 - **17 sets** → 官方 archive 包裝圖（archive.pokemon-card.com hero visual）
 - **7 sets** → 代表卡圖：SV5a（001蔓藤怪）、SV6a（001電電蟲）、SV7a（001蛋蛋）、SV9a（001阿響的凱羅斯）、MJ（001凱羅斯）、MBD（超級蒂安希ex）、MBG（超級耿鬼ex）
+
+---
+
+## 📝 2026-04-17 Session 5 — 補齊剩餘 5 個卡包官方封面
+
+> 觸發：使用者要求 SV5a/SV6a/SV7a/SV9a/MJ 不用卡片圖，改找真正的卡包封面
+
+### 解決方式
+- SV5a/SV6a/SV7a/SV9a → 從日本官方 **pokemon-card.com** 的 products 頁面 HTML 擷取 banner/product 圖片 URL
+- MJ (New Trainer Journey) → 台灣 archive 路徑不是 `/mj/` 而是 `/new-trainer-journey/`；在此頁面找到 `og-image.png`（OG 社群分享用圖，代表產品形象）
+
+### 最終封面來源（完整版）
+| Code | 封面圖來源 |
+|:---|:---|
+| SV5K / SV5M | `archive/sv5/` hero-visual.jpg（台灣官網，雙包共用） |
+| SV5a | `pokemon-card.com/products/2024/images/SV5a_banner.jpg`（日本官網） |
+| SV6a | `pokemon-card.com/products/2024/images/SV6a_10.jpg`（日本官網） |
+| SV7a | `pokemon-card.com/products/2024/images/sv7a_banner.jpg`（日本官網） |
+| SV9a | `pokemon-card.com/products/2025/images/sv9a_banner.jpg`（日本官網） |
+| MJ | `archive/new-trainer-journey/assets/images/og-image.png`（台灣官網） |
+| MBD / MBG | 使用者指定 → 蒂安希ex / 耿鬼ex 卡片圖 |
+| 其餘 17 sets | 台灣官網各自的 archive hero-visual |
+
+> **重要**：MJ 的台灣 archive URL 是 `new-trainer-journey` 而非 `mj`，未來若有類似命名不一致的情況，需從 archive 頁面 HTML 的 img src 逐一確認。
