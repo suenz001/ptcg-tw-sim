@@ -387,3 +387,51 @@ Lightbox 新增 `<svelte:window onkeydown={onKeydown} />` 時，若放在 `{#if 
 - **外部圖片熱連結**：如果未來又要換封面，記得先用瀏覽器實測圖片能否顯示（Node fetch ≠ 瀏覽器請求）。安全做法是自存到 `static/covers/`。
 - **`base` 前綴**：本地靜態路徑（`covers/xxx.jpg`）一定要用 `coverUrl()` 包一層，不然在 GitHub Pages 上會 404。
 - **`<svelte:window>`** 必須放在 HTML 頂層（`<script>` 結束之後、任何 `{#if}` 之前）。
+
+---
+
+## 📝 2026-04-17 Session 7 — M1 Phase A/B（卡片詳情預覽 + 牌組統計）
+
+> 觸發：使用者確認 M1 規劃後，開始實作 Phase A（卡片詳情）與 Phase B（統計摘要）
+
+### Phase A — 卡片詳情預覽 Modal
+
+**功能**：
+- 點擊 picker 右欄的卡片縮圖或名稱 → 開啟詳情 overlay
+- 點擊牌組中欄的卡片縮圖也可開啟
+- Modal 內容：大圖（180px）、卡名、HP badge、屬性 badge、標記、進化來源
+- 若有特性（Ability）：顯示紅色 label 標籤 + 名稱 + 效果文字
+- 若有招式（Attack）：顯示能量費用圓形 pip（顏色與 ENERGY_COLOR 對應）、招式名稱、傷害值、效果文字
+- 訓練家/能量卡：顯示 rulesText
+- 弱點 / 抵抗力 / 撤退費用（能量 pip）
+- 牌組內張數 + ± 按鈕（可直接在 modal 內加減，不需關閉）
+- Escape 鍵 / 點背景關閉
+- 目前預覽的卡在 picker 列表有藍色 outline 高亮
+
+**新增 state**：`pickerPreview: Card | null`、`previewCount`（derived）
+
+**新增 functions**：`openPreview(card)`、`closePreview()`、`onKeydown(e)` → Escape 關閉
+
+### Phase B — 牌組統計摘要列
+
+**功能**：
+- 在驗證提示下方顯示：`寶可夢 XX` · `訓練家 XX` · `能量 XX`（彩色 pill）
+- 右側附加比例進度條（綠/紫/橘，60 張為底）
+- 即時從 `poolById` 計算，`deckStats` derived
+
+### 修改檔案
+| 檔案 | 變更 |
+|:---|:---|
+| `src/routes/decks/+page.svelte` | 新增 preview modal、stats bar、相關 state/derived/CSS |
+
+### Commit
+- `57728b9` feat(decks): card detail preview modal + deck stats bar (M1 Phase A/B)
+
+### M1 剩餘工作
+- [ ] **Phase C** — 文字格式匯入匯出（PTCGL 格式：`4 皮卡丘 SV5K 001`）
+- [ ] **Phase D** — Firebase Anonymous Auth + Firestore 雲端同步
+
+### 給下一位 AI
+- `ENERGY_LABEL` / `ENERGY_COLOR` 定義在 `src/lib/cards/energy.ts`，preview modal 直接 import 使用
+- `maxCopies(card)` / `isBasicEnergy(card)` 在 `src/lib/decks/validation.ts`，preview modal 的 ± 按鈕也在用
+- Phase C 文字格式建議格式：每行 `{count} {名稱} {setCode} {collectorNumber}`，可對照 `poolById` 解析
