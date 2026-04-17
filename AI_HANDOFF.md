@@ -428,10 +428,81 @@ Lightbox 新增 `<svelte:window onkeydown={onKeydown} />` 時，若放在 `{#if 
 - `57728b9` feat(decks): card detail preview modal + deck stats bar (M1 Phase A/B)
 
 ### M1 剩餘工作
-- [ ] **Phase C** — 文字格式匯入匯出（PTCGL 格式：`4 皮卡丘 SV5K 001`）
-- [ ] **Phase D** — Firebase Anonymous Auth + Firestore 雲端同步
+- [x] **Phase C** — 文字格式匯入匯出 ✅
+- [x] **Phase D** — Firebase Anonymous Auth + Firestore 雲端同步 ✅
+- M1 **全部完成** ✅
 
 ### 給下一位 AI
 - `ENERGY_LABEL` / `ENERGY_COLOR` 定義在 `src/lib/cards/energy.ts`，preview modal 直接 import 使用
 - `maxCopies(card)` / `isBasicEnergy(card)` 在 `src/lib/decks/validation.ts`，preview modal 的 ± 按鈕也在用
-- Phase C 文字格式建議格式：每行 `{count} {名稱} {setCode} {collectorNumber}`，可對照 `poolById` 解析
+
+---
+
+## 📝 2026-04-17 Session 8 — M1 Phase C/D（文字格式 + Firebase 同步）
+
+> 接續 Session 7，完成 M1 最後兩個 Phase
+
+### Phase C — 文字格式匯入匯出
+
+**格式**：每行 `{張數} {卡名} {卡包代號} {卡號}`，首行可加 `// 牌組名稱`
+
+**匯出**：
+- 按鈕「匯出文字」（只在有牌組且有卡片時啟用）
+- 開啟 modal：顯示格式化文字、「複製到剪貼簿」（`navigator.clipboard`）、「下載 .txt」
+
+**匯入**：
+- 按鈕「匯入文字」（只在卡池載入完成時啟用）
+- 開啟 modal：貼上文字 → 按「匯入」
+- 解析邏輯：用二級索引 `poolBySetNum`（`${setCode}-${collectorNumber}` → Card）逐行查找
+- 找不到的卡片：彙整後一次性 confirm 對話框，可選擇略過繼續匯入
+- 首行 `// 名稱` 自動設為牌組名稱
+
+**新增 derived**：
+- `poolBySetNum: Map<string, Card>` — 二級索引供匯入用
+- `textExportContent: string` — 格式化後的匯出文字
+
+### Phase D — Firebase Anonymous Auth + Firestore 雲端同步
+
+**架構**：
+- `src/lib/decks/cloud.ts`：`syncDeckToCloud` / `removeDeckFromCloud` / `loadDecksFromCloud`
+- Firestore 路徑：`users/{uid}/decks/{deckId}`（每個牌組一個 document）
+- `firestore.rules`：只允許 `request.auth.uid == userId`
+
+**同步流程**（onMount）：
+1. `signInAnonymously(auth)` → 取得 uid（匿名，不需使用者操作）
+2. 先載入 localStorage（立即顯示）
+3. 讀取 Firestore：若雲端有資料，以 `updatedAt` 決定哪份較新，合併
+4. 首次使用雲端（cloud 空）：把本地牌組全部推上去
+5. 合併結果存回 localStorage + 更新 state
+
+**每次操作都 fire-and-forget 同步**：create / rename / add card / remove card / clear / import JSON / import text → `pushDeck()` 或 `dropDeck()`
+
+**狀態顯示**：頁首 pill 標籤
+- `⏳ 同步中`（黃底）
+- `☁️ 已同步`（綠底）
+- `⚠️ 離線`（紅底，hover 顯示錯誤訊息）
+- `⬜ 本機`（灰底，尚未登入時）
+
+**注意**：Firebase Console 需手動啟用 Anonymous Auth：
+> Authentication → Sign-in method → Anonymous → Enable
+
+### 新增檔案
+| 檔案 | 用途 |
+|:---|:---|
+| `src/lib/decks/cloud.ts` | Firestore CRUD helpers |
+| `firestore.rules` | Firestore security rules（需部署：`firebase deploy --only firestore:rules`） |
+
+### Commits
+- `57728b9` feat(decks): card detail preview modal + deck stats bar (M1 Phase A/B)
+- `2c4b809` feat(decks): text format import/export + Firebase cloud sync (M1 Phase C/D)
+
+### M1 完工狀態
+M1 全部 4 個 Phase 已完成。下一個里程碑是 **M2（對戰引擎）**：
+- M2 規劃：後端對戰邏輯（Firebase Realtime / Firestore 房間）、牌局狀態機
+- `src/lib/cards/pool.ts` 已可在 M2 規則引擎復用
+
+### 給下一位 AI 的注意事項
+1. **Firebase Console 要手動啟用 Anonymous Auth**，程式碼已就緒，但平台設定需人工操作
+2. **Firestore rules 要部署**：`firebase deploy --only firestore:rules`（需安裝 firebase CLI，`npm i -g firebase-tools`）
+3. cloud.ts 使用 `firebase/firestore`（非 `firebase/firestore/lite`），保留完整監聽能力以供 M2 使用
+4. 同步策略是「樂觀更新 + 最後寫入時間戳贏」，如果未來需要衝突解決，要修改 `onAuthStateChanged` 中的 merge 邏輯
