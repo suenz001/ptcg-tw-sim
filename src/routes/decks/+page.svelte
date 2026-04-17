@@ -14,7 +14,16 @@
   import { validateDeck, maxCopies, isBasicEnergy } from '$lib/decks/validation';
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
   import { auth } from '$lib/firebase';
-  import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
+  import {
+    signInAnonymously,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    linkWithCredential,
+    EmailAuthProvider,
+    signOut,
+    onAuthStateChanged,
+    type User
+  } from 'firebase/auth';
 
   // ── Data state ─────────────────────────────────────────────────────────
   let decks = $state<Deck[]>([]);
@@ -29,6 +38,16 @@
   let firebaseUser = $state<User | null>(null);
   let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   let syncError = $state<string | null>(null);
+
+  // ── Auth modal state ───────────────────────────────────────────────────
+  let showAuthModal = $state(false);
+  let authTab = $state<'upgrade' | 'login'>('upgrade');
+  let authEmail = $state('');
+  let authPassword = $state('');
+  let authError = $state<string | null>(null);
+  let authLoading = $state(false);
+
+  const isAnonymous = $derived(firebaseUser?.isAnonymous ?? true);
 
   // ── UI state ───────────────────────────────────────────────────────────
   let search = $state('');
@@ -382,6 +401,62 @@
     importTextInput = '';
   }
 
+  // ── Auth actions ───────────────────────────────────────────────────────
+  function openAuthModal() {
+    authTab = isAnonymous ? 'upgrade' : 'login';
+    authEmail = '';
+    authPassword = '';
+    authError = null;
+    showAuthModal = true;
+  }
+
+  /** 匿名帳號升級為 Email 帳號（保留現有 uid 與牌組） */
+  async function upgradeAccount() {
+    if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼'; return; }
+    authLoading = true; authError = null;
+    try {
+      const credential = EmailAuthProvider.credential(authEmail, authPassword);
+      await linkWithCredential(auth.currentUser!, credential);
+      showAuthModal = false;
+    } catch (e: any) {
+      authError = friendlyAuthError(e.code);
+    } finally { authLoading = false; }
+  }
+
+  /** 用 Email 登入（切換帳號，從雲端載入該帳號的牌組） */
+  async function loginWithEmail() {
+    if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼'; return; }
+    authLoading = true; authError = null;
+    try {
+      await signInWithEmailAndPassword(auth, authEmail, authPassword);
+      // onAuthStateChanged 會自動觸發，重新載入雲端牌組
+      showAuthModal = false;
+    } catch (e: any) {
+      authError = friendlyAuthError(e.code);
+    } finally { authLoading = false; }
+  }
+
+  /** 登出（回到匿名狀態） */
+  async function handleSignOut() {
+    if (!confirm('確定登出？登出後將以匿名模式繼續使用。')) return;
+    await signOut(auth);
+    // onAuthStateChanged 會觸發並以匿名重新登入
+  }
+
+  function friendlyAuthError(code: string): string {
+    const map: Record<string, string> = {
+      'auth/email-already-in-use': '此 Email 已被其他帳號使用',
+      'auth/invalid-email': 'Email 格式不正確',
+      'auth/weak-password': '密碼至少需要 6 個字元',
+      'auth/wrong-password': '密碼錯誤',
+      'auth/user-not-found': '找不到此 Email 的帳號',
+      'auth/too-many-requests': '嘗試次數過多，請稍後再試',
+      'auth/credential-already-in-use': '此帳號已存在，請直接登入',
+      'auth/invalid-credential': '帳號或密碼錯誤',
+    };
+    return map[code] ?? `登入失敗（${code}）`;
+  }
+
   // ── Card preview ───────────────────────────────────────────────────────
   function openPreview(card: Card) { pickerPreview = card; }
   function closePreview() { pickerPreview = null; }
@@ -425,6 +500,19 @@
     <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
       {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
     </span>
+    <!-- Auth status -->
+    {#if firebaseUser}
+      {#if isAnonymous}
+        <button class="auth-btn anon" onclick={openAuthModal} title="建立帳號以跨裝置保存牌組">
+          👤 匿名　<span class="auth-sub">建立帳號</span>
+        </button>
+      {:else}
+        <div class="auth-user">
+          <span class="auth-email">✉️ {firebaseUser.email}</span>
+          <button class="small danger" onclick={handleSignOut}>登出</button>
+        </div>
+      {/if}
+    {/if}
   </header>
 
   {#if poolError}
@@ -737,6 +825,53 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+{/if}
+
+<!-- ── Auth modal ───────────────────────────────────────────────────────── -->
+{#if showAuthModal}
+  <div class="pv-overlay" onclick={() => { showAuthModal = false; }}>
+    <div class="pv-inner auth-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={() => { showAuthModal = false; }} aria-label="關閉">×</button>
+
+      <h3 class="modal-title">帳號管理</h3>
+
+      <!-- Tab bar -->
+      <div class="auth-tabs">
+        <button class:active={authTab === 'upgrade'} onclick={() => { authTab = 'upgrade'; authError = null; }}>
+          {isAnonymous ? '🆕 建立新帳號' : '🆕 建立帳號'}
+        </button>
+        <button class:active={authTab === 'login'} onclick={() => { authTab = 'login'; authError = null; }}>
+          🔑 登入現有帳號
+        </button>
+      </div>
+
+      {#if authTab === 'upgrade'}
+        {#if isAnonymous}
+          <p class="auth-desc">建立帳號後，你目前的所有牌組將永久保存，換電腦也能繼續使用。</p>
+        {:else}
+          <p class="auth-desc">為其他裝置建立新帳號。</p>
+        {/if}
+        <div class="auth-form">
+          <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
+          <input type="password" placeholder="密碼（至少 6 碼）" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
+          {#if authError}<p class="auth-error">{authError}</p>{/if}
+          <button class="small primary" onclick={upgradeAccount} disabled={authLoading}>
+            {authLoading ? '處理中…' : isAnonymous ? '建立並綁定帳號' : '建立帳號'}
+          </button>
+        </div>
+      {:else}
+        <p class="auth-desc">登入後將從雲端載入該帳號的牌組。</p>
+        <div class="auth-form">
+          <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+          <input type="password" placeholder="密碼" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+          {#if authError}<p class="auth-error">{authError}</p>{/if}
+          <button class="small primary" onclick={loginWithEmail} disabled={authLoading}>
+            {authLoading ? '登入中…' : '登入'}
+          </button>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -1416,6 +1551,91 @@
   .sync-syncing { background: #fff8d0; color: #7a5800; }
   .sync-synced  { background: #e0f4e0; color: #1a6020; }
   .sync-error   { background: #fdeaea; color: #900; cursor: help; }
+
+  /* Auth header elements */
+  .auth-btn {
+    background: #fff8e0;
+    border: 1px solid #e0c040;
+    border-radius: 6px;
+    padding: 0.25rem 0.6rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .auth-btn:hover { background: #fff0b0; }
+  .auth-sub { color: #0066cc; font-size: 0.78rem; }
+  .auth-user {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .auth-email {
+    font-size: 0.82rem;
+    color: #444;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Auth modal */
+  .auth-modal { max-width: 420px; }
+  .auth-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #eee;
+    margin-bottom: 1rem;
+  }
+  .auth-tabs button {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    font: inherit;
+    font-size: 0.88rem;
+    cursor: pointer;
+    color: #888;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+  }
+  .auth-tabs button.active {
+    color: #0066cc;
+    border-bottom-color: #0066cc;
+    font-weight: 600;
+  }
+  .auth-desc {
+    font-size: 0.88rem;
+    color: #555;
+    margin: 0 0 1rem;
+  }
+  .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .auth-form input {
+    padding: 0.5rem 0.65rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.95rem;
+  }
+  .auth-form input:focus { outline: 2px solid #4a7fd4; border-color: transparent; }
+  .auth-error {
+    margin: 0;
+    color: #c00;
+    font-size: 0.85rem;
+  }
+  button.small.primary {
+    background: #0066cc;
+    color: #fff;
+    border-color: #0066cc;
+  }
+  button.small.primary:hover:not(:disabled) { background: #0055aa; }
+  button.small.primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* Text format modal */
   .text-modal { max-width: 560px; }
