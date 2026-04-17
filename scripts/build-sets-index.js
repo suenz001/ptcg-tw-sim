@@ -16,35 +16,59 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 const CARDS_DIR = path.join(REPO_ROOT, 'static', 'cards');
 
-// Human-readable zh-TW expansion names. Covers the sets we explicitly scrape;
-// anything else falls back to just the code.
-// Kept here (not in the scraper) because it's display metadata, not card data.
-// Only standard-legal sets (H / I / J marks). G-mark sets removed.
+// Official zh-TW expansion names from asia.pokemon-card.com/tw/.
+// Verified 2026-04-17 via archive pages + card detail pages.
+// Only standard-legal sets (H / I / J marks).
 const SET_NAMES = {
-  SV5M: '水君',
-  SV5K: '雷公',
-  SV5a: '賽場激鬥',
-  SV6: '變幻的假面',
-  SV6a: '夜晚的鐵拳',
-  SV7: '樂園的龍咆哮',
-  SV7a: '百合根',
-  SV8: '超電磁閃光',
-  SV8a: '熱風的競技場',
-  SV9: '戰鬥伙伴',
-  SV9a: '黑暗的王者',
-  SV10: '火箭隊的榮耀',
-  SV11W: '白熱的仕女',
-  SV11B: '黑炎的指導者',
-  M1S: 'Mega 進化',
-  M1L: 'Mega 旋律',
-  M2: 'Mega 之星',
-  M2a: 'Mega 彩焰',
-  M3: 'Mega 天際',
-  M4: 'Mega 火力',
-  MBD: 'Mega 增強包 D',
-  MBG: 'Mega 增強包 G',
-  MC: 'Mega Classic',
-  MJ: 'Mega Jumbo'
+  // H mark
+  SV5K: '狂野之力',
+  SV5M: '異度審判',
+  SV5a: '緋紅薄霧',
+  SV6:  '變幻假面',
+  SV6a: '黑夜漫遊者',
+  SV7:  '星晶奇跡',
+  SV7a: '樂園騰龍',
+  SV8:  '超電突圍',
+  SV8a: '太晶慶典ex',
+  MJ:   '新人冒險旅程',
+  // I mark
+  SV9:   '對戰搭檔',
+  SV9a:  '熱風競技場',
+  SV10:  '火箭隊的榮耀',
+  SV11B: '漆黑伏特',
+  SV11W: '純白閃焰',
+  M1S:   '超級交響樂',
+  M1L:   '超級勇氣',
+  M2:    '烈獄狂火X',
+  M2a:   '超級進化夢想ex',
+  MBD:   '超級蒂安希ex',
+  MBG:   '超級耿鬼ex',
+  // J mark
+  MC: '超級進化初階牌組100',
+  M3: '虛無歸零',
+  M4: '忍者飛旋',
+};
+
+// Official pack art images from asia.pokemon-card.com/tw/archive/special/card/
+// Verified via HTTP HEAD (all return 200). Fallback to first-card image if absent.
+const BASE = 'https://asia.pokemon-card.com/tw/archive/special/card';
+const SET_COVER_URLS = {
+  // H mark
+  SV6:  `${BASE}/sv6/assets/images/hero-visual.jpg`,
+  SV7:  `${BASE}/sv7/assets/images/hero-visual.jpg`,
+  SV8:  `${BASE}/sv8/assets/images/hero-visual.jpg`,
+  SV8a: `${BASE}/sv8a/assets/images/hero-pack.png`,
+  // I mark
+  SV9:  `${BASE}/sv9/assets/images/hero-visual.jpg`,
+  SV10: `${BASE}/sv10/assets/images/hero-visual.jpg`,
+  M1S:  `${BASE}/m1/assets/images/hero-visual.jpg`,
+  M1L:  `${BASE}/m1/assets/images/hero-visual.jpg`,
+  M2:   `${BASE}/m2/assets/images/hero-visual.png`,
+  M2a:  `${BASE}/m2a/assets/images/hero-pkg.png`,
+  // J mark
+  MC:   `${BASE}/mc/assets/images/home/image_package.png`,
+  M3:   `${BASE}/m3/assets/images/hero-visual.png`,
+  M4:   `${BASE}/m4/assets/images/hero-img-01-y25ri.png`,
 };
 
 function countBy(cards, key) {
@@ -66,15 +90,15 @@ function main() {
     const code = file.replace(/\.json$/, '');
     const cards = JSON.parse(fs.readFileSync(path.join(CARDS_DIR, file), 'utf8'));
     const supertypeCounts = countBy(cards, 'supertype');
-    // Use the first card's image as the set's cover art
-    const coverCard = cards[0];
+    // Use the official pack art if we have it; fall back to first card's image.
+    const coverUrl = SET_COVER_URLS[code] ?? cards[0]?.imageUrl ?? '';
     return {
       code,
       name: SET_NAMES[code] ?? code,
       regulationMark: SET_REGULATION_MARK[code] ?? null,
       cardCount: cards.length,
       supertypeCounts,
-      coverImageUrl: coverCard?.imageUrl ?? '',
+      coverImageUrl: coverUrl,
       scrapedAt: cards[0]?.scrapedAt ?? null
     };
   });

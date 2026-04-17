@@ -217,3 +217,63 @@ ptcg-tw-sim/
 - 目前僅靠 localStorage。重構到 Firestore 時保持 `src/lib/decks/storage.ts` 介面不動，只換實作即可。
 - `src/lib/cards/pool.ts` 是之後 M2 規則引擎也要用的共用模組，不要重複實作。
 - 每次動作繼續往本檔追加新的 session 條目。
+
+---
+
+## 📝 2026-04-17 Session 3 — M0 資料修正（卡包名稱 + 封面 + setCode）
+
+> 觸發：使用者發現卡包名稱全部錯誤（沿用佔位名），封面用的是卡片圖而非包裝圖，且多個 set 的 setCode 欄位為空字串
+
+### 問題根因
+1. **卡包名稱**：`build-sets-index.js` 的 `SET_NAMES` 是早期 AI 隨意命名（如「Mega之星」「雷公」「水君」），全部非官方
+2. **封面圖**：原本用 `cards[0].imageUrl`（第一張卡的牌面），而非卡包包裝圖
+3. **setCode 空字串**：`parse-card.js` 從 HTML 的 `img[src*="twhk_exp_"]` 抓 set code，但 M 系列和部分 SV 系列的頁面沒有這個圖片 → 爬到的 `setCode` 為空
+
+### 修正方式
+- **官方名稱**：去 `asia.pokemon-card.com/tw/archive/special/card/{code}/` 頁面抓 title；對找不到 archive 的卡包，從卡牌 detail 頁面的文字確認
+- **封面圖**：同樣從 archive 頁面找 `hero-visual.jpg / hero-visual.png / hero-pkg.png / hero-pack.png / hero-img-*.png` 等圖片
+- **setCode**：新增 `scripts/backfill-setcode.js`，用檔名作為 ground truth，補回空白的 `setCode`
+
+### 全部修正後的卡包名稱（24 sets，2026-04-17 驗證）
+
+| Code | 正確官方名稱 | 封面來源 |
+|:---|:---|:---|
+| SV5K | 狂野之力 | 卡片圖（無 archive） |
+| SV5M | 異度審判 | 卡片圖 |
+| SV5a | 緋紅薄霧 | 卡片圖 |
+| SV6  | 變幻假面 | **archive art** ✓ |
+| SV6a | 黑夜漫遊者 | 卡片圖 |
+| SV7  | 星晶奇跡 | **archive art** ✓ |
+| SV7a | 樂園騰龍 | 卡片圖 |
+| SV8  | 超電突圍 | **archive art** ✓ |
+| SV8a | 太晶慶典ex | **archive art** ✓ |
+| MJ   | 新人冒險旅程 | 卡片圖 |
+| SV9  | 對戰搭檔 | **archive art** ✓ |
+| SV9a | 熱風競技場 | 卡片圖 |
+| SV10 | 火箭隊的榮耀 | **archive art** ✓ |
+| SV11B | 漆黑伏特 | 卡片圖 |
+| SV11W | 純白閃焰 | 卡片圖 |
+| M1S  | 超級交響樂 | **archive art** ✓ (m1 共用) |
+| M1L  | 超級勇氣 | **archive art** ✓ (m1 共用) |
+| M2   | 烈獄狂火X | **archive art** ✓ |
+| M2a  | 超級進化夢想ex | **archive art** ✓ |
+| MBD  | 超級蒂安希ex | 卡片圖 |
+| MBG  | 超級耿鬼ex | 卡片圖 |
+| MC   | 超級進化初階牌組100 | **archive art** ✓ |
+| M3   | 虛無歸零 | **archive art** ✓ |
+| M4   | 忍者飛旋 | **archive art** ✓ |
+
+### 新增／修改檔案
+| 檔案 | 變更 |
+|:---|:---|
+| `scripts/build-sets-index.js` | 更新 `SET_NAMES`（全部改為官方名）；新增 `SET_COVER_URLS`（13 個有 archive 封面的卡包）；改用封面優先邏輯 |
+| `scripts/backfill-setcode.js` | 【新增】補回所有卡牌的 `setCode` 空白（3546 張） |
+| `scripts/fetch-set-info.js` | 【新增】一次性調查腳本（已完成任務，可保留或刪除） |
+| `static/cards/index.json` | 已重建（名稱 + 封面全部更新） |
+| `static/cards/*.json`（23 個） | `setCode` 全部補齊（SV10 / SV8a 原本就有，其餘補上） |
+
+### 給下一位 AI 的注意事項
+- SV9a 名稱「熱風競技場」源自 card detail 頁面文字，archive 頁不存在，如有疑慮請重新驗證
+- 封面圖 URL pattern：`https://asia.pokemon-card.com/tw/archive/special/card/{lowercase_code}/assets/images/hero-visual.{jpg|png}`（但 M4 是 `hero-img-01-y25ri.png`，MC 是 `home/image_package.png` — 不一致，所以 SET_COVER_URLS 要逐一確認）
+- 若有新卡包：更新 `regulation.js` + `regulation.ts` → `scrape-all.js` DEFAULT_SETS → `build-sets-index.js` SET_NAMES + SET_COVER_URLS
+- `setCode` 對牌組編輯器的卡包篩選至關重要，不可留空

@@ -1,7 +1,7 @@
 [
   {
     "code": "SV5a",
-    "name": "賽場激鬥",
+    "name": "緋紅薄霧",
     "regulationMark": "H",
     "cardCount": 96,
     "supertypeCounts": {
@@ -14,7 +14,7 @@
   },
   {
     "code": "SV5K",
-    "name": "雷公",
+    "name": "狂野之力",
     "regulationMark": "H",
     "cardCount": 100,
     "supertypeCounts": {
@@ -27,7 +27,7 @@
   },
   {
     "code": "SV5M",
-    "name": "水君",
+    "name": "異度審判",
     "regulationMark": "H",
     "cardCount": 100,
     "supertypeCounts": {
@@ -40,7 +40,7 @@
   },
   {
     "code": "SV6",
-    "name": "變幻的假面",
+    "name": "變幻假面",
     "regulationMark": "H",
     "cardCount": 133,
     "supertypeCounts": {
@@ -48,12 +48,12 @@
       "Trainer": 17,
       "Energy": 1
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010415.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv6/assets/images/hero-visual.jpg",
     "scrapedAt": "2026-04-16T07:53:00.895Z"
   },
   {
     "code": "SV6a",
-    "name": "夜晚的鐵拳",
+    "name": "黑夜漫遊者",
     "regulationMark": "H",
     "cardCount": 94,
     "supertypeCounts": {
@@ -65,19 +65,19 @@
   },
   {
     "code": "SV7",
-    "name": "樂園的龍咆哮",
+    "name": "星晶奇跡",
     "regulationMark": "H",
     "cardCount": 135,
     "supertypeCounts": {
       "Pokemon": 119,
       "Trainer": 16
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010896.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv7/assets/images/hero-visual.jpg",
     "scrapedAt": "2026-04-16T07:56:01.174Z"
   },
   {
     "code": "SV7a",
-    "name": "百合根",
+    "name": "樂園騰龍",
     "regulationMark": "H",
     "cardCount": 94,
     "supertypeCounts": {
@@ -90,19 +90,19 @@
   },
   {
     "code": "SV8",
-    "name": "超電磁閃光",
+    "name": "超電突圍",
     "regulationMark": "H",
     "cardCount": 138,
     "supertypeCounts": {
       "Pokemon": 122,
       "Trainer": 16
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011181.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv8/assets/images/hero-visual.jpg",
     "scrapedAt": "2026-04-16T07:59:02.734Z"
   },
   {
     "code": "SV8a",
-    "name": "熱風的競技場",
+    "name": "太晶慶典ex",
     "regulationMark": "H",
     "cardCount": 381,
     "supertypeCounts": {
@@ -110,12 +110,12 @@
       "Trainer": 87,
       "Energy": 5
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011526.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv8a/assets/images/hero-pack.png",
     "scrapedAt": "2026-04-16T08:01:07.033Z"
   },
   {
     "code": "SV9",
-    "name": "戰鬥伙伴",
+    "name": "對戰搭檔",
     "regulationMark": "I",
     "cardCount": 132,
     "supertypeCounts": {
@@ -123,12 +123,12 @@
       "Trainer": 13,
       "Energy": 2
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012463.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv9/assets/images/hero-visual.jpg",
     "scrapedAt": "2026-04-16T08:05:56.176Z"
   },
   {
     "code": "SV9a",
-    "name": "黑暗的王者",
+    "name": "熱風競技場",
     "regulationMark": "I",
     "cardCount": 92,
     "supertypeCounts": {
@@ -148,12 +148,12 @@
       "Trainer": 19,
       "Energy": 1
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012751.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv10/assets/images/hero-visual.jpg",
     "scrapedAt": "2026-04-16T07:11:55.699Z"
   },
   {
     "code": "SV11B",
-    "name": "黑炎的指導者",
+    "name": "漆黑伏特",
     "regulationMark": "I",
     "cardCount": 254,
     "supertypeCounts": {
@@ -166,7 +166,7 @@
   },
   {
     "code": "SV11W",
-    "name": "白熱的仕女",
+    "name": "純白閃焰",
     "regulationMark": "I",
     "cardCount": 254,
     "supertypeCounts": {
@@ -179,43 +179,43 @@
   },
   {
     "code": "M1L",
-    "name": "Mega 旋律",
+    "name": "超級勇氣",
     "regulationMark": "I",
     "cardCount": 92,
     "supertypeCounts": {
       "Pokemon": 78,
       "Trainer": 14
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013958.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m1/assets/images/hero-visual.jpg",
     "scrapedAt": "2026-04-16T08:16:43.852Z"
   },
   {
     "code": "M1S",
-    "name": "Mega 進化",
+    "name": "超級交響樂",
     "regulationMark": "I",
     "cardCount": 92,
     "supertypeCounts": {
       "Pokemon": 77,
       "Trainer": 15
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014021.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m1/assets/images/hero-visual.jpg",
     "scrapedAt": "2026-04-16T08:15:30.428Z"
   },
   {
     "code": "M2",
-    "name": "Mega 之星",
+    "name": "烈獄狂火X",
     "regulationMark": "I",
     "cardCount": 80,
     "supertypeCounts": {
       "Pokemon": 73,
       "Trainer": 7
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014319.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m2/assets/images/hero-visual.png",
     "scrapedAt": "2026-04-16T08:17:56.312Z"
   },
   {
     "code": "M2a",
-    "name": "Mega 彩焰",
+    "name": "超級進化夢想ex",
     "regulationMark": "I",
     "cardCount": 486,
     "supertypeCounts": {
@@ -223,12 +223,12 @@
       "Trainer": 49,
       "Energy": 3
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014661.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m2a/assets/images/hero-pkg.png",
     "scrapedAt": "2026-04-16T08:19:18.390Z"
   },
   {
     "code": "M3",
-    "name": "Mega 天際",
+    "name": "虛無歸零",
     "regulationMark": "J",
     "cardCount": 117,
     "supertypeCounts": {
@@ -236,12 +236,12 @@
       "Trainer": 22,
       "Energy": 3
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017978.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m3/assets/images/hero-visual.png",
     "scrapedAt": "2026-04-16T08:25:27.486Z"
   },
   {
     "code": "M4",
-    "name": "Mega 火力",
+    "name": "忍者飛旋",
     "regulationMark": "J",
     "cardCount": 83,
     "supertypeCounts": {
@@ -249,12 +249,12 @@
       "Trainer": 9,
       "Energy": 3
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018421.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m4/assets/images/hero-img-01-y25ri.png",
     "scrapedAt": "2026-04-16T08:26:58.977Z"
   },
   {
     "code": "MBD",
-    "name": "Mega 增強包 D",
+    "name": "超級蒂安希ex",
     "regulationMark": "I",
     "cardCount": 24,
     "supertypeCounts": {
@@ -267,7 +267,7 @@
   },
   {
     "code": "MBG",
-    "name": "Mega 增強包 G",
+    "name": "超級耿鬼ex",
     "regulationMark": "I",
     "cardCount": 24,
     "supertypeCounts": {
@@ -280,7 +280,7 @@
   },
   {
     "code": "MC",
-    "name": "Mega Classic",
+    "name": "超級進化初階牌組100",
     "regulationMark": "J",
     "cardCount": 902,
     "supertypeCounts": {
@@ -288,12 +288,12 @@
       "Trainer": 105,
       "Energy": 23
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00016472.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/mc/assets/images/home/image_package.png",
     "scrapedAt": "2026-04-16T08:29:24.027Z"
   },
   {
     "code": "MJ",
-    "name": "Mega Jumbo",
+    "name": "新人冒險旅程",
     "regulationMark": "H",
     "cardCount": 24,
     "supertypeCounts": {
