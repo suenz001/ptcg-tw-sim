@@ -174,3 +174,46 @@ ptcg-tw-sim/
   3. 牌組規則驗證（60 張、同名 ≤4 張、能量卡例外、僅 Standard H/I/J）
   4. 匯出 / 匯入 JSON
   5. 之後（M1 尾端）再串 Firebase Auth + Firestore 儲存雲端牌組
+
+---
+
+## 📝 2026-04-17 Session 2 (續) — M1 scaffold 實作
+
+### 新增檔案（Claude）
+
+| 檔案 | 用途 |
+|:---|:---|
+| `src/lib/decks/types.ts` | `Deck` / `DeckEntry` / `DeckValidationResult` 型別 |
+| `src/lib/decks/storage.ts` | localStorage CRUD（`loadDecks` / `upsertDeck` / `deleteDeck` / `newDeck`），key = `ptcg-tw-sim:decks` |
+| `src/lib/decks/validation.ts` | Standard 合法性驗證（60 張、同名 ≤4、至少 1 隻基礎寶可夢、僅 H/I/J） |
+| `src/lib/cards/pool.ts` | 共用卡池載入器：`loadIndex` / `loadSet` / `loadAllSets`（lazy + in-flight dedupe）+ `buildCardIndex` |
+| `src/routes/decks/+page.ts` | 路由設定（prerender=true, ssr=false） |
+| `src/routes/decks/+page.svelte` | **牌組編輯器主畫面**（三欄：牌組列表 / 牌組內容 / 卡片搜尋 + 篩選） |
+
+### 修改檔案
+
+| 檔案 | 變更 |
+|:---|:---|
+| `src/routes/+page.svelte` | 首頁新增「牌組編輯器」連結；路線圖標註 M0 ✅ / M1 🚧 |
+
+### M1 scaffold 已有功能
+- 多牌組並存（localStorage）
+- 即時規則驗證（60 張、同名 ≤4、基本能量無上限、至少 1 隻基礎寶可夢、擋非標卡）
+- 卡片搜尋（名稱 / 卡號）+ 類型 + 卡包 + 標記三重篩選
+- 匯出 / 匯入 JSON
+- 清空 / 刪除 / 更名
+- 加卡按鈕在超過上限時自動禁用（能量卡例外）
+- Svelte 5 runes（`$state` / `$derived` / `$derived.by`）
+- `npm run build` ✅ 通過（含 prerender，無警告無錯誤）
+
+### M1 尚待完成
+- [ ] 串接 Firebase Anonymous Auth（首頁已做 demo，這邊要把牌組綁 uid）
+- [ ] 將 localStorage 牌組同步到 Firestore（`users/{uid}/decks/{deckId}`）
+- [ ] 卡片詳情彈窗（點名稱或圖片 → 看 HP / 招式 / 特性）
+- [ ] 能量卡額外檢查（特殊能量總數 vs 基本能量）
+- [ ] 牌組匯入時的嚴格 schema 驗證（目前只檢查最外層欄位）
+
+### 給下一位 AI 的 hand-off
+- 目前僅靠 localStorage。重構到 Firestore 時保持 `src/lib/decks/storage.ts` 介面不動，只換實作即可。
+- `src/lib/cards/pool.ts` 是之後 M2 規則引擎也要用的共用模組，不要重複實作。
+- 每次動作繼續往本檔追加新的 session 條目。
