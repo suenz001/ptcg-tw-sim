@@ -61,17 +61,17 @@ const SET_COVER_URLS = {
   SV5K: `${ARCHIVE}/sv5/assets/images/hero-visual.jpg`,
   SV5M: `${ARCHIVE}/sv5/assets/images/hero-visual.jpg`,
   // SV5a, SV6a, SV7a have no archive page → use 001 card (cover Pokémon)
-  SV5a: `${CARD_IMG}/tw00010248.png`,   // 001 蔓藤怪
+  SV5a: 'https://www.pokemon-card.com/products/2024/images/SV5a_banner.jpg',
   SV6:  `${ARCHIVE}/sv6/assets/images/hero-visual.jpg`,
-  SV6a: `${CARD_IMG}/tw00010583.png`,   // 001 電電蟲
+  SV6a: 'https://www.pokemon-card.com/products/2024/images/SV6a_10.jpg',
   SV7:  `${ARCHIVE}/sv7/assets/images/hero-visual.jpg`,
-  SV7a: `${CARD_IMG}/tw00011031.png`,   // 001 蛋蛋
+  SV7a: 'https://www.pokemon-card.com/products/2024/images/sv7a_banner.jpg',
   SV8:  `${ARCHIVE}/sv8/assets/images/hero-visual.jpg`,
   SV8a: `${ARCHIVE}/sv8a/assets/images/hero-pack.png`,
-  MJ:   `${CARD_IMG}/tw00018360.png`,   // 001 凱羅斯 (New Trainer Journey)
+  MJ:   `${ARCHIVE}/new-trainer-journey/assets/images/og-image.png`,
   // ── I mark ──────────────────────────────────────────────────────────
   SV9:   `${ARCHIVE}/sv9/assets/images/hero-visual.jpg`,
-  SV9a:  `${CARD_IMG}/tw00012659.png`,  // 001 <阿響的>凱羅斯
+  SV9a:  'https://www.pokemon-card.com/products/2025/images/sv9a_banner.jpg',
   SV10:  `${ARCHIVE}/sv10/assets/images/hero-visual.jpg`,
   // SV11B + SV11W share the sv11 archive page (「漆黑伏特」「純白閃焰」dual release)
   SV11B: `${ARCHIVE}/sv11/assets/images/hero-visual.png`,
