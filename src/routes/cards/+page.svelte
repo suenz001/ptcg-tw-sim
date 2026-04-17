@@ -24,6 +24,14 @@
   let query = $state('');
   let supertypeFilter = $state<'All' | 'Pokemon' | 'Trainer' | 'Energy'>('All');
   let selected = $state<Card | null>(null);
+  let lightbox = $state<string | null>(null);
+
+  function openLightbox(url: string) { lightbox = url; }
+  function closeLightbox() { lightbox = null; }
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') { closeLightbox(); if (!lightbox) selected = null; }
+  }
 
   const setCards = $derived(data.mode === 'set' ? data.cards : []);
   const filtered = $derived.by(() => {
@@ -45,6 +53,8 @@
     selected = null;
   }
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <svelte:head>
   <title>
@@ -143,7 +153,15 @@
       <div class="modalInner" onclick={(e) => e.stopPropagation()} role="document">
         <button class="close" onclick={closeModal} aria-label="關閉">×</button>
         <div class="detailGrid">
-          <img class="detailImg" src={selected.imageUrl} alt={selected.name} />
+          <button
+            class="detailImgBtn"
+            onclick={() => openLightbox(selected!.imageUrl)}
+            aria-label="放大卡牌圖片"
+            title="點擊放大"
+          >
+            <img class="detailImg" src={selected.imageUrl} alt={selected.name} />
+            <span class="zoomHint">🔍</span>
+          </button>
           <div class="detailInfo">
             <h2>{selected.name}</h2>
             <p class="tag">
@@ -241,6 +259,19 @@
           </div>
         </div>
       </div>
+    </div>
+  {/if}
+
+  {#if lightbox}
+    <div
+      class="lightboxOverlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="放大卡牌圖片"
+      onclick={closeLightbox}
+    >
+      <img class="lightboxImg" src={lightbox} alt="放大圖片" onclick={(e) => e.stopPropagation()} />
+      <button class="lightboxClose" onclick={closeLightbox} aria-label="關閉">×</button>
     </div>
   {/if}
 {/if}
@@ -497,10 +528,84 @@
       grid-template-columns: 1fr;
     }
   }
+  /* Clickable card image in modal */
+  .detailImgBtn {
+    position: relative;
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: zoom-in;
+    width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .detailImgBtn:hover .zoomHint {
+    opacity: 1;
+  }
+  .zoomHint {
+    position: absolute;
+    bottom: 0.4rem;
+    right: 0.4rem;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 1rem;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: none;
+  }
   .detailImg {
     width: 100%;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: block;
+  }
+
+  /* Lightbox */
+  .lightboxOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    cursor: zoom-out;
+    padding: 1rem;
+  }
+  .lightboxImg {
+    max-width: min(600px, 95vw);
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: 12px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+    cursor: default;
+  }
+  .lightboxClose {
+    position: absolute;
+    top: 1rem;
+    right: 1.25rem;
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: #fff;
+    font-size: 2rem;
+    line-height: 1;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lightboxClose:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
   .detailInfo h2 {
     margin: 0 0 0.25rem;
