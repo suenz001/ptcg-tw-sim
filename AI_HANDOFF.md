@@ -274,6 +274,26 @@ ptcg-tw-sim/
 
 ### 給下一位 AI 的注意事項
 - SV9a 名稱「熱風競技場」源自 card detail 頁面文字，archive 頁不存在，如有疑慮請重新驗證
-- 封面圖 URL pattern：`https://asia.pokemon-card.com/tw/archive/special/card/{lowercase_code}/assets/images/hero-visual.{jpg|png}`（但 M4 是 `hero-img-01-y25ri.png`，MC 是 `home/image_package.png` — 不一致，所以 SET_COVER_URLS 要逐一確認）
+- 封面圖 URL pattern 不統一（M4=`hero-img-01-y25ri.png`，MC=`home/image_package.png`），SET_COVER_URLS 需逐一確認，不能只靠 pattern 推斷
 - 若有新卡包：更新 `regulation.js` + `regulation.ts` → `scrape-all.js` DEFAULT_SETS → `build-sets-index.js` SET_NAMES + SET_COVER_URLS
 - `setCode` 對牌組編輯器的卡包篩選至關重要，不可留空
+
+---
+
+## 📝 2026-04-17 Session 4 — 補齊剩餘封面 + 修正 MJ 名稱
+
+> 觸發：使用者要求補齊 11 個沒有封面的卡包，並質疑 MJ 名稱
+
+### 發現與修正
+
+| 問題 | 結果 |
+|:---|:---|
+| SV5K + SV5M 沒有 archive 頁 | **找到**：共用 `/sv5/` archive 頁（雙包同步發售），使用 `hero-visual.jpg` |
+| SV11B + SV11W 沒有 archive 頁 | **找到**：共用 `/sv11/` archive 頁，使用 `hero-visual.png` |
+| SV5a / SV6a / SV7a / SV9a / MJ 無 archive 頁 | 無官方包裝圖 → 使用各 set 的 001 號卡（封面寶可夢）代替 |
+| MBD / MBG | 使用者指定 → 超級蒂安希ex（tw00014110）/ 超級耿鬼ex（tw00014131）|
+| MJ 名稱「新人冒險旅程」 | **錯誤**：官網使用英文名 **"New Trainer Journey"**，已修正 |
+
+### 最終封面狀態（24 sets 全部有圖）
+- **17 sets** → 官方 archive 包裝圖（archive.pokemon-card.com hero visual）
+- **7 sets** → 代表卡圖：SV5a（001蔓藤怪）、SV6a（001電電蟲）、SV7a（001蛋蛋）、SV9a（001阿響的凱羅斯）、MJ（001凱羅斯）、MBD（超級蒂安希ex）、MBG（超級耿鬼ex）
