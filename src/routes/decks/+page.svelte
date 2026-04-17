@@ -12,6 +12,9 @@
   } from '$lib/decks/storage';
   import type { Deck } from '$lib/decks/types';
   import { validateDeck, maxCopies, isBasicEnergy } from '$lib/decks/validation';
+  import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
+  import { auth } from '$lib/firebase';
+  import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
 
   // ── Data state ─────────────────────────────────────────────────────────
   let decks = $state<Deck[]>([]);
@@ -22,12 +25,22 @@
   let poolError = $state<string | null>(null);
   let sets = $state<{ code: string; name: string; regulationMark?: string | null }[]>([]);
 
+  // ── Firebase / cloud state ─────────────────────────────────────────────
+  let firebaseUser = $state<User | null>(null);
+  let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  let syncError = $state<string | null>(null);
+
   // ── UI state ───────────────────────────────────────────────────────────
   let search = $state('');
   let supertypeFilter = $state<'All' | 'Pokemon' | 'Trainer' | 'Energy'>('All');
   let setFilter = $state<string>('');
   let markFilter = $state<'All' | 'H' | 'I' | 'J'>('All');
   let pickerPreview = $state<Card | null>(null);
+
+  // Text format modal
+  let showTextModal = $state(false);
+  let textModalMode = $state<'export' | 'import'>('export');
+  let importTextInput = $state('');
 
   // ── Derived ────────────────────────────────────────────────────────────
   const active = $derived(decks.find((d) => d.id === activeId) ?? null);
@@ -42,6 +55,21 @@
   const validation = $derived(
     active ? validateDeck(active, poolById) : null
   );
+
+  /** 二級索引：`${setCode}-${collectorNumber}` → Card（供文字格式匯入用） */
+  const poolBySetNum = $derived(
+    new Map(pool.map((c) => [`${c.setCode}-${c.collectorNumber}`, c]))
+  );
+
+  /** 文字格式匯出內容 */
+  const textExportContent = $derived.by(() => {
+    if (!active || activeEntries.length === 0) return '';
+    const lines = [`// ${active.name}`, ''];
+    for (const { entry, card } of activeEntries) {
+      lines.push(`${entry.count} ${card.name} ${card.setCode} ${card.collectorNumber}`);
+    }
+    return lines.join('\n');
+  });
 
   /** 各類型張數統計，用於牌組摘要列 */
   const deckStats = $derived.by(() => {
@@ -72,29 +100,101 @@
     });
   });
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────
-  onMount(async () => {
-    decks = loadDecks();
-    if (decks.length === 0) {
-      const first = newDeck('我的第一個牌組');
-      decks = upsertDeck(first);
-      activeId = first.id;
-    } else {
-      activeId = decks[0].id;
-    }
+  // ── Cloud sync helpers ─────────────────────────────────────────────────
+  async function pushDeck(deck: Deck) {
+    if (!firebaseUser) return;
+    syncStatus = 'syncing';
     try {
-      const [allCards, setIndex] = await Promise.all([loadAllSets(), loadIndex()]);
+      await syncDeckToCloud(firebaseUser.uid, deck);
+      syncStatus = 'synced';
+    } catch (e) {
+      syncStatus = 'error';
+      syncError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function dropDeck(deckId: string) {
+    if (!firebaseUser) return;
+    syncStatus = 'syncing';
+    try {
+      await removeDeckFromCloud(firebaseUser.uid, deckId);
+      syncStatus = 'synced';
+    } catch (e) {
+      syncStatus = 'error';
+      syncError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────
+  onMount(() => {
+    // ① Load card pool (independent of auth)
+    loadAllSets().then((allCards) => {
       pool = allCards;
       poolById = buildCardIndex(allCards);
+      poolReady = true;
+    }).catch((e) => { poolError = e instanceof Error ? e.message : String(e); });
+
+    loadIndex().then((setIndex) => {
       sets = setIndex.map((s) => ({
         code: s.code,
         name: s.name,
         regulationMark: s.regulationMark
       }));
-      poolReady = true;
-    } catch (e) {
-      poolError = e instanceof Error ? e.message : String(e);
-    }
+    }).catch(() => {/* non-critical */});
+
+    // ② Firebase anonymous auth; on sign-in, merge cloud ↔ local decks
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      firebaseUser = user;
+      if (!user) {
+        // Not signed in yet — start anonymous sign-in
+        try { await signInAnonymously(auth); } catch { /* will retry on next visit */ }
+        return;
+      }
+
+      // Load local decks first so UI is responsive immediately
+      const local = loadDecks();
+
+      // Then fetch cloud decks and merge
+      try {
+        syncStatus = 'syncing';
+        const cloud = await loadDecksFromCloud(user.uid);
+
+        if (cloud.length === 0 && local.length > 0) {
+          // First-time cloud: push existing local decks up
+          for (const d of local) await syncDeckToCloud(user.uid, d);
+          decks = local;
+        } else if (cloud.length > 0) {
+          // Merge by updatedAt: newer wins
+          const merged = new Map<string, Deck>();
+          for (const d of [...local, ...cloud]) {
+            const existing = merged.get(d.id);
+            if (!existing || d.updatedAt > existing.updatedAt) merged.set(d.id, d);
+          }
+          decks = [...merged.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+          // Persist merged result locally
+          import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
+        } else {
+          decks = local;
+        }
+
+        syncStatus = 'synced';
+      } catch {
+        // Cloud unavailable — fall back to local silently
+        decks = local;
+        syncStatus = 'error';
+      }
+
+      if (decks.length === 0) {
+        const first = newDeck('我的第一個牌組');
+        decks = upsertDeck(first);
+        pushDeck(first);
+        activeId = first.id;
+      } else {
+        activeId = decks[0].id;
+      }
+    });
+
+    return () => unsubAuth();
   });
 
   // ── Deck actions ───────────────────────────────────────────────────────
@@ -102,18 +202,21 @@
     const d = newDeck(`牌組 ${decks.length + 1}`);
     decks = upsertDeck(d);
     activeId = d.id;
+    pushDeck(d);
   }
 
   function removeDeck(id: string) {
     if (!confirm('確定要刪除這個牌組嗎？')) return;
     decks = deleteDeck(id);
     if (activeId === id) activeId = decks[0]?.id ?? null;
+    dropDeck(id);
   }
 
   function renameActive(name: string) {
     if (!active) return;
     const updated = { ...active, name };
     decks = upsertDeck(updated);
+    pushDeck(updated);
   }
 
   function addCard(card: Card) {
@@ -125,7 +228,9 @@
     if (currentCount >= max) return;
     if (i >= 0) entries[i] = { ...entries[i], count: currentCount + 1 };
     else entries.push({ cardId: card.id, count: 1 });
-    decks = upsertDeck({ ...active, entries });
+    const updated = { ...active, entries };
+    decks = upsertDeck(updated);
+    pushDeck(updated);
   }
 
   function removeCard(cardId: string) {
@@ -133,13 +238,17 @@
     const entries = active.entries
       .map((e) => (e.cardId === cardId ? { ...e, count: e.count - 1 } : e))
       .filter((e) => e.count > 0);
-    decks = upsertDeck({ ...active, entries });
+    const updated = { ...active, entries };
+    decks = upsertDeck(updated);
+    pushDeck(updated);
   }
 
   function clearDeck() {
     if (!active) return;
     if (!confirm('清空此牌組？')) return;
-    decks = upsertDeck({ ...active, entries: [] });
+    const updated = { ...active, entries: [] };
+    decks = upsertDeck(updated);
+    pushDeck(updated);
   }
 
   // ── Import / export ────────────────────────────────────────────────────
@@ -171,6 +280,7 @@
       };
       decks = upsertDeck(incoming);
       activeId = incoming.id;
+      pushDeck(incoming);
     } catch (e) {
       alert(`匯入失敗：${e instanceof Error ? e.message : String(e)}`);
     }
@@ -181,6 +291,85 @@
     const f = input.files?.[0];
     if (f) importJson(f);
     input.value = '';
+  }
+
+  // ── Text format (Phase C) ──────────────────────────────────────────────
+  function openTextExport() {
+    if (!active) return;
+    textModalMode = 'export';
+    showTextModal = true;
+  }
+
+  function openTextImport() {
+    importTextInput = '';
+    textModalMode = 'import';
+    showTextModal = true;
+  }
+
+  async function copyToClipboard() {
+    try {
+      await navigator.clipboard.writeText(textExportContent);
+      alert('已複製到剪貼簿！');
+    } catch {
+      alert('複製失敗，請手動選取文字複製。');
+    }
+  }
+
+  function downloadTextFile() {
+    const blob = new Blob([textExportContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${active?.name || 'deck'}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importFromText() {
+    if (!importTextInput.trim()) return;
+
+    const lines = importTextInput.split('\n');
+    const entries: { cardId: string; count: number }[] = [];
+    const errors: string[] = [];
+    let deckName = '';
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      // Comment line: optional deck name
+      if (line.startsWith('//') || line.startsWith('#')) {
+        if (!deckName) deckName = line.replace(/^\/\/\s*|^#\s*/, '').trim();
+        continue;
+      }
+      // Format: {count} {name} {setCode} {collectorNumber}
+      const m = line.match(/^(\d+)\s+(.+?)\s+([A-Za-z0-9]+)\s+(\S+)$/);
+      if (!m) { errors.push(`無法解析：${line}`); continue; }
+
+      const [, countStr, , setCode, collectorNumber] = m;
+      const count = Math.max(1, parseInt(countStr, 10));
+      const card = poolBySetNum.get(`${setCode}-${collectorNumber}`);
+
+      if (!card) {
+        errors.push(`找不到：${setCode} ${collectorNumber}`);
+        continue;
+      }
+      const existing = entries.find((e) => e.cardId === card.id);
+      if (existing) existing.count += count;
+      else entries.push({ cardId: card.id, count });
+    }
+
+    if (errors.length > 0) {
+      const msg = `以下 ${errors.length} 張卡片找不到，是否繼續匯入其餘卡片？\n\n${errors.slice(0, 10).join('\n')}${errors.length > 10 ? `\n…（共 ${errors.length} 筆）` : ''}`;
+      if (!confirm(msg)) return;
+    }
+    if (entries.length === 0) { alert('沒有找到任何可匯入的卡片'); return; }
+
+    const d = { ...newDeck(deckName || '匯入牌組'), entries };
+    decks = upsertDeck(d);
+    activeId = d.id;
+    pushDeck(d);
+    showTextModal = false;
+    importTextInput = '';
   }
 
   // ── Card preview ───────────────────────────────────────────────────────
@@ -223,6 +412,9 @@
     <a href="{base}/" class="back">← 首頁</a>
     <h1>牌組編輯器</h1>
     <span class="hint">Standard · H / I / J 標</span>
+    <span class="sync-pill sync-{syncStatus}" title={syncError ?? ''}>
+      {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線{:else}⬜ 本機{/if}
+    </span>
   </header>
 
   {#if poolError}
@@ -270,6 +462,8 @@
           />
           <div class="deck-actions">
             <span class="count" class:bad={totalCount !== 60}>{totalCount} / 60</span>
+            <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字</button>
+            <button class="small" onclick={openTextImport} disabled={!poolReady}>匯入文字</button>
             <button class="small" onclick={exportJson}>匯出 JSON</button>
             <label class="small file">
               匯入 JSON
@@ -533,6 +727,34 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+{/if}
+
+<!-- ── Text format modal ────────────────────────────────────────────────── -->
+{#if showTextModal}
+  <div class="pv-overlay" onclick={() => { showTextModal = false; }}>
+    <div class="pv-inner text-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={() => { showTextModal = false; }} aria-label="關閉">×</button>
+
+      {#if textModalMode === 'export'}
+        <h3 class="modal-title">匯出牌組（文字格式）</h3>
+        <p class="muted">格式：<code>張數 卡名 卡包代號 卡號</code>　可貼到其他模擬器或分享給對手</p>
+        <textarea class="text-area" readonly value={textExportContent}></textarea>
+        <div class="text-actions">
+          <button class="small" onclick={copyToClipboard}>📋 複製到剪貼簿</button>
+          <button class="small" onclick={downloadTextFile}>⬇ 下載 .txt</button>
+        </div>
+      {:else}
+        <h3 class="modal-title">匯入牌組（文字格式）</h3>
+        <p class="muted">格式：<code>張數 卡名 卡包代號 卡號</code>　首行可選：<code>// 牌組名稱</code></p>
+        <textarea class="text-area" bind:value={importTextInput}
+          placeholder={"// 我的火系牌組\n4 小火龍 SV5K 007\n2 火恐龍 SV5K 008\n..."}></textarea>
+        <div class="text-actions">
+          <button class="small" onclick={importFromText} disabled={!importTextInput.trim()}>匯入</button>
+          <button class="small" onclick={() => { showTextModal = false; }}>取消</button>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -1171,5 +1393,45 @@
   .pv-count-label {
     font-size: 0.9rem;
     margin-right: auto;
+  }
+
+  /* Sync status pill */
+  .sync-pill {
+    font-size: 0.78rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    margin-left: auto;
+  }
+  .sync-idle    { background: #eee; color: #888; }
+  .sync-syncing { background: #fff8d0; color: #7a5800; }
+  .sync-synced  { background: #e0f4e0; color: #1a6020; }
+  .sync-error   { background: #fdeaea; color: #900; cursor: help; }
+
+  /* Text format modal */
+  .text-modal { max-width: 560px; }
+  .modal-title { margin: 0 0 0.5rem; font-size: 1.1rem; }
+  .text-area {
+    width: 100%;
+    min-height: 260px;
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.85rem;
+    padding: 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    resize: vertical;
+    box-sizing: border-box;
+    background: #fafafa;
+  }
+  .text-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+  }
+  code {
+    background: #eef;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.82rem;
   }
 </style>
