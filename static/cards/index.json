@@ -22,7 +22,7 @@
       "Trainer": 12,
       "Energy": 1
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009758.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv5/assets/images/hero-visual.jpg",
     "scrapedAt": "2026-04-16T07:50:24.999Z"
   },
   {
@@ -35,7 +35,7 @@
       "Trainer": 12,
       "Energy": 1
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009842.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv5/assets/images/hero-visual.jpg",
     "scrapedAt": "2026-04-16T07:49:06.962Z"
   },
   {
@@ -161,7 +161,7 @@
       "Trainer": 15,
       "Energy": 2
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012943.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv11/assets/images/hero-visual.png",
     "scrapedAt": "2026-04-16T08:12:18.580Z"
   },
   {
@@ -174,7 +174,7 @@
       "Trainer": 15,
       "Energy": 2
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013029.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv11/assets/images/hero-visual.png",
     "scrapedAt": "2026-04-16T08:08:59.091Z"
   },
   {
@@ -262,7 +262,7 @@
       "Trainer": 11,
       "Energy": 1
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014105.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014110.png",
     "scrapedAt": "2026-04-16T08:28:01.888Z"
   },
   {
@@ -275,7 +275,7 @@
       "Trainer": 10,
       "Energy": 1
     },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014129.png",
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014131.png",
     "scrapedAt": "2026-04-16T08:28:21.248Z"
   },
   {
@@ -293,7 +293,7 @@
   },
   {
     "code": "MJ",
-    "name": "新人冒險旅程",
+    "name": "New Trainer Journey",
     "regulationMark": "H",
     "cardCount": 24,
     "supertypeCounts": {

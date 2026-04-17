@@ -30,7 +30,7 @@ const SET_NAMES = {
   SV7a: '樂園騰龍',
   SV8:  '超電突圍',
   SV8a: '太晶慶典ex',
-  MJ:   '新人冒險旅程',
+  MJ:   'New Trainer Journey',
   // I mark
   SV9:   '對戰搭檔',
   SV9a:  '熱風競技場',
@@ -49,26 +49,43 @@ const SET_NAMES = {
   M4: '忍者飛旋',
 };
 
-// Official pack art images from asia.pokemon-card.com/tw/archive/special/card/
-// Verified via HTTP HEAD (all return 200). Fallback to first-card image if absent.
-const BASE = 'https://asia.pokemon-card.com/tw/archive/special/card';
+// Cover art for every set. Verified 2026-04-17.
+//   - Archive hero images: HEAD 200 confirmed
+//   - Card images: official pokemon-card.com/tw card art
+//     (001 card of set, or the set's featured EX Pokémon)
+const ARCHIVE = 'https://asia.pokemon-card.com/tw/archive/special/card';
+const CARD_IMG = 'https://asia.pokemon-card.com/tw/card-img';
 const SET_COVER_URLS = {
-  // H mark
-  SV6:  `${BASE}/sv6/assets/images/hero-visual.jpg`,
-  SV7:  `${BASE}/sv7/assets/images/hero-visual.jpg`,
-  SV8:  `${BASE}/sv8/assets/images/hero-visual.jpg`,
-  SV8a: `${BASE}/sv8a/assets/images/hero-pack.png`,
-  // I mark
-  SV9:  `${BASE}/sv9/assets/images/hero-visual.jpg`,
-  SV10: `${BASE}/sv10/assets/images/hero-visual.jpg`,
-  M1S:  `${BASE}/m1/assets/images/hero-visual.jpg`,
-  M1L:  `${BASE}/m1/assets/images/hero-visual.jpg`,
-  M2:   `${BASE}/m2/assets/images/hero-visual.png`,
-  M2a:  `${BASE}/m2a/assets/images/hero-pkg.png`,
-  // J mark
-  MC:   `${BASE}/mc/assets/images/home/image_package.png`,
-  M3:   `${BASE}/m3/assets/images/hero-visual.png`,
-  M4:   `${BASE}/m4/assets/images/hero-img-01-y25ri.png`,
+  // ── H mark ──────────────────────────────────────────────────────────
+  // SV5K + SV5M share the sv5 archive page (「狂野之力」「異度審判」dual release)
+  SV5K: `${ARCHIVE}/sv5/assets/images/hero-visual.jpg`,
+  SV5M: `${ARCHIVE}/sv5/assets/images/hero-visual.jpg`,
+  // SV5a, SV6a, SV7a have no archive page → use 001 card (cover Pokémon)
+  SV5a: `${CARD_IMG}/tw00010248.png`,   // 001 蔓藤怪
+  SV6:  `${ARCHIVE}/sv6/assets/images/hero-visual.jpg`,
+  SV6a: `${CARD_IMG}/tw00010583.png`,   // 001 電電蟲
+  SV7:  `${ARCHIVE}/sv7/assets/images/hero-visual.jpg`,
+  SV7a: `${CARD_IMG}/tw00011031.png`,   // 001 蛋蛋
+  SV8:  `${ARCHIVE}/sv8/assets/images/hero-visual.jpg`,
+  SV8a: `${ARCHIVE}/sv8a/assets/images/hero-pack.png`,
+  MJ:   `${CARD_IMG}/tw00018360.png`,   // 001 凱羅斯 (New Trainer Journey)
+  // ── I mark ──────────────────────────────────────────────────────────
+  SV9:   `${ARCHIVE}/sv9/assets/images/hero-visual.jpg`,
+  SV9a:  `${CARD_IMG}/tw00012659.png`,  // 001 <阿響的>凱羅斯
+  SV10:  `${ARCHIVE}/sv10/assets/images/hero-visual.jpg`,
+  // SV11B + SV11W share the sv11 archive page (「漆黑伏特」「純白閃焰」dual release)
+  SV11B: `${ARCHIVE}/sv11/assets/images/hero-visual.png`,
+  SV11W: `${ARCHIVE}/sv11/assets/images/hero-visual.png`,
+  M1S:   `${ARCHIVE}/m1/assets/images/hero-visual.jpg`,
+  M1L:   `${ARCHIVE}/m1/assets/images/hero-visual.jpg`,
+  M2:    `${ARCHIVE}/m2/assets/images/hero-visual.png`,
+  M2a:   `${ARCHIVE}/m2a/assets/images/hero-pkg.png`,
+  MBD:   `${CARD_IMG}/tw00014110.png`,  // 超級蒂安希ex (user-requested fallback)
+  MBG:   `${CARD_IMG}/tw00014131.png`,  // 超級耿鬼ex (user-requested fallback)
+  // ── J mark ──────────────────────────────────────────────────────────
+  MC:    `${ARCHIVE}/mc/assets/images/home/image_package.png`,
+  M3:    `${ARCHIVE}/m3/assets/images/hero-visual.png`,
+  M4:    `${ARCHIVE}/m4/assets/images/hero-img-01-y25ri.png`,
 };
 
 function countBy(cards, key) {
