@@ -101,11 +101,21 @@
   });
 
   // ── Cloud sync helpers ─────────────────────────────────────────────────
+  /** 給 Promise 加上逾時，避免 Firestore 未建立時永遠卡住 */
+  function withTimeout<T>(p: Promise<T>, ms = 8000): Promise<T> {
+    return Promise.race([
+      p,
+      new Promise<T>((_, rej) =>
+        setTimeout(() => rej(new Error(`雲端操作逾時（${ms / 1000}s）— 請確認 Firebase Firestore 資料庫已建立`)), ms)
+      )
+    ]);
+  }
+
   async function pushDeck(deck: Deck) {
     if (!firebaseUser) return;
     syncStatus = 'syncing';
     try {
-      await syncDeckToCloud(firebaseUser.uid, deck);
+      await withTimeout(syncDeckToCloud(firebaseUser.uid, deck));
       syncStatus = 'synced';
     } catch (e) {
       syncStatus = 'error';
@@ -117,7 +127,7 @@
     if (!firebaseUser) return;
     syncStatus = 'syncing';
     try {
-      await removeDeckFromCloud(firebaseUser.uid, deckId);
+      await withTimeout(removeDeckFromCloud(firebaseUser.uid, deckId));
       syncStatus = 'synced';
     } catch (e) {
       syncStatus = 'error';
@@ -157,7 +167,7 @@
       // Then fetch cloud decks and merge
       try {
         syncStatus = 'syncing';
-        const cloud = await loadDecksFromCloud(user.uid);
+        const cloud = await withTimeout(loadDecksFromCloud(user.uid));
 
         if (cloud.length === 0 && local.length > 0) {
           // First-time cloud: push existing local decks up
@@ -412,8 +422,8 @@
     <a href="{base}/" class="back">← 首頁</a>
     <h1>牌組編輯器</h1>
     <span class="hint">Standard · H / I / J 標</span>
-    <span class="sync-pill sync-{syncStatus}" title={syncError ?? ''}>
-      {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線{:else}⬜ 本機{/if}
+    <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
+      {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
     </span>
   </header>
 
