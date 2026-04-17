@@ -516,3 +516,68 @@ M1 全部 4 個 Phase 已完成。下一個里程碑是 **M2（對戰引擎）**
 5. cloud.ts 使用 `firebase/firestore`（非 `firebase/firestore/lite`），保留完整監聽能力以供 M2 使用
 6. 同步策略是「樂觀更新 + 最後寫入時間戳贏」，如果未來需要衝突解決，要修改 `onAuthStateChanged` 中的 merge 邏輯
 7. Firestore 測試模式 30 天到期後會自動拒絕所有請求——但 rules 已部署為正式版規則（auth.uid 驗證），所以不受測試模式到期影響
+
+---
+
+## 📝 2026-04-17 Session 9 — M2 Phase A + B（對戰引擎 + 本機雙人 UI）
+
+### M2 Phase A — 純函式對戰引擎
+
+**新增檔案**：
+| 檔案 | 用途 |
+|:---|:---|
+| `src/lib/game/types.ts` | 全部型別：`GamePhase`, `TurnPhase`, `CardInstance`, `PlayerState`, `GameState`, `GameAction`, `EffectScript` |
+| `src/lib/game/engine.ts` | 純函式引擎：`createGame` / `applyAction` / `getAvailableAttacks` / `hasPendingActions` / `countEnergy` / `canAffordAttack` |
+| `src/lib/game/actions.ts` | Action creator helpers：`GameActions.placeActive` / `.benchPokemon` / `.finishSetup` / `.drawCard` / `.attachEnergy` / `.attack` / `.takePrizes` / `.sendNewActive` / `.endTurn` / `.playTrainer` / `.evolve` / `.retreat` |
+| `src/routes/game/+page.ts` | `prerender = false; ssr = false` |
+
+**引擎行為摘要**：
+- `createGame(spec1, spec2, pool)`：洗牌、發 7 張初手（自動重抽至多 10 次，基礎寶可夢不足時）→ `setup-p1` 階段
+- `applyAction`：純函式，state → new state
+- Setup：PLACE_ACTIVE / BENCH_POKEMON / FINISH_SETUP（發 6 張獎勵牌）→ 雙方完成後進入 `playing`
+- Playing：DRAW_CARD（空牌庫即輸）/ ATTACH_ENERGY（每回合 1 次）/ ATTACK（弱點 ×2、KO 扣獎勵牌、EX 系列扣 2 張）/ TAKE_PRIZES（獎勵牌拿完即贏）/ SEND_NEW_ACTIVE / END_TURN（換手、重設旗標）
+- `getAvailableAttacks(state, pool)` → 能量足夠的招式 index 陣列
+- `canAffordAttack(pokemon, cost, pool)` → 有色能量先比對，剩餘需求比無色
+
+**Commit**：`87d626e` feat(game): M2 Phase A — battle engine core (types + engine + actions)
+
+### M2 Phase B — 本機雙人對戰 UI
+
+**新增檔案**：`src/routes/game/+page.svelte`
+
+**UI 畫面**：
+1. **選牌組畫面（Lobby）**：兩人各選牌組 + 填名稱；兩人不可同一牌組；「開始遊戲」按鈕
+2. **Setup 畫面**：手牌 grid，基礎寶可夢可按「出場」/「備戰」；已選者顯示 chip；「準備完成」按鈕
+3. **對戰盤面（3 欄）**：
+   - 左欄：對手區（出場 Pokémon + HP bar、備戰列、牌組/墓地/獎勵牌計數）
+   - 中欄：行動區（待取獎勵警示、送出新出場 picker、抽牌/結束回合按鈕、招式按鈕含能量 pip）
+   - 右欄：自己區（出場 + 備戰可點擊附加能量、手牌橫捲）
+   - 標題列：回合數、行動玩家名稱、TurnPhase 標籤
+4. **遊戲結束畫面**：勝者名稱、勝利原因、「再來一局」/「回首頁」按鈕
+
+**互動邏輯**：
+- 手牌中的能量卡可點擊選取（發光高亮）→ 再點出場/備戰 Pokémon 完成附加
+- 招式按鈕顯示能量 pip（ENERGY_LABEL/ENERGY_COLOR），能量不足時禁用
+- 先手第 1 回合不能攻擊（`isFirstTurn` 旗標）
+- 所有互動都呼叫 `dispatch(GameActions.xxx())` → `applyAction` → 新 state
+
+**修改檔案**：
+| 檔案 | 變更 |
+|:---|:---|
+| `src/routes/+page.svelte` | 新增「⚔️ 對戰 → /game」section；路線圖標 M2 🚧 |
+
+**已知限制（M3/M4 補齊）**：
+- 訓練家牌、特性、特殊能量、寶可夢道具、進化、撤退尚未實裝（效果腳本預留）
+- 所有卡片效果實作從 M3 開始分批填入
+
+**Commits**：
+- `6bb34b1` chore: mark M1 complete on homepage roadmap
+- `edd14fd` feat(game): M2 Phase B — battle board UI (local pass-and-play)
+
+### 給下一位 AI 的注意事項
+1. **引擎是純函式**：`applyAction(state, action, pool) → GameState`，可以直接序列化到 Firestore 供 M3 連線對戰使用
+2. **`pool`（Map<string, Card>）** 在引擎 call 每次都需要傳入，不要把它塞進 GameState（避免序列化爆掉）
+3. **EffectScript 插槽**：`types.ts` 中定義了 `EffectScript` interface，M3/M4 逐張卡實裝時填入 `src/lib/game/effects/` 目錄
+4. **EX 判斷**：`engine.ts` 中用 `card.subtype === 'ex'` 判斷是否扣 2 張獎勵牌；目前台灣官網資料的 subtype 欄位需確認格式是否一致
+5. **先手第 1 回合限制**：`isFirstTurn` 在 P1 第一次 END_TURN 時清除（在 `handlePlaying` 的 `END_TURN` case 中）
+6. **下一步 M2 Phase C**：勝負條件邊界測試（獎勵牌剛好清空、牌庫清空等）+ 進化/撤退/訓練家基本流程
