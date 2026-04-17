@@ -426,6 +426,7 @@ Lightbox 新增 `<svelte:window onkeydown={onKeydown} />` 時，若放在 `{#if 
 
 ### Commit
 - `57728b9` feat(decks): card detail preview modal + deck stats bar (M1 Phase A/B)
+- `ad7ec49` feat(auth): email/password login + anonymous account upgrade
 
 ### M1 剩餘工作
 - [x] **Phase C** — 文字格式匯入匯出 ✅
@@ -500,6 +501,12 @@ Lightbox 新增 `<svelte:window onkeydown={onKeydown} />` 時，若放在 `{#if 
 M1 全部 4 個 Phase 已完成。下一個里程碑是 **M2（對戰引擎）**：
 - M2 規劃：後端對戰邏輯（Firebase Realtime / Firestore 房間）、牌局狀態機
 - `src/lib/cards/pool.ts` 已可在 M2 規則引擎復用
+
+### Email/Password Auth（Session 9 追加）
+- Firebase Console 已啟用 Email/Password 登入方式
+- 匿名帳號可透過 `linkWithCredential` 升級為 Email 帳號（uid 不變，牌組全部保留）
+- 其他裝置用 `signInWithEmailAndPassword` 登入後，`onAuthStateChanged` 自動載入雲端牌組
+- 登出後自動以匿名重新登入
 
 ### 給下一位 AI 的注意事項
 1. **Anonymous Auth** ✅ 已在 Firebase Console 啟用
