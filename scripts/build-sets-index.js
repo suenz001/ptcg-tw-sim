@@ -61,17 +61,18 @@ const SET_COVER_URLS = {
   SV5K: `${ARCHIVE}/sv5/assets/images/hero-visual.jpg`,
   SV5M: `${ARCHIVE}/sv5/assets/images/hero-visual.jpg`,
   // SV5a, SV6a, SV7a have no archive page → use 001 card (cover Pokémon)
-  SV5a: 'https://www.pokemon-card.com/products/2024/images/SV5a_banner.jpg',
+  // Static files hosted in static/covers/ (no external hotlink dependency)
+  SV5a: 'covers/SV5a.jpg',
   SV6:  `${ARCHIVE}/sv6/assets/images/hero-visual.jpg`,
-  SV6a: 'https://www.pokemon-card.com/products/2024/images/SV6a_10.jpg',
+  SV6a: 'covers/SV6a.jpg',
   SV7:  `${ARCHIVE}/sv7/assets/images/hero-visual.jpg`,
-  SV7a: 'https://www.pokemon-card.com/products/2024/images/sv7a_banner.jpg',
+  SV7a: 'covers/SV7a.jpg',
   SV8:  `${ARCHIVE}/sv8/assets/images/hero-visual.jpg`,
   SV8a: `${ARCHIVE}/sv8a/assets/images/hero-pack.png`,
-  MJ:   `${ARCHIVE}/new-trainer-journey/assets/images/og-image.png`,
+  MJ:   'covers/MJ.png',
   // ── I mark ──────────────────────────────────────────────────────────
   SV9:   `${ARCHIVE}/sv9/assets/images/hero-visual.jpg`,
-  SV9a:  'https://www.pokemon-card.com/products/2025/images/sv9a_banner.jpg',
+  SV9a:  'covers/SV9a.jpg',
   SV10:  `${ARCHIVE}/sv10/assets/images/hero-visual.jpg`,
   // SV11B + SV11W share the sv11 archive page (「漆黑伏特」「純白閃焰」dual release)
   SV11B: `${ARCHIVE}/sv11/assets/images/hero-visual.png`,

@@ -3,6 +3,14 @@
   import type { Card, SetSummary } from '$lib/cards/types';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
 
+  /** Resolve a coverImageUrl that is either an absolute https:// URL (external
+   *  archive art) or a relative path like "covers/SV5a.jpg" (self-hosted). */
+  function coverUrl(url: string): string {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `${base}/${url}`;
+  }
+
   type LoadData =
     | { mode: 'index'; sets: SetSummary[] }
     | { mode: 'set'; setCode: string; cards: Card[] };
@@ -83,7 +91,7 @@
       <div class="setGrid">
         {#each sets as set (set.code)}
           <a class="setTile" href="{base}/cards?set={set.code}">
-            <img src={set.coverImageUrl} alt="" loading="lazy" />
+            <img src={coverUrl(set.coverImageUrl)} alt="" loading="lazy" />
             <div class="setInfo">
               <span class="markDot mark-{mark}">{mark}</span>
               <div class="setCode">{set.code}</div>
