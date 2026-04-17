@@ -502,7 +502,10 @@ M1 全部 4 個 Phase 已完成。下一個里程碑是 **M2（對戰引擎）**
 - `src/lib/cards/pool.ts` 已可在 M2 規則引擎復用
 
 ### 給下一位 AI 的注意事項
-1. **Firebase Console 要手動啟用 Anonymous Auth**，程式碼已就緒，但平台設定需人工操作
-2. **Firestore rules 要部署**：`firebase deploy --only firestore:rules`（需安裝 firebase CLI，`npm i -g firebase-tools`）
-3. cloud.ts 使用 `firebase/firestore`（非 `firebase/firestore/lite`），保留完整監聽能力以供 M2 使用
-4. 同步策略是「樂觀更新 + 最後寫入時間戳贏」，如果未來需要衝突解決，要修改 `onAuthStateChanged` 中的 merge 邏輯
+1. **Anonymous Auth** ✅ 已在 Firebase Console 啟用
+2. **Firestore Database** ✅ 已建立（asia-east1，從測試模式啟動）
+3. **Firestore rules** ✅ 已部署（`firestore.rules`）— 只允許 `auth.uid == userId`
+4. **Firebase CLI 登入**：使用者已在本機登入。部署指令：`cd E:\ptcg-tw-sim && node node_modules\firebase-tools\lib\bin\firebase.js deploy --only firestore:rules --project ptcg-tw-sim`（Windows cmd 下用 node 直接呼叫，因為 PowerShell 有 execution policy 限制）
+5. cloud.ts 使用 `firebase/firestore`（非 `firebase/firestore/lite`），保留完整監聽能力以供 M2 使用
+6. 同步策略是「樂觀更新 + 最後寫入時間戳贏」，如果未來需要衝突解決，要修改 `onAuthStateChanged` 中的 merge 邏輯
+7. Firestore 測試模式 30 天到期後會自動拒絕所有請求——但 rules 已部署為正式版規則（auth.uid 驗證），所以不受測試模式到期影響
