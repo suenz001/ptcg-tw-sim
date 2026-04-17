@@ -5,6 +5,7 @@
   import { loadAllSets, buildCardIndex } from '$lib/cards/pool';
   import { loadDecks } from '$lib/decks/storage';
   import type { Deck } from '$lib/decks/types';
+  import { PRESET_DECKS } from '$lib/decks/presets';
   import {
     createGame, applyAction,
     getAvailableAttacks, hasPendingActions,
@@ -20,6 +21,9 @@
   let pool = $state<Map<string, Card>>(new Map());
   let poolReady = $state(false);
   let decks = $state<Deck[]>([]);
+
+  /** 使用者牌組 + 內建預設牌組，合併後供 Lobby 顯示 */
+  const allDecks = $derived([...PRESET_DECKS, ...decks]);
 
   // ── 遊戲狀態 ────────────────────────────────────────────────────────────────
   let game = $state<GameState | null>(null);
@@ -154,8 +158,8 @@
 
   function startGame() {
     if (!p1DeckId || !p2DeckId) return;
-    const d1 = decks.find((d) => d.id === p1DeckId);
-    const d2 = decks.find((d) => d.id === p2DeckId);
+    const d1 = allDecks.find((d) => d.id === p1DeckId);
+    const d2 = allDecks.find((d) => d.id === p2DeckId);
     if (!d1 || !d2) return;
     game = createGame(
       { name: p1Name || d1.name, entries: d1.entries },
@@ -204,9 +208,6 @@
 
     {#if !poolReady}
       <p class="muted">載入卡池中…</p>
-    {:else if decks.length < 2}
-      <p class="warn">⚠️ 請先在牌組編輯器建立至少 2 套牌組。</p>
-      <a href="{base}/decks" class="btn-primary">前往牌組編輯器</a>
     {:else}
       <div class="player-setup">
         <div class="setup-card">
@@ -214,9 +215,20 @@
           <input class="name-input" placeholder="玩家名稱" bind:value={p1Name} />
           <select bind:value={p1DeckId}>
             <option value="">— 選擇牌組 —</option>
-            {#each decks as d}
-              <option value={d.id}>{d.name}（{d.entries.reduce((n,e)=>n+e.count,0)} 張）</option>
-            {/each}
+            {#if PRESET_DECKS.length > 0}
+              <optgroup label="🎴 內建預組">
+                {#each PRESET_DECKS as d}
+                  <option value={d.id}>{d.name}</option>
+                {/each}
+              </optgroup>
+            {/if}
+            {#if decks.length > 0}
+              <optgroup label="📁 我的牌組">
+                {#each decks as d}
+                  <option value={d.id}>{d.name}（{d.entries.reduce((n,e)=>n+e.count,0)} 張）</option>
+                {/each}
+              </optgroup>
+            {/if}
           </select>
         </div>
 
@@ -227,9 +239,20 @@
           <input class="name-input" placeholder="玩家名稱" bind:value={p2Name} />
           <select bind:value={p2DeckId}>
             <option value="">— 選擇牌組 —</option>
-            {#each decks as d}
-              <option value={d.id}>{d.name}（{d.entries.reduce((n,e)=>n+e.count,0)} 張）</option>
-            {/each}
+            {#if PRESET_DECKS.length > 0}
+              <optgroup label="🎴 內建預組">
+                {#each PRESET_DECKS as d}
+                  <option value={d.id}>{d.name}</option>
+                {/each}
+              </optgroup>
+            {/if}
+            {#if decks.length > 0}
+              <optgroup label="📁 我的牌組">
+                {#each decks as d}
+                  <option value={d.id}>{d.name}（{d.entries.reduce((n,e)=>n+e.count,0)} 張）</option>
+                {/each}
+              </optgroup>
+            {/if}
           </select>
         </div>
       </div>
