@@ -321,3 +321,69 @@ ptcg-tw-sim/
 | 其餘 17 sets | 台灣官網各自的 archive hero-visual |
 
 > **重要**：MJ 的台灣 archive URL 是 `new-trainer-journey` 而非 `mj`，未來若有類似命名不一致的情況，需從 archive 頁面 HTML 的 img src 逐一確認。
+
+---
+
+## 📝 2026-04-17 Session 6 — 修正封面熱連結問題 + Lightbox 功能
+
+> 觸發：使用者回報 SV5a/SV6a/SV7a/SV9a/MJ 仍顯示 001 號卡圖；之後要求點擊卡牌圖片可放大
+
+### 問題一：外部封面圖被 Hotlink 保護封鎖
+
+**根因**：瀏覽器請求外部 URL 時會自動帶上 `Referer: https://suenz001.github.io/ptcg-tw-sim`，觸發 `pokemon-card.com` 的熱連結防護（Node.js HEAD 測試沒有 Referer 所以通過，但實際瀏覽器被擋）。
+
+**解決方式**：將 5 個本地化封面圖下載自存至 `static/covers/`
+| 檔案 | 大小 | 內容 |
+|:---|:---:|:---|
+| `static/covers/SV5a.jpg` | 466 KB | 緋紅薄霧包裝圖 |
+| `static/covers/SV6a.jpg` | 511 KB | 黑夜漫遊者包裝圖 |
+| `static/covers/SV7a.jpg` | 571 KB | 樂園騰龍包裝圖 |
+| `static/covers/SV9a.jpg` | 543 KB | 熱風競技場包裝圖 |
+| `static/covers/MJ.png`   | 1.4 MB | New Trainer Journey OG 圖 |
+
+`build-sets-index.js` 的 `SET_COVER_URLS` 改為相對路徑 `covers/SV5a.jpg` 等。
+
+**重要**：本地路徑需要在前端加 SvelteKit 的 `base` 前綴（GitHub Pages 部署在 `/ptcg-tw-sim`）。
+
+**`coverUrl()` helper**（位於 `src/routes/cards/+page.svelte`）：
+```typescript
+function coverUrl(url: string): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${base}/${url}`;  // 補上 /ptcg-tw-sim/ 前綴
+}
+```
+
+封面圖在模板中用 `coverUrl(set.coverImageUrl)` 呼叫。
+
+### 問題二：`<svelte:window>` 不能放在 block 內
+
+Lightbox 新增 `<svelte:window onkeydown={onKeydown} />` 時，若放在 `{#if data.mode === 'set'}...{/if}` block 內會編譯失敗。
+修正：移至 `<svelte:head>` 之前（HTML 頂層）。
+
+### 功能：卡牌圖片 Lightbox
+
+點擊詳情 modal 中的卡片圖片，會開啟全螢幕疊層顯示大圖：
+- 點擊暗色背景 → 關閉 Lightbox
+- 點擊圖片本身 → 不關閉（stopPropagation）
+- 按 `Escape` → 關閉
+- 圖片上方有 × 關閉按鈕
+- 卡片圖片 hover 時顯示 🔍 提示
+- `max-width: min(600px, 95vw)` 確保手機上也能正確顯示
+
+### 修改檔案
+| 檔案 | 變更 |
+|:---|:---|
+| `src/routes/cards/+page.svelte` | 新增 lightbox state、`openLightbox` / `closeLightbox` / `onKeydown`；detail img 改為 button 包裝；加入 lightbox overlay HTML + CSS |
+| `scripts/build-sets-index.js` | `SET_COVER_URLS` 中 SV5a/SV6a/SV7a/SV9a/MJ 改為本地相對路徑 |
+| `static/covers/*.jpg/png` | 5 個新增自存封面圖 |
+| `static/cards/index.json` | 重建（封面 URL 更新） |
+
+### Commits
+- `f22bf48` feat(cards): coverUrl helper + self-hosted covers for SV5a/SV6a/SV7a/SV9a/MJ
+- `59e1cb6` feat(cards): lightbox for full-size card image on click
+
+### 給下一位 AI 的注意事項
+- **外部圖片熱連結**：如果未來又要換封面，記得先用瀏覽器實測圖片能否顯示（Node fetch ≠ 瀏覽器請求）。安全做法是自存到 `static/covers/`。
+- **`base` 前綴**：本地靜態路徑（`covers/xxx.jpg`）一定要用 `coverUrl()` 包一層，不然在 GitHub Pages 上會 404。
+- **`<svelte:window>`** 必須放在 HTML 頂層（`<script>` 結束之後、任何 `{#if}` 之前）。
