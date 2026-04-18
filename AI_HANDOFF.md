@@ -808,11 +808,25 @@ Host onSnapshot 收到 'ready' → createGame() → pushGameState()
 
 ### Bug 修復
 
-**問題**：建立房間時出現「Missing or insufficient permissions.」
+**Bug 1**：建立房間時出現「Missing or insufficient permissions.」
 
 **根因**：`firestore.rules` 雖然已寫好 `rooms/{roomCode}` 規則，但從未 deploy 到 Firebase，Firestore 仍使用舊規則（只允許 `users/{uid}/decks/{deckId}`）。
 
 **修復**：執行 `npx firebase-tools deploy --only firestore:rules --project ptcg-tw-sim` 部署規則後解決。
+
+---
+
+**Bug 2**：加入房間時出現「Missing or insufficient permissions.」
+
+**根因**：原本的 update 規則只允許 `auth.uid == hostUid || auth.uid == guestUid`。但 guest 加入時 `guestUid` 欄位還是 `null`，guest 的 uid 不符合任何條件，所以 `updateDoc` 被 Firestore 拒絕。
+
+**修復**：在 update 規則加入第三個條件——若房間 `status == 'waiting'` 且 `guestUid == null`，且更新內容把 `guestUid` 設為自己的 uid，則允許：
+```js
+|| (resource.data.status == 'waiting'
+    && resource.data.guestUid == null
+    && request.resource.data.guestUid == request.auth.uid)
+```
+部署後解決（commit `35abe02`）。
 
 ### Commits
 
