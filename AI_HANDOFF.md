@@ -903,3 +903,90 @@ Host onSnapshot 收到 'ready' → createGame() → pushGameState()
 3. **pool 不進 GameState**：雙方各自從靜態 JSON 建立 pool，不透過 Firestore 傳輸
 4. **senderIdx 參數**：線上模式被擊倒後，防守方（`myPlayerIndex === dIdx`）送出新出場寶可夢時，需傳入 `senderIdx: myPlayerIndex`，否則會被引擎誤判為攻擊方操作
 5. **Anonymous Auth**：`onMount` 已有 `signInAnonymously(auth)`，建立/加入房間前 uid 必然存在，無需另外處理
+
+---
+
+## 📝 2026-04-19 Session 15 — 招式效果系統 + 屬性能量修正
+
+> 觸發：使用者回報「攻擊系統沒有完成，能量應該有分各種屬性」
+
+### 問題根因
+
+1. **能量屬性判斷錯誤**：`getEnergyProvided()` 只看 `card.pokemonType` 欄位。但 MBG/MBD 的能量卡（如「基本【惡】能量」）`pokemonType` 欄位為 `undefined`，導致所有能量被視為 Colorless，有色招式費用永遠湊不齊。
+
+2. **ATTACK_PRE/ATTACK_POST 未實裝**：`engine.ts` 已預留鉤子（commits from previous sessions），但 `effects.ts` 尚未 export 這兩個 Map，build 會報錯。
+
+### 修復方式
+
+#### 1. 屬性能量修正（`engine.ts`）
+
+新增 `ZH_ENERGY_TYPE` 對照表，從卡名 `【X】` pattern 推斷屬性：
+
+```typescript
+const ZH_ENERGY_TYPE: Record<string, EnergyType> = {
+  '草': 'Grass', '火': 'Fire', '水': 'Water', '雷': 'Lightning',
+  '超': 'Psychic', '格': 'Fighting', '惡': 'Darkness', '鋼': 'Metal',
+  '妖': 'Fairy', '龍': 'Dragon', '無': 'Colorless',
+};
+// getEnergyProvided 改為：pokemonType 優先，否則從卡名解析
+```
+
+#### 2. ATTACK_PRE/ATTACK_POST Map 實裝（`effects.ts`）
+
+新增兩個 Map，共實裝 **13 個招式效果**（MBG/MBD 預組全部特殊招式）：
+
+| 類型 | 招式 | 效果 |
+|:---|:---|:---|
+| PRE | 超級蒂安希ex \| 花冠射線 | 自動丟棄最多 2 個能量，造成 n×120 傷害 |
+| PRE | 霜奶仙 \| 甜點圓陣 | 自己場上寶可夢數量 × 20 |
+| PRE | 布魯皇 \| 致命刺擊 | 若對手戰鬥寶可夢有傷害指示物，+90（合計 180）|
+| PRE | 黑暗鴉 \| 伏擊 | 擲硬幣，正面 +20（合計 30）|
+| PRE | 烏鴉頭頭 \| 狙擊羽毛 | 丟棄 2 個能量，造成 120 傷害（M3 簡化：打出場，不支援備戰指定）|
+| PRE | 勾魂眼 \| 動怒爪 | 自己備戰區有惡屬 Stage2 則 +70 |
+| PRE | 桃歹郎ex \| 煩煩爆炸 | 對手已取獎勵牌數 × 60 |
+| POST | 阿勃梭魯 \| 吸引 | 從牌庫抽 2 張 |
+| POST | 小仙奶 \| 吸取之吻 | 自身回復 10 HP |
+| POST | 超級耿鬼ex \| 空無強風 | 移動自身最後 1 個能量到玩家選擇的備戰寶可夢 |
+| POST | 克雷色利亞 \| 充溢之光 | 從牌庫選最多 2 張基本能量附於自身（無傷害攻擊）|
+| POST | 美洛耶塔 \| 治癒旋律 | 選備戰超寶可夢回復 120 HP（無傷害攻擊）|
+| POST | 謎擬Q \| 呼朋引伴 | 從牌庫選 1 隻基礎寶可夢放備戰（無傷害攻擊）|
+
+#### 3. 新增 Resolvers
+
+| Key | 功能 |
+|:---|:---|
+| `gengar-move-energy` | 把暫存的能量 CardInstance 附到玩家選擇的備戰寶可夢 |
+| `cresselia-attach-energy` | 把選取的能量從牌庫附到自身出場寶可夢（並洗牌）|
+| `heal-120-bench` | 選定備戰寶可夢回復 120 HP |
+
+#### 4. endTurnAfter 機制
+
+RESOLVE_SELECTION 加入 `endTurnAfter` 支援：若 `params.endTurnAfter === true`，選擇解析後設 `turnPhase: 'end'`（目前 ATTACK 後 turnPhase 已是 'end'，此機制為訓練家互動效果保留）。
+
+### 架構說明（給下一位 AI）
+
+```
+ATTACK handler 流程：
+1. canAffordAttack → 能量足夠才繼續
+2. ATTACK_PRE.get(`${cardName}|${attackName}`) → { state, damage }（丟棄能量 / 計算倍數）
+3. 弱點 ×2（只對有傷害的招式套用）
+4. 施加傷害 → 擊倒判定（pendingPrizes, turnPhase='end'）
+5. ATTACK_POST.get(...) → GameState（回復 / 移動能量 / 觸發 pendingSelection）
+```
+
+- **POST + pendingSelection 共存**：攻擊 KO 後 `pendingPrizes > 0`，若同時有 pendingSelection，玩家必須先 RESOLVE_SELECTION，再 TAKE_PRIZES，最後 END_TURN（engine 在 pendingSelection 存在時只允許 RESOLVE_SELECTION 動作）。
+- **snipe 簡化**：狙擊羽毛目前只打對手出場（不支援備戰指定），M4 可改為觸發 `opp-target-choose`。
+- **花冠射線自動丟棄**：自動取最多 2 個能量（不讓玩家選），貪婪策略。若日後需互動，改為 PRE 觸發 pendingSelection（需修改 engine 架構）。
+
+### 未實裝（留 M4）
+| 項目 | 說明 |
+|:---|:---|
+| 神奇糖果 | Stage 2 跳進化（hand-choose → 找目標 basic）|
+| 龐克頭盔 / 氣球 | 道具牌（Tool）系統 |
+| 神秘花園 | 競技場（Stadium）系統 |
+| 無極汰那|力量猛攻 | 反面時「下回合不能攻擊」狀態旗標 |
+| 拉帝亞斯ex|無限之刃 | 「下回合不能攻擊」|
+| 狙擊羽毛備戰指定 | 需要 opp-target-choose 類型（含 active+bench）|
+
+### Commit
+- `f3506f1` feat(game): 招式效果系統 + 屬性能量修正
