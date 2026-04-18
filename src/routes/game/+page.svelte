@@ -131,13 +131,26 @@
           if (f === 'Basic:HP70') return card.supertype === 'Pokemon' && card.subtype === 'Basic' && (card.hp ?? 0) <= 70;
           if (f === 'Pokemon')    return card.supertype === 'Pokemon';
           if (f === 'Energy')     return card.supertype === 'Energy';
+          if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
           return true;
         });
       }
-      case 'bench-choose': return src.bench;
-      case 'hand-discard':  return src.hand;
+      case 'bench-choose':
+      case 'opp-bench-choose': return src.bench;
+      case 'hand-discard':
+      case 'hand-choose':  return src.hand;
       case 'heal-target':  return [...(src.active ? [src.active] : []), ...src.bench];
-      default:             return [] as CardInstance[];
+      case 'discard-search': {
+        const f = pendingSelection.filter ?? '';
+        return src.discard.filter(c => {
+          const card = pool.get(c.cardId);
+          if (!card) return false;
+          if (f === 'PokemonOrEnergy') return card.supertype === 'Pokemon' || card.supertype === 'Energy';
+          if (f === 'BasicEnergy')     return card.supertype === 'Energy';
+          return true;
+        });
+      }
+      default: return [] as CardInstance[];
     }
   });
 
@@ -306,10 +319,13 @@
     selectionPicked = new Set();
   }
   function selectionTitle(type: string): string {
-    if (type === 'deck-search')  return '從牌庫選擇';
-    if (type === 'bench-choose') return '選擇備戰寶可夢';
-    if (type === 'hand-discard') return '選擇丟棄的手牌';
-    if (type === 'heal-target')  return '選擇回復的寶可夢';
+    if (type === 'deck-search')     return '從牌庫選擇';
+    if (type === 'bench-choose')    return '選擇備戰寶可夢';
+    if (type === 'opp-bench-choose') return '選擇對手的備戰寶可夢';
+    if (type === 'hand-discard')    return '選擇丟棄的手牌';
+    if (type === 'hand-choose')     return '從手牌選擇';
+    if (type === 'heal-target')     return '選擇回復的寶可夢';
+    if (type === 'discard-search')  return '從棄牌區選擇';
     return '請選擇';
   }
 </script>
@@ -667,9 +683,6 @@
 
       <div class="action-btns">
         {#if isMyTurn()}
-          {#if game.turnPhase==='draw'}
-            <button class="btn-act primary" onclick={()=>dispatch(GameActions.drawCard())}>📥 抽牌</button>
-          {/if}
           {#if game.turnPhase==='main' && activePlayer?.active}
             {@const ac=getCard(activePlayer.active.cardId)}
             {#each ac?.attacks??[] as atk,i}

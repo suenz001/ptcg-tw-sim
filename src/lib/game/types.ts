@@ -85,7 +85,10 @@ export interface PlayerState {
 
 export interface PendingSelection {
   /** 選擇類型 */
-  type: 'deck-search' | 'bench-choose' | 'hand-discard' | 'heal-target';
+  type: 'deck-search' | 'bench-choose' | 'hand-discard' | 'heal-target'
+      | 'opp-bench-choose'  // 選對手備戰寶可夢（老大的指令、頂尖捕捉器）
+      | 'discard-search'    // 從棄牌區選擇（夜間擔架、能量回收器、奇跡修正檔）
+      | 'hand-choose';      // 從手牌選擇但不丟棄（神奇糖果第一步）
   /** 需要做選擇的玩家 */
   actorIdx: 0 | 1;
   /** 來源牌堆/目標的玩家（通常等於 actorIdx） */

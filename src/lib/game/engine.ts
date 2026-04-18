@@ -299,6 +299,32 @@ function handleSetup(
   return state;
 }
 
+// ── 自動抽牌（每回合開始時呼叫，回傳 turnPhase='main' 的新 state）────────────
+
+function applyAutoDraw(state: GameState): GameState {
+  const aIdx = state.activePlayerIndex;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const player = state.players[aIdx];
+  if (player.deck.length === 0) {
+    return {
+      ...state, phase: 'game-over',
+      winner: dIdx,
+      winReason: `${player.name} 牌組耗盡，無法抽牌`,
+      log: [...state.log, { turn: state.turn, playerIndex: null,
+        message: `${player.name} 無法抽牌，${state.players[dIdx].name} 獲勝！` }],
+    };
+  }
+  const drawn = player.deck[0];
+  const newPlayer = { ...player, deck: player.deck.slice(1), hand: [...player.hand, drawn] };
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[aIdx] = newPlayer;
+  return addLog(
+    { ...state, players, turnPhase: 'main' },
+    `${player.name} 抽了 1 張牌（手牌 ${newPlayer.hand.length} 張）`,
+    aIdx
+  );
+}
+
 // ── 正式對戰動作處理 ─────────────────────────────────────────────────────────
 
 function handlePlaying(
@@ -680,7 +706,7 @@ function handlePlaying(
     };
 
     const newTurn = aIdx === 1 ? state.turn + 1 : state.turn;
-    return addLog(
+    const afterSwitch = addLog(
       {
         ...state,
         players,
@@ -692,6 +718,8 @@ function handlePlaying(
       `回合結束，換 ${players[nextIdx].name} 行動。`,
       null
     );
+    // 自動抽牌（每回合開始規定，不需要玩家手動點擊）
+    return applyAutoDraw(afterSwitch);
   }
 
   return state;

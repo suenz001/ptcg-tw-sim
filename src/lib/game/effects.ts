@@ -391,3 +391,243 @@ reg('小剛的發掘', (st, idx) => {
     effectKey: 'search-pokemon-to-hand',
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 支援者 — 抽牌系列
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 莉莉艾的決意 — 手牌洗回牌庫，抽 6 張（獎勵牌剩 6 張時抽 8 張）
+reg('莉莉艾的決意', (st, idx) => {
+  const prizes = st.players[idx].prizes.length;
+  const drawCount = prizes >= 6 ? 8 : 6;
+  st = addLog(st, `莉莉艾的決意：手牌洗回牌庫，抽 ${drawCount} 張`, idx);
+  st = returnHandToDeck(st, idx);
+  return drawCards(st, idx, drawCount);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 支援者 — 呼叫對手（Gust 系列）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 老大的指令 — 選 1 隻對手備戰寶可夢與其戰鬥寶可夢互換
+reg('老大的指令', (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  if (st.players[oppIdx].bench.length === 0) {
+    return addLog(st, '老大的指令：對手備戰區沒有寶可夢', idx);
+  }
+  st = addLog(st, '老大的指令：選擇要呼叫的對手備戰寶可夢', idx);
+  return withPending(st, {
+    type: 'opp-bench-choose',
+    actorIdx: idx, sourcePlayerIdx: oppIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'gust-opp',
+  });
+});
+
+regR('gust-opp', (st, idx, iids, _params, _pool) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  return updatePlayer(st, oppIdx, (p) => {
+    if (!p.active) return p;
+    const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
+    if (bIdx < 0) return p;
+    const newBench = [...p.bench];
+    newBench[bIdx] = p.active;
+    return { ...p, active: { ...p.bench[bIdx], justPlaced: false }, bench: newBench };
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 物品卡 — 搜尋牌庫（補充）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 高級球 — 丟棄 2 張手牌，搜尋任意寶可夢加手牌
+reg('高級球', (st, idx) => {
+  if (st.players[idx].hand.length < 2) {
+    return addLog(st, '高級球：手牌不足 2 張，無法使用', idx);
+  }
+  st = addLog(st, '高級球：選擇 2 張手牌丟棄', idx);
+  return withPending(st, {
+    type: 'hand-discard',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 2, maxCount: 2,
+    effectKey: 'ultra-ball-discard',
+  });
+});
+regR('ultra-ball-discard', (st, idx, iids, _params, _pool) => {
+  st = updatePlayer(st, idx, (p) => {
+    const toDiscard = p.hand.filter(c => iids.includes(c.iid));
+    return { ...p, hand: p.hand.filter(c => !iids.includes(c.iid)), discard: [...p.discard, ...toDiscard] };
+  });
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-pokemon-to-hand',
+  });
+});
+
+// 超級信號 — 從牌庫搜尋 1 張 ex 寶可夢加手牌（簡化：搜任意寶可夢）
+reg('超級信號', (st, idx) => {
+  st = addLog(st, '超級信號：從牌庫選 1 張超級進化寶可夢 ex 加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'ex',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-pokemon-to-hand',
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 物品卡 — 棄牌區回收
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 夜間擔架 — 從棄牌區選 1 張寶可夢或基本能量卡加手牌
+reg('夜間擔架', (st, idx) => {
+  const discard = st.players[idx].discard;
+  if (discard.length === 0) return addLog(st, '夜間擔架：棄牌區為空', idx);
+  st = addLog(st, '夜間擔架：從棄牌區選 1 張寶可夢或基本能量加手牌', idx);
+  return withPending(st, {
+    type: 'discard-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'PokemonOrEnergy',
+    minCount: 0, maxCount: 1,
+    effectKey: 'discard-to-hand',
+  });
+});
+
+// 能量回收器 — 從棄牌區選最多 5 張基本能量卡放回牌庫
+reg('能量回收器', (st, idx) => {
+  const energies = st.players[idx].discard.filter(() => true); // 在 UI 篩選
+  if (energies.length === 0) return addLog(st, '能量回收器：棄牌區為空', idx);
+  st = addLog(st, '能量回收器：從棄牌區選最多 5 張基本能量洗回牌庫', idx);
+  return withPending(st, {
+    type: 'discard-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy',
+    minCount: 0, maxCount: 5,
+    effectKey: 'energy-retrieval',
+  });
+});
+regR('energy-retrieval', (st, idx, iids, _params, _pool) => {
+  return updatePlayer(st, idx, (p) => {
+    const chosen = p.discard.filter(c => iids.includes(c.iid));
+    const newDiscard = p.discard.filter(c => !iids.includes(c.iid));
+    return { ...p, deck: shuffle([...p.deck, ...chosen]), discard: newDiscard };
+  });
+});
+
+regR('discard-to-hand', (st, idx, iids, _params, _pool) => {
+  return updatePlayer(st, idx, (p) => {
+    const chosen = p.discard.filter(c => iids.includes(c.iid));
+    return { ...p, discard: p.discard.filter(c => !iids.includes(c.iid)), hand: [...p.hand, ...chosen] };
+  });
+});
+
+// 奇跡修正檔 — 從棄牌區選 1 張基本超能量，附於備戰的超寶可夢身上（兩步）
+reg('奇跡修正檔', (st, idx) => {
+  const hasEnergy = st.players[idx].discard.some(() => true); // 在 UI 過濾 BasicEnergy:Psychic
+  if (!hasEnergy) return addLog(st, '奇跡修正檔：棄牌區沒有基本超能量', idx);
+  st = addLog(st, '奇跡修正檔：從棄牌區選 1 張基本超能量', idx);
+  return withPending(st, {
+    type: 'discard-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy',
+    minCount: 1, maxCount: 1,
+    effectKey: 'miracle-codec-energy',
+  });
+});
+regR('miracle-codec-energy', (st, idx, iids, _params, _pool) => {
+  if (iids.length === 0) return st;
+  const energyIid = iids[0];
+  if (st.players[idx].bench.length === 0) {
+    // 直接附到出場寶可夢
+    return updatePlayer(st, idx, (p) => {
+      const energyCard = p.discard.find(c => c.iid === energyIid);
+      if (!energyCard || !p.active) return p;
+      return {
+        ...p,
+        discard: p.discard.filter(c => c.iid !== energyIid),
+        active: { ...p.active, energyAttached: [...p.active.energyAttached, energyCard] },
+      };
+    });
+  }
+  return withPending(st, {
+    type: 'bench-choose',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'miracle-codec-attach',
+    params: { energyIid },
+  });
+});
+regR('miracle-codec-attach', (st, idx, iids, params, _pool) => {
+  const energyIid = params?.energyIid as string;
+  if (!energyIid) return st;
+  const targetIid = iids[0];
+  return updatePlayer(st, idx, (p) => {
+    const energyCard = p.discard.find(c => c.iid === energyIid);
+    if (!energyCard) return p;
+    return {
+      ...p,
+      discard: p.discard.filter(c => c.iid !== energyIid),
+      bench: p.bench.map(c => c.iid === targetIid
+        ? { ...c, energyAttached: [...c.energyAttached, energyCard] }
+        : c),
+    };
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 物品卡 — 切換（呼叫對手 + 自己切換）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 頂尖捕捉器 — 選 1 隻對手備戰 → 換到對手場上；再選自己備戰 → 切換自己
+reg('頂尖捕捉器', (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  if (st.players[oppIdx].bench.length === 0) {
+    return addLog(st, '頂尖捕捉器：對手備戰區沒有寶可夢', idx);
+  }
+  st = addLog(st, '頂尖捕捉器：選擇要呼叫的對手備戰寶可夢', idx);
+  return withPending(st, {
+    type: 'opp-bench-choose',
+    actorIdx: idx, sourcePlayerIdx: oppIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'top-catcher-opp',
+  });
+});
+regR('top-catcher-opp', (st, idx, iids, _params, _pool) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  // 切換對手備戰 → 對手出場
+  st = updatePlayer(st, oppIdx, (p) => {
+    if (!p.active) return p;
+    const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
+    if (bIdx < 0) return p;
+    const newBench = [...p.bench];
+    newBench[bIdx] = p.active;
+    return { ...p, active: { ...p.bench[bIdx], justPlaced: false }, bench: newBench };
+  });
+  // 若自己也有備戰，選擇自己要換入的寶可夢
+  if (st.players[idx].bench.length === 0) return st;
+  return withPending(st, {
+    type: 'bench-choose',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'do-switch',
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 物品卡 — 其他
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 不公印章 — （省略「上回合寶可夢被擊倒」條件）雙方洗手牌，自己抽 5，對手抽 2
+reg('不公印章', (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  st = addLog(st, '不公印章：雙方洗手牌重抽（自己 5 張，對手 2 張）', idx);
+  st = returnHandToDeck(st, idx);
+  st = returnHandToDeck(st, oppIdx);
+  st = drawCards(st, idx, 5);
+  st = drawCards(st, oppIdx, 2);
+  return st;
+});
