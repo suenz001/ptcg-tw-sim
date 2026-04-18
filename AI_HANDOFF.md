@@ -657,3 +657,101 @@ M1 全部 4 個 Phase 已完成。下一個里程碑是 **M2（對戰引擎）**
 - 若要新增更多預組，只需在 `presets.ts` 的 `PRESET_DECKS` 陣列加入新的 Deck 物件即可
 - `PRESET_IDS` 用來判斷是否為內建牌組（方便之後在牌組編輯器中標示「內建」badge 或禁止刪除）
 - 卡片 ID 格式為純數字字串（如 `'14129'`），與 `buildCardIndex` 的 key 格式一致
+
+---
+
+## 📝 2026-04-18 Session 12 — 對戰 UI 重設計（Play Mat 佈局 + 卡片放大）
+
+> 觸發：使用者要求比照官方教學影片重設計對戰畫面佈局，並要求卡片可以點擊放大
+
+### 工作內容
+
+#### 1. Play Mat 佈局重設計（取代舊三欄佈局）
+
+舊版：三欄（對手區 / 行動區 / 我方區），所有內容縱向排列。
+新版：上下對稱桌墊佈局，每邊橫向排列：
+- **對手（上）**：`[牌庫/棄牌] [←備戰5格] [出場] [獎勵牌]`
+- **中間**：行動列（警示 / 攻擊按鈕 / 行動紀錄）
+- **我方（下）**：`[獎勵牌] [出場] [備戰5格→] [牌庫/棄牌]`
+- **最底**：手牌橫向捲軸
+
+#### 2. 卡片尺寸大幅放大
+
+| 位置 | 舊尺寸 | 新尺寸 |
+|------|--------|--------|
+| 出場寶可夢圖片 | 68px | **100px** |
+| 備戰寶可夢圖片 | 62px | **78px** |
+| 手牌圖片 | 54px | **72px** |
+| 手牌容器 | 58px | **76px** |
+| zone-active 寬度 | 195px | **250px** |
+| bench-slot 最大寬 | 80px | **95px** |
+
+#### 3. 卡片放大功能（Zoom Overlay）
+
+**觸發方式**：點擊任何卡片圖片（鼠標顯示為 🔍 zoom-in）
+**關閉方式**：點擊暗色背景 / 點擊 ✕ 按鈕 / 按 Escape 鍵
+
+**Zoom Modal 顯示內容**：
+- 大圖（260px 寬，右側為資訊面板）
+- 卡名、HP badge、屬性 badge、子類型、Regulation Mark
+- 進化來源（若有）
+- 特性（紅色 label + 名稱 + 效果文字）
+- 每個招式（能量 pip + 招式名 + 傷害值 + 效果文字）
+- 訓練家/能量牌的 rulesText
+- 弱點（×2）、撤退費用（能量 pip）
+
+**實作細節**：
+- `let zoomCard = $state<Card | null>(null)` — 新增 UI 狀態
+- `openZoom(cardId: string)` — 從 pool 取 Card 存入 zoomCard
+- `<svelte:window onkeydown={onGlobalKey} />` — ESC 關閉（同時也清空 selectionPicked）
+- 能量牌選取模式中點圖片不觸發 zoom（避免衝突）
+
+#### 4. 規則對照確認（不動 engine，延後到 M3）
+
+已確認以下規則均已正確實裝於 engine.ts：
+- 先手第1回合：不攻擊、不進化、不抽牌 ✅
+- 每回合限制：1張能量、1張支援者、1次撤退 ✅
+- 弱點 ×2、ex 被擊倒給2張獎勵牌 ✅
+- 三種勝利條件（獎勵牌/無牌可出/抽不到牌）✅
+
+以下項目規劃**延後至 M3 補齊**：
+- 抗性（Resistance，通常 -30）
+- 狀態異常（毒/麻痺/睡眠/灼傷）
+- 道具牌（Tool）效果
+- 競技場牌（Stadium）效果
+- 特殊能量完整處理
+
+### 修改檔案
+| 檔案 | 變更 |
+|:---|:---|
+| `src/routes/game/+page.svelte` | Play Mat 佈局、卡片尺寸放大、Zoom Overlay、`<svelte:window>` |
+
+### Commits
+- `8c02bf6` feat: redesign battle UI to official PTCG play mat layout
+- `（本 session）` feat: card zoom overlay + larger cards in battle UI
+
+---
+
+## 🔮 下一步：M3 多人連線對戰
+
+### M3 規劃
+
+| Phase | 內容 |
+|-------|------|
+| **A — 房間系統** | 建立/加入房間（4碼房號）、等待對手入場 |
+| **B — 狀態同步** | Firestore 儲存 GameState，雙方 `onSnapshot` 即時更新 |
+| **C — 行動驗證** | 只有輪到自己才能送出動作（Firestore rules + client guard）|
+| **D — 重連/斷線** | 離開後可回來繼續、逾時自動棄局 |
+
+### 技術重點
+- **引擎已是純函式**（`applyAction → new state`），GameState 可直接序列化到 Firestore
+- **pool 不進 GameState**（避免爆炸），雙方各自在本地建立
+- **行動送出方式**：本地先 `applyAction` 驗證合法性 → 寫 action 到 Firestore → 對方監聽到後也 `applyAction` 同步
+- **已有 Firestore** `users/{uid}/decks/{deckId}` 結構，M3 新增 `rooms/{roomId}` collection
+- **Anonymous Auth** 已啟用，uid 可直接用來識別玩家身分
+
+### Firebase 部署指令（Windows）
+```
+cd E:\ptcg-tw-sim
+node node_modules\firebase-tools\lib\bin\firebase.js deploy --only firestore:rules --project ptcg-tw-sim
+```

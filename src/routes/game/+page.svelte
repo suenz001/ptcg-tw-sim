@@ -21,8 +21,6 @@
   let pool = $state<Map<string, Card>>(new Map());
   let poolReady = $state(false);
   let decks = $state<Deck[]>([]);
-
-  /** 使用者牌組 + 內建預設牌組，合併後供 Lobby 顯示 */
   const allDecks = $derived([...PRESET_DECKS, ...decks]);
 
   // ── 遊戲狀態 ────────────────────────────────────────────────────────────────
@@ -35,10 +33,23 @@
   let p2Name = $state('玩家 2');
 
   // ── UI 互動狀態 ─────────────────────────────────────────────────────────────
-  let selectedEnergyIid = $state<string | null>(null);  // 已選取的能量卡
-  let showEvoMenu = $state<string | null>(null);         // 進化選單：展開的 fromIid
-  let showRetreatPicker = $state(false);                 // 顯示撤退備戰選擇
-  let selectionPicked = $state<Set<string>>(new Set());  // pendingSelection 選中的 iid
+  let selectedEnergyIid = $state<string | null>(null);
+  let showEvoMenu = $state<string | null>(null);
+  let showRetreatPicker = $state(false);
+  let selectionPicked = $state<Set<string>>(new Set());
+
+  // ── 卡片放大 ────────────────────────────────────────────────────────────────
+  let zoomCard = $state<Card | null>(null);
+
+  function openZoom(cardId: string) {
+    const c = pool.get(cardId);
+    if (c) zoomCard = c;
+  }
+  function closeZoom() { zoomCard = null; }
+
+  function onGlobalKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') { closeZoom(); selectionPicked = new Set(); }
+  }
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const aIdx = $derived(game?.activePlayerIndex ?? 0);
@@ -62,7 +73,6 @@
     !hasPendingActions(game)
   );
 
-  // pendingSelection 時可選的 items
   const selectionItems = $derived.by(() => {
     if (!pendingSelection || !game) return [] as CardInstance[];
     const src = game.players[pendingSelection.sourcePlayerIdx];
@@ -70,9 +80,7 @@
       case 'deck-search': {
         const f = pendingSelection.filter ?? '';
         if (f === 'TOP6') {
-          const top6Iids = new Set<string>(
-            (pendingSelection.params?.top6Iids as string[]) ?? []
-          );
+          const top6Iids = new Set<string>((pendingSelection.params?.top6Iids as string[]) ?? []);
           return src.deck.filter(c => top6Iids.has(c.iid));
         }
         return src.deck.filter(c => {
@@ -85,14 +93,10 @@
           return true;
         });
       }
-      case 'bench-choose':
-        return src.bench;
-      case 'hand-discard':
-        return src.hand;
-      case 'heal-target':
-        return [...(src.active ? [src.active] : []), ...src.bench];
-      default:
-        return [] as CardInstance[];
+      case 'bench-choose': return src.bench;
+      case 'hand-discard': return src.hand;
+      case 'heal-target': return [...(src.active ? [src.active] : []), ...src.bench];
+      default: return [] as CardInstance[];
     }
   });
 
@@ -110,13 +114,9 @@
   });
 
   // ── 輔助函式 ────────────────────────────────────────────────────────────────
-  function getCard(cardId: string): Card | undefined {
-    return pool.get(cardId);
-  }
+  function getCard(cardId: string): Card | undefined { return pool.get(cardId); }
 
-  function pokemonHP(instance: CardInstance): number {
-    return pool.get(instance.cardId)?.hp ?? 0;
-  }
+  function pokemonHP(instance: CardInstance): number { return pool.get(instance.cardId)?.hp ?? 0; }
 
   function hpRemaining(instance: CardInstance): number {
     return Math.max(0, pokemonHP(instance) - instance.damage);
@@ -139,7 +139,6 @@
     return getCard(inst.cardId)?.retreatCost?.length ?? 0;
   }
 
-  /** 從 evolvableTargets 取得某 iid 的可用進化卡 */
   function evoOptionsFor(fromIid: string): CardInstance[] {
     const entry = evolvableTargets.find(e => e.fromIid === fromIid);
     if (!entry || !activePlayer) return [];
@@ -157,8 +156,8 @@
 
   function startGame() {
     if (!p1DeckId || !p2DeckId) return;
-    const d1 = allDecks.find((d) => d.id === p1DeckId);
-    const d2 = allDecks.find((d) => d.id === p2DeckId);
+    const d1 = allDecks.find(d => d.id === p1DeckId);
+    const d2 = allDecks.find(d => d.id === p2DeckId);
     if (!d1 || !d2) return;
     game = createGame(
       { name: p1Name || d1.name, entries: d1.entries },
@@ -174,11 +173,8 @@
 
   function toggleSelection(iid: string) {
     const next = new Set(selectionPicked);
-    if (next.has(iid)) {
-      next.delete(iid);
-    } else if (pendingSelection && next.size < pendingSelection.maxCount) {
-      next.add(iid);
-    }
+    if (next.has(iid)) { next.delete(iid); }
+    else if (pendingSelection && next.size < pendingSelection.maxCount) { next.add(iid); }
     selectionPicked = next;
   }
 
@@ -197,6 +193,8 @@
   }
 </script>
 
+<svelte:window onkeydown={onGlobalKey} />
+
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 <!--  選牌組畫面                                                            -->
 <!-- ══════════════════════════════════════════════════════════════════════ -->
@@ -204,7 +202,6 @@
   <main class="lobby">
     <a href="{base}/" class="back">← 首頁</a>
     <h1>⚔️ 開始對戰</h1>
-
     {#if !poolReady}
       <p class="muted">載入卡池中…</p>
     {:else}
@@ -216,23 +213,17 @@
             <option value="">— 選擇牌組 —</option>
             {#if PRESET_DECKS.length > 0}
               <optgroup label="🎴 內建預組">
-                {#each PRESET_DECKS as d}
-                  <option value={d.id}>{d.name}</option>
-                {/each}
+                {#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}
               </optgroup>
             {/if}
             {#if decks.length > 0}
               <optgroup label="📁 我的牌組">
-                {#each decks as d}
-                  <option value={d.id}>{d.name}（{d.entries.reduce((n,e)=>n+e.count,0)} 張）</option>
-                {/each}
+                {#each decks as d}<option value={d.id}>{d.name}（{d.entries.reduce((n,e)=>n+e.count,0)} 張）</option>{/each}
               </optgroup>
             {/if}
           </select>
         </div>
-
         <div class="vs-badge">VS</div>
-
         <div class="setup-card">
           <h2>玩家 2（後手）</h2>
           <input class="name-input" placeholder="玩家名稱" bind:value={p2Name} />
@@ -240,34 +231,26 @@
             <option value="">— 選擇牌組 —</option>
             {#if PRESET_DECKS.length > 0}
               <optgroup label="🎴 內建預組">
-                {#each PRESET_DECKS as d}
-                  <option value={d.id}>{d.name}</option>
-                {/each}
+                {#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}
               </optgroup>
             {/if}
             {#if decks.length > 0}
               <optgroup label="📁 我的牌組">
-                {#each decks as d}
-                  <option value={d.id}>{d.name}（{d.entries.reduce((n,e)=>n+e.count,0)} 張）</option>
-                {/each}
+                {#each decks as d}<option value={d.id}>{d.name}（{d.entries.reduce((n,e)=>n+e.count,0)} 張）</option>{/each}
               </optgroup>
             {/if}
           </select>
         </div>
       </div>
-
-      <button class="btn-primary" disabled={!p1DeckId || !p2DeckId || p1DeckId === p2DeckId}
-        onclick={startGame}>
+      <button class="btn-primary" disabled={!p1DeckId || !p2DeckId || p1DeckId === p2DeckId} onclick={startGame}>
         🎮 開始遊戲
       </button>
-      {#if p1DeckId === p2DeckId && p1DeckId}
-        <p class="warn">兩位玩家請選不同的牌組</p>
-      {/if}
+      {#if p1DeckId === p2DeckId && p1DeckId}<p class="warn">兩位玩家請選不同的牌組</p>{/if}
     {/if}
   </main>
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<!--  遊戲結束畫面                                                          -->
+<!--  遊戲結束                                                              -->
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 {:else if game.phase === 'game-over'}
   <main class="lobby">
@@ -295,12 +278,9 @@
       <div class="setup-active">
         <strong>出場：</strong>
         <span class="poke-chip active-chip">{ac?.name ?? '?'} (HP {ac?.hp})</span>
-        <button class="small danger" onclick={() => dispatch(GameActions.placeActive(setupPlayer.active!.iid))}>
-          換出場
-        </button>
+        <button class="small danger" onclick={() => dispatch(GameActions.placeActive(setupPlayer.active!.iid))}>換出場</button>
       </div>
     {/if}
-
     {#if setupPlayer.bench.length > 0}
       <div class="setup-bench-row">
         <strong>備戰：</strong>
@@ -317,7 +297,7 @@
         {@const c = getCard(inst.cardId)}
         {#if c}
           <div class="hand-card" class:selectable={c.supertype === 'Pokemon' && c.subtype === 'Basic'}>
-            <img src={c.imageUrl} alt={c.name} />
+            <img src={c.imageUrl} alt={c.name} onclick={() => openZoom(inst.cardId)} class="zoomable" />
             <div class="hand-card-name">{c.name}</div>
             {#if c.supertype === 'Pokemon' && c.subtype === 'Basic'}
               {#if !setupPlayer.active}
@@ -332,22 +312,20 @@
         {/if}
       {/each}
     </div>
-
-    <button class="btn-primary" disabled={!setupPlayer.active}
-      onclick={() => dispatch(GameActions.finishSetup())}>
+    <button class="btn-primary" disabled={!setupPlayer.active} onclick={() => dispatch(GameActions.finishSetup())}>
       ✅ 準備完成
     </button>
   </main>
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<!--  正式對戰畫面（Play Mat 佈局）                                          -->
+<!--  正式對戰（Play Mat 佈局）                                              -->
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 {:else}
 <div class="battle-root">
 
   <!-- ── 頂部資訊列 ── -->
   <header class="battle-header">
-    <a href="{base}/" class="back small-back">← 首頁</a>
+    <a href="{base}/" class="small-back">← 首頁</a>
     <span class="turn-info">
       回合 {game.turn}　<strong>{activePlayer?.name}</strong> 行動中
       {#if game.isFirstTurn && aIdx === 0}<span class="hint">（先手第1回合不能攻擊/進化）</span>{/if}
@@ -367,33 +345,31 @@
   <!-- ── Play Mat ── -->
   <div class="playmat">
 
-    <!-- ════ 對手場地（上半）════
-         佈局：[牌庫棄牌] [←備戰(5格)] [出場] [獎勵牌]
-    -->
+    <!-- ════ 對手場地（上半）：[牌庫/棄牌] [←備戰] [出場] [獎勵牌] ════ -->
     <div class="field-row opponent-row">
 
-      <!-- 對手：牌庫 + 棄牌（最左） -->
+      <!-- 牌庫 + 棄牌 -->
       <div class="zone-pile">
-        <div class="pile-slot deck-pile" title="對手牌庫">
+        <div class="pile-slot deck-pile">
           <span class="pile-icon">🃏</span>
           <span class="pile-count">{defenderPlayer?.deck.length ?? 0}</span>
           <span class="pile-label">牌庫</span>
         </div>
-        <div class="pile-slot disc-pile" title="對手棄牌區">
+        <div class="pile-slot disc-pile">
           <span class="pile-icon">🗑</span>
           <span class="pile-count">{defenderPlayer?.discard.length ?? 0}</span>
           <span class="pile-label">棄牌</span>
         </div>
       </div>
 
-      <!-- 對手：備戰區（5格，靠近牌庫側） -->
+      <!-- 備戰區 -->
       <div class="zone-bench">
         {#each Array(5) as _, i}
           {#if defenderPlayer?.bench[i]}
             {@const b = defenderPlayer.bench[i]}
             {@const bc = getCard(b.cardId)}
             <div class="bench-slot">
-              <img src={bc?.imageUrl} alt={bc?.name} />
+              <img src={bc?.imageUrl} alt={bc?.name} onclick={() => openZoom(b.cardId)} class="zoomable" />
               <div class="hp-bar-wrap sm">
                 <div class="hp-bar" style="width:{bc?.hp ? hpRemaining(b)/bc.hp*100 : 0}%;background:{hpColor(hpRemaining(b),bc?.hp??0)}"></div>
               </div>
@@ -406,13 +382,13 @@
         {/each}
       </div>
 
-      <!-- 對手：出場寶可夢（中央） -->
+      <!-- 出場寶可夢 -->
       <div class="zone-active">
         <div class="zone-label-sm opp-label">對手出場</div>
         {#if defenderPlayer?.active}
           {@const ac = getCard(defenderPlayer.active.cardId)}
           <div class="active-card opp-active">
-            <img src={ac?.imageUrl} alt={ac?.name} class="active-img" />
+            <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={() => openZoom(defenderPlayer!.active!.cardId)} />
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
               <div class="hp-bar-wrap">
@@ -427,7 +403,7 @@
         {/if}
       </div>
 
-      <!-- 對手：獎勵牌（最右） -->
+      <!-- 獎勵牌 -->
       <div class="zone-prizes">
         <div class="prize-grid">
           {#each Array(6) as _, i}
@@ -442,7 +418,6 @@
     <!-- ════ 中間行動列 ════ -->
     <div class="action-bar">
 
-      <!-- 警示訊息 -->
       <div class="alerts-col">
         {#if pendingPrizes > 0}
           <div class="alert prize-alert">
@@ -464,8 +439,7 @@
                     if (game) game = { ...game, activePlayerIndex: prev };
                   }
                 }}>
-                  <img src={bc?.imageUrl} alt={bc?.name} />
-                  <span>{bc?.name}</span>
+                  <img src={bc?.imageUrl} alt={bc?.name} /><span>{bc?.name}</span>
                 </button>
               {/each}
             </div>
@@ -473,12 +447,10 @@
         {/if}
       </div>
 
-      <!-- 行動按鈕 -->
       <div class="action-btns">
         {#if game.turnPhase === 'draw'}
           <button class="btn-act primary" onclick={() => dispatch(GameActions.drawCard())}>📥 抽牌</button>
         {/if}
-
         {#if game.turnPhase === 'main' && activePlayer?.active}
           {@const ac = getCard(activePlayer.active.cardId)}
           {#each ac?.attacks ?? [] as atk, i}
@@ -487,9 +459,7 @@
               disabled={!availableAttacks.includes(i) || !!pendingSelection}
               onclick={() => dispatch(GameActions.attack(i))}>
               <span class="cost-row">
-                {#each atk.cost as e}
-                  <span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>
-                {/each}
+                {#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}
               </span>
               <span class="atk-name">{atk.name}</span>
               <span class="atk-dmg">{atk.damage || '—'}</span>
@@ -500,13 +470,11 @@
             跳過攻擊 →
           </button>
         {/if}
-
         {#if canEndTurn}
           <button class="btn-act primary" onclick={() => dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
         {/if}
       </div>
 
-      <!-- 行動紀錄 -->
       <div class="log-col">
         {#each [...(game.log ?? [])].reverse().slice(0, 12) as entry}
           <div class="log-line" class:log-sys={entry.playerIndex === null}>{entry.message}</div>
@@ -515,12 +483,10 @@
 
     </div><!-- /.action-bar -->
 
-    <!-- ════ 我的場地（下半）════
-         佈局：[獎勵牌] [出場] [備戰(5格)→] [牌庫棄牌]
-    -->
+    <!-- ════ 我的場地（下半）：[獎勵牌] [出場] [備戰→] [牌庫/棄牌] ════ -->
     <div class="field-row my-row">
 
-      <!-- 我的：獎勵牌（最左） -->
+      <!-- 獎勵牌 -->
       <div class="zone-prizes">
         <div class="zone-label-sm">獎勵 {activePlayer?.prizes.length ?? 0}張</div>
         <div class="prize-grid">
@@ -530,7 +496,7 @@
         </div>
       </div>
 
-      <!-- 我的：出場寶可夢（中央） -->
+      <!-- 出場寶可夢 -->
       <div class="zone-active my-active-zone">
         <div class="zone-label-sm">
           我的出場
@@ -547,7 +513,9 @@
           <div class="active-card mine-active"
             class:energy-target={selectedEnergyIid !== null && !pendingSelection}
             onclick={() => selectedEnergyIid && !pendingSelection && onAttachEnergy(activePlayer!.active!.iid)}>
-            <img src={ac?.imageUrl} alt={ac?.name} class="active-img" />
+            <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
+              class:zoomable={!selectedEnergyIid}
+              onclick={(e) => { if (!selectedEnergyIid) { e.stopPropagation(); openZoom(activePlayer!.active!.cardId); } }} />
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
               <div class="hp-bar-wrap">
@@ -555,16 +523,11 @@
               </div>
               <div class="active-hp">HP {hpRemaining(activePlayer.active)}/{ac?.hp}</div>
               <div class="active-nrg">{energySummary(activePlayer.active)}</div>
-              {#if selectedEnergyIid && !pendingSelection}
-                <div class="attach-hint">⚡ 點此附加</div>
-              {/if}
+              {#if selectedEnergyIid && !pendingSelection}<div class="attach-hint">⚡ 點此附加</div>{/if}
             </div>
-            <!-- 進化按鈕 -->
             {#if evoOpts.length > 0 && !pendingSelection}
               <div class="evo-wrap">
-                <button class="evo-btn" onclick={(e)=>{ e.stopPropagation(); showEvoMenu = showEvoMenu===activePlayer!.active!.iid ? null : activePlayer!.active!.iid; }}>
-                  進化▲
-                </button>
+                <button class="evo-btn" onclick={(e)=>{ e.stopPropagation(); showEvoMenu = showEvoMenu===activePlayer!.active!.iid ? null : activePlayer!.active!.iid; }}>進化▲</button>
                 {#if showEvoMenu === activePlayer.active.iid}
                   <div class="evo-menu">
                     {#each evoOpts as evo}
@@ -579,7 +542,6 @@
             {/if}
           </div>
 
-          <!-- 撤退選擇 -->
           {#if showRetreatPicker && !pendingSelection}
             <div class="retreat-picker">
               <span class="retreat-label">選擇換入：</span>
@@ -597,7 +559,7 @@
         {/if}
       </div>
 
-      <!-- 我的：備戰區（5格） -->
+      <!-- 備戰區 -->
       <div class="zone-bench">
         {#each Array(5) as _, i}
           {#if activePlayer?.bench[i]}
@@ -607,7 +569,9 @@
             <div class="bench-slot"
               class:energy-target={selectedEnergyIid !== null && !pendingSelection}
               onclick={() => selectedEnergyIid && !pendingSelection && onAttachEnergy(b.iid)}>
-              <img src={bc?.imageUrl} alt={bc?.name} />
+              <img src={bc?.imageUrl} alt={bc?.name}
+                class:zoomable={!selectedEnergyIid}
+                onclick={(e) => { if (!selectedEnergyIid) { e.stopPropagation(); openZoom(b.cardId); } }} />
               <div class="hp-bar-wrap sm">
                 <div class="hp-bar" style="width:{bc?.hp ? hpRemaining(b)/bc.hp*100 : 0}%;background:{hpColor(hpRemaining(b),bc?.hp??0)}"></div>
               </div>
@@ -635,14 +599,14 @@
         {/each}
       </div>
 
-      <!-- 我的：牌庫 + 棄牌（最右） -->
+      <!-- 牌庫 + 棄牌 -->
       <div class="zone-pile">
-        <div class="pile-slot deck-pile" title="我的牌庫">
+        <div class="pile-slot deck-pile">
           <span class="pile-icon">🃏</span>
           <span class="pile-count">{activePlayer?.deck.length ?? 0}</span>
           <span class="pile-label">牌庫</span>
         </div>
-        <div class="pile-slot disc-pile" title="我的棄牌區">
+        <div class="pile-slot disc-pile">
           <span class="pile-icon">🗑</span>
           <span class="pile-count">{activePlayer?.discard.length ?? 0}</span>
           <span class="pile-label">棄牌</span>
@@ -650,14 +614,11 @@
       </div>
 
     </div><!-- /.my-row -->
-
   </div><!-- /.playmat -->
 
   <!-- ── 手牌列 ── -->
   <div class="hand-strip">
-    <div class="hand-label">
-      ✋ {activePlayer?.name} 的手牌（{activePlayer?.hand.length ?? 0} 張）
-    </div>
+    <div class="hand-label">✋ {activePlayer?.name} 的手牌（{activePlayer?.hand.length ?? 0} 張）</div>
     <div class="hand-scroll">
       {#each activePlayer?.hand ?? [] as inst}
         {@const c = getCard(inst.cardId)}
@@ -675,7 +636,9 @@
             class:can-trainer={canTrainer}
             onclick={() => { if (canEnergy) selectedEnergyIid = selectedEnergyIid === inst.iid ? null : inst.iid; }}
             title={c.name}>
-            <img src={c.imageUrl} alt={c.name} />
+            <img src={c.imageUrl} alt={c.name}
+              class:zoomable={!canEnergy}
+              onclick={(e) => { if (!canEnergy) { e.stopPropagation(); openZoom(inst.cardId); } }} />
             <span class="hand-name">{c.name}</span>
             {#if canEnergy}
               <span class="hand-hint energy-hint">選取⚡</span>
@@ -720,19 +683,74 @@
               </button>
             {/if}
           {/each}
-          {#if selectionItems.length === 0}
-            <p class="sel-empty">（沒有符合條件的卡牌）</p>
-          {/if}
+          {#if selectionItems.length === 0}<p class="sel-empty">（沒有符合條件的卡牌）</p>{/if}
         </div>
         <div class="sel-footer">
-          <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>
-            確定（{selectionPicked.size} 張）
-          </button>
+          <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（{selectionPicked.size}張）</button>
           {#if pendingSelection.minCount === 0}
-            <button class="btn-act secondary" onclick={() => { selectionPicked = new Set(); confirmSelection(); }}>
-              不選（跳過）
-            </button>
+            <button class="btn-act secondary" onclick={() => { selectionPicked = new Set(); confirmSelection(); }}>不選（跳過）</button>
           {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- ── 卡片放大疊層 ── -->
+  {#if zoomCard}
+    <div class="zoom-overlay" onclick={closeZoom}>
+      <div class="zoom-modal" onclick={(e) => e.stopPropagation()}>
+        <button class="zoom-close" onclick={closeZoom}>✕</button>
+        <div class="zoom-body">
+          <img src={zoomCard.imageUrl} alt={zoomCard.name} class="zoom-img" />
+          <div class="zoom-info">
+            <div class="zoom-name">{zoomCard.name}</div>
+            <div class="zoom-badges">
+              {#if zoomCard.hp}<span class="badge hp-badge">HP {zoomCard.hp}</span>{/if}
+              {#if zoomCard.pokemonType}<span class="badge type-badge" style="background:{ENERGY_COLOR[zoomCard.pokemonType]}">{ENERGY_LABEL[zoomCard.pokemonType]}</span>{/if}
+              {#if zoomCard.subtype}<span class="badge sub-badge">{zoomCard.subtype}</span>{/if}
+              {#if zoomCard.regulationMark}<span class="badge mark-badge">{zoomCard.regulationMark}</span>{/if}
+            </div>
+            {#if zoomCard.evolvesFrom}<div class="zoom-meta">進化自：{zoomCard.evolvesFrom}</div>{/if}
+
+            {#each zoomCard.abilities ?? [] as ab}
+              <div class="zoom-ability">
+                <span class="ability-label">特性</span>
+                <strong>{ab.name}</strong>
+                <p class="effect-text">{ab.text}</p>
+              </div>
+            {/each}
+
+            {#each zoomCard.attacks ?? [] as atk}
+              <div class="zoom-attack">
+                <div class="atk-header">
+                  <span class="cost-row">
+                    {#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}
+                    {#if atk.cost.length === 0}<span class="no-cost">無消耗</span>{/if}
+                  </span>
+                  <span class="atk-nm">{atk.name}</span>
+                  <span class="atk-dp">{atk.damage || '—'}</span>
+                </div>
+                {#if atk.text}<p class="effect-text">{atk.text}</p>{/if}
+              </div>
+            {/each}
+
+            {#if zoomCard.rulesText}
+              <div class="zoom-rules">{zoomCard.rulesText}</div>
+            {/if}
+
+            <div class="zoom-footer">
+              {#if zoomCard.weakness}
+                <span class="footer-item">弱點：<span class="epip sm" style="background:{ENERGY_COLOR[zoomCard.weakness.type]}">{ENERGY_LABEL[zoomCard.weakness.type]}</span> ×2</span>
+              {/if}
+              {#if zoomCard.retreatCost && zoomCard.retreatCost.length > 0}
+                <span class="footer-item">撤退：
+                  {#each zoomCard.retreatCost as e}<span class="epip sm" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}
+                </span>
+              {:else if zoomCard.supertype === 'Pokemon'}
+                <span class="footer-item">撤退：免費</span>
+              {/if}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -754,50 +772,27 @@
   .back:hover { text-decoration: underline; }
   .muted { color: #aaa; font-size: 0.9rem; }
   .warn { color: #f0b040; }
-  .player-setup {
-    display: grid; grid-template-columns: 1fr auto 1fr;
-    gap: 1rem; align-items: center; margin: 1.5rem 0;
-  }
-  .setup-card {
-    background: #2a3a2a; border: 1px solid #3a5a3a; border-radius: 10px;
-    padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem;
-  }
+  .player-setup { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1rem; align-items: center; margin: 1.5rem 0; }
+  .setup-card { background: #2a3a2a; border: 1px solid #3a5a3a; border-radius: 10px; padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem; }
   .setup-card h2 { margin: 0; font-size: 1rem; color: #aaffaa; }
-  .name-input, .setup-card select {
-    padding: 0.45rem 0.6rem; border: 1px solid #4a6a4a; border-radius: 6px;
-    background: #1a2a1a; color: #f0f0f0; font: inherit;
-  }
+  .name-input, .setup-card select { padding: 0.45rem 0.6rem; border: 1px solid #4a6a4a; border-radius: 6px; background: #1a2a1a; color: #f0f0f0; font: inherit; }
   .vs-badge { font-size: 1.5rem; font-weight: 700; color: #f0b040; text-align: center; }
-  .btn-primary {
-    display: inline-block; background: #2a7a2a; color: #fff; border: none;
-    border-radius: 8px; padding: 0.6rem 1.4rem; font: inherit; font-size: 1rem;
-    font-weight: 600; cursor: pointer; text-decoration: none; margin-top: 0.5rem;
-  }
+  .btn-primary { display: inline-block; background: #2a7a2a; color: #fff; border: none; border-radius: 8px; padding: 0.6rem 1.4rem; font: inherit; font-size: 1rem; font-weight: 600; cursor: pointer; text-decoration: none; margin-top: 0.5rem; }
   .btn-primary:hover:not(:disabled) { background: #3a9a3a; }
   .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-secondary {
-    display: inline-block; background: #2a3a5a; color: #ccddff; border: 1px solid #4a5a8a;
-    border-radius: 8px; padding: 0.5rem 1.2rem; font: inherit; cursor: pointer; text-decoration: none;
-  }
+  .btn-secondary { display: inline-block; background: #2a3a5a; color: #ccddff; border: 1px solid #4a5a8a; border-radius: 8px; padding: 0.5rem 1.2rem; font: inherit; cursor: pointer; text-decoration: none; }
   .lobby-btns { display: flex; gap: 1rem; margin-top: 1.5rem; align-items: center; }
   .winner-text { font-size: 1.4rem; font-weight: 700; color: #ffdd55; }
 
-  /* Setup screen */
+  /* Setup */
   .setup-screen { background: #1a2a1a; border-radius: 10px; }
   .setup-screen h2 { color: #aaffaa; }
   .setup-active, .setup-bench-row { margin: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
   .poke-chip { padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.85rem; }
   .active-chip { background: #3a7a3a; color: #fff; }
   .bench-chip { background: #2a4a6a; color: #cdf; }
-  .hand-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-    gap: 0.5rem; margin: 0.5rem 0 1rem;
-  }
-  .hand-card {
-    background: #2a3a2a; border: 1px solid #3a5a3a; border-radius: 6px;
-    padding: 0.4rem; display: flex; flex-direction: column; align-items: center;
-    gap: 0.25rem; font-size: 0.75rem; color: #ddd;
-  }
+  .hand-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 0.5rem; margin: 0.5rem 0 1rem; }
+  .hand-card { background: #2a3a2a; border: 1px solid #3a5a3a; border-radius: 6px; padding: 0.4rem; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: #ddd; }
   .hand-card img { width: 70px; border-radius: 4px; }
   .hand-card-name { text-align: center; font-size: 0.72rem; }
   .hand-card.selectable { border-color: #6aaa6a; cursor: pointer; }
@@ -806,14 +801,14 @@
   .small.danger { color: #f88; border-color: #a44; }
   .small.primary { background: #2a5a2a; color: #aef; border-color: #4a8a4a; }
 
+  /* Zoomable */
+  .zoomable { cursor: zoom-in; }
+  .zoomable:hover { opacity: 0.85; outline: 2px solid #aaff4488; border-radius: 3px; }
+
   /* ════════════════ Battle Root ════════════════ */
   .battle-root {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    font-family: system-ui, 'Microsoft JhengHei', sans-serif;
-    color: #f0f0f0;
-    overflow: hidden;
+    height: 100vh; display: flex; flex-direction: column;
+    font-family: system-ui, 'Microsoft JhengHei', sans-serif; color: #f0f0f0; overflow: hidden;
   }
 
   /* ── Header ── */
@@ -821,197 +816,79 @@
     display: flex; align-items: center; gap: 0.6rem;
     background: #0a180a; padding: 0.35rem 0.75rem;
     border-bottom: 1px solid #2a4a2a; flex-shrink: 0; flex-wrap: wrap;
-    font-family: system-ui, 'Microsoft JhengHei', sans-serif;
   }
   .small-back { color: #88ccff; text-decoration: none; font-size: 0.82rem; }
   .small-back:hover { text-decoration: underline; }
   .turn-info { flex: 1; font-size: 0.88rem; }
   .hint { color: #888; font-size: 0.75rem; }
-  .phase-tag {
-    font-size: 0.78rem; color: #aaffaa;
-    background: #0e2e0e; padding: 0.18rem 0.5rem; border-radius: 4px;
-  }
+  .phase-tag { font-size: 0.78rem; color: #aaffaa; background: #0e2e0e; padding: 0.18rem 0.5rem; border-radius: 4px; }
   .status-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; }
-  .chip {
-    font-size: 0.68rem; padding: 0.1rem 0.35rem;
-    border-radius: 10px; background: #1a3a1a; color: #8f8; border: 1px solid #2a5a2a;
-  }
+  .chip { font-size: 0.68rem; padding: 0.1rem 0.35rem; border-radius: 10px; background: #1a3a1a; color: #8f8; border: 1px solid #2a5a2a; }
 
   /* ── Playmat ── */
   .playmat {
-    flex: 1;
-    display: grid;
-    grid-template-rows: 1fr auto 1fr;
-    overflow: hidden;
-    background:
-      linear-gradient(180deg,
-        rgba(0,60,0,0.25) 0%,
-        rgba(0,40,0,0.1) 48%,
-        rgba(0,0,0,0.5) 50%,
-        rgba(0,40,0,0.1) 52%,
-        rgba(0,60,0,0.25) 100%),
-      #1a2e1a;
+    flex: 1; display: grid; grid-template-rows: 1fr auto 1fr; overflow: hidden;
+    background: linear-gradient(180deg, rgba(0,60,0,0.25) 0%, rgba(0,40,0,0.1) 48%, rgba(0,0,0,0.5) 50%, rgba(0,40,0,0.1) 52%, rgba(0,60,0,0.25) 100%), #1a2e1a;
   }
 
   /* ── Field Rows ── */
   .field-row {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0.6rem;
-    overflow: hidden;
-    min-height: 0;
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.7rem; overflow: hidden; min-height: 0;
   }
-  .opponent-row {
-    border-bottom: 2px solid #2a5a2a;
-    background: rgba(0,0,0,0.2);
-    align-items: flex-end; /* 對手場地牌往下對齊（靠近中線） */
-    padding-bottom: 0.5rem;
-  }
-  .my-row {
-    border-top: 2px solid #2a5a2a;
-    align-items: flex-start; /* 我方場地牌往上對齊（靠近中線） */
-    padding-top: 0.5rem;
-  }
+  .opponent-row { border-bottom: 2px solid #2a5a2a; background: rgba(0,0,0,0.2); align-items: flex-end; padding-bottom: 0.6rem; }
+  .my-row { border-top: 2px solid #2a5a2a; align-items: flex-start; padding-top: 0.6rem; }
 
-  /* ── Prizes Zone ── */
-  .zone-prizes {
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.2rem;
-  }
-  .prize-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 3px;
-  }
-  .prize-card {
-    width: 30px; height: 42px;
-    background: linear-gradient(135deg, #1e4a8a 0%, #2a6ab0 60%, #1e4a8a 100%);
-    border: 1px solid #4a8ac0;
-    border-radius: 3px;
-    transition: opacity 0.3s;
-  }
-  .prize-card.my-prize {
-    background: linear-gradient(135deg, #2a6a1a 0%, #3a8a2a 60%, #2a6a1a 100%);
-    border-color: #5aaa4a;
-  }
-  .prize-card.prize-gone {
-    background: transparent;
-    border-color: #2a3a2a;
-    opacity: 0.3;
-  }
+  /* ── Prizes ── */
+  .zone-prizes { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; }
+  .prize-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+  .prize-card { width: 32px; height: 45px; background: linear-gradient(135deg,#1e4a8a,#2a6ab0); border: 1px solid #4a8ac0; border-radius: 4px; transition: opacity 0.3s; }
+  .prize-card.my-prize { background: linear-gradient(135deg,#2a6a1a,#3a8a2a); border-color: #5aaa4a; }
+  .prize-card.prize-gone { background: transparent; border-color: #2a3a2a; opacity: 0.25; }
   .zone-label-sm { font-size: 0.62rem; color: #888; text-align: center; white-space: nowrap; }
   .opp-label { color: #aa8888; }
 
   /* ── Active Zone ── */
-  .zone-active {
-    flex-shrink: 0;
-    width: 195px;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
+  .zone-active { flex-shrink: 0; width: 250px; display: flex; flex-direction: column; gap: 0.2rem; }
   .my-active-zone { position: relative; }
-
   .active-card {
-    display: flex;
-    gap: 0.4rem;
-    background: rgba(0,0,0,0.35);
-    border: 1px solid #3a5a3a;
-    border-radius: 8px;
-    padding: 0.4rem;
-    align-items: flex-start;
-    position: relative;
-    cursor: default;
-    min-height: 90px;
+    display: flex; gap: 0.5rem; background: rgba(0,0,0,0.35);
+    border: 1px solid #3a5a3a; border-radius: 8px; padding: 0.5rem;
+    align-items: flex-start; position: relative; cursor: default; min-height: 105px;
   }
   .active-card.opp-active { border-color: #5a3a3a; background: rgba(0,0,0,0.4); }
   .active-card.mine-active { border-color: #3a6a3a; }
   .active-card.energy-target { border-color: #aaff44; cursor: pointer; animation: glow 1s infinite alternate; }
-  .active-card.active-empty { justify-content: center; align-items: center; color: #555; font-size: 0.82rem; }
-  .active-img { width: 68px; border-radius: 4px; flex-shrink: 0; }
+  .active-card.active-empty { justify-content: center; align-items: center; color: #555; font-size: 0.85rem; }
+  .active-img { width: 100px; border-radius: 5px; flex-shrink: 0; }
   .active-info { flex: 1; min-width: 0; }
-  .active-name { font-size: 0.85rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .active-hp { font-size: 0.73rem; color: #ccc; }
-  .active-nrg { font-size: 0.67rem; color: #aaa; }
-  .attach-hint { font-size: 0.65rem; color: #aaff44; font-weight: 700; margin-top: 0.15rem; }
-
-  @keyframes glow {
-    from { box-shadow: 0 0 4px #aaff44; }
-    to   { box-shadow: 0 0 14px #aaff44; }
-  }
+  .active-name { font-size: 0.9rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.15rem; }
+  .active-hp { font-size: 0.78rem; color: #ccc; }
+  .active-nrg { font-size: 0.7rem; color: #aaa; margin-top: 0.15rem; }
+  .attach-hint { font-size: 0.68rem; color: #aaff44; font-weight: 700; margin-top: 0.15rem; }
+  @keyframes glow { from { box-shadow: 0 0 4px #aaff44; } to { box-shadow: 0 0 14px #aaff44; } }
 
   /* ── Bench Zone ── */
-  .zone-bench {
-    flex: 1;
-    display: flex;
-    gap: 0.3rem;
-    overflow: hidden;
-    min-width: 0;
-  }
+  .zone-bench { flex: 1; display: flex; gap: 0.35rem; overflow: hidden; min-width: 0; }
   .bench-slot {
-    flex: 1;
-    min-width: 0;
-    max-width: 80px;
-    background: rgba(0,0,0,0.25);
-    border: 1px solid #2a4a2a;
-    border-radius: 6px;
-    padding: 0.25rem;
-    text-align: center;
-    font-size: 0.62rem;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.05rem;
-    cursor: default;
-    overflow: hidden;
+    flex: 1; min-width: 0; max-width: 95px;
+    background: rgba(0,0,0,0.25); border: 1px solid #2a4a2a; border-radius: 6px;
+    padding: 0.3rem; text-align: center; font-size: 0.65rem;
+    position: relative; cursor: default;
+    display: flex; flex-direction: column; align-items: center; gap: 0.08rem; overflow: hidden;
   }
-  .bench-slot:not(.bench-empty).energy-target {
-    border-color: #aaff44;
-    cursor: pointer;
-  }
-  .bench-slot img { width: 100%; max-width: 62px; border-radius: 3px; }
-  .bench-empty {
-    border-style: dashed;
-    border-color: #1a3a1a;
-    opacity: 0.4;
-  }
-  .bench-name { font-size: 0.6rem; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; }
-  .bench-stat { font-size: 0.58rem; color: #aaa; }
-  .bench-nrg  { font-size: 0.55rem; color: #888; }
+  .bench-slot:not(.bench-empty).energy-target { border-color: #aaff44; cursor: pointer; }
+  .bench-slot img { width: 100%; max-width: 78px; border-radius: 4px; }
+  .bench-empty { border-style: dashed; border-color: #1a3a1a; opacity: 0.4; }
+  .bench-name { font-size: 0.63rem; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+  .bench-stat { font-size: 0.6rem; color: #aaa; }
+  .bench-nrg  { font-size: 0.56rem; color: #888; }
 
-  /* ── Pile Zone (deck + discard) ── */
-  .zone-pile {
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    width: 58px;
-    align-items: center;
-  }
-  .pile-slot {
-    width: 52px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    padding: 0.3rem 0.2rem;
-    gap: 0.1rem;
-    min-height: 52px;
-  }
-  .deck-pile {
-    background: linear-gradient(135deg, #1a3a6a, #2a5a9a);
-    border: 1px solid #4a7aaa;
-  }
-  .disc-pile {
-    background: #1a1a2a;
-    border: 1px dashed #3a3a5a;
-  }
+  /* ── Pile Zone ── */
+  .zone-pile { flex-shrink: 0; display: flex; flex-direction: column; gap: 0.35rem; width: 62px; align-items: center; }
+  .pile-slot { width: 55px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; padding: 0.3rem 0.2rem; gap: 0.1rem; min-height: 52px; }
+  .deck-pile { background: linear-gradient(135deg,#1a3a6a,#2a5a9a); border: 1px solid #4a7aaa; }
+  .disc-pile { background: #1a1a2a; border: 1px dashed #3a3a5a; }
   .pile-icon { font-size: 1rem; line-height: 1; }
   .pile-count { font-size: 1rem; font-weight: 700; color: #fff; }
   .pile-label { font-size: 0.58rem; color: #aaa; }
@@ -1023,196 +900,94 @@
 
   /* ── Action Bar ── */
   .action-bar {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 0.5rem;
-    padding: 0.3rem 0.6rem;
-    background: rgba(0,0,0,0.6);
-    border-top: 1px solid #2a4a2a;
-    border-bottom: 1px solid #2a4a2a;
-    flex-shrink: 0;
-    align-items: center;
-    min-height: 50px;
+    display: grid; grid-template-columns: auto 1fr auto; gap: 0.5rem;
+    padding: 0.3rem 0.7rem; background: rgba(0,0,0,0.6);
+    border-top: 1px solid #2a4a2a; border-bottom: 1px solid #2a4a2a;
+    flex-shrink: 0; align-items: center; min-height: 52px;
   }
-
-  .alerts-col { display: flex; flex-direction: column; gap: 0.2rem; max-width: 260px; }
-  .alert {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem;
-    padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.78rem;
-  }
+  .alerts-col { display: flex; flex-direction: column; gap: 0.2rem; max-width: 280px; }
+  .alert { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.8rem; }
   .prize-alert { background: #2a4a1a; border: 1px solid #4a8a3a; }
-  .warn-alert { background: #3a2a0a; border: 1px solid #8a6a2a; }
+  .warn-alert  { background: #3a2a0a; border: 1px solid #8a6a2a; }
   .mini-row { display: flex; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.2rem; width: 100%; }
-
-  .action-btns {
-    display: flex; flex-wrap: wrap; gap: 0.35rem;
-    justify-content: center; align-items: center;
-  }
-
-  .btn-act {
-    display: inline-flex; align-items: center; gap: 0.25rem;
-    padding: 0.3rem 0.7rem; border-radius: 6px; border: none;
-    font: inherit; font-size: 0.8rem; font-weight: 600;
-    cursor: pointer; white-space: nowrap;
-  }
+  .action-btns { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: center; align-items: center; }
+  .btn-act { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.32rem 0.72rem; border-radius: 6px; border: none; font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
   .btn-act.primary { background: #2a7a2a; color: #fff; }
   .btn-act.primary:hover:not(:disabled) { background: #3a9a3a; }
   .btn-act.primary:disabled { opacity: 0.4; cursor: not-allowed; }
   .btn-act.secondary { background: #2a3a5a; color: #ccddff; border: 1px solid #4a5a8a; }
   .btn-act.secondary:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-act.atk {
-    background: #1a2a3a; border: 1px solid #3a5a7a;
-    color: #ccd; opacity: 0.45; cursor: not-allowed;
-  }
+  .btn-act.atk { background: #1a2a3a; border: 1px solid #3a5a7a; color: #ccd; opacity: 0.45; cursor: not-allowed; }
   .btn-act.atk.atk-ready { opacity: 1; cursor: pointer; border-color: #6a9aff; }
   .btn-act.atk.atk-ready:not(:disabled):hover { background: #1a3a5a; }
-
   .cost-row { display: flex; gap: 0.15rem; }
-  .epip {
-    width: 1.1rem; height: 1.1rem; border-radius: 50%;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-size: 0.52rem; font-weight: 700; color: #fff; flex-shrink: 0;
-  }
+  .epip { width: 1.1rem; height: 1.1rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.52rem; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .epip.sm { width: 0.9rem; height: 0.9rem; font-size: 0.44rem; }
   .atk-name { max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .atk-dmg { font-weight: 700; color: #f88; }
-
-  .log-col {
-    max-width: 190px; max-height: 80px; overflow-y: auto;
-    font-size: 0.62rem;
-  }
+  .log-col { max-width: 200px; max-height: 80px; overflow-y: auto; font-size: 0.62rem; }
   .log-line { color: #7a9a7a; padding: 0.06rem 0; border-bottom: 1px solid #1a2a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .log-sys { color: #aaffaa; font-weight: 600; }
 
   /* ── Retreat ── */
-  .btn-retreat {
-    padding: 0.1rem 0.3rem; font-size: 0.62rem;
-    background: #3a3a6a; border: 1px solid #6a6aaa;
-    border-radius: 4px; color: #ccf; cursor: pointer;
-  }
+  .btn-retreat { padding: 0.1rem 0.3rem; font-size: 0.62rem; background: #3a3a6a; border: 1px solid #6a6aaa; border-radius: 4px; color: #ccf; cursor: pointer; }
   .btn-retreat:hover { background: #4a4a8a; }
-  .retreat-picker {
-    position: absolute; bottom: 100%; left: 0; right: 0; z-index: 20;
-    display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center;
-    background: #1a1a3a; border: 1px solid #4a4a8a;
-    border-radius: 8px; padding: 0.4rem; font-size: 0.7rem;
-    box-shadow: 0 -4px 12px rgba(0,0,0,0.6);
-  }
+  .retreat-picker { position: absolute; bottom: 100%; left: 0; right: 0; z-index: 20; display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; background: #1a1a3a; border: 1px solid #4a4a8a; border-radius: 8px; padding: 0.4rem; font-size: 0.7rem; box-shadow: 0 -4px 12px rgba(0,0,0,0.6); }
   .retreat-label { font-size: 0.72rem; color: #aaf; width: 100%; }
 
-  /* ── Mini pick buttons ── */
-  .mini-poke-btn {
-    display: flex; flex-direction: column; align-items: center;
-    background: #1a3a1a; border: 1px solid #4a8a4a; border-radius: 5px;
-    padding: 0.2rem; cursor: pointer; color: #ddd; font-size: 0.65rem; gap: 0.1rem;
-  }
-  .mini-poke-btn img { width: 38px; border-radius: 2px; }
+  /* ── Mini buttons ── */
+  .mini-poke-btn { display: flex; flex-direction: column; align-items: center; background: #1a3a1a; border: 1px solid #4a8a4a; border-radius: 5px; padding: 0.2rem; cursor: pointer; color: #ddd; font-size: 0.65rem; gap: 0.1rem; }
+  .mini-poke-btn img { width: 40px; border-radius: 2px; }
   .mini-poke-btn:hover { background: #2a5a2a; }
-
-  .btn-xs {
-    padding: 0.15rem 0.4rem; border-radius: 4px;
-    border: 1px solid #5a5a5a; background: #2a2a2a;
-    color: #ddd; cursor: pointer; font: inherit; font-size: 0.72rem;
-  }
+  .btn-xs { padding: 0.15rem 0.4rem; border-radius: 4px; border: 1px solid #5a5a5a; background: #2a2a2a; color: #ddd; cursor: pointer; font: inherit; font-size: 0.72rem; }
   .btn-xs.primary { background: #2a7a2a; border-color: #4a9a4a; color: #fff; }
 
   /* ── Evolve ── */
   .evo-wrap { position: absolute; bottom: 0.25rem; right: 0.25rem; }
-  .evo-btn {
-    padding: 0.12rem 0.32rem; font-size: 0.62rem;
-    background: #3a5a2a; border: 1px solid #6aaa4a;
-    border-radius: 4px; color: #aef; cursor: pointer;
-  }
+  .evo-btn { padding: 0.12rem 0.32rem; font-size: 0.62rem; background: #3a5a2a; border: 1px solid #6aaa4a; border-radius: 4px; color: #aef; cursor: pointer; }
   .evo-btn:hover { background: #4a7a3a; }
-  .evo-btn-sm {
-    display: block; width: 100%; margin-top: 0.15rem;
-    padding: 0.1rem; font-size: 0.56rem;
-    background: #3a5a2a; border: 1px solid #6aaa4a;
-    border-radius: 3px; color: #aef; cursor: pointer;
-  }
-  .evo-menu {
-    position: absolute; bottom: 100%; right: 0; z-index: 30;
-    background: #1a2a1a; border: 1px solid #4a8a4a; border-radius: 6px;
-    padding: 0.3rem; display: flex; flex-direction: column; gap: 0.2rem;
-    min-width: 80px; box-shadow: 0 4px 14px rgba(0,0,0,0.8);
-  }
+  .evo-btn-sm { display: block; width: 100%; margin-top: 0.15rem; padding: 0.1rem; font-size: 0.56rem; background: #3a5a2a; border: 1px solid #6aaa4a; border-radius: 3px; color: #aef; cursor: pointer; }
+  .evo-menu { position: absolute; bottom: 100%; right: 0; z-index: 30; background: #1a2a1a; border: 1px solid #4a8a4a; border-radius: 6px; padding: 0.3rem; display: flex; flex-direction: column; gap: 0.2rem; min-width: 90px; box-shadow: 0 4px 14px rgba(0,0,0,0.8); }
   .evo-above { bottom: auto; top: 100%; }
-  .evo-choice {
-    display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
-    background: #2a3a2a; border: 1px solid #4a6a4a; border-radius: 4px;
-    padding: 0.25rem; cursor: pointer; color: #ddd; font-size: 0.62rem;
-  }
-  .evo-choice img { width: 48px; border-radius: 3px; }
+  .evo-choice { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; background: #2a3a2a; border: 1px solid #4a6a4a; border-radius: 4px; padding: 0.25rem; cursor: pointer; color: #ddd; font-size: 0.62rem; }
+  .evo-choice img { width: 52px; border-radius: 3px; }
   .evo-choice:hover { background: #3a5a3a; }
 
   /* ── Hand Strip ── */
-  .hand-strip {
-    flex-shrink: 0;
-    background: #0a160a;
-    border-top: 2px solid #2a5a2a;
-    padding: 0.25rem 0.5rem 0.35rem;
-  }
-  .hand-label {
-    font-size: 0.65rem; color: #5a8a5a;
-    margin-bottom: 0.2rem;
-    font-family: system-ui, 'Microsoft JhengHei', sans-serif;
-  }
-  .hand-scroll {
-    display: flex; gap: 0.25rem; overflow-x: auto; padding-bottom: 0.2rem;
-  }
+  .hand-strip { flex-shrink: 0; background: #0a160a; border-top: 2px solid #2a5a2a; padding: 0.28rem 0.6rem 0.4rem; }
+  .hand-label { font-size: 0.65rem; color: #5a8a5a; margin-bottom: 0.2rem; }
+  .hand-scroll { display: flex; gap: 0.3rem; overflow-x: auto; padding-bottom: 0.25rem; }
   .hand-scroll::-webkit-scrollbar { height: 4px; }
   .hand-scroll::-webkit-scrollbar-thumb { background: #2a4a2a; border-radius: 2px; }
-
   .hand-card {
-    flex-shrink: 0; width: 58px;
-    background: #0e1e0e; border: 1px solid #2a3a2a;
-    border-radius: 5px; padding: 0.18rem;
+    flex-shrink: 0; width: 76px;
+    background: #0e1e0e; border: 1.5px solid #2a3a2a;
+    border-radius: 6px; padding: 0.2rem;
     text-align: center; cursor: default;
-    display: flex; flex-direction: column; align-items: center; gap: 0.08rem;
+    display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
     transition: border-color 0.15s;
   }
-  .hand-card img { width: 54px; border-radius: 3px; }
-  .hand-name { font-size: 0.56rem; color: #bbb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
-  .hand-hint { font-size: 0.56rem; }
+  .hand-card img { width: 72px; border-radius: 4px; }
+  .hand-name { font-size: 0.6rem; color: #bbb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+  .hand-hint { font-size: 0.58rem; }
   .energy-hint { color: #aaff44; }
-
   .hand-card.can-energy { border-color: #c0a020; cursor: pointer; }
   .hand-card.can-basic  { border-color: #5a9a5a; }
   .hand-card.can-trainer{ border-color: #5a7aba; }
   .hand-card.selected   { border-color: #aaff44; box-shadow: 0 0 6px #aaff4488; }
-
-  .hand-btn {
-    display: block; width: 100%; margin-top: 0.12rem;
-    padding: 0.1rem 0; border-radius: 3px;
-    font-size: 0.56rem; cursor: pointer; border: none;
-  }
+  .hand-btn { display: block; width: 100%; margin-top: 0.12rem; padding: 0.12rem 0; border-radius: 3px; font-size: 0.6rem; cursor: pointer; border: none; }
   .basic-btn   { background: #2a5a2a; color: #aef; }
   .basic-btn:hover   { background: #3a7a3a; }
   .trainer-btn { background: #2a3a6a; color: #ccf; }
   .trainer-btn:hover { background: #3a5a9a; }
 
   /* ── PendingSelection Overlay ── */
-  .selection-overlay {
-    position: fixed; inset: 0; z-index: 100;
-    background: rgba(0,0,0,0.82);
-    display: flex; align-items: center; justify-content: center;
-    font-family: system-ui, 'Microsoft JhengHei', sans-serif;
-  }
-  .selection-modal {
-    background: #1a2a1a; border: 1px solid #4a8a4a; border-radius: 12px;
-    padding: 1.25rem; max-width: 680px; width: 95vw; max-height: 85vh;
-    display: flex; flex-direction: column; gap: 0.75rem; color: #f0f0f0;
-  }
+  .selection-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.82); display: flex; align-items: center; justify-content: center; font-family: system-ui, 'Microsoft JhengHei', sans-serif; }
+  .selection-modal { background: #1a2a1a; border: 1px solid #4a8a4a; border-radius: 12px; padding: 1.25rem; max-width: 680px; width: 95vw; max-height: 85vh; display: flex; flex-direction: column; gap: 0.75rem; color: #f0f0f0; }
   .sel-header h3 { margin: 0 0 0.2rem; font-size: 1.1rem; color: #aaffaa; }
   .sel-hint { margin: 0; font-size: 0.85rem; color: #aaa; }
-  .sel-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-    gap: 0.4rem; overflow-y: auto; max-height: 52vh; padding-right: 0.25rem;
-  }
-  .sel-card {
-    display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
-    background: #0e1e0e; border: 2px solid #2a4a2a; border-radius: 6px;
-    padding: 0.3rem; cursor: pointer; color: #ccc; font-size: 0.65rem; position: relative;
-  }
+  .sel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 0.4rem; overflow-y: auto; max-height: 52vh; padding-right: 0.25rem; }
+  .sel-card { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; background: #0e1e0e; border: 2px solid #2a4a2a; border-radius: 6px; padding: 0.3rem; cursor: pointer; color: #ccc; font-size: 0.65rem; position: relative; }
   .sel-card:hover { border-color: #4a8a4a; }
   .sel-card.sel-picked { border-color: #aaff44; box-shadow: 0 0 6px #aaff4488; }
   .sel-card img { width: 64px; border-radius: 3px; }
@@ -1221,4 +996,52 @@
   .sel-check { position: absolute; top: 2px; right: 4px; font-size: 0.9rem; color: #aaff44; font-weight: 700; }
   .sel-empty { color: #666; font-size: 0.85rem; grid-column: 1/-1; text-align: center; padding: 1rem; }
   .sel-footer { display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap; }
+
+  /* ════════════════ Card Zoom Overlay ════════════════ */
+  .zoom-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.88);
+    display: flex; align-items: center; justify-content: center;
+    font-family: system-ui, 'Microsoft JhengHei', sans-serif;
+  }
+  .zoom-modal {
+    background: #1a2a1a; border: 1px solid #4a7a4a; border-radius: 14px;
+    padding: 1.2rem; max-width: 720px; width: 96vw; max-height: 92vh;
+    display: flex; flex-direction: column; gap: 0.75rem;
+    color: #f0f0f0; overflow-y: auto; position: relative;
+  }
+  .zoom-close {
+    position: absolute; top: 0.7rem; right: 0.8rem;
+    background: transparent; border: none; color: #aaa;
+    font-size: 1.2rem; cursor: pointer; padding: 0.2rem 0.4rem;
+    border-radius: 4px; line-height: 1;
+  }
+  .zoom-close:hover { background: #2a3a2a; color: #fff; }
+  .zoom-body {
+    display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap;
+  }
+  .zoom-img {
+    width: 260px; max-width: 90vw; border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.7); flex-shrink: 0;
+  }
+  .zoom-info { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 0.5rem; }
+  .zoom-name { font-size: 1.3rem; font-weight: 700; color: #fff; }
+  .zoom-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+  .badge { padding: 0.18rem 0.5rem; border-radius: 10px; font-size: 0.75rem; font-weight: 600; }
+  .hp-badge  { background: #2a5a2a; color: #8f8; border: 1px solid #4a8a4a; }
+  .type-badge{ color: #fff; }
+  .sub-badge { background: #2a3a5a; color: #aad; border: 1px solid #4a5a8a; }
+  .mark-badge{ background: #3a3a1a; color: #cc8; border: 1px solid #6a6a2a; }
+  .zoom-meta { font-size: 0.8rem; color: #888; }
+  .zoom-ability { background: #1e1e0e; border: 1px solid #6a5a1a; border-radius: 6px; padding: 0.5rem 0.6rem; }
+  .ability-label { display: inline-block; background: #8a1a1a; color: #fcc; font-size: 0.68rem; font-weight: 700; padding: 0.1rem 0.35rem; border-radius: 3px; margin-right: 0.4rem; }
+  .zoom-attack { background: #0e1e2e; border: 1px solid #2a4a6a; border-radius: 6px; padding: 0.45rem 0.6rem; }
+  .atk-header { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+  .atk-nm { flex: 1; font-weight: 600; font-size: 0.9rem; }
+  .atk-dp { font-weight: 700; color: #f88; font-size: 1rem; }
+  .no-cost { font-size: 0.7rem; color: #666; }
+  .effect-text { margin: 0.3rem 0 0; font-size: 0.78rem; color: #aaa; line-height: 1.5; }
+  .zoom-rules { background: #1e1e1e; border: 1px solid #3a3a3a; border-radius: 6px; padding: 0.5rem 0.6rem; font-size: 0.8rem; color: #bbb; line-height: 1.5; }
+  .zoom-footer { display: flex; gap: 0.75rem; flex-wrap: wrap; font-size: 0.78rem; color: #888; border-top: 1px solid #2a3a2a; padding-top: 0.4rem; margin-top: auto; }
+  .footer-item { display: flex; align-items: center; gap: 0.25rem; }
 </style>
