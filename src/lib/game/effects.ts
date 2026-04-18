@@ -631,3 +631,269 @@ reg('不公印章', (st, idx) => {
   st = drawCards(st, oppIdx, 2);
   return st;
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 招式效果
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * ATTACK_PRE：招式宣告後、傷害計算前的效果。
+ * 接收現在 state 與攻擊方索引，回傳 { state, damage }（damage 為本次招式實際傷害）。
+ *
+ * ATTACK_POST：傷害施加（含擊倒判定）後的效果。
+ * 可觸發 pendingSelection 讓玩家做額外選擇；回傳新 state。
+ *
+ * 注意：ATTACK 之後 turnPhase 已設為 'end'，
+ * POST 設定的 pendingSelection 解析完後 turnPhase 保持 'end'，
+ * 玩家確認取獎勵牌後再按 END_TURN 結束回合。
+ */
+
+type AttackPreFn = (
+  state: GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>
+) => { state: GameState; damage: number };
+
+type AttackPostFn = (
+  state: GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>
+) => GameState;
+
+export const ATTACK_PRE  = new Map<string, AttackPreFn>();
+export const ATTACK_POST = new Map<string, AttackPostFn>();
+
+function regPre(key: string, fn: AttackPreFn)   { ATTACK_PRE.set(key, fn); }
+function regPost(key: string, fn: AttackPostFn) { ATTACK_POST.set(key, fn); }
+
+// ── MBD 超級蒂安希ex ──────────────────────────────────────────────────────────
+
+// 花冠射線 — 丟棄最多 2 個能量（自動取最大），造成張數×120 傷害
+regPre('超級蒂安希ex|花冠射線', (state, aIdx, _pool) => {
+  const player = state.players[aIdx];
+  if (!player.active) return { state, damage: 0 };
+  const energies = player.active.energyAttached;
+  const discardCount = Math.min(2, energies.length);
+  const discarded  = energies.slice(-discardCount);
+  const remaining  = energies.slice(0, energies.length - discardCount);
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, energyAttached: remaining } : null,
+    discard: [...p.discard, ...discarded],
+  }));
+  const dmg = discardCount * 120;
+  s = addLog(s, `花冠射線：丟棄 ${discardCount} 個能量，造成 ${dmg} 傷害`, aIdx);
+  return { state: s, damage: dmg };
+});
+
+// ── MBD 霜奶仙 ────────────────────────────────────────────────────────────────
+
+// 甜點圓陣 — 自己場上寶可夢數量×20
+regPre('霜奶仙|甜點圓陣', (state, aIdx, _pool) => {
+  const p = state.players[aIdx];
+  const count = (p.active ? 1 : 0) + p.bench.length;
+  return { state, damage: count * 20 };
+});
+
+// ── MBD 布魯皇 ────────────────────────────────────────────────────────────────
+
+// 致命刺擊 — 若對手戰鬥寶可夢有傷害指示物，+90 傷害
+regPre('布魯皇|致命刺擊', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defenderDamaged = (state.players[dIdx].active?.damage ?? 0) > 0;
+  return { state, damage: 90 + (defenderDamaged ? 90 : 0) };
+});
+
+// ── MBG 黑暗鴉 ────────────────────────────────────────────────────────────────
+
+// 伏擊 — 擲硬幣，正面 +20
+regPre('黑暗鴉|伏擊', (state, aIdx, _pool) => {
+  const heads = Math.random() < 0.5;
+  const s = addLog(state, `伏擊：硬幣 ${heads ? '正面！+20 傷害' : '反面'}`, aIdx);
+  return { state: s, damage: 10 + (heads ? 20 : 0) };
+});
+
+// ── MBG 烏鴉頭頭 ──────────────────────────────────────────────────────────────
+
+// 狙擊羽毛 — 丟棄 2 個能量，對對手任意1隻寶可夢造成 120 傷害
+// M3 簡化：直接對出場造成 120（不含備戰區選擇）
+regPre('烏鴉頭頭|狙擊羽毛', (state, aIdx, _pool) => {
+  const player = state.players[aIdx];
+  if (!player.active) return { state, damage: 0 };
+  const energies = player.active.energyAttached;
+  if (energies.length < 2) return { state, damage: 0 };
+  const discarded = energies.slice(-2);
+  const remaining = energies.slice(0, energies.length - 2);
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, energyAttached: remaining } : null,
+    discard: [...p.discard, ...discarded],
+  }));
+  s = addLog(s, '狙擊羽毛：丟棄 2 個能量，造成 120 傷害', aIdx);
+  return { state: s, damage: 120 };
+});
+
+// ── MBG 勾魂眼 ────────────────────────────────────────────────────────────────
+
+// 動怒爪 — 自己備戰區有惡屬性2階進化寶可夢，+70
+regPre('勾魂眼|動怒爪', (state, aIdx, pool) => {
+  const hasStage2Dark = state.players[aIdx].bench.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.pokemonType === 'Darkness' && card?.subtype === 'Stage2';
+  });
+  return { state, damage: 20 + (hasStage2Dark ? 70 : 0) };
+});
+
+// ── MBG 桃歹郎ex ──────────────────────────────────────────────────────────────
+
+// 煩煩爆炸 — 對手已取的獎賞牌數×60
+regPre('桃歹郎ex|煩煩爆炸', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const taken = 6 - state.players[dIdx].prizes.length;
+  return { state, damage: taken * 60 };
+});
+
+// ── MBG 阿勃梭魯 ──────────────────────────────────────────────────────────────
+
+// 吸引 — 抽 2 張（POST，無傷害）
+regPost('阿勃梭魯|吸引', (state, aIdx, _pool) => {
+  let s = addLog(state, '吸引：從牌庫抽 2 張', aIdx);
+  return updatePlayer(s, aIdx, p => {
+    const n = Math.min(2, p.deck.length);
+    return { ...p, hand: [...p.hand, ...p.deck.slice(0, n)], deck: p.deck.slice(n) };
+  });
+});
+
+// ── MBD 小仙奶 ────────────────────────────────────────────────────────────────
+
+// 吸取之吻 — 自身回復 10 HP
+regPost('小仙奶|吸取之吻', (state, aIdx, _pool) => {
+  return updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, damage: Math.max(0, p.active.damage - 10) } };
+  });
+});
+
+// ── MBG 超級耿鬼ex ────────────────────────────────────────────────────────────
+
+// 空無強風 — 選 1 個自身能量，改附於備戰寶可夢（自動取最後 1 個能量，讓玩家選備戰目標）
+regPost('超級耿鬼ex|空無強風', (state, aIdx, _pool) => {
+  const player = state.players[aIdx];
+  if (!player.active || player.active.energyAttached.length === 0) return state;
+  if (player.bench.length === 0) {
+    return addLog(state, '空無強風：備戰區沒有寶可夢，能量留在原位', aIdx);
+  }
+  const energies = player.active.energyAttached;
+  const energyToMove = energies[energies.length - 1];
+  // 從出場移除能量
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.slice(0, -1) } : null,
+  }));
+  s = addLog(s, '空無強風：選擇將能量附於哪隻備戰寶可夢', aIdx);
+  return withPending(s, {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'gengar-move-energy',
+    params: { energyIid: energyToMove.iid, energyCardId: energyToMove.cardId },
+  });
+});
+
+regR('gengar-move-energy', (st, idx, iids, params, _pool) => {
+  const energyIid    = params?.energyIid    as string | undefined;
+  const energyCardId = params?.energyCardId as string | undefined;
+  if (!energyIid || !energyCardId || iids.length === 0) return st;
+  const targetIid = iids[0];
+  // 重建能量 CardInstance（基本能量無狀態，iid 與 cardId 即可還原）
+  const energyCard: CardInstance = { iid: energyIid, cardId: energyCardId, damage: 0, energyAttached: [] };
+  return updatePlayer(st, idx, p => ({
+    ...p,
+    bench: p.bench.map(c => c.iid === targetIid
+      ? { ...c, energyAttached: [...c.energyAttached, energyCard] }
+      : c),
+  }));
+});
+
+// ── MBD 克雷色利亞 ────────────────────────────────────────────────────────────
+
+// 充溢之光 — 從牌庫選最多 2 張基本能量，附於自身（POST；無傷害）
+regPost('克雷色利亞|充溢之光', (state, aIdx, pool) => {
+  const player = state.players[aIdx];
+  const hasEnergy = player.deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic';
+  });
+  if (!hasEnergy) return addLog(state, '充溢之光：牌庫中沒有基本能量', aIdx);
+  let s = addLog(state, '充溢之光：從牌庫選最多 2 張基本能量附於自身', aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Energy',
+    minCount: 0, maxCount: 2,
+    effectKey: 'cresselia-attach-energy',
+  });
+});
+
+regR('cresselia-attach-energy', (st, idx, iids, _params, _pool) => {
+  if (iids.length === 0) return st;
+  return updatePlayer(st, idx, p => {
+    if (!p.active) return p;
+    const chosen   = p.deck.filter(c => iids.includes(c.iid));
+    const newDeck  = p.deck.filter(c => !iids.includes(c.iid));
+    return {
+      ...p,
+      deck:   shuffle(newDeck),
+      active: { ...p.active, energyAttached: [...p.active.energyAttached, ...chosen] },
+    };
+  });
+});
+
+// ── MBD 美洛耶塔 ──────────────────────────────────────────────────────────────
+
+// 治癒旋律 — 選備戰超寶可夢，回復 120 HP（POST；無傷害）
+regPost('美洛耶塔|治癒旋律', (state, aIdx, pool) => {
+  const bench = state.players[aIdx].bench;
+  const psychicBench = bench.filter(c => (pool.get(c.cardId)?.pokemonType) === 'Psychic');
+  if (psychicBench.length === 0) {
+    return addLog(state, '治癒旋律：備戰區沒有超屬性寶可夢', aIdx);
+  }
+  let s = addLog(state, '治癒旋律：選擇回復 120 HP 的備戰超寶可夢', aIdx);
+  return withPending(s, {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'heal-120-bench',
+  });
+});
+
+regR('heal-120-bench', (st, idx, iids, _params, _pool) => {
+  const targetIid = iids[0];
+  return updatePlayer(st, idx, p => ({
+    ...p,
+    bench: p.bench.map(c => c.iid === targetIid
+      ? { ...c, damage: Math.max(0, c.damage - 120) }
+      : c),
+  }));
+});
+
+// ── MBD 謎擬Q ─────────────────────────────────────────────────────────────────
+
+// 呼朋引伴 — 從牌庫選 1 隻基礎寶可夢放備戰（POST；無傷害）
+regPost('謎擬Q|呼朋引伴', (state, aIdx, _pool) => {
+  const player = state.players[aIdx];
+  if (player.bench.length >= 5) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
+  const hasBasic = player.deck.some(c => {
+    // 過濾在 selection UI 中完成，這裡直接開啟選擇
+    return true;
+  });
+  if (!hasBasic) return addLog(state, '呼朋引伴：牌庫中沒有寶可夢', aIdx);
+  let s = addLog(state, '呼朋引伴：從牌庫選 1 隻基礎寶可夢放備戰', aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Basic',
+    minCount: 0, maxCount: 1,
+    effectKey: 'bench-basic-from-deck', // 複用好友寶芬的 resolver
+  });
+});

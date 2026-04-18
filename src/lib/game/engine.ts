@@ -13,7 +13,7 @@ import type {
   GameState, GameAction, CardInstance,
   PlayerState, LogEntry, TurnPhase
 } from './types';
-import { TRAINER_EFFECTS, RESOLVERS } from './effects';
+import { TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST } from './effects';
 
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
@@ -64,15 +64,30 @@ function isEnergy(cardId: string, pool: Map<string, Card>): boolean {
   return pool.get(cardId)?.supertype === 'Energy';
 }
 
+/** 台灣卡牌中文屬性名稱 → EnergyType（當 pokemonType 欄位遺漏時備用） */
+const ZH_ENERGY_TYPE: Record<string, EnergyType> = {
+  '草': 'Grass', '火': 'Fire', '水': 'Water', '雷': 'Lightning',
+  '超': 'Psychic', '格': 'Fighting', '惡': 'Darkness', '鋼': 'Metal',
+  '妖': 'Fairy', '龍': 'Dragon', '無': 'Colorless',
+};
+
 /**
  * 取得一張能量卡提供的能量類型列表。
- * 基礎能量：1 個對應屬性。
+ * 基礎能量：1 個對應屬性；若 pokemonType 欄位未填，從卡名【X】推斷。
  * 特殊能量：M2 先一律視為 1 Colorless（M4 再完整實裝）。
  */
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {
   const c = pool.get(cardId);
   if (!c || c.supertype !== 'Energy') return [];
-  if (c.subtype === 'Basic' && c.pokemonType) return [c.pokemonType];
+  if (c.subtype === 'Basic') {
+    if (c.pokemonType) return [c.pokemonType];
+    // 從卡名解析，例如「基本【惡】能量」→ 'Darkness'
+    const m = c.name.match(/【(.+?)】/);
+    if (m) {
+      const t = ZH_ENERGY_TYPE[m[1]];
+      if (t) return [t];
+    }
+  }
   return ['Colorless']; // special energy fallback
 }
 
@@ -345,10 +360,15 @@ function handlePlaying(
   if (action.type === 'RESOLVE_SELECTION') {
     if (!state.pendingSelection) return state;
     const { effectKey, actorIdx, params } = state.pendingSelection;
+    const endTurnAfter = params?.endTurnAfter === true;
     const resolver = RESOLVERS.get(effectKey);
-    const newState: GameState = { ...state, pendingSelection: undefined };
+    let newState: GameState = { ...state, pendingSelection: undefined };
     if (resolver) {
-      return resolver(newState, actorIdx, action.selectedIids, params, pool);
+      newState = resolver(newState, actorIdx, action.selectedIids, params, pool);
+    }
+    // 若為招式觸發的互動效果，解決後進入回合結束（不再有連鎖 pendingSelection 時才設）
+    if (endTurnAfter && !newState.pendingSelection) {
+      newState = { ...newState, turnPhase: 'end' };
     }
     return newState;
   }
@@ -570,50 +590,60 @@ function handlePlaying(
     // 確認能量足夠
     if (!canAffordAttack(attacker.active, attack.cost, pool)) return state;
 
-    // 計算傷害
-    let baseDamage = parseInt(attack.damage ?? '0', 10);
-    if (isNaN(baseDamage)) baseDamage = 0;
+    // ── 招式前置效果（修改傷害 / 丟棄能量等）────────────────────────────────
+    const effectKey = `${attackerCard.name}|${attack.name}`;
+    const preFn = ATTACK_PRE.get(effectKey);
+    let workingState: GameState = { ...state, players };
+    let baseDamage = parseInt(attack.damage ?? '0', 10) || 0;
+    if (preFn) {
+      const preResult = preFn(workingState, aIdx, pool);
+      workingState = preResult.state;
+      baseDamage = preResult.damage;
+    }
 
-    // 弱點（×2）
+    // 弱點（×2）— 只對有實際傷害的招式套用
     const defenderCard = getCard(defender.active.cardId, pool);
-    const weakness = defenderCard.weakness;
-    if (weakness && attackerCard.pokemonType === weakness.type) {
+    if (baseDamage > 0 && defenderCard.weakness && attackerCard.pokemonType === defenderCard.weakness.type) {
       baseDamage *= 2;
     }
 
     // 施加傷害
-    const newDamage = defender.active.damage + baseDamage;
+    const defPlayers = [...workingState.players] as [PlayerState, PlayerState];
+    const defenderState = { ...defPlayers[dIdx] };
+    if (!defenderState.active) return state;
+    const newDamage = defenderState.active.damage + baseDamage;
     const defenderHP = defenderCard.hp ?? 0;
-    let updatedDefenderActive = { ...defender.active, damage: newDamage };
 
     let newState: GameState = addLog(
-      { ...state, players },
-      `${attacker.name} 的 ${attackerCard.name} 使出「${attack.name}」，造成 ${baseDamage} 傷害！`,
+      workingState,
+      `${attacker.name} 的 ${attackerCard.name} 使出「${attack.name}」` +
+        (baseDamage > 0 ? `，造成 ${baseDamage} 傷害！` : '！'),
       aIdx
     );
 
     // 擊倒判定
-    if (defenderHP > 0 && newDamage >= defenderHP) {
-      // 擊倒：傷害寶可夢 + 附加能量 → 墓地
-      const koDiscard: CardInstance[] = [updatedDefenderActive, ...updatedDefenderActive.energyAttached];
-      defender.discard = [...defender.discard, ...koDiscard];
-      defender.active = null;
-
+    if (baseDamage > 0 && defenderHP > 0 && newDamage >= defenderHP) {
+      const updatedActive = { ...defenderState.active, damage: newDamage };
+      const koDiscard: CardInstance[] = [updatedActive, ...updatedActive.energyAttached];
+      defenderState.discard = [...defenderState.discard, ...koDiscard];
+      defenderState.active = null;
       const prizes = prizesForKO(defenderCard);
-      players[aIdx] = attacker;
-      players[dIdx] = defender;
+      defPlayers[dIdx] = defenderState;
       newState = {
-        ...newState,
-        players,
-        pendingPrizes: prizes,
-        turnPhase: 'end', // 攻擊後要取獎勵才能繼續
+        ...newState, players: defPlayers,
+        pendingPrizes: prizes, turnPhase: 'end',
       };
       newState = addLog(newState, `${defenderCard.name} 被擊倒！${attacker.name} 取得 ${prizes} 張獎勵牌。`, null);
     } else {
-      defender.active = updatedDefenderActive;
-      players[aIdx] = attacker;
-      players[dIdx] = defender;
-      newState = { ...newState, players, turnPhase: 'end' };
+      defenderState.active = { ...defenderState.active!, damage: newDamage };
+      defPlayers[dIdx] = defenderState;
+      newState = { ...newState, players: defPlayers, turnPhase: 'end' };
+    }
+
+    // ── 招式後置效果（回復、移動能量、觸發 pendingSelection 等）──────────────
+    const postFn = ATTACK_POST.get(effectKey);
+    if (postFn) {
+      newState = postFn(newState, aIdx, pool);
     }
 
     return newState;
