@@ -90,6 +90,12 @@
     game?.phase === 'playing' && game.turnPhase === 'end' && !hasPendingActions(game)
   );
 
+  // ── 視角固定：線上模式我方永遠在下方，本機模式隨行動方翻轉 ─────────────────
+  const myIdx   = $derived<0 | 1>(myPlayerIndex !== null ? myPlayerIndex : aIdx);
+  const oppIdx  = $derived<0 | 1>((1 - myIdx) as 0 | 1);
+  const myPlayer  = $derived(game ? game.players[myIdx]  : null);
+  const oppPlayer = $derived(game ? game.players[oppIdx] : null);
+
   // 線上模式：是否輪到我行動
   const isMyTurn = $derived(() => {
     if (myPlayerIndex === null) return true; // 本機模式，永遠可行動
@@ -177,8 +183,8 @@
   }
   function evoOptionsFor(fromIid: string): CardInstance[] {
     const entry = evolvableTargets.find(e => e.fromIid === fromIid);
-    if (!entry || !activePlayer) return [];
-    return activePlayer.hand.filter(c => entry.toIids.includes(c.iid));
+    if (!entry || !myPlayer) return [];
+    return myPlayer.hand.filter(c => entry.toIids.includes(c.iid));
   }
 
   // ── 動作分派（本機 + 線上共用） ─────────────────────────────────────────────
@@ -581,24 +587,24 @@
   <!-- ── Play Mat ── -->
   <div class="playmat">
 
-    <!-- 對手場地 -->
+    <!-- 對手場地（永遠在上方） -->
     <div class="field-row opponent-row">
       <div class="zone-pile">
         <div class="pile-slot deck-pile">
           <span class="pile-icon">🃏</span>
-          <span class="pile-count">{defenderPlayer?.deck.length??0}</span>
+          <span class="pile-count">{oppPlayer?.deck.length??0}</span>
           <span class="pile-label">牌庫</span>
         </div>
         <div class="pile-slot disc-pile">
           <span class="pile-icon">🗑</span>
-          <span class="pile-count">{defenderPlayer?.discard.length??0}</span>
+          <span class="pile-count">{oppPlayer?.discard.length??0}</span>
           <span class="pile-label">棄牌</span>
         </div>
       </div>
       <div class="zone-bench">
         {#each Array(5) as _, i}
-          {#if defenderPlayer?.bench[i]}
-            {@const b=defenderPlayer.bench[i]}{@const bc=getCard(b.cardId)}
+          {#if oppPlayer?.bench[i]}
+            {@const b=oppPlayer.bench[i]}{@const bc=getCard(b.cardId)}
             <div class="bench-slot">
               <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId)} class="zoomable"/>
               <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{bc?.hp?hpRemaining(b)/bc.hp*100:0}%;background:{hpColor(hpRemaining(b),bc?.hp??0)}"></div></div>
@@ -610,24 +616,24 @@
       </div>
       <div class="zone-active">
         <div class="zone-label-sm opp-label">對手出場</div>
-        {#if defenderPlayer?.active}
-          {@const ac=getCard(defenderPlayer.active.cardId)}
+        {#if oppPlayer?.active}
+          {@const ac=getCard(oppPlayer.active.cardId)}
           <div class="active-card opp-active">
-            <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(defenderPlayer!.active!.cardId)}/>
+            <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId)}/>
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
-              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{ac?.hp?hpRemaining(defenderPlayer.active)/ac.hp*100:0}%;background:{hpColor(hpRemaining(defenderPlayer.active),ac?.hp??0)}"></div></div>
-              <div class="active-hp">HP {hpRemaining(defenderPlayer.active)}/{ac?.hp}</div>
-              <div class="active-nrg">{energySummary(defenderPlayer.active)}</div>
+              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{ac?.hp?hpRemaining(oppPlayer.active)/ac.hp*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),ac?.hp??0)}"></div></div>
+              <div class="active-hp">HP {hpRemaining(oppPlayer.active)}/{ac?.hp}</div>
+              <div class="active-nrg">{energySummary(oppPlayer.active)}</div>
             </div>
           </div>
         {:else}<div class="active-card active-empty">（無出場）</div>{/if}
       </div>
       <div class="zone-prizes">
         <div class="prize-grid">
-          {#each Array(6) as _, i}<div class="prize-card" class:prize-gone={i>=(defenderPlayer?.prizes.length??0)}></div>{/each}
+          {#each Array(6) as _, i}<div class="prize-card" class:prize-gone={i>=(oppPlayer?.prizes.length??0)}></div>{/each}
         </div>
-        <div class="zone-label-sm">獎勵 {defenderPlayer?.prizes.length??0}張</div>
+        <div class="zone-label-sm">獎勵 {oppPlayer?.prizes.length??0}張</div>
       </div>
     </div>
 
@@ -693,12 +699,12 @@
       </div>
     </div>
 
-    <!-- 我方場地 -->
+    <!-- 我方場地（永遠在下方） -->
     <div class="field-row my-row">
       <div class="zone-prizes">
-        <div class="zone-label-sm">獎勵 {activePlayer?.prizes.length??0}張</div>
+        <div class="zone-label-sm">獎勵 {myPlayer?.prizes.length??0}張</div>
         <div class="prize-grid">
-          {#each Array(6) as _, i}<div class="prize-card my-prize" class:prize-gone={i>=(activePlayer?.prizes.length??0)}></div>{/each}
+          {#each Array(6) as _, i}<div class="prize-card my-prize" class:prize-gone={i>=(myPlayer?.prizes.length??0)}></div>{/each}
         </div>
       </div>
 
@@ -707,33 +713,33 @@
           我的出場
           {#if canRetreatNow&&!showRetreatPicker&&!pendingSelection&&isMyTurn()}
             <button class="btn-retreat" onclick={()=>showRetreatPicker=!showRetreatPicker}>
-              撤退（{retreatCostOf(activePlayer!.active!)}⚡）
+              撤退（{retreatCostOf(myPlayer!.active!)}⚡）
             </button>
           {/if}
         </div>
-        {#if activePlayer?.active}
-          {@const ac=getCard(activePlayer.active.cardId)}
-          {@const evoOpts=evoOptionsFor(activePlayer.active.iid)}
+        {#if myPlayer?.active}
+          {@const ac=getCard(myPlayer.active.cardId)}
+          {@const evoOpts=evoOptionsFor(myPlayer.active.iid)}
           <div class="active-card mine-active"
             class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
-            onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(activePlayer!.active!.iid)}>
+            onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
             <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
-              onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(activePlayer!.active!.cardId);}}}/>
+              onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId);}}}/>
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
-              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{ac?.hp?hpRemaining(activePlayer.active)/ac.hp*100:0}%;background:{hpColor(hpRemaining(activePlayer.active),ac?.hp??0)}"></div></div>
-              <div class="active-hp">HP {hpRemaining(activePlayer.active)}/{ac?.hp}</div>
-              <div class="active-nrg">{energySummary(activePlayer.active)}</div>
+              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{ac?.hp?hpRemaining(myPlayer.active)/ac.hp*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),ac?.hp??0)}"></div></div>
+              <div class="active-hp">HP {hpRemaining(myPlayer.active)}/{ac?.hp}</div>
+              <div class="active-nrg">{energySummary(myPlayer.active)}</div>
               {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡ 點此附加</div>{/if}
             </div>
             {#if evoOpts.length>0&&!pendingSelection&&isMyTurn()}
               <div class="evo-wrap">
-                <button class="evo-btn" onclick={(e)=>{e.stopPropagation();showEvoMenu=showEvoMenu===activePlayer!.active!.iid?null:activePlayer!.active!.iid;}}>進化▲</button>
-                {#if showEvoMenu===activePlayer.active.iid}
+                <button class="evo-btn" onclick={(e)=>{e.stopPropagation();showEvoMenu=showEvoMenu===myPlayer!.active!.iid?null:myPlayer!.active!.iid;}}>進化▲</button>
+                {#if showEvoMenu===myPlayer.active.iid}
                   <div class="evo-menu">
                     {#each evoOpts as evo}{@const ec=getCard(evo.cardId)}
-                      <button class="evo-choice" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.evolve(activePlayer!.active!.iid,evo.iid));}}>
+                      <button class="evo-choice" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.evolve(myPlayer!.active!.iid,evo.iid));}}>
                         <img src={ec?.imageUrl} alt={ec?.name}/><span>{ec?.name}</span>
                       </button>
                     {/each}
@@ -745,7 +751,7 @@
           {#if showRetreatPicker&&!pendingSelection}
             <div class="retreat-picker">
               <span class="retreat-label">選擇換入：</span>
-              {#each activePlayer.bench as b}{@const bc=getCard(b.cardId)}
+              {#each myPlayer.bench as b}{@const bc=getCard(b.cardId)}
                 <button class="mini-poke-btn" onclick={()=>dispatch(GameActions.retreat(b.iid))}>
                   <img src={bc?.imageUrl} alt={bc?.name}/><span>{bc?.name}</span>
                 </button>
@@ -760,8 +766,8 @@
 
       <div class="zone-bench">
         {#each Array(5) as _, i}
-          {#if activePlayer?.bench[i]}
-            {@const b=activePlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
+          {#if myPlayer?.bench[i]}
+            {@const b=myPlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
             <div class="bench-slot"
               class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
               onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(b.iid)}>
@@ -793,31 +799,31 @@
       <div class="zone-pile">
         <div class="pile-slot deck-pile">
           <span class="pile-icon">🃏</span>
-          <span class="pile-count">{activePlayer?.deck.length??0}</span>
+          <span class="pile-count">{myPlayer?.deck.length??0}</span>
           <span class="pile-label">牌庫</span>
         </div>
         <div class="pile-slot disc-pile">
           <span class="pile-icon">🗑</span>
-          <span class="pile-count">{activePlayer?.discard.length??0}</span>
+          <span class="pile-count">{myPlayer?.discard.length??0}</span>
           <span class="pile-label">棄牌</span>
         </div>
       </div>
     </div>
   </div><!-- /.playmat -->
 
-  <!-- 手牌列 -->
+  <!-- 手牌列（永遠顯示自己的手牌） -->
   <div class="hand-strip">
-    <div class="hand-label">✋ {activePlayer?.name} 的手牌（{activePlayer?.hand.length??0} 張）
-      {#if !isMyTurn()}<span class="hand-not-my-turn">（非你的回合）</span>{/if}
+    <div class="hand-label">✋ {myPlayer?.name} 的手牌（{myPlayer?.hand.length??0} 張）
+      {#if !isMyTurn()}<span class="hand-not-my-turn">（等待對手行動中）</span>{/if}
     </div>
     <div class="hand-scroll">
-      {#each activePlayer?.hand??[] as inst}
+      {#each myPlayer?.hand??[] as inst}
         {@const c=getCard(inst.cardId)}
         {#if c}
           {@const isEnergyCard=c.supertype==='Energy'}
           {@const isBasicCard=c.supertype==='Pokemon'&&c.subtype==='Basic'}
           {@const isTrainerCard=c.supertype==='Trainer'}
-          {@const canEnergy=isEnergyCard&&game?.turnPhase==='main'&&!activePlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()}
+          {@const canEnergy=isEnergyCard&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()}
           {@const canBasic=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()}
           {@const canTrainer=isTrainerCard&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
           <div class="hand-card"
