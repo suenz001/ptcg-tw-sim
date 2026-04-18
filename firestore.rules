@@ -19,9 +19,15 @@ service cloud.firestore {
                     && request.auth.uid == request.resource.data.hostUid;
 
       // host 或 guest 可以更新（推送狀態、打出動作）
+      // 另外：狀態為 waiting 且尚無 guest 時，任何已登入用戶可把自己寫入 guestUid（加入房間）
       allow update: if request.auth != null
-                    && (request.auth.uid == resource.data.hostUid
-                        || request.auth.uid == resource.data.guestUid);
+                    && (
+                      request.auth.uid == resource.data.hostUid
+                      || request.auth.uid == resource.data.guestUid
+                      || (resource.data.status == 'waiting'
+                          && resource.data.guestUid == null
+                          && request.resource.data.guestUid == request.auth.uid)
+                    );
     }
   }
 }
