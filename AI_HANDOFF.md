@@ -755,3 +755,76 @@ M1 全部 4 個 Phase 已完成。下一個里程碑是 **M2（對戰引擎）**
 cd E:\ptcg-tw-sim
 node node_modules\firebase-tools\lib\bin\firebase.js deploy --only firestore:rules --project ptcg-tw-sim
 ```
+
+---
+
+## 📝 2026-04-19 Session 13 — M3 線上連線對戰（Firestore 房間系統）
+
+> 觸發：接續 M2 規劃，實裝 M3 Phase A（房間建立/加入）+ Phase B（GameState 即時同步）
+
+### 新增檔案
+
+| 檔案 | 用途 |
+|:---|:---|
+| `src/lib/game/room.ts` | Firestore 房間 CRUD：`createRoom` / `joinRoom` / `subscribeRoom` / `pushGameState` |
+
+### 修改檔案
+
+| 檔案 | 變更 |
+|:---|:---|
+| `firestore.rules` | 新增 `rooms/{roomCode}` 規則：read=已登入用戶；create=hostUid 必須等於 auth.uid；update=host 或 guest |
+| `src/lib/game/types.ts` | `SEND_NEW_ACTIVE` action 加入選填欄位 `senderIdx?: 0 \| 1` |
+| `src/lib/game/actions.ts` | `sendNewActive()` 支援傳入 `senderIdx` |
+| `src/lib/game/engine.ts` | `SEND_NEW_ACTIVE` 改用 `action.senderIdx ?? aIdx`（線上模式可明確指定送出方）；移除誤植的 `PlayerState.energyAttached` 存取（TS 編譯錯誤修正）|
+| `src/routes/game/+page.svelte` | 新增模式選擇畫面（本機 / 線上）；線上 Lobby 三步驟（choose→create/join→room）；Firestore `onSnapshot` 即時同步 GameState；`isMyTurn` / `isMyDefenderTurn` derived 防止非行動方操作；`isSyncing` 狀態指示器 |
+
+### 線上對戰流程
+
+```
+Host 建立房間 → 取得 4 碼房號 → 等待 Guest 加入
+Guest 輸入房號 → joinRoom() → Firestore status='ready'
+Host onSnapshot 收到 'ready' → createGame() → pushGameState()
+雙方 onSnapshot 收到 gameState → 更新 UI
+任一方 dispatch(action) → applyAction() → pushGameState() → 對方 onSnapshot 更新
+```
+
+### Room Schema（`rooms/{roomCode}`）
+
+```ts
+{
+  hostUid: string, hostName: string, hostDeckEntries: [...],
+  guestUid: string|null, guestName: string|null, guestDeckEntries: [...]|null,
+  gameState: GameState|null,
+  status: 'waiting'|'ready'|'playing'|'ended',
+  createdAt, updatedAt
+}
+```
+
+### 已知限制 / 待處理（M3 Phase C/D）
+
+- [ ] **Phase C**：Firestore Rules server-side 行動驗證（目前只有 client guard）
+- [ ] **Phase D**：斷線重連（離開後重新訂閱房間可繼續）、逾時棄局機制
+- [ ] 兩人在同一台裝置各開分頁測試 OK；不同裝置測試待驗證
+
+### Bug 修復
+
+**問題**：建立房間時出現「Missing or insufficient permissions.」
+
+**根因**：`firestore.rules` 雖然已寫好 `rooms/{roomCode}` 規則，但從未 deploy 到 Firebase，Firestore 仍使用舊規則（只允許 `users/{uid}/decks/{deckId}`）。
+
+**修復**：執行 `npx firebase-tools deploy --only firestore:rules --project ptcg-tw-sim` 部署規則後解決。
+
+### Commits
+
+- `3dd8406` feat(game): M3 線上對戰 — Firestore 房間系統 + 即時同步
+
+### ⚠️ 給下一位 AI 的注意事項
+
+1. **Rules 一定要 deploy**：每次修改 `firestore.rules` 後必須執行下方指令，否則線上完全無效：
+   ```
+   cd E:\ptcg-tw-sim && npx firebase-tools deploy --only firestore:rules --project ptcg-tw-sim
+   ```
+2. **GameState 序列化**：`pushGameState` 已用 `JSON.parse(JSON.stringify(state))` 去除 `undefined` 欄位（Firestore 不接受 undefined）
+3. **pool 不進 GameState**：雙方各自從靜態 JSON 建立 pool，不透過 Firestore 傳輸
+4. **senderIdx 參數**：線上模式被擊倒後，防守方（`myPlayerIndex === dIdx`）送出新出場寶可夢時，需傳入 `senderIdx: myPlayerIndex`，否則會被引擎誤判為攻擊方操作
+5. **Anonymous Auth**：`onMount` 已有 `signInAnonymously(auth)`，建立/加入房間前 uid 必然存在，無需另外處理
