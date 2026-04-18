@@ -831,6 +831,20 @@ Host onSnapshot 收到 'ready' → createGame() → pushGameState()
 ### Commits
 
 - `3dd8406` feat(game): M3 線上對戰 — Firestore 房間系統 + 即時同步
+- `35abe02` fix(firestore): allow guest to join waiting room
+- `c72dde9` fix(game): 固定視角 — 自己永遠在下方，對手永遠在上方
+
+---
+
+**Bug 3**：線上對戰時視角會隨回合切換（對手回合看不到自己手牌）
+
+**根因**：盤面用 `activePlayer`（當前行動玩家）當「我方」、`defenderPlayer`（防守方）當「對手」，導致每次 END_TURN 後兩者互換，線上雙方視角對調。
+
+**修復**：新增 `myIdx`/`oppIdx`/`myPlayer`/`oppPlayer` derived：
+- **線上模式**：`myIdx = myPlayerIndex`（固定），自己永遠在下方
+- **本機模式**：`myIdx = aIdx`（跟隨行動方），維持原本 pass-and-play 翻轉行為
+- 盤面上方改用 `oppPlayer`，下方改用 `myPlayer`，手牌永遠顯示 `myPlayer.hand`
+- `aIdx`/`activePlayer` 保留，僅用於動作邏輯（attack/draw/endTurn 的 `isMyTurn()` 判斷）
 
 ### ⚠️ 給下一位 AI 的注意事項
 
