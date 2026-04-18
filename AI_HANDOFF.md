@@ -846,6 +846,53 @@ Host onSnapshot 收到 'ready' → createGame() → pushGameState()
 - 盤面上方改用 `oppPlayer`，下方改用 `myPlayer`，手牌永遠顯示 `myPlayer.hand`
 - `aIdx`/`activePlayer` 保留，僅用於動作邏輯（attack/draw/endTurn 的 `isMyTurn()` 判斷）
 
+---
+
+## 📝 2026-04-19 Session 14 — 自動抽牌 + 補齊訓練家效果 + 固定視角
+
+### 自動抽牌
+- `engine.ts` 新增 `applyAutoDraw()` helper
+- `END_TURN` 結束後直接呼叫，`turnPhase` 不再停在 `'draw'`，直接進入 `'main'`
+- 先手第 1 回合本已自動跳過抽牌（FINISH_SETUP 直接設 `turnPhase: 'main'`），不受影響
+- UI 移除「📥 抽牌」按鈕
+
+### 視角固定（線上模式）
+- 新增 `myIdx` / `oppIdx` / `myPlayer` / `oppPlayer` derived
+- **線上模式**：`myIdx = myPlayerIndex`（固定），自己永遠在下方，對手在上方
+- **本機模式**：`myIdx = aIdx`（隨行動方），維持原本 pass-and-play 翻轉行為
+- 手牌列永遠顯示 `myPlayer.hand`（對手回合也看得到自己的牌）
+
+### 新增 PendingSelection 類型（types.ts）
+| 類型 | 用途 |
+|:---|:---|
+| `opp-bench-choose` | 選對手備戰寶可夢 |
+| `discard-search` | 從棄牌區選擇 |
+| `hand-choose` | 從手牌選擇（不丟棄） |
+
+### 新增訓練家效果（effects.ts）
+| 卡片 | 效果 |
+|:---|:---|
+| 莉莉艾的決意 | 手牌洗回 + 抽 6（獎勵牌滿 6 時抽 8）|
+| 老大的指令 | 呼叫對手備戰 → 互換出場 |
+| 高級球 | 丟 2 張手牌 → 搜尋任意寶可夢（2 步）|
+| 超級信號 | 搜尋 ex 寶可夢加手牌 |
+| 夜間擔架 | 從棄牌取 1 張寶可夢或能量加手牌 |
+| 頂尖捕捉器 | 呼叫對手備戰 + 自己切換（2 步）|
+| 能量回收器 | 從棄牌選最多 5 張基本能量洗回牌庫 |
+| 奇跡修正檔 | 從棄牌取 1 張基本能量附於備戰（2 步）|
+| 不公印章 | 雙方洗手牌，自己抽 5 對手抽 2（省略「上回合被擊倒」條件）|
+
+### 未實裝（留下一版）
+| 卡片 | 原因 |
+|:---|:---|
+| 神奇糖果 | 需要 Stage 2 跳進化 UI（hand-choose → 選目標 basic）|
+| 龐克頭盔 / 氣球 | 寶可夢道具系統尚未建立 |
+| 神秘花園 | 競技場（Stadium）系統尚未建立 |
+
+### Commits
+- `c72dde9` fix(game): 固定視角
+- `1f53a54` feat(game): 自動抽牌 + 補齊訓練家效果
+
 ### ⚠️ 給下一位 AI 的注意事項
 
 1. **Rules 一定要 deploy**：每次修改 `firestore.rules` 後必須執行下方指令，否則線上完全無效：
