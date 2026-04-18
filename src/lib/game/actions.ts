@@ -14,7 +14,8 @@ export const GameActions = {
                        ({ type: 'ATTACH_ENERGY', energyIid, targetIid }),
   attack:            (attackIndex: number): GameAction => ({ type: 'ATTACK', attackIndex }),
   takePrizes:        (count: number): GameAction => ({ type: 'TAKE_PRIZES', count }),
-  sendNewActive:     (iid: string): GameAction => ({ type: 'SEND_NEW_ACTIVE', iid }),
+  sendNewActive:     (iid: string, senderIdx?: 0 | 1): GameAction =>
+                       ({ type: 'SEND_NEW_ACTIVE', iid, ...(senderIdx !== undefined && { senderIdx }) }),
   endTurn:           (): GameAction => ({ type: 'END_TURN' }),
 
   // M2 Phase C

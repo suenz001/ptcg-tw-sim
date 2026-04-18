@@ -162,7 +162,7 @@ export type GameAction =
   | { type: 'RESOLVE_SELECTION'; selectedIids: string[] }
   | { type: 'ATTACK'; attackIndex: number }
   | { type: 'TAKE_PRIZES'; count: number }
-  | { type: 'SEND_NEW_ACTIVE'; iid: string }
+  | { type: 'SEND_NEW_ACTIVE'; iid: string; senderIdx?: 0 | 1 }
   | { type: 'END_TURN' };
 
 // ── 效果腳本插槽（M3/M4 填入） ─────────────────────────────────────────────

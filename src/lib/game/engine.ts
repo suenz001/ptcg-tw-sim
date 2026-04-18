@@ -309,7 +309,7 @@ function handlePlaying(
   const aIdx = state.activePlayerIndex;
   const dIdx = (1 - aIdx) as 0 | 1;
   const players = [...state.players] as [PlayerState, PlayerState];
-  const attacker = { ...players[aIdx], energyAttached: players[aIdx].energyAttached ?? [] };
+  const attacker = { ...players[aIdx] };
   const defender = { ...players[dIdx] };
 
   // ── 若有待選擇，只允許 RESOLVE_SELECTION ────────────────────────────────
@@ -624,8 +624,8 @@ function handlePlaying(
 
   // ── 對手送出新的出場寶可夢（被擊倒後） ──────────────────────────────────
   if (action.type === 'SEND_NEW_ACTIVE') {
-    // 此時 activePlayerIndex 應已切換到被擊倒方，由他們送出新的寶可夢
-    const sendingIdx = aIdx; // 當前行動玩家送出新的寶可夢
+    // senderIdx 明確指定時使用（線上模式），否則回落到 aIdx（本機模式）
+    const sendingIdx: 0 | 1 = action.senderIdx ?? aIdx;
     const sendingPlayer = { ...players[sendingIdx] };
 
     if (sendingPlayer.active !== null) return state; // 還有出場寶可夢
