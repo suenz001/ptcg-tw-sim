@@ -1511,3 +1511,112 @@ zoom modal 的「📍 場上狀態」面板中：
 3. **進化鏈資料**：`evolvedFromStack: CardInstance[]`（不是 cardIds）。擊倒時必須 `...target.evolvedFromStack ?? []` 進棄牌。未來新增 KO 處理要加這一行。
 4. **ex 判斷（得 2 張獎勵）**：目前用 `name.endsWith('ex')` 或 `card.subtype === 'ex'`，兩者都可（因為 ex 寶可夢的 subtype 一定是 'ex'）。
 5. **TRAINER_GUARDS 是防線**：打出前驗證，若漏加導致使用者白送卡/白送支援者 flag。新卡一定要想「需不需要 guard」。
+
+---
+
+## 📝 2026-04-19 Session 24 — 第三副預組（破空焰ex 火屬）+ 卡片審計
+
+> 觸發：使用者接受 C→A→B 路線。Session 24 進入 C 階段：補第三副預組。
+
+### 卡片審計報告
+自動掃描 `static/cards/*.json` vs `effects.ts` 已註冊的 `reg/regPre/regPost/regA`，產生 [CARD_AUDIT.md](CARD_AUDIT.md)：
+- **特性**：已實裝 2 / 未實裝 247
+- **攻擊效果**：已實裝 16 / 未實裝 1599
+- **訓練家/道具/競技場**：已實裝 30 / 未實裝 197
+
+MBG/MBD 預組幾乎 100% 實裝可完整對戰，其他卡包多為未實裝。作為長期實裝追蹤表。
+
+### 新預組：`__preset_fire__` 破空焰ex 火屬（60 張）
+- 主力：3x 破空焰ex（MC, Basic ex HP 230, 烈火爆進 260）
+- 副力：2x 萊希拉姆ex（MC, Basic ex HP 230）
+- 進化鏈：4x 小火龍 + 2x 火恐龍、2x 燃燒蟲 + 2x 火神蛾、2x 爆焰龜獸
+- 訓練家 29 張：全部沿用 MBG/MBD 已實裝的（reg 按名稱匹配，不看 id）
+- 14x 基本【火】能量
+
+### 新實裝 1 個效果
+- **破空焰ex|烈火爆進**（ATTACK_POST）— 260 傷害 + 設 `cantAttackThisTurn`
+  - 簡化：原文是禁用本招；目前退化為「下回合完全不能攻擊」。未來可擴充 `disabledAttacks?: string[]` 機制。
+
+### Commits
+- `d2c86d4` docs: CARD_AUDIT.md
+- `7e1868b` feat(game): 第三副預組 + 烈火爆進
+
+---
+
+## 📝 2026-04-19 Session 25 A1 — 拖曳交互
+
+### 實裝
+取代原本「先點能量 → 再點目標」兩步流程，新增拖曳：
+- 能量卡 → 拖到寶可夢 → `attachEnergy`
+- 基礎寶可夢 → 拖到備戰空格 → `playBasic`
+- 道具卡 → 拖到寶可夢 → `playTrainer` + 自動消費 `attach-tool` pendingSelection
+
+### 技術
+- **Pointer events**（非 HTML5 drag）— 觸控+滑鼠+鍵盤全支援
+- `DRAG_THRESHOLD = 6px` 區分 click vs drag — 未達門檻保留原 onclick 行為
+- `data-drop-type="poke" data-drop-iid="..."` 與 `data-drop-type="bench-empty"` 標記 drop target
+- `document.elementsFromPoint` 即時偵測 hover 的 drop zone
+- 浮卡隨滑鼠 + 旋轉 4° + 陰影；drop-zone（pulse 藍框）+ drop-hover（金框）雙層提示
+
+### 關鍵邊界
+- 道具 attach 流程：dispatch `playTrainer` → engine 進 `attach-tool` pendingSelection → UI 檢測 `effectKey==='attach-tool'` 且 `dropTargetIid` 在 `params.validIids` → dispatch `resolveSelection`。兩次 dispatch 對應雙推雲端（可接受）。
+- 保留所有原按鈕作為 fallback（可及性 + 觸控點擊）
+
+### Commit
+- `5a6dc18` feat(ui): 拖曳交互
+
+---
+
+## 📝 2026-04-19 Session 26 A2 — 抽牌/發牌/洗牌動畫
+
+### 動畫清單
+- **手牌進場**：每張 `in:fly={{ x: 260, y: -40, delay: i * 70 }}` 從右上飛入，模擬從牌庫發出；Setup 初始 7 張依序 staggered（delay 80ms）
+- **手牌出場**：`out:fly={{ y: -220 }}` 打出時向上飛出
+- **Mulligan banner**：`scale` 進場 + 🔄 圖示 `spin` 旋轉
+- **牌堆立體感**：`::before/::after` 疊層 2 張模擬「一疊卡」+ hover 上浮陰影
+
+### 技術注意
+- Svelte `animate:flip` **無法**與 `{#if}` 包 each 內容同時使用（必須為 each 唯一子元素）。目前 each 內有 `{#if c}` guard 所以 flip 拿掉，只保留 in/out transitions。
+- Svelte transition 只在 mount/unmount 時觸發 — 既有卡不會重播，新進入才飛。
+
+### Commit
+- `3682f24` feat(ui): 動畫
+
+---
+
+## 📝 2026-04-19 Session 27 A3 — 扇形手牌 + hover 放大 + 勝負動畫 + 桌布質感
+
+### 扇形手牌
+- CSS custom properties `--fan-rot` + `--fan-lift` 由 Svelte inline style 動態算出
+- `transform: rotate(var(--fan-rot)) translateY(var(--fan-lift))`
+- `transform-origin: 50% 180%` 讓旋轉軸在下方（合理的扇形樞紐）
+- `gap: -24px` 讓卡重疊
+- `step = Math.min(4, 36/n)` 手牌越多 step 越小避免兩端翹太高
+
+### hover 放大
+- `.hand-card:hover:not(.dragging)`: `translateY(-50px) scale(1.35) rotate(0)`
+- cubic-bezier transition 自然彈性
+- `.hand-strip { overflow: visible }` 讓放大卡可突出
+
+### 勝負動畫
+- 全新 `.gameover-screen` 取代原 lobby 風格
+- 背景 `conic-gradient` 光暈 + `slow-spin` 20s 旋轉
+- 🏆/💔 圖示 `bounce` 1.5s + 金/紅光暈
+- `Victory!` / `Defeat` 字樣 glow shadow
+- scale-in → fly-in 文字 → fade-in 按鈕 依序延遲顯示
+- 線上模式依 `myPlayerIndex === winner` 判斷勝敗
+
+### 桌布質感
+- `.playmat` 新增：radial glow + repeating 45° 紋理
+- `::before` 中央虛線邊框框出桌面範圍
+
+### Commit
+- `f100094` feat(ui): 質感升級
+
+### ⚠️ 給下一位 AI 的注意事項
+
+1. **扇形 step 計算**：`step = Math.min(4, 36/n)` — 改動前要測手牌 15+ 張的極端情況。
+2. **Svelte transition `in:fly` 只觸發一次**（mount 時）— 後續變動不會重播。
+3. **animate:flip 使用限制**：元素必須是 keyed each block 的唯一子元素，不能外包 `{#if}`。
+4. **拖曳 `moved` 門檻**：當 pointer 移動 < 6px 時視為 click，> 6px 才進入 drag 模式。觸控很容易誤判，調高可解但犧牲敏感度。
+5. **`.battle-root` / `.playmat` 的 overflow:hidden**：hover 放大手牌卡要超出 playmat 區域，必須透過 `.hand-strip` 在 playmat 外層渲染 + `.hand-strip` overflow:visible 才不被裁。
