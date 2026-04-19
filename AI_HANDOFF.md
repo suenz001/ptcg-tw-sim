@@ -1264,3 +1264,54 @@ MBG（超級耿鬼ex 預組）+ MBD（超級蒂安希ex 預組）共 46 種卡�
 3. **pool 不進 GameState**：雙方各自在本地從靜態 JSON 建立，不透過 Firestore 傳輸
 4. **Svelte 5 runes**：`$state`、`$derived`、`$derived.by`、`$effect`，不用舊式 `$:` 宣告
 5. **本檔為接力文件**：每次工作前先讀它，工作結束後把本次動作追加到最下方
+
+---
+
+## 📝 2026-04-19 Session 21 — 修復線上對戰視角 Bug（雙方看到同一畫面）
+
+> 觸發：使用者回報「對戰時兩個玩家都變成了同一個畫面，之前沒有這個 bug」
+
+### Bug 根因
+
+Session 19 引入 AI 對手時，`aiPlayerIndex = $state<0|1|null>(1)` 預設為 `1`（P2 是 AI，方便本機測試），但進入線上模式時從未將其重置為 `null`。
+
+三個視角相關 derived（`myIdx` / `isMyTurn` / `isMyDefenderTurn`）的判斷順序為「AI 優先 → 線上次之」：
+
+```ts
+const myIdx = $derived<0 | 1>(
+  aiPlayerIndex !== null ? ((1 - aiPlayerIndex) as 0 | 1) :  // ← 線上模式被這行攔截
+  myPlayerIndex !== null ? myPlayerIndex : aIdx
+);
+```
+
+結果 Host（`myPlayerIndex=0`）和 Guest（`myPlayerIndex=1`）都被 `aiPlayerIndex=1` 攔截，雙方 `myIdx = 1 - 1 = 0`，**兩台都顯示 P1 視角**，看起來像同一個畫面。同理 `isMyTurn` / `isMyDefenderTurn` 也會把線上雙方當成「對 AI」處理。
+
+### 修復（`src/routes/game/+page.svelte`）
+
+在三個 derived 中加入 `mode === 'online'` 優先分支，確保線上模式永遠以 `myPlayerIndex` 決定視角：
+
+```ts
+const myIdx = $derived<0 | 1>(
+  mode === 'online' ? ((myPlayerIndex ?? 0) as 0 | 1) :  // ← 線上優先
+  aiPlayerIndex !== null ? ((1 - aiPlayerIndex) as 0 | 1) :
+  myPlayerIndex !== null ? myPlayerIndex : aIdx
+);
+```
+
+`isMyTurn` / `isMyDefenderTurn` 同樣把 `mode === 'online'` 分支放到最前，使用 `myPlayerIndex` 判定 setup 階段、pendingSelection actorIdx、防守方送寶可夢等邏輯。
+
+本機 AI / 本機雙人模式邏輯維持不變。
+
+### 驗證
+
+- `npm run build` ✅ 通過（SvelteKit adapter-static）
+- 預期行為：Host 開房、Guest 加入後，兩台各自看到自己的手牌在下方、對手在上方；標頭 role-chip 顯示「我是 P1 先手」/「我是 P2 後手」
+
+### Commit
+- `（本 session）` fix(game): 線上對戰視角修復 — 雙方看到同一畫面（Session 19 regression）
+
+### ⚠️ 給下一位 AI 的注意事項
+
+- `aiPlayerIndex` 預設為 `1` 是刻意保留（本機 lobby 的 AI 勾選預設開啟），**不要**把它改成 `null` 預設值 — 那會讓本機新玩家看不到 AI checkbox 預勾
+- 任何「依 mode 判斷視角／行動權」的 derived，`mode === 'online'` 分支都必須優先於 `aiPlayerIndex` 分支
+- 進線上 Lobby（`mode='online'`）時**不需**重置 `aiPlayerIndex`，因為 derived 已把 mode 納入考量，且 `scheduleAI()` (line 131) 也有 `mode === 'online'` guard 防止 AI 在線上觸發

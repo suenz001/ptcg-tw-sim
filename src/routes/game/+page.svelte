@@ -179,7 +179,9 @@
   );
 
   // ── 視角固定：AI模式/線上模式我方永遠在下方，本機雙人模式隨行動方翻轉 ──────
+  // 注意：線上模式必須優先判斷，否則預設 aiPlayerIndex=1 會讓雙方都算成 myIdx=0
   const myIdx   = $derived<0 | 1>(
+    mode === 'online' ? ((myPlayerIndex ?? 0) as 0 | 1) :
     aiPlayerIndex !== null ? ((1 - aiPlayerIndex) as 0 | 1) :
     myPlayerIndex !== null ? myPlayerIndex : aIdx
   );
@@ -190,6 +192,15 @@
   // 線上模式 / AI 模式：是否輪到玩家行動
   const isMyTurn = $derived(() => {
     if (!game) return false;
+    // 線上模式：只有輪到 myPlayerIndex 才能行動（必須優先於 AI 判斷）
+    if (mode === 'online') {
+      if (myPlayerIndex === null) return false;
+      if (game.phase === 'setup-p1') return myPlayerIndex === 0;
+      if (game.phase === 'setup-p2') return myPlayerIndex === 1;
+      if (game.pendingSelection) return game.pendingSelection.actorIdx === myPlayerIndex;
+      if (game.turnPhase === 'end' && game.players[myPlayerIndex].active === null) return true;
+      return game.activePlayerIndex === myPlayerIndex;
+    }
     // AI 模式：只有輪到人類時才能手動操作
     if (aiPlayerIndex !== null) {
       const hIdx = (1 - aiPlayerIndex) as 0 | 1;
@@ -199,24 +210,25 @@
       if (game.turnPhase === 'end' && game.players[hIdx].active === null) return true;
       return game.activePlayerIndex === hIdx && game.pendingPrizes === 0;
     }
-    if (myPlayerIndex === null) return true; // 本機雙人模式
-    if (game.phase === 'setup-p1') return myPlayerIndex === 0;
-    if (game.phase === 'setup-p2') return myPlayerIndex === 1;
-    return game.activePlayerIndex === myPlayerIndex;
+    return true; // 本機雙人模式
   });
   // 線上模式：我是否為防守方（被擊倒後需送出寶可夢）
   const isMyDefenderTurn = $derived(() => {
     if (!game) return false;
+    // 線上模式必須優先判斷
+    if (mode === 'online') {
+      if (myPlayerIndex === null) return false;
+      return game.phase === 'playing' &&
+             game.turnPhase === 'end' &&
+             myPlayerIndex === dIdx &&
+             defenderPlayer?.active === null;
+    }
     if (aiPlayerIndex !== null) {
       const hIdx = (1 - aiPlayerIndex) as 0 | 1;
       return game.phase === 'playing' && game.turnPhase === 'end' &&
              hIdx === dIdx && defenderPlayer?.active === null;
     }
-    if (myPlayerIndex === null) return true;
-    return game.phase === 'playing' &&
-           game.turnPhase === 'end' &&
-           myPlayerIndex === dIdx &&
-           defenderPlayer?.active === null;
+    return true; // 本機雙人模式
   });
 
   const selectionItems = $derived.by(() => {
