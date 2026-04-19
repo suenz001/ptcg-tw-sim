@@ -27,35 +27,41 @@ export function getAIAction(
 ): GameAction | null {
   if (state.phase === 'game-over') return null;
 
-  // setup 階段：使用 AI 自己的 index（雙方同時操作）
-  // 正式階段：使用 activePlayerIndex（AI 只在自己回合行動）
-  const aIdx: 0 | 1 = state.phase === 'setup' ? myIdx : state.activePlayerIndex;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const player = state.players[aIdx];
+  // ── Setup 階段：使用 AI 自己的 index（雙方同時操作） ─────────────────────
+  if (state.phase === 'setup') {
+    return handleSetupAI(state, pool, myIdx);
+  }
+  if (state.phase !== 'playing') return null;
 
-  // 1. 取獎勵牌
+  // ── 以下動作無論是否輪到我，只要「是我要做的」就要處理 ───────────────
+  // 1a. 我作為防守方，active 被擊倒 → 送新出場（優先於一切）
+  if (state.players[myIdx].active === null && state.players[myIdx].bench.length > 0) {
+    return {
+      type: 'SEND_NEW_ACTIVE',
+      iid: pickBestActive(state.players[myIdx].bench, pool).iid,
+      senderIdx: myIdx,
+    };
+  }
+
+  // 1b. 我要 resolve 的 pendingSelection（對手用老大的指令等，actor 可能是對手）
+  if (state.pendingSelection && state.pendingSelection.actorIdx === myIdx) {
+    return autoResolveSelection(state, pool);
+  }
+
+  // ── 以下只在輪到我時處理 ─────────────────────────────────────────────
+  if (state.activePlayerIndex !== myIdx) return null;
+
+  // 2. 取獎勵牌（只有攻擊方會有 pendingPrizes）
   if (state.pendingPrizes > 0) {
     return { type: 'TAKE_PRIZES', count: state.pendingPrizes };
   }
 
-  // 2. 自動解析選擇
-  if (state.pendingSelection) {
-    return autoResolveSelection(state, pool);
-  }
+  // 3. 若有對手的 pendingSelection，我什麼都不能做 — 等對手
+  if (state.pendingSelection) return null;
 
-  // 3. 送出新出場
-  if (state.phase === 'playing' && player.active === null && player.bench.length > 0) {
-    return { type: 'SEND_NEW_ACTIVE', iid: pickBestActive(player.bench, pool).iid };
-  }
+  const player = state.players[myIdx];
 
-  // 4a. setup 階段
-  if (state.phase === 'setup') {
-    return handleSetupAI(state, pool, aIdx);
-  }
-
-  if (state.phase !== 'playing') return null;
-
-  // 4b. END 階段 → 結束回合
+  // 4. END 階段 → 結束回合
   if (state.turnPhase === 'end') {
     return { type: 'END_TURN' };
   }
@@ -71,8 +77,8 @@ export function getAIAction(
     return { type: 'EVOLVE', fromIid: t.fromIid, toIid: t.toIids[0] };
   }
 
-  // 打基礎寶可夢到備戰（備戰 < 3 時）
-  if (player.bench.length < 3) {
+  // 打基礎寶可夢到備戰 — 盡量放滿 4 隻防止被一波擊倒
+  if (player.bench.length < 4) {
     const basics = getPlayableBasics(state, pool);
     if (basics.length > 0) {
       return { type: 'PLAY_BASIC', iid: basics[0] };
@@ -141,8 +147,8 @@ function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): 
     return { type: 'PLACE_ACTIVE', iid: best.iid, senderIdx: pIdx };
   }
 
-  // 再放備戰（最多 2 隻）
-  if (player.bench.length < 2) {
+  // 再放備戰 — Setup 放滿手牌中的基礎寶可夢（最多 3 隻），避免 active 被秒殺就輸
+  if (player.bench.length < 3) {
     const basics = player.hand.filter(c => isBasicPokemonCard(pool.get(c.cardId)));
     if (basics.length > 0) {
       return { type: 'BENCH_POKEMON', iid: basics[0].iid, senderIdx: pIdx };

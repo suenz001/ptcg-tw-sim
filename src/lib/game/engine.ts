@@ -435,7 +435,7 @@ function handlePlaying(
     if (hIdx < 0) return state;
     const inst = attacker.hand[hIdx];
     const card = pool.get(inst.cardId);
-    if (!card || card.supertype !== 'Pokemon' || card.subtype !== 'Basic') return state;
+    if (!isBasicPokemonCard(card)) return state;
 
     const placed = { ...inst, justPlaced: true };
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
