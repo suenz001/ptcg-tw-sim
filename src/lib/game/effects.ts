@@ -499,9 +499,9 @@ reg('夜間擔架', (st, idx) => {
 });
 
 // 能量回收器 — 從棄牌區選最多 5 張基本能量卡放回牌庫
-reg('能量回收器', (st, idx) => {
-  const energies = st.players[idx].discard.filter(() => true); // 在 UI 篩選
-  if (energies.length === 0) return addLog(st, '能量回收器：棄牌區為空', idx);
+reg('能量回收器', (st, idx, pool) => {
+  const energies = st.players[idx].discard.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+  if (energies.length === 0) return addLog(st, '能量回收器：棄牌區沒有基本能量', idx);
   st = addLog(st, '能量回收器：從棄牌區選最多 5 張基本能量洗回牌庫', idx);
   return withPending(st, {
     type: 'discard-search',
@@ -527,8 +527,8 @@ regR('discard-to-hand', (st, idx, iids, _params, _pool) => {
 });
 
 // 奇跡修正檔 — 從棄牌區選 1 張基本超能量，附於備戰的超寶可夢身上（兩步）
-reg('奇跡修正檔', (st, idx) => {
-  const hasEnergy = st.players[idx].discard.some(() => true); // 在 UI 過濾 BasicEnergy:Psychic
+reg('奇跡修正檔', (st, idx, pool) => {
+  const hasEnergy = st.players[idx].discard.some(c => pool.get(c.cardId)?.supertype === 'Energy');
   if (!hasEnergy) return addLog(st, '奇跡修正檔：棄牌區沒有基本超能量', idx);
   st = addLog(st, '奇跡修正檔：從棄牌區選 1 張基本超能量', idx);
   return withPending(st, {
@@ -955,6 +955,7 @@ regPost('美洛耶塔|治癒旋律', (state, aIdx, pool) => {
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'heal-120-bench',
+    params: { validIids: psychicBench.map(c => c.iid) },
   });
 });
 

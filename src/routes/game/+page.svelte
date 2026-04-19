@@ -244,7 +244,10 @@
           return true;
         });
       }
-      case 'bench-choose': return src.bench;
+      case 'bench-choose': {
+        const validIids4 = pendingSelection.params?.validIids as string[] | undefined;
+        return validIids4 ? src.bench.filter(c => validIids4.includes(c.iid)) : src.bench;
+      }
       case 'opp-poke-choose': {
         const items: CardInstance[] = [...src.bench];
         if (src.active) items.unshift(src.active);

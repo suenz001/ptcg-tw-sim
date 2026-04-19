@@ -778,8 +778,14 @@ function handlePlaying(
       baseDamage = Math.max(0, baseDamage - 30);
     }
 
+    // 施加傷害
+    const defPlayers = [...workingState.players] as [PlayerState, PlayerState];
+    const defenderState = { ...defPlayers[dIdx] };
+    if (!defenderState.active) return state;
+    const newDamage = defenderState.active.damage + baseDamage;
+    const defenderHP = defenderCard.hp ?? 0;
+
     // 被動特性：影藏（超級耿鬼ex）— 惡寶可夢被 ex 擊倒時，獎勵牌 -1
-    // （調整 prizesForKO 結果，在擊倒判定之前先計算好）
     let prizeAdjust = 0;
     if (baseDamage > 0 && newDamage >= defenderHP) {
       const isExAttacker = attackerCard.name.endsWith('ex') || attackerCard.name.endsWith('EX');
@@ -792,13 +798,6 @@ function handlePlaying(
         prizeAdjust = -1;
       }
     }
-
-    // 施加傷害
-    const defPlayers = [...workingState.players] as [PlayerState, PlayerState];
-    const defenderState = { ...defPlayers[dIdx] };
-    if (!defenderState.active) return state;
-    const newDamage = defenderState.active.damage + baseDamage;
-    const defenderHP = defenderCard.hp ?? 0;
 
     let newState: GameState = addLog(
       workingState,
@@ -879,12 +878,12 @@ function handlePlaying(
 
     let newState: GameState = addLog(
       { ...state, players, pendingPrizes: 0 },
-      `${attacker.name} 取得了 ${count} 張獎勵牌（剩餘 ${attacker.prizes.length - count} 張）`,
+      `${attacker.name} 取得了 ${count} 張獎勵牌（剩餘 ${attacker.prizes.length} 張）`,
       aIdx
     );
 
     // 勝利條件：獎勵牌全取完
-    if (attacker.prizes.length - count <= 0) {
+    if (attacker.prizes.length <= 0) {
       return {
         ...newState,
         phase: 'game-over',
