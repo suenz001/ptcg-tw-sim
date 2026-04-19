@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { fly, scale } from 'svelte/transition';
+  import { fly, scale, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { base } from '$app/paths';
   import type { Card } from '$lib/cards/types';
@@ -753,15 +753,25 @@
      遊戲結束
   ══════════════════════════════════════════════════════════════════════ -->
 {:else if game.phase === 'game-over'}
-  <main class="lobby">
-    <h1>🏆 遊戲結束</h1>
-    <p class="winner-text">{game.players[game.winner!].name} 獲勝！</p>
-    <p class="muted">{game.winReason}</p>
-    <div class="lobby-btns">
-      <button class="btn-primary" onclick={() => { game = null; if (mode === 'online') leaveOnlineGame(); }}>
-        {mode === 'online' ? '離開房間' : '再來一局'}
-      </button>
-      <a href="{base}/" class="btn-secondary">回首頁</a>
+  {@const isWin = mode !== 'online' || myPlayerIndex === game.winner}
+  <main class="gameover-screen">
+    <div class="gameover-card" in:scale={{ duration: 600, start: 0.3, easing: cubicOut }}>
+      <div class="gameover-icon {isWin ? 'win' : 'lose'}">
+        {isWin ? '🏆' : '💔'}
+      </div>
+      <h1 class="gameover-title {isWin ? 'win' : 'lose'}">
+        {isWin ? 'Victory!' : 'Defeat'}
+      </h1>
+      <p class="winner-text" in:fly={{ y: 30, duration: 500, delay: 300 }}>
+        {game.players[game.winner!].name} 獲勝！
+      </p>
+      <p class="muted" in:fade={{ duration: 400, delay: 600 }}>{game.winReason}</p>
+      <div class="lobby-btns" in:fade={{ duration: 400, delay: 900 }}>
+        <button class="btn-primary" onclick={() => { game = null; if (mode === 'online') leaveOnlineGame(); }}>
+          {mode === 'online' ? '離開房間' : '再來一局'}
+        </button>
+        <a href="{base}/" class="btn-secondary">回首頁</a>
+      </div>
     </div>
   </main>
 
@@ -1162,6 +1172,11 @@
     <div class="hand-scroll">
       {#each myPlayer?.hand??[] as inst, i (inst.iid)}
         {@const c=getCard(inst.cardId)}
+        {@const n=(myPlayer?.hand.length??0)}
+        {@const mid=(n-1)/2}
+        {@const step=Math.min(4, 36/Math.max(1,n))}
+        {@const rot=n>1?(i-mid)*step:0}
+        {@const liftY=Math.abs(i-mid)*(step*0.6)}
         {#if c}
           {@const isEnergyCard=c.supertype==='Energy'}
           {@const isBasicCard=isBasicPokemonCard(c)}
@@ -1178,6 +1193,7 @@
             class:can-trainer={canTrainer}
             class:dragging={dragging?.iid===inst.iid}
             class:draggable={dragKind!==null}
+            style="--fan-rot:{rot}deg;--fan-lift:{liftY}px;"
             in:fly={{ x: 260, y: -40, duration: 380, delay: i * 70, easing: cubicOut }}
             out:fly={{ y: -220, duration: 260, easing: cubicOut }}
             onpointerdown={(e)=>{if(dragKind)startDrag(e, inst, dragKind, c);}}
@@ -1456,6 +1472,19 @@
   .lobby-btns{ display:flex; gap:1rem; margin-top:1.5rem; align-items:center; }
   .winner-text{ font-size:1.4rem; font-weight:700; color:#ffdd55; }
 
+  /* ── 勝負畫面（Session 27） ── */
+  .gameover-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:2rem; background:radial-gradient(circle at 50% 40%, #1a2e3a 0%, #000 80%); font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; position:relative; overflow:hidden; }
+  .gameover-screen::before{ content:''; position:absolute; inset:-50%; background:conic-gradient(from 0deg at 50% 50%, transparent, rgba(255,212,74,.06), transparent, rgba(136,204,255,.06), transparent); animation:slow-spin 20s linear infinite; pointer-events:none; }
+  @keyframes slow-spin{ to{transform:rotate(360deg)} }
+  .gameover-card{ background:linear-gradient(160deg,#1a2a3a,#0a1a2a); border:2px solid #3a5a8a; border-radius:16px; padding:2.5rem 3rem; text-align:center; max-width:500px; box-shadow:0 20px 60px rgba(0,0,0,.8); position:relative; z-index:1; }
+  .gameover-icon{ font-size:5rem; margin-bottom:.5rem; display:inline-block; animation:bounce 1.5s ease-in-out infinite; }
+  .gameover-icon.win{ filter:drop-shadow(0 0 24px rgba(255,212,74,.9)); }
+  .gameover-icon.lose{ filter:grayscale(.4) drop-shadow(0 0 18px rgba(200,80,80,.6)); }
+  @keyframes bounce{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+  .gameover-title{ font-size:3rem; font-weight:800; margin:.2rem 0 1rem; letter-spacing:.08em; }
+  .gameover-title.win{ color:#ffd44a; text-shadow:0 0 20px rgba(255,212,74,.7), 0 0 40px rgba(255,212,74,.3); }
+  .gameover-title.lose{ color:#cc6666; text-shadow:0 0 18px rgba(200,80,80,.5); }
+
   /* Setup */
   .setup-screen{ background:#1a2a1a; border-radius:10px; }
   .setup-screen h2{ color:#aaffaa; }
@@ -1501,8 +1530,13 @@
   .res-lb{ font-weight:600; }
   .res-st{ font-size:.62rem; opacity:.85; padding-left:.15rem; border-left:1px solid rgba(255,255,255,.15); margin-left:.15rem; }
 
-  .playmat{ flex:1; display:grid; grid-template-rows:1fr auto 1fr; overflow:hidden;
-    background:linear-gradient(180deg,rgba(0,60,0,.25) 0%,rgba(0,40,0,.1) 48%,rgba(0,0,0,.5) 50%,rgba(0,40,0,.1) 52%,rgba(0,60,0,.25) 100%),#1a2e1a; }
+  .playmat{ flex:1; display:grid; grid-template-rows:1fr auto 1fr; overflow:hidden; position:relative;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(80,130,90,.12), transparent 72%),
+      repeating-linear-gradient(45deg, rgba(0,0,0,.05) 0 2px, transparent 2px 8px),
+      linear-gradient(180deg,rgba(0,60,0,.28) 0%,rgba(0,40,0,.1) 48%,rgba(0,0,0,.55) 50%,rgba(0,40,0,.1) 52%,rgba(0,60,0,.28) 100%),
+      linear-gradient(135deg,#1e3a20,#1a2e1a); }
+  .playmat::before{ content:''; position:absolute; left:50%; top:50%; width:84%; height:66%; transform:translate(-50%,-50%); border:2px dashed rgba(120,170,120,.12); border-radius:16px; pointer-events:none; }
 
   .field-row{ display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.7rem; overflow:hidden; min-height:0; }
   .opponent-row{ border-bottom:2px solid #2a5a2a; background:rgba(0,0,0,.2); align-items:flex-end; padding-bottom:0.6rem; }
@@ -1613,13 +1647,18 @@
   .evo-choice img{ width:52px; border-radius:3px; }
   .evo-choice:hover{ background:#3a5a3a; }
 
-  .hand-strip{ flex-shrink:0; background:#0a160a; border-top:2px solid #2a5a2a; padding:.35rem .7rem .5rem; }
+  .hand-strip{ flex-shrink:0; background:#0a160a; border-top:2px solid #2a5a2a; padding:.35rem .7rem .5rem; overflow:visible; }
   .hand-label{ font-size:.75rem; color:#5a8a5a; margin-bottom:.25rem; }
   .hand-not-my-turn{ color:#888; margin-left:.4rem; }
-  .hand-scroll{ display:flex; gap:.35rem; overflow-x:auto; padding-bottom:.3rem; }
+  .hand-scroll{ display:flex; justify-content:center; gap:-24px; padding:30px 1rem 6px; overflow-x:auto; overflow-y:visible; min-height:160px; perspective:900px; }
   .hand-scroll::-webkit-scrollbar{ height:5px; }
   .hand-scroll::-webkit-scrollbar-thumb{ background:#2a4a2a; border-radius:2px; }
-  .hand-card{ flex-shrink:0; width:92px; background:#0e1e0e; border:1.5px solid #2a3a2a; border-radius:6px; padding:.25rem; text-align:center; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.12rem; transition:border-color .15s; }
+  .hand-card{ flex-shrink:0; width:92px; background:#0e1e0e; border:1.5px solid #2a3a2a; border-radius:6px; padding:.25rem; text-align:center; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.12rem;
+    transform: rotate(var(--fan-rot, 0deg)) translateY(var(--fan-lift, 0));
+    transform-origin: 50% 180%;
+    transition: transform .22s cubic-bezier(.3,.8,.3,1), border-color .15s, box-shadow .15s, z-index 0s;
+    box-shadow: 0 3px 8px rgba(0,0,0,.35); }
+  .hand-card:hover:not(.dragging){ transform: translateY(-50px) scale(1.35) rotate(0deg); z-index: 50; box-shadow: 0 10px 26px rgba(0,0,0,.7); }
   .hand-card img{ width:88px; border-radius:4px; }
   .hand-name{ font-size:.68rem; color:#bbb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
   .hand-hint{ font-size:.65rem; }
