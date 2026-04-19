@@ -75,6 +75,43 @@
   let floatingRetreatMenu = $state<{ x: number; y: number } | null>(null);
   let viewDiscardFor = $state<0 | 1 | null>(null);
 
+  // ── 硬幣動畫（Session 28） ─────────────────────────────────────────────────
+  let coinFlip = $state<null | { result: 'heads' | 'tails'; label: string }>(null);
+  let coinTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastLogProcessed = 0;
+
+  function showCoinFlip(result: 'heads' | 'tails', label: string) {
+    if (coinTimer) clearTimeout(coinTimer);
+    coinFlip = { result, label };
+    coinTimer = setTimeout(() => { coinFlip = null; coinTimer = null; }, 2200);
+  }
+
+  // 監聽 log 新訊息，自動觸發硬幣動畫
+  $effect(() => {
+    if (!game || !game.log) { lastLogProcessed = 0; return; }
+    const logs = game.log;
+    if (logs.length <= lastLogProcessed) { lastLogProcessed = logs.length; return; }
+    const fresh = logs.slice(lastLogProcessed);
+    lastLogProcessed = logs.length;
+    // 只取最後一筆觸發硬幣的訊息（避免連續觸發多次）
+    for (const entry of fresh) {
+      const msg = entry.message;
+      if (msg.includes('擲硬幣') && msg.includes('先手')) {
+        const winnerName = msg.replace(/^🪙?\s*擲硬幣：\s*/, '').replace(/\s*先手.*$/, '');
+        showCoinFlip(Math.random() < 0.5 ? 'heads' : 'tails', `${winnerName} 先手`);
+        return;
+      }
+      if (msg.includes('正面')) {
+        showCoinFlip('heads', '擲硬幣：正面');
+        return;
+      }
+      if (msg.includes('反面')) {
+        showCoinFlip('tails', '擲硬幣：反面');
+        return;
+      }
+    }
+  });
+
   // ── 拖曳交互（Session 25 A1） ──────────────────────────────────────────────
   type DragKind = 'energy' | 'basic' | 'tool';
   let dragging = $state<null | {
@@ -1261,6 +1298,19 @@
     </div>
   {/if}
 
+  <!-- Coin Flip Overlay -->
+  {#if coinFlip}
+    <div class="coin-overlay" in:fade={{ duration: 200 }} out:fade={{ duration: 250 }}>
+      <div class="coin-stage">
+        <div class="coin coin-{coinFlip.result}">
+          <div class="coin-face coin-heads">🪙</div>
+          <div class="coin-face coin-tails">⚫</div>
+        </div>
+        <div class="coin-label" in:fly={{ y: 20, duration: 300, delay: 1400 }}>{coinFlip.label}</div>
+      </div>
+    </div>
+  {/if}
+
   <!-- Floating Drag Preview -->
   {#if dragging && dragging.moved}
     <div class="drag-preview" style="left:{dragging.x}px;top:{dragging.y}px;" aria-hidden="true">
@@ -1576,6 +1626,27 @@
   .drag-preview img{ width:100%; border-radius:6px; border:2px solid rgba(255,212,74,.7); }
   .drag-hint{ margin-top:.3rem; text-align:center; font-size:.68rem; color:#ffeaa6; background:rgba(0,0,0,.75); padding:.15rem .4rem; border-radius:3px; white-space:nowrap; }
 
+  /* ── 硬幣動畫（Session 28） ── */
+  .coin-overlay{ position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at 50% 50%, rgba(0,0,0,.55), rgba(0,0,0,.88)); backdrop-filter:blur(3px); pointer-events:none; }
+  .coin-stage{ display:flex; flex-direction:column; align-items:center; gap:1.2rem; }
+  .coin{ width:120px; height:120px; position:relative; transform-style:preserve-3d; animation:coin-flip 1.5s cubic-bezier(.35,.2,.25,1) forwards; }
+  .coin-face{ position:absolute; inset:0; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:5rem; backface-visibility:hidden; background:linear-gradient(135deg,#ffd44a,#b58a20); box-shadow:0 0 30px rgba(255,212,74,.6), inset 0 0 20px rgba(0,0,0,.3); border:3px solid #8a6a10; }
+  .coin-heads{ transform:rotateY(0deg); }
+  .coin-tails{ transform:rotateY(180deg); background:linear-gradient(135deg,#555,#222); color:#eee; box-shadow:0 0 30px rgba(136,136,136,.4), inset 0 0 20px rgba(0,0,0,.5); border-color:#333; }
+  .coin.coin-heads{ animation-name:coin-flip-heads; }
+  .coin.coin-tails{ animation-name:coin-flip-tails; }
+  @keyframes coin-flip-heads{
+    0%{ transform:rotateY(0) scale(.6); }
+    50%{ transform:rotateY(1080deg) scale(1.15); }
+    100%{ transform:rotateY(1440deg) scale(1); }
+  }
+  @keyframes coin-flip-tails{
+    0%{ transform:rotateY(0) scale(.6); }
+    50%{ transform:rotateY(1080deg) scale(1.15); }
+    100%{ transform:rotateY(1620deg) scale(1); }
+  }
+  .coin-label{ font-size:1.4rem; font-weight:700; color:#ffd44a; text-shadow:0 0 12px rgba(255,212,74,.7); background:rgba(0,0,0,.5); padding:.4rem 1rem; border-radius:6px; border:1px solid #8a6a10; }
+
   .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:hidden; min-width:0; }
   .bench-slot{ flex:1; min-width:0; max-width:115px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:visible; }
   .bench-slot:not(.bench-empty).energy-target{ border-color:#aaff44; cursor:pointer; }
@@ -1599,7 +1670,7 @@
 
   .hp-bar-wrap{ height:8px; background:#1a2a1a; border-radius:3px; overflow:hidden; margin:3px 0; }
   .hp-bar-wrap.sm{ height:5px; }
-  .hp-bar{ height:100%; border-radius:3px; transition:width .3s; }
+  .hp-bar{ height:100%; border-radius:3px; transition: width .55s cubic-bezier(.3,.8,.3,1), background .3s ease-out; }
 
   .action-bar{ display:grid; grid-template-columns:auto 1fr auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:center; min-height:52px; }
   .alerts-col{ display:flex; flex-direction:column; gap:.2rem; max-width:280px; }
