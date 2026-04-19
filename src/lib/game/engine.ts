@@ -634,6 +634,20 @@ function handlePlaying(
         pendingPrizes: prizes, turnPhase: 'end',
       };
       newState = addLog(newState, `${defenderCard.name} 被擊倒！${attacker.name} 取得 ${prizes} 張獎勵牌。`, null);
+
+      // 無備戰寶可夢 → 直接終局，不需送出新寶可夢
+      if (defenderState.bench.length === 0) {
+        return {
+          ...newState,
+          phase: 'game-over',
+          winner: aIdx,
+          winReason: `${defenderState.name} 沒有可上場的寶可夢`,
+          log: [
+            ...newState.log,
+            { turn: newState.turn, playerIndex: null as null, message: `${defenderState.name} 沒有可上場的寶可夢，${attacker.name} 獲勝！` },
+          ],
+        };
+      }
     } else {
       defenderState.active = { ...defenderState.active!, damage: newDamage };
       defPlayers[dIdx] = defenderState;

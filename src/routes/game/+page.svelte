@@ -59,15 +59,20 @@
 
   // ── UI 互動狀態 ─────────────────────────────────────────────────────────────
   let selectedEnergyIid = $state<string | null>(null);
-  let showEvoMenu = $state<string | null>(null);
   let showRetreatPicker = $state(false);
   let selectionPicked = $state<Set<string>>(new Set());
   let zoomCard = $state<Card | null>(null);
+  let floatingEvoMenu = $state<{ fromIid: string; evoOpts: CardInstance[]; x: number; y: number } | null>(null);
+  let viewDiscardFor = $state<0 | 1 | null>(null);
 
   function openZoom(cardId: string) { const c = pool.get(cardId); if (c) zoomCard = c; }
   function closeZoom() { zoomCard = null; }
+  function openFloatingEvo(fromIid: string, evoOpts: CardInstance[], e: MouseEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    floatingEvoMenu = { fromIid, evoOpts, x: rect.left + rect.width / 2, y: rect.top };
+  }
   function onGlobalKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') { closeZoom(); selectionPicked = new Set(); }
+    if (e.key === 'Escape') { closeZoom(); floatingEvoMenu = null; viewDiscardFor = null; selectionPicked = new Set(); }
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -205,7 +210,7 @@
     if (!game || !poolReady) return;
     const newState = applyAction(game, action as any, pool);
     game = newState;
-    showEvoMenu = null; showRetreatPicker = false; selectedEnergyIid = null;
+    floatingEvoMenu = null; showRetreatPicker = false; selectedEnergyIid = null;
 
     if (mode === 'online' && roomCode) {
       isSyncing = true;
@@ -611,7 +616,7 @@
           <span class="pile-count">{oppPlayer?.deck.length??0}</span>
           <span class="pile-label">牌庫</span>
         </div>
-        <div class="pile-slot disc-pile">
+        <div class="pile-slot disc-pile" onclick={() => viewDiscardFor = oppIdx} title="查看對手棄牌區">
           <span class="pile-icon">🗑</span>
           <span class="pile-count">{oppPlayer?.discard.length??0}</span>
           <span class="pile-label">棄牌</span>
@@ -748,16 +753,7 @@
             </div>
             {#if evoOpts.length>0&&!pendingSelection&&isMyTurn()}
               <div class="evo-wrap">
-                <button class="evo-btn" onclick={(e)=>{e.stopPropagation();showEvoMenu=showEvoMenu===myPlayer!.active!.iid?null:myPlayer!.active!.iid;}}>進化▲</button>
-                {#if showEvoMenu===myPlayer.active.iid}
-                  <div class="evo-menu">
-                    {#each evoOpts as evo}{@const ec=getCard(evo.cardId)}
-                      <button class="evo-choice" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.evolve(myPlayer!.active!.iid,evo.iid));}}>
-                        <img src={ec?.imageUrl} alt={ec?.name}/><span>{ec?.name}</span>
-                      </button>
-                    {/each}
-                  </div>
-                {/if}
+                <button class="evo-btn" onclick={(e)=>{e.stopPropagation();openFloatingEvo(myPlayer!.active!.iid,evoOpts,e);}}>進化▲</button>
               </div>
             {/if}
           </div>
@@ -793,16 +789,7 @@
               <div class="bench-nrg">{energySummary(b)}</div>
               {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡</div>{/if}
               {#if evoOptsB.length>0&&!pendingSelection&&isMyTurn()}
-                <button class="evo-btn-sm" onclick={(e)=>{e.stopPropagation();showEvoMenu=showEvoMenu===b.iid?null:b.iid;}}>進化</button>
-                {#if showEvoMenu===b.iid}
-                  <div class="evo-menu evo-above">
-                    {#each evoOptsB as evo}{@const ec=getCard(evo.cardId)}
-                      <button class="evo-choice" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.evolve(b.iid,evo.iid));}}>
-                        <img src={ec?.imageUrl} alt={ec?.name}/><span>{ec?.name}</span>
-                      </button>
-                    {/each}
-                  </div>
-                {/if}
+                <button class="evo-btn-sm" onclick={(e)=>{e.stopPropagation();openFloatingEvo(b.iid,evoOptsB,e);}}>進化</button>
               {/if}
             </div>
           {:else}<div class="bench-slot bench-empty"></div>{/if}
@@ -815,7 +802,7 @@
           <span class="pile-count">{myPlayer?.deck.length??0}</span>
           <span class="pile-label">牌庫</span>
         </div>
-        <div class="pile-slot disc-pile">
+        <div class="pile-slot disc-pile" onclick={() => viewDiscardFor = myIdx} title="查看我的棄牌區">
           <span class="pile-icon">🗑</span>
           <span class="pile-count">{myPlayer?.discard.length??0}</span>
           <span class="pile-label">棄牌</span>
@@ -889,6 +876,41 @@
           {#if pendingSelection.minCount===0}
             <button class="btn-act secondary" onclick={()=>{selectionPicked=new Set();confirmSelection();}}>不選（跳過）</button>
           {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Floating Evolution Menu -->
+  {#if floatingEvoMenu}
+    <div class="float-evo-backdrop" onclick={() => floatingEvoMenu = null}></div>
+    <div class="float-evo-menu" style="left:{floatingEvoMenu.x}px;top:{floatingEvoMenu.y}px;">
+      <div class="float-evo-title">選擇進化</div>
+      {#each floatingEvoMenu.evoOpts as evo}{@const ec=getCard(evo.cardId)}
+        <button class="evo-choice wide-evo" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.evolve(floatingEvoMenu!.fromIid,evo.iid));floatingEvoMenu=null;}}>
+          <img src={ec?.imageUrl} alt={ec?.name}/><span>{ec?.name}</span>
+        </button>
+      {/each}
+    </div>
+  {/if}
+
+  <!-- Discard Viewer -->
+  {#if viewDiscardFor !== null}
+    {@const viewPlayer = game!.players[viewDiscardFor]}
+    <div class="zoom-overlay" onclick={() => viewDiscardFor = null}>
+      <div class="zoom-modal discard-modal" onclick={(e)=>e.stopPropagation()}>
+        <button class="zoom-close" onclick={() => viewDiscardFor = null}>✕</button>
+        <h3 class="discard-title">🗑 {viewPlayer.name} 的棄牌區（{viewPlayer.discard.length} 張）</h3>
+        <div class="sel-grid">
+          {#each [...viewPlayer.discard].reverse() as inst}{@const c=getCard(inst.cardId)}
+            {#if c}
+              <button class="sel-card" onclick={() => openZoom(inst.cardId)}>
+                <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
+                {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+              </button>
+            {/if}
+          {/each}
+          {#if viewPlayer.discard.length === 0}<p class="sel-empty">（棄牌區是空的）</p>{/if}
         </div>
       </div>
     </div>
@@ -1053,40 +1075,41 @@
   .zone-label-sm{ font-size:.62rem; color:#888; text-align:center; white-space:nowrap; }
   .opp-label{ color:#aa8888; }
 
-  .zone-active{ flex-shrink:0; width:250px; display:flex; flex-direction:column; gap:0.2rem; }
+  .zone-active{ flex-shrink:0; width:300px; display:flex; flex-direction:column; gap:0.2rem; }
   .my-active-zone{ position:relative; }
-  .active-card{ display:flex; gap:0.5rem; background:rgba(0,0,0,.35); border:1px solid #3a5a3a; border-radius:8px; padding:0.5rem; align-items:flex-start; position:relative; cursor:default; min-height:105px; }
+  .active-card{ display:flex; gap:0.5rem; background:rgba(0,0,0,.35); border:1px solid #3a5a3a; border-radius:8px; padding:0.6rem; align-items:flex-start; position:relative; cursor:default; min-height:130px; }
   .active-card.opp-active{ border-color:#5a3a3a; background:rgba(0,0,0,.4); }
   .active-card.mine-active{ border-color:#3a6a3a; }
   .active-card.energy-target{ border-color:#aaff44; cursor:pointer; animation:glow 1s infinite alternate; }
   .active-card.active-empty{ justify-content:center; align-items:center; color:#555; font-size:.85rem; }
-  .active-img{ width:100px; border-radius:5px; flex-shrink:0; }
+  .active-img{ width:120px; border-radius:5px; flex-shrink:0; }
   .active-info{ flex:1; min-width:0; }
-  .active-name{ font-size:.9rem; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:.15rem; }
-  .active-hp{ font-size:.78rem; color:#ccc; }
-  .active-nrg{ font-size:.7rem; color:#aaa; margin-top:.15rem; }
-  .attach-hint{ font-size:.68rem; color:#aaff44; font-weight:700; margin-top:.15rem; }
+  .active-name{ font-size:1rem; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:.2rem; }
+  .active-hp{ font-size:.88rem; color:#ccc; }
+  .active-nrg{ font-size:.8rem; color:#aaa; margin-top:.2rem; }
+  .attach-hint{ font-size:.75rem; color:#aaff44; font-weight:700; margin-top:.2rem; }
   @keyframes glow{ from{box-shadow:0 0 4px #aaff44}to{box-shadow:0 0 14px #aaff44} }
 
   .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:hidden; min-width:0; }
-  .bench-slot{ flex:1; min-width:0; max-width:95px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.3rem; text-align:center; font-size:.65rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.08rem; overflow:hidden; }
+  .bench-slot{ flex:1; min-width:0; max-width:115px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:visible; }
   .bench-slot:not(.bench-empty).energy-target{ border-color:#aaff44; cursor:pointer; }
-  .bench-slot img{ width:100%; max-width:78px; border-radius:4px; }
-  .bench-empty{ border-style:dashed; border-color:#1a3a1a; opacity:.4; }
-  .bench-name{ font-size:.63rem; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
-  .bench-stat{ font-size:.6rem; color:#aaa; }
-  .bench-nrg{ font-size:.56rem; color:#888; }
+  .bench-slot img{ width:100%; max-width:96px; border-radius:4px; }
+  .bench-empty{ border-style:dashed; border-color:#1a3a1a; opacity:.4; overflow:hidden; }
+  .bench-name{ font-size:.7rem; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
+  .bench-stat{ font-size:.66rem; color:#aaa; }
+  .bench-nrg{ font-size:.62rem; color:#888; }
 
-  .zone-pile{ flex-shrink:0; display:flex; flex-direction:column; gap:.35rem; width:62px; align-items:center; }
-  .pile-slot{ width:55px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:6px; padding:.3rem .2rem; gap:.1rem; min-height:52px; }
+  .zone-pile{ flex-shrink:0; display:flex; flex-direction:column; gap:.35rem; width:72px; align-items:center; }
+  .pile-slot{ width:65px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:6px; padding:.35rem .25rem; gap:.12rem; min-height:60px; }
   .deck-pile{ background:linear-gradient(135deg,#1a3a6a,#2a5a9a); border:1px solid #4a7aaa; }
-  .disc-pile{ background:#1a1a2a; border:1px dashed #3a3a5a; }
-  .pile-icon{ font-size:1rem; line-height:1; }
-  .pile-count{ font-size:1rem; font-weight:700; color:#fff; }
-  .pile-label{ font-size:.58rem; color:#aaa; }
+  .disc-pile{ background:#1a1a2a; border:1px dashed #3a3a5a; cursor:pointer; transition:border-color .15s,background .15s; }
+  .disc-pile:hover{ border-color:#6a6aaa; background:#1e1e3a; }
+  .pile-icon{ font-size:1.15rem; line-height:1; }
+  .pile-count{ font-size:1.1rem; font-weight:700; color:#fff; }
+  .pile-label{ font-size:.65rem; color:#aaa; }
 
-  .hp-bar-wrap{ height:6px; background:#1a2a1a; border-radius:3px; overflow:hidden; margin:2px 0; }
-  .hp-bar-wrap.sm{ height:4px; }
+  .hp-bar-wrap{ height:8px; background:#1a2a1a; border-radius:3px; overflow:hidden; margin:3px 0; }
+  .hp-bar-wrap.sm{ height:5px; }
   .hp-bar{ height:100%; border-radius:3px; transition:width .3s; }
 
   .action-bar{ display:grid; grid-template-columns:auto 1fr auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:center; min-height:52px; }
@@ -1096,7 +1119,7 @@
   .warn-alert{ background:#3a2a0a; border:1px solid #8a6a2a; }
   .mini-row{ display:flex; gap:.25rem; flex-wrap:wrap; margin-top:.2rem; width:100%; }
   .action-btns{ display:flex; flex-wrap:wrap; gap:.35rem; justify-content:center; align-items:center; }
-  .btn-act{ display:inline-flex; align-items:center; gap:.25rem; padding:.32rem .72rem; border-radius:6px; border:none; font:inherit; font-size:.82rem; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .btn-act{ display:inline-flex; align-items:center; gap:.25rem; padding:.4rem .85rem; border-radius:6px; border:none; font:inherit; font-size:.9rem; font-weight:600; cursor:pointer; white-space:nowrap; }
   .btn-act.primary{ background:#2a7a2a; color:#fff; }
   .btn-act.primary:hover:not(:disabled){ background:#3a9a3a; }
   .btn-act.primary:disabled{ opacity:.4; cursor:not-allowed; }
@@ -1106,12 +1129,12 @@
   .btn-act.atk.atk-ready{ opacity:1; cursor:pointer; border-color:#6a9aff; }
   .btn-act.atk.atk-ready:not(:disabled):hover{ background:#1a3a5a; }
   .cost-row{ display:flex; gap:.15rem; }
-  .epip{ width:1.1rem; height:1.1rem; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:.52rem; font-weight:700; color:#fff; flex-shrink:0; }
-  .epip.sm{ width:.9rem; height:.9rem; font-size:.44rem; }
-  .atk-name{ max-width:100px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .atk-dmg{ font-weight:700; color:#f88; }
-  .log-col{ max-width:200px; max-height:80px; overflow-y:auto; font-size:.62rem; }
-  .log-line{ color:#7a9a7a; padding:.06rem 0; border-bottom:1px solid #1a2a1a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .epip{ width:1.25rem; height:1.25rem; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:.58rem; font-weight:700; color:#fff; flex-shrink:0; }
+  .epip.sm{ width:1rem; height:1rem; font-size:.5rem; }
+  .atk-name{ max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .atk-dmg{ font-weight:700; color:#f88; font-size:.95rem; }
+  .log-col{ max-width:220px; max-height:90px; overflow-y:auto; font-size:.7rem; }
+  .log-line{ color:#7a9a7a; padding:.07rem 0; border-bottom:1px solid #1a2a1a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .log-sys{ color:#aaffaa; font-weight:600; }
 
   .btn-retreat{ padding:.1rem .3rem; font-size:.62rem; background:#3a3a6a; border:1px solid #6a6aaa; border-radius:4px; color:#ccf; cursor:pointer; }
@@ -1135,22 +1158,22 @@
   .evo-choice img{ width:52px; border-radius:3px; }
   .evo-choice:hover{ background:#3a5a3a; }
 
-  .hand-strip{ flex-shrink:0; background:#0a160a; border-top:2px solid #2a5a2a; padding:.28rem .6rem .4rem; }
-  .hand-label{ font-size:.65rem; color:#5a8a5a; margin-bottom:.2rem; }
+  .hand-strip{ flex-shrink:0; background:#0a160a; border-top:2px solid #2a5a2a; padding:.35rem .7rem .5rem; }
+  .hand-label{ font-size:.75rem; color:#5a8a5a; margin-bottom:.25rem; }
   .hand-not-my-turn{ color:#888; margin-left:.4rem; }
-  .hand-scroll{ display:flex; gap:.3rem; overflow-x:auto; padding-bottom:.25rem; }
-  .hand-scroll::-webkit-scrollbar{ height:4px; }
+  .hand-scroll{ display:flex; gap:.35rem; overflow-x:auto; padding-bottom:.3rem; }
+  .hand-scroll::-webkit-scrollbar{ height:5px; }
   .hand-scroll::-webkit-scrollbar-thumb{ background:#2a4a2a; border-radius:2px; }
-  .hand-card{ flex-shrink:0; width:76px; background:#0e1e0e; border:1.5px solid #2a3a2a; border-radius:6px; padding:.2rem; text-align:center; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; transition:border-color .15s; }
-  .hand-card img{ width:72px; border-radius:4px; }
-  .hand-name{ font-size:.6rem; color:#bbb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
-  .hand-hint{ font-size:.58rem; }
+  .hand-card{ flex-shrink:0; width:92px; background:#0e1e0e; border:1.5px solid #2a3a2a; border-radius:6px; padding:.25rem; text-align:center; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.12rem; transition:border-color .15s; }
+  .hand-card img{ width:88px; border-radius:4px; }
+  .hand-name{ font-size:.68rem; color:#bbb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
+  .hand-hint{ font-size:.65rem; }
   .energy-hint{ color:#aaff44; }
   .hand-card.can-energy{ border-color:#c0a020; cursor:pointer; }
   .hand-card.can-basic{ border-color:#5a9a5a; }
   .hand-card.can-trainer{ border-color:#5a7aba; }
   .hand-card.selected{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }
-  .hand-btn{ display:block; width:100%; margin-top:.12rem; padding:.12rem 0; border-radius:3px; font-size:.6rem; cursor:pointer; border:none; }
+  .hand-btn{ display:block; width:100%; margin-top:.14rem; padding:.15rem 0; border-radius:3px; font-size:.68rem; cursor:pointer; border:none; }
   .basic-btn{ background:#2a5a2a; color:#aef; }
   .basic-btn:hover{ background:#3a7a3a; }
   .trainer-btn{ background:#2a3a6a; color:#ccf; }
@@ -1197,4 +1220,14 @@
   .zoom-rules{ background:#1e1e1e; border:1px solid #3a3a3a; border-radius:6px; padding:.5rem .6rem; font-size:.8rem; color:#bbb; line-height:1.5; }
   .zoom-footer{ display:flex; gap:.75rem; flex-wrap:wrap; font-size:.78rem; color:#888; border-top:1px solid #2a3a2a; padding-top:.4rem; margin-top:auto; }
   .footer-item{ display:flex; align-items:center; gap:.25rem; }
+
+  /* ── Floating Evo Menu ── */
+  .float-evo-backdrop{ position:fixed; inset:0; z-index:50; }
+  .float-evo-menu{ position:fixed; z-index:51; transform:translate(-50%,-105%); background:#1a2a1a; border:1px solid #6aaa4a; border-radius:8px; padding:.4rem; display:flex; flex-direction:column; gap:.25rem; min-width:120px; box-shadow:0 4px 24px rgba(0,0,0,.95); }
+  .float-evo-title{ font-size:.7rem; color:#aaffaa; text-align:center; font-weight:700; margin-bottom:.15rem; border-bottom:1px solid #2a4a2a; padding-bottom:.2rem; }
+  .wide-evo img{ width:70px; }
+
+  /* ── Discard Modal ── */
+  .discard-modal{ max-width:760px; }
+  .discard-title{ margin:0 0 .6rem; color:#aaffaa; font-size:1.05rem; }
 </style>
