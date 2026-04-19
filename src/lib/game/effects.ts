@@ -1389,3 +1389,159 @@ regPost('破空焰ex|烈火爆進', (state, aIdx, _pool) => {
   players[aIdx] = p;
   return addLog({ ...state, players }, '烈火爆進：下回合無法使用招式（簡化版）。', aIdx);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 30 B1 — 通用訓練家補實裝（10 張）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 傷藥 — 回 30 HP（物品）
+regG('傷藥', (st, idx) => {
+  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  return all.some(c => c.damage > 0);
+});
+reg('傷藥', (st, idx) => {
+  st = addLog(st, '傷藥：選擇回復 30 HP 的寶可夢', idx);
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, effectKey: 'heal-30',
+    params: { healAmount: 30, discardEnergy: 0 },
+  });
+});
+regR('heal-30', healResolver);
+
+// 西餐廚師 — 戰鬥寶可夢回 70 HP（支援者）
+regG('西餐廚師', (st, idx) => !!st.players[idx].active && st.players[idx].active!.damage > 0);
+reg('西餐廚師', (st, idx) => {
+  return updatePlayer(addLog(st, '西餐廚師：戰鬥寶可夢回復 70 HP', idx), idx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, damage: Math.max(0, p.active.damage - 70) } };
+  });
+});
+
+// 真菰 — 全體寶可夢各回 40 HP（支援者）
+regG('真菰', (st, idx) => {
+  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  return all.some(c => c.damage > 0);
+});
+reg('真菰', (st, idx) => {
+  return updatePlayer(addLog(st, '真菰：全體寶可夢各回復 40 HP', idx), idx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, damage: Math.max(0, p.active.damage - 40) } : null,
+    bench: p.bench.map(c => ({ ...c, damage: Math.max(0, c.damage - 40) })),
+  }));
+});
+
+// 白露的真心 — 選 HP≤30 的寶可夢回復全部 HP（支援者）
+regG('白露的真心', (st, idx, pool) => {
+  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  return all.some(c => {
+    const card = pool.get(c.cardId);
+    const hp = card?.hp ?? 0;
+    return hp > 0 && (hp - c.damage) <= 30;
+  });
+});
+reg('白露的真心', (st, idx, pool) => {
+  const p = st.players[idx];
+  const validIids: string[] = [];
+  const all = [...(p.active ? [p.active] : []), ...p.bench];
+  for (const c of all) {
+    const card = pool.get(c.cardId);
+    const hp = card?.hp ?? 0;
+    if (hp > 0 && (hp - c.damage) <= 30) validIids.push(c.iid);
+  }
+  st = addLog(st, '白露的真心：選 1 隻 HP≤30 的寶可夢回復全部 HP', idx);
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, effectKey: 'heal-full',
+    params: { healAmount: 9999, validIids },
+  });
+});
+regR('heal-full', healResolver);
+
+// 希特隆的機智 — 全體【雷】寶可夢回 60 HP（支援者）
+regG('希特隆的機智', (st, idx, pool) => {
+  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  return all.some(c => pool.get(c.cardId)?.pokemonType === 'Lightning' && c.damage > 0);
+});
+reg('希特隆的機智', (st, idx, pool) => {
+  const isLightning = (c: CardInstance) => pool.get(c.cardId)?.pokemonType === 'Lightning';
+  return updatePlayer(addLog(st, '希特隆的機智：全體【雷】寶可夢各回復 60 HP', idx), idx, p => ({
+    ...p,
+    active: p.active && isLightning(p.active) ? { ...p.active, damage: Math.max(0, p.active.damage - 60) } : p.active,
+    bench: p.bench.map(c => isLightning(c) ? { ...c, damage: Math.max(0, c.damage - 60) } : c),
+  }));
+});
+
+// 蓋伊 — 從牌庫抽 3 張（支援者）
+reg('蓋伊', (st, idx) => {
+  return updatePlayer(addLog(st, '蓋伊：從牌庫抽 3 張', idx), idx, p => {
+    const taken = p.deck.slice(0, 3);
+    return { ...p, deck: p.deck.slice(3), hand: [...p.hand, ...taken] };
+  });
+});
+
+// 裁判 — 雙方洗手牌 + 各抽 4（支援者）
+reg('裁判', (st, idx) => {
+  st = addLog(st, '裁判：雙方洗手牌各抽 4 張', idx);
+  const players = [...st.players] as [PlayerState, PlayerState];
+  for (const i of [0, 1] as const) {
+    const p = { ...players[i] };
+    const newDeck = shuffle([...p.deck, ...p.hand]);
+    const hand = newDeck.slice(0, 4);
+    p.hand = hand;
+    p.deck = newDeck.slice(4);
+    players[i] = p;
+  }
+  return { ...st, players };
+});
+
+// 衝浪手 — 切換出場/備戰 + 抽牌至手牌滿 5 張（支援者）
+regG('衝浪手', (st, idx) => !!st.players[idx].active && st.players[idx].bench.length > 0);
+reg('衝浪手', (st, idx) => {
+  st = addLog(st, '衝浪手：選要換入的備戰寶可夢，並抽牌至手牌 5 張', idx);
+  return withPending(st, {
+    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, effectKey: 'surfer-switch',
+  });
+});
+regR('surfer-switch', (st, idx, iids, _params, _pool) => {
+  return updatePlayer(st, idx, p => {
+    if (!p.active) return p;
+    const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
+    if (bIdx < 0) return p;
+    const newActive = { ...p.bench[bIdx], justPlaced: false };
+    const newBench = [...p.bench];
+    newBench[bIdx] = { ...p.active };
+    const drawN = Math.max(0, 5 - p.hand.length);
+    const taken = p.deck.slice(0, drawN);
+    return {
+      ...p, active: newActive, bench: newBench,
+      hand: [...p.hand, ...taken], deck: p.deck.slice(drawN),
+    };
+  });
+});
+
+// 精靈球 — 擲硬幣，正面則從牌庫選 1 張寶可夢加手牌（物品）
+reg('精靈球', (st, idx) => {
+  const coin = Math.random() < 0.5;
+  if (!coin) return addLog(st, '精靈球：反面，什麼都沒發生。', idx);
+  st = addLog(st, '精靈球：正面！從牌庫選 1 張寶可夢加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon', minCount: 0, maxCount: 1,
+    effectKey: 'search-pokemon-to-hand',
+  });
+});
+
+// 寶可夢捕捉器 — 擲硬幣，正面則選對手備戰與戰鬥寶可夢互換（物品）
+regG('寶可夢捕捉器', (st, idx) => st.players[(1 - idx) as 0 | 1].bench.length > 0);
+reg('寶可夢捕捉器', (st, idx) => {
+  const coin = Math.random() < 0.5;
+  if (!coin) return addLog(st, '寶可夢捕捉器：反面，什麼都沒發生。', idx);
+  const oppIdx = (1 - idx) as 0 | 1;
+  st = addLog(st, '寶可夢捕捉器：正面！選對手備戰與戰鬥寶可夢互換', idx);
+  return withPending(st, {
+    type: 'opp-bench-choose', actorIdx: idx, sourcePlayerIdx: oppIdx,
+    minCount: 1, maxCount: 1, effectKey: 'gust-opp',
+  });
+});
