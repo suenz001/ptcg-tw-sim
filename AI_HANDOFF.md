@@ -1034,3 +1034,70 @@ ATTACK handler 流程：
 
 ### Commit
 - `06f1bd9` feat: 進化選單修復、棄牌區查看、無備戰敗局判定、UI 放大
+
+---
+
+## 📝 2026-04-19 Session 17 — 道具牌/競技場/神奇糖果/無法攻擊全實裝
+
+> 觸發：使用者問「下一步」，補完 MBG/MBD 預組所有未實裝效果
+
+### 已實裝
+
+#### 1. 道具牌系統（Pokémon Tool）
+
+`engine.ts` PLAY_TRAINER 新增 Tool 分支：
+- Tool 卡（`supertype:'Pokemon', subtype:'Other'`）現在可從手牌打出
+- 打出後不進棄牌區，改觸發 `pendingSelection` 選擇附加目標
+- 附加後儲存於 `CardInstance.toolAttached`（原有欄位）
+- `getPlayableTrainers` 現在也回傳 Tool/Stadium 卡的 iid
+
+**氣球** 效果：
+- `canRetreat` 計算時若出場有氣球，retreat cost -2（最低 0）
+- RETREAT handler 同樣扣減
+- `retreatCostOf()` UI 函式也已同步
+
+**龐克頭盔** 效果：
+- ATTACK handler 在施加傷害後立即檢查防守方出場是否為【惡】且附有龐克頭盔
+- 若成立，對攻擊方出場放置 40 傷害指示物並記錄 log
+
+#### 2. 神奇糖果（Rare Candy）
+
+兩步 resolver 流程：
+1. `hand-choose` 選手牌中的 Stage 2 / ex（有 evolvesFrom）
+2. `rare-candy-choose-target` resolver：查出 Stage 1 的 evolvesFrom 找到目標 Basic，以 `heal-target + validIids` 過濾顯示場上合法基礎
+3. `rare-candy-evolve` resolver：繼承傷害/能量/道具/狀態，`evolvedThisTurn: true`
+
+**資料修正**：`MBG.json` 超級耿鬼ex `evolvesFrom` 從 "耿鬼ex"（不存在）改為 "鬼斯通"。
+
+#### 3. 神秘花園（Stadium 競技場）
+
+- Stadium 卡打出後放置於 `GameState.activeStadium`（前一張競技場丟棄牌區）
+- 標頭 status-chips 顯示 「🏟 神秘花園」 chip
+- 新增 `USE_STADIUM` action（`GameActions.useStadium()`）
+- 每位玩家每回合可使用 1 次（`stadiumUsedThisTurn: [boolean, boolean]`）
+- **神秘花園效果**：手牌棄 1 能量 → 從牌庫抽牌，直到手牌數 = 場上超屬寶可夢數
+- UI：主階段出現「🏟 神秘花園」按鈕（己方回合、未使用時）
+
+#### 4. 無法攻擊效果
+
+- `CardInstance.cantAttackThisTurn?: boolean`
+- **無極汰那|力量猛攻**（ATTACK_POST）：擲硬幣，反面時設旗標
+- **拉帝亞斯ex|無限之刃**（ATTACK_POST）：固定設旗標
+- ATTACK handler 開頭檢查旗標：若設定 → 清除旗標 + log + 強制 `turnPhase:'end'`
+
+#### 5. UI 更新
+
+- 道具卡手牌顯示「🔧 附加」按鈕（黃色）
+- 競技場手牌顯示「競技場」按鈕
+- 出場/備戰寶可夢顯示 🔧 道具 chip
+- `selectionItems` 新增 `validIids` 過濾支援（`heal-target`、`hand-choose`）
+- `hand-discard` 新增 `filter:'Energy'` 支援
+
+### 架構說明（給下一位 AI）
+
+- `EffectFn` 型別（effects.ts）第 4 個參數為 `cardInst?: CardInstance`，Tool/Stadium 打出時傳入該卡實例
+- Tool 效果 resolver 從 `params.toolInst` 取得卡片實例（整個 CardInstance 物件序列化存入 params）
+- Stadium 效果由 `USE_STADIUM` action 觸發（不是 PLAY_TRAINER），支援未來不同競技場效果
+
+### Commits
+- `aad0ef2` feat: 道具牌/競技場/神奇糖果/無法攻擊效果全實裝
