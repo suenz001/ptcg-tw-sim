@@ -1374,3 +1374,18 @@ regR('dominance-chain', (st, idx, iids, params, _pool) => {
     return { ...p, active: newActive, bench: newBench };
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MC 破空焰ex — 火牌組預組主力（Session 24）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 烈火爆進 — 260 傷害，使用後到離開戰鬥場前無法再用本招
+// M2 簡化：用現有 cantAttackThisTurn 旗標代表「下回合無法攻擊」
+// （原文是禁用特定招式；完整實作需 disabledAttacks 機制，此為可接受的保守簡化）
+regPost('破空焰ex|烈火爆進', (state, aIdx, _pool) => {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const p = { ...players[aIdx] };
+  if (p.active) p.active = { ...p.active, cantAttackThisTurn: true };
+  players[aIdx] = p;
+  return addLog({ ...state, players }, '烈火爆進：下回合無法使用招式（簡化版）。', aIdx);
+});

@@ -80,10 +80,42 @@ const DIANCIE_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/** 破空焰ex 火屬預組（Session 24 — 自組牌組，卡片來自 MC「超級進化初階牌組100」） */
+const CHI_YU_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_fire__',
+  name: '破空焰ex（火屬 · 自組）',
+  entries: [
+    // ── 寶可夢（17 張）──
+    { cardId: '16622', count: 3 },  // 破空焰ex（主力 · Basic ex · HP 230 · 烈火爆進 260）
+    { cardId: '16597', count: 2 },  // 萊希拉姆ex（副力 · Basic ex · HP 230 · 劈開 50）
+    { cardId: '16554', count: 4 },  // 小火龍（Basic · HP 80 · 火之爪 30）
+    { cardId: '16555', count: 2 },  // 火恐龍（Stage1 · HP 100 · 高溫爆破 50）
+    { cardId: '16593', count: 2 },  // 火神蛾（Stage1 · HP 140）
+    { cardId: '16592', count: 2 },  // 燃燒蟲（Basic · HP 70 · 為火神蛾進化來源）
+    { cardId: '16607', count: 2 },  // 爆焰龜獸（Basic · HP 120）
+    // ── 訓練家（29 張）──
+    { cardId: '17122', count: 4 },  // 高級球
+    { cardId: '17119', count: 3 },  // 好友寶芬
+    { cardId: '17141', count: 3 },  // 夜間擔架
+    { cardId: '17111', count: 2 },  // 能量回收器
+    { cardId: '17105', count: 2 },  // 好傷藥
+    { cardId: '17143', count: 1 },  // 龍之秘藥
+    { cardId: '17134', count: 3 },  // 寶可夢交替
+    { cardId: '17127', count: 1 },  // 頂尖捕捉器
+    { cardId: '17195', count: 2 },  // 老大的指令
+    { cardId: '17200', count: 4 },  // 莉莉艾的決意
+    { cardId: '17165', count: 3 },  // 艾莉絲的鬥志
+    { cardId: '17198', count: 1 },  // 松葉的信心
+    // ── 能量（14 張）──
+    { cardId: '17216', count: 14 }, // 基本【火】能量
+  ],
+};
+
 /** 所有內建預設牌組 */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
   { ...DIANCIE_DECK, updatedAt: 0 },
+  { ...CHI_YU_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */
