@@ -213,9 +213,10 @@
     dragging.y = e.clientY;
 
     if (dragging.moved) {
-      // 找底下的 drop target（避開拖曳中的浮動預覽本身）
-      const el = document.elementsFromPoint(e.clientX, e.clientY)
-        .find(n => (n as HTMLElement).dataset && ((n as HTMLElement).dataset.dropType || (n as HTMLElement).dataset.dropIid)) as HTMLElement | undefined;
+      // 用 elementFromPoint + closest 向上爬到 drop target 容器，
+      // 避免滑鼠落在子元素（img / hp-bar 等）時找不到屬性
+      const hit = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      const el = hit?.closest('[data-drop-type]') as HTMLElement | null;
       if (el) {
         const type = el.dataset.dropType;
         if (type === 'poke') {
@@ -1278,7 +1279,7 @@
     <div class="hand-label">✋ {myPlayer?.name} 的手牌（{myPlayer?.hand.length??0} 張）
       {#if !isMyTurn()}<span class="hand-not-my-turn">（等待對手行動中）</span>{/if}
     </div>
-    <div class="hand-scroll">
+    <div class="hand-scroll" class:is-dragging={!!dragging?.moved}>
       {#each myPlayer?.hand??[] as inst, i (inst.iid)}
         {@const c=getCard(inst.cardId)}
         {@const n=(myPlayer?.hand.length??0)}
@@ -1861,6 +1862,8 @@
     box-shadow: 0 8px 18px rgba(0,0,0,.55);
   }
   .hand-card img{ width:88px; border-radius:4px; }
+  /* 拖曳中所有其他手牌禁用 pointer，避免擋住 elementFromPoint */
+  .hand-scroll.is-dragging .hand-card:not(.dragging){ pointer-events:none; }
   /* 浮層預覽：永遠最上層，不影響原卡 layout */
   .hand-preview-float{ position:fixed; z-index:9999; pointer-events:none;
     transform:translate(-50%, -100%);
