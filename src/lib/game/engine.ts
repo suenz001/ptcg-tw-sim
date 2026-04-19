@@ -13,7 +13,7 @@ import type {
   GameState, GameAction, CardInstance,
   PlayerState, LogEntry, TurnPhase
 } from './types';
-import { TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST } from './effects';
+import { TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS } from './effects';
 
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
@@ -462,6 +462,12 @@ function handlePlaying(
     // 氣球道具：減少 2 撤退費
     const retreatTool = attacker.active.toolAttached ? pool.get(attacker.active.toolAttached.cardId) : null;
     if (retreatTool?.name === '氣球') retreatCost = Math.max(0, retreatCost - 2);
+    // 被動特性：天空徑線（拉帝亞斯ex）— 基礎寶可夢免費撤退
+    const hasSkyPathR = [
+      ...(attacker.active ? [attacker.active] : []),
+      ...attacker.bench,
+    ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
+    if (hasSkyPathR && activeCard?.subtype === 'Basic') retreatCost = 0;
     if (attacker.active.energyAttached.length < retreatCost) return state;
 
     // 自動丟棄能量（從後方取）
@@ -594,6 +600,50 @@ function handlePlaying(
     return addLog(newState, `使用競技場效果：${stadiumCard.name}`, aIdx);
   }
 
+  // ── 使用主動特性 ───────────────────────────────────────────────────────────
+  if (action.type === 'USE_ABILITY') {
+    if (state.turnPhase !== 'main') return state;
+    if (state.pendingSelection) return state;
+
+    // 找到目標寶可夢（出場或備戰）
+    const allPokes: CardInstance[] = [
+      ...(attacker.active ? [attacker.active] : []),
+      ...attacker.bench,
+    ];
+    const targetPoke = allPokes.find(c => c.iid === action.iid);
+    if (!targetPoke) return state;
+
+    // 檢查是否已用過特性
+    if (targetPoke.abilityUsedThisTurn) return state;
+
+    const pokeCard = pool.get(targetPoke.cardId);
+    const ability = pokeCard?.abilities?.[action.abilityIndex];
+    if (!ability) return state;
+
+    // 集客（米立龍）限制：只有在出場時才能使用
+    if (ability.name === '集客' && attacker.active?.iid !== action.iid) return state;
+
+    // 查找 ABILITY_EFFECTS
+    const abilityFn = ABILITY_EFFECTS.get(`${pokeCard!.name}|${action.abilityIndex}`);
+    if (!abilityFn) return state;
+
+    // 標記已使用
+    const markUsed = (c: CardInstance): CardInstance =>
+      c.iid === action.iid ? { ...c, abilityUsedThisTurn: true } : c;
+    const updatedPlayers = [...state.players] as [PlayerState, PlayerState];
+    const updatedP = { ...updatedPlayers[aIdx] };
+    updatedP.active = updatedP.active ? markUsed(updatedP.active) : null;
+    updatedP.bench = updatedP.bench.map(markUsed);
+    updatedPlayers[aIdx] = updatedP;
+
+    let newState: GameState = addLog(
+      { ...state, players: updatedPlayers },
+      `${attacker.name} 使用了 ${pokeCard!.name} 的特性「${ability.name}」！`,
+      aIdx
+    );
+    return abilityFn(newState, aIdx, pool);
+  }
+
   // ── 抽牌 ──────────────────────────────────────────────────────────────────
   if (action.type === 'DRAW_CARD') {
     if (state.turnPhase !== 'draw') return state;
@@ -697,6 +747,26 @@ function handlePlaying(
       baseDamage *= 2;
     }
 
+    // 被動特性：鑽石膜（超級蒂安希ex）— 受到招式傷害 -30
+    if (baseDamage > 0 && defenderCard.abilities?.some(a => a.name === '鑽石膜')) {
+      baseDamage = Math.max(0, baseDamage - 30);
+    }
+
+    // 被動特性：影藏（超級耿鬼ex）— 惡寶可夢被 ex 擊倒時，獎勵牌 -1
+    // （調整 prizesForKO 結果，在擊倒判定之前先計算好）
+    let prizeAdjust = 0;
+    if (baseDamage > 0 && newDamage >= defenderHP) {
+      const isExAttacker = attackerCard.name.endsWith('ex') || attackerCard.name.endsWith('EX');
+      const isDefenderDark = defenderCard.pokemonType === 'Darkness';
+      const defenderHasKageHide = defender.bench.some(c => {
+        const bc = pool.get(c.cardId);
+        return bc?.abilities?.some(a => a.name === '影藏');
+      }) || (defender.active && pool.get(defender.active.cardId)?.abilities?.some(a => a.name === '影藏'));
+      if (isExAttacker && isDefenderDark && defenderHasKageHide) {
+        prizeAdjust = -1;
+      }
+    }
+
     // 施加傷害
     const defPlayers = [...workingState.players] as [PlayerState, PlayerState];
     const defenderState = { ...defPlayers[dIdx] };
@@ -729,10 +799,14 @@ function handlePlaying(
     // 擊倒判定
     if (baseDamage > 0 && defenderHP > 0 && newDamage >= defenderHP) {
       const updatedActive = { ...defenderState.active, damage: newDamage };
-      const koDiscard: CardInstance[] = [updatedActive, ...updatedActive.energyAttached];
+      const koDiscard: CardInstance[] = [
+        updatedActive,
+        ...updatedActive.energyAttached,
+        ...(updatedActive.toolAttached ? [updatedActive.toolAttached] : []),
+      ];
       defenderState.discard = [...defenderState.discard, ...koDiscard];
       defenderState.active = null;
-      const prizes = prizesForKO(defenderCard);
+      const prizes = Math.max(1, prizesForKO(defenderCard) + prizeAdjust);
       defPlayers[dIdx] = defenderState;
       newState = {
         ...newState, players: defPlayers,
@@ -839,10 +913,56 @@ function handlePlaying(
       };
     }
 
-    // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn）
+    // 特殊狀態：中毒 — 回合結束施加 10 傷害
+    const poisonPlayer = { ...players[aIdx] };
+    if (poisonPlayer.active?.status === 'poisoned') {
+      const poisonedCard = pool.get(poisonPlayer.active.cardId);
+      const newDmg = poisonPlayer.active.damage + 10;
+      const poisonedHP = poisonedCard?.hp ?? 0;
+      if (poisonedHP > 0 && newDmg >= poisonedHP) {
+        // 被毒死 → 直接 KO，攻擊方（對手）取獎勵
+        const dIdxP = dIdx;
+        const koDiscard2: CardInstance[] = [
+          { ...poisonPlayer.active, damage: newDmg },
+          ...poisonPlayer.active.energyAttached,
+          ...(poisonPlayer.active.toolAttached ? [poisonPlayer.active.toolAttached] : []),
+        ];
+        poisonPlayer.discard = [...poisonPlayer.discard, ...koDiscard2];
+        poisonPlayer.active = null;
+        players[aIdx] = poisonPlayer;
+        const poisonPrizes = prizesForKO(poisonedCard!);
+        let poisonState = addLog(
+          { ...state, players },
+          `${poisonedCard?.name ?? '?'} 被中毒傷害擊倒！${players[dIdxP].name} 取得 ${poisonPrizes} 張獎勵牌。`,
+          null
+        );
+        if (poisonPlayer.bench.length === 0) {
+          return {
+            ...poisonState, phase: 'game-over',
+            winner: dIdxP,
+            winReason: `${poisonPlayer.name} 沒有可上場的寶可夢`,
+          };
+        }
+        return { ...poisonState, pendingPrizes: poisonPrizes };
+      } else {
+        poisonPlayer.active = { ...poisonPlayer.active, damage: newDmg };
+        players[aIdx] = poisonPlayer;
+        // 將中毒傷害記錄寫入 state（parameters 可重新賦值）
+        state = addLog({ ...state, players }, `中毒：${pool.get(poisonPlayer.active.cardId)?.name ?? '?'} 受到 10 傷害！`, null);
+      }
+    }
+
+    // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn / abilityUsedThisTurn）
     const currentPlayer = { ...players[aIdx] };
     currentPlayer.active = currentPlayer.active ? clearTurnFlags(currentPlayer.active) : null;
     currentPlayer.bench = currentPlayer.bench.map(clearTurnFlags);
+    // 清除特性使用旗標
+    const clearAbilityFlag = (c: CardInstance): CardInstance => {
+      if (!c.abilityUsedThisTurn) return c;
+      const n = { ...c }; delete n.abilityUsedThisTurn; return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = clearAbilityFlag(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(clearAbilityFlag);
     players[aIdx] = currentPlayer;
 
     // 重置次方玩家的回合限制旗標
@@ -978,6 +1098,12 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
   // 氣球道具：減少 2 撤退費
   const tool = player.active.toolAttached ? pool.get(player.active.toolAttached.cardId) : null;
   if (tool?.name === '氣球') cost = Math.max(0, cost - 2);
+  // 被動特性：天空徑線（拉帝亞斯ex）— 所有基礎寶可夢免費撤退
+  const hasSkyPath = [
+    ...(player.active ? [player.active] : []),
+    ...player.bench,
+  ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
+  if (hasSkyPath && card?.subtype === 'Basic') cost = 0;
   return player.active.energyAttached.length >= cost;
 }
 
@@ -1015,4 +1141,35 @@ export function getPlayableBasics(state: GameState, pool: Map<string, Card>): st
       return c?.supertype === 'Pokemon' && c.subtype === 'Basic';
     })
     .map(inst => inst.iid);
+}
+
+/**
+ * 列出目前行動玩家場上可使用的主動特性。
+ * 回傳 { iid, abilityIndex, pokemonName, abilityName }[]
+ */
+export function getUsableAbilities(
+  state: GameState,
+  pool: Map<string, Card>
+): Array<{ iid: string; abilityIndex: number; pokemonName: string; abilityName: string }> {
+  if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
+  if (state.pendingSelection) return [];
+  const player = state.players[state.activePlayerIndex];
+  const allPokes: CardInstance[] = [
+    ...(player.active ? [player.active] : []),
+    ...player.bench,
+  ];
+  const result: Array<{ iid: string; abilityIndex: number; pokemonName: string; abilityName: string }> = [];
+  for (const pk of allPokes) {
+    if (pk.abilityUsedThisTurn) continue;
+    const card = pool.get(pk.cardId);
+    if (!card?.abilities) continue;
+    card.abilities.forEach((ab, abIdx) => {
+      // 只列出在 ABILITY_EFFECTS 中有登錄的主動特性
+      if (!ABILITY_EFFECTS.has(`${card.name}|${abIdx}`)) return;
+      // 集客：只有出場才能用
+      if (ab.name === '集客' && player.active?.iid !== pk.iid) return;
+      result.push({ iid: pk.iid, abilityIndex: abIdx, pokemonName: card.name, abilityName: ab.name });
+    });
+  }
+  return result;
 }

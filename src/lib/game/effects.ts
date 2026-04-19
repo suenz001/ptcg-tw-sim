@@ -1088,3 +1088,82 @@ regPost('謎擬Q|呼朋引伴', (state, aIdx, _pool) => {
     effectKey: 'bench-basic-from-deck', // 複用好友寶芬的 resolver
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 主動特性（USE_ABILITY 觸發）
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** pokémonName|abilityIndex → 效果函式 */
+export const ABILITY_EFFECTS = new Map<string, EffectFn>();
+
+function regA(pokemonName: string, abilityIndex: number, fn: EffectFn) {
+  ABILITY_EFFECTS.set(`${pokemonName}|${abilityIndex}`, fn);
+}
+
+// ── 米立龍「集客」──────────────────────────────────────────────────────────────
+// 若在戰鬥場上，每回合 1 次：查看牌庫頂 6 張，取 1 張支援者加手牌，其餘洗回。
+regA('米立龍', 0, (st, idx) => {
+  const p = st.players[idx];
+  const top6 = p.deck.slice(0, 6);
+  if (top6.length === 0) return addLog(st, '集客：牌庫為空', idx);
+  st = addLog(st, '集客：查看牌庫頂 6 張，選 1 張支援者加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Supporter:TOP6',
+    minCount: 0, maxCount: 1,
+    effectKey: 'fetch-supporter',
+    params: { top6Iids: top6.map(c => c.iid) },
+  });
+});
+
+regR('fetch-supporter', (st, idx, iids, params, _pool) => {
+  const top6Iids = (params?.top6Iids as string[]) ?? [];
+  return updatePlayer(st, idx, (p) => {
+    const top6 = p.deck.filter(c => top6Iids.includes(c.iid));
+    const rest = p.deck.filter(c => !top6Iids.includes(c.iid));
+    const chosen = top6.filter(c => iids.includes(c.iid));
+    const remaining = top6.filter(c => !iids.includes(c.iid));
+    return {
+      ...p,
+      deck: shuffle([...rest, ...remaining]),
+      hand: [...p.hand, ...chosen],
+    };
+  });
+});
+
+// ── 桃歹郎ex「支配鎖鏈」──────────────────────────────────────────────────────
+// 每回合 1 次：選備戰的惡屬性寶可夢（桃歹郎ex除外）換到出場，新出場中毒。
+regA('桃歹郎ex', 0, (st, idx, pool) => {
+  const p = st.players[idx];
+  const validBench = p.bench.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.pokemonType === 'Darkness' && card?.name !== '桃歹郎ex';
+  });
+  if (validBench.length === 0) {
+    return addLog(st, '支配鎖鏈：備戰區沒有可切換的惡寶可夢', idx);
+  }
+  st = addLog(st, '支配鎖鏈：選 1 隻備戰惡屬性寶可夢換出場，並中毒', idx);
+  return withPending(st, {
+    type: 'bench-choose',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'dominance-chain',
+    params: { validIids: validBench.map(c => c.iid) },
+  });
+});
+
+regR('dominance-chain', (st, idx, iids, params, _pool) => {
+  const validIids = (params?.validIids as string[]) ?? [];
+  const targetIid = iids[0];
+  if (!validIids.includes(targetIid)) return st;
+  return updatePlayer(st, idx, (p) => {
+    if (!p.active) return p;
+    const bIdx = p.bench.findIndex(c => c.iid === targetIid);
+    if (bIdx < 0) return p;
+    const newActive = { ...p.bench[bIdx], status: 'poisoned' as const, justPlaced: false };
+    const newBench = [...p.bench];
+    newBench[bIdx] = { ...p.active };
+    return { ...p, active: newActive, bench: newBench };
+  });
+});

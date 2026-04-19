@@ -56,6 +56,11 @@ export interface CardInstance {
    * 本回合因招式效果無法使用招式（下回合嘗試攻擊時清除並封鎖）。
    */
   cantAttackThisTurn?: boolean;
+  /**
+   * 本回合已使用過特性（每回合限 1 次主動特性）。
+   * 在 END_TURN 時清除。
+   */
+  abilityUsedThisTurn?: boolean;
 }
 
 export type SpecialCondition =
@@ -175,6 +180,7 @@ export type GameAction =
   | { type: 'TAKE_PRIZES'; count: number }
   | { type: 'SEND_NEW_ACTIVE'; iid: string; senderIdx?: 0 | 1 }
   | { type: 'USE_STADIUM' }
+  | { type: 'USE_ABILITY'; iid: string; abilityIndex: number }
   | { type: 'END_TURN' };
 
 // ── 效果腳本插槽（M3/M4 填入） ─────────────────────────────────────────────

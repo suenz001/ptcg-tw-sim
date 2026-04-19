@@ -11,6 +11,7 @@
     getAvailableAttacks, hasPendingActions,
     countEnergy, getEvolvableTargets,
     canRetreat, getPlayableTrainers, getPlayableBasics,
+    getUsableAbilities,
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
@@ -94,6 +95,7 @@
   const canEndTurn = $derived(
     game?.phase === 'playing' && game.turnPhase === 'end' && !hasPendingActions(game)
   );
+  const usableAbilities = $derived(game && poolReady ? getUsableAbilities(game, pool) : []);
   const stadiumCard = $derived(game?.activeStadium ? pool.get(game.activeStadium.cardId) : null);
   const canUseStadium = $derived(
     game?.phase === 'playing' && game.turnPhase === 'main' &&
@@ -134,6 +136,10 @@
         if (f === 'TOP6') {
           const top6 = new Set<string>((pendingSelection.params?.top6Iids as string[]) ?? []);
           return src.deck.filter(c => top6.has(c.iid));
+        }
+        if (f === 'Supporter:TOP6') {
+          const top6 = new Set<string>((pendingSelection.params?.top6Iids as string[]) ?? []);
+          return src.deck.filter(c => top6.has(c.iid) && pool.get(c.cardId)?.subtype === 'Supporter');
         }
         return src.deck.filter(c => {
           const card = pool.get(c.cardId);
@@ -666,6 +672,13 @@
               <div class="hp-bar-wrap"><div class="hp-bar" style="width:{ac?.hp?hpRemaining(oppPlayer.active)/ac.hp*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),ac?.hp??0)}"></div></div>
               <div class="active-hp">HP {hpRemaining(oppPlayer.active)}/{ac?.hp}</div>
               <div class="active-nrg">{energySummary(oppPlayer.active)}</div>
+              {#if oppPlayer.active.status}<div class="status-chip status-{oppPlayer.active.status}">{
+                oppPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
+                oppPlayer.active.status === 'burned' ? '🔥 燒傷' :
+                oppPlayer.active.status === 'asleep' ? '💤 睡眠' :
+                oppPlayer.active.status === 'confused' ? '😵 混亂' :
+                oppPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.status
+              }</div>{/if}
             </div>
           </div>
         {:else}<div class="active-card active-empty">（無出場）</div>{/if}
@@ -775,6 +788,13 @@
               <div class="active-hp">HP {hpRemaining(myPlayer.active)}/{ac?.hp}</div>
               <div class="active-nrg">{energySummary(myPlayer.active)}</div>
               {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
+              {#if myPlayer.active.status}<div class="status-chip status-{myPlayer.active.status}">{
+                myPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
+                myPlayer.active.status === 'burned' ? '🔥 燒傷' :
+                myPlayer.active.status === 'asleep' ? '💤 睡眠' :
+                myPlayer.active.status === 'confused' ? '😵 混亂' :
+                myPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.status
+              }</div>{/if}
               {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡ 點此附加</div>{/if}
             </div>
             {#if evoOpts.length>0&&!pendingSelection&&isMyTurn()}
@@ -782,6 +802,11 @@
                 <button class="evo-btn" onclick={(e)=>{e.stopPropagation();openFloatingEvo(myPlayer!.active!.iid,evoOpts,e);}}>進化▲</button>
               </div>
             {/if}
+            {#each usableAbilities.filter(a=>a.iid===myPlayer!.active!.iid) as ab}
+              <button class="ability-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>
+                ✨{ab.abilityName}
+              </button>
+            {/each}
           </div>
           {#if showRetreatPicker&&!pendingSelection}
             <div class="retreat-picker">
@@ -814,10 +839,19 @@
               <div class="bench-stat">HP {hpRemaining(b)}/{bc?.hp}</div>
               <div class="bench-nrg">{energySummary(b)}</div>
               {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}
+              {#if b.status}<div class="status-chip-sm status-{b.status}">{
+                b.status === 'poisoned' ? '☠️' :
+                b.status === 'burned' ? '🔥' :
+                b.status === 'asleep' ? '💤' :
+                b.status === 'confused' ? '😵' : '⚡'
+              }</div>{/if}
               {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡</div>{/if}
               {#if evoOptsB.length>0&&!pendingSelection&&isMyTurn()}
                 <button class="evo-btn-sm" onclick={(e)=>{e.stopPropagation();openFloatingEvo(b.iid,evoOptsB,e);}}>進化</button>
               {/if}
+              {#each usableAbilities.filter(a=>a.iid===b.iid) as ab}
+                <button class="ability-btn-sm" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>✨{ab.abilityName}</button>
+              {/each}
             </div>
           {:else}<div class="bench-slot bench-empty"></div>{/if}
         {/each}
@@ -962,7 +996,7 @@
             </div>
             {#if zoomCard.evolvesFrom}<div class="zoom-meta">進化自：{zoomCard.evolvesFrom}</div>{/if}
             {#each zoomCard.abilities??[] as ab}
-              <div class="zoom-ability"><span class="ability-label">特性</span><strong>{ab.name}</strong><p class="effect-text">{ab.text}</p></div>
+              <div class="zoom-ability"><span class="ability-label">特性</span><strong>{ab.name}</strong><p class="effect-text">{ab.effect ?? (ab as any).text}</p></div>
             {/each}
             {#each zoomCard.attacks??[] as atk}
               <div class="zoom-attack">
@@ -1268,4 +1302,19 @@
   .stadium-chip{ background:#1a2a4a; color:#88aaff; border-color:#3a5a8a; }
   .btn-act.stadium-btn{ background:#1a2a4a; color:#88aaff; border:1px solid #3a5a8a; }
   .btn-act.stadium-btn:hover{ background:#2a3a6a; }
+
+  /* ── 特性按鈕 ── */
+  .ability-btn{ display:block; width:100%; margin-top:.2rem; padding:.2rem .3rem; font-size:.65rem; background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; border-radius:4px; cursor:pointer; text-align:center; }
+  .ability-btn:hover{ background:#5a2a8a; }
+  .ability-btn-sm{ display:block; width:100%; margin-top:.12rem; padding:.12rem; font-size:.56rem; background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; border-radius:3px; cursor:pointer; }
+  .ability-btn-sm:hover{ background:#5a2a8a; }
+
+  /* ── 特殊狀態晶片 ── */
+  .status-chip{ font-size:.62rem; color:#fff; padding:.08rem .25rem; border-radius:3px; margin-top:.1rem; display:inline-block; }
+  .status-chip-sm{ font-size:.75rem; display:inline-block; }
+  .status-poisoned{ background:#4a0a7a; border:1px solid #8a3aaa; }
+  .status-burned{ background:#8a2a00; border:1px solid #cc4a10; }
+  .status-asleep{ background:#1a1a5a; border:1px solid #4a4aaa; }
+  .status-confused{ background:#5a3a00; border:1px solid #aa7a10; }
+  .status-paralyzed{ background:#5a5a00; border:1px solid #aaaa10; }
 </style>

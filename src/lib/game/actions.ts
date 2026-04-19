@@ -29,4 +29,6 @@ export const GameActions = {
   resolveSelection:  (selectedIids: string[]): GameAction =>
                        ({ type: 'RESOLVE_SELECTION', selectedIids }),
   useStadium:        (): GameAction => ({ type: 'USE_STADIUM' }),
+  useAbility:        (iid: string, abilityIndex: number): GameAction =>
+                       ({ type: 'USE_ABILITY', iid, abilityIndex }),
 } as const;
