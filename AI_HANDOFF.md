@@ -1,7 +1,7 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-16  
-> 執行者：Antigravity AI (Google Deepmind)  
+> 最後更新：2026-04-19  
+> 執行者：Claude Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim
 
 ---
@@ -990,3 +990,47 @@ ATTACK handler 流程：
 
 ### Commit
 - `f3506f1` feat(game): 招式效果系統 + 屬性能量修正
+
+---
+
+## 📝 2026-04-19 Session 16 — 進化修復 + 棄牌查看 + 無備戰敗局 + UI 放大
+
+> 觸發：使用者回報進化按不了、看不到棄牌、UI 太小；另要求無備戰時自動判敗
+
+### 問題與修復
+
+#### 1. 進化按鈕無法使用（`+page.svelte`）
+
+**根因**：`.bench-slot` 設有 `overflow:hidden`，且 `.field-row` 也有 `overflow:hidden`。`position:absolute` 的 `.evo-menu` 會被這兩層裁切，完全看不到也按不到。
+
+**修復**：棄用 `showEvoMenu` inline dropdown 方案。改用全域 `floatingEvoMenu` 狀態（`{fromIid, evoOpts, x, y}`），搭配 `position:fixed` 浮動覆蓋層，用 `getBoundingClientRect()` 定位在觸發按鈕正上方。backdrop 覆蓋全螢幕用來接收點外關閉事件。
+
+#### 2. 棄牌區無法查看（`+page.svelte`）
+
+**修復**：雙方棄牌格（`.disc-pile`）加 `onclick`，開啟 `viewDiscardFor` Modal。Modal 複用現有 `.zoom-overlay` 樣式，以倒序顯示棄牌（最近丟的在最前），點卡可開啟 Zoom 檢視。
+
+#### 3. 無備戰寶可夢敗局判定（`engine.ts`）
+
+**根因**：ATTACK handler 擊倒後只設 `pendingPrizes` 及 `turnPhase:'end'`，沒有檢查防守方備戰是否已空。UI 會顯示「請送出寶可夢」但備戰為空，玩家無從操作。
+
+**修復**：KO 判定後立即檢查 `defenderState.bench.length === 0`，若成立則直接回傳 `phase:'game-over'`，跳過 TAKE_PRIZES / SEND_NEW_ACTIVE 流程。
+
+#### 4. UI 整體放大
+
+| 元素 | 舊值 | 新值 |
+|:---|:---|:---|
+| 出場寶可夢圖 | 100px | 120px |
+| 備戰寶可夢圖 | max-width 78px | 96px |
+| 手牌圖 | 72px | 88px |
+| 手牌格寬 | 76px | 92px |
+| `zone-active` 寬 | 250px | 300px |
+| HP 條高 | 6px / 4px | 8px / 5px |
+| `active-card` min-height | 105px | 130px |
+| 名稱字型 | .9rem | 1rem |
+| HP 字型 | .78rem | .88rem |
+| 手牌名稱字型 | .6rem | .68rem |
+| 按鈕字型 | .82rem | .9rem |
+| `.bench-slot overflow` | hidden | visible（bench-empty 保留 hidden）|
+
+### Commit
+- `06f1bd9` feat: 進化選單修復、棄牌區查看、無備戰敗局判定、UI 放大
