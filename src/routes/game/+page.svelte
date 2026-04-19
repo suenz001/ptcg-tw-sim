@@ -955,7 +955,7 @@
     {/if}
     <span class="turn-info">
       回合 {game.turn}　<strong>{activePlayer?.name}</strong> 行動中
-      {#if game.isFirstTurn && aIdx === game.firstPlayerIdx}<span class="hint">（先手第1回合不能攻擊/進化）</span>{/if}
+      {#if game.isFirstTurn && aIdx === game.firstPlayerIdx}<span class="hint">（先手第1回合不能攻擊 / 進化 / 用支援者）</span>{/if}
     </span>
     <span class="phase-tag">
       {#if game.turnPhase === 'draw'}📥 抽牌

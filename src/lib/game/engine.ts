@@ -571,6 +571,8 @@ function handlePlaying(
 
     // 支援者限制：每回合只能打 1 張
     if (trainerCard.subtype === 'Supporter' && attacker.supporterPlayedThisTurn) return state;
+    // 先攻玩家第一回合不能使用支援者（PTCG 2020+ 規則）
+    if (trainerCard.subtype === 'Supporter' && state.isFirstTurn && aIdx === state.firstPlayerIdx) return state;
 
     // 義務性前置檢查：夜間擔架棄牌為空、寶可夢交替備戰為空等情況禁止打出
     if (!canPlayTrainer(trainerCard.name, state, aIdx, pool)) return state;
@@ -1271,6 +1273,8 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       const isTrainer = c.supertype === 'Trainer';
       if (!isTool && !isTrainer) return false;
       if (c.subtype === 'Supporter' && player.supporterPlayedThisTurn) return false;
+      // 先攻玩家第一回合禁用支援者
+      if (c.subtype === 'Supporter' && state.isFirstTurn && state.activePlayerIndex === state.firstPlayerIdx) return false;
       // 義務性檢查：缺合法目標的卡不可打出
       if (!canPlayTrainer(c.name, state, state.activePlayerIndex, pool)) return false;
       return true;
