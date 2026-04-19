@@ -1,0 +1,299 @@
+/**
+ * PTCG 規則型 AI
+ *
+ * getAIAction(state, pool) → 下一個應執行的 GameAction，或 null（代表無事可做）
+ *
+ * 策略優先序：
+ *  1. 取獎勵牌
+ *  2. 解析待選擇（自動選最佳）
+ *  3. 送出新出場（被擊倒後）
+ *  4. 主階段：進化 → 打基礎備戰 → 附能量 → 打訓練家 → 使用特性 → 攻擊 → 結束
+ */
+
+import type { Card } from '$lib/cards/types';
+import type { GameState, GameAction, CardInstance, PendingSelection } from './types';
+import {
+  getAvailableAttacks, getEvolvableTargets,
+  getPlayableTrainers, getPlayableBasics,
+  getUsableAbilities, canRetreat,
+} from './engine';
+
+// ── 主要入口 ──────────────────────────────────────────────────────────────────
+
+export function getAIAction(
+  state: GameState,
+  pool: Map<string, Card>
+): GameAction | null {
+  if (state.phase === 'game-over') return null;
+
+  const aIdx = state.activePlayerIndex;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const player = state.players[aIdx];
+
+  // 1. 取獎勵牌
+  if (state.pendingPrizes > 0) {
+    return { type: 'TAKE_PRIZES', count: state.pendingPrizes };
+  }
+
+  // 2. 自動解析選擇
+  if (state.pendingSelection) {
+    return autoResolveSelection(state, pool);
+  }
+
+  // 3. 送出新出場
+  if (state.phase === 'playing' && player.active === null && player.bench.length > 0) {
+    return { type: 'SEND_NEW_ACTIVE', iid: pickBestActive(player.bench, pool).iid };
+  }
+
+  // 4a. setup 階段
+  if (state.phase === 'setup-p1' || state.phase === 'setup-p2') {
+    return handleSetupAI(state, pool);
+  }
+
+  if (state.phase !== 'playing') return null;
+
+  // 4b. END 階段 → 結束回合
+  if (state.turnPhase === 'end') {
+    return { type: 'END_TURN' };
+  }
+
+  if (state.turnPhase !== 'main') return null;
+
+  // ── 主階段決策 ───────────────────────────────────────────────────────────
+
+  // 進化
+  const evoTargets = getEvolvableTargets(state, pool);
+  if (evoTargets.length > 0) {
+    const t = evoTargets[0];
+    return { type: 'EVOLVE', fromIid: t.fromIid, toIid: t.toIids[0] };
+  }
+
+  // 打基礎寶可夢到備戰（備戰 < 3 時）
+  if (player.bench.length < 3) {
+    const basics = getPlayableBasics(state, pool);
+    if (basics.length > 0) {
+      return { type: 'PLAY_BASIC', iid: basics[0] };
+    }
+  }
+
+  // 附加能量（附到出場寶可夢，若無則附備戰）
+  if (!player.energyAttachedThisTurn && player.active) {
+    const energyInHand = player.hand.find(c => pool.get(c.cardId)?.supertype === 'Energy');
+    if (energyInHand) {
+      // 優先附到出場
+      return { type: 'ATTACH_ENERGY', energyIid: energyInHand.iid, targetIid: player.active.iid };
+    }
+  }
+
+  // 打訓練家（支援者先，再物品）
+  const trainerIids = getPlayableTrainers(state, pool);
+  if (trainerIids.length > 0) {
+    const sorted = [...trainerIids].sort((a, b) => {
+      const scoreOf = (iid: string) => {
+        const c = pool.get(player.hand.find(h => h.iid === iid)?.cardId ?? '');
+        if (c?.subtype === 'Supporter') return 10; // 支援者優先
+        if (c?.supertype === 'Energy') return 0;
+        return 5;
+      };
+      return scoreOf(b) - scoreOf(a);
+    });
+    return { type: 'PLAY_TRAINER', iid: sorted[0] };
+  }
+
+  // 使用主動特性
+  const abilities = getUsableAbilities(state, pool);
+  if (abilities.length > 0) {
+    return { type: 'USE_ABILITY', iid: abilities[0].iid, abilityIndex: abilities[0].abilityIndex };
+  }
+
+  // 攻擊（選傷害最高的）
+  const atkIdxs = getAvailableAttacks(state, pool);
+  if (atkIdxs.length > 0 && player.active) {
+    const card = pool.get(player.active.cardId);
+    const best = atkIdxs.reduce((prev, cur) => {
+      const pDmg = parseInt(card?.attacks?.[prev]?.damage ?? '0') || 0;
+      const cDmg = parseInt(card?.attacks?.[cur]?.damage ?? '0') || 0;
+      return cDmg > pDmg ? cur : prev;
+    });
+    return { type: 'ATTACK', attackIndex: best };
+  }
+
+  // 結束回合
+  return { type: 'END_TURN' };
+}
+
+// ── Setup 階段 AI ─────────────────────────────────────────────────────────────
+
+function handleSetupAI(state: GameState, pool: Map<string, Card>): GameAction | null {
+  const pIdx = state.phase === 'setup-p1' ? 0 : 1;
+  const player = state.players[pIdx];
+
+  // 先選出場（選 HP 最高的基礎）
+  if (!player.active) {
+    const basics = player.hand.filter(c => {
+      const card = pool.get(c.cardId);
+      return card?.supertype === 'Pokemon' && card.subtype === 'Basic';
+    });
+    if (basics.length === 0) return null;
+    const best = basics.reduce((a, b) =>
+      (pool.get(a.cardId)?.hp ?? 0) >= (pool.get(b.cardId)?.hp ?? 0) ? a : b
+    );
+    return { type: 'PLACE_ACTIVE', iid: best.iid };
+  }
+
+  // 再放備戰（最多 2 隻）
+  if (player.bench.length < 2) {
+    const basics = player.hand.filter(c => {
+      const card = pool.get(c.cardId);
+      return card?.supertype === 'Pokemon' && card.subtype === 'Basic';
+    });
+    if (basics.length > 0) {
+      return { type: 'BENCH_POKEMON', iid: basics[0].iid };
+    }
+  }
+
+  // 完成 setup
+  return { type: 'FINISH_SETUP' };
+}
+
+// ── 自動解析選擇 ──────────────────────────────────────────────────────────────
+
+function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAction {
+  const sel = state.pendingSelection!;
+  const actorPlayer = state.players[sel.actorIdx];
+  const srcPlayer   = state.players[sel.sourcePlayerIdx];
+
+  switch (sel.type) {
+    // 牌庫搜尋
+    case 'deck-search': {
+      const f = sel.filter ?? '';
+      let candidates = srcPlayer.deck.filter(c => {
+        const card = pool.get(c.cardId);
+        if (!card) return false;
+        const top6 = new Set<string>((sel.params?.top6Iids as string[]) ?? []);
+        if (f === 'TOP6')            return top6.has(c.iid);
+        if (f === 'Supporter:TOP6')  return top6.has(c.iid) && card.subtype === 'Supporter';
+        if (f === 'Basic')           return card.supertype === 'Pokemon' && card.subtype === 'Basic';
+        if (f === 'Basic:HP70')      return card.supertype === 'Pokemon' && card.subtype === 'Basic' && (card.hp ?? 0) <= 70;
+        if (f === 'Pokemon')         return card.supertype === 'Pokemon';
+        if (f === 'Energy')          return card.supertype === 'Energy';
+        if (f === 'ex')              return card.supertype === 'Pokemon' && card.subtype === 'ex';
+        return true;
+      });
+      // 優先選 HP 高的寶可夢
+      candidates.sort((a, b) => (pool.get(b.cardId)?.hp ?? 0) - (pool.get(a.cardId)?.hp ?? 0));
+      const count = Math.min(sel.maxCount, candidates.length);
+      return { type: 'RESOLVE_SELECTION', selectedIids: candidates.slice(0, count).map(c => c.iid) };
+    }
+
+    // 備戰選擇（自己）
+    case 'bench-choose': {
+      const validIids = sel.params?.validIids as string[] | undefined;
+      let bench = validIids
+        ? actorPlayer.bench.filter(c => validIids.includes(c.iid))
+        : actorPlayer.bench;
+      if (bench.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      // 選 HP 剩最少（最危險的）給支援，否則選最多 HP 的
+      const pick = bench[0];
+      return { type: 'RESOLVE_SELECTION', selectedIids: [pick.iid] };
+    }
+
+    // 對手備戰選擇
+    case 'opp-bench-choose': {
+      const bench = srcPlayer.bench;
+      if (bench.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      // 選剩餘 HP 最少的（最容易擊倒）
+      const best = bench.reduce((a, b) => {
+        const aRem = (pool.get(a.cardId)?.hp ?? 0) - a.damage;
+        const bRem = (pool.get(b.cardId)?.hp ?? 0) - b.damage;
+        return aRem <= bRem ? a : b;
+      });
+      return { type: 'RESOLVE_SELECTION', selectedIids: [best.iid] };
+    }
+
+    // 對手任意寶可夢選擇（狙擊羽毛）
+    case 'opp-poke-choose': {
+      const allOpp: CardInstance[] = [
+        ...(srcPlayer.active ? [srcPlayer.active] : []),
+        ...srcPlayer.bench,
+      ];
+      if (allOpp.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      const best = allOpp.reduce((a, b) => {
+        const aRem = (pool.get(a.cardId)?.hp ?? 0) - a.damage;
+        const bRem = (pool.get(b.cardId)?.hp ?? 0) - b.damage;
+        return aRem <= bRem ? a : b;
+      });
+      return { type: 'RESOLVE_SELECTION', selectedIids: [best.iid] };
+    }
+
+    // 手牌丟棄
+    case 'hand-discard': {
+      const f = sel.filter ?? '';
+      let hand = f === 'Energy'
+        ? actorPlayer.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy')
+        : actorPlayer.hand;
+      // 優先丟能量，再丟訓練家，最後寶可夢
+      hand = [...hand].sort((a, b) => {
+        const scoreOf = (c: CardInstance) => {
+          const card = pool.get(c.cardId);
+          if (card?.supertype === 'Energy') return 3;
+          if (card?.supertype === 'Trainer') return 2;
+          return 1;
+        };
+        return scoreOf(b) - scoreOf(a);
+      });
+      const count = Math.min(sel.maxCount, hand.length);
+      return { type: 'RESOLVE_SELECTION', selectedIids: hand.slice(0, count).map(c => c.iid) };
+    }
+
+    // 手牌選擇（不丟棄，如神奇糖果）
+    case 'hand-choose': {
+      const validIids = sel.params?.validIids as string[] | undefined;
+      const hand = validIids
+        ? actorPlayer.hand.filter(c => validIids.includes(c.iid))
+        : actorPlayer.hand;
+      if (hand.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      return { type: 'RESOLVE_SELECTION', selectedIids: [hand[0].iid] };
+    }
+
+    // 回復目標
+    case 'heal-target': {
+      const validIids = sel.params?.validIids as string[] | undefined;
+      const allPokes: CardInstance[] = [
+        ...(actorPlayer.active ? [actorPlayer.active] : []),
+        ...actorPlayer.bench,
+      ];
+      let targets = validIids ? allPokes.filter(c => validIids.includes(c.iid)) : allPokes;
+      if (targets.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      // 選傷害最多的（最需要治療的）
+      const best = targets.reduce((a, b) => a.damage >= b.damage ? a : b);
+      return { type: 'RESOLVE_SELECTION', selectedIids: [best.iid] };
+    }
+
+    // 棄牌區搜尋
+    case 'discard-search': {
+      const f = sel.filter ?? '';
+      let discard = actorPlayer.discard.filter(c => {
+        const card = pool.get(c.cardId);
+        if (!card) return false;
+        if (f === 'PokemonOrEnergy') return card.supertype === 'Pokemon' || card.supertype === 'Energy';
+        if (f === 'BasicEnergy')     return card.supertype === 'Energy';
+        return true;
+      });
+      const count = Math.min(sel.maxCount, discard.length);
+      return { type: 'RESOLVE_SELECTION', selectedIids: discard.slice(0, count).map(c => c.iid) };
+    }
+
+    default:
+      return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+  }
+}
+
+// ── 輔助 ──────────────────────────────────────────────────────────────────────
+
+/** 從備戰區選最佳的送出（HP 最高） */
+function pickBestActive(bench: CardInstance[], pool: Map<string, Card>): CardInstance {
+  return bench.reduce((a, b) =>
+    (pool.get(a.cardId)?.hp ?? 0) >= (pool.get(b.cardId)?.hp ?? 0) ? a : b
+  );
+}

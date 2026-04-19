@@ -23,6 +23,7 @@
     createRoom, joinRoom, subscribeRoom, pushGameState,
     type Room,
   } from '$lib/game/room';
+  import { getAIAction } from '$lib/game/ai';
 
   // ── 卡池 ────────────────────────────────────────────────────────────────────
   let pool = $state<Map<string, Card>>(new Map());
@@ -40,7 +41,12 @@
   let p1DeckId = $state('');
   let p2DeckId = $state('');
   let p1Name = $state('玩家 1');
-  let p2Name = $state('玩家 2');
+  let p2Name = $state('AI 對手');
+  /** AI 控制哪個玩家（null = 無 AI） */
+  let aiPlayerIndex = $state<0 | 1 | null>(1);
+  /** AI 是否正在思考（防止連擊） */
+  let aiThinking = $state(false);
+  let aiTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── 線上模式狀態 ─────────────────────────────────────────────────────────────
   let myUid       = $state<string | null>(null);
@@ -76,6 +82,75 @@
     if (e.key === 'Escape') { closeZoom(); floatingEvoMenu = null; viewDiscardFor = null; selectionPicked = new Set(); }
   }
 
+  // ── AI 驅動迴圈 ──────────────────────────────────────────────────────────────
+  function scheduleAI() {
+    if (aiTimer !== null) return; // 已排程中
+    const delay = aiThinking ? 250 : 500; // 第一步慢一點（看起來像在思考）
+    aiTimer = setTimeout(() => {
+      aiTimer = null;
+      tickAI();
+    }, delay);
+  }
+
+  function tickAI() {
+    if (!game || !poolReady || aiPlayerIndex === null) return;
+    if (game.phase === 'game-over') return;
+
+    // 判斷是否該 AI 行動
+    const shouldAct = (() => {
+      const ai = aiPlayerIndex;
+      const g = game!;
+      if (g.phase === 'setup-p1') return ai === 0;
+      if (g.phase === 'setup-p2') return ai === 1;
+      if (g.phase !== 'playing') return false;
+
+      // 取獎勵牌或選擇 — 由誰的行動決定
+      if (g.pendingPrizes > 0) return g.activePlayerIndex === ai;
+      if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
+
+      // 被擊倒需送出寶可夢
+      if (g.turnPhase === 'end' && g.players[ai].active === null) return true;
+
+      // 正常輪到自己
+      return g.activePlayerIndex === ai;
+    })();
+
+    if (!shouldAct) return;
+
+    const action = getAIAction(game!, pool);
+    if (!action) return;
+
+    aiThinking = true;
+    dispatch(action as any);
+    // 繼續排程下一步（直到 AI 不再需要行動）
+    scheduleAI();
+  }
+
+  // 監聽 game 變化：若 AI 需要行動則排程
+  $effect(() => {
+    if (!game || aiPlayerIndex === null || mode === 'online') return;
+    const g = game;
+    const ai = aiPlayerIndex;
+    if (g.phase === 'game-over') { aiThinking = false; return; }
+
+    const shouldAct = (() => {
+      if (g.phase === 'setup-p1') return ai === 0;
+      if (g.phase === 'setup-p2') return ai === 1;
+      if (g.phase !== 'playing') return false;
+      if (g.pendingPrizes > 0) return g.activePlayerIndex === ai;
+      if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
+      if (g.turnPhase === 'end' && g.players[ai].active === null) return true;
+      return g.activePlayerIndex === ai;
+    })();
+
+    if (shouldAct) {
+      scheduleAI();
+    } else {
+      aiThinking = false;
+      if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; }
+    }
+  });
+
   // ── Derived ─────────────────────────────────────────────────────────────────
   const aIdx = $derived(game?.activePlayerIndex ?? 0);
   const dIdx = $derived((1 - aIdx) as 0 | 1);
@@ -103,24 +178,41 @@
     !(game.stadiumUsedThisTurn ?? [false,false])[myIdx]
   );
 
-  // ── 視角固定：線上模式我方永遠在下方，本機模式隨行動方翻轉 ─────────────────
-  const myIdx   = $derived<0 | 1>(myPlayerIndex !== null ? myPlayerIndex : aIdx);
+  // ── 視角固定：AI模式/線上模式我方永遠在下方，本機雙人模式隨行動方翻轉 ──────
+  const myIdx   = $derived<0 | 1>(
+    aiPlayerIndex !== null ? ((1 - aiPlayerIndex) as 0 | 1) :
+    myPlayerIndex !== null ? myPlayerIndex : aIdx
+  );
   const oppIdx  = $derived<0 | 1>((1 - myIdx) as 0 | 1);
   const myPlayer  = $derived(game ? game.players[myIdx]  : null);
   const oppPlayer = $derived(game ? game.players[oppIdx] : null);
 
-  // 線上模式：是否輪到我行動
+  // 線上模式 / AI 模式：是否輪到玩家行動
   const isMyTurn = $derived(() => {
-    if (myPlayerIndex === null) return true; // 本機模式，永遠可行動
     if (!game) return false;
+    // AI 模式：只有輪到人類時才能手動操作
+    if (aiPlayerIndex !== null) {
+      const hIdx = (1 - aiPlayerIndex) as 0 | 1;
+      if (game.phase === 'setup-p1') return hIdx === 0;
+      if (game.phase === 'setup-p2') return hIdx === 1;
+      if (game.pendingSelection) return game.pendingSelection.actorIdx === hIdx;
+      if (game.turnPhase === 'end' && game.players[hIdx].active === null) return true;
+      return game.activePlayerIndex === hIdx && game.pendingPrizes === 0;
+    }
+    if (myPlayerIndex === null) return true; // 本機雙人模式
     if (game.phase === 'setup-p1') return myPlayerIndex === 0;
     if (game.phase === 'setup-p2') return myPlayerIndex === 1;
     return game.activePlayerIndex === myPlayerIndex;
   });
   // 線上模式：我是否為防守方（被擊倒後需送出寶可夢）
   const isMyDefenderTurn = $derived(() => {
-    if (myPlayerIndex === null) return true;
     if (!game) return false;
+    if (aiPlayerIndex !== null) {
+      const hIdx = (1 - aiPlayerIndex) as 0 | 1;
+      return game.phase === 'playing' && game.turnPhase === 'end' &&
+             hIdx === dIdx && defenderPlayer?.active === null;
+    }
+    if (myPlayerIndex === null) return true;
     return game.phase === 'playing' &&
            game.turnPhase === 'end' &&
            myPlayerIndex === dIdx &&
@@ -212,7 +304,7 @@
     checkAndStartOnlineGame();
   });
 
-  onDestroy(() => { unsubRoom?.(); });
+  onDestroy(() => { unsubRoom?.(); if (aiTimer !== null) clearTimeout(aiTimer); });
 
   // ── 輔助函式 ────────────────────────────────────────────────────────────────
   function getCard(cardId: string): Card | undefined { return pool.get(cardId); }
@@ -260,9 +352,11 @@
     const d1 = allDecks.find(d => d.id === p1DeckId);
     const d2 = allDecks.find(d => d.id === p2DeckId);
     if (!d1 || !d2) return;
+    aiThinking = false;
+    if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; }
     game = createGame(
       { name: p1Name || d1.name, entries: d1.entries },
-      { name: p2Name || d2.name, entries: d2.entries },
+      { name: aiPlayerIndex === 1 ? '🤖 ' + (p2Name || d2.name) : (p2Name || d2.name), entries: d2.entries },
       pool
     );
   }
@@ -418,9 +512,18 @@
         </select>
       </div>
       <div class="vs-badge">VS</div>
-      <div class="setup-card">
-        <h2>玩家 2（後手）</h2>
-        <input class="name-input" placeholder="玩家名稱" bind:value={p2Name} />
+      <div class="setup-card" class:ai-card={aiPlayerIndex===1}>
+        <h2>玩家 2（後手）{#if aiPlayerIndex===1}<span class="ai-tag">🤖 AI</span>{/if}</h2>
+        <label class="ai-toggle">
+          <input type="checkbox" checked={aiPlayerIndex===1} onchange={(e)=>{
+            aiPlayerIndex = (e.currentTarget as HTMLInputElement).checked ? 1 : null;
+            if (aiPlayerIndex === 1) p2Name = 'AI 對手';
+          }} />
+          由 AI 控制
+        </label>
+        {#if aiPlayerIndex !== 1}
+          <input class="name-input" placeholder="玩家名稱" bind:value={p2Name} />
+        {/if}
         <select bind:value={p2DeckId}>
           <option value="">— 選擇牌組 —</option>
           {#if PRESET_DECKS.length > 0}
@@ -432,8 +535,10 @@
         </select>
       </div>
     </div>
-    <button class="btn-primary" disabled={!p1DeckId || !p2DeckId || p1DeckId === p2DeckId} onclick={startLocalGame}>🎮 開始遊戲</button>
-    {#if p1DeckId === p2DeckId && p1DeckId}<p class="warn">兩位玩家請選不同的牌組</p>{/if}
+    <button class="btn-primary" disabled={!p1DeckId || !p2DeckId} onclick={startLocalGame}>
+      {aiPlayerIndex !== null ? '🤖 開始 vs AI' : '🎮 開始遊戲'}
+    </button>
+    {#if !aiPlayerIndex && p1DeckId === p2DeckId && p1DeckId}<p class="warn">雙人模式下兩位玩家請選不同的牌組</p>{/if}
   </main>
 
   {:else}
@@ -634,6 +739,7 @@
         {#if isSyncing}<span class="chip syncing-chip">⏳ 同步中</span>{/if}
         {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip">等待對手行動</span>{/if}
       {/if}
+      {#if aiPlayerIndex !== null && aiThinking}<span class="chip ai-chip">🤖 AI 思考中…</span>{/if}
       {#if activePlayer?.energyAttachedThisTurn}<span class="chip">⚡已附能</span>{/if}
       {#if activePlayer?.supporterPlayedThisTurn}<span class="chip">📋已用支援</span>{/if}
       {#if stadiumCard}<span class="chip stadium-chip">🏟 {stadiumCard.name}</span>{/if}
@@ -1327,4 +1433,12 @@
   .status-asleep{ background:#1a1a5a; border:1px solid #4a4aaa; }
   .status-confused{ background:#5a3a00; border:1px solid #aa7a10; }
   .status-paralyzed{ background:#5a5a00; border:1px solid #aaaa10; }
+
+  /* ── AI 模式 ── */
+  .ai-card{ border-color:#5a3a8a !important; }
+  .ai-tag{ font-size:.72rem; background:#3a1a5a; color:#e0a0ff; border-radius:4px; padding:.08rem .3rem; margin-left:.4rem; vertical-align:middle; }
+  .ai-toggle{ display:flex; align-items:center; gap:.4rem; font-size:.85rem; color:#ccc; cursor:pointer; }
+  .ai-toggle input{ cursor:pointer; accent-color:#8a4aee; width:16px; height:16px; }
+  .ai-chip{ background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; animation:pulse 1s infinite alternate; }
+  @keyframes pulse{ from{ opacity:.7; } to{ opacity:1; } }
 </style>
