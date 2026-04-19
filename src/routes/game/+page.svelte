@@ -192,8 +192,10 @@
 
   function startDrag(e: PointerEvent, inst: CardInstance, kind: DragKind, card: Card) {
     if (e.button !== 0) return;
-    e.preventDefault();
-    hoverHandIid = null; hoverHandAnchor = null; // 拖曳開始立即清 hover
+    // 不在 pointerdown 呼叫 preventDefault —— 那會阻止後續 click 事件觸發，
+    // 破壞所有「備戰/附加/使用」按鈕的 fallback 點擊。
+    // 瀏覽器原生拖曳/文字選取已由 CSS touch-action:none + user-select:none 阻止。
+    hoverHandIid = null; hoverHandAnchor = null;
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
     dragging = {
       iid: inst.iid, kind, cardId: inst.cardId, cardName: card.name,
