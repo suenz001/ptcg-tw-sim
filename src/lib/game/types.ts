@@ -52,6 +52,10 @@ export interface CardInstance {
    * 在 END_TURN 時清除。
    */
   evolvedThisTurn?: boolean;
+  /**
+   * 本回合因招式效果無法使用招式（下回合嘗試攻擊時清除並封鎖）。
+   */
+  cantAttackThisTurn?: boolean;
 }
 
 export type SpecialCondition =
@@ -139,6 +143,10 @@ export interface GameState {
    * 設定後 UI 必須顯示選擇介面，玩家透過 RESOLVE_SELECTION 繼續
    */
   pendingSelection?: PendingSelection;
+  /** 目前場上的競技場牌（Stadium） */
+  activeStadium?: CardInstance;
+  /** 雙方本回合是否已使用競技場效果 [P1, P2] */
+  stadiumUsedThisTurn?: [boolean, boolean];
 }
 
 export interface LogEntry {
@@ -166,6 +174,7 @@ export type GameAction =
   | { type: 'ATTACK'; attackIndex: number }
   | { type: 'TAKE_PRIZES'; count: number }
   | { type: 'SEND_NEW_ACTIVE'; iid: string; senderIdx?: 0 | 1 }
+  | { type: 'USE_STADIUM' }
   | { type: 'END_TURN' };
 
 // ── 效果腳本插槽（M3/M4 填入） ─────────────────────────────────────────────

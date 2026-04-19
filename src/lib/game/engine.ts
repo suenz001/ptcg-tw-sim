@@ -458,7 +458,10 @@ function handlePlaying(
     if (bIdx < 0) return state;
 
     const activeCard = pool.get(attacker.active.cardId);
-    const retreatCost = activeCard?.retreatCost?.length ?? 0;
+    let retreatCost = activeCard?.retreatCost?.length ?? 0;
+    // 氣球道具：減少 2 撤退費
+    const retreatTool = attacker.active.toolAttached ? pool.get(attacker.active.toolAttached.cardId) : null;
+    if (retreatTool?.name === '氣球') retreatCost = Math.max(0, retreatCost - 2);
     if (attacker.active.energyAttached.length < retreatCost) return state;
 
     // 自動丟棄能量（從後方取）
@@ -483,20 +486,47 @@ function handlePlaying(
     );
   }
 
-  // ── 打出訓練家牌 ──────────────────────────────────────────────────────────
+  // ── 打出訓練家牌（含道具卡 Tool 和競技場 Stadium）──────────────────────────
   if (action.type === 'PLAY_TRAINER') {
     if (state.turnPhase !== 'main') return state;
     const hIdx = attacker.hand.findIndex(c => c.iid === action.iid);
     if (hIdx < 0) return state;
     const trainerInst = attacker.hand[hIdx];
     const trainerCard = pool.get(trainerInst.cardId);
-    if (!trainerCard || trainerCard.supertype !== 'Trainer') return state;
+    if (!trainerCard) return state;
+
+    const isTool = trainerCard.supertype === 'Pokemon' && trainerCard.subtype === 'Other';
+    const isTrainer = trainerCard.supertype === 'Trainer';
+    if (!isTool && !isTrainer) return state;
 
     // 支援者限制：每回合只能打 1 張
     if (trainerCard.subtype === 'Supporter' && attacker.supporterPlayedThisTurn) return state;
 
-    // 移出手牌 → 棄牌區，並標記支援者
+    // 移出手牌
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
+
+    if (trainerCard.subtype === 'Stadium') {
+      // 競技場：放置到場；前一張競技場去棄牌區
+      const prevStadium = state.activeStadium;
+      if (prevStadium) attacker.discard = [...attacker.discard, prevStadium];
+      players[aIdx] = attacker;
+      let newState: GameState = { ...state, players, activeStadium: trainerInst };
+      newState = addLog(newState, `${attacker.name} 打出競技場：${trainerCard.name}！`, aIdx);
+      const effectFn = TRAINER_EFFECTS.get(trainerCard.name);
+      if (effectFn) return effectFn(newState, aIdx, pool, trainerInst);
+      return newState;
+    }
+
+    if (isTool) {
+      // 道具卡：不先棄置，效果 resolver 會將它附加到寶可夢
+      players[aIdx] = attacker;
+      let newState: GameState = { ...state, players };
+      const effectFn = TRAINER_EFFECTS.get(trainerCard.name);
+      if (effectFn) return effectFn(newState, aIdx, pool, trainerInst);
+      return addLog(newState, `${trainerCard.name}（道具）效果尚未實裝`, aIdx);
+    }
+
+    // 一般訓練家（物品 / 支援者）
     attacker.discard = [...attacker.discard, trainerInst];
     if (trainerCard.subtype === 'Supporter') attacker.supporterPlayedThisTurn = true;
     players[aIdx] = attacker;
@@ -505,7 +535,7 @@ function handlePlaying(
 
     const effectFn = TRAINER_EFFECTS.get(trainerCard.name);
     if (effectFn) {
-      return effectFn(newState, aIdx, pool);
+      return effectFn(newState, aIdx, pool, trainerInst);
     }
     // 效果尚未實裝
     return addLog(
@@ -513,6 +543,55 @@ function handlePlaying(
       `${trainerCard.name}（${trainerCard.subtype}）效果尚未實裝，已棄置`,
       aIdx
     );
+  }
+
+  // ── 使用競技場效果 ────────────────────────────────────────────────────────
+  if (action.type === 'USE_STADIUM') {
+    if (state.phase !== 'playing' || state.turnPhase !== 'main') return state;
+    if (!state.activeStadium) return state;
+    const used = state.stadiumUsedThisTurn ?? [false, false];
+    if (used[aIdx]) return state; // 已使用過
+    if (state.pendingSelection) return state;
+
+    const stadiumCard = pool.get(state.activeStadium.cardId);
+    if (!stadiumCard) return state;
+
+    // 標記已使用
+    const newUsed: [boolean, boolean] = [used[0], used[1]];
+    newUsed[aIdx] = true;
+    let newState: GameState = { ...state, stadiumUsedThisTurn: newUsed };
+
+    if (stadiumCard.name === '神秘花園') {
+      const player = newState.players[aIdx];
+      const energyInHand = player.hand.filter(inst => {
+        const c = pool.get(inst.cardId);
+        return c?.supertype === 'Energy';
+      });
+      if (energyInHand.length === 0) {
+        // 無能量可丟，重置旗標
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog(
+          { ...state, stadiumUsedThisTurn: revert },
+          '神秘花園：手牌中沒有能量牌可丟棄',
+          aIdx
+        );
+      }
+      return {
+        ...newState,
+        pendingSelection: {
+          type: 'hand-discard',
+          actorIdx: aIdx,
+          sourcePlayerIdx: aIdx,
+          minCount: 1,
+          maxCount: 1,
+          filter: 'Energy',
+          effectKey: 'miracle-garden-draw',
+          params: {},
+        },
+      };
+    }
+
+    return addLog(newState, `使用競技場效果：${stadiumCard.name}`, aIdx);
   }
 
   // ── 抽牌 ──────────────────────────────────────────────────────────────────
@@ -582,6 +661,17 @@ function handlePlaying(
     if (!attacker.active) return state;
     if (!defender.active) return state;
 
+    // 檢查是否因上回合效果而無法攻擊
+    if (attacker.active.cantAttackThisTurn) {
+      const atkName = pool.get(attacker.active.cardId)?.name ?? '?';
+      players[aIdx] = { ...attacker, active: { ...attacker.active, cantAttackThisTurn: undefined } };
+      return addLog(
+        { ...state, players, turnPhase: 'end' },
+        `${atkName} 因上回合效果，本回合無法使用招式！`,
+        aIdx
+      );
+    }
+
     const attackerCard = getCard(attacker.active.cardId, pool);
     const attacks = attackerCard.attacks ?? [];
     const attack = attacks[action.attackIndex];
@@ -620,6 +710,21 @@ function handlePlaying(
         (baseDamage > 0 ? `，造成 ${baseDamage} 傷害！` : '！'),
       aIdx
     );
+
+    // 龐克頭盔：防守方出場的【惡】寶可夢附有龐克頭盔時，攻擊者受到 40 傷害反擊
+    const defenderStatePre = newState.players[dIdx];
+    const defToolCard = defenderStatePre.active?.toolAttached
+      ? pool.get(defenderStatePre.active.toolAttached.cardId) : null;
+    const defActiveCardPre = defenderStatePre.active ? pool.get(defenderStatePre.active.cardId) : null;
+    if (baseDamage > 0 && defToolCard?.name === '龐克頭盔' && defActiveCardPre?.pokemonType === 'Darkness') {
+      const atkPlayers = [...newState.players] as [PlayerState, PlayerState];
+      const atkP = { ...atkPlayers[aIdx] };
+      if (atkP.active) {
+        atkP.active = { ...atkP.active, damage: atkP.active.damage + 40 };
+        atkPlayers[aIdx] = atkP;
+        newState = addLog({ ...newState, players: atkPlayers }, `龐克頭盔：${attackerCard.name} 受到 40 傷害反擊！`, null);
+      }
+    }
 
     // 擊倒判定
     if (baseDamage > 0 && defenderHP > 0 && newDamage >= defenderHP) {
@@ -749,6 +854,11 @@ function handlePlaying(
       retreatedThisTurn: false,
     };
 
+    // 重置競技場使用旗標（當前玩家的回合結束時清除其旗標）
+    let stadiumUsedThisTurn = state.stadiumUsedThisTurn ?? [false, false] as [boolean, boolean];
+    const newStadiumUsed: [boolean, boolean] = [stadiumUsedThisTurn[0], stadiumUsedThisTurn[1]];
+    newStadiumUsed[aIdx] = false;
+
     const newTurn = aIdx === 1 ? state.turn + 1 : state.turn;
     const afterSwitch = addLog(
       {
@@ -758,6 +868,7 @@ function handlePlaying(
         turn: newTurn,
         isFirstTurn: false,
         turnPhase: 'draw',
+        stadiumUsedThisTurn: newStadiumUsed,
       },
       `回合結束，換 ${players[nextIdx].name} 行動。`,
       null
@@ -863,7 +974,10 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
   const player = state.players[state.activePlayerIndex];
   if (player.retreatedThisTurn || !player.active || player.bench.length === 0) return false;
   const card = pool.get(player.active.cardId);
-  const cost = card?.retreatCost?.length ?? 0;
+  let cost = card?.retreatCost?.length ?? 0;
+  // 氣球道具：減少 2 撤退費
+  const tool = player.active.toolAttached ? pool.get(player.active.toolAttached.cardId) : null;
+  if (tool?.name === '氣球') cost = Math.max(0, cost - 2);
   return player.active.energyAttached.length >= cost;
 }
 
@@ -877,7 +991,10 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
   return player.hand
     .filter(inst => {
       const c = pool.get(inst.cardId);
-      if (!c || c.supertype !== 'Trainer') return false;
+      if (!c) return false;
+      const isTool = c.supertype === 'Pokemon' && c.subtype === 'Other';
+      const isTrainer = c.supertype === 'Trainer';
+      if (!isTool && !isTrainer) return false;
       if (c.subtype === 'Supporter' && player.supporterPlayedThisTurn) return false;
       return true;
     })

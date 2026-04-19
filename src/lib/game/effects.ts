@@ -17,7 +17,8 @@ import type { GameState, PlayerState, CardInstance, PendingSelection } from './t
 type EffectFn = (
   state: GameState,
   actorIdx: 0 | 1,
-  pool: Map<string, Card>
+  pool: Map<string, Card>,
+  cardInst?: CardInstance
 ) => GameState;
 
 /** 玩家做完選擇後的繼續處理 */
@@ -875,6 +876,196 @@ regR('heal-120-bench', (st, idx, iids, _params, _pool) => {
       ? { ...c, damage: Math.max(0, c.damage - 120) }
       : c),
   }));
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 道具卡（Tool Card）附加
+// ══════════════════════════════════════════════════════════════════════════════
+
+function toolAttachEffect(toolName: string): EffectFn {
+  return (st, idx, _pool, toolInst) => {
+    const p = st.players[idx];
+    const allInPlay = [...(p.active ? [p.active] : []), ...p.bench];
+    const validIids = allInPlay.filter(pk => !pk.toolAttached).map(pk => pk.iid);
+    if (validIids.length === 0) return addLog(st, `${toolName}：沒有可附加道具的寶可夢`, idx);
+    st = addLog(st, `${toolName}：選擇要附加的寶可夢`, idx);
+    return withPending(st, {
+      type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1, filter: '',
+      effectKey: 'attach-tool',
+      params: { toolInst, validIids },
+    });
+  };
+}
+reg('氣球', toolAttachEffect('氣球'));
+reg('龐克頭盔', toolAttachEffect('龐克頭盔'));
+
+regR('attach-tool', (st, idx, picked, params, _pool) => {
+  const targetIid = picked[0];
+  const toolInst = params?.toolInst as CardInstance;
+  if (!toolInst) return st;
+  return updatePlayer(st, idx, p => {
+    const attach = (pk: CardInstance): CardInstance =>
+      pk.iid === targetIid ? { ...pk, toolAttached: toolInst } : pk;
+    return {
+      ...p,
+      active: p.active ? attach(p.active) : null,
+      bench: p.bench.map(attach),
+    };
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 神奇糖果（Rare Candy）
+// ══════════════════════════════════════════════════════════════════════════════
+
+reg('神奇糖果', (st, idx, pool) => {
+  const p = st.players[idx];
+  const validIids = p.hand.filter(inst => {
+    const c = pool.get(inst.cardId);
+    return c?.supertype === 'Pokemon' && c.evolvesFrom && c.subtype !== 'Basic';
+  }).map(i => i.iid);
+  if (validIids.length === 0) return addLog(st, '神奇糖果：手牌中沒有可進化的寶可夢', idx);
+  st = addLog(st, '神奇糖果：從手牌選擇要進化的高階寶可夢', idx);
+  return withPending(st, {
+    type: 'hand-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, filter: '',
+    effectKey: 'rare-candy-choose-target',
+    params: { validIids },
+  });
+});
+
+regR('rare-candy-choose-target', (st, idx, picked, _params, pool) => {
+  const stage2Iid = picked[0];
+  const p = st.players[idx];
+  const stage2Inst = p.hand.find(i => i.iid === stage2Iid);
+  if (!stage2Inst) return st;
+  const stage2Card = pool.get(stage2Inst.cardId);
+  if (!stage2Card?.evolvesFrom) return st;
+
+  // Chain: basic → stage1 (evolvesFrom=basic) → stage2 (evolvesFrom=stage1)
+  const stage1Name = stage2Card.evolvesFrom;
+  let basicName: string | undefined;
+  for (const [, c] of pool) {
+    if (c.name === stage1Name && c.evolvesFrom) { basicName = c.evolvesFrom; break; }
+  }
+  // Fallback: stage2 directly evolvesFrom a basic
+  if (!basicName) basicName = stage1Name;
+
+  const fieldPokes = [...(p.active ? [p.active] : []), ...p.bench];
+  const validIids = fieldPokes
+    .filter(pk => {
+      if (pk.justPlaced || pk.evolvedThisTurn) return false;
+      const c = pool.get(pk.cardId);
+      return c?.name === basicName || c?.name === stage1Name;
+    })
+    .map(pk => pk.iid);
+
+  if (validIids.length === 0) return addLog(st, '神奇糖果：場上沒有可接受神奇糖果的寶可夢', idx);
+
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, filter: '',
+    effectKey: 'rare-candy-evolve',
+    params: { stage2Iid, validIids },
+  });
+});
+
+regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
+  const targetIid = picked[0];
+  const stage2Iid = params?.stage2Iid as string;
+
+  return updatePlayer(st, idx, p => {
+    const stage2Inst = p.hand.find(i => i.iid === stage2Iid);
+    if (!stage2Inst) return p;
+    const stage2Card = pool.get(stage2Inst.cardId);
+
+    const evolve = (pk: CardInstance): CardInstance => {
+      if (pk.iid !== targetIid) return pk;
+      return {
+        ...stage2Inst,
+        damage: pk.damage,
+        energyAttached: pk.energyAttached,
+        toolAttached: pk.toolAttached,
+        status: pk.status,
+        evolvedFromIid: pk.iid,
+        evolvedThisTurn: true,
+        justPlaced: false,
+      };
+    };
+
+    const baseCard = pool.get(p.active?.iid === targetIid ? p.active.cardId : (p.bench.find(b => b.iid === targetIid)?.cardId ?? ''));
+    const logMsg = `神奇糖果：${baseCard?.name ?? '?'} 直接進化為 ${stage2Card?.name ?? '?'}！`;
+    return {
+      ...p,
+      hand: p.hand.filter(i => i.iid !== stage2Iid),
+      active: p.active ? evolve(p.active) : null,
+      bench: p.bench.map(evolve),
+    };
+  });
+  // Note: log added outside, but updatePlayer doesn't return state separately
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 神秘花園（Stadium）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 競技場放置時無即時效果（engine 處理放置邏輯）
+// USE_STADIUM 由 engine 中 USE_STADIUM handler 觸發
+regR('miracle-garden-draw', (st, idx, picked, _params, pool) => {
+  const energyIid = picked[0];
+  return updatePlayer(st, idx, p => {
+    const eIdx = p.hand.findIndex(i => i.iid === energyIid);
+    if (eIdx < 0) return p;
+    const energyInst = p.hand[eIdx];
+    const newHand = p.hand.filter((_, i) => i !== eIdx);
+    const newDiscard = [...p.discard, energyInst];
+
+    // Count Psychic Pokémon in play
+    const allField = [...(p.active ? [p.active] : []), ...p.bench];
+    const psychicCount = allField.filter(pk => {
+      const c = pool.get(pk.cardId);
+      return c?.pokemonType === 'Psychic';
+    }).length;
+
+    // Draw until hand.length === psychicCount
+    const toDraw = Math.max(0, psychicCount - newHand.length);
+    const drawn = p.deck.slice(0, Math.min(toDraw, p.deck.length));
+
+    return {
+      ...p,
+      hand: [...newHand, ...drawn],
+      deck: p.deck.slice(drawn.length),
+      discard: newDiscard,
+    };
+  });
+});
+
+// ── MBG 無極汰那 ─────────────────────────────────────────────────────────────
+
+// 力量猛攻 — 擲硬幣，反面則下回合無法使用招式
+regPost('無極汰那|力量猛攻', (state, aIdx, _pool) => {
+  const coin = Math.random() < 0.5;
+  if (!coin) {
+    // tails → can't attack next turn
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const p = { ...players[aIdx] };
+    if (p.active) p.active = { ...p.active, cantAttackThisTurn: true };
+    players[aIdx] = p;
+    return addLog({ ...state, players }, '力量猛攻：反面！下回合無法使用招式。', aIdx);
+  }
+  return addLog(state, '力量猛攻：正面！', aIdx);
+});
+
+// ── MBD 拉帝亞斯ex ──────────────────────────────────────────────────────────
+
+// 無限之刃 — 使用後下回合無法攻擊
+regPost('拉帝亞斯ex|無限之刃', (state, aIdx, _pool) => {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const p = { ...players[aIdx] };
+  if (p.active) p.active = { ...p.active, cantAttackThisTurn: true };
+  players[aIdx] = p;
+  return addLog({ ...state, players }, '無限之刃：下回合無法使用招式。', aIdx);
 });
 
 // ── MBD 謎擬Q ─────────────────────────────────────────────────────────────────

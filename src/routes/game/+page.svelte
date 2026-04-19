@@ -94,6 +94,12 @@
   const canEndTurn = $derived(
     game?.phase === 'playing' && game.turnPhase === 'end' && !hasPendingActions(game)
   );
+  const stadiumCard = $derived(game?.activeStadium ? pool.get(game.activeStadium.cardId) : null);
+  const canUseStadium = $derived(
+    game?.phase === 'playing' && game.turnPhase === 'main' &&
+    !!game.activeStadium && !game.pendingSelection &&
+    !(game.stadiumUsedThisTurn ?? [false,false])[myIdx]
+  );
 
   // ── 視角固定：線上模式我方永遠在下方，本機模式隨行動方翻轉 ─────────────────
   const myIdx   = $derived<0 | 1>(myPlayerIndex !== null ? myPlayerIndex : aIdx);
@@ -142,9 +148,20 @@
       }
       case 'bench-choose':
       case 'opp-bench-choose': return src.bench;
-      case 'hand-discard':
-      case 'hand-choose':  return src.hand;
-      case 'heal-target':  return [...(src.active ? [src.active] : []), ...src.bench];
+      case 'hand-discard': {
+        const f2 = pendingSelection.filter ?? '';
+        if (f2 === 'Energy') return src.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+        return src.hand;
+      }
+      case 'hand-choose':  {
+        const validIids2 = pendingSelection.params?.validIids as string[] | undefined;
+        return validIids2 ? src.hand.filter(c => validIids2.includes(c.iid)) : src.hand;
+      }
+      case 'heal-target':  {
+        const all = [...(src.active ? [src.active] : []), ...src.bench];
+        const validIids3 = pendingSelection.params?.validIids as string[] | undefined;
+        return validIids3 ? all.filter(c => validIids3.includes(c.iid)) : all;
+      }
       case 'discard-search': {
         const f = pendingSelection.filter ?? '';
         return src.discard.filter(c => {
@@ -197,7 +214,9 @@
     return p > 0.5 ? '#2c7a3c' : p > 0.25 ? '#e0a020' : '#c00';
   }
   function retreatCostOf(inst: CardInstance): number {
-    return getCard(inst.cardId)?.retreatCost?.length ?? 0;
+    const base = getCard(inst.cardId)?.retreatCost?.length ?? 0;
+    const tool = inst.toolAttached ? getCard(inst.toolAttached.cardId) : null;
+    return tool?.name === '氣球' ? Math.max(0, base - 2) : base;
   }
   function evoOptionsFor(fromIid: string): CardInstance[] {
     const entry = evolvableTargets.find(e => e.fromIid === fromIid);
@@ -601,6 +620,7 @@
       {/if}
       {#if activePlayer?.energyAttachedThisTurn}<span class="chip">⚡已附能</span>{/if}
       {#if activePlayer?.supporterPlayedThisTurn}<span class="chip">📋已用支援</span>{/if}
+      {#if stadiumCard}<span class="chip stadium-chip">🏟 {stadiumCard.name}</span>{/if}
       {#if activePlayer?.retreatedThisTurn}<span class="chip">🔄已撤退</span>{/if}
     </span>
   </header>
@@ -702,6 +722,11 @@
             <button class="btn-act secondary" disabled={!!pendingSelection}
               onclick={()=>{if(game)game={...game,turnPhase:'end'};}}>跳過攻擊 →</button>
           {/if}
+          {#if canUseStadium && isMyTurn()}
+            <button class="btn-act stadium-btn" onclick={()=>dispatch(GameActions.useStadium())}>
+              🏟 {stadiumCard?.name}
+            </button>
+          {/if}
           {#if canEndTurn}
             <button class="btn-act primary" onclick={()=>dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
           {/if}
@@ -749,6 +774,7 @@
               <div class="hp-bar-wrap"><div class="hp-bar" style="width:{ac?.hp?hpRemaining(myPlayer.active)/ac.hp*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),ac?.hp??0)}"></div></div>
               <div class="active-hp">HP {hpRemaining(myPlayer.active)}/{ac?.hp}</div>
               <div class="active-nrg">{energySummary(myPlayer.active)}</div>
+              {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
               {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡ 點此附加</div>{/if}
             </div>
             {#if evoOpts.length>0&&!pendingSelection&&isMyTurn()}
@@ -787,6 +813,7 @@
               <div class="bench-name">{bc?.name}</div>
               <div class="bench-stat">HP {hpRemaining(b)}/{bc?.hp}</div>
               <div class="bench-nrg">{energySummary(b)}</div>
+              {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}
               {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡</div>{/if}
               {#if evoOptsB.length>0&&!pendingSelection&&isMyTurn()}
                 <button class="evo-btn-sm" onclick={(e)=>{e.stopPropagation();openFloatingEvo(b.iid,evoOptsB,e);}}>進化</button>
@@ -823,9 +850,10 @@
           {@const isEnergyCard=c.supertype==='Energy'}
           {@const isBasicCard=c.supertype==='Pokemon'&&c.subtype==='Basic'}
           {@const isTrainerCard=c.supertype==='Trainer'}
+          {@const isToolCard=c.supertype==='Pokemon'&&c.subtype==='Other'}
           {@const canEnergy=isEnergyCard&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()}
           {@const canBasic=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()}
-          {@const canTrainer=isTrainerCard&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
+          {@const canTrainer=(isTrainerCard||isToolCard)&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
           <div class="hand-card"
             class:selected={selectedEnergyIid===inst.iid}
             class:can-energy={canEnergy}
@@ -839,7 +867,8 @@
             <span class="hand-name">{c.name}</span>
             {#if canEnergy}<span class="hand-hint energy-hint">選取⚡</span>
             {:else if canBasic}<button class="hand-btn basic-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playBasic(inst.iid));}}>備戰</button>
-            {:else if canTrainer}<button class="hand-btn trainer-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playTrainer(inst.iid));}}>{c.subtype==='Supporter'?'支援者':'使用'}</button>
+            {:else if canTrainer && isToolCard}<button class="hand-btn tool-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playTrainer(inst.iid));}}>🔧 附加</button>
+            {:else if canTrainer}<button class="hand-btn trainer-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playTrainer(inst.iid));}}>{c.subtype==='Supporter'?'支援者':c.subtype==='Stadium'?'競技場':'使用'}</button>
             {/if}
           </div>
         {/if}
@@ -1230,4 +1259,13 @@
   /* ── Discard Modal ── */
   .discard-modal{ max-width:760px; }
   .discard-title{ margin:0 0 .6rem; color:#aaffaa; font-size:1.05rem; }
+
+  /* ── Tool + Stadium ── */
+  .tool-chip{ font-size:.6rem; color:#f0d080; background:#2a2a0a; border:1px solid #6a5a20; border-radius:3px; padding:.06rem .2rem; margin-top:.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tool-chip.sm{ font-size:.52rem; }
+  .tool-btn{ background:#4a3a10; color:#f0d080; }
+  .tool-btn:hover{ background:#6a5a20; }
+  .stadium-chip{ background:#1a2a4a; color:#88aaff; border-color:#3a5a8a; }
+  .btn-act.stadium-btn{ background:#1a2a4a; color:#88aaff; border:1px solid #3a5a8a; }
+  .btn-act.stadium-btn:hover{ background:#2a3a6a; }
 </style>
