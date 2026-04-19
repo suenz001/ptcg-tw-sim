@@ -1101,3 +1101,166 @@ ATTACK handler 流程：
 
 ### Commits
 - `aad0ef2` feat: 道具牌/競技場/神奇糖果/無法攻擊效果全實裝
+
+---
+
+## 📝 2026-04-19 Session 18 — 特性系統 + 特殊狀態 + KO 道具丟棄修復
+
+### 新增機制
+
+#### 1. USE_ABILITY 行動（主動特性）
+
+- `types.ts`：`GameAction` 新增 `{ type: 'USE_ABILITY'; iid: string; abilityIndex: number }`
+- `types.ts`：`CardInstance` 新增 `abilityUsedThisTurn?: boolean`（每回合限用 1 次）
+- `types.ts`：`PendingSelection.type` 新增 `'opp-poke-choose'`（選對手任意寶可夢，含出場）
+- `engine.ts`：USE_ABILITY handler（驗證旗標 → 呼叫 ABILITY_EFFECTS → 標記 abilityUsedThisTurn）
+- `engine.ts`：END_TURN 清除全場 abilityUsedThisTurn
+- `engine.ts`：新增 export `getUsableAbilities(state, pool)` → `{iid, abilityIndex, pokemonName, abilityName}[]`
+- `effects.ts`：`ABILITY_EFFECTS = new Map<string, EffectFn>()` + `regA()` helper
+- `actions.ts`：新增 `GameActions.useAbility(iid, abilityIndex)`
+
+#### 2. 已實裝主動特性
+
+| 寶可夢 | 特性 | 效果 |
+|:---|:---|:---|
+| 米立龍 | 集客 | 只限出場使用；查看牌庫頂 6 張，選 1 張支援者加手牌，其餘洗回 |
+| 桃歹郎ex | 支配鎖鏈 | 選備戰惡寶可夢（桃歹郎ex除外）→ 換出場 + 中毒 |
+
+#### 3. 已實裝被動特性（inline in engine.ts）
+
+| 寶可夢 | 特性 | 效果位置 |
+|:---|:---|:---|
+| 超級耿鬼ex | 影藏 | ATTACK KO 判定前：inex 攻擊者擊倒惡寶可夢時 prizesForKO-1 |
+| 超級蒂安希ex | 鑽石膜 | ATTACK 弱點後：受到招式傷害 -30 |
+| 拉帝亞斯ex | 天空徑線 | canRetreat + RETREAT：場上有此特性時所有基礎寶可夢免費撤退 |
+
+#### 4. 特殊狀態（5 種）
+
+`CardInstance.status?: SpecialCondition`（`'poisoned'|'burned'|'asleep'|'confused'|'paralyzed'`）
+
+| 狀態 | ATTACK 限制 | END_TURN 效果 |
+|:---|:---|:---|
+| 中毒 | 無 | +10 傷害，可 KO |
+| 燒傷 | 無 | +20 傷害，擲硬幣正面解除 |
+| 睡眠 | 無法攻擊、無法撤退 | 擲硬幣正面醒來 |
+| 混亂 | 擲硬幣反面 → 自傷 30 + 攻擊失敗 | 無 |
+| 麻痺 | 無法攻擊、無法撤退 | 自動解除 |
+
+#### 5. KO 道具丟棄修復
+
+**Bug**：寶可夢被擊倒時，附加的道具卡沒有跟著丟棄。
+**修復**：`engine.ts` KO 區段的 `koDiscard` 陣列加入 `toolAttached`。
+**同樣修復適用**：ATTACK 一般 KO、狙擊羽毛(snipe-120 resolver)、中毒/燒傷 KO。
+
+#### 6. 狙擊羽毛完整實裝（取代 Session 15 的簡化版）
+
+- **PRE**：丟棄 2 個能量，damage=0
+- **POST**：若對手只有出場（無備戰）→ 直接對出場施加 120；若有備戰 → 觸發 `opp-poke-choose`（含出場+備戰）
+- resolver `snipe-120`：對選擇目標施加 120，備戰目標不計弱點
+
+#### 7. 無極汰那|敲壞 完整實裝
+
+**POST**：丟棄 `state.activeStadium`，清除 `stadiumUsedThisTurn`
+
+### Commits
+- `342b5fa` feat: ability system + all special conditions + complete attack effects
+
+---
+
+## 📝 2026-04-19 Session 19 — AI 對手
+
+### 新增檔案
+
+| 檔案 | 用途 |
+|:---|:---|
+| `src/lib/game/ai.ts` | 規則型 AI `getAIAction(state, pool) → GameAction \| null` |
+
+### AI 策略優先序
+
+1. 取獎勵牌（`pendingPrizes > 0`）
+2. 解析 pendingSelection（autoResolveSelection）
+3. 送出新出場（被擊倒後）
+4. Setup 階段（選出場 → 備戰 → FINISH_SETUP）
+5. 主階段：進化 → 打基礎（備戰<3）→ 附能量 → 訓練家（支援者優先）→ 特性 → 攻擊（最高傷害）→ END_TURN
+
+### autoResolveSelection 行為
+
+| PendingSelection 類型 | AI 選擇邏輯 |
+|:---|:---|
+| deck-search | 優先 HP 最高的寶可夢 / 支援者優先 |
+| bench-choose | 選第一個（`validIids` 限制已套用）|
+| opp-bench-choose | 選剩餘 HP 最少的（最容易擊倒）|
+| opp-poke-choose | 同上（含出場）|
+| hand-discard | 能量 > 訓練家 > 寶可夢 |
+| hand-choose | 選第一個 |
+| heal-target | 選傷害最多的（最需治療）|
+| discard-search | 選前 n 個符合條件的 |
+
+### UI 整合（`+page.svelte`）
+
+- `aiPlayerIndex = $state<0|1|null>(1)`（預設 P2 為 AI）
+- `aiThinking / aiTimer`：防止 AI 連擊
+- `scheduleAI() / tickAI()`：首步 500ms，後續 250ms
+- `$effect` 監聽 game state 變化自動觸發 AI
+- Local Lobby：P2 欄位有 AI checkbox（預設打勾）
+- 標頭顯示「AI 思考中…」脈衝 chip
+
+### Commits
+- `342b5fa` feat: ability system + all special conditions + complete attack effects（AI 包含在同一 commit）
+
+---
+
+## 📝 2026-04-19 Session 20 — 全卡片效果審計 + 6 個 Bug 修復
+
+### 審計範圍
+MBG（超級耿鬼ex 預組）+ MBD（超級蒂安希ex 預組）共 46 種卡牌效果逐一對照。
+
+### 發現並修復的 Bug
+
+| 嚴重度 | 位置 | 問題 | 修復 |
+|:---:|:---|:---|:---|
+| 🔴 致命 | `engine.ts` ATTACK | `prizeAdjust` 計算在 `newDamage` / `defenderHP` 宣告之前使用（Temporal Dead Zone → 每次攻擊 ReferenceError） | 重排程式順序 |
+| 🔴 重大 | `engine.ts` TAKE_PRIZES | 勝利條件 `prizes.length - count <= 0`：slice 後 length 已扣 count，再減 count → 取 2 張剩 3 張時觸發假勝利 | 改為 `prizes.length <= 0`；log 計數同步修正 |
+| 🟡 次要 | `effects.ts` | `奇跡修正檔` hasEnergy guard：`discard.some(() => true)` 永遠為 true | 改為 `pool.get(...).supertype === 'Energy'` |
+| 🟡 次要 | `effects.ts` | `能量回收器` 同樣問題 | 同上 |
+| 🟡 次要 | `effects.ts` | `美洛耶塔\|治癒旋律` bench-choose 未傳 `validIids` → 可選非超屬性寶可夢 | 加入 `params: { validIids: psychicBench.map(c => c.iid) }` |
+| 🟡 次要 | `+page.svelte` | `selectionItems` 的 `bench-choose` 完全忽略 `params.validIids` → `支配鎖鏈` / `治癒旋律` 限制在 UI 無效 | 加入 validIids 過濾邏輯 |
+
+### 全卡驗證結論
+- MBG 所有卡片（22 張）效果正確 ✅
+- MBD 所有卡片（24 張）效果正確 ✅
+- 特殊狀態（5 種）✅、被動特性（3 種）✅、道具（2 種）✅、競技場 ✅
+
+### Commits
+- `2ae246b` fix: card effect audit — 6 bugs patched across engine, effects, and UI
+
+---
+
+## 🔮 下一步（M3 + 後續）
+
+### 目前完成度
+- ✅ **M0**：卡片資料（35 sets，標準賽 24 sets）
+- ✅ **M1**：牌組編輯器（localStorage + Firestore 雲端同步）
+- ✅ **M2**：規則引擎（MBG/MBD 全卡效果）+ AI 對手 + 線上對戰基礎（Firestore 房間）
+
+### M3 尚待完成
+- [ ] Firestore Rules server-side 行動驗證（目前只有 client guard）
+- [ ] 斷線重連機制（離開後重新訂閱可繼續）
+- [ ] 不同裝置測試（目前僅同台分頁測試）
+
+### 可選下一步
+1. 新增第三個預組牌組（繼續壓測引擎）
+2. UI/UX 優化（硬幣動畫、行動歷史面板）
+3. M4：規則引擎嚴謹化（抗性、更多 ex/V/VMAX 規則）
+4. M5：卡片池擴充（更多 set 的效果實裝）
+
+### ⚠️ 給下一位 AI 的注意事項
+
+1. **每次修改 `firestore.rules` 都必須 deploy**：
+   ```
+   cd E:\ptcg-tw-sim && npx firebase-tools deploy --only firestore:rules --project ptcg-tw-sim
+   ```
+2. **效果 key 格式**：ATTACK_PRE/POST = `「寶可夢名|招式名」`，ABILITY_EFFECTS = `「寶可夢名|特性索引數字」`
+3. **pool 不進 GameState**：雙方各自在本地從靜態 JSON 建立，不透過 Firestore 傳輸
+4. **Svelte 5 runes**：`$state`、`$derived`、`$derived.by`、`$effect`，不用舊式 `$:` 宣告
+5. **本檔為接力文件**：每次工作前先讀它，工作結束後把本次動作追加到最下方
