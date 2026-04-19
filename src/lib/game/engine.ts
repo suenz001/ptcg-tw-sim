@@ -452,6 +452,8 @@ function handlePlaying(
     if (state.turnPhase !== 'main') return state;
     if (attacker.retreatedThisTurn) return state;
     if (!attacker.active) return state;
+    // 睡眠和麻痺時無法撤退
+    if (attacker.active.status === 'asleep' || attacker.active.status === 'paralyzed') return state;
     if (attacker.bench.length === 0) return state;
 
     const bIdx = attacker.bench.findIndex(c => c.iid === action.newActiveIid);
@@ -711,6 +713,30 @@ function handlePlaying(
     if (!attacker.active) return state;
     if (!defender.active) return state;
 
+    const atkNameForStatus = pool.get(attacker.active.cardId)?.name ?? '?';
+
+    // 特殊狀態：睡眠 — 無法攻擊
+    if (attacker.active.status === 'asleep') {
+      return addLog({ ...state, players, turnPhase: 'end' },
+        `${atkNameForStatus} 正在睡眠，無法使用招式！`, aIdx);
+    }
+    // 特殊狀態：麻痺 — 無法攻擊
+    if (attacker.active.status === 'paralyzed') {
+      return addLog({ ...state, players, turnPhase: 'end' },
+        `${atkNameForStatus} 正在麻痺，無法使用招式！`, aIdx);
+    }
+    // 特殊狀態：混亂 — 擲硬幣，反面自身受30傷害且攻擊失敗
+    if (attacker.active.status === 'confused') {
+      const coin = Math.random() < 0.5;
+      if (!coin) {
+        const selfDmg = (attacker.active.damage ?? 0) + 30;
+        players[aIdx] = { ...attacker, active: { ...attacker.active, damage: selfDmg } };
+        return addLog({ ...state, players, turnPhase: 'end' },
+          `${atkNameForStatus} 陷入混亂，自身受到 30 傷害，攻擊失敗！`, aIdx);
+      }
+      // 正面：繼續正常攻擊
+    }
+
     // 檢查是否因上回合效果而無法攻擊
     if (attacker.active.cantAttackThisTurn) {
       const atkName = pool.get(attacker.active.cardId)?.name ?? '?';
@@ -952,6 +978,60 @@ function handlePlaying(
       }
     }
 
+    // 特殊狀態：燒傷 — 回合結束施加 20 傷害，然後擲硬幣決定是否解除
+    const burnedPlayer = { ...players[aIdx] };
+    if (burnedPlayer.active?.status === 'burned') {
+      const burnedCard = pool.get(burnedPlayer.active.cardId);
+      const newBurnDmg = burnedPlayer.active.damage + 20;
+      const burnedHP = burnedCard?.hp ?? 0;
+      if (burnedHP > 0 && newBurnDmg >= burnedHP) {
+        // 燒傷致死
+        const koDiscard3: CardInstance[] = [
+          { ...burnedPlayer.active, damage: newBurnDmg },
+          ...burnedPlayer.active.energyAttached,
+          ...(burnedPlayer.active.toolAttached ? [burnedPlayer.active.toolAttached] : []),
+        ];
+        burnedPlayer.discard = [...burnedPlayer.discard, ...koDiscard3];
+        burnedPlayer.active = null;
+        players[aIdx] = burnedPlayer;
+        const burnPrizes = prizesForKO(burnedCard!);
+        let burnState = addLog({ ...state, players }, `${burnedCard?.name ?? '?'} 被燒傷傷害擊倒！${players[dIdx].name} 取得 ${burnPrizes} 張獎勵牌。`, null);
+        if (burnedPlayer.bench.length === 0) {
+          return { ...burnState, phase: 'game-over', winner: dIdx, winReason: `${burnedPlayer.name} 沒有可上場的寶可夢` };
+        }
+        return { ...burnState, pendingPrizes: burnPrizes };
+      } else {
+        // 燒傷傷害但未倒
+        burnedPlayer.active = { ...burnedPlayer.active, damage: newBurnDmg };
+        // 擲硬幣：正面解除燒傷
+        const burnCoin = Math.random() < 0.5;
+        if (burnCoin) {
+          burnedPlayer.active = { ...burnedPlayer.active, status: undefined };
+        }
+        players[aIdx] = burnedPlayer;
+        state = addLog({ ...state, players }, `燒傷：${burnedCard?.name ?? '?'} 受到 20 傷害！${burnCoin ? '（正面：燒傷解除）' : '（反面：燒傷持續）'}`, null);
+      }
+    }
+
+    // 特殊狀態：麻痺 — 自動解除（回合結束後）
+    const paraPlayer = { ...players[aIdx] };
+    if (paraPlayer.active?.status === 'paralyzed') {
+      paraPlayer.active = { ...paraPlayer.active, status: undefined };
+      players[aIdx] = paraPlayer;
+      state = addLog({ ...state, players }, `${pool.get(paraPlayer.active.cardId)?.name ?? '?'} 的麻痺解除了！`, null);
+    }
+
+    // 特殊狀態：睡眠 — 擲硬幣決定是否醒來（在回合結束時檢查）
+    const sleepPlayer = { ...players[aIdx] };
+    if (sleepPlayer.active?.status === 'asleep') {
+      const wakeCoin = Math.random() < 0.5;
+      if (wakeCoin) {
+        sleepPlayer.active = { ...sleepPlayer.active, status: undefined };
+        players[aIdx] = sleepPlayer;
+        state = addLog({ ...state, players }, `${pool.get(sleepPlayer.active.cardId)?.name ?? '?'} 醒來了！`, null);
+      }
+    }
+
     // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn / abilityUsedThisTurn）
     const currentPlayer = { ...players[aIdx] };
     currentPlayer.active = currentPlayer.active ? clearTurnFlags(currentPlayer.active) : null;
@@ -1093,6 +1173,8 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return false;
   const player = state.players[state.activePlayerIndex];
   if (player.retreatedThisTurn || !player.active || player.bench.length === 0) return false;
+  // 睡眠和麻痺時無法撤退
+  if (player.active.status === 'asleep' || player.active.status === 'paralyzed') return false;
   const card = pool.get(player.active.cardId);
   let cost = card?.retreatCost?.length ?? 0;
   // 氣球道具：減少 2 撤退費

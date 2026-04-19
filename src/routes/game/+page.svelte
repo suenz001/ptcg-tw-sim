@@ -152,8 +152,17 @@
           return true;
         });
       }
-      case 'bench-choose':
-      case 'opp-bench-choose': return src.bench;
+      case 'bench-choose': return src.bench;
+      case 'opp-poke-choose': {
+        const items: CardInstance[] = [...src.bench];
+        if (src.active) items.unshift(src.active);
+        return items;
+      }
+      case 'opp-bench-choose': {
+        const includeActive = pendingSelection.params?.includeActive === true;
+        if (includeActive && src.active) return [src.active, ...src.bench];
+        return src.bench;
+      }
       case 'hand-discard': {
         const f2 = pendingSelection.filter ?? '';
         if (f2 === 'Energy') return src.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
@@ -352,6 +361,7 @@
     if (type === 'deck-search')     return '從牌庫選擇';
     if (type === 'bench-choose')    return '選擇備戰寶可夢';
     if (type === 'opp-bench-choose') return '選擇對手的備戰寶可夢';
+    if (type === 'opp-poke-choose') return '選擇對手的寶可夢';
     if (type === 'hand-discard')    return '選擇丟棄的手牌';
     if (type === 'hand-choose')     return '從手牌選擇';
     if (type === 'heal-target')     return '選擇回復的寶可夢';
@@ -918,7 +928,7 @@
           <h3>{selectionTitle(pendingSelection.type)}</h3>
           <p class="sel-hint">
             選 {pendingSelection.minCount===pendingSelection.maxCount?`${pendingSelection.minCount}`:`${pendingSelection.minCount}～${pendingSelection.maxCount}`} 張
-            {#if pendingSelection.filter&&pendingSelection.filter!=='TOP6'}（{pendingSelection.filter.replace('Basic:HP70','HP≤70基礎').replace('Basic','基礎寶可夢').replace('Pokemon','寶可夢').replace('Energy','能量')}）{/if}
+            {#if pendingSelection.filter&&pendingSelection.filter!=='TOP6'&&!pendingSelection.filter.startsWith('Supporter')}（{pendingSelection.filter.replace('Basic:HP70','HP≤70基礎').replace('Basic','基礎寶可夢').replace('Pokemon','寶可夢').replace('Energy','能量')}）{/if}
             · 已選 {selectionPicked.size}
           </p>
         </div>

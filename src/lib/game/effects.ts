@@ -716,8 +716,8 @@ regPre('黑暗鴉|伏擊', (state, aIdx, _pool) => {
 
 // ── MBG 烏鴉頭頭 ──────────────────────────────────────────────────────────────
 
-// 狙擊羽毛 — 丟棄 2 個能量，對對手任意1隻寶可夢造成 120 傷害
-// M3 簡化：直接對出場造成 120（不含備戰區選擇）
+// 狙擊羽毛 — 丟棄 2 個能量，對對手任意1隻寶可夢造成 120 傷害（含出場）
+// PRE：丟棄 2 個能量，回傳 damage=0（傷害由 POST 處理，不對出場造成傷害）
 regPre('烏鴉頭頭|狙擊羽毛', (state, aIdx, _pool) => {
   const player = state.players[aIdx];
   if (!player.active) return { state, damage: 0 };
@@ -730,8 +730,98 @@ regPre('烏鴉頭頭|狙擊羽毛', (state, aIdx, _pool) => {
     active: p.active ? { ...p.active, energyAttached: remaining } : null,
     discard: [...p.discard, ...discarded],
   }));
-  s = addLog(s, '狙擊羽毛：丟棄 2 個能量，造成 120 傷害', aIdx);
-  return { state: s, damage: 120 };
+  s = addLog(s, '狙擊羽毛：丟棄 2 個能量', aIdx);
+  return { state: s, damage: 0 };
+});
+
+// POST：選擇對手任意寶可夢，造成 120 傷害
+regPost('烏鴉頭頭|狙擊羽毛', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defender = state.players[dIdx];
+  if (defender.bench.length === 0 && !defender.active) return state;
+  if (defender.bench.length === 0 && defender.active) {
+    // 無備戰，直接對出場施加 120 傷害
+    const defCard = _pool.get(defender.active.cardId);
+    const newDmg = defender.active.damage + 120;
+    const defHP = defCard?.hp ?? 0;
+    if (defHP > 0 && newDmg >= defHP) {
+      const koDiscard: CardInstance[] = [
+        { ...defender.active, damage: newDmg },
+        ...defender.active.energyAttached,
+        ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+      ];
+      const players = [...state.players] as [PlayerState, PlayerState];
+      players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
+      const prizes = defCard!.name.endsWith('ex') || defCard!.name.endsWith('EX') ? 2 : 1;
+      let s = addLog({ ...state, players }, `狙擊羽毛：120 傷害擊倒 ${defCard?.name ?? '?'}！${state.players[aIdx].name} 取得 ${prizes} 張獎勵牌。`, null);
+      if (players[dIdx].bench.length === 0) {
+        return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+      }
+      return { ...s, pendingPrizes: prizes };
+    } else {
+      const players = [...state.players] as [PlayerState, PlayerState];
+      players[dIdx] = { ...defender, active: { ...defender.active!, damage: newDmg } };
+      return addLog({ ...state, players }, `狙擊羽毛：對 ${defCard?.name ?? '?'} 造成 120 傷害！`, aIdx);
+    }
+  }
+  // 有備戰，讓玩家選擇目標（含出場）
+  let s = addLog(state, '狙擊羽毛：選擇對手任意寶可夢造成 120 傷害', aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'snipe-120',
+    params: { includeActive: true },
+  });
+});
+
+regR('snipe-120', (st, actorIdx, selectedIids, _params, pool) => {
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  const defender = st.players[dIdx];
+  const targetIid = selectedIids[0];
+  if (!targetIid) return st;
+
+  const isActive = defender.active?.iid === targetIid;
+  const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+
+  const targetCard = pool.get(target.cardId);
+  const newDmg = target.damage + 120;
+  const targetHP = targetCard?.hp ?? 0;
+
+  if (targetHP > 0 && newDmg >= targetHP) {
+    // 擊倒目標
+    const koDiscard: CardInstance[] = [
+      { ...target, damage: newDmg },
+      ...target.energyAttached,
+      ...(target.toolAttached ? [target.toolAttached] : []),
+    ];
+    const prizes = targetCard!.name.endsWith('ex') || targetCard!.name.endsWith('EX') ? 2 : 1;
+    const players = [...st.players] as [PlayerState, PlayerState];
+    const newDefender = { ...defender, discard: [...defender.discard, ...koDiscard] };
+    if (isActive) {
+      newDefender.active = null;
+    } else {
+      newDefender.bench = defender.bench.filter(c => c.iid !== targetIid);
+    }
+    players[dIdx] = newDefender;
+    let s = addLog({ ...st, players }, `狙擊羽毛：${targetCard?.name ?? '?'} 被擊倒！${st.players[actorIdx].name} 取得 ${prizes} 張獎勵牌。`, null);
+    if (isActive && newDefender.bench.length === 0) {
+      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+    }
+    return { ...s, pendingPrizes: prizes };
+  } else {
+    // 未擊倒
+    const players = [...st.players] as [PlayerState, PlayerState];
+    const newDefender = { ...defender };
+    if (isActive) {
+      newDefender.active = { ...target, damage: newDmg };
+    } else {
+      newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
+    }
+    players[dIdx] = newDefender;
+    return addLog({ ...st, players }, `狙擊羽毛：對 ${targetCard?.name ?? '?'} 造成 120 傷害！`, actorIdx);
+  }
 });
 
 // ── MBG 勾魂眼 ────────────────────────────────────────────────────────────────
@@ -1042,6 +1132,15 @@ regR('miracle-garden-draw', (st, idx, picked, _params, pool) => {
 });
 
 // ── MBG 無極汰那 ─────────────────────────────────────────────────────────────
+
+// 敲壞 — 丟棄場上競技場
+regPost('無極汰那|敲壞', (state, aIdx, _pool) => {
+  if (!state.activeStadium) return addLog(state, '敲壞：場上沒有競技場', aIdx);
+  const stadiumName = _pool.get(state.activeStadium.cardId)?.name ?? '競技場';
+  const aPlayers = [...state.players] as [PlayerState, PlayerState];
+  aPlayers[aIdx] = { ...aPlayers[aIdx], discard: [...aPlayers[aIdx].discard, state.activeStadium] };
+  return addLog({ ...state, players: aPlayers, activeStadium: undefined, stadiumUsedThisTurn: undefined }, `敲壞：${stadiumName} 被丟棄！`, aIdx);
+});
 
 // 力量猛攻 — 擲硬幣，反面則下回合無法使用招式
 regPost('無極汰那|力量猛攻', (state, aIdx, _pool) => {
