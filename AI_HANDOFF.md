@@ -1620,3 +1620,89 @@ MBG/MBD 預組幾乎 100% 實裝可完整對戰，其他卡包多為未實裝。
 3. **animate:flip 使用限制**：元素必須是 keyed each block 的唯一子元素，不能外包 `{#if}`。
 4. **拖曳 `moved` 門檻**：當 pointer 移動 < 6px 時視為 click，> 6px 才進入 drag 模式。觸控很容易誤判，調高可解但犧牲敏感度。
 5. **`.battle-root` / `.playmat` 的 overflow:hidden**：hover 放大手牌卡要超出 playmat 區域，必須透過 `.hand-strip` 在 playmat 外層渲染 + `.hand-strip` overflow:visible 才不被裁。
+
+---
+
+## 📝 2026-04-19 Session 28 D1 — 硬幣動畫 + HP bar 過場
+
+### 硬幣動畫 overlay
+- 新增 `coinFlip` state + `.coin-overlay` 全螢幕淡入層
+- 3D 翻轉 1.5s（正面金幣 🪙 / 反面黑幣 ⚫）
+- `coin-label` fly-in 顯示結果（「XXX 先手」/「正面」/「反面」）
+- 2.2s 後自動消失；`pointer-events:none` 不阻斷遊戲操作
+
+### 觸發機制：log 偵測
+引擎內所有擲硬幣（`Math.random() < 0.5`）都已把結果寫入 `log`，UI 不需改 engine：
+- `$effect` 監聽 `game.log.length` 變化，取新增訊息
+- 訊息含「擲硬幣…先手」→ heads 動畫
+- 訊息含「正面」→ heads / 「反面」→ tails
+- `lastLogProcessed` 追蹤已處理筆數，避免 log 重掃時重播
+
+### HP bar transition
+`.hp-bar` transition 從 `width .3s` → `width .55s cubic-bezier(.3,.8,.3,1), background .3s`
+配合 Session 29 的傷害彈出，數字與血條同步流暢下降。
+
+### Commit
+- `9b4f361` feat(ui): 硬幣動畫 + HP bar 過場
+
+---
+
+## 📝 2026-04-19 Session 29 D2 — 傷害數字彈出 + 能量 pulse
+
+### 傷害數字彈出
+- `$effect` 監聽所有場上寶可夢的 `damage` 變化
+- `lastDamageByIid: Map<string, number>` 記錄上次值，比對得差值
+- damage 變動時用 `queueMicrotask` + `getBoundingClientRect` 取 DOM 座標
+- 在 `damagePops: Array<{id, amount, x, y, heal}>` 加入新項
+- 1.4s 後 setTimeout 移除
+
+**CSS 動畫** `dmg-rise`（1.2s）：
+- 0% 縮小透明 → 20% 跳出放大 → 100% 向上飛出消失
+- 紅字（扣血）`-N` / 綠字（治療）`+N` + 多層 text-shadow 光暈
+
+### 能量附加 pulse
+- `dispatch()` 偵測 `action.type === 'ATTACH_ENERGY'` → `triggerEnergyPulse(targetIid)`
+- 目標寶可夢套 `.energy-pulse` class 0.7s → CSS `energy-attach-pulse` 綠光脈衝 + scale 1.04
+
+### Commit
+- `92de15b` feat(ui): 傷害數字彈出 + 能量 pulse
+
+---
+
+## 📝 2026-04-19 Session 30 B1 — 10 張通用訓練家補實裝
+
+### 新實裝（全部來自 MC「超級進化初階牌組100」卡包，但按名稱註冊跨 set 共用）
+
+| 卡名 | 子類 | 效果 |
+|:---|:---|:---|
+| 傷藥 | Item | 回 30 HP |
+| 西餐廚師 | Supporter | 戰鬥寶可夢回 70 |
+| 真菰 | Supporter | 全體各回 40 |
+| 白露的真心 | Supporter | 選 HP≤30 的寶可夢回復全部 HP |
+| 希特隆的機智 | Supporter | 全體【雷】寶可夢各回 60 |
+| 蓋伊 | Supporter | 抽 3 |
+| 裁判 | Supporter | 雙方洗手牌抽 4 |
+| 衝浪手 | Supporter | 換出場/備戰 + 抽至手牌 5 張 |
+| 精靈球 | Item | 擲硬幣正面搜 1 寶可夢 |
+| 寶可夢捕捉器 | Item | 擲硬幣正面呼叫對手備戰 |
+
+### 技術要點
+- 全部搭配 `TRAINER_GUARDS` 前置檢查（衝浪手需備戰、捕捉器需對手備戰、回復類需有傷害目標）
+- 復用現有 resolver：`healResolver` / `search-pokemon-to-hand` / `gust-opp`
+- 新增一個 resolver：`surfer-switch`（切換 + 抽到 5）
+
+### 覆蓋率更新
+- 訓練家/道具：30 → 40（13% → **18%**）
+- 攻擊效果：16 → 17（加了精靈球正面，雖然它是訓練家內的硬幣但 effect 重用了搜尋機制）
+- `CARD_AUDIT.md` 已重新生成
+
+### Commit
+- `0c85c11` feat(game): 實裝 10 張通用訓練家
+
+### ⚠️ 給下一位 AI 的注意事項
+
+1. **硬幣動畫觸發**依賴 log 訊息關鍵字：「正面」「反面」「擲硬幣」「先手」。新增擲硬幣效果時，log 訊息必須包含這些字串之一，否則不會動畫化。
+2. **傷害數字彈出的 DOM 座標**來自 `[data-drop-iid]` 屬性。新增場上寶可夢容器時要確保有此屬性。
+3. **Guard 與 effect 必須成對註冊**：guard 回 false 時 UI 根本不顯示按鈕（使用者無法觸發 effect），但 effect 內仍可做防衛檢查。
+4. **healResolver 的 params**：`healAmount` + `discardEnergy`；治療無上限時 `healAmount: 9999`（Math.max clamp 至 0）。
+5. **下次補卡優先**：M2a 的 34 張、SV8a 的 18 張 — CARD_AUDIT.md 已列完整清單。
