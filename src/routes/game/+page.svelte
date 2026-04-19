@@ -75,6 +75,22 @@
   let floatingRetreatMenu = $state<{ x: number; y: number } | null>(null);
   let viewDiscardFor = $state<0 | 1 | null>(null);
 
+  // ── 手牌 hover 預覽（Session 31 修正） ─────────────────────────────────────
+  // 不改原卡 transform — 避免邊界抖動、z-index 爭奪、擋住 drop target
+  let hoverHandIid = $state<string | null>(null);
+  let hoverHandAnchor = $state<{ x: number; y: number } | null>(null);
+
+  function enterHandCard(e: PointerEvent, iid: string) {
+    if (dragging) return; // 拖曳中不顯示預覽
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    hoverHandIid = iid;
+    hoverHandAnchor = { x: rect.left + rect.width / 2, y: rect.top };
+  }
+  function leaveHandCard() {
+    hoverHandIid = null;
+    hoverHandAnchor = null;
+  }
+
   // ── 傷害數字彈出 + 能量附加 pulse（Session 29 D2） ──────────────────────────
   const lastDamageByIid = new Map<string, number>();
   let damagePops = $state<Array<{ id: number; amount: number; x: number; y: number; heal: boolean }>>([]);
@@ -177,6 +193,7 @@
   function startDrag(e: PointerEvent, inst: CardInstance, kind: DragKind, card: Card) {
     if (e.button !== 0) return;
     e.preventDefault();
+    hoverHandIid = null; hoverHandAnchor = null; // 拖曳開始立即清 hover
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
     dragging = {
       iid: inst.iid, kind, cardId: inst.cardId, cardName: card.name,
@@ -1285,10 +1302,13 @@
             class:can-trainer={canTrainer}
             class:dragging={dragging?.iid===inst.iid}
             class:draggable={dragKind!==null}
+            class:hover-peek={hoverHandIid===inst.iid}
             style="--fan-rot:{rot}deg;--fan-lift:{liftY}px;"
             in:fly={{ x: 260, y: -40, duration: 380, delay: i * 70, easing: cubicOut }}
             out:fly={{ y: -220, duration: 260, easing: cubicOut }}
-            onpointerdown={(e)=>{if(dragKind)startDrag(e, inst, dragKind, c);}}
+            onpointerenter={(e)=>enterHandCard(e, inst.iid)}
+            onpointerleave={leaveHandCard}
+            onpointerdown={(e)=>{leaveHandCard(); if(dragKind)startDrag(e, inst, dragKind, c);}}
             onclick={()=>{if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
             title={dragKind?`拖曳到目標 · ${c.name}`:c.name}>
             <img src={c.imageUrl} alt={c.name}
@@ -1351,6 +1371,21 @@
         </button>
       {/each}
     </div>
+  {/if}
+
+  <!-- Hand Hover Preview（獨立浮層，不改原卡位置） -->
+  {#if hoverHandIid && hoverHandAnchor && !dragging}
+    {@const inst = myPlayer?.hand.find(h => h.iid === hoverHandIid)}
+    {#if inst}
+      {@const pc = getCard(inst.cardId)}
+      {#if pc}
+        <div class="hand-preview-float"
+          style="left:{hoverHandAnchor.x}px; top:{hoverHandAnchor.y - 8}px;"
+          in:fade={{ duration: 120 }} aria-hidden="true">
+          <img src={pc.imageUrl} alt={pc.name}/>
+        </div>
+      {/if}
+    {/if}
   {/if}
 
   <!-- Damage / Heal Popups -->
@@ -1817,10 +1852,20 @@
   .hand-card{ flex-shrink:0; width:92px; background:#0e1e0e; border:1.5px solid #2a3a2a; border-radius:6px; padding:.25rem; text-align:center; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.12rem;
     transform: rotate(var(--fan-rot, 0deg)) translateY(var(--fan-lift, 0));
     transform-origin: 50% 180%;
-    transition: transform .22s cubic-bezier(.3,.8,.3,1), border-color .15s, box-shadow .15s, z-index 0s;
+    transition: border-color .15s, box-shadow .15s;
     box-shadow: 0 3px 8px rgba(0,0,0,.35); }
-  .hand-card:hover:not(.dragging){ transform: translateY(-50px) scale(1.35) rotate(0deg); z-index: 50; box-shadow: 0 10px 26px rgba(0,0,0,.7); }
+  /* 當前 hover 的卡片略微上推提示（仍維持原大小，避免抖動 + z-index 爭奪） */
+  .hand-card.hover-peek:not(.dragging){
+    transform: rotate(var(--fan-rot, 0deg)) translateY(calc(var(--fan-lift, 0) - 14px));
+    transition: transform .15s ease-out, border-color .15s;
+    box-shadow: 0 8px 18px rgba(0,0,0,.55);
+  }
   .hand-card img{ width:88px; border-radius:4px; }
+  /* 浮層預覽：永遠最上層，不影響原卡 layout */
+  .hand-preview-float{ position:fixed; z-index:9999; pointer-events:none;
+    transform:translate(-50%, -100%);
+    filter:drop-shadow(0 10px 26px rgba(0,0,0,.85)); }
+  .hand-preview-float img{ width:220px; border-radius:10px; border:2px solid rgba(255,212,74,.5); }
   .hand-name{ font-size:.68rem; color:#bbb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
   .hand-hint{ font-size:.65rem; }
   .energy-hint{ color:#aaff44; }
