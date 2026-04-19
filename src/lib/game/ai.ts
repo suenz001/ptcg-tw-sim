@@ -22,11 +22,14 @@ import {
 
 export function getAIAction(
   state: GameState,
-  pool: Map<string, Card>
+  pool: Map<string, Card>,
+  myIdx: 0 | 1 = state.activePlayerIndex
 ): GameAction | null {
   if (state.phase === 'game-over') return null;
 
-  const aIdx = state.activePlayerIndex;
+  // setup 階段：使用 AI 自己的 index（雙方同時操作）
+  // 正式階段：使用 activePlayerIndex（AI 只在自己回合行動）
+  const aIdx: 0 | 1 = state.phase === 'setup' ? myIdx : state.activePlayerIndex;
   const dIdx = (1 - aIdx) as 0 | 1;
   const player = state.players[aIdx];
 
@@ -46,8 +49,8 @@ export function getAIAction(
   }
 
   // 4a. setup 階段
-  if (state.phase === 'setup-p1' || state.phase === 'setup-p2') {
-    return handleSetupAI(state, pool);
+  if (state.phase === 'setup') {
+    return handleSetupAI(state, pool, aIdx);
   }
 
   if (state.phase !== 'playing') return null;
@@ -124,8 +127,8 @@ export function getAIAction(
 
 // ── Setup 階段 AI ─────────────────────────────────────────────────────────────
 
-function handleSetupAI(state: GameState, pool: Map<string, Card>): GameAction | null {
-  const pIdx = state.phase === 'setup-p1' ? 0 : 1;
+function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): GameAction | null {
+  if (state.setupDone[pIdx]) return null;
   const player = state.players[pIdx];
 
   // 先選出場（選 HP 最高的基礎）
@@ -138,7 +141,7 @@ function handleSetupAI(state: GameState, pool: Map<string, Card>): GameAction | 
     const best = basics.reduce((a, b) =>
       (pool.get(a.cardId)?.hp ?? 0) >= (pool.get(b.cardId)?.hp ?? 0) ? a : b
     );
-    return { type: 'PLACE_ACTIVE', iid: best.iid };
+    return { type: 'PLACE_ACTIVE', iid: best.iid, senderIdx: pIdx };
   }
 
   // 再放備戰（最多 2 隻）
@@ -148,12 +151,12 @@ function handleSetupAI(state: GameState, pool: Map<string, Card>): GameAction | 
       return card?.supertype === 'Pokemon' && card.subtype === 'Basic';
     });
     if (basics.length > 0) {
-      return { type: 'BENCH_POKEMON', iid: basics[0].iid };
+      return { type: 'BENCH_POKEMON', iid: basics[0].iid, senderIdx: pIdx };
     }
   }
 
   // 完成 setup
-  return { type: 'FINISH_SETUP' };
+  return { type: 'FINISH_SETUP', senderIdx: pIdx };
 }
 
 // ── 自動解析選擇 ──────────────────────────────────────────────────────────────

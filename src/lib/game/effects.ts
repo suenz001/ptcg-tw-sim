@@ -99,12 +99,38 @@ export const TRAINER_EFFECTS = new Map<string, EffectFn>();
 /** effectKey → resolver 函式 */
 export const RESOLVERS = new Map<string, ResolveFn>();
 
+/**
+ * cardName → 可否打出此訓練家卡的前置檢查。
+ * 返回 true 表示可打；false 表示缺少合法目標（例如夜間擔架棄牌區為空）。
+ * 未註冊 guard 的卡片預設為可打出（保持向後相容）。
+ */
+export type TrainerGuardFn = (
+  state: GameState,
+  actorIdx: 0 | 1,
+  pool: Map<string, Card>
+) => boolean;
+export const TRAINER_GUARDS = new Map<string, TrainerGuardFn>();
+
 function reg(name: string, fn: EffectFn) {
   TRAINER_EFFECTS.set(name, fn);
 }
 
 function regR(key: string, fn: ResolveFn) {
   RESOLVERS.set(key, fn);
+}
+
+function regG(name: string, fn: TrainerGuardFn) {
+  TRAINER_GUARDS.set(name, fn);
+}
+
+export function canPlayTrainer(
+  cardName: string,
+  state: GameState,
+  actorIdx: 0 | 1,
+  pool: Map<string, Card>
+): boolean {
+  const guard = TRAINER_GUARDS.get(cardName);
+  return guard ? guard(state, actorIdx, pool) : true;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -237,6 +263,9 @@ function switchEffect(label: string): EffectFn {
 }
 reg('寶可夢交替', switchEffect('寶可夢交替'));
 reg('急進開關', switchEffect('急進開關'));
+// 切換類：備戰必須有寶可夢
+regG('寶可夢交替', (st, idx) => st.players[idx].bench.length > 0);
+regG('急進開關', (st, idx) => st.players[idx].bench.length > 0);
 
 regR('do-switch', (st, idx, iids, _params, _pool) => {
   return updatePlayer(st, idx, (p) => {
@@ -255,6 +284,11 @@ regR('do-switch', (st, idx, iids, _params, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 好傷藥 — 回復 60 HP，丟棄 1 個能量
+// Guard: 場上至少 1 隻寶可夢「有傷害且身上有能量」
+regG('好傷藥', (st, idx) => {
+  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  return all.some(c => c.damage > 0 && c.energyAttached.length > 0);
+});
 reg('好傷藥', (st, idx) => {
   st = addLog(st, '好傷藥：選擇回復 60 HP 的寶可夢（丟棄 1 個能量）', idx);
   return withPending(st, {
@@ -267,6 +301,11 @@ reg('好傷藥', (st, idx) => {
 });
 
 // 龍之秘藥 — 回復 120 HP（簡化，原版有條件）
+// Guard: 場上至少 1 隻寶可夢有傷害
+regG('龍之秘藥', (st, idx) => {
+  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  return all.some(c => c.damage > 0);
+});
 reg('龍之秘藥', (st, idx) => {
   st = addLog(st, '龍之秘藥：選擇回復 120 HP 的寶可夢', idx);
   return withPending(st, {
@@ -411,6 +450,7 @@ reg('莉莉艾的決意', (st, idx) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 老大的指令 — 選 1 隻對手備戰寶可夢與其戰鬥寶可夢互換
+regG('老大的指令', (st, idx) => st.players[(1 - idx) as 0 | 1].bench.length > 0);
 reg('老大的指令', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
   if (st.players[oppIdx].bench.length === 0) {
@@ -442,6 +482,8 @@ regR('gust-opp', (st, idx, iids, _params, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 高級球 — 丟棄 2 張手牌，搜尋任意寶可夢加手牌
+// Guard: 手牌至少 3 張（含本卡）—— 打出後需再丟 2 張
+regG('高級球', (st, idx) => st.players[idx].hand.length >= 3);
 reg('高級球', (st, idx) => {
   if (st.players[idx].hand.length < 2) {
     return addLog(st, '高級球：手牌不足 2 張，無法使用', idx);
@@ -485,29 +527,37 @@ reg('超級信號', (st, idx) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 夜間擔架 — 從棄牌區選 1 張寶可夢或基本能量卡加手牌
+regG('夜間擔架', (st, idx, pool) => {
+  // 棄牌區必須至少有 1 張寶可夢或能量
+  return st.players[idx].discard.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' || card?.supertype === 'Energy';
+  });
+});
 reg('夜間擔架', (st, idx) => {
-  const discard = st.players[idx].discard;
-  if (discard.length === 0) return addLog(st, '夜間擔架：棄牌區為空', idx);
   st = addLog(st, '夜間擔架：從棄牌區選 1 張寶可夢或基本能量加手牌', idx);
   return withPending(st, {
     type: 'discard-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'PokemonOrEnergy',
-    minCount: 0, maxCount: 1,
+    minCount: 1, maxCount: 1,
     effectKey: 'discard-to-hand',
   });
 });
 
-// 能量回收器 — 從棄牌區選最多 5 張基本能量卡放回牌庫
+// 能量回收器 — 從棄牌區選最多 5 張基本能量卡放回牌庫（義務性：至少選 1 張）
+regG('能量回收器', (st, idx, pool) =>
+  st.players[idx].discard.some(c => pool.get(c.cardId)?.supertype === 'Energy')
+);
 reg('能量回收器', (st, idx, pool) => {
   const energies = st.players[idx].discard.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
-  if (energies.length === 0) return addLog(st, '能量回收器：棄牌區沒有基本能量', idx);
-  st = addLog(st, '能量回收器：從棄牌區選最多 5 張基本能量洗回牌庫', idx);
+  const maxN = Math.min(5, energies.length);
+  st = addLog(st, `能量回收器：從棄牌區選 1–${maxN} 張基本能量洗回牌庫`, idx);
   return withPending(st, {
     type: 'discard-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'BasicEnergy',
-    minCount: 0, maxCount: 5,
+    minCount: 1, maxCount: maxN,
     effectKey: 'energy-retrieval',
   });
 });
@@ -527,9 +577,13 @@ regR('discard-to-hand', (st, idx, iids, _params, _pool) => {
 });
 
 // 奇跡修正檔 — 從棄牌區選 1 張基本超能量，附於備戰的超寶可夢身上（兩步）
-reg('奇跡修正檔', (st, idx, pool) => {
+regG('奇跡修正檔', (st, idx, pool) => {
+  // 棄牌區有能量 + 備戰有超屬寶可夢才能打
   const hasEnergy = st.players[idx].discard.some(c => pool.get(c.cardId)?.supertype === 'Energy');
-  if (!hasEnergy) return addLog(st, '奇跡修正檔：棄牌區沒有基本超能量', idx);
+  const hasPsychicBench = st.players[idx].bench.some(b => pool.get(b.cardId)?.pokemonType === 'Psychic');
+  return hasEnergy && hasPsychicBench;
+});
+reg('奇跡修正檔', (st, idx, pool) => {
   st = addLog(st, '奇跡修正檔：從棄牌區選 1 張基本超能量', idx);
   return withPending(st, {
     type: 'discard-search',
@@ -584,6 +638,7 @@ regR('miracle-codec-attach', (st, idx, iids, params, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 頂尖捕捉器 — 選 1 隻對手備戰 → 換到對手場上；再選自己備戰 → 切換自己
+regG('頂尖捕捉器', (st, idx) => st.players[(1 - idx) as 0 | 1].bench.length > 0);
 reg('頂尖捕捉器', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
   if (st.players[oppIdx].bench.length === 0) {
@@ -1080,6 +1135,8 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
         toolAttached: pk.toolAttached,
         status: pk.status,
         evolvedFromIid: pk.iid,
+        // 神奇糖果跳過 Stage 1，進化鏈只記錄 Basic cardId
+        evolvedFromCardIds: [...(pk.evolvedFromCardIds ?? []), pk.cardId],
         evolvedThisTurn: true,
         justPlaced: false,
       };

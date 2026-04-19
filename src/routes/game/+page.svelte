@@ -66,20 +66,31 @@
 
   // ── UI 互動狀態 ─────────────────────────────────────────────────────────────
   let selectedEnergyIid = $state<string | null>(null);
-  let showRetreatPicker = $state(false);
   let selectionPicked = $state<Set<string>>(new Set());
   let zoomCard = $state<Card | null>(null);
+  let zoomInst = $state<CardInstance | null>(null);
   let floatingEvoMenu = $state<{ fromIid: string; evoOpts: CardInstance[]; x: number; y: number } | null>(null);
+  let floatingRetreatMenu = $state<{ x: number; y: number } | null>(null);
   let viewDiscardFor = $state<0 | 1 | null>(null);
 
-  function openZoom(cardId: string) { const c = pool.get(cardId); if (c) zoomCard = c; }
-  function closeZoom() { zoomCard = null; }
+  function openZoom(cardId: string, inst: CardInstance | null = null) {
+    const c = pool.get(cardId);
+    if (c) { zoomCard = c; zoomInst = inst; }
+  }
+  function closeZoom() { zoomCard = null; zoomInst = null; }
   function openFloatingEvo(fromIid: string, evoOpts: CardInstance[], e: MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     floatingEvoMenu = { fromIid, evoOpts, x: rect.left + rect.width / 2, y: rect.top };
   }
+  function openFloatingRetreat(e: MouseEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    floatingRetreatMenu = { x: rect.left + rect.width / 2, y: rect.top };
+  }
   function onGlobalKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') { closeZoom(); floatingEvoMenu = null; viewDiscardFor = null; selectionPicked = new Set(); }
+    if (e.key === 'Escape') {
+      closeZoom(); floatingEvoMenu = null; floatingRetreatMenu = null;
+      viewDiscardFor = null; selectionPicked = new Set();
+    }
   }
 
   // ── AI 驅動迴圈 ──────────────────────────────────────────────────────────────
@@ -100,8 +111,7 @@
     const shouldAct = (() => {
       const ai = aiPlayerIndex;
       const g = game!;
-      if (g.phase === 'setup-p1') return ai === 0;
-      if (g.phase === 'setup-p2') return ai === 1;
+      if (g.phase === 'setup') return !g.setupDone[ai];
       if (g.phase !== 'playing') return false;
 
       // 取獎勵牌或選擇 — 由誰的行動決定
@@ -117,7 +127,7 @@
 
     if (!shouldAct) return;
 
-    const action = getAIAction(game!, pool);
+    const action = getAIAction(game!, pool, aiPlayerIndex);
     if (!action) return;
 
     aiThinking = true;
@@ -134,8 +144,7 @@
     if (g.phase === 'game-over') { aiThinking = false; return; }
 
     const shouldAct = (() => {
-      if (g.phase === 'setup-p1') return ai === 0;
-      if (g.phase === 'setup-p2') return ai === 1;
+      if (g.phase === 'setup') return !g.setupDone[ai];
       if (g.phase !== 'playing') return false;
       if (g.pendingPrizes > 0) return g.activePlayerIndex === ai;
       if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
@@ -195,8 +204,7 @@
     // 線上模式：只有輪到 myPlayerIndex 才能行動（必須優先於 AI 判斷）
     if (mode === 'online') {
       if (myPlayerIndex === null) return false;
-      if (game.phase === 'setup-p1') return myPlayerIndex === 0;
-      if (game.phase === 'setup-p2') return myPlayerIndex === 1;
+      if (game.phase === 'setup') return !game.setupDone[myPlayerIndex];
       if (game.pendingSelection) return game.pendingSelection.actorIdx === myPlayerIndex;
       if (game.turnPhase === 'end' && game.players[myPlayerIndex].active === null) return true;
       return game.activePlayerIndex === myPlayerIndex;
@@ -204,8 +212,7 @@
     // AI 模式：只有輪到人類時才能手動操作
     if (aiPlayerIndex !== null) {
       const hIdx = (1 - aiPlayerIndex) as 0 | 1;
-      if (game.phase === 'setup-p1') return hIdx === 0;
-      if (game.phase === 'setup-p2') return hIdx === 1;
+      if (game.phase === 'setup') return !game.setupDone[hIdx];
       if (game.pendingSelection) return game.pendingSelection.actorIdx === hIdx;
       if (game.turnPhase === 'end' && game.players[hIdx].active === null) return true;
       return game.activePlayerIndex === hIdx && game.pendingPrizes === 0;
@@ -351,7 +358,7 @@
     if (!game || !poolReady) return;
     const newState = applyAction(game, action as any, pool);
     game = newState;
-    floatingEvoMenu = null; showRetreatPicker = false; selectedEnergyIid = null;
+    floatingEvoMenu = null; floatingRetreatMenu = null; selectedEnergyIid = null;
 
     if (mode === 'online' && roomCode) {
       isSyncing = true;
@@ -672,26 +679,42 @@
 <!-- ══════════════════════════════════════════════════════════════════════
      Setup 畫面
   ══════════════════════════════════════════════════════════════════════ -->
-{:else if game.phase === 'setup-p1' || game.phase === 'setup-p2'}
-  {@const setupIdx = game.phase === 'setup-p1' ? 0 : 1}
+{:else if game.phase === 'setup'}
+  {@const setupIdx = (
+    mode === 'online' && myPlayerIndex !== null
+      ? myPlayerIndex
+      : (aiPlayerIndex !== null && !game.setupDone[(1 - aiPlayerIndex) as 0 | 1]
+          ? ((1 - aiPlayerIndex) as 0 | 1)
+          : (!game.setupDone[0] ? 0 : 1))
+  ) as 0 | 1}
   {@const setupPlayer = game.players[setupIdx]}
-  {@const iAmSetup = myPlayerIndex === null || myPlayerIndex === setupIdx}
+  {@const iAmDone = game.setupDone[setupIdx]}
+  {@const waitingForOpp = iAmDone && !game.setupDone[(1 - setupIdx) as 0 | 1]}
 
   <main class="setup-screen">
-    {#if !iAmSetup}
-      <!-- 線上模式：對手正在設置 -->
-      <h2>⏳ 等待 {setupPlayer.name} 選出場寶可夢…</h2>
-      <p class="muted">請稍候，對手正在準備中。</p>
+    {#if game.mulliganCounts && (game.mulliganCounts[0] > 0 || game.mulliganCounts[1] > 0)}
+      <div class="mulligan-banner">
+        🔄 Mulligan：
+        {#if game.mulliganCounts[0] > 0}{game.players[0].name} 重抽 {game.mulliganCounts[0]} 次（對手多抽 {game.mulliganCounts[0]} 張）　{/if}
+        {#if game.mulliganCounts[1] > 0}{game.players[1].name} 重抽 {game.mulliganCounts[1]} 次（對手多抽 {game.mulliganCounts[1]} 張）{/if}
+      </div>
+    {/if}
+    {#if waitingForOpp}
+      <h2>⏳ 等待對手完成準備…</h2>
+      <p class="muted">你已完成設置，等待 {game.players[(1 - setupIdx) as 0 | 1].name} 選出場寶可夢。</p>
     {:else}
       <h2>🃏 {setupPlayer.name} — 選出場寶可夢</h2>
       <p class="muted">從起始手牌選出 1 隻基礎寶可夢作為出場，再選備戰區（最多 5 隻），完成後按「準備完成」。</p>
+      {#if mode !== 'online' && aiPlayerIndex === null}
+        <p class="muted"><small>（本機雙人：雙方依序設置；對方已完成後再輪到另一方）</small></p>
+      {/if}
 
       {#if setupPlayer.active}
         {@const ac = getCard(setupPlayer.active.cardId)}
         <div class="setup-active">
           <strong>出場：</strong>
           <span class="poke-chip active-chip">{ac?.name ?? '?'} (HP {ac?.hp})</span>
-          <button class="small danger" onclick={() => dispatch(GameActions.placeActive(setupPlayer.active!.iid))}>換出場</button>
+          <button class="small danger" onclick={() => dispatch(GameActions.placeActive(setupPlayer.active!.iid, setupIdx))}>換出場</button>
         </div>
       {/if}
       {#if setupPlayer.bench.length > 0}
@@ -711,9 +734,9 @@
               <div class="hand-card-name">{c.name}</div>
               {#if c.supertype==='Pokemon'&&c.subtype==='Basic'}
                 {#if !setupPlayer.active}
-                  <button class="small primary" onclick={() => dispatch(GameActions.placeActive(inst.iid))}>出場</button>
+                  <button class="small primary" onclick={() => dispatch(GameActions.placeActive(inst.iid, setupIdx))}>出場</button>
                 {:else if setupPlayer.bench.length < 5}
-                  <button class="small" onclick={() => dispatch(GameActions.benchPokemon(inst.iid))}>備戰</button>
+                  <button class="small" onclick={() => dispatch(GameActions.benchPokemon(inst.iid, setupIdx))}>備戰</button>
                 {/if}
               {:else}
                 <span class="card-type-tag">{c.supertype}</span>
@@ -722,7 +745,7 @@
           {/if}
         {/each}
       </div>
-      <button class="btn-primary" disabled={!setupPlayer.active} onclick={() => dispatch(GameActions.finishSetup())}>✅ 準備完成</button>
+      <button class="btn-primary" disabled={!setupPlayer.active} onclick={() => dispatch(GameActions.finishSetup(setupIdx))}>✅ 準備完成</button>
     {/if}
   </main>
 
@@ -741,7 +764,7 @@
     {/if}
     <span class="turn-info">
       回合 {game.turn}　<strong>{activePlayer?.name}</strong> 行動中
-      {#if game.isFirstTurn && aIdx === 0}<span class="hint">（先手第1回合不能攻擊/進化）</span>{/if}
+      {#if game.isFirstTurn && aIdx === game.firstPlayerIdx}<span class="hint">（先手第1回合不能攻擊/進化）</span>{/if}
     </span>
     <span class="phase-tag">
       {#if game.turnPhase === 'draw'}📥 抽牌
@@ -755,11 +778,34 @@
         {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip">等待對手行動</span>{/if}
       {/if}
       {#if aiPlayerIndex !== null && aiThinking}<span class="chip ai-chip">🤖 AI 思考中…</span>{/if}
-      {#if activePlayer?.energyAttachedThisTurn}<span class="chip">⚡已附能</span>{/if}
-      {#if activePlayer?.supporterPlayedThisTurn}<span class="chip">📋已用支援</span>{/if}
       {#if stadiumCard}<span class="chip stadium-chip">🏟 {stadiumCard.name}</span>{/if}
-      {#if activePlayer?.retreatedThisTurn}<span class="chip">🔄已撤退</span>{/if}
     </span>
+    {#if game.phase === 'playing' && activePlayer}
+      {@const attEnergy = activePlayer.energyAttachedThisTurn}
+      {@const attSupp = activePlayer.supporterPlayedThisTurn}
+      {@const attRetreat = activePlayer.retreatedThisTurn}
+      {@const attStadium = (game.stadiumUsedThisTurn ?? [false,false])[aIdx]}
+      <div class="turn-res" title="本回合資源（{activePlayer.name}）">
+        <span class="res-item" class:res-used={attEnergy}>
+          <span class="res-ic">⚡</span><span class="res-lb">填能</span>
+          <span class="res-st">{attEnergy?'已用':'可用'}</span>
+        </span>
+        <span class="res-item" class:res-used={attSupp}>
+          <span class="res-ic">📋</span><span class="res-lb">支援者</span>
+          <span class="res-st">{attSupp?'已用':'可用'}</span>
+        </span>
+        <span class="res-item" class:res-used={attRetreat}>
+          <span class="res-ic">🔄</span><span class="res-lb">撤退</span>
+          <span class="res-st">{attRetreat?'已用':'可用'}</span>
+        </span>
+        {#if stadiumCard}
+          <span class="res-item" class:res-used={attStadium}>
+            <span class="res-ic">🏟</span><span class="res-lb">競技場</span>
+            <span class="res-st">{attStadium?'已用':'可用'}</span>
+          </span>
+        {/if}
+      </div>
+    {/if}
   </header>
 
   <!-- ── Play Mat ── -->
@@ -784,10 +830,18 @@
           {#if oppPlayer?.bench[i]}
             {@const b=oppPlayer.bench[i]}{@const bc=getCard(b.cardId)}
             <div class="bench-slot">
-              <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId)} class="zoomable"/>
+              <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>
               <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{bc?.hp?hpRemaining(b)/bc.hp*100:0}%;background:{hpColor(hpRemaining(b),bc?.hp??0)}"></div></div>
               <div class="bench-name">{bc?.name}</div>
               <div class="bench-stat">HP {hpRemaining(b)}/{bc?.hp}</div>
+              {#if b.toolAttached}{@const tc3=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc3?.name}</div>{/if}
+              {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
+              {#if b.status}<div class="status-chip-sm status-{b.status}">{
+                b.status === 'poisoned' ? '☠️' :
+                b.status === 'burned' ? '🔥' :
+                b.status === 'asleep' ? '💤' :
+                b.status === 'confused' ? '😵' : '⚡'
+              }</div>{/if}
             </div>
           {:else}<div class="bench-slot bench-empty"></div>{/if}
         {/each}
@@ -797,12 +851,14 @@
         {#if oppPlayer?.active}
           {@const ac=getCard(oppPlayer.active.cardId)}
           <div class="active-card opp-active">
-            <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId)}/>
+            <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
               <div class="hp-bar-wrap"><div class="hp-bar" style="width:{ac?.hp?hpRemaining(oppPlayer.active)/ac.hp*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),ac?.hp??0)}"></div></div>
               <div class="active-hp">HP {hpRemaining(oppPlayer.active)}/{ac?.hp}</div>
               <div class="active-nrg">{energySummary(oppPlayer.active)}</div>
+              {#if oppPlayer.active.toolAttached}{@const tc=getCard(oppPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
+              {#if oppPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
               {#if oppPlayer.active.status}<div class="status-chip status-{oppPlayer.active.status}">{
                 oppPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
                 oppPlayer.active.status === 'burned' ? '🔥 燒傷' :
@@ -898,8 +954,8 @@
       <div class="zone-active my-active-zone">
         <div class="zone-label-sm">
           我的出場
-          {#if canRetreatNow&&!showRetreatPicker&&!pendingSelection&&isMyTurn()}
-            <button class="btn-retreat" onclick={()=>showRetreatPicker=!showRetreatPicker}>
+          {#if canRetreatNow&&!pendingSelection&&isMyTurn()}
+            <button class="btn-retreat" onclick={(e)=>openFloatingRetreat(e)}>
               撤退（{retreatCostOf(myPlayer!.active!)}⚡）
             </button>
           {/if}
@@ -912,13 +968,14 @@
             onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
             <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
-              onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId);}}}/>
+              onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}/>
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
               <div class="hp-bar-wrap"><div class="hp-bar" style="width:{ac?.hp?hpRemaining(myPlayer.active)/ac.hp*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),ac?.hp??0)}"></div></div>
               <div class="active-hp">HP {hpRemaining(myPlayer.active)}/{ac?.hp}</div>
               <div class="active-nrg">{energySummary(myPlayer.active)}</div>
               {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
+              {#if myPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
               {#if myPlayer.active.status}<div class="status-chip status-{myPlayer.active.status}">{
                 myPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
                 myPlayer.active.status === 'burned' ? '🔥 燒傷' :
@@ -939,17 +996,6 @@
               </button>
             {/each}
           </div>
-          {#if showRetreatPicker&&!pendingSelection}
-            <div class="retreat-picker">
-              <span class="retreat-label">選擇換入：</span>
-              {#each myPlayer.bench as b}{@const bc=getCard(b.cardId)}
-                <button class="mini-poke-btn" onclick={()=>dispatch(GameActions.retreat(b.iid))}>
-                  <img src={bc?.imageUrl} alt={bc?.name}/><span>{bc?.name}</span>
-                </button>
-              {/each}
-              <button class="btn-xs" onclick={()=>showRetreatPicker=false}>取消</button>
-            </div>
-          {/if}
         {:else}
           <div class="active-card active-empty">（無出場）</div>
         {/if}
@@ -964,12 +1010,13 @@
               onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(b.iid)}>
               <img src={bc?.imageUrl} alt={bc?.name}
                 class:zoomable={!selectedEnergyIid}
-                onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId);}}}/>
+                onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>
               <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{bc?.hp?hpRemaining(b)/bc.hp*100:0}%;background:{hpColor(hpRemaining(b),bc?.hp??0)}"></div></div>
               <div class="bench-name">{bc?.name}</div>
               <div class="bench-stat">HP {hpRemaining(b)}/{bc?.hp}</div>
               <div class="bench-nrg">{energySummary(b)}</div>
               {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}
+              {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
               {#if b.status}<div class="status-chip-sm status-{b.status}">{
                 b.status === 'poisoned' ? '☠️' :
                 b.status === 'burned' ? '🔥' :
@@ -1088,6 +1135,20 @@
     </div>
   {/if}
 
+  <!-- Floating Retreat Menu -->
+  {#if floatingRetreatMenu && myPlayer?.active}
+    <div class="float-evo-backdrop" onclick={() => floatingRetreatMenu = null}></div>
+    <div class="float-evo-menu" style="left:{floatingRetreatMenu.x}px;top:{floatingRetreatMenu.y}px;">
+      <div class="float-evo-title">🔄 選擇換入</div>
+      {#each myPlayer.bench as b}{@const bc=getCard(b.cardId)}
+        <button class="evo-choice wide-evo" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.retreat(b.iid));floatingRetreatMenu=null;}}>
+          <img src={bc?.imageUrl} alt={bc?.name}/><span>{bc?.name}</span>
+        </button>
+      {/each}
+      <button class="evo-choice wide-evo" style="justify-content:center;color:#faa;" onclick={()=>floatingRetreatMenu=null}>取消</button>
+    </div>
+  {/if}
+
   <!-- Discard Viewer -->
   {#if viewDiscardFor !== null}
     {@const viewPlayer = game!.players[viewDiscardFor]}
@@ -1126,6 +1187,60 @@
               {#if zoomCard.regulationMark}<span class="badge mark-badge">{zoomCard.regulationMark}</span>{/if}
             </div>
             {#if zoomCard.evolvesFrom}<div class="zoom-meta">進化自：{zoomCard.evolvesFrom}</div>{/if}
+            {#if zoomInst}
+              {@const instHp = (zoomCard.hp ?? 0) - zoomInst.damage}
+              {@const toolC = zoomInst.toolAttached ? getCard(zoomInst.toolAttached.cardId) : null}
+              <div class="zoom-state">
+                <div class="state-title">📍 場上狀態</div>
+                {#if zoomCard.hp}
+                  <div class="state-row">
+                    <span class="state-k">HP</span>
+                    <span class="state-v">{instHp} / {zoomCard.hp}{#if zoomInst.damage>0}（傷害 {zoomInst.damage}）{/if}</span>
+                  </div>
+                {/if}
+                <div class="state-row">
+                  <span class="state-k">附能</span>
+                  <span class="state-v">
+                    {#if zoomInst.energyAttached.length===0}無{:else}
+                      {#each zoomInst.energyAttached as ec}{@const c2=getCard(ec.cardId)}<span class="state-ecard" title={c2?.name}>{c2?.name?.replace(/基本【|】能量/g,'') ?? '?'}</span>{/each}
+                    {/if}
+                  </span>
+                </div>
+                {#if toolC}
+                  <div class="state-row"><span class="state-k">🔧 道具</span><span class="state-v">{toolC.name}</span></div>
+                {/if}
+                {#if zoomInst.status}
+                  <div class="state-row"><span class="state-k">異常</span><span class="state-v">{
+                    zoomInst.status==='poisoned'?'☠️ 中毒':
+                    zoomInst.status==='burned'?'🔥 燒傷':
+                    zoomInst.status==='asleep'?'💤 睡眠':
+                    zoomInst.status==='confused'?'😵 混亂':
+                    zoomInst.status==='paralyzed'?'⚡ 麻痺':zoomInst.status
+                  }</span></div>
+                {/if}
+                {#if zoomInst.evolvedFromCardIds && zoomInst.evolvedFromCardIds.length>0}
+                  <div class="state-row">
+                    <span class="state-k">進化鏈</span>
+                    <span class="state-v state-chain">
+                      {#each zoomInst.evolvedFromCardIds as cid}{@const c3=getCard(cid)}<span class="chain-node">{c3?.name ?? '?'}</span><span class="chain-arr">→</span>{/each}
+                      <span class="chain-node chain-current">{zoomCard.name}</span>
+                    </span>
+                  </div>
+                {/if}
+                {#if zoomInst.abilityUsedThisTurn}
+                  <div class="state-row"><span class="state-k">✨</span><span class="state-v">本回合已使用特性</span></div>
+                {/if}
+                {#if zoomInst.justPlaced}
+                  <div class="state-row"><span class="state-k">🆕</span><span class="state-v">本回合才打出（無法進化）</span></div>
+                {/if}
+                {#if zoomInst.evolvedThisTurn}
+                  <div class="state-row"><span class="state-k">🔺</span><span class="state-v">本回合剛進化（無法再進化）</span></div>
+                {/if}
+                {#if zoomInst.cantAttackThisTurn}
+                  <div class="state-row"><span class="state-k">🚫</span><span class="state-v">下一回合無法攻擊</span></div>
+                {/if}
+              </div>
+            {/if}
             {#each zoomCard.abilities??[] as ab}
               <div class="zoom-ability"><span class="ability-label">特性</span><strong>{ab.name}</strong><p class="effect-text">{ab.effect ?? (ab as any).text}</p></div>
             {/each}
@@ -1221,6 +1336,7 @@
   /* Setup */
   .setup-screen{ background:#1a2a1a; border-radius:10px; }
   .setup-screen h2{ color:#aaffaa; }
+  .mulligan-banner{ background:#3a2a0e; border:1px solid #6a5a1a; color:#f8d080; padding:.5rem .8rem; border-radius:6px; margin-bottom:.8rem; font-size:.85rem; }
   .setup-active,.setup-bench-row{ margin:0.5rem 0; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
   .poke-chip{ padding:0.2rem 0.5rem; border-radius:6px; font-size:0.85rem; }
   .active-chip{ background:#3a7a3a; color:#fff; }
@@ -1253,6 +1369,12 @@
   .wait-chip{ background:#3a2a1a; color:#fa8; border-color:#5a3a1a; }
   .syncing-chip{ background:#3a3a1a; color:#ff8; border-color:#5a5a1a; }
   .waiting-msg{ color:#fa8; font-size:0.85rem; font-style:italic; }
+  .turn-res{ display:flex; gap:0.3rem; align-items:center; margin-left:auto; }
+  .res-item{ display:flex; align-items:center; gap:.2rem; padding:.15rem .4rem; border-radius:4px; background:#0e3a1e; border:1px solid #2a6a3a; font-size:.7rem; color:#9fa; }
+  .res-item.res-used{ background:#3a0e0e; border-color:#6a2a2a; color:#faa; opacity:.75; }
+  .res-ic{ font-size:.78rem; }
+  .res-lb{ font-weight:600; }
+  .res-st{ font-size:.62rem; opacity:.85; padding-left:.15rem; border-left:1px solid rgba(255,255,255,.15); margin-left:.15rem; }
 
   .playmat{ flex:1; display:grid; grid-template-rows:1fr auto 1fr; overflow:hidden;
     background:linear-gradient(180deg,rgba(0,60,0,.25) 0%,rgba(0,40,0,.1) 48%,rgba(0,0,0,.5) 50%,rgba(0,40,0,.1) 52%,rgba(0,60,0,.25) 100%),#1a2e1a; }
@@ -1403,6 +1525,16 @@
   .sub-badge{ background:#2a3a5a; color:#aad; border:1px solid #4a5a8a; }
   .mark-badge{ background:#3a3a1a; color:#cc8; border:1px solid #6a6a2a; }
   .zoom-meta{ font-size:.8rem; color:#888; }
+  .zoom-state{ background:#0e1a1e; border:1px solid #2a5a6a; border-radius:6px; padding:.5rem .7rem; font-size:.78rem; display:flex; flex-direction:column; gap:.3rem; }
+  .state-title{ font-weight:700; color:#8cf; font-size:.82rem; margin-bottom:.1rem; }
+  .state-row{ display:flex; gap:.5rem; align-items:baseline; line-height:1.3; }
+  .state-k{ color:#8aa; min-width:3.3rem; flex-shrink:0; }
+  .state-v{ color:#ddd; flex:1; display:flex; flex-wrap:wrap; gap:.25rem; align-items:baseline; }
+  .state-ecard{ display:inline-block; background:#2a4a6a; color:#ccf; padding:.08rem .4rem; border-radius:3px; font-size:.7rem; }
+  .state-chain{ flex-wrap:wrap; }
+  .chain-node{ background:#1a2a1a; border:1px solid #3a5a3a; border-radius:3px; padding:.08rem .35rem; font-size:.72rem; color:#aca; }
+  .chain-current{ background:#2a4a2a; color:#cfc; border-color:#5a7a5a; font-weight:600; }
+  .chain-arr{ color:#667; font-size:.7rem; margin:0 .15rem; }
   .zoom-ability{ background:#1e1e0e; border:1px solid #6a5a1a; border-radius:6px; padding:.5rem .6rem; }
   .ability-label{ display:inline-block; background:#8a1a1a; color:#fcc; font-size:.68rem; font-weight:700; padding:.1rem .35rem; border-radius:3px; margin-right:.4rem; }
   .zoom-attack{ background:#0e1e2e; border:1px solid #2a4a6a; border-radius:6px; padding:.45rem .6rem; }
@@ -1428,6 +1560,8 @@
   /* ── Tool + Stadium ── */
   .tool-chip{ font-size:.6rem; color:#f0d080; background:#2a2a0a; border:1px solid #6a5a20; border-radius:3px; padding:.06rem .2rem; margin-top:.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .tool-chip.sm{ font-size:.52rem; }
+  .ab-used-chip{ font-size:.58rem; color:#c8c0f0; background:#2a1a3a; border:1px solid #4a3a6a; border-radius:3px; padding:.06rem .25rem; margin-top:.1rem; display:inline-block; }
+  .ab-used-chip.sm{ font-size:.7rem; padding:0 .15rem; border:none; background:transparent; color:#d0a0ff; }
   .tool-btn{ background:#4a3a10; color:#f0d080; }
   .tool-btn:hover{ background:#6a5a20; }
   .stadium-chip{ background:#1a2a4a; color:#88aaff; border-color:#3a5a8a; }

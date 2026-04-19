@@ -6,9 +6,9 @@
 import type { GameAction } from './types';
 
 export const GameActions = {
-  placeActive:       (iid: string): GameAction => ({ type: 'PLACE_ACTIVE', iid }),
-  benchPokemon:      (iid: string): GameAction => ({ type: 'BENCH_POKEMON', iid }),
-  finishSetup:       (): GameAction => ({ type: 'FINISH_SETUP' }),
+  placeActive:       (iid: string, senderIdx: 0 | 1): GameAction => ({ type: 'PLACE_ACTIVE', iid, senderIdx }),
+  benchPokemon:      (iid: string, senderIdx: 0 | 1): GameAction => ({ type: 'BENCH_POKEMON', iid, senderIdx }),
+  finishSetup:       (senderIdx: 0 | 1): GameAction => ({ type: 'FINISH_SETUP', senderIdx }),
   drawCard:          (): GameAction => ({ type: 'DRAW_CARD' }),
   attachEnergy:      (energyIid: string, targetIid: string): GameAction =>
                        ({ type: 'ATTACH_ENERGY', energyIid, targetIid }),

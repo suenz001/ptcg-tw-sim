@@ -13,8 +13,7 @@ import type { EnergyType } from '$lib/cards/types';
 
 /** 整局遊戲的大階段 */
 export type GamePhase =
-  | 'setup-p1'   // P1 選出場寶可夢
-  | 'setup-p2'   // P2 選出場寶可夢
+  | 'setup'      // 雙方同時選出場寶可夢 + 備戰
   | 'playing'    // 正式對戰輪回
   | 'game-over'; // 遊戲結束
 
@@ -40,6 +39,8 @@ export interface CardInstance {
   toolAttached?: CardInstance;
   /** 進化來源的 iid（用來驗證是否可進化） */
   evolvedFromIid?: string;
+  /** 進化鏈：下層被進化掉的 cardId 堆疊（由底到頂，不含當前卡）。UI 顯示用。 */
+  evolvedFromCardIds?: string[];
   /** 特殊狀態（M4 實裝） */
   status?: SpecialCondition;
   /**
@@ -125,15 +126,22 @@ export interface GameState {
   turnPhase: TurnPhase;
   /** 目前行動玩家（0 = P1, 1 = P2） */
   activePlayerIndex: 0 | 1;
+  /** 由 createGame 擲硬幣決定的先手方 */
+  firstPlayerIdx: 0 | 1;
   players: [PlayerState, PlayerState];
-  /** 回合數（從 1 開始，P1 第一回合 = 1） */
+  /** 回合數（從 1 開始，先手第一回合 = 1） */
   turn: number;
   /**
-   * 第一回合旗標：P1 第一回合不能攻擊也不能進化（Setup 寶可夢限制）
+   * 第一回合旗標：先手第一回合不能攻擊也不能進化（Setup 寶可夢限制）
    */
   isFirstTurn: boolean;
   /** 等待 P1 or P2 在 setup 選完備戰區後，另一方是否也已完成 */
   setupDone: [boolean, boolean];
+  /**
+   * Mulligan 次數：起手 7 張沒有基礎寶可夢時的重抽次數。
+   * 對手每次 mulligan 可多抽 1 張作為補償（PTCG 官方規則簡化：自動補抽，不詢問）。
+   */
+  mulliganCounts: [number, number];
   /** 行動紀錄（給 UI 顯示用） */
   log: LogEntry[];
   /** 勝者（game-over 時填入） */
@@ -164,10 +172,10 @@ export interface LogEntry {
 // ── 動作 ────────────────────────────────────────────────────────────────────
 
 export type GameAction =
-  // setup 階段
-  | { type: 'PLACE_ACTIVE'; iid: string }
-  | { type: 'BENCH_POKEMON'; iid: string }
-  | { type: 'FINISH_SETUP' }
+  // setup 階段（senderIdx 必填 — setup 階段雙方同時行動，需明示來源）
+  | { type: 'PLACE_ACTIVE'; iid: string; senderIdx: 0 | 1 }
+  | { type: 'BENCH_POKEMON'; iid: string; senderIdx: 0 | 1 }
+  | { type: 'FINISH_SETUP'; senderIdx: 0 | 1 }
 
   // 正式對戰
   | { type: 'DRAW_CARD' }

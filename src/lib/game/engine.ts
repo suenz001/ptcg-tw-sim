@@ -11,9 +11,9 @@
 import type { Card, EnergyType } from '$lib/cards/types';
 import type {
   GameState, GameAction, CardInstance,
-  PlayerState, LogEntry, TurnPhase
+  PlayerState, LogEntry, TurnPhase, GamePhase
 } from './types';
-import { TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS } from './effects';
+import { TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer } from './effects';
 
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
@@ -181,7 +181,7 @@ export interface DeckSpec {
 
 /**
  * 建立一場新遊戲。
- * 洗牌 → 各抽 7 張 → 若無基礎寶可夢則自動補牌（mulligans）→ 進入 setup-p1。
+ * 洗牌 → 各抽 7 張 → 若無基礎寶可夢則自動補牌（mulligans）→ 進入 setup 階段（雙方同時）。
  */
 export function createGame(
   spec1: DeckSpec,
@@ -195,32 +195,52 @@ export function createGame(
   p1.deck = shuffle(deckToInstances(spec1.entries));
   p2.deck = shuffle(deckToInstances(spec2.entries));
 
-  // 各抽 7 張（含自動 mulligan）
-  dealOpeningHand(p1, pool);
-  dealOpeningHand(p2, pool);
+  // 各抽 7 張（記錄 mulligan 次數）
+  const m1 = dealOpeningHand(p1, pool);
+  const m2 = dealOpeningHand(p2, pool);
+
+  // Mulligan 補抽：對手因為我 mulligan 而多抽 N 張（官方規則簡化：自動補抽，不詢問）
+  for (let i = 0; i < m1; i++) {
+    const top = p2.deck.shift();
+    if (top) p2.hand.push(top);
+  }
+  for (let i = 0; i < m2; i++) {
+    const top = p1.deck.shift();
+    if (top) p1.hand.push(top);
+  }
+
+  // 擲硬幣決定先手
+  const firstPlayerIdx: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
 
   const state: GameState = {
     id: uid(),
-    phase: 'setup-p1',
+    phase: 'setup',
     turnPhase: 'main',
-    activePlayerIndex: 0,
+    activePlayerIndex: firstPlayerIdx,
+    firstPlayerIdx,
     players: [p1, p2],
     turn: 1,
     isFirstTurn: true,
     setupDone: [false, false],
+    mulliganCounts: [m1, m2],
     log: [],
     pendingPrizes: 0,
   };
 
-  return addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
+  let st = addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
+  st = addLog(st, `🪙 擲硬幣：${state.players[firstPlayerIdx].name} 先手`, null);
+  if (m1 > 0) st = addLog(st, `${spec1.name} Mulligan ${m1} 次 → ${spec2.name} 多抽 ${m1} 張`, 0);
+  if (m2 > 0) st = addLog(st, `${spec2.name} Mulligan ${m2} 次 → ${spec1.name} 多抽 ${m2} 張`, 1);
+  return st;
 }
 
 /**
  * 抽 7 張起始手牌。若無基礎寶可夢則重新洗牌並再抽（mulligan）。
- * 最多執行 10 次以避免無限循環（理論上不會發生）。
+ * 回傳 mulligan 次數（第一次未成功抽到基礎的重抽次數）。
  */
-function dealOpeningHand(player: PlayerState, pool: Map<string, Card>): void {
+function dealOpeningHand(player: PlayerState, pool: Map<string, Card>): number {
   let attempts = 0;
+  let mulligans = 0;
   do {
     // 把手牌放回牌組重洗
     player.deck = shuffle([...player.deck, ...player.hand]);
@@ -231,10 +251,10 @@ function dealOpeningHand(player: PlayerState, pool: Map<string, Card>): void {
       if (top) player.hand.push(top);
     }
     attempts++;
-  } while (
-    attempts < 10 &&
-    !player.hand.some((c) => isBasicPokemon(c.cardId, pool))
-  );
+    if (player.hand.some((c) => isBasicPokemon(c.cardId, pool))) break;
+    mulligans++;
+  } while (attempts < 10);
+  return mulligans;
 }
 
 // ── Setup 階段處理 ───────────────────────────────────────────────────────────
@@ -244,7 +264,17 @@ function handleSetup(
   action: GameAction,
   pool: Map<string, Card>
 ): GameState {
-  const pIdx = state.phase === 'setup-p1' ? 0 : 1;
+  // Setup 階段雙方同時行動，從 action.senderIdx 取操作方
+  if (
+    action.type !== 'PLACE_ACTIVE' &&
+    action.type !== 'BENCH_POKEMON' &&
+    action.type !== 'FINISH_SETUP'
+  ) {
+    return state;
+  }
+  const pIdx = action.senderIdx;
+  // 已完成 setup 的玩家不能再操作
+  if (state.setupDone[pIdx]) return state;
   const player = { ...state.players[pIdx] };
   const players = [...state.players] as [PlayerState, PlayerState];
 
@@ -290,23 +320,18 @@ function handleSetup(
     players[pIdx] = player;
 
     let newState: GameState = { ...state, players, setupDone: newDone };
+    newState = addLog(newState, `${player.name} 完成準備。`, null);
 
     if (newDone[0] && newDone[1]) {
-      // 雙方都完成 → 進入正式對戰，P1 先手
+      // 雙方都完成 → 進入正式對戰，由擲硬幣決定的先手方先行動
       newState = {
         ...newState,
         phase: 'playing',
-        turnPhase: 'draw',
-        activePlayerIndex: 0,
+        turnPhase: 'main',
+        activePlayerIndex: state.firstPlayerIdx,
         isFirstTurn: true,
       };
-      newState = addLog(newState, 'Setup 完成！遊戲開始，先手玩家行動中。', null);
-      // 先手 P1 跳過抽牌（規則：先手第 1 回合不抽牌）
-      newState = { ...newState, turnPhase: 'main' };
-    } else {
-      // P1 完成，換 P2 setup
-      newState = { ...newState, phase: 'setup-p2' };
-      newState = addLog(newState, `${player.name} 完成準備。`, null);
+      newState = addLog(newState, `Setup 完成！${state.players[state.firstPlayerIdx].name} 先手行動中。`, null);
     }
     return newState;
   }
@@ -421,7 +446,8 @@ function handlePlaying(
     if (!baseCard) return state;
     if (evoCard.evolvesFrom !== baseCard.name) return state;
 
-    // 進化：繼承傷害、能量、狀態
+    // 進化：繼承傷害、能量、狀態；進化鏈堆疊保留被進化掉的 cardId
+    const prevChain = basePoke.evolvedFromCardIds ?? [];
     const evolved: CardInstance = {
       ...evoInst,
       damage: basePoke.damage,
@@ -429,6 +455,7 @@ function handlePlaying(
       toolAttached: basePoke.toolAttached,
       status: basePoke.status,
       evolvedFromIid: basePoke.iid,
+      evolvedFromCardIds: [...prevChain, basePoke.cardId],
       evolvedThisTurn: true,
       justPlaced: false,
     };
@@ -509,6 +536,9 @@ function handlePlaying(
 
     // 支援者限制：每回合只能打 1 張
     if (trainerCard.subtype === 'Supporter' && attacker.supporterPlayedThisTurn) return state;
+
+    // 義務性前置檢查：夜間擔架棄牌為空、寶可夢交替備戰為空等情況禁止打出
+    if (!canPlayTrainer(trainerCard.name, state, aIdx, pool)) return state;
 
     // 移出手牌
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
@@ -709,7 +739,7 @@ function handlePlaying(
   // ── 宣告招式 ──────────────────────────────────────────────────────────────
   if (action.type === 'ATTACK') {
     if (state.turnPhase !== 'main') return state;
-    if (state.isFirstTurn && aIdx === 0) return state; // 先手 P1 第 1 回合不能攻擊
+    if (state.isFirstTurn && aIdx === state.firstPlayerIdx) return state; // 先手第 1 回合不能攻擊
     if (!attacker.active) return state;
     if (!defender.active) return state;
 
@@ -1092,7 +1122,7 @@ export function applyAction(
 ): GameState {
   if (state.phase === 'game-over') return state;
 
-  if (state.phase === 'setup-p1' || state.phase === 'setup-p2') {
+  if (state.phase === 'setup') {
     return handleSetup(state, action, pool);
   }
 
@@ -1111,7 +1141,7 @@ export function getAvailableAttacks(
   pool: Map<string, Card>
 ): number[] {
   if (state.turnPhase !== 'main') return [];
-  if (state.isFirstTurn && state.activePlayerIndex === 0) return [];
+  if (state.isFirstTurn && state.activePlayerIndex === state.firstPlayerIdx) return [];
   const player = state.players[state.activePlayerIndex];
   if (!player.active) return [];
   const card = pool.get(player.active.cardId);
@@ -1203,6 +1233,8 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       const isTrainer = c.supertype === 'Trainer';
       if (!isTool && !isTrainer) return false;
       if (c.subtype === 'Supporter' && player.supporterPlayedThisTurn) return false;
+      // 義務性檢查：缺合法目標的卡不可打出
+      if (!canPlayTrainer(c.name, state, state.activePlayerIndex, pool)) return false;
       return true;
     })
     .map(inst => inst.iid);

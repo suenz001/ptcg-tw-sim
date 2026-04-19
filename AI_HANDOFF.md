@@ -1315,3 +1315,113 @@ const myIdx = $derived<0 | 1>(
 - `aiPlayerIndex` 預設為 `1` 是刻意保留（本機 lobby 的 AI 勾選預設開啟），**不要**把它改成 `null` 預設值 — 那會讓本機新玩家看不到 AI checkbox 預勾
 - 任何「依 mode 判斷視角／行動權」的 derived，`mode === 'online'` 分支都必須優先於 `aiPlayerIndex` 分支
 - 進線上 Lobby（`mode='online'`）時**不需**重置 `aiPlayerIndex`，因為 derived 已把 mode 納入考量，且 `scheduleAI()` (line 131) 也有 `mode === 'online'` guard 防止 AI 在線上觸發
+
+---
+
+## 📝 2026-04-19 Session 22 — 遊戲體驗大修（8 項）
+
+> 觸發：使用者回報多項規則/UI 缺失 — 撤退按不到、卡片詳情看不出當前狀態、缺先後手擲硬幣、缺 HUD 每回合資源顯示、特性已用沒標示、義務性效果可白打、setup 依序不同時 + 無 mulligan 補抽
+
+### 1. 撤退 bug 修復（UI overflow 裁切）
+
+**根因**：`retreat-picker` 使用 `position:absolute; bottom:100%` 放在 `.zone-active.my-active-zone` 內，但 `.playmat` / `.field-row` 有 `overflow:hidden`，picker 按鈕被裁切到看不見也點不到（跟 Session 16 修進化選單同一問題）。
+
+**修復**：改用 `position:fixed` 的浮動覆蓋層 `floatingRetreatMenu`，仿 `floatingEvoMenu` 模式：
+- 撤退按鈕 `onclick` 用 `getBoundingClientRect()` 取得位置 → 開啟浮動選單
+- `.float-evo-menu` 共用樣式
+- Escape 鍵 / 點背景 / dispatch 後自動關閉
+
+### 2. 卡片 zoom modal 顯示場上實例狀態
+
+**新增**：`CardInstance.evolvedFromCardIds?: string[]`（進化鏈堆疊）。`EVOLVE` handler 與 `rare-candy-evolve` resolver 在進化時 push 被進化卡的 cardId。
+
+**zoom modal 新增「📍 場上狀態」面板**（僅在 `zoomInst` 非 null 時顯示）：
+- HP 剩餘/總量 + 傷害值
+- 附加能量（顯示簡名 chip）
+- 附加道具（🔧）
+- 特殊狀態（☠️/🔥/💤/😵/⚡）
+- 進化鏈（A→B→當前）
+- 本回合已使用特性（✨）
+- `justPlaced` / `evolvedThisTurn` / `cantAttackThisTurn` 旗標
+
+`openZoom(cardId, inst?)` 第二個參數傳入 CardInstance；出場 / 備戰 / 棄牌區查看都傳 inst。
+
+### 3. 開戰擲硬幣決定先後手
+
+- `GameState` 新增 `firstPlayerIdx: 0 | 1`
+- `createGame` 用 `Math.random() < 0.5` 決定先手方，log 輸出「🪙 擲硬幣：XXX 先手」
+- 所有原本硬編碼 `aIdx === 0`（先手 P1 第 1 回合禁攻擊）改為 `aIdx === state.firstPlayerIdx`
+- `getAvailableAttacks` / UI hint 同步修正
+
+### 4. HUD 每回合資源狀態列（新 UI）
+
+header 新增 `.turn-res` 固定顯示 4 格（顯示 activePlayer 狀態）：
+- ⚡ 填能 · 📋 支援者 · 🔄 撤退 · 🏟 競技場
+- 每格：圖示 + 名稱 + 「可用/已用」狀態（綠背景=可用、紅背景=已用）
+- END_TURN 後旗標自動重置 → 顯示自動更新
+
+### 5. 已用特性圖示
+
+新增 `CardInstance.abilityUsedThisTurn` 的視覺化：
+- Active 寶可夢：`.ab-used-chip`（紫色 chip「✨已用特性」）
+- Bench 寶可夢：小版 ✨ 圖示
+- 雙方都顯示（方便看對手狀態）
+
+### 6. 義務性效果系統（TRAINER_GUARDS）
+
+**新增** `TRAINER_GUARDS: Map<string, (st, idx, pool) => boolean>` + `canPlayTrainer()` helper：若 guard 回傳 false，該卡從 `getPlayableTrainers` 過濾掉，`PLAY_TRAINER` handler 也直接 return state 不處理。
+
+**已註冊 guards**：
+| 卡片 | Guard |
+|:---|:---|
+| 夜間擔架 | 棄牌區至少有 1 張寶可夢或能量 |
+| 能量回收器 | 棄牌區至少 1 張基本能量 |
+| 奇跡修正檔 | 棄牌有能量 **且** 備戰有超屬寶可夢 |
+| 寶可夢交替 / 急進開關 | 備戰有寶可夢 |
+| 老大的指令 / 頂尖捕捉器 | 對手備戰有寶可夢 |
+| 高級球 | 手牌 ≥ 3（扣本卡後能再丟 2） |
+| 好傷藥 | 場上至少 1 隻有傷害且有能量 |
+| 龍之秘藥 | 場上至少 1 隻有傷害 |
+
+**minCount 強制選**：
+- 夜間擔架：`minCount: 0 → 1`（必選）
+- 能量回收器：`minCount: 0 → 1`（必選；maxCount = min(5, 棄牌基本能量數)）
+
+### 7. Setup 同時抽牌 + Mulligan 補抽
+
+**GamePhase 重構**：`'setup-p1' | 'setup-p2'` → `'setup'`（單一階段，雙方同時）
+
+- `GameAction` 中 `PLACE_ACTIVE` / `BENCH_POKEMON` / `FINISH_SETUP` 新增 **必填** `senderIdx: 0 | 1`
+- `handleSetup` 從 `action.senderIdx` 取玩家 index，檢查 `setupDone[idx]` 避免重複操作
+- 雙方 FINISH_SETUP 都完成 → 進入 playing；否則 phase 維持 `'setup'`
+
+**Mulligan 機制**：
+- `dealOpeningHand` 回傳 mulligan 次數（7 張起手無基礎寶可夢時的重抽次數）
+- `createGame` 根據 m1/m2 對**對手**自動補抽（PTCG 官方規則簡化版：省略詢問，理性玩家必選補抽）
+- `GameState` 新增 `mulliganCounts: [number, number]` 欄位
+- Setup 畫面顯示 `.mulligan-banner` 提示重抽次數與補抽結果
+
+**UI setup 畫面**：
+- setupIdx 由 mode + AI/myPlayerIndex + setupDone 決定（本機雙人：P1 完成後換 P2；AI 對手：AI 那邊由 `tickAI` 自動做；線上：各自看自己）
+- 已完成的玩家看到「⏳ 等待對手完成準備…」
+- `isMyTurn` / `isMyDefenderTurn` / `tickAI` / `$effect` 監聽全部改為 `phase === 'setup' && !setupDone[idx]`
+
+**AI 改造**（[src/lib/game/ai.ts](src/lib/game/ai.ts)）：
+- `getAIAction(state, pool, myIdx?)` 新增第三參數
+- setup 階段用 `myIdx`（雙方同時，不看 activePlayerIndex）
+- 正式階段仍用 `activePlayerIndex`
+- `handleSetupAI` 接收 pIdx 參數，action 帶 `senderIdx: pIdx`
+
+### 驗證
+- `npm run build` ✅（SvelteKit adapter-static 通過，無 TS 錯誤）
+
+### Commit
+- `（本 session）` feat(game): 撤退 bug 修復、zoom 實例狀態、擲硬幣、HUD、特性標記、義務性 guard、setup 同時+mulligan
+
+### ⚠️ 給下一位 AI 的注意事項
+
+1. **setup action 必須帶 senderIdx**：`GameActions.placeActive(iid, senderIdx)` 等。舊代碼呼叫不帶 senderIdx 會 TS 錯誤。
+2. **Mulligan 簡化版**：目前是「自動補抽」不詢問對手。若要改回官方「對手可選」，需加 `pendingMulliganChoice` pending 類型並擴充 UI。
+3. **TRAINER_GUARDS 註冊位置**：緊貼 `reg('xxx', ...)` 之前，維持可讀性。guard 回傳 false 時此卡會從 `getPlayableTrainers` 過濾 → UI 看不到「使用」按鈕。
+4. **進化鏈**：`evolvedFromCardIds` 只記錄 cardId（不是 iid），因為被進化掉的 CardInstance 已丟失，cardId 足以顯示名稱/圖片。
+5. **firstPlayerIdx 欄位**：由 createGame 隨機決定後不再改變。`state.isFirstTurn && aIdx === state.firstPlayerIdx` 才是「先手第 1 回合」的正確判斷。
