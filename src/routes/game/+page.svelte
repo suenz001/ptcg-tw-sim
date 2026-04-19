@@ -73,6 +73,93 @@
   let floatingRetreatMenu = $state<{ x: number; y: number } | null>(null);
   let viewDiscardFor = $state<0 | 1 | null>(null);
 
+  // ── 拖曳交互（Session 25 A1） ──────────────────────────────────────────────
+  type DragKind = 'energy' | 'basic' | 'tool';
+  let dragging = $state<null | {
+    iid: string; kind: DragKind; cardId: string; cardName: string;
+    imageUrl: string;
+    x: number; y: number;        // 當前滑鼠位置
+    startX: number; startY: number;
+    moved: boolean;              // 是否超出門檻視為「拖曳」
+  }>(null);
+  let dropTargetIid = $state<string | null>(null); // 當前 hover 的 drop target iid（寶可夢）
+  let dropBenchEmpty = $state(false);              // 當前 hover 的是否為空備戰格
+  const DRAG_THRESHOLD = 6; // px
+
+  function startDrag(e: PointerEvent, inst: CardInstance, kind: DragKind, card: Card) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
+    dragging = {
+      iid: inst.iid, kind, cardId: inst.cardId, cardName: card.name,
+      imageUrl: card.imageUrl,
+      x: e.clientX, y: e.clientY,
+      startX: e.clientX, startY: e.clientY,
+      moved: false,
+    };
+  }
+
+  function onWindowPointerMove(e: PointerEvent) {
+    if (!dragging) return;
+    const dx = e.clientX - dragging.startX;
+    const dy = e.clientY - dragging.startY;
+    if (!dragging.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) dragging.moved = true;
+    dragging.x = e.clientX;
+    dragging.y = e.clientY;
+
+    if (dragging.moved) {
+      // 找底下的 drop target（避開拖曳中的浮動預覽本身）
+      const el = document.elementsFromPoint(e.clientX, e.clientY)
+        .find(n => (n as HTMLElement).dataset && ((n as HTMLElement).dataset.dropType || (n as HTMLElement).dataset.dropIid)) as HTMLElement | undefined;
+      if (el) {
+        const type = el.dataset.dropType;
+        if (type === 'poke') {
+          dropTargetIid = el.dataset.dropIid ?? null;
+          dropBenchEmpty = false;
+        } else if (type === 'bench-empty') {
+          dropTargetIid = null;
+          dropBenchEmpty = true;
+        } else {
+          dropTargetIid = null;
+          dropBenchEmpty = false;
+        }
+      } else {
+        dropTargetIid = null;
+        dropBenchEmpty = false;
+      }
+    }
+  }
+
+  async function onWindowPointerUp(_e: PointerEvent) {
+    if (!dragging) return;
+    const d = dragging;
+    dragging = null;
+    const tIid = dropTargetIid;
+    const benchEmpty = dropBenchEmpty;
+    dropTargetIid = null;
+    dropBenchEmpty = false;
+
+    if (!d.moved) return; // 單純 click — onclick handler 會處理
+    if (!isMyTurn() || pendingSelection) return;
+
+    if (d.kind === 'energy' && tIid) {
+      await dispatch(GameActions.attachEnergy(d.iid, tIid));
+    } else if (d.kind === 'basic' && benchEmpty) {
+      await dispatch(GameActions.playBasic(d.iid));
+    } else if (d.kind === 'tool' && tIid) {
+      // 打出道具 → 觸發 pendingSelection（attach-tool）→ 用 drop target 直接 resolve
+      await dispatch(GameActions.playTrainer(d.iid));
+      // dispatch 是同步 setState（Svelte 5 $state），game 已更新；檢查 pendingSelection
+      const sel = game?.pendingSelection;
+      if (sel?.effectKey === 'attach-tool') {
+        const validIids = (sel.params?.validIids as string[] | undefined) ?? [];
+        if (validIids.includes(tIid)) {
+          await dispatch(GameActions.resolveSelection([tIid]));
+        }
+      }
+    }
+  }
+
   function openZoom(cardId: string, inst: CardInstance | null = null) {
     const c = pool.get(cardId);
     if (c) { zoomCard = c; zoomInst = inst; }
@@ -486,7 +573,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onGlobalKey} />
+<svelte:window onkeydown={onGlobalKey} onpointermove={onWindowPointerMove} onpointerup={onWindowPointerUp} />
 
 <!-- ══════════════════════════════════════════════════════════════════════
      模式選擇 / Lobby
@@ -965,6 +1052,10 @@
           {@const evoOpts=evoOptionsFor(myPlayer.active.iid)}
           <div class="active-card mine-active"
             class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
+            class:drop-zone={(dragging?.kind==='energy'||dragging?.kind==='tool')&&isMyTurn()}
+            class:drop-hover={dropTargetIid===myPlayer.active.iid}
+            data-drop-type="poke"
+            data-drop-iid={myPlayer.active.iid}
             onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
             <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
@@ -1007,6 +1098,10 @@
             {@const b=myPlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
             <div class="bench-slot"
               class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
+              class:drop-zone={(dragging?.kind==='energy'||dragging?.kind==='tool')&&isMyTurn()}
+              class:drop-hover={dropTargetIid===b.iid}
+              data-drop-type="poke"
+              data-drop-iid={b.iid}
               onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(b.iid)}>
               <img src={bc?.imageUrl} alt={bc?.name}
                 class:zoomable={!selectedEnergyIid}
@@ -1031,7 +1126,12 @@
                 <button class="ability-btn-sm" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>✨{ab.abilityName}</button>
               {/each}
             </div>
-          {:else}<div class="bench-slot bench-empty"></div>{/if}
+          {:else}
+            <div class="bench-slot bench-empty"
+              class:drop-zone={dragging?.kind==='basic'&&isMyTurn()&&(myPlayer?.bench.length??0)<5}
+              class:drop-hover={dropBenchEmpty&&dragging?.kind==='basic'}
+              data-drop-type="bench-empty"></div>
+          {/if}
         {/each}
       </div>
 
@@ -1066,18 +1166,22 @@
           {@const canEnergy=isEnergyCard&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()}
           {@const canBasic=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()}
           {@const canTrainer=(isTrainerCard||isToolCard)&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
+          {@const dragKind = canEnergy ? 'energy' : canBasic ? 'basic' : (canTrainer && isToolCard) ? 'tool' : null}
           <div class="hand-card"
             class:selected={selectedEnergyIid===inst.iid}
             class:can-energy={canEnergy}
             class:can-basic={canBasic}
             class:can-trainer={canTrainer}
-            onclick={()=>{if(canEnergy)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
-            title={c.name}>
+            class:dragging={dragging?.iid===inst.iid}
+            class:draggable={dragKind!==null}
+            onpointerdown={(e)=>{if(dragKind)startDrag(e, inst, dragKind, c);}}
+            onclick={()=>{if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
+            title={dragKind?`拖曳到目標 · ${c.name}`:c.name}>
             <img src={c.imageUrl} alt={c.name}
               class:zoomable={!canEnergy}
               onclick={(e)=>{if(!canEnergy){e.stopPropagation();openZoom(inst.cardId);}}}/>
             <span class="hand-name">{c.name}</span>
-            {#if canEnergy}<span class="hand-hint energy-hint">選取⚡</span>
+            {#if canEnergy}<span class="hand-hint energy-hint">⚡ 拖曳附加</span>
             {:else if canBasic}<button class="hand-btn basic-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playBasic(inst.iid));}}>備戰</button>
             {:else if canTrainer && isToolCard}<button class="hand-btn tool-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playTrainer(inst.iid));}}>🔧 附加</button>
             {:else if canTrainer}<button class="hand-btn trainer-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playTrainer(inst.iid));}}>{c.subtype==='Supporter'?'支援者':c.subtype==='Stadium'?'競技場':'使用'}</button>
@@ -1132,6 +1236,19 @@
           <img src={ec?.imageUrl} alt={ec?.name}/><span>{ec?.name}</span>
         </button>
       {/each}
+    </div>
+  {/if}
+
+  <!-- Floating Drag Preview -->
+  {#if dragging && dragging.moved}
+    <div class="drag-preview" style="left:{dragging.x}px;top:{dragging.y}px;" aria-hidden="true">
+      <img src={dragging.imageUrl} alt=""/>
+      <div class="drag-hint">
+        {#if dragging.kind==='energy'}⚡ 拖到寶可夢附加
+        {:else if dragging.kind==='basic'}📥 拖到備戰空格
+        {:else if dragging.kind==='tool'}🔧 拖到寶可夢附加
+        {/if}
+      </div>
     </div>
   {/if}
 
@@ -1405,6 +1522,17 @@
   .active-nrg{ font-size:.8rem; color:#aaa; margin-top:.2rem; }
   .attach-hint{ font-size:.75rem; color:#aaff44; font-weight:700; margin-top:.2rem; }
   @keyframes glow{ from{box-shadow:0 0 4px #aaff44}to{box-shadow:0 0 14px #aaff44} }
+
+  /* ── 拖曳交互（Session 25） ── */
+  .hand-card.draggable{ cursor:grab; touch-action:none; user-select:none; }
+  .hand-card.draggable:active{ cursor:grabbing; }
+  .hand-card.dragging{ opacity:0.3; transform:scale(0.95); transition:transform .15s, opacity .15s; }
+  .drop-zone{ outline:2px dashed rgba(136,204,255,.55); outline-offset:2px; animation:drop-pulse 1.2s infinite alternate; }
+  .drop-hover{ outline:3px solid #ffd44a !important; outline-offset:2px; box-shadow:0 0 18px rgba(255,212,74,.6); }
+  @keyframes drop-pulse{ from{outline-color:rgba(136,204,255,.35)}to{outline-color:rgba(136,204,255,.75)} }
+  .drag-preview{ position:fixed; z-index:9999; pointer-events:none; transform:translate(-50%,-50%) rotate(4deg); width:110px; filter:drop-shadow(0 8px 16px rgba(0,0,0,.65)); }
+  .drag-preview img{ width:100%; border-radius:6px; border:2px solid rgba(255,212,74,.7); }
+  .drag-hint{ margin-top:.3rem; text-align:center; font-size:.68rem; color:#ffeaa6; background:rgba(0,0,0,.75); padding:.15rem .4rem; border-radius:3px; white-space:nowrap; }
 
   .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:hidden; min-width:0; }
   .bench-slot{ flex:1; min-width:0; max-width:115px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:visible; }
