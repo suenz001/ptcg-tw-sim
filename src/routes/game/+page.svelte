@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { fly, scale } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import { base } from '$app/paths';
   import type { Card } from '$lib/cards/types';
   import { loadAllSets, buildCardIndex } from '$lib/cards/pool';
@@ -780,8 +782,8 @@
 
   <main class="setup-screen">
     {#if game.mulliganCounts && (game.mulliganCounts[0] > 0 || game.mulliganCounts[1] > 0)}
-      <div class="mulligan-banner">
-        🔄 Mulligan：
+      <div class="mulligan-banner" in:scale={{ duration: 350, start: 0.7 }}>
+        <span class="shuffle-ic">🔄</span> Mulligan：
         {#if game.mulliganCounts[0] > 0}{game.players[0].name} 重抽 {game.mulliganCounts[0]} 次（對手多抽 {game.mulliganCounts[0]} 張）　{/if}
         {#if game.mulliganCounts[1] > 0}{game.players[1].name} 重抽 {game.mulliganCounts[1]} 次（對手多抽 {game.mulliganCounts[1]} 張）{/if}
       </div>
@@ -813,10 +815,12 @@
 
       <h3>手牌</h3>
       <div class="hand-grid">
-        {#each setupPlayer.hand as inst}
+        {#each setupPlayer.hand as inst, i (inst.iid)}
           {@const c = getCard(inst.cardId)}
           {#if c}
-            <div class="hand-card" class:selectable={isBasicPokemonCard(c)}>
+            <div class="hand-card" class:selectable={isBasicPokemonCard(c)}
+              in:fly={{ x: 220, y: -30, duration: 420, delay: i * 80, easing: cubicOut }}
+              out:fly={{ y: -160, duration: 260 }}>
               <img src={c.imageUrl} alt={c.name} onclick={() => openZoom(inst.cardId)} class="zoomable" />
               <div class="hand-card-name">{c.name}</div>
               {#if isBasicPokemonCard(c)}
@@ -1156,7 +1160,7 @@
       {#if !isMyTurn()}<span class="hand-not-my-turn">（等待對手行動中）</span>{/if}
     </div>
     <div class="hand-scroll">
-      {#each myPlayer?.hand??[] as inst}
+      {#each myPlayer?.hand??[] as inst, i (inst.iid)}
         {@const c=getCard(inst.cardId)}
         {#if c}
           {@const isEnergyCard=c.supertype==='Energy'}
@@ -1174,6 +1178,8 @@
             class:can-trainer={canTrainer}
             class:dragging={dragging?.iid===inst.iid}
             class:draggable={dragKind!==null}
+            in:fly={{ x: 260, y: -40, duration: 380, delay: i * 70, easing: cubicOut }}
+            out:fly={{ y: -220, duration: 260, easing: cubicOut }}
             onpointerdown={(e)=>{if(dragKind)startDrag(e, inst, dragKind, c);}}
             onclick={()=>{if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
             title={dragKind?`拖曳到目標 · ${c.name}`:c.name}>
@@ -1454,6 +1460,8 @@
   .setup-screen{ background:#1a2a1a; border-radius:10px; }
   .setup-screen h2{ color:#aaffaa; }
   .mulligan-banner{ background:#3a2a0e; border:1px solid #6a5a1a; color:#f8d080; padding:.5rem .8rem; border-radius:6px; margin-bottom:.8rem; font-size:.85rem; }
+  .shuffle-ic{ display:inline-block; animation:spin 1.5s linear infinite; }
+  @keyframes spin{ from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
   .setup-active,.setup-bench-row{ margin:0.5rem 0; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
   .poke-chip{ padding:0.2rem 0.5rem; border-radius:6px; font-size:0.85rem; }
   .active-chip{ background:#3a7a3a; color:#fff; }
@@ -1544,8 +1552,11 @@
   .bench-nrg{ font-size:.62rem; color:#888; }
 
   .zone-pile{ flex-shrink:0; display:flex; flex-direction:column; gap:.35rem; width:72px; align-items:center; }
-  .pile-slot{ width:65px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:6px; padding:.35rem .25rem; gap:.12rem; min-height:60px; }
-  .deck-pile{ background:linear-gradient(135deg,#1a3a6a,#2a5a9a); border:1px solid #4a7aaa; }
+  .pile-slot{ width:65px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:6px; padding:.35rem .25rem; gap:.12rem; min-height:60px; transition:transform .15s, box-shadow .15s; position:relative; }
+  .pile-slot:hover{ transform:translateY(-2px) scale(1.04); box-shadow:0 4px 12px rgba(0,0,0,.4); }
+  .pile-slot::before{ content:''; position:absolute; inset:3px; border-radius:4px; background:inherit; opacity:.35; transform:translate(2px,2px); pointer-events:none; z-index:-1; }
+  .pile-slot::after{ content:''; position:absolute; inset:6px; border-radius:3px; background:inherit; opacity:.2; transform:translate(4px,4px); pointer-events:none; z-index:-2; }
+  .deck-pile{ background:linear-gradient(135deg,#1a3a6a,#2a5a9a); border:1px solid #4a7aaa; cursor:pointer; }
   .disc-pile{ background:#1a1a2a; border:1px dashed #3a3a5a; cursor:pointer; transition:border-color .15s,background .15s; }
   .disc-pile:hover{ border-color:#6a6aaa; background:#1e1e3a; }
   .pile-icon{ font-size:1.15rem; line-height:1; }
