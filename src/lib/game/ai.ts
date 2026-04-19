@@ -15,7 +15,7 @@ import type { GameState, GameAction, CardInstance, PendingSelection } from './ty
 import {
   getAvailableAttacks, getEvolvableTargets,
   getPlayableTrainers, getPlayableBasics,
-  getUsableAbilities, canRetreat,
+  getUsableAbilities, canRetreat, isBasicPokemonCard,
 } from './engine';
 
 // ── 主要入口 ──────────────────────────────────────────────────────────────────
@@ -131,12 +131,9 @@ function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): 
   if (state.setupDone[pIdx]) return null;
   const player = state.players[pIdx];
 
-  // 先選出場（選 HP 最高的基礎）
+  // 先選出場（選 HP 最高的基礎；含 ex 基礎）
   if (!player.active) {
-    const basics = player.hand.filter(c => {
-      const card = pool.get(c.cardId);
-      return card?.supertype === 'Pokemon' && card.subtype === 'Basic';
-    });
+    const basics = player.hand.filter(c => isBasicPokemonCard(pool.get(c.cardId)));
     if (basics.length === 0) return null;
     const best = basics.reduce((a, b) =>
       (pool.get(a.cardId)?.hp ?? 0) >= (pool.get(b.cardId)?.hp ?? 0) ? a : b
@@ -146,10 +143,7 @@ function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): 
 
   // 再放備戰（最多 2 隻）
   if (player.bench.length < 2) {
-    const basics = player.hand.filter(c => {
-      const card = pool.get(c.cardId);
-      return card?.supertype === 'Pokemon' && card.subtype === 'Basic';
-    });
+    const basics = player.hand.filter(c => isBasicPokemonCard(pool.get(c.cardId)));
     if (basics.length > 0) {
       return { type: 'BENCH_POKEMON', iid: basics[0].iid, senderIdx: pIdx };
     }
@@ -176,9 +170,9 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         const top6 = new Set<string>((sel.params?.top6Iids as string[]) ?? []);
         if (f === 'TOP6')            return top6.has(c.iid);
         if (f === 'Supporter:TOP6')  return top6.has(c.iid) && card.subtype === 'Supporter';
-        if (f === 'Basic')           return card.supertype === 'Pokemon' && card.subtype === 'Basic';
-        if (f === 'Basic:HP70')      return card.supertype === 'Pokemon' && card.subtype === 'Basic' && (card.hp ?? 0) <= 70;
-        if (f === 'Pokemon')         return card.supertype === 'Pokemon';
+        if (f === 'Basic')           return isBasicPokemonCard(card);
+        if (f === 'Basic:HP70')      return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
+        if (f === 'Pokemon')         return card.supertype === 'Pokemon' && card.subtype !== 'Other';
         if (f === 'Energy')          return card.supertype === 'Energy';
         if (f === 'ex')              return card.supertype === 'Pokemon' && card.subtype === 'ex';
         return true;
@@ -279,7 +273,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       let discard = actorPlayer.discard.filter(c => {
         const card = pool.get(c.cardId);
         if (!card) return false;
-        if (f === 'PokemonOrEnergy') return card.supertype === 'Pokemon' || card.supertype === 'Energy';
+        if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon' && card.subtype !== 'Other') || card.supertype === 'Energy';
         if (f === 'BasicEnergy')     return card.supertype === 'Energy';
         return true;
       });

@@ -804,6 +804,7 @@ regPost('烏鴉頭頭|狙擊羽毛', (state, aIdx, _pool) => {
         { ...defender.active, damage: newDmg },
         ...defender.active.energyAttached,
         ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+        ...(defender.active.evolvedFromStack ?? []),
       ];
       const players = [...state.players] as [PlayerState, PlayerState];
       players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
@@ -850,6 +851,7 @@ regR('snipe-120', (st, actorIdx, selectedIids, _params, pool) => {
       { ...target, damage: newDmg },
       ...target.energyAttached,
       ...(target.toolAttached ? [target.toolAttached] : []),
+      ...(target.evolvedFromStack ?? []),
     ];
     const prizes = targetCard!.name.endsWith('ex') || targetCard!.name.endsWith('EX') ? 2 : 1;
     const players = [...st.players] as [PlayerState, PlayerState];
@@ -885,7 +887,13 @@ regR('snipe-120', (st, actorIdx, selectedIids, _params, pool) => {
 regPre('勾魂眼|動怒爪', (state, aIdx, pool) => {
   const hasStage2Dark = state.players[aIdx].bench.some(c => {
     const card = pool.get(c.cardId);
-    return card?.pokemonType === 'Darkness' && card?.subtype === 'Stage2';
+    if (card?.pokemonType !== 'Darkness') return false;
+    // Stage 2 判斷：evolvesFrom 存在且該 Stage1 也有 evolvesFrom（含 ex 類型的 Stage2）
+    if (!card.evolvesFrom) return false;
+    for (const p of pool.values()) {
+      if (p.name === card.evolvesFrom && p.supertype === 'Pokemon' && p.evolvesFrom) return true;
+    }
+    return false;
   });
   return { state, damage: 20 + (hasStage2Dark ? 70 : 0) };
 });
@@ -1065,14 +1073,50 @@ regR('attach-tool', (st, idx, picked, params, _pool) => {
 // 神奇糖果（Rare Candy）
 // ══════════════════════════════════════════════════════════════════════════════
 
+// 神奇糖果 Guard：手牌中有「Stage2」且場上有其對應 Basic 目標才可打出
+regG('神奇糖果', (st, idx, pool) => {
+  const p = st.players[idx];
+  const isStage2 = (c?: Card) => {
+    if (!c || c.supertype !== 'Pokemon' || !c.evolvesFrom) return false;
+    for (const x of pool.values()) {
+      if (x.name === c.evolvesFrom && x.supertype === 'Pokemon' && x.evolvesFrom) return true;
+    }
+    return false;
+  };
+  const stage2sInHand = p.hand.filter(i => isStage2(pool.get(i.cardId)));
+  if (stage2sInHand.length === 0) return false;
+  const fieldPokes = [...(p.active ? [p.active] : []), ...p.bench];
+  // 至少一張 Stage2 有合法 Basic 目標（Stage2→Stage1→Basic 鏈結完整，場上有該 Basic 且可進化）
+  return stage2sInHand.some(hand => {
+    const s2 = pool.get(hand.cardId)!;
+    let basicName: string | undefined;
+    for (const c of pool.values()) {
+      if (c.name === s2.evolvesFrom && c.supertype === 'Pokemon' && c.evolvesFrom) {
+        basicName = c.evolvesFrom;
+        break;
+      }
+    }
+    if (!basicName) return false;
+    return fieldPokes.some(pk => {
+      const bc = pool.get(pk.cardId);
+      return bc?.name === basicName && !pk.justPlaced && !pk.evolvedThisTurn;
+    });
+  });
+});
+
 reg('神奇糖果', (st, idx, pool) => {
   const p = st.players[idx];
-  const validIids = p.hand.filter(inst => {
-    const c = pool.get(inst.cardId);
-    return c?.supertype === 'Pokemon' && c.evolvesFrom && c.subtype !== 'Basic';
-  }).map(i => i.iid);
+  // 只列出手牌中的「Stage2」寶可夢（含 Stage2 ex）
+  const isStage2 = (c?: Card) => {
+    if (!c || c.supertype !== 'Pokemon' || !c.evolvesFrom) return false;
+    for (const x of pool.values()) {
+      if (x.name === c.evolvesFrom && x.supertype === 'Pokemon' && x.evolvesFrom) return true;
+    }
+    return false;
+  };
+  const validIids = p.hand.filter(inst => isStage2(pool.get(inst.cardId))).map(i => i.iid);
   if (validIids.length === 0) return addLog(st, '神奇糖果：手牌中沒有可進化的寶可夢', idx);
-  st = addLog(st, '神奇糖果：從手牌選擇要進化的高階寶可夢', idx);
+  st = addLog(st, '神奇糖果：從手牌選擇要進化的 2 階寶可夢', idx);
   return withPending(st, {
     type: 'hand-choose', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1, filter: '',
@@ -1128,6 +1172,12 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
 
     const evolve = (pk: CardInstance): CardInstance => {
       if (pk.iid !== targetIid) return pk;
+      const baseBare: CardInstance = {
+        ...pk,
+        energyAttached: [],
+        toolAttached: undefined,
+        evolvedFromStack: undefined,
+      };
       return {
         ...stage2Inst,
         damage: pk.damage,
@@ -1135,8 +1185,8 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
         toolAttached: pk.toolAttached,
         status: pk.status,
         evolvedFromIid: pk.iid,
-        // 神奇糖果跳過 Stage 1，進化鏈只記錄 Basic cardId
-        evolvedFromCardIds: [...(pk.evolvedFromCardIds ?? []), pk.cardId],
+        // 神奇糖果跳過 Stage 1，進化鏈只含 Basic
+        evolvedFromStack: [...(pk.evolvedFromStack ?? []), baseBare],
         evolvedThisTurn: true,
         justPlaced: false,
       };

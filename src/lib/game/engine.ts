@@ -53,10 +53,39 @@ function deckToInstances(entries: { cardId: string; count: number }[]): CardInst
   return result;
 }
 
+/**
+ * 判斷一張 Card 物件是否為「基礎寶可夢」。
+ *
+ * ⚠️ 重要：不能只看 `subtype === 'Basic'`！
+ * ex 基礎寶可夢（如拉帝亞斯ex / 蒂安希ex / 桃歹郎ex）的 `subtype` 是 `'ex'`，
+ * 但它們沒有 `evolvesFrom`，規則上屬於基礎寶可夢、可直接出場/放備戰。
+ * 正確判斷：supertype === 'Pokemon' 且沒有 evolvesFrom。
+ *
+ * 例外：道具卡（寶可夢道具）也是 Pokemon supertype 但 subtype === 'Other'，
+ * 必須排除掉。
+ */
+export function isBasicPokemonCard(card: Card | undefined): boolean {
+  if (!card || card.supertype !== 'Pokemon') return false;
+  if (card.subtype === 'Other') return false; // 道具卡
+  return !card.evolvesFrom;
+}
+
 /** 從 pool 判斷一張牌是否為「基礎寶可夢」 */
 function isBasicPokemon(cardId: string, pool: Map<string, Card>): boolean {
-  const c = pool.get(cardId);
-  return !!c && c.supertype === 'Pokemon' && c.subtype === 'Basic';
+  return isBasicPokemonCard(pool.get(cardId));
+}
+
+/**
+ * 判斷一張寶可夢卡是否為「2 階進化」。
+ * 同樣不能只看 subtype === 'Stage2'（Stage2 ex 的 subtype 是 'ex'）。
+ * 正確：`evolvesFrom` 指向的 Stage1 自己也有 `evolvesFrom`（即進化鏈深度 = 3）。
+ */
+export function isStage2PokemonCard(card: Card | undefined, pool: Map<string, Card>): boolean {
+  if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
+  for (const c of pool.values()) {
+    if (c.name === card.evolvesFrom && c.supertype === 'Pokemon' && c.evolvesFrom) return true;
+  }
+  return false;
 }
 
 /** 從 pool 判斷是否為能量牌 */
@@ -446,8 +475,14 @@ function handlePlaying(
     if (!baseCard) return state;
     if (evoCard.evolvesFrom !== baseCard.name) return state;
 
-    // 進化：繼承傷害、能量、狀態；進化鏈堆疊保留被進化掉的 cardId
-    const prevChain = basePoke.evolvedFromCardIds ?? [];
+    // 進化：繼承傷害、能量、狀態；進化鏈堆疊保留被進化掉的 CardInstance（裸殼，附加物轉給頂層）
+    const prevStack = basePoke.evolvedFromStack ?? [];
+    const baseBare: CardInstance = {
+      ...basePoke,
+      energyAttached: [],
+      toolAttached: undefined,
+      evolvedFromStack: undefined, // 避免遞迴巢狀
+    };
     const evolved: CardInstance = {
       ...evoInst,
       damage: basePoke.damage,
@@ -455,7 +490,7 @@ function handlePlaying(
       toolAttached: basePoke.toolAttached,
       status: basePoke.status,
       evolvedFromIid: basePoke.iid,
-      evolvedFromCardIds: [...prevChain, basePoke.cardId],
+      evolvedFromStack: [...prevStack, baseBare],
       evolvedThisTurn: true,
       justPlaced: false,
     };
@@ -496,7 +531,7 @@ function handlePlaying(
       ...(attacker.active ? [attacker.active] : []),
       ...attacker.bench,
     ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
-    if (hasSkyPathR && activeCard?.subtype === 'Basic') retreatCost = 0;
+    if (hasSkyPathR && isBasicPokemonCard(activeCard)) retreatCost = 0;
     if (attacker.active.energyAttached.length < retreatCost) return state;
 
     // 自動丟棄能量（從後方取）
@@ -858,6 +893,7 @@ function handlePlaying(
         updatedActive,
         ...updatedActive.energyAttached,
         ...(updatedActive.toolAttached ? [updatedActive.toolAttached] : []),
+        ...(updatedActive.evolvedFromStack ?? []),
       ];
       defenderState.discard = [...defenderState.discard, ...koDiscard];
       defenderState.active = null;
@@ -981,6 +1017,7 @@ function handlePlaying(
           { ...poisonPlayer.active, damage: newDmg },
           ...poisonPlayer.active.energyAttached,
           ...(poisonPlayer.active.toolAttached ? [poisonPlayer.active.toolAttached] : []),
+          ...(poisonPlayer.active.evolvedFromStack ?? []),
         ];
         poisonPlayer.discard = [...poisonPlayer.discard, ...koDiscard2];
         poisonPlayer.active = null;
@@ -1019,6 +1056,7 @@ function handlePlaying(
           { ...burnedPlayer.active, damage: newBurnDmg },
           ...burnedPlayer.active.energyAttached,
           ...(burnedPlayer.active.toolAttached ? [burnedPlayer.active.toolAttached] : []),
+          ...(burnedPlayer.active.evolvedFromStack ?? []),
         ];
         burnedPlayer.discard = [...burnedPlayer.discard, ...koDiscard3];
         burnedPlayer.active = null;
@@ -1214,7 +1252,7 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
     ...(player.active ? [player.active] : []),
     ...player.bench,
   ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
-  if (hasSkyPath && card?.subtype === 'Basic') cost = 0;
+  if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
   return player.active.energyAttached.length >= cost;
 }
 
@@ -1249,10 +1287,7 @@ export function getPlayableBasics(state: GameState, pool: Map<string, Card>): st
   const player = state.players[state.activePlayerIndex];
   if (player.bench.length >= 5) return [];
   return player.hand
-    .filter(inst => {
-      const c = pool.get(inst.cardId);
-      return c?.supertype === 'Pokemon' && c.subtype === 'Basic';
-    })
+    .filter(inst => isBasicPokemonCard(pool.get(inst.cardId)))
     .map(inst => inst.iid);
 }
 

@@ -11,7 +11,7 @@
     getAvailableAttacks, hasPendingActions,
     countEnergy, getEvolvableTargets,
     canRetreat, getPlayableTrainers, getPlayableBasics,
-    getUsableAbilities,
+    getUsableAbilities, isBasicPokemonCard,
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
@@ -255,9 +255,9 @@
         return src.deck.filter(c => {
           const card = pool.get(c.cardId);
           if (!card) return false;
-          if (f === 'Basic')      return card.supertype === 'Pokemon' && card.subtype === 'Basic';
-          if (f === 'Basic:HP70') return card.supertype === 'Pokemon' && card.subtype === 'Basic' && (card.hp ?? 0) <= 70;
-          if (f === 'Pokemon')    return card.supertype === 'Pokemon';
+          if (f === 'Basic')      return isBasicPokemonCard(card);
+          if (f === 'Basic:HP70') return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
+          if (f === 'Pokemon')    return card.supertype === 'Pokemon' && card.subtype !== 'Other';
           if (f === 'Energy')     return card.supertype === 'Energy';
           if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
           return true;
@@ -296,7 +296,7 @@
         return src.discard.filter(c => {
           const card = pool.get(c.cardId);
           if (!card) return false;
-          if (f === 'PokemonOrEnergy') return card.supertype === 'Pokemon' || card.supertype === 'Energy';
+          if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon' && card.subtype !== 'Other') || card.supertype === 'Energy';
           if (f === 'BasicEnergy')     return card.supertype === 'Energy';
           return true;
         });
@@ -729,10 +729,10 @@
         {#each setupPlayer.hand as inst}
           {@const c = getCard(inst.cardId)}
           {#if c}
-            <div class="hand-card" class:selectable={c.supertype==='Pokemon'&&c.subtype==='Basic'}>
+            <div class="hand-card" class:selectable={isBasicPokemonCard(c)}>
               <img src={c.imageUrl} alt={c.name} onclick={() => openZoom(inst.cardId)} class="zoomable" />
               <div class="hand-card-name">{c.name}</div>
-              {#if c.supertype==='Pokemon'&&c.subtype==='Basic'}
+              {#if isBasicPokemonCard(c)}
                 {#if !setupPlayer.active}
                   <button class="small primary" onclick={() => dispatch(GameActions.placeActive(inst.iid, setupIdx))}>出場</button>
                 {:else if setupPlayer.bench.length < 5}
@@ -1060,7 +1060,7 @@
         {@const c=getCard(inst.cardId)}
         {#if c}
           {@const isEnergyCard=c.supertype==='Energy'}
-          {@const isBasicCard=c.supertype==='Pokemon'&&c.subtype==='Basic'}
+          {@const isBasicCard=isBasicPokemonCard(c)}
           {@const isTrainerCard=c.supertype==='Trainer'}
           {@const isToolCard=c.supertype==='Pokemon'&&c.subtype==='Other'}
           {@const canEnergy=isEnergyCard&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()}
@@ -1202,12 +1202,12 @@
                   <span class="state-k">附能</span>
                   <span class="state-v">
                     {#if zoomInst.energyAttached.length===0}無{:else}
-                      {#each zoomInst.energyAttached as ec}{@const c2=getCard(ec.cardId)}<span class="state-ecard" title={c2?.name}>{c2?.name?.replace(/基本【|】能量/g,'') ?? '?'}</span>{/each}
+                      {#each zoomInst.energyAttached as ec}{@const c2=getCard(ec.cardId)}<button class="state-ecard clickable" title="點擊放大：{c2?.name}" onclick={() => openZoom(ec.cardId, null)}>{c2?.name?.replace(/基本【|】能量/g,'') ?? '?'} 🔍</button>{/each}
                     {/if}
                   </span>
                 </div>
                 {#if toolC}
-                  <div class="state-row"><span class="state-k">🔧 道具</span><span class="state-v">{toolC.name}</span></div>
+                  <div class="state-row"><span class="state-k">🔧 道具</span><span class="state-v"><button class="state-tool clickable" title="點擊放大：{toolC.name}" onclick={() => openZoom(zoomInst!.toolAttached!.cardId, null)}>{toolC.name} 🔍</button></span></div>
                 {/if}
                 {#if zoomInst.status}
                   <div class="state-row"><span class="state-k">異常</span><span class="state-v">{
@@ -1218,11 +1218,11 @@
                     zoomInst.status==='paralyzed'?'⚡ 麻痺':zoomInst.status
                   }</span></div>
                 {/if}
-                {#if zoomInst.evolvedFromCardIds && zoomInst.evolvedFromCardIds.length>0}
+                {#if zoomInst.evolvedFromStack && zoomInst.evolvedFromStack.length>0}
                   <div class="state-row">
                     <span class="state-k">進化鏈</span>
                     <span class="state-v state-chain">
-                      {#each zoomInst.evolvedFromCardIds as cid}{@const c3=getCard(cid)}<span class="chain-node">{c3?.name ?? '?'}</span><span class="chain-arr">→</span>{/each}
+                      {#each zoomInst.evolvedFromStack as pc}{@const c3=getCard(pc.cardId)}<button class="chain-node clickable" title="點擊放大：{c3?.name}" onclick={() => openZoom(pc.cardId, pc)}>{c3?.name ?? '?'}</button><span class="chain-arr">→</span>{/each}
                       <span class="chain-node chain-current">{zoomCard.name}</span>
                     </span>
                   </div>
@@ -1530,9 +1530,15 @@
   .state-row{ display:flex; gap:.5rem; align-items:baseline; line-height:1.3; }
   .state-k{ color:#8aa; min-width:3.3rem; flex-shrink:0; }
   .state-v{ color:#ddd; flex:1; display:flex; flex-wrap:wrap; gap:.25rem; align-items:baseline; }
-  .state-ecard{ display:inline-block; background:#2a4a6a; color:#ccf; padding:.08rem .4rem; border-radius:3px; font-size:.7rem; }
+  .state-ecard{ display:inline-block; background:#2a4a6a; color:#ccf; padding:.08rem .4rem; border-radius:3px; font-size:.7rem; border:none; font-family:inherit; }
+  .state-ecard.clickable{ cursor:pointer; }
+  .state-ecard.clickable:hover{ background:#4a6a8a; color:#fff; }
+  .state-tool{ display:inline-block; background:#3a3a10; color:#f0d080; padding:.08rem .4rem; border-radius:3px; font-size:.75rem; border:1px solid #6a5a20; font-family:inherit; cursor:pointer; }
+  .state-tool:hover{ background:#5a5a20; color:#fff; }
   .state-chain{ flex-wrap:wrap; }
-  .chain-node{ background:#1a2a1a; border:1px solid #3a5a3a; border-radius:3px; padding:.08rem .35rem; font-size:.72rem; color:#aca; }
+  .chain-node{ background:#1a2a1a; border:1px solid #3a5a3a; border-radius:3px; padding:.08rem .35rem; font-size:.72rem; color:#aca; font-family:inherit; }
+  .chain-node.clickable{ cursor:pointer; }
+  .chain-node.clickable:hover{ background:#3a5a3a; color:#fff; }
   .chain-current{ background:#2a4a2a; color:#cfc; border-color:#5a7a5a; font-weight:600; }
   .chain-arr{ color:#667; font-size:.7rem; margin:0 .15rem; }
   .zoom-ability{ background:#1e1e0e; border:1px solid #6a5a1a; border-radius:6px; padding:.5rem .6rem; }

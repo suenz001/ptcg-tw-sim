@@ -1425,3 +1425,89 @@ header 新增 `.turn-res` 固定顯示 4 格（顯示 activePlayer 狀態）：
 3. **TRAINER_GUARDS 註冊位置**：緊貼 `reg('xxx', ...)` 之前，維持可讀性。guard 回傳 false 時此卡會從 `getPlayableTrainers` 過濾 → UI 看不到「使用」按鈕。
 4. **進化鏈**：`evolvedFromCardIds` 只記錄 cardId（不是 iid），因為被進化掉的 CardInstance 已丟失，cardId 足以顯示名稱/圖片。
 5. **firstPlayerIdx 欄位**：由 createGame 隨機決定後不再改變。`state.isFirstTurn && aIdx === state.firstPlayerIdx` 才是「先手第 1 回合」的正確判斷。
+
+---
+
+## 📝 2026-04-19 Session 23 — ex 基礎寶可夢 + Stage2 判斷 + 神奇糖果 guard + 進化鏈擊倒
+
+> 觸發：使用者回報三個 bug — 拉蒂亞斯ex/蒂安希ex 無法出場、神奇糖果沒合法目標仍可打、附加道具/能量/進化鏈不能放大。要求主動找類似 bug。
+
+### 🔴 核心 bug：所有 ex 基礎寶可夢無法出場
+
+**根因**：全專案 9 處用 `subtype === 'Basic'` 判斷基礎寶可夢。但拉帝亞斯ex、蒂安希ex、桃歹郎ex 等 ex 基礎的 `subtype === 'ex'` 不是 `'Basic'`，導致：
+- ❌ 不能作為出場寶可夢（PLACE_ACTIVE）
+- ❌ 不能打到備戰（BENCH_POKEMON / PLAY_BASIC）
+- ❌ Mulligan 判斷錯誤（起手 7 張若只有 ex 基礎，會被判斷為「無基礎」無限重抽）
+- ❌ AI 的 setup 卡住
+- ❌ Deck builder 驗證「至少 1 隻基礎」誤判純 ex 基礎牌組為非法
+- ❌ 好友寶芬 / 赫普的包包 / 卡片搜尋時的 'Basic' / 'Basic:HP70' filter
+- ❌ 天空徑線（拉帝亞斯ex 被動特性）對自己 ex 基礎無效
+
+**修復**：新增 `isBasicPokemonCard(card)` helper（export 自 engine.ts）：
+```ts
+export function isBasicPokemonCard(card: Card | undefined): boolean {
+  if (!card || card.supertype !== 'Pokemon') return false;
+  if (card.subtype === 'Other') return false; // 道具卡
+  return !card.evolvesFrom; // 沒進化來源 = 基礎
+}
+```
+
+全專案統一用此 helper：[engine.ts:57](src/lib/game/engine.ts:57) / [validation.ts:21](src/lib/decks/validation.ts:21) / [ai.ts](src/lib/game/ai.ts) / [+page.svelte](src/routes/game/+page.svelte) 三個地方。
+
+### 🟡 Stage2 判斷同樣 bug（動怒爪）
+
+勾魂眼「動怒爪」+70 傷害條件為「自己備戰有惡屬 Stage2」，但寫成 `subtype === 'Stage2'`。Stage2 ex（超級耿鬼ex 是惡屬 Stage2 ex）的 subtype 是 `'ex'` → 效果失效。
+
+**修復**：新增 `isStage2PokemonCard(card, pool)` helper — 判斷進化鏈深度 = 3（`evolvesFrom` 存在且其 Stage1 自己也有 `evolvesFrom`）。動怒爪改用此邏輯。
+
+### 🟡 神奇糖果 guard
+
+**Bug**：手牌中有 Stage2 但場上沒對應 Basic 時，使用者還能打出神奇糖果 → 進到 `rare-candy-choose-target` 後顯示「場上沒可接受的寶可夢」，**但支援者 flag 已設、卡已進棄牌**，形同被騙。
+
+**修復**：註冊 `TRAINER_GUARDS['神奇糖果']` — 逐一檢查手牌 Stage2，對每張找 Stage1、再找 Stage1.evolvesFrom = Basic name，判斷場上是否有該 Basic（未剛放、未剛進化）。任一有合法目標才允許打出。
+
+同時嚴格化手牌過濾：原本 `c.evolvesFrom && c.subtype !== 'Basic'` 會誤包括 Stage1（有 evolvesFrom 且非 Basic），改用 `isStage2` 精確過濾。
+
+### 🟡 系統性檢查：Pokemon 搜尋 filter 漏排除道具卡
+
+`f === 'Pokemon'` 與 `'PokemonOrEnergy'` filter 只看 `supertype === 'Pokemon'`，會包含道具卡（`subtype === 'Other'` 的寶可夢道具）。修正為排除 `subtype === 'Other'`。影響：甜蜜球、黑暗球、夜間擔架等。
+
+### 🔴 進化鏈被擊倒時未進棄牌（違反 PTCG 官方規則）
+
+**Bug**：Session 22 的 `evolvedFromCardIds: string[]` 只存 cardId，丟失了 Stage1 / Basic 的 CardInstance。寶可夢被擊倒時，只把頂層卡 + 能量 + 道具進棄牌，**進化鏈底下的卡「消失」**，違反 PTCG 規則（對手獎勵牌數以外的實物該全部回到棄牌區）。
+
+**修復**：重構為 `evolvedFromStack: CardInstance[]`（保留完整裸殼 — 清空 energyAttached/toolAttached 因附加物轉給頂層）。所有 4 處 KO 處理（engine 正常擊倒 / 中毒致死 / 燒傷致死 / snipe-120 resolver）都加上 `...evolvedFromStack` 進棄牌。
+
+### zoom modal：進化鏈 / 道具 / 能量可點擊放大
+
+zoom modal 的「📍 場上狀態」面板中：
+- **進化鏈節點**：從 `<span>` 改為 `<button class="clickable">`，點擊開啟該卡的 zoom（並帶入該卡實例，可繼續看其狀態）
+- **附加能量 chip**：同樣改 button，點擊 zoom 該能量卡
+- **附加道具**：tool-chip 改 button，點擊 zoom 該道具卡
+- 樣式加 hover 效果（`.clickable:hover` 變亮）
+
+### 系統性檢查未採取的項目（無實際 bug）
+
+| 項目 | 結論 |
+|:---|:---|
+| EVOLVE handler 用 `!evoCard.evolvesFrom` 判基礎 | ✅ 正確（已用 evolvesFrom） |
+| 搜尋 ex 寶可夢 `f === 'ex'` 用 `subtype === 'ex'` | ✅ 正確（ex 身份判斷） |
+| `subtype === 'Supporter'` / `'Stadium'` | ✅ 正確（訓練家子類） |
+| 切換類（寶可夢交替 / 急進開關）不檢查睡眠麻痺 | ✅ 正確（物品卡繞過狀態限制） |
+
+### 驗證
+- `npm run build` ✅
+- 測試動作：用純 ex 基礎（拉蒂亞斯ex / 蒂安希ex）打牌組 → 可出場、可備戰、AI 能自動 setup
+- 神奇糖果：手牌有 Stage2 但場上無對應 Basic → 「使用」按鈕消失
+- zoom 出場 ex 寶可夢 → 點附加能量/道具/進化鏈 → 切換到該卡的 zoom
+
+### Commit
+- `（本 session）` fix(game): ex 基礎 + Stage2 + 神奇糖果 guard + 進化鏈擊倒 + zoom 樹狀
+
+### ⚠️ 給下一位 AI 的注意事項
+
+1. **判斷基礎寶可夢永遠用 `isBasicPokemonCard(card)`**，禁止直接 `card.subtype === 'Basic'`。PTCG 中 ex/V/VMAX 等亞種的基礎寶可夢 subtype 不是 'Basic'。
+2. **判斷 Stage2 永遠用 `isStage2PokemonCard(card, pool)`**，原因同上。Stage1 可用 `card.evolvesFrom && !isStage2`。
+3. **進化鏈資料**：`evolvedFromStack: CardInstance[]`（不是 cardIds）。擊倒時必須 `...target.evolvedFromStack ?? []` 進棄牌。未來新增 KO 處理要加這一行。
+4. **ex 判斷（得 2 張獎勵）**：目前用 `name.endsWith('ex')` 或 `card.subtype === 'ex'`，兩者都可（因為 ex 寶可夢的 subtype 一定是 'ex'）。
+5. **TRAINER_GUARDS 是防線**：打出前驗證，若漏加導致使用者白送卡/白送支援者 flag。新卡一定要想「需不需要 guard」。

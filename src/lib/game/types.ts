@@ -39,8 +39,13 @@ export interface CardInstance {
   toolAttached?: CardInstance;
   /** 進化來源的 iid（用來驗證是否可進化） */
   evolvedFromIid?: string;
-  /** 進化鏈：下層被進化掉的 cardId 堆疊（由底到頂，不含當前卡）。UI 顯示用。 */
-  evolvedFromCardIds?: string[];
+  /**
+   * 進化鏈：下層被進化掉的 CardInstance 堆疊（由底到頂，不含當前卡）。
+   * - 被擊倒時要一併進棄牌區（PTCG 官方規則）
+   * - UI zoom modal 顯示進化鏈並可點擊檢視每張
+   * 每個元素不保留 energyAttached/toolAttached（已繼承給頂層）。
+   */
+  evolvedFromStack?: CardInstance[];
   /** 特殊狀態（M4 實裝） */
   status?: SpecialCondition;
   /**

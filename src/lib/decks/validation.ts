@@ -19,7 +19,12 @@ export function isBasicEnergy(card: Card): boolean {
 }
 
 export function isBasicPokemon(card: Card): boolean {
-  return card.supertype === 'Pokemon' && card.subtype === 'Basic';
+  // 「基礎寶可夢」= 沒有 evolvesFrom 的寶可夢卡。
+  // ex 基礎（subtype === 'ex'）同樣算基礎，不能用 subtype === 'Basic' 判斷。
+  // 道具卡（subtype === 'Other'）是 Pokemon supertype 但非寶可夢，排除。
+  if (card.supertype !== 'Pokemon') return false;
+  if (card.subtype === 'Other') return false;
+  return !card.evolvesFrom;
 }
 
 export function validateDeck(
