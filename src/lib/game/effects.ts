@@ -510,13 +510,14 @@ regR('ultra-ball-discard', (st, idx, iids, _params, _pool) => {
   });
 });
 
-// 超級信號 — 從牌庫搜尋 1 張 ex 寶可夢加手牌（簡化：搜任意寶可夢）
+// 超級信號 — 從牌庫搜尋 1 張「超級進化寶可夢 ex」加手牌
+// ⚠️ 必須只過濾「超級進化 ex」（名字開頭「超級」），普通 ex（桃歹郎ex / 拉帝亞斯ex）不可被搜到
 reg('超級信號', (st, idx) => {
   st = addLog(st, '超級信號：從牌庫選 1 張超級進化寶可夢 ex 加手牌', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'ex',
+    filter: 'MegaEx',
     minCount: 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
   });

@@ -435,6 +435,7 @@
           if (f === 'Pokemon')    return card.supertype === 'Pokemon' && card.subtype !== 'Other';
           if (f === 'Energy')     return card.supertype === 'Energy';
           if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
+          if (f === 'MegaEx')     return card.supertype === 'Pokemon' && card.subtype === 'ex' && card.name.startsWith('超級');
           return true;
         });
       }
