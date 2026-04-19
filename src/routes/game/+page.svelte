@@ -75,6 +75,55 @@
   let floatingRetreatMenu = $state<{ x: number; y: number } | null>(null);
   let viewDiscardFor = $state<0 | 1 | null>(null);
 
+  // ── 傷害數字彈出 + 能量附加 pulse（Session 29 D2） ──────────────────────────
+  const lastDamageByIid = new Map<string, number>();
+  let damagePops = $state<Array<{ id: number; amount: number; x: number; y: number; heal: boolean }>>([]);
+  let energyAttachPulse = $state<string | null>(null); // 剛被附能量的寶可夢 iid
+  let energyPulseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function triggerEnergyPulse(iid: string) {
+    if (energyPulseTimer) clearTimeout(energyPulseTimer);
+    energyAttachPulse = iid;
+    energyPulseTimer = setTimeout(() => { energyAttachPulse = null; }, 700);
+  }
+
+  // 監聽每隻場上寶可夢 damage 變化，彈出浮動數字
+  $effect(() => {
+    if (!game) return;
+    const seen = new Set<string>();
+    for (const p of game.players) {
+      const all = [...(p.active ? [p.active] : []), ...p.bench];
+      for (const pk of all) {
+        seen.add(pk.iid);
+        const prev = lastDamageByIid.get(pk.iid);
+        if (prev === undefined) { lastDamageByIid.set(pk.iid, pk.damage); continue; }
+        if (pk.damage !== prev) {
+          // 用 queueMicrotask 讓 DOM 更新後再查座標（此時 HP bar 已 reactive）
+          const diff = pk.damage - prev;
+          const iid = pk.iid;
+          queueMicrotask(() => {
+            const el = document.querySelector(`[data-drop-iid="${iid}"]`) as HTMLElement | null;
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+            const popId = Date.now() + Math.random();
+            damagePops = [...damagePops, {
+              id: popId, amount: Math.abs(diff),
+              heal: diff < 0,
+              x: rect.left + rect.width / 2,
+              y: rect.top + 20,
+            }];
+            setTimeout(() => { damagePops = damagePops.filter(d => d.id !== popId); }, 1400);
+          });
+        }
+        lastDamageByIid.set(pk.iid, pk.damage);
+      }
+    }
+    // 清除已不存在的 iid
+    for (const iid of [...lastDamageByIid.keys()]) {
+      if (!seen.has(iid)) lastDamageByIid.delete(iid);
+    }
+  });
+
   // ── 硬幣動畫（Session 28） ─────────────────────────────────────────────────
   let coinFlip = $state<null | { result: 'heads' | 'tails'; label: string }>(null);
   let coinTimer: ReturnType<typeof setTimeout> | null = null;
@@ -485,6 +534,9 @@
     const newState = applyAction(game, action as any, pool);
     game = newState;
     floatingEvoMenu = null; floatingRetreatMenu = null; selectedEnergyIid = null;
+
+    // 視覺回饋
+    if (action.type === 'ATTACH_ENERGY') triggerEnergyPulse(action.targetIid);
 
     if (mode === 'online' && roomCode) {
       isSyncing = true;
@@ -1105,6 +1157,7 @@
             class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
             class:drop-zone={(dragging?.kind==='energy'||dragging?.kind==='tool')&&isMyTurn()}
             class:drop-hover={dropTargetIid===myPlayer.active.iid}
+            class:energy-pulse={energyAttachPulse===myPlayer.active.iid}
             data-drop-type="poke"
             data-drop-iid={myPlayer.active.iid}
             onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
@@ -1151,6 +1204,7 @@
               class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
               class:drop-zone={(dragging?.kind==='energy'||dragging?.kind==='tool')&&isMyTurn()}
               class:drop-hover={dropTargetIid===b.iid}
+              class:energy-pulse={energyAttachPulse===b.iid}
               data-drop-type="poke"
               data-drop-iid={b.iid}
               onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(b.iid)}>
@@ -1297,6 +1351,16 @@
       {/each}
     </div>
   {/if}
+
+  <!-- Damage / Heal Popups -->
+  {#each damagePops as pop (pop.id)}
+    <div class="dmg-pop" class:heal={pop.heal}
+      style="left:{pop.x}px;top:{pop.y}px;"
+      in:fly={{ y: 0, duration: 0 }}
+      out:fade={{ duration: 300 }}>
+      {pop.heal ? '+' : '−'}{pop.amount}
+    </div>
+  {/each}
 
   <!-- Coin Flip Overlay -->
   {#if coinFlip}
@@ -1646,6 +1710,31 @@
     100%{ transform:rotateY(1620deg) scale(1); }
   }
   .coin-label{ font-size:1.4rem; font-weight:700; color:#ffd44a; text-shadow:0 0 12px rgba(255,212,74,.7); background:rgba(0,0,0,.5); padding:.4rem 1rem; border-radius:6px; border:1px solid #8a6a10; }
+
+  /* ── 傷害數字彈出（Session 29） ── */
+  .dmg-pop{ position:fixed; z-index:9500; pointer-events:none;
+    transform:translate(-50%, -50%);
+    font-size:2.2rem; font-weight:900; color:#ff4a4a;
+    text-shadow: 0 2px 0 #3a0a0a, 0 0 14px rgba(255,0,0,.8), 0 0 28px rgba(255,0,0,.5);
+    animation: dmg-rise 1.2s cubic-bezier(.2,.7,.3,1) forwards;
+    font-family: system-ui, sans-serif; letter-spacing:-2px; }
+  .dmg-pop.heal{ color:#4affa0; text-shadow: 0 2px 0 #083020, 0 0 14px rgba(0,255,100,.7); }
+  @keyframes dmg-rise{
+    0%  { transform:translate(-50%, -50%) scale(.5); opacity:0; }
+    20% { transform:translate(-50%, -90%) scale(1.3); opacity:1; }
+    55% { transform:translate(-50%, -110%) scale(1); opacity:1; }
+    100%{ transform:translate(-50%, -180%) scale(.85); opacity:0; }
+  }
+
+  /* ── 能量附加 pulse ── */
+  .active-card.energy-pulse, .bench-slot.energy-pulse{
+    animation: energy-attach-pulse .7s cubic-bezier(.2,.7,.3,1);
+  }
+  @keyframes energy-attach-pulse{
+    0%  { box-shadow: 0 0 0 rgba(170,255,68,0); }
+    40% { box-shadow: 0 0 24px rgba(170,255,68,.9), inset 0 0 18px rgba(170,255,68,.4); transform:scale(1.04); }
+    100%{ box-shadow: 0 0 0 rgba(170,255,68,0); transform:scale(1); }
+  }
 
   .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:hidden; min-width:0; }
   .bench-slot{ flex:1; min-width:0; max-width:115px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:visible; }
