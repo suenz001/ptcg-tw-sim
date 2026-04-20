@@ -3081,3 +3081,28 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 27/23
 - 版本 1.72 → 1.73
+
+---
+
+## 📝 2026-04-21 Session 38x (v1.74) — H 標第 19 波：swap + discard-multiply + KO（10 張）
+
+### 新 resolver / helper
+- `regR('opp-swap-dmg')` — 將對手戰鬥寶可夢與所選備戰寶可夢交換位置，然後對新戰鬥寶可夢造成指定傷害；含完整 KO cascade（能量、道具、進化鏈 → 棄牌；pendingPrizes；全滅判定）
+- `oppSwapDmgPost(dmg, label)` — 攻擊後觸發 `opp-bench-choose` + `opp-swap-dmg` 的一體化封裝（無備戰時跳過）
+- `registerSelfDiscardMultiply(key, label, baseDamage, per, max, typeFilter?)` — 註冊「丟棄自身最多 N 個能量、每張加傷」的攻擊；同時設 `ATTACK_PRE_DISCARD_CHOICE` 供 UI 選擇丟哪些 + regPre 計算最終傷害；typeFilter 支援 `'all' | 'basic' | EnergyType`
+
+### 實裝（10 張）
+- 強制交換+傷害（3 張）：大嘴娃｜誘導敲詐（30）、裹蜜蟲｜蜜糖捕捉器（70）、勇士雄鷹｜拖出（40）
+- 丟能量增傷（3 張）：巨鉗螳螂ex｜十字破壞（每張鋼能量 +120，最多 2 張）、固拉多｜熔岩光芒（每張任意能量 +60，最多 4 張）、席多藍恩｜鋼鐵爆炸（每張鋼能量 +50，最多 10 張）
+- KO 類（2 張）：棄世猴｜同命戰鬥（雙方戰鬥寶可夢同時擊倒，對手手動取獎）、雙斧戰龍｜斧擊在地（若對手戰鬥寶可夢有特殊能量則擊倒）
+- bench-snipe（2 張）：振翼髮｜飛來橫禍（90 + 備戰 1 隻 20）、多龍巴魯托ex｜幻影奇襲（200 + 備戰 1 隻 60）
+
+### 暫緩
+- 複合型 debuff-swap（老大的指令 + 傷害、頂尖捕捉器 + 傷害類）— 需要更複雜資源選擇
+- 棄世猴以外的同命 KO（若未來出現需要「自己不 KO、對手 KO」特例）
+- 冰伊布ex｜藍柱石（6 個傷害指示物以上就擊倒）— 需 ATTACK_POST 計數判定，另波處理
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 27/23
+- 版本 1.73 → 1.74
