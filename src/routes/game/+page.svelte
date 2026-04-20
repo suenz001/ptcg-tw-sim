@@ -180,8 +180,8 @@
     }
   });
 
-  // ── 拖曳交互（Session 25 A1） ──────────────────────────────────────────────
-  type DragKind = 'energy' | 'basic' | 'tool';
+  // ── 拖曳交互（Session 25 A1 / v1.02 擴增 evolve） ──────────────────────────
+  type DragKind = 'energy' | 'basic' | 'tool' | 'evolve';
   let dragging = $state<null | {
     iid: string; kind: DragKind; cardId: string; cardName: string;
     imageUrl: string;
@@ -195,9 +195,10 @@
 
   function startDrag(e: PointerEvent, inst: CardInstance, kind: DragKind, card: Card) {
     if (e.button !== 0) return;
-    // 不在 pointerdown 呼叫 preventDefault —— 那會阻止後續 click 事件觸發，
-    // 破壞所有「備戰/附加/使用」按鈕的 fallback 點擊。
-    // 瀏覽器原生拖曳/文字選取已由 CSS touch-action:none + user-select:none 阻止。
+    // 若 pointerdown 落在 button / 連結等互動元件，不啟動 drag —
+    // 讓按鈕的 click 事件正常觸發（否則 pointer capture 會吃掉 click）
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, select, textarea')) return;
     hoverHandIid = null; hoverHandAnchor = null;
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
     dragging = {
@@ -265,6 +266,11 @@
       await dispatch(GameActions.attachEnergy(d.iid, tIid));
     } else if (d.kind === 'basic' && benchEmpty) {
       await dispatch(GameActions.playBasic(d.iid));
+    } else if (d.kind === 'evolve' && tIid) {
+      // 確認目標在合法進化清單裡
+      if (evolveTargetsFor(d.iid).includes(tIid)) {
+        await dispatch(GameActions.evolve(tIid, d.iid));
+      }
     } else if (d.kind === 'tool' && tIid) {
       // 檢查目標是否已有道具（一隻只能附加一個，除非有特性）
       const allMy = [...(myPlayer?.active ? [myPlayer.active] : []), ...(myPlayer?.bench ?? [])];
@@ -402,6 +408,10 @@
   );
   const playableBasicIids = $derived(
     game && poolReady ? new Set(getPlayableBasics(game, pool)) : new Set<string>()
+  );
+  // 手牌中「可進化」的卡（其場上有合法基底）
+  const playableEvoIids = $derived(
+    new Set<string>(evolvableTargets.flatMap(e => e.toIids))
   );
   const canEndTurn = $derived(
     game?.phase === 'playing' && game.turnPhase === 'end' && !hasPendingActions(game)
@@ -584,6 +594,14 @@
     const entry = evolvableTargets.find(e => e.fromIid === fromIid);
     if (!entry || !myPlayer) return [];
     return myPlayer.hand.filter(c => entry.toIids.includes(c.iid));
+  }
+  // 手牌某張進化卡 → 可進化到哪些場上寶可夢 iid
+  function evolveTargetsFor(handIid: string): string[] {
+    const targets: string[] = [];
+    for (const entry of evolvableTargets) {
+      if (entry.toIids.includes(handIid)) targets.push(entry.fromIid);
+    }
+    return targets;
   }
 
   // ── 動作分派（本機 + 線上共用） ─────────────────────────────────────────────
@@ -1227,7 +1245,7 @@
           {@const evoOpts=evoOptionsFor(myPlayer.active.iid)}
           <div class="active-card mine-active"
             class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
-            class:drop-zone={(dragging?.kind==='energy'||dragging?.kind==='tool')&&isMyTurn()}
+            class:drop-zone={isMyTurn() && ((dragging?.kind==='energy'||dragging?.kind==='tool') || (dragging?.kind==='evolve'&&evolveTargetsFor(dragging.iid).includes(myPlayer.active.iid)))}
             class:drop-hover={dropTargetIid===myPlayer.active.iid}
             class:energy-pulse={energyAttachPulse===myPlayer.active.iid}
             data-drop-type="poke"
@@ -1274,7 +1292,7 @@
             {@const b=myPlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
             <div class="bench-slot"
               class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
-              class:drop-zone={(dragging?.kind==='energy'||dragging?.kind==='tool')&&isMyTurn()}
+              class:drop-zone={isMyTurn() && ((dragging?.kind==='energy'||dragging?.kind==='tool') || (dragging?.kind==='evolve'&&evolveTargetsFor(dragging.iid).includes(b.iid)))}
               class:drop-hover={dropTargetIid===b.iid}
               class:energy-pulse={energyAttachPulse===b.iid}
               data-drop-type="poke"
@@ -1345,15 +1363,16 @@
           {@const isBasicCard=isBasicPokemonCard(c)}
           {@const isTrainerCard=c.supertype==='Trainer'}
           {@const isToolCard=c.supertype==='Pokemon'&&c.subtype==='Other'}
+          {@const isEvolutionCard=c.supertype==='Pokemon'&&!!c.evolvesFrom}
           {@const canEnergy=isEnergyCard&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()}
           {@const canBasic=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()}
           {@const canTrainer=(isTrainerCard||isToolCard)&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
-          {@const dragKind = canEnergy ? 'energy' : canBasic ? 'basic' : (canTrainer && isToolCard) ? 'tool' : null}
+          {@const canEvolve=isEvolutionCard&&playableEvoIids.has(inst.iid)&&isMyTurn()&&!pendingSelection}
+          {@const dragKind = canEnergy ? 'energy' : canBasic ? 'basic' : canEvolve ? 'evolve' : (canTrainer && isToolCard) ? 'tool' : null}
+          {@const isActionable = canEnergy || canBasic || canTrainer || canEvolve}
           <div class="hand-card"
             class:selected={selectedEnergyIid===inst.iid}
-            class:can-energy={canEnergy}
-            class:can-basic={canBasic}
-            class:can-trainer={canTrainer}
+            class:can-actionable={isActionable}
             class:dragging={dragging?.iid===inst.iid}
             class:draggable={dragKind!==null}
             class:hover-peek={hoverHandIid===inst.iid}
@@ -1364,14 +1383,14 @@
             onpointerleave={leaveHandCard}
             onpointerdown={(e)=>{leaveHandCard(); if(dragKind)startDrag(e, inst, dragKind, c);}}
             onclick={()=>{if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
-            title={dragKind?`拖曳到目標 · ${c.name}`:c.name}>
-            <img src={c.imageUrl} alt={c.name}
-              class:zoomable={!canEnergy}
-              onclick={(e)=>{if(!canEnergy){e.stopPropagation();openZoom(inst.cardId);}}}/>
+            title={dragKind?`拖曳使用 · ${c.name}`:c.name}>
+            <img src={c.imageUrl} alt={c.name}/>
             <span class="hand-name">{c.name}</span>
-            {#if canEnergy}<span class="hand-hint energy-hint">⚡ 拖曳附加</span>
-            {:else if canBasic}<button class="hand-btn basic-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playBasic(inst.iid));}}>備戰</button>
-            {:else if canTrainer && isToolCard}<button class="hand-btn tool-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playTrainer(inst.iid));}}>🔧 附加</button>
+            {#if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
+            {:else if canBasic}<span class="hand-hint hl">📥 拖到備戰</span>
+              <button class="hand-btn basic-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playBasic(inst.iid));}}>備戰</button>
+            {:else if canEvolve}<span class="hand-hint hl">🔺 拖到進化目標</span>
+            {:else if canTrainer && isToolCard}<span class="hand-hint hl">🔧 拖到寶可夢</span>
             {:else if canTrainer}<button class="hand-btn trainer-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playTrainer(inst.iid));}}>{c.subtype==='Supporter'?'支援者':c.subtype==='Stadium'?'競技場':'使用'}</button>
             {/if}
           </div>
@@ -1919,7 +1938,11 @@
     transition: transform .15s ease-out, border-color .15s;
     box-shadow: 0 8px 18px rgba(0,0,0,.55);
   }
-  .hand-card img{ width:88px; border-radius:4px; }
+  .hand-card img{ width:88px; border-radius:4px; pointer-events:none; }
+  /* 整張 hand-card（含 img）為拖曳區域；不再用 img 的放大鏡按鈕 */
+  .hand-card{ cursor: default; }
+  .hand-card.draggable{ cursor: grab !important; }
+  .hand-card.draggable:active{ cursor: grabbing !important; }
   /* 拖曳中所有其他手牌禁用 pointer，避免擋住 elementFromPoint */
   .hand-scroll.is-dragging .hand-card:not(.dragging){ pointer-events:none; }
   /* 浮層預覽：永遠最上層，不影響原卡 layout */
@@ -1928,12 +1951,15 @@
     filter:drop-shadow(0 10px 26px rgba(0,0,0,.85)); }
   .hand-preview-float img{ width:220px; border-radius:10px; border:2px solid rgba(255,212,74,.5); }
   .hand-name{ font-size:.68rem; color:#bbb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
-  .hand-hint{ font-size:.65rem; }
+  .hand-hint{ font-size:.65rem; color:#bbb; }
+  .hand-hint.hl{ color:#ffd44a; font-weight:600; }
   .energy-hint{ color:#aaff44; }
-  .hand-card.can-energy{ border-color:#c0a020; cursor:pointer; }
-  .hand-card.can-basic{ border-color:#5a9a5a; }
-  .hand-card.can-trainer{ border-color:#5a7aba; }
-  .hand-card.selected{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }
+  /* v1.02：統一黃框表示「當下可用」— 涵蓋能量/基礎/訓練家/進化 */
+  .hand-card.can-actionable{
+    border-color:#e0b030;
+    box-shadow: 0 0 8px rgba(224,176,48,.45), 0 3px 8px rgba(0,0,0,.35);
+  }
+  .hand-card.selected{ border-color:#aaff44; box-shadow:0 0 8px #aaff4488; }
   .hand-btn{ display:block; width:100%; margin-top:.14rem; padding:.15rem 0; border-radius:3px; font-size:.68rem; cursor:pointer; border:none; }
   .basic-btn{ background:#2a5a2a; color:#aef; }
   .basic-btn:hover{ background:#3a7a3a; }
