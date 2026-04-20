@@ -581,6 +581,19 @@
   async function dispatch(action: ReturnType<typeof GameActions[keyof typeof GameActions]>) {
     if (!game || !poolReady) return;
     const newState = applyAction(game, action as any, pool);
+    // Debug：如果 action 被拒絕（state 沒變），印出 state 幫 debug
+    if (newState === game) {
+      console.warn('[PTCG] action 被 engine 拒絕:', action.type, {
+        action,
+        phase: game.phase,
+        turnPhase: game.turnPhase,
+        activePlayer: game.activePlayerIndex,
+        pendingSelection: game.pendingSelection?.type,
+        pendingPrizes: game.pendingPrizes,
+        myPlayerIndex,
+        isFirstTurn: game.isFirstTurn,
+      });
+    }
     game = newState;
     floatingEvoMenu = null; floatingRetreatMenu = null; selectedEnergyIid = null;
 
