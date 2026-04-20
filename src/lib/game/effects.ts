@@ -4732,3 +4732,194 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
   players[dIdx] = newDefender;
   return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${dmg} 傷害`, actorIdx);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38u v1.71 H 標第 16 波 — bench-count × multiplier + 能量/手牌 multiplier（~11 張）
+//
+// Helpers:
+//   selfBenchMultiplyPre(base, per, label) — 自己備戰數 × per
+//   oppBenchMultiplyPre(base, per, label) — 對手備戰數 × per
+//   bothBenchMultiplyPre(base, per, label) — 雙方備戰數總和 × per
+// 特殊：
+//   熔岩蝸牛ex|大地灼燒 — 雙方牌庫頂各 1 張丟棄，其中能量張數 × 140
+//   薩戮德|叢林鞭打 — 自身能量全部收回手牌 → +80（AI 永遠吃加成）
+//   吞食獸|張大嘴 — 若自身能量 > 對手戰鬥能量 → +160
+//   三海地鼠ex|三色炮 — 自動從手牌丟最多 3 張能量卡，對 opp active 造成 × 60
+//   賽富豪ex|淘金潮 — 自動從手牌丟棄全部基本能量，× 50
+//   雪童子|驚嚇 — 20 + 對手手牌隨機 1 張回對手牌庫並重洗
+// ══════════════════════════════════════════════════════════════════════════════
+
+function selfBenchMultiplyPre(base: number, per: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const count = state.players[aIdx].bench.length;
+    const dmg = base + per * count;
+    return { state: addLog(state, `${label}：自己備戰 ${count} 隻 → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+function oppBenchMultiplyPre(base: number, per: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const count = state.players[dIdx].bench.length;
+    const dmg = base + per * count;
+    return { state: addLog(state, `${label}：對手備戰 ${count} 隻 → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+function bothBenchMultiplyPre(base: number, per: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const count = state.players[aIdx].bench.length + state.players[dIdx].bench.length;
+    const dmg = base + per * count;
+    return { state: addLog(state, `${label}：雙方備戰 ${count} 隻 → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+// 裹蜜蟲|朋友之環 — 自己備戰數 × 20
+regPre('裹蜜蟲|朋友之環', selfBenchMultiplyPre(0, 20, '朋友之環'));
+
+// 厄鬼椪 碧草面具|鬼返 — 20 + 對手備戰數 × 20
+regPre('厄鬼椪 碧草面具|鬼返', oppBenchMultiplyPre(20, 20, '鬼返'));
+
+// 捷拉奧拉|鬥戰雷電 — 20 + 對手備戰數 × 20
+regPre('捷拉奧拉|鬥戰雷電', oppBenchMultiplyPre(20, 20, '鬥戰雷電'));
+
+// 骨紋巨聲鱷|閃焰獨唱會 — 60 + 雙方備戰數 × 20
+regPre('骨紋巨聲鱷|閃焰獨唱會', bothBenchMultiplyPre(60, 20, '閃焰獨唱會'));
+
+// 太樂巴戈斯ex|聯盟擊 — 後攻第一回合不可使用；否則 自己備戰數 × 30
+// 「後攻第一回合」判定：active !== firstPlayerIdx 且 turn === 1 + firstPlayerIdx
+regPre('太樂巴戈斯ex|聯盟擊', (state, aIdx, _pool) => {
+  const isSecondPlayerFirstTurn =
+    aIdx !== state.firstPlayerIdx && state.turn === 1 + state.firstPlayerIdx;
+  if (isSecondPlayerFirstTurn) {
+    return { state: addLog(state, '聯盟擊：後攻第一回合無法使用，招式失敗', aIdx), damage: 0 };
+  }
+  const count = state.players[aIdx].bench.length;
+  const dmg = count * 30;
+  return { state: addLog(state, `聯盟擊：自己備戰 ${count} 隻 → ${dmg}`, aIdx), damage: dmg };
+});
+
+// 熔岩蝸牛ex|大地灼燒 — 雙方牌庫頂各 1 張丟棄，其中能量張數 × 140，基礎 140
+regPre('熔岩蝸牛ex|大地灼燒', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const topA = state.players[aIdx].deck[0];
+  const topB = state.players[dIdx].deck[0];
+  let energyCount = 0;
+  if (topA) {
+    const c = pool.get(topA.cardId);
+    if (c?.supertype === 'Energy') energyCount++;
+  }
+  if (topB) {
+    const c = pool.get(topB.cardId);
+    if (c?.supertype === 'Energy') energyCount++;
+  }
+  const dmg = 140 + energyCount * 140;
+  return { state: addLog(state, `大地灼燒：雙方牌庫頂丟棄 ${energyCount} 張能量 → ${dmg}`, aIdx), damage: dmg };
+});
+regPost('熔岩蝸牛ex|大地灼燒', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  let s = state;
+  for (const idx of [aIdx, dIdx] as (0 | 1)[]) {
+    const p = players[idx];
+    if (p.deck.length === 0) continue;
+    const top = p.deck[0];
+    players[idx] = { ...p, deck: p.deck.slice(1), discard: [...p.discard, top] };
+  }
+  s = { ...s, players };
+  return addLog(s, '大地灼燒：雙方牌庫頂 1 張丟入棄牌區', aIdx);
+});
+
+// 薩戮德|叢林鞭打 — 基礎 80，若自身有能量則全部收回手牌 +80（AI 永遠吃加成）
+regPre('薩戮德|叢林鞭打', (state, aIdx, _pool) => {
+  const att = state.players[aIdx].active;
+  const hasEnergy = (att?.energyAttached.length ?? 0) > 0;
+  const dmg = 80 + (hasEnergy ? 80 : 0);
+  return { state: addLog(state, `叢林鞭打：${hasEnergy ? '收回自身能量 → +80，' : ''}${dmg}`, aIdx), damage: dmg };
+});
+regPost('薩戮德|叢林鞭打', (state, aIdx, _pool) => {
+  const att = state.players[aIdx].active;
+  if (!att || att.energyAttached.length === 0) return state;
+  return updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    const energies = p.active.energyAttached;
+    return {
+      ...p,
+      active: { ...p.active, energyAttached: [] },
+      hand: [...p.hand, ...energies],
+    };
+  });
+});
+
+// 吞食獸|張大嘴 — 若自身能量 > 對手出場能量 則 +160，基礎 10
+regPre('吞食獸|張大嘴', (state, aIdx, _pool) => {
+  const att = state.players[aIdx].active;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  const selfE = att?.energyAttached.length ?? 0;
+  const defE = def?.energyAttached.length ?? 0;
+  const bonus = selfE > defE ? 160 : 0;
+  const dmg = 10 + bonus;
+  return { state: addLog(state, `張大嘴：自能量 ${selfE} vs 對手 ${defE}${bonus ? ' +160' : ''} → ${dmg}`, aIdx), damage: dmg };
+});
+
+// 三海地鼠ex|三色炮 — 自動從手牌丟最多 3 張能量卡，× 60，攻擊對手戰鬥寶可夢
+// （備戰區不計算弱抗；AI sim 直接打 active 簡化）
+regPre('三海地鼠ex|三色炮', (state, aIdx, pool) => {
+  const hand = state.players[aIdx].hand;
+  const energyInHand = hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy').slice(0, 3);
+  const dmg = energyInHand.length * 60;
+  return { state: addLog(state, `三色炮：丟棄 ${energyInHand.length} 張能量 → ${dmg}`, aIdx), damage: dmg };
+});
+regPost('三海地鼠ex|三色炮', (state, aIdx, pool) => {
+  return updatePlayer(state, aIdx, p => {
+    const toDiscard: CardInstance[] = [];
+    let remaining = 3;
+    const newHand: CardInstance[] = [];
+    for (const c of p.hand) {
+      if (remaining > 0 && pool.get(c.cardId)?.supertype === 'Energy') {
+        toDiscard.push(c);
+        remaining--;
+      } else {
+        newHand.push(c);
+      }
+    }
+    return { ...p, hand: newHand, discard: [...p.discard, ...toDiscard] };
+  });
+});
+
+// 賽富豪ex|淘金潮 — 自動從手牌丟棄全部基本能量，× 50
+regPre('賽富豪ex|淘金潮', (state, aIdx, pool) => {
+  const count = state.players[aIdx].hand.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  }).length;
+  const dmg = count * 50;
+  return { state: addLog(state, `淘金潮：丟棄 ${count} 張基本能量 → ${dmg}`, aIdx), damage: dmg };
+});
+regPost('賽富豪ex|淘金潮', (state, aIdx, pool) => {
+  return updatePlayer(state, aIdx, p => {
+    const discarded: CardInstance[] = [];
+    const kept: CardInstance[] = [];
+    for (const c of p.hand) {
+      const card = pool.get(c.cardId);
+      if (card?.supertype === 'Energy' && card.subtype === 'Basic') discarded.push(c);
+      else kept.push(c);
+    }
+    return { ...p, hand: kept, discard: [...p.discard, ...discarded] };
+  });
+});
+
+// 雪童子|驚嚇 — 傷害 20（pre 不需），post：對手手牌隨機 1 張回牌庫並重洗
+regPost('雪童子|驚嚇', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  let s = addLog(state, '驚嚇：對手手牌隨機 1 張返回牌庫並重洗', aIdx);
+  return updatePlayer(s, dIdx, p => {
+    if (p.hand.length === 0) return p;
+    const idx = Math.floor(Math.random() * p.hand.length);
+    const picked = p.hand[idx];
+    const newHand = p.hand.filter((_, i) => i !== idx);
+    return { ...p, hand: newHand, deck: shuffle([...p.deck, picked]) };
+  });
+});

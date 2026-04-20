@@ -2997,3 +2997,36 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 29/21
 - 版本 1.69 → 1.70
+
+---
+
+## 📝 2026-04-21 Session 38u (v1.71) — H 標第 16 波：bench-count × multiplier（10 張）
+
+### 新 helper
+- `selfBenchMultiplyPre(base, per, label)` — 自己備戰數 × per
+- `oppBenchMultiplyPre(base, per, label)` — 對手備戰數 × per
+- `bothBenchMultiplyPre(base, per, label)` — 雙方備戰數總和 × per
+
+### 實裝（10 張）
+- 裹蜜蟲｜朋友之環（自備戰 × 20）
+- 厄鬼椪 碧草面具｜鬼返（20 + 對備戰 × 20）
+- 捷拉奧拉｜鬥戰雷電（20 + 對備戰 × 20）
+- 骨紋巨聲鱷｜閃焰獨唱會（60 + 雙方備戰 × 20）
+- 太樂巴戈斯ex｜聯盟擊（自備戰 × 30；後攻第一回合判定 active !== firstPlayerIdx && turn === 1 + firstPlayerIdx → 失敗）
+- 熔岩蝸牛ex｜大地灼燒（雙方牌庫頂各 1 張丟棄 → 其中能量數 × 140 + base 140；pre 檢查 top，post 執行丟棄）
+- 薩戮德｜叢林鞭打（基礎 80，AI 永遠吃 +80：自身能量全部收回手牌）
+- 吞食獸｜張大嘴（10 + 若自能量 > 對手戰鬥能量 +160）
+- 三海地鼠ex｜三色炮（自動丟最多 3 張能量卡 × 60；AI 打 opp active 簡化）
+- 賽富豪ex｜淘金潮（自動丟棄全部基本能量卡 × 50）
+- 雪童子｜驚嚇（傷害 20；post 隨機取對手手牌 1 張 + shuffle 回牌庫）
+
+### 暫緩
+- 狙射樹梟｜強力射擊（需「手牌必有基本草能量否則招式失敗」之 pre gate）
+- 電蜘蛛｜複眼（特性 +50 對 opp active 有特性；需 has-ability 篩選）
+- 搬運小匠、偷襲系列（coin-tails-fails：招式失敗機制）
+- 大電海燕｜風暴伏特（全能量改附備戰選擇 UI）
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 25/25（完全平衡）
+- 版本 1.70 → 1.71
