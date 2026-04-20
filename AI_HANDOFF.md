@@ -2424,3 +2424,50 @@ Windows / 上一版 commit 都是 2595 行）。我 v1.51 直接 `cp` sandbox �
 
 **驗證：** `/tmp/ptcg-work/repo` 本機 `npm run build` 通過。版本 1.54 → 1.55。
 
+---
+
+## 📝 2026-04-20 Session 38f (v1.56) — 不公印章 gate 修正 + peek-top-N 揭露其他卡 + action-bar min-height
+
+### 1. 不公印章機制修正
+
+**錯誤行為：** 舊版 gate 寫成 `st.players[idx].prizes.length < 6`——這檢查的是「我（idx）是否取過獎賞」方向剛好反了，而且沒區分「上一回合」vs「以前曾經」。結果無條件可用。
+
+**正確規則：** 卡面寫「上個對手的回合自己的寶可夢【昏厥】了才可使用」= 對手在他們剛結束的回合有取過獎賞。
+
+**修法（snapshot + 比對）：**
+
+1. `types.ts` 新增 `GameState.oppPrizesAtMyLastTurnEnd: [number, number]`，預設 `[6, 6]`。
+2. `engine.ts` END_TURN 處理：aIdx 結束回合時，snapshot `newOppSnap[aIdx] = players[1-aIdx].prizes.length`；把這個快照帶進下一回合 state。
+3. `effects.ts` gate：
+   ```ts
+   regG('不公印章', (st, idx) => {
+     const oppIdx = (1 - idx) as 0 | 1;
+     const snap = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
+     return st.players[oppIdx].prizes.length < snap;
+   });
+   ```
+
+**邊緣 case 驗證：**
+- 先手第 1 回合：snap=6, opp.prizes=6 → `6 < 6` false（正確，沒對手回合發生過）
+- P2 第 2 回合，P1 第 1 回合沒 KO：snap=6, opp.prizes=6 → false
+- P2 第 2 回合，P1 第 1 回合 KO 了 P2 的寶可夢：snap=6（init）, opp(P1).prizes=5 → `5<6` true（正確）
+- 自己中毒 KO 在自己回合末：prize 變化發生在「自己的回合」，下次自己回合 gate `snap==opp.prizes` → false（正確，不該判定「前個對手回合 KO」）
+
+### 2. peek-top-N 揭露其他卡（米立龍「集客」= Supporter:TOP6）
+
+**Leon 回報：** 米立龍翻 6 張挑支援者，原本 UI 只顯示挑到的 3 張支援者；另外 3 張非支援者玩家明明看過了但 UI 藏起來。他希望比照好友寶芬/高級球，多一塊區域顯示那 3 張。但差別是——只顯示翻到的這 6 張裡的其他，**不該**像 Ultra Ball 顯示整個牌庫剩餘（那會外洩未翻到的位置）。
+
+**修法（`+page.svelte` 選擇 modal 內，在既有的 `<details>「查看牌庫剩餘全部」` 之後加一塊）：**
+
+- 觸發條件：`/:TOP\d+$/.test(filter)`——只處理 "Subset:TOPN" 格式（如 `Supporter:TOP6`）。純 `TOP6` / `TOP8` 不進這個分支（它們本來全範圍就可選）。
+- 內容：從 `params.top6Iids`（或 top8Iids）找出所有 peek 範圍內的卡，排除已在 `selectionItems`（= 可挑的）= 剩下的就是玩家看過但不能選的其他卡。
+- 顯示：`<details>` 摺疊，summary 包含「翻到的其他 N 張 · 牌庫剩餘 X 張」，list 只顯示卡名（不揭露其他牌庫位置）。
+
+### 3. action-bar min-height 提升
+
+**原因：** v1.54 把 max-height 從 130 提到 200 只是上限；沒 stadium / log 又短時 action-bar 還是會塌縮到 ~70px（grid auto row 跟最高 child 走）。
+
+**修法：** `.action-bar{ min-height:70px → 160px }`。log-col 隨時有 ~5-6 行可視，有 stadium 時再自動撐到 178-200px。副作用極小（沒 stadium 時多一塊暗底色但視覺上協調）。
+
+**驗證：** `/tmp/ptcg-work/repo` 本機 `npm run build` 通過。版本 1.55 → 1.56。
+

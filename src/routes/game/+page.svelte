@@ -1681,6 +1681,33 @@
             </div>
           </details>
         {/if}
+
+        <!-- peek-top-N 的「非目標類」剩餘卡 — 例：米立龍「集客」(Supporter:TOP6) 顯示非支援者 3 張
+             玩家看過但本次無法挑選；洗回牌庫會重新洗牌，不外洩其他位置資訊。
+             篩選條件：filter 形如 "Supporter:TOP6" / 其他 "X:TOPN" —— 純 TOP6 / TOP8（全範圍可選）不進這個分支。 -->
+        {#if pendingSelection.type==='deck-search' && game && /:TOP\d+$/.test(pendingSelection.filter ?? '')}
+          {@const srcP2 = game.players[pendingSelection.sourcePlayerIdx]}
+          {@const peekIids = new Set<string>(
+            (pendingSelection.params?.top6Iids as string[] | undefined)
+            ?? (pendingSelection.params?.top8Iids as string[] | undefined)
+            ?? []
+          )}
+          {@const pickableIids = new Set(selectionItems.map(c => c.iid))}
+          {@const peekedOthers = srcP2.deck.filter(c => peekIids.has(c.iid) && !pickableIids.has(c.iid))}
+          {@const remainingDeck = srcP2.deck.length - peekIids.size}
+          {#if peekedOthers.length > 0}
+            <details class="full-deck-view">
+              <summary>🔍 查看翻到的其他 {peekedOthers.length} 張（本次不可選，僅供參考）· 牌庫剩餘 {remainingDeck} 張</summary>
+              <div class="full-deck-note">※ 這些卡你已看過但本次不符合挑選條件；結束後會洗回牌庫重新洗牌（位置不會外洩）</div>
+              <div class="full-deck-list">
+                {#each peekedOthers as inst}{@const c=getCard(inst.cardId)}
+                  {#if c}<div class="deck-item">{c.name}</div>{/if}
+                {/each}
+              </div>
+            </details>
+          {/if}
+        {/if}
+
         <div class="sel-footer">
           <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（{selectionPicked.size}張）</button>
           {#if pendingSelection.minCount===0}
@@ -2319,7 +2346,7 @@
   .hp-bar-wrap.sm{ height:5px; }
   .hp-bar{ height:100%; border-radius:3px; transition: width .55s cubic-bezier(.3,.8,.3,1), background .3s ease-out; }
 
-  .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:stretch; min-height:70px; max-height:200px; overflow:hidden; }
+  .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:stretch; min-height:160px; max-height:200px; overflow:hidden; }
   .alerts-col, .action-btns, .stadium-display{ align-self:center; }
   .stadium-display{ display:flex; flex-direction:column; align-items:center; gap:.25rem; padding:.35rem .5rem; border:1px solid #3a5a8a; background:rgba(26,42,74,.6); border-radius:6px; cursor:pointer; transition:transform .2s ease, box-shadow .2s ease; }
   .stadium-display:hover{ transform:scale(1.05); box-shadow:0 0 12px rgba(136,170,255,.4); }

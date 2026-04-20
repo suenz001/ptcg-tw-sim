@@ -281,6 +281,7 @@ export function createGame(
     pendingMulliganDraw: [m2, m1],
     log: [],
     pendingPrizes: 0,
+    oppPrizesAtMyLastTurnEnd: [6, 6],
   };
 
   let st = addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
@@ -1435,6 +1436,13 @@ function handlePlaying(
     const newStadiumUsed: [boolean, boolean] = [stadiumUsedThisTurn[0], stadiumUsedThisTurn[1]];
     newStadiumUsed[aIdx] = false;
 
+    // 快照對手目前獎賞張數（作為「下次我開始回合時」的基準值）—
+    // 下回合開始時用此快照 vs 屆時對手獎賞數差，判斷「對手在他們剛結束的回合是否取過獎賞」
+    // 用於不公印章等 gate 條件。
+    const prevOppSnap = state.oppPrizesAtMyLastTurnEnd ?? [6, 6] as [number, number];
+    const newOppSnap: [number, number] = [prevOppSnap[0], prevOppSnap[1]];
+    newOppSnap[aIdx] = players[1 - aIdx].prizes.length;
+
     const newTurn = aIdx === 1 ? state.turn + 1 : state.turn;
     const afterSwitch = addLog(
       {
@@ -1445,6 +1453,7 @@ function handlePlaying(
         isFirstTurn: false,
         turnPhase: 'draw',
         stadiumUsedThisTurn: newStadiumUsed,
+        oppPrizesAtMyLastTurnEnd: newOppSnap,
       },
       `回合結束，換 ${players[nextIdx].name} 行動。`,
       null

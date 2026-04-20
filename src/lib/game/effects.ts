@@ -775,10 +775,18 @@ regR('top-catcher-opp', (st, idx, iids, _params, pool) => {
 // 物品卡 — 其他
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 不公印章 — 必須「上回合寶可夢被擊倒」才可使用（簡化：自己獎賞 < 6 即代表曾被擊倒）
+// 不公印章 — 必須「上個對手的回合自己的寶可夢昏厥了」才可使用（= 對手剛結束的回合有取過獎賞）
 // 規則原文：「這張卡必須在上個對手的回合自己的寶可夢【昏厥】了才可使用」
-// 嚴格版需追蹤每回合 KO 事件，簡化為「剩餘獎賞 < 6」（對手曾取過獎賞 = 自己寶可夢被擊倒過）
-regG('不公印章', (st, idx) => st.players[idx].prizes.length < 6);
+// 舊版 bug：用 `players[idx].prizes.length < 6`（= 我有取過獎賞）判定，方向剛好寫反；
+// 且沒區分「上一回合」vs「以前曾經」。
+// 新版：engine 在每次 END_TURN 時快照對手獎賞張數到 state.oppPrizesAtMyLastTurnEnd[idx]；
+// 下次 idx 回合 gate 時，比較 snapshot vs 目前對手獎賞數，只要對手在他們剛結束的回合有取過獎賞
+// （= 自己寶可夢被擊倒），opp.prizes.length < snap 就回 true。
+regG('不公印章', (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  const snap = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
+  return st.players[oppIdx].prizes.length < snap;
+});
 reg('不公印章', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
   st = addLog(st, '不公印章：雙方洗手牌重抽（自己 5 張，對手 2 張）', idx);
