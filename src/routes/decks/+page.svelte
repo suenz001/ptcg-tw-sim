@@ -921,18 +921,29 @@
         </p>
 
         <details class="official-import-help">
-          <summary>📦 從官方訓練家網站匯入（bookmarklet）</summary>
+          <summary>📦 從官方訓練家網站匯入（一次設定永久可用）</summary>
           <div class="help-body">
-            <p>步驟：</p>
+            <p><strong>✨ 一次性設定</strong>（之後每次都只要點書籤）：</p>
             <ol>
-              <li>打開 <a href="https://asia.pokemon-card.com/tw/deck-build/" target="_blank" rel="noopener">官方牌組構築工具</a>，編輯完你的牌組</li>
-              <li>在同一個分頁按 <kbd>F12</kbd> 打開「開發者工具」→ 切到「Console / 主控台」分頁</li>
-              <li>複製下面這段程式碼貼到 Console，按 Enter 執行</li>
-              <li>它會把牌組卡名清單複製到剪貼簿</li>
-              <li>回到本頁，把剪貼簿內容貼到下方輸入框 → 按「匯入」</li>
+              <li>顯示瀏覽器書籤列：Firefox 按 <kbd>Ctrl+B</kbd> 或 Chrome 按 <kbd>Ctrl+Shift+B</kbd></li>
+              <li>把下面這個藍色按鈕<strong>用滑鼠拖曳到書籤列</strong>放開</li>
+              <li class="bm-drag-wrapper">
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                {@html `<a class="bm-drag-btn" href="javascript:(function(){const cs=document.querySelectorAll('%23decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組，請在官方牌組構築頁執行');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const k=c.children[1]%3F.innerText%3F.trim()||'1';lines.push(k+' '+n);});const text=lines.join('\\n');const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:%23fff;border:3px solid %232a5aa0;padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=%22font-weight:bold;margin-bottom:8px;color:%232a5aa0;%22>✅ 共 '+cs.length+' 種卡 — 按 Ctrl%2BC 複製</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length%2B1);ta.style.cssText='width:100%25;font-family:monospace;font-size:13px;padding:8px;border:1px solid %23aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();},100);})();" onclick="event.preventDefault(); alert('請將此按鈕用滑鼠拖到瀏覽器書籤列，不是點擊');" draggable="true">🔖 PTCG 匯入</a>`}
+              </li>
             </ol>
-            <textarea class="bm-code" readonly rows="6" onclick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}>{`(function(){const cs=document.querySelectorAll('#decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const k=c.children[1]?.innerText?.trim()||'1';lines.push(k+' '+n);});const text=lines.join('\\n');const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:#fff;border:3px solid #2a5aa0;padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=\"font-weight:bold;margin-bottom:8px;color:#2a5aa0;\">✅ 共 '+cs.length+' 種卡 — 已自動選取，按 Ctrl+C 複製</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length+1);ta.style.cssText='width:100%;font-family:monospace;font-size:13px;padding:8px;border:1px solid #aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();},100);})();`}</textarea>
-            <button class="small" type="button" onclick={(e) => { const ta=(e.currentTarget as HTMLElement).previousElementSibling as HTMLTextAreaElement; ta?.select(); document.execCommand('copy'); }}>📋 複製 bookmarklet 程式碼</button>
+            <p><strong>📥 之後每次匯入牌組</strong>：</p>
+            <ol>
+              <li>到 <a href="https://asia.pokemon-card.com/tw/deck-build/" target="_blank" rel="noopener">官方牌組構築工具</a>編輯好牌組</li>
+              <li>點剛才加到書籤列的「🔖 PTCG 匯入」書籤</li>
+              <li>跳出浮層後，文字已自動選取，按 <kbd>Ctrl+C</kbd> 複製</li>
+              <li>回本頁，在下方輸入框 <kbd>Ctrl+V</kbd> 貼 → 按「匯入」</li>
+            </ol>
+            <details class="fallback-help">
+              <summary style="font-size:0.8rem;color:#777;">書籤列不能拖？或用 Firefox 嚴格模式？開啟 F12 手動執行</summary>
+              <p style="font-size:0.8rem;">在官網按 <kbd>F12</kbd> → Console 分頁，貼下面程式碼按 Enter：</p>
+              <textarea class="bm-code" readonly rows="3" onclick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}>{`(function(){const cs=document.querySelectorAll('#decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const k=c.children[1]?.innerText?.trim()||'1';lines.push(k+' '+n);});const text=lines.join('\\n');const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:#fff;border:3px solid #2a5aa0;padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=\"font-weight:bold;margin-bottom:8px;color:#2a5aa0;\">✅ 共 '+cs.length+' 種卡 — 按 Ctrl+C 複製</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length+1);ta.style.cssText='width:100%;font-family:monospace;font-size:13px;padding:8px;border:1px solid #aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();},100);})();`}</textarea>
+            </details>
           </div>
         </details>
 
@@ -1690,6 +1701,12 @@
   .official-import-help kbd { background:#eee; border:1px solid #ccc; border-radius:3px; padding:0 0.25rem; font-family:monospace; font-size:0.8em; }
   .official-import-help a { color:#2a5aa0; }
   .bm-code { width:100%; font-family:'Consolas','Menlo',monospace; font-size:0.72rem; padding:0.4rem; border:1px solid #c5d0de; border-radius:4px; background:#eef3f9; color:#222; margin-bottom:0.3rem; box-sizing:border-box; white-space:pre; overflow-x:auto; }
+  .bm-drag-wrapper { list-style:none; text-align:center; margin:0.6rem 0; }
+  .bm-drag-btn { display:inline-block; background:linear-gradient(135deg,#2a5aa0,#4a7ac5); color:#fff !important; padding:0.6rem 1.4rem; border-radius:6px; font-weight:700; text-decoration:none; cursor:move; box-shadow:0 3px 8px rgba(42,90,160,.35); user-select:none; border:2px solid #1a4080; }
+  .bm-drag-btn:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(42,90,160,.5); }
+  .bm-drag-btn:active { cursor:grabbing; }
+  .fallback-help { margin-top:0.8rem; padding:0.4rem 0.6rem; background:#f9f9f9; border:1px dashed #ccc; border-radius:4px; }
+  .fallback-help summary { cursor:pointer; }
   .text-area {
     width: 100%;
     min-height: 260px;
