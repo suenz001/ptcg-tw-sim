@@ -849,6 +849,13 @@ function handlePlaying(
     const defPlayers = [...workingState.players] as [PlayerState, PlayerState];
     const defenderState = { ...defPlayers[dIdx] };
     if (!defenderState.active) return state;
+
+    // 「下次被攻擊傷害 -N」— 套用後清除旗標（Session 31 新機制）
+    if (baseDamage > 0 && defenderState.active.damageReduceNextHit) {
+      baseDamage = Math.max(0, baseDamage - defenderState.active.damageReduceNextHit);
+      defenderState.active = { ...defenderState.active, damageReduceNextHit: undefined };
+    }
+
     const newDamage = defenderState.active.damage + baseDamage;
     const defenderHP = defenderCard.hp ?? 0;
 

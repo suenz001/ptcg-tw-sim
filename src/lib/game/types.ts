@@ -39,6 +39,10 @@ export interface CardInstance {
   toolAttached?: CardInstance;
   /** 進化來源的 iid（用來驗證是否可進化） */
   evolvedFromIid?: string;
+  /** 下一次被攻擊時傷害 -N（攻擊後自動清除），用於「下回合受傷減 N」效果 */
+  damageReduceNextHit?: number;
+  /** 下一次輪到自己行動時不能撤退（老匠、關節技等），行動後清除 */
+  cantRetreatNextTurn?: boolean;
   /**
    * 進化鏈：下層被進化掉的 CardInstance 堆疊（由底到頂，不含當前卡）。
    * - 被擊倒時要一併進棄牌區（PTCG 官方規則）

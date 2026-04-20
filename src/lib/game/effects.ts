@@ -1781,3 +1781,171 @@ regR('search-to-hand-reshuffle', (st, idx, iids, _params, _pool) => {
     return { ...p, hand: [...p.hand, ...chosen], deck: shuffle(remaining) };
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 31 H5 — 擲硬幣正面 +N 傷害（PRE）
+// ══════════════════════════════════════════════════════════════════════════════
+
+function coinPlusDmg(base: number, bonus: number): AttackPreFn {
+  return (state, aIdx) => {
+    const heads = Math.random() < 0.5;
+    return { state: addLog(state, heads ? `正面！+${bonus}` : '反面', aIdx), damage: base + (heads ? bonus : 0) };
+  };
+}
+regPre('瑪力露麗|嬉鬧', coinPlusDmg(30, 30));
+regPre('大炭車|擊飛', coinPlusDmg(20, 40));
+regPre('土狼犬|咬盡', coinPlusDmg(30, 20));
+regPre('小火焰猴|吹火', coinPlusDmg(20, 20));
+regPre('伊布|電光一閃', coinPlusDmg(20, 20));
+regPre('啃果蟲|回轉攻擊', coinPlusDmg(10, 20));
+regPre('不良蛙|蛙跳', coinPlusDmg(20, 20));
+regPre('強顎雞母蟲|伏擊', coinPlusDmg(10, 30));
+regPre('炎兔兒|電光一閃', coinPlusDmg(10, 10));
+regPre('花療環環|嬉鬧', coinPlusDmg(20, 20));
+regPre('潤水鴨|燕返', coinPlusDmg(10, 20));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 31 H6 — 擲硬幣正面附加狀態（POST）
+// ══════════════════════════════════════════════════════════════════════════════
+
+function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'paralyzed'): AttackPostFn {
+  return (state, aIdx) => {
+    const heads = Math.random() < 0.5;
+    if (!heads) return addLog(state, '反面', aIdx);
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const def = { ...players[dIdx] };
+    if (def.active) def.active = { ...def.active, status };
+    players[dIdx] = def;
+    return addLog({ ...state, players }, `正面！對手${
+      status === 'poisoned' ? '中毒' : status === 'burned' ? '燒傷' :
+      status === 'asleep' ? '睡眠' : status === 'confused' ? '混亂' : '麻痺'
+    }`, aIdx);
+  };
+}
+regPost('火斑喵|擊掌奇襲', coinStatusPost('paralyzed'));
+regPost('捷拉奧拉|麻麻關節', coinStatusPost('paralyzed'));
+regPost('大舌舔|泰山壓頂', coinStatusPost('paralyzed'));
+regPost('呱頭蛙|麻麻水', coinStatusPost('paralyzed'));
+regPost('閃電鳥|電磁波', coinStatusPost('paralyzed'));
+regPost('電肚蛙|電擊', coinStatusPost('paralyzed'));
+regPost('赫拉克羅斯|泰山壓頂', coinStatusPost('paralyzed'));
+regPost('電海燕|電擊', coinStatusPost('paralyzed'));
+regPost('頑皮熊貓|瞪眼', coinStatusPost('paralyzed'));
+regPost('幾何雪花|冰凍光束', coinStatusPost('paralyzed'));
+regPost('太陽伊布|念力', coinStatusPost('paralyzed'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 31 H7 — 攻擊時抽牌（POST）
+// ══════════════════════════════════════════════════════════════════════════════
+
+function drawPost(n: number): AttackPostFn {
+  return (state, aIdx) => updatePlayer(state, aIdx, p => {
+    const taken = p.deck.slice(0, n);
+    return { ...p, deck: p.deck.slice(n), hand: [...p.hand, ...taken] };
+  });
+}
+regPost('凱路迪歐|快速抽出', drawPost(2));
+regPost('古玉魚|吸引', drawPost(2));
+regPost('傘電蜥|呼喚', drawPost(1));
+regPost('鴨寶寶|雙重抽出', drawPost(2));
+regPost('木木梟|叼', drawPost(1));
+regPost('電擊獸|呼喚', drawPost(1));
+regPost('齒輪兒|吸引', drawPost(1));
+
+// 特殊：手牌洗回 + 抽 N
+function discardHandDrawPost(n: number): AttackPostFn {
+  return (state, aIdx) => updatePlayer(state, aIdx, p => {
+    const newDiscard = [...p.discard, ...p.hand];
+    const taken = p.deck.slice(0, n);
+    return { ...p, hand: taken, deck: p.deck.slice(n), discard: newDiscard };
+  });
+}
+regPost('猛雷鼓ex|濺射咆哮', discardHandDrawPost(6));
+
+// 手牌洗回牌庫 + 抽 N
+regPost('比克提尼|啪噠啪噠', (state, aIdx) => updatePlayer(state, aIdx, p => {
+  const newDeck = shuffle([...p.deck, ...p.hand]);
+  const taken = newDeck.slice(0, 6);
+  return { ...p, hand: taken, deck: newDeck.slice(6) };
+}));
+
+// 雙方各抽 N
+regPost('花療環環|花流浴', (state, aIdx) => {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  for (const i of [0, 1] as const) {
+    const p = { ...players[i] };
+    const taken = p.deck.slice(0, 3);
+    p.hand = [...p.hand, ...taken];
+    p.deck = p.deck.slice(3);
+    players[i] = p;
+  }
+  return { ...state, players };
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 31 H8 — 下回合這隻無法使用招式（已有 cantAttackThisTurn 機制）
+// ══════════════════════════════════════════════════════════════════════════════
+
+function selfCantAttackNextPost(): AttackPostFn {
+  return (state, aIdx) => {
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) att.active = { ...att.active, cantAttackThisTurn: true };
+    players[aIdx] = att;
+    return { ...state, players };
+  };
+}
+regPost('大力鱷|駭浪', selfCantAttackNextPost());
+regPost('瑪力露麗|力量衝撞', selfCantAttackNextPost());
+regPost('飛天螳螂|猛擊在地', selfCantAttackNextPost());
+regPost('斗笠菇|關節衝擊', selfCantAttackNextPost());
+regPost('鐵斑葉ex|稜鏡刀鋒', selfCantAttackNextPost());
+
+// 對手受招後下回合無法攻擊
+function defCantAttackNextPost(): AttackPostFn {
+  return (state, aIdx) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const def = { ...players[dIdx] };
+    if (def.active) def.active = { ...def.active, cantAttackThisTurn: true };
+    players[dIdx] = def;
+    return { ...state, players };
+  };
+}
+regPost('雪絨蛾|冰冷寒氣', defCantAttackNextPost());
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 31 H9 — 下一次被攻擊傷害 -N（新機制 damageReduceNextHit）
+// ══════════════════════════════════════════════════════════════════════════════
+
+function selfDmgReducePost(n: number): AttackPostFn {
+  return (state, aIdx) => {
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) att.active = { ...att.active, damageReduceNextHit: n };
+    players[aIdx] = att;
+    return addLog({ ...state, players }, `下次受到招式傷害 -${n}`, aIdx);
+  };
+}
+regPost('樹林龜|甲殼衝撞', selfDmgReducePost(20));
+regPost('橡實果|硬化', selfDmgReducePost(30));
+regPost('巨鉗螳螂ex|鋼翼', selfDmgReducePost(50));
+regPost('煤炭龜|甲殼衝撞', selfDmgReducePost(30));
+regPost('波士可多拉|防守利爪', selfDmgReducePost(50));
+regPost('噗隆隆|硬化', selfDmgReducePost(30));
+regPost('飄飄球|膨脹', selfDmgReducePost(10));
+
+// 對手受招後下回合使用招式傷害 -N
+function defNextAtkReducePost(n: number): AttackPostFn {
+  return (state, aIdx) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const def = { ...players[dIdx] };
+    if (def.active) def.active = { ...def.active, damageReduceNextHit: n };
+    players[dIdx] = def;
+    return addLog({ ...state, players }, `對手下次使用招式傷害 -${n}`, aIdx);
+  };
+}
+regPost('黑魯加|大聲咆哮', defNextAtkReducePost(100));
+regPost('嘎啦嘎啦|叫聲', defNextAtkReducePost(40));
