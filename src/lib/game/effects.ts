@@ -9,7 +9,7 @@
  */
 
 import type { Card, EnergyType } from '$lib/cards/types';
-import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction } from './types';
+import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition } from './types';
 
 // ── 型別 ─────────────────────────────────────────────────────────────────────
 
@@ -6964,3 +6964,83 @@ regR('lanzhushi-ko', (st, actorIdx, selectedIids, params, pool) => {
   if (!target || target.damage < minDmg) return st;
   return resolveLanzhushi(st, actorIdx, target, isActive, pool);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38ag v1.83 H 標第 28 波 — 抽卡批次 + 狀態補完 + 自傷 + 其他簡單機制
+//
+// 不新增機制，大多是把剩下符合現有 helper 的卡牌補齊。
+// 1) 抽 N 張（22 張）— reuse drawNPost
+// 2) 對手狀態（5 張）— reuse statusPost
+// 3) 自己狀態（2 張）— selfStatusPost(status)
+// 4) 自傷反動（3 張）— reuse selfHitPost
+// 5) 其他：丟競技場 1 張、對手牌庫頂丟 1 張、道具防守回轉
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── (1) 抽 N 張 ─────────────────────────────────────────────────────────────
+regPost('貓鼬少|呼喚', drawNPost(1, '呼喚'));
+regPost('拉魯拉絲|呼喚', drawNPost(1, '呼喚'));
+regPost('木棉球|呼喚', drawNPost(1, '呼喚'));
+regPost('瑪沙那|呼喚', drawNPost(1, '呼喚'));
+regPost('呱呱泡蛙|呼喚', drawNPost(1, '呼喚'));
+regPost('火稚雞|呼喚', drawNPost(1, '呼喚'));
+regPost('花椰猴|呼喚', drawNPost(1, '呼喚'));
+regPost('冷水猴|呼喚', drawNPost(1, '呼喚'));
+regPost('爆香猴|呼喚', drawNPost(1, '呼喚'));
+regPost('<阿響的>皮丘|麻麻抽出', drawNPost(1, '麻麻抽出'));
+regPost('嗡蝠|快速抽出', drawNPost(1, '快速抽出'));
+
+regPost('超級巨牙鯊ex|貪心之牙', drawNPost(2, '貪心之牙'));
+regPost('劈斬司令|快速抽出', drawNPost(2, '快速抽出'));
+regPost('瑪機雅娜|扣殺抽出', drawNPost(2, '扣殺抽出'));
+regPost('龜腳腳|雙重抽出', drawNPost(2, '雙重抽出'));
+regPost('拉帝亞斯|吸引', drawNPost(2, '吸引'));
+regPost('象徵鳥|雙重抽出', drawNPost(2, '雙重抽出'));
+regPost('胡帕|偷盜', drawNPost(2, '偷盜'));
+regPost('貓鼬斬ex|扣殺抽出', drawNPost(2, '扣殺抽出'));
+regPost('怒鸚哥|叼', drawNPost(2, '叼'));
+
+regPost('青銅鐘|三重抽出', drawNPost(3, '三重抽出'));
+regPost('大王燕|叼', drawNPost(3, '叼'));
+
+regPost('高傲雉雞|叼', drawNPost(4, '叼'));
+
+// ── (2) 對手狀態（補完）─────────────────────────────────────────────────────
+regPost('狡猾天狗|蠱惑', statusPost('confused'));
+regPost('波爾凱尼恩|灼熱', statusPost('burned'));
+regPost('滋汁鼴|毒擊', statusPost('poisoned'));
+regPost('蔓藤怪|毒粉', statusPost('poisoned'));
+regPost('火炎獅|灼燒', statusPost('burned'));
+
+// ── (3) 自己狀態（攻擊者自身）────────────────────────────────────────────────
+function selfStatusPost(status: SpecialCondition): AttackPostFn {
+  return (state, aIdx) => {
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) att.active = { ...att.active, status };
+    players[aIdx] = att;
+    return { ...state, players };
+  };
+}
+regPost('卡比獸|倒下', selfStatusPost('asleep'));
+regPost('章魚桶|暴走', selfStatusPost('confused'));
+
+// ── (4) 自傷反動（補完）─────────────────────────────────────────────────────
+regPost('龍蝦小兵|猛撞', selfHitPost(10));
+regPost('鐵掌力士|狂野壓制', selfHitPost(70));
+regPost('毒骷蛙|突擊', selfHitPost(20));
+
+// ── (5) 其他單張簡單機制 ────────────────────────────────────────────────────
+
+// 切割洛托姆｜割除利刃 20 — 將場上競技場卡丟棄
+regPost('切割洛托姆|割除利刃', discardStadiumPost('割除利刃', false));
+
+// 花岩怪｜崩山 10 — 將對手牌庫頂 1 張丟棄
+regPost('花岩怪|崩山', millOppDeckTopPost(1, '崩山'));
+
+// 頓甲｜防守回轉 120 — 自己丟 2 張能量（作為成本）+ 下回合受招式傷害 -100
+// 先登 ATTACK_PRE_DISCARD_CHOICE 讓 UI 彈窗，再在 PRE 執行丟棄與傷害，POST 設置減傷旗標
+registerSelfDiscardMultiply('頓甲|防守回轉', '防守回轉', 120, 0, 2, 'all');
+regPost('頓甲|防守回轉', selfDmgReducePost(100));
+
+// 古劍豹｜冰柱閉環 120 — 選 1 張自身能量放回手牌
+regPost('古劍豹|冰柱閉環', returnSelfActiveEnergyPost(1, true, '冰柱閉環'));

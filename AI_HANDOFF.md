@@ -3349,3 +3349,30 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 22/28（P1/P2）、平均回合 14.3
 - 版本 1.81 → 1.82
+
+---
+
+## 📝 2026-04-21 Session 38ag (v1.83) — H 標第 28 波：抽卡批次 + 狀態補完 + 自傷 + 其他單張（35 張）
+
+### 實裝（35 張）
+- 抽 N 張（22 張，reuse drawNPost）：
+  - draw 1：貓鼬少|呼喚、拉魯拉絲|呼喚、木棉球|呼喚、瑪沙那|呼喚、呱呱泡蛙|呼喚、火稚雞|呼喚、花椰猴|呼喚、冷水猴|呼喚、爆香猴|呼喚、<阿響的>皮丘|麻麻抽出、嗡蝠|快速抽出
+  - draw 2：超級巨牙鯊ex|貪心之牙、劈斬司令|快速抽出、瑪機雅娜|扣殺抽出、龜腳腳|雙重抽出、拉帝亞斯|吸引、象徵鳥|雙重抽出、胡帕|偷盜、貓鼬斬ex|扣殺抽出、怒鸚哥|叼
+  - draw 3：青銅鐘|三重抽出、大王燕|叼
+  - draw 4：高傲雉雞|叼
+- 對手狀態（5 張，reuse statusPost）：狡猾天狗|蠱惑（混亂）、波爾凱尼恩|灼熱（灼傷）、滋汁鼴|毒擊（中毒）、蔓藤怪|毒粉（中毒）、火炎獅|灼燒（灼傷）
+- 自己狀態（2 張）：卡比獸|倒下（自己睡眠）、章魚桶|暴走（自己混亂）
+- 自傷反動（3 張，reuse selfHitPost）：龍蝦小兵|猛撞 10、鐵掌力士|狂野壓制 70、毒骷蛙|突擊 20
+- 其他單張：
+  - 切割洛托姆|割除利刃 20 — discardStadiumPost
+  - 花岩怪|崩山 10 — millOppDeckTopPost 1
+  - 頓甲|防守回轉 120 — registerSelfDiscardMultiply（丟 2 能量成本）+ selfDmgReducePost 100
+  - 古劍豹|冰柱閉環 120 — returnSelfActiveEnergyPost(1, true)
+
+### 新 helper
+- `selfStatusPost(status)` — 攻擊者自身陷入 SpecialCondition；從 types.ts 補 import SpecialCondition
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 23/27、平均回合 14.5
+- 版本 1.82 → 1.83
