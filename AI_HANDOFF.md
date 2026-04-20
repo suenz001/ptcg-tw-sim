@@ -2162,3 +2162,86 @@ node scripts/classify-h-cards.mjs H  # 掃未實裝 H 標，按模式分類
 
 ### Commit
 - （將在 commit 後補）v1.4 — UI 切割修、log 統一、選人介面統一
+
+## 📝 2026-04-20 Session 37 (v1.5) — Setup 蓋牌、Mega ex 獎賞、UI 狀態反白、swap log 雙名、對戰結束匯出 log
+
+### 1. Setup 階段對手卡蓋牌（全模式）
+**Why:** 開局雙方都要放基礎寶可夢，但現在 UI 會立刻把對手出場/備戰暴露給你 → 這不符合 PTCG「雙方同時背面放置，揭曉才互看」的規則。
+**改動：**
+- `src/routes/game/+page.svelte`
+  - 新增 `const oppHidden = $derived(!!game && game.phase === 'setup')`
+  - 對手 bench slot：若 `oppHidden`，改 render `<div class="card-back card-back-sm">?</div>` + 名字顯示「？？？」；HP/能量/道具/特性旗標/狀態全隱藏（連有幾隻備戰還是看得到，只是不知道身分）。
+  - 對手 active：同樣套 `.card-back-lg`，info 只顯示「？？？ / 戰鬥中（未揭曉）」，並加 `card-back-active` class 套斜體灰色樣式。
+- CSS：`.card-back` 用 `radial-gradient` 畫紅藍 Pokéball 風格 + 粗黑邊框 + 陰影，sm 尺寸 96×128（bench）、lg 尺寸 105×140（active）。
+- 「全模式都蓋」：AI 模式 / 線上模式 / 本機雙人 setup 都適用，因為 `game.phase === 'setup'` 在三種模式都是 true。
+- 一旦雙方 `setupDone[0] && setupDone[1]` → phase 變 `playing` → 揭曉。
+
+### 2. 超級進化寶可夢 ex（Mega ex）KO 給 3 張獎賞
+**Why:** PTCG Scarlet/Violet — Mega ex（卡名以「超級」開頭 + ex 後綴，如 超級噴火龍Xex / 超級妙蛙花ex / 超級拉帝亞斯ex）擊倒時對手取 **3 張**，不是 2 張。
+**改動：** `src/lib/game/engine.ts` `prizesForKO(card)`：
+```ts
+const isEx = name.endsWith('ex') || name.endsWith('EX');
+if (isEx && name.startsWith('超級')) return 3;   // Mega ex
+if (isEx) return 2;
+return 1;
+```
+KO resolution（L1040-L1154）、中毒/燒傷致死（L1317 / L1356）都走這個函式 → 統一套到。
+
+### 3. 「下回合無法攻擊」招式改為 UI 反白禁按（新機制 cantAttackPending）
+**Why:** 用戶原話：「無極汰那的力量猛攻反面後，應該是一開始就不能使用，應該是像能量不足的時候那樣，直接把兩個招式都反白不能點擊」。
+**原機制的問題：** `cantAttackThisTurn` 只在 `ATTACK` handler 被攔截後清除，UI 不知道要反白。而且即使改 UI 反白，玩家不攻擊就永遠不會清，下下回合還是卡住。
+**新設計（兩階段旗標）：**
+- `types.ts` 新增 `cantAttackPending?: boolean`（「下個自己回合預約封鎖」）。
+- 招式 POST 改設 **pending** 而非 thisTurn：`力量猛攻` / `無限之刃` / `烈火爆進` / `selfCantAttackNextPost`（大力鱷駭浪 / 瑪力露麗力量衝撞 / 飛天螳螂猛擊在地 / 斗笠菇關節衝擊 / 鐵斑葉ex稜鏡刀鋒）/ `defCantAttackNextPost`（雪絨蛾冰冷寒氣）。
+- `engine.ts` `END_TURN`：
+  - 當前玩家（aIdx）active/bench 全體：`cantAttackThisTurn` → **清除**（罰則消耗完）。
+  - 下個玩家（nextIdx=dIdx）active/bench 全體：`cantAttackPending` → **promote** 為 `cantAttackThisTurn`。
+- `engine.ts` `getAvailableAttacks`：新增三道狀態檢查 → 回傳空 array（→ UI 反白）：
+  - `status === 'asleep'`（睡眠）
+  - `status === 'paralyzed'`（麻痺）
+  - `cantAttackThisTurn === true`
+- 混亂仍走「擲幣判定」，不反白（不知道結果前還是可點）；中毒/燒傷不影響攻擊，不反白。
+- `ATTACK` handler 的 runtime 檢查保留作為 defensive fallback（被 UI 阻擋後不會走到，但保留以防 bug）。
+
+### 4. Log 審計第二輪：swap 時兩隻名字都寫
+**Why:** 用戶原話：「完整的紀錄遊戲的情況，除非該項資訊是只限定自己才能知道」。頂尖捕捉器 / 老大的指令 / 寶可夢交替 / 衝浪手 / 支配鎖鏈這些 swap 類 resolver 原本只寫「呼叫 X 到戰鬥場」，沒寫「把對手/自己原本的戰鬥寶可夢 Y 換下去」。
+**改動 `src/lib/game/effects.ts`：**
+- `gust-opp`（老大的指令 / 反擊捕捉器 / statusPost 類共用）：`將對手戰鬥場的 {oldName} 換到備戰區，呼叫 {newName} 到對手戰鬥場`
+- `top-catcher-opp`：同格式，加「頂尖捕捉器：」前綴
+- `do-switch`（寶可夢交替 / 急進開關 / top-catcher 第二段）：`→ 將 {oldName} 換到備戰區，派出 {newName} 到戰鬥場`
+- `surfer-switch`（衝浪手）：`衝浪手：將 {oldName} 換到備戰區，派出 {newName} 到戰鬥場`
+- `dominance-chain`（桃歹郎支配鎖鏈）：`支配鎖鏈：將 {oldName} 換到備戰區，派出 {newName} 到戰鬥場（中毒）`
+- 奇跡修正檔 / 神奇糖果（進化前/後名字）/ 撤退 / SEND_NEW_ACTIVE — Session 36 已處理，驗證通過不動。
+
+### 5b. 備戰區卡牌下方被切掉 + 設置階段 drop zone 框框太小（Session 37 補修）
+**Why:** v1.4 修了戰鬥場 active 切掉，但用戶 v1.5 截圖發現 mine-row 備戰區現在被切（圖片只剩名字+HP 一條）。同時用戶反饋初始拖曳寶可夢時，戰鬥場/備戰區的「黃色虛線框」比放置後的實際 slot 小很多，難以瞄準。
+**改動 `src/routes/game/+page.svelte` CSS：**
+- `.playmat grid-template-rows`: `minmax(185px,1fr)` → `minmax(230px,1fr)`（雙方 row 都從 185 拉到 230，足以容納 bench-slot 完整高度：96px 圖 + 6 行資訊 + 進化/特性按鈕 ≈ 220px）
+- `.active-card.active-empty` 加 `min-height:160px; padding:1.4rem; font-size:.9rem; font-weight:600`，drop-zone 狀態 `border-width:3px` 加粗，視覺尺寸與放置寶可夢後接近
+- `.bench-empty`: `flex:0 0 70px` → `flex:1 1 70px; min-width:70px; max-width:115px`（與已放置 slot 同 flex 規則）；`min-height:96px` → `170px`（接近放置後高度）；drop-zone 狀態 opacity 提升 + border 加粗
+
+### 6. 對戰結束後匯出 log（.txt / .json）
+**Why:** 用戶原話：「在對戰結束後，提供匯出log的功能，供玩家復盤」。
+**改動 `src/routes/game/+page.svelte`：**
+- 新增 `exportLogAs(format: 'txt' | 'json')`：
+  - txt：`[T{turn} P{idx}:{name}] {message}` 每行 1 條，附玩家/勝者/原因/版本 header，UTF-8。
+  - json：`{ meta: { exportedAt, version, players, winner, winnerName, winReason, finalTurn }, log: [...] }`。
+  - 用 `Blob` + `URL.createObjectURL` + 動態 `<a download>` 觸發下載；1 秒後 `revokeObjectURL`。
+  - 檔名：`ptcg-log-{YYYYMMDD-HHmmss}.{ext}`。
+- Game-over 畫面加兩個 `📄 匯出 log（.txt）` / `🧾 匯出 log（.json）` 按鈕（CSS `.export-btns`）。
+
+### 驗證
+- `node /tmp/sim-sandbox/sim.mjs 50` → 50/50 正常結束，0 卡住 / 0 崩潰 / 0 例外；P1 24 / P2 26，平均 15.3 回合。
+- 2 局 turn=2-3 早結束 = 單寶可夢備戰區被清空（規則內輸法），非 bug。
+- `npx tsc --noEmit`：0 新錯誤；僅剩 presets.ts / cards/+page.ts 舊有問題（與本次改動無關）。
+- Mega ex 判定已用 static/cards/*.json 的實際名字驗證（超級噴火龍Xex / 超級妙蛙花ex / 超級拉帝亞斯ex 等 15+ 張）。
+
+### 關鍵檔案變動
+- `src/lib/game/types.ts` — 新增 `cantAttackPending?: boolean`
+- `src/lib/game/engine.ts` — `prizesForKO` 加 Mega ex 判定；`getAvailableAttacks` 加狀態封鎖；`END_TURN` 加 pending↔thisTurn promote/clear 邏輯
+- `src/lib/game/effects.ts` — 6 處 `cantAttackThisTurn = true` → `cantAttackPending = true`；5 個 swap 類 resolver log 改雙名
+- `src/routes/game/+page.svelte` — `oppHidden` derived + 對手 bench/active 蓋牌 render + `exportLogAs` + 2 個匯出按鈕
+- `src/lib/version.ts` — 1.4 → 1.5
+
+### Commit
+- （將在 commit 後補）v1.5 — setup 蓋牌 + Mega ex 3 獎賞 + 招式反白 + swap log 雙名 + 匯出 log

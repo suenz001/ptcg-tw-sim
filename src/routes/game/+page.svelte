@@ -360,6 +360,59 @@
     }
   }
 
+  // 對戰結束後匯出 log（.txt 給玩家肉眼復盤；.json 給外部工具分析）
+  function exportLogAs(format: 'txt' | 'json') {
+    if (!game) return;
+    const ts = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const stamp = `${ts.getFullYear()}${pad(ts.getMonth()+1)}${pad(ts.getDate())}-${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}`;
+    const p0 = game.players[0]?.name ?? 'P0';
+    const p1 = game.players[1]?.name ?? 'P1';
+    const winnerName = game.winner !== null && game.winner !== undefined ? (game.players[game.winner]?.name ?? '?') : '?';
+    const reason = game.winReason ?? '';
+    let blob: Blob;
+    let filename: string;
+    if (format === 'txt') {
+      const lines: string[] = [];
+      lines.push(`=== PTCG 對戰紀錄 ===`);
+      lines.push(`匯出時間：${ts.toISOString()}`);
+      lines.push(`玩家：${p0}（P0）vs ${p1}（P1）`);
+      lines.push(`勝者：${winnerName}`);
+      lines.push(`原因：${reason}`);
+      lines.push(`版本：v${VERSION}`);
+      lines.push(`==================`);
+      for (const e of (game.log ?? [])) {
+        const who = e.playerIndex === 0 ? `[T${e.turn} P0:${p0}]`
+                  : e.playerIndex === 1 ? `[T${e.turn} P1:${p1}]`
+                  : `[T${e.turn} —]`;
+        lines.push(`${who} ${e.message}`);
+      }
+      blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+      filename = `ptcg-log-${stamp}.txt`;
+    } else {
+      const payload = {
+        meta: {
+          exportedAt: ts.toISOString(),
+          version: VERSION,
+          players: [p0, p1],
+          winner: game.winner,
+          winnerName,
+          winReason: reason,
+          finalTurn: game.turn,
+        },
+        log: game.log ?? [],
+      };
+      blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      filename = `ptcg-log-${stamp}.json`;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   function openZoom(cardId: string, inst: CardInstance | null = null) {
     const c = pool.get(cardId);
     if (!c) return;
@@ -503,6 +556,8 @@
   const oppIdx  = $derived<0 | 1>((1 - myIdx) as 0 | 1);
   const myPlayer  = $derived(game ? game.players[myIdx]  : null);
   const oppPlayer = $derived(game ? game.players[oppIdx] : null);
+  // Setup 階段對手場上的寶可夢應該蓋牌（不能讓對手看到身分），等雙方都完成後（phase→playing）再揭曉
+  const oppHidden = $derived(!!game && game.phase === 'setup');
 
   const canUseStadium = $derived(
     game?.phase === 'playing' && game.turnPhase === 'main' &&
@@ -1091,6 +1146,14 @@
         {game.players[game.winner!].name} 獲勝！
       </p>
       <p class="muted" in:fade={{ duration: 400, delay: 600 }}>{game.winReason}</p>
+      <div class="lobby-btns export-btns" in:fade={{ duration: 400, delay: 800 }}>
+        <button class="btn-secondary" onclick={()=>exportLogAs('txt')} title="匯出純文字 log 供復盤">
+          📄 匯出 log（.txt）
+        </button>
+        <button class="btn-secondary" onclick={()=>exportLogAs('json')} title="匯出結構化 log 供外部工具分析">
+          🧾 匯出 log（.json）
+        </button>
+      </div>
       <div class="lobby-btns" in:fade={{ duration: 400, delay: 900 }}>
         <button class="btn-primary" onclick={() => { game = null; if (mode === 'online') leaveOnlineGame(); }}>
           {mode === 'online' ? '離開房間' : '再來一局'}
@@ -1184,20 +1247,27 @@
         {#each Array(5) as _, i}
           {#if oppPlayer?.bench[i]}
             {@const b=oppPlayer.bench[i]}{@const bc=getCard(b.cardId)}
-            <div class="bench-slot">
-              <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>
-              <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
-              <div class="bench-name">{bc?.name}</div>
-              <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
-              {#if b.toolAttached}{@const tc3=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc3?.name}</div>{/if}
-              {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
-              {#if b.status}<div class="status-chip-sm status-{b.status}">{
-                b.status === 'poisoned' ? '☠️' :
-                b.status === 'burned' ? '🔥' :
-                b.status === 'asleep' ? '💤' :
-                b.status === 'confused' ? '😵' : '⚡'
-              }</div>{/if}
-            </div>
+            {#if oppHidden}
+              <div class="bench-slot card-back-slot" title="對手備戰寶可夢（設置中，未揭曉）">
+                <div class="card-back card-back-sm"><span class="card-back-mark">?</span></div>
+                <div class="bench-name">？？？</div>
+              </div>
+            {:else}
+              <div class="bench-slot">
+                <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>
+                <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
+                <div class="bench-name">{bc?.name}</div>
+                <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
+                {#if b.toolAttached}{@const tc3=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc3?.name}</div>{/if}
+                {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
+                {#if b.status}<div class="status-chip-sm status-{b.status}">{
+                  b.status === 'poisoned' ? '☠️' :
+                  b.status === 'burned' ? '🔥' :
+                  b.status === 'asleep' ? '💤' :
+                  b.status === 'confused' ? '😵' : '⚡'
+                }</div>{/if}
+              </div>
+            {/if}
           {:else}<div class="bench-slot bench-empty"></div>{/if}
         {/each}
       </div>
@@ -1205,24 +1275,34 @@
         <div class="zone-label-sm opp-label">對手出場</div>
         {#if oppPlayer?.active}
           {@const ac=getCard(oppPlayer.active.cardId)}
-          <div class="active-card opp-active">
-            <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>
-            <div class="active-info">
-              <div class="active-name">{ac?.name}</div>
-              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(oppPlayer.active)?hpRemaining(oppPlayer.active)/hpTotal(oppPlayer.active)*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),hpTotal(oppPlayer.active))}"></div></div>
-              <div class="active-hp">HP {hpRemaining(oppPlayer.active)}/{hpTotal(oppPlayer.active)}</div>
-              <div class="active-nrg">{energySummary(oppPlayer.active)}</div>
-              {#if oppPlayer.active.toolAttached}{@const tc=getCard(oppPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
-              {#if oppPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
-              {#if oppPlayer.active.status}<div class="status-chip status-{oppPlayer.active.status}">{
-                oppPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
-                oppPlayer.active.status === 'burned' ? '🔥 燒傷' :
-                oppPlayer.active.status === 'asleep' ? '💤 睡眠' :
-                oppPlayer.active.status === 'confused' ? '😵 混亂' :
-                oppPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.status
-              }</div>{/if}
+          {#if oppHidden}
+            <div class="active-card opp-active card-back-active" title="對手戰鬥寶可夢（設置中，未揭曉）">
+              <div class="card-back card-back-lg"><span class="card-back-mark">?</span></div>
+              <div class="active-info">
+                <div class="active-name">？？？</div>
+                <div class="active-hp">戰鬥中（未揭曉）</div>
+              </div>
             </div>
-          </div>
+          {:else}
+            <div class="active-card opp-active">
+              <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>
+              <div class="active-info">
+                <div class="active-name">{ac?.name}</div>
+                <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(oppPlayer.active)?hpRemaining(oppPlayer.active)/hpTotal(oppPlayer.active)*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),hpTotal(oppPlayer.active))}"></div></div>
+                <div class="active-hp">HP {hpRemaining(oppPlayer.active)}/{hpTotal(oppPlayer.active)}</div>
+                <div class="active-nrg">{energySummary(oppPlayer.active)}</div>
+                {#if oppPlayer.active.toolAttached}{@const tc=getCard(oppPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
+                {#if oppPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
+                {#if oppPlayer.active.status}<div class="status-chip status-{oppPlayer.active.status}">{
+                  oppPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
+                  oppPlayer.active.status === 'burned' ? '🔥 燒傷' :
+                  oppPlayer.active.status === 'asleep' ? '💤 睡眠' :
+                  oppPlayer.active.status === 'confused' ? '😵 混亂' :
+                  oppPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.status
+                }</div>{/if}
+              </div>
+            </div>
+          {/if}
         {:else}<div class="active-card active-empty">（無出場）</div>{/if}
       </div>
       <div class="zone-prizes">
@@ -2026,6 +2106,8 @@
   .btn-primary:disabled{ opacity:0.4; cursor:not-allowed; }
   .btn-secondary{ display:inline-block; background:#2a3a5a; color:#ccddff; border:1px solid #4a5a8a; border-radius:8px; padding:0.5rem 1.2rem; font:inherit; cursor:pointer; text-decoration:none; }
   .lobby-btns{ display:flex; gap:1rem; margin-top:1.5rem; align-items:center; }
+  .export-btns{ margin-top:1rem; }
+  .export-btns .btn-secondary{ font-size:.9rem; padding:.5rem .9rem; }
   .winner-text{ font-size:1.4rem; font-weight:700; color:#ffdd55; }
 
   /* ── 勝負畫面（Session 27） ── */
@@ -2087,7 +2169,7 @@
   .res-lb{ font-weight:600; }
   .res-st{ font-size:.62rem; opacity:.85; padding-left:.15rem; border-left:1px solid rgba(255,255,255,.15); margin-left:.15rem; }
 
-  .playmat{ flex:1; display:grid; grid-template-rows:minmax(185px,1fr) auto minmax(185px,1fr); overflow:hidden; position:relative;
+  .playmat{ flex:1; display:grid; grid-template-rows:minmax(230px,1fr) auto minmax(230px,1fr); overflow:hidden; position:relative;
     background:
       radial-gradient(circle at 50% 50%, rgba(80,130,90,.12), transparent 72%),
       repeating-linear-gradient(45deg, rgba(0,0,0,.05) 0 2px, transparent 2px 8px),
@@ -2126,9 +2208,18 @@
   .active-card.opp-active{ border-color:#5a3a3a; background:rgba(0,0,0,.4); }
   .active-card.mine-active{ border-color:#3a6a3a; }
   .active-card.energy-target{ border-color:#aaff44; cursor:pointer; animation:glow 1s infinite alternate; }
-  .active-card.active-empty{ justify-content:center; align-items:center; color:#888; font-size:.8rem; text-align:center; padding:.8rem; border:2px dashed #444; background:rgba(0,0,0,.25); }
-  .active-card.active-empty.drop-zone{ border-color:#88aaff; color:#cce; background:rgba(40,70,120,.3); }
+  /* active-empty: 讓空戰鬥場佔用與放置寶可夢後接近的空間，避免 setup 時 drop target 比實際位置小很多 */
+  .active-card.active-empty{ justify-content:center; align-items:center; color:#888; font-size:.9rem; text-align:center; padding:1.4rem; border:2px dashed #444; background:rgba(0,0,0,.25); min-height:160px; font-weight:600; }
+  .active-card.active-empty.drop-zone{ border-color:#88aaff; color:#cce; background:rgba(40,70,120,.3); border-width:3px; }
   .active-img{ width:105px; border-radius:5px; flex-shrink:0; }
+  /* 設置階段對手卡蓋牌：紅藍漸層 + Pokéball 風格 */
+  .card-back{ background:radial-gradient(circle at 50% 50%, #f0f4ff 0 12%, #ffffff 12% 14%, #1a1a1a 14% 18%, #c0392b 18% 50%, #922b21 50% 100%); border:2px solid #1a1a1a; border-radius:6px; box-shadow:inset 0 0 6px rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .card-back-mark{ font-family: 'Times New Roman', serif; font-weight:900; font-size:1.4rem; color:rgba(255,255,255,.85); text-shadow:0 1px 2px rgba(0,0,0,.7); }
+  .card-back-sm{ width:96px; height:128px; }
+  .card-back-lg{ width:105px; height:140px; }
+  .card-back-active .active-info{ color:#bbb; }
+  .card-back-active .active-name{ font-style:italic; }
+  .card-back-slot{ cursor:default !important; }
   .active-info{ flex:1; min-width:0; }
   .active-name{ font-size:1rem; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:.2rem; }
   .active-hp{ font-size:.88rem; color:#ccc; }
@@ -2197,8 +2288,10 @@
   .bench-slot{ flex:1 1 70px; min-width:70px; max-width:115px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:visible; }
   .bench-slot:not(.bench-empty).energy-target{ border-color:#aaff44; cursor:pointer; }
   .bench-slot img{ width:100%; max-width:96px; border-radius:4px; }
-  /* bench-empty：固定最小寬度確保拖曳 drop target 可見 + 可點擊 */
-  .bench-empty{ border-style:dashed; border-color:#2a5a2a; opacity:.55; overflow:visible; flex:0 0 70px; min-height:96px; }
+  /* bench-empty：flex 與寬度對齊已放置卡牌的 slot，避免 setup 時 drop target 小到難拖 */
+  .bench-empty{ border-style:dashed; border-color:#2a5a2a; opacity:.55; overflow:visible; flex:1 1 70px; min-width:70px; max-width:115px; min-height:170px; }
+  /* 拖曳中的 bench-empty 提升可見度（粗框 + 偏亮底） */
+  .bench-empty.drop-zone{ opacity:.95; border-width:3px; }
   .bench-name{ font-size:.7rem; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
   .bench-stat{ font-size:.66rem; color:#aaa; }
   .bench-nrg{ font-size:.62rem; color:#888; }

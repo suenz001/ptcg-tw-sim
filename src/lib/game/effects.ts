@@ -275,10 +275,9 @@ regG('急進開關', (st, idx) => st.players[idx].bench.length > 0);
 regR('do-switch', (st, idx, iids, _params, pool) => {
   const prevPlayer = st.players[idx];
   const target = prevPlayer.bench.find(c => c.iid === iids[0]);
-  if (target) {
-    const name = pool.get(target.cardId)?.name ?? '?';
-    st = addLog(st, `→ 派出 ${name} 到戰鬥場`, idx);
-  }
+  const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const oldName = prevPlayer.active ? (pool.get(prevPlayer.active.cardId)?.name ?? '?') : '?';
+  st = addLog(st, `→ 將 ${oldName} 換到備戰區，派出 ${newName} 到戰鬥場`, idx);
   return updatePlayer(st, idx, (p) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
@@ -523,10 +522,9 @@ regR('gust-opp', (st, idx, iids, _params, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const oppPlayer = st.players[oppIdx];
   const target = oppPlayer.bench.find(c => c.iid === iids[0]);
-  if (target) {
-    const name = pool.get(target.cardId)?.name ?? '?';
-    st = addLog(st, `老大的指令：呼叫 ${name} 到戰鬥場`, idx);
-  }
+  const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const oldName = oppPlayer.active ? (pool.get(oppPlayer.active.cardId)?.name ?? '?') : '?';
+  st = addLog(st, `將對手戰鬥場的 ${oldName} 換到備戰區，呼叫 ${newName} 到對手戰鬥場`, idx);
   return updatePlayer(st, oppIdx, (p) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
@@ -751,10 +749,9 @@ regR('top-catcher-opp', (st, idx, iids, _params, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const oppPlayer = st.players[oppIdx];
   const target = oppPlayer.bench.find(c => c.iid === iids[0]);
-  if (target) {
-    const name = pool.get(target.cardId)?.name ?? '?';
-    st = addLog(st, `頂尖捕捉器：呼叫 ${name} 到對手戰鬥場`, idx);
-  }
+  const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const oldName = oppPlayer.active ? (pool.get(oppPlayer.active.cardId)?.name ?? '?') : '?';
+  st = addLog(st, `頂尖捕捉器：將對手戰鬥場的 ${oldName} 換到備戰區，呼叫 ${newName} 到對手戰鬥場`, idx);
   // 切換對手備戰 → 對手出場
   st = updatePlayer(st, oppIdx, (p) => {
     if (!p.active) return p;
@@ -1395,10 +1392,10 @@ regPost('無極汰那|敲壞', (state, aIdx, _pool) => {
 regPost('無極汰那|力量猛攻', (state, aIdx, _pool) => {
   const coin = Math.random() < 0.5;
   if (!coin) {
-    // tails → can't attack next turn
+    // tails → can't attack next turn (用 pending，將在擁有者下個回合開始時 promote)
     const players = [...state.players] as [PlayerState, PlayerState];
     const p = { ...players[aIdx] };
-    if (p.active) p.active = { ...p.active, cantAttackThisTurn: true };
+    if (p.active) p.active = { ...p.active, cantAttackPending: true };
     players[aIdx] = p;
     return addLog({ ...state, players }, '力量猛攻：反面！下回合無法使用招式。', aIdx);
   }
@@ -1411,7 +1408,7 @@ regPost('無極汰那|力量猛攻', (state, aIdx, _pool) => {
 regPost('拉帝亞斯ex|無限之刃', (state, aIdx, _pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
-  if (p.active) p.active = { ...p.active, cantAttackThisTurn: true };
+  if (p.active) p.active = { ...p.active, cantAttackPending: true };
   players[aIdx] = p;
   return addLog({ ...state, players }, '無限之刃：下回合無法使用招式。', aIdx);
 });
@@ -1506,10 +1503,9 @@ regR('dominance-chain', (st, idx, iids, params, pool) => {
   const targetIid = iids[0];
   if (!validIids.includes(targetIid)) return st;
   const target = st.players[idx].bench.find(c => c.iid === targetIid);
-  if (target) {
-    const name = pool.get(target.cardId)?.name ?? '?';
-    st = addLog(st, `支配鎖鏈：派出 ${name} 到戰鬥場（中毒）`, idx);
-  }
+  const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const oldName = st.players[idx].active ? (pool.get(st.players[idx].active!.cardId)?.name ?? '?') : '?';
+  st = addLog(st, `支配鎖鏈：將 ${oldName} 換到備戰區，派出 ${newName} 到戰鬥場（中毒）`, idx);
   return updatePlayer(st, idx, (p) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === targetIid);
@@ -1526,12 +1522,12 @@ regR('dominance-chain', (st, idx, iids, params, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 烈火爆進 — 260 傷害，使用後到離開戰鬥場前無法再用本招
-// M2 簡化：用現有 cantAttackThisTurn 旗標代表「下回合無法攻擊」
+// M2 簡化：用 cantAttackPending 旗標代表「下回合無法攻擊」
 // （原文是禁用特定招式；完整實作需 disabledAttacks 機制，此為可接受的保守簡化）
 regPost('破空焰ex|烈火爆進', (state, aIdx, _pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
-  if (p.active) p.active = { ...p.active, cantAttackThisTurn: true };
+  if (p.active) p.active = { ...p.active, cantAttackPending: true };
   players[aIdx] = p;
   return addLog({ ...state, players }, '烈火爆進：下回合無法使用招式（簡化版）。', aIdx);
 });
@@ -1653,10 +1649,9 @@ reg('衝浪手', (st, idx) => {
 regR('surfer-switch', (st, idx, iids, _params, pool) => {
   const prevPlayer = st.players[idx];
   const target = prevPlayer.bench.find(c => c.iid === iids[0]);
-  if (target) {
-    const name = pool.get(target.cardId)?.name ?? '?';
-    st = addLog(st, `衝浪手：派出 ${name} 到戰鬥場`, idx);
-  }
+  const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const oldName = prevPlayer.active ? (pool.get(prevPlayer.active.cardId)?.name ?? '?') : '?';
+  st = addLog(st, `衝浪手：將 ${oldName} 換到備戰區，派出 ${newName} 到戰鬥場`, idx);
   return updatePlayer(st, idx, p => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
@@ -2040,14 +2035,14 @@ regPost('花療環環|花流浴', (state, aIdx) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Session 31 H8 — 下回合這隻無法使用招式（已有 cantAttackThisTurn 機制）
+// Session 31 H8 — 下回合這隻無法使用招式（cantAttackPending 機制）
 // ══════════════════════════════════════════════════════════════════════════════
 
 function selfCantAttackNextPost(): AttackPostFn {
   return (state, aIdx) => {
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
-    if (att.active) att.active = { ...att.active, cantAttackThisTurn: true };
+    if (att.active) att.active = { ...att.active, cantAttackPending: true };
     players[aIdx] = att;
     return { ...state, players };
   };
@@ -2064,7 +2059,7 @@ function defCantAttackNextPost(): AttackPostFn {
     const dIdx = (1 - aIdx) as 0 | 1;
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, cantAttackThisTurn: true };
+    if (def.active) def.active = { ...def.active, cantAttackPending: true };
     players[dIdx] = def;
     return { ...state, players };
   };

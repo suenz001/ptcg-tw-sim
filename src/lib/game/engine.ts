@@ -192,8 +192,12 @@ export function canAffordAttack(
 
 /** 判斷一張 ex 卡（name 含 'ex' 後綴）對應獎勵牌數 */
 function prizesForKO(card: Card): number {
-  // ex / V-STAR 等擊倒獲得 2 張（M4 再細分；M2 先用簡單規則）
-  if (card.name.endsWith('ex') || card.name.endsWith('EX')) return 2;
+  const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
+  // 超級進化寶可夢ex（Mega ex）：name 以「超級」開頭且為 ex → 3 張獎賞
+  // 例：超級噴火龍Xex / 超級妙蛙花ex / 超級拉帝亞斯ex
+  if (isEx && card.name.startsWith('超級')) return 3;
+  // 一般 ex / V-STAR 等擊倒獲得 2 張
+  if (isEx) return 2;
   return 1;
 }
 
@@ -1398,12 +1402,29 @@ function handlePlaying(
     };
     if (currentPlayer.active) currentPlayer.active = clearAbilityFlag(currentPlayer.active);
     currentPlayer.bench = currentPlayer.bench.map(clearAbilityFlag);
+    // 清除 cantAttackThisTurn：若當前玩家的 active 本回合被招式封鎖過，
+    // 回合結束時把罰則消耗完（否則 UI 反白會永久卡住）
+    const clearCantAttackThisTurn = (c: CardInstance): CardInstance => {
+      if (!c.cantAttackThisTurn) return c;
+      const n = { ...c }; delete n.cantAttackThisTurn; return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = clearCantAttackThisTurn(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(clearCantAttackThisTurn);
     players[aIdx] = currentPlayer;
 
-    // 重置次方玩家的回合限制旗標
+    // 重置次方玩家的回合限制旗標 + promote cantAttackPending → cantAttackThisTurn
     const nextIdx = dIdx;
+    const promotePending = (c: CardInstance): CardInstance => {
+      if (!c.cantAttackPending) return c;
+      const n = { ...c, cantAttackThisTurn: true };
+      delete n.cantAttackPending;
+      return n;
+    };
+    const nextP = { ...players[nextIdx] };
+    if (nextP.active) nextP.active = promotePending(nextP.active);
+    nextP.bench = nextP.bench.map(promotePending);
     players[nextIdx] = {
-      ...players[nextIdx],
+      ...nextP,
       energyAttachedThisTurn: false,
       supporterPlayedThisTurn: false,
       retreatedThisTurn: false,
@@ -1461,7 +1482,7 @@ export function applyAction(
 
 // ── 輔助查詢 ─────────────────────────────────────────────────────────────────
 
-/** 列出目前行動玩家可使用的招式（已滿足能量需求的） */
+/** 列出目前行動玩家可使用的招式（已滿足能量需求 + 未被狀態/效果封鎖的） */
 export function getAvailableAttacks(
   state: GameState,
   pool: Map<string, Card>
@@ -1470,6 +1491,11 @@ export function getAvailableAttacks(
   if (state.isFirstTurn && state.activePlayerIndex === state.firstPlayerIdx) return [];
   const player = state.players[state.activePlayerIndex];
   if (!player.active) return [];
+  // 狀態/效果封鎖：睡眠、麻痺、上回合招式設下的「本回合無法使用招式」
+  // （混亂只在攻擊時擲幣判定，這裡仍允許點擊；中毒/燒傷不影響攻擊）
+  if (player.active.status === 'asleep') return [];
+  if (player.active.status === 'paralyzed') return [];
+  if (player.active.cantAttackThisTurn) return [];
   const card = pool.get(player.active.cardId);
   if (!card?.attacks) return [];
   return card.attacks

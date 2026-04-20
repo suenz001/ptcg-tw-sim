@@ -63,9 +63,17 @@ export interface CardInstance {
    */
   evolvedThisTurn?: boolean;
   /**
-   * 本回合因招式效果無法使用招式（下回合嘗試攻擊時清除並封鎖）。
+   * 本回合無法使用招式（UI 反白禁按）。
+   * 由 cantAttackPending 在「擁有者下個回合開始」時自動 promote 而來，
+   * 並在該回合 END_TURN 時清除。
    */
   cantAttackThisTurn?: boolean;
+  /**
+   * 招式效果剛打出時設下的「下個自己回合無法使用招式」預約旗標。
+   * 在 END_TURN 切換到擁有者下個回合時，自動 promote 為 cantAttackThisTurn。
+   * 設於 ATTACK_POST 階段（攻擊方或防守方皆可）。
+   */
+  cantAttackPending?: boolean;
   /**
    * 本回合已使用過特性（每回合限 1 次主動特性）。
    * 在 END_TURN 時清除。
