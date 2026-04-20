@@ -1546,3 +1546,238 @@ reg('寶可夢捕捉器', (st, idx) => {
     minCount: 1, maxCount: 1, effectKey: 'gust-opp',
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 31 H1 — H 標批次實裝：狀態附加類攻擊（~25 張）
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 讓對手戰鬥寶可夢陷入指定狀態的 POST effect */
+function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'paralyzed'): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const def = { ...players[dIdx] };
+    if (def.active) def.active = { ...def.active, status };
+    players[dIdx] = def;
+    return { ...state, players };
+  };
+}
+
+// 中毒類
+regPost('鬼斯通|毒之氣息', statusPost('poisoned'));
+regPost('百足蜈蚣|毒液', statusPost('poisoned'));
+regPost('猛惡菇|噴毒', statusPost('poisoned'));
+regPost('溶食獸|毒之氣息', statusPost('poisoned'));
+regPost('吞食獸|毒液一擊', statusPost('poisoned'));
+regPost('破破袋|毒液一擊', statusPost('poisoned'));
+regPost('灰塵山|毒液一擊', statusPost('poisoned'));
+
+// 叉字蝠|劇毒牙：強化中毒（2 指示物）— 目前狀態系統不支援變強度中毒，先施加中毒
+regPost('叉字蝠|劇毒牙', statusPost('poisoned'));
+
+// 混亂類
+regPost('人造細胞卵|腦力震動', statusPost('confused'));
+regPost('魔牆人偶|不祥波動', statusPost('confused'));
+regPost('優雅貓|擺尾蠱惑', statusPost('confused'));
+regPost('奇麒麟|不祥波動', statusPost('confused'));
+regPost('願增猿|精神歪曲', statusPost('confused'));
+regPost('胡地|奇異駭入', statusPost('confused'));
+// 修建老匠|暴走：自己混亂（攻擊者自己中狀態）
+regPost('修建老匠|暴走', (state, aIdx) => {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const att = { ...players[aIdx] };
+  if (att.active) att.active = { ...att.active, status: 'confused' };
+  players[aIdx] = att;
+  return { ...state, players };
+});
+
+// 睡眠類
+regPost('雪吞蟲|細雪', statusPost('asleep'));
+regPost('蚊香君|催眠術', statusPost('asleep'));
+regPost('蚊香泳士|催眠術', statusPost('asleep'));
+regPost('美納斯ex|昏睡飛濺', statusPost('asleep'));
+regPost('海豹球|細雪', statusPost('asleep'));
+
+// 燒傷類
+regPost('焚焰蚣|灼熱', statusPost('burned'));
+regPost('熾焰咆哮虎ex|火焰炸彈', statusPost('burned'));
+
+// 混合狀態：九尾|奇異燈火（灼傷+混亂）— 目前狀態系統單一 slot，先給灼傷
+regPost('九尾|奇異燈火', statusPost('burned'));
+
+// 麻痺（條件式）
+// 托戈德瑪爾|麻麻時機 — 自己剩 1 獎賞卡時才麻痺對手
+regPost('托戈德瑪爾|麻麻時機', (state, aIdx) => {
+  if (state.players[aIdx].prizes.length !== 1) return state;
+  return statusPost('paralyzed')(state, aIdx, new Map());
+});
+// 闇黑酋雷姆ex|冰河期 — 對手為龍屬時麻痺
+regPost('闇黑酋雷姆ex|冰河期', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defCard = state.players[dIdx].active ? pool.get(state.players[dIdx].active!.cardId) : null;
+  if (defCard?.pokemonType !== 'Dragon') return state;
+  return statusPost('paralyzed')(state, aIdx, pool);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 31 H2 — 自傷類攻擊（反動）
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 攻擊後自傷 N */
+function selfHitPost(amount: number): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) att.active = { ...att.active, damage: att.active.damage + amount };
+    players[aIdx] = att;
+    return { ...state, players };
+  };
+}
+regPost('燒火蚣|高溫奇襲', selfHitPost(10));
+regPost('海地鼠|水炸彈', selfHitPost(20));
+regPost('重泥挽馬|十萬馬力', selfHitPost(40));
+regPost('蟲滾泥|撞一下', selfHitPost(10));
+regPost('龍頭地鼠|狂野衝撞', selfHitPost(50));
+regPost('佛烈托斯|鋼鐵衝撞', selfHitPost(40));
+regPost('鐵啞鈴|鐵之衝撞', selfHitPost(10));
+regPost('光電傘蜥|瘋狂伏特', selfHitPost(20));
+regPost('洗翠 卡蒂狗|猛撞', selfHitPost(10));
+regPost('轟擂金剛猩|木槌', selfHitPost(50));
+regPost('火紅不倒翁|火焰衝撞', selfHitPost(20));
+regPost('達摩狒狒|猛火猛撞', selfHitPost(70));
+regPost('可可多拉|捨身衝撞', selfHitPost(10));
+regPost('可多拉|鋼鐵衝撞', selfHitPost(20));
+regPost('卡璞・哞哞|木槌', selfHitPost(30));
+regPost('童偶熊|猛撞', selfHitPost(10));
+regPost('爆焰龜獸|猛火猛撞', selfHitPost(60));
+regPost('卡拉卡拉|突擊', selfHitPost(10));
+regPost('齒輪組|鐵之衝撞', selfHitPost(20));
+regPost('闇黑酋雷姆ex|闇黑冰霜', selfHitPost(30));
+regPost('拳拳蛸|撞一下', selfHitPost(10));
+regPost('豐蜜龍|狂野衝撞', selfHitPost(20));
+regPost('火神蛾|怒濤羽擊', selfHitPost(50));
+regPost('帝牙海獅|百萬噸墜落', selfHitPost(50));
+regPost('傘電蜥|突擊', selfHitPost(10));
+regPost('獨劍鞘|突擊', selfHitPost(10));
+regPost('伊布|突擊', selfHitPost(10));
+// 鐵骨土人|蠻力：條件式增傷 + 自傷（簡化：選擇性效果，固定採用增傷+自傷）
+regPost('鐵骨土人|蠻力', selfHitPost(30));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 31 H3 — 對手狀態時 +N 傷害（PRE）
+// ══════════════════════════════════════════════════════════════════════════════
+
+function defStatusBonus(base: number, condition: 'poisoned'|'burned'|'asleep'|'confused'|'paralyzed', bonus: number): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const hasStatus = state.players[dIdx].active?.status === condition;
+    return { state, damage: base + (hasStatus ? bonus : 0) };
+  };
+}
+regPre('熔岩蟲|炙燒', defStatusBonus(10, 'burned', 40));
+regPre('卡璞・蝶蝶|心靈粉碎', defStatusBonus(90, 'confused', 90));
+regPre('晶光花|毒液衝擊', defStatusBonus(30, 'poisoned', 100));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 31 H4 — 簡單訓練家（抽牌、搜尋、回血等）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 手部修剪器 — 雙方手牌丟至 5 張（對手先丟）
+reg('手部修剪器', (st, idx) => {
+  st = addLog(st, '手部修剪器：雙方手牌丟至 5 張', idx);
+  const players = [...st.players] as [PlayerState, PlayerState];
+  for (const i of [((1 - idx) as 0 | 1), idx]) {
+    const p = { ...players[i] };
+    if (p.hand.length <= 5) { players[i] = p; continue; }
+    const discardN = p.hand.length - 5;
+    const discarded = p.hand.slice(-discardN);
+    p.hand = p.hand.slice(0, 5);
+    p.discard = [...p.discard, ...discarded];
+    players[i] = p;
+  }
+  return { ...st, players };
+});
+
+// 高級香氛 — 從牌庫選最多 3 張 Stage1 寶可夢加手牌
+reg('高級香氛', (st, idx) => {
+  st = addLog(st, '高級香氛：從牌庫選最多 3 張 1 階進化寶可夢加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Stage1', minCount: 0, maxCount: 3,
+    effectKey: 'search-pokemon-to-hand',
+  });
+});
+
+// 覺醒戰鼓 — 抽與場上「古代」寶可夢相同數量的卡
+// 簡化：我們資料沒「古代」標記，改為抽與自己場上寶可夢總數相同張數
+reg('覺醒戰鼓', (st, idx) => {
+  const p = st.players[idx];
+  const count = (p.active ? 1 : 0) + p.bench.length;
+  st = addLog(st, `覺醒戰鼓：抽 ${count} 張（簡化為場上寶可夢數）`, idx);
+  return updatePlayer(st, idx, pl => {
+    const taken = pl.deck.slice(0, count);
+    return { ...pl, deck: pl.deck.slice(count), hand: [...pl.hand, ...taken] };
+  });
+});
+
+// 賽吉（支援者）— 從牌庫找進化卡直接進化場上寶可夢（簡化：略跳）
+// 跳過 — 涉及複雜的進化鏈選擇
+
+// 八朔（支援者）— 自己上回合被擊倒才可用，看牌庫頂 8 選 3
+regG('八朔', (st, idx) => {
+  // 我們沒追蹤「上回合是否被擊倒」，保守檢查棄牌有寶可夢
+  return st.players[idx].discard.some(c => {
+    // 簡化為棄牌區有任何卡即允許（實戰中大多滿足）
+    return true;
+  });
+});
+reg('八朔', (st, idx) => {
+  const top8Iids = st.players[idx].deck.slice(0, 8).map(c => c.iid);
+  st = addLog(st, '八朔：從牌庫頂 8 張選最多 3 張加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'TOP8', minCount: 0, maxCount: 3,
+    effectKey: 'search-to-hand-reshuffle',
+    params: { top8Iids },
+  });
+});
+
+// 朵拉塞娜（支援者）— 手牌洗回，擲硬幣正面抽 8 反面抽 3
+reg('朵拉塞娜', (st, idx) => {
+  const coin = Math.random() < 0.5;
+  const drawN = coin ? 8 : 3;
+  st = addLog(st, `朵拉塞娜：${coin ? '正面' : '反面'}！手牌洗回，抽 ${drawN} 張`, idx);
+  return updatePlayer(st, idx, p => {
+    const newDeck = shuffle([...p.deck, ...p.hand]);
+    const hand = newDeck.slice(0, drawN);
+    return { ...p, hand, deck: newDeck.slice(drawN) };
+  });
+});
+
+// 海岱（支援者）— 手牌選 2 張放牌庫底 + 抽 4（需至少 2 張手牌）
+regG('海岱', (st, idx) => st.players[idx].hand.length >= 3);
+reg('海岱', (st, idx) => {
+  st = addLog(st, '海岱：選 2 張手牌放牌庫底，再抽 4 張', idx);
+  return withPending(st, {
+    type: 'hand-discard', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 2, maxCount: 2, effectKey: 'hydai-bottom-draw4',
+  });
+});
+regR('hydai-bottom-draw4', (st, idx, iids, _params, _pool) => {
+  return updatePlayer(st, idx, p => {
+    const chosen = p.hand.filter(c => iids.includes(c.iid));
+    const newHand = p.hand.filter(c => !iids.includes(c.iid));
+    const newDeck = [...p.deck, ...chosen];
+    const taken = newDeck.slice(0, 4);
+    return { ...p, hand: [...newHand, ...taken], deck: newDeck.slice(4) };
+  });
+});
+
+// search-to-hand-reshuffle：從 TOP N 選幾張加手牌（剩餘放回重洗）
+regR('search-to-hand-reshuffle', (st, idx, iids, _params, _pool) => {
+  return updatePlayer(st, idx, p => {
+    const chosen = p.deck.filter(c => iids.includes(c.iid));
+    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+    return { ...p, hand: [...p.hand, ...chosen], deck: shuffle(remaining) };
+  });
+});

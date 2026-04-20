@@ -443,6 +443,10 @@
           const top6 = new Set<string>((pendingSelection.params?.top6Iids as string[]) ?? []);
           return src.deck.filter(c => top6.has(c.iid));
         }
+        if (f === 'TOP8') {
+          const top8 = new Set<string>((pendingSelection.params?.top8Iids as string[]) ?? []);
+          return src.deck.filter(c => top8.has(c.iid));
+        }
         if (f === 'Supporter:TOP6') {
           const top6 = new Set<string>((pendingSelection.params?.top6Iids as string[]) ?? []);
           return src.deck.filter(c => top6.has(c.iid) && pool.get(c.cardId)?.subtype === 'Supporter');
@@ -452,6 +456,7 @@
           if (!card) return false;
           if (f === 'Basic')      return isBasicPokemonCard(card);
           if (f === 'Basic:HP70') return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
+          if (f === 'Stage1')     return card.supertype === 'Pokemon' && card.subtype === 'Stage1';
           if (f === 'Pokemon')    return card.supertype === 'Pokemon' && card.subtype !== 'Other';
           if (f === 'Energy')     return card.supertype === 'Energy';
           if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
