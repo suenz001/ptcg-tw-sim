@@ -3968,3 +3968,172 @@ regPre('眷戀雲|愛之同感', (state, aIdx, pool) => {
   }
   return { state, damage: 80 };
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38q v1.67 H 標第 12 波 — other-bucket 簡單機制（8 張）
+//   (a) 對手牌庫頂丟棄 N 張 — 巨炭山|山崩、雄偉牙|地盤崩壞
+//   (b) 對手出場已灼傷才生效 — 焚焰蚣|焦黑吐息
+//   (c) 攻擊 + 自身施加狀態 — 熔岩蟲|熾熱熔岩（既有 statusPost）
+//   (d) 簡化：忽略特殊修正，當純傷害 — 故勒頓|撕裂
+//   (e) 自身中毒則增傷 — 夠讚狗ex|瘋狂連鎖
+//   (f) 攻擊 + 抽 N 張 — 貓頭夜鷹|鉤爪搜尋（簡化：固定抽，不開搜尋 UI）
+//   (g) 對對手任一寶可夢造成傷害 — 皮卡丘|電磁電光（10 傷害，opp-poke-choose）
+//
+// 已知簡化：
+//   - 地盤崩壞「古代支援者」附加 +3 張略（engine 未追蹤 supporter 類別）
+//   - 撕裂「不計算身上附加效果」略（engine 未實作弱點/抵抗修正）
+//   - 鉤爪搜尋簡化為抽 2 張（正式為從牌庫任選最多 2 張）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 巨炭山|山崩 — 150 + 對手牌庫頂 2 張丟棄
+regPost('巨炭山|山崩', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const p = state.players[dIdx];
+  const take = Math.min(2, p.deck.length);
+  if (take === 0) return state;
+  const discarded = p.deck.slice(0, take);
+  const s = addLog(state, `山崩：丟對手牌庫頂 ${take} 張`, aIdx);
+  return updatePlayer(s, dIdx, pl => ({
+    ...pl, deck: pl.deck.slice(take), discard: [...pl.discard, ...discarded]
+  }));
+});
+
+// 雄偉牙|地盤崩壞 — 基礎無傷害，丟對手牌庫頂 1 張（古代支援者條件簡化略）
+// 注意：本招式 damage 欄為空（無傷害），但需觸發牌庫丟棄
+regPre('雄偉牙|地盤崩壞', (state, aIdx, _pool) => {
+  return { state, damage: 0 };
+});
+regPost('雄偉牙|地盤崩壞', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const p = state.players[dIdx];
+  const take = Math.min(1, p.deck.length);
+  if (take === 0) return state;
+  const discarded = p.deck.slice(0, take);
+  const s = addLog(state, `地盤崩壞：丟對手牌庫頂 ${take} 張`, aIdx);
+  return updatePlayer(s, dIdx, pl => ({
+    ...pl, deck: pl.deck.slice(take), discard: [...pl.discard, ...discarded]
+  }));
+});
+
+// 焚焰蚣|焦黑吐息 — 對手戰鬥寶可夢已灼傷則 180，否則招式失敗（0 傷害）
+regPre('焚焰蚣|焦黑吐息', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  if (def && def.status === 'burned') {
+    return { state: addLog(state, '焦黑吐息：對手灼傷 → 180 傷害', aIdx), damage: 180 };
+  }
+  return { state: addLog(state, '焦黑吐息：對手未灼傷 → 招式失敗', aIdx), damage: 0 };
+});
+
+// 熔岩蟲|熾熱熔岩 — 20 + 灼傷
+regPost('熔岩蟲|熾熱熔岩', statusPost('burned'));
+
+// 故勒頓|撕裂 — 130（簡化：不特殊處理「不計算身上附加效果」）
+regPre('故勒頓|撕裂', (state, _aIdx, _pool) => {
+  return { state, damage: 130 };
+});
+
+// 夠讚狗ex|瘋狂連鎖 — 130 + 若自身中毒則 +130
+regPre('夠讚狗ex|瘋狂連鎖', (state, aIdx, _pool) => {
+  const att = state.players[aIdx].active;
+  if (att && att.status === 'poisoned') {
+    return { state: addLog(state, '瘋狂連鎖：自身中毒 → +130', aIdx), damage: 260 };
+  }
+  return { state, damage: 130 };
+});
+
+// 貓頭夜鷹|鉤爪搜尋 — 70 + 抽 2 張（簡化：固定從牌庫頂抽）
+regPost('貓頭夜鷹|鉤爪搜尋', drawNPost(2, '鉤爪搜尋'));
+
+// 皮卡丘|電磁電光 — 對對手任一寶可夢（含備戰）造成 10 傷害
+regPre('皮卡丘|電磁電光', (_state, _aIdx, _pool) => {
+  return { state: _state, damage: 0 };
+});
+regPost('皮卡丘|電磁電光', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defender = state.players[dIdx];
+  if (defender.bench.length === 0 && !defender.active) return state;
+  // 若無備戰，直接對出場施加 10
+  if (defender.bench.length === 0 && defender.active) {
+    const defCard = pool.get(defender.active.cardId);
+    const newDmg = defender.active.damage + 10;
+    const defHP = defCard?.hp ?? 0;
+    if (defHP > 0 && newDmg >= defHP) {
+      const koDiscard: CardInstance[] = [
+        { ...defender.active, damage: newDmg },
+        ...defender.active.energyAttached,
+        ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+        ...(defender.active.evolvedFromStack ?? []),
+      ];
+      const players = [...state.players] as [PlayerState, PlayerState];
+      players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
+      const prizes = defCard!.name.endsWith('ex') || defCard!.name.endsWith('EX') ? 2 : 1;
+      let s = addLog({ ...state, players }, `電磁電光：10 傷害擊倒 ${defCard?.name ?? '?'}！${state.players[aIdx].name} 取得 ${prizes} 張獎勵牌。`, null);
+      if (players[dIdx].bench.length === 0) {
+        return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+      }
+      return { ...s, pendingPrizes: prizes };
+    } else {
+      const players = [...state.players] as [PlayerState, PlayerState];
+      players[dIdx] = { ...defender, active: { ...defender.active!, damage: newDmg } };
+      return addLog({ ...state, players }, `電磁電光：對 ${defCard?.name ?? '?'} 造成 10 傷害！`, aIdx);
+    }
+  }
+  // 有備戰，讓玩家選擇
+  let s = addLog(state, '電磁電光：選擇對手任一寶可夢造成 10 傷害', aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'snipe-10',
+    params: { includeActive: true },
+  });
+});
+
+regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  const defender = st.players[dIdx];
+  const targetIid = selectedIids[0];
+  if (!targetIid) return st;
+
+  const isActive = defender.active?.iid === targetIid;
+  const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+
+  const targetCard = pool.get(target.cardId);
+  const newDmg = target.damage + 10;
+  const targetHP = targetCard?.hp ?? 0;
+
+  if (targetHP > 0 && newDmg >= targetHP) {
+    const koDiscard: CardInstance[] = [
+      { ...target, damage: newDmg },
+      ...target.energyAttached,
+      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...(target.evolvedFromStack ?? []),
+    ];
+    const prizes = targetCard!.name.endsWith('ex') || targetCard!.name.endsWith('EX') ? 2 : 1;
+    const players = [...st.players] as [PlayerState, PlayerState];
+    const newDefender = { ...defender, discard: [...defender.discard, ...koDiscard] };
+    if (isActive) {
+      newDefender.active = null;
+    } else {
+      newDefender.bench = defender.bench.filter(c => c.iid !== targetIid);
+    }
+    players[dIdx] = newDefender;
+    let s = addLog({ ...st, players }, `電磁電光：${targetCard?.name ?? '?'} 被擊倒！${st.players[actorIdx].name} 取得 ${prizes} 張獎勵牌。`, null);
+    if (isActive && newDefender.bench.length === 0) {
+      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+    }
+    return { ...s, pendingPrizes: prizes };
+  } else {
+    const players = [...st.players] as [PlayerState, PlayerState];
+    const newDefender = { ...defender };
+    if (isActive) {
+      newDefender.active = { ...target, damage: newDmg };
+    } else {
+      newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
+    }
+    players[dIdx] = newDefender;
+    return addLog({ ...st, players }, `電磁電光：對 ${targetCard?.name ?? '?'} 造成 10 傷害！`, actorIdx);
+  }
+});
