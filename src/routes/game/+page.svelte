@@ -293,10 +293,8 @@
       if (sel?.effectKey === 'attach-tool') {
         const validIids = (sel.params?.validIids as string[] | undefined) ?? [];
         if (validIids.includes(tIid)) {
-          await dispatch(GameActions.resolveSelection([tIid]));
-        } else {
-          // validIids 應該保證 tIid 有效（toolAttachEffect 已過濾），
-          // 若走到這裡代表 race condition，不 resolve 讓玩家自己選
+          const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
+          await dispatch(GameActions.resolveSelection([tIid], sid));
         }
       }
     }
@@ -768,7 +766,9 @@
   }
   function confirmSelection() {
     if (!selectionValid) return;
-    dispatch(GameActions.resolveSelection([...selectionPicked]));
+    // 線上模式帶 senderIdx 避免對手搶先 resolve
+    const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
+    dispatch(GameActions.resolveSelection([...selectionPicked], sid));
     selectionPicked = new Set();
   }
   function selectionTitle(type: string): string {
@@ -988,7 +988,11 @@
      遊戲結束
   ══════════════════════════════════════════════════════════════════════ -->
 {:else if game.phase === 'game-over'}
-  {@const isWin = mode !== 'online' || myPlayerIndex === game.winner}
+  {@const isWin = (
+    mode === 'online' ? (myPlayerIndex === game.winner) :
+    aiPlayerIndex !== null ? (game.winner === (1 - aiPlayerIndex)) :
+    true  /* 本機雙人無勝負個人視角，統一顯示 Victory */
+  )}
   <main class="gameover-screen">
     <div class="gameover-card" in:scale={{ duration: 600, start: 0.3, easing: cubicOut }}>
       <div class="gameover-icon {isWin ? 'win' : 'lose'}">
@@ -1114,7 +1118,7 @@
         {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip">等待對手行動</span>{/if}
       {/if}
       {#if aiPlayerIndex !== null && aiThinking}<span class="chip ai-chip">🤖 AI 思考中…</span>{/if}
-      {#if stadiumCard}<span class="chip stadium-chip">🏟 {stadiumCard.name}</span>{/if}
+      {#if stadiumCard && game.activeStadium}<button class="chip stadium-chip clickable-chip" title="點擊查看卡片詳情" onclick={()=>openZoom(game.activeStadium!.cardId, null)}>🏟 {stadiumCard.name} 🔍</button>{/if}
       <span class="chip version-chip" title="應用程式版本 — 檢查是否同步到最新">v{VERSION}</span>
     </span>
     {#if game.phase === 'playing' && activePlayer}
@@ -1267,6 +1271,8 @@
           {#if canEndTurn}
             <button class="btn-act primary" onclick={()=>dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
           {/if}
+        {:else if pendingSelection}
+          <span class="waiting-msg">⏳ 等待 {game.players[pendingSelection.actorIdx].name} 選擇中…</span>
         {:else}
           <span class="waiting-msg">⏳ 等待 {game.players[aIdx].name} 行動…</span>
         {/if}
@@ -1461,8 +1467,12 @@
     </div>
   </div>
 
-  <!-- PendingSelection -->
-  {#if pendingSelection}
+  <!-- PendingSelection — 只對 actor 玩家顯示（避免對手看到或搶先操作） -->
+  {#if pendingSelection && (
+    (mode === 'online' && myPlayerIndex !== null && pendingSelection.actorIdx === myPlayerIndex)
+    || (mode !== 'online' && aiPlayerIndex === null)
+    || (aiPlayerIndex !== null && pendingSelection.actorIdx === (1 - aiPlayerIndex))
+  )}
     <div class="selection-overlay">
       <div class="selection-modal">
         <div class="sel-header">
@@ -1485,6 +1495,31 @@
           {/each}
           {#if selectionItems.length===0}<p class="sel-empty">（沒有符合條件的卡牌）</p>{/if}
         </div>
+
+        <!-- 查看全牌庫（用於推斷獎賞卡） — 僅在 deck-search 類型顯示 -->
+        {#if pendingSelection.type==='deck-search' && game}
+          {@const srcP = game.players[pendingSelection.sourcePlayerIdx]}
+          {@const deckGrouped = (() => {
+            const map = new Map<string, { name: string; count: number }>();
+            for (const c of srcP.deck) {
+              const card = pool.get(c.cardId);
+              const name = card?.name ?? c.cardId;
+              const entry = map.get(c.cardId);
+              if (entry) entry.count++;
+              else map.set(c.cardId, { name, count: 1 });
+            }
+            return [...map.values()].sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name));
+          })()}
+          <details class="full-deck-view">
+            <summary>📖 查看牌庫剩餘全部（{srcP.deck.length} 張，推斷獎賞卡）</summary>
+            <div class="full-deck-note">※ 對照你的原牌組，不在清單中的 6 張通常是獎賞卡（或已在手牌/場上/棄牌）</div>
+            <div class="full-deck-list">
+              {#each deckGrouped as entry}
+                <div class="deck-item">{entry.count}× {entry.name}</div>
+              {/each}
+            </div>
+          </details>
+        {/if}
         <div class="sel-footer">
           <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（{selectionPicked.size}張）</button>
           {#if pendingSelection.minCount===0}
@@ -2059,6 +2094,11 @@
   .sel-header h3{ margin:0 0 .2rem; font-size:1.1rem; color:#aaffaa; }
   .sel-hint{ margin:0; font-size:.85rem; color:#aaa; }
   .sel-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:.4rem; overflow-y:auto; max-height:52vh; padding-right:.25rem; }
+  .full-deck-view{ margin-top:.6rem; background:#0e1a0e; border:1px solid #2a4a2a; border-radius:6px; padding:.4rem .7rem; }
+  .full-deck-view summary{ cursor:pointer; font-size:.85rem; color:#aaffcc; font-weight:600; }
+  .full-deck-note{ margin:.4rem 0; font-size:.75rem; color:#888; }
+  .full-deck-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:.2rem .6rem; max-height:200px; overflow-y:auto; }
+  .deck-item{ font-size:.8rem; color:#bbb; padding:.1rem 0; }
   .sel-card{ display:flex; flex-direction:column; align-items:center; gap:.2rem; background:#0e1e0e; border:2px solid #2a4a2a; border-radius:6px; padding:.3rem; cursor:pointer; color:#ccc; font-size:.65rem; position:relative; }
   .sel-card:hover{ border-color:#4a8a4a; }
   .sel-card.sel-picked{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }
@@ -2132,6 +2172,8 @@
   .tool-btn{ background:#4a3a10; color:#f0d080; }
   .tool-btn:hover{ background:#6a5a20; }
   .stadium-chip{ background:#1a2a4a; color:#88aaff; border-color:#3a5a8a; }
+  .clickable-chip{ cursor:pointer; font-family:inherit; }
+  .clickable-chip:hover{ background:#2a3a5a; color:#fff; }
   .btn-act.stadium-btn{ background:#1a2a4a; color:#88aaff; border:1px solid #3a5a8a; }
   .btn-act.stadium-btn:hover{ background:#2a3a6a; }
 

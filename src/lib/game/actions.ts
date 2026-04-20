@@ -26,8 +26,8 @@ export const GameActions = {
                        ({ type: 'RETREAT', newActiveIid }),
   playTrainer:       (iid: string, params?: Record<string, unknown>): GameAction =>
                        ({ type: 'PLAY_TRAINER', iid, params }),
-  resolveSelection:  (selectedIids: string[]): GameAction =>
-                       ({ type: 'RESOLVE_SELECTION', selectedIids }),
+  resolveSelection:  (selectedIids: string[], senderIdx?: 0 | 1): GameAction =>
+                       ({ type: 'RESOLVE_SELECTION', selectedIids, ...(senderIdx !== undefined && { senderIdx }) }),
   useStadium:        (): GameAction => ({ type: 'USE_STADIUM' }),
   useAbility:        (iid: string, abilityIndex: number): GameAction =>
                        ({ type: 'USE_ABILITY', iid, abilityIndex }),

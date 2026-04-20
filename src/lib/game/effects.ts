@@ -412,11 +412,19 @@ reg('黑暗球', (st, idx) => {
   });
 });
 
-regR('search-pokemon-to-hand', (st, idx, iids, _params, _pool) => {
+regR('search-pokemon-to-hand', (st, idx, iids, _params, pool) => {
+  // Log 顯示搜到哪張卡（公開資訊：官方規則搜牌庫結果需公開給對手看）
+  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `搜到：${names} 加入手牌`, idx);
+  } else {
+    st = addLog(st, '牌庫搜尋：未選擇任何卡', idx);
+  }
   return updatePlayer(st, idx, (p) => {
-    const chosen = p.deck.filter(c => iids.includes(c.iid));
+    const chosenInPlayer = p.deck.filter(c => iids.includes(c.iid));
     const remaining = p.deck.filter(c => !iids.includes(c.iid));
-    return { ...p, deck: shuffle(remaining), hand: [...p.hand, ...chosen] };
+    return { ...p, deck: shuffle(remaining), hand: [...p.hand, ...chosenInPlayer] };
   });
 });
 
@@ -496,7 +504,13 @@ reg('高級球', (st, idx) => {
     effectKey: 'ultra-ball-discard',
   });
 });
-regR('ultra-ball-discard', (st, idx, iids, _params, _pool) => {
+regR('ultra-ball-discard', (st, idx, iids, _params, pool) => {
+  // 記錄丟棄的卡名（公開資訊 — 丟棄到棄牌區本來就公開）
+  const toDiscardNow = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  if (toDiscardNow.length > 0) {
+    const names = toDiscardNow.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `高級球：丟棄 ${names}`, idx);
+  }
   st = updatePlayer(st, idx, (p) => {
     const toDiscard = p.hand.filter(c => iids.includes(c.iid));
     return { ...p, hand: p.hand.filter(c => !iids.includes(c.iid)), discard: [...p.discard, ...toDiscard] };
@@ -678,7 +692,10 @@ regR('top-catcher-opp', (st, idx, iids, _params, _pool) => {
 // 物品卡 — 其他
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 不公印章 — （省略「上回合寶可夢被擊倒」條件）雙方洗手牌，自己抽 5，對手抽 2
+// 不公印章 — 必須「上回合寶可夢被擊倒」才可使用（簡化：自己獎賞 < 6 即代表曾被擊倒）
+// 規則原文：「這張卡必須在上個對手的回合自己的寶可夢【昏厥】了才可使用」
+// 嚴格版需追蹤每回合 KO 事件，簡化為「剩餘獎賞 < 6」（對手曾取過獎賞 = 自己寶可夢被擊倒過）
+regG('不公印章', (st, idx) => st.players[idx].prizes.length < 6);
 reg('不公印章', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
   st = addLog(st, '不公印章：雙方洗手牌重抽（自己 5 張，對手 2 張）', idx);

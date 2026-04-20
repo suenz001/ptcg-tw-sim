@@ -193,7 +193,7 @@ export type GameAction =
   | { type: 'EVOLVE'; fromIid: string; toIid: string }
   | { type: 'RETREAT'; newActiveIid: string }
   | { type: 'PLAY_TRAINER'; iid: string; params?: Record<string, unknown> }
-  | { type: 'RESOLVE_SELECTION'; selectedIids: string[] }
+  | { type: 'RESOLVE_SELECTION'; selectedIids: string[]; senderIdx?: 0 | 1 }
   | { type: 'ATTACK'; attackIndex: number }
   | { type: 'TAKE_PRIZES'; count: number }
   | { type: 'SEND_NEW_ACTIVE'; iid: string; senderIdx?: 0 | 1 }

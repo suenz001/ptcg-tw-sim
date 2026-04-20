@@ -418,6 +418,8 @@ function handlePlaying(
   if (action.type === 'RESOLVE_SELECTION') {
     if (!state.pendingSelection) return state;
     const { effectKey, actorIdx, params } = state.pendingSelection;
+    // Guard：若明確指定 senderIdx，必須等於 actorIdx — 防止對手搶先操作
+    if (action.senderIdx !== undefined && action.senderIdx !== actorIdx) return state;
     const endTurnAfter = params?.endTurnAfter === true;
     const resolver = RESOLVERS.get(effectKey);
     let newState: GameState = { ...state, pendingSelection: undefined };
