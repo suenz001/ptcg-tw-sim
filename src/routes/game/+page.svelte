@@ -257,14 +257,23 @@
     } else if (d.kind === 'basic' && benchEmpty) {
       await dispatch(GameActions.playBasic(d.iid));
     } else if (d.kind === 'tool' && tIid) {
+      // 檢查目標是否已有道具（一隻只能附加一個，除非有特性）
+      const allMy = [...(myPlayer?.active ? [myPlayer.active] : []), ...(myPlayer?.bench ?? [])];
+      const target = allMy.find(p => p.iid === tIid);
+      if (target?.toolAttached) {
+        alert(`「${getCard(target.cardId)?.name ?? '該寶可夢'}」已附有道具，無法再附加（一隻寶可夢只能附加一個道具）。`);
+        return;
+      }
       // 打出道具 → 觸發 pendingSelection（attach-tool）→ 用 drop target 直接 resolve
       await dispatch(GameActions.playTrainer(d.iid));
-      // dispatch 是同步 setState（Svelte 5 $state），game 已更新；檢查 pendingSelection
       const sel = game?.pendingSelection;
       if (sel?.effectKey === 'attach-tool') {
         const validIids = (sel.params?.validIids as string[] | undefined) ?? [];
         if (validIids.includes(tIid)) {
           await dispatch(GameActions.resolveSelection([tIid]));
+        } else {
+          // validIids 應該保證 tIid 有效（toolAttachEffect 已過濾），
+          // 若走到這裡代表 race condition，不 resolve 讓玩家自己選
         }
       }
     }

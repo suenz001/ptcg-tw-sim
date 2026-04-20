@@ -1059,6 +1059,18 @@ regR('attach-tool', (st, idx, picked, params, _pool) => {
   const targetIid = picked[0];
   const toolInst = params?.toolInst as CardInstance;
   if (!toolInst) return st;
+  // Defensive check：target 已有道具則拒絕附加（一隻寶可夢只能附加一個道具）
+  const p = st.players[idx];
+  const all = [...(p.active ? [p.active] : []), ...p.bench];
+  const target = all.find(c => c.iid === targetIid);
+  if (target?.toolAttached) {
+    // 把本道具放回手牌（避免使用者損失道具）
+    return updatePlayer(
+      addLog(st, '附加失敗：目標寶可夢已有道具，道具回到手牌', idx),
+      idx,
+      pl => ({ ...pl, hand: [...pl.hand, toolInst] })
+    );
+  }
   return updatePlayer(st, idx, p => {
     const attach = (pk: CardInstance): CardInstance =>
       pk.iid === targetIid ? { ...pk, toolAttached: toolInst } : pk;

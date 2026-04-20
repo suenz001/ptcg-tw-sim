@@ -313,11 +313,14 @@ function handleSetup(
     const card = player.hand[iidx];
     if (!isBasicPokemon(card.cardId, pool)) return state;
     if (player.active) {
-      // 把舊的放回手牌
-      player.hand = [...player.hand, player.active];
+      // 把舊的放回手牌（清除 justPlaced 以免帶回手牌後殘留）
+      const returning = { ...player.active };
+      delete returning.justPlaced;
+      player.hand = [...player.hand, returning];
     }
     player.hand = player.hand.filter((_, i) => i !== iidx);
-    player.active = card;
+    // Setup 放的寶可夢設 justPlaced — 直到該玩家第一次 END_TURN 才能進化
+    player.active = { ...card, justPlaced: true };
     players[pIdx] = player;
     return addLog({ ...state, players }, `${player.name} 選擇了出場寶可夢`, null);
   }
@@ -330,7 +333,8 @@ function handleSetup(
     const card = player.hand[iidx];
     if (!isBasicPokemon(card.cardId, pool)) return state;
     player.hand = player.hand.filter((_, i) => i !== iidx);
-    player.bench = [...player.bench, card];
+    // Setup 放的寶可夢設 justPlaced
+    player.bench = [...player.bench, { ...card, justPlaced: true }];
     players[pIdx] = player;
     return { ...state, players };
   }
@@ -1293,7 +1297,9 @@ export function getAvailableAttacks(
 export function hasPendingActions(state: GameState): boolean {
   return state.pendingPrizes > 0 ||
     !!state.pendingSelection ||
-    state.players[state.activePlayerIndex].active === null;
+    // 雙方都必須有 active 才能結束回合（防守方被擊倒後必須先送新 active）
+    state.players[0].active === null ||
+    state.players[1].active === null;
 }
 
 /**
