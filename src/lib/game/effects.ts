@@ -1949,3 +1949,222 @@ function defNextAtkReducePost(n: number): AttackPostFn {
 }
 regPost('黑魯加|大聲咆哮', defNextAtkReducePost(100));
 regPost('嘎啦嘎啦|叫聲', defNextAtkReducePost(40));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 31 H10 — 更多通用訓練家（Item + Supporter）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 寶可生機劑A — 回 150 HP（物品）
+regG('寶可生機劑A', (st, idx) => {
+  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  return all.some(c => c.damage > 0);
+});
+reg('寶可生機劑A', (st, idx) => {
+  st = addLog(st, '寶可生機劑A：選擇回復 150 HP 的寶可夢', idx);
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, effectKey: 'heal-150',
+    params: { healAmount: 150, discardEnergy: 0 },
+  });
+});
+regR('heal-150', healResolver);
+
+// 危險光線 — 對手戰鬥寶可夢灼傷（簡化：原本是灼傷+混亂但狀態 slot 單一）
+regG('危險光線', (st, idx) => !!st.players[(1-idx) as 0|1].active);
+reg('危險光線', (st, idx) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const players = [...st.players] as [PlayerState, PlayerState];
+  const def = { ...players[dIdx] };
+  if (def.active) def.active = { ...def.active, status: 'burned' };
+  players[dIdx] = def;
+  return addLog({ ...st, players }, '危險光線：對手戰鬥寶可夢灼傷', idx);
+});
+
+// 推理組合 — 看牌庫頂 3，簡化為洗回底
+reg('推理組合', (st, idx) => {
+  st = addLog(st, '推理組合：牌庫頂 3 張洗回底', idx);
+  return updatePlayer(st, idx, p => {
+    const top3 = p.deck.slice(0, 3);
+    const rest = p.deck.slice(3);
+    return { ...p, deck: [...shuffle(rest), ...top3] };
+  });
+});
+
+// 奇跡耳麥 — 從棄牌取最多 2 張支援者加手牌
+regG('奇跡耳麥', (st, idx, pool) =>
+  st.players[idx].discard.some(c => pool.get(c.cardId)?.subtype === 'Supporter')
+);
+reg('奇跡耳麥', (st, idx) => {
+  st = addLog(st, '奇跡耳麥：從棄牌選最多 2 張支援者加手牌', idx);
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Supporter', minCount: 0, maxCount: 2,
+    effectKey: 'discard-to-hand',
+  });
+});
+
+// 反擊捕捉器 — 自己獎賞多時可用，呼叫對手備戰
+regG('反擊捕捉器', (st, idx) =>
+  st.players[idx].prizes.length > st.players[(1-idx) as 0|1].prizes.length &&
+  st.players[(1-idx) as 0|1].bench.length > 0
+);
+reg('反擊捕捉器', (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  st = addLog(st, '反擊捕捉器：選對手備戰與戰鬥寶可夢互換', idx);
+  return withPending(st, {
+    type: 'opp-bench-choose', actorIdx: idx, sourcePlayerIdx: oppIdx,
+    minCount: 1, maxCount: 1, effectKey: 'gust-opp',
+  });
+});
+
+// 釣竿MAX — 棄牌取最多 5 張寶可夢或基本能量
+regG('釣竿MAX', (st, idx, pool) =>
+  st.players[idx].discard.some(c => {
+    const card = pool.get(c.cardId);
+    return (card?.supertype === 'Pokemon' && card?.subtype !== 'Other') || card?.supertype === 'Energy';
+  })
+);
+reg('釣竿MAX', (st, idx) => {
+  st = addLog(st, '釣竿MAX：從棄牌選最多 5 張寶可夢或能量加手牌', idx);
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'PokemonOrEnergy', minCount: 0, maxCount: 5,
+    effectKey: 'discard-to-hand',
+  });
+});
+
+// 超級能量回收 — 丟 2 手牌 + 棄牌取最多 4 張基本能量
+regG('超級能量回收', (st, idx, pool) =>
+  st.players[idx].hand.length >= 3 &&
+  st.players[idx].discard.some(c => pool.get(c.cardId)?.supertype === 'Energy')
+);
+reg('超級能量回收', (st, idx) => {
+  st = addLog(st, '超級能量回收：選 2 張手牌丟棄', idx);
+  return withPending(st, {
+    type: 'hand-discard', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 2, maxCount: 2, effectKey: 'super-energy-step2',
+  });
+});
+regR('super-energy-step2', (st, idx, iids) => {
+  st = updatePlayer(st, idx, p => {
+    const toDiscard = p.hand.filter(c => iids.includes(c.iid));
+    return { ...p, hand: p.hand.filter(c => !iids.includes(c.iid)), discard: [...p.discard, ...toDiscard] };
+  });
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy', minCount: 0, maxCount: 4,
+    effectKey: 'discard-to-hand',
+  });
+});
+
+// 大地之容器 — 丟 1 手牌 + 搜最多 2 張基本能量
+regG('大地之容器', (st, idx) => st.players[idx].hand.length >= 2);
+reg('大地之容器', (st, idx) => {
+  st = addLog(st, '大地之容器：選 1 張手牌丟棄', idx);
+  return withPending(st, {
+    type: 'hand-discard', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, effectKey: 'earth-pot-step2',
+  });
+});
+regR('earth-pot-step2', (st, idx, iids) => {
+  st = updatePlayer(st, idx, p => {
+    const toDiscard = p.hand.filter(c => iids.includes(c.iid));
+    return { ...p, hand: p.hand.filter(c => !iids.includes(c.iid)), discard: [...p.discard, ...toDiscard] };
+  });
+  return withPending(st, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy', minCount: 0, maxCount: 2,
+    effectKey: 'search-to-hand-reshuffle',
+  });
+});
+
+// MJ 超級球 — 看牌庫頂 7 選 1 寶可夢加手牌
+reg('超級球', (st, idx) => {
+  st = addLog(st, '超級球：從牌庫選 1 張寶可夢加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon', minCount: 0, maxCount: 1,
+    effectKey: 'search-pokemon-to-hand',
+  });
+});
+
+// 黑連（支援者）— 抽 3
+reg('黑連', (st, idx) => updatePlayer(addLog(st, '黑連：抽 3 張', idx), idx, p => {
+  const taken = p.deck.slice(0, 3);
+  return { ...p, deck: p.deck.slice(3), hand: [...p.hand, ...taken] };
+}));
+
+// 野餐女孩 — 擲硬幣 正面抽 4 反面抽 2
+reg('野餐女孩', (st, idx) => {
+  const heads = Math.random() < 0.5;
+  const n = heads ? 4 : 2;
+  st = addLog(st, '野餐女孩：' + (heads ? '正面' : '反面') + ' 抽 ' + n + ' 張', idx);
+  return updatePlayer(st, idx, p => {
+    const taken = p.deck.slice(0, n);
+    return { ...p, deck: p.deck.slice(n), hand: [...p.hand, ...taken] };
+  });
+});
+
+// 仙后 — 手牌只有這 1 張才可用，搜 2 張任意卡
+regG('仙后', (st, idx) => st.players[idx].hand.length === 1);
+reg('仙后', (st, idx) => {
+  st = addLog(st, '仙后：從牌庫選最多 2 張卡加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: '', minCount: 0, maxCount: 2,
+    effectKey: 'search-to-hand-reshuffle',
+  });
+});
+
+// 庫瑟洛斯奇的企圖 — 對手手牌丟至 3 張
+reg('庫瑟洛斯奇的企圖', (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  st = addLog(st, '庫瑟洛斯奇的企圖：對手手牌丟至 3 張', idx);
+  return updatePlayer(st, oppIdx, p => {
+    if (p.hand.length <= 3) return p;
+    const discardN = p.hand.length - 3;
+    const discarded = p.hand.slice(-discardN);
+    return { ...p, hand: p.hand.slice(0, 3), discard: [...p.discard, ...discarded] };
+  });
+});
+
+// 席藍 — 搜最多 3 張 ex 寶可夢加手牌
+reg('席藍', (st, idx) => {
+  st = addLog(st, '席藍：從牌庫選最多 3 張寶可夢 ex 加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'ex', minCount: 0, maxCount: 3,
+    effectKey: 'search-to-hand-reshuffle',
+  });
+});
+
+// 寇沙 — 手牌洗回，抽比放回多 1 張
+reg('寇沙', (st, idx) => {
+  const drawN = st.players[idx].hand.length + 1;
+  st = addLog(st, '寇沙：手牌洗回，抽 ' + drawN + ' 張', idx);
+  return updatePlayer(st, idx, p => {
+    const newDeck = shuffle([...p.deck, ...p.hand]);
+    const taken = newDeck.slice(0, drawN);
+    return { ...p, hand: taken, deck: newDeck.slice(drawN) };
+  });
+});
+
+// 秋明 — 對手中毒時，手牌洗回，抽 7
+regG('秋明', (st, idx) => st.players[(1-idx) as 0|1].active?.status === 'poisoned');
+reg('秋明', (st, idx) => {
+  st = addLog(st, '秋明：手牌洗回，抽 7 張', idx);
+  return updatePlayer(st, idx, p => {
+    const newDeck = shuffle([...p.deck, ...p.hand]);
+    const taken = newDeck.slice(0, 7);
+    return { ...p, hand: taken, deck: newDeck.slice(7) };
+  });
+});
+
+// 蕾荷 — 牌庫頂 5 張丟棄（簡化：不支援選擇排序）
+reg('蕾荷', (st, idx) => {
+  st = addLog(st, '蕾荷：牌庫頂 5 張丟棄', idx);
+  return updatePlayer(st, idx, p => {
+    const top5 = p.deck.slice(0, 5);
+    return { ...p, deck: p.deck.slice(5), discard: [...p.discard, ...top5] };
+  });
+});
