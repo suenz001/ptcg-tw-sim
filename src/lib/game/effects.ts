@@ -200,7 +200,12 @@ reg('艾莉絲的鬥志', (st, idx) => {
     effectKey: 'alice-courage',
   });
 });
-regR('alice-courage', (st, idx, iids, _params, _pool) => {
+regR('alice-courage', (st, idx, iids, _params, pool) => {
+  const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `艾莉絲的鬥志：丟棄 ${names}`, idx);
+  }
   st = updatePlayer(st, idx, (p) => {
     const toDiscard = p.hand.filter(c => iids.includes(c.iid));
     const hand = p.hand.filter(c => !iids.includes(c.iid));
@@ -1109,7 +1114,7 @@ function toolAttachEffect(toolName: string): EffectFn {
 reg('氣球', toolAttachEffect('氣球'));
 reg('龐克頭盔', toolAttachEffect('龐克頭盔'));
 
-regR('attach-tool', (st, idx, picked, params, _pool) => {
+regR('attach-tool', (st, idx, picked, params, pool) => {
   const targetIid = picked[0];
   const toolInst = params?.toolInst as CardInstance;
   if (!toolInst) return st;
@@ -1125,6 +1130,9 @@ regR('attach-tool', (st, idx, picked, params, _pool) => {
       pl => ({ ...pl, hand: [...pl.hand, toolInst] })
     );
   }
+  const targetName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const toolName = pool.get(toolInst.cardId)?.name ?? '道具';
+  st = addLog(st, `🔧 ${toolName} 附加到 ${targetName}`, idx);
   return updatePlayer(st, idx, p => {
     const attach = (pk: CardInstance): CardInstance =>
       pk.iid === targetIid ? { ...pk, toolAttached: toolInst } : pk;
@@ -1829,11 +1837,16 @@ reg('海岱', (st, idx) => {
     minCount: 2, maxCount: 2, effectKey: 'hydai-bottom-draw4',
   });
 });
-regR('hydai-bottom-draw4', (st, idx, iids, _params, _pool) => {
+regR('hydai-bottom-draw4', (st, idx, iids, _params, pool) => {
+  const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `海岱：${names} 放到牌庫底`, idx);
+  }
   return updatePlayer(st, idx, p => {
-    const chosen = p.hand.filter(c => iids.includes(c.iid));
+    const picked = p.hand.filter(c => iids.includes(c.iid));
     const newHand = p.hand.filter(c => !iids.includes(c.iid));
-    const newDeck = [...p.deck, ...chosen];
+    const newDeck = [...p.deck, ...picked];
     const taken = newDeck.slice(0, 4);
     return { ...p, hand: [...newHand, ...taken], deck: newDeck.slice(4) };
   });
@@ -2207,7 +2220,12 @@ reg('超級能量回收', (st, idx) => {
     minCount: 2, maxCount: 2, effectKey: 'super-energy-step2',
   });
 });
-regR('super-energy-step2', (st, idx, iids) => {
+regR('super-energy-step2', (st, idx, iids, _params, pool) => {
+  const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `超級能量回收：丟棄 ${names}`, idx);
+  }
   st = updatePlayer(st, idx, p => {
     const toDiscard = p.hand.filter(c => iids.includes(c.iid));
     return { ...p, hand: p.hand.filter(c => !iids.includes(c.iid)), discard: [...p.discard, ...toDiscard] };
@@ -2228,7 +2246,12 @@ reg('大地之容器', (st, idx) => {
     minCount: 1, maxCount: 1, effectKey: 'earth-pot-step2',
   });
 });
-regR('earth-pot-step2', (st, idx, iids) => {
+regR('earth-pot-step2', (st, idx, iids, _params, pool) => {
+  const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `大地之容器：丟棄 ${names}`, idx);
+  }
   st = updatePlayer(st, idx, p => {
     const toDiscard = p.hand.filter(c => iids.includes(c.iid));
     return { ...p, hand: p.hand.filter(c => !iids.includes(c.iid)), discard: [...p.discard, ...toDiscard] };

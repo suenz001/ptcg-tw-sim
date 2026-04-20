@@ -86,6 +86,25 @@
   let hoverHandIid = $state<string | null>(null);
   let hoverHandAnchor = $state<{ x: number; y: number } | null>(null);
 
+  // ── 擲硬幣動畫（Session 34） ────────────────────────────────────────────────
+  // 新遊戲開始時播放 2 秒硬幣旋轉 + 1.5 秒結果揭曉
+  let coinFlipStage = $state<'flipping' | 'revealing' | 'done'>('done');
+  let coinFlipShownFor = $state<string | null>(null); // 已播過動畫的 game.id
+  let coinFlipTimers: ReturnType<typeof setTimeout>[] = [];
+
+  $effect(() => {
+    if (!game) return;
+    // game.id 變化（新局）才重播
+    if (coinFlipShownFor === game.id) return;
+    coinFlipShownFor = game.id;
+    // 清掉舊 timer
+    for (const t of coinFlipTimers) clearTimeout(t);
+    coinFlipTimers = [];
+    coinFlipStage = 'flipping';
+    coinFlipTimers.push(setTimeout(() => { coinFlipStage = 'revealing'; }, 2000));
+    coinFlipTimers.push(setTimeout(() => { coinFlipStage = 'done'; }, 3800));
+  });
+
   function enterHandCard(e: PointerEvent, iid: string) {
     if (dragging) return; // 拖曳中不顯示預覽
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -194,6 +213,7 @@
   }>(null);
   let dropTargetIid = $state<string | null>(null); // 當前 hover 的 drop target iid（寶可夢）
   let dropBenchEmpty = $state(false);              // 當前 hover 的是否為空備戰格
+  let dropActiveEmpty = $state(false);             // Setup 階段 hover 空戰鬥場
   const DRAG_THRESHOLD = 6; // px
 
   function startDrag(e: PointerEvent, inst: CardInstance, kind: DragKind, card: Card) {
@@ -230,16 +250,24 @@
         if (type === 'poke') {
           dropTargetIid = el.dataset.dropIid ?? null;
           dropBenchEmpty = false;
+          dropActiveEmpty = false;
         } else if (type === 'bench-empty') {
           dropTargetIid = null;
           dropBenchEmpty = true;
+          dropActiveEmpty = false;
+        } else if (type === 'active-empty') {
+          dropTargetIid = null;
+          dropBenchEmpty = false;
+          dropActiveEmpty = true;
         } else {
           dropTargetIid = null;
           dropBenchEmpty = false;
+          dropActiveEmpty = false;
         }
       } else {
         dropTargetIid = null;
         dropBenchEmpty = false;
+        dropActiveEmpty = false;
         // Debug：拖曳 basic 但沒碰到 drop target 時印出 hit 元素幫 debug
         if (dragging.kind === 'basic' && hit) {
           const hitInfo = hit.tagName + (hit.className ? '.' + String(hit.className).split(' ')[0] : '') + (hit.id ? '#' + hit.id : '');
@@ -259,16 +287,28 @@
     dragging = null;
     const tIid = dropTargetIid;
     const benchEmpty = dropBenchEmpty;
+    const activeEmpty = dropActiveEmpty;
     dropTargetIid = null;
     dropBenchEmpty = false;
+    dropActiveEmpty = false;
 
     if (!d.moved) return; // 單純 click — onclick handler 會處理
     if (!isMyTurn() || pendingSelection) return;
 
     if (d.kind === 'energy' && tIid) {
       await dispatch(GameActions.attachEnergy(d.iid, tIid));
-    } else if (d.kind === 'basic' && benchEmpty) {
-      await dispatch(GameActions.playBasic(d.iid));
+    } else if (d.kind === 'basic') {
+      // Setup 階段：無 active 拖到 active-empty → PLACE_ACTIVE；已有 active 拖到 bench-empty → BENCH_POKEMON
+      // Playing 階段：只能拖到 bench-empty → PLAY_BASIC
+      if (game?.phase === 'setup') {
+        if (activeEmpty && !myPlayer?.active) {
+          await dispatch(GameActions.placeActive(d.iid, myIdx));
+        } else if (benchEmpty && myPlayer?.active) {
+          await dispatch(GameActions.benchPokemon(d.iid, myIdx));
+        }
+      } else if (benchEmpty) {
+        await dispatch(GameActions.playBasic(d.iid));
+      }
     } else if (d.kind === 'evolve' && tIid) {
       // 確認目標在合法進化清單裡
       if (evolveTargetsFor(d.iid).includes(tIid)) {
@@ -424,22 +464,26 @@
   );
   const usableAbilities = $derived(game && poolReady ? getUsableAbilities(game, pool) : []);
   const stadiumCard = $derived(game?.activeStadium ? pool.get(game.activeStadium.cardId) : null);
+
+  // ── 視角固定：AI模式/線上模式我方永遠在下方，本機雙人模式隨行動方翻轉 ──────
+  // 注意：線上模式必須優先判斷，否則預設 aiPlayerIndex=1 會讓雙方都算成 myIdx=0
+  // Setup 階段本機雙人：翻到尚未完成 setup 的那一方
+  const myIdx   = $derived<0 | 1>(
+    mode === 'online' ? ((myPlayerIndex ?? 0) as 0 | 1) :
+    aiPlayerIndex !== null ? ((1 - aiPlayerIndex) as 0 | 1) :
+    (game?.phase === 'setup' && myPlayerIndex === null
+      ? ((game.setupDone[0] ? 1 : 0) as 0 | 1)
+      : (myPlayerIndex !== null ? myPlayerIndex : aIdx))
+  );
+  const oppIdx  = $derived<0 | 1>((1 - myIdx) as 0 | 1);
+  const myPlayer  = $derived(game ? game.players[myIdx]  : null);
+  const oppPlayer = $derived(game ? game.players[oppIdx] : null);
+
   const canUseStadium = $derived(
     game?.phase === 'playing' && game.turnPhase === 'main' &&
     !!game.activeStadium && !game.pendingSelection &&
     !(game.stadiumUsedThisTurn ?? [false,false])[myIdx]
   );
-
-  // ── 視角固定：AI模式/線上模式我方永遠在下方，本機雙人模式隨行動方翻轉 ──────
-  // 注意：線上模式必須優先判斷，否則預設 aiPlayerIndex=1 會讓雙方都算成 myIdx=0
-  const myIdx   = $derived<0 | 1>(
-    mode === 'online' ? ((myPlayerIndex ?? 0) as 0 | 1) :
-    aiPlayerIndex !== null ? ((1 - aiPlayerIndex) as 0 | 1) :
-    myPlayerIndex !== null ? myPlayerIndex : aIdx
-  );
-  const oppIdx  = $derived<0 | 1>((1 - myIdx) as 0 | 1);
-  const myPlayer  = $derived(game ? game.players[myIdx]  : null);
-  const oppPlayer = $derived(game ? game.players[oppIdx] : null);
 
   // 線上模式 / AI 模式：是否輪到玩家行動
   const isMyTurn = $derived(() => {
@@ -458,7 +502,9 @@
       if (game.phase === 'setup') return !game.setupDone[hIdx];
       if (game.pendingSelection) return game.pendingSelection.actorIdx === hIdx;
       if (game.turnPhase === 'end' && game.players[hIdx].active === null) return true;
-      return game.activePlayerIndex === hIdx && game.pendingPrizes === 0;
+      // 取獎勵由 activePlayerIndex 決定 — 我 KO 對方後換我取獎勵，UI 須允許取
+      if (game.pendingPrizes > 0) return game.activePlayerIndex === hIdx;
+      return game.activePlayerIndex === hIdx;
     }
     return true; // 本機雙人模式
   });
@@ -1018,82 +1064,7 @@
   </main>
 
 <!-- ══════════════════════════════════════════════════════════════════════
-     Setup 畫面
-  ══════════════════════════════════════════════════════════════════════ -->
-{:else if game.phase === 'setup'}
-  {@const setupIdx = (
-    mode === 'online' && myPlayerIndex !== null
-      ? myPlayerIndex
-      : (aiPlayerIndex !== null && !game.setupDone[(1 - aiPlayerIndex) as 0 | 1]
-          ? ((1 - aiPlayerIndex) as 0 | 1)
-          : (!game.setupDone[0] ? 0 : 1))
-  ) as 0 | 1}
-  {@const setupPlayer = game.players[setupIdx]}
-  {@const iAmDone = game.setupDone[setupIdx]}
-  {@const waitingForOpp = iAmDone && !game.setupDone[(1 - setupIdx) as 0 | 1]}
-
-  <main class="setup-screen">
-    {#if game.mulliganCounts && (game.mulliganCounts[0] > 0 || game.mulliganCounts[1] > 0)}
-      <div class="mulligan-banner" in:scale={{ duration: 350, start: 0.7 }}>
-        <span class="shuffle-ic">🔄</span> Mulligan：
-        {#if game.mulliganCounts[0] > 0}{game.players[0].name} 重抽 {game.mulliganCounts[0]} 次（對手多抽 {game.mulliganCounts[0]} 張）　{/if}
-        {#if game.mulliganCounts[1] > 0}{game.players[1].name} 重抽 {game.mulliganCounts[1]} 次（對手多抽 {game.mulliganCounts[1]} 張）{/if}
-      </div>
-    {/if}
-    {#if waitingForOpp}
-      <h2>⏳ 等待對手完成準備…</h2>
-      <p class="muted">你已完成設置，等待 {game.players[(1 - setupIdx) as 0 | 1].name} 選出場寶可夢。</p>
-    {:else}
-      <h2>🃏 {setupPlayer.name} — 選出場寶可夢</h2>
-      <p class="muted">從起始手牌選出 1 隻基礎寶可夢作為出場，再選備戰區（最多 5 隻），完成後按「準備完成」。</p>
-      {#if mode !== 'online' && aiPlayerIndex === null}
-        <p class="muted"><small>（本機雙人：雙方依序設置；對方已完成後再輪到另一方）</small></p>
-      {/if}
-
-      {#if setupPlayer.active}
-        {@const ac = getCard(setupPlayer.active.cardId)}
-        <div class="setup-active">
-          <strong>出場：</strong>
-          <span class="poke-chip active-chip">{ac?.name ?? '?'} (HP {hpTotal(setupPlayer.active)})</span>
-          <button class="small danger" onclick={() => dispatch(GameActions.placeActive(setupPlayer.active!.iid, setupIdx))}>換出場</button>
-        </div>
-      {/if}
-      {#if setupPlayer.bench.length > 0}
-        <div class="setup-bench-row">
-          <strong>備戰：</strong>
-          {#each setupPlayer.bench as b}{@const bc=getCard(b.cardId)}<span class="poke-chip bench-chip">{bc?.name??'?'}</span>{/each}
-        </div>
-      {/if}
-
-      <h3>手牌</h3>
-      <div class="hand-grid">
-        {#each setupPlayer.hand as inst, i (inst.iid)}
-          {@const c = getCard(inst.cardId)}
-          {#if c}
-            <div class="hand-card" class:selectable={isBasicPokemonCard(c)}
-              in:fly={{ x: 220, y: -30, duration: 420, delay: i * 80, easing: cubicOut }}
-              out:fly={{ y: -160, duration: 260 }}>
-              <img src={c.imageUrl} alt={c.name} onclick={() => openZoom(inst.cardId)} class="zoomable" />
-              <div class="hand-card-name">{c.name}</div>
-              {#if isBasicPokemonCard(c)}
-                {#if !setupPlayer.active}
-                  <button class="small primary" onclick={() => dispatch(GameActions.placeActive(inst.iid, setupIdx))}>出場</button>
-                {:else if setupPlayer.bench.length < 5}
-                  <button class="small" onclick={() => dispatch(GameActions.benchPokemon(inst.iid, setupIdx))}>備戰</button>
-                {/if}
-              {:else}
-                <span class="card-type-tag">{c.supertype}</span>
-              {/if}
-            </div>
-          {/if}
-        {/each}
-      </div>
-      <button class="btn-primary" disabled={!setupPlayer.active} onclick={() => dispatch(GameActions.finishSetup(setupIdx))}>✅ 準備完成</button>
-    {/if}
-  </main>
-
-<!-- ══════════════════════════════════════════════════════════════════════
-     正式對戰（Play Mat 佈局）
+     正式對戰（Play Mat 佈局） — setup 和 playing 共用此畫面
   ══════════════════════════════════════════════════════════════════════ -->
 {:else}
 <div class="battle-root">
@@ -1121,7 +1092,10 @@
         {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip">等待對手行動</span>{/if}
       {/if}
       {#if aiPlayerIndex !== null && aiThinking}<span class="chip ai-chip">🤖 AI 思考中…</span>{/if}
-      {#if stadiumCard && game.activeStadium}<button class="chip stadium-chip clickable-chip" title="點擊查看卡片詳情" onclick={()=>openZoom(game.activeStadium!.cardId, null)}>🏟 {stadiumCard.name} 🔍</button>{/if}
+      {#if stadiumCard && game.activeStadium}
+        {@const sId = game.activeStadium.cardId}
+        <button class="chip stadium-chip clickable-chip" title="點擊查看卡片詳情" onclick={()=>openZoom(sId, null)}>🏟 {stadiumCard.name} 🔍</button>
+      {/if}
       <span class="chip version-chip" title="應用程式版本 — 檢查是否同步到最新">v{VERSION}</span>
     </span>
     {#if game.phase === 'playing' && activePlayer}
@@ -1225,6 +1199,19 @@
     <!-- 中間行動列 -->
     <div class="action-bar">
       <div class="alerts-col">
+        {#if game.phase==='setup'}
+          {@const myDone = game.setupDone[myIdx]}
+          {@const oppDone = game.setupDone[oppIdx]}
+          {#if myDone && !oppDone}
+            <div class="alert info-alert">⏳ 等待對手選出場寶可夢…</div>
+          {:else if !myDone}
+            {#if !myPlayer?.active}
+              <div class="alert info-alert">🃏 從手牌拖出 1 隻基礎寶可夢到戰鬥場</div>
+            {:else}
+              <div class="alert info-alert">✅ 可加入備戰（最多 5 隻） · 準備完成後點下方按鈕</div>
+            {/if}
+          {/if}
+        {/if}
         {#if pendingPrizes > 0 && isMyTurn()}
           <div class="alert prize-alert">
             🏆 取 {pendingPrizes} 張獎勵牌
@@ -1251,7 +1238,12 @@
       </div>
 
       <div class="action-btns">
-        {#if isMyTurn()}
+        {#if game.phase==='setup' && isMyTurn() && !game.setupDone[myIdx]}
+          <button class="btn-act primary" disabled={!myPlayer?.active}
+            onclick={()=>dispatch(GameActions.finishSetup(myIdx))}>
+            ✅ 準備完成
+          </button>
+        {:else if isMyTurn()}
           {#if game.turnPhase==='main' && activePlayer?.active}
             {@const ac=getCard(activePlayer.active.cardId)}
             {#each ac?.attacks??[] as atk,i}
@@ -1280,6 +1272,15 @@
           <span class="waiting-msg">⏳ 等待 {game.players[aIdx].name} 行動…</span>
         {/if}
       </div>
+
+      {#if stadiumCard && game.activeStadium}
+        {@const stadiumIid = game.activeStadium.cardId}
+        <div class="stadium-display" title="場地卡 — 點擊查看詳情" onclick={()=>openZoom(stadiumIid, null)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(stadiumIid, null);}} role="button" tabindex="0">
+          <div class="stadium-display-label">🏟 場地</div>
+          <img src={stadiumCard.imageUrl} alt={stadiumCard.name} />
+          <div class="stadium-display-name">{stadiumCard.name} 🔍</div>
+        </div>
+      {/if}
 
       <div class="log-col">
         {#each [...(game.log??[])].reverse().slice(0,20) as entry}
@@ -1348,7 +1349,12 @@
             {/each}
           </div>
         {:else}
-          <div class="active-card active-empty">（無出場）</div>
+          <div class="active-card active-empty"
+            class:drop-zone={dragging?.kind==='basic'&&game?.phase==='setup'&&isMyTurn()}
+            class:drop-hover={dropActiveEmpty&&dragging?.kind==='basic'}
+            data-drop-type="active-empty">
+            {#if game?.phase==='setup'}🃏 拖曳基礎寶可夢到這裡{:else}（無出場）{/if}
+          </div>
         {/if}
       </div>
 
@@ -1389,7 +1395,7 @@
             </div>
           {:else}
             <div class="bench-slot bench-empty"
-              class:drop-zone={dragging?.kind==='basic'&&isMyTurn()&&(myPlayer?.bench.length??0)<5}
+              class:drop-zone={dragging?.kind==='basic'&&isMyTurn()&&(myPlayer?.bench.length??0)<5&&(game?.phase==='playing'||(game?.phase==='setup'&&!!myPlayer?.active))}
               class:drop-hover={dropBenchEmpty&&dragging?.kind==='basic'}
               data-drop-type="bench-empty"></div>
           {/if}
@@ -1430,10 +1436,12 @@
           {@const isTrainerCard=c.supertype==='Trainer'}
           {@const isToolCard=c.supertype==='Pokemon'&&c.subtype==='Other'}
           {@const isEvolutionCard=c.supertype==='Pokemon'&&!!c.evolvesFrom}
-          {@const canEnergy=isEnergyCard&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()}
-          {@const canBasic=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()}
-          {@const canTrainer=(isTrainerCard||isToolCard)&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
-          {@const canEvolve=isEvolutionCard&&playableEvoIids.has(inst.iid)&&isMyTurn()&&!pendingSelection}
+          {@const canEnergy=isEnergyCard&&game?.phase==='playing'&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()}
+          {@const canBasicPlay=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()&&game?.phase==='playing'}
+          {@const canBasicSetup=isBasicCard&&game?.phase==='setup'&&!game?.setupDone[myIdx]&&isMyTurn()}
+          {@const canBasic=canBasicPlay||canBasicSetup}
+          {@const canTrainer=(isTrainerCard||isToolCard)&&game?.phase==='playing'&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
+          {@const canEvolve=isEvolutionCard&&game?.phase==='playing'&&playableEvoIids.has(inst.iid)&&isMyTurn()&&!pendingSelection}
           {@const dragKind =
             canEnergy ? 'energy'
             : canBasic ? 'basic'
@@ -1733,6 +1741,33 @@
     </div>
   {/if}
 
+  <!-- ══ 擲硬幣動畫 (Session 34) ══ -->
+  {#if coinFlipStage !== 'done'}
+    <div class="coin-flip-overlay" in:fade={{ duration: 250 }} out:fade={{ duration: 400 }}>
+      <div class="coin-flip-box">
+        {#if coinFlipStage === 'flipping'}
+          <div class="coin flipping">🪙</div>
+          <div class="coin-text">擲硬幣決定先後…</div>
+        {:else}
+          {@const firstName = game.players[game.firstPlayerIdx].name}
+          <div class="coin revealed" in:scale={{ start: 0.3, duration: 500 }}>
+            {game.firstPlayerIdx === 0 ? '☀️' : '🌙'}
+          </div>
+          <div class="coin-text coin-result" in:fade={{ delay: 200, duration: 400 }}>
+            <strong>{firstName}</strong> 先手！
+          </div>
+          {#if game.mulliganCounts && (game.mulliganCounts[0] > 0 || game.mulliganCounts[1] > 0)}
+            <div class="coin-sub" in:fade={{ delay: 500, duration: 400 }}>
+              🔄 Mulligan：
+              {#if game.mulliganCounts[0] > 0}{game.players[0].name} 重抽 {game.mulliganCounts[0]}，{game.players[1].name} +{game.mulliganCounts[0]} 張。{/if}
+              {#if game.mulliganCounts[1] > 0}{game.players[1].name} 重抽 {game.mulliganCounts[1]}，{game.players[0].name} +{game.mulliganCounts[1]} 張。{/if}
+            </div>
+          {/if}
+        {/if}
+      </div>
+    </div>
+  {/if}
+
 </div>
 {/if}
 
@@ -1908,7 +1943,8 @@
   .active-card.opp-active{ border-color:#5a3a3a; background:rgba(0,0,0,.4); }
   .active-card.mine-active{ border-color:#3a6a3a; }
   .active-card.energy-target{ border-color:#aaff44; cursor:pointer; animation:glow 1s infinite alternate; }
-  .active-card.active-empty{ justify-content:center; align-items:center; color:#555; font-size:.85rem; }
+  .active-card.active-empty{ justify-content:center; align-items:center; color:#888; font-size:.8rem; text-align:center; padding:.8rem; border:2px dashed #444; background:rgba(0,0,0,.25); }
+  .active-card.active-empty.drop-zone{ border-color:#88aaff; color:#cce; background:rgba(40,70,120,.3); }
   .active-img{ width:120px; border-radius:5px; flex-shrink:0; }
   .active-info{ flex:1; min-width:0; }
   .active-name{ font-size:1rem; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:.2rem; }
@@ -2000,11 +2036,59 @@
   .hp-bar-wrap.sm{ height:5px; }
   .hp-bar{ height:100%; border-radius:3px; transition: width .55s cubic-bezier(.3,.8,.3,1), background .3s ease-out; }
 
-  .action-bar{ display:grid; grid-template-columns:auto 1fr auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:center; min-height:52px; }
+  .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:center; min-height:52px; }
+  .stadium-display{ display:flex; flex-direction:column; align-items:center; gap:.15rem; padding:.2rem; border:1px solid #3a5a8a; background:rgba(26,42,74,.6); border-radius:6px; cursor:pointer; transition:transform .2s ease, box-shadow .2s ease; }
+  .stadium-display:hover{ transform:scale(1.05); box-shadow:0 0 12px rgba(136,170,255,.4); }
+  .stadium-display img{ width:60px; height:auto; border-radius:3px; }
+  .stadium-display-label{ font-size:.6rem; color:#88aaff; font-weight:700; }
+  .stadium-display-name{ font-size:.65rem; color:#bbd; max-width:70px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .alerts-col{ display:flex; flex-direction:column; gap:.2rem; max-width:280px; }
   .alert{ display:flex; flex-wrap:wrap; align-items:center; gap:.35rem; padding:.25rem .5rem; border-radius:6px; font-size:.8rem; }
   .prize-alert{ background:#2a4a1a; border:1px solid #4a8a3a; }
   .warn-alert{ background:#3a2a0a; border:1px solid #8a6a2a; }
+  .info-alert{ background:#1a3a4a; border:1px solid #3a7aaa; color:#cce6ff; }
+
+  /* ══ 擲硬幣動畫 ══ */
+  .coin-flip-overlay{
+    position:fixed; inset:0; z-index:999;
+    background:rgba(0,0,0,.75); backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .coin-flip-box{
+    display:flex; flex-direction:column; align-items:center; gap:1.2rem;
+    padding:2.5rem 3.5rem;
+    background:linear-gradient(135deg, #2a4a2a, #1a3a1a);
+    border:2px solid #5aaa5a; border-radius:16px;
+    box-shadow:0 0 60px rgba(90,170,90,.5);
+    min-width:360px;
+  }
+  .coin{
+    font-size:5rem; line-height:1;
+    filter:drop-shadow(0 0 12px rgba(255, 215, 0, .6));
+  }
+  .coin.flipping{
+    animation:coin-spin 0.35s linear infinite;
+  }
+  .coin.revealed{
+    filter:drop-shadow(0 0 20px rgba(255, 215, 0, .8));
+  }
+  @keyframes coin-spin{
+    0%   { transform: rotateY(0deg)   scale(1);   }
+    25%  { transform: rotateY(90deg)  scale(.85); }
+    50%  { transform: rotateY(180deg) scale(1);   }
+    75%  { transform: rotateY(270deg) scale(.85); }
+    100% { transform: rotateY(360deg) scale(1);   }
+  }
+  .coin-text{
+    font-size:1.4rem; color:#eef; font-weight:700;
+    letter-spacing:1px; text-align:center;
+  }
+  .coin-result strong{ color:#ffd700; font-size:1.6rem; }
+  .coin-sub{
+    margin-top:.5rem; padding:.5rem 1rem;
+    background:rgba(0,0,0,.4); border-radius:6px;
+    font-size:.85rem; color:#bcd; text-align:center;
+  }
   .mini-row{ display:flex; gap:.25rem; flex-wrap:wrap; margin-top:.2rem; width:100%; }
   .action-btns{ display:flex; flex-wrap:wrap; gap:.35rem; justify-content:center; align-items:center; }
   .btn-act{ display:inline-flex; align-items:center; gap:.25rem; padding:.4rem .85rem; border-radius:6px; border:none; font:inherit; font-size:.9rem; font-weight:600; cursor:pointer; white-space:nowrap; }
