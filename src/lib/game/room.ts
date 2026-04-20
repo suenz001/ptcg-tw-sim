@@ -14,6 +14,7 @@
 import { db, auth } from '$lib/firebase';
 import {
   doc, setDoc, updateDoc, onSnapshot, getDoc, serverTimestamp,
+  collection, query, where, orderBy, limit,
 } from 'firebase/firestore';
 import type { GameState } from './types';
 
@@ -110,6 +111,33 @@ export function subscribeRoom(
       callback({ ...(snap.data() as RoomData), roomId: snap.id });
     },
     err => { console.error('[Room] snapshot error:', err); callback(null); }
+  );
+}
+
+/** 監聽所有可加入的房間（status=waiting），排除自己建的 */
+export function subscribeOpenRooms(
+  callback: (rooms: Room[]) => void
+): () => void {
+  const myUid = auth.currentUser?.uid ?? '';
+  const q = query(
+    collection(db, 'rooms'),
+    where('status', '==', 'waiting'),
+    orderBy('createdAt', 'desc'),
+    limit(30),
+  );
+  return onSnapshot(
+    q,
+    snap => {
+      const rooms: Room[] = [];
+      snap.forEach(d => {
+        const data = d.data() as RoomData;
+        // 排除自己建的房間
+        if (data.hostUid === myUid) return;
+        rooms.push({ ...data, roomId: d.id });
+      });
+      callback(rooms);
+    },
+    err => { console.error('[Room] list error:', err); callback([]); }
   );
 }
 

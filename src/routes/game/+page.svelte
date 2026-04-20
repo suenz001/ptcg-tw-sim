@@ -22,7 +22,7 @@
   import { auth } from '$lib/firebase';
   import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
   import {
-    createRoom, joinRoom, subscribeRoom, pushGameState,
+    createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
     type Room,
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
@@ -66,6 +66,9 @@
   let isSyncing     = $state(false);
   let myPlayerIndex = $state<0 | 1 | null>(null); // null = 本機模式（無限制）
   let unsubRoom:    (() => void) | null = null;
+  // 可加入的開放房間列表（onlineStep='join' 時即時訂閱）
+  let openRooms = $state<Room[]>([]);
+  let unsubOpenRooms: (() => void) | null = null;
 
   // ── UI 互動狀態 ─────────────────────────────────────────────────────────────
   let selectedEnergyIid = $state<string | null>(null);
@@ -574,7 +577,30 @@
     checkAndStartOnlineGame();
   });
 
-  onDestroy(() => { unsubRoom?.(); if (aiTimer !== null) clearTimeout(aiTimer); });
+  onDestroy(() => {
+    unsubRoom?.();
+    unsubOpenRooms?.();
+    if (aiTimer !== null) clearTimeout(aiTimer);
+  });
+
+  // 在線上 Lobby 的 join 步驟訂閱開放房間列表
+  $effect(() => {
+    if (onlineStep === 'join' && myUid) {
+      unsubOpenRooms?.();
+      unsubOpenRooms = subscribeOpenRooms(rooms => { openRooms = rooms; });
+    } else {
+      unsubOpenRooms?.();
+      unsubOpenRooms = null;
+      openRooms = [];
+    }
+  });
+
+  // 從房間列表一鍵加入
+  async function handleJoinFromList(rc: string) {
+    if (!myName.trim() || !myDeckId) { onlineError = '請先填寫名稱和選擇牌組'; return; }
+    joinInput = rc;
+    await handleJoinRoom();
+  }
 
   // ── 輔助函式 ────────────────────────────────────────────────────────────────
   function getCard(cardId: string): Card | undefined { return pool.get(cardId); }
@@ -883,7 +909,6 @@
     {:else if onlineStep === 'join'}
       <div class="online-form">
         <h2>加入房間（你是後手）</h2>
-        <label>房號（4碼）<input class="name-input code-input" placeholder="XXXX" maxlength="4" bind:value={joinInput} /></label>
         <label>你的名稱<input class="name-input" placeholder="輸入名稱" bind:value={myName} /></label>
         <label>選擇牌組
           <select bind:value={myDeckId}>
@@ -896,11 +921,38 @@
             {/if}
           </select>
         </label>
+
+        <!-- 公開房間列表 -->
+        <div class="open-rooms-section">
+          <h3>🌐 目前開放的房間（{openRooms.length}）</h3>
+          {#if openRooms.length === 0}
+            <p class="muted small">尚無其他玩家建立房間。可等待、或請對方建立後再刷新，或改用下方手動房號輸入。</p>
+          {:else}
+            <ul class="open-room-list">
+              {#each openRooms as r (r.roomId)}
+                <li class="open-room-row">
+                  <span class="or-host">🎮 {r.hostName}</span>
+                  <span class="or-code">房號 {r.roomId}</span>
+                  <button class="btn-sm primary" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim() || !myDeckId}>
+                    加入
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+
+        <!-- 手動輸入房號 fallback -->
+        <details class="manual-code">
+          <summary>🔑 用房號手動加入</summary>
+          <label>房號（4碼）<input class="name-input code-input" placeholder="XXXX" maxlength="4" bind:value={joinInput} /></label>
+          <button class="btn-primary" onclick={handleJoinRoom} disabled={onlineLoading || !joinInput.trim()}>
+            {onlineLoading ? '加入中…' : '加入'}
+          </button>
+        </details>
+
         {#if onlineError}<p class="warn">{onlineError}</p>{/if}
         <div class="form-btns">
-          <button class="btn-primary" onclick={handleJoinRoom} disabled={onlineLoading}>
-            {onlineLoading ? '加入中…' : '加入房間'}
-          </button>
           <button class="btn-secondary" onclick={() => { onlineStep='choose'; onlineError=''; }}>取消</button>
         </div>
       </div>
@@ -1221,7 +1273,7 @@
       </div>
 
       <div class="log-col">
-        {#each [...(game.log??[])].reverse().slice(0,12) as entry}
+        {#each [...(game.log??[])].reverse().slice(0,20) as entry}
           <div class="log-line" class:log-sys={entry.playerIndex===null}>{entry.message}</div>
         {/each}
       </div>
@@ -1691,6 +1743,23 @@
   .code-input{ text-transform:uppercase; letter-spacing:0.25em; font-size:1.2rem; font-weight:700; text-align:center; max-width:120px; }
   .form-btns{ display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.25rem; }
 
+  /* 開放房間列表 */
+  .open-rooms-section{ background:#162616; border:1px solid #2a4a2a; border-radius:8px; padding:.7rem .9rem; }
+  .open-rooms-section h3{ margin:0 0 .5rem; font-size:.95rem; color:#aaffcc; }
+  .small{ font-size:.8rem; }
+  .open-room-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.4rem; max-height:240px; overflow-y:auto; }
+  .open-room-row{ display:flex; align-items:center; gap:.6rem; padding:.5rem .75rem; background:#1a2a1a; border:1px solid #3a5a3a; border-radius:6px; }
+  .or-host{ flex:1; font-weight:600; color:#f0f0f0; }
+  .or-code{ font-family:monospace; letter-spacing:.15em; color:#aaf; font-size:.85rem; }
+  .btn-sm{ padding:.3rem .8rem; border:none; border-radius:5px; cursor:pointer; font-size:.85rem; }
+  .btn-sm.primary{ background:#3a7a3a; color:#fff; }
+  .btn-sm.primary:hover:not(:disabled){ background:#4a9a4a; }
+  .btn-sm:disabled{ opacity:.5; cursor:not-allowed; }
+  .manual-code{ background:#0e1e0e; border:1px solid #2a4a2a; border-radius:6px; padding:.5rem .8rem; }
+  .manual-code summary{ cursor:pointer; color:#ccc; font-size:.88rem; }
+  .manual-code label{ margin-top:.5rem; }
+  .manual-code button{ margin-top:.5rem; }
+
   /* 等待室 */
   .room-waiting{ display:flex; flex-direction:column; align-items:center; gap:1.25rem; padding:2rem; }
   .room-code-display{ text-align:center; background:#1e2e1e; border:1px solid #3a5a3a; border-radius:12px; padding:1.5rem 2rem; }
@@ -1913,9 +1982,11 @@
   .epip.sm{ width:1rem; height:1rem; font-size:.5rem; }
   .atk-name{ max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .atk-dmg{ font-weight:700; color:#f88; font-size:.95rem; }
-  .log-col{ max-width:220px; max-height:90px; overflow-y:auto; font-size:.7rem; }
-  .log-line{ color:#7a9a7a; padding:.07rem 0; border-bottom:1px solid #1a2a1a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .log-sys{ color:#aaffaa; font-weight:600; }
+  .log-col{ width:380px; max-height:160px; overflow-y:auto; font-size:.85rem; line-height:1.4;
+    background:rgba(0,0,0,.35); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem .6rem; }
+  .log-line{ color:#9ab89a; padding:.2rem 0; border-bottom:1px solid rgba(42,74,42,.4); white-space:normal; word-break:break-all; }
+  .log-line:last-child{ border-bottom:none; }
+  .log-sys{ color:#aaffcc; font-weight:600; }
 
   .btn-retreat{ padding:.1rem .3rem; font-size:.62rem; background:#3a3a6a; border:1px solid #6a6aaa; border-radius:4px; color:#ccf; cursor:pointer; }
   .btn-retreat:hover{ background:#4a4a8a; }
