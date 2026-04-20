@@ -4534,3 +4534,201 @@ regPre('古鼎鹿|傲慢衝擊', (state, aIdx, _pool) => {
 
 // 八爪武師|觸手激怒 — 130 plain（簡化：動態能量費用條件略）
 regPre('八爪武師|觸手激怒', (state, _aIdx, _pool) => ({ state, damage: 130 }));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38t v1.70 H 標第 15 波 — attach-energy × multiplier（20 張）
+//
+// Helper:
+//   countEnergy(instance, filter, pool) → 依 filter（'all'/'basic'/'special'/EnergyType）計數
+//   selfAttachedEnergyMultiplyPre(base, per, filter, label) — 自身附加能量 × per
+//   defActiveEnergyMultiplyPre(base, per, filter, label) — 對手戰鬥寶可夢身上能量 × per
+//   oppAllEnergyMultiplyPre(base, per, filter, label) — 對手全場能量 × per
+//   selfAllEnergyMultiplyPre(base, per, filter, label) — 自己全場能量 × per
+//   bothActiveEnergyMultiplyPre(base, per, label) — 雙方出場能量之和 × per
+// ══════════════════════════════════════════════════════════════════════════════
+
+type EnergyFilter = 'all' | 'basic' | 'special' | EnergyType;
+
+function countOneEnergy(inst: CardInstance, filter: EnergyFilter, pool: Map<string, Card>): number {
+  let count = 0;
+  for (const e of inst.energyAttached) {
+    const card = pool.get(e.cardId);
+    if (!card || card.supertype !== 'Energy') continue;
+    if (filter === 'all') count++;
+    else if (filter === 'basic' && card.subtype === 'Basic') count++;
+    else if (filter === 'special' && card.subtype === 'Special') count++;
+    else if (typeof filter === 'string' && card.pokemonType === filter) count++;
+  }
+  return count;
+}
+
+function selfAttachedEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const att = state.players[aIdx].active;
+    if (!att) return { state, damage: base };
+    const count = countOneEnergy(att, filter, pool);
+    const dmg = base + per * count;
+    return { state: addLog(state, `${label}：自身能量 ${count} → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+function defActiveEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const def = state.players[dIdx].active;
+    const count = def ? countOneEnergy(def, filter, pool) : 0;
+    const dmg = base + per * count;
+    return { state: addLog(state, `${label}：對手出場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+function oppAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const d = state.players[dIdx];
+    let count = 0;
+    for (const p of [d.active, ...d.bench]) {
+      if (p) count += countOneEnergy(p, filter, pool);
+    }
+    const dmg = base + per * count;
+    return { state: addLog(state, `${label}：對手全場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+function selfAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const a = state.players[aIdx];
+    let count = 0;
+    for (const p of [a.active, ...a.bench]) {
+      if (p) count += countOneEnergy(p, filter, pool);
+    }
+    const dmg = base + per * count;
+    return { state: addLog(state, `${label}：自己全場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+function bothActiveEnergyMultiplyPre(base: number, per: number, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const a = state.players[aIdx].active;
+    const d = state.players[dIdx].active;
+    const count = (a ? countOneEnergy(a, 'all', pool) : 0) + (d ? countOneEnergy(d, 'all', pool) : 0);
+    const dmg = base + per * count;
+    return { state: addLog(state, `${label}：雙方出場能量合計 ${count} → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+// 自身附加（filter）
+regPre('奇諾栗鼠|特殊滾滾', selfAttachedEnergyMultiplyPre(0, 70, 'special', '特殊滾滾'));
+regPre('巨炭山|機槍瀝青', selfAttachedEnergyMultiplyPre(40, 80, 'Fire', '機槍瀝青'));
+regPre('吉雉雞|能量羽毛', selfAttachedEnergyMultiplyPre(0, 30, 'all', '能量羽毛'));
+regPre('刺龍王ex|水炮', selfAttachedEnergyMultiplyPre(50, 50, 'Water', '水炮'));
+regPre('拉普拉斯ex|力量飛濺', selfAttachedEnergyMultiplyPre(0, 40, 'all', '力量飛濺'));
+regPre('帕路奇亞|空間粉碎', selfAttachedEnergyMultiplyPre(0, 40, 'basic', '空間粉碎'));
+
+// 對手戰鬥寶可夢身上
+regPre('蟲甲聖|精神強念', defActiveEnergyMultiplyPre(10, 30, 'all', '精神強念'));
+regPre('霏歐納|能量壓制', defActiveEnergyMultiplyPre(0, 20, 'all', '能量壓制'));
+regPre('勇基拉|精神強念', defActiveEnergyMultiplyPre(10, 30, 'all', '精神強念'));
+regPre('胡地|精神強念', defActiveEnergyMultiplyPre(10, 50, 'all', '精神強念'));
+regPre('洛托姆|能量短路', defActiveEnergyMultiplyPre(0, 20, 'all', '能量短路'));
+
+// 對手全場
+regPre('向日花怪|光返', oppAllEnergyMultiplyPre(0, 60, 'Fire', '光返'));
+regPre('蒂安希|漫反射', oppAllEnergyMultiplyPre(0, 40, 'special', '漫反射'));
+regPre('塗標客|能量塗鴉', oppAllEnergyMultiplyPre(0, 40, 'all', '能量塗鴉'));
+regPre('葉伊布ex|綠葉風暴', oppAllEnergyMultiplyPre(0, 60, 'all', '綠葉風暴'));
+
+// 自己全場
+regPre('蜜集大蛇ex|蜜糖風暴', selfAllEnergyMultiplyPre(30, 30, 'Grass', '蜜糖風暴'));
+
+// 雙方出場
+regPre('厄鬼椪 碧草面具ex|萬葉陣雨', bothActiveEnergyMultiplyPre(30, 30, '萬葉陣雨'));
+
+// 猛雷鼓|落雷風暴 — 0 base，傷害 = 自身能量 × 30，對對手任意 1 隻（含備戰）
+regPre('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  const count = att ? countOneEnergy(att, 'all', pool) : 0;
+  // 不在這裡造成傷害給對手出場，由 POST 處理任意目標
+  return { state: addLog(state, `落雷風暴：自身能量 ${count} → 對任一 ${count * 30} 傷害（不計弱抗）`, aIdx), damage: 0 };
+});
+regPost('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  const count = att ? countOneEnergy(att, 'all', pool) : 0;
+  const dmg = count * 30;
+  if (dmg === 0) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defender = state.players[dIdx];
+  if (defender.bench.length === 0 && !defender.active) return state;
+  if (defender.bench.length === 0 && defender.active) {
+    const defCard = pool.get(defender.active.cardId);
+    const newDmg = defender.active.damage + dmg;
+    const hp = defCard?.hp ?? 0;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    if (hp > 0 && newDmg >= hp) {
+      const ko: CardInstance[] = [
+        { ...defender.active, damage: newDmg },
+        ...defender.active.energyAttached,
+        ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+        ...(defender.active.evolvedFromStack ?? []),
+      ];
+      const p = isExCard(defCard) ? 2 : 1;
+      players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...ko] };
+      let s = addLog({ ...state, players }, `落雷風暴：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎勵牌。`, null);
+      if (players[dIdx].bench.length === 0) {
+        return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+      }
+      return { ...s, pendingPrizes: p };
+    }
+    players[dIdx] = { ...defender, active: { ...defender.active, damage: newDmg } };
+    return addLog({ ...state, players }, `落雷風暴：對 ${defCard?.name ?? '?'} 造成 ${dmg} 傷害`, aIdx);
+  }
+  let s = addLog(state, `落雷風暴：選擇對手任一寶可夢造成 ${dmg} 傷害`, aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'snipe-variable',
+    params: { includeActive: true, damage: dmg, label: '落雷風暴' },
+  });
+});
+
+regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
+  const dmg = (params?.damage as number) ?? 0;
+  const label = (params?.label as string) ?? '遠程攻擊';
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  const defender = st.players[dIdx];
+  const targetIid = selectedIids[0];
+  if (!targetIid || dmg === 0) return st;
+  const isActive = defender.active?.iid === targetIid;
+  const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const targetCard = pool.get(target.cardId);
+  const newDmg = target.damage + dmg;
+  const hp = targetCard?.hp ?? 0;
+  if (hp > 0 && newDmg >= hp) {
+    const ko: CardInstance[] = [
+      { ...target, damage: newDmg },
+      ...target.energyAttached,
+      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...(target.evolvedFromStack ?? []),
+    ];
+    const p = isExCard(targetCard) ? 2 : 1;
+    const players = [...st.players] as [PlayerState, PlayerState];
+    const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
+    if (isActive) newDefender.active = null;
+    else newDefender.bench = defender.bench.filter(c => c.iid !== targetIid);
+    players[dIdx] = newDefender;
+    let s = addLog({ ...st, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎勵牌。`, null);
+    if (isActive && newDefender.bench.length === 0) {
+      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+    }
+    return { ...s, pendingPrizes: p };
+  }
+  const players = [...st.players] as [PlayerState, PlayerState];
+  const newDefender = { ...defender };
+  if (isActive) newDefender.active = { ...target, damage: newDmg };
+  else newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
+  players[dIdx] = newDefender;
+  return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${dmg} 傷害`, actorIdx);
+});

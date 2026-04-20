@@ -2967,3 +2967,33 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 26/24
 - 版本 1.68 → 1.69
+
+---
+
+## 📝 2026-04-21 Session 38t (v1.70) — H 標第 15 波：能量 × multiplier（20 張）
+
+### 新 helper
+- `EnergyFilter = 'all' | 'basic' | 'special' | EnergyType` — 能量計數過濾器
+- `countOneEnergy(inst, filter, pool)` — 單一寶可夢按條件計能量
+- `selfAttachedEnergyMultiplyPre(base, per, filter, label)` — 自身附加能量
+- `defActiveEnergyMultiplyPre(base, per, filter, label)` — 對手戰鬥寶可夢身上能量
+- `oppAllEnergyMultiplyPre(base, per, filter, label)` — 對手全場能量
+- `selfAllEnergyMultiplyPre(base, per, filter, label)` — 自己全場能量
+- `bothActiveEnergyMultiplyPre(base, per, label)` — 雙方出場之和
+- `snipe-variable` resolver — 通用可變傷害 snipe（支援任意數值）
+
+### 實裝（20 張）
+- 自身：奇諾栗鼠｜特殊滾滾、巨炭山｜機槍瀝青、吉雉雞｜能量羽毛、刺龍王ex｜水炮、拉普拉斯ex｜力量飛濺、帕路奇亞｜空間粉碎
+- 對手戰鬥：蟲甲聖｜精神強念、霏歐納｜能量壓制、勇基拉｜精神強念、胡地｜精神強念、洛托姆｜能量短路
+- 對手全場：向日花怪｜光返、蒂安希｜漫反射、塗標客｜能量塗鴉、葉伊布ex｜綠葉風暴
+- 自己全場：蜜集大蛇ex｜蜜糖風暴
+- 雙方出場：厄鬼椪 碧草面具ex｜萬葉陣雨
+- 猛雷鼓｜落雷風暴（自身能量 × 30 對對手任一、snipe-variable resolver）
+
+### 暫緩
+- 拖拖蚓ex｜快掃拳返（被動特性：受攻擊時反打 ×2 鋼能量 × 傷害指示物；需 defender-side trigger）
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 29/21
+- 版本 1.69 → 1.70
