@@ -217,8 +217,7 @@
     dragging.y = e.clientY;
 
     if (dragging.moved) {
-      // 用 elementFromPoint + closest 向上爬到 drop target 容器，
-      // 避免滑鼠落在子元素（img / hp-bar 等）時找不到屬性
+      // 用 elementFromPoint + closest 向上爬到 drop target 容器
       const hit = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
       const el = hit?.closest('[data-drop-type]') as HTMLElement | null;
       if (el) {
@@ -236,6 +235,15 @@
       } else {
         dropTargetIid = null;
         dropBenchEmpty = false;
+        // Debug：拖曳 basic 但沒碰到 drop target 時印出 hit 元素幫 debug
+        if (dragging.kind === 'basic' && hit) {
+          const hitInfo = hit.tagName + (hit.className ? '.' + String(hit.className).split(' ')[0] : '') + (hit.id ? '#' + hit.id : '');
+          const benches = document.querySelectorAll('[data-drop-type="bench-empty"]');
+          if ((window as any).__ptcgDragLog !== hitInfo) {
+            (window as any).__ptcgDragLog = hitInfo;
+            console.log('[PTCG drag]', { hit: hitInfo, benchEmptyCount: benches.length, mouse: { x: e.clientX, y: e.clientY } });
+          }
+        }
       }
     }
   }
