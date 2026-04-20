@@ -3,6 +3,7 @@
   import { base } from '$app/paths';
   import { auth } from '$lib/firebase';
   import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
+  import { VERSION } from '$lib/version';
 
   let user = $state<User | null>(null);
   let error = $state<string | null>(null);
@@ -33,7 +34,7 @@
 </script>
 
 <main>
-  <h1>PTCG 對戰模擬器</h1>
+  <h1>PTCG 對戰模擬器 <span class="version">v{VERSION}</span></h1>
   <p class="tagline">Server-authoritative online battle simulator · 伺服器權威對戰</p>
 
   <section>
@@ -96,6 +97,7 @@
     margin: 0;
     background: #f4f4f6;
   }
+  .version { font-size: 0.75rem; font-weight: 400; color: #888; font-family: monospace; vertical-align: middle; margin-left: 0.3rem; background: #e8e4ee; padding: 0.1rem 0.4rem; border-radius: 3px; }
   main {
     max-width: 680px;
     margin: 2rem auto;

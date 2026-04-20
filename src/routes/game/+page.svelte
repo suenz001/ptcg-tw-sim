@@ -26,6 +26,7 @@
     type Room,
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
+  import { VERSION } from '$lib/version';
 
   // ── 卡池 ────────────────────────────────────────────────────────────────────
   let pool = $state<Map<string, Card>>(new Map());
@@ -1039,6 +1040,7 @@
       {/if}
       {#if aiPlayerIndex !== null && aiThinking}<span class="chip ai-chip">🤖 AI 思考中…</span>{/if}
       {#if stadiumCard}<span class="chip stadium-chip">🏟 {stadiumCard.name}</span>{/if}
+      <span class="chip version-chip" title="應用程式版本 — 檢查是否同步到最新">v{VERSION}</span>
     </span>
     {#if game.phase === 'playing' && activePlayer}
       {@const attEnergy = activePlayer.energyAttachedThisTurn}
@@ -1725,6 +1727,7 @@
   .status-chips{ display:flex; gap:0.3rem; flex-wrap:wrap; }
   .chip{ font-size:0.68rem; padding:0.1rem 0.35rem; border-radius:10px; background:#1a3a1a; color:#8f8; border:1px solid #2a5a2a; }
   .role-chip{ background:#1a1a3a; color:#aaf; border-color:#2a2a5a; }
+  .version-chip{ background:#2a1a3a; color:#c0a0e0; border-color:#4a3a6a; font-family:monospace; }
   .wait-chip{ background:#3a2a1a; color:#fa8; border-color:#5a3a1a; }
   .syncing-chip{ background:#3a3a1a; color:#ff8; border-color:#5a5a1a; }
   .waiting-msg{ color:#fa8; font-size:0.85rem; font-style:italic; }
@@ -1827,11 +1830,12 @@
     100%{ box-shadow: 0 0 0 rgba(170,255,68,0); transform:scale(1); }
   }
 
-  .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:hidden; min-width:0; }
-  .bench-slot{ flex:1; min-width:0; max-width:115px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:visible; }
+  .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:visible; min-width:0; }
+  .bench-slot{ flex:1 1 70px; min-width:70px; max-width:115px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:visible; }
   .bench-slot:not(.bench-empty).energy-target{ border-color:#aaff44; cursor:pointer; }
   .bench-slot img{ width:100%; max-width:96px; border-radius:4px; }
-  .bench-empty{ border-style:dashed; border-color:#1a3a1a; opacity:.4; overflow:hidden; }
+  /* bench-empty：固定最小寬度確保拖曳 drop target 可見 + 可點擊 */
+  .bench-empty{ border-style:dashed; border-color:#2a5a2a; opacity:.55; overflow:visible; flex:0 0 70px; min-height:96px; }
   .bench-name{ font-size:.7rem; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
   .bench-stat{ font-size:.66rem; color:#aaa; }
   .bench-nrg{ font-size:.62rem; color:#888; }

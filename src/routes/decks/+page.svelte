@@ -13,6 +13,7 @@
   import type { Deck } from '$lib/decks/types';
   import { validateDeck, maxCopies, isBasicEnergy } from '$lib/decks/validation';
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
+  import { VERSION } from '$lib/version';
   import { auth } from '$lib/firebase';
   import {
     signInAnonymously,
@@ -558,7 +559,7 @@
 <main>
   <header class="page-head">
     <a href="{base}/" class="back">← 首頁</a>
-    <h1>牌組編輯器</h1>
+    <h1>牌組編輯器 <span class="version-tag">v{VERSION}</span></h1>
     <span class="hint">Standard · H / I / J 標</span>
     <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
       {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
@@ -1033,6 +1034,7 @@
     color: #888;
     font-size: 0.85rem;
   }
+  .version-tag { font-size: 0.7rem; color: #888; font-family: monospace; background: #e8e4ee; padding: 0.1rem 0.4rem; border-radius: 3px; vertical-align: middle; margin-left: 0.3rem; font-weight: 400; }
   .error {
     color: #c00;
     background: #fee;
