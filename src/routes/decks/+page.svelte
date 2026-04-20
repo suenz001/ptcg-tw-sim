@@ -360,6 +360,7 @@
     const lines = importTextInput.split('\n');
     const entries: { cardId: string; count: number }[] = [];
     const errors: string[] = [];
+    const ambiguities: { name: string; used: string; alternatives: string[] }[] = [];
     let deckName = '';
 
     for (const rawLine of lines) {
@@ -370,17 +371,23 @@
         if (!deckName) deckName = line.replace(/^\/\/\s*|^#\s*/, '').trim();
         continue;
       }
+      // Format C（最精確，bookmarklet 輸出）：{count} {name} #{cardId}
+      const mId = line.match(/^(\d+)\s+(.+?)\s+#(\d+)$/);
       // Format A（完整）：{count} {name} {setCode} {collectorNumber}
-      const mFull = line.match(/^(\d+)\s+(.+?)\s+([A-Za-z0-9]+)\s+(\S+)$/);
+      const mFull = !mId ? line.match(/^(\d+)\s+(.+?)\s+([A-Za-z0-9]+)\s+(\S+)$/) : null;
       // Format B（簡易）：{count} {name}  / {count}x{name}  / {count} × {name}
-      //   官方 bookmarklet 匯出的格式；用卡名查找
-      const mSimple = line.match(/^(\d+)\s*[x×]?\s+(.+?)$/);
+      const mSimple = (!mId && !mFull) ? line.match(/^(\d+)\s*[x×]?\s+(.+?)$/) : null;
 
       let card: Card | undefined;
       let countStr = '';
       let label = '';
 
-      if (mFull) {
+      if (mId) {
+        countStr = mId[1];
+        const cardId = mId[3];
+        card = poolById.get(cardId);
+        label = `${mId[2].trim()} (id=${cardId})`;
+      } else if (mFull) {
         countStr = mFull[1];
         const setCode = mFull[3];
         const collectorNumber = mFull[4];
@@ -390,9 +397,21 @@
         countStr = mSimple[1];
         const name = mSimple[2].trim();
         label = name;
-        // 依名稱精確匹配（標準賽範圍），同名取第一張
-        const found = pool.find(c => c.name === name);
-        card = found ?? pool.find(c => c.name.includes(name));
+        // 依名稱精確匹配 — 若同名多張，記錄歧義，取第一張但警告
+        const exact = pool.filter(c => c.name === name);
+        if (exact.length === 0) {
+          card = pool.find(c => c.name.includes(name));
+        } else if (exact.length === 1) {
+          card = exact[0];
+        } else {
+          // 多個版本：取第一張，並收集歧義提示
+          card = exact[0];
+          ambiguities.push({
+            name,
+            used: `${exact[0].setCode} · ${exact[0].collectorNumber}`,
+            alternatives: exact.slice(1).map(c => `${c.setCode} · ${c.collectorNumber}`),
+          });
+        }
       } else {
         errors.push(`無法解析：${line}`);
         continue;
@@ -406,6 +425,16 @@
       const existing = entries.find((e) => e.cardId === card!.id);
       if (existing) existing.count += count;
       else entries.push({ cardId: card.id, count });
+    }
+
+    // 歧義提示：同名多張時，告訴使用者匯入了哪張、還有哪些選擇
+    if (ambiguities.length > 0) {
+      const msg = `⚠ 以下 ${ambiguities.length} 張卡有多個版本，已自動取第一張：\n\n`
+        + ambiguities.map(a =>
+            `• ${a.name}\n   使用：${a.used}\n   其他版本：${a.alternatives.join(', ')}`
+          ).join('\n\n')
+        + `\n\n若要使用特定版本，請改用「卡名 #cardId」格式（建議從官方網站透過書籤列匯入，會自動帶 cardId）。\n\n要繼續匯入嗎？`;
+      if (!confirm(msg)) return;
     }
 
     if (errors.length > 0) {
@@ -929,7 +958,7 @@
               <li>把下面這個藍色按鈕<strong>用滑鼠拖曳到書籤列</strong>放開</li>
               <li class="bm-drag-wrapper">
                 <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                {@html `<a class="bm-drag-btn" href="javascript:(function(){const cs=document.querySelectorAll('%23decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組，請在官方牌組構築頁執行');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const k=c.children[1]%3F.innerText%3F.trim()||'1';lines.push(k+' '+n);});const text=lines.join('\\n');function done(ok){const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:%23fff;border:3px solid '+(ok%3F'%23228a3a':'%232a5aa0')+';padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=%22font-weight:bold;margin-bottom:8px;color:'+(ok%3F'%23228a3a':'%232a5aa0')+';%22>'+(ok%3F'✅ 已自動複製 ':'⚠ 自動複製失敗，請手動 Ctrl%2BC — 共 ')+cs.length+' 種卡</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length%2B1);ta.style.cssText='width:100%25;font-family:monospace;font-size:13px;padding:8px;border:1px solid %23aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();if(!ok){try{document.execCommand('copy');}catch(e){}}},100);if(ok)setTimeout(function(){w.remove();},2500);}if(navigator.clipboard%26%26navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){done(true);}).catch(function(){done(false);});}else{done(false);}})();" onclick="event.preventDefault(); alert('請將此按鈕用滑鼠拖到瀏覽器書籤列，不是點擊');" draggable="true">🔖 PTCG 匯入</a>`}
+                {@html `<a class="bm-drag-btn" href="javascript:(function(){const cs=document.querySelectorAll('%23decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組，請在官方牌組構築頁執行');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const id=c.dataset.cardId||'';const k=c.children[1]%3F.innerText%3F.trim()||'1';lines.push(k+' '+n+(id%3F' %23'+id:''));});const text=lines.join('\\n');function done(ok){const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:%23fff;border:3px solid '+(ok%3F'%23228a3a':'%232a5aa0')+';padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=%22font-weight:bold;margin-bottom:8px;color:'+(ok%3F'%23228a3a':'%232a5aa0')+';%22>'+(ok%3F'✅ 已自動複製 ':'⚠ 自動複製失敗，請手動 Ctrl%2BC — 共 ')+cs.length+' 種卡</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length%2B1);ta.style.cssText='width:100%25;font-family:monospace;font-size:13px;padding:8px;border:1px solid %23aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();if(!ok){try{document.execCommand('copy');}catch(e){}}},100);if(ok)setTimeout(function(){w.remove();},2500);}if(navigator.clipboard%26%26navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){done(true);}).catch(function(){done(false);});}else{done(false);}})();" onclick="event.preventDefault(); alert('請將此按鈕用滑鼠拖到瀏覽器書籤列，不是點擊');" draggable="true">🔖 PTCG 匯入</a>`}
               </li>
             </ol>
             <p><strong>📥 之後每次匯入牌組</strong>：</p>
