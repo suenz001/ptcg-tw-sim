@@ -2320,3 +2320,46 @@ Windows / 上一版 commit 都是 2595 行）。我 v1.51 直接 `cp` sandbox �
   請先比對行數。
 
 版本號 1.52 → 1.53（實質內容與 1.52 相同，只是補完被截斷的檔案讓 build 能過）。
+
+---
+
+## 📝 2026-04-20 Session 38d (v1.54) — 場地卡截斷修復 + my-row 貼齊手牌
+
+**使用者觀察（screenshot）：**
+- v1.53 部署成功後，場地卡（stadium）圖片下半部被 action-bar 截掉。
+- 自己這邊（綠色 my-row）的 bench 和手牌之間還有一段「不算窄的空隙」—— bench 被 `align-items:flex-start` 推到 my-row 頂端，導致 my-row 底部出現空白。
+- 明確提醒：「不要為了調一個地方而整個都亂掉。」
+
+**根因：**
+1. `.action-bar{ max-height:130px }` 硬卡住，但 `.stadium-display` 子元素（label ~15px + img ~128px + name ~16px + gap/padding ~20px ≈ 178px）超過上限 → 圖片底部被 `overflow:hidden` 裁掉。
+2. `.my-row{ align-items:flex-start; padding-top:0.6rem }` 讓 bench 貼近 action-bar，my-row 底部（靠 hand-strip 那側）留下純粹的視覺空隙。
+
+**修法（兩處 surgical edit，`src/routes/game/+page.svelte`）：**
+
+```diff
+- .action-bar{ ... min-height:70px; max-height:130px; overflow:hidden; }
++ .action-bar{ ... min-height:70px; max-height:200px; overflow:hidden; }
+
+- .my-row{ border-top:2px solid #2a5a2a; align-items:flex-start; padding-top:0.6rem; }
++ .my-row{ border-top:2px solid #2a5a2a; align-items:flex-end; padding-bottom:0.6rem; }
+```
+
+**為什麼兩處都要改：**
+- 只改 max-height：場地卡能完整顯示，但 my-row 底部空隙還在。
+- 只改 my-row：空隙消失、bench 貼到手牌附近，但場地卡還是被裁（因為 max-height 沒放寬）。
+- 兩個同時改：場地卡完整 + bench 貼手牌 + action-bar 自然撐高（在有 stadium 時）→ `.log-col{ max-height:100% }` 跟著變高，日誌視窗多幾行。
+
+**連鎖副作用檢查：**
+- `.playmat{ grid-template-rows:minmax(230px,1fr) auto minmax(230px,1fr) }` 沒動。action-bar 是 `auto`，由最高子元素決定實際高度（無 stadium 時仍是 ~70-90px，空間全還給兩個 1fr row）。
+- `.opponent-row` 原本就是 `align-items:flex-end` + `padding-bottom:0.6rem`（對手 bench 貼 action-bar）。my-row 改為 `flex-end + padding-bottom:0.6rem` 後，my bench 貼 hand-strip——等於整個 playmat 的 bench 都朝向版面中央的 action-bar「展開」，對稱性更好。
+- `.field-row{ padding:0.5rem 0.7rem }` base padding 不變，my-row 只改方向（top→bottom）不改總量。
+
+**驗證：**
+- `/tmp/ptcg-work/repo` clean clone 跑 `npm ci && npm run build` 通過（防 FUSE 截斷誤推，見 v1.53 教訓）。
+- GHA 部署在 push 後 90-120s 生效，Leon 須 Ctrl+F5 + 清 Service Worker 確認頁首顯示 v1.54。
+
+**工作流備忘（FUSE 截斷 v2）：**
+- 這次 sandbox 的 `+page.svelte` 仍然只讀到 2562 行（origin 2597），完全沒動的情況下又被截斷一次。
+- 全程在 `/tmp/ptcg-work/repo` 作業（含 Edit tool），確認 build 過才推。`Read` 讀 `/tmp/` 的檔沒被截斷（因不走 FUSE）。
+- 這個 pattern 應該變成預設流程：改 `+page.svelte` 一律先 clone 到 /tmp，不走 FUSE mount。
+
