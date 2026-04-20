@@ -1,8 +1,9 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-19  
-> 執行者：Claude Sonnet 4.6 (Anthropic)  
-> 專案：https://github.com/suenz001/ptcg-tw-sim
+> 最後更新：2026-04-20 Session 34 (v1.21)  
+> 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
+> 專案：https://github.com/suenz001/ptcg-tw-sim  
+> 發佈：https://suenz001.github.io/ptcg-tw-sim/game
 
 ---
 
@@ -1706,3 +1707,310 @@ MBG/MBD 預組幾乎 100% 實裝可完整對戰，其他卡包多為未實裝。
 3. **Guard 與 effect 必須成對註冊**：guard 回 false 時 UI 根本不顯示按鈕（使用者無法觸發 effect），但 effect 內仍可做防衛檢查。
 4. **healResolver 的 params**：`healAmount` + `discardEnergy`；治療無上限時 `healAmount: 9999`（Math.max clamp 至 0）。
 5. **下次補卡優先**：M2a 的 34 張、SV8a 的 18 張 — CARD_AUDIT.md 已列完整清單。
+
+---
+
+## 📝 2026-04-19/20 Session 31 — H 標批次實裝 ~127 張
+
+### 分類腳本
+新增 `scripts/classify-h-cards.mjs`：掃 H 標 JSON，按正則分類攻擊/特性/訓練家效果。
+輸出 `.tmp-H-classify.json` + 終端機統計。TARGET 參數可切換 H/I/J。
+
+### 三波批次（累計本 session ~127 張）
+
+**H1–H4（Session 31 第 1 波，59 張）**
+- `statusPost` — 中毒/燒傷/睡眠/麻痺/混亂 POST（8 批 wrapper）
+- `selfHitPost` — 自傷 N（對自己放指示物）
+- `defStatusBonus` — 對有狀態敵人 +N 傷害
+- `selfCantAttackNextPost` — 下回合自己不能攻擊
+
+**H5–H6（Session 31 第 2 波，50 張）**
+- `coinPlusDmg` — 擲硬幣正面 +N
+- `coinStatusPost` — 擲硬幣正面附加狀態
+- `drawPost` — 攻擊後抽 N
+- `selfDmgReducePost` — 攻擊後自己受傷 -N 旗標
+
+**H7–H12（Session 32 第 3 波，18 張訓練家）**
+- 支援者批次：黑連(抽3)、野餐女孩(擲硬幣抽2/4)、仙后(手牌=1時抽2搜)、
+  庫瑟洛斯奇的企圖(對手丟至3)、席藍(搜最多3張ex)、寇沙(手洗抽+1)、
+  秋明(對手中毒時洗抽7)、蕾荷(牌庫頂5丟棄)、MJ超級球
+- 物品批次：寶可生機劑A(回150)、危險光線(灼傷)、推理組合、奇跡耳麥、
+  反擊捕捉器(獎賞多時呼叫備戰)、釣竿MAX、超級能量回收、大地之容器
+
+### 新增 attack hooks
+```ts
+// effects.ts
+ATTACK_PRE:  Map<'cardName|attackName', (state, aIdx, pool) => {state, damage}>
+ATTACK_POST: Map<'cardName|attackName', (state, aIdx, pool) => state>
+```
+
+### 常用 POST wrapper（可複用）
+- `statusPost(status, chance?)` — 附加狀態
+- `coinStatusPost(status)` — 擲硬幣正面附加狀態
+- `drawPost(n)`, `selfHitPost(n)`, `selfCantAttackNextPost()`
+
+### Commits
+- `2b5dec0` Session 31 — H 標批次第 1 波 59 張
+- `ffb8da1` H 標第 2 波 +50 張
+- `4bd832f` H 標第 3 波 +18 張訓練家
+
+---
+
+## 📝 2026-04-19/20 Session 32 — H 標被動特性 + Stadium + 主動特性
+
+### 被動特性系統（engine hook）
+新增 3 個 lookup map（effects.ts 導出，engine ATTACK 查表）：
+
+```ts
+PASSIVE_DAMAGE_REDUCE: Map<abilityName, number>       // 攻擊傷害 -N
+PASSIVE_IMMUNITY:      Map<abilityName, (attacker, damage, state, aIdx, pool) => boolean>
+PASSIVE_RETALIATION:   Map<abilityName, (state, dIdx, pool) => state>
+```
+
+**實裝（~11 被動）**
+- 鑽石膜/堅硬甲殼/密林之軀/柔軟羊毛/堅堅之軀 — 受傷 -N
+- 尾甲/礎石之勢/鐵壁硬殼/神秘之盾 — 特定條件完全免疫
+- 毒刺/灼熱之軀/反擊 — 反擊攻擊者
+
+### 主動特性（每回合 1 次）
+`ABILITY_EFFECTS: Map<cardName + abilityIndex, EffectFn>`
+實裝 ~11 隻：水晶燈火靈勸誘亮光、賽富豪ex紅利硬幣、吉雉雞ex扭轉乾坤、
+愛管侍悉心治癒、普隆隆姆轟鳴引擎、鐵蟻ex突然削退、螺釘地鼠狂挖…等。
+
+### Stadium 系統（活卡場地）
+- GameState 新增 `activeStadium`、`stadiumUsedThisTurn`
+- 實裝：危險密林（對非暗屬中毒 +20）、月光之丘（回 20 給月屬）、
+  夜晚學院（看牌庫頂 N 張）
+
+### 特殊狀態系統
+`CardInstance.status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'paralyzed'`
+- 中毒：回合結束 10 指示物（+20 危險密林、+50 劇毒支配）
+- 燒傷：回合結束 20，擲硬幣正面解除
+- 睡眠/麻痺：擲硬幣正面解除
+- 混亂：攻擊時擲硬幣，反面自傷 30 攻擊失敗
+- 撤退/進化 會清除狀態
+
+### Commit
+- `e4584e0` Session 32 — 被動特性 + Stadium + 主動特性（~22 張）
+
+---
+
+## 📝 2026-04-20 v1.0–v1.11 — 重大 UI/UX 大修 + 嚴重 bug 修復
+
+### 版本號系統
+新增 `src/lib/version.ts`：
+```ts
+export const VERSION = '1.21';  // 當前
+```
+- 小更新 +0.01 · 大更新 +0.1 · 重大變革 +1
+- 頭部顯示 chip，使用者可確認是否同步到最新。
+
+### v1.0 — UI 大量拖曳化
+- 移除手牌按鈕，統一拖曳
+- 手牌 hover 浮層預覽（340px）
+- 可執行卡統一黃框（`.can-actionable`）
+- 拖曳路徑：能量 → 寶可夢 / 基礎 → 備戰 / 進化 → 場上基底 / 道具 → 寶可夢 / 支援者 → 任何綠區
+- `.playmat.trainer-drop-zone::before` 綠光提示
+
+### v1.1 — 線上 Lobby + log 放大
+- 新增 `subscribeOpenRooms(callback)`（effects.ts）— onSnapshot 監聽 status='waiting' 房間
+- firestore.indexes.json 部署 composite index (status + createdAt)
+- `log-col`: 380px × 160px，字體 0.85rem，顯示最近 20 筆
+
+### v1.11 — 6 個嚴重 bug 修復（含最關鍵的線上互踩）
+1. **🚨 RESOLVE_SELECTION 搶先**：P1 高級球丟棄介面出現時 P2 可以搶先操作！
+   修復：`GameAction.RESOLVE_SELECTION` 新增 `senderIdx?: 0 | 1`，engine 拒絕
+   錯誤方的 action：
+   ```ts
+   if (action.senderIdx !== undefined && action.senderIdx !== actorIdx) return state;
+   ```
+   UI 的 confirmSelection 和道具 drop 都傳 senderIdx。
+   PendingSelection modal 只對 actor 玩家顯示（三模式分別檢查）。
+2. AI 勝利顯示 Victory 而非 Defeat — `isWin` 三模式分開判定
+3. 對手搜牌時看到玩家牌庫 — selection modal 遮罩改用 actor 檢查
+4. Stadium 放大鏡缺失 — chip 改為 button + openZoom
+5. 不公印章無條件檢查 — 補 `regG('不公印章', prizes<6)` guard
+6. 高級球 log 缺卡名 — resolver 加 `搜到：X 加入手牌` / `丟棄：X`
+
+### 新功能：查看完整牌庫（用於獎賞推算）
+selection modal 的 deck-search 類型新增 `<details>` 摺疊區，
+顯示 `srcP.deck` 同名卡聚合計數（勾選後不扣除，只反映剩餘）。
+
+### Commits
+- `818095d` v1.02 拖曳全牌、黃框統一
+- `8b736ae` v1.03 支援者拖曳 + hover 預覽 340px
+- `8787640` v1.1 Lobby 列表 + log 放大
+- `e8f441c` v1.11 六 bug 修
+
+---
+
+## 📝 2026-04-20 Session 33 (v1.2) — 寶可夢道具 17 張 + engine tool hooks
+
+### 新增 8 個 tool effect map（effects.ts 導出）
+```ts
+TOOL_HP_BONUS:              Map<toolName, (card) => number>
+TOOL_ATTACK_BONUS:          Map<toolName, (atkCard, atkInst, defCard, defInst) => number>
+TOOL_DEFENSE_REDUCE_BY_TYPE: Map<toolName, {amount, types[], discardOnTrigger}>
+TOOL_PREVENT_KO:            Map<toolName, (inst, card, dmg) => {prevent, leaveHP}>
+TOOL_ON_KO:                 Map<toolName, (state, dIdx, aIdx, pool) => state>
+TOOL_PRIZE_BONUS:           Map<toolName, (card) => number>
+TOOL_ON_DAMAGED:            Map<toolName, (state, dIdx, aIdx, dmg, pool) => state>
+TOOL_RETREAT_MOD:           Map<toolName, (card, inst) => {reduceBy?, zero?}>
+TOOL_BOTH_SIDES_RETREAT_PLUS: Set<toolName>    // 重力之玉（雙方 +1）
+```
+
+### 實裝 17 張 H 標道具
+- **HP 加成**：英雄斗篷+100、勇氣護符+50(基礎)、豪華斗篷+100(非規則)、驅勁能量古代+60
+- **攻擊加成**：極限腰帶對ex+50、鎖鏈糬中毒時+40、驅勁能量未來+20
+- **屬性防禦 -60**：福(超)/巧(火)/千(水)/刺(惡)/霹(鋼)/莓榴(龍)果，觸發即丟棄
+- **防 KO**：倖存鍛鍊器（滿血被 KO 時保留 10 HP，丟棄）
+- **被 KO 時**：希望護身符(抽3)、沉重接力棒(移3能量到備戰)
+- **獎賞加成**：豪華斗篷 +1
+- **反傷/抽牌**：幸運頭盔(抽2)、奢華炸彈(反彈120 + 自丟)
+- **撤退**：緊急滑板(-1/HP≤30→0)、驅勁能量未來(0)、重力之玉(雙方+1)
+
+延後（複雜 hook）：反擊增幅器、力之沙漏、璀璨結晶、手持循環扇、3張招式學習器
+
+### engine 新 helper
+```ts
+export function getEffectiveHP(inst, pool): number  // = card.hp + tool 加成
+```
+**所有** KO 判定、中毒/燒傷 overflow、UI 血條全改讀 `getEffectiveHP`
+（原本只讀 `card.hp`，漏掉道具加成會算錯 KO）。
+
+### ATTACK 流程新插入點（engine.ts line 920+）
+1. baseDamage（preFn）
+2. weakness ×2
+3. **TOOL_ATTACK_BONUS**（新，flat +）
+4. PASSIVE_DAMAGE_REDUCE
+5. **TOOL_DEFENSE_REDUCE_BY_TYPE**（新，觸發後丟棄）
+6. PASSIVE_IMMUNITY
+7. damageReduceNextHit
+8. 施加傷害 + 算 newDamage
+9. wouldBeKO 判定（使用 `getEffectiveHP`）
+10. **TOOL_PREVENT_KO**（新，保留 leaveHP 並丟道具）
+11. KO 執行 → **TOOL_PRIZE_BONUS** + **TOOL_ON_KO**
+12. 未 KO → **TOOL_ON_DAMAGED**
+13. ATTACK_POST
+14. PASSIVE_RETALIATION
+
+### 批次規則套用（用戶要求：類似機制統一）
+- **搜牌+丟棄 log 模式**：`bench-basic-from-deck` / `discard-to-hand` /
+  `energy-retrieval` 等 resolver 補卡名 log（原只有 ultra-ball-discard 和
+  search-pokemon-to-hand 有寫）
+- **Guard 補齊**：超級信號（MegaEx在牌庫）、席藍（ex在牌庫）、好友寶芬
+  （HP≤70 Basic + 備戰空位）、赫普的包包（Basic + 備戰空位）
+
+### Commit
+- `74702cd` Session 33 — 道具 17 張 + hooks
+
+---
+
+## 📝 2026-04-20 v1.21 — KO 卡住修正 + Setup 重構（直接進對戰畫面）
+
+### 關鍵 bug 修
+**AI KO 後取獎賞卡卡住** — `isMyTurn()` 在 AI 模式多了 `&& pendingPrizes === 0`：
+```ts
+// BEFORE: 取獎賞時 isMyTurn 回 false → UI 不顯示取獎按鈕
+return game.activePlayerIndex === hIdx && game.pendingPrizes === 0;
+
+// AFTER: 獎賞由 activePlayerIndex 決定，仍應允許取
+if (game.pendingPrizes > 0) return game.activePlayerIndex === hIdx;
+return game.activePlayerIndex === hIdx;
+```
+
+**對手 Stadium 放大鏡** — 原本只有 header chip（不明顯），新增
+`.stadium-display` 區塊在 action-bar 右側（卡圖 + 名稱 + 🔍 可點擊）。
+
+### Log 補強
+手牌丟棄 4 個 resolver 補卡名：alice-courage、hydai-bottom-draw4、
+super-energy-step2、earth-pot-step2。
+attach-tool 顯示「🔧 {道具} 附加到 {寶可夢}」。
+
+### Setup 重構（用戶明確要求：直接進對戰畫面）
+- **刪除獨立 setup screen**（原 `{:else if phase==='setup'}` 分支）
+- phase='setup' 和 'playing' **共用 battle-root**
+- **擲硬幣動畫 overlay**（~3.8 秒）：
+  - 2 秒硬幣旋轉（CSS `@keyframes coin-spin` 3D rotateY）
+  - 1.8 秒揭曉先手 + Mulligan 結果（scale + fade）
+  - `.coin-flip-box` 綠金漸層 + 金色 box-shadow
+- **Setup 拖曳整合**：
+  - 新 `data-drop-type="active-empty"` 空戰鬥場 drop zone
+  - dragKind='basic' 同時涵蓋 play（PLAY_BASIC）和 setup（PLACE_ACTIVE / BENCH_POKEMON），by phase 分流 dispatch
+  - `dropActiveEmpty` state 偵測
+- **Action bar setup 模式**：
+  - info-alert 提示（拖出場 / 可加備戰 / 等待對手）
+  - 「✅ 準備完成」按鈕（取代攻擊按鈕）
+- **本機雙人 myIdx** 在 setup 階段翻向尚未完成 setup 的那一方：
+  ```ts
+  (game?.phase === 'setup' && myPlayerIndex === null
+    ? (game.setupDone[0] ? 1 : 0)
+    : ...)
+  ```
+
+### 未完成（下次）
+- 對手 mulligan 時讓玩家決定抽/不抽（目前仍自動 +N 張）
+- 獎賞卡放置動畫（FINISH_SETUP 瞬間完成，沒有 fly 動畫）
+
+### Commit
+- `c757f47` v1.21 — KO bug + Setup 重構
+
+---
+
+## 🛠️ 當前架構快速導覽（給下一位 AI）
+
+### 關鍵檔案
+| 檔案 | 行數 | 角色 |
+|:---|---:|:---|
+| `src/lib/game/engine.ts` | ~1500 | 純函式 state machine（applyAction / createGame / handlers） |
+| `src/lib/game/effects.ts` | ~2600 | 訓練家 + 招式 + 特性 + 道具 效果登錄表 |
+| `src/lib/game/types.ts` | ~215 | GameState / CardInstance / GameAction 型別 |
+| `src/lib/game/actions.ts` | ~35 | GameActions helper（建立 action 物件） |
+| `src/lib/game/ai.ts` | ~500 | AI 決策 handleSetupAI + handlePlayAI |
+| `src/lib/game/room.ts` | ~200 | Firestore 房間 CRUD + subscribeRoom / subscribeOpenRooms |
+| `src/routes/game/+page.svelte` | ~2400 | 唯一對戰 UI（lobby + setup + play + game-over 全在這） |
+| `src/lib/cards/pool.ts` | 63 | 卡池載入（static/cards/*.json） |
+| `src/lib/version.ts` | 13 | 版本號字串 |
+
+### 所有 effect map（effects.ts 頂層 export）
+```
+TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS       // 訓練家
+ATTACK_PRE, ATTACK_POST                          // 招式
+ABILITY_EFFECTS                                  // 主動特性
+PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION  // 被動特性
+TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE,
+TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS,
+TOOL_ON_DAMAGED, TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS  // 道具
+```
+
+### 註冊 helper（effects.ts 內部）
+- `reg(name, fn)` → TRAINER_EFFECTS
+- `regR(key, fn)` → RESOLVERS
+- `regG(name, fn)` → TRAINER_GUARDS
+- `regPre('card|atk', fn)` / `regPost('card|atk', fn)` → ATTACK_PRE/POST
+- `regA(cardName, abilityIndex, fn)` → ABILITY_EFFECTS
+
+### AI sim 腳本
+```bash
+node scripts/sim-ai-battle.mjs 50  # 跑 50 局，檢查 0 卡住 / 0 崩潰
+```
+
+### 卡片分類腳本
+```bash
+node scripts/classify-h-cards.mjs H  # 掃未實裝 H 標，按模式分類
+```
+
+### 規則嚴守（用戶反覆強調）
+1. **類似機制統一套用**：一個 resolver 補 log → 找所有同類 resolver 一起補
+2. **Guard 條件須檢查**：沒目標不該能打（超級信號/席藍/不公印章）
+3. **線上 RESOLVE_SELECTION 必帶 senderIdx** — 否則可能互踩
+4. **所有 KO 判定用 `getEffectiveHP`** — 不要直接讀 `card.hp`
+5. **確認推送到 GitHub 生產環境**：用戶看的是 suenz001.github.io/ptcg-tw-sim/game
+6. **版本號要 bump**：小改 +0.01，大改 +0.1，破壞 +1
+
+### 未解決待辦（優先序）
+1. 對手 mulligan 時玩家決定抽/不抽
+2. 獎賞卡放置動畫
+3. H 標剩餘：~10 張複雜道具、~70 張特性、~500 張攻擊
+4. I/J 標尚未開始批次（SV9+、M1+、M2+、MC/M3/M4）
+5. 特殊能量卡系統（M4 原定實裝）
