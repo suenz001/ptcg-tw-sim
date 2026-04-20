@@ -14,7 +14,8 @@ export const GameActions = {
   drawCard:          (): GameAction => ({ type: 'DRAW_CARD' }),
   attachEnergy:      (energyIid: string, targetIid: string): GameAction =>
                        ({ type: 'ATTACH_ENERGY', energyIid, targetIid }),
-  attack:            (attackIndex: number): GameAction => ({ type: 'ATTACK', attackIndex }),
+  attack:            (attackIndex: number, discardedEnergyIids?: string[]): GameAction =>
+                       ({ type: 'ATTACK', attackIndex, ...(discardedEnergyIids && discardedEnergyIids.length > 0 && { discardedEnergyIids }) }),
   takePrizes:        (count: number): GameAction => ({ type: 'TAKE_PRIZES', count }),
   sendNewActive:     (iid: string, senderIdx?: 0 | 1): GameAction =>
                        ({ type: 'SEND_NEW_ACTIVE', iid, ...(senderIdx !== undefined && { senderIdx }) }),

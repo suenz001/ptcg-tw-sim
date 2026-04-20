@@ -17,6 +17,7 @@
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec } from '$lib/game/effects';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
   import { auth } from '$lib/firebase';
@@ -81,6 +82,15 @@
   let floatingEvoMenu = $state<{ fromIid: string; evoOpts: CardInstance[]; x: number; y: number } | null>(null);
   let floatingRetreatMenu = $state<{ x: number; y: number } | null>(null);
   let viewDiscardFor = $state<0 | 1 | null>(null);
+
+  // ── 招式前置丟能量選擇（v1.57） ────────────────────────────────────────────
+  // 玩家宣告招式、ATTACK_PRE_DISCARD_CHOICE 命中時彈出的能量挑選 modal 狀態
+  let preAttackDiscard = $state<{
+    attackIndex: number;
+    spec: PreDiscardSpec;
+    attackName: string;
+    picked: Set<string>;
+  } | null>(null);
 
   // ── 手牌 hover 預覽（Session 31 修正） ─────────────────────────────────────
   // 不改原卡 transform — 避免邊界抖動、z-index 爭奪、擋住 drop target
@@ -809,6 +819,72 @@
     }
   }
 
+  // ── 招式宣告：若需要丟能量選擇則開 modal，否則直接派送 ─────────────────────
+  function initiateAttack(attackIndex: number) {
+    if (!game || !activePlayer?.active) return;
+    const atkCard = getCard(activePlayer.active.cardId);
+    const atk = atkCard?.attacks?.[attackIndex];
+    if (!atkCard || !atk) return;
+    const key = `${atkCard.name}|${atk.name}`;
+    const spec = ATTACK_PRE_DISCARD_CHOICE.get(key);
+    if (!spec) {
+      dispatch(GameActions.attack(attackIndex));
+      return;
+    }
+    preAttackDiscard = {
+      attackIndex,
+      spec,
+      attackName: atk.name,
+      picked: new Set<string>(),
+    };
+  }
+
+  // 取得「可被挑選丟棄」的能量清單（依 scope 決定範圍）
+  function getDiscardableEnergies(spec: PreDiscardSpec): Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string }> {
+    if (!game || !activePlayer) return [];
+    const out: Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string }> = [];
+    const addFrom = (host: CardInstance | null | undefined) => {
+      if (!host) return;
+      const hc = getCard(host.cardId);
+      const hname = hc?.name ?? '?';
+      for (const e of host.energyAttached) out.push({ iid: e.iid, cardId: e.cardId, ownerIid: host.iid, ownerName: hname });
+    };
+    if (spec.scope === 'attacker') {
+      addFrom(activePlayer.active);
+    } else {
+      addFrom(activePlayer.active);
+      for (const b of activePlayer.bench) addFrom(b);
+    }
+    return out;
+  }
+
+  function togglePreAttackEnergy(iid: string) {
+    if (!preAttackDiscard) return;
+    const picked = new Set(preAttackDiscard.picked);
+    if (picked.has(iid)) {
+      picked.delete(iid);
+    } else {
+      const { max } = preAttackDiscard.spec;
+      if (max !== null && picked.size >= max) return;
+      picked.add(iid);
+    }
+    preAttackDiscard = { ...preAttackDiscard, picked };
+  }
+
+  function confirmPreAttackDiscard() {
+    if (!preAttackDiscard) return;
+    const { attackIndex, spec, picked } = preAttackDiscard;
+    if (picked.size < spec.min) return;
+    if (spec.max !== null && picked.size > spec.max) return;
+    const iids = [...picked];
+    preAttackDiscard = null;
+    dispatch(GameActions.attack(attackIndex, iids));
+  }
+
+  function cancelPreAttackDiscard() {
+    preAttackDiscard = null;
+  }
+
   // ── 本機 Lobby ───────────────────────────────────────────────────────────────
   function startLocalGame() {
     if (!p1DeckId || !p2DeckId) return;
@@ -1365,7 +1441,7 @@
             {#each ac?.attacks??[] as atk,i}
               <button class="btn-act atk" class:atk-ready={availableAttacks.includes(i)}
                 disabled={!availableAttacks.includes(i)||!!pendingSelection}
-                onclick={()=>dispatch(GameActions.attack(i))}>
+                onclick={()=>initiateAttack(i)}>
                 <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}</span>
                 <span class="atk-name">{atk.name}</span>
                 <span class="atk-dmg">{atk.damage||'—'}</span>
@@ -1825,6 +1901,51 @@
         <div class="sel-header">
           <h3>⏳ 等待對手決定 Mulligan 補抽</h3>
           <p class="sel-hint">你 Mulligan 了 {game.mulliganCounts[myIdx]} 次，對手正在決定是否多抽 {game.pendingMulliganDraw[oppIdx]} 張…</p>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- 招式前置：丟棄能量選擇（v1.57 花冠射線 / 猛擂鼓 EX 等變動張數招式） -->
+  {#if preAttackDiscard && game}
+    {@const spec = preAttackDiscard.spec}
+    {@const energies = getDiscardableEnergies(spec)}
+    {@const pickedCount = preAttackDiscard.picked.size}
+    {@const minOk = pickedCount >= spec.min}
+    {@const maxOk = spec.max === null || pickedCount <= spec.max}
+    {@const estDmg = spec.baseDamage + pickedCount * spec.damagePerEnergy}
+    <div class="selection-overlay">
+      <div class="selection-modal">
+        <div class="sel-header">
+          <h3>⚡ {preAttackDiscard.attackName}：選擇要丟棄的能量</h3>
+          <p class="sel-hint">
+            最少 {spec.min} 張{spec.max === null ? '（不限上限）' : `，最多 ${spec.max} 張`}
+            · 已選 {pickedCount} 張
+            {#if spec.damagePerEnergy > 0}· 預估傷害 <strong>{estDmg}</strong>{/if}
+            <br/>範圍：{spec.scope === 'attacker' ? '僅攻擊方出場寶可夢身上的能量' : '自己場上任一寶可夢身上的能量'}
+          </p>
+        </div>
+        <div class="sel-grid">
+          {#each energies as e (e.iid)}{@const ec = getCard(e.cardId)}
+            {#if ec}
+              {@const picked = preAttackDiscard.picked.has(e.iid)}
+              <button class="sel-card" class:sel-picked={picked} onclick={() => togglePreAttackEnergy(e.iid)}>
+                <img src={ec.imageUrl} alt={ec.name}/>
+                <span class="sel-name">{ec.name}</span>
+                <span class="sel-hp">附於 {e.ownerName}</span>
+                {#if picked}<span class="sel-check">✓</span>{/if}
+              </button>
+            {/if}
+          {/each}
+          {#if energies.length === 0}
+            <p class="sel-empty">（沒有可丟棄的能量）</p>
+          {/if}
+        </div>
+        <div class="sel-footer">
+          <button class="btn-act primary" disabled={!minOk || !maxOk} onclick={confirmPreAttackDiscard}>
+            確定使用招式（丟 {pickedCount} 張）
+          </button>
+          <button class="btn-act secondary" onclick={cancelPreAttackDiscard}>取消</button>
         </div>
       </div>
     </div>

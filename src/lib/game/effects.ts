@@ -9,7 +9,7 @@
  */
 
 import type { Card, EnergyType } from '$lib/cards/types';
-import type { GameState, PlayerState, CardInstance, PendingSelection } from './types';
+import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction } from './types';
 
 // ── 型別 ─────────────────────────────────────────────────────────────────────
 
@@ -816,7 +816,8 @@ reg('不公印章', (st, idx) => {
 type AttackPreFn = (
   state: GameState,
   aIdx: 0 | 1,
-  pool: Map<string, Card>
+  pool: Map<string, Card>,
+  action?: Extract<GameAction, { type: 'ATTACK' }>
 ) => { state: GameState; damage: number };
 
 type AttackPostFn = (
@@ -831,23 +832,70 @@ export const ATTACK_POST = new Map<string, AttackPostFn>();
 function regPre(key: string, fn: AttackPreFn)   { ATTACK_PRE.set(key, fn); }
 function regPost(key: string, fn: AttackPostFn) { ATTACK_POST.set(key, fn); }
 
+/**
+ * 招式宣告時需要玩家選擇丟棄能量的宣告表。
+ *
+ * - min / max：可丟棄的能量張數範圍（max=null 表示不限上限 / 全部）
+ * - scope：'attacker' = 只能丟攻擊方出場寶可夢身上的能量；
+ *          'any-own' = 可丟自己場上（含備戰）任何寶可夢身上的能量（例：猛擂鼓 EX）
+ * - baseDamage / damagePerEnergy：UI 顯示用的預估傷害公式（實際傷害仍由 regPre 計算）
+ *
+ * UI 在使用者按下招式按鈕時讀此表；若命中則彈出挑能量 modal，
+ * 玩家確認後帶著 discardedEnergyIids 派送 ATTACK action。
+ * 若 action 沒帶 iids（例：AI 直接派送），regPre 會退回預設的自動丟棄策略，
+ * 保持向後相容。
+ */
+export interface PreDiscardSpec {
+  min: number;
+  max: number | null; // null = 不限上限（全部）
+  scope: 'attacker' | 'any-own';
+  baseDamage: number;
+  damagePerEnergy: number;
+}
+
+export const ATTACK_PRE_DISCARD_CHOICE = new Map<string, PreDiscardSpec>();
+
 // ── MBD 超級蒂安希ex ──────────────────────────────────────────────────────────
 
-// 花冠射線 — 丟棄最多 2 個能量（自動取最大），造成張數×120 傷害
-regPre('超級蒂安希ex|花冠射線', (state, aIdx, _pool) => {
+// 花冠射線 — 玩家選擇丟 0~2 個自身能量，造成張數×120 傷害
+// UI：ATTACK_PRE_DISCARD_CHOICE 登錄後，按下招式會彈出能量選擇 modal。
+// AI / 舊流程（action 未帶 iids）：退回自動丟棄至多 2 個的舊邏輯，保持向後相容。
+ATTACK_PRE_DISCARD_CHOICE.set('超級蒂安希ex|花冠射線', {
+  min: 0,
+  max: 2,
+  scope: 'attacker',
+  baseDamage: 0,
+  damagePerEnergy: 120,
+});
+regPre('超級蒂安希ex|花冠射線', (state, aIdx, _pool, action) => {
   const player = state.players[aIdx];
   if (!player.active) return { state, damage: 0 };
   const energies = player.active.energyAttached;
-  const discardCount = Math.min(2, energies.length);
-  const discarded  = energies.slice(-discardCount);
-  const remaining  = energies.slice(0, energies.length - discardCount);
+
+  const chosenIids = action?.discardedEnergyIids;
+  let discarded: CardInstance[];
+  let remaining: CardInstance[];
+  if (chosenIids && chosenIids.length > 0) {
+    // 限制最多 2 張，且只認得攻擊方出場身上的能量
+    const allowed = new Set(energies.map(e => e.iid));
+    const capped = chosenIids.filter(id => allowed.has(id)).slice(0, 2);
+    const chosenSet = new Set(capped);
+    discarded = energies.filter(e => chosenSet.has(e.iid));
+    remaining = energies.filter(e => !chosenSet.has(e.iid));
+  } else {
+    // Fallback：自動丟最多 2 張（舊行為）
+    const discardCount = Math.min(2, energies.length);
+    discarded = energies.slice(-discardCount);
+    remaining = energies.slice(0, energies.length - discardCount);
+  }
+
   let s = updatePlayer(state, aIdx, p => ({
     ...p,
     active: p.active ? { ...p.active, energyAttached: remaining } : null,
     discard: [...p.discard, ...discarded],
   }));
-  const dmg = discardCount * 120;
-  s = addLog(s, `花冠射線：丟棄 ${discardCount} 個能量，造成 ${dmg} 傷害`, aIdx);
+  const dmg = discarded.length * 120;
+  s = addLog(s, `花冠射線：丟棄 ${discarded.length} 個能量，造成 ${dmg} 傷害`, aIdx);
   return { state: s, damage: dmg };
 });
 

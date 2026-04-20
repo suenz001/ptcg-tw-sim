@@ -2471,3 +2471,62 @@ Windows / 上一版 commit 都是 2595 行）。我 v1.51 直接 `cp` sandbox �
 
 **驗證：** `/tmp/ptcg-work/repo` 本機 `npm run build` 通過。版本 1.55 → 1.56。
 
+---
+
+## 📝 2026-04-20 Session 38g (v1.57) — 變動張數招式改為玩家自選丟棄能量
+
+### 背景 / Leon 回報
+
+> 玩家 1 的 超級蒂安希ex 使出「花冠射線」，造成 240 傷害！
+> 花冠射線：丟棄 2 個能量，造成 240 傷害
+>
+> 這種招式要讓玩家自己選擇要丟幾張能量，有的招式是有上限的，例如超級蒂安希ex的「花冠射線」最多只能丟2張，有的是沒有上限的，例如猛擂鼓EX（而且他可以丟別的寶可夢的能量）。
+
+原本 `regPre('超級蒂安希ex|花冠射線', …)` 固定丟最多 2 張（`Math.min(2, energies.length)`），玩家沒得選。
+
+### 設計：宣告式 spec + 行為式 regPre 雙層
+
+為了支援多張未來會有的變動張數招式（花冠射線、猛擂鼓 EX、其它 discard-N-damage 類），不要每張卡各自塞 UI。分成兩層：
+
+- **宣告層 `ATTACK_PRE_DISCARD_CHOICE: Map<key, PreDiscardSpec>`**（`effects.ts` export）：UI 讀這個表決定是否在按下招式按鈕時彈出 modal、範圍（只丟出場方 vs 自己場上任一隻）、張數上下限、以及預估傷害公式（只用於顯示）。
+  ```ts
+  export interface PreDiscardSpec {
+    min: number;
+    max: number | null;            // null = 不限上限
+    scope: 'attacker' | 'any-own'; // attacker = 只攻擊方出場；any-own = 自己場上任一隻（猛擂鼓 EX）
+    baseDamage: number;
+    damagePerEnergy: number;
+  }
+  ```
+- **行為層 regPre**：還是單一來源計算傷害、移動能量卡。簽名延伸為 `(state, aIdx, pool, action?)`；若 action 帶 `discardedEnergyIids` 則照玩家選的 iid 丟；否則 fallback 舊自動邏輯（AI 舊流程不會壞）。
+
+### 涉及檔案
+
+1. **`src/lib/game/types.ts`** — ATTACK action 多一個可選欄位：
+   ```ts
+   | { type: 'ATTACK'; attackIndex: number; discardedEnergyIids?: string[] }
+   ```
+2. **`src/lib/game/actions.ts`** — `attack` helper 多一個可選參數；空陣列/undefined 時不塞欄位，維持序列化乾淨。
+3. **`src/lib/game/effects.ts`**
+   - `AttackPreFn` 新增 optional `action` 參數
+   - 新增 `ATTACK_PRE_DISCARD_CHOICE` export + `PreDiscardSpec` interface
+   - 註冊花冠射線 spec `{min:0, max:2, scope:'attacker', baseDamage:0, damagePerEnergy:120}`
+   - 改寫花冠射線 regPre：若 `action.discardedEnergyIids` 有值，只用屬於攻擊方出場身上的那些 iid（safety filter + cap at max 2）；沒給就 fallback
+4. **`src/lib/game/engine.ts`** — ATTACK handler 呼叫 `preFn(workingState, aIdx, pool, action)` 時把 action 傳進去
+5. **`src/routes/game/+page.svelte`**
+   - 從 `$lib/game/effects` import `ATTACK_PRE_DISCARD_CHOICE` / `PreDiscardSpec`
+   - 新增 `preAttackDiscard` state + `initiateAttack(i)` / `getDiscardableEnergies()` / `togglePreAttackEnergy()` / `confirmPreAttackDiscard()` / `cancelPreAttackDiscard()`
+   - 招式按鈕 onclick 改為 `initiateAttack(i)`：查表命中才彈 modal，否則維持原本直接派送
+   - 新增一個 selection-overlay modal：列出 scope 範圍內所有能量、toggle 選擇、顯示預估傷害 (`baseDamage + picked × damagePerEnergy`)、確定/取消
+6. **`src/lib/version.ts`** — `1.56` → `1.57`
+
+### 後續擴充（猛擂鼓 EX 實裝時只要兩步）
+
+- regPre：重複花冠射線的模板，但用 `action?.discardedEnergyIids` 掃描自己場上（active + bench）找 iid、搬進 discard；damage = n × perEnergy
+- ATTACK_PRE_DISCARD_CHOICE.set：`{min: X, max: null, scope: 'any-own', baseDamage: 0, damagePerEnergy: Y}`
+- UI 自動吃新 spec，不用再改 `+page.svelte`
+
+### 驗證
+
+`/tmp/ptcg-work/repo` 本機 `npm run build` 通過。版本 1.56 → 1.57。
+

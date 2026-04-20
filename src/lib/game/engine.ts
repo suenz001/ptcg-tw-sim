@@ -970,7 +970,7 @@ function handlePlaying(
     let workingState: GameState = { ...state, players };
     let baseDamage = parseInt(attack.damage ?? '0', 10) || 0;
     if (preFn) {
-      const preResult = preFn(workingState, aIdx, pool);
+      const preResult = preFn(workingState, aIdx, pool, action);
       workingState = preResult.state;
       baseDamage = preResult.damage;
     }
