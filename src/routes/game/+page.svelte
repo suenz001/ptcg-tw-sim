@@ -2313,11 +2313,11 @@
   .hp-bar{ height:100%; border-radius:3px; transition: width .55s cubic-bezier(.3,.8,.3,1), background .3s ease-out; }
 
   .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:center; min-height:52px; }
-  .stadium-display{ display:flex; flex-direction:column; align-items:center; gap:.15rem; padding:.2rem; border:1px solid #3a5a8a; background:rgba(26,42,74,.6); border-radius:6px; cursor:pointer; transition:transform .2s ease, box-shadow .2s ease; }
+  .stadium-display{ display:flex; flex-direction:column; align-items:center; gap:.25rem; padding:.35rem .5rem; border:1px solid #3a5a8a; background:rgba(26,42,74,.6); border-radius:6px; cursor:pointer; transition:transform .2s ease, box-shadow .2s ease; }
   .stadium-display:hover{ transform:scale(1.05); box-shadow:0 0 12px rgba(136,170,255,.4); }
-  .stadium-display img{ width:60px; height:auto; border-radius:3px; }
-  .stadium-display-label{ font-size:.6rem; color:#88aaff; font-weight:700; }
-  .stadium-display-name{ font-size:.65rem; color:#bbd; max-width:70px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .stadium-display img{ width:92px; height:auto; border-radius:4px; }
+  .stadium-display-label{ font-size:.78rem; color:#a8c4ff; font-weight:700; letter-spacing:.05em; }
+  .stadium-display-name{ font-size:.82rem; color:#dde; max-width:120px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
   .alerts-col{ display:flex; flex-direction:column; gap:.2rem; max-width:280px; }
   .alert{ display:flex; flex-wrap:wrap; align-items:center; gap:.35rem; padding:.25rem .5rem; border-radius:6px; font-size:.8rem; }
   .prize-alert{ background:#2a4a1a; border:1px solid #4a8a3a; }
@@ -2381,8 +2381,8 @@
   .epip.sm{ width:1rem; height:1rem; font-size:.5rem; }
   .atk-name{ max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .atk-dmg{ font-weight:700; color:#f88; font-size:.95rem; }
-  .log-col{ width:380px; max-height:220px; overflow-y:auto; font-size:.85rem; line-height:1.4;
-    background:rgba(0,0,0,.35); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem .6rem;
+  .log-col{ width:380px; max-height:140px; overflow-y:auto; font-size:.8rem; line-height:1.35;
+    background:rgba(0,0,0,.45); border:1px solid #2a4a2a; border-radius:6px; padding:.3rem .55rem;
     scrollbar-width:thin; scrollbar-color:#4a6a4a rgba(0,0,0,.3); }
   .log-col::-webkit-scrollbar{ width:8px; }
   .log-col::-webkit-scrollbar-thumb{ background:#3a5a3a; border-radius:4px; }
@@ -2558,38 +2558,4 @@
   .discard-title{ margin:0 0 .6rem; color:#aaffaa; font-size:1.05rem; }
 
   /* ── Tool + Stadium ── */
-  .tool-chip{ font-size:.6rem; color:#f0d080; background:#2a2a0a; border:1px solid #6a5a20; border-radius:3px; padding:.06rem .2rem; margin-top:.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tool-chip.sm{ font-size:.52rem; }
-  .ab-used-chip{ font-size:.58rem; color:#c8c0f0; background:#2a1a3a; border:1px solid #4a3a6a; border-radius:3px; padding:.06rem .25rem; margin-top:.1rem; display:inline-block; }
-  .ab-used-chip.sm{ font-size:.7rem; padding:0 .15rem; border:none; background:transparent; color:#d0a0ff; }
-  .tool-btn{ background:#4a3a10; color:#f0d080; }
-  .tool-btn:hover{ background:#6a5a20; }
-  .stadium-chip{ background:#1a2a4a; color:#88aaff; border-color:#3a5a8a; }
-  .clickable-chip{ cursor:pointer; font-family:inherit; }
-  .clickable-chip:hover{ background:#2a3a5a; color:#fff; }
-  .btn-act.stadium-btn{ background:#1a2a4a; color:#88aaff; border:1px solid #3a5a8a; }
-  .btn-act.stadium-btn:hover{ background:#2a3a6a; }
-
-  /* ── 特性按鈕 ── */
-  .ability-btn{ display:block; width:100%; margin-top:.2rem; padding:.2rem .3rem; font-size:.65rem; background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; border-radius:4px; cursor:pointer; text-align:center; }
-  .ability-btn:hover{ background:#5a2a8a; }
-  .ability-btn-sm{ display:block; width:100%; margin-top:.12rem; padding:.12rem; font-size:.56rem; background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; border-radius:3px; cursor:pointer; }
-  .ability-btn-sm:hover{ background:#5a2a8a; }
-
-  /* ── 特殊狀態晶片 ── */
-  .status-chip{ font-size:.62rem; color:#fff; padding:.08rem .25rem; border-radius:3px; margin-top:.1rem; display:inline-block; }
-  .status-chip-sm{ font-size:.75rem; display:inline-block; }
-  .status-poisoned{ background:#4a0a7a; border:1px solid #8a3aaa; }
-  .status-burned{ background:#8a2a00; border:1px solid #cc4a10; }
-  .status-asleep{ background:#1a1a5a; border:1px solid #4a4aaa; }
-  .status-confused{ background:#5a3a00; border:1px solid #aa7a10; }
-  .status-paralyzed{ background:#5a5a00; border:1px solid #aaaa10; }
-
-  /* ── AI 模式 ── */
-  .ai-card{ border-color:#5a3a8a !important; }
-  .ai-tag{ font-size:.72rem; background:#3a1a5a; color:#e0a0ff; border-radius:4px; padding:.08rem .3rem; margin-left:.4rem; vertical-align:middle; }
-  .ai-toggle{ display:flex; align-items:center; gap:.4rem; font-size:.85rem; color:#ccc; cursor:pointer; }
-  .ai-toggle input{ cursor:pointer; accent-color:#8a4aee; width:16px; height:16px; }
-  .ai-chip{ background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; animation:pulse 1s infinite alternate; }
-  @keyframes pulse{ from{ opacity:.7; } to{ opacity:1; } }
-</style>
+  .tool-chip{ font-size:.6rem; color:#f0d080; background:#2a2a0a; border:1px solid #6a5a20; border-radius:3px; paddin

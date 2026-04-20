@@ -2217,31 +2217,37 @@ KO resolution（L1040-L1154）、中毒/燒傷致死（L1317 / L1356）都走這
 **Why:** v1.4 修了戰鬥場 active 切掉，但用戶 v1.5 截圖發現 mine-row 備戰區現在被切（圖片只剩名字+HP 一條）。同時用戶反饋初始拖曳寶可夢時，戰鬥場/備戰區的「黃色虛線框」比放置後的實際 slot 小很多，難以瞄準。
 **改動 `src/routes/game/+page.svelte` CSS：**
 - `.playmat grid-template-rows`: `minmax(185px,1fr)` → `minmax(230px,1fr)`（雙方 row 都從 185 拉到 230，足以容納 bench-slot 完整高度：96px 圖 + 6 行資訊 + 進化/特性按鈕 ≈ 220px）
-- `.active-card.active-empty` 加 `min-height:160px; padding:1.4rem; font-size:.9rem; font-weight:600`，drop-zone 狀態 `border-width:3px` 加粗，視覺尺寸與放置寶可夢後接近
-- `.bench-empty`: `flex:0 0 70px` → `flex:1 1 70px; min-width:70px; max-width:115px`（與已放置 slot 同 flex 規則）；`min-height:96px` → `170px`（接近放置後高度）；drop-zone 狀態 opacity 提升 + border 加粗
+- `.active-card.active-empty` 加 `min-height:160px; padding:1.4rem; font-size:.9rem; font-weight:600`，drop-zone 狀態 `border-width:3px`（明顯化）。
+- `.bench-empty` 對齊填卡後 slot 的 flex 規則：`flex:1 1 70px; min-width:70px; max-width:115px; min-height:170px`（原本 `flex:0 0 70px; min-height:96px` 導致空格小於實格）。
 
-### 6. 對戰結束後匯出 log（.txt / .json）
-**Why:** 用戶原話：「在對戰結束後，提供匯出log的功能，供玩家復盤」。
+### 6. 匯出 log（遊戲結束後）
+**Why:** 用戶希望遊戲結束後能保留完整 log 檔案，便於 review 或分享。
 **改動 `src/routes/game/+page.svelte`：**
-- 新增 `exportLogAs(format: 'txt' | 'json')`：
-  - txt：`[T{turn} P{idx}:{name}] {message}` 每行 1 條，附玩家/勝者/原因/版本 header，UTF-8。
-  - json：`{ meta: { exportedAt, version, players, winner, winnerName, winReason, finalTurn }, log: [...] }`。
-  - 用 `Blob` + `URL.createObjectURL` + 動態 `<a download>` 觸發下載；1 秒後 `revokeObjectURL`。
-  - 檔名：`ptcg-log-{YYYYMMDD-HHmmss}.{ext}`。
-- Game-over 畫面加兩個 `📄 匯出 log（.txt）` / `🧾 匯出 log（.json）` 按鈕（CSS `.export-btns`）。
+- 新增 `exportLogAs(format: 'txt' | 'json')` 函式：`Blob` + `URL.createObjectURL` + 動態 `<a download>` 觸發下載。
+- TXT 格式：每行 `[T{turn} P{idx}:{name}] {msg}`。
+- JSON 格式：`{ meta: {...game state summary}, log: [...entries] }`。
+- 檔名：`ptcg-log-{YYYYMMDD-HHmmss}.{ext}`。
+- 遊戲結束畫面新增「匯出 TXT」「匯出 JSON」兩鈕（`.export-btns`）。
 
-### 驗證
-- `node /tmp/sim-sandbox/sim.mjs 50` → 50/50 正常結束，0 卡住 / 0 崩潰 / 0 例外；P1 24 / P2 26，平均 15.3 回合。
-- 2 局 turn=2-3 早結束 = 單寶可夢備戰區被清空（規則內輸法），非 bug。
-- `npx tsc --noEmit`：0 新錯誤；僅剩 presets.ts / cards/+page.ts 舊有問題（與本次改動無關）。
-- Mega ex 判定已用 static/cards/*.json 的實際名字驗證（超級噴火龍Xex / 超級妙蛙花ex / 超級拉帝亞斯ex 等 15+ 張）。
+---
 
-### 關鍵檔案變動
-- `src/lib/game/types.ts` — 新增 `cantAttackPending?: boolean`
-- `src/lib/game/engine.ts` — `prizesForKO` 加 Mega ex 判定；`getAvailableAttacks` 加狀態封鎖；`END_TURN` 加 pending↔thisTurn promote/clear 邏輯
-- `src/lib/game/effects.ts` — 6 處 `cantAttackThisTurn = true` → `cantAttackPending = true`；5 個 swap 類 resolver log 改雙名
-- `src/routes/game/+page.svelte` — `oppHidden` derived + 對手 bench/active 蓋牌 render + `exportLogAs` + 2 個匯出按鈕
-- `src/lib/version.ts` — 1.4 → 1.5
+## Session 38（v1.51 — 2026-04-20，中盤 action-bar 排版微調）
 
-### Commit
-- （將在 commit 後補）v1.5 — setup 蓋牌 + Mega ex 3 獎賞 + 招式反白 + swap log 雙名 + 匯出 log
+### 背景
+v1.5 上線後用戶截圖回報中盤 `action-bar` 區塊（opp-row 與 my-row 之間）排版看起來有點跑掉、log 面板太突兀，且場地卡圖示＋文字過小。
+
+### 1. action-bar 中盤排版清理
+**改動 `src/routes/game/+page.svelte` CSS：**
+- `.log-col`: `max-height:220px → 140px`、`font-size:.85rem → .8rem`、`line-height:1.4 → 1.35`、背景 `.35 → .45`（加深對比）。log 仍保有 `overflow-y:auto` 可往上捲查完整歷史。
+- 目的：壓低中盤列高度，讓上下兩個 field-row 的 230px minmax 不被中盤吃掉太多視覺比重。
+
+### 2. 場地卡 stadium-display 放大
+**改動 `src/routes/game/+page.svelte` CSS：**
+- `.stadium-display img`: `width:60px → 92px`
+- `.stadium-display-label`: `font-size:.6rem → .78rem`、加 `letter-spacing:.05em`、色調改 `#a8c4ff`（更亮）
+- `.stadium-display-name`: `font-size:.65rem → .82rem`、`max-width:70 → 120px`、`font-weight:600`，色調改 `#dde`
+- `.stadium-display` padding 從 `.2rem` → `.35rem .5rem`、`gap:.15rem → .25rem`
+- 目的：場地卡在中盤列不再是難以辨識的小縮圖，用戶能一眼看清楚當前場地是什麼。
+
+### 結論
+兩處都是純 CSS 微調，engine / effect 無變動，sim 不跑也無風險。版本號 1.5 → 1.51。
