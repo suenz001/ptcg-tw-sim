@@ -2996,3 +2996,159 @@ TOOL_RETREAT_MOD.set('氣球', () => ({ reduceBy: 2 }));
 // 用一個獨立的 flag 標記，engine 計算撤退時若雙方任一 active 帶此 tool，則 +1
 export const TOOL_BOTH_SIDES_RETREAT_PLUS = new Set<string>();
 TOOL_BOTH_SIDES_RETREAT_PLUS.add('重力之玉');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Session 38h H 標第 5 波 damage-multiply 批次（18 張）
+// 通用：counter = Math.floor(inst.damage / 10)；preFn return { state, damage }
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** 取得 state 某 side 某 inst 的 damage counter 數（每 10 點 = 1 counter） */
+function counterCount(dmg: number): number { return Math.floor(dmg / 10); }
+
+/** 計算自己攻擊方 active 身上的 counter 數 */
+function selfActiveCounters(state: GameState, aIdx: 0 | 1): number {
+  return counterCount(state.players[aIdx].active?.damage ?? 0);
+}
+/** 計算對手 active 身上的 counter 數 */
+function oppActiveCounters(state: GameState, aIdx: 0 | 1): number {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  return counterCount(state.players[dIdx].active?.damage ?? 0);
+}
+/** 計算對手全場（active + bench）所有 counter 和 */
+function oppAllCounters(state: GameState, aIdx: 0 | 1): number {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const p = state.players[dIdx];
+  let sum = counterCount(p.active?.damage ?? 0);
+  for (const b of p.bench) if (b) sum += counterCount(b.damage);
+  return sum;
+}
+/** 計算自己場上符合 filterFn 的寶可夢數（active + bench） */
+function countOwnPokemon(state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, filterFn: (c: Card) => boolean): number {
+  const p = state.players[aIdx];
+  let n = 0;
+  if (p.active) { const c = pool.get(p.active.cardId); if (c && filterFn(c)) n++; }
+  for (const b of p.bench) if (b) { const c = pool.get(b.cardId); if (c && filterFn(c)) n++; }
+  return n;
+}
+/** 計算對手場上符合 filterFn 的寶可夢數 */
+function countOppPokemon(state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, filterFn: (c: Card) => boolean): number {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  return countOwnPokemon(state, dIdx, pool, filterFn);
+}
+
+// ── A. 自己身上 damage counter × k（6 張） ─────────────────────────────────
+
+// 醜醜魚｜抓狂 — 10× counter
+regPre('醜醜魚|抓狂', (state, aIdx, _pool) => {
+  const n = selfActiveCounters(state, aIdx);
+  return { state, damage: n * 10 };
+});
+
+// 厄鬼椪 火灶面具ex｜憤怒之窯 — 20× counter
+regPre('厄鬼椪 火灶面具ex|憤怒之窯', (state, aIdx, _pool) => {
+  const n = selfActiveCounters(state, aIdx);
+  return { state, damage: n * 20 };
+});
+
+// 鋁鋼龍｜激怒之錘 — 80 + 10× counter
+regPre('鋁鋼龍|激怒之錘', (state, aIdx, _pool) => {
+  const n = selfActiveCounters(state, aIdx);
+  return { state, damage: 80 + n * 10 };
+});
+
+// 狠辣椒ex｜香料激怒 — 10 + 70× counter
+regPre('狠辣椒ex|香料激怒', (state, aIdx, _pool) => {
+  const n = selfActiveCounters(state, aIdx);
+  return { state, damage: 10 + n * 70 };
+});
+
+// 巨蔓藤｜覆蓋 — 150 - 10× counter（自己身上傷害減傷，最少 0）
+regPre('巨蔓藤|覆蓋', (state, aIdx, _pool) => {
+  const n = selfActiveCounters(state, aIdx);
+  return { state, damage: Math.max(0, 150 - n * 10) };
+});
+
+// 尖牙籠｜覆蓋 — 130 - 10× counter
+regPre('尖牙籠|覆蓋', (state, aIdx, _pool) => {
+  const n = selfActiveCounters(state, aIdx);
+  return { state, damage: Math.max(0, 130 - n * 10) };
+});
+
+// ── B. 對手戰鬥寶可夢 damage counter × k（6 張） ──────────────────────────
+
+// 冰鬼護｜傷害律動 — 20× opp counter
+regPre('冰鬼護|傷害律動', (state, aIdx, _pool) => {
+  const n = oppActiveCounters(state, aIdx);
+  return { state, damage: n * 20 };
+});
+
+// 蘋裹龍｜酸味噴吐 — 20× opp counter
+regPre('蘋裹龍|酸味噴吐', (state, aIdx, _pool) => {
+  const n = oppActiveCounters(state, aIdx);
+  return { state, damage: n * 20 };
+});
+
+// 麒麟奇｜精神傷害 — 20 + 10× opp counter
+regPre('麒麟奇|精神傷害', (state, aIdx, _pool) => {
+  const n = oppActiveCounters(state, aIdx);
+  return { state, damage: 20 + n * 10 };
+});
+
+// 太陽伊布｜精神傷害 — 30 + 10× opp counter
+regPre('太陽伊布|精神傷害', (state, aIdx, _pool) => {
+  const n = oppActiveCounters(state, aIdx);
+  return { state, damage: 30 + n * 10 };
+});
+
+// 月月熊 赫月｜瘋狂啃咬 — 100 + 30× opp counter
+regPre('月月熊 赫月|瘋狂啃咬', (state, aIdx, _pool) => {
+  const n = oppActiveCounters(state, aIdx);
+  return { state, damage: 100 + n * 30 };
+});
+
+// 猛惡菇｜爆毆 — 50 + 50× opp counter
+regPre('猛惡菇|爆毆', (state, aIdx, _pool) => {
+  const n = oppActiveCounters(state, aIdx);
+  return { state, damage: 50 + n * 50 };
+});
+
+// ── C. 自己場上寶可夢計數（3 張） ──────────────────────────────────────────
+
+// 土台龜ex｜森林行進 — 自己場上【草】寶可夢數 × 30
+regPre('土台龜ex|森林行進', (state, aIdx, pool) => {
+  const n = countOwnPokemon(state, aIdx, pool, c => c.pokemonType === 'Grass');
+  return { state, damage: n * 30 };
+});
+
+// 奇麒麟｜中級轟鳴 — 自己場上【1階進化】寶可夢數 × 40
+regPre('奇麒麟|中級轟鳴', (state, aIdx, pool) => {
+  const n = countOwnPokemon(state, aIdx, pool, c => c.subtype === 'Stage1');
+  return { state, damage: n * 40 };
+});
+
+// 投擲猴｜聯合投擲 — 自己場上【基礎】寶可夢數 × 20
+regPre('投擲猴|聯合投擲', (state, aIdx, pool) => {
+  const n = countOwnPokemon(state, aIdx, pool, c => c.subtype === 'Basic');
+  return { state, damage: n * 20 };
+});
+
+// ── D. 其他計數類（3 張） ──────────────────────────────────────────────────
+
+// 索羅亞克｜幻影劫持 — 對手場上 ex 數 × 60
+regPre('索羅亞克|幻影劫持', (state, aIdx, pool) => {
+  const n = countOppPokemon(state, aIdx, pool, c => c.subtype === 'ex');
+  return { state, damage: n * 60 };
+});
+
+// 亞克諾姆｜意志強念 — 10 + 對手全場 counter 總和 × 10
+regPre('亞克諾姆|意志強念', (state, aIdx, _pool) => {
+  const n = oppAllCounters(state, aIdx);
+  return { state, damage: 10 + n * 10 };
+});
+
+// 水晶燈火靈｜意志統治者 — 對手手牌張數 × 30
+regPre('水晶燈火靈|意志統治者', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const n = state.players[dIdx].hand.length;
+  return { state, damage: n * 30 };
+});

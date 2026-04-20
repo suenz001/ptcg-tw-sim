@@ -2586,3 +2586,71 @@ H 標未實裝分類表裡，bench-snipe / spray 類（招式會打到備戰區�
 - gust-and-hit（拉上場 + 攻擊同一回合解決）× 5
 - 傷害指示物分配（n 個 counter 任意分配到對手場上）× 2
 - 傷害轉移（把自己身上 counter 搬到對手 bench）× 2
+
+---
+
+## 📝 2026-04-20 Session 38i (v1.59) — H 標第 5 波：damage-multiply 18 張
+
+### 背景
+
+H 標未實裝分類表第二大群是 damage-multiply 35 張。全部都是「某數字 × k」的形式，且多半只靠既有 state 即可算出。這波先挑 18 張最單純的；剩下 17 張牽涉棄牌區特定 trait（「古代」）、備戰區名字比對、手牌道具挑選、反彈傷害、counter 自貼等新機制，下波再推。
+
+### 新增 helper（局部 / `effects.ts`）
+
+避免每張卡手刻 counter 計算，抽出 6 個小函式：
+
+- `counterCount(dmg)` — `Math.floor(dmg / 10)`
+- `selfActiveCounters(state, aIdx)` / `oppActiveCounters(state, aIdx)`
+- `oppAllCounters(state, aIdx)` — active + bench 加總
+- `countOwnPokemon(state, aIdx, pool, filterFn)` — active + bench 符合條件者
+- `countOppPokemon(state, aIdx, pool, filterFn)` — 同上但對手側
+
+### 18 張分 4 組
+
+**A. 自己身上 counter × k（6 張）**
+- 醜醜魚｜抓狂（counter × 10）
+- 厄鬼椪 火灶面具ex｜憤怒之窯（counter × 20）
+- 鋁鋼龍｜激怒之錘（80 + counter × 10）
+- 狠辣椒ex｜香料激怒（10 + counter × 70）
+- 巨蔓藤｜覆蓋（150 − counter × 10，Math.max(0, …)）
+- 尖牙籠｜覆蓋（130 − counter × 10）
+
+**B. 對手戰鬥 counter × k（6 張）**
+- 冰鬼護｜傷害律動（counter × 20）
+- 蘋裹龍｜酸味噴吐（counter × 20）
+- 麒麟奇｜精神傷害（20 + counter × 10）
+- 太陽伊布｜精神傷害（30 + counter × 10）
+- 月月熊 赫月｜瘋狂啃咬（100 + counter × 30）
+- 猛惡菇｜爆毆（50 + counter × 50）
+
+**C. 自己場上寶可夢分類數 × k（3 張）**
+- 土台龜ex｜森林行進（`pokemonType === 'Grass'` × 30）
+- 奇麒麟｜中級轟鳴（`subtype === 'Stage1'` × 40）
+- 投擲猴｜聯合投擲（`subtype === 'Basic'` × 20）
+
+**D. 其他計數類（3 張）**
+- 索羅亞克｜幻影劫持（對手場上 `subtype === 'ex'` × 60）
+- 亞克諾姆｜意志強念（10 + 對手全場 counter 和 × 10）
+- 水晶燈火靈｜意志統治者（對手手牌 × 30）
+
+### 驗證
+
+- `npm run build` 通過
+- `node /tmp/sim-sandbox/sim-repo.mjs 50` → 50/50 正常結束、0 crash / 0 stuck
+- 版本 1.58 → 1.59
+
+### 下波（damage-multiply 剩 17 張）
+
+需要新機制或資料 tag：
+- 「古代」trait（轟鳴月｜雪恨箭羽、故勒頓｜原生亂打、來悲粗茶ex｜熬返 等）— 卡資料沒有 `trait` 欄位，要另建 Ancient 名單
+- 備戰區特定名字比對（鍬農炮蟲｜串聯加農炮 查「蟲電寶」、隨風球｜一同爆炸 查「飄飄球」）
+- 手牌丟任意數量道具（灰塵山｜丟棄）— 類似 v1.57 discard-N-damage 但選手牌道具
+- 反彈傷害（海豚俠｜先鋒拳）— attacker self damage
+- 放 counter 到自己（波盪水｜蜿蜒割裂）— attach-damage-counter-self
+- 棄牌區能量卡數（蒼炎刃鬼ex｜深淵熾火）
+- 棄牌區含特定招式名的寶可夢卡數（投羽梟｜團結之翼）
+- 已得獎賞卡數（鐵蟻ex｜復仇粉碎）— `prizes` state 有對手獲得量
+- 對手撤退能量數（阿利多斯、鐵包袱）— 算 `retreatCost.length - tool 減值`
+- 對手特殊狀態數量（搖籃百合｜瘴氣之風）
+- 對手 bench × self counter（吼叫尾｜大吼大叫，用 hitBenchPickPost）
+- debuff-self-till-next-turn（智揮猩｜掌握弱點）
