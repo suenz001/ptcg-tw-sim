@@ -4923,3 +4923,78 @@ regPost('雪童子|驚嚇', (state, aIdx, _pool) => {
     return { ...p, hand: newHand, deck: shuffle([...p.deck, picked]) };
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38v v1.72 H 標第 17 波 — self-discard-N-energy post-attack（26 張）
+//
+// Helpers:
+//   selfDiscardNEnergyPost(n, label) — 攻擊後自身丟 N 張能量（從後往前取）
+//   selfDiscardAllEnergyPost(label)  — 攻擊後自身丟全部能量
+//
+// 全都對應「選擇 N 個這隻寶可夢身上附加的能量，將其丟棄」／「全部丟棄」的招式後效。
+// AI sim 與 UI 預設都自動從後往前丟（最近附加的優先丟），夠用又不影響重要先附能量。
+// ══════════════════════════════════════════════════════════════════════════════
+
+function selfDiscardNEnergyPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const att = state.players[aIdx].active;
+    if (!att || att.energyAttached.length === 0) return state;
+    const attName = pool.get(att.cardId)?.name ?? '?';
+    const discardCount = Math.min(n, att.energyAttached.length);
+    let s = addLog(state, `${label}：${attName} 丟棄 ${discardCount} 個能量`, aIdx);
+    return updatePlayer(s, aIdx, p => {
+      if (!p.active) return p;
+      const remaining = p.active.energyAttached.slice(0, p.active.energyAttached.length - discardCount);
+      const discarded = p.active.energyAttached.slice(p.active.energyAttached.length - discardCount);
+      return { ...p, active: { ...p.active, energyAttached: remaining }, discard: [...p.discard, ...discarded] };
+    });
+  };
+}
+
+function selfDiscardAllEnergyPost(label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const att = state.players[aIdx].active;
+    if (!att || att.energyAttached.length === 0) return state;
+    const attName = pool.get(att.cardId)?.name ?? '?';
+    let s = addLog(state, `${label}：${attName} 丟棄全部能量（${att.energyAttached.length} 個）`, aIdx);
+    return updatePlayer(s, aIdx, p => {
+      if (!p.active) return p;
+      const discarded = p.active.energyAttached;
+      return { ...p, active: { ...p.active, energyAttached: [] }, discard: [...p.discard, ...discarded] };
+    });
+  };
+}
+
+// ── 1 張自身能量（21 張中的 discard 1 部分） ─────────────────────────────────
+regPost('四季鹿|落葉衝撞', selfDiscardNEnergyPost(1, '落葉衝撞'));
+regPost('捷拉奧拉|強力伏特', selfDiscardNEnergyPost(1, '強力伏特'));
+regPost('猛火猴|高溫打擊', selfDiscardNEnergyPost(1, '高溫打擊'));
+regPost('烈焰猴|燃燒殆盡', selfDiscardNEnergyPost(1, '燃燒殆盡'));
+regPost('冰鬼護|瘋狂頭', selfDiscardNEnergyPost(1, '瘋狂頭'));
+regPost('大電海燕|強力伏特', selfDiscardNEnergyPost(1, '強力伏特'));
+regPost('晶光芽|岩石射擊', selfDiscardNEnergyPost(1, '岩石射擊'));
+regPost('夜盜火蜥|火花', selfDiscardNEnergyPost(1, '火花'));
+regPost('焰后蜥|噴射火焰', selfDiscardNEnergyPost(1, '噴射火焰'));
+regPost('炭小侍|噴射火焰', selfDiscardNEnergyPost(1, '噴射火焰'));
+regPost('請假王ex|偉大橫掃', selfDiscardNEnergyPost(1, '偉大橫掃'));
+regPost('尖牙陸鯊|力量爆破', selfDiscardNEnergyPost(1, '力量爆破'));
+
+// ── 2 張自身能量 ─────────────────────────────────────────────────────────────
+regPost('鐵磐岩ex|力量踩踏', selfDiscardNEnergyPost(2, '力量踩踏'));
+regPost('巨金怪|潔淨爆破', selfDiscardNEnergyPost(2, '潔淨爆破'));
+regPost('煤炭龜|火焰旋渦', selfDiscardNEnergyPost(2, '火焰旋渦'));
+regPost('爬地翅|粉碎之翼', selfDiscardNEnergyPost(2, '粉碎之翼'));
+regPost('長毛巨魔|擊拳', selfDiscardNEnergyPost(2, '擊拳'));
+regPost('鋁鋼龍|鋁鋼光束', selfDiscardNEnergyPost(2, '鋁鋼光束'));
+regPost('爆炸頭水牛|粉碎頭擊', selfDiscardNEnergyPost(2, '粉碎頭擊'));
+regPost('古劍豹|氣忿利刃', selfDiscardNEnergyPost(2, '氣忿利刃'));
+
+// ── 3 張自身能量 ─────────────────────────────────────────────────────────────
+regPost('皮卡丘ex|黃玉伏特', selfDiscardNEnergyPost(3, '黃玉伏特'));
+
+// ── 全部自身能量 ─────────────────────────────────────────────────────────────
+regPost('閃電鳥|十萬伏特', selfDiscardAllEnergyPost('十萬伏特'));
+regPost('燈火幽靈|燃燒盡', selfDiscardAllEnergyPost('燃燒盡'));
+regPost('倫琴貓ex|伏特強襲', selfDiscardAllEnergyPost('伏特強襲'));
+regPost('齒輪怪|高級光束', selfDiscardAllEnergyPost('高級光束'));
+regPost('蒼炎刃鬼ex|紫水晶激怒', selfDiscardAllEnergyPost('紫水晶激怒'));
