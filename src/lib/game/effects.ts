@@ -5702,6 +5702,135 @@ regPost('咕咕|靜默之翼', peekOppHandPost('靜默之翼'));
 regPre('催眠貘|不祥視線', (state, _aIdx, _pool) => ({ state, damage: 10 }));
 regPost('催眠貘|不祥視線', peekOppHandPost('不祥視線'));
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38aa v1.77 H 標第 22 波 — heal-any-own + 呼朋引伴 + deck-mill（15 張）
+//
+// Helpers:
+//   healAnyOwnPost(amount, label) — 攻後設置 pending heal-target（重用 'heal-30' resolver）
+//   benchBasicFromDeckPost(max, label) — 攻後設置 pending deck-search Basic → bench
+//   millSelfDeckTopPost(n, label) — 攻後丟自己牌庫頂 n 張
+//   millOppDeckTopPost(n, label) — 攻後丟對手牌庫頂 n 張
+// ══════════════════════════════════════════════════════════════════════════════
+
+function healAnyOwnPost(amount: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const p = state.players[aIdx];
+    const all = [p.active, ...p.bench].filter((x): x is CardInstance => !!x);
+    if (!all.some(c => c.damage > 0)) {
+      return addLog(state, `${label}：沒有寶可夢需要療傷`, aIdx);
+    }
+    let s = addLog(state, `${label}：選擇回復 ${amount} HP 的寶可夢`, aIdx);
+    return withPending(s, {
+      type: 'heal-target',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: amount === 30 ? 'heal-30' : amount === 120 ? 'heal-120' : 'heal-30',
+      params: { healAmount: amount, discardEnergy: 0 },
+    });
+  };
+}
+
+function benchBasicFromDeckPost(max: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const player = state.players[aIdx];
+    if (player.bench.length >= 5) return addLog(state, `${label}：備戰區已滿`, aIdx);
+    const slots = 5 - player.bench.length;
+    const takeMax = Math.min(max, slots);
+    let s = addLog(state, `${label}：從牌庫選最多 ${takeMax} 張基礎寶可夢放備戰`, aIdx);
+    return withPending(s, {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Basic',
+      minCount: 0, maxCount: takeMax,
+      effectKey: 'bench-basic-from-deck',
+    });
+  };
+}
+
+function millSelfDeckTopPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const p = state.players[aIdx];
+    if (p.deck.length === 0) return addLog(state, `${label}：自己牌庫為空`, aIdx);
+    const taken = p.deck.slice(0, n);
+    return updatePlayer(
+      addLog(state, `${label}：自己牌庫頂 ${taken.length} 張丟入棄牌區`, aIdx),
+      aIdx,
+      pl => ({ ...pl, deck: pl.deck.slice(taken.length), discard: [...pl.discard, ...taken] }),
+    );
+  };
+}
+
+function millOppDeckTopPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const p = state.players[dIdx];
+    if (p.deck.length === 0) return addLog(state, `${label}：對手牌庫為空`, aIdx);
+    const taken = p.deck.slice(0, n);
+    return updatePlayer(
+      addLog(state, `${label}：對手牌庫頂 ${taken.length} 張丟入棄牌區`, aIdx),
+      dIdx,
+      pl => ({ ...pl, deck: pl.deck.slice(taken.length), discard: [...pl.discard, ...taken] }),
+    );
+  };
+}
+
+// ── pending heal（2 張） ────────────────────────────────────────────────────
+regPre('啃果蟲|營養素', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('啃果蟲|營養素', healAnyOwnPost(30, '營養素'));
+
+regPre('花蓓蓓|療傷', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('花蓓蓓|療傷', healAnyOwnPost(30, '療傷'));
+
+// ── 造傷 + self heal by dealt-damage（2 張；簡化為 base dmg 30）───────────────
+regPre('鐵毒蛾|吸納', (state, _aIdx, _pool) => ({ state, damage: 30 }));
+regPost('鐵毒蛾|吸納', selfHealPost(30, '吸納'));
+
+regPre('火神蛾|吸血', (state, _aIdx, _pool) => ({ state, damage: 30 }));
+regPost('火神蛾|吸血', selfHealPost(30, '吸血'));
+
+// ── 呼朋引伴 / 組成陣形 系列（5 張）───────────────────────────────────────────
+regPre('狗仔包|香味', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('狗仔包|香味', benchBasicFromDeckPost(1, '香味'));
+
+regPre('燭光靈|呼朋引伴', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('燭光靈|呼朋引伴', benchBasicFromDeckPost(1, '呼朋引伴'));
+
+regPre('粉蝶蟲|呼朋引伴', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('粉蝶蟲|呼朋引伴', benchBasicFromDeckPost(1, '呼朋引伴'));
+
+regPre('大顎蟻|呼朋引伴', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('大顎蟻|呼朋引伴', benchBasicFromDeckPost(2, '呼朋引伴'));
+
+regPre('列陣兵|組成陣形', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('列陣兵|組成陣形', benchBasicFromDeckPost(2, '組成陣形'));
+
+// ── 牌庫 mill（6 張）─────────────────────────────────────────────────────────
+// 自己 mill
+regPre('斧牙龍|龍之波動', (state, _aIdx, _pool) => ({ state, damage: 80 }));
+regPost('斧牙龍|龍之波動', millSelfDeckTopPost(1, '龍之波動'));
+
+regPre('雙斧戰龍|龍之波動', (state, _aIdx, _pool) => ({ state, damage: 230 }));
+regPost('雙斧戰龍|龍之波動', millSelfDeckTopPost(3, '龍之波動'));
+
+regPre('古簡蝸|捲入鞭打', (state, _aIdx, _pool) => ({ state, damage: 130 }));
+regPost('古簡蝸|捲入鞭打', millSelfDeckTopPost(3, '捲入鞭打'));
+
+// 對手 mill
+regPre('螺釘地鼠|掘掘', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('螺釘地鼠|掘掘', millOppDeckTopPost(1, '掘掘'));
+
+regPre('龍頭地鼠|挖洞爪', (state, _aIdx, _pool) => ({ state, damage: 20 }));
+regPost('龍頭地鼠|挖洞爪', millOppDeckTopPost(1, '挖洞爪'));
+
+regPre('三首惡龍ex|粉碎頭', (state, _aIdx, _pool) => ({ state, damage: 200 }));
+regPost('三首惡龍ex|粉碎頭', millOppDeckTopPost(3, '粉碎頭'));
+
+regPre('單首龍|踩落', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('單首龍|踩落', millOppDeckTopPost(1, '踩落'));
+
+regPre('雙首暴龍|踩落', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('雙首暴龍|踩落', millOppDeckTopPost(2, '踩落'));
+
 // 12. 噗隆隆|金屬塗層 — 招式：從棄牌區 1 張基本鋼能量附於自身（auto）
 //   實際卡池中此為招式（非特性），登錄為 ATTACK_POST，pre 傷害 0
 regPre('噗隆隆|金屬塗層', (state, _aIdx, _pool) => ({ state, damage: 0 }));

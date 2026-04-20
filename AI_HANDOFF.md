@@ -3161,3 +3161,31 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 24/26
 - 版本 1.75 → 1.76
+
+---
+
+## 📝 2026-04-21 Session 38aa (v1.77) — H 標第 22 波：heal + 呼朋引伴 + deck mill（17 張）
+
+### 新 helper
+- `healAnyOwnPost(amount, label)` — 攻後設置 pending heal-target（重用 'heal-30' resolver）
+- `benchBasicFromDeckPost(max, label)` — 攻後設置 pending deck-search Basic → 備戰（重用 'bench-basic-from-deck'）
+- `millSelfDeckTopPost(n, label)` — 攻後丟自己牌庫頂 n 張
+- `millOppDeckTopPost(n, label)` — 攻後丟對手牌庫頂 n 張
+
+### 實裝（17 張）
+- pending 療傷（2 張）：啃果蟲｜營養素、花蓓蓓｜療傷（各 30 HP）
+- 自身吸血（2 張）：鐵毒蛾｜吸納、火神蛾｜吸血（30 dmg + self heal 30）
+- 呼朋引伴（5 張）：狗仔包｜香味、燭光靈｜呼朋引伴、粉蝶蟲｜呼朋引伴、大顎蟻｜呼朋引伴（2 張）、列陣兵｜組成陣形（2 張）
+- 自己 mill（3 張）：斧牙龍｜龍之波動 80、雙斧戰龍｜龍之波動 230、古簡蝸｜捲入鞭打 130
+- 對手 mill（5 張）：螺釘地鼠｜掘掘（1 張）、龍頭地鼠｜挖洞爪 20（1 張）、三首惡龍ex｜粉碎頭 200（3 張）、單首龍｜踩落（1 張）、雙首暴龍｜踩落（2 張）
+
+### 暫緩
+- 鐵毒蛾｜吸納 / 火神蛾｜吸血 實際規則是「回復等於對對手造成的傷害」；此處簡化為 base dmg 回復（忽略弱抗加乘）
+- 彩粉蝶｜進化粉、伊布｜覺醒、蛋蛋｜早熟進化（從牌庫取進化卡直接進化）— 需 evolve-from-deck resolver
+- 蟲電寶｜並排（自名限定 deck search）— 需 filter 'Name:蟲電寶'
+- 狡猾天狗｜驅趕龍捲風、仙子伊布｜奧密迴旋、甜甜螢｜慢芬香 — opp 備戰挑選後放回牌庫重洗
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 25/25
+- 版本 1.76 → 1.77
