@@ -180,8 +180,8 @@
     }
   });
 
-  // ── 拖曳交互（Session 25 A1 / v1.02 擴增 evolve） ──────────────────────────
-  type DragKind = 'energy' | 'basic' | 'tool' | 'evolve';
+  // ── 拖曳交互（v1.03 擴增 trainer 類） ─────────────────────────────────────
+  type DragKind = 'energy' | 'basic' | 'tool' | 'evolve' | 'trainer';
   let dragging = $state<null | {
     iid: string; kind: DragKind; cardId: string; cardName: string;
     imageUrl: string;
@@ -271,6 +271,11 @@
       if (evolveTargetsFor(d.iid).includes(tIid)) {
         await dispatch(GameActions.evolve(tIid, d.iid));
       }
+    } else if (d.kind === 'trainer') {
+      // 支援者/物品/競技場 — 拖到任何非手牌區域即使用
+      // 用 closest 判斷 hit 是否在 hand-scroll 內
+      // (drop position 其實不重要，只要不是 hand-scroll 或 hand-card)
+      await dispatch(GameActions.playTrainer(d.iid));
     } else if (d.kind === 'tool' && tIid) {
       // 檢查目標是否已有道具（一隻只能附加一個，除非有特性）
       const allMy = [...(myPlayer?.active ? [myPlayer.active] : []), ...(myPlayer?.bench ?? [])];
@@ -1089,7 +1094,7 @@
   </header>
 
   <!-- ── Play Mat ── -->
-  <div class="playmat">
+  <div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'}>
 
     <!-- 對手場地（永遠在上方） -->
     <div class="field-row opponent-row">
@@ -1368,7 +1373,13 @@
           {@const canBasic=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()}
           {@const canTrainer=(isTrainerCard||isToolCard)&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
           {@const canEvolve=isEvolutionCard&&playableEvoIids.has(inst.iid)&&isMyTurn()&&!pendingSelection}
-          {@const dragKind = canEnergy ? 'energy' : canBasic ? 'basic' : canEvolve ? 'evolve' : (canTrainer && isToolCard) ? 'tool' : null}
+          {@const dragKind =
+            canEnergy ? 'energy'
+            : canBasic ? 'basic'
+            : canEvolve ? 'evolve'
+            : (canTrainer && isToolCard) ? 'tool'
+            : canTrainer ? 'trainer'
+            : null}
           {@const isActionable = canEnergy || canBasic || canTrainer || canEvolve}
           <div class="hand-card"
             class:selected={selectedEnergyIid===inst.iid}
@@ -1388,10 +1399,9 @@
             <span class="hand-name">{c.name}</span>
             {#if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
             {:else if canBasic}<span class="hand-hint hl">📥 拖到備戰</span>
-              <button class="hand-btn basic-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playBasic(inst.iid));}}>備戰</button>
             {:else if canEvolve}<span class="hand-hint hl">🔺 拖到進化目標</span>
             {:else if canTrainer && isToolCard}<span class="hand-hint hl">🔧 拖到寶可夢</span>
-            {:else if canTrainer}<button class="hand-btn trainer-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.playTrainer(inst.iid));}}>{c.subtype==='Supporter'?'支援者':c.subtype==='Stadium'?'競技場':'使用'}</button>
+            {:else if canTrainer}<span class="hand-hint hl">🎴 拖曳使用</span>
             {/if}
           </div>
         {/if}
@@ -1610,12 +1620,13 @@
               <div class="zoom-ability"><span class="ability-label">特性</span><strong>{ab.name}</strong><p class="effect-text">{ab.effect ?? (ab as any).text}</p></div>
             {/each}
             {#each zoomCard.attacks??[] as atk}
+              {@const atkEffect = atk.effect ?? (atk as any).text ?? ''}
               <div class="zoom-attack">
                 <div class="atk-header">
                   <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if atk.cost.length===0}<span class="no-cost">無消耗</span>{/if}</span>
                   <span class="atk-nm">{atk.name}</span><span class="atk-dp">{atk.damage||'—'}</span>
                 </div>
-                {#if atk.text}<p class="effect-text">{atk.text}</p>{/if}
+                {#if atkEffect.trim()}<p class="effect-text">{atkEffect}</p>{/if}
               </div>
             {/each}
             {#if zoomCard.rulesText}<div class="zoom-rules">{zoomCard.rulesText}</div>{/if}
@@ -1763,7 +1774,13 @@
       repeating-linear-gradient(45deg, rgba(0,0,0,.05) 0 2px, transparent 2px 8px),
       linear-gradient(180deg,rgba(0,60,0,.28) 0%,rgba(0,40,0,.1) 48%,rgba(0,0,0,.55) 50%,rgba(0,40,0,.1) 52%,rgba(0,60,0,.28) 100%),
       linear-gradient(135deg,#1e3a20,#1a2e1a); }
-  .playmat::before{ content:''; position:absolute; left:50%; top:50%; width:84%; height:66%; transform:translate(-50%,-50%); border:2px dashed rgba(120,170,120,.12); border-radius:16px; pointer-events:none; }
+  .playmat::before{ content:''; position:absolute; left:50%; top:50%; width:84%; height:66%; transform:translate(-50%,-50%); border:2px dashed rgba(120,170,120,.12); border-radius:16px; pointer-events:none; transition:border-color .2s, box-shadow .2s; }
+  /* 拖曳訓練家類卡時，整個 playmat 內部虛線框變綠發光 */
+  .playmat.trainer-drop-zone::before{
+    border-color: rgba(100,255,130,.7);
+    border-style: solid;
+    box-shadow: 0 0 30px rgba(100,255,130,.35), inset 0 0 30px rgba(100,255,130,.15);
+  }
 
   .field-row{ display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.7rem; overflow:hidden; min-height:0; }
   .opponent-row{ border-bottom:2px solid #2a5a2a; background:rgba(0,0,0,.2); align-items:flex-end; padding-bottom:0.6rem; }
@@ -1949,7 +1966,7 @@
   .hand-preview-float{ position:fixed; z-index:9999; pointer-events:none;
     transform:translate(-50%, -100%);
     filter:drop-shadow(0 10px 26px rgba(0,0,0,.85)); }
-  .hand-preview-float img{ width:220px; border-radius:10px; border:2px solid rgba(255,212,74,.5); }
+  .hand-preview-float img{ width:340px; border-radius:10px; border:2px solid rgba(255,212,74,.6); }
   .hand-name{ font-size:.68rem; color:#bbb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
   .hand-hint{ font-size:.65rem; color:#bbb; }
   .hand-hint.hl{ color:#ffd44a; font-weight:600; }
