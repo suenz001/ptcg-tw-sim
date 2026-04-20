@@ -3634,3 +3634,68 @@ regPre('土狼犬|連續舞步', coinUntilTailsMultiplyPre(10, 0, '連續舞步'
 regPre('普隆隆姆|奔進', coinUntilTailsMultiplyPre(100, 0, '奔進'));
 regPre('燈罩夜菇|螺旋衝刺', coinUntilTailsMultiplyPre(30, 60, '螺旋衝刺'));
 regPre('索財靈|連續擲幣', coinUntilTailsMultiplyPre(20, 0, '連續擲幣'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38o v1.65 H 標第 10 波 — self-heal 招式（22 張）
+// 招式造成傷害後，將自己（戰鬥寶可夢）恢復 N HP。
+// ══════════════════════════════════════════════════════════════════════════════
+
+function selfHealPost(amount: number, attackName: string): AttackPostFn {
+  return (state, aIdx) => {
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (!att.active) return state;
+    const before = att.active.damage;
+    const healed = Math.min(before, amount);
+    if (healed === 0) return state;
+    att.active = { ...att.active, damage: before - healed };
+    players[aIdx] = att;
+    return addLog({ ...state, players }, `${attackName}：恢復 ${healed} HP`, aIdx);
+  };
+}
+
+regPost('土台龜ex|叢林之錘', selfHealPost(50, '叢林之錘'));
+regPost('萌虻|小吸取', selfHealPost(10, '小吸取'));
+regPost('波盪水|極光增輝', selfHealPost(20, '極光增輝'));
+regPost('向日花怪|超級吸取', selfHealPost(30, '超級吸取'));
+regPost('小木靈|寄生種子', selfHealPost(20, '寄生種子'));
+regPost('墨海馬|紋絲不動', selfHealPost(30, '紋絲不動'));
+regPost('尖牙籠|偷食', selfHealPost(40, '偷食'));
+regPost('瑪沙那|冥想', selfHealPost(20, '冥想'));
+regPost('薩戮德|綠葉吸取', selfHealPost(20, '綠葉吸取'));
+regPost('走鯨|吸取鰭', selfHealPost(20, '吸取鰭'));
+regPost('超能豔鴕|螺旋吸取', selfHealPost(30, '螺旋吸取'));
+regPost('蛋蛋|吸取', selfHealPost(10, '吸取'));
+regPost('波克基古|吸取之吻', selfHealPost(30, '吸取之吻'));
+regPost('水伊布|螺旋吸取', selfHealPost(30, '螺旋吸取'));
+regPost('蒼炎刃鬼|生命之紗', selfHealPost(30, '生命之紗'));
+regPost('新葉喵ex|魔法葉', selfHealPost(30, '魔法葉'));
+regPost('陸地水母|超級吸取', selfHealPost(30, '超級吸取'));
+
+// ── 對自己所有寶可夢（含戰鬥+備戰）各恢復 N HP ─────────────────────────────
+function healAllOwnPost(amount: number, benchOnly: boolean, attackName: string): AttackPostFn {
+  return (state, aIdx) => {
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const p = { ...players[aIdx] };
+    let totalHealed = 0;
+    if (!benchOnly && p.active) {
+      const healed = Math.min(p.active.damage, amount);
+      if (healed > 0) {
+        p.active = { ...p.active, damage: p.active.damage - healed };
+        totalHealed += healed;
+      }
+    }
+    p.bench = p.bench.map(c => {
+      const healed = Math.min(c.damage, amount);
+      if (healed > 0) { totalHealed += healed; return { ...c, damage: c.damage - healed }; }
+      return c;
+    });
+    players[aIdx] = p;
+    if (totalHealed === 0) return state;
+    const target = benchOnly ? '所有備戰' : '所有自己寶可夢';
+    return addLog({ ...state, players }, `${attackName}：${target}各恢復 ${amount} HP（累計 ${totalHealed}）`, aIdx);
+  };
+}
+regPost('來悲粗茶ex|抹茶飛濺', healAllOwnPost(30, false, '抹茶飛濺'));
+regPost('克雷色利亞|治癒之舞', healAllOwnPost(20, false, '治癒之舞'));
+regPost('葉伊布ex|苔紋瑪瑙', healAllOwnPost(100, true, '苔紋瑪瑙'));
