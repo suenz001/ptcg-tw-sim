@@ -3152,3 +3152,93 @@ regPre('水晶燈火靈|意志統治者', (state, aIdx, _pool) => {
   const n = state.players[dIdx].hand.length;
   return { state, damage: n * 30 };
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Session 38i H 標第 6 波 damage-multiply 第二批（10 張）
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 蒼炎刃鬼ex｜深淵熾火 — 30 + 自己棄牌區能量卡 × 20
+regPre('蒼炎刃鬼ex|深淵熾火', (state, aIdx, pool) => {
+  const n = state.players[aIdx].discard.filter(c => pool.get(c.cardId)?.supertype === 'Energy').length;
+  return { state, damage: 30 + n * 20 };
+});
+
+// 鐵蟻ex｜復仇粉碎 — 120 + 對手已獲得獎賞 × 30
+//   對手取過的獎賞 = 6 - 對手目前獎賞堆張數
+regPre('鐵蟻ex|復仇粉碎', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const taken = 6 - state.players[dIdx].prizes.length;
+  return { state, damage: 120 + Math.max(0, taken) * 30 };
+});
+
+// 阿利多斯｜線帶纏繞 — 10 + 對手戰鬥寶可夢撤退能量數 × 30
+regPre('阿利多斯|線帶纏繞', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  const retreat = def ? (pool.get(def.cardId)?.retreatCost?.length ?? 0) : 0;
+  return { state, damage: 10 + retreat * 30 };
+});
+
+// 鐵包袱｜瞬風衝激 — 200 - 對手戰鬥寶可夢撤退 × 50
+regPre('鐵包袱|瞬風衝激', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  const retreat = def ? (pool.get(def.cardId)?.retreatCost?.length ?? 0) : 0;
+  return { state, damage: Math.max(0, 200 - retreat * 50) };
+});
+
+// 鍬農炮蟲｜串聯加農炮 — 120 + 自己備戰區「蟲電寶」× 80
+regPre('鍬農炮蟲|串聯加農炮', (state, aIdx, pool) => {
+  const n = state.players[aIdx].bench.filter(b => b && pool.get(b.cardId)?.name === '蟲電寶').length;
+  return { state, damage: 120 + n * 80 };
+});
+
+// 投羽梟｜團結之翼 — 自己棄牌區持有「團結之翼」招式的寶可夢卡 × 20
+regPre('投羽梟|團結之翼', (state, aIdx, pool) => {
+  const n = state.players[aIdx].discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.attacks?.some(a => a.name === '團結之翼');
+  }).length;
+  return { state, damage: n * 20 };
+});
+
+// 搖籃百合｜瘴氣之風 — 對手戰鬥寶可夢特殊狀態數 × 100
+//   注意：目前引擎 status 單欄位，實際只能算 0 或 1 個狀態
+regPre('搖籃百合|瘴氣之風', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const st = state.players[dIdx].active?.status;
+  return { state, damage: (st ? 1 : 0) * 100 };
+});
+
+// 海豚俠｜先鋒拳 — 130，攻擊後自己再受 counter × 10 傷害
+regPre('海豚俠|先鋒拳', (_state, _aIdx, _pool) => ({ state: _state, damage: 130 }));
+regPost('海豚俠|先鋒拳', (state, aIdx, _pool) => {
+  const n = selfActiveCounters(state, aIdx);
+  if (n === 0) return state;
+  const selfDmg = n * 10;
+  const s = updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, damage: p.active.damage + selfDmg } };
+  });
+  return addLog(s, `先鋒拳：反彈 ${selfDmg} 傷害到自己！`, aIdx);
+});
+
+// 波盪水｜蜿蜒割裂 — 在自己身上放 9 個 counter，造成 9 × 20 = 180
+//   簡化：固定放 9 個（玩家/AI 的「最多」選擇）
+regPre('波盪水|蜿蜒割裂', (state, aIdx, _pool) => {
+  const s = updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, damage: p.active.damage + 90 } };
+  });
+  const s2 = addLog(s, '蜿蜒割裂：在自己身上放置 9 個傷害指示物（+90 傷害）', aIdx);
+  return { state: s2, damage: 180 };
+});
+
+// 吼叫尾｜大吼大叫 — 對手 bench 1 隻 × (自己 counter × 20)
+//   原文「對手的 1 隻寶可夢」，但備戰區不計弱點抵抗；簡化為只打 bench
+regPost('吼叫尾|大吼大叫', (state, aIdx, _pool) => {
+  const n = selfActiveCounters(state, aIdx);
+  const amount = n * 20;
+  if (amount === 0) return state;
+  return hitBenchPickPost(state, aIdx, 'opp', 1, amount, '大吼大叫');
+});

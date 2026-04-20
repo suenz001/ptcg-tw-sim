@@ -2654,3 +2654,40 @@ H 標未實裝分類表第二大群是 damage-multiply 35 張。全部都是「�
 - 對手特殊狀態數量（搖籃百合｜瘴氣之風）
 - 對手 bench × self counter（吼叫尾｜大吼大叫，用 hitBenchPickPost）
 - debuff-self-till-next-turn（智揮猩｜掌握弱點）
+
+---
+
+## 📝 2026-04-20 Session 38j (v1.60) — H 標第 6 波：damage-multiply 第二批 10 張
+
+### 10 張涵蓋剩餘可做的計數類
+
+- **蒼炎刃鬼ex｜深淵熾火** — 30 + 自棄牌區能量 × 20
+- **鐵蟻ex｜復仇粉碎** — 120 + 對手已取獎賞（6 − prizes.length）× 30
+- **阿利多斯｜線帶纏繞** — 10 + 對手戰鬥 retreatCost × 30
+- **鐵包袱｜瞬風衝激** — max(0, 200 − 對手戰鬥 retreatCost × 50)
+- **鍬農炮蟲｜串聯加農炮** — 120 + 自備戰區「蟲電寶」× 80
+- **投羽梟｜團結之翼** — 自棄牌區含「團結之翼」招式的寶可夢卡 × 20
+- **搖籃百合｜瘴氣之風** — 對手戰鬥 status × 100（引擎 status 單欄位，上限 1）
+- **海豚俠｜先鋒拳** — regPre 130 + regPost 自傷 counter × 10
+- **波盪水｜蜿蜒割裂** — 自放 9 counter（active.damage += 90）+ 180 damage
+- **吼叫尾｜大吼大叫** — regPost hitBenchPickPost opp × (self counter × 20)
+
+### 已知限制
+
+- 搖籃百合的特殊狀態計算因 state schema 限制最多 1；真正多重狀態實裝要等引擎升級
+- 海豚俠 / 波盪水 自傷導致 self-KO 時目前引擎不會自動判 KO（和既有 `奢華炸彈` 反彈一致），留 bug 紀錄
+- 吼叫尾原文「對手的 1 隻寶可夢」應含 active，現簡化只打 bench（bench 不計弱點本就符合，active 需要完整 damage pipeline）
+
+### 驗證
+
+- `npm run build` 通過
+- sim 50 局全部正常結束、0 crash
+- 版本 1.59 → 1.60
+
+### damage-multiply 剩 7 張（之後不歸到這類）
+
+- 「古代」類 3 張（故勒頓｜原生亂打、轟鳴月｜雪恨箭羽、來悲粗茶ex｜熬返）— 需建 Ancient 名單
+- 灰塵山｜丟棄 — 需手牌挑道具 UI（類似 v1.57）
+- 隨風球｜一同爆炸 — 計自己場上特定名字 + 自 bench snipe
+- 智揮猩｜掌握弱點 — 需 debuff-self-weakness-type-till-next-turn
+- 鐵包袱 已實裝；還有 attach-energy/coin-heads/discard-energy 混合類裡的 damage-multiply 屬於別的分類，下波再處理
