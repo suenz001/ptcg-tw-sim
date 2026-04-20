@@ -593,6 +593,8 @@ function handlePlaying(
     if (!attacker.active) return state;
     // 睡眠和麻痺時無法撤退
     if (attacker.active.status === 'asleep' || attacker.active.status === 'paralyzed') return state;
+    // 招式效果「下個對手回合無法撤退」— cantRetreatNextTurn flag（v1.62）
+    if (attacker.active.cantRetreatNextTurn) return state;
     if (attacker.bench.length === 0) return state;
 
     const bIdx = attacker.bench.findIndex(c => c.iid === action.newActiveIid);
@@ -1411,6 +1413,13 @@ function handlePlaying(
     };
     if (currentPlayer.active) currentPlayer.active = clearCantAttackThisTurn(currentPlayer.active);
     currentPlayer.bench = currentPlayer.bench.map(clearCantAttackThisTurn);
+    // 清除 cantRetreatNextTurn：flag 由上個對手回合設下，作用於本回合；本回合結束時清除
+    const clearCantRetreat = (c: CardInstance): CardInstance => {
+      if (!c.cantRetreatNextTurn) return c;
+      const n = { ...c }; delete n.cantRetreatNextTurn; return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = clearCantRetreat(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(clearCantRetreat);
     players[aIdx] = currentPlayer;
 
     // 重置次方玩家的回合限制旗標 + promote cantAttackPending → cantAttackThisTurn

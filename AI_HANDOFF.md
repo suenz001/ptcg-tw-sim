@@ -2718,3 +2718,61 @@ H 標未實裝分類表第二大群是 damage-multiply 35 張。全部都是「�
 - `npm run build` 通過
 - sim 50 局正常、0 crash
 - 版本 1.60 → 1.61
+
+---
+
+## 📝 2026-04-20 Session 38l (v1.62) — H 標第 7 波：debuff-target 大批次（44 張）
+
+### 引擎改動：`cantRetreatNextTurn` 生效
+
+types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
+
+1. `RETREAT` action handler：`if (attacker.active.cantRetreatNextTurn) return state;` — 睡眠/麻痺檢查後接續。
+2. `END_TURN`：在 `clearCantAttackThisTurn` 之後新增 `clearCantRetreat` block，對 currentPlayer 的 active + bench 清除 flag（flag 作用於 flag 擁有者的本回合，於該回合結束時清除）。
+
+### (A) 對手受招後下回合無法撤退 — 14 張（含複合）
+
+新 helper `defCantRetreatNextPost()` 設 defender.active.cantRetreatNextTurn：
+羅絲雷朵｜束縛、小鋸鱷｜咬緊、三海地鼠ex｜麻痺控制、厄鬼椪 水井面具ex｜啜泣、勒克貓｜咬緊、大狼犬｜窮追不捨、狃拉｜逼近、黑夜魔靈｜影子束縛、觸手百合｜束縛、拖拖蚓ex｜岩石封鎖、磨牙彩皮魚｜咬緊、噬沙堡爺ex｜流沙地獄。
+
+複合式（status + cantRetreat）：
+- 爆焰龜獸｜火焰陣（灼傷 + 不撤退）
+- 車輪毬｜毒陣（中毒 + 不撤退）
+- 桃歹郎｜猛毒連鎖（中毒 + 不撤退）
+
+### (B) 自己下回合無法使用招式 — 26 張
+
+用既有 `selfCantAttackNextPost()`（所有「指定招式名」統一視為「全招式」，已知簡化）：
+炎熱喵｜閃焰強襲、咕咕鴿｜噴射之翼、高傲雉雞｜潛力、鐵螯龍蝦｜暴亂之錘、月月熊 赫月ex｜血月（兩種寫法）、波普海豚｜水流斬、海豚俠ex｜終極衝擊、吉利蛋｜潛力、大嘴蝠｜漆黑利刃、願增猿ex｜惡劣頭擊、閃焰王牌ex｜閃焰強襲、好勝毛蟹｜揮大拳、電燈怪｜閃電伏特、鋁鋼橋龍｜鐵之引爆、爆炸頭水牛｜潛力、蒼炎刃鬼｜黑煙斬、自爆磁怪｜電磁炮、火伊布ex｜紅玉髓、鐵毒蛾｜高熱光線、水伊布ex｜海藍寶石、雷伊布ex｜棕碧璽、鐵武者ex｜鐳射利刃、沙鐵皮ex｜大地扣殺、月亮伊布｜漆黑利刃、猛惡菇｜暴亂之錘、雙劍鞘｜猛擊在地。
+
+加 1 張擲硬幣觸發：朝北鼻｜力量猛攻（反面才 disable）。
+
+### (C) 對手受招後下回合無法使用招式 — 1 張
+豐蜜龍｜甜蜜熔化（用既有 `defCantAttackNextPost()`）。
+
+### (D) 復仇傷害 `revenge-dmg-plus` — 3 張
+
+靠 `oppPrizesAtMyLastTurnEnd` 快照判斷「上個對手回合對手有取過獎賞（= 自己寶可夢被 KO）」：
+- 鐵斑葉｜復仇刀鋒 100+60
+- 普隆隆姆｜捲土重來 30+90
+- 古玉魚｜嫉妒業火 50+90
+
+### (E) 懶人獺｜悠哉 — heal 60（部分實裝）
+
+簡化為僅恢復 60 HP；「這隻寶可夢下回合無法撤退」部分延後（需新增 `cantRetreatPending` 並於擁有者 END_TURN 晉升為 nextTurn，避免當回合即被清）。
+
+### 暫緩（需要新機制）
+- 青銅鐘｜進化妨礙者：對手不可進化
+- 含羞苞｜癢癢花粉：對手無法從手牌使出物品卡
+- 吼叫尾ex｜絕叫：對手無法使出支援者 + 後攻首回合限定
+- 電蜘蛛ex｜雷擊石：discard-all-self-energy + 對手無法使出物品卡
+- 晶光花｜侵蝕碎塊：中毒 + 對手無法附加從手牌的能量
+- 帕底亞 肯泰羅｜障礙踩踏：僅基礎寶可夢下回合不能攻擊
+- 鐵包袱｜冷卻噴射：僅進化寶可夢下回合不能攻擊
+- 電擊魔獸｜雷電在地：自己所有寶可夢下回合不能攻擊（player-level flag）
+- 大王銅象｜鼻之金勾臂：optional +100 帶 self-debuff
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、0 stuck
+- 版本 1.61 → 1.62

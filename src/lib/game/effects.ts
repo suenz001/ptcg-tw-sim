@@ -3381,3 +3381,152 @@ regPost('鐵螯龍蝦|喀嚓喀嚓', (state, aIdx, _pool) => {
     return { ...p, deck: p.deck.slice(take), discard: [...p.discard, ...discarded] };
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38l v1.62 H 標第 7 波 — debuff-target 大批次（40+ 張）
+// 機制:
+//   (a) 對手下回合無法撤退（cantRetreatNextTurn；engine v1.62 加 RETREAT 檢查 + END_TURN 清除）
+//   (b) 自己下回合無法使用招式（既有 selfCantAttackNextPost）
+//   (c) 對手下回合無法使用招式（既有 defCantAttackNextPost）
+//   (d) 上個對手回合被取走獎賞則傷害 +N（既有 oppPrizesAtMyLastTurnEnd 快照）
+//   複合招式（中毒+不撤退、灼傷+不撤退、擲硬幣+自不攻）用 inline 組合
+//
+// 已知簡化：
+//   - 「指定招式名無法使用」（如「閃焰強襲」）統一視為「全部招式無法使用」
+//   - 「無法從手牌使出能量/物品/支援者」機制延後（含晶光花、電蜘蛛ex、含羞苞、吼叫尾ex、青銅鐘）
+//   - 「自己所有寶可夢下回合都無法攻擊」（電擊魔獸｜雷電在地）延後（需 player-level flag）
+//   - 「僅基礎寶可夢/進化寶可夢無法攻擊」（帕底亞肯泰羅、鐵包袱）延後（需 pokemon-filter flag）
+//   - 「本次自願 +100 點並下回合不攻擊」（大王銅象｜鼻之金勾臂）延後（需 optional-choice UI）
+//   - 懶人獺｜悠哉「這隻寶可夢下回合無法撤退」簡化為僅 heal 60（self-cantRetreat 需 pending flag）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── 輔助：對手戰鬥寶可夢下回合無法撤退（cantRetreatNextTurn）────────────────
+function defCantRetreatNextPost(): AttackPostFn {
+  return (state, aIdx) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const def = { ...players[dIdx] };
+    if (def.active) def.active = { ...def.active, cantRetreatNextTurn: true };
+    players[dIdx] = def;
+    return addLog({ ...state, players }, `對手下次回合無法撤退`, aIdx);
+  };
+}
+
+// ── A. 對手受招後下回合無法撤退（14 張）────────────────────────────────────
+regPost('羅絲雷朵|束縛', defCantRetreatNextPost());
+regPost('小鋸鱷|咬緊', defCantRetreatNextPost());
+regPost('三海地鼠ex|麻痺控制', defCantRetreatNextPost());
+regPost('厄鬼椪 水井面具ex|啜泣', defCantRetreatNextPost());
+regPost('勒克貓|咬緊', defCantRetreatNextPost());
+regPost('大狼犬|窮追不捨', defCantRetreatNextPost());
+regPost('狃拉|逼近', defCantRetreatNextPost());
+regPost('黑夜魔靈|影子束縛', defCantRetreatNextPost());
+regPost('觸手百合|束縛', defCantRetreatNextPost());
+regPost('拖拖蚓ex|岩石封鎖', defCantRetreatNextPost());
+regPost('磨牙彩皮魚|咬緊', defCantRetreatNextPost());
+regPost('噬沙堡爺ex|流沙地獄', defCantRetreatNextPost());
+
+// 爆焰龜獸｜火焰陣 — 灼傷 + 對手下回合無法撤退
+regPost('爆焰龜獸|火焰陣', (state, aIdx, pool) => {
+  const s1 = statusPost('burned')(state, aIdx, pool);
+  return defCantRetreatNextPost()(s1, aIdx, pool);
+});
+
+// 車輪毬｜毒陣 — 中毒 + 對手下回合無法撤退
+regPost('車輪毬|毒陣', (state, aIdx, pool) => {
+  const s1 = statusPost('poisoned')(state, aIdx, pool);
+  return defCantRetreatNextPost()(s1, aIdx, pool);
+});
+
+// 桃歹郎｜猛毒連鎖 — 中毒 + 對手下回合無法撤退（非 ex 版本）
+regPost('桃歹郎|猛毒連鎖', (state, aIdx, pool) => {
+  const s1 = statusPost('poisoned')(state, aIdx, pool);
+  return defCantRetreatNextPost()(s1, aIdx, pool);
+});
+
+// ── B. 自己下回合無法使用招式（指定招式名統一視為全招式）────────────────
+regPost('炎熱喵|閃焰強襲', selfCantAttackNextPost());
+regPost('咕咕鴿|噴射之翼', selfCantAttackNextPost());
+regPost('高傲雉雞|潛力', selfCantAttackNextPost());
+regPost('鐵螯龍蝦|暴亂之錘', selfCantAttackNextPost());
+regPost('月月熊 赫月 ex|血月', selfCantAttackNextPost());
+regPost('月月熊 赫月ex|血月', selfCantAttackNextPost());  // 兼容去空格寫法
+regPost('波普海豚|水流斬', selfCantAttackNextPost());
+regPost('海豚俠ex|終極衝擊', selfCantAttackNextPost());
+regPost('吉利蛋|潛力', selfCantAttackNextPost());
+regPost('大嘴蝠|漆黑利刃', selfCantAttackNextPost());
+regPost('願增猿ex|惡劣頭擊', selfCantAttackNextPost());
+regPost('閃焰王牌ex|閃焰強襲', selfCantAttackNextPost());
+regPost('好勝毛蟹|揮大拳', selfCantAttackNextPost());
+regPost('電燈怪|閃電伏特', selfCantAttackNextPost());
+regPost('鋁鋼橋龍|鐵之引爆', selfCantAttackNextPost());
+regPost('爆炸頭水牛|潛力', selfCantAttackNextPost());
+regPost('蒼炎刃鬼|黑煙斬', selfCantAttackNextPost());
+regPost('自爆磁怪|電磁炮', selfCantAttackNextPost());
+regPost('火伊布ex|紅玉髓', selfCantAttackNextPost());
+regPost('鐵毒蛾|高熱光線', selfCantAttackNextPost());
+regPost('水伊布ex|海藍寶石', selfCantAttackNextPost());
+regPost('雷伊布ex|棕碧璽', selfCantAttackNextPost());
+regPost('鐵武者ex|鐳射利刃', selfCantAttackNextPost());
+regPost('沙鐵皮ex|大地扣殺', selfCantAttackNextPost());
+regPost('月亮伊布|漆黑利刃', selfCantAttackNextPost());
+regPost('猛惡菇|暴亂之錘', selfCantAttackNextPost());
+regPost('雙劍鞘|猛擊在地', selfCantAttackNextPost());
+
+// 朝北鼻｜力量猛攻 — 擲 1 次硬幣反面，自己下回合無法使用招式（60 dmg baseline）
+regPost('朝北鼻|力量猛攻', (state, aIdx, pool) => {
+  const tails = Math.random() >= 0.5;
+  if (!tails) return state;
+  const s = addLog(state, `力量猛攻：擲 1 次硬幣反面，自己下個回合無法使用招式`, aIdx);
+  return selfCantAttackNextPost()(s, aIdx, pool);
+});
+
+// ── C. 對手受招後下回合無法使用招式 ─────────────────────────────────────────
+regPost('豐蜜龍|甜蜜熔化', defCantAttackNextPost());
+
+// ── D. 上個對手回合被取走獎賞則傷害 +N（revenge-dmg-plus）───────────────────
+// 鐵斑葉｜復仇刀鋒 100+60
+regPre('鐵斑葉|復仇刀鋒', (state, aIdx, _pool) => {
+  const snap = state.oppPrizesAtMyLastTurnEnd?.[aIdx] ?? 6;
+  const oppIdx = (1 - aIdx) as 0 | 1;
+  const tookPrize = state.players[oppIdx].prizes.length < snap;
+  const bonus = tookPrize ? 60 : 0;
+  const s = tookPrize
+    ? addLog(state, `復仇刀鋒：上個對手回合取過獎賞 → +60 傷害`, aIdx)
+    : state;
+  return { state: s, damage: 100 + bonus };
+});
+// 普隆隆姆｜捲土重來 30+90
+regPre('普隆隆姆|捲土重來', (state, aIdx, _pool) => {
+  const snap = state.oppPrizesAtMyLastTurnEnd?.[aIdx] ?? 6;
+  const oppIdx = (1 - aIdx) as 0 | 1;
+  const tookPrize = state.players[oppIdx].prizes.length < snap;
+  const bonus = tookPrize ? 90 : 0;
+  const s = tookPrize
+    ? addLog(state, `捲土重來：上個對手回合取過獎賞 → +90 傷害`, aIdx)
+    : state;
+  return { state: s, damage: 30 + bonus };
+});
+// 古玉魚｜嫉妒業火 50+90
+regPre('古玉魚|嫉妒業火', (state, aIdx, _pool) => {
+  const snap = state.oppPrizesAtMyLastTurnEnd?.[aIdx] ?? 6;
+  const oppIdx = (1 - aIdx) as 0 | 1;
+  const tookPrize = state.players[oppIdx].prizes.length < snap;
+  const bonus = tookPrize ? 90 : 0;
+  const s = tookPrize
+    ? addLog(state, `嫉妒業火：上個對手回合取過獎賞 → +90 傷害`, aIdx)
+    : state;
+  return { state: s, damage: 50 + bonus };
+});
+
+// ── E. 懶人獺｜悠哉 — heal 60（自己下回合不撤退部分延後實裝）────────────────
+regPost('懶人獺|悠哉', (state, aIdx) => {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const att = { ...players[aIdx] };
+  if (att.active) {
+    const newDmg = Math.max(0, att.active.damage - 60);
+    att.active = { ...att.active, damage: newDmg };
+  }
+  players[aIdx] = att;
+  return addLog({ ...state, players }, `悠哉：恢復 60 HP`, aIdx);
+});
