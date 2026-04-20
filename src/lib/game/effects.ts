@@ -1920,13 +1920,18 @@ reg('寶可夢捕捉器', (st, idx) => {
 
 /** 讓對手戰鬥寶可夢陷入指定狀態的 POST effect */
 function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'paralyzed'): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, status };
+    if (!def.active) return state;
+    const defName = pool.get(def.active.cardId)?.name ?? '?';
+    const statusLabelMap: Record<string, string> = {
+      poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
+    };
+    def.active = { ...def.active, status };
     players[dIdx] = def;
-    return { ...state, players };
+    return addLog({ ...state, players }, `${defName} 陷入【${statusLabelMap[status]}】`, aIdx);
   };
 }
 
@@ -1992,12 +1997,14 @@ regPost('闇黑酋雷姆ex|冰河期', (state, aIdx, pool) => {
 
 /** 攻擊後自傷 N */
 function selfHitPost(amount: number): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
-    if (att.active) att.active = { ...att.active, damage: att.active.damage + amount };
+    if (!att.active) return state;
+    const attName = pool.get(att.active.cardId)?.name ?? '?';
+    att.active = { ...att.active, damage: att.active.damage + amount };
     players[aIdx] = att;
-    return { ...state, players };
+    return addLog({ ...state, players }, `${attName} 自身受到 ${amount} 點傷害`, aIdx);
   };
 }
 regPost('燒火蚣|高溫奇襲', selfHitPost(10));
@@ -5650,10 +5657,14 @@ function discardStadiumPost(label: string, failIfNone: boolean = false): AttackP
 }
 
 function peekOppHandPost(label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
-    const handCount = state.players[dIdx].hand.length;
-    return addLog(state, `${label}：查看對手手牌（${handCount} 張）`, aIdx);
+    const hand = state.players[dIdx].hand;
+    if (hand.length === 0) {
+      return addLog(state, `${label}：對手手牌為空`, aIdx);
+    }
+    const names = hand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    return addLog(state, `${label}：查看對手手牌（${hand.length} 張）— ${names}`, aIdx);
   };
 }
 
@@ -7013,12 +7024,17 @@ regPost('火炎獅|灼燒', statusPost('burned'));
 
 // ── (3) 自己狀態（攻擊者自身）────────────────────────────────────────────────
 function selfStatusPost(status: SpecialCondition): AttackPostFn {
-  return (state, aIdx) => {
+  return (state, aIdx, pool) => {
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
-    if (att.active) att.active = { ...att.active, status };
+    if (!att.active) return state;
+    const attName = pool.get(att.active.cardId)?.name ?? '?';
+    const statusLabelMap: Record<string, string> = {
+      poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
+    };
+    att.active = { ...att.active, status };
     players[aIdx] = att;
-    return { ...state, players };
+    return addLog({ ...state, players }, `${attName} 陷入【${statusLabelMap[status]}】`, aIdx);
   };
 }
 regPost('卡比獸|倒下', selfStatusPost('asleep'));
@@ -7044,3 +7060,129 @@ regPost('頓甲|防守回轉', selfDmgReducePost(100));
 
 // 古劍豹｜冰柱閉環 120 — 選 1 張自身能量放回手牌
 regPost('古劍豹|冰柱閉環', returnSelfActiveEnergyPost(1, true, '冰柱閉環'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 29 (v1.84) — 看對手手牌 + 對手手牌丟棄 + 狀態/自傷批次補完
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── (1) 查看對手手牌（新增 3 張）────────────────────────────────────────────
+regPre('妙喵|看透', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('妙喵|看透', peekOppHandPost('看透'));
+
+regPre('小貓怪|好奇心', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('小貓怪|好奇心', peekOppHandPost('好奇心'));
+
+regPre('豆豆鴿|偵察', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('豆豆鴿|偵察', peekOppHandPost('偵察'));
+
+// ── (2) 洛托姆｜粉碎脈衝 — 查看對手手牌，將其中「物品」「道具」卡全部丟棄 ─
+regPre('洛托姆|粉碎脈衝', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('洛托姆|粉碎脈衝', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const p = state.players[dIdx];
+  if (p.hand.length === 0) return addLog(state, '粉碎脈衝：對手手牌為空', aIdx);
+  const handNames = p.hand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = addLog(state, `粉碎脈衝：查看對手手牌（${p.hand.length} 張）— ${handNames}`, aIdx);
+  const toDiscard = p.hand.filter(c => {
+    const card = pool.get(c.cardId);
+    if (!card) return false;
+    // 「物品」= Trainer/Item, 「寶可夢道具」= Pokemon/Other (tool)
+    const isItem = card.supertype === 'Trainer' && card.subtype === 'Item';
+    const isTool = card.supertype === 'Pokemon' && card.subtype === 'Other';
+    return isItem || isTool;
+  });
+  if (toDiscard.length === 0) {
+    return addLog(s, '粉碎脈衝：對手手牌無物品或道具卡', aIdx);
+  }
+  const discardNames = toDiscard.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  const toDiscardIids = new Set(toDiscard.map(c => c.iid));
+  const players = [...s.players] as [PlayerState, PlayerState];
+  players[dIdx] = {
+    ...players[dIdx],
+    hand: p.hand.filter(c => !toDiscardIids.has(c.iid)),
+    discard: [...p.discard, ...toDiscard],
+  };
+  return addLog({ ...s, players }, `粉碎脈衝：將對手 ${toDiscard.length} 張物品/道具卡丟棄 — ${discardNames}`, aIdx);
+});
+
+// ── (3) statusPost 批次補完 ─────────────────────────────────────────────────
+// 混亂類
+regPost('光電傘蜥|閃光彈', statusPost('confused'));
+regPost('火箭隊的大嘴蝠|奇異之光', statusPost('confused'));
+regPost('<火箭隊的>大嘴蝠|奇異之光', statusPost('confused'));
+regPost('超能妙喵|蠱惑', statusPost('confused'));
+regPost('超音蝠|超音波', statusPost('confused'));
+regPost('死神棺|蠱惑', statusPost('confused'));
+regPost('花舞鳥|眩目舞', statusPost('confused'));
+regPost('音波龍|恐慌嚎鳴', statusPost('confused'));
+regPost('<火箭隊的>貓老大ex|殘酷斬', statusPost('confused'));
+regPost('雙彈瓦斯|充滿瓦斯', statusPost('confused'));
+
+// 中毒類
+regPost('天蠍|毒擊', statusPost('poisoned'));
+regPost('鉗尾蠍|毒擊', statusPost('poisoned'));
+regPost('火箭隊的超音蝠|噴毒', statusPost('poisoned'));
+regPost('<火箭隊的>超音蝠|噴毒', statusPost('poisoned'));
+regPost('<莉佳的>臭臭花|噴毒', statusPost('poisoned'));
+regPost('哎呀球菇|毒之孢子', statusPost('poisoned'));
+regPost('灰塵山|垃圾射擊', statusPost('poisoned'));
+regPost('<火箭隊的>小拉達|險惡門牙', statusPost('poisoned'));
+regPost('百足蜈蚣|噴毒', statusPost('poisoned'));
+
+// 睡眠類
+regPost('超級雪妖女ex|純粹雪', statusPost('asleep'));
+regPost('冰雪龍|冰凍之風', statusPost('asleep'));
+regPost('派拉斯特|蘑菇孢子', statusPost('asleep'));
+regPost('<火箭隊的>催眠貘|催眠光線', statusPost('asleep'));
+regPost('夢夢蝕|睡眠波動', statusPost('asleep'));
+
+// 灼傷類
+regPost('六尾|灼熱', statusPost('burned'));
+regPost('炒炒豬|火焰灼燒', statusPost('burned'));
+regPost('達摩狒狒|灼燒', statusPost('burned'));
+regPost('厄鬼椪 火灶面具|灼燒', statusPost('burned'));
+regPost('加熱洛托姆|灼熱', statusPost('burned'));
+
+// ── (4) 自傷反動批次補完（selfHitPost）────────────────────────────────────
+regPost('落雷獸|電流攻擊', selfHitPost(10));
+regPost('墓仔狗|猛撞', selfHitPost(10));
+regPost('萊希拉姆|燃燒閃焰', selfHitPost(60));
+regPost('帕底亞 肯泰羅|捨身衝撞', selfHitPost(20));
+regPost('利牙魚|突擊', selfHitPost(10));
+regPost('<火箭隊的>團珠蛛|猛撞', selfHitPost(10));
+regPost('火箭隊的椰蛋樹|捨身衝撞', selfHitPost(30));
+regPost('頑皮熊貓|突擊', selfHitPost(10));
+regPost('仆斬將軍|雙刃斬', selfHitPost(50));
+regPost('赫普的卡比獸|極限壓制', selfHitPost(80));
+regPost('藤藤蛇|突擊', selfHitPost(10));
+regPost('小拉達|猛撞', selfHitPost(10));
+regPost('泡沫栗鼠|猛撞', selfHitPost(10));
+regPost('<莉佳的>走路草|突擊', selfHitPost(10));
+regPost('烈焰馬|猛火猛撞', selfHitPost(30));
+regPost('超級炎武王ex|深紅炸彈', selfHitPost(60));
+regPost('小鋸鱷|撞一下', selfHitPost(10));
+regPost('阿羅拉 隆隆岩|百萬噸墜落', selfHitPost(40));
+regPost('固拉多|百萬噸墜落', selfHitPost(30));
+regPost('<派帕的>原野水母|撞一下', selfHitPost(10));
+regPost('<派帕的>陸地水母|突擊', selfHitPost(30));
+regPost('<瑪俐的>頭巾混混|狂野衝撞', selfHitPost(30));
+regPost('索羅亞|猛撞', selfHitPost(10));
+regPost('下石鳥|突擊', selfHitPost(20));
+regPost('騎士蝸牛|狂野槍', selfHitPost(30));
+regPost('伽勒爾 泥巴魚|飛撲啃咬', selfHitPost(30));
+regPost('寶貝龍|突擊', selfHitPost(10));
+regPost('故勒頓ex|凱撒衝撞', selfHitPost(60));
+regPost('貓鼬斬ex|狂野剪', selfHitPost(30));
+regPost('<青木的>勇士雄鷹|勇鳥猛攻', selfHitPost(30));
+regPost('刺梭魚|突擊', selfHitPost(10));
+regPost('沙基拉斯|猛撞', selfHitPost(20));
+
+// ── (5) Mill 對手牌庫補完 ───────────────────────────────────────────────────
+regPost('超級赫拉克羅斯ex|推山', millOppDeckTopPost(2, '推山'));
+regPost('鐵骨土人|臂錘', millOppDeckTopPost(1, '臂錘'));
+regPost('厄鬼椪 礎石面具|推山', millOppDeckTopPost(1, '推山'));
+regPost('<火箭隊的>幼基拉斯|嚼山', millOppDeckTopPost(1, '嚼山'));
+regPost('班基拉斯|斷裂頓足', millOppDeckTopPost(2, '斷裂頓足'));
+
+// ── (6) 自己 mill（將自己的牌庫頂 N 張丟棄）─ 沿用既有 millSelfDeckTopPost ─
+regPost('黏美龍|龍之波動', millSelfDeckTopPost(1, '龍之波動'));
