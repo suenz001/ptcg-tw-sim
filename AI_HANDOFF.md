@@ -2791,3 +2791,31 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 25/25
 - 版本 1.62 → 1.63
+
+---
+
+## 📝 2026-04-21 Session 38n (v1.64) — H 標第 9 波：coin 混合三類（16 張）
+
+三個新 helper + 16 張招式實裝。
+
+### (A) coin-tails-fail — 4 張
+`coinTailsFailPre(base, label)`：擲 1 次硬幣，反面則招式失敗（damage=0），正面照原傷害。
+單卵細胞球｜偷襲（30）、斯魔茶｜偷襲（30）、搬運小匠｜全力拳（40）、阿羅拉 地鼠｜偷襲（30）。
+
+### (B) coin-heads-self-immune-next — 7 張
+`coinHeadsSelfImmuneNextPost(label)`：擲 1 次硬幣，正面則設 `damageReduceNextHit = 9999`（實質免疫下個對手回合的招式傷害）。「效果不受影響」部分簡化未處理。
+泥偶小人｜鐵壁、泥偶巨人｜鐵壁、土龍弟弟｜挖洞（30）、電電蟲｜躍起閃避（10）、東施喵｜喵打滾（80）、飄飄雛｜躍起閃避（10）、七夕青鳥｜棉花之翼（100）。
+
+### (C) coin-until-tails-multiply — 5 張
+`coinUntilTailsMultiplyPre(perHead, base, label)`：擲硬幣直到反面為止，正面數 × k（+ 可選 base）。有 20 次安全上限防無限迴圈。
+瑪力露｜滾球（10×）、土狼犬｜連續舞步（10×）、普隆隆姆｜奔進（100×）、燈罩夜菇｜螺旋衝刺（60+30×）、索財靈｜連續擲幣（20×）。
+
+### 暫緩
+- 仙子伊布｜奧密迴旋（正面將 1 隻對手備戰放回牌庫並重洗）— 需 shuffle-bench-to-deck UI
+- 熔蟻獸｜滑燒火焰 130 + 擲 3 硬幣反面數丟自己能量 — 需 discard-energy 組合
+- 鐵荊棘｜壞死壓榨 翻牌庫 5 張，未來卡 × 70 — 需「未來」trait 識別
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash
+- 版本 1.63 → 1.64

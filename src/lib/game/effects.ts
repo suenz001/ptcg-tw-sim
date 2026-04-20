@@ -3570,3 +3570,67 @@ regPre('一家鼠|連續門牙', coinHeadsMultiplyPre(4, 30, '連續門牙'));
 regPre('三海地鼠|三連鞭', coinHeadsMultiplyPre(3, 70, '三連鞭'));
 regPre('天然雀|三連撞', coinHeadsMultiplyPre(3, 10, '三連撞'));
 regPre('袋獸|迷昏拳', coinHeadsMultiplyPre(2, 90, '迷昏拳'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38n v1.64 H 標第 9 波 — coin 混合三類（16 張）
+// (A) coin-tails-fail：擲反面 → 招式失敗（damage=0）
+// (B) coin-heads-immune-next：正面 → 下回合免疫（damageReduceNextHit=9999）
+// (C) coin-until-tails-multiply：擲到反面為止，正面數 × k
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── (A) coin-tails-fail helper + 4 張 ─────────────────────────────────────
+function coinTailsFailPre(base: number, attackName: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const heads = Math.random() < 0.5;
+    if (!heads) {
+      return { state: addLog(state, `${attackName}：擲硬幣反面 → 招式失敗`, aIdx), damage: 0 };
+    }
+    return { state: addLog(state, `${attackName}：擲硬幣正面 → ${base} 傷害`, aIdx), damage: base };
+  };
+}
+regPre('單卵細胞球|偷襲', coinTailsFailPre(30, '偷襲'));
+regPre('斯魔茶|偷襲', coinTailsFailPre(30, '偷襲'));
+regPre('搬運小匠|全力拳', coinTailsFailPre(40, '全力拳'));
+regPre('阿羅拉 地鼠|偷襲', coinTailsFailPre(30, '偷襲'));
+
+// ── (B) coin-heads-immune-next helper + 7 張 ──────────────────────────────
+// 擲 1 次硬幣若正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害（簡化：
+// damageReduceNextHit = 9999，實質免疫傷害；「效果不受影響」部分暫未處理）
+function coinHeadsSelfImmuneNextPost(attackName: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const heads = Math.random() < 0.5;
+    if (!heads) return addLog(state, `${attackName}：擲硬幣反面 → 無追加效果`, aIdx);
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) att.active = { ...att.active, damageReduceNextHit: 9999 };
+    players[aIdx] = att;
+    return addLog({ ...state, players }, `${attackName}：擲硬幣正面 → 下回合免疫招式傷害`, aIdx);
+  };
+}
+regPost('泥偶小人|鐵壁', coinHeadsSelfImmuneNextPost('鐵壁'));
+regPost('泥偶巨人|鐵壁', coinHeadsSelfImmuneNextPost('鐵壁'));
+regPost('土龍弟弟|挖洞', coinHeadsSelfImmuneNextPost('挖洞'));
+regPost('電電蟲|躍起閃避', coinHeadsSelfImmuneNextPost('躍起閃避'));
+regPost('東施喵|喵打滾', coinHeadsSelfImmuneNextPost('喵打滾'));
+regPost('飄飄雛|躍起閃避', coinHeadsSelfImmuneNextPost('躍起閃避'));
+regPost('七夕青鳥|棉花之翼', coinHeadsSelfImmuneNextPost('棉花之翼'));
+
+// ── (C) coin-until-tails-multiply helper + 5 張 ───────────────────────────
+function coinUntilTailsMultiplyPre(perHead: number, base: number, attackName: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    let heads = 0;
+    // 安全上限 20 次防無限迴圈（理論概率近 0，但保護）
+    for (let i = 0; i < 20; i++) {
+      if (Math.random() < 0.5) heads++;
+      else break;
+    }
+    const dmg = base + heads * perHead;
+    const s = addLog(state, `${attackName}：擲到反面前正面 ${heads} 次 → ${dmg} 傷害`, aIdx);
+    return { state: s, damage: dmg };
+  };
+}
+regPre('瑪力露|滾球', coinUntilTailsMultiplyPre(10, 0, '滾球'));
+regPre('土狼犬|連續舞步', coinUntilTailsMultiplyPre(10, 0, '連續舞步'));
+regPre('普隆隆姆|奔進', coinUntilTailsMultiplyPre(100, 0, '奔進'));
+regPre('燈罩夜菇|螺旋衝刺', coinUntilTailsMultiplyPre(30, 60, '螺旋衝刺'));
+regPre('索財靈|連續擲幣', coinUntilTailsMultiplyPre(20, 0, '連續擲幣'));
