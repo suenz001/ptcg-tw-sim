@@ -2560,4 +2560,38 @@
   .discard-title{ margin:0 0 .6rem; color:#aaffaa; font-size:1.05rem; }
 
   /* ── Tool + Stadium ── */
-  .tool-chip{ font-size:.6rem; color:#f0d080; background:#2a2a0a; border:1px solid #6a5a20; border-radius:3px; paddin
+  .tool-chip{ font-size:.6rem; color:#f0d080; background:#2a2a0a; border:1px solid #6a5a20; border-radius:3px; padding:.06rem .2rem; margin-top:.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tool-chip.sm{ font-size:.52rem; }
+  .ab-used-chip{ font-size:.58rem; color:#c8c0f0; background:#2a1a3a; border:1px solid #4a3a6a; border-radius:3px; padding:.06rem .25rem; margin-top:.1rem; display:inline-block; }
+  .ab-used-chip.sm{ font-size:.7rem; padding:0 .15rem; border:none; background:transparent; color:#d0a0ff; }
+  .tool-btn{ background:#4a3a10; color:#f0d080; }
+  .tool-btn:hover{ background:#6a5a20; }
+  .stadium-chip{ background:#1a2a4a; color:#88aaff; border-color:#3a5a8a; }
+  .clickable-chip{ cursor:pointer; font-family:inherit; }
+  .clickable-chip:hover{ background:#2a3a5a; color:#fff; }
+  .btn-act.stadium-btn{ background:#1a2a4a; color:#88aaff; border:1px solid #3a5a8a; }
+  .btn-act.stadium-btn:hover{ background:#2a3a6a; }
+
+  /* ── 特性按鈕 ── */
+  .ability-btn{ display:block; width:100%; margin-top:.2rem; padding:.2rem .3rem; font-size:.65rem; background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; border-radius:4px; cursor:pointer; text-align:center; }
+  .ability-btn:hover{ background:#5a2a8a; }
+  .ability-btn-sm{ display:block; width:100%; margin-top:.12rem; padding:.12rem; font-size:.56rem; background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; border-radius:3px; cursor:pointer; }
+  .ability-btn-sm:hover{ background:#5a2a8a; }
+
+  /* ── 特殊狀態晶片 ── */
+  .status-chip{ font-size:.62rem; color:#fff; padding:.08rem .25rem; border-radius:3px; margin-top:.1rem; display:inline-block; }
+  .status-chip-sm{ font-size:.75rem; display:inline-block; }
+  .status-poisoned{ background:#4a0a7a; border:1px solid #8a3aaa; }
+  .status-burned{ background:#8a2a00; border:1px solid #cc4a10; }
+  .status-asleep{ background:#1a1a5a; border:1px solid #4a4aaa; }
+  .status-confused{ background:#5a3a00; border:1px solid #aa7a10; }
+  .status-paralyzed{ background:#5a5a00; border:1px solid #aaaa10; }
+
+  /* ── AI 模式 ── */
+  .ai-card{ border-color:#5a3a8a !important; }
+  .ai-tag{ font-size:.72rem; background:#3a1a5a; color:#e0a0ff; border-radius:4px; padding:.08rem .3rem; margin-left:.4rem; vertical-align:middle; }
+  .ai-toggle{ display:flex; align-items:center; gap:.4rem; font-size:.85rem; color:#ccc; cursor:pointer; }
+  .ai-toggle input{ cursor:pointer; accent-color:#8a4aee; width:16px; height:16px; }
+  .ai-chip{ background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; animation:pulse 1s infinite alternate; }
+  @keyframes pulse{ from{ opacity:.7; } to{ opacity:1; } }
+</style>

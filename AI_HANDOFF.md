@@ -2281,3 +2281,42 @@ v1.51 把 log max-height 從 220 → 140px，但用戶又回傳截圖：log 面�
 
 版本號 1.51 → 1.52。
 
+
+
+---
+
+## Session 38c（v1.53 — 2026-04-20，修復 FUSE 截斷導致 v1.51/v1.52 部署失敗）
+
+### 背景
+Leon 回報線上網址還是顯示 v1.5。檢查 GitHub Actions：v1.51 和 v1.52 的 deploy workflow 都在
+「Build SvelteKit app」步驟 FAILED，v1.5（3acac62）才是最後一次成功部署——所以生產站還停在 v1.5。
+
+### 根因
+本地 build 重現錯誤：
+```
+file: src/routes/game/+page.svelte:2563:117
+unexpected_eof
+```
+生產端 `+page.svelte` 在 `.tool-chip` CSS 規則的 `paddin...` 處被切斷，style block 沒有收尾的 `}`
+也沒有 `</style>` 閉合標籤。
+
+問題來源：sandbox 從 FUSE mount 讀取大檔時會偶發**讀取截斷**（sandbox 看到 2562 行，實際
+Windows / 上一版 commit 都是 2595 行）。我 v1.51 直接 `cp` sandbox 的截斷版到 /tmp clean clone
+推上去，所以 origin/main 從 v1.51 開始就爛了；v1.52 又沿用截斷版，build 一直炸。
+
+### 修復
+1. 從 `git show 3acac62:src/routes/game/+page.svelte` 拉完整 2595 行版本到 /tmp。
+2. 用 Python 重打 v1.51+v1.52 的 CSS 修改（action-bar + log-col + stadium-display 那三段）。
+3. 結果檔案 2597 行（原 2595 + 2 新增行），`</style>` 收尾完整。
+4. 本地 `npm run build` 驗證通過（build in ~10s，無警告）。
+
+### 經驗
+- 不能無腦 `cp` sandbox FUSE 路徑的大檔到 /tmp clean clone；要先 `wc -l` 比對上一版 commit 的
+  檔案行數，確認沒被 FUSE 截斷。
+- 或更穩妥：用 `git show {last-good-sha}:{path} > /tmp/base` 拉遠端的完整版當基底，在 /tmp 裡用
+  Python/sed 打 patch，避開 FUSE 讀取。
+- 之後要注意 `src/lib/game/engine.ts`、`src/lib/game/types.ts` 等其他大檔在 sandbox 也可能被
+  FUSE 截斷讀（sandbox 分別看到 1615 / 220 行，origin 是 1655 / 230），若要 cp 到 clean clone
+  請先比對行數。
+
+版本號 1.52 → 1.53（實質內容與 1.52 相同，只是補完被截斷的檔案讓 build 能過）。
