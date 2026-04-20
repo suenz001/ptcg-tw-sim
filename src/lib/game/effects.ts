@@ -3530,3 +3530,43 @@ regPost('懶人獺|悠哉', (state, aIdx) => {
   players[aIdx] = att;
   return addLog({ ...state, players }, `悠哉：恢復 60 HP`, aIdx);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38m v1.63 H 標第 8 波 — coin-heads-multiply 批次（24 張）
+// 擲 N 次硬幣，正面出現次數 × k 點傷害。
+// ══════════════════════════════════════════════════════════════════════════════
+
+function coinHeadsMultiplyPre(flips: number, perHead: number, attackName: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    let heads = 0;
+    for (let i = 0; i < flips; i++) if (Math.random() < 0.5) heads++;
+    const dmg = heads * perHead;
+    const s = addLog(state, `${attackName}：擲 ${flips} 次硬幣正面 ${heads} 次 → ${dmg} 傷害`, aIdx);
+    return { state: s, damage: dmg };
+  };
+}
+
+regPre('木棉球|三重旋轉', coinHeadsMultiplyPre(3, 10, '三重旋轉'));
+regPre('海豚俠|二連擊', coinHeadsMultiplyPre(2, 90, '二連擊'));
+regPre('雙卵細胞球|雙重戲法', coinHeadsMultiplyPre(2, 30, '雙重戲法'));
+regPre('長鼻葉|連出巴掌', coinHeadsMultiplyPre(3, 30, '連出巴掌'));
+regPre('蘑蘑菇|二連頭錘', coinHeadsMultiplyPre(2, 10, '二連頭錘'));
+regPre('佛烈托斯|尖刺加農炮', coinHeadsMultiplyPre(3, 30, '尖刺加農炮'));
+regPre('大舌舔|舔舔颶風', coinHeadsMultiplyPre(4, 70, '舔舔颶風'));
+regPre('向日種子|種子機關槍', coinHeadsMultiplyPre(4, 10, '種子機關槍'));
+regPre('蚊香蝌蚪|擺尾拍打', coinHeadsMultiplyPre(2, 20, '擺尾拍打'));
+regPre('蚊香君|連環巴掌', coinHeadsMultiplyPre(2, 30, '連環巴掌'));
+regPre('穿山鼠|雙重抓', coinHeadsMultiplyPre(2, 20, '雙重抓'));
+regPre('索羅亞|雙重抓', coinHeadsMultiplyPre(2, 20, '雙重抓'));
+regPre('喵喵|亂抓', coinHeadsMultiplyPre(3, 20, '亂抓'));
+regPre('貓老大|亂抓', coinHeadsMultiplyPre(3, 50, '亂抓'));
+regPre('幼棉棉|雙重旋轉', coinHeadsMultiplyPre(2, 10, '雙重旋轉'));
+regPre('燈籠魚|雙重伏特', coinHeadsMultiplyPre(2, 20, '雙重伏特'));
+regPre('咕咕|三次撞', coinHeadsMultiplyPre(3, 10, '三次撞'));
+regPre('爆香猿|雙重粉碎', coinHeadsMultiplyPre(2, 70, '雙重粉碎'));
+regPre('猴怪|二連劈', coinHeadsMultiplyPre(2, 10, '二連劈'));
+regPre('青銅鐘|雙重衝擊', coinHeadsMultiplyPre(2, 100, '雙重衝擊'));
+regPre('一家鼠|連續門牙', coinHeadsMultiplyPre(4, 30, '連續門牙'));
+regPre('三海地鼠|三連鞭', coinHeadsMultiplyPre(3, 70, '三連鞭'));
+regPre('天然雀|三連撞', coinHeadsMultiplyPre(3, 10, '三連撞'));
+regPre('袋獸|迷昏拳', coinHeadsMultiplyPre(2, 90, '迷昏拳'));
