@@ -8,7 +8,7 @@
  * M3/M4 逐步填入更多效果
  */
 
-import type { Card } from '$lib/cards/types';
+import type { Card, EnergyType } from '$lib/cards/types';
 import type { GameState, PlayerState, CardInstance, PendingSelection } from './types';
 
 // ── 型別 ─────────────────────────────────────────────────────────────────────
@@ -354,6 +354,14 @@ function healResolver(
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 好友寶芬 — 從牌庫選最多 2 隻 HP≤70 基礎寶可夢放備戰
+regG('好友寶芬', (st, idx, pool) => {
+  // 備戰要有空位，且牌庫要有 HP≤70 的基礎寶可夢
+  if (st.players[idx].bench.length >= 5) return false;
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && (card.hp ?? 0) <= 70;
+  });
+});
 reg('好友寶芬', (st, idx) => {
   st = addLog(st, '好友寶芬：從牌庫選至多 2 隻 HP≤70 基礎寶可夢到備戰區', idx);
   return withPending(st, {
@@ -366,6 +374,13 @@ reg('好友寶芬', (st, idx) => {
 });
 
 // 赫普的包包 — 從牌庫選最多 2 隻「赫普的寶可夢」基礎寶可夢到備戰（簡化為任何基礎）
+regG('赫普的包包', (st, idx, pool) => {
+  if (st.players[idx].bench.length >= 5) return false;
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom;
+  });
+});
 reg('赫普的包包', (st, idx) => {
   st = addLog(st, '赫普的包包：從牌庫選至多 2 隻基礎寶可夢到備戰區', idx);
   return withPending(st, {
@@ -377,7 +392,15 @@ reg('赫普的包包', (st, idx) => {
   });
 });
 
-regR('bench-basic-from-deck', (st, idx, iids, _params, _pool) => {
+regR('bench-basic-from-deck', (st, idx, iids, _params, pool) => {
+  // 公開資訊：放到備戰區本來就對對手可見，順便記到 log 方便追蹤
+  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `放到備戰區：${names}`, idx);
+  } else {
+    st = addLog(st, '牌庫搜尋：未選擇任何卡', idx);
+  }
   return updatePlayer(st, idx, (p) => {
     const selected = p.deck
       .filter(c => iids.includes(c.iid))
@@ -526,6 +549,12 @@ regR('ultra-ball-discard', (st, idx, iids, _params, pool) => {
 
 // 超級信號 — 從牌庫搜尋 1 張「超級進化寶可夢 ex」加手牌
 // ⚠️ 必須只過濾「超級進化 ex」（名字開頭「超級」），普通 ex（桃歹郎ex / 拉帝亞斯ex）不可被搜到
+regG('超級信號', (st, idx, pool) =>
+  st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.name.startsWith('超級') && (card.subtype === 'ex' || card.name.endsWith('ex'));
+  })
+);
 reg('超級信號', (st, idx) => {
   st = addLog(st, '超級信號：從牌庫選 1 張超級進化寶可夢 ex 加手牌', idx);
   return withPending(st, {
@@ -577,6 +606,8 @@ reg('能量回收器', (st, idx, pool) => {
   });
 });
 regR('energy-retrieval', (st, idx, iids, _params, _pool) => {
+  const n = iids.length;
+  st = addLog(st, `能量回收器：${n} 張基本能量洗回牌庫`, idx);
   return updatePlayer(st, idx, (p) => {
     const chosen = p.discard.filter(c => iids.includes(c.iid));
     const newDiscard = p.discard.filter(c => !iids.includes(c.iid));
@@ -584,10 +615,16 @@ regR('energy-retrieval', (st, idx, iids, _params, _pool) => {
   });
 });
 
-regR('discard-to-hand', (st, idx, iids, _params, _pool) => {
+regR('discard-to-hand', (st, idx, iids, _params, pool) => {
+  // 棄牌區 → 手牌：來源是公開的，記錄取回的卡名
+  const chosen = st.players[idx].discard.filter(c => iids.includes(c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `從棄牌取回：${names}`, idx);
+  }
   return updatePlayer(st, idx, (p) => {
-    const chosen = p.discard.filter(c => iids.includes(c.iid));
-    return { ...p, discard: p.discard.filter(c => !iids.includes(c.iid)), hand: [...p.hand, ...chosen] };
+    const picked = p.discard.filter(c => iids.includes(c.iid));
+    return { ...p, discard: p.discard.filter(c => !iids.includes(c.iid)), hand: [...p.hand, ...picked] };
   });
 });
 
@@ -2254,6 +2291,12 @@ reg('庫瑟洛斯奇的企圖', (st, idx) => {
 });
 
 // 席藍 — 搜最多 3 張 ex 寶可夢加手牌
+regG('席藍', (st, idx, pool) =>
+  st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && (card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX'));
+  })
+);
 reg('席藍', (st, idx) => {
   st = addLog(st, '席藍：從牌庫選最多 3 張寶可夢 ex 加手牌', idx);
   return withPending(st, {
@@ -2396,3 +2439,161 @@ regA('螺釘地鼠', 0, (st, idx, pool) => {
     return { ...p, deck: shuffle(newDeck), discard: [...p.discard, ...fighting] };
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 33 — 寶可夢道具（Tool）效果登錄表
+//
+// 設計：每個 tool 的效果都是一小段「在 ATTACK 流程特定時機觸發」的 hook。
+// 引擎在 ATTACK handler 查表呼叫，沒註冊的 tool 沒效果。
+//
+// 觸發點（依序）：
+//   1. TOOL_HP_BONUS            — 防守方有效 HP 增加（影響 KO 判定）
+//   2. TOOL_ATTACK_BONUS        — 攻擊方 +N 傷害（weakness 後）
+//   3. TOOL_DEFENSE_REDUCE_BY_TYPE — 攻擊屬性符合時防守方 -N，觸發後丟棄道具
+//   4. TOOL_PREVENT_KO          — 滿血被 KO 時保留 HP，觸發後丟棄道具
+//   5. TOOL_ON_KO               — 被 KO 時的額外效果（如抽牌、移能量）
+//   6. TOOL_PRIZE_BONUS         — 被 KO 時對手多獲 N 張獎賞
+//   7. TOOL_ON_DAMAGED          — 被打到但未 KO 時觸發（如反傷、抽牌）
+//   8. TOOL_RETREAT_MOD         — 撤退成本修正
+// ══════════════════════════════════════════════════════════════════════════════
+
+export const TOOL_HP_BONUS = new Map<string, (holderCard: Card) => number>();
+export const TOOL_ATTACK_BONUS = new Map<string, (
+  attackerCard: Card, attackerInst: CardInstance,
+  defenderCard: Card, defenderInst: CardInstance
+) => number>();
+export const TOOL_DEFENSE_REDUCE_BY_TYPE = new Map<string, {
+  amount: number;
+  types: EnergyType[];
+  discardOnTrigger: boolean;
+}>();
+export const TOOL_PREVENT_KO = new Map<string, (
+  holderInst: CardInstance, holderCard: Card, incomingDamage: number
+) => { prevent: boolean; leaveHP: number }>();
+export const TOOL_ON_KO = new Map<string, (
+  state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, pool: Map<string, Card>
+) => GameState>();
+export const TOOL_PRIZE_BONUS = new Map<string, (holderCard: Card) => number>();
+export const TOOL_ON_DAMAGED = new Map<string, (
+  state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, damage: number, pool: Map<string, Card>
+) => GameState>();
+export const TOOL_RETREAT_MOD = new Map<string, (
+  holderCard: Card, holderInst: CardInstance
+) => { reduceBy?: number; zero?: boolean }>();
+
+// ── HP 加成 ──────────────────────────────────────────────────────────────────
+TOOL_HP_BONUS.set('英雄斗篷', () => 100);
+TOOL_HP_BONUS.set('勇氣護符', (card) => !card.evolvesFrom ? 50 : 0);
+TOOL_HP_BONUS.set('豪華斗篷', (card) => {
+  const isRulePoke = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX')
+    || !!card.rulesText?.includes('擁有規則');
+  return isRulePoke ? 0 : 100;
+});
+// 驅勁能量 古代/未來：簡化 — 不檢查「古代/未來」標籤，附上就生效（UI 層不會附錯）
+TOOL_HP_BONUS.set('驅勁能量 古代', () => 60);
+
+// ── 攻擊加成（我方帶此道具 → 打出時 +N）────────────────────────────────────
+TOOL_ATTACK_BONUS.set('極限腰帶', (_a, _ai, defCard) => {
+  const isEx = defCard.subtype === 'ex' || defCard.name.endsWith('ex') || defCard.name.endsWith('EX');
+  return isEx ? 50 : 0;
+});
+TOOL_ATTACK_BONUS.set('鎖鏈糬', (_a, atkInst) => atkInst.status === 'poisoned' ? 40 : 0);
+TOOL_ATTACK_BONUS.set('驅勁能量 未來', () => 20);
+
+// ── 特定屬性防禦（防守方帶此道具 → 特定屬性攻擊 -60，觸發即丟棄） ─────────
+TOOL_DEFENSE_REDUCE_BY_TYPE.set('福祿果', { amount: 60, types: ['Psychic'], discardOnTrigger: true });
+TOOL_DEFENSE_REDUCE_BY_TYPE.set('巧可果', { amount: 60, types: ['Fire'],    discardOnTrigger: true });
+TOOL_DEFENSE_REDUCE_BY_TYPE.set('千香果', { amount: 60, types: ['Water'],   discardOnTrigger: true });
+TOOL_DEFENSE_REDUCE_BY_TYPE.set('刺耳果', { amount: 60, types: ['Darkness'], discardOnTrigger: true });
+TOOL_DEFENSE_REDUCE_BY_TYPE.set('霹霹果', { amount: 60, types: ['Metal'],   discardOnTrigger: true });
+TOOL_DEFENSE_REDUCE_BY_TYPE.set('莓榴果', { amount: 60, types: ['Dragon'],  discardOnTrigger: true });
+
+// ── 防 KO（滿血被 KO 時留 10 HP） ─────────────────────────────────────────
+TOOL_PREVENT_KO.set('倖存鍛鍊器', (inst, card) => {
+  const hp = card.hp ?? 0;
+  if (inst.damage === 0 && hp > 10) return { prevent: true, leaveHP: 10 };
+  return { prevent: false, leaveHP: 0 };
+});
+
+// ── 被 KO 時效果 ───────────────────────────────────────────────────────────
+TOOL_ON_KO.set('希望護身符', (state, dIdx) => {
+  // 從牌庫抽 3 張（簡化為固定抽頂 3 張；原文為「任意選擇最多 3 張」）
+  state = addLog(state, '希望護身符：從牌庫抽 3 張', dIdx);
+  return updatePlayer(state, dIdx, p => {
+    const taken = p.deck.slice(0, 3);
+    return { ...p, deck: shuffle(p.deck.slice(3)), hand: [...p.hand, ...taken] };
+  });
+});
+TOOL_ON_KO.set('沉重接力棒', (state, dIdx, _aIdx, pool) => {
+  // 只對【撤退】所需 4 能量的寶可夢生效
+  // 注意：此 hook 在 KO 後呼叫，被 KO 的 active 已經進棄牌。要從棄牌找能量。
+  // 簡化：移除棄牌區最近丟進去的基本能量（最多 3 張），改附於第一個備戰。
+  const player = state.players[dIdx];
+  if (player.bench.length === 0) return state;
+  // 找棄牌區最後 N 張基本能量（剛剛被 KO 時一起丟進去的）
+  const revIds: string[] = [];
+  for (let i = player.discard.length - 1; i >= 0 && revIds.length < 3; i--) {
+    const c = player.discard[i];
+    const card = pool.get(c.cardId);
+    if (card?.supertype === 'Energy' && card.subtype === 'Basic') {
+      revIds.push(c.iid);
+    } else {
+      break; // 非能量則停止（只看最上面的批次）
+    }
+  }
+  if (revIds.length === 0) return state;
+  state = addLog(state, `沉重接力棒：移動 ${revIds.length} 張基本能量到備戰`, dIdx);
+  return updatePlayer(state, dIdx, p => {
+    const energies = p.discard.filter(c => revIds.includes(c.iid));
+    const newDiscard = p.discard.filter(c => !revIds.includes(c.iid));
+    const target = p.bench[0];
+    const newBench = [...p.bench];
+    newBench[0] = { ...target, energyAttached: [...target.energyAttached, ...energies] };
+    return { ...p, discard: newDiscard, bench: newBench };
+  });
+});
+
+// ── 被擊倒時對手多獲 1 張獎賞 ─────────────────────────────────────────────
+TOOL_PRIZE_BONUS.set('豪華斗篷', (card) => {
+  const isRulePoke = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX')
+    || !!card.rulesText?.includes('擁有規則');
+  return isRulePoke ? 0 : 1;
+});
+
+// ── 受傷（未 KO）觸發 ──────────────────────────────────────────────────────
+TOOL_ON_DAMAGED.set('幸運頭盔', (state, dIdx) => {
+  state = addLog(state, '幸運頭盔：抽 2 張', dIdx);
+  return updatePlayer(state, dIdx, p => {
+    const taken = p.deck.slice(0, 2);
+    return { ...p, deck: p.deck.slice(2), hand: [...p.hand, ...taken] };
+  });
+});
+TOOL_ON_DAMAGED.set('奢華炸彈', (state, dIdx, aIdx) => {
+  // 反彈 120 傷害到攻擊方，且道具丟棄
+  state = updatePlayer(state, dIdx, p => {
+    if (!p.active || !p.active.toolAttached) return p;
+    const tool = p.active.toolAttached;
+    return { ...p, active: { ...p.active, toolAttached: undefined }, discard: [...p.discard, tool] };
+  });
+  state = updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, damage: p.active.damage + 120 } };
+  });
+  return addLog(state, '奢華炸彈：反彈 120 傷害！', null);
+});
+
+// ── 撤退成本修正 ──────────────────────────────────────────────────────────
+TOOL_RETREAT_MOD.set('緊急滑板', (card, inst) => {
+  const hp = card.hp ?? 0;
+  const remaining = hp - inst.damage;
+  if (remaining <= 30) return { zero: true };
+  return { reduceBy: 1 };
+});
+TOOL_RETREAT_MOD.set('驅勁能量 未來', () => ({ zero: true }));
+// 氣球 已有既存 engine 支援（retreat -2），這裡補註冊好保持一致性
+TOOL_RETREAT_MOD.set('氣球', () => ({ reduceBy: 2 }));
+
+// ── 重力之玉：雙方撤退 +1（需要 engine 層在計算兩側時查對面 tool） ─────
+// 用一個獨立的 flag 標記，engine 計算撤退時若雙方任一 active 帶此 tool，則 +1
+export const TOOL_BOTH_SIDES_RETREAT_PLUS = new Set<string>();
+TOOL_BOTH_SIDES_RETREAT_PLUS.add('重力之玉');

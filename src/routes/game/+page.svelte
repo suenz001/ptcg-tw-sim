@@ -13,7 +13,7 @@
     getAvailableAttacks, hasPendingActions,
     countEnergy, getEvolvableTargets,
     canRetreat, getPlayableTrainers, getPlayableBasics,
-    getUsableAbilities, isBasicPokemonCard,
+    getUsableAbilities, isBasicPokemonCard, getEffectiveHP,
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
@@ -603,7 +603,10 @@
   // ── 輔助函式 ────────────────────────────────────────────────────────────────
   function getCard(cardId: string): Card | undefined { return pool.get(cardId); }
   function hpRemaining(inst: CardInstance): number {
-    return Math.max(0, (pool.get(inst.cardId)?.hp ?? 0) - inst.damage);
+    return Math.max(0, getEffectiveHP(inst, pool) - inst.damage);
+  }
+  function hpTotal(inst: CardInstance | null | undefined): number {
+    return inst ? getEffectiveHP(inst, pool) : 0;
   }
   function energySummary(inst: CardInstance): string {
     const counts = countEnergy(inst, pool);
@@ -1051,7 +1054,7 @@
         {@const ac = getCard(setupPlayer.active.cardId)}
         <div class="setup-active">
           <strong>出場：</strong>
-          <span class="poke-chip active-chip">{ac?.name ?? '?'} (HP {ac?.hp})</span>
+          <span class="poke-chip active-chip">{ac?.name ?? '?'} (HP {hpTotal(setupPlayer.active)})</span>
           <button class="small danger" onclick={() => dispatch(GameActions.placeActive(setupPlayer.active!.iid, setupIdx))}>換出場</button>
         </div>
       {/if}
@@ -1172,9 +1175,9 @@
             {@const b=oppPlayer.bench[i]}{@const bc=getCard(b.cardId)}
             <div class="bench-slot">
               <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>
-              <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{bc?.hp?hpRemaining(b)/bc.hp*100:0}%;background:{hpColor(hpRemaining(b),bc?.hp??0)}"></div></div>
+              <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
               <div class="bench-name">{bc?.name}</div>
-              <div class="bench-stat">HP {hpRemaining(b)}/{bc?.hp}</div>
+              <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
               {#if b.toolAttached}{@const tc3=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc3?.name}</div>{/if}
               {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
               {#if b.status}<div class="status-chip-sm status-{b.status}">{
@@ -1195,8 +1198,8 @@
             <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
-              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{ac?.hp?hpRemaining(oppPlayer.active)/ac.hp*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),ac?.hp??0)}"></div></div>
-              <div class="active-hp">HP {hpRemaining(oppPlayer.active)}/{ac?.hp}</div>
+              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(oppPlayer.active)?hpRemaining(oppPlayer.active)/hpTotal(oppPlayer.active)*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),hpTotal(oppPlayer.active))}"></div></div>
+              <div class="active-hp">HP {hpRemaining(oppPlayer.active)}/{hpTotal(oppPlayer.active)}</div>
               <div class="active-nrg">{energySummary(oppPlayer.active)}</div>
               {#if oppPlayer.active.toolAttached}{@const tc=getCard(oppPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
               {#if oppPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
@@ -1319,8 +1322,8 @@
               onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}/>
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
-              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{ac?.hp?hpRemaining(myPlayer.active)/ac.hp*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),ac?.hp??0)}"></div></div>
-              <div class="active-hp">HP {hpRemaining(myPlayer.active)}/{ac?.hp}</div>
+              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(myPlayer.active)?hpRemaining(myPlayer.active)/hpTotal(myPlayer.active)*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),hpTotal(myPlayer.active))}"></div></div>
+              <div class="active-hp">HP {hpRemaining(myPlayer.active)}/{hpTotal(myPlayer.active)}</div>
               <div class="active-nrg">{energySummary(myPlayer.active)}</div>
               {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
               {#if myPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
@@ -1364,9 +1367,9 @@
               <img src={bc?.imageUrl} alt={bc?.name}
                 class:zoomable={!selectedEnergyIid}
                 onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>
-              <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{bc?.hp?hpRemaining(b)/bc.hp*100:0}%;background:{hpColor(hpRemaining(b),bc?.hp??0)}"></div></div>
+              <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
               <div class="bench-name">{bc?.name}</div>
-              <div class="bench-stat">HP {hpRemaining(b)}/{bc?.hp}</div>
+              <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
               <div class="bench-nrg">{energySummary(b)}</div>
               {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}
               {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
@@ -1650,14 +1653,15 @@
             </div>
             {#if zoomCard.evolvesFrom}<div class="zoom-meta">進化自：{zoomCard.evolvesFrom}</div>{/if}
             {#if zoomInst}
-              {@const instHp = (zoomCard.hp ?? 0) - zoomInst.damage}
+              {@const effMax = hpTotal(zoomInst)}
+              {@const instHp = Math.max(0, effMax - zoomInst.damage)}
               {@const toolC = zoomInst.toolAttached ? getCard(zoomInst.toolAttached.cardId) : null}
               <div class="zoom-state">
                 <div class="state-title">📍 場上狀態</div>
-                {#if zoomCard.hp}
+                {#if effMax > 0}
                   <div class="state-row">
                     <span class="state-k">HP</span>
-                    <span class="state-v">{instHp} / {zoomCard.hp}{#if zoomInst.damage>0}（傷害 {zoomInst.damage}）{/if}</span>
+                    <span class="state-v">{instHp} / {effMax}{#if effMax > (zoomCard.hp ?? 0)}（道具 +{effMax - (zoomCard.hp ?? 0)}）{/if}{#if zoomInst.damage>0}（傷害 {zoomInst.damage}）{/if}</span>
                   </div>
                 {/if}
                 <div class="state-row">
