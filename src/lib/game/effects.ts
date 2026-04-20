@@ -4090,6 +4090,179 @@ regPost('皮卡丘|電磁電光', (state, aIdx, pool) => {
   });
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38r v1.68 H 標第 13 波 — other-bucket 續（9 張）
+//   (a) 攻擊 + 自回血 = 基礎傷害 — 朽木妖|終極吸取
+//   (b) 丟競技場 — 洗翠 卡蒂狗|全部燒光
+//   (c) 灼傷 — 洗翠 風速狗|灼燒
+//   (d) 對備戰 ex/V 60 傷害 — 謝米|精刺奇襲
+//   (e) 牌庫搜尋 Basic → 備戰 — 聒噪鳥|無伴奏合唱、向尾喵|呼朋引伴
+//   (f) 牌庫搜尋 Pokemon → 手牌 — 啃果蟲|尋找朋友
+//   (g) 攻擊後自交替 — 藍鱷|逆向噴射
+//   (h) 從棄牌區各附 1 張【鬥】能量到備戰 — 重泥挽馬|泥巴庫存
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 朽木妖|終極吸取 — 50 傷害 + 自回血 50（簡化：不追實際傷害）
+regPost('朽木妖|終極吸取', selfHealPost(50, '終極吸取'));
+
+// 洗翠 卡蒂狗|全部燒光 — 無傷害，丟棄競技場卡
+regPre('洗翠 卡蒂狗|全部燒光', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('洗翠 卡蒂狗|全部燒光', (state, aIdx, _pool) => {
+  if (!state.activeStadium) return addLog(state, '全部燒光：場上沒有競技場', aIdx);
+  const stadium = state.activeStadium;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[aIdx] = { ...players[aIdx], discard: [...players[aIdx].discard, stadium] };
+  return addLog({ ...state, players, activeStadium: undefined }, '全部燒光：丟棄競技場', aIdx);
+});
+
+// 洗翠 風速狗|灼燒 — 90 + 灼傷
+regPost('洗翠 風速狗|灼燒', statusPost('burned'));
+
+// 謝米|精刺奇襲 — 對備戰的 ex/V 60 傷害（不計弱抗）
+regPre('謝米|精刺奇襲', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('謝米|精刺奇襲', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defender = state.players[dIdx];
+  const exBench = defender.bench.filter(c => {
+    const card = pool.get(c.cardId);
+    return isExCard(card);
+  });
+  if (exBench.length === 0) {
+    return addLog(state, '精刺奇襲：對手備戰區沒有 ex/V 寶可夢', aIdx);
+  }
+  let s = addLog(state, '精刺奇襲：選對手備戰的 1 隻 ex/V 造成 60 傷害', aIdx);
+  return withPending(s, {
+    type: 'opp-bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'snipe-60-ex',
+    params: { validIids: exBench.map(c => c.iid) },
+  });
+});
+regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  const defender = st.players[dIdx];
+  const targetIid = selectedIids[0];
+  if (!targetIid) return st;
+  const target = defender.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const targetCard = pool.get(target.cardId);
+  const newDmg = target.damage + 60;
+  const targetHP = targetCard?.hp ?? 0;
+  if (targetHP > 0 && newDmg >= targetHP) {
+    const koDiscard: CardInstance[] = [
+      { ...target, damage: newDmg },
+      ...target.energyAttached,
+      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...(target.evolvedFromStack ?? []),
+    ];
+    const prizes = isExCard(targetCard) ? 2 : 1;
+    const players = [...st.players] as [PlayerState, PlayerState];
+    players[dIdx] = { ...defender, bench: defender.bench.filter(c => c.iid !== targetIid),
+      discard: [...defender.discard, ...koDiscard] };
+    let s = addLog({ ...st, players }, `精刺奇襲：${targetCard?.name ?? '?'} 被擊倒！${st.players[actorIdx].name} 取得 ${prizes} 張獎勵牌。`, null);
+    return { ...s, pendingPrizes: prizes };
+  }
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...defender, bench: defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c) };
+  return addLog({ ...st, players }, `精刺奇襲：對 ${targetCard?.name ?? '?'} 造成 60 傷害！`, actorIdx);
+});
+
+// 聒噪鳥|無伴奏合唱 — 從牌庫選最多 3 張 Basic 寶可夢卡放到備戰
+regPre('聒噪鳥|無伴奏合唱', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('聒噪鳥|無伴奏合唱', (state, aIdx, _pool) => {
+  const player = state.players[aIdx];
+  const benchRoom = 5 - player.bench.length;
+  if (benchRoom <= 0) return addLog(state, '無伴奏合唱：備戰區已滿', aIdx);
+  let s = addLog(state, '無伴奏合唱：從牌庫選最多 3 張基礎寶可夢放備戰', aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Basic',
+    minCount: 0, maxCount: Math.min(3, benchRoom),
+    effectKey: 'bench-basic-from-deck',
+  });
+});
+
+// 向尾喵|呼朋引伴 — 從牌庫選 1 張基礎寶可夢放備戰
+regPre('向尾喵|呼朋引伴', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('向尾喵|呼朋引伴', (state, aIdx, _pool) => {
+  const player = state.players[aIdx];
+  if (player.bench.length >= 5) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
+  let s = addLog(state, '呼朋引伴：從牌庫選 1 張基礎寶可夢放備戰', aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Basic',
+    minCount: 0, maxCount: 1,
+    effectKey: 'bench-basic-from-deck',
+  });
+});
+
+// 啃果蟲|尋找朋友 — 從牌庫選 1 張寶可夢加手牌
+regPre('啃果蟲|尋找朋友', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('啃果蟲|尋找朋友', (state, aIdx, _pool) => {
+  let s = addLog(state, '尋找朋友：從牌庫選 1 張寶可夢加手牌', aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Pokemon',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-pokemon-to-hand',
+  });
+});
+
+// 藍鱷|逆向噴射 — 30 傷害 + 自己戰鬥寶可夢與備戰寶可夢互換
+regPost('藍鱷|逆向噴射', (state, aIdx, _pool) => {
+  const player = state.players[aIdx];
+  if (!player.active || player.bench.length === 0) {
+    return addLog(state, '逆向噴射：沒有可交替的備戰寶可夢', aIdx);
+  }
+  let s = addLog(state, '逆向噴射：選擇換入的備戰寶可夢', aIdx);
+  return withPending(s, {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'do-switch',
+  });
+});
+
+// 重泥挽馬|泥巴庫存 — 從棄牌區給所有備戰各附 1 張基本【鬥】能量
+regPre('重泥挽馬|泥巴庫存', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('重泥挽馬|泥巴庫存', (state, aIdx, pool) => {
+  const player = state.players[aIdx];
+  const benchLen = player.bench.length;
+  if (benchLen === 0) return addLog(state, '泥巴庫存：沒有備戰寶可夢', aIdx);
+  // 從棄牌區取出最多 benchLen 張「基本【鬥】能量」（簡化：僅基本 Fighting 能量 subtype 判斷）
+  const fightingInDiscard: number[] = [];
+  for (let i = 0; i < player.discard.length && fightingInDiscard.length < benchLen; i++) {
+    const c = player.discard[i];
+    const card = pool.get(c.cardId);
+    if (card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.name.includes('鬥') || card.pokemonType === 'Fighting')) {
+      fightingInDiscard.push(i);
+    }
+  }
+  if (fightingInDiscard.length === 0) {
+    return addLog(state, '泥巴庫存：棄牌區沒有基本【鬥】能量', aIdx);
+  }
+  const benchNames = player.bench.map(c => pool.get(c.cardId)?.name ?? '?');
+  const used = new Set(fightingInDiscard);
+  const energiesToAttach = player.discard.filter((_, i) => used.has(i));
+  const remainingDiscard = player.discard.filter((_, i) => !used.has(i));
+  // 依序附給每個備戰（能量不足則只附前 N 個）
+  const newBench = player.bench.map((b, i) => {
+    if (i < energiesToAttach.length) {
+      return { ...b, energyAttached: [...b.energyAttached, energiesToAttach[i]] };
+    }
+    return b;
+  });
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[aIdx] = { ...player, bench: newBench, discard: remainingDiscard };
+  const attached = energiesToAttach.length;
+  const targets = benchNames.slice(0, attached).join('、');
+  return addLog({ ...state, players }, `泥巴庫存：從棄牌區附 ${attached} 張【鬥】能量給備戰 (${targets})`, aIdx);
+});
+
 regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
   const dIdx = (1 - actorIdx) as 0 | 1;
   const defender = st.players[dIdx];

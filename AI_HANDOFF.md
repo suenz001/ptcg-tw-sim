@@ -2908,3 +2908,31 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 30/20
 - 版本 1.66 → 1.67
+
+---
+
+## 📝 2026-04-21 Session 38r (v1.68) — H 標第 13 波：other-bucket 續（9 張）
+
+### 實裝（9 張）
+- 朽木妖｜終極吸取（50 + selfHealPost(50)；簡化：不追實際傷害，固定回 50）
+- 洗翠 卡蒂狗｜全部燒光（0 傷害 + 丟棄競技場）
+- 洗翠 風速狗｜灼燒（90 + 灼傷）
+- 謝米｜精刺奇襲（對備戰 ex/V 60 傷害、snipe-60-ex resolver）
+- 聒噪鳥｜無伴奏合唱（deck-search Basic maxCount 3 → bench-basic-from-deck）
+- 向尾喵｜呼朋引伴（deck-search Basic maxCount 1 → bench-basic-from-deck）
+- 啃果蟲｜尋找朋友（deck-search Pokemon maxCount 1 → search-pokemon-to-hand）
+- 藍鱷｜逆向噴射（30 + bench-choose do-switch 自交替）
+- 重泥挽馬｜泥巴庫存（從棄牌區各附 1 張基本【鬥】能量到備戰，無 UI 自動解）
+
+### 暫緩
+- 鐵斑葉｜補全之網（discard-search Pokemon 需新 filter 值，後續擴展）
+- 霏歐納｜招喚（discard-search Supporter 需新 filter 值）
+- 斯魔茶｜上茶（discard-search BasicGrassEnergy 需新 filter 值）
+- 大狼犬｜踹開（50 + 對手選備戰互換自己出場；需 opp-swap 機制）
+- 花蓓蓓｜療傷、花葉蒂｜小使者（需要任意 heal-target / energy-to-hand 擴展）
+- 大舌頭｜舌引（查看對手手牌並選基礎寶可夢放對手備戰；特殊互動）
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 21/29
+- 版本 1.67 → 1.68
