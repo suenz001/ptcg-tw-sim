@@ -6148,3 +6148,355 @@ regPost('噗隆隆|金屬塗層', (state, aIdx, pool) => {
     };
   });
 });
+
+// ── Session 38ac (v1.79) H 標第 24 波：棄牌能量附加 + 多目標 snipe ──────────────
+// 共同 helper：棄牌區選 N 張特定屬性基本能量 → 選 1 隻自己寶可夢附加
+// 兩步：步驟 1 選能量（discard-search），步驟 2 選目標（heal-target 類，任一自己寶可夢）
+function discardEnergyAttachPost(
+  max: number,
+  typeFilter: EnergyType | null,
+  label: string,
+): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    const cand = p.discard.filter(c => {
+      const card = pool.get(c.cardId);
+      if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+      if (typeFilter && card.pokemonType !== typeFilter) return false;
+      return true;
+    });
+    if (cand.length === 0) {
+      return addLog(state, `${label}：棄牌區沒有符合的基本能量`, aIdx);
+    }
+    const realMax = Math.min(max, cand.length);
+    const filterStr = typeFilter ? `Energy:${typeFilter}` : 'BasicEnergy';
+    const s = addLog(state, `${label}：從棄牌區選 1-${realMax} 張基本能量`, aIdx);
+    return withPending(s, {
+      type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: filterStr, minCount: 1, maxCount: realMax,
+      effectKey: 'discard-energy-attach-pick-target',
+      params: { label },
+    });
+  };
+}
+regR('discard-energy-attach-pick-target', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '棄牌能量附加';
+  const p = st.players[idx];
+  const allSelf = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
+  if (allSelf.length === 0) return st;
+  // 若場上只有 1 隻寶可夢，直接附加
+  if (allSelf.length === 1) {
+    const target = allSelf[0];
+    const energies = p.discard.filter(c => iids.includes(c.iid));
+    const targetName = pool.get(target.cardId)?.name ?? '?';
+    let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到 ${targetName}`, idx);
+    return updatePlayer(s, idx, pl => {
+      const rest = pl.discard.filter(c => !iids.includes(c.iid));
+      if (pl.active && pl.active.iid === target.iid) {
+        return {
+          ...pl,
+          discard: rest,
+          active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] },
+        };
+      }
+      return {
+        ...pl,
+        discard: rest,
+        bench: pl.bench.map(c => c.iid === target.iid
+          ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+          : c),
+      };
+    });
+  }
+  // 多隻寶可夢：進第二步
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'discard-energy-attach-commit',
+    params: { energyIids: iids, label },
+  });
+});
+regR('discard-energy-attach-commit', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '棄牌能量附加';
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const targetIid = iids[0];
+  const p = st.players[idx];
+  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const energies = p.discard.filter(c => energyIids.includes(c.iid));
+  if (energies.length === 0) return st;
+  const targetName = pool.get(target.cardId)?.name ?? '?';
+  let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到 ${targetName}`, idx);
+  return updatePlayer(s, idx, pl => {
+    const rest = pl.discard.filter(c => !energyIids.includes(c.iid));
+    if (pl.active && pl.active.iid === targetIid) {
+      return {
+        ...pl,
+        discard: rest,
+        active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] },
+      };
+    }
+    return {
+      ...pl,
+      discard: rest,
+      bench: pl.bench.map(c => c.iid === targetIid
+        ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+        : c),
+    };
+  });
+});
+
+// 多目標 snipe：對手任意 N 隻寶可夢各 D 傷害
+function multiSnipePost(targetCount: number, damage: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const d = state.players[dIdx];
+    const all = [d.active, ...d.bench].filter((c): c is CardInstance => !!c);
+    if (all.length === 0) return state;
+    const realMax = Math.min(targetCount, all.length);
+    const s = addLog(state, `${label}：選擇對手 ${realMax} 隻寶可夢各造成 ${damage} 傷害`, aIdx);
+    return withPending(s, {
+      type: 'opp-poke-choose',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: realMax,
+      effectKey: 'snipe-multi',
+      params: { damage, label },
+    });
+  };
+}
+regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
+  const dmg = (params?.damage as number) ?? 0;
+  const label = (params?.label as string) ?? '多目標攻擊';
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  let s = st;
+  let totalPrize = 0;
+  let opponentActiveKOed = false;
+  for (const iid of selectedIids) {
+    const defender = s.players[dIdx];
+    const isActive = defender.active?.iid === iid;
+    const target = isActive ? defender.active! : defender.bench.find(c => c.iid === iid);
+    if (!target) continue;
+    const targetCard = pool.get(target.cardId);
+    const newDmg = target.damage + dmg;
+    const hp = targetCard?.hp ?? 0;
+    if (hp > 0 && newDmg >= hp) {
+      const ko: CardInstance[] = [
+        { ...target, damage: newDmg },
+        ...target.energyAttached,
+        ...(target.toolAttached ? [target.toolAttached] : []),
+        ...(target.evolvedFromStack ?? []),
+      ];
+      const p = isExCard(targetCard) ? 2 : 1;
+      totalPrize += p;
+      const players = [...s.players] as [PlayerState, PlayerState];
+      const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
+      if (isActive) { newDefender.active = null; opponentActiveKOed = true; }
+      else newDefender.bench = defender.bench.filter(c => c.iid !== iid);
+      players[dIdx] = newDefender;
+      s = addLog({ ...s, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎勵牌。`, null);
+    } else {
+      const players = [...s.players] as [PlayerState, PlayerState];
+      const newDefender = { ...defender };
+      if (isActive) newDefender.active = { ...target, damage: newDmg };
+      else newDefender.bench = defender.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
+      players[dIdx] = newDefender;
+      s = addLog({ ...s, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${dmg} 傷害`, actorIdx);
+    }
+  }
+  // 檢查 KO 後的狀態
+  const defender = s.players[dIdx];
+  if (opponentActiveKOed && !defender.active && defender.bench.length === 0) {
+    return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+  }
+  if (totalPrize > 0) s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + totalPrize };
+  return s;
+});
+
+// ── 棄牌能量附加（6 張） ────────────────────────────────────────────────────
+regPre('古劍豹|雪之到來', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('古劍豹|雪之到來', discardEnergyAttachPost(2, 'Water', '雪之到來'));
+
+regPre('古玉魚|閃焰到來', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('古玉魚|閃焰到來', discardEnergyAttachPost(2, 'Fire', '閃焰到來'));
+
+regPre('古簡蝸|綠葉到來', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('古簡蝸|綠葉到來', discardEnergyAttachPost(2, 'Grass', '綠葉到來'));
+
+regPre('古鼎鹿|沙之到來', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('古鼎鹿|沙之到來', discardEnergyAttachPost(2, 'Fighting', '沙之到來'));
+
+regPre('土地雲|真氣之拳', (state, _aIdx, _pool) => ({ state, damage: 30 }));
+regPost('土地雲|真氣之拳', (state, aIdx, pool) => {
+  // 棄牌選 1 張能量附於自身（無屬性限制）
+  const p = state.players[aIdx];
+  const cand = p.discard.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+  if (cand.length === 0) return addLog(state, '真氣之拳：棄牌區沒有能量', aIdx);
+  const s = addLog(state, '真氣之拳：從棄牌區選 1 張能量', aIdx);
+  return withPending(s, {
+    type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'BasicEnergy', minCount: 1, maxCount: 1,
+    effectKey: 'discard-energy-attach-pick-target',
+    params: { label: '真氣之拳' },
+  });
+});
+
+regPre('多麗米亞|能量支援', (state, _aIdx, _pool) => ({ state, damage: 30 }));
+regPost('多麗米亞|能量支援', (state, aIdx, pool) => {
+  // 棄牌 1 張基本能量 → 附於備戰寶可夢
+  const p = state.players[aIdx];
+  if (p.bench.length === 0) return addLog(state, '能量支援：備戰區沒有寶可夢', aIdx);
+  const cand = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  });
+  if (cand.length === 0) return addLog(state, '能量支援：棄牌區沒有基本能量', aIdx);
+  const s = addLog(state, '能量支援：從棄牌區選 1 張基本能量', aIdx);
+  return withPending(s, {
+    type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'BasicEnergy', minCount: 1, maxCount: 1,
+    effectKey: 'discard-energy-attach-bench-only',
+    params: { label: '能量支援' },
+  });
+});
+regR('discard-energy-attach-bench-only', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '棄牌附能';
+  const p = st.players[idx];
+  if (p.bench.length === 0) return st;
+  if (p.bench.length === 1) {
+    const target = p.bench[0];
+    const energies = p.discard.filter(c => iids.includes(c.iid));
+    const tname = pool.get(target.cardId)?.name ?? '?';
+    let s = addLog(st, `${label}：將能量附加到備戰 ${tname}`, idx);
+    return updatePlayer(s, idx, pl => ({
+      ...pl,
+      discard: pl.discard.filter(c => !iids.includes(c.iid)),
+      bench: pl.bench.map(c => c.iid === target.iid
+        ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+        : c),
+    }));
+  }
+  return withPending(st, {
+    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'discard-energy-attach-commit-bench',
+    params: { energyIids: iids, label },
+  });
+});
+regR('discard-energy-attach-commit-bench', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '棄牌附能';
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const targetIid = iids[0];
+  const p = st.players[idx];
+  const target = p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const energies = p.discard.filter(c => energyIids.includes(c.iid));
+  const tname = pool.get(target.cardId)?.name ?? '?';
+  let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到備戰 ${tname}`, idx);
+  return updatePlayer(s, idx, pl => ({
+    ...pl,
+    discard: pl.discard.filter(c => !energyIids.includes(c.iid)),
+    bench: pl.bench.map(c => c.iid === targetIid
+      ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+      : c),
+  }));
+});
+
+// ── 多目標 snipe（2 張）─────────────────────────────────────────────────────
+// 甲賀忍蛙ex｜分身連打 — 丟 2 自身能量 → 對手 2 隻各 120
+regPre('甲賀忍蛙ex|分身連打', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('甲賀忍蛙ex|分身連打', (state, aIdx, pool) => {
+  let s = state;
+  const p = s.players[aIdx];
+  if (!p.active) return s;
+  if (p.active.energyAttached.length < 2) {
+    return addLog(s, '分身連打：自身能量不足 2 張', aIdx);
+  }
+  const removed = p.active.energyAttached.slice(-2);
+  s = addLog(s, '分身連打：丟棄自身 2 張能量', aIdx);
+  s = updatePlayer(s, aIdx, pl => {
+    if (!pl.active) return pl;
+    return {
+      ...pl,
+      active: { ...pl.active, energyAttached: pl.active.energyAttached.slice(0, -2) },
+      discard: [...pl.discard, ...removed],
+    };
+  });
+  return multiSnipePost(2, 120, '分身連打')(s, aIdx, pool);
+});
+
+// 酋雷姆｜三重冰霜 — 丟自身全部能量 → 對手 3 隻各 110
+regPre('酋雷姆|三重冰霜', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('酋雷姆|三重冰霜', (state, aIdx, pool) => {
+  let s = state;
+  const p = s.players[aIdx];
+  if (!p.active || p.active.energyAttached.length === 0) {
+    return addLog(s, '三重冰霜：自身無能量', aIdx);
+  }
+  const energies = p.active.energyAttached;
+  s = addLog(s, `三重冰霜：丟棄自身 ${energies.length} 張能量`, aIdx);
+  s = updatePlayer(s, aIdx, pl => {
+    if (!pl.active) return pl;
+    return {
+      ...pl,
+      active: { ...pl.active, energyAttached: [] },
+      discard: [...pl.discard, ...energies],
+    };
+  });
+  return multiSnipePost(3, 110, '三重冰霜')(s, aIdx, pool);
+});
+
+// ── 莫魯貝可｜能量車輪 70 — 選 2 張自身【惡】能量 → 改附於 1 隻備戰 ──────────
+regPre('莫魯貝可|能量車輪', (state, _aIdx, _pool) => ({ state, damage: 70 }));
+regPost('莫魯貝可|能量車輪', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  if (!p.active) return state;
+  // 列出自身【惡】能量 iid
+  const darkIids = p.active.energyAttached
+    .filter(e => {
+      const card = pool.get(e.cardId);
+      return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Darkness';
+    })
+    .map(e => e.iid);
+  if (darkIids.length < 2) {
+    return addLog(state, '能量車輪：自身【惡】能量不足 2 張', aIdx);
+  }
+  if (p.bench.length === 0) {
+    return addLog(state, '能量車輪：備戰區沒有寶可夢', aIdx);
+  }
+  // 自動挑前 2 個（AI 簡化；人類版應該用 pending，但這邊用簡化路徑）
+  const picked = darkIids.slice(0, 2);
+  const pickedEnergies = p.active.energyAttached.filter(e => picked.includes(e.iid));
+  let s = addLog(state, '能量車輪：將自身 2 張【惡】能量改附於備戰', aIdx);
+  s = updatePlayer(s, aIdx, pl => {
+    if (!pl.active) return pl;
+    return {
+      ...pl,
+      active: {
+        ...pl.active,
+        energyAttached: pl.active.energyAttached.filter(e => !picked.includes(e.iid)),
+      },
+    };
+  });
+  // 讓玩家選備戰目標
+  return withPending(s, {
+    type: 'bench-choose', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'energy-wheel-attach',
+    params: { energies: pickedEnergies },
+  });
+});
+regR('energy-wheel-attach', (st, idx, iids, params, pool) => {
+  const energies = (params?.energies as CardInstance[]) ?? [];
+  const targetIid = iids[0];
+  const p = st.players[idx];
+  const target = p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const tname = pool.get(target.cardId)?.name ?? '?';
+  let s = addLog(st, `能量車輪：將 ${energies.length} 張能量附加到 ${tname}`, idx);
+  return updatePlayer(s, idx, pl => ({
+    ...pl,
+    bench: pl.bench.map(c => c.iid === targetIid
+      ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+      : c),
+  }));
+});

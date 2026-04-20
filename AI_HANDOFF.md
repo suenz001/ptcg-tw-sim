@@ -3228,3 +3228,33 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 27/23
 - 版本 1.77 → 1.78
+
+---
+
+## 📝 2026-04-21 Session 38ac (v1.79) — H 標第 24 波：棄牌能量附加 + 多目標 snipe（10 張）
+
+### 新 helper
+- `discardEnergyAttachPost(max, typeFilter, label)` — 棄牌選屬性能量兩步流程，第 1 步 discard-search，第 2 步 heal-target（若場上只有 1 隻則自動附）
+- `multiSnipePost(targetCount, damage, label)` — 攻後對對手 N 隻寶可夢各造成 D 傷害（共用 opp-poke-choose maxCount=N）
+
+### 新 resolver
+- `discard-energy-attach-pick-target`、`discard-energy-attach-commit` — 兩步棄牌附能
+- `discard-energy-attach-bench-only`、`discard-energy-attach-commit-bench` — 限定備戰的版本
+- `snipe-multi` — 多目標循環施傷（正確處理 KO 與獎賞堆疊）
+- `energy-wheel-attach` — 莫魯貝可能量車輪用
+
+### 實裝（10 張）
+- 棄牌能量附加（6 張）：古劍豹｜雪之到來（2 水）、古玉魚｜閃焰到來（2 火）、古簡蝸｜綠葉到來（2 草）、古鼎鹿｜沙之到來（2 鬥）、土地雲｜真氣之拳 30（1 任意）、多麗米亞｜能量支援 30（1 基本→備戰）
+- 多目標 snipe（2 張）：甲賀忍蛙ex｜分身連打（丟 2 能量 + 對手 2 隻各 120）、酋雷姆｜三重冰霜（丟全能量 + 對手 3 隻各 110）
+- 莫魯貝可｜能量車輪 70（AI 自動挑前 2 張【惡】能量 → 選備戰附加）
+- 大電海燕｜風暴伏特（v1.78 已有）不計入
+
+### 暫緩
+- 紅蓮鎧騎｜紅蓮引爆（丟全火能量 + 對手備戰 1 隻 180）— 需選「僅備戰」非「任一」
+- 七夕青鳥｜哼唱充能、搖籃百合｜任選黏液 — 還沒做
+- 牌庫直接附能（秘能量、能量裝填 etc.）— 已做的差不多
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 25/25
+- 版本 1.78 → 1.79
