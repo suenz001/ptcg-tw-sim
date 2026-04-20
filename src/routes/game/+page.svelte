@@ -301,7 +301,7 @@
     }
   }
 
-  async function onWindowPointerUp(_e: PointerEvent) {
+  async function onWindowPointerUp(e: PointerEvent) {
     if (!dragging) return;
     const d = dragging;
     dragging = null;
@@ -335,10 +335,17 @@
         await dispatch(GameActions.evolve(tIid, d.iid));
       }
     } else if (d.kind === 'trainer') {
-      // 支援者/物品/競技場 — 拖到任何非手牌區域即使用
-      // 用 closest 判斷 hit 是否在 hand-scroll 內
-      // (drop position 其實不重要，只要不是 hand-scroll 或 hand-card)
-      await dispatch(GameActions.playTrainer(d.iid));
+      // 支援者/物品/競技場 — 只有釋放點落在 .playmat（綠色虛線釋放區）內才算使用；
+      // 拖回手牌 / 拖到非釋放區 / 拖到視窗外 → 一律視為取消，不 dispatch。
+      // 其他 kind（basic/evolve/tool）靠 tIid / benchEmpty / activeEmpty 自然具備 cancel 行為，
+      // 只有 trainer 因為沒有特定 drop target，之前漏做這個檢查。
+      const hit = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      const inPlaymat = !!hit?.closest('.playmat');
+      const inHand = !!hit?.closest('.hand-strip');
+      if (inPlaymat && !inHand) {
+        await dispatch(GameActions.playTrainer(d.iid));
+      }
+      // else: 取消使用（手牌保留）
     } else if (d.kind === 'tool' && tIid) {
       // 檢查目標是否已有道具（一隻只能附加一個，除非有特性）
       const allMy = [...(myPlayer?.active ? [myPlayer.active] : []), ...(myPlayer?.bench ?? [])];

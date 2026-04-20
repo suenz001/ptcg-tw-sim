@@ -2363,3 +2363,64 @@ Windows / 上一版 commit 都是 2595 行）。我 v1.51 直接 `cp` sandbox �
 - 全程在 `/tmp/ptcg-work/repo` 作業（含 Edit tool），確認 build 過才推。`Read` 讀 `/tmp/` 的檔沒被截斷（因不走 FUSE）。
 - 這個 pattern 應該變成預設流程：改 `+page.svelte` 一律先 clone 到 /tmp，不走 FUSE mount。
 
+---
+
+## 📝 2026-04-20 Session 38e (v1.55) — Trainer 拖曳取消 bug 修復
+
+**使用者回報：**
+> 支援者或物品卡等沒有目標的訓練家卡牌，如果拖曳起來，又在拖曳回手牌的地方，或是沒有拖曳到釋放區域，視為不使用
+> 我剛剛發生拖曳莉莉艾的決意，但又後悔了，拉回手牌，但卻被系統判定為使用
+
+**根因（`src/routes/game/+page.svelte` 的 `onWindowPointerUp`）：**
+
+其他拖曳 kind 都有 drop target 檢查才 dispatch：
+- `basic` → 需要 `benchEmpty` / `activeEmpty`
+- `evolve` → 需要 `tIid`
+- `tool` → 需要 `tIid`
+
+只有 `trainer` 分支寫成 unconditional dispatch：
+```js
+} else if (d.kind === 'trainer') {
+  // 支援者/物品/競技場 — 拖到任何非手牌區域即使用
+  // 用 closest 判斷 hit 是否在 hand-scroll 內
+  // (drop position 其實不重要，只要不是 hand-scroll 或 hand-card)
+  await dispatch(GameActions.playTrainer(d.iid));  // ← 註解寫了「除非是 hand-scroll」，但實作忘了做那個檢查
+}
+```
+
+註解說明了正確行為（「非手牌區域才使用」）但實作沒照辦——不管拖到哪裡都打出去。結果 Leon 拉回手牌想取消，卻被判定使用。
+
+**修法（pointerup 時用座標 hit-test `.playmat`）：**
+
+```diff
+- async function onWindowPointerUp(_e: PointerEvent) {
++ async function onWindowPointerUp(e: PointerEvent) {
+  ...
+  } else if (d.kind === 'trainer') {
+-   await dispatch(GameActions.playTrainer(d.iid));
++   const hit = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
++   const inPlaymat = !!hit?.closest('.playmat');
++   const inHand = !!hit?.closest('.hand-strip');
++   if (inPlaymat && !inHand) {
++     await dispatch(GameActions.playTrainer(d.iid));
++   }
++   // else: 取消使用（手牌保留）
+  }
+```
+
+**為何檢查 `.playmat` 而不是只排除 `.hand-strip`：**
+- Leon 描述兩個取消條件：(1) 「拖回手牌的地方」 (2) 「沒有拖曳到釋放區域」
+- `.playmat.trainer-drop-zone::before` 本來就有綠色虛線框視覺提示「這裡是釋放區」（見 `.playmat{ class:trainer-drop-zone={dragging?.kind==='trainer'} }`）
+- 正向檢查 `inPlaymat` 同時涵蓋兩種 cancel 情境（拖回手牌 AND 拖到 sidebar / toolbar / 視窗外）
+
+**為何用 `e.clientX/Y` 而不是 `d.x/d.y`：**
+- `d.x/d.y` 是 pointermove 快照，pointerup 前最後一次 move 的位置；多數情況與 pointerup 一致，但邊緣 case 可能有 1-frame 差
+- `e.clientX/Y` 直接取 pointerup event 自身座標，最準確
+
+**不影響其他 trainer 類型：**
+- 附加道具（tool）走 `d.kind === 'tool'` 分支，本來就要求 `tIid`，不受影響
+- 設置場地（stadium）實際屬於 trainer kind，但是靠 `playTrainer` → effects.ts 的 resolver 處理；只要釋放點在 playmat 內，stadium 照常生效
+- 有 pendingSelection 的 supporter（如 Iono / Boss / 艾莉卡款待）也都在 dispatch 後才 push selection，取消時根本沒進 effects，不會留狀態殘渣
+
+**驗證：** `/tmp/ptcg-work/repo` 本機 `npm run build` 通過。版本 1.54 → 1.55。
+
