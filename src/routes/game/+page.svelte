@@ -2312,7 +2312,8 @@
   .hp-bar-wrap.sm{ height:5px; }
   .hp-bar{ height:100%; border-radius:3px; transition: width .55s cubic-bezier(.3,.8,.3,1), background .3s ease-out; }
 
-  .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:center; min-height:52px; }
+  .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:stretch; min-height:70px; max-height:130px; overflow:hidden; }
+  .alerts-col, .action-btns, .stadium-display{ align-self:center; }
   .stadium-display{ display:flex; flex-direction:column; align-items:center; gap:.25rem; padding:.35rem .5rem; border:1px solid #3a5a8a; background:rgba(26,42,74,.6); border-radius:6px; cursor:pointer; transition:transform .2s ease, box-shadow .2s ease; }
   .stadium-display:hover{ transform:scale(1.05); box-shadow:0 0 12px rgba(136,170,255,.4); }
   .stadium-display img{ width:92px; height:auto; border-radius:4px; }
@@ -2381,8 +2382,9 @@
   .epip.sm{ width:1rem; height:1rem; font-size:.5rem; }
   .atk-name{ max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .atk-dmg{ font-weight:700; color:#f88; font-size:.95rem; }
-  .log-col{ width:380px; max-height:140px; overflow-y:auto; font-size:.8rem; line-height:1.35;
+  .log-col{ width:380px; max-height:100%; min-height:0; overflow-y:auto; font-size:.8rem; line-height:1.35;
     background:rgba(0,0,0,.45); border:1px solid #2a4a2a; border-radius:6px; padding:.3rem .55rem;
+    align-self:stretch;
     scrollbar-width:thin; scrollbar-color:#4a6a4a rgba(0,0,0,.3); }
   .log-col::-webkit-scrollbar{ width:8px; }
   .log-col::-webkit-scrollbar-thumb{ background:#3a5a3a; border-radius:4px; }

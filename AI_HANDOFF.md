@@ -2251,3 +2251,33 @@ v1.5 上線後用戶截圖回報中盤 `action-bar` 區塊（opp-row 與 my-row 
 
 ### 結論
 兩處都是純 CSS 微調，engine / effect 無變動，sim 不跑也無風險。版本號 1.5 → 1.51。
+
+---
+
+## Session 38b（v1.52 — 2026-04-20，action-bar log 溢出修正）
+
+### 背景
+v1.51 把 log max-height 從 220 → 140px，但用戶又回傳截圖：log 面板的上下邊界仍然「跑出去」opp-row 和 my-row 的邊界。
+
+### 根因
+`.action-bar` 有 `align-items:center` 卻沒 `overflow:hidden`。`.playmat` 用 `grid-template-rows:minmax(230px,1fr) auto minmax(230px,1fr)` + `overflow:hidden`，當視窗高度不夠時，中間 `auto` row 會被壓到比 `log-col`（140px + padding ≈ 150px）還矮；`align-items:center` 讓 log-col 垂直居中在窄 row 裡，於是向上下「對稱溢出」到 opp/my row 的視覺區塊。
+
+### 改動 `src/routes/game/+page.svelte` CSS
+- `.action-bar`：
+  - `align-items:center → stretch`（grid items 垂直撐滿自己的 row）
+  - 新增 `max-height:130px`（明確封頂中盤行高，避免 log 長到擠壓上下場）
+  - `min-height:52px → 70px`（給 log 一個舒服下限）
+  - 新增 `overflow:hidden`（安全網，殘餘溢出一律剪掉）
+- 新增 `.alerts-col, .action-btns, .stadium-display { align-self:center; }` — stretch 只給 log，其他 grid item 恢復垂直居中
+- `.log-col`：
+  - `max-height:140px → 100%`（完全跟隨 action-bar row 的實際高度）
+  - 新增 `min-height:0`（flexbox/grid scrolling 容器的慣用 trick，避免被內容撐高）
+  - 新增 `align-self:stretch`（明確宣告，避免被父的 align-items 影響）
+
+### 效果
+- log-col 永遠被 action-bar 的 130px 天花板封住，不會跑出到 opp/my row
+- 實際可視高度跟著視窗自動伸縮：視窗高 → row 更高 → 看到更多 log 行；視窗窄 → row 縮小 → 看少幾行但 log-col 本身有 `overflow-y:auto` 可捲
+- 其他中盤元素（alerts / 攻擊按鈕 / 場地卡）仍然垂直置中，視覺上維持原樣
+
+版本號 1.51 → 1.52。
+
