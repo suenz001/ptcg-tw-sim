@@ -385,8 +385,21 @@
       if (mId) {
         countStr = mId[1];
         const cardId = mId[3];
+        const name = mId[2].trim();
         card = poolById.get(cardId);
-        label = `${mId[2].trim()} (id=${cardId})`;
+        label = `${name} (id=${cardId})`;
+        // Fallback：cardId 找不到（可能是標外卡或更早 set），改用同名卡替代
+        if (!card) {
+          const fallback = pool.find(c => c.name === name);
+          if (fallback) {
+            card = fallback;
+            ambiguities.push({
+              name,
+              used: `${fallback.setCode} · ${fallback.collectorNumber} (自動替代)`,
+              alternatives: [`原版本 id=${cardId} 不在 H/I/J 標池 — 若是基本能量或同名卡效果通常相同`],
+            });
+          }
+        }
       } else if (mFull) {
         countStr = mFull[1];
         const setCode = mFull[3];
