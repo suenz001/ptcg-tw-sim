@@ -71,6 +71,8 @@
   let selectionPicked = $state<Set<string>>(new Set());
   let zoomCard = $state<Card | null>(null);
   let zoomInst = $state<CardInstance | null>(null);
+  // 堆疊：之前開過的 zoom — 用於「返回上一層」按鈕
+  let zoomStack = $state<Array<{ card: Card; inst: CardInstance | null }>>([]);
   let floatingEvoMenu = $state<{ fromIid: string; evoOpts: CardInstance[]; x: number; y: number } | null>(null);
   let floatingRetreatMenu = $state<{ x: number; y: number } | null>(null);
   let viewDiscardFor = $state<0 | 1 | null>(null);
@@ -270,9 +272,19 @@
 
   function openZoom(cardId: string, inst: CardInstance | null = null) {
     const c = pool.get(cardId);
-    if (c) { zoomCard = c; zoomInst = inst; }
+    if (!c) return;
+    // 若已有 zoom 開啟，把當前推入堆疊（供「返回」用）
+    if (zoomCard) zoomStack = [...zoomStack, { card: zoomCard, inst: zoomInst }];
+    zoomCard = c; zoomInst = inst;
   }
-  function closeZoom() { zoomCard = null; zoomInst = null; }
+  function closeZoom() { zoomCard = null; zoomInst = null; zoomStack = []; }
+  function popZoom() {
+    if (zoomStack.length === 0) { closeZoom(); return; }
+    const last = zoomStack[zoomStack.length - 1];
+    zoomStack = zoomStack.slice(0, -1);
+    zoomCard = last.card;
+    zoomInst = last.inst;
+  }
   function openFloatingEvo(fromIid: string, evoOpts: CardInstance[], e: MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     floatingEvoMenu = { fromIid, evoOpts, x: rect.left + rect.width / 2, y: rect.top };
@@ -283,6 +295,8 @@
   }
   function onGlobalKey(e: KeyboardEvent) {
     if (e.key === 'Escape') {
+      // 若 zoom 有堆疊，Escape 先彈回上一層，沒堆疊才全關
+      if (zoomCard && zoomStack.length > 0) { popZoom(); return; }
       closeZoom(); floatingEvoMenu = null; floatingRetreatMenu = null;
       viewDiscardFor = null; selectionPicked = new Set();
     }
@@ -1472,6 +1486,9 @@
   {#if zoomCard}
     <div class="zoom-overlay" onclick={closeZoom}>
       <div class="zoom-modal" onclick={(e)=>e.stopPropagation()}>
+        {#if zoomStack.length > 0}
+          <button class="zoom-back" onclick={popZoom} title="返回上一層">← 返回</button>
+        {/if}
         <button class="zoom-close" onclick={closeZoom}>✕</button>
         <div class="zoom-body">
           <img src={zoomCard.imageUrl} alt={zoomCard.name} class="zoom-img"/>
@@ -1908,6 +1925,8 @@
   .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.2rem; max-width:720px; width:96vw; max-height:92vh; display:flex; flex-direction:column; gap:.75rem; color:#f0f0f0; overflow-y:auto; position:relative; }
   .zoom-close{ position:absolute; top:.7rem; right:.8rem; background:transparent; border:none; color:#aaa; font-size:1.2rem; cursor:pointer; padding:.2rem .4rem; border-radius:4px; line-height:1; }
   .zoom-close:hover{ background:#2a3a2a; color:#fff; }
+  .zoom-back{ position:absolute; top:.7rem; left:.8rem; background:#2a4a6a; border:1px solid #4a6a8a; color:#cce; font-size:.82rem; cursor:pointer; padding:.25rem .6rem; border-radius:4px; line-height:1; }
+  .zoom-back:hover{ background:#3a5a8a; color:#fff; }
   .zoom-body{ display:flex; gap:1.25rem; align-items:flex-start; flex-wrap:wrap; }
   .zoom-img{ width:260px; max-width:90vw; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.7); flex-shrink:0; }
   .zoom-info{ flex:1; min-width:200px; display:flex; flex-direction:column; gap:.5rem; }
