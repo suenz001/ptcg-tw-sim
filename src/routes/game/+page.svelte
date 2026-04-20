@@ -650,8 +650,18 @@
           if (f === 'Stage1')     return card.supertype === 'Pokemon' && card.subtype === 'Stage1';
           if (f === 'Pokemon')    return card.supertype === 'Pokemon' && card.subtype !== 'Other';
           if (f === 'Energy')     return card.supertype === 'Energy';
+          if (f === 'BasicEnergy') return card.supertype === 'Energy' && card.subtype === 'Basic';
           if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
           if (f === 'MegaEx')     return card.supertype === 'Pokemon' && card.subtype === 'ex' && card.name.startsWith('超級');
+          if (f.startsWith('Pokemon:')) {
+            // 指定屬性的寶可夢，例 'Pokemon:Lightning'
+            const t = f.slice(8);
+            return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.pokemonType === t;
+          }
+          if (f.startsWith('Energy:')) {
+            const t = f.slice(7);
+            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === t;
+          }
           return true;
         });
       }
@@ -690,6 +700,14 @@
           if (!card) return false;
           if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon' && card.subtype !== 'Other') || card.supertype === 'Energy';
           if (f === 'BasicEnergy')     return card.supertype === 'Energy';
+          if (f === 'Pokemon')         return card.supertype === 'Pokemon' && card.subtype !== 'Other';
+          if (f === 'Trainer')         return card.supertype === 'Trainer';
+          if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
+          if (f.startsWith('Energy:')) {
+            // e.g., 'Energy:Lightning' = 基本能量 + 指定屬性
+            const t = f.slice(7);
+            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === t;
+          }
           return true;
         });
       }

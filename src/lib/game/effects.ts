@@ -5831,6 +5831,300 @@ regPost('單首龍|踩落', millOppDeckTopPost(1, '踩落'));
 regPre('雙首暴龍|踩落', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('雙首暴龍|踩落', millOppDeckTopPost(2, '踩落'));
 
+// ── Session 38ab (v1.78) H 標第 23 波：deck/discard search to hand + self-swap ──
+// 共同 helper：攻擊後自己切換（備戰選 1 → 與出場互換）
+function selfSwapPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const player = state.players[aIdx];
+    if (!player.active || player.bench.length === 0) {
+      return addLog(state, `${label}：備戰區沒有寶可夢，無法切換`, aIdx);
+    }
+    const s = addLog(state, `${label}：選擇換入的備戰寶可夢`, aIdx);
+    return withPending(s, {
+      type: 'bench-choose',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'do-switch',
+    });
+  };
+}
+
+// 從牌庫選 N 張（filter）加手牌（使用 search-to-hand-reshuffle）
+function deckSearchToHandPost(max: number, filter: string, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const p = state.players[aIdx];
+    if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
+    const s = addLog(state, `${label}：從牌庫選最多 ${max} 張（${filter}）加手牌`, aIdx);
+    return withPending(s, {
+      type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter, minCount: 0, maxCount: max,
+      effectKey: 'search-to-hand-reshuffle',
+    });
+  };
+}
+
+// ── 自己切換（5 張） ─────────────────────────────────────────────────────────
+regPre('原蓋海龜|飛濺迴轉', (state, _aIdx, _pool) => ({ state, damage: 70 }));
+regPost('原蓋海龜|飛濺迴轉', selfSwapPost('飛濺迴轉'));
+
+regPre('粉蝶蛹|走來走去', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('粉蝶蛹|走來走去', selfSwapPost('走來走去'));
+
+regPre('醜醜魚|躍起逃走', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('醜醜魚|躍起逃走', selfSwapPost('躍起逃走'));
+
+regPre('沙漠蜻蜓ex|風暴返', (state, _aIdx, _pool) => ({ state, damage: 130 }));
+regPost('沙漠蜻蜓ex|風暴返', selfSwapPost('風暴返'));
+
+regPre('鍬農炮蟲|伏特替換', (state, _aIdx, _pool) => ({ state, damage: 90 }));
+regPost('鍬農炮蟲|伏特替換', selfSwapPost('伏特替換'));
+
+// ── 牌庫選基本能量到手牌（4 張） ────────────────────────────────────────────
+regPre('基拉祈|蓄能量', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('基拉祈|蓄能量', deckSearchToHandPost(2, 'BasicEnergy', '蓄能量'));
+
+regPre('厄鬼椪 碧草面具|步山', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('厄鬼椪 碧草面具|步山', deckSearchToHandPost(2, 'BasicEnergy', '步山'));
+
+regPre('花葉蒂|小使者', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('花葉蒂|小使者', deckSearchToHandPost(3, 'BasicEnergy', '小使者'));
+
+regPre('索財靈|小使者', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('索財靈|小使者', deckSearchToHandPost(2, 'BasicEnergy', '小使者'));
+
+// 伊布|鮮豔捕捉 — 最多 3 張各不同屬性的基本能量（簡化：3 張 basic energy）
+regPre('伊布|鮮豔捕捉', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('伊布|鮮豔捕捉', deckSearchToHandPost(3, 'BasicEnergy', '鮮豔捕捉'));
+
+// 光電傘蜥|拋物面充電 — 最多 4 張能量（包含特殊；簡化：4 張 Energy）
+regPre('光電傘蜥|拋物面充電', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('光電傘蜥|拋物面充電', deckSearchToHandPost(4, 'Energy', '拋物面充電'));
+
+// ── 牌庫選寶可夢到手牌（2 張） ──────────────────────────────────────────────
+regPre('幾何雪花|呼喚信號', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('幾何雪花|呼喚信號', deckSearchToHandPost(1, 'Pokemon', '呼喚信號'));
+
+// 卡璞・鳴鳴|召喚雷電 — 最多 2 張【雷】寶可夢
+regPre('卡璞・鳴鳴|召喚雷電', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('卡璞・鳴鳴|召喚雷電', deckSearchToHandPost(2, 'Pokemon:Lightning', '召喚雷電'));
+
+// ── 棄牌區選卡到手牌（3 張） ────────────────────────────────────────────────
+regPre('呆呆獸|垂尾巴', (state, _aIdx, _p) => ({ state, damage: 0 }));
+// 'Pokemon' filter — 棄牌區寶可夢
+regPost('呆呆獸|垂尾巴', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const cand = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.subtype !== 'Other';
+  });
+  if (cand.length === 0) return addLog(state, '垂尾巴：棄牌區沒有寶可夢', aIdx);
+  const s = addLog(state, '垂尾巴：從棄牌區選 1 張寶可夢加手牌', aIdx);
+  return withPending(s, {
+    type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Pokemon', minCount: 1, maxCount: 1,
+    effectKey: 'discard-to-hand',
+  });
+});
+
+regPre('咚咚鼠|電磁聲納', (state, _aIdx, _p) => ({ state, damage: 0 }));
+regPost('咚咚鼠|電磁聲納', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const cand = p.discard.filter(c => pool.get(c.cardId)?.supertype === 'Trainer');
+  if (cand.length === 0) return addLog(state, '電磁聲納：棄牌區沒有訓練家卡', aIdx);
+  const s = addLog(state, '電磁聲納：從棄牌區選 1 張訓練家卡加手牌', aIdx);
+  return withPending(s, {
+    type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Trainer', minCount: 1, maxCount: 1,
+    effectKey: 'discard-to-hand',
+  });
+});
+
+regPre('霏歐納|招喚', (state, _aIdx, _p) => ({ state, damage: 0 }));
+regPost('霏歐納|招喚', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const cand = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Trainer' && card.subtype === 'Supporter';
+  });
+  if (cand.length === 0) return addLog(state, '招喚：棄牌區沒有支援者卡', aIdx);
+  const s = addLog(state, '招喚：從棄牌區選 1 張支援者卡加手牌', aIdx);
+  return withPending(s, {
+    type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Supporter', minCount: 1, maxCount: 1,
+    effectKey: 'discard-to-hand',
+  });
+});
+
+// ── 優雅貓|能量攪拌 跳過（太複雜的任意方式改附）────────────────────────────
+
+// ── 狙射樹梟|強力射擊 170 — 若無法丟基本草能量則招式失敗 ────────────────────
+regPre('狙射樹梟|強力射擊', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const hasGrassEnergy = p.hand.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Grass';
+  });
+  if (!hasGrassEnergy) {
+    return { state: addLog(state, '強力射擊：手牌無基本草能量，招式失敗', aIdx), damage: 0 };
+  }
+  return { state, damage: 170 };
+});
+regPost('狙射樹梟|強力射擊', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const gidx = p.hand.findIndex(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Grass';
+  });
+  if (gidx < 0) return state;
+  const energy = p.hand[gidx];
+  const s = addLog(state, '強力射擊：丟棄手牌 1 張基本草能量', aIdx);
+  return updatePlayer(s, aIdx, pl => ({
+    ...pl,
+    hand: [...pl.hand.slice(0, gidx), ...pl.hand.slice(gidx + 1)],
+    discard: [...pl.discard, energy],
+  }));
+});
+
+// ── 超甲狂犀|直衝鑽 180 — 丟對手戰鬥寶可夢 1 張能量（任意）──────────────────
+regPre('超甲狂犀|直衝鑽', (state, _aIdx, _pool) => ({ state, damage: 180 }));
+regPost('超甲狂犀|直衝鑽', discardOppActiveEnergyPost('直衝鑽', 'any'));
+
+// ── 爆焰龜獸|灼燒盡 — 對手戰鬥場是 ex 才生效 ────────────────────────────────
+regPre('爆焰龜獸|灼燒盡', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('爆焰龜獸|灼燒盡', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  if (!def) return state;
+  const defCard = pool.get(def.cardId);
+  if (!defCard || !isExCard(defCard)) {
+    return addLog(state, '灼燒盡：對手戰鬥寶可夢非 ex，無效果', aIdx);
+  }
+  if (def.energyAttached.length === 0) {
+    return addLog(state, '灼燒盡：對手戰鬥 ex 寶可夢無附加能量', aIdx);
+  }
+  const last = def.energyAttached[def.energyAttached.length - 1];
+  const defName = defCard.name;
+  const s = addLog(state, `灼燒盡：丟棄對手 ${defName} 1 張能量`, aIdx);
+  return updatePlayer(s, dIdx, pl => {
+    if (!pl.active) return pl;
+    return {
+      ...pl,
+      active: { ...pl.active, energyAttached: pl.active.energyAttached.slice(0, -1) },
+      discard: [...pl.discard, last],
+    };
+  });
+});
+
+// ── 月亮伊布ex|縞瑪瑙 — 丟自身全部能量 + 獲得 1 張獎賞 ─────────────────────
+regPre('月亮伊布ex|縞瑪瑙', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('月亮伊布ex|縞瑪瑙', (state, aIdx, _pool) => {
+  let s = state;
+  const p = s.players[aIdx];
+  if (p.active && p.active.energyAttached.length > 0) {
+    const energies = p.active.energyAttached;
+    s = addLog(s, `縞瑪瑙：丟棄自身 ${energies.length} 張能量`, aIdx);
+    s = updatePlayer(s, aIdx, pl => {
+      if (!pl.active) return pl;
+      return {
+        ...pl,
+        active: { ...pl.active, energyAttached: [] },
+        discard: [...pl.discard, ...energies],
+      };
+    });
+  }
+  if (s.players[aIdx].prizes.length === 0) {
+    return addLog(s, '縞瑪瑙：獎賞區已空，無法獲得獎賞', aIdx);
+  }
+  s = addLog(s, '縞瑪瑙：額外獲得 1 張獎賞', aIdx);
+  s = updatePlayer(s, aIdx, pl => {
+    const prize = pl.prizes[0];
+    return { ...pl, prizes: pl.prizes.slice(1), hand: [...pl.hand, prize] };
+  });
+  // 若剛好這樣取完 6 張，由 engine 的 prize 檢查勝利條件
+  return s;
+});
+
+// ── 烈咬陸鯊ex|音波奇襲 — 丟 2 自身能量 + 對手 1 隻任意 120 ──────────────────
+regPre('烈咬陸鯊ex|音波奇襲', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('烈咬陸鯊ex|音波奇襲', (state, aIdx, pool) => {
+  let s = state;
+  // 先丟 2 張自身能量（從後往前）
+  const p = s.players[aIdx];
+  if (!p.active) return s;
+  const take = Math.min(2, p.active.energyAttached.length);
+  if (take < 2) {
+    return addLog(s, '音波奇襲：自身能量不足 2 張', aIdx);
+  }
+  const removed = p.active.energyAttached.slice(-2);
+  s = addLog(s, '音波奇襲：丟棄自身 2 張能量', aIdx);
+  s = updatePlayer(s, aIdx, pl => {
+    if (!pl.active) return pl;
+    return {
+      ...pl,
+      active: { ...pl.active, energyAttached: pl.active.energyAttached.slice(0, -2) },
+      discard: [...pl.discard, ...removed],
+    };
+  });
+  return oppSnipePost(120, '音波奇襲')(s, aIdx, pool);
+});
+
+// ── 優雅貓跳過 / 大電海燕|風暴伏特 160 — 將自身所有能量改附於備戰（簡化：改附於 1 隻備戰）──
+regPre('大電海燕|風暴伏特', (state, _aIdx, _pool) => ({ state, damage: 160 }));
+regPost('大電海燕|風暴伏特', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  if (!p.active || p.active.energyAttached.length === 0) {
+    return addLog(state, '風暴伏特：自身無能量可改附', aIdx);
+  }
+  if (p.bench.length === 0) {
+    return addLog(state, '風暴伏特：備戰區沒有寶可夢', aIdx);
+  }
+  const energies = p.active.energyAttached;
+  let s = addLog(state, `風暴伏特：選擇 1 隻備戰寶可夢，將自身 ${energies.length} 張能量改附`, aIdx);
+  return withPending(s, {
+    type: 'bench-choose', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'storm-volt-move',
+  });
+});
+regR('storm-volt-move', (st, idx, iids, _params, pool) => {
+  const targetIid = iids[0];
+  const p = st.players[idx];
+  if (!p.active) return st;
+  const target = p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const energies = p.active.energyAttached;
+  const targetName = pool.get(target.cardId)?.name ?? '?';
+  let s = addLog(st, `風暴伏特：將 ${energies.length} 張能量改附於 ${targetName}`, idx);
+  return updatePlayer(s, idx, pl => {
+    if (!pl.active) return pl;
+    return {
+      ...pl,
+      active: { ...pl.active, energyAttached: [] },
+      bench: pl.bench.map(c => c.iid === targetIid
+        ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+        : c),
+    };
+  });
+});
+
+// ── 飄浮泡泡 太陽的樣子|陽光支援 50 — 同上模式（改附於 1 隻備戰）─────────────
+regPre('飄浮泡泡 太陽的樣子|陽光支援', (state, _aIdx, _pool) => ({ state, damage: 50 }));
+regPost('飄浮泡泡 太陽的樣子|陽光支援', (state, aIdx, _pool) => {
+  const p = state.players[aIdx];
+  if (!p.active || p.active.energyAttached.length === 0) {
+    return addLog(state, '陽光支援：自身無能量可改附', aIdx);
+  }
+  if (p.bench.length === 0) {
+    return addLog(state, '陽光支援：備戰區沒有寶可夢', aIdx);
+  }
+  const s = addLog(state, `陽光支援：選擇 1 隻備戰寶可夢，將自身能量改附`, aIdx);
+  return withPending(s, {
+    type: 'bench-choose', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'storm-volt-move',
+  });
+});
+
 // 12. 噗隆隆|金屬塗層 — 招式：從棄牌區 1 張基本鋼能量附於自身（auto）
 //   實際卡池中此為招式（非特性），登錄為 ATTACK_POST，pre 傷害 0
 regPre('噗隆隆|金屬塗層', (state, _aIdx, _pool) => ({ state, damage: 0 }));
