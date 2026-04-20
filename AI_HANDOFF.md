@@ -2936,3 +2936,34 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 21/29
 - 版本 1.67 → 1.68
+
+---
+
+## 📝 2026-04-21 Session 38s (v1.69) — H 標第 14 波：傷害指示物直置 + 灼傷補（10 張）
+
+### 新 helper
+- `applyDamageToAllOpp(state, aIdx, pool, amount, onlyDamaged, label)` — 對對手所有（或已傷）寶可夢各 +amount 傷害，處理 KO 串聯、獎賞累計、active/bench 全滅 → 勝利
+- `setOppActiveHPPre(targetHP, label)` — 將對手戰鬥寶可夢的傷害調整到剩餘 HP = targetHP（不改變自身已傷部分則無效）
+
+### 實裝（10 張）
+- 灼傷補齊：呆火鱷｜熱灼燒、熔岩蝸牛ex｜熾熱熔岩、飄浮泡泡 太陽的樣子｜灼熱
+- 綿綿泡芙｜悄聲加害（20 傷害 opp-poke-choose，snipe-20 resolver）
+- 由克希｜痛楚記憶（對手全體 +20 傷害）
+- 伊裴爾塔爾｜侵蝕之風（對手已傷寶可夢 +20 傷害）
+- 蜈蚣王｜偏道一回（將對手戰鬥寶可夢 HP 設到 10）
+- 恰雷姆ex｜氣功指壓（設到 50）
+- 古鼎鹿｜傲慢衝擊（220；自身 ≥40 傷害則失敗 0）
+- 八爪武師｜觸手激怒（130 plain；「有傷害則只需 1 鬥能量」動態費用條件簡化略）
+
+### 暫緩
+- 雷丘｜捲入伏特（雙方已傷寶可夢 50 各，含自傷；需 self-damage cascade）
+- 鐵磐岩ex｜還擊斧、爆炸頭水牛｜等待角擊、冰伊布｜滲透寒氣（反擊式：下個對手回合攻擊方放指示物 — 需 defender-side POST trigger）
+- 嘎啦嘎啦｜骨之復仇（備戰卡拉卡拉 damaged → +120；需 self-name bench-is-damaged check）
+- 振翼髮｜蠱惑挪移（選自備戰古代將其傷害轉給對手戰鬥；需 ancient trait + damage-transfer）
+- 鐵脖頸｜自動導向頭擊（3 隻已傷寶可夢各 50；需多選目標 UI 擴展）
+- 死神棺｜冥府之律（雙方擁有特性的寶可夢各 6 指示物；需自傷 + 雙向處理）
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 26/24
+- 版本 1.68 → 1.69

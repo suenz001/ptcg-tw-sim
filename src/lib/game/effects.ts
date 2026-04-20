@@ -4310,3 +4310,227 @@ regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
     return addLog({ ...st, players }, `電磁電光：對 ${targetCard?.name ?? '?'} 造成 10 傷害！`, actorIdx);
   }
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38s v1.69 H 標第 14 波 — 傷害指示物直置 + 灼傷補齊（10 張）
+//
+// 新 helper:
+//   applyDamageToAllOpp(state, aIdx, pool, amount, onlyDamaged, label)
+//     → 對對手所有（或已有傷害指示物的）寶可夢各 +amount 傷害，處理 KO 串聯
+//   setOppActiveHPPre(targetHP, label)
+//     → 將對手戰鬥寶可夢的傷害設到 HP - targetHP（即剩餘 HP = targetHP）
+//
+// 實裝清單:
+//   (a) 灼傷補齊（3 張）:呆火鱷|熱灼燒、熔岩蝸牛ex|熾熱熔岩、飄浮泡泡 太陽的樣子|灼熱
+//   (b) 單點指示物（1 張）:綿綿泡芙|悄聲加害（20 傷害=2 個指示物）→ opp-poke-choose
+//   (c) 全體指示物（2 張）:由克希|痛楚記憶（全體 +20）、伊裴爾塔爾|侵蝕之風（已傷 +20）
+//   (d) HP 設定（2 張）:蜈蚣王|偏道一回（剩 10）、恰雷姆ex|氣功指壓（剩 50）
+//   (e) 條件失敗（1 張）:古鼎鹿|傲慢衝擊（220，若自身 ≥4 指示物則失敗）
+//   (f) 簡化 plain（1 張）:八爪武師|觸手激怒（130；動態能量費用略）
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 對 opp 全體或已傷寶可夢各加 amount 傷害，含 KO 處理 */
+function applyDamageToAllOpp(
+  state: GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>,
+  amount: number,
+  onlyDamaged: boolean,
+  label: string
+): GameState {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  let s = state;
+  let prizesTotal = 0;
+  const players = [...s.players] as [PlayerState, PlayerState];
+  let defender = { ...players[dIdx] };
+
+  // 處理 active
+  if (defender.active && (!onlyDamaged || defender.active.damage > 0)) {
+    const defCard = pool.get(defender.active.cardId);
+    const newDmg = defender.active.damage + amount;
+    const hp = defCard?.hp ?? 0;
+    if (hp > 0 && newDmg >= hp) {
+      const koDiscard: CardInstance[] = [
+        { ...defender.active, damage: newDmg },
+        ...defender.active.energyAttached,
+        ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+        ...(defender.active.evolvedFromStack ?? []),
+      ];
+      const p = isExCard(defCard) ? 2 : 1;
+      prizesTotal += p;
+      defender = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
+      s = addLog(s, `${label}：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎勵牌。`, null);
+    } else {
+      defender = { ...defender, active: { ...defender.active, damage: newDmg } };
+    }
+  }
+
+  // 處理 bench（篩選條件後再累積指示物；KO 的收到 discard）
+  const newBench: CardInstance[] = [];
+  for (const b of defender.bench) {
+    if (onlyDamaged && b.damage === 0) { newBench.push(b); continue; }
+    const card = pool.get(b.cardId);
+    const newDmg = b.damage + amount;
+    const hp = card?.hp ?? 0;
+    if (hp > 0 && newDmg >= hp) {
+      const koDiscard: CardInstance[] = [
+        { ...b, damage: newDmg },
+        ...b.energyAttached,
+        ...(b.toolAttached ? [b.toolAttached] : []),
+        ...(b.evolvedFromStack ?? []),
+      ];
+      const p = isExCard(card) ? 2 : 1;
+      prizesTotal += p;
+      defender = { ...defender, discard: [...defender.discard, ...koDiscard] };
+      s = addLog(s, `${label}：${card?.name ?? '?'}（備戰）被擊倒！+${p} 張獎勵牌。`, null);
+      // 不加入 newBench = 移除
+    } else {
+      newBench.push({ ...b, damage: newDmg });
+    }
+  }
+  defender = { ...defender, bench: newBench };
+  players[dIdx] = defender;
+  s = { ...s, players };
+
+  if (prizesTotal > 0) {
+    // 若 active 被擊倒且備戰空 → 勝利
+    if (!defender.active && defender.bench.length === 0) {
+      return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+    }
+    return { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizesTotal };
+  }
+  return s;
+}
+
+/** 將對手戰鬥寶可夢的傷害設為使剩餘 HP = targetHP */
+function setOppActiveHPPre(targetHP: number, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const def = state.players[dIdx].active;
+    if (!def) return { state, damage: 0 };
+    const card = pool.get(def.cardId);
+    const hp = card?.hp ?? 0;
+    if (hp <= targetHP) {
+      return { state: addLog(state, `${label}：對手 HP 已在 ${targetHP} 以下，無效`, aIdx), damage: 0 };
+    }
+    const needed = hp - targetHP - def.damage;
+    if (needed <= 0) {
+      return { state: addLog(state, `${label}：對手已有足夠傷害指示物，無效`, aIdx), damage: 0 };
+    }
+    return { state: addLog(state, `${label}：讓對手剩餘 HP = ${targetHP}（+${needed} 傷害）`, aIdx), damage: needed };
+  };
+}
+
+// 灼傷補齊
+regPost('呆火鱷|熱灼燒', statusPost('burned'));
+regPost('熔岩蝸牛ex|熾熱熔岩', statusPost('burned'));
+regPre('飄浮泡泡 太陽的樣子|灼熱', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('飄浮泡泡 太陽的樣子|灼熱', statusPost('burned'));
+
+// 綿綿泡芙|悄聲加害 — 對對手 1 隻寶可夢放置 2 個傷害指示物（= 20 傷害，使用現成 snipe-10 邏輯的 20 變種）
+regPre('綿綿泡芙|悄聲加害', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('綿綿泡芙|悄聲加害', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defender = state.players[dIdx];
+  if (defender.bench.length === 0 && !defender.active) return state;
+  if (defender.bench.length === 0 && defender.active) {
+    // 僅 active 可選，直接施加
+    const defCard = pool.get(defender.active.cardId);
+    const newDmg = defender.active.damage + 20;
+    const hp = defCard?.hp ?? 0;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    if (hp > 0 && newDmg >= hp) {
+      const ko: CardInstance[] = [
+        { ...defender.active, damage: newDmg },
+        ...defender.active.energyAttached,
+        ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+        ...(defender.active.evolvedFromStack ?? []),
+      ];
+      const p = isExCard(defCard) ? 2 : 1;
+      players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...ko] };
+      let s = addLog({ ...state, players }, `悄聲加害：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎勵牌。`, null);
+      if (players[dIdx].bench.length === 0) {
+        return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+      }
+      return { ...s, pendingPrizes: p };
+    }
+    players[dIdx] = { ...defender, active: { ...defender.active, damage: newDmg } };
+    return addLog({ ...state, players }, `悄聲加害：對 ${defCard?.name ?? '?'} 造成 20 傷害`, aIdx);
+  }
+  let s = addLog(state, '悄聲加害：選擇對手任一寶可夢，放置 2 個傷害指示物', aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'snipe-20',
+    params: { includeActive: true },
+  });
+});
+
+regR('snipe-20', (st, actorIdx, selectedIids, _params, pool) => {
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  const defender = st.players[dIdx];
+  const targetIid = selectedIids[0];
+  if (!targetIid) return st;
+  const isActive = defender.active?.iid === targetIid;
+  const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const targetCard = pool.get(target.cardId);
+  const newDmg = target.damage + 20;
+  const hp = targetCard?.hp ?? 0;
+  if (hp > 0 && newDmg >= hp) {
+    const ko: CardInstance[] = [
+      { ...target, damage: newDmg },
+      ...target.energyAttached,
+      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...(target.evolvedFromStack ?? []),
+    ];
+    const p = isExCard(targetCard) ? 2 : 1;
+    const players = [...st.players] as [PlayerState, PlayerState];
+    const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
+    if (isActive) newDefender.active = null;
+    else newDefender.bench = defender.bench.filter(c => c.iid !== targetIid);
+    players[dIdx] = newDefender;
+    let s = addLog({ ...st, players }, `悄聲加害：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎勵牌。`, null);
+    if (isActive && newDefender.bench.length === 0) {
+      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+    }
+    return { ...s, pendingPrizes: p };
+  }
+  const players = [...st.players] as [PlayerState, PlayerState];
+  const newDefender = { ...defender };
+  if (isActive) newDefender.active = { ...target, damage: newDmg };
+  else newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
+  players[dIdx] = newDefender;
+  return addLog({ ...st, players }, `悄聲加害：對 ${targetCard?.name ?? '?'} 造成 20 傷害`, actorIdx);
+});
+
+// 由克希|痛楚記憶 — 對手所有寶可夢各放置 2 個指示物（= 20 傷害）
+regPre('由克希|痛楚記憶', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('由克希|痛楚記憶', (state, aIdx, pool) => {
+  return applyDamageToAllOpp(state, aIdx, pool, 20, false, '痛楚記憶');
+});
+
+// 伊裴爾塔爾|侵蝕之風 — 對手已傷寶可夢各放置 2 個指示物
+regPre('伊裴爾塔爾|侵蝕之風', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('伊裴爾塔爾|侵蝕之風', (state, aIdx, pool) => {
+  return applyDamageToAllOpp(state, aIdx, pool, 20, true, '侵蝕之風');
+});
+
+// 蜈蚣王|偏道一回 — 將對手戰鬥寶可夢剩餘 HP 變為 10
+regPre('蜈蚣王|偏道一回', setOppActiveHPPre(10, '偏道一回'));
+
+// 恰雷姆ex|氣功指壓 — 剩餘 HP 變為 50
+regPre('恰雷姆ex|氣功指壓', setOppActiveHPPre(50, '氣功指壓'));
+
+// 古鼎鹿|傲慢衝擊 — 220；若自身 ≥40 傷害（=4 指示物）則失敗
+regPre('古鼎鹿|傲慢衝擊', (state, aIdx, _pool) => {
+  const att = state.players[aIdx].active;
+  if (att && att.damage >= 40) {
+    return { state: addLog(state, '傲慢衝擊：自身 ≥4 指示物 → 招式失敗', aIdx), damage: 0 };
+  }
+  return { state, damage: 220 };
+});
+
+// 八爪武師|觸手激怒 — 130 plain（簡化：動態能量費用條件略）
+regPre('八爪武師|觸手激怒', (state, _aIdx, _pool) => ({ state, damage: 130 }));
