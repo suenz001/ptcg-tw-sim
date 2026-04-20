@@ -2530,3 +2530,59 @@ Windows / 上一版 commit 都是 2595 行）。我 v1.51 直接 `cp` sandbox �
 
 `/tmp/ptcg-work/repo` 本機 `npm run build` 通過。版本 1.56 → 1.57。
 
+
+---
+
+## 📝 2026-04-20 Session 38h (v1.58) — H 標第 4 波：bench snipe 一次補 13 張
+
+### 背景
+
+H 標未實裝分類表裡，bench-snipe / spray 類（招式會打到備戰區）共 22 張，是 damage-multiply 35 之後第二大群。大部分只要能「對備戰打固定傷害 + 走標準 KO 流程」就能跑。這波挑 13 張不需要新引擎能力的先做，剩 9 張（gust-and-hit × 5、傷害指示物分配 × 2、傷害轉移 × 2）留待後續有新機制時再補。
+
+### 新增 helper（`src/lib/game/effects.ts`）
+
+避免每張卡都手寫 KO cascade。獨立出 3 個本地 helper（不引 engine.ts，維持 effects→engine 單向依賴）：
+
+- **`koPrizeCount(card)`** — 抄 engine 的 `prizesForKO` 邏輯：超級 ex = 3、ex/EX = 2、其它 = 1。
+- **`effectiveHPInline(inst, pool)`** — 吃 `TOOL_HP_BONUS` 讀工具加成後的有效 HP，判斷是否已 KO。
+- **`hitBenchAll(state, aIdx, targetSide, amount, pool, label)`** — 對指定一方（aIdx / 1-aIdx）的所有備戰傷害 + KO 判定。KO 時能量 / 工具 / 進化堆整包進棄牌區、`pendingPrizes` 累加（用 `+=`，別覆蓋）、每張都寫 log。
+- **`hitBenchPickPost(state, aIdx, targetSide, count, amount, label)`** — 不直接打，而是推 pendingSelection（`bench-choose` / `opp-bench-choose`）讓玩家/AI 挑 N 隻，再由 resolver `bench-hit-N` 統一施加傷害。
+- **resolver `bench-hit-N`** — 讀 `params.amount` / `params.attackLabel`，逐一對 selectedIids 套傷害、KO 判定、搬廢棄。
+
+### 13 張分 5 個小模式
+
+**P1 自／雙方全體 bench 固定值**（3 張）：
+- 穿山王｜地震（自己 bench 全吃 10）
+- 焚焰蚣｜燃燒熱浪（自己 bench 全吃 30）
+- 電飛鼠｜天空波（雙方 bench 全吃 10）
+
+**P2 指定敵方 bench N 隻 × amount**（5 張）：
+- 奇麒麟ex｜惡劣光束（對手 1 × 30）
+- 摩托蜥ex｜突圍（對手 1 × 30）
+- 冰伊布ex｜冰霜子彈（對手 1 × 30）
+- 三首惡龍ex｜黑曜石（對手 2 × 130）
+- 麒麟奇｜雙向頭擊（自己 bench 1 × 10；對己方 bench 1 隻）
+
+**P3 條件 damage-plus**（3 張，regPre 調整 damage）：
+- 老翁龍｜盛怒炮（100 + 120 if 自己 bench 全部受傷）
+- 洗翠 風速狗｜驕傲獠牙（30 + 90 if 任一自己 bench 受傷）
+- 鐵頭殼｜滅絕斬（40 + 80 if 對手 bench ≥ 3）
+
+**P4 清 stadium + bench 全體**（1 張）：
+- 古鼎鹿｜大地斷裂（若有 activeStadium：丟到攻擊方棄牌 + 對手 bench 全吃 30）
+
+**P5 牌庫條件觸發挑選**（1 張）：
+- 古簡蝸｜貪婪危害（若自己牌庫 ≤ 3：對手 bench 2 隻 × 120）
+
+### 驗證
+
+- `/tmp/ptcg-work/repo` 本機 `npm run build` 通過
+- `node /tmp/sim-sandbox/sim-repo.mjs 50` → 50/50 正常結束，0 crash / 0 stuck
+- 版本 1.57 → 1.58
+
+### 未竟（H 標 bench-snipe 剩 9 張）
+
+需要新引擎能力才跑得動，下波再推：
+- gust-and-hit（拉上場 + 攻擊同一回合解決）× 5
+- 傷害指示物分配（n 個 counter 任意分配到對手場上）× 2
+- 傷害轉移（把自己身上 counter 搬到對手 bench）× 2

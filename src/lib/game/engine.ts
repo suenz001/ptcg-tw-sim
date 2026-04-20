@@ -191,7 +191,7 @@ export function canAffordAttack(
 }
 
 /** 判斷一張 ex 卡（name 含 'ex' 後綴）對應獎勵牌數 */
-function prizesForKO(card: Card): number {
+export function prizesForKO(card: Card): number {
   const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
   // 超級進化寶可夢ex（Mega ex）：name 以「超級」開頭且為 ex → 3 張獎賞
   // 例：超級噴火龍Xex / 超級妙蛙花ex / 超級拉帝亞斯ex

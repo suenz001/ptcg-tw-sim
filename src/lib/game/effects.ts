@@ -855,6 +855,171 @@ export interface PreDiscardSpec {
 
 export const ATTACK_PRE_DISCARD_CHOICE = new Map<string, PreDiscardSpec>();
 
+// ══════════════════════════════════════════════════════════════════════════════
+// POST 共用 helper：bench 施傷 / KO 處理（v1.58 H13 批次）
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 計算 KO 獎賞張數（與 engine.prizesForKO 對齊；inline 以免 effects→engine 反向依賴） */
+function koPrizeCount(card: Card): number {
+  const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
+  if (isEx && card.name.startsWith('超級')) return 3; // Mega ex
+  return isEx ? 2 : 1;
+}
+
+/** 計算 CardInstance 的有效 HP（含道具 HP 加成，與 engine.getEffectiveHP 對齊） */
+function effectiveHPInline(inst: CardInstance, pool: Map<string, Card>): number {
+  const card = pool.get(inst.cardId);
+  if (!card) return 0;
+  let hp = card.hp ?? 0;
+  if (inst.toolAttached) {
+    const tool = pool.get(inst.toolAttached.cardId);
+    if (tool) {
+      const bonusFn = TOOL_HP_BONUS.get(tool.name);
+      if (bonusFn) hp += bonusFn(card);
+    }
+  }
+  return hp;
+}
+
+/**
+ * 對指定方的「所有備戰寶可夢」施加固定 amount 傷害（bench 不計算弱點/抵抗力）。
+ * KO 判定 + 棄牌遷移 + pendingPrizes 累計都在這裡處理。
+ * 僅在擊倒的情況下寫 log；非 KO 僅回傳新 state 由 caller 寫總結 log。
+ *
+ * 注意：bench 被 KO 不會 set pendingSelection；攻擊方累計取獎後照流程進行。
+ */
+function hitBenchAll(
+  state: GameState,
+  attackerIdx: 0 | 1,
+  targetIdx: 0 | 1,
+  amount: number,
+  pool: Map<string, Card>,
+  attackLabel: string,
+): GameState {
+  const target = state.players[targetIdx];
+  if (target.bench.length === 0 || amount <= 0) return state;
+
+  let morePrizes = 0;
+  const newBench: CardInstance[] = [];
+  const koDiscards: CardInstance[] = [];
+  const koNames: string[] = [];
+
+  for (const c of target.bench) {
+    const card = pool.get(c.cardId);
+    const newDmg = c.damage + amount;
+    const hp = effectiveHPInline(c, pool);
+    if (hp > 0 && newDmg >= hp) {
+      koDiscards.push({ ...c, damage: newDmg });
+      for (const e of c.energyAttached) koDiscards.push(e);
+      if (c.toolAttached) koDiscards.push(c.toolAttached);
+      for (const prev of c.evolvedFromStack ?? []) koDiscards.push(prev);
+      if (card) morePrizes += koPrizeCount(card);
+      koNames.push(card?.name ?? '?');
+    } else {
+      newBench.push({ ...c, damage: newDmg });
+    }
+  }
+
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[targetIdx] = {
+    ...target,
+    bench: newBench,
+    discard: [...target.discard, ...koDiscards],
+  };
+
+  const who = targetIdx === attackerIdx ? '自己' : '對手';
+  let s: GameState = { ...state, players };
+  s = addLog(s, `${attackLabel}：對${who}所有備戰寶可夢各造成 ${amount} 傷害`, attackerIdx);
+  if (koNames.length > 0) {
+    s = addLog(s, `${attackLabel}：${koNames.join('、')} 被擊倒，${state.players[attackerIdx].name} 額外取得 ${morePrizes} 張獎勵牌`, null);
+    s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + morePrizes };
+  }
+  return s;
+}
+
+/**
+ * 對指定方的備戰寶可夢挑選 count 隻，各施加 amount 傷害。
+ * 透過 pendingSelection（'bench-choose' / 'opp-bench-choose'）讓玩家選擇。
+ * 挑選完後由 `bench-hit-N` resolver 施加傷害 / KO 判定。
+ *
+ * 若備戰數量不足 count，會改為 min(備戰數, count)；為 0 則直接返回（無動作）。
+ */
+function hitBenchPickPost(
+  state: GameState,
+  attackerIdx: 0 | 1,
+  targetSide: 'self' | 'opp',
+  count: number,
+  amount: number,
+  attackLabel: string,
+): GameState {
+  const targetIdx = (targetSide === 'opp' ? (1 - attackerIdx) : attackerIdx) as 0 | 1;
+  const target = state.players[targetIdx];
+  if (target.bench.length === 0 || amount <= 0 || count <= 0) return state;
+  const pickCount = Math.min(count, target.bench.length);
+  const pendingType: PendingSelection['type'] = targetSide === 'opp' ? 'opp-bench-choose' : 'bench-choose';
+  let s = addLog(state, `${attackLabel}：選擇 ${pickCount} 隻${targetSide === 'opp' ? '對手' : '自己'}備戰寶可夢，各造成 ${amount} 傷害`, attackerIdx);
+  return withPending(s, {
+    type: pendingType,
+    actorIdx: attackerIdx,
+    sourcePlayerIdx: targetIdx,
+    minCount: pickCount,
+    maxCount: pickCount,
+    effectKey: 'bench-hit-N',
+    params: { amount, attackLabel, targetIdx },
+  });
+}
+
+/**
+ * 通用 resolver：對 selectedIids 指到的 bench 寶可夢各施加 params.amount 傷害，
+ * 處理 KO + 棄牌遷移 + pendingPrizes 累計。
+ * 支援「挑自己備戰」或「挑對手備戰」（sourcePlayerIdx 決定）。
+ */
+regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
+  const amount = Number(params?.amount ?? 0);
+  const label = String(params?.attackLabel ?? '招式');
+  const targetIdx = ((params?.targetIdx ?? (1 - actorIdx)) as 0 | 1);
+  if (amount <= 0 || selectedIids.length === 0) return st;
+  const target = st.players[targetIdx];
+
+  let morePrizes = 0;
+  const newBench: CardInstance[] = [];
+  const koDiscards: CardInstance[] = [];
+  const hitNames: string[] = [];
+  const koNames: string[] = [];
+  const hitSet = new Set(selectedIids);
+
+  for (const c of target.bench) {
+    if (!hitSet.has(c.iid)) { newBench.push(c); continue; }
+    const card = pool.get(c.cardId);
+    const newDmg = c.damage + amount;
+    const hp = effectiveHPInline(c, pool);
+    if (hp > 0 && newDmg >= hp) {
+      koDiscards.push({ ...c, damage: newDmg });
+      for (const e of c.energyAttached) koDiscards.push(e);
+      if (c.toolAttached) koDiscards.push(c.toolAttached);
+      for (const prev of c.evolvedFromStack ?? []) koDiscards.push(prev);
+      if (card) morePrizes += koPrizeCount(card);
+      koNames.push(card?.name ?? '?');
+    } else {
+      newBench.push({ ...c, damage: newDmg });
+      hitNames.push(card?.name ?? '?');
+    }
+  }
+
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[targetIdx] = { ...target, bench: newBench, discard: [...target.discard, ...koDiscards] };
+
+  let s: GameState = { ...st, players };
+  if (hitNames.length > 0) {
+    s = addLog(s, `${label}：對 ${hitNames.join('、')} 造成 ${amount} 傷害`, actorIdx);
+  }
+  if (koNames.length > 0) {
+    s = addLog(s, `${label}：${koNames.join('、')} 被擊倒，${st.players[actorIdx].name} 額外取得 ${morePrizes} 張獎勵牌`, null);
+    s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + morePrizes };
+  }
+  return s;
+});
+
 // ── MBD 超級蒂安希ex ──────────────────────────────────────────────────────────
 
 // 花冠射線 — 玩家選擇丟 0~2 個自身能量，造成張數×120 傷害
@@ -2156,6 +2321,87 @@ function defNextAtkReducePost(n: number): AttackPostFn {
 }
 regPost('黑魯加|大聲咆哮', defNextAtkReducePost(100));
 regPost('嘎啦嘎啦|叫聲', defNextAtkReducePost(40));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38g H13 — bench snipe / spray 批次（13 張）
+// 使用 hitBenchAll / hitBenchPickPost helper，bench 不計算弱點・抵抗力已內建
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── P1：對指定方「所有備戰」施加固定傷害（3 張）────────────────────────────
+// 穿山王 地震 — 自己所有備戰 10
+regPost('穿山王|地震', (state, aIdx, pool) =>
+  hitBenchAll(state, aIdx, aIdx, 10, pool, '地震'));
+// 焚焰蚣 燃燒熱浪 — 自己所有備戰 30
+regPost('焚焰蚣|燃燒熱浪', (state, aIdx, pool) =>
+  hitBenchAll(state, aIdx, aIdx, 30, pool, '燃燒熱浪'));
+// 電飛鼠 天空波 — 雙方所有備戰各 10
+regPost('電飛鼠|天空波', (state, aIdx, pool) => {
+  const s1 = hitBenchAll(state, aIdx, aIdx, 10, pool, '天空波');
+  return hitBenchAll(s1, aIdx, (1 - aIdx) as 0 | 1, 10, pool, '天空波');
+});
+
+// ── P2：選 N 隻備戰各施加固定傷害（5 張）──────────────────────────────────
+// 奇麒麟ex 惡劣光束 — 選對手 1 隻備戰 30
+regPost('奇麒麟ex|惡劣光束', (state, aIdx, _pool) =>
+  hitBenchPickPost(state, aIdx, 'opp', 1, 30, '惡劣光束'));
+// 摩托蜥ex 突圍 — 選對手 1 隻備戰 30
+regPost('摩托蜥ex|突圍', (state, aIdx, _pool) =>
+  hitBenchPickPost(state, aIdx, 'opp', 1, 30, '突圍'));
+// 冰伊布ex 冰霜子彈 — 選對手 1 隻備戰 30
+regPost('冰伊布ex|冰霜子彈', (state, aIdx, _pool) =>
+  hitBenchPickPost(state, aIdx, 'opp', 1, 30, '冰霜子彈'));
+// 三首惡龍ex 黑曜石 — 選對手 2 隻備戰各 130
+regPost('三首惡龍ex|黑曜石', (state, aIdx, _pool) =>
+  hitBenchPickPost(state, aIdx, 'opp', 2, 130, '黑曜石'));
+// 麒麟奇 雙向頭擊 — 選自己 1 隻備戰 10
+regPost('麒麟奇|雙向頭擊', (state, aIdx, _pool) =>
+  hitBenchPickPost(state, aIdx, 'self', 1, 10, '雙向頭擊'));
+
+// ── P3：條件式 +N 傷害（regPre 修改傷害，3 張）────────────────────────────
+// 老翁龍 盛怒炮 — 若自己所有備戰都有傷，+120（基礎 100）
+regPre('老翁龍|盛怒炮', (state, aIdx, _pool) => {
+  const bench = state.players[aIdx].bench;
+  const bonus = bench.length > 0 && bench.every(c => c.damage > 0) ? 120 : 0;
+  return { state, damage: 100 + bonus };
+});
+// 洗翠 風速狗 驕傲獠牙 — 若自己備戰任一有傷，+90（基礎 30）
+regPre('洗翠 風速狗|驕傲獠牙', (state, aIdx, _pool) => {
+  const anyDamaged = state.players[aIdx].bench.some(c => c.damage > 0);
+  return { state, damage: 30 + (anyDamaged ? 90 : 0) };
+});
+// 鐵頭殼 滅絕斬 — 若對手備戰 ≥3 隻，+80（基礎 40）
+regPre('鐵頭殼|滅絕斬', (state, aIdx, _pool) => {
+  const oppBench = state.players[(1 - aIdx) as 0 | 1].bench.length;
+  return { state, damage: 40 + (oppBench >= 3 ? 80 : 0) };
+});
+
+// ── P4：條件式 bench 傷害 + stadium 丟棄（1 張）────────────────────────────
+// 古鼎鹿 大地斷裂 — 若場上有 Stadium：對手所有備戰 30 + 丟棄 Stadium
+regPost('古鼎鹿|大地斷裂', (state, aIdx, pool) => {
+  if (!state.activeStadium) return state;
+  const stadiumInst = state.activeStadium;
+  const stadiumCard = pool.get(stadiumInst.cardId);
+  const stadiumOwner = (state.players[0].discard.some(c => c.iid === stadiumInst.iid) ||
+                       state.players[1].discard.some(c => c.iid === stadiumInst.iid))
+                      ? null : aIdx; // 安全退回：丟到攻擊方 discard
+  // 實際上 activeStadium 應該屬於雙方其中一位的 supporterPlayedThisTurn 所放；
+  // 為了簡化：丟到攻擊方棄牌區（Stadium 下場無所屬方規則差異）
+  let s: GameState = {
+    ...state,
+    activeStadium: undefined,
+    stadiumUsedThisTurn: undefined,
+  };
+  s = updatePlayer(s, aIdx, p => ({ ...p, discard: [...p.discard, stadiumInst] }));
+  s = addLog(s, `大地斷裂：將場地卡 ${stadiumCard?.name ?? '?'} 丟棄`, aIdx);
+  return hitBenchAll(s, aIdx, (1 - aIdx) as 0 | 1, 30, pool, '大地斷裂');
+});
+
+// ── P5：條件式 選 2 隻對手備戰施加 120（1 張）──────────────────────────────
+// 古簡蝸 貪婪危害 — 若自己牌庫 ≤3 張，對手選 2 隻備戰各 120
+regPost('古簡蝸|貪婪危害', (state, aIdx, _pool) => {
+  if (state.players[aIdx].deck.length > 3) return state;
+  return hitBenchPickPost(state, aIdx, 'opp', 2, 120, '貪婪危害');
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 32 H11 — 被動特性：受傷減 N / 免疫
