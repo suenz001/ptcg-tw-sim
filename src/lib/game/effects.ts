@@ -6500,3 +6500,213 @@ regR('energy-wheel-attach', (st, idx, iids, params, pool) => {
       : c),
   }));
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38ad v1.80 H 標第 25 波 — field discard×multiplier + 特能清除 + coin×energy
+//
+// Helpers:
+//   fieldDiscardMultiplyPre(base, per, max, typeFilter, label) — 可丟場上（含備戰）能量
+//   oppDiscardAllSpecialEnergyPost(label) — 清空對手全場特殊能量
+//   coinByActiveEnergyPre(base, per, label, scope: 'self'|'both') — 擲硬幣=出場能量數
+// 卡牌：
+//   來悲粗茶 傾瀉茶 70×（草 max 3 場上）
+//   猛雷鼓ex 極降駕 70×（basic 任意 場上）
+//   蒼炎刃鬼 火焰咒詛（清除全場特殊能量）
+//   厄鬼椪 火灶面具ex 極限火焰 140（若對手進化 +140 並丟全部自身能量）
+//   怖納噬草 強力尖刺 80×硬幣正面數（=自身能量數）
+//   椰蛋樹 投球時刻 60×硬幣正面數（=雙方出場能量和）
+// ══════════════════════════════════════════════════════════════════════════════
+
+type FieldDiscardFilter = 'all' | 'basic' | EnergyType;
+
+function fieldDiscardMultiplyPre(
+  baseDamage: number,
+  per: number,
+  max: number,
+  typeFilter: FieldDiscardFilter,
+  label: string,
+): AttackPreFn {
+  return (state, aIdx, pool, action) => {
+    const player = state.players[aIdx];
+    // 列出場上（含備戰）所有符合條件的能量
+    type Loc = { host: 'active' | number; energy: CardInstance };
+    const eligible: Loc[] = [];
+    const matches = (e: CardInstance): boolean => {
+      const c = pool.get(e.cardId);
+      if (!c || c.supertype !== 'Energy') return false;
+      if (typeFilter === 'all') return true;
+      if (typeFilter === 'basic') return c.subtype === 'Basic';
+      return c.pokemonType === typeFilter;
+    };
+    if (player.active) {
+      for (const e of player.active.energyAttached) {
+        if (matches(e)) eligible.push({ host: 'active', energy: e });
+      }
+    }
+    player.bench.forEach((b, i) => {
+      for (const e of b.energyAttached) {
+        if (matches(e)) eligible.push({ host: i, energy: e });
+      }
+    });
+
+    // 決定要丟的 iid 清單
+    const chosenIids = action?.discardedEnergyIids;
+    let selected: Loc[];
+    if (chosenIids && chosenIids.length > 0) {
+      const idSet = new Set(chosenIids);
+      selected = eligible.filter(l => idSet.has(l.energy.iid)).slice(0, max);
+    } else {
+      // 自動 fallback：從尾端挑 max 個
+      const n = Math.min(max, eligible.length);
+      selected = eligible.slice(-n);
+    }
+    if (selected.length === 0) {
+      return { state: addLog(state, `${label}：未丟棄任何能量 → ${baseDamage}`, aIdx), damage: baseDamage };
+    }
+
+    // 依 host 分組
+    const activeRm = new Set<string>();
+    const benchRm = new Map<number, Set<string>>();
+    for (const s of selected) {
+      if (s.host === 'active') activeRm.add(s.energy.iid);
+      else {
+        const st = benchRm.get(s.host) ?? new Set<string>();
+        st.add(s.energy.iid);
+        benchRm.set(s.host, st);
+      }
+    }
+
+    const discardList = selected.map(s => s.energy);
+    let s2 = updatePlayer(state, aIdx, p => ({
+      ...p,
+      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => !activeRm.has(e.iid)) } : null,
+      bench: p.bench.map((b, i) => {
+        const rm = benchRm.get(i);
+        if (!rm || rm.size === 0) return b;
+        return { ...b, energyAttached: b.energyAttached.filter(e => !rm.has(e.iid)) };
+      }),
+      discard: [...p.discard, ...discardList],
+    }));
+    const dmg = baseDamage + per * selected.length;
+    s2 = addLog(s2, `${label}：丟棄 ${selected.length} 個能量 → ${dmg}`, aIdx);
+    return { state: s2, damage: dmg };
+  };
+}
+
+function registerFieldDiscardMultiply(
+  key: string,
+  label: string,
+  baseDamage: number,
+  per: number,
+  max: number,
+  typeFilter: FieldDiscardFilter,
+) {
+  ATTACK_PRE_DISCARD_CHOICE.set(key, {
+    min: 0,
+    max,
+    scope: 'any-own',
+    baseDamage,
+    damagePerEnergy: per,
+  });
+  regPre(key, fieldDiscardMultiplyPre(baseDamage, per, max, typeFilter, label));
+}
+
+// 來悲粗茶｜傾瀉茶 — 最多 3 張自己場上【草】能量 × 70
+registerFieldDiscardMultiply('來悲粗茶|傾瀉茶', '傾瀉茶', 0, 70, 3, 'Grass');
+
+// 猛雷鼓ex｜極降駕 — 任意張數自己場上基本能量 × 70（以大 max 近似 "任意"）
+registerFieldDiscardMultiply('猛雷鼓ex|極降駕', '極降駕', 0, 70, 20, 'basic');
+
+// ── 蒼炎刃鬼｜火焰咒詛 — 將對手全場特殊能量全部丟棄 ───────────────────────
+regPre('蒼炎刃鬼|火焰咒詛', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('蒼炎刃鬼|火焰咒詛', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const d = state.players[dIdx];
+  let removed = 0;
+  const removedEnergies: CardInstance[] = [];
+  const stripSpecial = (inst: CardInstance): CardInstance => {
+    const specials: CardInstance[] = [];
+    const kept: CardInstance[] = [];
+    for (const e of inst.energyAttached) {
+      const c = pool.get(e.cardId);
+      if (c && c.supertype === 'Energy' && c.subtype === 'Special') {
+        specials.push(e);
+      } else {
+        kept.push(e);
+      }
+    }
+    removed += specials.length;
+    removedEnergies.push(...specials);
+    return { ...inst, energyAttached: kept };
+  };
+  let s = state;
+  s = updatePlayer(s, dIdx, p => ({
+    ...p,
+    active: p.active ? stripSpecial(p.active) : null,
+    bench: p.bench.map(stripSpecial),
+    discard: [...p.discard, ...removedEnergies],
+  }));
+  if (removed === 0) {
+    return addLog(s, '火焰咒詛：對手全場沒有特殊能量', aIdx);
+  }
+  return addLog(s, `火焰咒詛：丟棄對手全場 ${removed} 張特殊能量`, aIdx);
+});
+
+// ── 厄鬼椪 火灶面具ex｜極限火焰 — 140（若對手是進化寶可夢 +140，並丟自身全部能量）
+regPre('厄鬼椪 火灶面具ex|極限火焰', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  if (!def) return { state, damage: 140 };
+  const defCard = pool.get(def.cardId);
+  const isEvo = !!(defCard?.evolvesFrom);
+  if (!isEvo) {
+    return { state: addLog(state, '極限火焰：對手非進化寶可夢', aIdx), damage: 140 };
+  }
+  // 是進化寶可夢：+140 並丟自身全部能量
+  const att = state.players[aIdx].active;
+  if (!att) return { state, damage: 280 };
+  let s = addLog(state, `極限火焰：對手為進化寶可夢 → +140（丟自身 ${att.energyAttached.length} 張能量）`, aIdx);
+  s = updatePlayer(s, aIdx, p => {
+    if (!p.active) return p;
+    const ens = p.active.energyAttached;
+    return { ...p, active: { ...p.active, energyAttached: [] }, discard: [...p.discard, ...ens] };
+  });
+  return { state: s, damage: 280 };
+});
+
+// ── 怖納噬草｜強力尖刺 — 擲與自身能量數同次硬幣，正面 × 80 ──────────────
+regPre('怖納噬草|強力尖刺', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  if (!att) return { state, damage: 0 };
+  const n = countOneEnergy(att, 'all', pool);
+  if (n === 0) return { state: addLog(state, '強力尖刺：自身無能量', aIdx), damage: 0 };
+  let heads = 0;
+  const seq: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const h = Math.random() < 0.5;
+    if (h) heads++;
+    seq.push(h ? '正' : '反');
+  }
+  const dmg = heads * 80;
+  const s = addLog(state, `強力尖刺：擲 ${n} 次硬幣 [${seq.join(' ')}] → 正面 ${heads} 次 × 80 = ${dmg}`, aIdx);
+  return { state: s, damage: dmg };
+});
+
+// ── 椰蛋樹｜投球時刻 — 擲與雙方出場能量和同次硬幣，正面 × 60 ────────────
+regPre('椰蛋樹|投球時刻', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const att = state.players[aIdx].active;
+  const def = state.players[dIdx].active;
+  const n = (att ? countOneEnergy(att, 'all', pool) : 0) + (def ? countOneEnergy(def, 'all', pool) : 0);
+  if (n === 0) return { state: addLog(state, '投球時刻：雙方出場皆無能量', aIdx), damage: 0 };
+  let heads = 0;
+  const seq: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const h = Math.random() < 0.5;
+    if (h) heads++;
+    seq.push(h ? '正' : '反');
+  }
+  const dmg = heads * 60;
+  const s = addLog(state, `投球時刻：擲 ${n} 次硬幣 [${seq.join(' ')}] → 正面 ${heads} 次 × 60 = ${dmg}`, aIdx);
+  return { state: s, damage: dmg };
+});

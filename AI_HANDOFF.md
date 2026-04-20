@@ -3258,3 +3258,30 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 25/25
 - 版本 1.78 → 1.79
+
+---
+
+## 📝 2026-04-21 Session 38ad (v1.80) — H 標第 25 波：場上丟能量×倍率 + 特能清除 + 擲硬幣×能量數（6 張）
+
+### 新 helper
+- `fieldDiscardMultiplyPre(base, per, max, typeFilter, label)` — 可丟自己「場上任意寶可夢（含備戰）」身上的能量，支援 `action.discardedEnergyIids` 選定路徑；找不到時自動 fallback 挑最後 N 個
+- `registerFieldDiscardMultiply(key, label, base, per, max, typeFilter)` — 打包：ATTACK_PRE_DISCARD_CHOICE（scope `'any-own'`）+ regPre
+- 類型 `FieldDiscardFilter = 'all' | 'basic' | EnergyType`
+
+### 實裝（6 張）
+- 場上丟能量 × 倍率（2 張）：來悲粗茶｜傾瀉茶 70×（草 max 3）、猛雷鼓ex｜極降駕 70×（基本 max 20 ≈ 任意）
+- 蒼炎刃鬼｜火焰咒詛 — 清除對手全場特殊能量
+- 厄鬼椪 火灶面具ex｜極限火焰 — 140（若對手戰鬥為進化寶可夢 → +140 並丟自身全部能量，共 280）
+- 怖納噬草｜強力尖刺 — 擲與自身能量同次硬幣，正面 × 80
+- 椰蛋樹｜投球時刻 — 擲與雙方出場能量合計同次硬幣，正面 × 60
+
+### 暫緩
+- damage-plus 下回合加傷類（巨金怪 彗星拳、大電海燕 風力充能、超音波幼蟲 刺耳聲）— 需新增「下回合加傷」引擎旗標
+- 電蜘蛛 [特性] 複眼 — 需「對擁有特性的寶可夢加傷」的 hook
+- 阿柏蛇/阿柏怪/晶光花 多重狀態類 — 需擴充 status 為陣列
+- 厄鬼椪 火灶面具ex｜極限火焰 的手動確認（目前完全自動，若對手為進化一定加傷並丟全能量；AI 版不需拒絕）
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 21/29
+- 版本 1.79 → 1.80
