@@ -5382,3 +5382,229 @@ regPost('多龍巴魯托ex|幻影奇襲', (state, aIdx, _pool) => {
     params: { damage: 60, label: '幻影奇襲' },
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38x+ v1.75 H 標第 20 波 — swap + energy return + count-multiply（10 張）
+//
+// Helpers:
+//   discardOppActiveEnergyPost(label, filter?) — 攻後丟對手戰鬥寶可夢 1 張能量
+//     filter: 'any' | 'special'；'special' 僅丟特殊能量
+//   returnSelfActiveEnergyPost(n, toHand, label) — 攻後移除自身能量 n 張，toHand=true 放回手牌，否則改附備戰
+//   returnOppActiveEnergyPost(n, label) — 攻後將對手戰鬥能量 n 張放回對手手牌
+//   countDamagedSelfMultiplyPre(per, label) — pre 傷害 = 自己場上被傷害的寶可夢數 × per
+// 特殊：
+//   古月鳥|噴吐射擊 — 丟自身全部能量 + opp-poke-choose 120
+//   噬沙堡爺ex|重晶石之獄 — 對手所有備戰設置 damage 直到剩 HP=100
+// ══════════════════════════════════════════════════════════════════════════════
+
+function discardOppActiveEnergyPost(
+  label: string,
+  filter: 'any' | 'special' = 'any',
+): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const defender = state.players[dIdx];
+    if (!defender.active) return state;
+    const defName = pool.get(defender.active.cardId)?.name ?? '?';
+    const energies = defender.active.energyAttached;
+    if (energies.length === 0) {
+      return addLog(state, `${label}：${defName} 沒有可丟的能量`, aIdx);
+    }
+    // 找最後一個符合 filter 的能量
+    let targetIdx = -1;
+    for (let i = energies.length - 1; i >= 0; i--) {
+      const card = pool.get(energies[i].cardId);
+      if (filter === 'special') {
+        if (card?.supertype === 'Energy' && card.subtype === 'Special') {
+          targetIdx = i;
+          break;
+        }
+      } else {
+        targetIdx = i;
+        break;
+      }
+    }
+    if (targetIdx < 0) {
+      return addLog(state, `${label}：${defName} 無${filter === 'special' ? '特殊' : ''}能量可丟`, aIdx);
+    }
+    const discarded = energies[targetIdx];
+    const newEnergies = [...energies.slice(0, targetIdx), ...energies.slice(targetIdx + 1)];
+    const energyName = pool.get(discarded.cardId)?.name ?? '能量';
+    let s = addLog(state, `${label}：${defName} 丟棄 1 張${filter === 'special' ? '特殊' : ''}能量（${energyName}）`, aIdx);
+    return updatePlayer(s, dIdx, p => {
+      if (!p.active) return p;
+      return {
+        ...p,
+        active: { ...p.active, energyAttached: newEnergies },
+        discard: [...p.discard, discarded],
+      };
+    });
+  };
+}
+
+function returnSelfActiveEnergyPost(n: number, toHand: boolean, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const att = state.players[aIdx].active;
+    if (!att) return state;
+    const attName = pool.get(att.cardId)?.name ?? '?';
+    const energies = att.energyAttached;
+    if (energies.length === 0) {
+      return addLog(state, `${label}：${attName} 沒有可移動的能量`, aIdx);
+    }
+    const takeCount = Math.min(n, energies.length);
+    const moved = energies.slice(energies.length - takeCount);
+    const remaining = energies.slice(0, energies.length - takeCount);
+    if (toHand) {
+      let s = addLog(state, `${label}：${attName} 將 ${takeCount} 張能量放回手牌`, aIdx);
+      return updatePlayer(s, aIdx, p => {
+        if (!p.active) return p;
+        return {
+          ...p,
+          active: { ...p.active, energyAttached: remaining },
+          hand: [...p.hand, ...moved],
+        };
+      });
+    }
+    // 改附於備戰：用 gengar-move-energy 單張迴圈；我們取 1 張（n 預設 1 對此類卡）
+    if (state.players[aIdx].bench.length === 0) {
+      return addLog(state, `${label}：沒有備戰寶可夢，能量留在原位`, aIdx);
+    }
+    const toMove = moved[0];
+    let s = updatePlayer(state, aIdx, p => ({
+      ...p,
+      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.slice(0, -1) } : null,
+    }));
+    s = addLog(s, `${label}：將能量改附於備戰寶可夢`, aIdx);
+    return withPending(s, {
+      type: 'bench-choose',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'gengar-move-energy',
+      params: { energyIid: toMove.iid, energyCardId: toMove.cardId },
+    });
+  };
+}
+
+function returnOppActiveEnergyPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const defender = state.players[dIdx];
+    if (!defender.active) return state;
+    const defName = pool.get(defender.active.cardId)?.name ?? '?';
+    const energies = defender.active.energyAttached;
+    if (energies.length === 0) {
+      return addLog(state, `${label}：${defName} 沒有能量可放回`, aIdx);
+    }
+    const takeCount = Math.min(n, energies.length);
+    const returned = energies.slice(energies.length - takeCount);
+    const remaining = energies.slice(0, energies.length - takeCount);
+    let s = addLog(state, `${label}：${defName} 的 ${takeCount} 張能量放回對手手牌`, aIdx);
+    return updatePlayer(s, dIdx, p => {
+      if (!p.active) return p;
+      return {
+        ...p,
+        active: { ...p.active, energyAttached: remaining },
+        hand: [...p.hand, ...returned],
+      };
+    });
+  };
+}
+
+function countDamagedSelfMultiplyPre(per: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const p = state.players[aIdx];
+    const all = [p.active, ...p.bench].filter((x): x is CardInstance => !!x);
+    const count = all.filter(c => c.damage > 0).length;
+    const dmg = count * per;
+    return {
+      state: addLog(state, `${label}：自己被傷害的寶可夢 ${count} 隻 × ${per} → ${dmg}`, aIdx),
+      damage: dmg,
+    };
+  };
+}
+
+// 1. 比克提尼|燒落 — 30 + 丟對手戰鬥場 1 張特殊能量
+regPre('比克提尼|燒落', (state, _aIdx, _pool) => ({ state, damage: 30 }));
+regPost('比克提尼|燒落', discardOppActiveEnergyPost('燒落', 'special'));
+
+// 2. 大蔥鴨|音速斬 — 30 + 丟對手戰鬥場 1 張特殊能量
+regPre('大蔥鴨|音速斬', (state, _aIdx, _pool) => ({ state, damage: 30 }));
+regPost('大蔥鴨|音速斬', discardOppActiveEnergyPost('音速斬', 'special'));
+
+// 3. 吼叫尾ex|咬碎 — 120 + 丟對手戰鬥場 1 張能量（任意）
+regPre('吼叫尾ex|咬碎', (state, _aIdx, _pool) => ({ state, damage: 120 }));
+regPost('吼叫尾ex|咬碎', discardOppActiveEnergyPost('咬碎', 'any'));
+
+// 4. 狡猾天狗|能量閉環 — 140 + 將 1 張自身能量放回手牌
+regPre('狡猾天狗|能量閉環', (state, _aIdx, _pool) => ({ state, damage: 140 }));
+regPost('狡猾天狗|能量閉環', returnSelfActiveEnergyPost(1, true, '能量閉環'));
+
+// 5. 鐵荊棘ex|伏特旋風 — 140 + 將 1 張自身能量改附於備戰
+regPre('鐵荊棘ex|伏特旋風', (state, _aIdx, _pool) => ({ state, damage: 140 }));
+regPost('鐵荊棘ex|伏特旋風', returnSelfActiveEnergyPost(1, false, '伏特旋風'));
+
+// 6. 鐵轍跡|路徑輪 — 60 + 將 1 張自身能量改附於備戰
+regPre('鐵轍跡|路徑輪', (state, _aIdx, _pool) => ({ state, damage: 60 }));
+regPost('鐵轍跡|路徑輪', returnSelfActiveEnergyPost(1, false, '路徑輪'));
+
+// 7. 高傲雉雞|反轉之風 — 70 + 對手戰鬥寶可夢 2 張能量放回對手手牌
+regPre('高傲雉雞|反轉之風', (state, _aIdx, _pool) => ({ state, damage: 70 }));
+regPost('高傲雉雞|反轉之風', returnOppActiveEnergyPost(2, '反轉之風'));
+
+// 8. 波士可多拉|發怒猛進 — 自己場上身上有傷害指示物的寶可夢數 × 50
+regPre('波士可多拉|發怒猛進', countDamagedSelfMultiplyPre(50, '發怒猛進'));
+
+// 9. 古月鳥|噴吐射擊 — 丟自身全部能量；對手 1 隻寶可夢受 120 傷害（備戰不計弱抗）
+regPre('古月鳥|噴吐射擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('古月鳥|噴吐射擊', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  if (!att) return state;
+  const attName = pool.get(att.cardId)?.name ?? '?';
+  const energyCount = att.energyAttached.length;
+  if (energyCount === 0) {
+    return addLog(state, `噴吐射擊：${attName} 沒有能量可丟，招式失敗`, aIdx);
+  }
+  // 丟全部自身能量
+  let s = addLog(state, `噴吐射擊：${attName} 丟棄全部 ${energyCount} 張能量`, aIdx);
+  s = updatePlayer(s, aIdx, p => {
+    if (!p.active) return p;
+    return {
+      ...p,
+      active: { ...p.active, energyAttached: [] },
+      discard: [...p.discard, ...p.active.energyAttached],
+    };
+  });
+  const dIdx = (1 - aIdx) as 0 | 1;
+  // 對手必定有 active（否則攻擊無法進行）
+  if (!s.players[dIdx].active && s.players[dIdx].bench.length === 0) return s;
+  s = addLog(s, '噴吐射擊：選擇對手任一寶可夢造成 120 傷害', aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'snipe-variable',
+    params: { includeActive: true, damage: 120, label: '噴吐射擊' },
+  });
+});
+
+// 10. 噬沙堡爺ex|重晶石之獄 — 對手所有備戰設置 damage 直到剩 HP=100
+regPre('噬沙堡爺ex|重晶石之獄', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('噬沙堡爺ex|重晶石之獄', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defender = state.players[dIdx];
+  if (defender.bench.length === 0) {
+    return addLog(state, '重晶石之獄：對手無備戰寶可夢', aIdx);
+  }
+  const newBench = defender.bench.map(c => {
+    const card = pool.get(c.cardId);
+    const hp = card?.hp ?? 0;
+    if (hp <= 100) return c; // HP 上限即為 100 或以下，不影響
+    const targetDamage = hp - 100;
+    if (c.damage >= targetDamage) return c; // 已超過上限、不再補
+    return { ...c, damage: targetDamage };
+  });
+  const affected = newBench.filter((c, i) => c.damage !== defender.bench[i].damage).length;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...defender, bench: newBench };
+  return addLog({ ...state, players }, `重晶石之獄：對手備戰 ${affected} 隻被放置傷害指示物至剩 HP 100`, aIdx);
+});

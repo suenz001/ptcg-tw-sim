@@ -3106,3 +3106,33 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 27/23
 - 版本 1.73 → 1.74
+
+---
+
+## 📝 2026-04-21 Session 38y (v1.75) — H 標第 20 波：swap + energy return + count-multiply（10 張）
+
+### 新 helper
+- `discardOppActiveEnergyPost(label, filter?)` — 攻後丟對手戰鬥寶可夢 1 張能量，filter='any'/'special'
+- `returnSelfActiveEnergyPost(n, toHand, label)` — 攻後移動自身能量；toHand=true 放回手牌，false 改附備戰（n=1 時走 gengar-move-energy）
+- `returnOppActiveEnergyPost(n, label)` — 攻後將對手戰鬥能量 N 張放回對手手牌
+- `countDamagedSelfMultiplyPre(per, label)` — pre 傷害 = 自己場上被傷害的寶可夢數 × per
+
+### 實裝（10 張）
+- 丟對手能量（3 張）：比克提尼｜燒落（30 + 丟 1 特殊）、大蔥鴨｜音速斬（30 + 丟 1 特殊）、吼叫尾ex｜咬碎（120 + 丟 1 任意）
+- 自能量移動（3 張）：狡猾天狗｜能量閉環（140 + 1 張回手牌）、鐵荊棘ex｜伏特旋風（140 + 1 張改附備戰）、鐵轍跡｜路徑輪（60 + 1 張改附備戰）
+- 返還對手能量（1 張）：高傲雉雞｜反轉之風（70 + 2 張回對手手牌）
+- 計數乘法（1 張）：波士可多拉｜發怒猛進（自己被傷害的寶可夢數 × 50）
+- 特殊（2 張）：
+  - 古月鳥｜噴吐射擊（丟自身全部能量 + opp-poke-choose 120；無能量則失敗）
+  - 噬沙堡爺ex｜重晶石之獄（對手所有備戰 HP > 100 者 damage 補至 HP=100）
+
+### 暫緩
+- 大狼犬｜踹開、長毛巨魔｜挑釁抓擊 — 「由對手選擇互換上場」需定義 defender 主動 pending 流程
+- 耿鬼ex｜戲法舞步 — 將對手能量改附於對手備戰，需新 resolver（目前 gengar-move-energy 限自家）
+- 甲賀忍蛙ex｜分身連打 — 丟 2 自能量 + opp-poke-choose 2 目標各 120，需支援 2 目標 snipe resolver
+- 優雅貓｜能量攪拌 — 任意重排自家能量，需多階段選擇 UI
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 27/23
+- 版本 1.74 → 1.75
