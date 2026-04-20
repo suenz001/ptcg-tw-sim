@@ -1951,6 +1951,102 @@ regPost('黑魯加|大聲咆哮', defNextAtkReducePost(100));
 regPost('嘎啦嘎啦|叫聲', defNextAtkReducePost(40));
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Session 32 H11 — 被動特性：受傷減 N / 免疫
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 特性名 → 受招式傷害 -N（被動） */
+export const PASSIVE_DAMAGE_REDUCE = new Map<string, number>([
+  ['鑽石膜', 30],       // 超級蒂安希ex — 原本 hard-coded 在 engine
+  ['堅硬甲殼', 20],     // 草苗龜
+  ['密林之軀', 30],     // 巨蔓藤
+  ['柔軟羊毛', 30],     // 毛毛角羊
+  ['堅堅之軀', 30],     // 浩大鯨
+]);
+
+/** 特性名 → 判斷是否完全免疫此攻擊 */
+export type ImmunityCheck = (
+  attackerCard: Card,
+  baseDamage: number,
+  state: GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>
+) => boolean;
+export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
+  // 奇麒麟ex 尾甲 — 免疫 Basic ex 招式
+  ['尾甲', (att) => att.subtype === 'ex' && !att.evolvesFrom],
+  // 厄鬼椪 礎石面具ex 礎石之勢 — 免疫有特性的寶可夢招式
+  ['礎石之勢', (att) => !!att.abilities && att.abilities.length > 0],
+  // 暴噬龜 鐵壁硬殼 — 免疫 ≥200 傷害
+  ['鐵壁硬殼', (_att, baseDamage) => baseDamage >= 200],
+  // 堅盾劍怪 神秘之盾 — 免疫 ex/V 招式
+  ['神秘之盾', (att) => att.subtype === 'ex' || att.name.endsWith('V') || att.name.endsWith('VMAX')],
+]);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 32 H12 — 被動特性：受傷反擊（中毒/灼傷/放指示物）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Stadium resolvers（USE_STADIUM 觸發的 pending selection）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 夜間學院 — 選 1 張手牌放回牌庫上方
+regR('night-academy-top', (st, idx, iids) => {
+  return updatePlayer(st, idx, p => {
+    const chosen = p.hand.filter(c => iids.includes(c.iid));
+    const newHand = p.hand.filter(c => !iids.includes(c.iid));
+    return { ...p, hand: newHand, deck: [...chosen, ...p.deck] };
+  });
+});
+
+// 月光丘陵 — 丟 1 張超能量 → 全體回 30 HP
+regR('moonlight-hill-heal', (st, idx, iids) => {
+  return updatePlayer(st, idx, p => {
+    const toDiscard = p.hand.filter(c => iids.includes(c.iid));
+    const newHand = p.hand.filter(c => !iids.includes(c.iid));
+    const healActive = p.active ? { ...p.active, damage: Math.max(0, p.active.damage - 30) } : null;
+    const healBench = p.bench.map(c => ({ ...c, damage: Math.max(0, c.damage - 30) }));
+    return { ...p, hand: newHand, discard: [...p.discard, ...toDiscard], active: healActive, bench: healBench };
+  });
+});
+
+/** 特性名 → 受到招式傷害後對攻擊者的反擊（在 engine 裡呼叫）*/
+export type RetaliationFn = (
+  state: GameState,
+  dIdx: 0 | 1,  // 被攻擊者 index
+  pool: Map<string, Card>
+) => GameState;
+export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
+  // 毒薔薇 / 羅絲雷朵 毒刺 — 攻擊者中毒
+  ['毒刺', (state, dIdx) => {
+    const aIdx = (1 - dIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active && !att.active.status) att.active = { ...att.active, status: 'poisoned' };
+    players[aIdx] = att;
+    return { ...state, players };
+  }],
+  // 席多藍恩 灼熱之軀 — 攻擊者灼傷
+  ['灼熱之軀', (state, dIdx) => {
+    const aIdx = (1 - dIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active && !att.active.status) att.active = { ...att.active, status: 'burned' };
+    players[aIdx] = att;
+    return { ...state, players };
+  }],
+  // 磨牙彩皮魚 反擊 — 攻擊者放 3 個傷害指示物（= 30 傷害）
+  ['反擊', (state, dIdx) => {
+    const aIdx = (1 - dIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) att.active = { ...att.active, damage: att.active.damage + 30 };
+    players[aIdx] = att;
+    return { ...state, players };
+  }],
+]);
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Session 31 H10 — 更多通用訓練家（Item + Supporter）
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -2166,5 +2262,108 @@ reg('蕾荷', (st, idx) => {
   return updatePlayer(st, idx, p => {
     const top5 = p.deck.slice(0, 5);
     return { ...p, deck: p.deck.slice(5), discard: [...p.discard, ...top5] };
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 32 H13 — 主動特性
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 水晶燈火靈 勸誘亮光 — 每回合 1 次，雙方各抽 1
+regA('水晶燈火靈', 0, (st, idx) => {
+  st = addLog(st, '水晶燈火靈 勸誘亮光：雙方各抽 1 張', idx);
+  const players = [...st.players] as [PlayerState, PlayerState];
+  for (const i of [0, 1] as const) {
+    const p = { ...players[i] };
+    const taken = p.deck.slice(0, 1);
+    p.hand = [...p.hand, ...taken];
+    p.deck = p.deck.slice(1);
+    players[i] = p;
+  }
+  return { ...st, players };
+});
+
+// 賽富豪ex 紅利硬幣 — 每回合 1 次，抽 1；若在戰鬥場再抽 1
+regA('賽富豪ex', 0, (st, idx, pool) => {
+  return updatePlayer(addLog(st, '賽富豪ex 紅利硬幣：抽牌', idx), idx, p => {
+    // 若賽富豪ex 在戰鬥場抽 2，備戰只抽 1
+    const isActive = !!p.active && pool.get(p.active.cardId)?.name === '賽富豪ex';
+    const draw = isActive ? 2 : 1;
+    const taken = p.deck.slice(0, draw);
+    return { ...p, hand: [...p.hand, ...taken], deck: p.deck.slice(draw) };
+  });
+});
+
+// 吉雉雞ex 扭轉乾坤 — 上回合寶可夢被擊倒才可用，抽 3
+// 簡化：我們沒追蹤「上回合是否被擊倒」，改為「棄牌區有寶可夢」時允許
+regA('吉雉雞ex', 0, (st, idx, pool) => {
+  const hasDiscardedPoke = st.players[idx].discard.some(c =>
+    pool.get(c.cardId)?.supertype === 'Pokemon'
+  );
+  if (!hasDiscardedPoke) return addLog(st, '扭轉乾坤：棄牌區沒有寶可夢', idx);
+  return updatePlayer(addLog(st, '吉雉雞ex 扭轉乾坤：抽 3 張', idx), idx, p => {
+    const taken = p.deck.slice(0, 3);
+    return { ...p, hand: [...p.hand, ...taken], deck: p.deck.slice(3) };
+  });
+});
+
+// 愛管侍 悉心治癒 — 放置到備戰時可用，戰鬥寶可夢回 30 + 解除 1 個特殊狀態
+// 我們沒「放置觸發」機制；改為主動（正常回合可用）
+regA('愛管侍', 0, (st, idx) => {
+  return updatePlayer(addLog(st, '愛管侍 悉心治癒：戰鬥寶可夢回 30 HP + 解除異常狀態', idx), idx, p => {
+    if (!p.active) return p;
+    const newActive = {
+      ...p.active,
+      damage: Math.max(0, p.active.damage - 30),
+      status: undefined,
+    };
+    return { ...p, active: newActive };
+  });
+});
+
+// 普隆隆姆 轟鳴引擎 — 丟 1 能量 → 抽至手牌 6 張
+// 簡化：固定丟 1 能量（若有）
+regA('普隆隆姆', 0, (st, idx, pool) => {
+  const energyInHand = st.players[idx].hand.filter(c =>
+    pool.get(c.cardId)?.supertype === 'Energy'
+  );
+  if (energyInHand.length === 0) return addLog(st, '轟鳴引擎：手牌沒有能量', idx);
+  const toDiscard = energyInHand[0];
+  return updatePlayer(addLog(st, '普隆隆姆 轟鳴引擎：丟 1 能量 → 抽至 6 張', idx), idx, p => {
+    const newHand = p.hand.filter(c => c.iid !== toDiscard.iid);
+    const drawN = Math.max(0, 6 - newHand.length);
+    const taken = p.deck.slice(0, drawN);
+    return {
+      ...p,
+      hand: [...newHand, ...taken],
+      deck: p.deck.slice(drawN),
+      discard: [...p.discard, toDiscard],
+    };
+  });
+});
+
+// 鐵蟻ex 突然削退 — 放置時可用，丟對手牌庫頂 1 張
+// 簡化：主動觸發
+regA('鐵蟻ex', 0, (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  st = addLog(st, '鐵蟻ex 突然削退：丟對手牌庫頂 1 張', idx);
+  return updatePlayer(st, oppIdx, p => {
+    const top = p.deck.slice(0, 1);
+    return { ...p, deck: p.deck.slice(1), discard: [...p.discard, ...top] };
+  });
+});
+
+// 螺釘地鼠 狂挖 — 放置時可用，丟最多 3 張基本鬥能量
+regA('螺釘地鼠', 0, (st, idx, pool) => {
+  const fighting = st.players[idx].deck.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.pokemonType === 'Fighting';
+  }).slice(0, 3);
+  st = addLog(st, '狂挖：丟最多 3 張基本鬥能量到棄牌', idx);
+  if (fighting.length === 0) return st;
+  return updatePlayer(st, idx, p => {
+    const fIids = new Set(fighting.map(c => c.iid));
+    const newDeck = p.deck.filter(c => !fIids.has(c.iid));
+    return { ...p, deck: shuffle(newDeck), discard: [...p.discard, ...fighting] };
   });
 });

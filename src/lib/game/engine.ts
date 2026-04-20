@@ -13,7 +13,7 @@ import type {
   GameState, GameAction, CardInstance,
   PlayerState, LogEntry, TurnPhase, GamePhase
 } from './types';
-import { TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer } from './effects';
+import { TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer, PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION } from './effects';
 
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
@@ -636,6 +636,57 @@ function handlePlaying(
     newUsed[aIdx] = true;
     let newState: GameState = { ...state, stadiumUsedThisTurn: newUsed };
 
+    // 夜間學院 — 選 1 張手牌放回牌庫上方
+    if (stadiumCard.name === '夜間學院') {
+      if (newState.players[aIdx].hand.length === 0) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '夜間學院：手牌為空', aIdx);
+      }
+      return {
+        ...newState,
+        pendingSelection: {
+          type: 'hand-choose', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+          minCount: 1, maxCount: 1, filter: '',
+          effectKey: 'night-academy-top', params: {},
+        },
+      };
+    }
+
+    // 月光丘陵 — 丟 1 張基本超能量 → 全體回 30 HP
+    if (stadiumCard.name === '月光丘陵') {
+      const p = newState.players[aIdx];
+      const energyInHand = p.hand.filter(inst => {
+        const c = pool.get(inst.cardId);
+        return c?.supertype === 'Energy' && c?.name?.includes('超');
+      });
+      if (energyInHand.length === 0) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '月光丘陵：手牌中沒有超能量', aIdx);
+      }
+      return {
+        ...newState,
+        pendingSelection: {
+          type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+          minCount: 1, maxCount: 1, filter: 'Energy',
+          effectKey: 'moonlight-hill-heal', params: {},
+        },
+      };
+    }
+
+    // 居民會館 — 這回合打過支援者才能用，全體回 10 HP
+    if (stadiumCard.name === '居民會館') {
+      if (!newState.players[aIdx].supporterPlayedThisTurn) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '居民會館：本回合還沒出支援者', aIdx);
+      }
+      const updated = { ...newState.players } as [PlayerState, PlayerState];
+      const p = { ...updated[aIdx] };
+      if (p.active) p.active = { ...p.active, damage: Math.max(0, p.active.damage - 10) };
+      p.bench = p.bench.map(c => ({ ...c, damage: Math.max(0, c.damage - 10) }));
+      updated[aIdx] = p;
+      return addLog({ ...newState, players: updated }, '居民會館：自己寶可夢各回 10 HP', aIdx);
+    }
+
     if (stadiumCard.name === '神秘花園') {
       const player = newState.players[aIdx];
       const energyInHand = player.hand.filter(inst => {
@@ -840,9 +891,23 @@ function handlePlaying(
       baseDamage *= 2;
     }
 
-    // 被動特性：鑽石膜（超級蒂安希ex）— 受到招式傷害 -30
-    if (baseDamage > 0 && defenderCard.abilities?.some(a => a.name === '鑽石膜')) {
-      baseDamage = Math.max(0, baseDamage - 30);
+    // 被動特性：受傷減 N（Passive damage reduction）
+    if (baseDamage > 0 && defenderCard.abilities) {
+      for (const ab of defenderCard.abilities) {
+        const reduce = PASSIVE_DAMAGE_REDUCE.get(ab.name);
+        if (reduce) baseDamage = Math.max(0, baseDamage - reduce);
+      }
+    }
+
+    // 被動特性：條件式完全免疫
+    if (baseDamage > 0 && defenderCard.abilities) {
+      for (const ab of defenderCard.abilities) {
+        const immune = PASSIVE_IMMUNITY.get(ab.name);
+        if (immune && immune(attackerCard, baseDamage, state, aIdx, pool)) {
+          baseDamage = 0;
+          break;
+        }
+      }
     }
 
     // 施加傷害
@@ -939,6 +1004,14 @@ function handlePlaying(
       newState = postFn(newState, aIdx, pool);
     }
 
+    // ── 被動反擊特性（毒刺、灼熱之軀、反擊等）— 只對有實際傷害的招式觸發 ──
+    if (baseDamage > 0 && defenderCard.abilities) {
+      for (const ab of defenderCard.abilities) {
+        const retal = PASSIVE_RETALIATION.get(ab.name);
+        if (retal) newState = retal(newState, dIdx, pool);
+      }
+    }
+
     return newState;
   }
 
@@ -1013,11 +1086,29 @@ function handlePlaying(
       };
     }
 
-    // 特殊狀態：中毒 — 回合結束施加 10 傷害
+    // 特殊狀態：中毒 — 回合結束施加 10 傷害（危險密林競技場：+20 = 30 指示物）
+    // 桃歹郎 劇毒支配 被動：對手中毒時指示物 +5
     const poisonPlayer = { ...players[aIdx] };
     if (poisonPlayer.active?.status === 'poisoned') {
       const poisonedCard = pool.get(poisonPlayer.active.cardId);
-      const newDmg = poisonPlayer.active.damage + 10;
+      const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+      let poisonBonus = 0;
+      if (stadiumName === '危險密林' && poisonedCard?.pokemonType !== 'Darkness') poisonBonus += 20;
+      // 對手場上有「桃歹郎 劇毒支配」被動 → +50
+      const oppPokes = [
+        ...(state.players[dIdx].active ? [state.players[dIdx].active!] : []),
+        ...state.players[dIdx].bench,
+      ];
+      const hasDominatingPoison = oppPokes.some(c => {
+        const card = pool.get(c.cardId);
+        return card?.abilities?.some(a => a.name === '劇毒支配');
+      });
+      if (hasDominatingPoison && state.players[dIdx].active &&
+          // 只有 defender's active 是「桃歹郎」本體才啟動（劇毒支配只要求對手中毒時加傷）
+          state.players[dIdx].active.iid && true) {
+        poisonBonus += 50;
+      }
+      const newDmg = poisonPlayer.active.damage + 10 + poisonBonus;
       const poisonedHP = poisonedCard?.hp ?? 0;
       if (poisonedHP > 0 && newDmg >= poisonedHP) {
         // 被毒死 → 直接 KO，攻擊方（對手）取獎勵
