@@ -370,19 +370,40 @@
         if (!deckName) deckName = line.replace(/^\/\/\s*|^#\s*/, '').trim();
         continue;
       }
-      // Format: {count} {name} {setCode} {collectorNumber}
-      const m = line.match(/^(\d+)\s+(.+?)\s+([A-Za-z0-9]+)\s+(\S+)$/);
-      if (!m) { errors.push(`無法解析：${line}`); continue; }
+      // Format A（完整）：{count} {name} {setCode} {collectorNumber}
+      const mFull = line.match(/^(\d+)\s+(.+?)\s+([A-Za-z0-9]+)\s+(\S+)$/);
+      // Format B（簡易）：{count} {name}  / {count}x{name}  / {count} × {name}
+      //   官方 bookmarklet 匯出的格式；用卡名查找
+      const mSimple = line.match(/^(\d+)\s*[x×]?\s+(.+?)$/);
 
-      const [, countStr, , setCode, collectorNumber] = m;
-      const count = Math.max(1, parseInt(countStr, 10));
-      const card = poolBySetNum.get(`${setCode}-${collectorNumber}`);
+      let card: Card | undefined;
+      let countStr = '';
+      let label = '';
 
-      if (!card) {
-        errors.push(`找不到：${setCode} ${collectorNumber}`);
+      if (mFull) {
+        countStr = mFull[1];
+        const setCode = mFull[3];
+        const collectorNumber = mFull[4];
+        card = poolBySetNum.get(`${setCode}-${collectorNumber}`);
+        label = `${setCode} ${collectorNumber}`;
+      } else if (mSimple) {
+        countStr = mSimple[1];
+        const name = mSimple[2].trim();
+        label = name;
+        // 依名稱精確匹配（標準賽範圍），同名取第一張
+        const found = pool.find(c => c.name === name);
+        card = found ?? pool.find(c => c.name.includes(name));
+      } else {
+        errors.push(`無法解析：${line}`);
         continue;
       }
-      const existing = entries.find((e) => e.cardId === card.id);
+
+      if (!card) {
+        errors.push(`找不到：${label}`);
+        continue;
+      }
+      const count = Math.max(1, parseInt(countStr, 10));
+      const existing = entries.find((e) => e.cardId === card!.id);
       if (existing) existing.count += count;
       else entries.push({ cardId: card.id, count });
     }
@@ -892,9 +913,31 @@
         </div>
       {:else}
         <h3 class="modal-title">匯入牌組（文字格式）</h3>
-        <p class="muted">格式：<code>張數 卡名 卡包代號 卡號</code>　首行可選：<code>// 牌組名稱</code></p>
+        <p class="muted">
+          支援兩種格式：<br>
+          ① 完整格式：<code>張數 卡名 卡包代號 卡號</code><br>
+          ② 簡易格式：<code>張數 卡名</code>（同名取第一張）<br>
+          首行可選：<code>// 牌組名稱</code>
+        </p>
+
+        <details class="official-import-help">
+          <summary>📦 從官方訓練家網站匯入（bookmarklet）</summary>
+          <div class="help-body">
+            <p>步驟：</p>
+            <ol>
+              <li>打開 <a href="https://asia.pokemon-card.com/tw/deck-build/" target="_blank" rel="noopener">官方牌組構築工具</a>，編輯完你的牌組</li>
+              <li>在同一個分頁按 <kbd>F12</kbd> 打開「開發者工具」→ 切到「Console / 主控台」分頁</li>
+              <li>複製下面這段程式碼貼到 Console，按 Enter 執行</li>
+              <li>它會把牌組卡名清單複製到剪貼簿</li>
+              <li>回到本頁，把剪貼簿內容貼到下方輸入框 → 按「匯入」</li>
+            </ol>
+            <textarea class="bm-code" readonly rows="4" onclick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}>{`(function(){const cs=document.querySelectorAll('#decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組，請確認你在官方牌組構築頁面');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const k=c.children[1]?.innerText?.trim()||'1';lines.push(k+' '+n);});const text=lines.join('\\n');navigator.clipboard.writeText(text).then(()=>alert('✅ 已複製 '+cs.length+' 張卡到剪貼簿\\n\\n回到 PTCG 模擬器貼到匯入框即可')).catch(()=>prompt('請手動複製：',text));})();`}</textarea>
+            <button class="small" type="button" onclick={(e) => { const ta=(e.currentTarget as HTMLElement).previousElementSibling as HTMLTextAreaElement; ta?.select(); document.execCommand('copy'); }}>📋 複製 bookmarklet 程式碼</button>
+          </div>
+        </details>
+
         <textarea class="text-area" bind:value={importTextInput}
-          placeholder={"// 我的火系牌組\n4 小火龍 SV5K 007\n2 火恐龍 SV5K 008\n..."}></textarea>
+          placeholder={"// 我的火系牌組\n4 小火龍\n2 火恐龍\n3 破空焰ex\n14 基本【火】能量\n..."}></textarea>
         <div class="text-actions">
           <button class="small" onclick={importFromText} disabled={!importTextInput.trim()}>匯入</button>
           <button class="small" onclick={() => { showTextModal = false; }}>取消</button>
@@ -1640,6 +1683,13 @@
   /* Text format modal */
   .text-modal { max-width: 560px; }
   .modal-title { margin: 0 0 0.5rem; font-size: 1.1rem; }
+  .official-import-help { background:#f4f7fa; border:1px solid #d0dbe7; border-radius:6px; padding:0.5rem 0.8rem; margin:0.5rem 0; font-size:0.85rem; }
+  .official-import-help summary { cursor:pointer; font-weight:600; color:#2a5aa0; }
+  .official-import-help .help-body { margin-top:0.5rem; }
+  .official-import-help ol { margin:0.3rem 0 0.6rem 1.2rem; padding:0; line-height:1.6; }
+  .official-import-help kbd { background:#eee; border:1px solid #ccc; border-radius:3px; padding:0 0.25rem; font-family:monospace; font-size:0.8em; }
+  .official-import-help a { color:#2a5aa0; }
+  .bm-code { width:100%; font-family:'Consolas','Menlo',monospace; font-size:0.72rem; padding:0.4rem; border:1px solid #c5d0de; border-radius:4px; background:#eef3f9; color:#222; margin-bottom:0.3rem; box-sizing:border-box; white-space:pre; overflow-x:auto; }
   .text-area {
     width: 100%;
     min-height: 260px;
