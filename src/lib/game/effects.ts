@@ -4998,3 +4998,110 @@ regPost('燈火幽靈|燃燒盡', selfDiscardAllEnergyPost('燃燒盡'));
 regPost('倫琴貓ex|伏特強襲', selfDiscardAllEnergyPost('伏特強襲'));
 regPost('齒輪怪|高級光束', selfDiscardAllEnergyPost('高級光束'));
 regPost('蒼炎刃鬼ex|紫水晶激怒', selfDiscardAllEnergyPost('紫水晶激怒'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38w v1.73 H 標第 18 波 — 綜合（coin+discard+status 等，~10 張）
+//
+// Helpers:
+//   coinHeadsOppDiscardEnergyPost(label) — 正面時對手戰鬥寶可夢隨機丟 1 個能量
+//   coinTripleHeadsPre(base, b1, b2, b3, label) — 3 硬幣，正面次數 1/2/3 各加 b1/b2/b3
+// ══════════════════════════════════════════════════════════════════════════════
+
+function coinHeadsOppDiscardEnergyPost(label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const heads = Math.random() < 0.5;
+    if (!heads) return addLog(state, `${label}：反面，無追加效果`, aIdx);
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const def = state.players[dIdx].active;
+    if (!def || def.energyAttached.length === 0) {
+      return addLog(state, `${label}：正面！但對手出場無附加能量`, aIdx);
+    }
+    const defName = pool.get(def.cardId)?.name ?? '?';
+    // 從後往前丟 1 張（最近附加優先）
+    const last = def.energyAttached[def.energyAttached.length - 1];
+    let s = addLog(state, `${label}：正面！丟棄對手 ${defName} 身上 1 張能量`, aIdx);
+    return updatePlayer(s, dIdx, p => {
+      if (!p.active) return p;
+      return {
+        ...p,
+        active: { ...p.active, energyAttached: p.active.energyAttached.slice(0, -1) },
+        discard: [...p.discard, last],
+      };
+    });
+  };
+}
+
+function coinTripleHeadsPre(base: number, b1: number, b2: number, b3: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    let heads = 0;
+    for (let i = 0; i < 3; i++) if (Math.random() < 0.5) heads++;
+    const bonus = heads === 3 ? b3 : heads === 2 ? b2 : heads === 1 ? b1 : 0;
+    const dmg = base + bonus;
+    return { state: addLog(state, `${label}：3 硬幣正面 ${heads} 次 → +${bonus}，合 ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+// ── Coin-heads-opp-discard-energy (6 張) ─────────────────────────────────────
+regPost('鬼斯|神秘光束', coinHeadsOppDiscardEnergyPost('神秘光束'));
+regPost('角金魚|潮旋', coinHeadsOppDiscardEnergyPost('潮旋'));
+regPost('伊裴爾塔爾|破壞光束', coinHeadsOppDiscardEnergyPost('破壞光束'));
+regPost('鑽角犀獸|破壞之角', coinHeadsOppDiscardEnergyPost('破壞之角'));
+regPost('火爆猴|掃腿', coinHeadsOppDiscardEnergyPost('掃腿'));
+regPost('火伊布|破壞火', coinHeadsOppDiscardEnergyPost('破壞火'));
+
+// ── 貓鼬斬|連斬 (10+, 3 硬幣正面 1/2/3 次各 +20/+50/+80) ─────────────────────
+regPre('貓鼬斬|連斬', coinTripleHeadsPre(10, 20, 50, 80, '連斬'));
+
+// ── 瑪狃拉|冰雹爪 (70, 丟棄自身全部能量，麻痺對手) ───────────────────────────
+regPost('瑪狃拉|冰雹爪', (state, aIdx, pool) => {
+  let s = selfDiscardAllEnergyPost('冰雹爪')(state, aIdx, pool);
+  return statusPost('paralyzed')(s, aIdx, pool);
+});
+
+// ── 自爆磁怪|強勁磁場 (80, 混亂 + 下回合無法撤退) ───────────────────────────
+regPost('自爆磁怪|強勁磁場', (state, aIdx, pool) => {
+  let s = statusPost('confused')(state, aIdx, pool);
+  return defCantRetreatNextPost()(s, aIdx, pool);
+});
+
+// ── 紅蓮鎧騎|紅蓮引爆：丟棄自身全部火能量 → 對手備戰 1 隻 180 傷害 ───────────
+// 有火能量才能觸發；若對手備戰 0 則不進 pendingSelection
+regPre('紅蓮鎧騎|紅蓮引爆', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  if (!att) return { state, damage: 0 };
+  const fireCount = att.energyAttached.filter(e => pool.get(e.cardId)?.pokemonType === 'Fire').length;
+  if (fireCount === 0) {
+    return { state: addLog(state, '紅蓮引爆：身上無火能量，招式失敗', aIdx), damage: 0 };
+  }
+  return { state: addLog(state, `紅蓮引爆：丟棄 ${fireCount} 張火能量`, aIdx), damage: 0 };
+});
+regPost('紅蓮鎧騎|紅蓮引爆', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  if (!att) return state;
+  const fireEnergies = att.energyAttached.filter(e => pool.get(e.cardId)?.pokemonType === 'Fire');
+  if (fireEnergies.length === 0) return state;
+  // 先丟棄火能量
+  let s = updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    const kept = p.active.energyAttached.filter(e => pool.get(e.cardId)?.pokemonType !== 'Fire');
+    return {
+      ...p,
+      active: { ...p.active, energyAttached: kept },
+      discard: [...p.discard, ...fireEnergies],
+    };
+  });
+  // 然後 opp-bench-choose 選 1 隻打 180
+  const dIdx = (1 - aIdx) as 0 | 1;
+  if (s.players[dIdx].bench.length === 0) {
+    return addLog(s, '紅蓮引爆：對手無備戰寶可夢，無法施傷', aIdx);
+  }
+  return withPending(s, {
+    type: 'opp-bench-choose',
+    actorIdx: aIdx,
+    sourcePlayerIdx: dIdx,
+    minCount: 1,
+    maxCount: 1,
+    effectKey: 'snipe-variable',
+    params: { damage: 180, label: '紅蓮引爆' },
+  });
+});
