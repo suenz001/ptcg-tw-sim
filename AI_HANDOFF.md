@@ -1,6 +1,6 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-20 Session 34 (v1.21)  
+> 最後更新：2026-04-20 Session 35 (v1.3)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
@@ -1957,6 +1957,89 @@ attach-tool 顯示「🔧 {道具} 附加到 {寶可夢}」。
 
 ---
 
+## 📝 2026-04-20 Session 35 (v1.3) — 7 項一次打包（bug 修 + UX + 待辦 1/2）
+
+### Bug 修
+
+**① 線上房間列表看不到對方建立的房間**
+- 原因推斷：`rooms/{code}` 查詢使用 `orderBy('createdAt') + where('status','==','waiting')` 需要
+  composite index（`status ASC + createdAt DESC`），production Firestore 很可能沒部署該 index，
+  導致 onSnapshot 靜默失敗（無資料）。
+- 修：`src/lib/game/room.ts::subscribeOpenRooms` 去掉 `orderBy`，改 client-side 依 `createdAt.seconds` 排序；
+  加 `onError` callback 讓 UI 顯示載入失敗原因；`myUid` 改在 snapshot callback 內讀（避免訂閱時 auth 尚未完成）。
+- UI：`+page.svelte` 新增 `openRoomsErr` state + 紅字 `.warn.small` 顯示錯誤訊息。
+
+**② 米立龍「集客」peek-top-X 不該顯示「查看牌庫剩餘」**
+- 原因：`selection-modal` 內的「📖 查看牌庫剩餘全部」details 區塊對所有 deck-search 都顯示，
+  包括 peek-top-N 機制（會爆雷剩餘牌 = 推斷獎賞卡）。
+- 修：`{#if pendingSelection.type==='deck-search' && !(filter?.startsWith('TOP') || filter?.includes(':TOP'))}`
+  — TOP6 / TOP8 / Supporter:TOP6 類都隱藏「查看剩餘」。
+
+**③ 龐克頭盔反彈傷害消失且無效果**
+- 原因：`engine.ts::handleAttack` 中原本在 `newState.players` 上 in-place 套用 +40 反擊傷害，
+  但後續 `newState = { ...newState, players: defPlayers, turnPhase: 'end' }` 用 defPlayers 整個覆蓋，
+  攻擊方 active 的 damage 被倒回 → 反擊無效、log 也可能被其他路徑丟失。
+- 修：提早計算 `punkReflectDamage` flag（只讀取 defender 當前狀態），在 defender 狀態提交（newState.players = defPlayers）
+  後才套用到 attacker active.damage，確保不被覆蓋；並補 log「🔧 龐克頭盔：{攻方} 受到 40 傷害反擊！」。
+
+### UX 改善
+
+**④ Log 完整保留 + 可滾動回戰鬥開始**
+- 原本用 `.slice(0, 20)` 限制顯示數 → 改為 `[...(game.log ?? [])].reverse()` 完整渲染（最新在上）。
+- `.log-col` CSS：`max-height:220px; overflow-y:auto`，自訂 scrollbar 顏色；
+  最新一行加 `.log-latest` 背景標記（`background:rgba(170,255,204,.06); border-left:2px solid #aaffcc`）。
+- 加 `title` 提示：「向下滾動可查看從戰鬥開始到現在的完整記錄」。
+
+**⑤ 撤退選單改橫向 + 支援放大鏡（避免同名卡選錯）**
+- 原本 floating menu 由撤退按鈕座標往上展開，超出螢幕頂部只能顯示 3 張。
+- 改寫為置中 modal：`.selection-overlay` + `.selection-modal.retreat-modal`（max-width 760px，grid auto-fill minmax(130px,1fr)）。
+- 每張備戰卡有：卡圖、名稱、HP 剩/總、能量摘要、道具、狀態；加「🔍 放大鏡」按鈕（右上 z-index:2），
+  點開完整 zoom modal 可看到能量明細 → 解決同名但能量不同選錯的問題。
+- 背景點擊關閉，Cancel 按鈕退出。
+
+### 待辦 1：對手 mulligan 時讓玩家決定抽/不抽
+
+- 新增 `GameState.pendingMulliganDraw: [number, number]` 欄位（types.ts）。
+- 新增 action：`{ type: 'MULLIGAN_DRAW_DECISION'; accept: boolean; senderIdx: 0 | 1 }`。
+- `engine.ts::createGame` 不再自動幫對手補抽；改為設定 `pendingMulliganDraw[0]=m2, pendingMulliganDraw[1]=m1`。
+- `handleSetup` 新增分支處理 `MULLIGAN_DRAW_DECISION`：accept → 從自己 deck 抽 N 張；false → 放棄。
+  兩邊 decision + setupDone 都 done 才進入 phase='playing'。
+- `ai.ts::handleSetupAI` 最前面加 mulligan check：AI 永遠 accept。
+- UI：新增 `.mulligan-modal`（在 retreat-modal 之前插入）— 顯示對手 mulligan 次數 + 可抽 N 張 +
+  牌組剩餘/手牌/抽後手牌數 + 「抽 N 張 / 放棄」兩按鈕。`GameActions.mulliganDrawDecision(accept, senderIdx)` 新 helper。
+- 本機雙人 `myIdx` 加 mulligan 優先判斷（pendingMulliganDraw 有值時先翻到那一方）。
+- AI 模式 `shouldAct` 在 setup phase 也檢查 `pendingMulliganDraw[ai] > 0`。
+
+### 待辦 2：獎賞卡放置動畫
+
+- 新增 state：`prizeAnimKey: [number, number]`（雙方各一計數器）。
+- `$effect` 偵測 `prizes.length` 從 0 → 6 的 transition，對應玩家 key++。
+- 在雙方 `.prize-grid` 外包 `{#key prizeAnimKey[oppIdx]}` / `{#key prizeAnimKey[myIdx]}` — key 變化時整段 re-mount → CSS 動畫重播。
+- 新增 `.prize-card.prize-anim` + `@keyframes prize-deal` — fly-in 從左上 `translate(-60px,-40px) rotate(-18deg) scale(.5)`
+  → 輕微 overshoot `scale(1.05) rotate(4deg)` → 復位。每張 `animation-delay:{i*90}ms` 錯開發牌感。
+- `.prize-gone` 加 `animation:none !important` 防止已空格子也播動畫。
+
+### 驗證
+- `node scripts/sim-ai-battle.mjs 100` → 100/100 正常結束，0 卡住 / 0 崩潰 / 0 例外；P1 56 / P2 44，平均 15.1 回合。
+- 兩筆 3 回合內結束 = AI 被 1-2 punch wipe，符合 FIRE 卡組 aggressive 行為，非 bug。
+- 工程師手動檢查：UI 改動不影響 engine 純函式邏輯，sim 通過即表示機制正確。
+
+### 小改
+
+- `.gitignore` 新增 `.tmp-sim-*` / `.sim-test.mjs` / `.tmp-H-*` / `.tmp-sim-bundle.mjs`。
+
+### 未完成（下次）
+- H 標剩餘：~10 張複雜道具、~70 張特性、~500 張攻擊
+- I/J 標尚未開始批次（SV9+、M1+、M2+、MC/M3/M4）
+- 特殊能量卡系統（M4 原定實裝）
+- Firestore composite index（firestore.indexes.json 有定義但 production 未部署） — 若未來要恢復
+  server-side orderBy 排序，需 `firebase deploy --only firestore:indexes`
+
+### Commit
+- （將在 commit 後補）v1.3 — 7 項打包
+
+---
+
 ## 🛠️ 當前架構快速導覽（給下一位 AI）
 
 ### 關鍵檔案
@@ -2009,8 +2092,7 @@ node scripts/classify-h-cards.mjs H  # 掃未實裝 H 標，按模式分類
 6. **版本號要 bump**：小改 +0.01，大改 +0.1，破壞 +1
 
 ### 未解決待辦（優先序）
-1. 對手 mulligan 時玩家決定抽/不抽
-2. 獎賞卡放置動畫
-3. H 標剩餘：~10 張複雜道具、~70 張特性、~500 張攻擊
-4. I/J 標尚未開始批次（SV9+、M1+、M2+、MC/M3/M4）
-5. 特殊能量卡系統（M4 原定實裝）
+1. H 標剩餘：~10 張複雜道具、~70 張特性、~500 張攻擊
+2. I/J 標尚未開始批次（SV9+、M1+、M2+、MC/M3/M4）
+3. 特殊能量卡系統（M4 原定實裝）
+4. Firestore composite index production 部署（若要恢復 server-side orderBy）

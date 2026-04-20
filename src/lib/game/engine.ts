@@ -256,15 +256,9 @@ export function createGame(
   const m1 = dealOpeningHand(p1, pool);
   const m2 = dealOpeningHand(p2, pool);
 
-  // Mulligan 補抽：對手因為我 mulligan 而多抽 N 張（官方規則簡化：自動補抽，不詢問）
-  for (let i = 0; i < m1; i++) {
-    const top = p2.deck.shift();
-    if (top) p2.hand.push(top);
-  }
-  for (let i = 0; i < m2; i++) {
-    const top = p1.deck.shift();
-    if (top) p1.hand.push(top);
-  }
+  // Mulligan 補抽不再自動完成 — 交給對手（非 mulligan 方）自己決定抽或不抽。
+  // pendingMulliganDraw[0] = m2（P2 mulligan → P1 可補抽）
+  // pendingMulliganDraw[1] = m1（P1 mulligan → P2 可補抽）
 
   // 擲硬幣決定先手
   const firstPlayerIdx: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
@@ -280,14 +274,15 @@ export function createGame(
     isFirstTurn: true,
     setupDone: [false, false],
     mulliganCounts: [m1, m2],
+    pendingMulliganDraw: [m2, m1],
     log: [],
     pendingPrizes: 0,
   };
 
   let st = addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
   st = addLog(st, `🪙 擲硬幣：${state.players[firstPlayerIdx].name} 先手`, null);
-  if (m1 > 0) st = addLog(st, `${spec1.name} Mulligan ${m1} 次 → ${spec2.name} 多抽 ${m1} 張`, 0);
-  if (m2 > 0) st = addLog(st, `${spec2.name} Mulligan ${m2} 次 → ${spec1.name} 多抽 ${m2} 張`, 1);
+  if (m1 > 0) st = addLog(st, `${spec1.name} Mulligan ${m1} 次 → ${spec2.name} 可選擇多抽 ${m1} 張`, 0);
+  if (m2 > 0) st = addLog(st, `${spec2.name} Mulligan ${m2} 次 → ${spec1.name} 可選擇多抽 ${m2} 張`, 1);
   return st;
 }
 
@@ -325,12 +320,54 @@ function handleSetup(
   if (
     action.type !== 'PLACE_ACTIVE' &&
     action.type !== 'BENCH_POKEMON' &&
-    action.type !== 'FINISH_SETUP'
+    action.type !== 'FINISH_SETUP' &&
+    action.type !== 'MULLIGAN_DRAW_DECISION'
   ) {
     return state;
   }
   const pIdx = action.senderIdx;
-  // 已完成 setup 的玩家不能再操作
+
+  // Mulligan 補抽決定 — 可在 setup 任何時候進行（即使已 FINISH_SETUP 也允許，
+  // 雙方都要決定才能真正進入 playing；此處允許 setupDone 的玩家繼續處理 mulligan 決定）
+  if (action.type === 'MULLIGAN_DRAW_DECISION') {
+    const cur = state.pendingMulliganDraw?.[pIdx] ?? 0;
+    if (cur <= 0) return state; // 沒有待決定
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const player = { ...players[pIdx] };
+    if (action.accept) {
+      // 補抽 cur 張
+      const draws = player.deck.slice(0, cur);
+      player.deck = player.deck.slice(cur);
+      player.hand = [...player.hand, ...draws];
+    }
+    players[pIdx] = player;
+    const newPending = [...state.pendingMulliganDraw] as [number, number];
+    newPending[pIdx] = 0;
+    const msg = action.accept
+      ? `${player.name} 選擇補抽 ${cur} 張（對手 mulligan 補償）`
+      : `${player.name} 放棄 ${cur} 張 mulligan 補抽`;
+    let next: GameState = {
+      ...state, players, pendingMulliganDraw: newPending,
+    };
+    next = addLog(next, msg, pIdx);
+
+    // 若雙方 setupDone 都已完成、且雙方 mulligan 決定也已完成 → 進入 playing
+    if (next.setupDone[0] && next.setupDone[1]
+        && next.pendingMulliganDraw[0] === 0 && next.pendingMulliganDraw[1] === 0
+        && next.phase === 'setup') {
+      next = {
+        ...next,
+        phase: 'playing',
+        turnPhase: 'main',
+        activePlayerIndex: next.firstPlayerIdx,
+        isFirstTurn: true,
+      };
+      next = addLog(next, `Setup 完成！${next.players[next.firstPlayerIdx].name} 先手行動中。`, null);
+    }
+    return next;
+  }
+
+  // 已完成 setup 的玩家不能再操作（place/bench/finish）
   if (state.setupDone[pIdx]) return state;
   const player = { ...state.players[pIdx] };
   const players = [...state.players] as [PlayerState, PlayerState];
@@ -383,8 +420,9 @@ function handleSetup(
     let newState: GameState = { ...state, players, setupDone: newDone };
     newState = addLog(newState, `${player.name} 完成準備。`, null);
 
-    if (newDone[0] && newDone[1]) {
-      // 雙方都完成 → 進入正式對戰，由擲硬幣決定的先手方先行動
+    // 雙方都完成 setup + 雙方都已決定 mulligan 補抽 → 進入 playing
+    const mul = newState.pendingMulliganDraw ?? [0, 0];
+    if (newDone[0] && newDone[1] && mul[0] === 0 && mul[1] === 0) {
       newState = {
         ...newState,
         phase: 'playing',
@@ -1026,18 +1064,16 @@ function handlePlaying(
       aIdx
     );
 
-    // 龐克頭盔：防守方出場的【惡】寶可夢附有龐克頭盔時，攻擊者受到 40 傷害反擊
-    const defenderStatePre = newState.players[dIdx];
-    const defToolCard = defenderStatePre.active?.toolAttached
-      ? pool.get(defenderStatePre.active.toolAttached.cardId) : null;
-    const defActiveCardPre = defenderStatePre.active ? pool.get(defenderStatePre.active.cardId) : null;
-    if (baseDamage > 0 && defToolCard?.name === '龐克頭盔' && defActiveCardPre?.pokemonType === 'Darkness') {
-      const atkPlayers = [...newState.players] as [PlayerState, PlayerState];
-      const atkP = { ...atkPlayers[aIdx] };
-      if (atkP.active) {
-        atkP.active = { ...atkP.active, damage: atkP.active.damage + 40 };
-        atkPlayers[aIdx] = atkP;
-        newState = addLog({ ...newState, players: atkPlayers }, `龐克頭盔：${attackerCard.name} 受到 40 傷害反擊！`, null);
+    // 龐克頭盔：防守方出場的【惡】寶可夢附有龐克頭盔時，攻擊者受到 40 傷害反擊。
+    // 注意：僅計算反彈量，實際套用在下方「防守方狀態提交後」，避免被 defPlayers 覆蓋掉。
+    let punkReflectDamage = 0;
+    {
+      const defenderStatePre = defPlayers[dIdx];
+      const defToolCardPre = defenderStatePre.active?.toolAttached
+        ? pool.get(defenderStatePre.active.toolAttached.cardId) : null;
+      const defActiveCardPre = defenderStatePre.active ? pool.get(defenderStatePre.active.cardId) : null;
+      if (baseDamage > 0 && defToolCardPre?.name === '龐克頭盔' && defActiveCardPre?.pokemonType === 'Darkness') {
+        punkReflectDamage = 40;
       }
     }
 
@@ -1132,6 +1168,21 @@ function handlePlaying(
           const fn = TOOL_ON_DAMAGED.get(tool.name);
           if (fn) newState = fn(newState, dIdx, aIdx, baseDamage, pool);
         }
+      }
+    }
+
+    // ── 龐克頭盔反彈 40：在防守方狀態已提交後套用，避免被覆蓋 ──────────────────
+    if (punkReflectDamage > 0) {
+      const refPlayers = [...newState.players] as [PlayerState, PlayerState];
+      const atkP = { ...refPlayers[aIdx] };
+      if (atkP.active) {
+        atkP.active = { ...atkP.active, damage: atkP.active.damage + punkReflectDamage };
+        refPlayers[aIdx] = atkP;
+        newState = addLog(
+          { ...newState, players: refPlayers },
+          `🔧 龐克頭盔：${attackerCard.name} 受到 ${punkReflectDamage} 傷害反擊！`,
+          null,
+        );
       }
     }
 

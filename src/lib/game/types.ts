@@ -148,9 +148,16 @@ export interface GameState {
   setupDone: [boolean, boolean];
   /**
    * Mulligan 次數：起手 7 張沒有基礎寶可夢時的重抽次數。
-   * 對手每次 mulligan 可多抽 1 張作為補償（PTCG 官方規則簡化：自動補抽，不詢問）。
+   * 對手每次 mulligan 可多抽 1 張作為補償。
    */
   mulliganCounts: [number, number];
+  /**
+   * 待決定的 mulligan 補抽張數 [P1, P2]：
+   * 對手（非我方）mulligan 時我方可補抽 N 張，玩家可選擇抽或不抽。
+   * 值 > 0 時 setup 階段顯示選擇 UI；decide 後歸零（不論接不接受）。
+   * 無 mulligan 則一開始就是 [0, 0]。
+   */
+  pendingMulliganDraw: [number, number];
   /** 行動紀錄（給 UI 顯示用） */
   log: LogEntry[];
   /** 勝者（game-over 時填入） */
@@ -185,6 +192,8 @@ export type GameAction =
   | { type: 'PLACE_ACTIVE'; iid: string; senderIdx: 0 | 1 }
   | { type: 'BENCH_POKEMON'; iid: string; senderIdx: 0 | 1 }
   | { type: 'FINISH_SETUP'; senderIdx: 0 | 1 }
+  /** 對手 mulligan 補抽：accept=true 抽齊 pendingMulliganDraw[senderIdx] 張；false 放棄 */
+  | { type: 'MULLIGAN_DRAW_DECISION'; accept: boolean; senderIdx: 0 | 1 }
 
   // 正式對戰
   | { type: 'DRAW_CARD' }

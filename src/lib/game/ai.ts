@@ -134,6 +134,10 @@ export function getAIAction(
 // ── Setup 階段 AI ─────────────────────────────────────────────────────────────
 
 function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): GameAction | null {
+  // Mulligan 補抽決定：AI 一律接受（有的拿沒理由不拿）
+  if ((state.pendingMulliganDraw?.[pIdx] ?? 0) > 0) {
+    return { type: 'MULLIGAN_DRAW_DECISION', accept: true, senderIdx: pIdx };
+  }
   if (state.setupDone[pIdx]) return null;
   const player = state.players[pIdx];
 

@@ -99,7 +99,11 @@ function simulateGame(deck1Key, deck2Key, seed) {
     // 決定哪位 AI 該行動
     let actorIdx;
     if (state.phase === 'setup') {
-      actorIdx = !state.setupDone[0] ? 0 : (!state.setupDone[1] ? 1 : 0);
+      // 有待決 mulligan 的玩家優先；否則看 setupDone
+      const mul = state.pendingMulliganDraw ?? [0, 0];
+      if (mul[0] > 0) actorIdx = 0;
+      else if (mul[1] > 0) actorIdx = 1;
+      else actorIdx = !state.setupDone[0] ? 0 : (!state.setupDone[1] ? 1 : 0);
     } else if (state.pendingSelection) {
       actorIdx = state.pendingSelection.actorIdx;
     } else {

@@ -19,3 +19,9 @@ Thumbs.db
 # Scrape outputs — logs and in-progress files (final JSONs ARE committed)
 static/cards/*.log
 static/cards/*.tmp
+
+# Sim / build temp files
+.tmp-sim-*
+.tmp-H-*
+.sim-test.mjs
+.tmp-sim-bundle.mjs

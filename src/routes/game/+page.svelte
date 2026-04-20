@@ -68,6 +68,7 @@
   let unsubRoom:    (() => void) | null = null;
   // 可加入的開放房間列表（onlineStep='join' 時即時訂閱）
   let openRooms = $state<Room[]>([]);
+  let openRoomsErr = $state('');
   let unsubOpenRooms: (() => void) | null = null;
 
   // ── UI 互動狀態 ─────────────────────────────────────────────────────────────
@@ -103,6 +104,25 @@
     coinFlipStage = 'flipping';
     coinFlipTimers.push(setTimeout(() => { coinFlipStage = 'revealing'; }, 2000));
     coinFlipTimers.push(setTimeout(() => { coinFlipStage = 'done'; }, 3800));
+  });
+
+  // ── 獎賞卡放置動畫 ─────────────────────────────────────────────────────────
+  // 偵測雙方 prizes 從 0 → 6 的瞬間，觸發 stagger 動畫重播
+  let prizeAnimKey = $state<[number, number]>([0, 0]);
+  const prevPrizesLen: [number, number] = [0, 0];
+  $effect(() => {
+    if (!game) return;
+    let changed = false;
+    const next: [number, number] = [prizeAnimKey[0], prizeAnimKey[1]];
+    for (const i of [0, 1] as const) {
+      const cur = game.players[i].prizes.length;
+      if (prevPrizesLen[i] === 0 && cur === 6) {
+        next[i]++;
+        changed = true;
+      }
+      prevPrizesLen[i] = cur;
+    }
+    if (changed) prizeAnimKey = next;
   });
 
   function enterHandCard(e: PointerEvent, iid: string) {
@@ -390,7 +410,7 @@
     const shouldAct = (() => {
       const ai = aiPlayerIndex;
       const g = game!;
-      if (g.phase === 'setup') return !g.setupDone[ai];
+      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0;
       if (g.phase !== 'playing') return false;
 
       // 取獎勵牌或選擇 — 由誰的行動決定
@@ -423,7 +443,7 @@
     if (g.phase === 'game-over') { aiThinking = false; return; }
 
     const shouldAct = (() => {
-      if (g.phase === 'setup') return !g.setupDone[ai];
+      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0;
       if (g.phase !== 'playing') return false;
       if (g.pendingPrizes > 0) return g.activePlayerIndex === ai;
       if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
@@ -472,7 +492,12 @@
     mode === 'online' ? ((myPlayerIndex ?? 0) as 0 | 1) :
     aiPlayerIndex !== null ? ((1 - aiPlayerIndex) as 0 | 1) :
     (game?.phase === 'setup' && myPlayerIndex === null
-      ? ((game.setupDone[0] ? 1 : 0) as 0 | 1)
+      // 本機雙人 setup：優先處理 mulligan 補抽，再看 setup 完成狀態
+      ? (((game.pendingMulliganDraw?.[0] ?? 0) > 0
+          ? 0
+          : (game.pendingMulliganDraw?.[1] ?? 0) > 0
+            ? 1
+            : (game.setupDone[0] ? 1 : 0)) as 0 | 1)
       : (myPlayerIndex !== null ? myPlayerIndex : aIdx))
   );
   const oppIdx  = $derived<0 | 1>((1 - myIdx) as 0 | 1);
@@ -631,11 +656,20 @@
   $effect(() => {
     if (onlineStep === 'join' && myUid) {
       unsubOpenRooms?.();
-      unsubOpenRooms = subscribeOpenRooms(rooms => { openRooms = rooms; });
+      openRoomsErr = '';
+      unsubOpenRooms = subscribeOpenRooms(
+        rooms => { openRooms = rooms; openRoomsErr = ''; },
+        err => {
+          openRoomsErr = err?.message?.includes('index')
+            ? '房間查詢需要 Firestore 索引（尚未部署），已退回手動房號。'
+            : `房間列表載入失敗：${err?.message ?? '未知錯誤'}`;
+        },
+      );
     } else {
       unsubOpenRooms?.();
       unsubOpenRooms = null;
       openRooms = [];
+      openRoomsErr = '';
     }
   });
 
@@ -974,9 +1008,12 @@
         <!-- 公開房間列表 -->
         <div class="open-rooms-section">
           <h3>🌐 目前開放的房間（{openRooms.length}）</h3>
-          {#if openRooms.length === 0}
+          {#if openRoomsErr}
+            <p class="warn small">⚠️ {openRoomsErr}</p>
+          {/if}
+          {#if openRooms.length === 0 && !openRoomsErr}
             <p class="muted small">尚無其他玩家建立房間。可等待、或請對方建立後再刷新，或改用下方手動房號輸入。</p>
-          {:else}
+          {:else if openRooms.length > 0}
             <ul class="open-room-list">
               {#each openRooms as r (r.roomId)}
                 <li class="open-room-row">
@@ -1189,9 +1226,11 @@
         {:else}<div class="active-card active-empty">（無出場）</div>{/if}
       </div>
       <div class="zone-prizes">
-        <div class="prize-grid">
-          {#each Array(6) as _, i}<div class="prize-card" class:prize-gone={i>=(oppPlayer?.prizes.length??0)}></div>{/each}
-        </div>
+        {#key prizeAnimKey[oppIdx]}
+          <div class="prize-grid">
+            {#each Array(6) as _, i}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} style="animation-delay:{i*90}ms"></div>{/each}
+          </div>
+        {/key}
         <div class="zone-label-sm">獎勵 {oppPlayer?.prizes.length??0}張</div>
       </div>
     </div>
@@ -1282,9 +1321,9 @@
         </div>
       {/if}
 
-      <div class="log-col">
-        {#each [...(game.log??[])].reverse().slice(0,20) as entry}
-          <div class="log-line" class:log-sys={entry.playerIndex===null}>{entry.message}</div>
+      <div class="log-col" title="向下滾動可查看從戰鬥開始到現在的完整記錄">
+        {#each [...(game.log??[])].reverse() as entry, i}
+          <div class="log-line" class:log-sys={entry.playerIndex===null} class:log-latest={i===0}>{entry.message}</div>
         {/each}
       </div>
     </div>
@@ -1294,7 +1333,9 @@
       <div class="zone-prizes">
         <div class="zone-label-sm">獎勵 {myPlayer?.prizes.length??0}張</div>
         <div class="prize-grid">
-          {#each Array(6) as _, i}<div class="prize-card my-prize" class:prize-gone={i>=(myPlayer?.prizes.length??0)}></div>{/each}
+          {#key prizeAnimKey[myIdx]}
+            {#each Array(6) as _, i}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} style="animation-delay:{i*90}ms"></div>{/each}
+          {/key}
         </div>
       </div>
 
@@ -1507,8 +1548,9 @@
           {#if selectionItems.length===0}<p class="sel-empty">（沒有符合條件的卡牌）</p>{/if}
         </div>
 
-        <!-- 查看全牌庫（用於推斷獎賞卡） — 僅在 deck-search 類型顯示 -->
-        {#if pendingSelection.type==='deck-search' && game}
+        <!-- 查看全牌庫（用於推斷獎賞卡） — 僅在「搜尋全牌庫」類型顯示；peek-top-X 機制不該能看剩餘牌 -->
+        {#if pendingSelection.type==='deck-search' && game
+          && !(pendingSelection.filter?.startsWith('TOP') || pendingSelection.filter?.includes(':TOP'))}
           {@const srcP = game.players[pendingSelection.sourcePlayerIdx]}
           {@const deckGrouped = (() => {
             const map = new Map<string, { name: string; count: number }>();
@@ -1605,17 +1647,92 @@
     </div>
   {/if}
 
-  <!-- Floating Retreat Menu -->
+  <!-- Mulligan 補抽決定：對手 mulligan 時玩家選擇抽/不抽補償 -->
+  {#if game && game.phase==='setup' && (game.pendingMulliganDraw?.[myIdx] ?? 0) > 0 && (
+      (mode==='online' && myPlayerIndex===myIdx) ||
+      (mode!=='online' && aiPlayerIndex === null) ||
+      (aiPlayerIndex !== null && aiPlayerIndex !== myIdx)
+    )}
+    {@const nDraw = game.pendingMulliganDraw[myIdx]}
+    {@const oppName = game.players[oppIdx].name}
+    <div class="selection-overlay">
+      <div class="selection-modal mulligan-modal">
+        <div class="sel-header">
+          <h3>🔄 對手 Mulligan</h3>
+          <p class="sel-hint">
+            <strong>{oppName}</strong> 起手沒有基礎寶可夢，重新洗牌 {nDraw} 次。
+            <br/>作為補償，你可多抽 <strong>{nDraw}</strong> 張牌。
+          </p>
+        </div>
+        <div class="mulligan-body">
+          <div class="mulligan-info">
+            <div>📦 牌組剩餘：{myPlayer?.deck.length ?? 0} 張</div>
+            <div>🖐 目前手牌：{myPlayer?.hand.length ?? 0} 張</div>
+            <div>👉 接受後手牌變為：{(myPlayer?.hand.length ?? 0) + nDraw} 張</div>
+          </div>
+        </div>
+        <div class="sel-footer mulligan-footer">
+          <button class="btn-act secondary"
+            onclick={() => dispatch(GameActions.mulliganDrawDecision(false, myIdx))}>
+            🚫 不抽（放棄 {nDraw} 張）
+          </button>
+          <button class="btn-act primary"
+            onclick={() => dispatch(GameActions.mulliganDrawDecision(true, myIdx))}>
+            ✅ 抽 {nDraw} 張
+          </button>
+        </div>
+      </div>
+    </div>
+  {:else if game && game.phase==='setup' && (game.pendingMulliganDraw?.[oppIdx] ?? 0) > 0 && mode==='online' && myPlayerIndex===myIdx}
+    <!-- 對手還沒決定 mulligan 補抽 — 僅在線上模式需顯示等待 -->
+    <div class="selection-overlay">
+      <div class="selection-modal mulligan-modal">
+        <div class="sel-header">
+          <h3>⏳ 等待對手決定 Mulligan 補抽</h3>
+          <p class="sel-hint">你 Mulligan 了 {game.mulliganCounts[myIdx]} 次，對手正在決定是否多抽 {game.pendingMulliganDraw[oppIdx]} 張…</p>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Retreat Menu（置中橫向 grid，支援放大鏡，避免撞到畫面頂部） -->
   {#if floatingRetreatMenu && myPlayer?.active}
-    <div class="float-evo-backdrop" onclick={() => floatingRetreatMenu = null}></div>
-    <div class="float-evo-menu" style="left:{floatingRetreatMenu.x}px;top:{floatingRetreatMenu.y}px;">
-      <div class="float-evo-title">🔄 選擇換入</div>
-      {#each myPlayer.bench as b}{@const bc=getCard(b.cardId)}
-        <button class="evo-choice wide-evo" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.retreat(b.iid));floatingRetreatMenu=null;}}>
-          <img src={bc?.imageUrl} alt={bc?.name}/><span>{bc?.name}</span>
-        </button>
-      {/each}
-      <button class="evo-choice wide-evo" style="justify-content:center;color:#faa;" onclick={()=>floatingRetreatMenu=null}>取消</button>
+    <div class="selection-overlay" onclick={() => floatingRetreatMenu = null}>
+      <div class="selection-modal retreat-modal" onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header">
+          <h3>🔄 選擇換入的寶可夢</h3>
+          <p class="sel-hint">挑選一隻備戰區的寶可夢上場；點放大鏡 🔍 查看詳情以區分同名卡身上的能量</p>
+        </div>
+        <div class="retreat-grid">
+          {#each myPlayer.bench as b}{@const bc=getCard(b.cardId)}
+            {#if bc}
+              {@const eff=hpTotal(b)}
+              {@const rem=hpRemaining(b)}
+              <div class="retreat-card">
+                <button class="retreat-zoom" title="放大檢視：{bc.name}"
+                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.retreat(b.iid));floatingRetreatMenu=null;}}>
+                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <div class="retreat-name">{bc.name}</div>
+                  <div class="retreat-hp">HP {rem}/{eff}</div>
+                  <div class="retreat-nrg">{energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                  {#if b.status}<div class="retreat-status">
+                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
+                    {b.status}
+                  </div>{/if}
+                </button>
+              </div>
+            {/if}
+          {/each}
+          {#if myPlayer.bench.length===0}
+            <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
+          {/if}
+        </div>
+        <div class="sel-footer">
+          <button class="btn-act secondary" onclick={()=>floatingRetreatMenu=null}>取消</button>
+        </div>
+      </div>
     </div>
   {/if}
 
@@ -1933,7 +2050,14 @@
   .prize-grid{ display:grid; grid-template-columns:1fr 1fr; gap:3px; }
   .prize-card{ width:32px; height:45px; background:linear-gradient(135deg,#1e4a8a,#2a6ab0); border:1px solid #4a8ac0; border-radius:4px; }
   .prize-card.my-prize{ background:linear-gradient(135deg,#2a6a1a,#3a8a2a); border-color:#5aaa4a; }
-  .prize-card.prize-gone{ background:transparent; border-color:#2a3a2a; opacity:.25; }
+  .prize-card.prize-gone{ background:transparent; border-color:#2a3a2a; opacity:.25; animation:none !important; }
+  /* 獎賞卡放置動畫：從上方 fly-in + rotate + scale，by animation-delay 錯開 */
+  .prize-card.prize-anim{ animation:prize-deal .45s cubic-bezier(.2,.9,.35,1.15) both; transform-origin:center; }
+  @keyframes prize-deal{
+    0%{ transform:translate(-60px,-40px) rotate(-18deg) scale(.5); opacity:0; box-shadow:0 8px 16px rgba(0,0,0,.6); }
+    60%{ transform:translate(2px,3px) rotate(4deg) scale(1.05); opacity:1; box-shadow:0 4px 10px rgba(0,0,0,.55); }
+    100%{ transform:none; opacity:1; box-shadow:none; }
+  }
   .zone-label-sm{ font-size:.62rem; color:#888; text-align:center; white-space:nowrap; }
   .opp-label{ color:#aa8888; }
 
@@ -2105,11 +2229,16 @@
   .epip.sm{ width:1rem; height:1rem; font-size:.5rem; }
   .atk-name{ max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .atk-dmg{ font-weight:700; color:#f88; font-size:.95rem; }
-  .log-col{ width:380px; max-height:160px; overflow-y:auto; font-size:.85rem; line-height:1.4;
-    background:rgba(0,0,0,.35); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem .6rem; }
+  .log-col{ width:380px; max-height:220px; overflow-y:auto; font-size:.85rem; line-height:1.4;
+    background:rgba(0,0,0,.35); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem .6rem;
+    scrollbar-width:thin; scrollbar-color:#4a6a4a rgba(0,0,0,.3); }
+  .log-col::-webkit-scrollbar{ width:8px; }
+  .log-col::-webkit-scrollbar-thumb{ background:#3a5a3a; border-radius:4px; }
+  .log-col::-webkit-scrollbar-thumb:hover{ background:#5a7a5a; }
   .log-line{ color:#9ab89a; padding:.2rem 0; border-bottom:1px solid rgba(42,74,42,.4); white-space:normal; word-break:break-all; }
   .log-line:last-child{ border-bottom:none; }
   .log-sys{ color:#aaffcc; font-weight:600; }
+  .log-latest{ background:rgba(170,255,204,.06); padding-left:.3rem; border-left:2px solid #aaffcc; }
 
   .btn-retreat{ padding:.1rem .3rem; font-size:.62rem; background:#3a3a6a; border:1px solid #6a6aaa; border-radius:4px; color:#ccf; cursor:pointer; }
   .btn-retreat:hover{ background:#4a4a8a; }
@@ -2196,6 +2325,28 @@
   .sel-check{ position:absolute; top:2px; right:4px; font-size:.9rem; color:#aaff44; font-weight:700; }
   .sel-empty{ color:#666; font-size:.85rem; grid-column:1/-1; text-align:center; padding:1rem; }
   .sel-footer{ display:flex; gap:.75rem; justify-content:flex-end; flex-wrap:wrap; }
+
+  /* Mulligan 補抽模態 */
+  .mulligan-modal{ max-width:440px; }
+  .mulligan-body{ padding:.4rem 0; }
+  .mulligan-info{ background:rgba(255,220,120,.08); border:1px solid rgba(255,200,100,.35); border-radius:8px; padding:.6rem .75rem; display:flex; flex-direction:column; gap:.25rem; color:#ffe0a0; font-size:.85rem; }
+  .mulligan-footer{ justify-content:space-between; }
+
+  /* 撤退選單（置中橫向 grid） */
+  .retreat-modal{ max-width:760px; }
+  .retreat-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:.6rem; overflow-y:auto; max-height:58vh; padding:.25rem; }
+  .retreat-card{ position:relative; background:#0e1e0e; border:2px solid #2a4a2a; border-radius:8px; overflow:hidden; transition:border-color .15s, box-shadow .15s; }
+  .retreat-card:hover{ border-color:#4a8a4a; box-shadow:0 0 8px rgba(170,255,170,.25); }
+  .retreat-zoom{ position:absolute; top:.25rem; right:.25rem; z-index:2; background:rgba(0,0,0,.72); border:1px solid #6aaa6a; color:#cfc; font-size:.78rem; line-height:1; padding:.22rem .4rem; border-radius:4px; cursor:pointer; }
+  .retreat-zoom:hover{ background:rgba(74,138,74,.9); color:#fff; }
+  .retreat-pick{ display:flex; flex-direction:column; align-items:center; gap:.25rem; background:transparent; border:none; padding:.45rem .3rem .5rem; cursor:pointer; color:#ddd; font-size:.72rem; width:100%; }
+  .retreat-pick img{ width:96px; border-radius:6px; }
+  .retreat-name{ font-weight:700; color:#fff; font-size:.82rem; text-align:center; max-width:100%; word-break:break-all; line-height:1.2; }
+  .retreat-hp{ color:#aaffaa; font-size:.72rem; }
+  .retreat-nrg{ color:#ffcc88; font-size:.72rem; min-height:.9rem; }
+  .retreat-tool{ color:#aad0ff; font-size:.7rem; }
+  .retreat-status{ color:#ff9999; font-size:.7rem; text-transform:capitalize; }
+  .retreat-pick:hover .retreat-name{ color:#aaffcc; }
 
   .zoom-overlay{ position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.88); display:flex; align-items:center; justify-content:center; font-family:system-ui,'Microsoft JhengHei',sans-serif; }
   .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.2rem; max-width:720px; width:96vw; max-height:92vh; display:flex; flex-direction:column; gap:.75rem; color:#f0f0f0; overflow-y:auto; position:relative; }

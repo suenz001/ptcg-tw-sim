@@ -9,6 +9,8 @@ export const GameActions = {
   placeActive:       (iid: string, senderIdx: 0 | 1): GameAction => ({ type: 'PLACE_ACTIVE', iid, senderIdx }),
   benchPokemon:      (iid: string, senderIdx: 0 | 1): GameAction => ({ type: 'BENCH_POKEMON', iid, senderIdx }),
   finishSetup:       (senderIdx: 0 | 1): GameAction => ({ type: 'FINISH_SETUP', senderIdx }),
+  mulliganDrawDecision: (accept: boolean, senderIdx: 0 | 1): GameAction =>
+                       ({ type: 'MULLIGAN_DRAW_DECISION', accept, senderIdx }),
   drawCard:          (): GameAction => ({ type: 'DRAW_CARD' }),
   attachEnergy:      (energyIid: string, targetIid: string): GameAction =>
                        ({ type: 'ATTACH_ENERGY', energyIid, targetIid }),
