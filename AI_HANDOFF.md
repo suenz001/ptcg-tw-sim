@@ -3285,3 +3285,32 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 21/29
 - 版本 1.79 → 1.80
+
+---
+
+## 📝 2026-04-21 Session 38ae (v1.81) — H 標第 26 波：下回合加傷旗標 + 特性加傷（3 張）
+
+### 引擎擴充
+- `CardInstance.damageBonusPending?: number` — 招式效果設下的「下個自己回合招式 +N 傷害」預約旗標
+- `CardInstance.damageBonusThisTurn?: number` — 已 promote 的啟用版，由引擎在 ATTACK 時套用於 base damage（weakness 前），用完即清
+- engine.ts ATTACK：`baseDamage += damageBonusThisTurn` 套用後 delete 該欄位，寫 log
+- engine.ts END_TURN：
+  - 目前玩家的 damageBonusThisTurn 殘留值清除（例如攻擊失敗沒用到時）
+  - 次方玩家 promotePending 擴充：同時處理 `damageBonusPending → damageBonusThisTurn`
+
+### 新 helper
+- `setSelfDamageBonusPendingPost(amount, label)` — 招後設下 N；下回合自動生效 1 次於 base damage
+
+### 實裝（3 張）
+- 巨金怪｜彗星拳 60 — 下回合招式 +60（為 金屬之錘/潔淨爆破 加傷；也會影響 彗星拳 本身若下回合再打）
+- 大電海燕｜風力充能 10 — 下回合招式 +120（為 強力伏特/風暴伏特 加傷）
+- 電蜘蛛｜麻麻羅網 — 在既有 50 基礎上疊加「複眼」特性 PRE hook：對手戰鬥擁有特性則 +50
+
+### 暫緩
+- 超音波幼蟲｜刺耳聲 — 「受到此招式的寶可夢下回合受到招式傷害 +50」→ 需 `damageTakenBonusPending`（跨 2 END_TURN 生效）機制，結構複雜暫不做
+- 電蜘蛛 [特性]複眼 本體效果為「招式傷害 +50」的 passive，目前實作限縮為「麻麻羅網」招式；覆蓋所有 pokemon 的 attacker passive 還沒做（需要加 PASSIVE_ATTACK_BONUS_VS_ABILITY 型 hook，暫緩）
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 25/25
+- 版本 1.80 → 1.81

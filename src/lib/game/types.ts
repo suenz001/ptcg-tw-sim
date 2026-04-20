@@ -79,6 +79,17 @@ export interface CardInstance {
    * 在 END_TURN 時清除。
    */
   abilityUsedThisTurn?: boolean;
+  /**
+   * 本回合此寶可夢使用招式時，base damage +N（在 weakness 之前套用）。
+   * 由 damageBonusPending 在「擁有者下個回合開始」時自動 promote 而來，
+   * 並在該回合 END_TURN 時清除。
+   */
+  damageBonusThisTurn?: number;
+  /**
+   * 招式效果剛打出時設下的「下個自己回合招式 +N 傷害」預約旗標。
+   * 在 END_TURN 切換到擁有者下個回合時，自動 promote 為 damageBonusThisTurn。
+   */
+  damageBonusPending?: number;
 }
 
 export type SpecialCondition =

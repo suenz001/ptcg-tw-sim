@@ -6710,3 +6710,51 @@ regPre('椰蛋樹|投球時刻', (state, aIdx, pool) => {
   const s = addLog(state, `投球時刻：擲 ${n} 次硬幣 [${seq.join(' ')}] → 正面 ${heads} 次 × 60 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38ae v1.81 H 標第 26 波 — damage-plus 下回合加傷 + 特性加傷（4 張）
+//
+// 引擎新增：CardInstance.damageBonusPending / damageBonusThisTurn
+//   POST 設 damageBonusPending = N → END_TURN promote 為 damageBonusThisTurn
+//   → 下個自己回合招式發動時，base damage +N（weakness 前套用），用完即清
+//
+// Helpers:
+//   setSelfDamageBonusPendingPost(amount, label) — 打完招設下 N
+// 卡牌：
+//   巨金怪 彗星拳 60（下回合 +60）
+//   大電海燕 風力充能 10（下回合 +120）
+//   電蜘蛛 複眼（PRE：若對手戰鬥擁有特性則 +50，和 麻麻羅網 疊加）
+// ══════════════════════════════════════════════════════════════════════════════
+
+function setSelfDamageBonusPendingPost(amount: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const att = state.players[aIdx].active;
+    if (!att) return state;
+    const name = pool.get(att.cardId)?.name ?? '?';
+    const s = addLog(state, `${label}：${name} 下回合招式傷害 +${amount}`, aIdx);
+    return updatePlayer(s, aIdx, p => ({
+      ...p,
+      active: p.active ? { ...p.active, damageBonusPending: (p.active.damageBonusPending ?? 0) + amount } : null,
+    }));
+  };
+}
+
+regPost('巨金怪|彗星拳', setSelfDamageBonusPendingPost(60, '彗星拳'));
+regPost('大電海燕|風力充能', setSelfDamageBonusPendingPost(120, '風力充能'));
+
+// 電蜘蛛｜麻麻羅網 — 既有 50 base + coin heads→poison；再疊加 複眼 +50 若對手戰鬥擁有特性
+// 原 PRE 保留，在既有基礎上加 dmg 前先檢查 + wrap
+const _originalMaMaLuoWangPre = ATTACK_PRE.get('電蜘蛛|麻麻羅網');
+if (_originalMaMaLuoWangPre) {
+  regPre('電蜘蛛|麻麻羅網', (state, aIdx, pool, action) => {
+    const r = _originalMaMaLuoWangPre(state, aIdx, pool, action);
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const def = state.players[dIdx].active;
+    if (!def || r.damage <= 0) return r;
+    const defCard = pool.get(def.cardId);
+    if (!defCard?.abilities || defCard.abilities.length === 0) return r;
+    const dmg = r.damage + 50;
+    const s = addLog(r.state, `複眼：對手擁有特性 → 麻麻羅網 +50 = ${dmg}`, aIdx);
+    return { state: s, damage: dmg };
+  });
+}

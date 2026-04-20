@@ -977,6 +977,19 @@ function handlePlaying(
       baseDamage = preResult.damage;
     }
 
+    // 下回合加傷旗標（巨金怪 彗星拳、大電海燕 風力充能 類）—
+    // 由前一個自己回合設下，至本回合起生效 1 次於 base damage 上，weakness 前套用。
+    if (baseDamage > 0 && attacker.active.damageBonusThisTurn) {
+      const dmgBonus = attacker.active.damageBonusThisTurn;
+      baseDamage += dmgBonus;
+      const newAtk = { ...attacker.active };
+      delete newAtk.damageBonusThisTurn;
+      players[aIdx] = { ...players[aIdx], active: newAtk };
+      workingState = { ...workingState, players };
+      const atkName = pool.get(newAtk.cardId)?.name ?? '?';
+      workingState = addLog(workingState, `${atkName} 招式傷害 +${dmgBonus}（下回合加傷效果）`, aIdx);
+    }
+
     // 弱點（×2）— 只對有實際傷害的招式套用
     const defenderCard = getCard(defender.active.cardId, pool);
     if (baseDamage > 0 && defenderCard.weakness && attackerCard.pokemonType === defenderCard.weakness.type) {
@@ -1423,13 +1436,28 @@ function handlePlaying(
     players[aIdx] = currentPlayer;
 
     // 重置次方玩家的回合限制旗標 + promote cantAttackPending → cantAttackThisTurn
+    // + promote damageBonusPending → damageBonusThisTurn
     const nextIdx = dIdx;
     const promotePending = (c: CardInstance): CardInstance => {
-      if (!c.cantAttackPending) return c;
-      const n = { ...c, cantAttackThisTurn: true };
-      delete n.cantAttackPending;
+      let n = c;
+      if (c.cantAttackPending) {
+        n = { ...n, cantAttackThisTurn: true };
+        delete n.cantAttackPending;
+      }
+      if (c.damageBonusPending && c.damageBonusPending > 0) {
+        n = { ...n, damageBonusThisTurn: (n.damageBonusThisTurn ?? 0) + c.damageBonusPending };
+        delete n.damageBonusPending;
+      }
       return n;
     };
+    // 清除目前玩家 active/bench 上殘留的 damageBonusThisTurn（若攻擊未命中用掉）
+    const clearDmgBonusThisTurn = (c: CardInstance): CardInstance => {
+      if (!c.damageBonusThisTurn) return c;
+      const n = { ...c }; delete n.damageBonusThisTurn; return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = clearDmgBonusThisTurn(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(clearDmgBonusThisTurn);
+    players[aIdx] = currentPlayer;
     const nextP = { ...players[nextIdx] };
     if (nextP.active) nextP.active = promotePending(nextP.active);
     nextP.bench = nextP.bench.map(promotePending);
