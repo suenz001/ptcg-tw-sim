@@ -3699,3 +3699,272 @@ function healAllOwnPost(amount: number, benchOnly: boolean, attackName: string):
 regPost('來悲粗茶ex|抹茶飛濺', healAllOwnPost(30, false, '抹茶飛濺'));
 regPost('克雷色利亞|治癒之舞', healAllOwnPost(20, false, '治癒之舞'));
 regPost('葉伊布ex|苔紋瑪瑙', healAllOwnPost(100, true, '苔紋瑪瑙'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38p v1.66 H 標第 11 波 — 條件式增傷（20+ 張）
+// 均為 regPre 判斷條件，若符合則 base + bonus，否則 base。
+// ══════════════════════════════════════════════════════════════════════════════
+
+function isExCard(c: Card | undefined): boolean {
+  if (!c) return false;
+  // PTCG ex / V 都可 KO 取 2 張；簡化：名字結尾 ex 或 EX
+  return c.name.endsWith('ex') || c.name.endsWith('EX');
+}
+function isEvolvedCard(c: Card | undefined): boolean {
+  return c?.subtype === 'Stage1' || c?.subtype === 'Stage2';
+}
+
+// 若對手戰鬥寶可夢處於特殊狀態 → +120
+regPre('波盪水ex|宣洩吼嘯', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const hasStatus = !!state.players[dIdx].active?.status;
+  return { state, damage: 120 + (hasStatus ? 120 : 0) };
+});
+
+// 若對手戰鬥寶可夢為 ex/V → +N（多張）
+function defIsExPre(base: number, bonus: number, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const def = state.players[dIdx].active;
+    const card = def ? pool.get(def.cardId) : undefined;
+    if (isExCard(card)) {
+      return { state: addLog(state, `${label}：對手為 ex/V → +${bonus}`, aIdx), damage: base + bonus };
+    }
+    return { state, damage: base };
+  };
+}
+regPre('泥偶巨人|鬥志之拳', defIsExPre(120, 120, '鬥志之拳'));
+regPre('舞天鵝|鬥志之翼', defIsExPre(20, 90, '鬥志之翼'));
+regPre('電蜘蛛ex|衝天之線', defIsExPre(110, 110, '衝天之線'));
+regPre('火伊布|鬥志猛火', defIsExPre(90, 90, '鬥志猛火'));
+regPre('水伊布|鬥志潮旋', defIsExPre(90, 90, '鬥志潮旋'));
+regPre('雷伊布|鬥志雷霆', defIsExPre(90, 90, '鬥志雷霆'));
+regPre('蒼炎刃鬼|鬥士的巨劍', defIsExPre(100, 100, '鬥士的巨劍'));
+regPre('無極汰那|汰那爆破', defIsExPre(10, 80, '汰那爆破'));
+
+// 若對手戰鬥寶可夢為進化寶可夢 → +N
+function defIsEvolvedPre(base: number, bonus: number, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const def = state.players[dIdx].active;
+    const card = def ? pool.get(def.cardId) : undefined;
+    if (isEvolvedCard(card)) {
+      return { state: addLog(state, `${label}：對手為進化寶可夢 → +${bonus}`, aIdx), damage: base + bonus };
+    }
+    return { state, damage: base };
+  };
+}
+regPre('毒骷蛙|俐落一擊', defIsEvolvedPre(90, 90, '俐落一擊'));
+regPre('肯泰羅|俐落一擊', defIsEvolvedPre(50, 50, '俐落一擊'));
+
+// 若對手戰鬥寶可夢為【1階進化】→ +90
+regPre('帕底亞 肯泰羅|真氣衝撞', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  const card = def ? pool.get(def.cardId) : undefined;
+  if (card?.subtype === 'Stage1') {
+    return { state: addLog(state, '真氣衝撞：對手為 1 階進化 → +90', aIdx), damage: 180 };
+  }
+  return { state, damage: 90 };
+});
+
+// 若對手戰鬥寶可夢為【超】→ +30
+regPre('銅鏡怪|鏡面攻擊', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  const card = def ? pool.get(def.cardId) : undefined;
+  if (card?.pokemonType === 'Psychic') {
+    return { state: addLog(state, '鏡面攻擊：對手為【超】→ +30', aIdx), damage: 40 };
+  }
+  return { state, damage: 10 };
+});
+
+// 若對手戰鬥寶可夢身上放置有傷害指示物 → +80
+regPre('暴噬龜|堅硬嚼碎', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  if (def && def.damage > 0) {
+    return { state: addLog(state, '堅硬嚼碎：對手帶傷 → +80', aIdx), damage: 160 };
+  }
+  return { state, damage: 80 };
+});
+
+// 若對手戰鬥寶可夢【撤退】所需的能量為2個以上 → +110
+regPre('烈箭鷹|氣旋競爭', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  const card = def ? pool.get(def.cardId) : undefined;
+  const retreat = card?.retreatCost?.length ?? 0;
+  if (retreat >= 2) {
+    return { state: addLog(state, `氣旋競爭：對手撤退 ${retreat} ≥ 2 → +110`, aIdx), damage: 220 };
+  }
+  return { state, damage: 110 };
+});
+
+// 若自己備戰區有【鋼】寶可夢 → +80
+function selfBenchHasTypePre(base: number, bonus: number, ptype: EnergyType, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const has = state.players[aIdx].bench.some(b => pool.get(b.cardId)?.pokemonType === ptype);
+    if (has) {
+      return { state: addLog(state, `${label}：備戰區有【${ptype}】→ +${bonus}`, aIdx), damage: base + bonus };
+    }
+    return { state, damage: base };
+  };
+}
+regPre('破破舵輪|鋼鐵船錨', selfBenchHasTypePre(80, 80, 'Metal', '鋼鐵船錨'));
+regPre('龍頭地鼠|鑽粉碎', selfBenchHasTypePre(60, 80, 'Metal', '鑽粉碎'));
+
+// 若對手場上有【水】寶可夢 → +120
+regPre('電擊魔獸|漏電關節', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const d = state.players[dIdx];
+  const has = [d.active, ...d.bench].some(c => c && pool.get(c.cardId)?.pokemonType === 'Water');
+  if (has) {
+    return { state: addLog(state, '漏電關節：對手場上有【水】→ +120', aIdx), damage: 160 };
+  }
+  return { state, damage: 40 };
+});
+
+// 若自己備戰區有名為 X 的寶可夢 → +N
+function selfBenchHasNamePre(base: number, bonus: number, targetName: string, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const has = state.players[aIdx].bench.some(b => pool.get(b.cardId)?.name === targetName);
+    if (has) {
+      return { state: addLog(state, `${label}：備戰區有「${targetName}」→ +${bonus}`, aIdx), damage: base + bonus };
+    }
+    return { state, damage: base };
+  };
+}
+regPre('大狼犬|群起打獵', selfBenchHasNamePre(30, 90, '大狼犬', '群起打獵'));
+regPre('電螢蟲|聯合攻擊', selfBenchHasNamePre(20, 60, '甜甜螢', '聯合攻擊'));
+
+// 若對手戰鬥寶可夢身上附有寶可夢道具 → +80
+regPre('大朝北鼻|進擊鐳射', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  if (def?.toolAttached) {
+    return { state: addLog(state, '進擊鐳射：對手附有道具 → +80', aIdx), damage: 160 };
+  }
+  return { state, damage: 80 };
+});
+
+// 若自己剩餘獎賞卡張數 > 對手 → +90（獎賞反擊）
+function selfPrizesMorePre(base: number, bonus: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const diff = state.players[aIdx].prizes.length - state.players[dIdx].prizes.length;
+    if (diff > 0) {
+      return { state: addLog(state, `${label}：獎賞較多 → +${bonus}`, aIdx), damage: base + bonus };
+    }
+    return { state, damage: base };
+  };
+}
+regPre('摔角鷹人|獎賞反擊', selfPrizesMorePre(50, 90, '獎賞反擊'));
+regPre('卡璞・鳴鳴|獎賞反擊', selfPrizesMorePre(90, 90, '獎賞反擊'));
+
+// 若對手剩餘獎賞卡張數 ≤ 4 → +70
+regPre('破空焰|爆燃突擊', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  if (state.players[dIdx].prizes.length <= 4) {
+    return { state: addLog(state, '爆燃突擊：對手獎賞 ≤4 → +70', aIdx), damage: 170 };
+  }
+  return { state, damage: 100 };
+});
+
+// 若自己牌庫剩餘 ≤ 3 → +200
+regPre('蟲甲聖|絕地反攻', (state, aIdx, _pool) => {
+  if (state.players[aIdx].deck.length <= 3) {
+    return { state: addLog(state, '絕地反攻：牌庫 ≤3 → +200', aIdx), damage: 240 };
+  }
+  return { state, damage: 40 };
+});
+
+// 若對手手牌 ≤ 5 → +60
+regPre('師父鼬|疾風迴旋', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  if (state.players[dIdx].hand.length <= 5) {
+    return { state: addLog(state, '疾風迴旋：對手手牌 ≤5 → +60', aIdx), damage: 90 };
+  }
+  return { state, damage: 30 };
+});
+
+// 若這隻寶可夢身上附有【雷】能量卡 → +80
+regPre('電蜘蛛|麻麻羅網', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  if (!att) return { state, damage: 50 };
+  const has = att.energyAttached.some(e => pool.get(e.cardId)?.pokemonType === 'Lightning');
+  if (has) {
+    return { state: addLog(state, '麻麻羅網：附有【雷】能量 → +80', aIdx), damage: 130 };
+  }
+  return { state, damage: 50 };
+});
+
+// 若自己場上的【惡】能量有 3 個以上 → +50
+regPre('阿勃梭魯|惡棍墜落', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  let count = 0;
+  for (const c of [p.active, ...p.bench]) {
+    if (!c) continue;
+    for (const e of c.energyAttached) {
+      if (pool.get(e.cardId)?.pokemonType === 'Darkness') count++;
+    }
+  }
+  if (count >= 3) {
+    return { state: addLog(state, `惡棍墜落：【惡】能量 ${count} ≥3 → +50`, aIdx), damage: 70 };
+  }
+  return { state, damage: 20 };
+});
+
+// 若場上有競技場卡 → +60，並丟棄那張競技場卡
+regPre('古玉魚|大地熔化', (state, aIdx, _pool) => {
+  if (state.activeStadium) {
+    return { state: addLog(state, '大地熔化：場上有競技場 → +60', aIdx), damage: 120 };
+  }
+  return { state, damage: 60 };
+});
+regPost('古玉魚|大地熔化', (state, aIdx, _pool) => {
+  if (!state.activeStadium) return state;
+  const stadium = state.activeStadium;
+  // 丟到擁有者的棄牌區：以卡 iid 判斷是哪邊打的；若無法判斷則丟到施術方
+  // 這裡簡化：嘗試找出擁有者（其中 1 方的 discard 裡有沒有等等，這卡是場上唯一，無法從狀態直接得知擁有者）
+  // 傳統作法：engine 有 stadiumOwnerIdx 欄位，這裡沒有，故簡化為丟到 activeStadium 清除+施術方棄牌
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[aIdx] = { ...players[aIdx], discard: [...players[aIdx].discard, stadium] };
+  return addLog({ ...state, players, activeStadium: undefined }, '大地熔化：丟棄競技場', aIdx);
+});
+
+// 若希望，將場上的競技場卡丟棄 → +120（只在有競技場時才生效）
+regPre('轟鳴月ex|災厄風暴', (state, aIdx, _pool) => {
+  if (state.activeStadium) {
+    return { state: addLog(state, '災厄風暴：丟棄競技場 → +120', aIdx), damage: 220 };
+  }
+  return { state, damage: 100 };
+});
+regPost('轟鳴月ex|災厄風暴', (state, aIdx, _pool) => {
+  if (!state.activeStadium) return state;
+  const stadium = state.activeStadium;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[aIdx] = { ...players[aIdx], discard: [...players[aIdx].discard, stadium] };
+  return { ...state, players, activeStadium: undefined };
+});
+
+// 眷戀雲｜愛之同感：若自己場上有與對手場上寶可夢相同屬性的寶可夢 → +120
+regPre('眷戀雲|愛之同感', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const a = state.players[aIdx], d = state.players[dIdx];
+  const oppTypes = new Set<string>();
+  for (const c of [d.active, ...d.bench]) {
+    if (!c) continue;
+    const t = pool.get(c.cardId)?.pokemonType;
+    if (t) oppTypes.add(t);
+  }
+  const match = [a.active, ...a.bench].some(c => {
+    if (!c) return false;
+    const t = pool.get(c.cardId)?.pokemonType;
+    return t ? oppTypes.has(t) : false;
+  });
+  if (match) {
+    return { state: addLog(state, '愛之同感：同屬性在場 → +120', aIdx), damage: 200 };
+  }
+  return { state, damage: 80 };
+});
