@@ -1259,17 +1259,7 @@
         {/if}
         {#if game.phase==='playing' && defenderPlayer?.active===null && game.turnPhase==='end'}
           {#if isMyDefenderTurn()}
-            <div class="alert warn-alert">
-              ⚠️ 請送出寶可夢
-              <div class="mini-row">
-                {#each defenderPlayer?.bench??[] as b}
-                  {@const bc=getCard(b.cardId)}
-                  <button class="mini-poke-btn" onclick={()=>dispatch(GameActions.sendNewActive(b.iid, dIdx))}>
-                    <img src={bc?.imageUrl} alt={bc?.name}/><span>{bc?.name}</span>
-                  </button>
-                {/each}
-              </div>
-            </div>
+            <div class="alert warn-alert">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
           {:else if isMyTurn()}
             <div class="alert warn-alert">⚠️ 等待 {defenderPlayer?.name} 送出寶可夢</div>
           {/if}
@@ -1525,28 +1515,59 @@
     || (mode !== 'online' && aiPlayerIndex === null)
     || (aiPlayerIndex !== null && pendingSelection.actorIdx === (1 - aiPlayerIndex))
   )}
+    {@const isPokePicker = pendingSelection.type==='bench-choose' || pendingSelection.type==='opp-bench-choose' || pendingSelection.type==='opp-poke-choose' || pendingSelection.type==='heal-target'}
     <div class="selection-overlay">
-      <div class="selection-modal">
+      <div class="selection-modal" class:retreat-modal={isPokePicker}>
         <div class="sel-header">
           <h3>{selectionTitle(pendingSelection.type)}</h3>
           <p class="sel-hint">
             選 {pendingSelection.minCount===pendingSelection.maxCount?`${pendingSelection.minCount}`:`${pendingSelection.minCount}～${pendingSelection.maxCount}`} 張
             {#if pendingSelection.filter&&pendingSelection.filter!=='TOP6'&&!pendingSelection.filter.startsWith('Supporter')}（{pendingSelection.filter.replace('Basic:HP70','HP≤70基礎').replace('Basic','基礎寶可夢').replace('Pokemon','寶可夢').replace('Energy','能量')}）{/if}
             · 已選 {selectionPicked.size}
+            {#if isPokePicker}· 點放大鏡 🔍 查看詳情{/if}
           </p>
         </div>
-        <div class="sel-grid">
-          {#each selectionItems as item}{@const c=getCard(item.cardId)}
-            {#if c}
-              <button class="sel-card" class:sel-picked={selectionPicked.has(item.iid)} onclick={()=>toggleSelection(item.iid)}>
-                <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
-                {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
-                {#if selectionPicked.has(item.iid)}<span class="sel-check">✓</span>{/if}
-              </button>
-            {/if}
-          {/each}
-          {#if selectionItems.length===0}<p class="sel-empty">（沒有符合條件的卡牌）</p>{/if}
-        </div>
+        {#if isPokePicker}
+          <div class="retreat-grid">
+            {#each selectionItems as item}{@const c=getCard(item.cardId)}
+              {#if c}
+                {@const eff=hpTotal(item)}
+                {@const rem=hpRemaining(item)}
+                {@const picked=selectionPicked.has(item.iid)}
+                <div class="retreat-card" class:sel-picked={picked}>
+                  <button class="retreat-zoom" title="放大檢視：{c.name}"
+                    onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
+                  <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();toggleSelection(item.iid);}}>
+                    <img src={c.imageUrl} alt={c.name}/>
+                    <div class="retreat-name">{c.name}</div>
+                    <div class="retreat-hp">HP {rem}/{eff}</div>
+                    <div class="retreat-nrg">{energySummary(item)}</div>
+                    {#if item.toolAttached}{@const tc=getCard(item.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                    {#if item.status}<div class="retreat-status">
+                      {item.status==='poisoned'?'☠️':item.status==='burned'?'🔥':item.status==='asleep'?'💤':item.status==='confused'?'😵':item.status==='paralyzed'?'⚡':''}
+                      {item.status}
+                    </div>{/if}
+                    {#if picked}<span class="sel-check">✓</span>{/if}
+                  </button>
+                </div>
+              {/if}
+            {/each}
+            {#if selectionItems.length===0}<p class="sel-empty">（沒有符合條件的寶可夢）</p>{/if}
+          </div>
+        {:else}
+          <div class="sel-grid">
+            {#each selectionItems as item}{@const c=getCard(item.cardId)}
+              {#if c}
+                <button class="sel-card" class:sel-picked={selectionPicked.has(item.iid)} onclick={()=>toggleSelection(item.iid)}>
+                  <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
+                  {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+                  {#if selectionPicked.has(item.iid)}<span class="sel-check">✓</span>{/if}
+                </button>
+              {/if}
+            {/each}
+            {#if selectionItems.length===0}<p class="sel-empty">（沒有符合條件的卡牌）</p>{/if}
+          </div>
+        {/if}
 
         <!-- 查看全牌庫（用於推斷獎賞卡） — 僅在「搜尋全牌庫」類型顯示；peek-top-X 機制不該能看剩餘牌 -->
         {#if pendingSelection.type==='deck-search' && game
@@ -1731,6 +1752,44 @@
         </div>
         <div class="sel-footer">
           <button class="btn-act secondary" onclick={()=>floatingRetreatMenu=null}>取消</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Send New Active Modal（戰鬥寶可夢昏厥後派出新戰鬥寶可夢，使用統一的橫向 grid + 放大鏡介面） -->
+  {#if game && game.phase==='playing' && defenderPlayer?.active===null && game.turnPhase==='end' && isMyDefenderTurn()}
+    <div class="selection-overlay">
+      <div class="selection-modal retreat-modal" onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header">
+          <h3>⚠️ 派出新的戰鬥寶可夢</h3>
+          <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
+        </div>
+        <div class="retreat-grid">
+          {#each defenderPlayer?.bench??[] as b}{@const bc=getCard(b.cardId)}
+            {#if bc}
+              {@const eff=hpTotal(b)}
+              {@const rem=hpRemaining(b)}
+              <div class="retreat-card">
+                <button class="retreat-zoom" title="放大檢視：{bc.name}"
+                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.sendNewActive(b.iid, dIdx));}}>
+                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <div class="retreat-name">{bc.name}</div>
+                  <div class="retreat-hp">HP {rem}/{eff}</div>
+                  <div class="retreat-nrg">{energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                  {#if b.status}<div class="retreat-status">
+                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
+                    {b.status}
+                  </div>{/if}
+                </button>
+              </div>
+            {/if}
+          {/each}
+          {#if (defenderPlayer?.bench??[]).length===0}
+            <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
+          {/if}
         </div>
       </div>
     </div>
@@ -2028,7 +2087,7 @@
   .res-lb{ font-weight:600; }
   .res-st{ font-size:.62rem; opacity:.85; padding-left:.15rem; border-left:1px solid rgba(255,255,255,.15); margin-left:.15rem; }
 
-  .playmat{ flex:1; display:grid; grid-template-rows:1fr auto 1fr; overflow:hidden; position:relative;
+  .playmat{ flex:1; display:grid; grid-template-rows:minmax(185px,1fr) auto minmax(185px,1fr); overflow:hidden; position:relative;
     background:
       radial-gradient(circle at 50% 50%, rgba(80,130,90,.12), transparent 72%),
       repeating-linear-gradient(45deg, rgba(0,0,0,.05) 0 2px, transparent 2px 8px),
@@ -2063,13 +2122,13 @@
 
   .zone-active{ flex-shrink:0; width:300px; display:flex; flex-direction:column; gap:0.2rem; }
   .my-active-zone{ position:relative; }
-  .active-card{ display:flex; gap:0.5rem; background:rgba(0,0,0,.35); border:1px solid #3a5a3a; border-radius:8px; padding:0.6rem; align-items:flex-start; position:relative; cursor:default; min-height:130px; }
+  .active-card{ display:flex; gap:0.45rem; background:rgba(0,0,0,.35); border:1px solid #3a5a3a; border-radius:8px; padding:0.45rem 0.5rem; align-items:flex-start; position:relative; cursor:default; min-height:auto; }
   .active-card.opp-active{ border-color:#5a3a3a; background:rgba(0,0,0,.4); }
   .active-card.mine-active{ border-color:#3a6a3a; }
   .active-card.energy-target{ border-color:#aaff44; cursor:pointer; animation:glow 1s infinite alternate; }
   .active-card.active-empty{ justify-content:center; align-items:center; color:#888; font-size:.8rem; text-align:center; padding:.8rem; border:2px dashed #444; background:rgba(0,0,0,.25); }
   .active-card.active-empty.drop-zone{ border-color:#88aaff; color:#cce; background:rgba(40,70,120,.3); }
-  .active-img{ width:120px; border-radius:5px; flex-shrink:0; }
+  .active-img{ width:105px; border-radius:5px; flex-shrink:0; }
   .active-info{ flex:1; min-width:0; }
   .active-name{ font-size:1rem; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:.2rem; }
   .active-hp{ font-size:.88rem; color:#ccc; }
@@ -2337,6 +2396,8 @@
   .retreat-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:.6rem; overflow-y:auto; max-height:58vh; padding:.25rem; }
   .retreat-card{ position:relative; background:#0e1e0e; border:2px solid #2a4a2a; border-radius:8px; overflow:hidden; transition:border-color .15s, box-shadow .15s; }
   .retreat-card:hover{ border-color:#4a8a4a; box-shadow:0 0 8px rgba(170,255,170,.25); }
+  .retreat-card.sel-picked{ border-color:#aaff44; box-shadow:0 0 10px #aaff4488; }
+  .retreat-pick .sel-check{ position:absolute; top:.25rem; left:.35rem; font-size:1rem; color:#aaff44; font-weight:700; text-shadow:0 0 4px rgba(0,0,0,.8); }
   .retreat-zoom{ position:absolute; top:.25rem; right:.25rem; z-index:2; background:rgba(0,0,0,.72); border:1px solid #6aaa6a; color:#cfc; font-size:.78rem; line-height:1; padding:.22rem .4rem; border-radius:4px; cursor:pointer; }
   .retreat-zoom:hover{ background:rgba(74,138,74,.9); color:#fff; }
   .retreat-pick{ display:flex; flex-direction:column; align-items:center; gap:.25rem; background:transparent; border:none; padding:.45rem .3rem .5rem; cursor:pointer; color:#ddd; font-size:.72rem; width:100%; }

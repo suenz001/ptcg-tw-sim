@@ -1,6 +1,6 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-20 Session 35 (v1.3)  
+> 最後更新：2026-04-20 Session 36 (v1.4)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
@@ -2096,3 +2096,69 @@ node scripts/classify-h-cards.mjs H  # 掃未實裝 H 標，按模式分類
 2. I/J 標尚未開始批次（SV9+、M1+、M2+、MC/M3/M4）
 3. 特殊能量卡系統（M4 原定實裝）
 4. Firestore composite index production 部署（若要恢復 server-side orderBy）
+
+---
+
+## 📝 2026-04-20 Session 36 (v1.4) — 戰鬥場 UI 切割 + log 目標統一 + 選人 UI 統一
+
+### 工作流程反饋（用戶明示）
+- **「下次請你自己先push看看，我很懶」** → Session 36 起 Claude 直接嘗試 `git push`，不再要求用戶手動 push。
+  （SDK sandbox 中曾有 auth 問題，若失敗會回報具體錯誤讓用戶補推。）
+
+### ① UI Bug：戰鬥寶可夢卡牌下方被切掉
+- 根因：`.playmat { grid-template-rows: 1fr auto 1fr; overflow:hidden }` 搭配 `.field-row { overflow:hidden }`
+  → 小螢幕下 1fr 區塊壓縮低於卡片自然高度（~187px @ 120px 圖寬），底部能量/狀態資訊被裁掉。
+- 修：
+  - `.playmat` → `grid-template-rows: minmax(185px,1fr) auto minmax(185px,1fr)` 保底最小高度。
+  - `.active-card` → `padding:0.45rem 0.5rem`（原 0.6rem）、`align-items:flex-start`、移除 `min-height:130px`。
+  - `.active-img` → `width:105px`（原 120px），同比縮 flex-shrink:0 佔位。
+
+### ② Log 完整性審計（「奇跡修正檔未顯示附加給哪個寶可夢」擴大審查）
+用戶：「未顯示敘述附加超能量給哪個寶可夢，請你統一檢查類似的情形需記錄於 log」  
+規則：凡是效果「修改特定寶可夢狀態」（附加能量、附加道具、回血、派出上場），log 必須指名目標。
+
+補完的 resolver（13 處）：
+- `healResolver`：「→ {name} 回復 {amount} HP[，丟棄 {N} 個能量]」
+- `miracle-codec-energy` + `miracle-codec-attach`：拆兩段處理，第二段 log「奇跡修正檔：將 {energyName} 附加到 {targetName}」
+- `gengar-move-energy`（超級耿鬼 ex 空無強風）：「空無強風：將 {energyName} 附加到 {targetName}」
+- `cresselia-attach-energy`（克雷色利亞 充溢之光）：「充溢之光：將 {names} 附加到 {activeName}」
+- `heal-120-bench`：「→ {name} 回復 {actualHeal} HP」
+- `rare-candy-evolve`：**原本有 bug，log 在 updatePlayer 裡構造但從未 addLog** — 修為先查名再 addLog，寫出「神奇糖果：{basicName} 進化成 {stage2Name}」
+- `gust-opp`（老大的指令）：「老大的指令：呼叫 {name} 到戰鬥場」
+- `top-catcher-opp`（頂尖捕捉器對手版）：「頂尖捕捉器：呼叫 {name} 到對手戰鬥場」
+- `do-switch`（寶可夢交替 / 急進開關 / 頂尖捕捉器自我版）：「→ 派出 {name} 到戰鬥場」
+- `surfer-switch`（衝浪手）：「衝浪手：派出 {name} 到戰鬥場」
+- `dominance-chain`（支配鎖鏈）：「支配鎖鏈：派出 {name} 到戰鬥場（中毒）」
+- 沉重接力棒 `TOOL_ON_KO`：指名備戰區要繼承的寶可夢名稱，而非泛稱「備戰」
+
+已確認無需修（engine.ts handler 原本就有 log）：
+- `ATTACH_ENERGY`：「{attacker.name} 將能量附加到 {targetCard.name}」✅
+- `SEND_NEW_ACTIVE`：「{sendingPlayer.name} 送出了 {newActiveCard.name}！」✅
+- `RETREAT`：「{name} 的 {activeCard} 撤退，{newActiveCard} 上場！」✅
+
+### ③ 選人 UI 統一（撤退介面 → SEND_NEW_ACTIVE + bench-choose）
+用戶：「撤退的時候選擇寶可夢的介面改得不錯，戰鬥寶可夢昏厥須派出時、寶可夢交替、頂尖捕捉器等也請使用一樣的 UI。」
+
+實作方式：
+1. **SEND_NEW_ACTIVE**：移除 `alerts-col` 內擁擠的 `.mini-poke-btn` 列（40px 縮圖太小、同名卡無法區分）；
+   改為獨立 `.selection-overlay` + `.retreat-modal` — 自動在 `isMyDefenderTurn()` 條件下 pop up，
+   含 🔍 放大鏡、HP 剩/總、能量摘要、道具、狀態五段資訊。不提供 cancel（必須選）。
+2. **pendingSelection 通用 modal**：新增 `isPokePicker = type ∈ {bench-choose, opp-bench-choose, opp-poke-choose, heal-target}` 判斷。
+   - 為 true → 改套 `.retreat-grid` / `.retreat-card` / `.retreat-zoom` / `.retreat-pick` 五元素排版，
+     每張卡都有 🔍 magnifier（放大看能量、狀態），點卡面 toggle 選取。
+   - 為 false（deck-search / hand-discard / hand-choose / discard-search） → 保留原本 `.sel-grid` 密集排版（64px 縮圖 + 名稱 + HP 小字）。
+   - 多選情境（原本就支援）：picked 狀態套 `.retreat-card.sel-picked` 邊框高亮 + 卡面角落 ✓。
+3. CSS 補：`.retreat-card.sel-picked { border-color:#aaff44; box-shadow:0 0 10px #aaff4488 }`；
+   `.retreat-pick .sel-check { position:absolute; top:.25rem; left:.35rem; font-size:1rem; ... }`。
+
+受影響的選人流程（全部自動升級）：
+- 寶可夢交替、急進開關、頂尖捕捉器（自我呼叫）、衝浪手、支配鎖鏈、老大的指令、頂尖捕捉器（對手版）、
+  美洛耶塔 治癒旋律、超級耿鬼 ex 空無強風、奇跡修正檔 第二段選目標、所有 `heal-target` 類、所有 `opp-*-choose` 類。
+
+### 驗證
+- `node sim.mjs 50` → 50/50 正常結束，0 卡住 / 0 崩潰 / 0 例外；P1 26 / P2 24，平均 14.2 回合。
+- 2 局 turn=1 早結束 = Mulligan 後備戰區無寶可夢，屬規則內輸法，非 bug。
+- UI 改動不觸及 engine 純函式，sim 通過即代表機制邏輯未破。
+
+### Commit
+- （將在 commit 後補）v1.4 — UI 切割修、log 統一、選人介面統一

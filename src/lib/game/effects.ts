@@ -272,7 +272,13 @@ reg('急進開關', switchEffect('急進開關'));
 regG('寶可夢交替', (st, idx) => st.players[idx].bench.length > 0);
 regG('急進開關', (st, idx) => st.players[idx].bench.length > 0);
 
-regR('do-switch', (st, idx, iids, _params, _pool) => {
+regR('do-switch', (st, idx, iids, _params, pool) => {
+  const prevPlayer = st.players[idx];
+  const target = prevPlayer.bench.find(c => c.iid === iids[0]);
+  if (target) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    st = addLog(st, `→ 派出 ${name} 到戰鬥場`, idx);
+  }
   return updatePlayer(st, idx, (p) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
@@ -330,12 +336,24 @@ function healResolver(
   idx: 0 | 1,
   iids: string[],
   params: Record<string, unknown> | undefined,
-  _pool: Map<string, Card>
+  pool: Map<string, Card>
 ): GameState {
   const healAmount = (params?.healAmount as number) ?? 30;
   const discardCount = (params?.discardEnergy as number) ?? 0;
+  const iid = iids[0];
+  // 附加 log：記錄實際回復的目標與數值（pre-log 僅提示「選擇…寶可夢」，未標明目標）
+  const prevPlayer = st.players[idx];
+  const prevTarget = prevPlayer.active?.iid === iid
+    ? prevPlayer.active
+    : prevPlayer.bench.find(c => c.iid === iid);
+  if (prevTarget) {
+    const name = pool.get(prevTarget.cardId)?.name ?? '?';
+    const actualHeal = Math.min(prevTarget.damage, healAmount);
+    const parts = [`${name} 回復 ${actualHeal} HP`];
+    if (discardCount > 0) parts.push(`丟棄 ${discardCount} 個能量`);
+    st = addLog(st, `→ ${parts.join('，')}`, idx);
+  }
   return updatePlayer(st, idx, (p) => {
-    const iid = iids[0];
     const isActive = p.active?.iid === iid;
     let target = isActive ? p.active! : p.bench.find(c => c.iid === iid);
     if (!target) return p;
@@ -501,8 +519,14 @@ reg('老大的指令', (st, idx) => {
   });
 });
 
-regR('gust-opp', (st, idx, iids, _params, _pool) => {
+regR('gust-opp', (st, idx, iids, _params, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
+  const oppPlayer = st.players[oppIdx];
+  const target = oppPlayer.bench.find(c => c.iid === iids[0]);
+  if (target) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    st = addLog(st, `老大的指令：呼叫 ${name} 到戰鬥場`, idx);
+  }
   return updatePlayer(st, oppIdx, (p) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
@@ -650,11 +674,16 @@ reg('奇跡修正檔', (st, idx, pool) => {
     effectKey: 'miracle-codec-energy',
   });
 });
-regR('miracle-codec-energy', (st, idx, iids, _params, _pool) => {
+regR('miracle-codec-energy', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return st;
   const energyIid = iids[0];
-  if (st.players[idx].bench.length === 0) {
+  const player = st.players[idx];
+  const energyInst = player.discard.find(c => c.iid === energyIid);
+  const energyName = energyInst ? (pool.get(energyInst.cardId)?.name ?? '超能量') : '超能量';
+  if (player.bench.length === 0) {
     // 直接附到出場寶可夢
+    const activeName = player.active ? (pool.get(player.active.cardId)?.name ?? '出場寶可夢') : '出場寶可夢';
+    st = addLog(st, `奇跡修正檔：將 ${energyName} 附加到 ${activeName}`, idx);
     return updatePlayer(st, idx, (p) => {
       const energyCard = p.discard.find(c => c.iid === energyIid);
       if (!energyCard || !p.active) return p;
@@ -670,13 +699,22 @@ regR('miracle-codec-energy', (st, idx, iids, _params, _pool) => {
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'miracle-codec-attach',
-    params: { energyIid },
+    params: { energyIid, energyName },
   });
 });
-regR('miracle-codec-attach', (st, idx, iids, params, _pool) => {
+regR('miracle-codec-attach', (st, idx, iids, params, pool) => {
   const energyIid = params?.energyIid as string;
   if (!energyIid) return st;
   const targetIid = iids[0];
+  const player = st.players[idx];
+  const target = player.bench.find(c => c.iid === targetIid);
+  const targetName = target ? (pool.get(target.cardId)?.name ?? '備戰寶可夢') : '備戰寶可夢';
+  const energyName = (params?.energyName as string | undefined)
+    ?? (() => {
+      const e = player.discard.find(c => c.iid === energyIid);
+      return e ? (pool.get(e.cardId)?.name ?? '超能量') : '超能量';
+    })();
+  st = addLog(st, `奇跡修正檔：將 ${energyName} 附加到 ${targetName}`, idx);
   return updatePlayer(st, idx, (p) => {
     const energyCard = p.discard.find(c => c.iid === energyIid);
     if (!energyCard) return p;
@@ -709,8 +747,14 @@ reg('頂尖捕捉器', (st, idx) => {
     effectKey: 'top-catcher-opp',
   });
 });
-regR('top-catcher-opp', (st, idx, iids, _params, _pool) => {
+regR('top-catcher-opp', (st, idx, iids, _params, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
+  const oppPlayer = st.players[oppIdx];
+  const target = oppPlayer.bench.find(c => c.iid === iids[0]);
+  if (target) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    st = addLog(st, `頂尖捕捉器：呼叫 ${name} 到對手戰鬥場`, idx);
+  }
   // 切換對手備戰 → 對手出場
   st = updatePlayer(st, oppIdx, (p) => {
     if (!p.active) return p;
@@ -1014,11 +1058,15 @@ regPost('超級耿鬼ex|空無強風', (state, aIdx, _pool) => {
   });
 });
 
-regR('gengar-move-energy', (st, idx, iids, params, _pool) => {
+regR('gengar-move-energy', (st, idx, iids, params, pool) => {
   const energyIid    = params?.energyIid    as string | undefined;
   const energyCardId = params?.energyCardId as string | undefined;
   if (!energyIid || !energyCardId || iids.length === 0) return st;
   const targetIid = iids[0];
+  const target = st.players[idx].bench.find(c => c.iid === targetIid);
+  const targetName = target ? (pool.get(target.cardId)?.name ?? '備戰寶可夢') : '備戰寶可夢';
+  const energyName = pool.get(energyCardId)?.name ?? '能量';
+  st = addLog(st, `空無強風：將 ${energyName} 附加到 ${targetName}`, idx);
   // 重建能量 CardInstance（基本能量無狀態，iid 與 cardId 即可還原）
   const energyCard: CardInstance = { iid: energyIid, cardId: energyCardId, damage: 0, energyAttached: [] };
   return updatePlayer(st, idx, p => ({
@@ -1049,8 +1097,14 @@ regPost('克雷色利亞|充溢之光', (state, aIdx, pool) => {
   });
 });
 
-regR('cresselia-attach-energy', (st, idx, iids, _params, _pool) => {
+regR('cresselia-attach-energy', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return st;
+  const player = st.players[idx];
+  if (!player.active) return st;
+  const activeName = pool.get(player.active.cardId)?.name ?? '出場寶可夢';
+  const chosenInst = player.deck.filter(c => iids.includes(c.iid));
+  const names = chosenInst.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `充溢之光：將 ${names} 附加到 ${activeName}`, idx);
   return updatePlayer(st, idx, p => {
     if (!p.active) return p;
     const chosen   = p.deck.filter(c => iids.includes(c.iid));
@@ -1082,8 +1136,14 @@ regPost('美洛耶塔|治癒旋律', (state, aIdx, pool) => {
   });
 });
 
-regR('heal-120-bench', (st, idx, iids, _params, _pool) => {
+regR('heal-120-bench', (st, idx, iids, _params, pool) => {
   const targetIid = iids[0];
+  const target = st.players[idx].bench.find(c => c.iid === targetIid);
+  if (target) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    const actualHeal = Math.min(target.damage, 120);
+    st = addLog(st, `→ ${name} 回復 ${actualHeal} HP`, idx);
+  }
   return updatePlayer(st, idx, p => ({
     ...p,
     bench: p.bench.map(c => c.iid === targetIid
@@ -1240,10 +1300,19 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
   const targetIid = picked[0];
   const stage2Iid = params?.stage2Iid as string;
 
+  // 補 log：記錄基礎→2 階的進化（原本只有構造 logMsg 但未呼叫 addLog）
+  const prevPlayer = st.players[idx];
+  const stage2InstPrev = prevPlayer.hand.find(i => i.iid === stage2Iid);
+  const stage2Name = stage2InstPrev ? (pool.get(stage2InstPrev.cardId)?.name ?? '?') : '?';
+  const baseInstPrev = prevPlayer.active?.iid === targetIid
+    ? prevPlayer.active
+    : prevPlayer.bench.find(b => b.iid === targetIid);
+  const baseName = baseInstPrev ? (pool.get(baseInstPrev.cardId)?.name ?? '?') : '?';
+  st = addLog(st, `神奇糖果：${baseName} 直接進化為 ${stage2Name}！`, idx);
+
   return updatePlayer(st, idx, p => {
     const stage2Inst = p.hand.find(i => i.iid === stage2Iid);
     if (!stage2Inst) return p;
-    const stage2Card = pool.get(stage2Inst.cardId);
 
     const evolve = (pk: CardInstance): CardInstance => {
       if (pk.iid !== targetIid) return pk;
@@ -1267,8 +1336,6 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
       };
     };
 
-    const baseCard = pool.get(p.active?.iid === targetIid ? p.active.cardId : (p.bench.find(b => b.iid === targetIid)?.cardId ?? ''));
-    const logMsg = `神奇糖果：${baseCard?.name ?? '?'} 直接進化為 ${stage2Card?.name ?? '?'}！`;
     return {
       ...p,
       hand: p.hand.filter(i => i.iid !== stage2Iid),
@@ -1276,7 +1343,6 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
       bench: p.bench.map(evolve),
     };
   });
-  // Note: log added outside, but updatePlayer doesn't return state separately
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1435,10 +1501,15 @@ regA('桃歹郎ex', 0, (st, idx, pool) => {
   });
 });
 
-regR('dominance-chain', (st, idx, iids, params, _pool) => {
+regR('dominance-chain', (st, idx, iids, params, pool) => {
   const validIids = (params?.validIids as string[]) ?? [];
   const targetIid = iids[0];
   if (!validIids.includes(targetIid)) return st;
+  const target = st.players[idx].bench.find(c => c.iid === targetIid);
+  if (target) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    st = addLog(st, `支配鎖鏈：派出 ${name} 到戰鬥場（中毒）`, idx);
+  }
   return updatePlayer(st, idx, (p) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === targetIid);
@@ -1579,7 +1650,13 @@ reg('衝浪手', (st, idx) => {
     minCount: 1, maxCount: 1, effectKey: 'surfer-switch',
   });
 });
-regR('surfer-switch', (st, idx, iids, _params, _pool) => {
+regR('surfer-switch', (st, idx, iids, _params, pool) => {
+  const prevPlayer = st.players[idx];
+  const target = prevPlayer.bench.find(c => c.iid === iids[0]);
+  if (target) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    st = addLog(st, `衝浪手：派出 ${name} 到戰鬥場`, idx);
+  }
   return updatePlayer(st, idx, p => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
@@ -2565,7 +2642,9 @@ TOOL_ON_KO.set('沉重接力棒', (state, dIdx, _aIdx, pool) => {
     }
   }
   if (revIds.length === 0) return state;
-  state = addLog(state, `沉重接力棒：移動 ${revIds.length} 張基本能量到備戰`, dIdx);
+  const benchTarget = player.bench[0];
+  const benchName = benchTarget ? (pool.get(benchTarget.cardId)?.name ?? '備戰寶可夢') : '備戰寶可夢';
+  state = addLog(state, `沉重接力棒：將 ${revIds.length} 張基本能量附加到 ${benchName}`, dIdx);
   return updatePlayer(state, dIdx, p => {
     const energies = p.discard.filter(c => revIds.includes(c.iid));
     const newDiscard = p.discard.filter(c => !revIds.includes(c.iid));
