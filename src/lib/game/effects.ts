@@ -5608,3 +5608,120 @@ regPost('噬沙堡爺ex|重晶石之獄', (state, aIdx, pool) => {
   players[dIdx] = { ...defender, bench: newBench };
   return addLog({ ...state, players }, `重晶石之獄：對手備戰 ${affected} 隻被放置傷害指示物至剩 HP 100`, aIdx);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38z v1.76 H 標第 21 波 — snipe + stadium discard + peek hand（12 張）
+//
+// Helpers:
+//   oppSnipePost(dmg, label) — 設置 pending 讓玩家選對手任一寶可夢造成 dmg（走 snipe-variable）
+//   discardStadiumPost(label, failIfNone?) — 攻後丟棄場上競技場；failIfNone=true 時若無競技場則無效
+//   peekOppHandPost(label) — 攻後「查看對手手牌」；目前僅記 log（UI 未來可做 reveal UI）
+// ══════════════════════════════════════════════════════════════════════════════
+
+function oppSnipePost(dmg: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const defender = state.players[dIdx];
+    // 若對手場上沒有任何寶可夢，跳過（理論不可能）
+    if (!defender.active && defender.bench.length === 0) return state;
+    const s = addLog(state, `${label}：選擇對手任一寶可夢造成 ${dmg} 傷害`, aIdx);
+    return withPending(s, {
+      type: 'opp-poke-choose',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'snipe-variable',
+      params: { includeActive: true, damage: dmg, label },
+    });
+  };
+}
+
+function discardStadiumPost(label: string, failIfNone: boolean = false): AttackPostFn {
+  return (state, aIdx, pool) => {
+    if (!state.activeStadium) {
+      if (failIfNone) return addLog(state, `${label}：場上無競技場，招式效果失敗`, aIdx);
+      return addLog(state, `${label}：場上無競技場`, aIdx);
+    }
+    const stadium = state.activeStadium;
+    const stadiumName = pool.get(stadium.cardId)?.name ?? '競技場';
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[aIdx] = { ...players[aIdx], discard: [...players[aIdx].discard, stadium] };
+    return addLog({ ...state, players, activeStadium: undefined, stadiumUsedThisTurn: undefined }, `${label}：${stadiumName} 被丟棄`, aIdx);
+  };
+}
+
+function peekOppHandPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const handCount = state.players[dIdx].hand.length;
+    return addLog(state, `${label}：查看對手手牌（${handCount} 張）`, aIdx);
+  };
+}
+
+// 1-5. 簡單 snipe（對對手任一寶可夢造成 dmg，備戰不計弱抗）
+regPre('變隱龍|舌之鞭打', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('變隱龍|舌之鞭打', oppSnipePost(30, '舌之鞭打'));
+
+regPre('雷伊布|直擊彈', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('雷伊布|直擊彈', oppSnipePost(30, '直擊彈'));
+
+regPre('拉帝歐斯|直擊飛行', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('拉帝歐斯|直擊飛行', oppSnipePost(50, '直擊飛行'));
+
+regPre('吉雉雞ex|殘酷箭', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('吉雉雞ex|殘酷箭', oppSnipePost(100, '殘酷箭'));
+
+regPre('閃焰王牌ex|石榴石截擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('閃焰王牌ex|石榴石截擊', oppSnipePost(180, '石榴石截擊'));
+
+// 6. 盔甲鳥|大風暴 — 90 + 丟棄場上競技場卡
+regPre('盔甲鳥|大風暴', (state, _aIdx, _pool) => ({ state, damage: 90 }));
+regPost('盔甲鳥|大風暴', discardStadiumPost('大風暴', false));
+
+// 7. 無極汰那|世界之末 — 230 + 丟棄場上競技場（無則失敗）
+// pre 依競技場存在設定傷害，不存在則 0
+regPre('無極汰那|世界之末', (state, aIdx, _pool) => {
+  if (!state.activeStadium) {
+    return { state: addLog(state, '世界之末：場上無競技場，招式失敗', aIdx), damage: 0 };
+  }
+  return { state, damage: 230 };
+});
+regPost('無極汰那|世界之末', discardStadiumPost('世界之末', false));
+
+// 8. 毛辮羊|搗碎 — 30 + 可選丟棄競技場（AI 永遠丟）
+regPre('毛辮羊|搗碎', (state, _aIdx, _pool) => ({ state, damage: 30 }));
+regPost('毛辮羊|搗碎', discardStadiumPost('搗碎', false));
+
+// 9. 毛毛角羊|搗碎 — 70 + 可選丟棄競技場（AI 永遠丟）
+regPre('毛毛角羊|搗碎', (state, _aIdx, _pool) => ({ state, damage: 70 }));
+regPost('毛毛角羊|搗碎', discardStadiumPost('搗碎', false));
+
+// 10-11. peek opp hand 類（僅 log，真實 reveal UI 另做）
+regPre('咕咕|靜默之翼', (state, _aIdx, _pool) => ({ state, damage: 20 }));
+regPost('咕咕|靜默之翼', peekOppHandPost('靜默之翼'));
+
+regPre('催眠貘|不祥視線', (state, _aIdx, _pool) => ({ state, damage: 10 }));
+regPost('催眠貘|不祥視線', peekOppHandPost('不祥視線'));
+
+// 12. 噗隆隆|金屬塗層 — 招式：從棄牌區 1 張基本鋼能量附於自身（auto）
+//   實際卡池中此為招式（非特性），登錄為 ATTACK_POST，pre 傷害 0
+regPre('噗隆隆|金屬塗層', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('噗隆隆|金屬塗層', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  if (!p.active) return addLog(state, '金屬塗層：場上無戰鬥寶可夢', aIdx);
+  const idx = p.discard.findIndex(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Metal';
+  });
+  if (idx < 0) return addLog(state, '金屬塗層：棄牌區沒有基本鋼能量', aIdx);
+  const energy = p.discard[idx];
+  const attName = pool.get(p.active.cardId)?.name ?? '?';
+  let s = addLog(state, `金屬塗層：從棄牌區附加 1 張基本鋼能量到 ${attName}`, aIdx);
+  return updatePlayer(s, aIdx, p2 => {
+    if (!p2.active) return p2;
+    return {
+      ...p2,
+      discard: [...p2.discard.slice(0, idx), ...p2.discard.slice(idx + 1)],
+      active: { ...p2.active, energyAttached: [...p2.active.energyAttached, energy] },
+    };
+  });
+});
