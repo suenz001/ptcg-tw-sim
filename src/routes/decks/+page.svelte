@@ -929,16 +929,16 @@
               <li>把下面這個藍色按鈕<strong>用滑鼠拖曳到書籤列</strong>放開</li>
               <li class="bm-drag-wrapper">
                 <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                {@html `<a class="bm-drag-btn" href="javascript:(function(){const cs=document.querySelectorAll('%23decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組，請在官方牌組構築頁執行');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const k=c.children[1]%3F.innerText%3F.trim()||'1';lines.push(k+' '+n);});const text=lines.join('\\n');const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:%23fff;border:3px solid %232a5aa0;padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=%22font-weight:bold;margin-bottom:8px;color:%232a5aa0;%22>✅ 共 '+cs.length+' 種卡 — 按 Ctrl%2BC 複製</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length%2B1);ta.style.cssText='width:100%25;font-family:monospace;font-size:13px;padding:8px;border:1px solid %23aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();},100);})();" onclick="event.preventDefault(); alert('請將此按鈕用滑鼠拖到瀏覽器書籤列，不是點擊');" draggable="true">🔖 PTCG 匯入</a>`}
+                {@html `<a class="bm-drag-btn" href="javascript:(function(){const cs=document.querySelectorAll('%23decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組，請在官方牌組構築頁執行');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const k=c.children[1]%3F.innerText%3F.trim()||'1';lines.push(k+' '+n);});const text=lines.join('\\n');function done(ok){const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:%23fff;border:3px solid '+(ok%3F'%23228a3a':'%232a5aa0')+';padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=%22font-weight:bold;margin-bottom:8px;color:'+(ok%3F'%23228a3a':'%232a5aa0')+';%22>'+(ok%3F'✅ 已自動複製 ':'⚠ 自動複製失敗，請手動 Ctrl%2BC — 共 ')+cs.length+' 種卡</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length%2B1);ta.style.cssText='width:100%25;font-family:monospace;font-size:13px;padding:8px;border:1px solid %23aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();if(!ok){try{document.execCommand('copy');}catch(e){}}},100);if(ok)setTimeout(function(){w.remove();},2500);}if(navigator.clipboard%26%26navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){done(true);}).catch(function(){done(false);});}else{done(false);}})();" onclick="event.preventDefault(); alert('請將此按鈕用滑鼠拖到瀏覽器書籤列，不是點擊');" draggable="true">🔖 PTCG 匯入</a>`}
               </li>
             </ol>
             <p><strong>📥 之後每次匯入牌組</strong>：</p>
             <ol>
               <li>到 <a href="https://asia.pokemon-card.com/tw/deck-build/" target="_blank" rel="noopener">官方牌組構築工具</a>編輯好牌組</li>
-              <li>點剛才加到書籤列的「🔖 PTCG 匯入」書籤</li>
-              <li>跳出浮層後，文字已自動選取，按 <kbd>Ctrl+C</kbd> 複製</li>
+              <li>點剛才加到書籤列的「🔖 PTCG 匯入」書籤 — <strong>會自動複製到剪貼簿</strong>（綠框提示 2.5 秒後自動消失）</li>
               <li>回本頁，在下方輸入框 <kbd>Ctrl+V</kbd> 貼 → 按「匯入」</li>
             </ol>
+            <p class="small-note">※ 若瀏覽器阻擋自動複製（藍框提示），跳出的浮層文字已選取好，手動按 <kbd>Ctrl+C</kbd> 即可</p>
             <details class="fallback-help">
               <summary style="font-size:0.8rem;color:#777;">書籤列不能拖？或用 Firefox 嚴格模式？開啟 F12 手動執行</summary>
               <p style="font-size:0.8rem;">在官網按 <kbd>F12</kbd> → Console 分頁，貼下面程式碼按 Enter：</p>
@@ -1707,6 +1707,7 @@
   .bm-drag-btn:active { cursor:grabbing; }
   .fallback-help { margin-top:0.8rem; padding:0.4rem 0.6rem; background:#f9f9f9; border:1px dashed #ccc; border-radius:4px; }
   .fallback-help summary { cursor:pointer; }
+  .small-note { font-size:0.78rem; color:#666; margin:0.3rem 0 0; }
   .text-area {
     width: 100%;
     min-height: 260px;
