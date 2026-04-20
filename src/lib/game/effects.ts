@@ -3242,3 +3242,142 @@ regPost('吼叫尾|大吼大叫', (state, aIdx, _pool) => {
   if (amount === 0) return state;
   return hitBenchPickPost(state, aIdx, 'opp', 1, amount, '大吼大叫');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Session 38j H 標第 7 波 雜項（硬幣、混亂、抽卡、下回合減傷）27 張
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** 簡易 coin flip +N helper：基礎傷害 + (正面 ? N : 0) */
+function coinPlusPre(base: number, bonus: number, attackName: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const heads = Math.random() < 0.5;
+    const s = addLog(state, `${attackName}：硬幣 ${heads ? '正面！+' + bonus + ' 傷害' : '反面'}`, aIdx);
+    return { state: s, damage: base + (heads ? bonus : 0) };
+  };
+}
+
+// ── A. 硬幣加傷 (7 張) ─────────────────────────────────────────────────────
+regPre('啃果蟲|打滾', coinPlusPre(20, 30, '打滾'));
+regPre('炙燙鱷|高溫吐息', coinPlusPre(30, 50, '高溫吐息'));
+regPre('電海燕|燕返', coinPlusPre(10, 20, '燕返'));
+regPre('銅鏡怪|盾牌攻擊', coinPlusPre(20, 20, '盾牌攻擊'));
+regPre('一對鼠|嬉鬧', coinPlusPre(10, 10, '嬉鬧'));
+regPre('普隆隆姆|擊飛', coinPlusPre(90, 90, '擊飛'));
+
+// 貓鼠斬｜連斬 — 擲 3 次硬幣，1 正 +20 / 2 正 +50 / 3 正 +80
+regPre('貓鼠斬|連斬', (state, aIdx, _pool) => {
+  let heads = 0;
+  for (let i = 0; i < 3; i++) if (Math.random() < 0.5) heads++;
+  const bonus = heads === 3 ? 80 : heads === 2 ? 50 : heads === 1 ? 20 : 0;
+  const s = addLog(state, `連斬：擲 3 次硬幣正面 ${heads} 次（+${bonus} 傷害）`, aIdx);
+  return { state: s, damage: 10 + bonus };
+});
+
+// ── B. 將對手混亂（regPost statusPost('confused')）6 張 ──────────────────
+regPost('仙子伊布|魅惑之聲', statusPost('confused'));
+regPost('麻花犬ex|奇跡閃耀', statusPost('confused'));
+regPost('卡璞・蝶蝶|蠱惑', statusPost('confused'));
+regPost('青綿鳥|魅惑之聲', statusPost('confused'));
+regPost('月亮伊布ex|月亮幻想', statusPost('confused'));
+regPost('電燈怪|錯亂閃光', statusPost('confused')); // 「8 個 counter」細節先不實作
+
+// ── C. 將自己混亂 2 張 ─────────────────────────────────────────────────────
+function selfConfusePost(): AttackPostFn {
+  return (state, aIdx) => {
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) att.active = { ...att.active, status: 'confused' };
+    players[aIdx] = att;
+    return addLog({ ...state, players }, `自身陷入【混亂】`, aIdx);
+  };
+}
+regPost('流氓熊貓|暴走', selfConfusePost());
+regPost('棄世猴|暴走', selfConfusePost());
+
+// ── D. 抽卡類 7 張 ─────────────────────────────────────────────────────────
+function drawNPost(n: number, attackName: string): AttackPostFn {
+  return (state, aIdx) => {
+    let s = addLog(state, `${attackName}：從牌庫抽 ${n} 張`, aIdx);
+    return updatePlayer(s, aIdx, p => {
+      const take = Math.min(n, p.deck.length);
+      return { ...p, hand: [...p.hand, ...p.deck.slice(0, take)], deck: p.deck.slice(take) };
+    });
+  };
+}
+regPost('摩托蜥ex|鋯石之路', drawNPost(5, '鋯石之路'));
+regPost('蟲滾泥|呼喚', drawNPost(1, '呼喚'));
+regPost('蟲甲聖|三重抽出', drawNPost(3, '三重抽出'));
+regPost('斑斑馬|叼', drawNPost(1, '叼'));
+regPost('金魚王|快速抽出', drawNPost(2, '快速抽出'));
+regPost('時拉比|呼喚', drawNPost(1, '呼喚'));
+
+// 鑰圈兒｜插入抽出 — 丟 1 張手牌後抽 2 張（簡化：丟隨機 1 張）
+regPost('鑰圈兒|插入抽出', (state, aIdx, _pool) => {
+  let s = addLog(state, '插入抽出：丟 1 張手牌、抽 2 張', aIdx);
+  return updatePlayer(s, aIdx, p => {
+    if (p.hand.length === 0) {
+      const take = Math.min(2, p.deck.length);
+      return { ...p, hand: [...p.hand, ...p.deck.slice(0, take)], deck: p.deck.slice(take) };
+    }
+    const discardIdx = Math.floor(Math.random() * p.hand.length);
+    const discarded = p.hand[discardIdx];
+    const newHand = p.hand.filter((_, i) => i !== discardIdx);
+    const take = Math.min(2, p.deck.length);
+    return {
+      ...p,
+      hand: [...newHand, ...p.deck.slice(0, take)],
+      deck: p.deck.slice(take),
+      discard: [...p.discard, discarded],
+    };
+  });
+});
+
+// ── E. 自己下回合受招式傷害 -N 4 張 ───────────────────────────────────────
+regPost('龍捲雲|暴風障壁', selfDmgReducePost(50));
+regPost('盔甲鳥|鋼翼', selfDmgReducePost(30));
+regPost('振翼髮|月亮之力', selfDmgReducePost(30));
+regPost('仙子伊布ex|魔法魅惑', selfDmgReducePost(100));
+
+// ── F. 丟對手隨機 1 張手牌 2 張 ───────────────────────────────────────────
+function oppDiscardRandomHand(n: number, attackName: string): AttackPostFn {
+  return (state, aIdx) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    let s = addLog(state, `${attackName}：丟棄對手手牌 ${n} 張`, aIdx);
+    return updatePlayer(s, dIdx, p => {
+      const pickCount = Math.min(n, p.hand.length);
+      if (pickCount === 0) return p;
+      let hand = [...p.hand];
+      const discarded: CardInstance[] = [];
+      for (let i = 0; i < pickCount; i++) {
+        const idx = Math.floor(Math.random() * hand.length);
+        discarded.push(hand[idx]);
+        hand = hand.filter((_, j) => j !== idx);
+      }
+      return { ...p, hand, discard: [...p.discard, ...discarded] };
+    });
+  };
+}
+regPost('功夫鼬|拍落', oppDiscardRandomHand(1, '拍落'));
+regPost('太陽伊布ex|精神出局', oppDiscardRandomHand(1, '精神出局'));
+
+// 巨牙鯊｜咬棄 — 擲 3 次硬幣，丟對手正面數量的手牌（不看正面）
+regPost('巨牙鯊|咬棄', (state, aIdx, _pool) => {
+  let heads = 0;
+  for (let i = 0; i < 3; i++) if (Math.random() < 0.5) heads++;
+  const s = addLog(state, `咬棄：擲 3 次硬幣正面 ${heads} 次，丟對手 ${heads} 張手牌`, aIdx);
+  return oppDiscardRandomHand(heads, '咬棄')(s, aIdx, new Map());
+});
+
+// 鐵螯龍蝦｜喀嚓喀嚓 — 擲 2 次硬幣，對手牌庫上方正面數的牌丟棄
+regPost('鐵螯龍蝦|喀嚓喀嚓', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  let heads = 0;
+  for (let i = 0; i < 2; i++) if (Math.random() < 0.5) heads++;
+  let s = addLog(state, `喀嚓喀嚓：擲 2 次硬幣正面 ${heads} 次，丟對手牌庫頂 ${heads} 張`, aIdx);
+  return updatePlayer(s, dIdx, p => {
+    const take = Math.min(heads, p.deck.length);
+    if (take === 0) return p;
+    const discarded = p.deck.slice(0, take);
+    return { ...p, deck: p.deck.slice(take), discard: [...p.discard, ...discarded] };
+  });
+});
