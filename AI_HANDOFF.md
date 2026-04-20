@@ -3314,3 +3314,38 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 25/25
 - 版本 1.80 → 1.81
+
+---
+
+## 📝 2026-04-21 Session 38af (v1.82) — H 標第 27 波：KO-check + 條件 cantAttackPending + 直擊 KO（5 張 + 懶人獺 補完）
+
+### 引擎擴充
+- `CardInstance.cantRetreatPendingSelf?: boolean` — 自己寶可夢下個自己回合不可撤退的預約旗標
+- engine.ts END_TURN promotePending 擴充：`cantRetreatPendingSelf → cantRetreatNextTurn`（發生在擁有者下回合開始時；照原 clearCantRetreat 規則在該回合結束時清除）
+
+### 新 helper（effects.ts）
+- `bonusPrizeIfKOPost(bonus, label)` — 招後若對手出場 active 已 KO（null 且 pendingPrizes > 0）則 +N 獎勵牌
+- `defCantAttackIfSubtypePost(cond, label)` — 若對手 Active 仍存活且符合 Basic/進化條件則設 cantAttackPending
+- `resolveLanzhushi(...)` — 藍柱石直接 KO 指定對手寶可夢（含出場/備戰），處理 discard、獎賞、勝利判定
+
+### 新 resolver
+- `lanzhushi-ko` — 對手身上有 ≥6 傷害指示物的寶可夢 pickOne（opp-poke-choose）→ KO
+
+### 實裝（5 張 + 1 補完）
+- 懶人獺｜悠哉（補完）— heal 60 現在也設 cantRetreatPendingSelf，下個自己回合無法撤退
+- 鐵臂膀ex｜感激放大 120 — 若此招 KO 對手 → +1 獎勵牌
+- 鐵包袱｜冷卻噴射 80 — 若對手戰鬥寶可夢為進化 → 對手下回合無法使用招式（cantAttackPending）
+- 帕底亞 肯泰羅｜障礙踩踏 90 — 若對手戰鬥寶可夢為基礎 → 對手下回合無法使用招式
+- 轟鳴月ex｜瘋癲攻擊 — KO 對手戰鬥寶可夢；然後自己受 200 傷害（可能自爆 KO，對方取獎）
+- 冰伊布ex｜藍柱石 — 選 1 隻對手身上有 ≥6 個傷害指示物（damage ≥ 60）的寶可夢 KO；候選唯一時自動 KO、多個時 opp-poke-choose
+
+### 暫緩
+- 超音波幼蟲｜刺耳聲（受招寶可夢下回合受傷 +50）— 需跨 2 END_TURN 的 damageTakenBonus 機制
+- 電擊魔獸｜雷電在地（全寶可夢下回合無法攻擊）— 需 player-level flag
+- 大王銅象｜鼻之金勾臂（可選 +100 與下回合不攻擊）— 需 UI 選擇
+- 含羞苞、青銅鐘、吼叫尾ex、蝶結萌虻 — 需新機制（no-item、no-evolve、no-supporter、deferred-prize-bonus）
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局正常、0 crash、勝率 22/28（P1/P2）、平均回合 14.3
+- 版本 1.81 → 1.82

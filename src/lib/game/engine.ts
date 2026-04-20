@@ -1448,6 +1448,10 @@ function handlePlaying(
         n = { ...n, damageBonusThisTurn: (n.damageBonusThisTurn ?? 0) + c.damageBonusPending };
         delete n.damageBonusPending;
       }
+      if (c.cantRetreatPendingSelf) {
+        n = { ...n, cantRetreatNextTurn: true };
+        delete n.cantRetreatPendingSelf;
+      }
       return n;
     };
     // 清除目前玩家 active/bench 上殘留的 damageBonusThisTurn（若攻擊未命中用掉）

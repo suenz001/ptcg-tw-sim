@@ -90,6 +90,12 @@ export interface CardInstance {
    * 在 END_TURN 切換到擁有者下個回合時，自動 promote 為 damageBonusThisTurn。
    */
   damageBonusPending?: number;
+  /**
+   * 自己寶可夢下個自己回合不可撤退（懶人獺 悠哉）。
+   * 設於 ATTACK_POST，於擁有者下回合開始（nextIdx promote）時變成 cantRetreatNextTurn=true，
+   * 於該回合 END_TURN 照 clearCantRetreat 規則清除。
+   */
+  cantRetreatPendingSelf?: boolean;
 }
 
 export type SpecialCondition =
