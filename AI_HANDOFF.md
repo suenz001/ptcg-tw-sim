@@ -3941,3 +3941,54 @@ movedToActiveThisTurn?: boolean;
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 24/26（P1/P2）、平均回合 14.9
 - 版本 1.95 → 1.96
+
+## Session 38au (v1.97 wave 42) — 竹蘭的烈咬陸鯊EX 主題牌 12 張 + 影藏特性 bugfix
+
+Leon 指示：「把這 13 項當『第 42 波』直接實裝，原規劃的 5 張卡順延」、「然後把這套設定為預設牌組，竹蘭的烈咬陸鯊EX」、「13.特殊能量應該是 硬岩【鬥】能量」、「順便把超級耿鬼ex特性的bug修一下」。
+
+### 影藏特性 bugfix
+
+`engine.ts` 中 `影藏` 分支原本用 `Math.max(1, prizeCount - 1)`，導致「惡 Pokemon 被對方 ex 擊倒時獎賞 -1」永遠拿不到 0 張的結果（最少也會算 1）。改為 `Math.max(0, prizeCount - 1)`：當 ex 擊倒 1 格寶可夢時 1 - 1 = 0，對手抽 0 張獎賞。同時補上 log：
+- 觸發時 log「[影藏] <KO者名> 發動，減少對手獎賞」
+- 若結算後為 0 張，log「對手獎賞卡 +0 張（影藏生效）」
+
+### 引擎新增機制（effects.ts + engine.ts + types.ts）
+
+- **`PASSIVE_ATTACK_BONUS: Map<string, (attacker, attackerState, allAttackerPokemon) => number>`**（effects.ts）
+  掃描攻擊者全場上所有寶可夢、任何持有此 map 註冊的特性都會對招式傷害提供加成；多隻相同特性獨立累加（例：2 隻羅絲雷朵 = +60）。在 weakness/resistance **之前**套用。
+- **`PlayerState.damageBoostFightingThisTurn?: number`**（types.ts）
+  玩家級「本回合自己【鬥】寶可夢招式傷害 +N」旗標；每使用 1 張力量蛋白飲 +30；只對 `pokemonType==='Fighting'` 的攻擊者生效；於 weakness 前套用。END_TURN 時 aIdx 方清除。
+- **`SPECIAL_ENERGY_TYPES` 登錄**：硬岩【鬥】能量 → Fighting（類型解析已連動；「附有此能量的寶可夢不會受對手招式效果影響」的免疫條款此波僅型別實裝，等後續 wave 接效果攔截）。
+- **`TOOL_HP_BONUS`**：竹蘭的力量負重 — 裝在「竹蘭的」寶可夢上提供 +70 HP（僅對 name.includes('竹蘭的') 的本體有效）。
+
+### 新增 deck-search filter（+page.svelte + ai.ts）
+
+- `CynthiaPokemon`：寶可夢（非 Other）+ name 含「竹蘭的」
+- `FightingBasicOrFightingEnergy`：基本【鬥】寶可夢 or 基本【鬥】能量
+- `PokemonNonRule`：寶可夢（非 Other）且非 ex/EX
+
+### 實裝（12 張，皆以本體 + 角括號變體雙註冊）
+
+1. **竹蘭的圓陸鯊｜岩石投擲** — 20 無視抗性/弱點（skipWeakResPre）
+2. **<竹蘭的>尖牙陸鯊｜龍之強襲** — 90（單純招式）
+3. **<竹蘭的>尖牙陸鯊｜[特性]烈咬召喚** — regA，1 回合 1 次從牌庫搜「竹蘭的」寶可夢上手
+4. **<竹蘭的>烈咬陸鯊ex｜龍之爆發** — 240 + 自丟全部能量（selfDiscardAllEnergyPost）
+5. **<竹蘭的>烈咬陸鯊ex｜螺旋俯衝** — 160 + 抽到 6 張（drawToHandPost(6)）
+6. **<竹蘭的>加保果｜激怒咒詛** — 備戰區竹蘭寶可夢身上指示物 × 10、無視抗性/弱點
+7. **<竹蘭的>貓鼬斬｜雙刀攻擊** — 40×2（multiCoinPost(2, 40)）
+8. **<竹蘭的>羅絲雷朵｜[特性]輝煌聲援** — PASSIVE_ATTACK_BONUS +30（只對「竹蘭的」攻擊者生效）
+9. **力量蛋白飲**（Item）— 打出使 `damageBoostFightingThisTurn += 30`
+10. **戰鬥鑼**（Item）— 牌庫搜 1 張 基本【鬥】寶可夢 或 基本【鬥】能量，上手、重洗
+11. **寶可平板**（Item）— 牌庫搜 1 張「非 ex 寶可夢」上手、重洗
+12. **火箭隊的拉姆達**（Supporter）— 牌庫搜 1 張 Trainer 上手、重洗
+13. **硬岩【鬥】能量**（特殊能量）— 類型為 Fighting；免疫條款留待後續 wave
+
+### 預設牌組
+
+`presets.ts` 已加入 `CYNTHIA_GARCHOMP_DECK`（先前 session 已完成卡清單），本波設定為新建遊戲預設牌組。
+
+### 驗證
+
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 27/23（P1/P2）、平均回合 15.2
+- 版本 1.96 → 1.97

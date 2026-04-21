@@ -111,11 +111,49 @@ const CHI_YU_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/**
+ * 竹蘭的烈咬陸鯊EX 牌組（Wave 42 — JP meta 引入）
+ *
+ * 以日本賽事 meta deck「シロナのガブリアスex」為藍本，
+ * 透過 setCode + collectorNumber 對應到台版卡牌資料。
+ * 主力：羅絲雷朵「輝煌聲援」+30 加成 + 烈咬陸鯊ex「龍之爆發」高傷一波流。
+ */
+const CYNTHIA_GARCHOMP_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_cynthia_garchomp__',
+  name: '竹蘭的烈咬陸鯊EX',
+  entries: [
+    // ── 寶可夢（19 張）──
+    { cardId: '12702', count: 3 },  // <竹蘭的>烈咬陸鯊ex (SV9a)
+    { cardId: '14749', count: 4 },  // 竹蘭的尖牙陸鯊 (M2a)
+    { cardId: '14748', count: 4 },  // 竹蘭的圓陸鯊 (M2a)
+    { cardId: '12663', count: 3 },  // <竹蘭的>羅絲雷朵 (SV9a)
+    { cardId: '16503', count: 3 },  // 竹蘭的毒薔薇 (MC)
+    { cardId: '12708', count: 1 },  // <竹蘭的>花岩怪 (SV9a)
+    { cardId: '11526', count: 1 },  // 含羞苞 (SV8a)
+    // ── 訓練家（34 張）──
+    { cardId: '17123', count: 4 },  // 力量蛋白飲 (MC)
+    { cardId: '17125', count: 4 },  // 戰鬥鑼 (MC)
+    { cardId: '10300', count: 1 },  // 不公印章 (SV5a)
+    { cardId: '11672', count: 4 },  // 好友寶芬 (SV8a)
+    { cardId: '17133', count: 4 },  // 寶可平板 (MC)
+    { cardId: '11676', count: 1 },  // 夜間擔架 (SV8a)
+    { cardId: '12718', count: 3 },  // 竹蘭的力量負重 (SV9a · 道具)
+    { cardId: '12720', count: 3 },  // 裁判 (SV9a)
+    { cardId: '17195', count: 3 },  // 老大的指令 (MC)
+    { cardId: '17200', count: 4 },  // 莉莉艾的決意 (MC)
+    { cardId: '12844', count: 3 },  // 火箭隊的拉姆達 (SV10)
+    // ── 能量（7 張）──
+    { cardId: '17215', count: 4 },  // 基本【鬥】能量 (MC)
+    { cardId: '18057', count: 3 },  // 硬岩【鬥】能量 (M3 · 特殊能量)
+  ],
+};
+
 /** 所有內建預設牌組 */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
   { ...DIANCIE_DECK, updatedAt: 0 },
   { ...CHI_YU_DECK, updatedAt: 0 },
+  { ...CYNTHIA_GARCHOMP_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */

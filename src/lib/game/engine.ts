@@ -15,7 +15,7 @@ import type {
 } from './types';
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
-  PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION,
+  PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS,
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
@@ -133,6 +133,15 @@ const ZH_ENERGY_TYPE: Record<string, EnergyType> = {
  * 基礎能量：1 個對應屬性；若 pokemonType 欄位未填，從卡名【X】推斷。
  * 特殊能量：M2 先一律視為 1 Colorless（M4 再完整實裝）。
  */
+/**
+ * 已知特殊能量 → 提供的能量屬性對應表。
+ * 未列表的特殊能量依然依舊 fallback 為 1 個 Colorless。
+ * 這裡只處理「屬性」——特殊能量的其他效果（例如硬岩的免疫效果）走 effects.ts / engine 層邏輯。
+ */
+const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
+  '硬岩【鬥】能量': ['Fighting'],
+};
+
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {
   const c = pool.get(cardId);
   if (!c || c.supertype !== 'Energy') return [];
@@ -145,7 +154,9 @@ export function getEnergyProvided(cardId: string, pool: Map<string, Card>): Ener
       if (t) return [t];
     }
   }
-  return ['Colorless']; // special energy fallback
+  // 特殊能量：先查表；未登記者 fallback 為 Colorless
+  if (SPECIAL_ENERGY_TYPES[c.name]) return SPECIAL_ENERGY_TYPES[c.name];
+  return ['Colorless'];
 }
 
 /**
@@ -1044,6 +1055,36 @@ function handlePlaying(
       }
     }
 
+    // Wave 42：被動特性 +N 攻擊傷害（攻擊方場上）— 例如 <竹蘭的>羅絲雷朵｜輝煌聲援 對「竹蘭的」寶可夢 +30
+    // 多隻擁有同特性的寶可夢可疊加（場上每一隻都會算一次）。
+    if (baseDamage > 0) {
+      const attAll: CardInstance[] = [
+        ...(attacker.active ? [attacker.active] : []),
+        ...attacker.bench,
+      ];
+      for (const inst of attAll) {
+        const c = pool.get(inst.cardId);
+        if (!c?.abilities) continue;
+        for (const ab of c.abilities) {
+          const fn = PASSIVE_ATTACK_BONUS.get(ab.name);
+          if (!fn) continue;
+          const bonus = fn(attackerCard);
+          if (bonus > 0) {
+            baseDamage += bonus;
+            workingState = addLog(workingState, `「${ab.name}」啟動：${attackerCard.name} 招式傷害 +${bonus}`, aIdx);
+          }
+        }
+      }
+    }
+
+    // Wave 42：玩家級「本回合自己的【鬥】寶可夢招式傷害 +N」（例：力量蛋白飲）
+    // 多次使用會累加（每張 +30）。在 weakness 前套用，對對手「戰鬥寶可夢」才算（與卡面一致，engine 層的 baseDamage 本就只對戰鬥寶可夢）。
+    if (baseDamage > 0 && attackerCard.pokemonType === 'Fighting' && attacker.damageBoostFightingThisTurn) {
+      const b = attacker.damageBoostFightingThisTurn;
+      baseDamage += b;
+      workingState = addLog(workingState, `「力量蛋白飲」啟動：${attackerCard.name} 招式傷害 +${b}`, aIdx);
+    }
+
     // 被動特性：受傷減 N（Passive damage reduction）— skipDefEffects 跳過
     if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities) {
       for (const ab of defenderCard.abilities) {
@@ -1190,7 +1231,8 @@ function handlePlaying(
       // Wave 39：蝶結萌虻｜多餘花粉 — 跨回合獎賞加成
       const deferredBonus = (updatedActive.deferredPrizeBonusThisTurn && updatedActive.deferredPrizeBonusThisTurn > 0)
         ? updatedActive.deferredPrizeBonusThisTurn : 0;
-      const prizes = Math.max(1, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus);
+      // 獎賞牌下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
+      const prizes = Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus);
       defPlayers[dIdx] = defenderState;
       newState = {
         ...newState, players: defPlayers,
@@ -1199,7 +1241,14 @@ function handlePlaying(
       if (deferredBonus > 0) {
         newState = addLog(newState, `${defenderCard.name} 因「多餘花粉」遺留效果，+${deferredBonus} 張獎勵牌`, null);
       }
-      newState = addLog(newState, `${defenderCard.name} 被擊倒！${attacker.name} 取得 ${prizes} 張獎勵牌。`, null);
+      if (prizeAdjust < 0) {
+        newState = addLog(newState, `「影藏」啟動：${attacker.name} 取得的獎勵牌減少 1 張`, null);
+      }
+      if (prizes > 0) {
+        newState = addLog(newState, `${defenderCard.name} 被擊倒！${attacker.name} 取得 ${prizes} 張獎勵牌。`, null);
+      } else {
+        newState = addLog(newState, `${defenderCard.name} 被擊倒！但 ${attacker.name} 無法取得任何獎勵牌。`, null);
+      }
 
       // 道具：被 KO 時觸發（希望護身符 / 沉重接力棒）
       if (onKOTool) {
@@ -1554,13 +1603,15 @@ function handlePlaying(
       currentPlayer.noAttacksThisTurn ||
       currentPlayer.cantPlayItemThisTurn ||
       currentPlayer.cantPlaySupporterThisTurn ||
-      currentPlayer.cantEvolveThisTurn
+      currentPlayer.cantEvolveThisTurn ||
+      currentPlayer.damageBoostFightingThisTurn
     ) {
       const cp = { ...currentPlayer };
       delete cp.noAttacksThisTurn;
       delete cp.cantPlayItemThisTurn;
       delete cp.cantPlaySupporterThisTurn;
       delete cp.cantEvolveThisTurn;
+      delete cp.damageBoostFightingThisTurn;
       players[aIdx] = cp;
     } else {
       players[aIdx] = currentPlayer;

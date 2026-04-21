@@ -2433,6 +2433,17 @@ export const PASSIVE_DAMAGE_REDUCE = new Map<string, number>([
   ['堅堅之軀', 30],     // 浩大鯨
 ]);
 
+/**
+ * Wave 42：攻擊方場上的被動特性「+N 攻擊傷害」查表。
+ * 特性名 → (attackerCard) => 是否對此攻擊者生效 & 加多少傷害。
+ * engine 在 weakness 之前、已過 skipWeakRes/skipDefEffects 判斷區塊之外套用（屬於攻擊方效果，不受 skipDefEffects 影響）。
+ * 多個來源可疊加（例如場上同時有 2 隻羅絲雷朵），以擁有特性的 Pokemon 張數乘算。
+ */
+export const PASSIVE_ATTACK_BONUS = new Map<string, (attackerCard: Card) => number>([
+  // <竹蘭的>羅絲雷朵｜輝煌聲援 — 只要這隻在場上，自己「竹蘭的」寶可夢招式傷害 +30
+  ['輝煌聲援', (att) => att.name.includes('竹蘭的') ? 30 : 0],
+]);
+
 /** 特性名 → 判斷是否完全免疫此攻擊 */
 export type ImmunityCheck = (
   attackerCard: Card,
@@ -2905,6 +2916,8 @@ TOOL_HP_BONUS.set('豪華斗篷', (card) => {
 });
 // 驅勁能量 古代/未來：簡化 — 不檢查「古代/未來」標籤，附上就生效（UI 層不會附錯）
 TOOL_HP_BONUS.set('驅勁能量 古代', () => 60);
+// Wave 42：竹蘭的力量負重（道具）— 「竹蘭的」寶可夢 HP +70
+TOOL_HP_BONUS.set('竹蘭的力量負重', (card) => card.name.includes('竹蘭的') ? 70 : 0);
 
 // ── 攻擊加成（我方帶此道具 → 打出時 +N）────────────────────────────────────
 TOOL_ATTACK_BONUS.set('極限腰帶', (_a, _ai, defCard) => {
@@ -9306,3 +9319,163 @@ reg('百萬噸吹風機', (st, idx, pool) => {
   }
   return s;
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 42 — 「竹蘭的烈咬陸鯊EX」JP meta 牌組實裝（v1.97）
+//
+// 項目：
+//   1. <竹蘭的>烈咬陸鯊ex｜螺旋俯衝  — 100 + 抽到滿 6
+//   2. <竹蘭的>烈咬陸鯊ex｜龍之爆發  — 260 + 自己全丟能量
+//   3. 竹蘭的尖牙陸鯊｜王者呼聲      — 特性，搜 1 張「竹蘭的」寶可夢到手牌
+//   4. 竹蘭的圓陸鯊｜岩石投擲        — 20 不計算弱點/抵抗力
+//   5. <竹蘭的>羅絲雷朵｜輝煌聲援    — 被動特性，場上時「竹蘭的」寶可夢招式 +30
+//   6. <竹蘭的>花岩怪｜激怒咒詛      — 備戰「竹蘭的」×10，skipWeakRes
+//   7. 力量蛋白飲（Item）            — 本回合 [鬥] 寶可夢招式 +30（player flag）
+//   8. 戰鬥鑼（Item）                 — 搜 1 張 [鬥] 基礎寶可夢 或 基本【鬥】能量到手牌
+//   9. 寶可平板（Item）              — 搜 1 張「非擁有規則」寶可夢到手牌
+//   10. 竹蘭的力量負重（道具）       — 「竹蘭的」寶可夢 HP +70（已由 TOOL_HP_BONUS 處理）
+//   11. 火箭隊的拉姆達（Supporter）  — 搜 1 張訓練家卡到手牌
+//   12. 硬岩【鬥】能量（特殊能量）   — 屬性：鬥（免疫效果延後）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── 1. 螺旋俯衝 — 100 傷害 + 抽到滿 6 ────────────────────────────────────────
+regPost('<竹蘭的>烈咬陸鯊ex|螺旋俯衝', drawToHandPost(6, '螺旋俯衝'));
+regPost('竹蘭的烈咬陸鯊ex|螺旋俯衝', drawToHandPost(6, '螺旋俯衝'));
+
+// ── 2. 龍之爆發 — 260 傷害 + 自己全部能量丟棄 ─────────────────────────────
+regPost('<竹蘭的>烈咬陸鯊ex|龍之爆發', selfDiscardAllEnergyPost('龍之爆發'));
+regPost('竹蘭的烈咬陸鯊ex|龍之爆發', selfDiscardAllEnergyPost('龍之爆發'));
+
+// ── 3. 竹蘭的尖牙陸鯊｜王者呼聲（特性）──────────────────────────────────────
+// 每回合 1 次（ABILITY_USED 一次性規則由 engine 管控）：從牌庫選 1 張「竹蘭的」寶可夢加手牌。
+regA('竹蘭的尖牙陸鯊', 0, (st, idx, pool) => {
+  const p = st.players[idx];
+  const hasTarget = p.deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon'
+      && card.subtype !== 'Other'
+      && card.name.includes('竹蘭的');
+  });
+  if (!hasTarget) {
+    return addLog(st, '王者呼聲：牌庫沒有「竹蘭的」寶可夢可搜', idx);
+  }
+  st = addLog(st, '王者呼聲：從牌庫選 1 張「竹蘭的」寶可夢加入手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'CynthiaPokemon',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-generic-to-hand',
+  });
+});
+
+// ── 4. 竹蘭的圓陸鯊｜岩石投擲 — 20 傷害 skipWeakRes ─────────────────────────
+regPre('竹蘭的圓陸鯊|岩石投擲', skipWeakResPre(20, '岩石投擲'));
+
+// ── 5. 輝煌聲援（被動）— 上面 PASSIVE_ATTACK_BONUS 已登記，不需 regA ────────
+// 被動特性在 engine 傷害計算時自動掃場觸發，不透過 ABILITY_EFFECTS。
+
+// ── 6. <竹蘭的>花岩怪｜激怒咒詛 —————————————————————————————————————
+// 基礎傷害 0，對方戰鬥寶可夢每張自己備戰「竹蘭的」寶可夢的傷害指示物 +10；不計算弱點/抵抗力。
+regPre('<竹蘭的>花岩怪|激怒咒詛', (state, aIdx, pool, _action) => {
+  const p = state.players[aIdx];
+  let totalMarkers = 0;
+  for (const b of p.bench) {
+    const card = pool.get(b.cardId);
+    if (card?.name.includes('竹蘭的')) {
+      // 以 10 為單位計數（傷害指示物每顆 10 HP）
+      totalMarkers += Math.floor(b.damage / 10);
+    }
+  }
+  const damage = totalMarkers * 10;
+  const s = addLog(state, `激怒咒詛：備戰「竹蘭的」寶可夢傷害指示物合計 ${totalMarkers} 顆 → ${damage} 傷害（不計算弱點/抵抗力）`, aIdx);
+  return { state: s, damage, skipWeakRes: true };
+});
+regPre('竹蘭的花岩怪|激怒咒詛', (state, aIdx, pool, _action) => {
+  const p = state.players[aIdx];
+  let totalMarkers = 0;
+  for (const b of p.bench) {
+    const card = pool.get(b.cardId);
+    if (card?.name.includes('竹蘭的')) {
+      totalMarkers += Math.floor(b.damage / 10);
+    }
+  }
+  const damage = totalMarkers * 10;
+  const s = addLog(state, `激怒咒詛：備戰「竹蘭的」寶可夢傷害指示物合計 ${totalMarkers} 顆 → ${damage} 傷害（不計算弱點/抵抗力）`, aIdx);
+  return { state: s, damage, skipWeakRes: true };
+});
+
+// ── 7. 力量蛋白飲（Item）— 本回合自己 [鬥] 寶可夢招式傷害 +30 ──────────────
+regG('力量蛋白飲', () => true);
+reg('力量蛋白飲', (st, idx) => {
+  st = addLog(st, '力量蛋白飲：本回合自己的【鬥】寶可夢招式傷害 +30', idx);
+  return updatePlayer(st, idx, p => ({
+    ...p,
+    damageBoostFightingThisTurn: (p.damageBoostFightingThisTurn ?? 0) + 30,
+  }));
+});
+
+// ── 8. 戰鬥鑼（Item）— 搜 1 張 [鬥] 基礎寶可夢 或 基本【鬥】能量 ───────────
+regG('戰鬥鑼', (st, idx, pool) => {
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    if (!card) return false;
+    if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
+    if (card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Fighting') return true;
+    return false;
+  });
+});
+reg('戰鬥鑼', (st, idx) => {
+  st = addLog(st, '戰鬥鑼：從牌庫選 1 張 [鬥] 基礎寶可夢 或 基本【鬥】能量加入手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'FightingBasicOrFightingEnergy',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-generic-to-hand',
+  });
+});
+
+// ── 9. 寶可平板（Item）— 搜 1 張「非擁有規則」寶可夢 ─────────────────────
+// 「擁有規則」= ex / VMAX / VSTAR / TAG TEAM 等。MVP 以 subtype==='ex' 或 name 尾 ex/EX 判定。
+regG('寶可平板', (st, idx, pool) => {
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    if (!card || card.supertype !== 'Pokemon' || card.subtype === 'Other') return false;
+    const isRule = card.subtype === 'ex'
+      || card.name.endsWith('ex') || card.name.endsWith('EX');
+    return !isRule;
+  });
+});
+reg('寶可平板', (st, idx) => {
+  st = addLog(st, '寶可平板：從牌庫選 1 張「非擁有規則」寶可夢加入手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'PokemonNonRule',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-generic-to-hand',
+  });
+});
+
+// ── 10. 竹蘭的力量負重（道具） — 已由 TOOL_HP_BONUS 登記，無需額外 reg ──────
+
+// ── 11. 火箭隊的拉姆達（Supporter）— 搜 1 張訓練家卡加手牌 ────────────────
+regG('火箭隊的拉姆達', (st, idx, pool) => {
+  return st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Trainer');
+});
+reg('火箭隊的拉姆達', (st, idx) => {
+  st = addLog(st, '火箭隊的拉姆達：從牌庫選 1 張訓練家卡加入手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Trainer',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-generic-to-hand',
+  });
+});
+
+// ── 12. 硬岩【鬥】能量 — 屬性：鬥（已由 engine SPECIAL_ENERGY_TYPES 處理） ──
+// 補充：卡面另有「附著此能量的寶可夢不會受到對手寶可夢招式的效果的影響」，
+// 這個 effect-immunity 子句目前暫未實裝，後續獨立一波處理（需在 ATTACK_POST / status / flag 套用前判斷）。
+

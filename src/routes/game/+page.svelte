@@ -658,6 +658,20 @@
           if (f === 'Tool')       return card.supertype === 'Pokemon' && card.subtype === 'Other';
           if (f === 'Stadium')    return card.supertype === 'Trainer' && card.subtype === 'Stadium';
           if (f === 'Trainer')    return card.supertype === 'Trainer';
+          // Wave 42 新增 filter
+          if (f === 'CynthiaPokemon') {
+            return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.name.includes('竹蘭的');
+          }
+          if (f === 'FightingBasicOrFightingEnergy') {
+            if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
+            if (card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Fighting') return true;
+            return false;
+          }
+          if (f === 'PokemonNonRule') {
+            if (card.supertype !== 'Pokemon' || card.subtype === 'Other') return false;
+            const isRule = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX');
+            return !isRule;
+          }
           if (f.startsWith('Pokemon:')) {
             // 指定屬性的寶可夢，例 'Pokemon:Lightning'
             const t = f.slice(8);

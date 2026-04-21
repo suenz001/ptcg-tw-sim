@@ -195,6 +195,12 @@ export interface PlayerState {
    */
   cantEvolveNextTurn?: boolean;
   cantEvolveThisTurn?: boolean;
+  /**
+   * Wave 42：玩家級「本回合自己的【鬥】寶可夢招式傷害 +N」累積值（例：力量蛋白飲）。
+   * 每使用 1 張 +30。只對 pokemonType==='Fighting' 的攻擊者生效；在 weakness 前套用。
+   * 在 END_TURN 時清除（於 aIdx 方）。
+   */
+  damageBoostFightingThisTurn?: number;
 }
 
 // ── 待選擇狀態（訓練家/招式效果需要玩家做決定時）──────────────────────────
