@@ -817,10 +817,10 @@
   // ── 輔助函式 ────────────────────────────────────────────────────────────────
   function getCard(cardId: string): Card | undefined { return pool.get(cardId); }
   function hpRemaining(inst: CardInstance): number {
-    return Math.max(0, getEffectiveHP(inst, pool) - inst.damage);
+    return Math.max(0, getEffectiveHP(inst, pool, game ?? undefined) - inst.damage);
   }
   function hpTotal(inst: CardInstance | null | undefined): number {
-    return inst ? getEffectiveHP(inst, pool) : 0;
+    return inst ? getEffectiveHP(inst, pool, game ?? undefined) : 0;
   }
   function energySummary(inst: CardInstance): string {
     const counts = countEnergy(inst, pool);

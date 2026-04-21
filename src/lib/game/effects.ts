@@ -8833,11 +8833,14 @@ function findAbilityUserIid(
 }
 
 // ── 咒詛炸彈 resolver ─────────────────────────────────────────────────────
-// 流程：opp-poke-choose → 對目標 +50 → 自身 KO。
-// 若目標被 +50 擊倒，pendingPrizes 照常累積；若自身 KO 後對手 prize 歸零 → 對手勝。
+// 流程：opp-poke-choose → 對目標 +N counter（N 由 params.counters 決定，預設 5）→ 自身 KO。
+// 若目標被 +N 擊倒，pendingPrizes 照常累積；若自身 KO 後對手 prize 歸零 → 對手勝。
+// counters: 5 = 彷徨夜靈（+50 傷害）；13 = 黑夜魔靈（+130 傷害）
 regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
   const label = (params?.label as string) ?? '咒詛炸彈';
   const userIid = params?.userIid as string | undefined;
+  const counters = (params?.counters as number) ?? 5;
+  const addDmg = counters * 10;
   const dIdx = (1 - actorIdx) as 0 | 1;
   const defender = st.players[dIdx];
   const targetIid = selectedIids[0];
@@ -8847,10 +8850,10 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
   if (!target) return st;
   const targetCard = pool.get(target.cardId);
   const tHp = targetCard?.hp ?? 0;
-  const newDmg = target.damage + 50;
+  const newDmg = target.damage + addDmg;
   let s: GameState = st;
   if (tHp > 0 && newDmg >= tHp) {
-    // 目標被放 5 個指示物擊倒
+    // 目標被放 N 個指示物擊倒
     const koDiscard: CardInstance[] = [
       { ...target, damage: newDmg },
       ...target.energyAttached,
@@ -8867,7 +8870,7 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
     };
     players[dIdx] = newDefender;
     s = addLog({ ...s, players },
-      `${label}：在 ${targetCard?.name ?? '?'} 身上放 5 個傷害指示物 → 被擊倒！+${prizes} 張獎勵牌`, actorIdx);
+      `${label}：在 ${targetCard?.name ?? '?'} 身上放 ${counters} 個傷害指示物 → 被擊倒！+${prizes} 張獎勵牌`, actorIdx);
     s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
     if (isActive && newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
@@ -8878,7 +8881,7 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
     if (isActive) newDefender.active = { ...target, damage: newDmg };
     else newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
     players[dIdx] = newDefender;
-    s = addLog({ ...s, players }, `${label}：在 ${targetCard?.name ?? '?'} 身上放 5 個傷害指示物`, actorIdx);
+    s = addLog({ ...s, players }, `${label}：在 ${targetCard?.name ?? '?'} 身上放 ${counters} 個傷害指示物`, actorIdx);
   }
   // 自身 KO（不論目標是否被擊倒）
   if (userIid) {
@@ -8887,8 +8890,8 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
   return s;
 });
 
-/** 招式式 [特性]咒詛炸彈 — 攻擊者 = active。 */
-function cursedBombAttackPost(label: string): AttackPostFn {
+/** 招式式 [特性]咒詛炸彈 — 攻擊者 = active。counters: 放幾個傷害指示物（預設 5） */
+function cursedBombAttackPost(label: string, counters: number = 5): AttackPostFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (!p.active) return state;
@@ -8899,13 +8902,13 @@ function cursedBombAttackPost(label: string): AttackPostFn {
       return selfKOInstance(addLog(state, `${label}：對手無可選寶可夢`, aIdx),
         aIdx, userIid, pool, label);
     }
-    const s = addLog(state, `${label}：選 1 隻對手寶可夢放 5 個傷害指示物`, aIdx);
+    const s = addLog(state, `${label}：選 1 隻對手寶可夢放 ${counters} 個傷害指示物`, aIdx);
     return withPending(s, {
       type: 'opp-poke-choose',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 1, maxCount: 1,
       effectKey: 'cursed-bomb',
-      params: { label, userIid, includeActive: true },
+      params: { label, userIid, includeActive: true, counters },
     });
   };
 }
@@ -9507,4 +9510,305 @@ reg('火箭隊的拉姆達', (st, idx) => {
 // ── 12. 硬岩【鬥】能量 — 屬性：鬥（已由 engine SPECIAL_ENERGY_TYPES 處理） ──
 // 補充：卡面另有「附著此能量的寶可夢不會受到對手寶可夢招式的效果的影響」，
 // 這個 effect-immunity 子句目前暫未實裝，後續獨立一波處理（需在 ATTACK_POST / status / flag 套用前判斷）。
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38ay (Wave 43) — 魔靈多龍牌組 補實裝
+// 涵蓋：黑夜魔靈 咒詛炸彈(13)、多龍奇 偵查指令、願增猿 腎上腺腦力、
+//        喵喵ex 殺手鐧捕捉、阻礙之塔(engine hook)、白蕾雅、阿蜜的目光、
+//        特殊紅牌、赤松、莉莉艾的珍珠
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── 阻礙之塔（Stadium）── 引擎側 hook ────────────────────────────────────────
+// 用途：engine.ts 在查 TOOL_* 映射前檢查 activeStadium 是否在此集合中。
+// 若是則視同「道具無效」，TOOL_* 的效果全部不觸發（含 HP、攻擊、防禦、KO、
+// 被 KO、受傷、撤退 cost）。附著動作本身不受影響（可附、可丟）。
+export const JAMMING_TOWER_STADIUMS = new Set<string>(['阻礙之塔']);
+
+// ── 寶可夢「上備戰時」觸發（PLAY_BASIC 後 dispatch） ─────────────────────────
+// engine.ts 會在 PLAY_BASIC 成功後查此 map，有則觸發（pendingSelection 或即時）。
+export const BENCH_PLACE_TRIGGERS = new Map<string, EffectFn>();
+
+// 喵喵ex｜殺手鐧捕捉 — 上備戰時查看牌庫，選 1 張支援者加手牌，洗牌庫
+BENCH_PLACE_TRIGGERS.set('喵喵ex', (st, idx, pool) => {
+  if (st.players[idx].deck.length === 0) {
+    return addLog(st, '殺手鐧捕捉：牌庫為空', idx);
+  }
+  const hasSupp = st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Trainer' && card?.subtype === 'Supporter';
+  });
+  if (!hasSupp) {
+    return addLog(st, '殺手鐧捕捉：牌庫中沒有支援者可選', idx);
+  }
+  st = addLog(st, '殺手鐧捕捉：從牌庫選 1 張支援者加入手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Supporter',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-generic-to-hand',
+  });
+});
+
+// ── 黑夜魔靈｜咒詛炸彈 — 13 counter 版本 ─────────────────────────────────────
+// 正統 ability 路徑（MC 等 abilities[] 填入的套牌）
+regA('黑夜魔靈', 0, (st, aIdx, pool) => {
+  const userIid = findAbilityUserIid(st, aIdx, '黑夜魔靈', pool);
+  if (!userIid) return st;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const dp = st.players[dIdx];
+  if (!dp.active && dp.bench.length === 0) {
+    return selfKOInstance(addLog(st, '咒詛炸彈：對手無可選寶可夢', aIdx),
+      aIdx, userIid, pool, '咒詛炸彈');
+  }
+  const s = addLog(st, '咒詛炸彈：選 1 隻對手寶可夢放 13 個傷害指示物', aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'cursed-bomb',
+    params: { label: '咒詛炸彈', userIid, includeActive: true, counters: 13 },
+  });
+});
+
+// 黑夜魔靈 — attack-style 變體（ZWJ U+200C + [特性]咒詛炸彈，13 counter）
+regPre('黑夜魔靈|\u200c[特性]咒詛炸彈', (s, _a, _p) => ({ state: s, damage: 0 }));
+regPost('黑夜魔靈|\u200c[特性]咒詛炸彈', cursedBombAttackPost('咒詛炸彈', 13));
+
+// ── 多龍奇｜偵查指令 ─────────────────────────────────────────────────────────
+// 一回合一次：查看牌庫頂 3 張，選 1 張加手牌，其餘洗回牌庫。
+regA('多龍奇', 0, (st, idx) => {
+  const p = st.players[idx];
+  const top3 = p.deck.slice(0, 3);
+  if (top3.length === 0) return addLog(st, '偵查指令：牌庫為空', idx);
+  st = addLog(st, `偵查指令：查看牌庫頂 ${top3.length} 張，選 1 張加手牌，其餘洗回`, idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'TOP3',
+    minCount: 0, maxCount: 1,
+    effectKey: 'scouting-order',
+    params: { top3Iids: top3.map(c => c.iid) },
+  });
+});
+
+regR('scouting-order', (st, idx, iids, params, pool) => {
+  const top3Iids = (params?.top3Iids as string[]) ?? [];
+  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `偵查指令：將 ${names} 加入手牌（其餘洗回牌庫）`, idx);
+  } else {
+    st = addLog(st, '偵查指令：未選取任何卡（全數洗回牌庫）', idx);
+  }
+  return updatePlayer(st, idx, (p) => {
+    const top3 = p.deck.filter(c => top3Iids.includes(c.iid));
+    const rest = p.deck.filter(c => !top3Iids.includes(c.iid));
+    const picked = top3.filter(c => iids.includes(c.iid));
+    const remaining = top3.filter(c => !iids.includes(c.iid));
+    return {
+      ...p,
+      deck: shuffle([...rest, ...remaining]),
+      hand: [...p.hand, ...picked],
+    };
+  });
+});
+
+// ── 願增猿｜腎上腺腦力 ───────────────────────────────────────────────────────
+// 一回合一次：從己方 1 隻寶可夢卸下 1 個【惡】能量到棄牌區，然後將 3 個
+// 傷害指示物從自己的 1 隻寶可夢移動到對手的 1 隻寶可夢上。
+// 簡化流程（降低多步互動成本）：
+//   1. self-poke-source：選「身上有【惡】能量、且身上 damage >= 30」的己方寶可夢
+//      → 卸 1 張惡能量、移除 30 damage
+//   2. opp-poke-choose：選對手 1 隻寶可夢 → +30 damage（含 KO 判定）
+// 條件放 canPlayAbility 由上層保證場上有合法來源。
+regA('願增猿', 0, (st, idx, pool) => {
+  const p = st.players[idx];
+  const self = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
+  const sources = self.filter(c => {
+    if (c.damage < 30) return false;
+    return c.energyAttached.some(e => {
+      const card = pool.get(e.cardId);
+      return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Darkness';
+    });
+  });
+  if (sources.length === 0) {
+    return addLog(st, '腎上腺腦力：場上沒有「身上有【惡】能量且有 ≥30 傷害」的寶可夢', idx);
+  }
+  const dp = st.players[(1 - idx) as 0 | 1];
+  if (!dp.active && dp.bench.length === 0) {
+    return addLog(st, '腎上腺腦力：對手場上無寶可夢', idx);
+  }
+  st = addLog(st, '腎上腺腦力：選 1 隻「身上有【惡】能量且有 ≥30 傷害」的己方寶可夢', idx);
+  return withPending(st, {
+    type: 'heal-target', // 複用 heal-target UI（讓玩家選自己場上的寶可夢）
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'adrenal-brain-src',
+    params: { validIids: sources.map(c => c.iid) },
+  });
+});
+
+regR('adrenal-brain-src', (st, idx, iids, params, pool) => {
+  const validIids = (params?.validIids as string[]) ?? [];
+  const targetIid = iids[0];
+  if (!targetIid || !validIids.includes(targetIid)) {
+    return addLog(st, '腎上腺腦力：目標不合法', idx);
+  }
+  const p = st.players[idx];
+  const source = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
+  if (!source) return st;
+  // 卸 1 張【惡】能量
+  const darkIdx = source.energyAttached.findIndex(e => {
+    const card = pool.get(e.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Darkness';
+  });
+  if (darkIdx < 0) return addLog(st, '腎上腺腦力：來源沒有【惡】能量', idx);
+  const discardedEnergy = source.energyAttached[darkIdx];
+  const newEnergy = source.energyAttached.filter((_, i) => i !== darkIdx);
+  const newDmg = Math.max(0, source.damage - 30);
+  const sourceName = pool.get(source.cardId)?.name ?? '?';
+  st = addLog(st, `腎上腺腦力：從 ${sourceName} 卸下 1 張【惡】能量並移除 30 傷害`, idx);
+  st = updatePlayer(st, idx, pl => {
+    const newDiscard = [...pl.discard, discardedEnergy];
+    if (pl.active && pl.active.iid === targetIid) {
+      return { ...pl, discard: newDiscard,
+        active: { ...pl.active, energyAttached: newEnergy, damage: newDmg } };
+    }
+    return { ...pl, discard: newDiscard,
+      bench: pl.bench.map(c => c.iid === targetIid
+        ? { ...c, energyAttached: newEnergy, damage: newDmg } : c) };
+  });
+  // 下一步：選對手 1 隻寶可夢 +30
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  if (!dp.active && dp.bench.length === 0) {
+    return addLog(st, '腎上腺腦力：對手無可選寶可夢（效果中斷）', idx);
+  }
+  st = addLog(st, '腎上腺腦力：選對手 1 隻寶可夢 +30 傷害', idx);
+  return withPending(st, {
+    type: 'opp-poke-choose',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'adrenal-brain-target',
+    params: { includeActive: true },
+  });
+});
+
+regR('adrenal-brain-target', (st, actorIdx, iids, _params, pool) => {
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  const defender = st.players[dIdx];
+  const targetIid = iids[0];
+  if (!targetIid) return st;
+  const isActive = defender.active?.iid === targetIid;
+  const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const targetCard = pool.get(target.cardId);
+  const tHp = targetCard?.hp ?? 0;
+  const newDmg = target.damage + 30;
+  let s: GameState = st;
+  if (tHp > 0 && newDmg >= tHp) {
+    const koDiscard: CardInstance[] = [
+      { ...target, damage: newDmg },
+      ...target.energyAttached,
+      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...(target.evolvedFromStack ?? []),
+    ];
+    const prizes = targetCard ? koPrizeCount(targetCard) : 1;
+    const players = [...s.players] as [PlayerState, PlayerState];
+    const newDefender: PlayerState = {
+      ...defender,
+      discard: [...defender.discard, ...koDiscard],
+      active: isActive ? null : defender.active,
+      bench: isActive ? defender.bench : defender.bench.filter(c => c.iid !== targetIid),
+    };
+    players[dIdx] = newDefender;
+    s = addLog({ ...s, players },
+      `腎上腺腦力：在 ${targetCard?.name ?? '?'} 身上放 30 傷害 → 被擊倒！+${prizes} 張獎勵牌`, actorIdx);
+    s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
+    if (isActive && newDefender.bench.length === 0) {
+      return { ...s, phase: 'game-over', winner: actorIdx,
+        winReason: `${defender.name} 沒有可上場的寶可夢` };
+    }
+  } else {
+    const players = [...s.players] as [PlayerState, PlayerState];
+    const newDefender = { ...defender };
+    if (isActive) newDefender.active = { ...target, damage: newDmg };
+    else newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
+    players[dIdx] = newDefender;
+    s = addLog({ ...s, players },
+      `腎上腺腦力：在 ${targetCard?.name ?? '?'} 身上放 30 傷害`, actorIdx);
+  }
+  return s;
+});
+
+// ── 特殊紅牌（Item） ────────────────────────────────────────────────────────
+// 對手手牌洗回牌庫，抽 3 張。
+reg('特殊紅牌', (st, idx) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  st = addLog(st, '特殊紅牌：對手手牌洗回牌庫，抽 3 張', idx);
+  st = returnHandToDeck(st, dIdx);
+  return drawCards(st, dIdx, 3);
+});
+
+// ── 赤松（Supporter） ───────────────────────────────────────────────────────
+// 從牌庫搜最多 2 張基本能量加手牌（可重複屬性；簡化版，不強制不同類）。
+regG('赤松', (st, idx, pool) => {
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  });
+});
+reg('赤松', (st, idx) => {
+  st = addLog(st, '赤松：從牌庫選最多 2 張基本能量加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Energy:Basic',
+    minCount: 0, maxCount: 2,
+    effectKey: 'search-generic-to-hand',
+  });
+});
+
+// ── 阿蜜的目光（Supporter） ─────────────────────────────────────────────────
+// 本回合結束後，你的戰鬥位寶可夢下次受到招式傷害 -30（套用 damageReduceNextHit）。
+regG('阿蜜的目光', (st, idx) => !!st.players[idx].active);
+reg('阿蜜的目光', (st, idx, pool) => {
+  const p = st.players[idx];
+  if (!p.active) return addLog(st, '阿蜜的目光：戰鬥位沒有寶可夢', idx);
+  const activeName = pool.get(p.active.cardId)?.name ?? '戰鬥位寶可夢';
+  st = addLog(st, `阿蜜的目光：${activeName} 下次受到招式傷害 -30`, idx);
+  return updatePlayer(st, idx, pl => {
+    if (!pl.active) return pl;
+    return { ...pl, active: { ...pl.active, damageReduceNextHit: 30 } };
+  });
+});
+
+// ── 白蕾雅（Supporter） ─────────────────────────────────────────────────────
+// 本回合你的戰鬥位寶可夢招式 +30 傷害（簡化版 — 原卡條件「太晶寶可夢」暫不檢查）。
+regG('白蕾雅', (st, idx) => !!st.players[idx].active);
+reg('白蕾雅', (st, idx) => {
+  const p = st.players[idx];
+  if (!p.active) return addLog(st, '白蕾雅：戰鬥位沒有寶可夢', idx);
+  st = addLog(st, '白蕾雅：本回合戰鬥位招式 +30 傷害', idx);
+  return updatePlayer(st, idx, pl => {
+    if (!pl.active) return pl;
+    return { ...pl, active: { ...pl.active,
+      damageBonusThisTurn: (pl.active.damageBonusThisTurn ?? 0) + 30 } };
+  });
+});
+
+// ── 莉莉艾的珍珠（Pokemon Tool） ────────────────────────────────────────────
+// 裝備者若為「擁有規則」寶可夢（ex / 超級ex），被擊倒時對手取得的獎勵牌 -1。
+// 實作：TOOL_PRIZE_BONUS 回傳負值（已由 engine Math.max(0, ...) clamp）。
+// 其他寶可夢裝備時無效果（回 0）。
+TOOL_PRIZE_BONUS.set('莉莉艾的珍珠', (card) => {
+  const isRulePoke = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX')
+    || !!card.rulesText?.includes('擁有規則');
+  return isRulePoke ? -1 : 0;
+});
+// 登錄 attach effect（TOOL_* 自動登記 block 在前面已跑過、不會重複登錄這張）
+if (!TRAINER_EFFECTS.has('莉莉艾的珍珠')) {
+  reg('莉莉艾的珍珠', toolAttachEffect('莉莉艾的珍珠'));
+}
 

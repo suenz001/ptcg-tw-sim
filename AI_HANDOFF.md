@@ -1,6 +1,6 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38ax (v2.00)  
+> 最後更新：2026-04-21 Session 38ay (v2.01)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
@@ -4114,3 +4114,57 @@ Leon 要求上方儀錶板（header）在 🎮 主階段 tag 左邊新增一欄�
 
 - `npm run build` 通過（✓ built in 11.41s）
 - 版本 1.99 → 2.00
+
+---
+
+## 📝 2026-04-21 Session 38ay — 魔靈多龍缺口特性/招式/訓練家實裝 → v2.01
+
+### 目標
+Leon：「這 60 張牌有那些特性和效果還沒處理的，我們先來處理，把這 60 張牌完全搞定！」
+
+承接 38ax 的延後清單，完整實裝 v2.00 留下的 10 項缺口，讓魔靈多龍預設牌組的每一張卡都能在對戰中正確觸發。
+
+### 變更檔案
+
+- `src/lib/game/effects.ts` — 新增 Wave 43 區塊（JAMMING_TOWER_STADIUMS、BENCH_PLACE_TRIGGERS、10 張卡 effect 登錄）
+- `src/lib/game/engine.ts` — 接 effects.ts 兩個新 export；TOOL_* 全面加上「阻礙之塔」閘門；PLAY_BASIC 呼叫 BENCH_PLACE_TRIGGERS
+- `src/routes/game/+page.svelte` — `hpRemaining` / `hpTotal` 呼叫 `getEffectiveHP` 時傳入 `game` 以支援 stadium 感知
+- `src/lib/decks/presets.ts` — 清掉魔靈多龍註解裡「延後實裝」清單
+- `src/lib/version.ts` — 2.00 → 2.01
+
+### 完整實裝清單（10 項）
+
+| 卡 | 機制 | 實作摘要 |
+|:---|:---|:---|
+| 黑夜魔靈 咒詛炸彈 | ability +13 counter + 自 KO | `regA('黑夜魔靈', 0, ...)` → `opp-poke-choose` → 既有 `cursed-bomb` resolver（擴充 `params.counters` 支援 5/13） |
+| 黑夜魔靈 [特性]咒詛炸彈 | 招式式變體 | `cursedBombAttackPost('咒詛炸彈', 13)` |
+| 多龍奇 偵查指令 | 查牌庫頂 3 張選 1 加手牌 | `regA` + 新 resolver `scouting-order`（TOP3 filter） |
+| 願增猿 腎上腺腦力 | 卸 1 惡能量 → 從自身移 3 counter 給對手 | 兩階段：`adrenal-brain-src`（heal-target 複用）→ `adrenal-brain-target`（opp-poke-choose，含 KO 判定） |
+| 喵喵ex 殺手鐧捕捉 | 上備戰時 tutor 1 張支援者 | `BENCH_PLACE_TRIGGERS.set('喵喵ex', ...)` → engine PLAY_BASIC dispatch |
+| 阻礙之塔 | Stadium：雙方道具失效 | `JAMMING_TOWER_STADIUMS` Set + engine `isToolsJammed()` helper，閘在 8 個 TOOL_* 查找 + 龐克頭盔反彈處 |
+| 白蕾雅 | 本回合戰鬥位招式 +30 | 簡化版（原卡條件「太晶寶可夢」暫不檢查）：`damageBonusThisTurn += 30` |
+| 阿蜜的目光 | 戰鬥位下次受招式傷害 -30 | `damageReduceNextHit = 30`（重用既有引擎旗標） |
+| 特殊紅牌 | 對手手牌洗回 + 抽 3 | `returnHandToDeck` + `drawCards` |
+| 赤松 | 從牌庫搜最多 2 張基本能量到手 | 簡化版（原卡需不同屬性，本版任意）：`deck-search` filter=`Energy:Basic` |
+| 莉莉艾的珍珠 | 道具：裝備者為「規則寶可夢」被 KO 時對手 -1 獎賞 | `TOOL_PRIZE_BONUS.set(..., card => isRulePoke ? -1 : 0)`（engine `Math.max(0, ...)` clamp） |
+
+### engine.ts 的重點變更
+
+1. **BENCH_PLACE_TRIGGERS dispatch**：`PLAY_BASIC` 成功後以卡名查 map，有則呼叫 `fn(state, aIdx, pool)`。
+2. **isToolsJammed() helper**：純函式檢查 `state.activeStadium` 是否在 `JAMMING_TOWER_STADIUMS`。
+3. **TOOL_* 全面閘門化**：
+   - `getEffectiveHP` 新增 optional `state` 參數；UI 已同步傳入。
+   - 對戰 / 撤退 / canRetreat 的 8 個 TOOL_* 查找（HP / ATTACK / DEFENSE / PREVENT_KO / PRIZE / ON_KO / ON_DAMAGED / RETREAT + BOTH_SIDES_RETREAT_PLUS）與龐克頭盔反彈段，全部先檢查 `toolsJammed`。
+4. **簡化 / 偏保守策略**（依 Leon 風格：「移除不確定先下手」）：
+   - 白蕾雅未套「太晶寶可夢」條件 → 戰鬥位恆 +30。
+   - 赤松不強制兩屬性不同 → 搜最多 2 張任意基本能量。
+   - 阿蜜的目光映射到既有 `damageReduceNextHit`。
+
+### 驗證
+
+- `npm run build` ✓（6s client / 11s server，無 TS error、無 Svelte warning）
+- 60 張卡每張都對應到 effects.ts 的 `reg` / `regA` / `regPre` / `regPost` / `TOOL_*` 或 `BENCH_PLACE_TRIGGERS` 登錄（或依舊為純 stat 寶可夢，如夜巡靈 / 彷徨夜靈 進化系的非 ability 分支）。
+- 版本 2.00 → 2.01
+
+### 後續
+魔靈多龍預設牌組 v2.01 完整實裝完畢。接下來可挑下一個日本 meta 預設牌組（尚有 35 個）。

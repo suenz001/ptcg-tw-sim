@@ -19,7 +19,19 @@ import {
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
+  BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS,
 } from './effects';
+
+// ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
+// 當場上活動球場為 JAMMING_TOWER_STADIUMS 所列球場時，雙方所有【道具】不發動效果。
+// 這個閘門會包在所有 TOOL_* 查找上，讓道具的 HP 加成、攻擊 +N、退避減免等全部失效。
+function isToolsJammed(state: GameState, pool: Map<string, Card>): boolean {
+  const s = state.activeStadium;
+  if (!s) return false;
+  const card = pool.get(s.cardId);
+  if (!card) return false;
+  return JAMMING_TOWER_STADIUMS.has(card.name);
+}
 
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
@@ -105,13 +117,16 @@ function isEnergy(cardId: string, pool: Map<string, Card>): boolean {
  */
 export function getEffectiveHP(
   inst: CardInstance | null | undefined,
-  pool: Map<string, Card>
+  pool: Map<string, Card>,
+  state?: GameState
 ): number {
   if (!inst) return 0;
   const card = pool.get(inst.cardId);
   if (!card) return 0;
   let hp = card.hp ?? 0;
-  if (inst.toolAttached) {
+  // 阻礙之塔（Stadium）會讓道具 HP 加成失效；若未傳 state 則忽略此檢查
+  const jammed = state ? isToolsJammed(state, pool) : false;
+  if (inst.toolAttached && !jammed) {
     const tool = pool.get(inst.toolAttached.cardId);
     if (tool) {
       const bonusFn = TOOL_HP_BONUS.get(tool.name);
@@ -532,11 +547,15 @@ function handlePlaying(
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
     attacker.bench = [...attacker.bench, placed];
     players[aIdx] = attacker;
-    return addLog(
+    let afterPlace = addLog(
       { ...state, players },
       `${attacker.name} 將 ${card.name} 放到備戰區`,
       aIdx
     );
+    // 觸發「放到備戰區」特性（例：喵喵ex｜殺手鐧捕捉）
+    const placeFn = BENCH_PLACE_TRIGGERS.get(card.name);
+    if (placeFn) afterPlace = placeFn(afterPlace, aIdx, pool);
+    return afterPlace;
   }
 
   // ── 進化 ──────────────────────────────────────────────────────────────────
@@ -618,8 +637,9 @@ function handlePlaying(
 
     const activeCard = pool.get(attacker.active.cardId);
     let retreatCost = activeCard?.retreatCost?.length ?? 0;
-    // 道具撤退修正（氣球 / 緊急滑板 / 驅勁能量 未來）
-    const retreatTool = attacker.active.toolAttached ? pool.get(attacker.active.toolAttached.cardId) : null;
+    // 道具撤退修正（氣球 / 緊急滑板 / 驅勁能量 未來）— 阻礙之塔時道具失效
+    const toolsJammedR = isToolsJammed(state, pool);
+    const retreatTool = (!toolsJammedR && attacker.active.toolAttached) ? pool.get(attacker.active.toolAttached.cardId) : null;
     if (retreatTool && activeCard) {
       const mod = TOOL_RETREAT_MOD.get(retreatTool.name);
       if (mod) {
@@ -628,10 +648,10 @@ function handlePlaying(
         else if (r.reduceBy) retreatCost = Math.max(0, retreatCost - r.reduceBy);
       }
     }
-    // 重力之玉：雙方 active 任一帶此道具 → 雙方撤退 +1
-    const bothPlusFromSelf = attacker.active.toolAttached
+    // 重力之玉：雙方 active 任一帶此道具 → 雙方撤退 +1（阻礙之塔時失效）
+    const bothPlusFromSelf = !toolsJammedR && attacker.active.toolAttached
       && TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(attacker.active.toolAttached.cardId)?.name ?? '');
-    const bothPlusFromOpp = defender.active?.toolAttached
+    const bothPlusFromOpp = !toolsJammedR && defender.active?.toolAttached
       && TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(defender.active.toolAttached.cardId)?.name ?? '');
     if (bothPlusFromSelf || bothPlusFromOpp) retreatCost += 1;
     // 被動特性：天空徑線（拉帝亞斯ex）— 基礎寶可夢免費撤退
@@ -1045,8 +1065,9 @@ function handlePlaying(
       workingState = addLog(workingState, `${defenderCard.name} 受到 +${extra} 傷害（上回合招式遺留效果）`, dIdx);
     }
 
-    // 道具：我方攻擊 +N（極限腰帶 / 鎖鏈糬 / 驅勁能量 未來）
-    if (baseDamage > 0 && attacker.active.toolAttached) {
+    // 道具：我方攻擊 +N（極限腰帶 / 鎖鏈糬 / 驅勁能量 未來）— 阻礙之塔時全部失效
+    const toolsJammed = isToolsJammed(state, pool);
+    if (!toolsJammed && baseDamage > 0 && attacker.active.toolAttached) {
       const atkTool = pool.get(attacker.active.toolAttached.cardId);
       if (atkTool) {
         const fn = TOOL_ATTACK_BONUS.get(atkTool.name);
@@ -1097,9 +1118,9 @@ function handlePlaying(
 
     // 道具：特定屬性防禦（福祿果 / 巧可果 / 千香果 / 刺耳果 / 霹霹果 / 莓榴果）
     // 只要觸發就 -60 並丟棄，不受是否已被其他機制削到 0 影響（規則上 tool 仍消耗）
-    // skipDefEffects 跳過，但不觸發道具也不丟棄。
+    // skipDefEffects 跳過，但不觸發道具也不丟棄。阻礙之塔時整個道具效果失效。
     let defenseReduceToolToDiscard: CardInstance | null = null;
-    if (!skipDefEffects && defender.active.toolAttached) {
+    if (!toolsJammed && !skipDefEffects && defender.active.toolAttached) {
       const defTool = pool.get(defender.active.toolAttached.cardId);
       if (defTool) {
         const defense = TOOL_DEFENSE_REDUCE_BY_TYPE.get(defTool.name);
@@ -1142,7 +1163,7 @@ function handlePlaying(
 
     const newDamage = defenderState.active.damage + baseDamage;
     // 有效 HP = 基礎 HP + 道具加成（英雄斗篷/勇氣護符/豪華斗篷/驅勁能量古代）
-    const defenderHP = getEffectiveHP(defenderState.active, pool);
+    const defenderHP = getEffectiveHP(defenderState.active, pool, state);
 
     // 被動特性：影藏（超級耿鬼ex）— 惡寶可夢被 ex 擊倒時，獎勵牌 -1
     let prizeAdjust = 0;
@@ -1173,7 +1194,7 @@ function handlePlaying(
       const defToolCardPre = defenderStatePre.active?.toolAttached
         ? pool.get(defenderStatePre.active.toolAttached.cardId) : null;
       const defActiveCardPre = defenderStatePre.active ? pool.get(defenderStatePre.active.cardId) : null;
-      if (baseDamage > 0 && defToolCardPre?.name === '龐克頭盔' && defActiveCardPre?.pokemonType === 'Darkness') {
+      if (!toolsJammed && baseDamage > 0 && defToolCardPre?.name === '龐克頭盔' && defActiveCardPre?.pokemonType === 'Darkness') {
         punkReflectDamage = 40;
       }
     }
@@ -1181,9 +1202,9 @@ function handlePlaying(
     // 擊倒判定
     const wouldBeKO = baseDamage > 0 && defenderHP > 0 && newDamage >= defenderHP;
 
-    // 道具防 KO（倖存鍛鍊器）— 滿血被 KO 時保留少量 HP，道具丟棄
+    // 道具防 KO（倖存鍛鍊器）— 滿血被 KO 時保留少量 HP，道具丟棄（阻礙之塔時失效）
     let preventedKO = false;
-    if (wouldBeKO && defenderState.active?.toolAttached) {
+    if (!toolsJammed && wouldBeKO && defenderState.active?.toolAttached) {
       const preventTool = pool.get(defenderState.active.toolAttached.cardId);
       if (preventTool) {
         const fn = TOOL_PREVENT_KO.get(preventTool.name);
@@ -1208,9 +1229,9 @@ function handlePlaying(
     }
 
     if (!preventedKO && wouldBeKO) {
-      // 道具：被 KO 時獎賞加成（豪華斗篷 +1）
+      // 道具：被 KO 時獎賞加成（豪華斗篷 +1 / 莉莉艾的珍珠 -1 等）— 阻礙之塔時失效
       let prizeTool = 0;
-      if (defenderState.active?.toolAttached) {
+      if (!toolsJammed && defenderState.active?.toolAttached) {
         const tool = pool.get(defenderState.active.toolAttached.cardId);
         if (tool) {
           const fn = TOOL_PRIZE_BONUS.get(tool.name);
@@ -1252,8 +1273,8 @@ function handlePlaying(
         newState = addLog(newState, `${defenderCard.name} 被擊倒！但 ${attacker.name} 無法取得任何獎勵牌。`, null);
       }
 
-      // 道具：被 KO 時觸發（希望護身符 / 沉重接力棒）
-      if (onKOTool) {
+      // 道具：被 KO 時觸發（希望護身符 / 沉重接力棒）— 阻礙之塔時失效
+      if (!toolsJammed && onKOTool) {
         const fn = TOOL_ON_KO.get(onKOTool.name);
         if (fn) newState = fn(newState, dIdx, aIdx, pool);
       }
@@ -1276,8 +1297,8 @@ function handlePlaying(
       defPlayers[dIdx] = defenderState;
       newState = { ...newState, players: defPlayers, turnPhase: 'end' };
 
-      // 道具：被打到但未 KO 時觸發（幸運頭盔 / 奢華炸彈）
-      if (baseDamage > 0 && defenderState.active.toolAttached) {
+      // 道具：被打到但未 KO 時觸發（幸運頭盔 / 奢華炸彈）— 阻礙之塔時失效
+      if (!toolsJammed && baseDamage > 0 && defenderState.active.toolAttached) {
         const tool = pool.get(defenderState.active.toolAttached.cardId);
         if (tool) {
           const fn = TOOL_ON_DAMAGED.get(tool.name);
@@ -1416,7 +1437,7 @@ function handlePlaying(
         poisonBonus += 50;
       }
       const newDmg = poisonPlayer.active.damage + 10 + poisonBonus;
-      const poisonedHP = getEffectiveHP(poisonPlayer.active, pool);
+      const poisonedHP = getEffectiveHP(poisonPlayer.active, pool, state);
       if (poisonedHP > 0 && newDmg >= poisonedHP) {
         // 被毒死 → 直接 KO，攻擊方（對手）取獎勵
         const dIdxP = dIdx;
@@ -1456,7 +1477,7 @@ function handlePlaying(
     if (burnedPlayer.active?.status === 'burned') {
       const burnedCard = pool.get(burnedPlayer.active.cardId);
       const newBurnDmg = burnedPlayer.active.damage + 20;
-      const burnedHP = getEffectiveHP(burnedPlayer.active, pool);
+      const burnedHP = getEffectiveHP(burnedPlayer.active, pool, state);
       if (burnedHP > 0 && newBurnDmg >= burnedHP) {
         // 燒傷致死
         const koDiscard3: CardInstance[] = [
@@ -1786,8 +1807,9 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
   if (player.active.status === 'asleep' || player.active.status === 'paralyzed') return false;
   const card = pool.get(player.active.cardId);
   let cost = card?.retreatCost?.length ?? 0;
-  // 道具撤退修正（氣球 / 緊急滑板 / 驅勁能量 未來）
-  const tool = player.active.toolAttached ? pool.get(player.active.toolAttached.cardId) : null;
+  // 道具撤退修正（氣球 / 緊急滑板 / 驅勁能量 未來）— 阻礙之塔時道具失效
+  const toolsJammedCanR = isToolsJammed(state, pool);
+  const tool = (!toolsJammedCanR && player.active.toolAttached) ? pool.get(player.active.toolAttached.cardId) : null;
   if (tool && card) {
     const mod = TOOL_RETREAT_MOD.get(tool.name);
     if (mod) {
@@ -1796,11 +1818,11 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
       else if (r.reduceBy) cost = Math.max(0, cost - r.reduceBy);
     }
   }
-  // 重力之玉：雙方 active 任一帶此道具 → 雙方撤退 +1
+  // 重力之玉：雙方 active 任一帶此道具 → 雙方撤退 +1（阻礙之塔時失效）
   const opp = state.players[(1 - state.activePlayerIndex) as 0 | 1];
-  const bothPlusFromSelf = player.active.toolAttached
+  const bothPlusFromSelf = !toolsJammedCanR && player.active.toolAttached
     && TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(player.active.toolAttached.cardId)?.name ?? '');
-  const bothPlusFromOpp = opp.active?.toolAttached
+  const bothPlusFromOpp = !toolsJammedCanR && opp.active?.toolAttached
     && TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(opp.active.toolAttached.cardId)?.name ?? '');
   if (bothPlusFromSelf || bothPlusFromOpp) cost += 1;
   // 被動特性：天空徑線（拉帝亞斯ex）— 所有基礎寶可夢免費撤退

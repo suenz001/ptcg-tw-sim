@@ -158,9 +158,7 @@ const CYNTHIA_GARCHOMP_DECK: Omit<Deck, 'updatedAt'> = {
  *        喵喵ex「殺手鐧捕捉」（上備戰時 tutor 支援者）
  *        吉雉雞ex「扭轉乾坤」（自場寶可夢昏厥後抽 3）
  *
- * 部分特性 / 訓練家尚未完整實裝，會在後續 bug fix 波補齊：
- *   黑夜魔靈 咒詛炸彈 13-counter、願增猿 腎上腺腦力、喵喵ex 殺手鐧捕捉、
- *   阻礙之塔、白蕾雅、阿蜜的目光、特殊紅牌、莉莉艾的珍珠 道具、赤松、月光丘陵
+ * 全套 60 張（寶可夢特性/招式、訓練家、競技場、道具）於 v2.01 全部實裝完畢。
  */
 const MARRUNE_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_marrune_dragapult__',
