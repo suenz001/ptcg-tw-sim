@@ -19,11 +19,22 @@ import {
 } from '../_shared';
 
 // ── 赤松（Supporter） ───────────────────────────────────────────────────────
-// 從牌庫搜最多 2 張基本能量，1 張加手牌、另 1 張附加到己方 1 隻寶可夢身上，然後洗牌庫。
-// 兩階段流程：
-//   1. deck-search（最多 2 張基本能量，可選 0/1/2 張）→ 'akamatsu-split'
-//   2. 若選到 2 張：第 1 張加手牌後，另 1 張進入 'akamatsu-attach' pending（選己方寶可夢）
-//      若選到 0 或 1 張：直接加入手牌結束。
+// 從牌庫搜最多 2 張基本能量；玩家自行決定哪 1 張附加到己方寶可夢、哪 1 張收入手牌。
+// 只能搜 1 張能量時（或牌庫只剩 1 張基本能量時），該能量直接附加到寶可夢。
+// 洗牌庫。
+//
+// v2.13 流程重做（Session 38ba）：
+//   - 舊版寫死「第 1 張加手牌 / 第 2 張附加」，也不讓玩家決定。官方規則是玩家自選。
+//   - 舊版 heal-target 的 UI 標題為「選擇回復的寶可夢」不符情境，改透過
+//     `params.titleOverride` 讓 +page.svelte 的 selectionTitle() 顯示對應敘述。
+//
+// 階段：
+//   1. deck-search（基本能量 0/1/2 張）→ 'akamatsu-split'
+//   2a. 若 0 張：洗牌庫結束
+//   2b. 若 1 張 + 場上有寶可夢：該能量直接進 heal-target 附加流程
+//   2c. 若 2 張 + 場上有寶可夢：兩張都先收手牌，再 hand-choose 讓玩家挑 1 張附加
+//       （未被挑選的那張自然留在手牌）
+//   2d. 場上無寶可夢（罕見邊界）：全部退回手牌當 fallback
 regG('赤松', (st, idx, pool) => {
   return st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
@@ -31,7 +42,7 @@ regG('赤松', (st, idx, pool) => {
   });
 });
 reg('赤松', (st, idx) => {
-  st = addLog(st, '赤松：從牌庫選最多 2 張基本能量（1 張加手牌 + 1 張附加寶可夢）', idx);
+  st = addLog(st, '赤松：從牌庫選最多 2 張基本能量（之後自選 1 張附加、另 1 張收手牌）', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -48,48 +59,112 @@ regR('akamatsu-split', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) {
     return addLog(st, '赤松：未選取任何能量（洗回牌庫）', idx);
   }
-  // 第 1 張：固定加入手牌
   const p = st.players[idx];
-  const first = p.deck.find(c => c.iid === iids[0]);
-  const second = iids[1] ? p.deck.find(c => c.iid === iids[1]) : undefined;
-  if (!first) return st;
-  const firstName = pool.get(first.cardId)?.name ?? '?';
-  st = addLog(st, `赤松：將 ${firstName} 加入手牌`, idx);
+  const picked = iids
+    .map(iid => p.deck.find(c => c.iid === iid))
+    .filter((c): c is CardInstance => !!c);
+  if (picked.length === 0) return st;
+
+  // 先把選到的能量從牌庫移除、洗牌庫
   st = updatePlayer(st, idx, pl => ({
     ...pl,
     deck: shuffle(pl.deck.filter(c => !iids.includes(c.iid))),
-    hand: [...pl.hand, first],
   }));
-  if (!second) return st;
-  // 第 2 張：暫存到 pending params，讓玩家選要附加給哪隻寶可夢
+
+  const pokes = [st.players[idx].active, ...st.players[idx].bench]
+    .filter((c): c is CardInstance => !!c);
+
+  // 場上無寶可夢 → fallback 全部加入手牌
+  if (pokes.length === 0) {
+    const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `赤松：場上無寶可夢，改將 ${names} 全部加入手牌`, idx);
+    return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, ...picked] }));
+  }
+
+  // 1 張 → 直接附加（不需二階段手牌選擇）
+  if (picked.length === 1) {
+    const energy = picked[0];
+    const eName = pool.get(energy.cardId)?.name ?? '?';
+    st = addLog(st, `赤松：選 1 隻己方寶可夢附加 ${eName}`, idx);
+    return withPending(st, {
+      type: 'heal-target', // 複用 heal-target UI（自己場上寶可夢），標題由 titleOverride 客製
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'akamatsu-attach',
+      params: {
+        energyInstance: energy,
+        validIids: pokes.map(c => c.iid),
+        titleOverride: `赤松：選擇要附加 ${eName} 的寶可夢`,
+      },
+    });
+  }
+
+  // 2 張 → 兩張先進手牌，讓玩家用 hand-choose 挑 1 張附加；未挑的那張自然留手牌
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `赤松：${names} 暫時加入手牌，請選 1 張能量附加到寶可夢`, idx);
+  st = updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, ...picked] }));
+  return withPending(st, {
+    type: 'hand-choose',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'akamatsu-pick-attach',
+    params: {
+      validIids: picked.map(c => c.iid),
+      titleOverride: '赤松：選 1 張能量附加到寶可夢（未選的留在手牌）',
+    },
+  });
+});
+
+// 二階段：hand-choose 後挑出要附加的能量，再進 heal-target 選寶可夢
+regR('akamatsu-pick-attach', (st, idx, iids, _params, pool) => {
+  const energyIid = iids[0];
+  if (!energyIid) return st;
+  const energy = st.players[idx].hand.find(c => c.iid === energyIid);
+  if (!energy) return st;
   const pokes = [st.players[idx].active, ...st.players[idx].bench]
     .filter((c): c is CardInstance => !!c);
   if (pokes.length === 0) {
-    // 場上無寶可夢 → 第 2 張也加入手牌作 fallback
-    const secondName = pool.get(second.cardId)?.name ?? '?';
-    st = addLog(st, `赤松：場上無寶可夢，改將 ${secondName} 一併加入手牌`, idx);
-    return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, second] }));
+    // 邊界：選擇途中寶可夢離場（實際不會發生，pending 阻塞其他行動）— 保守 fallback
+    return addLog(st, '赤松：場上無寶可夢可附加，能量留在手牌', idx);
   }
-  const secondName = pool.get(second.cardId)?.name ?? '?';
-  st = addLog(st, `赤松：選 1 隻己方寶可夢附加 ${secondName}`, idx);
+  const eName = pool.get(energy.cardId)?.name ?? '?';
+  st = addLog(st, `赤松：選 1 隻己方寶可夢附加 ${eName}（未選能量留手牌）`, idx);
   return withPending(st, {
-    type: 'heal-target', // 複用 heal-target UI 選自己寶可夢
+    type: 'heal-target',
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'akamatsu-attach',
-    params: { energyInstance: second, validIids: pokes.map(c => c.iid) },
+    params: {
+      energyIid,  // ← 告訴 resolver 從手牌取
+      validIids: pokes.map(c => c.iid),
+      titleOverride: `赤松：選擇要附加 ${eName} 的寶可夢`,
+    },
   });
 });
 
 regR('akamatsu-attach', (st, idx, iids, params, pool) => {
-  const energy = params?.energyInstance as CardInstance | undefined;
   const validIids = (params?.validIids as string[]) ?? [];
   const targetIid = iids[0];
+  // 兩種輸入方式：1 張流程用 energyInstance、2 張流程用 energyIid（從手牌取）
+  const energyInstance = params?.energyInstance as CardInstance | undefined;
+  const energyIid = params?.energyIid as string | undefined;
+
+  // 從手牌取能量（2 張流程）
+  let energy: CardInstance | undefined = energyInstance;
+  if (!energy && energyIid) {
+    energy = st.players[idx].hand.find(c => c.iid === energyIid);
+    if (energy) {
+      st = updatePlayer(st, idx, pl => ({
+        ...pl,
+        hand: pl.hand.filter(c => c.iid !== energyIid),
+      }));
+    }
+  }
+
   if (!energy || !targetIid || !validIids.includes(targetIid)) {
-    // 目標不合法 → 把能量塞回手牌避免卡牌遺失
     if (energy) {
       st = addLog(st, '赤松：目標不合法，能量加入手牌', idx);
-      return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, energy] }));
+      return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, energy!] }));
     }
     return st;
   }
@@ -98,12 +173,13 @@ regR('akamatsu-attach', (st, idx, iids, params, pool) => {
   const tName = targetPoke ? (pool.get(targetPoke.cardId)?.name ?? '?') : '?';
   const eName = pool.get(energy.cardId)?.name ?? '?';
   st = addLog(st, `赤松：將 ${eName} 附加到 ${tName}`, idx);
+  const energyFinal = energy; // TS narrow
   return updatePlayer(st, idx, pl => {
     if (pl.active?.iid === targetIid) {
-      return { ...pl, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, energy] } };
+      return { ...pl, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, energyFinal] } };
     }
     return { ...pl, bench: pl.bench.map(c => c.iid === targetIid
-      ? { ...c, energyAttached: [...c.energyAttached, energy] } : c) };
+      ? { ...c, energyAttached: [...c.energyAttached, energyFinal] } : c) };
   });
 });
 

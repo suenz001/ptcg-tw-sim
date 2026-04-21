@@ -1,9 +1,110 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b9 (v2.12)  
+> 最後更新：2026-04-21 Session 38ba (v2.13)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38ba (v2.13) — 3 項修正：赤松 UI / 對手選擇標示 / 預組檢視
+
+### 背景
+
+Leon 同時回報三件事，順序是「先修 bug，再繼續模組化」：
+
+1. **赤松 UI 錯誤** — 第二步敘述顯示「選擇要回復的寶可夢」。赤松實際流程應該是：
+   先搜 2 張基本能量，讓玩家自選「哪張附加寶可夢」、「哪張收手牌」；若牌庫只剩
+   1 張能量，該能量直接附加。舊實裝寫死「第 1 張加手牌 / 第 2 張附加」完全沒給
+   玩家選擇權，而且 pending 複用 `heal-target` 造成標題牛頭不對馬嘴。
+
+2. **願增猿 / 類似機制的對手寶可夢選擇 UI** — 「腎上腺腦力」可將傷害指示物丟到
+   對手戰鬥寶可夢或備戰寶可夢，但選擇清單沒有標示哪隻是對手的戰鬥寶可夢，玩家
+   只能靠位置記憶去猜。Leon 特別要求「相關 UI 也請你一併檢查並設定」——也就是
+   所有 `opp-poke-choose` / `opp-bench-choose`（含 active）類機制。
+
+3. **牌組編輯器不能檢視預組** — Leon 想檢查魔靈多龍是否真的含「莉莉艾的珍珠」
+   （他說「一定是你看錯牌了」），但編輯器只能打開使用者自建牌組；此外 Leon
+   決定刪除「破空焰EX（火屬 · 自組）」這個預組。
+
+### 改動
+
+**Bug A — 赤松 UI 重寫**（`src/lib/game/effects/cards/white_lily_akamatsu.ts`）
+
+- `reg('赤松')` 初始敘述改為「從牌庫選最多 2 張基本能量（之後自選 1 張附加、
+  另 1 張收手牌）」。
+- `regR('akamatsu-split')` 重寫分支：
+  - 0 張：洗牌庫結束
+  - 1 張 + 場上有寶可夢：能量直接進 `heal-target` 附加流程（1 張情況不需手牌
+    二次挑選）
+  - 2 張 + 場上有寶可夢：兩張都先收手牌，再用 `hand-choose`（`validIids` 限制
+    只能選這 2 張）讓玩家挑 1 張附加；未挑的那張自然留在手牌裡
+  - 場上無寶可夢：fallback 全部加入手牌
+- 新增 `regR('akamatsu-pick-attach')`：處理 2 張流程的「挑出要附加的能量」→ 進
+  `heal-target` pending 選寶可夢。
+- `regR('akamatsu-attach')` 擴充：支援 `params.energyIid`（從手牌取）+ 原本的
+  `params.energyInstance`（1 張流程直接帶能量物件）。
+- 所有 pending 都帶 `params.titleOverride`，`+page.svelte` 的 `selectionTitle()`
+  優先讀取這個客製標題；例「赤松：選擇要附加 基本【火】能量 的寶可夢」。
+
+**Bug B — 對手寶可夢選擇 UI 標示**（`src/routes/game/+page.svelte`）
+
+- `isPokePicker` 分支內新增 `srcActiveIid` / `isOppPicker` 兩個 derived：
+  - `srcActiveIid = game?.players[pendingSelection.sourcePlayerIdx].active?.iid`
+  - `isOppPicker = type==='opp-poke-choose' || type==='opp-bench-choose'`（含 active）
+- 每張 retreat-card 若 `item.iid === srcActiveIid`，加上 `.is-active-poke` class
+  + `<span class="retreat-active-badge">⚔️ 對手戰鬥中／戰鬥中</span>` 徽章。
+- CSS：`.is-active-poke` 金色邊框 + 金色陰影；徽章橘色膠囊，位於卡底置中。
+- 自動覆蓋所有 pending Pokemon 選擇場景：`opp-poke-choose`、`opp-bench-choose`
+  （含 includeActive）、`bench-choose`（active 會被排除不顯示但 class 邏輯安全）、
+  `heal-target`（己方選擇，顯示「戰鬥中」）。
+- 這就完成了「願增猿等類似機制」的一次性修正，不需要各卡個別處理。
+
+**Feature C-1 — 牌組編輯器預組檢視**（`src/routes/decks/+page.svelte`）
+
+- 新 import `{ PRESET_DECKS, PRESET_IDS }`。
+- `active` derived 改為：先查使用者牌組，再退回 `PRESET_DECKS`。
+- 新 derived `isPresetActive`：true 時編輯動作全部 no-op 保險。
+- `renameActive` / `addCard` / `removeCard` / `clearDeck` 頂部加 preset guard。
+- 新函式 `copyPresetToMine()`：從預組複製一份到使用者牌組（沿用 `newDeck` 產生
+  新 ID + 新名字「xxx（複製）」）。
+- 左側 rail 新增「🎴 內建預組（唯讀）」區塊，列出所有 `PRESET_DECKS`；淡橙底
+  + 🔒 圖示；active 狀態金邊。
+- 右側 header：預組模式顯示 `🔒 預組（唯讀）` badge、匯入 JSON/匯入文字/清空
+  按鈕隱藏；新增 `📋 複製到我的牌組` 按鈕；標題欄 readonly。
+- 每張 entry 的 ± 按鈕、picker 的 + 按鈕、preview modal 的 ± 按鈕都加 preset
+  disabled，避免誤點。
+
+**Feature C-2 — 刪除破空焰EX 預組**（`src/lib/decks/presets.ts`）
+
+- 整段刪除 `CHI_YU_DECK`（`__preset_fire__`），`PRESET_DECKS` 陣列移除對應項。
+- 破空焰ex 本身（`regPost('破空焰ex|烈火爆進')`、`regPre('破空焰|爆燃突擊')`
+  等卡片效果）保留在 effects.ts；只是不再作為內建牌組提供。
+
+**Feature C-3 — 魔靈多龍「莉莉艾的珍珠」驗證**
+
+已查證：`presets.ts:186` 確實有 `{ cardId: '17163', count: 1 }` 即「莉莉艾的
+珍珠」。這張道具只對「莉莉艾的」前綴的寶可夢有效，但魔靈多龍整套沒有任何莉莉
+艾的寶可夢，所以這張實際上無作用。
+
+本輪沒動魔靈多龍的內容——等 Leon 用新的預組檢視介面看過、決定要換成什麼後再改。
+建議方向：JP 賽事 meta ヨノワール+ドラパルトex 軸常見 tool 是「英雄披風／ヒー
+ローマント」對非 ex 寶可夢 +30 HP 減傷，會跟多龍梅西亞/夜巡靈 line 搭配較好。
+
+### 驗證
+
+- `npm run build` ✅ 無 warning/error
+- 赤松流程手動驗證：0/1/2 張能量、場上有無寶可夢、單張全附加、雙張自選 — 皆
+  走對應 resolver 分支
+- 對手選擇 UI：`is-active-poke` 金邊 + badge 在 retreat-card 上正確渲染
+- 預組檢視：4 套（耿軌 / 蒂安希 / 竹蘭列咬陸鯊 / 魔靈多龍）可點入查看；所有
+  編輯路徑都 guard 住
+
+### 下一步候選
+
+- 繼續模組化：莉莉艾的決意 / 老大的指令 系列抽到 draw_supporters.ts 擴充
+- 物品卡系列（神奇糖果 / 高級球 / 夜間擔架 / 寶可平板）抽到新檔
+- 確認魔靈多龍替代 tool（等 Leon 決定）
 
 ---
 

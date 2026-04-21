@@ -1059,6 +1059,9 @@
     selectionPicked = new Set();
   }
   function selectionTitle(type: string): string {
+    // 支援效果層透過 params.titleOverride 客製標題（例：赤松要「選寶可夢附加能量」而非預設「回復」）
+    const override = pendingSelection?.params?.titleOverride;
+    if (typeof override === 'string' && override.length > 0) return override;
     if (type === 'deck-search')     return '從牌庫選擇';
     if (type === 'bench-choose')    return '選擇備戰寶可夢';
     if (type === 'opp-bench-choose') return '選擇對手的備戰寶可夢';
@@ -1771,16 +1774,20 @@
           </p>
         </div>
         {#if isPokePicker}
+          {@const srcActiveIid = game?.players[pendingSelection.sourcePlayerIdx].active?.iid ?? null}
+          {@const isOppPicker = pendingSelection.type==='opp-poke-choose' || pendingSelection.type==='opp-bench-choose'}
           <div class="retreat-grid">
             {#each selectionItems as item}{@const c=getCard(item.cardId)}
               {#if c}
                 {@const eff=hpTotal(item)}
                 {@const rem=hpRemaining(item)}
                 {@const picked=selectionPicked.has(item.iid)}
-                <div class="retreat-card" class:sel-picked={picked}>
+                {@const isActivePoke = item.iid === srcActiveIid}
+                <div class="retreat-card" class:sel-picked={picked} class:is-active-poke={isActivePoke}>
                   <button class="retreat-zoom" title="放大檢視：{c.name}"
                     onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
                   <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();toggleSelection(item.iid);}}>
+                    {#if isActivePoke}<span class="retreat-active-badge" title={isOppPicker ? '對手目前戰鬥寶可夢' : '目前戰鬥寶可夢'}>⚔️ {isOppPicker ? '對手戰鬥中' : '戰鬥中'}</span>{/if}
                     <img src={c.imageUrl} alt={c.name}/>
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
@@ -2776,6 +2783,9 @@
   .retreat-card{ position:relative; background:#0e1e0e; border:2px solid #2a4a2a; border-radius:8px; overflow:hidden; transition:border-color .15s, box-shadow .15s; }
   .retreat-card:hover{ border-color:#4a8a4a; box-shadow:0 0 8px rgba(170,255,170,.25); }
   .retreat-card.sel-picked{ border-color:#aaff44; box-shadow:0 0 10px #aaff4488; }
+  .retreat-card.is-active-poke{ border-color:#ffcc44; box-shadow:0 0 10px rgba(255,204,68,.35); }
+  .retreat-card.is-active-poke.sel-picked{ border-color:#aaff44; box-shadow:0 0 10px #aaff4488, 0 0 14px rgba(255,204,68,.4); }
+  .retreat-active-badge{ position:absolute; bottom:.28rem; left:50%; transform:translateX(-50%); z-index:2; background:rgba(180,120,0,.94); color:#fffbe0; font-size:.7rem; font-weight:700; padding:.14rem .46rem; border-radius:4px; text-shadow:0 0 4px rgba(0,0,0,.6); pointer-events:none; white-space:nowrap; box-shadow:0 0 6px rgba(0,0,0,.55); }
   .retreat-pick .sel-check{ position:absolute; top:.25rem; left:.35rem; font-size:1rem; color:#aaff44; font-weight:700; text-shadow:0 0 4px rgba(0,0,0,.8); }
   .retreat-zoom{ position:absolute; top:.25rem; right:.25rem; z-index:2; background:rgba(0,0,0,.72); border:1px solid #6aaa6a; color:#cfc; font-size:.78rem; line-height:1; padding:.22rem .4rem; border-radius:4px; cursor:pointer; }
   .retreat-zoom:hover{ background:rgba(74,138,74,.9); color:#fff; }

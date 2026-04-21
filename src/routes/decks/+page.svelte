@@ -10,6 +10,7 @@
     deleteDeck,
     newDeck
   } from '$lib/decks/storage';
+  import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import type { Deck } from '$lib/decks/types';
   import { validateDeck, maxCopies, isBasicEnergy } from '$lib/decks/validation';
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
@@ -63,7 +64,14 @@
   let importTextInput = $state('');
 
   // ── Derived ────────────────────────────────────────────────────────────
-  const active = $derived(decks.find((d) => d.id === activeId) ?? null);
+  // v2.13：支援檢視內建預組（唯讀）。activeId 先找使用者牌組，再退回預組。
+  const active = $derived(
+    decks.find((d) => d.id === activeId)
+    ?? PRESET_DECKS.find((d) => d.id === activeId)
+    ?? null
+  );
+  /** 目前檢視的是否為內建預組 —— true 時編輯器鎖定為唯讀 */
+  const isPresetActive = $derived(!!activeId && PRESET_IDS.has(activeId));
 
   /** 目前預覽的卡片在作用中牌組裡的張數 */
   const previewCount = $derived(
@@ -243,14 +251,14 @@
   }
 
   function renameActive(name: string) {
-    if (!active) return;
+    if (!active || isPresetActive) return;
     const updated = { ...active, name };
     decks = upsertDeck(updated);
     pushDeck(updated);
   }
 
   function addCard(card: Card) {
-    if (!active) return;
+    if (!active || isPresetActive) return;
     const entries = [...active.entries];
     const i = entries.findIndex((e) => e.cardId === card.id);
     const currentCount = i >= 0 ? entries[i].count : 0;
@@ -264,7 +272,7 @@
   }
 
   function removeCard(cardId: string) {
-    if (!active) return;
+    if (!active || isPresetActive) return;
     const entries = active.entries
       .map((e) => (e.cardId === cardId ? { ...e, count: e.count - 1 } : e))
       .filter((e) => e.count > 0);
@@ -274,11 +282,24 @@
   }
 
   function clearDeck() {
-    if (!active) return;
+    if (!active || isPresetActive) return;
     if (!confirm('清空此牌組？')) return;
     const updated = { ...active, entries: [] };
     decks = upsertDeck(updated);
     pushDeck(updated);
+  }
+
+  /** 從內建預組複製一份到使用者牌組（可編輯） */
+  function copyPresetToMine() {
+    if (!active || !isPresetActive) return;
+    const copy: Deck = {
+      ...newDeck(`${active.name}（複製）`),
+      entries: active.entries.map((e) => ({ ...e })),
+      notes: active.notes,
+    };
+    decks = upsertDeck(copy);
+    activeId = copy.id;
+    pushDeck(copy);
   }
 
   // ── Import / export ────────────────────────────────────────────────────
@@ -608,6 +629,25 @@
           </li>
         {/each}
       </ul>
+
+      <!-- v2.13：內建預組（唯讀檢視） -->
+      {#if PRESET_DECKS.length > 0}
+        <div class="rail-head preset-head">
+          <strong>🎴 內建預組（唯讀）</strong>
+        </div>
+        <ul class="deck-list preset-list">
+          {#each PRESET_DECKS as d (d.id)}
+            <li class:active={d.id === activeId}>
+              <button class="deck-pick" onclick={() => (activeId = d.id)} title="檢視預組內容（點『複製』可改成自己的牌組）">
+                <span class="deck-name">🔒 {d.name}</span>
+                <span class="deck-size">
+                  {d.entries.reduce((n, e) => n + e.count, 0)} / 60
+                </span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </aside>
 
     <!-- ── Deck detail ──────────────────────────────────────────────── -->
@@ -621,17 +661,26 @@
             value={active.name}
             placeholder="牌組名稱"
             oninput={(e) => renameActive((e.target as HTMLInputElement).value)}
+            readonly={isPresetActive}
+            title={isPresetActive ? '內建預組不可改名；請先複製一份' : ''}
           />
           <div class="deck-actions">
             <span class="count" class:bad={totalCount !== 60}>{totalCount} / 60</span>
-            <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字</button>
-            <button class="small" onclick={openTextImport} disabled={!poolReady}>匯入文字</button>
-            <button class="small" onclick={exportJson}>匯出 JSON</button>
-            <label class="small file">
-              匯入 JSON
-              <input type="file" accept="application/json" onchange={onFileChosen} />
-            </label>
-            <button class="small danger" onclick={clearDeck}>清空</button>
+            {#if isPresetActive}
+              <span class="preset-badge" title="內建預組，僅供檢視">🔒 預組（唯讀）</span>
+              <button class="small" onclick={copyPresetToMine}>📋 複製到我的牌組</button>
+              <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字</button>
+              <button class="small" onclick={exportJson}>匯出 JSON</button>
+            {:else}
+              <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字</button>
+              <button class="small" onclick={openTextImport} disabled={!poolReady}>匯入文字</button>
+              <button class="small" onclick={exportJson}>匯出 JSON</button>
+              <label class="small file">
+                匯入 JSON
+                <input type="file" accept="application/json" onchange={onFileChosen} />
+              </label>
+              <button class="small danger" onclick={clearDeck}>清空</button>
+            {/if}
           </div>
         </div>
 
@@ -686,12 +735,12 @@
                   </div>
                 </div>
                 <div class="counter">
-                  <button class="icon" onclick={() => removeCard(card.id)}>−</button>
+                  <button class="icon" onclick={() => removeCard(card.id)} disabled={isPresetActive}>−</button>
                   <span>{entry.count}</span>
                   <button
                     class="icon"
                     onclick={() => addCard(card)}
-                    disabled={!isBasicEnergy(card) && entry.count >= 4}
+                    disabled={isPresetActive || (!isBasicEnergy(card) && entry.count >= 4)}
                   >+</button>
                 </div>
               </li>
@@ -752,7 +801,7 @@
                   {/if}
                 </div>
               </button>
-              <button class="icon add-btn" onclick={() => addCard(card)} title="加入牌組">+</button>
+              <button class="icon add-btn" onclick={() => addCard(card)} title={isPresetActive ? '預組唯讀' : '加入牌組'} disabled={isPresetActive}>+</button>
             </li>
           {/each}
         </ul>
@@ -881,8 +930,9 @@
           <div class="pv-counter">
             {#if active}
               <span class="pv-count-label">牌組中：<strong>{pvCount} / {pvMax}</strong></span>
-              <button class="icon" onclick={() => removeCard(pv.id)} disabled={pvCount <= 0}>−</button>
-              <button class="icon" onclick={() => addCard(pv)} disabled={!isBasicEnergy(pv) && pvCount >= pvMax}>+</button>
+              <button class="icon" onclick={() => removeCard(pv.id)} disabled={isPresetActive || pvCount <= 0}>−</button>
+              <button class="icon" onclick={() => addCard(pv)} disabled={isPresetActive || (!isBasicEnergy(pv) && pvCount >= pvMax)}>+</button>
+              {#if isPresetActive}<span class="pv-count-label muted" style="margin-left:.5rem">（預組唯讀）</span>{/if}
             {:else}
               <span class="pv-count-label muted">請先選擇牌組</span>
             {/if}
@@ -1083,6 +1133,11 @@
   .deck-list li.active {
     background: #eef4ff;
   }
+  /* 預組區塊 — 淡橙底讓人知道是唯讀 */
+  .rail-head.preset-head { margin-top: 1rem; }
+  .preset-list li { background: #fff5e6; }
+  .preset-list li.active { background: #ffe6c4; box-shadow: inset 0 0 0 1px #d9aa4a; }
+  .preset-badge { background:#d9aa4a; color:#fff; font-size:.72rem; font-weight:700; padding:.18rem .45rem; border-radius:4px; white-space:nowrap; }
   .deck-pick {
     flex: 1;
     text-align: left;
