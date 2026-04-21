@@ -3696,3 +3696,35 @@ movedToActiveThisTurn?: boolean;
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 27/23（P1/P2）、平均回合 15.3
 - 版本 1.88 → 1.89
+
+## Session 38an — v1.90 H 標第 35 波 self-return-to-hand/deck
+
+### 機制設計
+這一波實裝「自身（含附加能量 / 道具 / 進化棧）結算完傷害後，整疊送回手牌 / 牌庫」類招式。
+核心觀察：引擎 `hasPendingActions` 已能在 `active === null` 時自動觸發 pending `SEND_NEW_ACTIVE`，
+所以招式 post 函式只要把自身連同附加卡全部移走、把 `active` 設為 null，
+引擎就會自動向擁有者要新的戰鬥場寶可夢，不必改任何 engine 程式碼。
+
+### 新增 helper（effects.ts）
+- `selfReturnToHandPost(label)` — active + energyAttached + toolAttached + evolvedFromStack 全部放回手牌；主卡重設所有 turn flags / damage / attach 後再放
+- `selfReturnToDeckPost(label)` — 同上但放回牌庫並 shuffle
+- `selfReturnToDeckThenSearchPost(maxSearch, label)` — 先放回牌庫（不洗）→ `withPending({ type:'deck-search', effectKey:'search-to-hand-reshuffle', filter:'Any', maxCount:maxSearch })`，由既有 resolver `search-to-hand-reshuffle`（effects.ts:2166）處理抽到手牌後再 shuffle
+- `selfBenchReturnToDeckPost(label)` — 玩家從自己備戰選 1 隻 → 新 resolver `self-bench-return-to-deck` 連附加送回牌庫並 shuffle
+- `regR('self-bench-return-to-deck')` resolver — 跟備戰管理呼應，filter 掉被選中的 iid，把主體（重設 flags）+ 附加能量 / 道具 / evolvedFromStack 全部加進 deck 再 shuffle
+
+### filter='Any' 驗證
+- UI（game/+page.svelte:631 的 deck-search case）：未匹配的 filter 會落到 `return true`，渲染全牌庫
+- AI（ai.ts:175 deck-search case）：同樣 fall-through `return true`
+- 所以 `filter: 'Any'` 實際語義 = 無過濾 = 整個牌庫都可選
+
+### 實裝（5 張）
+- 喵喵ex｜夾尾巴逃跑 60 + selfReturnToHandPost
+- 賽富豪｜賽富迴旋 100 + selfReturnToDeckPost
+- 蚊香泳士｜跳躍衝天 120+120=240 + selfReturnToDeckPost（sim/AI 簡化：總是選擇 +120）
+- 白蓬蓬｜微風之禮 0 + selfReturnToDeckThenSearchPost(3)
+- 風鈴鈴｜回家鐘聲 0 + selfBenchReturnToDeckPost
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 22/28（P1/P2）、平均回合 14.6
+- 版本 1.89 → 1.90

@@ -8104,3 +8104,187 @@ regPre('烈空坐|進擊破壞', movedToActivePre(20, 90, '進擊破壞'));
 
 // 凱路迪歐ex｜疾風直撞 — 30+90 = 120
 regPre('凱路迪歐ex|疾風直撞', movedToActivePre(30, 90, '疾風直撞'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 35 — 自身回手牌 / 回牌庫 類招式
+//
+// 對 active 自身結算完傷害後，將 active（含附加能量 / 道具 / evolvedFromStack）
+// 一併送回手牌或牌庫，active 設為 null → 引擎會自動觸發 pending SEND_NEW_ACTIVE。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 自身回手牌：active + 所有附加卡全部放回手牌，active=null。
+ * 使用時機：post（傷害已結算）。
+ */
+function selfReturnToHandPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const p = state.players[aIdx];
+    if (!p.active) return state;
+    const inst = p.active;
+    const returning: CardInstance[] = [
+      // 把進化棧底重設為未進化版本（保留最底層 card），其實不必拆棧 —
+      // 整疊連附加一起送回手牌即可，但 evolvedFromStack 裡每張都是獨立的 CardInstance，
+      // 逐一加入手牌才符合「附加的卡」語義。
+      // 主體（含目前 cardId 與 iid）
+      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined,
+        status: undefined, evolvedFromStack: undefined,
+        evolvedThisTurn: undefined, justPlaced: undefined, movedToActiveThisTurn: undefined,
+        damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
+        abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
+        cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
+        damageBonusPending: undefined },
+      ...inst.energyAttached,
+      ...(inst.toolAttached ? [inst.toolAttached] : []),
+      ...(inst.evolvedFromStack ?? []),
+    ];
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[aIdx] = {
+      ...p,
+      active: null,
+      hand: [...p.hand, ...returning],
+    };
+    return addLog({ ...state, players }, `${label}：將自身（含附加）全部放回手牌`, aIdx);
+  };
+}
+
+/**
+ * 自身回牌庫（重洗）：active + 所有附加卡放回牌庫並 shuffle，active=null。
+ */
+function selfReturnToDeckPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const p = state.players[aIdx];
+    if (!p.active) return state;
+    const inst = p.active;
+    const returning: CardInstance[] = [
+      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined,
+        status: undefined, evolvedFromStack: undefined,
+        evolvedThisTurn: undefined, justPlaced: undefined, movedToActiveThisTurn: undefined,
+        damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
+        abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
+        cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
+        damageBonusPending: undefined },
+      ...inst.energyAttached,
+      ...(inst.toolAttached ? [inst.toolAttached] : []),
+      ...(inst.evolvedFromStack ?? []),
+    ];
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[aIdx] = {
+      ...p,
+      active: null,
+      deck: shuffle([...p.deck, ...returning]),
+    };
+    return addLog({ ...state, players }, `${label}：將自身（含附加）全部放回自己牌庫並重洗`, aIdx);
+  };
+}
+
+/**
+ * 自身回牌庫 + 從牌庫任意選最多 N 張加入手牌。
+ * 做法：先把 active 送回牌庫（不洗）→ 觸發 pending deck-search（filter=Any, max=N）→
+ * resolver 處理抽完後 shuffle 牌庫。
+ */
+function selfReturnToDeckThenSearchPost(maxSearch: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const p = state.players[aIdx];
+    if (!p.active) return state;
+    const inst = p.active;
+    const returning: CardInstance[] = [
+      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined,
+        status: undefined, evolvedFromStack: undefined,
+        evolvedThisTurn: undefined, justPlaced: undefined, movedToActiveThisTurn: undefined,
+        damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
+        abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
+        cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
+        damageBonusPending: undefined },
+      ...inst.energyAttached,
+      ...(inst.toolAttached ? [inst.toolAttached] : []),
+      ...(inst.evolvedFromStack ?? []),
+    ];
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[aIdx] = {
+      ...p,
+      active: null,
+      // 先「放」回牌庫（不 shuffle）— resolver 做 search → 取到手牌後 shuffle
+      deck: [...p.deck, ...returning],
+    };
+    const afterReturn = addLog({ ...state, players }, `${label}：將自身（含附加）全部放回自己牌庫`, aIdx);
+    // deck-search 預設 filter=Any（maxCount 張數上限，由玩家自選）
+    return withPending(afterReturn, {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 0, maxCount: maxSearch,
+      effectKey: 'search-to-hand-reshuffle',
+      filter: 'Any',
+      params: { label },
+    });
+  };
+}
+
+/**
+ * 備戰寶可夢回牌庫：玩家選 1 隻自己備戰寶可夢，連同附加一起回牌庫並重洗。
+ * 使用既有 bench-choose pending + 新 resolver `self-bench-return-to-deck`。
+ */
+function selfBenchReturnToDeckPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const p = state.players[aIdx];
+    if (p.bench.length === 0) return addLog(state, `${label}：沒有備戰寶可夢`, aIdx);
+    const s = addLog(state, `${label}：選擇 1 隻備戰寶可夢回到牌庫`, aIdx);
+    return withPending(s, {
+      type: 'bench-choose',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'self-bench-return-to-deck',
+      params: { label },
+    });
+  };
+}
+
+regR('self-bench-return-to-deck', (st, actorIdx, selectedIids, params, _pool) => {
+  const label = (params?.label as string) ?? '回家鐘聲';
+  const iid = selectedIids[0];
+  const p = st.players[actorIdx];
+  const picked = p.bench.find(c => c.iid === iid);
+  if (!picked) return st;
+  const returning: CardInstance[] = [
+    { ...picked, damage: 0, energyAttached: [], toolAttached: undefined,
+      status: undefined, evolvedFromStack: undefined,
+      evolvedThisTurn: undefined, justPlaced: undefined, movedToActiveThisTurn: undefined,
+      damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
+      abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
+      cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
+      damageBonusPending: undefined },
+    ...picked.energyAttached,
+    ...(picked.toolAttached ? [picked.toolAttached] : []),
+    ...(picked.evolvedFromStack ?? []),
+  ];
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[actorIdx] = {
+    ...p,
+    bench: p.bench.filter(c => c.iid !== iid),
+    deck: shuffle([...p.deck, ...returning]),
+  };
+  return addLog({ ...st, players }, `${label}：備戰寶可夢連附加放回牌庫並重洗`, actorIdx);
+});
+
+// ── Wave 35 招式登記 ──────────────────────────────────────────────────────
+
+// 喵喵ex｜夾尾巴逃跑 — 60 + 自身回手牌
+regPre('喵喵ex|夾尾巴逃跑', (state, _a, _p) => ({ state, damage: 60 }));
+regPost('喵喵ex|夾尾巴逃跑', selfReturnToHandPost('夾尾巴逃跑'));
+
+// 賽富豪｜賽富迴旋 — 100 + 可選自身回牌庫（sim/AI 簡化：總是回）
+regPre('賽富豪|賽富迴旋', (state, _a, _p) => ({ state, damage: 100 }));
+regPost('賽富豪|賽富迴旋', selfReturnToDeckPost('賽富迴旋'));
+
+// 蚊香泳士｜跳躍衝天 — 120+120 = 240 + 自身回牌庫（sim/AI 簡化：總是選擇 +120）
+regPre('蚊香泳士|跳躍衝天', (state, aIdx, _p) => {
+  return { state: addLog(state, '跳躍衝天：選擇 +120（自身將回牌庫）', aIdx), damage: 240 };
+});
+regPost('蚊香泳士|跳躍衝天', selfReturnToDeckPost('跳躍衝天'));
+
+// 白蓬蓬｜微風之禮 — 0 傷 + 自身回牌庫 + 從牌庫任選最多 3 張加手牌
+regPre('白蓬蓬|微風之禮', (state, _a, _p) => ({ state, damage: 0 }));
+regPost('白蓬蓬|微風之禮', selfReturnToDeckThenSearchPost(3, '微風之禮'));
+
+// 風鈴鈴｜回家鐘聲 — 0 傷 + 備戰選 1 隻連附加回牌庫
+regPre('風鈴鈴|回家鐘聲', (state, _a, _p) => ({ state, damage: 0 }));
+regPost('風鈴鈴|回家鐘聲', selfBenchReturnToDeckPost('回家鐘聲'));
