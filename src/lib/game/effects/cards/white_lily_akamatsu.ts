@@ -35,7 +35,10 @@ reg('赤松', (st, idx) => {
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Energy:Basic',
+    // 注意：deck-search filter parser 裡 'Energy:X' 把 X 當成屬性名（Grass/Fire/…）
+    // 所以 'Energy:Basic' 會被解讀成「pokemonType === 'Basic'」永遠不中。
+    // 要全部基本能量用 'BasicEnergy'（parser 第 653 行的分支）。
+    filter: 'BasicEnergy',
     minCount: 0, maxCount: 2,
     effectKey: 'akamatsu-split',
   });

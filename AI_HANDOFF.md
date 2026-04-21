@@ -1,9 +1,52 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b2 (v2.05)  
+> 最後更新：2026-04-21 Session 38b3 (v2.06)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b3 (v2.06) — 赤松 filter 字串修正（pre-existing bug）
+
+### 問題
+
+Leon 實測回報：赤松搜尋找不到任何基本能量，即使牌庫有。
+
+### 根因（不是 v2.05 模組化造成）
+
+赤松原本的 `reg('赤松', ...)` 用 `filter: 'Energy:Basic'` 宣告 pending deck-search。
+但 `+page.svelte` 的 deck-search filter parser（line 685-687）對 `'Energy:X'` 的解讀是：
+
+```ts
+if (f.startsWith('Energy:')) {
+  const t = f.slice(7);
+  return card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === t;
+}
+```
+
+也就是 `'Energy:X'` 裡的 X 被當成 **能量屬性名**（Grass / Fire / Water / Lightning / …），
+與「Basic」完全無關。傳 `'Energy:Basic'` 會變成判斷 `pokemonType === 'Basic'`，
+但 pokemonType 永遠不會是 'Basic'，因此結果永遠是 0 張命中。
+
+parser 第 653 行其實已經有正確的 `'BasicEnergy'` 分支可以用：
+`if (f === 'BasicEnergy') return card.supertype === 'Energy' && card.subtype === 'Basic';`
+
+### 修正
+
+`effects/cards/white_lily_akamatsu.ts` 內 `reg('赤松')` 的 pending filter
+`'Energy:Basic'` → `'BasicEnergy'`，並附註釋說明陷阱避免將來再犯。
+
+### 驗證
+
+- `npm run build` 通過
+- 其他傳 `'BasicEnergy'` 的卡（effects.ts 多處）早就能正常運作 → 這條路徑可信
+
+### 模組化的意外收獲
+
+這是 v2.05 搬出 白蕾雅 + 赤松 之後 Leon 第一次實測才發現的 pre-existing bug。
+**模組化的副作用是讓兩張 Supporter 的實作變成獨立 file 可以單點檢查**，
+反而凸顯了之前淹沒在 10k 行檔案裡的錯誤。模組化本身沒有造成 regression。
 
 ---
 
