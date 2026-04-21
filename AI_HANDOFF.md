@@ -1,9 +1,46 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38bd (v2.16)  
+> 最後更新：2026-04-21 Session 38be (v2.17)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38be (v2.17) — 赤松雙屬性判定修正（基本能量 pokemonType 為空 → 改讀卡名）
+
+### 背景
+
+v2.16 剛 ship 後 Leon 立刻回報：
+> 赤松還是有bug 我選了超能和火能，還是跳出「赤松選 2 張能量時，兩張屬性必須不同」不給我選。
+
+### Root cause
+
+v2.16 的 UI `akamatsuSameTypeBlocked` 與 resolver 防禦都只看 `card.pokemonType`。但 `static/cards/MC.json` 的基本能量（例：`基本【超】能量`、`基本【火】能量`）`pokemonType` 欄位是 `undefined / null`——因為那些 entries 只有 `supertype: 'Energy'` + `subtype: 'Basic'`，沒有設 pokemonType。
+
+結果每張基本能量都被當成「類型 = null」，`new Set([null, null]).size === 1 < 2` → 恆判定為同屬性 → 永遠擋下使用者。
+
+### 修正
+
+改以「`pokemonType ?? 卡名【X】】 內字元` 」為 fallback。`ENERGY_LABEL` 的對應（草/火/水/雷/超/鬥/惡/鋼/妖/龍/無）剛好就是卡名【】內的中文字，所以 parse `name.match(/【(.+?)】/)?.[1]` 可直接用。
+
+**UI**（`src/routes/game/+page.svelte`）：
+```ts
+function basicEnergyTypeFromName(name: string): string | null {
+  const m = name.match(/【(.+?)】/);
+  return m ? m[1] : null;
+}
+// akamatsuSameTypeBlocked 內：
+const typeStr = c.pokemonType ?? basicEnergyTypeFromName(c.name) ?? `?${iid}`;
+```
+（以 `?${iid}` 作為完全無法辨識時的唯一鍵，避免把兩張都無法解析的卡誤當成同屬性擋掉。）
+
+**resolver**（`src/lib/game/effects/cards/white_lily_akamatsu.ts`）：抽出 `energyTypeOf(c) → pokemonType ?? name.match(/【(.+?)】/)?.[1] ?? null` helper，`akamatsu-split` 同屬性檢查改用它。
+
+### 測試
+
+- `npm run build` 通過。
+- 基本能量資料驗證：Python 直接開 `static/cards/MC.json` 確認 `基本【惡】能量` 的 `pokemonType` 是 `None`。
 
 ---
 

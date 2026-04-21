@@ -764,6 +764,12 @@
   });
 
   // 赤松（akamatsu-split）：選 2 張能量時必須是不同屬性；只選 1 張或 0 張永遠合法
+  // 注意：基本能量卡的 `pokemonType` 欄位在卡表資料中常為空（undefined），
+  // 所以這裡從卡名 `基本【X】能量` 解析屬性字元來比對。
+  function basicEnergyTypeFromName(name: string): string | null {
+    const m = name.match(/【(.+?)】/);
+    return m ? m[1] : null;
+  }
   const akamatsuSameTypeBlocked = $derived.by(() => {
     if (!pendingSelection || pendingSelection.effectKey !== 'akamatsu-split') return false;
     if (selectionPicked.size < 2) return false;
@@ -771,7 +777,9 @@
     const types = iids.map(iid => {
       const item = selectionItems.find(it => it.iid === iid);
       const c = item ? getCard(item.cardId) : null;
-      return c?.pokemonType ?? null;
+      if (!c) return `?${iid}`; // 缺資料時以 iid 當獨立值，避免誤判為同屬性
+      // 優先用 pokemonType；沒有就從名字解析；兩者都拿不到則視為「未知-該張 iid」避免誤擋
+      return c.pokemonType ?? basicEnergyTypeFromName(c.name) ?? `?${iid}`;
     });
     return new Set(types).size < types.length;
   });

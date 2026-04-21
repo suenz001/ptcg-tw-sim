@@ -66,9 +66,19 @@ regR('akamatsu-split', (st, idx, iids, _params, pool) => {
   if (picked.length === 0) return st;
   // 規則：兩張能量必須是不同屬性（UI 已禁止，此處為防禦）
   // 若 UI 繞過送到兩張同屬性，丟棄第 2 張、僅沿用第 1 張繼續流程
+  //
+  // v2.17 (Session 38be)：基本能量卡 `pokemonType` 通常為 undefined（見 MC.json），
+  // 改以卡名「基本【X】能量」的【】內字元作 fallback 判斷屬性。
+  const energyTypeOf = (c: CardInstance): string | null => {
+    const card = pool.get(c.cardId);
+    if (!card) return null;
+    if (card.pokemonType) return card.pokemonType;
+    const m = card.name.match(/【(.+?)】/);
+    return m ? m[1] : null;
+  };
   if (picked.length === 2) {
-    const t0 = pool.get(picked[0].cardId)?.pokemonType ?? null;
-    const t1 = pool.get(picked[1].cardId)?.pokemonType ?? null;
+    const t0 = energyTypeOf(picked[0]);
+    const t1 = energyTypeOf(picked[1]);
     if (t0 !== null && t1 !== null && t0 === t1) {
       st = addLog(st, '赤松：兩張能量須不同屬性，第 2 張略過', idx);
       picked = [picked[0]];
