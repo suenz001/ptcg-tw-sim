@@ -76,3 +76,13 @@ regR('moonlight-hill-heal', (st, idx, iids) => {
 // 若是則視同「道具無效」，TOOL_* 的效果全部不觸發（含 HP、攻擊、防禦、KO、
 // 被 KO、受傷、撤退 cost）。附著動作本身不受影響（可附、可丟）。
 export const JAMMING_TOWER_STADIUMS = new Set<string>(['阻礙之塔']);
+
+// ── 火箭隊的監視塔（Stadium）── 引擎側 hook ──────────────────────────────────
+// 用途：engine.ts 在觸發寶可夢特性前，檢查 activeStadium 是否在此集合中，
+// 且該寶可夢的 pokemonType 為 'Colorless'（台版【無】屬）。若是則該特性不發動：
+//   1. 主動特性（USE_ABILITY / getUsableAbilities UI）
+//   2. 上備戰時觸發（BENCH_PLACE_TRIGGERS）
+//   3. （未實裝）被動特性 — 被動特性散落在 ATTACK_PRE/POST 各自檢查，
+//      若日後發現 Colorless 被動特性跟本機制互動有誤，再各自加 isColorlessAbilityBlocked 閘門。
+// 卡面文字：「雙方場上所有【無】寶可夢的特性全部消除。」
+export const ROCKET_WATCHTOWER_STADIUMS = new Set<string>(['火箭隊的監視塔']);

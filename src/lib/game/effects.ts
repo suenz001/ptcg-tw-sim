@@ -56,9 +56,10 @@ export {
 
 // ── 競技場卡（Stadium）模組 — v2.10 從本檔抽離 ─────────────────────────────
 // stadiums.ts 包含 3 個 USE_STADIUM 的 pending resolver（神秘花園、夜間學院、
-// 月光丘陵）以及 JAMMING_TOWER_STADIUMS 引擎側 hook 集合。
-import { JAMMING_TOWER_STADIUMS } from './effects/cards/stadiums';
-export { JAMMING_TOWER_STADIUMS };
+// 月光丘陵）以及 JAMMING_TOWER_STADIUMS / ROCKET_WATCHTOWER_STADIUMS 兩個
+// 引擎側 hook 集合（道具無效 / 【無】寶可夢特性無效）。
+import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS } from './effects/cards/stadiums';
+export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS };
 
 // 已搬遷到 effects/cards/ 下的卡 — side-effect import 觸發 reg() 登錄。
 // 未來要加更多搬遷檔時，也只需要在這裡加一行 import。

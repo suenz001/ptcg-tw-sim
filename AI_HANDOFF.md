@@ -1,9 +1,96 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38ba (v2.13)  
+> 最後更新：2026-04-21 Session 38bb (v2.14)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38bb (v2.14) — 魔靈多龍預組勘誤 + 補實裝 鳴依的勉勵 / 火箭隊的監視塔
+
+### 背景
+
+Leon 用 v2.13 新加的「預組檢視器」功能對照真實卡表，發現魔靈多龍預組內容有多處錯誤，提供正確 28 條的完整卡表要求修正並補實裝缺漏的卡功能。
+
+### 修正對照（預組卡表 diff）
+
+**寶可夢層**
+- 多龍奇：2 → 4
+- 夜巡靈：2 → 1
+- 黑夜魔靈：2 → 1
+- 彷徨夜靈：2 維持
+- 其他（多龍梅西亞 4 / 多龍巴魯托ex 3 / 含羞苞 1 / 願增猿 1 / 喵喵ex 2 / 吉雉雞ex 1）：不變
+
+**物品層**
+- 移除：莉莉艾的珍珠（原 1 張 — 真實卡表根本沒有這張）
+- 其他（不公印章 1 / 夜間擔架 2 / 特殊紅牌 1 / 神奇糖果 3 / 高級球 4 / 寶可平板 4）：不變
+
+**支援者層**
+- 移除：阿蜜的目光 / 裁判（共 -2）
+- 新增：鳴依的勉勵 × 1、探險家的嚮導 × 1（共 +2）
+- 其他（好友寶芬 4 / 莉莉艾的決意 4 / 老大的指令 2 / 白蕾雅 1 / 赤松 1）：不變
+
+**競技場層**
+- 移除：月光丘陵 × 1（→ 0）
+- 新增：火箭隊的監視塔 × 2（→ 2）
+- 阻礙之塔 × 1：不變
+
+**能量層**：完全不變（火 3 / 超 3 / 惡 2 = 8）
+
+總張數：60 ✓
+
+### 新實裝卡片
+
+#### 1. 鳴依的勉勵（Supporter, M3 075/080, id 18052）
+
+卡面：「這張卡只有在自己剩餘獎賞卡的張數比對手剩餘獎賞卡的張數多時才可使用。從自己的棄牌區選擇最多 2 張基本能量卡，附於自己的 1 隻【2 階進化】寶可夢身上。」
+
+位置：`src/lib/game/effects/cards/draw_supporters.ts`（跟其他 Supporter 放一起）
+
+流程：
+1. `regG('鳴依的勉勵', ...)` guard — 檢查 self prizes > opp prizes、棄牌有基本能量、場上有 Stage 2
+2. `reg('鳴依的勉勵', ...)` — 進 `discard-search` pending（BasicEnergy, 1..min(2, cand.length)）
+3. `regR('naruei-encourage-pick-target')` — 檢查場上 Stage 2 數量
+   - 0 隻：log 取消（guard 正常會擋，保險）
+   - 1 隻：直接附加
+   - N 隻：進 `heal-target` pending，用 `validIids` 限定 Stage 2
+4. `regR('naruei-encourage-commit')` — 附加能量到選中的 Stage 2
+
+Stage 2 判定：本地複製 `engine.ts` 的 `isStage2PokemonCard`（`evolvesFrom` 指向另一個有 `evolvesFrom` 的 Stage1 → 進化深度 = 3），避免 `engine ↔ effects` 循環 import。
+
+#### 2. 火箭隊的監視塔（Stadium, SV10 096/098, id 12846）
+
+卡面：「雙方場上所有【無】寶可夢的特性全部消除。」
+
+位置：
+- `src/lib/game/effects/cards/stadiums.ts`：新增 `ROCKET_WATCHTOWER_STADIUMS` 集合
+- `src/lib/game/effects.ts`：re-export
+- `src/lib/game/engine.ts`：新增 `isColorlessAbilityBlocked(state, pokeCard, pool)` 輔助函式，在三個發動點檢查：
+  1. `USE_ABILITY` handler（line ~882）— 阻擋主動特性發動
+  2. `getUsableAbilities`（UI 按鈕篩選，line ~1920）— 不列出被封的特性
+  3. `PLAY_BASIC` → `BENCH_PLACE_TRIGGERS` 觸發前（line ~574）— 喵喵ex｜殺手鐧捕捉會被這張 Stadium 封掉
+
+設計仿 `JAMMING_TOWER_STADIUMS`（阻礙之塔、道具無效）的模式：只在 engine hook 判定，不需要 USE_STADIUM 的 resolver（純被動）。
+
+**覆蓋範圍限制**：目前只處理「主動特性 + BENCH_PLACE 觸發」。被動特性（如「受傷時…」、「對手抽牌時…」之類散落在 ATTACK_PRE/POST 的）尚未加閘門；本 deck 內涉及的【無】屬只有喵喵ex 的殺手鐧捕捉（屬於 BENCH_PLACE 觸發），已覆蓋。日後若發現其他【無】屬被動特性跟本機制互動有誤，再各自加 `isColorlessAbilityBlocked` 閘門。
+
+#### 3. 探險家的嚮導（Supporter, MC 717/742, id 17188）
+
+v2.12 Session 38b9 已實裝在 `draw_supporters.ts`，本波只是把它加進預組裡。
+
+### 關鍵檔案
+
+- `src/lib/decks/presets.ts` — MARRUNE_DRAGAPULT_DECK 改成 28 條 60 張的正確卡表
+- `src/lib/game/effects/cards/draw_supporters.ts` — 加 鳴依的勉勵 + 3 個 resolver
+- `src/lib/game/effects/cards/stadiums.ts` — 加 `ROCKET_WATCHTOWER_STADIUMS` 集合
+- `src/lib/game/effects.ts` — re-export `ROCKET_WATCHTOWER_STADIUMS`
+- `src/lib/game/engine.ts` — 加 `isColorlessAbilityBlocked` + 三個呼叫點
+- `src/lib/version.ts` — 2.13 → 2.14
+
+### 本機驗證
+
+`npm run build` ✓ 成功（6.14s client / 12.36s server）。`npm run check` 仍顯示 11 個 pre-existing 錯誤（presets.ts 的 `createdAt` 型別 / tools.ts 的 `EffectFn` import mode / effects.ts:4772 / decks +page 的 `active` null 檢查）— 都跟本波修改無關。
 
 ---
 

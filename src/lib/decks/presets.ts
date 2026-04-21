@@ -127,46 +127,51 @@ const CYNTHIA_GARCHOMP_DECK: Omit<Deck, 'updatedAt'> = {
  *        喵喵ex「殺手鐧捕捉」（上備戰時 tutor 支援者）
  *        吉雉雞ex「扭轉乾坤」（自場寶可夢昏厥後抽 3）
  *
- * 全套 60 張（寶可夢特性/招式、訓練家、競技場、道具）於 v2.01 全部實裝完畢。
+ * v2.14 (Session 38bb)：依 Leon 用新預組檢視器對過的完整卡表修正。
+ *   - 寶可夢：多龍奇 2→4、夜巡靈 2→1、彷徨夜靈 2 不變、黑夜魔靈 2→1
+ *   - 物品：移除 莉莉艾的珍珠（不在真實卡表）
+ *   - 支援者：移除 阿蜜的目光/裁判；加入 鳴依的勉勵 × 1、探險家的嚮導 × 1
+ *   - 競技場：移除 月光丘陵；加入 火箭隊的監視塔 × 2（總 3 張）
+ *   - 能量：不變（火 3 / 超 3 / 惡 2）
+ *   總張數：60 張
  */
 const MARRUNE_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_marrune_dragapult__',
   name: '魔靈多龍',
   entries: [
     // ── 寶可夢（20 張）──
-    { cardId: '17019', count: 3 },  // 多龍巴魯托ex (MC)
-    { cardId: '17018', count: 2 },  // 多龍奇 (MC)
-    { cardId: '17017', count: 4 },  // 多龍梅西亞 (MC)
-    { cardId: '16781', count: 2 },  // 黑夜魔靈 (MC) — 咒詛炸彈 13 counter
-    { cardId: '16780', count: 2 },  // 彷徨夜靈 (MC) — 咒詛炸彈 5 counter（已實裝）
-    { cardId: '16779', count: 2 },  // 夜巡靈 (MC)
-    { cardId: '16829', count: 1 },  // 願增猿 (MC) — 腎上腺腦力
-    { cardId: '11526', count: 1 },  // 含羞苞 (SV8a) — 迷幻花粉
-    { cardId: '18038', count: 2 },  // 喵喵ex (M3) — 殺手鐧捕捉
     { cardId: '16960', count: 1 },  // 吉雉雞ex (MC) — 扭轉乾坤
-    // ── 訓練家・物品（16 張）──
-    { cardId: '17119', count: 4 },  // 好友寶芬 (MC)
-    { cardId: '17122', count: 4 },  // 高級球 (MC)
-    { cardId: '17133', count: 4 },  // 寶可平板 (MC)
-    { cardId: '17126', count: 3 },  // 神奇糖果 (MC)
+    { cardId: '17019', count: 3 },  // 多龍巴魯托ex (MC)
+    { cardId: '17018', count: 4 },  // 多龍奇 (MC) — 偵查指令
+    { cardId: '17017', count: 4 },  // 多龍梅西亞 (MC)
+    { cardId: '11526', count: 1 },  // 含羞苞 (SV8a) — 迷幻花粉
+    { cardId: '16780', count: 2 },  // 彷徨夜靈 (MC) — 咒詛炸彈 5 counter
+    { cardId: '16779', count: 1 },  // 夜巡靈 (MC)
+    { cardId: '18038', count: 2 },  // 喵喵ex (M3) — 殺手鐧捕捉（受火箭隊監視塔影響）
+    { cardId: '16781', count: 1 },  // 黑夜魔靈 (MC) — 咒詛炸彈 13 counter
+    { cardId: '16829', count: 1 },  // 願增猿 (MC) — 腎上腺腦力
+    // ── 訓練家・物品（15 張）──
+    { cardId: '17104', count: 1 },  // 不公印章 (MC)
     { cardId: '17141', count: 2 },  // 夜間擔架 (MC)
     { cardId: '18492', count: 1 },  // 特殊紅牌 (M4)
-    { cardId: '17104', count: 1 },  // 不公印章 (MC)
-    { cardId: '17163', count: 1 },  // 莉莉艾的珍珠 (MC · 道具)
-    // ── 訓練家・支援者（10 張）──
-    { cardId: '17200', count: 4 },  // 莉莉艾的決意 (MC)
-    { cardId: '17195', count: 2 },  // 老大的指令 (MC)
+    { cardId: '17126', count: 3 },  // 神奇糖果 (MC)
+    { cardId: '17122', count: 4 },  // 高級球 (MC)
+    { cardId: '17133', count: 4 },  // 寶可平板 (MC)
+    // ── 訓練家・支援者（14 張）──
+    { cardId: '18052', count: 1 },  // 鳴依的勉勵 (M3) — 棄牌能量附 Stage2
     { cardId: '17193', count: 1 },  // 白蕾雅 (MC)
-    { cardId: '17199', count: 1 },  // 阿蜜的目光 (MC)
+    { cardId: '17119', count: 4 },  // 好友寶芬 (MC)
+    { cardId: '17195', count: 2 },  // 老大的指令 (MC)
     { cardId: '17167', count: 1 },  // 赤松 (MC)
-    { cardId: '17182', count: 1 },  // 裁判 (MC)
-    // ── 競技場（2 張）──
-    { cardId: '11706', count: 1 },  // 阻礙之塔 (SV8a)
-    { cardId: '11708', count: 1 },  // 月光丘陵 (SV8a)
+    { cardId: '17200', count: 4 },  // 莉莉艾的決意 (MC)
+    { cardId: '17188', count: 1 },  // 探險家的嚮導 (MC) — 看 top 6 選 2
+    // ── 競技場（3 張）──
+    { cardId: '11706', count: 1 },  // 阻礙之塔 (SV8a) — 道具無效
+    { cardId: '12846', count: 2 },  // 火箭隊的監視塔 (SV10) — 【無】寶可夢特性無效
     // ── 能量（8 張）──
     { cardId: '17216', count: 3 },  // 基本【火】能量 (MC)
-    { cardId: '17220', count: 3 },  // 基本【超】能量 (MC)
     { cardId: '17214', count: 2 },  // 基本【惡】能量 (MC)
+    { cardId: '17220', count: 3 },  // 基本【超】能量 (MC)
   ],
 };
 

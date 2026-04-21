@@ -19,7 +19,7 @@ import {
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
-  BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS,
+  BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
   clearActiveEffects,
 } from './effects';
 
@@ -32,6 +32,23 @@ function isToolsJammed(state: GameState, pool: Map<string, Card>): boolean {
   const card = pool.get(s.cardId);
   if (!card) return false;
   return JAMMING_TOWER_STADIUMS.has(card.name);
+}
+
+// ── 火箭隊的監視塔（【無】寶可夢特性無效）── 輔助判定 ────────────────────────
+// 當場上活動場地卡為 ROCKET_WATCHTOWER_STADIUMS 所列競技場卡時，
+// 雙方所有【無】屬寶可夢（pokemonType === 'Colorless'）的特性全部消除。
+// 包在 USE_ABILITY / getUsableAbilities / BENCH_PLACE_TRIGGERS 三個發動點。
+function isColorlessAbilityBlocked(
+  state: GameState,
+  pokeCard: Card | undefined,
+  pool: Map<string, Card>
+): boolean {
+  if (!pokeCard || pokeCard.pokemonType !== 'Colorless') return false;
+  const s = state.activeStadium;
+  if (!s) return false;
+  const stadiumCard = pool.get(s.cardId);
+  if (!stadiumCard) return false;
+  return ROCKET_WATCHTOWER_STADIUMS.has(stadiumCard.name);
 }
 
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
@@ -554,8 +571,11 @@ function handlePlaying(
       aIdx
     );
     // 觸發「放到備戰區」特性（例：喵喵ex｜殺手鐧捕捉）
+    // 火箭隊的監視塔：【無】屬寶可夢的特性全部消除，跳過此觸發
     const placeFn = BENCH_PLACE_TRIGGERS.get(card.name);
-    if (placeFn) afterPlace = placeFn(afterPlace, aIdx, pool);
+    if (placeFn && !isColorlessAbilityBlocked(afterPlace, card, pool)) {
+      afterPlace = placeFn(afterPlace, aIdx, pool);
+    }
     return afterPlace;
   }
 
@@ -877,6 +897,9 @@ function handlePlaying(
 
     // 集客（米立龍）限制：只有在出場時才能使用
     if (ability.name === '集客' && attacker.active?.iid !== action.iid) return state;
+
+    // 火箭隊的監視塔：場上此 Stadium 時，【無】屬寶可夢的特性全部消除
+    if (isColorlessAbilityBlocked(state, pokeCard, pool)) return state;
 
     // 查找 ABILITY_EFFECTS
     const abilityFn = ABILITY_EFFECTS.get(`${pokeCard!.name}|${action.abilityIndex}`);
@@ -1911,6 +1934,8 @@ export function getUsableAbilities(
     if (pk.abilityUsedThisTurn) continue;
     const card = pool.get(pk.cardId);
     if (!card?.abilities) continue;
+    // 火箭隊的監視塔：【無】屬寶可夢的特性全部消除
+    if (isColorlessAbilityBlocked(state, card, pool)) continue;
     card.abilities.forEach((ab, abIdx) => {
       // 只列出在 ABILITY_EFFECTS 中有登錄的主動特性
       if (!ABILITY_EFFECTS.has(`${card.name}|${abIdx}`)) return;
