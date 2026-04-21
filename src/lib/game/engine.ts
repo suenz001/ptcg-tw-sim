@@ -20,6 +20,7 @@ import {
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
+  SPECIAL_ENERGY_ATTACH,
   clearActiveEffects,
 } from './effects';
 
@@ -49,6 +50,36 @@ function isColorlessAbilityBlocked(
   const stadiumCard = pool.get(s.cardId);
   if (!stadiumCard) return false;
   return ROCKET_WATCHTOWER_STADIUMS.has(stadiumCard.name);
+}
+
+// ── 可達鴨｜濕氣（防自 KO 特性）── 輔助判定 ─────────────────────────────────
+// 卡面文字：「只要這隻寶可夢在場上，雙方所有寶可夢的『將自己【昏厥】的效果』的特性，
+//           全部消除。」
+// 也就是說：只要「任一方」場上有可達鴨（active 或 bench），所有「自身 KO」類特性
+// 與「[特性]」招式形式都不會觸發。目前適用：
+//   - 彷徨夜靈｜咒詛炸彈（5 counter） — ability 形式 + [特性]咒詛炸彈 attack 形式
+//   - 黑夜魔靈｜咒詛炸彈（13 counter） — ability 形式
+//   - 三合一磁怪｜[特性] 過度放電 — attack 形式（自身 KO 後附能）
+// 註：「自爆磁怪 強勁磁場」等招式是扣己方 HP 不屬「將自己昏厥的特性」，不受影響。
+export const SELF_KO_ABILITY_NAMES = new Set<string>([
+  '咒詛炸彈',
+  '過度放電',
+]);
+export function isSelfKOEffectBlocked(
+  state: GameState,
+  pool: Map<string, Card>
+): boolean {
+  for (const p of state.players) {
+    const allPokes: CardInstance[] = [
+      ...(p.active ? [p.active] : []),
+      ...p.bench,
+    ];
+    for (const pk of allPokes) {
+      const card = pool.get(pk.cardId);
+      if (card?.abilities?.some(a => a.name === '濕氣')) return true;
+    }
+  }
+  return false;
 }
 
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
@@ -175,6 +206,8 @@ const ZH_ENERGY_TYPE: Record<string, EnergyType> = {
  */
 const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   '硬岩【鬥】能量': ['Fighting'],
+  '富裕能量': ['Colorless'],     // ACE SPEC — 視為 1【無】能量（附加時抽 4 走 effects）
+  '感應【超】能量': ['Psychic'], // 視為 1【超】能量（附加到【超】寶可夢時搜尋基礎【超】，走 effects）
 };
 
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {
@@ -884,7 +917,7 @@ function handlePlaying(
       const p = newState.players[aIdx];
       const cand = p.deck.filter(inst => {
         const c = pool.get(inst.cardId);
-        return c?.supertype === 'Pokemon' && c?.subtype !== 'Other' && c?.name?.startsWith('<瑪俐的>');
+        return c?.supertype === 'Pokemon' && c?.subtype !== 'Other' && c?.name?.startsWith('瑪俐的');
       });
       if (cand.length === 0) {
         const revert: [boolean, boolean] = [used[0], used[1]];
@@ -939,6 +972,11 @@ function handlePlaying(
 
     // 火箭隊的監視塔：場上此 Stadium 時，【無】屬寶可夢的特性全部消除
     if (isColorlessAbilityBlocked(state, pokeCard, pool)) return state;
+
+    // 可達鴨｜濕氣：自身 KO 類特性被消除
+    if (SELF_KO_ABILITY_NAMES.has(ability.name) && isSelfKOEffectBlocked(state, pool)) {
+      return addLog(state, `${pokeCard!.name} 的特性「${ability.name}」被可達鴨的濕氣消除`, aIdx);
+    }
 
     // 查找 ABILITY_EFFECTS
     const abilityFn = ABILITY_EFFECTS.get(`${pokeCard!.name}|${action.abilityIndex}`);
@@ -1016,11 +1054,18 @@ function handlePlaying(
 
     const targetCard = getCard(target.cardId, pool);
     players[aIdx] = attacker;
-    return addLog(
+    let afterAttach: GameState = addLog(
       { ...state, players },
       `${attacker.name} 將能量附加到 ${targetCard.name}`,
       aIdx
     );
+    // v2.22：特殊能量「附加時」hook（例：富裕能量抽 4、感應【超】能量搜【超】基本）
+    const energyName = getCard(energyCard.cardId, pool).name;
+    const attachHook = SPECIAL_ENERGY_ATTACH.get(energyName);
+    if (attachHook) {
+      afterAttach = attachHook(afterAttach, aIdx, target.iid, pool);
+    }
+    return afterAttach;
   }
 
   // ── 宣告招式 ──────────────────────────────────────────────────────────────
@@ -1143,7 +1188,7 @@ function handlePlaying(
       }
     }
 
-    // Wave 42：被動特性 +N 攻擊傷害（攻擊方場上）— 例如 <竹蘭的>羅絲雷朵｜輝煌聲援 對「竹蘭的」寶可夢 +30
+    // Wave 42：被動特性 +N 攻擊傷害（攻擊方場上）— 例如 竹蘭的羅絲雷朵｜輝煌聲援 對「竹蘭的」寶可夢 +30
     // 多隻擁有同特性的寶可夢可疊加（場上每一隻都會算一次）。
     if (baseDamage > 0) {
       const attAll: CardInstance[] = [
@@ -1604,6 +1649,100 @@ function handlePlaying(
       }
     }
 
+    // ── 雪妖女｜冰冷之帳 ─────────────────────────────────────────────────────
+    // 卡面：只要這隻寶可夢在場上，每次寶可夢檢查時，在雙方的擁有特性的所有寶可夢
+    //       （「雪妖女」除外）身上各放置 1 個傷害指示物。
+    // 觸發階段：「寶可夢檢查」= 中毒/灼傷/麻痺/睡眠之後（本段落所在處）。
+    // 設計：每隻雪妖女各放 1 個指示物；若場上有 N 隻雪妖女則每個目標放 N 個。
+    // KO 歸屬：被 aIdx（結束回合方）自己的寶可夢擊倒 → 對手（nextIdx=dIdx）取獎賞
+    //         → 沿用 pendingPrizes 機制（early return，讓對手取獎後再 END_TURN）。
+    //         dIdx 側自 KO（自己的雪妖女打死自己其他寶可夢）為極端邊角案例，
+    //         目前僅棄牌但不分配獎賞（後續再補）。
+    const countFrosmoth = (pl: PlayerState): number => {
+      let n = 0;
+      if (pl.active && pool.get(pl.active.cardId)?.name === '雪妖女') n += 1;
+      n += pl.bench.filter(c => pool.get(c.cardId)?.name === '雪妖女').length;
+      return n;
+    };
+    const frosmothN = countFrosmoth(players[0]) + countFrosmoth(players[1]);
+    if (frosmothN > 0) {
+      const addCounters = frosmothN; // 每隻雪妖女放 1 個 → 共 N 個指示物 = N*10 傷害
+      const isFrosmothCheckupTarget = (c: CardInstance): boolean => {
+        const card = pool.get(c.cardId);
+        if (!card?.abilities || card.abilities.length === 0) return false;
+        if (card.name === '雪妖女') return false;
+        return true;
+      };
+      const affectedNames: string[] = [];
+      let aIdxKOPrizes = 0;
+      let aIdxKOActiveDied = false;
+      for (const i of [0, 1] as const) {
+        const pl = { ...players[i] };
+        // 戰鬥區
+        if (pl.active && isFrosmothCheckupTarget(pl.active)) {
+          const newDmg = pl.active.damage + addCounters * 10;
+          const card = pool.get(pl.active.cardId);
+          const hp = getEffectiveHP(pl.active, pool, state);
+          affectedNames.push(`${card?.name ?? '?'}(+${addCounters * 10})`);
+          if (hp > 0 && newDmg >= hp) {
+            const koDiscard: CardInstance[] = [
+              { ...pl.active, damage: newDmg },
+              ...pl.active.energyAttached,
+              ...(pl.active.toolAttached ? [pl.active.toolAttached] : []),
+              ...(pl.active.evolvedFromStack ?? []),
+            ];
+            pl.discard = [...pl.discard, ...koDiscard];
+            if (i === aIdx) {
+              aIdxKOPrizes += prizesForKO(card!);
+              aIdxKOActiveDied = true;
+            }
+            pl.active = null;
+          } else {
+            pl.active = { ...pl.active, damage: newDmg };
+          }
+        }
+        // 備戰區
+        const newBench: CardInstance[] = [];
+        for (const b of pl.bench) {
+          if (!isFrosmothCheckupTarget(b)) { newBench.push(b); continue; }
+          const newDmg = b.damage + addCounters * 10;
+          const card = pool.get(b.cardId);
+          const hp = getEffectiveHP(b, pool, state);
+          affectedNames.push(`${card?.name ?? '?'}(+${addCounters * 10})`);
+          if (hp > 0 && newDmg >= hp) {
+            const koDiscard: CardInstance[] = [
+              { ...b, damage: newDmg },
+              ...b.energyAttached,
+              ...(b.toolAttached ? [b.toolAttached] : []),
+              ...(b.evolvedFromStack ?? []),
+            ];
+            pl.discard = [...pl.discard, ...koDiscard];
+            if (i === aIdx) aIdxKOPrizes += prizesForKO(card!);
+          } else {
+            newBench.push({ ...b, damage: newDmg });
+          }
+        }
+        pl.bench = newBench;
+        players[i] = pl;
+      }
+      if (affectedNames.length > 0) {
+        state = addLog({ ...state, players },
+          `冰冷之帳：${affectedNames.join('、')}`, null);
+      }
+      if (aIdxKOPrizes > 0) {
+        state = addLog(state,
+          `冰冷之帳：${players[aIdx].name} 有寶可夢被擊倒，${players[dIdx].name} 取得 ${aIdxKOPrizes} 張獎勵牌。`, null);
+        // 若 aIdx 戰鬥寶可夢被擊倒 + 備戰已空 → 勝利條件
+        if (aIdxKOActiveDied && players[aIdx].bench.length === 0 && players[aIdx].active === null) {
+          return {
+            ...state, phase: 'game-over',
+            winner: dIdx, winReason: `${players[aIdx].name} 沒有可上場的寶可夢`,
+          };
+        }
+        return { ...state, pendingPrizes: (state.pendingPrizes ?? 0) + aIdxKOPrizes };
+      }
+    }
+
     // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn / abilityUsedThisTurn）
     const currentPlayer = { ...players[aIdx] };
     currentPlayer.active = currentPlayer.active ? clearTurnFlags(currentPlayer.active) : null;
@@ -2000,6 +2139,8 @@ export function getUsableAbilities(
       if (ab.name === '集客' && player.active?.iid !== pk.iid) return;
       // 精神抽出 / 龐克練肌：只有本回合剛進化才能用
       if ((ab.name === '精神抽出' || ab.name === '龐克練肌') && !pk.evolvedThisTurn) return;
+      // 可達鴨｜濕氣：自身 KO 類特性被消除（不列入可用清單）
+      if (SELF_KO_ABILITY_NAMES.has(ab.name) && isSelfKOEffectBlocked(state, pool)) return;
       // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。
       // 條件：對手在他們剛結束的回合取過獎賞（TurnStart < LastTurnEnd）。
       // 不允許：自己回合內的自 KO（如黑夜魔靈 咒詛炸彈）— 此時 TurnStart == LastTurnEnd。

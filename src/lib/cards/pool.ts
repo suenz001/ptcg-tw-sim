@@ -35,7 +35,14 @@ export async function loadSet(
   const p = (async () => {
     const res = await fetchFn(`${base}/cards/${setCode}.json`);
     if (!res.ok) throw new Error(`Set ${setCode} not found (HTTP ${res.status})`);
-    const cards = (await res.json()) as Card[];
+    const raw = (await res.json()) as Card[];
+    // v2.22：統一訓練家寶可夢命名 — 部分 set（SV9a/MC/SVOM/SVOD）原始卡名帶有
+    // <>冠名括號（例：<竹蘭的>烈咬陸鯊ex、<瑪俐的>搗蛋小妖），M2a 復刻版則不帶。
+    // 為了統一 effects.ts 裡的效果登錄 key（regA / regPre / regPost 都用純名），
+    // 在載入時 strip 掉 `<` 與 `>`。UI 顯示也隨之一致（皆為「竹蘭的XXX」/「瑪俐的XXX」）。
+    const cards = raw.map(c => (c.name && (c.name.includes('<') || c.name.includes('>')))
+      ? { ...c, name: c.name.replace(/[<>]/g, '') }
+      : c);
     setCache.set(setCode, cards);
     inflight.delete(setCode);
     return cards;

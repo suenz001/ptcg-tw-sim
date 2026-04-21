@@ -100,3 +100,14 @@ export const JAMMING_TOWER_STADIUMS = new Set<string>(['阻礙之塔']);
 //      若日後發現 Colorless 被動特性跟本機制互動有誤，再各自加 isColorlessAbilityBlocked 閘門。
 // 卡面文字：「雙方場上所有【無】寶可夢的特性全部消除。」
 export const ROCKET_WATCHTOWER_STADIUMS = new Set<string>(['火箭隊的監視塔']);
+
+// ── 對戰圓形競技場（Stadium）── 引擎側 hook ── v2.22 ──────────────────────────
+// 卡面文字：「雙方的所有備戰寶可夢，不會因對手的招式與特性的效果而被放置傷害指示物。
+//   [會受到招式的傷害。]」
+// 實裝範圍：各 bench-snipe resolver（snipe-10/20/30/60/120/variable/multi）、
+//   cursed-bomb（自 KO 特性類）、bench-hit-N、damage-distribute（幻影奇襲 類）、
+//   applyDamageToAllOpp 全體指示物類——若 activeStadium 為此集合成員且目標為備戰，
+//   放置動作直接跳過（僅記一條 log）。
+// 註：括號內「會受到招式的傷害」指直接攻擊戰鬥位的招式傷害（weakness/resistance 計算）
+//   不受此卡影響；因此 ATTACK pipeline 的 active-hit 不需要閘門。
+export const BENCH_PROTECTION_STADIUMS = new Set<string>(['對戰圓形競技場']);

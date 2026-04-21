@@ -183,6 +183,9 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'Basic')           return isBasicPokemonCard(card);
         if (f === 'Basic:HP70')      return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
         if (f === 'Stage1')          return card.supertype === 'Pokemon' && card.subtype === 'Stage1';
+        if (f === 'Stage2')          return card.supertype === 'Pokemon' && card.subtype === 'Stage2';
+        if (f === 'Evolution')       return card.supertype === 'Pokemon' && !!card.evolvesFrom;
+        if (f === 'PsychicBasic')    return card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Psychic';
         if (f === 'TOP8') {
           const top8 = new Set<string>((sel.params?.top8Iids as string[]) ?? []);
           return top8.has(c.iid);
@@ -257,8 +260,10 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         ...(srcPlayer.active ? [srcPlayer.active] : []),
         ...srcPlayer.bench,
       ];
-      if (allOpp.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
-      const best = allOpp.reduce((a, b) => {
+      const validIidsOP = sel.params?.validIids as string[] | undefined;
+      const oppPool = validIidsOP ? allOpp.filter(c => validIidsOP.includes(c.iid)) : allOpp;
+      if (oppPool.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      const best = oppPool.reduce((a, b) => {
         const aRem = (pool.get(a.cardId)?.hp ?? 0) - a.damage;
         const bRem = (pool.get(b.cardId)?.hp ?? 0) - b.damage;
         return aRem <= bRem ? a : b;

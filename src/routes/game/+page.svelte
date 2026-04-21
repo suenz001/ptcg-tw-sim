@@ -655,6 +655,9 @@
           if (f === 'Basic')      return isBasicPokemonCard(card);
           if (f === 'Basic:HP70') return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
           if (f === 'Stage1')     return card.supertype === 'Pokemon' && card.subtype === 'Stage1';
+          if (f === 'Stage2')     return card.supertype === 'Pokemon' && card.subtype === 'Stage2';
+          if (f === 'Evolution')  return card.supertype === 'Pokemon' && !!card.evolvesFrom;
+          if (f === 'PsychicBasic') return card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Psychic';
           if (f === 'Pokemon')    return card.supertype === 'Pokemon' && card.subtype !== 'Other';
           if (f === 'Energy')     return card.supertype === 'Energy';
           if (f === 'BasicEnergy') return card.supertype === 'Energy' && card.subtype === 'Basic';
@@ -671,7 +674,7 @@
           }
           // Wave 44 (v2.21)：尖釘鎮道館用 — 「瑪俐的」寶可夢
           if (f === 'MarniePokemon') {
-            return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.name.startsWith('<瑪俐的>');
+            return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.name.startsWith('瑪俐的');
           }
           if (f === 'FightingBasicOrFightingEnergy') {
             // 基本【鬥】寶可夢：pokemonType === 'Fighting' 且為基礎
@@ -707,12 +710,14 @@
       case 'opp-poke-choose': {
         const items: CardInstance[] = [...src.bench];
         if (src.active) items.unshift(src.active);
-        return items;
+        const validIidsOpp = pendingSelection.params?.validIids as string[] | undefined;
+        return validIidsOpp ? items.filter(c => validIidsOpp.includes(c.iid)) : items;
       }
       case 'opp-bench-choose': {
         const includeActive = pendingSelection.params?.includeActive === true;
-        if (includeActive && src.active) return [src.active, ...src.bench];
-        return src.bench;
+        const base = includeActive && src.active ? [src.active, ...src.bench] : src.bench;
+        const validIidsOppB = pendingSelection.params?.validIids as string[] | undefined;
+        return validIidsOppB ? base.filter(c => validIidsOppB.includes(c.iid)) : base;
       }
       case 'damage-distribute': {
         // 傷害指示物自由分配（幻影奇襲）— 預設只能選對手備戰；

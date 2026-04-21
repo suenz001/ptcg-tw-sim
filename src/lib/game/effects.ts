@@ -58,8 +58,38 @@ export {
 // stadiums.ts 包含 3 個 USE_STADIUM 的 pending resolver（神秘花園、夜間學院、
 // 月光丘陵）以及 JAMMING_TOWER_STADIUMS / ROCKET_WATCHTOWER_STADIUMS 兩個
 // 引擎側 hook 集合（道具無效 / 【無】寶可夢特性無效）。
-import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS } from './effects/cards/stadiums';
-export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS };
+import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS } from './effects/cards/stadiums';
+export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS };
+
+/**
+ * v2.22：對戰圓形競技場（Stadium）— 備戰保護判定
+ * 當場上活動場地卡為 BENCH_PROTECTION_STADIUMS（對戰圓形競技場）時，
+ * 雙方所有備戰寶可夢不會因對手的招式/特性效果被放置傷害指示物。
+ * 所有 snipe-*、cursed-bomb、bench-hit-N、damage-distribute、全體指示物 resolver
+ * 在處理備戰目標前先呼叫這個 helper；true → 跳過放置並記 log。
+ */
+export function isBenchProtected(state: GameState, pool: Map<string, Card>): boolean {
+  const s = state.activeStadium;
+  if (!s) return false;
+  const card = pool.get(s.cardId);
+  if (!card) return false;
+  return BENCH_PROTECTION_STADIUMS.has(card.name);
+}
+
+/**
+ * v2.22：特殊能量「附加時」hook —
+ * 某些特殊能量（富裕能量、感應【超】能量）附加後會有額外效果（抽牌 / 搜索 etc.）。
+ * engine.ts 的 ATTACH_ENERGY handler 在能量實際附加後，會查此 map：
+ *   key = 特殊能量卡名，fn(state, actorIdx, targetIid, pool) => newState。
+ * 若目標寶可夢不符條件（例：感應【超】只對【超】寶可夢生效），fn 內部自行判斷並可略過。
+ */
+export type AttachEnergyHookFn = (
+  state: GameState,
+  actorIdx: 0 | 1,
+  targetIid: string,
+  pool: Map<string, Card>,
+) => GameState;
+export const SPECIAL_ENERGY_ATTACH = new Map<string, AttachEnergyHookFn>();
 
 // 已搬遷到 effects/cards/ 下的卡 — side-effect import 觸發 reg() 登錄。
 // 未來要加更多搬遷檔時，也只需要在這裡加一行 import。
@@ -660,6 +690,10 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   const label = String(params?.attackLabel ?? '招式');
   const targetIdx = ((params?.targetIdx ?? (1 - actorIdx)) as 0 | 1);
   if (amount <= 0 || selectedIids.length === 0) return st;
+  // v2.22 對戰圓形競技場：針對「對手備戰」的招式效果全部跳過
+  if (targetIdx !== actorIdx && isBenchProtected(st, pool)) {
+    return addLog(st, `${label}：對戰圓形競技場效果 — 對手備戰不受此效果傷害`, actorIdx);
+  }
   const target = st.players[targetIdx];
 
   let morePrizes = 0;
@@ -843,6 +877,12 @@ regR('snipe-120', (st, actorIdx, selectedIids, _params, pool) => {
   const isActive = defender.active?.iid === targetIid;
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
+
+  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物
+  if (!isActive && isBenchProtected(st, pool)) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    return addLog(st, `狙擊羽毛：${name} 因對戰圓形競技場效果不受傷害`, actorIdx);
+  }
 
   const targetCard = pool.get(target.cardId);
   const newDmg = target.damage + 120;
@@ -2038,7 +2078,7 @@ export const PASSIVE_DAMAGE_REDUCE = new Map<string, number>([
  * 多個來源可疊加（例如場上同時有 2 隻羅絲雷朵），以擁有特性的 Pokemon 張數乘算。
  */
 export const PASSIVE_ATTACK_BONUS = new Map<string, (attackerCard: Card) => number>([
-  // <竹蘭的>羅絲雷朵｜輝煌聲援 — 只要這隻在場上，自己「竹蘭的」寶可夢招式傷害 +30
+  // 竹蘭的羅絲雷朵｜輝煌聲援 — 只要這隻在場上，自己「竹蘭的」寶可夢招式傷害 +30
   ['輝煌聲援', (att) => att.name.includes('竹蘭的') ? 30 : 0],
 ]);
 
@@ -3610,6 +3650,11 @@ regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
   if (!targetIid) return st;
   const target = defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
+  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物
+  if (isBenchProtected(st, pool)) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    return addLog(st, `精刺奇襲：${name} 因對戰圓形競技場效果不受傷害`, actorIdx);
+  }
   const targetCard = pool.get(target.cardId);
   const newDmg = target.damage + 60;
   const targetHP = targetCard?.hp ?? 0;
@@ -3737,6 +3782,12 @@ regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
 
+  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物
+  if (!isActive && isBenchProtected(st, pool)) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    return addLog(st, `電磁電光：${name} 因對戰圓形競技場效果不受傷害`, actorIdx);
+  }
+
   const targetCard = pool.get(target.cardId);
   const newDmg = target.damage + 10;
   const targetHP = targetCard?.hp ?? 0;
@@ -3830,8 +3881,11 @@ function applyDamageToAllOpp(
   }
 
   // 處理 bench（篩選條件後再累積指示物；KO 的收到 discard）
+  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物，整體跳過
+  const benchBlocked = isBenchProtected(s, pool);
   const newBench: CardInstance[] = [];
   for (const b of defender.bench) {
+    if (benchBlocked) { newBench.push(b); continue; }
     if (onlyDamaged && b.damage === 0) { newBench.push(b); continue; }
     const card = pool.get(b.cardId);
     const newDmg = b.damage + amount;
@@ -3939,6 +3993,11 @@ regR('snipe-20', (st, actorIdx, selectedIids, _params, pool) => {
   const isActive = defender.active?.iid === targetIid;
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
+  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物
+  if (!isActive && isBenchProtected(st, pool)) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    return addLog(st, `悄聲加害：${name} 因對戰圓形競技場效果不受傷害指示物`, actorIdx);
+  }
   const targetCard = pool.get(target.cardId);
   const newDmg = target.damage + 20;
   const hp = targetCard?.hp ?? 0;
@@ -4167,6 +4226,11 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
   const isActive = defender.active?.iid === targetIid;
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
+  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物
+  if (!isActive && isBenchProtected(st, pool)) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    return addLog(st, `${label}：${name} 因對戰圓形競技場效果不受傷害`, actorIdx);
+  }
   const targetCard = pool.get(target.cardId);
   const newDmg = target.damage + dmg;
   const hp = targetCard?.hp ?? 0;
@@ -4871,6 +4935,10 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
   const dIdx = (1 - actorIdx) as 0 | 1;
 
   if (selectedIids.length === 0) return st;
+  // v2.22 對戰圓形競技場：備戰完全不受對手招式傷害指示物 → 整批放置取消
+  if (isBenchProtected(st, pool)) {
+    return addLog(st, `${label}：對戰圓形競技場效果 — 對手備戰不受傷害指示物放置`, actorIdx);
+  }
 
   let s: GameState = st;
   let placedThisBatch = 0;
@@ -5845,6 +5913,8 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
   const dmg = (params?.damage as number) ?? 0;
   const label = (params?.label as string) ?? '多目標攻擊';
   const dIdx = (1 - actorIdx) as 0 | 1;
+  // v2.22 對戰圓形競技場：備戰目標不受傷害指示物（active 仍可受 snipe-multi 類直擊）
+  const benchBlocked = isBenchProtected(st, pool);
   let s = st;
   let totalPrize = 0;
   let opponentActiveKOed = false;
@@ -5853,6 +5923,11 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     const isActive = defender.active?.iid === iid;
     const target = isActive ? defender.active! : defender.bench.find(c => c.iid === iid);
     if (!target) continue;
+    if (!isActive && benchBlocked) {
+      const name = pool.get(target.cardId)?.name ?? '?';
+      s = addLog(s, `${label}：${name} 因對戰圓形競技場效果不受傷害`, actorIdx);
+      continue;
+    }
     const targetCard = pool.get(target.cardId);
     const newDmg = target.damage + dmg;
     const hp = targetCard?.hp ?? 0;
@@ -6729,9 +6804,10 @@ regPost('超級炎武王ex|深紅炸彈', selfHitPost(60));
 regPost('小鋸鱷|撞一下', selfHitPost(10));
 regPost('阿羅拉 隆隆岩|百萬噸墜落', selfHitPost(40));
 regPost('固拉多|百萬噸墜落', selfHitPost(30));
-regPost('<派帕的>原野水母|撞一下', selfHitPost(10));
-regPost('<派帕的>陸地水母|突擊', selfHitPost(30));
-regPost('<瑪俐的>頭巾混混|狂野衝撞', selfHitPost(30));
+// v2.22：訓練家寶可夢卡名統一 strip 掉 <> 冠名（pool.ts loadSet 會 normalize）
+regPost('派帕的原野水母|撞一下', selfHitPost(10));
+regPost('派帕的陸地水母|突擊', selfHitPost(30));
+regPost('瑪俐的頭巾混混|狂野衝撞', selfHitPost(30));
 regPost('索羅亞|猛撞', selfHitPost(10));
 regPost('下石鳥|突擊', selfHitPost(20));
 regPost('騎士蝸牛|狂野槍', selfHitPost(30));
@@ -8074,7 +8150,7 @@ regPost('長毛巨魔|挑釁抓擊', forceOppSwapThenDamagePost(160, '挑釁抓�
 //   • 烈雀｜啄食 (M1L/MC) ─ 10 + 丟對手 tool
 //   • 拉達｜削落 (M3) ─ 20 + 丟對手 tool
 //   • 燃燒蟲｜啄落 (SV11B) ─ 10 + 丟對手 tool
-//   • <派帕的>貪心栗鼠｜咬取 (SV9a) ─ 10 + 丟對手 tool
+//   • 派帕的貪心栗鼠｜咬取 (SV9a) ─ 10 + 丟對手 tool
 //   • N的電電蟲｜劈哩啪啦短路 (SV9) ─ 30 + 丟對手 tool + 有丟棄則麻痺
 //   • 美錄梅塔｜重塑斧 (SV7) ─ 250 + 必須丟自身 tool，無 tool 則失敗
 //
@@ -8134,7 +8210,7 @@ function defToolDiscardParalyzePre(base: number, label: string): AttackPreFn {
 regPre('烈雀|啄食', defToolDiscardPre(10, '啄食'));
 regPre('拉達|削落', defToolDiscardPre(20, '削落'));
 regPre('燃燒蟲|啄落', defToolDiscardPre(10, '啄落'));
-regPre('<派帕的>貪心栗鼠|咬取', defToolDiscardPre(10, '咬取'));
+regPre('派帕的貪心栗鼠|咬取', defToolDiscardPre(10, '咬取'));
 
 // 丟對手 tool + 有丟棄則麻痺
 regPre('N的電電蟲|劈哩啪啦短路', defToolDiscardParalyzePre(30, '劈哩啪啦短路'));
@@ -8365,6 +8441,15 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
   const isActive = defender.active?.iid === targetIid;
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
+  // v2.22 對戰圓形競技場：特性類對備戰的傷害指示物放置無效（仍自 KO 自己）
+  if (!isActive && isBenchProtected(st, pool)) {
+    const name = pool.get(target.cardId)?.name ?? '?';
+    let s = addLog(st, `${label}：${name} 因對戰圓形競技場效果不受傷害指示物`, actorIdx);
+    if (userIid) {
+      s = selfKOInstance(s, actorIdx, userIid, pool, label);
+    }
+    return s;
+  }
   const targetCard = pool.get(target.cardId);
   const tHp = targetCard?.hp ?? 0;
   const newDmg = target.damage + addDmg;
@@ -8407,11 +8492,34 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
   return s;
 });
 
+/**
+ * 可達鴨｜濕氣 — 內嵌判定（避免循環 import）。
+ * 只要任一方場上有可達鴨（active 或 bench），所有「將自己昏厥」類效果
+ * （ability / [特性]招式）全部不觸發。
+ */
+function hasPsyduckDamp(state: GameState, pool: Map<string, Card>): boolean {
+  for (const p of state.players) {
+    const allPokes: CardInstance[] = [
+      ...(p.active ? [p.active] : []),
+      ...p.bench,
+    ];
+    for (const pk of allPokes) {
+      const card = pool.get(pk.cardId);
+      if (card?.abilities?.some(a => a.name === '濕氣')) return true;
+    }
+  }
+  return false;
+}
+
 /** 招式式 [特性]咒詛炸彈 — 攻擊者 = active。counters: 放幾個傷害指示物（預設 5） */
 function cursedBombAttackPost(label: string, counters: number = 5): AttackPostFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (!p.active) return state;
+    // 可達鴨｜濕氣：自身 KO 類招式被消除（不放指示物也不自 KO）
+    if (hasPsyduckDamp(state, pool)) {
+      return addLog(state, `${label}：被可達鴨的濕氣消除`, aIdx);
+    }
     const userIid = p.active.iid;
     const dIdx = (1 - aIdx) as 0 | 1;
     const dp = state.players[dIdx];
@@ -8501,6 +8609,10 @@ function overvoltAttackPost(label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (!p.active) return state;
+    // 可達鴨｜濕氣：自身 KO 類招式被消除（不 KO 自己也不找能量）
+    if (hasPsyduckDamp(state, pool)) {
+      return addLog(state, `${label}：被可達鴨的濕氣消除`, aIdx);
+    }
     const userIid = p.active.iid;
     // (1) 自身 KO
     let s = selfKOInstance(state, aIdx, userIid, pool, label);
@@ -8872,12 +8984,12 @@ reg('百萬噸吹風機', (st, idx, pool) => {
 // Wave 42 — 「竹蘭的烈咬陸鯊EX」JP meta 牌組實裝（v1.97）
 //
 // 項目：
-//   1. <竹蘭的>烈咬陸鯊ex｜螺旋俯衝  — 100 + 抽到滿 6
-//   2. <竹蘭的>烈咬陸鯊ex｜龍之爆發  — 260 + 自己全丟能量
-//   3. 竹蘭的尖牙陸鯊｜王者呼聲      — 特性，搜 1 張「竹蘭的」寶可夢到手牌
-//   4. 竹蘭的圓陸鯊｜岩石投擲        — 20 不計算弱點/抵抗力
-//   5. <竹蘭的>羅絲雷朵｜輝煌聲援    — 被動特性，場上時「竹蘭的」寶可夢招式 +30
-//   6. <竹蘭的>花岩怪｜激怒咒詛      — 備戰「竹蘭的」×10，skipWeakRes
+//   1. 竹蘭的烈咬陸鯊ex｜螺旋俯衝  — 100 + 抽到滿 6
+//   2. 竹蘭的烈咬陸鯊ex｜龍之爆發  — 260 + 自己全丟能量
+//   3. 竹蘭的尖牙陸鯊｜王者呼聲    — 特性，搜 1 張「竹蘭的」寶可夢到手牌
+//   4. 竹蘭的圓陸鯊｜岩石投擲      — 20 不計算弱點/抵抗力
+//   5. 竹蘭的羅絲雷朵｜輝煌聲援    — 被動特性，場上時「竹蘭的」寶可夢招式 +30
+//   6. 竹蘭的花岩怪｜激怒咒詛      — 備戰「竹蘭的」×10，skipWeakRes
 //   7. 力量蛋白飲（Item）            — 本回合 [鬥] 寶可夢招式 +30（player flag）
 //   8. 戰鬥鑼（Item）                 — 搜 1 張 [鬥] 基礎寶可夢 或 基本【鬥】能量到手牌
 //   9. 寶可平板（Item）              — 搜 1 張「非擁有規則」寶可夢到手牌
@@ -8887,11 +8999,10 @@ reg('百萬噸吹風機', (st, idx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── 1. 螺旋俯衝 — 100 傷害 + 抽到滿 6 ────────────────────────────────────────
-regPost('<竹蘭的>烈咬陸鯊ex|螺旋俯衝', drawToHandPost(6, '螺旋俯衝'));
+// v2.22：卡名統一（pool.ts loadSet strip <>），只登錄純名稱即可
 regPost('竹蘭的烈咬陸鯊ex|螺旋俯衝', drawToHandPost(6, '螺旋俯衝'));
 
 // ── 2. 龍之爆發 — 260 傷害 + 自己全部能量丟棄 ─────────────────────────────
-regPost('<竹蘭的>烈咬陸鯊ex|龍之爆發', selfDiscardAllEnergyPost('龍之爆發'));
 regPost('竹蘭的烈咬陸鯊ex|龍之爆發', selfDiscardAllEnergyPost('龍之爆發'));
 
 // ── 3. 竹蘭的尖牙陸鯊｜王者呼聲（特性）──────────────────────────────────────
@@ -8923,28 +9034,16 @@ regPre('竹蘭的圓陸鯊|岩石投擲', skipWeakResPre(20, '岩石投擲'));
 // ── 5. 輝煌聲援（被動）— 上面 PASSIVE_ATTACK_BONUS 已登記，不需 regA ────────
 // 被動特性在 engine 傷害計算時自動掃場觸發，不透過 ABILITY_EFFECTS。
 
-// ── 6. <竹蘭的>花岩怪｜激怒咒詛 —————————————————————————————————————
+// ── 6. 竹蘭的花岩怪｜激怒咒詛 —————————————————————————————————————
 // 基礎傷害 0，對方戰鬥寶可夢每張自己備戰「竹蘭的」寶可夢的傷害指示物 +10；不計算弱點/抵抗力。
-regPre('<竹蘭的>花岩怪|激怒咒詛', (state, aIdx, pool, _action) => {
-  const p = state.players[aIdx];
-  let totalMarkers = 0;
-  for (const b of p.bench) {
-    const card = pool.get(b.cardId);
-    if (card?.name.includes('竹蘭的')) {
-      // 以 10 為單位計數（傷害指示物每顆 10 HP）
-      totalMarkers += Math.floor(b.damage / 10);
-    }
-  }
-  const damage = totalMarkers * 10;
-  const s = addLog(state, `激怒咒詛：備戰「竹蘭的」寶可夢傷害指示物合計 ${totalMarkers} 顆 → ${damage} 傷害（不計算弱點/抵抗力）`, aIdx);
-  return { state: s, damage, skipWeakRes: true };
-});
+// v2.22：卡名統一（pool.ts loadSet strip <>），只登錄純名稱即可
 regPre('竹蘭的花岩怪|激怒咒詛', (state, aIdx, pool, _action) => {
   const p = state.players[aIdx];
   let totalMarkers = 0;
   for (const b of p.bench) {
     const card = pool.get(b.cardId);
     if (card?.name.includes('竹蘭的')) {
+      // 以 10 為單位計數（傷害指示物每顆 10 HP）
       totalMarkers += Math.floor(b.damage / 10);
     }
   }
@@ -9458,6 +9557,266 @@ regPost('瑪俐的長毛巨魔ex|暗影子彈', (state, aIdx, _pool) => {
     minCount: 1, maxCount: 1,
     effectKey: 'snipe-variable',
     params: { damage: 30, label: '暗影子彈' },
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.22 新增：6 張卡
+//   - 改造之錘（Item）—— 丟對手 1 隻寶可夢身上的 1 張特殊能量
+//   - 小光（Supporter）—— 依序搜尋 1 基礎/1 一階進化/1 二階進化加手牌
+//   - 鬥子（Supporter）—— 搜尋 1 進化寶可夢 + 1 能量加手牌
+//   - 對戰圓形競技場（Stadium）—— 被動：備戰免於對手招式/特性放指示物（BENCH_PROTECTION_STADIUMS）
+//   - 富裕能量（ACE SPEC Special Energy）—— 從手牌附加時抽 4
+//   - 感應【超】能量（Special Energy）—— 附加到【超】寶可夢時搜尋至多 2 隻基礎【超】到備戰
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── 改造之錘（Item） ─────────────────────────────────────────────────────────
+// 卡面：從對手任一隻寶可夢身上丟棄 1 張特殊能量。
+// Guard：對手場上（含出場 + 備戰）至少 1 隻寶可夢附有特殊能量。
+// UI：opp-poke-choose 並用 validIids 只顯示有特殊能量的寶可夢。
+// Resolver：把該寶可夢身上「最後一張」特殊能量丟到對手棄牌區。
+regG('改造之錘', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
+  return all.some(pk => pk.energyAttached.some(e => {
+    const c = pool.get(e.cardId);
+    return c?.supertype === 'Energy' && c.subtype === 'Special';
+  }));
+});
+reg('改造之錘', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
+  const cand = all.filter(pk => pk.energyAttached.some(e => {
+    const c = pool.get(e.cardId);
+    return c?.supertype === 'Energy' && c.subtype === 'Special';
+  }));
+  if (cand.length === 0) return addLog(st, '改造之錘：對手場上沒有特殊能量', idx);
+  const s = addLog(st, '改造之錘：選 1 隻對手附有特殊能量的寶可夢丟棄 1 張特殊能量', idx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'reform-hammer-discard',
+    params: { includeActive: true, validIids: cand.map(c => c.iid) },
+  });
+});
+regR('reform-hammer-discard', (st, idx, iids, _params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const targetIid = iids[0];
+  if (!targetIid) return st;
+  const dp = st.players[dIdx];
+  const target = dp.active?.iid === targetIid
+    ? dp.active
+    : dp.bench.find(c => c.iid === targetIid) ?? null;
+  if (!target) return st;
+  // 由後往前找第一張特殊能量
+  let spIdx = -1;
+  for (let i = target.energyAttached.length - 1; i >= 0; i--) {
+    const c = pool.get(target.energyAttached[i].cardId);
+    if (c?.supertype === 'Energy' && c.subtype === 'Special') { spIdx = i; break; }
+  }
+  if (spIdx < 0) {
+    const tn = pool.get(target.cardId)?.name ?? '?';
+    return addLog(st, `改造之錘：${tn} 身上沒有特殊能量`, idx);
+  }
+  const removed = target.energyAttached[spIdx];
+  const energyName = pool.get(removed.cardId)?.name ?? '特殊能量';
+  const targetName = pool.get(target.cardId)?.name ?? '?';
+  const s = addLog(st, `改造之錘：丟棄 ${targetName} 身上的特殊能量（${energyName}）`, idx);
+  return updatePlayer(s, dIdx, p => {
+    const newEnergies = [
+      ...target.energyAttached.slice(0, spIdx),
+      ...target.energyAttached.slice(spIdx + 1),
+    ];
+    const updated = { ...target, energyAttached: newEnergies };
+    return {
+      ...p,
+      active: p.active?.iid === targetIid ? updated : p.active,
+      bench: p.bench.map(c => c.iid === targetIid ? updated : c),
+      discard: [...p.discard, removed],
+    };
+  });
+});
+
+// ── 小光（Supporter） ───────────────────────────────────────────────────────
+// 卡面：從你的牌庫搜尋 1 張基礎寶可夢、1 張進化一階寶可夢、1 張進化二階寶可夢，
+//      展示給對手後加進手牌，並重洗牌庫。
+// 實裝：三段鏈式 deck-search（Basic → Stage1 → Stage2），每段 minCount:0 maxCount:1
+//      （牌庫找不到時玩家可以直接 Skip 進下一段）。最後階段結束才 shuffle。
+regG('小光', (st, idx) => st.players[idx].deck.length > 0);
+reg('小光', (st, idx) => {
+  const s = addLog(st, '小光：依序搜尋 1 基礎/1 進化一階/1 進化二階寶可夢加手牌', idx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Basic',
+    minCount: 0, maxCount: 1,
+    effectKey: 'koharu-phase1',
+  });
+});
+regR('koharu-phase1', (st, idx, iids, _params, pool) => {
+  // 第 1 階段：Basic
+  if (iids.length > 0) {
+    const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `小光（基礎）：${names} 加入手牌`, idx);
+    st = updatePlayer(st, idx, p => ({
+      ...p,
+      hand: [...p.hand, ...p.deck.filter(c => iids.includes(c.iid))],
+      deck: p.deck.filter(c => !iids.includes(c.iid)),
+    }));
+  } else {
+    st = addLog(st, '小光（基礎）：未選擇', idx);
+  }
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Stage1',
+    minCount: 0, maxCount: 1,
+    effectKey: 'koharu-phase2',
+  });
+});
+regR('koharu-phase2', (st, idx, iids, _params, pool) => {
+  if (iids.length > 0) {
+    const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `小光（進化一階）：${names} 加入手牌`, idx);
+    st = updatePlayer(st, idx, p => ({
+      ...p,
+      hand: [...p.hand, ...p.deck.filter(c => iids.includes(c.iid))],
+      deck: p.deck.filter(c => !iids.includes(c.iid)),
+    }));
+  } else {
+    st = addLog(st, '小光（進化一階）：未選擇', idx);
+  }
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Stage2',
+    minCount: 0, maxCount: 1,
+    effectKey: 'koharu-phase3',
+  });
+});
+regR('koharu-phase3', (st, idx, iids, _params, pool) => {
+  if (iids.length > 0) {
+    const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `小光（進化二階）：${names} 加入手牌`, idx);
+    st = updatePlayer(st, idx, p => ({
+      ...p,
+      hand: [...p.hand, ...p.deck.filter(c => iids.includes(c.iid))],
+      deck: p.deck.filter(c => !iids.includes(c.iid)),
+    }));
+  } else {
+    st = addLog(st, '小光（進化二階）：未選擇', idx);
+  }
+  // 三階段結束後重洗牌庫
+  return updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) }));
+});
+
+// ── 鬥子（Supporter） ───────────────────────────────────────────────────────
+// 卡面：從你的牌庫搜尋 1 張進化寶可夢 + 1 張能量卡，展示後加進手牌並重洗牌庫。
+regG('鬥子', (st, idx) => st.players[idx].deck.length > 0);
+reg('鬥子', (st, idx) => {
+  const s = addLog(st, '鬥子：搜尋 1 張進化寶可夢 + 1 張能量加手牌', idx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Evolution',
+    minCount: 0, maxCount: 1,
+    effectKey: 'touko-phase1',
+  });
+});
+regR('touko-phase1', (st, idx, iids, _params, pool) => {
+  if (iids.length > 0) {
+    const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `鬥子（進化寶可夢）：${names} 加入手牌`, idx);
+    st = updatePlayer(st, idx, p => ({
+      ...p,
+      hand: [...p.hand, ...p.deck.filter(c => iids.includes(c.iid))],
+      deck: p.deck.filter(c => !iids.includes(c.iid)),
+    }));
+  } else {
+    st = addLog(st, '鬥子（進化寶可夢）：未選擇', idx);
+  }
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Energy',
+    minCount: 0, maxCount: 1,
+    effectKey: 'touko-phase2',
+  });
+});
+regR('touko-phase2', (st, idx, iids, _params, pool) => {
+  if (iids.length > 0) {
+    const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `鬥子（能量）：${names} 加入手牌`, idx);
+    st = updatePlayer(st, idx, p => ({
+      ...p,
+      hand: [...p.hand, ...p.deck.filter(c => iids.includes(c.iid))],
+      deck: p.deck.filter(c => !iids.includes(c.iid)),
+    }));
+  } else {
+    st = addLog(st, '鬥子（能量）：未選擇', idx);
+  }
+  return updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) }));
+});
+
+// ── 對戰圓形競技場（Stadium） ─────────────────────────────────────────────────
+// 純被動：雙方備戰寶可夢不會因對手的招式與特性被放置傷害指示物。
+// 放置走 engine PLAY_TRAINER/Stadium 分支；無需 reg(TRAINER_EFFECTS)。
+// 被動 gate 在 stadiums.ts 的 BENCH_PROTECTION_STADIUMS 集合，所有 bench-damage resolver
+// 都已經在觸發點呼叫 isBenchProtected(state, pool) 跳過傷害放置。
+
+// ── 富裕能量（ACE SPEC Special Energy） ─────────────────────────────────────
+// 卡面：提供 1 個【無】能量。從手牌附加到你的任 1 隻寶可夢時，抽 4 張卡。
+// Hook：SPECIAL_ENERGY_ATTACH，engine ATTACH_ENERGY 附加後呼叫。
+SPECIAL_ENERGY_ATTACH.set('富裕能量', (st, idx) => {
+  const s = addLog(st, '富裕能量：從牌庫抽 4 張', idx);
+  return drawCards(s, idx, 4);
+});
+
+// ── 感應【超】能量（Special Energy） ────────────────────────────────────────
+// 卡面：提供 1 個【超】能量。從手牌附加到你的【超】寶可夢時，
+//      可從牌庫搜尋至多 2 張基礎【超】寶可夢放備戰並重洗牌庫。
+// Hook：SPECIAL_ENERGY_ATTACH；先驗證 target 是【超】才進 pending。
+SPECIAL_ENERGY_ATTACH.set('感應【超】能量', (st, idx, targetIid, pool) => {
+  const p = st.players[idx];
+  const target = p.active?.iid === targetIid
+    ? p.active
+    : p.bench.find(c => c.iid === targetIid) ?? null;
+  if (!target) return st;
+  const targetCard = pool.get(target.cardId);
+  if (targetCard?.pokemonType !== 'Psychic') {
+    // 附加到非【超】寶可夢時不觸發搜索效果
+    return st;
+  }
+  // 備戰空位
+  const benchSlots = 5 - p.bench.length;
+  if (benchSlots <= 0) {
+    return addLog(st, '感應【超】能量：備戰區已滿，略過搜尋', idx);
+  }
+  // 牌庫要有基礎【超】寶可夢
+  const hasPsychicBasic = p.deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.subtype !== 'Other'
+      && !card.evolvesFrom && card.pokemonType === 'Psychic';
+  });
+  if (!hasPsychicBasic) {
+    return addLog(st, '感應【超】能量：牌庫沒有基礎【超】寶可夢', idx);
+  }
+  const takeMax = Math.min(2, benchSlots);
+  const s = addLog(st, `感應【超】能量：從牌庫選至多 ${takeMax} 隻基礎【超】寶可夢到備戰區`, idx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'PsychicBasic',
+    minCount: 0, maxCount: takeMax,
+    effectKey: 'bench-basic-from-deck',
   });
 });
 

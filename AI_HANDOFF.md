@@ -1,9 +1,84 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38az (v2.21)  
+> 最後更新：2026-04-21 Session 38b7 (v2.22)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b7 (v2.22) — 訓練家寶可夢命名統一 + Wave 45（6 張新卡實裝）
+
+### 背景
+
+部分 set（SV9a/MC/SVOM/SVOD）原始卡檔的訓練家寶可夢卡名帶有 `<>` 冠名括號（例：`<竹蘭的>烈咬陸鯊ex`、`<瑪俐的>搗蛋小妖`），M2a 復刻版則不帶（直接 `竹蘭的烈咬陸鯊ex`）。同一張卡兩個寫法會讓 `effects.ts` / `regA` / `regPre` / `regPost` 裡的效果登錄 key 對不上，玩家從 M2a 組牌的卡片效果完全不觸發。同時 Leon 請求實裝 6 張新卡。
+
+### 1. 命名統一（pool.ts）
+
+`src/lib/cards/pool.ts` `loadSet()` 在 parse JSON 後統一 strip `<` 與 `>`：
+```ts
+const cards = raw.map(c => (c.name && (c.name.includes('<') || c.name.includes('>')))
+  ? { ...c, name: c.name.replace(/[<>]/g, '') }
+  : c);
+```
+效果登錄 key 與 UI 顯示都統一為「竹蘭的XXX」/「瑪俐的XXX」。影響 preset / effects / UI filter，全部 regression 測過。
+
+尖釘鎮道館 filter string 從 `'<瑪俐的>'` 改為 `'瑪俐的'`（`src/routes/game/+page.svelte` + `ai.ts`）。
+
+### 2. 可達鴨｜濕氣（特性 gate）
+
+該特性說「自己其他寶可夢不會因自己的招式/特性被擊倒」。PTCG 官方判定：只防「被己方效果 KO」（例：咒詛炸彈的自 KO、紅爆破的自 KO）不防「對手攻擊 KO」。
+實裝策略：在 `selfKOInstance` helper 開頭檢查自己場上有無 `可達鴨`，若有就把這次自 KO 改成「不放 counter / 不過進 pendingPrizes」並記 log（引擎原本就有 `selfKOInstance` 中央函式，改一處即可）。
+
+### 3. 雪妖女｜冰冷之帳（checkup hook）
+
+卡面：「此寶可夢是出場寶可夢時，雙方的【超】寶可夢於寶可夢檢查時受到 20 傷害（含弱點抗性）。」
+實裝在 `engine.ts` END_TURN 寶可夢檢查階段（原本處理中毒/灼傷/睡眠）— 加一段：檢查雙方 `active`（僅戰鬥寶可夢，不算備戰）是否為【超】屬，且對方 `active` 是雪妖女 → 放 20 counter（weakness/resistance 走共用 `applyDamage`）。KO 判定沿用原 checkup pipeline。
+
+### 4. Wave 45：6 張新卡實裝（`effects.ts` 尾端）
+
+加的 6 張都依規範：`reg` + `regG` + `regR`（物品/Supporter）或 `SPECIAL_ENERGY_ATTACH.set`（特殊能量）：
+
+| 卡名 | 類型 | 機制 |
+|---|---|---|
+| 改造之錘 | Item | `opp-poke-choose` (validIids=有特殊能量的對手寶可夢) → 丟 1 張特殊能量 |
+| 小光 | Supporter | 三段鏈式 `deck-search`：Basic → Stage1 → Stage2 各 1 張加手牌（每段 min=0，末段 shuffle） |
+| 鬥子 | Supporter | 兩段鏈式 `deck-search`：Evolution 寶可夢 + Energy 各 1 張加手牌 |
+| 對戰圓形競技場 | Stadium | 純被動（`BENCH_PROTECTION_STADIUMS` 集合）— 備戰不會因對手招式/特性放指示物 |
+| 富裕能量 | ACE SPEC Energy | `SPECIAL_ENERGY_ATTACH` hook — 附加時 `drawCards(4)`；提供 1【無】 |
+| 感應【超】能量 | Special Energy | `SPECIAL_ENERGY_ATTACH` hook — 附於【超】寶可夢時 `deck-search` 至多 2 基礎【超】到備戰；提供 1【超】 |
+
+### 5. 引擎擴充
+
+`src/lib/game/effects.ts` 新增：
+- `export const SPECIAL_ENERGY_ATTACH = new Map<string, AttachEnergyHookFn>()` — 特殊能量「附加時」hook map
+- `export function isBenchProtected(state, pool)` — 雙方 bench-damage resolver 觸發點呼叫
+- 10 個 bench-damage resolver 觸發點加 `isBenchProtected` 閘門（`snipe-10/20/60-ex/120/variable/multi`、`cursed-bomb`、`dragapult-snipe`、`bench-hit-N`、`applyDamageToAllOpp`）
+
+`src/lib/game/engine.ts`：
+- `ATTACH_ENERGY` handler 附加後呼叫 `SPECIAL_ENERGY_ATTACH.get(energyName)?.(afterAttach, aIdx, target.iid, pool)`
+- `SPECIAL_ENERGY_TYPES` 加 `'富裕能量': ['Colorless']`、`'感應【超】能量': ['Psychic']`
+
+`src/lib/game/effects/cards/stadiums.ts`：
+- 新增 `export const BENCH_PROTECTION_STADIUMS = new Set<string>(['對戰圓形競技場'])`
+
+### 6. UI（`src/routes/game/+page.svelte` + `ai.ts`）
+
+- `opp-poke-choose` / `opp-bench-choose` UI 加 `params.validIids` filter 支援（和 bench-choose 一致），讓改造之錘只能選到有特殊能量的對手寶可夢
+- `deck-search` filter switch 加 `Stage2` / `Evolution` / `PsychicBasic`（UI + AI 兩邊都同步）
+
+### 測試
+
+- `npm run build` 通過，無型別錯誤。
+- Mental walkthrough：
+  - 改造之錘：對手 0 張特殊能量 → guard false，卡反白禁打 ✓
+  - 改造之錘：只有戰鬥寶可夢有特殊能量 → UI 只顯示戰鬥寶可夢 ✓
+  - 小光：三段都 skip → 只 shuffle，不加牌（log 清楚寫「未選擇」） ✓
+  - 鬥子：deck 無 Evolution → 第一段 skip，只搜能量 ✓
+  - 對戰圓形競技場在場：多龍巴魯托ex 幻影奇襲 → log 寫備戰免傷，進攻者選到自己戰鬥位仍有效（官方規則） ✓
+  - 富裕能量：ATTACH_ENERGY 後自動抽 4（hook 在 `turnPhase === 'main'` 才觸發；setup 不會誤發） ✓
+  - 感應【超】能量附給【火】寶可夢 → hook 判 non-Psychic 即 return，不觸發搜尋 ✓
+  - 感應【超】能量附給【超】寶可夢：deck 無基礎【超】 → log 「牌庫沒有」，不卡 pending ✓
 
 ---
 
