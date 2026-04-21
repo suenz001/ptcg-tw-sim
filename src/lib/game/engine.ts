@@ -1941,6 +1941,12 @@ export function getUsableAbilities(
       if (!ABILITY_EFFECTS.has(`${card.name}|${abIdx}`)) return;
       // 集客：只有出場才能用
       if (ab.name === '集客' && player.active?.iid !== pk.iid) return;
+      // 扭轉乾坤：上個對手的回合自己寶可夢昏厥了才可用（同不公印章邏輯）
+      if (ab.name === '扭轉乾坤') {
+        const oppIdx = (1 - state.activePlayerIndex) as 0 | 1;
+        const snap = state.oppPrizesAtMyLastTurnEnd?.[state.activePlayerIndex] ?? 6;
+        if (state.players[oppIdx].prizes.length >= snap) return;
+      }
       result.push({ iid: pk.iid, abilityIndex: abIdx, pokemonName: card.name, abilityName: ab.name });
     });
   }

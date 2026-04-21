@@ -1787,7 +1787,7 @@
                   <button class="retreat-zoom" title="放大檢視：{c.name}"
                     onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
                   <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();toggleSelection(item.iid);}}>
-                    {#if isActivePoke}<span class="retreat-active-badge" title={isOppPicker ? '對手目前戰鬥寶可夢' : '目前戰鬥寶可夢'}>⚔️ {isOppPicker ? '對手戰鬥中' : '戰鬥中'}</span>{/if}
+                    {#if isActivePoke}<span class="retreat-active-badge" class:opp={isOppPicker} title={isOppPicker ? '對手目前戰鬥寶可夢' : '目前戰鬥寶可夢'}>⚔️ {isOppPicker ? '對手戰鬥寶可夢' : '我方戰鬥寶可夢'}</span>{/if}
                     <img src={c.imageUrl} alt={c.name}/>
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
@@ -2783,9 +2783,11 @@
   .retreat-card{ position:relative; background:#0e1e0e; border:2px solid #2a4a2a; border-radius:8px; overflow:hidden; transition:border-color .15s, box-shadow .15s; }
   .retreat-card:hover{ border-color:#4a8a4a; box-shadow:0 0 8px rgba(170,255,170,.25); }
   .retreat-card.sel-picked{ border-color:#aaff44; box-shadow:0 0 10px #aaff4488; }
-  .retreat-card.is-active-poke{ border-color:#ffcc44; box-shadow:0 0 10px rgba(255,204,68,.35); }
-  .retreat-card.is-active-poke.sel-picked{ border-color:#aaff44; box-shadow:0 0 10px #aaff4488, 0 0 14px rgba(255,204,68,.4); }
-  .retreat-active-badge{ position:absolute; bottom:.28rem; left:50%; transform:translateX(-50%); z-index:2; background:rgba(180,120,0,.94); color:#fffbe0; font-size:.7rem; font-weight:700; padding:.14rem .46rem; border-radius:4px; text-shadow:0 0 4px rgba(0,0,0,.6); pointer-events:none; white-space:nowrap; box-shadow:0 0 6px rgba(0,0,0,.55); }
+  .retreat-card.is-active-poke{ border-color:#ffcc44; border-width:3px; box-shadow:0 0 14px rgba(255,204,68,.55); }
+  .retreat-card.is-active-poke.sel-picked{ border-color:#aaff44; box-shadow:0 0 10px #aaff4488, 0 0 18px rgba(255,204,68,.55); }
+  /* v2.15：徽章改為頂部全寬 header 條，避免與 HP/能量/狀態行重疊；對手戰鬥寶可夢用紅底更顯眼 */
+  .retreat-active-badge{ display:block; width:100%; margin:-.35rem 0 .1rem; padding:.22rem .3rem; box-sizing:border-box; background:linear-gradient(90deg,#b8860b,#e2a020,#b8860b); color:#fffbe0; font-size:.78rem; font-weight:800; letter-spacing:.04em; text-align:center; border-radius:4px 4px 0 0; text-shadow:0 0 3px rgba(0,0,0,.8); pointer-events:none; white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.55); }
+  .retreat-active-badge.opp{ background:linear-gradient(90deg,#962020,#d04040,#962020); color:#fff1e0; }
   .retreat-pick .sel-check{ position:absolute; top:.25rem; left:.35rem; font-size:1rem; color:#aaff44; font-weight:700; text-shadow:0 0 4px rgba(0,0,0,.8); }
   .retreat-zoom{ position:absolute; top:.25rem; right:.25rem; z-index:2; background:rgba(0,0,0,.72); border:1px solid #6aaa6a; color:#cfc; font-size:.78rem; line-height:1; padding:.22rem .4rem; border-radius:4px; cursor:pointer; }
   .retreat-zoom:hover{ background:rgba(74,138,74,.9); color:#fff; }

@@ -2531,13 +2531,21 @@ regA('賽富豪ex', 0, (st, idx, pool) => {
   });
 });
 
-// 吉雉雞ex 扭轉乾坤 — 上回合寶可夢被擊倒才可用，抽 3
-// 簡化：我們沒追蹤「上回合是否被擊倒」，改為「棄牌區有寶可夢」時允許
-regA('吉雉雞ex', 0, (st, idx, pool) => {
-  const hasDiscardedPoke = st.players[idx].discard.some(c =>
-    pool.get(c.cardId)?.supertype === 'Pokemon'
-  );
-  if (!hasDiscardedPoke) return addLog(st, '扭轉乾坤：棄牌區沒有寶可夢', idx);
+// 吉雉雞ex 扭轉乾坤 — 「上個對手的回合自己的寶可夢昏厥了」才可用，抽 3
+//
+// v2.15 (Session 38bc)：改用與不公印章相同的判定基準
+//   舊版簡化為「棄牌區有寶可夢」，但這在 setup/mulligan 後就永遠成立，條件形同失效。
+//   新版用 oppPrizesAtMyLastTurnEnd snapshot vs 目前對手獎賞數：
+//     - snap = 上次自己回合結束時對手剩餘獎賞數
+//     - 若對手目前獎賞 < snap → 對手在他們剛結束的回合取過獎賞
+//     - 取獎賞 = 擊倒了我方寶可夢 → 可用
+//   getUsableAbilities 也有對應 guard（engine.ts），UI 上會直接反白按鈕。
+regA('吉雉雞ex', 0, (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  const snap = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
+  if (st.players[oppIdx].prizes.length >= snap) {
+    return addLog(st, '扭轉乾坤：上回合自己沒有寶可夢昏厥，無法使用', idx);
+  }
   return updatePlayer(addLog(st, '吉雉雞ex 扭轉乾坤：抽 3 張', idx), idx, p => {
     const taken = p.deck.slice(0, 3);
     return { ...p, hand: [...p.hand, ...taken], deck: p.deck.slice(3) };

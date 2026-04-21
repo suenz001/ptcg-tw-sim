@@ -1,9 +1,79 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38bb (v2.14)  
+> 最後更新：2026-04-21 Session 38bc (v2.15)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38bc (v2.15) — 對手戰鬥寶可夢 UI 標示強化 + 吉雉雞ex 扭轉乾坤 gate 修正
+
+### 背景
+
+Leon 中斷「下一步模組化」規劃，改為先修兩個 bug：
+
+1. **戰鬥寶可夢 UI 標示不清楚**：類似願增猿轉傷害等「目標是對手戰鬥+備戰寶可夢」的招式在 opp-poke-choose UI 上，雖然 v2.13 task #97 已經加了 `.is-active-poke` 黃框 + 底部徽章，但徽章被擠在卡片底部、跟 HP/能量/狀態行視覺重疊，需要再加強讓「哪一張是對方現在的戰鬥寶可夢」一眼就能看出來。
+
+2. **吉雉雞ex 扭轉乾坤 gate 錯誤**：舊版 gate 是「棄牌區有寶可夢」，這在 mulligan / setup 後就永遠成立，條件形同失效。正確邏輯應該跟**不公印章**一樣，是「上個對手回合自己有寶可夢昏厥」才可用。
+
+### Bug #105 修正：戰鬥寶可夢 UI 標示強化
+
+**檔案**：`src/routes/game/+page.svelte`
+
+**改動**：
+- 黃框邊線從 2px 升為 **3px**，發光從 `rgba(255,204,68,.35)` 加深到 `rgba(255,204,68,.55)`，讓邊框更亮更容易識別。
+- 徽章 `.retreat-active-badge` 從「絕對定位、卡片底部」改為「頂部全寬 header 條」，佔用一整行，避免跟 HP/能量/狀態行擠在一起。
+- 新增 `.retreat-active-badge.opp` class：當這張是**對手戰鬥寶可夢**時用紅色漸層（`#962020 → #d04040 → #962020`）；我方用金色漸層（`#b8860b → #e2a020 → #b8860b`）。
+- 文字從「戰鬥中 / 對手戰鬥中」改為「我方戰鬥寶可夢 / 對手戰鬥寶可夢」，更完整。
+
+**驗證範圍**：這是通用的 opp-poke-choose / bench-choose 等選擇 UI，所有呼叫 retreat-grid 的招式（願增猿轉傷害、各種 bench snipe、swap 類招式等）都自動套用。
+
+### Bug #106 修正：吉雉雞ex 扭轉乾坤 gate 改用不公印章邏輯
+
+**檔案**：`src/lib/game/effects.ts`、`src/lib/game/engine.ts`
+
+**原本**（錯）：`pool.get(c.cardId)?.supertype === 'Pokemon'` 掃棄牌區 — setup 後永遠 true。
+
+**現在**（對）：跟不公印章一樣用 `oppPrizesAtMyLastTurnEnd` snapshot。
+
+```ts
+// effects.ts
+regA('吉雉雞ex', 0, (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  const snap = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
+  if (st.players[oppIdx].prizes.length >= snap) {
+    return addLog(st, '扭轉乾坤：上回合自己沒有寶可夢昏厥，無法使用', idx);
+  }
+  // ... 抽 3
+});
+```
+
+原理：`oppPrizesAtMyLastTurnEnd[idx]` 記錄自己上次回合結束時對手剩餘獎賞數。若對手現在獎賞數 < snap，代表對手在他們剛結束的回合取了獎賞 → 擊倒了我方寶可夢 → 允許使用。
+
+**同步在 engine.ts `getUsableAbilities` 加 guard**（跟「集客」一樣），讓按鈕在 UI 直接被隱藏，不要等點下去才失敗。belt-and-suspenders 雙層保護：engine guard 擋 UI，effects.ts 內部 guard 擋 programmatic 呼叫。
+
+```ts
+// engine.ts getUsableAbilities
+if (ab.name === '扭轉乾坤') {
+  const oppIdx = (1 - state.activePlayerIndex) as 0 | 1;
+  const snap = state.oppPrizesAtMyLastTurnEnd?.[state.activePlayerIndex] ?? 6;
+  if (state.players[oppIdx].prizes.length >= snap) return;
+}
+```
+
+### 驗證
+
+- `npm run build` ✓（6.10s + 12.38s，無 TS 錯誤）
+- diff 僅 4 檔 28 +/12 -，無副作用
+
+### 接下來
+
+Leon 原本要求討論「下一步模組化規劃」，現在 bug fix 結案後可以回到該議題。目前 effects.ts 還有 ~9400 行，可以分 4 輪抽離：
+1. Round 1: ~1100 行 training 類卡 → `effects/cards/trainer_*.ts`
+2. Round 2: ~500 行 pattern factories → `effects/patterns/*.ts`
+3. Round 3: ~700 行 MBG/MBD 預組特化 → `effects/presets/*.ts`
+4. Round 4: ~6500 行 long-tail 招式（最大塊）
 
 ---
 
