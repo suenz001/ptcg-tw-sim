@@ -148,12 +148,68 @@ const CYNTHIA_GARCHOMP_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/**
+ * 魔靈多龍 牌組（Wave 43 — JP meta 引入）
+ *
+ * 日本賽事 meta「ヨノワール + ドラパルトex」軸：
+ * - 主力：多龍巴魯托ex「幻影奇襲」200 + 對手備戰 2 隻 50 snipe
+ * - 引擎：黑夜魔靈「咒詛炸彈」特性（自身昏厥 + 對手 1 隻放 13 counter ≈ 130 傷害）
+ * - 輔助：願增猿「腎上腺腦力」（需 惡 能量，轉移傷害）
+ *        喵喵ex「殺手鐧捕捉」（上備戰時 tutor 支援者）
+ *        吉雉雞ex「扭轉乾坤」（自場寶可夢昏厥後抽 3）
+ *
+ * 部分特性 / 訓練家尚未完整實裝，會在後續 bug fix 波補齊：
+ *   黑夜魔靈 咒詛炸彈 13-counter、願增猿 腎上腺腦力、喵喵ex 殺手鐧捕捉、
+ *   阻礙之塔、白蕾雅、阿蜜的目光、特殊紅牌、莉莉艾的珍珠 道具、赤松、月光丘陵
+ */
+const MARRUNE_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_marrune_dragapult__',
+  name: '魔靈多龍',
+  entries: [
+    // ── 寶可夢（20 張）──
+    { cardId: '17019', count: 3 },  // 多龍巴魯托ex (MC)
+    { cardId: '17018', count: 2 },  // 多龍奇 (MC)
+    { cardId: '17017', count: 4 },  // 多龍梅西亞 (MC)
+    { cardId: '16781', count: 2 },  // 黑夜魔靈 (MC) — 咒詛炸彈 13 counter
+    { cardId: '16780', count: 2 },  // 彷徨夜靈 (MC) — 咒詛炸彈 5 counter（已實裝）
+    { cardId: '16779', count: 2 },  // 夜巡靈 (MC)
+    { cardId: '16829', count: 1 },  // 願增猿 (MC) — 腎上腺腦力
+    { cardId: '11526', count: 1 },  // 含羞苞 (SV8a) — 迷幻花粉
+    { cardId: '18038', count: 2 },  // 喵喵ex (M3) — 殺手鐧捕捉
+    { cardId: '16960', count: 1 },  // 吉雉雞ex (MC) — 扭轉乾坤
+    // ── 訓練家・物品（16 張）──
+    { cardId: '17119', count: 4 },  // 好友寶芬 (MC)
+    { cardId: '17122', count: 4 },  // 高級球 (MC)
+    { cardId: '17133', count: 4 },  // 寶可平板 (MC)
+    { cardId: '17126', count: 3 },  // 神奇糖果 (MC)
+    { cardId: '17141', count: 2 },  // 夜間擔架 (MC)
+    { cardId: '18492', count: 1 },  // 特殊紅牌 (M4)
+    { cardId: '17104', count: 1 },  // 不公印章 (MC)
+    { cardId: '17163', count: 1 },  // 莉莉艾的珍珠 (MC · 道具)
+    // ── 訓練家・支援者（10 張）──
+    { cardId: '17200', count: 4 },  // 莉莉艾的決意 (MC)
+    { cardId: '17195', count: 2 },  // 老大的指令 (MC)
+    { cardId: '17193', count: 1 },  // 白蕾雅 (MC)
+    { cardId: '17199', count: 1 },  // 阿蜜的目光 (MC)
+    { cardId: '17167', count: 1 },  // 赤松 (MC)
+    { cardId: '17182', count: 1 },  // 裁判 (MC)
+    // ── 競技場（2 張）──
+    { cardId: '11706', count: 1 },  // 阻礙之塔 (SV8a)
+    { cardId: '11708', count: 1 },  // 月光丘陵 (SV8a)
+    // ── 能量（8 張）──
+    { cardId: '17216', count: 3 },  // 基本【火】能量 (MC)
+    { cardId: '17220', count: 3 },  // 基本【超】能量 (MC)
+    { cardId: '17214', count: 2 },  // 基本【惡】能量 (MC)
+  ],
+};
+
 /** 所有內建預設牌組 */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
   { ...DIANCIE_DECK, updatedAt: 0 },
   { ...CHI_YU_DECK, updatedAt: 0 },
   { ...CYNTHIA_GARCHOMP_DECK, updatedAt: 0 },
+  { ...MARRUNE_DRAGAPULT_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */
