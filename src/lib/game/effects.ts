@@ -65,6 +65,7 @@ export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS };
 // 未來要加更多搬遷檔時，也只需要在這裡加一行 import。
 import './effects/cards/white_lily_akamatsu';
 import './effects/cards/draw_supporters';
+import './effects/cards/pokemon_search';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -198,122 +199,10 @@ function healResolver(
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 物品卡 — 搜尋牌庫
+// 物品卡 — 搜尋牌庫（球 + 小剛的發掘） — v2.19 已抽到 effects/cards/pokemon_search.ts
+// 包含：好友寶芬、赫普的包包、甜蜜球、黑暗球、小剛的發掘、高級球、超級信號
+//       共用 resolver: bench-basic-from-deck / search-pokemon-to-hand / ultra-ball-discard
 // ══════════════════════════════════════════════════════════════════════════════
-
-// 好友寶芬 — 從牌庫選最多 2 隻 HP≤70 基礎寶可夢放備戰
-regG('好友寶芬', (st, idx, pool) => {
-  // 備戰要有空位，且牌庫要有 HP≤70 的基礎寶可夢
-  if (st.players[idx].bench.length >= 5) return false;
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && (card.hp ?? 0) <= 70;
-  });
-});
-reg('好友寶芬', (st, idx) => {
-  const slots = 5 - st.players[idx].bench.length;
-  const takeMax = Math.min(2, slots);
-  st = addLog(st, `好友寶芬：從牌庫選至多 ${takeMax} 隻 HP≤70 基礎寶可夢到備戰區`, idx);
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Basic:HP70',
-    minCount: 0, maxCount: takeMax,
-    effectKey: 'bench-basic-from-deck',
-  });
-});
-
-// 赫普的包包 — 從牌庫選最多 2 隻「赫普的寶可夢」基礎寶可夢到備戰（簡化為任何基礎）
-regG('赫普的包包', (st, idx, pool) => {
-  if (st.players[idx].bench.length >= 5) return false;
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom;
-  });
-});
-reg('赫普的包包', (st, idx) => {
-  const slots = 5 - st.players[idx].bench.length;
-  const takeMax = Math.min(2, slots);
-  st = addLog(st, `赫普的包包：從牌庫選至多 ${takeMax} 隻基礎寶可夢到備戰區`, idx);
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Basic',
-    minCount: 0, maxCount: takeMax,
-    effectKey: 'bench-basic-from-deck',
-  });
-});
-
-regR('bench-basic-from-deck', (st, idx, iids, _params, pool) => {
-  // 公開資訊：放到備戰區本來就對對手可見，順便記到 log 方便追蹤
-  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
-  if (chosen.length > 0) {
-    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `放到備戰區：${names}`, idx);
-  } else {
-    st = addLog(st, '牌庫搜尋：未選擇任何卡', idx);
-  }
-  return updatePlayer(st, idx, (p) => {
-    const selected = p.deck
-      .filter(c => iids.includes(c.iid))
-      .map(c => ({ ...c, justPlaced: true }));
-    const remaining = p.deck.filter(c => !iids.includes(c.iid));
-    const bench = [...p.bench, ...selected].slice(0, 5);
-    return { ...p, deck: shuffle(remaining), bench };
-  });
-});
-
-// 甜蜜球 — 從牌庫選 1 隻與對手出場寶可夢同名的寶可夢（簡化：選任意寶可夢加手牌）
-reg('甜蜜球', (st, idx) => {
-  st = addLog(st, '甜蜜球：從牌庫選 1 張寶可夢加手牌', idx);
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon',
-    minCount: 0, maxCount: 1,
-    effectKey: 'search-pokemon-to-hand',
-  });
-});
-
-// 黑暗球 — 查看牌庫底 7 張，選 1 張寶可夢加手牌
-reg('黑暗球', (st, idx) => {
-  st = addLog(st, '黑暗球：從牌庫選 1 張寶可夢加手牌', idx);
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon',
-    minCount: 0, maxCount: 1,
-    effectKey: 'search-pokemon-to-hand',
-  });
-});
-
-regR('search-pokemon-to-hand', (st, idx, iids, _params, pool) => {
-  // Log 顯示搜到哪張卡（公開資訊：官方規則搜牌庫結果需公開給對手看）
-  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
-  if (chosen.length > 0) {
-    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `搜到：${names} 加入手牌`, idx);
-  } else {
-    st = addLog(st, '牌庫搜尋：未選擇任何卡', idx);
-  }
-  return updatePlayer(st, idx, (p) => {
-    const chosenInPlayer = p.deck.filter(c => iids.includes(c.iid));
-    const remaining = p.deck.filter(c => !iids.includes(c.iid));
-    return { ...p, deck: shuffle(remaining), hand: [...p.hand, ...chosenInPlayer] };
-  });
-});
-
-// 小剛的發掘（Supporter）— 從牌庫選至多 2 隻基礎寶可夢 or 1 隻進化寶可夢加手牌
-reg('小剛的發掘', (st, idx) => {
-  st = addLog(st, '小剛的發掘：從牌庫選最多 2 隻基礎寶可夢加手牌', idx);
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Basic',
-    minCount: 0, maxCount: 2,
-    effectKey: 'search-pokemon-to-hand',
-  });
-});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 支援者 — 抽牌系列
@@ -367,62 +256,8 @@ regR('gust-opp', (st, idx, iids, _params, pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 物品卡 — 搜尋牌庫（補充）
+// 物品卡 — 搜尋牌庫（補充：高級球、超級信號） — v2.19 已抽到 effects/cards/pokemon_search.ts
 // ══════════════════════════════════════════════════════════════════════════════
-
-// 高級球 — 丟棄 2 張手牌，搜尋任意寶可夢加手牌
-// Guard: 手牌至少 3 張（含本卡）—— 打出後需再丟 2 張
-regG('高級球', (st, idx) => st.players[idx].hand.length >= 3);
-reg('高級球', (st, idx) => {
-  if (st.players[idx].hand.length < 2) {
-    return addLog(st, '高級球：手牌不足 2 張，無法使用', idx);
-  }
-  st = addLog(st, '高級球：選擇 2 張手牌丟棄', idx);
-  return withPending(st, {
-    type: 'hand-discard',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 2, maxCount: 2,
-    effectKey: 'ultra-ball-discard',
-  });
-});
-regR('ultra-ball-discard', (st, idx, iids, _params, pool) => {
-  // 記錄丟棄的卡名（公開資訊 — 丟棄到棄牌區本來就公開）
-  const toDiscardNow = st.players[idx].hand.filter(c => iids.includes(c.iid));
-  if (toDiscardNow.length > 0) {
-    const names = toDiscardNow.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `高級球：丟棄 ${names}`, idx);
-  }
-  st = updatePlayer(st, idx, (p) => {
-    const toDiscard = p.hand.filter(c => iids.includes(c.iid));
-    return { ...p, hand: p.hand.filter(c => !iids.includes(c.iid)), discard: [...p.discard, ...toDiscard] };
-  });
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon',
-    minCount: 0, maxCount: 1,
-    effectKey: 'search-pokemon-to-hand',
-  });
-});
-
-// 超級信號 — 從牌庫搜尋 1 張「超級進化寶可夢 ex」加手牌
-// ⚠️ 必須只過濾「超級進化 ex」（名字開頭「超級」），普通 ex（桃歹郎ex / 拉帝亞斯ex）不可被搜到
-regG('超級信號', (st, idx, pool) =>
-  st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.name.startsWith('超級') && (card.subtype === 'ex' || card.name.endsWith('ex'));
-  })
-);
-reg('超級信號', (st, idx) => {
-  st = addLog(st, '超級信號：從牌庫選 1 張超級進化寶可夢 ex 加手牌', idx);
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'MegaEx',
-    minCount: 0, maxCount: 1,
-    effectKey: 'search-pokemon-to-hand',
-  });
-});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 物品卡 — 棄牌區回收

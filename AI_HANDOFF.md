@@ -1,9 +1,41 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38bf (v2.18)  
+> 最後更新：2026-04-21 Session 38c0 (v2.19)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38c0 (v2.19) — 模組化：抽「搜尋寶可夢 Trainer」到 effects/cards/pokemon_search.ts
+
+### 背景
+
+接續 Session 38b2 / 38b8 / 38b9 / 38ba 的模組化路線。`effects.ts` 9405 行仍然過肥，其中 Trainer 卡剩下約 560 行，可按主題再切。`draw_supporters.ts` 已抽「抽牌 / 互動」Supporter；下一波抽「從牌庫搜寶可夢」這個主題——涵蓋 7 張卡共享 3 個 resolver。
+
+### 抽出內容（byte-exact）
+
+`src/lib/game/effects/cards/pokemon_search.ts`（200 行）：
+
+- 物品：好友寶芬、赫普的包包（→ 備戰區；共用 `bench-basic-from-deck` resolver）
+- 物品：甜蜜球、黑暗球（→ 手牌；共用 `search-pokemon-to-hand` resolver）
+- Supporter：小剛的發掘（機制同上，共用 resolver，所以放同檔）
+- 物品：高級球（兩階段：`hand-discard` → `ultra-ball-discard` resolver → `deck-search` → 共用 `search-pokemon-to-hand`）
+- 物品：超級信號（過濾「超級 ex」）
+
+刪除 effects.ts 對應區塊，只留「已抽到 pokemon_search.ts」的指引註解。
+在 effects.ts 的「已搬遷」區塊加 `import './effects/cards/pokemon_search'` side-effect import，保證 reg 呼叫寫到同一份 Map。
+
+### 效益
+
+- `effects.ts`：9405 → 9240（-165 行）
+- 所有「從牌庫搜寶可夢」主題的卡與其 resolver 都集中在同一個檔，未來改規則（例：球類禁搜 ex、好友寶芬加條件）只需改這一檔。
+- 所有共用 resolver 與其 caller 卡都在同一個檔，命中率不再靠 regR 字串散落全檔搜尋。
+
+### 測試
+
+- `npm run build` 通過，無型別錯誤。
+- 沒有卡名或 resolver key 留在 effects.ts 裡（grep `reg('好友寶芬...` 等共 10 個 key 無命中）。
 
 ---
 
