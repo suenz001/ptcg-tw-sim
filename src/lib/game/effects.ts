@@ -8503,3 +8503,83 @@ regPost('小箭雀|送回', forceOppSwapPost('送回'));
 // 長毛巨魔｜挑釁抓擊 — 0 pre，互換後新上場寶可夢受 160 傷害
 regPre('長毛巨魔|挑釁抓擊', (state, _a, _p) => ({ state, damage: 0 }));
 regPost('長毛巨魔|挑釁抓擊', forceOppSwapThenDamagePost(160, '挑釁抓擊'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 38 — 攻擊前丟道具卡系列
+//
+// 已有 helper：defToolDiscardPre(base, label) — 丟對手戰鬥寶可夢的 tool + base 傷。
+// 本波新增：
+//   • selfToolDiscardOrFailPre — 先丟自身 tool，若無則招式失敗（0 傷）
+//   • defToolDiscardParalyzePre — 丟對手 tool，若實際有丟棄則再施加【麻痺】
+//
+// 本波實裝卡片：
+//   • 烈雀｜啄食 (M1L/MC) ─ 10 + 丟對手 tool
+//   • 拉達｜削落 (M3) ─ 20 + 丟對手 tool
+//   • 燃燒蟲｜啄落 (SV11B) ─ 10 + 丟對手 tool
+//   • <派帕的>貪心栗鼠｜咬取 (SV9a) ─ 10 + 丟對手 tool
+//   • N的電電蟲｜劈哩啪啦短路 (SV9) ─ 30 + 丟對手 tool + 有丟棄則麻痺
+//   • 美錄梅塔｜重塑斧 (SV7) ─ 250 + 必須丟自身 tool，無 tool 則失敗
+//
+// DEFER：安瓢蟲｜繁星花紋 (SV7) — 為【特性】（on-evolve ability），
+// 需要新增進化觸發式 ability infra，拆到後續 wave 處理。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 自身 tool 必須丟棄，否則招式失敗（0 傷）。用於「重塑斧」。 */
+function selfToolDiscardOrFailPre(base: number, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (!p.active || !p.active.toolAttached) {
+      return { state: addLog(state, `${label}：自身無道具可丟棄 → 招式失敗`, aIdx), damage: 0 };
+    }
+    const attName = pool.get(p.active.cardId)?.name ?? '?';
+    const toolName = pool.get(p.active.toolAttached.cardId)?.name ?? '?';
+    const discarded = p.active.toolAttached;
+    let s = addLog(state, `${label}：丟棄 ${attName} 的道具「${toolName}」`, aIdx);
+    s = updatePlayer(s, aIdx, pl => {
+      if (!pl.active) return pl;
+      const { toolAttached: _removed, ...rest } = pl.active;
+      return { ...pl, active: rest as CardInstance, discard: [...pl.discard, discarded] };
+    });
+    return { state: s, damage: base };
+  };
+}
+
+/** 丟對手 tool + base 傷，且「若有丟棄」再將對手戰鬥寶可夢【麻痺】。 */
+function defToolDiscardParalyzePre(base: number, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const def = state.players[dIdx].active;
+    if (!def || !def.toolAttached) {
+      return { state: addLog(state, `${label}：對手戰鬥寶可夢無道具（不觸發麻痺）`, aIdx), damage: base };
+    }
+    const defName = pool.get(def.cardId)?.name ?? '?';
+    const toolName = pool.get(def.toolAttached.cardId)?.name ?? '?';
+    const discarded = def.toolAttached;
+    let s = addLog(state, `${label}：丟棄 ${defName} 的道具「${toolName}」`, aIdx);
+    s = updatePlayer(s, dIdx, pl => {
+      if (!pl.active) return pl;
+      const { toolAttached: _removed, ...rest } = pl.active;
+      return {
+        ...pl,
+        active: { ...(rest as CardInstance), status: 'paralyzed' },
+        discard: [...pl.discard, discarded],
+      };
+    });
+    s = addLog(s, `${defName} 陷入【麻痺】`, aIdx);
+    return { state: s, damage: base };
+  };
+}
+
+// ── Wave 38 招式登記 ──────────────────────────────────────────────────────
+
+// 重用 defToolDiscardPre（對手 tool 丟棄）
+regPre('烈雀|啄食', defToolDiscardPre(10, '啄食'));
+regPre('拉達|削落', defToolDiscardPre(20, '削落'));
+regPre('燃燒蟲|啄落', defToolDiscardPre(10, '啄落'));
+regPre('<派帕的>貪心栗鼠|咬取', defToolDiscardPre(10, '咬取'));
+
+// 丟對手 tool + 有丟棄則麻痺
+regPre('N的電電蟲|劈哩啪啦短路', defToolDiscardParalyzePre(30, '劈哩啪啦短路'));
+
+// 必須丟自身 tool，否則招式失敗
+regPre('美錄梅塔|重塑斧', selfToolDiscardOrFailPre(250, '重塑斧'));

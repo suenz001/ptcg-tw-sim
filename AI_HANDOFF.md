@@ -3794,3 +3794,32 @@ movedToActiveThisTurn?: boolean;
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 29/21（P1/P2）、平均回合 15.5
 - 版本 1.91 → 1.92
+
+## Session 38aq — v1.93 H 標第 38 波 攻擊前丟道具卡系列
+
+### 機制盤點
+此波掃了 9 個系列 (M1L/M3/MC/SV6/SV7/SV7a/SV9/SV9a/SV11B) 中
+含「寶可夢道具」卡丟棄 的招式，分三類：
+- 丟對手 tool（本波主幹）— 既有 helper `defToolDiscardPre` 已涵蓋
+- 丟自身 tool，無 tool 則招式失敗（新 helper）
+- 丟對手 tool + 有丟棄則施加【麻痺】（新 helper）
+
+### 新增 helper（effects.ts）
+- `selfToolDiscardOrFailPre(base, label)` — 檢查 active.toolAttached；無則 log「自身無道具 → 招式失敗」且 damage=0；有則將該 tool 移到 discard 並回傳 `{ state, damage: base }`
+- `defToolDiscardParalyzePre(base, label)` — 沿用 `defToolDiscardPre` 的丟 tool 邏輯，並在實際有丟棄時將對手戰鬥寶可夢設為 status='paralyzed'
+
+### 實裝（6 張）
+- 烈雀｜啄食 10 + 丟對手 tool（重用 defToolDiscardPre）
+- 拉達｜削落 20 + 丟對手 tool
+- 燃燒蟲｜啄落 10 + 丟對手 tool
+- <派帕的>貪心栗鼠｜咬取 10 + 丟對手 tool
+- N的電電蟲｜劈哩啪啦短路 30 + 丟對手 tool + 有丟棄則麻痺
+- 美錄梅塔｜重塑斧 250 + 必須丟自身 tool，無則招式失敗
+
+### DEFER
+- 安瓢蟲｜繁星花紋（SV7）是【特性】（on-evolve ability），需要新增進化觸發式 ability infra，拆到後續 wave 處理（非本波 attack 範疇）
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 26/24（P1/P2）、平均回合 15.2
+- 版本 1.92 → 1.93
