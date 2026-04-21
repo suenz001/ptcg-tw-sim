@@ -20,18 +20,35 @@ Leon 回報 `/cards` 的卡包索引頁醜：
 - **Badge 對齊**：`.markBadge` 是 `display: inline-flex` + 1.6em 方塊、字體 700；旁邊文字 `font-weight: 500`，`line-height` 預設繼承導致兩者 baseline 不一致；又 I 字左右留白不對稱加劇歪斜感。
 - **名稱溢位**：`.setTile` 是水平 flex（img + `.setInfo`），`.setInfo` 沒 `min-width: 0`，所以 flex child 預設 min-width = content width，`.setName` 的 `text-overflow: ellipsis` 整個失效 → 長名把 `.setInfo` 撐爆 → `.setTile` 超出 grid cell。
 
+### 設計討論
+
+先提 3 個選項讓 Leon 選：
+- **A.** 最小修補：保持水平、只補 `min-width: 0` 修 ellipsis → 名稱會截斷。
+- **B.** 改直式卡片（卡包封面填滿 tile 寬 + 名稱 2 行）→ 封面變大、名稱完整、像卡包牆。
+- **C.** 保水平 + 允許 2 行換行 → 每格高度不一致會參差。
+
+Leon 選 B。
+
 ### 修法：直式卡片重排（方案 B）
 
 `src/routes/cards/+page.svelte`：
 
-1. **`.setTile` 從水平改直式**：`flex-direction: column`，圖 100% 寬（原本 70px 郵票）、`aspect-ratio: 0.71`，下方放 setCode / setName / setCount。
-2. **`.setName` 允許 2 行**：`display: -webkit-box; -webkit-line-clamp: 2;` + `min-height: 2.7em` 保證每格高度一致。長名完整顯示不截斷。
-3. **`.setInfo` 補 `min-width: 0`**：未來若換回 ellipsis 也能正確生效。
-4. **`.setGrid`** `minmax(220px, 1fr)` → `minmax(180px, 1fr)`：每排放更多、像「卡包牆」。
-5. **`.markBadge` 對齊修正**：改 `display: inline-grid; place-items: center;` + `line-height: 1` + 等寬字型（`ui-monospace`）讓 H/I/J 光學寬度一致。
-6. **移除 `.markDot`**：原本右上角的小徽章，既然分組標題已經標示 mark，這是冗餘資訊 + 會壓迫 `.setName` 空間，直接拿掉。
+**HTML：**
+- `.setTile` 內移除 `<span class="markDot">`（section header 已標示 mark，冗餘）。
+- `.setName` 加 `title={set.name}` — 名稱 2 行 clamp 極端狀況下滑鼠 hover 仍能看完整名。
 
-本機 `npm run build` 通過。
+**CSS：**
+1. **`.setTile` 從水平改直式**：`flex-direction: column`、`padding 0.6→0.75rem`、`border-radius 8→10px`、hover 加 `border-color` transition + 陰影加重（`4px 12px → 6px 18px`）。
+2. **`.setTile img`**：`width: 70px` → `width: 100%`；`aspect-ratio: 0.71` 維持（TCG 卡比例）；`border-radius 4→6px`；加 `margin-bottom: 0.55rem` 與文字分段。
+3. **`.setName` 允許 2 行**：`display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;` + `min-height: 2.7em`（2 行 × 1.35 line-height）保證每格高度一致。原本 `white-space: nowrap` 系列拿掉。
+4. **`.setInfo` 補 `min-width: 0`**：防禦性（未來若換回 ellipsis 也能正確生效）；同時移除 `position: relative`（markDot 拿掉後不需要）。
+5. **`.setCode`** 字體 0.75 → 0.72rem + 加 `letter-spacing: 0.02em`（視覺更輕）。
+6. **`.setGrid`** `minmax(220px, 1fr)` → `minmax(180px, 1fr)`：每排放更多、像「卡包牆」。
+7. **`.markHeader`** `font-size 1 → 1.05rem` + `line-height: 1.6em`（= badge 高度），讓文字基線自動對齊徽章中心。
+8. **`.markBadge` 對齊修正**：`inline-flex` → `inline-grid + place-items: center`；字體 `1 → 0.95rem` + `line-height: 1`；加 `font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace` 讓 H/I/J 光學寬度一致（I 不再看起來偏右）。
+9. **移除 `.markDot` CSS**：一併刪除。
+
+本機 `npm run build` 通過（6.14s + 12.17s 兩階段）。commit `8308a9e` 推上 origin/main。
 
 ---
 
