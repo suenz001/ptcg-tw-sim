@@ -102,7 +102,7 @@ draw_supporters.ts / pokemon_search.ts / white_lily_akamatsu.ts，`effects.ts`
 
 ### commit hash
 
-`<補在 push 後>`
+`40896a5`
 
 ---
 
