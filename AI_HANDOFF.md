@@ -1,9 +1,37 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b7 (v2.22)  
+> 最後更新：2026-04-21 Session 38b8 (v2.23)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b8 (v2.23) — 卡牌資料庫 `/cards` 套版重修
+
+### 問題
+
+Leon 回報 `/cards` 的卡包索引頁醜：
+1. H / I / J 徽章跟旁邊的「H 標 · N 個卡包」文字視覺上沒對齊（I 標特別明顯）。
+2. SVOM「瑪俐的莫魯貝可&長毛巨魔」、SVOD「大吾的鐵咒鈴&巨金怪 ex」的卡包名太長，把整個 `.setTile` 撐破 grid cell，擋到隔壁。
+
+### 根因
+
+- **Badge 對齊**：`.markBadge` 是 `display: inline-flex` + 1.6em 方塊、字體 700；旁邊文字 `font-weight: 500`，`line-height` 預設繼承導致兩者 baseline 不一致；又 I 字左右留白不對稱加劇歪斜感。
+- **名稱溢位**：`.setTile` 是水平 flex（img + `.setInfo`），`.setInfo` 沒 `min-width: 0`，所以 flex child 預設 min-width = content width，`.setName` 的 `text-overflow: ellipsis` 整個失效 → 長名把 `.setInfo` 撐爆 → `.setTile` 超出 grid cell。
+
+### 修法：直式卡片重排（方案 B）
+
+`src/routes/cards/+page.svelte`：
+
+1. **`.setTile` 從水平改直式**：`flex-direction: column`，圖 100% 寬（原本 70px 郵票）、`aspect-ratio: 0.71`，下方放 setCode / setName / setCount。
+2. **`.setName` 允許 2 行**：`display: -webkit-box; -webkit-line-clamp: 2;` + `min-height: 2.7em` 保證每格高度一致。長名完整顯示不截斷。
+3. **`.setInfo` 補 `min-width: 0`**：未來若換回 ellipsis 也能正確生效。
+4. **`.setGrid`** `minmax(220px, 1fr)` → `minmax(180px, 1fr)`：每排放更多、像「卡包牆」。
+5. **`.markBadge` 對齊修正**：改 `display: inline-grid; place-items: center;` + `line-height: 1` + 等寬字型（`ui-monospace`）讓 H/I/J 光學寬度一致。
+6. **移除 `.markDot`**：原本右上角的小徽章，既然分組標題已經標示 mark，這是冗餘資訊 + 會壓迫 `.setName` 空間，直接拿掉。
+
+本機 `npm run build` 通過。
 
 ---
 

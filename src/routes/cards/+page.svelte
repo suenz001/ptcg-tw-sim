@@ -103,9 +103,8 @@
           <a class="setTile" href="{base}/cards?set={set.code}">
             <img src={coverUrl(set.coverImageUrl)} alt="" loading="lazy" />
             <div class="setInfo">
-              <span class="markDot mark-{mark}">{mark}</span>
               <div class="setCode">{set.code}</div>
-              <div class="setName">{set.name}</div>
+              <div class="setName" title={set.name}>{set.name}</div>
               <div class="setCount">{set.cardCount} 張</div>
             </div>
           </a>
@@ -306,45 +305,55 @@
   /* ── Set-index grid ── */
   .setGrid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 1rem;
     font-family: system-ui, 'Microsoft JhengHei', sans-serif;
   }
   .setTile {
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.6rem;
+    flex-direction: column;
+    padding: 0.75rem;
     background: #fff;
     border: 1px solid #e5e5e5;
-    border-radius: 8px;
+    border-radius: 10px;
     text-decoration: none;
     color: inherit;
-    transition: transform 0.08s, box-shadow 0.08s;
+    transition: transform 0.08s, box-shadow 0.08s, border-color 0.08s;
   }
   .setTile:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+    border-color: #d0d0d0;
   }
   .setTile img {
-    width: 70px;
+    width: 100%;
     aspect-ratio: 0.71;
     object-fit: cover;
     background: #eee;
-    border-radius: 4px;
-    flex-shrink: 0;
+    border-radius: 6px;
+    margin-bottom: 0.55rem;
+  }
+  .setInfo {
+    min-width: 0; /* let the 2-line clamp actually work inside flex/grid */
   }
   .setCode {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: #888;
     font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
   }
   .setName {
     font-weight: 600;
-    margin: 0.1rem 0;
-    white-space: nowrap;
+    font-size: 0.95rem;
+    margin: 0.15rem 0 0.25rem;
+    line-height: 1.35;
+    /* Allow wrap up to 2 lines; long 中文卡包名完整顯示不截斷 */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    /* Reserve 2 lines so every tile has the same height regardless of name length */
+    min-height: 2.7em;
   }
   .setCount {
     font-size: 0.8rem;
@@ -363,37 +372,23 @@
     align-items: center;
     gap: 0.5rem;
     margin: 0 0 0.75rem;
-    font-size: 1rem;
+    font-size: 1.05rem;
+    line-height: 1.6em;
     color: #555;
     font-weight: 500;
   }
   .markBadge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-grid;
+    place-items: center;
     width: 1.6em;
     height: 1.6em;
     border-radius: 4px;
     color: #fff;
     font-weight: 700;
-    font-size: 1rem;
-  }
-  .markDot {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.3em;
-    height: 1.3em;
-    border-radius: 3px;
-    color: #fff;
-    font-weight: 700;
-    font-size: 0.65rem;
-    position: absolute;
-    top: 0.3rem;
-    right: 0.3rem;
-  }
-  .setInfo {
-    position: relative;
+    font-size: 0.95rem;
+    line-height: 1;
+    /* Monospace keeps H/I/J optical width similar so the badge doesn't look lopsided */
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   }
   .mark-H { background: #3b82f6; }
   .mark-I { background: #8b5cf6; }
