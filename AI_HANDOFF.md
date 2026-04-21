@@ -1,9 +1,27 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38be (v2.17)  
+> 最後更新：2026-04-21 Session 38bf (v2.18)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38bf (v2.18) — 場地行 chip 顏色改表示「目前回合」
+
+### 背景
+
+Leon 提議：v2.16 Bug #108 加的「先攻/後攻」chip 用金色/灰色區分身分，但身分已經寫在文字上了，顏色資訊等於重複。如果改用金色高亮當下輪到的那一側，就能一眼看出回合歸屬，而顏色語意更有價值。
+
+### 修正
+
+`src/routes/game/+page.svelte`：
+- `class:first={game.firstPlayerIdx === oppIdx/myIdx}` → `class:active-turn={game.activePlayerIndex === oppIdx/myIdx}`。
+- `title` attribute 保留身分說明、當前回合時追加「・目前回合」。
+- CSS 類名 `.first` → `.active-turn`，加 `transition` 讓切換平滑。
+- 文字內容仍維持「先攻/後攻」不變（靜態身分）。
+
+視覺：輪到我方時下方 chip 亮金（含我方大部分回合時長），切回對手時上方 chip 亮金。切換有 0.2s 過渡。
 
 ---
 

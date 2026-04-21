@@ -1412,8 +1412,9 @@
     <!-- 對手場地（永遠在上方） -->
     <div class="field-row opponent-row">
       {#if game}
-        <div class="turn-order-chip" class:first={game.firstPlayerIdx === oppIdx}
-          title={game.firstPlayerIdx === oppIdx ? '對手為先攻玩家' : '對手為後攻玩家'}>
+        <div class="turn-order-chip" class:active-turn={game.activePlayerIndex === oppIdx}
+          title={(game.firstPlayerIdx === oppIdx ? '對手為先攻玩家' : '對手為後攻玩家')
+            + (game.activePlayerIndex === oppIdx ? '・目前回合' : '')}>
           {game.firstPlayerIdx === oppIdx ? '先攻' : '後攻'}
         </div>
       {/if}
@@ -1594,8 +1595,9 @@
     <!-- 我方場地（永遠在下方） -->
     <div class="field-row my-row">
       {#if game}
-        <div class="turn-order-chip" class:first={game.firstPlayerIdx === myIdx}
-          title={game.firstPlayerIdx === myIdx ? '我方為先攻玩家' : '我方為後攻玩家'}>
+        <div class="turn-order-chip" class:active-turn={game.activePlayerIndex === myIdx}
+          title={(game.firstPlayerIdx === myIdx ? '我方為先攻玩家' : '我方為後攻玩家')
+            + (game.activePlayerIndex === myIdx ? '・目前回合' : '')}>
           {game.firstPlayerIdx === myIdx ? '先攻' : '後攻'}
         </div>
       {/if}
@@ -2523,7 +2525,9 @@
   .zone-label-sm{ font-size:.62rem; color:#888; text-align:center; white-space:nowrap; }
   .opp-label{ color:#aa8888; }
 
-  /* 先攻/後攻 標記（場地行首常駐顯示） — v2.16 Bug #108 */
+  /* 先攻/後攻 標記（場地行首常駐顯示）
+   * v2.16 Bug #108：新增標籤 + 先攻金色高亮。
+   * v2.17 Bug #115：金色高亮改表示「目前回合輪到誰」，文字本身已傳達先攻/後攻。 */
   .turn-order-chip{
     flex-shrink:0;
     align-self:center;
@@ -2537,8 +2541,9 @@
     writing-mode:vertical-rl; text-orientation:upright;
     min-height:3rem;
     display:flex; align-items:center; justify-content:center;
+    transition:background .2s, color .2s, border-color .2s, box-shadow .2s;
   }
-  .turn-order-chip.first{
+  .turn-order-chip.active-turn{
     background:linear-gradient(180deg, rgba(255,200,60,.25), rgba(255,140,40,.25));
     color:#ffd35a;
     border-color:#ffb732;
