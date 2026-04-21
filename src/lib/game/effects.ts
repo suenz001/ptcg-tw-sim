@@ -4834,72 +4834,120 @@ regPost('振翼髮|飛來橫禍', (state, aIdx, _pool) => {
 
 // 多龍巴魯托ex|幻影奇襲 (200 + 6 個傷害指示物自由分配到對手備戰寶可夢身上)
 // 規則：6 個傷害指示物（每個 10 傷害），玩家可任意分配給任意數量的對手備戰寶可夢。
-// 實作：迴圈 6 次 opp-bench-choose；每次放 10 傷害，包含 KO 判定。
-// 若對手無備戰寶可夢，跳過 snipe 段。
+//
+// v2.20 UX 改寫：改用新的 `damage-distribute` pending type。
+//   - UI 顯示「已放置 X/60」進度條
+//   - 可一次點多隻備戰各 1 counter（或同一隻多次）再統一確認，批次應用
+//   - 按一次「確認」後若還有未用 counter 且對手仍有備戰，modal 再開；直到 60/60 或對手清空
+//
+// 舊版問題：每放 1 個 counter 就強制彈 1 次 modal，放 6 個要按 6 次確認。
 regPre('多龍巴魯托ex|幻影奇襲', (state, _aIdx, _pool) => ({ state, damage: 200 }));
 regPost('多龍巴魯托ex|幻影奇襲', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) return state;
-  let s = addLog(state, '幻影奇襲：將 6 個傷害指示物自由分配到對手備戰寶可夢（每次 1 個）', aIdx);
+  const s = addLog(state, '幻影奇襲：將 6 個傷害指示物自由分配到對手備戰寶可夢（可一次多選）', aIdx);
   return withPending(s, {
-    type: 'opp-bench-choose',
+    type: 'damage-distribute',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
+    minCount: 1, maxCount: 6,
     effectKey: 'dragapult-snipe',
-    params: { remaining: 6, label: '幻影奇襲' },
+    params: {
+      totalCounters: 6,
+      placedCounters: 0,
+      counterDamage: 10,
+      label: '幻影奇襲',
+    },
   });
 });
 
-// 幻影奇襲 resolver — 每次放 10 傷害，若 remaining > 1 且仍有備戰，再起一個 pending
+// 幻影奇襲 resolver — iids 陣列每出現 1 次 iid = 放 1 個 counter 到該寶可夢。
+// 相同 iid 可出現多次（同一隻放多個 counter）。依序處理並在每次放置時檢查 KO。
+// 若仍有剩餘 counter 且對手仍有備戰，再起一個 damage-distribute pending。
 regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
-  const remaining = (params?.remaining as number) ?? 1;
+  const totalCounters = (params?.totalCounters as number) ?? 6;
+  const placedBefore = (params?.placedCounters as number) ?? 0;
+  const counterDamage = (params?.counterDamage as number) ?? 10;
   const label = (params?.label as string) ?? '幻影奇襲';
   const dIdx = (1 - actorIdx) as 0 | 1;
-  const defender = st.players[dIdx];
-  const targetIid = selectedIids[0];
-  if (!targetIid) return st;
-  const target = defender.bench.find(c => c.iid === targetIid);
-  if (!target) return st;
-  const targetCard = pool.get(target.cardId);
-  const tHp = targetCard?.hp ?? 0;
-  const newDmg = target.damage + 10;
+
+  if (selectedIids.length === 0) return st;
+
   let s: GameState = st;
-  if (tHp > 0 && newDmg >= tHp) {
-    // 該備戰被 10 傷害擊倒（少見但可能，例如已帶 9 counter）
-    const koDiscard: CardInstance[] = [
-      { ...target, damage: newDmg },
-      ...target.energyAttached,
-      ...(target.toolAttached ? [target.toolAttached] : []),
-      ...(target.evolvedFromStack ?? []),
-    ];
-    const prizes = targetCard ? koPrizeCount(targetCard) : 1;
-    const players = [...s.players] as [PlayerState, PlayerState];
-    players[dIdx] = {
-      ...defender,
-      discard: [...defender.discard, ...koDiscard],
-      bench: defender.bench.filter(c => c.iid !== targetIid),
-    };
-    s = addLog({ ...s, players },
-      `${label}：在對手 ${targetCard?.name ?? '?'} 身上放置第 ${7 - remaining}/6 個傷害指示物 → 被擊倒！+${prizes} 張獎勵牌（剩 ${remaining - 1} 個待分配）`, actorIdx);
-    s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
-  } else {
-    const players = [...s.players] as [PlayerState, PlayerState];
-    players[dIdx] = {
-      ...defender,
-      bench: defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c),
-    };
-    s = addLog({ ...s, players },
-      `${label}：在對手 ${targetCard?.name ?? '?'} 身上放置第 ${7 - remaining}/6 個傷害指示物（剩 ${remaining - 1} 個待分配）`, actorIdx);
+  let placedThisBatch = 0;
+
+  // 聚合每隻本批次的 counter 數量，方便產生一條精簡 log（不每個 counter 刷一行）
+  const batchTally = new Map<string, number>();
+  for (const iid of selectedIids) batchTally.set(iid, (batchTally.get(iid) ?? 0) + 1);
+
+  // 依序施加，每放 1 個 counter 即檢查 KO（因為 KO 後不能再放到已離場的寶可夢）
+  for (const iid of selectedIids) {
+    const defender = s.players[dIdx];
+    const target = defender.bench.find(c => c.iid === iid);
+    if (!target) continue; // 若該寶可夢已被此批次稍早的 counter 擊倒，後續 counter 作廢
+
+    const targetCard = pool.get(target.cardId);
+    const tHp = targetCard?.hp ?? 0;
+    const newDmg = target.damage + counterDamage;
+    placedThisBatch++;
+
+    if (tHp > 0 && newDmg >= tHp) {
+      // 被這個 counter 擊倒
+      const koDiscard: CardInstance[] = [
+        { ...target, damage: newDmg },
+        ...target.energyAttached,
+        ...(target.toolAttached ? [target.toolAttached] : []),
+        ...(target.evolvedFromStack ?? []),
+      ];
+      const prizes = targetCard ? koPrizeCount(targetCard) : 1;
+      const players = [...s.players] as [PlayerState, PlayerState];
+      players[dIdx] = {
+        ...defender,
+        discard: [...defender.discard, ...koDiscard],
+        bench: defender.bench.filter(c => c.iid !== iid),
+      };
+      s = { ...s, players, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
+      s = addLog(s,
+        `${label}：${targetCard?.name ?? '?'} 累計到第 ${placedBefore + placedThisBatch}/${totalCounters} 個指示物 → 被擊倒！+${prizes} 張獎勵牌`, actorIdx);
+    } else {
+      const players = [...s.players] as [PlayerState, PlayerState];
+      players[dIdx] = {
+        ...defender,
+        bench: defender.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c),
+      };
+      s = { ...s, players };
+    }
   }
-  // 還有指示物要分配且對手仍有備戰 → 再起一個 pending
-  const nextRemaining = remaining - 1;
+
+  // 批次結束後補 1 條總結 log（未 KO 的部分）
+  const summaryParts: string[] = [];
+  for (const [iid, cnt] of batchTally) {
+    // 尋找最後存活的狀態（可能已被 KO → 跳過，避免跟 KO log 重複）
+    const stillThere = s.players[dIdx].bench.find(c => c.iid === iid);
+    if (stillThere) {
+      const name = pool.get(stillThere.cardId)?.name ?? '?';
+      summaryParts.push(`${name}×${cnt}`);
+    }
+  }
+  const placedAfter = placedBefore + placedThisBatch;
+  if (summaryParts.length > 0) {
+    s = addLog(s,
+      `${label}：本批次放置 ${summaryParts.join('、')} → 累計 ${placedAfter}/${totalCounters}`, actorIdx);
+  }
+
+  // 還有 counter 要放 + 對手仍有備戰 → 再開 pending
+  const nextRemaining = totalCounters - placedAfter;
   if (nextRemaining > 0 && s.players[dIdx].bench.length > 0) {
     return withPending(s, {
-      type: 'opp-bench-choose',
+      type: 'damage-distribute',
       actorIdx, sourcePlayerIdx: dIdx,
-      minCount: 1, maxCount: 1,
+      minCount: 1, maxCount: nextRemaining,
       effectKey: 'dragapult-snipe',
-      params: { remaining: nextRemaining, label },
+      params: {
+        totalCounters,
+        placedCounters: placedAfter,
+        counterDamage,
+        label,
+      },
     });
   }
   if (nextRemaining > 0) {

@@ -1,9 +1,54 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38c0 (v2.19)  
+> 最後更新：2026-04-21 Session 38c1 (v2.20)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38c1 (v2.20) — 幻影奇襲批次 UX：`damage-distribute` pending type
+
+### 背景
+
+Leon 回報：多龍巴魯托ex「幻影奇襲」要放 6 個傷害指示物，舊版每放 1 個就要按一次確認、重開 modal 6 次，非常煩。希望：
+1. 進度條顯示「已放置 X/60」
+2. 可一次選多隻備戰（例如 4 隻各 +1、同一隻可 +2/+3），一次按確認批次應用
+3. 若還有 counter 未用，繼續開 modal 分配，直到 60/60 或對手清空備戰
+
+### 引擎擴充
+
+`src/lib/game/types.ts` 加 `'damage-distribute'` pending type，語意：
+- `actorIdx` = 進攻方；`sourcePlayerIdx` = 防守方（目標所在）
+- `minCount` / `maxCount` = 本批次要放的 counter 數（非目標數）
+- `params.totalCounters` / `placedCounters` / `counterDamage` / `label`
+- UI 回 `selectedIids` 為扁平陣列，`iid` 出現 n 次 = 該寶可夢放 n 個 counter
+
+`src/lib/game/effects.ts` `dragapult-snipe` resolver 重寫：
+- 依序處理 iids 陣列，每個 counter 先 +`counterDamage` 再判 KO（因為 KO 後不能再放到已離場的目標）
+- 批次 log 策略：被 KO 的個別印「被擊倒」+獎賞卡數；存活的用一條 `「本批次放置 A×2、B×1 → 累計 X/totalCounters」` 精簡 log
+- `nextRemaining > 0` 且對手仍有備戰 → 再開 `damage-distribute` pending；對手清空 → log 作廢 counter
+
+### UI（`src/routes/game/+page.svelte`）
+
+新增狀態：
+- `selectionCounts: Record<string, number>` — 每隻本批次計數器
+- `selectionBatchSum` derived — 所有計數器加總
+- `selectionValid` 分支判斷（damage-distribute 用 sum，其他用 `Set.size`）
+
+互動：
+- 點卡 +1、右鍵 -1、卡上「－」徽章 -1、達 `maxCount` 整批禁點
+- 計數 >0 時顯示左上紅色徽章 `×n` + 下方「+Xpts → 當前HP/滿HP」預覽，將被擊倒時標 `KO` 紅標 + 卡框變紅
+- 頂部進度條：填充 = `(placedCounters + batchSum) / totalCounters`；文字「已放置 X/60（Y/6 個指示物）」
+- 「確認本批次（X/maxCount 個指示物）」按鈕 + 「清空本批次」
+
+確認時把 counts 展平：`Object.entries(counts).flatMap(([iid,n]) => Array(n).fill(iid))`，引擎 resolver 依出現次數處理。
+
+### 測試
+
+- `npm run build` 通過，無型別錯誤。
+- 「放 6 顆到同一隻」/「4+1+1 分到 3 隻」/「2+2+2 分到 3 隻且其中一隻會被 KO」三種路徑 mental walkthrough 皆通。
+- 對手清空備戰 → log 明確寫「剩 X 個指示物作廢」。
 
 ---
 

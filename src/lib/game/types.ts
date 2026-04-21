@@ -218,7 +218,8 @@ export interface PendingSelection {
       | 'opp-bench-choose'  // 選對手備戰寶可夢（老大的指令、頂尖捕捉器）
       | 'opp-poke-choose'   // 選對手任意寶可夢（含出場，例如狙擊羽毛）
       | 'discard-search'    // 從棄牌區選擇（夜間擔架、能量回收器、奇跡修正檔）
-      | 'hand-choose';      // 從手牌選擇但不丟棄（神奇糖果第一步）
+      | 'hand-choose'       // 從手牌選擇但不丟棄（神奇糖果第一步）
+      | 'damage-distribute'; // 傷害指示物自由分配到多隻對手備戰（幻影奇襲、類似機制）
   /** 需要做選擇的玩家 */
   actorIdx: 0 | 1;
   /** 來源牌堆/目標的玩家（通常等於 actorIdx） */

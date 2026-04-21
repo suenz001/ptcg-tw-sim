@@ -75,6 +75,9 @@
   // ── UI 互動狀態 ─────────────────────────────────────────────────────────────
   let selectedEnergyIid = $state<string | null>(null);
   let selectionPicked = $state<Set<string>>(new Set());
+  // damage-distribute 專用：每隻目標本批次要放幾個 counter
+  // 跟 selectionPicked 分開：selectionPicked 是 toggle 集合（單次唯一），這裡是計數器
+  let selectionCounts = $state<Record<string, number>>({});
   let zoomCard = $state<Card | null>(null);
   let zoomInst = $state<CardInstance | null>(null);
   // 堆疊：之前開過的 zoom — 用於「返回上一層」按鈕
@@ -458,7 +461,7 @@
       // 若 zoom 有堆疊，Escape 先彈回上一層，沒堆疊才全關
       if (zoomCard && zoomStack.length > 0) { popZoom(); return; }
       closeZoom(); floatingEvoMenu = null; floatingRetreatMenu = null;
-      viewDiscardFor = null; selectionPicked = new Set();
+      viewDiscardFor = null; selectionPicked = new Set(); selectionCounts = {};
     }
   }
 
@@ -707,6 +710,13 @@
         if (includeActive && src.active) return [src.active, ...src.bench];
         return src.bench;
       }
+      case 'damage-distribute': {
+        // 傷害指示物自由分配（幻影奇襲）— 預設只能選對手備戰；
+        // 若效果允許 includeActive，則把對手戰鬥寶可夢也納入。
+        const includeActiveDD = pendingSelection.params?.includeActive === true;
+        if (includeActiveDD && src.active) return [src.active, ...src.bench];
+        return src.bench;
+      }
       case 'hand-discard': {
         const f2 = pendingSelection.filter ?? '';
         const validIidsHD = pendingSelection.params?.validIids as string[] | undefined;
@@ -783,12 +793,22 @@
     });
     return new Set(types).size < types.length;
   });
-  const selectionValid = $derived(
-    pendingSelection !== null &&
-    selectionPicked.size >= pendingSelection.minCount &&
-    selectionPicked.size <= pendingSelection.maxCount &&
-    !akamatsuSameTypeBlocked
-  );
+  // damage-distribute 本批次加總的 counter 數（= 各 iid 的 count 之和）
+  const selectionBatchSum = $derived.by(() => {
+    let s = 0;
+    for (const n of Object.values(selectionCounts)) s += n;
+    return s;
+  });
+  const selectionValid = $derived.by(() => {
+    if (!pendingSelection) return false;
+    if (akamatsuSameTypeBlocked) return false;
+    if (pendingSelection.type === 'damage-distribute') {
+      const n = selectionBatchSum;
+      return n >= pendingSelection.minCount && n <= pendingSelection.maxCount;
+    }
+    return selectionPicked.size >= pendingSelection.minCount
+        && selectionPicked.size <= pendingSelection.maxCount;
+  });
 
   // ── 初始化 ──────────────────────────────────────────────────────────────────
   onMount(async () => {
@@ -1072,12 +1092,33 @@
     else if (pendingSelection && next.size < pendingSelection.maxCount) { next.add(iid); }
     selectionPicked = next;
   }
+  // damage-distribute：點擊目標 +1 counter；達到 maxCount 後不再加
+  function incrementCount(iid: string) {
+    if (!pendingSelection || pendingSelection.type !== 'damage-distribute') return;
+    if (selectionBatchSum >= pendingSelection.maxCount) return;
+    selectionCounts = { ...selectionCounts, [iid]: (selectionCounts[iid] ?? 0) + 1 };
+  }
+  function decrementCount(iid: string) {
+    const cur = selectionCounts[iid] ?? 0;
+    if (cur <= 0) return;
+    const next = { ...selectionCounts };
+    if (cur - 1 <= 0) delete next[iid]; else next[iid] = cur - 1;
+    selectionCounts = next;
+  }
   function confirmSelection() {
     if (!selectionValid) return;
     // 線上模式帶 senderIdx 避免對手搶先 resolve
     const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
-    dispatch(GameActions.resolveSelection([...selectionPicked], sid));
+    let payload: string[];
+    if (pendingSelection?.type === 'damage-distribute') {
+      // 展開計數器為扁平陣列：{A:2, B:1} → [A,A,B]（resolver 以 iid 出現次數計數）
+      payload = Object.entries(selectionCounts).flatMap(([iid, n]) => Array(n).fill(iid));
+    } else {
+      payload = [...selectionPicked];
+    }
+    dispatch(GameActions.resolveSelection(payload, sid));
     selectionPicked = new Set();
+    selectionCounts = {};
   }
   function selectionTitle(type: string): string {
     // 支援效果層透過 params.titleOverride 客製標題（例：赤松要「選寶可夢附加能量」而非預設「回復」）
@@ -1091,6 +1132,10 @@
     if (type === 'hand-choose')     return '從手牌選擇';
     if (type === 'heal-target')     return '選擇回復的寶可夢';
     if (type === 'discard-search')  return '從棄牌區選擇';
+    if (type === 'damage-distribute') {
+      const label = pendingSelection?.params?.label as string | undefined;
+      return label ? `${label}：放置傷害指示物` : '放置傷害指示物';
+    }
     return '請選擇';
   }
 </script>
@@ -1797,16 +1842,37 @@
     || (aiPlayerIndex !== null && pendingSelection.actorIdx === (1 - aiPlayerIndex))
   )}
     {@const isPokePicker = pendingSelection.type==='bench-choose' || pendingSelection.type==='opp-bench-choose' || pendingSelection.type==='opp-poke-choose' || pendingSelection.type==='heal-target'}
+    {@const isDmgDist   = pendingSelection.type==='damage-distribute'}
+    {@const dmgTotal    = (pendingSelection.params?.totalCounters as number | undefined) ?? pendingSelection.maxCount}
+    {@const dmgPlaced   = (pendingSelection.params?.placedCounters as number | undefined) ?? 0}
+    {@const dmgPer      = (pendingSelection.params?.counterDamage as number | undefined) ?? 10}
     <div class="selection-overlay">
-      <div class="selection-modal" class:retreat-modal={isPokePicker}>
+      <div class="selection-modal" class:retreat-modal={isPokePicker || isDmgDist}>
         <div class="sel-header">
           <h3>{selectionTitle(pendingSelection.type)}</h3>
-          <p class="sel-hint">
-            選 {pendingSelection.minCount===pendingSelection.maxCount?`${pendingSelection.minCount}`:`${pendingSelection.minCount}～${pendingSelection.maxCount}`} 張
-            {#if pendingSelection.filter&&pendingSelection.filter!=='TOP6'&&!pendingSelection.filter.startsWith('Supporter')}（{pendingSelection.filter.replace('Basic:HP70','HP≤70基礎').replace('Basic','基礎寶可夢').replace('Pokemon','寶可夢').replace('Energy','能量')}）{/if}
-            · 已選 {selectionPicked.size}
-            {#if isPokePicker}· 點放大鏡 🔍 查看詳情{/if}
-          </p>
+          {#if isDmgDist}
+            <!-- 幻影奇襲類：頂部進度條顯示「已放置 X/totalCounters」— X 含本批次即時累加 -->
+            <div class="dmg-progress">
+              <div class="dmg-progress-bar">
+                <div class="dmg-progress-fill" style="width:{Math.min(100, ((dmgPlaced + selectionBatchSum) / dmgTotal) * 100)}%"></div>
+              </div>
+              <div class="dmg-progress-text">
+                已放置 <strong>{(dmgPlaced + selectionBatchSum) * dmgPer}</strong>／{dmgTotal * dmgPer}
+                　<span class="muted">（{dmgPlaced + selectionBatchSum}／{dmgTotal} 個指示物）</span>
+              </div>
+              <p class="sel-hint">
+                本批次剩餘可放 <strong>{pendingSelection.maxCount - selectionBatchSum}</strong>／{pendingSelection.maxCount} 個
+                · 點目標 +1、按「－」鍵 或 右鍵 -1 · 確認後若還有指示物會再開此視窗
+              </p>
+            </div>
+          {:else}
+            <p class="sel-hint">
+              選 {pendingSelection.minCount===pendingSelection.maxCount?`${pendingSelection.minCount}`:`${pendingSelection.minCount}～${pendingSelection.maxCount}`} 張
+              {#if pendingSelection.filter&&pendingSelection.filter!=='TOP6'&&!pendingSelection.filter.startsWith('Supporter')}（{pendingSelection.filter.replace('Basic:HP70','HP≤70基礎').replace('Basic','基礎寶可夢').replace('Pokemon','寶可夢').replace('Energy','能量')}）{/if}
+              · 已選 {selectionPicked.size}
+              {#if isPokePicker}· 點放大鏡 🔍 查看詳情{/if}
+            </p>
+          {/if}
         </div>
         {#if isPokePicker}
           {@const srcActiveIid = game?.players[pendingSelection.sourcePlayerIdx].active?.iid ?? null}
@@ -1838,6 +1904,46 @@
               {/if}
             {/each}
             {#if selectionItems.length===0}<p class="sel-empty">（沒有符合條件的寶可夢）</p>{/if}
+          </div>
+        {:else if isDmgDist}
+          {@const srcActiveIidD = game?.players[pendingSelection.sourcePlayerIdx].active?.iid ?? null}
+          {@const batchFull = selectionBatchSum >= pendingSelection.maxCount}
+          <div class="retreat-grid">
+            {#each selectionItems as item}{@const c=getCard(item.cardId)}
+              {#if c}
+                {@const eff=hpTotal(item)}
+                {@const rem=hpRemaining(item)}
+                {@const cnt=selectionCounts[item.iid] ?? 0}
+                {@const isActivePoke = item.iid === srcActiveIidD}
+                {@const projected = item.damage + cnt * dmgPer}
+                {@const willKO = eff > 0 && projected >= eff}
+                <div class="retreat-card" class:sel-picked={cnt>0} class:is-active-poke={isActivePoke} class:will-ko={willKO}>
+                  <button class="retreat-zoom" title="放大檢視：{c.name}"
+                    onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
+                  {#if cnt > 0}
+                    <button class="dmg-minus" title="移除 1 個指示物（右鍵/減號 快捷）"
+                      onclick={(e)=>{e.stopPropagation();decrementCount(item.iid);}}>−</button>
+                  {/if}
+                  <button class="retreat-pick" disabled={batchFull}
+                    oncontextmenu={(e)=>{e.preventDefault();decrementCount(item.iid);}}
+                    onclick={(e)=>{e.stopPropagation();incrementCount(item.iid);}}>
+                    {#if isActivePoke}<span class="retreat-active-badge opp" title="對手目前戰鬥寶可夢">⚔️ 對手戰鬥寶可夢</span>{/if}
+                    <img src={c.imageUrl} alt={c.name}/>
+                    <div class="retreat-name">{c.name}</div>
+                    <div class="retreat-hp">HP {rem}/{eff}</div>
+                    <div class="retreat-nrg">{energySummary(item)}</div>
+                    {#if cnt > 0}
+                      <div class="dmg-preview">
+                        +{cnt * dmgPer} → {Math.min(projected, eff)}/{eff}
+                        {#if willKO}<span class="dmg-ko-tag">KO</span>{/if}
+                      </div>
+                    {/if}
+                  </button>
+                  {#if cnt > 0}<span class="dmg-badge">×{cnt}</span>{/if}
+                </div>
+              {/if}
+            {/each}
+            {#if selectionItems.length===0}<p class="sel-empty">（對手沒有備戰寶可夢，無法分配）</p>{/if}
           </div>
         {:else}
           <div class="sel-grid">
@@ -1914,9 +2020,18 @@
           {#if akamatsuSameTypeBlocked}
             <div class="sel-hint-warn">⚠ 赤松選 2 張能量時，兩張屬性必須不同</div>
           {/if}
-          <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（{selectionPicked.size}張）</button>
-          {#if pendingSelection.minCount===0}
-            <button class="btn-act secondary" onclick={()=>{selectionPicked=new Set();confirmSelection();}}>不選（跳過）</button>
+          {#if isDmgDist}
+            <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>
+              確認本批次（{selectionBatchSum}／{pendingSelection.maxCount} 個指示物）
+            </button>
+            {#if selectionBatchSum > 0}
+              <button class="btn-act secondary" onclick={()=>{selectionCounts={};}}>清空本批次</button>
+            {/if}
+          {:else}
+            <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（{selectionPicked.size}張）</button>
+            {#if pendingSelection.minCount===0}
+              <button class="btn-act secondary" onclick={()=>{selectionPicked=new Set();confirmSelection();}}>不選（跳過）</button>
+            {/if}
           {/if}
         </div>
       </div>
@@ -2867,6 +2982,26 @@
   .retreat-tool{ color:#aad0ff; font-size:.7rem; }
   .retreat-status{ color:#ff9999; font-size:.7rem; text-transform:capitalize; }
   .retreat-pick:hover .retreat-name{ color:#aaffcc; }
+
+  /* damage-distribute (幻影奇襲) — 頂部進度條 + 每卡片計數徽章 */
+  .dmg-progress{ display:flex; flex-direction:column; gap:.35rem; margin-top:.2rem; }
+  .dmg-progress-bar{ width:100%; height:10px; background:#0e1e0e; border:1px solid #3a5a3a; border-radius:5px; overflow:hidden; }
+  .dmg-progress-fill{ height:100%; background:linear-gradient(90deg,#ff8844,#ff4444); transition:width .2s; }
+  .dmg-progress-text{ font-size:1rem; color:#ffcc88; letter-spacing:.02em; }
+  .dmg-progress-text .muted{ color:#888; font-size:.82rem; }
+  .dmg-progress-text strong{ color:#ffe0a0; font-size:1.1rem; }
+
+  .retreat-card.will-ko{ border-color:#ff4466; box-shadow:0 0 12px rgba(255,68,102,.55); }
+  .retreat-card.will-ko.sel-picked{ border-color:#ff6688; box-shadow:0 0 14px rgba(255,102,136,.7); }
+  .retreat-pick[disabled]{ opacity:.55; cursor:not-allowed; }
+  .retreat-pick[disabled]:hover .retreat-name{ color:#ddd; }
+
+  .dmg-badge{ position:absolute; top:.3rem; left:.3rem; z-index:3; background:linear-gradient(135deg,#ff6030,#cc3030); color:#fff; font-size:.9rem; font-weight:800; padding:.18rem .48rem; border-radius:10px; border:2px solid #fff2; box-shadow:0 2px 6px rgba(0,0,0,.6); pointer-events:none; min-width:1.4rem; text-align:center; }
+  .dmg-minus{ position:absolute; top:.3rem; left:2.6rem; z-index:4; width:1.6rem; height:1.6rem; border-radius:50%; background:#2a2a2a; border:1px solid #6a6a6a; color:#fff; font-size:1.1rem; font-weight:800; line-height:1; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; }
+  .dmg-minus:hover{ background:#cc3030; border-color:#ff8080; }
+  .dmg-preview{ color:#ff8866; font-size:.75rem; font-weight:600; margin-top:.15rem; }
+  .dmg-ko-tag{ display:inline-block; margin-left:.3rem; background:#ff2040; color:#fff; font-weight:800; padding:.05rem .35rem; border-radius:3px; font-size:.7rem; letter-spacing:.05em; }
+
 
   .zoom-overlay{ position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.88); display:flex; align-items:center; justify-content:center; font-family:system-ui,'Microsoft JhengHei',sans-serif; }
   .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.2rem; max-width:720px; width:96vw; max-height:92vh; display:flex; flex-direction:column; gap:.75rem; color:#f0f0f0; overflow-y:auto; position:relative; }
