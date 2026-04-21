@@ -1,9 +1,37 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38az (v2.02)  
+> 最後更新：2026-04-21 Session 38b0 (v2.03)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b0 (v2.03) — 願增猿｜腎上腺腦力 傷害量修正
+
+### 問題
+
+v2.02 把腎上腺腦力實裝成「來源必須 ≥30 傷害指示物、固定移 30」。Leon 指正規則應該是：
+
+- 來源篩選：自己場上任何 **已受傷**（damage ≥ 10）的寶可夢
+- 移動量：`amount = min(source.damage, 30)`（最多 30、不超過實際傷害）
+- 例 1：自己 20 傷害 → 自療 20、對手 +20 傷害
+- 例 2：自己 60 傷害 → 自療 30、對手 +30 傷害（30 上限）
+- 若此招 KO 對手寶可夢，對手下回合一樣可以觸發「不公印章」等「上回合我方寶可夢被 KO」為條件的卡片
+
+### 修改
+
+`effects.ts`：
+
+- `regA('願增猿', 0, ...)`：sources filter 從 `c.damage >= 30` 改成 `c.damage >= 10`
+- `regR('adrenal-brain-src', ...)`：計算 `amount = min(source.damage, 30)`，將 `amount` 透過 `params` 傳遞到下一階段（`opp-poke-choose`）
+- `regR('adrenal-brain-target', ...)`：從 `params.amount` 讀取要加到對手身上的傷害量
+- log 訊息改成動態顯示實際移動量（`${amount}`）
+- 不公印章 gate 無需額外處理：對手被 KO 後會走正常 `pendingPrizes` → `TAKE_PRIZES`，`oppPrizesAtMyLastTurnEnd` 快照會正確偵測
+
+### 驗證
+
+- `npm run build` 通過（client 5.98s / server 11.84s）
 
 ---
 

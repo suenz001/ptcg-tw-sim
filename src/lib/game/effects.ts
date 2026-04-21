@@ -9676,23 +9676,26 @@ regR('scouting-order', (st, idx, iids, params, pool) => {
 });
 
 // ── 願增猿｜腎上腺腦力 ───────────────────────────────────────────────────────
-// 一回合一次：將 3 個傷害指示物從自己的 1 隻寶可夢移動到對手的 1 隻寶可夢上。
+// 一回合一次：從自己 1 隻受傷寶可夢身上移動最多 3 個傷害指示物（= 最多 30 傷害）
+// 到對手 1 隻寶可夢身上。轉移數量 = min(來源目前傷害, 30)。
+// 例：來源 20 傷害 → 轉 20（來源回 20、對手 +20）；來源 60 傷害 → 轉 30（上限）。
+// 若因此將對手寶可夢擊倒，等同於一般取獎賞流程（defender 下回合可用不公印章等
+// 「自己寶可夢上回合昏厥」類 gate，因為 oppPrizesAtMyLastTurnEnd 快照會偵測到）。
 // 流程：
-//   1. self-poke-source：選「身上有 ≥30 damage」的己方寶可夢 → 移除 30 damage
-//   2. opp-poke-choose：選對手 1 隻寶可夢 → +30 damage（含 KO 判定）
-// 無需能量代價。條件由 canPlayAbility 保證場上有合法來源。
+//   1. heal-target：選「身上有 ≥10 傷害」的己方寶可夢 → 根據當前傷害計算轉移量
+//   2. opp-poke-choose：選對手 1 隻寶可夢 → +轉移量 傷害（含 KO 判定）
 regA('願增猿', 0, (st, idx) => {
   const p = st.players[idx];
   const self = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
-  const sources = self.filter(c => c.damage >= 30);
+  const sources = self.filter(c => c.damage >= 10);
   if (sources.length === 0) {
-    return addLog(st, '腎上腺腦力：場上沒有「身上有 ≥30 傷害」的寶可夢', idx);
+    return addLog(st, '腎上腺腦力：場上沒有受傷（≥10 傷害）的寶可夢', idx);
   }
   const dp = st.players[(1 - idx) as 0 | 1];
   if (!dp.active && dp.bench.length === 0) {
     return addLog(st, '腎上腺腦力：對手場上無寶可夢', idx);
   }
-  st = addLog(st, '腎上腺腦力：選 1 隻「身上有 ≥30 傷害」的己方寶可夢', idx);
+  st = addLog(st, '腎上腺腦力：選 1 隻受傷（≥10 傷害）的己方寶可夢', idx);
   return withPending(st, {
     type: 'heal-target', // 複用 heal-target UI（讓玩家選自己場上的寶可夢）
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -9711,9 +9714,11 @@ regR('adrenal-brain-src', (st, idx, iids, params, pool) => {
   const p = st.players[idx];
   const source = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
   if (!source) return st;
-  const newDmg = Math.max(0, source.damage - 30);
+  // 轉移量 = min(來源目前傷害, 30)；PTCG 傷害一律 10 的倍數，所以不需 round
+  const amount = Math.min(source.damage, 30);
+  const newDmg = source.damage - amount;
   const sourceName = pool.get(source.cardId)?.name ?? '?';
-  st = addLog(st, `腎上腺腦力：從 ${sourceName} 身上移除 30 傷害`, idx);
+  st = addLog(st, `腎上腺腦力：從 ${sourceName} 身上移除 ${amount} 傷害（回復 ${amount} HP）`, idx);
   st = updatePlayer(st, idx, pl => {
     if (pl.active && pl.active.iid === targetIid) {
       return { ...pl, active: { ...pl.active, damage: newDmg } };
@@ -9721,23 +9726,23 @@ regR('adrenal-brain-src', (st, idx, iids, params, pool) => {
     return { ...pl,
       bench: pl.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c) };
   });
-  // 下一步：選對手 1 隻寶可夢 +30
+  // 下一步：選對手 1 隻寶可夢 +amount 傷害
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   if (!dp.active && dp.bench.length === 0) {
     return addLog(st, '腎上腺腦力：對手無可選寶可夢（效果中斷）', idx);
   }
-  st = addLog(st, '腎上腺腦力：選對手 1 隻寶可夢 +30 傷害', idx);
+  st = addLog(st, `腎上腺腦力：選對手 1 隻寶可夢 +${amount} 傷害`, idx);
   return withPending(st, {
     type: 'opp-poke-choose',
     actorIdx: idx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'adrenal-brain-target',
-    params: { includeActive: true },
+    params: { includeActive: true, amount },
   });
 });
 
-regR('adrenal-brain-target', (st, actorIdx, iids, _params, pool) => {
+regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
   const dIdx = (1 - actorIdx) as 0 | 1;
   const defender = st.players[dIdx];
   const targetIid = iids[0];
@@ -9747,7 +9752,8 @@ regR('adrenal-brain-target', (st, actorIdx, iids, _params, pool) => {
   if (!target) return st;
   const targetCard = pool.get(target.cardId);
   const tHp = targetCard?.hp ?? 0;
-  const newDmg = target.damage + 30;
+  const amount = (params?.amount as number) ?? 30;
+  const newDmg = target.damage + amount;
   let s: GameState = st;
   if (tHp > 0 && newDmg >= tHp) {
     const koDiscard: CardInstance[] = [
@@ -9766,7 +9772,7 @@ regR('adrenal-brain-target', (st, actorIdx, iids, _params, pool) => {
     };
     players[dIdx] = newDefender;
     s = addLog({ ...s, players },
-      `腎上腺腦力：在 ${targetCard?.name ?? '?'} 身上放 30 傷害 → 被擊倒！+${prizes} 張獎勵牌`, actorIdx);
+      `腎上腺腦力：在 ${targetCard?.name ?? '?'} 身上放 ${amount} 傷害 → 被擊倒！+${prizes} 張獎勵牌`, actorIdx);
     s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
     if (isActive && newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx,
@@ -9779,7 +9785,7 @@ regR('adrenal-brain-target', (st, actorIdx, iids, _params, pool) => {
     else newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
     players[dIdx] = newDefender;
     s = addLog({ ...s, players },
-      `腎上腺腦力：在 ${targetCard?.name ?? '?'} 身上放 30 傷害`, actorIdx);
+      `腎上腺腦力：在 ${targetCard?.name ?? '?'} 身上放 ${amount} 傷害`, actorIdx);
   }
   return s;
 });
