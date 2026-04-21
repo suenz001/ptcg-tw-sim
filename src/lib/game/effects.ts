@@ -3027,6 +3027,34 @@ TOOL_RETREAT_MOD.set('氣球', () => ({ reduceBy: 2 }));
 export const TOOL_BOTH_SIDES_RETREAT_PLUS = new Set<string>();
 TOOL_BOTH_SIDES_RETREAT_PLUS.add('重力之玉');
 
+// ── 道具卡自動登記 attach effect（Wave 42 bugfix）────────────────────────
+// 背景：任何登錄在 TOOL_* 映射中的道具，都需要 TRAINER_EFFECTS 中有對應的
+// attach resolver，否則 engine 的 PLAY_TRAINER 會走到 isTool 分支但找不到
+// effect 而 log「效果尚未實裝」，結果卡片既沒附上寶可夢、也沒回手牌，
+// 直接從手牌消失。原本只有 氣球 / 龐克頭盔 有顯式 reg，其他（英雄斗篷、
+// 勇氣護符、豪華斗篷、極限腰帶、鎖鏈糬、驅勁能量、倖存鍛鍊器、希望護身符、
+// 沉重接力棒、幸運頭盔、奢華炸彈、緊急滑板、福祿果系列、重力之玉、
+// 竹蘭的力量負重 …）都是隱性 broken，直到 Leon 實際測試到才發現。
+// 這裡統一掃過所有 TOOL_* 結構，未被任何 reg() 蓋過者即註冊 toolAttachEffect。
+{
+  const toolNames = new Set<string>([
+    ...TOOL_HP_BONUS.keys(),
+    ...TOOL_ATTACK_BONUS.keys(),
+    ...TOOL_DEFENSE_REDUCE_BY_TYPE.keys(),
+    ...TOOL_PREVENT_KO.keys(),
+    ...TOOL_ON_KO.keys(),
+    ...TOOL_PRIZE_BONUS.keys(),
+    ...TOOL_ON_DAMAGED.keys(),
+    ...TOOL_RETREAT_MOD.keys(),
+    ...TOOL_BOTH_SIDES_RETREAT_PLUS,
+  ]);
+  for (const name of toolNames) {
+    if (!TRAINER_EFFECTS.has(name)) {
+      reg(name, toolAttachEffect(name));
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Session 38h H 標第 5 波 damage-multiply 批次（18 張）
 // 通用：counter = Math.floor(inst.damage / 10)；preFn return { state, damage }
@@ -9458,7 +9486,8 @@ reg('寶可平板', (st, idx) => {
   });
 });
 
-// ── 10. 竹蘭的力量負重（道具） — 已由 TOOL_HP_BONUS 登記，無需額外 reg ──────
+// ── 10. 竹蘭的力量負重（道具）— TOOL_HP_BONUS 提供 +70 HP；
+//        attach resolver 由 TOOL_* 自動登記區塊統一註冊 toolAttachEffect。 ────────
 
 // ── 11. 火箭隊的拉姆達（Supporter）— 搜 1 張訓練家卡加手牌 ────────────────
 regG('火箭隊的拉姆達', (st, idx, pool) => {

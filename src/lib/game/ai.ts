@@ -203,7 +203,10 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         }
         if (f === 'FightingBasicOrFightingEnergy') {
           if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
-          if (card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Fighting') return true;
+          if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+            if (card.pokemonType === 'Fighting') return true;
+            if (card.name.includes('【鬥】') || card.name.includes('【格】')) return true;
+          }
           return false;
         }
         if (f === 'PokemonNonRule') {

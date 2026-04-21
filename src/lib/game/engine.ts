@@ -122,9 +122,11 @@ export function getEffectiveHP(
 }
 
 /** 台灣卡牌中文屬性名稱 → EnergyType（當 pokemonType 欄位遺漏時備用） */
+// 備註：台灣卡面使用「鬥」（例：基本【鬥】能量），舊卡曾用「格」；兩者同對應 Fighting。
 const ZH_ENERGY_TYPE: Record<string, EnergyType> = {
   '草': 'Grass', '火': 'Fire', '水': 'Water', '雷': 'Lightning',
-  '超': 'Psychic', '格': 'Fighting', '惡': 'Darkness', '鋼': 'Metal',
+  '超': 'Psychic', '格': 'Fighting', '鬥': 'Fighting',
+  '惡': 'Darkness', '鋼': 'Metal',
   '妖': 'Fairy', '龍': 'Dragon', '無': 'Colorless',
 };
 

@@ -3992,3 +3992,49 @@ Leon 指示：「把這 13 項當『第 42 波』直接實裝，原規劃的 5 �
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 27/23（P1/P2）、平均回合 15.2
 - 版本 1.96 → 1.97
+
+---
+
+## Session 38av (v1.98) — 竹蘭的烈咬陸鯊EX 牌組 4 bug 修 + 道具統一 attach
+
+Leon 實測 v1.97 的 `CYNTHIA_GARCHOMP_DECK` 發現四個 bug，本波一次修清；沒有新增卡實裝。
+
+### Bug 1：竹蘭的圓陸鯊 → 竹蘭的尖牙陸鯊 進化鏈斷
+
+- 症狀：M2a set 裡面的「竹蘭的尖牙陸鯊」`evolvesFrom` 被資料填錯，寫成 `<竹蘭的>尖牙陸鯊`（自我參照），應為 `竹蘭的圓陸鯊`。
+- 影響 id：14749 / 16383 / 16384（三張 M2a 變體）。
+- 修復：改 `static/cards/M2a.json` 三處。
+- 進化鏈現況：`竹蘭的圓陸鯊`(M2a 14748) → `竹蘭的尖牙陸鯊`(M2a 14749) → `<竹蘭的>烈咬陸鯊ex`(SV9a 12702) 皆為精確 name 對應，引擎 `evoCard.evolvesFrom === baseCard.name` 可通過。
+
+### Bug 2：戰鬥鑼 搜不到 基本【鬥】能量
+
+- 雙重根因：
+  1. `ZH_ENERGY_TYPE`（engine.ts）只有 `'格': 'Fighting'`，缺 `'鬥'`。基本【鬥】能量沒有 `pokemonType` 欄位，需靠名字解析，結果 fallback 為 Colorless。
+  2. `FightingBasicOrFightingEnergy` filter（+page.svelte + ai.ts）只檢查 `pokemonType === 'Fighting'`，基本【鬥】能量因此被排除。
+- 修復：
+  - `ZH_ENERGY_TYPE` 加入 `'鬥': 'Fighting'`（與既有 '格' 並存）。
+  - filter 基本能量分支擴充為「pokemonType === 'Fighting' 或 name 含【鬥】/【格】」。
+
+### Bug 3：牌庫搜尋 UI 加放大鏡
+
+- 需求：火箭隊的拉姆達、高級球、好友寶芬、戰鬥鑼等卡叫出的 deck-search 彈窗，每張卡只有圖+名字+HP，看不出細節。
+- 修復：`+page.svelte` 的 `.sel-grid` 每個 `sel-card` 外包一層 `.sel-card-wrap`，右上角新增 `.sel-zoom` 按鈕（🔍）開啟既有 `openZoom(cardId, inst)` 浮層。寶可夢選擇（retreat-grid）已有此按鈕；本波統一補在通用 deck-search / selection-item UI。
+- 樣式新增：`.sel-card-wrap` / `.sel-zoom`（+hover）；原 `.sel-card` `width:100%` 配 wrap 使用。
+
+### Bug 4：竹蘭的力量負重（道具）放上寶可夢就消失
+
+- 根因：`effects.ts` 對 tool 效果拆為兩部分——`TOOL_*` 映射（HP bonus / attack mod / …）+ `TRAINER_EFFECTS.reg(name, toolAttachEffect(name))` 的 attach resolver。之前只有 `氣球` / `龐克頭盔` 有顯式 reg，其他 tool（英雄斗篷、勇氣護符、豪華斗篷、極限腰帶、鎖鏈糬、驅勁能量 古代/未來、福祿果系列、倖存鍛鍊器、希望護身符、沉重接力棒、幸運頭盔、奢華炸彈、緊急滑板、重力之玉、**竹蘭的力量負重**）全數是隱性 broken——engine PLAY_TRAINER 的 isTool 分支找不到 effectFn 時只寫 log「尚未實裝」，卡片既沒附上寶可夢、也沒回手牌，直接人間蒸發。
+- 修復：在所有 `TOOL_*` map 最後做一次「自動 attach reg」掃描：
+  ```ts
+  const toolNames = new Set<string>([...TOOL_HP_BONUS.keys(), ...TOOL_ATTACK_BONUS.keys(), ...]);
+  for (const name of toolNames) {
+    if (!TRAINER_EFFECTS.has(name)) reg(name, toolAttachEffect(name));
+  }
+  ```
+- 結果：竹蘭的力量負重 + 上述 14 張隱性壞掉的 tool 一次補齊 attach 流程，未來任何加到 `TOOL_*` 的新道具也自動獲得 attach resolver。
+
+### 驗證
+
+- `npm run build` 通過（無 TypeScript / svelte-check 警告）。
+- sim 30 局 / 30 正常結束、0 crash、P1/P2 = 18/12、平均 15.3 回合。
+- 版本 1.97 → 1.98

@@ -663,8 +663,13 @@
             return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.name.includes('竹蘭的');
           }
           if (f === 'FightingBasicOrFightingEnergy') {
+            // 基本【鬥】寶可夢：pokemonType === 'Fighting' 且為基礎
             if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
-            if (card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Fighting') return true;
+            // 基本【鬥】能量：pokemonType 有時缺漏（MC 集能量卡），所以名字含【鬥】/【格】也算
+            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+              if (card.pokemonType === 'Fighting') return true;
+              if (card.name.includes('【鬥】') || card.name.includes('【格】')) return true;
+            }
             return false;
           }
           if (f === 'PokemonNonRule') {
@@ -1778,11 +1783,15 @@
           <div class="sel-grid">
             {#each selectionItems as item}{@const c=getCard(item.cardId)}
               {#if c}
-                <button class="sel-card" class:sel-picked={selectionPicked.has(item.iid)} onclick={()=>toggleSelection(item.iid)}>
-                  <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
-                  {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
-                  {#if selectionPicked.has(item.iid)}<span class="sel-check">✓</span>{/if}
-                </button>
+                <div class="sel-card-wrap" class:sel-picked={selectionPicked.has(item.iid)}>
+                  <button class="sel-zoom" title="放大檢視：{c.name}"
+                    onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
+                  <button class="sel-card" onclick={()=>toggleSelection(item.iid)}>
+                    <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
+                    {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+                    {#if selectionPicked.has(item.iid)}<span class="sel-check">✓</span>{/if}
+                  </button>
+                </div>
               {/if}
             {/each}
             {#if selectionItems.length===0}<p class="sel-empty">（沒有符合條件的卡牌）</p>{/if}
@@ -2682,9 +2691,14 @@
   .full-deck-note{ margin:.4rem 0; font-size:.75rem; color:#888; }
   .full-deck-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:.2rem .6rem; max-height:200px; overflow-y:auto; }
   .deck-item{ font-size:.8rem; color:#bbb; padding:.1rem 0; }
-  .sel-card{ display:flex; flex-direction:column; align-items:center; gap:.2rem; background:#0e1e0e; border:2px solid #2a4a2a; border-radius:6px; padding:.3rem; cursor:pointer; color:#ccc; font-size:.65rem; position:relative; }
+  .sel-card{ display:flex; flex-direction:column; align-items:center; gap:.2rem; background:#0e1e0e; border:2px solid #2a4a2a; border-radius:6px; padding:.3rem; cursor:pointer; color:#ccc; font-size:.65rem; position:relative; width:100%; }
   .sel-card:hover{ border-color:#4a8a4a; }
   .sel-card.sel-picked{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }
+  /* deck-search / generic selection：放大鏡 + 挑選按鈕的 wrapper */
+  .sel-card-wrap{ position:relative; display:flex; flex-direction:column; }
+  .sel-card-wrap.sel-picked .sel-card{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }
+  .sel-zoom{ position:absolute; top:.2rem; right:.2rem; z-index:2; background:rgba(0,0,0,.72); border:1px solid #6aaa6a; color:#cfc; font-size:.7rem; line-height:1; padding:.18rem .32rem; border-radius:4px; cursor:pointer; }
+  .sel-zoom:hover{ background:rgba(74,138,74,.9); color:#fff; }
   .sel-card img{ width:64px; border-radius:3px; }
   .sel-name{ text-align:center; font-size:.6rem; }
   .sel-hp{ font-size:.58rem; color:#888; }
