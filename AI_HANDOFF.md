@@ -1,9 +1,92 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b1 (v2.04)  
+> 最後更新：2026-04-21 Session 38b2 (v2.05)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b2 (v2.05) — effects.ts 模組化首波（白蕾雅 + 赤松）
+
+### 目標
+
+`effects.ts` 已達 9938 行、難以維護。開始分檔 —— 但必須步步為營，一次只動很小範圍，
+每一步都以 `npm run build` 通過為底線。本 session 是示範第一刀。
+
+### 新目錄結構
+
+```
+src/lib/game/effects/
+  _shared.ts                        # 型別 + 登錄表 + reg/regR/regG + canPlayTrainer + 共用 helper
+  cards/
+    white_lily_akamatsu.ts          # 白蕾雅 + 赤松（Supporter）
+```
+
+### 搬遷細節
+
+**1. `effects/_shared.ts` 新增（154 行）：**
+
+- 型別：`EffectFn` / `ResolveFn` / `TrainerGuardFn`（從 effects.ts 原位置搬來）
+- 登錄表 Map：`TRAINER_EFFECTS` / `RESOLVERS` / `TRAINER_GUARDS`（single instance，effects.ts 與子檔共享）
+- 登錄函式：`reg` / `regR` / `regG`（這三個是 **唯一** 寫入上述 Map 的入口）
+- 純函式：`shuffle` / `updatePlayer` / `addLog` / `drawCards` / `discardHand` / `returnHandToDeck` / `withPending`
+- 公開：`canPlayTrainer`
+
+**2. `effects.ts` 頂端改為從 `_shared.ts` import 回來：**
+
+- 原本 1-135 行的型別 / 工具 / 登錄表定義全部刪除，取而代之是一段 import 區塊
+- 為 engine.ts / +page.svelte 的 `from './effects'` import 路徑維持相容：
+  `export { TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS, canPlayTrainer }` +
+  `export type { ResolveFn, TrainerGuardFn }`
+- 其他 9800+ 行的卡牌 reg 呼叫維持原樣
+
+**3. `effects/cards/white_lily_akamatsu.ts` 新增（128 行）：**
+
+- 從 effects.ts 搬出：赤松（regG + reg + 2 regR）、白蕾雅（regG + reg）
+- 從 `../_shared` import 所需的 reg 函式與 helper
+- 不依賴 attack / ability / tool 系統，是搬遷「最乾淨的候選人」
+
+**4. effects.ts 新增 side-effect import：**
+
+```ts
+import './effects/cards/white_lily_akamatsu';
+```
+
+這行放在頂部 import 區塊下方。ES 模組規則確保這行在 effects.ts 本文任何 reg()
+呼叫之前執行，但由於 Map 寫入無先後依賴，順序不影響行為。
+
+### 驗證
+
+- `npm run build` 通過（client 5.XX s / server 12.10s / 11.63s）
+- grep 確認 `^reg\('(赤松|白蕾雅)|^regG\('(赤松|白蕾雅)` 只在新檔出現、effects.ts 已無
+- effects.ts 行數：9938 → 9740（-198 行）
+- 新增總行數：_shared 154 + white_lily_akamatsu 128 = 282 行（含檔頭註解）
+
+### 風險評估
+
+**為什麼選這兩張？**
+
+1. **最新、最熟**：v2.02 / v2.03 才剛人工改過，我對它們的語意最確定
+2. **不碰攻擊 / 特性系統**：只用 `reg` / `regG` / `regR`，不需 `regPre` / `regPost` / `regA`
+3. **沒有跨卡共用的 helper**：不依賴 `statusPost` / `oppCantPlayItemNextPost` / `toolAttachEffect`
+   等 effects.ts 內部 helper —— 所以搬出去後不需要重複定義或再抽 helper 檔
+4. **resolver key 唯一**：`akamatsu-split` / `akamatsu-attach` 不與其他卡共用
+
+### 下一波建議
+
+若要繼續搬遷，候選順序（從安全到複雜）：
+
+1. **阿蜜的目光**（Supporter，1 個 regG + 1 個 reg，單檔獨立）
+2. **其他非互動抽牌 Supporter**（管理員 / 帕底亞的夥伴 / 納莉 / 丹瑜 / 紫竽 / 松葉的信心 / 枇琶）
+3. **固定 item（球類搜索）** —— 但要小心共用 deck-search key
+4. **基礎道具 HP 加成**（引用 `TOOL_HP_BONUS` 等，需要額外 export）
+5. 攻擊類（regPre / regPost）—— **需要先把 attack-system 的 helper 也抽到 _shared 或另開 _attack_helpers.ts**，風險較高，建議最後動
+
+### 對其他人（engine.ts / +page.svelte / types.ts）的影響
+
+**零影響。** 他們引用 `from './effects'` 的所有符號（`TRAINER_EFFECTS` 等）仍在
+effects.ts 的 export 面，只是實體已在 `_shared.ts`。
 
 ---
 

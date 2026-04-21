@@ -11,127 +11,34 @@
 import type { Card, EnergyType } from '$lib/cards/types';
 import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition } from './types';
 
-// ── 型別 ─────────────────────────────────────────────────────────────────────
+// ── 基礎設施 → 從 effects/_shared.ts 匯入 ──────────────────────────────────
+//
+// v2.05 起，effects 模組的型別 / 登錄表 / 登錄函式 / 共用 helper 集中在
+// ./effects/_shared.ts。所有 effects/cards/*.ts 子檔也從同一個地方 import，
+// 確保 reg() / regR() / regG() 寫入的是同一份 Map 實例。
+// effects.ts 仍保留所有尚未被搬遷的卡牌 reg 呼叫。
 
-/** 即時或觸發 pendingSelection 的效果函式 */
-type EffectFn = (
-  state: GameState,
-  actorIdx: 0 | 1,
-  pool: Map<string, Card>,
-  cardInst?: CardInstance
-) => GameState;
+import type { EffectFn, ResolveFn, TrainerGuardFn } from './effects/_shared';
+import {
+  // Maps
+  TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS,
+  // Register functions
+  reg, regR, regG,
+  // Public
+  canPlayTrainer,
+  // Helpers
+  shuffle, updatePlayer, addLog,
+  drawCards, discardHand, returnHandToDeck,
+  withPending,
+} from './effects/_shared';
 
-/** 玩家做完選擇後的繼續處理 */
-export type ResolveFn = (
-  state: GameState,
-  actorIdx: 0 | 1,
-  selectedIids: string[],
-  params: Record<string, unknown> | undefined,
-  pool: Map<string, Card>
-) => GameState;
+// 為 engine.ts / +page.svelte 的 import 路徑維持相容：re-export
+export { TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS, canPlayTrainer };
+export type { ResolveFn, TrainerGuardFn };
 
-// ── 工具函式 ─────────────────────────────────────────────────────────────────
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function updatePlayer(
-  state: GameState,
-  idx: 0 | 1,
-  fn: (p: PlayerState) => PlayerState
-): GameState {
-  const players = [...state.players] as [PlayerState, PlayerState];
-  players[idx] = fn(players[idx]);
-  return { ...state, players };
-}
-
-function addLog(
-  state: GameState,
-  msg: string,
-  playerIdx: 0 | 1 | null = null
-): GameState {
-  return {
-    ...state,
-    log: [...state.log, { turn: state.turn, playerIndex: playerIdx, message: msg }],
-  };
-}
-
-function drawCards(state: GameState, idx: 0 | 1, count: number): GameState {
-  return updatePlayer(state, idx, (p) => {
-    const n = Math.min(count, p.deck.length);
-    if (n <= 0) return p;
-    const drawn = p.deck.slice(0, n);
-    return { ...p, deck: p.deck.slice(n), hand: [...p.hand, ...drawn] };
-  });
-}
-
-function discardHand(state: GameState, idx: 0 | 1): GameState {
-  return updatePlayer(state, idx, (p) => ({
-    ...p,
-    discard: [...p.discard, ...p.hand],
-    hand: [],
-  }));
-}
-
-function returnHandToDeck(state: GameState, idx: 0 | 1): GameState {
-  return updatePlayer(state, idx, (p) => ({
-    ...p,
-    deck: shuffle([...p.deck, ...p.hand]),
-    hand: [],
-  }));
-}
-
-function withPending(state: GameState, sel: PendingSelection): GameState {
-  return { ...state, pendingSelection: sel };
-}
-
-// ── 登錄表 ───────────────────────────────────────────────────────────────────
-
-/** cardName（完全符合）→ 效果函式 */
-export const TRAINER_EFFECTS = new Map<string, EffectFn>();
-
-/** effectKey → resolver 函式 */
-export const RESOLVERS = new Map<string, ResolveFn>();
-
-/**
- * cardName → 可否打出此訓練家卡的前置檢查。
- * 返回 true 表示可打；false 表示缺少合法目標（例如夜間擔架棄牌區為空）。
- * 未註冊 guard 的卡片預設為可打出（保持向後相容）。
- */
-export type TrainerGuardFn = (
-  state: GameState,
-  actorIdx: 0 | 1,
-  pool: Map<string, Card>
-) => boolean;
-export const TRAINER_GUARDS = new Map<string, TrainerGuardFn>();
-
-function reg(name: string, fn: EffectFn) {
-  TRAINER_EFFECTS.set(name, fn);
-}
-
-function regR(key: string, fn: ResolveFn) {
-  RESOLVERS.set(key, fn);
-}
-
-function regG(name: string, fn: TrainerGuardFn) {
-  TRAINER_GUARDS.set(name, fn);
-}
-
-export function canPlayTrainer(
-  cardName: string,
-  state: GameState,
-  actorIdx: 0 | 1,
-  pool: Map<string, Card>
-): boolean {
-  const guard = TRAINER_GUARDS.get(cardName);
-  return guard ? guard(state, actorIdx, pool) : true;
-}
+// 已搬遷到 effects/cards/ 下的卡 — side-effect import 觸發 reg() 登錄。
+// 未來要加更多搬遷檔時，也只需要在這裡加一行 import。
+import './effects/cards/white_lily_akamatsu';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者（無需互動）
@@ -9799,91 +9706,7 @@ reg('特殊紅牌', (st, idx) => {
   return drawCards(st, dIdx, 3);
 });
 
-// ── 赤松（Supporter） ───────────────────────────────────────────────────────
-// 從牌庫搜最多 2 張基本能量，1 張加手牌、另 1 張附加到己方 1 隻寶可夢身上，然後洗牌庫。
-// 兩階段流程：
-//   1. deck-search（最多 2 張基本能量，可選 0/1/2 張）→ 'akamatsu-split'
-//   2. 若選到 2 張：第 1 張加手牌後，另 1 張進入 'akamatsu-attach' pending（選己方寶可夢）
-//      若選到 0 或 1 張：直接加入手牌結束。
-regG('赤松', (st, idx, pool) => {
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic';
-  });
-});
-reg('赤松', (st, idx) => {
-  st = addLog(st, '赤松：從牌庫選最多 2 張基本能量（1 張加手牌 + 1 張附加寶可夢）', idx);
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Energy:Basic',
-    minCount: 0, maxCount: 2,
-    effectKey: 'akamatsu-split',
-  });
-});
-
-regR('akamatsu-split', (st, idx, iids, _params, pool) => {
-  if (iids.length === 0) {
-    return addLog(st, '赤松：未選取任何能量（洗回牌庫）', idx);
-  }
-  // 第 1 張：固定加入手牌
-  const p = st.players[idx];
-  const first = p.deck.find(c => c.iid === iids[0]);
-  const second = iids[1] ? p.deck.find(c => c.iid === iids[1]) : undefined;
-  if (!first) return st;
-  const firstName = pool.get(first.cardId)?.name ?? '?';
-  st = addLog(st, `赤松：將 ${firstName} 加入手牌`, idx);
-  st = updatePlayer(st, idx, pl => ({
-    ...pl,
-    deck: shuffle(pl.deck.filter(c => !iids.includes(c.iid))),
-    hand: [...pl.hand, first],
-  }));
-  if (!second) return st;
-  // 第 2 張：暫存到 pending params，讓玩家選要附加給哪隻寶可夢
-  const pokes = [st.players[idx].active, ...st.players[idx].bench]
-    .filter((c): c is CardInstance => !!c);
-  if (pokes.length === 0) {
-    // 場上無寶可夢 → 第 2 張也加入手牌作 fallback
-    const secondName = pool.get(second.cardId)?.name ?? '?';
-    st = addLog(st, `赤松：場上無寶可夢，改將 ${secondName} 一併加入手牌`, idx);
-    return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, second] }));
-  }
-  const secondName = pool.get(second.cardId)?.name ?? '?';
-  st = addLog(st, `赤松：選 1 隻己方寶可夢附加 ${secondName}`, idx);
-  return withPending(st, {
-    type: 'heal-target', // 複用 heal-target UI 選自己寶可夢
-    actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'akamatsu-attach',
-    params: { energyInstance: second, validIids: pokes.map(c => c.iid) },
-  });
-});
-
-regR('akamatsu-attach', (st, idx, iids, params, pool) => {
-  const energy = params?.energyInstance as CardInstance | undefined;
-  const validIids = (params?.validIids as string[]) ?? [];
-  const targetIid = iids[0];
-  if (!energy || !targetIid || !validIids.includes(targetIid)) {
-    // 目標不合法 → 把能量塞回手牌避免卡牌遺失
-    if (energy) {
-      st = addLog(st, '赤松：目標不合法，能量加入手牌', idx);
-      return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, energy] }));
-    }
-    return st;
-  }
-  const p = st.players[idx];
-  const targetPoke = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
-  const tName = targetPoke ? (pool.get(targetPoke.cardId)?.name ?? '?') : '?';
-  const eName = pool.get(energy.cardId)?.name ?? '?';
-  st = addLog(st, `赤松：將 ${eName} 附加到 ${tName}`, idx);
-  return updatePlayer(st, idx, pl => {
-    if (pl.active?.iid === targetIid) {
-      return { ...pl, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, energy] } };
-    }
-    return { ...pl, bench: pl.bench.map(c => c.iid === targetIid
-      ? { ...c, energyAttached: [...c.energyAttached, energy] } : c) };
-  });
-});
+// 赤松：已搬遷到 ./effects/cards/white_lily_akamatsu.ts（v2.05）
 
 // ── 阿蜜的目光（Supporter） ─────────────────────────────────────────────────
 // 本回合結束後，你的戰鬥位寶可夢下次受到招式傷害 -30（套用 damageReduceNextHit）。
@@ -9899,28 +9722,7 @@ reg('阿蜜的目光', (st, idx, pool) => {
   });
 });
 
-// ── 白蕾雅（Supporter） ─────────────────────────────────────────────────────
-// 原文：
-//   這張卡只有在對手剩餘獎賞卡的張數為 2 張時才可使用。
-//   在這個回合，若對手的戰鬥寶可夢因自己的「太晶」寶可夢使用的招式的傷害而【昏厥】了，
-//   則多獲得 1 張獎賞卡。
-// 實裝：
-//   - regG：對手獎勵牌恰為 2 張時才可打出。
-//   - reg ：設 PlayerState.teraKoBonusPrizeThisTurn=true。engine.ts KO 路徑 (attacker 側)
-//           檢查本旗標 + 攻擊方 active 是否為「太晶寶可夢」(card.attacks 含 name==='太晶')
-//           → prizes +1。END_TURN 於 aIdx 清除旗標。
-regG('白蕾雅', (st, idx) => {
-  const opp = st.players[1 - idx];
-  return opp.prizes.length === 2;
-});
-reg('白蕾雅', (st, idx) => {
-  const opp = st.players[1 - idx];
-  if (opp.prizes.length !== 2) {
-    return addLog(st, '白蕾雅：對手剩餘獎勵牌不是 2 張，無法使用', idx);
-  }
-  st = addLog(st, '白蕾雅：本回合若太晶寶可夢招式 KO 對手戰鬥寶可夢 +1 張獎勵牌', idx);
-  return updatePlayer(st, idx, pl => ({ ...pl, teraKoBonusPrizeThisTurn: true }));
-});
+// 白蕾雅：已搬遷到 ./effects/cards/white_lily_akamatsu.ts（v2.05）
 
 // ── 莉莉艾的珍珠（Pokemon Tool） ────────────────────────────────────────────
 // 裝備者若為「擁有規則」寶可夢（ex / 超級ex），被擊倒時對手取得的獎勵牌 -1。
