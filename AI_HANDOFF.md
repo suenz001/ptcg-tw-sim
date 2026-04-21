@@ -1,9 +1,67 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b5 (v2.08)  
+> 最後更新：2026-04-21 Session 38b6 (v2.09)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b6 (v2.09) — 模組化：抽 道具卡 (Pokemon Tool) 到 effects/cards/tools.ts
+
+### 背景
+
+v2.05 開始把龐大的 `effects.ts`（原 ~9700 行）逐步拆到 `effects/cards/` 子模組。
+已完成：
+- v2.05：`effects/_shared.ts`（TRAINER_EFFECTS / RESOLVERS / TRAINER_GUARDS 三個 Map +
+  reg / regR / regG / shuffle / updatePlayer / addLog / withPending / drawCards / clearActiveEffects 等 helper）
+- v2.05：`effects/cards/white_lily_akamatsu.ts`（白百合 / 赤松示範模組）
+
+這次抽出「寶可夢道具卡（Pokemon Tool）」整塊到 `effects/cards/tools.ts`。
+
+### 改動
+
+**新增** `src/lib/game/effects/cards/tools.ts` (293 行)：
+- 8 張 TOOL_* Map 的 export：`TOOL_HP_BONUS`, `TOOL_ATTACK_BONUS`,
+  `TOOL_DEFENSE_REDUCE_BY_TYPE`, `TOOL_PREVENT_KO`, `TOOL_ON_KO`, `TOOL_PRIZE_BONUS`,
+  `TOOL_ON_DAMAGED`, `TOOL_RETREAT_MOD` + `TOOL_BOTH_SIDES_RETREAT_PLUS` Set
+- 23 張道具卡的完整 entry（byte-exact 從原 effects.ts 搬過來）：
+  英雄斗篷、勇氣護符、豪華斗篷、驅勁能量（古代/未來）、竹蘭的力量負重、極限腰帶、
+  鎖鏈糬、福祿果、巧可果、千香果、刺耳果、霹霹果、莓榴果、倖存鍛鍊器、希望護身符、
+  沉重接力棒、莉莉艾的珍珠、幸運頭盔、奢華炸彈、緊急滑板、氣球、重力之玉、龐克頭盔
+- `toolAttachEffect(toolName)` helper + `regR('attach-tool')` resolver
+- 檔尾 auto-register 迴圈：遍歷所有 TOOL_* Map 的 keys + `TOOL_BOTH_SIDES_RETREAT_PLUS`
+  Set，對每張卡呼叫 `reg(name, toolAttachEffect(name))`（若尚未註冊）
+
+**修改** `src/lib/game/effects.ts`：
+- 在檔頭 import `./effects/cards/tools` 的所有 TOOL_* 並 re-export（engine.ts 的
+  `import { TOOL_* } from './effects'` 路徑不需改）
+- 刪除 Session 33 的 `// Pokemon Tool 系統` 189 行大區塊
+- 刪除 `toolAttachEffect` 定義 + `reg('氣球')` / `reg('龐克頭盔')` / `regR('attach-tool')`
+  原有區塊（已移到 tools.ts）
+- 刪除檔尾 `reg('莉莉艾的珍珠')` 遲註冊（已併入 tools.ts 的自動註冊前）
+- 行數從 9753 → 9532（-221 行）
+
+**副作用匯入**：`effects.ts` 檔頭順序新增
+```ts
+import './effects/cards/tools';
+```
+讓 tools.ts 檔尾的 `reg()` 呼叫會在 `applyAction` 第一次被呼叫前執行。
+
+### 驗證
+
+- `npm run build` ✅
+- grep `TOOL_.*\.set\|TOOL_.*\.add` on effects.ts → 0（全搬光）
+- grep `toolAttachEffect` on effects.ts → 只剩註解（3 處 stub 說明）
+- engine.ts 零改動
+
+### 記憶檔更新
+
+- 新增 `reference_ptcg_terminology.md`：PTCG 繁中正式翻譯表（Stadium → 競技場卡 / 場地卡，
+  不是球場；Prize → 獎勵牌 不是獎賞…等），寫 log / 註解 / commit message 都要遵守
+- 新增 `feedback_edit_verify_first.md`：Edit 前先 Read 對應區段拿原文，不要從記憶猜
+  old_string（v2.08 AI_HANDOFF URL 改錯 + 這次第一版 tools.ts 從記憶寫錯 4 個 tool 邏輯，
+  已是第二次犯類似錯誤）
 
 ---
 
