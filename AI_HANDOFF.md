@@ -3420,3 +3420,60 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局正常、0 crash、勝率 31/19（P1/P2）、平均回合 15.1
 - 版本 1.83 → 1.84
+
+---
+
+## 📝 2026-04-21 Session 38ai (v1.85) — H 標第 30 波：既有 helper 補完 + 條件式 +N + coin 組合（25 張）
+
+### 實裝（25 張）
+
+**(A) Coin helper 補完**
+- 來電汪|嬉鬧（coinPlusDmg 20+20）、變澀蜥|二連撞（coinHeads×2 ×30）、跳跳豬|三重旋轉（coinHeads×3 ×10）、炎兔兒|踹（coinTailsFail 30）、胖丁|滾球（coinUntilTails ×20）、無畏小子|叩叩打擊（coinUntilTails ×30 base 10）、銅鏡怪|鐵壁（coinHeadsSelfImmuneNext）
+
+**(B) registerSelfDiscardMultiply（自身丟能量）**
+- 千面避役|水射擊（110 + 丟 1 cost）、超級噴火駝ex|火山流星（280 + 丟 2）、鋼炮臂蝦|水之發射器（210 + 丟全部）、雷吉艾斯ex|冰之牢籠（140 + 丟 2 + 對手【麻痺】）
+
+**(C) selfHealPost**
+- 超級妙蛙花ex|叢林拋擲（240 + 自癒 30）、麻麻小魚|紋絲不動（0 + 自癒 10）
+
+**(D) statusPost**
+- 霸王花|花粉炸彈（30 + 對手【中毒】，原規則 中毒+睡眠 引擎僅單一 status，取主要中毒）
+
+**(E) oppDiscardRandomHand / oppSwapDmgPost / discardOppActiveEnergyPost**
+- 滑滑小子|拍落（20 + 對手手牌隨機丟 1）
+- 皮皮|看我嘛（0 + 對手備戰互換）
+- 鋁鋼龍|破壞光線（70 + 丟對手戰鬥能量 1）
+
+**(F) selfSwapPost / selfDmgReducePost / selfCantAttackNextPost / defCantRetreatNextPost**
+- 鐵面忍者|急速折返（90 + 自己換場）、椰蛋樹|防守壓制（30 + 下次受傷 -30）、巨石丁|潛力（140 + 自己下回合無法攻擊）、妙蛙種子|束縛（10 + 對手下回合無法撤退）
+
+**(G) defIsExPre — 對手為 ex/V → +N**
+- 火焰鳥|鬥志之翼（20 + 對手 ex → +90）
+
+**(H) deck-search**
+- 炭小侍|集力（0 + 牌庫選 ≤2 基本能量加手牌，reuse deckSearchToHandPost）
+- 呆火駝|呼朋引伴（0 + 牌庫選 ≤2 基礎寶可夢放備戰，reuse bench-basic-from-deck resolver）
+
+**(I) 條件式 +N 傷害**
+- <火箭隊的>尼多力諾|角裂（60 + 對手帶傷 → +60）
+- N的萊希拉姆|強力激怒（自身傷害指示物 ×20）
+- 迷唇姐|精神強念（30 + 對手能量數 ×30）
+
+**(J) coin + 既有 helper 組合**
+- 大岩蛇|綁緊（30 + 擲硬幣正面 → 對手【麻痺】）
+- 破破袋|酸液炸彈（10 + 擲硬幣正面 → 丟對手戰鬥 1 能量）
+
+**(K) 抽到手牌滿 6**
+- 狐大盜|貪慾狩獵（20 + 抽到手牌滿 6）
+
+### 暫緩
+- 不計算抵抗力（10 張）— 引擎尚無 resistance 機制，效果 no-op
+- 月桂葉|推倒（對手選擇互換目標）— 需 force-opp-send-new-active 機制
+- 喵喵ex|夾尾巴逃跑（自己 + 附加卡放回手牌）— 需新機制
+- 烈雀|啄食（造成傷害前丟對手道具）— 需 ATTACK_PRE 階段道具丟棄
+- 安瓢蟲（特性）— 進化時觸發特性，非招式
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 27/23（P1/P2）、平均回合 14.4
+- 版本 1.84 → 1.85

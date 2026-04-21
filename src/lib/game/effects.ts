@@ -7186,3 +7186,157 @@ regPost('班基拉斯|斷裂頓足', millOppDeckTopPost(2, '斷裂頓足'));
 
 // ── (6) 自己 mill（將自己的牌庫頂 N 張丟棄）─ 沿用既有 millSelfDeckTopPost ─
 regPost('黏美龍|龍之波動', millSelfDeckTopPost(1, '龍之波動'));
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 30 (v1.85) — 補完現有 helper 套用 + 新增 helpers（單一/條件/能量×倍率）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── (A) 既有 coin helper 補完 ───────────────────────────────────────────────
+// coinPlusDmg(base, bonus) — 擲 1 次硬幣若正面 +N
+regPre('來電汪|嬉鬧', coinPlusDmg(20, 20));
+
+// coinHeadsMultiplyPre(flips, perHead, label)
+regPre('變澀蜥|二連撞', coinHeadsMultiplyPre(2, 30, '二連撞'));
+regPre('跳跳豬|三重旋轉', coinHeadsMultiplyPre(3, 10, '三重旋轉'));
+
+// coinTailsFailPre(base, label)
+regPre('炎兔兒|踹', coinTailsFailPre(30, '踹'));
+
+// coinUntilTailsMultiplyPre(perHead, base, label)
+regPre('胖丁|滾球', coinUntilTailsMultiplyPre(20, 0, '滾球'));
+regPre('無畏小子|叩叩打擊', coinUntilTailsMultiplyPre(30, 10, '叩叩打擊'));
+
+// coinHeadsSelfImmuneNextPost(label) — 0 dmg + 正面則自己下回合免疫
+regPre('銅鏡怪|鐵壁', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('銅鏡怪|鐵壁', coinHeadsSelfImmuneNextPost('鐵壁'));
+
+// ── (B) registerSelfDiscardMultiply 補完（自身丟能量為 cost） ─────────────
+// 千面避役｜水射擊 110 — 丟 1 自身能量（cost）
+registerSelfDiscardMultiply('千面避役|水射擊', '水射擊', 110, 0, 1, 'all');
+
+// 超級噴火駝ex｜火山流星 280 — 丟 2 自身能量
+registerSelfDiscardMultiply('超級噴火駝ex|火山流星', '火山流星', 280, 0, 2, 'all');
+
+// 鋼炮臂蝦｜水之發射器 210 — 丟所有自身能量
+registerSelfDiscardMultiply('鋼炮臂蝦|水之發射器', '水之發射器', 210, 0, 99, 'all');
+
+// 雷吉艾斯ex｜冰之牢籠 140 — 丟 2 自身能量 + 對手【麻痺】
+registerSelfDiscardMultiply('雷吉艾斯ex|冰之牢籠', '冰之牢籠', 140, 0, 2, 'all');
+regPost('雷吉艾斯ex|冰之牢籠', statusPost('paralyzed'));
+
+// ── (C) selfHealPost 補完 ────────────────────────────────────────────────
+// 超級妙蛙花ex｜叢林拋擲 240 + 自癒 30
+regPost('超級妙蛙花ex|叢林拋擲', selfHealPost(30, '叢林拋擲'));
+
+// 麻麻小魚｜紋絲不動 0 + 自癒 10
+regPre('麻麻小魚|紋絲不動', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('麻麻小魚|紋絲不動', selfHealPost(10, '紋絲不動'));
+
+// ── (D) statusPost 多狀態（取主要狀態） ─────────────────────────────────
+// 霸王花｜花粉炸彈 30 + 中毒（規則 says 中毒+睡眠，但引擎僅單一 status，取中毒）
+regPost('霸王花|花粉炸彈', statusPost('poisoned'));
+
+// ── (E) oppDiscardRandomHand / oppSwapDmgPost / discardOppActiveEnergyPost ──
+// 滑滑小子｜拍落 20 + 對手手牌隨機丟 1
+regPost('滑滑小子|拍落', oppDiscardRandomHand(1, '拍落'));
+
+// 皮皮｜看我嘛 0 + 選對手備戰 1 隻與戰鬥場互換（無傷）
+regPre('皮皮|看我嘛', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('皮皮|看我嘛', oppSwapDmgPost(0, '看我嘛'));
+
+// 鋁鋼龍｜破壞光線 70 + 丟對手戰鬥能量 1 張
+regPost('鋁鋼龍|破壞光線', discardOppActiveEnergyPost('破壞光線', 'any'));
+
+// ── (F) selfSwapPost / selfDmgReducePost / selfCantAttackNextPost ──────
+// 鐵面忍者｜急速折返 90 + 自己換場
+regPost('鐵面忍者|急速折返', selfSwapPost('急速折返'));
+
+// 椰蛋樹｜防守壓制 30 + 下次受傷 -30
+regPost('椰蛋樹|防守壓制', selfDmgReducePost(30));
+
+// 巨石丁｜潛力 140 + 自己下回合無法使用招式
+regPost('巨石丁|潛力', selfCantAttackNextPost());
+
+// 妙蛙種子｜束縛 10 + 對手下回合無法撤退
+regPost('妙蛙種子|束縛', defCantRetreatNextPost());
+
+// ── (G) defIsExPre — 對手為 ex/V → +N ──────────────────────────────────
+regPre('火焰鳥|鬥志之翼', defIsExPre(20, 90, '鬥志之翼'));
+
+// ── (H) deck-search 補完 ────────────────────────────────────────────────
+// 炭小侍｜集力 0 + 從牌庫選最多 2 張基本能量加手牌
+regPre('炭小侍|集力', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('炭小侍|集力', deckSearchToHandPost(2, 'BasicEnergy', '集力'));
+
+// 呆火駝｜呼朋引伴 0 + 從牌庫選最多 2 隻基礎寶可夢放備戰
+regPre('呆火駝|呼朋引伴', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('呆火駝|呼朋引伴', (state, aIdx, _pool) => {
+  const p = state.players[aIdx];
+  if (p.deck.length === 0) return addLog(state, '呼朋引伴：牌庫為空', aIdx);
+  if (p.bench.length >= 5) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
+  const s = addLog(state, '呼朋引伴：從牌庫選最多 2 隻基礎寶可夢放備戰', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Basic',
+    minCount: 0, maxCount: Math.min(2, 5 - p.bench.length),
+    effectKey: 'bench-basic-from-deck',
+  });
+});
+
+// ── (I) 條件式 +N 傷害（其他）──────────────────────────────────────────
+// <火箭隊的>尼多力諾｜角裂 60 + 若對手有傷害指示物 +60
+regPre('<火箭隊的>尼多力諾|角裂', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  if (def && def.damage > 0) {
+    return { state: addLog(state, '角裂：對手帶傷 → +60', aIdx), damage: 120 };
+  }
+  return { state, damage: 60 };
+});
+
+// N的萊希拉姆｜強力激怒 — 自身傷害指示物數 × 20（damage / 10 = 指示物數）
+regPre('N的萊希拉姆|強力激怒', (state, aIdx, _pool) => {
+  const att = state.players[aIdx].active;
+  const counters = att ? Math.floor(att.damage / 10) : 0;
+  const dmg = counters * 20;
+  const s = addLog(state, `強力激怒：自身傷害指示物 ${counters} × 20 → ${dmg}`, aIdx);
+  return { state: s, damage: dmg };
+});
+
+// 迷唇姐｜精神強念 — 對手戰鬥寶可夢能量數 × 30
+regPre('迷唇姐|精神強念', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  const energyCount = def ? def.energyAttached.length : 0;
+  const dmg = 30 + energyCount * 30;
+  const s = addLog(state, `精神強念：對手能量 ${energyCount} × 30 → ${dmg}`, aIdx);
+  return { state: s, damage: dmg };
+});
+
+// ── (J) coin + 既有 helper 組合 ────────────────────────────────────────
+// 大岩蛇｜綁緊 30 + 擲硬幣正面則對手【麻痺】
+regPost('大岩蛇|綁緊', (state, aIdx, pool) => {
+  const heads = Math.random() < 0.5;
+  if (!heads) return addLog(state, '綁緊：擲硬幣反面 → 無附加效果', aIdx);
+  return statusPost('paralyzed')(addLog(state, '綁緊：擲硬幣正面 → 對手【麻痺】', aIdx), aIdx, pool);
+});
+
+// 破破袋｜酸液炸彈 10 + 擲硬幣正面則丟對手戰鬥 1 張能量
+regPost('破破袋|酸液炸彈', (state, aIdx, pool) => {
+  const heads = Math.random() < 0.5;
+  if (!heads) return addLog(state, '酸液炸彈：擲硬幣反面 → 無附加效果', aIdx);
+  return discardOppActiveEnergyPost('酸液炸彈', 'any')(addLog(state, '酸液炸彈：擲硬幣正面', aIdx), aIdx, pool);
+});
+
+// ── (K) 抽卡到 6 張 ──────────────────────────────────────────────────
+// 狐大盜｜貪慾狩獵 20 + 從牌庫抽到手牌滿 6
+regPost('狐大盜|貪慾狩獵', (state, aIdx, _pool) => {
+  const p = state.players[aIdx];
+  const need = Math.max(0, 6 - p.hand.length);
+  if (need === 0) return addLog(state, '貪慾狩獵：手牌已滿 6 張', aIdx);
+  const drawn = Math.min(need, p.deck.length);
+  if (drawn === 0) return addLog(state, '貪慾狩獵：牌庫為空', aIdx);
+  const s = addLog(state, `貪慾狩獵：抽到手牌滿 6（補 ${drawn} 張）`, aIdx);
+  return drawCards(s, aIdx, drawn);
+});
