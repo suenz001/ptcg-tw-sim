@@ -1,9 +1,53 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b8 (v2.11)  
+> 最後更新：2026-04-21 Session 38b9 (v2.12)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b9 (v2.12) — 模組化：抽 Supporter 區塊到 effects/cards/draw_supporters.ts
+
+### 背景
+
+承 v2.10 Stadium 抽離後，繼續模組化 effects.ts。本波挑選最淺的 trainer 類別：
+「即時支援者」+「互動支援者」，byte-exact 搬出，只依賴 _shared.ts 已匯出的
+`reg / regR / addLog / updatePlayer / withPending / drawCards / discardHand /
+returnHandToDeck`，不涉及攻擊系統 / 特性 / 道具 / Stadium / 被動減傷。
+
+### 改動
+
+**新增** `src/lib/game/effects/cards/draw_supporters.ts` (131 行)：
+
+即時支援者（純 draw，無 pending）：
+- 管理員（抽 2）/ 帕底亞的夥伴（抽 3）/ 納莉（抽 4）/ 枇琶（抽 3）
+- 丹瑜（丟全手 → 抽 5）
+- 紫竽（手回牌庫 → 抽 4）/ 松葉的信心（手回牌庫 → 抽 5）
+
+互動支援者（`withPending` + `regR`）：
+- 艾莉絲的鬥志（hand-discard 1 → 抽至 6，effectKey `alice-courage`）
+- 探險家的嚮導（TOP6 → 選 0-2 加手牌、其餘丟棄，effectKey `explorer-guide`）
+
+**修改** `src/lib/game/effects.ts`：
+- 頂部新增 `import './effects/cards/draw_supporters'` 觸發 side-effect 登錄
+- 刪除原處 67-180 行的 9 張卡 reg/regR 區塊，留下 section stub 註解
+- 行數從 9499 → 9392（-107）
+
+### 驗證
+
+- `npm run build` ✅
+- 所有 reg() 都寫進同一個 `TRAINER_EFFECTS / RESOLVERS` Map（透過 _shared.ts
+  的共享實例），engine.ts / ai.ts 無感
+- CRLF line-ending 保留（`file` 輸出 "with CRLF line terminators"）
+- git diff 僅 115 行變動，無全檔 re-normalize
+
+### 下一步候選
+
+- 「支援者 — 抽牌系列」(莉莉艾的決意) + 「支援者 — 呼叫對手」(老大的指令) →
+  可抽到同一個新檔或 draw_supporters.ts 擴充
+- 「物品卡 — 切換」/「藥水回復」/「搜尋牌庫」三大 Item 區塊 → 分別獨立檔
+- Wave 43 魔靈多龍剩餘卡 → 擴充 white_lily_akamatsu.ts
 
 ---
 
