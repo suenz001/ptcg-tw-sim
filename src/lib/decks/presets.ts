@@ -176,16 +176,110 @@ const MARRUNE_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
 };
 
 /**
+ * 胡地 牌組（v2.21 — Leon 自選卡表）
+ *
+ * 軸心：凱西 → 勇基拉 → 胡地（M1S，特性「精神抽出」+ 招式「手之力量」）
+ *        依序進化爬上去；土龍節節ex 為副 ace 打點。
+ * 引擎：鬥子（MC）+ 小光 + 水蓮的照顧 作為支援者循環；
+ *        吉雉雞ex「扭轉乾坤」自場寶可夢昏厥後補手；
+ *        謝米/可達鴨作為 bench 支援。
+ * ACE SPEC：富裕能量（MC）附在主力胡地上觸發加乘。
+ */
+const ALAKAZAM_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_alakazam__',
+  name: '胡地',
+  entries: [
+    // ── 寶可夢（21 張）──
+    { cardId: '14056', count: 4 },  // 凱西 (M1S)
+    { cardId: '14057', count: 4 },  // 勇基拉 (M1S)
+    { cardId: '14058', count: 4 },  // 胡地 (M1S) — 特性精神抽出、招式手之力量
+    { cardId: '17045', count: 3 },  // 土龍弟弟 (MC)
+    { cardId: '17046', count: 3 },  // 土龍節節ex (MC)
+    { cardId: '14692', count: 1 },  // 可達鴨 (M2a) — 特性濕氣
+    { cardId: '17980', count: 1 },  // 謝米 (M3)
+    { cardId: '16960', count: 1 },  // 吉雉雞ex (MC) — 扭轉乾坤
+    // ── 訓練家・物品（16 張）──
+    { cardId: '17119', count: 4 },  // 好友寶芬 (MC)
+    { cardId: '17133', count: 3 },  // 寶可平板 (MC)
+    { cardId: '17126', count: 3 },  // 神奇糖果 (MC)
+    { cardId: '17141', count: 2 },  // 夜間擔架 (MC)
+    { cardId: '14808', count: 2 },  // 改造之錘 (M2a)
+    { cardId: '18492', count: 1 },  // 特殊紅牌 (M4)
+    { cardId: '18407', count: 1 },  // 奇跡修正檔 (M3)
+    // ── 訓練家・支援者（12 張）──
+    { cardId: '14395', count: 3 },  // 小光 (M2)
+    { cardId: '17189', count: 4 },  // 鬥子 (MC)
+    { cardId: '17195', count: 3 },  // 老大的指令 (MC)
+    { cardId: '17183', count: 1 },  // 水蓮的照顧 (MC)
+    { cardId: '12278', count: 1 },  // 枇琶 (SV8a)
+    // ── 競技場（4 張）──
+    { cardId: '14397', count: 4 },  // 對戰圓形競技場 (M2)
+    // ── 能量（7 張）──
+    { cardId: '17211', count: 1 },  // 富裕能量 ACE SPEC (MC)
+    { cardId: '18056', count: 4 },  // 感應【超】能量 (M3)
+    { cardId: '17220', count: 2 },  // 基本【超】能量 (MC)
+  ],
+};
+
+/**
+ * 瑪俐的長毛巨魔ex 牌組（v2.21 — Leon 自選卡表）
+ *
+ * SVOM 主打組「瑪俐的莫魯貝可&長毛巨魔ex」為軸：
+ *   - 瑪俐的搗蛋小妖 → 瑪俐的詐唬魔 → 瑪俐的長毛巨魔ex（Stage2 線）
+ *   - 雪童子 → 雪妖女（副軸壓場）
+ *   - 願增猿「腎上腺腦力」 + 伊裴爾塔爾 打 spread/tempo
+ * ACE SPEC：不公印章（MC）
+ * 場地：尖釘鎮道館（SVOM）
+ */
+const MARNIE_SCRAFTY_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_marnie_scrafty__',
+  name: '瑪俐的長毛巨魔ex',
+  entries: [
+    // ── 寶可夢（20 張）──
+    { cardId: '12610', count: 3 },  // <瑪俐的>長毛巨魔ex (SVOM)
+    { cardId: '12609', count: 2 },  // <瑪俐的>詐唬魔 (SVOM)
+    { cardId: '12608', count: 3 },  // <瑪俐的>搗蛋小妖 (SVOM)
+    { cardId: '10445', count: 2 },  // 雪童子 (SV6)
+    { cardId: '10447', count: 2 },  // 雪妖女 (SV6)
+    { cardId: '16829', count: 3 },  // 願增猿 (MC) — 腎上腺腦力
+    { cardId: '11526', count: 1 },  // 含羞苞 (SV8a)
+    { cardId: '16951', count: 1 },  // 伊裴爾塔爾 (MC)
+    { cardId: '17020', count: 1 },  // 米立龍 (MC)
+    { cardId: '14692', count: 1 },  // 可達鴨 (M2a) — 特性濕氣
+    { cardId: '17980', count: 1 },  // 謝米 (M3)
+    // ── 訓練家・物品（15 張）──
+    { cardId: '17119', count: 3 },  // 好友寶芬 (MC)
+    { cardId: '17133', count: 4 },  // 寶可平板 (MC)
+    { cardId: '17126', count: 3 },  // 神奇糖果 (MC)
+    { cardId: '17141', count: 2 },  // 夜間擔架 (MC)
+    { cardId: '18492', count: 1 },  // 特殊紅牌 (M4)
+    { cardId: '17104', count: 1 },  // 不公印章 ACE SPEC (MC)
+    { cardId: '17159', count: 1 },  // 氣球 (MC)
+    // ── 訓練家・支援者（12 張）──
+    { cardId: '17200', count: 4 },  // 莉莉艾的決意 (MC)
+    { cardId: '17205', count: 4 },  // 火箭隊的拉姆達 (MC)
+    { cardId: '17195', count: 4 },  // 老大的指令 (MC)
+    // ── 競技場（4 張）──
+    { cardId: '12624', count: 4 },  // 尖釘鎮道館 (SVOM)
+    // ── 能量（9 張）──
+    { cardId: '17214', count: 9 },  // 基本【惡】能量 (MC)
+  ],
+};
+
+/**
  * 所有內建預設牌組
  *
  * v2.13：移除「破空焰ex（火屬 · 自組）」—— 那是 Session 24 自組的嘗試用牌組，
  * 既非官方預組也沒跟上 MC 後的卡片規則，Leon 決定不再內建。
+ * v2.21：新增「胡地」與「瑪俐的長毛巨魔ex」，並爬入 SVOM / SVOD 兩個初階牌組系列。
  */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
   { ...DIANCIE_DECK, updatedAt: 0 },
   { ...CYNTHIA_GARCHOMP_DECK, updatedAt: 0 },
   { ...MARRUNE_DRAGAPULT_DECK, updatedAt: 0 },
+  { ...ALAKAZAM_DECK, updatedAt: 0 },
+  { ...MARNIE_SCRAFTY_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */

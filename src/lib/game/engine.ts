@@ -879,6 +879,32 @@ function handlePlaying(
       };
     }
 
+    // 尖釘鎮道館 — 從牌庫選 1 張「瑪俐的」寶可夢加手牌並重洗
+    if (stadiumCard.name === '尖釘鎮道館') {
+      const p = newState.players[aIdx];
+      const cand = p.deck.filter(inst => {
+        const c = pool.get(inst.cardId);
+        return c?.supertype === 'Pokemon' && c?.subtype !== 'Other' && c?.name?.startsWith('<瑪俐的>');
+      });
+      if (cand.length === 0) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '尖釘鎮道館：牌庫沒有「瑪俐的」寶可夢', aIdx);
+      }
+      return {
+        ...newState,
+        pendingSelection: {
+          type: 'deck-search',
+          actorIdx: aIdx,
+          sourcePlayerIdx: aIdx,
+          minCount: 1,
+          maxCount: 1,
+          filter: 'MarniePokemon',
+          effectKey: 'spikemuth-marnie-search',
+          params: {},
+        },
+      };
+    }
+
     return addLog(newState, `使用競技場效果：${stadiumCard.name}`, aIdx);
   }
 
@@ -904,6 +930,12 @@ function handlePlaying(
 
     // 集客（米立龍）限制：只有在出場時才能使用
     if (ability.name === '集客' && attacker.active?.iid !== action.iid) return state;
+
+    // 精神抽出（勇基拉 / 胡地）/ 龐克練肌（瑪俐的長毛巨魔ex）：
+    // 必須「本回合剛進化成此階段」才能使用（evolvedThisTurn）。
+    if ((ability.name === '精神抽出' || ability.name === '龐克練肌') && !targetPoke.evolvedThisTurn) {
+      return state;
+    }
 
     // 火箭隊的監視塔：場上此 Stadium 時，【無】屬寶可夢的特性全部消除
     if (isColorlessAbilityBlocked(state, pokeCard, pool)) return state;
@@ -1966,6 +1998,8 @@ export function getUsableAbilities(
       if (!ABILITY_EFFECTS.has(`${card.name}|${abIdx}`)) return;
       // 集客：只有出場才能用
       if (ab.name === '集客' && player.active?.iid !== pk.iid) return;
+      // 精神抽出 / 龐克練肌：只有本回合剛進化才能用
+      if ((ab.name === '精神抽出' || ab.name === '龐克練肌') && !pk.evolvedThisTurn) return;
       // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。
       // 條件：對手在他們剛結束的回合取過獎賞（TurnStart < LastTurnEnd）。
       // 不允許：自己回合內的自 KO（如黑夜魔靈 咒詛炸彈）— 此時 TurnStart == LastTurnEnd。

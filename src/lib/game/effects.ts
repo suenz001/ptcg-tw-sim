@@ -9286,3 +9286,178 @@ reg('阿蜜的目光', (st, idx, pool) => {
 
 // 莉莉艾的珍珠（Pokemon Tool）— v2.09 搬到 effects/cards/tools.ts
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38az (Wave 44) — 胡地 + 瑪俐的長毛巨魔ex 牌組補實裝 (v2.21)
+// ══════════════════════════════════════════════════════════════════════════════
+// 胡地牌組：凱西→勇基拉→胡地（精神抽出特性 + 手之力量招式）、土龍節節ex、謝米
+// 瑪俐牌組：瑪俐的搗蛋小妖→詐唬魔→長毛巨魔ex（龐克練肌 + 暗影子彈）
+// 註：
+//   - 精神抽出 / 龐克練肌 兩個特性都是「進化當回合才能用 1 次」
+//     → engine.ts getUsableAbilities 另加閘門（evolvedThisTurn && !abilityUsedThisTurn）
+//   - 可達鴨|濕氣 是被動特性（「若在備戰區，其他自己的寶可夢不會陷入【混亂】」），
+//     目前引擎未實作「混亂偏置/防止」機制，暫不註冊（UI 自動不顯示按鈕）。
+//   - 雪妖女|冰冷之帳（checkup hook）也暫不實裝。
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── 凱西｜瞬間移動攻擊 — 10，可選擇與備戰互換 ────────────────────────────────
+regPre('凱西|瞬間移動攻擊', (state, _aIdx, _pool) => ({ state, damage: 10 }));
+regPost('凱西|瞬間移動攻擊', selfSwapPost('瞬間移動攻擊'));
+
+// ── 勇基拉｜精神抽出（特性）— 本回合由凱西進化後可用一次：抽 2 張 ─────────────
+regA('勇基拉', 0, (st, idx) => {
+  return drawCards(addLog(st, '精神抽出：抽 2 張', idx), idx, 2);
+});
+
+// ── 胡地｜精神抽出（特性）— 本回合由勇基拉進化後可用一次：抽 3 張 ─────────────
+regA('胡地', 0, (st, idx) => {
+  return drawCards(addLog(st, '精神抽出：抽 3 張', idx), idx, 3);
+});
+
+// ── 胡地｜手之力量 — 傷害 = 你手牌張數 × 10 ──────────────────────────────────
+regPre('胡地|手之力量', (state, aIdx, _pool) => {
+  const handCount = state.players[aIdx].hand.length;
+  return {
+    state: addLog(state, `手之力量：手牌 ${handCount} 張 → ${handCount * 10} 傷害`, aIdx),
+    damage: handCount * 10,
+  };
+});
+
+// ── 土龍弟弟｜交替 — 0 傷害，與備戰互換 ────────────────────────────────────
+regPre('土龍弟弟|交替', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('土龍弟弟|交替', selfSwapPost('交替'));
+
+// ── 土龍節節ex｜逆境之尾 — 對手場上每隻寶可夢ex × 60 ────────────────────────
+regPre('土龍節節ex|逆境之尾', (state, aIdx, pool) => {
+  const n = countOppPokemon(state, aIdx, pool, c =>
+    c.supertype === 'Pokemon' && (c.subtype === 'ex' || c.name.endsWith('ex') || c.name.endsWith('EX'))
+  );
+  return {
+    state: addLog(state, `逆境之尾：對手寶可夢ex ${n} 隻 → ${n * 60} 傷害`, aIdx),
+    damage: n * 60,
+  };
+});
+
+// ── 土龍節節ex｜鑽破壞 — 150，不計算對手戰鬥寶可夢身上的附加效果 ─────────────
+regPre('土龍節節ex|鑽破壞', skipDefEffectsPre(150, '鑽破壞'));
+
+// ── 謝米｜親送花朵 — 從牌庫選 1 張基本【草】能量附於我方 1 隻備戰寶可夢 ────────
+function deckEnergyAttachBenchPost(typeFilter: EnergyType | null, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (p.bench.length === 0) return addLog(state, `${label}：備戰區沒有寶可夢`, aIdx);
+    const cand = p.deck.filter(c => {
+      const card = pool.get(c.cardId);
+      if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+      if (typeFilter && card.pokemonType !== typeFilter) return false;
+      return true;
+    });
+    if (cand.length === 0) return addLog(state, `${label}：牌庫沒有符合的基本能量`, aIdx);
+    const filterStr = typeFilter ? `Energy:${typeFilter}` : 'BasicEnergy';
+    const s = addLog(state, `${label}：從牌庫選 1 張基本能量附於備戰`, aIdx);
+    return withPending(s, {
+      type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: filterStr, minCount: 1, maxCount: 1,
+      effectKey: 'deck-energy-attach-bench-pick-energy',
+      params: { label, validIids: cand.map(c => c.iid) },
+    });
+  };
+}
+regR('deck-energy-attach-bench-pick-energy', (st, idx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '附能到備戰';
+  const p = st.players[idx];
+  if (p.bench.length === 0) return st;
+  if (p.bench.length === 1) {
+    return applyDeckAttachBench(st, idx, iids, p.bench[0].iid, label);
+  }
+  return withPending(st, {
+    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'deck-energy-attach-bench-commit',
+    params: { energyIids: iids, label },
+  });
+});
+regR('deck-energy-attach-bench-commit', (st, idx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '附能到備戰';
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  return applyDeckAttachBench(st, idx, energyIids, iids[0], label);
+});
+function applyDeckAttachBench(
+  st: GameState, idx: 0 | 1, energyIids: string[], targetIid: string, label: string
+): GameState {
+  const p = st.players[idx];
+  const target = p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const energies = p.deck.filter(c => energyIids.includes(c.iid));
+  if (energies.length === 0) return st;
+  const s = addLog(st, `${label}：將 ${energies.length} 張能量附加到備戰（重洗牌庫）`, idx);
+  return updatePlayer(s, idx, pl => ({
+    ...pl,
+    deck: shuffle(pl.deck.filter(c => !energyIids.includes(c.iid))),
+    bench: pl.bench.map(c => c.iid === targetIid
+      ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+      : c),
+  }));
+}
+regPre('謝米|親送花朵', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('謝米|親送花朵', deckEnergyAttachBenchPost('Grass', '親送花朵'));
+
+// ── 瑪俐的搗蛋小妖｜偷盜 — 0 傷害，抽 1 張 ──────────────────────────────
+regPre('瑪俐的搗蛋小妖|偷盜', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('瑪俐的搗蛋小妖|偷盜', (state, aIdx, _pool) => {
+  return drawCards(addLog(state, '偷盜：抽 1 張', aIdx), aIdx, 1);
+});
+
+// ── 瑪俐的長毛巨魔ex｜龐克練肌（特性）─ 進化當回合可用 1 次
+//    從牌庫選最多 5 張基本【惡】能量附於自身（重洗牌庫）
+regA('瑪俐的長毛巨魔ex', 0, (st, idx, pool) => {
+  const p = st.players[idx];
+  if (!p.active) return addLog(st, '龐克練肌：沒有戰鬥寶可夢', idx);
+  const cand = p.deck.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Darkness';
+  });
+  if (cand.length === 0) return addLog(st, '龐克練肌：牌庫沒有基本【惡】能量', idx);
+  const maxN = Math.min(5, cand.length);
+  const s = addLog(st, `龐克練肌：從牌庫選最多 ${maxN} 張基本【惡】能量附於自身`, idx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Energy:Darkness', minCount: 0, maxCount: maxN,
+    effectKey: 'punk-training-attach',
+    params: { label: '龐克練肌', validIids: cand.map(c => c.iid) },
+  });
+});
+regR('punk-training-attach', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '龐克練肌';
+  const p = st.players[idx];
+  if (!p.active) return st;
+  const picked = p.deck.filter(c => iids.includes(c.iid));
+  const targetName = pool.get(p.active.cardId)?.name ?? '戰鬥寶可夢';
+  if (picked.length === 0) return addLog(st, `${label}：未選擇能量（重洗牌庫）`, idx);
+  const s = addLog(st, `${label}：將 ${picked.length} 張【惡】能量附加到 ${targetName}（重洗牌庫）`, idx);
+  return updatePlayer(s, idx, pl => {
+    if (!pl.active) return pl;
+    return {
+      ...pl,
+      deck: shuffle(pl.deck.filter(c => !iids.includes(c.iid))),
+      active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...picked] },
+    };
+  });
+});
+
+// ── 瑪俐的長毛巨魔ex｜暗影子彈 — 180，另對對手 1 隻備戰寶可夢造成 30 傷害 ──────
+regPre('瑪俐的長毛巨魔ex|暗影子彈', (state, _aIdx, _pool) => ({ state, damage: 180 }));
+regPost('瑪俐的長毛巨魔ex|暗影子彈', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  if (state.players[dIdx].bench.length === 0) {
+    return addLog(state, '暗影子彈：對手無備戰寶可夢', aIdx);
+  }
+  const s = addLog(state, '暗影子彈：選 1 隻對手備戰寶可夢造成 30 傷害', aIdx);
+  return withPending(s, {
+    type: 'opp-bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'snipe-variable',
+    params: { damage: 30, label: '暗影子彈' },
+  });
+});
+

@@ -47,6 +47,8 @@ const SET_NAMES = {
   MC: '超級進化初階牌組100',
   M3: '虛無歸零',
   M4: '忍者飛旋',
+  SVOM: '瑪俐的莫魯貝可&長毛巨魔ex 初階牌組',
+  SVOD: '大吾的鐵啞鈴&巨金怪ex 初階牌組',
 };
 
 // Cover art for every set. Verified 2026-04-17.
@@ -87,6 +89,9 @@ const SET_COVER_URLS = {
   MC:    `${ARCHIVE}/mc/assets/images/home/image_package.png`,
   M3:    `${ARCHIVE}/m3/assets/images/hero-visual.png`,
   M4:    `${ARCHIVE}/m4/assets/images/hero-img-01-y25ri.png`,
+  // SVOM/SVOD 無 archive 頁 → 用主打 ex 卡面當封面（與 MBD/MBG 同做法）
+  SVOM:  `${CARD_IMG}/tw00012610.png`,  // <瑪俐的>長毛巨魔ex
+  SVOD:  `${CARD_IMG}/tw00012588.png`,  // <大吾的>巨金怪ex
 };
 
 function countBy(cards, key) {

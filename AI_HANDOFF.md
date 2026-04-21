@@ -1,9 +1,78 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38c1 (v2.20)  
+> 最後更新：2026-04-21 Session 38az (v2.21)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38az (v2.21) — 胡地 + 瑪俐的長毛巨魔ex 兩組預組 + Wave 44 實裝
+
+### 背景
+
+Leon 在 `H:\我的雲端硬碟\遊戲開發\deck_picture\` 提供兩張卡表：
+1. 胡地（M1S）— 凱西→勇基拉→胡地 進化線（特性「精神抽出」進化當回合抽 2 / 3、招式「手之力量」手牌×10），副軸土龍節節ex（逆境之尾、鑽破壞）、謝米
+2. 瑪俐的長毛巨魔ex（SVOM）— 瑪俐的搗蛋小妖→詐唬魔→長毛巨魔ex 進化線（特性「龐克練肌」+ 招式「暗影子彈」），搭配場地卡「尖釘鎮道館」
+
+連帶把 SVOM / SVOD 兩個初階牌組爬入卡池（Task #120-#122），並用 card-face URL 當封面（與 MBD/MBG 同做法）。
+
+### Wave 44 實裝（`src/lib/game/effects.ts` 尾端）
+
+- `凱西|瞬間移動攻擊`：10 傷害 + `selfSwapPost`
+- `勇基拉|精神抽出`（特性）：`drawCards(...,2)`，**只在進化當回合可用**（見下方 gate）
+- `胡地|精神抽出`（特性）：`drawCards(...,3)`，同上
+- `胡地|手之力量`：hand.length × 10
+- `土龍弟弟|交替`：0 傷害 + `selfSwapPost`
+- `土龍節節ex|逆境之尾`：`countOppPokemon` (subtype==='ex' || name.endsWith('ex/EX')) × 60
+- `土龍節節ex|鑽破壞`：`skipDefEffectsPre(150, ...)`
+- `謝米|親送花朵`：新 helper `deckEnergyAttachBenchPost` + 2 個 resolver
+  （`deck-energy-attach-bench-pick-energy` → `bench-choose` → `deck-energy-attach-bench-commit`）
+- `瑪俐的搗蛋小妖|偷盜`：0 傷害 + drawCards 1
+- `瑪俐的長毛巨魔ex|龐克練肌`（特性）：從牌庫選最多 5 張基本【惡】能量附於自身（resolver `punk-training-attach`），僅進化當回合可用
+- `瑪俐的長毛巨魔ex|暗影子彈`：180 + 對對手備戰 1 隻 snipe 30（走 `snipe-variable`）
+
+未實裝（故意跳過）：
+- `可達鴨|濕氣`（被動：自己其他寶可夢不會【混亂】）— 引擎沒有「狀態防止」機制，不註冊即可（`ABILITY_EFFECTS.has()` 檢查讓按鈕不出現）
+- `雪妖女|冰冷之帳`（checkup hook） — 跨回合 checkup 機制複雜，留給未來波次
+
+### 引擎擴充（`src/lib/game/engine.ts`）
+
+1. `USE_ABILITY` handler：加 `精神抽出` / `龐克練肌` 的 `evolvedThisTurn` 閘門
+2. `getUsableAbilities`：同條件閘門（UI 反白）
+3. `USE_STADIUM` handler：新增 `尖釘鎮道館` 分支 → 觸發 `deck-search` pending（filter=`'MarniePokemon'`）
+
+### Stadium resolver（`src/lib/game/effects/cards/stadiums.ts`）
+
+新增 `spikemuth-marnie-search` resolver：picked 加手牌、deck 重洗。`_shared` import 補 `shuffle, addLog`。
+
+### UI（`src/routes/game/+page.svelte`）
+
+在 `deck-search` filter switch 加 `MarniePokemon`：
+```ts
+if (f === 'MarniePokemon') {
+  return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.name.startsWith('<瑪俐的>');
+}
+```
+（瑪俐牌組的寶可夢名字都以 `<瑪俐的>` 開頭）
+
+### Preset（`src/lib/decks/presets.ts`）
+
+`ALAKAZAM_DECK` + `MARNIE_SCRAFTY_DECK` 已在上個 checkpoint 加入。本次 v2.21 沒改 presets。
+
+### 測試
+
+- `npm run build` 通過，無型別錯誤。
+- Mental walkthrough：
+  - 凱西瞬間移動 → 放備戰、10 傷 ✓
+  - 凱西→勇基拉（本回合）→ UI 顯示「精神抽出」按鈕 → 抽 2 張 → 按鈕消失 ✓
+  - 勇基拉→胡地（本回合）→ UI 顯示「精神抽出」按鈕 → 抽 3 張 ✓
+  - 手之力量 10 張手牌 = 100 傷害 ✓
+  - 土龍節節ex 對面有 3 隻 ex = 180 傷害 ✓
+  - 鑽破壞 150 傷害無視對手附加效果 ✓
+  - 瑪俐的長毛巨魔ex 進化當回合 → 龐克練肌 → deck-search ≤5 【惡】能量 → 附於自身 ✓
+  - 暗影子彈 → 180 主傷害 → `opp-bench-choose` 選 1 隻打 30 ✓
+  - 尖釘鎮道館：雙方每回合 1 次 → 選 1 張`<瑪俐的>`寶可夢加手牌 ✓
 
 ---
 

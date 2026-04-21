@@ -35,6 +35,8 @@ export const SET_REGULATION_MARK: Record<string, RegulationMark> = {
   MC: 'J',
   M3: 'J',
   M4: 'J',
+  SVOM: 'J',  // 瑪俐的莫魯貝可&長毛巨魔ex 初階牌組
+  SVOD: 'J',  // 大吾的鐵啞鈴&巨金怪ex 初階牌組
 };
 
 /** Marks currently legal in Standard format. */

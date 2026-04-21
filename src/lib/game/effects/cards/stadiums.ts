@@ -16,7 +16,7 @@
  * stadiumUsedThisTurn 旗標等引擎層狀態）。
  */
 
-import { regR, updatePlayer } from '../_shared';
+import { regR, updatePlayer, shuffle, addLog } from '../_shared';
 
 // ── 神秘花園（Stadium）──────────────────────────────────────────────────────
 // 丟 1 張超能量 → 抽到手牌數 = 己方場上超屬寶可夢數量
@@ -69,6 +69,20 @@ regR('moonlight-hill-heal', (st, idx, iids) => {
     const healBench = p.bench.map(c => ({ ...c, damage: Math.max(0, c.damage - 30) }));
     return { ...p, hand: newHand, discard: [...p.discard, ...toDiscard], active: healActive, bench: healBench };
   });
+});
+
+// ── 尖釘鎮道館（Stadium）── v2.21 ───────────────────────────────────────────
+// 從牌庫選 1 張「瑪俐的」寶可夢加手牌並重洗（雙方玩家每回合 1 次）
+regR('spikemuth-marnie-search', (st, idx, iids, _params, pool) => {
+  const p = st.players[idx];
+  const picked = p.deck.filter(c => iids.includes(c.iid));
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  const s = addLog(st, `尖釘鎮道館：${names || '未選擇'} 加入手牌（重洗牌庫）`, idx);
+  return updatePlayer(s, idx, pl => ({
+    ...pl,
+    hand: [...pl.hand, ...picked],
+    deck: shuffle(pl.deck.filter(c => !iids.includes(c.iid))),
+  }));
 });
 
 // ── 阻礙之塔（Stadium）── 引擎側 hook ────────────────────────────────────────

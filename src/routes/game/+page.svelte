@@ -669,6 +669,10 @@
           if (f === 'CynthiaPokemon') {
             return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.name.includes('竹蘭的');
           }
+          // Wave 44 (v2.21)：尖釘鎮道館用 — 「瑪俐的」寶可夢
+          if (f === 'MarniePokemon') {
+            return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.name.startsWith('<瑪俐的>');
+          }
           if (f === 'FightingBasicOrFightingEnergy') {
             // 基本【鬥】寶可夢：pokemonType === 'Fighting' 且為基礎
             if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;

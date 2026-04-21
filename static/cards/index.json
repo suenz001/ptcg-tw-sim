@@ -178,6 +178,32 @@
     "scrapedAt": "2026-04-16T08:08:59.091Z"
   },
   {
+    "code": "SVOD",
+    "name": "大吾的鐵啞鈴&巨金怪ex 初階牌組",
+    "regulationMark": "J",
+    "cardCount": 23,
+    "supertypeCounts": {
+      "Pokemon": 10,
+      "Trainer": 11,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012588.png",
+    "scrapedAt": "2026-04-21T14:24:57.960Z"
+  },
+  {
+    "code": "SVOM",
+    "name": "瑪俐的莫魯貝可&長毛巨魔ex 初階牌組",
+    "regulationMark": "J",
+    "cardCount": 23,
+    "supertypeCounts": {
+      "Pokemon": 10,
+      "Trainer": 12,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012610.png",
+    "scrapedAt": "2026-04-21T14:24:25.226Z"
+  },
+  {
     "code": "M1L",
     "name": "超級勇氣",
     "regulationMark": "I",

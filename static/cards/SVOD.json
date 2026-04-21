@@ -1,0 +1,588 @@
+[
+  {
+    "id": "12581",
+    "name": "<大吾的>天秤偶",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVOD",
+    "collectorNumber": "001/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012581.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12581/",
+    "scrapedAt": "2026-04-21T14:24:57.960Z",
+    "hp": 60,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "召集標誌",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫選擇最多2張【基礎】寶可夢的「大吾的寶可夢」，放置於備戰區。並且重洗牌庫。"
+      },
+      {
+        "name": "‌念動彈",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 343,
+    "species": "泥偶寶可夢",
+    "illustrator": "Tonji Matsuno",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12582",
+    "name": "<大吾的>念力土偶",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "SVOD",
+    "collectorNumber": "002/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012582.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12582/",
+    "scrapedAt": "2026-04-21T14:24:59.007Z",
+    "hp": 120,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "不祥之光",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "20",
+        "effect": "將對手的戰鬥寶可夢【混亂】。"
+      },
+      {
+        "name": "黏土爆破",
+        "cost": [
+          "Psychic",
+          "Psychic",
+          "Colorless"
+        ],
+        "damage": "220",
+        "effect": "將這隻寶可夢身上附加的能量卡全部丟棄。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 344,
+    "species": "泥偶寶可夢",
+    "illustrator": "nagimiso",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12583",
+    "name": "<大吾的>小碎鑽",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVOD",
+    "collectorNumber": "003/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012583.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12583/",
+    "scrapedAt": "2026-04-21T14:24:59.900Z",
+    "hp": 80,
+    "pokemonType": "Psychic",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "岩石宮殿",
+        "effect": "只要這隻寶可夢在備戰區，自己的所有「大吾的寶可夢」受到對手的寶可夢招式的傷害「-30」點。無論有多少隻擁有這個特性的寶可夢，這個效果也不會重複。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "魔法射擊",
+        "cost": [
+          "Psychic",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "80",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Metal",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 703,
+    "species": "寶石寶可夢",
+    "illustrator": "Ligton",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12584",
+    "name": "吉雉雞ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "SVOD",
+    "collectorNumber": "004/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012584.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12584/",
+    "scrapedAt": "2026-04-21T14:25:00.796Z",
+    "hp": 210,
+    "pokemonType": "Darkness",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "扭轉乾坤",
+        "effect": "在上個對手的回合，若自己的寶可夢【昏厥】了，則在自己的回合時可使用1次。從自己的牌庫抽出3張卡。在這個回合，若已經使出了其他的「扭轉乾坤」，則這個特性無法使用。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "殘酷箭",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "對手的1隻寶可夢受到100點傷害。[在備戰區不計算弱點・抵抗力。]"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "illustrator": "takuyoa",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12585",
+    "name": "<大吾的>盔甲鳥",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVOD",
+    "collectorNumber": "005/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012585.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12585/",
+    "scrapedAt": "2026-04-21T14:25:01.704Z",
+    "hp": 120,
+    "pokemonType": "Metal",
+    "attacks": [
+      {
+        "name": "銳利羽",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect": ""
+      },
+      {
+        "name": "雙音波",
+        "cost": [
+          "Metal",
+          "Metal",
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "對手的2隻寶可夢各受到50點傷害。[在備戰區不計算弱點・抵抗力。]"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 227,
+    "species": "鋼甲鳥寶可夢",
+    "illustrator": "Nisota Niso",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12586",
+    "name": "<大吾的>鐵啞鈴",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVOD",
+    "collectorNumber": "006/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012586.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12586/",
+    "scrapedAt": "2026-04-21T14:25:02.617Z",
+    "hp": 70,
+    "pokemonType": "Metal",
+    "attacks": [
+      {
+        "name": "衝撞",
+        "cost": [
+          "Metal",
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 374,
+    "species": "鐵球寶可夢",
+    "illustrator": "Takeshi Nakamura",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12587",
+    "name": "<大吾的>金屬怪",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "SVOD",
+    "collectorNumber": "007/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012587.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12587/",
+    "scrapedAt": "2026-04-21T14:25:03.637Z",
+    "hp": 100,
+    "pokemonType": "Metal",
+    "attacks": [
+      {
+        "name": "金屬斬",
+        "cost": [
+          "Metal",
+          "Colorless"
+        ],
+        "damage": "70",
+        "effect": "在下個自己的回合，這隻寶可夢無法使用招式。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 375,
+    "species": "鐵爪寶可夢",
+    "illustrator": "Anesaki Dynamic",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12588",
+    "name": "<大吾的>巨金怪ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "SVOD",
+    "collectorNumber": "008/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012588.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12588/",
+    "scrapedAt": "2026-04-21T14:25:04.678Z",
+    "hp": 340,
+    "pokemonType": "Metal",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "X啟動",
+        "effect": "在自己的回合時可使用1次。從自己的牌庫選擇「基本【超】能量」卡與「基本【鋼】能量」卡最多各1張，以任意方式附於自己的【超】或者【鋼】寶可夢身上。並且重洗牌庫。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "金屬踩踏",
+        "cost": [
+          "Metal",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "200",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "illustrator": "PLANETA Mochizuki",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12589",
+    "name": "能量回收器",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVOD",
+    "collectorNumber": "009/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012589.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12589/",
+    "scrapedAt": "2026-04-21T14:25:05.668Z",
+    "rulesText": "從自己的棄牌區選擇最多5張基本能量卡，在給對手看過後放回牌庫並重洗。",
+    "illustrator": "Toyste Beach",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12590",
+    "name": "厲害釣竿",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVOD",
+    "collectorNumber": "010/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012590.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12590/",
+    "scrapedAt": "2026-04-21T14:25:06.581Z",
+    "rulesText": "從自己的棄牌區選擇寶可夢卡與基本能量卡合計最多3張，在給對手看過後放回牌庫並重洗。",
+    "illustrator": "Toyste Beach",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12591",
+    "name": "好友寶芬",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVOD",
+    "collectorNumber": "011/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012591.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12591/",
+    "scrapedAt": "2026-04-21T14:25:07.461Z",
+    "rulesText": "從自己的牌庫選擇最多2張HP為「70」以下的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。",
+    "illustrator": "AYUMI ODASHIMA",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12592",
+    "name": "高級球",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVOD",
+    "collectorNumber": "012/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012592.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12592/",
+    "scrapedAt": "2026-04-21T14:25:08.379Z",
+    "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。\n \n從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Ayaka Yoshida",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12593",
+    "name": "神奇糖果",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVOD",
+    "collectorNumber": "013/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012593.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12593/",
+    "scrapedAt": "2026-04-21T14:25:09.260Z",
+    "rulesText": "從自己的手牌選擇1張【2階進化】寶可夢卡，放置於自己的場上的可進化成那隻寶可夢的【基礎】寶可夢身上，跳過【1階進化】完成進化。（無法對自己的最初回合或剛使出的寶可夢使用。）",
+    "illustrator": "Studio Bora Inc.",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12594",
+    "name": "寶可夢交替",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVOD",
+    "collectorNumber": "014/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012594.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12594/",
+    "scrapedAt": "2026-04-21T14:25:10.162Z",
+    "rulesText": "將自己的戰鬥寶可夢與備戰寶可夢互換。",
+    "illustrator": "Studio Bora Inc.",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12595",
+    "name": "緊急滑板",
+    "supertype": "Pokemon",
+    "subtype": "Other",
+    "setCode": "SVOD",
+    "collectorNumber": "015/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012595.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12595/",
+    "scrapedAt": "2026-04-21T14:25:11.113Z",
+    "rulesText": "附有這張卡的寶可夢，【撤退】所需的能量減少1個。若那隻寶可夢的剩餘HP為「30」以下，則【撤退】所需的能量全部消除。",
+    "illustrator": "Toyste Beach",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12596",
+    "name": "奇樹",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVOD",
+    "collectorNumber": "016/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012596.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12596/",
+    "scrapedAt": "2026-04-21T14:25:12.066Z",
+    "rulesText": "雙方玩家各將自己的手牌全部翻回反面並重洗，放回牌庫下方。然後，各從牌庫抽出與自己剩餘獎賞卡的張數相同數量的卡。",
+    "illustrator": "Sanosuke Sakuma",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12597",
+    "name": "博士的研究",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVOD",
+    "collectorNumber": "017/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012597.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12597/",
+    "scrapedAt": "2026-04-21T14:25:12.998Z",
+    "rulesText": "將自己的手牌全部丟棄，從牌庫抽出7張卡。",
+    "illustrator": "Hideki Ishikawa",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12598",
+    "name": "派帕",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVOD",
+    "collectorNumber": "018/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012598.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12598/",
+    "scrapedAt": "2026-04-21T14:25:14.002Z",
+    "rulesText": "從自己的牌庫選擇「物品」卡與「寶可夢道具」卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "GIDORA",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12599",
+    "name": "老大的指令",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVOD",
+    "collectorNumber": "019/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012599.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12599/",
+    "scrapedAt": "2026-04-21T14:25:14.997Z",
+    "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
+    "illustrator": "NC Empire",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12600",
+    "name": "石之洞窟",
+    "supertype": "Trainer",
+    "subtype": "Stadium",
+    "setCode": "SVOD",
+    "collectorNumber": "020/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012600.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12600/",
+    "scrapedAt": "2026-04-21T14:25:15.896Z",
+    "rulesText": "雙方的所有「大吾的寶可夢」受到對手的寶可夢招式的傷害「-30」點。",
+    "illustrator": "AYUMI ODASHIMA",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12601",
+    "name": "<大吾的>鐵啞鈴",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVOD",
+    "collectorNumber": "021/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012601.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12601/",
+    "scrapedAt": "2026-04-21T14:25:16.788Z",
+    "hp": 70,
+    "pokemonType": "Metal",
+    "attacks": [
+      {
+        "name": "衝撞",
+        "cost": [
+          "Metal",
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 374,
+    "species": "鐵球寶可夢",
+    "illustrator": "hncl",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12602",
+    "name": "基本【超】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "SVOD",
+    "collectorNumber": "PSY",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012602.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12602/",
+    "scrapedAt": "2026-04-21T14:25:17.709Z",
+    "regulationMark": "J"
+  },
+  {
+    "id": "12603",
+    "name": "基本【鋼】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "SVOD",
+    "collectorNumber": "MET",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012603.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12603/",
+    "scrapedAt": "2026-04-21T14:25:18.627Z",
+    "regulationMark": "J"
+  }
+]

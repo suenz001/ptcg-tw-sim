@@ -30,6 +30,8 @@ export const SET_REGULATION_MARK = {
   MC: 'J',
   M3: 'J',
   M4: 'J',
+  SVOM: 'J',
+  SVOD: 'J',
 };
 
 export const STANDARD_MARKS = new Set(['H', 'I', 'J']);
