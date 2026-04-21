@@ -76,6 +76,16 @@ reg('松葉的信心', (st, idx) => {
   return drawCards(st, idx, 5);
 });
 
+// 莉莉艾的決意 — 手牌洗回牌庫，抽 6 張（獎勵牌剩 6 張時抽 8 張）
+// v2.24 從 effects.ts 搬遷
+reg('莉莉艾的決意', (st, idx) => {
+  const prizes = st.players[idx].prizes.length;
+  const drawCount = prizes >= 6 ? 8 : 6;
+  st = addLog(st, `莉莉艾的決意：手牌洗回牌庫，抽 ${drawCount} 張`, idx);
+  st = returnHandToDeck(st, idx);
+  return drawCards(st, idx, drawCount);
+});
+
 // 枇琶 — 抽 3 張（簡化，不處理額外效果）
 reg('枇琶', (st, idx) => {
   st = addLog(st, '枇琶：抽 3 張', idx);

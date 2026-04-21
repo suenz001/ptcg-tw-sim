@@ -197,3 +197,63 @@ export function clearActiveEffects(poke: CardInstance): CardInstance {
     movedToActiveThisTurn: undefined,
   };
 }
+
+/**
+ * 通用回復 resolver（heal-target pending 的共用處理）。
+ *
+ * v2.24：從 effects.ts 抽到 _shared.ts，統一給 heal-30 / heal-60-discard-1 /
+ * heal-120 / heal-150 / heal-full 五個 effectKey 共用，避免分散在多個模組時出現
+ * 重複實作或跨檔 import 循環。
+ *
+ * params:
+ *   - healAmount   : number       回復量（heal-full 可傳 9999）
+ *   - discardEnergy: number       選擇目標後丟棄 N 個能量（好傷藥 = 1）
+ *
+ * 行為：
+ *   1. pre-log「→ {name} 回復 X HP（丟棄 N 個能量）」
+ *      實際 log 的 HP 量使用 Math.min(damage, healAmount)，避免寫出「回復 120」
+ *      但目標只有 30 傷害的奇怪 log。
+ *   2. 目標寶可夢的 damage -= healAmount（下限 0），energyAttached 從尾端移除 N 個
+ *      進棄牌。
+ *   3. 回 updatePlayer(state, idx, p => ...)，純函式不 mutate。
+ */
+export function healResolver(
+  st: GameState,
+  idx: 0 | 1,
+  iids: string[],
+  params: Record<string, unknown> | undefined,
+  pool: Map<string, Card>
+): GameState {
+  const healAmount = (params?.healAmount as number) ?? 30;
+  const discardCount = (params?.discardEnergy as number) ?? 0;
+  const iid = iids[0];
+  // 附加 log：記錄實際回復的目標與數值（pre-log 僅提示「選擇…寶可夢」，未標明目標）
+  const prevPlayer = st.players[idx];
+  const prevTarget = prevPlayer.active?.iid === iid
+    ? prevPlayer.active
+    : prevPlayer.bench.find(c => c.iid === iid);
+  if (prevTarget) {
+    const name = pool.get(prevTarget.cardId)?.name ?? '?';
+    const actualHeal = Math.min(prevTarget.damage, healAmount);
+    const parts = [`${name} 回復 ${actualHeal} HP`];
+    if (discardCount > 0) parts.push(`丟棄 ${discardCount} 個能量`);
+    st = addLog(st, `→ ${parts.join('，')}`, idx);
+  }
+  return updatePlayer(st, idx, (p) => {
+    const isActive = p.active?.iid === iid;
+    const target = isActive ? p.active! : p.bench.find(c => c.iid === iid);
+    if (!target) return p;
+
+    const newDamage = Math.max(0, target.damage - healAmount);
+    const discarded = target.energyAttached.slice(-discardCount);
+    const remaining = target.energyAttached.slice(0, target.energyAttached.length - discardCount);
+    const healed: CardInstance = { ...target, damage: newDamage, energyAttached: remaining };
+
+    return {
+      ...p,
+      active: isActive ? healed : p.active,
+      bench: isActive ? p.bench : p.bench.map(c => c.iid === iid ? healed : c),
+      discard: [...p.discard, ...discarded],
+    };
+  });
+}

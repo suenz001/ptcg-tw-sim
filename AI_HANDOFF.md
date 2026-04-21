@@ -1,9 +1,108 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b8 (v2.23)  
+> 最後更新：2026-04-22 Session 38bd (v2.24)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38bd (v2.24) — 模組化第 6 波：物品卡雜項 + Gust 支援者
+
+### 問題
+
+Leon 要求「請繼續完成模組化作業」。前幾波已抽出 tools.ts / stadiums.ts /
+draw_supporters.ts / pokemon_search.ts / white_lily_akamatsu.ts，`effects.ts`
+從最早的近萬行還是剩 9822 行。107-499 行剛好是幾個主題明確、互相獨立的訓練家區塊
+（切換 / 藥水 / 棄牌區回收 / 不公印章 / 老大的指令 / 莉莉艾的決意），適合抽出。
+
+### 根因
+
+這些區塊共用的 helper `healResolver` 和 `switchEffect` 都只在自己區塊內使用。
+`effects.ts` 這份中央檔越長越難導航，修任何一張卡都要在近萬行檔裡搜；模組化後：
+- 改一張卡 → 找對應主題檔，檔案都在 300 行內。
+- 新加一張同主題的卡 → 加到對應檔末尾，不再污染 `effects.ts`。
+- `effects.ts` 中央檔只負責 re-export + 那些還沒抽的複雜互動。
+
+### 設計討論
+
+**檔案拆分**（依「Item / Supporter」 + 主題分）：
+1. `items_misc.ts` — 所有被抽的物品卡（切換 / 藥水 / 棄牌區回收 / 頂尖捕捉器 / 不公印章）
+2. `supporters_gust.ts` — 老大的指令（獨立檔，未來其他 gust-type supporter 也放這）
+3. `draw_supporters.ts` — 莉莉艾的決意搬進去（跟其他抽牌支援者作伙）
+
+**healResolver 的歸屬**：
+- `heal-60-discard-1` / `heal-120` 是 `items_misc.ts` 用的（好傷藥 / 龍之秘藥）。
+- 但 `effects.ts` 另有 `heal-30`（傷藥）/ `heal-full`（白露的真心）/ `heal-150`
+  也 `regR('xxx', healResolver)`。
+- 若把 `healResolver` 放 `items_misc.ts` 再 export，會變成 `effects.ts` → `items_misc.ts` 的
+  反向依賴；items_misc 也不該是 heal 邏輯的中心。
+- 最乾淨是放 `_shared.ts`（純 state 工具），`effects.ts` / `items_misc.ts` 都從 `_shared` 拉。
+
+**切換 helper `switchEffect`**：
+- 只被寶可夢交替 / 急進開關兩張卡用，頂尖捕捉器在自己的 resolver 內另做一次切換。
+- 完全放 `items_misc.ts` local，不需外露。
+
+**老大的指令 vs 頂尖捕捉器**：
+- 機制同（呼叫對手備戰→戰鬥場），但一張是 supporter、一張是 item。依現有 draw_supporters.ts
+  的「按卡類型分檔」慣例拆兩邊比較一致。
+
+### 修法
+
+**新檔**：
+
+1. **`src/lib/game/effects/cards/items_misc.ts` (365 行)**
+   - 寶可夢交替 / 急進開關（共用 `switchEffect` helper + `do-switch` resolver）
+   - 好傷藥 / 龍之秘藥（`heal-60-discard-1` / `heal-120`，resolver 共用 _shared 的 `healResolver`）
+   - 夜間擔架（`discard-to-hand` resolver）
+   - 能量回收器（`energy-retrieval` resolver）
+   - 奇跡修正檔（兩步：`miracle-codec-energy` → `miracle-codec-attach`）
+   - 頂尖捕捉器（`top-catcher-opp` resolver + 尾段續接 `do-switch`）
+   - 不公印章（維持 v2.15 的 TurnStart < LastTurnEnd gate）
+
+2. **`src/lib/game/effects/cards/supporters_gust.ts` (54 行)**
+   - 老大的指令（`gust-opp` resolver）
+   - 註解保留給未來其他 gust-type supporter。
+
+**修改**：
+
+3. **`src/lib/game/effects/_shared.ts`**
+   - 新增 `export function healResolver(...)` — 從 effects.ts 搬來的共用 resolver，
+     支援 `healAmount` / `discardEnergy` 兩個 params，`Math.min(damage, healAmount)` 避免
+     log 寫出「回復 120」但目標只有 30 傷害的奇怪訊息。
+   - 順手把原本的 `let target` 改成 `const target`（整個函式內沒 reassign）。
+
+4. **`src/lib/game/effects/cards/draw_supporters.ts`**
+   - 松葉的信心後面插入莉莉艾的決意（條件式抽 6/8，獎勵牌剩 6 張時抽 8）。
+
+5. **`src/lib/game/effects.ts`**
+   - 加 `healResolver` 到 `_shared` import 列表。
+   - 加兩行 side-effect import：`./effects/cards/items_misc` / `./effects/cards/supporters_gust`。
+   - 刪除 107-499 行的所有實作（寶可夢交替 / 急進開關 / do-switch / 好傷藥 / 龍之秘藥 /
+     healResolver / 莉莉艾的決意 / 老大的指令 / gust-opp / 夜間擔架 / 能量回收器 /
+     energy-retrieval / discard-to-hand / 奇跡修正檔 / miracle-codec-* / 頂尖捕捉器 /
+     top-catcher-opp / 不公印章）。
+   - 原區塊註解替換為「v2.24 搬到 xxx.ts」指向說明，保持 effects.ts 可讀性。
+   - `healResolver` 仍被 `heal-30` / `heal-full` / `heal-150` 使用（這三個的 reg 塊還沒抽），
+     改從 `_shared` import。
+
+### 次要調整
+
+- `items_misc.ts` 頭部 JSDoc 列出所有 7 張卡 + 共用 resolver 清單，方便未來 grep。
+- `supporters_gust.ts` 只有 1 張卡，頭部 JSDoc 註明「保留獨立模組未來擴充」避免下次有
+  AI 以為檔案太小想合併。
+
+### 驗證
+
+- `npm install` + `npm run build` 在 sandbox 通過（Vite 6，輸出 `/build`，無 TS error，`✓ built in 12.46s`）。
+- `sim-ai-battle.mjs` 因為硬碼 Windows 路徑 `E:/ptcg-tw-sim/.tmp-sim-entry.ts` 在 sandbox 跑不動；
+  build 已包含 TS type-check 所以型別安全沒疑慮，功能回歸要靠 Leon 本地打一局或跑 sim 驗。
+- `effects.ts` 9822 → 9452 行（-370 行）；新增 items_misc.ts 365 行 + supporters_gust.ts 54 行
+  + 莉莉艾 10 行到 draw_supporters.ts + _shared healResolver 約 40 行，總行數守恆。
+
+### commit hash
+
+`<補在 push 後>`
 
 ---
 
