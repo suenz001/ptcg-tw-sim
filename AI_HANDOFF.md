@@ -3618,3 +3618,55 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 30/20（P1/P2）、平均回合 14.1
 - 版本 1.86 → 1.87
+
+## Session 38al (v1.88) — H 標第 33 波 引擎擴充：skipWeakRes / skipDefEffects 旗標
+
+### 核心：AttackPreFn 回傳型別擴充
+```ts
+type AttackPreFn = (...) => {
+  state: GameState;
+  damage: number;
+  skipWeakRes?: boolean;     // 傷害不計算弱點（抵抗力引擎未實作）
+  skipDefEffects?: boolean;  // 傷害不計算對手戰鬥寶可夢身上的「附加效果」
+};
+```
+
+### engine.ts 傷害管線同步
+- `if (!skipWeakRes)` 套用弱點 ×2（L995）
+- `if (!skipDefEffects)` 套用 PASSIVE_DAMAGE_REDUCE（L1012）/ TOOL_DEFENSE_REDUCE_BY_TYPE（L1022）/ PASSIVE_IMMUNITY（L1034）/ damageReduceNextHit（L1057）
+- 附加效果類若被 skip 則不觸發、道具不丟棄、`damageReduceNextHit` 旗標不消耗（視為未對上「效果」，保留給下次）
+
+### 新增 helper
+- `skipWeakResPre(dmg, label)` — 固定傷害 + skipWeakRes
+- `skipDefEffectsPre(dmg, label)` — 固定傷害 + skipDefEffects
+- `skipBothPre(dmg, label)` — 兩旗標一起
+
+### 本波實裝（10 張 pre 改寫 / 新登記）
+- 恰雷姆ex｜瑜伽踢 190 — skipWeakRes
+- 厄鬼椪 礎石面具ex｜打爆 140 — skipBoth
+- 安瓢蟲｜高速星星 70 — skipBoth
+- 輕身鱈｜音波刀鋒 110 — skipDefEffects
+- 米立龍ex｜突襲水泵 100 — skipDefEffects
+- 頓甲｜打垮 40 — skipDefEffects
+- 堅盾劍怪｜堅硬猛擊 120 — skipDefEffects
+- 晶光芽｜岩石投擲 10 — skipWeakRes（引擎暫無抵抗力，旗標為日後接入預留）
+- 土地雲｜粗暴橫掃 130 — skipWeakRes（同上）
+- 故勒頓｜撕裂 130 — 原 Wave 32 之前的簡化實作升級：正式加上 skipDefEffects
+- 鐵頭殼ex｜雙刃劍 — Wave 31 已用 snipe-multi 實作，snipe 本就繞過管線，無需改寫
+
+### 向後相容性
+- 所有既有 `regPre` 未回傳旗標 → 預設 false，行為不變
+- 既有 180+ 招式測過無迴歸（sim 50/50 0 crash）
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 25/25（P1/P2）、平均回合 15.9
+- 版本 1.87 → 1.88
+
+### 下波計畫（暫緩項目繼續消化）
+- Wave 34：CardInstance.movedToActiveThisTurn 旗標 → 普隆隆姆ex｜暴衝閃光、蚊香泳士｜跳躍衝天
+- Wave 35：player-level noAttacksNextTurn + cross-turn 加收傷害 → 電擊魔獸、超音波幼蟲
+- Wave 36：force-opp-send-new-active pending → 大狼犬、月桂葉、小箭雀、長毛巨魔
+- Wave 37：self-return-to-hand/deck → 喵喵ex、賽富豪、風鈴鈴、白蓬蓬
+- Wave 38：ATTACK_PRE self-tool-discard + evolve-trigger registry → 烈雀、美錄梅塔、安瓢蟲
+- Wave 39：player-level ban（no-item/no-evolve/no-supporter）+ self-KO + deferred-prize-bonus

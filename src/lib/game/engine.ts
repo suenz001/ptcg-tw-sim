@@ -971,10 +971,18 @@ function handlePlaying(
     const preFn = ATTACK_PRE.get(effectKey);
     let workingState: GameState = { ...state, players };
     let baseDamage = parseInt(attack.damage ?? '0', 10) || 0;
+    // Session 33 引擎旗標：招式可聲明
+    //   skipWeakRes    ：傷害不計算弱點 / 抵抗力
+    //   skipDefEffects ：傷害不計算對手戰鬥寶可夢身上的「附加效果」
+    //                    （含被動減傷特性、防禦道具、下次被攻擊 -N、條件式完全免疫）
+    let skipWeakRes = false;
+    let skipDefEffects = false;
     if (preFn) {
       const preResult = preFn(workingState, aIdx, pool, action);
       workingState = preResult.state;
       baseDamage = preResult.damage;
+      if (preResult.skipWeakRes) skipWeakRes = true;
+      if (preResult.skipDefEffects) skipDefEffects = true;
     }
 
     // 下回合加傷旗標（巨金怪 彗星拳、大電海燕 風力充能 類）—
@@ -990,9 +998,9 @@ function handlePlaying(
       workingState = addLog(workingState, `${atkName} 招式傷害 +${dmgBonus}（下回合加傷效果）`, aIdx);
     }
 
-    // 弱點（×2）— 只對有實際傷害的招式套用
+    // 弱點（×2）— 只對有實際傷害的招式套用。skipWeakRes 旗標跳過此計算。
     const defenderCard = getCard(defender.active.cardId, pool);
-    if (baseDamage > 0 && defenderCard.weakness && attackerCard.pokemonType === defenderCard.weakness.type) {
+    if (!skipWeakRes && baseDamage > 0 && defenderCard.weakness && attackerCard.pokemonType === defenderCard.weakness.type) {
       baseDamage *= 2;
     }
 
@@ -1008,8 +1016,8 @@ function handlePlaying(
       }
     }
 
-    // 被動特性：受傷減 N（Passive damage reduction）
-    if (baseDamage > 0 && defenderCard.abilities) {
+    // 被動特性：受傷減 N（Passive damage reduction）— skipDefEffects 跳過
+    if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities) {
       for (const ab of defenderCard.abilities) {
         const reduce = PASSIVE_DAMAGE_REDUCE.get(ab.name);
         if (reduce) baseDamage = Math.max(0, baseDamage - reduce);
@@ -1018,8 +1026,9 @@ function handlePlaying(
 
     // 道具：特定屬性防禦（福祿果 / 巧可果 / 千香果 / 刺耳果 / 霹霹果 / 莓榴果）
     // 只要觸發就 -60 並丟棄，不受是否已被其他機制削到 0 影響（規則上 tool 仍消耗）
+    // skipDefEffects 跳過，但不觸發道具也不丟棄。
     let defenseReduceToolToDiscard: CardInstance | null = null;
-    if (defender.active.toolAttached) {
+    if (!skipDefEffects && defender.active.toolAttached) {
       const defTool = pool.get(defender.active.toolAttached.cardId);
       if (defTool) {
         const defense = TOOL_DEFENSE_REDUCE_BY_TYPE.get(defTool.name);
@@ -1030,8 +1039,8 @@ function handlePlaying(
       }
     }
 
-    // 被動特性：條件式完全免疫
-    if (baseDamage > 0 && defenderCard.abilities) {
+    // 被動特性：條件式完全免疫 — skipDefEffects 跳過
+    if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities) {
       for (const ab of defenderCard.abilities) {
         const immune = PASSIVE_IMMUNITY.get(ab.name);
         if (immune && immune(attackerCard, baseDamage, state, aIdx, pool)) {
@@ -1054,7 +1063,8 @@ function handlePlaying(
     }
 
     // 「下次被攻擊傷害 -N」— 套用後清除旗標（Session 31 新機制）
-    if (baseDamage > 0 && defenderState.active.damageReduceNextHit) {
+    // skipDefEffects 跳過，但旗標保持不消耗（視為對方的附加效果，未被觸發）。
+    if (!skipDefEffects && baseDamage > 0 && defenderState.active.damageReduceNextHit) {
       baseDamage = Math.max(0, baseDamage - defenderState.active.damageReduceNextHit);
       defenderState.active = { ...defenderState.active, damageReduceNextHit: undefined };
     }

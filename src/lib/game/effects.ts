@@ -818,7 +818,17 @@ type AttackPreFn = (
   aIdx: 0 | 1,
   pool: Map<string, Card>,
   action?: Extract<GameAction, { type: 'ATTACK' }>
-) => { state: GameState; damage: number };
+) => {
+  state: GameState;
+  damage: number;
+  /** 招式傷害不計算弱點・抵抗力（Session 33）。 */
+  skipWeakRes?: boolean;
+  /**
+   * 招式傷害不計算對手戰鬥寶可夢身上的「附加效果」（Session 33）。
+   * 包含被動減傷特性、防禦道具（福祿果等）、下次被攻擊 -N、條件式完全免疫。
+   */
+  skipDefEffects?: boolean;
+};
 
 type AttackPostFn = (
   state: GameState,
@@ -4035,9 +4045,9 @@ regPre('焚焰蚣|焦黑吐息', (state, aIdx, _pool) => {
 // 熔岩蟲|熾熱熔岩 — 20 + 灼傷
 regPost('熔岩蟲|熾熱熔岩', statusPost('burned'));
 
-// 故勒頓|撕裂 — 130（簡化：不特殊處理「不計算身上附加效果」）
+// 故勒頓|撕裂 — 130（不計算對手戰鬥寶可夢身上的附加效果，Session 33 正式實作）
 regPre('故勒頓|撕裂', (state, _aIdx, _pool) => {
-  return { state, damage: 130 };
+  return { state, damage: 130, skipDefEffects: true };
 });
 
 // 夠讚狗ex|瘋狂連鎖 — 130 + 若自身中毒則 +130
@@ -7992,3 +8002,67 @@ regPre('賽富豪|富裕強襲', (state, aIdx, pool) => {
   }
   return { state, damage: 30 };
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 33 — 引擎擴充：skipWeakRes / skipDefEffects 旗標
+//
+// 本波新增招式旗標（AttackPreFn 回傳 skipWeakRes / skipDefEffects）：
+//
+//   skipWeakRes    — 傷害不計算弱點（抵抗力目前引擎未實作，此旗標主要作用於弱點）
+//   skipDefEffects — 傷害不計算對手戰鬥寶可夢身上的「附加效果」：
+//                    被動減傷特性、特定屬性防禦道具、下次被攻擊 -N、條件式完全免疫
+//
+// 實作對照：engine.ts 傷害管線
+//   if (!skipWeakRes)    → 套用弱點 ×2
+//   if (!skipDefEffects) → 套用 PASSIVE_DAMAGE_REDUCE / TOOL_DEFENSE_REDUCE_BY_TYPE /
+//                          PASSIVE_IMMUNITY / damageReduceNextHit
+//
+// 注意：並非實卡所有「附加效果」文字都等同於引擎全部防禦機制；此處採取保守實作，
+// 將所有 defender-side 的減傷/免疫機制一起納入 skipDefEffects 範圍（符合大多數實戰情境）。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 固定傷害 + 跳過弱點/抵抗力。 */
+function skipWeakResPre(baseDmg: number, _label: string): AttackPreFn {
+  return (state, _aIdx, _pool) => ({ state, damage: baseDmg, skipWeakRes: true });
+}
+
+/** 固定傷害 + 跳過對手戰鬥寶可夢身上附加效果。 */
+function skipDefEffectsPre(baseDmg: number, _label: string): AttackPreFn {
+  return (state, _aIdx, _pool) => ({ state, damage: baseDmg, skipDefEffects: true });
+}
+
+/** 固定傷害 + 同時跳過弱點/抵抗力與身上附加效果。 */
+function skipBothPre(baseDmg: number, _label: string): AttackPreFn {
+  return (state, _aIdx, _pool) => ({ state, damage: baseDmg, skipWeakRes: true, skipDefEffects: true });
+}
+
+// ── Wave 33 招式登記 ───────────────────────────────────────────────────────
+// 恰雷姆ex｜瑜伽踢 — 190，傷害不計算弱點・抵抗力
+regPre('恰雷姆ex|瑜伽踢', skipWeakResPre(190, '瑜伽踢'));
+
+// 厄鬼椪 礎石面具ex｜打爆 — 140，不計算弱點・抵抗力與對手戰鬥寶可夢身上的附加效果
+regPre('厄鬼椪 礎石面具ex|打爆', skipBothPre(140, '打爆'));
+
+// 安瓢蟲｜高速星星 — 70，不計算弱點・抵抗力與對手戰鬥寶可夢身上的附加效果
+regPre('安瓢蟲|高速星星', skipBothPre(70, '高速星星'));
+
+// 輕身鱈｜音波刀鋒 — 110，不計算對手戰鬥寶可夢身上的附加效果
+regPre('輕身鱈|音波刀鋒', skipDefEffectsPre(110, '音波刀鋒'));
+
+// 米立龍ex｜突襲水泵 — 100，不計算對手戰鬥寶可夢身上的附加效果
+regPre('米立龍ex|突襲水泵', skipDefEffectsPre(100, '突襲水泵'));
+
+// 頓甲｜打垮 — 40，不計算對手戰鬥寶可夢身上的附加效果
+regPre('頓甲|打垮', skipDefEffectsPre(40, '打垮'));
+
+// 堅盾劍怪｜堅硬猛擊 — 120，不計算對手戰鬥寶可夢身上的附加效果
+regPre('堅盾劍怪|堅硬猛擊', skipDefEffectsPre(120, '堅硬猛擊'));
+
+// 晶光芽｜岩石投擲 — 10，不計算抵抗力（引擎未實作抵抗力，此處僅註記；以 skipWeakRes 避免日後接入時反悔）
+regPre('晶光芽|岩石投擲', skipWeakResPre(10, '岩石投擲'));
+
+// 土地雲｜粗暴橫掃 — 130，不計算抵抗力（同上理由）
+regPre('土地雲|粗暴橫掃', skipWeakResPre(130, '粗暴橫掃'));
+
+// 鐵頭殼ex｜雙刃劍 — 已於 Wave 31 以 multiSnipePost 實作；snipe-multi 本身即繞過弱點/附加效果，
+// Session 33 不需額外旗標改寫。保留此註記以避免未來重複登記。
