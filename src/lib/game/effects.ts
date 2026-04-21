@@ -8707,3 +8707,296 @@ regPost('晶光花|侵蝕碎塊', (state, aIdx, pool) => {
 // 蝶結萌虻｜多餘花粉 30 + 跨回合獎賞 +2
 regPre('蝶結萌虻|多餘花粉', (s, _a, _p) => ({ state: s, damage: 30 }));
 regPost('蝶結萌虻|多餘花粉', oppActiveDeferredPrizeNextPost(2, '多餘花粉'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 40 — 自身 KO 類特性 / 招式（v1.95）
+//
+// 共 2 張：
+//   1. 彷徨夜靈|咒詛炸彈   — 自身昏厥 + 在對手 1 隻寶可夢身上放 5 個傷害指示物
+//   2. 三合一磁怪|過度放電 — 自身昏厥 + 從自己棄牌區選最多 3 張基本【雷】能量
+//                            以任意方式附於自己的【雷】寶可夢身上
+//                            （sim/AI 簡化：全部附於單一選擇的目標）
+//
+// 兩張的卡牌資料在部分套牌登記為 abilities[]（→ regA），其餘套牌以 attacks[] 形式
+// 登記（名稱前綴 ZWJ U+200C + [特性]）。兩種路徑都需要註冊以確保涵蓋。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 自身 KO 某隻特定 iid 寶可夢 — 含附加卡送棄牌 + 對手即時取獎賞 + 勝負檢查。
+ * （自身 KO 時，對手的獎賞不經 pendingPrizes，因攻擊方無法自己取自己 KO 的獎賞。）
+ */
+function selfKOInstance(
+  state: GameState,
+  aIdx: 0 | 1,
+  iid: string,
+  pool: Map<string, Card>,
+  label: string,
+): GameState {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const p = state.players[aIdx];
+  const isActive = p.active?.iid === iid;
+  const target = isActive ? p.active! : p.bench.find(c => c.iid === iid);
+  if (!target) return state;
+  const tCard = pool.get(target.cardId);
+  const tName = tCard?.name ?? '?';
+  const ko: CardInstance[] = [
+    { ...target, damage: tCard?.hp ?? 999 },
+    ...target.energyAttached,
+    ...(target.toolAttached ? [target.toolAttached] : []),
+    ...(target.evolvedFromStack ?? []),
+  ];
+  const prizes = tCard ? koPrizeCount(tCard) : 1;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const newP: PlayerState = {
+    ...p,
+    discard: [...p.discard, ...ko],
+    active: isActive ? null : p.active,
+    bench: isActive ? p.bench : p.bench.filter(c => c.iid !== iid),
+  };
+  players[aIdx] = newP;
+  let s: GameState = addLog({ ...state, players }, `${label}：${tName} 昏厥！對手取得 ${prizes} 張獎勵牌`, null);
+  // 對手即時取獎賞
+  const opp = s.players[dIdx];
+  const take = Math.min(prizes, opp.prizes.length);
+  if (take > 0) {
+    const taken = opp.prizes.slice(0, take);
+    const finalPlayers = [...s.players] as [PlayerState, PlayerState];
+    finalPlayers[dIdx] = { ...opp, prizes: opp.prizes.slice(take), hand: [...opp.hand, ...taken] };
+    s = addLog({ ...s, players: finalPlayers }, `${opp.name} 取走 ${take} 張獎勵牌`, null);
+    if (finalPlayers[dIdx].prizes.length === 0) {
+      return { ...s, phase: 'game-over', winner: dIdx, winReason: '取得所有獎勵牌' };
+    }
+  }
+  // 自身是否無後繼
+  if (isActive && newP.bench.length === 0) {
+    return { ...s, phase: 'game-over', winner: dIdx, winReason: `${p.name} 沒有可上場的寶可夢` };
+  }
+  return s;
+}
+
+/** 找本回合已觸發特性且 cardName 符合的 CardInstance iid（regA 內部用）。*/
+function findAbilityUserIid(
+  state: GameState,
+  aIdx: 0 | 1,
+  cardName: string,
+  pool: Map<string, Card>,
+): string | null {
+  const p = state.players[aIdx];
+  const all = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
+  for (const c of all) {
+    if (!c.abilityUsedThisTurn) continue;
+    const card = pool.get(c.cardId);
+    if (card?.name === cardName) return c.iid;
+  }
+  return null;
+}
+
+// ── 咒詛炸彈 resolver ─────────────────────────────────────────────────────
+// 流程：opp-poke-choose → 對目標 +50 → 自身 KO。
+// 若目標被 +50 擊倒，pendingPrizes 照常累積；若自身 KO 後對手 prize 歸零 → 對手勝。
+regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
+  const label = (params?.label as string) ?? '咒詛炸彈';
+  const userIid = params?.userIid as string | undefined;
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  const defender = st.players[dIdx];
+  const targetIid = selectedIids[0];
+  if (!targetIid) return st;
+  const isActive = defender.active?.iid === targetIid;
+  const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const targetCard = pool.get(target.cardId);
+  const tHp = targetCard?.hp ?? 0;
+  const newDmg = target.damage + 50;
+  let s: GameState = st;
+  if (tHp > 0 && newDmg >= tHp) {
+    // 目標被放 5 個指示物擊倒
+    const koDiscard: CardInstance[] = [
+      { ...target, damage: newDmg },
+      ...target.energyAttached,
+      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...(target.evolvedFromStack ?? []),
+    ];
+    const prizes = targetCard ? koPrizeCount(targetCard) : 1;
+    const players = [...s.players] as [PlayerState, PlayerState];
+    const newDefender: PlayerState = {
+      ...defender,
+      discard: [...defender.discard, ...koDiscard],
+      active: isActive ? null : defender.active,
+      bench: isActive ? defender.bench : defender.bench.filter(c => c.iid !== targetIid),
+    };
+    players[dIdx] = newDefender;
+    s = addLog({ ...s, players },
+      `${label}：在 ${targetCard?.name ?? '?'} 身上放 5 個傷害指示物 → 被擊倒！+${prizes} 張獎勵牌`, actorIdx);
+    s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
+    if (isActive && newDefender.bench.length === 0) {
+      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+    }
+  } else {
+    const players = [...s.players] as [PlayerState, PlayerState];
+    const newDefender = { ...defender };
+    if (isActive) newDefender.active = { ...target, damage: newDmg };
+    else newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
+    players[dIdx] = newDefender;
+    s = addLog({ ...s, players }, `${label}：在 ${targetCard?.name ?? '?'} 身上放 5 個傷害指示物`, actorIdx);
+  }
+  // 自身 KO（不論目標是否被擊倒）
+  if (userIid) {
+    s = selfKOInstance(s, actorIdx, userIid, pool, label);
+  }
+  return s;
+});
+
+/** 招式式 [特性]咒詛炸彈 — 攻擊者 = active。 */
+function cursedBombAttackPost(label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (!p.active) return state;
+    const userIid = p.active.iid;
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const dp = state.players[dIdx];
+    if (!dp.active && dp.bench.length === 0) {
+      return selfKOInstance(addLog(state, `${label}：對手無可選寶可夢`, aIdx),
+        aIdx, userIid, pool, label);
+    }
+    const s = addLog(state, `${label}：選 1 隻對手寶可夢放 5 個傷害指示物`, aIdx);
+    return withPending(s, {
+      type: 'opp-poke-choose',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'cursed-bomb',
+      params: { label, userIid, includeActive: true },
+    });
+  };
+}
+
+// ── 過度放電 resolver + postFn ────────────────────────────────────────────
+// 流程：先自身 KO（active）→ 再 pending discard-search（Energy:Lightning, 1-3）→
+//       resolver 選 1 隻自己雷寶可夢附上全部能量。
+
+regR('overvolt-attach-pick-target', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '過度放電';
+  const p = st.players[idx];
+  const lightningSelf = [p.active, ...p.bench].filter((c): c is CardInstance => {
+    if (!c) return false;
+    const card = pool.get(c.cardId);
+    return card?.pokemonType === 'Lightning';
+  });
+  if (lightningSelf.length === 0) {
+    // 全部雷寶可夢已離場 — 能量留在棄牌區
+    return addLog(st, `${label}：場上無【雷】寶可夢，能量留在棄牌區`, idx);
+  }
+  if (lightningSelf.length === 1) {
+    const target = lightningSelf[0];
+    const energies = p.discard.filter(c => iids.includes(c.iid));
+    const tName = pool.get(target.cardId)?.name ?? '?';
+    const s = addLog(st, `${label}：將 ${energies.length} 張基本雷能量附加到 ${tName}`, idx);
+    return updatePlayer(s, idx, pl => {
+      const rest = pl.discard.filter(c => !iids.includes(c.iid));
+      if (pl.active && pl.active.iid === target.iid) {
+        return { ...pl, discard: rest,
+          active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } };
+      }
+      return { ...pl, discard: rest,
+        bench: pl.bench.map(c => c.iid === target.iid
+          ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
+    });
+  }
+  // 多隻雷寶可夢：進第二步（sim/AI 簡化：全部附到單一目標）
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'overvolt-attach-commit',
+    params: { energyIids: iids, label },
+  });
+});
+
+regR('overvolt-attach-commit', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '過度放電';
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const targetIid = iids[0];
+  const p = st.players[idx];
+  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const targetCard = pool.get(target.cardId);
+  if (targetCard?.pokemonType !== 'Lightning') {
+    return addLog(st, `${label}：目標非【雷】寶可夢，取消附加`, idx);
+  }
+  const energies = p.discard.filter(c => energyIids.includes(c.iid));
+  if (energies.length === 0) return st;
+  const s = addLog(st, `${label}：將 ${energies.length} 張基本雷能量附加到 ${targetCard.name}`, idx);
+  return updatePlayer(s, idx, pl => {
+    const rest = pl.discard.filter(c => !energyIids.includes(c.iid));
+    if (pl.active && pl.active.iid === targetIid) {
+      return { ...pl, discard: rest,
+        active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } };
+    }
+    return { ...pl, discard: rest,
+      bench: pl.bench.map(c => c.iid === targetIid
+        ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
+  });
+});
+
+function overvoltAttackPost(label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (!p.active) return state;
+    const userIid = p.active.iid;
+    // (1) 自身 KO
+    let s = selfKOInstance(state, aIdx, userIid, pool, label);
+    if (s.phase === 'game-over') return s;
+    // (2) 棄牌區基本雷能量候選
+    const cand = s.players[aIdx].discard.filter(c => {
+      const card = pool.get(c.cardId);
+      return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Lightning';
+    });
+    if (cand.length === 0) return addLog(s, `${label}：棄牌區無基本雷能量`, aIdx);
+    // (3) 場上是否還有雷寶可夢
+    const hasLightning = [s.players[aIdx].active, ...s.players[aIdx].bench].some(c => {
+      if (!c) return false;
+      return pool.get(c.cardId)?.pokemonType === 'Lightning';
+    });
+    if (!hasLightning) return addLog(s, `${label}：場上無【雷】寶可夢，無法附加`, aIdx);
+    // (4) pending discard-search
+    const realMax = Math.min(3, cand.length);
+    const s2 = addLog(s, `${label}：從棄牌區選 1-${realMax} 張基本雷能量`, aIdx);
+    return withPending(s2, {
+      type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Energy:Lightning', minCount: 1, maxCount: realMax,
+      effectKey: 'overvolt-attach-pick-target',
+      params: { label },
+    });
+  };
+}
+
+// ── 註冊 ─────────────────────────────────────────────────────────────────
+
+// 彷徨夜靈 — 正統 ability 路徑（SV8a 等正確填入 abilities[] 的套牌）
+regA('彷徨夜靈', 0, (st, aIdx, pool) => {
+  const userIid = findAbilityUserIid(st, aIdx, '彷徨夜靈', pool);
+  if (!userIid) return st;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const dp = st.players[dIdx];
+  if (!dp.active && dp.bench.length === 0) {
+    return selfKOInstance(addLog(st, '咒詛炸彈：對手無可選寶可夢', aIdx),
+      aIdx, userIid, pool, '咒詛炸彈');
+  }
+  const s = addLog(st, '咒詛炸彈：選 1 隻對手寶可夢放 5 個傷害指示物', aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'cursed-bomb',
+    params: { label: '咒詛炸彈', userIid, includeActive: true },
+  });
+});
+
+// 彷徨夜靈 — attack-style 變體（ZWJ U+200C + [特性]咒詛炸彈）
+regPre('彷徨夜靈|\u200c[特性]咒詛炸彈', (s, _a, _p) => ({ state: s, damage: 0 }));
+regPost('彷徨夜靈|\u200c[特性]咒詛炸彈', cursedBombAttackPost('咒詛炸彈'));
+
+// 三合一磁怪 — attack-style 變體（兩個 ZWJ*3 變體：有空格 / 無空格）
+regPre('三合一磁怪|\u200c\u200c\u200c[特性] 過度放電', (s, _a, _p) => ({ state: s, damage: 0 }));
+regPost('三合一磁怪|\u200c\u200c\u200c[特性] 過度放電', overvoltAttackPost('過度放電'));
+
+regPre('三合一磁怪|\u200c\u200c\u200c[特性]過度放電', (s, _a, _p) => ({ state: s, damage: 0 }));
+regPost('三合一磁怪|\u200c\u200c\u200c[特性]過度放電', overvoltAttackPost('過度放電'));

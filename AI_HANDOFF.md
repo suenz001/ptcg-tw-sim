@@ -3875,3 +3875,35 @@ movedToActiveThisTurn?: boolean;
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 31/19（P1/P2）、平均回合 14.5
 - 版本 1.93 → 1.94
+
+---
+
+## Session 38as (v1.95 wave 40) — 自身 KO 類特性 / 招式
+
+完成先前 wave 39 DEFER 的兩張自爆寶可夢。
+
+### 新增 effects.ts helpers
+
+- `selfKOInstance(state, aIdx, iid, pool, label)` — 把自己某隻（active/bench）連附加送棄牌；對手即時取獎賞（**不**走 `pendingPrizes`，因攻擊方不能自取自己 KO 的獎賞）；勝負檢查。
+- `findAbilityUserIid(state, aIdx, cardName, pool)` — 以 `abilityUsedThisTurn + cardName` 找回 regA 的使用者 iid。
+
+### 新增 resolvers
+
+- `cursed-bomb`：opp-poke-choose 結果後 → 對目標 +50 → 自身 KO（若目標被擊倒，pendingPrizes 照累）
+- `overvolt-attach-pick-target` / `overvolt-attach-commit`：自身 KO 後 discard-search 基本雷能量 → 選 1 隻自己雷寶可夢附加全部
+
+### 實裝（2 張）
+
+- 彷徨夜靈｜咒詛炸彈 — 自身 KO + 對手 1 隻寶可夢 +5 指示物（50）
+  - `regA('彷徨夜靈', 0, …)` — 正統 ability（SV8a 路徑）
+  - `regPre/regPost('彷徨夜靈|\u200c[特性]咒詛炸彈', …)` — attack-style（SV6a/M2a/MC 以 attack-with-ZWJ 形式登記）
+- 三合一磁怪｜過度放電 — 自身 KO + 棄牌區選最多 3 張基本雷能量以任意方式附於雷寶可夢
+  - `regPre/regPost('三合一磁怪|\u200c\u200c\u200c[特性] 過度放電', …)`（含空格變體）
+  - `regPre/regPost('三合一磁怪|\u200c\u200c\u200c[特性]過度放電', …)`（無空格變體）
+  - sim/AI 簡化：全部能量附到單一選擇的雷寶可夢
+
+### 驗證
+
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 26/24（P1/P2）、平均回合 15.5
+- 版本 1.94 → 1.95
