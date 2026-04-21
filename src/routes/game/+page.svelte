@@ -638,6 +638,10 @@
           const top8 = new Set<string>((pendingSelection.params?.top8Iids as string[]) ?? []);
           return src.deck.filter(c => top8.has(c.iid));
         }
+        if (f === 'TOP2') {
+          const top2 = new Set<string>((pendingSelection.params?.top2Iids as string[]) ?? []);
+          return src.deck.filter(c => top2.has(c.iid));
+        }
         if (f === 'Supporter:TOP6') {
           const top6 = new Set<string>((pendingSelection.params?.top6Iids as string[]) ?? []);
           return src.deck.filter(c => top6.has(c.iid) && pool.get(c.cardId)?.subtype === 'Supporter');

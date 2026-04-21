@@ -9544,39 +9544,44 @@ regPre('黑夜魔靈|\u200c[特性]咒詛炸彈', (s, _a, _p) => ({ state: s, da
 regPost('黑夜魔靈|\u200c[特性]咒詛炸彈', cursedBombAttackPost('咒詛炸彈', 13));
 
 // ── 多龍奇｜偵查指令 ─────────────────────────────────────────────────────────
-// 一回合一次：查看牌庫頂 3 張，選 1 張加手牌，其餘洗回牌庫。
+// 一回合一次：查看牌庫上方 2 張，選 1 張加手牌，其餘放回牌庫下方（不洗牌）。
+// v2.07：原實作用 TOP3（slice(0,3)）且 filter 字串 'TOP3' 在 +page.svelte / ai.ts
+//        沒註冊，fallback 到「顯示整個牌庫」→ 玩家可以從整副牌庫任選；同時結尾
+//        用 shuffle() 把剩餘塞回整副牌庫也錯了（應放回下方）。
+//        正確卡面：查看上方 2 張，選其中 1 張加手牌，剩餘放回牌庫下方。
 regA('多龍奇', 0, (st, idx) => {
   const p = st.players[idx];
-  const top3 = p.deck.slice(0, 3);
-  if (top3.length === 0) return addLog(st, '偵查指令：牌庫為空', idx);
-  st = addLog(st, `偵查指令：查看牌庫頂 ${top3.length} 張，選 1 張加手牌，其餘洗回`, idx);
+  const top2 = p.deck.slice(0, 2);
+  if (top2.length === 0) return addLog(st, '偵查指令：牌庫為空', idx);
+  st = addLog(st, `偵查指令：查看牌庫上方 ${top2.length} 張，選 1 張加手牌，其餘放回牌庫下方`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'TOP3',
-    minCount: 0, maxCount: 1,
+    filter: 'TOP2',
+    minCount: 1, maxCount: 1,
     effectKey: 'scouting-order',
-    params: { top3Iids: top3.map(c => c.iid) },
+    params: { top2Iids: top2.map(c => c.iid) },
   });
 });
 
 regR('scouting-order', (st, idx, iids, params, pool) => {
-  const top3Iids = (params?.top3Iids as string[]) ?? [];
+  const top2Iids = (params?.top2Iids as string[]) ?? [];
   const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
   if (chosen.length > 0) {
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `偵查指令：將 ${names} 加入手牌（其餘洗回牌庫）`, idx);
+    st = addLog(st, `偵查指令：將 ${names} 加入手牌（剩餘放回牌庫下方）`, idx);
   } else {
-    st = addLog(st, '偵查指令：未選取任何卡（全數洗回牌庫）', idx);
+    st = addLog(st, '偵查指令：未選取任何卡（全數放回牌庫下方）', idx);
   }
   return updatePlayer(st, idx, (p) => {
-    const top3 = p.deck.filter(c => top3Iids.includes(c.iid));
-    const rest = p.deck.filter(c => !top3Iids.includes(c.iid));
-    const picked = top3.filter(c => iids.includes(c.iid));
-    const remaining = top3.filter(c => !iids.includes(c.iid));
+    const top2 = p.deck.filter(c => top2Iids.includes(c.iid));
+    const rest = p.deck.filter(c => !top2Iids.includes(c.iid));
+    const picked = top2.filter(c => iids.includes(c.iid));
+    const remaining = top2.filter(c => !iids.includes(c.iid));
+    // 剩餘牌放回牌庫下方（不洗牌）：rest（原本 top2 以下的部分） + remaining
     return {
       ...p,
-      deck: shuffle([...rest, ...remaining]),
+      deck: [...rest, ...remaining],
       hand: [...p.hand, ...picked],
     };
   });

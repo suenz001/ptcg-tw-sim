@@ -187,6 +187,10 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const top8 = new Set<string>((sel.params?.top8Iids as string[]) ?? []);
           return top8.has(c.iid);
         }
+        if (f === 'TOP2') {
+          const top2 = new Set<string>((sel.params?.top2Iids as string[]) ?? []);
+          return top2.has(c.iid);
+        }
         if (f === 'Pokemon')         return card.supertype === 'Pokemon' && card.subtype !== 'Other';
         if (f === 'Energy')          return card.supertype === 'Energy';
         if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';

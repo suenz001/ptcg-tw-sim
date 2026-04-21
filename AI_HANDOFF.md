@@ -1,9 +1,54 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b3 (v2.06)  
+> 最後更新：2026-04-21 Session 38b4 (v2.07)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b4 (v2.07) — 多龍奇「偵查指令」全面修正
+
+### Leon 回報
+
+> 多龍奇的偵查指令也錯了，你再看一下他的敘述：
+> 「在自己的回合時可使用 1 次。查看自己的牌庫上方 2 張卡，選擇其中 1 張，加入手牌。將剩餘卡放回牌庫下方。」
+
+### 既有實作的三個 bug
+
+effects.ts line 9546-9583 `regA('多龍奇', 0, ...)` + `regR('scouting-order', ...)`：
+
+1. **看錯張數**：`p.deck.slice(0, 3)` — 應該是上方 **2 張**。
+2. **filter 字串沒註冊**：`filter: 'TOP3'` 傳給 pendingSelection，但 `+page.svelte`
+   的 `selectionItems` 只處理 `TOP6` / `TOP8` / `Supporter:TOP6`，沒有 `TOP3` 分支；
+   `ai.ts` 同樣沒有。結果 fallback 到 `return true` 讓玩家從 **整副牌庫** 任選，
+   完全忽略「只能看頂上幾張」的限制（嚴重違規）。
+3. **結尾洗牌**：`deck: shuffle([...rest, ...remaining])` — 應該是 **放回牌庫下方**
+   （不洗），原本的位置順序也要維持。
+
+另外原本 `minCount: 0, maxCount: 1` 讓玩家可以跳過不抽，但卡面「選擇其中 1 張」是
+強制要選，改 `minCount: 1`。
+
+### 修正
+
+**effects.ts** 多龍奇段（維持在 effects.ts 裡，未模組化）：
+- 新增 comment 說明 v2.07 修正原因。
+- `top3` → `top2`，`slice(0, 3)` → `slice(0, 2)`，`top3Iids` → `top2Iids`。
+- `filter: 'TOP3'` → `filter: 'TOP2'`。
+- `minCount: 0` → `minCount: 1`。
+- 早期 `addLog` 的「洗回」→「放回牌庫下方」。
+- resolver 結尾 `shuffle([...rest, ...remaining])` → `[...rest, ...remaining]`
+  （rest 是原 top2 以下的部分，remaining 是沒選到的 top2，接在後面就是放到下方）。
+
+**+page.svelte** line 637 區塊：新增 `TOP2` 分支，讀取 `params.top2Iids` 過濾 deck。
+
+**ai.ts** line 186 區塊：新增 `TOP2` 分支（AI 也要能正確看到候選範圍）。
+
+### 驗證
+
+`npm run build` 通過。效果：多龍奇特性按下 → 只看到上方 2 張（或牌庫剩餘 1 張時就
+只看到 1 張）→ 必須選 1 張加入手牌 → 沒選的那張留在牌庫下方（rest 之後），
+其餘牌的順序不變。完全符合卡面描述。
 
 ---
 
