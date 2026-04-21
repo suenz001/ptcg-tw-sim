@@ -1,9 +1,61 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b6 (v2.09)  
+> 最後更新：2026-04-21 Session 38b7 (v2.10)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b7 (v2.10) — 模組化：抽 競技場卡 (Stadium) 到 effects/cards/stadiums.ts
+
+### 背景
+
+承 v2.09 Tool 模組抽離，接續把「競技場卡（Stadium）」邏輯搬到專屬檔案。
+PTCG 場地卡邏輯跨 engine / effects 兩邊：engine.ts 的 USE_STADIUM handler
+負責放置、丟棄、`stadiumUsedThisTurn` 等引擎層狀態；真正要 pending 選手牌 /
+選能量的互動部分則丟到 effects 這邊的 `regR()` resolver。
+
+### 改動
+
+**新增** `src/lib/game/effects/cards/stadiums.ts` (83 行)：
+- 3 個 USE_STADIUM 的 pending resolver（byte-exact 搬自 effects.ts）：
+  - `miracle-garden-draw` — 神秘花園（Stadium）：丟 1 張超能量 → 抽到手牌 = 己方場上超屬寶可夢數
+  - `night-academy-top` — 夜間學院（Stadium）：選 1 張手牌放回牌庫上方
+  - `moonlight-hill-heal` — 月光丘陵（Stadium）：丟 1 張超能量 → 全體回 30 HP
+- `JAMMING_TOWER_STADIUMS` Set 的 export（阻礙之塔的引擎側 hook，engine.ts
+  在查 TOOL_* 前會檢查，命中則視同雙方道具全失效）
+
+**修改** `src/lib/game/effects.ts`：
+- 檔頭 `import { JAMMING_TOWER_STADIUMS } from './effects/cards/stadiums'`
+  並 re-export，engine.ts 既有的 `import { JAMMING_TOWER_STADIUMS } from './effects'`
+  路徑保持相容
+- 刪除原處的 3 個 Stadium regR 區塊 + `export const JAMMING_TOWER_STADIUMS` 定義
+- 留下 section stub 註解指向新位置
+- 行數從 9532 → 9487
+
+**術語修正** — 把殘留的「球場」改成正式翻譯（參考 PTCG 繁中官方用語：場地卡 /
+競技場卡，不是「球場」）：
+- `engine.ts:27` 註解：「當場上活動球場為 ... 所列球場時」→
+  「當場上活動場地卡為 ... 所列競技場卡時」
+- `effects/cards/white_lily_akamatsu.ts:12` 註解：「道具 / 球場 / 被動減傷」→
+  「道具 / 場地卡 / 被動減傷」
+
+### 驗證
+
+- `npm run build` ✅
+- grep 全 src：0 處「球場」殘留
+- JAMMING_TOWER_STADIUMS 透過 re-export 對 engine.ts 完全透明
+- engine.ts 邏輯零改動（只改註解）
+
+### 目前模組化進度
+
+`effects/cards/` 下已抽出：
+- `white_lily_akamatsu.ts`（v2.05）— 2 張魔靈多龍 Supporter
+- `tools.ts`（v2.09）— 23 張道具卡 + 全 TOOL_* 登錄表
+- `stadiums.ts`（v2.10）— 3 個 Stadium resolver + JAMMING_TOWER_STADIUMS
+
+`effects.ts` 剩 9487 行，仍含絕大多數寶可夢招式 / 特性 / 支援者 / 物品 / 引擎 helper。
 
 ---
 

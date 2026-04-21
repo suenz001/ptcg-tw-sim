@@ -24,7 +24,7 @@ import {
 } from './effects';
 
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
-// 當場上活動球場為 JAMMING_TOWER_STADIUMS 所列球場時，雙方所有【道具】不發動效果。
+// 當場上活動場地卡為 JAMMING_TOWER_STADIUMS 所列競技場卡時，雙方所有【道具】不發動效果。
 // 這個閘門會包在所有 TOOL_* 查找上，讓道具的 HP 加成、攻擊 +N、退避減免等全部失效。
 function isToolsJammed(state: GameState, pool: Map<string, Card>): boolean {
   const s = state.activeStadium;

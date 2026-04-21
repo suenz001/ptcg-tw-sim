@@ -9,7 +9,7 @@
  *   - 型別：CardInstance
  *
  * 不涉及攻擊系統（ATTACK_PRE/POST）、特性（ABILITY_EFFECTS）、
- * 道具 / 球場 / 被動減傷等機制，因此可以獨立搬出而不影響其他卡。
+ * 道具 / 場地卡 / 被動減傷等機制，因此可以獨立搬出而不影響其他卡。
  */
 
 import type { CardInstance } from '../../types';

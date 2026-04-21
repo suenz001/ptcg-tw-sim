@@ -54,6 +54,12 @@ export {
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
 };
 
+// ── 競技場卡（Stadium）模組 — v2.10 從本檔抽離 ─────────────────────────────
+// stadiums.ts 包含 3 個 USE_STADIUM 的 pending resolver（神秘花園、夜間學院、
+// 月光丘陵）以及 JAMMING_TOWER_STADIUMS 引擎側 hook 集合。
+import { JAMMING_TOWER_STADIUMS } from './effects/cards/stadiums';
+export { JAMMING_TOWER_STADIUMS };
+
 // 已搬遷到 effects/cards/ 下的卡 — side-effect import 觸發 reg() 登錄。
 // 未來要加更多搬遷檔時，也只需要在這裡加一行 import。
 import './effects/cards/white_lily_akamatsu';
@@ -1457,39 +1463,9 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 神秘花園（Stadium）
+// 神秘花園（Stadium）→ v2.10 搬到 effects/cards/stadiums.ts
 // ══════════════════════════════════════════════════════════════════════════════
-
-// 競技場放置時無即時效果（engine 處理放置邏輯）
-// USE_STADIUM 由 engine 中 USE_STADIUM handler 觸發
-regR('miracle-garden-draw', (st, idx, picked, _params, pool) => {
-  const energyIid = picked[0];
-  return updatePlayer(st, idx, p => {
-    const eIdx = p.hand.findIndex(i => i.iid === energyIid);
-    if (eIdx < 0) return p;
-    const energyInst = p.hand[eIdx];
-    const newHand = p.hand.filter((_, i) => i !== eIdx);
-    const newDiscard = [...p.discard, energyInst];
-
-    // Count Psychic Pokémon in play
-    const allField = [...(p.active ? [p.active] : []), ...p.bench];
-    const psychicCount = allField.filter(pk => {
-      const c = pool.get(pk.cardId);
-      return c?.pokemonType === 'Psychic';
-    }).length;
-
-    // Draw until hand.length === psychicCount
-    const toDraw = Math.max(0, psychicCount - newHand.length);
-    const drawn = p.deck.slice(0, Math.min(toDraw, p.deck.length));
-
-    return {
-      ...p,
-      hand: [...newHand, ...drawn],
-      deck: p.deck.slice(drawn.length),
-      discard: newDiscard,
-    };
-  });
-});
+// miracle-garden-draw regR 已移至 stadiums.ts
 
 // ── MBG 無極汰那 ─────────────────────────────────────────────────────────────
 
@@ -2353,28 +2329,9 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Stadium resolvers（USE_STADIUM 觸發的 pending selection）
+// Stadium resolvers → v2.10 搬到 effects/cards/stadiums.ts
 // ══════════════════════════════════════════════════════════════════════════════
-
-// 夜間學院 — 選 1 張手牌放回牌庫上方
-regR('night-academy-top', (st, idx, iids) => {
-  return updatePlayer(st, idx, p => {
-    const chosen = p.hand.filter(c => iids.includes(c.iid));
-    const newHand = p.hand.filter(c => !iids.includes(c.iid));
-    return { ...p, hand: newHand, deck: [...chosen, ...p.deck] };
-  });
-});
-
-// 月光丘陵 — 丟 1 張超能量 → 全體回 30 HP
-regR('moonlight-hill-heal', (st, idx, iids) => {
-  return updatePlayer(st, idx, p => {
-    const toDiscard = p.hand.filter(c => iids.includes(c.iid));
-    const newHand = p.hand.filter(c => !iids.includes(c.iid));
-    const healActive = p.active ? { ...p.active, damage: Math.max(0, p.active.damage - 30) } : null;
-    const healBench = p.bench.map(c => ({ ...c, damage: Math.max(0, c.damage - 30) }));
-    return { ...p, hand: newHand, discard: [...p.discard, ...toDiscard], active: healActive, bench: healBench };
-  });
-});
+// night-academy-top / moonlight-hill-heal regR 已移至 stadiums.ts
 
 /** 特性名 → 受到招式傷害後對攻擊者的反擊（在 engine 裡呼叫）*/
 export type RetaliationFn = (
@@ -9286,10 +9243,8 @@ reg('火箭隊的拉姆達', (st, idx) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── 阻礙之塔（Stadium）── 引擎側 hook ────────────────────────────────────────
-// 用途：engine.ts 在查 TOOL_* 映射前檢查 activeStadium 是否在此集合中。
-// 若是則視同「道具無效」，TOOL_* 的效果全部不觸發（含 HP、攻擊、防禦、KO、
-// 被 KO、受傷、撤退 cost）。附著動作本身不受影響（可附、可丟）。
-export const JAMMING_TOWER_STADIUMS = new Set<string>(['阻礙之塔']);
+// v2.10：JAMMING_TOWER_STADIUMS 集合已移至 effects/cards/stadiums.ts，
+// 在本檔頂部 re-export 供 engine.ts 沿用同一個 import 路徑。
 
 // ── 寶可夢「上備戰時」觸發（PLAY_BASIC 後 dispatch） ─────────────────────────
 // engine.ts 會在 PLAY_BASIC 成功後查此 map，有則觸發（pendingSelection 或即時）。
