@@ -609,15 +609,19 @@ regR('top-catcher-opp', (st, idx, iids, _params, pool) => {
 
 // 不公印章 — 必須「上個對手的回合自己的寶可夢昏厥了」才可使用（= 對手剛結束的回合有取過獎賞）
 // 規則原文：「這張卡必須在上個對手的回合自己的寶可夢【昏厥】了才可使用」
-// 舊版 bug：用 `players[idx].prizes.length < 6`（= 我有取過獎賞）判定，方向剛好寫反；
-// 且沒區分「上一回合」vs「以前曾經」。
-// 新版：engine 在每次 END_TURN 時快照對手獎賞張數到 state.oppPrizesAtMyLastTurnEnd[idx]；
-// 下次 idx 回合 gate 時，比較 snapshot vs 目前對手獎賞數，只要對手在他們剛結束的回合有取過獎賞
-// （= 自己寶可夢被擊倒），opp.prizes.length < snap 就回 true。
+// 歷史 bug：
+//   v1 bug：用 `players[idx].prizes.length < 6`（= 我有取過獎賞）判定，方向剛好寫反；
+//           且沒區分「上一回合」vs「以前曾經」。
+//   v2 fix：engine END_TURN 快照對手獎賞到 oppPrizesAtMyLastTurnEnd[idx]，比對目前 opp.prizes。
+//   v2 hole：這種只看「比 LastTurnEnd 少」的判定，無法區分「對手回合擊倒我方」vs
+//            「我自己回合內自 KO」（例如黑夜魔靈咒詛炸彈 在自己回合自爆 → opp 也取獎賞 → 誤觸發）。
+// v3 fix：加一個回合開始時的獨立快照 oppPrizesAtMyTurnStart[idx]，
+//         gate 條件改為 TurnStart < LastTurnEnd（= 對手在他們剛結束的回合取過獎賞）。
+//         自己回合的自 KO 只會讓「目前 opp.prizes」變少但 TurnStart 已鎖定，不會觸發。
 regG('不公印章', (st, idx) => {
-  const oppIdx = (1 - idx) as 0 | 1;
-  const snap = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
-  return st.players[oppIdx].prizes.length < snap;
+  const lastEnd = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
+  const turnStart = st.oppPrizesAtMyTurnStart?.[idx] ?? 6;
+  return turnStart < lastEnd;
 });
 reg('不公印章', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
@@ -5041,7 +5045,7 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
       bench: defender.bench.filter(c => c.iid !== targetIid),
     };
     s = addLog({ ...s, players },
-      `${label}：${targetCard?.name ?? '?'} 被擊倒！+${prizes} 張獎勵牌（剩 ${remaining - 1} 個指示物待分配）`, actorIdx);
+      `${label}：在對手 ${targetCard?.name ?? '?'} 身上放置第 ${7 - remaining}/6 個傷害指示物 → 被擊倒！+${prizes} 張獎勵牌（剩 ${remaining - 1} 個待分配）`, actorIdx);
     s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
   } else {
     const players = [...s.players] as [PlayerState, PlayerState];
@@ -5050,7 +5054,7 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
       bench: defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c),
     };
     s = addLog({ ...s, players },
-      `${label}：在 ${targetCard?.name ?? '?'} 身上放 1 個傷害指示物（剩 ${remaining - 1} 個待分配）`, actorIdx);
+      `${label}：在對手 ${targetCard?.name ?? '?'} 身上放置第 ${7 - remaining}/6 個傷害指示物（剩 ${remaining - 1} 個待分配）`, actorIdx);
   }
   // 還有指示物要分配且對手仍有備戰 → 再起一個 pending
   const nextRemaining = remaining - 1;

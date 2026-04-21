@@ -288,12 +288,27 @@ export interface GameState {
   /** 雙方本回合是否已使用競技場效果 [P1, P2] */
   stadiumUsedThisTurn?: [boolean, boolean];
   /**
+   * 雙方本回合是否已打出過場地卡 [P1, P2]。
+   * PTCG 規則：一回合每位玩家只能打出一張競技場卡（不論目前場上有無場地）。
+   * 於 END_TURN 重置 activePlayerIndex 側為 false。
+   */
+  stadiumPlayedThisTurn?: [boolean, boolean];
+  /**
    * 我方上次結束自己回合時，對手剩餘獎賞張數的快照 [P1 側快照, P2 側快照]。
    * 比較 snapshot vs 目前 opp 獎賞張數差即可得知「對手上個回合是否取得過獎賞（= 自己寶可夢是否在對手回合被擊倒）」。
    * 用於「不公印章」等需要『前一回合對手取過獎賞』判定的卡牌。
    * 初始值 [6, 6]（雙方都還沒結束過自己的回合，視為對手沒取過獎賞）。
    */
   oppPrizesAtMyLastTurnEnd?: [number, number];
+  /**
+   * 我方「這個回合開始時」對手剩餘獎賞張數的快照 [P1 側快照, P2 側快照]。
+   * 與 oppPrizesAtMyLastTurnEnd 對比判定自 KO：
+   *   - TurnStart < LastTurnEnd → 對手在他們剛結束的回合取過獎賞（= 對手回合擊倒我方）
+   *   - TurnStart == LastTurnEnd 但當下 opp.prizes 更少 → 自己這個回合內自 KO（不該觸發不公印章）
+   * 於 END_TURN 時由「下一個 activePlayer」快照 opp.prizes.length。
+   * 初始值 [6, 6]。
+   */
+  oppPrizesAtMyTurnStart?: [number, number];
 }
 
 export interface LogEntry {

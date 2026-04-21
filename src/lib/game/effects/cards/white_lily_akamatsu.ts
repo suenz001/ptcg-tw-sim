@@ -60,15 +60,27 @@ regR('akamatsu-split', (st, idx, iids, _params, pool) => {
     return addLog(st, '赤松：未選取任何能量（洗回牌庫）', idx);
   }
   const p = st.players[idx];
-  const picked = iids
+  let picked = iids
     .map(iid => p.deck.find(c => c.iid === iid))
     .filter((c): c is CardInstance => !!c);
   if (picked.length === 0) return st;
+  // 規則：兩張能量必須是不同屬性（UI 已禁止，此處為防禦）
+  // 若 UI 繞過送到兩張同屬性，丟棄第 2 張、僅沿用第 1 張繼續流程
+  if (picked.length === 2) {
+    const t0 = pool.get(picked[0].cardId)?.pokemonType ?? null;
+    const t1 = pool.get(picked[1].cardId)?.pokemonType ?? null;
+    if (t0 !== null && t1 !== null && t0 === t1) {
+      st = addLog(st, '赤松：兩張能量須不同屬性，第 2 張略過', idx);
+      picked = [picked[0]];
+    }
+  }
 
   // 先把選到的能量從牌庫移除、洗牌庫
+  // 用 picked（防禦後可能被縮減）而非原始 iids 以避免丟失第 2 張同屬性能量
+  const pickedIids = new Set(picked.map(c => c.iid));
   st = updatePlayer(st, idx, pl => ({
     ...pl,
-    deck: shuffle(pl.deck.filter(c => !iids.includes(c.iid))),
+    deck: shuffle(pl.deck.filter(c => !pickedIids.has(c.iid))),
   }));
 
   const pokes = [st.players[idx].active, ...st.players[idx].bench]

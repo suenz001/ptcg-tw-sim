@@ -329,6 +329,8 @@ export function createGame(
     log: [],
     pendingPrizes: 0,
     oppPrizesAtMyLastTurnEnd: [6, 6],
+    oppPrizesAtMyTurnStart: [6, 6],
+    stadiumPlayedThisTurn: [false, false],
   };
 
   let st = addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
@@ -736,11 +738,16 @@ function handlePlaying(
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
 
     if (trainerCard.subtype === 'Stadium') {
+      // 一回合只能打出一張競技場卡（不論目前場上有無 stadium）
+      const played = state.stadiumPlayedThisTurn ?? [false, false];
+      if (played[aIdx]) return state;
       // 競技場：放置到場；前一張競技場去棄牌區
       const prevStadium = state.activeStadium;
       if (prevStadium) attacker.discard = [...attacker.discard, prevStadium];
       players[aIdx] = attacker;
-      let newState: GameState = { ...state, players, activeStadium: trainerInst };
+      const newPlayed: [boolean, boolean] = [played[0], played[1]];
+      newPlayed[aIdx] = true;
+      let newState: GameState = { ...state, players, activeStadium: trainerInst, stadiumPlayedThisTurn: newPlayed };
       newState = addLog(newState, `${attacker.name} 打出競技場：${trainerCard.name}！`, aIdx);
       const effectFn = TRAINER_EFFECTS.get(trainerCard.name);
       if (effectFn) return effectFn(newState, aIdx, pool, trainerInst);
@@ -1712,12 +1719,26 @@ function handlePlaying(
     const newStadiumUsed: [boolean, boolean] = [stadiumUsedThisTurn[0], stadiumUsedThisTurn[1]];
     newStadiumUsed[aIdx] = false;
 
+    // 重置「本回合是否打過競技場」旗標（即將開始回合的 nextIdx 清零）
+    const stadiumPlayedThisTurn = state.stadiumPlayedThisTurn ?? [false, false] as [boolean, boolean];
+    const newStadiumPlayed: [boolean, boolean] = [stadiumPlayedThisTurn[0], stadiumPlayedThisTurn[1]];
+    newStadiumPlayed[nextIdx] = false;
+
     // 快照對手目前獎賞張數（作為「下次我開始回合時」的基準值）—
     // 下回合開始時用此快照 vs 屆時對手獎賞數差，判斷「對手在他們剛結束的回合是否取過獎賞」
     // 用於不公印章等 gate 條件。
     const prevOppSnap = state.oppPrizesAtMyLastTurnEnd ?? [6, 6] as [number, number];
     const newOppSnap: [number, number] = [prevOppSnap[0], prevOppSnap[1]];
     newOppSnap[aIdx] = players[1 - aIdx].prizes.length;
+
+    // 同時快照「下一位 activePlayer 回合開始瞬間」的對手獎賞張數 —
+    // 用來區分『對手在他們回合取獎賞』vs『我自己回合內自 KO』。
+    // 不公印章 gate：需 oppPrizesAtMyTurnStart[myIdx] < oppPrizesAtMyLastTurnEnd[myIdx]
+    // （對手上回合取了獎賞 → TurnStart 比 LastTurnEnd 小）
+    const prevTurnStart = state.oppPrizesAtMyTurnStart ?? [6, 6] as [number, number];
+    const newTurnStart: [number, number] = [prevTurnStart[0], prevTurnStart[1]];
+    // nextIdx 的視角：「對手」= aIdx（剛結束回合的玩家）
+    newTurnStart[nextIdx] = players[aIdx].prizes.length;
 
     const newTurn = aIdx === 1 ? state.turn + 1 : state.turn;
     const afterSwitch = addLog(
@@ -1729,7 +1750,9 @@ function handlePlaying(
         isFirstTurn: false,
         turnPhase: 'draw',
         stadiumUsedThisTurn: newStadiumUsed,
+        stadiumPlayedThisTurn: newStadiumPlayed,
         oppPrizesAtMyLastTurnEnd: newOppSnap,
+        oppPrizesAtMyTurnStart: newTurnStart,
       },
       `回合結束，換 ${players[nextIdx].name} 行動。`,
       null
@@ -1891,6 +1914,8 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       if (c.subtype === 'Supporter' && player.supporterPlayedThisTurn) return false;
       // 先攻玩家第一回合禁用支援者
       if (c.subtype === 'Supporter' && state.isFirstTurn && state.activePlayerIndex === state.firstPlayerIdx) return false;
+      // 競技場：一回合每位玩家只能打出一張
+      if (c.subtype === 'Stadium' && (state.stadiumPlayedThisTurn?.[state.activePlayerIndex] ?? false)) return false;
       // Wave 43 fix：玩家級物品/支援者鎖也要在可用清單裡濾掉（否則 AI 會挑到被鎖的卡、engine 靜默 no-op → AI 當機）
       if (c.subtype === 'Item' && player.cantPlayItemThisTurn) return false;
       if (c.subtype === 'Supporter' && player.cantPlaySupporterThisTurn) return false;
@@ -1941,11 +1966,14 @@ export function getUsableAbilities(
       if (!ABILITY_EFFECTS.has(`${card.name}|${abIdx}`)) return;
       // 集客：只有出場才能用
       if (ab.name === '集客' && player.active?.iid !== pk.iid) return;
-      // 扭轉乾坤：上個對手的回合自己寶可夢昏厥了才可用（同不公印章邏輯）
+      // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。
+      // 條件：對手在他們剛結束的回合取過獎賞（TurnStart < LastTurnEnd）。
+      // 不允許：自己回合內的自 KO（如黑夜魔靈 咒詛炸彈）— 此時 TurnStart == LastTurnEnd。
       if (ab.name === '扭轉乾坤') {
-        const oppIdx = (1 - state.activePlayerIndex) as 0 | 1;
-        const snap = state.oppPrizesAtMyLastTurnEnd?.[state.activePlayerIndex] ?? 6;
-        if (state.players[oppIdx].prizes.length >= snap) return;
+        const myIdx = state.activePlayerIndex;
+        const lastEnd = state.oppPrizesAtMyLastTurnEnd?.[myIdx] ?? 6;
+        const turnStart = state.oppPrizesAtMyTurnStart?.[myIdx] ?? 6;
+        if (turnStart >= lastEnd) return;
       }
       result.push({ iid: pk.iid, abilityIndex: abIdx, pokemonName: card.name, abilityName: ab.name });
     });

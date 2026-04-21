@@ -763,10 +763,23 @@
     }
   });
 
+  // 赤松（akamatsu-split）：選 2 張能量時必須是不同屬性；只選 1 張或 0 張永遠合法
+  const akamatsuSameTypeBlocked = $derived.by(() => {
+    if (!pendingSelection || pendingSelection.effectKey !== 'akamatsu-split') return false;
+    if (selectionPicked.size < 2) return false;
+    const iids = [...selectionPicked];
+    const types = iids.map(iid => {
+      const item = selectionItems.find(it => it.iid === iid);
+      const c = item ? getCard(item.cardId) : null;
+      return c?.pokemonType ?? null;
+    });
+    return new Set(types).size < types.length;
+  });
   const selectionValid = $derived(
     pendingSelection !== null &&
     selectionPicked.size >= pendingSelection.minCount &&
-    selectionPicked.size <= pendingSelection.maxCount
+    selectionPicked.size <= pendingSelection.maxCount &&
+    !akamatsuSameTypeBlocked
   );
 
   // ── 初始化 ──────────────────────────────────────────────────────────────────
@@ -1390,6 +1403,12 @@
 
     <!-- 對手場地（永遠在上方） -->
     <div class="field-row opponent-row">
+      {#if game}
+        <div class="turn-order-chip" class:first={game.firstPlayerIdx === oppIdx}
+          title={game.firstPlayerIdx === oppIdx ? '對手為先攻玩家' : '對手為後攻玩家'}>
+          {game.firstPlayerIdx === oppIdx ? '先攻' : '後攻'}
+        </div>
+      {/if}
       <div class="zone-pile">
         <div class="pile-slot deck-pile">
           <span class="pile-icon">🃏</span>
@@ -1566,6 +1585,12 @@
 
     <!-- 我方場地（永遠在下方） -->
     <div class="field-row my-row">
+      {#if game}
+        <div class="turn-order-chip" class:first={game.firstPlayerIdx === myIdx}
+          title={game.firstPlayerIdx === myIdx ? '我方為先攻玩家' : '我方為後攻玩家'}>
+          {game.firstPlayerIdx === myIdx ? '先攻' : '後攻'}
+        </div>
+      {/if}
       <div class="zone-prizes">
         <div class="zone-label-sm">獎勵 {myPlayer?.prizes.length??0}張</div>
         <div class="prize-grid">
@@ -1876,6 +1901,9 @@
         {/if}
 
         <div class="sel-footer">
+          {#if akamatsuSameTypeBlocked}
+            <div class="sel-hint-warn">⚠ 赤松選 2 張能量時，兩張屬性必須不同</div>
+          {/if}
           <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（{selectionPicked.size}張）</button>
           {#if pendingSelection.minCount===0}
             <button class="btn-act secondary" onclick={()=>{selectionPicked=new Set();confirmSelection();}}>不選（跳過）</button>
@@ -2486,6 +2514,33 @@
   }
   .zone-label-sm{ font-size:.62rem; color:#888; text-align:center; white-space:nowrap; }
   .opp-label{ color:#aa8888; }
+
+  /* 先攻/後攻 標記（場地行首常駐顯示） — v2.16 Bug #108 */
+  .turn-order-chip{
+    flex-shrink:0;
+    align-self:center;
+    font-size:.72rem; font-weight:700;
+    padding:.2rem .45rem;
+    border-radius:6px;
+    background:rgba(60,60,80,.45);
+    color:#99a;
+    border:1px solid #556;
+    letter-spacing:.1em;
+    writing-mode:vertical-rl; text-orientation:upright;
+    min-height:3rem;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .turn-order-chip.first{
+    background:linear-gradient(180deg, rgba(255,200,60,.25), rgba(255,140,40,.25));
+    color:#ffd35a;
+    border-color:#ffb732;
+    box-shadow:0 0 8px rgba(255,180,60,.25);
+  }
+  .sel-hint-warn{
+    font-size:.78rem; color:#ffcc66; padding:.25rem .5rem;
+    background:rgba(120,80,20,.25); border:1px solid #aa7722;
+    border-radius:4px; text-align:center; margin-bottom:.3rem;
+  }
 
   .zone-active{ flex-shrink:0; width:300px; display:flex; flex-direction:column; gap:0.2rem; }
   .my-active-zone{ position:relative; }

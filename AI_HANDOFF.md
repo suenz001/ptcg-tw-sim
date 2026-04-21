@@ -1,9 +1,78 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38bc (v2.15)  
+> 最後更新：2026-04-21 Session 38bd (v2.16)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38bd (v2.16) — 6 個 bug 修正（場地行標 + Stadium 一回合一張 + 幻影奇襲 log + 不公印章自 KO gate + 赤松雙屬性）
+
+### 背景
+
+Leon 在 v2.15 push 後立刻回報 6 個 bug，範圍從 UI 標示到機制正確性都有：
+
+1. **Bug #108 UI**：場地行沒有「先攻／後攻」標記，回合較長時容易忘記誰先行動。
+2. **Bug #109 規則**：一回合只能打出一張競技場卡（不論目前場上有無 Stadium），原本的實作沒有阻擋。
+3. **Bug #110 log**：多龍巴魯托ex 的「幻影奇襲」每次只寫「放 1 個」，沒有寫這是第幾個/共 6 個 + 沒註明目標是對手備戰。
+4. **Bug #111 guard**：好友寶芬 / 呼朋引伴 等 bench-search 需要「備戰還有空位就能用，只有備戰滿才擋」。經審計，目前所有相關 guard 都用 `bench.length >= 5`、`minCount: 0`，這條規則其實之前 task #90 已經修過，v2.16 補上稽核記錄以避免未來再改壞。
+5. **Bug #112 gate**：v2.15 剛修的不公印章 / 扭轉乾坤 gate 有破口 — 只看「opp.prizes < oppPrizesAtMyLastTurnEnd」分不出「對手回合擊倒我方」vs「自己回合自 KO」。以黑夜魔靈 咒詛炸彈為例，自 KO 發生在自己的回合，對手在『這個』回合取獎賞，gate 會誤觸發。
+6. **Bug #113 規則**：赤松效果的兩張基本能量必須**不同屬性**，目前允許同屬性。
+
+### Bug #108 修正：場地行加「先攻／後攻」常駐標記
+
+**檔案**：`src/routes/game/+page.svelte`
+
+在 `opponent-row` / `my-row` 的最左側插入 `.turn-order-chip`，根據 `game.firstPlayerIdx === <row 對應 idx>` 顯示「先攻」或「後攻」，先攻用金色漸層高亮，後攻灰色。採垂直書寫節省寬度。
+
+### Bug #109 修正：Stadium 一回合一張
+
+**型別**：`src/lib/game/types.ts` — 新增 `stadiumPlayedThisTurn?: [boolean, boolean]`（與 `stadiumUsedThisTurn` 分開：一個記「是否打過」、一個記「是否已用過效果」）。
+
+**engine**：
+- `createGame` 初始化 `[false, false]`。
+- `PLAY_TRAINER` Stadium 分支先檢查 `played[aIdx]`，是 true 則 no-op（不打出）；否則設 `newPlayed[aIdx] = true`。
+- `getPlayableTrainers` 過濾掉 `c.subtype === 'Stadium' && stadiumPlayedThisTurn[activePlayerIndex] === true`（防 AI 卡在選不能打的卡上當機）。
+- `END_TURN` 重置 `newStadiumPlayed[nextIdx] = false`（下一位即將開始回合的玩家）。
+
+### Bug #110 修正：幻影奇襲 log 更詳盡
+
+**檔案**：`src/lib/game/effects.ts` dragapult-snipe resolver
+
+**原**：`${label}：在 ${targetCard?.name} 身上放 1 個傷害指示物（剩 ${remaining - 1} 個待分配）`
+
+**新**：`${label}：在對手 ${targetCard?.name} 身上放置第 ${7 - remaining}/6 個傷害指示物（剩 ${remaining - 1} 個待分配）`
+
+KO 變體同步加上「第 X/6 個 → 被擊倒」敘述。
+
+### Bug #111：bench-search guard 稽核
+
+已檢查 `effects.ts` 中所有 bench-search cards（好友寶芬、赫普的包包、各款呼朋引伴、各款組成陣形、benchBasicFromDeckPost helper、向尾喵|呼朋引伴、呆火駝|呼朋引伴、謎擬Q|呼朋引伴）——全部使用 `bench.length >= 5` 判定**真正滿**，並全部 `minCount: 0` 可選擇 0 張。行為已符合 Leon 的規格。
+
+Grep `bench.length >= [1-4]`：無結果。task #90 已解決此類問題，v2.16 僅稽核確認。
+
+### Bug #112 修正：不公印章 / 扭轉乾坤 gate 區分「對手回合 KO」vs「自 KO」
+
+**型別**：`src/lib/game/types.ts` — 新增 `oppPrizesAtMyTurnStart?: [number, number]`（回合**開始**瞬間的快照；與原本的 `oppPrizesAtMyLastTurnEnd` 是回合**結束**快照）。
+
+**engine END_TURN**：`aIdx` 結束回合時，除了原本寫 `oppPrizesAtMyLastTurnEnd[aIdx]`，也同時寫 `oppPrizesAtMyTurnStart[nextIdx] = players[aIdx].prizes.length`（下一位開始回合時，他的視角中「對手的獎賞剩餘」）。
+
+**gate 判定**（改用 TurnStart vs LastTurnEnd）：
+- `turnStart < lastEnd` → 對手在他們剛結束的回合取過獎賞 → 成立（我方寶可夢被對手擊倒）。
+- `turnStart == lastEnd` → 對手這回合沒取過獎賞。就算目前 `opp.prizes` 變少了（我方這回合自 KO），也不成立。
+- 不公印章 (`effects.ts`) 與 吉雉雞ex 扭轉乾坤 (`engine.ts` getUsableAbilities) 都統一改用此邏輯。
+
+### Bug #113 修正：赤松兩張能量必須不同屬性
+
+**UI**：`src/routes/game/+page.svelte`
+- 新增 `akamatsuSameTypeBlocked $derived`：當 `pendingSelection.effectKey === 'akamatsu-split'` 且已選 2 張、兩張 `pokemonType` 相同時為 true。
+- `selectionValid` 增加 `!akamatsuSameTypeBlocked` 條件。
+- 選擇器 footer 顯示警告 `⚠ 赤松選 2 張能量時，兩張屬性必須不同`。
+
+**resolver（防禦性）**：`src/lib/game/effects/cards/white_lily_akamatsu.ts`
+- `akamatsu-split` 收到 2 張同屬性時丟棄第 2 張、僅以第 1 張繼續（並 log「第 2 張略過」）。
+- 牌庫移除改用 `picked` iids（而非原始 iids）避免被縮減後的第 2 張能量遺失。
 
 ---
 
