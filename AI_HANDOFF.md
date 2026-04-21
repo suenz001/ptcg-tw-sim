@@ -4038,3 +4038,26 @@ Leon 實測 v1.97 的 `CYNTHIA_GARCHOMP_DECK` 發現四個 bug，本波一次修
 - `npm run build` 通過（無 TypeScript / svelte-check 警告）。
 - sim 30 局 / 30 正常結束、0 crash、P1/P2 = 18/12、平均 15.3 回合。
 - 版本 1.97 → 1.98
+
+---
+
+## Session 38aw (v1.99) — 頂部資訊列加雙方手牌張數
+
+Leon 要求上方儀錶板（header）在 🎮 主階段 tag 左邊新增一欄「玩家 X 的手牌（X 張）」。
+手牌張數是公開資訊（對戰雙方都看得到對方有幾張）——不等同於看內容，所以直接顯示在 header。
+
+### 變更
+
+- `src/routes/game/+page.svelte` 在 `.phase-tag` 前插入 `<span class="hand-counts">`，
+  用 `{#each game.players as pl, pi}` 一次渲染雙方。當前行動玩家 chip 套 `.hc-active` 高亮。
+- 新增 CSS：
+  - `.hand-counts` — flex 容器
+  - `.hand-count-chip` — 藍灰底色（與其他 chip 區別）
+  - `.hand-count-chip.hc-active` — 綠底高亮、陰影
+
+格式：`✋ {name} 手牌 {N} 張`（目前行動者 = 綠色；另一側 = 藍灰）。
+
+### 驗證
+
+- `npm run build` 通過
+- 版本 1.98 → 1.99

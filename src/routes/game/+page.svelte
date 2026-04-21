@@ -1325,6 +1325,13 @@
       回合 {game.turn}　<strong>{activePlayer?.name}</strong> 行動中
       {#if game.isFirstTurn && aIdx === game.firstPlayerIdx}<span class="hint">（先手第1回合不能攻擊 / 進化 / 用支援者）</span>{/if}
     </span>
+    <span class="hand-counts" title="雙方手牌張數（手牌內容仍為隱私，僅顯示張數）">
+      {#each game.players as pl, pi}
+        <span class="chip hand-count-chip" class:hc-active={pi === aIdx}>
+          ✋ {pl.name ?? `P${pi+1}`} 手牌 {pl.hand.length} 張
+        </span>
+      {/each}
+    </span>
     <span class="phase-tag">
       {#if game.turnPhase === 'draw'}📥 抽牌
       {:else if game.turnPhase === 'main'}🎮 主階段
@@ -2376,6 +2383,9 @@
   .turn-info{ flex:1; font-size:0.88rem; }
   .hint{ color:#888; font-size:0.75rem; }
   .phase-tag{ font-size:0.78rem; color:#aaffaa; background:#0e2e0e; padding:0.18rem 0.5rem; border-radius:4px; }
+  .hand-counts{ display:flex; gap:0.28rem; align-items:center; flex-wrap:wrap; }
+  .hand-count-chip{ background:#1a2a3a; color:#9cf; border-color:#2a4a6a; font-size:0.7rem; padding:0.14rem 0.45rem; }
+  .hand-count-chip.hc-active{ background:#2a3e1a; color:#cfa; border-color:#4a6a2a; box-shadow:0 0 4px rgba(150,255,100,.25); }
   .status-chips{ display:flex; gap:0.3rem; flex-wrap:wrap; }
   .chip{ font-size:0.68rem; padding:0.1rem 0.35rem; border-radius:10px; background:#1a3a1a; color:#8f8; border:1px solid #2a5a2a; }
   .role-chip{ background:#1a1a3a; color:#aaf; border-color:#2a2a5a; }
