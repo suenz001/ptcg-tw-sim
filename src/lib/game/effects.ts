@@ -7340,3 +7340,337 @@ regPost('狐大盜|貪慾狩獵', (state, aIdx, _pool) => {
   const s = addLog(state, `貪慾狩獵：抽到手牌滿 6（補 ${drawn} 張）`, aIdx);
   return drawCards(s, aIdx, drawn);
 });
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 31 (v1.86) — 抽到 N + 牌庫搜 Item/Tool/Supporter + 同名群聚 + 手牌附能
+//                 + 對手 ex snipe + 先丟對手道具 + 多目標 + 單目標 snipe
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Helper: drawToHandPost — 從牌庫抽卡直到手牌滿 N ────────────────────────
+function drawToHandPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const p = state.players[aIdx];
+    const need = Math.max(0, n - p.hand.length);
+    if (need === 0) return addLog(state, `${label}：手牌已滿 ${n} 張`, aIdx);
+    const drawn = Math.min(need, p.deck.length);
+    if (drawn === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
+    const s = addLog(state, `${label}：抽到手牌滿 ${n}（補 ${drawn} 張）`, aIdx);
+    return drawCards(s, aIdx, drawn);
+  };
+}
+
+// ── Helper: handAttachEnergyPost — 從手牌選基本能量附於自己場上寶可夢 ────
+// typeFilter=null 不限屬性；max=99 表示不限上限
+function handAttachEnergyPost(
+  max: number,
+  typeFilter: EnergyType | null,
+  label: string,
+): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    const cand = p.hand.filter(c => {
+      const card = pool.get(c.cardId);
+      if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+      if (typeFilter && card.pokemonType !== typeFilter) return false;
+      return true;
+    });
+    if (cand.length === 0) return addLog(state, `${label}：手牌沒有符合的基本能量`, aIdx);
+    const realMax = Math.min(max, cand.length);
+    const filterStr = typeFilter ? `Energy:${typeFilter}` : 'BasicEnergy';
+    const s = addLog(state, `${label}：從手牌選最多 ${realMax} 張基本能量`, aIdx);
+    return withPending(s, {
+      type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: filterStr,
+      minCount: 1, maxCount: realMax,
+      effectKey: 'hand-energy-attach-pick-target',
+      params: { label, validIids: cand.map(c => c.iid) },
+    });
+  };
+}
+regR('hand-energy-attach-pick-target', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '手牌附能';
+  const p = st.players[idx];
+  const allSelf = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
+  if (allSelf.length === 0) return st;
+  if (allSelf.length === 1) {
+    const target = allSelf[0];
+    const energies = p.hand.filter(c => iids.includes(c.iid));
+    const tname = pool.get(target.cardId)?.name ?? '?';
+    let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到 ${tname}`, idx);
+    return updatePlayer(s, idx, pl => {
+      const restHand = pl.hand.filter(c => !iids.includes(c.iid));
+      if (pl.active && pl.active.iid === target.iid) {
+        return { ...pl, hand: restHand, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } };
+      }
+      return {
+        ...pl, hand: restHand,
+        bench: pl.bench.map(c => c.iid === target.iid
+          ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+          : c),
+      };
+    });
+  }
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'hand-energy-attach-commit',
+    params: { energyIids: iids, label },
+  });
+});
+regR('hand-energy-attach-commit', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '手牌附能';
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const targetIid = iids[0];
+  const p = st.players[idx];
+  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const energies = p.hand.filter(c => energyIids.includes(c.iid));
+  if (energies.length === 0) return st;
+  const tname = pool.get(target.cardId)?.name ?? '?';
+  let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到 ${tname}`, idx);
+  return updatePlayer(s, idx, pl => {
+    const restHand = pl.hand.filter(c => !energyIids.includes(c.iid));
+    if (pl.active && pl.active.iid === targetIid) {
+      return { ...pl, hand: restHand, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } };
+    }
+    return {
+      ...pl, hand: restHand,
+      bench: pl.bench.map(c => c.iid === targetIid
+        ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+        : c),
+    };
+  });
+});
+
+// ── Helper: deckSameNameBenchPost — 從牌庫選最多 N 張「同名卡」放備戰 ─────
+function deckSameNameBenchPost(max: number, cardName: string, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
+    if (p.bench.length >= 5) return addLog(state, `${label}：備戰區已滿`, aIdx);
+    const cand = p.deck.filter(c => pool.get(c.cardId)?.name === cardName);
+    if (cand.length === 0) return addLog(state, `${label}：牌庫無「${cardName}」`, aIdx);
+    const slots = Math.min(max, 5 - p.bench.length, cand.length);
+    const s = addLog(state, `${label}：從牌庫選最多 ${slots} 張「${cardName}」放備戰`, aIdx);
+    return withPending(s, {
+      type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Basic', minCount: 0, maxCount: slots,
+      effectKey: 'bench-basic-from-deck',
+      params: { validIids: cand.map(c => c.iid), targetName: cardName },
+    });
+  };
+}
+
+// ── Helper: discardSameNameBenchPost — 從棄牌區選最多 N 張「同名卡」放備戰 ─
+function discardSameNameBenchPost(max: number, cardName: string, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (p.bench.length >= 5) return addLog(state, `${label}：備戰區已滿`, aIdx);
+    const cand = p.discard.filter(c => pool.get(c.cardId)?.name === cardName);
+    if (cand.length === 0) return addLog(state, `${label}：棄牌區無「${cardName}」`, aIdx);
+    const slots = Math.min(max, 5 - p.bench.length, cand.length);
+    const s = addLog(state, `${label}：從棄牌區選最多 ${slots} 張「${cardName}」放備戰`, aIdx);
+    return withPending(s, {
+      type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Pokemon', minCount: 0, maxCount: slots,
+      effectKey: 'bench-from-discard-samename',
+      params: { validIids: cand.map(c => c.iid), targetName: cardName, label },
+    });
+  };
+}
+regR('bench-from-discard-samename', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '同名回備戰';
+  const targetName = (params?.targetName as string) ?? '';
+  const p = st.players[idx];
+  const picked = p.discard.filter(c => iids.includes(c.iid));
+  if (picked.length === 0) return addLog(st, `${label}：未選擇`, idx);
+  const slots = 5 - p.bench.length;
+  const take = picked.slice(0, slots).map(c => ({ ...c, damage: 0, energyAttached: [], justPlaced: true } as CardInstance));
+  const names = take.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = addLog(st, `${label}：從棄牌區放置 ${take.length} 張「${targetName}」到備戰（${names}）`, idx);
+  return updatePlayer(s, idx, pl => ({
+    ...pl,
+    bench: [...pl.bench, ...take],
+    discard: pl.discard.filter(c => !take.some(t => t.iid === c.iid)),
+  }));
+});
+
+// ── Helper: snipeAllOppExPost — 對手所有 ex/V 各 N 傷害（不計弱抵與附加效果）
+function snipeAllOppExPost(dmg: number, filterType: 'ex' | 'ex-or-v', label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const d = state.players[dIdx];
+    const all = [d.active, ...d.bench].filter((c): c is CardInstance => !!c);
+    const targets = all.filter(c => {
+      const card = pool.get(c.cardId);
+      if (!card) return false;
+      if (isExCard(card)) return true;
+      if (filterType === 'ex-or-v' && (card.name.endsWith('V') || card.name.endsWith('VMAX'))) return true;
+      return false;
+    });
+    if (targets.length === 0) return addLog(state, `${label}：對手場上無 ex 寶可夢`, aIdx);
+    let s = addLog(state, `${label}：對手 ${targets.length} 隻 ex 寶可夢各 ${dmg} 傷害`, aIdx);
+    let totalPrize = 0;
+    let oppActiveKOed = false;
+    for (const t of targets) {
+      const defender = s.players[dIdx];
+      const isActive = defender.active?.iid === t.iid;
+      const cur = isActive ? defender.active : defender.bench.find(c => c.iid === t.iid);
+      if (!cur) continue;
+      const card = pool.get(cur.cardId);
+      const hp = card?.hp ?? 0;
+      const newDmg = cur.damage + dmg;
+      if (hp > 0 && newDmg >= hp) {
+        const ko: CardInstance[] = [
+          { ...cur, damage: newDmg },
+          ...cur.energyAttached,
+          ...(cur.toolAttached ? [cur.toolAttached] : []),
+          ...(cur.evolvedFromStack ?? []),
+        ];
+        const p = isExCard(card) ? 2 : 1;
+        totalPrize += p;
+        const players = [...s.players] as [PlayerState, PlayerState];
+        const nd = { ...defender, discard: [...defender.discard, ...ko] };
+        if (isActive) { nd.active = null; oppActiveKOed = true; }
+        else nd.bench = defender.bench.filter(c => c.iid !== t.iid);
+        players[dIdx] = nd;
+        s = addLog({ ...s, players }, `${label}：${card?.name ?? '?'} 被擊倒！+${p} 張獎勵牌。`, null);
+      } else {
+        const players = [...s.players] as [PlayerState, PlayerState];
+        const nd = { ...defender };
+        if (isActive) nd.active = { ...cur, damage: newDmg };
+        else nd.bench = defender.bench.map(c => c.iid === t.iid ? { ...c, damage: newDmg } : c);
+        players[dIdx] = nd;
+        s = addLog({ ...s, players }, `${label}：對 ${card?.name ?? '?'} 造成 ${dmg} 傷害`, aIdx);
+      }
+    }
+    const defender = s.players[dIdx];
+    if (oppActiveKOed && !defender.active && defender.bench.length === 0) {
+      return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+    }
+    if (totalPrize > 0) s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + totalPrize };
+    return s;
+  };
+}
+
+// ── Helper: defToolDiscardPre — 攻擊前丟對手戰鬥寶可夢道具卡 ──────────────
+function defToolDiscardPre(base: number, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const def = state.players[dIdx].active;
+    if (!def || !def.toolAttached) {
+      return { state: addLog(state, `${label}：對手戰鬥寶可夢無道具`, aIdx), damage: base };
+    }
+    const toolName = pool.get(def.toolAttached.cardId)?.name ?? '?';
+    const discarded = def.toolAttached;
+    const defName = pool.get(def.cardId)?.name ?? '?';
+    let s = addLog(state, `${label}：丟棄 ${defName} 的道具「${toolName}」`, aIdx);
+    s = updatePlayer(s, dIdx, pl => {
+      if (!pl.active) return pl;
+      const { toolAttached: _removed, ...rest } = pl.active;
+      return { ...pl, active: rest as CardInstance, discard: [...pl.discard, discarded] };
+    });
+    return { state: s, damage: base };
+  };
+}
+
+// ── Helper: damagedMultiSnipePost — 對手身上有傷害指示物的 N 隻各 D 傷害 ──
+function damagedMultiSnipePost(targetCount: number, dmg: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const d = state.players[dIdx];
+    const all = [d.active, ...d.bench].filter((c): c is CardInstance => !!c);
+    const damaged = all.filter(c => c.damage > 0);
+    if (damaged.length === 0) return addLog(state, `${label}：對手場上無帶傷寶可夢`, aIdx);
+    const realMax = Math.min(targetCount, damaged.length);
+    const s = addLog(state, `${label}：選擇對手 ${realMax} 隻「帶傷」寶可夢各 ${dmg} 傷害`, aIdx);
+    return withPending(s, {
+      type: 'opp-poke-choose',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: realMax,
+      effectKey: 'snipe-multi',
+      params: { damage: dmg, label, validIids: damaged.map(c => c.iid) },
+    });
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 31 招式登記
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── (A) 抽到 N 張 ──────────────────────────────────────────────────────────
+regPre('狙射樹梟|羽毛庫存', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('狙射樹梟|羽毛庫存', drawToHandPost(7, '羽毛庫存'));
+
+regPre('霓虹魚|報恩', (state, _aIdx, _pool) => ({ state, damage: 20 }));
+regPost('霓虹魚|報恩', drawToHandPost(6, '報恩'));
+
+regPre('幸福蛋ex|報恩', (state, _aIdx, _pool) => ({ state, damage: 180 }));
+regPost('幸福蛋ex|報恩', drawToHandPost(6, '報恩'));
+
+// ── (B) 牌庫搜 Item / Supporter（需搭配 UI 新 filter） ────────────────────
+regPre('海地鼠|挖到寶', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('海地鼠|挖到寶', deckSearchToHandPost(1, 'Item', '挖到寶'));
+
+regPre('海刺龍|援軍', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('海刺龍|援軍', deckSearchToHandPost(3, 'Pokemon', '援軍'));
+
+regPre('超音蝠|引路', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('超音蝠|引路', deckSearchToHandPost(1, 'Supporter', '引路'));
+
+// ── (C) 棄牌區能量附加 ──────────────────────────────────────────────────
+regPre('莫魯貝可|撿拾附上', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('莫魯貝可|撿拾附上', discardEnergyAttachPost(2, null, '撿拾附上'));
+
+// ── (D) 單目標 + 多目標 snipe ──────────────────────────────────────────
+regPre('月亮伊布|出奇一擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('月亮伊布|出奇一擊', multiSnipePost(1, 50, '出奇一擊'));
+
+regPre('鐵頭殼ex|雙刃劍', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('鐵頭殼ex|雙刃劍', multiSnipePost(2, 50, '雙刃劍'));
+
+// 鐵脖頸|自動導向頭擊 — 對手 3 隻有傷害指示物各 50
+regPre('鐵脖頸|自動導向頭擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('鐵脖頸|自動導向頭擊', damagedMultiSnipePost(3, 50, '自動導向頭擊'));
+
+// ── (E) 同名群聚（牌庫搜同名） ────────────────────────────────────────
+regPre('強顎雞母蟲|群聚', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('強顎雞母蟲|群聚', deckSameNameBenchPost(2, '強顎雞母蟲', '群聚'));
+
+regPre('一家鼠|家族行軍', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('一家鼠|家族行軍', deckSameNameBenchPost(2, '一家鼠', '家族行軍'));
+
+regPre('蟲電寶|並排', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('蟲電寶|並排', deckSameNameBenchPost(3, '蟲電寶', '並排'));
+
+regPre('呱呱泡蛙|群聚', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('呱呱泡蛙|群聚', deckSameNameBenchPost(2, '呱呱泡蛙', '群聚'));
+
+// ── (F) 同名群聚（棄牌區搜同名） ──────────────────────────────────────
+regPre('夜巡靈|前往渡魂', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('夜巡靈|前往渡魂', discardSameNameBenchPost(3, '夜巡靈', '前往渡魂'));
+
+// ── (G) 手牌附能（基本能量從手牌） ────────────────────────────────────
+regPre('艾姆利多|滿載心田', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('艾姆利多|滿載心田', handAttachEnergyPost(2, 'Psychic', '滿載心田'));
+
+regPre('固拉多|充溢之力', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('固拉多|充溢之力', handAttachEnergyPost(1, 'Fighting', '充溢之力'));
+
+regPre('吉利蛋|幸運貼附', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('吉利蛋|幸運貼附', handAttachEnergyPost(1, null, '幸運貼附'));
+
+regPre('阿羅拉 椰蛋樹ex|熱帶狂燒', (state, _aIdx, _pool) => ({ state, damage: 150 }));
+regPost('阿羅拉 椰蛋樹ex|熱帶狂燒', handAttachEnergyPost(99, null, '熱帶狂燒'));
+
+// ── (H) 對手所有 ex/V snipe ─────────────────────────────────────────
+regPre('水伊布ex|重磅驟雨', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('水伊布ex|重磅驟雨', snipeAllOppExPost(60, 'ex', '重磅驟雨'));
+
+regPre('沙漠蜻蜓ex|橄欖石音波', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('沙漠蜻蜓ex|橄欖石音波', snipeAllOppExPost(100, 'ex-or-v', '橄欖石音波'));
+
+// ── (I) 攻擊前丟對手道具 ────────────────────────────────────────────
+regPre('金魚王|啄落', defToolDiscardPre(50, '啄落'));
+regPre('破破舵輪|破壞船錨', defToolDiscardPre(80, '破壞船錨'));

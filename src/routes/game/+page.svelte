@@ -653,6 +653,10 @@
           if (f === 'BasicEnergy') return card.supertype === 'Energy' && card.subtype === 'Basic';
           if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
           if (f === 'MegaEx')     return card.supertype === 'Pokemon' && card.subtype === 'ex' && card.name.startsWith('超級');
+          if (f === 'Item')       return card.supertype === 'Trainer' && card.subtype === 'Item';
+          if (f === 'Supporter')  return card.supertype === 'Trainer' && card.subtype === 'Supporter';
+          if (f === 'Tool')       return card.supertype === 'Pokemon' && card.subtype === 'Other';
+          if (f === 'Trainer')    return card.supertype === 'Trainer';
           if (f.startsWith('Pokemon:')) {
             // 指定屬性的寶可夢，例 'Pokemon:Lightning'
             const t = f.slice(8);
@@ -681,8 +685,22 @@
       }
       case 'hand-discard': {
         const f2 = pendingSelection.filter ?? '';
-        if (f2 === 'Energy') return src.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
-        return src.hand;
+        const validIidsHD = pendingSelection.params?.validIids as string[] | undefined;
+        let pool0 = src.hand;
+        if (validIidsHD) pool0 = pool0.filter(c => validIidsHD.includes(c.iid));
+        if (f2 === 'Energy') return pool0.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+        if (f2 === 'BasicEnergy') return pool0.filter(c => {
+          const card = pool.get(c.cardId);
+          return card?.supertype === 'Energy' && card.subtype === 'Basic';
+        });
+        if (f2.startsWith('Energy:')) {
+          const t = f2.slice(7);
+          return pool0.filter(c => {
+            const card = pool.get(c.cardId);
+            return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === t;
+          });
+        }
+        return pool0;
       }
       case 'hand-choose':  {
         const validIids2 = pendingSelection.params?.validIids as string[] | undefined;

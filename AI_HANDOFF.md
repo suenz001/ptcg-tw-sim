@@ -3477,3 +3477,84 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 27/23（P1/P2）、平均回合 14.4
 - 版本 1.84 → 1.85
+
+---
+
+## Session 38aj (v1.86) — H 標第 31 波 抽到 N + 同名群聚 + 手牌附能 + 對手 ex snipe + 先丟對手道具 + snipe
+
+### 新增 helper
+- `drawToHandPost(n, label)` — 攻擊後從牌庫抽到手牌滿 N 張
+- `handAttachEnergyPost(max, typeFilter, label)` — 從手牌選基本能量附於自己場上寶可夢（含 type 篩選）
+- `deckSameNameBenchPost(max, cardName, label)` — 從牌庫選最多 N 張「同名卡」放備戰（使用 bench-basic-from-deck resolver + validIids）
+- `discardSameNameBenchPost(max, cardName, label)` — 從棄牌區選最多 N 張「同名卡」放備戰（新 resolver bench-from-discard-samename）
+- `snipeAllOppExPost(dmg, filterType, label)` — 對手所有 ex（或 ex/V）各 N 傷害（不計弱抵與附加效果），含 KO 檢查
+- `defToolDiscardPre(base, label)` — 攻擊前丟對手戰鬥寶可夢的 `toolAttached`
+- `damagedMultiSnipePost(targetCount, dmg, label)` — 對手「身上有傷害指示物」的 N 隻各 D 傷害（使用 snipe-multi resolver + validIids）
+
+### UI 擴充
+- `+page.svelte` deck-search filter 新增 `Item` / `Supporter` / `Tool` / `Trainer`（原本只支援 Basic/Pokemon/Energy...）
+- `+page.svelte` hand-discard filter 新增 `BasicEnergy` / `Energy:<type>` 並支援 `params.validIids`
+
+### 本波實裝（25 張）
+**(A) 抽到 N 張 (3)**
+- 狙射樹梟｜羽毛庫存 — 0 dmg + 抽到 7
+- 霓虹魚｜報恩 — 20 dmg + 抽到 6
+- 幸福蛋ex｜報恩 — 180 dmg + 抽到 6
+
+**(B) 牌庫搜 Item/Pokemon/Supporter (3)**
+- 海地鼠｜挖到寶 — 0 dmg + 牌庫選 1 張物品卡加手牌
+- 海刺龍｜援軍 — 0 dmg + 牌庫選最多 3 張寶可夢加手牌
+- 超音蝠｜引路 — 0 dmg + 牌庫選 1 張支援者加手牌
+
+**(C) 棄牌區能量附加 (1)**
+- 莫魯貝可｜撿拾附上 — 棄牌區選最多 2 張基本能量附自己寶可夢
+
+**(D) 單/多目標 snipe (3)**
+- 月亮伊布｜出奇一擊 — 對手 1 隻寶可夢 50 傷害
+- 鐵頭殼ex｜雙刃劍 — 對手 2 隻寶可夢各 50 傷害
+- 鐵脖頸｜自動導向頭擊 — 對手 3 隻帶傷寶可夢各 50 傷害
+
+**(E) 同名群聚（牌庫）(4)**
+- 強顎雞母蟲｜群聚 — 最多 2
+- 一家鼠｜家族行軍 — 最多 2
+- 蟲電寶｜並排 — 最多 3
+- 呱呱泡蛙｜群聚 — 最多 2
+
+**(F) 同名群聚（棄牌區）(1)**
+- 夜巡靈｜前往渡魂 — 最多 3
+
+**(G) 手牌附能 (4)**
+- 艾姆利多｜滿載心田 — 最多 2 張基本超能量
+- 固拉多｜充溢之力 — 1 張基本鬥能量
+- 吉利蛋｜幸運貼附 — 1 張基本能量（不限屬性）
+- 阿羅拉 椰蛋樹ex｜熱帶狂燒 — 150 dmg + 任意張基本能量
+
+**(H) 對手所有 ex/V snipe (2)**
+- 水伊布ex｜重磅驟雨 — 對手所有 ex 各 60（含 KO）
+- 沙漠蜻蜓ex｜橄欖石音波 — 對手所有 ex/V 各 100（含 KO）
+
+**(I) 攻擊前丟對手道具 (2)**
+- 金魚王｜啄落 — 50 dmg（造成傷害前先丟）
+- 破破舵輪｜破壞船錨 — 80 dmg（造成傷害前先丟）
+
+### 暫緩（需新機制）
+- `不計算弱點抵抗力` 旗標 — 10+ 張（恰雷姆ex｜瑜伽踢、厄鬼椪 礎石面具ex｜打爆、晶光芽｜岩石投擲、土地雲｜粗暴橫掃、輕身鱈｜音波刀鋒、米立龍ex｜突襲水泵、堅盾劍怪｜堅硬猛擊、頓甲｜打垮 等）
+- 「下回合對手寶可夢受傷 +N」cross-turn flag — 超音波幼蟲｜刺耳聲
+- `電擊魔獸｜雷電在地` player-level「所有寶可夢無法使用招式」旗標
+- `大王銅象｜鼻之金勾臂` UI 增傷選擇
+- 「若對手場上有 <名稱/subtype>」+N 傷害（需 selfOppHasNamePre / oppHasSubtypePre）— 爬地翅｜鐵碎、雷吉奇卡斯｜寶石破壞
+- 「若從 <X> 進化」+N（evolvedFromName check）— 賽富豪｜富裕強襲、普隆隆姆ex｜暴衝閃光、焰后蜥｜突然炙烤
+- 進化時觸發特性 — 安瓢蟲｜繁星花紋
+- 本回合使用 <支援者/招式> +N — 鐵武者｜莊嚴之劍、列陣兵｜一併攻擊
+- 其他：智揮猩｜掌握弱點（反轉弱點）、蚊香泳士｜跳躍衝天（回牌庫增傷）、賽富豪｜賽富迴旋（回牌庫無傷）、普隆隆姆ex｜高速破壞（自己丟棄）、甜甜螢｜慢芬香（對手備戰回牌庫）、狡猾天狗｜驅趕龍捲風（對手備戰回牌庫）、風鈴鈴｜回家鐘聲、白蓬蓬｜微風之禮、迷唇姐｜邀請之吻（拉基礎+能量轉附）、迷唇娃｜樂呵呵之吻、七夕青鳥｜哼唱充能（牌庫選任意能量附 — 可用既有能量 attach resolver 實作）
+- 霜奶仙｜彩色甜點（按附屬能量同屬性 Pokemon）
+- 普攻前置效果：彷徨夜靈｜咒詛炸彈（自 KO + 指示物）、黑夜魔靈｜咒詛炸彈、三合一磁怪｜過度放電
+- 呆呆王｜耀閃挑戰（從牌庫頂選招式 copy）
+- 皮可西｜揮指、魔牆人偶｜相仿秀（copy 對手招式/支援者 — 非常複雜）
+- 異常攻擊：鐵磐岩|調整角擊（手牌數量相等才能用）
+- 塗標客｜惡作劇作畫（從對手棄牌選能量附對手）
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 22/28（P1/P2）、平均回合 13.8
+- 版本 1.85 → 1.86
