@@ -315,8 +315,8 @@ export function createGame(
 
   let st = addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
   st = addLog(st, `🪙 擲硬幣：${state.players[firstPlayerIdx].name} 先手`, null);
-  if (m1 > 0) st = addLog(st, `${spec1.name} Mulligan ${m1} 次 → ${spec2.name} 可選擇多抽 ${m1} 張`, 0);
-  if (m2 > 0) st = addLog(st, `${spec2.name} Mulligan ${m2} 次 → ${spec1.name} 可選擇多抽 ${m2} 張`, 1);
+  if (m1 > 0) st = addLog(st, `${spec1.name} 起手無基礎寶可夢，重抽懲罰 ${m1} 次 → ${spec2.name} 可選擇多抽 ${m1} 張`, 0);
+  if (m2 > 0) st = addLog(st, `${spec2.name} 起手無基礎寶可夢，重抽懲罰 ${m2} 次 → ${spec1.name} 可選擇多抽 ${m2} 張`, 1);
   return st;
 }
 
@@ -378,8 +378,8 @@ function handleSetup(
     const newPending = [...state.pendingMulliganDraw] as [number, number];
     newPending[pIdx] = 0;
     const msg = action.accept
-      ? `${player.name} 選擇補抽 ${cur} 張（對手 mulligan 補償）`
-      : `${player.name} 放棄 ${cur} 張 mulligan 補抽`;
+      ? `${player.name} 選擇補抽 ${cur} 張（對手重抽懲罰補償）`
+      : `${player.name} 放棄 ${cur} 張重抽懲罰補抽`;
     let next: GameState = {
       ...state, players, pendingMulliganDraw: newPending,
     };
@@ -1254,8 +1254,17 @@ function handlePlaying(
       // Wave 39：蝶結萌虻｜多餘花粉 — 跨回合獎賞加成
       const deferredBonus = (updatedActive.deferredPrizeBonusThisTurn && updatedActive.deferredPrizeBonusThisTurn > 0)
         ? updatedActive.deferredPrizeBonusThisTurn : 0;
+      // Wave 43：白蕾雅 — 本回合，攻擊方使用「太晶」寶可夢招式 KO 對手戰鬥位 → +1 獎勵牌。
+      // 條件：aIdx 玩家本回合有 teraKoBonusPrizeThisTurn 旗標，且攻擊方 active 為太晶寶可夢（attacks 含 name==='太晶'）。
+      let whiteLilyBonus = 0;
+      if (newState.players[aIdx].teraKoBonusPrizeThisTurn) {
+        const atkActive = newState.players[aIdx].active;
+        const atkCard = atkActive ? pool.get(atkActive.cardId) : null;
+        const isTera = !!atkCard?.attacks?.some(a => a.name === '太晶');
+        if (isTera) whiteLilyBonus = 1;
+      }
       // 獎賞牌下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
-      const prizes = Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus);
+      const prizes = Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus);
       defPlayers[dIdx] = defenderState;
       newState = {
         ...newState, players: defPlayers,
@@ -1263,6 +1272,9 @@ function handlePlaying(
       };
       if (deferredBonus > 0) {
         newState = addLog(newState, `${defenderCard.name} 因「多餘花粉」遺留效果，+${deferredBonus} 張獎勵牌`, null);
+      }
+      if (whiteLilyBonus > 0) {
+        newState = addLog(newState, `「白蕾雅」效果發動：太晶寶可夢的招式 KO 對手戰鬥位 +${whiteLilyBonus} 張獎勵牌`, aIdx);
       }
       if (prizeAdjust < 0) {
         newState = addLog(newState, `「影藏」啟動：${attacker.name} 取得的獎勵牌減少 1 張`, null);
@@ -1627,7 +1639,8 @@ function handlePlaying(
       currentPlayer.cantPlayItemThisTurn ||
       currentPlayer.cantPlaySupporterThisTurn ||
       currentPlayer.cantEvolveThisTurn ||
-      currentPlayer.damageBoostFightingThisTurn
+      currentPlayer.damageBoostFightingThisTurn ||
+      currentPlayer.teraKoBonusPrizeThisTurn
     ) {
       const cp = { ...currentPlayer };
       delete cp.noAttacksThisTurn;
@@ -1635,6 +1648,7 @@ function handlePlaying(
       delete cp.cantPlaySupporterThisTurn;
       delete cp.cantEvolveThisTurn;
       delete cp.damageBoostFightingThisTurn;
+      delete cp.teraKoBonusPrizeThisTurn;
       players[aIdx] = cp;
     } else {
       players[aIdx] = currentPlayer;
@@ -1851,6 +1865,9 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       if (c.subtype === 'Supporter' && player.supporterPlayedThisTurn) return false;
       // 先攻玩家第一回合禁用支援者
       if (c.subtype === 'Supporter' && state.isFirstTurn && state.activePlayerIndex === state.firstPlayerIdx) return false;
+      // Wave 43 fix：玩家級物品/支援者鎖也要在可用清單裡濾掉（否則 AI 會挑到被鎖的卡、engine 靜默 no-op → AI 當機）
+      if (c.subtype === 'Item' && player.cantPlayItemThisTurn) return false;
+      if (c.subtype === 'Supporter' && player.cantPlaySupporterThisTurn) return false;
       // 義務性檢查：缺合法目標的卡不可打出
       if (!canPlayTrainer(c.name, state, state.activePlayerIndex, pool)) return false;
       return true;

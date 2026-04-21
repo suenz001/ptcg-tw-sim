@@ -1931,7 +1931,7 @@
     </div>
   {/if}
 
-  <!-- Mulligan 補抽決定：對手 mulligan 時玩家選擇抽/不抽補償 -->
+  <!-- 重抽懲罰補抽決定：對手起手無基礎寶可夢重抽時，玩家選擇抽/不抽補償 -->
   {#if game && game.phase==='setup' && (game.pendingMulliganDraw?.[myIdx] ?? 0) > 0 && (
       (mode==='online' && myPlayerIndex===myIdx) ||
       (mode!=='online' && aiPlayerIndex === null) ||
@@ -1942,7 +1942,7 @@
     <div class="selection-overlay">
       <div class="selection-modal mulligan-modal">
         <div class="sel-header">
-          <h3>🔄 對手 Mulligan</h3>
+          <h3>🔄 對手的重抽懲罰</h3>
           <p class="sel-hint">
             <strong>{oppName}</strong> 起手沒有基礎寶可夢，重新洗牌 {nDraw} 次。
             <br/>作為補償，你可多抽 <strong>{nDraw}</strong> 張牌。
@@ -1968,12 +1968,12 @@
       </div>
     </div>
   {:else if game && game.phase==='setup' && (game.pendingMulliganDraw?.[oppIdx] ?? 0) > 0 && mode==='online' && myPlayerIndex===myIdx}
-    <!-- 對手還沒決定 mulligan 補抽 — 僅在線上模式需顯示等待 -->
+    <!-- 對手還沒決定重抽補抽 — 僅在線上模式需顯示等待 -->
     <div class="selection-overlay">
       <div class="selection-modal mulligan-modal">
         <div class="sel-header">
-          <h3>⏳ 等待對手決定 Mulligan 補抽</h3>
-          <p class="sel-hint">你 Mulligan 了 {game.mulliganCounts[myIdx]} 次，對手正在決定是否多抽 {game.pendingMulliganDraw[oppIdx]} 張…</p>
+          <h3>⏳ 等待對手決定補抽</h3>
+          <p class="sel-hint">你因起手無基礎寶可夢重抽了 {game.mulliganCounts[myIdx]} 次，對手正在決定是否多抽 {game.pendingMulliganDraw[oppIdx]} 張…</p>
         </div>
       </div>
     </div>
@@ -2242,9 +2242,9 @@
           </div>
           {#if game.mulliganCounts && (game.mulliganCounts[0] > 0 || game.mulliganCounts[1] > 0)}
             <div class="coin-sub" in:fade={{ delay: 500, duration: 400 }}>
-              🔄 Mulligan：
-              {#if game.mulliganCounts[0] > 0}{game.players[0].name} 重抽 {game.mulliganCounts[0]}，{game.players[1].name} +{game.mulliganCounts[0]} 張。{/if}
-              {#if game.mulliganCounts[1] > 0}{game.players[1].name} 重抽 {game.mulliganCounts[1]}，{game.players[0].name} +{game.mulliganCounts[1]} 張。{/if}
+              🔄 重抽懲罰：
+              {#if game.mulliganCounts[0] > 0}{game.players[0].name} 重抽 {game.mulliganCounts[0]} 次，{game.players[1].name} 多抽 {game.mulliganCounts[0]} 張。{/if}
+              {#if game.mulliganCounts[1] > 0}{game.players[1].name} 重抽 {game.mulliganCounts[1]} 次，{game.players[0].name} 多抽 {game.mulliganCounts[1]} 張。{/if}
             </div>
           {/if}
         {/if}
@@ -2400,7 +2400,7 @@
   .res-lb{ font-weight:600; }
   .res-st{ font-size:.62rem; opacity:.85; padding-left:.15rem; border-left:1px solid rgba(255,255,255,.15); margin-left:.15rem; }
 
-  .playmat{ flex:1; display:grid; grid-template-rows:minmax(230px,1fr) auto minmax(230px,1fr); overflow:hidden; position:relative;
+  .playmat{ flex:1; display:grid; grid-template-rows:minmax(230px,1fr) auto minmax(275px,1.1fr); overflow:visible; position:relative;
     background:
       radial-gradient(circle at 50% 50%, rgba(80,130,90,.12), transparent 72%),
       repeating-linear-gradient(45deg, rgba(0,0,0,.05) 0 2px, transparent 2px 8px),
@@ -2414,9 +2414,10 @@
     box-shadow: 0 0 30px rgba(100,255,130,.35), inset 0 0 30px rgba(100,255,130,.15);
   }
 
-  .field-row{ display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.7rem; overflow:hidden; min-height:0; }
+  .field-row{ display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.7rem; overflow:visible; min-height:0; }
   .opponent-row{ border-bottom:2px solid #2a5a2a; background:rgba(0,0,0,.2); align-items:flex-end; padding-bottom:0.6rem; }
-  .my-row{ border-top:2px solid #2a5a2a; align-items:flex-end; padding-bottom:0.6rem; }
+  /* v2.02：my-row 加大下緣 padding，讓備戰寶可夢的特性/進化按鈕不再被綠色場地底緣切到 */
+  .my-row{ border-top:2px solid #2a5a2a; align-items:flex-end; padding-bottom:1.4rem; }
 
   .zone-prizes{ flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:0.2rem; }
   .prize-grid{ display:grid; grid-template-columns:1fr 1fr; gap:3px; }
@@ -2543,7 +2544,8 @@
   .hp-bar-wrap.sm{ height:5px; }
   .hp-bar{ height:100%; border-radius:3px; transition: width .55s cubic-bezier(.3,.8,.3,1), background .3s ease-out; }
 
-  .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:stretch; min-height:160px; max-height:200px; overflow:hidden; }
+  /* v2.02：action-bar 往下拉高，避免中央場地卡下方被切 */
+  .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:stretch; min-height:180px; max-height:240px; overflow:visible; }
   .alerts-col, .action-btns, .stadium-display{ align-self:center; }
   .stadium-display{ display:flex; flex-direction:column; align-items:center; gap:.25rem; padding:.35rem .5rem; border:1px solid #3a5a8a; background:rgba(26,42,74,.6); border-radius:6px; cursor:pointer; transition:transform .2s ease, box-shadow .2s ease; }
   .stadium-display:hover{ transform:scale(1.05); box-shadow:0 0 12px rgba(136,170,255,.4); }

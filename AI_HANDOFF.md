@@ -1,9 +1,53 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38ay (v2.01)  
+> 最後更新：2026-04-21 Session 38az (v2.02)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38az (v2.02) — 魔靈多龍 bug 修復 + AI 當機 + UI 調整
+
+### 1. effects.ts 正確性修復（4 張）
+
+| 卡 | 舊錯誤實裝 | 正確實裝 |
+|:---|:---|:---|
+| 願增猿｜腎上腺腦力 | 要求卸 1 張惡能量才能觸發 | 僅檢查 `c.damage >= 30`，直接移 30 → 對手任一寶可夢 +30（含 KO） |
+| 赤松 | 兩張能量都進手牌 | 第 1 張進手牌、第 2 張用 `heal-target` 選一隻寶可夢附加（二階段 resolver `akamatsu-split` → `akamatsu-attach`） |
+| 多龍巴魯托ex｜幻影奇襲 | 固定把 60 點打在 1 個選定的備戰 | 6 個 10 點指示物分別放置，每次透過 `opp-bench-choose` 點選，支援同一對象重複（ABC×20、A40/B20、A30/C30 等任意組合）；`dragapult-snipe` resolver 鏈到剩 0 或對手無備戰為止，途中 KO 自動結算 |
+| 白蕾雅 | +30 傷害本回合 | **對手獎勵牌恰為 2 張才可打出**（`regG`）；本回合自己的「太晶」寶可夢招式 KO 對手戰鬥位 → +1 獎勵牌 |
+
+### 2. 白蕾雅 引擎支撐
+
+- `PlayerState.teraKoBonusPrizeThisTurn?: boolean`（types.ts）
+- engine.ts KO 路徑：`prizes += whiteLilyBonus`，條件為 aIdx 玩家有此旗標 + `pool.get(active.cardId).attacks[].name === '太晶'`
+- `END_TURN`（aIdx）清除旗標
+- 「太晶寶可夢」的偵測方式：卡牌資料中這些寶可夢第一個招式名為「太晶」（效果：只要這隻寶可夢在備戰區，不會受到招式的傷害）
+
+### 3. 含羞苞 癢癢花粉 AI 當機修復
+
+- 症狀：AI 對手被 `cantPlayItemNextTurn` 標記後，`cantPlayItemThisTurn` 在下回合開始 promote；AI 主循環 `getPlayableTrainers` 回傳內容未過濾被鎖物品，AI 重複 `PLAY_TRAINER` → engine 靜默 `return state` → 死迴圈
+- 修復：`engine.ts::getPlayableTrainers` 加入 `player.cantPlayItemThisTurn`/`cantPlaySupporterThisTurn` 過濾
+
+### 4. Mulligan 相關 UI / log 翻成繁中
+
+- setup UI 彈窗標題：`🔄 對手 Mulligan` → `🔄 對手的重抽懲罰`
+- 等待對手：`⏳ 等待對手決定 Mulligan 補抽` → `⏳ 等待對手決定補抽`
+- 先手擲硬幣視窗的 `🔄 Mulligan：` → `🔄 重抽懲罰：`
+- engine.ts 產生的 log `Mulligan N 次` → `起手無基礎寶可夢，重抽懲罰 N 次`
+- `對手 mulligan 補償` → `對手重抽懲罰補償`；`放棄 N 張 mulligan 補抽` → `放棄 N 張重抽懲罰補抽`
+
+### 5. CSS 調整：場地與備戰區往下延伸
+
+- `.playmat` grid-row：我方場地 min-height 從 230px → 275px；overflow hidden → visible（給按鈕垂墜空間）
+- `.field-row` overflow hidden → visible
+- `.my-row` padding-bottom 0.6rem → 1.4rem（解決備戰寶可夢特性按鈕溢出綠色框框）
+- `.action-bar` min/max-height 160/200 → 180/240，overflow hidden → visible（解決中央場地卡下方被切）
+
+### 6. 驗證
+
+- `npm run build`：client 5.92s / server 11.72s（通過）
 
 ---
 

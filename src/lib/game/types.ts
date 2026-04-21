@@ -201,6 +201,13 @@ export interface PlayerState {
    * 在 END_TURN 時清除（於 aIdx 方）。
    */
   damageBoostFightingThisTurn?: number;
+  /**
+   * Wave 43：白蕾雅（Supporter）— 本回合，若對手戰鬥寶可夢因自己的「太晶」寶可夢使用的招式而 KO，
+   * 則多取 1 張獎勵牌。打出 supporter 時設為 true，KO 路徑於攻擊方獲獎前檢查此旗標 +
+   * 攻擊方 active 是否為太晶（card.attacks[].name === '太晶'）。
+   * 在 END_TURN 時清除（於 aIdx 方）。
+   */
+  teraKoBonusPrizeThisTurn?: boolean;
 }
 
 // ── 待選擇狀態（訓練家/招式效果需要玩家做決定時）──────────────────────────
