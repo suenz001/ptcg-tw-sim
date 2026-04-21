@@ -152,3 +152,48 @@ export function returnHandToDeck(state: GameState, idx: 0 | 1): GameState {
 export function withPending(state: GameState, sel: PendingSelection): GameState {
   return { ...state, pendingSelection: sel };
 }
+
+/**
+ * 當寶可夢離開戰鬥場（撤退 / 被切換 / 被換出）時要清掉的旗標與狀態。
+ *
+ * PTCG 官方規則：寶可夢離開戰鬥場、或離開場地時，所有施於它身上的
+ *   - 特殊狀態（灼傷、中毒、睡眠、混亂、麻痺）
+ *   - 招式效果（如「下回合不能使用 X 招式」、「下回合不能撤退」、跨回合受傷 +N、
+ *     跨回合傷害 +N 等）
+ * 通通解除；但以下必須保留：
+ *   - damage（傷害指示物）
+ *   - energyAttached（附加的能量）
+ *   - toolAttached（附加的道具）
+ *   - evolvedFromStack / evolvedFromIid（進化鏈）
+ *   - justPlaced / evolvedThisTurn / abilityUsedThisTurn（玩家行為計數，於 END_TURN 清）
+ *
+ * 用於 engine.ts 的 RETREAT、以及 effects.ts 所有 active ↔ bench swap 的點
+ * （寶可夢交替 / 急進開關 / 頂尖捕捉器 / 衝浪手 / 支配鎖鏈 / 老匠系強制互換 等）。
+ * 設計為純函式：回傳新 CardInstance，不 mutate 輸入。
+ *
+ * v2.08：原本撤退 / 換場都只搬 active/bench 不清狀態旗標，導致：
+ *   - 灼傷/中毒/睡眠/混亂/麻痺 跟著到備戰區
+ *   - 烈火爆進等「此寶可夢離開戰鬥場前無法使用該招式」的 cantAttackPending/ThisTurn
+ *     即使撤退換回來也還在
+ * 統一用這個 helper 處理。
+ */
+export function clearActiveEffects(poke: CardInstance): CardInstance {
+  return {
+    ...poke,
+    status: undefined,
+    cantAttackThisTurn: undefined,
+    cantAttackPending: undefined,
+    cantRetreatNextTurn: undefined,
+    cantRetreatPendingSelf: undefined,
+    damageReduceNextHit: undefined,
+    damageBonusThisTurn: undefined,
+    damageBonusPending: undefined,
+    takeExtraDamageThisTurn: undefined,
+    takeExtraDamageNextTurn: undefined,
+    cantAttachEnergyThisTurn: undefined,
+    cantAttachEnergyNextTurn: undefined,
+    deferredPrizeBonusThisTurn: undefined,
+    deferredPrizeBonusNextTurn: undefined,
+    movedToActiveThisTurn: undefined,
+  };
+}

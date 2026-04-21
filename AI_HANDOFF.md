@@ -1,9 +1,82 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b4 (v2.07)  
+> 最後更新：2026-04-21 Session 38b5 (v2.08)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b5 (v2.08) — 多龍巴魯托ex 進化資料 + 備戰區離場清狀態
+
+### Leon 回報
+
+> 多龍奇無法進化成多龍巴魯托EX。
+>
+> 備戰區的寶可夢會自動解除異常狀態，例如混亂、灼傷、睡眠、中毒，甚至有些招式使出後，
+> 下回合不能使用，例如破空焰ex的烈火爆進「若使用了這個招式，則這隻寶可夢離開戰鬥場前
+> 無法使用烈火爆進」，都可以在離開戰鬥場後回復。玩家最常用的方法就是：戰鬥寶可夢先
+> 撤退，再用「寶可夢交替」換回戰鬥場，就可以繼續使用招式了，異常狀態也會解除。
+
+### Bug 1：多龍巴魯托ex 的 evolvesFrom 指向死人
+
+`static/cards/{M2a,MC,SV6,SV8a}.json` 共 6 筆多龍巴魯托ex 條目的
+`evolvesFrom: "多龍巴魯托"` — 但卡池裡根本沒有「多龍巴魯托」這張卡（沒 ex 的 2 階
+在日版 / 台版 PTCG 本來就不存在），導致進化鏈斷掉。
+
+對照敘述，多龍巴魯托ex 的前階應該是 1 階「多龍奇」。
+
+**修正**：用 Node 腳本對 4 個 JSON 檔批次修改 `"多龍巴魯托"` → `"多龍奇"`。
+分布：M2a=1、MC=1、SV6=2、SV8a=2。只改字串，不碰任何其他欄位。
+
+> Note：另外檢查到類似的死 evolvesFrom 還有烈咬陸鯊ex、超級妙蛙花ex、超級沙奈朵ex、
+> 超級快龍ex 等約 30 筆，但這些的前階卡本來就沒 scrape 到，屬於 scraper 的範疇，
+> 跟目前的預設牌組無關，這次不處理。
+
+### Bug 2：寶可夢離開戰鬥場應清掉異常狀態 + 招式鎖
+
+PTCG 規則：寶可夢離開戰鬥場（撤退 / 寶可夢交替 / 急進開關 / 頂尖捕捉器 / 衝浪手 /
+支配鎖鏈 / 老匠系強制互換 …）時，身上所有的：
+- 特殊狀態（灼傷、中毒、睡眠、混亂、麻痺）
+- 跨回合招式效果（cantAttackThisTurn、cantAttackPending、cantRetreatNextTurn、
+  damageBonusThisTurn/Pending、takeExtraDamageThisTurn/NextTurn、
+  cantAttachEnergyThisTurn/NextTurn、deferredPrizeBonusThisTurn/NextTurn、
+  damageReduceNextHit、movedToActiveThisTurn…）
+
+全部要解除；但下列保留：
+- damage（傷害指示物）
+- energyAttached（能量）
+- toolAttached（道具）
+- evolvedFromStack / evolvedFromIid（進化鏈）
+- justPlaced / evolvedThisTurn / abilityUsedThisTurn（回合級玩家行為計數）
+
+原本 engine.ts 的 RETREAT、effects.ts 所有 swap resolver（大約 8 個點）只搬
+active ↔ bench 不清旗標，導致：
+- 灼傷 / 中毒 / 睡眠 / 混亂 / 麻痺 跟著到備戰區
+- 烈火爆進等「此寶可夢離開戰鬥場前無法使用該招式」的 cantAttackPending 永遠卡住，
+  就算撤退再換回來也不能用
+
+**修正**：在 `effects/_shared.ts` 新增 pure function `clearActiveEffects(poke)`，
+集中列出所有要清掉的旗標，統一套用在：
+- `engine.ts` RETREAT 的 `retreatingPoke` 建構點
+- `effects.ts` 八個 swap resolver：do-switch、gust-opp、top-catcher-opp、
+  支配鎖鏈、surfer-switch、opp-swap-dmg、force-opp-swap、
+  force-opp-swap-then-damage
+
+`effects.ts` 從 `_shared` 匯入 `clearActiveEffects` 並 re-export，維持 engine.ts
+原有的 import path。
+
+> 設計考量：用 helper 而非把邏輯 inline，未來新增 swap 機制只要記得 wrap helper
+> 就好，不會漏清。所有回合級玩家行為計數（abilityUsedThisTurn 等）仍由
+> END_TURN 統一清，不在離場時碰。
+
+### 驗證
+
+`npm run build` 通過。
+
+- 多龍奇 → 多龍巴魯托ex 可正常進化。
+- 烈火爆進打完後撤退 → 寶可夢交替換回戰鬥場 → `cantAttackPending` 被清掉，可再打。
+- 中毒 / 灼傷 / 睡眠 / 混亂 / 麻痺寶可夢撤退到備戰區 → status 解除。
 
 ---
 

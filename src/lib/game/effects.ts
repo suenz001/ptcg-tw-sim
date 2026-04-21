@@ -30,10 +30,11 @@ import {
   shuffle, updatePlayer, addLog,
   drawCards, discardHand, returnHandToDeck,
   withPending,
+  clearActiveEffects,
 } from './effects/_shared';
 
 // 為 engine.ts / +page.svelte 的 import 路徑維持相容：re-export
-export { TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS, canPlayTrainer };
+export { TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS, canPlayTrainer, clearActiveEffects };
 export type { ResolveFn, TrainerGuardFn };
 
 // 已搬遷到 effects/cards/ 下的卡 — side-effect import 觸發 reg() 登錄。
@@ -191,7 +192,8 @@ regR('do-switch', (st, idx, iids, _params, pool) => {
     if (bIdx < 0) return p;
     const newActive = { ...p.bench[bIdx], justPlaced: false };
     const newBench = [...p.bench];
-    newBench[bIdx] = { ...p.active };
+    // v2.08：離開戰鬥場清狀態旗標
+    newBench[bIdx] = clearActiveEffects(p.active);
     return { ...p, active: newActive, bench: newBench };
   });
 });
@@ -437,7 +439,8 @@ regR('gust-opp', (st, idx, iids, _params, pool) => {
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
     const newBench = [...p.bench];
-    newBench[bIdx] = p.active;
+    // v2.08：離開戰鬥場清狀態旗標
+    newBench[bIdx] = clearActiveEffects(p.active);
     return { ...p, active: { ...p.bench[bIdx], justPlaced: false }, bench: newBench };
   });
 });
@@ -665,7 +668,8 @@ regR('top-catcher-opp', (st, idx, iids, _params, pool) => {
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
     const newBench = [...p.bench];
-    newBench[bIdx] = p.active;
+    // v2.08：離開戰鬥場清狀態旗標
+    newBench[bIdx] = clearActiveEffects(p.active);
     return { ...p, active: { ...p.bench[bIdx], justPlaced: false }, bench: newBench };
   });
   // 若自己也有備戰，選擇自己要換入的寶可夢
@@ -1650,7 +1654,8 @@ regR('dominance-chain', (st, idx, iids, params, pool) => {
     if (bIdx < 0) return p;
     const newActive = { ...p.bench[bIdx], status: 'poisoned' as const, justPlaced: false };
     const newBench = [...p.bench];
-    newBench[bIdx] = { ...p.active };
+    // v2.08：離開戰鬥場清狀態旗標（新上場 active 的中毒已在 newActive 設定）
+    newBench[bIdx] = clearActiveEffects(p.active);
     return { ...p, active: newActive, bench: newBench };
   });
 });
@@ -1796,7 +1801,8 @@ regR('surfer-switch', (st, idx, iids, _params, pool) => {
     if (bIdx < 0) return p;
     const newActive = { ...p.bench[bIdx], justPlaced: false };
     const newBench = [...p.bench];
-    newBench[bIdx] = { ...p.active };
+    // v2.08：離開戰鬥場清狀態旗標
+    newBench[bIdx] = clearActiveEffects(p.active);
     const drawN = Math.max(0, 5 - p.hand.length);
     const taken = p.deck.slice(0, drawN);
     return {
@@ -5094,9 +5100,9 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
   const oldActiveName = pool.get(oldActive.cardId)?.name ?? '?';
   const newActiveName = newActiveCard?.name ?? '?';
 
-  // swap first
+  // swap first — v2.08：離開戰鬥場清狀態旗標
   const newBench = [...defender.bench];
-  newBench[benchIdx] = oldActive;
+  newBench[benchIdx] = clearActiveEffects(oldActive);
   let newDefender = { ...defender, active: { ...newActiveOrig, justPlaced: false }, bench: newBench };
   let s: GameState = { ...st };
   let players = [...s.players] as [PlayerState, PlayerState];
@@ -8441,7 +8447,8 @@ regR('force-opp-swap', (st, actorIdx, iids, params, pool) => {
   const oldActiveName = pool.get(p.active.cardId)?.name ?? '?';
   const newActiveName = pool.get(p.bench[bIdx].cardId)?.name ?? '?';
   const newBench = [...p.bench];
-  newBench[bIdx] = p.active;
+  // v2.08：離開戰鬥場清狀態旗標
+  newBench[bIdx] = clearActiveEffects(p.active);
   const newActive: CardInstance = { ...p.bench[bIdx], movedToActiveThisTurn: true };
   const players = [...st.players] as [PlayerState, PlayerState];
   players[actorIdx] = { ...p, active: newActive, bench: newBench };
@@ -8461,7 +8468,8 @@ regR('force-opp-swap-then-damage', (st, actorIdx, iids, params, pool) => {
   const swappingIn = p.bench[bIdx];
   const newActiveName = pool.get(swappingIn.cardId)?.name ?? '?';
   const newBench = [...p.bench];
-  newBench[bIdx] = p.active;
+  // v2.08：離開戰鬥場清狀態旗標
+  newBench[bIdx] = clearActiveEffects(p.active);
 
   // 計算傷害（不計弱點 / 抵抗力 / 附加效果）
   const newDmg = swappingIn.damage + dmg;

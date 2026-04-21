@@ -20,6 +20,7 @@ import {
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS,
+  clearActiveEffects,
 } from './effects';
 
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
@@ -665,7 +666,9 @@ function handlePlaying(
     // 自動丟棄能量（從後方取）
     const discardE = attacker.active.energyAttached.slice(-retreatCost);
     const keepE = attacker.active.energyAttached.slice(0, attacker.active.energyAttached.length - retreatCost);
-    const retreatingPoke = { ...attacker.active, energyAttached: keepE };
+    // v2.08：撤退回備戰時清除狀態旗標（灼傷/中毒/睡眠/混亂/麻痺 以及
+    // 「離開戰鬥場前不能再用」類招式鎖），符合 PTCG 官方規則。
+    const retreatingPoke = clearActiveEffects({ ...attacker.active, energyAttached: keepE });
     // Session 34：設 movedToActiveThisTurn，供「在這個回合若從備戰區放到戰鬥場」條件用
     const newActive = { ...attacker.bench[bIdx], movedToActiveThisTurn: true };
     const newBench = attacker.bench.filter((_, i) => i !== bIdx);
