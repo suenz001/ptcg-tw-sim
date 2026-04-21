@@ -7674,3 +7674,321 @@ regPost('沙漠蜻蜓ex|橄欖石音波', snipeAllOppExPost(100, 'ex-or-v', '橄
 // ── (I) 攻擊前丟對手道具 ────────────────────────────────────────────
 regPre('金魚王|啄落', defToolDiscardPre(50, '啄落'));
 regPre('破破舵輪|破壞船錨', defToolDiscardPre(80, '破壞船錨'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Session 38ak v1.87 H 標第 32 波 — 棄牌到手牌/備戰 + 手牌附能+heal + 自牌庫找基本能量附自 + 手牌 tool×damage + 先丟附加能量 + 條件進化
+//
+// 新 Helper:
+//   • discardSearchToHandPost(max, filter, label) — 從棄牌區選最多 N 張 X 加手牌（重用 discard-to-hand resolver）
+//   • deckEnergyAttachSelfPost(typeFilter, label) — 從牌庫選 1 張基本能量附於自己，重洗
+//   • selfActiveHandAttachHealPost(heal, label) — 從手牌選 1 張能量附於自己戰鬥寶可夢 + 回 heal HP
+//   • benchHandAttachFullHealPost(typeFilter, label) — 從手牌選 1 張基本能量附於備戰 + 將該寶可夢全回復
+//
+// 新 regPre：
+//   • 灰塵山|丟棄 — 宣告時用 hand-discard 選任意數量的「寶可夢道具」卡，×50 傷害
+//   • 切割洛托姆|割除衝刺 — 造傷害前丟對手戰鬥寶可夢的 toolAttached + 所有特殊能量
+//   • 賽富豪|富裕強襲 — 若本回合從「索財靈」進化，則 +90
+// ══════════════════════════════════════════════════════════════════════════════
+
+// (A) 棄牌區選卡到手牌：Pokemon×2
+function discardSearchToHandPost(max: number, filter: string, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    const cand = p.discard.filter(c => {
+      const card = pool.get(c.cardId);
+      if (!card) return false;
+      if (filter === 'Pokemon') return card.supertype === 'Pokemon' && card.subtype !== 'Other';
+      if (filter === 'BasicEnergy') return card.supertype === 'Energy' && card.subtype === 'Basic';
+      if (filter.startsWith('Energy:')) {
+        const t = filter.slice(7);
+        return card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === t;
+      }
+      return true;
+    });
+    if (cand.length === 0) return addLog(state, `${label}：棄牌區沒有可選的卡`, aIdx);
+    const realMax = Math.min(max, cand.length);
+    const s = addLog(state, `${label}：從棄牌區選最多 ${realMax} 張加手牌`, aIdx);
+    return withPending(s, {
+      type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter, minCount: 1, maxCount: realMax,
+      effectKey: 'discard-to-hand',
+    });
+  };
+}
+
+// 鐵斑葉|補全之網 — 從棄牌區選最多 2 張寶可夢卡加手牌
+regPre('鐵斑葉|補全之網', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('鐵斑葉|補全之網', discardSearchToHandPost(2, 'Pokemon', '補全之網'));
+
+// 破破舵輪|救援船錨 — 從棄牌區選最多 2 張寶可夢卡加手牌
+regPre('破破舵輪|救援船錨', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('破破舵輪|救援船錨', discardSearchToHandPost(2, 'Pokemon', '救援船錨'));
+
+// 斯魔茶|上茶 — 從棄牌區選 1 張基本草能量加手牌
+regPre('斯魔茶|上茶', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('斯魔茶|上茶', discardSearchToHandPost(1, 'Energy:Grass', '上茶'));
+
+// (B) 刺龍王ex|王之號召 — 從棄牌區選最多 3 張【水】寶可夢卡放備戰（重用 bench-from-discard-samename resolver，validIids=水寶可夢）
+regPre('刺龍王ex|王之號召', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('刺龍王ex|王之號召', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  if (p.bench.length >= 5) return addLog(state, '王之號召：備戰區已滿', aIdx);
+  const cand = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.subtype !== 'Other' && card.pokemonType === 'Water';
+  });
+  if (cand.length === 0) return addLog(state, '王之號召：棄牌區無【水】寶可夢', aIdx);
+  const slots = Math.min(3, 5 - p.bench.length, cand.length);
+  const s = addLog(state, `王之號召：從棄牌區選最多 ${slots} 張【水】寶可夢放備戰`, aIdx);
+  return withPending(s, {
+    type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Pokemon', minCount: 0, maxCount: slots,
+    effectKey: 'bench-from-discard-samename',
+    params: { validIids: cand.map(c => c.iid), targetName: '【水】寶可夢', label: '王之號召' },
+  });
+});
+
+// (C) 甲賀忍蛙ex|忍之利刃 170 — 可選從牌庫任意 1 張加手牌（不限屬性）
+regPre('甲賀忍蛙ex|忍之利刃', (state, _aIdx, _pool) => ({ state, damage: 170 }));
+regPost('甲賀忍蛙ex|忍之利刃', deckSearchToHandPost(1, 'Any', '忍之利刃'));
+
+// 美錄坦|搬運破爛 — 從牌庫選 1 張寶可夢道具卡加手牌並重洗
+regPre('美錄坦|搬運破爛', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('美錄坦|搬運破爛', deckSearchToHandPost(1, 'Tool', '搬運破爛'));
+
+// (D) 穿著熊|力量充能 30 — 從牌庫選 1 張基本能量附於自己，並重洗
+function deckEnergyAttachSelfPost(typeFilter: EnergyType | null, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (!p.active) return state;
+    const cand = p.deck.filter(c => {
+      const card = pool.get(c.cardId);
+      if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+      if (typeFilter && card.pokemonType !== typeFilter) return false;
+      return true;
+    });
+    if (cand.length === 0) return addLog(state, `${label}：牌庫無符合的基本能量`, aIdx);
+    const filterStr = typeFilter ? `Energy:${typeFilter}` : 'BasicEnergy';
+    const s = addLog(state, `${label}：從牌庫選 1 張基本能量附於自己`, aIdx);
+    return withPending(s, {
+      type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: filterStr, minCount: 1, maxCount: 1,
+      effectKey: 'deck-energy-attach-self',
+      params: { validIids: cand.map(c => c.iid), label },
+    });
+  };
+}
+regR('deck-energy-attach-self', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '自牌庫附能';
+  const p = st.players[idx];
+  if (!p.active) return st;
+  const picked = p.deck.filter(c => iids.includes(c.iid));
+  if (picked.length === 0) return addLog(st, `${label}：未選擇`, idx);
+  const tname = pool.get(p.active.cardId)?.name ?? '?';
+  const ename = pool.get(picked[0].cardId)?.name ?? '?';
+  let s = addLog(st, `${label}：將 ${ename} 附加到 ${tname}（重洗牌庫）`, idx);
+  return updatePlayer(s, idx, pl => {
+    if (!pl.active) return pl;
+    const newDeck = shuffle(pl.deck.filter(c => !iids.includes(c.iid)));
+    return {
+      ...pl,
+      deck: newDeck,
+      active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...picked] },
+    };
+  });
+});
+regPre('穿著熊|力量充能', (state, _aIdx, _pool) => ({ state, damage: 30 }));
+regPost('穿著熊|力量充能', deckEnergyAttachSelfPost(null, '力量充能'));
+
+// (E) 卡比獸|吃飽先 — 從手牌選 1 張能量附於自己 + 回 60 HP
+function selfActiveHandAttachHealPost(heal: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (!p.active) return state;
+    const cand = p.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+    if (cand.length === 0) {
+      // 沒能量 → 只回血
+      const tname = pool.get(p.active.cardId)?.name ?? '?';
+      const newDmg = Math.max(0, p.active.damage - heal);
+      const healed = p.active.damage - newDmg;
+      if (healed === 0) return addLog(state, `${label}：手牌無能量且 ${tname} 無傷害`, aIdx);
+      const s = addLog(state, `${label}：手牌無能量，${tname} 回 ${healed} HP`, aIdx);
+      return updatePlayer(s, aIdx, pl => ({ ...pl, active: pl.active ? { ...pl.active, damage: newDmg } : pl.active }));
+    }
+    const s = addLog(state, `${label}：從手牌選 1 張能量附於自己 + 回 ${heal} HP`, aIdx);
+    return withPending(s, {
+      type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Energy', minCount: 1, maxCount: 1,
+      effectKey: 'self-active-hand-attach-heal',
+      params: { heal, label, validIids: cand.map(c => c.iid) },
+    });
+  };
+}
+regR('self-active-hand-attach-heal', (st, idx, iids, params, pool) => {
+  const heal = (params?.heal as number) ?? 0;
+  const label = (params?.label as string) ?? '手牌附能+回血';
+  const p = st.players[idx];
+  if (!p.active) return st;
+  const picked = p.hand.filter(c => iids.includes(c.iid));
+  if (picked.length === 0) return st;
+  const tname = pool.get(p.active.cardId)?.name ?? '?';
+  const ename = pool.get(picked[0].cardId)?.name ?? '?';
+  const newDmg = Math.max(0, p.active.damage - heal);
+  const healed = p.active.damage - newDmg;
+  let s = addLog(st, `${label}：${ename} 附於 ${tname}，並回 ${healed} HP`, idx);
+  return updatePlayer(s, idx, pl => {
+    if (!pl.active) return pl;
+    return {
+      ...pl,
+      hand: pl.hand.filter(c => !iids.includes(c.iid)),
+      active: {
+        ...pl.active,
+        damage: newDmg,
+        energyAttached: [...pl.active.energyAttached, ...picked],
+      },
+    };
+  });
+});
+regPre('卡比獸|吃飽先', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('卡比獸|吃飽先', selfActiveHandAttachHealPost(60, '吃飽先'));
+
+// (F) 葉伊布|嫩葉之恩 — 從手牌選 1 張基本草能量附於備戰 + 全回復
+function benchHandAttachFullHealPost(typeFilter: EnergyType | null, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (p.bench.length === 0) return addLog(state, `${label}：無備戰寶可夢`, aIdx);
+    const cand = p.hand.filter(c => {
+      const card = pool.get(c.cardId);
+      if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+      if (typeFilter && card.pokemonType !== typeFilter) return false;
+      return true;
+    });
+    if (cand.length === 0) return addLog(state, `${label}：手牌無符合的基本能量`, aIdx);
+    const filterStr = typeFilter ? `Energy:${typeFilter}` : 'BasicEnergy';
+    const s = addLog(state, `${label}：從手牌選 1 張基本能量附於備戰並全回復`, aIdx);
+    return withPending(s, {
+      type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: filterStr, minCount: 1, maxCount: 1,
+      effectKey: 'bench-hand-attach-fullheal-pick-energy',
+      params: { label, validIids: cand.map(c => c.iid) },
+    });
+  };
+}
+regR('bench-hand-attach-fullheal-pick-energy', (st, idx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '附能+全回復';
+  const p = st.players[idx];
+  if (p.bench.length === 0) return st;
+  if (p.bench.length === 1) {
+    // 只有 1 隻備戰，自動選定
+    return applyBenchAttachFullHeal(st, idx, iids, p.bench[0].iid, label);
+  }
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'bench-hand-attach-fullheal-commit',
+    params: { energyIids: iids, label, validIids: p.bench.map(c => c.iid) },
+  });
+});
+regR('bench-hand-attach-fullheal-commit', (st, idx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '附能+全回復';
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  return applyBenchAttachFullHeal(st, idx, energyIids, iids[0], label);
+});
+function applyBenchAttachFullHeal(st: GameState, idx: 0 | 1, energyIids: string[], targetIid: string, label: string): GameState {
+  const p = st.players[idx];
+  const target = p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const energies = p.hand.filter(c => energyIids.includes(c.iid));
+  if (energies.length === 0) return st;
+  // 只取 pool 以保留名字 — 由呼叫者傳入 pool 會較好，這裡從 cardId 推名即可
+  const newDamage = 0;
+  const healed = target.damage;
+  let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到備戰，並全回復（回 ${healed} HP）`, idx);
+  return updatePlayer(s, idx, pl => ({
+    ...pl,
+    hand: pl.hand.filter(c => !energyIids.includes(c.iid)),
+    bench: pl.bench.map(c => c.iid === targetIid
+      ? { ...c, damage: newDamage, energyAttached: [...c.energyAttached, ...energies] }
+      : c),
+  }));
+}
+regPre('葉伊布|嫩葉之恩', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('葉伊布|嫩葉之恩', benchHandAttachFullHealPost('Grass', '嫩葉之恩'));
+
+// (G) 灰塵山|丟棄 — 手牌丟任意數量「寶可夢道具」×50 傷害
+// 簡化：現行 engine 不支援 pre 階段請 UI 選卡；
+// pre 自動把手牌所有「寶可夢道具」卡丟掉並按張數×50 計算 base damage。
+// （未來可改為 ATTACK_PRE_DISCARD_CHOICE 擴充 scope='hand-tool' 做選擇性丟）
+regPre('灰塵山|丟棄', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const toolIdxs: number[] = [];
+  p.hand.forEach((c, i) => {
+    const card = pool.get(c.cardId);
+    if (card?.supertype === 'Pokemon' && card.subtype === 'Other') toolIdxs.push(i);
+  });
+  if (toolIdxs.length === 0) return { state: addLog(state, '丟棄：手牌無寶可夢道具', aIdx), damage: 0 };
+  const damage = toolIdxs.length * 50;
+  const discarded = toolIdxs.map(i => p.hand[i]);
+  const discardNames = discarded.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = addLog(state, `丟棄：丟 ${discarded.length} 張道具（${discardNames}），造成 ${damage} 傷害`, aIdx);
+  s = updatePlayer(s, aIdx, pl => ({
+    ...pl,
+    hand: pl.hand.filter((_, i) => !toolIdxs.includes(i)),
+    discard: [...pl.discard, ...discarded],
+  }));
+  return { state: s, damage };
+});
+
+// (H) 切割洛托姆|割除衝刺 30 — 造成傷害前丟對手戰鬥寶可夢 toolAttached + 所有特殊能量
+regPre('切割洛托姆|割除衝刺', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  if (!def) return { state, damage: 30 };
+  const dname = pool.get(def.cardId)?.name ?? '?';
+  let s = state;
+  const newDiscards: CardInstance[] = [];
+  // 丟 tool
+  let newActive = { ...def };
+  if (def.toolAttached) {
+    const tname = pool.get(def.toolAttached.cardId)?.name ?? '?';
+    newDiscards.push(def.toolAttached);
+    newActive = { ...newActive, toolAttached: undefined };
+    s = addLog(s, `割除衝刺：丟棄 ${dname} 的道具 ${tname}`, aIdx);
+  }
+  // 丟所有特殊能量
+  const keepEnergies: CardInstance[] = [];
+  const specialEnergies: CardInstance[] = [];
+  for (const e of def.energyAttached) {
+    const card = pool.get(e.cardId);
+    if (card?.supertype === 'Energy' && card.subtype !== 'Basic') specialEnergies.push(e);
+    else keepEnergies.push(e);
+  }
+  if (specialEnergies.length > 0) {
+    newDiscards.push(...specialEnergies);
+    newActive = { ...newActive, energyAttached: keepEnergies };
+    const enames = specialEnergies.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+    s = addLog(s, `割除衝刺：丟棄 ${dname} 的特殊能量 ${specialEnergies.length} 張（${enames}）`, aIdx);
+  }
+  if (newDiscards.length === 0) return { state: s, damage: 30 };
+  const players = [...s.players] as [PlayerState, PlayerState];
+  players[dIdx] = {
+    ...players[dIdx],
+    active: newActive,
+    discard: [...players[dIdx].discard, ...newDiscards],
+  };
+  s = { ...s, players };
+  return { state: s, damage: 30 };
+});
+
+// (I) 賽富豪|富裕強襲 30+ — 若本回合從「索財靈」進化，則 +90
+regPre('賽富豪|富裕強襲', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  if (!p.active) return { state, damage: 30 };
+  const evolved = p.active.evolvedThisTurn;
+  const stack = p.active.evolvedFromStack ?? [];
+  const fromName = stack.length > 0 ? pool.get(stack[stack.length - 1].cardId)?.name : undefined;
+  if (evolved && fromName === '索財靈') {
+    return { state: addLog(state, '富裕強襲：本回合從「索財靈」進化 → +90', aIdx), damage: 120 };
+  }
+  return { state, damage: 30 };
+});

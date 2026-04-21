@@ -3558,3 +3558,63 @@ types.ts 已有該旗標但從未被引擎處理過。v1.62 補上：
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 22/28（P1/P2）、平均回合 13.8
 - 版本 1.85 → 1.86
+
+## Session 38ak (v1.87) — H 標第 32 波 棄牌 search + 手牌附能+heal + 自牌庫找基本能量附自 + 手牌 tool×damage + 先丟對手特能 + 條件進化
+
+### 新增 helper
+- `discardSearchToHandPost(max, filter, label)` — 從棄牌區選最多 N 張（filter=Pokemon / BasicEnergy / Energy:<type>）加手牌，重用 `discard-to-hand` resolver
+- `deckEnergyAttachSelfPost(typeFilter, label)` — 從牌庫選 1 張基本能量附於自己戰鬥寶可夢，並重洗牌庫。新 resolver `deck-energy-attach-self`
+- `selfActiveHandAttachHealPost(heal, label)` — 從手牌選 1 張能量附於自己戰鬥寶可夢 + 回 N HP。新 resolver `self-active-hand-attach-heal`
+- `benchHandAttachFullHealPost(typeFilter, label)` — 從手牌選 1 張基本能量附於備戰 + 全回復（清 damage=0）。新 resolver `bench-hand-attach-fullheal-pick-energy` + `bench-hand-attach-fullheal-commit`
+
+### 本波實裝（12 張）
+
+**(A) 棄牌區 → 手牌 (3)**
+- 鐵斑葉｜補全之網 — 棄牌選最多 2 張寶可夢加手牌
+- 破破舵輪｜救援船錨 — 棄牌選最多 2 張寶可夢加手牌
+- 斯魔茶｜上茶 — 棄牌選 1 張基本草能量加手牌
+
+**(B) 棄牌區 → 備戰 (1)**
+- 刺龍王ex｜王之號召 — 棄牌選最多 3 張【水】寶可夢放備戰（重用 `bench-from-discard-samename` + validIids）
+
+**(C) 牌庫 → 手牌 (2)**
+- 甲賀忍蛙ex｜忍之利刃 170 — 可選從牌庫任意 1 張加手牌
+- 美錄坦｜搬運破爛 — 從牌庫選 1 張寶可夢道具加手牌
+
+**(D) 牌庫 → 自附能 (1)**
+- 穿著熊｜力量充能 30 — 從牌庫選 1 張基本能量附於自己
+
+**(E) 手牌附能+回血 (2)**
+- 卡比獸｜吃飽先 — 手牌選 1 張能量附自己 + 回 60 HP（無能量時仍回血）
+- 葉伊布｜嫩葉之恩 — 手牌選 1 張基本草能量附備戰 + 全回復該隻
+
+**(F) 手牌 tool × 傷害 (1)**
+- 灰塵山｜丟棄 — pre 階段自動把手牌所有「寶可夢道具」丟掉，damage = 張數 × 50（簡化：未支援 UI 選擇）
+
+**(G) 攻擊前丟對手特殊能量 + tool (1)**
+- 切割洛托姆｜割除衝刺 30 — pre 階段先丟對手戰鬥寶可夢的 `toolAttached` 與所有「特殊能量」，再造 30 傷害
+
+**(H) 條件式進化 +N (1)**
+- 賽富豪｜富裕強襲 30+ — 若本回合從「索財靈」進化（由 `evolvedThisTurn` + `evolvedFromStack` 底層名稱判定），則 +90
+
+### 暫緩（需新引擎旗標 — 下一輪任務）
+1. **攻擊級旗標 `skipWeakRes` / `skipDefEffects`**（回傳於 AttackPreFn）
+   - skipWeakRes：恰雷姆ex｜瑜伽踢 190、厄鬼椪 礎石面具ex｜打爆 140、晶光芽｜岩石投擲、土地雲｜粗暴橫掃、安瓢蟲｜高速星星、鐵頭殼ex｜雙刃劍（已實但需補 skip）
+   - skipDefEffects（不計附加效果）：輕身鱈｜音波刀鋒、米立龍ex｜突襲水泵、頓甲｜打垮、堅盾劍怪｜堅硬猛擊、故勒頓｜撕裂、厄鬼椪 礎石面具ex｜打爆（兩旗標）
+2. **player-level `noAttacksNextTurn`**：電擊魔獸｜雷電在地
+3. **cross-turn 加收傷害 flag**：超音波幼蟲｜刺耳聲
+4. **UI 增傷選擇**（加傷 with drawback）：大王銅象｜鼻之金勾臂、鐵磐岩（暫緩）
+5. **Pokemon instance flag `movedToActiveThisTurn`**：普隆隆姆ex｜暴衝閃光、蚊香泳士｜跳躍衝天
+6. **force-opp-send-new-active**（由對手選新場上）：大狼犬｜踹開、月桂葉｜推倒、小箭雀｜送回、長毛巨魔｜挑釁抓擊
+7. **self-return-to-hand / self-return-to-deck**：喵喵ex｜夾尾巴逃跑、賽富豪｜賽富迴旋、風鈴鈴｜回家鐘聲、白蓬蓬｜微風之禮
+8. **ATTACK_PRE self-tool-discard**：烈雀｜啄食、美錄梅塔｜重塑斧
+9. **evolve-trigger ability**：安瓢蟲｜繁星花紋
+10. **no-item / no-evolve / no-supporter / deferred-prize-bonus**：含羞苞、青銅鐘、吼叫尾ex、蝶結萌虻
+11. **self-KO ability**：彷徨夜靈｜咒詛炸彈、黑夜魔靈｜咒詛炸彈、三合一磁怪｜過度放電
+12. **copy-attack**：呆呆王、皮可西｜揮指、魔牆人偶｜相仿秀
+13. **smallpage-unique**：霜奶仙｜彩色甜點（按附屬能量同屬性 Pokemon）、塗標客（對手棄能附對手）、鐵磐岩（手牌數量條件）、智揮猩（反轉弱點）、攻擊前 KO 檢查 ability `願增猿ex｜鬆口氣`、`皮卡丘ex｜勤奮之心`
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 30/20（P1/P2）、平均回合 14.1
+- 版本 1.86 → 1.87
