@@ -2400,7 +2400,7 @@
   .res-lb{ font-weight:600; }
   .res-st{ font-size:.62rem; opacity:.85; padding-left:.15rem; border-left:1px solid rgba(255,255,255,.15); margin-left:.15rem; }
 
-  .playmat{ flex:1; display:grid; grid-template-rows:minmax(230px,1fr) auto minmax(275px,1.1fr); overflow:visible; position:relative;
+  .playmat{ flex:1; display:grid; grid-template-rows:minmax(230px,1fr) auto minmax(230px,1fr); overflow:visible; position:relative;
     background:
       radial-gradient(circle at 50% 50%, rgba(80,130,90,.12), transparent 72%),
       repeating-linear-gradient(45deg, rgba(0,0,0,.05) 0 2px, transparent 2px 8px),
@@ -2416,8 +2416,8 @@
 
   .field-row{ display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.7rem; overflow:visible; min-height:0; }
   .opponent-row{ border-bottom:2px solid #2a5a2a; background:rgba(0,0,0,.2); align-items:flex-end; padding-bottom:0.6rem; }
-  /* v2.02：my-row 加大下緣 padding，讓備戰寶可夢的特性/進化按鈕不再被綠色場地底緣切到 */
-  .my-row{ border-top:2px solid #2a5a2a; align-items:flex-end; padding-bottom:1.4rem; }
+  /* v2.03：還原為對稱 padding，依靠 overflow:visible 讓按鈕自然延伸到場地外即可 */
+  .my-row{ border-top:2px solid #2a5a2a; align-items:flex-end; padding-bottom:0.6rem; }
 
   .zone-prizes{ flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:0.2rem; }
   .prize-grid{ display:grid; grid-template-columns:1fr 1fr; gap:3px; }
@@ -2544,8 +2544,8 @@
   .hp-bar-wrap.sm{ height:5px; }
   .hp-bar{ height:100%; border-radius:3px; transition: width .55s cubic-bezier(.3,.8,.3,1), background .3s ease-out; }
 
-  /* v2.02：action-bar 往下拉高，避免中央場地卡下方被切 */
-  .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:stretch; min-height:180px; max-height:240px; overflow:visible; }
+  /* v2.03：action-bar 還原為原本 160/200；靠 overflow:visible 讓場地卡不會被切 */
+  .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:stretch; min-height:160px; max-height:200px; overflow:visible; }
   .alerts-col, .action-btns, .stadium-display{ align-self:center; }
   .stadium-display{ display:flex; flex-direction:column; align-items:center; gap:.25rem; padding:.35rem .5rem; border:1px solid #3a5a8a; background:rgba(26,42,74,.6); border-radius:6px; cursor:pointer; transition:transform .2s ease, box-shadow .2s ease; }
   .stadium-display:hover{ transform:scale(1.05); box-shadow:0 0 12px rgba(136,170,255,.4); }

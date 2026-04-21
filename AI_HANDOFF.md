@@ -1,9 +1,35 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b0 (v2.03)  
+> 最後更新：2026-04-21 Session 38b1 (v2.04)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b1 (v2.04) — playmat UI 比例還原（v2.02 調過頭的回退）
+
+### 問題
+
+v2.02 為了修「備戰特性按鈕 + 場地卡下方溢出」同時改動三處：
+
+1. `.playmat` grid-template-rows `minmax(230px,1fr) auto minmax(230px,1fr)` → `minmax(230px,1fr) auto minmax(275px,1.1fr)`（我方加高 45px + 1.1 倍權重）
+2. `.my-row` padding-bottom `0.6rem → 1.4rem`
+3. `.action-bar` min/max-height `160/200 → 180/240`
+
+疊加效果：我方場地 + action-bar 多吃了將近 100px，手牌列被擠到視窗最下方幾乎被工作列切到。實際上真正需要的修正只有 `overflow:hidden → visible` 一項 —— 讓按鈕 / 場地卡能自然溢出綠色場地邊界即可，不需要擴張。
+
+### 修正
+
+還原三處到 v2.01 值，保留 v2.02 的 `overflow:visible`：
+
+- `.playmat` grid-template-rows 改回對稱 `minmax(230px,1fr) auto minmax(230px,1fr)`
+- `.my-row` padding-bottom 改回 `0.6rem`
+- `.action-bar` min/max-height 改回 `160px / 200px`
+
+### 驗證
+
+- `npm run build` 通過
 
 ---
 
