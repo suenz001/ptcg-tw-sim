@@ -3907,3 +3907,37 @@ movedToActiveThisTurn?: boolean;
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 26/24（P1/P2）、平均回合 15.5
 - 版本 1.94 → 1.95
+
+## Session 38at (v1.96 wave 41) — 訓練家補實裝 6 張
+
+盤點 H 標剩餘 trainer 卡（19 Items / 12 Stadiums / 20 Supporters）後挑簡單可重用模式的 6 張。
+
+### 引擎 filter 擴充
+
+- `+page.svelte` deck-search 新增 `'Stadium'`
+- `+page.svelte` discard-search 新增 `'PokemonNonExOrBasicEnergy'`（寶可夢非道具非 ex + 基本能量）
+- `ai.ts` deck-search 補齊 `'BasicEnergy' / 'Item' / 'Supporter' / 'Stadium' / 'Tool' / 'Trainer'` 分支（之前 AI 會 fallthrough 到 `return true`，可能選到非預期卡種）
+- `ai.ts` discard-search 補 `'PokemonNonExOrBasicEnergy'` 分支
+
+### 新增 resolvers
+
+- `search-generic-to-hand`：牌庫選到的卡加入手牌、重洗牌庫
+- `energy-pro-search`：能量輸送PRO 專用 — 依「卡名」去重（基本能量名唯一對應屬性），重複的放回牌庫
+- `wind-vortex-return`：寶可夢旋風回收機 — 選定的自己寶可夢 + 所有附加卡（能量、道具、進化棧）放回手牌；狀態/旗標清除；若為 active 則 active=null（SEND_NEW_ACTIVE 接手）
+- `akuroma-step1-stadium`：阿克羅瑪的執著 step 1 — 搜 Stadium 後，withPending step 2
+- `akuroma-step2-energy`：step 2 — 搜 Energy 後，最終重洗牌庫
+
+### 實裝（6 張）
+
+- 珍寶配件（Item, SV8a）— 牌庫選最多 5 張「寶可夢道具」加手牌
+- 能量輸送PRO（Item, SV7a）— 牌庫選任意張數不同屬性基本能量加手牌（同屬只取 1 張）
+- 水蓮的照顧（Supporter, SV5a/SV8a/MC）— 棄牌區選寶可夢（不含 ex）+ 基本能量合計最多 3 張加手牌
+- 寶可夢旋風回收機（Item, SV6/SV8a/MC）— 選 1 自己場上寶可夢 → 本體+附加全放回手牌。regG 阻擋「只有 active 無備戰」狀況（避免場上歸零）
+- 阿克羅瑪的執著（Supporter, SV6a/SV8a）— 兩步 pending：先搜競技場卡、再搜能量卡，各 1 張，最後重洗
+- 百萬噸吹風機（Item, SV7a）— 丟棄對手所有寶可夢身上的道具卡 + 特殊能量卡 + 場上的競技場卡。場上競技場丟到使用者棄牌區（MVP：資料未追蹤擁有者）
+
+### 驗證
+
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 24/26（P1/P2）、平均回合 14.9
+- 版本 1.95 → 1.96

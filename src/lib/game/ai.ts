@@ -189,8 +189,14 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         }
         if (f === 'Pokemon')         return card.supertype === 'Pokemon' && card.subtype !== 'Other';
         if (f === 'Energy')          return card.supertype === 'Energy';
+        if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';
         if (f === 'ex')              return card.supertype === 'Pokemon' && card.subtype === 'ex';
         if (f === 'MegaEx')          return card.supertype === 'Pokemon' && card.subtype === 'ex' && card.name.startsWith('超級');
+        if (f === 'Item')            return card.supertype === 'Trainer' && card.subtype === 'Item';
+        if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
+        if (f === 'Stadium')         return card.supertype === 'Trainer' && card.subtype === 'Stadium';
+        if (f === 'Tool')            return card.supertype === 'Pokemon' && card.subtype === 'Other';
+        if (f === 'Trainer')         return card.supertype === 'Trainer';
         return true;
       });
       // 優先選 HP 高的寶可夢
@@ -290,6 +296,11 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         const card = pool.get(c.cardId);
         if (!card) return false;
         if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon' && card.subtype !== 'Other') || card.supertype === 'Energy';
+        if (f === 'PokemonNonExOrBasicEnergy') {
+          if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.subtype !== 'ex') return true;
+          if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
+          return false;
+        }
         if (f === 'BasicEnergy')     return card.supertype === 'Energy';
         return true;
       });

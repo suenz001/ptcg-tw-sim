@@ -9000,3 +9000,309 @@ regPost('三合一磁怪|\u200c\u200c\u200c[特性] 過度放電', overvoltAttac
 
 regPre('三合一磁怪|\u200c\u200c\u200c[特性]過度放電', (s, _a, _p) => ({ state: s, damage: 0 }));
 regPost('三合一磁怪|\u200c\u200c\u200c[特性]過度放電', overvoltAttackPost('過度放電'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 41 — 訓練家補實裝：
+//   珍寶配件 / 能量輸送PRO / 水蓮的照顧 / 寶可夢旋風回收機 /
+//   阿克羅瑪的執著 / 百萬噸吹風機
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── 珍寶配件（Item） ── 從牌庫選最多 5 張寶可夢道具加手牌 ────────────────
+// 資料結構：道具 supertype='Pokemon' subtype='Other'（與 UI 'Tool' filter 對應）
+regG('珍寶配件', (st, idx, pool) => {
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.subtype === 'Other';
+  });
+});
+reg('珍寶配件', (st, idx) => {
+  st = addLog(st, '珍寶配件：從牌庫選最多 5 張寶可夢道具加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Tool',
+    minCount: 0, maxCount: 5,
+    effectKey: 'search-generic-to-hand',
+  });
+});
+
+// 通用 resolver：選到的卡加入手牌、重洗牌庫、log 卡名
+regR('search-generic-to-hand', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) {
+    return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })),
+      '牌庫搜尋：未選擇任何卡（牌庫已重洗）', idx);
+  }
+  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `搜到：${names} 加入手牌（牌庫已重洗）`, idx);
+  return updatePlayer(st, idx, (p) => {
+    const picked = p.deck.filter(c => iids.includes(c.iid));
+    const rest = p.deck.filter(c => !iids.includes(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...picked] };
+  });
+});
+
+// ── 能量輸送PRO（Item） ── 從牌庫選任意張數不同屬性基本能量加手牌 ──────
+regG('能量輸送PRO', (st, idx, pool) => {
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  });
+});
+reg('能量輸送PRO', (st, idx) => {
+  st = addLog(st, '能量輸送PRO：從牌庫選任意張數基本能量加手牌（同屬只取 1 張）', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy',
+    minCount: 0, maxCount: 8,
+    effectKey: 'energy-pro-search',
+  });
+});
+regR('energy-pro-search', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) {
+    return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })),
+      '能量輸送PRO：未選擇任何能量（牌庫已重洗）', idx);
+  }
+  // 依「卡名」去重（基本能量名唯一對應屬性，例：基本【雷】能量）
+  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const seen = new Set<string>();
+  const kept: CardInstance[] = [];
+  const dupes: CardInstance[] = [];
+  for (const c of chosen) {
+    const nm = pool.get(c.cardId)?.name ?? '';
+    if (seen.has(nm)) { dupes.push(c); continue; }
+    seen.add(nm);
+    kept.push(c);
+  }
+  const keptNames = kept.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `能量輸送PRO：搜到 ${keptNames}（${kept.length} 張）加入手牌`, idx);
+  if (dupes.length > 0) {
+    st = addLog(st, `（同屬重複 ${dupes.length} 張放回牌庫）`, idx);
+  }
+  return updatePlayer(st, idx, (p) => {
+    const keptIids = new Set(kept.map(c => c.iid));
+    const pickedInDeck = p.deck.filter(c => keptIids.has(c.iid));
+    const rest = p.deck.filter(c => !keptIids.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...pickedInDeck] };
+  });
+});
+
+// ── 水蓮的照顧（Supporter） ── 棄牌區選寶可夢（非 rule-box）+ 基本能量合計最多 3 張
+regG('水蓮的照顧', (st, idx, pool) => {
+  return st.players[idx].discard.some(c => {
+    const card = pool.get(c.cardId);
+    if (!card) return false;
+    if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.subtype !== 'ex') return true;
+    if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
+    return false;
+  });
+});
+reg('水蓮的照顧', (st, idx) => {
+  st = addLog(st, '水蓮的照顧：從棄牌區選寶可夢（不含 ex）+ 基本能量合計最多 3 張加手牌', idx);
+  return withPending(st, {
+    type: 'discard-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'PokemonNonExOrBasicEnergy',
+    minCount: 0, maxCount: 3,
+    effectKey: 'discard-to-hand',
+  });
+});
+
+// ── 寶可夢旋風回收機（Item） ── 選 1 自己場上寶可夢 → 本體+附加全放回手牌
+regG('寶可夢旋風回收機', (st, idx) => {
+  const p = st.players[idx];
+  // 只有 active 且備戰空 → 不可打（否則場上就沒有寶可夢）
+  // 只要備戰 >= 1（或 active 有且備戰也有），就可用
+  if (!p.active && p.bench.length === 0) return false;
+  if (p.active && p.bench.length === 0) return false; // 只有 active，回收了就沒了
+  if (!p.active && p.bench.length > 0) return true;   // 只有備戰
+  return true;                                         // active + bench 皆有
+});
+reg('寶可夢旋風回收機', (st, idx) => {
+  const p = st.players[idx];
+  const all = [...(p.active ? [p.active] : []), ...p.bench];
+  // 若備戰空而只有 active → 不應進入此函式（guard 應攔下）。仍做防禦：只列備戰
+  const validIids = (p.bench.length === 0)
+    ? []
+    : all.map(c => c.iid);
+  st = addLog(st, '寶可夢旋風回收機：選 1 隻自己場上的寶可夢放回手牌（含附加卡）', idx);
+  return withPending(st, {
+    type: 'heal-target',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: '', minCount: 1, maxCount: 1,
+    params: { validIids },
+    effectKey: 'wind-vortex-return',
+  });
+});
+regR('wind-vortex-return', (st, idx, iids, _params, pool) => {
+  const targetIid = iids[0];
+  if (!targetIid) return st;
+  const p = st.players[idx];
+  const isActive = p.active?.iid === targetIid;
+  const target = isActive ? p.active! : p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const tName = pool.get(target.cardId)?.name ?? '?';
+  // 重置為純淨狀態（清除傷害、狀態、旗標、能量、道具、進化棧）
+  const mainBare: CardInstance = {
+    ...target,
+    damage: 0,
+    energyAttached: [],
+    toolAttached: undefined,
+    status: undefined,
+    evolvedFromStack: undefined,
+    evolvedThisTurn: undefined,
+    justPlaced: undefined,
+    movedToActiveThisTurn: undefined,
+    damageBonusThisTurn: undefined,
+    damageReduceNextHit: undefined,
+    abilityUsedThisTurn: undefined,
+    cantAttackThisTurn: undefined,
+    cantAttackPending: undefined,
+    cantRetreatNextTurn: undefined,
+    cantRetreatPendingSelf: undefined,
+    damageBonusPending: undefined,
+  };
+  const returning: CardInstance[] = [
+    mainBare,
+    ...target.energyAttached,
+    ...(target.toolAttached ? [target.toolAttached] : []),
+    ...(target.evolvedFromStack ?? []),
+  ];
+  const s = addLog(st, `寶可夢旋風回收機：將 ${tName} 與附加的 ${returning.length - 1} 張卡放回手牌`, idx);
+  return updatePlayer(s, idx, pp => ({
+    ...pp,
+    active: isActive ? null : pp.active,
+    bench: isActive ? pp.bench : pp.bench.filter(c => c.iid !== targetIid),
+    hand: [...pp.hand, ...returning],
+  }));
+});
+
+// ── 阿克羅瑪的執著（Supporter） ── 從牌庫選競技場卡 + 能量卡各 1 張加手牌
+regG('阿克羅瑪的執著', (st, idx, pool) => {
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    if (!card) return false;
+    if (card.supertype === 'Trainer' && card.subtype === 'Stadium') return true;
+    if (card.supertype === 'Energy') return true;
+    return false;
+  });
+});
+reg('阿克羅瑪的執著', (st, idx) => {
+  st = addLog(st, '阿克羅瑪的執著：步驟 1／2 — 從牌庫選 1 張競技場卡加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Stadium',
+    minCount: 0, maxCount: 1,
+    effectKey: 'akuroma-step1-stadium',
+  });
+});
+regR('akuroma-step1-stadium', (st, idx, iids, _params, pool) => {
+  let s = st;
+  if (iids.length > 0) {
+    const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    s = addLog(s, `阿克羅瑪的執著：搜到 ${names}（競技場）加入手牌`, idx);
+    s = updatePlayer(s, idx, (p) => {
+      const picked = p.deck.filter(c => iids.includes(c.iid));
+      const rest = p.deck.filter(c => !iids.includes(c.iid));
+      return { ...p, deck: rest, hand: [...p.hand, ...picked] };
+    });
+  } else {
+    s = addLog(s, '阿克羅瑪的執著：未選擇競技場卡', idx);
+  }
+  // Step 2
+  s = addLog(s, '阿克羅瑪的執著：步驟 2／2 — 從牌庫選 1 張能量卡加手牌', idx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Energy',
+    minCount: 0, maxCount: 1,
+    effectKey: 'akuroma-step2-energy',
+  });
+});
+regR('akuroma-step2-energy', (st, idx, iids, _params, pool) => {
+  let s = st;
+  if (iids.length > 0) {
+    const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    s = addLog(s, `阿克羅瑪的執著：搜到 ${names}（能量）加入手牌`, idx);
+    s = updatePlayer(s, idx, (p) => {
+      const picked = p.deck.filter(c => iids.includes(c.iid));
+      const rest = p.deck.filter(c => !iids.includes(c.iid));
+      return { ...p, deck: rest, hand: [...p.hand, ...picked] };
+    });
+  } else {
+    s = addLog(s, '阿克羅瑪的執著：未選擇能量卡', idx);
+  }
+  // 最後重洗牌庫
+  return updatePlayer(s, idx, (p) => ({ ...p, deck: shuffle(p.deck) }));
+});
+
+// ── 百萬噸吹風機（Item） ── 丟棄對手所有道具 + 特殊能量 + 場上競技場 ────
+regG('百萬噸吹風機', (st, idx, pool) => {
+  const opp = st.players[(1 - idx) as 0 | 1];
+  const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
+  const hasTool = allOpp.some(c => c.toolAttached);
+  const hasSpecial = allOpp.some(c =>
+    c.energyAttached.some(e => pool.get(e.cardId)?.subtype === 'Special')
+  );
+  const hasStadium = !!st.activeStadium;
+  return hasTool || hasSpecial || hasStadium;
+});
+reg('百萬噸吹風機', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const opp = st.players[dIdx];
+
+  // 收集要丟棄的道具與特殊能量
+  const removedTools: CardInstance[] = [];
+  const removedSpecials: CardInstance[] = [];
+  const toolNames: string[] = [];
+  const specialNames: string[] = [];
+  const stripOne = (c: CardInstance | null): CardInstance | null => {
+    if (!c) return c;
+    if (c.toolAttached) {
+      removedTools.push(c.toolAttached);
+      toolNames.push(pool.get(c.toolAttached.cardId)?.name ?? '?');
+    }
+    const keptEnergies: CardInstance[] = [];
+    for (const e of c.energyAttached) {
+      if (pool.get(e.cardId)?.subtype === 'Special') {
+        removedSpecials.push(e);
+        specialNames.push(pool.get(e.cardId)?.name ?? '?');
+      } else {
+        keptEnergies.push(e);
+      }
+    }
+    return { ...c, toolAttached: undefined, energyAttached: keptEnergies };
+  };
+  const newOppActive = stripOne(opp.active);
+  const newOppBench = opp.bench.map(b => stripOne(b)).filter((x): x is CardInstance => !!x);
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[dIdx] = {
+    ...opp,
+    active: newOppActive,
+    bench: newOppBench,
+    discard: [...opp.discard, ...removedTools, ...removedSpecials],
+  };
+  let s: GameState = { ...st, players };
+  if (toolNames.length > 0) {
+    s = addLog(s, `百萬噸吹風機：丟棄對手 ${toolNames.length} 張道具（${toolNames.join('、')}）`, idx);
+  }
+  if (specialNames.length > 0) {
+    s = addLog(s, `百萬噸吹風機：丟棄對手 ${specialNames.length} 張特殊能量（${specialNames.join('、')}）`, idx);
+  }
+  // 丟棄場上的競技場（丟到使用者棄牌區 — MVP 簡化，資料未追蹤擁有者）
+  if (s.activeStadium) {
+    const stadName = pool.get(s.activeStadium.cardId)?.name ?? '?';
+    const players2 = [...s.players] as [PlayerState, PlayerState];
+    players2[idx] = { ...players2[idx], discard: [...players2[idx].discard, s.activeStadium] };
+    s = { ...s, players: players2, activeStadium: undefined };
+    s = addLog(s, `百萬噸吹風機：丟棄場上的競技場 ${stadName}`, idx);
+  }
+  if (toolNames.length === 0 && specialNames.length === 0) {
+    // 若連 stadium 都沒有，由 guard 攔下；進到這裡表示只有 stadium 被丟，已 log 過
+  }
+  return s;
+});
