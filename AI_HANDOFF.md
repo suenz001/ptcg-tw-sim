@@ -1,9 +1,53 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-21 Session 38b7 (v2.10)  
+> 最後更新：2026-04-21 Session 38b8 (v2.11)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b8 (v2.11) — 三個 bug fix：備戰格上限 / 獎勵牌 guard / 自 KO 派新戰鬥
+
+### 背景
+
+使用者 bug report：
+1. **好友寶芬 / 呼朋引伴 等 bench search 卡** — 沒有依照目前備戰區剩餘空位決定
+   `maxCount`。場上已有 4 隻備戰時，卡片仍要求選 2 隻上場（應該封頂 1）；
+   備戰已滿 (5) 時應該整張卡不可用。
+2. **特殊紅牌** — 卡牌敘述為「只有在對手剩餘獎賞卡的張數為 3 張以下時才可使用」，
+   但目前在開局（對手獎賞 6 張）就能用。白蕾雅（「對手獎賞恰為 2」）路徑要
+   一併檢查。
+3. **黑夜魔靈 咒詛炸彈** — 在戰鬥場使用此特性自 KO 後，自己戰鬥場變空，UI 不會
+   跳出「派出新戰鬥寶可夢」視窗，整個回合卡死無法繼續。
+
+### 改動
+
+**effects.ts：好友寶芬 / 赫普的包包 修 maxCount**
+- 原：`maxCount: 2`（固定 2）
+- 新：`maxCount: Math.min(2, 5 - bench.length)` — 依剩餘備戰空位封頂
+- 備戰滿 (5) 時 guard (regG) 會讓卡片直接不可打出
+
+**effects.ts：特殊紅牌 regG**
+- 新增 `regG('特殊紅牌', …)` 檢查 `players[1-idx].prizes.length <= 3`
+- 白蕾雅已有相同機制的 regG (`opp.prizes.length === 2`)，已驗證正確
+
+**routes/game/+page.svelte：自 KO UI 補派新戰鬥場**
+- 原 UI 的 "⚠️ 派出新戰鬥寶可夢" 警語 + modal 僅在
+  `defenderPlayer?.active === null && game.turnPhase === 'end'`
+  觸發（被對手 KO 的正常流程）
+- 新增平行條件：`myPlayer?.active === null && game.turnPhase !== 'end'
+  && myPlayer.bench.length > 0 && !pendingSelection`
+  → 主動方自 KO 後可從自己備戰區派新戰鬥寶可夢
+- 另加對手側的等待提示，情境對稱
+- AI 端不需改 — `src/lib/game/ai.ts:38` 早已處理 `players[myIdx].active === null`
+
+### 驗證
+
+- `npm run build` ✅
+- 既有被 KO 路徑（turnPhase='end'）的 UI 行為不變
+- 自 KO 路徑（main phase）現在會顯示新 modal，從我方備戰區送出
+- AI 模式 AI 自 KO 也能正常繼續（ai.ts 已涵蓋）
 
 ---
 

@@ -1500,6 +1500,13 @@
             <div class="alert warn-alert">⚠️ 等待 {defenderPlayer?.name} 送出寶可夢</div>
           {/if}
         {/if}
+        <!-- 自 KO（如咒詛炸彈）：主動方自己戰鬥場變空，須從備戰區送出新戰鬥寶可夢 -->
+        {#if game.phase==='playing' && myPlayer?.active===null && game.turnPhase!=='end' && (myPlayer?.bench??[]).length>0 && !pendingSelection}
+          <div class="alert warn-alert">⚠️ 你的戰鬥寶可夢已昏厥，請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
+        {/if}
+        {#if game.phase==='playing' && oppPlayer?.active===null && game.turnPhase!=='end' && (oppPlayer?.bench??[]).length>0 && !pendingSelection}
+          <div class="alert warn-alert">⚠️ 等待 {oppPlayer?.name} 送出新戰鬥寶可夢</div>
+        {/if}
       </div>
 
       <div class="action-btns">
@@ -2102,6 +2109,41 @@
           {#if (defenderPlayer?.bench??[]).length===0}
             <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
           {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Send New Active Modal（自 KO 版）：主動方自 KO（如咒詛炸彈）後自己戰鬥場空欄 → 從自己備戰區選 -->
+  {#if game && game.phase==='playing' && myPlayer?.active===null && game.turnPhase!=='end' && (myPlayer?.bench??[]).length>0 && !pendingSelection}
+    <div class="selection-overlay">
+      <div class="selection-modal retreat-modal" onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header">
+          <h3>⚠️ 派出新的戰鬥寶可夢</h3>
+          <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
+        </div>
+        <div class="retreat-grid">
+          {#each myPlayer?.bench??[] as b}{@const bc=getCard(b.cardId)}
+            {#if bc}
+              {@const eff=hpTotal(b)}
+              {@const rem=hpRemaining(b)}
+              <div class="retreat-card">
+                <button class="retreat-zoom" title="放大檢視：{bc.name}"
+                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.sendNewActive(b.iid, myIdx));}}>
+                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <div class="retreat-name">{bc.name}</div>
+                  <div class="retreat-hp">HP {rem}/{eff}</div>
+                  <div class="retreat-nrg">{energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                  {#if b.status}<div class="retreat-status">
+                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
+                    {b.status}
+                  </div>{/if}
+                </button>
+              </div>
+            {/if}
+          {/each}
         </div>
       </div>
     </div>

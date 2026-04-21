@@ -317,12 +317,14 @@ regG('好友寶芬', (st, idx, pool) => {
   });
 });
 reg('好友寶芬', (st, idx) => {
-  st = addLog(st, '好友寶芬：從牌庫選至多 2 隻 HP≤70 基礎寶可夢到備戰區', idx);
+  const slots = 5 - st.players[idx].bench.length;
+  const takeMax = Math.min(2, slots);
+  st = addLog(st, `好友寶芬：從牌庫選至多 ${takeMax} 隻 HP≤70 基礎寶可夢到備戰區`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Basic:HP70',
-    minCount: 0, maxCount: 2,
+    minCount: 0, maxCount: takeMax,
     effectKey: 'bench-basic-from-deck',
   });
 });
@@ -336,12 +338,14 @@ regG('赫普的包包', (st, idx, pool) => {
   });
 });
 reg('赫普的包包', (st, idx) => {
-  st = addLog(st, '赫普的包包：從牌庫選至多 2 隻基礎寶可夢到備戰區', idx);
+  const slots = 5 - st.players[idx].bench.length;
+  const takeMax = Math.min(2, slots);
+  st = addLog(st, `赫普的包包：從牌庫選至多 ${takeMax} 隻基礎寶可夢到備戰區`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Basic',
-    minCount: 0, maxCount: 2,
+    minCount: 0, maxCount: takeMax,
     effectKey: 'bench-basic-from-deck',
   });
 });
@@ -9457,9 +9461,17 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
 });
 
 // ── 特殊紅牌（Item） ────────────────────────────────────────────────────────
-// 對手手牌洗回牌庫，抽 3 張。
+// 原文：這張卡只有在對手剩餘獎賞卡的張數為 3 張以下時才可使用。
+// 效果：對手手牌洗回牌庫，抽 3 張。
+regG('特殊紅牌', (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  return st.players[oppIdx].prizes.length <= 3;
+});
 reg('特殊紅牌', (st, idx) => {
   const dIdx = (1 - idx) as 0 | 1;
+  if (st.players[dIdx].prizes.length > 3) {
+    return addLog(st, '特殊紅牌：對手剩餘獎勵牌超過 3 張，無法使用', idx);
+  }
   st = addLog(st, '特殊紅牌：對手手牌洗回牌庫，抽 3 張', idx);
   st = returnHandToDeck(st, dIdx);
   return drawCards(st, dIdx, 3);
