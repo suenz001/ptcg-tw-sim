@@ -3670,3 +3670,29 @@ type AttackPreFn = (...) => {
 - Wave 37：self-return-to-hand/deck → 喵喵ex、賽富豪、風鈴鈴、白蓬蓬
 - Wave 38：ATTACK_PRE self-tool-discard + evolve-trigger registry → 烈雀、美錄梅塔、安瓢蟲
 - Wave 39：player-level ban（no-item/no-evolve/no-supporter）+ self-KO + deferred-prize-bonus
+
+## Session 38am (v1.89) — H 標第 34 波 movedToActiveThisTurn 旗標 + 4 張暴衝類
+
+### 核心：CardInstance 新增旗標
+```ts
+movedToActiveThisTurn?: boolean;
+```
+- 意涵：本回合剛從備戰區被放到戰鬥場
+- 設定時機：
+  1. `RETREAT` action — 新上場者寫入 `movedToActiveThisTurn: true`
+  2. `SEND_NEW_ACTIVE` action — 同上（對手 KO 後被迫送出）
+- 清除時機：`clearTurnFlags` 於擁有者 END_TURN 時清除（與 justPlaced / evolvedThisTurn 同處理）
+
+### 新增 helper
+- `movedToActivePre(base, bonus, label)` — 若 attacker.active.movedToActiveThisTurn 則傷害 = base+bonus，否則 base
+
+### 本波實裝（4 張）
+- 普隆隆姆ex｜暴衝閃光 20→140（+120）
+- 超級長耳兔ex｜疾風直撞 60→230（+170）
+- 烈空坐｜進擊破壞 20→110（+90）
+- 凱路迪歐ex｜疾風直撞 30→120（+90）
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 27/23（P1/P2）、平均回合 15.3
+- 版本 1.88 → 1.89

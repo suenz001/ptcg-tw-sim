@@ -212,12 +212,13 @@ function emptyPlayer(name: string): PlayerState {
   };
 }
 
-/** 清除 CardInstance 上的回合旗標 */
+/** 清除 CardInstance 上的回合旗標（於擁有者 END_TURN 執行） */
 function clearTurnFlags(c: CardInstance): CardInstance {
-  if (!c.justPlaced && !c.evolvedThisTurn) return c;
+  if (!c.justPlaced && !c.evolvedThisTurn && !c.movedToActiveThisTurn) return c;
   const n = { ...c };
   delete n.justPlaced;
   delete n.evolvedThisTurn;
+  delete n.movedToActiveThisTurn;
   return n;
 }
 
@@ -630,7 +631,8 @@ function handlePlaying(
     const discardE = attacker.active.energyAttached.slice(-retreatCost);
     const keepE = attacker.active.energyAttached.slice(0, attacker.active.energyAttached.length - retreatCost);
     const retreatingPoke = { ...attacker.active, energyAttached: keepE };
-    const newActive = { ...attacker.bench[bIdx] };
+    // Session 34：設 movedToActiveThisTurn，供「在這個回合若從備戰區放到戰鬥場」條件用
+    const newActive = { ...attacker.bench[bIdx], movedToActiveThisTurn: true };
     const newBench = attacker.bench.filter((_, i) => i !== bIdx);
     newBench.push(retreatingPoke);
 
@@ -1273,7 +1275,11 @@ function handlePlaying(
     const benchIdx = sendingPlayer.bench.findIndex((c) => c.iid === action.iid);
     if (benchIdx < 0) return state;
 
-    const newActive = sendingPlayer.bench[benchIdx];
+    // Session 34：設 movedToActiveThisTurn（供「在這個回合若從備戰區放到戰鬥場」條件用）。
+    // 注意：SEND_NEW_ACTIVE 通常發生在對手回合（被擊倒後自動補上場）；
+    // 設旗標的目的是在「自己下一回合」使用此旗標進行傷害加成判斷 — clearTurnFlags 在
+    // 擁有者的 END_TURN 才觸發，所以對被擊倒方而言，下回合使用「暴衝閃光」類仍可判定 true。
+    const newActive = { ...sendingPlayer.bench[benchIdx], movedToActiveThisTurn: true };
     sendingPlayer.bench = sendingPlayer.bench.filter((_, i) => i !== benchIdx);
     sendingPlayer.active = newActive;
 

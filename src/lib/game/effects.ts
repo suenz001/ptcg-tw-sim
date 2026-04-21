@@ -8066,3 +8066,41 @@ regPre('土地雲|粗暴橫掃', skipWeakResPre(130, '粗暴橫掃'));
 
 // 鐵頭殼ex｜雙刃劍 — 已於 Wave 31 以 multiSnipePost 實作；snipe-multi 本身即繞過弱點/附加效果，
 // Session 33 不需額外旗標改寫。保留此註記以避免未來重複登記。
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 34 — 引擎擴充：CardInstance.movedToActiveThisTurn 旗標
+//
+// 新增旗標：`movedToActiveThisTurn`（在 RETREAT 與 SEND_NEW_ACTIVE 時設，
+// 於擁有者下回合 END_TURN 時 clearTurnFlags 一併清除）。
+// 作用：招式效果「在這個回合，若從備戰區將這隻寶可夢放置於戰鬥場，則增加 N 點傷害」。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * base + bonus（若本回合剛從備戰區被放到戰鬥場）。
+ * 條件以 attacker.active.movedToActiveThisTurn 判斷。
+ */
+function movedToActivePre(base: number, bonus: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const att = state.players[aIdx].active;
+    if (att?.movedToActiveThisTurn) {
+      return {
+        state: addLog(state, `${label}：本回合從備戰區放置戰鬥場 → +${bonus}`, aIdx),
+        damage: base + bonus,
+      };
+    }
+    return { state, damage: base };
+  };
+}
+
+// ── Wave 34 招式登記（4 張） ───────────────────────────────────────────────
+// 普隆隆姆ex｜暴衝閃光 — 20+120 = 140
+regPre('普隆隆姆ex|暴衝閃光', movedToActivePre(20, 120, '暴衝閃光'));
+
+// 超級長耳兔ex｜疾風直撞 — 60+170 = 230
+regPre('超級長耳兔ex|疾風直撞', movedToActivePre(60, 170, '疾風直撞'));
+
+// 烈空坐｜進擊破壞 — 20+90 = 110
+regPre('烈空坐|進擊破壞', movedToActivePre(20, 90, '進擊破壞'));
+
+// 凱路迪歐ex｜疾風直撞 — 30+90 = 120
+regPre('凱路迪歐ex|疾風直撞', movedToActivePre(30, 90, '疾風直撞'));

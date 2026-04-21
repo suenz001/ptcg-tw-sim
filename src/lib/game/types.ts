@@ -96,6 +96,14 @@ export interface CardInstance {
    * 於該回合 END_TURN 照 clearCantRetreat 規則清除。
    */
   cantRetreatPendingSelf?: boolean;
+  /**
+   * 本回合剛從備戰區被放置於戰鬥場（RETREAT 交替、SEND_NEW_ACTIVE 送出新戰鬥寶可夢、
+   * 或其他將備戰寶可夢移到戰鬥場的效果）。
+   * 由 ATTACK_PRE 用來判斷「在這個回合，若從備戰區將這隻寶可夢放置於戰鬥場」條件。
+   * 在 END_TURN 時清除（僅在擁有者的回合結束時）。
+   * 設此旗標的進入點：RETREAT、SEND_NEW_ACTIVE。
+   */
+  movedToActiveThisTurn?: boolean;
 }
 
 export type SpecialCondition =
