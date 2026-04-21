@@ -530,6 +530,8 @@ function handlePlaying(
   if (action.type === 'EVOLVE') {
     if (state.turnPhase !== 'main') return state;
     if (state.isFirstTurn) return state; // 第一回合不能進化
+    // Wave 39：玩家級進化鎖（例：青銅鐘｜進化妨礙者）
+    if (attacker.cantEvolveThisTurn) return state;
 
     // 在手牌找進化卡
     const evoHIdx = attacker.hand.findIndex(c => c.iid === action.toIid);
@@ -667,6 +669,9 @@ function handlePlaying(
     if (trainerCard.subtype === 'Supporter' && attacker.supporterPlayedThisTurn) return state;
     // 先攻玩家第一回合不能使用支援者（PTCG 2020+ 規則）
     if (trainerCard.subtype === 'Supporter' && state.isFirstTurn && aIdx === state.firstPlayerIdx) return state;
+    // Wave 39：玩家級物品 / 支援者鎖（例：含羞苞｜癢癢花粉、吼叫尾ex｜絕叫、電蜘蛛ex｜雷擊石）
+    if (trainerCard.subtype === 'Item' && attacker.cantPlayItemThisTurn) return state;
+    if (trainerCard.subtype === 'Supporter' && attacker.cantPlaySupporterThisTurn) return state;
 
     // 義務性前置檢查：夜間擔架棄牌為空、寶可夢交替備戰為空等情況禁止打出
     if (!canPlayTrainer(trainerCard.name, state, aIdx, pool)) return state;
@@ -899,6 +904,8 @@ function handlePlaying(
       target = attacker.bench.find((c) => c.iid === action.targetIid) ?? null;
     }
     if (!target) return state;
+    // Wave 39：卡片層級能量附加鎖（例：晶光花｜侵蝕碎塊）
+    if (target.cantAttachEnergyThisTurn) return state;
 
     // 附加
     target = { ...target, energyAttached: [...target.energyAttached, energyCard] };
@@ -1180,12 +1187,18 @@ function handlePlaying(
 
       defenderState.discard = [...defenderState.discard, ...koDiscard];
       defenderState.active = null;
-      const prizes = Math.max(1, prizesForKO(defenderCard) + prizeAdjust + prizeTool);
+      // Wave 39：蝶結萌虻｜多餘花粉 — 跨回合獎賞加成
+      const deferredBonus = (updatedActive.deferredPrizeBonusThisTurn && updatedActive.deferredPrizeBonusThisTurn > 0)
+        ? updatedActive.deferredPrizeBonusThisTurn : 0;
+      const prizes = Math.max(1, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus);
       defPlayers[dIdx] = defenderState;
       newState = {
         ...newState, players: defPlayers,
         pendingPrizes: prizes, turnPhase: 'end',
       };
+      if (deferredBonus > 0) {
+        newState = addLog(newState, `${defenderCard.name} 因「多餘花粉」遺留效果，+${deferredBonus} 張獎勵牌`, null);
+      }
       newState = addLog(newState, `${defenderCard.name} 被擊倒！${attacker.name} 取得 ${prizes} 張獎勵牌。`, null);
 
       // 道具：被 KO 時觸發（希望護身符 / 沉重接力棒）
@@ -1471,7 +1484,7 @@ function handlePlaying(
     players[aIdx] = currentPlayer;
 
     // Wave 36：於 aIdx（本回合結束方）自己的卡 promote takeExtraDamageNextTurn → ThisTurn
-    // 機制：此旗標由對手（攻擊方）在上個對手回合 ATTACK_POST 設下，經過我方這一回合後，
+    // 機制：此旗標由對手（攻擊方）在上個對手回合 ATTACK_POST 設下，經過我方這一回合後,
     //      在對手下個回合開始前（現在）啟用。於對手 END_TURN 時清除。
     const promoteTakeExtra = (c: CardInstance): CardInstance => {
       if (!c.takeExtraDamageNextTurn || c.takeExtraDamageNextTurn <= 0) return c;
@@ -1479,8 +1492,15 @@ function handlePlaying(
       delete n.takeExtraDamageNextTurn;
       return n;
     };
-    if (currentPlayer.active) currentPlayer.active = promoteTakeExtra(currentPlayer.active);
-    currentPlayer.bench = currentPlayer.bench.map(promoteTakeExtra);
+    // Wave 39：於 aIdx 方自己的卡 promote deferredPrizeBonusNextTurn → ThisTurn（同跨回合模型）
+    const promoteDeferredPrize = (c: CardInstance): CardInstance => {
+      if (!c.deferredPrizeBonusNextTurn || c.deferredPrizeBonusNextTurn <= 0) return c;
+      const n: CardInstance = { ...c, deferredPrizeBonusThisTurn: (c.deferredPrizeBonusThisTurn ?? 0) + c.deferredPrizeBonusNextTurn };
+      delete n.deferredPrizeBonusNextTurn;
+      return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = promoteDeferredPrize(promoteTakeExtra(currentPlayer.active));
+    currentPlayer.bench = currentPlayer.bench.map(c => promoteDeferredPrize(promoteTakeExtra(c)));
     players[aIdx] = currentPlayer;
 
     // 重置次方玩家的回合限制旗標 + promote cantAttackPending → cantAttackThisTurn
@@ -1505,6 +1525,16 @@ function handlePlaying(
         n = { ...n };
         delete n.takeExtraDamageThisTurn;
       }
+      // Wave 39：清除消耗完的 deferredPrizeBonusThisTurn（同跨回合模型）
+      if (c.deferredPrizeBonusThisTurn) {
+        n = { ...n };
+        delete n.deferredPrizeBonusThisTurn;
+      }
+      // Wave 39：promote 卡片層級 cantAttachEnergyNextTurn → ThisTurn（於 nextIdx 方，即擁有者下個回合開始前）
+      if (c.cantAttachEnergyNextTurn) {
+        n = { ...n, cantAttachEnergyThisTurn: true };
+        delete n.cantAttachEnergyNextTurn;
+      }
       return n;
     };
     // 清除目前玩家 active/bench 上殘留的 damageBonusThisTurn（若攻擊未命中用掉）
@@ -1512,12 +1542,25 @@ function handlePlaying(
       if (!c.damageBonusThisTurn) return c;
       const n = { ...c }; delete n.damageBonusThisTurn; return n;
     };
-    if (currentPlayer.active) currentPlayer.active = clearDmgBonusThisTurn(currentPlayer.active);
-    currentPlayer.bench = currentPlayer.bench.map(clearDmgBonusThisTurn);
-    // Wave 36：清除 aIdx（本回合結束方）的 noAttacksThisTurn（若本回合已消耗完）
-    if (currentPlayer.noAttacksThisTurn) {
+    // Wave 39：清除 aIdx（擁有者）本回合殘留的 cantAttachEnergyThisTurn
+    const clearCantAttachEnergy = (c: CardInstance): CardInstance => {
+      if (!c.cantAttachEnergyThisTurn) return c;
+      const n = { ...c }; delete n.cantAttachEnergyThisTurn; return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = clearCantAttachEnergy(clearDmgBonusThisTurn(currentPlayer.active));
+    currentPlayer.bench = currentPlayer.bench.map(c => clearCantAttachEnergy(clearDmgBonusThisTurn(c)));
+    // Wave 36/39：清除 aIdx（本回合結束方）的玩家級 ThisTurn 旗標（若本回合已消耗完）
+    if (
+      currentPlayer.noAttacksThisTurn ||
+      currentPlayer.cantPlayItemThisTurn ||
+      currentPlayer.cantPlaySupporterThisTurn ||
+      currentPlayer.cantEvolveThisTurn
+    ) {
       const cp = { ...currentPlayer };
       delete cp.noAttacksThisTurn;
+      delete cp.cantPlayItemThisTurn;
+      delete cp.cantPlaySupporterThisTurn;
+      delete cp.cantEvolveThisTurn;
       players[aIdx] = cp;
     } else {
       players[aIdx] = currentPlayer;
@@ -1529,6 +1572,19 @@ function handlePlaying(
     if (nextP.noAttacksNextTurn) {
       nextP.noAttacksThisTurn = true;
       delete nextP.noAttacksNextTurn;
+    }
+    // Wave 39：promote nextIdx 的 cantPlayItem/Supporter/Evolve NextTurn → ThisTurn
+    if (nextP.cantPlayItemNextTurn) {
+      nextP.cantPlayItemThisTurn = true;
+      delete nextP.cantPlayItemNextTurn;
+    }
+    if (nextP.cantPlaySupporterNextTurn) {
+      nextP.cantPlaySupporterThisTurn = true;
+      delete nextP.cantPlaySupporterNextTurn;
+    }
+    if (nextP.cantEvolveNextTurn) {
+      nextP.cantEvolveThisTurn = true;
+      delete nextP.cantEvolveNextTurn;
     }
     players[nextIdx] = {
       ...nextP,

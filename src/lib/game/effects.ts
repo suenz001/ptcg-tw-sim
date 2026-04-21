@@ -8583,3 +8583,127 @@ regPre('N的電電蟲|劈哩啪啦短路', defToolDiscardParalyzePre(30, '劈哩
 
 // 必須丟自身 tool，否則招式失敗
 regPre('美錄梅塔|重塑斧', selfToolDiscardOrFailPre(250, '重塑斧'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 39 — 玩家級禁卡 / 卡片級能量附加鎖 / 跨回合獎賞加成
+//
+// 新 Helper（effects.ts）：
+//   • oppCantPlayItemNextPost(label)       — 對手下個回合無法從手牌使出物品卡
+//   • oppCantPlaySupporterNextPost(label)  — 對手下個回合無法從手牌使出支援者卡
+//   • oppCantEvolveNextPost(label)         — 對手下個回合無法從手牌使出寶可夢並完成進化
+//   • oppActiveCantAttachEnergyNextPost(label) — 對手戰鬥寶可夢下個回合無法附上從手牌的能量
+//   • oppActiveDeferredPrizeNextPost(bonus, label) — 對手戰鬥寶可夢在攻擊方下個回合被 KO 時 +N 張獎勵牌
+//   • selfDiscardAllEnergyPost(label)      — 自丟自身 active 所有附加能量
+//
+// 引擎聯動：
+//   - PlayerState.cantPlayItemNextTurn/ThisTurn、cantPlaySupporterNext/This、cantEvolveNext/This
+//   - CardInstance.cantAttachEnergyNextTurn/ThisTurn、deferredPrizeBonusNextTurn/ThisTurn
+//   - engine.ts PLAY_TRAINER / EVOLVE / ATTACH_ENERGY gate 檢查上述旗標
+//   - engine.ts END_TURN：於 nextIdx promote Next → This；於 aIdx 清除 This
+//   - engine.ts KO 路徑讀取 deferredPrizeBonusThisTurn 加到 pendingPrizes
+//
+// 本波實裝（6 張）：
+//   • 含羞苞｜癢癢花粉 10 + cantPlayItem
+//   • 青銅鐘｜進化妨礙者 30 + cantEvolve
+//   • 吼叫尾ex｜絕叫 0 + cantPlaySupporter（「後攻最初回合限定」暫簡化為始終可用）
+//   • 電蜘蛛ex｜雷擊石 180 + 自丟所有能量 + cantPlayItem
+//   • 晶光花｜侵蝕碎塊 20 + 中毒 + cantAttachEnergy
+//   • 蝶結萌虻｜多餘花粉 30 + deferredPrizeBonus=2
+// ══════════════════════════════════════════════════════════════════════════════
+
+function oppCantPlayItemNextPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[dIdx] = { ...players[dIdx], cantPlayItemNextTurn: true };
+    return addLog({ ...state, players }, `${label}：對手下個回合無法從手牌使出物品卡`, aIdx);
+  };
+}
+
+function oppCantPlaySupporterNextPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[dIdx] = { ...players[dIdx], cantPlaySupporterNextTurn: true };
+    return addLog({ ...state, players }, `${label}：對手下個回合無法從手牌使出支援者卡`, aIdx);
+  };
+}
+
+function oppCantEvolveNextPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[dIdx] = { ...players[dIdx], cantEvolveNextTurn: true };
+    return addLog({ ...state, players }, `${label}：對手下個回合無法從手牌使出寶可夢並完成進化`, aIdx);
+  };
+}
+
+function oppActiveCantAttachEnergyNextPost(label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const d = state.players[dIdx];
+    if (!d.active) return state;
+    const dName = pool.get(d.active.cardId)?.name ?? '?';
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[dIdx] = { ...d, active: { ...d.active, cantAttachEnergyNextTurn: true } };
+    return addLog({ ...state, players }, `${label}：${dName} 下個回合無法附上從手牌使出的能量卡`, aIdx);
+  };
+}
+
+function oppActiveDeferredPrizeNextPost(bonus: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const d = state.players[dIdx];
+    if (!d.active) return state;
+    const dName = pool.get(d.active.cardId)?.name ?? '?';
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[dIdx] = {
+      ...d,
+      active: {
+        ...d.active,
+        deferredPrizeBonusNextTurn: (d.active.deferredPrizeBonusNextTurn ?? 0) + bonus,
+      },
+    };
+    return addLog(
+      { ...state, players },
+      `${label}：${dName} 若在攻擊方下個回合被擊倒，多 +${bonus} 張獎勵牌`,
+      aIdx,
+    );
+  };
+}
+
+// 註：selfDiscardAllEnergyPost 已於 4971 行定義，直接重用。
+
+// ── Wave 39 招式登記 ──────────────────────────────────────────────────────
+
+// 含羞苞｜癢癢花粉 10 + 下回合對手禁物品卡
+regPre('含羞苞|癢癢花粉', (s, _a, _p) => ({ state: s, damage: 10 }));
+regPost('含羞苞|癢癢花粉', oppCantPlayItemNextPost('癢癢花粉'));
+
+// 青銅鐘｜進化妨礙者 30 + 下回合對手禁進化
+regPre('青銅鐘|進化妨礙者', (s, _a, _p) => ({ state: s, damage: 30 }));
+regPost('青銅鐘|進化妨礙者', oppCantEvolveNextPost('進化妨礙者'));
+
+// 吼叫尾ex｜絕叫 0 + 下回合對手禁支援者
+regPre('吼叫尾ex|絕叫', (s, _a, _p) => ({ state: s, damage: 0 }));
+regPost('吼叫尾ex|絕叫', oppCantPlaySupporterNextPost('絕叫'));
+
+// 電蜘蛛ex｜雷擊石 180 + 自丟所有能量 + 下回合對手禁物品卡
+regPre('電蜘蛛ex|雷擊石', (s, _a, _p) => ({ state: s, damage: 180 }));
+regPost('電蜘蛛ex|雷擊石', (state, aIdx, pool) => {
+  let s = selfDiscardAllEnergyPost('雷擊石')(state, aIdx, pool);
+  s = oppCantPlayItemNextPost('雷擊石')(s, aIdx, pool);
+  return s;
+});
+
+// 晶光花｜侵蝕碎塊 20 + 中毒 + 下回合對手戰鬥寶可夢無法附能
+regPre('晶光花|侵蝕碎塊', (s, _a, _p) => ({ state: s, damage: 20 }));
+regPost('晶光花|侵蝕碎塊', (state, aIdx, pool) => {
+  let s = statusPost('poisoned')(state, aIdx, pool);
+  s = oppActiveCantAttachEnergyNextPost('侵蝕碎塊')(s, aIdx, pool);
+  return s;
+});
+
+// 蝶結萌虻｜多餘花粉 30 + 跨回合獎賞 +2
+regPre('蝶結萌虻|多餘花粉', (s, _a, _p) => ({ state: s, damage: 30 }));
+regPost('蝶結萌虻|多餘花粉', oppActiveDeferredPrizeNextPost(2, '多餘花粉'));

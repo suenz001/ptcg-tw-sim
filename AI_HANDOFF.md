@@ -3823,3 +3823,55 @@ movedToActiveThisTurn?: boolean;
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 26/24（P1/P2）、平均回合 15.2
 - 版本 1.92 → 1.93
+
+## Session 38ar — v1.94 H 標第 39 波 player-level 禁卡 + 卡片級能量附加鎖 + 跨回合獎賞
+
+### 機制設計
+此波集中處理「以招式設定跨回合限制或獎賞加成」的一系列機制，
+沿用 Wave 36 的「NextTurn → ThisTurn promote」框架（於 nextIdx 方 END_TURN 升級，於 aIdx 方 END_TURN 清除）。
+
+### 新增 types.ts 旗標
+- PlayerState（玩家級，opp-facing）：
+  - `cantPlayItemNextTurn` / `cantPlayItemThisTurn`
+  - `cantPlaySupporterNextTurn` / `cantPlaySupporterThisTurn`
+  - `cantEvolveNextTurn` / `cantEvolveThisTurn`
+- CardInstance（卡片級）：
+  - `cantAttachEnergyNextTurn` / `cantAttachEnergyThisTurn`（opp active-facing）
+  - `deferredPrizeBonusNextTurn` / `deferredPrizeBonusThisTurn`（跨回合 KO 獎賞加成）
+
+### engine.ts 聯動
+- `EVOLVE` / `PLAY_TRAINER` / `ATTACH_ENERGY` 加入旗標 gate 檢查（亮起即 return state，靜默失敗）
+- `END_TURN`：
+  - nextP 上 promote 玩家級 cantPlay/Evolve NextTurn → ThisTurn
+  - nextP 上 promote 卡片級 cantAttachEnergy NextTurn → ThisTurn（同 promotePending）
+  - aIdx 方自己卡片 promote deferredPrizeBonus NextTurn → ThisTurn（同 promoteTakeExtra）
+  - nextP 卡片清除 deferredPrizeBonusThisTurn
+  - aIdx 方玩家級 ThisTurn 清除整併到原本 noAttacks 清除區塊
+  - aIdx 方卡片 cantAttachEnergyThisTurn 清除
+- KO 路徑：讀取 defender.active.deferredPrizeBonusThisTurn，加到 pendingPrizes 並 log「+N 張獎勵牌」
+
+### 新增 effects.ts helpers
+- `oppCantPlayItemNextPost(label)`
+- `oppCantPlaySupporterNextPost(label)`
+- `oppCantEvolveNextPost(label)`
+- `oppActiveCantAttachEnergyNextPost(label)`
+- `oppActiveDeferredPrizeNextPost(bonus, label)`
+- （重用既有 `selfDiscardAllEnergyPost`）
+
+### 實裝（6 張）
+- 含羞苞｜癢癢花粉 10 + cantPlayItem
+- 青銅鐘｜進化妨礙者 30 + cantEvolve
+- 吼叫尾ex｜絕叫 0 + cantPlaySupporter（後攻最初回合限制暫簡化）
+- 電蜘蛛ex｜雷擊石 180 + 自丟所有能量 + cantPlayItem
+- 晶光花｜侵蝕碎塊 20 + 中毒 + cantAttachEnergy
+- 蝶結萌虻｜多餘花粉 30 + deferredPrizeBonus=2
+
+### DEFER
+- 彷徨夜靈｜[特性]咒詛炸彈（self-KO + 5 damage counters）
+- 三合一磁怪｜[特性]過度放電（self-KO + discard energy attach to Lightning）
+→ 需要自爆型 ability 助函式（regA + self-discard + pendingPrizes + SEND_NEW_ACTIVE），拆到後續 wave。
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 31/19（P1/P2）、平均回合 14.5
+- 版本 1.93 → 1.94

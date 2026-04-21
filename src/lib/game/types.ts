@@ -117,6 +117,26 @@ export interface CardInstance {
    * 在對手（攻擊方）的 END_TURN 時清除。
    */
   takeExtraDamageThisTurn?: number;
+  /**
+   * 卡片層級「下回合此卡無法從手牌附加能量」預約旗標（晶光花｜侵蝕碎塊）。
+   * 於擁有者下個 END_TURN 時 promote 為 cantAttachEnergyThisTurn。
+   */
+  cantAttachEnergyNextTurn?: boolean;
+  /**
+   * 本回合此卡無法從手牌附加能量（由 cantAttachEnergyNextTurn promote 而來）。
+   * 在擁有者 END_TURN 時清除。
+   */
+  cantAttachEnergyThisTurn?: boolean;
+  /**
+   * 跨回合「若此卡在攻擊方下個回合被 KO，則 +N 張獎勵牌」預約旗標（蝶結萌虻｜多餘花粉）。
+   * 由攻擊方在 ATTACK_POST 設於對手 active；於擁有者下個 END_TURN promote 為 ThisTurn。
+   */
+  deferredPrizeBonusNextTurn?: number;
+  /**
+   * 本回合此卡被 KO 時 +N 張獎勵牌（由 deferredPrizeBonusNextTurn promote 而來）。
+   * 在對手（攻擊方）的 END_TURN 時清除。
+   */
+  deferredPrizeBonusThisTurn?: number;
 }
 
 export type SpecialCondition =
@@ -155,6 +175,26 @@ export interface PlayerState {
    * 在 END_TURN 時清除（於 aIdx 方）。
    */
   noAttacksThisTurn?: boolean;
+  /**
+   * Wave 39：玩家級「下個自己回合無法從手牌使出物品卡」預約旗標（例：含羞苞｜癢癢花粉）。
+   * 於擁有者下個 END_TURN（= nextIdx 方）promote 為 cantPlayItemThisTurn。
+   */
+  cantPlayItemNextTurn?: boolean;
+  /**
+   * 本回合此玩家無法從手牌使出物品卡（由 cantPlayItemNextTurn promote）。
+   * 在 END_TURN 時清除（於 aIdx 方）。
+   */
+  cantPlayItemThisTurn?: boolean;
+  /**
+   * Wave 39：玩家級「下個自己回合無法從手牌使出支援者卡」預約旗標（例：吼叫尾ex｜絕叫）。
+   */
+  cantPlaySupporterNextTurn?: boolean;
+  cantPlaySupporterThisTurn?: boolean;
+  /**
+   * Wave 39：玩家級「下個自己回合無法從手牌使出寶可夢並完成進化」預約旗標（例：青銅鐘｜進化妨礙者）。
+   */
+  cantEvolveNextTurn?: boolean;
+  cantEvolveThisTurn?: boolean;
 }
 
 // ── 待選擇狀態（訓練家/招式效果需要玩家做決定時）──────────────────────────
