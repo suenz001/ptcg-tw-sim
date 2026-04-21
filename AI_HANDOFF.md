@@ -3728,3 +3728,41 @@ movedToActiveThisTurn?: boolean;
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 22/28（P1/P2）、平均回合 14.6
 - 版本 1.89 → 1.90
+
+## Session 38ao — v1.91 H 標第 36 波 player-level noAttacksNextTurn + 跨回合加傷
+
+### 引擎擴充
+
+**types.ts**:
+- CardInstance 新增：`takeExtraDamageNextTurn?: number`（攻擊方 POST 設於對手 active）
+- CardInstance 新增：`takeExtraDamageThisTurn?: number`（END_TURN promote 後啟用）
+- PlayerState 新增：`noAttacksNextTurn?: boolean`（攻擊方對自己設）
+- PlayerState 新增：`noAttacksThisTurn?: boolean`（END_TURN promote 後啟用）
+
+**engine.ts**:
+- ATTACK dispatch：攻擊入口增加 `attacker.noAttacksThisTurn` 判斷 → 整回合強制結束
+- getAvailableAttacks：加入同樣的 player-level 封鎖
+- 傷害管線：weakness 之後、工具 bonus 之前套用 `defender.active.takeExtraDamageThisTurn`（+N 不消耗）
+- END_TURN 新時序（兩側互換）：
+  - 於 aIdx（結束方）清除 `noAttacksThisTurn`（本回合已消耗完）
+  - 於 aIdx（結束方）promote `takeExtraDamageNextTurn → ThisTurn`（因對手下回合即將開始，旗標應生效）
+  - 於 dIdx（次方）promote `noAttacksNextTurn → ThisTurn`（同 cantAttackPending 路徑）
+  - 於 dIdx（次方）清除 `takeExtraDamageThisTurn`（結算完畢）
+
+### 設計關鍵
+`takeExtraDamageNextTurn` 與一般 `damageBonusPending` 不同，旗標設在「對手」卡上而非自己卡上，
+且需要「一個完整的對手回合」才啟用。時序上：
+1. P1 攻擊 → flag 設於 P2 active（NextTurn=50）
+2. END_TURN(P1)：flag 保持 NextTurn（因為 aIdx=P1，flag 在 P2/dIdx）
+3. END_TURN(P2)：aIdx=P2，promote P2 自己卡的 NextTurn→ThisTurn（OK 因 P1 下回合 = 攻擊方）
+4. Turn(P1)：傷害管線讀 defender.takeExtraDamageThisTurn，+50
+5. END_TURN(P1)：dIdx=P2，清除 P2 的 ThisTurn
+
+### 實裝（2 張）
+- 電擊魔獸｜雷電在地 220 + `playerNoAttacksNextPost`
+- 超音波幼蟲｜刺耳聲 0 + `oppTargetTakeExtraNextPost(50)`
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 26/24（P1/P2）、平均回合 13.4
+- 版本 1.90 → 1.91

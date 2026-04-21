@@ -949,13 +949,23 @@ function handlePlaying(
       // 正面：繼續正常攻擊
     }
 
-    // 檢查是否因上回合效果而無法攻擊
+    // 檢查是否因上回合效果而無法攻擊（個卡）
     if (attacker.active.cantAttackThisTurn) {
       const atkName = pool.get(attacker.active.cardId)?.name ?? '?';
       players[aIdx] = { ...attacker, active: { ...attacker.active, cantAttackThisTurn: undefined } };
       return addLog(
         { ...state, players, turnPhase: 'end' },
         `${atkName} 因上回合效果，本回合無法使用招式！`,
+        aIdx
+      );
+    }
+
+    // 玩家級「本回合所有寶可夢皆無法使用招式」（例：電擊魔獸｜雷電在地）
+    if (attacker.noAttacksThisTurn) {
+      const atkName = pool.get(attacker.active.cardId)?.name ?? '?';
+      return addLog(
+        { ...state, players, turnPhase: 'end' },
+        `${attacker.name} 因雷電在地類效果，本回合所有寶可夢無法使用招式（${atkName} 強制結束攻擊階段）！`,
         aIdx
       );
     }
@@ -1004,6 +1014,15 @@ function handlePlaying(
     const defenderCard = getCard(defender.active.cardId, pool);
     if (!skipWeakRes && baseDamage > 0 && defenderCard.weakness && attackerCard.pokemonType === defenderCard.weakness.type) {
       baseDamage *= 2;
+    }
+
+    // 跨回合「這隻本回合受招式傷害 +N」旗標（例：超音波幼蟲｜刺耳聲）
+    // 由對手上個回合 ATTACK_POST 設於 takeExtraDamageNextTurn → 本回合開始前 promote 為 ThisTurn。
+    // 不消耗旗標，本回合結束時在 END_TURN 統一清除。
+    if (baseDamage > 0 && defender.active.takeExtraDamageThisTurn) {
+      const extra = defender.active.takeExtraDamageThisTurn;
+      baseDamage += extra;
+      workingState = addLog(workingState, `${defenderCard.name} 受到 +${extra} 傷害（上回合招式遺留效果）`, dIdx);
     }
 
     // 道具：我方攻擊 +N（極限腰帶 / 鎖鏈糬 / 驅勁能量 未來）
@@ -1451,6 +1470,19 @@ function handlePlaying(
     currentPlayer.bench = currentPlayer.bench.map(clearCantRetreat);
     players[aIdx] = currentPlayer;
 
+    // Wave 36：於 aIdx（本回合結束方）自己的卡 promote takeExtraDamageNextTurn → ThisTurn
+    // 機制：此旗標由對手（攻擊方）在上個對手回合 ATTACK_POST 設下，經過我方這一回合後，
+    //      在對手下個回合開始前（現在）啟用。於對手 END_TURN 時清除。
+    const promoteTakeExtra = (c: CardInstance): CardInstance => {
+      if (!c.takeExtraDamageNextTurn || c.takeExtraDamageNextTurn <= 0) return c;
+      const n: CardInstance = { ...c, takeExtraDamageThisTurn: (c.takeExtraDamageThisTurn ?? 0) + c.takeExtraDamageNextTurn };
+      delete n.takeExtraDamageNextTurn;
+      return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = promoteTakeExtra(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(promoteTakeExtra);
+    players[aIdx] = currentPlayer;
+
     // 重置次方玩家的回合限制旗標 + promote cantAttackPending → cantAttackThisTurn
     // + promote damageBonusPending → damageBonusThisTurn
     const nextIdx = dIdx;
@@ -1468,6 +1500,11 @@ function handlePlaying(
         n = { ...n, cantRetreatNextTurn: true };
         delete n.cantRetreatPendingSelf;
       }
+      // Wave 36：清除本回合已消耗完的 takeExtraDamageThisTurn（對手本回合結束 = 本方下回合開始）
+      if (c.takeExtraDamageThisTurn) {
+        n = { ...n };
+        delete n.takeExtraDamageThisTurn;
+      }
       return n;
     };
     // 清除目前玩家 active/bench 上殘留的 damageBonusThisTurn（若攻擊未命中用掉）
@@ -1477,10 +1514,22 @@ function handlePlaying(
     };
     if (currentPlayer.active) currentPlayer.active = clearDmgBonusThisTurn(currentPlayer.active);
     currentPlayer.bench = currentPlayer.bench.map(clearDmgBonusThisTurn);
-    players[aIdx] = currentPlayer;
+    // Wave 36：清除 aIdx（本回合結束方）的 noAttacksThisTurn（若本回合已消耗完）
+    if (currentPlayer.noAttacksThisTurn) {
+      const cp = { ...currentPlayer };
+      delete cp.noAttacksThisTurn;
+      players[aIdx] = cp;
+    } else {
+      players[aIdx] = currentPlayer;
+    }
     const nextP = { ...players[nextIdx] };
     if (nextP.active) nextP.active = promotePending(nextP.active);
     nextP.bench = nextP.bench.map(promotePending);
+    // Wave 36：promote nextIdx 的 noAttacksNextTurn → noAttacksThisTurn（例：雷電在地）
+    if (nextP.noAttacksNextTurn) {
+      nextP.noAttacksThisTurn = true;
+      delete nextP.noAttacksNextTurn;
+    }
     players[nextIdx] = {
       ...nextP,
       energyAttachedThisTurn: false,
@@ -1562,6 +1611,8 @@ export function getAvailableAttacks(
   if (player.active.status === 'asleep') return [];
   if (player.active.status === 'paralyzed') return [];
   if (player.active.cantAttackThisTurn) return [];
+  // Wave 36：玩家級封鎖（電擊魔獸｜雷電在地類）
+  if (player.noAttacksThisTurn) return [];
   const card = pool.get(player.active.cardId);
   if (!card?.attacks) return [];
   return card.attacks

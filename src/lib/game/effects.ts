@@ -8288,3 +8288,58 @@ regPost('白蓬蓬|微風之禮', selfReturnToDeckThenSearchPost(3, '微風之�
 // 風鈴鈴｜回家鐘聲 — 0 傷 + 備戰選 1 隻連附加回牌庫
 regPre('風鈴鈴|回家鐘聲', (state, _a, _p) => ({ state, damage: 0 }));
 regPost('風鈴鈴|回家鐘聲', selfBenchReturnToDeckPost('回家鐘聲'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 36 — 引擎擴充：player-level noAttacksNextTurn + 跨回合加傷
+//
+// 引擎新增：
+//   - PlayerState.noAttacksNextTurn / noAttacksThisTurn（玩家級，涵蓋新上場寶可夢）
+//   - CardInstance.takeExtraDamageNextTurn / takeExtraDamageThisTurn（跨回合目標 +N 受傷）
+//
+// 搭配的 END_TURN 變化：
+//   - 於 aIdx（結束方）promote takeExtraDamageNextTurn → ThisTurn
+//   - 於 dIdx（下個行動方）promote noAttacksNextTurn → ThisTurn
+//   - 於 dIdx 清除 takeExtraDamageThisTurn、aIdx 清除 noAttacksThisTurn
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * ATTACK_POST：對自己（攻擊方）設 noAttacksNextTurn = true。
+ * 使用時機：打爆類 AoE 代價招式（雷電在地）。
+ */
+function playerNoAttacksNextPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[aIdx] = { ...players[aIdx], noAttacksNextTurn: true };
+    return addLog({ ...state, players },
+      `${label}：自己下個回合所有寶可夢將無法使用招式（含新上場的）`, aIdx);
+  };
+}
+
+/**
+ * ATTACK_POST：對對手戰鬥場設 takeExtraDamageNextTurn = N。
+ * 若對手此攻擊被擊倒（active 已 null），旗標自然失效。
+ */
+function oppTargetTakeExtraNextPost(bonus: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const d = state.players[dIdx];
+    if (!d.active) return state;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[dIdx] = {
+      ...d,
+      active: { ...d.active, takeExtraDamageNextTurn: (d.active.takeExtraDamageNextTurn ?? 0) + bonus },
+    };
+    const nm = players[dIdx].active ? (state.players[dIdx].active ? '對手戰鬥寶可夢' : '?') : '?';
+    return addLog({ ...state, players }, `${label}：${nm}下個自己回合受到招式傷害 +${bonus}`, aIdx);
+  };
+}
+
+// ── Wave 36 招式登記（2 張） ───────────────────────────────────────────────
+
+// 電擊魔獸｜雷電在地 — 220，自己下個回合所有寶可夢皆無法使用招式
+regPre('電擊魔獸|雷電在地', (state, _a, _p) => ({ state, damage: 220 }));
+regPost('電擊魔獸|雷電在地', playerNoAttacksNextPost('雷電在地'));
+
+// 超音波幼蟲｜刺耳聲 — 0 傷，對手戰鬥寶可夢下個自己（攻擊方）回合受招式 +50
+regPre('超音波幼蟲|刺耳聲', (state, _a, _p) => ({ state, damage: 0 }));
+regPost('超音波幼蟲|刺耳聲', oppTargetTakeExtraNextPost(50, '刺耳聲'));

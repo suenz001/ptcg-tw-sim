@@ -104,6 +104,19 @@ export interface CardInstance {
    * 設此旗標的進入點：RETREAT、SEND_NEW_ACTIVE。
    */
   movedToActiveThisTurn?: boolean;
+  /**
+   * 跨回合「下個對手（設此旗標的攻擊方）回合本卡受到招式傷害 +N」。
+   * 例：超音波幼蟲｜刺耳聲 → 對手下個自己回合，打這隻 +50。
+   * - 攻擊方在 ATTACK_POST 設於對手的 active（若仍存在）
+   * - 於擁有者下個 END_TURN（= 對手下回合開始前）promote 為 takeExtraDamageThisTurn
+   * - 在攻擊方（此卡擁有者的對手）下個 END_TURN 時清除
+   */
+  takeExtraDamageNextTurn?: number;
+  /**
+   * 本回合此卡受到招式傷害 +N（由 takeExtraDamageNextTurn promote 而來）。
+   * 在對手（攻擊方）的 END_TURN 時清除。
+   */
+  takeExtraDamageThisTurn?: number;
 }
 
 export type SpecialCondition =
@@ -131,6 +144,17 @@ export interface PlayerState {
   supporterPlayedThisTurn: boolean;
   /** 本回合是否已撤退 */
   retreatedThisTurn: boolean;
+  /**
+   * 招式效果設下的「下個自己回合，自己所有寶可夢（含新上場的）無法使用招式」預約旗標。
+   * 例：電擊魔獸｜雷電在地。
+   * 在擁有者下個回合開始前（END_TURN 時於 nextIdx 方）promote 為 noAttacksThisTurn。
+   */
+  noAttacksNextTurn?: boolean;
+  /**
+   * 本回合，此玩家所有寶可夢皆無法使用招式（由 noAttacksNextTurn promote）。
+   * 在 END_TURN 時清除（於 aIdx 方）。
+   */
+  noAttacksThisTurn?: boolean;
 }
 
 // ── 待選擇狀態（訓練家/招式效果需要玩家做決定時）──────────────────────────
