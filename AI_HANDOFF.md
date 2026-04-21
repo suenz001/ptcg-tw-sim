@@ -3766,3 +3766,31 @@ movedToActiveThisTurn?: boolean;
 - `npm run build` 通過
 - sim 50 局 normal 50/50、0 crash、勝率 26/24（P1/P2）、平均回合 13.4
 - 版本 1.90 → 1.91
+
+## Session 38ap — v1.92 H 標第 37 波 force-opp-send-new-active
+
+### 機制設計
+這一波為「攻擊結算後強制對手將戰鬥寶可夢與備戰寶可夢互換」。
+關鍵點：選擇方是「對手」（actorIdx = dIdx），所以用既有的 'bench-choose' 而非 'opp-bench-choose'，
+因為 'bench-choose' 的語義就是「actor 從自己備戰選 1 隻」。
+
+### 新增 helper（effects.ts）
+- `forceOppSwapPost(label)` — 觸發對手 'bench-choose'，選完後由 `force-opp-swap` resolver 執行互換
+- `forceOppSwapThenDamagePost(dmg, label)` — 同上，但互換後對新上場寶可夢造成 dmg 點傷害（不計弱點 / 抵抗力）；若造成 KO 會自動 null active + pendingPrizes += koPrizeCount
+- `regR('force-opp-swap')` — 讀 params.label 與 attackerIdx；swap 時給新 active 設 movedToActiveThisTurn
+- `regR('force-opp-swap-then-damage')` — 同 swap 流程 + 傷害計算 + KO 判定
+
+### 邊界處理
+- 對手備戰為空時：`forceOppSwapPost` 僅 log 提示；`forceOppSwapThenDamagePost` 對現戰鬥寶可夢直接補 dmg
+- AI 預設 'bench-choose' 選 bench[0]，防守方 AI 不一定選最理想但不影響正確性
+
+### 實裝（4 張）
+- 大狼犬｜踹開 50 + forceOppSwapPost
+- 月桂葉｜推倒 10 + forceOppSwapPost
+- 小箭雀｜送回 10 + forceOppSwapPost
+- 長毛巨魔｜挑釁抓擊 0 + forceOppSwapThenDamagePost(160)
+
+### 驗證
+- `npm run build` 通過
+- sim 50 局 normal 50/50、0 crash、勝率 29/21（P1/P2）、平均回合 15.5
+- 版本 1.91 → 1.92

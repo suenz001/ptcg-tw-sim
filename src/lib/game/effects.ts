@@ -8343,3 +8343,163 @@ regPost('電擊魔獸|雷電在地', playerNoAttacksNextPost('雷電在地'));
 // 超音波幼蟲｜刺耳聲 — 0 傷，對手戰鬥寶可夢下個自己（攻擊方）回合受招式 +50
 regPre('超音波幼蟲|刺耳聲', (state, _a, _p) => ({ state, damage: 0 }));
 regPost('超音波幼蟲|刺耳聲', oppTargetTakeExtraNextPost(50, '刺耳聲'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Wave 37 — 強制對手將戰鬥寶可夢與備戰寶可夢互換（由對手選）
+//
+// 機制：
+//   - ATTACK_POST 觸發 pending 'bench-choose'，actorIdx=defenderIdx（對手自選）
+//   - resolver 負責執行 swap，並給新上場的寶可夢設 movedToActiveThisTurn
+//   - 變種：互換後對新上場寶可夢造成 N 點傷害（長毛巨魔｜挑釁抓擊）
+//   - 若對手備戰為空：post 僅結算原本傷害，不觸發 pending
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * ATTACK_POST：強制對手將戰鬥寶可夢與備戰寶可夢互換（由對手選）。
+ * 若對手備戰為空 → 無效果（本來 damage 已在 pre 結算）。
+ */
+function forceOppSwapPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const d = state.players[dIdx];
+    if (!d.active) return state;
+    if (d.bench.length === 0) {
+      return addLog(state, `${label}：對手沒有備戰寶可夢可交換`, aIdx);
+    }
+    const s = addLog(state, `${label}：對手必須將戰鬥寶可夢與備戰寶可夢互換（由對手選擇）`, aIdx);
+    return withPending(s, {
+      type: 'bench-choose',
+      actorIdx: dIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'force-opp-swap',
+      params: { label, attackerIdx: aIdx },
+    });
+  };
+}
+
+/**
+ * ATTACK_POST：強制對手 swap 後，對新上場的寶可夢造成 dmg 點傷害（不計弱點 / 抵抗力 / 附加效果）。
+ * 若對手備戰為空：直接對現戰鬥寶可夢造成 dmg（因無處可替換，但招式還是要執行傷害部分）。
+ */
+function forceOppSwapThenDamagePost(dmg: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const d = state.players[dIdx];
+    if (!d.active) return state;
+    if (d.bench.length === 0) {
+      // 無備戰可換 → 對原戰鬥寶可夢補 dmg
+      const newDmg = d.active.damage + dmg;
+      const hp = effectiveHPInline(d.active, _pool);
+      const nm = _pool.get(d.active.cardId)?.name ?? '?';
+      if (hp > 0 && newDmg >= hp) {
+        // KO
+        const koPile: CardInstance[] = [
+          { ...d.active, damage: newDmg },
+          ...d.active.energyAttached,
+          ...(d.active.toolAttached ? [d.active.toolAttached] : []),
+          ...(d.active.evolvedFromStack ?? []),
+        ];
+        const cardDef = _pool.get(d.active.cardId);
+        const morePrizes = cardDef ? koPrizeCount(cardDef) : 1;
+        const players = [...state.players] as [PlayerState, PlayerState];
+        players[dIdx] = { ...d, active: null, discard: [...d.discard, ...koPile] };
+        return addLog({ ...state, players, pendingPrizes: (state.pendingPrizes ?? 0) + morePrizes },
+          `${label}：對手無備戰，${nm} 受到 ${dmg} 點傷害後被擊倒（+${morePrizes} 張獎勵牌）`, aIdx);
+      }
+      const players = [...state.players] as [PlayerState, PlayerState];
+      players[dIdx] = { ...d, active: { ...d.active, damage: newDmg } };
+      return addLog({ ...state, players },
+        `${label}：對手無備戰可交換，${nm} 受到 ${dmg} 點傷害`, aIdx);
+    }
+    const s = addLog(state, `${label}：對手必須將戰鬥寶可夢與備戰寶可夢互換，然後新上場的寶可夢受到 ${dmg} 點傷害（由對手選）`, aIdx);
+    return withPending(s, {
+      type: 'bench-choose',
+      actorIdx: dIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'force-opp-swap-then-damage',
+      params: { label, attackerIdx: aIdx, dmg },
+    });
+  };
+}
+
+regR('force-opp-swap', (st, actorIdx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '強制互換';
+  const attackerIdx = ((params?.attackerIdx ?? (1 - actorIdx)) as 0 | 1);
+  const p = st.players[actorIdx];
+  if (!p.active) return st;
+  const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
+  if (bIdx < 0) return st;
+  const oldActiveName = pool.get(p.active.cardId)?.name ?? '?';
+  const newActiveName = pool.get(p.bench[bIdx].cardId)?.name ?? '?';
+  const newBench = [...p.bench];
+  newBench[bIdx] = p.active;
+  const newActive: CardInstance = { ...p.bench[bIdx], movedToActiveThisTurn: true };
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[actorIdx] = { ...p, active: newActive, bench: newBench };
+  return addLog({ ...st, players },
+    `${label}：${oldActiveName} 退回備戰區，${newActiveName} 上場`, attackerIdx);
+});
+
+regR('force-opp-swap-then-damage', (st, actorIdx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '強制互換';
+  const attackerIdx = ((params?.attackerIdx ?? (1 - actorIdx)) as 0 | 1);
+  const dmg = Number(params?.dmg ?? 0);
+  const p = st.players[actorIdx];
+  if (!p.active) return st;
+  const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
+  if (bIdx < 0) return st;
+  const oldActiveName = pool.get(p.active.cardId)?.name ?? '?';
+  const swappingIn = p.bench[bIdx];
+  const newActiveName = pool.get(swappingIn.cardId)?.name ?? '?';
+  const newBench = [...p.bench];
+  newBench[bIdx] = p.active;
+
+  // 計算傷害（不計弱點 / 抵抗力 / 附加效果）
+  const newDmg = swappingIn.damage + dmg;
+  const hp = effectiveHPInline(swappingIn, pool);
+  const players = [...st.players] as [PlayerState, PlayerState];
+  let s: GameState = { ...st };
+
+  if (dmg > 0 && hp > 0 && newDmg >= hp) {
+    // 新上場寶可夢被擊倒 → 放入棄牌、active=null，攻擊方獲得獎勵
+    const koPile: CardInstance[] = [
+      { ...swappingIn, damage: newDmg, movedToActiveThisTurn: true },
+      ...swappingIn.energyAttached,
+      ...(swappingIn.toolAttached ? [swappingIn.toolAttached] : []),
+      ...(swappingIn.evolvedFromStack ?? []),
+    ];
+    const cardDef = pool.get(swappingIn.cardId);
+    const morePrizes = cardDef ? koPrizeCount(cardDef) : 1;
+    players[actorIdx] = { ...p, active: null, bench: newBench, discard: [...p.discard, ...koPile] };
+    s = addLog({ ...s, players },
+      `${label}：${oldActiveName} 退回備戰區，${newActiveName} 上場後受到 ${dmg} 點傷害被擊倒（+${morePrizes} 張獎勵牌）`, attackerIdx);
+    return { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + morePrizes };
+  }
+
+  const newActive: CardInstance = { ...swappingIn, damage: newDmg, movedToActiveThisTurn: true };
+  players[actorIdx] = { ...p, active: newActive, bench: newBench };
+  s = addLog({ ...s, players },
+    `${label}：${oldActiveName} 退回備戰區，${newActiveName} 上場`, attackerIdx);
+  if (dmg > 0) {
+    s = addLog(s, `${label}：${newActiveName} 受到 ${dmg} 點傷害`, attackerIdx);
+  }
+  return s;
+});
+
+// ── Wave 37 招式登記（4 張） ───────────────────────────────────────────────
+
+// 大狼犬｜踹開 — 50 + 強制對手互換
+regPre('大狼犬|踹開', (state, _a, _p) => ({ state, damage: 50 }));
+regPost('大狼犬|踹開', forceOppSwapPost('踹開'));
+
+// 月桂葉｜推倒 — 10 + 強制對手互換
+regPre('月桂葉|推倒', (state, _a, _p) => ({ state, damage: 10 }));
+regPost('月桂葉|推倒', forceOppSwapPost('推倒'));
+
+// 小箭雀｜送回 — 10 + 強制對手互換
+regPre('小箭雀|送回', (state, _a, _p) => ({ state, damage: 10 }));
+regPost('小箭雀|送回', forceOppSwapPost('送回'));
+
+// 長毛巨魔｜挑釁抓擊 — 0 pre，互換後新上場寶可夢受 160 傷害
+regPre('長毛巨魔|挑釁抓擊', (state, _a, _p) => ({ state, damage: 0 }));
+regPost('長毛巨魔|挑釁抓擊', forceOppSwapThenDamagePost(160, '挑釁抓擊'));
