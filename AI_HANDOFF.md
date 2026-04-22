@@ -1,9 +1,45 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session c0f2 (v2.26)  
+> 最後更新：2026-04-22 Session c0f2+ (v2.27)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session c0f2+ (v2.27) — /cards set page header 加中文名稱 + 放寬 setCode regex
+
+### 問題
+
+Leon 看 `/cards?set=M1S` 時，header 只寫「M1S」，沒帶「超級交響樂」這個中文名，
+不直觀。順便查到 `+page.ts` 的 setCode validation regex `^[A-Za-z0-9]+$` 擋掉了
+M-P（促銷特典卡）— 點 M-P 卡包會直接 throw。
+
+### 主要修法
+
+**1. `src/routes/cards/+page.ts`**
+- setCode regex: `^[A-Za-z0-9]+$` → `^[A-Za-z0-9-]+$`（放行 M-P）
+- load 改成同時抓 `{setCode}.json` + `index.json`（parallel Promise.all），
+  從 index 找到對應的 `name` 欄位，塞進 return payload 當 `setName`
+- LoadData type 新增 `setName?: string`
+
+**2. `src/routes/cards/+page.svelte`**
+- set mode header 從 `<h1>{data.setCode}</h1>`
+  改成 `<h1>M1S <span class="setTitleName">超級交響樂</span></h1>`
+- 新增 `.setTitleName` CSS：`font-size: 0.7em; color: #4b5563; margin-left: 0.75rem`
+
+### 驗證
+
+- `npm run build` ✓ 12.27s
+
+### 次要調整
+
+- AI_HANDOFF header 更新到 Session c0f2+ (v2.27)
+- version.ts: 2.26 → 2.27
+
+### commit hash
+
+（待推完補）
 
 ---
 

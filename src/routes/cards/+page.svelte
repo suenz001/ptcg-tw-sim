@@ -13,7 +13,7 @@
 
   type LoadData =
     | { mode: 'index'; sets: SetSummary[] }
-    | { mode: 'set'; setCode: string; cards: Card[] };
+    | { mode: 'set'; setCode: string; setName?: string; cards: Card[] };
 
   let { data }: { data: LoadData } = $props();
 
@@ -116,7 +116,9 @@
   <!-- ═══════════════════════ Card grid ═══════════════════════ -->
   <header>
     <a class="back" href="{base}/cards">← 卡包列表</a>
-    <h1>{data.setCode}</h1>
+    <h1>
+      {data.setCode}{#if data.setName}<span class="setTitleName">{data.setName}</span>{/if}
+    </h1>
     <p class="meta">共 {setCards.length} 張卡 · 顯示 {filtered.length} 張</p>
   </header>
 
@@ -295,6 +297,12 @@
   }
   h1 {
     margin: 0.5rem 0 0.25rem;
+  }
+  .setTitleName {
+    margin-left: 0.75rem;
+    font-size: 0.7em;
+    font-weight: 500;
+    color: #4b5563;
   }
   .meta {
     margin: 0;

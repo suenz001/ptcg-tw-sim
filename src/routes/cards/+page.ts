@@ -18,13 +18,25 @@ export async function load({ fetch, url }) {
     return { mode: 'index' as const, sets };
   }
 
-  // Validate setCode looks legitimate (avoid letting arbitrary strings hit static)
-  if (!/^[A-Za-z0-9]+$/.test(setCode)) {
+  // Validate setCode looks legitimate (avoid letting arbitrary strings hit static).
+  // Allow dash — M-P (promo 特典卡) uses it.
+  if (!/^[A-Za-z0-9-]+$/.test(setCode)) {
     throw new Error(`Invalid set code: ${setCode}`);
   }
 
-  const res = await fetch(`${base}/cards/${setCode}.json`);
-  if (!res.ok) throw new Error(`Set ${setCode} not found (HTTP ${res.status})`);
-  const cards: Card[] = await res.json();
-  return { mode: 'set' as const, setCode, cards };
+  // Fetch the cards AND the index in parallel — we need the Chinese set name
+  // (e.g. "超級交響樂" for M1S) for the header display.
+  const [cardsRes, indexRes] = await Promise.all([
+    fetch(`${base}/cards/${setCode}.json`),
+    fetch(`${base}/cards/index.json`)
+  ]);
+  if (!cardsRes.ok) throw new Error(`Set ${setCode} not found (HTTP ${cardsRes.status})`);
+  const cards: Card[] = await cardsRes.json();
+
+  let setName: string | undefined;
+  if (indexRes.ok) {
+    const sets: SetSummary[] = await indexRes.json();
+    setName = sets.find((s) => s.code === setCode)?.name;
+  }
+  return { mode: 'set' as const, setCode, setName, cards };
 }
