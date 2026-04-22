@@ -9983,14 +9983,26 @@ reg('能量回收', (st, idx) => {
 // 卡面文字主要為「附加到自己的寶可夢」類 Tool；此處無 TOOL_* 登錄，實際等同無效果。
 // 不登錄 reg/regG → engine 會走「效果尚未實裝」分支。
 
-// ---- 太晶珠（Tool）- 太晶寶可夢 HP +30 --------------------------------------
-// v2.48：改查 card.tags。scraper 已把太晶從 attacks 挪到 tags，
-// 原本的 kludge（attacks.some(a=>a.name==='太晶')）對遷移後的資料失效，
-// 故改用規範化的 tags 欄位。
-// 為了不動 tools.ts 檔結構，透過 TOOL_HP_BONUS.set 登錄（與勇氣護符/英雄斗篷同機制）。
-TOOL_HP_BONUS.set('太晶珠', (card) => {
-  const isTera = !!card.tags?.includes('太晶');
-  return isTera ? 30 : 0;
+// ---- 太晶珠（Item）- 從牌庫搜 1 張「太晶」寶可夢加手牌 -----------------------
+// v2.52：修正 — 太晶珠是 **Item**（搜尋牌庫），不是 Tool（HP +30）。
+// 之前 v2.48 誤把它登錄成 TOOL_HP_BONUS，實際卡面文字：
+//   「從自己的牌庫選擇1張『太晶』寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。」
+// = 典型 deck-search → search-pokemon-to-hand 流程（filter: TeraPokemon）。
+regG('太晶珠', (st, idx, pool) =>
+  st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && !!card.tags?.includes('太晶');
+  })
+);
+reg('太晶珠', (st, idx) => {
+  st = addLog(st, '太晶珠：從牌庫選 1 張「太晶」寶可夢卡加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'TeraPokemon',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-pokemon-to-hand',
+  });
 });
 
 // ---- 捕蟲組合（Item）- 查看牌庫頂 6，選最多 2 張草寶可夢/草能量加手牌 -------

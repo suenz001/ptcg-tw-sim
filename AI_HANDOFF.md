@@ -1,9 +1,59 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 2f3e (v2.51)  
+> 最後更新：2026-04-22 Session 2f3f (v2.52)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 2f3f (v2.52) — 戰鬥場能量 pip 化 + 太晶珠 Item 正確實裝
+
+### 問題
+
+Leon 反饋：「我覺得能量改成這樣的圖示很好，戰鬥場也請你這樣改吧。我在測試猛擂鼓預設套牌 出現 太晶珠（Item）效果尚未實裝，已棄置」。兩件事：
+
+1. **UI**：v2.51 只把備戰能量改成 pip 垂直排列，戰鬥場（active）還是舊的 `energySummary()` 文字總和。要一致化。
+2. **Bug**：太晶珠打出顯示「效果尚未實裝，已棄置」。源頭是 v2.48 我（前任 Claude）誤把太晶珠登錄成 `TOOL_HP_BONUS`（類似勇氣護符、英雄斗篷）—— 實際卡面是 **Item**：「從自己的牌庫選擇1張『太晶』寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。」。engine 走 Item 分支找不到 reg 就輸出「尚未實裝」。這剛好命中 Leon 的記憶條目「不要把前任 AI 的『歷史慣例』註解當既成事實」。
+
+### 修法
+
+**1. 戰鬥場 active 卡 pip 化** — `src/routes/game/+page.svelte`（~1863 對手 active / ~2028 自方 active）：
+
+- 在 `<img class="active-img">` 跟 `<div class="active-info">` 之間插入 `<div class="active-nrg-col">`，用 `{#each energyPips(player.active) as pip}` 渲染垂直 pip。
+- 移除 `.active-info` 內的 `<div class="active-nrg">{energySummary(player.active)}</div>`（文字版）。
+- CSS（~3117）新增 `.active-nrg-col { display:flex; flex-direction:column; align-items:center; gap:3px; flex-shrink:0; padding-top:.2rem; line-height:1; }`，pip 比 bench 版略大（寬≥18px、高 16px、字體 .66rem）以符合戰鬥場比例。
+
+**2. 太晶珠 Item 正確實裝** — `src/lib/game/effects.ts`（~9986）：
+
+- 刪除 v2.48 的 `TOOL_HP_BONUS.set('太晶珠', …)` 錯誤登錄（+30 HP 完全不是這張卡的效果）。
+- 新增 `regG`（guard）：牌庫裡有至少 1 張符合條件的太晶寶可夢才能打。
+- 新增 `reg`：`withPending({ type: 'deck-search', filter: 'TeraPokemon', effectKey: 'search-pokemon-to-hand', minCount:0, maxCount:1 })` — 甜蜜球/黑暗球同 resolver，只是換 filter。
+
+**3. 新增 `TeraPokemon` filter** — 3 處必須同步（舊 pattern）：
+
+- `src/lib/game/ai.ts`（~200）autoResolveSelection：`if (f === 'TeraPokemon') return card.supertype === 'Pokemon' && !!card.tags?.includes('太晶');`
+- `src/routes/game/+page.svelte`（~886）deck-search matcher：同上。
+- `src/routes/game/+page.svelte`（~1446）describeFilter map：`'TeraPokemon': '「太晶」寶可夢',`
+
+### 為何 guard 要檢查牌庫
+
+太晶珠卡面是「從牌庫搜」，若牌庫沒有太晶寶可夢打出就沒意義，直接禁用比讓玩家打完空手更好。這跟甜蜜球（無寶可夢則無效）的 regG pattern 一致。
+
+### 驗證
+
+`npm run build` 通過（13.17s，無 warning/error）。實機要在猛擂鼓 preset（含太晶珠 + 太晶 tag 的 ex）跑一次：打出太晶珠 → deck-search UI → 只列太晶寶可夢 → 選 1 張加手牌 → 牌庫重洗。
+
+### 檔案變更
+
+- `src/lib/version.ts`: 2.51 → 2.52
+- `src/lib/game/ai.ts`: +1 line（TeraPokemon filter）
+- `src/lib/game/effects.ts`: 太晶珠從 TOOL_HP_BONUS 改成 reg/regG（-4 行 +16 行）
+- `src/routes/game/+page.svelte`: TeraPokemon filter + describeFilter + 2 處 active-nrg-col markup + CSS
+
+### Commit
+
+待 commit 後填入 hash。
 
 ---
 
@@ -39,7 +89,7 @@ Leon 之前就鎖死 bench-slot 在 185px（v2.47 決定）以免撐大 zone-ben
 
 ### Commit
 
-待 commit 後填入 hash。
+`0eba91b` — v2.51: 備戰 slot 加寬 140px + 能量 pip 垂直排列在圖片右側
 
 ---
 

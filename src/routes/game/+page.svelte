@@ -884,6 +884,7 @@
           if (f === 'BasicEnergy') return card.supertype === 'Energy' && card.subtype === 'Basic';
           if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
           if (f === 'MegaEx')     return card.supertype === 'Pokemon' && card.subtype === 'ex' && card.name.startsWith('超級');
+          if (f === 'TeraPokemon') return card.supertype === 'Pokemon' && !!card.tags?.includes('太晶');
           if (f === 'Item')       return card.supertype === 'Trainer' && card.subtype === 'Item';
           if (f === 'Supporter')  return card.supertype === 'Trainer' && card.subtype === 'Supporter';
           if (f === 'Tool')       return card.supertype === 'Pokemon' && card.subtype === 'Other';
@@ -1444,6 +1445,7 @@
       'Supporter':                     '支援者',
       'ex':                            'ex 寶可夢',
       'MegaEx':                        '超級進化寶可夢 ex',
+      'TeraPokemon':                   '「太晶」寶可夢',
       'MarniePokemon':                 '瑪俐的寶可夢',
       'CynthiaPokemon':                '竹蘭的寶可夢',
       'FightingBasicOrFightingEnergy': '基礎【鬥】寶可夢或【鬥】能量',
@@ -1860,11 +1862,16 @@
           {:else}
             <div class="active-card opp-active" out:scale={{ duration: 360, start: 0.55, opacity: 0 }}>
               <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>
+              <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致） -->
+              <div class="active-nrg-col">
+                {#each energyPips(oppPlayer.active) as pip}
+                  <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                {/each}
+              </div>
               <div class="active-info">
                 <div class="active-name">{ac?.name}</div>
                 <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(oppPlayer.active)?hpRemaining(oppPlayer.active)/hpTotal(oppPlayer.active)*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),hpTotal(oppPlayer.active))}"></div></div>
                 <div class="active-hp">HP {hpRemaining(oppPlayer.active)}/{hpTotal(oppPlayer.active)}</div>
-                <div class="active-nrg">{energySummary(oppPlayer.active)}</div>
                 {#if oppPlayer.active.toolAttached}{@const tc=getCard(oppPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
                 {#if oppPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
                 {#if oppPlayer.active.status}<div class="status-chip status-{oppPlayer.active.status}">{
@@ -2021,11 +2028,16 @@
             <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
               onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}/>
+            <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致） -->
+            <div class="active-nrg-col">
+              {#each energyPips(myPlayer.active) as pip}
+                <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+              {/each}
+            </div>
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
               <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(myPlayer.active)?hpRemaining(myPlayer.active)/hpTotal(myPlayer.active)*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),hpTotal(myPlayer.active))}"></div></div>
               <div class="active-hp">HP {hpRemaining(myPlayer.active)}/{hpTotal(myPlayer.active)}</div>
-              <div class="active-nrg">{energySummary(myPlayer.active)}</div>
               {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
               {#if myPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
               {#if myPlayer.active.status}<div class="status-chip status-{myPlayer.active.status}">{
@@ -3112,6 +3124,10 @@
   .active-name{ font-size:1rem; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:.2rem; }
   .active-hp{ font-size:.88rem; color:#ccc; }
   .active-nrg{ font-size:.8rem; color:#aaa; margin-top:.2rem; }
+  /* v2.52：戰鬥場能量 pip 改為垂直排列在卡圖右側（與備戰的 .bench-nrg 一致）。
+     pip 比 bench 版本略大以符合戰鬥場比例（寬≈18px、高=16px）。 */
+  .active-nrg-col{ display:flex; flex-direction:column; align-items:center; gap:3px; flex-shrink:0; padding-top:.2rem; line-height:1; }
+  .active-nrg-col .nrg-pip{ min-width:18px; height:16px; font-size:.66rem; }
   .attach-hint{ font-size:.75rem; color:#aaff44; font-weight:700; margin-top:.2rem; }
   @keyframes glow{ from{box-shadow:0 0 4px #aaff44}to{box-shadow:0 0 14px #aaff44} }
 

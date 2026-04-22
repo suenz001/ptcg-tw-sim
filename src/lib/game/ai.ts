@@ -199,6 +199,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';
         if (f === 'ex')              return card.supertype === 'Pokemon' && card.subtype === 'ex';
         if (f === 'MegaEx')          return card.supertype === 'Pokemon' && card.subtype === 'ex' && card.name.startsWith('超級');
+        if (f === 'TeraPokemon')     return card.supertype === 'Pokemon' && !!card.tags?.includes('太晶');
         if (f === 'Item')            return card.supertype === 'Trainer' && card.subtype === 'Item';
         if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
         if (f === 'Stadium')         return card.supertype === 'Trainer' && card.subtype === 'Stadium';
