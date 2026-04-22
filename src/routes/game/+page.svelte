@@ -1827,10 +1827,11 @@
               </div>
             {:else}
               <div class="bench-slot" out:scale={{ duration: 320, start: 0.55, opacity: 0 }}>
-                <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>
-                <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
+                <!-- v2.49：名字/HP 移到卡牌上方，避免與下方 chip/button 擠在一起 -->
                 <div class="bench-name">{bc?.name}</div>
                 <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
+                <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>
+                <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
                 {#if b.toolAttached}{@const tc3=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc3?.name}</div>{/if}
                 {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
                 {#if b.status}<div class="status-chip-sm status-{b.status}">{
@@ -2070,12 +2071,13 @@
               data-drop-iid={b.iid}
               out:scale={{ duration: 320, start: 0.55, opacity: 0 }}
               onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(b.iid)}>
+              <!-- v2.49：名字/HP 移到卡牌上方，避免與下方進化按鈕/特性按鈕/能量 pip 擠在一起 -->
+              <div class="bench-name">{bc?.name}</div>
+              <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
               <img src={bc?.imageUrl} alt={bc?.name}
                 class:zoomable={!selectedEnergyIid}
                 onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>
               <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
-              <div class="bench-name">{bc?.name}</div>
-              <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
               <!-- v2.47：以緊湊 pip 橫向呈現能量（取代文字表達），避免 bench-slot 被撐寬 -->
               <div class="bench-nrg">
                 {#each energyPips(b) as pip}
@@ -3236,7 +3238,8 @@
      避免撐大 zone-bench 把下方手牌擠出 viewport。能量 pip 橫向 wrap 到 max 2 行。 */
   .bench-slot{ flex:1 1 70px; min-width:70px; max-width:115px; height:185px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:hidden; }
   .bench-slot:not(.bench-empty).energy-target{ border-color:#aaff44; cursor:pointer; }
-  .bench-slot img{ width:100%; max-width:96px; border-radius:4px; }
+  /* v2.49：限制圖片高度，把底部空間留給能量 pip / 進化按鈕 / 特性按鈕（名字/HP 已移到卡牌上方） */
+  .bench-slot img{ width:100%; max-width:96px; max-height:100px; object-fit:contain; border-radius:4px; }
   /* bench-empty：與已放置 slot 等高；flex 與寬度對齊已放置卡牌的 slot，避免 setup 時 drop target 小到難拖 */
   .bench-empty{ border-style:dashed; border-color:#2a5a2a; opacity:.55; overflow:visible; flex:1 1 70px; min-width:70px; max-width:115px; height:185px; }
   /* 拖曳中的 bench-empty 提升可見度（粗框 + 偏亮底） */

@@ -1,9 +1,37 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 2f3c (v2.49)  
+> 最後更新：2026-04-22 Session 2f3d (v2.50)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 2f3d (v2.50) — 備戰寶可夢 UI：名字/HP 移到卡牌上方
+
+### 問題
+
+Leon 截圖：備戰區卡牌下方「名字 + HP + 特性按鈕」擠在一團。例子是可古㢢（HP 80/80）旁邊的土龍節節（HP 140/140，帶「逃跑抽出」特性按鈕）——三行文字在 185px 高度固定的 bench-slot 裡被往下擠到看不見。
+
+### 修法
+
+`src/routes/game/+page.svelte`：
+
+1. 兩個 bench-slot 渲染點（對手備戰 1829-1842 / 自方備戰 2064-2102）都把 `<div class="bench-name">` + `<div class="bench-stat">HP x/x</div>` 從圖片下方搬到圖片上方。這樣卡牌下方只留能量 pip / tool chip / ability-used chip / 進化按鈕 / 特性按鈕，不會跟名字/HP 搶空間。
+2. CSS `.bench-slot img` 加 `max-height:100px; object-fit:contain;`，限制圖片最大高度，把底部空間保留給 chip/button。（原本 img 只有 max-width:96px，高度隨自然 aspect ratio 約 134px，沒留空間給按鈕。）
+
+### 檔案變更
+
+- `src/lib/version.ts`: 2.49 → 2.50
+- `src/routes/game/+page.svelte`: 2 處渲染點 reorder + 1 處 CSS（img max-height 100px）
+
+### 構建
+
+`npm run build` 通過。
+
+### Commit
+
+待 commit 後填入 hash。
 
 ---
 
