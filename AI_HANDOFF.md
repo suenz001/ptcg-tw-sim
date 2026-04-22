@@ -104,7 +104,7 @@ v2.12 批次搬遷時漏看了這個欄位直接寫「抽 3 張」stub。未來�
 
 ### commit hash
 
-（見 commit 後 backfill）
+`74e69d8e9695aa450f2dc093e6d5ff560c6436b7`
 
 ---
 
