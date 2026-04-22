@@ -67,7 +67,7 @@ Leon：「抽牌（如每回合開始時抽一張牌、胡地特性、富裕能�
 
 ### Commit hash
 
-(build 後 push 補上)
+`08edfca`
 
 ---
 
