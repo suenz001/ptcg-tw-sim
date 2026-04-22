@@ -95,7 +95,7 @@ discard-search / hand-discard 兩種 pending 都加這個 key 的解析。
 
 ### commit hash
 
-（見 commit 後 backfill）
+`b088318bf1106f0ea740d1fa930ea70137808fa8`
 
 ---
 
