@@ -84,7 +84,7 @@ Zone-label 差異：
 
 ### Commit
 
-待填（此 entry 建立時尚未 commit）
+`4cc06ad` — v2.54: 戰鬥場黃框移除 + 碧綠之舞效果重寫 + 捕蟲組合 top6→top7
 
 ---
 
