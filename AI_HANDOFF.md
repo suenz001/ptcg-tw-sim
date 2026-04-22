@@ -69,6 +69,10 @@ fallback 保留是 defensive — 萬一未來某條新的 ability 呼叫路徑�
 
 `npm run build` 綠（12.28s）。
 
+### Commit
+
+`b3e2d66` v2.61: 碧綠之舞／逃跑抽出 觸發源定位根源修（engine 傳 cardInst）
+
 ### Teach moment
 
 這個 bug 的根源是「`action.iid` 進了 engine 但沒流到 effect 層」 — 一個**典型的 context lost** 問題。type 系統已經預留了第 4 參數，但實作側沒人使用 → 整個效果層演化出「靠 side effect (abilityUsedThisTurn flag) 反推觸發源」的 hack pattern。這種 hack 在單例場景下很穩，多例場景下必壞。
