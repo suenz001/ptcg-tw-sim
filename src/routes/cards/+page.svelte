@@ -131,6 +131,25 @@
     </p>
   </header>
 
+  <!-- ═══════════════ ALL (virtual aggregator) ═══════════════ -->
+  {@const totalAllCards = data.sets.reduce((n, s) => n + s.cardCount, 0)}
+  <div class="markSection">
+    <h2 class="markHeader">
+      <span class="markBadge mark-ALL">★</span>
+      <span>全部 · 合併 H / I / J 所有卡包</span>
+    </h2>
+    <div class="setGrid">
+      <a class="setTile setTileAll" href="{base}/cards?set=ALL">
+        <img src="{base}/covers/ALL.svg" alt="全部卡牌" loading="lazy" />
+        <div class="setInfo">
+          <div class="setCode">ALL</div>
+          <div class="setName">全部 H / I / J 卡牌</div>
+          <div class="setCount">{totalAllCards} 張</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
   {#each markGroups as [mark, sets] (mark)}
     <div class="markSection">
       <h2 class="markHeader">
@@ -186,7 +205,9 @@
       <button class="cardBtn" onclick={() => (selected = card)} aria-label={card.name}>
         <img src={card.imageUrl} alt={card.name} loading="lazy" />
         <span class="cardLabel">
-          <span class="num">{card.collectorNumber}</span>
+          <span class="num">
+            {#if data.setCode === 'ALL'}<span class="setPrefix">{card.setCode}</span>{' '}{/if}{card.collectorNumber}
+          </span>
           <span class="name">{card.name}</span>
         </span>
       </button>
@@ -445,6 +466,26 @@
   .mark-H { background: #3b82f6; }
   .mark-I { background: #8b5cf6; }
   .mark-J { background: #f59e0b; }
+  .mark-ALL {
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 55%, #f59e0b 100%);
+  }
+
+  /* Highlight the ALL aggregator tile so it stands out from real packs */
+  .setTileAll {
+    border-color: transparent;
+    background:
+      linear-gradient(#fff, #fff) padding-box,
+      linear-gradient(135deg, #3b82f6, #8b5cf6, #f59e0b) border-box;
+    border: 2px solid transparent;
+  }
+  .setTileAll:hover {
+    box-shadow: 0 6px 18px rgba(139, 92, 246, 0.25);
+    border-color: transparent;
+  }
+  .setTileAll .setCode {
+    color: #6d28d9;
+    font-weight: 700;
+  }
 
   /* ── Single-set browser ── */
   .controls {
@@ -523,6 +564,17 @@
   .cardLabel .num {
     color: #888;
     font-variant-numeric: tabular-nums;
+  }
+  /* Set-code prefix shown on each card tile in ALL mode */
+  .setPrefix {
+    display: inline-block;
+    padding: 0 0.3em;
+    margin-right: 0.15em;
+    background: #e0e7ff;
+    color: #4338ca;
+    border-radius: 3px;
+    font-weight: 600;
+    font-size: 0.95em;
   }
   .cardLabel .name {
     font-weight: 500;

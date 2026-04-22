@@ -1,9 +1,64 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session c0f2++ (v2.28)  
+> 最後更新：2026-04-22 Session c0f2+++ (v2.29)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session c0f2+++ (v2.29) — /cards 新增「全部卡牌」虛擬卡包（?set=ALL）
+
+### 問題
+
+Leon 想要一個「一次瀏覽所有卡牌」的入口：在卡包列表多一張封面，
+點進去讀全部 H/I/J 卡包的卡，一樣可以用 v2.28 那套 6 類篩選。
+封面讓我自己設計一個能代表寶可夢卡牌的圖案。
+
+### 主要修法
+
+**1. `static/covers/ALL.svg`（新檔）**
+- 自製 SVG 封面：精靈球 icon + 藍/紫/橙漸層背景（跟 H/I/J badge 配色一致）
+- 文字「全部卡牌」+「H · I · J」副標
+- 寬高比 213×300 ≒ 0.71（跟真實卡包封面同比例，tile 佔位一致）
+
+**2. `src/routes/cards/+page.ts`**
+- 新增 `setCode === 'ALL'` 分支：
+  - 先抓 `index.json`
+  - 用 `Promise.all` 平行抓所有 set 的 cards JSON（個別失敗 tolerate 成空陣列）
+  - `.flat()` 併成單一 `Card[]`
+  - return payload：`mode: 'set'`, `setCode: 'ALL'`, `setName: '全部 H / I / J 卡牌'`
+- 驗證 regex 仍維持 `^[A-Za-z0-9-]+$`（ALL 3 letters，通過）
+
+**3. `src/routes/cards/+page.svelte`**
+- Index mode 在 H/I/J 三組卡包**之前**插入 ALL section：
+  - `.markBadge.mark-ALL` = 藍紫橙 45° 漸層圓角 + 「★」字
+  - `.setTileAll` = 透明 border + 漸層邊框（padding-box / border-box 雙層 trick）
+  - 亮眼但不搶戲
+- Single-set mode 的每張卡 tile，當 `data.setCode === 'ALL'` 時在卡號前加上
+  `<span class="setPrefix">{setCode}</span>` 淡紫色背景 chip，避免 4000+ 張卡混淆
+- 維持 v2.28 的 6 類多選篩選（跟普通 set 共用同一套狀態）
+
+### 效能
+
+- 初始載入：一次併發 29 個 JSON fetch，SvelteKit 會把 fetch 預渲染/快取
+- 4,250 張 `<img loading="lazy">`：瀏覽器只會載入視窗內的卡圖，捲到哪載到哪
+- 分類篩選 / 搜尋：O(n) filter 在 n=4250 尚屬低延遲範圍
+- 若實戰發現慢，下一步可考慮 virtual scrolling 或分頁
+
+### 驗證
+
+- `npm run build` ✓ 12.51s
+- `static/covers/ALL.svg` 確認進入 `build/covers/ALL.svg` 輸出
+
+### 次要調整
+
+- version.ts: 2.28 → 2.29
+- AI_HANDOFF header 更新到 Session c0f2+++ (v2.29)
+
+### commit hash
+
+（待推完補）
 
 ---
 
