@@ -89,7 +89,7 @@ hasPendingActions（engine.ts:2000-2007）會在 `p.active === null` 時強制�
 
 ### commit hash
 
-（見 commit 後 backfill）
+`067c2d7da1bc5212cd16205aa2f008cc473b478e`
 
 ---
 
