@@ -87,10 +87,66 @@ reg('莉莉艾的決意', (st, idx) => {
   return drawCards(st, idx, drawCount);
 });
 
-// 枇琶 — 抽 3 張（簡化，不處理額外效果）
-reg('枇琶', (st, idx) => {
-  st = addLog(st, '枇琶：抽 3 張', idx);
-  return drawCards(st, idx, 3);
+// 枇琶 — 查看對手手牌，從其中選擇最多 2 張「物品卡」將其丟棄
+// v2.38：原簡化為「抽 3 張」是錯的。依官方文字（`rulesText` 亦印證）：
+//   「查看對手的手牌，從其中選擇最多2張物品卡，將其丟棄。」
+// 實裝機制：
+//   - 先掃對手手牌，挑出 Trainer/Item 的 iids 放入 validIids 傳給 UI。
+//   - 開 'hand-discard' 選單，sourcePlayerIdx = 對手，actorIdx = 自己，
+//     minCount=0（允許不選，例如只有 1 張時也可只選 1 或 0）、maxCount=min(2, 物品張數)、
+//     filter='Item'（UI / AI 據此過濾）。
+//   - UI 會以 validIids 限定「只有物品卡可點選」；非物品的手牌在 UI 下方
+//     揭露區塊（`<details>` 對手手牌其餘卡）裡僅供查看，不可選。
+//   - Resolver 把選取的 iids 從對手 hand 移到對手 discard。
+reg('枇琶', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const oppHand = st.players[dIdx].hand;
+  if (oppHand.length === 0) {
+    return addLog(st, '枇琶：對手手牌為空，無效果', idx);
+  }
+  const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = addLog(st, `枇琶：查看對手手牌（${oppHand.length} 張）— ${handNames}`, idx);
+  const itemIids = oppHand
+    .filter(c => {
+      const card = pool.get(c.cardId);
+      return card?.supertype === 'Trainer' && card.subtype === 'Item';
+    })
+    .map(c => c.iid);
+  if (itemIids.length === 0) {
+    return addLog(s, '枇琶：對手手牌無物品卡，效果結束', idx);
+  }
+  s = addLog(s, `枇琶：可丟棄對手最多 ${Math.min(2, itemIids.length)} 張物品卡`, idx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: idx,
+    sourcePlayerIdx: dIdx,
+    minCount: 0,
+    maxCount: Math.min(2, itemIids.length),
+    filter: 'Item',
+    effectKey: 'loquat-discard-opp-items',
+    params: { validIids: itemIids },
+  });
+});
+
+// v2.38 枇琶 resolver — 將選取的對手手牌（物品卡）移到對手棄牌區
+regR('loquat-discard-opp-items', (st, actorIdx, selectedIids, _params, pool) => {
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  const oppP = st.players[dIdx];
+  const picks = oppP.hand.filter(c => selectedIids.includes(c.iid));
+  if (picks.length === 0) {
+    return addLog(st, '枇琶：未選取任何物品卡', actorIdx);
+  }
+  const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  const pickedSet = new Set(selectedIids);
+  return updatePlayer(
+    addLog(st, `枇琶：丟棄對手 ${picks.length} 張物品卡 — ${names}`, actorIdx),
+    dIdx,
+    p => ({
+      ...p,
+      hand: p.hand.filter(c => !pickedSet.has(c.iid)),
+      discard: [...p.discard, ...picks],
+    }),
+  );
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

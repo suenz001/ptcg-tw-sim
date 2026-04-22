@@ -2047,6 +2047,25 @@
           {/if}
         {/if}
 
+        <!-- v2.38 枇琶：對手手牌 hand-discard（sourcePlayerIdx != actorIdx）— 揭露「非可選」其餘手牌 -->
+        {#if pendingSelection.type==='hand-discard' && game
+          && pendingSelection.sourcePlayerIdx !== pendingSelection.actorIdx}
+          {@const srcHand = game.players[pendingSelection.sourcePlayerIdx].hand}
+          {@const pickableIidsHD = new Set(selectionItems.map(c => c.iid))}
+          {@const otherHand = srcHand.filter(c => !pickableIidsHD.has(c.iid))}
+          {#if otherHand.length > 0}
+            <details class="full-deck-view">
+              <summary>🔍 對手手牌其餘 {otherHand.length} 張（本次不可丟棄，僅供查看）</summary>
+              <div class="full-deck-note">※ 枇琶效果只能丟棄物品卡；其餘手牌（寶可夢 / 支援者 / 能量 / 道具 / 場地）僅揭露，不可選</div>
+              <div class="full-deck-list">
+                {#each otherHand as inst}{@const c=getCard(inst.cardId)}
+                  {#if c}<div class="deck-item">{c.name}</div>{/if}
+                {/each}
+              </div>
+            </details>
+          {/if}
+        {/if}
+
         <div class="sel-footer">
           {#if akamatsuSameTypeBlocked}
             <div class="sel-hint-warn">⚠ 赤松選 2 張能量時，兩張屬性必須不同</div>

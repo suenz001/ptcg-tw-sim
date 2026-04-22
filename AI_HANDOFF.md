@@ -1,9 +1,110 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session d1a3c (v2.37)  
+> 最後更新：2026-04-22 Session d1a3d (v2.38)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session d1a3d (v2.38) — 修正 枇琶 支援者效果（原簡化為抽 3 張 → 改為查看對手手牌丟物品卡）
+
+### 問題
+
+Leon 回報：枇琶（SV8a Supporter，id=12278）目前實裝為「抽 3 張」是錯的。
+官方 `rulesText`（SV8a.json 也有收）：
+
+> 查看對手的手牌，從其中選擇最多 2 張物品卡，將其丟棄。
+
+現有實裝位於 `effects/cards/draw_supporters.ts`，被 v2.12 批次搬遷時以
+「抽 3 張（簡化，不處理額外效果）」 stub 進去，忘了後續補回正確效果。
+
+### 設計
+
+Leon 明確指示實作流程應類似「牌庫清單檢索」的 UX：
+1. 列出對手手牌裡的物品卡 → 可選最多 2 張丟到對手棄牌區。
+2. 同時揭露對手手牌的「非物品卡」（寶可夢 / 支援者 / 能量 / 道具 / 場地）僅供查看。
+
+### 實裝
+
+**A. `effects/cards/draw_supporters.ts`** — 改寫 `reg('枇琶', ...)`：
+
+```ts
+reg('枇琶', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const oppHand = st.players[dIdx].hand;
+  if (oppHand.length === 0) return addLog(st, '枇琶：對手手牌為空，無效果', idx);
+
+  const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = addLog(st, `枇琶：查看對手手牌（${oppHand.length} 張）— ${handNames}`, idx);
+
+  const itemIids = oppHand.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Trainer' && card.subtype === 'Item';
+  }).map(c => c.iid);
+  if (itemIids.length === 0) return addLog(s, '枇琶：對手手牌無物品卡', idx);
+
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: idx,
+    sourcePlayerIdx: dIdx,        // 關鍵：sourcePlayer ≠ actor 指向對手
+    minCount: 0,
+    maxCount: Math.min(2, itemIids.length),
+    filter: 'Item',
+    effectKey: 'loquat-discard-opp-items',
+    params: { validIids: itemIids },
+  });
+});
+```
+
+Resolver 從對手 hand 移到對手 discard。
+
+**B. `routes/game/+page.svelte`** — 加「對手手牌其餘揭露」`<details>` block：
+
+當 `pendingSelection.type === 'hand-discard'` 且
+`sourcePlayerIdx !== actorIdx` 時，計算 `srcHand - pickableIids` 作為其餘
+手牌，展開顯示卡名（純揭露不可選）。UX 仿照 deck-search 的「翻到其他 X 張」。
+
+**C. `game/ai.ts`** — 修 `hand-discard` case：
+
+原先固定用 `actorPlayer.hand`，枇琶 case（actor=AI / src=玩家）會抓到 AI 自己
+的手牌 → bug。改為：
+- `hand = srcPlayer.hand`（依 sourcePlayerIdx）
+- 支援 `params.validIids` 過濾
+- 新增 `filter === 'Item'` 與 `'BasicEnergy'` 分支（補齊 UI 已支援的 filters）
+- 對手手牌排序策略：優先丟 Trainer（尤其名字含「球」的），原本「優先丟能量」
+  只適用於自己手牌
+
+### 為什麼不新增 pending type
+
+最初想過加一個 `'opp-hand-discard'` 新 type，但：
+- `hand-discard` 已有 `sourcePlayerIdx` 欄位，語意天然支援異玩家
+- UI 的 `selectionItems` 已經用 `src = game.players[sourcePlayerIdx]`，
+  將 src 設為對手後就自動抓對手手牌
+- ai.ts 的原實作有 bug（hardcode actorPlayer.hand）才是真正要修的地方
+
+結論：沿用既有 type 只需補 AI bug + UI 揭露，最小改動、最大相容。
+
+### 驗證
+
+本機 `npm run build` 通過（206 modules，12.55s）。
+
+### 改到的檔
+
+- `src/lib/game/effects/cards/draw_supporters.ts` — 枇琶 reg + regR
+- `src/routes/game/+page.svelte` — 加 opp-hand 揭露 details
+- `src/lib/game/ai.ts` — hand-discard case 支援 srcPlayer + validIids + Item / BasicEnergy filter
+
+### 學到的教訓
+
+枇琶 的 `rulesText` 一直都在 SV8a.json 裡（`"查看對手的手牌，從其中選擇最多2張物品卡，將其丟棄。"`），
+v2.12 批次搬遷時漏看了這個欄位直接寫「抽 3 張」stub。未來做批次實裝時，
+應該優先掃 `rulesText` 而不是只看 card `text` / `abilities` / `attacks`。
+配合 `feedback_card_text_proactive.md` — 有官方文字就該 先自己判讀實裝。
+
+### commit hash
+
+（見 commit 後 backfill）
 
 ---
 

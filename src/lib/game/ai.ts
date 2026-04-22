@@ -290,15 +290,36 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
     }
 
     // 手牌丟棄
+    // v2.38：sourcePlayerIdx 可以 ≠ actorIdx（例：枇琶 — AI 用枇琶丟玩家手牌物品卡）
+    // 所以改用 srcPlayer 的 hand 作為來源，並支援 validIids 過濾。
     case 'hand-discard': {
       const f = sel.filter ?? '';
-      let hand = f === 'Energy'
-        ? actorPlayer.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy')
-        : actorPlayer.hand;
-      // 優先丟能量，再丟訓練家，最後寶可夢
+      const validIidsHD = sel.params?.validIids as string[] | undefined;
+      let hand = srcPlayer.hand;
+      if (validIidsHD) hand = hand.filter(c => validIidsHD.includes(c.iid));
+      if (f === 'Energy') hand = hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+      else if (f === 'BasicEnergy') hand = hand.filter(c => {
+        const card = pool.get(c.cardId);
+        return card?.supertype === 'Energy' && card.subtype === 'Basic';
+      });
+      else if (f === 'Item') hand = hand.filter(c => {
+        const card = pool.get(c.cardId);
+        return card?.supertype === 'Trainer' && card.subtype === 'Item';
+      });
+      // 對自己手牌丟棄：優先丟能量，再丟訓練家，最後寶可夢
+      // 對對手手牌丟棄（枇琶）：丟高價值物品優先（球 / 研究之類 > 其他）
+      const isOppHand = sel.sourcePlayerIdx !== sel.actorIdx;
       hand = [...hand].sort((a, b) => {
         const scoreOf = (c: CardInstance) => {
           const card = pool.get(c.cardId);
+          if (isOppHand) {
+            // 丟對手物品：優先丟訓練家（預期值較高）；若名字含「球」更優先
+            if (card?.supertype === 'Trainer') {
+              return card.name.includes('球') ? 4 : 3;
+            }
+            return 1;
+          }
+          // 丟自己：能量 > 訓練家 > 寶可夢（留場上資源）
           if (card?.supertype === 'Energy') return 3;
           if (card?.supertype === 'Trainer') return 2;
           return 1;
