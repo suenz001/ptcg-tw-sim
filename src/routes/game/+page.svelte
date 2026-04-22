@@ -295,9 +295,109 @@
     }
   });
 
+  // ── v2.45 抽牌飛卡 overlay ────────────────────────────────────────────────
+  // Leon feedback：每回合開始抽牌 / 胡地特性 / 富裕能量 / 不公印章 / 莉莉艾的決意 /
+  // 裁判 / setup 一開始發 7 張，看不到動畫。希望一張一張發牌、有抽牌的臨場感。
+  //
+  // 做法：
+  //   - 監聽 game.players[*].hand 的 iid 集合差異
+  //   - 新 iid 視為「剛抽到」，從對應玩家牌庫位置飛到手牌區（自己往下，對手往上）
+  //   - 多張同時進來時 stagger 130ms，玩家看到一張一張飛過去
+  //   - face-down card-back 呈現（抽牌當下看不到內容，飛到位後才揭曉 = 實際 hand-card）
+  //   - 為避免與既有 hand-card `in:fly` 重疊、看到兩張卡疊著，arrivingIids 讓
+  //     hand-card 飛行期間 opacity:0，overlay 卡落地後 remove → hand-card 淡入
+  //   - coinFlipStage !== 'done' 時不動（setup 一開始蓋著 coin-overlay 看不到）
+  type DrawAnim = {
+    id: number;
+    playerIdx: 0 | 1;
+    iid: string;
+    startX: number; startY: number;
+    endX: number;   endY: number;
+    width: number;  height: number;
+    delay: number;  duration: number;
+  };
+  let drawAnims = $state<DrawAnim[]>([]);
+  let arrivingIids = $state<Set<string>>(new Set());
+  const prevHandIids: [Set<string>, Set<string>] = [new Set(), new Set()];
+  const drawAnimTimers: ReturnType<typeof setTimeout>[] = [];
+  const DRAW_ANIM_DUR = 520;
+  const DRAW_STAGGER  = 130;
+
+  $effect(() => {
+    if (!game) {
+      prevHandIids[0] = new Set();
+      prevHandIids[1] = new Set();
+      return;
+    }
+    // 硬幣動畫還在播時：發牌畫面會被蓋住，不動；等 'done' 後再算 iid 差異
+    if (coinFlipStage !== 'done') return;
+    for (const pIdx of [0, 1] as const) {
+      const curr = game.players[pIdx].hand;
+      const currIids = new Set(curr.map(c => c.iid));
+      const prev = prevHandIids[pIdx];
+      const newIids: string[] = [];
+      for (const inst of curr) if (!prev.has(inst.iid)) newIids.push(inst.iid);
+      prevHandIids[pIdx] = currIids;
+      if (newIids.length === 0) continue;
+      // 先把新 iid 標記為 arriving（hand-card opacity:0）— 自己的手牌才有 DOM
+      if ((pIdx as number) === myIdx) {
+        const next = new Set(arrivingIids);
+        for (const iid of newIids) next.add(iid);
+        arrivingIids = next;
+      }
+      const capturedNew = newIids.slice();
+      // 延遲到下一個 microtask 才量 DOM — 此時 hand 新卡已 render
+      queueMicrotask(() => {
+        const isMine = (pIdx as number) === myIdx;
+        const deckEl = document.querySelector(
+          isMine ? '.my-row .pile-slot.deck-pile' : '.opponent-row .pile-slot.deck-pile'
+        ) as HTMLElement | null;
+        if (!deckEl) return;
+        const deckRect = deckEl.getBoundingClientRect();
+        const startX = deckRect.left + deckRect.width / 2;
+        const startY = deckRect.top  + deckRect.height / 2;
+        // 自己的手牌區 → 飛到 hand-strip 中心；對手無可見手牌 → 飛到 opponent-row 上方
+        let endX: number, endY: number;
+        if (isMine) {
+          const handEl = document.querySelector('.hand-strip') as HTMLElement | null;
+          const handRect = handEl?.getBoundingClientRect();
+          endX = handRect ? handRect.left + handRect.width / 2 : window.innerWidth / 2;
+          endY = handRect ? handRect.top  + handRect.height / 2 : window.innerHeight - 80;
+        } else {
+          const oppRowEl = document.querySelector('.opponent-row') as HTMLElement | null;
+          const oppRect = oppRowEl?.getBoundingClientRect();
+          endX = oppRect ? oppRect.left + oppRect.width / 2 : window.innerWidth / 2;
+          endY = oppRect ? oppRect.top  + 30 : 60;
+        }
+        capturedNew.forEach((iid, i) => {
+          const id = Date.now() + Math.random() + i * 0.001;
+          const anim: DrawAnim = {
+            id, playerIdx: pIdx, iid,
+            startX, startY, endX, endY,
+            width: 96, height: 128,
+            delay: i * DRAW_STAGGER,
+            duration: DRAW_ANIM_DUR,
+          };
+          drawAnims = [...drawAnims, anim];
+          const total = anim.delay + anim.duration + 40;
+          const timerId = setTimeout(() => {
+            drawAnims = drawAnims.filter(d => d.id !== id);
+            if (isMine) {
+              const next = new Set(arrivingIids);
+              next.delete(iid);
+              arrivingIids = next;
+            }
+          }, total);
+          drawAnimTimers.push(timerId);
+        });
+      });
+    }
+  });
+
   onDestroy(() => {
     for (const t of shuffleTimers) clearTimeout(t);
     for (const t of discardTimers) clearTimeout(t);
+    for (const t of drawAnimTimers) clearTimeout(t);
   });
 
   // ── 硬幣動畫（Session 28） ─────────────────────────────────────────────────
@@ -2052,6 +2152,7 @@
             class:dragging={dragging?.iid===inst.iid}
             class:draggable={dragKind!==null}
             class:hover-peek={hoverHandIid===inst.iid}
+            class:arriving={arrivingIids.has(inst.iid)}
             style="--fan-rot:{rot}deg;--fan-lift:{liftY}px;"
             in:fly={{ x: 220, y: -40, duration: game?.phase === 'setup' ? 480 : 220, delay: (game?.phase === 'setup' ? i * 150 : i * 40), easing: cubicOut }}
             out:fly={{ y: -220, duration: 220, easing: cubicOut }}
@@ -2734,6 +2835,27 @@
     </div>
   {/if}
 
+  <!-- ══ v2.45 抽牌飛卡 overlay ══ -->
+  {#if drawAnims.length > 0}
+    <div class="draw-fly-overlay">
+      {#each drawAnims as d (d.id)}
+        <div class="draw-fly-card"
+          style="
+            left:{d.startX - d.width/2}px;
+            top:{d.startY - d.height/2}px;
+            width:{d.width}px;
+            height:{d.height}px;
+            --dx:{d.endX - d.startX}px;
+            --dy:{d.endY - d.startY}px;
+            animation-delay:{d.delay}ms;
+            animation-duration:{d.duration}ms;
+          ">
+          <div class="card-back draw-fly-back"><span class="card-back-mark">?</span></div>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
 </div>
 {/if}
 
@@ -2948,7 +3070,9 @@
 
   .zone-active{ flex-shrink:0; width:300px; display:flex; flex-direction:column; gap:0.2rem; }
   .my-active-zone{ position:relative; }
-  .active-card{ display:flex; gap:0.45rem; background:rgba(0,0,0,.35); border:1px solid #3a5a3a; border-radius:8px; padding:0.45rem 0.5rem; align-items:flex-start; position:relative; cursor:default; min-height:auto; }
+  /* v2.45 Leon feedback：戰鬥場框大小固定，不因 tool/ability-used/status chip 出現而變長變短；
+     min-height 170px 預留最壞情形（名字/HP bar/HP/能量/裝備/特性已用/狀態）。 */
+  .active-card{ display:flex; gap:0.45rem; background:rgba(0,0,0,.35); border:1px solid #3a5a3a; border-radius:8px; padding:0.45rem 0.5rem; align-items:flex-start; position:relative; cursor:default; min-height:170px; }
   .active-card.opp-active{ border-color:#5a3a3a; background:rgba(0,0,0,.4); }
   .active-card.mine-active{ border-color:#3a6a3a; }
   .active-card.energy-target{ border-color:#aaff44; cursor:pointer; animation:glow 1s infinite alternate; }
@@ -3063,6 +3187,33 @@
     45%  { transform: scale(1.14) rotate(-3deg); }
     100% { transform: scale(1) rotate(0); }
   }
+
+  /* ── v2.45 抽牌飛卡 overlay ── */
+  /* 注意：.draw-fly-card 用 fixed + left/top（初始在牌庫位置），動畫用 translate(var(--dx), var(--dy)) */
+  .draw-fly-overlay{ position:fixed; inset:0; z-index:9200; pointer-events:none; overflow:visible; }
+  .draw-fly-card{
+    position:fixed; pointer-events:none; will-change:transform, opacity;
+    animation-name: draw-fly; animation-timing-function: cubic-bezier(.3,.7,.25,1); animation-fill-mode: both;
+    filter: drop-shadow(0 6px 12px rgba(0,0,0,.65));
+  }
+  .draw-fly-back{
+    width:100%; height:100%; border-radius:6px;
+    display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 50%, #f0f4ff 0 12%, #ffffff 12% 14%, #1a1a1a 14% 18%, #c0392b 18% 50%, #922b21 50% 100%);
+    border:2px solid #1a1a1a;
+    box-shadow:inset 0 0 6px rgba(0,0,0,.6);
+  }
+  .draw-fly-card .card-back-mark{ font-size:1.15rem; font-weight:900; color:rgba(255,255,255,.85); text-shadow:0 1px 2px rgba(0,0,0,.7); font-family:'Times New Roman',serif; }
+  @keyframes draw-fly{
+    0%   { transform:translate(0,0) rotate(-8deg) scale(.7); opacity:0; }
+    12%  { opacity:1; transform:translate(calc(var(--dx) * .05), calc(var(--dy) * .05)) rotate(-6deg) scale(.78); }
+    70%  { opacity:1; transform:translate(calc(var(--dx) * .88), calc(var(--dy) * .88)) rotate(-2deg) scale(.98); }
+    100% { transform:translate(var(--dx), var(--dy)) rotate(0) scale(1.02); opacity:0; }
+  }
+
+  /* v2.45：overlay 飛行期間 hand-card opacity:0，overlay 落地才淡入 */
+  .hand-card.arriving{ opacity:0; pointer-events:none; }
+  .hand-card:not(.arriving){ transition: opacity .18s ease-out; }
 
   .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:visible; min-width:0; }
   .bench-slot{ flex:1 1 70px; min-width:70px; max-width:115px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:visible; }

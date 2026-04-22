@@ -1,9 +1,73 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 4d7e2 (v2.44)  
+> 最後更新：2026-04-22 Session 5a1c8 (v2.45)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 5a1c8 (v2.45) — 抽牌飛卡 overlay + 戰鬥場框大小鎖定（另 2 件 Leon 誤報已澄清）
+
+### 先處理兩件 Leon 自己澄清的誤報（不算 bug）
+
+1. **土龍節節 逃跑抽出 不能使用**：Leon 自己確認「我弄錯了，原來是被火箭隊的監視塔封鎖了」。engine.ts:42-53 `isColorlessAbilityBlocked` + line 2166 `getUsableAbilities` 正確 gate【無】寶可夢特性 — 規則正確、實裝正確。事前已用 scripts/test-toedscruel.mjs 驗證過：ABILITY_EFFECTS 有 `土龍節節|0`、USE_ABILITY 抽 3 張 + bench→active swap 全部乾淨。task #209 關閉。
+2. **彈出 UI 視窗可拖曳**：Leon 自己確認「ui 拖曳已經實裝了，我沒確認到抱歉」— v2.44 task #206 就做了 `.selection-overlay.dragged { background:transparent; pointer-events:none }` + `modalOffset` + `.sel-header` 拖曳把手。不動。
+
+### 真正動手的兩件
+
+#### A. 戰鬥場框大小鎖定（Leon 新提的 UI 一致性要求）
+
+Leon：「應該鎖定中間玩家戰鬥場的框框大小，不要有的時候有裝備、能量、特性的時候就變長，沒有的時候就縮小，大小應該要一直維持一致(因此應該預留排版)」。
+
+**根因**：`.active-card { min-height: auto }` → 框高隨 `.active-info` 內容動態增減：當寶可夢附上 tool、`abilityUsedThisTurn=true` 出現 ✨已用特性 chip、或有 status chip（中毒/燒傷/睡眠/混亂/麻痺）時，`.active-info` 多出幾行文字，整個框高就長高；反之縮回去。
+
+**修法**：`.active-card` 改 `min-height:170px`，預留最壞情形（active-name 22px + hp-bar 6px + active-hp 14px + active-nrg 16px + tool-chip 18px + ab-used-chip 18px + status-chip 22px = 116px + padding 16px ≈ 132px，170 給足緩衝）。不改 `.active-card.active-empty`（它本來就 min-height:160px、padding 1.4rem，視覺重量相當）。既讓有沒有 chip 都一樣高、也不會覆蓋空戰鬥場的拖放 target 大小。
+
+#### B. 抽牌飛卡 overlay（task #208）
+
+Leon：「抽牌（如每回合開始時抽一張牌、胡地特性、富裕能量等）和一開始發牌（還有不公印章、莉莉艾的決意、裁判等等）的時候，我還是看不到動畫，我建議一張一張發，讓玩家有抽牌的臨場感」。
+
+**為什麼 v2.42 做的 `in:fly` 不夠**：當時的 hand-card in:fly 起點是 `(x:+220, y:-40)` 的相對偏移、playing 時長 220ms、delay i*40ms — 單張抽牌幾乎察覺不到，且不從牌庫方向來，沒有「發牌」的感覺。
+
+**新設計：獨立 overlay，一張一張從牌庫飛到手牌區**
+
+- **狀態**：`drawAnims` 陣列（每張飛行卡的起訖座標 + delay + duration）、`arrivingIids` Set（目前正在飛行中的 hand iid）、`prevHandIids` 兩方手牌 iid 快照。
+- **觸發**：`$effect` 監聽 `game.players[*].hand`，對前後 iid 集合做 diff。新 iid = 剛抽到的卡。多張一起進（起手 7、莉莉艾/裁判換手牌、胡地 3 張）就 stagger 130ms 一張、flight duration 520ms，視覺上真的「一、二、三、四…」飛過去。
+- **座標**：起點為對應玩家牌庫 `deckRect` 中心；終點：自己 → `.hand-strip` 中心，對手 → `.opponent-row` 上緣（對手手牌永遠 hidden，飛到區域內消失即可）。
+- **Coin flip gate**：`coinFlipStage !== 'done'` 時不處理 diff（setup 初期手牌 populated 時硬幣還在轉，完全蓋住畫面）。等 flipping/revealing 結束、stage 轉 'done' 時 effect 再跑一次（Svelte 5 auto-tracking 追到 coinFlipStage），此時才把 7 張新 iid 推去動畫，玩家才看到「硬幣落定 → 一張一張發牌」。
+- **避免疊卡**：hand-card `in:fly` 還是會放（不刪，保留淡入微動效），但用 `.arriving` class 在飛行期間 `opacity:0` 遮住，overlay 落地後 timer 把 iid 從 arrivingIids 拔掉 → hand-card `transition:opacity .18s` 淡入，overlay 本身 100% keyframe 淡出。視覺上：飛過去、落地、卡片「顯形」在手牌位置，不會看到兩張。
+- **視覺**：`.draw-fly-card` + `.draw-fly-back` 用跟 `.card-back`（v2.42 對手設置蓋牌用的那個 Pokéball 紅漸層）一模一樣的 CSS background，大小 96×128（card-back-sm 同尺寸），z-index 9200（介於 coin-overlay 9000 與 dmg-pop 9500 之間）。keyframe 從起點旋轉 -8deg scale .7 飛到終點 scale 1.02 + 微旋正，最後 opacity→0 讓 hand-card 接棒。
+
+**涵蓋哪些情境**（靠 iid diff 自動全中，不用特地接各個效果）：
+- Setup 起手 7 張（雙方）
+- Setup mulligan 重抽（手牌 iid 整批換掉，新 iid 全部觸發）
+- 每回合開始抽 1 張
+- 胡地｜手之力量（抽 3）、富裕能量（抽 2）、不公印章（抽 3）、莉莉艾的決意（補到 6）、裁判（雙方重洗+抽 4）、莉莉艾的珍珠、赫普的包包、鳴依的勉勵… 所有 regular 的 「抽 N 到手牌」
+- 搜牌後放手牌（老大的指令沒抽所以不觸發、但球類/博士研究類會）
+
+### 小改動總覽
+
+- `src/lib/version.ts`：2.44 → 2.45
+- `src/routes/game/+page.svelte`：
+  - 加 `DrawAnim` type、`drawAnims`/`arrivingIids`/`prevHandIids`/`drawAnimTimers`、監聽 hand iid 差異的 `$effect`、extend `onDestroy`
+  - hand-card `<div>` 新增 `class:arriving={arrivingIids.has(inst.iid)}`
+  - 硬幣 overlay 下方加 `{#if drawAnims.length > 0}` 飛卡 overlay render block
+  - CSS：`.active-card` min-height auto → 170px、新增 `.draw-fly-overlay` / `.draw-fly-card` / `.draw-fly-back` / `@keyframes draw-fly` / `.hand-card.arriving { opacity:0 }`
+
+### 驗證
+
+- 本機 `npm run build` 成功（13.19s，無 error，僅 Sass 棄用警告不影響）。
+- 靜態分析：因為 iid 都來自 engine 管的 CardInstance、每次 draw_N 都 mint 新 iid，iid diff 不會漏也不會重。
+- 沒寫 Node script — 動畫視覺本來就要實機觀察，ship 後 Leon 回饋再調 duration/stagger/z-index。
+
+### 次要改動（同一 commit 內）
+
+無。這次只有動畫 overlay + active-card min-height 兩處。
+
+### Commit hash
+
+(build 後 push 補上)
 
 ---
 
