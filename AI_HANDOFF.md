@@ -1,9 +1,72 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session c0f2+++++ (v2.31)  
+> 最後更新：2026-04-22 Session c0f2++++++ (v2.32)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session c0f2++++++ (v2.32) — 卡牌 zoom 返回鈕移位 + 修胡地進化鏈資料
+
+### 問題
+
+Leon 指出兩個 bug（附卡牌 zoom 截圖）：
+1. **UI**：zoom modal 的「← 返回」按鈕放在左上，卡牌圖在它下方 → 按鈕會**擋到卡牌**
+2. **資料**：在遊戲中**勇基拉無法進化為胡地**（v2.21 建的「胡地」預組裡 M1S 14058 胡地 是軸心）
+
+### Bug A — 返回鈕位置
+
+**修法**：`src/routes/game/+page.svelte` 的 `.zoom-back` CSS
+- 原本 `position:absolute; top:.7rem; left:.8rem`（左上）
+- 改成 `position:absolute; top:.7rem; right:3rem`（右上，在 × 左側）
+- `.zoom-close` 本身 `right:.8rem`；close 按鈕寬約 1.6–2rem，留出 ~0.4rem 間距
+- 不改 HTML 結構，純 CSS 改 1 行
+
+### Bug B — 勇基拉 → 胡地 進化鏈資料錯誤
+
+**根因**（scraper 資料 bug）：所有 set 的「胡地」(Stage2) `evolvesFrom` 都寫成 `'胡地ex'`，
+應該是 `'勇基拉'`。engine 進化判定 `evoCard.evolvesFrom !== baseCard.name` 比對失敗，
+所以勇基拉（name='勇基拉'）無法進化成 evolvesFrom='胡地ex' 的胡地。
+
+**掃描結果**：總共 6 筆「胡地」卡資料有此錯誤：
+
+| Set | id | 原 evolvesFrom | 修正為 |
+|-----|----|----------------|--------|
+| M-P | 17974 | 胡地ex | 勇基拉 |
+| M1S | 14058 | 胡地ex | 勇基拉 |
+| M1S | 14218 | 胡地ex | 勇基拉（alt art） |
+| SV6 | 10463 | 胡地ex | 勇基拉 |
+| SV8a | 11584 | 胡地ex | 勇基拉 |
+| SV8a | 12360 | 胡地ex | 勇基拉（alt art） |
+
+**修法**：Python 腳本直接改 `static/cards/{M-P,M1S,SV6,SV8a}.json`。
+
+### 同 bug 模式，其他 Stage2 卡（未修，需 Leon 確認）
+
+掃描發現另外 3 筆 Stage2 卡有同樣「evolvesFrom = 自己ex版」的錯誤模式。
+由於這兩條進化鏈我只能從 JSON 推測（memory: 卡表辨識不確定時一定要問 Leon），
+先列出等 Leon 確認正確的 evolvesFrom：
+
+| Set | 卡名 | 現 evolvesFrom | 疑似正確值（待 Leon 確認） |
+|-----|------|----------------|--------------------------|
+| M3 | 君主蛇 | 君主蛇ex | 青藤蛇（Snivy→Servine→Serperior 進化鏈）|
+| SV9a | 蜜集大蛇 ×2 | 蜜集大蛇ex | 裹蜜蟲？（SV9a 內唯一名含「蜜」的 Stage1） |
+
+> **→ Leon 如確認，下個 session 一起修掉。**
+> 另外 scraper 本身（`scripts/scrape/parse-card.js` line 237–243）在處理
+> 「同名 card 有 ex / 非 ex 兩版」時會誤判：`.evolution` section 的 `findIndex(n => n === card.name)`
+> 可能匹配到 ex 版本的位置，導致 evolvesFrom 變成 ex 版。未來若重爬卡表需要 patch。
+
+### 驗證
+- `npm run build` ✓ 12.40s（含 effects.ts 364.36 kB）
+- 6 筆 JSON 已改，`python3` 檢查 evolvesFrom 全為 '勇基拉' ✓
+
+### 版本
+- `src/lib/version.ts`: 2.31 → 2.32
+
+### Commit
+- 待填入（push 後 backfill）
 
 ---
 

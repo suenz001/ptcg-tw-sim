@@ -3019,7 +3019,8 @@
   .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.2rem; max-width:720px; width:96vw; max-height:92vh; display:flex; flex-direction:column; gap:.75rem; color:#f0f0f0; overflow-y:auto; position:relative; }
   .zoom-close{ position:absolute; top:.7rem; right:.8rem; background:transparent; border:none; color:#aaa; font-size:1.2rem; cursor:pointer; padding:.2rem .4rem; border-radius:4px; line-height:1; }
   .zoom-close:hover{ background:#2a3a2a; color:#fff; }
-  .zoom-back{ position:absolute; top:.7rem; left:.8rem; background:#2a4a6a; border:1px solid #4a6a8a; color:#cce; font-size:.82rem; cursor:pointer; padding:.25rem .6rem; border-radius:4px; line-height:1; }
+  /* v2.32：放到 × 左邊（top-right），避免擋到卡牌圖。.zoom-close 大約 1.6–2rem 寬，所以 back 從 right:3rem 開始留一些間距。 */
+  .zoom-back{ position:absolute; top:.7rem; right:3rem; background:#2a4a6a; border:1px solid #4a6a8a; color:#cce; font-size:.82rem; cursor:pointer; padding:.25rem .6rem; border-radius:4px; line-height:1; }
   .zoom-back:hover{ background:#3a5a8a; color:#fff; }
   .zoom-body{ display:flex; gap:1.25rem; align-items:flex-start; flex-wrap:wrap; }
   .zoom-img{ width:260px; max-width:90vw; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.7); flex-shrink:0; }
