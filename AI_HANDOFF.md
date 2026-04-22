@@ -1,9 +1,55 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session ea58 (v2.63)  
+> 最後更新：2026-04-23 Session ea58 (v2.64)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session ea58 (v2.64) — 模組化第三波：ATTACK_PRE / POST / ABILITY_EFFECTS 搬到 _shared，抽出胡地 + 瑪俐預組
+
+Leon 於 UTC+8 00:44 交代「自己執行模組化，不要停下來問」後，本波把 effects.ts 剩下的 **攻擊 / 特性核心登錄表**一併移到 `_shared.ts`，打開其餘 Wave-block 能被抽離的能力，並拿 **Wave 44（胡地 + 瑪俐的長毛巨魔ex）** 做第一組實證。
+
+### 重構 1 — 核心登錄表搬遷
+
+effects.ts 過去把這些留在自己 scope 裡：
+
+- 型別：`AttackPreFn` / `AttackPostFn` / `PreDiscardSpec`
+- Maps：`ATTACK_PRE` / `ATTACK_POST` / `ABILITY_EFFECTS` / `ATTACK_PRE_DISCARD_CHOICE`
+- Helper：`regPre` / `regPost` / `regA`
+
+→ 結果任何一張想搬到 `effects/cards/*.ts` 的攻擊/特性卡都進不了子模組（沒有匯入源）。v2.64 把全部搬到 `effects/_shared.ts`，並在 `effects.ts` 以 `export { ... }` / `export type { ... }` 維持 `engine.ts`、`+page.svelte` 既有的 import 路徑不變。
+
+同時把 4 個跨卡共享的 helper（`koPrizeCount` / `countOppPokemon` / `selfSwapPost` / `skipDefEffectsPre`）加上 `export` keyword — 這些會被新搬遷的子模組反向 import。只要新檔 `import ... from '../../effects'`、而 effects.ts 裡 `import './effects/cards/foo'` 的 side-effect import 排在後面，ES module 的 top-level 宣告完成時 helper 已可被呼叫，不會發生 undefined。Build 驗證通過。
+
+### 重構 2 — 抽出 Wave 44（胡地 + 瑪俐預組）
+
+新檔：`src/lib/game/effects/cards/abra_mawile_deck.ts`（≈260 行）。
+
+包含的卡／招式／特性：
+
+- 凱西｜瞬間移動攻擊（regPre/regPost, self-swap）
+- 勇基拉｜精神抽出（regA，抽 2）
+- 胡地｜精神抽出（regA，抽 3）
+- 胡地｜手之力量（regPre 0 / regPost：放手牌×2 個傷害指示物，招式效果 bypass 弱點・抗性・防禦道具，手動 KO 判定）
+- 土龍弟弟｜交替（regPre/regPost, self-swap）
+- 土龍節節ex｜逆境之尾（對手場上每隻 ex × 60，走 `countOppPokemon`）
+- 土龍節節ex｜鑽破壞（150，skipDefEffects）
+- 土龍節節（非 ex）｜逃跑抽出（regA：抽 3 + 自身與前階回牌庫重洗；以 cardInst iid 為準定位觸發源）
+- 謝米｜親送花朵（regPre 0 / regPost：`deckEnergyAttachBenchPost('Grass', ...)`）
+  - 搬走配套的 `deck-energy-attach-bench-pick-energy` / `deck-energy-attach-bench-commit` 兩個 resolver + `applyDeckAttachBench` helper（僅被此招使用，沒有跨卡依賴）
+- 瑪俐的搗蛋小妖｜偷盜（0 傷害、抽 1）
+- 瑪俐的長毛巨魔ex｜龐克練肌（regA：搜最多 5 張基本【惡】能量附於自身）
+- 瑪俐的長毛巨魔ex｜暗影子彈（180，snipe 30 備戰）
+
+effects.ts 刪除對應區塊（9151–9414 共 264 行），加 `import './effects/cards/abra_mawile_deck';` 觸發子模組的 reg 副作用。
+
+### 影響面
+
+- `effects.ts` 由 10,379 行降到 10,065 行（−314 淨行，含型別搬遷節省）；以後要再抽任何 Wave-block 都只需要 (a) 新建子模組檔 (b) side-effect import (c) 刪除原區塊。
+- 工程上最大的 unlock：**`regA/regPre/regPost` 子檔可用**。下一波可挑 Wave 43（魔靈多龍，264 行）或 v2.35 火箭隊超夢ex/猛雷鼓ex block（≈437 行）接著做。
+- 無行為變更；build 雙次通過（refactor-only + extraction）。
 
 ---
 

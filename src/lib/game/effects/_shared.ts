@@ -16,7 +16,7 @@
 
 import type { Card } from '$lib/cards/types';
 import type {
-  GameState, PlayerState, CardInstance, PendingSelection,
+  GameState, PlayerState, CardInstance, PendingSelection, GameAction,
 } from '../types';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -78,6 +78,72 @@ export function regR(key: string, fn: ResolveFn) {
 
 export function regG(name: string, fn: TrainerGuardFn) {
   TRAINER_GUARDS.set(name, fn);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 攻擊 / 特性 型別 + 登錄表 + helper（v2.64 從 effects.ts 搬到這裡）
+//
+// 搬遷動機：子模組（effects/cards/*.ts）需要能註冊攻擊 PRE / POST 與特性。
+// 過去 regPre / regPost / regA 是 effects.ts 內部 function，無法 import，
+// 導致 Wave/ 預組專屬卡無法抽到子模組。搬到 _shared 後 ATTACK_PRE / POST /
+// ABILITY_EFFECTS 變成「唯一 Map 實例」，effects.ts 仍然 re-export 維持
+// engine.ts / +page.svelte 既有 import 路徑不變。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * ATTACK_PRE：招式宣告後、傷害計算前的效果。
+ * 接收現在 state 與攻擊方索引，回傳 { state, damage }（damage 為本次招式實際傷害）。
+ *
+ * ATTACK_POST：傷害施加（含擊倒判定）後的效果。
+ * 可觸發 pendingSelection 讓玩家做額外選擇；回傳新 state。
+ */
+export type AttackPreFn = (
+  state: GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>,
+  action?: Extract<GameAction, { type: 'ATTACK' }>
+) => {
+  state: GameState;
+  damage: number;
+  /** 招式傷害不計算弱點・抵抗力（Session 33）。 */
+  skipWeakRes?: boolean;
+  /**
+   * 招式傷害不計算對手戰鬥寶可夢身上的「附加效果」（Session 33）。
+   * 包含被動減傷特性、防禦道具（福祿果等）、下次被攻擊 -N、條件式完全免疫。
+   */
+  skipDefEffects?: boolean;
+};
+
+export type AttackPostFn = (
+  state: GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>
+) => GameState;
+
+export const ATTACK_PRE  = new Map<string, AttackPreFn>();
+export const ATTACK_POST = new Map<string, AttackPostFn>();
+
+export function regPre(key: string, fn: AttackPreFn)   { ATTACK_PRE.set(key, fn); }
+export function regPost(key: string, fn: AttackPostFn) { ATTACK_POST.set(key, fn); }
+
+/**
+ * 招式宣告時需要玩家選擇丟棄能量的宣告表。見 effects.ts 原註解說明。
+ */
+export interface PreDiscardSpec {
+  min: number;
+  max: number | null; // null = 不限上限（全部）
+  scope: 'attacker' | 'any-own' | 'own-bench';
+  baseDamage: number;
+  damagePerEnergy: number;
+}
+
+export const ATTACK_PRE_DISCARD_CHOICE = new Map<string, PreDiscardSpec>();
+
+/** pokémonName|abilityIndex → 效果函式 */
+export const ABILITY_EFFECTS = new Map<string, EffectFn>();
+
+export function regA(pokemonName: string, abilityIndex: number, fn: EffectFn) {
+  ABILITY_EFFECTS.set(`${pokemonName}|${abilityIndex}`, fn);
 }
 
 export function canPlayTrainer(
