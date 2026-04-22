@@ -79,6 +79,74 @@ export function isBenchProtected(state: GameState, pool: Map<string, Card>): boo
 }
 
 /**
+ * v2.46：招式/特性的傷害判定分類
+ * - attack-damage：招式的【傷害】（例：殘酷箭、狙擊羽毛、暗影子彈的 30 點、電磁電光）
+ *     → 不被對戰圓形擋；會被謝米「花之帷幔」擋（只擋備戰且非規則寶可夢）
+ * - attack-effect：招式的【效果】（放傷害指示物，例：悄聲加害、飛來橫禍、幻影奇襲的 6 個指示物）
+ *     → 被對戰圓形擋；不被花之帷幔擋
+ * - ability-effect：特性的【效果】（放傷害指示物，例：咒詛炸彈）
+ *     → 被對戰圓形擋；不被花之帷幔擋
+ *
+ * 起源：v2.46 Leon 發現「殘酷箭：土龍弟弟 因對戰圓形競技場效果不受傷害」是錯的。
+ * 對戰圓形只擋「放置指示物」的效果，不擋招式本身的傷害。因此分離傷害 vs 效果兩個判定。
+ * 類似於基本能量 vs 特殊能量當初的拆分原則。
+ */
+export type DamageKind = 'attack-damage' | 'attack-effect' | 'ability-effect';
+
+/**
+ * v2.46：檢查 defender 場上是否有謝米（花之帷幔）。
+ * 花之帷幔：自己的所有備戰寶可夢（擁有規則的寶可夢除外）不會受到對手的招式的傷害。
+ *   - 只擋「招式的傷害」（attack-damage）
+ *   - 不擋招式的效果（放指示物）或特性效果
+ *   - 不擋對戰鬥寶可夢的傷害
+ *   - 目標若為「擁有規則的寶可夢」（ex/EX）不受保護
+ */
+export function hasFlowerVeil(
+  state: GameState,
+  defenderIdx: 0 | 1,
+  pool: Map<string, Card>,
+): boolean {
+  const defender = state.players[defenderIdx];
+  const cards = [defender.active, ...defender.bench].filter((c): c is CardInstance => !!c);
+  for (const c of cards) {
+    const card = pool.get(c.cardId);
+    if (!card?.abilities) continue;
+    for (const a of card.abilities) {
+      if (a.name === '花之帷幔') return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * v2.46：「對備戰目標」造成傷害/放指示物時，統一檢查是否被卡面/場地擋下。
+ *   kind === 'attack-effect' / 'ability-effect' → 查對戰圓形（備戰不放指示物）
+ *   kind === 'attack-damage'                   → 查花之帷幔（備戰且非 ex）
+ * 回傳：{ blocked: true, reason } 表示被擋下；{ blocked: false } 表示可進行。
+ * 注意：actor 的對手 = defender，所以比對特性要對 defenderIdx 做。
+ */
+export function resolveBenchGuard(
+  state: GameState,
+  pool: Map<string, Card>,
+  actorIdx: 0 | 1,
+  targetCard: Card | undefined,
+  kind: DamageKind,
+): { blocked: true; reason: string } | { blocked: false } {
+  if (kind === 'attack-effect' || kind === 'ability-effect') {
+    if (isBenchProtected(state, pool)) {
+      return { blocked: true, reason: '對戰圓形競技場效果' };
+    }
+  }
+  if (kind === 'attack-damage') {
+    const defenderIdx = (1 - actorIdx) as 0 | 1;
+    if (hasFlowerVeil(state, defenderIdx, pool) && !isExCard(targetCard)) {
+      return { blocked: true, reason: '謝米 花之帷幔 效果' };
+    }
+  }
+  return { blocked: false };
+}
+
+/**
  * v2.22：特殊能量「附加時」hook —
  * 某些特殊能量（富裕能量、感應【超】能量）附加後會有額外效果（抽牌 / 搜索 etc.）。
  * engine.ts 的 ATTACH_ENERGY handler 在能量實際附加後，會查此 map：
@@ -510,13 +578,16 @@ regR('snipe-120', (st, actorIdx, selectedIids, _params, pool) => {
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
 
-  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物
-  if (!isActive && isBenchProtected(st, pool)) {
-    const name = pool.get(target.cardId)?.name ?? '?';
-    return addLog(st, `狙擊羽毛：${name} 因對戰圓形競技場效果不受傷害`, actorIdx);
+  const targetCard = pool.get(target.cardId);
+  // v2.46 狙擊羽毛 = 招式【傷害】→ 不受對戰圓形影響；只受花之帷幔（備戰 + 非 ex）擋
+  if (!isActive) {
+    const g = resolveBenchGuard(st, pool, actorIdx, targetCard, 'attack-damage');
+    if (g.blocked) {
+      const name = targetCard?.name ?? '?';
+      return addLog(st, `狙擊羽毛：${name} 因${g.reason}不受傷害`, actorIdx);
+    }
   }
 
-  const targetCard = pool.get(target.cardId);
   const newDmg = target.damage + 120;
   const targetHP = targetCard?.hp ?? 0;
 
@@ -3292,12 +3363,17 @@ regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
   if (!targetIid) return st;
   const target = defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
-  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物
-  if (isBenchProtected(st, pool)) {
-    const name = pool.get(target.cardId)?.name ?? '?';
-    return addLog(st, `精刺奇襲：${name} 因對戰圓形競技場效果不受傷害`, actorIdx);
-  }
   const targetCard = pool.get(target.cardId);
+  // v2.46 精刺奇襲 = 招式【傷害】→ 不受對戰圓形影響；只受花之帷幔擋（備戰 + 非 ex）
+  //   實務上 snipe-60-ex 僅能選對手的 ex/EX，花之帷幔不保護 ex，故通常 pass；
+  //   仍呼叫 resolveBenchGuard 以保持判定一致性。
+  {
+    const g = resolveBenchGuard(st, pool, actorIdx, targetCard, 'attack-damage');
+    if (g.blocked) {
+      const name = targetCard?.name ?? '?';
+      return addLog(st, `精刺奇襲：${name} 因${g.reason}不受傷害`, actorIdx);
+    }
+  }
   const newDmg = target.damage + 60;
   const targetHP = targetCard?.hp ?? 0;
   if (targetHP > 0 && newDmg >= targetHP) {
@@ -3424,13 +3500,16 @@ regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
 
-  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物
-  if (!isActive && isBenchProtected(st, pool)) {
-    const name = pool.get(target.cardId)?.name ?? '?';
-    return addLog(st, `電磁電光：${name} 因對戰圓形競技場效果不受傷害`, actorIdx);
+  const targetCard = pool.get(target.cardId);
+  // v2.46 電磁電光 = 招式【傷害】→ 不受對戰圓形影響；只受花之帷幔（備戰 + 非 ex）擋
+  if (!isActive) {
+    const g = resolveBenchGuard(st, pool, actorIdx, targetCard, 'attack-damage');
+    if (g.blocked) {
+      const name = targetCard?.name ?? '?';
+      return addLog(st, `電磁電光：${name} 因${g.reason}不受傷害`, actorIdx);
+    }
   }
 
-  const targetCard = pool.get(target.cardId);
   const newDmg = target.damage + 10;
   const targetHP = targetCard?.hp ?? 0;
 
@@ -3861,6 +3940,10 @@ regPost('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
 regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
   const dmg = (params?.damage as number) ?? 0;
   const label = (params?.label as string) ?? '遠程攻擊';
+  // v2.46：caller 透過 kind 指定是招式【傷害】還是【效果】（放傷害指示物）。
+  // 未指定時預設 'attack-damage' — 絕大多數 snipe-variable 用途都是招式傷害
+  // （殘酷箭、落雷風暴、暗影子彈…），只有飛來橫禍等「放指示物」要顯式傳 'attack-effect'。
+  const kind = ((params?.kind as DamageKind) ?? 'attack-damage');
   const dIdx = (1 - actorIdx) as 0 | 1;
   const defender = st.players[dIdx];
   const targetIid = selectedIids[0];
@@ -3868,12 +3951,15 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
   const isActive = defender.active?.iid === targetIid;
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
-  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物
-  if (!isActive && isBenchProtected(st, pool)) {
-    const name = pool.get(target.cardId)?.name ?? '?';
-    return addLog(st, `${label}：${name} 因對戰圓形競技場效果不受傷害`, actorIdx);
-  }
   const targetCard = pool.get(target.cardId);
+  // v2.46 統一判定：對戰圓形只擋效果；花之帷幔只擋招式傷害到備戰（且非 ex）
+  if (!isActive) {
+    const g = resolveBenchGuard(st, pool, actorIdx, targetCard, kind);
+    if (g.blocked) {
+      const name = targetCard?.name ?? '?';
+      return addLog(st, `${label}：${name} 因${g.reason}不受傷害`, actorIdx);
+    }
+  }
   const newDmg = target.damage + dmg;
   const hp = targetCard?.hp ?? 0;
   if (hp > 0 && newDmg >= hp) {
@@ -4523,18 +4609,20 @@ regPost('雙斧戰龍|斧擊在地', (state, aIdx, pool) => {
 
 // ── damage-counter bench (2 張) ────────────────────────────────────────────────
 // 10 點 = 1 個指示物。此處 AI 簡化：集中對單一備戰上（玩家透過 UI pendingSelection 之後可再拓展選多隻）
-// 振翼髮|飛來橫禍 (90 + 2 指示物即 20 傷害到 opp bench)
+// 振翼髮|飛來橫禍 (90 + 2 指示物放置於對手備戰)
+// 卡面："將2個傷害指示物以任意方式放置於對手的備戰寶可夢身上。"
+// → 「放置指示物」= 招式【效果】；會被對戰圓形擋，不受花之帷幔擋。
 regPre('振翼髮|飛來橫禍', (state, _aIdx, _pool) => ({ state, damage: 90 }));
 regPost('振翼髮|飛來橫禍', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) return state;
-  let s = addLog(state, '飛來橫禍：選擇對手備戰 1 隻受 20 傷害', aIdx);
+  let s = addLog(state, '飛來橫禍：選擇對手備戰 1 隻放置 2 個傷害指示物（= 20 傷害）', aIdx);
   return withPending(s, {
     type: 'opp-bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'snipe-variable',
-    params: { damage: 20, label: '飛來橫禍' },
+    params: { damage: 20, label: '飛來橫禍', kind: 'attack-effect' },
   });
 });
 
@@ -5554,9 +5642,9 @@ function multiSnipePost(targetCount: number, damage: number, label: string): Att
 regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
   const dmg = (params?.damage as number) ?? 0;
   const label = (params?.label as string) ?? '多目標攻擊';
+  // v2.46：caller 可用 kind 指定是招式傷害還是招式效果。預設 'attack-damage'。
+  const kind = ((params?.kind as DamageKind) ?? 'attack-damage');
   const dIdx = (1 - actorIdx) as 0 | 1;
-  // v2.22 對戰圓形競技場：備戰目標不受傷害指示物（active 仍可受 snipe-multi 類直擊）
-  const benchBlocked = isBenchProtected(st, pool);
   let s = st;
   let totalPrize = 0;
   let opponentActiveKOed = false;
@@ -5565,12 +5653,16 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     const isActive = defender.active?.iid === iid;
     const target = isActive ? defender.active! : defender.bench.find(c => c.iid === iid);
     if (!target) continue;
-    if (!isActive && benchBlocked) {
-      const name = pool.get(target.cardId)?.name ?? '?';
-      s = addLog(s, `${label}：${name} 因對戰圓形競技場效果不受傷害`, actorIdx);
-      continue;
-    }
     const targetCard = pool.get(target.cardId);
+    // v2.46 對戰圓形只擋效果；花之帷幔只擋招式傷害到備戰（且非 ex）
+    if (!isActive) {
+      const g = resolveBenchGuard(s, pool, actorIdx, targetCard, kind);
+      if (g.blocked) {
+        const name = targetCard?.name ?? '?';
+        s = addLog(s, `${label}：${name} 因${g.reason}不受傷害`, actorIdx);
+        continue;
+      }
+    }
     const newDmg = target.damage + dmg;
     const hp = targetCard?.hp ?? 0;
     if (hp > 0 && newDmg >= hp) {

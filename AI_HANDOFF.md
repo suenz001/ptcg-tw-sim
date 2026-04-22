@@ -1,9 +1,154 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 5a1c8 (v2.45)  
+> 最後更新：2026-04-22 Session 7c3b1 (v2.46)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 7c3b1 (v2.46) — 對戰圓形競技場 vs 招式傷害 語意拆分 + 胡地預組換謝米
+
+### 問題
+
+Leon 在 v2.45 打一場對戰時發現 log 錯誤：「吉雉雞ex 使用招式 對戰log顯示『殘酷箭：土龍弟弟 因對戰圓形競技場效果不受傷害』這是錯的」。
+
+卡面證據：
+- **殘酷箭**：卡面寫「對手的1隻備戰寶可夢也受到120點傷害」 — 這是招式【傷害】，不是放置指示物的效果。
+- **對戰圓形競技場**：「雙方的所有備戰寶可夢，不會因對手的招式與特性的效果而被放置傷害指示物。[會受到招式的傷害。]」 — 方括號內明文指出**會**受招式傷害。
+
+Leon 進一步闡明規則分類：「對戰圓形競技場只能免疫招式的【效果】，而非招式【傷害】。而特性產生的則一定是【效果】(但不屬於招式，屬於特性)，例如腎上腺腦力或冰冷之杖等等」。
+
+並下了一條架構指示：「我建議你把招式 拆分 成 效果 和 傷害 2個判定系統，這樣以後出現不同的狀況就能一一應對 就像我勸你把能量區分成 特殊能量 和 基本能量一樣」。
+
+另提一個特殊案例警告：「多龍巴魯托ex 幻影奇襲這種，又有招式傷害(200點)又有招式效果(6個傷害指示物)的你就要特別注意」。
+
+同場加 feature：把胡地牌組裡的謝米 `17980` (M3 版，親送花朵，無特性) 換成 M2a · 012/193 `16255` (特性花之帷幔：「只要這隻寶可夢在場上，自己的所有備戰寶可夢（「擁有規則的寶可夢」除外）不會受到對手的招式的傷害。」)。
+
+### 根因
+
+v2.22 第一次做對戰圓形競技場時，我把所有「對備戰放傷」的路徑（snipe-* 系列、cursed-bomb、bench-hit-N、damage-distribute、applyDamageToAllOpp）全部用同一個 `isBenchProtected` helper 擋下 —— 把「招式傷害」跟「放置傷害指示物的效果」混為一談。卡面其實分得很清楚：寫「造成 X 傷害」是【傷害】，寫「放置 X 個傷害指示物」才是【效果】。當時沒有花之帷幔這種 keyword 特性逼著分，所以 conflation 沒被抓到 —— 現在花之帷幔加進卡池，剛好反過來：它只擋**傷害**、不擋**效果**，跟對戰圓形正好互補，不拆就絕對寫不對。
+
+### 設計（跟能量 basic/special 拆分同一個設計原則）
+
+**taxonomy**（`effects.ts` DamageKind 新增 type）：
+
+- `'attack-damage'` — 招式的【傷害】
+  - 例：殘酷箭、狙擊羽毛、精刺奇襲、電磁電光、暗影子彈(30)、噴吐射擊、落雷風暴、紅蓮引爆
+  - 對戰圓形：**不擋** ✅
+  - 花之帷幔：**擋**（備戰且非 ex）
+- `'attack-effect'` — 招式的【效果】（放指示物）
+  - 例：悄聲加害、飛來橫禍(20=2 counter)、幻影奇襲(6 counter)、由克希痛楚記憶、伊裴爾塔爾侵蝕之風
+  - 對戰圓形：**擋** ✅
+  - 花之帷幔：**不擋**（花之帷幔只擋「招式的傷害」）
+- `'ability-effect'` — 特性的【效果】（放指示物）
+  - 例：咒詛炸彈、冰冷之帳（checkup 灑傷）
+  - 對戰圓形：**擋** ✅（對戰圓形卡面明文「招式與特性的效果」）
+  - 花之帷幔：**不擋**（花之帷幔卡面只提招式）
+
+**新 helpers**（effects.ts 第 80 行後、isBenchProtected 下方）：
+
+```ts
+export type DamageKind = 'attack-damage' | 'attack-effect' | 'ability-effect';
+
+export function hasFlowerVeil(state, defenderIdx, pool): boolean {
+  // 遍歷 defender 場上的 active + bench，查 card.abilities 有沒有「花之帷幔」
+}
+
+export function resolveBenchGuard(state, pool, actorIdx, targetCard, kind):
+  { blocked: true; reason: string } | { blocked: false }
+{
+  if (kind === 'attack-effect' || kind === 'ability-effect') {
+    if (isBenchProtected(...)) return { blocked: true, reason: '對戰圓形競技場效果' };
+  }
+  if (kind === 'attack-damage') {
+    if (hasFlowerVeil(...) && !isExCard(targetCard)) {
+      return { blocked: true, reason: '謝米 花之帷幔 效果' };
+    }
+  }
+  return { blocked: false };
+}
+```
+
+### 修了哪些 resolver
+
+全部改用 `resolveBenchGuard`，kind 從原本「一律當成 effect 擋」改成**按卡面語意分類**：
+
+| Resolver | 代表卡 | 舊行為 | 新 kind | 新行為 |
+|---|---|---|---|---|
+| `snipe-120` | 狙擊羽毛 | 被對戰圓形擋 ❌ | `attack-damage` | 不被對戰圓形擋；被花之帷幔擋（備戰非 ex） |
+| `snipe-60-ex` | 精刺奇襲 | 被對戰圓形擋 ❌ | `attack-damage` | 不被對戰圓形擋；目標本來只限 ex，花之帷幔對 ex 無效 → 實務上 pass |
+| `snipe-10` | 電磁電光 | 被對戰圓形擋 ❌ | `attack-damage` | 不被對戰圓形擋 |
+| `snipe-multi` | 多目標 snipe（音波奇襲等） | 全體被對戰圓形擋 ❌ | `attack-damage`（預設） | 不被對戰圓形擋 |
+| `snipe-variable` | 殘酷箭、紅蓮引爆、落雷風暴、噴吐射擊、暗影子彈(30)、飛來橫禍(20) | 全部被對戰圓形擋 ❌ | 依 `params.kind` 分流 | 見下方 |
+| `snipe-20` | 悄聲加害 | 被對戰圓形擋 ✅ | **不改** | 卡面「放置2個傷害指示物」→ 仍是 attack-effect |
+| `dragapult-snipe` | 幻影奇襲 6 counter | 被對戰圓形擋 ✅ | **不改** | 放指示物 = attack-effect |
+| `bench-hit-N` | 各種多張指示物 | 被對戰圓形擋 ✅ | **不改** | 放指示物 = attack-effect |
+| `applyDamageToAllOpp` | 痛楚記憶、侵蝕之風 | 被對戰圓形擋 ✅ | **不改** | 卡面「各放置 2 個指示物」 |
+| 咒詛炸彈 特性 | 黑夜魔靈 | 被對戰圓形擋 ✅ | **不改** | 特性放指示物 = ability-effect |
+
+**snipe-variable 分流邏輯**：預設 kind='attack-damage'，只有 caller 顯式傳 `kind:'attack-effect'` 才走 effect 閘（目前只有飛來橫禍）。暗影子彈 30 點、殘酷箭 120 點、紅蓮引爆 180 點、落雷風暴 var 點、噴吐射擊 120 點、瑪俐暗影子彈 30 點 — 全吃預設路徑 = attack-damage = 不被對戰圓形擋、但會被花之帷幔擋（對應備戰且非 ex 才擋）。
+
+### 飛來橫禍特別處理
+
+`振翼髮|飛來橫禍` regPost 原本 params: `{ damage: 20, label: '飛來橫禍' }` → 以後會跑到 snipe-variable 的 attack-damage 預設路徑 → 被對戰圓形擋的邏輯就斷掉。
+
+正確卡面：90 主傷 + 「將2個傷害指示物以任意方式放置於對手的備戰寶可夢身上」。後半是放**指示物**，所以仍該被對戰圓形擋。
+
+修法：加 `kind: 'attack-effect'` 讓它跑 effect 分支，同時把 log 文字從「受 20 傷害」改成「放置 2 個傷害指示物（= 20 傷害）」以反映語意。
+
+### 幻影奇襲（Leon 特別提醒的 edge case）
+
+`多龍巴魯托ex|幻影奇襲` 包兩段：
+1. **regPre 回傳 damage:200** → 走一般 ATTACK 流程對 opp active 直擊 200 點（attack-damage、只會對 active 所以對戰圓形/花之帷幔都不適用）。
+2. **regPost 開 damage-distribute pending** → 6 counter 在 opp bench 上任意分配，走 `dragapult-snipe` resolver → 這段是 **attack-effect**（放指示物）→ 本來就被對戰圓形擋。
+
+這次 v2.46 不動幻影奇襲的 regPre/regPost/dragapult-snipe — 它原本的分流 (active damage vs bench counter) 就已經是對的、只是換了術語描述它。花之帷幔對這兩段都**不擋**：200 傷害打 active、花之帷幔只保護 bench；6 counter 是效果、花之帷幔只擋傷害。
+
+### 胡地預組換謝米
+
+`src/lib/decks/presets.ts:200`：
+```diff
+- { cardId: '17980', count: 1 },  // 謝米 (M3)
++ { cardId: '16255', count: 1 },  // 謝米 (M2a 012/193) — 特性花之帷幔（備戰免招式傷害）
+```
+
+M3 版 id `17980` 的謝米是基礎寶可夢，無特性，招式「親送花朵」+「綠葉舞步」 — Leon 判斷對胡地陣容沒用。M2a 版 id `16255` 的謝米 HP 80 基礎寶可夢，特性「花之帷幔」剛好搭配對戰圓形：一個擋效果、一個擋傷害，備戰形同無敵（除了 ex/規則寶可夢）。瑪俐的長毛巨魔 ex 預組內的 17980（line 250）沒動 — Leon 只指名胡地那張。
+
+### 為什麼這樣拆 > 直接在每個 resolver 各自判斷
+
+- **單一 choke point**：`resolveBenchGuard` 只有一個函數、一種 policy，以後加新的 stadium/特性保護時（例：能擋招式但不擋特性、能擋 ex 但不擋 Basic）只要擴 DamageKind 或 guard fn 就好，不用跑遍每個 snipe-*。
+- **caller 只需要聲明意圖**：resolver 作者寫 params 時只要回答「這是招式傷害還是招式效果」一題，不用記「xxx 競技場擋誰」、「花之帷幔擋誰」的表格。跟能量 basic/special 拆分一樣 — caller 只要說「這個效果只吃基本能量」，不用列舉所有特殊能量名字。
+- **抗未來回歸**：之後若有人接新 bench snipe 卡，抄舊的 snipe-variable 用法不需要再想 gate，預設值就對。遇到 effect 類再顯式傳 kind — 「default safe」的設計原則。
+
+### 小改動總覽
+
+- `src/lib/version.ts`：2.45 → 2.46
+- `src/lib/game/effects.ts`：
+  - 新增 `DamageKind` type、`hasFlowerVeil` helper、`resolveBenchGuard` helper（isBenchProtected 下方）
+  - 重寫 `snipe-120` / `snipe-60-ex` / `snipe-10` / `snipe-multi` / `snipe-variable` 的 bench guard 為 `resolveBenchGuard(..., 'attack-damage')`
+  - `snipe-variable` + `snipe-multi` 支援 `params.kind` override（default='attack-damage'）
+  - `振翼髮|飛來橫禍` regPost 加 `kind: 'attack-effect'`、log 文字「受 20 傷害」→「放置 2 個傷害指示物（= 20 傷害）」
+  - `snipe-20`、`dragapult-snipe`、`applyDamageToAllOpp` 不動（本來就正確的 effect gate）
+- `src/lib/decks/presets.ts:200`：胡地預組 謝米 17980 → 16255
+
+### 驗證
+
+- 本機 `npm run build` 成功（6.42s / 12.57s，無 error）。
+- 檔行數 effects.ts 10113、presets.ts 378、version.ts 12 — 沒截斷。
+- 卡面語意對照（用靜態 JSON 比對確認）：
+  - `悄聲加害` (SV8a/SV6/M2) effect: 「放置 N 個傷害指示物」 → effect 類 ✓
+  - `飛來橫禍` (SV5K) effect: 「將2個傷害指示物以任意方式放置於對手的備戰寶可夢身上」 → effect 類 ✓
+  - `暗影子彈` (M2a) damage: 180 effect: 「對手的1隻備戰寶可夢也受到30點傷害」 → 30 點那段是 damage 類 ✓
+  - M2a/16255 謝米 abilities[0].name === '花之帷幔'、effect 字樣確認 ✓
+
+### 次要改動
+
+這次沒有順便修其他 bug，範圍限縮在 guard 拆分 + 謝米替換。
+
+### Commit hash
+
+`(build 後 push 補上)`
 
 ---
 

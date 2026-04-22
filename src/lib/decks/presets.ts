@@ -197,7 +197,7 @@ const ALAKAZAM_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '17045', count: 3 },  // 土龍弟弟 (MC)
     { cardId: '11655', count: 3 },  // 土龍節節 (SV8a) — 非 ex 版；4 張效果相同，任選其一
     { cardId: '14692', count: 1 },  // 可達鴨 (M2a) — 特性濕氣
-    { cardId: '17980', count: 1 },  // 謝米 (M3)
+    { cardId: '16255', count: 1 },  // 謝米 (M2a 012/193) — 特性花之帷幔（備戰免招式傷害）
     { cardId: '16960', count: 1 },  // 吉雉雞ex (MC) — 扭轉乾坤
     // ── 訓練家・物品（16 張）──
     { cardId: '17119', count: 4 },  // 好友寶芬 (MC)
