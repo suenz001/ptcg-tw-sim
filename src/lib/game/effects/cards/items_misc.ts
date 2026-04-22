@@ -187,7 +187,10 @@ reg('奇跡修正檔', (st, idx, pool) => {
   return withPending(st, {
     type: 'discard-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'BasicEnergy',
+    // 只「基本【超】能量」— 必須排除富裕能量 / 感應超等 Special Energy，
+    // 也排除其他屬性的基本能量。discard-search 的 'BasicEnergy' 歷史慣例 = 所有能量，
+    // 所以另外開新 filter key。名字完全比對，避免 pokemonType 欄位為空的問題。
+    filter: 'BasicPsychicEnergy',
     minCount: 1, maxCount: 1,
     effectKey: 'miracle-codec-energy',
   });

@@ -367,6 +367,9 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           return false;
         }
         if (f === 'BasicEnergy')     return card.supertype === 'Energy';
+        if (f === 'BasicPsychicEnergy') {
+          return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
+        }
         return true;
       });
       const count = Math.min(sel.maxCount, discard.length);

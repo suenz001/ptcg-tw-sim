@@ -1,9 +1,92 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session d1a3d (v2.38)  
+> 最後更新：2026-04-22 Session d1a3e (v2.39)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session d1a3e (v2.39) — 對手手牌清單加放大鏡 + 奇跡修正檔 filter bug
+
+### 問題
+
+Leon 在用完 v2.38 後連帶提出兩件事：
+
+1. **UX 請求**：v2.38 在枇琶觸發 `hand-discard` 時，於選擇 UI 加了一個 `<details>` 揭露
+   對手手牌其餘非物品卡。Leon 希望清單每列旁能加放大鏡 🔍，讓玩家除了看名稱之外還能看
+   到卡牌完整內容；並叮嚀要注意牌版（加圖示後文字可能變長）。
+2. **Bug 回報**：奇跡修正檔（Item）依官方文字應「從棄牌區選 1 張基本超能量」附給備戰
+   超寶可夢。實際測試發現列表把 **富裕能量（ACE SPEC Special Energy）** 也列成可選。
+
+### 設計
+
+**Feature A（放大鏡）**：直接沿用既有 `openZoom(cardId, inst)` 函式（v1.76 牌庫放大鏡
+就在用）。兩個位置：v2.38 的對手手牌 details（`sourcePlayerIdx !== actorIdx` 分支）、
+以及更早的 peek-top-N 非可選揭露區（`deck-search /:TOP\d+$/`）。兩者 HTML 結構一樣，
+都是 `.full-deck-list > .deck-item` 純文字，一併升級成「文字 + 右側 🔍」。
+
+排版對策（避免爆版）：
+- `.deck-item` 改為 flex 橫排；`.deck-item-name` 吃 `flex:1 1 auto + overflow:hidden +
+  text-overflow:ellipsis`，長卡名截斷顯示（hover `title` 顯示全名）。
+- `.deck-item-zoom` 是 `flex:0 0 auto` 的透明按鈕，只吃最小寬度。
+- `.full-deck-list` 的 `minmax(140px,1fr)` 放寬到 `minmax(160px,1fr)`，留點空間給 🔍。
+- `z-index`：`selection-overlay`=100、`zoom-overlay`=200，放大鏡會蓋在選擇 modal 之上，
+  關掉放大鏡後原本的選擇流程繼續。
+
+**Feature B（奇跡修正檔 filter）**：根源在 `+page.svelte:791` 與 `ai.ts:369` 兩處
+discard-search 的 filter 分支：
+```ts
+if (f === 'BasicEnergy') return card.supertype === 'Energy';  // ← 歷史慣例：所有能量
+```
+這個「BasicEnergy = 所有能量」的慣例是故意的（能量回收這類卡會靠它抓回 Special Energy
+嗎？實際上能量回收只應抓基本能量 — 這也是另一個潛在 bug，但不是本 session 修的目標）。
+為避免改到共用邏輯造成連鎖 bug，改採「新增專屬 filter key」：
+
+```ts
+// effects/cards/items_misc.ts
+filter: 'BasicPsychicEnergy',
+```
+
+過濾規則：`supertype === 'Energy' && subtype === 'Basic' && name.includes('【超】')`。
+
+為什麼用 name 判斷？查 static/cards/*.json 所有 `supertype=Energy, subtype=Basic` 的
+8 張基本能量（草/火/水/雷/超/鬥/惡/鋼）**全部 `pokemonType = null`**，不能用 `pokemonType`
+欄位過濾。基本能量名字固定為「基本【X】能量」格式，用 name 子字串判斷最穩。
+
+### 實裝
+
+**A. `src/lib/game/effects/cards/items_misc.ts`** — 奇跡修正檔 reg：
+```ts
+filter: 'BasicPsychicEnergy',  // 原本 'BasicEnergy'
+```
+附加註解說明為何新開 filter key。
+
+**B. `src/routes/game/+page.svelte`** — 三處改動：
+- 在 discard-search filter 區新增 `'BasicPsychicEnergy'` 分支（`supertype=Energy &&
+  subtype=Basic && name.includes('【超】')`）。
+- peek-top-N details 的 `{#each peekedOthers}` 與枇琶 details 的 `{#each otherHand}` 都
+  改成 `<div class="deck-item"><span class="deck-item-name" title>...<button
+  class="deck-item-zoom" onclick={openZoom}>🔍</button></div>`。
+- CSS `.deck-item / .deck-item-name / .deck-item-zoom / .full-deck-list` 樣式調整
+  （flex + ellipsis + minmax 放寬）。
+
+**C. `src/lib/game/ai.ts`** — discard-search selector 加 `'BasicPsychicEnergy'` 分支
+（與 UI 對稱，確保 AI 不會在訓練對戰中挑到富裕能量附進超寶可夢 → crash）。
+
+**D. `src/lib/version.ts`** — 2.38 → 2.39。
+
+### 教訓 / 後續
+
+- discard-search 的 `'BasicEnergy'` filter 實際上等於「所有能量」（註解已指出「歷史
+  慣例」）。之後若要檢查其他用 `'BasicEnergy'` 的卡（能量回收、水蓮、etc.）是否也
+  誤收 Special Energy，應系統性掃一遍，可能需再開一個 v2.40 session 清理。
+- 基本能量的 `pokemonType` 欄位全部為空 — 若未來有「只抓基本火能量」這類需求，不能靠
+  pokemonType 欄位，只能用 name 比對或由 scraper 回填這個欄位。
+
+### commit hash
+
+（見 commit 後 backfill）
 
 ---
 

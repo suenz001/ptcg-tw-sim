@@ -789,6 +789,10 @@
             return false;
           }
           if (f === 'BasicEnergy')     return card.supertype === 'Energy';
+          if (f === 'BasicPsychicEnergy') {
+            // 奇跡修正檔專用：只基本【超】能量。排除富裕能量/感應超等 Special Energy。
+            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
+          }
           if (f === 'Pokemon')         return card.supertype === 'Pokemon' && card.subtype !== 'Other';
           if (f === 'Trainer')         return card.supertype === 'Trainer';
           if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
@@ -2040,7 +2044,13 @@
               <div class="full-deck-note">※ 這些卡你已看過但本次不符合挑選條件；結束後會洗回牌庫重新洗牌（位置不會外洩）</div>
               <div class="full-deck-list">
                 {#each peekedOthers as inst}{@const c=getCard(inst.cardId)}
-                  {#if c}<div class="deck-item">{c.name}</div>{/if}
+                  {#if c}
+                    <div class="deck-item">
+                      <span class="deck-item-name" title={c.name}>{c.name}</span>
+                      <button class="deck-item-zoom" title="放大查看：{c.name}"
+                        onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>🔍</button>
+                    </div>
+                  {/if}
                 {/each}
               </div>
             </details>
@@ -2059,7 +2069,13 @@
               <div class="full-deck-note">※ 枇琶效果只能丟棄物品卡；其餘手牌（寶可夢 / 支援者 / 能量 / 道具 / 場地）僅揭露，不可選</div>
               <div class="full-deck-list">
                 {#each otherHand as inst}{@const c=getCard(inst.cardId)}
-                  {#if c}<div class="deck-item">{c.name}</div>{/if}
+                  {#if c}
+                    <div class="deck-item">
+                      <span class="deck-item-name" title={c.name}>{c.name}</span>
+                      <button class="deck-item-zoom" title="放大查看：{c.name}"
+                        onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>🔍</button>
+                    </div>
+                  {/if}
                 {/each}
               </div>
             </details>
@@ -2987,8 +3003,12 @@
   .full-deck-view{ margin-top:.6rem; background:#0e1a0e; border:1px solid #2a4a2a; border-radius:6px; padding:.4rem .7rem; }
   .full-deck-view summary{ cursor:pointer; font-size:.85rem; color:#aaffcc; font-weight:600; }
   .full-deck-note{ margin:.4rem 0; font-size:.75rem; color:#888; }
-  .full-deck-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:.2rem .6rem; max-height:200px; overflow-y:auto; }
-  .deck-item{ font-size:.8rem; color:#bbb; padding:.1rem 0; }
+  .full-deck-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:.2rem .6rem; max-height:200px; overflow-y:auto; }
+  /* v2.39 行內放大鏡：flex 左文字 + 右 🔍，避免長名稱爆版 */
+  .deck-item{ display:flex; align-items:center; justify-content:space-between; gap:.25rem; font-size:.8rem; color:#bbb; padding:.1rem 0; min-width:0; }
+  .deck-item-name{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .deck-item-zoom{ flex:0 0 auto; background:transparent; border:none; color:#aaffcc; cursor:pointer; font-size:.85rem; padding:0 .15rem; line-height:1; }
+  .deck-item-zoom:hover{ color:#fff; }
   .sel-card{ display:flex; flex-direction:column; align-items:center; gap:.2rem; background:#0e1e0e; border:2px solid #2a4a2a; border-radius:6px; padding:.3rem; cursor:pointer; color:#ccc; font-size:.65rem; position:relative; width:100%; }
   .sel-card:hover{ border-color:#4a8a4a; }
   .sel-card.sel-picked{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }
