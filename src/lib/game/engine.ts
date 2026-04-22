@@ -2221,6 +2221,16 @@ export function getUsableAbilities(
       if ((ab.name === '精神抽出' || ab.name === '龐克練肌') && !pk.evolvedThisTurn) return;
       // 腎上腺腦力：身上必須附有至少 1 顆【惡】能量
       if (ab.name === '腎上腺腦力' && (countEnergy(pk, pool).get('Darkness') ?? 0) < 1) return;
+      // v2.53 碧綠之舞：手牌必須至少有 1 張基本草能量（否則按了只會輸出警告 log，
+      // Leon 反饋希望 UI 直接隱藏按鈕，而不是誤按後才提示）。
+      if (ab.name === '碧綠之舞') {
+        const hasGrassEnergy = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          if (cc?.supertype !== 'Energy' || cc.subtype !== 'Basic') return false;
+          return cc.pokemonType === 'Grass' || cc.name.includes('【草】');
+        });
+        if (!hasGrassEnergy) return;
+      }
       // 可達鴨｜濕氣：自身 KO 類特性被消除（不列入可用清單）
       if (SELF_KO_ABILITY_NAMES.has(ab.name) && isSelfKOEffectBlocked(state, pool)) return;
       // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。

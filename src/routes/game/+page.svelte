@@ -1862,12 +1862,15 @@
           {:else}
             <div class="active-card opp-active" out:scale={{ duration: 360, start: 0.55, opacity: 0 }}>
               <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>
-              <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致） -->
-              <div class="active-nrg-col">
-                {#each energyPips(oppPlayer.active) as pip}
-                  <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
-                {/each}
-              </div>
+              <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）
+                   v2.53：無能量時不渲染（避免空欄佔寬度） -->
+              {#if energyPips(oppPlayer.active).length > 0}
+                <div class="active-nrg-col">
+                  {#each energyPips(oppPlayer.active) as pip}
+                    <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                  {/each}
+                </div>
+              {/if}
               <div class="active-info">
                 <div class="active-name">{ac?.name}</div>
                 <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(oppPlayer.active)?hpRemaining(oppPlayer.active)/hpTotal(oppPlayer.active)*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),hpTotal(oppPlayer.active))}"></div></div>
@@ -2028,12 +2031,15 @@
             <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
               onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}/>
-            <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致） -->
-            <div class="active-nrg-col">
-              {#each energyPips(myPlayer.active) as pip}
-                <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
-              {/each}
-            </div>
+            <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）
+                 v2.53：無能量時不渲染（避免空欄佔寬度） -->
+            {#if energyPips(myPlayer.active).length > 0}
+              <div class="active-nrg-col">
+                {#each energyPips(myPlayer.active) as pip}
+                  <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                {/each}
+              </div>
+            {/if}
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
               <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(myPlayer.active)?hpRemaining(myPlayer.active)/hpTotal(myPlayer.active)*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),hpTotal(myPlayer.active))}"></div></div>
@@ -2086,16 +2092,19 @@
               <!-- v2.49：名字/HP 移到卡牌上方，避免與下方進化按鈕/特性按鈕/能量 pip 擠在一起 -->
               <div class="bench-name">{bc?.name}</div>
               <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
-              <!-- v2.51：加寬 slot + 能量 pip 改為垂直排列在圖片右側，避免能量超過 2 個時撐高 -->
+              <!-- v2.51：加寬 slot + 能量 pip 改為垂直排列在圖片右側，避免能量超過 2 個時撐高
+                   v2.53：bench-nrg 條件渲染 — 沒能量就不 render 右側欄，讓 img 置中填滿 slot -->
               <div class="bench-middle">
                 <img src={bc?.imageUrl} alt={bc?.name}
                   class:zoomable={!selectedEnergyIid}
                   onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>
-                <div class="bench-nrg">
-                  {#each energyPips(b) as pip}
-                    <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
-                  {/each}
-                </div>
+                {#if energyPips(b).length > 0}
+                  <div class="bench-nrg">
+                    {#each energyPips(b) as pip}
+                      <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                    {/each}
+                  </div>
+                {/if}
               </div>
               <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
               {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}
@@ -3254,16 +3263,19 @@
   .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:visible; min-width:0; }
   /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
      避免撐大 zone-bench 把下方手牌擠出 viewport。
-     v2.51：加寬 slot（115→140px），能量 pip 移到右側垂直排列。 */
-  .bench-slot{ flex:1 1 90px; min-width:90px; max-width:140px; height:185px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:hidden; }
+     v2.51：加寬 slot（115→140px），能量 pip 移到右側垂直排列。
+     v2.53：縮窄 slot 回 128px 並放大卡圖（Leon 反饋「牌變小空隙太大」），
+            bench-nrg 條件渲染後沒能量時 img 置中填滿 slot。 */
+  .bench-slot{ flex:1 1 90px; min-width:90px; max-width:128px; height:185px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:hidden; }
   .bench-slot:not(.bench-empty).energy-target{ border-color:#aaff44; cursor:pointer; }
   /* v2.49：限制圖片高度，把底部空間留給能量 pip / 進化按鈕 / 特性按鈕（名字/HP 已移到卡牌上方）
-     v2.51：寬度讓 flex 自動分配（bench-middle 裡與能量 pip 共用一列；對手 bench 無 bench-middle 則直接填滿 slot） */
-  .bench-slot img{ width:100%; max-width:92px; max-height:100px; object-fit:contain; border-radius:4px; }
+     v2.51：寬度讓 flex 自動分配（bench-middle 裡與能量 pip 共用一列；對手 bench 無 bench-middle 則直接填滿 slot）
+     v2.53：max-width 92→108、max-height 100→128，卡圖顯著放大（寶可夢卡 aspect ≈1.4，height 主導 → 實際約 92×128） */
+  .bench-slot img{ width:100%; max-width:108px; max-height:128px; object-fit:contain; border-radius:4px; }
   /* v2.51：中段 flex row — 圖片 + 右側能量垂直 pip；佔據 slot 大部分高度，下方留空間給 hp bar + 按鈕 */
   .bench-middle{ display:flex; flex-direction:row; width:100%; align-items:center; justify-content:center; gap:3px; flex:1 1 auto; min-height:0; }
   /* bench-empty：與已放置 slot 等高；flex 與寬度對齊已放置卡牌的 slot，避免 setup 時 drop target 小到難拖 */
-  .bench-empty{ border-style:dashed; border-color:#2a5a2a; opacity:.55; overflow:visible; flex:1 1 90px; min-width:90px; max-width:140px; height:185px; }
+  .bench-empty{ border-style:dashed; border-color:#2a5a2a; opacity:.55; overflow:visible; flex:1 1 90px; min-width:90px; max-width:128px; height:185px; }
   /* 拖曳中的 bench-empty 提升可見度（粗框 + 偏亮底） */
   .bench-empty.drop-zone{ opacity:.95; border-width:3px; }
   .bench-name{ font-size:.7rem; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }

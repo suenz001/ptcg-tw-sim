@@ -1,9 +1,73 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 2f3f (v2.52)  
+> 最後更新：2026-04-22 Session 2f3g (v2.53)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 2f3g (v2.53) — 備戰 UI 美化（放大卡圖 + pip 條件渲染） + 碧綠之舞 gate
+
+### 問題
+
+Leon 截圖反饋：「備戰區的排版變得好醜，牌的版面變好小，空出的空隙超大，請你做適度的調整」。以及 bug：「如果手牌沒有草能量，不會出現發動碧綠之舞的特性按鈕，而不是按了特性後告訴玩家沒有草能量」。
+
+兩件事：
+
+1. **UI**：v2.51 把 slot 加寬到 140px、v2.52 沒改，這兩版在視覺上有幾個問題：
+   - `.bench-slot img` max-width 92px、max-height 100px → 加上 aspect ratio 1.4（寶可夢卡標準比例），實際圖大約 **71×100**，相對於 140px slot 顯得很小。
+   - `.bench-nrg` 即使沒能量也佔版面（flex-row 右側永遠保留位置），讓 img 沒辦法置中填滿。
+2. **Bug（碧綠之舞）**：厄鬼椪 碧芯面具ex 的特性按鈕沒做手牌 gate，按了才跑 `addLog('碧綠之舞：手牌中沒有基本草能量', idx)`。v2.41 後 Leon 定調「一切 resolver 的前置條件要在 UI 階段就反映」— 這張卡漏了。
+
+### 修法
+
+**1. UI 美化** — `src/routes/game/+page.svelte`：
+
+- **markup**：3 處（my-bench / opp-active / my-active）把能量欄用 `{#if energyPips(x).length > 0}` 包起來。沒能量時直接不 render，flex 的 `justify-content:center` 會讓 img 置中填滿。
+- **CSS**：
+  - `.bench-slot` / `.bench-empty` max-width 140 → **128**（縮 12px 減少 5 格之間空隙）。
+  - `.bench-slot img` max-width 92 → **108**、max-height 100 → **128** → aspect 1.4 下 height 主導，實際 **92×128**（比 v2.51 的 71×100 放大約 68% 面積）。
+
+**2. 碧綠之舞 gate** — `src/lib/game/engine.ts` `getUsableAbilities`：
+
+在既有的 ability-name gate 鏈（腎上腺腦力、扭轉乾坤…）插入：
+
+```ts
+if (ab.name === '碧綠之舞') {
+  const hasGrassEnergy = player.hand.some(c => {
+    const cc = pool.get(c.cardId);
+    if (cc?.supertype !== 'Energy' || cc.subtype !== 'Basic') return false;
+    return cc.pokemonType === 'Grass' || cc.name.includes('【草】');
+  });
+  if (!hasGrassEnergy) return;
+}
+```
+
+這樣手牌沒草能量時按鈕不出現。reg 裡舊的 `if (!grassEnergyInst) return addLog('碧綠之舞：手牌中沒有基本草能量')` 保留當 defense-in-depth（例如 AI 走路徑、或 UI race condition）。
+
+### 為何 slot 維持 128 而非更小
+
+5 × 128 + 4 gap(.35rem≈5.6) = 662.4px，playmat 大約 1000px 寬，還有約 337 富餘；比 v2.51 的 5×140=722 只縮 60px。夠讓 img 放大但不會壓縮 setup 期間 drop-zone 可點區域。再小下去（例如 115）會回到 v2.50 前的高度撐高問題（能量多時 wrap）。
+
+### 檔案變更
+
+- `src/lib/version.ts`: 2.52 → 2.53
+- `src/lib/game/engine.ts`: +9 行（碧綠之舞 gate）
+- `src/routes/game/+page.svelte`: 3 處能量欄條件渲染 + 2 條 CSS（slot/img 尺寸）
+
+### 構建
+
+`npm run build` 通過（12.93s）。
+
+### 實機測試建議
+
+- 開猛擂鼓 preset：確認備戰 5 格視覺不再空蕩；厄鬼椪（帶 ex 特性）手牌無草能量時特性按鈕隱藏，一抽到草能量按鈕出現。
+- 看戰鬥場能量 pip：無能量不顯示空欄（v2.53 條件渲染）。
+
+### Commit
+
+待 commit 後填入 hash。
 
 ---
 
