@@ -47,6 +47,10 @@ if (card.subtype === 'Stage1' || card.subtype === 'Stage2') return false;
 
 `npm run build` 綠（13.02s）。
 
+### Commit
+
+`957e04a` v2.62: 火箭隊的操陷蛛 被當 Basic 直接上場（引擎加固 + 補 evolvesFrom）
+
 ### 待辦（v2.63+ 候選）
 
 1. 剩餘 70+ 張訓練家寶可夢 Stage1/Stage2 缺 evolvesFrom 的補表 — 分 set 分訓練家逐張對卡面。
