@@ -22,6 +22,7 @@ import {
   BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
   SPECIAL_ENERGY_ATTACH,
   clearActiveEffects,
+  hasFairyZoneField,
 } from './effects';
 
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
@@ -295,6 +296,7 @@ function emptyPlayer(name: string): PlayerState {
     bench: [], discard: [], prizes: [],
     energyAttachedThisTurn: false,
     supporterPlayedThisTurn: false,
+    rocketSupporterPlayedThisTurn: false,
     retreatedThisTurn: false,
   };
 }
@@ -830,7 +832,13 @@ function handlePlaying(
 
     // 一般訓練家（物品 / 支援者）
     attacker.discard = [...attacker.discard, trainerInst];
-    if (trainerCard.subtype === 'Supporter') attacker.supporterPlayedThisTurn = true;
+    if (trainerCard.subtype === 'Supporter') {
+      attacker.supporterPlayedThisTurn = true;
+      // v2.57：名稱含「火箭隊」的支援者 → 同時記 rocketSupporterPlayedThisTurn，供「火箭隊的工廠」gate 使用。
+      if (trainerCard.name.includes('火箭隊')) {
+        attacker.rocketSupporterPlayedThisTurn = true;
+      }
+    }
     players[aIdx] = attacker;
 
     let newState: GameState = { ...state, players };
@@ -915,6 +923,26 @@ function handlePlaying(
       p.bench = p.bench.map(c => ({ ...c, damage: Math.max(0, c.damage - 10) }));
       updated[aIdx] = p;
       return addLog({ ...newState, players: updated }, '居民會館：自己寶可夢各回 10 HP', aIdx);
+    }
+
+    // v2.57 火箭隊的工廠 — 這回合打過名稱含「火箭隊」的支援者才能用，抽 2 張
+    if (stadiumCard.name === '火箭隊的工廠') {
+      if (!newState.players[aIdx].rocketSupporterPlayedThisTurn) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '火箭隊的工廠：本回合還沒打出「火箭隊」支援者', aIdx);
+      }
+      const updated = { ...newState.players } as [PlayerState, PlayerState];
+      const p = { ...updated[aIdx] };
+      const drawCount = Math.min(2, p.deck.length);
+      if (drawCount === 0) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '火箭隊的工廠：牌庫已空', aIdx);
+      }
+      const drawn = p.deck.slice(0, drawCount);
+      p.hand = [...p.hand, ...drawn];
+      p.deck = p.deck.slice(drawCount);
+      updated[aIdx] = p;
+      return addLog({ ...newState, players: updated }, `火箭隊的工廠：從牌庫抽 ${drawCount} 張`, aIdx);
     }
 
     if (stadiumCard.name === '神秘花園') {
@@ -1160,6 +1188,22 @@ function handlePlaying(
       );
     }
 
+    // v2.57 火箭隊的超夢ex｜力量抑制者 — 自己場上「火箭隊的」寶可夢 < 4 時無法使用招式
+    {
+      const actCard = pool.get(attacker.active.cardId);
+      if (actCard?.name === '火箭隊的超夢ex' && actCard.abilities?.some(a => a.name === '力量抑制者')) {
+        const allOwn: CardInstance[] = [attacker.active, ...attacker.bench];
+        const rocketCount = allOwn.filter(c => pool.get(c.cardId)?.name?.startsWith('火箭隊的')).length;
+        if (rocketCount < 4) {
+          return addLog(
+            state,
+            `${actCard.name} 力量抑制者：自己場上「火箭隊的」寶可夢只有 ${rocketCount} 隻（未達 4 隻），無法使用招式`,
+            aIdx
+          );
+        }
+      }
+    }
+
     const attackerCard = getCard(attacker.active.cardId, pool);
     const attacks = attackerCard.attacks ?? [];
     const attack = attacks[action.attackIndex];
@@ -1202,7 +1246,13 @@ function handlePlaying(
 
     // 弱點（×2）— 只對有實際傷害的招式套用。skipWeakRes 旗標跳過此計算。
     const defenderCard = getCard(defender.active.cardId, pool);
-    if (!skipWeakRes && baseDamage > 0 && defenderCard.weakness && attackerCard.pokemonType === defenderCard.weakness.type) {
+    // v2.57：莉莉艾的皮皮ex｜妖精領域 — 我方場上有皮皮ex 時，對手【龍】寶可夢的弱點改為【超】。
+    // 卡面允許「本無弱點」的龍寶可夢被加上【超】弱點。
+    let effectiveWeaknessType: string | undefined = defenderCard.weakness?.type;
+    if (defenderCard.pokemonType === 'Dragon' && hasFairyZoneField(workingState, aIdx, pool)) {
+      effectiveWeaknessType = 'Psychic';
+    }
+    if (!skipWeakRes && baseDamage > 0 && effectiveWeaknessType && attackerCard.pokemonType === effectiveWeaknessType) {
       baseDamage *= 2;
     }
 
@@ -1923,6 +1973,7 @@ function handlePlaying(
       ...nextP,
       energyAttachedThisTurn: false,
       supporterPlayedThisTurn: false,
+      rocketSupporterPlayedThisTurn: false,
       retreatedThisTurn: false,
     };
 
@@ -2052,6 +2103,12 @@ export function getAvailableAttacks(
   if (player.noAttacksThisTurn) return [];
   const card = pool.get(player.active.cardId);
   if (!card?.attacks) return [];
+  // v2.57 力量抑制者：自己場上「火箭隊的」寶可夢 < 4 → 禁用所有招式
+  if (card.name === '火箭隊的超夢ex' && card.abilities?.some(a => a.name === '力量抑制者')) {
+    const allOwn: CardInstance[] = [player.active, ...player.bench];
+    const rocketCount = allOwn.filter(c => pool.get(c.cardId)?.name?.startsWith('火箭隊的')).length;
+    if (rocketCount < 4) return [];
+  }
   return card.attacks
     .map((atk, i) => (canAffordAttack(player.active!, atk.cost, pool) ? i : -1))
     .filter((i) => i >= 0);

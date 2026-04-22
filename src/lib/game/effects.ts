@@ -119,6 +119,65 @@ export function hasFlowerVeil(
 }
 
 /**
+ * v2.57：檢查 defender 場上是否有「火箭隊的急凍鳥｜抵抗之幕」特性。
+ * 抵抗之幕：只要這隻寶可夢在場上，自己的場上所有【基礎】寶可夢的「火箭隊的寶可夢」，
+ *           不會受到對手的寶可夢使用招式的效果的影響。
+ *   - 只擋「招式的效果」（attack-effect）— 放指示物、debuff flag、異常狀態等
+ *   - 不擋純招式傷害（那是 attack-damage）
+ *   - 不擋對手的特性效果（卡面明確說「招式的」）
+ *   - 目標條件：Basic stage + 名稱含「火箭隊的」
+ */
+export function hasRocketVeil(
+  state: GameState,
+  defenderIdx: 0 | 1,
+  pool: Map<string, Card>,
+): boolean {
+  const defender = state.players[defenderIdx];
+  const cards = [defender.active, ...defender.bench].filter((c): c is CardInstance => !!c);
+  for (const c of cards) {
+    const card = pool.get(c.cardId);
+    if (!card?.abilities) continue;
+    for (const a of card.abilities) {
+      if (a.name === '抵抗之幕') return true;
+    }
+  }
+  return false;
+}
+
+/** v2.57：判斷 targetCard 是「基礎」且名稱含「火箭隊的」— 抵抗之幕保護對象 */
+export function isRocketBasicTarget(targetCard: Card | undefined): boolean {
+  if (!targetCard) return false;
+  // 基礎寶可夢：subtype === 'Basic'（不含 Stage1/Stage2/Mega 等）
+  if (targetCard.subtype !== 'Basic') return false;
+  // 名稱含「火箭隊的」（火箭隊的急凍鳥、火箭隊的超夢ex、火箭隊的操陷蛛 等）
+  return targetCard.name.includes('火箭隊的');
+}
+
+/**
+ * v2.57：檢查指定 player 場上是否有「莉莉艾的皮皮ex｜妖精領域」特性。
+ * 妖精領域：只要這隻寶可夢在場上，對手的場上的所有【龍】寶可夢的弱點全部改爲【超】屬性。
+ *   - engine 在計算弱點時查這個 flag：若 attacker 的一方有皮皮ex 且 defender 是【龍】，
+ *     則把 defender 的弱點類型當作 'Psychic' 處理。
+ *   - 被火箭監視塔壓制時（皮皮ex 是【妖精】不是【無】），此特性仍生效。
+ */
+export function hasFairyZoneField(
+  state: GameState,
+  ownerIdx: 0 | 1,
+  pool: Map<string, Card>,
+): boolean {
+  const p = state.players[ownerIdx];
+  const cards = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
+  for (const c of cards) {
+    const card = pool.get(c.cardId);
+    if (!card?.abilities) continue;
+    for (const a of card.abilities) {
+      if (a.name === '妖精領域') return true;
+    }
+  }
+  return false;
+}
+
+/**
  * v2.46：「對備戰目標」造成傷害/放指示物時，統一檢查是否被卡面/場地擋下。
  *   kind === 'attack-effect' / 'ability-effect' → 查對戰圓形（備戰不放指示物）
  *   kind === 'attack-damage'                   → 查花之帷幔（備戰且非 ex）、太晶（備戰）
@@ -140,6 +199,14 @@ export function resolveBenchGuard(
   if (kind === 'attack-effect' || kind === 'ability-effect') {
     if (isBenchProtected(state, pool)) {
       return { blocked: true, reason: '對戰圓形競技場效果' };
+    }
+  }
+  if (kind === 'attack-effect') {
+    // v2.57：火箭隊的急凍鳥「抵抗之幕」— 我方基礎火箭隊寶可夢不受對手【招式的效果】影響。
+    // 因 resolveBenchGuard 僅在 target 為 bench 時被呼叫，這裡檢查備戰區上的目標即可。
+    const defenderIdx = (1 - actorIdx) as 0 | 1;
+    if (hasRocketVeil(state, defenderIdx, pool) && isRocketBasicTarget(targetCard)) {
+      return { blocked: true, reason: '火箭隊的急凍鳥 抵抗之幕 效果' };
     }
   }
   if (kind === 'attack-damage') {
@@ -256,7 +323,8 @@ function regPost(key: string, fn: AttackPostFn) { ATTACK_POST.set(key, fn); }
  *
  * - min / max：可丟棄的能量張數範圍（max=null 表示不限上限 / 全部）
  * - scope：'attacker' = 只能丟攻擊方出場寶可夢身上的能量；
- *          'any-own' = 可丟自己場上（含備戰）任何寶可夢身上的能量（例：猛擂鼓 EX）
+ *          'any-own' = 可丟自己場上（含備戰）任何寶可夢身上的能量（例：猛擂鼓 EX）；
+ *          'own-bench' = 只能丟自己「備戰」寶可夢身上的能量（不含戰鬥場，例：超夢ex 擦除球）
  * - baseDamage / damagePerEnergy：UI 顯示用的預估傷害公式（實際傷害仍由 regPre 計算）
  *
  * UI 在使用者按下招式按鈕時讀此表；若命中則彈出挑能量 modal，
@@ -267,7 +335,7 @@ function regPost(key: string, fn: AttackPostFn) { ATTACK_POST.set(key, fn); }
 export interface PreDiscardSpec {
   min: number;
   max: number | null; // null = 不限上限（全部）
-  scope: 'attacker' | 'any-own';
+  scope: 'attacker' | 'any-own' | 'own-bench';
   baseDamage: number;
   damagePerEnergy: number;
 }
@@ -9671,7 +9739,7 @@ SPECIAL_ENERGY_ATTACH.set('感應【超】能量', (st, idx, targetIid, pool) =>
 //     Attack          : 團珠蛛｜猛撞（已存在 v1.x，rename key 後仍保留）
 //     Attack          : 操陷蛛｜火箭猛攻（30× 丟能，使用 registerFieldDiscardMultiply）
 //     Attack          : 急凍鳥｜暗黑冰霜（60，對手有特殊能量 +30 stub）
-//     Attack          : 謎擬Ｑ｜扮晶晶酒（known gap — copy-attack 太複雜）
+//     Attack          : 謎擬Ｑ｜扮晶晶酒（v2.57 實裝：自動挑對手太晶最高傷害招式，不遞迴附加效果）
 //   【猛雷鼓】預組（6 張新卡）：
 //     Item            : 能量回收（擲幣：正 4 張，反 2 張基本能量棄牌→手牌）
 //     Item            : 寶可裝置3.0（stub — 無實裝 Tool）
@@ -9921,37 +9989,174 @@ regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool) => {
 // 從自己的場上選擇任意張基本能量丟棄，傷害 = 30 × 丟棄張數。
 registerFieldDiscardMultiply('火箭隊的操陷蛛|火箭猛攻', '火箭猛攻', 0, 30, 20, 'basic');
 
-// ---- 超夢ex｜擦除球 attack（160 + gate stub） -----------------------------
-// 卡面（近似）：從這隻寶可夢附加的能量中，隨意選 2 張【超】能量棄置。base 160。
-// 實裝：宣告 base 160。棄能流程：ATTACK_PRE_DISCARD_CHOICE（scope='self'）棄 2 張【超】能量。
+// ---- 超夢ex｜擦除球 attack（160 + 丟備戰能 ×60） --------------------------
+// 卡面原文：160 — 若希望，將最多 2 張自己的備戰寶可夢身上附加的能量卡丟棄，
+//            增加其張數×60 點傷害。
+// v2.35 stub 對卡面誤解成「丟自己（戰鬥場）的超能量」。v2.57 修：
+//   scope='own-bench'（只能丟備戰），min=0 max=2，每張 +60（base 160→最高 280）。
 ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的超夢ex|擦除球', {
-  min: 2, max: 2, scope: 'self', baseDamage: 160, damagePerEnergy: 0,
+  min: 0, max: 2, scope: 'own-bench', baseDamage: 160, damagePerEnergy: 60,
 });
-regPre('火箭隊的超夢ex|擦除球', (state, _aIdx, _pool) => ({ state, damage: 160 }));
-// Note: 傷害扣能邏輯交 engine 共用 pipeline；若 attacker 身上不足 2 張【超】，UI 會阻擋宣告。
+regPre('火箭隊的超夢ex|擦除球', (state, aIdx, _pool, action) => {
+  const player = state.players[aIdx];
+  // 只列備戰寶可夢身上的能量
+  type Loc = { benchIdx: number; energy: CardInstance };
+  const eligible: Loc[] = [];
+  player.bench.forEach((b, i) => {
+    for (const e of b.energyAttached) eligible.push({ benchIdx: i, energy: e });
+  });
 
-// ---- 火箭隊的急凍鳥｜暗黑冰霜（60，有特殊能量 +30 stub） --------------------
-// 卡面（近似）：暗黑冰霜 60 — 若對手戰鬥寶可夢身上有 1 張以上特殊能量，這個招式的傷害 +30。
+  const chosenIids = action?.discardedEnergyIids;
+  let selected: Loc[];
+  if (chosenIids && chosenIids.length > 0) {
+    const idSet = new Set(chosenIids);
+    selected = eligible.filter(l => idSet.has(l.energy.iid)).slice(0, 2);
+  } else {
+    // AI fallback：不丟能（保守，基礎 160 即可）
+    selected = [];
+  }
+  if (selected.length === 0) {
+    return { state: addLog(state, '擦除球：未丟棄備戰能量 → 160', aIdx), damage: 160 };
+  }
+
+  const benchRm = new Map<number, Set<string>>();
+  for (const s of selected) {
+    const st = benchRm.get(s.benchIdx) ?? new Set<string>();
+    st.add(s.energy.iid);
+    benchRm.set(s.benchIdx, st);
+  }
+  const discardList = selected.map(s => s.energy);
+  let s2 = updatePlayer(state, aIdx, p => ({
+    ...p,
+    bench: p.bench.map((b, i) => {
+      const rm = benchRm.get(i);
+      if (!rm || rm.size === 0) return b;
+      return { ...b, energyAttached: b.energyAttached.filter(e => !rm.has(e.iid)) };
+    }),
+    discard: [...p.discard, ...discardList],
+  }));
+  const dmg = 160 + 60 * selected.length;
+  s2 = addLog(s2, `擦除球：丟棄 ${selected.length} 個備戰能量 → ${dmg}`, aIdx);
+  return { state: s2, damage: dmg };
+});
+
+// ---- 火箭隊的急凍鳥｜暗黑冰霜 ------------------------------------------------
+// 卡面原文：60 — 若這隻寶可夢身上附有「火箭隊能量」，則增加 60 點傷害。
+// v2.35 的 stub 註解把條件寫成「對手有特殊能量 +30」— 是錯的。
+// v2.57 修正：條件是【攻擊者自身附有 "火箭隊能量" 特殊能量】，加成是 +60（60→120）。
 regPre('火箭隊的急凍鳥|暗黑冰霜', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const defActive = state.players[dIdx].active;
+  const atk = state.players[aIdx].active;
   let base = 60;
-  if (defActive) {
-    const hasSpecial = defActive.energyAttached.some(e => {
+  if (atk) {
+    const hasRocketEnergy = atk.energyAttached.some(e => {
       const card = pool.get(e.cardId);
-      return card?.supertype === 'Energy' && card.subtype === 'Special';
+      return card?.supertype === 'Energy' && card.name === '火箭隊能量';
     });
-    if (hasSpecial) base += 30;
+    if (hasRocketEnergy) base += 60;
   }
   return { state, damage: base };
 });
 
+// ---- v2.57：火箭隊的超夢 預組 特性實裝 --------------------------------------
+// 操陷蛛｜充能（主動）：1 回合 1 次，從棄牌區選 1 張基本能量附於此寶可夢。
+// 實裝方式：regA → discard-search filter=BasicEnergy → 自訂 resolver 附於觸發源。
+regA('火箭隊的操陷蛛', 0, (st, idx, pool) => {
+  const userIid = findAbilityUserIid(st, idx, '火箭隊的操陷蛛', pool);
+  if (!userIid) return st;
+  const p = st.players[idx];
+  const cand = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  });
+  if (cand.length === 0) return addLog(st, '充能：棄牌區沒有基本能量', idx);
+  st = addLog(st, '充能：從棄牌區選 1 張基本能量附於此寶可夢', idx);
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy', minCount: 1, maxCount: 1,
+    effectKey: 'rocket-ariados-attach-self',
+    params: { userIid, label: '充能' },
+  });
+});
+
+regR('rocket-ariados-attach-self', (st, idx, iids, params, pool) => {
+  const userIid = params?.userIid as string | undefined;
+  const label = (params?.label as string) ?? '充能';
+  if (!userIid) return st;
+  const p = st.players[idx];
+  const energies = p.discard.filter(c => iids.includes(c.iid));
+  if (energies.length === 0) return st;
+  const target = p.active?.iid === userIid ? p.active : p.bench.find(c => c.iid === userIid);
+  if (!target) return st;
+  const tname = pool.get(target.cardId)?.name ?? '?';
+  const eName = pool.get(energies[0].cardId)?.name ?? '能量';
+  const s = addLog(st, `${label}：將 ${eName} 附加到 ${tname}`, idx);
+  return updatePlayer(s, idx, pl => {
+    const rest = pl.discard.filter(c => !iids.includes(c.iid));
+    if (pl.active && pl.active.iid === userIid) {
+      return { ...pl, discard: rest,
+        active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } };
+    }
+    return { ...pl, discard: rest,
+      bench: pl.bench.map(c => c.iid === userIid
+        ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
+  });
+});
+
+// ---- 火箭隊的謎擬Ｑ｜扮晶晶酒（copy-attack, v2.57） -------------------------
+// 卡面原文：選擇1個對手的戰鬥場的「太晶」寶可夢持有的招式，作為這個招式使用。
+//
+// 實裝策略（務實版）：
+//   AttackPreFn 是同步的，無法在攻擊中途彈 UI 讓玩家挑招式。
+//   因此採「自動挑選」路線 — 只考慮對手戰鬥場，若為太晶寶可夢：
+//     (1) 過濾掉無傷害的招式（damage 為空或 0）
+//     (2) 剩餘招式中挑「印刷傷害最高」的
+//     (3) 若全部都沒印刷傷害 → 挑第一招（純效果招式亦可觸發，但本實裝僅回傳 damage=0）
+//   對手非太晶 / 無戰鬥場 → log 並回傳 damage=0。
+//
+// 已知限制（v2.57）：
+//   - 不會遞迴觸發被複製招式的 regPre／regPost 效果（避免複雜的 engine 遞迴 + 無窮展開）。
+//     → 只取「印刷基礎傷害」，弱點／抵抗力／附加效果仍依 engine 正常流程計算。
+//   - 若對手太晶寶可夢有多招，使用者無法手動挑 — 自動選最高傷害。
+//   - 若複製的招式帶 "+N" / "×N" 等非純數字字樣，只解析前導整數。
+regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const oppActive = state.players[dIdx].active;
+  if (!oppActive) {
+    return { state: addLog(state, '扮晶晶酒：對手沒有戰鬥寶可夢', aIdx), damage: 0 };
+  }
+  const oppCard = pool.get(oppActive.cardId);
+  if (!oppCard || !oppCard.tags?.includes('太晶')) {
+    const oname = oppCard?.name ?? '?';
+    return { state: addLog(state, `扮晶晶酒：${oname} 不是「太晶」寶可夢，無法扮演`, aIdx), damage: 0 };
+  }
+  const atks = oppCard.attacks ?? [];
+  if (atks.length === 0) {
+    return { state: addLog(state, `扮晶晶酒：${oppCard.name} 沒有可以扮演的招式`, aIdx), damage: 0 };
+  }
+  // 解析每招印刷傷害的前導整數（空字串 / 全非數字 → 0）
+  const parseDmg = (s: string): number => {
+    const m = s.match(/^(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+  };
+  // 挑「印刷傷害最高」那招；全為 0 則退回第一招
+  let picked = atks[0];
+  let pickedDmg = parseDmg(picked.damage);
+  for (let i = 1; i < atks.length; i++) {
+    const d = parseDmg(atks[i].damage);
+    if (d > pickedDmg) {
+      picked = atks[i];
+      pickedDmg = d;
+    }
+  }
+  const s = addLog(state, `扮晶晶酒：扮演 ${oppCard.name} 的「${picked.name}」（傷害 ${pickedDmg}，不含附加效果）`, aIdx);
+  return { state: s, damage: pickedDmg };
+});
+
 // ---- Known gap 特性 stubs（log only）--------------------------------------
-// 這些特性需要 engine 擴充才能完整實裝。目前寫成說明 log，避免預組無法放入編輯器。
-regA('火箭隊的操陷蛛', 0, (st, idx) => addLog(st, '充能：特性尚未實裝（known gap v2.35）', idx));
-regA('火箭隊的急凍鳥', 0, (st, idx) => addLog(st, '抵抗之幕：被動特性尚未實裝（known gap v2.35）', idx));
-regA('莉莉艾的皮皮ex', 0, (st, idx) => addLog(st, '妖精領域：被動特性尚未實裝（known gap v2.35）', idx));
-regA('火箭隊的超夢ex', 0, (st, idx) => addLog(st, '力量抑制者：被動特性尚未實裝（known gap v2.35）', idx));
+// 這些特性需要引擎擴充才能完整實裝。目前寫成說明 log，避免預組無法放入編輯器。
+// v2.57 進度：操陷蛛 充能 / 急凍鳥 抵抗之幕 / 皮皮ex 妖精領域 / 超夢ex 力量抑制者 → 全部已實裝。
+// 力量抑制者為 engine 層 gate（見 engine.ts 的 ATTACK handler + getAvailableAttacks），不在此處 regA。
+// 扮晶晶酒為務實 copy-attack（自動挑對手太晶最高傷害招式，不遞迴附加效果）。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 猛雷鼓預組：新物品卡

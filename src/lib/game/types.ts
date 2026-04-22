@@ -162,6 +162,8 @@ export interface PlayerState {
   energyAttachedThisTurn: boolean;
   /** 本回合是否已打出支援者 */
   supporterPlayedThisTurn: boolean;
+  /** v2.57：本回合是否已打出「名稱含『火箭隊』的支援者」— 火箭隊的工廠 gate 用 */
+  rocketSupporterPlayedThisTurn?: boolean;
   /** 本回合是否已撤退 */
   retreatedThisTurn: boolean;
   /**

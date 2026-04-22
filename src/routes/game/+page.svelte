@@ -1255,6 +1255,9 @@
     };
     if (spec.scope === 'attacker') {
       addFrom(activePlayer.active);
+    } else if (spec.scope === 'own-bench') {
+      // v2.57 擦除球：只丟備戰寶可夢身上的能量
+      for (const b of activePlayer.bench) addFrom(b);
     } else {
       addFrom(activePlayer.active);
       for (const b of activePlayer.bench) addFrom(b);
@@ -2605,7 +2608,7 @@
             最少 {spec.min} 張{spec.max === null ? '（不限上限）' : `，最多 ${spec.max} 張`}
             · 已選 {pickedCount} 張
             {#if spec.damagePerEnergy > 0}· 預估傷害 <strong>{estDmg}</strong>{/if}
-            <br/>範圍：{spec.scope === 'attacker' ? '僅攻擊方出場寶可夢身上的能量' : '自己場上任一寶可夢身上的能量'}
+            <br/>範圍：{spec.scope === 'attacker' ? '僅攻擊方出場寶可夢身上的能量' : spec.scope === 'own-bench' ? '僅自己備戰寶可夢身上的能量' : '自己場上任一寶可夢身上的能量'}
           </p>
         </div>
         <div class="sel-grid">

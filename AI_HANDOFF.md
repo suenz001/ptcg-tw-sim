@@ -1,9 +1,243 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 2f3j (v2.56)  
+> 最後更新：2026-04-22 Session 38b7 (v2.57)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38b7 (v2.57) — 火箭隊的超夢ex 預組 8 項缺口一次補完
+
+### 背景
+
+Leon 直接下令：「都要處理，一張一張來吧」。
+「處理」的對象是 v2.35 火箭隊的超夢ex 預組下的 8 個 known gap（effects.ts:9729-9742 羅列）：
+1. 暗黑冰霜 — 停在 `+30` 錯的 stub 上
+2. 擦除球 — 丟能 UI 有寫，但 regPre 未走通
+3. 操陷蛛｜充能（特性）
+4. 急凍鳥｜抵抗之幕（特性）
+5. 皮皮ex｜妖精領域（特性）
+6. 火箭隊的工廠（Stadium）
+7. 超夢ex｜力量抑制者（特性）
+8. 謎擬Ｑ｜扮晶晶酒（copy-attack）
+
+依「易→難」順序一項一項推，每項推完都跑 `npm run build` 確認；8 項全綠後才 bump v2.57。
+
+---
+
+### (1/8) 火箭隊的急凍鳥｜暗黑冰霜（60 + 自身附火箭隊能量 → +60）
+
+**問題**：v2.35 stub 註解把條件寫反：「對手有特殊能量 +30」。卡面實際：「60。若這隻寶可夢身上附有『火箭隊能量』，則增加 60 點傷害。」條件主體是**攻擊方自己**、加成 **+60**（不是 +30）。
+
+**修法**：`effects.ts:10047-10058` 重寫 `regPre('火箭隊的急凍鳥|暗黑冰霜', …)`：
+```ts
+const atk = state.players[aIdx].active;
+let base = 60;
+if (atk) {
+  const hasRocketEnergy = atk.energyAttached.some(e => {
+    const card = pool.get(e.cardId);
+    return card?.supertype === 'Energy' && card.name === '火箭隊能量';
+  });
+  if (hasRocketEnergy) base += 60;
+}
+return { state, damage: base };
+```
+查名稱直接比 `'火箭隊能量'`（特殊能量，Name-based 比對）。
+
+---
+
+### (2/8) 火箭隊的超夢ex｜擦除球（160 + 丟備戰能 × 60）
+
+**問題**：`ATTACK_PRE_DISCARD_CHOICE` 先前只支援 `attacker` / `any-own`，超夢ex 的卡面寫「從自己的備戰區寶可夢身上丟棄2個能量」— **不含**戰鬥場、上限 2 個。需要新 scope `'own-bench'`。
+
+**修法**：
+- `effects.ts:327-338`：`PreDiscardSpec.scope` union 加 `'own-bench'`，註解更新用例。
+- `+page.svelte`：挑能量 modal 若 scope='own-bench' → `targets` 只含 bench pokemons。
+- `effects.ts:9997-10041`：
+  ```ts
+  ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的超夢ex|擦除球', {
+    min: 0, max: 2, scope: 'own-bench', baseDamage: 160, damagePerEnergy: 60,
+  });
+  regPre('火箭隊的超夢ex|擦除球', (state, aIdx, _pool, action) => {
+    const iids = action?.discardedEnergyIids ?? [];
+    // ...丟棄 iids 對應的 bench 能量，dmg = 160 + n*60
+  });
+  ```
+
+---
+
+### (3/8) 火箭隊的操陷蛛｜充能（特性）
+
+**問題**：v2.35 stub。卡面：「1 回合 1 次，可以從自己的棄牌區選擇 1 張基本能量，附於這隻寶可夢身上。」
+
+**修法**：`effects.ts:10063-10102`：
+```ts
+regA('火箭隊的操陷蛛', 0, (st, idx, pool) => {
+  const userIid = findAbilityUserIid(...);
+  const cand = p.discard.filter(c => card?.supertype === 'Energy' && card.subtype === 'Basic');
+  if (cand.length === 0) return addLog(st, '充能：棄牌區沒有基本能量', idx);
+  return withPending(st, {
+    type: 'discard-search', filter: 'BasicEnergy',
+    minCount: 1, maxCount: 1,
+    effectKey: 'rocket-ariados-attach-self',
+    params: { userIid, label: '充能' },
+  });
+});
+regR('rocket-ariados-attach-self', (st, idx, iids, params, pool) => {
+  // 把選中的能量從棄牌區移到 userIid 身上
+});
+```
+
+`regA` 第 2 參為 `0`（每回合 1 次）— effects.ts 內部有 attack-ability limiter。
+
+---
+
+### (4/8) 火箭隊的急凍鳥｜抵抗之幕（特性）
+
+**卡面**：「只要這隻寶可夢在戰鬥場，雙方場上所有【基礎】寶可夢不會受到對手招式的附加效果（傷害除外）。」
+
+**實裝範圍**（務實）：`resolveBenchGuard` 既有 `kind='attack-effect'` 分支是唯一 hook 點。真正的 "active 受附加效果" gate 要改動整個 ATTACK pipeline，超出本 session 範圍，先保留文件化的 known limit。
+
+**修法**：`effects.ts` 加入 `hasRocketVeil(state, ownerIdx, pool)` + `isRocketBasicTarget(card)` helper，在 `resolveBenchGuard` 的 attack-effect 分支檢查：
+```ts
+if (kind === 'attack-effect') {
+  const defenderIdx = (1 - actorIdx) as 0 | 1;
+  if (hasRocketVeil(state, defenderIdx, pool) && isRocketBasicTarget(targetCard)) {
+    return { blocked: true, reason: '火箭隊的急凍鳥 抵抗之幕 效果' };
+  }
+}
+```
+
+其中 `hasRocketVeil` 只看 owner 的 active 是否為「火箭隊的急凍鳥」且帶 `抵抗之幕` ability；`isRocketBasicTarget` 查 targetCard.subtype === 'Basic'。
+
+---
+
+### (5/8) 莉莉艾的皮皮ex｜妖精領域（特性）
+
+**卡面**：「只要這隻寶可夢在場上，所有【龍】寶可夢的弱點全部改爲【超】屬性（×2）。」
+
+**修法**：
+- `effects.ts`：新增 `hasFairyZoneField(state, ownerIdx, pool)` — 掃 owner.active + bench，找名字帶「莉莉艾的皮皮」且有 `妖精領域` ability 的任一隻。
+- `engine.ts` 招式傷害計算（line ~1205）把原本的 `defenderCard.weakness?.type` 改成可覆寫的 `effectiveWeaknessType`：
+  ```ts
+  let effectiveWeaknessType: string | undefined = defenderCard.weakness?.type;
+  if (defenderCard.pokemonType === 'Dragon' && hasFairyZoneField(workingState, aIdx, pool)) {
+    effectiveWeaknessType = 'Psychic';
+  }
+  if (!skipWeakRes && baseDamage > 0 && effectiveWeaknessType
+      && attackerCard.pokemonType === effectiveWeaknessType) {
+    baseDamage *= 2;
+  }
+  ```
+- 注意卡面寫「所有【龍】寶可夢」包含原本無弱點的龍（例如 M2a 的復刻龍王）— 此實裝對「無弱點龍」也會套上 Psychic 弱點 ×2，符合卡面。
+
+`hasFairyZoneField` 從 effects.ts export，engine.ts 的 import list 同步加入。
+
+---
+
+### (6/8) 火箭隊的工廠（Stadium）
+
+**卡面**：「打出使用『火箭隊』支援者後，從自己的牌庫抽 2 張卡（同方每回合 1 次）。」
+
+**修法**（engine.ts，不是 effects/cards/stadiums.ts — 需要 PlayerState flag）：
+- `types.ts:164` 加 `rocketSupporterPlayedThisTurn?: boolean` 到 `PlayerState`。
+- `engine.ts` `emptyPlayer()` + END_TURN nextIdx 分支都初始化/重置此 flag。
+- 支援者打出時（engine.ts ~line 834）：
+  ```ts
+  if (trainerCard.subtype === 'Supporter') {
+    attacker.supporterPlayedThisTurn = true;
+    if (trainerCard.name.includes('火箭隊')) {
+      attacker.rocketSupporterPlayedThisTurn = true;
+    }
+  }
+  ```
+- USE_STADIUM handler 接在「居民會館」case 後加分支：
+  ```ts
+  if (stadiumCard.name === '火箭隊的工廠') {
+    if (!newState.players[aIdx].rocketSupporterPlayedThisTurn) {
+      // revert stadiumUsedThisTurn flag 並 log 未打出火箭隊支援者
+    }
+    // 抽 2 張（若 deck 不足，抽完；若 deck=0，不算用掉 flag）
+  }
+  ```
+
+`stadiumUsedThisTurn` 是 `[boolean, boolean]` 每方玩家每回合 1 次，是 engine 層共用閘。
+「本回合還沒打出火箭隊支援者」→ revert flag，讓玩家改場地後還能再用一次（與居民會館的錯誤路徑一致）。
+
+---
+
+### (7/8) 火箭隊的超夢ex｜力量抑制者（特性）
+
+**卡面**：「只要這隻寶可夢在戰鬥場且自己場上火箭隊的寶可夢少於 4 隻，這隻寶可夢無法使用招式。」
+
+**修法**（engine.ts 雙閘門）：
+- **ATTACK handler** — 在 noAttacksThisTurn 檢查之後加：
+  ```ts
+  const actCard = pool.get(attacker.active.cardId);
+  if (actCard?.name === '火箭隊的超夢ex' && actCard.abilities?.some(a => a.name === '力量抑制者')) {
+    const allOwn = [attacker.active, ...attacker.bench];
+    const rocketCount = allOwn.filter(c => pool.get(c.cardId)?.name?.startsWith('火箭隊的')).length;
+    if (rocketCount < 4) {
+      return addLog(state, `${actCard.name} 力量抑制者：火箭隊寶可夢僅 ${rocketCount} 隻（< 4），無法使用招式`, aIdx);
+    }
+  }
+  ```
+- **getAvailableAttacks** — 相同邏輯；< 4 時回 `[]`，UI 按鈕全部隱藏。
+- 計算方式是 `name.startsWith('火箭隊的')`（含「火箭隊的超夢ex」自己）— 卡面文字直指名稱帶「火箭隊的」前綴即可。
+
+雙閘門防止 UI bypass + API 直送時卡住條件。
+
+---
+
+### (8/8) 火箭隊的謎擬Ｑ｜扮晶晶酒（copy-attack，務實版）
+
+**卡面**：「選擇 1 個對手的戰鬥場的『太晶』寶可夢持有的招式，作為這個招式使用。」
+
+**實裝限制**：`AttackPreFn` 是同步（`(state, aIdx, pool, action?) => { state, damage }`）、不能中途彈 UI 讓玩家挑招式。若要支援真正的使用者選，必須新增 pendingSelection 類型 + engine 層插 pause/resume hook，屬於跨 session 的大改動。
+
+**v2.57 務實路線**（effects.ts:10105-10142）：
+```ts
+regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const oppActive = state.players[dIdx].active;
+  if (!oppActive) return { state: addLog(..., '對手沒有戰鬥寶可夢'), damage: 0 };
+  const oppCard = pool.get(oppActive.cardId);
+  if (!oppCard?.tags?.includes('太晶'))
+    return { state: addLog(..., `${oppCard?.name} 不是太晶寶可夢`), damage: 0 };
+  const atks = oppCard.attacks ?? [];
+  if (atks.length === 0) return { state: addLog(..., '沒有招式可扮演'), damage: 0 };
+  // parse leading integer
+  const parseDmg = (s: string) => { const m = s.match(/^(\d+)/); return m ? parseInt(m[1], 10) : 0; };
+  let picked = atks[0], pickedDmg = parseDmg(picked.damage);
+  for (let i = 1; i < atks.length; i++) {
+    const d = parseDmg(atks[i].damage);
+    if (d > pickedDmg) { picked = atks[i]; pickedDmg = d; }
+  }
+  const s = addLog(state, `扮晶晶酒：扮演 ${oppCard.name} 的「${picked.name}」（傷害 ${pickedDmg}，不含附加效果）`, aIdx);
+  return { state: s, damage: pickedDmg };
+});
+```
+
+**已知限制**（在程式碼註解及 AI_HANDOFF 都有明寫）：
+1. 不遞迴觸發被複製招式的 regPre/regPost（避免複雜的同步遞迴）— 僅取「印刷基礎傷害」，弱點/抵抗力仍走 engine 正常流程。
+2. 多招式情形自動挑「印刷傷害最高」那招，使用者無法手動選。
+3. `"60+"` / `"30×"` 等非純數字字樣只取前導整數。
+
+卡面需要的「太晶」檢查用 `tags.includes('太晶')`（v2.48 migration 後太晶已從 attacks 移到 tags 欄）。
+
+---
+
+### 構件驗證
+
+- 8 項分別跑過 `npm run build`，全部一次綠。
+- effects.ts 新增 hasRocketVeil / isRocketBasicTarget / hasFairyZoneField helpers + 5 個 reg* 登錄；engine.ts 動 4 處（weakness override、supporter-played flag、USE_STADIUM 分支、ATTACK & getAvailableAttacks 力量抑制者 gate）。
+- 最終 `VERSION = '2.57'`。
+
+### 已知 follow-up（未實裝）
+
+- **抵抗之幕對 active 目標的附加效果**仍不阻擋 — 要完整 gate 需大改 ATTACK_PRE/POST pipeline。現階段只保護備戰（最常見 snipe / 幻影奇襲 類）。
+- **扮晶晶酒不遞迴複製招式效果** — 需要 engine 加中斷/恢復機制才能完整；目前僅複製印刷傷害。
 
 ---
 
