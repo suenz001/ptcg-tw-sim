@@ -2288,6 +2288,15 @@ export function getUsableAbilities(
         });
         if (!hasGrassEnergy) return;
       }
+      // v2.59 充能（火箭隊的操陷蛛）：棄牌區必須至少有 1 張基本能量。
+      // 與碧綠之舞同模式 — 條件未滿足時直接不顯示按鈕，不要讓玩家按了才收到 log。
+      if (ab.name === '充能') {
+        const hasBasicEnergyInDiscard = player.discard.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic';
+        });
+        if (!hasBasicEnergyInDiscard) return;
+      }
       // 可達鴨｜濕氣：自身 KO 類特性被消除（不列入可用清單）
       if (SELF_KO_ABILITY_NAMES.has(ab.name) && isSelfKOEffectBlocked(state, pool)) return;
       // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。

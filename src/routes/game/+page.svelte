@@ -1853,9 +1853,19 @@
             {:else}
               <div class="bench-slot" out:scale={{ duration: 320, start: 0.55, opacity: 0 }}>
                 <!-- v2.49：名字/HP 移到卡牌上方，避免與下方 chip/button 擠在一起 -->
+                <!-- v2.59：對手 bench 也要顯示附加能量（pip column），與我方備戰一致 — Leon 回報對手資訊看不到 -->
                 <div class="bench-name">{bc?.name}</div>
                 <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
-                <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>
+                <div class="bench-middle">
+                  <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>
+                  {#if energyPips(b).length > 0}
+                    <div class="bench-nrg">
+                      {#each energyPips(b) as pip}
+                        <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
                 <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
                 {#if b.toolAttached}{@const tc3=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc3?.name}</div>{/if}
                 {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}

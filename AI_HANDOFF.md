@@ -1,9 +1,79 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session a9f1 (v2.58)  
+> 最後更新：2026-04-22 Session a9f1 (v2.59)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session a9f1 (v2.59) — 操陷蛛｜充能 gate + 對手備戰能量可見
+
+### 問題
+
+Leon 回報兩個 bug：
+
+**Bug A — 充能（火箭隊的操陷蛛）特性應在條件不滿足時不顯示按鈕**  
+現況：按下「✨ 充能」後會收到 log「充能：棄牌區沒有基本能量」才知道不能用。Leon 指出應該走碧草面具ex／碧綠之舞 的模式 — 棄牌區沒有基本能量時，直接就不要顯示特性按鈕。
+
+**Bug B — 對手戰鬥場／備戰場的附加能量、道具、狀態看不到**  
+Leon 的原話：「戰鬥場及備戰場的所有資訊應該是大家都能看的到，不管是自己還是對手」。  
+實際檢查：
+- 對手戰鬥場（`.opp-active`）— pip / tool chip / ab-used-chip / status chip **已經** 渲染，OK。
+- 對手備戰場（`.bench-slot` within `.opponent-row`）— 渲染了 name/HP/tool-chip sm/ab-used-chip sm/status-chip-sm，但**完全沒有附加能量 pip 的 render 邏輯**。與我方備戰 UI 的 `.bench-middle` + `.bench-nrg` 不對稱。
+- 放大鏡（zoom modal）— `openZoom(cardId, inst)` 在對手 active/bench 兩處**有**傳 inst，modal 的 `{#if zoomInst}` block 會 render `附能 / 🔧 道具 / 異常 / 進化鏈` 等。理論上是對稱的；Leon 的「放大鏡也看不到」判斷，最可能原因是主棋盤 opp bench 沒顯示能量 → 他以為整條鏈都壞了，所以本次只改主棋盤 opp bench，zoom 不動。
+
+### 修法
+
+**Bug A — `engine.ts` `getUsableAbilities`**（緊接在 v2.53 碧綠之舞 gate 之後）：
+
+```ts
+// v2.59 充能（火箭隊的操陷蛛）：棄牌區必須至少有 1 張基本能量。
+// 與碧綠之舞同模式 — 條件未滿足時直接不顯示按鈕，不要讓玩家按了才收到 log。
+if (ab.name === '充能') {
+  const hasBasicEnergyInDiscard = player.discard.some(c => {
+    const cc = pool.get(c.cardId);
+    return cc?.supertype === 'Energy' && cc.subtype === 'Basic';
+  });
+  if (!hasBasicEnergyInDiscard) return;
+}
+```
+
+配套：effects.ts 裡充能 regAb 的前置判斷仍保留（safety net，避免 race condition 或未來新 trigger path 繞過 UI gate）。
+
+**Bug B — `+page.svelte` opp bench slot（~line 1854）**：
+
+把原本的
+
+```svelte
+<img ... class="zoomable"/>
+<div class="hp-bar-wrap sm">...</div>
+```
+
+改成（新增 `.bench-middle` wrapper + 條件式 `.bench-nrg`）：
+
+```svelte
+<div class="bench-middle">
+  <img ... class="zoomable"/>
+  {#if energyPips(b).length > 0}
+    <div class="bench-nrg">
+      {#each energyPips(b) as pip}
+        <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" ...>...</span>
+      {/each}
+    </div>
+  {/if}
+</div>
+<div class="hp-bar-wrap sm">...</div>
+```
+
+與我方備戰 slot（line 2120）對稱，沿用既有的 `.bench-middle` `.bench-nrg` CSS — 無新增 CSS。
+
+主棋盤對手 active slot 本來就有 pip / tool chip / ab-used-chip / status chip（line 1890-1909），v2.59 不動。
+放大鏡 modal 本來也會渲染完整 `zoomInst` 狀態（line 2795-2848），v2.59 不動。
+
+### 驗證
+
+`npm run build` 綠，無 CSS unused selector warning（`.bench-middle` / `.bench-nrg` 在 my-row 已使用、現在 opp-row 也用了）。
 
 ---
 
