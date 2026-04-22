@@ -9112,6 +9112,54 @@ regPre('土龍節節ex|逆境之尾', (state, aIdx, pool) => {
 // ── 土龍節節ex｜鑽破壞 — 150，不計算對手戰鬥寶可夢身上的附加效果 ─────────────
 regPre('土龍節節ex|鑽破壞', skipDefEffectsPre(150, '鑽破壞'));
 
+// ── 土龍節節（非 ex）｜逃跑抽出 — 抽 3 + 自身（含附加 + 前階）回牌庫並重洗 ──
+// v2.37：非 ex 版土龍節節特性。一回合一次（引擎 abilityUsedThisTurn gate）：
+//   1. 從自己的牌庫抽 3 張；
+//   2. 將「這隻土龍節節」與其附加的能量、道具、以及前一階土龍弟弟（含其附加
+//      能量/道具，若有）全部放回牌庫並重洗。
+// 由於 regA 不會收到 action.iid，我們靠引擎在呼叫 ability fn「前」已將觸發對象
+// 的 `abilityUsedThisTurn` 標成 true（engine.ts:998-1004）來定位觸發源：
+// 掃自己的 active + bench，找 name === '土龍節節' 且 abilityUsedThisTurn === true。
+// active 被清空時由 hasPendingActions 觸發 SEND_NEW_ACTIVE，與撤退後 flow 相同。
+regA('土龍節節', 0, (st, idx, pool) => {
+  const p = st.players[idx];
+  const allPokes: CardInstance[] = [
+    ...(p.active ? [p.active] : []),
+    ...p.bench,
+  ];
+  const src = allPokes.find(c => {
+    const card = pool.get(c.cardId);
+    return card?.name === '土龍節節' && c.abilityUsedThisTurn === true;
+  });
+  if (!src) return st;
+  const isActive = p.active?.iid === src.iid;
+
+  // 步驟 1：抽 3
+  st = addLog(st, '逃跑抽出：從牌庫抽 3 張', idx);
+  st = drawCards(st, idx, 3);
+
+  // 步驟 2：組出要回牌庫的卡 — 本體（重設狀態）+ 能量 + 道具 + 前階堆疊
+  const returning: CardInstance[] = [
+    { ...src, damage: 0, energyAttached: [], toolAttached: undefined,
+      status: undefined, evolvedFromStack: undefined,
+      evolvedThisTurn: undefined, justPlaced: undefined, movedToActiveThisTurn: undefined,
+      damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
+      abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
+      cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
+      damageBonusPending: undefined },
+    ...src.energyAttached,
+    ...(src.toolAttached ? [src.toolAttached] : []),
+    ...(src.evolvedFromStack ?? []),
+  ];
+  st = addLog(st, '逃跑抽出：土龍節節（含附加 + 前階）放回牌庫並重洗', idx);
+  return updatePlayer(st, idx, pl => ({
+    ...pl,
+    active: isActive ? null : pl.active,
+    bench: isActive ? pl.bench : pl.bench.filter(c => c.iid !== src.iid),
+    deck: shuffle([...pl.deck, ...returning]),
+  }));
+});
+
 // ── 謝米｜親送花朵 — 從牌庫選 1 張基本【草】能量附於我方 1 隻備戰寶可夢 ────────
 function deckEnergyAttachBenchPost(typeFilter: EnergyType | null, label: string): AttackPostFn {
   return (state, aIdx, pool) => {

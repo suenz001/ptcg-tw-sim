@@ -1,9 +1,95 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session d1a3b (v2.36)  
+> 最後更新：2026-04-22 Session d1a3c (v2.37)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session d1a3c (v2.37) — 實裝 土龍節節 特性「逃跑抽出」
+
+### 問題
+
+v2.36 把胡地 preset 的土龍節節ex 換成非 ex 版後，特性「逃跑抽出」留作 known gap。
+Leon 提供官方卡面文字並明確指示「不要每次都等 Leon 確認，能判讀的直接實裝」：
+
+> [特性] 逃跑抽出  
+> 在自己的回合時可使用 1 次。從自己的牌庫抽出 3 張卡。然後，將這隻寶可夢與附加的卡，
+> 全部放回自己的牌庫並重洗。
+
+### 效果拆解
+
+1. 一回合只可使用 1 次（引擎既有 `abilityUsedThisTurn` gate 負責擋第二次）。
+2. 從牌庫抽 3 張 → `drawCards(st, idx, 3)`。
+3. 將觸發源（含身上能量、附加道具、**前一階土龍弟弟**連同其自身能量/道具）
+   全部放回牌庫並重洗。這點是 Leon 特別強調的：前階是透過 `evolvedFromStack`
+   一併帶走的，這個欄位本來就存進化前保留下來的 `CardInstance`。
+
+### 實裝位置
+
+`src/lib/game/effects.ts` — 在既有「土龍節節ex｜鑽破壞」（9113 行）後面插入：
+
+```ts
+regA('土龍節節', 0, (st, idx, pool) => {
+  // 靠引擎在呼叫此 fn 前已將觸發對象的 abilityUsedThisTurn=true 來定位
+  const allPokes: CardInstance[] = [
+    ...(p.active ? [p.active] : []), ...p.bench
+  ];
+  const src = allPokes.find(c => {
+    const card = pool.get(c.cardId);
+    return card?.name === '土龍節節' && c.abilityUsedThisTurn === true;
+  });
+  ...
+  st = drawCards(st, idx, 3);
+  const returning = [
+    { ...src, damage:0, energyAttached:[], toolAttached:undefined, ... },
+    ...src.energyAttached,
+    ...(src.toolAttached ? [src.toolAttached] : []),
+    ...(src.evolvedFromStack ?? []),
+  ];
+  return updatePlayer(st, idx, pl => ({
+    ...pl,
+    active: isActive ? null : pl.active,
+    bench: isActive ? pl.bench : pl.bench.filter(c => c.iid !== src.iid),
+    deck: shuffle([...pl.deck, ...returning]),
+  }));
+});
+```
+
+### 設計要點
+
+**為什麼用 `abilityUsedThisTurn === true` 定位觸發源？**  
+`regA` 的 signature 是 `(st, idx, pool) => GameState`，不會收到 `action.iid`。
+但引擎（engine.ts:998-1004）在呼叫 ability fn **之前**已經把觸發對象的
+`abilityUsedThisTurn` 設成 `true`。由於：
+- 本回合其他已觸發過的 pokemon 如果也是土龍節節，必然已經回到牌庫裡（不在 active/bench），
+- 其他沒用過特性的土龍節節都還是 `abilityUsedThisTurn === undefined`，
+
+所以掃 active + bench 找「name === '土龍節節' && abilityUsedThisTurn === true」是唯一匹配。
+
+**active=null 後自動觸發 SEND_NEW_ACTIVE**  
+hasPendingActions（engine.ts:2000-2007）會在 `p.active === null` 時強制玩家先送
+新戰鬥寶可夢才能按結束回合，與撤退流程一致。不需要在 effect 裡額外發 pending。
+
+**既有「土龍節節ex」招式不衝突**  
+`regPre('土龍節節ex|逆境之尾'...)`、`regPre('土龍節節ex|鑽破壞'...)` 留著不動 —
+卡名不再匹配非 ex 版，既沒副作用也不會觸發。若之後 Leon 想在其他牌組重新放
+土龍節節ex 也能直接用。
+
+### 遵循的 feedback
+
+- `feedback_card_text_proactive.md`（v2.36 session 新建）—— 爬蟲 text=None 時自己
+  讀卡名、用 PTCG 常識推理 → 直接實裝。這次 Leon 給了正式文字，按文字實作即可。
+- `feedback_ai_handoff_logging.md` —— 記問題/根因/設計討論/主修法。
+
+### 驗證
+
+本機 `npm run build` 通過（206 modules，14.25s）。
+
+### commit hash
+
+（見 commit 後 backfill）
 
 ---
 
