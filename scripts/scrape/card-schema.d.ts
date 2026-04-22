@@ -63,6 +63,13 @@ export interface Card {
   retreatCost?: EnergyType[]; // Array of energies, length = retreat cost
   abilities?: Ability[];
   attacks?: Attack[];
+  /**
+   * 寶可夢的特徵標籤（目前只有 '太晶'）。
+   * 從 asia.pokemon-card.com 的 .skillInformation .skill 區塊抓出，
+   * 若 skillName 是白名單（太晶 / [太晶]）且無 cost/damage，寫到 tags 而非 attacks。
+   * 引擎用來判定防禦規則（太晶 = 備戰不受招式傷害）與週邊特效（白蕾雅獎賞、太晶珠 HP+30）。
+   */
+  tags?: string[];
 
   // === Trainer / special Energy ===
   /** Full rules text for Trainer/Energy cards (the effect box on the card) */

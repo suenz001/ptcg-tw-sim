@@ -506,12 +506,6 @@
     "pokemonType": "Fire",
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "熾熱熔岩",
         "cost": [
           "Fire",
@@ -542,7 +536,10 @@
     ],
     "evolvesFrom": "熔岩蝸牛GX",
     "illustrator": "PLANETA Mochizuki",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10261",
@@ -1894,12 +1891,6 @@
     "pokemonType": "Fighting",
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "忍之利刃",
         "cost": [
           "Water"
@@ -1927,7 +1918,10 @@
     ],
     "evolvesFrom": "甲賀忍蛙",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10293",
@@ -2989,12 +2983,6 @@
     "pokemonType": "Fire",
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "熾熱熔岩",
         "cost": [
           "Fire",
@@ -3025,7 +3013,10 @@
     ],
     "evolvesFrom": "熔岩蝸牛GX",
     "illustrator": "PLANETA Yamashita",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10714",
@@ -3131,12 +3122,6 @@
     "pokemonType": "Fighting",
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "忍之利刃",
         "cost": [
           "Water"
@@ -3164,7 +3149,10 @@
     ],
     "evolvesFrom": "甲賀忍蛙",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10717",
@@ -3323,12 +3311,6 @@
     "pokemonType": "Fighting",
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "忍之利刃",
         "cost": [
           "Water"
@@ -3356,7 +3338,10 @@
     ],
     "evolvesFrom": "甲賀忍蛙",
     "illustrator": "akagi",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10724",

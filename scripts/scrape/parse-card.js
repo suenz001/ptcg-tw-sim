@@ -169,9 +169,18 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
     const types = energiesFromImages($, typeImgs);
     if (types.length) card.pokemonType = types[0];
 
-    // Abilities + attacks (both inside .skillInformation > .skill)
+    // Abilities + attacks + tags (all inside .skillInformation > .skill)
+    //
+    // 寶可夢的 .skill 區塊可能是三種：
+    //   (a) 特性：rawName 為 "[特性] xxx"（或 "[古代特性] xxx" 等）→ abilities[]
+    //   (b) 特徵標籤（目前只有「太晶」）：rawName 為 "太晶" 或 "[太晶]"，沒有 cost/damage →
+    //       這不是招式而是寶可夢本身的防禦特徵（e.g. 太晶 = 在備戰區不受招式傷害），
+    //       寫到 card.tags[] 讓引擎查詢。
+    //   (c) 招式：其餘的。
     const abilities = [];
     const attacks = [];
+    const tags = [];
+    const TAG_KEYWORDS = new Set(['太晶', '[太晶]']);
     $('.skillInformation .skill').each((_, el) => {
       const $el = $(el);
       const rawName = $el.find('.skillName').text().trim();
@@ -180,7 +189,7 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
       const costImgs = $el.find('.skillCost img');
       const cost = energiesFromImages($, costImgs);
 
-      // Abilities are marked with "[特性]" prefix
+      // Abilities are marked with "[特性]" prefix ("[特性] xxx")
       const abilityMatch = rawName.match(/^\[([^\]]+)\]\s*(.+)$/);
       if (abilityMatch) {
         abilities.push({
@@ -188,12 +197,23 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
           name: abilityMatch[2],
           effect
         });
-      } else if (rawName) {
+        return;
+      }
+
+      // 特徵標籤（太晶）：name 是白名單 + 沒有 cost/damage
+      if (TAG_KEYWORDS.has(rawName) && cost.length === 0 && !damage) {
+        const cleanName = rawName.replace(/^\[/, '').replace(/\]$/, '');
+        if (!tags.includes(cleanName)) tags.push(cleanName);
+        return;
+      }
+
+      if (rawName) {
         attacks.push({ name: rawName, cost, damage, effect });
       }
     });
     if (abilities.length) card.abilities = abilities;
     if (attacks.length) card.attacks = attacks;
+    if (tags.length) card.tags = tags;
 
     // Weakness / resistance / retreat
     const sub = $('.subInformation');

@@ -1,9 +1,136 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 2f3a (v2.47)  
+> 最後更新：2026-04-22 Session 2f3b (v2.48)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 2f3b (v2.48) — 太晶規則基礎建設（scraper tags 欄位 + 引擎 resolveBenchGuard + 126 張卡遷移）
+
+### 問題
+
+Leon 在 v2.47 之後回報：「我看到 log 敘述『🤖 AI 對手 的 多龍巴魯托ex 使出「太晶」』，這是啥？怎麼會有太晶這個招式？太晶應該是寶可夢自己本身的防禦效果，有太晶標籤的寶可夢不會在備戰區受到【招式】的【傷害】。」
+
+這揭露兩個連動的老問題：
+
+1. **Scraper 把太晶誤判為招式**：asia.pokemon-card.com 的寶可夢頁面把「特性 / 太晶標籤 / 招式」全都塞在同一個 `.skillInformation > .skill` 區塊。`scripts/scrape/parse-card.js` 原本的判斷只看 `[特性]` 前綴當作 ability、其餘通通塞進 `attacks[]`。因此太晶寶可夢（多龍巴魯托ex / 黑夜魔靈ex / …）的太晶標籤被當成一個「沒有 cost 也沒有 damage 的招式」寫進卡表。AI 輪到行動時 `chooseAttack()` 在 attacks 裡挑到太晶就使出來了。
+
+2. **引擎沒有真正實作太晶規則**：太晶 = 在【備戰區】不會受到【招式】的【傷害】。過去 v2.11 寫白蕾雅時用的 kludge 是 `card.attacks?.some(a => a.name === '太晶')`，太晶珠 tool 的 HP +30 判定也走同一 kludge，這兩個地方恰恰依賴 scraper 的錯誤分類才能運作。而「太晶寶可夢在備戰區 tank 招式傷害」這條核心規則，從來沒有實裝過——多龍巴魯托ex 的幻影奇襲 6 個 counter 打在備戰區的太晶寶可夢上，過去是正常生效的。
+
+Leon 在 Phase 2 前特別澄清：「多龍巴魯托幻影奇襲把 6 個 counter 放到對手備戰，這個算是招式效果—『指示物放置效果』」，意思是 6-counter 攤派屬於 `attack-effect`，太晶**不**應該擋；太晶只擋 `attack-damage`（直接招式傷害）。本次修法嚴守這條。
+
+### 設計：三層修法（scraper → data → engine）
+
+核心洞察是「太晶屬於寶可夢的**特徵標籤**」，不是招式也不是特性。最乾淨的做法是為 Card schema 開一個 `tags: string[]` 欄位，由 scraper 在抓 skill 區塊時分類寫入；引擎只查規範化的 `tags`，徹底拋棄「看 attacks 名字猜特徵」的 kludge。
+
+#### Step 1 — Scraper：`scripts/scrape/parse-card.js`
+
+在 `.skill` 迴圈裡加白名單分支。太晶 skill 有三個辨識特徵：`rawName` 是 `太晶` 或 `[太晶]`、`cost` 長度為 0、`damage` 字串為空。符合這三項就推 `tags`，不推 `attacks`。
+
+```js
+const abilities = [];
+const attacks = [];
+const tags = [];
+const TAG_KEYWORDS = new Set(['太晶', '[太晶]']);
+$('.skillInformation .skill').each((_, el) => {
+  // ...（ability 偵測邏輯不變）...
+  if (abilityMatch) { abilities.push(...); return; }
+
+  // 特徵標籤（太晶）：白名單 + 無 cost + 無 damage
+  if (TAG_KEYWORDS.has(rawName) && cost.length === 0 && !damage) {
+    const cleanName = rawName.replace(/^\[/, '').replace(/\]$/, '');
+    if (!tags.includes(cleanName)) tags.push(cleanName);
+    return;
+  }
+  if (rawName) attacks.push({ name: rawName, cost, damage, effect });
+});
+if (tags.length) card.tags = tags;
+```
+
+踩到的坑：最初以為可以用「effect 為空」當判斷條件，但太晶 skill 的 effect 文字是「只要這隻寶可夢在備戰區，不會受到招式的傷害。」（非空）。所以改用「cost=[] 且 damage=''」當結構性條件，白名單只是再加一層保險。
+
+#### Step 2 — Type：`Card.tags`
+
+兩份 Card schema 同步加欄位：
+- `src/lib/cards/types.ts`（runtime Card）
+- `scripts/scrape/card-schema.d.ts`（scraper 端，文件用）
+
+Docstring 明寫：「太晶寶可夢在備戰區不會受到【招式】的【傷害】；招式內的『指示物放置』效果（例：多龍巴魯托ex｜幻影奇襲 的 6 個 counter）不受太晶保護。」
+
+#### Step 3 — Migration：`static/cards/*.json`
+
+已經爬下來的 11 個 set 需要一次性搬家（把 `{name:"太晶", cost:[], damage:"", effect:"..."}` 從 attacks 挪到 `tags:['太晶']`）。用 inline Python 在 sandbox 跑：
+
+```python
+TAG_NAMES = {'太晶', '[太晶]'}
+for c in cards:
+    attacks = c.get('attacks') or []
+    tag_attacks = [a for a in attacks if a.get('name') in TAG_NAMES]
+    if not tag_attacks: continue
+    new_attacks = [a for a in attacks if a.get('name') not in TAG_NAMES]
+    if new_attacks: c['attacks'] = new_attacks
+    else: c.pop('attacks', None)
+    existing_tags = c.get('tags') or []
+    for t in tag_attacks:
+        name = t['name'].replace('[','').replace(']','')
+        if name not in existing_tags: existing_tags.append(name)
+    c['tags'] = existing_tags
+```
+
+結果：146 張太晶寶可夢跨 11 個 set 被遷移（SV8a: 36、MC: 28、SV6: 15、SV8: 11、SV7: 11、SV7a: 8、M2a: 6、SV5a: 5、SV6a: 2、SV5M: 2、SV5K: 2）。抽驗 17019 多龍巴魯托ex：`attacks=[噴射頭擊, 幻影奇襲]`、`tags=['太晶']`，正確。
+
+#### Step 4 — Engine：`resolveBenchGuard` 擴充
+
+`src/lib/game/effects.ts` 的 `resolveBenchGuard` 原本只管：
+- `attack-effect / ability-effect` → 對戰圓形競技場擋
+- `attack-damage` → 花之帷幔擋（備戰且非 ex）
+
+現在在 `attack-damage` 分支加第二個守衛：
+
+```ts
+if (kind === 'attack-damage') {
+  // ...（花之帷幔 unchanged）...
+  if (targetCard?.tags?.includes('太晶')) {
+    return { blocked: true, reason: '太晶寶可夢 防禦效果' };
+  }
+}
+```
+
+呼叫點全都是 bench snipe 類的 resolver（snipe-variable、snipe-120、snipe-60-ex、snipe-10 等），原本就走 `resolveBenchGuard`，所以不必動各別 resolver。Active 的太晶寶可夢**不**受此保護 — 規則上太晶的免疫只存在於備戰區，caller 也只在 target 是 bench 時呼叫 `resolveBenchGuard`。
+
+#### Step 5 — Kludge 清除
+
+兩個老地方的「看 attacks 名字」kludge 全改成 `card.tags?.includes('太晶')`：
+
+- `src/lib/game/engine.ts:1413` — 白蕾雅 KO 獎勵判定攻擊方 active 是否為太晶。
+- `src/lib/game/effects.ts` `TOOL_HP_BONUS.set('太晶珠', ...)` — 太晶珠裝備時 HP +30 的判定。順便把 `|| card.rulesText?.includes('太晶')` 這條更 loose 的 fallback 也拿掉（太晶珠是 Tool 不該查自己的 rulesText；那段是歷史試錯殘留）。
+- 相關 docstring：`src/lib/game/types.ts` PlayerState.teraKoBonusPrizeThisTurn、`src/lib/game/effects/cards/white_lily_akamatsu.ts` 檔頭註解。
+
+`grep -rn "attacks.some(a => a.name === '太晶')"` 掃整個 repo 已無殘留。
+
+### 不在本 session 處理的事
+
+- **`applyDamageToAllOpp`（痛楚記憶 / 侵蝕之風 / 等群體 snipe）沒接進 `resolveBenchGuard`**：這些是「對對手所有寶可夢放指示物」屬於 attack-effect，太晶本來就不擋，所以即使不走 guard 也行為正確。留意未來若有「對全體造成 X 傷害」類型才需要補。
+- **v2.47 的備戰異常狀態 root cause**：v2.47 用 `scrubBenchStatus` invariant 擋在所有 swap 後，Leon 還沒要求繼續往回追到某個 swap resolver 沒清 bench status 的源頭。保留 TODO。
+
+### 更動檔案一覽
+
+- `scripts/scrape/parse-card.js`（+26 / -6）— TAG_KEYWORDS 白名單
+- `scripts/scrape/card-schema.d.ts`（+7）— Card.tags 欄位註解
+- `src/lib/cards/types.ts`（+7）— Card.tags 欄位註解
+- `src/lib/game/effects.ts`（+16 / -4）— resolveBenchGuard 加太晶分支、太晶珠改查 tags
+- `src/lib/game/engine.ts`（+5 / -2）— 白蕾雅查 tags
+- `src/lib/game/types.ts`（+3 / -1）— PlayerState docstring
+- `src/lib/game/effects/cards/white_lily_akamatsu.ts`（+3 / -1）— 註解
+- `src/lib/version.ts` — 2.47 → 2.48
+- `static/cards/{M2a,MC,SV5K,SV5M,SV5a,SV6,SV6a,SV7,SV7a,SV8,SV8a}.json` — 146 張卡 attacks→tags 遷移
+
+### Build / Commit
+
+- `npm run build`：通過（vite build + adapter-static 雙階段，和 v2.47 一樣 387 KB game page）。
+- 本機 build 用於避讓 FUSE 截斷大檔讀取的老坑。
 
 ---
 

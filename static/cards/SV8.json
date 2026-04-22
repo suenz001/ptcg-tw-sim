@@ -1343,12 +1343,6 @@
     "pokemonType": "Lightning",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "‌‌[特性]勤奮之心",
         "cost": [],
         "damage": "",
@@ -1373,7 +1367,10 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11214",
@@ -2374,12 +2371,6 @@
     "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "流沙地獄",
         "cost": [
           "Colorless",
@@ -2416,7 +2407,10 @@
     ],
     "evolvesFrom": "噬沙堡爺GX",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11238",
@@ -3036,12 +3030,6 @@
     "pokemonType": "Darkness",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "粉碎頭",
         "cost": [
           "Darkness",
@@ -3073,7 +3061,10 @@
     ],
     "evolvesFrom": "三首惡龍",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11253",
@@ -3415,12 +3406,6 @@
     "pokemonType": "Dragon",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "突襲水泵",
         "cost": [
           "Fire",
@@ -3444,7 +3429,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11262",
@@ -4740,12 +4728,6 @@
     "pokemonType": "Lightning",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "‌‌[特性]勤奮之心",
         "cost": [],
         "damage": "",
@@ -4770,7 +4752,10 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11476",
@@ -4785,12 +4770,6 @@
     "hp": 280,
     "pokemonType": "Psychic",
     "attacks": [
-      {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
       {
         "name": "流沙地獄",
         "cost": [
@@ -4828,7 +4807,10 @@
     ],
     "evolvesFrom": "噬沙堡爺GX",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11477",
@@ -4843,12 +4825,6 @@
     "hp": 330,
     "pokemonType": "Darkness",
     "attacks": [
-      {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
       {
         "name": "粉碎頭",
         "cost": [
@@ -4881,7 +4857,10 @@
     ],
     "evolvesFrom": "三首惡龍",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11478",
@@ -4896,12 +4875,6 @@
     "hp": 160,
     "pokemonType": "Dragon",
     "attacks": [
-      {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
       {
         "name": "突襲水泵",
         "cost": [
@@ -4926,7 +4899,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11479",
@@ -5112,12 +5088,6 @@
     "pokemonType": "Lightning",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "‌‌[特性]勤奮之心",
         "cost": [],
         "damage": "",
@@ -5142,7 +5112,10 @@
       "Colorless"
     ],
     "illustrator": "GIDORA",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11486",
@@ -5157,12 +5130,6 @@
     "hp": 330,
     "pokemonType": "Darkness",
     "attacks": [
-      {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
       {
         "name": "粉碎頭",
         "cost": [
@@ -5195,7 +5162,10 @@
     ],
     "evolvesFrom": "三首惡龍",
     "illustrator": "AKIRA EGAWA",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11487",
@@ -5239,12 +5209,6 @@
     "pokemonType": "Lightning",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "‌‌[特性]勤奮之心",
         "cost": [],
         "damage": "",
@@ -5269,7 +5233,10 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11490",

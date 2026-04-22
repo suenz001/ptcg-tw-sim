@@ -121,9 +121,14 @@ export function hasFlowerVeil(
 /**
  * v2.46：「對備戰目標」造成傷害/放指示物時，統一檢查是否被卡面/場地擋下。
  *   kind === 'attack-effect' / 'ability-effect' → 查對戰圓形（備戰不放指示物）
- *   kind === 'attack-damage'                   → 查花之帷幔（備戰且非 ex）
+ *   kind === 'attack-damage'                   → 查花之帷幔（備戰且非 ex）、太晶（備戰）
  * 回傳：{ blocked: true, reason } 表示被擋下；{ blocked: false } 表示可進行。
  * 注意：actor 的對手 = defender，所以比對特性要對 defenderIdx 做。
+ *
+ * v2.48：加入太晶規則。太晶寶可夢在【備戰區】不會受到【招式】的【傷害】，
+ *        但招式內的「指示物放置」效果（e.g. 幻影奇襲 的 6 counter）不受太晶保護，
+ *        所以只在 kind === 'attack-damage' 分支檢查 tags。
+ *        Active 的太晶寶可夢不受此保護 — caller 應只在目標為 bench 時呼叫本函式。
  */
 export function resolveBenchGuard(
   state: GameState,
@@ -141,6 +146,9 @@ export function resolveBenchGuard(
     const defenderIdx = (1 - actorIdx) as 0 | 1;
     if (hasFlowerVeil(state, defenderIdx, pool) && !isExCard(targetCard)) {
       return { blocked: true, reason: '謝米 花之帷幔 效果' };
+    }
+    if (targetCard?.tags?.includes('太晶')) {
+      return { blocked: true, reason: '太晶寶可夢 防禦效果' };
     }
   }
   return { blocked: false };
@@ -9974,10 +9982,12 @@ reg('能量回收', (st, idx) => {
 // 不登錄 reg/regG → engine 會走「效果尚未實裝」分支。
 
 // ---- 太晶珠（Tool）- 太晶寶可夢 HP +30 --------------------------------------
-// 判定「太晶寶可夢」：card.attacks 存在 name==='太晶' 或 rulesText 含「太晶」——近似法。
+// v2.48：改查 card.tags。scraper 已把太晶從 attacks 挪到 tags，
+// 原本的 kludge（attacks.some(a=>a.name==='太晶')）對遷移後的資料失效，
+// 故改用規範化的 tags 欄位。
 // 為了不動 tools.ts 檔結構，透過 TOOL_HP_BONUS.set 登錄（與勇氣護符/英雄斗篷同機制）。
 TOOL_HP_BONUS.set('太晶珠', (card) => {
-  const isTera = !!(card.attacks?.some(a => a.name === '太晶')) || !!card.rulesText?.includes('太晶');
+  const isTera = !!card.tags?.includes('太晶');
   return isTera ? 30 : 0;
 });
 

@@ -655,12 +655,6 @@
     ],
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "萬葉陣雨",
         "cost": [
           "Grass",
@@ -679,7 +673,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10431",
@@ -917,12 +914,6 @@
     "pokemonType": "Fire",
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "憤怒之窯",
         "cost": [
           "Fire",
@@ -951,7 +942,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10437",
@@ -1585,12 +1579,6 @@
     "pokemonType": "Water",
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "啜泣",
         "cost": [
           "Colorless"
@@ -1617,7 +1605,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10453",
@@ -2747,12 +2738,6 @@
     ],
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "打爆",
         "cost": [
           "Fighting",
@@ -2771,7 +2756,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10480",
@@ -3478,12 +3466,6 @@
     "pokemonType": "Dragon",
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "噴射頭擊",
         "cost": [
           "Colorless"
@@ -3506,7 +3488,10 @@
     ],
     "evolvesFrom": "多龍奇",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10496",
@@ -4565,12 +4550,6 @@
     ],
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "萬葉陣雨",
         "cost": [
           "Grass",
@@ -4589,7 +4568,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10567",
@@ -4604,12 +4586,6 @@
     "hp": 210,
     "pokemonType": "Fire",
     "attacks": [
-      {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
       {
         "name": "憤怒之窯",
         "cost": [
@@ -4639,7 +4615,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10568",
@@ -4696,12 +4675,6 @@
     "pokemonType": "Water",
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "啜泣",
         "cost": [
           "Colorless"
@@ -4728,7 +4701,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10570",
@@ -4794,12 +4770,6 @@
     ],
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "打爆",
         "cost": [
           "Fighting",
@@ -4818,7 +4788,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10572",
@@ -4833,12 +4806,6 @@
     "hp": 320,
     "pokemonType": "Dragon",
     "attacks": [
-      {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
       {
         "name": "噴射頭擊",
         "cost": [
@@ -4862,7 +4829,10 @@
     ],
     "evolvesFrom": "多龍奇",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10573",
@@ -4972,12 +4942,6 @@
     ],
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "萬葉陣雨",
         "cost": [
           "Grass",
@@ -4996,7 +4960,10 @@
       "Colorless"
     ],
     "illustrator": "Yano Keiji",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10578",
@@ -5011,12 +4978,6 @@
     "hp": 210,
     "pokemonType": "Fire",
     "attacks": [
-      {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
       {
         "name": "憤怒之窯",
         "cost": [
@@ -5046,7 +5007,10 @@
       "Colorless"
     ],
     "illustrator": "Yano Keiji",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10579",
@@ -5061,12 +5025,6 @@
     "hp": 210,
     "pokemonType": "Water",
     "attacks": [
-      {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
       {
         "name": "啜泣",
         "cost": [
@@ -5094,7 +5052,10 @@
       "Colorless"
     ],
     "illustrator": "Yano Keiji",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10580",
@@ -5117,12 +5078,6 @@
     ],
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "打爆",
         "cost": [
           "Fighting",
@@ -5141,7 +5096,10 @@
       "Colorless"
     ],
     "illustrator": "Yano Keiji",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "10581",
@@ -5192,12 +5150,6 @@
     ],
     "attacks": [
       {
-        "name": "[太晶]",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "萬葉陣雨",
         "cost": [
           "Grass",
@@ -5216,7 +5168,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "15825",

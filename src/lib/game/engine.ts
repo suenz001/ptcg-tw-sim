@@ -1405,12 +1405,13 @@ function handlePlaying(
       const deferredBonus = (updatedActive.deferredPrizeBonusThisTurn && updatedActive.deferredPrizeBonusThisTurn > 0)
         ? updatedActive.deferredPrizeBonusThisTurn : 0;
       // Wave 43：白蕾雅 — 本回合，攻擊方使用「太晶」寶可夢招式 KO 對手戰鬥位 → +1 獎勵牌。
-      // 條件：aIdx 玩家本回合有 teraKoBonusPrizeThisTurn 旗標，且攻擊方 active 為太晶寶可夢（attacks 含 name==='太晶'）。
+      // 條件：aIdx 玩家本回合有 teraKoBonusPrizeThisTurn 旗標，且攻擊方 active 為太晶寶可夢。
+      // v2.48：scraper 把太晶從 attacks[] 抽出，改查 card.tags 欄位。
       let whiteLilyBonus = 0;
       if (newState.players[aIdx].teraKoBonusPrizeThisTurn) {
         const atkActive = newState.players[aIdx].active;
         const atkCard = atkActive ? pool.get(atkActive.cardId) : null;
-        const isTera = !!atkCard?.attacks?.some(a => a.name === '太晶');
+        const isTera = !!atkCard?.tags?.includes('太晶');
         if (isTera) whiteLilyBonus = 1;
       }
       // 獎賞牌下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）

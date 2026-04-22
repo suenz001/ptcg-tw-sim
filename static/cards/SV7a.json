@@ -1091,12 +1091,6 @@
     "pokemonType": "Fighting",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "風暴返",
         "cost": [
           "Fighting"
@@ -1124,7 +1118,10 @@
     ],
     "evolvesFrom": "沙漠蜻蜓GX",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11058",
@@ -1672,12 +1669,6 @@
     "pokemonType": "Dragon",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "熱帶狂燒",
         "cost": [
           "Grass",
@@ -1704,7 +1695,10 @@
     ],
     "evolvesFrom": "阿羅拉 椰蛋樹GX",
     "illustrator": "aky CG Works",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11071",
@@ -2124,12 +2118,6 @@
     "pokemonType": "Colorless",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "突圍",
         "cost": [
           "Colorless",
@@ -2158,7 +2146,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11082",
@@ -2955,12 +2946,6 @@
     "pokemonType": "Fighting",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "風暴返",
         "cost": [
           "Fighting"
@@ -2988,7 +2973,10 @@
     ],
     "evolvesFrom": "沙漠蜻蜓GX",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11445",
@@ -3050,12 +3038,6 @@
     "pokemonType": "Dragon",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "熱帶狂燒",
         "cost": [
           "Grass",
@@ -3082,7 +3064,10 @@
     ],
     "evolvesFrom": "阿羅拉 椰蛋樹GX",
     "illustrator": "aky CG Works",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11447",
@@ -3097,12 +3082,6 @@
     "hp": 210,
     "pokemonType": "Colorless",
     "attacks": [
-      {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
       {
         "name": "突圍",
         "cost": [
@@ -3132,7 +3111,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11448",
@@ -3295,12 +3277,6 @@
     "pokemonType": "Dragon",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "熱帶狂燒",
         "cost": [
           "Grass",
@@ -3327,7 +3303,10 @@
     ],
     "evolvesFrom": "阿羅拉 椰蛋樹GX",
     "illustrator": "Yuriko Akase",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11455",
@@ -3371,12 +3350,6 @@
     "pokemonType": "Dragon",
     "attacks": [
       {
-        "name": "太晶",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在備戰區，不會受到招式的傷害。"
-      },
-      {
         "name": "熱帶狂燒",
         "cost": [
           "Grass",
@@ -3403,7 +3376,10 @@
     ],
     "evolvesFrom": "阿羅拉 椰蛋樹GX",
     "illustrator": "aky CG Works",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "太晶"
+    ]
   },
   {
     "id": "11458",

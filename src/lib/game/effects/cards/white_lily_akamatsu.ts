@@ -213,8 +213,9 @@ regR('akamatsu-attach', (st, idx, iids, params, pool) => {
 // 實裝：
 //   - regG：對手獎勵牌恰為 2 張時才可打出。
 //   - reg ：設 PlayerState.teraKoBonusPrizeThisTurn=true。engine.ts KO 路徑 (attacker 側)
-//           檢查本旗標 + 攻擊方 active 是否為「太晶寶可夢」(card.attacks 含 name==='太晶')
+//           檢查本旗標 + 攻擊方 active 是否為「太晶寶可夢」(card.tags?.includes('太晶'))
 //           → prizes +1。END_TURN 於 aIdx 清除旗標。
+//           v2.48：改查 card.tags；scraper 已把太晶從 attacks 挪到 tags。
 regG('白蕾雅', (st, idx) => {
   const opp = st.players[1 - idx];
   return opp.prizes.length === 2;

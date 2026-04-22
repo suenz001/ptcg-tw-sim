@@ -40,6 +40,13 @@ export interface Card {
   retreatCost?: EnergyType[];
   abilities?: Ability[];
   attacks?: Attack[];
+  /**
+   * v2.48：寶可夢的特徵標籤。目前只會有 '太晶'。
+   * 太晶寶可夢在備戰區不會受到【招式】的【傷害】；招式內的「指示物放置」效果
+   * （例：多龍巴魯托ex｜幻影奇襲 的 6 個 counter）不受太晶保護。
+   * scraper 從 pokemon-card.com 的 .skillInformation .skill 區塊裡的 tag 標誌抓進來。
+   */
+  tags?: string[];
   rulesText?: string;
   illustrator?: string;
   imageUrl: string;
