@@ -1,9 +1,101 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session d1a3e (v2.39)  
+> 最後更新：2026-04-22 Session d1a3f (v2.40)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session d1a3f (v2.40) — 根源修正：'BasicEnergy' filter 誤當「所有能量」+ 月光丘陵 bug
+
+### 問題
+
+Leon 對 v2.39 的「歷史慣例」註解打臉：
+> BasicEnergy 不應該是指所有能量吧？應該是指所有的基本能量。你的歷史慣例是不是有問題？
+> 如果月光丘陵可以丟感應【超】能量的話，救出大事了。
+
+直覺完全正確。實測根源 bug：
+
+**Bug 1（根源）**：`discard-search` 的 `'BasicEnergy'` filter 解析錯誤。
+- `+page.svelte:791`：`if (f === 'BasicEnergy') return card.supertype === 'Energy';` ← 漏寫 subtype=Basic
+- `ai.ts:369`：同樣漏寫。
+- 但 `deck-search` (`+page.svelte:666`) 與 `hand-discard` (`+page.svelte:757`) 的同 key 解析都正確寫 `subtype === 'Basic'`。
+- 結論：這是真 bug，不是「慣例」。影響所有用 discard-search + 'BasicEnergy' 的卡：
+  - **能量回收器**（items_misc.ts:150）— 原本只應撿「基本能量」洗回牌庫，實測可撿富裕能量
+  - **能量回收**（effects.ts:9861）— 同上
+  - ACE SPEC 特殊能量（富裕能量）、感應超、增強草、古舊能量、新衝天能量等全部都會被誤列
+
+**Bug 2（月光丘陵獨立雙重 bug）**：
+- 卡面官方（SV8a rulesText）：「若從自己的手牌將 1 張『基本【超】能量』卡丟棄，則可將自己的所有寶可夢各恢復 30 HP。」
+- 現況實裝（`engine.ts:858-877`）：
+  - gate：`c?.supertype === 'Energy' && c?.name?.includes('超')` ← 感應【超】能量也 match（name 含「超」且是 Energy）
+  - pending filter：`'Energy'` ← UI 列**所有能量**，玩家甚至能丟基本【草】、基本【火】
+  - resolver（`stadiums.ts:64`）：不做檢查，玩家選啥就丟啥
+- 實測：Leon 擔心的情境完全成立 — 可以丟感應【超】能量，還能丟任何其他能量。
+
+**Bug 3（UI filter 與 gate 不一致 — 充溢之光）**：
+- 克雷色利亞 EX `充溢之光`（effects.ts:654-669）：gate 正確檢查 `subtype === 'Basic'`，
+  但 pending `filter: 'Energy'` 讓牌庫清單列出所有能量；雖然克雷色利亞牌庫通常只放基本，
+  但 scope 不一致本身是缺陷，順手統一。
+
+### 設計
+
+**修根源**：把 discard-search 的 `'BasicEnergy'` 解析改為
+`supertype === 'Energy' && subtype === 'Basic'`（與 deck-search/hand-discard 一致）。
+
+**月光丘陵 & 奇跡修正檔**：需要比「基本能量」再縮一層 — 只基本【超】。新增 filter key
+`'BasicPsychicEnergy'`：`supertype=Energy && subtype=Basic && name.includes('【超】')`。
+用 name match 是因為基本能量的 `pokemonType` 欄位全部為空（8 種屬性都是 null）。
+discard-search / hand-discard 兩種 pending 都加這個 key 的解析。
+
+### 實裝
+
+**A. `src/routes/game/+page.svelte`** — 兩處 filter 分支：
+- `case 'discard-search'`：`'BasicEnergy'` 改加 `subtype === 'Basic'`（修根源）
+- `case 'hand-discard'`：新增 `'BasicPsychicEnergy'` 分支（月光丘陵用）
+
+**B. `src/lib/game/ai.ts`** — 對稱兩處：
+- discard-search selector 的 `'BasicEnergy'` 加 `subtype === 'Basic'`
+- hand-discard selector 加 `'BasicPsychicEnergy'` 分支
+
+**C. `src/lib/game/engine.ts`** — 月光丘陵（`stadiumCard.name === '月光丘陵'`）：
+- gate 改為 `supertype === 'Energy' && subtype === 'Basic' && name.includes('【超】')`
+- pending filter 從 `'Energy'` 改為 `'BasicPsychicEnergy'`
+- log 訊息從「沒有超能量」改為「沒有基本【超】能量」
+
+**D. `src/lib/game/effects/cards/items_misc.ts`** — 奇跡修正檔 log 與註解更新
+（filter 在 v2.39 已改成 `'BasicPsychicEnergy'`，這次只修註解措辭與 log 的「基本超能量」→「基本【超】能量」）。
+
+**E. `src/lib/game/effects.ts`** — 兩處：
+- `9861`（能量回收）：刪掉錯誤的「歷史慣例」註解。
+- `665`（克雷色利亞 充溢之光）：`filter: 'Energy'` → `'BasicEnergy'`（UI 與 gate 一致）。
+
+**F. `src/lib/version.ts`** — 2.39 → 2.40。
+
+### 不改的地方（查過卡面，filter: 'Energy' 確實是正確語義）
+
+- 神秘花園（engine.ts:916）— 官方「1 張能量卡」；所有能量可選，正確。
+- 阿克羅瑪的執著（effects.ts:8525）— 官方「競技場卡與能量卡各 1 張」；正確。
+- 鬥子（effects.ts:9469）— 官方「進化寶可夢卡與能量卡各 1 張」；正確。
+- `self-active-hand-attach-heal` (effects.ts:7095) — 通用 helper，多卡共用，卡面通常寫「能量」不限基本；不動。
+
+### 影響面與教訓
+
+- `'BasicEnergy'` 是**3 個 pending 類型共享 1 個 key**（deck-search、hand-discard、
+  discard-search）。過去以為這個 key 在 discard-search 的語義是「所有能量」，其實是
+  bug，連帶能量回收器 / 能量回收兩卡多年行為偏寬。
+- 新增 `'BasicPsychicEnergy'` 示範了「基本能量子集」的 filter key 命名慣例。未來若
+  出現「只基本草」、「只基本水」等精準效果，可比照 `BasicGrassEnergy` /
+  `BasicWaterEnergy` 新增 key（name match 比 pokemonType 可靠）。
+- 往後實裝 Stadium / Item / Supporter 若文案寫「基本【X】能量」，一定要：
+  1. gate 檢查 `subtype === 'Basic'`（別只用 `includes('X')`）
+  2. pending filter 用與 UI 相符的 key，不要留 `'Energy'` 又期待玩家自己挑對
+  3. resolver 可做 sanity check（防意外修改 UI filter 時漏攔）
+
+### commit hash
+
+（見 commit 後 backfill）
 
 ---
 

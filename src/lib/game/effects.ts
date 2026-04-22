@@ -662,7 +662,8 @@ regPost('克雷色利亞|充溢之光', (state, aIdx, pool) => {
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Energy',
+    // v2.40：卡面僅限基本能量；原本寫 'Energy' 會讓 UI 列出 Special Energy。
+    filter: 'BasicEnergy',
     minCount: 0, maxCount: 2,
     effectKey: 'cresselia-attach-energy',
   });
@@ -9858,7 +9859,7 @@ reg('能量回收', (st, idx) => {
   return withPending(st, {
     type: 'discard-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'BasicEnergy',  // discard-search 的 BasicEnergy 過濾為所有能量（歷史慣例）
+    filter: 'BasicEnergy',  // 只基本能量（v2.40 根源 bug 修正後；不含 Special Energy）
     minCount: 0, maxCount: maxN,
     effectKey: 'discard-to-hand',
   });

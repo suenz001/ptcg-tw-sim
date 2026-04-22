@@ -855,22 +855,25 @@ function handlePlaying(
       };
     }
 
-    // 月光丘陵 — 丟 1 張基本超能量 → 全體回 30 HP
+    // 月光丘陵 — 丟 1 張基本【超】能量 → 全體回 30 HP
+    // v2.40 bug fix：原本 gate 用 name.includes('超') + filter: 'Energy' 會把
+    // 感應【超】能量等 Special Energy 也列為可選。正確語義只限「基本【超】能量」：
+    // supertype=Energy && subtype=Basic && name.includes('【超】')。
     if (stadiumCard.name === '月光丘陵') {
       const p = newState.players[aIdx];
       const energyInHand = p.hand.filter(inst => {
         const c = pool.get(inst.cardId);
-        return c?.supertype === 'Energy' && c?.name?.includes('超');
+        return c?.supertype === 'Energy' && c?.subtype === 'Basic' && !!c?.name?.includes('【超】');
       });
       if (energyInHand.length === 0) {
         const revert: [boolean, boolean] = [used[0], used[1]];
-        return addLog({ ...state, stadiumUsedThisTurn: revert }, '月光丘陵：手牌中沒有超能量', aIdx);
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '月光丘陵：手牌中沒有基本【超】能量', aIdx);
       }
       return {
         ...newState,
         pendingSelection: {
           type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-          minCount: 1, maxCount: 1, filter: 'Energy',
+          minCount: 1, maxCount: 1, filter: 'BasicPsychicEnergy',
           effectKey: 'moonlight-hill-heal', params: {},
         },
       };

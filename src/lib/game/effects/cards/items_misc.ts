@@ -183,13 +183,13 @@ regG('奇跡修正檔', (st, idx, pool) => {
   return hasEnergy && hasPsychicBench;
 });
 reg('奇跡修正檔', (st, idx, pool) => {
-  st = addLog(st, '奇跡修正檔：從棄牌區選 1 張基本超能量', idx);
+  st = addLog(st, '奇跡修正檔：從棄牌區選 1 張基本【超】能量', idx);
   return withPending(st, {
     type: 'discard-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    // 只「基本【超】能量」— 必須排除富裕能量 / 感應超等 Special Energy，
-    // 也排除其他屬性的基本能量。discard-search 的 'BasicEnergy' 歷史慣例 = 所有能量，
-    // 所以另外開新 filter key。名字完全比對，避免 pokemonType 欄位為空的問題。
+    // 只「基本【超】能量」—「BasicEnergy」本身是所有屬性基本能量，這裡要再縮一層。
+    // 過濾規則：supertype=Energy && subtype=Basic && name 含「【超】」。
+    // 用 name match 是因為基本能量的 pokemonType 欄位全部為空（卡表資料慣例）。
     filter: 'BasicPsychicEnergy',
     minCount: 1, maxCount: 1,
     effectKey: 'miracle-codec-energy',

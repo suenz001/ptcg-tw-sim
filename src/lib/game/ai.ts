@@ -302,6 +302,11 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         const card = pool.get(c.cardId);
         return card?.supertype === 'Energy' && card.subtype === 'Basic';
       });
+      // v2.40 月光丘陵：只基本【超】能量
+      else if (f === 'BasicPsychicEnergy') hand = hand.filter(c => {
+        const card = pool.get(c.cardId);
+        return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
+      });
       else if (f === 'Item') hand = hand.filter(c => {
         const card = pool.get(c.cardId);
         return card?.supertype === 'Trainer' && card.subtype === 'Item';
@@ -366,7 +371,8 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
           return false;
         }
-        if (f === 'BasicEnergy')     return card.supertype === 'Energy';
+        // v2.40 修正：原本 supertype === 'Energy' 是 bug（= 所有能量，會選到 Special Energy）
+        if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';
         if (f === 'BasicPsychicEnergy') {
           return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
         }

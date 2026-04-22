@@ -758,6 +758,11 @@
           const card = pool.get(c.cardId);
           return card?.supertype === 'Energy' && card.subtype === 'Basic';
         });
+        // v2.40 月光丘陵：只基本【超】能量（排除感應【超】等 Special Energy）
+        if (f2 === 'BasicPsychicEnergy') return pool0.filter(c => {
+          const card = pool.get(c.cardId);
+          return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
+        });
         if (f2.startsWith('Energy:')) {
           const t = f2.slice(7);
           return pool0.filter(c => {
@@ -788,9 +793,12 @@
             if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
             return false;
           }
-          if (f === 'BasicEnergy')     return card.supertype === 'Energy';
+          // v2.40 修正：原本這裡寫 supertype === 'Energy'（= 所有能量）是 bug，
+          // 會讓能量回收器 / 能量回收 等卡從棄牌區撿到富裕能量等 Special Energy。
+          // 正確語義：BasicEnergy = supertype=Energy && subtype=Basic（與 deck-search/hand-discard 一致）
+          if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';
           if (f === 'BasicPsychicEnergy') {
-            // 奇跡修正檔專用：只基本【超】能量。排除富裕能量/感應超等 Special Energy。
+            // 奇跡修正檔 / 月光丘陵：只基本【超】能量。排除富裕能量/感應【超】等 Special Energy。
             return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
           }
           if (f === 'Pokemon')         return card.supertype === 'Pokemon' && card.subtype !== 'Other';
