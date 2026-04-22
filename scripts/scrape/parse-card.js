@@ -94,7 +94,7 @@ function classifyTrainerOrEnergyByH3($) {
  * @param {string} sourceUrl
  * @returns {import('./card-schema.d.ts').Card}
  */
-export function parseCard(html, id, sourceUrl) {
+export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
   const $ = cheerio.load(html);
 
   // Initial classification: Pokémon has .mainInfomation (HP + type), others don't
@@ -121,11 +121,27 @@ export function parseCard(html, id, sourceUrl) {
     if (m) card.setCode = m[1];
   }
 
-  // --- Collector number (e.g. "001/098") ---
+  // --- Collector number (e.g. "001/098" or "099/M-P") ---
   // The .collectorNumber class exists in the page but let's also grep for the
   // "NNN/NNN" pattern as a fallback.
   const colNum = $('.collectorNumber').first().text().trim().replace(/\s+/g, '');
   if (colNum) card.collectorNumber = colNum;
+
+  // Fallback 1: promo cards show /mark/PROMO.MARK.png and have a collector
+  // number like "099/M-P" — extract the set code from the collector number's
+  // denominator, since the twhk_exp_*.png image is absent.
+  if (!card.setCode && colNum) {
+    const m = colNum.match(/\/([A-Z0-9-]+)$/);
+    if (m) card.setCode = m[1];
+  }
+  // Fallback 2: some promo entries (e.g. basic energy with colNum "GRA",
+  // 勝利之證 with colNum "M-P" sans slash) can't be recovered from either
+  // the logo or collectorNumber. Use the scrape-set.js-provided expectedSetCode
+  // as a last-resort fallback — we know from the list-page walk which set
+  // we're scraping.
+  if (!card.setCode && expectedSetCode) {
+    card.setCode = expectedSetCode;
+  }
 
   // --- Regulation mark ---
   // The TW site does not display regulation marks in the HTML, so we look it

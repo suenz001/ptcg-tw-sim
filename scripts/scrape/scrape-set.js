@@ -126,7 +126,7 @@ async function main() {
     try {
       await sleep(args.delayMs);
       const html = await fetchHtml(url);
-      const card = parseCard(html, id, url);
+      const card = parseCard(html, id, url, setCode);
       results.push(card);
       ok++;
       await fs.appendFile(

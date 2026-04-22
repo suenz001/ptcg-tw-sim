@@ -1,16 +1,16 @@
 [
   {
-    "code": "SV5a",
-    "name": "緋紅薄霧",
+    "code": "MJ",
+    "name": "New Trainer Journey",
     "regulationMark": "H",
-    "cardCount": 96,
+    "cardCount": 24,
     "supertypeCounts": {
-      "Pokemon": 77,
-      "Trainer": 17,
+      "Pokemon": 16,
+      "Trainer": 6,
       "Energy": 2
     },
-    "coverImageUrl": "covers/SV5a.jpg",
-    "scrapedAt": "2026-04-16T07:51:42.989Z"
+    "coverImageUrl": "covers/MJ.png",
+    "scrapedAt": "2026-04-16T08:40:39.689Z"
   },
   {
     "code": "SV5K",
@@ -37,6 +37,19 @@
     },
     "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv5/assets/images/hero-visual.jpg",
     "scrapedAt": "2026-04-16T07:49:06.962Z"
+  },
+  {
+    "code": "SV5a",
+    "name": "緋紅薄霧",
+    "regulationMark": "H",
+    "cardCount": 96,
+    "supertypeCounts": {
+      "Pokemon": 77,
+      "Trainer": 17,
+      "Energy": 2
+    },
+    "coverImageUrl": "covers/SV5a.jpg",
+    "scrapedAt": "2026-04-16T07:51:42.989Z"
   },
   {
     "code": "SV6",
@@ -114,96 +127,6 @@
     "scrapedAt": "2026-04-16T08:01:07.033Z"
   },
   {
-    "code": "SV9",
-    "name": "對戰搭檔",
-    "regulationMark": "I",
-    "cardCount": 132,
-    "supertypeCounts": {
-      "Pokemon": 117,
-      "Trainer": 13,
-      "Energy": 2
-    },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv9/assets/images/hero-visual.jpg",
-    "scrapedAt": "2026-04-16T08:05:56.176Z"
-  },
-  {
-    "code": "SV9a",
-    "name": "熱風競技場",
-    "regulationMark": "I",
-    "cardCount": 92,
-    "supertypeCounts": {
-      "Pokemon": 80,
-      "Trainer": 12
-    },
-    "coverImageUrl": "covers/SV9a.jpg",
-    "scrapedAt": "2026-04-16T08:07:38.291Z"
-  },
-  {
-    "code": "SV10",
-    "name": "火箭隊的榮耀",
-    "regulationMark": "I",
-    "cardCount": 132,
-    "supertypeCounts": {
-      "Pokemon": 112,
-      "Trainer": 19,
-      "Energy": 1
-    },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv10/assets/images/hero-visual.jpg",
-    "scrapedAt": "2026-04-16T07:11:55.699Z"
-  },
-  {
-    "code": "SV11B",
-    "name": "漆黑伏特",
-    "regulationMark": "I",
-    "cardCount": 254,
-    "supertypeCounts": {
-      "Pokemon": 237,
-      "Trainer": 15,
-      "Energy": 2
-    },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv11/assets/images/hero-visual.png",
-    "scrapedAt": "2026-04-16T08:12:18.580Z"
-  },
-  {
-    "code": "SV11W",
-    "name": "純白閃焰",
-    "regulationMark": "I",
-    "cardCount": 254,
-    "supertypeCounts": {
-      "Pokemon": 237,
-      "Trainer": 15,
-      "Energy": 2
-    },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv11/assets/images/hero-visual.png",
-    "scrapedAt": "2026-04-16T08:08:59.091Z"
-  },
-  {
-    "code": "SVOD",
-    "name": "大吾的鐵啞鈴&巨金怪ex 初階牌組",
-    "regulationMark": "J",
-    "cardCount": 23,
-    "supertypeCounts": {
-      "Pokemon": 10,
-      "Trainer": 11,
-      "Energy": 2
-    },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012588.png",
-    "scrapedAt": "2026-04-21T14:24:57.960Z"
-  },
-  {
-    "code": "SVOM",
-    "name": "瑪俐的莫魯貝可&長毛巨魔ex 初階牌組",
-    "regulationMark": "J",
-    "cardCount": 23,
-    "supertypeCounts": {
-      "Pokemon": 10,
-      "Trainer": 12,
-      "Energy": 1
-    },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012610.png",
-    "scrapedAt": "2026-04-21T14:24:25.226Z"
-  },
-  {
     "code": "M1L",
     "name": "超級勇氣",
     "regulationMark": "I",
@@ -253,32 +176,6 @@
     "scrapedAt": "2026-04-16T08:19:18.390Z"
   },
   {
-    "code": "M3",
-    "name": "虛無歸零",
-    "regulationMark": "J",
-    "cardCount": 117,
-    "supertypeCounts": {
-      "Pokemon": 92,
-      "Trainer": 22,
-      "Energy": 3
-    },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m3/assets/images/hero-visual.png",
-    "scrapedAt": "2026-04-16T08:25:27.486Z"
-  },
-  {
-    "code": "M4",
-    "name": "忍者飛旋",
-    "regulationMark": "J",
-    "cardCount": 83,
-    "supertypeCounts": {
-      "Pokemon": 71,
-      "Trainer": 9,
-      "Energy": 3
-    },
-    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m4/assets/images/hero-img-01-y25ri.png",
-    "scrapedAt": "2026-04-16T08:26:58.977Z"
-  },
-  {
     "code": "MBD",
     "name": "超級蒂安希ex",
     "regulationMark": "I",
@@ -305,6 +202,135 @@
     "scrapedAt": "2026-04-16T08:28:21.248Z"
   },
   {
+    "code": "SV10",
+    "name": "火箭隊的榮耀",
+    "regulationMark": "I",
+    "cardCount": 132,
+    "supertypeCounts": {
+      "Pokemon": 112,
+      "Trainer": 19,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv10/assets/images/hero-visual.jpg",
+    "scrapedAt": "2026-04-16T07:11:55.699Z"
+  },
+  {
+    "code": "SV11B",
+    "name": "漆黑伏特",
+    "regulationMark": "I",
+    "cardCount": 254,
+    "supertypeCounts": {
+      "Pokemon": 237,
+      "Trainer": 15,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv11/assets/images/hero-visual.png",
+    "scrapedAt": "2026-04-16T08:12:18.580Z"
+  },
+  {
+    "code": "SV11W",
+    "name": "純白閃焰",
+    "regulationMark": "I",
+    "cardCount": 254,
+    "supertypeCounts": {
+      "Pokemon": 237,
+      "Trainer": 15,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv11/assets/images/hero-visual.png",
+    "scrapedAt": "2026-04-16T08:08:59.091Z"
+  },
+  {
+    "code": "SV9",
+    "name": "對戰搭檔",
+    "regulationMark": "I",
+    "cardCount": 132,
+    "supertypeCounts": {
+      "Pokemon": 117,
+      "Trainer": 13,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sv9/assets/images/hero-visual.jpg",
+    "scrapedAt": "2026-04-16T08:05:56.176Z"
+  },
+  {
+    "code": "SV9a",
+    "name": "熱風競技場",
+    "regulationMark": "I",
+    "cardCount": 92,
+    "supertypeCounts": {
+      "Pokemon": 80,
+      "Trainer": 12
+    },
+    "coverImageUrl": "covers/SV9a.jpg",
+    "scrapedAt": "2026-04-16T08:07:38.291Z"
+  },
+  {
+    "code": "SVQL",
+    "name": "ex 初階牌組 噴火龍",
+    "regulationMark": "I",
+    "cardCount": 23,
+    "supertypeCounts": {
+      "Pokemon": 11,
+      "Trainer": 11,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013163.png",
+    "scrapedAt": "2026-04-22T01:01:36.632022Z"
+  },
+  {
+    "code": "SVQP",
+    "name": "ex 初階牌組 皮卡丘",
+    "regulationMark": "I",
+    "cardCount": 24,
+    "supertypeCounts": {
+      "Pokemon": 12,
+      "Trainer": 11,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013137.png",
+    "scrapedAt": "2026-04-22T01:01:36.632405Z"
+  },
+  {
+    "code": "M-P",
+    "name": "特典卡 超級進化",
+    "regulationMark": "J",
+    "cardCount": 98,
+    "supertypeCounts": {
+      "Pokemon": 75,
+      "Trainer": 11,
+      "Energy": 12
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018516.png",
+    "scrapedAt": "2026-04-22T01:01:36.634085Z"
+  },
+  {
+    "code": "M3",
+    "name": "虛無歸零",
+    "regulationMark": "J",
+    "cardCount": 117,
+    "supertypeCounts": {
+      "Pokemon": 92,
+      "Trainer": 22,
+      "Energy": 3
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m3/assets/images/hero-visual.png",
+    "scrapedAt": "2026-04-16T08:25:27.486Z"
+  },
+  {
+    "code": "M4",
+    "name": "忍者飛旋",
+    "regulationMark": "J",
+    "cardCount": 83,
+    "supertypeCounts": {
+      "Pokemon": 71,
+      "Trainer": 9,
+      "Energy": 3
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m4/assets/images/hero-img-01-y25ri.png",
+    "scrapedAt": "2026-04-16T08:26:58.977Z"
+  },
+  {
     "code": "MC",
     "name": "超級進化初階牌組100",
     "regulationMark": "J",
@@ -318,16 +344,29 @@
     "scrapedAt": "2026-04-16T08:29:24.027Z"
   },
   {
-    "code": "MJ",
-    "name": "New Trainer Journey",
-    "regulationMark": "H",
-    "cardCount": 24,
+    "code": "SVOD",
+    "name": "大吾的鐵啞鈴&巨金怪ex 初階牌組",
+    "regulationMark": "J",
+    "cardCount": 23,
     "supertypeCounts": {
-      "Pokemon": 16,
-      "Trainer": 6,
+      "Pokemon": 10,
+      "Trainer": 11,
       "Energy": 2
     },
-    "coverImageUrl": "covers/MJ.png",
-    "scrapedAt": "2026-04-16T08:40:39.689Z"
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012588.png",
+    "scrapedAt": "2026-04-21T14:24:57.960Z"
+  },
+  {
+    "code": "SVOM",
+    "name": "瑪俐的莫魯貝可&長毛巨魔ex 初階牌組",
+    "regulationMark": "J",
+    "cardCount": 23,
+    "supertypeCounts": {
+      "Pokemon": 10,
+      "Trainer": 12,
+      "Energy": 1
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012610.png",
+    "scrapedAt": "2026-04-21T14:24:25.226Z"
   }
 ]

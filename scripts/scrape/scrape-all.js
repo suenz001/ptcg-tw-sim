@@ -35,10 +35,13 @@ const DEFAULT_SETS = [
   'SV9', 'SV9a',
   'SV10',
   'SV11W', 'SV11B',
+  'SVQL', 'SVQP',  // ex 初階牌組（噴火龍 / 皮卡丘，2025-07-18）
   'M1S', 'M1L', 'M2', 'M2a',
   'MBD', 'MBG',
   // J mark
-  'MC', 'M3', 'M4'
+  'MC', 'M3', 'M4',
+  'SVOD', 'SVOM',
+  'M-P',  // 特典卡 超級進化（promo）
 ];
 
 function parseArgs(argv) {

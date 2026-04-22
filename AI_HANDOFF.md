@@ -1,9 +1,85 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 38bd (v2.24)  
+> 最後更新：2026-04-22 Session 38be (v2.25)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 38be (v2.25) — 卡池補齊 3 個缺漏 set（SVQL / SVQP / M-P）
+
+### 問題
+
+Leon 提到官網 `asia.pokemon-card.com/tw/card-search/` 有完整卡池資料，要求「重新整理
+一次」，並限定 **H / I / J** 三個合法 regulation mark 的卡包。
+
+盤點本地 `static/cards/index.json`（26 sets）vs 官網商品清單後，發現缺三個：
+
+| 代號 | 名稱 | 發售 | 推測 mark |
+|---|---|---|---|
+| SVQL | ex 初階牌組 噴火龍 | 2025-07-18 | I |
+| SVQP | ex 初階牌組 皮卡丘 | 2025-07-18 | I |
+| M-P | 特典卡 超級進化 | 2025-08-07 | J |
+
+Leon 選擇「只補差」+「sandbox 直接跑 scraper」。M-P 是 98 張跨期 promo，Leon 選
+「全爬進來再過濾」。
+
+### 根因
+
+1. `SET_REGULATION_MARK`（`scripts/regulation.js` + `src/lib/cards/regulation.ts`）
+   沒登錄 SVQL / SVQP / M-P，所以即使 scrape 完也寫不進 `regulationMark`。
+2. `parse-card.js` 的 setCode 擷取只看 `img[src*="/mark/twhk_exp_"]` + regex
+   `[A-Za-z0-9]+`，promo 卡用的是 `PROMO.MARK.png`、而且 set 代號含 dash（`M-P`）
+   — 兩個原因都會讓 setCode 解不出來。第一次爬 M-P 98 張全部 setCode = 空字串。
+3. `scrape-all.js` 的 `DEFAULT_SETS` 也沒包含 SVOD / SVOM / SVQL / SVQP / M-P
+   — 即使未來跑 `npm run scrape` 也不會自動爬到這幾個。
+
+### 主要修法
+
+**1. `scripts/scrape/parse-card.js` 加兩段 setCode fallback**
+- Fallback 1：用 collectorNumber 的分母（`"099/M-P"` → `"M-P"`）補 setCode
+- Fallback 2：`scrape-set.js` 傳一個 `expectedSetCode` 參數給 parseCard，
+  當前兩種都解不出來（例如 promo basic energy 的 colNum 是 `"GRA"` 這種縮寫），
+  用正在爬的 set 作最後保底
+
+**2. `scripts/scrape/scrape-set.js` 改呼叫**
+- `parseCard(html, id, url)` → `parseCard(html, id, url, setCode)`
+
+**3. Regulation 雙檔同步加三筆**
+- `src/lib/cards/regulation.ts`：I 標 +SVQL/SVQP，J 標 +M-P
+- `scripts/regulation.js`：同上（scraper 端用）
+
+**4. 實際 scraping**
+- SVQL → 23 張（小火龍 / 噴火龍ex / 能量回收 / 艾莉絲的鬥志 etc.）
+- SVQP → 24 張（皮卡丘ex / 閃電鳥 / 洛拍棒 / 希特隆的機智 etc.）
+- M-P → 98 張 promo，全部 J 標（官網 M-P filter 只列當期合法 promo）
+
+**5. `static/cards/index.json` 新增 3 筆**
+- SVQL cover = 噴火龍ex 卡圖（id 13163）
+- SVQP cover = 皮卡丘ex 卡圖（id 13137）
+- M-P cover = 超級甲賀忍蛙ex 卡圖（id 18516）
+- 排序改成按 regulation mark（H → I → J），代號字典序
+
+**6. `scripts/scrape/scrape-all.js` DEFAULT_SETS 補齊**
+- I：+SVQL, +SVQP
+- J：+SVOD, +SVOM（之前漏掉）, +M-P
+
+### 驗證
+
+- `npm run build` ✓ 13.05s 無錯
+- `SVQL.json / SVQP.json`：23/24 張全部 mark=I
+- `M-P.json`（重爬兩次後）：98 張全部 setCode=M-P, mark=J
+- `index.json`：29 sets（26 + 3 新），按 mark + 代號排序
+
+### 次要調整
+
+- AI_HANDOFF header 更新到 Session 38be (v2.25)
+- version.ts: 2.24 → 2.25
+
+### commit hash
+
+- `TBD`（本 session push 後填入）
 
 ---
 

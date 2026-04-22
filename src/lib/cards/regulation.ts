@@ -27,6 +27,7 @@ export const SET_REGULATION_MARK: Record<string, RegulationMark> = {
   SV9: 'I',  SV9a: 'I',
   SV10: 'I',
   SV11B: 'I', SV11W: 'I',
+  SVQL: 'I', SVQP: 'I',  // ex 初階牌組（噴火龍 / 皮卡丘，2025-07-18）
   M1S: 'I',  M1L: 'I',
   M2: 'I',   M2a: 'I',
   MBD: 'I',  MBG: 'I',
@@ -37,6 +38,7 @@ export const SET_REGULATION_MARK: Record<string, RegulationMark> = {
   M4: 'J',
   SVOM: 'J',  // 瑪俐的莫魯貝可&長毛巨魔ex 初階牌組
   SVOD: 'J',  // 大吾的鐵啞鈴&巨金怪ex 初階牌組
+  'M-P': 'J',  // 特典卡 超級進化（promo，官網 M-P filter 只列當期合法的 promo）
 };
 
 /** Marks currently legal in Standard format. */

@@ -22,6 +22,7 @@ export const SET_REGULATION_MARK = {
   SV9: 'I',  SV9a: 'I',
   SV10: 'I',
   SV11B: 'I', SV11W: 'I',
+  SVQL: 'I', SVQP: 'I',  // ex 初階牌組（噴火龍 / 皮卡丘，2025-07-18）
   M1S: 'I',  M1L: 'I',
   M2: 'I',   M2a: 'I',
   MBD: 'I',  MBG: 'I',
@@ -32,6 +33,7 @@ export const SET_REGULATION_MARK = {
   M4: 'J',
   SVOM: 'J',
   SVOD: 'J',
+  'M-P': 'J',  // 特典卡 超級進化（promo，官網 M-P filter 只列當期合法的 promo）
 };
 
 export const STANDARD_MARKS = new Set(['H', 'I', 'J']);
