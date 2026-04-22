@@ -66,7 +66,7 @@ Leon 指出兩個 bug（附卡牌 zoom 截圖）：
 - `src/lib/version.ts`: 2.31 → 2.32
 
 ### Commit
-- 待填入（push 後 backfill）
+- `dd7bbac` — v2.32: zoom modal 返回鈕右上 + 修胡地 evolvesFrom 資料
 
 ---
 
