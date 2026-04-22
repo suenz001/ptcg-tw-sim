@@ -1,9 +1,120 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session f3a91 (v2.43)  
+> 最後更新：2026-04-22 Session 4d7e2 (v2.44)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 4d7e2 (v2.44) — 奇跡修正檔 guard 卡住 + 彈出視窗可拖曳 + describeFilter 補完
+
+### 問題
+
+Leon 在 v2.43 驗收後一次提了 3 件事：
+
+1. **奇跡修正檔卡住**：「使用了以後，出現如果棄牌區沒有符合的卡片的時候就會卡住的情況」。Leon 補上自己的判斷：「照理說，應該先檢查棄牌區有沒有符合條件的卡片可以取回，如果沒有的話根本不能使用(沒有黃色框框)」。
+2. **UI 出現英文字**：同一事件附截圖「選 1 張 （基礎寶可夢Psychic能量） · 已選 0」——又是 filter 翻譯殘渣。
+3. **彈出 UI 視窗要能拖曳**：「所有介面彈出 ui 視窗的時候，例如從牌庫選牌、選取對象寶可夢、選取棄牌區對象等等，可以讓玩家拖曳這個視窗，這樣玩家就能再回去看場上的牌的狀況 (背景的場面情形也要一起把變暗的狀況取消)」。
+
+### 根因分析
+
+**#1 奇跡修正檔 guard vs filter 不一致**  
+`regG('奇跡修正檔')` 的 guard 只檢查「棄牌區有任何 supertype='Energy' 的卡」，但 pending 用 `filter: 'BasicPsychicEnergy'`（只吃 subtype='Basic' 且 name.includes('【超】')）。棄牌區只有特殊能量（例：富裕能量、感應【超】能量）時 guard 放行 → pending 開出來 0 個可選 → minCount=1 卡住。這是 v2.40 task #180 已經掃過的「guard 比 filter 鬆」經典 bug，v2.44 又冒出來一張漏網之魚。
+
+**回頭全掃**找到同款 bug：
+- **能量回收器**（items_misc.ts）：guard 用 `supertype === 'Energy'`，但招式 filter 是 `BasicEnergy`。還加 bug：`const maxN = Math.min(5, energies.length)` 的 `energies` 也沒查 subtype，只有特殊能量時 maxN=N 但實際可選=0。
+- **土地雲|真氣之拳**（effects.ts:5622）：regPost 的 `const cand` 檢查 `supertype === 'Energy'`，但 pending filter 是 `BasicEnergy`。卡面寫「基本能量」，guard 放行後 pending 空卡住。
+
+**#2 describeFilter 英文殘渣**  
+v2.43 的 `describeFilter` 已經是字典式，但 map 沒收錄 `BasicPsychicEnergy`（Wait — 其實有，map 裡明寫「基本【超】能量」）。Leon 在截圖看到的「基礎寶可夢Psychic能量」是 **v2.42 前的舊 fallback 鏈結果**（那時還在用 `.replace('Basic','基礎寶可夢').replace('Energy','能量')`）—— Leon 看到的是 GitHub Pages 還沒部署 v2.43 的舊版畫面，v2.43 正式上線後這個字串會自動修掉。但趁這個機會還是把 describeFilter 補到「完全覆蓋所有現役 filter」：把 `Item / MarniePokemon / MegaEx / ex / Supporter / any（小寫）` 也寫進 map，再加 `^(\w+):TOP(\d+)$` pattern 翻 `Supporter:TOP6`（之前只有 `^TOP(\d+)$`，複合名走不到）。未來若 filter 洩漏 `MegaEx` 之類的碼，看到的會是「超級進化寶可夢 ex」而不是半翻譯。
+
+**#3 彈出視窗拖曳**  
+原設計：`.selection-overlay` 半透明黑 82% 蓋滿整個 viewport，`.selection-modal` 置中。`.selection-overlay` 的 `pointer-events` 預設 auto + 沒 transform offset，所以：玩家看不到背景、沒辦法移動視窗。Leon 要求拖曳後背景也要恢復正常，意思是拖曳 = 視窗半 dock 到角落，場面完全露出。
+
+### 主修法
+
+**A. guard vs filter 全掃（items_misc.ts + effects.ts）**
+
+- **奇跡修正檔**（items_misc.ts）：guard 改查 `supertype === 'Energy' && subtype === 'Basic' && name.includes('【超】')`（與 filter 'BasicPsychicEnergy' 語意一致）。
+- **能量回收器**（items_misc.ts）：guard 與 `energies.filter` 都補 `subtype === 'Basic'` 條件，maxN 計算才對。
+- **土地雲|真氣之拳**（effects.ts:5622）：`cand` 補 subtype=Basic、log 從「棄牌區沒有能量」改「棄牌區沒有基本能量」、pending 前的 addLog 也改為「從棄牌區選 1 張基本能量」（與多麗米亞|能量支援同模式）。
+
+然後 grep 全專案 `supertype === 'Energy'`（~40 筆）逐項看是否搭配 `subtype === 'Basic'`：
+- 大多正確成對（例：多麗米亞|能量支援、充溢之光、夜間擔架、白蕾雅赤松等）。
+- 幾個純傷害計算（深淵熾火 × 20、三海地鼠ex|三色炮 × 60）不需要 Basic 限定——卡面寫「能量卡 × N」，含特殊能量是正確的。
+- 神秘花園（engine.ts）用 filter='Energy'、普隆隆姆 轟鳴引擎、卡比獸|吃飽先（filter='Energy'）、阿克羅瑪的執著（filter='Energy'）——filter 本身就是 Energy 非 BasicEnergy，一致。
+
+**B. describeFilter 補完（+page.svelte）**
+
+新增 map 條目：`Item / Supporter / ex / MegaEx / MarniePokemon / any（小寫 alias）`。新增 pattern：
+
+```typescript
+const mKTop = f.match(/^(\w+):TOP(\d+)$/);
+if (mKTop) {
+  const inner = map[mKTop[1]] ?? mKTop[1];
+  return `牌庫頂 ${mKTop[2]} 張中的${inner}`;
+}
+```
+
+讓 `Supporter:TOP6` 變「牌庫頂 6 張中的支援者」。
+
+**C. 彈出視窗拖曳（+page.svelte）**
+
+新增 `$state` 3 個（`modalOffset`、`modalDragged`、`modalDragStart`）+ 3 個 pointer handler + 一個 $effect。
+
+核心想法：`.sel-header` 兼任拖曳把手。3 個 handler 用 `setPointerCapture` 綁在 header 上，確保拖出視窗範圍仍能收到 pointermove/up。`modalDragged` 超過 3px 才觸發，避免意外點擊被判為拖曳。
+
+拖曳中：
+- `.selection-modal` 套 `style:transform={\`translate(${x}px, ${y}px)\`}`。
+- `.selection-overlay` 加 `class:dragged`，CSS 讓 overlay `background:transparent; pointer-events:none`，但 `.dragged .selection-modal` 仍 `pointer-events:auto`—— 背景完全看得到、可互動，但 modal 本身還能繼續點選。
+
+切換新 modal 時自動重置 offset：用 `$derived modalSignature`（`type|effectKey|actorIdx` 字串）做 fingerprint，$effect 追這個 signature 變化而非 pendingSelection 物件 ref（避免 game 狀態更新新 ref 誤重置）。
+
+7 個 modal 實例（`.selection-modal` 共 7 處）全部套上 style:transform、overlay 全套 `class:dragged`、7 個 `.sel-header` 套 onpointerdown/move/up。
+
+CSS 新增：
+- `.selection-overlay { transition:background .15s ease; }` — 變透明時平滑淡出。
+- `.selection-overlay.dragged { background:transparent; pointer-events:none; }`
+- `.selection-overlay.dragged .selection-modal { pointer-events:auto; box-shadow:0 8px 32px rgba(0,0,0,.6); }` — 加陰影維持 modal 邊界感。
+- `.sel-header { cursor:grab; user-select:none; touch-action:none; }` + `:active { cursor:grabbing }` — 觸控也 OK。
+
+### 次要調整
+
+- 奇跡修正檔 / 土地雲|真氣之拳 guard 的 log 訊息更精確（寫「基本能量」不寫「能量」），之後 debug 比較準。
+- `.selection-modal` 加 `will-change:transform` 提升 transform 動畫性能。
+
+### 檔案變更
+
+- `src/lib/game/effects/cards/items_misc.ts`：奇跡修正檔 guard、能量回收器 guard + maxN filter 都改為 basic-only。
+- `src/lib/game/effects.ts`：土地雲|真氣之拳 regPost 的 cand 改為 basic-only + log 改字。
+- `src/routes/game/+page.svelte`：
+  - describeFilter map +6 筆、加 `X:TOPn` pattern。
+  - script 新 `modalOffset / modalDragged / modalDragStart` state + 3 handler + modalSignature derived + reset $effect（~40 行）。
+  - 7 個 `.selection-overlay` 加 `class:dragged={modalDragged}`。
+  - 7 個 `.selection-modal` 加 `style:transform`。
+  - 7 個 `.sel-header` 加 onpointerdown/move/up + title。
+  - CSS `.selection-overlay` 加 transition + `.dragged` 規則 + `.sel-header` cursor 規則 + `.selection-modal` will-change。
+- `src/lib/version.ts`：`2.43 → 2.44`。
+
+### 驗證
+
+`npm run build` pass（386.20 kB，無型別錯誤、無 Svelte 警告）。
+
+`supertype === 'Energy'` grep 全掃後只有 3 處改（奇跡修正檔 / 能量回收器 / 土地雲），其他成對 supertype/subtype 檢查保留。
+
+modalSignature 設計避免 pendingSelection 物件 ref 每次變化誤觸——type+effectKey+actorIdx 改變才算是「新 modal」。
+
+### 心得
+
+- **guard vs filter 要一致**是 PTCG engine 的老病：v2.40 task #180 已經做過一輪掃，v2.44 又找到 3 張。根因是不同作者寫 effect 時沒注意「pending filter 的語意」——`BasicEnergy` 的 filter 其實排除 Special Energy，但直覺寫 guard 時只想到「能量」就 `supertype === 'Energy'`。未來若再加新卡，effect 作者 PR 時要 review 這個 pair。
+- **彈出視窗拖曳的 UX 平衡**：最初考慮「拖曳視窗但背景保持 82% 黑」，但 Leon 明確說要把 dim 取消——這符合實用主義（玩家拖視窗的目的就是看背景）。`pointer-events:none` 讓玩家甚至可以繼續操作背景；`.selection-modal { pointer-events:auto }` 讓 modal 本身仍可點——這個 CSS combo 是整個方案的關鍵。
+- **Leon 的「卡住」回報暗示 guard bug**（而不是 filter/UI bug）。他明確點出「應該先檢查棄牌區有沒有」——這正是 guard 的職責。比起直接修 filter，他的 debug 方向一般都很準，值得信任。
+
+### 後續潛在 TODO（未做）
+
+- 拖曳 modal 沒做「邊界限制」——玩家可以把視窗拖到螢幕外、找不回來。目前設計是：切換新 modal 時 offset 自動歸零，算是逃生閥。之後若 Leon 反饋「拖太遠回不來」再補 clamp 或加「回到中間」按鈕。
+- `.selection-overlay.dragged` 背景透明後，玩家若誤以為沒有進行中的 pending、去操作背景卡牌——點擊會被 engine 擋（因為還有 pendingSelection），但可能造成困惑。觀察中。
 
 ---
 

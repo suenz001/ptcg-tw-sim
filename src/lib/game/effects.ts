@@ -5621,11 +5621,14 @@ regPost('古鼎鹿|沙之到來', discardEnergyAttachPost(2, 'Fighting', '沙之
 
 regPre('土地雲|真氣之拳', (state, _aIdx, _pool) => ({ state, damage: 30 }));
 regPost('土地雲|真氣之拳', (state, aIdx, pool) => {
-  // 棄牌選 1 張能量附於自身（無屬性限制）
+  // 棄牌選 1 張基本能量附於自身（無屬性限制）
   const p = state.players[aIdx];
-  const cand = p.discard.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
-  if (cand.length === 0) return addLog(state, '真氣之拳：棄牌區沒有能量', aIdx);
-  const s = addLog(state, '真氣之拳：從棄牌區選 1 張能量', aIdx);
+  const cand = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  });
+  if (cand.length === 0) return addLog(state, '真氣之拳：棄牌區沒有基本能量', aIdx);
+  const s = addLog(state, '真氣之拳：從棄牌區選 1 張基本能量', aIdx);
   return withPending(s, {
     type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'BasicEnergy', minCount: 1, maxCount: 1,

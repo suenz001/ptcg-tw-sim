@@ -86,6 +86,40 @@
   let floatingRetreatMenu = $state<{ x: number; y: number } | null>(null);
   let viewDiscardFor = $state<0 | 1 | null>(null);
 
+  // ── 彈出 UI 視窗拖曳（v2.44） ──────────────────────────────────────────────
+  // Leon feedback：選牌 / 選寶可夢 modal 彈出後，玩家想拖曳視窗回去看場上的卡，
+  // 被拖曳後背景變暗狀況也要取消，讓玩家看到被遮住的場面。
+  // 實作：
+  //   - `.sel-header` 為拖曳把手（避免按到按鈕）
+  //   - 被拖曳後 `.selection-overlay` 加 `.dragged` → 背景 transparent + pointer-events:none
+  //   - `.selection-modal` pointer-events:auto 讓 modal 本身仍可點
+  //   - 切換新 modal 時 $effect 自動重置 offset（pendingSelection 物件變更就 trigger）
+  let modalOffset = $state<{ x: number; y: number }>({ x: 0, y: 0 });
+  let modalDragged = $state(false);
+  let modalDragStart: { sx: number; sy: number; ox: number; oy: number } | null = null;
+  function onModalHeaderPointerDown(e: PointerEvent) {
+    const t = e.target as HTMLElement | null;
+    if (!t) return;
+    // 按到 header 裡面的按鈕/輸入框時不觸發拖曳
+    if (t.closest('button, input, select, textarea, a, [role="button"]')) return;
+    modalDragStart = {
+      sx: e.clientX, sy: e.clientY,
+      ox: modalOffset.x, oy: modalOffset.y,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  }
+  function onModalHeaderPointerMove(e: PointerEvent) {
+    if (!modalDragStart) return;
+    const dx = e.clientX - modalDragStart.sx;
+    const dy = e.clientY - modalDragStart.sy;
+    modalOffset = { x: modalDragStart.ox + dx, y: modalDragStart.oy + dy };
+    if (!modalDragged && Math.abs(dx) + Math.abs(dy) > 3) modalDragged = true;
+  }
+  function onModalHeaderPointerUp(_e: PointerEvent) {
+    modalDragStart = null;
+  }
+
   // ── 招式前置丟能量選擇（v1.57） ────────────────────────────────────────────
   // 玩家宣告招式、ATTACK_PRE_DISCARD_CHOICE 命中時彈出的能量挑選 modal 狀態
   let preAttackDiscard = $state<{
@@ -608,6 +642,22 @@
   const availableAttacks = $derived(game && poolReady ? getAvailableAttacks(game, pool) : []);
   const pendingPrizes    = $derived(game?.pendingPrizes ?? 0);
   const pendingSelection = $derived(game?.pendingSelection ?? null);
+
+  // v2.44：切換新 modal 時重置拖曳偏移量
+  // 用 effectKey + actorIdx + type 做 signature，避免每次 game 狀態更新（物件新 ref）都誤重置
+  const modalSignature = $derived(
+    pendingSelection
+      ? `${pendingSelection.type}|${pendingSelection.effectKey ?? ''}|${pendingSelection.actorIdx}`
+      : floatingRetreatMenu
+        ? 'retreat-menu'
+        : 'none'
+  );
+  $effect(() => {
+    const _sig = modalSignature;
+    modalOffset = { x: 0, y: 0 };
+    modalDragged = false;
+    modalDragStart = null;
+  });
   const evolvableTargets = $derived(game && poolReady ? getEvolvableTargets(game, pool) : []);
   const canRetreatNow    = $derived(game && poolReady ? canRetreat(game, pool) : false);
   const playableTrainerIids = $derived(
@@ -1279,7 +1329,13 @@
       'Trainer':                       '訓練家',
       'AnyTrainer':                    '訓練家卡',
       'Any':                           '任意卡',
+      'any':                           '任意卡',
       'Energy':                        '能量',
+      'Item':                          '物品卡',
+      'Supporter':                     '支援者',
+      'ex':                            'ex 寶可夢',
+      'MegaEx':                        '超級進化寶可夢 ex',
+      'MarniePokemon':                 '瑪俐的寶可夢',
       'CynthiaPokemon':                '竹蘭的寶可夢',
       'FightingBasicOrFightingEnergy': '基礎【鬥】寶可夢或【鬥】能量',
       'GrassBasicOrGrassEnergy':       '基礎【草】寶可夢或【草】能量',
@@ -1297,6 +1353,12 @@
     if (mET) {
       const t = typeMap[mET[2]] ?? mET[2];
       return mET[1] === 'Energy' ? `基本${t}能量` : `${t}寶可夢`;
+    }
+    // v2.44：X:TOPn 複合 filter（如 Supporter:TOP6 = 牌庫頂 6 張中的支援者）
+    const mKTop = f.match(/^(\w+):TOP(\d+)$/);
+    if (mKTop) {
+      const inner = map[mKTop[1]] ?? mKTop[1];
+      return `牌庫頂 ${mKTop[2]} 張中的${inner}`;
     }
     const mTop = f.match(/^TOP(\d+)$/);
     if (mTop) return `前 ${mTop[1]} 張`;
@@ -2024,9 +2086,9 @@
     {@const dmgTotal    = (pendingSelection.params?.totalCounters as number | undefined) ?? pendingSelection.maxCount}
     {@const dmgPlaced   = (pendingSelection.params?.placedCounters as number | undefined) ?? 0}
     {@const dmgPer      = (pendingSelection.params?.counterDamage as number | undefined) ?? 10}
-    <div class="selection-overlay">
-      <div class="selection-modal" class:retreat-modal={isPokePicker || isDmgDist}>
-        <div class="sel-header">
+    <div class="selection-overlay" class:dragged={modalDragged}>
+      <div class="selection-modal" class:retreat-modal={isPokePicker || isDmgDist} style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>{selectionTitle(pendingSelection.type)}</h3>
           {#if isDmgDist}
             <!-- 幻影奇襲類：頂部進度條顯示「已放置 X/totalCounters」— X 含本批次即時累加 -->
@@ -2324,9 +2386,9 @@
     )}
     {@const nDraw = game.pendingMulliganDraw[myIdx]}
     {@const oppName = game.players[oppIdx].name}
-    <div class="selection-overlay">
-      <div class="selection-modal mulligan-modal">
-        <div class="sel-header">
+    <div class="selection-overlay" class:dragged={modalDragged}>
+      <div class="selection-modal mulligan-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>🔄 對手的重抽懲罰</h3>
           <p class="sel-hint">
             <strong>{oppName}</strong> 起手沒有基礎寶可夢，重新洗牌 {nDraw} 次。
@@ -2354,9 +2416,9 @@
     </div>
   {:else if game && game.phase==='setup' && (game.pendingMulliganDraw?.[oppIdx] ?? 0) > 0 && mode==='online' && myPlayerIndex===myIdx}
     <!-- 對手還沒決定重抽補抽 — 僅在線上模式需顯示等待 -->
-    <div class="selection-overlay">
-      <div class="selection-modal mulligan-modal">
-        <div class="sel-header">
+    <div class="selection-overlay" class:dragged={modalDragged}>
+      <div class="selection-modal mulligan-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>⏳ 等待對手決定補抽</h3>
           <p class="sel-hint">你因起手無基礎寶可夢重抽了 {game.mulliganCounts[myIdx]} 次，對手正在決定是否多抽 {game.pendingMulliganDraw[oppIdx]} 張…</p>
         </div>
@@ -2372,9 +2434,9 @@
     {@const minOk = pickedCount >= spec.min}
     {@const maxOk = spec.max === null || pickedCount <= spec.max}
     {@const estDmg = spec.baseDamage + pickedCount * spec.damagePerEnergy}
-    <div class="selection-overlay">
-      <div class="selection-modal">
-        <div class="sel-header">
+    <div class="selection-overlay" class:dragged={modalDragged}>
+      <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>⚡ {preAttackDiscard.attackName}：選擇要丟棄的能量</h3>
           <p class="sel-hint">
             最少 {spec.min} 張{spec.max === null ? '（不限上限）' : `，最多 ${spec.max} 張`}
@@ -2411,9 +2473,9 @@
 
   <!-- Retreat Menu（置中橫向 grid，支援放大鏡，避免撞到畫面頂部） -->
   {#if floatingRetreatMenu && myPlayer?.active}
-    <div class="selection-overlay" onclick={() => floatingRetreatMenu = null}>
-      <div class="selection-modal retreat-modal" onclick={(e)=>e.stopPropagation()}>
-        <div class="sel-header">
+    <div class="selection-overlay" class:dragged={modalDragged} onclick={() => floatingRetreatMenu = null}>
+      <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>🔄 選擇換入的寶可夢</h3>
           <p class="sel-hint">挑選一隻備戰區的寶可夢上場；點放大鏡 🔍 查看詳情以區分同名卡身上的能量</p>
         </div>
@@ -2453,8 +2515,8 @@
   <!-- Send New Active Modal（戰鬥寶可夢昏厥後派出新戰鬥寶可夢，使用統一的橫向 grid + 放大鏡介面） -->
   {#if game && game.phase==='playing' && defenderPlayer?.active===null && game.turnPhase==='end' && isMyDefenderTurn()}
     <div class="selection-overlay">
-      <div class="selection-modal retreat-modal" onclick={(e)=>e.stopPropagation()}>
-        <div class="sel-header">
+      <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>⚠️ 派出新的戰鬥寶可夢</h3>
           <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
         </div>
@@ -2491,8 +2553,8 @@
   <!-- Send New Active Modal（自 KO 版）：主動方自 KO（如咒詛炸彈）後自己戰鬥場空欄 → 從自己備戰區選 -->
   {#if game && game.phase==='playing' && myPlayer?.active===null && game.turnPhase!=='end' && (myPlayer?.bench??[]).length>0 && !pendingSelection}
     <div class="selection-overlay">
-      <div class="selection-modal retreat-modal" onclick={(e)=>e.stopPropagation()}>
-        <div class="sel-header">
+      <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>⚠️ 派出新的戰鬥寶可夢</h3>
           <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
         </div>
@@ -3181,8 +3243,14 @@
   .trainer-btn{ background:#2a3a6a; color:#ccf; }
   .trainer-btn:hover{ background:#3a5a9a; }
 
-  .selection-overlay{ position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.82); display:flex; align-items:center; justify-content:center; font-family:system-ui,'Microsoft JhengHei',sans-serif; }
-  .selection-modal{ background:#1a2a1a; border:1px solid #4a8a4a; border-radius:12px; padding:1.25rem; max-width:680px; width:95vw; max-height:85vh; display:flex; flex-direction:column; gap:.75rem; color:#f0f0f0; }
+  .selection-overlay{ position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.82); display:flex; align-items:center; justify-content:center; font-family:system-ui,'Microsoft JhengHei',sans-serif; transition:background .15s ease; }
+  /* v2.44：modal 被拖曳後背景變透明且不擋互動（讓玩家看見、甚至操作場上），modal 本體仍可互動 */
+  .selection-overlay.dragged{ background:transparent; pointer-events:none; }
+  .selection-overlay.dragged .selection-modal{ pointer-events:auto; box-shadow:0 8px 32px rgba(0,0,0,.6); }
+  .selection-modal{ background:#1a2a1a; border:1px solid #4a8a4a; border-radius:12px; padding:1.25rem; max-width:680px; width:95vw; max-height:85vh; display:flex; flex-direction:column; gap:.75rem; color:#f0f0f0; will-change:transform; }
+  /* v2.44：sel-header 兼任拖曳把手，給 cursor 提示；touch-action:none 阻止觸控滾動干擾 */
+  .sel-header{ cursor:grab; user-select:none; touch-action:none; }
+  .sel-header:active{ cursor:grabbing; }
   .sel-header h3{ margin:0 0 .2rem; font-size:1.1rem; color:#aaffaa; }
   .sel-hint{ margin:0; font-size:.85rem; color:#aaa; }
   .sel-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:.4rem; overflow-y:auto; max-height:52vh; padding-right:.25rem; }

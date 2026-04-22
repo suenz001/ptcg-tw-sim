@@ -141,11 +141,19 @@ reg('夜間擔架', (st, idx) => {
 });
 
 // 能量回收器 — 從棄牌區選最多 5 張基本能量卡放回牌庫（義務性：至少選 1 張）
+// v2.44 修：guard + maxN 原本用 `supertype==='Energy'`（含 Special Energy），
+// 但 filter 是 'BasicEnergy'（只基本能量）。棄牌區只剩 Special Energy 時 minCount:1 會卡死。
 regG('能量回收器', (st, idx, pool) =>
-  st.players[idx].discard.some(c => pool.get(c.cardId)?.supertype === 'Energy')
+  st.players[idx].discard.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  })
 );
 reg('能量回收器', (st, idx, pool) => {
-  const energies = st.players[idx].discard.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+  const energies = st.players[idx].discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  });
   const maxN = Math.min(5, energies.length);
   st = addLog(st, `能量回收器：從棄牌區選 1–${maxN} 張基本能量洗回牌庫`, idx);
   return withPending(st, {
@@ -180,11 +188,17 @@ regR('discard-to-hand', (st, idx, iids, _params, pool) => {
 });
 
 // 奇跡修正檔 — 從棄牌區選 1 張基本超能量，附於備戰的超寶可夢身上（兩步）
+// v2.44 修：guard 原本只查 `supertype==='Energy'`（任何能量都算通過），但 filter 是
+// 'BasicPsychicEnergy'（基本【超】能量）。棄牌區若只剩其他屬性能量 / 富裕能量 /
+// 感應【超】等 Special Energy，UI 會卡在「選 1 張 · 已選 0」的空選擇畫面。
+// 正確語義：guard 必須與 filter 比對一致。
 regG('奇跡修正檔', (st, idx, pool) => {
-  // 棄牌區有能量 + 備戰有超屬寶可夢才能打
-  const hasEnergy = st.players[idx].discard.some(c => pool.get(c.cardId)?.supertype === 'Energy');
+  const hasBasicPsy = st.players[idx].discard.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
+  });
   const hasPsychicBench = st.players[idx].bench.some(b => pool.get(b.cardId)?.pokemonType === 'Psychic');
-  return hasEnergy && hasPsychicBench;
+  return hasBasicPsy && hasPsychicBench;
 });
 reg('奇跡修正檔', (st, idx, pool) => {
   st = addLog(st, '奇跡修正檔：從棄牌區選 1 張基本【超】能量', idx);
