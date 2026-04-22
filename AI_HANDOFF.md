@@ -1,9 +1,90 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 2f3g (v2.53)  
+> 最後更新：2026-04-22 Session 2f3h (v2.54)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 2f3h (v2.54) — 戰鬥場黃框移除 + 碧綠之舞效果重寫 + 捕蟲組合 top6→top7
+
+### 問題
+
+Leon 連續三項回饋：
+
+1. **UI**：「我方戰鬥場的寶可夢已經有上方的文字標示了，不要再用那個黃色框框，這樣會有誤導選擇框的嫌疑」。v2.53 起戰鬥場上方新增 zone-label（「我方戰鬥場 / 對方戰鬥場」），因此「選擇附加能量目標時」全卡亮黃框 + glow 動畫的 UX 會被誤認為 pending-selection 黃框，造成語意混淆。
+2. **碧綠之舞效果錯誤**：「碧綠之舞的效果其實是特填草能量到發動特性的那隻寶可夢身上，所以不該出現選擇的 ui 介面，而是應該直接把基本草能量附到發動特性的寶可夢身上 另外碧綠之舞發動成功是可以抽一張牌的」。卡面原文：「從自己的手牌選擇1張『基本【草】能量』卡，附於這隻寶可夢身上。然後，從自己的牌庫抽出1張卡。」— **「這隻寶可夢」= 發動特性的厄鬼椪 碧草面具ex 自身**，不是場上任意【草】寶可夢。且有抽 1 的後置效果被我漏寫。
+3. **捕蟲組合數量錯誤**：「補蟲組合的效果是 查看自己的牌庫上方7張卡... 這個效果類似米粒龍的特性，因此你補蟲組合的效果做錯了!!!」現行實裝是 top 6（錯），卡面是 top 7。
+
+### 根因
+
+1. `.active-card.energy-target` CSS 規則套 `border-color:#aaff44 + cursor:pointer + animation:glow 1s infinite alternate`。備戰版也有同一 class 但因備戰 zone-label 位置不同，視覺衝突只在戰鬥場出現。我方戰鬥場已有獨立 zone-label（「我方戰鬥場」），不需再用整卡黃框強調 — zone-label 才是權威標示。
+2. v2.53 我誤解卡面「這隻寶可夢」＝任意【草】寶可夢，於是開了 heal-target pending 讓玩家選。實際上 PTCG 卡面「這隻」= trigger source（abilityUsedThisTurn 標記者）。碧草面具ex 只能附到自己身上。
+3. 捕蟲組合我寫成 6 單純是筆誤 / 查卡不仔細。「top N → pick up to 2 → 剩下放回重洗」結構跟米立龍｜集客 完全一樣，但米立龍是 6 張，捕蟲組合卡面是 7 張。
+
+### 修法
+
+**1. 戰鬥場移除黃框** — `src/routes/game/+page.svelte`：
+
+- 我方戰鬥場 div 的 `class:energy-target` 改成 `class:energy-clickable`（line 2023）。
+- CSS 新增 `.active-card.energy-clickable{ cursor:pointer; }` — 只保留 pointer 提示，拿掉 border/animation/glow。
+- 保留既有 `.active-card.energy-target` 規則讓備戰版（`.bench-slot.energy-target`）不受影響（備戰仍用黃框，因為備戰沒有像 active 那樣強烈的 zone-label 加持）。
+- 原本 `onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(...)}` 不動，點擊行為照舊。
+- `<div class="attach-hint">⚡ 點此附加</div>` 文字提示保留（在 active-info 內，小字描述，不是選擇框 UI）。
+
+**2. 碧綠之舞效果重寫** — `src/lib/game/effects.ts`：
+
+刪除舊的 heal-target 選擇 UI 與 `regR('verdant-dance-attach', ...)` resolver。改寫 `regA('厄鬼椪 碧草面具ex', 0, ...)`：
+
+1. 用土龍節節 pattern 定位 source：`allPokes.find(c => pool.get(c.cardId)?.name === '厄鬼椪 碧草面具ex' && c.abilityUsedThisTurn === true)`（engine.ts USE_ABILITY handler 於呼叫 abilityFn 前標 abilityUsedThisTurn=true）。
+2. 從手牌挑第 1 張基本草能量 instance（保留原 guard：`supertype==='Energy' && subtype==='Basic' && (pokemonType==='Grass' || name.includes('【草】'))`）。
+3. 直接 `updatePlayer` 把該能量從 hand 移除、附到 src.iid 的 `energyAttached`（無 pending UI）。
+4. `drawCards(st, idx, 1)` 抽 1 張。
+5. Log 兩行：`碧綠之舞：將 {eName} 附加到 {sName}` + `碧綠之舞：從牌庫抽 1 張`。
+
+v2.53 加在 `getUsableAbilities` 的「手牌至少有 1 張基本草能量」gate 保留不動 — 仍是第一道防線（無能量時按鈕不出現）。
+
+**3. 捕蟲組合 top 6 → top 7** — `src/lib/game/effects.ts`：
+
+`reg('捕蟲組合', ...)` 裡 `p.deck.slice(0, 6)` → `p.deck.slice(0, 7)`；log 文字 6→7；`params.top6Iids` → `params.top7Iids`；resolver 同步改名。行為完全等同（都是 `filter: 'GrassBasicOrGrassEnergy', maxCount: 2`），只差看幾張。
+
+### 檔案變更
+
+- `src/lib/version.ts`: 2.53 → 2.54
+- `src/routes/game/+page.svelte`: 2 處（class 改名 + 新增 1 條 CSS）
+- `src/lib/game/effects.ts`: 
+  - 碧綠之舞 regA 重寫（source 定位 + 自動附能量 + draw 1，刪除 heal-target pending）
+  - 刪除 `regR('verdant-dance-attach')`（舊 resolver）
+  - 捕蟲組合 top6→top7 + params key rename
+
+### 設計討論
+
+**碧綠之舞 — 為何靠 abilityUsedThisTurn 而非 action.iid？**
+
+引擎的 regA fn signature 是 `(state, idx, pool) => GameState` — 沒有 source iid 參數。歷史原因：最早期的特性都是 player-level（如赤焰部隊｜升火），不需要定位 source。後來土龍節節｜逃跑抽出、願增猿｜腎上腺腦力等需要「對自己」時才用 abilityUsedThisTurn flag workaround（見 engine.ts USE_ABILITY handler line 998-1004：dispatch action 前先標 flag，再呼叫 abilityFn）。這不是最乾淨的 API 但已是既定模式，土龍節節跑得好，碧綠之舞沿用同樣 pattern。
+
+**為何戰鬥場去黃框、備戰保留？**
+
+Zone-label 差異：
+- 戰鬥場有獨立 zone-label「我方戰鬥場 / 對方戰鬥場」寫在卡上方，已明確標示是戰鬥位置。
+- 備戰 5 格共用「我方備戰區」一個 header，單格本身沒獨立 label，所以需要 per-slot 的視覺強調（黃框）來提示「這格能點」。
+
+保留 CSS rule `.active-card.energy-target`（沒 caller）可能看起來多餘，但留著可選（若將來又有其他地方想套）；也方便 grep。
+
+### 構建
+
+`npm run build` 通過（12.77s）。
+
+### 實機測試建議
+
+- 手上握草能量時點擊：戰鬥場不亮黃框 / 無 glow，只有 cursor pointer；備戰格仍亮黃框。
+- 碧綠之舞：出厄鬼椪 碧草面具ex + 手牌有基本草能量 + 回合內未用過特性時，點特性按鈕 → 應該立刻附到自己 + 抽 1，無選擇 UI 跳出。
+- 捕蟲組合：打出後 peek 7 張，選 0-2 張（草寶可夢 / 基本草能量），其餘重洗回牌庫。
+
+### Commit
+
+待填（此 entry 建立時尚未 commit）
 
 ---
 

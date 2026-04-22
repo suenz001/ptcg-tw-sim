@@ -9869,53 +9869,52 @@ reg('火箭隊的拉姆達', (st, idx) => {
 //   旗標、在 PLAY_TRAINER Supporter 路徑設旗標、END_TURN 清旗標。
 // 目前以 stadium「不觸發」通過：Leon 可手動放置／被動佔位（擠掉對方其他場地卡）。
 
-// ---- 碧草面具ex｜碧綠之舞（Ability）- 1/回合 附加基本草能量 -----------------
-// 卡面：1 次/回合，可從手牌將 1 張基本草能量附加到自己的【草】寶可夢身上。
+// ---- 碧草面具ex｜碧綠之舞（Ability）- 1/回合 附加基本草能量到自身 + 抽 1 ----
+// 卡面原文：「從自己的手牌選擇1張『基本【草】能量』卡，附於這隻寶可夢身上。
+//            然後，從自己的牌庫抽出1張卡。」
+// 關鍵字「這隻寶可夢」＝發動特性的厄鬼椪 碧草面具ex 自身（非任意【草】寶可夢）。
+// v2.53：先加 getUsableAbilities gate（手牌無基本草能量時不顯示特性按鈕）。
+// v2.54：修正效果 — 自動附加到觸發源（無選擇 UI），再抽 1 張。
+// 定位源：regA 沒有收到 action.iid；引擎於呼叫 abilityFn 前已將觸發對象的
+//   abilityUsedThisTurn 標成 true，所以掃 active + bench，找 name === 厄鬼椪 碧草面具ex
+//   且 abilityUsedThisTurn === true 的 instance（同 土龍節節 逃跑抽出 pattern）。
 regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool) => {
   const p = st.players[idx];
-  // 手牌至少有 1 張基本草能量
+  // 找觸發源（發動特性的寶可夢）
+  const allPokes: CardInstance[] = [
+    ...(p.active ? [p.active] : []),
+    ...p.bench,
+  ];
+  const src = allPokes.find(c => {
+    const card = pool.get(c.cardId);
+    return card?.name === '厄鬼椪 碧草面具ex' && c.abilityUsedThisTurn === true;
+  });
+  if (!src) return st;
+  // 手牌需有基本草能量
   const grassEnergyInst = p.hand.find(c => {
     const card = pool.get(c.cardId);
     if (card?.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
     return card.pokemonType === 'Grass' || card.name.includes('【草】');
   });
   if (!grassEnergyInst) return addLog(st, '碧綠之舞：手牌中沒有基本草能量', idx);
-  // 場上要有【草】寶可夢
-  const grassPokes = [...(p.active ? [p.active] : []), ...p.bench].filter(c => pool.get(c.cardId)?.pokemonType === 'Grass');
-  if (grassPokes.length === 0) return addLog(st, '碧綠之舞：場上沒有【草】寶可夢', idx);
-  st = addLog(st, '碧綠之舞：選一隻自己的【草】寶可夢附加 1 張基本草能量', idx);
-  return withPending(st, {
-    type: 'heal-target',  // 復用目標選擇 UI（自己寶可夢）
-    actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'verdant-dance-attach',
-    params: {
-      energyIid: grassEnergyInst.iid,
-      validIids: grassPokes.map(c => c.iid),
-      titleOverride: '碧綠之舞：選擇附加基本草能量的【草】寶可夢',
-    },
+  const eName = pool.get(grassEnergyInst.cardId)?.name ?? '基本草能量';
+  const sName = pool.get(src.cardId)?.name ?? '厄鬼椪 碧草面具ex';
+  // 步驟 1：把能量從手牌直接附到自己身上（無需選擇 UI）
+  st = addLog(st, `碧綠之舞：將 ${eName} 附加到 ${sName}`, idx);
+  st = updatePlayer(st, idx, pl => {
+    const newHand = pl.hand.filter(c => c.iid !== grassEnergyInst.iid);
+    const attach = (c: CardInstance): CardInstance =>
+      c.iid === src.iid ? { ...c, energyAttached: [...c.energyAttached, grassEnergyInst] } : c;
+    return {
+      ...pl,
+      hand: newHand,
+      active: pl.active ? attach(pl.active) : null,
+      bench: pl.bench.map(attach),
+    };
   });
-});
-regR('verdant-dance-attach', (st, idx, iids, params, pool) => {
-  const targetIid = iids[0];
-  const energyIid = params?.energyIid as string | undefined;
-  if (!targetIid || !energyIid) return st;
-  const p = st.players[idx];
-  const energyInst = p.hand.find(c => c.iid === energyIid);
-  if (!energyInst) return st;
-  const targetPoke = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
-  if (!targetPoke) return st;
-  const tName = pool.get(targetPoke.cardId)?.name ?? '?';
-  const eName = pool.get(energyInst.cardId)?.name ?? '?';
-  st = addLog(st, `碧綠之舞：將 ${eName} 附加到 ${tName}`, idx);
-  return updatePlayer(st, idx, pl => {
-    const newHand = pl.hand.filter(c => c.iid !== energyIid);
-    const attach = (c: CardInstance) => ({ ...c, energyAttached: [...c.energyAttached, energyInst] });
-    let active = pl.active;
-    if (active?.iid === targetIid) active = attach(active);
-    const bench = pl.bench.map(c => c.iid === targetIid ? attach(c) : c);
-    return { ...pl, hand: newHand, active, bench };
-  });
+  // 步驟 2：抽 1 張
+  st = addLog(st, '碧綠之舞：從牌庫抽 1 張', idx);
+  return drawCards(st, idx, 1);
 });
 
 // ---- 操陷蛛｜火箭猛攻 attack（30× 棄能） ----------------------------------
@@ -10005,25 +10004,27 @@ reg('太晶珠', (st, idx) => {
   });
 });
 
-// ---- 捕蟲組合（Item）- 查看牌庫頂 6，選最多 2 張草寶可夢/草能量加手牌 -------
+// ---- 捕蟲組合（Item）- 查看牌庫頂 7，選最多 2 張草寶可夢/草能量加手牌 -------
+// v2.54 修正：卡面明寫「上方 7 張」（原 v2.xx 實裝為 top 6 — 錯誤）。
+// 機制類似 米立龍｜集客：peek top N → pick up to 2（同屬類別）→ 剩下放回並重洗。
 regG('捕蟲組合', (st, idx) => st.players[idx].deck.length > 0);
 reg('捕蟲組合', (st, idx) => {
   const p = st.players[idx];
-  const top6 = p.deck.slice(0, 6);
-  if (top6.length === 0) return addLog(st, '捕蟲組合：牌庫為空', idx);
-  st = addLog(st, '捕蟲組合：查看牌庫頂 6 張，選最多 2 張基本草寶可夢或基本草能量加手牌', idx);
+  const top7 = p.deck.slice(0, 7);
+  if (top7.length === 0) return addLog(st, '捕蟲組合：牌庫為空', idx);
+  st = addLog(st, '捕蟲組合：查看牌庫頂 7 張，選最多 2 張基本草寶可夢或基本草能量加手牌', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'GrassBasicOrGrassEnergy',
     minCount: 0, maxCount: 2,
     effectKey: 'bug-catcher-set',
-    params: { top6Iids: top6.map(c => c.iid) },
+    params: { top7Iids: top7.map(c => c.iid) },
   });
 });
 regR('bug-catcher-set', (st, idx, iids, params, pool) => {
-  const top6Iids = new Set<string>((params?.top6Iids as string[]) ?? []);
-  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid) && top6Iids.has(c.iid));
+  const top7Iids = new Set<string>((params?.top7Iids as string[]) ?? []);
+  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid) && top7Iids.has(c.iid));
   const chosenIids = new Set(chosen.map(c => c.iid));
   if (chosen.length > 0) {
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');

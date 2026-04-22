@@ -2020,7 +2020,7 @@
           {@const ac=getCard(myPlayer.active.cardId)}
           {@const evoOpts=evoOptionsFor(myPlayer.active.iid)}
           <div class="active-card mine-active"
-            class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
+            class:energy-clickable={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
             class:drop-zone={isMyTurn() && ((dragging?.kind==='energy'||dragging?.kind==='tool') || (dragging?.kind==='evolve'&&evolveTargetsFor(dragging.iid).includes(myPlayer.active.iid)))}
             class:drop-hover={dropTargetIid===myPlayer.active.iid}
             class:energy-pulse={energyAttachPulse===myPlayer.active.iid}
@@ -3117,6 +3117,9 @@
   .active-card.opp-active{ border-color:#5a3a3a; background:rgba(0,0,0,.4); }
   .active-card.mine-active{ border-color:#3a6a3a; }
   .active-card.energy-target{ border-color:#aaff44; cursor:pointer; animation:glow 1s infinite alternate; }
+  /* v2.54: 我方戰鬥場在「選擇附加能量目標」時不再套黃框動畫（上方 zone-label 已標示為戰鬥場），
+     僅保留 pointer cursor 提示可點擊，避免與 pending-selection 黃框 UI 混淆。 */
+  .active-card.energy-clickable{ cursor:pointer; }
   /* active-empty: 讓空戰鬥場佔用與放置寶可夢後接近的空間，避免 setup 時 drop target 比實際位置小很多 */
   .active-card.active-empty{ justify-content:center; align-items:center; color:#888; font-size:.9rem; text-align:center; padding:1.4rem; border:2px dashed #444; background:rgba(0,0,0,.25); min-height:160px; font-weight:600; }
   .active-card.active-empty.drop-zone{ border-color:#88aaff; color:#cce; background:rgba(40,70,120,.3); border-width:3px; }
