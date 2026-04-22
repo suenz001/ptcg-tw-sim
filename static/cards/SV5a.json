@@ -1090,7 +1090,10 @@
     "pokedexNumber": 1009,
     "species": "悖謬寶可夢",
     "illustrator": "kawayoo",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10274",
@@ -1701,7 +1704,10 @@
       "Colorless"
     ],
     "illustrator": "akagi",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10288",
@@ -3106,7 +3112,10 @@
       "Colorless"
     ],
     "illustrator": "PLANETA Hiiragi",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10716",

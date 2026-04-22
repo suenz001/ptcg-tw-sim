@@ -1,9 +1,105 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session epic-zen-cerf (v2.66)  
-> 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
+> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.67)  
+> 執行者：Claude Opus 4.7 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session clever-optimistic-ritchie (v2.67) — 故勒頓｜原生亂打 未計入備戰古代寶可夢 + 補實裝「古代」tag
+
+### 問題
+Leon 回報：
+> 故勒頓的招式 原生亂打 造成自己的場上的「古代」寶可夢的數量×30 點傷害。沒有算到備戰寶可夢，
+> 我在備戰區放上猛雷鼓，系統沒有幫我增加傷害，這是錯的（猛雷鼓是古代 tag 的寶可夢，
+> 卡片右上角有「古代」兩個字）。
+
+### 根因
+1. effects.ts 從頭到尾就沒有註冊 `regPre('故勒頓|原生亂打', …)` 的 handler
+   — 招式走 default 路徑取 JSON 字面 `damage = "30×"` 的數字（可能被 engine 解析成 0 或 30）。
+2. 資料層完全沒有「古代」tag：`grep -r '古代' src/lib/cards/types.ts` 只看到 v2.48
+   導入的 `tags?: string[]` 為太晶預留，scraper 的 `TAG_KEYWORDS` 只有 `['太晶', '[太晶]']`。
+3. 單張卡片頁面 HTML（`/tw/card-search/detail/{id}/`）**完全不含**「古代」字樣 —
+   「古代」標籤只在卡面藝術上，HTML 不會 render。這點與太晶（attack-like skill block）
+   的檢測方式不同，要從 list filter 反推 ID 白名單。
+4. 同一坑 effects.ts:1460-1461 的「覺醒戰鼓」也留了 TODO 註解「我們資料沒古代標記，
+   改為抽與自己場上寶可夢總數相同張數」— 同時處理，避免之後再踩一次。
+
+### 主修法
+
+**重構 1 — scraper 加「古代」tag 檢測**
+
+新增 `scripts/scrape/ancient-tag.js`：
+- `collectAncientPokemonIds(delayMs)`：走訪 `list/?pokemonTag[0]=105`（官網「古代」
+  filter 的 value），分頁收集所有古代寶可夢的 detail id，回傳 `Set<string>`。
+- `addTag(card, tag)`：append 到 `card.tags[]`，不覆寫既有 tag（例：太晶）。
+
+修改 `scripts/scrape/scrape-set.js`：爬完一個 set 的 `results` 後呼叫
+`collectAncientPokemonIds()`，把命中白名單且為 Pokemon 的卡片統一補 `tags: ['古代']`。
+未來新 set 自動帶 tag。
+
+**重構 2 — 一次性 migration**
+
+新增 `scripts/migrate-ancient-tag.js`：
+- 掃 `static/cards/*.json`（29 個 set）
+- 對每張 Pokemon 檢查 id 是否在官網 Ancient 白名單內
+- 若是則 append `'古代'` 到 `tags[]`（冪等）
+
+跑完結果：
+```
+[1/3] Fetching ancient Pokemon IDs from pokemon-card.com...
+      Collected 116 ancient Pokemon IDs.
+[2/3] Loading static/cards/*.json...
+      Found 29 set files.
+  [MC.json]    tagged 16 ancient Pokemon
+  [SV5K.json]  tagged 18
+  [SV5a.json]  tagged 3
+  [SV6.json]   tagged 1
+  [SV6a.json]  tagged 1
+  [SV7.json]   tagged 1
+  [SV7a.json]  tagged 1
+  [SV8.json]   tagged 2
+  [SV8a.json]  tagged 26
+[3/3] Done. Tagged 69 Pokemon across 9 set files.
+```
+（差額 47 = 40 張屬於未爬取的 SVK/SV4K 老 set + 7 張 pokemonTag=105 篩選誤列的 Trainer，
+已跳過非 Pokemon 並印 warning）。
+
+**重構 3 — 引擎實裝**
+
+`src/lib/game/effects.ts`：
+1. 新 helper `countAncientOnField(state, idx, pool): number` — 數戰鬥場 + 備戰區
+   `card.tags?.includes('古代')` 的總數。
+2. 新 `regPre('故勒頓|原生亂打', …)` — damage = 30 × count，log 寫出張數。
+3. 覺醒戰鼓 從 TODO 註解簡化改用真 tag：`reg('覺醒戰鼓', (st, idx, pool) => { count = countAncientOnField(…) })`。
+
+`src/lib/cards/types.ts`：`tags?: string[]` 註解擴寫 '古代' 來源（說明 HTML 無
+字樣、靠 list filter 反推 ID 白名單）。
+
+### 驗證
+```bash
+python3 -c "... static/cards/SV5K.json ..." =>
+  9822 052/071 故勒頓     tags=['古代']
+  9823 053/071 猛雷鼓ex   tags=['古代']
+  10212 089/071 猛雷鼓ex  tags=['古代']
+  10218 095/071 猛雷鼓ex  tags=['古代']
+  15495 100/071 猛雷鼓ex  tags=['古代']
+
+npm run build  ✓  (13.44s, 無 TS error, 無 Svelte warning)
+```
+
+**實戰預期**：戰鬥場故勒頓 + 備戰 猛雷鼓 × 1 → 原生亂打 = 30 × 2 = **60** 傷害
+（v2.67 前只會被當成 0 或 30）。
+
+### 未盡事項
+- **古代支援者 tag**：雄偉牙｜地盤崩壞 effect 註解提到「古代支援者條件簡化略」
+  — 官網有 `trainersTag[]=105` 篩選，若要補可複用 `ancient-tag.js` pattern。
+  目前 AI_HANDOFF 記錄下來，日後若有牌組需要再補。
+- **未來 tag**（`pokemonTag[]=106`）：對稱處理可補 `collectFutureIds()` + 同 migration
+  flow，但目前沒有效果需要它（未來寶可夢沒有「×未來寶可夢數」的招式）。
+- **SVK / SV4K 沒爬**：v2.25 的 set 清單定死在 29 個，若將來補這兩個 set，
+  scrape-set.js 會自動帶 `tags:['古代']` — 不用再跑 migration。
 
 ---
 

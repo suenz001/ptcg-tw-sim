@@ -2500,7 +2500,10 @@
     "pokedexNumber": 987,
     "species": "悖謬寶可夢",
     "illustrator": "Ebila",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "11240",
@@ -2925,7 +2928,10 @@
     "pokedexNumber": 1007,
     "species": "悖謬寶可夢",
     "illustrator": "Ryuta Fuse",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "11250",

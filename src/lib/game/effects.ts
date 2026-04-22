@@ -86,6 +86,27 @@ export function isBenchProtected(state: GameState, pool: Map<string, Card>): boo
 }
 
 /**
+ * v2.67：計算玩家場上「古代」tag 寶可夢數量（戰鬥場 + 備戰區）。
+ * - 依據 card.tags?.includes('古代')（由 scraper + migration 補到 static/cards）
+ * - 用於 故勒頓｜原生亂打、覺醒戰鼓…等以古代寶可夢為數量倍率的效果
+ * - v2.48 的太晶 tag 屬同類機制；此 helper 可視為同一 pattern 的延伸
+ */
+export function countAncientOnField(
+  state: GameState,
+  idx: 0 | 1,
+  pool: Map<string, Card>,
+): number {
+  const p = state.players[idx];
+  const instances = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
+  let count = 0;
+  for (const inst of instances) {
+    const card = pool.get(inst.cardId);
+    if (card?.tags?.includes('古代')) count++;
+  }
+  return count;
+}
+
+/**
  * v2.46：招式/特性的傷害判定分類
  * - attack-damage：招式的【傷害】（例：殘酷箭、狙擊羽毛、暗影子彈的 30 點、電磁電光）
  *     → 不被對戰圓形擋；會被謝米「花之帷幔」擋（只擋備戰且非規則寶可夢）
@@ -1457,12 +1478,14 @@ reg('高級香氛', (st, idx) => {
   });
 });
 
-// 覺醒戰鼓 — 抽與場上「古代」寶可夢相同數量的卡
-// 簡化：我們資料沒「古代」標記，改為抽與自己場上寶可夢總數相同張數
-reg('覺醒戰鼓', (st, idx) => {
-  const p = st.players[idx];
-  const count = (p.active ? 1 : 0) + p.bench.length;
-  st = addLog(st, `覺醒戰鼓：抽 ${count} 張（簡化為場上寶可夢數）`, idx);
+// 覺醒戰鼓 — 抽與自己場上「古代」寶可夢相同數量的卡
+// v2.67：改用真正的 card.tags 查詢（v2.48 太晶 tag 同 pattern）。
+reg('覺醒戰鼓', (st, idx, pool) => {
+  const count = countAncientOnField(st, idx, pool);
+  if (count === 0) {
+    return addLog(st, '覺醒戰鼓：場上無「古代」寶可夢，抽 0 張', idx);
+  }
+  st = addLog(st, `覺醒戰鼓：場上 ${count} 隻「古代」寶可夢 → 抽 ${count} 張`, idx);
   return updatePlayer(st, idx, pl => {
     const taken = pl.deck.slice(0, count);
     return { ...pl, deck: pl.deck.slice(count), hand: [...pl.hand, ...taken] };
@@ -3271,6 +3294,20 @@ regPost('熔岩蟲|熾熱熔岩', statusPost('burned'));
 // 故勒頓|撕裂 — 130（不計算對手戰鬥寶可夢身上的附加效果，Session 33 正式實作）
 regPre('故勒頓|撕裂', (state, _aIdx, _pool) => {
   return { state, damage: 130, skipDefEffects: true };
+});
+
+// 故勒頓|原生亂打 — 30×自己場上「古代」寶可夢數量
+// v2.67：實裝（Leon 回報備戰的猛雷鼓沒被計入）。依據 card.tags.includes('古代')
+// 計算戰鬥 + 備戰區的古代寶可夢總數。
+regPre('故勒頓|原生亂打', (state, aIdx, pool) => {
+  const count = countAncientOnField(state, aIdx, pool);
+  const damage = 30 * count;
+  const s = addLog(
+    state,
+    `原生亂打：場上 ${count} 隻「古代」寶可夢 → ${damage} 傷害`,
+    aIdx,
+  );
+  return { state: s, damage };
 });
 
 // 夠讚狗ex|瘋狂連鎖 — 130 + 若自身中毒則 +130

@@ -3157,7 +3157,10 @@
     "pokedexNumber": 1021,
     "species": "悖謬寶可夢",
     "illustrator": "kodama",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10971",

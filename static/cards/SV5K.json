@@ -154,7 +154,10 @@
     "scrapedAt": "2026-04-16T07:50:29.258Z",
     "rulesText": "附有這張卡的「古代」寶可夢的最大HP「+60」，那隻寶可夢不會陷入特殊狀態，並將受到的特殊狀態全部恢復。",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "9765",
@@ -746,7 +749,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "9783",
@@ -1233,7 +1239,10 @@
       "Colorless"
     ],
     "illustrator": "takuyoa",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "9795",
@@ -1630,7 +1639,10 @@
     "pokedexNumber": 987,
     "species": "悖謬寶可夢",
     "illustrator": "kodama",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "9804",
@@ -2050,7 +2062,10 @@
     "pokedexNumber": 984,
     "species": "悖謬寶可夢",
     "illustrator": "GIDORA",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "9813",
@@ -2431,7 +2446,10 @@
     "pokedexNumber": 1005,
     "species": "悖謬寶可夢",
     "illustrator": "hncl",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "9822",
@@ -2473,7 +2491,10 @@
     "pokedexNumber": 1007,
     "species": "悖謬寶可夢",
     "illustrator": "Teeziro",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "9823",
@@ -2512,7 +2533,10 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "9824",
@@ -2938,7 +2962,10 @@
     "pokedexNumber": 987,
     "species": "悖謬寶可夢",
     "illustrator": "Takumi Wada",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10200",
@@ -3338,7 +3365,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10209",
@@ -3379,7 +3409,10 @@
       "Colorless"
     ],
     "illustrator": "takuyoa",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10210",
@@ -3505,7 +3538,10 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10213",
@@ -3591,7 +3627,10 @@
       "Colorless"
     ],
     "illustrator": "Teeziro",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10217",
@@ -3632,7 +3671,10 @@
       "Colorless"
     ],
     "illustrator": "Teeziro",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10218",
@@ -3671,7 +3713,10 @@
       "Colorless"
     ],
     "illustrator": "Teeziro",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10219",
@@ -3743,7 +3788,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "15494",
@@ -3784,7 +3832,10 @@
       "Colorless"
     ],
     "illustrator": "takuyoa",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "15495",
@@ -3823,6 +3874,9 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   }
 ]

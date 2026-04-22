@@ -41,10 +41,14 @@ export interface Card {
   abilities?: Ability[];
   attacks?: Attack[];
   /**
-   * v2.48：寶可夢的特徵標籤。目前只會有 '太晶'。
-   * 太晶寶可夢在備戰區不會受到【招式】的【傷害】；招式內的「指示物放置」效果
-   * （例：多龍巴魯托ex｜幻影奇襲 的 6 個 counter）不受太晶保護。
-   * scraper 從 pokemon-card.com 的 .skillInformation .skill 區塊裡的 tag 標誌抓進來。
+   * 寶可夢的特徵標籤。
+   * - '太晶' (v2.48)：太晶寶可夢在備戰區不會受到【招式】的【傷害】；招式內的
+   *   「指示物放置」效果（例：多龍巴魯托ex｜幻影奇襲 的 6 個 counter）不受太晶保護。
+   *   來源：scraper 從 .skillInformation .skill 區塊的 tag 白名單抓進來。
+   * - '古代' (v2.67)：古代寶可夢用於 故勒頓｜原生亂打、覺醒戰鼓 等倍率招式。
+   *   來源：pokemon-card.com 單張卡片頁面的 HTML 不含「古代」字樣，必須透過
+   *   list search 的 pokemonTag[]=105 篩選結果回填；scrape-set.js 在爬完後
+   *   自動呼叫 collectAncientPokemonIds() 對本批次 ID 做白名單比對。
    */
   tags?: string[];
   rulesText?: string;

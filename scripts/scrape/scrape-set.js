@@ -19,6 +19,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCard } from './parse-card.js';
+import { collectAncientPokemonIds, addTag } from './ancient-tag.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -151,7 +152,25 @@ async function main() {
     }
   }
 
-  console.error(`[3/3] Writing ${results.length} cards to ${outPath}`);
+  // 古代 tag 無法從單張卡片頁面解析（HTML 不含「古代」字樣），要透過
+  // pokemonTag[]=105 的 list filter 得到 ID 白名單才能回填。
+  console.error('[3/3] Applying 古代 tags (pokemonTag=105 filter)...');
+  try {
+    const ancientIds = await collectAncientPokemonIds(args.delayMs);
+    let tagged = 0;
+    for (const card of results) {
+      if (card.supertype === 'Pokemon' && ancientIds.has(String(card.id))) {
+        const before = card.tags?.length || 0;
+        addTag(card, '古代');
+        if ((card.tags?.length || 0) > before) tagged++;
+      }
+    }
+    console.error(`      Tagged ${tagged} Pokemon with 古代 in this set.`);
+  } catch (e) {
+    console.error(`      WARNING: failed to fetch ancient tag list: ${e.message}`);
+  }
+
+  console.error(`Writing ${results.length} cards to ${outPath}`);
   results.sort((a, b) => parseInt(a.id) - parseInt(b.id));
   await writeAtomic(outPath, JSON.stringify(results, null, 2));
   console.error(`Done. ${ok} ok, ${fail} failed.`);
