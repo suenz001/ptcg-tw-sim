@@ -94,6 +94,25 @@ export function canPlayTrainer(
 // 純函式工具
 // ══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * v2.35：進化 name 同名判定（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）。
+ *
+ * 例：`伊布` / `伊布ex` 都是 Basic，兩個都可進化為 `火伊布ex`。
+ * 卡池裡 `evolvesFrom='伊布'` 的 `火伊布ex`，場上若擺 `伊布ex` 也應能當底。
+ *
+ * 因此所有 `evolvesFrom` vs `name` 的字串比對都要走這個 helper，
+ * 忽略兩邊尾端的 `ex` 後綴後比對。
+ *
+ * 注意：這不是「容錯」而是「正確的進化規則」。scraper 資料若爬錯仍要修；
+ * helper 只處理真正的 ex/非 ex 互通情境。
+ */
+export function sameEvoName(a: string | undefined, b: string | undefined): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const stripEx = (s: string) => (s.endsWith('ex') ? s.slice(0, -2) : s);
+  return stripEx(a) === stripEx(b);
+}
+
 export function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {

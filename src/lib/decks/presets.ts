@@ -267,11 +267,100 @@ const MARNIE_SCRAFTY_DECK: Omit<Deck, 'updatedAt'> = {
 };
 
 /**
+ * 火箭隊的超夢ex 牌組（v2.35 — Leon 自選卡表）
+ *
+ * SV10「火箭隊」系列 meta deck，軸心：
+ *   - 火箭隊的團珠蛛（Basic）→ 火箭隊的操陷蛛（Stage1）打能量加速／抽牌
+ *   - 火箭隊的超夢ex 主打 ace，由團珠蛛／操陷蛛鋪出的能量組打高傷
+ *   - 火箭隊的急凍鳥 作為副 ace（免能量偷勝／水牆）
+ *   - 莉莉艾的皮皮ex 做備戰 bench tutor／補資源
+ *   - 火箭隊的謎擬Ｑ 作為專門對策或撥亂反正
+ * 支援者：火箭隊團伙（雅典娜／蘭斯／坂木／阿波羅／拉姆達）抽牌＆場控迴轉
+ * 場地：火箭隊的工廠（SV10，壓制對手補資源）
+ * ACE SPEC：極限腰帶（ex 多 +50 傷害）
+ */
+const ROCKET_MEWTWO_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_rocket_mewtwo__',
+  name: '火箭隊的超夢ex',
+  entries: [
+    // ── 寶可夢（15 張）──
+    { cardId: '16761', count: 2 }, // <火箭隊的>超夢ex (MC)
+    { cardId: '14675', count: 4 }, // <火箭隊的>團珠蛛 (M2a)
+    { cardId: '14676', count: 4 }, // <火箭隊的>操陷蛛 (M2a)
+    { cardId: '16812', count: 2 }, // <火箭隊的>謎擬Ｑ (MC)
+    { cardId: '14694', count: 2 }, // <火箭隊的>急凍鳥 (M2a)
+    { cardId: '16758', count: 1 }, // <莉莉艾的>皮皮ex (MC)
+    // ── 訓練家・物品（15 張）──
+    { cardId: '17122', count: 4 }, // 高級球 (MC)
+    { cardId: '17146', count: 4 }, // 火箭隊的接收器 (MC)
+    { cardId: '17138', count: 3 }, // 捕蟲組合 (MC)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC)
+    { cardId: '17133', count: 1 }, // 寶可平板 (MC)
+    { cardId: '17109', count: 1 }, // 能量轉移 (MC)
+    // ── 寶可夢道具（2 張）──
+    { cardId: '11029', count: 1 }, // 勇氣護符 (SV7)
+    { cardId: '17162', count: 1 }, // 極限腰帶 ACE SPEC (MC)
+    // ── 訓練家・支援者（14 張）──
+    { cardId: '17202', count: 2 }, // 火箭隊的雅典娜 (MC)
+    { cardId: '17206', count: 3 }, // 火箭隊的蘭斯 (MC)
+    { cardId: '17204', count: 3 }, // 火箭隊的坂木 (MC)
+    { cardId: '17203', count: 2 }, // 火箭隊的阿波羅 (MC)
+    { cardId: '17205', count: 1 }, // 火箭隊的拉姆達 (MC)
+    { cardId: '17200', count: 3 }, // 莉莉艾的決意 (MC)
+    // ── 競技場（3 張）──
+    { cardId: '12847', count: 3 }, // 火箭隊的工廠 (SV10)
+    // ── 能量（11 張）──
+    { cardId: '17217', count: 7 }, // 基本【草】能量 (MC)
+    { cardId: '17213', count: 4 }, // 火箭隊能量 (MC)
+  ],
+};
+
+/**
+ * 猛雷鼓ex 牌組（v2.35 — Leon 自選卡表）
+ *
+ * SV5K「豪華浪漫的猛雷鼓ex」系列，軸心：
+ *   - 猛雷鼓ex（Basic・3 屬能量「豐盈節奏」，棄基本草／雷／鬥能量一張造傷）
+ *   - 厄鬼椪 碧草面具ex（Basic・草・特性「活力果實」：附能量時每回合只 1 次，
+ *     自己一隻寶可夢回復 30 HP）作副軸穩盤
+ *   - 吉雉雞ex「扭轉乾坤」自場寶可夢昏厥後抽 3 張
+ *   - 故勒頓（Basic・鬥）太晶／打點補強
+ * ACE SPEC：不公印章（MC）
+ * 引擎：赤松 + 莉莉艾的決意 雙支援者循環；寶可裝置3.0 抽牌；寶可夢捕捉器 switch。
+ */
+const THUNDER_DRUM_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_thunder_drum__',
+  name: '猛雷鼓ex',
+  entries: [
+    // ── 寶可夢（10 張）──
+    { cardId: '17025', count: 4 }, // 猛雷鼓ex (MC)
+    { cardId: '16553', count: 4 }, // 厄鬼椪 碧草面具ex (MC)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC)
+    { cardId: '17021', count: 1 }, // 故勒頓 (MC)
+    // ── 訓練家・物品（20 張）──
+    { cardId: '17122', count: 4 }, // 高級球 (MC)
+    { cardId: '14812', count: 2 }, // 太晶珠 (M2a)
+    { cardId: '17107', count: 2 }, // 能量回收 (MC)
+    { cardId: '17131', count: 3 }, // 寶可裝置3.0 (MC)
+    { cardId: '17138', count: 4 }, // 捕蟲組合 (MC)
+    { cardId: '17136', count: 4 }, // 寶可夢捕捉器 (MC)
+    { cardId: '17104', count: 1 }, // 不公印章 ACE SPEC (MC)
+    // ── 訓練家・支援者（8 張）──
+    { cardId: '17167', count: 4 }, // 赤松 (MC)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC)
+    // ── 能量（22 張）──
+    { cardId: '17217', count: 12 }, // 基本【草】能量 (MC)
+    { cardId: '17218', count: 5 },  // 基本【雷】能量 (MC)
+    { cardId: '17215', count: 5 },  // 基本【鬥】能量 (MC)
+  ],
+};
+
+/**
  * 所有內建預設牌組
  *
  * v2.13：移除「破空焰ex（火屬 · 自組）」—— 那是 Session 24 自組的嘗試用牌組，
  * 既非官方預組也沒跟上 MC 後的卡片規則，Leon 決定不再內建。
  * v2.21：新增「胡地」與「瑪俐的長毛巨魔ex」，並爬入 SVOM / SVOD 兩個初階牌組系列。
+ * v2.35：新增「火箭隊的超夢ex」與「猛雷鼓ex」兩組 Leon 自選卡表。
  */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
@@ -280,6 +369,8 @@ export const PRESET_DECKS: Deck[] = [
   { ...MARRUNE_DRAGAPULT_DECK, updatedAt: 0 },
   { ...ALAKAZAM_DECK, updatedAt: 0 },
   { ...MARNIE_SCRAFTY_DECK, updatedAt: 0 },
+  { ...ROCKET_MEWTWO_DECK, updatedAt: 0 },
+  { ...THUNDER_DRUM_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */

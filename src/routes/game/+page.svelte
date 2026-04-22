@@ -694,6 +694,25 @@
             const isRule = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX');
             return !isRule;
           }
+          // v2.35：火箭隊新增 filter
+          if (f === 'RocketSupporter') {
+            return card.supertype === 'Trainer' && card.subtype === 'Supporter' && card.name.includes('火箭隊');
+          }
+          if (f === 'RocketBasic') {
+            return card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.name.includes('火箭隊的');
+          }
+          if (f === 'AnyTrainer') {
+            return card.supertype === 'Trainer';
+          }
+          if (f === 'GrassBasicOrGrassEnergy') {
+            // 捕蟲組合：基本【草】寶可夢 or 基本【草】能量
+            if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
+            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+              if (card.pokemonType === 'Grass') return true;
+              if (card.name.includes('【草】')) return true;
+            }
+            return false;
+          }
           if (f.startsWith('Pokemon:')) {
             // 指定屬性的寶可夢，例 'Pokemon:Lightning'
             const t = f.slice(8);

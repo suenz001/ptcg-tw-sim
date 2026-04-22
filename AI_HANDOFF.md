@@ -1,9 +1,121 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session c0f2++++++++ (v2.34)  
+> 最後更新：2026-04-22 Session d1a3 (v2.35)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session d1a3 (v2.35) — 新增兩套預組「火箭隊的超夢ex」「猛雷鼓ex」 + 批量實裝新卡
+
+### 任務概述
+
+Leon 拿到 M2a（火箭隊） + SV9 系列的新牌組卡表，要求加入兩個新預組並把新卡的
+effect 都實裝起來：
+
+1. **火箭隊的超夢ex 組**（M2a）：以超夢ex｜擦除球為中心，搭配火箭隊支援者群
+   與火箭隊特殊能量。
+2. **猛雷鼓ex 組**（SV9）：以各種道具 / 碧草面具ex｜碧綠之舞 特性為主軸。
+
+### 主要修改
+
+**A. 新增兩個 preset**（`src/lib/decks/presets.ts`，前一 session 完成）
+
+`ROCKET_MEWTWO_DECK` 與 `THUNDER_DRUM_DECK`，各 60 張。`PRESET_DECKS` 擴充到 8
+組。每組卡表按 Leon 提供的清單照抄。
+
+**B. 新增 4 個 UI filter**（`+page.svelte` + `ai.ts` 兩處同步）
+
+- `RocketSupporter`: 訓練家 + Supporter + 名稱含「火箭隊」 → 火箭隊的接收器用
+- `RocketBasic`: 基礎寶可夢 + 名稱含「火箭隊的」 → 火箭隊的蘭斯用
+- `AnyTrainer`: 所有訓練家卡 → 火箭隊的拉姆達用（跟既有 'Trainer' 等價，純命名）
+- `GrassBasicOrGrassEnergy`: 基礎【草】寶可夢 或 基本【草】能量 → 捕蟲組合用
+
+**C. 新增特殊能量**（`engine.ts`）
+
+`SPECIAL_ENERGY_TYPES` map 加入：
+
+```ts
+// 火箭隊能量 — 只可附於「火箭隊的寶可夢」身上，視為 2 個【超】與【惡】。
+'火箭隊能量': ['Psychic', 'Darkness'],
+```
+
+**D. 新增 SPECIAL_ENERGY_ATTACH hook**（`effects.ts` v2.35 區塊）
+
+火箭隊能量附加 gate：若 target 名稱不含「火箭隊的」→ 把剛附加的火箭隊能量從
+target 移到棄牌區（跟硬岩【鬥】能量 / 感應【超】能量同機制）。
+
+**E. 新增訓練家 / Supporter**（v2.35 區塊）
+
+- **火箭隊的接收器**（Item）：搜 1 張「火箭隊」Supporter 加手牌
+- **火箭隊的雅典娜**（Supporter）：抽到手牌 5 張（若全場都是火箭隊寶可夢抽到 8 張）
+- **火箭隊的蘭斯**（Supporter）：搜最多 3 張基礎「火箭隊」寶可夢加手牌
+- **火箭隊的坂木**（Supporter）：自己先換戰鬥 + 對方被迫換戰鬥（兩段 pending）
+- **火箭隊的阿波羅**（Supporter）：雙方手牌洗回牌庫，自己抽 5 / 對手抽 3
+  （「上一回合被取獎賞」的 gate 暫簡化為永遠可用；未來可加 `prizesTakenLastTurn` 旗標）
+- **火箭隊的拉姆達**（Supporter）：搜 1 張任意訓練家卡加手牌（v1.97 已有舊實作，
+  v2.35 新增覆寫版改用 `AnyTrainer` filter。兩次 `reg()` 後者勝出）
+- **火箭隊的工廠**（Stadium）：**known gap stub**。卡面「使出火箭隊 Supporter
+  後可從牌庫抽 2 張」需要 `rocketSupporterPlayedThisTurn` 旗標，engine USE_STADIUM
+  要加分支，下次實裝。
+
+**F. 新增招式 effect**（v2.35 區塊）
+
+- **火箭隊的超夢ex｜擦除球**：`ATTACK_PRE_DISCARD_CHOICE` scope='self' min/max=2，
+  基礎傷害 160（+ 2 能量丟棄 cost 觸發）
+- **火箭隊的急凍鳥｜暗黑冰霜**：60 + 對手戰鬥寶可夢身上有特殊能量時 +30
+- **火箭隊的操陷蛛｜火箭猛攻**：透過 `registerFieldDiscardMultiply` — 基本能量
+  每丟 1 張 +30，額外加基礎 20
+- **厄鬼椪 碧草面具ex｜碧綠之舞**（特性，1/回合）：從手牌附加 1 張基本草能量
+  到自己的【草】寶可夢，用 `heal-target` pending + 自訂 resolver `verdant-dance-attach`
+
+**G. 新增 Item / Tool**（v2.35 區塊）
+
+- **能量回收**（Item）：擲幣，正面從棄牌選最多 4 張基本能量，反面最多 2 張，
+  重用既有 `discard-to-hand` resolver
+- **太晶珠**（Tool）：太晶寶可夢（有「太晶」招式或描述）HP +30，透過
+  `TOOL_HP_BONUS.set('太晶珠', ...)` 註冊（跟勇氣護符 / 英雄斗篷同機制）
+- **捕蟲組合**（Item）：查看牌庫頂 6 張，選最多 2 張「基礎【草】寶可夢 或 基本
+  【草】能量」加手牌，其餘洗回牌庫。新 resolver `bug-catcher-set`
+- **能量轉移**（Item）：兩段 pipeline — `energy-switch-src`（選源寶可夢的 1 顆
+  基本能量）→ `energy-switch-dst`（選目的寶可夢）
+- **寶可裝置3.0**（Item）：**known gap stub**（未註冊 → engine 顯示「效果尚未
+  實裝」）
+
+**H. known gap 特性 regA stubs**（只寫 log 不觸發真實效果）
+
+- 充能
+- 抵抗之幕
+- 妖精領域
+- 力量抑制者
+
+這些特性卡面效果複雜（持續性免疫 / 狀態阻擋），需要引擎層旗標機制或招式路徑 hook，
+v2.35 先以 stub 註冊避免「效果尚未實裝」的負面體驗。**下次補實裝**。
+
+### 其他小修
+
+- `src/lib/game/effects/cards/tools.ts`: `EffectFn` 型別改為 `import type` 分離，
+  消除 vite 的 "EffectFn is not exported" warning（TypeScript 傾向把純 type
+  imports 分離，否則 bundler 警告）
+
+### build 驗證
+
+本機 `npm run build` 通過（206 modules，bundle 大小跟 v2.34 接近）。
+
+### 已知 gap（留給下次）
+
+- 火箭隊的工廠 Stadium 被動抽牌
+- 寶可裝置3.0 Tool
+- 充能 / 抵抗之幕 / 妖精領域 / 力量抑制者 4 個特性完整實裝
+- 阿波羅「上一回合被取獎賞」gate（現在永遠可用）
+- v2.35 Task #172：engine sameEvoName helper 加上 scan 其他 evolution 反向 bug
+  （前一 session `scripts/fix-evolution-data.mjs` 已跑過一輪，還有 219 個 suspect
+  待人工確認；不阻塞本版 release）
+
+### commit hash
+
+（將於 commit 後回填）
 
 ---
 

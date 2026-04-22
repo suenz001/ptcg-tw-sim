@@ -221,6 +221,24 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const isRule = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX');
           return !isRule;
         }
+        // v2.35：火箭隊新增 filter
+        if (f === 'RocketSupporter') {
+          return card.supertype === 'Trainer' && card.subtype === 'Supporter' && card.name.includes('火箭隊');
+        }
+        if (f === 'RocketBasic') {
+          return card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.name.includes('火箭隊的');
+        }
+        if (f === 'AnyTrainer') {
+          return card.supertype === 'Trainer';
+        }
+        if (f === 'GrassBasicOrGrassEnergy') {
+          if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
+          if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+            if (card.pokemonType === 'Grass') return true;
+            if (card.name.includes('【草】')) return true;
+          }
+          return false;
+        }
         return true;
       });
       // 優先選 HP 高的寶可夢

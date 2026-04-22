@@ -252,7 +252,7 @@
     ],
     "pokedexNumber": 470,
     "species": "新綠寶可夢",
-    "evolvesFrom": "火伊布GX",
+    "evolvesFrom": "伊布",
     "illustrator": "Kuroimori",
     "regulationMark": "H"
   },
@@ -884,7 +884,7 @@
     ],
     "pokedexNumber": 471,
     "species": "新雪寶可夢",
-    "evolvesFrom": "仙子伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "rika",
     "regulationMark": "H"
   },
@@ -2078,7 +2078,7 @@
     ],
     "pokedexNumber": 1011,
     "species": "糖蘋果寶可夢",
-    "evolvesFrom": "豐蜜龍",
+    "evolvesFrom": "啃果蟲",
     "illustrator": "OKACHEKE",
     "regulationMark": "H"
   },

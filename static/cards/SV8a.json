@@ -68,7 +68,7 @@
     ],
     "pokedexNumber": 470,
     "species": "新綠寶可夢",
-    "evolvesFrom": "火伊布GX",
+    "evolvesFrom": "伊布",
     "illustrator": "Iori Suzuki",
     "regulationMark": "H"
   },
@@ -119,7 +119,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "仙子伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "5ban Graphics",
     "regulationMark": "H"
   },
@@ -359,7 +359,7 @@
     ],
     "pokedexNumber": 1011,
     "species": "糖蘋果寶可夢",
-    "evolvesFrom": "豐蜜龍",
+    "evolvesFrom": "啃果蟲",
     "illustrator": "Saboteri",
     "regulationMark": "H"
   },
@@ -865,7 +865,7 @@
     ],
     "pokedexNumber": 136,
     "species": "火寶可夢",
-    "evolvesFrom": "水伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "SIE NANAHARA",
     "regulationMark": "H"
   },
@@ -916,7 +916,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "葉伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "5ban Graphics",
     "regulationMark": "H"
   },
@@ -1321,7 +1321,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "火伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "5ban Graphics",
     "regulationMark": "H"
   },
@@ -1681,7 +1681,7 @@
     ],
     "pokedexNumber": 471,
     "species": "新雪寶可夢",
-    "evolvesFrom": "仙子伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "Keisin",
     "regulationMark": "H"
   },
@@ -1731,7 +1731,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "水伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "aky CG Works",
     "regulationMark": "H"
   },
@@ -2154,7 +2154,7 @@
     },
     "pokedexNumber": 135,
     "species": "雷寶可夢",
-    "evolvesFrom": "火伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "Nisota Niso",
     "regulationMark": "H"
   },
@@ -2201,7 +2201,7 @@
       "type": "Fighting",
       "value": "×2"
     },
-    "evolvesFrom": "冰伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "5ban Graphics",
     "regulationMark": "H"
   },
@@ -2641,7 +2641,7 @@
     ],
     "pokedexNumber": 196,
     "species": "太陽寶可夢",
-    "evolvesFrom": "月亮伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "Kariya",
     "regulationMark": "H"
   },
@@ -2696,7 +2696,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "雷伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "5ban Graphics",
     "regulationMark": "H"
   },
@@ -2927,7 +2927,7 @@
     ],
     "pokedexNumber": 700,
     "species": "連結寶可夢",
-    "evolvesFrom": "葉伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "Susumu Maeya",
     "regulationMark": "H"
   },
@@ -2979,7 +2979,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "太陽伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "5ban Graphics",
     "regulationMark": "H"
   },
@@ -3030,7 +3030,7 @@
     ],
     "pokedexNumber": 937,
     "species": "火劍士寶可夢",
-    "evolvesFrom": "紅蓮鎧騎",
+    "evolvesFrom": "炭小侍",
     "illustrator": "Ryota Murayama",
     "regulationMark": "H"
   },
@@ -3982,7 +3982,7 @@
     ],
     "pokedexNumber": 197,
     "species": "月光寶可夢",
-    "evolvesFrom": "冰伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "matazo",
     "regulationMark": "H"
   },
@@ -4034,7 +4034,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "太陽伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "takuyoa",
     "regulationMark": "H"
   },
@@ -6882,7 +6882,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "仙子伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "Jiro Sasumo",
     "regulationMark": "H"
   },
@@ -6980,7 +6980,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "葉伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "Nurikabe",
     "regulationMark": "H"
   },
@@ -7030,7 +7030,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "紅蓮鎧騎ex",
+    "evolvesFrom": "炭小侍",
     "illustrator": "akagi",
     "regulationMark": "H"
   },
@@ -7131,7 +7131,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "火伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "Narano",
     "regulationMark": "H"
   },
@@ -7181,7 +7181,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "水伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "Kamome Shirahama",
     "regulationMark": "H"
   },
@@ -7317,7 +7317,7 @@
       "type": "Fighting",
       "value": "×2"
     },
-    "evolvesFrom": "冰伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "kantaro",
     "regulationMark": "H"
   },
@@ -7420,7 +7420,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "雷伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "sui",
     "regulationMark": "H"
   },
@@ -7472,7 +7472,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "太陽伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "Cona Nitanda",
     "regulationMark": "H"
   },
@@ -7701,7 +7701,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "太陽伊布ex",
+    "evolvesFrom": "伊布",
     "illustrator": "YASHIRO Nanaco",
     "regulationMark": "H"
   },
@@ -8485,7 +8485,7 @@
     ],
     "pokedexNumber": 470,
     "species": "新綠寶可夢",
-    "evolvesFrom": "火伊布GX",
+    "evolvesFrom": "伊布",
     "illustrator": "Iori Suzuki",
     "regulationMark": "H"
   },
@@ -8725,7 +8725,7 @@
     ],
     "pokedexNumber": 1011,
     "species": "糖蘋果寶可夢",
-    "evolvesFrom": "豐蜜龍",
+    "evolvesFrom": "啃果蟲",
     "illustrator": "Saboteri",
     "regulationMark": "H"
   },
@@ -9059,7 +9059,7 @@
     ],
     "pokedexNumber": 136,
     "species": "火寶可夢",
-    "evolvesFrom": "水伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "SIE NANAHARA",
     "regulationMark": "H"
   },
@@ -9634,7 +9634,7 @@
     ],
     "pokedexNumber": 471,
     "species": "新雪寶可夢",
-    "evolvesFrom": "仙子伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "Keisin",
     "regulationMark": "H"
   },
@@ -9927,7 +9927,7 @@
     },
     "pokedexNumber": 135,
     "species": "雷寶可夢",
-    "evolvesFrom": "火伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "Nisota Niso",
     "regulationMark": "H"
   },
@@ -10275,7 +10275,7 @@
     ],
     "pokedexNumber": 196,
     "species": "太陽寶可夢",
-    "evolvesFrom": "月亮伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "Kariya",
     "regulationMark": "H"
   },
@@ -10506,7 +10506,7 @@
     ],
     "pokedexNumber": 700,
     "species": "連結寶可夢",
-    "evolvesFrom": "葉伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "Susumu Maeya",
     "regulationMark": "H"
   },
@@ -10557,7 +10557,7 @@
     ],
     "pokedexNumber": 937,
     "species": "火劍士寶可夢",
-    "evolvesFrom": "紅蓮鎧騎",
+    "evolvesFrom": "炭小侍",
     "illustrator": "Ryota Murayama",
     "regulationMark": "H"
   },
@@ -11326,7 +11326,7 @@
     ],
     "pokedexNumber": 197,
     "species": "月光寶可夢",
-    "evolvesFrom": "冰伊布",
+    "evolvesFrom": "伊布",
     "illustrator": "matazo",
     "regulationMark": "H"
   },

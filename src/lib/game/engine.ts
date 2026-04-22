@@ -142,6 +142,11 @@ function isBasicPokemon(cardId: string, pool: Map<string, Card>): boolean {
   return isBasicPokemonCard(pool.get(cardId));
 }
 
+// v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
+// helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
+import { sameEvoName } from './effects/_shared';
+export { sameEvoName };
+
 /**
  * 判斷一張寶可夢卡是否為「2 階進化」。
  * 同樣不能只看 subtype === 'Stage2'（Stage2 ex 的 subtype 是 'ex'）。
@@ -150,7 +155,7 @@ function isBasicPokemon(cardId: string, pool: Map<string, Card>): boolean {
 export function isStage2PokemonCard(card: Card | undefined, pool: Map<string, Card>): boolean {
   if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
   for (const c of pool.values()) {
-    if (c.name === card.evolvesFrom && c.supertype === 'Pokemon' && c.evolvesFrom) return true;
+    if (sameEvoName(c.name, card.evolvesFrom) && c.supertype === 'Pokemon' && c.evolvesFrom) return true;
   }
   return false;
 }
@@ -208,6 +213,9 @@ const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   '硬岩【鬥】能量': ['Fighting'],
   '富裕能量': ['Colorless'],     // ACE SPEC — 視為 1【無】能量（附加時抽 4 走 effects）
   '感應【超】能量': ['Psychic'], // 視為 1【超】能量（附加到【超】寶可夢時搜尋基礎【超】，走 effects）
+  // v2.35：火箭隊能量 — 只可附於「火箭隊的寶可夢」身上，視為 2 個「2 種屬性」的能量【超】與【惡】。
+  // 以 [Psychic, Darkness] 表示 1 超 + 1 惡 = 共 2 單位；非火箭隊寶可夢時由 SPECIAL_ENERGY_ATTACH hook 自棄。
+  '火箭隊能量': ['Psychic', 'Darkness'],
 };
 
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {
@@ -641,7 +649,7 @@ function handlePlaying(
 
     const baseCard = pool.get(basePoke.cardId);
     if (!baseCard) return state;
-    if (evoCard.evolvesFrom !== baseCard.name) return state;
+    if (!sameEvoName(evoCard.evolvesFrom, baseCard.name)) return state;
 
     // 進化：繼承傷害、能量、狀態；進化鏈堆疊保留被進化掉的 CardInstance（裸殼，附加物轉給頂層）
     const prevStack = basePoke.evolvedFromStack ?? [];
@@ -2027,7 +2035,7 @@ export function getEvolvableTargets(
     if (fp.justPlaced || fp.evolvedThisTurn) continue;
     const fpCard = pool.get(fp.cardId);
     if (!fpCard) continue;
-    const validEvos = handEvos.filter(evo => pool.get(evo.cardId)?.evolvesFrom === fpCard.name);
+    const validEvos = handEvos.filter(evo => sameEvoName(pool.get(evo.cardId)?.evolvesFrom, fpCard.name));
     if (validEvos.length > 0) {
       result.push({ fromIid: fp.iid, toIids: validEvos.map(e => e.iid) });
     }

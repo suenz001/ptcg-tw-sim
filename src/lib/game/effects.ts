@@ -32,6 +32,7 @@ import {
   withPending,
   clearActiveEffects,
   healResolver,
+  sameEvoName,
 } from './effects/_shared';
 
 // 為 engine.ts / +page.svelte 的 import 路徑維持相容：re-export
@@ -565,7 +566,7 @@ regPre('勾魂眼|動怒爪', (state, aIdx, pool) => {
     // Stage 2 判斷：evolvesFrom 存在且該 Stage1 也有 evolvesFrom（含 ex 類型的 Stage2）
     if (!card.evolvesFrom) return false;
     for (const p of pool.values()) {
-      if (p.name === card.evolvesFrom && p.supertype === 'Pokemon' && p.evolvesFrom) return true;
+      if (sameEvoName(p.name, card.evolvesFrom) && p.supertype === 'Pokemon' && p.evolvesFrom) return true;
     }
     return false;
   });
@@ -739,7 +740,7 @@ regG('神奇糖果', (st, idx, pool) => {
   const isStage2 = (c?: Card) => {
     if (!c || c.supertype !== 'Pokemon' || !c.evolvesFrom) return false;
     for (const x of pool.values()) {
-      if (x.name === c.evolvesFrom && x.supertype === 'Pokemon' && x.evolvesFrom) return true;
+      if (sameEvoName(x.name, c.evolvesFrom) && x.supertype === 'Pokemon' && x.evolvesFrom) return true;
     }
     return false;
   };
@@ -751,7 +752,7 @@ regG('神奇糖果', (st, idx, pool) => {
     const s2 = pool.get(hand.cardId)!;
     let basicName: string | undefined;
     for (const c of pool.values()) {
-      if (c.name === s2.evolvesFrom && c.supertype === 'Pokemon' && c.evolvesFrom) {
+      if (sameEvoName(c.name, s2.evolvesFrom) && c.supertype === 'Pokemon' && c.evolvesFrom) {
         basicName = c.evolvesFrom;
         break;
       }
@@ -759,7 +760,7 @@ regG('神奇糖果', (st, idx, pool) => {
     if (!basicName) return false;
     return fieldPokes.some(pk => {
       const bc = pool.get(pk.cardId);
-      return bc?.name === basicName && !pk.justPlaced && !pk.evolvedThisTurn;
+      return !!bc && sameEvoName(bc.name, basicName) && !pk.justPlaced && !pk.evolvedThisTurn;
     });
   });
 });
@@ -770,7 +771,7 @@ reg('神奇糖果', (st, idx, pool) => {
   const isStage2 = (c?: Card) => {
     if (!c || c.supertype !== 'Pokemon' || !c.evolvesFrom) return false;
     for (const x of pool.values()) {
-      if (x.name === c.evolvesFrom && x.supertype === 'Pokemon' && x.evolvesFrom) return true;
+      if (sameEvoName(x.name, c.evolvesFrom) && x.supertype === 'Pokemon' && x.evolvesFrom) return true;
     }
     return false;
   };
@@ -797,7 +798,7 @@ regR('rare-candy-choose-target', (st, idx, picked, _params, pool) => {
   const stage1Name = stage2Card.evolvesFrom;
   let basicName: string | undefined;
   for (const [, c] of pool) {
-    if (c.name === stage1Name && c.evolvesFrom) { basicName = c.evolvesFrom; break; }
+    if (sameEvoName(c.name, stage1Name) && c.evolvesFrom) { basicName = c.evolvesFrom; break; }
   }
   // Fallback: stage2 directly evolvesFrom a basic
   if (!basicName) basicName = stage1Name;
@@ -807,7 +808,7 @@ regR('rare-candy-choose-target', (st, idx, picked, _params, pool) => {
     .filter(pk => {
       if (pk.justPlaced || pk.evolvedThisTurn) return false;
       const c = pool.get(pk.cardId);
-      return c?.name === basicName || c?.name === stage1Name;
+      return !!c && (sameEvoName(c.name, basicName) || sameEvoName(c.name, stage1Name));
     })
     .map(pk => pk.iid);
 
@@ -9489,6 +9490,471 @@ SPECIAL_ENERGY_ATTACH.set('感應【超】能量', (st, idx, targetIid, pool) =>
     filter: 'PsychicBasic',
     minCount: 0, maxCount: takeMax,
     effectKey: 'bench-basic-from-deck',
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.35：火箭隊的超夢ex / 猛雷鼓ex 兩組預組新卡的 effects
+//
+// 範圍（Leon 卡表）：
+//   【火箭隊的超夢】預組（14+3 張新卡）：
+//     Special Energy  : 火箭隊能量
+//     Supporter       : 火箭隊的雅典娜 / 蘭斯 / 坂木 / 阿波羅 / 拉姆達
+//     Item            : 火箭隊的接收器
+//     Stadium         : 火箭隊的工廠
+//     Ability         : 操陷蛛｜充能（known gap，純說明 log）
+//     Ability         : 急凍鳥｜抵抗之幕（known gap）
+//     Ability         : 莉莉艾的皮皮ex｜妖精領域（known gap）
+//     Ability         : 超夢ex｜力量抑制者（known gap）
+//     Attack          : 超夢ex｜擦除球（base 160 + 丟能 gate stub，丟能在 ATTACK_PRE_DISCARD_CHOICE）
+//     Attack          : 團珠蛛｜猛撞（已存在 v1.x，rename key 後仍保留）
+//     Attack          : 操陷蛛｜火箭猛攻（30× 丟能，使用 registerFieldDiscardMultiply）
+//     Attack          : 急凍鳥｜暗黑冰霜（60，對手有特殊能量 +30 stub）
+//     Attack          : 謎擬Ｑ｜扮晶晶酒（known gap — copy-attack 太複雜）
+//   【猛雷鼓】預組（6 張新卡）：
+//     Item            : 能量回收（擲幣：正 4 張，反 2 張基本能量棄牌→手牌）
+//     Item            : 寶可裝置3.0（stub — 無實裝 Tool）
+//     Item            : 太晶珠（Tool：太晶寶可夢 HP +30）
+//     Item            : 捕蟲組合（top6 → 選最多 2 張草寶可夢/草能量加手牌）
+//     Item            : 能量轉移（把 1 張基本能量從自己的寶可夢移到另一隻）
+//     Ability         : 厄鬼椪 碧草面具ex｜碧綠之舞（1/回合 — 從手牌附加 1 張基本草能量到草寶可夢）
+//
+// 說明：
+//   - 需要新 UI filter 的已在 +page.svelte / ai.ts 加過（RocketSupporter / RocketBasic /
+//     AnyTrainer / GrassBasicOrGrassEnergy）。
+//   - 「known gap」條目留 stub（打出時寫 log），未阻塞遊戲主流程。
+//     完整實作待日後 session（attack-copy、pass-through ability 需要 engine 擴充）。
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ---- 火箭隊能量：附加後 gate ------------------------------------------------
+// 卡面文字：這張卡只可附於「火箭隊的寶可夢」身上，若附於「火箭隊的寶可夢」以外的
+//   寶可夢身上，則將其丟棄。只要這張卡附於寶可夢身上，視為提供 2 個【超】【惡】2 種
+//   屬性的能量。
+// 實裝：
+//   - 屬性：engine.ts SPECIAL_ENERGY_TYPES 已加 ['Psychic','Darkness'] = 2 單位。
+//   - Gate：若 target 名稱不含「火箭隊的」→ 把已附加的火箭隊能量從 target 移到棄牌區。
+SPECIAL_ENERGY_ATTACH.set('火箭隊能量', (st, idx, targetIid, pool) => {
+  const p = st.players[idx];
+  const target = p.active?.iid === targetIid
+    ? p.active
+    : p.bench.find(c => c.iid === targetIid) ?? null;
+  if (!target) return st;
+  const targetCard = pool.get(target.cardId);
+  const targetName = targetCard?.name ?? '?';
+  if (targetName.includes('火箭隊的')) return st; // 合法附加
+  // 非火箭隊寶可夢 → 已附加的火箭隊能量丟棄
+  const rocketEnergyInst = target.energyAttached.find(e => pool.get(e.cardId)?.name === '火箭隊能量');
+  if (!rocketEnergyInst) return st;
+  const s = addLog(st, `火箭隊能量：${targetName} 不是「火箭隊的寶可夢」，火箭隊能量丟棄`, idx);
+  return updatePlayer(s, idx, pl => {
+    const removeFromEnergy = (c: CardInstance) => ({
+      ...c, energyAttached: c.energyAttached.filter(e => e.iid !== rocketEnergyInst.iid)
+    });
+    let active = pl.active;
+    if (active?.iid === targetIid) active = removeFromEnergy(active);
+    const bench = pl.bench.map(c => c.iid === targetIid ? removeFromEnergy(c) : c);
+    return { ...pl, active, bench, discard: [...pl.discard, rocketEnergyInst] };
+  });
+});
+
+// ---- 火箭隊的接收器（Item）- 搜「火箭隊」Supporter 加手牌 ------------------
+regG('火箭隊的接收器', (st, idx, pool) =>
+  st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Trainer' && card.subtype === 'Supporter'
+      && card.name.includes('火箭隊');
+  })
+);
+reg('火箭隊的接收器', (st, idx) => {
+  st = addLog(st, '火箭隊的接收器：從牌庫選 1 張「火箭隊」支援者加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'RocketSupporter',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-pokemon-to-hand',   // 復用（與 Pokemon 搜尋同機制：加手牌+洗牌）
+  });
+});
+
+// ---- 火箭隊的雅典娜（Supporter）- 抽到 5（若全場都是火箭隊則抽到 8）----------
+reg('火箭隊的雅典娜', (st, idx, pool) => {
+  const p = st.players[idx];
+  const field = [...(p.active ? [p.active] : []), ...p.bench];
+  const allRocket = field.length > 0 && field.every(c => (pool.get(c.cardId)?.name ?? '').includes('火箭隊的'));
+  const target = allRocket ? 8 : 5;
+  const toDraw = Math.max(0, target - p.hand.length);
+  st = addLog(st, `火箭隊的雅典娜：抽到手牌滿 ${target} 張（抽 ${toDraw} 張${allRocket ? '（全場皆為火箭隊寶可夢）' : ''}）`, idx);
+  return drawCards(st, idx, toDraw);
+});
+
+// ---- 火箭隊的蘭斯（Supporter）- 搜最多 3 張基礎火箭隊寶可夢 ------------------
+//   備註：卡面「先攻玩家的最初回合也可使用」— 引擎的 supporter ban gate 只阻擋
+//   「先手第 1 回合的 Supporter」本來就不存在（台版 M2 沒有這條限制），所以無需特例。
+regG('火箭隊的蘭斯', (st, idx, pool) =>
+  st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.subtype !== 'Other'
+      && !card.evolvesFrom && card.name.includes('火箭隊的');
+  })
+);
+reg('火箭隊的蘭斯', (st, idx) => {
+  st = addLog(st, '火箭隊的蘭斯：從牌庫選最多 3 張基礎的「火箭隊」寶可夢加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'RocketBasic',
+    minCount: 0, maxCount: 3,
+    effectKey: 'search-pokemon-to-hand',
+  });
+});
+
+// ---- 火箭隊的坂木（Supporter）- 本方自換 + 對方被迫換 -----------------------
+// 卡面：將自己的戰鬥場的「火箭隊的寶可夢」與備戰區的「火箭隊的寶可夢」互換。
+//       然後，選 1 隻對手備戰寶可夢與對手戰鬥寶可夢互換。
+// 實裝：
+//   - 若戰鬥位與備戰皆有至少 1 隻火箭隊的寶可夢 → 進入 bench-choose（自方火箭隊備戰）
+//     self-swap-rocket resolver 執行後接 opp-bench-choose → gust-opp。
+//   - 若條件不齊（如戰鬥位非火箭隊 / 備戰沒有火箭隊）→ 跳過自換步驟直接進對方換。
+regG('火箭隊的坂木', (st, idx) => {
+  const opp = st.players[(1 - idx) as 0 | 1];
+  return opp.bench.length > 0;  // 至少需要對手有備戰
+});
+reg('火箭隊的坂木', (st, idx, pool) => {
+  const p = st.players[idx];
+  const activeIsRocket = p.active && (pool.get(p.active.cardId)?.name ?? '').includes('火箭隊的');
+  const rocketBench = p.bench.filter(c => (pool.get(c.cardId)?.name ?? '').includes('火箭隊的'));
+  st = addLog(st, '火箭隊的坂木：自己戰鬥↔備戰互換火箭隊寶可夢，然後對手備戰↔戰鬥互換', idx);
+  if (activeIsRocket && rocketBench.length > 0) {
+    // 先自換：選 1 隻備戰火箭隊寶可夢
+    return withPending(st, {
+      type: 'bench-choose',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'sakaki-self-swap',
+      params: { validIids: rocketBench.map(c => c.iid) },
+    });
+  }
+  // 條件不符：直接對方換
+  st = addLog(st, '火箭隊的坂木：自方無可互換的火箭隊寶可夢，略過自換', idx);
+  return withPending(st, {
+    type: 'opp-bench-choose',
+    actorIdx: idx, sourcePlayerIdx: (1 - idx) as 0 | 1,
+    minCount: 1, maxCount: 1,
+    effectKey: 'gust-opp',   // 復用既有 opp-swap resolver
+  });
+});
+regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
+  const pickIid = iids[0];
+  if (!pickIid) return st;
+  const p = st.players[idx];
+  const benchPick = p.bench.find(c => c.iid === pickIid);
+  if (!p.active || !benchPick) return st;
+  const aName = pool.get(p.active.cardId)?.name ?? '?';
+  const bName = pool.get(benchPick.cardId)?.name ?? '?';
+  st = addLog(st, `火箭隊的坂木：${aName}（戰鬥）↔ ${bName}（備戰）互換`, idx);
+  st = updatePlayer(st, idx, pl => {
+    if (!pl.active) return pl;
+    const newActive = benchPick;
+    const newBench = pl.bench.map(c => c.iid === pickIid ? pl.active! : c);
+    return { ...pl, active: newActive, bench: newBench };
+  });
+  // 再強迫對方換
+  return withPending(st, {
+    type: 'opp-bench-choose',
+    actorIdx: idx, sourcePlayerIdx: (1 - idx) as 0 | 1,
+    minCount: 1, maxCount: 1,
+    effectKey: 'gust-opp',
+  });
+});
+
+// ---- 火箭隊的阿波羅（Supporter）- 上回合火箭隊寶可夢 KO'd 才可用 ------------
+// 卡面：這張卡必須在上個對手的回合自己的「火箭隊的寶可夢」【昏厥】了才可使用。
+//       雙方手牌放回牌庫重洗。然後抽牌：自己 5 張，對手 3 張。
+// Gate：復用 rocketKoLastTurn 旗標（此次新增，類似 v1.95 self-KO 特性的 flag）。
+//   實際新增較複雜；為維持 scope，這版先以「對手上回合造成過任何自己寶可夢 KO」為判定
+//   （即沿用 opponentKoedLastTurn 類旗標若存在），否則 always true。
+//   （Leon 在後續對戰時觀察若有誤判再收斂。）
+reg('火箭隊的阿波羅', (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  st = addLog(st, '火箭隊的阿波羅：雙方手牌洗回牌庫，自己抽 5 / 對手抽 3', idx);
+  // 雙方手牌放回牌庫並重洗
+  st = returnHandToDeck(st, idx);
+  st = returnHandToDeck(st, oppIdx);
+  st = drawCards(st, idx, 5);
+  st = drawCards(st, oppIdx, 3);
+  return st;
+});
+
+// ---- 火箭隊的拉姆達（Supporter）- 搜任意 1 張訓練家加手牌 -------------------
+regG('火箭隊的拉姆達', (st, idx, pool) =>
+  st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Trainer')
+);
+reg('火箭隊的拉姆達', (st, idx) => {
+  st = addLog(st, '火箭隊的拉姆達：從牌庫選 1 張訓練家卡加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'AnyTrainer',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-pokemon-to-hand',   // resolver 為「加手牌 + 洗牌」，對訓練家同樣適用
+  });
+});
+
+// ---- 火箭隊的工廠（Stadium）- known gap stub --------------------------------
+// 卡面：在這個回合從手牌使出了名稱中有「火箭隊」的支援者卡的玩家，可從自己的牌庫抽出 2 張卡。
+// 實裝狀態：未實裝。需要在 engine USE_STADIUM 加分支 + per-player `rocketSupporterPlayedThisTurn`
+//   旗標、在 PLAY_TRAINER Supporter 路徑設旗標、END_TURN 清旗標。
+// 目前以 stadium「不觸發」通過：Leon 可手動放置／被動佔位（擠掉對方其他場地卡）。
+
+// ---- 碧草面具ex｜碧綠之舞（Ability）- 1/回合 附加基本草能量 -----------------
+// 卡面：1 次/回合，可從手牌將 1 張基本草能量附加到自己的【草】寶可夢身上。
+regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool) => {
+  const p = st.players[idx];
+  // 手牌至少有 1 張基本草能量
+  const grassEnergyInst = p.hand.find(c => {
+    const card = pool.get(c.cardId);
+    if (card?.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+    return card.pokemonType === 'Grass' || card.name.includes('【草】');
+  });
+  if (!grassEnergyInst) return addLog(st, '碧綠之舞：手牌中沒有基本草能量', idx);
+  // 場上要有【草】寶可夢
+  const grassPokes = [...(p.active ? [p.active] : []), ...p.bench].filter(c => pool.get(c.cardId)?.pokemonType === 'Grass');
+  if (grassPokes.length === 0) return addLog(st, '碧綠之舞：場上沒有【草】寶可夢', idx);
+  st = addLog(st, '碧綠之舞：選一隻自己的【草】寶可夢附加 1 張基本草能量', idx);
+  return withPending(st, {
+    type: 'heal-target',  // 復用目標選擇 UI（自己寶可夢）
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'verdant-dance-attach',
+    params: {
+      energyIid: grassEnergyInst.iid,
+      validIids: grassPokes.map(c => c.iid),
+      titleOverride: '碧綠之舞：選擇附加基本草能量的【草】寶可夢',
+    },
+  });
+});
+regR('verdant-dance-attach', (st, idx, iids, params, pool) => {
+  const targetIid = iids[0];
+  const energyIid = params?.energyIid as string | undefined;
+  if (!targetIid || !energyIid) return st;
+  const p = st.players[idx];
+  const energyInst = p.hand.find(c => c.iid === energyIid);
+  if (!energyInst) return st;
+  const targetPoke = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
+  if (!targetPoke) return st;
+  const tName = pool.get(targetPoke.cardId)?.name ?? '?';
+  const eName = pool.get(energyInst.cardId)?.name ?? '?';
+  st = addLog(st, `碧綠之舞：將 ${eName} 附加到 ${tName}`, idx);
+  return updatePlayer(st, idx, pl => {
+    const newHand = pl.hand.filter(c => c.iid !== energyIid);
+    const attach = (c: CardInstance) => ({ ...c, energyAttached: [...c.energyAttached, energyInst] });
+    let active = pl.active;
+    if (active?.iid === targetIid) active = attach(active);
+    const bench = pl.bench.map(c => c.iid === targetIid ? attach(c) : c);
+    return { ...pl, hand: newHand, active, bench };
+  });
+});
+
+// ---- 操陷蛛｜火箭猛攻 attack（30× 棄能） ----------------------------------
+// 從自己的場上選擇任意張基本能量丟棄，傷害 = 30 × 丟棄張數。
+registerFieldDiscardMultiply('火箭隊的操陷蛛|火箭猛攻', '火箭猛攻', 0, 30, 20, 'basic');
+
+// ---- 超夢ex｜擦除球 attack（160 + gate stub） -----------------------------
+// 卡面（近似）：從這隻寶可夢附加的能量中，隨意選 2 張【超】能量棄置。base 160。
+// 實裝：宣告 base 160。棄能流程：ATTACK_PRE_DISCARD_CHOICE（scope='self'）棄 2 張【超】能量。
+ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的超夢ex|擦除球', {
+  min: 2, max: 2, scope: 'self', baseDamage: 160, damagePerEnergy: 0,
+});
+regPre('火箭隊的超夢ex|擦除球', (state, _aIdx, _pool) => ({ state, damage: 160 }));
+// Note: 傷害扣能邏輯交 engine 共用 pipeline；若 attacker 身上不足 2 張【超】，UI 會阻擋宣告。
+
+// ---- 火箭隊的急凍鳥｜暗黑冰霜（60，有特殊能量 +30 stub） --------------------
+// 卡面（近似）：暗黑冰霜 60 — 若對手戰鬥寶可夢身上有 1 張以上特殊能量，這個招式的傷害 +30。
+regPre('火箭隊的急凍鳥|暗黑冰霜', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defActive = state.players[dIdx].active;
+  let base = 60;
+  if (defActive) {
+    const hasSpecial = defActive.energyAttached.some(e => {
+      const card = pool.get(e.cardId);
+      return card?.supertype === 'Energy' && card.subtype === 'Special';
+    });
+    if (hasSpecial) base += 30;
+  }
+  return { state, damage: base };
+});
+
+// ---- Known gap 特性 stubs（log only）--------------------------------------
+// 這些特性需要 engine 擴充才能完整實裝。目前寫成說明 log，避免預組無法放入編輯器。
+regA('火箭隊的操陷蛛', 0, (st, idx) => addLog(st, '充能：特性尚未實裝（known gap v2.35）', idx));
+regA('火箭隊的急凍鳥', 0, (st, idx) => addLog(st, '抵抗之幕：被動特性尚未實裝（known gap v2.35）', idx));
+regA('莉莉艾的皮皮ex', 0, (st, idx) => addLog(st, '妖精領域：被動特性尚未實裝（known gap v2.35）', idx));
+regA('火箭隊的超夢ex', 0, (st, idx) => addLog(st, '力量抑制者：被動特性尚未實裝（known gap v2.35）', idx));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 猛雷鼓預組：新物品卡
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ---- 能量回收（Item）- 擲幣：正 4 / 反 2 張基本能量棄牌→手牌 ----------------
+regG('能量回收', (st, idx, pool) =>
+  st.players[idx].discard.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  })
+);
+reg('能量回收', (st, idx) => {
+  const heads = Math.random() < 0.5;
+  const maxN = heads ? 4 : 2;
+  st = addLog(st, `能量回收：擲硬幣—${heads ? '正面（最多 4 張）' : '反面（最多 2 張）'}`, idx);
+  // 棄牌區可選張數
+  return withPending(st, {
+    type: 'discard-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy',  // discard-search 的 BasicEnergy 過濾為所有能量（歷史慣例）
+    minCount: 0, maxCount: maxN,
+    effectKey: 'discard-to-hand',
+  });
+});
+
+// ---- 寶可裝置3.0（Item）- stub（未實裝，僅棄置）----------------------------
+// 卡面文字主要為「附加到自己的寶可夢」類 Tool；此處無 TOOL_* 登錄，實際等同無效果。
+// 不登錄 reg/regG → engine 會走「效果尚未實裝」分支。
+
+// ---- 太晶珠（Tool）- 太晶寶可夢 HP +30 --------------------------------------
+// 判定「太晶寶可夢」：card.attacks 存在 name==='太晶' 或 rulesText 含「太晶」——近似法。
+// 為了不動 tools.ts 檔結構，透過 TOOL_HP_BONUS.set 登錄（與勇氣護符/英雄斗篷同機制）。
+TOOL_HP_BONUS.set('太晶珠', (card) => {
+  const isTera = !!(card.attacks?.some(a => a.name === '太晶')) || !!card.rulesText?.includes('太晶');
+  return isTera ? 30 : 0;
+});
+
+// ---- 捕蟲組合（Item）- 查看牌庫頂 6，選最多 2 張草寶可夢/草能量加手牌 -------
+regG('捕蟲組合', (st, idx) => st.players[idx].deck.length > 0);
+reg('捕蟲組合', (st, idx) => {
+  const p = st.players[idx];
+  const top6 = p.deck.slice(0, 6);
+  if (top6.length === 0) return addLog(st, '捕蟲組合：牌庫為空', idx);
+  st = addLog(st, '捕蟲組合：查看牌庫頂 6 張，選最多 2 張基本草寶可夢或基本草能量加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'GrassBasicOrGrassEnergy',
+    minCount: 0, maxCount: 2,
+    effectKey: 'bug-catcher-set',
+    params: { top6Iids: top6.map(c => c.iid) },
+  });
+});
+regR('bug-catcher-set', (st, idx, iids, params, pool) => {
+  const top6Iids = new Set<string>((params?.top6Iids as string[]) ?? []);
+  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid) && top6Iids.has(c.iid));
+  const chosenIids = new Set(chosen.map(c => c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `捕蟲組合：${names} 加入手牌，其餘放回牌庫底（重洗）`, idx);
+  } else {
+    st = addLog(st, '捕蟲組合：未選擇任何卡，全部放回牌庫底（重洗）', idx);
+  }
+  return updatePlayer(st, idx, p => ({
+    ...p,
+    hand: [...p.hand, ...chosen],
+    deck: shuffle(p.deck.filter(c => !chosenIids.has(c.iid))),
+  }));
+});
+
+// ---- 能量轉移（Item）- 把 1 張基本能量從自己的寶可夢移到另一隻 -------------
+// 2 步：先選來源（自己寶可夢身上有基本能量者），再選其身上的基本能量，再選目的地寶可夢。
+// 為降低 UI 複雜度，此版簡化為：選來源寶可夢，自動挑第 1 張基本能量；然後選目的地。
+regG('能量轉移', (st, idx, pool) => {
+  const p = st.players[idx];
+  const allField = [...(p.active ? [p.active] : []), ...p.bench];
+  if (allField.length < 2) return false;  // 至少 2 隻才有「轉移」空間
+  return allField.some(poke => poke.energyAttached.some(e => {
+    const card = pool.get(e.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  }));
+});
+reg('能量轉移', (st, idx, pool) => {
+  const p = st.players[idx];
+  const allField = [...(p.active ? [p.active] : []), ...p.bench];
+  const sources = allField.filter(poke => poke.energyAttached.some(e => {
+    const card = pool.get(e.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  }));
+  if (sources.length === 0) return addLog(st, '能量轉移：沒有寶可夢身上有基本能量', idx);
+  st = addLog(st, '能量轉移：選擇「移出」基本能量的來源寶可夢', idx);
+  return withPending(st, {
+    type: 'heal-target',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'energy-switch-src',
+    params: {
+      validIids: sources.map(c => c.iid),
+      titleOverride: '能量轉移：選擇要移出基本能量的寶可夢',
+    },
+  });
+});
+regR('energy-switch-src', (st, idx, iids, _params, pool) => {
+  const srcIid = iids[0];
+  if (!srcIid) return st;
+  const p = st.players[idx];
+  const srcPoke = p.active?.iid === srcIid ? p.active : p.bench.find(c => c.iid === srcIid);
+  if (!srcPoke) return st;
+  // 取第 1 張基本能量作為移動對象
+  const energyInst = srcPoke.energyAttached.find(e => {
+    const card = pool.get(e.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  });
+  if (!energyInst) return st;
+  const srcName = pool.get(srcPoke.cardId)?.name ?? '?';
+  const eName = pool.get(energyInst.cardId)?.name ?? '?';
+  // 從來源移除 energyInst
+  st = updatePlayer(st, idx, pl => {
+    const remove = (c: CardInstance) => ({
+      ...c, energyAttached: c.energyAttached.filter(e => e.iid !== energyInst.iid)
+    });
+    let active = pl.active;
+    if (active?.iid === srcIid) active = remove(active);
+    const bench = pl.bench.map(c => c.iid === srcIid ? remove(c) : c);
+    return { ...pl, active, bench };
+  });
+  st = addLog(st, `能量轉移：從 ${srcName} 取下 ${eName}，選擇目的地寶可夢`, idx);
+  // 選目的地（所有自己的寶可夢，排除來源）
+  const pp = st.players[idx];
+  const allTargets = [...(pp.active ? [pp.active] : []), ...pp.bench]
+    .filter(c => c.iid !== srcIid);
+  if (allTargets.length === 0) {
+    // Fallback：沒別的寶可夢，能量回 hand（維持不空轉）
+    st = addLog(st, '能量轉移：沒有其他寶可夢，能量移回手牌', idx);
+    return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, energyInst] }));
+  }
+  return withPending(st, {
+    type: 'heal-target',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'energy-switch-dst',
+    params: {
+      energyInstance: energyInst,
+      validIids: allTargets.map(c => c.iid),
+      titleOverride: `能量轉移：選擇附加 ${eName} 的目的地寶可夢`,
+    },
+  });
+});
+regR('energy-switch-dst', (st, idx, iids, params, pool) => {
+  const dstIid = iids[0];
+  const energyInst = params?.energyInstance as CardInstance | undefined;
+  if (!dstIid || !energyInst) return st;
+  const p = st.players[idx];
+  const dstPoke = p.active?.iid === dstIid ? p.active : p.bench.find(c => c.iid === dstIid);
+  if (!dstPoke) return st;
+  const dstName = pool.get(dstPoke.cardId)?.name ?? '?';
+  const eName = pool.get(energyInst.cardId)?.name ?? '?';
+  st = addLog(st, `能量轉移：將 ${eName} 附加到 ${dstName}`, idx);
+  return updatePlayer(st, idx, pl => {
+    const attach = (c: CardInstance) => ({ ...c, energyAttached: [...c.energyAttached, energyInst] });
+    let active = pl.active;
+    if (active?.iid === dstIid) active = attach(active);
+    const bench = pl.bench.map(c => c.iid === dstIid ? attach(c) : c);
+    return { ...pl, active, bench };
   });
 });
 

@@ -16,6 +16,7 @@ import {
   reg, regR, regG,
   addLog, updatePlayer, withPending,
   drawCards, discardHand, returnHandToDeck,
+  sameEvoName,
 } from '../_shared';
 import type { CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -28,7 +29,7 @@ function isStage2PokemonCardLocal(
 ): boolean {
   if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
   for (const c of pool.values()) {
-    if (c.name === card.evolvesFrom && c.supertype === 'Pokemon' && c.evolvesFrom) return true;
+    if (sameEvoName(c.name, card.evolvesFrom) && c.supertype === 'Pokemon' && c.evolvesFrom) return true;
   }
   return false;
 }

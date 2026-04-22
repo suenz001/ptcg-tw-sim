@@ -26,8 +26,8 @@
 
 import type { Card, EnergyType } from '$lib/cards/types';
 import type { GameState, CardInstance } from '../../types';
+import type { EffectFn } from '../_shared';
 import {
-  EffectFn,
   TRAINER_EFFECTS,
   reg, regR,
   addLog, updatePlayer, withPending, shuffle,
