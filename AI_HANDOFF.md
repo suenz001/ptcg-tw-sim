@@ -1,9 +1,119 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session c0f2+++++++ (v2.33)  
+> 最後更新：2026-04-22 Session c0f2++++++++ (v2.34)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session c0f2++++++++ (v2.34) — 願增猿 惡能量 gate + 胡地 手之力量 改為招式效果
+
+### 問題
+
+Leon 回報兩個關聯 bug（一個 gate 漏掉、一個把招式效果誤實裝成招式傷害），並給了
+關於「**招式傷害 vs. 招式效果**」的規則教學，要記在腦裡：
+
+- **招式傷害**：普通戰鬥傷害。**計算弱點 / 抗性**。受防禦類道具（龐克頭盔、
+  鐵頭盔）、「受到的傷害 -N」等效果影響。
+- **招式效果**：「放置傷害指示物」等語句。**不計算弱點 / 抗性**，也**不受**
+  上述防禦類效果影響。
+- 範例：
+  - 火紅不倒翁「穿傷」= 招式傷害
+  - 多龍巴魯托ex 幻影奇襲：200 傷害 = 招式傷害；再放 6 個傷害指示物 = 招式效果
+  - 胡地 手之力量：**整個招式只有「放置傷害指示物」，因此整個都是招式效果**
+
+### Bug A — 願增猿｜腎上腺腦力 缺少「身上附有【惡】能量」gate
+
+**問題**：特性描述要求願增猿身上**附有惡能量**才能啟動（移傷 ≤30），
+但 `engine.ts` 的 `USE_ABILITY` handler 完全沒做這項檢查。玩家只要願增猿上場、
+場上有受傷己方寶可夢，就能直接用，等於把惡能量這個 cost 繞過去了。
+
+**修法**（`src/lib/game/engine.ts`，兩處對稱加 gate）：
+
+1. `USE_ABILITY` handler（~line 967 之後，緊接 精神抽出/龐克練肌 gate）：
+   ```ts
+   // 腎上腺腦力（願增猿）：身上必須附有至少 1 顆【惡】能量才能使用。
+   if (ability.name === '腎上腺腦力' && (countEnergy(targetPoke, pool).get('Darkness') ?? 0) < 1) {
+     return state;
+   }
+   ```
+
+2. `getUsableAbilities`（~line 2141 之後，緊接 精神抽出/龐克練肌 gate）：
+   ```ts
+   // 腎上腺腦力：身上必須附有至少 1 顆【惡】能量
+   if (ab.name === '腎上腺腦力' && (countEnergy(pk, pool).get('Darkness') ?? 0) < 1) return;
+   ```
+
+兩處都必須加：前者是引擎 guard（防作弊 / 防 AI 錯用），後者是 UI 可用清單
+（不符條件就不列出來），和既有的 `精神抽出` / `龐克練肌` / `集客` 的
+double-gate 模式一致。
+
+**為什麼用 `'Darkness'`**：
+- `ZH_ENERGY_TYPE` 映射 `'惡' → 'Darkness'`（engine.ts:190）
+- `countEnergy(pk, pool)` 把每張能量卡透過 `getEnergyProvided` 攤平成實際
+  提供的屬性並計數，所以「基本【惡】能量」或富裕能量提供的 Darkness 都會算到。
+
+### Bug B — 胡地｜手之力量 是招式效果，不是招式傷害
+
+**問題**：原實作（`effects.ts:9046` 附近）
+```ts
+regPre('胡地|手之力量', (state, aIdx) => ({
+  state: addLog(state, ...),
+  damage: handCount * 10,   // ← 走一般戰鬥傷害流程
+}));
+```
+兩個錯：
+1. **數值錯**：卡面是「手牌張數 × 2 個傷害指示物」，等同 handCount × 20 傷害；
+   原本只寫 × 10。範例：手牌 13 張 → 應放 26 個指示物 = 260 傷害，但原本
+   只算成 130。
+2. **類型錯**：透過 `damage` 走一般攻擊流程 → 會計算弱點/抗性 + 被龐克頭盔/
+   鐵頭盔 / 「受傷 -N」等減傷效果影響。卡面是放置傷害指示物，屬於**招式效果**，
+   必須 bypass 這些。
+
+**修法**（`src/lib/game/effects.ts:9046` 附近，整段重寫）：
+
+```ts
+// ── 胡地｜手之力量 — 將手牌張數 × 2 個傷害指示物放到對手戰鬥寶可夢（招式效果）─
+regPre('胡地|手之力量', (_state) => ({ state: _state, damage: 0 }));
+regPost('胡地|手之力量', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defender = state.players[dIdx];
+  if (!defender.active) return state;
+  const handCount = state.players[aIdx].hand.length;
+  const counters = handCount * 2;
+  const addDmg = counters * 10;
+  // ... 直接對 defender.active.damage 加值，手動 KO / 獎賞 / gameover 判定
+});
+```
+
+**設計要點**：
+- `regPre` 回傳 `damage: 0` → 不觸發一般戰鬥傷害流程（因此完全 bypass
+  弱點/抗性/防禦道具/「受傷 -N」等減傷效果）
+- 實際放傷在 `regPost`，直接改 `defender.active.damage`
+- KO 流程照既有模式：active + energyAttached + toolAttached + evolvedFromStack
+  全進 discard，`koPrizeCount(defCard)` 算獎賞，`pendingPrizes` 累加
+- 對手戰鬥區空 + 備戰區空 → `phase: 'game-over'`
+
+**參考實作**：
+- 皮卡丘｜電磁電光（`effects.ts:3183-3216`，已經是 `regPre damage:0 +
+  regPost 直接放傷` 模式）
+- `adrenal-brain-target` resolver（`effects.ts:8934-8980`）用了相同
+  KO / pendingPrizes 模板
+
+### 次要調整
+
+- **Log 文字**：手之力量 log 補上「（共 N 傷害，不計算弱點 / 抗性 / 防禦效果）」
+  提示，方便 Leon 對戰時確認 bypass 行為生效。
+
+### 驗證
+- `npm run build` ✓
+
+### 版本
+- `src/lib/version.ts`: 2.33 → 2.34
+
+### Commit
+- TBD（push 後回填）
 
 ---
 

@@ -9043,13 +9043,54 @@ regA('胡地', 0, (st, idx) => {
   return drawCards(addLog(st, '精神抽出：抽 3 張', idx), idx, 3);
 });
 
-// ── 胡地｜手之力量 — 傷害 = 你手牌張數 × 10 ──────────────────────────────────
-regPre('胡地|手之力量', (state, aIdx, _pool) => {
+// ── 胡地｜手之力量 — 將手牌張數 × 2 個傷害指示物放到對手戰鬥寶可夢（招式效果）─
+// 原文：將與自己的手牌的張數×2個的相同數量的傷害指示物，放置於對手的戰鬥寶可夢身上。
+// 判斷：「放置傷害指示物」屬於招式效果（非招式傷害），因此 bypass 弱點 / 抗性 /
+//      防禦道具（龐克頭盔等）/ 鐵頭盔道具 / 以及各種「受到傷害 -N」的減傷效果。
+// 實作：regPre 回傳 damage: 0（不觸發一般戰鬥傷害流程），實際放傷邏輯在 regPost，
+//      直接對 defender.active.damage 加值，手動做 KO / 獎賞 / gameover 判定。
+regPre('胡地|手之力量', (_state, _aIdx, _pool) => ({ state: _state, damage: 0 }));
+regPost('胡地|手之力量', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defender = state.players[dIdx];
+  if (!defender.active) return state;
   const handCount = state.players[aIdx].hand.length;
-  return {
-    state: addLog(state, `手之力量：手牌 ${handCount} 張 → ${handCount * 10} 傷害`, aIdx),
-    damage: handCount * 10,
-  };
+  const counters = handCount * 2;
+  const addDmg = counters * 10;
+  const defCard = pool.get(defender.active.cardId);
+  const newDmg = defender.active.damage + addDmg;
+  const defHP = defCard?.hp ?? 0;
+  let s = addLog(
+    state,
+    `手之力量：手牌 ${handCount} 張 → 放置 ${counters} 個傷害指示物於 ${defCard?.name ?? '?'}（共 ${addDmg} 傷害，不計算弱點 / 抗性 / 防禦效果）`,
+    aIdx
+  );
+  if (defHP > 0 && newDmg >= defHP) {
+    // KO 流程：出場寶可夢、附加能量、道具、進化底卡全部進棄牌堆
+    const koDiscard: CardInstance[] = [
+      { ...defender.active, damage: newDmg },
+      ...defender.active.energyAttached,
+      ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+      ...(defender.active.evolvedFromStack ?? []),
+    ];
+    const prizes = defCard ? koPrizeCount(defCard) : 1;
+    const players = [...s.players] as [PlayerState, PlayerState];
+    players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
+    s = addLog(
+      { ...s, players },
+      `手之力量：${defCard?.name ?? '?'} 被擊倒！+${prizes} 張獎勵牌`,
+      aIdx
+    );
+    s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
+    if (players[dIdx].bench.length === 0) {
+      return { ...s, phase: 'game-over', winner: aIdx,
+        winReason: `${defender.name} 沒有可上場的寶可夢` };
+    }
+    return s;
+  }
+  const players = [...s.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...defender, active: { ...defender.active, damage: newDmg } };
+  return { ...s, players };
 });
 
 // ── 土龍弟弟｜交替 — 0 傷害，與備戰互換 ────────────────────────────────────
