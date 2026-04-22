@@ -1,9 +1,41 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 38b7 (v2.57)  
+> 最後更新：2026-04-22 Session a9f1 (v2.58)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session a9f1 (v2.58) — 選寶可夢 modal：拔掉戰鬥寶可夢的粗黃框
+
+### 問題
+
+Leon 看到「赤松：選擇要附加 基本【鬥】能量 的寶可夢」modal 截圖時點出：戰鬥寶可夢（猛雷鼓ex）外圍有一個粗粗的黃框（`border-color:#ffcc44; border-width:3px; box-shadow:0 0 14px rgba(255,204,68,.55)`），他之前就說過只要上方的「⚔️ 我方戰鬥寶可夢」徽章條做標示即可，不要那個黃框。
+
+v2.54 那次（task #236）只把「主棋盤我方戰鬥場」的黃色 energy-target 邊框拔掉，沒掃到「選寶可夢 modal」(`.retreat-modal`) 裡也用了同樣的視覺設計。這次要在 picker modal 那側把它拔掉。
+
+### 修法
+
+`+page.svelte:3536-3537` 原本兩條 CSS：
+```css
+.retreat-card.is-active-poke{ border-color:#ffcc44; border-width:3px; box-shadow:0 0 14px rgba(255,204,68,.55); }
+.retreat-card.is-active-poke.sel-picked{ border-color:#aaff44; box-shadow:0 0 10px #aaff4488, 0 0 18px rgba(255,204,68,.55); }
+```
+
+→ 整段刪除，留一行 v2.58 註解說明 why。
+
+`.is-active-poke` class 本身還在 `div.retreat-card` 上（仍會被 svelte 套用），但因為沒有對應 CSS rule，就不會出現黃色邊框。
+被 `is-active-poke` 條件觸發的 `<span class="retreat-active-badge">` 保留 — 那個頂部金色/紅色條狀徽章就是 Leon 要保留的唯一視覺標記。
+
+### 影響範圍
+
+只影響 `.retreat-modal`（也就是 selection picker 的 modal 中 `isPokePicker` 或 `isDmgDist` 分支）。
+主棋盤的 `.my-row` / 戰鬥場 UI 完全沒動到，那裡 v2.54 就已清理過。
+
+### 驗證
+
+`npm run build` 一次綠，沒有 svelte CSS unused-selector warning（因為 CSS rule 整個刪了，class 留在 DOM 也不會 warn）。
 
 ---
 
