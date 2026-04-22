@@ -24,6 +24,7 @@ import {
   TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS,
   ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
   BENCH_PLACE_TRIGGERS,
+  SPECIAL_ENERGY_ATTACH,
   // Register functions
   reg, regR, regG,
   regPre, regPost, regA,
@@ -42,6 +43,7 @@ import {
 export { TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS, canPlayTrainer, clearActiveEffects };
 export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE };
 export { BENCH_PLACE_TRIGGERS };
+export { SPECIAL_ENERGY_ATTACH };
 export type { ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec };
 
 // ── 道具（Pokemon Tool）模組 — v2.09 從本檔抽離 ────────────────────────────
@@ -226,20 +228,7 @@ export function resolveBenchGuard(
   return { blocked: false };
 }
 
-/**
- * v2.22：特殊能量「附加時」hook —
- * 某些特殊能量（富裕能量、感應【超】能量）附加後會有額外效果（抽牌 / 搜索 etc.）。
- * engine.ts 的 ATTACH_ENERGY handler 在能量實際附加後，會查此 map：
- *   key = 特殊能量卡名，fn(state, actorIdx, targetIid, pool) => newState。
- * 若目標寶可夢不符條件（例：感應【超】只對【超】寶可夢生效），fn 內部自行判斷並可略過。
- */
-export type AttachEnergyHookFn = (
-  state: GameState,
-  actorIdx: 0 | 1,
-  targetIid: string,
-  pool: Map<string, Card>,
-) => GameState;
-export const SPECIAL_ENERGY_ATTACH = new Map<string, AttachEnergyHookFn>();
+// SPECIAL_ENERGY_ATTACH 和 AttachEnergyHookFn 已搬到 _shared.ts（v2.66）。
 
 // 已搬遷到 effects/cards/ 下的卡 — side-effect import 觸發 reg() 登錄。
 // 未來要加更多搬遷檔時，也只需要在這裡加一行 import。
@@ -253,6 +242,8 @@ import './effects/cards/supporters_gust';
 import './effects/cards/abra_mawile_deck';
 // v2.65：魔靈多龍牌組 Wave 43（黑夜魔靈咒詛炸彈 / 多龍奇 / 願增猿 / 喵喵ex / 特殊紅牌 / 阿蜜的目光）
 import './effects/cards/maroon_dragon_deck';
+// v2.66：特殊能量卡 hook（富裕能量 / 感應【超】能量 / 火箭隊能量）
+import './effects/cards/energy_cards';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -9116,53 +9107,7 @@ regR('touko-phase2', (st, idx, iids, _params, pool) => {
 // 被動 gate 在 stadiums.ts 的 BENCH_PROTECTION_STADIUMS 集合，所有 bench-damage resolver
 // 都已經在觸發點呼叫 isBenchProtected(state, pool) 跳過傷害放置。
 
-// ── 富裕能量（ACE SPEC Special Energy） ─────────────────────────────────────
-// 卡面：提供 1 個【無】能量。從手牌附加到你的任 1 隻寶可夢時，抽 4 張卡。
-// Hook：SPECIAL_ENERGY_ATTACH，engine ATTACH_ENERGY 附加後呼叫。
-SPECIAL_ENERGY_ATTACH.set('富裕能量', (st, idx) => {
-  const s = addLog(st, '富裕能量：從牌庫抽 4 張', idx);
-  return drawCards(s, idx, 4);
-});
-
-// ── 感應【超】能量（Special Energy） ────────────────────────────────────────
-// 卡面：提供 1 個【超】能量。從手牌附加到你的【超】寶可夢時，
-//      可從牌庫搜尋至多 2 張基礎【超】寶可夢放備戰並重洗牌庫。
-// Hook：SPECIAL_ENERGY_ATTACH；先驗證 target 是【超】才進 pending。
-SPECIAL_ENERGY_ATTACH.set('感應【超】能量', (st, idx, targetIid, pool) => {
-  const p = st.players[idx];
-  const target = p.active?.iid === targetIid
-    ? p.active
-    : p.bench.find(c => c.iid === targetIid) ?? null;
-  if (!target) return st;
-  const targetCard = pool.get(target.cardId);
-  if (targetCard?.pokemonType !== 'Psychic') {
-    // 附加到非【超】寶可夢時不觸發搜索效果
-    return st;
-  }
-  // 備戰空位
-  const benchSlots = 5 - p.bench.length;
-  if (benchSlots <= 0) {
-    return addLog(st, '感應【超】能量：備戰區已滿，略過搜尋', idx);
-  }
-  // 牌庫要有基礎【超】寶可夢
-  const hasPsychicBasic = p.deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.subtype !== 'Other'
-      && !card.evolvesFrom && card.pokemonType === 'Psychic';
-  });
-  if (!hasPsychicBasic) {
-    return addLog(st, '感應【超】能量：牌庫沒有基礎【超】寶可夢', idx);
-  }
-  const takeMax = Math.min(2, benchSlots);
-  const s = addLog(st, `感應【超】能量：從牌庫選至多 ${takeMax} 隻基礎【超】寶可夢到備戰區`, idx);
-  return withPending(s, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'PsychicBasic',
-    minCount: 0, maxCount: takeMax,
-    effectKey: 'bench-basic-from-deck',
-  });
-});
+// 富裕能量 / 感應【超】能量 hooks 已搬到 effects/cards/energy_cards.ts（v2.66）。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // v2.35：火箭隊的超夢ex / 猛雷鼓ex 兩組預組新卡的 effects
@@ -9197,36 +9142,7 @@ SPECIAL_ENERGY_ATTACH.set('感應【超】能量', (st, idx, targetIid, pool) =>
 //     完整實作待日後 session（attack-copy、pass-through ability 需要 engine 擴充）。
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ---- 火箭隊能量：附加後 gate ------------------------------------------------
-// 卡面文字：這張卡只可附於「火箭隊的寶可夢」身上，若附於「火箭隊的寶可夢」以外的
-//   寶可夢身上，則將其丟棄。只要這張卡附於寶可夢身上，視為提供 2 個【超】【惡】2 種
-//   屬性的能量。
-// 實裝：
-//   - 屬性：engine.ts SPECIAL_ENERGY_TYPES 已加 ['Psychic','Darkness'] = 2 單位。
-//   - Gate：若 target 名稱不含「火箭隊的」→ 把已附加的火箭隊能量從 target 移到棄牌區。
-SPECIAL_ENERGY_ATTACH.set('火箭隊能量', (st, idx, targetIid, pool) => {
-  const p = st.players[idx];
-  const target = p.active?.iid === targetIid
-    ? p.active
-    : p.bench.find(c => c.iid === targetIid) ?? null;
-  if (!target) return st;
-  const targetCard = pool.get(target.cardId);
-  const targetName = targetCard?.name ?? '?';
-  if (targetName.includes('火箭隊的')) return st; // 合法附加
-  // 非火箭隊寶可夢 → 已附加的火箭隊能量丟棄
-  const rocketEnergyInst = target.energyAttached.find(e => pool.get(e.cardId)?.name === '火箭隊能量');
-  if (!rocketEnergyInst) return st;
-  const s = addLog(st, `火箭隊能量：${targetName} 不是「火箭隊的寶可夢」，火箭隊能量丟棄`, idx);
-  return updatePlayer(s, idx, pl => {
-    const removeFromEnergy = (c: CardInstance) => ({
-      ...c, energyAttached: c.energyAttached.filter(e => e.iid !== rocketEnergyInst.iid)
-    });
-    let active = pl.active;
-    if (active?.iid === targetIid) active = removeFromEnergy(active);
-    const bench = pl.bench.map(c => c.iid === targetIid ? removeFromEnergy(c) : c);
-    return { ...pl, active, bench, discard: [...pl.discard, rocketEnergyInst] };
-  });
-});
+// 火箭隊能量 hook 已搬到 effects/cards/energy_cards.ts（v2.66）。
 
 // ---- 火箭隊的接收器（Item）- 搜「火箭隊」Supporter 加手牌 ------------------
 regG('火箭隊的接收器', (st, idx, pool) =>

@@ -1,9 +1,67 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session ea58 (v2.65)  
+> 最後更新：2026-04-23 Session epic-zen-cerf (v2.66)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session epic-zen-cerf (v2.66) — 模組化第五波：SPECIAL_ENERGY_ATTACH 搬到 _shared，抽出特殊能量卡
+
+### 問題
+effects.ts（9820 行）仍持有三張特殊能量卡的 SPECIAL_ENERGY_ATTACH hook 及其型別定義。
+前一 session（ea58）已在 _shared.ts 預留了 SPECIAL_ENERGY_ATTACH / AttachEnergyHookFn 的
+uncommitted 草稿（diff 留在舊 sandbox /tmp/ptcg-work/repo），但尚未 commit。
+
+### 根因
+scheduled-task 跨 sandbox session 後，新 sandbox（epic-zen-cerf）對舊 sandbox 的
+/tmp/ptcg-work/repo 沒有寫入權限（owned by nobody, 舊 session 使用者）。
+解法：git clone 到新 sandbox 的可寫目錄（/sessions/epic-zen-cerf/tmp/ptcg-repo），
+並 git apply 舊 sandbox 的 _shared.ts diff。
+
+### 主修法
+
+**新增檔案**
+- `src/lib/game/effects/cards/energy_cards.ts`（95 行）
+  - 從 effects.ts 搬出三個 SPECIAL_ENERGY_ATTACH.set() hook：
+    1. 富裕能量（ACE SPEC）：附加後抽 4 張
+    2. 感應【超】能量：附加到【超】寶可夢後搜牌庫選至多 2 隻基礎【超】到備戰
+    3. 火箭隊能量：附加到非「火箭隊的」寶可夢後自動丟棄（gate）
+
+**修改 `src/lib/game/effects/_shared.ts`**
+- 新增 `AttachEnergyHookFn` type 定義
+- 新增 `SPECIAL_ENERGY_ATTACH = new Map<string, AttachEnergyHookFn>()`（v2.66 搬移）
+
+**修改 `src/lib/game/effects.ts`**
+- 從 `_shared` import 清單加入 `SPECIAL_ENERGY_ATTACH`
+- 新增 `export { SPECIAL_ENERGY_ATTACH };`（engine.ts 從 effects 取用，路徑不變）
+- 移除舊 `export type AttachEnergyHookFn` + `export const SPECIAL_ENERGY_ATTACH`（15 行）
+- 移除 富裕能量 + 感應【超】能量 兩個 hook 區塊（~50 行）
+- 移除 火箭隊能量 hook 區塊（~25 行）
+- 加 `import './effects/cards/energy_cards';`（side-effect import）
+- 效果：9820 → 9736 行（減 84 行）
+
+**修改 `src/lib/version.ts`**：2.65 → 2.66
+
+### Build 驗證
+`npm run build` ✓（12.72s，無 TS error，無 Svelte warning）
+
+### Import/Export 路徑確認
+```
+_shared.ts  →  定義 SPECIAL_ENERGY_ATTACH
+energy_cards.ts  →  import { SPECIAL_ENERGY_ATTACH } from ../_shared，三個 .set()
+effects.ts  →  import SPECIAL_ENERGY_ATTACH from _shared + re-export
+engine.ts  →  import { SPECIAL_ENERGY_ATTACH } from ./effects  ✅（路徑不動）
+```
+
+### 後續建議
+以下為 effects.ts 還可以繼續切的候選主題（按簡易到複雜）：
+- `effects/cards/rocket_team.ts`：火箭隊的接收器 / 雅典娜 / 蘭斯 / 坂木 / 阿波羅 / 拉姆達 / 工廠 stub
+- `effects/cards/heal.ts`：自癒 / 治療類招式（目前散落在 effects.ts 中段）
+- `effects/cards/coin_flip.ts`：擲硬幣類招式
+- `effects/cards/bench_snipe.ts`：bench damage 類招式
+- `effects/cards/status_ailments.ts`：灼傷 / 麻痺 / 混亂 / 睡眠 / 中毒判定
 
 ---
 

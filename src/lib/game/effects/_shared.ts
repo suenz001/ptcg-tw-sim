@@ -155,6 +155,21 @@ export function regA(pokemonName: string, abilityIndex: number, fn: EffectFn) {
  */
 export const BENCH_PLACE_TRIGGERS = new Map<string, EffectFn>();
 
+/**
+ * 特殊能量「附加後」hook — engine.ts 的 ATTACH_ENERGY handler 在能量實際附加後，
+ * 會查此 map：key = 特殊能量卡名，fn(state, actorIdx, targetIid, pool) => newState。
+ * 若目標寶可夢不符條件（例：感應【超】只對【超】寶可夢生效），fn 內部自行判斷並可略過。
+ *
+ * v2.66：從 effects.ts 搬到 _shared，讓子模組能直接 `.set(...)` 註冊。
+ */
+export type AttachEnergyHookFn = (
+  state: GameState,
+  actorIdx: 0 | 1,
+  targetIid: string,
+  pool: Map<string, Card>,
+) => GameState;
+export const SPECIAL_ENERGY_ATTACH = new Map<string, AttachEnergyHookFn>();
+
 export function canPlayTrainer(
   cardName: string,
   state: GameState,
