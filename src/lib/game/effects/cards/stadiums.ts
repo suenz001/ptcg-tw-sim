@@ -111,3 +111,16 @@ export const ROCKET_WATCHTOWER_STADIUMS = new Set<string>(['火箭隊的監視�
 // 註：括號內「會受到招式的傷害」指直接攻擊戰鬥位的招式傷害（weakness/resistance 計算）
 //   不受此卡影響；因此 ATTACK pipeline 的 active-hit 不需要閘門。
 export const BENCH_PROTECTION_STADIUMS = new Set<string>(['對戰圓形競技場']);
+
+// ── 被動競技場（UI 用）── v2.31 ───────────────────────────────────────────────
+// 純被動：放下即生效、效果持續到被換場，無主動觸發動作 → UI 不需顯示「使用競技場」按鈕。
+//   - 對戰圓形競技場：備戰保護
+//   - 阻礙之塔：雙方道具無效
+//   - 火箭隊的監視塔：雙方【無】寶可夢特性無效
+// /routes/game/+page.svelte 的 `canUseStadium` 會透過 helper 過濾這組成員。
+// 新增純被動場地卡時記得加進來。
+export const PASSIVE_STADIUMS = new Set<string>([
+  ...BENCH_PROTECTION_STADIUMS,
+  ...JAMMING_TOWER_STADIUMS,
+  ...ROCKET_WATCHTOWER_STADIUMS,
+]);

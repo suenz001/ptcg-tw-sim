@@ -17,7 +17,7 @@
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec } from '$lib/game/effects';
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS } from '$lib/game/effects';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
   import { auth } from '$lib/firebase';
@@ -579,10 +579,13 @@
   // Setup 階段對手場上的寶可夢應該蓋牌（不能讓對手看到身分），等雙方都完成後（phase→playing）再揭曉
   const oppHidden = $derived(!!game && game.phase === 'setup');
 
+  // v2.31：純被動場地卡（對戰圓形競技場 / 阻礙之塔 / 火箭隊的監視塔）不需要使用按鈕，
+  // 效果放下即一直存在；排除這組後才顯示「🏟 使用競技場」按鈕。
   const canUseStadium = $derived(
     game?.phase === 'playing' && game.turnPhase === 'main' &&
     !!game.activeStadium && !game.pendingSelection &&
-    !(game.stadiumUsedThisTurn ?? [false,false])[myIdx]
+    !(game.stadiumUsedThisTurn ?? [false,false])[myIdx] &&
+    !(stadiumCard && PASSIVE_STADIUMS.has(stadiumCard.name))
   );
 
   // 線上模式 / AI 模式：是否輪到玩家行動

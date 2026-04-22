@@ -1,9 +1,77 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session c0f2++++ (v2.30)  
+> 最後更新：2026-04-22 Session c0f2+++++ (v2.31)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session c0f2+++++ (v2.31) — 被動競技場隱藏使用按鈕 + 驗證備戰保護資料流
+
+### 問題
+
+Leon 指出「對戰圓形競技場」的效果是**純被動**（雙方備戰寶可夢不因對手招式/特性
+被放置傷害指示物），不需要「使用競技場」按鈕。同時要我確認該卡能否擋住：
+1. 多龍巴魯托ex｜幻影奇襲（6 個傷害指示物自由分配到對手備戰）
+2. 黑夜魔靈｜咒詛炸彈（放 13 個指示物到對手 1 隻寶可夢）
+
+### 驗證：備戰保護的資料流已正確
+
+v2.22 實作時就已在 effects.ts 佈好 `isBenchProtected(state, pool)` helper（line 72），
+各 resolver 處理備戰目標前先查。兩張卡的 gate 都已經存在：
+
+**A. 幻影奇襲（`regR('dragapult-snipe', ...)` effects.ts:4561）**
+- 進 resolver 第一步 `isBenchProtected` 為 true → 整批取消放置，記一條 log、return
+  「`幻影奇襲：對戰圓形競技場效果 — 對手備戰不受傷害指示物放置`」
+- 因對手備戰是唯一合法目標，整個 6 counter 分配被取消。行為正確。
+
+**B. 咒詛炸彈（`regR('cursed-bomb', ...)` effects.ts:8063）**
+- 同時支援 5 counter（彷徨夜靈）與 13 counter（黑夜魔靈）
+- 目標若為備戰（`!isActive && isBenchProtected`）→ 跳過傷害放置，**仍自身 KO**
+  「`咒詛炸彈：XX 因對戰圓形競技場效果不受傷害指示物`」+ `selfKOInstance`
+- 若目標是對手戰鬥場 pokemon（active） → 不受此卡保護，正常放置 + 自身 KO
+  （括號內「會受到招式的傷害」僅指招式直擊戰鬥位；ability-form 的 13-counter
+   對戰鬥位同樣放置，符合卡面規則）
+
+其他亦已在 v2.22 裝上 gate 的 resolver：snipe-10/20/30/60/120/variable/multi、
+bench-hit-N、damage-distribute、全體指示物類、某些自 KO ability。列表見
+`stadiums.ts` BENCH_PROTECTION_STADIUMS 註解。
+
+### 主要修法：被動場地卡隱藏「使用競技場」按鈕
+
+**1. `src/lib/game/effects/cards/stadiums.ts`**
+- 新增 `PASSIVE_STADIUMS` 集合，union of BENCH_PROTECTION / JAMMING_TOWER /
+  ROCKET_WATCHTOWER。目的：UI gate，不參與 engine 邏輯。
+- 註解明確「新增純被動場地卡時記得加進來」
+
+**2. `src/lib/game/effects.ts`**
+- 從 stadiums.ts re-export `PASSIVE_STADIUMS`
+
+**3. `src/routes/game/+page.svelte`**
+- `canUseStadium` 多加一條 gate：`!(stadiumCard && PASSIVE_STADIUMS.has(stadiumCard.name))`
+- 對戰圓形競技場 / 阻礙之塔 / 火箭隊的監視塔在場上時，`🏟 XXX` 按鈕完全不顯示
+
+### 現有需按鈕的場地卡（未被過濾掉）
+
+- 夜間學院（手牌放回牌庫上方）
+- 月光丘陵（丟超能量回 HP）
+- 居民會館（回 10 HP，需本回合用過支援者）
+- 神秘花園（丟能量抽牌）
+- 尖釘鎮道館（搜尋瑪俐寶可夢）
+
+未來新增 USE_STADIUM handler 時預設會出現按鈕；新增純被動效果時要把卡名加進
+`PASSIVE_STADIUMS`。
+
+### 驗證
+- `npm run build` ✓ 12.47s
+- 純 UI + 型別擴充，不改 engine / effect 邏輯
+
+### 版本
+- `src/lib/version.ts`: 2.30 → 2.31
+
+### Commit
+- `<TBD-after-push>` — v2.31: 被動競技場隱藏按鈕 + 驗證幻影奇襲/咒詛炸彈 gate
 
 ---
 
