@@ -106,7 +106,7 @@ if (f === 'Supporter:TOP7') {
 
 ### Commit
 
-待 push 後回填。
+`70ec9c9` — v2.56: 實裝寶可裝置3.0（Item）— 查看牌庫頂 7 張選 1 支援者
 
 ---
 
