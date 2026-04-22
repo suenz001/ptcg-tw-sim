@@ -10,7 +10,8 @@
       "Energy": 2
     },
     "coverImageUrl": "covers/MJ.png",
-    "scrapedAt": "2026-04-16T08:40:39.689Z"
+    "scrapedAt": "2026-04-16T08:40:39.689Z",
+    "releaseDate": "2026-02-26"
   },
   {
     "code": "SV5K",
@@ -23,7 +24,8 @@
       "Energy": 1
     },
     "coverImageUrl": "covers/SV5K.png",
-    "scrapedAt": "2026-04-16T07:50:24.999Z"
+    "scrapedAt": "2026-04-16T07:50:24.999Z",
+    "releaseDate": "2024-02-02"
   },
   {
     "code": "SV5M",
@@ -36,7 +38,8 @@
       "Energy": 1
     },
     "coverImageUrl": "covers/SV5M.png",
-    "scrapedAt": "2026-04-16T07:49:06.962Z"
+    "scrapedAt": "2026-04-16T07:49:06.962Z",
+    "releaseDate": "2024-02-02"
   },
   {
     "code": "SV5a",
@@ -49,7 +52,8 @@
       "Energy": 2
     },
     "coverImageUrl": "covers/SV5a.png",
-    "scrapedAt": "2026-04-16T07:51:42.989Z"
+    "scrapedAt": "2026-04-16T07:51:42.989Z",
+    "releaseDate": "2024-04-03"
   },
   {
     "code": "SV6",
@@ -62,7 +66,8 @@
       "Energy": 1
     },
     "coverImageUrl": "covers/SV6.png",
-    "scrapedAt": "2026-04-16T07:53:00.895Z"
+    "scrapedAt": "2026-04-16T07:53:00.895Z",
+    "releaseDate": "2024-05-10"
   },
   {
     "code": "SV6a",
@@ -74,7 +79,8 @@
       "Trainer": 15
     },
     "coverImageUrl": "covers/SV6a.png",
-    "scrapedAt": "2026-04-16T07:54:43.541Z"
+    "scrapedAt": "2026-04-16T07:54:43.541Z",
+    "releaseDate": "2024-06-21"
   },
   {
     "code": "SV7",
@@ -86,7 +92,8 @@
       "Trainer": 16
     },
     "coverImageUrl": "covers/SV7.png",
-    "scrapedAt": "2026-04-16T07:56:01.174Z"
+    "scrapedAt": "2026-04-16T07:56:01.174Z",
+    "releaseDate": "2024-08-02"
   },
   {
     "code": "SV7a",
@@ -99,7 +106,8 @@
       "Energy": 2
     },
     "coverImageUrl": "covers/SV7a.png",
-    "scrapedAt": "2026-04-16T07:57:46.945Z"
+    "scrapedAt": "2026-04-16T07:57:46.945Z",
+    "releaseDate": "2024-09-27"
   },
   {
     "code": "SV8",
@@ -111,7 +119,8 @@
       "Trainer": 16
     },
     "coverImageUrl": "covers/SV8.png",
-    "scrapedAt": "2026-04-16T07:59:02.734Z"
+    "scrapedAt": "2026-04-16T07:59:02.734Z",
+    "releaseDate": "2024-10-25"
   },
   {
     "code": "SV8a",
@@ -124,7 +133,8 @@
       "Energy": 5
     },
     "coverImageUrl": "covers/SV8a.png",
-    "scrapedAt": "2026-04-16T08:01:07.033Z"
+    "scrapedAt": "2026-04-16T08:01:07.033Z",
+    "releaseDate": "2024-12-20"
   },
   {
     "code": "M1L",
@@ -136,7 +146,8 @@
       "Trainer": 14
     },
     "coverImageUrl": "covers/M1L.png",
-    "scrapedAt": "2026-04-16T08:16:43.852Z"
+    "scrapedAt": "2026-04-16T08:16:43.852Z",
+    "releaseDate": "2025-08-15"
   },
   {
     "code": "M1S",
@@ -148,7 +159,8 @@
       "Trainer": 15
     },
     "coverImageUrl": "covers/M1S.png",
-    "scrapedAt": "2026-04-16T08:15:30.428Z"
+    "scrapedAt": "2026-04-16T08:15:30.428Z",
+    "releaseDate": "2025-08-15"
   },
   {
     "code": "M2",
@@ -160,7 +172,8 @@
       "Trainer": 7
     },
     "coverImageUrl": "covers/M2.png",
-    "scrapedAt": "2026-04-16T08:17:56.312Z"
+    "scrapedAt": "2026-04-16T08:17:56.312Z",
+    "releaseDate": "2025-10-09"
   },
   {
     "code": "M2a",
@@ -173,7 +186,8 @@
       "Energy": 3
     },
     "coverImageUrl": "covers/M2a.png",
-    "scrapedAt": "2026-04-16T08:19:18.390Z"
+    "scrapedAt": "2026-04-16T08:19:18.390Z",
+    "releaseDate": "2025-12-05"
   },
   {
     "code": "MBD",
@@ -186,7 +200,8 @@
       "Energy": 1
     },
     "coverImageUrl": "covers/MBD.png",
-    "scrapedAt": "2026-04-16T08:28:01.888Z"
+    "scrapedAt": "2026-04-16T08:28:01.888Z",
+    "releaseDate": "2025-09-19"
   },
   {
     "code": "MBG",
@@ -199,7 +214,8 @@
       "Energy": 1
     },
     "coverImageUrl": "covers/MBG.png",
-    "scrapedAt": "2026-04-16T08:28:21.248Z"
+    "scrapedAt": "2026-04-16T08:28:21.248Z",
+    "releaseDate": "2025-09-19"
   },
   {
     "code": "SV10",
@@ -212,7 +228,8 @@
       "Energy": 1
     },
     "coverImageUrl": "covers/SV10.png",
-    "scrapedAt": "2026-04-16T07:11:55.699Z"
+    "scrapedAt": "2026-04-16T07:11:55.699Z",
+    "releaseDate": "2025-05-02"
   },
   {
     "code": "SV11B",
@@ -225,7 +242,8 @@
       "Energy": 2
     },
     "coverImageUrl": "covers/SV11B.png",
-    "scrapedAt": "2026-04-16T08:12:18.580Z"
+    "scrapedAt": "2026-04-16T08:12:18.580Z",
+    "releaseDate": "2025-06-20"
   },
   {
     "code": "SV11W",
@@ -238,7 +256,8 @@
       "Energy": 2
     },
     "coverImageUrl": "covers/SV11W.png",
-    "scrapedAt": "2026-04-16T08:08:59.091Z"
+    "scrapedAt": "2026-04-16T08:08:59.091Z",
+    "releaseDate": "2025-06-20"
   },
   {
     "code": "SV9",
@@ -251,7 +270,8 @@
       "Energy": 2
     },
     "coverImageUrl": "covers/SV9.png",
-    "scrapedAt": "2026-04-16T08:05:56.176Z"
+    "scrapedAt": "2026-04-16T08:05:56.176Z",
+    "releaseDate": "2025-02-07"
   },
   {
     "code": "SV9a",
@@ -263,7 +283,8 @@
       "Trainer": 12
     },
     "coverImageUrl": "covers/SV9a.png",
-    "scrapedAt": "2026-04-16T08:07:38.291Z"
+    "scrapedAt": "2026-04-16T08:07:38.291Z",
+    "releaseDate": "2025-03-28"
   },
   {
     "code": "SVQL",
@@ -276,7 +297,8 @@
       "Energy": 1
     },
     "coverImageUrl": "covers/SVQL.png",
-    "scrapedAt": "2026-04-22T01:01:36.632022Z"
+    "scrapedAt": "2026-04-22T01:01:36.632022Z",
+    "releaseDate": "2025-07-18"
   },
   {
     "code": "SVQP",
@@ -289,7 +311,8 @@
       "Energy": 1
     },
     "coverImageUrl": "covers/SVQP.png",
-    "scrapedAt": "2026-04-22T01:01:36.632405Z"
+    "scrapedAt": "2026-04-22T01:01:36.632405Z",
+    "releaseDate": "2025-07-18"
   },
   {
     "code": "M-P",
@@ -302,7 +325,8 @@
       "Energy": 12
     },
     "coverImageUrl": "covers/M-P.png",
-    "scrapedAt": "2026-04-22T01:01:36.634085Z"
+    "scrapedAt": "2026-04-22T01:01:36.634085Z",
+    "releaseDate": "2025-08-07"
   },
   {
     "code": "M3",
@@ -315,7 +339,8 @@
       "Energy": 3
     },
     "coverImageUrl": "covers/M3.png",
-    "scrapedAt": "2026-04-16T08:25:27.486Z"
+    "scrapedAt": "2026-04-16T08:25:27.486Z",
+    "releaseDate": "2026-02-06"
   },
   {
     "code": "M4",
@@ -328,7 +353,8 @@
       "Energy": 3
     },
     "coverImageUrl": "covers/M4.png",
-    "scrapedAt": "2026-04-16T08:26:58.977Z"
+    "scrapedAt": "2026-04-16T08:26:58.977Z",
+    "releaseDate": "2026-03-27"
   },
   {
     "code": "MC",
@@ -341,7 +367,8 @@
       "Energy": 23
     },
     "coverImageUrl": "covers/MC.png",
-    "scrapedAt": "2026-04-16T08:29:24.027Z"
+    "scrapedAt": "2026-04-16T08:29:24.027Z",
+    "releaseDate": "2026-01-16"
   },
   {
     "code": "SVOD",
@@ -354,7 +381,8 @@
       "Energy": 2
     },
     "coverImageUrl": "covers/SVOD.png",
-    "scrapedAt": "2026-04-21T14:24:57.960Z"
+    "scrapedAt": "2026-04-21T14:24:57.960Z",
+    "releaseDate": "2025-03-07"
   },
   {
     "code": "SVOM",
@@ -367,6 +395,7 @@
       "Energy": 1
     },
     "coverImageUrl": "covers/SVOM.png",
-    "scrapedAt": "2026-04-21T14:24:25.226Z"
+    "scrapedAt": "2026-04-21T14:24:25.226Z",
+    "releaseDate": "2025-03-07"
   }
 ]

@@ -1,9 +1,93 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session c0f2+++ (v2.29)  
+> 最後更新：2026-04-22 Session c0f2++++ (v2.30)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session c0f2++++ (v2.30) — /cards 首頁依發售日排序 + 顯示發售日
+
+### 問題
+
+Leon 要卡牌資料庫的排序「除了按照 H/I/J 標排序外，也按卡包發售日排序」。
+確認方向後決定：**每個 H/I/J 區塊內** 依發售日**升序（舊 → 新）**，
+越新的排越右邊；同時在每張卡包 tile 的中文名稱下方顯示發售日。
+
+### 發售日資料來源
+
+從 `asia.pokemon-card.com/tw/card-search/` pageNo=1 + pageNo=2 爬出 29 個
+卡包的發售日，人工對照到 index.json 的每個 code：
+
+| Mark | Code(s) | 發售日 |
+|------|---------|--------|
+| H | SV5K, SV5M | 2024-02-02 |
+| H | SV5a | 2024-04-03 |
+| H | SV6 | 2024-05-10 |
+| H | SV6a | 2024-06-21 |
+| H | SV7 | 2024-08-02 |
+| H | SV7a | 2024-09-27 |
+| H | SV8 | 2024-10-25 |
+| H | SV8a | 2024-12-20 |
+| H | MJ | 2026-02-26（本質為 H 標 reprint 擴充） |
+| I | SV9 | 2025-02-07 |
+| I | SV9a | 2025-03-28 |
+| I | SVOD, SVOM | 2025-03-07 |
+| I | SV10 | 2025-05-02 |
+| I | SV11B, SV11W | 2025-06-20 |
+| I | SVQL, SVQP | 2025-07-18 |
+| I | M1L, M1S | 2025-08-15 |
+| I | MBD, MBG | 2025-09-19 |
+| I | M2 | 2025-10-09 |
+| I | M2a | 2025-12-05 |
+| J | M-P | 2025-08-07 |
+| J | MC | 2026-01-16 |
+| J | M3 | 2026-02-06 |
+| J | M4 | 2026-03-27 |
+
+### 主要修法
+
+**1. `src/lib/cards/types.ts`**
+- `SetSummary` interface 新增 `releaseDate?: string` field
+- 註解說明格式 YYYY-MM-DD、資料來源、排序用途、缺欄位的 fallback 行為
+
+**2. `static/cards/index.json`**
+- 用 Python 腳本幫 29 個 set 逐一注入 `releaseDate` 欄位
+- 驗證：29/29 都有值，missing list 空
+
+**3. `src/routes/cards/+page.svelte` — index mode sort**
+- 新增 `byDateAsc` comparator：
+  - 兩者都有日期 → `da.localeCompare(db)`（字串 YYYY-MM-DD 直接比較就是時序）
+  - 一邊缺日期 → 缺的排最後
+  - 同日（SV5K/SV5M、SV11B/SV11W 等）→ 再用 `code.localeCompare` 做穩定排序
+- 各 mark group 內 sort 完再照舊 H → I → J 組裝
+
+**4. `src/routes/cards/+page.svelte` — tile 顯示**
+- 在 `setName` 下、`setCount` 上插入 `.setDate`：「發售 2025-XX-XX」
+- CSS：`font-size: 0.72rem; color: #9ca3af; font-variant-numeric: tabular-nums`
+  — 比張數再淡一階、等寬數字讓日期垂直對齊
+
+### 設計討論
+
+- 一開始先做成「新 → 舊」（符合「最近的先看」直覺），Leon 回說要改成「舊 → 新，越新排越右邊」。
+- 邏輯上兩者都 OK，但「越新排越右邊」的好處是：未來新增卡包只會往尾端擴展，tile 位置不會抖動。
+
+### 驗證
+
+- `npm run build` ✓ 12.19s
+- 沒動到 engine / effect / preset 邏輯，純 /cards 路由 UI + 資料
+- 類型安全：`releaseDate?: string` 是 optional，所有舊程式碼都相容
+
+### 版本
+
+- `src/lib/version.ts`: 2.29 → 2.30
+
+### 後續 TODO
+- 未來 set 爬取時記得帶上 releaseDate（目前 scraper 沒抓這欄，之後加新卡包時要手動補）
+
+### Commit
+- `<TBD-after-push>` — v2.30: 卡包依發售日排序 + tile 顯示發售日
 
 ---
 

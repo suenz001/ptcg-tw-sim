@@ -56,4 +56,11 @@ export interface SetSummary {
   supertypeCounts: Partial<Record<Supertype, number>>;
   coverImageUrl: string;
   scrapedAt: string | null;
+  /**
+   * 卡包台灣版發售日 (YYYY-MM-DD)，可選。
+   * 來源：asia.pokemon-card.com/tw/card-search 的「發售日」欄。
+   * 用途：/cards index 頁內每個 H/I/J 區塊依此降序排序（新→舊）。
+   * 沒填的 set 會排在該區塊最末端（fallback 用 code 字典序）。
+   */
+  releaseDate?: string;
 }

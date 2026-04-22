@@ -110,6 +110,19 @@
       if (!groups.has(m)) groups.set(m, []);
       groups.get(m).push(set);
     }
+    // v2.30: 每個 mark group 內依 releaseDate 升序（舊 → 新）——越新的越右邊。
+    // 沒填 releaseDate 的排到最後，最後用 code 字典序做 tiebreaker，
+    // 保證同一天發售（如 SV5K/SV5M、SV11B/SV11W）仍有穩定順序。
+    const byDateAsc = (a: SetSummary, b: SetSummary) => {
+      const da = a.releaseDate ?? '';
+      const db = b.releaseDate ?? '';
+      if (da && db && da !== db) return da.localeCompare(db);
+      if (da && !db) return -1;
+      if (!da && db) return 1;
+      return a.code.localeCompare(b.code);
+    };
+    for (const [, sets] of groups) sets.sort(byDateAsc);
+
     // Ensure H → I → J order
     const ordered = [];
     for (const mark of ['H', 'I', 'J']) {
@@ -163,6 +176,9 @@
             <div class="setInfo">
               <div class="setCode">{set.code}</div>
               <div class="setName" title={set.name}>{set.name}</div>
+              {#if set.releaseDate}
+                <div class="setDate">發售 {set.releaseDate}</div>
+              {/if}
               <div class="setCount">{set.cardCount} 張</div>
             </div>
           </a>
@@ -431,6 +447,15 @@
   .setCount {
     font-size: 0.8rem;
     color: #666;
+  }
+  /* v2.30: 發售日 — 放在中文名稱下方，比 setCount 再淡一階。
+     用 tabular-nums 讓每片 tile 的日期在同一列對齊。 */
+  .setDate {
+    font-size: 0.72rem;
+    color: #9ca3af;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    margin-bottom: 0.1rem;
   }
 
   /* ── Regulation mark sections ── */
