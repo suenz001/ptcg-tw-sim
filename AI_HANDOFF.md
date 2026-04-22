@@ -1,9 +1,84 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session a9f1 (v2.62)  
+> 最後更新：2026-04-23 Session ea58 (v2.63)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session ea58 (v2.63) — 火箭隊四合一：彈性能量 / 工廠觸發 / 力量抑制者 / 撤退拔能量選擇
+
+Leon 一次回報 4 個火箭隊相關 bug（A 能量、B 工廠、C 力量抑制者、D 撤退能量選擇）。本 session 一次處理完。
+
+### Bug A — 火箭隊能量 彈性屬性（超／惡 任意組合）
+
+**卡面規則**：`<火箭隊能量>` 只能附於「火箭隊的寶可夢」身上，視為提供 **2 個【超】和【惡】2 種屬性的能量**。  
+Leon 澄清的使用情境：「要當 1 個超 1 個惡可以 / 要當 2 個超也可以 / 要當 2 個惡也可以」— 也就是付技能能量時可依需求分配。
+
+**根因**：原本 `isEnergyOfType` 對「雙色／多色提供」能量的匹配是硬寫死（例：歸類成 `colorless` 或只當單一屬性），付招費時拿不到彈性分配。同時 `canAffordAttack` 用的是 greedy 直接配對，沒辦法處理「同一張能量可做 A 或 B」的情境。
+
+**修法**：在 `engine.ts` 引入 `EnergyUnit` 概念 + 回溯配對：
+
+- `getEnergyUnits(cardId, pool)`：回傳該卡「所提供的每個能量單位的候選類型集合」。一般基本能量為 `[{types: {'火'}}]`；火箭隊能量為 `[{types: {'超','惡'}}, {types: {'超','惡'}}]`（兩個 slot、每個可當超或惡）。
+- `canAffordAttack(attached, cost, pool)`：把 attached 展成 flat units list，對招費做 backtracking 配對（每個 cost slot 找一個未用的 unit，unit 的 types 集合要涵蓋該 cost）。
+
+這讓未來若出現「草/草」「雷/雷」等多單位能量卡，同一套機制直接能用。
+
+### Bug B — 火箭隊的工廠出場後，場地按鈕沒亮（可抽卡沒觸發）
+
+Leon 回報：「打出了火箭隊的支援者，但卻沒有讓我可以使用中間的場地按鈕抽卡」。
+
+**根因 — tuple 腐化**：`applyAction` 多處對 `state.players` 做 `{...state.players}`（物件展開）而不是 `[...state.players] as [PlayerState, PlayerState]`（陣列展開 + tuple 保留）。Svelte 5 + TypeScript 對 `[PlayerState, PlayerState]` tuple 的 runtime 是陣列，物件展開後變成 `{0:..., 1:..., length:2}` 這種 array-like，**後續 `state.players[0]` 讀取還能跑（索引看起來仍對）**，但：
+
+- `state.players.length` 丟失 array prototype 方法
+- 某些 `derived` 重算時 tuple 特徵被破壞 → reactivity 斷鏈
+- 觸發條件 `active.playingFieldUseCount` 更新時，中間場地按鈕的 gate `canUseStadiumAbility` 拿到的是舊 tuple，UI 沒亮
+
+`居民會館`、`火箭隊的工廠` 這類「每回合可按一次」的 stadium 靠的就是這條 reactive 鏈。
+
+**修法**：engine.ts 全面掃 `{...state.players}` → `[...state.players] as [PlayerState, PlayerState]`。這是個**專案級通用修**，不只解這一張卡，所有靠 reactive derived 的 stadium / 多階段觸發全受益。
+
+### Bug C — 力量抑制者：場上（戰鬥場 + 備戰）超過 4 隻才觸發
+
+Leon 澄清：「所謂的場上是包含戰鬥場和備戰區，總共加起來超過4隻就可以」。
+
+**結論：非 bug**。查 `effects.ts` 的力量抑制者 gate 實作，已經是 `[active, ...bench].length > 4` 的寫法（5 隻才開放），沒問題。本次僅確認不須改。
+
+### Bug D — 撤退時多屬性能量要讓玩家選擇丟哪幾張
+
+Leon 回報：「當戰鬥寶可夢身上有多個不同屬性的能量要撤退時，要給玩家選擇拔掉哪個屬性的能量」。
+
+**舊行為**：撤退一律從 attached 前 N 張丟掉（自動），玩家沒選擇權。附同色時沒差；附多色（例：身上有 超 ×1 + 惡 ×1，撤退費 1）時強迫玩家接受自動決定。
+
+**修法**：在 engine `RETREAT` handler 的 auto-discard path 之前加 gate：
+
+```ts
+// 計算每張 attached energy 的「類型簽章」（對 getEnergyUnits 結果 sort+join）
+// 若場上有 >= 2 種不同簽章 → 開 pendingSelection 讓玩家選
+```
+
+新增：
+
+- `types.ts`：`PendingSelection.type` union 加 `'active-energy-discard'`
+- `engine.ts`：Retreat gate 產 pending + `RESOLVERS.set('retreat-energy-discard', ...)`（展開／交換活性／清除狀態異常／撤退次數標記一條龍）
+- `+page.svelte`：`selectionItems` 加 `active-energy-discard` case（源自 `src.active.energyAttached`）+ `selectionTitle` 對應中文「選擇撤退要丟棄的能量」
+
+同色能量（單一簽章）維持舊 auto-discard 行為、不開多餘選單。
+
+### 驗證
+
+`npm run build` 綠（13.07s）、TS 無錯。
+
+### Commit
+
+待本 session 推送後補。
+
+### Teach moment
+
+1. **Tuple 腐化** 是 Svelte 5 + TS 專案的常見坑。`{...tuple}` 在 compile time 看不出錯、runtime 還能用索引，但斷 reactive derivation — 一定要 `[...tuple] as [X, Y]`。本 session 順手全掃。
+2. **回溯配對** 是多色能量系統的正規解。之前硬寫 `isEnergyOfType` 只能處理一對一映射，未來二精靈／三精靈／未實裝雙色都會撞上；早早換成 EnergyUnit 一勞永逸。
+3. **撤退是引擎原生機制**，不是卡片效果 — resolver 直接寫在 engine.ts 尾端的 `RESOLVERS.set`，不放 effects.ts。這是個 pattern 分界。
 
 ---
 

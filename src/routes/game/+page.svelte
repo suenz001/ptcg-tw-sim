@@ -1015,6 +1015,10 @@
         const validIids2 = pendingSelection.params?.validIids as string[] | undefined;
         return validIids2 ? src.hand.filter(c => validIids2.includes(c.iid)) : src.hand;
       }
+      // v2.63 撤退選擇要丟棄的附加能量（戰鬥寶可夢身上有多屬性時才彈出）
+      case 'active-energy-discard': {
+        return src.active?.energyAttached ?? [];
+      }
       case 'heal-target':  {
         const all = [...(src.active ? [src.active] : []), ...src.bench];
         const validIids3 = pendingSelection.params?.validIids as string[] | undefined;
@@ -1430,6 +1434,7 @@
     if (type === 'opp-poke-choose') return '選擇對手的寶可夢';
     if (type === 'hand-discard')    return '選擇丟棄的手牌';
     if (type === 'hand-choose')     return '從手牌選擇';
+    if (type === 'active-energy-discard') return '選擇撤退要丟棄的能量';
     if (type === 'heal-target')     return '選擇回復的寶可夢';
     if (type === 'discard-search')  return '從棄牌區選擇';
     if (type === 'damage-distribute') {

@@ -260,28 +260,89 @@ export function countEnergy(
 }
 
 /**
+ * 能量「單位」：描述單一個能量在成本檢查時可視為哪些屬性。
+ * - 基本能量：1 個單位、types=[對應屬性]（純種）
+ * - 硬岩【鬥】/ 感應【超】：1 個單位、types=[對應屬性]
+ * - 富裕能量：1 個單位、types=['Colorless']（通吃 Colorless slot；遇到有色需求不可用）
+ * - 火箭隊能量：2 個單位、types=['Psychic','Darkness']（任意當作超或惡）
+ * - 其他未登記特殊能量 fallback：1 個單位、types=['Colorless']
+ *
+ * 成本檢查會以 unit 為單位做匹配（每個 unit 最多付 1 個 cost slot），
+ * 所以 1 張火箭隊能量能付 2 超、或 2 惡、或 1 超 1 惡，而不是寫死 1 超 + 1 惡。
+ */
+export type EnergyUnit = { types: EnergyType[] };
+
+export function getEnergyUnits(cardId: string, pool: Map<string, Card>): EnergyUnit[] {
+  const c = pool.get(cardId);
+  if (!c || c.supertype !== 'Energy') return [];
+  if (c.subtype === 'Basic') {
+    let t: EnergyType | undefined;
+    if (c.pokemonType) t = c.pokemonType;
+    else {
+      const m = c.name.match(/【(.+?)】/);
+      if (m) t = ZH_ENERGY_TYPE[m[1]];
+    }
+    return t ? [{ types: [t] }] : [];
+  }
+  // 特殊能量多單位 / 多屬性顯式處理
+  if (c.name === '火箭隊能量') {
+    // 2 個單位，各可當作【超】或【惡】
+    return [
+      { types: ['Psychic', 'Darkness'] },
+      { types: ['Psychic', 'Darkness'] },
+    ];
+  }
+  // 一般特殊能量：依 SPECIAL_ENERGY_TYPES 每個 type 拆成 1 個單純單位
+  if (SPECIAL_ENERGY_TYPES[c.name]) {
+    return SPECIAL_ENERGY_TYPES[c.name].map((t) => ({ types: [t] }));
+  }
+  // fallback：1 個 Colorless 單位
+  return [{ types: ['Colorless'] }];
+}
+
+/**
  * 判斷招式能量需求是否滿足。
- * cost[] 中 'Colorless' 可由任何能量代替，其餘必須完全匹配。
+ * 以「能量單位」做匹配：每個 unit 最多付 1 個 cost slot。
+ * - 'Colorless' cost 可由任何 unit 支付（包括 types=['Psychic'] 的純種單位）。
+ * - 有色 cost 必須由 types 中有該色的 unit 支付。
+ * 使用回溯確保如「火箭隊能量+基本超」這類混合能量組合能正確分配。
  */
 export function canAffordAttack(
   pokemon: CardInstance,
   cost: EnergyType[],
   pool: Map<string, Card>
 ): boolean {
-  const available = countEnergy(pokemon, pool);
-  const avail = new Map(available); // 可用副本
+  // 收集所有附加能量的「單位」
+  const units: EnergyUnit[] = [];
+  for (const e of pokemon.energyAttached) {
+    units.push(...getEnergyUnits(e.cardId, pool));
+  }
+
   const colorlessCost = cost.filter((t) => t === 'Colorless').length;
   const typedCost = cost.filter((t) => t !== 'Colorless');
 
-  // 先扣掉有色需求
-  for (const t of typedCost) {
-    const have = avail.get(t) ?? 0;
-    if (have <= 0) return false;
-    avail.set(t, have - 1);
-  }
-  // 剩餘能量總量要 ≥ 無色需求
-  const remaining = [...avail.values()].reduce((a, b) => a + b, 0);
-  return remaining >= colorlessCost;
+  // 單位數量不夠直接失敗
+  if (units.length < typedCost.length + colorlessCost) return false;
+
+  // 回溯：依序把每個有色需求配給一個 types 包含該色的 unit；最後檢查剩餘 unit 數 ≥ colorless 需求
+  const used = new Array(units.length).fill(false);
+  const tryMatch = (i: number): boolean => {
+    if (i >= typedCost.length) {
+      let remaining = 0;
+      for (const u of used) if (!u) remaining++;
+      return remaining >= colorlessCost;
+    }
+    const need = typedCost[i];
+    for (let j = 0; j < units.length; j++) {
+      if (used[j]) continue;
+      if (!units[j].types.includes(need)) continue;
+      used[j] = true;
+      if (tryMatch(i + 1)) return true;
+      used[j] = false;
+    }
+    return false;
+  };
+  return tryMatch(0);
 }
 
 /** 判斷一張 ex 卡（name 含 'ex' 後綴）對應獎勵牌數 */
@@ -749,7 +810,36 @@ function handlePlaying(
     if (hasSkyPathR && isBasicPokemonCard(activeCard)) retreatCost = 0;
     if (attacker.active.energyAttached.length < retreatCost) return state;
 
-    // 自動丟棄能量（從後方取）
+    // v2.63：若撤退需丟 ≥1 個能量，且附加能量包含多種屬性（或不同單位結構的特殊能量），
+    // 開 pendingSelection 讓玩家選要丟哪幾個能量；否則沿用自動丟棄。
+    // 判定「多屬性」：以每張能量的 type signature（sort 後 join）做 set，size ≥ 2 才問。
+    if (retreatCost > 0 && attacker.active.energyAttached.length > 0) {
+      const typeSig = (iid: string): string => {
+        const inst = attacker.active!.energyAttached.find(e => e.iid === iid);
+        if (!inst) return '';
+        const units = getEnergyUnits(inst.cardId, pool);
+        if (units.length === 0) return pool.get(inst.cardId)?.name ?? 'unknown';
+        // 多單位（如火箭隊能量）與單純基本能量視為不同 signature
+        return units.map(u => [...u.types].sort().join(',')).sort().join('|');
+      };
+      const sigs = new Set(attacker.active.energyAttached.map(e => typeSig(e.iid)));
+      if (sigs.size >= 2) {
+        return {
+          ...state,
+          pendingSelection: {
+            type: 'active-energy-discard',
+            actorIdx: aIdx,
+            sourcePlayerIdx: aIdx,
+            minCount: retreatCost,
+            maxCount: retreatCost,
+            effectKey: 'retreat-energy-discard',
+            params: { newActiveIid: action.newActiveIid, retreatCost },
+          },
+        };
+      }
+    }
+
+    // 自動丟棄能量（從後方取）— 單屬性 or retreatCost=0，無需詢問
     const discardE = attacker.active.energyAttached.slice(-retreatCost);
     const keepE = attacker.active.energyAttached.slice(0, attacker.active.energyAttached.length - retreatCost);
     // v2.08：撤退回備戰時清除狀態旗標（灼傷/中毒/睡眠/混亂/麻痺 以及
@@ -923,7 +1013,10 @@ function handlePlaying(
         const revert: [boolean, boolean] = [used[0], used[1]];
         return addLog({ ...state, stadiumUsedThisTurn: revert }, '居民會館：本回合還沒出支援者', aIdx);
       }
-      const updated = { ...newState.players } as [PlayerState, PlayerState];
+      // v2.63 root-fix：此前誤用 `{ ...players }` 展開 → 變成 `{0:P,1:P}` 物件（非陣列），
+      // 下一個 reducer 的 `[...state.players]` 會 throw / 被誤當空陣列 → 整個 game state 被清空。
+      // 必須用 `[...players]` 陣列展開才能保持 tuple 形態。
+      const updated = [...newState.players] as [PlayerState, PlayerState];
       const p = { ...updated[aIdx] };
       if (p.active) p.active = { ...p.active, damage: Math.max(0, p.active.damage - 10) };
       p.bench = p.bench.map(c => ({ ...c, damage: Math.max(0, c.damage - 10) }));
@@ -937,7 +1030,12 @@ function handlePlaying(
         const revert: [boolean, boolean] = [used[0], used[1]];
         return addLog({ ...state, stadiumUsedThisTurn: revert }, '火箭隊的工廠：本回合還沒打出「火箭隊」支援者', aIdx);
       }
-      const updated = { ...newState.players } as [PlayerState, PlayerState];
+      // v2.63 root-fix：`{ ...players }` 會把 tuple 變成 {0:P,1:P} 普通物件，
+      // Svelte 5 reactivity 會把 players 重新包成 Proxy，下一輪 reducer 的
+      // `[...state.players]` 會拿到空陣列（普通物件非 iterable），整個 UI 就停擺。
+      // Leon 回報「按鈕按了沒抽卡」的真相：hand 實際有 +2（localState 有更新），
+      // 但下一次任何 action 都回傳 `state`（未修改）→ 在 UI 看起來像什麼都沒發生。
+      const updated = [...newState.players] as [PlayerState, PlayerState];
       const p = { ...updated[aIdx] };
       const drawCount = Math.min(2, p.deck.length);
       if (drawCount === 0) {
@@ -2321,3 +2419,60 @@ export function getUsableAbilities(
   }
   return result;
 }
+
+// ── v2.63 撤退能量選擇 resolver ────────────────────────────────────────────────
+// 當戰鬥寶可夢附加多種屬性能量時，RETREAT action 會開 pendingSelection 改走這裡；
+// selectedIids = 玩家挑要丟棄的 N 張能量 iid（N = retreatCost）。
+// 把撤退的主流程複製一份但改用「手選」的能量集，再完成上場切換。
+RESOLVERS.set('retreat-energy-discard', (state, actorIdx, selectedIids, params, pool) => {
+  const newActiveIid = params?.newActiveIid as string | undefined;
+  const retreatCost = (params?.retreatCost as number | undefined) ?? 0;
+  if (!newActiveIid) return state;
+
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const attacker = { ...players[actorIdx] };
+  if (!attacker.active) return state;
+
+  // 驗證選取張數；保底避免異常 resolve
+  const picked = new Set(selectedIids);
+  if (picked.size !== retreatCost) return state;
+
+  // 驗證每個 iid 都存在於 energyAttached
+  const allIids = new Set(attacker.active.energyAttached.map(e => e.iid));
+  for (const iid of picked) {
+    if (!allIids.has(iid)) return state;
+  }
+
+  const bIdx = attacker.bench.findIndex(c => c.iid === newActiveIid);
+  if (bIdx < 0) return state;
+
+  const activeCard = pool.get(attacker.active.cardId);
+
+  const discardE = attacker.active.energyAttached.filter(e => picked.has(e.iid));
+  const keepE = attacker.active.energyAttached.filter(e => !picked.has(e.iid));
+
+  const retreatingPoke = clearActiveEffects({ ...attacker.active, energyAttached: keepE });
+  const newActive = { ...attacker.bench[bIdx], movedToActiveThisTurn: true };
+  const newBench = attacker.bench.filter((_, i) => i !== bIdx);
+  newBench.push(retreatingPoke);
+
+  attacker.active = newActive;
+  attacker.bench = newBench;
+  attacker.discard = [...attacker.discard, ...discardE];
+  attacker.retreatedThisTurn = true;
+  players[actorIdx] = attacker;
+
+  const newActiveCard = pool.get(newActive.cardId);
+  const prefix = `${attacker.name} 的 ${activeCard?.name ?? '?'} 撤退`;
+  // log 寫出玩家選擇丟棄了哪幾張能量
+  const discardNames = discardE.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  const msg = discardE.length > 0
+    ? `${prefix}（丟棄：${discardNames}），${newActiveCard?.name ?? '?'} 上場！`
+    : `${prefix}，${newActiveCard?.name ?? '?'} 上場！`;
+
+  return {
+    ...state,
+    players,
+    log: [...state.log, { turn: state.turn, playerIndex: actorIdx, message: msg }],
+  };
+});
