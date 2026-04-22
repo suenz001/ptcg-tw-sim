@@ -1,9 +1,52 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session d1a3 (v2.35)  
+> 最後更新：2026-04-22 Session d1a3b (v2.36)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session d1a3b (v2.36) — 修正胡地 preset 卡表（土龍節節ex → 土龍節節）
+
+### 問題
+
+Leon 校對胡地牌組（v2.21 原建）時發現卡表誤植 — 原本應該是**非 ex 的土龍節節**
+（Colorless 副線），當時誤寫成「土龍節節ex (MC 17046)」。
+
+### 修法
+
+`src/lib/decks/presets.ts` 把 `ALAKAZAM_DECK.entries` 中的
+`{ cardId: '17046', count: 3 }` 改為 `{ cardId: '11655', count: 3 }`（SV8a 非 ex 版）。
+
+### 為什麼選 SV8a 11655
+
+非 ex 土龍節節在卡池有 4 張完全等效的版本（卡面相同，只差插畫 / set）：
+
+| set | id | HP | 招式 | 特性 |
+|---|---|---|---|---|
+| SV5K | 9827 | 140 | 大地粉碎 90 (CCC) | 逃跑抽出 |
+| SV8a | 11655 | 140 | 大地粉碎 90 (CCC) | 逃跑抽出 |
+| SV8a | 12415 | 140 | 大地粉碎 90 (CCC) | 逃跑抽出 |
+| M-P | 14465 | 140 | 大地粉碎 90 (CCC) | 逃跑抽出 |
+
+任選其一皆可；挑較新 + 主流 set 的 **SV8a 11655**。Leon 如要換插畫可改 ID。
+
+### 遺留問題（不阻塞本版）
+
+- **逃跑抽出特性未實裝**：卡面原始 text 欄是 `None`（爬蟲沒抓到效果文字），實際
+  效果需查官方卡面。據推測為「這隻寶可夢撤退時可從牌庫抽 1 張卡」。由於不確定精
+  確觸發點（撤退時 / 自主撤退 vs. 被招式強制撤退 / 是否算進化前 pre-evolution），
+  留給 Leon 確認文字後下次實裝。目前 engine 裡舊註冊的「土龍節節ex｜逆境之尾 /
+  鑽破壞」（9101-9113 行）不會觸發，因為卡名不再匹配，也不衝突，保留不動。
+
+### 驗證
+
+本機 `npm run build` 通過（206 modules）。
+
+### commit hash
+
+（將於 commit 後回填）
 
 ---
 

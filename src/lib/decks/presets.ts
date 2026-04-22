@@ -176,10 +176,11 @@ const MARRUNE_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
 };
 
 /**
- * 胡地 牌組（v2.21 — Leon 自選卡表）
+ * 胡地 牌組（v2.21 原建 — v2.36 修正 土龍節節ex → 土龍節節）
  *
  * 軸心：凱西 → 勇基拉 → 胡地（M1S，特性「精神抽出」+ 招式「手之力量」）
- *        依序進化爬上去；土龍節節ex 為副 ace 打點。
+ *        依序進化爬上去；土龍節節（非 ex）作為 Colorless 副線打點（HP 140、
+ *        大地粉碎 90、特性「逃跑抽出」— 當戰鬥寶可夢退場時下一隻 drawCards 1）。
  * 引擎：鬥子（MC）+ 小光 + 水蓮的照顧 作為支援者循環；
  *        吉雉雞ex「扭轉乾坤」自場寶可夢昏厥後補手；
  *        謝米/可達鴨作為 bench 支援。
@@ -194,7 +195,7 @@ const ALAKAZAM_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '14057', count: 4 },  // 勇基拉 (M1S)
     { cardId: '14058', count: 4 },  // 胡地 (M1S) — 特性精神抽出、招式手之力量
     { cardId: '17045', count: 3 },  // 土龍弟弟 (MC)
-    { cardId: '17046', count: 3 },  // 土龍節節ex (MC)
+    { cardId: '11655', count: 3 },  // 土龍節節 (SV8a) — 非 ex 版；4 張效果相同，任選其一
     { cardId: '14692', count: 1 },  // 可達鴨 (M2a) — 特性濕氣
     { cardId: '17980', count: 1 },  // 謝米 (M3)
     { cardId: '16960', count: 1 },  // 吉雉雞ex (MC) — 扭轉乾坤
