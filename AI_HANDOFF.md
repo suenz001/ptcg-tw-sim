@@ -1,13 +1,13 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 7c3b1 (v2.46)  
+> 最後更新：2026-04-22 Session 305dc (v2.46)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
 
 ---
 
-## Session 7c3b1 (v2.46) — 對戰圓形競技場 vs 招式傷害 語意拆分 + 胡地預組換謝米
+## Session 305dc (v2.46) — 對戰圓形競技場 vs 招式傷害 語意拆分 + 胡地預組換謝米
 
 ### 問題
 
@@ -148,7 +148,7 @@ M3 版 id `17980` 的謝米是基礎寶可夢，無特性，招式「親送花�
 
 ### Commit hash
 
-`(build 後 push 補上)`
+`305dc2e`
 
 ---
 
