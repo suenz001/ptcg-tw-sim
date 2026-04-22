@@ -10162,7 +10162,10 @@ regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool) => {
 // 猛雷鼓預組：新物品卡
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ---- 能量回收（Item）- 擲幣：正 4 / 反 2 張基本能量棄牌→手牌 ----------------
+// ---- 能量回收（Item）- 棄牌區選最多 2 張基本能量 → 給對手看 → 加手牌 -------------
+// 卡面（MC/SV11W/SVQL 同）：「從自己的棄牌區選擇最多2張基本能量卡，在給對手看過後加入手牌。」
+// v2.60 修正：原本錯誤沿用上古版（擲幣：正 4/反 2），實際新版 I/J regulation 已不擲幣。
+// 「給對手看」語意在本模擬器中為隱含 — 棄牌區對雙方公開、picker UI 選擇也會留 log。
 regG('能量回收', (st, idx, pool) =>
   st.players[idx].discard.some(c => {
     const card = pool.get(c.cardId);
@@ -10170,15 +10173,12 @@ regG('能量回收', (st, idx, pool) =>
   })
 );
 reg('能量回收', (st, idx) => {
-  const heads = Math.random() < 0.5;
-  const maxN = heads ? 4 : 2;
-  st = addLog(st, `能量回收：擲硬幣—${heads ? '正面（最多 4 張）' : '反面（最多 2 張）'}`, idx);
-  // 棄牌區可選張數
+  st = addLog(st, '能量回收：從棄牌區選最多 2 張基本能量加入手牌（給對手看）', idx);
   return withPending(st, {
     type: 'discard-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'BasicEnergy',  // 只基本能量（v2.40 根源 bug 修正後；不含 Special Energy）
-    minCount: 0, maxCount: maxN,
+    minCount: 0, maxCount: 2,
     effectKey: 'discard-to-hand',
   });
 });

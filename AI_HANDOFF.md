@@ -1,9 +1,47 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session a9f1 (v2.59)  
+> 最後更新：2026-04-22 Session a9f1 (v2.60)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session a9f1 (v2.60) — 能量回收 bug：新版不該擲幣
+
+### 問題
+
+Leon 回報：使用「能量回收」時出現擲幣。但新版卡面（MC 636/742、SV11W 079/086、SVQL 012/022、regulation I/J）rulesText 統一為：
+
+> 「從自己的棄牌區選擇最多2張基本能量卡，在給對手看過後加入手牌。」
+
+完全沒有擲幣環節。
+
+### 根因
+
+`effects.ts:10165-10184` 的實裝沿用**上古版**（劍盾以前）規則：擲幣 正面 4 張／反面 2 張。新版 I/J regulation 已改為固定 ≤2 張 + 公開。這是 scraper 卡表與 effects 實作的世代錯位 — 原實作者照舊印象實裝，沒對照當前卡面。
+
+### 修法
+
+`effects.ts:10165-10184`：
+
+```ts
+// 舊：擲幣決定 maxN = 4 or 2，addLog 寫「擲硬幣—正/反面」
+// 新：固定 maxCount: 2，log 改成「從棄牌區選最多 2 張基本能量加入手牌（給對手看）」
+```
+
+保留 `filter: 'BasicEnergy'`（v2.40 修根 — 只基本能量，不含特殊能量）、`effectKey: 'discard-to-hand'`、regG 判斷條件（至少一張棄牌區基本能量才能用）。
+
+「給對手看」語意在本模擬器是**隱含**的 — 棄牌區對雙方公開、picker UI 選擇本身也會產生 log，所以不需要額外 show-to-opponent pending step。
+
+### 驗證
+
+`npm run build` 綠。
+
+### Teach moment
+
+這次又是「舊註解／舊實裝誤當既成」類型的 bug（連續系列：v2.40 BasicEnergy filter、v2.43 夜間擔架 filter、這次能量回收）。
+`effects.ts:10165` 的註解頭就寫著 `擲幣：正 4 / 反 2`，完全對不上當前卡面 — 和 v2.40「歷史慣例」註解類型一模一樣。以後掃卡時：**當 effects.ts 註解/實作與 scraper json rulesText 對不上，優先採信 rulesText** — scraper 是真實卡面，註解可能是實作者的舊印象。
 
 ---
 
