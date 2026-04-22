@@ -1,9 +1,79 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 38be (v2.25)  
+> 最後更新：2026-04-22 Session c0f2 (v2.26)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session c0f2 (v2.26) — 全卡包封面改為官網卡包包裝圖（29 sets）
+
+### 問題
+
+Leon 看到 v2.25 剛補的 SVQL / SVQP / M-P 封面（用單張卡圖湊的），說：
+
+> 封面請你抓網站裡面的卡包圖案，原本的舊有封面也請你直接抓網址裡面的卡包圖案
+> （舊的封面你之前抓的，有的很醜）
+
+意思是：
+1. 新加的 3 個 set 用單張卡圖當封面不夠好看
+2. 原本 index.json 裡很多 set 是用 `archive/special/card/{set}/assets/images/hero-visual.jpg`
+   （官網「卡包介紹頁」的長條 banner），直式 grid 顯示會變形
+3. 全部改用 `/tw/products/` 商品頁那個方正的「卡包包裝盒」縮圖
+
+### 根因
+
+之前爬卡片時沒把 `/tw/products/` 的 `_PKG` / `_thumbnail_` 方圖撈下來，
+就隨手用 hero-visual.jpg（寬幅 banner）或單張卡圖當封面。
+
+### 主要修法
+
+**1. 新腳本 `/tmp/ptcg-work/fetch-covers.js`**（一次性工具，未入庫）
+- 手 curl `/tw/products/` 整頁 HTML
+- 比對商品名（`<div class="name">`）+ 檔名（`_{SET}_PKG` / `_{SET}.` 等 pattern）
+- 挑出每個 set 對應的「主打卡包包裝圖」連結
+- 下載到 `static/covers/{SET}.png`
+
+**2. 挑圖規則**
+- 優先選 `_{SET}_PKG.png` / `_{SET}.png`，排除 `supply`、`deck_case`、`playmat`
+  等周邊商品，以及帶 9 位數 product id（`_9xxxxxx`）的補充商品
+- 大多都是官方 480x480 png，在 `/cards` 直式格子長相很正
+
+**3. 27 個 set 下載成功**
+- `SV5K/SV5M/SV5a/SV6/SV6a/SV7/SV7a/SV8/SV8a` (H 標)
+- `M1L/M1S/M2/M2a/MBD/MBG/SV10/SV11B/SV11W/SV9/SV9a/SVQL/SVQP` (I 標)
+- `M3/M4/MC/SVOD/SVOM` (J 標)
+
+**4. 2 個 set 無官方卡包圖**
+- `MJ`（New Trainer Journey，campaign set）— 官網無 `/archive` 也無 products 條目，
+  保留舊 `covers/MJ.png`（1200x630 banner）
+- `M-P`（特典卡 超級進化，promo 類）— 一樣沒 pack，下載 Mega Greninja ex 單卡
+  （`card-img/tw00018516.png`）存為 `covers/M-P.png`
+
+**5. `static/cards/index.json` 全部 29 筆 coverImageUrl 改成 `covers/{CODE}.png`**
+- 不再指向 `hero-visual.jpg` / `hero-pack.png` / `card-img/twXXX.png` 等外站 URL
+- 所有封面改走本地 `static/covers/`（由 SvelteKit adapter-static 直送）
+- 既穩定（不怕官網改 path）又統一（尺寸/比例一致）
+
+**6. 刪掉 4 個舊 `.jpg` 封面**
+- `SV5a.jpg / SV6a.jpg / SV7a.jpg / SV9a.jpg` → 取代為同名 `.png`
+
+### 驗證
+
+- `npm run build` ✓ 12.30s 無錯
+- 29 個 coverImageUrl 全部形如 `covers/{CODE}.png`，每個檔案磁碟上都存在
+- 下載尺寸合理：大多數 140~210KB，SV5a 較小 40KB（官方本身就是小圖），M-P 單卡
+  圖 868x1212 是 card-img 原尺寸
+
+### 次要調整
+
+- AI_HANDOFF header 更新到 Session c0f2 (v2.26)
+- version.ts: 2.25 → 2.26
+
+### commit hash
+
+（待推完補）
 
 ---
 
