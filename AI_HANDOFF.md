@@ -67,7 +67,7 @@ if (ab.name === '碧綠之舞') {
 
 ### Commit
 
-待 commit 後填入 hash。
+`45cc60e` — v2.53: 備戰 UI 美化（放大卡圖 + pip 條件渲染） + 碧綠之舞 gate
 
 ---
 
