@@ -31,7 +31,7 @@ Leon 回報 log 顯示：
 - `src/lib/version.ts`: 2.32 → 2.33
 
 ### Commit
-- 待填入（push 後 backfill）
+- `8a508dc` — v2.33: 冰冷之帳 log 括號符號修為 -X（HP 扣除）
 
 ---
 
