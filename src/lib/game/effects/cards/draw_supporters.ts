@@ -112,8 +112,25 @@ reg('枇琶', (st, idx, pool) => {
       return card?.supertype === 'Trainer' && card.subtype === 'Item';
     })
     .map(c => c.iid);
+  // v2.41：即使對手沒有物品卡，也必須開 UI 讓玩家查看對手整副手牌
+  //   — Leon：「就算對手沒有物品卡，也應該跑出ui，讓玩家查看
+  //     (因為還能確認對方的手牌內容，是一個重要戰略)」
+  // 以 maxCount:0 + 空 validIids 進 pending → UI 下方 <details> 會揭露對手
+  // 全部手牌（pickableIids=空集合 → otherHand=整副手牌），footer 顯示
+  // 「不選（跳過）」讓玩家確認關閉。resolver 收到空 selectedIids 正常走完
+  // 「未選取任何物品卡」日誌分支。
   if (itemIids.length === 0) {
-    return addLog(s, '枇琶：對手手牌無物品卡，效果結束', idx);
+    s = addLog(s, '枇琶：對手手牌無物品卡，可確認手牌內容後結束', idx);
+    return withPending(s, {
+      type: 'hand-discard',
+      actorIdx: idx,
+      sourcePlayerIdx: dIdx,
+      minCount: 0,
+      maxCount: 0,
+      filter: 'Item',
+      effectKey: 'loquat-discard-opp-items',
+      params: { validIids: [] },
+    });
   }
   s = addLog(s, `枇琶：可丟棄對手最多 ${Math.min(2, itemIids.length)} 張物品卡`, idx);
   return withPending(s, {

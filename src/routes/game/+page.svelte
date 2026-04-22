@@ -1822,7 +1822,8 @@
     <div class="hand-label">✋ {myPlayer?.name} 的手牌（{myPlayer?.hand.length??0} 張）
       {#if !isMyTurn()}<span class="hand-not-my-turn">（等待對手行動中）</span>{/if}
     </div>
-    <div class="hand-scroll" class:is-dragging={!!dragging?.moved}>
+    <div class="hand-scroll" class:is-dragging={!!dragging?.moved}
+      style="--hand-overlap:{(myPlayer?.hand.length??0)<=9 ? 0 : Math.min(58, ((myPlayer?.hand.length??0)-9)*7)}px;">
       {#each myPlayer?.hand??[] as inst, i (inst.iid)}
         {@const c=getCard(inst.cardId)}
         {@const n=(myPlayer?.hand.length??0)}
@@ -2961,9 +2962,11 @@
   .hand-strip{ flex-shrink:0; background:#0a160a; border-top:2px solid #2a5a2a; padding:.35rem .7rem .5rem; overflow:visible; }
   .hand-label{ font-size:.75rem; color:#5a8a5a; margin-bottom:.25rem; }
   .hand-not-my-turn{ color:#888; margin-left:.4rem; }
-  .hand-scroll{ display:flex; justify-content:center; gap:-24px; padding:30px 1rem 6px; overflow-x:auto; overflow-y:visible; min-height:160px; perspective:900px; }
-  .hand-scroll::-webkit-scrollbar{ height:5px; }
-  .hand-scroll::-webkit-scrollbar-thumb{ background:#2a4a2a; border-radius:2px; }
+  /* v2.41：鎖定手牌列不可滑動（移除 overflow-x:auto 產生的滑桿）；
+     當手牌 >9 張時以 var(--hand-overlap) 讓卡片互疊而不溢出視窗。
+     `overflow:hidden` 確保兩軸都不產生滾動條；padding-bottom 加大以容納扇形下彎。 */
+  .hand-scroll{ display:flex; justify-content:center; gap:0; padding:30px 1rem 22px; overflow:hidden; min-height:170px; perspective:900px; }
+  .hand-scroll > .hand-card + .hand-card{ margin-left: calc(var(--hand-overlap, 0px) * -1); }
   .hand-card{ flex-shrink:0; width:92px; background:#0e1e0e; border:1.5px solid #2a3a2a; border-radius:6px; padding:.25rem; text-align:center; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.12rem;
     transform: rotate(var(--fan-rot, 0deg)) translateY(var(--fan-lift, 0));
     transform-origin: 50% 180%;

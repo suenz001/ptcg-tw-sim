@@ -1,9 +1,154 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session d1a3f (v2.40)  
+> 最後更新：2026-04-22 Session d1a40 (v2.41)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session d1a40 (v2.41) — 手牌鎖定不可滑 + 同名競技場規則 + 枇琶空物品仍開 UI
+
+### 問題
+
+Leon 在 v2.40 驗收後一次提了三件事：
+
+1. **手牌最右滑桿**：附圖截圖顯示自己手牌列最右邊有一條可滑動的 scrollbar 圖示，覺得很礙眼。要求「鎖定介面大小不能滑動，但務必確認 UI，不要弄得太醜或造成手牌顯示不明顯」。
+2. **同名競技場規則**：場上已有「對戰圓形競技場」時，再從手牌打出同名的對戰圓形競技場應該被擋下（PTCG 規則：同名競技場不能覆蓋自己）。
+3. **枇琶空物品卡仍要開 UI**：v2.38 實裝的枇琶，在對手手牌為非空但沒有物品卡時，log 顯示「對手手牌無物品卡，效果結束」就關閉——Leon 覺得不對：「就算對手沒有物品卡，也應該跑出 ui，讓玩家查看(因為還能確認對方的手牌內容，是一個重要戰略)」。
+
+### 根因分析
+
+**A. 手牌滑桿**
+
+`.hand-scroll` CSS（`+page.svelte:2964`）原本是：
+```css
+.hand-scroll{ display:flex; justify-content:center; gap:-24px; padding:30px 1rem 6px;
+              overflow-x:auto; overflow-y:visible; min-height:160px; perspective:900px; }
+```
+
+兩個問題：
+- `gap:-24px` 無效 — CSS `gap` 規範不允許負值，瀏覽器靜默忽略，所以卡片並沒有互疊，而是佔 92px × n 的總寬。
+- `overflow-x:auto; overflow-y:visible` — 根據 CSS 規範，兩軸其中一軸為 `auto/hidden/scroll` 時，另一軸的 `visible` 會被瀏覽器計算成 `auto`。所以手牌多時會出現橫向 scrollbar；overflow-y 也不是真的 visible。
+
+**B. 同名競技場**
+
+`engine.ts:781-796` Stadium 分支有「一回合一張」gate，但**沒有**「同名不能覆蓋」gate。玩家可以出兩張對戰圓形競技場（第二張會把第一張送棄牌區，但不該允許發生）。
+
+**C. 枇琶空物品卡**
+
+`effects/cards/draw_supporters.ts:115-117`：
+```ts
+if (itemIids.length === 0) {
+  return addLog(s, '枇琶：對手手牌無物品卡，效果結束', idx);
+}
+```
+
+直接 return，沒進 pending → UI 不會開 → 玩家看不到對手完整手牌。可是 v2.38 的 `<details>` 揭露機制（`+page.svelte:2070-2093`）剛好是 `hand-discard` 搭配 `sourcePlayerIdx !== actorIdx` 的分支在跑；只要開 hand-discard pending 就會揭露。
+
+### 設計討論
+
+**A. 手牌不滑動的方案選擇**
+
+考量：
+- 不能讓卡片縮小（`flex-shrink` 會破壞 92px 固定寬度 + 圖片比例）
+- 不能讓容器 clip 到卡片（`overflow:hidden` 會切到下方的 fan-lift 陰影）
+- 必須保留上方 `hover-peek` 的 `translateY(-14px)` 效果（padding-top 30px 已經夠）
+
+最後選定：**動態負 margin + `overflow:hidden`**
+- 用 Svelte 內聯計算出 `--hand-overlap` CSS 變數（9 張以內 0px，10 張以上每多 1 張加 7px 至上限 58px）
+- `.hand-card + .hand-card { margin-left: calc(var(--hand-overlap) * -1) }` 讓相鄰卡片互疊
+- 容器 `overflow:hidden` + 放大 padding-bottom 到 22px 吸收 fan-lift
+- min-height 從 160px 升到 170px 補回扇形下彎高度
+
+**B. 同名競技場 gate 的擺放位置**
+
+方案 1：`canPlayTrainer` / `TRAINER_GUARDS`
+- 優點：可重用，AI 跟 UI 都能查
+- 缺點：要為每張競技場卡註冊相同邏輯的 guard，或改 `canPlayTrainer` 簽章
+
+方案 2：在 engine.ts Stadium 分支集中檢查（選）
+- 優點：單一通用規則，所有競技場卡自動適用，程式碼集中
+- 缺點：AI 要避免打出同名的話要自己算（目前 AI 不打 Stadium 邏輯不強，先不管）
+
+選方案 2。檢查位置放在 `prevStadium` 已取得之後、「棄置 prev」之前，比對 `pool.get(prevStadium.cardId)?.name === trainerCard.name` 就 return 原 state（因為 `attacker.hand = attacker.hand.filter(...)` 只改 shallow copy，沒 commit 到 `state.players`）。
+
+**C. 枇琶空物品 UI**
+
+只要用 `maxCount:0` + 空 `validIids` 開 pending 即可：
+- `selectionItems` 會空（無可選）
+- `otherHand` 揭露區塊是 `srcHand.filter(c => !pickableIidsHD.has(c.iid))`，pickableIidsHD 為空 → otherHand = 整副對手手牌
+- footer 因 `minCount===0` 顯示「不選（跳過）」按鈕，玩家看完按一下結束
+- AI 若是 actor：`ai.ts:334` `count = Math.min(0, hand.length) = 0` → `selectedIids: []` 正常走完
+
+### 主要修改
+
+**A. 手牌 CSS + 模板（`src/routes/game/+page.svelte`）**
+
+```svelte
+<div class="hand-scroll" class:is-dragging={!!dragging?.moved}
+  style="--hand-overlap:{(myPlayer?.hand.length??0)<=9 ? 0 : Math.min(58, ((myPlayer?.hand.length??0)-9)*7)}px;">
+```
+
+CSS：
+```css
+.hand-scroll{ display:flex; justify-content:center; gap:0; padding:30px 1rem 22px;
+              overflow:hidden; min-height:170px; perspective:900px; }
+.hand-scroll > .hand-card + .hand-card{ margin-left: calc(var(--hand-overlap, 0px) * -1); }
+```
+
+（移除舊的 `.hand-scroll::-webkit-scrollbar` 樣式；原本 `gap:-24px` 本來就無效故移除。）
+
+**B. Stadium 同名 gate（`src/lib/game/engine.ts:781+`）**
+
+```ts
+if (trainerCard.subtype === 'Stadium') {
+  const played = state.stadiumPlayedThisTurn ?? [false, false];
+  if (played[aIdx]) return state;
+  const prevStadium = state.activeStadium;
+  if (prevStadium) {
+    const prevCard = pool.get(prevStadium.cardId);
+    if (prevCard?.name === trainerCard.name) {
+      return addLog(state, `規則：場上已有相同名稱的競技場（${trainerCard.name}），無法重複打出`, aIdx);
+    }
+  }
+  if (prevStadium) attacker.discard = [...attacker.discard, prevStadium];
+  // ...
+```
+
+注意 return `state`（原狀態）而非 `newState`，因為 `attacker.hand = attacker.hand.filter(...)` 是 shallow copy，尚未提交到 state.players，所以手牌自動還原。
+
+**C. 枇琶空物品也開 UI（`src/lib/game/effects/cards/draw_supporters.ts:115+`）**
+
+```ts
+if (itemIids.length === 0) {
+  s = addLog(s, '枇琶：對手手牌無物品卡，可確認手牌內容後結束', idx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: idx,
+    sourcePlayerIdx: dIdx,
+    minCount: 0,
+    maxCount: 0,
+    filter: 'Item',
+    effectKey: 'loquat-discard-opp-items',
+    params: { validIids: [] },
+  });
+}
+```
+
+resolver 那邊 `picks.length === 0` 已經會 log「未選取任何物品卡」，不用改。
+
+### Build / Commit
+
+- `VERSION = '2.41'`
+- `npm run build` ✅
+- Commit hash：待補（push 後回填）
+
+### 教訓
+
+- **CSS `gap` 不支援負值**：要讓 flex 子項互疊只能靠 `margin-left` 負值（建議用 `+` 選擇器只作用於非第一個）。
+- **`overflow-x:auto; overflow-y:visible` 不成立**：其中一軸 auto/hidden 會強迫另一軸 auto。想「只 x 軸 clip，y 軸可溢出」要用 `overflow-x:clip; overflow-y:visible`（現代瀏覽器支援），或改結構加 padding 後 `overflow:hidden`。
+- **Svelte `{@const}` 只能是 block tag（`{#if}` / `{#each}` / `{:else}`）的 immediate child**，不能直接放在 `<div>` 兄弟位置。要麼改用內聯計算，要麼包一層 `{#if true}`。
 
 ---
 

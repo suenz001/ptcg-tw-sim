@@ -782,8 +782,17 @@ function handlePlaying(
       // 一回合只能打出一張競技場卡（不論目前場上有無 stadium）
       const played = state.stadiumPlayedThisTurn ?? [false, false];
       if (played[aIdx]) return state;
-      // 競技場：放置到場；前一張競技場去棄牌區
+      // v2.41：PTCG 規則 — 同名競技場不能覆蓋自己
+      // 場上已有同名競技場（例：對戰圓形競技場）時，禁止再從手牌打出同名的競技場。
+      // 回傳到原 state 之前把已移出手牌的卡放回（線上 Stadium branch 在 `attacker.hand = ...` 之後執行）。
       const prevStadium = state.activeStadium;
+      if (prevStadium) {
+        const prevCard = pool.get(prevStadium.cardId);
+        if (prevCard?.name === trainerCard.name) {
+          // 還原手牌：上方已 filter 掉該張，這裡直接 return 原 state（hand 未實際 commit 到 state）
+          return addLog(state, `規則：場上已有相同名稱的競技場（${trainerCard.name}），無法重複打出`, aIdx);
+        }
+      }
       if (prevStadium) attacker.discard = [...attacker.discard, prevStadium];
       players[aIdx] = attacker;
       const newPlayed: [boolean, boolean] = [played[0], played[1]];
