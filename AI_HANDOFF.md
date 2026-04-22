@@ -54,7 +54,7 @@ filter 字串系統慣例（sync 3 處）：`effects.ts`（宣告）、`+page.sv
 
 ### Commit
 
-待填（此 entry 建立時尚未 commit）
+`6f20f02` — v2.55: 捕蟲組合 filter 加 :TOP7 後綴 — 真正限定 peek top 7
 
 ---
 
