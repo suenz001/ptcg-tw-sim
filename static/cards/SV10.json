@@ -345,7 +345,8 @@
     "pokedexNumber": 918,
     "species": "陷阱寶可夢",
     "illustrator": "Taiga Kasai",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "evolvesFrom": "火箭隊的團珠蛛"
   },
   {
     "id": "12760",
@@ -3807,7 +3808,8 @@
     "pokedexNumber": 918,
     "species": "陷阱寶可夢",
     "illustrator": "NC Empire",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "evolvesFrom": "火箭隊的團珠蛛"
   },
   {
     "id": "12905",

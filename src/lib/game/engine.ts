@@ -131,10 +131,16 @@ function deckToInstances(entries: { cardId: string; count: number }[]): CardInst
  *
  * 例外：道具卡（寶可夢道具）也是 Pokemon supertype 但 subtype === 'Other'，
  * 必須排除掉。
+ *
+ * v2.62 加固：若 subtype 明確是 'Stage1' / 'Stage2'，不論 evolvesFrom 有無
+ * 一律**不是**基礎寶可夢。這是防禦 scraper 漏抓 evolvesFrom 的資料壞案例
+ * （例：<火箭隊的>操陷蛛 SV10 009/098 在原 JSON 缺 evolvesFrom、卻 subtype
+ * 明確是 Stage1 → 若只靠 evolvesFrom 判斷會被誤當成 Basic 而直接上場）。
  */
 export function isBasicPokemonCard(card: Card | undefined): card is Card {
   if (!card || card.supertype !== 'Pokemon') return false;
   if (card.subtype === 'Other') return false; // 道具卡
+  if (card.subtype === 'Stage1' || card.subtype === 'Stage2') return false; // v2.62 加固
   return !card.evolvesFrom;
 }
 

@@ -1,9 +1,74 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session a9f1 (v2.61)  
+> 最後更新：2026-04-23 Session a9f1 (v2.62)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session a9f1 (v2.62) — 火箭隊的操陷蛛 被當基礎寶可夢直接上場（scraper 漏抓 evolvesFrom）
+
+### 問題
+
+Leon 回報：`<火箭隊的>操陷蛛` 是 Stage1（應由 `<火箭隊的>團珠蛛` 進化），但模擬器允許直接放到戰鬥場／備戰。
+
+### 根因 — 兩層共犯
+
+**層 1（資料面）：scraper heuristic 對 `<xxx的>` 名字的進化鏈匹配失效。**  
+`scripts/scrape/parse-card.js:257-263` 的 `.evolution` 區塊解析：
+
+```js
+const names = evo.find('a, span').map((_, el) => $(el).text().trim()).get()...
+const idx = names.findIndex((n) => n === card.name);  // ← 這行
+if (idx > 0) card.evolvesFrom = names[idx - 1];
+```
+
+`card.name` 含 `<火箭隊的>` 尖括號，但 `.evolution` 內的 `<a>/<span>` 文字很可能不含（或用不同分隔格式）→ `findIndex` 永遠 -1 → 整張卡沒 evolvesFrom。
+
+廣掃 `static/cards/*.json` 結果：**82 張 Stage1/Stage2 完全沒 evolvesFrom**。扣掉 6 張化石進化類（原蓋海龜、觸手百合、始祖小鳥、寶寶暴龍、冰雪龍、大宇怪）和 1 張脫殼忍者（特殊機制）外，**剩 70+ 張訓練家寶可夢（`<火箭隊的>`、`<瑪俐的>`、`<阿響的>`、`<奇樹的>`、`<莉莉艾的>`、`<青木的>`、`<派帕的>`、`<小霞的>`、`<竹蘭的>`、`<大吾的>` 等）全中**。
+
+**層 2（引擎面）：`isBasicPokemonCard` 只看 `!evolvesFrom`**。於是資料壞掉的 Stage1/Stage2 被誤判為 Basic，允許直接上場。
+
+### 修法 — 雙軌（資料 + 引擎）
+
+**(A) 引擎 defense-in-depth — `engine.ts` `isBasicPokemonCard`：**
+
+```ts
+// v2.62 加固：subtype 明確是 Stage1/Stage2 就不是 Basic，不論 evolvesFrom
+if (card.subtype === 'Stage1' || card.subtype === 'Stage2') return false;
+```
+
+這樣即使未來資料再壞，Stage1/Stage2 的卡**絕對**不會被誤當成可直接上場的基礎。這是永久防線，跟資料修不修無關。
+
+**(B) 資料面 — 擴充 `scripts/fix-evolution-data.mjs`**：本次只補 Leon 直接踩到的「火箭隊的操陷蛛」→ `火箭隊的團珠蛛`（5 個 entries：SV10 009/098 + 099/098 + M2a 016/193 ×3）。其他 70+ 張因涉及逐張對卡面／確認前階名稱，本 session 不批補，另開案子。
+
+### 驗證
+
+`npm run build` 綠（13.02s）。
+
+### 待辦（v2.63+ 候選）
+
+1. 剩餘 70+ 張訓練家寶可夢 Stage1/Stage2 缺 evolvesFrom 的補表 — 分 set 分訓練家逐張對卡面。
+2. scraper `parse-card.js` 的 `.evolution` name 比對改成 `strip brackets 後 equals`，根治 `<xxx的>` 匹配失敗。
+3. 補完後 scraper 修整批重爬 + diff vs 手動表 verify 是否一致。
+
+全清單（供下次接續參考）：
+- M1S：脫殼忍者（特殊）
+- M2a：`<火箭隊的>操陷蛛`（已修 v2.62）、`<阿響的>熔岩蝸牛`
+- M3：冰雪龍（化石）、寶寶暴龍（化石）
+- MC：`<莉佳的>臭臭花/口呆花/大食花`、`<火箭隊的>黑魯加/引夢貘人/尼多娜/尼多后/尼多力諾/拉達`、`<小霞的>寶石海星/暴鯉龍`、`<派帕的>陸地水母`、`<瑪俐的>酷豹/頭巾混混`、`<青木的>姆克鳥/姆克鷹/勇士雄鷹`、大宇怪（化石）、始祖小鳥（化石）
+- SV10：`<火箭隊的>操陷蛛`（已修）、`<火箭隊的>黑魯加/茸茸羊/電龍/引夢貘人/天罩蟲/以歐路普/沙基拉斯/班基拉斯/阿柏怪/尼多娜/尼多后/尼多力諾/臭臭泥/雙彈瓦斯/拉達/多邊獸Ⅱ/多邊獸Ｚ`
+- SV11B：原蓋海龜（化石）、大宇怪（化石）
+- SV11W：始祖小鳥（化石）
+- SV7：觸手百合（化石）、原蓋海龜（化石）
+- SV9a：`<阿響的>火岩鼠/火爆獸/熔岩蝸牛`、`<小霞的>寶石海星/暴鯉龍`、`<竹蘭的>美納斯`、`<派帕的>陸地水母/藏飽栗鼠`
+- SVOD：`<大吾的>念力土偶/金屬怪`
+- SVOM：`<瑪俐的>酷豹/頭巾混混/詐唬魔`
+
+### Teach moment
+
+又一個「scraper 世代錯位 + 資料與實裝脫鉤」的 bug — 跟 v2.32 胡地的 evolvesFrom bug、v2.35 批修進化家族是同一個 pattern。這類 scraper 問題的根治必須「修爬蟲 + 加引擎防線」兩手並進，單動一手都留漏洞。
 
 ---
 

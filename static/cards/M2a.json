@@ -644,7 +644,8 @@
     "pokedexNumber": 918,
     "species": "陷阱寶可夢",
     "illustrator": "Taiga Kasai",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "evolvesFrom": "火箭隊的團珠蛛"
   },
   {
     "id": "14677",
@@ -9943,7 +9944,8 @@
     "pokedexNumber": 918,
     "species": "陷阱寶可夢",
     "illustrator": "Taiga Kasai",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "evolvesFrom": "火箭隊的團珠蛛"
   },
   {
     "id": "16264",
@@ -9986,7 +9988,8 @@
     "pokedexNumber": 918,
     "species": "陷阱寶可夢",
     "illustrator": "Taiga Kasai",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "evolvesFrom": "火箭隊的團珠蛛"
   },
   {
     "id": "16265",
