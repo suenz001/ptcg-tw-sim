@@ -146,6 +146,15 @@ export function regA(pokemonName: string, abilityIndex: number, fn: EffectFn) {
   ABILITY_EFFECTS.set(`${pokemonName}|${abilityIndex}`, fn);
 }
 
+/**
+ * 寶可夢「上備戰時」觸發表（cardName → EffectFn）。
+ * engine.ts 會在 PLAY_BASIC 成功後查此 map，有則觸發（pendingSelection 或即時）。
+ *
+ * v2.65：從 effects.ts 搬到 _shared，讓子模組（例如 maroon_dragon_deck）能直接
+ * `import { BENCH_PLACE_TRIGGERS } from '../_shared'`，維持單一 Map 實例。
+ */
+export const BENCH_PLACE_TRIGGERS = new Map<string, EffectFn>();
+
 export function canPlayTrainer(
   cardName: string,
   state: GameState,

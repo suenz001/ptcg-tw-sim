@@ -1,9 +1,62 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session ea58 (v2.64)  
+> 最後更新：2026-04-23 Session ea58 (v2.65)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session ea58 (v2.65) — 模組化第四波：BENCH_PLACE_TRIGGERS 搬到 _shared，抽出魔靈多龍牌組（Wave 43）
+
+接在 v2.64 後同一 session 的第二波 autonomous 搬遷。Leon 「直接一波接著一波」的 standing directive 繼續生效。
+
+### 重構 1 — BENCH_PLACE_TRIGGERS 搬到 _shared
+
+Wave 43 的 `喵喵ex｜殺手鐧捕捉` 是「上備戰時觸發」類效果，走的不是 TRAINER_EFFECTS / ABILITY_EFFECTS，而是 engine.ts `PLAY_BASIC` 專用的 `BENCH_PLACE_TRIGGERS` Map。這張 Map 原本宣告在 effects.ts 的 Wave 43 block 中間（line 8908），子模組無路可 import → 跟 v2.64 的 ATTACK_PRE 同樣的卡住原因。
+
+→ 把 `export const BENCH_PLACE_TRIGGERS` 搬到 `effects/_shared.ts`（緊鄰 ABILITY_EFFECTS），然後 effects.ts `import { BENCH_PLACE_TRIGGERS } from './effects/_shared'` + `export { BENCH_PLACE_TRIGGERS }` 維持 `engine.ts: import { BENCH_PLACE_TRIGGERS } from './effects'` 既有路徑不變（engine.ts 一行都不改）。
+
+### 重構 2 — 抽出 Wave 43（魔靈多龍牌組）
+
+新檔：`src/lib/game/effects/cards/maroon_dragon_deck.ts`（≈230 行）。
+
+包含的卡／招式／特性：
+
+- **喵喵ex｜殺手鐧捕捉**（BENCH_PLACE_TRIGGERS：上備戰時搜牌庫 1 張支援者加手牌）
+- **黑夜魔靈｜咒詛炸彈 13 counter**（`regA('黑夜魔靈', 0, ...)` 正統 ability 路徑 + `regPre/regPost('黑夜魔靈|\\u200c[特性]咒詛炸彈', ...)` attack-style ZWJ 變體）
+- **多龍奇｜偵查指令**（regA + `regR('scouting-order', ...)`：查看牌庫上方 2 張，選 1 加手牌，剩餘放回下方，不洗牌）
+- **願增猿｜腎上腺腦力**（regA + 兩個 resolver `adrenal-brain-src` / `adrenal-brain-target`：搬 ≤30 傷害，含 KO 判定）
+- **特殊紅牌**（regG + reg：對手剩餘獎賞 ≤3 才可用 → 對手洗回手牌抽 3）
+- **阿蜜的目光**（regG + reg：戰鬥位寶可夢下次受招式傷害 -30）
+
+### 反向 import 擴大
+
+從 effects.ts 新增 `export` 的 helper（給 maroon_dragon_deck 用）：
+
+- `selfKOInstance`（line 8127）
+- `findAbilityUserIid`（line 8177）
+- `cursedBombAttackPost`（line 8280）
+
+循環安全性：跟 v2.64 同理 — effects.ts 的 top-level `export function` 都宣告完成後才跑到 `import './effects/cards/maroon_dragon_deck'` 這行 side-effect import，而三個 helper 只在 regA / regPost 的 callback 裡被呼叫，不在模組求值期被觸發。Build 驗證通過（12.7 s），無 TS 錯誤。
+
+### 量化成果
+
+- `effects.ts` 行數：10,065 → 9,820（-245 行；Wave 43 block 共 253 行，抵掉新增的 side-effect import + re-export）
+- `effects/_shared.ts` 新增 BENCH_PLACE_TRIGGERS export
+- 新 submodule 加入現有 side-effect import cluster（現在已有 white_lily_akamatsu / draw_supporters / pokemon_search / items_misc / supporters_gust / abra_mawile_deck / maroon_dragon_deck 共 7 支）
+
+### 剩餘可抽區塊（下一波候選）
+
+effects.ts 剩 ~9,800 行。按主題掃描，最大的還抱在 effects.ts 的 block 有：
+
+- **v2.35 火箭隊超夢ex + 猛雷鼓ex**（~430 行，單一主題 + 多 regPre/regPost/regA + 多 resolver，適合獨立檔）
+- **早期 H 標 Wave（~1.x 系列）** 若干散落的多卡區塊
+- **攻擊通用機制 resolver**（discard / snipe / heal 等跨卡 effectKey）
+
+這些留給後續 session 接力。
+
+無任何行為變更，純重構 + build 綠。
 
 ---
 
