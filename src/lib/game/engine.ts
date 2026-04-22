@@ -1683,7 +1683,7 @@ function handlePlaying(
           const newDmg = pl.active.damage + addCounters * 10;
           const card = pool.get(pl.active.cardId);
           const hp = getEffectiveHP(pl.active, pool, state);
-          affectedNames.push(`${card?.name ?? '?'}(+${addCounters * 10})`);
+          affectedNames.push(`${card?.name ?? '?'}(-${addCounters * 10})`);
           if (hp > 0 && newDmg >= hp) {
             const koDiscard: CardInstance[] = [
               { ...pl.active, damage: newDmg },
@@ -1708,7 +1708,7 @@ function handlePlaying(
           const newDmg = b.damage + addCounters * 10;
           const card = pool.get(b.cardId);
           const hp = getEffectiveHP(b, pool, state);
-          affectedNames.push(`${card?.name ?? '?'}(+${addCounters * 10})`);
+          affectedNames.push(`${card?.name ?? '?'}(-${addCounters * 10})`);
           if (hp > 0 && newDmg >= hp) {
             const koDiscard: CardInstance[] = [
               { ...b, damage: newDmg },

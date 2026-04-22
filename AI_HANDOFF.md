@@ -1,9 +1,37 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session c0f2++++++ (v2.32)  
+> 最後更新：2026-04-22 Session c0f2+++++++ (v2.33)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session c0f2+++++++ (v2.33) — 冰冷之帳 log 符號修正
+
+### 問題
+
+Leon 回報 log 顯示：
+```
+冰冷之帳：可達鴨(+10)、勇基拉(+10)、勇基拉(+10)、勇基拉(+10)、願增猿(+10)、願增猿(+10)
+```
+括號裡的 `+10` 讀起來像是「+10 HP（回血）」，實際上是 HP 扣除 10（放 1 個傷害指示物）。
+語意錯誤，應為 `-10`。
+
+### 修法
+
+**`src/lib/game/engine.ts` line 1686 / 1711**
+- 兩處 `(+${addCounters * 10})` → `(-${addCounters * 10})`
+- 戰鬥區 + 備戰區各一處，邏輯本身不動（damage += addCounters*10 不變）
+
+### 驗證
+- `npm run build` ✓
+
+### 版本
+- `src/lib/version.ts`: 2.32 → 2.33
+
+### Commit
+- 待填入（push 後 backfill）
 
 ---
 
