@@ -1,9 +1,59 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session c0f2+ (v2.27)  
+> 最後更新：2026-04-22 Session c0f2++ (v2.28)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session c0f2++ (v2.28) — /cards 細化分類篩選（6 類 + 多選 toggle）
+
+### 問題
+
+Leon 要求 `/cards?set=XXX` 的篩選按鈕從粗略的「全部/寶可夢/訓練家/能量」
+升級成 6 類細分：「全部、寶可夢、支援者、物品、寶可夢道具、競技場、能量」，
+並且支援**多選**——點一次加入、點兩次取消。
+
+### 主要修法
+
+**`src/routes/cards/+page.svelte`**
+
+1. 分類邏輯改用 `cardCategory(c)` helper，跟 `engine.ts` / `effects.ts`
+   現有的「寶可夢道具」判定一致：
+   - `Pokemon` supertype + `subtype !== 'Other'` → 寶可夢
+   - `Pokemon` supertype + `subtype === 'Other'` → 寶可夢道具（Tool）
+   - `Trainer` supertype → 看 subtype 分 Supporter / Item / Stadium
+   - `Energy` supertype → 能量
+
+2. state 從單選 `supertypeFilter: 'All' | 'Pokemon' | 'Trainer' | 'Energy'`
+   改成多選 `selectedCategories: Set<CategoryKey>`。
+   - Set 為空 = 顯示全部
+   - `toggleCategory(cat)` = 若已選 → 移除；否則 → 加入
+   - `clearCategories()` = 清空 Set（「全部」按鈕）
+   - 「全部」按鈕在 Set 為空時為 active
+
+3. 新增 `CATEGORY_LABEL` / `CATEGORY_ORDER` 常數，顯示順序 Leon 指定：
+   寶可夢 → 支援者 → 物品 → 寶可夢道具 → 競技場 → 能量
+
+### 資料驗證
+
+對全 29 set 的 4,250 張卡做分類統計：
+- 寶可夢 3499 / 寶可夢道具 93 / 支援者 299 / 物品 232 / 競技場 55 / 能量 72
+- 合計 4250，無漏計
+
+### 驗證
+
+- `npm run build` ✓ 11.96s
+
+### 次要調整
+
+- version.ts: 2.27 → 2.28
+- AI_HANDOFF header 更新到 Session c0f2++ (v2.28)
+
+### commit hash
+
+（待推完補）
 
 ---
 

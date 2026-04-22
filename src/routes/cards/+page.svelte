@@ -21,10 +21,48 @@
   // (declared at top level so Svelte 5 $state works; only used when data.mode === 'index')
 
   // ─── Single-set browser state ────────────────────────────────────────
+  // 分類 key 對應 (supertype, subtype) — 跟 sim engine 一致：
+  //   - Pokemon: supertype='Pokemon' && subtype !== 'Other'
+  //   - Tool (寶可夢道具): supertype='Pokemon' && subtype === 'Other'
+  //   - Supporter / Item / Stadium: supertype='Trainer' && 對應 subtype
+  //   - Energy: supertype='Energy'
+  type CategoryKey = 'Pokemon' | 'Supporter' | 'Item' | 'Tool' | 'Stadium' | 'Energy';
+  const CATEGORY_LABEL: Record<CategoryKey, string> = {
+    Pokemon: '寶可夢',
+    Supporter: '支援者',
+    Item: '物品',
+    Tool: '寶可夢道具',
+    Stadium: '競技場',
+    Energy: '能量'
+  };
+  // 顯示順序（左到右）
+  const CATEGORY_ORDER: CategoryKey[] = ['Pokemon', 'Supporter', 'Item', 'Tool', 'Stadium', 'Energy'];
+
+  function cardCategory(c: Card): CategoryKey {
+    if (c.supertype === 'Energy') return 'Energy';
+    if (c.supertype === 'Pokemon') return c.subtype === 'Other' ? 'Tool' : 'Pokemon';
+    // Trainer
+    if (c.subtype === 'Supporter') return 'Supporter';
+    if (c.subtype === 'Stadium') return 'Stadium';
+    return 'Item';
+  }
+
   let query = $state('');
-  let supertypeFilter = $state<'All' | 'Pokemon' | 'Trainer' | 'Energy'>('All');
+  // 多選：空 Set = 全部；非空 = 只顯示這些分類
+  // 點一次加入、點兩次移除；按「全部」清空 Set。
+  let selectedCategories = $state<Set<CategoryKey>>(new Set());
   let selected = $state<Card | null>(null);
   let lightbox = $state<string | null>(null);
+
+  function toggleCategory(cat: CategoryKey) {
+    const next = new Set(selectedCategories);
+    if (next.has(cat)) next.delete(cat);
+    else next.add(cat);
+    selectedCategories = next;
+  }
+  function clearCategories() {
+    selectedCategories = new Set();
+  }
 
   function openLightbox(url: string) { lightbox = url; }
   function closeLightbox() { lightbox = null; }
@@ -37,8 +75,9 @@
   const filtered = $derived.by(() => {
     if (data.mode !== 'set') return [];
     const q = query.trim().toLowerCase();
+    const cats = selectedCategories;
     return setCards.filter((c) => {
-      if (supertypeFilter !== 'All' && c.supertype !== supertypeFilter) return false;
+      if (cats.size > 0 && !cats.has(cardCategory(c))) return false;
       if (!q) return true;
       return (
         c.name.toLowerCase().includes(q) ||
@@ -124,15 +163,20 @@
 
   <div class="controls">
     <input type="search" bind:value={query} placeholder="搜尋卡名、招式、特性、卡號..." aria-label="搜尋" />
-    <div class="filters" role="tablist">
-      {#each ['All', 'Pokemon', 'Trainer', 'Energy'] as st (st)}
+    <div class="filters" role="group" aria-label="卡片分類篩選（可複選，再點一次取消）">
+      <button
+        class="filter"
+        class:active={selectedCategories.size === 0}
+        onclick={clearCategories}
+        title="清除所有分類篩選"
+      >全部</button>
+      {#each CATEGORY_ORDER as cat (cat)}
         <button
           class="filter"
-          class:active={supertypeFilter === st}
-          onclick={() => (supertypeFilter = st as typeof supertypeFilter)}
-        >
-          {st === 'All' ? '全部' : st === 'Pokemon' ? '寶可夢' : st === 'Trainer' ? '訓練家' : '能量'}
-        </button>
+          class:active={selectedCategories.has(cat)}
+          onclick={() => toggleCategory(cat)}
+          title="點一次選取、點兩次取消"
+        >{CATEGORY_LABEL[cat]}</button>
       {/each}
     </div>
   </div>
