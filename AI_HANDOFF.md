@@ -113,7 +113,7 @@ regPost('胡地|手之力量', (state, aIdx, pool) => {
 - `src/lib/version.ts`: 2.33 → 2.34
 
 ### Commit
-- TBD（push 後回填）
+- `954723e` — v2.34: 願增猿 惡能量 gate + 胡地 手之力量 改為招式效果
 
 ---
 
