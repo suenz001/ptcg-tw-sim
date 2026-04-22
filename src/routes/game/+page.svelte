@@ -870,6 +870,11 @@
           const top6 = new Set<string>((pendingSelection.params?.top6Iids as string[]) ?? []);
           return src.deck.filter(c => top6.has(c.iid) && pool.get(c.cardId)?.subtype === 'Supporter');
         }
+        // v2.56 寶可裝置3.0：牌庫頂 7 張中的支援者
+        if (f === 'Supporter:TOP7') {
+          const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
+          return src.deck.filter(c => top7.has(c.iid) && pool.get(c.cardId)?.subtype === 'Supporter');
+        }
         // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
         if (f === 'GrassBasicOrGrassEnergy:TOP7') {
           const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);

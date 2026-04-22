@@ -9978,9 +9978,40 @@ reg('能量回收', (st, idx) => {
   });
 });
 
-// ---- 寶可裝置3.0（Item）- stub（未實裝，僅棄置）----------------------------
-// 卡面文字主要為「附加到自己的寶可夢」類 Tool；此處無 TOOL_* 登錄，實際等同無效果。
-// 不登錄 reg/regG → engine 會走「效果尚未實裝」分支。
+// ---- 寶可裝置3.0（Item）- 查看牌庫頂 7，選 1 張支援者加手牌 ------------------
+// v2.56 修正：原 stub 註解誤寫成「附加到自己的寶可夢類 Tool」— 實際卡面是 Item：
+//   「查看自己的牌庫上方7張卡，從其中選擇1張支援者卡，在給對手看過後加入手牌。
+//    將剩餘卡放回牌庫並重洗。」
+// 機制與 米立龍｜集客 幾乎一樣，只是 top 6 → top 7。
+regG('寶可裝置3.0', (st, idx) => st.players[idx].deck.length > 0);
+reg('寶可裝置3.0', (st, idx) => {
+  const p = st.players[idx];
+  const top7 = p.deck.slice(0, 7);
+  if (top7.length === 0) return addLog(st, '寶可裝置3.0：牌庫為空', idx);
+  st = addLog(st, '寶可裝置3.0：查看牌庫頂 7 張，選 1 張支援者加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Supporter:TOP7',
+    minCount: 0, maxCount: 1,
+    effectKey: 'pokegear-fetch-supporter',
+    params: { top7Iids: top7.map(c => c.iid) },
+  });
+});
+regR('pokegear-fetch-supporter', (st, idx, iids, params, _pool) => {
+  const top7Iids = (params?.top7Iids as string[]) ?? [];
+  return updatePlayer(st, idx, (p) => {
+    const top7 = p.deck.filter(c => top7Iids.includes(c.iid));
+    const rest = p.deck.filter(c => !top7Iids.includes(c.iid));
+    const chosen = top7.filter(c => iids.includes(c.iid));
+    const remaining = top7.filter(c => !iids.includes(c.iid));
+    return {
+      ...p,
+      deck: shuffle([...rest, ...remaining]),
+      hand: [...p.hand, ...chosen],
+    };
+  });
+});
 
 // ---- 太晶珠（Item）- 從牌庫搜 1 張「太晶」寶可夢加手牌 -----------------------
 // v2.52：修正 — 太晶珠是 **Item**（搜尋牌庫），不是 Tool（HP +30）。

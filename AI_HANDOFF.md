@@ -1,9 +1,112 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 2f3i (v2.55)  
+> 最後更新：2026-04-22 Session 2f3j (v2.56)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 2f3j (v2.56) — 寶可裝置3.0（Item）實裝：查看牌庫頂 7 張選 1 支援者
+
+### 問題
+
+Leon：「寶可裝置3.0（Item）效果尚未實裝，已棄置 — 處理一下吧，邏輯跟米立龍的集客幾乎一模一樣」。
+
+原本 `effects.ts` 對寶可裝置3.0 留了一段註解 + 無登錄：
+```ts
+// ---- 寶可裝置3.0（Item）- stub（未實裝，僅棄置）----------------------------
+// 卡面文字主要為「附加到自己的寶可夢」類 Tool；此處無 TOOL_* 登錄，實際等同無效果。
+// 不登錄 reg/regG → engine 會走「效果尚未實裝」分支。
+```
+
+這個註解兩個謊話：
+1. 不是 Tool — MC.json 裡這張是 `subtype: "Item"`。
+2. 效果不是「附加到寶可夢」— 卡面文字：「查看自己的牌庫上方7張卡，從其中選擇1張支援者卡，在給對手看過後加入手牌。將剩餘卡放回牌庫並重洗。」就是米立龍｜集客的 Item 版，只是 top 6 → top 7。
+
+又一次 memory `feedback_question_legacy_comments.md` 場景 — 前任 AI 的「歷史慣例 / 棄置」註解不能信，必須對卡面驗證。
+
+### 修法
+
+**1. effects.ts 寶可裝置3.0**（替換 9981-9983 整段 stub）：
+
+照米立龍｜集客（`effects.ts:1027-1057`）的樣版寫：
+```ts
+regG('寶可裝置3.0', (st, idx) => st.players[idx].deck.length > 0);
+reg('寶可裝置3.0', (st, idx) => {
+  const p = st.players[idx];
+  const top7 = p.deck.slice(0, 7);
+  if (top7.length === 0) return addLog(st, '寶可裝置3.0：牌庫為空', idx);
+  st = addLog(st, '寶可裝置3.0：查看牌庫頂 7 張，選 1 張支援者加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Supporter:TOP7',
+    minCount: 0, maxCount: 1,
+    effectKey: 'pokegear-fetch-supporter',
+    params: { top7Iids: top7.map(c => c.iid) },
+  });
+});
+regR('pokegear-fetch-supporter', (st, idx, iids, params, _pool) => {
+  const top7Iids = (params?.top7Iids as string[]) ?? [];
+  return updatePlayer(st, idx, (p) => {
+    const top7 = p.deck.filter(c => top7Iids.includes(c.iid));
+    const rest = p.deck.filter(c => !top7Iids.includes(c.iid));
+    const chosen = top7.filter(c => iids.includes(c.iid));
+    const remaining = top7.filter(c => !iids.includes(c.iid));
+    return {
+      ...p,
+      deck: shuffle([...rest, ...remaining]),
+      hand: [...p.hand, ...chosen],
+    };
+  });
+});
+```
+
+effectKey 用 `pokegear-fetch-supporter`（不能叫 `fetch-supporter`，那是米立龍的）— resolver 名字全域唯一。
+
+**2. +page.svelte `selectionItems`**（接在 `Supporter:TOP6` 分支後）：
+```svelte
+if (f === 'Supporter:TOP7') {
+  const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
+  return src.deck.filter(c => top7.has(c.iid) && pool.get(c.cardId)?.subtype === 'Supporter');
+}
+```
+
+**3. ai.ts `autoResolveSelection`**：
+```ts
+if (f === 'Supporter:TOP7') {
+  const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);
+  return top7.has(c.iid) && card.subtype === 'Supporter';
+}
+```
+
+沒動：
+- `describeFilter` 的通用 regex `/^(\w+):TOP(\d+)$/` 會把 `Supporter:TOP7` 描述成「牌庫頂 7 張中的支援者」，OK。
+- peek remainder 的 `peekIids` fallback 鏈（`+page.svelte:2405-2410`）v2.55 已補上 `top7Iids`，不重複補。
+
+### 檔案變更
+
+- `src/lib/version.ts`: 2.55 → 2.56
+- `src/lib/game/effects.ts`: 寶可裝置3.0 stub 註解 → 實裝（regG + reg + regR）
+- `src/routes/game/+page.svelte`: +4 行（selectionItems 加 Supporter:TOP7 分支）
+- `src/lib/game/ai.ts`: +5 行（autoResolve 加 Supporter:TOP7 分支）
+- `AI_HANDOFF.md`: 本 session
+
+### 構建
+
+`npm run build` 通過（12.78s）。
+
+### 實機測試建議
+
+- 猛雷鼓 preset 打出寶可裝置3.0：UI 應列牌庫頂 7 張中的支援者作可點選項（0–1 張）；非支援者 7–N 張在 `<details>` 摺疊區可看但不可選。
+- top 7 無支援者時：UI 顯示 0 可選，可直接跳過（minCount=0）— 等同於「翻給對手看，全部洗回」。
+- 牌庫 ≤ 7 時：top 全翻，其餘洗回一樣沒問題；牌庫 0 時走 early-return log。
+- AI 模式：AI 自動挑候選只從 top7 中的支援者，不會撈整個牌庫。
+
+### Commit
+
+待 push 後回填。
 
 ---
 

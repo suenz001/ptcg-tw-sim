@@ -180,6 +180,11 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         const top6 = new Set<string>((sel.params?.top6Iids as string[]) ?? []);
         if (f === 'TOP6')            return top6.has(c.iid);
         if (f === 'Supporter:TOP6')  return top6.has(c.iid) && card.subtype === 'Supporter';
+        // v2.56 寶可裝置3.0：牌庫頂 7 張中的支援者
+        if (f === 'Supporter:TOP7') {
+          const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);
+          return top7.has(c.iid) && card.subtype === 'Supporter';
+        }
         // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
         if (f === 'GrassBasicOrGrassEnergy:TOP7') {
           const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);
