@@ -1,9 +1,79 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session a9f1 (v2.60)  
+> 最後更新：2026-04-22 Session a9f1 (v2.61)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session a9f1 (v2.61) — 碧綠之舞／逃跑抽出 觸發源定位根源修（engine 傳 cardInst）
+
+### 問題
+
+Leon 回報：同回合 A 寶可夢發動碧綠之舞（附草能到 A，OK），接著 B 寶可夢也發動碧綠之舞 — 草能量卻**又附到 A 身上**，不是 B 自己。Leon 原話：「B寶可夢發動就應該附在B寶可夢的身上」。
+
+### 根因 — 不是效果邏輯問題，是觸發源定位整個骨架有缺口
+
+`engine.ts:USE_ABILITY` 分派到 `ABILITY_EFFECTS.get(...)` 時，只傳 `(state, aIdx, pool)` 三個參數，**沒有把觸發此特性的 CardInstance 傳下去**。於是所有 regA 實作都得自己掃場定位「誰觸發了我」，現狀靠的是 engine 已先把 `abilityUsedThisTurn=true` 標起來 → regA 裡用 `find(name === X && abilityUsedThisTurn === true)` 反推。
+
+這個 hack 在**同回合只有一隻同名寶可夢發動**時能動。但：
+- A（碧草面具ex）先發動 → `abilityUsedThisTurn=true`
+- 同回合 B（也是碧草面具ex）發動 → engine 把 B 也標成 true
+- regA 執行 `find(name === '厄鬼椪 碧草面具ex' && abilityUsedThisTurn === true)` → **命中 A（陣列中較前者）**
+- 能量附到 A。Bug。
+
+同 pattern 的 bug 地雷另有一個：`土龍節節｜逃跑抽出`（effects.ts:9305），掃場 key 一模一樣。本次預防性同步修掉。
+
+### 修法 — 兩層一起動
+
+**層 1 — `engine.ts:1067`（根源）**：把 `targetPoke`（action.iid 對應的 instance）當作第 4 參數傳給 abilityFn：
+
+```ts
+// 之前：
+return abilityFn(newState, aIdx, pool);
+// 現在：
+return abilityFn(newState, aIdx, pool, targetPoke);
+```
+
+`EffectFn` 型別 (`effects/_shared.ts:27-32`) **早就**有 optional `cardInst?: CardInstance` 第 4 參數，只是 engine 一直沒傳 — 這次才真正接起來。
+
+**層 2 — 兩個 regA 改用 cardInst.iid**：
+
+```ts
+// 碧綠之舞（effects.ts:9949）：
+regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool, cardInst) => {
+  // ...
+  const src = cardInst
+    ? allPokes.find(c => c.iid === cardInst.iid)
+    : allPokes.find(c => /* fallback：舊的 name+abilityUsedThisTurn 掃場 */);
+  if (!src) return st;
+  // ...
+});
+
+// 土龍節節 逃跑抽出（effects.ts:9305）：同模式改法。
+```
+
+fallback 保留是 defensive — 萬一未來某條新的 ability 呼叫路徑沒接到 cardInst 也不會整個壞。
+
+### 為何不純走 fallback 移除／不設計新的「定位 helper」
+
+- 根源修才是對的：engine 有 `action.iid` → `targetPoke`，那就是**唯一**可信的觸發源來源。讓 ability 自己猜 = 每個 regA 都在重複造輪子，而且這輪子本身壞的。
+- 不加 helper 是因為 `cardInst.iid` 已經夠直接；寫個 `findTrigger(st, idx, cardInst)` 反而是包裝 over-engineering。
+
+### 掃過的類似 pattern
+
+`grep 'abilityUsedThisTurn === true' src/lib/game/effects.ts`：只有 2 個 hit — 碧綠之舞（已修）+ 土龍節節（已修）。其他 regA 或是沒有「定位觸發源」的需求（效果只影響手牌 / 牌組 / 棄牌區），或是本來就只有單一實例會存在（玩家一場只會有一隻），無此 bug。
+
+### 驗證
+
+`npm run build` 綠（12.28s）。
+
+### Teach moment
+
+這個 bug 的根源是「`action.iid` 進了 engine 但沒流到 effect 層」 — 一個**典型的 context lost** 問題。type 系統已經預留了第 4 參數，但實作側沒人使用 → 整個效果層演化出「靠 side effect (abilityUsedThisTurn flag) 反推觸發源」的 hack pattern。這種 hack 在單例場景下很穩，多例場景下必壞。
+
+看到 `find(name === X && abilityUsedThisTurn === true)` 或類似「靠旗標反推身份」的實作 pattern，就要警覺：**你真的應該把身份從 engine 端直接傳過來**。
 
 ---
 

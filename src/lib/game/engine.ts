@@ -1064,7 +1064,9 @@ function handlePlaying(
       `${attacker.name} 使用了 ${pokeCard!.name} 的特性「${ability.name}」！`,
       aIdx
     );
-    return abilityFn(newState, aIdx, pool);
+    // 傳入觸發此特性的 CardInstance（以 iid 辨識），避免 ability 實作用
+    // name 掃場而在「同回合多隻同名寶可夢發動」時誤中第一隻。
+    return abilityFn(newState, aIdx, pool, targetPoke);
   }
 
   // ── 抽牌 ──────────────────────────────────────────────────────────────────

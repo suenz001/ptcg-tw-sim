@@ -9298,20 +9298,21 @@ regPre('土龍節節ex|鑽破壞', skipDefEffectsPre(150, '鑽破壞'));
 //   1. 從自己的牌庫抽 3 張；
 //   2. 將「這隻土龍節節」與其附加的能量、道具、以及前一階土龍弟弟（含其附加
 //      能量/道具，若有）全部放回牌庫並重洗。
-// 由於 regA 不會收到 action.iid，我們靠引擎在呼叫 ability fn「前」已將觸發對象
-// 的 `abilityUsedThisTurn` 標成 true（engine.ts:998-1004）來定位觸發源：
-// 掃自己的 active + bench，找 name === '土龍節節' 且 abilityUsedThisTurn === true。
+// v2.61：engine 以第 4 參數 cardInst 傳入觸發源（以 iid 定位），避免同回合
+//   兩隻同名土龍節節先後發動時誤中第一隻。保留 name 掃場作為 fallback。
 // active 被清空時由 hasPendingActions 觸發 SEND_NEW_ACTIVE，與撤退後 flow 相同。
-regA('土龍節節', 0, (st, idx, pool) => {
+regA('土龍節節', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   const allPokes: CardInstance[] = [
     ...(p.active ? [p.active] : []),
     ...p.bench,
   ];
-  const src = allPokes.find(c => {
-    const card = pool.get(c.cardId);
-    return card?.name === '土龍節節' && c.abilityUsedThisTurn === true;
-  });
+  const src = cardInst
+    ? allPokes.find(c => c.iid === cardInst.iid)
+    : allPokes.find(c => {
+        const card = pool.get(c.cardId);
+        return card?.name === '土龍節節' && c.abilityUsedThisTurn === true;
+      });
   if (!src) return st;
   const isActive = p.active?.iid === src.iid;
 
@@ -9943,20 +9944,22 @@ reg('火箭隊的拉姆達', (st, idx) => {
 // 關鍵字「這隻寶可夢」＝發動特性的厄鬼椪 碧草面具ex 自身（非任意【草】寶可夢）。
 // v2.53：先加 getUsableAbilities gate（手牌無基本草能量時不顯示特性按鈕）。
 // v2.54：修正效果 — 自動附加到觸發源（無選擇 UI），再抽 1 張。
-// 定位源：regA 沒有收到 action.iid；引擎於呼叫 abilityFn 前已將觸發對象的
-//   abilityUsedThisTurn 標成 true，所以掃 active + bench，找 name === 厄鬼椪 碧草面具ex
-//   且 abilityUsedThisTurn === true 的 instance（同 土龍節節 逃跑抽出 pattern）。
-regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool) => {
+// v2.61：engine 會以第 4 參數 cardInst 傳入觸發源。舊實作在同回合兩隻同名
+//   碧草面具ex 先後發動時，find(abilityUsedThisTurn===true) 會命中第一隻，
+//   導致 B 發動卻附到 A。改用 cardInst.iid 精確定位，保留 name 掃場作為 fallback。
+regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
-  // 找觸發源（發動特性的寶可夢）
+  // 找觸發源（發動特性的寶可夢）— 以 iid 為準
   const allPokes: CardInstance[] = [
     ...(p.active ? [p.active] : []),
     ...p.bench,
   ];
-  const src = allPokes.find(c => {
-    const card = pool.get(c.cardId);
-    return card?.name === '厄鬼椪 碧草面具ex' && c.abilityUsedThisTurn === true;
-  });
+  const src = cardInst
+    ? allPokes.find(c => c.iid === cardInst.iid)
+    : allPokes.find(c => {
+        const card = pool.get(c.cardId);
+        return card?.name === '厄鬼椪 碧草面具ex' && c.abilityUsedThisTurn === true;
+      });
   if (!src) return st;
   // 手牌需有基本草能量
   const grassEnergyInst = p.hand.find(c => {
