@@ -71,7 +71,7 @@ bench-hit-N、damage-distribute、全體指示物類、某些自 KO ability。�
 - `src/lib/version.ts`: 2.30 → 2.31
 
 ### Commit
-- `<TBD-after-push>` — v2.31: 被動競技場隱藏按鈕 + 驗證幻影奇襲/咒詛炸彈 gate
+- `338b565` — v2.31: 被動競技場隱藏按鈕 + 驗證幻影奇襲/咒詛炸彈 gate
 
 ---
 
