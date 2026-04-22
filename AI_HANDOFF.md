@@ -79,7 +79,7 @@ Leon 選擇「只補差」+「sandbox 直接跑 scraper」。M-P 是 98 張跨�
 
 ### commit hash
 
-- `TBD`（本 session push 後填入）
+- `7db174f` — v2.25 補齊 SVQL / SVQP / M-P 三個缺漏 set
 
 ---
 
