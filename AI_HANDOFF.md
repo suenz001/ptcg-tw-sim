@@ -53,7 +53,7 @@ Leon 要求 `/cards?set=XXX` 的篩選按鈕從粗略的「全部/寶可夢/訓�
 
 ### commit hash
 
-（待推完補）
+`eea6238 v2.28 /cards 篩選細化為 6 類 + 多選 toggle`
 
 ---
 
