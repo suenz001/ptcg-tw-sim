@@ -9816,7 +9816,9 @@ regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
   st = updatePlayer(st, idx, pl => {
     if (!pl.active) return pl;
     const newActive = benchPick;
-    const newBench = pl.bench.map(c => c.iid === pickIid ? pl.active! : c);
+    // v2.49：離開戰鬥場清狀態旗標（修 sakaki-self-swap 的 bench status leak）
+    const cleared = clearActiveEffects(pl.active);
+    const newBench = pl.bench.map(c => c.iid === pickIid ? cleared : c);
     return { ...pl, active: newActive, bench: newBench };
   });
   // 再強迫對方換

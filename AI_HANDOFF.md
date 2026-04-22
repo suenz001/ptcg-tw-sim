@@ -1,9 +1,74 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 2f3b (v2.48)  
+> 最後更新：2026-04-22 Session 2f3c (v2.49)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 2f3c (v2.49) — v2.47 備戰異常狀態 root cause：火箭隊的坂木 self-swap 未 sanitize
+
+### 問題
+
+Leon 在 v2.47 指出備戰區異常狀態 leak（願增猿「精神歪曲」混亂留在備戰）。當時 v2.47 加了 `scrubBenchStatus` invariant 當作 defense-in-depth，但 root cause 沒追到。本 session 繼續盤點所有 active→bench 轉移路徑，找出唯一一個未套 `clearActiveEffects` 的 resolver。
+
+### 盤點結果
+
+PTCG 所有可能把 active 退到 bench 的路徑：
+
+| 路徑 | 位置 | 狀態 |
+|------|------|------|
+| RETREAT | engine.ts:749 | ✓ clearActiveEffects |
+| do-switch（寶可夢交替 / 急進開關 / selfSwapPost 路由） | items_misc.ts:70 | ✓ clearActiveEffects |
+| gust-opp（老大的指令 / 頂尖捕捉器自換） | supporters_gust.ts:51 | ✓ clearActiveEffects |
+| top-catcher-opp（頂尖捕捉器對手） | items_misc.ts:303 | ✓ clearActiveEffects |
+| surfer-switch（衝浪手） | effects.ts:1242 | ✓ clearActiveEffects |
+| dominance-chain（支配鎖鏈） | effects.ts:1095 | ✓ clearActiveEffects |
+| opp-swap-dmg（互換 + 施傷系列） | effects.ts:4398 | ✓ clearActiveEffects |
+| force-opp-swap（大狼犬踹開 / 月桂葉推倒 / 小箭雀送回） | effects.ts:7813 | ✓ clearActiveEffects |
+| force-opp-swap-then-damage（長毛巨魔挑釁抓擊） | effects.ts:7834 | ✓ clearActiveEffects |
+| **sakaki-self-swap（火箭隊的坂木）** | **effects.ts:9819** | ❌ **raw `pl.active!`** |
+
+`sakaki-self-swap` 是火箭隊的坂木 Supporter 觸發的自方互換 resolver。其他所有 swap resolver 都用 `clearActiveEffects(pl.active)` 寫回 bench，只有這個直接寫 `pl.active!` — 如果當下 active 帶著狀態（睡眠 / 混亂 / 中毒 / 灼傷 / 麻痺 / cantAttackPending 等），就會完整複製到 bench，違反 PTCG「備戰區不受異常狀態影響」規則。
+
+### 修法（effects.ts:9816-9822）
+
+```ts
+st = updatePlayer(st, idx, pl => {
+  if (!pl.active) return pl;
+  const newActive = benchPick;
+  // v2.49：離開戰鬥場清狀態旗標（修 sakaki-self-swap 的 bench status leak）
+  const cleared = clearActiveEffects(pl.active);
+  const newBench = pl.bench.map(c => c.iid === pickIid ? cleared : c);
+  return { ...pl, active: newActive, bench: newBench };
+});
+```
+
+### 與 v2.47 scrubBenchStatus 的關係
+
+v2.47 的 `scrubBenchStatus` invariant（engine.ts:1991-2009）仍保留作 defense-in-depth。它只清 status 欄位；而 `clearActiveEffects` 除了 status 還會清 cantAttackPending / damageReduceNextHit / damageBonusThisTurn 等多種「離開戰鬥場即應失效」的旗標，所以兩層都需要：根源用 clearActiveEffects，invariant 保險兜底避免日後新增 swap 路徑漏寫。
+
+### 其他也驗證過的邊界
+
+- 閱讀 `statusPost`（effects.ts:1282-1296）：只寫 `def.active = { ...def.active, status }`，不寫到 bench，乾淨。
+- 閱讀 `selfSwapPost`（effects.ts:5219-5233）：route 到 do-switch resolver，由 do-switch 負責 sanitize。
+- 閱讀 `SEND_NEW_ACTIVE`（engine.ts:1535-1563）：只移動 bench→active，不會建立 bench status。
+- Grep `newBench[` 共 5 個位置在 effects.ts（dominance-chain / surfer-switch / opp-swap-dmg / force-opp-swap ×2）+ items_misc.ts ×2 + supporters_gust.ts ×1，全部都接 clearActiveEffects。
+- 沒有其他 resolver 用 `pl.bench.map(c => ... pl.active!)` 這種 raw active 寫回 pattern（effects.ts 只有 sakaki 這一處）。
+
+### 檔案變更
+
+- `src/lib/version.ts`: 2.48 → 2.49
+- `src/lib/game/effects.ts`: sakaki-self-swap resolver（+2 行）
+
+### 構建
+
+`npm run build` 通過（無 warning）。
+
+### Commit
+
+待 commit 後填入 hash。
 
 ---
 
