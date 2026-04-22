@@ -1,9 +1,92 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session d1a40 (v2.41)  
+> 最後更新：2026-04-22 Session e5c12 (v2.42)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session e5c12 (v2.42) — 抽牌/發牌/洗牌/棄牌/KO 動畫
+
+### 問題
+
+Leon 一句話需求：「抽牌、發牌、洗牌等，做一下動畫吧」。
+
+AskUserQuestion 跟 Leon 確認後範圍為：
+- **類別**：全包——抽牌、Setup 發牌、洗牌、棄牌/能量附加/KO
+- **節奏**：快（150~250ms）
+- **發牌方式**：一張張 stagger（不要一次全現）
+
+### 設計討論
+
+最初的直覺方案是做一個「flyingCards overlay」：`$state<FlyingAnim[]>` 陣列，每次抽牌都 push 一個從牌庫 anchor 飛到手牌 anchor 的元素，CSS keyframe `translate` 就能完成飛行動畫。這方案的問題：
+- 洗牌動畫要插進 engine.ts 裡 20+ 個 `shuffle(...)` call site（高風險、容易漏、會髒到 engine 層）
+- 真實飛行需要 DOM `getBoundingClientRect` 起終點查詢、時序（Svelte $effect → DOM update → `queueMicrotask`）、overlay z-index 管理
+- 實作量大（約 200+ 行），對「快速動畫」的體感幫助反而有限，因為卡片在空中飛的時間 > 使用者等得到結果的時間
+
+改用**既有模式堆疊**：
+1. `prizeAnimKey` + `{#key}` 模式（v1.5 獎賞卡放置動畫）→ 用在洗牌/棄牌
+2. `energy-pulse` + CSS keyframe 模式（Session 29 D2）→ 用在 discard pulse
+3. Svelte `out:scale` transition → 用在 KO 消失動畫
+4. 既有 `in:fly` hand-card transition → 只調整 duration/delay 參數
+
+這樣整個 v2.42 不需碰 engine.ts / effects.ts，全部在 `+page.svelte` 完成。
+
+### 主修法
+
+**A. 抽牌/Setup 發牌加速**（hand-card template）
+
+原本 `in:fly={{ x: 260, y: -40, duration: 380, delay: i * 70 }}` 改為 `in:fly={{ x: 220, y: -40, duration: 220, delay: i * 40 }}`。每張 220ms，stagger 40ms。7 張起手牌總時長從 ~800ms 降到 ~470ms，Setup 階段新增 5 張備用抽的 staccato 手感明顯變緊湊。`out:fly` 同步調短避免打出 Supporter/Item 時手牌重排的等待感。
+
+**B. 洗牌動畫（log 驅動偵測）**
+
+不改 engine.ts，改用 log 偵測。shuffle log 訊息都含「洗牌 / 重洗 / 洗回」其中之一（grep 掃過 effects.ts 跟 engine.ts 所有 `addLog(...洗)` 確認）。
+
+新增 `animLogCursor` 獨立的 log 游標（不跟 `lastLogProcessed` 的硬幣動畫共用，避免互踩）。$effect 吃新 log entries，regex 命中就設 `shuffleFlashUntil[idx] = Date.now()+600`，並排 600ms 後清除。系統 log（`playerIndex === null`，例如雙方初始洗牌）會同時觸發兩邊。
+
+對應的牌庫 `.pile-slot.deck-pile` 加 `class:shuffling={shuffleFlashUntil[idx] > 0}`，CSS `@keyframes deck-shuffle` 做 0.55s 的左右搖晃 + 10% 放大，加上 `box-shadow` 的藍色 glow。額外再疊一個 `.shuffle-spark`（🌀 emoji 絕對定位在右上）做 spark-spin 動畫：旋轉 360° 同時從 0.4 → 1.1 → 0.6 scale，opacity 0 → 1 → 0。
+
+**C. 棄牌脈衝**
+
+追 `game.players[i].discard.length` 的增量。只要變多就設 `discardFlashUntil[i]`，CSS `@keyframes discard-pulse` 做 0.45s 的縮放 + 微旋轉，背景暫時變紫色 `#2a1a3a`。
+
+**D. KO 動畫**
+
+Svelte 內建 `scale` transition（已 import 在 line 3）剛好適合：pokemon 被 KO 後 `myPlayer.active === null`，`{#if active}` 區塊 unmount → `out:scale` 觸發。
+
+4 個 pokemon 元素都加 `out:scale={{ duration: 320~360, start: 0.55, opacity: 0 }}`：
+- opp-active（360ms — 敵人 KO 要有戲）
+- opp 備戰（320ms）
+- mine-active（360ms）
+- my 備戰（320ms）
+
+### 次要調整
+
+- 既有 `prizeAnimKey` 獎賞發牌動畫不動 — v1.5 以後就穩定在 i*90ms stagger。
+- 既有 `damagePops` 傷害數字不動。
+- `onDestroy` 清 `shuffleTimers` / `discardTimers` 的 setTimeout handles（避免熱重載造成殘留 timer 觸發不存在的 state）。
+
+### 檔案變更
+
+- `src/routes/game/+page.svelte`：加 70 行 state + $effect + onDestroy；4 處 `out:scale` KO 動畫；兩組 deck-pile + disc-pile 加 `class:shuffling` / `class:discard-pulse` + `.shuffle-spark` overlay；hand-card in:fly 調參；CSS 加 `@keyframes deck-shuffle` / `spark-spin` / `discard-pulse`。
+- `src/lib/version.ts`：`2.41 → 2.42`。
+
+### 驗證
+
+`npm run build` pass（無型別錯誤、transition 參數合法）。CSS selector 與現有 `.pile-slot` / `.deck-pile` / `.disc-pile` 階層匹配。`out:scale` 用到的 `scale` transition 已在 line 3 import。
+
+### 心得
+
+- 「log 驅動動畫」比「state tick 驅動」低風險 — 不用改 engine/effects 任何 shuffle call site，只要 log 有「洗」這個字就能偵測。缺點是耦合到 log 文字，若日後改 log 翻譯就要同步更新 regex，但 v1.5 以來中文 log 格式相當穩。
+- Svelte `out:scale` 比自製 `{#key}` + CSS keyframe 乾淨很多，前提是被動畫元素剛好會 unmount（KO/retreat/吸收等 use case 都符合）。
+- 把 damage-pop 跟 energy-pulse 的既有模式看清楚後，新動畫的實作模式就能複製貼上 — 不要急著建 overlay 系統。
+
+### 後續潛在 TODO（未做）
+
+- 能量附加：目前只有「附到哪」的 energy-pulse，沒有「從手牌飛過去」的飛行。如果 Leon 想做，要另加 flyingCards overlay（單點飛行比整套還簡單）。
+- 進化：目前沒有動畫。可以用 `{#key iid}` 強制 active-card remount + `in:fly` 假裝「新卡蓋上來」。
+- Mulligan 補牌：目前跟一般抽牌共用 in:fly，但 Leon 可能想要特殊視覺（例如整副手牌回庫再重抽）。
 
 ---
 

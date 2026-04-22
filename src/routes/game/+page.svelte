@@ -198,6 +198,74 @@
     }
   });
 
+  // ── v2.42 牌庫洗牌 / 棄牌脈衝 / KO 震動動畫 ──────────────────────────────
+  // 洗牌：在 log 裡偵測「洗牌 / 重洗 / 洗回」關鍵字，對應玩家的牌庫圖示做 shake + glow
+  // 棄牌脈衝：棄牌區張數變多 → 對應玩家棄牌圖示閃一下
+  // KO 震動：寶可夢被打空 HP → 先震動 0.4s 再被移除（利用 Svelte out:transition）
+  let shuffleFlashUntil = $state<[number, number]>([0, 0]);      // timestamp（ms）
+  let discardFlashUntil = $state<[number, number]>([0, 0]);
+  let animLogCursor = 0;                                         // log 游標（與硬幣動畫共用不同的 cursor）
+  const prevDiscardLen: [number, number] = [0, 0];
+  const shuffleTimers: ReturnType<typeof setTimeout>[] = [];
+  const discardTimers: ReturnType<typeof setTimeout>[] = [];
+
+  // 監聽 log 新訊息 → 洗牌動畫
+  $effect(() => {
+    if (!game || !game.log) { animLogCursor = 0; return; }
+    const logs = game.log;
+    if (logs.length <= animLogCursor) { animLogCursor = logs.length; return; }
+    const fresh = logs.slice(animLogCursor);
+    animLogCursor = logs.length;
+    for (const entry of fresh) {
+      if (!/(洗牌|重洗|洗回)/.test(entry.message)) continue;
+      const idx = entry.playerIndex;
+      // 整場洗牌（setup mulligan、裁判、特殊紅牌等）也要給雙方都來一下
+      const targets: (0 | 1)[] = idx === 0 || idx === 1 ? [idx] : [0, 1];
+      const ts = Date.now() + 600;
+      for (const t of targets) {
+        const next: [number, number] = [...shuffleFlashUntil];
+        next[t] = ts;
+        shuffleFlashUntil = next;
+        const timerId = setTimeout(() => {
+          if (shuffleFlashUntil[t] === ts) {
+            const clear: [number, number] = [...shuffleFlashUntil];
+            clear[t] = 0;
+            shuffleFlashUntil = clear;
+          }
+        }, 600);
+        shuffleTimers.push(timerId);
+      }
+    }
+  });
+
+  // 監聽 discard 張數變化 → 棄牌脈衝
+  $effect(() => {
+    if (!game) { prevDiscardLen[0] = 0; prevDiscardLen[1] = 0; return; }
+    for (const i of [0, 1] as const) {
+      const cur = game.players[i].discard.length;
+      if (cur > prevDiscardLen[i]) {
+        const ts = Date.now() + 500;
+        const next: [number, number] = [...discardFlashUntil];
+        next[i] = ts;
+        discardFlashUntil = next;
+        const timerId = setTimeout(() => {
+          if (discardFlashUntil[i] === ts) {
+            const clear: [number, number] = [...discardFlashUntil];
+            clear[i] = 0;
+            discardFlashUntil = clear;
+          }
+        }, 500);
+        discardTimers.push(timerId);
+      }
+      prevDiscardLen[i] = cur;
+    }
+  });
+
+  onDestroy(() => {
+    for (const t of shuffleTimers) clearTimeout(t);
+    for (const t of discardTimers) clearTimeout(t);
+  });
+
   // ── 硬幣動畫（Session 28） ─────────────────────────────────────────────────
   let coinFlip = $state<null | { result: 'heads' | 'tails'; label: string }>(null);
   let coinTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1507,12 +1575,14 @@
         </div>
       {/if}
       <div class="zone-pile">
-        <div class="pile-slot deck-pile">
+        <div class="pile-slot deck-pile" class:shuffling={shuffleFlashUntil[oppIdx] > 0}>
           <span class="pile-icon">🃏</span>
           <span class="pile-count">{oppPlayer?.deck.length??0}</span>
           <span class="pile-label">牌庫</span>
+          {#if shuffleFlashUntil[oppIdx] > 0}<span class="shuffle-spark">🌀</span>{/if}
         </div>
-        <div class="pile-slot disc-pile" onclick={() => viewDiscardFor = oppIdx} title="查看對手棄牌區">
+        <div class="pile-slot disc-pile" class:discard-pulse={discardFlashUntil[oppIdx] > 0}
+          onclick={() => viewDiscardFor = oppIdx} title="查看對手棄牌區">
           <span class="pile-icon">🗑</span>
           <span class="pile-count">{oppPlayer?.discard.length??0}</span>
           <span class="pile-label">棄牌</span>
@@ -1528,7 +1598,7 @@
                 <div class="bench-name">？？？</div>
               </div>
             {:else}
-              <div class="bench-slot">
+              <div class="bench-slot" out:scale={{ duration: 320, start: 0.55, opacity: 0 }}>
                 <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>
                 <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
                 <div class="bench-name">{bc?.name}</div>
@@ -1559,7 +1629,7 @@
               </div>
             </div>
           {:else}
-            <div class="active-card opp-active">
+            <div class="active-card opp-active" out:scale={{ duration: 360, start: 0.55, opacity: 0 }}>
               <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>
               <div class="active-info">
                 <div class="active-name">{ac?.name}</div>
@@ -1717,6 +1787,7 @@
             class:energy-pulse={energyAttachPulse===myPlayer.active.iid}
             data-drop-type="poke"
             data-drop-iid={myPlayer.active.iid}
+            out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
             onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
             <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
@@ -1769,6 +1840,7 @@
               class:energy-pulse={energyAttachPulse===b.iid}
               data-drop-type="poke"
               data-drop-iid={b.iid}
+              out:scale={{ duration: 320, start: 0.55, opacity: 0 }}
               onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(b.iid)}>
               <img src={bc?.imageUrl} alt={bc?.name}
                 class:zoomable={!selectedEnergyIid}
@@ -1803,12 +1875,14 @@
       </div>
 
       <div class="zone-pile">
-        <div class="pile-slot deck-pile">
+        <div class="pile-slot deck-pile" class:shuffling={shuffleFlashUntil[myIdx] > 0}>
           <span class="pile-icon">🃏</span>
           <span class="pile-count">{myPlayer?.deck.length??0}</span>
           <span class="pile-label">牌庫</span>
+          {#if shuffleFlashUntil[myIdx] > 0}<span class="shuffle-spark">🌀</span>{/if}
         </div>
-        <div class="pile-slot disc-pile" onclick={() => viewDiscardFor = myIdx} title="查看我的棄牌區">
+        <div class="pile-slot disc-pile" class:discard-pulse={discardFlashUntil[myIdx] > 0}
+          onclick={() => viewDiscardFor = myIdx} title="查看我的棄牌區">
           <span class="pile-icon">🗑</span>
           <span class="pile-count">{myPlayer?.discard.length??0}</span>
           <span class="pile-label">棄牌</span>
@@ -1858,8 +1932,8 @@
             class:draggable={dragKind!==null}
             class:hover-peek={hoverHandIid===inst.iid}
             style="--fan-rot:{rot}deg;--fan-lift:{liftY}px;"
-            in:fly={{ x: 260, y: -40, duration: 380, delay: i * 70, easing: cubicOut }}
-            out:fly={{ y: -220, duration: 260, easing: cubicOut }}
+            in:fly={{ x: 220, y: -40, duration: 220, delay: i * 40, easing: cubicOut }}
+            out:fly={{ y: -220, duration: 220, easing: cubicOut }}
             onpointerenter={(e)=>enterHandCard(e, inst.iid)}
             onpointerleave={leaveHandCard}
             onpointerdown={(e)=>{leaveHandCard(); if(dragKind)startDrag(e, inst, dragKind, c);}}
@@ -2825,6 +2899,42 @@
     0%  { box-shadow: 0 0 0 rgba(170,255,68,0); }
     40% { box-shadow: 0 0 24px rgba(170,255,68,.9), inset 0 0 18px rgba(170,255,68,.4); transform:scale(1.04); }
     100%{ box-shadow: 0 0 0 rgba(170,255,68,0); transform:scale(1); }
+  }
+
+  /* ── v2.42 牌庫洗牌動畫 ── */
+  .pile-slot.deck-pile.shuffling{
+    animation: deck-shuffle .55s cubic-bezier(.3,.8,.3,1);
+    box-shadow: 0 0 16px rgba(136,190,255,.8), 0 0 28px rgba(136,190,255,.4);
+  }
+  @keyframes deck-shuffle{
+    0%   { transform: rotate(0)     scale(1); }
+    20%  { transform: rotate(-10deg) scale(1.08); }
+    45%  { transform: rotate(8deg)   scale(1.12); }
+    70%  { transform: rotate(-4deg)  scale(1.05); }
+    100% { transform: rotate(0)      scale(1); }
+  }
+  .pile-slot .shuffle-spark{
+    position:absolute; top:-10px; right:-6px; font-size:1.1rem;
+    pointer-events:none;
+    animation: spark-spin .55s linear;
+    filter: drop-shadow(0 0 6px rgba(136,190,255,.9));
+  }
+  @keyframes spark-spin{
+    0%   { transform: rotate(0)    scale(.4); opacity:0; }
+    30%  { transform: rotate(140deg) scale(1.1); opacity:1; }
+    100% { transform: rotate(360deg) scale(.6); opacity:0; }
+  }
+
+  /* ── v2.42 棄牌脈衝 ── */
+  .pile-slot.disc-pile.discard-pulse{
+    animation: discard-pulse .45s cubic-bezier(.3,.8,.3,1);
+    background:#2a1a3a !important;
+    box-shadow: 0 0 14px rgba(200,120,255,.7);
+  }
+  @keyframes discard-pulse{
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.14) rotate(-3deg); }
+    100% { transform: scale(1) rotate(0); }
   }
 
   .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:visible; min-width:0; }
