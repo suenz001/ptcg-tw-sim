@@ -10005,8 +10005,10 @@ reg('太晶珠', (st, idx) => {
 });
 
 // ---- 捕蟲組合（Item）- 查看牌庫頂 7，選最多 2 張草寶可夢/草能量加手牌 -------
-// v2.54 修正：卡面明寫「上方 7 張」（原 v2.xx 實裝為 top 6 — 錯誤）。
-// 機制類似 米立龍｜集客：peek top N → pick up to 2（同屬類別）→ 剩下放回並重洗。
+// v2.54 修正：卡面明寫「上方 7 張」（原實裝為 top 6 — 錯誤）。
+// v2.55 修正：filter 改用 ':TOP7' 後綴把範圍限定在前 7 張 — v2.54 只改了數字但沒
+// 改 filter，UI selectionItems 走 default 分支還是檢索整個牌庫。
+// 機制類似 米立龍｜集客（Supporter:TOP6）：peek top N → pick up to 2 → 剩下回底重洗。
 regG('捕蟲組合', (st, idx) => st.players[idx].deck.length > 0);
 reg('捕蟲組合', (st, idx) => {
   const p = st.players[idx];
@@ -10016,7 +10018,7 @@ reg('捕蟲組合', (st, idx) => {
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'GrassBasicOrGrassEnergy',
+    filter: 'GrassBasicOrGrassEnergy:TOP7',
     minCount: 0, maxCount: 2,
     effectKey: 'bug-catcher-set',
     params: { top7Iids: top7.map(c => c.iid) },

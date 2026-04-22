@@ -180,6 +180,17 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         const top6 = new Set<string>((sel.params?.top6Iids as string[]) ?? []);
         if (f === 'TOP6')            return top6.has(c.iid);
         if (f === 'Supporter:TOP6')  return top6.has(c.iid) && card.subtype === 'Supporter';
+        // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
+        if (f === 'GrassBasicOrGrassEnergy:TOP7') {
+          const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);
+          if (!top7.has(c.iid)) return false;
+          if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
+          if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+            if (card.pokemonType === 'Grass') return true;
+            if (card.name.includes('【草】')) return true;
+          }
+          return false;
+        }
         if (f === 'Basic')           return isBasicPokemonCard(card);
         if (f === 'Basic:HP70')      return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
         if (f === 'Stage1')          return card.supertype === 'Pokemon' && card.subtype === 'Stage1';

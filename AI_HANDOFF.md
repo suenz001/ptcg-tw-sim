@@ -1,9 +1,60 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 2f3h (v2.54)  
+> 最後更新：2026-04-22 Session 2f3i (v2.55)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 2f3i (v2.55) — 捕蟲組合 filter 加 :TOP7 後綴（真正限定 peek top 7）
+
+### 問題
+
+Leon 回饋：「補蟲組合還是不對阿，他是從牌庫上方看 7 張牌，然後選其中屬於基本草能量或是草系寶可夢最多 2 張入手，不是全牌庫檢索 — 他的邏輯類似米立龍的集客寶可裝置 3.0 阿」。
+
+v2.54 我只改了 `top6`→`top7` 數字與 params key 名字，但 `filter: 'GrassBasicOrGrassEnergy'` 沒加 `:TOP7` 後綴 — `selectionItems` 在 +page.svelte 會走 default 分支 `return src.deck.filter(c => { if (f === 'GrassBasicOrGrassEnergy') ... })`，這是對整個牌庫做 filter。應該像米立龍｜集客（`'Supporter:TOP6'`）一樣用「預述 filter : TOPN」後綴告訴 UI 只看前 N 張。
+
+### 修法
+
+**1. effects.ts 捕蟲組合**：
+- `filter: 'GrassBasicOrGrassEnergy'` → `filter: 'GrassBasicOrGrassEnergy:TOP7'`（params key `top7Iids` v2.54 已改好）。
+
+**2. +page.svelte `selectionItems` matcher**（約 line 872 後）：
+新增 `f === 'GrassBasicOrGrassEnergy:TOP7'` 特殊分支，交集「top7Iids 集合」＆「基本草寶可夢 OR 基本草能量」predicate，直接 return，避免掉到 default 分支。
+
+**3. +page.svelte peek-top-N 剩餘卡顯示**（約 line 2386）：
+`peekIids` 的 fallback 鏈原本只有 `top6Iids`/`top8Iids`，補上 `top7Iids`，讓 `<details>「🔍 查看翻到的其他 N 張」` 區塊也能正確顯示 7 張中沒選到的。
+
+**4. ai.ts `autoResolveSelection`**：
+同 +page.svelte，加 `f === 'GrassBasicOrGrassEnergy:TOP7'` 分支把候選限定在 top7Iids。
+
+filter 字串系統慣例（sync 3 處）：`effects.ts`（宣告）、`+page.svelte`（UI 呈現）、`ai.ts`（AI 自動決策）。
+
+### 為何 X:TOPn 不是單純 runtime regex
+
+現行 +page.svelte 的 `describeFilter` 有通用 `/^(\w+):TOP(\d+)$/` regex，會把 `GrassBasicOrGrassEnergy:TOP7` 描述成「牌庫頂 7 張中的基礎【草】寶可夢或【草】能量」。但 `selectionItems`（決定 UI 列出哪些可點）和 `ai.ts`（決定 AI 自動解析挑哪張）用 switch-case 硬編碼，沒 regex fallback — 所以必須個別加 case。不改成 regex 是因為不同 X 的 predicate 行為不完全一樣（e.g. `FightingBasicOrFightingEnergy` 裡 `【鬥】` vs `【格】` 的相容處理），抽象化沒有淨 win。
+
+### 檔案變更
+
+- `src/lib/version.ts`: 2.54 → 2.55
+- `src/lib/game/effects.ts`: 捕蟲組合 filter 加 `:TOP7` 後綴 + 補充註解
+- `src/routes/game/+page.svelte`: +14 行（selectionItems 加 GrassBasicOrGrassEnergy:TOP7 分支）+ peek remainder 加 top7Iids fallback
+- `src/lib/game/ai.ts`: +12 行（autoResolve 加 GrassBasicOrGrassEnergy:TOP7 分支）
+
+### 構建
+
+`npm run build` 通過（13.19s）。
+
+### 實機測試建議
+
+- 猛擂鼓 preset 打出捕蟲組合：UI 應該只列牌庫頂 7 張中的「基本草寶可夢 / 基本草能量」作可點選項；其他 5 張（非符合）在 `<details>` 摺疊區可看但不可選。
+- 無任何符合時：UI 顯示 0 張可選，可直接跳過（minCount=0）。
+- AI 模式：AI 自動解析應該只從 top7 符合者挑，不應從整個牌庫掃。
+
+### Commit
+
+待填（此 entry 建立時尚未 commit）
 
 ---
 
