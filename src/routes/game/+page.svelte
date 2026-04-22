@@ -1139,6 +1139,15 @@
     if (counts.size === 0) return '無能量';
     return [...counts.entries()].map(([t,n]) => `${ENERGY_LABEL[t]}×${n}`).join(' ');
   }
+  /**
+   * v2.47：備戰區專用的緊湊能量圖示 — 以小圓形彩色 pip 橫向排列，
+   * 取代「火×2 水×1」這種文字表達，避免 bench-slot 被撐寬或換行。
+   * 回傳 { type, count } 陣列供模板 #each 渲染。
+   */
+  function energyPips(inst: CardInstance): Array<{ type: string; count: number }> {
+    const counts = countEnergy(inst, pool);
+    return [...counts.entries()].map(([type, count]) => ({ type, count }));
+  }
   function hpColor(rem: number, tot: number): string {
     const p = tot > 0 ? rem/tot : 1;
     return p > 0.5 ? '#2c7a3c' : p > 0.25 ? '#e0a020' : '#c00';
@@ -2067,10 +2076,17 @@
               <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
               <div class="bench-name">{bc?.name}</div>
               <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
-              <div class="bench-nrg">{energySummary(b)}</div>
+              <!-- v2.47：以緊湊 pip 橫向呈現能量（取代文字表達），避免 bench-slot 被撐寬 -->
+              <div class="bench-nrg">
+                {#each energyPips(b) as pip}
+                  <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                {/each}
+              </div>
               {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}
               {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
-              {#if b.status}<div class="status-chip-sm status-{b.status}">{
+              <!-- v2.47：備戰區寶可夢依 PTCG 規則不會有異常狀態；engine scrubBenchStatus 亦會抹除，
+                   這裡不再渲染 status chip（避免佔版面） -->
+              {#if b.status}<div class="status-chip-sm status-{b.status}" title="異常狀態（不應出現於備戰，請回報）">{
                 b.status === 'poisoned' ? '☠️' :
                 b.status === 'burned' ? '🔥' :
                 b.status === 'asleep' ? '💤' :
@@ -3216,16 +3232,25 @@
   .hand-card:not(.arriving){ transition: opacity .18s ease-out; }
 
   .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:visible; min-width:0; }
-  .bench-slot{ flex:1 1 70px; min-width:70px; max-width:115px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:visible; }
+  /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
+     避免撐大 zone-bench 把下方手牌擠出 viewport。能量 pip 橫向 wrap 到 max 2 行。 */
+  .bench-slot{ flex:1 1 70px; min-width:70px; max-width:115px; height:185px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:hidden; }
   .bench-slot:not(.bench-empty).energy-target{ border-color:#aaff44; cursor:pointer; }
   .bench-slot img{ width:100%; max-width:96px; border-radius:4px; }
-  /* bench-empty：flex 與寬度對齊已放置卡牌的 slot，避免 setup 時 drop target 小到難拖 */
-  .bench-empty{ border-style:dashed; border-color:#2a5a2a; opacity:.55; overflow:visible; flex:1 1 70px; min-width:70px; max-width:115px; min-height:170px; }
+  /* bench-empty：與已放置 slot 等高；flex 與寬度對齊已放置卡牌的 slot，避免 setup 時 drop target 小到難拖 */
+  .bench-empty{ border-style:dashed; border-color:#2a5a2a; opacity:.55; overflow:visible; flex:1 1 70px; min-width:70px; max-width:115px; height:185px; }
   /* 拖曳中的 bench-empty 提升可見度（粗框 + 偏亮底） */
   .bench-empty.drop-zone{ opacity:.95; border-width:3px; }
   .bench-name{ font-size:.7rem; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
   .bench-stat{ font-size:.66rem; color:#aaa; }
-  .bench-nrg{ font-size:.62rem; color:#888; }
+  /* v2.47：能量改用橫向 pip（一字排開），flex-wrap 最多兩行也還塞得下 */
+  .bench-nrg{ font-size:.62rem; color:#888; display:flex; flex-wrap:wrap; justify-content:center; gap:2px; width:100%; line-height:1; }
+  .nrg-pip{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:14px; height:14px; padding:0 3px; border-radius:7px;
+    font-size:.58rem; font-weight:700; color:#fff; line-height:1;
+    box-shadow:0 0 0 1px rgba(0,0,0,.35) inset;
+  }
 
   .zone-pile{ flex-shrink:0; display:flex; flex-direction:column; gap:.35rem; width:72px; align-items:center; }
   .pile-slot{ width:65px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:6px; padding:.35rem .25rem; gap:.12rem; min-height:60px; transition:transform .15s, box-shadow .15s; position:relative; }

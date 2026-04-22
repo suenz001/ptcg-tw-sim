@@ -348,9 +348,12 @@ export function createGame(
   const m1 = dealOpeningHand(p1, pool);
   const m2 = dealOpeningHand(p2, pool);
 
-  // Mulligan 補抽不再自動完成 — 交給對手（非 mulligan 方）自己決定抽或不抽。
-  // pendingMulliganDraw[0] = m2（P2 mulligan → P1 可補抽）
-  // pendingMulliganDraw[1] = m1（P1 mulligan → P2 可補抽）
+  // Mulligan 補抽採「NET 抵銷」：只有次數多的一方的對手可以補抽差額。
+  // 例：雙方各 1 次 → 互相抵銷，兩邊都 0；對方 2 次我方 1 次 → 我方補 1、對方 0。
+  // pendingMulliganDraw[0] = P1 可補抽張數（= max(0, m2 - m1)）
+  // pendingMulliganDraw[1] = P2 可補抽張數（= max(0, m1 - m2)）
+  const extraForP1 = Math.max(0, m2 - m1);
+  const extraForP2 = Math.max(0, m1 - m2);
 
   // 擲硬幣決定先手
   const firstPlayerIdx: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
@@ -366,7 +369,7 @@ export function createGame(
     isFirstTurn: true,
     setupDone: [false, false],
     mulliganCounts: [m1, m2],
-    pendingMulliganDraw: [m2, m1],
+    pendingMulliganDraw: [extraForP1, extraForP2],
     log: [],
     pendingPrizes: 0,
     oppPrizesAtMyLastTurnEnd: [6, 6],
@@ -376,8 +379,20 @@ export function createGame(
 
   let st = addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
   st = addLog(st, `🪙 擲硬幣：${state.players[firstPlayerIdx].name} 先手`, null);
-  if (m1 > 0) st = addLog(st, `${spec1.name} 起手無基礎寶可夢，重抽懲罰 ${m1} 次 → ${spec2.name} 可選擇多抽 ${m1} 張`, 0);
-  if (m2 > 0) st = addLog(st, `${spec2.name} 起手無基礎寶可夢，重抽懲罰 ${m2} 次 → ${spec1.name} 可選擇多抽 ${m2} 張`, 1);
+  // Mulligan log：依 NET 抵銷結果寫
+  if (m1 > 0 && m2 > 0 && m1 === m2) {
+    st = addLog(st, `雙方皆起手無基礎寶可夢（各重抽 ${m1} 次），重抽懲罰互相抵銷，雙方皆不可多抽牌`, null);
+  } else if (m1 > 0 && m2 > 0) {
+    // 兩邊都有但次數不同 → 差額歸次數少的那一方的對手（= 次數多的一方的對手）
+    const winnerIdx = m1 > m2 ? 1 : 0;
+    const net = Math.abs(m1 - m2);
+    const winnerName = state.players[winnerIdx].name;
+    st = addLog(st, `雙方皆起手無基礎寶可夢（${spec1.name} ${m1} 次 / ${spec2.name} ${m2} 次），抵銷後 ${winnerName} 可選擇多抽 ${net} 張`, null);
+  } else if (m1 > 0) {
+    st = addLog(st, `${spec1.name} 起手無基礎寶可夢，重抽懲罰 ${m1} 次 → ${spec2.name} 可選擇多抽 ${m1} 張`, 0);
+  } else if (m2 > 0) {
+    st = addLog(st, `${spec2.name} 起手無基礎寶可夢，重抽懲罰 ${m2} 次 → ${spec1.name} 可選擇多抽 ${m2} 張`, 1);
+  }
   return st;
 }
 
@@ -1963,6 +1978,36 @@ function handlePlaying(
 // ── 主要 applyAction ─────────────────────────────────────────────────────────
 
 /**
+ * 備戰區異常狀態守衛（v2.47）
+ *
+ * PTCG 規則：備戰區的寶可夢不會處於任何異常狀態（睡眠 / 麻痺 / 中毒 / 灼傷 / 混亂）。
+ * 若因某處邏輯漏洞（例如某個換場 resolver 忘了呼叫 clearActiveEffects）導致
+ * 備戰寶可夢身上殘留 status，這裡做最後一道防線 — 在 applyAction 入口與出口
+ * 統一抹除備戰區所有寶可夢的 status 旗標。
+ *
+ * 此函式為純函式：回傳新 state（有變更時）或原 state（無變更）。
+ */
+function scrubBenchStatus(state: GameState): GameState {
+  let changed = false;
+  const players = state.players.map((p) => {
+    let benchChanged = false;
+    const newBench = p.bench.map((b) => {
+      if (b.status !== undefined) {
+        benchChanged = true;
+        return { ...b, status: undefined };
+      }
+      return b;
+    });
+    if (benchChanged) {
+      changed = true;
+      return { ...p, bench: newBench };
+    }
+    return p;
+  }) as [PlayerState, PlayerState];
+  return changed ? { ...state, players } : state;
+}
+
+/**
  * 主要引擎入口：接收現有 state + 動作 → 回傳新 state。
  * 所有遊戲邏輯都在這裡分派。
  */
@@ -1973,15 +2018,17 @@ export function applyAction(
 ): GameState {
   if (state.phase === 'game-over') return state;
 
+  let next: GameState;
   if (state.phase === 'setup') {
-    return handleSetup(state, action, pool);
+    next = handleSetup(state, action, pool);
+  } else if (state.phase === 'playing') {
+    next = handlePlaying(state, action, pool);
+  } else {
+    next = state;
   }
 
-  if (state.phase === 'playing') {
-    return handlePlaying(state, action, pool);
-  }
-
-  return state;
+  // v2.47 防禦層：備戰寶可夢不應持有異常狀態
+  return scrubBenchStatus(next);
 }
 
 // ── 輔助查詢 ─────────────────────────────────────────────────────────────────

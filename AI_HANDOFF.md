@@ -1,9 +1,86 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 305dc (v2.46)  
+> 最後更新：2026-04-22 Session 2f3a (v2.47)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 2f3a (v2.47) — Mulligan NET 抵銷 + 備戰異常狀態守衛 + 備戰 UI 高度鎖
+
+### 問題
+
+Leon 在 v2.46 後提出三件事：
+
+1. **Mulligan 懲罰要 NET 抵銷** —「雙方都重抽1次就互相抵銷、沒人多抽；對方2次我方1次 → 我方多抽 1 張；以此類推。」
+
+2. **備戰區土龍弟弟跳出混亂狀態 bug**：
+   - 跑胡地 vs 魔靈多龍時，備戰區的土龍弟弟顯示了【混亂】晶片。
+   - Leon 兩點質疑：（a）對手魔靈多龍 preset 沒有造成混亂的卡片 —— 其實有（願增猿「精神歪曲」60 傷 + 混亂，但 statusPost 明明只打 def.active）；（b）PTCG 規則：備戰區的寶可夢不會處於任何異常狀態（睡眠/麻痺/中毒/灼傷/混亂）。
+
+3. **UI 版面擠壓** — 土龍弟弟的「能量文字 + 狀態晶片」太長，把 bench-slot 撐高，連帶戰鬥場也被拉寬，手牌被擠到 viewport 下方。Leon 提議：「能量只顯示圖示，然後往橫的放之類的」。
+
+### Bug #1 修法：Mulligan NET 抵銷
+
+#### 根因
+
+`engine.ts` createGame 原本直接把對手的原始 mulligan 次數塞進 `pendingMulliganDraw: [m2, m1]` —— 雙方各 1 次會變成兩邊都可多抽 1 張，沒抵銷。
+
+#### 修法
+
+`engine.ts:347~395` 改為 NET 計算：
+```ts
+const extraForP1 = Math.max(0, m2 - m1);
+const extraForP2 = Math.max(0, m1 - m2);
+pendingMulliganDraw: [extraForP1, extraForP2],
+```
+
+Log 也依四種情況分流：
+- 雙方同次數 → 「雙方皆起手無基礎寶可夢（各重抽 N 次），重抽懲罰互相抵銷，雙方皆不可多抽牌」
+- 雙方不同次數 → 「抵銷後 {winnerName} 可選擇多抽 {net} 張」
+- 只有單邊 → 維持原文案
+- 雙方都沒 mulligan → 不輸出
+
+### Bug #2 修法：備戰區異常狀態（防禦層 + 根因未完全定位）
+
+#### 根因推斷
+
+`statusPost` 本體永遠只打 `def.active`；所有 swap/retreat resolver 都呼叫 `clearActiveEffects` 清狀態 —— 理論上備戰區不該有 status。但 Leon 實際看到了，代表有某條 code path 沒經過 helper（可能是新 swap 機制或特殊 resolver 沒接到，例如支配鎖鏈、衝浪手等變體）。這次先做防禦層，不深掃根因。
+
+#### 修法（防禦層）
+
+`engine.ts` 新增 `scrubBenchStatus(state)`：走訪雙方 bench，把 `status` 旗標清空。`applyAction` 出口統一 scrub：
+
+```ts
+export function applyAction(state, action, pool) {
+  if (state.phase === 'game-over') return state;
+  let next;
+  if (state.phase === 'setup') next = handleSetup(state, action, pool);
+  else if (state.phase === 'playing') next = handlePlaying(state, action, pool);
+  else next = state;
+  return scrubBenchStatus(next);  // ← v2.47 出口統一 scrub
+}
+```
+
+→ 無論哪條 resolver 漏清、或將來新 swap 機制忘記接 helper，備戰都不會殘留 status。一個永遠安全的 invariant。
+
+Active 的 status 完全不受影響（scrub 只動 bench），正常中毒/燒傷/睡眠在戰鬥場仍運作。
+
+### Bug #3 修法：備戰區 UI 高度鎖定 + 能量 pip 化
+
+1. **能量文字→橫向 pip**：`+page.svelte` 新增 `energyPips(inst)` helper 回傳 `{type, count}[]`，bench-slot 改以 flex-wrap 的 `.nrg-pip` 小圓角標籤渲染（14px 高、背景色依能量屬性、`火3`、`水1` 並列）。省下一半寬度，同類型能量合併顯示。
+2. **bench-slot 高度鎖定**：原本只有 max-width、height 由內容決定；改成 `height:185px; overflow:hidden`。`.bench-empty` 一併鎖 185px。不管身上有多少 tool/chip/status，slot 都不會被撐開。
+3. **備戰 status chip 保留但不影響版面**：本來不該出現（engine scrub 已保證），留著當第二層 safety。slot 鎖高後即使出現也不會擠爆版面。
+
+### 次要調整
+
+- `version.ts`：`'2.46'` → `'2.47'`
+
+### Build / Commit
+
+- 本地 `npm run build` 成功（client 6.23s / server 12.97s），無 error。
+- 對照 origin 行數後 push（commit hash 填在下方）。
 
 ---
 
