@@ -142,7 +142,7 @@ resolver 那邊 `picks.length === 0` 已經會 log「未選取任何物品卡」
 
 - `VERSION = '2.41'`
 - `npm run build` ✅
-- Commit hash：待補（push 後回填）
+- Commit hash：`6e90d4c`
 
 ### 教訓
 
