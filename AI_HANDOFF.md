@@ -1,9 +1,45 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session 2f3d (v2.50)  
+> 最後更新：2026-04-22 Session 2f3e (v2.51)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session 2f3e (v2.51) — 備戰 slot 加寬 + 能量 pip 垂直排列在右側
+
+### 問題
+
+v2.47 把備戰能量 pip 做成橫向 wrap，v2.50 把名字/HP 移到卡牌上方。Leon 看到新版反饋：「能量改成這樣的圖示很好，但建議可以把卡片的格子加寬，把能量圖示放到右邊，垂直排列，這樣就不會有高度高過的問題了」。即：能量數量多時（≥3 張）橫向 wrap 仍會吃掉第二行空間；更好的解法是加寬 slot 並把 pip 挪到圖片右側垂直疊放，就永遠不會撐高。
+
+### 修法
+
+`src/routes/game/+page.svelte`：
+
+1. **自方 bench-slot 結構**（~2077）：把 `<img>` + `<div class="bench-nrg">…pips…</div>` 包進新的 `<div class="bench-middle">` flex-row 容器；圖片佔左側，能量 pip 佔右側。
+2. **CSS**（~3236-3250）：
+   - `.bench-slot` / `.bench-empty` max-width 115px → 140px、flex-basis/min-width 70px → 90px，加寬整個備戰區。5 格 × 140px + gaps ≈ 720px，仍在 playmat 內。
+   - 新增 `.bench-middle { display:flex; flex-direction:row; align-items:center; justify-content:center; gap:3px; flex:1 1 auto; min-height:0; }`。
+   - `.bench-nrg` 從 `flex-wrap:wrap; width:100%;` 改為 `flex-direction:column; flex-shrink:0;`，pip 改為垂直疊放。
+   - `.bench-slot img` max-width 96px → 92px，保留 `width:100%` 讓它在 bench-middle flex row 裡自適應（對手 bench 無 bench-middle 時則照舊填滿 slot）。
+
+### 為何 height:185px 不變
+
+Leon 之前就鎖死 bench-slot 在 185px（v2.47 決定）以免撐大 zone-bench 擠出手牌。這次只動寬度，維持高度鎖定。能量 pip 垂直後，自然高度等於 `pip 數 × 16px`（14px + 2px gap）；若能量 ≥6 張，會受 `.bench-middle` max-height（由 flex:1 1 auto 分到的剩餘空間，約 90-100px）截斷，但實戰中同一隻寶可夢帶 ≥6 顆能量的情況罕見，先這樣觀察。
+
+### 檔案變更
+
+- `src/lib/version.ts`: 2.50 → 2.51
+- `src/routes/game/+page.svelte`: 自方 bench-slot markup 加 `.bench-middle` wrap；CSS 加寬 + pip 轉垂直 + 新增 `.bench-middle` rule
+
+### 構建
+
+`npm run build` 通過。
+
+### Commit
+
+待 commit 後填入 hash。
 
 ---
 
@@ -31,7 +67,7 @@ Leon 截圖：備戰區卡牌下方「名字 + HP + 特性按鈕」擠在一團�
 
 ### Commit
 
-待 commit 後填入 hash。
+`38009b9` — v2.50: 備戰寶可夢名字/HP 移到卡牌上方 — 避免與特性按鈕擠在一團
 
 ---
 
@@ -96,7 +132,7 @@ v2.47 的 `scrubBenchStatus` invariant（engine.ts:1991-2009）仍保留作 defe
 
 ### Commit
 
-待 commit 後填入 hash。
+`0c37b02` — v2.49: sakaki-self-swap 補 clearActiveEffects — 追到 v2.47 備戰狀態 leak root cause
 
 ---
 

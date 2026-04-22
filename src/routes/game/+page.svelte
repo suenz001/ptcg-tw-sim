@@ -2074,16 +2074,18 @@
               <!-- v2.49：名字/HP 移到卡牌上方，避免與下方進化按鈕/特性按鈕/能量 pip 擠在一起 -->
               <div class="bench-name">{bc?.name}</div>
               <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
-              <img src={bc?.imageUrl} alt={bc?.name}
-                class:zoomable={!selectedEnergyIid}
-                onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>
-              <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
-              <!-- v2.47：以緊湊 pip 橫向呈現能量（取代文字表達），避免 bench-slot 被撐寬 -->
-              <div class="bench-nrg">
-                {#each energyPips(b) as pip}
-                  <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
-                {/each}
+              <!-- v2.51：加寬 slot + 能量 pip 改為垂直排列在圖片右側，避免能量超過 2 個時撐高 -->
+              <div class="bench-middle">
+                <img src={bc?.imageUrl} alt={bc?.name}
+                  class:zoomable={!selectedEnergyIid}
+                  onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>
+                <div class="bench-nrg">
+                  {#each energyPips(b) as pip}
+                    <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                  {/each}
+                </div>
               </div>
+              <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
               {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}
               {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
               <!-- v2.47：備戰區寶可夢依 PTCG 規則不會有異常狀態；engine scrubBenchStatus 亦會抹除，
@@ -3235,19 +3237,23 @@
 
   .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:visible; min-width:0; }
   /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
-     避免撐大 zone-bench 把下方手牌擠出 viewport。能量 pip 橫向 wrap 到 max 2 行。 */
-  .bench-slot{ flex:1 1 70px; min-width:70px; max-width:115px; height:185px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:hidden; }
+     避免撐大 zone-bench 把下方手牌擠出 viewport。
+     v2.51：加寬 slot（115→140px），能量 pip 移到右側垂直排列。 */
+  .bench-slot{ flex:1 1 90px; min-width:90px; max-width:140px; height:185px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:hidden; }
   .bench-slot:not(.bench-empty).energy-target{ border-color:#aaff44; cursor:pointer; }
-  /* v2.49：限制圖片高度，把底部空間留給能量 pip / 進化按鈕 / 特性按鈕（名字/HP 已移到卡牌上方） */
-  .bench-slot img{ width:100%; max-width:96px; max-height:100px; object-fit:contain; border-radius:4px; }
+  /* v2.49：限制圖片高度，把底部空間留給能量 pip / 進化按鈕 / 特性按鈕（名字/HP 已移到卡牌上方）
+     v2.51：寬度讓 flex 自動分配（bench-middle 裡與能量 pip 共用一列；對手 bench 無 bench-middle 則直接填滿 slot） */
+  .bench-slot img{ width:100%; max-width:92px; max-height:100px; object-fit:contain; border-radius:4px; }
+  /* v2.51：中段 flex row — 圖片 + 右側能量垂直 pip；佔據 slot 大部分高度，下方留空間給 hp bar + 按鈕 */
+  .bench-middle{ display:flex; flex-direction:row; width:100%; align-items:center; justify-content:center; gap:3px; flex:1 1 auto; min-height:0; }
   /* bench-empty：與已放置 slot 等高；flex 與寬度對齊已放置卡牌的 slot，避免 setup 時 drop target 小到難拖 */
-  .bench-empty{ border-style:dashed; border-color:#2a5a2a; opacity:.55; overflow:visible; flex:1 1 70px; min-width:70px; max-width:115px; height:185px; }
+  .bench-empty{ border-style:dashed; border-color:#2a5a2a; opacity:.55; overflow:visible; flex:1 1 90px; min-width:90px; max-width:140px; height:185px; }
   /* 拖曳中的 bench-empty 提升可見度（粗框 + 偏亮底） */
   .bench-empty.drop-zone{ opacity:.95; border-width:3px; }
   .bench-name{ font-size:.7rem; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
   .bench-stat{ font-size:.66rem; color:#aaa; }
-  /* v2.47：能量改用橫向 pip（一字排開），flex-wrap 最多兩行也還塞得下 */
-  .bench-nrg{ font-size:.62rem; color:#888; display:flex; flex-wrap:wrap; justify-content:center; gap:2px; width:100%; line-height:1; }
+  /* v2.51：能量 pip 改為垂直排列在圖片右側（解決能量多時撐高問題） */
+  .bench-nrg{ font-size:.62rem; color:#888; display:flex; flex-direction:column; align-items:center; gap:2px; line-height:1; flex-shrink:0; }
   .nrg-pip{
     display:inline-flex; align-items:center; justify-content:center;
     min-width:14px; height:14px; padding:0 3px; border-radius:7px;
