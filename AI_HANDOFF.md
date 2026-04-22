@@ -86,7 +86,7 @@ filter: 'BasicPsychicEnergy',  // 原本 'BasicEnergy'
 
 ### commit hash
 
-（見 commit 後 backfill）
+`4dcefe09ad1059af32fff982ab790fc3e2bc1702`
 
 ---
 
