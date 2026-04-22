@@ -39,7 +39,7 @@ M-P（促銷特典卡）— 點 M-P 卡包會直接 throw。
 
 ### commit hash
 
-（待推完補）
+`58b33ad v2.27 /cards set page header 補中文名稱 + 放寬 setCode regex`
 
 ---
 
