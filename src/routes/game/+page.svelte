@@ -855,6 +855,12 @@
           const card = pool.get(c.cardId);
           if (!card) return false;
           if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon' && card.subtype !== 'Other') || card.supertype === 'Energy';
+          if (f === 'PokemonOrBasicEnergy') {
+            // v2.43：夜間擔架用 — 寶可夢卡或「基本」能量卡（排除 Special Energy / Pokemon 道具）
+            if (card.supertype === 'Pokemon' && card.subtype !== 'Other') return true;
+            if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
+            return false;
+          }
           if (f === 'PokemonNonExOrBasicEnergy') {
             // 水蓮的照顧：寶可夢（不含道具 subtype=Other 與規則盒 subtype=ex）+ 基本能量
             if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.subtype !== 'ex') return true;
@@ -1248,6 +1254,57 @@
       return label ? `${label}：放置傷害指示物` : '放置傷害指示物';
     }
     return '請選擇';
+  }
+
+  // v2.43：把 effects.ts 的 filter 字串翻成 UI 顯示文字。
+  // 先前是一連串 .replace('Pokemon','寶可夢').replace('Energy','能量') 的鏈式替換，
+  // 碰到 'PokemonNonExOrBasicEnergy' 這類複合名時會殘留英文（例：「寶可夢NonExOr基礎寶可夢能量」）。
+  // 現在改為：已知 filter 優先查表；'Energy:Type' / 'Pokemon:Type' 走屬性規則；未列出者退回舊鏈。
+  function describeFilter(f: string): string {
+    const map: Record<string, string> = {
+      'Basic':                         '基礎寶可夢',
+      'Basic:HP70':                    'HP≤70 基礎寶可夢',
+      'BasicEnergy':                   '基本能量',
+      'BasicPsychicEnergy':            '基本【超】能量',
+      'Pokemon':                       '寶可夢',
+      'PokemonOrEnergy':               '寶可夢或能量',
+      'PokemonOrBasicEnergy':          '寶可夢或基本能量',
+      'PokemonNonExOrBasicEnergy':     '寶可夢（非 ex）或基本能量',
+      'PokemonNonRule':                '非規則盒寶可夢',
+      'Stage1':                        '1 階進化',
+      'Stage2':                        '2 階進化',
+      'Evolution':                     '進化卡',
+      'Tool':                          '道具',
+      'Stadium':                       '競技場卡',
+      'Trainer':                       '訓練家',
+      'AnyTrainer':                    '訓練家卡',
+      'Any':                           '任意卡',
+      'Energy':                        '能量',
+      'CynthiaPokemon':                '竹蘭的寶可夢',
+      'FightingBasicOrFightingEnergy': '基礎【鬥】寶可夢或【鬥】能量',
+      'GrassBasicOrGrassEnergy':       '基礎【草】寶可夢或【草】能量',
+      'PsychicBasic':                  '基礎【超】寶可夢',
+      'RocketBasic':                   '火箭隊基礎寶可夢',
+      'RocketSupporter':               '火箭隊支援者',
+    };
+    if (map[f]) return map[f];
+    const typeMap: Record<string, string> = {
+      Grass: '【草】', Fire: '【火】', Water: '【水】', Lightning: '【雷】',
+      Psychic: '【超】', Fighting: '【鬥】', Darkness: '【惡】', Metal: '【鋼】',
+      Dragon: '【龍】', Fairy: '【妖】', Colorless: '【無】',
+    };
+    const mET = f.match(/^(Energy|Pokemon):(\w+)$/);
+    if (mET) {
+      const t = typeMap[mET[2]] ?? mET[2];
+      return mET[1] === 'Energy' ? `基本${t}能量` : `${t}寶可夢`;
+    }
+    const mTop = f.match(/^TOP(\d+)$/);
+    if (mTop) return `前 ${mTop[1]} 張`;
+    // fallback：舊的替換鏈（避免未列出的 filter 完全壞）
+    return f.replace('Basic:HP70','HP≤70基礎')
+            .replace('Basic','基礎寶可夢')
+            .replace('Pokemon','寶可夢')
+            .replace('Energy','能量');
   }
 </script>
 
@@ -1898,6 +1955,8 @@
     </div>
     <div class="hand-scroll" class:is-dragging={!!dragging?.moved}
       style="--hand-overlap:{(myPlayer?.hand.length??0)<=9 ? 0 : Math.min(58, ((myPlayer?.hand.length??0)-9)*7)}px;">
+      <!-- v2.43: setup 階段要等硬幣動畫結束才開始發牌（感覺上是硬幣→發 7 張） -->
+      {#if !game || game.phase !== 'setup' || coinFlipStage === 'done'}
       {#each myPlayer?.hand??[] as inst, i (inst.iid)}
         {@const c=getCard(inst.cardId)}
         {@const n=(myPlayer?.hand.length??0)}
@@ -1932,7 +1991,7 @@
             class:draggable={dragKind!==null}
             class:hover-peek={hoverHandIid===inst.iid}
             style="--fan-rot:{rot}deg;--fan-lift:{liftY}px;"
-            in:fly={{ x: 220, y: -40, duration: 220, delay: i * 40, easing: cubicOut }}
+            in:fly={{ x: 220, y: -40, duration: game?.phase === 'setup' ? 480 : 220, delay: (game?.phase === 'setup' ? i * 150 : i * 40), easing: cubicOut }}
             out:fly={{ y: -220, duration: 220, easing: cubicOut }}
             onpointerenter={(e)=>enterHandCard(e, inst.iid)}
             onpointerleave={leaveHandCard}
@@ -1950,6 +2009,7 @@
           </div>
         {/if}
       {/each}
+      {/if}
     </div>
   </div>
 
@@ -1986,7 +2046,7 @@
           {:else}
             <p class="sel-hint">
               選 {pendingSelection.minCount===pendingSelection.maxCount?`${pendingSelection.minCount}`:`${pendingSelection.minCount}～${pendingSelection.maxCount}`} 張
-              {#if pendingSelection.filter&&pendingSelection.filter!=='TOP6'&&!pendingSelection.filter.startsWith('Supporter')}（{pendingSelection.filter.replace('Basic:HP70','HP≤70基礎').replace('Basic','基礎寶可夢').replace('Pokemon','寶可夢').replace('Energy','能量')}）{/if}
+              {#if pendingSelection.filter&&pendingSelection.filter!=='TOP6'&&!pendingSelection.filter.startsWith('Supporter')}（{describeFilter(pendingSelection.filter)}）{/if}
               · 已選 {selectionPicked.size}
               {#if isPokePicker}· 點放大鏡 🔍 查看詳情{/if}
             </p>
@@ -2087,13 +2147,14 @@
           && !(pendingSelection.filter?.startsWith('TOP') || pendingSelection.filter?.includes(':TOP'))}
           {@const srcP = game.players[pendingSelection.sourcePlayerIdx]}
           {@const deckGrouped = (() => {
-            const map = new Map<string, { name: string; count: number }>();
+            // v2.43：保留 cardId 讓每組旁邊的放大鏡可呼叫 openZoom（與枇琶下拉一致）
+            const map = new Map<string, { name: string; count: number; cardId: string }>();
             for (const c of srcP.deck) {
               const card = pool.get(c.cardId);
               const name = card?.name ?? c.cardId;
               const entry = map.get(c.cardId);
               if (entry) entry.count++;
-              else map.set(c.cardId, { name, count: 1 });
+              else map.set(c.cardId, { name, count: 1, cardId: c.cardId });
             }
             return [...map.values()].sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name));
           })()}
@@ -2102,7 +2163,11 @@
             <div class="full-deck-note">※ 對照你的原牌組，不在清單中的 6 張通常是獎賞卡（或已在手牌/場上/棄牌）</div>
             <div class="full-deck-list">
               {#each deckGrouped as entry}
-                <div class="deck-item">{entry.count}× {entry.name}</div>
+                <div class="deck-item">
+                  <span class="deck-item-name" title={entry.name}>{entry.count}× {entry.name}</span>
+                  <button class="deck-item-zoom" title="放大查看：{entry.name}"
+                    onclick={(e)=>{e.stopPropagation();openZoom(entry.cardId);}}>🔍</button>
+                </div>
               {/each}
             </div>
           </details>
@@ -3126,8 +3191,11 @@
   .full-deck-note{ margin:.4rem 0; font-size:.75rem; color:#888; }
   .full-deck-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:.2rem .6rem; max-height:200px; overflow-y:auto; }
   /* v2.39 行內放大鏡：flex 左文字 + 右 🔍，避免長名稱爆版 */
-  .deck-item{ display:flex; align-items:center; justify-content:space-between; gap:.25rem; font-size:.8rem; color:#bbb; padding:.1rem 0; min-width:0; }
-  .deck-item-name{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* v2.43 Leon 反饋：原本 justify-content:space-between + 名字 flex:1 1 auto，
+     讓名字拉滿整行、放大鏡被推到最右邊，與卡名的距離太遠。
+     改為 flex-start + 名字 flex:0 1 auto，讓名字只佔實際寬度，放大鏡緊貼名字。 */
+  .deck-item{ display:flex; align-items:center; justify-content:flex-start; gap:.25rem; font-size:.8rem; color:#bbb; padding:.1rem 0; min-width:0; }
+  .deck-item-name{ flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .deck-item-zoom{ flex:0 0 auto; background:transparent; border:none; color:#aaffcc; cursor:pointer; font-size:.85rem; padding:0 .15rem; line-height:1; }
   .deck-item-zoom:hover{ color:#fff; }
   .sel-card{ display:flex; flex-direction:column; align-items:center; gap:.2rem; background:#0e1e0e; border:2px solid #2a4a2a; border-radius:6px; padding:.3rem; cursor:pointer; color:#ccc; font-size:.65rem; position:relative; width:100%; }

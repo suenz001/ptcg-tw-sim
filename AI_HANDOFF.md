@@ -1,9 +1,128 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-22 Session e5c12 (v2.42)  
+> 最後更新：2026-04-22 Session f3a91 (v2.43)  
 > 執行者：Claude Opus 4.7 / Sonnet 4.6 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session f3a91 (v2.43) — v2.42 動畫驗收後 7 件回饋 + 基本能量 filter 全掃
+
+### 問題
+
+Leon 在 v2.42 動畫上線後驗收，一次提了 7 件事：
+
+1. **抽牌動畫看不到**：「太快了嗎??」建議「一開始丟完硬幣以後，再來個發7張牌的動畫」。
+2. **水蓮的照顧 UI 出現程式碼字串**：filter 顯示「寶可夢NonExOr基礎寶可夢能量」這種英文殘渣。
+3. **改造之槌可敲場上特殊能量（含自己）**：Leon 一開始說要雙方皆可，實作前我回頭對卡面（SV5a id=10301 / SV8a id=11663 都寫「對手」），Leon 改口「我講錯了，改造之槌只能敲對手的特殊能量」——照卡面不動。
+4. **同名競技場手牌卡不該亮黃框**：engine 確實會擋，但 UI 還讓玩家拖過去。
+5. **夜間擔架可撿特殊能量**：拿到「感應【超】能量」（Special Energy）— 卡面寫「基本能量」。
+6. **枇琶下拉放大鏡與卡名距離太遠**。
+7. **查看牌庫下拉每張卡旁邊也要有放大鏡**：「剛剛請你修正 枇琶 這張卡的時候不就說過了??」— 模式要沿用。
+
+另外 #5 延伸出 Leon 的標籤指引：「基本能量的標籤有 3 個：基本能量、能量、屬性能量；特殊能量的標籤也有 3 個：能量、特殊能量、屬性能量」——暗示：卡面如果寫「基本能量」就絕不能含 Special Energy，該掃整個專案確認有沒有同款 bug。
+
+### 根因分析
+
+**#2 NonExOr 洩漏**  
+`+page.svelte:1992` 用 `pendingSelection.filter.replace('Basic','基礎寶可夢').replace('Pokemon','寶可夢').replace('Energy','能量')` 這種鏈式替換。遇到 `'PokemonNonExOrBasicEnergy'` 這種複合名時：`Pokemon→寶可夢` 先替換，剩下「寶可夢NonExOr基礎寶可夢能量」，`NonExOr` 沒被任何規則吃掉。這是「把翻譯寫成連續 replace」的根本脆弱——無法表達「整個 token 對應一段中文」。
+
+**#4 同名競技場黃框**  
+`engine.ts` 的 play path 有 block（v2.41 task #185 已加），但 `getPlayableTrainers`（UI 用來計算手牌黃框的 derivation）沒有對應的 gate。黃框 = 引擎說你能打，但拖下去會被擋 — UI 與 engine 不一致的經典 bug。
+
+**#5 夜間擔架 filter 太鬆**  
+`filter: 'PokemonOrEnergy'` — 這個 filter 把所有 `supertype === 'Energy'` 都算進去（含 Special Energy）。卡面寫「基本能量卡」。  
+**同時掃出 2 個同類 bug**（Leon 的標籤指引催化）：
+- **釣竿MAX**：filter 同樣用 `PokemonOrEnergy`，卡面寫「寶可夢卡與基本能量卡」。
+- **超級能量回收**：guard 用 `supertype === 'Energy'`（不查 subtype），對手棄牌區只剩 Special Energy 時會誤判「可打」，但 step2 的 `BasicEnergy` filter 讓玩家卡在空選擇。
+
+**#6 枇琶 magnifier 距離**  
+`.deck-item` CSS 用 `justify-content:space-between` + 名字 `flex:1 1 auto`，讓名字拉滿整行、把 🔍 推到容器最右邊。長名字看起來還好，但短名字（如「神奇糖果」）旁邊空了一大片才接到 🔍。
+
+**#7 查看牌庫下拉沒放大鏡**  
+單純遺漏——v2.39 task #177 只給枇琶那條路徑加了，查看牌庫模式沒搬過去。
+
+### 主修法
+
+**A. 把 filter 翻譯從 replace 鏈改成字典 + pattern fallback**（+page.svelte）
+
+新 function `describeFilter(f: string): string`：
+- 26 個已知 filter 一對一映射（Basic / BasicEnergy / BasicPsychicEnergy / PokemonNonExOrBasicEnergy / CynthiaPokemon / FightingBasicOrFightingEnergy 等，全都寫死正確中文）
+- 未知者：regex `^(Energy|Pokemon):(\w+)$` 依屬性表翻成「基本【草】能量」/「【雷】寶可夢」
+- `^TOP(\d+)$` → 「前 N 張」
+- 最終 fallback 才走舊的 replace 鏈（保底不壞）
+
+顯示處 line 1992 從鏈式 replace 直接換成 `describeFilter(pendingSelection.filter)`。未來新 filter 要就加 map、要就走 pattern，NonExOr 這種半英文組合絕不可能再漏。
+
+**B. Setup coin flip 後才發牌**（+page.svelte）
+
+hand-card `{#each}` 外包一層 `{#if !game || game.phase !== 'setup' || coinFlipStage === 'done'}`：硬幣動畫沒結束前手牌不 render，結束瞬間 7 張全部 mount 觸發 `in:fly`。setup 階段 duration 從 220ms 放寬回 480ms、stagger 從 40ms 放寬回 150ms，7 張發完約 1.5s 有「撲克發牌」的節奏。非 setup 階段（正常抽牌）維持 v2.42 的 220/40 快節奏。
+
+**C. 同名競技場 UI gate**（engine.ts `getPlayableTrainers` +8 行）
+
+```typescript
+if (c.subtype === 'Stadium' && state.activeStadium) {
+  const prev = pool.get(state.activeStadium.cardId);
+  if (prev?.name === c.name) return false;
+}
+```
+
+放在 play path 的 gate 之前，確保 UI derive 也濾掉。engine 的 play-path block 保留（萬一未來有其他入口）。
+
+**D. 新 filter `PokemonOrBasicEnergy`**（3 處同步）
+
+Leon 的標籤指引讓我意識到這是一個**新的共通 filter** 而不是 case-by-case。照慣例要動 3 個地方：
+1. `effects/cards/items_misc.ts` 夜間擔架：`filter` 從 `'PokemonOrEnergy'` 改 `'PokemonOrBasicEnergy'`、guard 同步查 subtype。
+2. `+page.svelte` case `'discard-search'`：加 `if (f === 'PokemonOrBasicEnergy') { Pokemon(非 Other) || Energy:Basic }`。
+3. `ai.ts` autoResolveSelection 的 `'discard-search'` 分支加對應判斷（沒補的話 AI 選到 Special Energy，engine 會因 validIids 不符靜默 no-op → AI 當機）。
+
+**E. 釣竿MAX / 超級能量回收**（effects.ts）
+
+- 釣竿MAX：filter 改 `PokemonOrBasicEnergy`、guard 同步、log 文字從「寶可夢或能量」改「寶可夢或基本能量」。
+- 超級能量回收：guard 查 `supertype === 'Energy' && subtype === 'Basic'`。
+
+**F. 枇琶放大鏡 CSS**（+page.svelte CSS）
+
+`.deck-item`: `justify-content` 從 `space-between` 改 `flex-start`；`.deck-item-name`: `flex` 從 `1 1 auto` 改 `0 1 auto`。名字只佔實際寬度，🔍 緊貼名字後面。`min-width:0` 保留讓超長名字還是能省略。
+
+**G. 查看牌庫下拉加放大鏡**（+page.svelte）
+
+`deckGrouped` Map 值從 `{name, count}` 改成 `{name, count, cardId}`（多記 cardId 讓按鈕能呼叫 `openZoom(cardId)`）。`.deck-item` 從純文字改成跟枇琶一致的 `<span class="deck-item-name">` + `<button class="deck-item-zoom">` 結構，CSS 自動共用 F 的 flex 布局。
+
+### 次要調整
+
+- `items_misc.ts` 夜間擔椎頭部註解改寫卡面原文，避免未來又被當「歷史慣例」繞過（對照 memory `feedback_question_legacy_comments`）。
+- `effects.ts` 釣竿MAX / 超級能量回收同款頭部註解。
+
+### 檔案變更
+
+- `src/routes/game/+page.svelte`：`describeFilter()` +50 行；`discard-search` case 加 `PokemonOrBasicEnergy` 分支；setup 階段手牌 `{#if}` 包覆 + `in:fly` duration/delay 條件化；查看牌庫 `deckGrouped` + 下拉 render 加 🔍；`.deck-item` CSS 改 `flex-start`、`.deck-item-name` 改 `flex:0 1 auto`。
+- `src/lib/game/engine.ts`：`getPlayableTrainers` 加同名 Stadium gate（+7 行）。
+- `src/lib/game/effects/cards/items_misc.ts`：夜間擔椎 guard/filter 改走 `PokemonOrBasicEnergy`。
+- `src/lib/game/effects.ts`：釣竿MAX filter+guard+log 改走 `PokemonOrBasicEnergy`；超級能量回收 guard 查 subtype=Basic。
+- `src/lib/game/ai.ts`：autoResolveSelection 加 `PokemonOrBasicEnergy` 分支。
+- `src/lib/version.ts`：`2.42 → 2.43`。
+
+### 驗證
+
+`npm run build` pass（385.87 kB → 386.x kB、無型別錯誤）。
+
+`PokemonOrBasicEnergy` 3 處同步：grep `PokemonOrBasicEnergy` 確認出現在 effects.ts（釣竿MAX）、effects/cards/items_misc.ts（夜間擔椎）、+page.svelte（case 'discard-search'）、ai.ts（case 'discard-search'）。共 5 筆（effects.ts 跟 items_misc 各一、UI 與 AI 的 discard-search 各一、外加 describeFilter map）。
+
+同名競技場手牌卡 UI 黃框走 `getPlayableTrainers`，新 gate 直接 return false → 不納入可出列表 → UI derive `playableTrainers.has(c.id)` 為 false → 無黃框。
+
+### 心得
+
+- **filter 翻譯的字典派做法**比 `.replace('Energy','能量')` 健壯太多。Leon 的 NonExOr 回報逼我把這一塊整理成可擴充的結構，未來新 filter（不管是 DragonBasic、PsychicNonEx、還是隨便一個複合名）只要加一行 map。
+- **卡面是最終權威，但 Leon 的直覺常先到**（#3 改造之槌事件）：我先查卡面發現「只限對手」，在實作前用 AskUserQuestion 把兩個選項（照卡面 vs house rule）都攤開讓 Leon 選。結果 Leon 自己改口「我講錯了」——如果當下悶頭改成雙方皆可，之後還要再改回來。Memory `feedback_card_identification` 這條規則實戰有效。
+- **一個使用者回報常帶出根源 bug**：Leon 只回報夜間擔椎撿到 Special Energy，但他的標籤指引（基本能量 vs 特殊能量的 3 個標籤）暗示整個專案可能有同款 bug。照他的暗示全掃 effects.ts，果然挖出釣竿MAX 跟超級能量回收兩張卡同類問題。這種「一事三檢」的姿態未來遇到 basic-energy / special-energy 類回饋都該維持。
+- **設定動畫節奏的參數化**（setup vs 正常）避免了「整體變慢」的副作用。setup 階段需要「發牌感」所以慢；正常抽牌每回合都發生所以快——兩段不同參數才合理。
+
+### 後續潛在 TODO（未做）
+
+- `deck-search` / `hand-discard` 的其他 filter 走 describeFilter 時會不會還有漏？目前只改 `discard-search` 顯示點（line 1992），但 filter 文字其他地方也有顯示（例如 pending action 側邊欄）。v2.44 驗收時若又出現英文殘渣，要把 describeFilter 套到所有顯示點。
+- 動畫第二波回饋未來可能會有：進化動畫、能量飛行、mulligan 重抽視覺——v2.42 的 overlay 設計留白沒做，等 Leon 再提。
 
 ---
 

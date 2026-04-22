@@ -1847,25 +1847,34 @@ reg('反擊捕捉器', (st, idx) => {
 });
 
 // 釣竿MAX — 棄牌取最多 5 張寶可夢或基本能量
+// v2.43 修：卡面寫「寶可夢卡與『基本能量』卡合計最多5張」，原本 filter: 'PokemonOrEnergy'
+// （含 Special Energy）違反卡面。改成 PokemonOrBasicEnergy；guard 也比照調整。
 regG('釣竿MAX', (st, idx, pool) =>
   st.players[idx].discard.some(c => {
     const card = pool.get(c.cardId);
-    return (card?.supertype === 'Pokemon' && card?.subtype !== 'Other') || card?.supertype === 'Energy';
+    if (card?.supertype === 'Pokemon' && card.subtype !== 'Other') return true;
+    if (card?.supertype === 'Energy' && card.subtype === 'Basic') return true;
+    return false;
   })
 );
 reg('釣竿MAX', (st, idx) => {
-  st = addLog(st, '釣竿MAX：從棄牌選最多 5 張寶可夢或能量加手牌', idx);
+  st = addLog(st, '釣竿MAX：從棄牌選最多 5 張寶可夢或基本能量加手牌', idx);
   return withPending(st, {
     type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'PokemonOrEnergy', minCount: 0, maxCount: 5,
+    filter: 'PokemonOrBasicEnergy', minCount: 0, maxCount: 5,
     effectKey: 'discard-to-hand',
   });
 });
 
 // 超級能量回收 — 丟 2 手牌 + 棄牌取最多 4 張基本能量
+// v2.43 修：guard 原本寫 supertype==='Energy'（含 Special Energy）— 只剩 Special Energy 時
+// 仍會讓 UI 顯示「可打出」，但 step2 的 BasicEnergy filter 會讓玩家卡在空選擇上。
 regG('超級能量回收', (st, idx, pool) =>
   st.players[idx].hand.length >= 3 &&
-  st.players[idx].discard.some(c => pool.get(c.cardId)?.supertype === 'Energy')
+  st.players[idx].discard.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  })
 );
 reg('超級能量回收', (st, idx) => {
   st = addLog(st, '超級能量回收：選 2 張手牌丟棄', idx);

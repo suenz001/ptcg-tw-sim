@@ -2112,6 +2112,13 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       if (c.subtype === 'Supporter' && state.isFirstTurn && state.activePlayerIndex === state.firstPlayerIdx) return false;
       // 競技場：一回合每位玩家只能打出一張
       if (c.subtype === 'Stadium' && (state.stadiumPlayedThisTurn?.[state.activePlayerIndex] ?? false)) return false;
+      // v2.43：PTCG 規則 — 同名競技場不能覆蓋自己。
+      // engine play path 也會 block，但 UI 需要在「可打出」清單就濾掉，
+      // 否則手牌卡會亮黃框讓使用者誤以為可以拖曳（實際上拖下去會被 engine 擋）。
+      if (c.subtype === 'Stadium' && state.activeStadium) {
+        const prev = pool.get(state.activeStadium.cardId);
+        if (prev?.name === c.name) return false;
+      }
       // Wave 43 fix：玩家級物品/支援者鎖也要在可用清單裡濾掉（否則 AI 會挑到被鎖的卡、engine 靜默 no-op → AI 當機）
       if (c.subtype === 'Item' && player.cantPlayItemThisTurn) return false;
       if (c.subtype === 'Supporter' && player.cantPlaySupporterThisTurn) return false;

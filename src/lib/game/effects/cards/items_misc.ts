@@ -117,12 +117,16 @@ regR('heal-120', healResolver);
 // 物品卡 — 棄牌區回收
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 夜間擔架 — 從棄牌區選 1 張寶可夢或基本能量卡加手牌
+// 夜間擔架 — 從棄牌區選 1 張寶可夢或「基本」能量卡加手牌
+// v2.43 修：卡面寫「寶可夢卡或者基本能量卡」，原本 filter 用 PokemonOrEnergy（含特殊能量）
+// 導致可以撿回感應【超】能量這種 Special Energy — 不符合卡面。
 regG('夜間擔架', (st, idx, pool) => {
-  // 棄牌區必須至少有 1 張寶可夢或能量
+  // 棄牌區至少 1 張寶可夢或基本能量（排除 Special Energy / Pokemon 道具 subtype=Other）
   return st.players[idx].discard.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' || card?.supertype === 'Energy';
+    if (card?.supertype === 'Pokemon' && card.subtype !== 'Other') return true;
+    if (card?.supertype === 'Energy' && card.subtype === 'Basic') return true;
+    return false;
   });
 });
 reg('夜間擔架', (st, idx) => {
@@ -130,7 +134,7 @@ reg('夜間擔架', (st, idx) => {
   return withPending(st, {
     type: 'discard-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'PokemonOrEnergy',
+    filter: 'PokemonOrBasicEnergy',
     minCount: 1, maxCount: 1,
     effectKey: 'discard-to-hand',
   });

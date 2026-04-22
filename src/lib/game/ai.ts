@@ -366,6 +366,12 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         const card = pool.get(c.cardId);
         if (!card) return false;
         if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon' && card.subtype !== 'Other') || card.supertype === 'Energy';
+        if (f === 'PokemonOrBasicEnergy') {
+          // v2.43：夜間擔架用 — 寶可夢或基本能量（排除 Special Energy / Pokemon 道具）
+          if (card.supertype === 'Pokemon' && card.subtype !== 'Other') return true;
+          if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
+          return false;
+        }
         if (f === 'PokemonNonExOrBasicEnergy') {
           if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.subtype !== 'ex') return true;
           if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
