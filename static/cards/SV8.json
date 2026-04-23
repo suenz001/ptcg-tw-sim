@@ -984,7 +984,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "狠辣椒",
+    "evolvesFrom": "熱辣娃",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "H",
     "stage": "Stage1"
@@ -1109,7 +1109,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "美納斯",
+    "evolvesFrom": "醜醜魚",
     "illustrator": "hncl",
     "regulationMark": "H",
     "stage": "Stage1"
@@ -2467,7 +2467,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "噬沙堡爺",
+    "evolvesFrom": "沙丘娃",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
@@ -3142,13 +3142,13 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "三首惡龍",
+    "evolvesFrom": "雙首暴龍",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
       "太晶"
     ],
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "11253",
@@ -3641,10 +3641,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "請假王",
+    "evolvesFrom": "過動猿",
     "illustrator": "PLANETA Igarashi",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "11265",
@@ -4792,7 +4792,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "狠辣椒",
+    "evolvesFrom": "熱辣娃",
     "illustrator": "PLANETA Igarashi",
     "regulationMark": "H",
     "stage": "Stage1"
@@ -4835,7 +4835,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "美納斯",
+    "evolvesFrom": "醜醜魚",
     "illustrator": "N-DESIGN Inc.",
     "regulationMark": "H",
     "stage": "Stage1"
@@ -4932,7 +4932,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "噬沙堡爺",
+    "evolvesFrom": "沙丘娃",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
@@ -4983,13 +4983,13 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "三首惡龍",
+    "evolvesFrom": "雙首暴龍",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
       "太晶"
     ],
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "11478",
@@ -5074,10 +5074,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "請假王",
+    "evolvesFrom": "過動猿",
     "illustrator": "PLANETA Igarashi",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "11480",
@@ -5202,7 +5202,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "美納斯",
+    "evolvesFrom": "醜醜魚",
     "illustrator": "Kuroimori",
     "regulationMark": "H",
     "stage": "Stage1"
@@ -5294,13 +5294,13 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "三首惡龍",
+    "evolvesFrom": "雙首暴龍",
     "illustrator": "AKIRA EGAWA",
     "regulationMark": "H",
     "tags": [
       "太晶"
     ],
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "11487",

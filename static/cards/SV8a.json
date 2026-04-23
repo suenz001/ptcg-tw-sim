@@ -1663,13 +1663,13 @@
       "type": "Lightning",
       "value": "×2"
     },
-    "evolvesFrom": "烈咬陸鯊",
+    "evolvesFrom": "尖牙陸鯊",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
       "太晶"
     ],
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "11565",
@@ -1969,7 +1969,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "海豚俠",
+    "evolvesFrom": "波普海豚",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "H",
     "stage": "Stage1"
@@ -7416,7 +7416,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "海豚俠",
+    "evolvesFrom": "波普海豚",
     "illustrator": "Tetsuo Hara",
     "regulationMark": "H",
     "stage": "Stage1"

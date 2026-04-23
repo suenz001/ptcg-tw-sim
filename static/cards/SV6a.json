@@ -520,10 +520,10 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "刺龍王",
+    "evolvesFrom": "海刺龍",
     "illustrator": "toriyufu",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "10595",
@@ -653,7 +653,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "普隆隆姆",
+    "evolvesFrom": "噗隆隆",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "H",
     "tags": [
@@ -3118,10 +3118,10 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "刺龍王",
+    "evolvesFrom": "海刺龍",
     "illustrator": "PLANETA Igarashi",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "10879",
@@ -3162,7 +3162,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "普隆隆姆",
+    "evolvesFrom": "噗隆隆",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "H",
     "tags": [

@@ -930,7 +930,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "遠古巨蜓",
+    "evolvesFrom": "蜻蜻蜓",
     "illustrator": "takuyoa",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -1553,10 +1553,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "土台龜",
+    "evolvesFrom": "樹林龜",
     "illustrator": "PLANETA Tsuji",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "16508",
@@ -1897,7 +1897,7 @@
       "type": "Fire",
       "value": "×2"
     },
-    "evolvesFrom": "風妖精",
+    "evolvesFrom": "木棉球",
     "illustrator": "5ban Graphics",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -3000,10 +3000,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "奧利瓦",
+    "evolvesFrom": "奧利紐",
     "illustrator": "PLANETA Tsuji",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "16543",
@@ -4051,7 +4051,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "熔岩蝸牛",
+    "evolvesFrom": "熔岩蟲",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "J",
     "tags": [
@@ -5613,10 +5613,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "熾焰咆哮虎",
+    "evolvesFrom": "炎熱喵",
     "illustrator": "N-DESIGN Inc.",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "16604",
@@ -5909,7 +5909,7 @@
       "type": "Water",
       "value": "×2"
     },
-    "evolvesFrom": "閃焰王牌",
+    "evolvesFrom": "騰蹴小將",
     "illustrator": "5ban Graphics",
     "regulationMark": "J",
     "tags": [
@@ -6232,7 +6232,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "狠辣椒",
+    "evolvesFrom": "熱辣娃",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -6554,10 +6554,10 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "刺龍王",
+    "evolvesFrom": "海刺龍",
     "illustrator": "toriyufu",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "16626",
@@ -7865,7 +7865,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "美納斯",
+    "evolvesFrom": "醜醜魚",
     "illustrator": "hncl",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -8872,10 +8872,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "甲賀忍蛙",
+    "evolvesFrom": "呱頭蛙",
     "illustrator": "5ban Graphics",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "16680",
@@ -9201,7 +9201,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "海豚俠",
+    "evolvesFrom": "波普海豚",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -9829,7 +9829,7 @@
     ],
     "pokedexNumber": 76,
     "species": "重量級寶可夢",
-    "evolvesFrom": "阿羅拉 隆隆岩",
+    "evolvesFrom": "阿羅拉 隆隆石",
     "illustrator": "Takeshi Nakamura",
     "regulationMark": "J",
     "stage": "Stage2"
@@ -10113,7 +10113,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "電擊魔獸",
+    "evolvesFrom": "電擊獸",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -10505,7 +10505,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "倫琴貓",
+    "evolvesFrom": "勒克貓",
     "illustrator": "PLANETA Yamashita",
     "regulationMark": "J",
     "stage": "Stage2"
@@ -10883,7 +10883,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "電蜘蛛",
+    "evolvesFrom": "電電蟲",
     "illustrator": "5ban Graphics",
     "regulationMark": "J",
     "tags": [
@@ -12711,7 +12711,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "瑪力露麗",
+    "evolvesFrom": "瑪力露",
     "illustrator": "5ban Graphics",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -15003,7 +15003,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "麻花犬",
+    "evolvesFrom": "狗仔包",
     "illustrator": "You Iribi",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -15147,7 +15147,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "墓揚犬",
+    "evolvesFrom": "墓仔狗",
     "illustrator": "takuyoa",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -15752,7 +15752,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "象牙豬",
+    "evolvesFrom": "長毛豬",
     "illustrator": "Nisota Niso",
     "regulationMark": "J",
     "stage": "Stage2"
@@ -16016,7 +16016,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "恰雷姆",
+    "evolvesFrom": "瑪沙那",
     "illustrator": "PLANETA Yamashita",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -16445,7 +16445,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "路卡利歐",
+    "evolvesFrom": "利歐路",
     "illustrator": "PLANETA Igarashi",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -16744,7 +16744,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "龍頭地鼠",
+    "evolvesFrom": "螺釘地鼠",
     "illustrator": "N-DESIGN Inc.",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -19319,7 +19319,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "耿鬼",
+    "evolvesFrom": "鬼斯通",
     "illustrator": "Nisota Niso",
     "regulationMark": "J",
     "stage": "Stage2"
@@ -20611,7 +20611,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "禿鷹娜",
+    "evolvesFrom": "禿鷹丫頭",
     "illustrator": "Ultimateinudog",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -20755,10 +20755,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "三首惡龍",
+    "evolvesFrom": "雙首暴龍",
     "illustrator": "5ban Graphics",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "16950",
@@ -21122,7 +21122,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "奇麒麟",
+    "evolvesFrom": "麒麟奇",
     "illustrator": "5ban Graphics",
     "regulationMark": "J",
     "tags": [
@@ -22664,7 +22664,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "美錄梅塔",
+    "evolvesFrom": "美錄坦",
     "illustrator": "takuyoa",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -23015,7 +23015,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "鋁鋼橋龍",
+    "evolvesFrom": "鋁鋼龍",
     "illustrator": "5ban Graphics",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -23527,7 +23527,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "阿羅拉 椰蛋樹",
+    "evolvesFrom": "椰蛋樹",
     "illustrator": "aky CG Works",
     "regulationMark": "J",
     "tags": [
@@ -23659,10 +23659,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "暴飛龍",
+    "evolvesFrom": "甲殼龍",
     "illustrator": "toriyufu",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "17012",
@@ -24596,7 +24596,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "幸福蛋",
+    "evolvesFrom": "吉利蛋",
     "illustrator": "Iwamoto05",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -25496,10 +25496,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "請假王",
+    "evolvesFrom": "過動猿",
     "illustrator": "PLANETA Igarashi",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "17055",
@@ -26875,7 +26875,7 @@
     },
     "pokedexNumber": 715,
     "species": "音波寶可夢",
-    "evolvesFrom": "音波龍",
+    "evolvesFrom": "嗡蝠",
     "illustrator": "Anesaki Dynamic",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -29780,10 +29780,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "奧利瓦",
+    "evolvesFrom": "奧利紐",
     "illustrator": "PLANETA Tsuji",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "18217",
@@ -31215,7 +31215,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "電擊魔獸",
+    "evolvesFrom": "電擊獸",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -31649,7 +31649,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "瑪力露麗",
+    "evolvesFrom": "瑪力露",
     "illustrator": "5ban Graphics",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -31891,7 +31891,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "墓揚犬",
+    "evolvesFrom": "墓仔狗",
     "illustrator": "takuyoa",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -32542,7 +32542,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "禿鷹娜",
+    "evolvesFrom": "禿鷹丫頭",
     "illustrator": "Ultimateinudog",
     "regulationMark": "J",
     "stage": "Stage1"

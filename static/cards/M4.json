@@ -108,10 +108,10 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "大針蜂",
+    "evolvesFrom": "鐵殼蛹",
     "illustrator": "toriyufu",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "18424",
@@ -1748,7 +1748,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "南瓜怪人",
+    "evolvesFrom": "南瓜精",
     "illustrator": "5ban Graphics",
     "regulationMark": "J",
     "stage": "Stage1"
@@ -3003,7 +3003,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "奇諾栗鼠",
+    "evolvesFrom": "泡沫栗鼠",
     "illustrator": "5ban Graphics",
     "regulationMark": "J",
     "stage": "Stage1"

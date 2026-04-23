@@ -477,10 +477,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "土台龜",
+    "evolvesFrom": "樹林龜",
     "illustrator": "PLANETA Tsuji",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "9776",
@@ -1317,7 +1317,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "三海地鼠",
+    "evolvesFrom": "海地鼠",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
@@ -2329,7 +2329,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "耿鬼",
+    "evolvesFrom": "鬼斯通",
     "illustrator": "Nisota Niso",
     "regulationMark": "H",
     "stage": "Stage2"
@@ -3400,10 +3400,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "土台龜",
+    "evolvesFrom": "樹林龜",
     "illustrator": "PLANETA Tsuji",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "10208",
@@ -3536,7 +3536,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "三海地鼠",
+    "evolvesFrom": "海地鼠",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
@@ -3582,7 +3582,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "耿鬼",
+    "evolvesFrom": "鬼斯通",
     "illustrator": "Satoshi Shirai",
     "regulationMark": "H",
     "stage": "Stage2"

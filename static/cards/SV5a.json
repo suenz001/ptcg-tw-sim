@@ -549,7 +549,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "熔岩蝸牛",
+    "evolvesFrom": "熔岩蟲",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "H",
     "tags": [
@@ -1972,13 +1972,13 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "甲賀忍蛙",
+    "evolvesFrom": "呱頭蛙",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
       "太晶"
     ],
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "10293",
@@ -3094,7 +3094,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "熔岩蝸牛",
+    "evolvesFrom": "熔岩蟲",
     "illustrator": "PLANETA Yamashita",
     "regulationMark": "H",
     "tags": [
@@ -3239,13 +3239,13 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "甲賀忍蛙",
+    "evolvesFrom": "呱頭蛙",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
       "太晶"
     ],
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "10717",
@@ -3431,13 +3431,13 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "甲賀忍蛙",
+    "evolvesFrom": "呱頭蛙",
     "illustrator": "akagi",
     "regulationMark": "H",
     "tags": [
       "太晶"
     ],
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "10724",

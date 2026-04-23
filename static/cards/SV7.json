@@ -719,7 +719,7 @@
       "type": "Water",
       "value": "×2"
     },
-    "evolvesFrom": "閃焰王牌",
+    "evolvesFrom": "騰蹴小將",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
@@ -1368,7 +1368,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "電蜘蛛",
+    "evolvesFrom": "電電蟲",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
@@ -1917,7 +1917,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "麻花犬",
+    "evolvesFrom": "狗仔包",
     "illustrator": "You Iribi",
     "regulationMark": "H",
     "stage": "Stage1"
@@ -2260,7 +2260,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "恰雷姆",
+    "evolvesFrom": "瑪沙那",
     "illustrator": "PLANETA Yamashita",
     "regulationMark": "H",
     "stage": "Stage1"
@@ -4581,7 +4581,7 @@
       "type": "Water",
       "value": "×2"
     },
-    "evolvesFrom": "閃焰王牌",
+    "evolvesFrom": "騰蹴小將",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
@@ -4676,7 +4676,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "電蜘蛛",
+    "evolvesFrom": "電電蟲",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
@@ -4721,7 +4721,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "麻花犬",
+    "evolvesFrom": "狗仔包",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "H",
     "stage": "Stage1"
@@ -4766,7 +4766,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "恰雷姆",
+    "evolvesFrom": "瑪沙那",
     "illustrator": "PLANETA Yamashita",
     "regulationMark": "H",
     "stage": "Stage1"
@@ -5007,7 +5007,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "電蜘蛛",
+    "evolvesFrom": "電電蟲",
     "illustrator": "MARINA Chikazawa",
     "regulationMark": "H",
     "tags": [
@@ -5052,7 +5052,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "麻花犬",
+    "evolvesFrom": "狗仔包",
     "illustrator": "Yuu Nishida",
     "regulationMark": "H",
     "stage": "Stage1"

@@ -193,7 +193,7 @@
       "type": "Fire",
       "value": "×2"
     },
-    "evolvesFrom": "風妖精",
+    "evolvesFrom": "木棉球",
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "stage": "Stage1"
@@ -1826,7 +1826,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "胖嘟嘟",
+    "evolvesFrom": "輕飄飄",
     "illustrator": "PLANETA Igarashi",
     "regulationMark": "I",
     "stage": "Stage1"
@@ -2689,10 +2689,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "三首惡龍",
+    "evolvesFrom": "雙首暴龍",
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "13091",
@@ -9956,7 +9956,7 @@
       "type": "Fire",
       "value": "×2"
     },
-    "evolvesFrom": "風妖精",
+    "evolvesFrom": "木棉球",
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "stage": "Stage1"
@@ -10094,7 +10094,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "胖嘟嘟",
+    "evolvesFrom": "輕飄飄",
     "illustrator": "N-DESIGN Inc.",
     "regulationMark": "I",
     "stage": "Stage1"
@@ -10141,10 +10141,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "三首惡龍",
+    "evolvesFrom": "雙首暴龍",
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "13856",
@@ -10251,7 +10251,7 @@
       "type": "Fire",
       "value": "×2"
     },
-    "evolvesFrom": "風妖精",
+    "evolvesFrom": "木棉球",
     "illustrator": "mele",
     "regulationMark": "I",
     "stage": "Stage1"
@@ -10389,7 +10389,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "胖嘟嘟",
+    "evolvesFrom": "輕飄飄",
     "illustrator": "Narano",
     "regulationMark": "I",
     "stage": "Stage1"
@@ -10436,10 +10436,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "三首惡龍",
+    "evolvesFrom": "雙首暴龍",
     "illustrator": "Takumi Wada",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "13864",

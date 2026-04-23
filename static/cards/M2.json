@@ -1472,7 +1472,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "夢妖魔",
+    "evolvesFrom": "夢妖",
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "stage": "Stage1"
@@ -2397,10 +2397,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "帝王拿波",
+    "evolvesFrom": "波皇子",
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "14377",

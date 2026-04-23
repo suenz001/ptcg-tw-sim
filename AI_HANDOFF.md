@@ -1,9 +1,93 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 (v2.75)  
+> 最後更新：2026-04-23 (v2.76)  
 > 執行者：Gemini（Google DeepMind）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.76 — evolvesFrom 全面清查修正（156 張卡）+ stage 修正（35 張卡）
+
+### 問題
+v2.75 的 migration 雖然新增了 `stage` 欄位，但有兩個系統性錯誤未修：
+1. **evolvesFrom 指向同名非 ex 版本**：如耿鬼ex → 耿鬼（應為鬼斯通）、
+   噴火龍ex → 噴火龍（應為火恐龍）。這導致遊戲中 ex 卡無法從正確的前階進化。
+2. **evolvesFrom 自我參照**：v2.75 的 GX strip 產生的副作用，
+   如 貓鼬探長GX → strip → 貓鼬探長（指向自己）。
+3. **stage 錯誤**：name-matching 推斷出的 stage 在部分 Stage2 卡被誤標為 Stage1
+   （因為同名非 ex 版本也有 evolvesFrom 錯誤，推斷鏈斷裂）。
+
+### 根因
+官網 `.evolution` 區塊的 HTML 會列出所有世代的同名卡，例如：
+```
+[小火龍, 火恐龍, 噴火龍, 噴火龍GX, 噴火龍ex]
+```
+scraper 取 `index - 1` → 噴火龍ex 的前階是 噴火龍GX → strip GX → 噴火龍（同名）。
+正確做法是向前搜尋，跳過所有同名（含 GX/ex 變體），取到 火恐龍。
+
+### 主修
+
+#### Phase 1: 批量修正 evolvesFrom（67 + 68 + 21 = 156 張卡）
+
+三階段修正：
+1. **名稱比對**（67 張）：從 pool 中找同名非 ex 版本的 evolvesFrom，直接套用。
+2. **官網 re-parse**（68 張）：23 個物種的 sourceUrl re-fetch，解析 H1 + `.evolution`。
+3. **深層鏈解析**（21 張）：7 個物種的進化鏈有 GX 雙重同名，需跳過多層。
+
+修正的物種完整清單（30 個）：
+| 物種 | 修正前 evo | 修正後 evo | stage |
+|---|---|---|---|
+| 噴火龍ex | 噴火龍 | 火恐龍 | Stage2 |
+| 耿鬼ex | 耿鬼 | 鬼斯通 | Stage2 |
+| 土台龜ex | 土台龜 | 樹林龜 | Stage2 |
+| 暴飛龍ex | 暴飛龍 | 甲殼龍 | Stage2 |
+| 甲賀忍蛙ex | 甲賀忍蛙 | 呱頭蛙 | Stage2 |
+| 路卡利歐ex | 路卡利歐 | 利歐路 | Stage1 |
+| 熾焰咆哮虎ex | 熾焰咆哮虎 | 炎熱喵 | Stage2 |
+| 刺龍王ex | 刺龍王 | 海刺龍 | Stage2 |
+| 阿羅拉 椰蛋樹ex | 阿羅拉 椰蛋樹 | 椰蛋樹 | Stage1 |
+| 三首惡龍ex | 三首惡龍 | 雙首暴龍 | Stage2 |
+| ...等 30 個物種 |||
+
+#### Phase 2: stage 欄位修正（35 張卡）
+
+從官網 H1 取得正確 stage，修正 migration 時的推斷錯誤。
+
+#### Phase 3: scraper 修正
+
+`parse-card.js` 的 evolvesFrom 解析改為**向前迴圈搜尋**：
+```javascript
+// 跳過所有同名（含 GX/ex 變體），取到真正的前階
+for (let i = idx - 1; i >= 0; i--) {
+  const clean = names[i].replace(/GX$/, '').replace(/ex$/, '');
+  if (clean !== cardBase) { evoName = names[i]; break; }
+}
+```
+
+### 遊戲影響
+- **進化機制修復**：156 張卡（含 噴火龍ex、耿鬼ex、暴飛龍ex 等主力卡）現在可以
+  從正確的前階進化。修正前，這些卡在遊戲中無法進化（`sameEvoName` 比對失敗）。
+- **基礎判定不受影響**：`isBasicPokemonCard()` 只看 `subtype` + `evolvesFrom` 有無，
+  不受 evolvesFrom 值改變影響。
+
+### 驗證
+- `npm run build` ✓（無 TS error）
+- 最終驗證：0 張卡有同名/自引用 evolvesFrom（ALL CLEAN）
+
+### 變更檔案
+```
+新增：
+  scripts/fix-evolves-from.mjs      # Phase 1 修正腳本
+  scripts/fix-evolves-from-v2.mjs   # Phase 2 官網 re-parse
+  scripts/fix-evolves-from-v3.mjs   # Phase 3 深層鏈解析
+
+修改：
+  scripts/scrape/parse-card.js      # evolvesFrom 解析改為迴圈搜尋
+  src/lib/version.ts                # 2.75 → 2.76
+  AI_HANDOFF.md                     # 本段紀錄
+  static/cards/*.json               # evolvesFrom + stage 修正（29 個 set）
+```
 
 ---
 

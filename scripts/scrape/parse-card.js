@@ -280,10 +280,20 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
         .filter((s) => s && s.length > 0);
       const idx = names.findIndex((n) => n === card.name);
       if (idx > 0) {
-        // evolvesFrom 也可能帶 <>（前階冠名），strip 以對齊 name 格式。
-        // v2.75: 也 strip GX 後綴 — 官網 .evolution 區塊偶爾會帶 GX 名稱，
-        // 但當前卡池無 GX 卡，保留 GX 會導致 evolvesFrom 對不上任何卡。
-        card.evolvesFrom = names[idx - 1].replace(/[<>]/g, '').replace(/GX$/, '');
+        // v2.76: 向前搜尋正確的前階卡。
+        // 官網 .evolution 區塊可能在 ex 卡前面列出同名的 GX / 非 ex 版本，
+        // 例如 [小火龍, 火恐龍, 噴火龍, 噴火龍GX, 噴火龍ex]
+        // 噴火龍ex 的 evolvesFrom 應該是 火恐龍（跳過同名的噴火龍和噴火龍GX）。
+        const cardBase = card.name.replace(/ex$/, '').trim();
+        let evoName = null;
+        for (let i = idx - 1; i >= 0; i--) {
+          const clean = names[i].replace(/[<>]/g, '').replace(/GX$/, '').replace(/ex$/, '').trim();
+          if (clean !== cardBase) {
+            evoName = names[i].replace(/[<>]/g, '').replace(/GX$/, '');
+            break;
+          }
+        }
+        if (evoName) card.evolvesFrom = evoName;
       }
     }
   } else {

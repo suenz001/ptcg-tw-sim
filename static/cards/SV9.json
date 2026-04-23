@@ -1969,7 +1969,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "象牙豬",
+    "evolvesFrom": "長毛豬",
     "illustrator": "Nisota Niso",
     "regulationMark": "I",
     "stage": "Stage2"
@@ -3160,10 +3160,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "暴飛龍",
+    "evolvesFrom": "甲殼龍",
     "illustrator": "toriyufu",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "12535",
@@ -3554,7 +3554,7 @@
     },
     "pokedexNumber": 715,
     "species": "音波寶可夢",
-    "evolvesFrom": "音波龍",
+    "evolvesFrom": "嗡蝠",
     "illustrator": "Anesaki Dynamic",
     "regulationMark": "I",
     "stage": "Stage1"
@@ -4730,7 +4730,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "象牙豬",
+    "evolvesFrom": "長毛豬",
     "illustrator": "N-DESIGN Inc.",
     "regulationMark": "I",
     "stage": "Stage2"
@@ -4872,10 +4872,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "暴飛龍",
+    "evolvesFrom": "甲殼龍",
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "12646",
@@ -5238,10 +5238,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "暴飛龍",
+    "evolvesFrom": "甲殼龍",
     "illustrator": "Tsuyoshi Nagano",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "12656",
