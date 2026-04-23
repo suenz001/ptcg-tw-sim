@@ -36,7 +36,8 @@
       "value": "×2"
     },
     "illustrator": "N-DESIGN Inc.",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13138",
@@ -79,7 +80,8 @@
     "pokedexNumber": 81,
     "species": "磁鐵寶可夢",
     "illustrator": "Masakazu Fukuda",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13139",
@@ -125,7 +127,8 @@
     "species": "磁鐵寶可夢",
     "evolvesFrom": "小磁怪",
     "illustrator": "kurumitsu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13140",
@@ -171,7 +174,8 @@
     "species": "磁場寶可夢",
     "evolvesFrom": "三合一磁怪",
     "illustrator": "Anesaki Dynamic",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage2"
   },
   {
     "id": "13141",
@@ -220,7 +224,8 @@
     "pokedexNumber": 145,
     "species": "電擊寶可夢",
     "illustrator": "Nisota Niso",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13142",
@@ -263,7 +268,8 @@
     "pokedexNumber": 417,
     "species": "電松鼠寶可夢",
     "illustrator": "Yuya Oka",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13143",
@@ -305,7 +311,8 @@
     "pokedexNumber": 694,
     "species": "發電寶可夢",
     "illustrator": "Taiga Kayama",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13144",
@@ -340,7 +347,8 @@
     "species": "發電寶可夢",
     "evolvesFrom": "傘電蜥",
     "illustrator": "Atsuya Uki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13145",
@@ -384,7 +392,8 @@
     "pokedexNumber": 807,
     "species": "奔雷寶可夢",
     "illustrator": "kantaro",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13146",
@@ -427,7 +436,8 @@
     "pokedexNumber": 938,
     "species": "電蝌蚪寶可夢",
     "illustrator": "nisimono",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13147",
@@ -464,7 +474,8 @@
     "species": "電蛙寶可夢",
     "evolvesFrom": "電肚蛙ex",
     "illustrator": "Kouki Saitou",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13148",
@@ -510,7 +521,8 @@
     "pokedexNumber": 143,
     "species": "瞌睡寶可夢",
     "illustrator": "Ounishi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13149",

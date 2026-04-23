@@ -32,7 +32,8 @@
     "pokedexNumber": 209,
     "species": "妖精寶可夢",
     "illustrator": "Gapao",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14106",
@@ -79,7 +80,8 @@
     "species": "妖精寶可夢",
     "evolvesFrom": "布魯",
     "illustrator": "Ryuta Fuse",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14107",
@@ -125,7 +127,8 @@
       "Colorless"
     ],
     "illustrator": "takuyoa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14108",
@@ -173,7 +176,8 @@
     "pokedexNumber": 488,
     "species": "新月寶可夢",
     "illustrator": "Raita Kazama",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14109",
@@ -220,7 +224,8 @@
     "pokedexNumber": 648,
     "species": "旋律寶可夢",
     "illustrator": "MINAMINAMI Take",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14110",
@@ -260,7 +265,8 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14111",
@@ -302,7 +308,8 @@
     "pokedexNumber": 778,
     "species": "畫皮寶可夢",
     "illustrator": "miki kudo",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14112",
@@ -336,7 +343,8 @@
     "pokedexNumber": 868,
     "species": "鮮奶油寶可夢",
     "illustrator": "Taiga Kayama",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14113",
@@ -371,7 +379,8 @@
     "species": "鮮奶油寶可夢",
     "evolvesFrom": "小仙奶",
     "illustrator": "Narumi Sato",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14114",
@@ -409,7 +418,8 @@
     "pokedexNumber": 978,
     "species": "擬態寶可夢",
     "illustrator": "Jerky",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14115",
@@ -630,7 +640,8 @@
     "pokedexNumber": 648,
     "species": "旋律寶可夢",
     "illustrator": "Keisin",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14128",

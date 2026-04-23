@@ -31,7 +31,8 @@
     "pokedexNumber": 4,
     "species": "蜥蜴寶可夢",
     "illustrator": "DOM",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13162",
@@ -77,7 +78,8 @@
     "species": "火焰寶可夢",
     "evolvesFrom": "小火龍",
     "illustrator": "GIDORA",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13163",
@@ -120,9 +122,10 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "噴火龍GX",
+    "evolvesFrom": "噴火龍",
     "illustrator": "PLANETA Mochizuki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13164",
@@ -157,7 +160,8 @@
     "pokedexNumber": 58,
     "species": "小狗寶可夢",
     "illustrator": "kawayoo",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13165",
@@ -205,7 +209,8 @@
     "species": "傳說寶可夢",
     "evolvesFrom": "卡蒂狗",
     "illustrator": "Ryuta Fuse",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13166",
@@ -240,7 +245,8 @@
     "pokedexNumber": 479,
     "species": "等離子寶可夢",
     "illustrator": "Scav",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13167",
@@ -274,7 +280,8 @@
     "pokedexNumber": 513,
     "species": "高溫寶可夢",
     "illustrator": "Wintr Wandr",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13168",
@@ -309,7 +316,8 @@
     "species": "火花寶可夢",
     "evolvesFrom": "爆香猴",
     "illustrator": "Taiga Kasai",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13169",
@@ -355,7 +363,8 @@
     "pokedexNumber": 776,
     "species": "爆炸龜寶可夢",
     "illustrator": "Shigenori Negishi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13170",
@@ -399,7 +408,8 @@
     "pokedexNumber": 1017,
     "species": "面具寶可夢",
     "illustrator": "HYOGONOSUKE",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13171",
@@ -444,7 +454,8 @@
     "pokedexNumber": 115,
     "species": "親子寶可夢",
     "illustrator": "Uta",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13172",

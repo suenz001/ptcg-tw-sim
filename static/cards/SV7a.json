@@ -31,7 +31,8 @@
     "pokedexNumber": 102,
     "species": "蛋寶可夢",
     "illustrator": "Tetsu Kayama",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11032",
@@ -65,7 +66,8 @@
     "pokedexNumber": 755,
     "species": "發光寶可夢",
     "illustrator": "Tomokazu Komiya",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11033",
@@ -109,7 +111,8 @@
     "species": "發光寶可夢",
     "evolvesFrom": "睡睡菇",
     "illustrator": "Aya Kusube",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11034",
@@ -155,7 +158,8 @@
     "pokedexNumber": 781,
     "species": "碎藻寶可夢",
     "illustrator": "Mori Yuu",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11035",
@@ -199,7 +203,8 @@
     "pokedexNumber": 893,
     "species": "惡猿寶可夢",
     "illustrator": "GOSSAN",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11036",
@@ -239,7 +244,8 @@
     "pokedexNumber": 351,
     "species": "天氣寶可夢",
     "illustrator": "osare",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11037",
@@ -273,7 +279,8 @@
     "pokedexNumber": 513,
     "species": "高溫寶可夢",
     "illustrator": "Wintr Wandr",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11038",
@@ -308,7 +315,8 @@
     "species": "火花寶可夢",
     "evolvesFrom": "爆香猴",
     "illustrator": "Taiga Kasai",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11039",
@@ -356,7 +364,8 @@
     "regulationMark": "H",
     "tags": [
       "古代"
-    ]
+    ],
+    "stage": "Basic"
   },
   {
     "id": "11040",
@@ -398,7 +407,8 @@
     "pokedexNumber": 615,
     "species": "結晶寶可夢",
     "illustrator": "sui",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11041",
@@ -445,7 +455,8 @@
       "Colorless"
     ],
     "illustrator": "kawayoo",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11042",
@@ -487,7 +498,8 @@
     "pokedexNumber": 779,
     "species": "磨牙寶可夢",
     "illustrator": "Shibuzoh.",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11043",
@@ -521,7 +533,8 @@
     "pokedexNumber": 912,
     "species": "小鴨寶可夢",
     "illustrator": "Saboteri",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11044",
@@ -556,7 +569,8 @@
     "species": "習藝寶可夢",
     "evolvesFrom": "潤水鴨",
     "illustrator": "OKACHEKE",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11045",
@@ -599,7 +613,8 @@
     "species": "舞者寶可夢",
     "evolvesFrom": "湧躍鴨",
     "illustrator": "nagimiso",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage2"
   },
   {
     "id": "11046",
@@ -636,7 +651,8 @@
     "pokedexNumber": 974,
     "species": "陸鯨寶可夢",
     "illustrator": "Ayako Ozaki",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11047",
@@ -683,7 +699,8 @@
     "species": "陸鯨寶可夢",
     "evolvesFrom": "走鯨",
     "illustrator": "Uta",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11048",
@@ -716,7 +733,8 @@
     "pokedexNumber": 238,
     "species": "親吻寶可夢",
     "illustrator": "Saya Tsuruta",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11049",
@@ -761,7 +779,8 @@
       "Colorless"
     ],
     "illustrator": "takuyoa",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11050",
@@ -811,7 +830,8 @@
     "pokedexNumber": 381,
     "species": "無限寶可夢",
     "illustrator": "kantaro",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11051",
@@ -856,7 +876,8 @@
     "pokedexNumber": 786,
     "species": "土地神寶可夢",
     "illustrator": "Natsumi Yoshida",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11052",
@@ -894,7 +915,8 @@
     "pokedexNumber": 955,
     "species": "褶邊寶可夢",
     "illustrator": "buchi",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11053",
@@ -942,7 +964,8 @@
     "species": "鴕鳥寶可夢",
     "evolvesFrom": "飄飄雛",
     "illustrator": "Anesaki Dynamic",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11054",
@@ -991,7 +1014,8 @@
     "pokedexNumber": 999,
     "species": "寶箱寶可夢",
     "illustrator": "Scav",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11055",
@@ -1034,7 +1058,8 @@
     "pokedexNumber": 328,
     "species": "蟻獅寶可夢",
     "illustrator": "Taiga Kayama",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11056",
@@ -1078,7 +1103,8 @@
     "species": "震動寶可夢",
     "evolvesFrom": "大顎蟻",
     "illustrator": "Teeziro",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11057",
@@ -1119,12 +1145,13 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "沙漠蜻蜓GX",
+    "evolvesFrom": "沙漠蜻蜓",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
       "太晶"
-    ]
+    ],
+    "stage": "Stage2"
   },
   {
     "id": "11058",
@@ -1167,7 +1194,8 @@
     "pokedexNumber": 529,
     "species": "鼴鼠寶可夢",
     "illustrator": "Ounishi",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11059",
@@ -1212,7 +1240,8 @@
     "species": "地底寶可夢",
     "evolvesFrom": "螺釘地鼠",
     "illustrator": "Yuya Oka",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11060",
@@ -1258,7 +1287,8 @@
     "pokedexNumber": 645,
     "species": "豐饒寶可夢",
     "illustrator": "Souichirou Gunjima",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11061",
@@ -1293,7 +1323,8 @@
     "pokedexNumber": 766,
     "species": "配合寶可夢",
     "illustrator": "Teeziro",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11062",
@@ -1328,7 +1359,8 @@
     "pokedexNumber": 852,
     "species": "纏人寶可夢",
     "illustrator": "Shimaris Yukichi",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11063",
@@ -1375,7 +1407,8 @@
     "species": "柔術寶可夢",
     "evolvesFrom": "拳拳蛸",
     "illustrator": "KEIICHIRO ITO",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11064",
@@ -1414,7 +1447,8 @@
     "pokedexNumber": 227,
     "species": "鋼甲鳥寶可夢",
     "illustrator": "kawayoo",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11065",
@@ -1460,7 +1494,8 @@
     "pokedexNumber": 707,
     "species": "鑰匙串寶可夢",
     "illustrator": "mingo",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11066",
@@ -1510,7 +1545,8 @@
     "pokedexNumber": 884,
     "species": "合金寶可夢",
     "illustrator": "Tonji Matsuno",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11067",
@@ -1556,7 +1592,8 @@
     ],
     "evolvesFrom": "鋁鋼橋龍",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11068",
@@ -1606,7 +1643,8 @@
     "species": "寶者寶可夢",
     "evolvesFrom": "賽富豪ex",
     "illustrator": "Dsuke",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11069",
@@ -1659,7 +1697,8 @@
     "regulationMark": "H",
     "tags": [
       "未來"
-    ]
+    ],
+    "stage": "Basic"
   },
   {
     "id": "11070",
@@ -1699,12 +1738,13 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "阿羅拉 椰蛋樹GX",
+    "evolvesFrom": "阿羅拉 椰蛋樹",
     "illustrator": "aky CG Works",
     "regulationMark": "H",
     "tags": [
       "太晶"
-    ]
+    ],
+    "stage": "Stage1"
   },
   {
     "id": "11071",
@@ -1744,7 +1784,8 @@
     "species": "哼唱寶可夢",
     "evolvesFrom": "青綿鳥",
     "illustrator": "rika",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11072",
@@ -1785,7 +1826,8 @@
     "pokedexNumber": 483,
     "species": "時間寶可夢",
     "illustrator": "Takumi Wada",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11073",
@@ -1817,7 +1859,8 @@
     "pokedexNumber": 484,
     "species": "空間寶可夢",
     "illustrator": "danciao",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11074",
@@ -1859,7 +1902,8 @@
     "pokedexNumber": 776,
     "species": "爆炸龜寶可夢",
     "illustrator": "Rianti Hidayat",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11075",
@@ -1898,7 +1942,8 @@
     "pokedexNumber": 840,
     "species": "蘋果居寶可夢",
     "illustrator": "Yuka Morii",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11076",
@@ -1938,7 +1983,8 @@
     "species": "蘋果翅寶可夢",
     "evolvesFrom": "啃果蟲",
     "illustrator": "GOTO minori",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11077",
@@ -1981,7 +2027,8 @@
     "species": "蘋果汁寶可夢",
     "evolvesFrom": "啃果蟲",
     "illustrator": "Oswaldo KATO",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11078",
@@ -2019,7 +2066,8 @@
     "pokedexNumber": 333,
     "species": "綿鳥寶可夢",
     "illustrator": "sowsow",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11079",
@@ -2058,7 +2106,8 @@
     "pokedexNumber": 627,
     "species": "雛鷹寶可夢",
     "illustrator": "Nakamura Ippan",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11080",
@@ -2108,7 +2157,8 @@
     "species": "勇猛寶可夢",
     "evolvesFrom": "毛頭小鷹",
     "illustrator": "Anesaki Dynamic",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11081",
@@ -2155,7 +2205,8 @@
     "regulationMark": "H",
     "tags": [
       "太晶"
-    ]
+    ],
+    "stage": "Basic"
   },
   {
     "id": "11082",
@@ -2379,7 +2430,8 @@
     "pokedexNumber": 102,
     "species": "蛋寶可夢",
     "illustrator": "Yuriko Akase",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11431",
@@ -2423,7 +2475,8 @@
     "species": "發光寶可夢",
     "evolvesFrom": "睡睡菇",
     "illustrator": "matazo",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11432",
@@ -2463,7 +2516,8 @@
     "pokedexNumber": 351,
     "species": "天氣寶可夢",
     "illustrator": "Narano",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11433",
@@ -2505,7 +2559,8 @@
     "pokedexNumber": 779,
     "species": "磨牙寶可夢",
     "illustrator": "Mitsuhiro Arita",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11434",
@@ -2552,7 +2607,8 @@
     "species": "陸鯨寶可夢",
     "evolvesFrom": "走鯨",
     "illustrator": "Jerky",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11435",
@@ -2602,7 +2658,8 @@
     "pokedexNumber": 381,
     "species": "無限寶可夢",
     "illustrator": "OKACHEKE",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11436",
@@ -2646,7 +2703,8 @@
     "species": "震動寶可夢",
     "evolvesFrom": "大顎蟻",
     "illustrator": "toriyufu",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11437",
@@ -2681,7 +2739,8 @@
     "pokedexNumber": 852,
     "species": "纏人寶可夢",
     "illustrator": "USGMEN",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11438",
@@ -2720,7 +2779,8 @@
     "pokedexNumber": 227,
     "species": "鋼甲鳥寶可夢",
     "illustrator": "Takumi Wada",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11439",
@@ -2760,7 +2820,8 @@
     "species": "蘋果翅寶可夢",
     "evolvesFrom": "啃果蟲",
     "illustrator": "Uninori",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11440",
@@ -2803,7 +2864,8 @@
     "species": "蘋果汁寶可夢",
     "evolvesFrom": "啃果蟲",
     "illustrator": "MINAMINAMI Take",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11441",
@@ -2853,7 +2915,8 @@
     "species": "勇猛寶可夢",
     "evolvesFrom": "毛頭小鷹",
     "illustrator": "Gapao",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11442",
@@ -2900,7 +2963,8 @@
       "Colorless"
     ],
     "illustrator": "N-DESIGN Inc.",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11443",
@@ -2945,7 +3009,8 @@
       "Colorless"
     ],
     "illustrator": "takuyoa",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11444",
@@ -2986,12 +3051,13 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "沙漠蜻蜓GX",
+    "evolvesFrom": "沙漠蜻蜓",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
     "tags": [
       "太晶"
-    ]
+    ],
+    "stage": "Stage2"
   },
   {
     "id": "11445",
@@ -3037,7 +3103,8 @@
     ],
     "evolvesFrom": "鋁鋼橋龍",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11446",
@@ -3077,12 +3144,13 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "阿羅拉 椰蛋樹GX",
+    "evolvesFrom": "阿羅拉 椰蛋樹",
     "illustrator": "aky CG Works",
     "regulationMark": "H",
     "tags": [
       "太晶"
-    ]
+    ],
+    "stage": "Stage1"
   },
   {
     "id": "11447",
@@ -3129,7 +3197,8 @@
     "regulationMark": "H",
     "tags": [
       "太晶"
-    ]
+    ],
+    "stage": "Basic"
   },
   {
     "id": "11448",
@@ -3230,7 +3299,8 @@
       "Colorless"
     ],
     "illustrator": "OKACHEKE",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Basic"
   },
   {
     "id": "11453",
@@ -3276,7 +3346,8 @@
     ],
     "evolvesFrom": "鋁鋼橋龍",
     "illustrator": "Shinya Mizuno",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "stage": "Stage1"
   },
   {
     "id": "11454",
@@ -3316,12 +3387,13 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "阿羅拉 椰蛋樹GX",
+    "evolvesFrom": "阿羅拉 椰蛋樹",
     "illustrator": "Yuriko Akase",
     "regulationMark": "H",
     "tags": [
       "太晶"
-    ]
+    ],
+    "stage": "Stage1"
   },
   {
     "id": "11455",
@@ -3389,12 +3461,13 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "阿羅拉 椰蛋樹GX",
+    "evolvesFrom": "阿羅拉 椰蛋樹",
     "illustrator": "aky CG Works",
     "regulationMark": "H",
     "tags": [
       "太晶"
-    ]
+    ],
+    "stage": "Stage1"
   },
   {
     "id": "11458",

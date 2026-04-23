@@ -31,7 +31,8 @@
     ],
     "pokedexNumber": 152,
     "species": "葉子寶可夢",
-    "illustrator": "Makura Tami"
+    "illustrator": "Makura Tami",
+    "stage": "Basic"
   },
   {
     "id": "14085",
@@ -74,7 +75,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "stage": "Basic"
   },
   {
     "id": "14086",
@@ -120,7 +122,8 @@
     ],
     "pokedexNumber": 1015,
     "species": "隨從寶可夢",
-    "illustrator": "kodama"
+    "illustrator": "kodama",
+    "stage": "Basic"
   },
   {
     "id": "14087",
@@ -164,7 +167,8 @@
     ],
     "pokedexNumber": 296,
     "species": "毅力寶可夢",
-    "illustrator": "Takeshi Nakamura"
+    "illustrator": "Takeshi Nakamura",
+    "stage": "Basic"
   },
   {
     "id": "14088",
@@ -244,7 +248,8 @@
     ],
     "pokedexNumber": 1,
     "species": "種子寶可夢",
-    "illustrator": "HYOGONOSUKE"
+    "illustrator": "HYOGONOSUKE",
+    "stage": "Basic"
   },
   {
     "id": "14092",
@@ -282,7 +287,8 @@
     "pokedexNumber": 2,
     "species": "種子寶可夢",
     "evolvesFrom": "妙蛙種子",
-    "illustrator": "Takumi Wada"
+    "illustrator": "Takumi Wada",
+    "stage": "Stage1"
   },
   {
     "id": "14093",
@@ -324,7 +330,8 @@
     ],
     "pokedexNumber": 251,
     "species": "時空穿越寶可夢",
-    "illustrator": "Naoki Saito"
+    "illustrator": "Naoki Saito",
+    "stage": "Basic"
   },
   {
     "id": "14094",
@@ -362,7 +369,8 @@
     ],
     "pokedexNumber": 63,
     "species": "念力寶可夢",
-    "illustrator": "Orca"
+    "illustrator": "Orca",
+    "stage": "Basic"
   },
   {
     "id": "14095",
@@ -408,7 +416,8 @@
     ],
     "pokedexNumber": 280,
     "species": "心情寶可夢",
-    "illustrator": "Terada Tera"
+    "illustrator": "Terada Tera",
+    "stage": "Basic"
   },
   {
     "id": "14096",
@@ -455,7 +464,8 @@
     "pokedexNumber": 281,
     "species": "感情寶可夢",
     "evolvesFrom": "拉魯拉絲",
-    "illustrator": "satoma"
+    "illustrator": "satoma",
+    "stage": "Stage1"
   },
   {
     "id": "14097",
@@ -499,7 +509,8 @@
     ],
     "pokedexNumber": 296,
     "species": "毅力寶可夢",
-    "illustrator": "Jerky"
+    "illustrator": "Jerky",
+    "stage": "Basic"
   },
   {
     "id": "14098",
@@ -534,7 +545,8 @@
     ],
     "pokedexNumber": 447,
     "species": "波紋寶可夢",
-    "illustrator": "hncl"
+    "illustrator": "hncl",
+    "stage": "Basic"
   },
   {
     "id": "14099",
@@ -569,7 +581,8 @@
     ],
     "pokedexNumber": 802,
     "species": "棲影寶可夢",
-    "illustrator": "Tomomi Ozaki"
+    "illustrator": "Tomomi Ozaki",
+    "stage": "Basic"
   },
   {
     "id": "14100",
@@ -678,7 +691,8 @@
     ],
     "pokedexNumber": 4,
     "species": "蜥蜴寶可夢",
-    "illustrator": "HYOGONOSUKE"
+    "illustrator": "HYOGONOSUKE",
+    "stage": "Basic"
   },
   {
     "id": "14417",
@@ -714,7 +728,8 @@
     "pokedexNumber": 5,
     "species": "火焰寶可夢",
     "evolvesFrom": "小火龍",
-    "illustrator": "Uninori"
+    "illustrator": "Uninori",
+    "stage": "Stage1"
   },
   {
     "id": "14418",
@@ -748,7 +763,8 @@
     ],
     "pokedexNumber": 146,
     "species": "火焰寶可夢",
-    "illustrator": "Kazumasa Yasukuni"
+    "illustrator": "Kazumasa Yasukuni",
+    "stage": "Basic"
   },
   {
     "id": "14419",
@@ -791,7 +807,8 @@
     ],
     "pokedexNumber": 393,
     "species": "企鵝寶可夢",
-    "illustrator": "Hideki Ishikawa"
+    "illustrator": "Hideki Ishikawa",
+    "stage": "Basic"
   },
   {
     "id": "14420",
@@ -837,7 +854,8 @@
     "pokedexNumber": 394,
     "species": "企鵝寶可夢",
     "evolvesFrom": "波加曼",
-    "illustrator": "Atsuya Uki"
+    "illustrator": "Atsuya Uki",
+    "stage": "Stage1"
   },
   {
     "id": "14421",
@@ -880,7 +898,8 @@
     ],
     "pokedexNumber": 215,
     "species": "鉤爪寶可夢",
-    "illustrator": "Souichirou Gunjima"
+    "illustrator": "Souichirou Gunjima",
+    "stage": "Basic"
   },
   {
     "id": "14422",
@@ -914,7 +933,8 @@
     ],
     "pokedexNumber": 318,
     "species": "凶猛寶可夢",
-    "illustrator": "Shin Nagasawa"
+    "illustrator": "Shin Nagasawa",
+    "stage": "Basic"
   },
   {
     "id": "14423",
@@ -957,7 +977,8 @@
     ],
     "pokedexNumber": 848,
     "species": "嬰兒寶可夢",
-    "illustrator": "OKACHEKE"
+    "illustrator": "OKACHEKE",
+    "stage": "Basic"
   },
   {
     "id": "14424",
@@ -1006,7 +1027,8 @@
       "Colorless"
     ],
     "evolvesFrom": "噴火龍ex",
-    "illustrator": "takuyoa"
+    "illustrator": "takuyoa",
+    "stage": "Stage1"
   },
   {
     "id": "14426",
@@ -1042,7 +1064,8 @@
     ],
     "pokedexNumber": 888,
     "species": "強者寶可夢",
-    "illustrator": "Shiburingaru"
+    "illustrator": "Shiburingaru",
+    "stage": "Basic"
   },
   {
     "id": "14427",
@@ -1087,7 +1110,8 @@
     "pokedexNumber": 849,
     "species": "龐克寶可夢",
     "evolvesFrom": "毒電嬰",
-    "illustrator": "Krgc"
+    "illustrator": "Krgc",
+    "stage": "Stage1"
   },
   {
     "id": "14428",
@@ -1159,7 +1183,8 @@
     "pokedexNumber": 937,
     "species": "火劍士寶可夢",
     "evolvesFrom": "炭小侍",
-    "illustrator": "Anesaki Dynamic"
+    "illustrator": "Anesaki Dynamic",
+    "stage": "Stage1"
   },
   {
     "id": "14432",
@@ -1202,7 +1227,8 @@
     "pokedexNumber": 330,
     "species": "神秘寶可夢",
     "evolvesFrom": "超音波幼蟲",
-    "illustrator": "Oswaldo KATO"
+    "illustrator": "Oswaldo KATO",
+    "stage": "Stage2"
   },
   {
     "id": "14433",
@@ -1267,7 +1293,8 @@
     },
     "pokedexNumber": 406,
     "species": "花苞寶可夢",
-    "illustrator": "Yoriyuki Ikegami"
+    "illustrator": "Yoriyuki Ikegami",
+    "stage": "Basic"
   },
   {
     "id": "14444",
@@ -1296,7 +1323,8 @@
     },
     "pokedexNumber": 406,
     "species": "花苞寶可夢",
-    "illustrator": "Yoriyuki Ikegami"
+    "illustrator": "Yoriyuki Ikegami",
+    "stage": "Basic"
   },
   {
     "id": "14445",
@@ -1374,7 +1402,8 @@
     "pokedexNumber": 5,
     "species": "火焰寶可夢",
     "evolvesFrom": "小火龍",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "stage": "Stage1"
   },
   {
     "id": "14463",
@@ -1420,7 +1449,8 @@
       "Colorless"
     ],
     "evolvesFrom": "流氓鱷",
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "stage": "Stage2"
   },
   {
     "id": "14464",
@@ -1463,7 +1493,8 @@
     ],
     "pokedexNumber": 848,
     "species": "嬰兒寶可夢",
-    "illustrator": "Mina Nakai"
+    "illustrator": "Mina Nakai",
+    "stage": "Basic"
   },
   {
     "id": "14465",
@@ -1509,7 +1540,8 @@
     "pokedexNumber": 982,
     "species": "地蛇寶可夢",
     "evolvesFrom": "土龍弟弟",
-    "illustrator": "Teeziro"
+    "illustrator": "Teeziro",
+    "stage": "Stage1"
   },
   {
     "id": "14466",
@@ -1597,7 +1629,8 @@
     "pokedexNumber": 154,
     "species": "芳草寶可夢",
     "evolvesFrom": "月桂葉",
-    "illustrator": "Uninori"
+    "illustrator": "Uninori",
+    "stage": "Stage2"
   },
   {
     "id": "17972",
@@ -1640,7 +1673,8 @@
     "pokedexNumber": 818,
     "species": "特工寶可夢",
     "evolvesFrom": "變澀蜥",
-    "illustrator": "Kazumasa Yasukuni"
+    "illustrator": "Kazumasa Yasukuni",
+    "stage": "Stage2"
   },
   {
     "id": "17973",
@@ -1681,7 +1715,8 @@
     "illustrator": "mingo",
     "tags": [
       "訓練家冠名"
-    ]
+    ],
+    "stage": "Basic"
   },
   {
     "id": "17974",
@@ -1727,7 +1762,8 @@
     "pokedexNumber": 65,
     "species": "念力寶可夢",
     "evolvesFrom": "勇基拉",
-    "illustrator": "cochi8i"
+    "illustrator": "cochi8i",
+    "stage": "Stage2"
   },
   {
     "id": "17975",
@@ -1771,7 +1807,8 @@
       "Colorless"
     ],
     "evolvesFrom": "超級沙奈朵ex",
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "stage": "Stage1"
   },
   {
     "id": "17976",
@@ -1805,7 +1842,8 @@
     ],
     "pokedexNumber": 194,
     "species": "毒魚寶可夢",
-    "illustrator": "OKACHEKE"
+    "illustrator": "OKACHEKE",
+    "stage": "Basic"
   },
   {
     "id": "17977",
@@ -1840,7 +1878,8 @@
     ],
     "pokedexNumber": 52,
     "species": "妖怪貓寶可夢",
-    "illustrator": "Uninori"
+    "illustrator": "Uninori",
+    "stage": "Basic"
   },
   {
     "id": "18058",
@@ -1877,7 +1916,8 @@
       "type": "Fire",
       "value": "×2"
     },
-    "illustrator": "saino misaki"
+    "illustrator": "saino misaki",
+    "stage": "Basic"
   },
   {
     "id": "18059",
@@ -1920,7 +1960,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "Atsuya Uki"
+    "illustrator": "Atsuya Uki",
+    "stage": "Basic"
   },
   {
     "id": "18060",
@@ -1964,7 +2005,8 @@
       "Colorless"
     ],
     "evolvesFrom": "木木梟",
-    "illustrator": "aspara"
+    "illustrator": "aspara",
+    "stage": "Stage1"
   },
   {
     "id": "18061",
@@ -2006,7 +2048,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "Kanami Ogata"
+    "illustrator": "Kanami Ogata",
+    "stage": "Basic"
   },
   {
     "id": "18062",
@@ -2038,7 +2081,8 @@
     "retreatCost": [
       "Colorless"
     ],
-    "illustrator": "Takeshi Nakamura"
+    "illustrator": "Takeshi Nakamura",
+    "stage": "Basic"
   },
   {
     "id": "18063",
@@ -2083,7 +2127,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "AKIRA EGAWA"
+    "illustrator": "AKIRA EGAWA",
+    "stage": "Basic"
   },
   {
     "id": "18064",
@@ -2124,7 +2169,8 @@
     "retreatCost": [
       "Colorless"
     ],
-    "illustrator": "Natsumi Yoshida"
+    "illustrator": "Natsumi Yoshida",
+    "stage": "Basic"
   },
   {
     "id": "18065",
@@ -2158,7 +2204,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "OKACHEKE"
+    "illustrator": "OKACHEKE",
+    "stage": "Basic"
   },
   {
     "id": "18066",
@@ -2198,7 +2245,8 @@
     "retreatCost": [
       "Colorless"
     ],
-    "illustrator": "Pani Kobayashi"
+    "illustrator": "Pani Kobayashi",
+    "stage": "Basic"
   },
   {
     "id": "18067",
@@ -2239,7 +2287,8 @@
     "retreatCost": [
       "Colorless"
     ],
-    "illustrator": "kamonabe"
+    "illustrator": "kamonabe",
+    "stage": "Basic"
   },
   {
     "id": "18068",
@@ -2280,7 +2329,8 @@
     "retreatCost": [
       "Colorless"
     ],
-    "illustrator": "Mina Nakai"
+    "illustrator": "Mina Nakai",
+    "stage": "Basic"
   },
   {
     "id": "18069",
@@ -2315,7 +2365,8 @@
       "Colorless"
     ],
     "evolvesFrom": "超級噴火龍Xex",
-    "illustrator": "Ultimateinudog"
+    "illustrator": "Ultimateinudog",
+    "stage": "Stage2"
   },
   {
     "id": "18070",
@@ -2358,7 +2409,8 @@
       "Colorless"
     ],
     "evolvesFrom": "龜腳腳",
-    "illustrator": "Hasuno"
+    "illustrator": "Hasuno",
+    "stage": "Stage1"
   },
   {
     "id": "18071",
@@ -2401,7 +2453,8 @@
       "Colorless"
     ],
     "evolvesFrom": "寶寶暴龍",
-    "illustrator": "Nisota Niso"
+    "illustrator": "Nisota Niso",
+    "stage": "Stage2"
   },
   {
     "id": "18072",
@@ -2447,7 +2500,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "miki kudo"
+    "illustrator": "miki kudo",
+    "stage": "Basic"
   },
   {
     "id": "18073",
@@ -2488,7 +2542,8 @@
       "Colorless"
     ],
     "evolvesFrom": "呆呆王ex",
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "stage": "Stage1"
   },
   {
     "id": "18074",
@@ -2528,7 +2583,8 @@
     "retreatCost": [
       "Colorless"
     ],
-    "illustrator": "Mina Nakai"
+    "illustrator": "Mina Nakai",
+    "stage": "Basic"
   },
   {
     "id": "18075",
@@ -2570,7 +2626,8 @@
       "Colorless",
       "Colorless"
     ],
-    "illustrator": "Shimaris Yukichi"
+    "illustrator": "Shimaris Yukichi",
+    "stage": "Basic"
   },
   {
     "id": "18076",
@@ -2658,7 +2715,8 @@
     "pokedexNumber": 169,
     "species": "蝙蝠寶可夢",
     "evolvesFrom": "大嘴蝠",
-    "illustrator": "Apios"
+    "illustrator": "Apios",
+    "stage": "Stage2"
   },
   {
     "id": "18505",
@@ -2699,7 +2757,8 @@
     "pokedexNumber": 706,
     "species": "龍寶可夢",
     "evolvesFrom": "黏美兒",
-    "illustrator": "okayamatakatoshi"
+    "illustrator": "okayamatakatoshi",
+    "stage": "Stage2"
   },
   {
     "id": "18506",
@@ -2741,7 +2800,8 @@
     ],
     "pokedexNumber": 653,
     "species": "狐狸寶可夢",
-    "illustrator": "saino misaki"
+    "illustrator": "saino misaki",
+    "stage": "Basic"
   },
   {
     "id": "18507",
@@ -2777,7 +2837,8 @@
     "pokedexNumber": 654,
     "species": "狐狸寶可夢",
     "evolvesFrom": "火狐狸",
-    "illustrator": "Taiga Kasai"
+    "illustrator": "Taiga Kasai",
+    "stage": "Stage1"
   },
   {
     "id": "18508",
@@ -2811,7 +2872,8 @@
     ],
     "pokedexNumber": 667,
     "species": "幼獅寶可夢",
-    "illustrator": "Mina Nakai"
+    "illustrator": "Mina Nakai",
+    "stage": "Basic"
   },
   {
     "id": "18509",
@@ -2854,7 +2916,8 @@
     ],
     "pokedexNumber": 647,
     "species": "幼馬寶可夢",
-    "illustrator": "Mitsuhiro Arita"
+    "illustrator": "Mitsuhiro Arita",
+    "stage": "Basic"
   },
   {
     "id": "18510",
@@ -2896,7 +2959,8 @@
     ],
     "pokedexNumber": 656,
     "species": "泡蛙寶可夢",
-    "illustrator": "Kariya"
+    "illustrator": "Kariya",
+    "stage": "Basic"
   },
   {
     "id": "18511",
@@ -2940,7 +3004,8 @@
     "pokedexNumber": 657,
     "species": "泡蛙寶可夢",
     "evolvesFrom": "呱呱泡蛙",
-    "illustrator": "Nelnal"
+    "illustrator": "Nelnal",
+    "stage": "Stage1"
   },
   {
     "id": "18512",
@@ -2988,7 +3053,8 @@
     ],
     "pokedexNumber": 386,
     "species": "ＤＮＡ寶可夢",
-    "illustrator": "Shiburingaru"
+    "illustrator": "Shiburingaru",
+    "stage": "Basic"
   },
   {
     "id": "18513",
@@ -3034,7 +3100,8 @@
     ],
     "pokedexNumber": 708,
     "species": "樹樁寶可夢",
-    "illustrator": "Taiga Kasai"
+    "illustrator": "Taiga Kasai",
+    "stage": "Basic"
   },
   {
     "id": "18514",
@@ -3073,7 +3140,8 @@
     ],
     "pokedexNumber": 710,
     "species": "南瓜寶可夢",
-    "illustrator": "Jerky"
+    "illustrator": "Jerky",
+    "stage": "Basic"
   },
   {
     "id": "18515",
@@ -3117,7 +3185,8 @@
     "pokedexNumber": 655,
     "species": "狐狸寶可夢",
     "evolvesFrom": "長尾火狐",
-    "illustrator": "Souichirou Gunjima"
+    "illustrator": "Souichirou Gunjima",
+    "stage": "Stage2"
   },
   {
     "id": "18516",
@@ -3158,7 +3227,8 @@
       "Colorless"
     ],
     "evolvesFrom": "甲賀忍蛙ex",
-    "illustrator": "5ban Graphics"
+    "illustrator": "5ban Graphics",
+    "stage": "Stage1"
   },
   {
     "id": "18517",
@@ -3202,7 +3272,8 @@
     "pokedexNumber": 181,
     "species": "燈寶可夢",
     "evolvesFrom": "茸茸羊",
-    "illustrator": "Taiga Kasai"
+    "illustrator": "Taiga Kasai",
+    "stage": "Stage2"
   },
   {
     "id": "18518",

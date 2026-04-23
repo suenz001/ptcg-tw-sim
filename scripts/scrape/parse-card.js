@@ -159,6 +159,8 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
     const h1Raw = $('h1').first().text();
     const { subtype, name } = parsePokemonH1(h1Raw);
     card.name = name;
+    // v2.75: 保留原始 stage（基礎/1階進化/2階進化），然後才讓 refine 把 subtype 覆寫為 ex 等
+    if (subtype) card.stage = subtype;  // 'Basic' | 'Stage1' | 'Stage2'
     card.subtype = refinePokemonSubtype(subtype, name);
 
     // HP + pokemonType
@@ -278,8 +280,10 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
         .filter((s) => s && s.length > 0);
       const idx = names.findIndex((n) => n === card.name);
       if (idx > 0) {
-        // evolvesFrom 也可能帶 <>（前階冠名），strip 以對齊 name 格式
-        card.evolvesFrom = names[idx - 1].replace(/[<>]/g, '');
+        // evolvesFrom 也可能帶 <>（前階冠名），strip 以對齊 name 格式。
+        // v2.75: 也 strip GX 後綴 — 官網 .evolution 區塊偶爾會帶 GX 名稱，
+        // 但當前卡池無 GX 卡，保留 GX 會導致 evolvesFrom 對不上任何卡。
+        card.evolvesFrom = names[idx - 1].replace(/[<>]/g, '').replace(/GX$/, '');
       }
     }
   } else {

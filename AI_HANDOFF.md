@@ -1,9 +1,103 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 (v2.74)  
+> 最後更新：2026-04-23 (v2.75)  
 > 執行者：Gemini（Google DeepMind）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.75 — stage 欄位全面補齊 + evolvesFrom GX 後綴修正
+
+### 需求
+v2.74 的屬性/階段篩選揭露了兩個資料層問題：
+1. **ex 卡的階段只能靠 runtime 推斷**，因為 scraper 的 `refinePokemonSubtype()` 會把
+   原始的 `基礎`/`1階進化`/`2階進化` 覆寫為 `'ex'`。
+2. **39 張卡的 `evolvesFrom` 帶有 GX 後綴**（如 `噴火龍GX`），但卡池中沒有 GX 卡，
+   導致進化鏈對不上。
+
+### 根因
+1. `parse-card.js` 的 `refinePokemonSubtype(subtype, name)` 在偵測到 `ex` 後綴時，
+   直接 `return 'ex'`，丟掉 `parsePokemonH1()` 回傳的原始 stage。
+2. 官網 `.evolution` 區塊的 HTML 偶爾會帶前一世代的 GX 後綴（因為同名寶可夢在不同
+   世代可能有 GX 和 ex 兩個版本），但 `parse-card.js` 沒有 strip GX。
+
+### 主修
+
+#### 1. 新增 `stage` 欄位 — `types.ts` + migration
+
+**`src/lib/cards/types.ts`**：Card 新增 `stage?: 'Basic' | 'Stage1' | 'Stage2'`。
+- 獨立於 `subtype`，保留原始的進化階段。
+- subtype=Basic/Stage1/Stage2 的卡：stage 與 subtype 同值（冗餘但方便查詢）。
+- subtype=ex 的卡：stage 保留原始值（如 Basic / Stage1 / Stage2）。
+- subtype=Other（寶可夢道具）：不設 stage。
+
+**`scripts/migrate-stage.mjs`**（一次性 migration，冪等）：
+- Phase 1: 從 subtype=Basic/Stage1/Stage2 的卡建立「名稱 → stage」對應表（931 筆）。
+- Phase 2: 對 612 張 ex 卡，用名稱比對推斷 stage（strip `ex` → 查同名非 ex 版本的 stage）。
+  - 578 張靠名稱比對解決。
+  - 34 張無同名非 ex 版本（如火箭隊的超夢ex、捷克羅姆ex、闇黑酋雷姆ex 等），依
+    evolvesFrom 推斷或默認 Basic。
+- Phase 3: 交叉驗證 evolvesFrom 正確性（59 張 ex 指向同名進化寶可夢 — 這些在 PTCG
+  規則上是正確的，例如耿鬼ex 確實從耿鬼進化）。
+- Phase 4: 寫入 `stage` 到 29 個 JSON 檔，共 3499 張寶可夢。
+
+#### 2. 修正 evolvesFrom GX 後綴 — 39 張卡
+
+直接在 JSON 中把 `evolvesFrom` 的 `GX` 後綴移除：
+```
+噴火龍ex: 噴火龍GX → 噴火龍
+路卡利歐ex: 路卡利歐GX → 路卡利歐
+暴飛龍ex: 暴飛龍GX → 暴飛龍
+...共 39 張（跨 18 個 set）
+```
+
+**影響評估**：引擎的 `sameEvoName()` 只 strip `ex` 後綴，不 strip `GX`。因此
+`evolvesFrom='噴火龍GX'` 時，場上放「噴火龍」或「噴火龍ex」都無法配對進化
+→ 這 39 張卡在遊戲中**無法正常進化**。修正後恢復正常。
+
+#### 3. scraper 修正 — `parse-card.js`
+
+- 新增 `card.stage = subtype`：在 `refinePokemonSubtype()` 覆寫 subtype 之前，
+  先把原始 stage 存下來。未來新爬的卡會自動帶 stage。
+- evolvesFrom strip 加 `.replace(/GX$/, '')`：防止新爬的卡再帶 GX 後綴。
+
+#### 4. UI 更新 — cards page
+
+`src/routes/cards/+page.svelte` 的 `cardStage()` 函式：
+- v2.74 版使用 runtime 推斷（strip ex → 查 evolvesFrom）。
+- v2.75 改為直接讀 `card.stage` 欄位，有 fallback 給未 migrate 的老資料。
+
+### 驗證
+- `npm run build` ✓（34.81s，無 TS error）
+- 所有 3499 張寶可夢都有 stage 欄位
+- 39 張 GX evolvesFrom 已修正
+- 既有 a11y warning 皆來自 game page，非本版新增
+
+### 安全性確認（不破壞舊機制）
+- **`isBasicPokemonCard()`**：使用 `subtype` + `evolvesFrom` 判斷，stage 欄位是
+  獨立新增的，不影響此函式。
+- **`isStage2PokemonCard()`**：用 pool cross-reference evolvesFrom 鏈，不受影響。
+- **進化機制**（engine.ts EVOLVE）：用 `sameEvoName(evoCard.evolvesFrom, baseCard.name)`
+  驗證，只依賴 evolvesFrom 和 name。GX 修正反而修復了 39 張卡的進化問題。
+- **`prizesForKO()`**：看 name 後綴（ex/EX），不受影響。
+- **effects.ts 各效果**：用 `evolvesFrom` 和 `subtype`，不查 stage。
+
+### 變更檔案
+```
+新增：
+  scripts/migrate-stage.mjs         # stage 欄位 migration（一次性）
+
+修改：
+  src/lib/cards/types.ts            # Card.stage 新欄位
+  scripts/scrape/parse-card.js      # 保存 stage + strip GX
+  src/routes/cards/+page.svelte     # cardStage() 改讀 stage 欄位
+  src/lib/version.ts                # 2.74 → 2.75
+  AI_HANDOFF.md                     # 本段紀錄
+
+migration 寫入（29 個 set JSON）：
+  static/cards/*.json               # stage 欄位 + evolvesFrom GX 修正
+```
 
 ---
 

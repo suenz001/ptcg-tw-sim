@@ -31,7 +31,8 @@
     "pokedexNumber": 92,
     "species": "氣體狀寶可夢",
     "illustrator": "Saboteri",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14130",
@@ -66,7 +67,8 @@
     "species": "氣體狀寶可夢",
     "evolvesFrom": "鬼斯",
     "illustrator": "Rianti Hidayat",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14131",
@@ -108,7 +110,8 @@
     ],
     "evolvesFrom": "鬼斯通",
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage2"
   },
   {
     "id": "14132",
@@ -146,7 +149,8 @@
     "pokedexNumber": 198,
     "species": "黑暗寶可夢",
     "illustrator": "Tomokazu Komiya",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14133",
@@ -195,7 +199,8 @@
     "species": "大頭目寶可夢",
     "evolvesFrom": "黑暗鴉",
     "illustrator": "Anesaki Dynamic",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14134",
@@ -229,7 +234,8 @@
     "pokedexNumber": 302,
     "species": "黑暗寶可夢",
     "illustrator": "osare",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14135",
@@ -272,7 +278,8 @@
     "pokedexNumber": 359,
     "species": "災禍寶可夢",
     "illustrator": "Takumi Wada",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14136",
@@ -318,7 +325,8 @@
     "pokedexNumber": 890,
     "species": "超極巨寶可夢",
     "illustrator": "akagi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14137",
@@ -358,7 +366,8 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14138",
@@ -396,7 +405,8 @@
     "pokedexNumber": 978,
     "species": "擬態寶可夢",
     "illustrator": "Jerky",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14139",
@@ -605,7 +615,8 @@
     "species": "氣體狀寶可夢",
     "evolvesFrom": "鬼斯",
     "illustrator": "Arai Kiriko",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14152",

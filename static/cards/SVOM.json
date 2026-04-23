@@ -34,7 +34,8 @@
     "regulationMark": "J",
     "tags": [
       "訓練家冠名"
-    ]
+    ],
+    "stage": "Basic"
   },
   {
     "id": "12605",
@@ -72,7 +73,8 @@
     "regulationMark": "J",
     "tags": [
       "訓練家冠名"
-    ]
+    ],
+    "stage": "Stage1"
   },
   {
     "id": "12606",
@@ -111,7 +113,8 @@
     "regulationMark": "J",
     "tags": [
       "訓練家冠名"
-    ]
+    ],
+    "stage": "Basic"
   },
   {
     "id": "12607",
@@ -159,7 +162,8 @@
     "regulationMark": "J",
     "tags": [
       "訓練家冠名"
-    ]
+    ],
+    "stage": "Stage1"
   },
   {
     "id": "12608",
@@ -204,7 +208,8 @@
     "regulationMark": "J",
     "tags": [
       "訓練家冠名"
-    ]
+    ],
+    "stage": "Basic"
   },
   {
     "id": "12609",
@@ -242,7 +247,8 @@
     "regulationMark": "J",
     "tags": [
       "訓練家冠名"
-    ]
+    ],
+    "stage": "Stage1"
   },
   {
     "id": "12610",
@@ -286,7 +292,8 @@
     "regulationMark": "J",
     "tags": [
       "訓練家冠名"
-    ]
+    ],
+    "stage": "Stage2"
   },
   {
     "id": "12611",
@@ -322,7 +329,8 @@
     "regulationMark": "J",
     "tags": [
       "訓練家冠名"
-    ]
+    ],
+    "stage": "Basic"
   },
   {
     "id": "12612",
@@ -363,7 +371,8 @@
       "Colorless"
     ],
     "illustrator": "takuyoa",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "stage": "Basic"
   },
   {
     "id": "12613",
@@ -567,7 +576,8 @@
     "regulationMark": "J",
     "tags": [
       "訓練家冠名"
-    ]
+    ],
+    "stage": "Basic"
   },
   {
     "id": "12626",

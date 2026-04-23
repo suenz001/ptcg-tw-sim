@@ -84,25 +84,19 @@
   const STAGE_ORDER: StageKey[] = ['Basic', 'Stage1', 'Stage2'];
   let selectedStages = $state<Set<StageKey>>(new Set());
 
-  /** 推斷寶可夢的階段。subtype 為 Basic/Stage1/Stage2 時直接用；
-   *  subtype 為 ex 時依 evolvesFrom 推斷。*/
+  /** 取得寶可夢的階段。v2.75 起 JSON 有 `stage` 欄位（由 migration 補齊），
+   *  直接用即可，不再需要 runtime 推斷。
+   *  fallback：若 stage 欄位缺失（老資料未跑 migration），用 subtype。*/
   function cardStage(c: Card): StageKey | null {
     if (c.supertype !== 'Pokemon' || c.subtype === 'Other') return null;
+    // v2.75: 直接讀 stage 欄位
+    if (c.stage) return c.stage;
+    // fallback for un-migrated data
     if (c.subtype === 'Basic') return 'Basic';
     if (c.subtype === 'Stage1') return 'Stage1';
     if (c.subtype === 'Stage2') return 'Stage2';
-    // ex / VSTAR / MegaEvolution etc — 推斷 stage
-    if (!c.evolvesFrom) {
-      // 超級進化一定有前階，如果缺 evolvesFrom 也視為進化 ex
-      if (c.name.startsWith('超級')) return 'Stage1';
-      return 'Basic';
-    }
-    // 有 evolvesFrom。如果前階本身也是進化的（Stage1 or ex with evolvesFrom），就是 Stage2。
-    // 但我們在這裡只有單張卡的資訊，無法查前階卡的 subtype。
-    // 簡易判定：如果前階名字看起來也是 ex 或含 evolvesFrom 等字串就是 2 階。
-    // 更好的方式：看卡池裡前階卡的 subtype。但 filter 的 derived 無法 async 查。
-    // 所以這裡返回 'Stage1'（保守），2 階 ex 在現行資料庫中極少見。
-    return 'Stage1';
+    // ex without stage field — conservative Basic
+    return c.evolvesFrom ? 'Stage1' : 'Basic';
   }
 
   function isMegaEx(c: Card): boolean {

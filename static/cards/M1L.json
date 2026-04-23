@@ -32,7 +32,8 @@
     "pokedexNumber": 1,
     "species": "種子寶可夢",
     "illustrator": "HYOGONOSUKE",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13959",
@@ -70,7 +71,8 @@
     "species": "種子寶可夢",
     "evolvesFrom": "妙蛙種子",
     "illustrator": "Takumi Wada",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13960",
@@ -116,7 +118,8 @@
     ],
     "evolvesFrom": "妙蛙花ex",
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13961",
@@ -150,7 +153,8 @@
     "pokedexNumber": 102,
     "species": "蛋寶可夢",
     "illustrator": "aspara",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13962",
@@ -196,7 +200,8 @@
     "species": "椰子寶可夢",
     "evolvesFrom": "蛋蛋",
     "illustrator": "Kazumasa Yasukuni",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13963",
@@ -238,7 +243,8 @@
     "pokedexNumber": 251,
     "species": "時空穿越寶可夢",
     "illustrator": "Naoki Saito",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13964",
@@ -281,7 +287,8 @@
     "pokedexNumber": 273,
     "species": "橡實寶可夢",
     "illustrator": "Miki Tanaka",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13965",
@@ -326,7 +333,8 @@
     "species": "捉弄寶可夢",
     "evolvesFrom": "橡實果",
     "illustrator": "takashi shiraishi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13966",
@@ -371,7 +379,8 @@
     "species": "邪惡寶可夢",
     "evolvesFrom": "長鼻葉",
     "illustrator": "Uninori",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage2"
   },
   {
     "id": "13967",
@@ -414,7 +423,8 @@
     "pokedexNumber": 37,
     "species": "狐狸寶可夢",
     "illustrator": "Naoyo Kimura",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13968",
@@ -458,7 +468,8 @@
     "species": "狐狸寶可夢",
     "evolvesFrom": "六尾",
     "illustrator": "satoma",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13969",
@@ -503,7 +514,8 @@
     "pokedexNumber": 322,
     "species": "遲鈍寶可夢",
     "illustrator": "Wintr Wandr",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13970",
@@ -550,7 +562,8 @@
     ],
     "evolvesFrom": "噴火駝",
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage2"
   },
   {
     "id": "13971",
@@ -595,7 +608,8 @@
     "pokedexNumber": 721,
     "species": "蒸汽寶可夢",
     "illustrator": "GIDORA",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13972",
@@ -629,7 +643,8 @@
     "pokedexNumber": 813,
     "species": "兔子寶可夢",
     "illustrator": "svlt",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13973",
@@ -664,7 +679,8 @@
     "species": "兔子寶可夢",
     "evolvesFrom": "炎兔兒",
     "illustrator": "Narumi Sato",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13974",
@@ -703,7 +719,8 @@
     "species": "前鋒寶可夢",
     "evolvesFrom": "騰蹴小將",
     "illustrator": "REND",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage2"
   },
   {
     "id": "13975",
@@ -747,7 +764,8 @@
     "pokedexNumber": 341,
     "species": "無賴寶可夢",
     "illustrator": "Sanosuke Sakuma",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13976",
@@ -786,7 +804,8 @@
     "pokedexNumber": 999,
     "species": "寶箱寶可夢",
     "illustrator": "Takeshi Nakamura",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13977",
@@ -829,7 +848,8 @@
     "pokedexNumber": 27,
     "species": "鼠寶可夢",
     "illustrator": "Shinji Kanda",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13978",
@@ -875,7 +895,8 @@
     "species": "鼠寶可夢",
     "evolvesFrom": "穿山鼠",
     "illustrator": "imoniii",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13979",
@@ -924,7 +945,8 @@
     "pokedexNumber": 95,
     "species": "岩蛇寶可夢",
     "illustrator": "Uta",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13980",
@@ -953,7 +975,8 @@
     "pokedexNumber": 236,
     "species": "打鬥寶可夢",
     "illustrator": "OKUBO",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13981",
@@ -997,7 +1020,8 @@
     "pokedexNumber": 296,
     "species": "毅力寶可夢",
     "illustrator": "Jerky",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13982",
@@ -1043,7 +1067,8 @@
     "species": "猛推寶可夢",
     "evolvesFrom": "幕下力士",
     "illustrator": "GOSSAN",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13983",
@@ -1085,7 +1110,8 @@
     "pokedexNumber": 337,
     "species": "隕石寶可夢",
     "illustrator": "Whisker",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13984",
@@ -1119,7 +1145,8 @@
     "pokedexNumber": 338,
     "species": "隕石寶可夢",
     "illustrator": "Whisker",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13985",
@@ -1154,7 +1181,8 @@
     "pokedexNumber": 447,
     "species": "波紋寶可夢",
     "illustrator": "hncl",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13986",
@@ -1197,7 +1225,8 @@
     ],
     "evolvesFrom": "路卡利歐ex",
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13987",
@@ -1231,7 +1260,8 @@
     "pokedexNumber": 453,
     "species": "毒擊寶可夢",
     "illustrator": "matazo",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13988",
@@ -1266,7 +1296,8 @@
     "species": "毒擊寶可夢",
     "evolvesFrom": "不良蛙",
     "illustrator": "Hasuno",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13989",
@@ -1301,7 +1332,8 @@
     "pokedexNumber": 802,
     "species": "棲影寶可夢",
     "illustrator": "Tomomi Ozaki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13990",
@@ -1346,7 +1378,8 @@
     "pokedexNumber": 874,
     "species": "巨石寶可夢",
     "illustrator": "Hitoshi Ariga",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13991",
@@ -1381,7 +1414,8 @@
     "pokedexNumber": 932,
     "species": "岩鹽寶可夢",
     "illustrator": "sowsow",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13992",
@@ -1419,7 +1453,8 @@
     "species": "岩鹽寶可夢",
     "evolvesFrom": "鹽石寶",
     "illustrator": "kodama",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13993",
@@ -1466,7 +1501,8 @@
     "species": "岩鹽寶可夢",
     "evolvesFrom": "鹽石壘",
     "illustrator": "danciao",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage2"
   },
   {
     "id": "13994",
@@ -1513,7 +1549,8 @@
     "species": "流氓寶可夢",
     "evolvesFrom": "龍蝦小兵",
     "illustrator": "kawayoo",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "13995",
@@ -1557,7 +1594,8 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13996",
@@ -1598,7 +1636,8 @@
     "pokedexNumber": 442,
     "species": "封印寶可夢",
     "illustrator": "mingo",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13997",
@@ -1643,7 +1682,8 @@
     "pokedexNumber": 717,
     "species": "破壞寶可夢",
     "illustrator": "akagi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13998",
@@ -1677,7 +1717,8 @@
     "pokedexNumber": 827,
     "species": "狐狸寶可夢",
     "illustrator": "Souichirou Gunjima",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "13999",
@@ -1721,7 +1762,8 @@
     "species": "狐狸寶可夢",
     "evolvesFrom": "偷兒狐",
     "illustrator": "ryoma uratsuka",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14000",
@@ -1756,7 +1798,8 @@
     "pokedexNumber": 944,
     "species": "毒鼠寶可夢",
     "illustrator": "osare",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14001",
@@ -1792,7 +1835,8 @@
     "species": "毒猴寶可夢",
     "evolvesFrom": "滋汁鼴",
     "illustrator": "Dsuke",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14002",
@@ -1846,7 +1890,8 @@
     "species": "鐵蛇寶可夢",
     "evolvesFrom": "大岩蛇",
     "illustrator": "Anesaki Dynamic",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14003",
@@ -1894,7 +1939,8 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14004",
@@ -1943,7 +1989,8 @@
     "pokedexNumber": 483,
     "species": "時間寶可夢",
     "illustrator": "Teeziro",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14005",
@@ -1981,7 +2028,8 @@
     "pokedexNumber": 957,
     "species": "錘鍊寶可夢",
     "illustrator": "You Iribi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14006",
@@ -2028,7 +2076,8 @@
     "species": "錘子寶可夢",
     "evolvesFrom": "小鍛匠",
     "illustrator": "KEIICHIRO ITO",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14007",
@@ -2068,7 +2117,8 @@
     "species": "錘子寶可夢",
     "evolvesFrom": "巧鍛匠",
     "illustrator": "toriyufu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage2"
   },
   {
     "id": "14008",
@@ -2118,7 +2168,8 @@
     "species": "寶者寶可夢",
     "evolvesFrom": "賽富豪ex",
     "illustrator": "Yukihiro Tada",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14009",
@@ -2156,7 +2207,8 @@
     "pokedexNumber": 21,
     "species": "小鳥寶可夢",
     "illustrator": "Scav",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14010",
@@ -2195,7 +2247,8 @@
     "species": "鳥嘴寶可夢",
     "evolvesFrom": "烈雀",
     "illustrator": "Saboteri",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14011",
@@ -2241,7 +2294,8 @@
     "pokedexNumber": 241,
     "species": "乳牛寶可夢",
     "illustrator": "Kouki Saitou",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14012",
@@ -2284,7 +2338,8 @@
     "pokedexNumber": 734,
     "species": "巡迴寶可夢",
     "illustrator": "Mékayu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14013",
@@ -2325,9 +2380,10 @@
     ],
     "pokedexNumber": 735,
     "species": "監視寶可夢",
-    "evolvesFrom": "貓鼬探長GX",
+    "evolvesFrom": "貓鼬探長",
     "illustrator": "Shigenori Negishi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14014",
@@ -2463,7 +2519,8 @@
     "pokedexNumber": 1,
     "species": "種子寶可夢",
     "illustrator": "mashu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14183",
@@ -2501,7 +2558,8 @@
     "species": "種子寶可夢",
     "evolvesFrom": "妙蛙種子",
     "illustrator": "mashu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14184",
@@ -2547,7 +2605,8 @@
     "species": "椰子寶可夢",
     "evolvesFrom": "蛋蛋",
     "illustrator": "Yukihiro Tada",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14185",
@@ -2590,7 +2649,8 @@
     "pokedexNumber": 37,
     "species": "狐狸寶可夢",
     "illustrator": "saino misaki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14186",
@@ -2625,7 +2685,8 @@
     "pokedexNumber": 447,
     "species": "波紋寶可夢",
     "illustrator": "GOSSAN",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14187",
@@ -2660,7 +2721,8 @@
     "pokedexNumber": 802,
     "species": "棲影寶可夢",
     "illustrator": "313",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14188",
@@ -2707,7 +2769,8 @@
     "species": "岩鹽寶可夢",
     "evolvesFrom": "鹽石壘",
     "illustrator": "Yano Keiji",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage2"
   },
   {
     "id": "14189",
@@ -2748,7 +2811,8 @@
     "pokedexNumber": 442,
     "species": "封印寶可夢",
     "illustrator": "IKEDA Saki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14190",
@@ -2783,7 +2847,8 @@
     "pokedexNumber": 944,
     "species": "毒鼠寶可夢",
     "illustrator": "Shimaris Yukichi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14191",
@@ -2837,7 +2902,8 @@
     "species": "鐵蛇寶可夢",
     "evolvesFrom": "大岩蛇",
     "illustrator": "Tonji Matsuno",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14192",
@@ -2875,7 +2941,8 @@
     "pokedexNumber": 21,
     "species": "小鳥寶可夢",
     "illustrator": "MINAMINAMI Take",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14193",
@@ -2916,9 +2983,10 @@
     ],
     "pokedexNumber": 735,
     "species": "監視寶可夢",
-    "evolvesFrom": "貓鼬探長GX",
+    "evolvesFrom": "貓鼬探長",
     "illustrator": "Mina Nakai",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14194",
@@ -2964,7 +3032,8 @@
     ],
     "evolvesFrom": "妙蛙花ex",
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14195",
@@ -3011,7 +3080,8 @@
     ],
     "evolvesFrom": "噴火駝",
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage2"
   },
   {
     "id": "14196",
@@ -3054,7 +3124,8 @@
     ],
     "evolvesFrom": "路卡利歐ex",
     "illustrator": "takuyoa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14197",
@@ -3098,7 +3169,8 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14198",
@@ -3146,7 +3218,8 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14199",
@@ -3279,7 +3352,8 @@
     ],
     "evolvesFrom": "妙蛙花ex",
     "illustrator": "mashu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14206",
@@ -3322,7 +3396,8 @@
     ],
     "evolvesFrom": "路卡利歐ex",
     "illustrator": "Atsushi Furusawa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   },
   {
     "id": "14207",
@@ -3366,7 +3441,8 @@
       "Colorless"
     ],
     "illustrator": "Mitsuhiro Arita",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Basic"
   },
   {
     "id": "14208",
@@ -3440,6 +3516,7 @@
     ],
     "evolvesFrom": "路卡利歐ex",
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "stage": "Stage1"
   }
 ]

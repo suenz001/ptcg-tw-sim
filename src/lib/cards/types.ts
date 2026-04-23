@@ -33,6 +33,18 @@ export interface Card {
   hp?: number;
   pokemonType?: EnergyType;
   evolvesFrom?: string;
+  /**
+   * 寶可夢的進化階段，獨立於 subtype。
+   * - 'Basic' / 'Stage1' / 'Stage2'
+   * - 來源：官網 H1 文字（基礎 / 1階進化 / 2階進化）。
+   * - 為何需要：scraper 的 refinePokemonSubtype() 會把 ex 卡的 subtype 覆寫為 'ex'，
+   *   丟失原始的階段資訊。stage 保留原始值，讓 /cards 篩選與引擎判定都能正確區分
+   *   「基礎 ex」與「進化 ex」。
+   * - v2.75 新增。對 subtype=Basic/Stage1/Stage2 的卡，stage 與 subtype 同值（冗餘但方便）。
+   *   對 subtype=ex 的卡，stage 保留原始的 Basic/Stage1/Stage2。
+   *   寶可夢道具（subtype=Other）不設 stage。
+   */
+  stage?: 'Basic' | 'Stage1' | 'Stage2';
   pokedexNumber?: number;
   species?: string;
   weakness?: { type: EnergyType; value: string };
