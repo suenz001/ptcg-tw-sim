@@ -1,9 +1,43 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 (v2.77)  
+> 最後更新：2026-04-23 (v2.78)  
 > 執行者：Gemini（Google DeepMind）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.78 — 超級進化ex `stage` 屬性全面修正（48 張卡）
+
+### 問題
+在 v2.77 修正超級進化 `evolvesFrom` 之後，部分超級進化寶可夢的 `stage` 欄位並未同步更新。
+例如 `超級甲賀忍蛙ex` 雖然已正確從 `呱頭蛙` 進化，但它的 `stage` 卻殘留為 `Stage1`，
+而官網和卡面文字上，`超級甲賀忍蛙ex` 是「2階進化」（因為呱頭蛙是 Stage1）。
+PTCG 的規則是：**超級進化會繼承前階的進化階級 + 1**。
+- 若由**基礎**寶可夢進化（如呆火駝 → 超級噴火駝ex），為 **1階進化** (Stage1)。
+- 若由 **1階進化**寶可夢進化（如火恐龍 → 超級噴火龍Xex），為 **2階進化** (Stage2)。
+
+### 主修
+
+1. **全面清查前階階級**：
+   寫腳本比對所有超級進化 ex 的 `evolvesFrom` 目標：
+   - 基礎 (Basic) → 改為 Stage1
+   - 1階進化 (Stage1) → 改為 Stage2
+2. **修正數量**：
+   共計修正 48 張 Mega 卡的 `stage` 屬性（包含 M-P, M1L, M1S, M2, M2a, M4, MC 彈）。
+   
+### 修正範例
+| 卡片 | 修正前 Stage | 正確前階 | 修正後 Stage |
+|---|---|---|---|
+| 超級甲賀忍蛙ex | Stage1 | 呱頭蛙 (Stage1) | Stage2 ✅ |
+| 超級噴火龍Xex | Stage1 | 火恐龍 (Stage1) | Stage2 ✅ |
+| 超級雷電獸ex | Stage2 | 落雷獸 (Basic) | Stage1 ✅ |
+| 超級暴雪王ex | Stage2 | 雪笠怪 (Basic) | Stage1 ✅ |
+| 超級噴火駝ex | Stage2 | 呆火駝 (Basic) | Stage1 ✅ |
+
+### 驗證
+- 撰寫 `audit-mega.mjs` 直接連線至 PTCG 亞洲官網，解析每張超級進化卡專屬頁面的 `H1` 標籤（會顯示官方的 1階進化/2階進化）。
+- 執行比對後，全數 36 種超級進化物種的 `stage` 與 `evolvesFrom` 皆與官網資訊 **100% 吻合**。
 
 ---
 

@@ -519,7 +519,7 @@
     "evolvesFrom": "火恐龍",
     "illustrator": "takuyoa",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "14332",
@@ -2077,7 +2077,7 @@
     "evolvesFrom": "利牙魚",
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
-    "stage": "Stage2"
+    "stage": "Stage1"
   },
   {
     "id": "14370",
@@ -3009,7 +3009,7 @@
     "evolvesFrom": "捲捲耳",
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
-    "stage": "Stage2"
+    "stage": "Stage1"
   },
   {
     "id": "14391",

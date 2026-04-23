@@ -1028,7 +1028,7 @@
     ],
     "evolvesFrom": "火恐龍",
     "illustrator": "takuyoa",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "14426",
@@ -1808,7 +1808,7 @@
     ],
     "evolvesFrom": "奇魯莉安",
     "illustrator": "5ban Graphics",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "17976",
@@ -3228,7 +3228,7 @@
     ],
     "evolvesFrom": "呱頭蛙",
     "illustrator": "5ban Graphics",
-    "stage": "Stage1"
+    "stage": "Stage2"
   },
   {
     "id": "18517",
