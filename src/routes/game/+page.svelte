@@ -14,6 +14,7 @@
     countEnergy, getEvolvableTargets,
     canRetreat, getPlayableTrainers, getPlayableBasics,
     getUsableAbilities, isBasicPokemonCard, getEffectiveHP,
+    totalEnergyUnits,
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
@@ -1097,6 +1098,15 @@
     if (pendingSelection.type === 'damage-distribute') {
       const n = selectionBatchSum;
       return n >= pendingSelection.minCount && n <= pendingSelection.maxCount;
+    }
+    // v2.69：撤退能量選擇用「能量單位」判定（火箭隊能量 1 張 = 2 units）
+    // 而非張數；要求選中能量單位總和 ≥ retreatCost。
+    if (pendingSelection.type === 'active-energy-discard'
+        && pendingSelection.effectKey === 'retreat-energy-discard') {
+      const retreatCost = (pendingSelection.params?.retreatCost as number | undefined) ?? 0;
+      if (selectionPicked.size === 0) return false;
+      const pickedInsts = selectionItems.filter(it => selectionPicked.has(it.iid));
+      return totalEnergyUnits(pickedInsts, pool) >= retreatCost;
     }
     return selectionPicked.size >= pendingSelection.minCount
         && selectionPicked.size <= pendingSelection.maxCount;
@@ -3585,29 +3595,30 @@
 
 
   .zoom-overlay{ position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.88); display:flex; align-items:center; justify-content:center; font-family:system-ui,'Microsoft JhengHei',sans-serif; }
-  .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.2rem; max-width:720px; width:96vw; max-height:92vh; display:flex; flex-direction:column; gap:.75rem; color:#f0f0f0; overflow-y:auto; position:relative; }
-  .zoom-close{ position:absolute; top:.7rem; right:.8rem; background:transparent; border:none; color:#aaa; font-size:1.2rem; cursor:pointer; padding:.2rem .4rem; border-radius:4px; line-height:1; }
+  /* v2.69：卡牌詳細 modal 整體等比放大 20%（Leon 反饋） */
+  .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.44rem; max-width:864px; width:96vw; max-height:92vh; display:flex; flex-direction:column; gap:.9rem; color:#f0f0f0; overflow-y:auto; position:relative; }
+  .zoom-close{ position:absolute; top:.7rem; right:.8rem; background:transparent; border:none; color:#aaa; font-size:1.44rem; cursor:pointer; padding:.24rem .48rem; border-radius:4px; line-height:1; }
   .zoom-close:hover{ background:#2a3a2a; color:#fff; }
   /* v2.32：放到 × 左邊（top-right），避免擋到卡牌圖。.zoom-close 大約 1.6–2rem 寬，所以 back 從 right:3rem 開始留一些間距。 */
-  .zoom-back{ position:absolute; top:.7rem; right:3rem; background:#2a4a6a; border:1px solid #4a6a8a; color:#cce; font-size:.82rem; cursor:pointer; padding:.25rem .6rem; border-radius:4px; line-height:1; }
+  .zoom-back{ position:absolute; top:.7rem; right:3.2rem; background:#2a4a6a; border:1px solid #4a6a8a; color:#cce; font-size:.98rem; cursor:pointer; padding:.3rem .72rem; border-radius:4px; line-height:1; }
   .zoom-back:hover{ background:#3a5a8a; color:#fff; }
-  .zoom-body{ display:flex; gap:1.25rem; align-items:flex-start; flex-wrap:wrap; }
-  .zoom-img{ width:260px; max-width:90vw; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.7); flex-shrink:0; }
-  .zoom-info{ flex:1; min-width:200px; display:flex; flex-direction:column; gap:.5rem; }
-  .zoom-name{ font-size:1.3rem; font-weight:700; color:#fff; }
-  .zoom-badges{ display:flex; gap:.35rem; flex-wrap:wrap; }
-  .badge{ padding:.18rem .5rem; border-radius:10px; font-size:.75rem; font-weight:600; }
+  .zoom-body{ display:flex; gap:1.5rem; align-items:flex-start; flex-wrap:wrap; }
+  .zoom-img{ width:312px; max-width:90vw; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.7); flex-shrink:0; }
+  .zoom-info{ flex:1; min-width:240px; display:flex; flex-direction:column; gap:.6rem; }
+  .zoom-name{ font-size:1.56rem; font-weight:700; color:#fff; }
+  .zoom-badges{ display:flex; gap:.42rem; flex-wrap:wrap; }
+  .badge{ padding:.22rem .6rem; border-radius:10px; font-size:.9rem; font-weight:600; }
   .hp-badge{ background:#2a5a2a; color:#8f8; border:1px solid #4a8a4a; }
   .type-badge{ color:#fff; }
   .sub-badge{ background:#2a3a5a; color:#aad; border:1px solid #4a5a8a; }
   .mark-badge{ background:#3a3a1a; color:#cc8; border:1px solid #6a6a2a; }
-  .zoom-meta{ font-size:.8rem; color:#888; }
-  .zoom-state{ background:#0e1a1e; border:1px solid #2a5a6a; border-radius:6px; padding:.5rem .7rem; font-size:.78rem; display:flex; flex-direction:column; gap:.3rem; }
-  .state-title{ font-weight:700; color:#8cf; font-size:.82rem; margin-bottom:.1rem; }
-  .state-row{ display:flex; gap:.5rem; align-items:baseline; line-height:1.3; }
-  .state-k{ color:#8aa; min-width:3.3rem; flex-shrink:0; }
-  .state-v{ color:#ddd; flex:1; display:flex; flex-wrap:wrap; gap:.25rem; align-items:baseline; }
-  .state-ecard{ display:inline-block; background:#2a4a6a; color:#ccf; padding:.08rem .4rem; border-radius:3px; font-size:.7rem; border:none; font-family:inherit; }
+  .zoom-meta{ font-size:.96rem; color:#888; }
+  .zoom-state{ background:#0e1a1e; border:1px solid #2a5a6a; border-radius:6px; padding:.6rem .84rem; font-size:.94rem; display:flex; flex-direction:column; gap:.36rem; }
+  .state-title{ font-weight:700; color:#8cf; font-size:.98rem; margin-bottom:.12rem; }
+  .state-row{ display:flex; gap:.6rem; align-items:baseline; line-height:1.3; }
+  .state-k{ color:#8aa; min-width:4rem; flex-shrink:0; }
+  .state-v{ color:#ddd; flex:1; display:flex; flex-wrap:wrap; gap:.3rem; align-items:baseline; }
+  .state-ecard{ display:inline-block; background:#2a4a6a; color:#ccf; padding:.1rem .48rem; border-radius:3px; font-size:.84rem; border:none; font-family:inherit; }
   .state-ecard.clickable{ cursor:pointer; }
   .state-ecard.clickable:hover{ background:#4a6a8a; color:#fff; }
   .state-tool{ display:inline-block; background:#3a3a10; color:#f0d080; padding:.08rem .4rem; border-radius:3px; font-size:.75rem; border:1px solid #6a5a20; font-family:inherit; cursor:pointer; }
@@ -3637,8 +3648,14 @@
   .wide-evo img{ width:70px; }
 
   /* ── Discard Modal ── */
-  .discard-modal{ max-width:760px; }
+  .discard-modal{ max-width:920px; }
   .discard-title{ margin:0 0 .6rem; color:#aaffaa; font-size:1.05rem; }
+  /* v2.69：棄牌區卡片圖示放大（Leon 反饋：原本太小考驗眼力） */
+  .discard-modal .sel-grid{ grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:.55rem; max-height:72vh; }
+  .discard-modal .sel-card{ padding:.4rem; font-size:.78rem; }
+  .discard-modal .sel-card img{ width:108px; }
+  .discard-modal .sel-name{ font-size:.74rem; }
+  .discard-modal .sel-hp{ font-size:.68rem; }
 
   /* ── Tool + Stadium ── */
   .tool-chip{ font-size:.6rem; color:#f0d080; background:#2a2a0a; border:1px solid #6a5a20; border-radius:3px; padding:.06rem .2rem; margin-top:.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

@@ -1,9 +1,135 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.68)  
+> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.69)  
 > 執行者：Claude Opus 4.7 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session clever-optimistic-ritchie (v2.69) — ACE SPEC 牌組上限 / 驅勁能量 supertype / 先攻可使用支援者 / 火箭隊能量撤退雙數 / UI 放大
+
+### 問題集（5 項 v2.68 未盡事項 + 新 bug）
+
+Leon 給出 5 件事：
+
+1. **#269（v2.68 AI_HANDOFF 指名未竟）**：ACE SPEC「一副牌最多 1 張」在 deck builder 還沒 guard。
+2. **#270（v2.68 AI_HANDOFF 指名未竟）**：驅勁能量 古代／未來 版本 supertype 被誤判為
+   `Pokemon`，導致 migrate-tags 的 supertype guard 擋下來、無法補 ACE SPEC tag。根因要回
+   scraper 補 fallback。
+3. **#271**：火箭隊的蘭斯 rulesText 明寫「這張卡在先攻玩家的最初回合也可使用」，但引擎把
+   它擋在先攻玩家 T1 不能打支援者的一般 gate 裡；同款敘述卡還有丹瑜，Leon 要求整批掃一次。
+4. **#272**：撤退時火箭隊能量可以算 2 顆無屬性能量，所以撤退 2 時棄 1 張火箭隊能量即可，
+   但現行引擎仍按「1 張 = 1 顆」算；包含 gate / auto-discard / 手動挑能量 UI。
+5. **#273（UI）**：
+   - (a) 棄牌區卡片圖示太小看眼花，雖可點開詳細，還是希望放大。
+   - (b) 卡牌詳細 modal（zoom-modal）再等比放大 20%（文字/邊框/圖片）。
+
+### 修法總覽
+
+#### #269 — ACE SPEC deck builder guard
+
+`src/lib/decks/validation.ts`：
+- 新增 `isAceSpec(card)`：`card.tags?.includes('ACE SPEC')`（v2.68 migrate-tags 已把所有
+  ACE SPEC Trainer+Energy 補進 tag）。
+- 新增 `aceSpecCount(deck, pool)`：跨 supertype 計算。
+- `maxCopies()` 對 ACE SPEC 回 1（單張上限 1）。
+- `validateDeck()` 加全牌組層驗證：合計 ACE SPEC >1 就報錯（含訊息列出所有 ACE SPEC 卡名）。
+
+`src/routes/decks/+page.svelte`：
+- `$derived` `activeAceSpecCount`。
+- `aceSpecBlocked()` helper：已有 ACE SPEC 且準備加的也是 ACE SPEC → true。
+- `addCard()` 早退 + 卡池 `+` 按鈕加 disabled + tooltip（保持 UI 一致感）。
+
+#### #270 — scraper 驅勁能量 fallback
+
+根因：官網這兩張卡（驅勁能量 古代 / 驅勁能量 未來）整個 detail 頁沒任何 h3 分類標
+籤，`classifyTrainerOrEnergyByH3` 回 null → `parse-card.js` 走最後 else 分支預設
+`supertype: 'Pokemon'`。
+
+修法（`scripts/scrape/parse-card.js`）— classifyTrainerOrEnergyByH3 回 null 時，加
+name-suffix fallback：
+```js
+} else if (/能量$/.test(card.name)) {
+  // 官網部分卡（驅勁能量 古代/未來）HTML 內完全沒有 h3 分類標籤 → fallback 到 Energy
+  card.supertype = 'Energy';
+  card.subtype = /基本/.test(card.name) ? 'Basic' : 'Special';
+}
+```
+
+直接 JSON 修正（3 個 set 共 6 筆，避免 Leon 重跑 scraper）：
+- `static/cards/SV5K.json` id 9764（驅勁能量 古代）
+- `static/cards/SV5M.json` id 9906（驅勁能量 未來）
+- `static/cards/SV8a.json` id 11682 / 11683 / 12435 / 12436
+
+全部從 `"supertype":"Pokemon","subtype":"Other"` 改成
+`"supertype":"Energy","subtype":"Special"`。migrate-tags 後續跑會補上 ACE SPEC tag。
+
+#### #271 — 先攻可使用的支援者 bypass
+
+`src/lib/game/engine.ts`：新增 rulesText 偵測 helper
+```ts
+export function canPlaySupporterOnFirstTurn(card: Card): boolean {
+  if (card.supertype !== 'Trainer' || card.subtype !== 'Supporter') return false;
+  return !!card.rulesText && /先攻玩家的最初回合/.test(card.rulesText);
+}
+```
+
+兩處支援者 gate 都套（applyAction PLAY_TRAINER + getPlayableTrainers）：只要該卡
+rulesText 命中，即使先攻玩家 T1 也准打。現存命中卡（整個卡池掃過 `rulesText`）：
+- 火箭隊的蘭斯（SV10 id 12845 / MC id 17206）
+- 火箭隊的羅傑（SV10 id 12928 — 同樣敘述，同樣是火箭隊系 supporter）
+- 丹瑜（MC id 17186 — rulesText 版本用「可在」而非「也可使用」，regex 都抓）
+
+附帶：`src/lib/game/effects.ts` 內火箭隊的蘭斯實裝的 stale comment 清掉（v2.43 類
+「歷史慣例」教訓，memory feedback_question_legacy_comments）。
+
+注意：Pokemon 特性/招式上類似敘述（SV11B 出道演出、SV7a/M2a/M1S/SV6 的招式等）
+不在本次範圍 — 它們是另外的 gate 機制（回合一起動即可使用招式 / 特性），需要另
+外實裝；此 helper 只處理 Trainer:Supporter。
+
+#### #272 — 火箭隊能量 = 2 顆無屬性（撤退）
+
+核心認知：`energyAttached: CardInstance[]` 是「物理卡」；實際「能量單位」要用
+`getEnergyUnits(cardId, pool)` 展開（v2.63 之後火箭隊能量的卡池定義已回 2 unit）。
+撤退 cost 是以 unit 計。
+
+`src/lib/game/engine.ts`：
+- 新 helper `totalEnergyUnits(attached, pool)`：把每張卡丟給 getEnergyUnits，
+  fallback length=0 時算 1（非特殊能量）。
+- `RETREAT` gate：`attacker.active.energyAttached.length < retreatCost` 改成
+  `totalEnergyUnits(...) < retreatCost`。
+- 自動棄能量改為 from-back 累積 unit：每丟一張就把 `paidUnits += units.length ?? 1`，
+  夠了就停（舊版是 `for i 0..retreatCost-1` 硬丟張數）。
+- pendingSelection.params 加 `retreatCost`；`minCount:1`、`maxCount:全部 energyAttached`，
+  讓 UI 能接受「1 張火箭隊能量」這種少於 retreatCost 的選擇。
+- `retreat-energy-discard` resolver 驗證以 units 為準：
+  `if (totalEnergyUnits(pickedInsts, pool) < retreatCost) return state;`
+- `canRetreat()` 改 `totalEnergyUnits >= cost`。
+
+`src/routes/game/+page.svelte`：
+- 匯入 `totalEnergyUnits`。
+- `selectionValid()` 在 `effectKey==='retreat-energy-discard'` 分支用 units 驗證，
+  替代舊的 size===retreatCost 僵硬判斷。
+
+#### #273 — UI 放大
+
+`src/routes/game/+page.svelte`：
+- 棄牌區 `.discard-modal .sel-grid` scoped 樣式：grid min 80→120px、gap 拉大、
+  img 70→108px，字級同步拉大；其他 modal 維持原本較小密度。
+- `.zoom-modal` 整套 20% 等比放大：padding 1.2→1.44rem、max-width 720→864px、
+  gap/字級/badge/meta/state 全部 ×1.2；img 260→312px；close/back 按鈕同步。
+
+### 驗證
+
+`npm run build`（/tmp/ptcg-work/repo）：✓ 無 TS/svelte 錯誤；client 12.69s 完成。
+
+### 未竟事項
+
+- 本版只處理 Trainer Supporter 類「先攻 T1 可打」；Pokemon 類（特性 出道演出 /
+  招式內「這個招式可在先攻玩家的最初回合使用」）需另外 gate 機制，未實裝。
+- scraper fallback 的 parse-card.js 改動已寫，但本版沒重跑 scraper — Leon 若之後
+  重爬任何 SV5K/SV5M/SV8a 以外的 set 發現更多 `能量$` 結尾異常卡，可直接生效。
 
 ---
 

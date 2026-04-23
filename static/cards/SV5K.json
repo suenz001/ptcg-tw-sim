@@ -148,8 +148,8 @@
   {
     "id": "9764",
     "name": "驅勁能量 古代",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Energy",
+    "subtype": "Special",
     "setCode": "SV5K",
     "collectorNumber": "065/071",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009764.png",

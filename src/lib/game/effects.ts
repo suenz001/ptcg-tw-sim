@@ -9212,8 +9212,10 @@ reg('火箭隊的雅典娜', (st, idx, pool) => {
 });
 
 // ---- 火箭隊的蘭斯（Supporter）- 搜最多 3 張基礎火箭隊寶可夢 ------------------
-//   備註：卡面「先攻玩家的最初回合也可使用」— 引擎的 supporter ban gate 只阻擋
-//   「先手第 1 回合的 Supporter」本來就不存在（台版 M2 沒有這條限制），所以無需特例。
+//   備註：卡面「先攻玩家的最初回合也可使用」— engine 的 isFirstTurn supporter gate
+//   會呼叫 canPlaySupporterOnFirstTurn(card) 檢查 rulesText 是否包含
+//   「先攻玩家的最初回合」，命中就 bypass。v2.69 起改成由 engine 統一處理，
+//   所以這裡不需要對這張卡做任何特例。
 regG('火箭隊的蘭斯', (st, idx, pool) =>
   st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);

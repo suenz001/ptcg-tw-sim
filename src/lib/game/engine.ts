@@ -83,6 +83,21 @@ export function isSelfKOEffectBlocked(
   return false;
 }
 
+// ── 先攻可使用的支援者（bypass 先手第 1 回合禁打支援者）── 輔助判定 ──────────
+// PTCG 規則：先攻玩家的第 1 回合不能使用支援者。但部分支援者卡面明寫「這張卡
+// 在先攻玩家的最初回合也可使用」或「這張卡可在先攻玩家的最初回合使用」。這些
+// 支援者可以 bypass 該 restriction。用 rulesText 偵測（官網兩種寫法都包含
+// 「先攻玩家的最初回合」字串，直接用這當 marker）。
+//
+// 目前已知適用：
+//   - 火箭隊的蘭斯（M2a 211/165 / MC 174/189 / SV10 重印）
+//   - 丹瑜（SV6 / SV8a / MC 重印）
+//   - 可能還有：未來有新卡附此文字會自動適用，不用改 code
+export function canPlaySupporterOnFirstTurn(card: Card): boolean {
+  if (card.supertype !== 'Trainer' || card.subtype !== 'Supporter') return false;
+  return !!card.rulesText && /先攻玩家的最初回合/.test(card.rulesText);
+}
+
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
 /** 產生一個輕量隨機 ID */
@@ -298,6 +313,25 @@ export function getEnergyUnits(cardId: string, pool: Map<string, Card>): EnergyU
   }
   // fallback：1 個 Colorless 單位
   return [{ types: ['Colorless'] }];
+}
+
+/**
+ * 計算一組附加能量的總「單位數」（用於撤退成本判定）。
+ * 基本能量 / 一般特殊能量：1 張 = 1 unit
+ * 火箭隊能量：1 張 = 2 units（等同 2 顆無屬性）
+ * 未登記能量 fallback：1 張 = 1 unit（getEnergyUnits 回 [{Colorless}]）
+ * 找不到卡的保底：1 unit（避免異常讓玩家卡死）。
+ */
+export function totalEnergyUnits(
+  attached: CardInstance[],
+  pool: Map<string, Card>
+): number {
+  let n = 0;
+  for (const e of attached) {
+    const units = getEnergyUnits(e.cardId, pool);
+    n += units.length === 0 ? 1 : units.length;
+  }
+  return n;
 }
 
 /**
@@ -808,11 +842,13 @@ function handlePlaying(
       ...attacker.bench,
     ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
     if (hasSkyPathR && isBasicPokemonCard(activeCard)) retreatCost = 0;
-    if (attacker.active.energyAttached.length < retreatCost) return state;
+    // v2.69：撤退成本用「能量單位」比對，不是卡片張數。火箭隊能量 1 張 = 2 units。
+    if (totalEnergyUnits(attacker.active.energyAttached, pool) < retreatCost) return state;
 
     // v2.63：若撤退需丟 ≥1 個能量，且附加能量包含多種屬性（或不同單位結構的特殊能量），
     // 開 pendingSelection 讓玩家選要丟哪幾個能量；否則沿用自動丟棄。
     // 判定「多屬性」：以每張能量的 type signature（sort 後 join）做 set，size ≥ 2 才問。
+    // v2.69：即使單一屬性，只要有多單位能量（火箭隊能量）混合單單位能量，仍需問玩家。
     if (retreatCost > 0 && attacker.active.energyAttached.length > 0) {
       const typeSig = (iid: string): string => {
         const inst = attacker.active!.energyAttached.find(e => e.iid === iid);
@@ -830,8 +866,10 @@ function handlePlaying(
             type: 'active-energy-discard',
             actorIdx: aIdx,
             sourcePlayerIdx: aIdx,
-            minCount: retreatCost,
-            maxCount: retreatCost,
+            // v2.69：改為 units-aware — minCount/maxCount 僅控制卡片張數邊界，
+            // 實際「總單位數 ≥ retreatCost」由 UI selectionValid 檢查 params.retreatCost。
+            minCount: 1,
+            maxCount: attacker.active.energyAttached.length,
             effectKey: 'retreat-energy-discard',
             params: { newActiveIid: action.newActiveIid, retreatCost },
           },
@@ -839,9 +877,21 @@ function handlePlaying(
       }
     }
 
-    // 自動丟棄能量（從後方取）— 單屬性 or retreatCost=0，無需詢問
-    const discardE = attacker.active.energyAttached.slice(-retreatCost);
-    const keepE = attacker.active.energyAttached.slice(0, attacker.active.energyAttached.length - retreatCost);
+    // 自動丟棄能量（單屬性 or retreatCost=0，無需詢問）。
+    // v2.69：從後方取，累積 units 直到 ≥ retreatCost；火箭隊能量 1 張 = 2 units。
+    let paidUnits = 0;
+    const keepE: CardInstance[] = [];
+    const discardE: CardInstance[] = [];
+    for (let i = attacker.active.energyAttached.length - 1; i >= 0; i--) {
+      const e = attacker.active.energyAttached[i];
+      if (paidUnits < retreatCost) {
+        discardE.unshift(e);
+        const units = getEnergyUnits(e.cardId, pool);
+        paidUnits += units.length === 0 ? 1 : units.length;
+      } else {
+        keepE.unshift(e);
+      }
+    }
     // v2.08：撤退回備戰時清除狀態旗標（灼傷/中毒/睡眠/混亂/麻痺 以及
     // 「離開戰鬥場前不能再用」類招式鎖），符合 PTCG 官方規則。
     const retreatingPoke = clearActiveEffects({ ...attacker.active, energyAttached: keepE });
@@ -880,7 +930,13 @@ function handlePlaying(
     // 支援者限制：每回合只能打 1 張
     if (trainerCard.subtype === 'Supporter' && attacker.supporterPlayedThisTurn) return state;
     // 先攻玩家第一回合不能使用支援者（PTCG 2020+ 規則）
-    if (trainerCard.subtype === 'Supporter' && state.isFirstTurn && aIdx === state.firstPlayerIdx) return state;
+    // 卡面「先攻玩家的最初回合也可使用」的支援者可 bypass（例：火箭隊的蘭斯、丹瑜）
+    if (
+      trainerCard.subtype === 'Supporter' &&
+      state.isFirstTurn &&
+      aIdx === state.firstPlayerIdx &&
+      !canPlaySupporterOnFirstTurn(trainerCard)
+    ) return state;
     // Wave 39：玩家級物品 / 支援者鎖（例：含羞苞｜癢癢花粉、吼叫尾ex｜絕叫、電蜘蛛ex｜雷擊石）
     if (trainerCard.subtype === 'Item' && attacker.cantPlayItemThisTurn) return state;
     if (trainerCard.subtype === 'Supporter' && attacker.cantPlaySupporterThisTurn) return state;
@@ -2301,7 +2357,8 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
     ...player.bench,
   ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
   if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
-  return player.active.energyAttached.length >= cost;
+  // v2.69：以能量單位計算（火箭隊能量 1 張 = 2 units）。
+  return totalEnergyUnits(player.active.energyAttached, pool) >= cost;
 }
 
 /**
@@ -2319,8 +2376,13 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       const isTrainer = c.supertype === 'Trainer';
       if (!isTool && !isTrainer) return false;
       if (c.subtype === 'Supporter' && player.supporterPlayedThisTurn) return false;
-      // 先攻玩家第一回合禁用支援者
-      if (c.subtype === 'Supporter' && state.isFirstTurn && state.activePlayerIndex === state.firstPlayerIdx) return false;
+      // 先攻玩家第一回合禁用支援者（卡面「先攻最初回合也可使用」bypass）
+      if (
+        c.subtype === 'Supporter' &&
+        state.isFirstTurn &&
+        state.activePlayerIndex === state.firstPlayerIdx &&
+        !canPlaySupporterOnFirstTurn(c)
+      ) return false;
       // 競技場：一回合每位玩家只能打出一張
       if (c.subtype === 'Stadium' && (state.stadiumPlayedThisTurn?.[state.activePlayerIndex] ?? false)) return false;
       // v2.43：PTCG 規則 — 同名競技場不能覆蓋自己。
@@ -2433,15 +2495,19 @@ RESOLVERS.set('retreat-energy-discard', (state, actorIdx, selectedIids, params, 
   const attacker = { ...players[actorIdx] };
   if (!attacker.active) return state;
 
-  // 驗證選取張數；保底避免異常 resolve
+  // v2.69：驗證「選取能量的總 units ≥ retreatCost」（火箭隊能量 1 張 = 2 units）。
   const picked = new Set(selectedIids);
-  if (picked.size !== retreatCost) return state;
+  if (picked.size === 0) return state;
 
   // 驗證每個 iid 都存在於 energyAttached
   const allIids = new Set(attacker.active.energyAttached.map(e => e.iid));
   for (const iid of picked) {
     if (!allIids.has(iid)) return state;
   }
+
+  // 計算選中能量的總單位數
+  const pickedInsts = attacker.active.energyAttached.filter(e => picked.has(e.iid));
+  if (totalEnergyUnits(pickedInsts, pool) < retreatCost) return state;
 
   const bIdx = attacker.bench.findIndex(c => c.iid === newActiveIid);
   if (bIdx < 0) return state;

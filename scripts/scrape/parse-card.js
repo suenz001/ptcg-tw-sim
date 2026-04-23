@@ -276,6 +276,14 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
     if (classified) {
       card.supertype = classified.supertype;
       card.subtype = classified.subtype;
+    } else if (/能量$/.test(card.name)) {
+      // v2.69：官網部分卡（例：驅勁能量古代/未來版）HTML 內完全沒有 h3 分類標籤，
+      // classifyTrainerOrEnergyByH3 會回 null → 落回 default supertype='Pokemon'，
+      // 下游 migrate-tags.js 的 supertype guard 也因此擋下 ACE SPEC 補 tag。
+      // fallback：卡名以「能量」結尾 → 視為能量卡。基本能量大多帶 h3 所以走前面分支，
+      // 此 fallback 預設為 Special（ACE SPEC / 一般特殊能量皆落此範圍）。
+      card.supertype = 'Energy';
+      card.subtype = /基本/.test(card.name) ? 'Basic' : 'Special';
     }
     // Full rules text lives in .skillEffect (.skill > .skillEffect)
     const effectParts = $('.skill .skillEffect')

@@ -12,7 +12,7 @@
   } from '$lib/decks/storage';
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import type { Deck } from '$lib/decks/types';
-  import { validateDeck, maxCopies, isBasicEnergy } from '$lib/decks/validation';
+  import { validateDeck, maxCopies, isBasicEnergy, isAceSpec, aceSpecCount } from '$lib/decks/validation';
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
   import { VERSION } from '$lib/version';
   import { auth } from '$lib/firebase';
@@ -98,6 +98,18 @@
     }
     return lines.join('\n');
   });
+
+  /** 目前 active 牌組的 ACE SPEC 總張數（跨卡名）。UI 用來禁用 + 按鈕。 */
+  const activeAceSpecCount = $derived(active ? aceSpecCount(active, poolById) : 0);
+
+  /** 在 list / modal 的「+」按鈕決定是否禁用（已達 ACE SPEC 限額 + 非同一張）。 */
+  function aceSpecBlocked(card: Card): boolean {
+    if (!isAceSpec(card)) return false;
+    if (activeAceSpecCount <= 0) return false;
+    // 已經是這張 ACE SPEC 本身 → 由 maxCopies=1 的 pvCount >= pvMax 負責擋；不重複擋。
+    const already = active?.entries.find((e) => e.cardId === card.id);
+    return !already || already.count <= 0;
+  }
 
   /** 各類型張數統計，用於牌組摘要列 */
   const deckStats = $derived.by(() => {
@@ -264,6 +276,11 @@
     const currentCount = i >= 0 ? entries[i].count : 0;
     const max = maxCopies(card);
     if (currentCount >= max) return;
+    // ACE SPEC：整副牌只能 1 張（不管同名還是異名），擋在這裡。
+    if (isAceSpec(card) && aceSpecCount(active, poolById) >= 1) {
+      alert('一副牌最多只能放 1 張 ACE SPEC 卡。');
+      return;
+    }
     if (i >= 0) entries[i] = { ...entries[i], count: currentCount + 1 };
     else entries.push({ cardId: card.id, count: 1 });
     const updated = { ...active, entries };
@@ -801,7 +818,11 @@
                   {/if}
                 </div>
               </button>
-              <button class="icon add-btn" onclick={() => addCard(card)} title={isPresetActive ? '預組唯讀' : '加入牌組'} disabled={isPresetActive}>+</button>
+              <button
+                class="icon add-btn"
+                onclick={() => addCard(card)}
+                title={isPresetActive ? '預組唯讀' : aceSpecBlocked(card) ? '一副牌最多 1 張 ACE SPEC' : '加入牌組'}
+                disabled={isPresetActive || aceSpecBlocked(card)}>+</button>
             </li>
           {/each}
         </ul>
@@ -931,7 +952,11 @@
             {#if active}
               <span class="pv-count-label">牌組中：<strong>{pvCount} / {pvMax}</strong></span>
               <button class="icon" onclick={() => removeCard(pv.id)} disabled={isPresetActive || pvCount <= 0}>−</button>
-              <button class="icon" onclick={() => addCard(pv)} disabled={isPresetActive || (!isBasicEnergy(pv) && pvCount >= pvMax)}>+</button>
+              <button
+                class="icon"
+                onclick={() => addCard(pv)}
+                title={aceSpecBlocked(pv) ? '一副牌最多 1 張 ACE SPEC' : ''}
+                disabled={isPresetActive || (!isBasicEnergy(pv) && pvCount >= pvMax) || aceSpecBlocked(pv)}>+</button>
               {#if isPresetActive}<span class="pv-count-label muted" style="margin-left:.5rem">（預組唯讀）</span>{/if}
             {:else}
               <span class="pv-count-label muted">請先選擇牌組</span>

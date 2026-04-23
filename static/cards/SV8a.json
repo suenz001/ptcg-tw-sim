@@ -6281,8 +6281,8 @@
   {
     "id": "11682",
     "name": "驅勁能量 古代",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Energy",
+    "subtype": "Special",
     "setCode": "SV8a",
     "collectorNumber": "157/187",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011682.png",
@@ -6298,8 +6298,8 @@
   {
     "id": "11683",
     "name": "驅勁能量 未來",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Energy",
+    "subtype": "Special",
     "setCode": "SV8a",
     "collectorNumber": "158/187",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011683.png",
@@ -13046,8 +13046,8 @@
   {
     "id": "12435",
     "name": "驅勁能量 古代",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Energy",
+    "subtype": "Special",
     "setCode": "SV8a",
     "collectorNumber": "157/187",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012435.png",
@@ -13063,8 +13063,8 @@
   {
     "id": "12436",
     "name": "驅勁能量 未來",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Energy",
+    "subtype": "Special",
     "setCode": "SV8a",
     "collectorNumber": "158/187",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012436.png",
