@@ -1,9 +1,44 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.71)  
+> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.72)  
 > 執行者：Claude Opus 4.7 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session clever-optimistic-ritchie (v2.72) — 訓練家冠名 hotfix（白名單收緊）
+
+### 問題
+v2.71 把 Trainer 卡只要 `name` 開頭「XX的」就打 '訓練家冠名' tag（除了「陳舊的」化石 黑名單），結果像「暗碼迷的解讀」「松葉的信心」「老大的指令」「水蓮的照顧」「博士的研究」「艾莉絲的鬥志」這些**只有支援者、訓練家角色沒有對應寶可夢**的卡也錯誤打了 tag。
+
+Leon 糾正：「訓練家冠名的訓練家通常至少都會有寶可夢，暗碼迷沒有寶可夢，所以只是一般的支援者名稱而已。」
+
+### 根因
+用了寬鬆的 regex pattern 而非 ground-truth 白名單。卡池裡實際有「XX的」寶可夢的訓練家只有 14 人（N / 大吾 / 奇樹 / 小霞 / 探險家 / 派帕 / 火箭隊 / 瑪俐 / 竹蘭 / 莉佳 / 莉莉艾 / 赫普 / 阿響 / 青木），其他「XX的」開頭的 Trainer 卡只是支援者角色的普通命名，不是 PTCG 規則上的冠名。
+
+v2.62 `migrate-tags.js` 已有 13 人白名單，本版把「探險家」加進來（探險家的嚮導 SV8a 12449 是 Pokemon/Other 類型），變 14 人。
+
+### 主修
+**新 migration — `scripts/migrate-trainer-branded-fix.mjs`**：從 Pokemon 反推 14 人白名單，掃所有 Trainer 冠名 tag，owner 不在白名單的移除。跑完結果：
+```
+Derived 14 real trainer-branded owners from Pokemon
+Removed tags from 107 Trainer cards across 24 files
+```
+
+被移除 tag 的 28 種訓練家卡（依張數排序）：
+- 艾莉絲的鬥志×10, 暗碼迷的解讀/松葉的信心/水蓮的照顧/白露的真心/老大的指令/阿塞蘿拉的惡作劇/阿杏的秘招×6, 希特隆的機智/阿克羅瑪的執著×5, 博士的研究/滿充的體貼/琉琪亞的展示/阿蜜的目光/馬志士的交易×4, 帕底亞的夥伴/庫瑟洛斯奇的企圖/鳴依的勉勵×3, 主持人的帶動/可怕的哥哥/奧琳博士的氣魄/小剛的發掘/弗圖博士的劇本/空手道王的演練×2, AZ的平和/越橘的一步棋/霍米加的演奏/老大的指令（烏羽）×1
+
+**Scraper — `parse-card.js`**：Trainer 分支從「pattern + 黑名單」改為「14 人白名單」判定
+**migrate-tags.js**：TRAINER_OWNERS 13 → 14 人（加入探險家）
+**migrate-trainer-branded.mjs**：同步白名單 + 判定邏輯
+
+### 驗證
+- 掃所有 Trainer 冠名 tag：73 張全部符合白名單（暗碼迷/松葉/博士/老大 等 28 種 107 張已乾淨移除）
+- `npm run build` 本機過
+
+### commit / push
+- commit hash：（見下方）
 
 ---
 

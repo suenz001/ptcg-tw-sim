@@ -30,17 +30,13 @@ const CARDS_DIR = path.resolve(__dirname, '..', 'static', 'cards');
 
 // 訓練家角色白名單（Pokemon 冠名必匹配其中之一才算訓練家寶可夢）。
 // 保持與 scripts/migrate-tags.js 的 TRAINER_OWNERS 同步。
-const POKEMON_OWNERS = [
-  '奇樹', '阿響', '竹蘭', '火箭隊', 'N', '莉莉艾',
-  '赫普', '瑪俐', '大吾', '莉佳', '小霞', '派帕', '青木'
+// v2.71 hotfix: 14 人白名單（含探險家）。Leon 的定義是「該訓練家要有對應寶可夢」，
+// 所以 Trainer 分支也改用白名單判定（原本的「XX的」開頭 + 黑名單模式太寬）。
+const TRAINER_BRANDED_OWNERS = [
+  'N', '大吾', '奇樹', '小霞', '探險家', '派帕', '火箭隊',
+  '瑪俐', '竹蘭', '莉佳', '莉莉艾', '赫普', '阿響', '青木'
 ];
-const POKEMON_OWNER_RE = new RegExp('^(' + POKEMON_OWNERS.join('|') + ')的');
-
-// Trainer 冠名：「XX的」開頭都算，但排除這些形容詞性/地形性 prefix（非訓練家）
-const TRAINER_NAME_BLACKLIST = [
-  /^陳舊的/,         // 陳舊的 XX 化石
-  /^飄浮泡泡/,       // 飄浮泡泡 太陽的樣子（Pokemon，但有時候誤列）
-];
+const BRANDED_OWNER_RE = new RegExp('^(' + TRAINER_BRANDED_OWNERS.join('|') + ')的');
 
 const OLD_TAG = '訓練家的寶可夢';
 const NEW_TAG = '訓練家冠名';
@@ -49,21 +45,17 @@ function isPokemonTrainerBranded(card) {
   const raw = card.name || '';
   // 1. 原 name 帶 <XX的>
   if (/^<[^<>]+的>/.test(raw)) return true;
-  // 2. Strip 後名稱匹配 owner 白名單
+  // 2. Strip 後名稱匹配 14 人白名單
   const stripped = raw.replace(/[<>]/g, '');
-  return POKEMON_OWNER_RE.test(stripped);
+  return BRANDED_OWNER_RE.test(stripped);
 }
 
 function isTrainerCardBranded(card) {
   if (card.supertype !== 'Trainer') return false;
   const name = (card.name || '').replace(/[<>]/g, '');
-  // 必須是 [XX]的 開頭（且中間不能有空白/括號）
-  if (!/^[^<>\s]+的/.test(name)) return false;
-  // 黑名單（形容詞性、非訓練家）
-  for (const re of TRAINER_NAME_BLACKLIST) {
-    if (re.test(name)) return false;
-  }
-  return true;
+  // 必須匹配白名單（暗碼迷/松葉/老大/博士 等有「XX的」格式但無對應寶可夢的
+  // 訓練家不算冠名，不打 tag — 見 TRAINER_BRANDED_OWNERS 註解）
+  return BRANDED_OWNER_RE.test(name);
 }
 
 async function main() {

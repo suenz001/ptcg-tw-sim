@@ -285,15 +285,23 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
   } else {
     // Trainer or Energy
     const rawTrainerName = $('h1').first().text().trim();
-    // v2.71：Trainer 冠名卡（如「赫普的包包」「N的ＰＰ提升劑」「老大的指令」）
-    // 打 '訓練家冠名' tag。判定：name 開頭「XX的」且非形容詞性黑名單。
-    // 能量卡不會冠名，故只對 Trainer supertype 判定。
-    const TRAINER_PREFIX_BLACKLIST = [/^陳舊的/]; // 化石物品（不是訓練家）
-    const isTrainerBranded = (name) => {
-      if (!/^[^<>\s]+的/.test(name)) return false;
-      for (const re of TRAINER_PREFIX_BLACKLIST) if (re.test(name)) return false;
-      return true;
-    };
+    // v2.71：Trainer 冠名卡（如「赫普的包包」「N的ＰＰ提升劑」「瑪俐的長毛巨魔組合」）
+    // 打 '訓練家冠名' tag。
+    //
+    // 定義（Leon 定的）：冠名訓練家 = 該訓練家**至少有一隻對應的寶可夢**。像
+    // 「暗碼迷的解讀」「松葉的信心」「水蓮的照顧」「老大的指令」「博士的研究」
+    // 雖然也是「XX的」格式，但卡池裡沒有「暗碼迷的XX」「松葉的XX」「老大的XX」
+    // 寶可夢，所以只是「支援者的角色名稱」，不算冠名。
+    //
+    // 白名單 14 人：從 static/cards 的 Pokemon 反推（scripts/migrate-trainer-
+    // branded-fix.mjs 能自動重算）。未來新 set 若出現新的「XX的寶可夢」系列，
+    // 記得把 XX 加到這份白名單 + migrate-tags.js 的 TRAINER_OWNERS。
+    const TRAINER_BRANDED_OWNERS = [
+      'N', '大吾', '奇樹', '小霞', '探險家', '派帕', '火箭隊',
+      '瑪俐', '竹蘭', '莉佳', '莉莉艾', '赫普', '阿響', '青木'
+    ];
+    const TRAINER_BRANDED_RE = new RegExp('^(' + TRAINER_BRANDED_OWNERS.join('|') + ')的');
+    const isTrainerBranded = (name) => TRAINER_BRANDED_RE.test(name);
     card.name = rawTrainerName.replace(/[<>]/g, '');
     const classified = classifyTrainerOrEnergyByH3($);
     if (classified) {
