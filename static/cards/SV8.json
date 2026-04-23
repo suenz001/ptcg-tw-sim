@@ -4100,7 +4100,7 @@
     "id": "11278",
     "name": "希望護身符",
     "supertype": "Trainer",
-    "subtype": "Tool",
+    "subtype": "PokemonTool",
     "setCode": "SV8",
     "collectorNumber": "098/106",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011278.png",

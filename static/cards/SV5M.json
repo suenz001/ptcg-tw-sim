@@ -2763,7 +2763,7 @@
     "id": "9905",
     "name": "英雄斗篷",
     "supertype": "Trainer",
-    "subtype": "Tool",
+    "subtype": "PokemonTool",
     "setCode": "SV5M",
     "collectorNumber": "064/071",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009905.png",

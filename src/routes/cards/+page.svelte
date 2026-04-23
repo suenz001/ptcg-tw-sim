@@ -22,8 +22,8 @@
 
   // ─── Single-set browser state ────────────────────────────────────────
   // 分類 key 對應 (supertype, subtype) — 跟 sim engine 一致：
-  //   - Pokemon: supertype='Pokemon' && subtype !== 'Other'
-  //   - Tool (寶可夢道具): supertype='Pokemon' && subtype === 'Other'
+  //   - Pokemon: supertype='Pokemon'
+  //   - Tool (寶可夢道具): supertype='Trainer' && subtype === 'PokemonTool'
   //   - Supporter / Item / Stadium: supertype='Trainer' && 對應 subtype
   //   - Energy: supertype='Energy'
   type CategoryKey = 'Pokemon' | 'Supporter' | 'Item' | 'Tool' | 'Stadium' | 'Energy';
@@ -40,8 +40,9 @@
 
   function cardCategory(c: Card): CategoryKey {
     if (c.supertype === 'Energy') return 'Energy';
-    if (c.supertype === 'Pokemon') return c.subtype === 'Other' ? 'Tool' : 'Pokemon';
+    if (c.supertype === 'Pokemon') return 'Pokemon';
     // Trainer
+    if (c.subtype === 'PokemonTool') return 'Tool';
     if (c.subtype === 'Supporter') return 'Supporter';
     if (c.subtype === 'Stadium') return 'Stadium';
     return 'Item';
@@ -88,7 +89,7 @@
    *  直接用即可，不再需要 runtime 推斷。
    *  fallback：若 stage 欄位缺失（老資料未跑 migration），用 subtype。*/
   function cardStage(c: Card): StageKey | null {
-    if (c.supertype !== 'Pokemon' || c.subtype === 'Other') return null;
+    if (c.supertype !== 'Pokemon') return null;
     // v2.75: 直接讀 stage 欄位
     if (c.stage) return c.stage;
     // fallback for un-migrated data

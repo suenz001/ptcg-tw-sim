@@ -2409,7 +2409,7 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
     .filter(inst => {
       const c = pool.get(inst.cardId);
       if (!c) return false;
-      const isTool = c.supertype === 'Pokemon' && c.subtype === 'Other';
+      const isTool = c.supertype === 'Trainer' && c.subtype === 'PokemonTool';
       const isTrainer = c.supertype === 'Trainer';
       if (!isTool && !isTrainer) return false;
       if (c.subtype === 'Supporter' && player.supporterPlayedThisTurn) return false;

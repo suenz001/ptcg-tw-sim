@@ -189,7 +189,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'GrassBasicOrGrassEnergy:TOP7') {
           const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);
           if (!top7.has(c.iid)) return false;
-          if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
+          if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
           if (card.supertype === 'Energy' && card.subtype === 'Basic') {
             if (card.pokemonType === 'Grass') return true;
             if (card.name.includes('【草】')) return true;
@@ -201,7 +201,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'Stage1')          return card.supertype === 'Pokemon' && card.subtype === 'Stage1';
         if (f === 'Stage2')          return card.supertype === 'Pokemon' && card.subtype === 'Stage2';
         if (f === 'Evolution')       return card.supertype === 'Pokemon' && !!card.evolvesFrom;
-        if (f === 'PsychicBasic')    return card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Psychic';
+        if (f === 'PsychicBasic')    return card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Psychic';
         if (f === 'TOP8') {
           const top8 = new Set<string>((sel.params?.top8Iids as string[]) ?? []);
           return top8.has(c.iid);
@@ -210,7 +210,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const top2 = new Set<string>((sel.params?.top2Iids as string[]) ?? []);
           return top2.has(c.iid);
         }
-        if (f === 'Pokemon')         return card.supertype === 'Pokemon' && card.subtype !== 'Other';
+        if (f === 'Pokemon')         return card.supertype === 'Pokemon';
         if (f === 'Energy')          return card.supertype === 'Energy';
         if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';
         if (f === 'ex')              return card.supertype === 'Pokemon' && card.subtype === 'ex';
@@ -219,14 +219,14 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'Item')            return card.supertype === 'Trainer' && card.subtype === 'Item';
         if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
         if (f === 'Stadium')         return card.supertype === 'Trainer' && card.subtype === 'Stadium';
-        if (f === 'Tool')            return card.supertype === 'Pokemon' && card.subtype === 'Other';
+        if (f === 'Tool')            return card.supertype === 'Trainer' && card.subtype === 'PokemonTool';
         if (f === 'Trainer')         return card.supertype === 'Trainer';
         // Wave 42 新增 filter
         if (f === 'CynthiaPokemon') {
-          return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.name.includes('竹蘭的');
+          return card.supertype === 'Pokemon' && card.name.includes('竹蘭的');
         }
         if (f === 'FightingBasicOrFightingEnergy') {
-          if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
+          if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
           if (card.supertype === 'Energy' && card.subtype === 'Basic') {
             if (card.pokemonType === 'Fighting') return true;
             if (card.name.includes('【鬥】') || card.name.includes('【格】')) return true;
@@ -234,7 +234,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           return false;
         }
         if (f === 'PokemonNonRule') {
-          if (card.supertype !== 'Pokemon' || card.subtype === 'Other') return false;
+          if (card.supertype !== 'Pokemon') return false;
           const isRule = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX');
           return !isRule;
         }
@@ -243,13 +243,13 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           return card.supertype === 'Trainer' && card.subtype === 'Supporter' && card.name.includes('火箭隊');
         }
         if (f === 'RocketBasic') {
-          return card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.name.includes('火箭隊的');
+          return card.supertype === 'Pokemon' && !card.evolvesFrom && card.name.includes('火箭隊的');
         }
         if (f === 'AnyTrainer') {
           return card.supertype === 'Trainer';
         }
         if (f === 'GrassBasicOrGrassEnergy') {
-          if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
+          if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
           if (card.supertype === 'Energy' && card.subtype === 'Basic') {
             if (card.pokemonType === 'Grass') return true;
             if (card.name.includes('【草】')) return true;
@@ -382,15 +382,15 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       let discard = actorPlayer.discard.filter(c => {
         const card = pool.get(c.cardId);
         if (!card) return false;
-        if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon' && card.subtype !== 'Other') || card.supertype === 'Energy';
+        if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon') || card.supertype === 'Energy';
         if (f === 'PokemonOrBasicEnergy') {
           // v2.43：夜間擔架用 — 寶可夢或基本能量（排除 Special Energy / Pokemon 道具）
-          if (card.supertype === 'Pokemon' && card.subtype !== 'Other') return true;
+          if (card.supertype === 'Pokemon') return true;
           if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
           return false;
         }
         if (f === 'PokemonNonExOrBasicEnergy') {
-          if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.subtype !== 'ex') return true;
+          if (card.supertype === 'Pokemon' && card.subtype !== 'ex') return true;
           if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
           return false;
         }

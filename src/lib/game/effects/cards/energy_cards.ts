@@ -46,7 +46,7 @@ SPECIAL_ENERGY_ATTACH.set('感應【超】能量', (st, idx, targetIid, pool) =>
   // 牌庫要有基礎【超】寶可夢
   const hasPsychicBasic = p.deck.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.subtype !== 'Other'
+    return card?.supertype === 'Pokemon'
       && !card.evolvesFrom && card.pokemonType === 'Psychic';
   });
   if (!hasPsychicBasic) {

@@ -883,7 +883,7 @@
             if (!top7.has(c.iid)) return false;
             const card = pool.get(c.cardId);
             if (!card) return false;
-            if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
+            if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
             if (card.supertype === 'Energy' && card.subtype === 'Basic') {
               if (card.pokemonType === 'Grass') return true;
               if (card.name.includes('【草】')) return true;
@@ -899,8 +899,8 @@
           if (f === 'Stage1')     return card.supertype === 'Pokemon' && card.subtype === 'Stage1';
           if (f === 'Stage2')     return card.supertype === 'Pokemon' && card.subtype === 'Stage2';
           if (f === 'Evolution')  return card.supertype === 'Pokemon' && !!card.evolvesFrom;
-          if (f === 'PsychicBasic') return card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Psychic';
-          if (f === 'Pokemon')    return card.supertype === 'Pokemon' && card.subtype !== 'Other';
+          if (f === 'PsychicBasic') return card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Psychic';
+          if (f === 'Pokemon')    return card.supertype === 'Pokemon';
           if (f === 'Energy')     return card.supertype === 'Energy';
           if (f === 'BasicEnergy') return card.supertype === 'Energy' && card.subtype === 'Basic';
           if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
@@ -908,20 +908,20 @@
           if (f === 'TeraPokemon') return card.supertype === 'Pokemon' && !!card.tags?.includes('太晶');
           if (f === 'Item')       return card.supertype === 'Trainer' && card.subtype === 'Item';
           if (f === 'Supporter')  return card.supertype === 'Trainer' && card.subtype === 'Supporter';
-          if (f === 'Tool')       return card.supertype === 'Pokemon' && card.subtype === 'Other';
+          if (f === 'Tool')       return card.supertype === 'Trainer' && card.subtype === 'PokemonTool';
           if (f === 'Stadium')    return card.supertype === 'Trainer' && card.subtype === 'Stadium';
           if (f === 'Trainer')    return card.supertype === 'Trainer';
           // Wave 42 新增 filter
           if (f === 'CynthiaPokemon') {
-            return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.name.includes('竹蘭的');
+            return card.supertype === 'Pokemon' && card.name.includes('竹蘭的');
           }
           // Wave 44 (v2.21)：尖釘鎮道館用 — 「瑪俐的」寶可夢
           if (f === 'MarniePokemon') {
-            return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.name.startsWith('瑪俐的');
+            return card.supertype === 'Pokemon' && card.name.startsWith('瑪俐的');
           }
           if (f === 'FightingBasicOrFightingEnergy') {
             // 基本【鬥】寶可夢：pokemonType === 'Fighting' 且為基礎
-            if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
+            if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
             // 基本【鬥】能量：pokemonType 有時缺漏（MC 集能量卡），所以名字含【鬥】/【格】也算
             if (card.supertype === 'Energy' && card.subtype === 'Basic') {
               if (card.pokemonType === 'Fighting') return true;
@@ -930,7 +930,7 @@
             return false;
           }
           if (f === 'PokemonNonRule') {
-            if (card.supertype !== 'Pokemon' || card.subtype === 'Other') return false;
+            if (card.supertype !== 'Pokemon') return false;
             const isRule = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX');
             return !isRule;
           }
@@ -939,14 +939,14 @@
             return card.supertype === 'Trainer' && card.subtype === 'Supporter' && card.name.includes('火箭隊');
           }
           if (f === 'RocketBasic') {
-            return card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.name.includes('火箭隊的');
+            return card.supertype === 'Pokemon' && !card.evolvesFrom && card.name.includes('火箭隊的');
           }
           if (f === 'AnyTrainer') {
             return card.supertype === 'Trainer';
           }
           if (f === 'GrassBasicOrGrassEnergy') {
             // 捕蟲組合：基本【草】寶可夢 or 基本【草】能量
-            if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
+            if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
             if (card.supertype === 'Energy' && card.subtype === 'Basic') {
               if (card.pokemonType === 'Grass') return true;
               if (card.name.includes('【草】')) return true;
@@ -956,7 +956,7 @@
           if (f.startsWith('Pokemon:')) {
             // 指定屬性的寶可夢，例 'Pokemon:Lightning'
             const t = f.slice(8);
-            return card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.pokemonType === t;
+            return card.supertype === 'Pokemon' && card.pokemonType === t;
           }
           if (f.startsWith('Energy:')) {
             const t = f.slice(7);
@@ -1030,16 +1030,16 @@
         return src.discard.filter(c => {
           const card = pool.get(c.cardId);
           if (!card) return false;
-          if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon' && card.subtype !== 'Other') || card.supertype === 'Energy';
+          if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon') || card.supertype === 'Energy';
           if (f === 'PokemonOrBasicEnergy') {
             // v2.43：夜間擔架用 — 寶可夢卡或「基本」能量卡（排除 Special Energy / Pokemon 道具）
-            if (card.supertype === 'Pokemon' && card.subtype !== 'Other') return true;
+            if (card.supertype === 'Pokemon') return true;
             if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
             return false;
           }
           if (f === 'PokemonNonExOrBasicEnergy') {
             // 水蓮的照顧：寶可夢（不含道具 subtype=Other 與規則盒 subtype=ex）+ 基本能量
-            if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.subtype !== 'ex') return true;
+            if (card.supertype === 'Pokemon' && card.subtype !== 'ex') return true;
             if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
             return false;
           }
@@ -1051,7 +1051,7 @@
             // 奇跡修正檔 / 月光丘陵：只基本【超】能量。排除富裕能量/感應【超】等 Special Energy。
             return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
           }
-          if (f === 'Pokemon')         return card.supertype === 'Pokemon' && card.subtype !== 'Other';
+          if (f === 'Pokemon')         return card.supertype === 'Pokemon';
           if (f === 'Trainer')         return card.supertype === 'Trainer';
           if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
           if (f.startsWith('Energy:')) {
@@ -2220,7 +2220,7 @@
           {@const isEnergyCard=c.supertype==='Energy'}
           {@const isBasicCard=isBasicPokemonCard(c)}
           {@const isTrainerCard=c.supertype==='Trainer'}
-          {@const isToolCard=c.supertype==='Pokemon'&&c.subtype==='Other'}
+          {@const isToolCard=c.supertype === 'Trainer' && c.subtype === 'PokemonTool'}
           {@const isEvolutionCard=c.supertype==='Pokemon'&&!!c.evolvesFrom}
           {@const canEnergy=isEnergyCard&&game?.phase==='playing'&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()}
           {@const canBasicPlay=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()&&game?.phase==='playing'}

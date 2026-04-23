@@ -1969,7 +1969,7 @@ reg('反擊捕捉器', (st, idx) => {
 regG('釣竿MAX', (st, idx, pool) =>
   st.players[idx].discard.some(c => {
     const card = pool.get(c.cardId);
-    if (card?.supertype === 'Pokemon' && card.subtype !== 'Other') return true;
+    if (card?.supertype === 'Pokemon') return true;
     if (card?.supertype === 'Energy' && card.subtype === 'Basic') return true;
     return false;
   })
@@ -5350,7 +5350,7 @@ regPost('呆呆獸|垂尾巴', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const cand = p.discard.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.subtype !== 'Other';
+    return card?.supertype === 'Pokemon';
   });
   if (cand.length === 0) return addLog(state, '垂尾巴：棄牌區沒有寶可夢', aIdx);
   const s = addLog(state, '垂尾巴：從棄牌區選 1 張寶可夢加手牌', aIdx);
@@ -6526,7 +6526,7 @@ regPost('洛托姆|粉碎脈衝', (state, aIdx, pool) => {
     if (!card) return false;
     // 「物品」= Trainer/Item, 「寶可夢道具」= Pokemon/Other (tool)
     const isItem = card.supertype === 'Trainer' && card.subtype === 'Item';
-    const isTool = card.supertype === 'Pokemon' && card.subtype === 'Other';
+    const isTool = card.supertype === 'Trainer' && card.subtype === 'PokemonTool';
     return isItem || isTool;
   });
   if (toDiscard.length === 0) {
@@ -7136,7 +7136,7 @@ function discardSearchToHandPost(max: number, filter: string, label: string): At
     const cand = p.discard.filter(c => {
       const card = pool.get(c.cardId);
       if (!card) return false;
-      if (filter === 'Pokemon') return card.supertype === 'Pokemon' && card.subtype !== 'Other';
+      if (filter === 'Pokemon') return card.supertype === 'Pokemon';
       if (filter === 'BasicEnergy') return card.supertype === 'Energy' && card.subtype === 'Basic';
       if (filter.startsWith('Energy:')) {
         const t = filter.slice(7);
@@ -7174,7 +7174,7 @@ regPost('刺龍王ex|王之號召', (state, aIdx, pool) => {
   if (p.bench.length >= 5) return addLog(state, '王之號召：備戰區已滿', aIdx);
   const cand = p.discard.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.subtype !== 'Other' && card.pokemonType === 'Water';
+    return card?.supertype === 'Pokemon' && card.pokemonType === 'Water';
   });
   if (cand.length === 0) return addLog(state, '王之號召：棄牌區無【水】寶可夢', aIdx);
   const slots = Math.min(3, 5 - p.bench.length, cand.length);
@@ -7363,7 +7363,7 @@ regPre('灰塵山|丟棄', (state, aIdx, pool) => {
   const toolIdxs: number[] = [];
   p.hand.forEach((c, i) => {
     const card = pool.get(c.cardId);
-    if (card?.supertype === 'Pokemon' && card.subtype === 'Other') toolIdxs.push(i);
+    if (card?.supertype === 'Trainer' && card.subtype === 'PokemonTool') toolIdxs.push(i);
   });
   if (toolIdxs.length === 0) return { state: addLog(state, '丟棄：手牌無寶可夢道具', aIdx), damage: 0 };
   const damage = toolIdxs.length * 50;
@@ -8482,7 +8482,7 @@ regPost('三合一磁怪|\u200c\u200c\u200c[特性]過度放電', overvoltAttack
 regG('珍寶配件', (st, idx, pool) => {
   return st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.subtype === 'Other';
+    return card?.supertype === 'Trainer' && card.subtype === 'PokemonTool';
   });
 });
 reg('珍寶配件', (st, idx) => {
@@ -8563,7 +8563,7 @@ regG('水蓮的照顧', (st, idx, pool) => {
   return st.players[idx].discard.some(c => {
     const card = pool.get(c.cardId);
     if (!card) return false;
-    if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && card.subtype !== 'ex') return true;
+    if (card.supertype === 'Pokemon' && card.subtype !== 'ex') return true;
     if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
     return false;
   });
@@ -8809,7 +8809,6 @@ regA('竹蘭的尖牙陸鯊', 0, (st, idx, pool) => {
   const hasTarget = p.deck.some(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Pokemon'
-      && card.subtype !== 'Other'
       && card.name.includes('竹蘭的');
   });
   if (!hasTarget) {
@@ -8864,7 +8863,7 @@ regG('戰鬥鑼', (st, idx, pool) => {
   return st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
     if (!card) return false;
-    if (card.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
+    if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
     if (card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Fighting') return true;
     return false;
   });
@@ -8885,7 +8884,7 @@ reg('戰鬥鑼', (st, idx) => {
 regG('寶可平板', (st, idx, pool) => {
   return st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
-    if (!card || card.supertype !== 'Pokemon' || card.subtype === 'Other') return false;
+    if (!card || card.supertype !== 'Pokemon') return false;
     const isRule = card.subtype === 'ex'
       || card.name.endsWith('ex') || card.name.endsWith('EX');
     return !isRule;
@@ -9219,7 +9218,7 @@ reg('火箭隊的雅典娜', (st, idx, pool) => {
 regG('火箭隊的蘭斯', (st, idx, pool) =>
   st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.subtype !== 'Other'
+    return card?.supertype === 'Pokemon'
       && !card.evolvesFrom && card.name.includes('火箭隊的');
   })
 );

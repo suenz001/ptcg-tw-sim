@@ -2372,7 +2372,7 @@
     "id": "10306",
     "name": "倖存鍛鍊器",
     "supertype": "Trainer",
-    "subtype": "Tool",
+    "subtype": "PokemonTool",
     "setCode": "SV5a",
     "collectorNumber": "059/066",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010306.png",

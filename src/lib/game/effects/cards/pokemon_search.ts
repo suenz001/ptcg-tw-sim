@@ -29,7 +29,7 @@ regG('好友寶芬', (st, idx, pool) => {
   if (st.players[idx].bench.length >= 5) return false;
   return st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom && (card.hp ?? 0) <= 70;
+    return card?.supertype === 'Pokemon' && !card.evolvesFrom && (card.hp ?? 0) <= 70;
   });
 });
 reg('好友寶芬', (st, idx) => {
@@ -50,7 +50,7 @@ regG('赫普的包包', (st, idx, pool) => {
   if (st.players[idx].bench.length >= 5) return false;
   return st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.subtype !== 'Other' && !card.evolvesFrom;
+    return card?.supertype === 'Pokemon' && !card.evolvesFrom;
   });
 });
 reg('赫普的包包', (st, idx) => {

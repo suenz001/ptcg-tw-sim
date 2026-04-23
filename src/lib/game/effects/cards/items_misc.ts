@@ -124,7 +124,7 @@ regG('夜間擔架', (st, idx, pool) => {
   // 棄牌區至少 1 張寶可夢或基本能量（排除 Special Energy / Pokemon 道具 subtype=Other）
   return st.players[idx].discard.some(c => {
     const card = pool.get(c.cardId);
-    if (card?.supertype === 'Pokemon' && card.subtype !== 'Other') return true;
+    if (card?.supertype === 'Pokemon') return true;
     if (card?.supertype === 'Energy' && card.subtype === 'Basic') return true;
     return false;
   });

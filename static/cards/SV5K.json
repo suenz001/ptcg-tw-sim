@@ -169,7 +169,7 @@
     "id": "9765",
     "name": "極限腰帶",
     "supertype": "Trainer",
-    "subtype": "Tool",
+    "subtype": "PokemonTool",
     "setCode": "SV5K",
     "collectorNumber": "066/071",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009765.png",

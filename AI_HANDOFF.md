@@ -1,9 +1,34 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 (v2.81)  
+> 最後更新：2026-04-23 (v2.82)  
 > 執行者：Gemini（Google DeepMind）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.82 — 寶可夢道具系統底層大重構 (Pokemon/Other -> Trainer/PokemonTool)
+
+### 問題核心與背景
+在稍早的 v2.81 修正中，雖然我們將爬蟲抓到的寶可夢道具正確存成了 `Trainer / PokemonTool`，卻意外引發了嚴重的 UI 與對戰引擎錯誤（導致「寶可夢道具」分類只剩下 2 張卡，且原本的道具卡跑到了「物品卡」去）。
+經過徹底調查，發現這是由於早期系統為了解決官網標籤錯亂（即上個版本的 `寶可夢道具卡` 字眼問題），**將整個對戰引擎與 UI 篩選器都建立在一個臨時的 Fallback 架構上**：
+> 舊系統約定：`supertype: Pokemon` 且 `subtype: Other` = 寶可夢道具。
+因此，當我把資料庫的道具卡改回正規的 `Trainer` 時，反而被 UI 誤認成了普通的物品卡。
+
+另外，像 `鬼之假面`（物品）和 `探險家的嚮導`（支援者）之所以會出現在「寶可夢道具」分類，是因為官方網站在特定異圖版本（如 SV8a 12420 / 12449）的網頁原始碼中，居然**完全遺漏了卡片類型標題 (`<h3>`)**！這導致爬蟲再次觸發了舊版的 fallback 機制，把它們誤塞成了 `Pokemon / Other`。
+
+### 解決方案
+我決定一勞永逸地解決這個歷史共業，不再使用畸形的 `Pokemon / Other`：
+
+1. **全面重構對戰引擎與 UI**：使用自製腳本掃描並替換了 `src/lib/game/`（包含 AI、引擎規則、卡牌效果表）與 `src/routes/` 之下超過 60 多個判斷式：
+   - 修正前：`card.supertype === 'Pokemon' && card.subtype === 'Other'`
+   - 修正後：`card.supertype === 'Trainer' && card.subtype === 'PokemonTool'`
+   - 所有實體寶可夢判定也從 `subtype !== 'Other'` 簡化為直接判定 `supertype === 'Pokemon'`。
+2. **自動修復官網漏標的異圖卡**：撰寫 `fix-broken-trainers.mjs`，當遇到因官網漏給標籤而變成 fallback 的卡片時，自動比對整個卡池中**同名卡片**（如普通版）的屬性。成功修復了 `鬼之假面` 和 `探險家的嚮導`。
+3. **資料庫清理**：將之前測試時暫存的 `Trainer / Tool` 統一規範回系統預期的 `Trainer / PokemonTool`。
+
+**結果**：
+現在「寶可夢道具」的底層資料結構終於名正言順，UI 篩選與遊戲引擎都完美對齊了官方分類（Trainer / PokemonTool）。「鬼之假面」等異常卡片也回到它們該去的地方了！
 
 ---
 
