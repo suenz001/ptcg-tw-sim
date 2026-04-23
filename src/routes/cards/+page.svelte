@@ -25,21 +25,22 @@
   //   - Pokemon: supertype='Pokemon'
   //   - Tool (寶可夢道具): supertype='Trainer' && subtype === 'PokemonTool'
   //   - Supporter / Item / Stadium: supertype='Trainer' && 對應 subtype
-  //   - Energy: supertype='Energy'
-  type CategoryKey = 'Pokemon' | 'Supporter' | 'Item' | 'Tool' | 'Stadium' | 'Energy';
+  //   - Energy: supertype='Energy' (Basic / Special)
+  type CategoryKey = 'Pokemon' | 'Supporter' | 'Item' | 'Tool' | 'Stadium' | 'BasicEnergy' | 'SpecialEnergy';
   const CATEGORY_LABEL: Record<CategoryKey, string> = {
     Pokemon: '寶可夢',
     Supporter: '支援者',
     Item: '物品',
     Tool: '寶可夢道具',
     Stadium: '競技場',
-    Energy: '能量'
+    BasicEnergy: '基本能量',
+    SpecialEnergy: '特殊能量'
   };
   // 顯示順序（左到右）
-  const CATEGORY_ORDER: CategoryKey[] = ['Pokemon', 'Supporter', 'Item', 'Tool', 'Stadium', 'Energy'];
+  const CATEGORY_ORDER: CategoryKey[] = ['Pokemon', 'Supporter', 'Item', 'Tool', 'Stadium', 'BasicEnergy', 'SpecialEnergy'];
 
   function cardCategory(c: Card): CategoryKey {
-    if (c.supertype === 'Energy') return 'Energy';
+    if (c.supertype === 'Energy') return c.subtype === 'Basic' ? 'BasicEnergy' : 'SpecialEnergy';
     if (c.supertype === 'Pokemon') return 'Pokemon';
     // Trainer
     if (c.subtype === 'PokemonTool') return 'Tool';
@@ -84,6 +85,11 @@
   };
   const STAGE_ORDER: StageKey[] = ['Basic', 'Stage1', 'Stage2'];
   let selectedStages = $state<Set<StageKey>>(new Set());
+
+  // v2.83: 賽制賽季標記篩選 (H, I, J)
+  type RegMarkKey = 'H' | 'I' | 'J';
+  const REG_MARK_ORDER: RegMarkKey[] = ['H', 'I', 'J'];
+  let selectedRegMarks = $state<Set<RegMarkKey>>(new Set());
 
   /** 取得寶可夢的階段。v2.75 起 JSON 有 `stage` 欄位（由 migration 補齊），
    *  直接用即可，不再需要 runtime 推斷。
@@ -141,8 +147,14 @@
     else next.add(s);
     selectedStages = next;
   }
-  function clearStages() {
-    selectedStages = new Set();
+  function toggleRegMark(m: RegMarkKey) {
+    const next = new Set(selectedRegMarks);
+    if (next.has(m)) next.delete(m);
+    else next.add(m);
+    selectedRegMarks = next;
+  }
+  function clearRegMarks() {
+    selectedRegMarks = new Set();
   }
 
   function openLightbox(url: string) { lightbox = url; }
@@ -160,6 +172,7 @@
     const tags = selectedTags;
     const types = selectedTypes;
     const stages = selectedStages;
+    const marks = selectedRegMarks;
     return setCards.filter((c) => {
       if (cats.size > 0 && !cats.has(cardCategory(c))) return false;
       // tag filter: OR across selected tags
@@ -176,6 +189,10 @@
       if (stages.size > 0) {
         const stage = cardStage(c);
         if (!stage || !stages.has(stage)) return false;
+      }
+      // v2.83: 賽季標記篩選（OR）
+      if (marks.size > 0) {
+        if (!c.regulationMark || !marks.has(c.regulationMark as RegMarkKey)) return false;
       }
       if (!q) return true;
       return (
@@ -365,6 +382,23 @@
           onclick={() => toggleStage(stg)}
           title="點一次選取、點兩次取消"
         >{STAGE_LABEL[stg]}</button>
+      {/each}
+    </div>
+    <div class="filters markFilters" role="group" aria-label="賽季標記篩選（可複選）">
+      <span class="tagLabel">賽季：</span>
+      <button
+        class="filter filter-mark"
+        class:active={selectedRegMarks.size === 0}
+        onclick={clearRegMarks}
+        title="清除所有賽季標記篩選"
+      >不限</button>
+      {#each REG_MARK_ORDER as m (m)}
+        <button
+          class="filter filter-mark"
+          class:active={selectedRegMarks.has(m)}
+          onclick={() => toggleRegMark(m)}
+          title="點一次選取、點兩次取消"
+        >{m} 標</button>
       {/each}
     </div>
   </div>
@@ -770,14 +804,23 @@
   }
   /* v2.74: 階段篩選 chip */
   .filter-stage {
-    padding: 0.35rem 0.7rem;
-    font-size: 0.82rem;
-    color: #4b5563;
+    font-size: 0.8rem;
+    padding: 0.2rem 0.5rem;
+    border-color: #6c5a8a;
   }
   .filter-stage.active {
-    background: #059669;
+    background: #6c5a8a;
     color: #fff;
-    border-color: #059669;
+  }
+
+  .filter-mark {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.5rem;
+    border-color: #5a7a8a;
+  }
+  .filter-mark.active {
+    background: #5a7a8a;
+    color: #fff;
   }
 
   .grid {

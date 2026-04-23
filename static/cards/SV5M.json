@@ -2779,8 +2779,8 @@
   {
     "id": "9906",
     "name": "驅勁能量 未來",
-    "supertype": "Energy",
-    "subtype": "Special",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV5M",
     "collectorNumber": "065/071",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009906.png",

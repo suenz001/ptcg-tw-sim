@@ -332,6 +332,10 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
     if (classified) {
       card.supertype = classified.supertype;
       card.subtype = classified.subtype;
+    } else if (/驅勁能量/.test(card.name)) {
+      // 驅勁能量 古代 / 未來 are actually Pokemon Tools, not Energy
+      card.supertype = 'Trainer';
+      card.subtype = 'PokemonTool';
     } else if (/能量$/.test(card.name)) {
       // v2.69：官網部分卡（例：驅勁能量古代/未來版）HTML 內完全沒有 h3 分類標籤，
       // classifyTrainerOrEnergyByH3 會回 null → 落回 default supertype='Pokemon'，
