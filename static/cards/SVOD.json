@@ -43,7 +43,10 @@
     "pokedexNumber": 343,
     "species": "泥偶寶可夢",
     "illustrator": "Tonji Matsuno",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12582",
@@ -92,7 +95,10 @@
     "pokedexNumber": 344,
     "species": "泥偶寶可夢",
     "illustrator": "nagimiso",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12583",
@@ -136,7 +142,10 @@
     "pokedexNumber": 703,
     "species": "寶石寶可夢",
     "illustrator": "Ligton",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12584",
@@ -226,7 +235,10 @@
     "pokedexNumber": 227,
     "species": "鋼甲鳥寶可夢",
     "illustrator": "Nisota Niso",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12586",
@@ -265,7 +277,10 @@
     "pokedexNumber": 374,
     "species": "鐵球寶可夢",
     "illustrator": "Takeshi Nakamura",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12587",
@@ -305,7 +320,10 @@
     "pokedexNumber": 375,
     "species": "鐵爪寶可夢",
     "illustrator": "Anesaki Dynamic",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12588",
@@ -352,7 +370,10 @@
       "Colorless"
     ],
     "illustrator": "PLANETA Mochizuki",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12589",
@@ -559,7 +580,10 @@
     "pokedexNumber": 374,
     "species": "鐵球寶可夢",
     "illustrator": "hncl",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12602",

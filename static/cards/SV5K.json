@@ -112,7 +112,10 @@
     "scrapedAt": "2026-04-16T07:50:27.093Z",
     "rulesText": "從牌庫抽出與自己的場上的「古代」寶可夢相同數量的卡。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "9762",
@@ -185,7 +188,10 @@
     "scrapedAt": "2026-04-16T07:50:30.693Z",
     "rulesText": "查看自己的牌庫上方6張卡，從其中選擇2張卡加入手牌。將剩餘卡丟棄。",
     "illustrator": "Hideki Ishikawa",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "9767",
@@ -240,7 +246,10 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/9770/",
     "scrapedAt": "2026-04-16T07:50:33.570Z",
     "rulesText": "只要這張卡附於寶可夢身上，視為提供1個【無】能量。\n若附於【2階進化】寶可夢身上，則視為提供2個所有屬性的能量。",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "9771",
@@ -3555,7 +3564,10 @@
     "scrapedAt": "2026-04-16T07:51:30.144Z",
     "rulesText": "查看自己的牌庫上方6張卡，從其中選擇2張卡加入手牌。將剩餘卡丟棄。",
     "illustrator": "Hideki Ishikawa",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10214",

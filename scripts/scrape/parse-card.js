@@ -211,6 +211,14 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
         attacks.push({ name: rawName, cost, damage, effect });
       }
     });
+    // 訓練家的寶可夢（例：<阿響的>凱羅斯、<火箭隊的>超夢ex、<竹蘭的>烈咬陸鯊ex）。
+    // 這類寶可夢在官網會帶有冠名括號 `<XX的>` 作為 HTML marker，純 HTML 上可見。
+    // （M2a 復刻版不帶 <>，那些靠 migrate-tags.js 的 owner 白名單補 — 見下方註解。）
+    // pool.ts 載入時會 strip 掉 `<>`，但 scraper 端保留原樣當辨識訊號。
+    if (/^<[^<>]+的>/.test(card.name)) {
+      if (!tags.includes('訓練家的寶可夢')) tags.push('訓練家的寶可夢');
+    }
+
     if (abilities.length) card.abilities = abilities;
     if (attacks.length) card.attacks = attacks;
     if (tags.length) card.tags = tags;

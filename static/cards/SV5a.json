@@ -298,7 +298,10 @@
     "pokedexNumber": 1010,
     "species": "悖謬寶可夢",
     "illustrator": "Mitsuhiro Arita",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "未來"
+    ]
   },
   {
     "id": "10255",
@@ -1395,7 +1398,10 @@
       "Colorless"
     ],
     "illustrator": "PLANETA Mochizuki",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "未來"
+    ]
   },
   {
     "id": "10281",
@@ -2232,7 +2238,10 @@
     "scrapedAt": "2026-04-16T07:52:21.805Z",
     "rulesText": "這張卡必須在上個對手的回合自己的寶可夢【昏厥】了才可使用。 \n雙方玩家各自將手牌全部放回牌庫並重洗。然後，從牌庫抽卡，自己抽出5張，對手抽出2張。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "10301",
@@ -2260,7 +2269,10 @@
     "scrapedAt": "2026-04-16T07:52:23.218Z",
     "rulesText": "從自己的牌庫選擇最多3張【1階進化】寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "10303",
@@ -3066,7 +3078,10 @@
       "Colorless"
     ],
     "illustrator": "PLANETA Mochizuki",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "未來"
+    ]
   },
   {
     "id": "10715",

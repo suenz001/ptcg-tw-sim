@@ -1,9 +1,156 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.67)  
+> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.68)  
 > 執行者：Claude Opus 4.7 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session clever-optimistic-ritchie (v2.68) — 卡牌標籤全面盤點：補齊 未來 / ACE SPEC / 訓練家的寶可夢 tag
+
+### 問題
+Leon 指出 v2.67 只補了「古代 × Pokemon」，但實際官網還有更多 tag 類別沒被抓：
+> 藉由剛剛的事件(猛擂鼓沒抓到古代標籤) 我認為你應該徹底搜尋一下所有卡牌的標籤，如有遺漏
+> 的話就請你補上. 我知道的至少有，但不限於: 古代(支援者和寶可夢都會有), 未來(支援者和寶可夢
+> 都會有), ace spec(訓練家卡都會有), 太晶寶可夢(例如碧草面具ex), XX訓練家的寶可夢
+> (例如阿響的火爆獸、火箭隊的超夢), ex寶可夢(例如多龍巴魯托ex)等等
+
+### 根因與盤點
+透過 pokemon-card.com 的 `card-search/list/` filter 選單清點，確認共 8 種需要透過 list
+filter 才能得到 ID 白名單的 tag 組合（單張卡片頁 HTML 不含這些字樣，只在版型/配色體現）：
+
+| filter param | id | supertype | tag  |
+|--------------|----|-----------|------|
+| pokemonTag[] | 105 | Pokemon | 古代 (v2.67 已實裝，現納入通用架構) |
+| pokemonTag[] | 106 | Pokemon | 未來 |
+| trainersTag[] | 104 | Trainer | ACE SPEC |
+| trainersTag[] | 105 | Trainer | 古代 |
+| trainersTag[] | 106 | Trainer | 未來 |
+| energiesTag[] | 104 | Energy | ACE SPEC |
+| energiesTag[] | 105 | Energy | 古代 |
+| energiesTag[] | 106 | Energy | 未來 |
+
+另有兩種可從單張 HTML 直接偵測：
+
+- **太晶**（v2.48 已實裝）— `.skillInformation .skill` 區塊的 tag 白名單。
+- **訓練家的寶可夢**（本版新增）— 卡名以 `<XX的>` 前綴為標記（例：`<阿響的>凱羅斯`、
+  `<火箭隊的>超夢ex`、`<竹蘭的>烈咬陸鯊ex`）。parse-card.js 在 Pokemon branch 以
+  `/^<[^<>]+的>/` 偵測，命中就補 `訓練家的寶可夢` tag。
+
+至於 Leon 提到的「ex 寶可夢」— 盤查 types.ts + pool.ts：
+`subtype` 欄已帶 `化身`/`VMAX`/`ex` 等，現行引擎/UI 都用 `subtype` 判斷，不需另開 tag。
+
+### 主修法
+
+**重構 1 — 通用 tag filter 抓取器**
+
+新增 `scripts/scrape/tag-filters.js`（取代 v2.67 單一用途的 ancient-tag.js）：
+- `TAG_FILTERS`：上表 8 種組合的宣告式清單。
+- `collectTaggedIds(filterParam, filterId, delayMs)`：對任一 filter/id 走訪分頁，
+  收集 detail page id set。
+- `collectAllTaggedIds(delayMs)`：串接全部 8 個 filter，回傳 `Map<string, {ids, def}>`。
+- `addTag(card, tag)`：append 不覆寫（保留太晶等既有 tag）。
+- 關鍵 guard：**filter 結果會跨 supertype 污染**（例：pokemonTag=105 偶爾列入少數
+  Trainer），實際套 tag 時要用 `card.supertype === def.supertype` 比對擋下。
+
+`scripts/scrape/ancient-tag.js` 縮成 thin re-export（`@deprecated` 保留向後相容）。
+
+**重構 2 — scrape-set.js 新 set 自動補 tag**
+
+把 scrape-set 的 [3/3] post-hook 從單一「古代 Pokemon」擴成呼叫 `collectAllTaggedIds()`，
+對 8 種組合逐一比對補 tag，含 supertype guard + summary log。未來新 set 一次到位。
+
+**重構 3 — parse-card.js 偵測訓練家的寶可夢**
+
+Pokemon branch 在 abilities/attacks/tags 組裝前加：
+
+```js
+if (/^<[^<>]+的>/.test(card.name)) {
+  if (!tags.includes('訓練家的寶可夢')) tags.push('訓練家的寶可夢');
+}
+```
+
+注意：pool.ts（v2.22）會在 load 時 strip 卡名裡的 `<>` — 所以 tag 必須在 scrape 階段
+偵測並寫進 JSON，runtime 已拿不到 `<>` 資訊。
+
+**重構 4 — 一次性 migration 回填全部舊資料**
+
+新增 `scripts/migrate-tags.js`（4 phase）：
+1. fetch 全部 8 個 filter 的 ID 白名單
+2. load `static/cards/*.json`
+3. 對每張卡依 supertype guard 補 filter-based tag（古代/未來/ACE SPEC）
+4. 再跑一次，對 Pokemon 卡名匹配 `TRAINER_OWNERS` 白名單補 `訓練家的寶可夢` tag
+
+`TRAINER_OWNERS` 白名單（已知現有 owner，新增需兩邊維護）：
+```
+'奇樹', '阿響', '竹蘭', '火箭隊', 'N', '莉莉艾',
+'赫普', '瑪俐', '大吾', '莉佳', '小霞', '派帕', '青木'
+```
+
+migration 實跑結果：
+
+```
+[Phase 1-3 filter-based]
+  Pokemon:未來    : 60
+  Trainer:ACE SPEC: 30
+  Trainer:古代    : 8
+  Trainer:未來    : 8
+  Energy:ACE SPEC : 6
+  (Pokemon:古代 已於 v2.67 補齊 69 張)
+  小計 = 112 張新 tag
+
+[Phase 4 owner-based]
+  Pokemon:訓練家的寶可夢 : 401 張 across 8 set files
+
+總計 = 513 張新 tag 寫入 13 個 set json
+```
+
+### 次要調整
+
+- **types.ts Card.tags 註解大幅擴寫** — 文件化 5 種 tag 來源，分 (a) HTML 可直接偵測
+  與 (b) list filter 回填 兩類；每種 tag 標示引入版本、用途（哪些 effect 會查）、
+  以及「新增 owner 時要同步 parse-card.js 與 migrate-tags.js」的維護提醒。
+- **保留向後相容** — `ancient-tag.js` 改成 thin re-export `collectAncientPokemonIds`
+  (= `collectTaggedIds('pokemonTag', 105)` 的 alias)；舊 import path 不會壞。
+
+### 驗證
+
+- `npm run build` ✓
+- migration 完成後抽驗：
+  - Trainer:ACE SPEC → 不公印章、頂尖捕捉器、天真的伊修蘭 ✓
+  - Energy:ACE SPEC → 富裕能量、古舊能量、新衝天能量 ✓
+  - Pokemon:訓練家的寶可夢 → 阿響的凱羅斯、火箭隊的超夢ex、竹蘭的烈咬陸鯊ex ✓
+  - Pokemon:未來 → 鐵頭殼ex、鐵手腕 ✓
+
+### 未盡事項
+
+1. **ACE SPEC 一副牌最多 1 張的牌組編輯器 guard** — 規則上一副牌不能放 2 張 ACE SPEC
+   （不管是 trainer 還是 energy），目前 tag 已有但 deck builder 尚未做限制；Leon 知道，
+   下一波處理。
+2. **驅勁能量 古代/未來 版 supertype 誤分類** — 這兩張在官網 HTML 只有 340 行、
+   沒有 h3 分類 tag，parse-card.js `classifyTrainerOrEnergyByH3` 回 null 導致 fallback
+   到 Pokemon default。**現況：migration phase 1-3 的 supertype guard 會把它們擋下
+   不補 tag**（因為帶錯 supertype），log 裡有一行 skip-wrong-supertype 訊息。修法需回 scraper 加
+   「無 h3 但 title 含『能量』」的 fallback 推斷，下一版再處理。
+
+### 變更檔案
+
+```
+新增：
+  scripts/scrape/tag-filters.js      # 通用 tag filter 抓取
+  scripts/migrate-tags.js            # 4-phase 一次性 migration
+
+修改：
+  scripts/scrape/ancient-tag.js      # → thin re-export
+  scripts/scrape/scrape-set.js       # post-hook 改用 collectAllTaggedIds
+  scripts/scrape/parse-card.js       # Pokemon <XX的> prefix 偵測
+  src/lib/cards/types.ts             # tags 註解擴寫
+  src/lib/version.ts                 # 2.67 → 2.68
+
+migration 寫入 (13 個 set)：
+  static/cards/{M-P,M2a,MBD,MBG,MC,SV10,SV5K,SV5M,SV5a,SV6,SV6a,SV7,SV7a,SV8,SV8a,SV9,SV9a,SVOD,SVOM}.json
+```
 
 ---
 

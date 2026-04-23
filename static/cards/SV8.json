@@ -1285,7 +1285,10 @@
     "pokedexNumber": 991,
     "species": "悖謬寶可夢",
     "illustrator": "rika",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "未來"
+    ]
   },
   {
     "id": "11212",
@@ -1839,7 +1842,10 @@
     "pokedexNumber": 1008,
     "species": "悖謬寶可夢",
     "illustrator": "Nurikabe",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "未來"
+    ]
   },
   {
     "id": "11225",
@@ -3961,7 +3967,10 @@
     "scrapedAt": "2026-04-16T08:00:12.700Z",
     "rulesText": "將自己的戰鬥寶可夢與備戰寶可夢互換。然後，選擇換入備戰區的寶可夢身上附加的任意數量的能量卡，改附於新的戰鬥寶可夢身上。",
     "illustrator": "Ayaka Yoshida",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "11276",
@@ -3989,7 +3998,10 @@
     "scrapedAt": "2026-04-16T08:00:14.120Z",
     "rulesText": "從自己的棄牌區選擇最多2張支援者卡，在給對手看過後加入手牌。",
     "illustrator": "inose yukie",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "11278",

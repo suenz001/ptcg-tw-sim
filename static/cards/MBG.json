@@ -452,7 +452,10 @@
     "scrapedAt": "2026-04-16T08:28:31.000Z",
     "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。然後，將自己的戰鬥寶可夢與備戰寶可夢互換。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "14143",

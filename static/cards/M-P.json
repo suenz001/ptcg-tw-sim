@@ -1672,7 +1672,10 @@
     ],
     "pokedexNumber": 940,
     "species": "海燕寶可夢",
-    "illustrator": "mingo"
+    "illustrator": "mingo",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "17974",

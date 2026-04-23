@@ -31,7 +31,10 @@
     "pokedexNumber": 509,
     "species": "壞心眼寶可夢",
     "illustrator": "REND",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12605",
@@ -66,7 +69,10 @@
     "pokedexNumber": 510,
     "species": "冷酷寶可夢",
     "illustrator": "Hasuno",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12606",
@@ -102,7 +108,10 @@
     "pokedexNumber": 559,
     "species": "蛻皮寶可夢",
     "illustrator": "Teeziro",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12607",
@@ -147,7 +156,10 @@
     "pokedexNumber": 560,
     "species": "惡黨寶可夢",
     "illustrator": "Kazumasa Yasukuni",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12608",
@@ -189,7 +201,10 @@
     "pokedexNumber": 859,
     "species": "捉弄寶可夢",
     "illustrator": "KEIICHIRO ITO",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12609",
@@ -224,7 +239,10 @@
     "pokedexNumber": 860,
     "species": "壞心眼寶可夢",
     "illustrator": "NC Empire",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12610",
@@ -265,7 +283,10 @@
       "Colorless"
     ],
     "illustrator": "PLANETA Mochizuki",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12611",
@@ -298,7 +319,10 @@
     "pokedexNumber": 877,
     "species": "雙面寶可夢",
     "illustrator": "Mina Nakai",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12612",
@@ -540,7 +564,10 @@
     "pokedexNumber": 877,
     "species": "雙面寶可夢",
     "illustrator": "Susumu Maeya",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12626",

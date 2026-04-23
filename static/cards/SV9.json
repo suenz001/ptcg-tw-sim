@@ -571,7 +571,10 @@
     "pokedexNumber": 554,
     "species": "不倒翁寶可夢",
     "illustrator": "Gemi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12478",
@@ -619,7 +622,10 @@
     "species": "爆燃寶可夢",
     "evolvesFrom": "N的火紅不倒翁",
     "illustrator": "nagimiso",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12479",
@@ -1028,7 +1034,10 @@
     "pokedexNumber": 100,
     "species": "球寶可夢",
     "illustrator": "Kazumasa Yasukuni",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12489",
@@ -1071,7 +1080,10 @@
     "species": "球寶可夢",
     "evolvesFrom": "奇樹的霹靂電球",
     "illustrator": "GOTO minori",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12490",
@@ -1106,7 +1118,10 @@
     "pokedexNumber": 595,
     "species": "吸附寶可夢",
     "illustrator": "Iori Suzuki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12491",
@@ -1142,7 +1157,10 @@
     "pokedexNumber": 938,
     "species": "電蝌蚪寶可夢",
     "illustrator": "kurumitsu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12492",
@@ -1186,7 +1204,10 @@
     ],
     "evolvesFrom": "奇樹的光蚪仔",
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12493",
@@ -1224,7 +1245,10 @@
     "pokedexNumber": 940,
     "species": "海燕寶可夢",
     "illustrator": "Akira Komayama",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12494",
@@ -1272,7 +1296,10 @@
     "species": "軍艦鳥寶可夢",
     "evolvesFrom": "奇樹的電海燕",
     "illustrator": "chibi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12495",
@@ -1312,7 +1339,10 @@
       "Colorless"
     ],
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12496",
@@ -1639,7 +1669,10 @@
     "pokedexNumber": 561,
     "species": "似鳥寶可夢",
     "illustrator": "Shiburingaru",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12503",
@@ -1670,7 +1703,10 @@
     "pokedexNumber": 742,
     "species": "蜂虻寶可夢",
     "illustrator": "Saya Tsuruta",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12504",
@@ -1709,7 +1745,10 @@
     "species": "蜂虻寶可夢",
     "evolvesFrom": "莉莉艾的萌虻",
     "illustrator": "mashu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12505",
@@ -1751,7 +1790,10 @@
     "pokedexNumber": 764,
     "species": "摘花寶可夢",
     "illustrator": "Narumi Sato",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12506",
@@ -2176,7 +2218,10 @@
     "pokedexNumber": 843,
     "species": "沙蛇寶可夢",
     "illustrator": "aspara",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12516",
@@ -2224,7 +2269,10 @@
     "species": "沙蛇寶可夢",
     "evolvesFrom": "赫普的沙包蛇",
     "illustrator": "Sanosuke Sakuma",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12517",
@@ -2439,7 +2487,10 @@
     "pokedexNumber": 509,
     "species": "壞心眼寶可夢",
     "illustrator": "Keisin",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12522",
@@ -2473,7 +2524,10 @@
     "pokedexNumber": 570,
     "species": "惡狐寶可夢",
     "illustrator": "Jiro Sasumo",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12523",
@@ -2515,7 +2569,10 @@
     ],
     "evolvesFrom": "N的索羅亞",
     "illustrator": "takuyoa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12524",
@@ -2649,7 +2706,10 @@
     "pokedexNumber": 599,
     "species": "齒輪寶可夢",
     "illustrator": "Saboteri",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12527",
@@ -2699,7 +2759,10 @@
     "species": "齒輪寶可夢",
     "evolvesFrom": "N的齒輪兒",
     "illustrator": "KEIICHIRO ITO",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12528",
@@ -2750,7 +2813,10 @@
     "species": "齒輪寶可夢",
     "evolvesFrom": "N的齒輪組",
     "illustrator": "matazo",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12529",
@@ -2845,7 +2911,10 @@
     "species": "烏鴉寶可夢",
     "evolvesFrom": "赫普的藍鴉",
     "illustrator": "GIDORA",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12531",
@@ -2893,7 +2962,10 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12532",
@@ -3103,7 +3175,10 @@
     "pokedexNumber": 643,
     "species": "白陽寶可夢",
     "illustrator": "rika",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12537",
@@ -3149,7 +3224,10 @@
     "pokedexNumber": 143,
     "species": "瞌睡寶可夢",
     "illustrator": "GOSSAN",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12538",
@@ -3480,7 +3558,10 @@
     "pokedexNumber": 821,
     "species": "小鳥寶可夢",
     "illustrator": "Shinya Mizuno",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12546",
@@ -3529,7 +3610,10 @@
     "species": "烏鴉寶可夢",
     "evolvesFrom": "赫普的稚山雀",
     "illustrator": "Souichirou Gunjima",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12547",
@@ -3565,7 +3649,10 @@
     "pokedexNumber": 831,
     "species": "綿羊寶可夢",
     "illustrator": "Tomomi Ozaki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12548",
@@ -3610,7 +3697,10 @@
     "species": "綿羊寶可夢",
     "evolvesFrom": "赫普的毛辮羊",
     "illustrator": "Ryota Murayama",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12549",
@@ -3648,7 +3738,10 @@
     "pokedexNumber": 845,
     "species": "一口吞寶可夢",
     "illustrator": "Saboteri",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12550",
@@ -3718,7 +3811,10 @@
     "scrapedAt": "2026-04-16T08:07:03.268Z",
     "rulesText": "附有這張卡的「赫普的寶可夢」，使用招式所需的能量減少1個【無】能量，那隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害「+30」點。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12555",
@@ -3732,7 +3828,10 @@
     "scrapedAt": "2026-04-16T08:07:04.066Z",
     "rulesText": "附有這張卡的「莉莉艾的寶可夢」受到對手的寶可夢招式的傷害而【昏厥】時，被獲得的獎賞卡減少1張。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12556",
@@ -4008,7 +4107,10 @@
     "species": "軍艦鳥寶可夢",
     "evolvesFrom": "奇樹的電海燕",
     "illustrator": "Terada Tera",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12631",
@@ -4047,7 +4149,10 @@
     "species": "蜂虻寶可夢",
     "evolvesFrom": "莉莉艾的萌虻",
     "illustrator": "saino misaki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12632",
@@ -4169,7 +4274,10 @@
     "pokedexNumber": 570,
     "species": "惡狐寶可夢",
     "illustrator": "Megumi Mizutani",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12635",
@@ -4212,7 +4320,10 @@
     "pokedexNumber": 643,
     "species": "白陽寶可夢",
     "illustrator": "Bun Toujo",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12636",
@@ -4330,7 +4441,10 @@
     "pokedexNumber": 831,
     "species": "綿羊寶可夢",
     "illustrator": "MINAMINAMI Take",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12639",
@@ -4417,7 +4531,10 @@
     ],
     "evolvesFrom": "奇樹的光蚪仔",
     "illustrator": "寶可夢集\n                                        5ban Graphics\n                \n                                \n                                        訓練家\n                                        DOM",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12641",
@@ -4457,7 +4574,10 @@
       "Colorless"
     ],
     "illustrator": "寶可夢集\n                                        5ban Graphics\n                \n                                \n                                        訓練家\n                                        DOM",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12642",
@@ -4543,7 +4663,10 @@
     ],
     "evolvesFrom": "N的索羅亞",
     "illustrator": "寶可夢集\n                                        takuyoa\n                \n                                \n                                        訓練家\n                                        DOM",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12644",
@@ -4591,7 +4714,10 @@
       "Colorless"
     ],
     "illustrator": "寶可夢集\n                                        aky CG Works\n                \n                                \n                                        訓練家\n                                        DOM",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12645",
@@ -4808,7 +4934,10 @@
     ],
     "evolvesFrom": "奇樹的光蚪仔",
     "illustrator": "Yuu Nishida",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12652",
@@ -4848,7 +4977,10 @@
       "Colorless"
     ],
     "illustrator": "Susumu Maeya",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12653",
@@ -4890,7 +5022,10 @@
     ],
     "evolvesFrom": "N的索羅亞",
     "illustrator": "Megumi Mizutani",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12654",
@@ -4938,7 +5073,10 @@
       "Colorless"
     ],
     "illustrator": "DOM",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12655",
@@ -5025,7 +5163,10 @@
     ],
     "evolvesFrom": "奇樹的光蚪仔",
     "illustrator": "寶可夢集\n                                        5ban Graphics\n                \n                                \n                                        訓練家\n                                        DOM",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12657",
@@ -5067,7 +5208,10 @@
     ],
     "evolvesFrom": "N的索羅亞",
     "illustrator": "寶可夢集\n                                        takuyoa\n                \n                                \n                                        訓練家\n                                        DOM",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12658",

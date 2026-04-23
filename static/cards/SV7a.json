@@ -1656,7 +1656,10 @@
     "pokedexNumber": 1023,
     "species": "悖謬寶可夢",
     "illustrator": "akagi",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "未來"
+    ]
   },
   {
     "id": "11070",
@@ -2166,7 +2169,10 @@
     "scrapedAt": "2026-04-16T07:58:24.346Z",
     "rulesText": "從自己的牌庫選擇任意數量的各不同屬性的基本能量卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "11083",
@@ -2222,7 +2228,10 @@
     "scrapedAt": "2026-04-16T07:58:27.136Z",
     "rulesText": "將對手的所有寶可夢身上附加的「寶可夢道具」卡與「特殊能量」卡，與場上的「競技場」卡，全部丟棄。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "11087",
@@ -2333,7 +2342,10 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11094/",
     "scrapedAt": "2026-04-16T07:58:33.026Z",
     "rulesText": "只要這張卡附於寶可夢身上，視為提供1個【無】能量。\n\n從手牌將這張卡附於寶可夢身上時，從自己的牌庫抽出4張卡。",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "11430",

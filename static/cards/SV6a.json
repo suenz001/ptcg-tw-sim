@@ -379,7 +379,10 @@
     "pokedexNumber": 994,
     "species": "悖謬寶可夢",
     "illustrator": "Shinji Kanda",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "未來"
+    ]
   },
   {
     "id": "10592",
@@ -2314,7 +2317,10 @@
     "scrapedAt": "2026-04-16T07:55:23.284Z",
     "rulesText": "將對手的戰鬥寶可夢【灼傷】與【混亂】。",
     "illustrator": "inose yukie",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "10637",
@@ -2328,7 +2334,10 @@
     "scrapedAt": "2026-04-16T07:55:24.086Z",
     "rulesText": "將自己的1隻寶可夢恢復「150」HP。\n\n這張卡只要在棄牌區，無法加入手牌，無法放回牌庫。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "10638",
@@ -2440,7 +2449,10 @@
     "scrapedAt": "2026-04-16T07:55:29.949Z",
     "rulesText": "雙方的所有寶可夢（「擁有規則的寶可夢」除外），不會受到對手的「寶可夢【ex】・【V】」招式的傷害。\n\n這張卡只要在棄牌區，無法加入手牌，無法放回牌庫。",
     "illustrator": "imoniii",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "10646",
@@ -3538,7 +3550,10 @@
     "scrapedAt": "2026-04-16T07:55:51.868Z",
     "rulesText": "這張卡必須將自己的1張手牌丟棄才可使用。 \n\n從自己的牌庫選擇最多2張基本能量卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "古代"
+    ]
   },
   {
     "id": "10895",

@@ -41,14 +41,31 @@ export interface Card {
   abilities?: Ability[];
   attacks?: Attack[];
   /**
-   * 寶可夢的特徵標籤。
-   * - '太晶' (v2.48)：太晶寶可夢在備戰區不會受到【招式】的【傷害】；招式內的
-   *   「指示物放置」效果（例：多龍巴魯托ex｜幻影奇襲 的 6 個 counter）不受太晶保護。
-   *   來源：scraper 從 .skillInformation .skill 區塊的 tag 白名單抓進來。
-   * - '古代' (v2.67)：古代寶可夢用於 故勒頓｜原生亂打、覺醒戰鼓 等倍率招式。
-   *   來源：pokemon-card.com 單張卡片頁面的 HTML 不含「古代」字樣，必須透過
-   *   list search 的 pokemonTag[]=105 篩選結果回填；scrape-set.js 在爬完後
-   *   自動呼叫 collectAncientPokemonIds() 對本批次 ID 做白名單比對。
+   * 卡牌的特徵標籤。同一張卡可能有多個 tag。Pokemon / Trainer / Energy 三種
+   * supertype 都能帶 tag。來源分兩層：
+   *
+   *  (a) 從單張卡片頁面 HTML 可直接偵測的（parse-card.js 處理）：
+   *    - '太晶' (v2.48)：太晶寶可夢在備戰區不會受到【招式】的【傷害】；招式內的
+   *      「指示物放置」效果（例：多龍巴魯托ex｜幻影奇襲 的 6 個 counter）不受太晶保護。
+   *      來源：.skillInformation .skill 區塊的 tag 白名單。
+   *    - '訓練家的寶可夢' (v2.68)：卡名有 <XX的> 冠名括號的寶可夢（例：阿響的凱羅斯、
+   *      火箭隊的超夢、竹蘭的烈咬陸鯊ex）。用於特定支援者/場地的 grouping 檢查
+   *      （例：火箭隊當家、阿響 等 effect 會查場上的「XX的」寶可夢）。
+   *
+   *  (b) 需要透過 list filter 回填的（tag-filters.js + scrape-set.js post-hook）：
+   *    - '古代' (v2.67 Pokemon / v2.68 Trainer+Energy)：原生亂打、覺醒戰鼓、地盤崩壞
+   *      等倍率招式要查場上「古代」寶可夢數量；部分 Supporter/Item（探險家的嚮導、
+   *      大地之容器、奧琳博士的氣魄…）帶古代 tag，與古代寶可夢效果連動。
+   *    - '未來' (v2.68)：鐵系寶可夢（鐵頭殼、鐵手腕等）用於鐵頭殼ex｜未來決戰 等倍率
+   *      招式；部分未來 Supporter/Item（重新啟動箱、暗碼迷的解讀 等）帶未來 tag。
+   *    - 'ACE SPEC' (v2.68)：ACE SPEC 訓練家（不公印章、頂尖捕捉器…）與特殊能量
+   *      （富裕能量、古舊能量、新衝天能量）— PTCG 規則：一副牌最多 1 張 ACE SPEC。
+   *      註：目前尚未在牌組編輯器實裝「最多 1 張」的限制 guard — 未盡事項。
+   *
+   *    來源：pokemon-card.com 單張卡片頁面的 HTML 不含這些字樣（只體現在版型/配色），
+   *    必須透過 list search 的 pokemonTag / trainersTag / energiesTag filter 取得
+   *    ID 白名單；scrape-set.js 在爬完後自動呼叫 tag-filters.js 的
+   *    collectAllTaggedIds() 對本批次 ID 做白名單比對。
    */
   tags?: string[];
   rulesText?: string;

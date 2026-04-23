@@ -423,7 +423,10 @@
     "scrapedAt": "2026-04-16T08:28:09.354Z",
     "rulesText": "這張卡必須在上個對手的回合自己的寶可夢【昏厥】了才可使用。\n \n雙方玩家各自將手牌全部放回牌庫並重洗。然後，從牌庫抽卡，自己抽出5張，對手抽出2張。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "14116",

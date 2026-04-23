@@ -42,7 +42,10 @@
     "pokedexNumber": 127,
     "species": "鍬形蟲寶可夢",
     "illustrator": "GIDORA",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12660",
@@ -170,7 +173,10 @@
     "pokedexNumber": 315,
     "species": "荊棘寶可夢",
     "illustrator": "nisimono",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12663",
@@ -214,7 +220,10 @@
     "species": "花束寶可夢",
     "evolvesFrom": "竹蘭的毒薔薇",
     "illustrator": "En Morikura",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12664",
@@ -610,7 +619,10 @@
     "pokedexNumber": 155,
     "species": "火鼠寶可夢",
     "illustrator": "Susumu Maeya",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12674",
@@ -651,7 +663,10 @@
     "pokedexNumber": 156,
     "species": "火山寶可夢",
     "illustrator": "Souichirou Gunjima",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12675",
@@ -696,7 +711,10 @@
     "pokedexNumber": 157,
     "species": "火山寶可夢",
     "illustrator": "danciao",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12676",
@@ -731,7 +749,10 @@
     "pokedexNumber": 218,
     "species": "熔岩寶可夢",
     "illustrator": "Sanosuke Sakuma",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12677",
@@ -776,7 +797,10 @@
     "pokedexNumber": 219,
     "species": "熔岩寶可夢",
     "illustrator": "kodama",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12678",
@@ -819,7 +843,10 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12679",
@@ -904,7 +931,10 @@
     "pokedexNumber": 54,
     "species": "鴨寶可夢",
     "illustrator": "Yuu Nishida",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12681",
@@ -938,7 +968,10 @@
     "pokedexNumber": 120,
     "species": "星形寶可夢",
     "illustrator": "Shinya Komatsu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12682",
@@ -972,7 +1005,10 @@
     "pokedexNumber": 121,
     "species": "謎寶可夢",
     "illustrator": "Natsumi Yoshida",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12683",
@@ -1013,7 +1049,10 @@
     "pokedexNumber": 129,
     "species": "魚寶可夢",
     "illustrator": "Shimaris Yukichi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12684",
@@ -1060,7 +1099,10 @@
     "pokedexNumber": 130,
     "species": "凶惡寶可夢",
     "illustrator": "GOSSAN",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12685",
@@ -1103,7 +1145,10 @@
     "pokedexNumber": 131,
     "species": "乘載寶可夢",
     "illustrator": "En Morikura",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12686",
@@ -1137,7 +1182,10 @@
     "pokedexNumber": 349,
     "species": "魚寶可夢",
     "illustrator": "kamonabe",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12687",
@@ -1173,7 +1221,10 @@
     "pokedexNumber": 350,
     "species": "慈愛寶可夢",
     "illustrator": "You Iribi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12688",
@@ -1466,7 +1517,10 @@
     "pokedexNumber": 172,
     "species": "小鼠寶可夢",
     "illustrator": "Narumi Sato",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12695",
@@ -1683,7 +1737,10 @@
     "pokedexNumber": 185,
     "species": "模仿寶可夢",
     "illustrator": "OKACHEKE",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12700",
@@ -1717,7 +1774,10 @@
     "pokedexNumber": 443,
     "species": "陸鯊寶可夢",
     "illustrator": "Tomomi Ozaki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12701",
@@ -1759,7 +1819,10 @@
     "species": "洞穴寶可夢",
     "evolvesFrom": "竹蘭的圓陸鯊",
     "illustrator": "Taira Akitsu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12702",
@@ -1798,7 +1861,10 @@
     },
     "evolvesFrom": "竹蘭的尖牙陸鯊",
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12703",
@@ -1915,7 +1981,10 @@
     "pokedexNumber": 948,
     "species": "木耳寶可夢",
     "illustrator": "Fujimoto Gold",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12706",
@@ -1960,7 +2029,10 @@
     "pokedexNumber": 949,
     "species": "木耳寶可夢",
     "illustrator": "Yuya Oka",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12707",
@@ -2038,7 +2110,10 @@
     "pokedexNumber": 442,
     "species": "封印寶可夢",
     "illustrator": "satoma",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12709",
@@ -2083,7 +2158,10 @@
     "pokedexNumber": 942,
     "species": "小輩寶可夢",
     "illustrator": "Mina Nakai",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12710",
@@ -2128,7 +2206,10 @@
     ],
     "evolvesFrom": "派帕的偶叫獒",
     "illustrator": "akagi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12711",
@@ -2206,7 +2287,10 @@
     "pokedexNumber": 819,
     "species": "貪吃寶可夢",
     "illustrator": "Oswaldo KATO",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12713",
@@ -2249,7 +2333,10 @@
     "pokedexNumber": 820,
     "species": "貪慾寶可夢",
     "illustrator": "Akira Komayama",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12714",
@@ -2319,7 +2406,10 @@
     "scrapedAt": "2026-04-16T08:08:21.972Z",
     "rulesText": "附有這張卡的「竹蘭的寶可夢」的最大HP「+70」。",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12719",
@@ -2452,7 +2542,10 @@
     "species": "花束寶可夢",
     "evolvesFrom": "竹蘭的毒薔薇",
     "illustrator": "rika",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12724",
@@ -2675,7 +2768,10 @@
     "pokedexNumber": 157,
     "species": "火山寶可夢",
     "illustrator": "GIDORA",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12729",
@@ -2716,7 +2812,10 @@
     "pokedexNumber": 54,
     "species": "鴨寶可夢",
     "illustrator": "OKACHEKE",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12730",
@@ -2759,7 +2858,10 @@
     "pokedexNumber": 131,
     "species": "乘載寶可夢",
     "illustrator": "Orca",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12731",
@@ -2888,7 +2990,10 @@
     "pokedexNumber": 820,
     "species": "貪慾寶可夢",
     "illustrator": "Natsumi Yoshida",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12734",
@@ -2978,7 +3083,10 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12736",
@@ -3111,7 +3219,10 @@
     },
     "evolvesFrom": "竹蘭的尖牙陸鯊",
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12739",
@@ -3156,7 +3267,10 @@
     ],
     "evolvesFrom": "派帕的偶叫獒",
     "illustrator": "PLANETA Igarashi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12740",
@@ -3288,7 +3402,10 @@
       "Colorless"
     ],
     "illustrator": "Atsushi Furusawa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12745",
@@ -3327,7 +3444,10 @@
     },
     "evolvesFrom": "竹蘭的尖牙陸鯊",
     "illustrator": "HICO KIM",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12746",
@@ -3372,7 +3492,10 @@
     ],
     "evolvesFrom": "派帕的偶叫獒",
     "illustrator": "Yuriko Akase",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12747",
@@ -3429,7 +3552,10 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12749",
@@ -3468,7 +3594,10 @@
     },
     "evolvesFrom": "竹蘭的尖牙陸鯊",
     "illustrator": "5ban Graphics",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家的寶可夢"
+    ]
   },
   {
     "id": "12750",

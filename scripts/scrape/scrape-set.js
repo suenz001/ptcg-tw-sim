@@ -19,7 +19,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCard } from './parse-card.js';
-import { collectAncientPokemonIds, addTag } from './ancient-tag.js';
+import { collectAllTaggedIds, addTag } from './tag-filters.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -152,22 +152,28 @@ async function main() {
     }
   }
 
-  // 古代 tag 無法從單張卡片頁面解析（HTML 不含「古代」字樣），要透過
-  // pokemonTag[]=105 的 list filter 得到 ID 白名單才能回填。
-  console.error('[3/3] Applying 古代 tags (pokemonTag=105 filter)...');
+  // 多個 tag（古代 / 未來 / ACE SPEC × Pokemon / Trainer / Energy）都無法從
+  // 單張卡片頁面解析（HTML 不含這些字樣，只體現在版型/配色），必須透過官網 list
+  // filter 得到 ID 白名單才能回填。參見 scripts/scrape/tag-filters.js 的 TAG_FILTERS。
+  console.error('[3/3] Applying tag filters (古代/未來/ACE SPEC × Pokemon/Trainer/Energy)...');
   try {
-    const ancientIds = await collectAncientPokemonIds(args.delayMs);
-    let tagged = 0;
-    for (const card of results) {
-      if (card.supertype === 'Pokemon' && ancientIds.has(String(card.id))) {
+    const allTagIds = await collectAllTaggedIds(args.delayMs);
+    const counts = {};
+    for (const [key, { ids, def }] of allTagIds) {
+      let tagged = 0;
+      for (const card of results) {
+        if (card.supertype !== def.supertype) continue;
+        if (!ids.has(String(card.id))) continue;
         const before = card.tags?.length || 0;
-        addTag(card, '古代');
+        addTag(card, def.label);
         if ((card.tags?.length || 0) > before) tagged++;
       }
+      if (tagged > 0) counts[key] = tagged;
     }
-    console.error(`      Tagged ${tagged} Pokemon with 古代 in this set.`);
+    const summary = Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(', ');
+    console.error(`      Tagged in this set: ${summary || '(none)'}`);
   } catch (e) {
-    console.error(`      WARNING: failed to fetch ancient tag list: ${e.message}`);
+    console.error(`      WARNING: failed to fetch tag filter lists: ${e.message}`);
   }
 
   console.error(`Writing ${results.length} cards to ${outPath}`);
