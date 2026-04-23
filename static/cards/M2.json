@@ -445,7 +445,7 @@
     "pokedexNumber": 4,
     "species": "蜥蜴寶可夢",
     "illustrator": "HYOGONOSUKE",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -482,7 +482,7 @@
     "species": "火焰寶可夢",
     "evolvesFrom": "小火龍",
     "illustrator": "Uninori",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -765,7 +765,7 @@
     "pokedexNumber": 935,
     "species": "小火星寶可夢",
     "illustrator": "Tomokazu Komiya",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -802,7 +802,7 @@
     "species": "火劍士寶可夢",
     "evolvesFrom": "炭小侍",
     "illustrator": "Gemi",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {

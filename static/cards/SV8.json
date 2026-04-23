@@ -407,7 +407,7 @@
     "pokedexNumber": 1001,
     "species": "災厄寶可夢",
     "illustrator": "danciao",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -848,7 +848,7 @@
     "pokedexNumber": 935,
     "species": "小火星寶可夢",
     "illustrator": "Mékayu",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -943,7 +943,7 @@
     "species": "火劍士寶可夢",
     "evolvesFrom": "炭小侍",
     "illustrator": "kantaro",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -1315,7 +1315,7 @@
     "pokedexNumber": 991,
     "species": "悖謬寶可夢",
     "illustrator": "rika",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "tags": [
       "未來"
     ],
@@ -1361,7 +1361,7 @@
     "pokedexNumber": 1002,
     "species": "災厄寶可夢",
     "illustrator": "Yuya Oka",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -1402,7 +1402,7 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "tags": [
       "太晶"
     ],
@@ -1440,7 +1440,7 @@
     "pokedexNumber": 81,
     "species": "磁鐵寶可夢",
     "illustrator": "Hoshino KURO",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -1483,7 +1483,7 @@
     "species": "磁鐵寶可夢",
     "evolvesFrom": "小磁怪",
     "illustrator": "Nisota Niso",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -1534,7 +1534,7 @@
     "species": "磁場寶可夢",
     "evolvesFrom": "三合一磁怪",
     "illustrator": "Po-Suzuki",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Stage2"
   },
   {
@@ -4358,7 +4358,7 @@
     "species": "火劍士寶可夢",
     "evolvesFrom": "炭小侍",
     "illustrator": "Rond",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -4472,7 +4472,7 @@
     "species": "磁鐵寶可夢",
     "evolvesFrom": "小磁怪",
     "illustrator": "Shinji Kanda",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -4881,7 +4881,7 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "tags": [
       "太晶"
     ],
@@ -5248,7 +5248,7 @@
       "Colorless"
     ],
     "illustrator": "GIDORA",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "tags": [
       "太晶"
     ],
@@ -5371,7 +5371,7 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "tags": [
       "太晶"
     ],

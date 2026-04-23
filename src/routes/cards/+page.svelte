@@ -86,9 +86,9 @@
   const STAGE_ORDER: StageKey[] = ['Basic', 'Stage1', 'Stage2'];
   let selectedStages = $state<Set<StageKey>>(new Set());
 
-  // v2.83: 賽制賽季標記篩選 (H, I, J)
-  type RegMarkKey = 'H' | 'I' | 'J';
-  const REG_MARK_ORDER: RegMarkKey[] = ['H', 'I', 'J'];
+  // v2.84: 賽制賽季標記篩選 (G, H, I, J)
+  type RegMarkKey = 'G' | 'H' | 'I' | 'J';
+  const REG_MARK_ORDER: RegMarkKey[] = ['G', 'H', 'I', 'J'];
   let selectedRegMarks = $state<Set<RegMarkKey>>(new Set());
 
   /** 取得寶可夢的階段。v2.75 起 JSON 有 `stage` 欄位（由 migration 補齊），

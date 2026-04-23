@@ -3515,7 +3515,7 @@
     "pokedexNumber": 4,
     "species": "蜥蜴寶可夢",
     "illustrator": "Orca",
-    "regulationMark": "J",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -3552,7 +3552,7 @@
     "species": "火焰寶可夢",
     "evolvesFrom": "小火龍",
     "illustrator": "Julie Hang",
-    "regulationMark": "J",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -6154,7 +6154,7 @@
     "pokedexNumber": 935,
     "species": "小火星寶可夢",
     "illustrator": "Krgc",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -9691,7 +9691,7 @@
       "Colorless"
     ],
     "illustrator": "takuyoa",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -9866,7 +9866,7 @@
     "pokedexNumber": 81,
     "species": "磁鐵寶可夢",
     "illustrator": "Hoshino KURO",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -9909,7 +9909,7 @@
     "species": "磁鐵寶可夢",
     "evolvesFrom": "小磁怪",
     "illustrator": "Nisota Niso",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -11495,7 +11495,7 @@
     "pokedexNumber": 877,
     "species": "雙面寶可夢",
     "illustrator": "kodama",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -11588,7 +11588,7 @@
     "species": "電蛙寶可夢",
     "evolvesFrom": "電肚蛙ex",
     "illustrator": "Mina Nakai",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -15197,7 +15197,7 @@
     "pokedexNumber": 985,
     "species": "悖謬寶可夢",
     "illustrator": "kawayoo",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "tags": [
       "古代"
     ],
@@ -15385,7 +15385,7 @@
     "pokedexNumber": 999,
     "species": "寶箱寶可夢",
     "illustrator": "Takeshi Nakamura",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -16238,7 +16238,7 @@
     "pokedexNumber": 383,
     "species": "大陸寶可夢",
     "illustrator": "Kazumasa Yasukuni",
-    "regulationMark": "J",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -20194,7 +20194,7 @@
     "pokedexNumber": 568,
     "species": "垃圾袋寶可夢",
     "illustrator": "OKUBO",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -20242,7 +20242,7 @@
     "species": "垃圾場寶可夢",
     "evolvesFrom": "破破袋",
     "illustrator": "OKUBO",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -21174,7 +21174,7 @@
     "pokedexNumber": 986,
     "species": "悖謬寶可夢",
     "illustrator": "danciao",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "tags": [
       "古代"
     ],
@@ -23281,7 +23281,7 @@
     "species": "多汽缸寶可夢",
     "evolvesFrom": "噗隆隆",
     "illustrator": "GOSSAN",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -26792,7 +26792,7 @@
     "pokedexNumber": 701,
     "species": "摔角寶可夢",
     "illustrator": "KEIICHIRO ITO",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -27478,7 +27478,7 @@
     "pokedexNumber": 993,
     "species": "悖謬寶可夢",
     "illustrator": "KEIICHIRO ITO",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "tags": [
       "未來"
     ],
@@ -27768,7 +27768,7 @@
     "scrapedAt": "2026-04-16T08:37:24.925Z",
     "rulesText": "將自己的1隻寶可夢恢復「30」HP。",
     "illustrator": "Ayaka Yoshida",
-    "regulationMark": "J"
+    "regulationMark": "G"
   },
   {
     "id": "17115",
@@ -27782,7 +27782,7 @@
     "scrapedAt": "2026-04-16T08:37:25.623Z",
     "rulesText": "擲1次硬幣若為正面，則選擇1個對手的場上寶可夢身上附加的能量，將其丟棄。",
     "illustrator": "Ayaka Yoshida",
-    "regulationMark": "J"
+    "regulationMark": "G"
   },
   {
     "id": "17116",
@@ -28100,7 +28100,7 @@
     "scrapedAt": "2026-04-16T08:37:40.888Z",
     "rulesText": "擲1次硬幣若為正面，則選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "J"
+    "regulationMark": "G"
   },
   {
     "id": "17137",
@@ -28790,7 +28790,7 @@
     "scrapedAt": "2026-04-16T08:38:14.063Z",
     "rulesText": "雙方玩家各自將手牌全部放回牌庫並重洗。然後，各自從牌庫抽出4張卡。",
     "illustrator": "kantaro",
-    "regulationMark": "J"
+    "regulationMark": "G"
   },
   {
     "id": "17183",
@@ -29917,7 +29917,7 @@
     "pokedexNumber": 4,
     "species": "蜥蜴寶可夢",
     "illustrator": "Orca",
-    "regulationMark": "J",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -29954,7 +29954,7 @@
     "species": "火焰寶可夢",
     "evolvesFrom": "小火龍",
     "illustrator": "Julie Hang",
-    "regulationMark": "J",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -30561,7 +30561,7 @@
     "pokedexNumber": 935,
     "species": "小火星寶可夢",
     "illustrator": "Krgc",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -31182,7 +31182,7 @@
       "Colorless"
     ],
     "illustrator": "takuyoa",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -31348,7 +31348,7 @@
     "pokedexNumber": 877,
     "species": "雙面寶可夢",
     "illustrator": "kodama",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -33707,7 +33707,7 @@
     "scrapedAt": "2026-04-16T08:39:59.658Z",
     "rulesText": "將自己的1隻寶可夢恢復「30」HP。",
     "illustrator": "Ayaka Yoshida",
-    "regulationMark": "J"
+    "regulationMark": "G"
   },
   {
     "id": "18308",
@@ -33721,7 +33721,7 @@
     "scrapedAt": "2026-04-16T08:40:00.384Z",
     "rulesText": "擲1次硬幣若為正面，則選擇1個對手的場上寶可夢身上附加的能量，將其丟棄。",
     "illustrator": "Ayaka Yoshida",
-    "regulationMark": "J"
+    "regulationMark": "G"
   },
   {
     "id": "18309",
@@ -33805,7 +33805,7 @@
     "scrapedAt": "2026-04-16T08:40:04.795Z",
     "rulesText": "擲1次硬幣若為正面，則選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "J"
+    "regulationMark": "G"
   },
   {
     "id": "18315",
@@ -33931,7 +33931,7 @@
     "scrapedAt": "2026-04-16T08:40:11.505Z",
     "rulesText": "雙方玩家各自將手牌全部放回牌庫並重洗。然後，各自從牌庫抽出4張卡。",
     "illustrator": "kantaro",
-    "regulationMark": "J"
+    "regulationMark": "G"
   },
   {
     "id": "18324",
@@ -34990,7 +34990,7 @@
       "Colorless"
     ],
     "illustrator": "booota",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
