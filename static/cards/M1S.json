@@ -583,7 +583,7 @@
     "pokedexNumber": 1004,
     "species": "災厄寶可夢",
     "illustrator": "Gemi",
-    "regulationMark": "G",
+    "regulationMark": "I",
     "stage": "Basic"
   },
   {
@@ -1118,7 +1118,7 @@
     "pokedexNumber": 81,
     "species": "磁鐵寶可夢",
     "illustrator": "Krgc",
-    "regulationMark": "G",
+    "regulationMark": "I",
     "stage": "Basic"
   },
   {
@@ -1155,7 +1155,7 @@
     "species": "磁鐵寶可夢",
     "evolvesFrom": "小磁怪",
     "illustrator": "Saboteri",
-    "regulationMark": "G",
+    "regulationMark": "I",
     "stage": "Stage1"
   },
   {
@@ -1202,7 +1202,7 @@
     "species": "磁場寶可夢",
     "evolvesFrom": "三合一磁怪",
     "illustrator": "nagimiso",
-    "regulationMark": "G",
+    "regulationMark": "I",
     "stage": "Stage2"
   },
   {

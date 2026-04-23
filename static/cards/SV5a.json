@@ -774,7 +774,7 @@
     "pokedexNumber": 1004,
     "species": "災厄寶可夢",
     "illustrator": "Oku",
-    "regulationMark": "G",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -1292,7 +1292,7 @@
     "pokedexNumber": 877,
     "species": "雙面寶可夢",
     "illustrator": "kodama",
-    "regulationMark": "G",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -1385,7 +1385,7 @@
     "species": "電蛙寶可夢",
     "evolvesFrom": "電肚蛙ex",
     "illustrator": "Mina Nakai",
-    "regulationMark": "G",
+    "regulationMark": "H",
     "stage": "Stage1"
   },
   {
@@ -2013,7 +2013,7 @@
     "pokedexNumber": 701,
     "species": "摔角寶可夢",
     "illustrator": "Shigenori Negishi",
-    "regulationMark": "G",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -2060,7 +2060,7 @@
     "pokedexNumber": 1003,
     "species": "災厄寶可夢",
     "illustrator": "Anesaki Dynamic",
-    "regulationMark": "G",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -2352,7 +2352,7 @@
     "scrapedAt": "2026-04-16T07:52:24.668Z",
     "rulesText": "擲1次硬幣若為正面，則選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "G"
+    "regulationMark": "J"
   },
   {
     "id": "10305",
