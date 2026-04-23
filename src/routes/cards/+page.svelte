@@ -147,6 +147,9 @@
     else next.add(s);
     selectedStages = next;
   }
+  function clearStages() {
+    selectedStages = new Set();
+  }
   function toggleRegMark(m: RegMarkKey) {
     const next = new Set(selectedRegMarks);
     if (next.has(m)) next.delete(m);

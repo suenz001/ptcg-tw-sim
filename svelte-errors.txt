@@ -1,0 +1,3050 @@
+Loading svelte-check in workspace: e:\ptcg-tw-sim
+Getting Svelte diagnostics...
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:14:7
+[31mError[39m: Property 'createdAt' is missing in type '{ id: string; name: string; entries: { cardId: string; count: number; }[]; }' but required in type 'Omit<Deck, "updatedAt">'. 
+[36m/** 超級耿鬼ex 預組牌組（MBG，60 張） */
+const [35mGENGAR_DECK[36m: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_mbg__',[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:49:7
+[31mError[39m: Property 'createdAt' is missing in type '{ id: string; name: string; entries: { cardId: string; count: number; }[]; }' but required in type 'Omit<Deck, "updatedAt">'. 
+[36m/** 超級蒂安希ex 預組牌組（MBD，60 張） */
+const [35mDIANCIE_DECK[36m: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_mbd__',[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:90:7
+[31mError[39m: Property 'createdAt' is missing in type '{ id: string; name: string; entries: { cardId: string; count: number; }[]; }' but required in type 'Omit<Deck, "updatedAt">'. 
+[36m */
+const [35mCYNTHIA_GARCHOMP_DECK[36m: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_cynthia_garchomp__',[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:138:7
+[31mError[39m: Property 'createdAt' is missing in type '{ id: string; name: string; entries: { cardId: string; count: number; }[]; }' but required in type 'Omit<Deck, "updatedAt">'. 
+[36m */
+const [35mMARRUNE_DRAGAPULT_DECK[36m: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_marrune_dragapult__',[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:189:7
+[31mError[39m: Property 'createdAt' is missing in type '{ id: string; name: string; entries: { cardId: string; count: number; }[]; }' but required in type 'Omit<Deck, "updatedAt">'. 
+[36m */
+const [35mALAKAZAM_DECK[36m: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_alakazam__',[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:235:7
+[31mError[39m: Property 'createdAt' is missing in type '{ id: string; name: string; entries: { cardId: string; count: number; }[]; }' but required in type 'Omit<Deck, "updatedAt">'. 
+[36m */
+const [35mMARNIE_SCRAFTY_DECK[36m: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_marnie_scrafty__',[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:283:7
+[31mError[39m: Property 'createdAt' is missing in type '{ id: string; name: string; entries: { cardId: string; count: number; }[]; }' but required in type 'Omit<Deck, "updatedAt">'. 
+[36m */
+const [35mROCKET_MEWTWO_DECK[36m: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_rocket_mewtwo__',[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:331:7
+[31mError[39m: Property 'createdAt' is missing in type '{ id: string; name: string; entries: { cardId: string; count: number; }[]; }' but required in type 'Omit<Deck, "updatedAt">'. 
+[36m */
+const [35mTHUNDER_DRUM_DECK[36m: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_thunder_drum__',[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:367:21
+[31mError[39m: Type 'number' is not assignable to type 'string'. 
+[36mexport const PRESET_DECKS: Deck[] = [
+  { ...GENGAR_DECK, [35mupdatedAt[36m: 0 },
+  { ...DIANCIE_DECK, updatedAt: 0 },[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:368:22
+[31mError[39m: Type 'number' is not assignable to type 'string'. 
+[36m  { ...GENGAR_DECK, updatedAt: 0 },
+  { ...DIANCIE_DECK, [35mupdatedAt[36m: 0 },
+  { ...CYNTHIA_GARCHOMP_DECK, updatedAt: 0 },[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:369:31
+[31mError[39m: Type 'number' is not assignable to type 'string'. 
+[36m  { ...DIANCIE_DECK, updatedAt: 0 },
+  { ...CYNTHIA_GARCHOMP_DECK, [35mupdatedAt[36m: 0 },
+  { ...MARRUNE_DRAGAPULT_DECK, updatedAt: 0 },[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:370:32
+[31mError[39m: Type 'number' is not assignable to type 'string'. 
+[36m  { ...CYNTHIA_GARCHOMP_DECK, updatedAt: 0 },
+  { ...MARRUNE_DRAGAPULT_DECK, [35mupdatedAt[36m: 0 },
+  { ...ALAKAZAM_DECK, updatedAt: 0 },[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:371:23
+[31mError[39m: Type 'number' is not assignable to type 'string'. 
+[36m  { ...MARRUNE_DRAGAPULT_DECK, updatedAt: 0 },
+  { ...ALAKAZAM_DECK, [35mupdatedAt[36m: 0 },
+  { ...MARNIE_SCRAFTY_DECK, updatedAt: 0 },[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:372:29
+[31mError[39m: Type 'number' is not assignable to type 'string'. 
+[36m  { ...ALAKAZAM_DECK, updatedAt: 0 },
+  { ...MARNIE_SCRAFTY_DECK, [35mupdatedAt[36m: 0 },
+  { ...ROCKET_MEWTWO_DECK, updatedAt: 0 },[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:373:28
+[31mError[39m: Type 'number' is not assignable to type 'string'. 
+[36m  { ...MARNIE_SCRAFTY_DECK, updatedAt: 0 },
+  { ...ROCKET_MEWTWO_DECK, [35mupdatedAt[36m: 0 },
+  { ...THUNDER_DRUM_DECK, updatedAt: 0 },[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\decks\presets.ts[39m:374:27
+[31mError[39m: Type 'number' is not assignable to type 'string'. 
+[36m  { ...ROCKET_MEWTWO_DECK, updatedAt: 0 },
+  { ...THUNDER_DRUM_DECK, [35mupdatedAt[36m: 0 },
+];[39m
+
+e:\ptcg-tw-sim\[32msrc\lib\game\effects.ts[39m:4471:37
+[31mError[39m: Type 'null' is not assignable to type '{ justPlaced: boolean; iid: string; cardId: string; damage: number; energyAttached: CardInstance[]; toolAttached?: CardInstance; evolvedFromIid?: string; damageReduceNextHit?: number; ... 16 more ...; deferredPrizeBonusThisTurn?: number; }'. 
+[36m    const prizes = isExCard(newActiveCard) ? 2 : 1;
+    newDefender = { ...newDefender, [35mactive[36m: null, discard: [...newDefender.discard, ...koList] };
+    players = [...s.players] as [PlayerState, PlayerState];[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\cards\+page.svelte[39m:424:5
+[33mWarn[39m: Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus (svelte)
+[36m  {#if selected}
+    [35m<div class="modal" role="dialog" aria-modal="true" onclick={closeModal}>
+      <div class="modalInner" onclick={(e) => e.stopPropagation()} role="document">
+        <button class="close" onclick={closeModal} aria-label="關閉">×</button>
+        <div class="detailGrid">
+          <button
+            class="detailImgBtn"
+            onclick={() => openLightbox(selected!.imageUrl)}
+            aria-label="放大卡牌圖片"
+            title="點擊放大"
+          >
+            <img class="detailImg" src={selected.imageUrl} alt={selected.name} />
+            <span class="zoomHint">🔍</span>
+          </button>
+          <div class="detailInfo">
+            <h2>{selected.name}</h2>
+            <p class="tag">
+              {selected.supertype} / {selected.subtype}
+              {#if cardStage(selected)}
+                · {STAGE_LABEL[cardStage(selected)!] ?? cardStage(selected)}
+              {/if}
+              {#if selected.hp}· HP {selected.hp}{/if}
+              {#if selected.pokemonType}
+                · <span class="energy" style:background={ENERGY_COLOR[selected.pokemonType]}>
+                  {ENERGY_LABEL[selected.pokemonType]}
+                </span>
+              {/if}
+            </p>
+            {#if selected.evolvesFrom}
+              <p class="evo">從「{selected.evolvesFrom}」進化</p>
+            {/if}
+
+            {#if (selected.tags && selected.tags.length) || isMegaEx(selected)}
+              <p class="tagChips">
+                {#each selected.tags ?? [] as t}
+                  <span class="tagChip">{t}</span>
+                {/each}
+                {#if isMegaEx(selected)}
+                  <span class="tagChip">超級進化</span>
+                {/if}
+              </p>
+            {/if}
+
+            {#if selected.abilities?.length}
+              <section>
+                <h3>特性</h3>
+                {#each selected.abilities as ab}
+                  <div class="skill">
+                    <div class="skillHead">
+                      <span class="abilityLabel">[{ab.label}]</span>
+                      <span class="skillName">{ab.name}</span>
+                    </div>
+                    <p class="skillEffect">{ab.effect}</p>
+                  </div>
+                {/each}
+              </section>
+            {/if}
+
+            {#if selected.attacks?.length}
+              <section>
+                <h3>招式</h3>
+                {#each selected.attacks as atk}
+                  <div class="skill">
+                    <div class="skillHead">
+                      <span class="cost">
+                        {#each atk.cost as e}<span
+                            class="energyDot"
+                            style:background={ENERGY_COLOR[e]}
+                            title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                      </span>
+                      <span class="skillName">{atk.name}</span>
+                      {#if atk.damage}<span class="damage">{atk.damage}</span>{/if}
+                    </div>
+                    {#if atk.effect}<p class="skillEffect">{atk.effect}</p>{/if}
+                  </div>
+                {/each}
+              </section>
+            {/if}
+
+            {#if selected.rulesText}
+              <section>
+                <h3>效果</h3>
+                <p class="rules">{selected.rulesText}</p>
+              </section>
+            {/if}
+
+            {#if selected.weakness || selected.resistance || selected.retreatCost}
+              <section class="stats">
+                {#if selected.weakness}
+                  <div>
+                    <strong>弱點</strong>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.weakness.type]}>
+                      {ENERGY_LABEL[selected.weakness.type]}
+                    </span>
+                    {selected.weakness.value}
+                  </div>
+                {/if}
+                {#if selected.resistance}
+                  <div>
+                    <strong>抵抗力</strong>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.resistance.type]}>
+                      {ENERGY_LABEL[selected.resistance.type]}
+                    </span>
+                    {selected.resistance.value}
+                  </div>
+                {/if}
+                {#if selected.retreatCost}
+                  <div>
+                    <strong>撤退</strong>
+                    {#each selected.retreatCost as e}<span
+                        class="energyDot small"
+                        style:background={ENERGY_COLOR[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                  </div>
+                {/if}
+              </section>
+            {/if}
+
+            <p class="foot">
+              {selected.setCode} · {selected.collectorNumber}
+              {#if selected.regulationMark}· {selected.regulationMark}{/if}
+              {#if selected.illustrator}· 繪師 {selected.illustrator}{/if}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>[36m
+  {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\cards\+page.svelte[39m:424:5
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m  {#if selected}
+    [35m<div class="modal" role="dialog" aria-modal="true" onclick={closeModal}>
+      <div class="modalInner" onclick={(e) => e.stopPropagation()} role="document">
+        <button class="close" onclick={closeModal} aria-label="關閉">×</button>
+        <div class="detailGrid">
+          <button
+            class="detailImgBtn"
+            onclick={() => openLightbox(selected!.imageUrl)}
+            aria-label="放大卡牌圖片"
+            title="點擊放大"
+          >
+            <img class="detailImg" src={selected.imageUrl} alt={selected.name} />
+            <span class="zoomHint">🔍</span>
+          </button>
+          <div class="detailInfo">
+            <h2>{selected.name}</h2>
+            <p class="tag">
+              {selected.supertype} / {selected.subtype}
+              {#if cardStage(selected)}
+                · {STAGE_LABEL[cardStage(selected)!] ?? cardStage(selected)}
+              {/if}
+              {#if selected.hp}· HP {selected.hp}{/if}
+              {#if selected.pokemonType}
+                · <span class="energy" style:background={ENERGY_COLOR[selected.pokemonType]}>
+                  {ENERGY_LABEL[selected.pokemonType]}
+                </span>
+              {/if}
+            </p>
+            {#if selected.evolvesFrom}
+              <p class="evo">從「{selected.evolvesFrom}」進化</p>
+            {/if}
+
+            {#if (selected.tags && selected.tags.length) || isMegaEx(selected)}
+              <p class="tagChips">
+                {#each selected.tags ?? [] as t}
+                  <span class="tagChip">{t}</span>
+                {/each}
+                {#if isMegaEx(selected)}
+                  <span class="tagChip">超級進化</span>
+                {/if}
+              </p>
+            {/if}
+
+            {#if selected.abilities?.length}
+              <section>
+                <h3>特性</h3>
+                {#each selected.abilities as ab}
+                  <div class="skill">
+                    <div class="skillHead">
+                      <span class="abilityLabel">[{ab.label}]</span>
+                      <span class="skillName">{ab.name}</span>
+                    </div>
+                    <p class="skillEffect">{ab.effect}</p>
+                  </div>
+                {/each}
+              </section>
+            {/if}
+
+            {#if selected.attacks?.length}
+              <section>
+                <h3>招式</h3>
+                {#each selected.attacks as atk}
+                  <div class="skill">
+                    <div class="skillHead">
+                      <span class="cost">
+                        {#each atk.cost as e}<span
+                            class="energyDot"
+                            style:background={ENERGY_COLOR[e]}
+                            title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                      </span>
+                      <span class="skillName">{atk.name}</span>
+                      {#if atk.damage}<span class="damage">{atk.damage}</span>{/if}
+                    </div>
+                    {#if atk.effect}<p class="skillEffect">{atk.effect}</p>{/if}
+                  </div>
+                {/each}
+              </section>
+            {/if}
+
+            {#if selected.rulesText}
+              <section>
+                <h3>效果</h3>
+                <p class="rules">{selected.rulesText}</p>
+              </section>
+            {/if}
+
+            {#if selected.weakness || selected.resistance || selected.retreatCost}
+              <section class="stats">
+                {#if selected.weakness}
+                  <div>
+                    <strong>弱點</strong>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.weakness.type]}>
+                      {ENERGY_LABEL[selected.weakness.type]}
+                    </span>
+                    {selected.weakness.value}
+                  </div>
+                {/if}
+                {#if selected.resistance}
+                  <div>
+                    <strong>抵抗力</strong>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.resistance.type]}>
+                      {ENERGY_LABEL[selected.resistance.type]}
+                    </span>
+                    {selected.resistance.value}
+                  </div>
+                {/if}
+                {#if selected.retreatCost}
+                  <div>
+                    <strong>撤退</strong>
+                    {#each selected.retreatCost as e}<span
+                        class="energyDot small"
+                        style:background={ENERGY_COLOR[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                  </div>
+                {/if}
+              </section>
+            {/if}
+
+            <p class="foot">
+              {selected.setCode} · {selected.collectorNumber}
+              {#if selected.regulationMark}· {selected.regulationMark}{/if}
+              {#if selected.illustrator}· 繪師 {selected.illustrator}{/if}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>[36m
+  {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\cards\+page.svelte[39m:425:7
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m    <div class="modal" role="dialog" aria-modal="true" onclick={closeModal}>
+      [35m<div class="modalInner" onclick={(e) => e.stopPropagation()} role="document">
+        <button class="close" onclick={closeModal} aria-label="關閉">×</button>
+        <div class="detailGrid">
+          <button
+            class="detailImgBtn"
+            onclick={() => openLightbox(selected!.imageUrl)}
+            aria-label="放大卡牌圖片"
+            title="點擊放大"
+          >
+            <img class="detailImg" src={selected.imageUrl} alt={selected.name} />
+            <span class="zoomHint">🔍</span>
+          </button>
+          <div class="detailInfo">
+            <h2>{selected.name}</h2>
+            <p class="tag">
+              {selected.supertype} / {selected.subtype}
+              {#if cardStage(selected)}
+                · {STAGE_LABEL[cardStage(selected)!] ?? cardStage(selected)}
+              {/if}
+              {#if selected.hp}· HP {selected.hp}{/if}
+              {#if selected.pokemonType}
+                · <span class="energy" style:background={ENERGY_COLOR[selected.pokemonType]}>
+                  {ENERGY_LABEL[selected.pokemonType]}
+                </span>
+              {/if}
+            </p>
+            {#if selected.evolvesFrom}
+              <p class="evo">從「{selected.evolvesFrom}」進化</p>
+            {/if}
+
+            {#if (selected.tags && selected.tags.length) || isMegaEx(selected)}
+              <p class="tagChips">
+                {#each selected.tags ?? [] as t}
+                  <span class="tagChip">{t}</span>
+                {/each}
+                {#if isMegaEx(selected)}
+                  <span class="tagChip">超級進化</span>
+                {/if}
+              </p>
+            {/if}
+
+            {#if selected.abilities?.length}
+              <section>
+                <h3>特性</h3>
+                {#each selected.abilities as ab}
+                  <div class="skill">
+                    <div class="skillHead">
+                      <span class="abilityLabel">[{ab.label}]</span>
+                      <span class="skillName">{ab.name}</span>
+                    </div>
+                    <p class="skillEffect">{ab.effect}</p>
+                  </div>
+                {/each}
+              </section>
+            {/if}
+
+            {#if selected.attacks?.length}
+              <section>
+                <h3>招式</h3>
+                {#each selected.attacks as atk}
+                  <div class="skill">
+                    <div class="skillHead">
+                      <span class="cost">
+                        {#each atk.cost as e}<span
+                            class="energyDot"
+                            style:background={ENERGY_COLOR[e]}
+                            title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                      </span>
+                      <span class="skillName">{atk.name}</span>
+                      {#if atk.damage}<span class="damage">{atk.damage}</span>{/if}
+                    </div>
+                    {#if atk.effect}<p class="skillEffect">{atk.effect}</p>{/if}
+                  </div>
+                {/each}
+              </section>
+            {/if}
+
+            {#if selected.rulesText}
+              <section>
+                <h3>效果</h3>
+                <p class="rules">{selected.rulesText}</p>
+              </section>
+            {/if}
+
+            {#if selected.weakness || selected.resistance || selected.retreatCost}
+              <section class="stats">
+                {#if selected.weakness}
+                  <div>
+                    <strong>弱點</strong>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.weakness.type]}>
+                      {ENERGY_LABEL[selected.weakness.type]}
+                    </span>
+                    {selected.weakness.value}
+                  </div>
+                {/if}
+                {#if selected.resistance}
+                  <div>
+                    <strong>抵抗力</strong>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.resistance.type]}>
+                      {ENERGY_LABEL[selected.resistance.type]}
+                    </span>
+                    {selected.resistance.value}
+                  </div>
+                {/if}
+                {#if selected.retreatCost}
+                  <div>
+                    <strong>撤退</strong>
+                    {#each selected.retreatCost as e}<span
+                        class="energyDot small"
+                        style:background={ENERGY_COLOR[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                  </div>
+                {/if}
+              </section>
+            {/if}
+
+            <p class="foot">
+              {selected.setCode} · {selected.collectorNumber}
+              {#if selected.regulationMark}· {selected.regulationMark}{/if}
+              {#if selected.illustrator}· 繪師 {selected.illustrator}{/if}
+            </p>
+          </div>
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\cards\+page.svelte[39m:425:7
+[33mWarn[39m: Non-interactive element `<div>` should not be assigned mouse or keyboard event listeners
+https://svelte.dev/e/a11y_no_noninteractive_element_interactions (svelte)
+[36m    <div class="modal" role="dialog" aria-modal="true" onclick={closeModal}>
+      [35m<div class="modalInner" onclick={(e) => e.stopPropagation()} role="document">
+        <button class="close" onclick={closeModal} aria-label="關閉">×</button>
+        <div class="detailGrid">
+          <button
+            class="detailImgBtn"
+            onclick={() => openLightbox(selected!.imageUrl)}
+            aria-label="放大卡牌圖片"
+            title="點擊放大"
+          >
+            <img class="detailImg" src={selected.imageUrl} alt={selected.name} />
+            <span class="zoomHint">🔍</span>
+          </button>
+          <div class="detailInfo">
+            <h2>{selected.name}</h2>
+            <p class="tag">
+              {selected.supertype} / {selected.subtype}
+              {#if cardStage(selected)}
+                · {STAGE_LABEL[cardStage(selected)!] ?? cardStage(selected)}
+              {/if}
+              {#if selected.hp}· HP {selected.hp}{/if}
+              {#if selected.pokemonType}
+                · <span class="energy" style:background={ENERGY_COLOR[selected.pokemonType]}>
+                  {ENERGY_LABEL[selected.pokemonType]}
+                </span>
+              {/if}
+            </p>
+            {#if selected.evolvesFrom}
+              <p class="evo">從「{selected.evolvesFrom}」進化</p>
+            {/if}
+
+            {#if (selected.tags && selected.tags.length) || isMegaEx(selected)}
+              <p class="tagChips">
+                {#each selected.tags ?? [] as t}
+                  <span class="tagChip">{t}</span>
+                {/each}
+                {#if isMegaEx(selected)}
+                  <span class="tagChip">超級進化</span>
+                {/if}
+              </p>
+            {/if}
+
+            {#if selected.abilities?.length}
+              <section>
+                <h3>特性</h3>
+                {#each selected.abilities as ab}
+                  <div class="skill">
+                    <div class="skillHead">
+                      <span class="abilityLabel">[{ab.label}]</span>
+                      <span class="skillName">{ab.name}</span>
+                    </div>
+                    <p class="skillEffect">{ab.effect}</p>
+                  </div>
+                {/each}
+              </section>
+            {/if}
+
+            {#if selected.attacks?.length}
+              <section>
+                <h3>招式</h3>
+                {#each selected.attacks as atk}
+                  <div class="skill">
+                    <div class="skillHead">
+                      <span class="cost">
+                        {#each atk.cost as e}<span
+                            class="energyDot"
+                            style:background={ENERGY_COLOR[e]}
+                            title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                      </span>
+                      <span class="skillName">{atk.name}</span>
+                      {#if atk.damage}<span class="damage">{atk.damage}</span>{/if}
+                    </div>
+                    {#if atk.effect}<p class="skillEffect">{atk.effect}</p>{/if}
+                  </div>
+                {/each}
+              </section>
+            {/if}
+
+            {#if selected.rulesText}
+              <section>
+                <h3>效果</h3>
+                <p class="rules">{selected.rulesText}</p>
+              </section>
+            {/if}
+
+            {#if selected.weakness || selected.resistance || selected.retreatCost}
+              <section class="stats">
+                {#if selected.weakness}
+                  <div>
+                    <strong>弱點</strong>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.weakness.type]}>
+                      {ENERGY_LABEL[selected.weakness.type]}
+                    </span>
+                    {selected.weakness.value}
+                  </div>
+                {/if}
+                {#if selected.resistance}
+                  <div>
+                    <strong>抵抗力</strong>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.resistance.type]}>
+                      {ENERGY_LABEL[selected.resistance.type]}
+                    </span>
+                    {selected.resistance.value}
+                  </div>
+                {/if}
+                {#if selected.retreatCost}
+                  <div>
+                    <strong>撤退</strong>
+                    {#each selected.retreatCost as e}<span
+                        class="energyDot small"
+                        style:background={ENERGY_COLOR[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                  </div>
+                {/if}
+              </section>
+            {/if}
+
+            <p class="foot">
+              {selected.setCode} · {selected.collectorNumber}
+              {#if selected.regulationMark}· {selected.regulationMark}{/if}
+              {#if selected.illustrator}· 繪師 {selected.illustrator}{/if}
+            </p>
+          </div>
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\cards\+page.svelte[39m:552:5
+[33mWarn[39m: Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus (svelte)
+[36m  {#if lightbox}
+    [35m<div
+      class="lightboxOverlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="放大卡牌圖片"
+      onclick={closeLightbox}
+    >
+      <img class="lightboxImg" src={lightbox} alt="放大圖片" onclick={(e) => e.stopPropagation()} />
+      <button class="lightboxClose" onclick={closeLightbox} aria-label="關閉">×</button>
+    </div>[36m
+  {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\cards\+page.svelte[39m:552:5
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m  {#if lightbox}
+    [35m<div
+      class="lightboxOverlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="放大卡牌圖片"
+      onclick={closeLightbox}
+    >
+      <img class="lightboxImg" src={lightbox} alt="放大圖片" onclick={(e) => e.stopPropagation()} />
+      <button class="lightboxClose" onclick={closeLightbox} aria-label="關閉">×</button>
+    </div>[36m
+  {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\cards\+page.svelte[39m:559:7
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m    >
+      [35m<img class="lightboxImg" src={lightbox} alt="放大圖片" onclick={(e) => e.stopPropagation()} />[36m
+      <button class="lightboxClose" onclick={closeLightbox} aria-label="關閉">×</button>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\cards\+page.svelte[39m:559:7
+[33mWarn[39m: Non-interactive element `<img>` should not be assigned mouse or keyboard event listeners
+https://svelte.dev/e/a11y_no_noninteractive_element_interactions (svelte)
+[36m    >
+      [35m<img class="lightboxImg" src={lightbox} alt="放大圖片" onclick={(e) => e.stopPropagation()} />[36m
+      <button class="lightboxClose" onclick={closeLightbox} aria-label="關閉">×</button>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\cards\+page.svelte[39m:645:5
+[33mWarn[39m: Also define the standard property 'line-clamp' for compatibility (css)
+[36m    display: -webkit-box;
+    [35m-webkit-line-clamp[36m: 2;
+    -webkit-box-orient: vertical;[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:842:3
+[33mWarn[39m: Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus (svelte)
+[36m  {@const pvMax = maxCopies(pv)}
+  [35m<div class="pv-overlay" role="dialog" aria-modal="true" aria-label="卡片詳情"
+    onclick={closePreview}>
+    <div class="pv-inner" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={closePreview} aria-label="關閉">×</button>
+
+      <!-- Top: image + quick info -->
+      <div class="pv-top">
+        <img class="pv-img" src={pv.imageUrl} alt={pv.name} />
+
+        <div class="pv-info">
+          <h2 class="pv-name">{pv.name}</h2>
+
+          <!-- badges row -->
+          <div class="pv-badges">
+            {#if pv.pokemonType}
+              <span class="type-badge" style="background:{ENERGY_COLOR[pv.pokemonType]}">
+                {ENERGY_LABEL[pv.pokemonType]}
+              </span>
+            {/if}
+            <span class="sub-badge">{pv.subtype}</span>
+            {#if pv.hp}
+              <span class="hp-badge">HP {pv.hp}</span>
+            {/if}
+            {#if pv.regulationMark}
+              <span class="mark mark-{pv.regulationMark}">{pv.regulationMark}</span>
+            {/if}
+          </div>
+
+          {#if pv.evolvesFrom}
+            <p class="pv-evolve">進化自：{pv.evolvesFrom}</p>
+          {/if}
+
+          <!-- Abilities -->
+          {#if pv.abilities?.length}
+            <div class="pv-section">
+              {#each pv.abilities as ab}
+                <div class="pv-ability">
+                  <span class="ab-label">{ab.label}</span>
+                  <strong class="ab-name">{ab.name}</strong>
+                  <p class="ab-effect">{ab.effect}</p>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Attacks -->
+          {#if pv.attacks?.length}
+            <div class="pv-section">
+              {#each pv.attacks as atk}
+                <div class="pv-attack">
+                  <div class="atk-head">
+                    <span class="atk-cost">
+                      {#each atk.cost as e}
+                        <span class="energy-pip" style="background:{ENERGY_COLOR[e]}" title={ENERGY_LABEL[e]}>
+                          {ENERGY_LABEL[e]}
+                        </span>
+                      {/each}
+                    </span>
+                    <strong class="atk-name">{atk.name}</strong>
+                    {#if atk.damage}
+                      <span class="atk-dmg">{atk.damage}</span>
+                    {/if}
+                  </div>
+                  {#if atk.effect}
+                    <p class="atk-effect">{atk.effect}</p>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Rules text (Trainer / Energy) -->
+          {#if pv.rulesText}
+            <div class="pv-section pv-rules">{pv.rulesText}</div>
+          {/if}
+
+          <!-- Weakness / Resistance / Retreat -->
+          {#if pv.weakness || pv.resistance || pv.retreatCost?.length}
+            <div class="pv-wrc">
+              {#if pv.weakness}
+                <span>弱點：
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.weakness.type]}">
+                    {ENERGY_LABEL[pv.weakness.type]}
+                  </span>
+                  {pv.weakness.value}
+                </span>
+              {/if}
+              {#if pv.resistance}
+                <span>抵抗力：
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.resistance.type]}">
+                    {ENERGY_LABEL[pv.resistance.type]}
+                  </span>
+                  {pv.resistance.value}
+                </span>
+              {/if}
+              {#if pv.retreatCost?.length}
+                <span>撤退：
+                  {#each pv.retreatCost as e}
+                    <span class="energy-pip sm" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>
+                  {/each}
+                </span>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Set info -->
+          <p class="pv-setinfo">{pv.setCode} · {pv.collectorNumber}</p>
+
+          <!-- Deck counter -->
+          <div class="pv-counter">
+            {#if active}
+              <span class="pv-count-label">牌組中：<strong>{pvCount} / {pvMax}</strong></span>
+              <button class="icon" onclick={() => removeCard(pv.id)} disabled={isPresetActive || pvCount <= 0}>−</button>
+              <button
+                class="icon"
+                onclick={() => addCard(pv)}
+                title={aceSpecBlocked(pv) ? '一副牌最多 1 張 ACE SPEC' : ''}
+                disabled={isPresetActive || (!isBasicEnergy(pv) && pvCount >= pvMax) || aceSpecBlocked(pv)}>+</button>
+              {#if isPresetActive}<span class="pv-count-label muted" style="margin-left:.5rem">（預組唯讀）</span>{/if}
+            {:else}
+              <span class="pv-count-label muted">請先選擇牌組</span>
+            {/if}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>[36m
+{/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:842:3
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m  {@const pvMax = maxCopies(pv)}
+  [35m<div class="pv-overlay" role="dialog" aria-modal="true" aria-label="卡片詳情"
+    onclick={closePreview}>
+    <div class="pv-inner" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={closePreview} aria-label="關閉">×</button>
+
+      <!-- Top: image + quick info -->
+      <div class="pv-top">
+        <img class="pv-img" src={pv.imageUrl} alt={pv.name} />
+
+        <div class="pv-info">
+          <h2 class="pv-name">{pv.name}</h2>
+
+          <!-- badges row -->
+          <div class="pv-badges">
+            {#if pv.pokemonType}
+              <span class="type-badge" style="background:{ENERGY_COLOR[pv.pokemonType]}">
+                {ENERGY_LABEL[pv.pokemonType]}
+              </span>
+            {/if}
+            <span class="sub-badge">{pv.subtype}</span>
+            {#if pv.hp}
+              <span class="hp-badge">HP {pv.hp}</span>
+            {/if}
+            {#if pv.regulationMark}
+              <span class="mark mark-{pv.regulationMark}">{pv.regulationMark}</span>
+            {/if}
+          </div>
+
+          {#if pv.evolvesFrom}
+            <p class="pv-evolve">進化自：{pv.evolvesFrom}</p>
+          {/if}
+
+          <!-- Abilities -->
+          {#if pv.abilities?.length}
+            <div class="pv-section">
+              {#each pv.abilities as ab}
+                <div class="pv-ability">
+                  <span class="ab-label">{ab.label}</span>
+                  <strong class="ab-name">{ab.name}</strong>
+                  <p class="ab-effect">{ab.effect}</p>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Attacks -->
+          {#if pv.attacks?.length}
+            <div class="pv-section">
+              {#each pv.attacks as atk}
+                <div class="pv-attack">
+                  <div class="atk-head">
+                    <span class="atk-cost">
+                      {#each atk.cost as e}
+                        <span class="energy-pip" style="background:{ENERGY_COLOR[e]}" title={ENERGY_LABEL[e]}>
+                          {ENERGY_LABEL[e]}
+                        </span>
+                      {/each}
+                    </span>
+                    <strong class="atk-name">{atk.name}</strong>
+                    {#if atk.damage}
+                      <span class="atk-dmg">{atk.damage}</span>
+                    {/if}
+                  </div>
+                  {#if atk.effect}
+                    <p class="atk-effect">{atk.effect}</p>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Rules text (Trainer / Energy) -->
+          {#if pv.rulesText}
+            <div class="pv-section pv-rules">{pv.rulesText}</div>
+          {/if}
+
+          <!-- Weakness / Resistance / Retreat -->
+          {#if pv.weakness || pv.resistance || pv.retreatCost?.length}
+            <div class="pv-wrc">
+              {#if pv.weakness}
+                <span>弱點：
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.weakness.type]}">
+                    {ENERGY_LABEL[pv.weakness.type]}
+                  </span>
+                  {pv.weakness.value}
+                </span>
+              {/if}
+              {#if pv.resistance}
+                <span>抵抗力：
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.resistance.type]}">
+                    {ENERGY_LABEL[pv.resistance.type]}
+                  </span>
+                  {pv.resistance.value}
+                </span>
+              {/if}
+              {#if pv.retreatCost?.length}
+                <span>撤退：
+                  {#each pv.retreatCost as e}
+                    <span class="energy-pip sm" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>
+                  {/each}
+                </span>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Set info -->
+          <p class="pv-setinfo">{pv.setCode} · {pv.collectorNumber}</p>
+
+          <!-- Deck counter -->
+          <div class="pv-counter">
+            {#if active}
+              <span class="pv-count-label">牌組中：<strong>{pvCount} / {pvMax}</strong></span>
+              <button class="icon" onclick={() => removeCard(pv.id)} disabled={isPresetActive || pvCount <= 0}>−</button>
+              <button
+                class="icon"
+                onclick={() => addCard(pv)}
+                title={aceSpecBlocked(pv) ? '一副牌最多 1 張 ACE SPEC' : ''}
+                disabled={isPresetActive || (!isBasicEnergy(pv) && pvCount >= pvMax) || aceSpecBlocked(pv)}>+</button>
+              {#if isPresetActive}<span class="pv-count-label muted" style="margin-left:.5rem">（預組唯讀）</span>{/if}
+            {:else}
+              <span class="pv-count-label muted">請先選擇牌組</span>
+            {/if}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>[36m
+{/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:844:5
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m    onclick={closePreview}>
+    [35m<div class="pv-inner" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={closePreview} aria-label="關閉">×</button>
+
+      <!-- Top: image + quick info -->
+      <div class="pv-top">
+        <img class="pv-img" src={pv.imageUrl} alt={pv.name} />
+
+        <div class="pv-info">
+          <h2 class="pv-name">{pv.name}</h2>
+
+          <!-- badges row -->
+          <div class="pv-badges">
+            {#if pv.pokemonType}
+              <span class="type-badge" style="background:{ENERGY_COLOR[pv.pokemonType]}">
+                {ENERGY_LABEL[pv.pokemonType]}
+              </span>
+            {/if}
+            <span class="sub-badge">{pv.subtype}</span>
+            {#if pv.hp}
+              <span class="hp-badge">HP {pv.hp}</span>
+            {/if}
+            {#if pv.regulationMark}
+              <span class="mark mark-{pv.regulationMark}">{pv.regulationMark}</span>
+            {/if}
+          </div>
+
+          {#if pv.evolvesFrom}
+            <p class="pv-evolve">進化自：{pv.evolvesFrom}</p>
+          {/if}
+
+          <!-- Abilities -->
+          {#if pv.abilities?.length}
+            <div class="pv-section">
+              {#each pv.abilities as ab}
+                <div class="pv-ability">
+                  <span class="ab-label">{ab.label}</span>
+                  <strong class="ab-name">{ab.name}</strong>
+                  <p class="ab-effect">{ab.effect}</p>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Attacks -->
+          {#if pv.attacks?.length}
+            <div class="pv-section">
+              {#each pv.attacks as atk}
+                <div class="pv-attack">
+                  <div class="atk-head">
+                    <span class="atk-cost">
+                      {#each atk.cost as e}
+                        <span class="energy-pip" style="background:{ENERGY_COLOR[e]}" title={ENERGY_LABEL[e]}>
+                          {ENERGY_LABEL[e]}
+                        </span>
+                      {/each}
+                    </span>
+                    <strong class="atk-name">{atk.name}</strong>
+                    {#if atk.damage}
+                      <span class="atk-dmg">{atk.damage}</span>
+                    {/if}
+                  </div>
+                  {#if atk.effect}
+                    <p class="atk-effect">{atk.effect}</p>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Rules text (Trainer / Energy) -->
+          {#if pv.rulesText}
+            <div class="pv-section pv-rules">{pv.rulesText}</div>
+          {/if}
+
+          <!-- Weakness / Resistance / Retreat -->
+          {#if pv.weakness || pv.resistance || pv.retreatCost?.length}
+            <div class="pv-wrc">
+              {#if pv.weakness}
+                <span>弱點：
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.weakness.type]}">
+                    {ENERGY_LABEL[pv.weakness.type]}
+                  </span>
+                  {pv.weakness.value}
+                </span>
+              {/if}
+              {#if pv.resistance}
+                <span>抵抗力：
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.resistance.type]}">
+                    {ENERGY_LABEL[pv.resistance.type]}
+                  </span>
+                  {pv.resistance.value}
+                </span>
+              {/if}
+              {#if pv.retreatCost?.length}
+                <span>撤退：
+                  {#each pv.retreatCost as e}
+                    <span class="energy-pip sm" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>
+                  {/each}
+                </span>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Set info -->
+          <p class="pv-setinfo">{pv.setCode} · {pv.collectorNumber}</p>
+
+          <!-- Deck counter -->
+          <div class="pv-counter">
+            {#if active}
+              <span class="pv-count-label">牌組中：<strong>{pvCount} / {pvMax}</strong></span>
+              <button class="icon" onclick={() => removeCard(pv.id)} disabled={isPresetActive || pvCount <= 0}>−</button>
+              <button
+                class="icon"
+                onclick={() => addCard(pv)}
+                title={aceSpecBlocked(pv) ? '一副牌最多 1 張 ACE SPEC' : ''}
+                disabled={isPresetActive || (!isBasicEnergy(pv) && pvCount >= pvMax) || aceSpecBlocked(pv)}>+</button>
+              {#if isPresetActive}<span class="pv-count-label muted" style="margin-left:.5rem">（預組唯讀）</span>{/if}
+            {:else}
+              <span class="pv-count-label muted">請先選擇牌組</span>
+            {/if}
+          </div>
+        </div>
+      </div>
+    </div>[36m
+  </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:844:5
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m    onclick={closePreview}>
+    [35m<div class="pv-inner" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={closePreview} aria-label="關閉">×</button>
+
+      <!-- Top: image + quick info -->
+      <div class="pv-top">
+        <img class="pv-img" src={pv.imageUrl} alt={pv.name} />
+
+        <div class="pv-info">
+          <h2 class="pv-name">{pv.name}</h2>
+
+          <!-- badges row -->
+          <div class="pv-badges">
+            {#if pv.pokemonType}
+              <span class="type-badge" style="background:{ENERGY_COLOR[pv.pokemonType]}">
+                {ENERGY_LABEL[pv.pokemonType]}
+              </span>
+            {/if}
+            <span class="sub-badge">{pv.subtype}</span>
+            {#if pv.hp}
+              <span class="hp-badge">HP {pv.hp}</span>
+            {/if}
+            {#if pv.regulationMark}
+              <span class="mark mark-{pv.regulationMark}">{pv.regulationMark}</span>
+            {/if}
+          </div>
+
+          {#if pv.evolvesFrom}
+            <p class="pv-evolve">進化自：{pv.evolvesFrom}</p>
+          {/if}
+
+          <!-- Abilities -->
+          {#if pv.abilities?.length}
+            <div class="pv-section">
+              {#each pv.abilities as ab}
+                <div class="pv-ability">
+                  <span class="ab-label">{ab.label}</span>
+                  <strong class="ab-name">{ab.name}</strong>
+                  <p class="ab-effect">{ab.effect}</p>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Attacks -->
+          {#if pv.attacks?.length}
+            <div class="pv-section">
+              {#each pv.attacks as atk}
+                <div class="pv-attack">
+                  <div class="atk-head">
+                    <span class="atk-cost">
+                      {#each atk.cost as e}
+                        <span class="energy-pip" style="background:{ENERGY_COLOR[e]}" title={ENERGY_LABEL[e]}>
+                          {ENERGY_LABEL[e]}
+                        </span>
+                      {/each}
+                    </span>
+                    <strong class="atk-name">{atk.name}</strong>
+                    {#if atk.damage}
+                      <span class="atk-dmg">{atk.damage}</span>
+                    {/if}
+                  </div>
+                  {#if atk.effect}
+                    <p class="atk-effect">{atk.effect}</p>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Rules text (Trainer / Energy) -->
+          {#if pv.rulesText}
+            <div class="pv-section pv-rules">{pv.rulesText}</div>
+          {/if}
+
+          <!-- Weakness / Resistance / Retreat -->
+          {#if pv.weakness || pv.resistance || pv.retreatCost?.length}
+            <div class="pv-wrc">
+              {#if pv.weakness}
+                <span>弱點：
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.weakness.type]}">
+                    {ENERGY_LABEL[pv.weakness.type]}
+                  </span>
+                  {pv.weakness.value}
+                </span>
+              {/if}
+              {#if pv.resistance}
+                <span>抵抗力：
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.resistance.type]}">
+                    {ENERGY_LABEL[pv.resistance.type]}
+                  </span>
+                  {pv.resistance.value}
+                </span>
+              {/if}
+              {#if pv.retreatCost?.length}
+                <span>撤退：
+                  {#each pv.retreatCost as e}
+                    <span class="energy-pip sm" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>
+                  {/each}
+                </span>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Set info -->
+          <p class="pv-setinfo">{pv.setCode} · {pv.collectorNumber}</p>
+
+          <!-- Deck counter -->
+          <div class="pv-counter">
+            {#if active}
+              <span class="pv-count-label">牌組中：<strong>{pvCount} / {pvMax}</strong></span>
+              <button class="icon" onclick={() => removeCard(pv.id)} disabled={isPresetActive || pvCount <= 0}>−</button>
+              <button
+                class="icon"
+                onclick={() => addCard(pv)}
+                title={aceSpecBlocked(pv) ? '一副牌最多 1 張 ACE SPEC' : ''}
+                disabled={isPresetActive || (!isBasicEnergy(pv) && pvCount >= pvMax) || aceSpecBlocked(pv)}>+</button>
+              {#if isPresetActive}<span class="pv-count-label muted" style="margin-left:.5rem">（預組唯讀）</span>{/if}
+            {:else}
+              <span class="pv-count-label muted">請先選擇牌組</span>
+            {/if}
+          </div>
+        </div>
+      </div>
+    </div>[36m
+  </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:973:3
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m{#if showAuthModal}
+  [35m<div class="pv-overlay" onclick={() => { showAuthModal = false; }}>
+    <div class="pv-inner auth-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={() => { showAuthModal = false; }} aria-label="關閉">×</button>
+
+      <h3 class="modal-title">帳號管理</h3>
+
+      <!-- Tab bar -->
+      <div class="auth-tabs">
+        <button class:active={authTab === 'upgrade'} onclick={() => { authTab = 'upgrade'; authError = null; }}>
+          {isAnonymous ? '🆕 建立新帳號' : '🆕 建立帳號'}
+        </button>
+        <button class:active={authTab === 'login'} onclick={() => { authTab = 'login'; authError = null; }}>
+          🔑 登入現有帳號
+        </button>
+      </div>
+
+      {#if authTab === 'upgrade'}
+        {#if isAnonymous}
+          <p class="auth-desc">建立帳號後，你目前的所有牌組將永久保存，換電腦也能繼續使用。</p>
+        {:else}
+          <p class="auth-desc">為其他裝置建立新帳號。</p>
+        {/if}
+        <div class="auth-form">
+          <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
+          <input type="password" placeholder="密碼（至少 6 碼）" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
+          {#if authError}<p class="auth-error">{authError}</p>{/if}
+          <button class="small primary" onclick={upgradeAccount} disabled={authLoading}>
+            {authLoading ? '處理中…' : isAnonymous ? '建立並綁定帳號' : '建立帳號'}
+          </button>
+        </div>
+      {:else}
+        <p class="auth-desc">登入後將從雲端載入該帳號的牌組。</p>
+        <div class="auth-form">
+          <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+          <input type="password" placeholder="密碼" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+          {#if authError}<p class="auth-error">{authError}</p>{/if}
+          <button class="small primary" onclick={loginWithEmail} disabled={authLoading}>
+            {authLoading ? '登入中…' : '登入'}
+          </button>
+        </div>
+      {/if}
+    </div>
+  </div>[36m
+{/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:973:3
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m{#if showAuthModal}
+  [35m<div class="pv-overlay" onclick={() => { showAuthModal = false; }}>
+    <div class="pv-inner auth-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={() => { showAuthModal = false; }} aria-label="關閉">×</button>
+
+      <h3 class="modal-title">帳號管理</h3>
+
+      <!-- Tab bar -->
+      <div class="auth-tabs">
+        <button class:active={authTab === 'upgrade'} onclick={() => { authTab = 'upgrade'; authError = null; }}>
+          {isAnonymous ? '🆕 建立新帳號' : '🆕 建立帳號'}
+        </button>
+        <button class:active={authTab === 'login'} onclick={() => { authTab = 'login'; authError = null; }}>
+          🔑 登入現有帳號
+        </button>
+      </div>
+
+      {#if authTab === 'upgrade'}
+        {#if isAnonymous}
+          <p class="auth-desc">建立帳號後，你目前的所有牌組將永久保存，換電腦也能繼續使用。</p>
+        {:else}
+          <p class="auth-desc">為其他裝置建立新帳號。</p>
+        {/if}
+        <div class="auth-form">
+          <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
+          <input type="password" placeholder="密碼（至少 6 碼）" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
+          {#if authError}<p class="auth-error">{authError}</p>{/if}
+          <button class="small primary" onclick={upgradeAccount} disabled={authLoading}>
+            {authLoading ? '處理中…' : isAnonymous ? '建立並綁定帳號' : '建立帳號'}
+          </button>
+        </div>
+      {:else}
+        <p class="auth-desc">登入後將從雲端載入該帳號的牌組。</p>
+        <div class="auth-form">
+          <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+          <input type="password" placeholder="密碼" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+          {#if authError}<p class="auth-error">{authError}</p>{/if}
+          <button class="small primary" onclick={loginWithEmail} disabled={authLoading}>
+            {authLoading ? '登入中…' : '登入'}
+          </button>
+        </div>
+      {/if}
+    </div>
+  </div>[36m
+{/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:974:5
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m  <div class="pv-overlay" onclick={() => { showAuthModal = false; }}>
+    [35m<div class="pv-inner auth-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={() => { showAuthModal = false; }} aria-label="關閉">×</button>
+
+      <h3 class="modal-title">帳號管理</h3>
+
+      <!-- Tab bar -->
+      <div class="auth-tabs">
+        <button class:active={authTab === 'upgrade'} onclick={() => { authTab = 'upgrade'; authError = null; }}>
+          {isAnonymous ? '🆕 建立新帳號' : '🆕 建立帳號'}
+        </button>
+        <button class:active={authTab === 'login'} onclick={() => { authTab = 'login'; authError = null; }}>
+          🔑 登入現有帳號
+        </button>
+      </div>
+
+      {#if authTab === 'upgrade'}
+        {#if isAnonymous}
+          <p class="auth-desc">建立帳號後，你目前的所有牌組將永久保存，換電腦也能繼續使用。</p>
+        {:else}
+          <p class="auth-desc">為其他裝置建立新帳號。</p>
+        {/if}
+        <div class="auth-form">
+          <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
+          <input type="password" placeholder="密碼（至少 6 碼）" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
+          {#if authError}<p class="auth-error">{authError}</p>{/if}
+          <button class="small primary" onclick={upgradeAccount} disabled={authLoading}>
+            {authLoading ? '處理中…' : isAnonymous ? '建立並綁定帳號' : '建立帳號'}
+          </button>
+        </div>
+      {:else}
+        <p class="auth-desc">登入後將從雲端載入該帳號的牌組。</p>
+        <div class="auth-form">
+          <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+          <input type="password" placeholder="密碼" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+          {#if authError}<p class="auth-error">{authError}</p>{/if}
+          <button class="small primary" onclick={loginWithEmail} disabled={authLoading}>
+            {authLoading ? '登入中…' : '登入'}
+          </button>
+        </div>
+      {/if}
+    </div>[36m
+  </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:974:5
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m  <div class="pv-overlay" onclick={() => { showAuthModal = false; }}>
+    [35m<div class="pv-inner auth-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={() => { showAuthModal = false; }} aria-label="關閉">×</button>
+
+      <h3 class="modal-title">帳號管理</h3>
+
+      <!-- Tab bar -->
+      <div class="auth-tabs">
+        <button class:active={authTab === 'upgrade'} onclick={() => { authTab = 'upgrade'; authError = null; }}>
+          {isAnonymous ? '🆕 建立新帳號' : '🆕 建立帳號'}
+        </button>
+        <button class:active={authTab === 'login'} onclick={() => { authTab = 'login'; authError = null; }}>
+          🔑 登入現有帳號
+        </button>
+      </div>
+
+      {#if authTab === 'upgrade'}
+        {#if isAnonymous}
+          <p class="auth-desc">建立帳號後，你目前的所有牌組將永久保存，換電腦也能繼續使用。</p>
+        {:else}
+          <p class="auth-desc">為其他裝置建立新帳號。</p>
+        {/if}
+        <div class="auth-form">
+          <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
+          <input type="password" placeholder="密碼（至少 6 碼）" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
+          {#if authError}<p class="auth-error">{authError}</p>{/if}
+          <button class="small primary" onclick={upgradeAccount} disabled={authLoading}>
+            {authLoading ? '處理中…' : isAnonymous ? '建立並綁定帳號' : '建立帳號'}
+          </button>
+        </div>
+      {:else}
+        <p class="auth-desc">登入後將從雲端載入該帳號的牌組。</p>
+        <div class="auth-form">
+          <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+          <input type="password" placeholder="密碼" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+          {#if authError}<p class="auth-error">{authError}</p>{/if}
+          <button class="small primary" onclick={loginWithEmail} disabled={authLoading}>
+            {authLoading ? '登入中…' : '登入'}
+          </button>
+        </div>
+      {/if}
+    </div>[36m
+  </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:1020:3
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m{#if showTextModal}
+  [35m<div class="pv-overlay" onclick={() => { showTextModal = false; }}>
+    <div class="pv-inner text-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={() => { showTextModal = false; }} aria-label="關閉">×</button>
+
+      {#if textModalMode === 'export'}
+        <h3 class="modal-title">匯出牌組（文字格式）</h3>
+        <p class="muted">格式：<code>張數 卡名 卡包代號 卡號</code>　可貼到其他模擬器或分享給對手</p>
+        <textarea class="text-area" readonly value={textExportContent}></textarea>
+        <div class="text-actions">
+          <button class="small" onclick={copyToClipboard}>📋 複製到剪貼簿</button>
+          <button class="small" onclick={downloadTextFile}>⬇ 下載 .txt</button>
+        </div>
+      {:else}
+        <h3 class="modal-title">匯入牌組（文字格式）</h3>
+        <p class="muted">
+          支援兩種格式：<br>
+          ① 完整格式：<code>張數 卡名 卡包代號 卡號</code><br>
+          ② 簡易格式：<code>張數 卡名</code>（同名取第一張）<br>
+          首行可選：<code>// 牌組名稱</code>
+        </p>
+
+        <details class="official-import-help">
+          <summary>📦 從官方訓練家網站匯入（一次設定永久可用）</summary>
+          <div class="help-body">
+            <p><strong>✨ 一次性設定</strong>（之後每次都只要點書籤）：</p>
+            <ol>
+              <li>顯示瀏覽器書籤列：Firefox 按 <kbd>Ctrl+B</kbd> 或 Chrome 按 <kbd>Ctrl+Shift+B</kbd></li>
+              <li>把下面這個藍色按鈕<strong>用滑鼠拖曳到書籤列</strong>放開</li>
+              <li class="bm-drag-wrapper">
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                {@html `<a class="bm-drag-btn" href="javascript:(function(){const cs=document.querySelectorAll('%23decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組，請在官方牌組構築頁執行');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const id=c.dataset.cardId||'';const k=c.children[1]%3F.innerText%3F.trim()||'1';lines.push(k+' '+n+(id%3F' %23'+id:''));});const text=lines.join('\\n');function done(ok){const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:%23fff;border:3px solid '+(ok%3F'%23228a3a':'%232a5aa0')+';padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=%22font-weight:bold;margin-bottom:8px;color:'+(ok%3F'%23228a3a':'%232a5aa0')+';%22>'+(ok%3F'✅ 已自動複製 ':'⚠ 自動複製失敗，請手動 Ctrl%2BC — 共 ')+cs.length+' 種卡</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length%2B1);ta.style.cssText='width:100%25;font-family:monospace;font-size:13px;padding:8px;border:1px solid %23aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();if(!ok){try{document.execCommand('copy');}catch(e){}}},100);if(ok)setTimeout(function(){w.remove();},2500);}if(navigator.clipboard%26%26navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){done(true);}).catch(function(){done(false);});}else{done(false);}})();" onclick="event.preventDefault(); alert('請將此按鈕用滑鼠拖到瀏覽器書籤列，不是點擊');" draggable="true">🔖 PTCG 匯入</a>`}
+              </li>
+            </ol>
+            <p><strong>📥 之後每次匯入牌組</strong>：</p>
+            <ol>
+              <li>到 <a href="https://asia.pokemon-card.com/tw/deck-build/" target="_blank" rel="noopener">官方牌組構築工具</a>編輯好牌組</li>
+              <li>點剛才加到書籤列的「🔖 PTCG 匯入」書籤 — <strong>會自動複製到剪貼簿</strong>（綠框提示 2.5 秒後自動消失）</li>
+              <li>回本頁，在下方輸入框 <kbd>Ctrl+V</kbd> 貼 → 按「匯入」</li>
+            </ol>
+            <p class="small-note">※ 若瀏覽器阻擋自動複製（藍框提示），跳出的浮層文字已選取好，手動按 <kbd>Ctrl+C</kbd> 即可</p>
+            <details class="fallback-help">
+              <summary style="font-size:0.8rem;color:#777;">書籤列不能拖？或用 Firefox 嚴格模式？開啟 F12 手動執行</summary>
+              <p style="font-size:0.8rem;">在官網按 <kbd>F12</kbd> → Console 分頁，貼下面程式碼按 Enter：</p>
+              <textarea class="bm-code" readonly rows="3" onclick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}>{`(function(){const cs=document.querySelectorAll('#decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const k=c.children[1]?.innerText?.trim()||'1';lines.push(k+' '+n);});const text=lines.join('\\n');const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:#fff;border:3px solid #2a5aa0;padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=\"font-weight:bold;margin-bottom:8px;color:#2a5aa0;\">✅ 共 '+cs.length+' 種卡 — 按 Ctrl+C 複製</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length+1);ta.style.cssText='width:100%;font-family:monospace;font-size:13px;padding:8px;border:1px solid #aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();},100);})();`}</textarea>
+            </details>
+          </div>
+        </details>
+
+        <textarea class="text-area" bind:value={importTextInput}
+          placeholder={"// 我的火系牌組\n4 小火龍\n2 火恐龍\n3 破空焰ex\n14 基本【火】能量\n..."}></textarea>
+        <div class="text-actions">
+          <button class="small" onclick={importFromText} disabled={!importTextInput.trim()}>匯入</button>
+          <button class="small" onclick={() => { showTextModal = false; }}>取消</button>
+        </div>
+      {/if}
+    </div>
+  </div>[36m
+{/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:1020:3
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m{#if showTextModal}
+  [35m<div class="pv-overlay" onclick={() => { showTextModal = false; }}>
+    <div class="pv-inner text-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={() => { showTextModal = false; }} aria-label="關閉">×</button>
+
+      {#if textModalMode === 'export'}
+        <h3 class="modal-title">匯出牌組（文字格式）</h3>
+        <p class="muted">格式：<code>張數 卡名 卡包代號 卡號</code>　可貼到其他模擬器或分享給對手</p>
+        <textarea class="text-area" readonly value={textExportContent}></textarea>
+        <div class="text-actions">
+          <button class="small" onclick={copyToClipboard}>📋 複製到剪貼簿</button>
+          <button class="small" onclick={downloadTextFile}>⬇ 下載 .txt</button>
+        </div>
+      {:else}
+        <h3 class="modal-title">匯入牌組（文字格式）</h3>
+        <p class="muted">
+          支援兩種格式：<br>
+          ① 完整格式：<code>張數 卡名 卡包代號 卡號</code><br>
+          ② 簡易格式：<code>張數 卡名</code>（同名取第一張）<br>
+          首行可選：<code>// 牌組名稱</code>
+        </p>
+
+        <details class="official-import-help">
+          <summary>📦 從官方訓練家網站匯入（一次設定永久可用）</summary>
+          <div class="help-body">
+            <p><strong>✨ 一次性設定</strong>（之後每次都只要點書籤）：</p>
+            <ol>
+              <li>顯示瀏覽器書籤列：Firefox 按 <kbd>Ctrl+B</kbd> 或 Chrome 按 <kbd>Ctrl+Shift+B</kbd></li>
+              <li>把下面這個藍色按鈕<strong>用滑鼠拖曳到書籤列</strong>放開</li>
+              <li class="bm-drag-wrapper">
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                {@html `<a class="bm-drag-btn" href="javascript:(function(){const cs=document.querySelectorAll('%23decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組，請在官方牌組構築頁執行');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const id=c.dataset.cardId||'';const k=c.children[1]%3F.innerText%3F.trim()||'1';lines.push(k+' '+n+(id%3F' %23'+id:''));});const text=lines.join('\\n');function done(ok){const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:%23fff;border:3px solid '+(ok%3F'%23228a3a':'%232a5aa0')+';padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=%22font-weight:bold;margin-bottom:8px;color:'+(ok%3F'%23228a3a':'%232a5aa0')+';%22>'+(ok%3F'✅ 已自動複製 ':'⚠ 自動複製失敗，請手動 Ctrl%2BC — 共 ')+cs.length+' 種卡</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length%2B1);ta.style.cssText='width:100%25;font-family:monospace;font-size:13px;padding:8px;border:1px solid %23aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();if(!ok){try{document.execCommand('copy');}catch(e){}}},100);if(ok)setTimeout(function(){w.remove();},2500);}if(navigator.clipboard%26%26navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){done(true);}).catch(function(){done(false);});}else{done(false);}})();" onclick="event.preventDefault(); alert('請將此按鈕用滑鼠拖到瀏覽器書籤列，不是點擊');" draggable="true">🔖 PTCG 匯入</a>`}
+              </li>
+            </ol>
+            <p><strong>📥 之後每次匯入牌組</strong>：</p>
+            <ol>
+              <li>到 <a href="https://asia.pokemon-card.com/tw/deck-build/" target="_blank" rel="noopener">官方牌組構築工具</a>編輯好牌組</li>
+              <li>點剛才加到書籤列的「🔖 PTCG 匯入」書籤 — <strong>會自動複製到剪貼簿</strong>（綠框提示 2.5 秒後自動消失）</li>
+              <li>回本頁，在下方輸入框 <kbd>Ctrl+V</kbd> 貼 → 按「匯入」</li>
+            </ol>
+            <p class="small-note">※ 若瀏覽器阻擋自動複製（藍框提示），跳出的浮層文字已選取好，手動按 <kbd>Ctrl+C</kbd> 即可</p>
+            <details class="fallback-help">
+              <summary style="font-size:0.8rem;color:#777;">書籤列不能拖？或用 Firefox 嚴格模式？開啟 F12 手動執行</summary>
+              <p style="font-size:0.8rem;">在官網按 <kbd>F12</kbd> → Console 分頁，貼下面程式碼按 Enter：</p>
+              <textarea class="bm-code" readonly rows="3" onclick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}>{`(function(){const cs=document.querySelectorAll('#decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const k=c.children[1]?.innerText?.trim()||'1';lines.push(k+' '+n);});const text=lines.join('\\n');const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:#fff;border:3px solid #2a5aa0;padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=\"font-weight:bold;margin-bottom:8px;color:#2a5aa0;\">✅ 共 '+cs.length+' 種卡 — 按 Ctrl+C 複製</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length+1);ta.style.cssText='width:100%;font-family:monospace;font-size:13px;padding:8px;border:1px solid #aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();},100);})();`}</textarea>
+            </details>
+          </div>
+        </details>
+
+        <textarea class="text-area" bind:value={importTextInput}
+          placeholder={"// 我的火系牌組\n4 小火龍\n2 火恐龍\n3 破空焰ex\n14 基本【火】能量\n..."}></textarea>
+        <div class="text-actions">
+          <button class="small" onclick={importFromText} disabled={!importTextInput.trim()}>匯入</button>
+          <button class="small" onclick={() => { showTextModal = false; }}>取消</button>
+        </div>
+      {/if}
+    </div>
+  </div>[36m
+{/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:1021:5
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m  <div class="pv-overlay" onclick={() => { showTextModal = false; }}>
+    [35m<div class="pv-inner text-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={() => { showTextModal = false; }} aria-label="關閉">×</button>
+
+      {#if textModalMode === 'export'}
+        <h3 class="modal-title">匯出牌組（文字格式）</h3>
+        <p class="muted">格式：<code>張數 卡名 卡包代號 卡號</code>　可貼到其他模擬器或分享給對手</p>
+        <textarea class="text-area" readonly value={textExportContent}></textarea>
+        <div class="text-actions">
+          <button class="small" onclick={copyToClipboard}>📋 複製到剪貼簿</button>
+          <button class="small" onclick={downloadTextFile}>⬇ 下載 .txt</button>
+        </div>
+      {:else}
+        <h3 class="modal-title">匯入牌組（文字格式）</h3>
+        <p class="muted">
+          支援兩種格式：<br>
+          ① 完整格式：<code>張數 卡名 卡包代號 卡號</code><br>
+          ② 簡易格式：<code>張數 卡名</code>（同名取第一張）<br>
+          首行可選：<code>// 牌組名稱</code>
+        </p>
+
+        <details class="official-import-help">
+          <summary>📦 從官方訓練家網站匯入（一次設定永久可用）</summary>
+          <div class="help-body">
+            <p><strong>✨ 一次性設定</strong>（之後每次都只要點書籤）：</p>
+            <ol>
+              <li>顯示瀏覽器書籤列：Firefox 按 <kbd>Ctrl+B</kbd> 或 Chrome 按 <kbd>Ctrl+Shift+B</kbd></li>
+              <li>把下面這個藍色按鈕<strong>用滑鼠拖曳到書籤列</strong>放開</li>
+              <li class="bm-drag-wrapper">
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                {@html `<a class="bm-drag-btn" href="javascript:(function(){const cs=document.querySelectorAll('%23decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組，請在官方牌組構築頁執行');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const id=c.dataset.cardId||'';const k=c.children[1]%3F.innerText%3F.trim()||'1';lines.push(k+' '+n+(id%3F' %23'+id:''));});const text=lines.join('\\n');function done(ok){const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:%23fff;border:3px solid '+(ok%3F'%23228a3a':'%232a5aa0')+';padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=%22font-weight:bold;margin-bottom:8px;color:'+(ok%3F'%23228a3a':'%232a5aa0')+';%22>'+(ok%3F'✅ 已自動複製 ':'⚠ 自動複製失敗，請手動 Ctrl%2BC — 共 ')+cs.length+' 種卡</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length%2B1);ta.style.cssText='width:100%25;font-family:monospace;font-size:13px;padding:8px;border:1px solid %23aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();if(!ok){try{document.execCommand('copy');}catch(e){}}},100);if(ok)setTimeout(function(){w.remove();},2500);}if(navigator.clipboard%26%26navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){done(true);}).catch(function(){done(false);});}else{done(false);}})();" onclick="event.preventDefault(); alert('請將此按鈕用滑鼠拖到瀏覽器書籤列，不是點擊');" draggable="true">🔖 PTCG 匯入</a>`}
+              </li>
+            </ol>
+            <p><strong>📥 之後每次匯入牌組</strong>：</p>
+            <ol>
+              <li>到 <a href="https://asia.pokemon-card.com/tw/deck-build/" target="_blank" rel="noopener">官方牌組構築工具</a>編輯好牌組</li>
+              <li>點剛才加到書籤列的「🔖 PTCG 匯入」書籤 — <strong>會自動複製到剪貼簿</strong>（綠框提示 2.5 秒後自動消失）</li>
+              <li>回本頁，在下方輸入框 <kbd>Ctrl+V</kbd> 貼 → 按「匯入」</li>
+            </ol>
+            <p class="small-note">※ 若瀏覽器阻擋自動複製（藍框提示），跳出的浮層文字已選取好，手動按 <kbd>Ctrl+C</kbd> 即可</p>
+            <details class="fallback-help">
+              <summary style="font-size:0.8rem;color:#777;">書籤列不能拖？或用 Firefox 嚴格模式？開啟 F12 手動執行</summary>
+              <p style="font-size:0.8rem;">在官網按 <kbd>F12</kbd> → Console 分頁，貼下面程式碼按 Enter：</p>
+              <textarea class="bm-code" readonly rows="3" onclick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}>{`(function(){const cs=document.querySelectorAll('#decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const k=c.children[1]?.innerText?.trim()||'1';lines.push(k+' '+n);});const text=lines.join('\\n');const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:#fff;border:3px solid #2a5aa0;padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=\"font-weight:bold;margin-bottom:8px;color:#2a5aa0;\">✅ 共 '+cs.length+' 種卡 — 按 Ctrl+C 複製</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length+1);ta.style.cssText='width:100%;font-family:monospace;font-size:13px;padding:8px;border:1px solid #aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();},100);})();`}</textarea>
+            </details>
+          </div>
+        </details>
+
+        <textarea class="text-area" bind:value={importTextInput}
+          placeholder={"// 我的火系牌組\n4 小火龍\n2 火恐龍\n3 破空焰ex\n14 基本【火】能量\n..."}></textarea>
+        <div class="text-actions">
+          <button class="small" onclick={importFromText} disabled={!importTextInput.trim()}>匯入</button>
+          <button class="small" onclick={() => { showTextModal = false; }}>取消</button>
+        </div>
+      {/if}
+    </div>[36m
+  </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:1021:5
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m  <div class="pv-overlay" onclick={() => { showTextModal = false; }}>
+    [35m<div class="pv-inner text-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={() => { showTextModal = false; }} aria-label="關閉">×</button>
+
+      {#if textModalMode === 'export'}
+        <h3 class="modal-title">匯出牌組（文字格式）</h3>
+        <p class="muted">格式：<code>張數 卡名 卡包代號 卡號</code>　可貼到其他模擬器或分享給對手</p>
+        <textarea class="text-area" readonly value={textExportContent}></textarea>
+        <div class="text-actions">
+          <button class="small" onclick={copyToClipboard}>📋 複製到剪貼簿</button>
+          <button class="small" onclick={downloadTextFile}>⬇ 下載 .txt</button>
+        </div>
+      {:else}
+        <h3 class="modal-title">匯入牌組（文字格式）</h3>
+        <p class="muted">
+          支援兩種格式：<br>
+          ① 完整格式：<code>張數 卡名 卡包代號 卡號</code><br>
+          ② 簡易格式：<code>張數 卡名</code>（同名取第一張）<br>
+          首行可選：<code>// 牌組名稱</code>
+        </p>
+
+        <details class="official-import-help">
+          <summary>📦 從官方訓練家網站匯入（一次設定永久可用）</summary>
+          <div class="help-body">
+            <p><strong>✨ 一次性設定</strong>（之後每次都只要點書籤）：</p>
+            <ol>
+              <li>顯示瀏覽器書籤列：Firefox 按 <kbd>Ctrl+B</kbd> 或 Chrome 按 <kbd>Ctrl+Shift+B</kbd></li>
+              <li>把下面這個藍色按鈕<strong>用滑鼠拖曳到書籤列</strong>放開</li>
+              <li class="bm-drag-wrapper">
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                {@html `<a class="bm-drag-btn" href="javascript:(function(){const cs=document.querySelectorAll('%23decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組，請在官方牌組構築頁執行');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const id=c.dataset.cardId||'';const k=c.children[1]%3F.innerText%3F.trim()||'1';lines.push(k+' '+n+(id%3F' %23'+id:''));});const text=lines.join('\\n');function done(ok){const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:%23fff;border:3px solid '+(ok%3F'%23228a3a':'%232a5aa0')+';padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=%22font-weight:bold;margin-bottom:8px;color:'+(ok%3F'%23228a3a':'%232a5aa0')+';%22>'+(ok%3F'✅ 已自動複製 ':'⚠ 自動複製失敗，請手動 Ctrl%2BC — 共 ')+cs.length+' 種卡</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length%2B1);ta.style.cssText='width:100%25;font-family:monospace;font-size:13px;padding:8px;border:1px solid %23aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();if(!ok){try{document.execCommand('copy');}catch(e){}}},100);if(ok)setTimeout(function(){w.remove();},2500);}if(navigator.clipboard%26%26navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){done(true);}).catch(function(){done(false);});}else{done(false);}})();" onclick="event.preventDefault(); alert('請將此按鈕用滑鼠拖到瀏覽器書籤列，不是點擊');" draggable="true">🔖 PTCG 匯入</a>`}
+              </li>
+            </ol>
+            <p><strong>📥 之後每次匯入牌組</strong>：</p>
+            <ol>
+              <li>到 <a href="https://asia.pokemon-card.com/tw/deck-build/" target="_blank" rel="noopener">官方牌組構築工具</a>編輯好牌組</li>
+              <li>點剛才加到書籤列的「🔖 PTCG 匯入」書籤 — <strong>會自動複製到剪貼簿</strong>（綠框提示 2.5 秒後自動消失）</li>
+              <li>回本頁，在下方輸入框 <kbd>Ctrl+V</kbd> 貼 → 按「匯入」</li>
+            </ol>
+            <p class="small-note">※ 若瀏覽器阻擋自動複製（藍框提示），跳出的浮層文字已選取好，手動按 <kbd>Ctrl+C</kbd> 即可</p>
+            <details class="fallback-help">
+              <summary style="font-size:0.8rem;color:#777;">書籤列不能拖？或用 Firefox 嚴格模式？開啟 F12 手動執行</summary>
+              <p style="font-size:0.8rem;">在官網按 <kbd>F12</kbd> → Console 分頁，貼下面程式碼按 Enter：</p>
+              <textarea class="bm-code" readonly rows="3" onclick={(e) => (e.currentTarget as HTMLTextAreaElement).select()}>{`(function(){const cs=document.querySelectorAll('#decklistZoneCardContainer > .card');if(!cs.length){alert('找不到牌組');return;}const lines=[];cs.forEach(c=>{const n=c.dataset.cardName||'';const k=c.children[1]?.innerText?.trim()||'1';lines.push(k+' '+n);});const text=lines.join('\\n');const w=document.createElement('div');w.style.cssText='position:fixed;top:20px;left:20px;right:20px;z-index:99999;background:#fff;border:3px solid #2a5aa0;padding:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-family:system-ui;';w.innerHTML='<div style=\"font-weight:bold;margin-bottom:8px;color:#2a5aa0;\">✅ 共 '+cs.length+' 種卡 — 按 Ctrl+C 複製</div>';const ta=document.createElement('textarea');ta.value=text;ta.rows=Math.min(20,lines.length+1);ta.style.cssText='width:100%;font-family:monospace;font-size:13px;padding:8px;border:1px solid #aaa;box-sizing:border-box;';w.appendChild(ta);const btn=document.createElement('button');btn.innerText='關閉';btn.style.cssText='margin-top:8px;padding:6px 14px;cursor:pointer;';btn.onclick=function(){w.remove();};w.appendChild(btn);document.body.appendChild(w);setTimeout(function(){ta.focus();ta.select();},100);})();`}</textarea>
+            </details>
+          </div>
+        </details>
+
+        <textarea class="text-area" bind:value={importTextInput}
+          placeholder={"// 我的火系牌組\n4 小火龍\n2 火恐龍\n3 破空焰ex\n14 基本【火】能量\n..."}></textarea>
+        <div class="text-actions">
+          <button class="small" onclick={importFromText} disabled={!importTextInput.trim()}>匯入</button>
+          <button class="small" onclick={() => { showTextModal = false; }}>取消</button>
+        </div>
+      {/if}
+    </div>[36m
+  </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\decks\+page.svelte[39m:577:47
+[31mError[39m: 'active' is possibly 'null'. (ts)
+[36m  const activeEntries = $derived.by(() => {
+    if (!active) return [] as { entry: typeof [35mactive[36m.entries[number]; card: Card }[];
+    const result: { entry: typeof active.entries[number]; card: Card }[] = [];[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1853:9
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m        </div>
+        [35m<div class="pile-slot disc-pile" class:discard-pulse={discardFlashUntil[oppIdx] > 0}
+          onclick={() => viewDiscardFor = oppIdx} title="查看對手棄牌區">
+          <span class="pile-icon">🗑</span>
+          <span class="pile-count">{oppPlayer?.discard.length??0}</span>
+          <span class="pile-label">棄牌</span>
+        </div>[36m
+      </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1853:9
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m        </div>
+        [35m<div class="pile-slot disc-pile" class:discard-pulse={discardFlashUntil[oppIdx] > 0}
+          onclick={() => viewDiscardFor = oppIdx} title="查看對手棄牌區">
+          <span class="pile-icon">🗑</span>
+          <span class="pile-count">{oppPlayer?.discard.length??0}</span>
+          <span class="pile-label">棄牌</span>
+        </div>[36m
+      </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1876:19
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m                <div class="bench-middle">
+                  [35m<img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>[36m
+                  {#if energyPips(b).length > 0}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1876:19
+[33mWarn[39m: Non-interactive element `<img>` should not be assigned mouse or keyboard event listeners
+https://svelte.dev/e/a11y_no_noninteractive_element_interactions (svelte)
+[36m                <div class="bench-middle">
+                  [35m<img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>[36m
+                  {#if energyPips(b).length > 0}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1913:15
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m            <div class="active-card opp-active" out:scale={{ duration: 360, start: 0.55, opacity: 0 }}>
+              [35m<img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>[36m
+              <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1913:15
+[33mWarn[39m: Non-interactive element `<img>` should not be assigned mouse or keyboard event listeners
+https://svelte.dev/e/a11y_no_noninteractive_element_interactions (svelte)
+[36m            <div class="active-card opp-active" out:scale={{ duration: 360, start: 0.55, opacity: 0 }}>
+              [35m<img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>[36m
+              <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2071:11
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m          {@const evoOpts=evoOptionsFor(myPlayer.active.iid)}
+          [35m<div class="active-card mine-active"
+            class:energy-clickable={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
+            class:drop-zone={isMyTurn() && ((dragging?.kind==='energy'||dragging?.kind==='tool') || (dragging?.kind==='evolve'&&evolveTargetsFor(dragging.iid).includes(myPlayer.active.iid)))}
+            class:drop-hover={dropTargetIid===myPlayer.active.iid}
+            class:energy-pulse={energyAttachPulse===myPlayer.active.iid}
+            data-drop-type="poke"
+            data-drop-iid={myPlayer.active.iid}
+            out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
+            onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
+            <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
+              class:zoomable={!selectedEnergyIid}
+              onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}/>
+            <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）
+                 v2.53：無能量時不渲染（避免空欄佔寬度） -->
+            {#if energyPips(myPlayer.active).length > 0}
+              <div class="active-nrg-col">
+                {#each energyPips(myPlayer.active) as pip}
+                  <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                {/each}
+              </div>
+            {/if}
+            <div class="active-info">
+              <div class="active-name">{ac?.name}</div>
+              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(myPlayer.active)?hpRemaining(myPlayer.active)/hpTotal(myPlayer.active)*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),hpTotal(myPlayer.active))}"></div></div>
+              <div class="active-hp">HP {hpRemaining(myPlayer.active)}/{hpTotal(myPlayer.active)}</div>
+              {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
+              {#if myPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
+              {#if myPlayer.active.status}<div class="status-chip status-{myPlayer.active.status}">{
+                myPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
+                myPlayer.active.status === 'burned' ? '🔥 燒傷' :
+                myPlayer.active.status === 'asleep' ? '💤 睡眠' :
+                myPlayer.active.status === 'confused' ? '😵 混亂' :
+                myPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.status
+              }</div>{/if}
+              {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡ 點此附加</div>{/if}
+            </div>
+            {#if evoOpts.length>0&&!pendingSelection&&isMyTurn()}
+              <div class="evo-wrap">
+                <button class="evo-btn" onclick={(e)=>{e.stopPropagation();openFloatingEvo(myPlayer!.active!.iid,evoOpts,e);}}>進化▲</button>
+              </div>
+            {/if}
+            {#each usableAbilities.filter(a=>a.iid===myPlayer!.active!.iid) as ab}
+              <button class="ability-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>
+                ✨{ab.abilityName}
+              </button>
+            {/each}
+          </div>[36m
+        {:else}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2071:11
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m          {@const evoOpts=evoOptionsFor(myPlayer.active.iid)}
+          [35m<div class="active-card mine-active"
+            class:energy-clickable={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
+            class:drop-zone={isMyTurn() && ((dragging?.kind==='energy'||dragging?.kind==='tool') || (dragging?.kind==='evolve'&&evolveTargetsFor(dragging.iid).includes(myPlayer.active.iid)))}
+            class:drop-hover={dropTargetIid===myPlayer.active.iid}
+            class:energy-pulse={energyAttachPulse===myPlayer.active.iid}
+            data-drop-type="poke"
+            data-drop-iid={myPlayer.active.iid}
+            out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
+            onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
+            <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
+              class:zoomable={!selectedEnergyIid}
+              onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}/>
+            <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）
+                 v2.53：無能量時不渲染（避免空欄佔寬度） -->
+            {#if energyPips(myPlayer.active).length > 0}
+              <div class="active-nrg-col">
+                {#each energyPips(myPlayer.active) as pip}
+                  <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                {/each}
+              </div>
+            {/if}
+            <div class="active-info">
+              <div class="active-name">{ac?.name}</div>
+              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(myPlayer.active)?hpRemaining(myPlayer.active)/hpTotal(myPlayer.active)*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),hpTotal(myPlayer.active))}"></div></div>
+              <div class="active-hp">HP {hpRemaining(myPlayer.active)}/{hpTotal(myPlayer.active)}</div>
+              {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
+              {#if myPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
+              {#if myPlayer.active.status}<div class="status-chip status-{myPlayer.active.status}">{
+                myPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
+                myPlayer.active.status === 'burned' ? '🔥 燒傷' :
+                myPlayer.active.status === 'asleep' ? '💤 睡眠' :
+                myPlayer.active.status === 'confused' ? '😵 混亂' :
+                myPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.status
+              }</div>{/if}
+              {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡ 點此附加</div>{/if}
+            </div>
+            {#if evoOpts.length>0&&!pendingSelection&&isMyTurn()}
+              <div class="evo-wrap">
+                <button class="evo-btn" onclick={(e)=>{e.stopPropagation();openFloatingEvo(myPlayer!.active!.iid,evoOpts,e);}}>進化▲</button>
+              </div>
+            {/if}
+            {#each usableAbilities.filter(a=>a.iid===myPlayer!.active!.iid) as ab}
+              <button class="ability-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>
+                ✨{ab.abilityName}
+              </button>
+            {/each}
+          </div>[36m
+        {:else}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2080:13
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m            onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
+            [35m<img src={ac?.imageUrl} alt={ac?.name} class="active-img"
+              class:zoomable={!selectedEnergyIid}
+              onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}/>[36m
+            <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2080:13
+[33mWarn[39m: Non-interactive element `<img>` should not be assigned mouse or keyboard event listeners
+https://svelte.dev/e/a11y_no_noninteractive_element_interactions (svelte)
+[36m            onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
+            [35m<img src={ac?.imageUrl} alt={ac?.name} class="active-img"
+              class:zoomable={!selectedEnergyIid}
+              onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}/>[36m
+            <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2132:13
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m            {@const b=myPlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
+            [35m<div class="bench-slot"
+              class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
+              class:drop-zone={isMyTurn() && ((dragging?.kind==='energy'||dragging?.kind==='tool') || (dragging?.kind==='evolve'&&evolveTargetsFor(dragging.iid).includes(b.iid)))}
+              class:drop-hover={dropTargetIid===b.iid}
+              class:energy-pulse={energyAttachPulse===b.iid}
+              data-drop-type="poke"
+              data-drop-iid={b.iid}
+              out:scale={{ duration: 320, start: 0.55, opacity: 0 }}
+              onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(b.iid)}>
+              <!-- v2.49：名字/HP 移到卡牌上方，避免與下方進化按鈕/特性按鈕/能量 pip 擠在一起 -->
+              <div class="bench-name">{bc?.name}</div>
+              <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
+              <!-- v2.51：加寬 slot + 能量 pip 改為垂直排列在圖片右側，避免能量超過 2 個時撐高
+                   v2.53：bench-nrg 條件渲染 — 沒能量就不 render 右側欄，讓 img 置中填滿 slot -->
+              <div class="bench-middle">
+                <img src={bc?.imageUrl} alt={bc?.name}
+                  class:zoomable={!selectedEnergyIid}
+                  onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>
+                {#if energyPips(b).length > 0}
+                  <div class="bench-nrg">
+                    {#each energyPips(b) as pip}
+                      <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+              <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
+              {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}
+              {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
+              <!-- v2.47：備戰區寶可夢依 PTCG 規則不會有異常狀態；engine scrubBenchStatus 亦會抹除，
+                   這裡不再渲染 status chip（避免佔版面） -->
+              {#if b.status}<div class="status-chip-sm status-{b.status}" title="異常狀態（不應出現於備戰，請回報）">{
+                b.status === 'poisoned' ? '☠️' :
+                b.status === 'burned' ? '🔥' :
+                b.status === 'asleep' ? '💤' :
+                b.status === 'confused' ? '😵' : '⚡'
+              }</div>{/if}
+              {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡</div>{/if}
+              {#if evoOptsB.length>0&&!pendingSelection&&isMyTurn()}
+                <button class="evo-btn-sm" onclick={(e)=>{e.stopPropagation();openFloatingEvo(b.iid,evoOptsB,e);}}>進化</button>
+              {/if}
+              {#each usableAbilities.filter(a=>a.iid===b.iid) as ab}
+                <button class="ability-btn-sm" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>✨{ab.abilityName}</button>
+              {/each}
+            </div>[36m
+          {:else}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2132:13
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m            {@const b=myPlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
+            [35m<div class="bench-slot"
+              class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
+              class:drop-zone={isMyTurn() && ((dragging?.kind==='energy'||dragging?.kind==='tool') || (dragging?.kind==='evolve'&&evolveTargetsFor(dragging.iid).includes(b.iid)))}
+              class:drop-hover={dropTargetIid===b.iid}
+              class:energy-pulse={energyAttachPulse===b.iid}
+              data-drop-type="poke"
+              data-drop-iid={b.iid}
+              out:scale={{ duration: 320, start: 0.55, opacity: 0 }}
+              onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(b.iid)}>
+              <!-- v2.49：名字/HP 移到卡牌上方，避免與下方進化按鈕/特性按鈕/能量 pip 擠在一起 -->
+              <div class="bench-name">{bc?.name}</div>
+              <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
+              <!-- v2.51：加寬 slot + 能量 pip 改為垂直排列在圖片右側，避免能量超過 2 個時撐高
+                   v2.53：bench-nrg 條件渲染 — 沒能量就不 render 右側欄，讓 img 置中填滿 slot -->
+              <div class="bench-middle">
+                <img src={bc?.imageUrl} alt={bc?.name}
+                  class:zoomable={!selectedEnergyIid}
+                  onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>
+                {#if energyPips(b).length > 0}
+                  <div class="bench-nrg">
+                    {#each energyPips(b) as pip}
+                      <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+              <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
+              {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}
+              {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
+              <!-- v2.47：備戰區寶可夢依 PTCG 規則不會有異常狀態；engine scrubBenchStatus 亦會抹除，
+                   這裡不再渲染 status chip（避免佔版面） -->
+              {#if b.status}<div class="status-chip-sm status-{b.status}" title="異常狀態（不應出現於備戰，請回報）">{
+                b.status === 'poisoned' ? '☠️' :
+                b.status === 'burned' ? '🔥' :
+                b.status === 'asleep' ? '💤' :
+                b.status === 'confused' ? '😵' : '⚡'
+              }</div>{/if}
+              {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡</div>{/if}
+              {#if evoOptsB.length>0&&!pendingSelection&&isMyTurn()}
+                <button class="evo-btn-sm" onclick={(e)=>{e.stopPropagation();openFloatingEvo(b.iid,evoOptsB,e);}}>進化</button>
+              {/if}
+              {#each usableAbilities.filter(a=>a.iid===b.iid) as ab}
+                <button class="ability-btn-sm" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>✨{ab.abilityName}</button>
+              {/each}
+            </div>[36m
+          {:else}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2147:17
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m              <div class="bench-middle">
+                [35m<img src={bc?.imageUrl} alt={bc?.name}
+                  class:zoomable={!selectedEnergyIid}
+                  onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>[36m
+                {#if energyPips(b).length > 0}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2147:17
+[33mWarn[39m: Non-interactive element `<img>` should not be assigned mouse or keyboard event listeners
+https://svelte.dev/e/a11y_no_noninteractive_element_interactions (svelte)
+[36m              <div class="bench-middle">
+                [35m<img src={bc?.imageUrl} alt={bc?.name}
+                  class:zoomable={!selectedEnergyIid}
+                  onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>[36m
+                {#if energyPips(b).length > 0}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2193:9
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m        </div>
+        [35m<div class="pile-slot disc-pile" class:discard-pulse={discardFlashUntil[myIdx] > 0}
+          onclick={() => viewDiscardFor = myIdx} title="查看我的棄牌區">
+          <span class="pile-icon">🗑</span>
+          <span class="pile-count">{myPlayer?.discard.length??0}</span>
+          <span class="pile-label">棄牌</span>
+        </div>[36m
+      </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2193:9
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m        </div>
+        [35m<div class="pile-slot disc-pile" class:discard-pulse={discardFlashUntil[myIdx] > 0}
+          onclick={() => viewDiscardFor = myIdx} title="查看我的棄牌區">
+          <span class="pile-icon">🗑</span>
+          <span class="pile-count">{myPlayer?.discard.length??0}</span>
+          <span class="pile-label">棄牌</span>
+        </div>[36m
+      </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2239:11
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m          {@const isActionable = canEnergy || canBasic || canTrainer || canEvolve}
+          [35m<div class="hand-card"
+            class:selected={selectedEnergyIid===inst.iid}
+            class:can-actionable={isActionable}
+            class:dragging={dragging?.iid===inst.iid}
+            class:draggable={dragKind!==null}
+            class:hover-peek={hoverHandIid===inst.iid}
+            class:arriving={arrivingIids.has(inst.iid)}
+            style="--fan-rot:{rot}deg;--fan-lift:{liftY}px;"
+            in:fly={{ x: 220, y: -40, duration: game?.phase === 'setup' ? 480 : 220, delay: (game?.phase === 'setup' ? i * 150 : i * 40), easing: cubicOut }}
+            out:fly={{ y: -220, duration: 220, easing: cubicOut }}
+            onpointerenter={(e)=>enterHandCard(e, inst.iid)}
+            onpointerleave={leaveHandCard}
+            onpointerdown={(e)=>{leaveHandCard(); if(dragKind)startDrag(e, inst, dragKind, c);}}
+            onclick={()=>{if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
+            title={dragKind?`拖曳使用 · ${c.name}`:c.name}>
+            <img src={c.imageUrl} alt={c.name}/>
+            <span class="hand-name">{c.name}</span>
+            {#if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
+            {:else if canBasic}<span class="hand-hint hl">📥 拖到備戰</span>
+            {:else if canEvolve}<span class="hand-hint hl">🔺 拖到進化目標</span>
+            {:else if canTrainer && isToolCard}<span class="hand-hint hl">🔧 拖到寶可夢</span>
+            {:else if canTrainer}<span class="hand-hint hl">🎴 拖曳使用</span>
+            {/if}
+          </div>[36m
+        {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2239:11
+[33mWarn[39m: `<div>` with a pointerenter, pointerleave, pointerdown or click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m          {@const isActionable = canEnergy || canBasic || canTrainer || canEvolve}
+          [35m<div class="hand-card"
+            class:selected={selectedEnergyIid===inst.iid}
+            class:can-actionable={isActionable}
+            class:dragging={dragging?.iid===inst.iid}
+            class:draggable={dragKind!==null}
+            class:hover-peek={hoverHandIid===inst.iid}
+            class:arriving={arrivingIids.has(inst.iid)}
+            style="--fan-rot:{rot}deg;--fan-lift:{liftY}px;"
+            in:fly={{ x: 220, y: -40, duration: game?.phase === 'setup' ? 480 : 220, delay: (game?.phase === 'setup' ? i * 150 : i * 40), easing: cubicOut }}
+            out:fly={{ y: -220, duration: 220, easing: cubicOut }}
+            onpointerenter={(e)=>enterHandCard(e, inst.iid)}
+            onpointerleave={leaveHandCard}
+            onpointerdown={(e)=>{leaveHandCard(); if(dragKind)startDrag(e, inst, dragKind, c);}}
+            onclick={()=>{if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
+            title={dragKind?`拖曳使用 · ${c.name}`:c.name}>
+            <img src={c.imageUrl} alt={c.name}/>
+            <span class="hand-name">{c.name}</span>
+            {#if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
+            {:else if canBasic}<span class="hand-hint hl">📥 拖到備戰</span>
+            {:else if canEvolve}<span class="hand-hint hl">🔺 拖到進化目標</span>
+            {:else if canTrainer && isToolCard}<span class="hand-hint hl">🔧 拖到寶可夢</span>
+            {:else if canTrainer}<span class="hand-hint hl">🎴 拖曳使用</span>
+            {/if}
+          </div>[36m
+        {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2282:9
+[33mWarn[39m: `<div>` with a pointerdown, pointermove or pointerup handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m      <div class="selection-modal" class:retreat-modal={isPokePicker || isDmgDist} style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        [35m<div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>{selectionTitle(pendingSelection.type)}</h3>
+          {#if isDmgDist}
+            <!-- 幻影奇襲類：頂部進度條顯示「已放置 X/totalCounters」— X 含本批次即時累加 -->
+            <div class="dmg-progress">
+              <div class="dmg-progress-bar">
+                <div class="dmg-progress-fill" style="width:{Math.min(100, ((dmgPlaced + selectionBatchSum) / dmgTotal) * 100)}%"></div>
+              </div>
+              <div class="dmg-progress-text">
+                已放置 <strong>{(dmgPlaced + selectionBatchSum) * dmgPer}</strong>／{dmgTotal * dmgPer}
+                　<span class="muted">（{dmgPlaced + selectionBatchSum}／{dmgTotal} 個指示物）</span>
+              </div>
+              <p class="sel-hint">
+                本批次剩餘可放 <strong>{pendingSelection.maxCount - selectionBatchSum}</strong>／{pendingSelection.maxCount} 個
+                · 點目標 +1、按「－」鍵 或 右鍵 -1 · 確認後若還有指示物會再開此視窗
+              </p>
+            </div>
+          {:else}
+            <p class="sel-hint">
+              選 {pendingSelection.minCount===pendingSelection.maxCount?`${pendingSelection.minCount}`:`${pendingSelection.minCount}～${pendingSelection.maxCount}`} 張
+              {#if pendingSelection.filter&&pendingSelection.filter!=='TOP6'&&!pendingSelection.filter.startsWith('Supporter')}（{describeFilter(pendingSelection.filter)}）{/if}
+              · 已選 {selectionPicked.size}
+              {#if isPokePicker}· 點放大鏡 🔍 查看詳情{/if}
+            </p>
+          {/if}
+        </div>[36m
+        {#if isPokePicker}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2511:5
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m  {#if floatingEvoMenu}
+    [35m<div class="float-evo-backdrop" onclick={() => floatingEvoMenu = null}></div>[36m
+    <div class="float-evo-menu" style="left:{floatingEvoMenu.x}px;top:{floatingEvoMenu.y}px;">[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2511:5
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m  {#if floatingEvoMenu}
+    [35m<div class="float-evo-backdrop" onclick={() => floatingEvoMenu = null}></div>[36m
+    <div class="float-evo-menu" style="left:{floatingEvoMenu.x}px;top:{floatingEvoMenu.y}px;">[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2583:9
+[33mWarn[39m: `<div>` with a pointerdown, pointermove or pointerup handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m      <div class="selection-modal mulligan-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        [35m<div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>🔄 對手的重抽懲罰</h3>
+          <p class="sel-hint">
+            <strong>{oppName}</strong> 起手沒有基礎寶可夢，重新洗牌 {nDraw} 次。
+            <br/>作為補償，你可多抽 <strong>{nDraw}</strong> 張牌。
+          </p>
+        </div>[36m
+        <div class="mulligan-body">[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2613:9
+[33mWarn[39m: `<div>` with a pointerdown, pointermove or pointerup handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m      <div class="selection-modal mulligan-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        [35m<div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>⏳ 等待對手決定補抽</h3>
+          <p class="sel-hint">你因起手無基礎寶可夢重抽了 {game.mulliganCounts[myIdx]} 次，對手正在決定是否多抽 {game.pendingMulliganDraw[oppIdx]} 張…</p>
+        </div>[36m
+      </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2631:9
+[33mWarn[39m: `<div>` with a pointerdown, pointermove or pointerup handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m      <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        [35m<div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>⚡ {preAttackDiscard.attackName}：選擇要丟棄的能量</h3>
+          <p class="sel-hint">
+            最少 {spec.min} 張{spec.max === null ? '（不限上限）' : `，最多 ${spec.max} 張`}
+            · 已選 {pickedCount} 張
+            {#if spec.damagePerEnergy > 0}· 預估傷害 <strong>{estDmg}</strong>{/if}
+            <br/>範圍：{spec.scope === 'attacker' ? '僅攻擊方出場寶可夢身上的能量' : spec.scope === 'own-bench' ? '僅自己備戰寶可夢身上的能量' : '自己場上任一寶可夢身上的能量'}
+          </p>
+        </div>[36m
+        <div class="sel-grid">[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2668:5
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m  {#if floatingRetreatMenu && myPlayer?.active}
+    [35m<div class="selection-overlay" class:dragged={modalDragged} onclick={() => floatingRetreatMenu = null}>
+      <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>🔄 選擇換入的寶可夢</h3>
+          <p class="sel-hint">挑選一隻備戰區的寶可夢上場；點放大鏡 🔍 查看詳情以區分同名卡身上的能量</p>
+        </div>
+        <div class="retreat-grid">
+          {#each myPlayer.bench as b}{@const bc=getCard(b.cardId)}
+            {#if bc}
+              {@const eff=hpTotal(b)}
+              {@const rem=hpRemaining(b)}
+              <div class="retreat-card">
+                <button class="retreat-zoom" title="放大檢視：{bc.name}"
+                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.retreat(b.iid));floatingRetreatMenu=null;}}>
+                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <div class="retreat-name">{bc.name}</div>
+                  <div class="retreat-hp">HP {rem}/{eff}</div>
+                  <div class="retreat-nrg">{energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                  {#if b.status}<div class="retreat-status">
+                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
+                    {b.status}
+                  </div>{/if}
+                </button>
+              </div>
+            {/if}
+          {/each}
+          {#if myPlayer.bench.length===0}
+            <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
+          {/if}
+        </div>
+        <div class="sel-footer">
+          <button class="btn-act secondary" onclick={()=>floatingRetreatMenu=null}>取消</button>
+        </div>
+      </div>
+    </div>[36m
+  {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2668:5
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m  {#if floatingRetreatMenu && myPlayer?.active}
+    [35m<div class="selection-overlay" class:dragged={modalDragged} onclick={() => floatingRetreatMenu = null}>
+      <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>🔄 選擇換入的寶可夢</h3>
+          <p class="sel-hint">挑選一隻備戰區的寶可夢上場；點放大鏡 🔍 查看詳情以區分同名卡身上的能量</p>
+        </div>
+        <div class="retreat-grid">
+          {#each myPlayer.bench as b}{@const bc=getCard(b.cardId)}
+            {#if bc}
+              {@const eff=hpTotal(b)}
+              {@const rem=hpRemaining(b)}
+              <div class="retreat-card">
+                <button class="retreat-zoom" title="放大檢視：{bc.name}"
+                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.retreat(b.iid));floatingRetreatMenu=null;}}>
+                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <div class="retreat-name">{bc.name}</div>
+                  <div class="retreat-hp">HP {rem}/{eff}</div>
+                  <div class="retreat-nrg">{energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                  {#if b.status}<div class="retreat-status">
+                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
+                    {b.status}
+                  </div>{/if}
+                </button>
+              </div>
+            {/if}
+          {/each}
+          {#if myPlayer.bench.length===0}
+            <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
+          {/if}
+        </div>
+        <div class="sel-footer">
+          <button class="btn-act secondary" onclick={()=>floatingRetreatMenu=null}>取消</button>
+        </div>
+      </div>
+    </div>[36m
+  {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2669:7
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m    <div class="selection-overlay" class:dragged={modalDragged} onclick={() => floatingRetreatMenu = null}>
+      [35m<div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>🔄 選擇換入的寶可夢</h3>
+          <p class="sel-hint">挑選一隻備戰區的寶可夢上場；點放大鏡 🔍 查看詳情以區分同名卡身上的能量</p>
+        </div>
+        <div class="retreat-grid">
+          {#each myPlayer.bench as b}{@const bc=getCard(b.cardId)}
+            {#if bc}
+              {@const eff=hpTotal(b)}
+              {@const rem=hpRemaining(b)}
+              <div class="retreat-card">
+                <button class="retreat-zoom" title="放大檢視：{bc.name}"
+                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.retreat(b.iid));floatingRetreatMenu=null;}}>
+                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <div class="retreat-name">{bc.name}</div>
+                  <div class="retreat-hp">HP {rem}/{eff}</div>
+                  <div class="retreat-nrg">{energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                  {#if b.status}<div class="retreat-status">
+                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
+                    {b.status}
+                  </div>{/if}
+                </button>
+              </div>
+            {/if}
+          {/each}
+          {#if myPlayer.bench.length===0}
+            <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
+          {/if}
+        </div>
+        <div class="sel-footer">
+          <button class="btn-act secondary" onclick={()=>floatingRetreatMenu=null}>取消</button>
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2669:7
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m    <div class="selection-overlay" class:dragged={modalDragged} onclick={() => floatingRetreatMenu = null}>
+      [35m<div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>🔄 選擇換入的寶可夢</h3>
+          <p class="sel-hint">挑選一隻備戰區的寶可夢上場；點放大鏡 🔍 查看詳情以區分同名卡身上的能量</p>
+        </div>
+        <div class="retreat-grid">
+          {#each myPlayer.bench as b}{@const bc=getCard(b.cardId)}
+            {#if bc}
+              {@const eff=hpTotal(b)}
+              {@const rem=hpRemaining(b)}
+              <div class="retreat-card">
+                <button class="retreat-zoom" title="放大檢視：{bc.name}"
+                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.retreat(b.iid));floatingRetreatMenu=null;}}>
+                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <div class="retreat-name">{bc.name}</div>
+                  <div class="retreat-hp">HP {rem}/{eff}</div>
+                  <div class="retreat-nrg">{energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                  {#if b.status}<div class="retreat-status">
+                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
+                    {b.status}
+                  </div>{/if}
+                </button>
+              </div>
+            {/if}
+          {/each}
+          {#if myPlayer.bench.length===0}
+            <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
+          {/if}
+        </div>
+        <div class="sel-footer">
+          <button class="btn-act secondary" onclick={()=>floatingRetreatMenu=null}>取消</button>
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2670:9
+[33mWarn[39m: `<div>` with a pointerdown, pointermove or pointerup handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m      <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        [35m<div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>🔄 選擇換入的寶可夢</h3>
+          <p class="sel-hint">挑選一隻備戰區的寶可夢上場；點放大鏡 🔍 查看詳情以區分同名卡身上的能量</p>
+        </div>[36m
+        <div class="retreat-grid">[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2710:7
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m    <div class="selection-overlay">
+      [35m<div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>⚠️ 派出新的戰鬥寶可夢</h3>
+          <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
+        </div>
+        <div class="retreat-grid">
+          {#each defenderPlayer?.bench??[] as b}{@const bc=getCard(b.cardId)}
+            {#if bc}
+              {@const eff=hpTotal(b)}
+              {@const rem=hpRemaining(b)}
+              <div class="retreat-card">
+                <button class="retreat-zoom" title="放大檢視：{bc.name}"
+                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.sendNewActive(b.iid, dIdx));}}>
+                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <div class="retreat-name">{bc.name}</div>
+                  <div class="retreat-hp">HP {rem}/{eff}</div>
+                  <div class="retreat-nrg">{energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                  {#if b.status}<div class="retreat-status">
+                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
+                    {b.status}
+                  </div>{/if}
+                </button>
+              </div>
+            {/if}
+          {/each}
+          {#if (defenderPlayer?.bench??[]).length===0}
+            <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
+          {/if}
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2710:7
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m    <div class="selection-overlay">
+      [35m<div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>⚠️ 派出新的戰鬥寶可夢</h3>
+          <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
+        </div>
+        <div class="retreat-grid">
+          {#each defenderPlayer?.bench??[] as b}{@const bc=getCard(b.cardId)}
+            {#if bc}
+              {@const eff=hpTotal(b)}
+              {@const rem=hpRemaining(b)}
+              <div class="retreat-card">
+                <button class="retreat-zoom" title="放大檢視：{bc.name}"
+                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.sendNewActive(b.iid, dIdx));}}>
+                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <div class="retreat-name">{bc.name}</div>
+                  <div class="retreat-hp">HP {rem}/{eff}</div>
+                  <div class="retreat-nrg">{energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                  {#if b.status}<div class="retreat-status">
+                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
+                    {b.status}
+                  </div>{/if}
+                </button>
+              </div>
+            {/if}
+          {/each}
+          {#if (defenderPlayer?.bench??[]).length===0}
+            <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
+          {/if}
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2711:9
+[33mWarn[39m: `<div>` with a pointerdown, pointermove or pointerup handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m      <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        [35m<div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>⚠️ 派出新的戰鬥寶可夢</h3>
+          <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
+        </div>[36m
+        <div class="retreat-grid">[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2748:7
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m    <div class="selection-overlay">
+      [35m<div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>⚠️ 派出新的戰鬥寶可夢</h3>
+          <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
+        </div>
+        <div class="retreat-grid">
+          {#each myPlayer?.bench??[] as b}{@const bc=getCard(b.cardId)}
+            {#if bc}
+              {@const eff=hpTotal(b)}
+              {@const rem=hpRemaining(b)}
+              <div class="retreat-card">
+                <button class="retreat-zoom" title="放大檢視：{bc.name}"
+                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.sendNewActive(b.iid, myIdx));}}>
+                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <div class="retreat-name">{bc.name}</div>
+                  <div class="retreat-hp">HP {rem}/{eff}</div>
+                  <div class="retreat-nrg">{energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                  {#if b.status}<div class="retreat-status">
+                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
+                    {b.status}
+                  </div>{/if}
+                </button>
+              </div>
+            {/if}
+          {/each}
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2748:7
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m    <div class="selection-overlay">
+      [35m<div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>⚠️ 派出新的戰鬥寶可夢</h3>
+          <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
+        </div>
+        <div class="retreat-grid">
+          {#each myPlayer?.bench??[] as b}{@const bc=getCard(b.cardId)}
+            {#if bc}
+              {@const eff=hpTotal(b)}
+              {@const rem=hpRemaining(b)}
+              <div class="retreat-card">
+                <button class="retreat-zoom" title="放大檢視：{bc.name}"
+                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.sendNewActive(b.iid, myIdx));}}>
+                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <div class="retreat-name">{bc.name}</div>
+                  <div class="retreat-hp">HP {rem}/{eff}</div>
+                  <div class="retreat-nrg">{energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                  {#if b.status}<div class="retreat-status">
+                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
+                    {b.status}
+                  </div>{/if}
+                </button>
+              </div>
+            {/if}
+          {/each}
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2749:9
+[33mWarn[39m: `<div>` with a pointerdown, pointermove or pointerup handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m      <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
+        [35m<div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>⚠️ 派出新的戰鬥寶可夢</h3>
+          <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
+        </div>[36m
+        <div class="retreat-grid">[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2783:5
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m    {@const viewPlayer = game!.players[viewDiscardFor]}
+    [35m<div class="zoom-overlay" onclick={() => viewDiscardFor = null}>
+      <div class="zoom-modal discard-modal" onclick={(e)=>e.stopPropagation()}>
+        <button class="zoom-close" onclick={() => viewDiscardFor = null}>✕</button>
+        <h3 class="discard-title">🗑 {viewPlayer.name} 的棄牌區（{viewPlayer.discard.length} 張）</h3>
+        <div class="sel-grid">
+          {#each [...viewPlayer.discard].reverse() as inst}{@const c=getCard(inst.cardId)}
+            {#if c}
+              <button class="sel-card" onclick={() => openZoom(inst.cardId)}>
+                <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
+                {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+              </button>
+            {/if}
+          {/each}
+          {#if viewPlayer.discard.length === 0}<p class="sel-empty">（棄牌區是空的）</p>{/if}
+        </div>
+      </div>
+    </div>[36m
+  {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2783:5
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m    {@const viewPlayer = game!.players[viewDiscardFor]}
+    [35m<div class="zoom-overlay" onclick={() => viewDiscardFor = null}>
+      <div class="zoom-modal discard-modal" onclick={(e)=>e.stopPropagation()}>
+        <button class="zoom-close" onclick={() => viewDiscardFor = null}>✕</button>
+        <h3 class="discard-title">🗑 {viewPlayer.name} 的棄牌區（{viewPlayer.discard.length} 張）</h3>
+        <div class="sel-grid">
+          {#each [...viewPlayer.discard].reverse() as inst}{@const c=getCard(inst.cardId)}
+            {#if c}
+              <button class="sel-card" onclick={() => openZoom(inst.cardId)}>
+                <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
+                {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+              </button>
+            {/if}
+          {/each}
+          {#if viewPlayer.discard.length === 0}<p class="sel-empty">（棄牌區是空的）</p>{/if}
+        </div>
+      </div>
+    </div>[36m
+  {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2784:7
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m    <div class="zoom-overlay" onclick={() => viewDiscardFor = null}>
+      [35m<div class="zoom-modal discard-modal" onclick={(e)=>e.stopPropagation()}>
+        <button class="zoom-close" onclick={() => viewDiscardFor = null}>✕</button>
+        <h3 class="discard-title">🗑 {viewPlayer.name} 的棄牌區（{viewPlayer.discard.length} 張）</h3>
+        <div class="sel-grid">
+          {#each [...viewPlayer.discard].reverse() as inst}{@const c=getCard(inst.cardId)}
+            {#if c}
+              <button class="sel-card" onclick={() => openZoom(inst.cardId)}>
+                <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
+                {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+              </button>
+            {/if}
+          {/each}
+          {#if viewPlayer.discard.length === 0}<p class="sel-empty">（棄牌區是空的）</p>{/if}
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2784:7
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m    <div class="zoom-overlay" onclick={() => viewDiscardFor = null}>
+      [35m<div class="zoom-modal discard-modal" onclick={(e)=>e.stopPropagation()}>
+        <button class="zoom-close" onclick={() => viewDiscardFor = null}>✕</button>
+        <h3 class="discard-title">🗑 {viewPlayer.name} 的棄牌區（{viewPlayer.discard.length} 張）</h3>
+        <div class="sel-grid">
+          {#each [...viewPlayer.discard].reverse() as inst}{@const c=getCard(inst.cardId)}
+            {#if c}
+              <button class="sel-card" onclick={() => openZoom(inst.cardId)}>
+                <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
+                {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+              </button>
+            {/if}
+          {/each}
+          {#if viewPlayer.discard.length === 0}<p class="sel-empty">（棄牌區是空的）</p>{/if}
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2804:5
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m  {#if zoomCard}
+    [35m<div class="zoom-overlay" onclick={closeZoom}>
+      <div class="zoom-modal" onclick={(e)=>e.stopPropagation()}>
+        {#if zoomStack.length > 0}
+          <button class="zoom-back" onclick={popZoom} title="返回上一層">← 返回</button>
+        {/if}
+        <button class="zoom-close" onclick={closeZoom}>✕</button>
+        <div class="zoom-body">
+          <img src={zoomCard.imageUrl} alt={zoomCard.name} class="zoom-img"/>
+          <div class="zoom-info">
+            <div class="zoom-name">{zoomCard.name}</div>
+            <div class="zoom-badges">
+              {#if zoomCard.hp}<span class="badge hp-badge">HP {zoomCard.hp}</span>{/if}
+              {#if zoomCard.pokemonType}<span class="badge type-badge" style="background:{ENERGY_COLOR[zoomCard.pokemonType]}">{ENERGY_LABEL[zoomCard.pokemonType]}</span>{/if}
+              {#if zoomCard.subtype}<span class="badge sub-badge">{zoomCard.subtype}</span>{/if}
+              {#if zoomCard.regulationMark}<span class="badge mark-badge">{zoomCard.regulationMark}</span>{/if}
+            </div>
+            {#if zoomCard.evolvesFrom}<div class="zoom-meta">進化自：{zoomCard.evolvesFrom}</div>{/if}
+            {#if zoomInst}
+              {@const effMax = hpTotal(zoomInst)}
+              {@const instHp = Math.max(0, effMax - zoomInst.damage)}
+              {@const toolC = zoomInst.toolAttached ? getCard(zoomInst.toolAttached.cardId) : null}
+              <div class="zoom-state">
+                <div class="state-title">📍 場上狀態</div>
+                {#if effMax > 0}
+                  <div class="state-row">
+                    <span class="state-k">HP</span>
+                    <span class="state-v">{instHp} / {effMax}{#if effMax > (zoomCard.hp ?? 0)}（道具 +{effMax - (zoomCard.hp ?? 0)}）{/if}{#if zoomInst.damage>0}（傷害 {zoomInst.damage}）{/if}</span>
+                  </div>
+                {/if}
+                <div class="state-row">
+                  <span class="state-k">附能</span>
+                  <span class="state-v">
+                    {#if zoomInst.energyAttached.length===0}無{:else}
+                      {#each zoomInst.energyAttached as ec}{@const c2=getCard(ec.cardId)}<button class="state-ecard clickable" title="點擊放大：{c2?.name}" onclick={() => openZoom(ec.cardId, null)}>{c2?.name?.replace(/基本【|】能量/g,'') ?? '?'} 🔍</button>{/each}
+                    {/if}
+                  </span>
+                </div>
+                {#if toolC}
+                  <div class="state-row"><span class="state-k">🔧 道具</span><span class="state-v"><button class="state-tool clickable" title="點擊放大：{toolC.name}" onclick={() => openZoom(zoomInst!.toolAttached!.cardId, null)}>{toolC.name} 🔍</button></span></div>
+                {/if}
+                {#if zoomInst.status}
+                  <div class="state-row"><span class="state-k">異常</span><span class="state-v">{
+                    zoomInst.status==='poisoned'?'☠️ 中毒':
+                    zoomInst.status==='burned'?'🔥 燒傷':
+                    zoomInst.status==='asleep'?'💤 睡眠':
+                    zoomInst.status==='confused'?'😵 混亂':
+                    zoomInst.status==='paralyzed'?'⚡ 麻痺':zoomInst.status
+                  }</span></div>
+                {/if}
+                {#if zoomInst.evolvedFromStack && zoomInst.evolvedFromStack.length>0}
+                  <div class="state-row">
+                    <span class="state-k">進化鏈</span>
+                    <span class="state-v state-chain">
+                      {#each zoomInst.evolvedFromStack as pc}{@const c3=getCard(pc.cardId)}<button class="chain-node clickable" title="點擊放大：{c3?.name}" onclick={() => openZoom(pc.cardId, pc)}>{c3?.name ?? '?'}</button><span class="chain-arr">→</span>{/each}
+                      <span class="chain-node chain-current">{zoomCard.name}</span>
+                    </span>
+                  </div>
+                {/if}
+                {#if zoomInst.abilityUsedThisTurn}
+                  <div class="state-row"><span class="state-k">✨</span><span class="state-v">本回合已使用特性</span></div>
+                {/if}
+                {#if zoomInst.justPlaced}
+                  <div class="state-row"><span class="state-k">🆕</span><span class="state-v">本回合才打出（無法進化）</span></div>
+                {/if}
+                {#if zoomInst.evolvedThisTurn}
+                  <div class="state-row"><span class="state-k">🔺</span><span class="state-v">本回合剛進化（無法再進化）</span></div>
+                {/if}
+                {#if zoomInst.cantAttackThisTurn}
+                  <div class="state-row"><span class="state-k">🚫</span><span class="state-v">下一回合無法攻擊</span></div>
+                {/if}
+              </div>
+            {/if}
+            {#each zoomCard.abilities??[] as ab}
+              <div class="zoom-ability"><span class="ability-label">特性</span><strong>{ab.name}</strong><p class="effect-text">{ab.effect ?? (ab as any).text}</p></div>
+            {/each}
+            {#each zoomCard.attacks??[] as atk}
+              {@const atkEffect = atk.effect ?? (atk as any).text ?? ''}
+              <div class="zoom-attack">
+                <div class="atk-header">
+                  <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if atk.cost.length===0}<span class="no-cost">無消耗</span>{/if}</span>
+                  <span class="atk-nm">{atk.name}</span><span class="atk-dp">{atk.damage||'—'}</span>
+                </div>
+                {#if atkEffect.trim()}<p class="effect-text">{atkEffect}</p>{/if}
+              </div>
+            {/each}
+            {#if zoomCard.rulesText}<div class="zoom-rules">{zoomCard.rulesText}</div>{/if}
+            <div class="zoom-footer">
+              {#if zoomCard.weakness}<span class="footer-item">弱點：<span class="epip sm" style="background:{ENERGY_COLOR[zoomCard.weakness.type]}">{ENERGY_LABEL[zoomCard.weakness.type]}</span> ×2</span>{/if}
+              {#if zoomCard.retreatCost?.length}
+                <span class="footer-item">撤退：{#each zoomCard.retreatCost as e}<span class="epip sm" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}</span>
+              {:else if zoomCard.supertype==='Pokemon'}<span class="footer-item">撤退：免費</span>{/if}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>[36m
+  {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2804:5
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m  {#if zoomCard}
+    [35m<div class="zoom-overlay" onclick={closeZoom}>
+      <div class="zoom-modal" onclick={(e)=>e.stopPropagation()}>
+        {#if zoomStack.length > 0}
+          <button class="zoom-back" onclick={popZoom} title="返回上一層">← 返回</button>
+        {/if}
+        <button class="zoom-close" onclick={closeZoom}>✕</button>
+        <div class="zoom-body">
+          <img src={zoomCard.imageUrl} alt={zoomCard.name} class="zoom-img"/>
+          <div class="zoom-info">
+            <div class="zoom-name">{zoomCard.name}</div>
+            <div class="zoom-badges">
+              {#if zoomCard.hp}<span class="badge hp-badge">HP {zoomCard.hp}</span>{/if}
+              {#if zoomCard.pokemonType}<span class="badge type-badge" style="background:{ENERGY_COLOR[zoomCard.pokemonType]}">{ENERGY_LABEL[zoomCard.pokemonType]}</span>{/if}
+              {#if zoomCard.subtype}<span class="badge sub-badge">{zoomCard.subtype}</span>{/if}
+              {#if zoomCard.regulationMark}<span class="badge mark-badge">{zoomCard.regulationMark}</span>{/if}
+            </div>
+            {#if zoomCard.evolvesFrom}<div class="zoom-meta">進化自：{zoomCard.evolvesFrom}</div>{/if}
+            {#if zoomInst}
+              {@const effMax = hpTotal(zoomInst)}
+              {@const instHp = Math.max(0, effMax - zoomInst.damage)}
+              {@const toolC = zoomInst.toolAttached ? getCard(zoomInst.toolAttached.cardId) : null}
+              <div class="zoom-state">
+                <div class="state-title">📍 場上狀態</div>
+                {#if effMax > 0}
+                  <div class="state-row">
+                    <span class="state-k">HP</span>
+                    <span class="state-v">{instHp} / {effMax}{#if effMax > (zoomCard.hp ?? 0)}（道具 +{effMax - (zoomCard.hp ?? 0)}）{/if}{#if zoomInst.damage>0}（傷害 {zoomInst.damage}）{/if}</span>
+                  </div>
+                {/if}
+                <div class="state-row">
+                  <span class="state-k">附能</span>
+                  <span class="state-v">
+                    {#if zoomInst.energyAttached.length===0}無{:else}
+                      {#each zoomInst.energyAttached as ec}{@const c2=getCard(ec.cardId)}<button class="state-ecard clickable" title="點擊放大：{c2?.name}" onclick={() => openZoom(ec.cardId, null)}>{c2?.name?.replace(/基本【|】能量/g,'') ?? '?'} 🔍</button>{/each}
+                    {/if}
+                  </span>
+                </div>
+                {#if toolC}
+                  <div class="state-row"><span class="state-k">🔧 道具</span><span class="state-v"><button class="state-tool clickable" title="點擊放大：{toolC.name}" onclick={() => openZoom(zoomInst!.toolAttached!.cardId, null)}>{toolC.name} 🔍</button></span></div>
+                {/if}
+                {#if zoomInst.status}
+                  <div class="state-row"><span class="state-k">異常</span><span class="state-v">{
+                    zoomInst.status==='poisoned'?'☠️ 中毒':
+                    zoomInst.status==='burned'?'🔥 燒傷':
+                    zoomInst.status==='asleep'?'💤 睡眠':
+                    zoomInst.status==='confused'?'😵 混亂':
+                    zoomInst.status==='paralyzed'?'⚡ 麻痺':zoomInst.status
+                  }</span></div>
+                {/if}
+                {#if zoomInst.evolvedFromStack && zoomInst.evolvedFromStack.length>0}
+                  <div class="state-row">
+                    <span class="state-k">進化鏈</span>
+                    <span class="state-v state-chain">
+                      {#each zoomInst.evolvedFromStack as pc}{@const c3=getCard(pc.cardId)}<button class="chain-node clickable" title="點擊放大：{c3?.name}" onclick={() => openZoom(pc.cardId, pc)}>{c3?.name ?? '?'}</button><span class="chain-arr">→</span>{/each}
+                      <span class="chain-node chain-current">{zoomCard.name}</span>
+                    </span>
+                  </div>
+                {/if}
+                {#if zoomInst.abilityUsedThisTurn}
+                  <div class="state-row"><span class="state-k">✨</span><span class="state-v">本回合已使用特性</span></div>
+                {/if}
+                {#if zoomInst.justPlaced}
+                  <div class="state-row"><span class="state-k">🆕</span><span class="state-v">本回合才打出（無法進化）</span></div>
+                {/if}
+                {#if zoomInst.evolvedThisTurn}
+                  <div class="state-row"><span class="state-k">🔺</span><span class="state-v">本回合剛進化（無法再進化）</span></div>
+                {/if}
+                {#if zoomInst.cantAttackThisTurn}
+                  <div class="state-row"><span class="state-k">🚫</span><span class="state-v">下一回合無法攻擊</span></div>
+                {/if}
+              </div>
+            {/if}
+            {#each zoomCard.abilities??[] as ab}
+              <div class="zoom-ability"><span class="ability-label">特性</span><strong>{ab.name}</strong><p class="effect-text">{ab.effect ?? (ab as any).text}</p></div>
+            {/each}
+            {#each zoomCard.attacks??[] as atk}
+              {@const atkEffect = atk.effect ?? (atk as any).text ?? ''}
+              <div class="zoom-attack">
+                <div class="atk-header">
+                  <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if atk.cost.length===0}<span class="no-cost">無消耗</span>{/if}</span>
+                  <span class="atk-nm">{atk.name}</span><span class="atk-dp">{atk.damage||'—'}</span>
+                </div>
+                {#if atkEffect.trim()}<p class="effect-text">{atkEffect}</p>{/if}
+              </div>
+            {/each}
+            {#if zoomCard.rulesText}<div class="zoom-rules">{zoomCard.rulesText}</div>{/if}
+            <div class="zoom-footer">
+              {#if zoomCard.weakness}<span class="footer-item">弱點：<span class="epip sm" style="background:{ENERGY_COLOR[zoomCard.weakness.type]}">{ENERGY_LABEL[zoomCard.weakness.type]}</span> ×2</span>{/if}
+              {#if zoomCard.retreatCost?.length}
+                <span class="footer-item">撤退：{#each zoomCard.retreatCost as e}<span class="epip sm" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}</span>
+              {:else if zoomCard.supertype==='Pokemon'}<span class="footer-item">撤退：免費</span>{/if}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>[36m
+  {/if}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2805:7
+[33mWarn[39m: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+[36m    <div class="zoom-overlay" onclick={closeZoom}>
+      [35m<div class="zoom-modal" onclick={(e)=>e.stopPropagation()}>
+        {#if zoomStack.length > 0}
+          <button class="zoom-back" onclick={popZoom} title="返回上一層">← 返回</button>
+        {/if}
+        <button class="zoom-close" onclick={closeZoom}>✕</button>
+        <div class="zoom-body">
+          <img src={zoomCard.imageUrl} alt={zoomCard.name} class="zoom-img"/>
+          <div class="zoom-info">
+            <div class="zoom-name">{zoomCard.name}</div>
+            <div class="zoom-badges">
+              {#if zoomCard.hp}<span class="badge hp-badge">HP {zoomCard.hp}</span>{/if}
+              {#if zoomCard.pokemonType}<span class="badge type-badge" style="background:{ENERGY_COLOR[zoomCard.pokemonType]}">{ENERGY_LABEL[zoomCard.pokemonType]}</span>{/if}
+              {#if zoomCard.subtype}<span class="badge sub-badge">{zoomCard.subtype}</span>{/if}
+              {#if zoomCard.regulationMark}<span class="badge mark-badge">{zoomCard.regulationMark}</span>{/if}
+            </div>
+            {#if zoomCard.evolvesFrom}<div class="zoom-meta">進化自：{zoomCard.evolvesFrom}</div>{/if}
+            {#if zoomInst}
+              {@const effMax = hpTotal(zoomInst)}
+              {@const instHp = Math.max(0, effMax - zoomInst.damage)}
+              {@const toolC = zoomInst.toolAttached ? getCard(zoomInst.toolAttached.cardId) : null}
+              <div class="zoom-state">
+                <div class="state-title">📍 場上狀態</div>
+                {#if effMax > 0}
+                  <div class="state-row">
+                    <span class="state-k">HP</span>
+                    <span class="state-v">{instHp} / {effMax}{#if effMax > (zoomCard.hp ?? 0)}（道具 +{effMax - (zoomCard.hp ?? 0)}）{/if}{#if zoomInst.damage>0}（傷害 {zoomInst.damage}）{/if}</span>
+                  </div>
+                {/if}
+                <div class="state-row">
+                  <span class="state-k">附能</span>
+                  <span class="state-v">
+                    {#if zoomInst.energyAttached.length===0}無{:else}
+                      {#each zoomInst.energyAttached as ec}{@const c2=getCard(ec.cardId)}<button class="state-ecard clickable" title="點擊放大：{c2?.name}" onclick={() => openZoom(ec.cardId, null)}>{c2?.name?.replace(/基本【|】能量/g,'') ?? '?'} 🔍</button>{/each}
+                    {/if}
+                  </span>
+                </div>
+                {#if toolC}
+                  <div class="state-row"><span class="state-k">🔧 道具</span><span class="state-v"><button class="state-tool clickable" title="點擊放大：{toolC.name}" onclick={() => openZoom(zoomInst!.toolAttached!.cardId, null)}>{toolC.name} 🔍</button></span></div>
+                {/if}
+                {#if zoomInst.status}
+                  <div class="state-row"><span class="state-k">異常</span><span class="state-v">{
+                    zoomInst.status==='poisoned'?'☠️ 中毒':
+                    zoomInst.status==='burned'?'🔥 燒傷':
+                    zoomInst.status==='asleep'?'💤 睡眠':
+                    zoomInst.status==='confused'?'😵 混亂':
+                    zoomInst.status==='paralyzed'?'⚡ 麻痺':zoomInst.status
+                  }</span></div>
+                {/if}
+                {#if zoomInst.evolvedFromStack && zoomInst.evolvedFromStack.length>0}
+                  <div class="state-row">
+                    <span class="state-k">進化鏈</span>
+                    <span class="state-v state-chain">
+                      {#each zoomInst.evolvedFromStack as pc}{@const c3=getCard(pc.cardId)}<button class="chain-node clickable" title="點擊放大：{c3?.name}" onclick={() => openZoom(pc.cardId, pc)}>{c3?.name ?? '?'}</button><span class="chain-arr">→</span>{/each}
+                      <span class="chain-node chain-current">{zoomCard.name}</span>
+                    </span>
+                  </div>
+                {/if}
+                {#if zoomInst.abilityUsedThisTurn}
+                  <div class="state-row"><span class="state-k">✨</span><span class="state-v">本回合已使用特性</span></div>
+                {/if}
+                {#if zoomInst.justPlaced}
+                  <div class="state-row"><span class="state-k">🆕</span><span class="state-v">本回合才打出（無法進化）</span></div>
+                {/if}
+                {#if zoomInst.evolvedThisTurn}
+                  <div class="state-row"><span class="state-k">🔺</span><span class="state-v">本回合剛進化（無法再進化）</span></div>
+                {/if}
+                {#if zoomInst.cantAttackThisTurn}
+                  <div class="state-row"><span class="state-k">🚫</span><span class="state-v">下一回合無法攻擊</span></div>
+                {/if}
+              </div>
+            {/if}
+            {#each zoomCard.abilities??[] as ab}
+              <div class="zoom-ability"><span class="ability-label">特性</span><strong>{ab.name}</strong><p class="effect-text">{ab.effect ?? (ab as any).text}</p></div>
+            {/each}
+            {#each zoomCard.attacks??[] as atk}
+              {@const atkEffect = atk.effect ?? (atk as any).text ?? ''}
+              <div class="zoom-attack">
+                <div class="atk-header">
+                  <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if atk.cost.length===0}<span class="no-cost">無消耗</span>{/if}</span>
+                  <span class="atk-nm">{atk.name}</span><span class="atk-dp">{atk.damage||'—'}</span>
+                </div>
+                {#if atkEffect.trim()}<p class="effect-text">{atkEffect}</p>{/if}
+              </div>
+            {/each}
+            {#if zoomCard.rulesText}<div class="zoom-rules">{zoomCard.rulesText}</div>{/if}
+            <div class="zoom-footer">
+              {#if zoomCard.weakness}<span class="footer-item">弱點：<span class="epip sm" style="background:{ENERGY_COLOR[zoomCard.weakness.type]}">{ENERGY_LABEL[zoomCard.weakness.type]}</span> ×2</span>{/if}
+              {#if zoomCard.retreatCost?.length}
+                <span class="footer-item">撤退：{#each zoomCard.retreatCost as e}<span class="epip sm" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}</span>
+              {:else if zoomCard.supertype==='Pokemon'}<span class="footer-item">撤退：免費</span>{/if}
+            </div>
+          </div>
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2805:7
+[33mWarn[39m: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m    <div class="zoom-overlay" onclick={closeZoom}>
+      [35m<div class="zoom-modal" onclick={(e)=>e.stopPropagation()}>
+        {#if zoomStack.length > 0}
+          <button class="zoom-back" onclick={popZoom} title="返回上一層">← 返回</button>
+        {/if}
+        <button class="zoom-close" onclick={closeZoom}>✕</button>
+        <div class="zoom-body">
+          <img src={zoomCard.imageUrl} alt={zoomCard.name} class="zoom-img"/>
+          <div class="zoom-info">
+            <div class="zoom-name">{zoomCard.name}</div>
+            <div class="zoom-badges">
+              {#if zoomCard.hp}<span class="badge hp-badge">HP {zoomCard.hp}</span>{/if}
+              {#if zoomCard.pokemonType}<span class="badge type-badge" style="background:{ENERGY_COLOR[zoomCard.pokemonType]}">{ENERGY_LABEL[zoomCard.pokemonType]}</span>{/if}
+              {#if zoomCard.subtype}<span class="badge sub-badge">{zoomCard.subtype}</span>{/if}
+              {#if zoomCard.regulationMark}<span class="badge mark-badge">{zoomCard.regulationMark}</span>{/if}
+            </div>
+            {#if zoomCard.evolvesFrom}<div class="zoom-meta">進化自：{zoomCard.evolvesFrom}</div>{/if}
+            {#if zoomInst}
+              {@const effMax = hpTotal(zoomInst)}
+              {@const instHp = Math.max(0, effMax - zoomInst.damage)}
+              {@const toolC = zoomInst.toolAttached ? getCard(zoomInst.toolAttached.cardId) : null}
+              <div class="zoom-state">
+                <div class="state-title">📍 場上狀態</div>
+                {#if effMax > 0}
+                  <div class="state-row">
+                    <span class="state-k">HP</span>
+                    <span class="state-v">{instHp} / {effMax}{#if effMax > (zoomCard.hp ?? 0)}（道具 +{effMax - (zoomCard.hp ?? 0)}）{/if}{#if zoomInst.damage>0}（傷害 {zoomInst.damage}）{/if}</span>
+                  </div>
+                {/if}
+                <div class="state-row">
+                  <span class="state-k">附能</span>
+                  <span class="state-v">
+                    {#if zoomInst.energyAttached.length===0}無{:else}
+                      {#each zoomInst.energyAttached as ec}{@const c2=getCard(ec.cardId)}<button class="state-ecard clickable" title="點擊放大：{c2?.name}" onclick={() => openZoom(ec.cardId, null)}>{c2?.name?.replace(/基本【|】能量/g,'') ?? '?'} 🔍</button>{/each}
+                    {/if}
+                  </span>
+                </div>
+                {#if toolC}
+                  <div class="state-row"><span class="state-k">🔧 道具</span><span class="state-v"><button class="state-tool clickable" title="點擊放大：{toolC.name}" onclick={() => openZoom(zoomInst!.toolAttached!.cardId, null)}>{toolC.name} 🔍</button></span></div>
+                {/if}
+                {#if zoomInst.status}
+                  <div class="state-row"><span class="state-k">異常</span><span class="state-v">{
+                    zoomInst.status==='poisoned'?'☠️ 中毒':
+                    zoomInst.status==='burned'?'🔥 燒傷':
+                    zoomInst.status==='asleep'?'💤 睡眠':
+                    zoomInst.status==='confused'?'😵 混亂':
+                    zoomInst.status==='paralyzed'?'⚡ 麻痺':zoomInst.status
+                  }</span></div>
+                {/if}
+                {#if zoomInst.evolvedFromStack && zoomInst.evolvedFromStack.length>0}
+                  <div class="state-row">
+                    <span class="state-k">進化鏈</span>
+                    <span class="state-v state-chain">
+                      {#each zoomInst.evolvedFromStack as pc}{@const c3=getCard(pc.cardId)}<button class="chain-node clickable" title="點擊放大：{c3?.name}" onclick={() => openZoom(pc.cardId, pc)}>{c3?.name ?? '?'}</button><span class="chain-arr">→</span>{/each}
+                      <span class="chain-node chain-current">{zoomCard.name}</span>
+                    </span>
+                  </div>
+                {/if}
+                {#if zoomInst.abilityUsedThisTurn}
+                  <div class="state-row"><span class="state-k">✨</span><span class="state-v">本回合已使用特性</span></div>
+                {/if}
+                {#if zoomInst.justPlaced}
+                  <div class="state-row"><span class="state-k">🆕</span><span class="state-v">本回合才打出（無法進化）</span></div>
+                {/if}
+                {#if zoomInst.evolvedThisTurn}
+                  <div class="state-row"><span class="state-k">🔺</span><span class="state-v">本回合剛進化（無法再進化）</span></div>
+                {/if}
+                {#if zoomInst.cantAttackThisTurn}
+                  <div class="state-row"><span class="state-k">🚫</span><span class="state-v">下一回合無法攻擊</span></div>
+                {/if}
+              </div>
+            {/if}
+            {#each zoomCard.abilities??[] as ab}
+              <div class="zoom-ability"><span class="ability-label">特性</span><strong>{ab.name}</strong><p class="effect-text">{ab.effect ?? (ab as any).text}</p></div>
+            {/each}
+            {#each zoomCard.attacks??[] as atk}
+              {@const atkEffect = atk.effect ?? (atk as any).text ?? ''}
+              <div class="zoom-attack">
+                <div class="atk-header">
+                  <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if atk.cost.length===0}<span class="no-cost">無消耗</span>{/if}</span>
+                  <span class="atk-nm">{atk.name}</span><span class="atk-dp">{atk.damage||'—'}</span>
+                </div>
+                {#if atkEffect.trim()}<p class="effect-text">{atkEffect}</p>{/if}
+              </div>
+            {/each}
+            {#if zoomCard.rulesText}<div class="zoom-rules">{zoomCard.rulesText}</div>{/if}
+            <div class="zoom-footer">
+              {#if zoomCard.weakness}<span class="footer-item">弱點：<span class="epip sm" style="background:{ENERGY_COLOR[zoomCard.weakness.type]}">{ENERGY_LABEL[zoomCard.weakness.type]}</span> ×2</span>{/if}
+              {#if zoomCard.retreatCost?.length}
+                <span class="footer-item">撤退：{#each zoomCard.retreatCost as e}<span class="epip sm" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}</span>
+              {:else if zoomCard.supertype==='Pokemon'}<span class="footer-item">撤退：免費</span>{/if}
+            </div>
+          </div>
+        </div>
+      </div>[36m
+    </div>[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:3051:3
+[33mWarn[39m: Unused CSS selector ".setup-screen h2"
+https://svelte.dev/e/css_unused_selector (svelte)
+[36m  .setup-screen{ background:#1a2a1a; border-radius:10px; }
+  [35m.setup-screen h2[36m{ color:#aaffaa; }
+  .mulligan-banner{ background:#3a2a0e; border:1px solid #6a5a1a; color:#f8d080; padding:.5rem .8rem; border-radius:6px; margin-bottom:.8rem; font-size:.85rem; }[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:3450:3
+[33mWarn[39m: Unused CSS selector ".mini-poke-btn img"
+https://svelte.dev/e/css_unused_selector (svelte)
+[36m  .mini-poke-btn{ display:flex; flex-direction:column; align-items:center; background:#1a3a1a; border:1px solid #4a8a4a; border-radius:5px; padding:.2rem; cursor:pointer; color:#ddd; font-size:.65rem; gap:.1rem; }
+  [35m.mini-poke-btn img[36m{ width:40px; border-radius:2px; }
+  .mini-poke-btn:hover{ background:#2a5a2a; }[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1880:66
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                      {#each energyPips(b) as pip}
+                        <span class="nrg-pip" style="background:{[35mENERGY_COLOR[pip.type][36m}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                      {/each}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1880:99
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                      {#each energyPips(b) as pip}
+                        <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{[35mENERGY_LABEL[pip.type][36m} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                      {/each}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1880:139
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                      {#each energyPips(b) as pip}
+                        <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{[35mENERGY_LABEL[pip.type][36m}{pip.count > 1 ? pip.count : ''}</span>
+                      {/each}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1919:62
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                  {#each energyPips(oppPlayer.active) as pip}
+                    <span class="nrg-pip" style="background:{[35mENERGY_COLOR[pip.type][36m}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                  {/each}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1919:95
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                  {#each energyPips(oppPlayer.active) as pip}
+                    <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{[35mENERGY_LABEL[pip.type][36m} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                  {/each}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:1919:135
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                  {#each energyPips(oppPlayer.active) as pip}
+                    <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{[35mENERGY_LABEL[pip.type][36m}{pip.count > 1 ? pip.count : ''}</span>
+                  {/each}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2088:60
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                {#each energyPips(myPlayer.active) as pip}
+                  <span class="nrg-pip" style="background:{[35mENERGY_COLOR[pip.type][36m}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                {/each}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2088:93
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                {#each energyPips(myPlayer.active) as pip}
+                  <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{[35mENERGY_LABEL[pip.type][36m} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                {/each}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2088:133
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                {#each energyPips(myPlayer.active) as pip}
+                  <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{[35mENERGY_LABEL[pip.type][36m}{pip.count > 1 ? pip.count : ''}</span>
+                {/each}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2153:64
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                    {#each energyPips(b) as pip}
+                      <span class="nrg-pip" style="background:{[35mENERGY_COLOR[pip.type][36m}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                    {/each}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2153:97
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                    {#each energyPips(b) as pip}
+                      <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{[35mENERGY_LABEL[pip.type][36m} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                    {/each}[39m
+
+e:\ptcg-tw-sim\[32msrc\routes\game\+page.svelte[39m:2153:137
+[31mError[39m: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<EnergyType, string>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<EnergyType, string>'. (ts)
+[36m                    {#each energyPips(b) as pip}
+                      <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{[35mENERGY_LABEL[pip.type][36m}{pip.count > 1 ? pip.count : ''}</span>
+                    {/each}[39m
+
+====================================
+[31msvelte-check found 30 errors and 66 warnings in 5 files
+[39m
