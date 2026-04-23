@@ -48,7 +48,7 @@ const CARDS_DIR = path.join(REPO_ROOT, 'static', 'cards');
  */
 const TRAINER_OWNERS = [
   '奇樹', '阿響', '竹蘭', '火箭隊', 'N', '莉莉艾',
-  '赫普', '瑪俐', '大吾', '莉佳', '小霞', '派帕', '青木', '探險家'
+  '赫普', '瑪俐', '大吾', '莉佳', '小霞', '派帕', '青木'
 ];
 const OWNER_PREFIX_RE = new RegExp('^<?(' + TRAINER_OWNERS.join('|') + ')的[>\\s]?');
 const OWNER_TAG = '訓練家冠名';

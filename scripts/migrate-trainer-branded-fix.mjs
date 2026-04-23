@@ -30,12 +30,16 @@ async function main() {
   const files = (await fs.readdir(CARDS_DIR))
     .filter(f => f.endsWith('.json') && f !== 'index.json').sort();
 
-  // Pass 1: 從所有 Pokemon 反推 owner 白名單
+  // Pass 1: 從所有「真寶可夢」反推 owner 白名單
+  // 注意：supertype='Pokemon' && subtype='Other' 是 PokemonTool（寶可夢道具卡），
+  // 不是真寶可夢，要排除（e.g.「探險家的嚮導」SV8a 12449 是 Tool，探險家因此
+  // 不算冠名訓練家）。
   const owners = new Set();
   for (const f of files) {
     const cards = JSON.parse(await fs.readFile(path.join(CARDS_DIR, f), 'utf8'));
     for (const c of cards) {
       if (c.supertype !== 'Pokemon') continue;
+      if (c.subtype === 'Other') continue;
       const m = (c.name || '').match(/^([^<>\s]+?)的/);
       if (m) owners.add(m[1]);
     }

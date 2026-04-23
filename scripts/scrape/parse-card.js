@@ -293,11 +293,17 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
     // 雖然也是「XX的」格式，但卡池裡沒有「暗碼迷的XX」「松葉的XX」「老大的XX」
     // 寶可夢，所以只是「支援者的角色名稱」，不算冠名。
     //
-    // 白名單 14 人：從 static/cards 的 Pokemon 反推（scripts/migrate-trainer-
-    // branded-fix.mjs 能自動重算）。未來新 set 若出現新的「XX的寶可夢」系列，
-    // 記得把 XX 加到這份白名單 + migrate-tags.js 的 TRAINER_OWNERS。
+    // 白名單 13 人：從 static/cards 反推真寶可夢（必須 supertype='Pokemon'
+    // **且** subtype !== 'Other' — 'Other' 是寶可夢道具卡 PokemonTool 的標記，
+    // 不算真寶可夢）。scripts/migrate-trainer-branded-fix.mjs 能自動重算。
+    // 未來新 set 若出現新的「XX的寶可夢」系列，記得把 XX 加到這份白名單 +
+    // migrate-tags.js 的 TRAINER_OWNERS。
+    //
+    // v2.73：原 v2.72 清單誤含「探險家」— 探險家的嚮導 SV8a 12449 是
+    // [Pokemon/Other]（PokemonTool），不是真寶可夢；其他 4 版本都是
+    // Trainer/Supporter。所以探險家沒有任何一張真寶可夢，不算冠名訓練家。
     const TRAINER_BRANDED_OWNERS = [
-      'N', '大吾', '奇樹', '小霞', '探險家', '派帕', '火箭隊',
+      'N', '大吾', '奇樹', '小霞', '派帕', '火箭隊',
       '瑪俐', '竹蘭', '莉佳', '莉莉艾', '赫普', '阿響', '青木'
     ];
     const TRAINER_BRANDED_RE = new RegExp('^(' + TRAINER_BRANDED_OWNERS.join('|') + ')的');

@@ -1,9 +1,39 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.72)  
+> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.73)  
 > 執行者：Claude Opus 4.7 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session clever-optimistic-ritchie (v2.73) — 冠名白名單修正（探險家移除）
+
+### 問題
+v2.72 把「探險家」加進白名單（14 人），但 Leon 指出探險家沒有任何寶可夢，不該算冠名訓練家。
+
+### 根因（我的幻覺）
+我之前寫 ground-truth 判定時用 `supertype === 'Pokemon'` 就算寶可夢，**沒排除 `subtype === 'Other'`（PokemonTool 寶可夢道具卡）**。
+
+結果：「探險家的嚮導」SV8a 12449 是 `[Pokemon/Other]` — 就是寶可夢道具卡，不是真寶可夢 — 被我誤算成探險家有一張寶可夢。
+
+其他 4 版本「探險家的嚮導」MC 17188 / SV5K 9766 / SV5K 10213 / SV8a 11697 都是 Trainer/Supporter（真正的「探險家的嚮導」是支援者卡，那張 Pokemon/Other 是對應的道具卡版本）。
+
+**探險家沒有任何真寶可夢，不算冠名訓練家。**
+
+### 修正
+- 正確 ground-truth 判定：`supertype === 'Pokemon' && subtype !== 'Other'`
+- 白名單 14 → 13 人（移除探險家）
+- 三處同步：`parse-card.js` / `migrate-tags.js` / `migrate-trainer-branded.mjs`
+- `migrate-trainer-branded-fix.mjs` 再跑一次，移除 4 張「探險家的嚮導」Trainer 版本的錯誤 tag
+
+### 驗證
+- 最終 Trainer 冠名 tag 符合白名單：69/69（100%）
+- 13 人：N / 大吾 / 奇樹 / 小霞 / 派帕 / 火箭隊 / 瑪俐 / 竹蘭 / 莉佳 / 莉莉艾 / 赫普 / 阿響 / 青木
+- 本機 build ✓
+
+### 記憶教訓
+寫 ground-truth 判定前要同時思考「PokemonTool 是 supertype=Pokemon 但 subtype=Other」這個 scraper 命名慣例 — 不能只看 supertype。現有的 `cardCategory()` 也是這樣區分的。以後要加到 SOP memory。
 
 ---
 

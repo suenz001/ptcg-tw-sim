@@ -30,10 +30,12 @@ const CARDS_DIR = path.resolve(__dirname, '..', 'static', 'cards');
 
 // 訓練家角色白名單（Pokemon 冠名必匹配其中之一才算訓練家寶可夢）。
 // 保持與 scripts/migrate-tags.js 的 TRAINER_OWNERS 同步。
-// v2.71 hotfix: 14 人白名單（含探險家）。Leon 的定義是「該訓練家要有對應寶可夢」，
-// 所以 Trainer 分支也改用白名單判定（原本的「XX的」開頭 + 黑名單模式太寬）。
+// v2.73: 13 人白名單（從卡池反推，supertype='Pokemon' && subtype !== 'Other'
+// — 排除 Tool）。Leon 的定義：「該訓練家要有對應（真）寶可夢」。
+// v2.72 誤把探險家納入（探險家的嚮導 SV8a 12449 其實是 Pokemon/Other Tool
+// 不是真寶可夢），本版移除。
 const TRAINER_BRANDED_OWNERS = [
-  'N', '大吾', '奇樹', '小霞', '探險家', '派帕', '火箭隊',
+  'N', '大吾', '奇樹', '小霞', '派帕', '火箭隊',
   '瑪俐', '竹蘭', '莉佳', '莉莉艾', '赫普', '阿響', '青木'
 ];
 const BRANDED_OWNER_RE = new RegExp('^(' + TRAINER_BRANDED_OWNERS.join('|') + ')的');
