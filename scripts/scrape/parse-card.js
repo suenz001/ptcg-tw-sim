@@ -211,12 +211,22 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
         attacks.push({ name: rawName, cost, damage, effect });
       }
     });
-    // 訓練家的寶可夢（例：<阿響的>凱羅斯、<火箭隊的>超夢ex、<竹蘭的>烈咬陸鯊ex）。
-    // 這類寶可夢在官網會帶有冠名括號 `<XX的>` 作為 HTML marker，純 HTML 上可見。
-    // （M2a 復刻版不帶 <>，那些靠 migrate-tags.js 的 owner 白名單補 — 見下方註解。）
-    // pool.ts 載入時會 strip 掉 `<>`，但 scraper 端保留原樣當辨識訊號。
+    // 訓練家冠名（v2.71 改名自「訓練家的寶可夢」並擴展到 Trainer 卡）。
+    // 含兩類：
+    //   (a) 訓練家冠名的寶可夢（例：阿響的凱羅斯、火箭隊的超夢ex、竹蘭的烈咬陸鯊ex）
+    //   (b) 訓練家冠名的訓練家卡（例：赫普的包包、N的ＰＰ提升劑、老大的指令）
+    // 這類卡在官網寶可夢的 name 會帶有 `<XX的>` 包裝標記，HTML 上可見。v2.71 後
+    // JSON 儲存時會把 `<>` strip 掉（fetch-card.js 處理），但 parse-card.js 在
+    // 打 tag 時以原始帶 `<>` name 判定，最可靠。
+    // 訓練家卡沒有 `<>` 標記，由 migrate-tags.js / migrate-trainer-branded.mjs 的
+    // prefix 比對補打 tag，未來新 Trainer 卡由 migration 批次回填。
     if (/^<[^<>]+的>/.test(card.name)) {
-      if (!tags.includes('訓練家的寶可夢')) tags.push('訓練家的寶可夢');
+      if (!tags.includes('訓練家冠名')) tags.push('訓練家冠名');
+    }
+    // v2.71：tag 打完後，strip `<>` 讓 JSON name 不帶冠名括號（統一格式）。
+    // 這也會順便 strip evolvesFrom（若前階也帶冠名）。
+    if (card.name.includes('<') || card.name.includes('>')) {
+      card.name = card.name.replace(/[<>]/g, '');
     }
 
     if (abilities.length) card.abilities = abilities;
@@ -267,11 +277,24 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
       const names = evo.find('a, span').map((_, el) => $(el).text().trim()).get()
         .filter((s) => s && s.length > 0);
       const idx = names.findIndex((n) => n === card.name);
-      if (idx > 0) card.evolvesFrom = names[idx - 1];
+      if (idx > 0) {
+        // evolvesFrom 也可能帶 <>（前階冠名），strip 以對齊 name 格式
+        card.evolvesFrom = names[idx - 1].replace(/[<>]/g, '');
+      }
     }
   } else {
     // Trainer or Energy
-    card.name = $('h1').first().text().trim();
+    const rawTrainerName = $('h1').first().text().trim();
+    // v2.71：Trainer 冠名卡（如「赫普的包包」「N的ＰＰ提升劑」「老大的指令」）
+    // 打 '訓練家冠名' tag。判定：name 開頭「XX的」且非形容詞性黑名單。
+    // 能量卡不會冠名，故只對 Trainer supertype 判定。
+    const TRAINER_PREFIX_BLACKLIST = [/^陳舊的/]; // 化石物品（不是訓練家）
+    const isTrainerBranded = (name) => {
+      if (!/^[^<>\s]+的/.test(name)) return false;
+      for (const re of TRAINER_PREFIX_BLACKLIST) if (re.test(name)) return false;
+      return true;
+    };
+    card.name = rawTrainerName.replace(/[<>]/g, '');
     const classified = classifyTrainerOrEnergyByH3($);
     if (classified) {
       card.supertype = classified.supertype;
@@ -291,6 +314,12 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
       .get()
       .filter(Boolean);
     if (effectParts.length) card.rulesText = effectParts.join('\n\n');
+
+    // Trainer 冠名卡打 tag（能量不判定）
+    if (card.supertype === 'Trainer' && isTrainerBranded(card.name)) {
+      card.tags = card.tags || [];
+      if (!card.tags.includes('訓練家冠名')) card.tags.push('訓練家冠名');
+    }
   }
 
   // Illustrator — the .illustrator block contains the literal label "繪師"

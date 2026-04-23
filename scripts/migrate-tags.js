@@ -34,19 +34,24 @@ const CARDS_DIR = path.join(REPO_ROOT, 'static', 'cards');
  * 訓練家寶可夢 owner 白名單（名稱 prefix 為「XX的」的寶可夢）。
  * 這些 Pokemon 在特定 Supporter/Stadium 效果中會被當作一個 group 處理
  * （例：火箭隊當家查「場上『火箭隊的』寶可夢」）。tag 化讓引擎可以用
- * tags.includes('訓練家的寶可夢') 快速識別這張是不是訓練家寶可夢，
+ * tags.includes('訓練家冠名') 快速識別這張是不是訓練家冠名卡，
  * 具體 owner 仍由 name prefix 推斷。
  *
- * 白名單 vs regex：官網 HTML 在新 set（SV9a/MC/SVOM/SVOD 等）會用 `<XX的>`
- * 包住，這個 `<>` 是可靠的識別訊號 — parse-card.js 用該 pattern。但 M2a 復刻
- * 版及其他較舊格式沒有 `<>`，必須靠白名單。新增 owner 時兩邊都要更新。
+ * 白名單 vs regex：v2.71 前官網 HTML 在新 set（SV9a/MC/SVOM/SVOD 等）會用 `<XX的>`
+ * 包住，這個 `<>` 是可靠的識別訊號 — parse-card.js 用該 pattern。但 M2a 復刻版
+ * 及其他較舊格式沒有 `<>`，必須靠白名單。v2.71 後 JSON 統一 strip `<>`，所以本
+ * regex 的 `<?` 和 `[>\s]?` 只剩防禦性 match，實際都走純 prefix match。
+ *
+ * v2.71：tag 改名 '訓練家的寶可夢' → '訓練家冠名'，並擴展到 Trainer 卡（見
+ * migrate-trainer-branded.mjs）。新增 owner 時三處都要更新：本白名單、
+ * parse-card.js 的判定、/cards/+page.svelte 的 TagKey。
  */
 const TRAINER_OWNERS = [
   '奇樹', '阿響', '竹蘭', '火箭隊', 'N', '莉莉艾',
   '赫普', '瑪俐', '大吾', '莉佳', '小霞', '派帕', '青木'
 ];
 const OWNER_PREFIX_RE = new RegExp('^<?(' + TRAINER_OWNERS.join('|') + ')的[>\\s]?');
-const OWNER_TAG = '訓練家的寶可夢';
+const OWNER_TAG = '訓練家冠名';
 
 async function main() {
   console.error(`[1/4] Fetching ${TAG_FILTERS.length} tag filter lists from pokemon-card.com...`);

@@ -1,9 +1,123 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.70)  
+> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.71)  
 > 執行者：Claude Opus 4.7 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session clever-optimistic-ritchie (v2.71) — 訓練家冠名統一命名 + 新 tag 篩選
+
+### 問題集（1 項，但改動面積大）
+
+Leon 在做「呆呆王 + 超級路卡利歐」兩組 preset 的 Phase 1 對卡途中發現：
+- MC 17047/17048 這類「青木的土龍弟弟 / 土龍節節ex」— 訓練家冠名寶可夢，JSON name 帶
+  `<青木的>` 包裝
+- 之前 v2.22 pool.ts 在 runtime strip `<>`，但 JSON 層級格式不統一（部分帶 `<>`、
+  部分不帶），對新牌組製作、查資料都造成困擾
+- 既有 `/cards` 檢索系統沒有「訓練家冠名」篩選 — 要找出所有「赫普的XX」「N的XX」
+  「火箭隊的XX」系列卡要手動搜尋
+
+Leon 的要求（原話）：「請你在我們的資料庫完成統一的命名」＋「針對目前所有牌庫 4250
+張卡做統一的檢查」＋「在卡牌資料庫的標籤右側，再增加一個【訓練家冠名】的標籤，
+篩選後，只要是屬於訓練家冠名的寶可夢、訓練家卡都會出現」。
+
+### 現況盤點
+
+帶 `<>` 仍未統一的卡 **243 張**（跨 13 個訓練家）：
+- 火箭隊×110 / 阿響×25 / 竹蘭×24 / 瑪俐×14 / 小霞×13 / 派帕×13 / 大吾×10
+- 青木×8 / 莉佳×7 / 奇樹×6 / 赫普×5 / 莉莉艾×4 / N×4
+
+既有 `'訓練家的寶可夢'` tag（v2.68）只打給 **Pokemon**，不含 Trainer 卡（赫普的包包、
+N的ＰＰ提升劑、老大的指令等），Leon 要的篩選要一次涵蓋 Pokemon + Trainer。
+
+v2.22 的 `pool.ts` strip `<>` 邏輯已經讓 `effects.ts` 的 name matching 用純名（e.g.
+`.includes('火箭隊的')`），所以統一 JSON 層級的 strip **不會破壞現有邏輯**。
+
+### 設計討論（定下四條規則）
+
+1. **Tag 重命名 + 擴展**：`'訓練家的寶可夢'`（只 Pokemon）→ `'訓練家冠名'`（Pokemon +
+   Trainer）。effects.ts 沒人用舊 tag 字串做 matching（grep 過）— 安全重命名。
+2. **JSON 層級 strip `<>`**：所有 4250 張卡的 `name` / `evolvesFrom` 都 strip，統一成
+   無角括號格式。`pool.ts` 的 runtime strip 變 defensive no-op（留著防未 migrate 的
+   老 JSON）。
+3. **scraper 同步改**：`parse-card.js` 在判定 tag 後再 strip `<>`，所以未來重爬也保持
+   統一格式；Trainer 分支加 branded tag 判定（開頭「XX的」＋ 黑名單排除「陳舊的」化石）。
+4. **UI filter**：`/cards/+page.svelte` 的 `TagKey` 加 `'訓練家冠名'` — 走既有的
+   `tags.includes(tag)` 路徑，不用特別寫。
+
+### 主修（本版的主要改動）
+
+**Migration（一次性腳本）— `scripts/migrate-trainer-branded.mjs`**：
+- 掃 29 個 set × 4250 張卡
+- 判定 Pokemon 訓練家冠名：原 name 帶 `<XX的>` OR strip 後匹配 13 人白名單
+- 判定 Trainer 訓練家冠名：strip 後開頭「XX的」＋ 排除「陳舊的」
+- 動作：strip `<>` / `evolvesFrom` 的 `<>` / rename 舊 tag → 新 tag / 補打新 tag
+- 冪等（重跑安全）
+
+跑完結果：
+```
+Total cards scanned: 4250
+Names stripped of <>: 243
+Tags renamed (訓練家的寶可夢 → 訓練家冠名): 401
+New 訓練家冠名 tags added (Trainer + missing Pokemon): 180
+Files modified: 25/29
+```
+
+**Scraper — `scripts/scrape/parse-card.js`**：
+- tag label '訓練家的寶可夢' → '訓練家冠名'
+- Pokemon 分支：打完 tag 後 `card.name = card.name.replace(/[<>]/g, '')`
+- Trainer 分支：新加 `isTrainerBranded(name)`，對 branded 打 tag
+- `evolvesFrom` 也 strip `<>`（前階可能冠名）
+
+**Migration - `scripts/migrate-tags.js`**：
+- `OWNER_TAG = '訓練家的寶可夢'` → `'訓練家冠名'`
+- 註解更新，提醒新增 owner 時三處都要同步
+
+**Type 註解 — `src/lib/cards/types.ts`**：
+- tag 清單的「訓練家的寶可夢」條目改名「訓練家冠名」並補上 Trainer 範例（赫普的包包、
+  N的ＰＰ提升劑、暗碼迷的解讀 等）
+
+**UI — `src/routes/cards/+page.svelte`**：
+- `TagKey` 加 `'訓練家冠名'`
+- `TAG_ORDER` 追加到最末（Leon 明說「右側再增加」）
+
+**Defensive — `src/lib/cards/pool.ts`**：
+- runtime `<>` strip 邏輯保留，註解說明 v2.71 已 migrate JSON，這段變 no-op
+
+### 次要調整
+- 原 tag '訓練家的寶可夢' 若同時與新 tag 共存時，舊 tag 會被 migration 移除（dedup）
+- 既有的 13 人 owner 白名單與 v2.62 `migrate-tags.js` 完全同步
+
+### 驗證
+- Migration 跑完後：
+  - `grep '<'` in static/cards → 0 張卡 name 仍帶 `<>`
+  - `MC 17048` 現在 name = `青木的土龍節節ex`，tags = `['訓練家冠名']`
+  - `MC 17169 暗碼迷的解讀` tags = `['未來', '訓練家冠名']`（原有的未來 tag 保留）
+  - `MC 17195 老大的指令` tags = `['訓練家冠名']`
+- `npm run build` 本機過（12.51s → 第二次 bump 後再過）
+
+### Bug 抓到（過程中察覺的隱形問題）
+1. `parse-card.js` 原本的 `evolvesFrom` 來自 `.evolution` 區塊，**沒有 strip `<>`** —
+   這代表之前帶冠名的前階（如 `<火箭隊的>狃拉` → 火箭隊的狃拉 ex）在 json 裡前階欄位
+   會帶 `<>`，然後 runtime pool.ts 的 strip 只 strip `name` 沒 strip `evolvesFrom`，
+   造成 engine 比對進化鏈時可能對不起來。本版同時修。
+2. Leon 提示的「MC 17048 evolvesFrom 缺失」是 scraper 對 `<XX的>` 訓練家寶可夢普遍的
+   bug（v2.62 操陷蛛同 pattern），這次 migration 不自動補（因為需要人工判斷前階是哪張），
+   未來做青木牌組 preset 時再補。
+
+### 延伸任務（未做）
+- 呆呆王 + 超級路卡利歐 兩組 preset（#283–#287）— 原本本回合要做，但 Leon 插入這個
+  更優先的名稱統一任務，兩組 preset 順延到下個 session。
+- Leon 已回答的 preset 疑點（呆呆獸 M-P 18072、土龍弟弟 MC 17045、土龍節節ex MC
+  17046、卡表無前階照卡表放、筆誤三張：暗碼迷/決意/回力鏢、SV7 10934 呆呆王
+  evolvesFrom 改呆呆獸、超級路卡利歐ex evolvesFrom 改利歐路）已記在本 session
+  conversation，下個 session 直接承接。
+
+### commit / push
+- commit hash：（見下方 commit）
+- pushed to origin/main
 
 ---
 

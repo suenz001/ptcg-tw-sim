@@ -1,7 +1,7 @@
 [
   {
     "id": "12604",
-    "name": "<瑪俐的>扒手貓",
+    "name": "瑪俐的扒手貓",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SVOM",
@@ -33,12 +33,12 @@
     "illustrator": "REND",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12605",
-    "name": "<瑪俐的>酷豹",
+    "name": "瑪俐的酷豹",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SVOM",
@@ -71,12 +71,12 @@
     "illustrator": "Hasuno",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12606",
-    "name": "<瑪俐的>滑滑小子",
+    "name": "瑪俐的滑滑小子",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SVOM",
@@ -110,12 +110,12 @@
     "illustrator": "Teeziro",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12607",
-    "name": "<瑪俐的>頭巾混混",
+    "name": "瑪俐的頭巾混混",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SVOM",
@@ -158,12 +158,12 @@
     "illustrator": "Kazumasa Yasukuni",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12608",
-    "name": "<瑪俐的>搗蛋小妖",
+    "name": "瑪俐的搗蛋小妖",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SVOM",
@@ -203,12 +203,12 @@
     "illustrator": "KEIICHIRO ITO",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12609",
-    "name": "<瑪俐的>詐唬魔",
+    "name": "瑪俐的詐唬魔",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SVOM",
@@ -241,12 +241,12 @@
     "illustrator": "NC Empire",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12610",
-    "name": "<瑪俐的>長毛巨魔ex",
+    "name": "瑪俐的長毛巨魔ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SVOM",
@@ -285,12 +285,12 @@
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12611",
-    "name": "<瑪俐的>莫魯貝可",
+    "name": "瑪俐的莫魯貝可",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SVOM",
@@ -321,7 +321,7 @@
     "illustrator": "Mina Nakai",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -475,7 +475,10 @@
     "scrapedAt": "2026-04-21T14:24:40.008Z",
     "rulesText": "從自己的牌庫選擇競技場卡與能量卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "hncl",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12621",
@@ -503,7 +506,10 @@
     "scrapedAt": "2026-04-21T14:24:41.782Z",
     "rulesText": "將自己的手牌全部丟棄，從牌庫抽出7張卡。",
     "illustrator": "Taira Akitsu",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12623",
@@ -517,7 +523,10 @@
     "scrapedAt": "2026-04-21T14:24:42.712Z",
     "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "NC Empire",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12624",
@@ -535,7 +544,7 @@
   },
   {
     "id": "12625",
-    "name": "<瑪俐的>莫魯貝可",
+    "name": "瑪俐的莫魯貝可",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SVOM",
@@ -566,7 +575,7 @@
     "illustrator": "Susumu Maeya",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {

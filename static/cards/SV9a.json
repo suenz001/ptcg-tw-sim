@@ -1,7 +1,7 @@
 [
   {
     "id": "12659",
-    "name": "<阿響的>凱羅斯",
+    "name": "阿響的凱羅斯",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -44,7 +44,7 @@
     "illustrator": "GIDORA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -143,7 +143,7 @@
   },
   {
     "id": "12662",
-    "name": "<竹蘭的>毒薔薇",
+    "name": "竹蘭的毒薔薇",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -175,12 +175,12 @@
     "illustrator": "nisimono",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12663",
-    "name": "<竹蘭的>羅絲雷朵",
+    "name": "竹蘭的羅絲雷朵",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV9a",
@@ -222,7 +222,7 @@
     "illustrator": "En Morikura",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -589,7 +589,7 @@
   },
   {
     "id": "12673",
-    "name": "<阿響的>火球鼠",
+    "name": "阿響的火球鼠",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -621,12 +621,12 @@
     "illustrator": "Susumu Maeya",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12674",
-    "name": "<阿響的>火岩鼠",
+    "name": "阿響的火岩鼠",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV9a",
@@ -665,12 +665,12 @@
     "illustrator": "Souichirou Gunjima",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12675",
-    "name": "<阿響的>火爆獸",
+    "name": "阿響的火爆獸",
     "supertype": "Pokemon",
     "subtype": "Stage2",
     "setCode": "SV9a",
@@ -713,12 +713,12 @@
     "illustrator": "danciao",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12676",
-    "name": "<阿響的>熔岩蟲",
+    "name": "阿響的熔岩蟲",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -751,12 +751,12 @@
     "illustrator": "Sanosuke Sakuma",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12677",
-    "name": "<阿響的>熔岩蝸牛",
+    "name": "阿響的熔岩蝸牛",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV9a",
@@ -799,12 +799,12 @@
     "illustrator": "kodama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12678",
-    "name": "<阿響的>鳳王ex",
+    "name": "阿響的鳳王ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV9a",
@@ -845,7 +845,7 @@
     "illustrator": "aky CG Works",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -894,7 +894,7 @@
   },
   {
     "id": "12680",
-    "name": "<小霞的>可達鴨",
+    "name": "小霞的可達鴨",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -933,12 +933,12 @@
     "illustrator": "Yuu Nishida",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12681",
-    "name": "<小霞的>海星星",
+    "name": "小霞的海星星",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -970,12 +970,12 @@
     "illustrator": "Shinya Komatsu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12682",
-    "name": "<小霞的>寶石海星",
+    "name": "小霞的寶石海星",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV9a",
@@ -1007,12 +1007,12 @@
     "illustrator": "Natsumi Yoshida",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12683",
-    "name": "<小霞的>鯉魚王",
+    "name": "小霞的鯉魚王",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -1051,12 +1051,12 @@
     "illustrator": "Shimaris Yukichi",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12684",
-    "name": "<小霞的>暴鯉龍",
+    "name": "小霞的暴鯉龍",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV9a",
@@ -1101,12 +1101,12 @@
     "illustrator": "GOSSAN",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12685",
-    "name": "<小霞的>拉普拉斯",
+    "name": "小霞的拉普拉斯",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -1147,12 +1147,12 @@
     "illustrator": "En Morikura",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12686",
-    "name": "<竹蘭的>醜醜魚",
+    "name": "竹蘭的醜醜魚",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -1184,12 +1184,12 @@
     "illustrator": "kamonabe",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12687",
-    "name": "<竹蘭的>美納斯",
+    "name": "竹蘭的美納斯",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV9a",
@@ -1223,7 +1223,7 @@
     "illustrator": "You Iribi",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -1492,7 +1492,7 @@
   },
   {
     "id": "12694",
-    "name": "<阿響的>皮丘",
+    "name": "阿響的皮丘",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -1519,7 +1519,7 @@
     "illustrator": "Narumi Sato",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -1698,7 +1698,7 @@
   },
   {
     "id": "12699",
-    "name": "<阿響的>樹才怪",
+    "name": "阿響的樹才怪",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -1739,12 +1739,12 @@
     "illustrator": "OKACHEKE",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12700",
-    "name": "<竹蘭的>圓陸鯊",
+    "name": "竹蘭的圓陸鯊",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -1776,12 +1776,12 @@
     "illustrator": "Tomomi Ozaki",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12701",
-    "name": "<竹蘭的>尖牙陸鯊",
+    "name": "竹蘭的尖牙陸鯊",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV9a",
@@ -1821,12 +1821,12 @@
     "illustrator": "Taira Akitsu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12702",
-    "name": "<竹蘭的>烈咬陸鯊ex",
+    "name": "竹蘭的烈咬陸鯊ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV9a",
@@ -1863,7 +1863,7 @@
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -1951,7 +1951,7 @@
   },
   {
     "id": "12705",
-    "name": "<派帕的>原野水母",
+    "name": "派帕的原野水母",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -1983,12 +1983,12 @@
     "illustrator": "Fujimoto Gold",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12706",
-    "name": "<派帕的>陸地水母",
+    "name": "派帕的陸地水母",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV9a",
@@ -2031,7 +2031,7 @@
     "illustrator": "Yuya Oka",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2080,7 +2080,7 @@
   },
   {
     "id": "12708",
-    "name": "<竹蘭的>花岩怪",
+    "name": "竹蘭的花岩怪",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -2112,12 +2112,12 @@
     "illustrator": "satoma",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12709",
-    "name": "<派帕的>偶叫獒",
+    "name": "派帕的偶叫獒",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -2160,12 +2160,12 @@
     "illustrator": "Mina Nakai",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12710",
-    "name": "<派帕的>獒教父ex",
+    "name": "派帕的獒教父ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV9a",
@@ -2208,7 +2208,7 @@
     "illustrator": "akagi",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2257,7 +2257,7 @@
   },
   {
     "id": "12712",
-    "name": "<派帕的>貪心栗鼠",
+    "name": "派帕的貪心栗鼠",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -2289,12 +2289,12 @@
     "illustrator": "Oswaldo KATO",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12713",
-    "name": "<派帕的>藏飽栗鼠",
+    "name": "派帕的藏飽栗鼠",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV9a",
@@ -2335,7 +2335,7 @@
     "illustrator": "Akira Komayama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2364,7 +2364,10 @@
     "scrapedAt": "2026-04-16T08:08:19.788Z",
     "rulesText": "將自己的戰鬥寶可夢恢復「30」HP。若那隻寶可夢為「派帕的寶可夢」，則恢復的HP改為「100」。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12716",
@@ -2408,7 +2411,7 @@
     "illustrator": "Studio Bora Inc.",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2423,7 +2426,10 @@
     "scrapedAt": "2026-04-16T08:08:22.694Z",
     "rulesText": "從自己的牌庫抽出2張卡。若對手剩餘獎賞卡的張數為3張以下，則再抽出2張卡。",
     "illustrator": "Cona Nitanda",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12720",
@@ -2451,7 +2457,10 @@
     "scrapedAt": "2026-04-16T08:08:24.155Z",
     "rulesText": "從自己的牌庫選擇「阿響的寶可夢」與「基本【火】能量」卡合計最多3張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Iori Suzuki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12722",
@@ -2502,7 +2511,7 @@
   },
   {
     "id": "12723",
-    "name": "<竹蘭的>羅絲雷朵",
+    "name": "竹蘭的羅絲雷朵",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV9a",
@@ -2544,7 +2553,7 @@
     "illustrator": "rika",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2727,7 +2736,7 @@
   },
   {
     "id": "12728",
-    "name": "<阿響的>火爆獸",
+    "name": "阿響的火爆獸",
     "supertype": "Pokemon",
     "subtype": "Stage2",
     "setCode": "SV9a",
@@ -2770,12 +2779,12 @@
     "illustrator": "GIDORA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12729",
-    "name": "<小霞的>可達鴨",
+    "name": "小霞的可達鴨",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -2814,12 +2823,12 @@
     "illustrator": "OKACHEKE",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12730",
-    "name": "<小霞的>拉普拉斯",
+    "name": "小霞的拉普拉斯",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV9a",
@@ -2860,7 +2869,7 @@
     "illustrator": "Orca",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2951,7 +2960,7 @@
   },
   {
     "id": "12733",
-    "name": "<派帕的>藏飽栗鼠",
+    "name": "派帕的藏飽栗鼠",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV9a",
@@ -2992,7 +3001,7 @@
     "illustrator": "Natsumi Yoshida",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3044,7 +3053,7 @@
   },
   {
     "id": "12735",
-    "name": "<阿響的>鳳王ex",
+    "name": "阿響的鳳王ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV9a",
@@ -3085,7 +3094,7 @@
     "illustrator": "aky CG Works",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3184,7 +3193,7 @@
   },
   {
     "id": "12738",
-    "name": "<竹蘭的>烈咬陸鯊ex",
+    "name": "竹蘭的烈咬陸鯊ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV9a",
@@ -3221,12 +3230,12 @@
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12739",
-    "name": "<派帕的>獒教父ex",
+    "name": "派帕的獒教父ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV9a",
@@ -3269,7 +3278,7 @@
     "illustrator": "PLANETA Igarashi",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3284,7 +3293,10 @@
     "scrapedAt": "2026-04-16T08:08:38.439Z",
     "rulesText": "從自己的牌庫抽出2張卡。若對手剩餘獎賞卡的張數為3張以下，則再抽出2張卡。",
     "illustrator": "Cona Nitanda",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12741",
@@ -3312,7 +3324,10 @@
     "scrapedAt": "2026-04-16T08:08:39.803Z",
     "rulesText": "從自己的牌庫選擇「阿響的寶可夢」與「基本【火】能量」卡合計最多3張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Iori Suzuki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12743",
@@ -3363,7 +3378,7 @@
   },
   {
     "id": "12744",
-    "name": "<阿響的>鳳王ex",
+    "name": "阿響的鳳王ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV9a",
@@ -3404,12 +3419,12 @@
     "illustrator": "Atsushi Furusawa",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12745",
-    "name": "<竹蘭的>烈咬陸鯊ex",
+    "name": "竹蘭的烈咬陸鯊ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV9a",
@@ -3446,12 +3461,12 @@
     "illustrator": "HICO KIM",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12746",
-    "name": "<派帕的>獒教父ex",
+    "name": "派帕的獒教父ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV9a",
@@ -3494,7 +3509,7 @@
     "illustrator": "Yuriko Akase",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3509,11 +3524,14 @@
     "scrapedAt": "2026-04-16T08:08:43.328Z",
     "rulesText": "從自己的牌庫選擇「阿響的寶可夢」與「基本【火】能量」卡合計最多3張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Kariya",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12748",
-    "name": "<阿響的>鳳王ex",
+    "name": "阿響的鳳王ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV9a",
@@ -3554,12 +3572,12 @@
     "illustrator": "aky CG Works",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12749",
-    "name": "<竹蘭的>烈咬陸鯊ex",
+    "name": "竹蘭的烈咬陸鯊ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV9a",
@@ -3596,7 +3614,7 @@
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {

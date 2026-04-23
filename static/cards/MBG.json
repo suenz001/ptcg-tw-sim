@@ -539,7 +539,10 @@
     "scrapedAt": "2026-04-16T08:28:35.255Z",
     "rulesText": "這張卡必須將自己的1張手牌丟棄才可使用。\n\n從牌庫抽卡直到自己的手牌滿6張為止。",
     "illustrator": "yuu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14149",
@@ -553,7 +556,10 @@
     "scrapedAt": "2026-04-16T08:28:35.986Z",
     "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "NC Empire",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14150",
@@ -567,7 +573,10 @@
     "scrapedAt": "2026-04-16T08:28:36.667Z",
     "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
     "illustrator": "Atsushi Furusawa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14151",

@@ -1,7 +1,7 @@
 [
   {
     "id": "12581",
-    "name": "<大吾的>天秤偶",
+    "name": "大吾的天秤偶",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SVOD",
@@ -45,12 +45,12 @@
     "illustrator": "Tonji Matsuno",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12582",
-    "name": "<大吾的>念力土偶",
+    "name": "大吾的念力土偶",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SVOD",
@@ -97,12 +97,12 @@
     "illustrator": "nagimiso",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12583",
-    "name": "<大吾的>小碎鑽",
+    "name": "大吾的小碎鑽",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SVOD",
@@ -144,7 +144,7 @@
     "illustrator": "Ligton",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -190,7 +190,7 @@
   },
   {
     "id": "12585",
-    "name": "<大吾的>盔甲鳥",
+    "name": "大吾的盔甲鳥",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SVOD",
@@ -237,12 +237,12 @@
     "illustrator": "Nisota Niso",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12586",
-    "name": "<大吾的>鐵啞鈴",
+    "name": "大吾的鐵啞鈴",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SVOD",
@@ -279,12 +279,12 @@
     "illustrator": "Takeshi Nakamura",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12587",
-    "name": "<大吾的>金屬怪",
+    "name": "大吾的金屬怪",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SVOD",
@@ -322,12 +322,12 @@
     "illustrator": "Anesaki Dynamic",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12588",
-    "name": "<大吾的>巨金怪ex",
+    "name": "大吾的巨金怪ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SVOD",
@@ -372,7 +372,7 @@
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -499,7 +499,10 @@
     "scrapedAt": "2026-04-21T14:25:12.998Z",
     "rulesText": "將自己的手牌全部丟棄，從牌庫抽出7張卡。",
     "illustrator": "Hideki Ishikawa",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12598",
@@ -527,7 +530,10 @@
     "scrapedAt": "2026-04-21T14:25:14.997Z",
     "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "NC Empire",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12600",
@@ -545,7 +551,7 @@
   },
   {
     "id": "12601",
-    "name": "<大吾的>鐵啞鈴",
+    "name": "大吾的鐵啞鈴",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SVOD",
@@ -582,7 +588,7 @@
     "illustrator": "hncl",
     "regulationMark": "J",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {

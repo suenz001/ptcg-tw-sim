@@ -2393,7 +2393,10 @@
     "scrapedAt": "2026-04-16T07:55:27.057Z",
     "rulesText": "從自己的牌庫選擇競技場卡與能量卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "hncl",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "10642",
@@ -2407,7 +2410,10 @@
     "scrapedAt": "2026-04-16T07:55:27.781Z",
     "rulesText": "選擇最多2隻自己的【惡】寶可夢，從自己的牌庫附給那些寶可夢各1張「基本【惡】能量」卡。並且重洗牌庫。附於戰鬥寶可夢身上的情況下，將那隻寶可夢【中毒】。",
     "illustrator": "Taira Akitsu",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "10643",
@@ -2435,7 +2441,10 @@
     "scrapedAt": "2026-04-16T07:55:29.221Z",
     "rulesText": "對手將對手自己的手牌丟棄直到變為3張為止。",
     "illustrator": "GOSSAN",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "10645",
@@ -3278,7 +3287,10 @@
     "scrapedAt": "2026-04-16T07:55:44.690Z",
     "rulesText": "從自己的牌庫選擇競技場卡與能量卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "hncl",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "10885",
@@ -3292,7 +3304,10 @@
     "scrapedAt": "2026-04-16T07:55:45.405Z",
     "rulesText": "選擇最多2隻自己的【惡】寶可夢，從自己的牌庫附給那些寶可夢各1張「基本【惡】能量」卡。並且重洗牌庫。附於戰鬥寶可夢身上的情況下，將那隻寶可夢【中毒】。",
     "illustrator": "Taira Akitsu",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "10886",
@@ -3320,7 +3335,10 @@
     "scrapedAt": "2026-04-16T07:55:46.819Z",
     "rulesText": "對手將對手自己的手牌丟棄直到變為3張為止。",
     "illustrator": "GOSSAN",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "10888",

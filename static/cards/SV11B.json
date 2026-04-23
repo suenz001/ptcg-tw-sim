@@ -3359,7 +3359,10 @@
     "scrapedAt": "2026-04-16T08:13:19.165Z",
     "rulesText": "選擇最多2個自己的備戰寶可夢身上附加的能量，改附於戰鬥寶可夢身上。",
     "illustrator": "hncl",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "13026",
@@ -3373,7 +3376,10 @@
     "scrapedAt": "2026-04-16T08:13:19.879Z",
     "rulesText": "將自己的手牌全部丟棄，從牌庫抽出7張卡。",
     "illustrator": "Taira Akitsu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "13027",
@@ -6706,7 +6712,10 @@
     "scrapedAt": "2026-04-16T08:14:19.703Z",
     "rulesText": "選擇最多2個自己的備戰寶可夢身上附加的能量，改附於戰鬥寶可夢身上。",
     "illustrator": "hncl",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "13771",
@@ -7001,7 +7010,10 @@
     "scrapedAt": "2026-04-16T08:14:25.462Z",
     "rulesText": "選擇最多2個自己的備戰寶可夢身上附加的能量，改附於戰鬥寶可夢身上。",
     "illustrator": "REND",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "13868",
@@ -10096,7 +10108,10 @@
     "scrapedAt": "2026-04-16T08:15:22.020Z",
     "rulesText": "選擇最多2個自己的備戰寶可夢身上附加的能量，改附於戰鬥寶可夢身上。",
     "illustrator": "hncl",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "13951",
@@ -10110,7 +10125,10 @@
     "scrapedAt": "2026-04-16T08:15:22.751Z",
     "rulesText": "將自己的手牌全部丟棄，從牌庫抽出7張卡。",
     "illustrator": "Taira Akitsu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "13952",

@@ -40,6 +40,9 @@ export async function loadSet(
     // <>冠名括號（例：<竹蘭的>烈咬陸鯊ex、<瑪俐的>搗蛋小妖），M2a 復刻版則不帶。
     // 為了統一 effects.ts 裡的效果登錄 key（regA / regPre / regPost 都用純名），
     // 在載入時 strip 掉 `<` 與 `>`。UI 顯示也隨之一致（皆為「竹蘭的XXX」/「瑪俐的XXX」）。
+    // v2.71：migrate-trainer-branded.mjs 已把 JSON 層級的 `<>` 全部 strip，parse-card.js
+    // 也改在存檔前 strip，所以這個 runtime strip 變成 defensive no-op — 留著以防
+    // 有人手動塞回帶 `<>` 的 JSON 或重爬未 migrate 的老 set。
     const cards = raw.map(c => (c.name && (c.name.includes('<') || c.name.includes('>')))
       ? { ...c, name: c.name.replace(/[<>]/g, '') }
       : c);

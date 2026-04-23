@@ -1,7 +1,7 @@
 [
   {
     "id": "14661",
-    "name": "<阿響的>凱羅斯",
+    "name": "阿響的凱羅斯",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -44,7 +44,7 @@
     "illustrator": "GIDORA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -376,12 +376,12 @@
     "illustrator": "nisimono",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "14670",
-    "name": "<竹蘭的>羅絲雷朵",
+    "name": "竹蘭的羅絲雷朵",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M2a",
@@ -423,7 +423,7 @@
     "illustrator": "En Morikura",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -580,7 +580,7 @@
   },
   {
     "id": "14675",
-    "name": "<火箭隊的>團珠蛛",
+    "name": "火箭隊的團珠蛛",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -612,12 +612,12 @@
     "illustrator": "Saboteri",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "14676",
-    "name": "<火箭隊的>操陷蛛",
+    "name": "火箭隊的操陷蛛",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M2a",
@@ -659,7 +659,7 @@
     "regulationMark": "I",
     "evolvesFrom": "火箭隊的團珠蛛",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -708,7 +708,7 @@
   },
   {
     "id": "14678",
-    "name": "<阿響的>熔岩蟲",
+    "name": "阿響的熔岩蟲",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -741,12 +741,12 @@
     "illustrator": "Sanosuke Sakuma",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "14679",
-    "name": "<阿響的>熔岩蝸牛",
+    "name": "阿響的熔岩蝸牛",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M2a",
@@ -789,7 +789,7 @@
     "illustrator": "kodama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -831,7 +831,7 @@
   },
   {
     "id": "14681",
-    "name": "<阿響的>鳳王ex",
+    "name": "阿響的鳳王ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "M2a",
@@ -872,7 +872,7 @@
     "illustrator": "aky CG Works",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -1151,7 +1151,7 @@
     "illustrator": "Gemi",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -1202,7 +1202,7 @@
     "illustrator": "Takeshi Nakamura",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -1418,7 +1418,7 @@
   },
   {
     "id": "14694",
-    "name": "<火箭隊的>急凍鳥",
+    "name": "火箭隊的急凍鳥",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -1463,7 +1463,7 @@
     "illustrator": "Mitsuhiro Arita",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -1586,7 +1586,7 @@
     "illustrator": "yuu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -1634,7 +1634,7 @@
     "illustrator": "kirisAki",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -1684,7 +1684,7 @@
     "illustrator": "imoniii",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2374,7 +2374,7 @@
     "illustrator": "kurumitsu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2421,7 +2421,7 @@
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2462,7 +2462,7 @@
     "illustrator": "Akira Komayama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2513,7 +2513,7 @@
     "illustrator": "DOM",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2556,7 +2556,7 @@
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2597,7 +2597,7 @@
     "illustrator": "Gapao",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2652,12 +2652,12 @@
     "illustrator": "Ryuta Fuse",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "14723",
-    "name": "<火箭隊的>超夢ex",
+    "name": "火箭隊的超夢ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "M2a",
@@ -2702,7 +2702,7 @@
     "illustrator": "aky CG Works",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3313,7 +3313,7 @@
     "illustrator": "tono",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3366,12 +3366,12 @@
     "illustrator": "matazo",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "14739",
-    "name": "<火箭隊的>謎擬Ｑ",
+    "name": "火箭隊的謎擬Ｑ",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -3405,7 +3405,7 @@
     "illustrator": "DOM",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3536,7 +3536,7 @@
     "illustrator": "Yuriko Akase",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3582,7 +3582,7 @@
     "illustrator": "KEIICHIRO ITO",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3772,7 +3772,7 @@
     "illustrator": "Tomomi Ozaki",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3817,12 +3817,12 @@
     "illustrator": "Taira Akitsu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "14750",
-    "name": "<竹蘭的>烈咬陸鯊ex",
+    "name": "竹蘭的烈咬陸鯊ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "M2a",
@@ -3859,7 +3859,7 @@
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4232,7 +4232,7 @@
     "illustrator": "toi8",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4281,12 +4281,12 @@
     "illustrator": "AKIRA EGAWA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "14761",
-    "name": "<火箭隊的>叉字蝠ex",
+    "name": "火箭隊的叉字蝠ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "M2a",
@@ -4329,12 +4329,12 @@
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "14762",
-    "name": "<火箭隊的>黑暗鴉",
+    "name": "火箭隊的黑暗鴉",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -4379,7 +4379,7 @@
     "illustrator": "Mugi Hamada",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4432,12 +4432,12 @@
     "illustrator": "hncl",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "14764",
-    "name": "<火箭隊的>狃拉",
+    "name": "火箭隊的狃拉",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -4478,7 +4478,7 @@
     "illustrator": "GIDORA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4609,7 +4609,7 @@
   },
   {
     "id": "14768",
-    "name": "<竹蘭的>花岩怪",
+    "name": "竹蘭的花岩怪",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -4641,7 +4641,7 @@
     "illustrator": "satoma",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4757,7 +4757,7 @@
     "illustrator": "Jiro Sasumo",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4802,7 +4802,7 @@
     "illustrator": "takuyoa",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -5294,7 +5294,7 @@
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -5492,7 +5492,7 @@
     "illustrator": "rika",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -5539,7 +5539,7 @@
     "illustrator": "AKIRA EGAWA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -5822,7 +5822,7 @@
     "illustrator": "OKACHEKE",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -6034,7 +6034,7 @@
     "illustrator": "Tomomi Ozaki",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -6082,7 +6082,7 @@
     "illustrator": "Ryota Murayama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -6123,7 +6123,7 @@
     "illustrator": "Saboteri",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -6230,7 +6230,10 @@
     "scrapedAt": "2026-04-16T08:21:10.464Z",
     "rulesText": "從自己的棄牌區選擇1張基本能量卡，附於備戰區的「N的寶可夢」身上。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14807",
@@ -6370,7 +6373,10 @@
     "scrapedAt": "2026-04-16T08:21:17.534Z",
     "rulesText": "從自己的牌庫選擇最多2張【基礎】寶可夢的「赫普的寶可夢」，放置於備戰區。並且重洗牌庫。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14817",
@@ -6426,7 +6432,10 @@
     "scrapedAt": "2026-04-16T08:21:20.387Z",
     "rulesText": "從自己的牌庫選擇1張名稱中有「火箭隊」的支援者卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "inose yukie",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14821",
@@ -6456,7 +6465,7 @@
     "illustrator": "Studio Bora Inc.",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -6529,7 +6538,7 @@
     "illustrator": "Toyste Beach",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -6544,7 +6553,10 @@
     "scrapedAt": "2026-04-16T08:21:26.036Z",
     "rulesText": "這張卡必須將自己的1張手牌丟棄才可使用。\n\n從牌庫抽卡直到自己的手牌滿6張為止。",
     "illustrator": "yuu",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14829",
@@ -6558,7 +6570,10 @@
     "scrapedAt": "2026-04-16T08:21:26.819Z",
     "rulesText": "這張卡只有在對手剩餘獎賞卡的張數為2張以下時才可使用。\n\n選擇1隻自己的場上寶可夢。在下個對手的回合，那隻寶可夢不會受到對手的「寶可夢【ex】」招式的傷害與效果的影響。",
     "illustrator": "Yuu Nishida",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14830",
@@ -6628,7 +6643,10 @@
     "scrapedAt": "2026-04-16T08:21:30.374Z",
     "rulesText": "從自己的牌庫選擇「阿響的寶可夢」與「基本【火】能量」卡合計最多3張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Iori Suzuki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14835",
@@ -6642,7 +6660,10 @@
     "scrapedAt": "2026-04-16T08:21:31.084Z",
     "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
     "illustrator": "Atsushi Furusawa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14836",
@@ -6656,7 +6677,10 @@
     "scrapedAt": "2026-04-16T08:21:31.814Z",
     "rulesText": "從牌庫抽卡直到自己的手牌滿5張為止。若自己的所有場上寶可夢皆為「火箭隊的寶可夢」，則抽卡直到滿8張為止。",
     "illustrator": "hncl",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14837",
@@ -6670,7 +6694,10 @@
     "scrapedAt": "2026-04-16T08:21:32.536Z",
     "rulesText": "這張卡必須在上個對手的回合自己的「火箭隊的寶可夢」【昏厥】了才可使用。\n \n 雙方玩家各將手牌全部放回牌庫並重洗。然後，從牌庫抽卡，自己抽出5張，對手抽出3張。",
     "illustrator": "Hideki Ishikawa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14838",
@@ -6684,7 +6711,10 @@
     "scrapedAt": "2026-04-16T08:21:33.227Z",
     "rulesText": "將自己的戰鬥場的「火箭隊的寶可夢」與備戰區的「火箭隊的寶可夢」互換。然後，選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "akagi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14839",
@@ -6698,7 +6728,10 @@
     "scrapedAt": "2026-04-16T08:21:34.048Z",
     "rulesText": "從自己的牌庫選擇1張訓練家卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "GOSSAN",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14840",
@@ -6712,7 +6745,10 @@
     "scrapedAt": "2026-04-16T08:21:34.732Z",
     "rulesText": "這張卡在先攻玩家的最初回合也可使用。\n\n從自己的牌庫選擇最多3張【基礎】寶可夢的「火箭隊的寶可夢」，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Naoki Saito",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14841",
@@ -6726,7 +6762,10 @@
     "scrapedAt": "2026-04-16T08:21:35.482Z",
     "rulesText": "雙方場上所有「N的寶可夢」【撤退】所需的能量全部消除。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14842",
@@ -6838,7 +6877,10 @@
     "scrapedAt": "2026-04-16T08:21:41.173Z",
     "rulesText": "雙方場上所有【無】寶可夢的特性全部消除。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14850",
@@ -6852,7 +6894,10 @@
     "scrapedAt": "2026-04-16T08:21:41.956Z",
     "rulesText": "在每個自己的回合時，可使用1次。在這個回合從手牌使出了名稱中有「火箭隊」的支援者卡的玩家，可從自己的牌庫抽出2張卡。",
     "illustrator": "imoniii",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14851",
@@ -7010,7 +7055,7 @@
   },
   {
     "id": "15945",
-    "name": "<阿響的>熔岩蝸牛",
+    "name": "阿響的熔岩蝸牛",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M2a",
@@ -7053,7 +7098,7 @@
     "illustrator": "Hideki Ishikawa",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -7352,12 +7397,12 @@
     "illustrator": "Tomowaka",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "15953",
-    "name": "<火箭隊的>謎擬Ｑ",
+    "name": "火箭隊的謎擬Ｑ",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -7391,7 +7436,7 @@
     "illustrator": "GOSSAN",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -7437,7 +7482,7 @@
     "illustrator": "Whisker",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -7477,7 +7522,7 @@
   },
   {
     "id": "15956",
-    "name": "<竹蘭的>花岩怪",
+    "name": "竹蘭的花岩怪",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -7509,7 +7554,7 @@
     "illustrator": "hncl",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -7603,7 +7648,7 @@
     "illustrator": "Bun Toujo",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -7741,7 +7786,10 @@
     "scrapedAt": "2026-04-16T08:21:59.494Z",
     "rulesText": "從自己的棄牌區選擇1張基本能量卡，附於備戰區的「N的寶可夢」身上。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "15963",
@@ -7783,7 +7831,10 @@
     "scrapedAt": "2026-04-16T08:22:01.680Z",
     "rulesText": "從自己的牌庫選擇1張名稱中有「火箭隊」的支援者卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "inose yukie",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "15966",
@@ -7825,7 +7876,10 @@
     "scrapedAt": "2026-04-16T08:22:03.886Z",
     "rulesText": "在這個回合，自己的寶可夢使用的招式，對對手的戰鬥場的「寶可夢【ex】」造成的傷害「+40」點。",
     "illustrator": "GOSSAN",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "15969",
@@ -8447,12 +8501,12 @@
     "illustrator": "Akira Komayama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "15985",
-    "name": "<火箭隊的>超夢ex",
+    "name": "火箭隊的超夢ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "M2a",
@@ -8497,7 +8551,7 @@
     "illustrator": "Mitsuhiro Arita",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -8708,12 +8762,12 @@
     "illustrator": "Raita Kazama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "15991",
-    "name": "<瑪俐的>長毛巨魔ex",
+    "name": "瑪俐的長毛巨魔ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "M2a",
@@ -8752,7 +8806,7 @@
     "illustrator": "Ligton",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -8798,7 +8852,7 @@
   },
   {
     "id": "15993",
-    "name": "<大吾的>巨金怪ex",
+    "name": "大吾的巨金怪ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "M2a",
@@ -8843,7 +8897,7 @@
     "illustrator": "chibi",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -8897,7 +8951,10 @@
     "scrapedAt": "2026-04-16T08:22:23.791Z",
     "rulesText": "這張卡必須將自己的1張手牌丟棄才可使用。\n\n從牌庫抽卡直到自己的手牌滿6張為止。",
     "illustrator": "Kuroimori",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "15996",
@@ -8968,7 +9025,7 @@
   },
   {
     "id": "16235",
-    "name": "<阿響的>凱羅斯",
+    "name": "阿響的凱羅斯",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -9011,12 +9068,12 @@
     "illustrator": "GIDORA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16236",
-    "name": "<阿響的>凱羅斯",
+    "name": "阿響的凱羅斯",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -9059,7 +9116,7 @@
     "illustrator": "GIDORA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -9592,7 +9649,7 @@
     "illustrator": "nisimono",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -9629,12 +9686,12 @@
     "illustrator": "nisimono",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16251",
-    "name": "<竹蘭的>羅絲雷朵",
+    "name": "竹蘭的羅絲雷朵",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M2a",
@@ -9676,12 +9733,12 @@
     "illustrator": "En Morikura",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16252",
-    "name": "<竹蘭的>羅絲雷朵",
+    "name": "竹蘭的羅絲雷朵",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M2a",
@@ -9723,7 +9780,7 @@
     "illustrator": "En Morikura",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -10032,7 +10089,7 @@
   },
   {
     "id": "16261",
-    "name": "<火箭隊的>團珠蛛",
+    "name": "火箭隊的團珠蛛",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -10064,12 +10121,12 @@
     "illustrator": "Saboteri",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16262",
-    "name": "<火箭隊的>團珠蛛",
+    "name": "火箭隊的團珠蛛",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -10101,12 +10158,12 @@
     "illustrator": "Saboteri",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16263",
-    "name": "<火箭隊的>操陷蛛",
+    "name": "火箭隊的操陷蛛",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M2a",
@@ -10148,12 +10205,12 @@
     "regulationMark": "I",
     "evolvesFrom": "火箭隊的團珠蛛",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16264",
-    "name": "<火箭隊的>操陷蛛",
+    "name": "火箭隊的操陷蛛",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M2a",
@@ -10195,12 +10252,12 @@
     "regulationMark": "I",
     "evolvesFrom": "火箭隊的團珠蛛",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16265",
-    "name": "<阿響的>熔岩蟲",
+    "name": "阿響的熔岩蟲",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -10233,12 +10290,12 @@
     "illustrator": "Sanosuke Sakuma",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16266",
-    "name": "<阿響的>熔岩蟲",
+    "name": "阿響的熔岩蟲",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -10271,12 +10328,12 @@
     "illustrator": "Sanosuke Sakuma",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16267",
-    "name": "<阿響的>熔岩蝸牛",
+    "name": "阿響的熔岩蝸牛",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M2a",
@@ -10319,12 +10376,12 @@
     "illustrator": "kodama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16268",
-    "name": "<阿響的>熔岩蝸牛",
+    "name": "阿響的熔岩蝸牛",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M2a",
@@ -10367,7 +10424,7 @@
     "illustrator": "kodama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -10950,7 +11007,7 @@
     "illustrator": "Gemi",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -10999,7 +11056,7 @@
     "illustrator": "Gemi",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -11050,7 +11107,7 @@
     "illustrator": "Takeshi Nakamura",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -11101,7 +11158,7 @@
     "illustrator": "Takeshi Nakamura",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -11346,7 +11403,7 @@
   },
   {
     "id": "16291",
-    "name": "<火箭隊的>急凍鳥",
+    "name": "火箭隊的急凍鳥",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -11391,12 +11448,12 @@
     "illustrator": "Mitsuhiro Arita",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16292",
-    "name": "<火箭隊的>急凍鳥",
+    "name": "火箭隊的急凍鳥",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -11441,7 +11498,7 @@
     "illustrator": "Mitsuhiro Arita",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -11555,7 +11612,7 @@
     "illustrator": "yuu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -11601,7 +11658,7 @@
     "illustrator": "yuu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -11649,7 +11706,7 @@
     "illustrator": "kirisAki",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -11697,7 +11754,7 @@
     "illustrator": "kirisAki",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -11747,7 +11804,7 @@
     "illustrator": "imoniii",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -11797,7 +11854,7 @@
     "illustrator": "imoniii",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -12874,7 +12931,7 @@
     "illustrator": "kurumitsu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -12913,7 +12970,7 @@
     "illustrator": "kurumitsu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -12954,7 +13011,7 @@
     "illustrator": "Akira Komayama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -12995,7 +13052,7 @@
     "illustrator": "Akira Komayama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -13046,7 +13103,7 @@
     "illustrator": "DOM",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -13097,7 +13154,7 @@
     "illustrator": "DOM",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -13138,7 +13195,7 @@
     "illustrator": "Gapao",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -13179,7 +13236,7 @@
     "illustrator": "Gapao",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -13234,7 +13291,7 @@
     "illustrator": "Ryuta Fuse",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -13289,7 +13346,7 @@
     "illustrator": "Ryuta Fuse",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -14287,7 +14344,7 @@
     "illustrator": "tono",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -14329,7 +14386,7 @@
     "illustrator": "tono",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -14382,7 +14439,7 @@
     "illustrator": "matazo",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -14435,12 +14492,12 @@
     "illustrator": "matazo",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16363",
-    "name": "<火箭隊的>謎擬Ｑ",
+    "name": "火箭隊的謎擬Ｑ",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -14474,12 +14531,12 @@
     "illustrator": "DOM",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16364",
-    "name": "<火箭隊的>謎擬Ｑ",
+    "name": "火箭隊的謎擬Ｑ",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -14513,7 +14570,7 @@
     "illustrator": "DOM",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -14738,7 +14795,7 @@
     "illustrator": "Yuriko Akase",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -14775,7 +14832,7 @@
     "illustrator": "Yuriko Akase",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -14821,7 +14878,7 @@
     "illustrator": "KEIICHIRO ITO",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -14867,7 +14924,7 @@
     "illustrator": "KEIICHIRO ITO",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -15210,7 +15267,7 @@
     "illustrator": "Tomomi Ozaki",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -15247,7 +15304,7 @@
     "illustrator": "Tomomi Ozaki",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -15292,7 +15349,7 @@
     "illustrator": "Taira Akitsu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -15337,7 +15394,7 @@
     "illustrator": "Taira Akitsu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -15874,7 +15931,7 @@
     "illustrator": "toi8",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -15915,7 +15972,7 @@
     "illustrator": "toi8",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -15964,7 +16021,7 @@
     "illustrator": "AKIRA EGAWA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -16013,12 +16070,12 @@
     "illustrator": "AKIRA EGAWA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16401",
-    "name": "<火箭隊的>黑暗鴉",
+    "name": "火箭隊的黑暗鴉",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -16063,12 +16120,12 @@
     "illustrator": "Mugi Hamada",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16402",
-    "name": "<火箭隊的>黑暗鴉",
+    "name": "火箭隊的黑暗鴉",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -16113,7 +16170,7 @@
     "illustrator": "Mugi Hamada",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -16166,7 +16223,7 @@
     "illustrator": "hncl",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -16219,12 +16276,12 @@
     "illustrator": "hncl",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16405",
-    "name": "<火箭隊的>狃拉",
+    "name": "火箭隊的狃拉",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -16265,12 +16322,12 @@
     "illustrator": "GIDORA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16406",
-    "name": "<火箭隊的>狃拉",
+    "name": "火箭隊的狃拉",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -16311,7 +16368,7 @@
     "illustrator": "GIDORA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -16568,7 +16625,7 @@
   },
   {
     "id": "16413",
-    "name": "<竹蘭的>花岩怪",
+    "name": "竹蘭的花岩怪",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -16600,12 +16657,12 @@
     "illustrator": "satoma",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "16414",
-    "name": "<竹蘭的>花岩怪",
+    "name": "竹蘭的花岩怪",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M2a",
@@ -16637,7 +16694,7 @@
     "illustrator": "satoma",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -16746,7 +16803,7 @@
     "illustrator": "Jiro Sasumo",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -16783,7 +16840,7 @@
     "illustrator": "Jiro Sasumo",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -17671,7 +17728,7 @@
     "illustrator": "rika",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -17717,7 +17774,7 @@
     "illustrator": "rika",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -17764,7 +17821,7 @@
     "illustrator": "AKIRA EGAWA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -17811,7 +17868,7 @@
     "illustrator": "AKIRA EGAWA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -18246,7 +18303,7 @@
     "illustrator": "OKACHEKE",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -18295,7 +18352,7 @@
     "illustrator": "OKACHEKE",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -18680,7 +18737,7 @@
     "illustrator": "Tomomi Ozaki",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -18719,7 +18776,7 @@
     "illustrator": "Tomomi Ozaki",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -18767,7 +18824,7 @@
     "illustrator": "Ryota Murayama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -18815,7 +18872,7 @@
     "illustrator": "Ryota Murayama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -18856,7 +18913,7 @@
     "illustrator": "Saboteri",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -18897,7 +18954,7 @@
     "illustrator": "Saboteri",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {

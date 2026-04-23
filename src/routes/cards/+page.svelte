@@ -58,8 +58,8 @@
   // tag 即顯示（與 category filter 以 AND 結合）。「超級進化」不是 scraper tag，而是
   // runtime 依卡名前綴「超級」+ subtype='ex' 偵測（與 engine.prizesForKO 同邏輯），
   // 這樣資料不用重跑 migration 也能立即篩。
-  type TagKey = 'ACE SPEC' | '古代' | '未來' | '太晶' | '超級進化';
-  const TAG_ORDER: TagKey[] = ['ACE SPEC', '古代', '未來', '太晶', '超級進化'];
+  type TagKey = 'ACE SPEC' | '古代' | '未來' | '太晶' | '超級進化' | '訓練家冠名';
+  const TAG_ORDER: TagKey[] = ['ACE SPEC', '古代', '未來', '太晶', '超級進化', '訓練家冠名'];
   let selectedTags = $state<Set<TagKey>>(new Set());
 
   function isMegaEx(c: Card): boolean {

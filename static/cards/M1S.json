@@ -2364,7 +2364,10 @@
     "scrapedAt": "2026-04-16T08:16:14.084Z",
     "rulesText": "這張卡只有在對手剩餘獎賞卡的張數為2張以下時才可使用。\n\n選擇1隻自己的場上寶可夢。在下個對手的回合，那隻寶可夢不會受到對手的「寶可夢【ex】」招式的傷害與效果的影響。",
     "illustrator": "Yuu Nishida",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14080",
@@ -2378,7 +2381,10 @@
     "scrapedAt": "2026-04-16T08:16:14.805Z",
     "rulesText": "將自己的1隻「超級進化【ex】」的HP全部恢復。然後，將恢復的寶可夢身上附加的能量卡全部放回手牌。",
     "illustrator": "Iori Suzuki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14081",
@@ -3182,7 +3188,10 @@
     "scrapedAt": "2026-04-16T08:16:32.201Z",
     "rulesText": "這張卡只有在對手剩餘獎賞卡的張數為2張以下時才可使用。\n\n選擇1隻自己的場上寶可夢。在下個對手的回合，那隻寶可夢不會受到對手的「寶可夢【ex】」招式的傷害與效果的影響。",
     "illustrator": "Yuu Nishida",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14232",
@@ -3196,7 +3205,10 @@
     "scrapedAt": "2026-04-16T08:16:33.001Z",
     "rulesText": "將自己的1隻「超級進化【ex】」的HP全部恢復。然後，將恢復的寶可夢身上附加的能量卡全部放回手牌。",
     "illustrator": "Iori Suzuki",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14233",
@@ -3351,7 +3363,10 @@
     "scrapedAt": "2026-04-16T08:16:36.689Z",
     "rulesText": "這張卡只有在對手剩餘獎賞卡的張數為2張以下時才可使用。\n\n選擇1隻自己的場上寶可夢。在下個對手的回合，那隻寶可夢不會受到對手的「寶可夢【ex】」招式的傷害與效果的影響。",
     "illustrator": "sui",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14238",
@@ -3365,7 +3380,10 @@
     "scrapedAt": "2026-04-16T08:16:37.371Z",
     "rulesText": "將自己的1隻「超級進化【ex】」的HP全部恢復。然後，將恢復的寶可夢身上附加的能量卡全部放回手牌。",
     "illustrator": "Jiro Sasumo",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14239",

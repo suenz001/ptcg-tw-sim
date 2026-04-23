@@ -238,7 +238,7 @@
   },
   {
     "id": "12757",
-    "name": "<火箭隊的>索偵蟲",
+    "name": "火箭隊的索偵蟲",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -270,12 +270,12 @@
     "illustrator": "buchi",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12758",
-    "name": "<火箭隊的>團珠蛛",
+    "name": "火箭隊的團珠蛛",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -307,12 +307,12 @@
     "illustrator": "Saboteri",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12759",
-    "name": "<火箭隊的>操陷蛛",
+    "name": "火箭隊的操陷蛛",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -354,7 +354,7 @@
     "regulationMark": "I",
     "evolvesFrom": "火箭隊的團珠蛛",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -573,7 +573,7 @@
   },
   {
     "id": "12765",
-    "name": "<火箭隊的>火焰鳥ex",
+    "name": "火箭隊的火焰鳥ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -621,12 +621,12 @@
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12766",
-    "name": "<火箭隊的>戴魯比",
+    "name": "火箭隊的戴魯比",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -658,12 +658,12 @@
     "illustrator": "Krgc",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12767",
-    "name": "<火箭隊的>黑魯加",
+    "name": "火箭隊的黑魯加",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -705,7 +705,7 @@
     "illustrator": "Anesaki Dynamic",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -888,7 +888,7 @@
   },
   {
     "id": "12772",
-    "name": "<火箭隊的>急凍鳥",
+    "name": "火箭隊的急凍鳥",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -933,7 +933,7 @@
     "illustrator": "Mitsuhiro Arita",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -1366,7 +1366,7 @@
   },
   {
     "id": "12783",
-    "name": "<火箭隊的>閃電鳥",
+    "name": "火箭隊的閃電鳥",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -1413,12 +1413,12 @@
     "illustrator": "Nurikabe",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12784",
-    "name": "<火箭隊的>咩利羊",
+    "name": "火箭隊的咩利羊",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -1458,12 +1458,12 @@
     "illustrator": "Teeziro",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12785",
-    "name": "<火箭隊的>茸茸羊",
+    "name": "火箭隊的茸茸羊",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -1497,12 +1497,12 @@
     "illustrator": "Jerky",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12786",
-    "name": "<火箭隊的>電龍",
+    "name": "火箭隊的電龍",
     "supertype": "Pokemon",
     "subtype": "Stage2",
     "setCode": "SV10",
@@ -1544,12 +1544,12 @@
     "illustrator": "Shiburingaru",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12787",
-    "name": "<火箭隊的>催眠貘",
+    "name": "火箭隊的催眠貘",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -1586,12 +1586,12 @@
     "illustrator": "matazo",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12788",
-    "name": "<火箭隊的>引夢貘人",
+    "name": "火箭隊的引夢貘人",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -1638,12 +1638,12 @@
     "illustrator": "Yuya Oka",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12789",
-    "name": "<火箭隊的>超夢ex",
+    "name": "火箭隊的超夢ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -1688,12 +1688,12 @@
     "illustrator": "aky CG Works",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12790",
-    "name": "<火箭隊的>果然翁",
+    "name": "火箭隊的果然翁",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -1741,12 +1741,12 @@
     "illustrator": "Kazumasa Yasukuni",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12791",
-    "name": "<火箭隊的>鈴鐺響",
+    "name": "火箭隊的鈴鐺響",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -1777,12 +1777,12 @@
     "illustrator": "Mina Nakai",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12792",
-    "name": "<火箭隊的>謎擬Ｑ",
+    "name": "火箭隊的謎擬Ｑ",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -1816,12 +1816,12 @@
     "illustrator": "DOM",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12793",
-    "name": "<火箭隊的>天罩蟲",
+    "name": "火箭隊的天罩蟲",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -1867,12 +1867,12 @@
     "illustrator": "Scav",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12794",
-    "name": "<火箭隊的>以歐路普",
+    "name": "火箭隊的以歐路普",
     "supertype": "Pokemon",
     "subtype": "Stage2",
     "setCode": "SV10",
@@ -1918,7 +1918,7 @@
     "illustrator": "Shin Nagasawa",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2037,7 +2037,7 @@
   },
   {
     "id": "12798",
-    "name": "<火箭隊的>幼基拉斯",
+    "name": "火箭隊的幼基拉斯",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -2069,12 +2069,12 @@
     "illustrator": "Kuroimori",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12799",
-    "name": "<火箭隊的>沙基拉斯",
+    "name": "火箭隊的沙基拉斯",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -2107,12 +2107,12 @@
     "illustrator": "Izucch",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12800",
-    "name": "<火箭隊的>班基拉斯",
+    "name": "火箭隊的班基拉斯",
     "supertype": "Pokemon",
     "subtype": "Stage2",
     "setCode": "SV10",
@@ -2156,7 +2156,7 @@
     "illustrator": "Ryuta Fuse",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -2368,7 +2368,7 @@
   },
   {
     "id": "12806",
-    "name": "<火箭隊的>阿柏蛇",
+    "name": "火箭隊的阿柏蛇",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -2408,12 +2408,12 @@
     "illustrator": "KEIICHIRO ITO",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12807",
-    "name": "<火箭隊的>阿柏怪",
+    "name": "火箭隊的阿柏怪",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -2455,12 +2455,12 @@
     "illustrator": "Teeziro",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12808",
-    "name": "<火箭隊的>尼多蘭",
+    "name": "火箭隊的尼多蘭",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -2492,12 +2492,12 @@
     "illustrator": "REND",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12809",
-    "name": "<火箭隊的>尼多娜",
+    "name": "火箭隊的尼多娜",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -2539,12 +2539,12 @@
     "illustrator": "Taiga Kasai",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12810",
-    "name": "<火箭隊的>尼多后",
+    "name": "火箭隊的尼多后",
     "supertype": "Pokemon",
     "subtype": "Stage2",
     "setCode": "SV10",
@@ -2587,12 +2587,12 @@
     "illustrator": "hncl",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12811",
-    "name": "<火箭隊的>尼多朗",
+    "name": "火箭隊的尼多朗",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -2633,12 +2633,12 @@
     "illustrator": "buchi",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12812",
-    "name": "<火箭隊的>尼多力諾",
+    "name": "火箭隊的尼多力諾",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -2682,12 +2682,12 @@
     "illustrator": "KEIICHIRO ITO",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12813",
-    "name": "<火箭隊的>尼多王ex",
+    "name": "火箭隊的尼多王ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -2732,12 +2732,12 @@
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12814",
-    "name": "<火箭隊的>超音蝠",
+    "name": "火箭隊的超音蝠",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -2773,12 +2773,12 @@
     "illustrator": "toi8",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12815",
-    "name": "<火箭隊的>大嘴蝠",
+    "name": "火箭隊的大嘴蝠",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -2822,12 +2822,12 @@
     "illustrator": "AKIRA EGAWA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12816",
-    "name": "<火箭隊的>叉字蝠ex",
+    "name": "火箭隊的叉字蝠ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -2870,12 +2870,12 @@
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12817",
-    "name": "<火箭隊的>臭泥",
+    "name": "火箭隊的臭泥",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -2910,12 +2910,12 @@
     "illustrator": "Mousho",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12818",
-    "name": "<火箭隊的>臭臭泥",
+    "name": "火箭隊的臭臭泥",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -2961,12 +2961,12 @@
     "illustrator": "Uta",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12819",
-    "name": "<火箭隊的>瓦斯彈",
+    "name": "火箭隊的瓦斯彈",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -3006,12 +3006,12 @@
     "illustrator": "kodama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12820",
-    "name": "<火箭隊的>雙彈瓦斯",
+    "name": "火箭隊的雙彈瓦斯",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -3045,12 +3045,12 @@
     "illustrator": "matazo",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12821",
-    "name": "<火箭隊的>黑暗鴉",
+    "name": "火箭隊的黑暗鴉",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -3095,12 +3095,12 @@
     "illustrator": "Mugi Hamada",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12822",
-    "name": "<火箭隊的>狃拉",
+    "name": "火箭隊的狃拉",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -3141,7 +3141,7 @@
     "illustrator": "GIDORA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3285,7 +3285,7 @@
   },
   {
     "id": "12826",
-    "name": "<火箭隊的>小拉達",
+    "name": "火箭隊的小拉達",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -3317,12 +3317,12 @@
     "illustrator": "Dsuke",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12827",
-    "name": "<火箭隊的>拉達",
+    "name": "火箭隊的拉達",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -3354,12 +3354,12 @@
     "illustrator": "Uninori",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12828",
-    "name": "<火箭隊的>喵喵",
+    "name": "火箭隊的喵喵",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -3400,12 +3400,12 @@
     "illustrator": "Megumi Mizutani",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12829",
-    "name": "<火箭隊的>貓老大ex",
+    "name": "火箭隊的貓老大ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -3447,7 +3447,7 @@
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3498,7 +3498,7 @@
   },
   {
     "id": "12831",
-    "name": "<火箭隊的>多邊獸",
+    "name": "火箭隊的多邊獸",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -3530,12 +3530,12 @@
     "illustrator": "Oswaldo KATO",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12832",
-    "name": "<火箭隊的>多邊獸Ⅱ",
+    "name": "火箭隊的多邊獸Ⅱ",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -3569,12 +3569,12 @@
     "illustrator": "Takeshi Nakamura",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12833",
-    "name": "<火箭隊的>多邊獸Ｚ",
+    "name": "火箭隊的多邊獸Ｚ",
     "supertype": "Pokemon",
     "subtype": "Stage2",
     "setCode": "SV10",
@@ -3614,7 +3614,7 @@
     "illustrator": "Anesaki Dynamic",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -3750,7 +3750,10 @@
     "scrapedAt": "2026-04-16T07:12:59.814Z",
     "rulesText": "選擇1張對手的反面朝上的獎賞卡，並在不看正面的情況下，從對手的手牌選擇1張，查看各自的正面。若希望，令對手互換所選的卡。（在對戰結束前，那張獎賞卡維持正面朝上。）",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12838",
@@ -3764,7 +3767,10 @@
     "scrapedAt": "2026-04-16T07:13:00.575Z",
     "rulesText": "擲1次硬幣。若為正面，則從自己的牌庫選擇1張進化寶可夢的「火箭隊的寶可夢」，若為反面，則選擇1張【基礎】寶可夢的「火箭隊的寶可夢」，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12839",
@@ -3778,7 +3784,10 @@
     "scrapedAt": "2026-04-16T07:13:01.380Z",
     "rulesText": "擲1次硬幣若為正面，則在對手的1隻寶可夢身上放置2個傷害指示物。若為反面，則在自己的戰鬥寶可夢身上放置2個傷害指示物。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12840",
@@ -3792,7 +3801,10 @@
     "scrapedAt": "2026-04-16T07:13:02.108Z",
     "rulesText": "從自己的牌庫選擇1張名稱中有「火箭隊」的支援者卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "inose yukie",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12841",
@@ -3806,7 +3818,10 @@
     "scrapedAt": "2026-04-16T07:13:02.793Z",
     "rulesText": "從牌庫抽卡直到自己的手牌滿5張為止。若自己的所有場上寶可夢皆為「火箭隊的寶可夢」，則抽卡直到滿8張為止。",
     "illustrator": "hncl",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12842",
@@ -3820,7 +3835,10 @@
     "scrapedAt": "2026-04-16T07:13:03.481Z",
     "rulesText": "這張卡必須在上個對手的回合自己的「火箭隊的寶可夢」【昏厥】了才可使用。\n \n 雙方玩家各將手牌全部放回牌庫並重洗。然後，從牌庫抽卡，自己抽出5張，對手抽出3張。",
     "illustrator": "Hideki Ishikawa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12843",
@@ -3834,7 +3852,10 @@
     "scrapedAt": "2026-04-16T07:13:04.209Z",
     "rulesText": "將自己的戰鬥場的「火箭隊的寶可夢」與備戰區的「火箭隊的寶可夢」互換。然後，選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "akagi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12844",
@@ -3848,7 +3869,10 @@
     "scrapedAt": "2026-04-16T07:13:05.005Z",
     "rulesText": "從自己的牌庫選擇1張訓練家卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "GOSSAN",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12845",
@@ -3862,7 +3886,10 @@
     "scrapedAt": "2026-04-16T07:13:05.835Z",
     "rulesText": "這張卡在先攻玩家的最初回合也可使用。\n\n從自己的牌庫選擇最多3張【基礎】寶可夢的「火箭隊的寶可夢」，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Naoki Saito",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12846",
@@ -3876,7 +3903,10 @@
     "scrapedAt": "2026-04-16T07:13:06.533Z",
     "rulesText": "雙方場上所有【無】寶可夢的特性全部消除。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12847",
@@ -3890,7 +3920,10 @@
     "scrapedAt": "2026-04-16T07:13:07.271Z",
     "rulesText": "在每個自己的回合時，可使用1次。在這個回合從手牌使出了名稱中有「火箭隊」的支援者卡的玩家，可從自己的牌庫抽出2張卡。",
     "illustrator": "imoniii",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12848",
@@ -3907,7 +3940,7 @@
   },
   {
     "id": "12904",
-    "name": "<火箭隊的>操陷蛛",
+    "name": "火箭隊的操陷蛛",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -3949,12 +3982,12 @@
     "regulationMark": "I",
     "evolvesFrom": "火箭隊的團珠蛛",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12905",
-    "name": "<火箭隊的>黑魯加",
+    "name": "火箭隊的黑魯加",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -3996,7 +4029,7 @@
     "illustrator": "nagimiso",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4083,7 +4116,7 @@
   },
   {
     "id": "12908",
-    "name": "<火箭隊的>果然翁",
+    "name": "火箭隊的果然翁",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -4131,12 +4164,12 @@
     "illustrator": "Saboteri",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12909",
-    "name": "<火箭隊的>以歐路普",
+    "name": "火箭隊的以歐路普",
     "supertype": "Pokemon",
     "subtype": "Stage2",
     "setCode": "SV10",
@@ -4182,12 +4215,12 @@
     "illustrator": "HYOGONOSUKE",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12910",
-    "name": "<火箭隊的>雙彈瓦斯",
+    "name": "火箭隊的雙彈瓦斯",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -4221,12 +4254,12 @@
     "illustrator": "Yukihiro Tada",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12911",
-    "name": "<火箭隊的>黑暗鴉",
+    "name": "火箭隊的黑暗鴉",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -4271,7 +4304,7 @@
     "illustrator": "Akira Komayama",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4317,7 +4350,7 @@
   },
   {
     "id": "12913",
-    "name": "<火箭隊的>拉達",
+    "name": "火箭隊的拉達",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "SV10",
@@ -4349,12 +4382,12 @@
     "illustrator": "Mékayu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12914",
-    "name": "<火箭隊的>喵喵",
+    "name": "火箭隊的喵喵",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "SV10",
@@ -4395,7 +4428,7 @@
     "illustrator": "Shimaris Yukichi",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4490,7 +4523,7 @@
   },
   {
     "id": "12917",
-    "name": "<火箭隊的>火焰鳥ex",
+    "name": "火箭隊的火焰鳥ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -4538,7 +4571,7 @@
     "illustrator": "寶可夢集\n                                        5ban Graphics\n                \n                                \n                                        訓練家\n                                        Hideki Ishikawa",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4589,7 +4622,7 @@
   },
   {
     "id": "12919",
-    "name": "<火箭隊的>超夢ex",
+    "name": "火箭隊的超夢ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -4634,7 +4667,7 @@
     "illustrator": "寶可夢集\n                                        aky CG Works\n                \n                                \n                                        訓練家\n                                        Hideki Ishikawa",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4684,7 +4717,7 @@
   },
   {
     "id": "12921",
-    "name": "<火箭隊的>尼多王ex",
+    "name": "火箭隊的尼多王ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -4729,12 +4762,12 @@
     "illustrator": "寶可夢集\n                                        5ban Graphics\n                \n                                \n                                        訓練家\n                                        Hideki Ishikawa",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12922",
-    "name": "<火箭隊的>叉字蝠ex",
+    "name": "火箭隊的叉字蝠ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -4777,12 +4810,12 @@
     "illustrator": "寶可夢集\n                                        5ban Graphics\n                \n                                \n                                        訓練家\n                                        Taira Akitsu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12923",
-    "name": "<火箭隊的>貓老大ex",
+    "name": "火箭隊的貓老大ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -4824,7 +4857,7 @@
     "illustrator": "寶可夢集\n                                        5ban Graphics\n                \n                                \n                                        訓練家\n                                        Hideki Ishikawa",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -4839,7 +4872,10 @@
     "scrapedAt": "2026-04-16T07:13:23.863Z",
     "rulesText": "從牌庫抽卡直到自己的手牌滿5張為止。若自己的所有場上寶可夢皆為「火箭隊的寶可夢」，則抽卡直到滿8張為止。",
     "illustrator": "hncl",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12925",
@@ -4853,7 +4889,10 @@
     "scrapedAt": "2026-04-16T07:13:24.551Z",
     "rulesText": "這張卡必須在上個對手的回合自己的「火箭隊的寶可夢」【昏厥】了才可使用。\n \n 雙方玩家各將手牌全部放回牌庫並重洗。然後，從牌庫抽卡，自己抽出5張，對手抽出3張。",
     "illustrator": "Hideki Ishikawa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12926",
@@ -4867,7 +4906,10 @@
     "scrapedAt": "2026-04-16T07:13:25.280Z",
     "rulesText": "將自己的戰鬥場的「火箭隊的寶可夢」與備戰區的「火箭隊的寶可夢」互換。然後，選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "akagi",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12927",
@@ -4881,7 +4923,10 @@
     "scrapedAt": "2026-04-16T07:13:25.973Z",
     "rulesText": "從自己的牌庫選擇1張訓練家卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "GOSSAN",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12928",
@@ -4895,11 +4940,14 @@
     "scrapedAt": "2026-04-16T07:13:26.699Z",
     "rulesText": "這張卡在先攻玩家的最初回合也可使用。\n\n從自己的牌庫選擇最多3張【基礎】寶可夢的「火箭隊的寶可夢」，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Naoki Saito",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12929",
-    "name": "<火箭隊的>火焰鳥ex",
+    "name": "火箭隊的火焰鳥ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -4947,12 +4995,12 @@
     "illustrator": "AKIRA EGAWA",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12930",
-    "name": "<火箭隊的>超夢ex",
+    "name": "火箭隊的超夢ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -4997,12 +5045,12 @@
     "illustrator": "Iwamoto05",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12931",
-    "name": "<火箭隊的>尼多王ex",
+    "name": "火箭隊的尼多王ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -5047,12 +5095,12 @@
     "illustrator": "Uninori",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12932",
-    "name": "<火箭隊的>叉字蝠ex",
+    "name": "火箭隊的叉字蝠ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -5095,7 +5143,7 @@
     "illustrator": "cochi8i",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
@@ -5110,7 +5158,10 @@
     "scrapedAt": "2026-04-16T07:13:30.432Z",
     "rulesText": "從牌庫抽卡直到自己的手牌滿5張為止。若自己的所有場上寶可夢皆為「火箭隊的寶可夢」，則抽卡直到滿8張為止。",
     "illustrator": "Yoshioka",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12934",
@@ -5124,11 +5175,14 @@
     "scrapedAt": "2026-04-16T07:13:31.148Z",
     "rulesText": "將自己的戰鬥場的「火箭隊的寶可夢」與備戰區的「火箭隊的寶可夢」互換。然後，選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "Krgc",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "12935",
-    "name": "<火箭隊的>超夢ex",
+    "name": "火箭隊的超夢ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -5173,12 +5227,12 @@
     "illustrator": "寶可夢集\n                                        aky CG Works\n                \n                                \n                                        訓練家\n                                        Hideki Ishikawa",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {
     "id": "12936",
-    "name": "<火箭隊的>叉字蝠ex",
+    "name": "火箭隊的叉字蝠ex",
     "supertype": "Pokemon",
     "subtype": "ex",
     "setCode": "SV10",
@@ -5221,7 +5275,7 @@
     "illustrator": "寶可夢集\n                                        5ban Graphics\n                \n                                \n                                        訓練家\n                                        Taira Akitsu",
     "regulationMark": "I",
     "tags": [
-      "訓練家的寶可夢"
+      "訓練家冠名"
     ]
   },
   {

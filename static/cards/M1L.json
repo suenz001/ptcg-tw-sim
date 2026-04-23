@@ -2397,7 +2397,10 @@
     "scrapedAt": "2026-04-16T08:17:28.747Z",
     "rulesText": "詢問對手是否希望「雙方玩家各自獲得1張獎賞卡。」。若對手希望，則雙方玩家各自獲得1張獎賞卡。若不希望，則自己從牌庫抽出4張卡。",
     "illustrator": "Hideki Ishikawa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14019",
@@ -2411,7 +2414,10 @@
     "scrapedAt": "2026-04-16T08:17:29.466Z",
     "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
     "illustrator": "Atsushi Furusawa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14020",
@@ -3213,7 +3219,10 @@
     "scrapedAt": "2026-04-16T08:17:46.397Z",
     "rulesText": "詢問對手是否希望「雙方玩家各自獲得1張獎賞卡。」。若對手希望，則雙方玩家各自獲得1張獎賞卡。若不希望，則自己從牌庫抽出4張卡。",
     "illustrator": "Hideki Ishikawa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14204",
@@ -3227,7 +3236,10 @@
     "scrapedAt": "2026-04-16T08:17:47.079Z",
     "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
     "illustrator": "Atsushi Furusawa",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14205",
@@ -3374,7 +3386,10 @@
     "scrapedAt": "2026-04-16T08:17:50.001Z",
     "rulesText": "詢問對手是否希望「雙方玩家各自獲得1張獎賞卡。」。若對手希望，則雙方玩家各自獲得1張獎賞卡。若不希望，則自己從牌庫抽出4張卡。",
     "illustrator": "osare",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14209",
@@ -3388,7 +3403,10 @@
     "scrapedAt": "2026-04-16T08:17:50.686Z",
     "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
     "illustrator": "satoma",
-    "regulationMark": "I"
+    "regulationMark": "I",
+    "tags": [
+      "訓練家冠名"
+    ]
   },
   {
     "id": "14210",
