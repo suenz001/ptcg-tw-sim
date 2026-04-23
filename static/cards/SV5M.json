@@ -2762,8 +2762,8 @@
   {
     "id": "9905",
     "name": "英雄斗篷",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "Tool",
     "setCode": "SV5M",
     "collectorNumber": "064/071",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009905.png",
@@ -2771,7 +2771,10 @@
     "scrapedAt": "2026-04-16T07:49:53.416Z",
     "rulesText": "附有這張卡的寶可夢的最大HP「+100」。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "9906",

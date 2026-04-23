@@ -116,7 +116,8 @@
     "illustrator": "Toyste Beach",
     "regulationMark": "H",
     "tags": [
-      "ACE SPEC"
+      "ACE SPEC",
+      "古代"
     ]
   },
   {
@@ -167,8 +168,8 @@
   {
     "id": "9765",
     "name": "極限腰帶",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "Tool",
     "setCode": "SV5K",
     "collectorNumber": "066/071",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009765.png",
@@ -176,7 +177,10 @@
     "scrapedAt": "2026-04-16T07:50:29.954Z",
     "rulesText": "附有這張卡的寶可夢使用的招式，對對手的戰鬥場的「寶可夢【ex】」造成的傷害「+50」點。",
     "illustrator": "inose yukie",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "9766",

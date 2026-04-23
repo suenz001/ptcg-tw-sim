@@ -3859,8 +3859,8 @@
   {
     "id": "10989",
     "name": "璀璨結晶",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "Tool",
     "setCode": "SV7",
     "collectorNumber": "094/102",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010989.png",
@@ -3868,7 +3868,10 @@
     "scrapedAt": "2026-04-16T07:57:10.407Z",
     "rulesText": "附有這張卡的「太晶」寶可夢使用招式時，使用那個招式所需的能量減少1個。（減少的能量任何屬性皆可。）",
     "illustrator": "Toyste Beach",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "10990",
@@ -3887,8 +3890,8 @@
   {
     "id": "10991",
     "name": "奢華炸彈",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "Tool",
     "setCode": "SV7",
     "collectorNumber": "096/102",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010991.png",
@@ -3896,7 +3899,10 @@
     "scrapedAt": "2026-04-16T07:57:11.785Z",
     "rulesText": "附有這張卡的寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置12個傷害指示物。然後，將這張卡丟棄。",
     "illustrator": "inose yukie",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "10992",

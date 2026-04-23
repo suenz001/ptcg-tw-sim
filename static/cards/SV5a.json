@@ -2371,8 +2371,8 @@
   {
     "id": "10306",
     "name": "倖存鍛鍊器",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "Tool",
     "setCode": "SV5a",
     "collectorNumber": "059/066",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010306.png",
@@ -2380,7 +2380,10 @@
     "scrapedAt": "2026-04-16T07:52:26.098Z",
     "rulesText": "附有這張卡的寶可夢的HP是全滿的狀態下，受到對手的寶可夢招式的傷害而【昏厥】時，那隻寶可夢不會【昏厥】，而是以剩餘HP為「10」的狀態留在場上。然後，將這張卡丟棄。",
     "illustrator": "inose yukie",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "10307",

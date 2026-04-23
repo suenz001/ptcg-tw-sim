@@ -4099,8 +4099,8 @@
   {
     "id": "11278",
     "name": "希望護身符",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "Tool",
     "setCode": "SV8",
     "collectorNumber": "098/106",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011278.png",
@@ -4108,7 +4108,10 @@
     "scrapedAt": "2026-04-16T08:00:14.859Z",
     "rulesText": "附有這張卡的寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，從自己的牌庫任意選擇最多3張卡加入手牌。並且重洗牌庫。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "11279",

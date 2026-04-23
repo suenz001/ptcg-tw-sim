@@ -18986,7 +18986,7 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Basic"
+    "stage": "Stage2"
   },
   {
     "id": "16909",
@@ -27752,7 +27752,8 @@
     "illustrator": "Toyste Beach",
     "regulationMark": "J",
     "tags": [
-      "ACE SPEC"
+      "ACE SPEC",
+      "古代"
     ]
   },
   {
@@ -28316,8 +28317,8 @@
   {
     "id": "17151",
     "name": "璀璨結晶",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "Tool",
     "setCode": "MC",
     "collectorNumber": "680/742",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017151.png",
@@ -28325,7 +28326,10 @@
     "scrapedAt": "2026-04-16T08:37:51.738Z",
     "rulesText": "附有這張卡的「太晶」寶可夢使用招式時，使用那個招式所需的能量減少1個。（減少的能量任何屬性皆可。）",
     "illustrator": "Toyste Beach",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "17152",
@@ -28375,8 +28379,8 @@
   {
     "id": "17155",
     "name": "奢華炸彈",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "Tool",
     "setCode": "MC",
     "collectorNumber": "684/742",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017155.png",
@@ -28384,7 +28388,10 @@
     "scrapedAt": "2026-04-16T08:37:54.685Z",
     "rulesText": "附有這張卡的寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置12個傷害指示物。然後，將這張卡丟棄。",
     "illustrator": "inose yukie",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "17156",
@@ -28417,8 +28424,8 @@
   {
     "id": "17158",
     "name": "英雄斗篷",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "Tool",
     "setCode": "MC",
     "collectorNumber": "687/742",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017158.png",
@@ -28426,7 +28433,10 @@
     "scrapedAt": "2026-04-16T08:37:56.891Z",
     "rulesText": "附有這張卡的寶可夢的最大HP「+100」。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "17159",
@@ -28476,8 +28486,8 @@
   {
     "id": "17162",
     "name": "極限腰帶",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "Tool",
     "setCode": "MC",
     "collectorNumber": "691/742",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017162.png",
@@ -28485,7 +28495,10 @@
     "scrapedAt": "2026-04-16T08:37:59.771Z",
     "rulesText": "附有這張卡的寶可夢使用的招式，對對手的戰鬥場的「寶可夢【ex】」造成的傷害「+50」點。",
     "illustrator": "inose yukie",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "17163",
@@ -32312,7 +32325,7 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Basic"
+    "stage": "Stage2"
   },
   {
     "id": "18276",
