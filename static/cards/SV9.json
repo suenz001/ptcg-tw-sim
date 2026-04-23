@@ -3895,8 +3895,8 @@
   {
     "id": "12554",
     "name": "赫普的講究頭帶",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV9",
     "collectorNumber": "092/100",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012554.png",
@@ -3912,8 +3912,8 @@
   {
     "id": "12555",
     "name": "莉莉艾的珍珠",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV9",
     "collectorNumber": "093/100",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012555.png",

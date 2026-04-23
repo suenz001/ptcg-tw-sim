@@ -31,7 +31,7 @@
     "pokedexNumber": 509,
     "species": "壞心眼寶可夢",
     "illustrator": "REND",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "tags": [
       "訓練家冠名"
     ],
@@ -70,7 +70,7 @@
     "pokedexNumber": 510,
     "species": "冷酷寶可夢",
     "illustrator": "Hasuno",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "tags": [
       "訓練家冠名"
     ],
@@ -110,7 +110,7 @@
     "pokedexNumber": 559,
     "species": "蛻皮寶可夢",
     "illustrator": "Teeziro",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "tags": [
       "訓練家冠名"
     ],
@@ -159,7 +159,7 @@
     "pokedexNumber": 560,
     "species": "惡黨寶可夢",
     "illustrator": "Kazumasa Yasukuni",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "tags": [
       "訓練家冠名"
     ],
@@ -205,7 +205,7 @@
     "pokedexNumber": 859,
     "species": "捉弄寶可夢",
     "illustrator": "KEIICHIRO ITO",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "tags": [
       "訓練家冠名"
     ],
@@ -244,7 +244,7 @@
     "pokedexNumber": 860,
     "species": "壞心眼寶可夢",
     "illustrator": "NC Empire",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "tags": [
       "訓練家冠名"
     ],
@@ -289,7 +289,7 @@
       "Colorless"
     ],
     "illustrator": "PLANETA Mochizuki",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "tags": [
       "訓練家冠名"
     ],
@@ -326,7 +326,7 @@
     "pokedexNumber": 877,
     "species": "雙面寶可夢",
     "illustrator": "Mina Nakai",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "tags": [
       "訓練家冠名"
     ],
@@ -371,7 +371,7 @@
       "Colorless"
     ],
     "illustrator": "takuyoa",
-    "regulationMark": "J",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -386,7 +386,7 @@
     "scrapedAt": "2026-04-21T14:24:33.541Z",
     "rulesText": "從自己的棄牌區選擇最多5張基本能量卡，在給對手看過後放回牌庫並重洗。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "12614",
@@ -400,7 +400,7 @@
     "scrapedAt": "2026-04-21T14:24:34.465Z",
     "rulesText": "從自己的棄牌區選擇寶可夢卡與基本能量卡合計最多3張，在給對手看過後放回牌庫並重洗。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "J"
+    "regulationMark": "G"
   },
   {
     "id": "12615",
@@ -414,7 +414,7 @@
     "scrapedAt": "2026-04-21T14:24:35.386Z",
     "rulesText": "從自己的牌庫選擇最多2張HP為「70」以下的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "J"
+    "regulationMark": "H"
   },
   {
     "id": "12616",
@@ -428,7 +428,7 @@
     "scrapedAt": "2026-04-21T14:24:36.304Z",
     "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。\n \n從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Ayaka Yoshida",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "12617",
@@ -442,7 +442,7 @@
     "scrapedAt": "2026-04-21T14:24:37.266Z",
     "rulesText": "從自己的手牌選擇1張【2階進化】寶可夢卡，放置於自己的場上的可進化成那隻寶可夢的【基礎】寶可夢身上，跳過【1階進化】完成進化。（無法對自己的最初回合或剛使出的寶可夢使用。）",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "12618",
@@ -456,7 +456,7 @@
     "scrapedAt": "2026-04-21T14:24:38.176Z",
     "rulesText": "將自己的戰鬥寶可夢與備戰寶可夢互換。",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "12619",
@@ -470,7 +470,7 @@
     "scrapedAt": "2026-04-21T14:24:39.085Z",
     "rulesText": "從自己的棄牌區選擇1張寶可夢卡或者基本能量卡，在給對手看過後加入手牌。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "J"
+    "regulationMark": "H"
   },
   {
     "id": "12620",
@@ -484,7 +484,7 @@
     "scrapedAt": "2026-04-21T14:24:40.008Z",
     "rulesText": "從自己的牌庫選擇競技場卡與能量卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "hncl",
-    "regulationMark": "J"
+    "regulationMark": "H"
   },
   {
     "id": "12621",
@@ -498,7 +498,7 @@
     "scrapedAt": "2026-04-21T14:24:40.894Z",
     "rulesText": "雙方玩家各將自己的手牌全部翻回反面並重洗，放回牌庫下方。然後，各從牌庫抽出與自己剩餘獎賞卡的張數相同數量的卡。",
     "illustrator": "Sanosuke Sakuma",
-    "regulationMark": "J"
+    "regulationMark": "G"
   },
   {
     "id": "12622",
@@ -512,7 +512,7 @@
     "scrapedAt": "2026-04-21T14:24:41.782Z",
     "rulesText": "將自己的手牌全部丟棄，從牌庫抽出7張卡。",
     "illustrator": "Taira Akitsu",
-    "regulationMark": "J"
+    "regulationMark": "G"
   },
   {
     "id": "12623",
@@ -526,7 +526,7 @@
     "scrapedAt": "2026-04-21T14:24:42.712Z",
     "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "NC Empire",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "12624",
@@ -540,7 +540,7 @@
     "scrapedAt": "2026-04-21T14:24:43.607Z",
     "rulesText": "雙方玩家在每個自己的回合時，可使用1次，可從自己的牌庫選擇1張「瑪俐的寶可夢」，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "12625",
@@ -573,7 +573,7 @@
     "pokedexNumber": 877,
     "species": "雙面寶可夢",
     "illustrator": "Susumu Maeya",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "tags": [
       "訓練家冠名"
     ],
@@ -589,6 +589,6 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012626.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/12626/",
     "scrapedAt": "2026-04-21T14:24:45.498Z",
-    "regulationMark": "J"
+    "regulationMark": "H"
   }
 ]

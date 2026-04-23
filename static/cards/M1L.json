@@ -3266,8 +3266,8 @@
   {
     "id": "14202",
     "name": "氣球",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "M1L",
     "collectorNumber": "084/063",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014202.png",

@@ -2409,8 +2409,8 @@
   {
     "id": "10639",
     "name": "鎖鏈糬",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV6a",
     "collectorNumber": "057/064",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010639.png",
@@ -2423,8 +2423,8 @@
   {
     "id": "10640",
     "name": "力之沙漏",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV6a",
     "collectorNumber": "058/064",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010640.png",
@@ -3626,7 +3626,7 @@
     "scrapedAt": "2026-04-16T07:55:51.868Z",
     "rulesText": "這張卡必須將自己的1張手牌丟棄才可使用。 \n\n從自己的牌庫選擇最多2張基本能量卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "tags": [
       "古代"
     ]
@@ -3634,8 +3634,8 @@
   {
     "id": "10895",
     "name": "力之沙漏",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV6a",
     "collectorNumber": "094/064",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010895.png",

@@ -137,8 +137,8 @@
   {
     "id": "9763",
     "name": "緊急滑板",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV5K",
     "collectorNumber": "064/071",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009763.png",
@@ -160,7 +160,7 @@
     "scrapedAt": "2026-04-16T07:50:29.258Z",
     "rulesText": "附有這張卡的「古代」寶可夢的最大HP「+60」，那隻寶可夢不會陷入特殊狀態，並將受到的特殊狀態全部恢復。",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "tags": [
       "古代"
     ]

@@ -3395,7 +3395,7 @@
     "scrapedAt": "2026-04-16T08:13:16.927Z",
     "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。若在自己的回合中，則可將場上的這張卡丟棄。\n\n這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "I"
+    "regulationMark": "H"
   },
   {
     "id": "13023",
@@ -3414,8 +3414,8 @@
   {
     "id": "13024",
     "name": "氣球",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV11B",
     "collectorNumber": "082/086",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013024.png",
@@ -3454,7 +3454,7 @@
     "scrapedAt": "2026-04-16T08:13:19.879Z",
     "rulesText": "將自己的手牌全部丟棄，從牌庫抽出7張卡。",
     "illustrator": "Taira Akitsu",
-    "regulationMark": "I"
+    "regulationMark": "G"
   },
   {
     "id": "13027",
@@ -10297,7 +10297,7 @@
     "scrapedAt": "2026-04-16T08:15:19.873Z",
     "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。若在自己的回合中，則可將場上的這張卡丟棄。\n\n這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "I"
+    "regulationMark": "H"
   },
   {
     "id": "13948",
@@ -10316,8 +10316,8 @@
   {
     "id": "13949",
     "name": "氣球",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV11B",
     "collectorNumber": "082/086",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013949.png",
@@ -10356,7 +10356,7 @@
     "scrapedAt": "2026-04-16T08:15:22.751Z",
     "rulesText": "將自己的手牌全部丟棄，從牌庫抽出7張卡。",
     "illustrator": "Taira Akitsu",
-    "regulationMark": "I"
+    "regulationMark": "G"
   },
   {
     "id": "13952",

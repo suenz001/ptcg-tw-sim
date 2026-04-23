@@ -4016,8 +4016,8 @@
   {
     "id": "10509",
     "name": "手持循環扇",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV6",
     "collectorNumber": "095/101",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010509.png",

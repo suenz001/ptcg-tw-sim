@@ -2882,8 +2882,8 @@
   {
     "id": "18049",
     "name": "核心記憶碟",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "M3",
     "collectorNumber": "072/080",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018049.png",
@@ -3901,7 +3901,7 @@
     "scrapedAt": "2026-04-16T08:26:41.127Z",
     "rulesText": "從自己的棄牌區選擇最多5張基本能量卡，在給對手看過後放回牌庫並重洗。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "18405",
@@ -3915,7 +3915,7 @@
     "scrapedAt": "2026-04-16T08:26:41.856Z",
     "rulesText": "從自己的棄牌區選擇最多5張寶可夢卡，在給對手看過後放回牌庫並重洗。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "18406",
@@ -3943,7 +3943,7 @@
     "scrapedAt": "2026-04-16T08:26:43.278Z",
     "rulesText": "從自己的棄牌區選擇1張「基本【超】能量」卡，附於備戰區的【超】寶可夢身上。",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "18408",
@@ -4013,7 +4013,7 @@
     "scrapedAt": "2026-04-16T08:26:46.840Z",
     "rulesText": "雙方的所有【草】寶可夢就算在剛使出的回合（自己的最初回合除外）也可進化成【草】寶可夢。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "18413",

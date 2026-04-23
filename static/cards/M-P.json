@@ -9,7 +9,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014084.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14084/",
     "scrapedAt": "2026-04-22T00:59:35.648Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 70,
     "pokemonType": "Grass",
     "attacks": [
@@ -44,7 +44,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014085.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14085/",
     "scrapedAt": "2026-04-22T00:59:36.345Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 210,
     "pokemonType": "Water",
     "attacks": [
@@ -88,7 +88,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014086.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14086/",
     "scrapedAt": "2026-04-22T00:59:37.034Z",
-    "regulationMark": "J",
+    "regulationMark": "H",
     "hp": 110,
     "pokemonType": "Psychic",
     "abilities": [
@@ -135,7 +135,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014087.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14087/",
     "scrapedAt": "2026-04-22T00:59:37.790Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 80,
     "pokemonType": "Fighting",
     "attacks": [
@@ -180,21 +180,21 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014088.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14088/",
     "scrapedAt": "2026-04-22T00:59:38.475Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "將自己的牌庫上方2張卡丟棄。",
     "illustrator": "Toyste Beach"
   },
   {
     "id": "14089",
     "name": "反擊增幅器",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "M-P",
     "collectorNumber": "017/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014089.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14089/",
     "scrapedAt": "2026-04-22T00:59:39.197Z",
-    "regulationMark": "J",
+    "regulationMark": "H",
     "rulesText": "若自己剩餘獎賞卡的張數比對手剩餘獎賞卡的張數多，則附有這張卡的寶可夢使用招式所需的能量，減少1個【無】能量。",
     "illustrator": "Toyste Beach"
   },
@@ -208,7 +208,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014090.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14090/",
     "scrapedAt": "2026-04-22T00:59:39.913Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
     "illustrator": "Atsushi Furusawa",
     "tags": [
@@ -225,7 +225,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014091.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14091/",
     "scrapedAt": "2026-04-22T00:59:40.611Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 80,
     "pokemonType": "Grass",
     "attacks": [
@@ -261,7 +261,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014092.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14092/",
     "scrapedAt": "2026-04-22T00:59:41.375Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 110,
     "pokemonType": "Grass",
     "attacks": [
@@ -300,7 +300,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014093.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14093/",
     "scrapedAt": "2026-04-22T00:59:42.064Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 80,
     "pokemonType": "Grass",
     "attacks": [
@@ -343,7 +343,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014094.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14094/",
     "scrapedAt": "2026-04-22T00:59:42.881Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 50,
     "pokemonType": "Psychic",
     "attacks": [
@@ -382,7 +382,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014095.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14095/",
     "scrapedAt": "2026-04-22T00:59:43.675Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 70,
     "pokemonType": "Psychic",
     "attacks": [
@@ -429,7 +429,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014096.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14096/",
     "scrapedAt": "2026-04-22T00:59:44.472Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 100,
     "pokemonType": "Psychic",
     "attacks": [
@@ -477,7 +477,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014097.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14097/",
     "scrapedAt": "2026-04-22T00:59:45.317Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 80,
     "pokemonType": "Fighting",
     "attacks": [
@@ -522,7 +522,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014098.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14098/",
     "scrapedAt": "2026-04-22T00:59:46.019Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 80,
     "pokemonType": "Fighting",
     "attacks": [
@@ -558,7 +558,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014099.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14099/",
     "scrapedAt": "2026-04-22T00:59:46.729Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 90,
     "pokemonType": "Fighting",
     "attacks": [
@@ -594,7 +594,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014100.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14100/",
     "scrapedAt": "2026-04-22T00:59:47.410Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "這張卡只有在對手剩餘獎賞卡的張數為2張以下時才可使用。\n \n 選擇1隻自己的場上寶可夢。在下個對手的回合，那隻寶可夢不會受到對手的「寶可夢【ex】」招式的傷害與效果的影響。",
     "illustrator": "Yuu Nishida"
   },
@@ -608,7 +608,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014101.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14101/",
     "scrapedAt": "2026-04-22T00:59:48.158Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
     "illustrator": "Atsushi Furusawa",
     "tags": [
@@ -625,7 +625,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014102.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14102/",
     "scrapedAt": "2026-04-22T00:59:48.876Z",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "14103",
@@ -637,7 +637,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014103.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14103/",
     "scrapedAt": "2026-04-22T00:59:49.562Z",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "14104",
@@ -649,7 +649,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014104.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14104/",
     "scrapedAt": "2026-04-22T00:59:50.288Z",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "14416",
@@ -661,7 +661,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014416.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14416/",
     "scrapedAt": "2026-04-22T00:59:51.384Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 80,
     "pokemonType": "Fire",
     "abilities": [
@@ -704,7 +704,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014417.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14417/",
     "scrapedAt": "2026-04-22T00:59:52.182Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 110,
     "pokemonType": "Fire",
     "attacks": [
@@ -741,7 +741,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014418.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14418/",
     "scrapedAt": "2026-04-22T00:59:52.949Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 120,
     "pokemonType": "Fire",
     "attacks": [
@@ -776,7 +776,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014419.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14419/",
     "scrapedAt": "2026-04-22T00:59:53.684Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 70,
     "pokemonType": "Water",
     "attacks": [
@@ -820,7 +820,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014420.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14420/",
     "scrapedAt": "2026-04-22T00:59:54.474Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 100,
     "pokemonType": "Water",
     "attacks": [
@@ -867,7 +867,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014421.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14421/",
     "scrapedAt": "2026-04-22T00:59:55.183Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 70,
     "pokemonType": "Darkness",
     "attacks": [
@@ -911,7 +911,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014422.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14422/",
     "scrapedAt": "2026-04-22T00:59:56.041Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 70,
     "pokemonType": "Darkness",
     "attacks": [
@@ -946,7 +946,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014423.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14423/",
     "scrapedAt": "2026-04-22T00:59:56.813Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 70,
     "pokemonType": "Darkness",
     "attacks": [
@@ -990,7 +990,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014424.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14424/",
     "scrapedAt": "2026-04-22T00:59:57.533Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "從自己的牌庫選擇「【基礎】寶可夢」卡「【1階進化】寶可夢」卡「【2階進化】寶可夢」卡各一張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Yuu Nishida"
   },
@@ -1004,7 +1004,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014425.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14425/",
     "scrapedAt": "2026-04-22T00:59:58.234Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 360,
     "pokemonType": "Fire",
     "attacks": [
@@ -1040,7 +1040,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014426.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14426/",
     "scrapedAt": "2026-04-22T00:59:58.981Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 130,
     "pokemonType": "Psychic",
     "attacks": [
@@ -1077,7 +1077,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014427.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14427/",
     "scrapedAt": "2026-04-22T00:59:59.741Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 140,
     "pokemonType": "Darkness",
     "abilities": [
@@ -1123,7 +1123,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014428.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14428/",
     "scrapedAt": "2026-04-22T01:00:00.462Z",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "14429",
@@ -1135,7 +1135,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014429.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14429/",
     "scrapedAt": "2026-04-22T01:00:01.141Z",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "14430",
@@ -1147,7 +1147,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014430.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14430/",
     "scrapedAt": "2026-04-22T01:00:01.887Z",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "14431",
@@ -1159,7 +1159,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014431.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14431/",
     "scrapedAt": "2026-04-22T01:00:02.617Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 140,
     "pokemonType": "Fire",
     "attacks": [
@@ -1196,7 +1196,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014432.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14432/",
     "scrapedAt": "2026-04-22T01:00:03.307Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 150,
     "pokemonType": "Fighting",
     "abilities": [
@@ -1240,7 +1240,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014433.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14433/",
     "scrapedAt": "2026-04-22T01:00:04.029Z",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "14434",
@@ -1252,7 +1252,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014434.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14434/",
     "scrapedAt": "2026-04-22T01:00:04.744Z",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "14435",
@@ -1264,7 +1264,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014435.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14435/",
     "scrapedAt": "2026-04-22T01:00:05.468Z",
-    "regulationMark": "J"
+    "regulationMark": "I"
   },
   {
     "id": "14443",
@@ -1276,7 +1276,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014443.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14443/",
     "scrapedAt": "2026-04-22T01:00:06.169Z",
-    "regulationMark": "J",
+    "regulationMark": "H",
     "hp": 30,
     "pokemonType": "Grass",
     "attacks": [
@@ -1306,7 +1306,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014444.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14444/",
     "scrapedAt": "2026-04-22T01:00:06.919Z",
-    "regulationMark": "J",
+    "regulationMark": "H",
     "hp": 30,
     "pokemonType": "Grass",
     "attacks": [
@@ -1336,7 +1336,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014445.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14445/",
     "scrapedAt": "2026-04-22T01:00:07.600Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "5ban Graphics"
   },
@@ -1350,7 +1350,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014446.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14446/",
     "scrapedAt": "2026-04-22T01:00:08.277Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "5ban Graphics"
   },
@@ -1364,7 +1364,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014447.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14447/",
     "scrapedAt": "2026-04-22T01:00:08.993Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "5ban Graphics"
   },
@@ -1378,7 +1378,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014462.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14462/",
     "scrapedAt": "2026-04-22T01:00:09.760Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 110,
     "pokemonType": "Fire",
     "attacks": [
@@ -1415,7 +1415,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014463.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14463/",
     "scrapedAt": "2026-04-22T01:00:10.520Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 320,
     "pokemonType": "Darkness",
     "attacks": [
@@ -1462,7 +1462,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014464.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14464/",
     "scrapedAt": "2026-04-22T01:00:11.270Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 70,
     "pokemonType": "Darkness",
     "attacks": [
@@ -1506,7 +1506,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014465.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14465/",
     "scrapedAt": "2026-04-22T01:00:11.968Z",
-    "regulationMark": "J",
+    "regulationMark": "H",
     "hp": 140,
     "pokemonType": "Colorless",
     "abilities": [
@@ -1546,28 +1546,28 @@
   {
     "id": "14466",
     "name": "逆境保險",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "M-P",
     "collectorNumber": "046/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014466.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14466/",
     "scrapedAt": "2026-04-22T01:00:12.646Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "若附有這張卡的寶可夢的弱點屬性與對手戰鬥寶可夢的屬性相同，則附有這張卡的寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，從自己的牌庫抽出3張卡。",
     "illustrator": "Ayaka Yoshida"
   },
   {
     "id": "14467",
     "name": "氣球",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "M-P",
     "collectorNumber": "047/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014467.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14467/",
     "scrapedAt": "2026-04-22T01:00:13.325Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "附有這張卡的寶可夢，【撤退】所需的能量減少2個。",
     "illustrator": "Studio Bora Inc."
   },
@@ -1581,7 +1581,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014468.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14468/",
     "scrapedAt": "2026-04-22T01:00:14.002Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "從自己的牌庫選擇進化寶可夢卡與能量卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "yuu"
   },
@@ -1595,7 +1595,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017971.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/17971/",
     "scrapedAt": "2026-04-22T01:00:14.760Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 160,
     "pokemonType": "Grass",
     "abilities": [
@@ -1642,7 +1642,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017972.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/17972/",
     "scrapedAt": "2026-04-22T01:00:15.511Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 150,
     "pokemonType": "Water",
     "attacks": [
@@ -1686,7 +1686,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017973.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/17973/",
     "scrapedAt": "2026-04-22T01:00:16.213Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 60,
     "pokemonType": "Lightning",
     "attacks": [
@@ -1728,7 +1728,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017974.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/17974/",
     "scrapedAt": "2026-04-22T01:00:16.989Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "hp": 140,
     "pokemonType": "Psychic",
     "abilities": [
@@ -1820,7 +1820,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017976.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/17976/",
     "scrapedAt": "2026-04-22T01:00:18.667Z",
-    "regulationMark": "J",
+    "regulationMark": "H",
     "hp": 60,
     "pokemonType": "Darkness",
     "attacks": [
@@ -1855,7 +1855,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00017977.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/17977/",
     "scrapedAt": "2026-04-22T01:00:19.428Z",
-    "regulationMark": "J",
+    "regulationMark": "H",
     "hp": 70,
     "pokemonType": "Colorless",
     "attacks": [
@@ -2300,7 +2300,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018068.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/18068/",
     "scrapedAt": "2026-04-22T01:00:27.383Z",
-    "regulationMark": "J",
+    "regulationMark": "H",
     "hp": 60,
     "pokemonType": "Colorless",
     "attacks": [
@@ -2555,7 +2555,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018074.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/18074/",
     "scrapedAt": "2026-04-22T01:00:31.739Z",
-    "regulationMark": "J",
+    "regulationMark": "H",
     "hp": 100,
     "pokemonType": "Fighting",
     "abilities": [
@@ -2632,14 +2632,14 @@
   {
     "id": "18076",
     "name": "猛攻手鐲",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "M-P",
     "collectorNumber": "080/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018076.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/18076/",
     "scrapedAt": "2026-04-22T01:00:33.170Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "附有這張卡的寶可夢（「擁有規則的寶可夢」除外）使用的招式，對對手的戰鬥場的「寶可夢【ex】」造成的傷害「+30」點。",
     "illustrator": "Toyste Beach"
   },
@@ -2667,7 +2667,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018078.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/18078/",
     "scrapedAt": "2026-04-22T01:00:34.623Z",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "rulesText": "將自己的1隻「超級進化寶可夢【ex】」的HP全部恢復。然後，將恢復的寶可夢身上附加的能量卡全部放回手牌。",
     "illustrator": "Iori Suzuki"
   },

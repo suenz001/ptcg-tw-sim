@@ -525,8 +525,8 @@
   {
     "id": "14122",
     "name": "氣球",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "MBD",
     "collectorNumber": "018/022",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014122.png",

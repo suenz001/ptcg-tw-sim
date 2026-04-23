@@ -3042,8 +3042,8 @@
   {
     "id": "14393",
     "name": "神聖護符",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "M2",
     "collectorNumber": "075/080",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014393.png",

@@ -512,8 +512,8 @@
   {
     "id": "14146",
     "name": "龐克頭盔",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "MBG",
     "collectorNumber": "018/022",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014146.png",
@@ -526,8 +526,8 @@
   {
     "id": "14147",
     "name": "氣球",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "MBG",
     "collectorNumber": "019/022",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014147.png",

@@ -4116,8 +4116,8 @@
   {
     "id": "11279",
     "name": "刺耳果",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV8",
     "collectorNumber": "099/106",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011279.png",
@@ -4130,8 +4130,8 @@
   {
     "id": "11280",
     "name": "霹霹果",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV8",
     "collectorNumber": "100/106",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011280.png",
@@ -4144,8 +4144,8 @@
   {
     "id": "11281",
     "name": "招式學習器 螢石",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV8",
     "collectorNumber": "101/106",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011281.png",

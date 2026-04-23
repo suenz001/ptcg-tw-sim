@@ -2301,8 +2301,8 @@
   {
     "id": "11088",
     "name": "千香果",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV7a",
     "collectorNumber": "058/064",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011088.png",
@@ -2315,8 +2315,8 @@
   {
     "id": "11089",
     "name": "反擊增幅器",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV7a",
     "collectorNumber": "059/064",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011089.png",
@@ -3472,8 +3472,8 @@
   {
     "id": "11458",
     "name": "反擊增幅器",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV7a",
     "collectorNumber": "093/064",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011458.png",
@@ -3494,6 +3494,6 @@
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11459/",
     "scrapedAt": "2026-04-16T07:58:55.114Z",
     "rulesText": "只要這張卡附於寶可夢身上，視為提供1個【無】能量。\n\n從手牌將這張卡附於備戰寶可夢身上時，將附有這張卡的寶可夢與戰鬥寶可夢互換。",
-    "regulationMark": "H"
+    "regulationMark": "G"
   }
 ]

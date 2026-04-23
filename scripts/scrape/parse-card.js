@@ -79,7 +79,7 @@ function classifyTrainerOrEnergyByH3($) {
     const t = text.replace(/\s+/g, '');
     if (t.includes('支援者卡')) return { supertype: 'Trainer', subtype: 'Supporter' };
     if (t.includes('競技場卡')) return { supertype: 'Trainer', subtype: 'Stadium' };
-    if (t.includes('寶可夢道具卡')) return { supertype: 'Trainer', subtype: 'PokemonTool' };
+    if (t.includes('寶可夢道具')) return { supertype: 'Trainer', subtype: 'PokemonTool' };
     if (t.includes('物品卡')) return { supertype: 'Trainer', subtype: 'Item' };
     if (t.includes('特殊能量卡')) return { supertype: 'Energy', subtype: 'Special' };
     if (t.includes('基本能量卡')) return { supertype: 'Energy', subtype: 'Basic' };
@@ -144,10 +144,15 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
   }
 
   // --- Regulation mark ---
-  // The TW site does not display regulation marks in the HTML, so we look it
-  // up from our verified set-code → mark mapping table instead.
+  // The TW site has regulation marks in the `<span class="alpha">H</span>` block.
+  // This is critical for compilation sets (like SV4a, SV8a) where cards from
+  // different sets (and thus different regulation marks) are mixed.
+  const alphaMark = $('.alpha').first().text().trim();
   const regLabel = $('.regulationLabel, .regulation').first().text().trim();
-  if (regLabel && /^[A-Z]$/.test(regLabel)) {
+  
+  if (alphaMark && /^[A-Z]$/.test(alphaMark)) {
+    card.regulationMark = alphaMark;
+  } else if (regLabel && /^[A-Z]$/.test(regLabel)) {
     card.regulationMark = regLabel;
   } else if (card.setCode && SET_REGULATION_MARK[card.setCode]) {
     card.regulationMark = SET_REGULATION_MARK[card.setCode];

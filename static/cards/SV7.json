@@ -3831,8 +3831,8 @@
   {
     "id": "10987",
     "name": "福祿果",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV7",
     "collectorNumber": "092/102",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010987.png",
@@ -3845,8 +3845,8 @@
   {
     "id": "10988",
     "name": "巧可果",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV7",
     "collectorNumber": "093/102",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010988.png",
@@ -3876,8 +3876,8 @@
   {
     "id": "10990",
     "name": "重力之玉",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV7",
     "collectorNumber": "095/102",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010990.png",
@@ -5190,8 +5190,8 @@
   {
     "id": "11029",
     "name": "勇氣護符",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV7",
     "collectorNumber": "134/102",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011029.png",
@@ -5199,7 +5199,7 @@
     "scrapedAt": "2026-04-16T07:57:39.991Z",
     "rulesText": "附有這張卡的【基礎】寶可夢的最大HP「+50」。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "H"
+    "regulationMark": "G"
   },
   {
     "id": "11030",

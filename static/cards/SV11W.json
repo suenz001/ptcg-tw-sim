@@ -3473,8 +3473,8 @@
   {
     "id": "13110",
     "name": "猛攻手鐲",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV11W",
     "collectorNumber": "082/086",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013110.png",
@@ -6694,8 +6694,8 @@
   {
     "id": "13439",
     "name": "猛攻手鐲",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV11W",
     "collectorNumber": "082/086",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013439.png",

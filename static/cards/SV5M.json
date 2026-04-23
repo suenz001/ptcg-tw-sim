@@ -2788,7 +2788,7 @@
     "scrapedAt": "2026-04-16T07:49:54.095Z",
     "rulesText": "附有這張卡的「未來」寶可夢【撤退】所需的能量全部消除，那隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害「+20」點。",
     "illustrator": "5ban Graphics",
-    "regulationMark": "H",
+    "regulationMark": "G",
     "tags": [
       "未來"
     ]
@@ -2796,8 +2796,8 @@
   {
     "id": "9907",
     "name": "沉重接力棒",
-    "supertype": "Pokemon",
-    "subtype": "Other",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
     "setCode": "SV5M",
     "collectorNumber": "066/071",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00009907.png",

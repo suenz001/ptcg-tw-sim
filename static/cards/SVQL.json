@@ -31,7 +31,7 @@
     "pokedexNumber": 4,
     "species": "蜥蜴寶可夢",
     "illustrator": "DOM",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -78,7 +78,7 @@
     "species": "火焰寶可夢",
     "evolvesFrom": "小火龍",
     "illustrator": "GIDORA",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -124,7 +124,7 @@
     ],
     "evolvesFrom": "火恐龍",
     "illustrator": "PLANETA Mochizuki",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Stage2"
   },
   {
@@ -160,7 +160,7 @@
     "pokedexNumber": 58,
     "species": "小狗寶可夢",
     "illustrator": "kawayoo",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -209,7 +209,7 @@
     "species": "傳說寶可夢",
     "evolvesFrom": "卡蒂狗",
     "illustrator": "Ryuta Fuse",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Stage1"
   },
   {
@@ -245,7 +245,7 @@
     "pokedexNumber": 479,
     "species": "等離子寶可夢",
     "illustrator": "Scav",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "stage": "Basic"
   },
   {
@@ -280,7 +280,7 @@
     "pokedexNumber": 513,
     "species": "高溫寶可夢",
     "illustrator": "Wintr Wandr",
-    "regulationMark": "I",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -316,7 +316,7 @@
     "species": "火花寶可夢",
     "evolvesFrom": "爆香猴",
     "illustrator": "Taiga Kasai",
-    "regulationMark": "I",
+    "regulationMark": "H",
     "stage": "Stage1"
   },
   {
@@ -363,7 +363,7 @@
     "pokedexNumber": 776,
     "species": "爆炸龜寶可夢",
     "illustrator": "Shigenori Negishi",
-    "regulationMark": "I",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -454,7 +454,7 @@
     "pokedexNumber": 115,
     "species": "親子寶可夢",
     "illustrator": "Uta",
-    "regulationMark": "I",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -483,7 +483,7 @@
     "scrapedAt": "2026-04-22T00:53:14.233Z",
     "rulesText": "擲1次硬幣若為正面，則選擇1個對手的場上寶可夢身上附加的能量，將其丟棄。",
     "illustrator": "Ayaka Yoshida",
-    "regulationMark": "I"
+    "regulationMark": "J"
   },
   {
     "id": "13174",
@@ -497,7 +497,7 @@
     "scrapedAt": "2026-04-22T00:53:15.047Z",
     "rulesText": "查看自己的牌庫上方7張卡。從其中選擇1張寶可夢卡，在給對手看過後加入手牌。將剩餘卡放回牌庫並重洗。",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "I"
+    "regulationMark": "G"
   },
   {
     "id": "13175",
@@ -539,7 +539,7 @@
     "scrapedAt": "2026-04-22T00:53:17.227Z",
     "rulesText": "擲1次硬幣若為正面，則選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "I"
+    "regulationMark": "J"
   },
   {
     "id": "13178",
@@ -581,7 +581,7 @@
     "scrapedAt": "2026-04-22T00:53:19.405Z",
     "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出5張卡。",
     "illustrator": "Hitoshi Ariga",
-    "regulationMark": "I"
+    "regulationMark": "G"
   },
   {
     "id": "13181",
@@ -609,7 +609,7 @@
     "scrapedAt": "2026-04-22T00:53:20.849Z",
     "rulesText": "這張卡必須在上個對手的回合自己的寶可夢【昏厥】了才可使用。 \n\n從自己的棄牌區選擇1張「基本【火】能量」卡，附於自己的寶可夢身上。然後，從牌庫抽卡直到自己的手牌滿6張為止。",
     "illustrator": "kirisAki",
-    "regulationMark": "I"
+    "regulationMark": "G"
   },
   {
     "id": "13185",
