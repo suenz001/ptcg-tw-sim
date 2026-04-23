@@ -1593,7 +1593,8 @@
     <button class="btn-primary" disabled={!p1DeckId || !p2DeckId} onclick={startLocalGame}>
       {aiPlayerIndex !== null ? '🤖 開始 vs AI' : '🎮 開始遊戲'}
     </button>
-    {#if !aiPlayerIndex && p1DeckId === p2DeckId && p1DeckId}<p class="warn">雙人模式下兩位玩家請選不同的牌組</p>{/if}
+    <!-- v2.70：移除「雙人請選不同牌組」警告；本機/線上對戰皆允許兩位玩家使用同一牌組 -->
+
   </main>
 
   {:else}

@@ -73,11 +73,16 @@ regR('moonlight-hill-heal', (st, idx, iids) => {
 
 // ── 尖釘鎮道館（Stadium）── v2.21 ───────────────────────────────────────────
 // 從牌庫選 1 張「瑪俐的」寶可夢加手牌並重洗（雙方玩家每回合 1 次）
+// v2.70：放寬 — 即使牌庫沒有「瑪俐的」寶可夢也能使用（engine 改以 minCount=0
+//        開 UI），玩家可藉此檢查牌庫。iids 為空時仍重洗牌庫並記 log。
 regR('spikemuth-marnie-search', (st, idx, iids, _params, pool) => {
   const p = st.players[idx];
   const picked = p.deck.filter(c => iids.includes(c.iid));
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  const s = addLog(st, `尖釘鎮道館：${names || '未選擇'} 加入手牌（重洗牌庫）`, idx);
+  const msg = picked.length === 0
+    ? '尖釘鎮道館：未選到「瑪俐的」寶可夢（重洗牌庫）'
+    : `尖釘鎮道館：${names} 加入手牌（重洗牌庫）`;
+  const s = addLog(st, msg, idx);
   return updatePlayer(s, idx, pl => ({
     ...pl,
     hand: [...pl.hand, ...picked],

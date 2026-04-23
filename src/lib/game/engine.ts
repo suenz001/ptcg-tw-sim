@@ -1136,23 +1136,16 @@ function handlePlaying(
     }
 
     // 尖釘鎮道館 — 從牌庫選 1 張「瑪俐的」寶可夢加手牌並重洗
+    // v2.70：即便牌庫沒有「瑪俐的」寶可夢也要開 UI（玩家可藉此查看牌庫內容），
+    //       所以 minCount 設為 0 允許確認無選擇，候選數量不做 gate。
     if (stadiumCard.name === '尖釘鎮道館') {
-      const p = newState.players[aIdx];
-      const cand = p.deck.filter(inst => {
-        const c = pool.get(inst.cardId);
-        return c?.supertype === 'Pokemon' && c?.subtype !== 'Other' && c?.name?.startsWith('瑪俐的');
-      });
-      if (cand.length === 0) {
-        const revert: [boolean, boolean] = [used[0], used[1]];
-        return addLog({ ...state, stadiumUsedThisTurn: revert }, '尖釘鎮道館：牌庫沒有「瑪俐的」寶可夢', aIdx);
-      }
       return {
         ...newState,
         pendingSelection: {
           type: 'deck-search',
           actorIdx: aIdx,
           sourcePlayerIdx: aIdx,
-          minCount: 1,
+          minCount: 0,
           maxCount: 1,
           filter: 'MarniePokemon',
           effectKey: 'spikemuth-marnie-search',
@@ -1907,10 +1900,10 @@ function handlePlaying(
     //       （「雪妖女」除外）身上各放置 1 個傷害指示物。
     // 觸發階段：「寶可夢檢查」= 中毒/灼傷/麻痺/睡眠之後（本段落所在處）。
     // 設計：每隻雪妖女各放 1 個指示物；若場上有 N 隻雪妖女則每個目標放 N 個。
-    // KO 歸屬：被 aIdx（結束回合方）自己的寶可夢擊倒 → 對手（nextIdx=dIdx）取獎賞
-    //         → 沿用 pendingPrizes 機制（early return，讓對手取獎後再 END_TURN）。
-    //         dIdx 側自 KO（自己的雪妖女打死自己其他寶可夢）為極端邊角案例，
-    //         目前僅棄牌但不分配獎賞（後續再補）。
+    // v2.70：KO 獎賞兩側都要計算（selfKOInstance 風格直接取獎，不走 pendingPrizes）。
+    //        因為：pendingPrizes 會被 activePlayerIndex 方 TAKE_PRIZES，
+    //        但 checkup 時 activePlayerIndex 仍是 aIdx，勝方卻可能是任何一方。
+    //        改成直接從勝方自己的獎賞堆轉到勝方手牌（與 selfKOInstance 同樣手法）。
     const countFrosmoth = (pl: PlayerState): number => {
       let n = 0;
       if (pl.active && pool.get(pl.active.cardId)?.name === '雪妖女') n += 1;
@@ -1927,8 +1920,9 @@ function handlePlaying(
         return true;
       };
       const affectedNames: string[] = [];
-      let aIdxKOPrizes = 0;
-      let aIdxKOActiveDied = false;
+      // [ownerIdx → prizes they owe to opponent]
+      const koPrizesByOwner: [number, number] = [0, 0];
+      const activeDiedByOwner: [boolean, boolean] = [false, false];
       for (const i of [0, 1] as const) {
         const pl = { ...players[i] };
         // 戰鬥區
@@ -1945,10 +1939,8 @@ function handlePlaying(
               ...(pl.active.evolvedFromStack ?? []),
             ];
             pl.discard = [...pl.discard, ...koDiscard];
-            if (i === aIdx) {
-              aIdxKOPrizes += prizesForKO(card!);
-              aIdxKOActiveDied = true;
-            }
+            koPrizesByOwner[i] += prizesForKO(card!);
+            activeDiedByOwner[i] = true;
             pl.active = null;
           } else {
             pl.active = { ...pl.active, damage: newDmg };
@@ -1970,7 +1962,7 @@ function handlePlaying(
               ...(b.evolvedFromStack ?? []),
             ];
             pl.discard = [...pl.discard, ...koDiscard];
-            if (i === aIdx) aIdxKOPrizes += prizesForKO(card!);
+            koPrizesByOwner[i] += prizesForKO(card!);
           } else {
             newBench.push({ ...b, damage: newDmg });
           }
@@ -1982,17 +1974,44 @@ function handlePlaying(
         state = addLog({ ...state, players },
           `冰冷之帳：${affectedNames.join('、')}`, null);
       }
-      if (aIdxKOPrizes > 0) {
-        state = addLog(state,
-          `冰冷之帳：${players[aIdx].name} 有寶可夢被擊倒，${players[dIdx].name} 取得 ${aIdxKOPrizes} 張獎勵牌。`, null);
-        // 若 aIdx 戰鬥寶可夢被擊倒 + 備戰已空 → 勝利條件
-        if (aIdxKOActiveDied && players[aIdx].bench.length === 0 && players[aIdx].active === null) {
+      // 直接取獎：owner i 側寶可夢被 KO → 對手 (1-i) 從自己獎賞堆取牌進手牌
+      for (const i of [0, 1] as const) {
+        const owed = koPrizesByOwner[i];
+        if (owed <= 0) continue;
+        const winnerIdx = (1 - i) as 0 | 1;
+        const winner = players[winnerIdx];
+        state = addLog({ ...state, players },
+          `冰冷之帳：${players[i].name} 有寶可夢被擊倒，${winner.name} 取得 ${owed} 張獎勵牌。`,
+          null);
+        const take = Math.min(owed, winner.prizes.length);
+        if (take > 0) {
+          const taken = winner.prizes.slice(0, take);
+          players[winnerIdx] = {
+            ...winner,
+            prizes: winner.prizes.slice(take),
+            hand: [...winner.hand, ...taken],
+          };
+          state = addLog({ ...state, players },
+            `${winner.name} 取走 ${take} 張獎勵牌（剩餘 ${players[winnerIdx].prizes.length} 張）`,
+            null);
+        }
+        // 勝利條件：勝方獎賞全取完
+        if (players[winnerIdx].prizes.length === 0) {
           return {
             ...state, phase: 'game-over',
-            winner: dIdx, winReason: `${players[aIdx].name} 沒有可上場的寶可夢`,
+            winner: winnerIdx, winReason: `${winner.name} 取得所有獎勵牌`,
           };
         }
-        return { ...state, pendingPrizes: (state.pendingPrizes ?? 0) + aIdxKOPrizes };
+      }
+      // 勝利條件：任一方戰鬥寶可夢被擊倒 + 備戰已空 → 對手勝
+      for (const i of [0, 1] as const) {
+        if (activeDiedByOwner[i] && players[i].bench.length === 0 && players[i].active === null) {
+          const winnerIdx = (1 - i) as 0 | 1;
+          return {
+            ...state, phase: 'game-over',
+            winner: winnerIdx, winReason: `${players[i].name} 沒有可上場的寶可夢`,
+          };
+        }
       }
     }
 
@@ -2165,6 +2184,22 @@ function handlePlaying(
     // nextIdx 的視角：「對手」= aIdx（剛結束回合的玩家）
     newTurnStart[nextIdx] = players[aIdx].prizes.length;
 
+    // v2.70：快照雙方棄牌堆中「火箭隊的」寶可夢數量，用於火箭隊的阿波羅 gate。
+    //   aIdx（剛結束回合方）→ 寫 LastTurnEnd[aIdx]
+    //   nextIdx（即將開始回合方）→ 寫 TurnStart[nextIdx]
+    // gate：turnStart[me] > lastEnd[me] 表示對手剛結束的回合間我方的火箭隊寶可夢被擊倒
+    const countRocketPokeInDiscard = (pl: PlayerState): number =>
+      pl.discard.filter(c => {
+        const card = pool.get(c.cardId);
+        return card?.supertype === 'Pokemon' && card.name?.startsWith('火箭隊的');
+      }).length;
+    const prevRocketLastEnd = state.rocketInMyDiscardAtMyLastTurnEnd ?? [0, 0] as [number, number];
+    const newRocketLastEnd: [number, number] = [prevRocketLastEnd[0], prevRocketLastEnd[1]];
+    newRocketLastEnd[aIdx] = countRocketPokeInDiscard(players[aIdx]);
+    const prevRocketTurnStart = state.rocketInMyDiscardAtMyTurnStart ?? [0, 0] as [number, number];
+    const newRocketTurnStart: [number, number] = [prevRocketTurnStart[0], prevRocketTurnStart[1]];
+    newRocketTurnStart[nextIdx] = countRocketPokeInDiscard(players[nextIdx]);
+
     const newTurn = aIdx === 1 ? state.turn + 1 : state.turn;
     const afterSwitch = addLog(
       {
@@ -2178,6 +2213,8 @@ function handlePlaying(
         stadiumPlayedThisTurn: newStadiumPlayed,
         oppPrizesAtMyLastTurnEnd: newOppSnap,
         oppPrizesAtMyTurnStart: newTurnStart,
+        rocketInMyDiscardAtMyLastTurnEnd: newRocketLastEnd,
+        rocketInMyDiscardAtMyTurnStart: newRocketTurnStart,
       },
       `回合結束，換 ${players[nextIdx].name} 行動。`,
       null

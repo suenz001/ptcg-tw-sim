@@ -54,6 +54,22 @@
   let selected = $state<Card | null>(null);
   let lightbox = $state<string | null>(null);
 
+  // v2.70: tag chip 列 — PTCG 常見跨 supertype 分類標籤。邏輯為 OR：命中任一選中
+  // tag 即顯示（與 category filter 以 AND 結合）。「超級進化」不是 scraper tag，而是
+  // runtime 依卡名前綴「超級」+ subtype='ex' 偵測（與 engine.prizesForKO 同邏輯），
+  // 這樣資料不用重跑 migration 也能立即篩。
+  type TagKey = 'ACE SPEC' | '古代' | '未來' | '太晶' | '超級進化';
+  const TAG_ORDER: TagKey[] = ['ACE SPEC', '古代', '未來', '太晶', '超級進化'];
+  let selectedTags = $state<Set<TagKey>>(new Set());
+
+  function isMegaEx(c: Card): boolean {
+    return c.supertype === 'Pokemon' && c.subtype === 'ex' && c.name.startsWith('超級');
+  }
+  function hasTag(c: Card, tag: TagKey): boolean {
+    if (tag === '超級進化') return isMegaEx(c);
+    return (c.tags ?? []).includes(tag);
+  }
+
   function toggleCategory(cat: CategoryKey) {
     const next = new Set(selectedCategories);
     if (next.has(cat)) next.delete(cat);
@@ -62,6 +78,15 @@
   }
   function clearCategories() {
     selectedCategories = new Set();
+  }
+  function toggleTag(tag: TagKey) {
+    const next = new Set(selectedTags);
+    if (next.has(tag)) next.delete(tag);
+    else next.add(tag);
+    selectedTags = next;
+  }
+  function clearTags() {
+    selectedTags = new Set();
   }
 
   function openLightbox(url: string) { lightbox = url; }
@@ -76,8 +101,15 @@
     if (data.mode !== 'set') return [];
     const q = query.trim().toLowerCase();
     const cats = selectedCategories;
+    const tags = selectedTags;
     return setCards.filter((c) => {
       if (cats.size > 0 && !cats.has(cardCategory(c))) return false;
+      // tag filter: OR across selected tags
+      if (tags.size > 0) {
+        let any = false;
+        for (const t of tags) { if (hasTag(c, t)) { any = true; break; } }
+        if (!any) return false;
+      }
       if (!q) return true;
       return (
         c.name.toLowerCase().includes(q) ||
@@ -214,6 +246,23 @@
         >{CATEGORY_LABEL[cat]}</button>
       {/each}
     </div>
+    <div class="filters tagFilters" role="group" aria-label="標籤篩選（可複選）">
+      <span class="tagLabel">標籤：</span>
+      <button
+        class="filter filter-tag"
+        class:active={selectedTags.size === 0}
+        onclick={clearTags}
+        title="清除所有標籤篩選"
+      >不限</button>
+      {#each TAG_ORDER as tag (tag)}
+        <button
+          class="filter filter-tag"
+          class:active={selectedTags.has(tag)}
+          onclick={() => toggleTag(tag)}
+          title="點一次選取、點兩次取消"
+        >{tag}</button>
+      {/each}
+    </div>
   </div>
 
   <div class="grid">
@@ -257,6 +306,17 @@
             </p>
             {#if selected.evolvesFrom}
               <p class="evo">從「{selected.evolvesFrom}」進化</p>
+            {/if}
+
+            {#if (selected.tags && selected.tags.length) || isMegaEx(selected)}
+              <p class="tagChips">
+                {#each selected.tags ?? [] as t}
+                  <span class="tagChip">{t}</span>
+                {/each}
+                {#if isMegaEx(selected)}
+                  <span class="tagChip">超級進化</span>
+                {/if}
+              </p>
             {/if}
 
             {#if selected.abilities?.length}
@@ -548,6 +608,27 @@
     color: #fff;
     border-color: #1a1a1a;
   }
+  /* tag filter — 次要欄，視覺上比分類 chip 再淡一階 */
+  .tagFilters {
+    flex-basis: 100%;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .tagLabel {
+    color: #6b7280;
+    font-size: 0.85rem;
+    margin-right: 0.2rem;
+  }
+  .filter-tag {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.82rem;
+    color: #4b5563;
+  }
+  .filter-tag.active {
+    background: #6366f1;
+    color: #fff;
+    border-color: #6366f1;
+  }
 
   .grid {
     max-width: 1200px;
@@ -743,6 +824,21 @@
     color: #666;
     font-size: 0.9rem;
     margin: 0.25rem 0 0.75rem;
+  }
+  .tagChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin: 0.25rem 0 0.75rem;
+  }
+  .tagChip {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    background: #eef2ff;
+    color: #4338ca;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 500;
   }
   .detailInfo h3 {
     font-size: 0.95rem;

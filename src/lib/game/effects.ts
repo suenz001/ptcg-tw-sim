@@ -9298,10 +9298,18 @@ regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
 // ---- 火箭隊的阿波羅（Supporter）- 上回合火箭隊寶可夢 KO'd 才可用 ------------
 // 卡面：這張卡必須在上個對手的回合自己的「火箭隊的寶可夢」【昏厥】了才可使用。
 //       雙方手牌放回牌庫重洗。然後抽牌：自己 5 張，對手 3 張。
-// Gate：復用 rocketKoLastTurn 旗標（此次新增，類似 v1.95 self-KO 特性的 flag）。
-//   實際新增較複雜；為維持 scope，這版先以「對手上回合造成過任何自己寶可夢 KO」為判定
-//   （即沿用 opponentKoedLastTurn 類旗標若存在），否則 always true。
-//   （Leon 在後續對戰時觀察若有誤判再收斂。）
+// v2.70 gate：套用與「不公印章」相同的快照對比手法，但比的是
+//   「自己棄牌堆中火箭隊寶可夢數量」而不是「對手獎賞張數」。
+//   engine END_TURN 時分別快照：
+//     rocketInMyDiscardAtMyLastTurnEnd[aIdx] = 剛結束回合方的棄牌堆中火箭隊寶可夢數
+//     rocketInMyDiscardAtMyTurnStart[nextIdx] = 即將開始回合方的棄牌堆中火箭隊寶可夢數
+//   gate：turnStart > lastEnd → 對手上個回合我方有火箭隊寶可夢被擊倒（棄牌堆變多）。
+//   這樣能避開「自己回合內自 KO」誤觸發（turnStart 已鎖定，自 KO 只影響當下數而不影響快照）。
+regG('火箭隊的阿波羅', (st, idx) => {
+  const lastEnd = st.rocketInMyDiscardAtMyLastTurnEnd?.[idx] ?? 0;
+  const turnStart = st.rocketInMyDiscardAtMyTurnStart?.[idx] ?? 0;
+  return turnStart > lastEnd;
+});
 reg('火箭隊的阿波羅', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
   st = addLog(st, '火箭隊的阿波羅：雙方手牌洗回牌庫，自己抽 5 / 對手抽 3', idx);
@@ -9501,23 +9509,23 @@ regR('rocket-ariados-attach-self', (st, idx, iids, params, pool) => {
   });
 });
 
-// ---- 火箭隊的謎擬Ｑ｜扮晶晶酒（copy-attack, v2.57） -------------------------
+// ---- 火箭隊的謎擬Ｑ｜扮晶晶酒（copy-attack, v2.57／v2.70） -----------------
 // 卡面原文：選擇1個對手的戰鬥場的「太晶」寶可夢持有的招式，作為這個招式使用。
 //
-// 實裝策略（務實版）：
+// 實裝策略（v2.57 務實版）：
 //   AttackPreFn 是同步的，無法在攻擊中途彈 UI 讓玩家挑招式。
 //   因此採「自動挑選」路線 — 只考慮對手戰鬥場，若為太晶寶可夢：
-//     (1) 過濾掉無傷害的招式（damage 為空或 0）
-//     (2) 剩餘招式中挑「印刷傷害最高」的
-//     (3) 若全部都沒印刷傷害 → 挑第一招（純效果招式亦可觸發，但本實裝僅回傳 damage=0）
-//   對手非太晶 / 無戰鬥場 → log 並回傳 damage=0。
+//     (1) 挑「印刷傷害最高」的招式（解析前導整數；全 0 則退回第一招）。
+//     (2) 非太晶 / 無戰鬥場 → log 並回傳 damage=0。
 //
-// 已知限制（v2.57）：
-//   - 不會遞迴觸發被複製招式的 regPre／regPost 效果（避免複雜的 engine 遞迴 + 無窮展開）。
-//     → 只取「印刷基礎傷害」，弱點／抵抗力／附加效果仍依 engine 正常流程計算。
-//   - 若對手太晶寶可夢有多招，使用者無法手動挑 — 自動選最高傷害。
-//   - 若複製的招式帶 "+N" / "×N" 等非純數字字樣，只解析前導整數。
-regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool) => {
+// v2.70 修正（Leon 回報）：萬葉陣雨（= 基礎 30 + 雙方出場能量 × 30）用扮晶晶酒
+//   複製只出 30 點傷害，因為舊版只解析「印刷的前導整數」。這版改成：
+//   1) 遞迴呼叫被複製招式的 ATTACK_PRE，取回正確 damage + skipWeakRes / skipDefEffects。
+//   2) 將被複製的 effectKey 存到 state.pendingCopyAttackKey，好讓下面的 regPost 能
+//      轉接呼叫被複製招式的 ATTACK_POST（處理 pendingSelection 類附加效果）。
+//   3) 若被複製招式沒有註冊 PRE，維持 v2.57 路徑（解析印刷傷害）。
+//   引擎仍會自己走弱點／抵抗／道具 +N 那段流程；這裡只接 PRE/POST 附加效果層。
+regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppActive = state.players[dIdx].active;
   if (!oppActive) {
@@ -9547,8 +9555,36 @@ regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool) => {
       pickedDmg = d;
     }
   }
-  const s = addLog(state, `扮晶晶酒：扮演 ${oppCard.name} 的「${picked.name}」（傷害 ${pickedDmg}，不含附加效果）`, aIdx);
+  // 被複製招式的 effectKey（與 engine.ts 的 effectKey 組法一致）
+  const copiedKey = `${oppCard.name}|${picked.name}`;
+  let s = addLog(state, `扮晶晶酒：扮演 ${oppCard.name} 的「${picked.name}」`, aIdx);
+  s = { ...s, pendingCopyAttackKey: copiedKey };
+
+  const copiedPre = ATTACK_PRE.get(copiedKey);
+  if (copiedPre) {
+    // 遞迴呼叫被複製招式 PRE — 傷害以 PRE 回傳為準（涵蓋 ×能量 / +條件 等動態計算）。
+    // 傳 action，好讓某些 PRE 使用 action.targetIid 等資訊（即使 UI 本身不會開新選單）。
+    const sub = copiedPre(s, aIdx, pool, action);
+    return {
+      state: sub.state,
+      damage: sub.damage,
+      skipWeakRes: sub.skipWeakRes,
+      skipDefEffects: sub.skipDefEffects,
+    };
+  }
+  // 被複製招式沒有註冊 PRE → 走 v2.57 舊路徑：解析印刷傷害
   return { state: s, damage: pickedDmg };
+});
+
+// POST 轉接：engine 走完傷害施加後，查本招式的 POST → 這邊將 state.pendingCopyAttackKey
+// 轉去呼叫被複製招式的 POST（例如 pendingSelection 類附加效果），完成後清除旗標。
+regPost('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool) => {
+  const key = state.pendingCopyAttackKey;
+  const cleared: GameState = { ...state, pendingCopyAttackKey: undefined };
+  if (!key) return cleared;
+  const copiedPost = ATTACK_POST.get(key);
+  if (!copiedPost) return cleared;
+  return copiedPost(cleared, aIdx, pool);
 });
 
 // ---- Known gap 特性 stubs（log only）--------------------------------------

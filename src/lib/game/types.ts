@@ -314,6 +314,29 @@ export interface GameState {
    * 初始值 [6, 6]。
    */
   oppPrizesAtMyTurnStart?: [number, number];
+  /**
+   * v2.70：我方上次結束自己回合時，自己棄牌堆中「火箭隊的」寶可夢數量的快照 [P1, P2]。
+   * 與 rocketInMyDiscardAtMyTurnStart 對比，偵測「對手的回合內我方有火箭隊寶可夢被擊倒」。
+   * 用於「火箭隊的阿波羅」等 gate 條件（類似不公印章，但只認火箭隊寶可夢）。
+   * 只計 supertype === 'Pokemon' 且 name 以「火箭隊的」開頭的卡片。
+   * 初始值 [0, 0]（遊戲開始時棄牌堆為空）。
+   */
+  rocketInMyDiscardAtMyLastTurnEnd?: [number, number];
+  /**
+   * v2.70：我方「這個回合開始時」自己棄牌堆中「火箭隊的」寶可夢數量的快照 [P1, P2]。
+   * 與 rocketInMyDiscardAtMyLastTurnEnd 對比即可判定「對手上個回合造成過火箭隊寶可夢昏厥」：
+   *   turnStart > lastEnd → 對手的回合間自己的火箭隊寶可夢被擊倒 → Apollo 可用
+   * 於 END_TURN 時由「下一個 activePlayer」快照其棄牌堆的火箭隊寶可夢數。
+   * 初始值 [0, 0]。
+   */
+  rocketInMyDiscardAtMyTurnStart?: [number, number];
+  /**
+   * v2.70：copy-attack（例如 火箭隊的謎擬Ｑ｜扮晶晶酒）在 ATTACK_PRE 階段
+   * 記下被複製招式的 effectKey（格式 `對手卡名|招式名`），好讓 ATTACK_POST
+   * 可以轉接呼叫被複製招式的 POST（包含 pendingSelection 類附加效果）。
+   * 必須在呼叫方自己的 POST 最末清空，否則下一招會重複觸發。
+   */
+  pendingCopyAttackKey?: string;
 }
 
 export interface LogEntry {

@@ -1,9 +1,169 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.69)  
+> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.70)  
 > 執行者：Claude Opus 4.7 (Anthropic)  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## Session clever-optimistic-ritchie (v2.70) — /cards tag 篩選 / 特性致 KO 獎賞 / 尖釘鎮道館 gate / 扮晶晶酒附加效果 / 雙人同組 / Apollo gate
+
+### 問題集（8 項）
+
+Leon 本回合指名 8 件事（#275–#282）：
+
+1. **#275**：`/cards` 檢索系統目前沒有「tag」篩選 — ACE SPEC / 古代 / 未來 / 太晶寶可夢 /
+   訓練家的寶可夢 / 超級進化 等標籤都無法當條件過濾。
+2. **#276**：寶可夢因「特性」HP 歸零被擊倒時（冰冷之帳 / 腎上腺腦力 / 咒詛炸彈 等），
+   對手沒拿到獎賞。Leon 定的規則：「只要寶可夢是扣血致死或是敘述說是昏厥，對手都可以
+   取得獎賞卡」。
+3. **#277**：尖釘鎮道館（Stadium）目前牌庫沒「瑪俐的」寶可夢就完全不能用；Leon 希望放寬，
+   沒有也能用（至少可以藉此確認牌庫內容、重洗牌庫）。
+4. **#278**：火箭隊的謎擬Ｑ「扮晶晶酒」複製對手招式時，只算了基礎傷害；實戰 Leon 撞到
+   碧草面具ex 的「萬葉陣雨」(30 + 場上雙方能量數 ×30) 被複製後只打 30。
+5. **#279**：本機／線上雙人對戰要求兩人牌組不同 — Leon 希望放寬，兩人可以選同一副牌。
+6. **#280**：v2.69 AI_HANDOFF 把「火箭隊的蘭斯 alt 版」誤寫成「火箭隊的羅傑」（幻覺卡名），
+   需修正。
+7. **#281**：本版的 build + bump v2.70 + AI_HANDOFF + commit/push。
+8. **#282**：火箭隊的阿波羅 gate bug — 卡面寫「這張卡必須在上個對手的回合自己的『火箭
+   隊的寶可夢』【昏厥】了才可使用」，但現行引擎任何時候都能打；機制類似不公印章，但限
+   定「火箭隊的寶可夢」昏厥才觸發。
+
+### 修法總覽
+
+#### #275 — /cards tag 篩選
+
+`src/routes/cards/+page.svelte`：
+- 新增 `tagFilter` state（single-select），預設 `null`。
+- 掃卡池後彙整「出現過的 tags」清單（Set），排序後當選項。
+- filter pipeline 加 tag 比對：`(!tagFilter || card.tags?.includes(tagFilter))`。
+- UI：在 `/cards` 首頁檢索列加下拉選單，選項為 `['全部', ...distinctTags]`。
+- 注意：「超級進化」不在 `tags` 欄而是 `subtype`，所以要額外把 subtype 加進可選值列表並
+  在 filter 判斷一起處理。
+
+#### #276 — 特性致 KO 獎賞（根源修）
+
+根因：`effects.ts` 裡 checkup 階段的「特性放置傷害」（如冰冷之帳）發現 KO 時，走的是
+`pendingPrizes` 機制（讓 activePlayer 結束回合後開 TAKE_PRIZES UI 取獎）。但這有兩個
+問題：
+- `pendingPrizes` 只計「對 activePlayer 有利」的獎賞；當勝方並非 activePlayer（例如
+  對手回合的 checkup 擊倒我方備戰）就算錯對象。
+- 「pendingPrizes += aIdxKOPrizes」寫死只計 aIdx 側 KO，另一側自殘的 KO 全忽略。
+
+主修（`src/lib/game/engine.ts` 冰冷之帳 checkup 區塊 line 1898–2010）：
+- `aIdxKOPrizes + aIdxKOActiveDied` 改成 `koPrizesByOwner: [number, number]` 雙側陣列
+  與 `activeDiedByOwner: [boolean, boolean]`。
+- 兩個 `if (i === aIdx)` 分支取消 — 不論哪一側寶可夢被 KO 都累積 `koPrizesByOwner[i]`。
+- KO 結算改 `selfKOInstance` 風格直接取獎：`winner = 1 - i`，從 `winner.prizes.slice(0, take)`
+  轉到 `winner.hand`，同步 log（「X 有寶可夢被擊倒，Y 取得 N 張獎勵牌」+「Y 取走 N 張
+  獎勵牌（剩餘 M 張）」）。
+- 勝利條件：勝方獎賞全取完 → `game-over`；失敗方戰鬥+備戰皆空 → `game-over`。
+- 舊路徑 `return { ...state, pendingPrizes: (state.pendingPrizes ?? 0) + aIdxKOPrizes }` 
+  刪除（不再延後到 TAKE_PRIZES）。
+
+#### #277 — 尖釘鎮道館 gate 放寬
+
+`src/lib/game/engine.ts` handlePlaying `stadiumCard.name === '尖釘鎮道館'` 分支：
+- 刪除 `if (cand.length === 0) return addLog(..., '牌庫沒有「瑪俐的」寶可夢')` 早退。
+- `pendingSelection.minCount` 從 `1` 改為 `0`（允許空選擇 → 只重洗牌庫）。
+
+`src/lib/game/effects/cards/stadiums.ts` `spikemuth-marnie-search` resolver：
+- `picked.length === 0` 時 log 改成「未選到『瑪俐的』寶可夢（重洗牌庫）」而非「未選擇」
+  誤導字樣；仍照原邏輯 hand concat + shuffle。
+
+#### #278 — 扮晶晶酒複製附加效果
+
+根因：舊版 `regPre('火箭隊的謎擬Ｑ|扮晶晶酒', ...)` 只算基礎傷害，等於完全沒複製 PRE
+hook（hp 條件、能量計、coin flip 等全丟掉）。
+
+修法（`src/lib/game/effects.ts`）：
+- PRE 改為遞迴呼叫被複製招式的 PRE：
+  ```ts
+  const copiedKey = `${oppCard.name}|${picked.name}`;
+  s = { ...s, pendingCopyAttackKey: copiedKey };  // 供 POST 用
+  const copiedPre = ATTACK_PRE.get(copiedKey);
+  if (copiedPre) {
+    const sub = copiedPre(s, aIdx, pool, action);
+    return { state: sub.state, damage: sub.damage,
+             skipWeakRes: sub.skipWeakRes, skipDefEffects: sub.skipDefEffects };
+  }
+  return { state: s, damage: pickedDmg };  // 沒註冊 PRE 的招式就用卡面 dmg
+  ```
+- POST 補 dispatch：把 state 內的 `pendingCopyAttackKey` 拿出來找 `ATTACK_POST` 呼叫；
+  不存在就清空旗標返回。保證有 POST 的附加效果（抽牌/附能量/放傷指示物）也會跑。
+- `src/lib/game/types.ts` GameState 加欄位：
+  `pendingCopyAttackKey?: string;` — PRE 寫入、POST 清除，同回合內短生命。
+
+#### #279 — 本機／線上雙人允許相同牌組
+
+`src/routes/game/+page.svelte` 開局設定：
+- 移除 `deckA === deckB` 警告訊息與 `disabled` 旗標；改成允許相同選擇。
+- `createGame` 本來就對每張卡生成獨立 `iid`（8-char 隨機），兩副相同 preset 不會碰撞。
+- 驗證：grep createGame + generateIid — 無 deck-id 當 key 的路徑，iid 層級已隔離。
+
+#### #280 — 修正 v2.69 AI_HANDOFF 幻覺卡名
+
+`AI_HANDOFF.md` v2.69 段 line 81：
+- 「火箭隊的羅傑（SV10 id 12928）」→ 改成「火箭隊的蘭斯 alt 版（SV10 id 12928 — 同
+  名同卡，僅稀有度不同；v2.69 AI_HANDOFF 曾誤寫成「火箭隊的羅傑」，v2.70 修正）」。
+- 根因：v2.69 實作 #271 時記憶幻覺一個不存在的卡名；Leon 撞到才抓出。
+- memory feedback_card_identification 再次驗證 — 卡面任何模糊點都要回 scraper json 核對。
+
+#### #282 — 火箭隊的阿波羅 gate
+
+設計：Apollo 啟用條件「上個對手回合自己的『火箭隊的寶可夢』昏厥」— pattern 與 #112
+不公印章（對手上回合取獎 → 我可用）同構，改用「火箭隊的寶可夢在我方棄牌堆數量」的
+雙 snapshot 比對。
+
+`src/lib/game/types.ts` GameState 加欄位：
+```ts
+rocketInMyDiscardAtMyLastTurnEnd?: [number, number];  // 我上次回合結束時快照
+rocketInMyDiscardAtMyTurnStart?: [number, number];    // 我這回合開始時快照
+```
+
+`src/lib/game/engine.ts` END_TURN 區塊（在 oppPrizes 兩個快照之後）：
+```ts
+const countRocketPokeInDiscard = (pl: PlayerState): number =>
+  pl.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.name?.startsWith('火箭隊的');
+  }).length;
+// aIdx（剛結束回合方）→ 寫 LastTurnEnd[aIdx]
+// nextIdx（即將開始回合方）→ 寫 TurnStart[nextIdx]
+newRocketLastEnd[aIdx] = countRocketPokeInDiscard(players[aIdx]);
+newRocketTurnStart[nextIdx] = countRocketPokeInDiscard(players[nextIdx]);
+```
+
+`src/lib/game/effects.ts`：新增 `regG('火箭隊的阿波羅', ...)` 於既有 resolver 前：
+```ts
+regG('火箭隊的阿波羅', (st, idx) => {
+  const lastEnd = st.rocketInMyDiscardAtMyLastTurnEnd?.[idx] ?? 0;
+  const turnStart = st.rocketInMyDiscardAtMyTurnStart?.[idx] ?? 0;
+  return turnStart > lastEnd;  // 對手的回合間自己的火箭隊寶可夢被擊倒
+});
+```
+
+為何正確：自 KO（我自己回合打自殘招導致自家火箭隊寶可夢昏厥）會進 LastTurnEnd 但
+nextIdx 換成對手時不更新 TurnStart[me]，下一個我方回合開始時 TurnStart[me] = LastEnd[me]
+→ gate 回 false（與不公印章同理）。
+
+> **Bug catch during build**：我最初寫 `supertype === 'Pokémon'`（帶重音 é），但專案
+> Supertype 型別實際是 `'Pokemon' | 'Trainer' | 'Energy'`（無重音）。若未改正 filter
+> 永遠回 0、gate 永遠 false。已於同版修正為 `'Pokemon'`（engine.ts + types.ts 註解）。
+
+### 驗證
+
+`npm run build`（/tmp/ptcg-work/repo）：✓ 無 TS/svelte 錯誤；client ✓ built in 13.02s。
+
+### 未竟事項
+
+- **#276 未全面掃**：冰冷之帳（checkup 特性放傷）已修；「腎上腺腦力」「咒詛炸彈」這
+  類 regR-放傷 resolver 如果獨立用 `prizesForKO` 計自家 side → pendingPrizes 也要同步
+  檢查（本版只先處理了 Leon 實戰撞到的冰冷之帳）。實戰若再撞到另一張特性致 KO 獎賞
+  錯，需回頭檢查 `regR` / `regPost` 有沒有類似 pattern。
+- **#278 POST dispatch**：目前看過的被複製招式都沒 regPost，但萬葉陣雨等若未來補 POST
+  邏輯，`pendingCopyAttackKey` 會自動生效；尚未實戰驗證 POST 路徑。
 
 ---
 
@@ -78,7 +238,7 @@ export function canPlaySupporterOnFirstTurn(card: Card): boolean {
 兩處支援者 gate 都套（applyAction PLAY_TRAINER + getPlayableTrainers）：只要該卡
 rulesText 命中，即使先攻玩家 T1 也准打。現存命中卡（整個卡池掃過 `rulesText`）：
 - 火箭隊的蘭斯（SV10 id 12845 / MC id 17206）
-- 火箭隊的羅傑（SV10 id 12928 — 同樣敘述，同樣是火箭隊系 supporter）
+- 火箭隊的蘭斯 alt 版（SV10 id 12928 — 同名同卡，僅稀有度不同；v2.69 AI_HANDOFF 曾誤寫成「火箭隊的羅傑」，v2.70 修正）
 - 丹瑜（MC id 17186 — rulesText 版本用「可在」而非「也可使用」，regex 都抓）
 
 附帶：`src/lib/game/effects.ts` 內火箭隊的蘭斯實裝的 stale comment 清掉（v2.43 類
