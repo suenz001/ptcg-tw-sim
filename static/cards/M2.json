@@ -516,7 +516,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "噴火龍ex",
+    "evolvesFrom": "火恐龍",
     "illustrator": "takuyoa",
     "regulationMark": "I",
     "stage": "Stage1"
@@ -2074,7 +2074,7 @@
       "type": "Grass",
       "value": "×2"
     },
-    "evolvesFrom": "巨牙鯊",
+    "evolvesFrom": "利牙魚",
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "stage": "Stage2"
@@ -3006,7 +3006,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "長耳兔",
+    "evolvesFrom": "捲捲耳",
     "illustrator": "5ban Graphics",
     "regulationMark": "I",
     "stage": "Stage2"

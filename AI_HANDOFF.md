@@ -1,9 +1,70 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 (v2.76)  
+> 最後更新：2026-04-23 (v2.77)  
 > 執行者：Gemini（Google DeepMind）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.77 — 超級進化ex evolvesFrom 全面修正（94 張卡）
+
+### 問題
+所有超級進化（Mega）ex 卡的 evolvesFrom 指向對應的 ex 卡（如超級路卡利歐ex → 路卡利歐ex），
+但正確應該指向前一階的普通寶可夢（如超級路卡利歐ex → 利歐路）。
+
+### 規則釐清
+在 PTCG 中，超級進化 ex 和普通 ex 是**同一階段的替代版本**，不是互相進化的關係：
+```
+利歐路 → 路卡利歐ex      (Stage1)
+利歐路 → 超級路卡利歐ex   (Stage1)
+```
+而不是：
+```
+利歐路 → 路卡利歐ex → 超級路卡利歐ex  ← 這是錯的！
+```
+
+### 主修
+
+分 3 階段修正全部 94 張超級進化 ex 卡：
+
+1. **Phase 1**（42 張）：跟蹤 evolvesFrom 鏈到非 ex 前階。
+2. **Phase 2**（21 張）：從官網 re-fetch 進化鏈，跳過所有 ex/GX 變體。
+3. **Phase 3**（8 + 6 + 2 張）：手動處理分支進化（沙奈朵/艾路雷朵、呆殼獸/呆呆王等）。
+
+修正範例：
+| 超級進化卡 | 修正前 evo | 修正後 evo | stage |
+|---|---|---|---|
+| 超級路卡利歐ex | 路卡利歐ex | 利歐路 | Stage1 |
+| 超級甲賀忍蛙ex | 甲賀忍蛙ex | 呱頭蛙 | Stage1 |
+| 超級噴火龍X/Yex | 噴火龍ex | 火恐龍 | Stage1/2 |
+| 超級耿鬼ex | 耿鬼ex | 鬼斯通 | Stage1 |
+| 超級妙蛙花ex | 妙蛙花ex | 妙蛙草 | Stage1 |
+| 超級快龍ex | 快龍ex | 哈克龍 | Stage1 |
+| 超級沙奈朵ex | 沙奈朵ex | 奇魯莉安 | Stage1 |
+| 超級艾路雷朵ex | 沙奈朵ex | 奇魯莉安 | Stage1 |
+| 超級皮可西ex | 皮可西ex | 皮皮 | Stage1 |
+| 超級呆殼獸ex | 呆呆王ex | 呆呆獸 | Stage1 |
+
+### 驗證
+- `npm run build` ✓
+- 36 種超級進化物種全部 evolvesFrom 正確（0 issues）
+- 無 Mega 卡的 evolvesFrom 仍指向 ex 卡
+
+### 變更檔案
+```
+新增：
+  scripts/fix-mega-evo.mjs          # Phase 1
+  scripts/fix-mega-evo-v2.mjs       # Phase 2
+  scripts/fix-mega-evo-v3.mjs       # Phase 2 base-ex fix
+  scripts/fix-mega-final.mjs        # Phase 3
+
+修改：
+  src/lib/version.ts                # 2.76 → 2.77
+  AI_HANDOFF.md
+  static/cards/M-P.json, M1L.json, M1S.json, M2.json,
+  M2a.json, M3.json, M4.json, MC.json
+```
 
 ---
 

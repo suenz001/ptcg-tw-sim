@@ -1026,7 +1026,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "噴火龍ex",
+    "evolvesFrom": "火恐龍",
     "illustrator": "takuyoa",
     "stage": "Stage1"
   },
@@ -1806,7 +1806,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "超級沙奈朵ex",
+    "evolvesFrom": "奇魯莉安",
     "illustrator": "5ban Graphics",
     "stage": "Stage1"
   },
@@ -2364,7 +2364,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "超級噴火龍Xex",
+    "evolvesFrom": "火恐龍",
     "illustrator": "Ultimateinudog",
     "stage": "Stage2"
   },
@@ -2541,7 +2541,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "呆呆王ex",
+    "evolvesFrom": "呆呆獸",
     "illustrator": "5ban Graphics",
     "stage": "Stage1"
   },
@@ -3226,7 +3226,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "甲賀忍蛙ex",
+    "evolvesFrom": "呱頭蛙",
     "illustrator": "5ban Graphics",
     "stage": "Stage1"
   },
