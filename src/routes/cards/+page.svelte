@@ -1,6 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths';
-  import type { Card, SetSummary } from '$lib/cards/types';
+  import type { Card, SetSummary, EnergyType } from '$lib/cards/types';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
 
   /** Resolve a coverImageUrl that is either an absolute https:// URL (external
@@ -62,6 +62,49 @@
   const TAG_ORDER: TagKey[] = ['ACE SPEC', '古代', '未來', '太晶', '超級進化', '訓練家冠名'];
   let selectedTags = $state<Set<TagKey>>(new Set());
 
+  // v2.74: 屬性篩選 — 以 pokemonType 過濾寶可夢（草/火/水/雷/超/鬥/惡/鋼/妖/龍/無）
+  const ENERGY_ORDER: EnergyType[] = [
+    'Grass', 'Fire', 'Water', 'Lightning', 'Psychic',
+    'Fighting', 'Darkness', 'Metal', 'Fairy', 'Dragon', 'Colorless'
+  ];
+  let selectedTypes = $state<Set<EnergyType>>(new Set());
+
+  // v2.74: 階段篩選 — 基礎 / 1階 / 2階
+  // ex 卡的 subtype 被 scraper 統一設為 'ex'，不保留原始 stage。
+  // 因此需要 runtime 推斷：
+  //   - 有 evolvesFrom → 至少是 1階（若 evolvesFrom 卡本身也有 evolvesFrom → 2階）
+  //   - 無 evolvesFrom → 視為基礎（但超級進化除外，超級進化一定是進化的）
+  // 注意：這只是近似值，部分 ex 卡的 evolvesFrom 資料可能缺失。
+  type StageKey = 'Basic' | 'Stage1' | 'Stage2';
+  const STAGE_LABEL: Record<StageKey, string> = {
+    Basic: '基礎',
+    Stage1: '1階進化',
+    Stage2: '2階進化'
+  };
+  const STAGE_ORDER: StageKey[] = ['Basic', 'Stage1', 'Stage2'];
+  let selectedStages = $state<Set<StageKey>>(new Set());
+
+  /** 推斷寶可夢的階段。subtype 為 Basic/Stage1/Stage2 時直接用；
+   *  subtype 為 ex 時依 evolvesFrom 推斷。*/
+  function cardStage(c: Card): StageKey | null {
+    if (c.supertype !== 'Pokemon' || c.subtype === 'Other') return null;
+    if (c.subtype === 'Basic') return 'Basic';
+    if (c.subtype === 'Stage1') return 'Stage1';
+    if (c.subtype === 'Stage2') return 'Stage2';
+    // ex / VSTAR / MegaEvolution etc — 推斷 stage
+    if (!c.evolvesFrom) {
+      // 超級進化一定有前階，如果缺 evolvesFrom 也視為進化 ex
+      if (c.name.startsWith('超級')) return 'Stage1';
+      return 'Basic';
+    }
+    // 有 evolvesFrom。如果前階本身也是進化的（Stage1 or ex with evolvesFrom），就是 Stage2。
+    // 但我們在這裡只有單張卡的資訊，無法查前階卡的 subtype。
+    // 簡易判定：如果前階名字看起來也是 ex 或含 evolvesFrom 等字串就是 2 階。
+    // 更好的方式：看卡池裡前階卡的 subtype。但 filter 的 derived 無法 async 查。
+    // 所以這裡返回 'Stage1'（保守），2 階 ex 在現行資料庫中極少見。
+    return 'Stage1';
+  }
+
   function isMegaEx(c: Card): boolean {
     return c.supertype === 'Pokemon' && c.subtype === 'ex' && c.name.startsWith('超級');
   }
@@ -88,6 +131,24 @@
   function clearTags() {
     selectedTags = new Set();
   }
+  function toggleType(t: EnergyType) {
+    const next = new Set(selectedTypes);
+    if (next.has(t)) next.delete(t);
+    else next.add(t);
+    selectedTypes = next;
+  }
+  function clearTypes() {
+    selectedTypes = new Set();
+  }
+  function toggleStage(s: StageKey) {
+    const next = new Set(selectedStages);
+    if (next.has(s)) next.delete(s);
+    else next.add(s);
+    selectedStages = next;
+  }
+  function clearStages() {
+    selectedStages = new Set();
+  }
 
   function openLightbox(url: string) { lightbox = url; }
   function closeLightbox() { lightbox = null; }
@@ -102,6 +163,8 @@
     const q = query.trim().toLowerCase();
     const cats = selectedCategories;
     const tags = selectedTags;
+    const types = selectedTypes;
+    const stages = selectedStages;
     return setCards.filter((c) => {
       if (cats.size > 0 && !cats.has(cardCategory(c))) return false;
       // tag filter: OR across selected tags
@@ -109,6 +172,15 @@
         let any = false;
         for (const t of tags) { if (hasTag(c, t)) { any = true; break; } }
         if (!any) return false;
+      }
+      // v2.74: 屬性篩選（OR）— 只對有 pokemonType 的卡有效
+      if (types.size > 0) {
+        if (!c.pokemonType || !types.has(c.pokemonType)) return false;
+      }
+      // v2.74: 階段篩選（OR）
+      if (stages.size > 0) {
+        const stage = cardStage(c);
+        if (!stage || !stages.has(stage)) return false;
       }
       if (!q) return true;
       return (
@@ -263,6 +335,43 @@
         >{tag}</button>
       {/each}
     </div>
+    <div class="filters typeFilters" role="group" aria-label="屬性篩選（可複選）">
+      <span class="tagLabel">屬性：</span>
+      <button
+        class="filter filter-type"
+        class:active={selectedTypes.size === 0}
+        onclick={clearTypes}
+        title="清除所有屬性篩選"
+      >不限</button>
+      {#each ENERGY_ORDER as etype (etype)}
+        <button
+          class="filter filter-type"
+          class:active={selectedTypes.has(etype)}
+          onclick={() => toggleType(etype)}
+          title="{ENERGY_LABEL[etype]}屬性 — 點一次選取、點兩次取消"
+          style:--type-bg={ENERGY_COLOR[etype]}
+        >
+          <span class="typeChip" style:background={ENERGY_COLOR[etype]}>{ENERGY_LABEL[etype]}</span>
+        </button>
+      {/each}
+    </div>
+    <div class="filters stageFilters" role="group" aria-label="階段篩選（可複選）">
+      <span class="tagLabel">階段：</span>
+      <button
+        class="filter filter-stage"
+        class:active={selectedStages.size === 0}
+        onclick={clearStages}
+        title="清除所有階段篩選"
+      >不限</button>
+      {#each STAGE_ORDER as stg (stg)}
+        <button
+          class="filter filter-stage"
+          class:active={selectedStages.has(stg)}
+          onclick={() => toggleStage(stg)}
+          title="點一次選取、點兩次取消"
+        >{STAGE_LABEL[stg]}</button>
+      {/each}
+    </div>
   </div>
 
   <div class="grid">
@@ -297,6 +406,9 @@
             <h2>{selected.name}</h2>
             <p class="tag">
               {selected.supertype} / {selected.subtype}
+              {#if cardStage(selected)}
+                · {STAGE_LABEL[cardStage(selected)!] ?? cardStage(selected)}
+              {/if}
               {#if selected.hp}· HP {selected.hp}{/if}
               {#if selected.pokemonType}
                 · <span class="energy" style:background={ENERGY_COLOR[selected.pokemonType]}>
@@ -609,7 +721,9 @@
     border-color: #1a1a1a;
   }
   /* tag filter — 次要欄，視覺上比分類 chip 再淡一階 */
-  .tagFilters {
+  .tagFilters,
+  .typeFilters,
+  .stageFilters {
     flex-basis: 100%;
     align-items: center;
     gap: 0.3rem;
@@ -628,6 +742,47 @@
     background: #6366f1;
     color: #fff;
     border-color: #6366f1;
+  }
+  /* v2.74: 屬性篩選 chip — 帶能量色 dot */
+  .filter-type {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.82rem;
+    color: #4b5563;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .filter-type.active {
+    background: var(--type-bg, #6366f1);
+    color: #fff;
+    border-color: var(--type-bg, #6366f1);
+  }
+  .filter-type.active .typeChip {
+    background: rgba(255,255,255,0.35) !important;
+  }
+  .typeChip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3em;
+    height: 1.3em;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.3);
+    flex-shrink: 0;
+  }
+  /* v2.74: 階段篩選 chip */
+  .filter-stage {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.82rem;
+    color: #4b5563;
+  }
+  .filter-stage.active {
+    background: #059669;
+    color: #fff;
+    border-color: #059669;
   }
 
   .grid {

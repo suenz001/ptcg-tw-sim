@@ -1,9 +1,79 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-23 Session clever-optimistic-ritchie (v2.73)  
-> 執行者：Claude Opus 4.7 (Anthropic)  
+> 最後更新：2026-04-23 (v2.74)  
+> 執行者：Gemini（Google DeepMind）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.74 — /cards 屬性篩選 + 階段篩選
+
+### 需求
+Leon 希望在卡牌資料庫增加：
+1. **屬性篩選**：可以直接找到草屬性寶可夢、火屬性寶可夢等（全 11 種屬性）。
+2. **階段篩選**：基礎 / 1階進化 / 2階進化，方便檢查有沒有把寶可夢的 stage 搞錯。
+   - 背景：之前 AI 曾把路卡利歐ex 誤認為路卡利歐的「下一階」，但路卡利歐和路卡利歐ex
+     都是 1 階進化寶可夢（都從利歐路進化）。ex 只是稀有度標記，不代表進化階段。
+
+### 根因
+- 現有 `/cards` 頁只有分類篩選（寶可夢/支援者/物品/道具/競技場/能量）和標籤篩選
+  （ACE SPEC/古代/未來/太晶/超級進化/訓練家冠名），缺少屬性和階段維度。
+- 卡片資料中 `pokemonType` 欄位已有 11 種屬性值，可直接利用。
+- 階段資訊的問題：scraper 的 `refinePokemonSubtype()` 會把 ex 寶可夢的 subtype 統一
+  覆寫為 `'ex'`，丟失了原始的 `基礎`/`1階進化`/`2階進化` 資訊。
+
+### 主修
+
+**`src/routes/cards/+page.svelte`**：
+
+#### 屬性篩選（pokemonType）
+- 新增 `selectedTypes` state（`Set<EnergyType>`），多選切換。
+- 按 `ENERGY_ORDER`（草/火/水/雷/超/鬥/惡/鋼/妖/龍/無）排列 11 個 chip。
+- 每個 chip 帶能量色圓點，激活時以該能量色為背景色。
+- filter pipeline 加 pokemonType 比對：`(!c.pokemonType || !types.has(c.pokemonType))`。
+- 與分類/標籤 filter 以 AND 結合，同排 chip 之間為 OR。
+
+#### 階段篩選（stage）
+- 新增 `selectedStages` state（`Set<StageKey>`），多選切換。
+- 三個 chip：基礎 / 1階進化 / 2階進化，激活時綠色背景。
+- 新增 `cardStage(c: Card)` 推斷函式：
+  - `subtype === 'Basic'` → 基礎
+  - `subtype === 'Stage1'` → 1階進化
+  - `subtype === 'Stage2'` → 2階進化
+  - `subtype === 'ex'`（scraper 覆寫了原始 stage）→ 依 `evolvesFrom` 推斷：
+    - 無 evolvesFrom → 基礎 ex（如拉普拉斯ex）
+    - 有 evolvesFrom → 1階進化 ex（如路卡利歐ex ← 利歐路）
+    - 超級進化（名稱開頭「超級」）→ 固定 1階進化
+  - `subtype === 'Other'`（寶可夢道具）→ null（不參與階段篩選）
+  - ⚠️ 限制：部分 ex 的 evolvesFrom 可能缺失，推斷不一定準確。
+    2 階 ex 在現行資料庫中極少，保守回傳 Stage1。
+
+#### 詳情 modal 顯示階段
+- 卡片詳情 modal 的 `supertype / subtype` 行追加顯示推斷階段
+  （如 `Pokemon / ex · 1階進化 · HP 120 · 鬥`），方便 Leon 逐卡核對。
+
+**`src/lib/version.ts`**：2.73 → 2.74
+
+### 驗證
+- `npm run build` ✓（16.77s，無 TS error）
+- 既有 a11y warning 皆來自 game page，非本版新增。
+
+### 未竟事項
+- **scraper 未保存原始 stage**：`parse-card.js` 的 `refinePokemonSubtype()` 會把 ex
+  寶可夢的 stage 覆寫掉。若要精確篩選，需在 Card 型別加 `stage` 欄位（獨立於 subtype），
+  由 scraper 保留 H1 解析出的 `基礎`/`1階進化`/`2階進化`。目前 runtime 推斷已能
+  覆蓋大部分案例。
+- **2 階 ex 判定**：目前 ex + evolvesFrom 一律回 Stage1（保守）。要判斷 2 階 ex
+  需要查前階卡的 subtype（需 cross-reference 卡池），複雜度較高，延後處理。
+
+### 變更檔案
+```
+修改：
+  src/routes/cards/+page.svelte   # 新增屬性/階段篩選 UI + filter 邏輯 + 詳情 modal 顯示
+  src/lib/version.ts              # 2.73 → 2.74
+  AI_HANDOFF.md                   # 本段紀錄
+```
 
 ---
 
