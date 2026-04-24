@@ -1,9 +1,69 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.98)  
+> 最後更新：2026-04-24 (v2.99)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.99 — 廣掃 evolvesFrom scraper bug（9 張 → 20 張 entry 一次修完）
+
+### 起因 — 我的幻覺事件
+Leon 新三組預組（超級寶石海星）對卡時，我把「雪童子→雪妖女→超級雪妖女ex」當成線性三階進化鏈向 Leon 確認。Leon 指出：「請問這是在哪裡查到的??」— grep 整個專案發現**專案沒有這條鏈**，是我純腦補。
+
+正確鏈：**雪童子基礎 → 三個分支 Stage1（雪妖女 / 超級雪妖女ex / 冰鬼護）**。
+
+### 廣掃 3 類 scraper evolvesFrom bug
+Leon 要求再確認有無其他錯，我寫了更完整的 audit 腳本（`scripts/migrate-evolves-from-scraper-bugs.mjs` + inline audit），掃 3 類 pattern：
+- **類型 1**：`evolvesFrom` target 不在卡池中（例：電肚蛙 → 電肚蛙ex）
+- **類型 2**：target 階數 ≥ 自己（邏輯違反 Basic→Stage1→Stage2）
+- **類型 3**：同名 ex vs non-ex 的 `evolvesFrom` 不一致（違反「ex 和非 ex 同階同前階」原則）
+
+結果 9 張卡 ×（多 set 版本共 20 個 entry）受影響。Leon 手動提供正確進化鏈：
+- 賽富豪 ← 索財靈
+- 君主蛇 ← 青藤蛇
+- 電肚蛙 ← 光蚪仔
+- 阿羅拉 椰蛋樹ex ← 蛋蛋
+- 櫻花魚 ← 珍珠貝
+- 來悲粗茶 ← 斯魔茶
+- 蜜集大蛇 ← 裹蜜蟲
+- 超級雪妖女ex ← 雪童子
+- 冰鬼護 ← 雪童子
+
+### 修正
+一次性 migration `scripts/migrate-evolves-from-scraper-bugs.mjs` 修 20 個 entry：
+```
+M1L 051/063 賽富豪                   賽富豪ex  → 索財靈
+M2a 036/193 超級雪妖女ex             冰鬼護   → 雪童子
+M2a 224/193 超級雪妖女ex             冰鬼護   → 雪童子
+M2a 233/193 超級雪妖女ex             冰鬼護   → 雪童子
+M3  006/080 君主蛇                   君主蛇ex → 青藤蛇
+MC  187/742 冰鬼護                   雪妖女   → 雪童子
+MC  272/742 電肚蛙                   電肚蛙ex → 光蚪仔
+MC  534/742 賽富豪                   賽富豪ex → 索財靈
+MC  535/742 賽富豪                   賽富豪ex → 索財靈
+MC  537/742 阿羅拉 椰蛋樹ex          椰蛋樹   → 蛋蛋
+SV10 025/098 櫻花魚                  獵斑魚   → 珍珠貝
+SV5a 032/066 電肚蛙                  電肚蛙ex → 光蚪仔
+SV6  014/101 來悲粗茶                來悲粗茶ex → 斯魔茶
+SV6  032/101 冰鬼護                  雪妖女   → 雪童子
+SV7a 038/064 賽富豪                  賽富豪ex → 索財靈
+SV7a 040/064 阿羅拉 椰蛋樹ex         椰蛋樹   → 蛋蛋
+SV7a 081/064 阿羅拉 椰蛋樹ex         椰蛋樹   → 蛋蛋
+SV7a 089/064 阿羅拉 椰蛋樹ex         椰蛋樹   → 蛋蛋
+SV7a 092/064 阿羅拉 椰蛋樹ex         椰蛋樹   → 蛋蛋
+SV8a 018/187 來悲粗茶 ×2             來悲粗茶ex → 斯魔茶
+SV9a 011/063 蜜集大蛇                蜜集大蛇ex → 裹蜜蟲
+SV9a 068/063 蜜集大蛇                蜜集大蛇ex → 裹蜜蟲
+SVQP 011/023 電肚蛙                  電肚蛙ex → 光蚪仔
+```
+
+### 後續
+- Memory 補 `feedback_evolves_from_never_guess.md` — 進化鏈絕不能腦補、3 類 scraper bug pattern 修法
+- 第二次 audit scan 確認 0 殘留
+- npm run build ✓
+- 下一步：三組預組（奧利瓦 / 鋁鋼橋龍 / 超級寶石海星）Phase 4 實裝效果
 
 ---
 
