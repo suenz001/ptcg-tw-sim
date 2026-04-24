@@ -64,12 +64,64 @@
   const TAG_ORDER: TagKey[] = ['ACE SPEC', '古代', '未來', '太晶', '超級進化', '訓練家冠名'];
   let selectedTags = $state<Set<TagKey>>(new Set());
 
-  // v2.74: 屬性篩選 — 以 pokemonType 過濾寶可夢（草/火/水/雷/超/鬥/惡/鋼/妖/龍/無）
+  // v2.86: 屬性篩選 — 以 pokemonType 過濾寶可夢+能量卡（移除已不存在的妖精屬性）
   const ENERGY_ORDER: EnergyType[] = [
     'Grass', 'Fire', 'Water', 'Lightning', 'Psychic',
-    'Fighting', 'Darkness', 'Metal', 'Fairy', 'Dragon', 'Colorless'
+    'Fighting', 'Darkness', 'Metal', 'Dragon', 'Colorless'
   ];
   let selectedTypes = $state<Set<EnergyType>>(new Set());
+
+  // v2.86: 能量卡的屬性映射 — 讓能量卡也能被屬性篩選找到
+  // 基本能量：對應其單一屬性。
+  // 特殊能量：依據卡片效果提供的能量屬性分類。
+  //   - 全屬性能量（古舊能量、夜光能量等）→ 所有 10 種屬性
+  //   - 無屬性能量（富裕能量、燃火能量等）→ 只有 Colorless
+  //   - 單屬性特殊能量（增強【草】能量等）→ 該屬性 + Colorless
+  //   - 雙屬性能量（火箭隊能量等）→ 對應的兩個屬性
+  const ALL_TYPES: EnergyType[] = ['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal','Dragon','Colorless'];
+  const ENERGY_TYPE_MAP: Record<string, EnergyType[]> = {
+    // 基本能量
+    '基本【草】能量': ['Grass'],
+    '基本【火】能量': ['Fire'],
+    '基本【水】能量': ['Water'],
+    '基本【雷】能量': ['Lightning'],
+    '基本【超】能量': ['Psychic'],
+    '基本【鬥】能量': ['Fighting'],
+    '基本【惡】能量': ['Darkness'],
+    '基本【鋼】能量': ['Metal'],
+    // 全屬性特殊能量（可以當作任何屬性）
+    '古舊能量': ALL_TYPES,
+    '夜光能量': ALL_TYPES,
+    '新衝天能量': ALL_TYPES,
+    '稜鏡能量': ALL_TYPES,
+    // 單屬性特殊能量
+    '增強【草】能量': ['Grass', 'Colorless'],
+    '燃料【火】能量': ['Fire', 'Colorless'],
+    '泡沫【水】能量': ['Water', 'Colorless'],
+    '感應【超】能量': ['Psychic', 'Colorless'],
+    '硬岩【鬥】能量': ['Fighting', 'Colorless'],
+    '磁鐵【鋼】能量': ['Metal', 'Colorless'],
+    // 雙屬性特殊能量
+    '火箭隊能量': ['Psychic', 'Darkness'],
+    // 無色/效果型特殊能量（只提供無色能量）
+    '富裕能量': ['Colorless'],
+    '燃火能量': ['Colorless'],
+    '噴射能量': ['Colorless'],
+    '回力鏢能量': ['Colorless'],
+    '扣殺能量': ['Colorless'],
+    '薄霧能量': ['Colorless'],
+  };
+
+  /** 取得卡片匹配的屬性列表（用於屬性篩選） */
+  function cardTypes(c: Card): EnergyType[] {
+    // 寶可夢：直接用 pokemonType
+    if (c.pokemonType) return [c.pokemonType];
+    // 能量卡：查表
+    if (c.supertype === 'Energy') {
+      return ENERGY_TYPE_MAP[c.name] ?? ['Colorless'];
+    }
+    return [];
+  }
 
   // v2.74: 階段篩選 — 基礎 / 1階 / 2階
   // ex 卡的 subtype 被 scraper 統一設為 'ex'，不保留原始 stage。
@@ -184,9 +236,10 @@
         for (const t of tags) { if (hasTag(c, t)) { any = true; break; } }
         if (!any) return false;
       }
-      // v2.74: 屬性篩選（OR）— 只對有 pokemonType 的卡有效
+      // v2.86: 屬性篩選（OR）— 寶可夢用 pokemonType，能量卡用 ENERGY_TYPE_MAP
       if (types.size > 0) {
-        if (!c.pokemonType || !types.has(c.pokemonType)) return false;
+        const ct = cardTypes(c);
+        if (ct.length === 0 || !ct.some(t => types.has(t))) return false;
       }
       // v2.74: 階段篩選（OR）
       if (stages.size > 0) {
