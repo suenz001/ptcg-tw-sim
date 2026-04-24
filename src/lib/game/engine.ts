@@ -1490,26 +1490,15 @@ function handlePlaying(
       workingState = addLog(workingState, `${atkName} 招式傷害 +${dmgBonus}（下回合加傷效果）`, aIdx);
     }
 
-    // 弱點（×2）— 只對有實際傷害的招式套用。skipWeakRes 旗標跳過此計算。
+    // ── v2.97：攻擊方 +N bonus 全部在 weakness 前套用（PTCG 規則） ───────────
+    // 先前實作順序錯誤（bonus 於 weakness 後加）導致 Leon 實戰計算不符：
+    //   270 × 2 + 60 = 600（錯）；正確 (270 + 60) × 2 = 660
+    // 修正：把以下三個 attacker-side bonus 都移到 weakness 前套用。
+    //   - TOOL_ATTACK_BONUS（極限腰帶 / 鎖鏈糬 / 驅勁能量 未來）
+    //   - PASSIVE_ATTACK_BONUS（羅絲雷朵 輝煌聲援 等）
+    //   - damageBoostFightingThisTurn（力量蛋白飲）
+    // （damageBonusThisTurn 下回合加傷原本就在 weakness 前，位置不動。）
     const defenderCard = getCard(defender.active.cardId, pool);
-    // v2.57：莉莉艾的皮皮ex｜妖精領域 — 我方場上有皮皮ex 時，對手【龍】寶可夢的弱點改為【超】。
-    // 卡面允許「本無弱點」的龍寶可夢被加上【超】弱點。
-    let effectiveWeaknessType: string | undefined = defenderCard.weakness?.type;
-    if (defenderCard.pokemonType === 'Dragon' && hasFairyZoneField(workingState, aIdx, pool)) {
-      effectiveWeaknessType = 'Psychic';
-    }
-    if (!skipWeakRes && baseDamage > 0 && effectiveWeaknessType && attackerCard.pokemonType === effectiveWeaknessType) {
-      baseDamage *= 2;
-    }
-
-    // 跨回合「這隻本回合受招式傷害 +N」旗標（例：超音波幼蟲｜刺耳聲）
-    // 由對手上個回合 ATTACK_POST 設於 takeExtraDamageNextTurn → 本回合開始前 promote 為 ThisTurn。
-    // 不消耗旗標，本回合結束時在 END_TURN 統一清除。
-    if (baseDamage > 0 && defender.active.takeExtraDamageThisTurn) {
-      const extra = defender.active.takeExtraDamageThisTurn;
-      baseDamage += extra;
-      workingState = addLog(workingState, `${defenderCard.name} 受到 +${extra} 傷害（上回合招式遺留效果）`, dIdx);
-    }
 
     // 道具：我方攻擊 +N（極限腰帶 / 鎖鏈糬 / 驅勁能量 未來）— 阻礙之塔時全部失效
     const toolsJammed = isToolsJammed(state, pool);
@@ -1547,11 +1536,32 @@ function handlePlaying(
     }
 
     // Wave 42：玩家級「本回合自己的【鬥】寶可夢招式傷害 +N」（例：力量蛋白飲）
-    // 多次使用會累加（每張 +30）。在 weakness 前套用，對對手「戰鬥寶可夢」才算（與卡面一致，engine 層的 baseDamage 本就只對戰鬥寶可夢）。
+    // 多次使用會累加（每張 +30）。在 weakness 前套用（PTCG 規則 — v2.97 修正）。
     if (baseDamage > 0 && attackerCard.pokemonType === 'Fighting' && attacker.damageBoostFightingThisTurn) {
       const b = attacker.damageBoostFightingThisTurn;
       baseDamage += b;
       workingState = addLog(workingState, `「力量蛋白飲」啟動：${attackerCard.name} 招式傷害 +${b}`, aIdx);
+    }
+
+    // 弱點（×2）— 只對有實際傷害的招式套用。skipWeakRes 旗標跳過此計算。
+    // v2.57：莉莉艾的皮皮ex｜妖精領域 — 我方場上有皮皮ex 時，對手【龍】寶可夢的弱點改為【超】。
+    // 卡面允許「本無弱點」的龍寶可夢被加上【超】弱點。
+    let effectiveWeaknessType: string | undefined = defenderCard.weakness?.type;
+    if (defenderCard.pokemonType === 'Dragon' && hasFairyZoneField(workingState, aIdx, pool)) {
+      effectiveWeaknessType = 'Psychic';
+    }
+    if (!skipWeakRes && baseDamage > 0 && effectiveWeaknessType && attackerCard.pokemonType === effectiveWeaknessType) {
+      baseDamage *= 2;
+    }
+
+    // 跨回合「這隻本回合受招式傷害 +N」旗標（例：超音波幼蟲｜刺耳聲）
+    // 由對手上個回合 ATTACK_POST 設於 takeExtraDamageNextTurn → 本回合開始前 promote 為 ThisTurn。
+    // 不消耗旗標，本回合結束時在 END_TURN 統一清除。
+    // 位置：weakness 後（語意上是 defender-side 的「本回合受傷 +N」debuff，不是 attacker's bonus）。
+    if (baseDamage > 0 && defender.active.takeExtraDamageThisTurn) {
+      const extra = defender.active.takeExtraDamageThisTurn;
+      baseDamage += extra;
+      workingState = addLog(workingState, `${defenderCard.name} 受到 +${extra} 傷害（上回合招式遺留效果）`, dIdx);
     }
 
     // 被動特性：受傷減 N（Passive damage reduction）— skipDefEffects 跳過

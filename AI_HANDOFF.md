@@ -1,9 +1,52 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.96)  
+> 最後更新：2026-04-24 (v2.97)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.97 — Bug 修：攻擊方 +N bonus 必須在 weakness 前套用
+
+### Leon 回報
+使用 2 次力量蛋白飲、用 270 傷害的超級勇氣打弱點對象 (×2)：
+- 實際傷害 = 600
+- 卡面期待 = (270+30+30)×2 = 660
+
+### 根因
+engine.ts 攻擊 pipeline 中，`damageBoostFightingThisTurn`（力量蛋白飲）原本放在
+weakness 計算**之後**，即使註解寫著「在 weakness 前套用」，實作與註解不一致：
+```
+原順序：270 × 2 (weakness) = 540 → +60 (力量蛋白飲) = 600 ❌
+正確：270 + 60 (力量蛋白飲) = 330 → × 2 (weakness) = 660 ✓
+```
+
+同樣問題還有 `TOOL_ATTACK_BONUS`（極限腰帶 / 鎖鏈糬 / 驅勁能量 未來）和
+`PASSIVE_ATTACK_BONUS`（羅絲雷朵 輝煌聲援 等）— 這三類都是 **attacker's +N bonus**，
+按 PTCG 規則都該在 weakness 前套用，但原實作都在 weakness 後。
+
+### 修正
+engine.ts attack pipeline 重排順序：
+1. preFn（可修改 baseDamage）
+2. damageBonusThisTurn（下回合加傷）— 原本就在 weakness 前，不動
+3. **TOOL_ATTACK_BONUS** — v2.97 從 weakness 後 → 前
+4. **PASSIVE_ATTACK_BONUS**（羅絲雷朵 等）— v2.97 從 weakness 後 → 前
+5. **damageBoostFightingThisTurn**（力量蛋白飲）— v2.97 從 weakness 後 → 前
+6. weakness × 2 / 抗性 -30
+7. takeExtraDamageThisTurn（defender-side 跨回合 debuff）— 維持 weakness 後
+8. 被動減傷 / 防禦道具 / 條件免疫（defender's reductions）
+
+### 影響卡牌
+這次修正會讓以下卡在實戰打弱點時傷害**確實變更高**（修正前被 weakness 乘錯邊）：
+- 力量蛋白飲（本次 Leon 回報）
+- 極限腰帶 / 鎖鏈糬 等道具 +N
+- 竹蘭的羅絲雷朵｜輝煌聲援 +30
+- 所有使用 TOOL_ATTACK_BONUS / PASSIVE_ATTACK_BONUS 的卡
+
+### 驗證
+- build ✓（14.56s）
+- 需實戰：超級路卡利歐ex (270) + 力量蛋白飲 ×2 + 弱點對象 → 應該打 660 傷害
 
 ---
 
