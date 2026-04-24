@@ -173,65 +173,65 @@ function playCoin(c: AudioContext, out: GainNode, t: number): void {
   metalClink(c, out, t + 0.18,  1050, 0.18);
 }
 
-// ─ 紙張「刷」通用 helper（v2.119 換音色 — Leon 反饋：之前像電子嗶嗶聲）────
-// 用 low-pass + high-pass 夾擠 white noise，讓它聽起來像紙張纖維摩擦而不是電子音：
-//   - low-pass ~1200~2200Hz 去掉刺耳的高頻
-//   - high-pass ~350Hz 去掉低頻隆隆聲，保留「刷」的 crinkle 質感
-//   - 短 envelope（attack 8ms / decay 跟 duration 一致）
-// 每個 burst 都用輕微 randomized filter freq，讓多 burst 聽起來更有「連續紙張」感。
+// ─ 紙牌「刷」通用 helper（v2.121 Leon 指定：白噪音 + 高頻濾波器 + 快速衰減包絡）────
+// v2.119 用 low-pass 結果仍被認為像嗶嗶 → v2.121 改成 Leon 明確指定的音色配方：
+//   - 白噪音短 burst（10~80ms）
+//   - high-pass filter 保留 ~2000~4000Hz 高頻「沙沙」刷動特徵，去掉低頻隆隆
+//   - envelope：快 attack（2~5ms）+ 快 exp decay（= duration）
+// 關鍵差別：保留高頻刷感、裁掉低頻，聽起來像紙張纖維摩擦而不是電子合成音。
 interface PaperSwishOpts {
   bursts?: number;
   durationPerBurst?: number;
   gap?: number;
   peakGain?: number;
-  lpCenter?: number;
-  lpJitter?: number;
+  /** high-pass cutoff Hz — 越高越「沙」、越低越「紙悶」 */
+  hpCenter?: number;
+  /** 每 burst 隨機 jitter 範圍，讓多 burst 不單調 */
+  hpJitter?: number;
 }
 function paperSwish(c: AudioContext, out: GainNode, t: number, opts: PaperSwishOpts = {}): void {
   const bursts = opts.bursts ?? 1;
-  const dur = opts.durationPerBurst ?? 0.1;
+  const dur = opts.durationPerBurst ?? 0.06;
   const gap = opts.gap ?? 0.02;
   const peak = opts.peakGain ?? 0.28;
-  const lpC = opts.lpCenter ?? 1600;
-  const lpJ = opts.lpJitter ?? 700;
+  const hpC = opts.hpCenter ?? 2800;
+  const hpJ = opts.hpJitter ?? 800;
   for (let i = 0; i < bursts; i++) {
     const start = t + i * (dur + gap);
     const src = c.createBufferSource();
     src.buffer = noiseBuffer(c, dur);
     const hp = c.createBiquadFilter();
-    hp.type = 'highpass'; hp.frequency.value = 350;
-    const lp = c.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = lpC + (Math.random() - 0.5) * lpJ;
-    lp.Q.value = 0.7;
+    hp.type = 'highpass';
+    hp.frequency.value = hpC + (Math.random() - 0.5) * hpJ;
+    hp.Q.value = 0.5;
     const g = c.createGain();
     g.gain.setValueAtTime(0, start);
-    g.gain.linearRampToValueAtTime(peak, start + 0.008);
+    g.gain.linearRampToValueAtTime(peak, start + 0.003);
     g.gain.exponentialRampToValueAtTime(0.001, start + dur);
-    src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(out);
+    src.connect(hp); hp.connect(g); g.connect(out);
     src.start(start); src.stop(start + dur + 0.05);
   }
 }
 
-// ─ Deal（發牌）— 兩個短紙張刷 ────
+// ─ Deal（發牌）— 短促 1 burst ────
 function playDeal(c: AudioContext, out: GainNode, t: number): void {
-  paperSwish(c, out, t, { bursts: 2, durationPerBurst: 0.09, gap: 0.015, peakGain: 0.26, lpCenter: 1800 });
+  paperSwish(c, out, t, { bursts: 1, durationPerBurst: 0.07, peakGain: 0.3, hpCenter: 2800 });
 }
 
-// ─ Draw（抽牌）— 單一紙張刷 ────
+// ─ Draw（抽牌）— 稍快一點 ────
 function playDraw(c: AudioContext, out: GainNode, t: number): void {
-  paperSwish(c, out, t, { bursts: 1, durationPerBurst: 0.11, peakGain: 0.3, lpCenter: 1900 });
+  paperSwish(c, out, t, { bursts: 1, durationPerBurst: 0.06, peakGain: 0.32, hpCenter: 3200 });
 }
 
 // ─ Shuffle — 多張紙互相摩擦（連續快速 burst）────
 function playShuffle(c: AudioContext, out: GainNode, t: number): void {
   paperSwish(c, out, t, {
-    bursts: 8,
-    durationPerBurst: 0.06,
-    gap: 0.018,
-    peakGain: 0.2,
-    lpCenter: 1500,
-    lpJitter: 1000,
+    bursts: 10,
+    durationPerBurst: 0.05,
+    gap: 0.02,
+    peakGain: 0.22,
+    hpCenter: 2600,
+    hpJitter: 1200,
   });
 }
 

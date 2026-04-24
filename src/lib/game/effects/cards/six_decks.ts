@@ -615,18 +615,27 @@ reg('阿杏的秘招', (st, idx, pool) => {
   });
 });
 regR('akyo-pick-pokes', (state, aIdx, selectedPokeIids, params) => {
+  // v2.121：玩家放棄（空 iids）→ 結束效果不開第二 pending
+  if (selectedPokeIids.length === 0) {
+    return addLog(state, '阿杏的秘招：未選寶可夢，放棄效果', aIdx);
+  }
   const deckDarkECount = (params?.deckDarkECount as number) ?? 0;
   const nPokes = selectedPokeIids.length;
   const maxE = Math.min(nPokes, deckDarkECount);
+  // v2.121：若牌庫無基本【惡】能量（maxE=0），整個效果已無意義，直接結束
+  if (maxE <= 0) {
+    return addLog(state, '阿杏的秘招：牌庫已無基本【惡】能量，結束效果', aIdx);
+  }
   return withPending(state, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'Energy:Darkness',
-    minCount: 1, maxCount: maxE,
+    // v2.121：minCount 降為 0，讓玩家可以「不選（跳過）」或「放棄」
+    minCount: 0, maxCount: maxE,
     effectKey: 'akyo-pick-energies',
     params: {
       pokeIids: selectedPokeIids,
-      titleOverride: `從牌庫選 1~${maxE} 張基本【惡】能量`,
+      titleOverride: `從牌庫選 0~${maxE} 張基本【惡】能量`,
     },
   });
 });
@@ -634,6 +643,12 @@ regR('akyo-pick-energies', (state, aIdx, selectedEnergyIids, params, pool) => {
   const pokeIids = (params?.pokeIids as string[]) ?? [];
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
+  // v2.121：若玩家放棄（空 iids）→ 直接重洗結束
+  if (selectedEnergyIids.length === 0) {
+    p.deck = [...p.deck].sort(() => Math.random() - 0.5);
+    players[aIdx] = p;
+    return addLog({ ...state, players }, '阿杏的秘招：未選能量，重洗牌庫結束效果', aIdx);
+  }
   const energies = p.deck.filter(c => selectedEnergyIids.includes(c.iid));
   p.deck = p.deck.filter(c => !selectedEnergyIids.includes(c.iid));
   // 第 i 張能量附給第 i 隻選到的寶可夢（若 M < N，後面的寶可夢拿不到）

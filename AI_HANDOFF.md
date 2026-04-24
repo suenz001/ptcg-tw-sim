@@ -1,9 +1,74 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.120)  
+> 最後更新：2026-04-25 (v2.121)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.121 — 紙牌音用 high-pass + 阿杏 filter/UI 兩層修 + 全域 pending 安全網
+
+### Leon 回報
+
+**1. 發牌/抽牌還像嗶嗶聲**
+Leon 明確指定音色配方：「短促白噪音 + **高頻**濾波器 + 快速衰減音量包絡」。
+- v2.119 我用 low-pass（去掉高頻）方向錯了 → 聽起來仍像電子合成 beep
+- v2.121 改用 **high-pass 2800~3200Hz**（保留高頻「沙沙刷」特徵，去掉低頻隆隆）
+- envelope: attack 3ms、exponential decay = duration
+- deal 1 burst 0.07s / draw 1 burst 0.06s / shuffle 10 bursts 0.05s（隨機 jitter）
+
+**2. 阿杏的秘招 bug（雙重）**
+
+Bug 2a：「明明牌庫有基本【惡】能量卻搜尋不到」  
+根因：engine + UI 的 `filter === 'Energy:<Type>'` 分支只用 `card.pokemonType === t` 判定。
+但基本能量卡 JSON 的 `pokemonType` 欄位常為 **undefined**（scraper 沒填，v2.108 feedback 已知）→
+搜不到卡。
+
+修法：加 **name-based fallback** — 判定 `card.name.includes('【X】')` 對應屬性中文字。
+修兩處：
+- `/routes/game/+page.svelte`：deck-search / discard-search / hand-discard 3 個 `Energy:` 分支都加 fallback
+- `/lib/game/effects.ts` `discardSearchToHandPost` 的 `Energy:` 分支
+- 抽了一個共用 helper `isBasicEnergyOfType(card, type)` + `ZH_BY_TYPE` 映射
+
+Bug 2b：「搜尋不到時 UI 強制確定但沒牌可選 → 卡死」  
+Leon 要求做**整體檢查**，不是個別卡修。
+
+整體修法 = 全域安全網：pending modal UI 加「放棄（無符合卡）」按鈕，條件 `pendingStuckEmpty`：
+- `pendingSelection` 存在
+- 非 damage-distribute 類型
+- `minCount > 0`（非可選）
+- `selectionItems.length === 0`（真的沒卡）
+
+按下 `abandonSelection()` → dispatch `GameActions.resolveSelection([])`。resolver 收到空 iids 時
+自行 graceful 結束。這樣所有 pending 在「候選為空」狀況都有退路，不用個別卡調 minCount。
+
+Bug 2c：阿杏的秘招 resolver 處理空 selection
+- `akyo-pick-pokes`：空 iids → log 放棄，直接 return（不開第二 pending）
+- `akyo-pick-pokes`：若牌庫 `deckDarkECount <= 0` → 結束（防邊界）
+- `akyo-pick-pokes`：step 2 的 `minCount` 從 1 降為 **0** — Leon 明示「應該可以放棄」
+- `akyo-pick-energies`：空 iids → 重洗牌庫 + log 結束效果
+
+### 檔案改動
+- `src/lib/audio/sfx.ts`：paperSwish 改 high-pass filter（hpCenter/hpJitter）+ envelope 調快
+- `src/lib/game/effects.ts`：`discardSearchToHandPost` 的 `Energy:` filter 加 name fallback
+- `src/routes/game/+page.svelte`：
+  - `isBasicEnergyOfType(card, type)` helper + `ZH_BY_TYPE` map
+  - 3 處 `Energy:` filter 改用 helper
+  - `abandonSelection()` + `pendingStuckEmpty` derived
+  - Modal footer 加「放棄（無符合卡）」按鈕
+- `src/lib/game/effects/cards/six_decks.ts`：阿杏兩個 resolver 加空 iids 防呆 + minCount 降 0
+
+### 驗證
+- npm run build ✓（14.74s）
+- 基本【惡】能量現在能被 filter='Energy:Darkness' 搜到（name fallback）
+- 任何 pending 在候選為空時會顯示「放棄」按鈕，不會再卡死
+
+### 後續可擴充
+- Scraper 層把所有基本能量的 `pokemonType` 統一補齊，免 runtime fallback
+- 掃其他 resolver（除阿杏外）處理空 iids 的行為 — 目前大多 resolver 對空 iids 已 graceful，
+  少數可能有 crash risk，視 Leon 測試遇到再個別修
+- Leon 沒測到的 v2.113 latent bug：AZ的平和 用了 `'own-bench-pokemon'` pending type（engine 不認得）
 
 ---
 

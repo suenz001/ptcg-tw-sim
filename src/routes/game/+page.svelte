@@ -961,8 +961,9 @@
             return card.supertype === 'Pokemon' && card.pokemonType === t;
           }
           if (f.startsWith('Energy:')) {
-            const t = f.slice(7);
-            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === t;
+            // v2.121：加 name fallback（基本能量 pokemonType 常為 undefined）
+            const t = f.slice(7) as EnergyType;
+            return isBasicEnergyOfType(card, t);
           }
           return true;
         });
@@ -1011,11 +1012,9 @@
           return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
         });
         if (f2.startsWith('Energy:')) {
-          const t = f2.slice(7);
-          return pool0.filter(c => {
-            const card = pool.get(c.cardId);
-            return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === t;
-          });
+          // v2.121：加 name fallback
+          const t = f2.slice(7) as EnergyType;
+          return pool0.filter(c => isBasicEnergyOfType(pool.get(c.cardId), t));
         }
         return pool0;
       }
@@ -1073,8 +1072,9 @@
           if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
           if (f.startsWith('Energy:')) {
             // e.g., 'Energy:Lightning' = 基本能量 + 指定屬性
-            const t = f.slice(7);
-            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === t;
+            // v2.121：加 name fallback（基本能量 pokemonType 常 undefined）
+            const t = f.slice(7) as EnergyType;
+            return isBasicEnergyOfType(card, t);
           }
           // v2.102 旋轉洛托姆｜風扇呼喚：HP≤100 的【無】寶可夢
           if (f === 'ColorlessPokeHP100') {
@@ -1592,6 +1592,39 @@
     selectionPicked = new Set();
     selectionCounts = {};
   }
+
+  // v2.121 全域安全網：當 pending 的候選列表為空（例：搜卡但牌庫/棄牌/手牌無符合條件的卡）
+  // 允許玩家「放棄」以空 selection 前進，避免卡死。resolver 收到空 iids 應能 graceful 結束。
+  function abandonSelection() {
+    const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
+    dispatch(GameActions.resolveSelection([], sid));
+    selectionPicked = new Set();
+    selectionCounts = {};
+  }
+  // 判定：這個 pending 的候選是否為空且 minCount>0（玩家會被卡住 → 需要放棄按鈕）。
+  // damage-distribute 用 counts 不用 picked，排除。
+  const pendingStuckEmpty = $derived.by(() => {
+    if (!pendingSelection) return false;
+    if (pendingSelection.type === 'damage-distribute') return false;
+    if (pendingSelection.minCount <= 0) return false;
+    return selectionItems.length === 0;
+  });
+  // v2.121：判斷一張卡是否為指定屬性的基本能量。
+  // 很多基本能量卡 JSON 的 pokemonType 欄位為 undefined（scraper 沒填），只能從卡名【X】解析。
+  // 統一 helper 供所有 filter 'Energy:<Type>' 用。
+  const ZH_BY_TYPE: Record<EnergyType, string> = {
+    Grass: '草', Fire: '火', Water: '水', Lightning: '雷',
+    Psychic: '超', Fighting: '鬥', Darkness: '惡', Metal: '鋼',
+    Dragon: '龍', Colorless: '無',
+  };
+  function isBasicEnergyOfType(card: Card | undefined, type: EnergyType): boolean {
+    if (!card) return false;
+    if (card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+    if (card.pokemonType === type) return true;
+    const zh = ZH_BY_TYPE[type];
+    return zh ? card.name.includes(`【${zh}】`) : false;
+  }
+
   function selectionTitle(type: string): string {
     // 支援效果層透過 params.titleOverride 客製標題（例：赤松要「選寶可夢附加能量」而非預設「回復」）
     const override = pendingSelection?.params?.titleOverride;
@@ -2810,6 +2843,13 @@
             <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（{selectionPicked.size}張）</button>
             {#if pendingSelection.minCount===0}
               <button class="btn-act secondary" onclick={()=>{selectionPicked=new Set();confirmSelection();}}>不選（跳過）</button>
+            {/if}
+            <!-- v2.121 全域安全網：候選為空且 minCount>0 時開放「放棄」避免卡住 -->
+            {#if pendingStuckEmpty}
+              <button class="btn-act secondary" onclick={abandonSelection}
+                title="沒有符合條件的卡可選 — 放棄此效果以繼續">
+                放棄（無符合卡）
+              </button>
             {/if}
           {/if}
         </div>

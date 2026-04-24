@@ -7272,8 +7272,16 @@ function discardSearchToHandPost(max: number, filter: string, label: string): At
       if (filter === 'Pokemon') return card.supertype === 'Pokemon';
       if (filter === 'BasicEnergy') return card.supertype === 'Energy' && card.subtype === 'Basic';
       if (filter.startsWith('Energy:')) {
+        // v2.121：加 name fallback（基本能量 pokemonType 常為 undefined）
         const t = filter.slice(7);
-        return card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === t;
+        if (card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+        if (card.pokemonType === t) return true;
+        const zhByType: Record<string, string> = {
+          Grass: '草', Fire: '火', Water: '水', Lightning: '雷',
+          Psychic: '超', Fighting: '鬥', Darkness: '惡', Metal: '鋼',
+          Dragon: '龍', Colorless: '無',
+        };
+        return card.name.includes(`【${zhByType[t] ?? ''}】`);
       }
       return true;
     });
