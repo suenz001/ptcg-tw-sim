@@ -441,5 +441,125 @@
     "scrapedAt": "2026-04-24T11:13:16.802Z",
     "releaseDate": "2024-09-27",
     "count": 50
+  },
+  {
+    "code": "SVM",
+    "name": "雙ex初階牌組 Generations",
+    "regulationMark": "G",
+    "cardCount": 183,
+    "supertypeCounts": {
+      "Pokemon": 124,
+      "Trainer": 50,
+      "Energy": 9
+    },
+    "coverImageUrl": "covers/SVM.png",
+    "scrapedAt": "2026-04-24T12:55:42.364Z",
+    "releaseDate": "2024-11-29",
+    "count": 183
+  },
+  {
+    "code": "SVC",
+    "name": "起始組合ex 皮卡丘ex&巴布土撥",
+    "regulationMark": "G",
+    "cardCount": 22,
+    "supertypeCounts": {
+      "Pokemon": 10,
+      "Trainer": 11,
+      "Energy": 1
+    },
+    "coverImageUrl": "covers/SVC.png",
+    "scrapedAt": "2026-04-24T12:51:02.266Z",
+    "releaseDate": "2023-03-31",
+    "count": 22
+  },
+  {
+    "code": "SVD",
+    "name": "隨機ex初階牌組",
+    "regulationMark": "G",
+    "cardCount": 147,
+    "supertypeCounts": {
+      "Pokemon": 109,
+      "Trainer": 29,
+      "Energy": 9
+    },
+    "coverImageUrl": "covers/SVD.png",
+    "scrapedAt": "2026-04-24T12:57:36.503Z",
+    "releaseDate": "2023-06-02",
+    "count": 147
+  },
+  {
+    "code": "SVP1",
+    "name": "ex特別組合",
+    "regulationMark": "G",
+    "cardCount": 7,
+    "supertypeCounts": {
+      "Pokemon": 7,
+      "Trainer": 0,
+      "Energy": 0
+    },
+    "coverImageUrl": "covers/SVP1.png",
+    "scrapedAt": "2026-04-24T12:50:21.001Z",
+    "releaseDate": "2023-06-02",
+    "count": 7
+  },
+  {
+    "code": "SVPN",
+    "name": "ex特別組合 太晶屬性：星晶 仙子伊布ex",
+    "regulationMark": "H",
+    "cardCount": 8,
+    "supertypeCounts": {
+      "Pokemon": 8,
+      "Trainer": 0,
+      "Energy": 0
+    },
+    "coverImageUrl": "covers/SVPN.png",
+    "scrapedAt": "2026-04-24T12:51:36.512Z",
+    "releaseDate": "2024-09-27",
+    "count": 8
+  },
+  {
+    "code": "SVPS",
+    "name": "ex特別組合 太晶屬性：星晶 蒼炎刃鬼ex",
+    "regulationMark": "H",
+    "cardCount": 8,
+    "supertypeCounts": {
+      "Pokemon": 8,
+      "Trainer": 0,
+      "Energy": 0
+    },
+    "coverImageUrl": "covers/SVPS.png",
+    "scrapedAt": "2026-04-24T12:52:07.121Z",
+    "releaseDate": "2024-09-27",
+    "count": 8
+  },
+  {
+    "code": "svhk",
+    "name": "起始組合「古代故勒頓ex」",
+    "regulationMark": "H",
+    "cardCount": 24,
+    "supertypeCounts": {
+      "Pokemon": 10,
+      "Trainer": 12,
+      "Energy": 2
+    },
+    "coverImageUrl": "covers/svhk.png",
+    "scrapedAt": "2026-04-24T12:52:49.271Z",
+    "releaseDate": "2024-02-02",
+    "count": 24
+  },
+  {
+    "code": "svhm",
+    "name": "起始組合「未來密勒頓ex」",
+    "regulationMark": "H",
+    "cardCount": 24,
+    "supertypeCounts": {
+      "Pokemon": 10,
+      "Trainer": 12,
+      "Energy": 2
+    },
+    "coverImageUrl": "covers/svhm.png",
+    "scrapedAt": "2026-04-24T12:53:31.642Z",
+    "releaseDate": "2024-02-02",
+    "count": 24
   }
 ]

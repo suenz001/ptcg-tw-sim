@@ -6,7 +6,7 @@
  * Standard format (as of 2026-02-06): H, I, J are legal; G is rotated out.
  */
 
-export type RegulationMark = 'G' | 'H' | 'I' | 'J';
+export type RegulationMark = 'F' | 'G' | 'H' | 'I' | 'J';
 
 /** Map every known set code to its regulation mark. */
 export const SET_REGULATION_MARK: Record<string, RegulationMark> = {
@@ -15,6 +15,11 @@ export const SET_REGULATION_MARK: Record<string, RegulationMark> = {
   SV2P: 'G', SV2D: 'G', SV2a: 'G',
   SV3: 'G',  SV3a: 'G',
   SV4K: 'G', SV4M: 'G', SV4a: 'G',
+  // v2.111 補爬：G 標舊 set（Leon 要求「把卡牌資料庫弄到最齊全」）
+  SVM: 'G',   // 朱紫高級寶可夢集 · Shiny Treasure 對應（2024 初，183 張混 G/H/I）
+  SVC: 'G',   // 朱紫入門組合（22 張）
+  SVD: 'G',   // 朱紫ex 入門牌組合輯（147 張）
+  SVP1: 'G',  // 朱紫 Promo 第一批（7 張）
 
   // ── H mark ────────────────────────────────────────────────────────
   SV5K: 'H', SV5M: 'H', SV5a: 'H',
@@ -23,6 +28,10 @@ export const SET_REGULATION_MARK: Record<string, RegulationMark> = {
   SV8: 'H',  SV8a: 'H',
   MJ: 'H',
   SVK: 'H',  // 牌組構築BOX 樂園騰龍（2024-09-27，含 G/H/I 混合卡；per-card 以 .alpha 為準）
+  SVPN: 'H', // Promo H 標（8 張，可能是特典 / 紀念）
+  SVPS: 'H', // Promo H 標（8 張）
+  svhk: 'H', // 朱紫擴充包 H 標 kai 系列（24 張）
+  svhm: 'H', // 朱紫擴充包 H 標 mega 系列（24 張，含 F/H 混合）
 
   // ── I mark ────────────────────────────────────────────────────────
   SV9: 'I',  SV9a: 'I',

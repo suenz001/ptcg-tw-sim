@@ -1,0 +1,341 @@
+[
+  {
+    "id": "11095",
+    "name": "六尾",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVPS",
+    "collectorNumber": "001/008",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011095.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11095/",
+    "scrapedAt": "2026-04-24T12:52:03.595Z",
+    "regulationMark": "H",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "猛撞",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "30",
+        "effect": "這隻寶可夢也受到10點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 37,
+    "species": "狐狸寶可夢",
+    "illustrator": "Narumi Sato"
+  },
+  {
+    "id": "11096",
+    "name": "九尾",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "SVPS",
+    "collectorNumber": "002/008",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011096.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11096/",
+    "scrapedAt": "2026-04-24T12:52:04.081Z",
+    "regulationMark": "H",
+    "stage": "Stage1",
+    "hp": 120,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "火焰聖靈",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "50",
+        "effect": "對手的1隻備戰寶可夢也受到30點傷害。[在備戰區不計算弱點・抵抗力。]"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 38,
+    "species": "狐狸寶可夢",
+    "evolvesFrom": "六尾",
+    "illustrator": "Kamome Shirahama"
+  },
+  {
+    "id": "11097",
+    "name": "鳳王",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVPS",
+    "collectorNumber": "003/008",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011097.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11097/",
+    "scrapedAt": "2026-04-24T12:52:04.608Z",
+    "regulationMark": "H",
+    "stage": "Basic",
+    "hp": 130,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "羽擊",
+        "cost": [
+          "Fire",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect": ""
+      },
+      {
+        "name": "閃耀火焰",
+        "cost": [
+          "Fire",
+          "Fire",
+          "Colorless"
+        ],
+        "damage": "100+",
+        "effect": "若自己的備戰區有「太晶」寶可夢，則增加100點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 250,
+    "species": "虹色寶可夢",
+    "illustrator": "kodama"
+  },
+  {
+    "id": "11098",
+    "name": "花舞鳥",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVPS",
+    "collectorNumber": "004/008",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011098.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11098/",
+    "scrapedAt": "2026-04-24T12:52:05.069Z",
+    "regulationMark": "H",
+    "stage": "Basic",
+    "hp": 90,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "能量支援",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "",
+        "effect": "從自己的棄牌區選擇最多2張基本能量卡，附於1隻備戰寶可夢身上。"
+      },
+      {
+        "name": "花火",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "30",
+        "effect": "選擇1個這隻寶可夢身上附加的能量，將其丟棄。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 741,
+    "species": "舞蹈寶可夢",
+    "illustrator": "Heisuke Kitazawa"
+  },
+  {
+    "id": "11099",
+    "name": "炭小侍",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVPS",
+    "collectorNumber": "005/008",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011099.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11099/",
+    "scrapedAt": "2026-04-24T12:52:05.603Z",
+    "regulationMark": "H",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "鬼火",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 935,
+    "species": "小火星寶可夢",
+    "illustrator": "Kariya"
+  },
+  {
+    "id": "11100",
+    "name": "蒼炎刃鬼ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "SVPS",
+    "collectorNumber": "006/008",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011100.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11100/",
+    "scrapedAt": "2026-04-24T12:52:06.131Z",
+    "regulationMark": "H",
+    "stage": "Stage1",
+    "hp": 270,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "深淵熾火",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "30+",
+        "effect": "增加自己的棄牌區的能量卡的張數×20點傷害。"
+      },
+      {
+        "name": "紫水晶激怒",
+        "cost": [
+          "Fire",
+          "Psychic",
+          "Metal"
+        ],
+        "damage": "280",
+        "effect": "將這隻寶可夢身上附加的能量卡全部丟棄。"
+      }
+    ],
+    "tags": [
+      "太晶"
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom": "紅蓮鎧騎ex",
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "11101",
+    "name": "象徵鳥",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVPS",
+    "collectorNumber": "007/008",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011101.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11101/",
+    "scrapedAt": "2026-04-24T12:52:06.584Z",
+    "regulationMark": "H",
+    "stage": "Basic",
+    "hp": 110,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "雙重抽出",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫抽出2張卡。"
+      },
+      {
+        "name": "念力",
+        "cost": [
+          "Psychic",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "60",
+        "effect": "擲1次硬幣若為正面，則將對手的戰鬥寶可夢【麻痺】。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 561,
+    "species": "似鳥寶可夢",
+    "illustrator": "svlt"
+  },
+  {
+    "id": "11102",
+    "name": "雷吉斯奇魯",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVPS",
+    "collectorNumber": "008/008",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011102.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11102/",
+    "scrapedAt": "2026-04-24T12:52:07.121Z",
+    "regulationMark": "H",
+    "stage": "Basic",
+    "hp": 130,
+    "pokemonType": "Metal",
+    "attacks": [
+      {
+        "name": "激怒之錘",
+        "cost": [
+          "Metal",
+          "Colorless"
+        ],
+        "damage": "60+",
+        "effect": "增加這隻寶可夢身上放置的傷害指示物的數量×10點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 379,
+    "species": "黑金寶可夢",
+    "illustrator": "Shiburingaru"
+  }
+]

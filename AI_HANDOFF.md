@@ -1,9 +1,75 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.110)  
+> 最後更新：2026-04-24 (v2.111)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.111 — 補爬 8 個缺漏 set（423 張）+ scraper setCode fallback bug
+
+### 目標（Leon 要求）
+做火焰雞多龍 preset 需要「火焰雞ex」（SVM 016/175），但 SVM 不在卡池。
+Leon：「方案 A：先把卡牌資料庫弄到最齊全的狀態」→ 爬全部 8 個缺漏 set。
+
+### 爬到的 8 個 set
+| Set | 張數 | 主 regulation | 說明 |
+|---|---|---|---|
+| **SVM** | 183 | G（混 G45/H126/I6/J6）| 雙ex初階牌組 Generations（含火焰雞ex 等 H 標卡）|
+| **SVC** | 22 | G | 起始組合ex 皮卡丘ex&巴布土撥 |
+| **SVD** | 147 | G | 隨機ex初階牌組 |
+| **SVP1** | 7 | G | ex特別組合 |
+| **SVPN** | 8 | H | ex特別組合 仙子伊布ex |
+| **SVPS** | 8 | H | ex特別組合 蒼炎刃鬼ex |
+| **svhk** | 24 | H（混 F/H/G/I）| 起始組合「古代故勒頓ex」 |
+| **svhm** | 24 | H（混 F/H/G/I）| 起始組合「未來密勒頓ex」 |
+
+### 順手修的 scraper bug
+爬完發現 SVM/SVC/SVD/SVP1/svhk/svhm 的 `setCode` 欄位**全錯**：
+- SVM 的 setCode 變成 "175"
+- SVC → "021"、SVD → "139" 等等
+
+**根因**：parse-card.js fallback 1（line 136-139）：
+```typescript
+if (!card.setCode && colNum) {
+  const m = colNum.match(/\/([A-Z0-9-]+)$/);
+  if (m) card.setCode = m[1];
+}
+```
+這個 fallback 本來是為 M-P（colNum = "099/M-P"）設計，取 denominator 當 setCode。
+但對「016/175」denominator 是純數字 "175"，也被當 setCode！
+
+**修法**：denominator 必須**含字母**才當 setCode：
+```typescript
+if (m && /[A-Za-z-]/.test(m[1])) card.setCode = m[1];
+```
+純數字 denominator（016/175）現在走 fallback 2（expectedSetCode），對。
+
+**批修**：寫 inline migration 把 6 set 共 386 entries 的 setCode 糾正。
+
+### 其他改動
+- `RegulationMark` type 加 `'F'`（svhk/svhm 含 F 標卡）
+- `regulation.ts` 加 8 set mapping
+- `scrape-all.js` DEFAULT_SETS 加 8 set
+- `static/covers/` 下載 8 個 cover 圖（從 products page 解析 URL）
+- `static/cards/index.json` append 8 entries
+
+### 全卡池變動
+- 30 set → **38 set**（新增 8）
+- 3666 → **4089** 張（+423）
+
+### 驗證
+- build ✓（13.71s）
+- 火焰雞ex 現在可在卡池找到：SVM 016/175, H 標 ✓
+- 所有 8 set 的 setCode 欄位都對
+- 月月熊 赫月 SV6a 025/064 也驗證在卡池 ✓（原本就有，audit 的 name match bug 讓我漏了）
+
+### 下一步
+進入疑點清單的其他項目：
+- ② 莉莉艾的決心 → 決意（typo 修正 — Leon 確認 ✓）
+- ④ 同名多 set 按「最新 + 低 cn」預選（Leon 批准 ✓）
+- 開始做 6 組 preset
 
 ---
 

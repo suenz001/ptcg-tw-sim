@@ -133,9 +133,11 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
   // Fallback 1: promo cards show /mark/PROMO.MARK.png and have a collector
   // number like "099/M-P" — extract the set code from the collector number's
   // denominator, since the twhk_exp_*.png image is absent.
+  // v2.111：denominator 必須**含字母**才當 setCode。純數字 denominator（例 016/175）
+  //   不是 set code 而是 set 總張數，別誤用。此情況走 fallback 2（expectedSetCode）。
   if (!card.setCode && colNum) {
     const m = colNum.match(/\/([A-Z0-9-]+)$/);
-    if (m) card.setCode = m[1];
+    if (m && /[A-Za-z-]/.test(m[1])) card.setCode = m[1];
   }
   // Fallback 2: some promo entries (e.g. basic energy with colNum "GRA",
   // 勝利之證 with colNum "M-P" sans slash) can't be recovered from either

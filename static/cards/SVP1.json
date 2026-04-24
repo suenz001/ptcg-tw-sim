@@ -1,0 +1,309 @@
+[
+  {
+    "id": "8113",
+    "name": "原野水母",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVP1",
+    "collectorNumber": "001/007",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008113.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/8113/",
+    "scrapedAt": "2026-04-24T12:50:17.941Z",
+    "regulationMark": "G",
+    "stage": "Basic",
+    "hp": 50,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "亂踢",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "10×",
+        "effect": "擲3次硬幣，造成正面出現的次數×10點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 948,
+    "species": "木耳寶可夢",
+    "illustrator": "Shin Nagasawa"
+  },
+  {
+    "id": "8114",
+    "name": "陸地水母ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "SVP1",
+    "collectorNumber": "002/007",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008114.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/8114/",
+    "scrapedAt": "2026-04-24T12:50:18.441Z",
+    "regulationMark": "G",
+    "stage": "Stage1",
+    "hp": 270,
+    "pokemonType": "Grass",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "守護菌絲",
+        "effect": "只要這隻寶可夢在場上，自己的所有身上附有能量卡的寶可夢，不會受到對手的寶可夢使用招式的效果的影響。（已經受到的效果不會消除。）"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "菌落猛攻",
+        "cost": [
+          "Grass",
+          "Grass"
+        ],
+        "damage": "80+",
+        "effect": "增加自己的備戰區身上附有【草】能量卡的寶可夢的數量×40點傷害。"
+      },
+      {
+        "name": "[ex規則]",
+        "cost": [],
+        "damage": "",
+        "effect": "寶可夢【ex】【昏厥】時，對手獲得2張獎賞卡。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom": "原野水母",
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "8115",
+    "name": "布撥",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVP1",
+    "collectorNumber": "003/007",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008115.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/8115/",
+    "scrapedAt": "2026-04-24T12:50:18.930Z",
+    "regulationMark": "G",
+    "stage": "Basic",
+    "hp": 50,
+    "pokemonType": "Lightning",
+    "attacks": [
+      {
+        "name": "小衝擊",
+        "cost": [
+          "Lightning"
+        ],
+        "damage": "",
+        "effect": "擲1次硬幣若為正面，則將對手的戰鬥寶可夢【麻痺】。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 921,
+    "species": "鼠寶可夢",
+    "illustrator": "Tika Matsuno"
+  },
+  {
+    "id": "8116",
+    "name": "布土撥",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "SVP1",
+    "collectorNumber": "004/007",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008116.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/8116/",
+    "scrapedAt": "2026-04-24T12:50:19.403Z",
+    "regulationMark": "G",
+    "stage": "Stage1",
+    "hp": 90,
+    "pokemonType": "Lightning",
+    "attacks": [
+      {
+        "name": "電擊",
+        "cost": [
+          "Lightning"
+        ],
+        "damage": "30",
+        "effect": "擲1次硬幣若為正面，則將對手的戰鬥寶可夢【麻痺】。"
+      },
+      {
+        "name": "伏特頭擊",
+        "cost": [
+          "Lightning",
+          "Lightning",
+          "Colorless"
+        ],
+        "damage": "70",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 922,
+    "species": "鼠寶可夢",
+    "evolvesFrom": "布撥",
+    "illustrator": "Saya Tsuruta"
+  },
+  {
+    "id": "8117",
+    "name": "巴布土撥ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "SVP1",
+    "collectorNumber": "005/007",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008117.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/8117/",
+    "scrapedAt": "2026-04-24T12:50:19.876Z",
+    "regulationMark": "G",
+    "stage": "Stage2",
+    "hp": 300,
+    "pokemonType": "Lightning",
+    "attacks": [
+      {
+        "name": "電氣踢",
+        "cost": [
+          "Lightning"
+        ],
+        "damage": "60",
+        "effect": ""
+      },
+      {
+        "name": "閃電強襲",
+        "cost": [
+          "Lightning",
+          "Lightning"
+        ],
+        "damage": "",
+        "effect": "將2個這隻寶可夢身上附加的【雷】能量丟棄，對手的1隻寶可夢受到220點傷害。[在備戰區不計算弱點・抵抗力。]"
+      },
+      {
+        "name": "[ex規則]",
+        "cost": [],
+        "damage": "",
+        "effect": "寶可夢【ex】【昏厥】時，對手獲得2張獎賞卡。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "evolvesFrom": "布土撥",
+    "illustrator": "aky CG Works"
+  },
+  {
+    "id": "8118",
+    "name": "墓仔狗",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVP1",
+    "collectorNumber": "006/007",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008118.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/8118/",
+    "scrapedAt": "2026-04-24T12:50:20.406Z",
+    "regulationMark": "G",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "墓地遊玩",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "10×",
+        "effect": "造成自己的棄牌區的【超】寶可夢的張數×10點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 971,
+    "species": "鬼犬寶可夢",
+    "illustrator": "yuu"
+  },
+  {
+    "id": "8119",
+    "name": "墓揚犬ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "SVP1",
+    "collectorNumber": "007/007",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00008119.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/8119/",
+    "scrapedAt": "2026-04-24T12:50:21.001Z",
+    "regulationMark": "G",
+    "stage": "Stage1",
+    "hp": 260,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "咬緊",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "30",
+        "effect": "在下個對手的回合，受到這個招式的寶可夢無法撤退。"
+      },
+      {
+        "name": "掃墓",
+        "cost": [
+          "Psychic",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "160+",
+        "effect": "增加自己的棄牌區的【超】寶可夢卡的張數×10點傷害。"
+      },
+      {
+        "name": "[ex規則]",
+        "cost": [],
+        "damage": "",
+        "effect": "寶可夢【ex】【昏厥】時，對手獲得2張獎賞卡。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom": "墓仔狗",
+    "illustrator": "5ban Graphics"
+  }
+]
