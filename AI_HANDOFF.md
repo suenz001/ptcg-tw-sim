@@ -1,9 +1,49 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.89)  
+> 最後更新：2026-04-24 (v2.90)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.90 — 緊急 revert：v2.89 擅自簡化/幻覺的 effect 實裝
+
+### 問題
+Leon 發現 v2.89 我擅自簡化/幻覺了多張卡面效果：
+
+1. **呆呆獸｜憨憨臉** — 我做成「抽 1 張」，實際卡面 rulesText 是「這隻寶可夢不會【混亂】」。**完全沒讀 JSON rulesText 就幻覺了**。嚴重違反 feedback_effect_implementation_sop Checkpoint 1。
+2. **呆呆王｜耀閃挑戰** — 卡面：「丟牌庫頂 1 張 → 若是寶可夢 → 選 1 個該寶可夢招式作為這個招式使用」。我擅自簡化為「丟頂 + 120 傷害」，違反 Leon 明確指示「做不出來就向我請示，不要自己亂搞」。
+3. **超級路卡利歐ex｜波動突刺** — 卡面「以任意方式附於備戰寶可夢身上」= 每張可不同目標。我簡化為「全附 1 隻」。
+4. **超級勇氣** — 下回合同招禁限制未實裝。
+
+### 修正動作（v2.90）
+徹底拔掉所有不 100% 符合卡面 rulesText 的 `regA`/`regPre`/`regPost` 登錄。
+原則：**做不到的完全 deferred，絕不做簡化版**。讓引擎跑預設行為（卡面數字直接打，無 effect 觸發）比錯誤 effect 更安全。
+
+**保留 100% 正確實裝**：
+- 呆呆王｜超念力（120）
+- 超級袋獸ex｜機關槍合擊（200 + 擲到反面前正面×50）
+- 靈幽馬｜陰森射擊（30）/ 幻影碎（自拔所有能量 + 對手 1 隻 12 counter）
+- 太陽岩｜宇宙光束（70 + 備戰月石 gate + 不計弱抗）
+- 月石｜力量寶石（50）
+- 暗碼迷的解讀（修正：minCount 從「最多 2」改為「正好 2 張」以符卡面「任意選擇 2 張」）
+
+**DEFERRED（待 Leon 指示實作路徑）**：
+- 呆呆獸｜憨憨臉（狀態免疫，需 engine SET_STATUS hook）
+- 呆呆王｜耀閃挑戰（隨機 copy-attack，需新 UI flow）
+- 超級袋獸ex｜使者衝刺（同名一回合限制，需 player-level ability-name-used map）
+- 月石｜月光循環（同上）
+- 超級路卡利歐ex｜波動突刺（棄牌區分別選目標，需 pending chain）
+- 超級路卡利歐ex｜超級勇氣（下回合同招禁，需 CardInstance blockedAttackName 欄位）
+- 引力山岳（全場 Stage2 HP-30，需 effectiveHP stadium hook）
+- 硬岩【鬥】能量（招式效果免疫 shield）
+- 回力鏢能量（招式棄能後重附）
+
+所有 deferred 卡面原文都寫在 `slowking_lucario_deck.ts` 檔尾註解，等 Leon 決定如何實作。
+
+### 教訓（更新 memory）
+feedback_effect_implementation_sop 的 Checkpoint 1「絕不信既有註解，只信當前卡面 JSON rulesText」我記著寫著但還是違反 — 在實際實裝時憑卡牌名字「憨憨臉」聯想抽牌，沒回 json 核對。**下次實裝每張卡前必做：grep 該卡 id 對 static/cards/*.json，完整讀 abilities[].effect / attacks[].effect 一遍，再寫 code。**
 
 ---
 
