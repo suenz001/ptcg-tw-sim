@@ -989,6 +989,11 @@ function handlePlaying(
       ...attacker.bench,
     ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
     if (hasSkyPathR && isBasicPokemonCard(activeCard)) retreatCost = 0;
+    // v2.117 N的城堡（Stadium）：雙方場上所有「N的」寶可夢撤退成本 = 0。
+    const stadiumNameForRetreat = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
+    if (stadiumNameForRetreat === 'N的城堡' && activeCard?.name?.startsWith('N的')) {
+      retreatCost = 0;
+    }
     // v2.69：撤退成本用「能量單位」比對，不是卡片張數。火箭隊能量 1 張 = 2 units。
     // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
     if (totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx) < retreatCost) return state;
@@ -2914,6 +2919,46 @@ export function getUsableAbilities(
           return cc?.supertype === 'Energy' && cc.subtype === 'Basic';
         });
         if (!hasBasicEnergyInDiscard) return;
+      }
+      // v2.117 沸騰鬥志（火焰雞ex）：棄牌區必須有基本能量，否則隱藏按鈕。
+      //   與充能同 pattern，避免玩家按下才跳 log（無法取消的壞體驗）。
+      if (ab.name === '沸騰鬥志') {
+        const hasBasicEnergyInDiscard = player.discard.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic';
+        });
+        if (!hasBasicEnergyInDiscard) return;
+      }
+      // v2.117 岩石武裝（龜足巨鎧）：手牌需有基本【鬥】能量 && 場上需有【鬥】寶可夢。
+      if (ab.name === '岩石武裝') {
+        const hasFightEInHand = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && /【鬥】/.test(cc.name);
+        });
+        if (!hasFightEInHand) return;
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        const hasFightPoke = field.some(c => pool.get(c.cardId)?.pokemonType === 'Fighting');
+        if (!hasFightPoke) return;
+      }
+      // v2.117 惡棍衝天（顫弦蠑螈）：牌庫需有基本【惡】能量 && 備戰需有【惡】寶可夢。
+      if (ab.name === '惡棍衝天') {
+        const hasDarkEInDeck = player.deck.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && /【惡】/.test(cc.name);
+        });
+        if (!hasDarkEInDeck) return;
+        const hasDarkBench = player.bench.some(b => pool.get(b.cardId)?.pokemonType === 'Darkness');
+        if (!hasDarkBench) return;
+      }
+      // v2.117 必殺手裡劍（超級甲賀忍蛙ex）：須在戰鬥場 && 手牌有基本【水】能量。
+      if (ab.name === '必殺手裡劍') {
+        if (player.active?.iid !== pk.iid) return;
+        const hasWaterInHand = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' &&
+            (cc.pokemonType === 'Water' || /【水】/.test(cc.name));
+        });
+        if (!hasWaterInHand) return;
       }
       // 可達鴨｜濕氣：自身 KO 類特性被消除（不列入可用清單）
       if (SELF_KO_ABILITY_NAMES.has(ab.name) && isSelfKOEffectBlocked(state, pool)) return;

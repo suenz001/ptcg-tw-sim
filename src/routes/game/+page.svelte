@@ -1060,6 +1060,12 @@
             // v2.89 波動突刺：只基本【鬥】能量。排除硬岩【鬥】等 Special Energy。
             return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
           }
+          if (f === 'FightingPokemonOrBasicFightingEnergy') {
+            // v2.117 塔拉剛：【鬥】寶可夢 或 基本【鬥】能量
+            if (card.supertype === 'Pokemon' && card.pokemonType === 'Fighting') return true;
+            if (card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】')) return true;
+            return false;
+          }
           if (f === 'Pokemon')         return card.supertype === 'Pokemon';
           if (f === 'Trainer')         return card.supertype === 'Trainer';
           if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
@@ -1212,6 +1218,11 @@
       const allMy = [...(myPlayer.active ? [myPlayer.active] : []), ...myPlayer.bench];
       const hasSkyPath = allMy.some(c => getCard(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
       if (hasSkyPath) cost = 0;
+    }
+    // v2.117 N的城堡（Stadium）— 雙方場上所有「N的」寶可夢撤退 0
+    if (cost > 0 && card?.name?.startsWith('N的') && game?.activeStadium) {
+      const stadiumName = getCard(game.activeStadium.cardId)?.name;
+      if (stadiumName === 'N的城堡') cost = 0;
     }
     return cost;
   }
@@ -1511,6 +1522,7 @@
       'MarniePokemon':                 '瑪俐的寶可夢',
       'CynthiaPokemon':                '竹蘭的寶可夢',
       'FightingBasicOrFightingEnergy': '基礎【鬥】寶可夢或【鬥】能量',
+      'FightingPokemonOrBasicFightingEnergy': '【鬥】寶可夢或基本【鬥】能量',
       'GrassBasicOrGrassEnergy':       '基礎【草】寶可夢或【草】能量',
       'PsychicBasic':                  '基礎【超】寶可夢',
       'RocketBasic':                   '火箭隊基礎寶可夢',

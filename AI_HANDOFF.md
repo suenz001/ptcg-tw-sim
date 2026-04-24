@@ -1,9 +1,90 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.116)  
+> 最後更新：2026-04-25 (v2.117)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.117 — 修 v2.113 批次實裝的一串重大 bug（engine 不存在的 pending type / filter 亂來）
+
+### Leon 回報的 bug 清單
+1. 阿杏的秘招 — UI 顯示非惡能量、選完無法附加場上寶可夢
+2. N的ＰＰ提升劑 — 棄牌區無能量仍顯黃框、選完卡住無法附加（重大卡遊戲）
+3. N的城堡 — 放場上沒效果
+4. 火焰雞ex 沸騰鬥志 — 棄牌區無能量仍顯特性按鈕、選完卡住（重大卡遊戲）
+5. 高溫燃燒器 — 手牌無火能量仍顯黃框
+6. 網頁有時黑底有時白底（實為 /game 頁的深綠戰場主題 vs /cards · /decks · 首頁的淺灰 #f4f4f6）
+
+### 根因（重要教訓）
+v2.113 批次實裝 17 張卡時，我**發明了一堆 engine 不存在的 pending type 和 filter**：
+- `attach-energy-own-any`、`attach-energy-bench-dark`、`attach-energy-bench-n`、`attach-energies-to-dark-pokes`、`opp-any-pokemon` — engine 完全不認得
+- `BasicDarknessEnergy`、`DarknessOwn`、`NPokemonBench`、`FightingType`、`DarknessBench` — UI describeFilter / 候選 filter 沒支援，fallback 到「顯示全部」或「顯示非法對象」
+
+結果就是：UI 顯示亂掉、engine resolver 收到沒認識的 type 就停在 pending 不動，玩家卡死無法操作。
+
+engine 合法的 pending type 只有這幾種（types.ts:288-294）：
+`deck-search | bench-choose | hand-discard | heal-target | opp-bench-choose | opp-poke-choose | discard-search | hand-choose | damage-distribute | active-energy-discard`
+
+engine 合法的 filter（discard-search / deck-search / hand-discard 等各有自己支援清單）：`BasicEnergy`、`BasicPsychicEnergy`、`BasicFightingEnergy`、`Energy:<Type>`（如 `Energy:Darkness`）、`Pokemon`、`Pokemon:<Type>`、`Stage1`、`Stage2`、`Evolution`、`Trainer`、`Supporter`、`Item`、`Tool`、`Stadium`、`Any`/`any`、`TOP6`/`TOPn`、`X:TOPn` 等。
+
+### 修正清單（全在 effects/cards/six_decks.ts + engine.ts + /routes/game/+page.svelte）
+
+**阿杏的秘招**（完整重寫，依 Leon 指定流程）
+1. 先選最多 2 隻場上【惡】寶可夢（N = min(2, 惡寶數, 牌庫惡能量數)）
+2. 再從牌庫搜基本【惡】能量 M 張（M = min(N, 牌庫惡能量數)）
+3. 第 i 張能量附給第 i 隻選到的寶可夢；若 M < N，後面的寶可夢拿不到
+4. 若被附能量的其中一隻是戰鬥寶可夢 → 中毒
+5. 重洗牌庫
+
+實作：`heal-target`（validIids=惡寶 iid）→ `deck-search`（filter='Energy:Darkness'）→ 分配+中毒+重洗
+加 `regG`：場上有惡寶 AND 牌庫有基本惡能量 才可打出。
+
+**N的ＰＰ提升劑**
+- 加 `regG`：棄牌區有基本能量 AND 備戰有 N的寶可夢
+- Step 1: `discard-search` / `BasicEnergy`
+- Step 2: `heal-target` + validIids=備戰 N的寶可夢 → 附加能量
+
+**N的城堡**（Stadium passive 效果實裝）
+- `engine.ts` 的 RETREAT handler：若 `activeStadium.name === 'N的城堡'` 且 active 卡名 startsWith('N的')，`retreatCost = 0`
+- `+page.svelte` 的 `retreatCostOf` 同步鏡射（UI 按鈕顯示 0⚡）
+- 原本已在 `STATIC_PASSIVE_STADIUMS` 白名單（v2.96 加），只差效果實裝
+
+**火焰雞ex｜沸騰鬥志**
+- `engine.ts` `getAvailableAbilities` 加 gate：棄牌區無基本能量 → 不列入（按鈕隱藏）
+- effect: `discard-search` / `BasicEnergy` → `heal-target` + validIids=全部自己寶可夢
+
+**龜足巨鎧｜岩石武裝 / 顫弦蠑螈｜惡棍衝天 / 超級甲賀忍蛙ex｜必殺手裡劍**
+同 pattern 修正：UI gate + 用 heal-target / opp-poke-choose 代替自創 type
+
+**高溫燃燒器**
+- 加 `regG`：手牌有基本【火】能量 AND 對手場上有 Tool/特殊能量/Stadium 可敲
+- effect: 丟火能量 + log 提示「follow-up 需要手動執行」（引擎尚無 mixed-pick pending type）
+
+**塔拉剛**（順手修同 pattern bug — Leon 尚未回報但會壞）
+- UI `discard-search` 分支加 `FightingPokemonOrBasicFightingEnergy` filter 解析
+- describeFilter 加對應中文
+
+### 背景色 Bug 解釋
+全專案 grep `prefers-color-scheme` / dark theme toggle 都沒有。真相：
+- /game 頁 body 背景 `#162816`（深綠戰場主題 — 刻意）
+- /cards · /decks · 首頁 body 背景 `#f4f4f6`（淺灰 — 刻意）
+
+Leon 在不同頁面切換時會看到不同底色。要不要統一改白底需要 Leon 決定（會犧牲戰場沉浸感），v2.117 先不動，下次問清楚再改。
+
+### 重要教訓（寫進 memory）
+**實裝 effect 前必須先驗證**：
+1. pending type 必須在 `types.ts:PendingSelection['type']` 列表裡
+2. filter 必須在 UI (`+page.svelte`) 的對應 case 有分支 + describeFilter 有映射
+3. 至少跑一次 E2E：打出卡 → 看 UI 是否正確 filter → 選完 → 能否真的執行
+
+v2.113 批次實裝沒跑這些驗證，造成 6 張卡同時壞掉。
+
+### 驗證
+- npm run build ✓（14.67s）
+- 六張卡 gate / filter / pending type 都改為 engine 原生支援
+- N的城堡 engine + UI 雙層 retreat hook
 
 ---
 

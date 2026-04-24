@@ -273,6 +273,12 @@ regR('trade-draw-2', (state, aIdx, selectedIids, _params) => {
 });
 
 // 火焰雞ex｜沸騰鬥志 — 棄牌區選 1 基本能量附給自己寶可夢（1/回合）
+// v2.117 修：原實裝用了不存在的 pending type 'attach-energy-own-any' 導致 UI 卡住，
+//   且 gate 只寫在 fn 內部（按了才跳 log）。改為：
+//   - Step 1: discard-search / BasicEnergy 選能量
+//   - Step 2: heal-target + validIids=全部自己寶可夢 → 選附加目標
+//   - engine getAvailableAbilities gate（棄牌區有基本能量才顯示按鈕，同「充能」pattern）
+// 註：ability gate 在 engine.ts 端維護，這裡只做安全檢查（雙重保險）。
 regA('火焰雞ex', 0, (st, idx, pool) => {
   const hasBasicEnergy = st.players[idx].discard.some(c => {
     const card = pool.get(c.cardId);
@@ -285,20 +291,25 @@ regA('火焰雞ex', 0, (st, idx, pool) => {
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'BasicEnergy',
     minCount: 1, maxCount: 1,
-    effectKey: 'blaziken-boiling-attach',
+    effectKey: 'blaziken-boiling-pick-energy',
   });
 });
-regR('blaziken-boiling-attach', (state, aIdx, selectedIids) => {
-  // 第一步選完能量，接著開 attach-energy pending 讓玩家選寶可夢
+regR('blaziken-boiling-pick-energy', (state, aIdx, selectedEnergyIids) => {
+  const p = state.players[aIdx];
+  const allMy = [...(p.active ? [p.active] : []), ...p.bench];
   return withPending(state, {
-    type: 'attach-energy-own-any',
+    type: 'heal-target',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
-    effectKey: 'blaziken-boiling-attach-target',
-    params: { energyIids: selectedIids },
+    effectKey: 'blaziken-boiling-attach',
+    params: {
+      energyIids: selectedEnergyIids,
+      validIids: allMy.map(c => c.iid),
+      titleOverride: '選擇附加能量的寶可夢（沸騰鬥志）',
+    },
   });
 });
-regR('blaziken-boiling-attach-target', (state, aIdx, selectedPokeIids, params, pool) => {
+regR('blaziken-boiling-attach', (state, aIdx, selectedPokeIids, params, pool) => {
   const energyIids = (params?.energyIids as string[]) ?? [];
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
@@ -306,20 +317,37 @@ regR('blaziken-boiling-attach-target', (state, aIdx, selectedPokeIids, params, p
   if (!energy) return addLog(state, '沸騰鬥志：能量不在棄牌區', aIdx);
   p.discard = p.discard.filter(c => c.iid !== energy.iid);
   const pIid = selectedPokeIids[0];
-  if (p.active?.iid === pIid) p.active = { ...p.active, energyAttached: [...p.active.energyAttached, energy] };
-  else p.bench = p.bench.map(b => b.iid === pIid ? { ...b, energyAttached: [...b.energyAttached, energy] } : b);
+  let tgtName = '?';
+  if (p.active?.iid === pIid) {
+    p.active = { ...p.active, energyAttached: [...p.active.energyAttached, energy] };
+    tgtName = pool.get(p.active.cardId)?.name ?? '?';
+  } else {
+    p.bench = p.bench.map(b => {
+      if (b.iid === pIid) {
+        tgtName = pool.get(b.cardId)?.name ?? '?';
+        return { ...b, energyAttached: [...b.energyAttached, energy] };
+      }
+      return b;
+    });
+  }
   players[aIdx] = p;
   const ename = pool.get(energy.cardId)?.name ?? '?';
-  return addLog({ ...state, players }, `沸騰鬥志：將 ${ename} 附給寶可夢`, aIdx);
+  return addLog({ ...state, players }, `沸騰鬥志：將 ${ename} 附給 ${tgtName}`, aIdx);
 });
 
 // 龜足巨鎧｜岩石武裝 — 手牌選 1 張「基本【鬥】能量」附給自己的【鬥】寶可夢（1/回合）
+// v2.117 修：pending type 改 heal-target + validIids（限【鬥】寶可夢）
 regA('龜足巨鎧', 0, (st, idx, pool) => {
   const hasFighting = st.players[idx].hand.some(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card?.subtype === 'Basic' && /【鬥】/.test(card.name);
   });
   if (!hasFighting) return addLog(st, '岩石武裝：手牌無基本【鬥】能量', idx);
+  // 還要確認場上有【鬥】寶可夢
+  const p = st.players[idx];
+  const allMy = [...(p.active ? [p.active] : []), ...p.bench];
+  const hasFightPoke = allMy.some(c => pool.get(c.cardId)?.pokemonType === 'Fighting');
+  if (!hasFightPoke) return addLog(st, '岩石武裝：場上無【鬥】寶可夢', idx);
   st = addLog(st, '岩石武裝：從手牌選 1 張基本【鬥】能量附給自己的【鬥】寶可夢', idx);
   return withPending(st, {
     type: 'hand-discard',
@@ -329,14 +357,20 @@ regA('龜足巨鎧', 0, (st, idx, pool) => {
     effectKey: 'rock-armor-pick-energy',
   });
 });
-regR('rock-armor-pick-energy', (state, aIdx, selectedIids) => {
+regR('rock-armor-pick-energy', (state, aIdx, selectedIids, _params, pool) => {
+  const p = state.players[aIdx];
+  const allMy = [...(p.active ? [p.active] : []), ...p.bench];
+  const fightIids = allMy.filter(c => pool.get(c.cardId)?.pokemonType === 'Fighting').map(c => c.iid);
   return withPending(state, {
-    type: 'attach-energy-own-any',
+    type: 'heal-target',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
-    filter: 'FightingType',
     effectKey: 'rock-armor-attach',
-    params: { energyIids: selectedIids },
+    params: {
+      energyIids: selectedIids,
+      validIids: fightIids,
+      titleOverride: '選擇附加能量的【鬥】寶可夢（岩石武裝）',
+    },
   });
 });
 regR('rock-armor-attach', (state, aIdx, selectedPokeIids, params, pool) => {
@@ -347,14 +381,27 @@ regR('rock-armor-attach', (state, aIdx, selectedPokeIids, params, pool) => {
   if (!energy) return addLog(state, '岩石武裝：能量不在手牌', aIdx);
   p.hand = p.hand.filter(c => c.iid !== energy.iid);
   const pIid = selectedPokeIids[0];
-  if (p.active?.iid === pIid) p.active = { ...p.active, energyAttached: [...p.active.energyAttached, energy] };
-  else p.bench = p.bench.map(b => b.iid === pIid ? { ...b, energyAttached: [...b.energyAttached, energy] } : b);
+  let tgtName = '?';
+  if (p.active?.iid === pIid) {
+    p.active = { ...p.active, energyAttached: [...p.active.energyAttached, energy] };
+    tgtName = pool.get(p.active.cardId)?.name ?? '?';
+  } else {
+    p.bench = p.bench.map(b => {
+      if (b.iid === pIid) {
+        tgtName = pool.get(b.cardId)?.name ?? '?';
+        return { ...b, energyAttached: [...b.energyAttached, energy] };
+      }
+      return b;
+    });
+  }
   players[aIdx] = p;
   const ename = pool.get(energy.cardId)?.name ?? '?';
-  return addLog({ ...state, players }, `岩石武裝：將 ${ename} 附給【鬥】寶可夢`, aIdx);
+  return addLog({ ...state, players }, `岩石武裝：將 ${ename} 附給 ${tgtName}`, aIdx);
 });
 
 // 顫弦蠑螈｜惡棍衝天 — 牌庫選 1 張「基本【惡】能量」附給備戰區【惡】寶可夢 + 重洗 + 放 2 傷
+// v2.117 修：filter 'BasicDarknessEnergy' engine 不認得 → 改用 'Energy:Darkness'。
+//   pending type 'attach-energy-bench-dark' 不存在 → 改用 heal-target + validIids（限備戰【惡】）。
 regA('顫弦蠑螈', 0, (st, idx, pool) => {
   const hasDark = st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
@@ -370,19 +417,24 @@ regA('顫弦蠑螈', 0, (st, idx, pool) => {
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'BasicDarknessEnergy',
+    filter: 'Energy:Darkness',
     minCount: 1, maxCount: 1,
     effectKey: 'rascal-skyward-pick',
   });
 });
-regR('rascal-skyward-pick', (state, aIdx, selectedIids) => {
+regR('rascal-skyward-pick', (state, aIdx, selectedIids, _params, pool) => {
+  const p = state.players[aIdx];
+  const darkBenchIids = p.bench.filter(b => pool.get(b.cardId)?.pokemonType === 'Darkness').map(b => b.iid);
   return withPending(state, {
-    type: 'attach-energy-bench-dark',
+    type: 'heal-target',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
-    filter: 'DarknessBench',
     effectKey: 'rascal-skyward-attach',
-    params: { energyIids: selectedIids },
+    params: {
+      energyIids: selectedIids,
+      validIids: darkBenchIids,
+      titleOverride: '選擇備戰【惡】寶可夢附加能量（惡棍衝天）',
+    },
   });
 });
 regR('rascal-skyward-attach', (state, aIdx, selectedPokeIids, params, pool) => {
@@ -423,7 +475,7 @@ regA('超級甲賀忍蛙ex', 0, (st, idx, pool, cardInst) => {
   players[idx] = p;
   st = addLog({ ...st, players }, '必殺手裡劍：丟棄 1 張基本【水】能量，在對手 1 隻寶可夢身上放 6 個傷害指示物', idx);
   return withPending(st, {
-    type: 'opp-any-pokemon',
+    type: 'opp-poke-choose',
     actorIdx: idx, sourcePlayerIdx: (1 - idx) as 0 | 1,
     minCount: 1, maxCount: 1,
     effectKey: 'greninja-shuriken-6',
@@ -453,17 +505,24 @@ regR('greninja-shuriken-6', (state, aIdx, selectedIids, _params, pool) => {
 // ─── Trainer ──────────────────────────────────────────────────────────────
 
 // N的ＰＰ提升劑（Item）— 棄牌區選 1 張基本能量附給備戰區的「N的」寶可夢
-reg('N的ＰＰ提升劑', (st, idx, pool) => {
+// v2.117 修：原實裝用了不存在的 pending type 'attach-energy-bench-n' 導致 follow-up 卡住；
+//   gate 未註冊為 regG，UI 仍顯示黃框。改為：
+//   - regG gate：棄牌區有基本能量 AND 備戰有 N的寶可夢
+//   - Step 1: discard-search / BasicEnergy 選能量
+//   - Step 2: heal-target + validIids=備戰 N的寶可夢 → 選目標
+regG('N的ＰＰ提升劑', (st, idx, pool) => {
   const hasBasicE = st.players[idx].discard.some(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card?.subtype === 'Basic';
   });
+  if (!hasBasicE) return false;
   const hasNBench = st.players[idx].bench.some(b => {
     const card = pool.get(b.cardId);
     return card?.name.startsWith('N的');
   });
-  if (!hasBasicE) return addLog(st, 'N的ＰＰ提升劑：棄牌區無基本能量', idx);
-  if (!hasNBench) return addLog(st, 'N的ＰＰ提升劑：備戰區無「N的」寶可夢', idx);
+  return hasNBench;
+});
+reg('N的ＰＰ提升劑', (st, idx) => {
   st = addLog(st, 'N的ＰＰ提升劑：從棄牌區選 1 張基本能量附給備戰「N的」寶可夢', idx);
   return withPending(st, {
     type: 'discard-search',
@@ -473,14 +532,19 @@ reg('N的ＰＰ提升劑', (st, idx, pool) => {
     effectKey: 'n-pp-pick-energy',
   });
 });
-regR('n-pp-pick-energy', (state, aIdx, selectedIids) => {
+regR('n-pp-pick-energy', (state, aIdx, selectedIids, _params, pool) => {
+  const p = state.players[aIdx];
+  const nBenchIids = p.bench.filter(b => pool.get(b.cardId)?.name.startsWith('N的')).map(b => b.iid);
   return withPending(state, {
-    type: 'attach-energy-bench-n',
+    type: 'heal-target',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
-    filter: 'NPokemonBench',
     effectKey: 'n-pp-attach',
-    params: { energyIids: selectedIids },
+    params: {
+      energyIids: selectedIids,
+      validIids: nBenchIids,
+      titleOverride: '選擇備戰「N的」寶可夢附加能量（N的ＰＰ提升劑）',
+    },
   });
 });
 regR('n-pp-attach', (state, aIdx, selectedPokeIids, params, pool) => {
@@ -491,87 +555,113 @@ regR('n-pp-attach', (state, aIdx, selectedPokeIids, params, pool) => {
   if (!energy) return addLog(state, 'N的ＰＰ提升劑：能量不在棄牌區', aIdx);
   p.discard = p.discard.filter(c => c.iid !== energy.iid);
   const pIid = selectedPokeIids[0];
-  p.bench = p.bench.map(b => b.iid === pIid ? { ...b, energyAttached: [...b.energyAttached, energy] } : b);
+  let tgtName = '?';
+  p.bench = p.bench.map(b => {
+    if (b.iid === pIid) {
+      tgtName = pool.get(b.cardId)?.name ?? '?';
+      return { ...b, energyAttached: [...b.energyAttached, energy] };
+    }
+    return b;
+  });
   players[aIdx] = p;
   const ename = pool.get(energy.cardId)?.name ?? '?';
-  return addLog({ ...state, players }, `N的ＰＰ提升劑：將 ${ename} 附給備戰「N的」寶可夢`, aIdx);
+  return addLog({ ...state, players }, `N的ＰＰ提升劑：將 ${ename} 附給 ${tgtName}`, aIdx);
 });
 
-// 阿杏的秘招（Supporter）— 牌庫搜 ≤2 張基本惡能量分配給 ≤2 隻自己的惡寶 + 戰鬥位惡寶中毒
-reg('阿杏的秘招', (st, idx, pool) => {
+// 阿杏的秘招（Supporter）
+// v2.117 完整重寫（Leon 指定流程）：
+//   1) 先選最多 2 隻自己場上的【惡】寶可夢（1 ≤ N ≤ min(2, 惡寶數量, 牌庫惡能量數)）
+//   2) 再從牌庫搜基本【惡】能量 M 張（1 ≤ M ≤ min(N, 牌庫惡能量數)）
+//   3) 第 i 張能量附給第 i 隻選到的寶可夢；若 M < N，後面的寶可夢不拿到
+//   4) 若被附能量的其中一隻是戰鬥寶可夢 → 中毒
+//   5) 重洗牌庫
+// 原實裝用了 engine 不存在的 pending type 'attach-energies-to-dark-pokes' + 自訂 filter
+// 'BasicDarknessEnergy' / 'DarknessOwn' → UI 既顯示非惡能量、又卡在無法附加。全部改成
+// engine 原生支援的 filter / pending type。
+regG('阿杏的秘招', (st, idx, pool) => {
   const hasDarkE = st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card?.subtype === 'Basic' && /【惡】/.test(card.name);
   });
-  const hasDarkPoke = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench]
-    .some(pk => pool.get(pk.cardId)?.pokemonType === 'Darkness');
-  if (!hasDarkE) return addLog(st, '阿杏的秘招：牌庫無基本【惡】能量', idx);
-  if (!hasDarkPoke) return addLog(st, '阿杏的秘招：場上無【惡】寶可夢', idx);
-  st = addLog(st, '阿杏的秘招：牌庫搜最多 2 張基本【惡】能量附給【惡】寶可夢（戰鬥位時中毒）', idx);
+  if (!hasDarkE) return false;
+  const allMy = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  return allMy.some(pk => pool.get(pk.cardId)?.pokemonType === 'Darkness');
+});
+reg('阿杏的秘招', (st, idx, pool) => {
+  const p = st.players[idx];
+  const allMy = [...(p.active ? [p.active] : []), ...p.bench];
+  const darkPokeIids = allMy.filter(c => pool.get(c.cardId)?.pokemonType === 'Darkness').map(c => c.iid);
+  const deckDarkECount = p.deck.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && /【惡】/.test(card.name);
+  }).length;
+  const maxPoke = Math.min(2, darkPokeIids.length, deckDarkECount);
+  st = addLog(st, `阿杏的秘招：選 1~${maxPoke} 隻【惡】寶可夢，之後從牌庫搜對應張數基本【惡】能量附上`, idx);
   return withPending(st, {
-    type: 'deck-search',
+    type: 'heal-target',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'BasicDarknessEnergy',
-    minCount: 0, maxCount: 2,
-    effectKey: 'akyo-secret-pick',
+    minCount: 1, maxCount: maxPoke,
+    effectKey: 'akyo-pick-pokes',
+    params: {
+      validIids: darkPokeIids,
+      deckDarkECount,
+      titleOverride: `選擇要附基本【惡】能量的寶可夢（最多 ${maxPoke} 隻）`,
+    },
   });
 });
-regR('akyo-secret-pick', (state, aIdx, selectedIids, _params, pool) => {
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const p = { ...players[aIdx] };
-  const energies = p.deck.filter(c => selectedIids.includes(c.iid));
-  if (energies.length === 0) {
-    p.deck = [...p.deck].sort(() => Math.random() - 0.5);
-    players[aIdx] = p;
-    return addLog({ ...state, players }, '阿杏的秘招：未選能量，重洗牌庫', aIdx);
-  }
-  p.deck = p.deck.filter(c => !selectedIids.includes(c.iid));
-  players[aIdx] = p;
-  // 分配給 ≤energies.length 隻惡寶
-  return withPending({ ...state, players }, {
-    type: 'attach-energies-to-dark-pokes',
+regR('akyo-pick-pokes', (state, aIdx, selectedPokeIids, params) => {
+  const deckDarkECount = (params?.deckDarkECount as number) ?? 0;
+  const nPokes = selectedPokeIids.length;
+  const maxE = Math.min(nPokes, deckDarkECount);
+  return withPending(state, {
+    type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 1, maxCount: energies.length,
-    filter: 'DarknessOwn',
-    effectKey: 'akyo-secret-attach',
-    params: { energyIids: selectedIids, count: energies.length },
+    filter: 'Energy:Darkness',
+    minCount: 1, maxCount: maxE,
+    effectKey: 'akyo-pick-energies',
+    params: {
+      pokeIids: selectedPokeIids,
+      titleOverride: `從牌庫選 1~${maxE} 張基本【惡】能量`,
+    },
   });
 });
-regR('akyo-secret-attach', (state, aIdx, selectedPokeIids, params, pool) => {
-  const energyIids = (params?.energyIids as string[]) ?? [];
+regR('akyo-pick-energies', (state, aIdx, selectedEnergyIids, params, pool) => {
+  const pokeIids = (params?.pokeIids as string[]) ?? [];
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
-  // 簡化：把所有能量平均附給選到的寶可夢（第一個先附完）
-  const energies = energyIids.map(iid => p.hand.find(c => c.iid === iid) ?? p.deck.find(c => c.iid === iid) ?? p.discard.find(c => c.iid === iid))
-    .filter((x): x is CardInstance => !!x);
-  // 實際上剛 deck-search 後那些能量已從 deck 移除（前個 resolver），但還沒進任何區域。
-  // 保險起見重新收集：params.energyIids 內的 id 應該仍在 p.deck 或 p.hand 裡 — 若找不到就當傳遞丟失，重洗結束。
-  if (energies.length === 0) {
-    p.deck = [...p.deck].sort(() => Math.random() - 0.5);
-    players[aIdx] = p;
-    return addLog({ ...state, players }, '阿杏的秘招：能量遺失，重洗牌庫', aIdx);
-  }
-  // 輪流分配：一隻一個
-  const poke = selectedPokeIids;
-  let atkActiveMet = false;
-  energies.forEach((e, i) => {
-    const pokeIid = poke[i % poke.length];
+  const energies = p.deck.filter(c => selectedEnergyIids.includes(c.iid));
+  p.deck = p.deck.filter(c => !selectedEnergyIids.includes(c.iid));
+  // 第 i 張能量附給第 i 隻選到的寶可夢（若 M < N，後面的寶可夢拿不到）
+  const poisonedActive: string[] = [];
+  const attachLog: string[] = [];
+  for (let i = 0; i < energies.length; i++) {
+    const e = energies[i];
+    const pokeIid = pokeIids[i];
+    if (!pokeIid) break;
+    const ename = pool.get(e.cardId)?.name ?? '?';
     if (p.active?.iid === pokeIid) {
-      p.active = { ...p.active, energyAttached: [...p.active.energyAttached, e] };
-      atkActiveMet = true;
+      p.active = { ...p.active, energyAttached: [...p.active.energyAttached, e], status: 'poisoned' };
+      poisonedActive.push(pool.get(p.active.cardId)?.name ?? '?');
+      attachLog.push(`${pool.get(p.active.cardId)?.name ?? '?'} +${ename}`);
     } else {
-      p.bench = p.bench.map(b => b.iid === pokeIid ? { ...b, energyAttached: [...b.energyAttached, e] } : b);
+      p.bench = p.bench.map(b => {
+        if (b.iid === pokeIid) {
+          attachLog.push(`${pool.get(b.cardId)?.name ?? '?'} +${ename}`);
+          return { ...b, energyAttached: [...b.energyAttached, e] };
+        }
+        return b;
+      });
     }
-  });
-  // 戰鬥位中毒
-  if (atkActiveMet && p.active) {
-    p.active = { ...p.active, status: 'poisoned' };
-    state = addLog(state, '阿杏的秘招：附給戰鬥寶可夢 → 中毒', aIdx);
   }
   // 重洗
   p.deck = [...p.deck].sort(() => Math.random() - 0.5);
   players[aIdx] = p;
-  return addLog({ ...state, players }, `阿杏的秘招：附 ${energies.length} 張【惡】能量，並重洗牌庫`, aIdx);
+  let s = addLog({ ...state, players }, `阿杏的秘招：${attachLog.join('、')}`, aIdx);
+  if (poisonedActive.length > 0) {
+    s = addLog(s, `阿杏的秘招：戰鬥寶可夢 ${poisonedActive.join('、')} → 中毒`, aIdx);
+  }
+  s = addLog(s, '阿杏的秘招：重洗牌庫', aIdx);
+  return s;
 });
 
 // 空手道王的演練（Supporter）— 本回合對 ex +40（player-level flag karateKingBonus）
@@ -612,14 +702,16 @@ regR('taragun-to-hand', (state, aIdx, selectedIids, _params, pool) => {
 });
 
 // 高溫燃燒器（Item）— 棄自己 1 張基本【火】能量 → 選對手場上 1 張 Tool/特殊能量/Stadium 丟棄
-reg('高溫燃燒器', (st, idx, pool) => {
-  // 棄火能量 gate — hand 裡要有
-  const fireIdx = st.players[idx].hand.findIndex(c => {
+// v2.117 修：加 regG 讓手牌無火能量時 UI 不顯示黃框（Leon 要求）。
+// 主 effect follow-up（選 Tool/特殊能量/Stadium）目前引擎沒有 mixed-pick pending type，
+// 留待未來擴充 — 先標記為 TODO，不會卡住遊戲（log 提示後直接結束）。
+regG('高溫燃燒器', (st, idx, pool) => {
+  const hasFire = st.players[idx].hand.some(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card?.subtype === 'Basic' && /【火】/.test(card.name);
   });
-  if (fireIdx < 0) return addLog(st, '高溫燃燒器：手牌無基本【火】能量', idx);
-  // 檢查對手場上是否有可敲對象
+  if (!hasFire) return false;
+  // 也要對手場上有可敲對象，否則整張牌無意義
   const dIdx = (1 - idx) as 0 | 1;
   const oppAll = [...(st.players[dIdx].active ? [st.players[dIdx].active!] : []), ...st.players[dIdx].bench];
   const hasTargetTool = oppAll.some(p => p.toolAttached);
@@ -628,9 +720,14 @@ reg('高溫燃燒器', (st, idx, pool) => {
     return ec?.supertype === 'Energy' && ec?.subtype !== 'Basic';
   }));
   const hasStadium = !!st.activeStadium;
-  if (!hasTargetTool && !hasTargetSpecialE && !hasStadium) {
-    return addLog(st, '高溫燃燒器：對手場上無 Tool / 特殊能量 / Stadium 可丟棄', idx);
-  }
+  return hasTargetTool || hasTargetSpecialE || hasStadium;
+});
+reg('高溫燃燒器', (st, idx, pool) => {
+  const fireIdx = st.players[idx].hand.findIndex(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && /【火】/.test(card.name);
+  });
+  if (fireIdx < 0) return addLog(st, '高溫燃燒器：手牌無基本【火】能量', idx);
   // 棄能量
   const players = [...st.players] as [PlayerState, PlayerState];
   const p = { ...players[idx] };
@@ -639,8 +736,7 @@ reg('高溫燃燒器', (st, idx, pool) => {
   p.discard = [...p.discard, eCard];
   players[idx] = p;
   st = addLog({ ...st, players }, '高溫燃燒器：丟棄 1 張基本【火】能量', idx);
-  // 開 pending 讓 Leon 手動選對象（簡化：在 log 提示；UI 尚未支援，v2.114 完善）
-  return addLog(st, '高溫燃燒器：從對手場上選 1 張 Tool/特殊能量/Stadium 丟棄（TODO: pending UI 尚未完整，請手動調整場況）', idx);
+  return addLog(st, '高溫燃燒器：從對手場上選 1 張 Tool/特殊能量/Stadium 丟棄（TODO: 引擎尚未支援 mixed-pick pending，請手動執行）', idx);
 });
 
 // 完全體攪拌器（Item ACE SPEC）— 從牌庫選 ≤5 張丟棄 + 重洗
