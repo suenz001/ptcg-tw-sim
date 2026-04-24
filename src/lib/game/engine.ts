@@ -66,6 +66,25 @@ export const SELF_KO_ABILITY_NAMES = new Set<string>([
   '咒詛炸彈',
   '過度放電',
 ]);
+
+/**
+ * v2.93：「同名特性一回合共享 1 次」的白名單。
+ * 卡面含「在使用了其他的『XX』的回合，這個特性無法使用」字樣的特性才適用。
+ * 全卡池掃描後僅有以下兩張（v2.93-2026-04-24）：
+ *   - 月光循環（月石 M1L/M2a/MC）
+ *   - 使者衝刺（超級袋獸ex M1S 051/080/089）
+ *
+ * v2.91 首次實裝時我錯把 gate 套到所有特性，導致兩隻同名寶可夢（例：
+ * 土龍節節｜逃跑抽出）同回合都想用時第二隻被誤擋。v2.93 以白名單限定修正。
+ *
+ * 加入新卡時：只有卡面明寫「在使用了其他的『XX』的回合，這個特性無法使用」
+ * 才加入本 set；「在自己的回合時可使用 1 次」屬 per-instance 限制（由既有
+ * `CardInstance.abilityUsedThisTurn` flag 負責），不在此範圍。
+ */
+export const SHARED_ONCE_PER_TURN_ABILITY_NAMES = new Set<string>([
+  '月光循環',
+  '使者衝刺',
+]);
 export function isSelfKOEffectBlocked(
   state: GameState,
   pool: Map<string, Card>
@@ -1203,9 +1222,13 @@ function handlePlaying(
       return addLog(state, `${pokeCard!.name} 的特性「${ability.name}」被可達鴨的濕氣消除`, aIdx);
     }
 
-    // v2.91：同名特性一回合限 1 次（例：使者衝刺 / 月光循環）
-    // 卡面「在使用了其他的『XX』的回合，此特性無法使用」= 同名跨實例共享 1 次。
-    if (attacker.abilityNamesUsedThisTurn?.includes(ability.name)) {
+    // v2.91 → v2.93 修正：同名特性一回合共享 1 次 — 只對白名單套用
+    // 卡面含「在使用了其他的『XX』的回合，此特性無法使用」才屬此類（例：月光循環 / 使者衝刺）。
+    // v2.91 原作為全局 gate，導致兩隻土龍節節同回合想用「逃跑抽出」時第二隻被誤擋 — v2.93 以白名單限定。
+    if (
+      SHARED_ONCE_PER_TURN_ABILITY_NAMES.has(ability.name)
+      && attacker.abilityNamesUsedThisTurn?.includes(ability.name)
+    ) {
       return state;
     }
 
@@ -1238,11 +1261,15 @@ function handlePlaying(
     const updatedP = { ...updatedPlayers[aIdx] };
     updatedP.active = updatedP.active ? markUsed(updatedP.active) : null;
     updatedP.bench = updatedP.bench.map(markUsed);
-    // v2.91：記錄本回合用過的特性名稱（同名跨實例限 1 次用）
-    updatedP.abilityNamesUsedThisTurn = [
-      ...(updatedP.abilityNamesUsedThisTurn ?? []),
-      ability.name,
-    ];
+    // v2.91 → v2.93 修正：只有白名單特性（月光循環/使者衝刺）才記錄到
+    // abilityNamesUsedThisTurn；一般特性的「每回合 1 次」由 per-instance
+    // 的 abilityUsedThisTurn flag 負責。
+    if (SHARED_ONCE_PER_TURN_ABILITY_NAMES.has(ability.name)) {
+      updatedP.abilityNamesUsedThisTurn = [
+        ...(updatedP.abilityNamesUsedThisTurn ?? []),
+        ability.name,
+      ];
+    }
     updatedPlayers[aIdx] = updatedP;
 
     let newState: GameState = addLog(
@@ -2619,8 +2646,11 @@ export function getUsableAbilities(
       // 可達鴨｜濕氣：自身 KO 類特性被消除（不列入可用清單）
       if (SELF_KO_ABILITY_NAMES.has(ab.name) && isSelfKOEffectBlocked(state, pool)) return;
 
-      // v2.91：同名特性一回合限 1 次（使者衝刺 / 月光循環 等）
-      if (player.abilityNamesUsedThisTurn?.includes(ab.name)) return;
+      // v2.91 → v2.93 修正：同名特性共享 1 次 — 只對白名單（月光循環 / 使者衝刺）
+      if (
+        SHARED_ONCE_PER_TURN_ABILITY_NAMES.has(ab.name)
+        && player.abilityNamesUsedThisTurn?.includes(ab.name)
+      ) return;
 
       // v2.91 使者衝刺（超級袋獸ex）：「若這隻寶可夢在戰鬥場上，...」→ 備戰時不顯示
       if (ab.name === '使者衝刺' && player.active?.iid !== pk.iid) return;

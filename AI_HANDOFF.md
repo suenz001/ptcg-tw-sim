@@ -1,9 +1,47 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.92)  
+> 最後更新：2026-04-24 (v2.93)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.93 — Bug 修：同名特性 gate 誤擋土龍節節「逃跑抽出」
+
+### 回報
+Leon 實戰測試：場上有 2 張土龍節節，第 1 隻用「逃跑抽出」（抽 3 張 + 自洗回牌庫）正常，
+第 2 隻進化完後「逃跑抽出」按鈕反白禁按。
+
+### 根因
+v2.91 為了支援 月石｜月光循環 / 超級袋獸ex｜使者衝刺 的卡面限制
+（「在使用了其他的『XX』的回合，這個特性無法使用」），新增
+`PlayerState.abilityNamesUsedThisTurn` 陣列 + USE_ABILITY 的同名 gate +
+getUsableAbilities 的同步檢查。
+
+但實作時把 gate 做成**全局**，任何特性只要同名在本回合用過就擋掉。
+而土龍節節「逃跑抽出」的 rulesText 其實是「在自己的回合時可使用 1 次」—
+這是 **per-instance** 限制（由既有的 `CardInstance.abilityUsedThisTurn` 負責），
+不同隻同名寶可夢各自能用。
+
+### 修正
+engine.ts 新增常數 `SHARED_ONCE_PER_TURN_ABILITY_NAMES`（白名單 pattern，
+與 `SELF_KO_ABILITY_NAMES` 同型）：
+
+```ts
+export const SHARED_ONCE_PER_TURN_ABILITY_NAMES = new Set<string>([
+  '月光循環',
+  '使者衝刺',
+]);
+```
+
+全卡池掃描確認只有這兩張寫「在使用了其他的『XX』的回合…」— 其他特性不套用此限制。
+三處 gate（USE_ABILITY check / push / getUsableAbilities check）都加白名單前置檢查。
+
+### 驗證
+- build ✓（14.03s）
+- 需實戰：第 2 隻土龍節節「逃跑抽出」按鈕應可正常點擊；月石 / 超級袋獸ex 的
+  同名限制應維持不變。
 
 ---
 
