@@ -809,7 +809,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "阿響的熔岩蟲"
   },
   {
     "id": "14680",
@@ -7242,7 +7243,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "阿響的熔岩蟲"
   },
   {
     "id": "15946",
@@ -8984,7 +8986,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "瑪俐的詐唬魔"
   },
   {
     "id": "15992",
@@ -9077,7 +9080,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "大吾的金屬怪"
   },
   {
     "id": "15994",

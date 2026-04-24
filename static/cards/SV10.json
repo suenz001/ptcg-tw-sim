@@ -723,7 +723,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的戴魯比"
   },
   {
     "id": "12768",
@@ -1533,7 +1534,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的咩利羊"
   },
   {
     "id": "12786",
@@ -1581,7 +1583,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "火箭隊的茸茸羊"
   },
   {
     "id": "12787",
@@ -1677,7 +1680,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的催眠貘"
   },
   {
     "id": "12789",
@@ -1911,7 +1915,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "蟲寶包"
   },
   {
     "id": "12794",
@@ -1963,7 +1968,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "火箭隊的天罩蟲"
   },
   {
     "id": "12795",
@@ -2157,7 +2163,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的幼基拉斯"
   },
   {
     "id": "12800",
@@ -2207,7 +2214,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "火箭隊的沙基拉斯"
   },
   {
     "id": "12801",
@@ -2513,7 +2521,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的阿柏蛇"
   },
   {
     "id": "12808",
@@ -2599,7 +2608,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的尼多蘭"
   },
   {
     "id": "12810",
@@ -2648,7 +2658,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "火箭隊的尼多娜"
   },
   {
     "id": "12811",
@@ -2745,7 +2756,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的尼多朗"
   },
   {
     "id": "12813",
@@ -2796,7 +2808,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "火箭隊的尼多力諾"
   },
   {
     "id": "12814",
@@ -3030,7 +3043,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的臭泥"
   },
   {
     "id": "12819",
@@ -3116,7 +3130,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的瓦斯彈"
   },
   {
     "id": "12821",
@@ -3432,7 +3447,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的小拉達"
   },
   {
     "id": "12828",
@@ -3527,7 +3543,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的喵喵"
   },
   {
     "id": "12830",
@@ -3652,7 +3669,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的多邊獸"
   },
   {
     "id": "12833",
@@ -3698,7 +3716,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "火箭隊的多邊獸Ⅱ"
   },
   {
     "id": "12834",
@@ -4118,7 +4137,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的戴魯比"
   },
   {
     "id": "12906",
@@ -4308,7 +4328,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "火箭隊的天罩蟲"
   },
   {
     "id": "12910",
@@ -4348,7 +4369,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的瓦斯彈"
   },
   {
     "id": "12911",
@@ -4479,7 +4501,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的小拉達"
   },
   {
     "id": "12914",
@@ -4867,7 +4890,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "火箭隊的尼多力諾"
   },
   {
     "id": "12922",
@@ -4964,7 +4988,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的喵喵"
   },
   {
     "id": "12924",
@@ -5205,7 +5230,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "火箭隊的尼多力諾"
   },
   {
     "id": "12932",

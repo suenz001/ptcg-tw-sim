@@ -74,7 +74,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "莉佳的走路草"
   },
   {
     "id": "16474",
@@ -120,7 +121,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "莉佳的臭臭花"
   },
   {
     "id": "16475",
@@ -287,7 +289,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "莉佳的走路草"
   },
   {
     "id": "16479",
@@ -338,7 +341,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "莉佳的臭臭花"
   },
   {
     "id": "16480",
@@ -4237,7 +4241,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的戴魯比"
   },
   {
     "id": "16572",
@@ -6633,7 +6638,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "小霞的海星星"
   },
   {
     "id": "16628",
@@ -6729,7 +6735,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "小霞的鯉魚王"
   },
   {
     "id": "16630",
@@ -12375,7 +12382,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的催眠貘"
   },
   {
     "id": "16761",
@@ -18183,7 +18191,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "派帕的原野水母"
   },
   {
     "id": "16892",
@@ -18789,7 +18798,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的尼多蘭"
   },
   {
     "id": "16905",
@@ -18838,7 +18848,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "火箭隊的尼多娜"
   },
   {
     "id": "16906",
@@ -18935,7 +18946,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的尼多朗"
   },
   {
     "id": "16908",
@@ -18986,7 +18998,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "火箭隊的尼多力諾"
   },
   {
     "id": "16909",
@@ -19917,7 +19930,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "瑪俐的扒手貓"
   },
   {
     "id": "16931",
@@ -20150,7 +20164,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "瑪俐的滑滑小子"
   },
   {
     "id": "16936",
@@ -24333,7 +24348,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的小拉達"
   },
   {
     "id": "17028",
@@ -24507,7 +24523,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "火箭隊的喵喵"
   },
   {
     "id": "17032",
@@ -25248,7 +25265,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "青木的土龍弟弟"
   },
   {
     "id": "17049",
@@ -25850,7 +25868,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "青木的姆克兒"
   },
   {
     "id": "17063",
@@ -25902,7 +25921,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "青木的姆克鳥"
   },
   {
     "id": "17064",
@@ -26626,7 +26646,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "青木的毛頭小鷹"
   },
   {
     "id": "17081",
@@ -29977,7 +29998,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "青木的姆克鳥"
   },
   {
     "id": "18348",

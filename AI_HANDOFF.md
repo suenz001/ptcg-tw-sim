@@ -1,9 +1,59 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.87)  
+> 最後更新：2026-04-24 (v2.88)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.88 — 冠名寶可夢 evolvesFrom 全面補修（69 張）
+
+### 問題
+Leon 回報一堆訓練家冠名寶可夢的進化鏈沒連上。例如「小霞的寶石海星」沒顯示進化前階，應該是「小霞的海星星」。
+
+### 根因
+冠名寶可夢（火箭隊的XX / 小霞的XX / 阿響的XX... 13 人白名單）的官網頁面 `.evolution` 區塊**只列出自己**，沒有前階資訊。
+```
+h1: 1階進化|<小霞的>寶石海星
+.evolution: ["<小霞的>寶石海星"]
+```
+scraper 的 `findIndex + idx - 1` 邏輯找不到 idx-1，所以 evolvesFrom 直接空著。141 張冠名 Stage1+ 寶可夢中，**69 張 evolvesFrom 為空**。
+
+### 主修
+分兩階段處理：
+
+**Phase 1（39 張自動推導）— `scripts/fix-branded-evolution.mjs`**：
+- 邏輯：`{owner}的{base} Stage1+` 的前階 = `{owner}的{base_prev}`（if 同訓練家冠名前階在卡池）else `{base_prev}`（普通版 fallback）
+- base_prev 從卡池中同 base 的**普通版**（非冠名）的 evolvesFrom 推導
+- 39 張直接自動填入
+
+**Phase 2（30 張手動 hardcoded）— `scripts/fix-branded-evolution-v2.mjs`**：
+卡在邊界：普通版寶可夢不在卡池或沒 evolvesFrom（尼多蘭、尼多朗、姆克兒、煤炭龜、鯉魚王 等 — 這些普通版沒出 TCG 卡，但冠名版在卡池）。手動建表，每張的前階都經卡池交叉驗證存在：
+
+- 莉佳 → 口呆花 / 大食花 系（Oddish/Gloom/Vileplume）
+- 小霞 → 寶石海星 / 暴鯉龍（Staryu/Starmie, Magikarp/Gyarados）
+- 火箭隊 → 尼多系 8 張（兩條分支：尼多蘭→尼多娜→尼多后；尼多朗→尼多力諾→尼多王ex）
+- 火箭隊 → 天罩蟲/以歐路普、臭臭泥、多邊獸系、拉達、貓老大ex 等
+- 青木 → 姆克兒→姆克鳥→姆克鷹
+- 阿響 → 火岩鼠→火爆獸（fallback 煤炭龜）
+- 派帕 → 貪心栗鼠→藏飽栗鼠
+
+**規則**：所有 evolvesFrom 都不帶 `<>`（Leon 重申 v2.71 定的統一命名規則）。
+
+### 驗證
+最終 audit 掃全卡池：
+```
+冠名 Stage1+ OK: 141 (100%)
+evolvesFrom 仍空: 0
+evolvesFrom 帶 <>: 0
+evolvesFrom 指向池外: 0
+全卡池帶 <> 殘留: 0
+```
+本機 build ✓
+
+### 教訓（已加到 memory）
+冠名寶可夢的官網頁面 `.evolution` 只顯示自己，無前階 — scraper 無法抓。v2.76 修過 ex/GX 同名，v2.87 加地區前綴 strip，但都沒處理這個 pattern。未來新 set 若有冠名寶可夢，**必須手動補 evolvesFrom** 或寫專用 migration。
 
 ---
 

@@ -100,7 +100,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "大吾的天秤偶"
   },
   {
     "id": "12583",
@@ -330,7 +331,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "大吾的鐵啞鈴"
   },
   {
     "id": "12588",
@@ -381,7 +383,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "大吾的金屬怪"
   },
   {
     "id": "12589",

@@ -682,7 +682,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "煤炭龜"
   },
   {
     "id": "12675",
@@ -731,7 +732,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "阿響的火岩鼠"
   },
   {
     "id": "12676",
@@ -819,7 +821,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "阿響的熔岩蟲"
   },
   {
     "id": "12678",
@@ -1032,7 +1035,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "小霞的海星星"
   },
   {
     "id": "12683",
@@ -1128,7 +1132,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "小霞的鯉魚王"
   },
   {
     "id": "12685",
@@ -1253,7 +1258,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "竹蘭的醜醜魚"
   },
   {
     "id": "12688",
@@ -2080,7 +2086,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "派帕的原野水母"
   },
   {
     "id": "12707",
@@ -2391,7 +2398,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "派帕的貪心栗鼠"
   },
   {
     "id": "12714",
@@ -2839,7 +2847,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "阿響的火岩鼠"
   },
   {
     "id": "12729",
@@ -3066,7 +3075,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "派帕的貪心栗鼠"
   },
   {
     "id": "12734",

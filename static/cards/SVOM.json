@@ -74,7 +74,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "瑪俐的扒手貓"
   },
   {
     "id": "12606",
@@ -163,7 +164,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "瑪俐的滑滑小子"
   },
   {
     "id": "12608",
@@ -248,7 +250,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "瑪俐的搗蛋小妖"
   },
   {
     "id": "12610",
@@ -293,7 +296,8 @@
     "tags": [
       "訓練家冠名"
     ],
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "evolvesFrom": "瑪俐的詐唬魔"
   },
   {
     "id": "12611",
