@@ -886,10 +886,12 @@ function handlePlaying(
     if (!baseCard) return state;
     // v2.102 活力森林（Stadium）— 雙方的所有【草】寶可夢就算在剛使出的回合也可進化成【草】寶可夢。
     //   自己最初回合例外（line 775 `state.isFirstTurn` gate 照舊擋）。
+    // v2.110：bypass 不只 justPlaced，也 bypass evolvedThisTurn — 允許同回合連鎖進化
+    //   整條草進化鏈（例：菊草葉→月桂葉→大竺葵 一回合打完）。只要草→草、活力森林在場。
     const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
     const vigorousForestException = stadiumName === '活力森林' &&
       baseCard.pokemonType === 'Grass' && evoCard.pokemonType === 'Grass';
-    if ((basePoke.justPlaced && !vigorousForestException) || basePoke.evolvedThisTurn) return state;
+    if ((basePoke.justPlaced || basePoke.evolvedThisTurn) && !vigorousForestException) return state;
     if (!sameEvoName(evoCard.evolvesFrom, baseCard.name)) return state;
 
     // 進化：繼承傷害、能量、狀態；進化鏈堆疊保留被進化掉的 CardInstance（裸殼，附加物轉給頂層）
@@ -2696,25 +2698,27 @@ export function getEvolvableTargets(
     ...player.bench,
   ];
 
-  // v2.109：活力森林（Stadium）— 雙方的所有【草】寶可夢就算在剛使出的回合也可進化成【草】寶可夢。
-  //   engine EVOLVE handler 已處理此 bypass（line 887-892），UI 這邊也要同步放行才會顯示進化綠框。
+  // v2.109/v2.110：活力森林（Stadium）— 雙方的所有【草】寶可夢就算在剛使出的回合也可進化成【草】寶可夢。
+  //   v2.110：bypass 不只 justPlaced 也 bypass evolvedThisTurn，允許同回合連鎖進化整條草鏈
+  //   （菊草葉→月桂葉→大竺葵 一回合打完）。只要 base/evo 都是草，活力森林 exception 放行。
   const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
   const isForest = stadiumName === '活力森林';
 
   const result: Array<{ fromIid: string; toIids: string[] }> = [];
   for (const fp of fieldPokemon) {
-    if (fp.evolvedThisTurn) continue;
     const fpCard = pool.get(fp.cardId);
     if (!fpCard) continue;
-    // justPlaced 通常擋；但若活力森林且 fp 是草寶可夢，delay 到 per-evo 再判（evoCard 也要是草才 bypass）
+    // 活力森林 bypass 對 base 的要求：base 是草寶可夢
     const forestBypassBase = isForest && fpCard.pokemonType === 'Grass';
-    if (fp.justPlaced && !forestBypassBase) continue;
+    // 原本的 gate：justPlaced OR evolvedThisTurn 擋。活力森林 exception 兩者都能豁免（per-evo 再確認 evoCard 也是草）
+    const baseBlocked = fp.justPlaced || fp.evolvedThisTurn;
+    if (baseBlocked && !forestBypassBase) continue;
     const validEvos = handEvos.filter(evo => {
       const ec = pool.get(evo.cardId);
       if (!ec) return false;
       if (!sameEvoName(ec.evolvesFrom, fpCard.name)) return false;
-      // justPlaced 的 fp：只有活力森林 exception 可進化，且 evoCard 也必須是草
-      if (fp.justPlaced && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
+      // 若 base 被擋但進到這裡 → 代表活力森林 bypass 成立，必須 evoCard 也是草
+      if (baseBlocked && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
       return true;
     });
     if (validEvos.length > 0) {

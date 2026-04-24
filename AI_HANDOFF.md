@@ -1,9 +1,52 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.109)  
+> 最後更新：2026-04-24 (v2.110)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.110 — Bug：活力森林 v2.109 修不完整 — 也要 bypass evolvedThisTurn
+
+### 問題（Leon 回報）
+v2.109 放行後：場上有活力森林，當回合打菊草葉 → 進化月桂葉 ✓
+但月桂葉進一步進化大竺葵時**還是被擋** — 因為月桂葉 `evolvedThisTurn=true`。
+
+Leon 指正：「活力森林的被動效果是一直存在的，只要在場上，草系寶可夢就可以**隨時進化**」—
+即使當回合剛進化過的草寶可夢，只要要進化到上一階且目標也是草，就能繼續進化。
+等同「菊草葉→月桂葉→大竺葵」可一回合連鎖打完；多組進化鏈也一樣。
+
+### 根因
+v2.109 只 bypass `justPlaced`，沒 bypass `evolvedThisTurn`。gate 原寫：
+```typescript
+if ((basePoke.justPlaced && !vigorousForestException) || basePoke.evolvedThisTurn) return state;
+```
+v2.109 只調了 `justPlaced` 的部分，右側 `|| evolvedThisTurn` 照舊擋。
+
+### 修的東西
+engine EVOLVE handler（line 892）改為：
+```typescript
+if ((basePoke.justPlaced || basePoke.evolvedThisTurn) && !vigorousForestException) return state;
+```
+→ 活力森林 exception 成立時（草→草 + Stadium 在場），**兩個 flag 都繞過**。
+
+UI `getEvolvableTargets`（line 2706-2727）同步：
+- 合併 `baseBlocked = justPlaced || evolvedThisTurn`
+- 活力森林 bypass 條件下 per-evo 再確認 evoCard 也是草
+
+### 驗證
+- build ✓
+- 邏輯：場上有活力森林、手上有整條草鏈 → 當回合菊草葉→月桂葉→大竺葵 一次打完 ✓
+
+### 為什麼 v2.109 沒一次做到位（教訓）
+v2.109 只看 Leon 描述「打迷你芙後不能進化奧利紐」— 當時 basePoke (迷你芙) 只有
+`justPlaced=true`，`evolvedThisTurn=false`，bypass justPlaced 就 OK。沒想到
+Leon 下一步可能會繼續進化 Stage2（月桂葉→大竺葵）。
+
+應從**卡面 rulesText 反推完整規則**：「就算在剛使出的回合也可進化成【草】寶可夢」
+— 「剛使出」是廣義詞，不只 `justPlaced`，也包括「同回合剛進化完畢的寶可夢」。
+兩個 flag 都要放行才對。
 
 ---
 
