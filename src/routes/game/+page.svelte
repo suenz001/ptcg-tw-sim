@@ -1217,9 +1217,84 @@
    * 取代「火×2 水×1」這種文字表達，避免 bench-slot 被撐寬或換行。
    * 回傳 { type, count } 陣列供模板 #each 渲染。
    */
-  function energyPips(inst: CardInstance): Array<{ type: string; count: number }> {
-    const counts = countEnergy(inst, pool);
-    return [...counts.entries()].map(([type, count]) => ({ type, count }));
+  // v2.120：以「一張卡 = 一個 pip」為原則，避免全屬性特殊能量展成 10 個 pip。
+  // 'Rainbow' = virtual type「彩」，用於古舊/夜光/稜鏡(on Basic)/新衝天 等全屬性卡。
+  // 火箭隊能量：看 host 招式需求 → 2 顆惡 或 2 顆超 或 1 超 1 惡。
+  function energyPips(inst: CardInstance): Array<{ type: string; count: number; label?: string }> {
+    const host = getCard(inst.cardId);
+    const hostIsEvolution = !!host?.evolvesFrom || host?.stage === 'Stage1' || host?.stage === 'Stage2';
+    const hostIsStage2 = host?.stage === 'Stage2';
+    const hostNeedsType = (t: EnergyType): boolean =>
+      !!host?.attacks?.some(a => a.cost?.includes(t));
+
+    // Map<pip type> → count。用 Map 保留插入順序（先來先列）。
+    const counts = new Map<string, number>();
+    const bump = (type: string, n = 1) => counts.set(type, (counts.get(type) ?? 0) + n);
+
+    for (const e of inst.energyAttached) {
+      const ec = getCard(e.cardId);
+      if (!ec) continue;
+      // 基本能量：按卡片 pokemonType 或 name 解析
+      if (ec.subtype === 'Basic') {
+        let t: string = 'Colorless';
+        if (ec.pokemonType) t = ec.pokemonType;
+        else {
+          const m = ec.name.match(/【(.+?)】/);
+          const zhMap: Record<string, EnergyType> = {
+            草: 'Grass', 火: 'Fire', 水: 'Water', 雷: 'Lightning',
+            超: 'Psychic', 鬥: 'Fighting', 惡: 'Darkness', 鋼: 'Metal',
+            龍: 'Dragon', 無: 'Colorless',
+          };
+          if (m && zhMap[m[1]]) t = zhMap[m[1]];
+        }
+        bump(t);
+        continue;
+      }
+      // 特殊能量：依卡名分類
+      const name = ec.name;
+      // 全屬性類 → Rainbow「彩」
+      if (name === '古舊能量' || name === '夜光能量') { bump('Rainbow'); continue; }
+      if (name === '稜鏡能量') { bump(hostIsEvolution ? 'Colorless' : 'Rainbow'); continue; }
+      if (name === '新衝天能量') {
+        if (hostIsStage2) { bump('Rainbow', 2); }
+        else { bump('Colorless'); }
+        continue;
+      }
+      // 火箭隊能量：看 host 招式需求 → 顯示相符屬性 ×2
+      if (name === '火箭隊能量') {
+        const needsDark = hostNeedsType('Darkness');
+        const needsPsychic = hostNeedsType('Psychic');
+        if (needsDark && !needsPsychic)      { bump('Darkness', 2); }
+        else if (needsPsychic && !needsDark) { bump('Psychic', 2); }
+        else                                  { bump('Psychic'); bump('Darkness'); }
+        continue;
+      }
+      // 燃火能量：on 進化 = 3 顆【無】；其他 = 1 顆【無】
+      if (name === '燃火能量') {
+        if (hostIsEvolution) bump('Colorless', 3);
+        else bump('Colorless');
+        continue;
+      }
+      // 單屬性特殊能量（感應【超】/ 硬岩【鬥】 / 磁鐵【鋼】 等）→ 主屬性
+      //   name 例如「感應【超】能量」→ 取【X】解析
+      const m = name.match(/【(.+?)】/);
+      if (m) {
+        const zhMap: Record<string, EnergyType> = {
+          草: 'Grass', 火: 'Fire', 水: 'Water', 雷: 'Lightning',
+          超: 'Psychic', 鬥: 'Fighting', 惡: 'Darkness', 鋼: 'Metal',
+          龍: 'Dragon', 無: 'Colorless',
+        };
+        if (zhMap[m[1]]) { bump(zhMap[m[1]]); continue; }
+      }
+      // fallback：無色
+      bump('Colorless');
+    }
+    // 轉出，Rainbow 加 label '彩'
+    return [...counts.entries()].map(([type, count]) => ({
+      type,
+      count,
+      ...(type === 'Rainbow' ? { label: '彩' } : {}),
+    }));
   }
   function hpColor(rem: number, tot: number): string {
     const p = tot > 0 ? rem/tot : 1;
@@ -2096,7 +2171,7 @@
                   {#if energyPips(b).length > 0}
                     <div class="bench-nrg">
                       {#each energyPips(b) as pip}
-                        <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                        <span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
                       {/each}
                     </div>
                   {/if}
@@ -2145,7 +2220,7 @@
               {#if energyPips(oppPlayer.active).length > 0}
                 <div class="active-nrg-col">
                   {#each energyPips(oppPlayer.active) as pip}
-                    <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                    <span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
                   {/each}
                 </div>
               {/if}
@@ -2321,7 +2396,7 @@
             {#if energyPips(myPlayer.active).length > 0}
               <div class="active-nrg-col">
                 {#each energyPips(myPlayer.active) as pip}
-                  <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                  <span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
                 {/each}
               </div>
             {/if}
@@ -2386,7 +2461,7 @@
                 {#if energyPips(b).length > 0}
                   <div class="bench-nrg">
                     {#each energyPips(b) as pip}
-                      <span class="nrg-pip" style="background:{ENERGY_COLOR[pip.type]}" title="{ENERGY_LABEL[pip.type]} × {pip.count}">{ENERGY_LABEL[pip.type]}{pip.count > 1 ? pip.count : ''}</span>
+                      <span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
                     {/each}
                   </div>
                 {/if}
@@ -3705,6 +3780,21 @@
     min-width:14px; height:14px; padding:0 3px; border-radius:7px;
     font-size:.58rem; font-weight:700; color:#fff; line-height:1;
     box-shadow:0 0 0 1px rgba(0,0,0,.35) inset;
+  }
+  /* v2.120 Rainbow pip：全屬性特殊能量（古舊/夜光/稜鏡 on Basic/新衝天 on Stage2） */
+  .nrg-pip.nrg-pip-rainbow{
+    background: conic-gradient(
+      #5ca83a 0deg 40deg,     /* 草 */
+      #d94a3a 40deg 80deg,    /* 火 */
+      #3a7aca 80deg 120deg,   /* 水 */
+      #e8b33a 120deg 160deg,  /* 雷 */
+      #9a4ab4 160deg 200deg,  /* 超 */
+      #aa6a4a 200deg 240deg,  /* 鬥 */
+      #4a4a5a 240deg 280deg,  /* 惡 */
+      #8a9aa4 280deg 320deg,  /* 鋼 */
+      #c4a84a 320deg 360deg   /* 龍 */
+    );
+    color:#fff; text-shadow:0 0 3px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,.9);
   }
 
   .zone-pile{ flex-shrink:0; display:flex; flex-direction:column; gap:.35rem; width:72px; align-items:center; }

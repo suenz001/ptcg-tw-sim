@@ -361,11 +361,25 @@ function effectiveHPInline(
     hp = Math.max(0, hp - 30);
   }
   // v2.113 夠讚狗｜腎上腺力量 — 身上附【惡】能量時最大 HP +100
+  // v2.120 修：稜鏡能量附於基礎寶可夢時視為提供全屬性能量（含惡能量），也算數
   if (card.name === '夠讚狗') {
+    // 夠讚狗是 Basic，稜鏡能量附它 → 全屬性（含 Darkness）
+    const hostIsEvolution = !!card.evolvesFrom || card.stage === 'Stage1' || card.stage === 'Stage2';
     const hasDark = inst.energyAttached.some(e => {
       const ec = pool.get(e.cardId);
-      return ec?.supertype === 'Energy' &&
-        (ec.pokemonType === 'Darkness' || (ec.subtype === 'Basic' && /【惡】/.test(ec.name)));
+      if (!ec || ec.supertype !== 'Energy') return false;
+      // 基本能量 Darkness
+      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Darkness' || /【惡】/.test(ec.name))) return true;
+      // 特殊能量本來屬性即含 Darkness（火箭隊能量、古舊能量等）
+      if (ec.pokemonType === 'Darkness') return true;
+      // 稜鏡能量 on Basic host → 視為全屬性
+      if (ec.name === '稜鏡能量' && !hostIsEvolution) return true;
+      // 新衝天能量 on Stage2 host → 全屬性（夠讚狗是 Basic 所以不適用，保留邏輯為他卡參考）
+      // 古舊能量 → 單張即全屬性
+      if (ec.name === '古舊能量' || ec.name === '夜光能量') return true;
+      // 火箭隊能量 → 提供 Psychic/Darkness
+      if (ec.name === '火箭隊能量') return true;
+      return false;
     });
     if (hasDark) hp += 100;
   }

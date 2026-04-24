@@ -144,11 +144,33 @@ function beep(
   osc.stop(start + duration + 0.05);
 }
 
-// ─ Coin flip ────────
-// 兩個短音：高頻「叮」+ 稍低「啷」，模擬金幣敲擊
+// ─ Coin flip（v2.120 Leon 要求改為金屬鏘鏘聲）────────
+// 金屬敲擊的聲學特徵：多個 inharmonic partial（1f、~2.3f、~3.7f）同時響起後
+// 快速 attack + 長 ring decay。用 3 個 sine + 1 個少量 square（帶少許刺痛感）
+// 疊加，每次 coin flip 產生 2 次敲擊（硬幣彈起落下的兩個接觸聲）。
+function metalClink(c: AudioContext, out: GainNode, t: number, base: number, peak: number): void {
+  const partials = [
+    { freq: base,        gain: peak,        type: 'sine' as OscillatorType,     dur: 0.45 },
+    { freq: base * 2.31, gain: peak * 0.6,  type: 'sine' as OscillatorType,     dur: 0.35 },
+    { freq: base * 3.75, gain: peak * 0.35, type: 'sine' as OscillatorType,     dur: 0.28 },
+    { freq: base * 1.5,  gain: peak * 0.15, type: 'square' as OscillatorType,   dur: 0.08 }, // 刺耳 attack transient
+  ];
+  for (const p of partials) {
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.type = p.type;
+    osc.frequency.value = p.freq;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(p.gain, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.001, t + p.dur);
+    osc.connect(g); g.connect(out);
+    osc.start(t); osc.stop(t + p.dur + 0.05);
+  }
+}
 function playCoin(c: AudioContext, out: GainNode, t: number): void {
-  beep(c, out, t, 1200, 0.15, 'sine', 0.35);
-  beep(c, out, t + 0.12, 900, 0.25, 'triangle', 0.28);
+  // 兩次敲擊：第一次亮、第二次稍低（硬幣旋轉落地感）
+  metalClink(c, out, t,         1400, 0.22);
+  metalClink(c, out, t + 0.18,  1050, 0.18);
 }
 
 // ─ 紙張「刷」通用 helper（v2.119 換音色 — Leon 反饋：之前像電子嗶嗶聲）────

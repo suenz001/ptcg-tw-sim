@@ -331,16 +331,45 @@ export function getEnergyProvided(cardId: string, pool: Map<string, Card>): Ener
 /**
  * 計算一隻寶可夢附加的能量總量（按屬性分類）。
  * 回傳 Map<EnergyType, number>
+ *
+ * v2.120：host-aware — 某些特殊能量（稜鏡能量）根據 host 寶可夢階段提供不同屬性：
+ *   稜鏡能量 on Basic → 視為所有屬性（Leon 要求修正 v2.113 反邏輯）
+ *   稜鏡能量 on Evolution → 僅無色
+ * 新衝天能量 on Stage2 → 視為所有屬性×2；其他 → 無色×1
+ * 這些都要反映到 countEnergy，才能讓腎上腺力量等判定「身上有惡能量」正確生效。
  */
 export function countEnergy(
   pokemon: CardInstance,
   pool: Map<string, Card>
 ): Map<EnergyType, number> {
+  const hostCard = pool.get(pokemon.cardId);
+  const hostStage = hostCard?.stage ?? hostCard?.subtype;
+  const hostIsEvolution = hostStage === 'Stage1' || hostStage === 'Stage2' || !!hostCard?.evolvesFrom;
+  const hostIsStage2 = hostStage === 'Stage2';
+  const ALL_TYPES: EnergyType[] = ['Grass', 'Fire', 'Water', 'Lightning', 'Psychic', 'Fighting', 'Darkness', 'Metal', 'Dragon', 'Colorless'];
+
   const map = new Map<EnergyType, number>();
+  const add = (types: EnergyType[]) => {
+    for (const t of types) map.set(t, (map.get(t) ?? 0) + 1);
+  };
   for (const e of pokemon.energyAttached) {
-    for (const t of getEnergyProvided(e.cardId, pool)) {
-      map.set(t, (map.get(t) ?? 0) + 1);
+    const ec = pool.get(e.cardId);
+    if (ec?.name === '稜鏡能量') {
+      add(hostIsEvolution ? ['Colorless'] : ALL_TYPES);
+      continue;
     }
+    if (ec?.name === '新衝天能量') {
+      if (hostIsStage2) { add(ALL_TYPES); add(ALL_TYPES); }
+      else              { add(['Colorless']); }
+      continue;
+    }
+    if (ec?.name === '燃火能量') {
+      // 燃火能量 on 進化 = 3 個【無】；否則 1 個【無】
+      if (hostIsEvolution) { add(['Colorless']); add(['Colorless']); add(['Colorless']); }
+      else                 { add(['Colorless']); }
+      continue;
+    }
+    add(getEnergyProvided(e.cardId, pool));
   }
   return map;
 }
@@ -461,9 +490,11 @@ export function canAffordAttack(
       }
       continue;
     }
-    // v2.113 稜鏡能量：非【基礎】寶（Stage1 或 Stage2）→ 1 個任意屬性 unit；否則 1 個【無】
+    // v2.113 稜鏡能量（v2.120 修：原版邏輯寫反）卡面：
+    //   「若附於【基礎】寶可夢身上，則視為提供 1 個所有屬性的能量」→ Basic → 全屬性
+    //   否則只視為 1 個【無】。
     if (ec?.name === '稜鏡能量') {
-      units.push({ types: isEvolution ? ALL_TYPES : ['Colorless'] });
+      units.push({ types: isEvolution ? ['Colorless'] : ALL_TYPES });
       continue;
     }
     // v2.113 新衝天能量（ACE SPEC）：【2 階進化】寶 → 2 個任意屬性 units；否則 1 個【無】
@@ -1687,12 +1718,9 @@ function handlePlaying(
     }
 
     // v2.113 夠讚狗｜腎上腺力量 — 若攻擊方自身（夠讚狗）附有【惡】能量，招式傷害 +100
+    // v2.120：改用 countEnergy（host-aware），稜鏡能量在 Basic host 上也算惡能量
     if (baseDamage > 0 && attackerCard.name === '夠讚狗') {
-      const hasDark = attacker.active.energyAttached.some(e => {
-        const ec = pool.get(e.cardId);
-        return ec?.supertype === 'Energy' &&
-          (ec.pokemonType === 'Darkness' || (ec.subtype === 'Basic' && /【惡】/.test(ec.name)));
-      });
+      const hasDark = (countEnergy(attacker.active, pool).get('Darkness') ?? 0) >= 1;
       if (hasDark) {
         baseDamage += 100;
         workingState = addLog(workingState, `「腎上腺力量」啟動：夠讚狗 招式傷害 +100`, aIdx);

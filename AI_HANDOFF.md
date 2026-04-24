@@ -1,9 +1,72 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.119)  
+> 最後更新：2026-04-25 (v2.120)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.120 — 金屬硬幣音 + 稜鏡能量邏輯修 + UI 彩色能量 pip + 火箭隊能量依招式顯示
+
+### Leon 回報 & 修正
+
+**1. 擲硬幣要金屬鏘鏘聲**
+- v2.118 `playCoin` 只用 sine + triangle 單音 → 聽起來像鈴聲不像硬幣
+- 改用 `metalClink` 函式：3 個 sine partial（1f / 2.31f / 3.75f — 金屬 inharmonic partial 典型比例）
+  + 1 個 square 做 attack transient（刺耳感）+ 長 ring decay（0.28~0.45s）
+- 播 2 次（第一次 1400Hz、第二次 1050Hz，延 0.18s），模擬硬幣敲擊 → 旋轉落地
+
+**2. 稜鏡能量邏輯修正（v2.113 實裝反了）**
+卡面：「若附於【基礎】寶可夢身上，則視為提供 1 個所有屬性的能量」
+- v2.113 我寫成 `isEvolution ? ALL_TYPES : Colorless`（反了）
+- v2.120 修為 `isEvolution ? Colorless : ALL_TYPES`
+- engine.ts canAffordAttack inline + countEnergy 都同步
+
+**2b. countEnergy host-aware（讓腎上腺力量認得稜鏡）**
+- Leon 情境：夠讚狗（Basic）+ 1 鬥 + 1 稜鏡 → 應該視為「有惡能量」觸發腎上腺力量 HP+100 + 招式 +100
+- 重寫 `countEnergy(pokemon, pool)` → 讀取 host 寶可夢階段：
+  - 稜鏡能量 on Basic → 全屬性（含 Darkness）
+  - 稜鏡能量 on Evolution → Colorless
+  - 新衝天能量 on Stage2 → 全屬性 ×2；其他 → Colorless
+  - 燃火能量 on Evolution → Colorless ×3；其他 → Colorless
+- engine.ts 腎上腺力量判定改用 `countEnergy(...).get('Darkness') >= 1`
+- effects.ts effectiveHPInline 腎上腺力量判定同步認得稜鏡 + 火箭隊 + 古舊 + 夜光 等能量
+
+**3. UI 能量 pip「彩」字 + 1 張卡 = 1 個 pip**
+Leon 反饋：古舊能量/稜鏡 等全屬性能量在 UI 被展成 8~10 顆 pip，看起來像有很多能量。實際是 1 張卡。
+- 重寫 `energyPips(inst)`：遍歷每張能量卡，按卡片分類而非用 countEnergy 展開
+  - 基本能量 → 對應屬性 pip
+  - 全屬性特殊能量（古舊/夜光/稜鏡 on Basic）→ 單一 Rainbow pip（「彩」字）
+  - 新衝天能量 on Stage2 → 2 個 Rainbow pip；其他 → 1 個 Colorless
+  - 火箭隊能量 → 看 host 招式需求：需要 Darkness → 2 顆惡；需要 Psychic → 2 顆超；
+    都需 or 都不需 → 1 超 + 1 惡
+  - 燃火能量 on Evolution → 3 顆 Colorless；其他 → 1 顆
+  - 單屬性特殊能量（感應【超】/ 硬岩【鬥】）→ 依卡名【X】解析為對應屬性
+- CSS 新增 `.nrg-pip-rainbow`：9 色 conic-gradient 背景 + 白字「彩」
+- UI 4 處 pip 渲染都改用 `pip.label ?? ENERGY_LABEL[pip.type]` 相容 Rainbow
+
+### 檔案改動
+- `src/lib/audio/sfx.ts`：metalClink helper + playCoin 改寫
+- `src/lib/game/engine.ts`：
+  - 稜鏡能量 canAffordAttack 邏輯修（Basic 才全屬性）
+  - countEnergy 改為 host-aware（稜鏡 / 新衝天 / 燃火 特殊處理）
+  - 夠讚狗 腎上腺力量 hasDark 改用 countEnergy
+- `src/lib/game/effects.ts`：effectiveHPInline 夠讚狗 hasDark 加全屬性特殊能量識別
+- `src/routes/game/+page.svelte`：
+  - energyPips 重寫（1 張卡 = 1 pip）
+  - 4 處 pip render 加 `class:nrg-pip-rainbow` + `pip.label` fallback
+  - CSS `.nrg-pip-rainbow` conic gradient
+
+### 驗證
+- npm run build ✓（13.70s）
+- 稜鏡能量附夠讚狗 + 1 鬥能量：腎上腺力量應觸發（HP 230、招式 +100）
+- 古舊能量在 UI 顯示為 1 個「彩」pip（不再是 8 個單屬性 pip）
+- 火箭隊能量附火箭隊的寶可夢（如謎擬Q = Psychic）→ 顯示 2 顆超
+
+### 備註
+- 原 `countEnergy` 為單純聚合函式，現改 host-aware 可能影響其他腎上腺腦力（胡地）/ 尖釘鎮道館等判定 — 預期正向（稜鏡能量這些特殊能量現在會被算入應有屬性）
+- Rainbow 是 UI virtual type（`'Rainbow'`）不進 EnergyType 聯合型別；僅 pip 渲染用
 
 ---
 
