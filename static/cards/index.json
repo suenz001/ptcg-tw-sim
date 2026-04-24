@@ -20,8 +20,8 @@
     "regulationMark": "H",
     "cardCount": 100,
     "supertypeCounts": {
-      "Pokemon": 87,
-      "Trainer": 12,
+      "Pokemon": 84,
+      "Trainer": 15,
       "Energy": 1
     },
     "coverImageUrl": "covers/SV5K.png",
@@ -35,8 +35,8 @@
     "regulationMark": "H",
     "cardCount": 100,
     "supertypeCounts": {
-      "Pokemon": 87,
-      "Trainer": 12,
+      "Pokemon": 84,
+      "Trainer": 15,
       "Energy": 1
     },
     "coverImageUrl": "covers/SV5M.png",
@@ -50,8 +50,8 @@
     "regulationMark": "H",
     "cardCount": 96,
     "supertypeCounts": {
-      "Pokemon": 77,
-      "Trainer": 17,
+      "Pokemon": 74,
+      "Trainer": 20,
       "Energy": 2
     },
     "coverImageUrl": "covers/SV5a.png",
@@ -65,8 +65,8 @@
     "regulationMark": "H",
     "cardCount": 133,
     "supertypeCounts": {
-      "Pokemon": 115,
-      "Trainer": 17,
+      "Pokemon": 114,
+      "Trainer": 18,
       "Energy": 1
     },
     "coverImageUrl": "covers/SV6.png",
@@ -80,8 +80,8 @@
     "regulationMark": "H",
     "cardCount": 94,
     "supertypeCounts": {
-      "Pokemon": 79,
-      "Trainer": 15
+      "Pokemon": 76,
+      "Trainer": 18
     },
     "coverImageUrl": "covers/SV6a.png",
     "scrapedAt": "2026-04-16T07:54:43.541Z",
@@ -94,8 +94,8 @@
     "regulationMark": "H",
     "cardCount": 135,
     "supertypeCounts": {
-      "Pokemon": 119,
-      "Trainer": 16
+      "Pokemon": 113,
+      "Trainer": 22
     },
     "coverImageUrl": "covers/SV7.png",
     "scrapedAt": "2026-04-16T07:56:01.174Z",
@@ -108,8 +108,8 @@
     "regulationMark": "H",
     "cardCount": 94,
     "supertypeCounts": {
-      "Pokemon": 76,
-      "Trainer": 16,
+      "Pokemon": 73,
+      "Trainer": 19,
       "Energy": 2
     },
     "coverImageUrl": "covers/SV7a.png",
@@ -123,8 +123,8 @@
     "regulationMark": "H",
     "cardCount": 138,
     "supertypeCounts": {
-      "Pokemon": 122,
-      "Trainer": 16
+      "Pokemon": 118,
+      "Trainer": 20
     },
     "coverImageUrl": "covers/SV8.png",
     "scrapedAt": "2026-04-16T07:59:02.734Z",
@@ -137,8 +137,8 @@
     "regulationMark": "H",
     "cardCount": 381,
     "supertypeCounts": {
-      "Pokemon": 289,
-      "Trainer": 87,
+      "Pokemon": 269,
+      "Trainer": 107,
       "Energy": 5
     },
     "coverImageUrl": "covers/SV8a.png",
@@ -152,8 +152,8 @@
     "regulationMark": "I",
     "cardCount": 92,
     "supertypeCounts": {
-      "Pokemon": 78,
-      "Trainer": 14
+      "Pokemon": 77,
+      "Trainer": 15
     },
     "coverImageUrl": "covers/M1L.png",
     "scrapedAt": "2026-04-16T08:16:43.852Z",
@@ -180,8 +180,8 @@
     "regulationMark": "I",
     "cardCount": 80,
     "supertypeCounts": {
-      "Pokemon": 73,
-      "Trainer": 7
+      "Pokemon": 72,
+      "Trainer": 8
     },
     "coverImageUrl": "covers/M2.png",
     "scrapedAt": "2026-04-16T08:17:56.312Z",
@@ -192,10 +192,10 @@
     "code": "M2a",
     "name": "超級進化夢想ex",
     "regulationMark": "I",
-    "cardCount": 486,
+    "cardCount": 250,
     "supertypeCounts": {
-      "Pokemon": 434,
-      "Trainer": 49,
+      "Pokemon": 190,
+      "Trainer": 57,
       "Energy": 3
     },
     "coverImageUrl": "covers/M2a.png",
@@ -209,8 +209,8 @@
     "regulationMark": "I",
     "cardCount": 24,
     "supertypeCounts": {
-      "Pokemon": 12,
-      "Trainer": 11,
+      "Pokemon": 11,
+      "Trainer": 12,
       "Energy": 1
     },
     "coverImageUrl": "covers/MBD.png",
@@ -224,8 +224,8 @@
     "regulationMark": "I",
     "cardCount": 24,
     "supertypeCounts": {
-      "Pokemon": 13,
-      "Trainer": 10,
+      "Pokemon": 11,
+      "Trainer": 12,
       "Energy": 1
     },
     "coverImageUrl": "covers/MBG.png",
@@ -254,8 +254,8 @@
     "regulationMark": "I",
     "cardCount": 254,
     "supertypeCounts": {
-      "Pokemon": 237,
-      "Trainer": 15,
+      "Pokemon": 235,
+      "Trainer": 17,
       "Energy": 2
     },
     "coverImageUrl": "covers/SV11B.png",
@@ -269,8 +269,8 @@
     "regulationMark": "I",
     "cardCount": 254,
     "supertypeCounts": {
-      "Pokemon": 237,
-      "Trainer": 15,
+      "Pokemon": 235,
+      "Trainer": 17,
       "Energy": 2
     },
     "coverImageUrl": "covers/SV11W.png",
@@ -284,8 +284,8 @@
     "regulationMark": "I",
     "cardCount": 132,
     "supertypeCounts": {
-      "Pokemon": 117,
-      "Trainer": 13,
+      "Pokemon": 115,
+      "Trainer": 15,
       "Energy": 2
     },
     "coverImageUrl": "covers/SV9.png",
@@ -299,8 +299,8 @@
     "regulationMark": "I",
     "cardCount": 92,
     "supertypeCounts": {
-      "Pokemon": 80,
-      "Trainer": 12
+      "Pokemon": 79,
+      "Trainer": 13
     },
     "coverImageUrl": "covers/SV9a.png",
     "scrapedAt": "2026-04-16T08:07:38.291Z",
@@ -343,8 +343,8 @@
     "regulationMark": "J",
     "cardCount": 98,
     "supertypeCounts": {
-      "Pokemon": 75,
-      "Trainer": 11,
+      "Pokemon": 71,
+      "Trainer": 15,
       "Energy": 12
     },
     "coverImageUrl": "covers/M-P.png",
@@ -358,8 +358,8 @@
     "regulationMark": "J",
     "cardCount": 117,
     "supertypeCounts": {
-      "Pokemon": 92,
-      "Trainer": 22,
+      "Pokemon": 91,
+      "Trainer": 23,
       "Energy": 3
     },
     "coverImageUrl": "covers/M3.png",
@@ -386,11 +386,11 @@
     "code": "MC",
     "name": "超級進化初階牌組100",
     "regulationMark": "J",
-    "cardCount": 902,
+    "cardCount": 774,
     "supertypeCounts": {
-      "Pokemon": 774,
-      "Trainer": 105,
-      "Energy": 23
+      "Pokemon": 653,
+      "Trainer": 106,
+      "Energy": 15
     },
     "coverImageUrl": "covers/MC.png",
     "scrapedAt": "2026-04-16T08:29:24.027Z",
@@ -403,8 +403,8 @@
     "regulationMark": "J",
     "cardCount": 23,
     "supertypeCounts": {
-      "Pokemon": 10,
-      "Trainer": 11,
+      "Pokemon": 9,
+      "Trainer": 12,
       "Energy": 2
     },
     "coverImageUrl": "covers/SVOD.png",

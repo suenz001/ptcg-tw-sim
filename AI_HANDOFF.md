@@ -1,9 +1,50 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.97)  
+> 最後更新：2026-04-24 (v2.98)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.98 — /cards 首頁卡牌張數同步（4250 → 3886）
+
+### Leon 回報
+/cards 首頁顯示「共 4250 張卡」，但實際 JSON 檔已經去重/修過應該不是這個數。
+
+### 根因
+`static/cards/index.json` 的每個卡包 entry 有 `cardCount` 欄位，由 scraper 第一次
+爬取時寫入、後來的 JSON migration（如 v2.95 的 [特性] entry 搬 abilities 一併
+去重、或其他清理）修改了 `static/cards/*.json` 但**沒同步更新** index.json 的
+cardCount。
+
+實際 diff：
+- M2a: index 486 / actual 250（差 236）
+- MC : index 902 / actual 774（差 128）
+- 其他 27 個卡包一致
+
+全卡池實際總和 = **3886 張**（不是 4250）。
+
+### 為何不用既有 scripts/build-sets-index.js
+該腳本**整個重建** index.json，但 hardcoded 欄位清單不含 `releaseDate`（v2.30 新
+增欄位），直接跑會把發售日資料砍掉、coverImageUrl 也會從相對路徑改回官網絕對網址。
+
+### 修正
+1. 新增 `scripts/sync-card-counts.mjs` — **partial update** 只同步 `cardCount` /
+   `count` / `supertypeCounts` 三個欄位，其他欄位（releaseDate / coverImageUrl /
+   regulationMark / scrapedAt / name）原封保留。設計為可反覆執行（idempotent）。
+2. 執行一次修正：M2a 486→250、MC 902→774，其他不變。
+3. /cards 首頁（line 314 `data.sets.reduce((n, s) => n + s.cardCount, 0)`）本來就
+   是動態計算，所以 index.json 修完前端自動顯示 3886。
+
+### 未來維護
+任何 migration 或手動編輯 static/cards/*.json 之後，跑一次
+`node scripts/sync-card-counts.mjs` 即可同步。
+
+### 驗證
+- node scripts/sync-card-counts.mjs ✓（報告 2 個卡包更新、總 3886）
+- releaseDate / coverImageUrl 等欄位保留 ✓
+- npm run build ✓
 
 ---
 
