@@ -1297,64 +1297,6 @@
     "stage": "Basic"
   },
   {
-    "id": "14444",
-    "name": "含羞苞",
-    "supertype": "Pokemon",
-    "subtype": "Basic",
-    "setCode": "M-P",
-    "collectorNumber": "037/M-P",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014444.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14444/",
-    "scrapedAt": "2026-04-22T01:00:06.919Z",
-    "regulationMark": "H",
-    "hp": 30,
-    "pokemonType": "Grass",
-    "attacks": [
-      {
-        "name": "癢癢花粉",
-        "cost": [],
-        "damage": "10",
-        "effect": "在下個對手的回合，對手無法從手牌使出物品卡。"
-      }
-    ],
-    "weakness": {
-      "type": "Fire",
-      "value": "×2"
-    },
-    "pokedexNumber": 406,
-    "species": "花苞寶可夢",
-    "illustrator": "Yoriyuki Ikegami",
-    "stage": "Basic"
-  },
-  {
-    "id": "14445",
-    "name": "勝利之證",
-    "supertype": "Trainer",
-    "subtype": "Item",
-    "setCode": "M-P",
-    "collectorNumber": "M-P",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014445.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14445/",
-    "scrapedAt": "2026-04-22T01:00:07.600Z",
-    "regulationMark": "I",
-    "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
-    "illustrator": "5ban Graphics"
-  },
-  {
-    "id": "14446",
-    "name": "勝利之證",
-    "supertype": "Trainer",
-    "subtype": "Item",
-    "setCode": "M-P",
-    "collectorNumber": "M-P",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014446.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14446/",
-    "scrapedAt": "2026-04-22T01:00:08.277Z",
-    "regulationMark": "I",
-    "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
-    "illustrator": "5ban Graphics"
-  },
-  {
     "id": "14447",
     "name": "勝利之證",
     "supertype": "Trainer",

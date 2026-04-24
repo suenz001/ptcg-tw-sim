@@ -1,9 +1,50 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.104)  
+> 最後更新：2026-04-24 (v2.105)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.105 — 卡牌資料庫清理：清 307 筆同 cn 重複 entries（SV11B/SV11W/SV8a/M-P）
+
+### 問題（Leon 發現）
+卡牌資料庫內有「同一個商品包裡出現重複 collectorNumber」的卡。Leon：「SV11B 和 SV11W 裡的卡牌有重複… 請幫我確實檢查其他商品卡包是否也有同樣情形」。
+
+### 根因
+Scraper 前後跑了兩次（或先爬部分、後補爬）造成同一 cn 有兩個 id 的重複 entry — 卡面完全相同，只是 id 不同。
+
+### 盤點結果
+全卡池 55 個 set 掃一遍，**4 個 set 有重複**：
+| Set | 重複 entries 數 | before → after |
+|-----|----------------|---------------|
+| SV11B | 80 | 254 → 174 |
+| SV11W | 80 | 254 → 174 |
+| SV8a | 144 | 381 → 237 |
+| M-P | 3 | 98 → 95 |
+| **合計** | **307** | 3886 → 3579 全卡池 |
+
+### 解法
+寫 `scripts/migrate-dedupe-cards.mjs` 一次性 migration：對每組 duplicate，保留「最高分」者：
+1. 被 preset 引用的 id（`src/lib/decks/presets.ts`）→ +1,000,000,000 分
+2. `scrapedAt` 較新
+3. tie 則保留 id 較大的（後爬的）
+
+跑時 307 個重複 entries 裡**沒有任何一個被 preset 引用**（安全性保障 0 個存在 preset 引用不一致）。
+
+### 流程
+1. `node scripts/migrate-dedupe-cards.mjs` → drop 307 entries
+2. `node scripts/sync-card-counts.mjs` → 同步 `static/cards/index.json` 的 cardCount（4 個 set 更新）
+
+### 驗證
+- build ✓（13.95s）
+- 307 drops 全部為非 preset 引用的 id（零風險刪除）
+- 剩餘 3 個 set 的 cardCount 不動
+
+### 尚待 Leon 確認
+- **Task 1（AR/SAR 補爬）**：Leon 回報 M2 對戰圓形競技場 SAR 108/080 沒爬進 — 因為 scraper 的 list page 只顯示到 080/080，108/080 這類「AR/SAR」高編號需改用不同路徑。改動需要跑大範圍爬蟲（55 set × 高編號），建議下個 session 再處理。
+- **Task 3（svK）**：Leon 說「缺 svK 商品包」。盤點後：regulation.js 有完整 29 個 H/I/J set，index.json 也全部就位。目前沒有 set code 叫 "svK" — 是否是「SV5K」（朗姆流 EX）或「SVK 促銷」typo？請 Leon 確認。
 
 ---
 
