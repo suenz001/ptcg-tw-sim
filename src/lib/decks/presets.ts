@@ -441,6 +441,135 @@ const MEGA_LUCARIO_DECK: Omit<Deck, 'updatedAt'> = {
 };
 
 /**
+ * 奧利瓦 牌組（Leon 自選卡表，v2.104）
+ *
+ * 主力：奧利瓦ex（Stage2 草 Mega，油之機關槍 6 次 20 傷 分配 / 芳香射擊 160 + 清狀態）
+ * + 厄鬼椪 碧草面具ex 碧綠之舞能量加速 + 活力森林 讓剛出場草寶可夢可進化（Stage1/2 速攻）。
+ * 副力：大竺葵（繁茂特性，草能量視為 2 個）+ 吉雉雞ex / 喵喵ex / 奧利紐 支援。
+ */
+const OLIVA_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_oliva__',
+  name: '奧利瓦',
+  entries: [
+    // ── 寶可夢（20 張）──
+    { cardId: '16542', count: 2 }, // 奧利瓦ex (MC 071)
+    { cardId: '16541', count: 2 }, // 奧利紐 (MC 070)
+    { cardId: '16540', count: 2 }, // 迷你芙 (MC 069)
+    { cardId: '17971', count: 2 }, // 大竺葵 (M-P 055)
+    { cardId: '16488', count: 2 }, // 月桂葉 (MC 017)
+    { cardId: '16487', count: 2 }, // 菊草葉 (MC 016)
+    { cardId: '14443', count: 1 }, // 含羞苞 (M-P 037)
+    { cardId: '16553', count: 4 }, // 厄鬼椪 碧草面具ex (MC 082)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489)
+    // ── 訓練家・物品（12 張）──
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651)
+    { cardId: '17133', count: 2 }, // 寶可平板 (MC 662)
+    { cardId: '17104', count: 1 }, // 不公印章 ACE SPEC (MC 633)
+    { cardId: '17141', count: 1 }, // 夜間擔架 (MC 670)
+    { cardId: '17138', count: 4 }, // 捕蟲組合 (MC 667)
+    // ── 訓練家・支援者（12 張）──
+    { cardId: '17182', count: 1 }, // 裁判 (MC 711)
+    { cardId: '17183', count: 1 }, // 水蓮的照顧 (MC 712)
+    { cardId: '17193', count: 1 }, // 白蕾雅 (MC 722)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724)
+    { cardId: '14424', count: 3 }, // 小光 (M-P 028)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729)
+    // ── 競技場（4 張）──
+    { cardId: '14081', count: 4 }, // 活力森林 (M1S 061)
+    // ── 能量（12 張）──
+    { cardId: '17217', count: 12 }, // 基本【草】能量 (MC)
+  ],
+};
+
+/**
+ * 鋁鋼橋龍 牌組（Leon 自選卡表，v2.104）
+ *
+ * 主力：鋁鋼橋龍ex（Stage1 鋼 Mega，合金建造 進化時棄牌搜 2 張基本鋼能量附鋼寶 /
+ * 金屬防禦強化 220 + 下回合弱點消除 / 塗層攻擊 120 + 下回合不受基礎招式傷害）。
+ * 副力：超級大嘴娃ex（貪心 × 已取獎賞 / 大啃咬 260）+ 土龍系加速 + 稜鏡塔抽牌。
+ */
+const ALLOY_BRIDGE_DRAGON_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_alloy_bridge_dragon__',
+  name: '鋁鋼橋龍',
+  entries: [
+    // ── 寶可夢（21 張）──
+    { cardId: '16994', count: 4 }, // 鋁鋼龍 (MC 523)
+    { cardId: '16997', count: 3 }, // 鋁鋼橋龍ex (MC 526)
+    { cardId: '14381', count: 1 }, // 鋁鋼橋龍 (M2 063/080) — Leon 指定
+    { cardId: '14003', count: 1 }, // 超級大嘴娃ex (M1L 046)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061)
+    { cardId: '17045', count: 4 }, // 土龍弟弟 (MC 574)
+    { cardId: '14465', count: 3 }, // 土龍節節 (M-P 045)
+    { cardId: '17046', count: 1 }, // 土龍節節ex (MC 575)
+    { cardId: '14799', count: 2 }, // 旋轉洛托姆 (M2a 139) — 風扇呼喚首回合搜無屬
+    // ── 訓練家・物品（13 張）──
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC 662)
+    { cardId: '17104', count: 1 }, // 不公印章 ACE SPEC (MC 633)
+    { cardId: '17119', count: 3 }, // 好友寶芬 (MC 648)
+    { cardId: '17141', count: 1 }, // 夜間擔架 (MC 670)
+    // ── 訓練家・支援者（12 張）──
+    { cardId: '17195', count: 4 }, // 老大的指令 (MC 724)
+    { cardId: '17182', count: 3 }, // 裁判 (MC 711)
+    { cardId: '18496', count: 1 }, // 吉普索 (M4 076) — 棄牌搜鋼能量附鋼寶
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729)
+    // ── 競技場（4 張）──
+    { cardId: '18500', count: 3 }, // 稜鏡塔 (M4 080) — 棄 2 抽 1
+    { cardId: '15970', count: 1 }, // 阻礙之塔 (M2a 222) — 雙方道具失效
+    // ── 能量（10 張）──
+    { cardId: '17219', count: 10 }, // 基本【鋼】能量 (MC)
+  ],
+};
+
+/**
+ * 超級寶石海星 牌組（Leon 自選卡表，v2.104）
+ *
+ * 主力：超級寶石海星ex（Stage1 水 Mega，噴射打擊 120 + 選對手備戰 50 /
+ * 星雲光束 210 不計弱抵不計附加效果）+ 超級雪妖女ex（怨言 × 對手手牌 × 50 /
+ * 純粹雪）。副力：險惡廢墟（上備戰放 2 傷）限制對手 / 願增猿 腎上腺腦力
+ * 搬傷害反打 / 古舊能量 KO 減獎 ACE SPEC。
+ */
+const STARMIE_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_starmie__',
+  name: '超級寶石海星',
+  entries: [
+    // ── 寶可夢（17 張）──
+    { cardId: '16657', count: 3 }, // 雪童子 (MC 186)
+    { cardId: '10447', count: 2 }, // 雪妖女 (SV6 033)
+    { cardId: '14696', count: 2 }, // 超級雪妖女ex (M2a 036)
+    { cardId: '18062', count: 3 }, // 海星星 (M-P 066)
+    { cardId: '17998', count: 2 }, // 超級寶石海星ex (M3 021)
+    { cardId: '16829', count: 3 }, // 願增猿 (MC 358)
+    { cardId: '14443', count: 1 }, // 含羞苞 (M-P 037)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061)
+    // ── 訓練家・物品（16 張）──
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC 648)
+    { cardId: '17131', count: 2 }, // 寶可裝置3.0 (MC 660)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670)
+    { cardId: '17122', count: 3 }, // 高級球 (MC 651)
+    { cardId: '17133', count: 3 }, // 寶可平板 (MC 662)
+    { cardId: '17134', count: 1 }, // 寶可夢交替 (MC 663)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072)
+    // ── 訓練家・支援者（15 張）──
+    { cardId: '18078', count: 1 }, // 滿充的體貼 (M-P 082) — 超級ex 全回血+能量回手
+    { cardId: '17166', count: 2 }, // 青木的手法 (MC 695) — 棄手牌搜 3 類各 1
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724)
+    { cardId: '17167', count: 2 }, // 赤松 (MC 696)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729)
+    { cardId: '17189', count: 3 }, // 鬥子 (MC 718)
+    // ── 競技場（3 張）──
+    { cardId: '14020', count: 3 }, // 險惡廢墟 (M1L 063)
+    // ── 能量（9 張）──
+    { cardId: '17212', count: 1 }, // 古舊能量 ACE SPEC (MC 741)
+    { cardId: '17207', count: 1 }, // 燃火能量 (MC 736)
+    { cardId: '17221', count: 4 }, // 基本【水】能量 (MC)
+    { cardId: '17214', count: 3 }, // 基本【惡】能量 (MC)
+  ],
+};
+
+/**
  * 所有內建預設牌組
  *
  * v2.13：移除「破空焰ex（火屬 · 自組）」—— 那是 Session 24 自組的嘗試用牌組，
@@ -448,6 +577,7 @@ const MEGA_LUCARIO_DECK: Omit<Deck, 'updatedAt'> = {
  * v2.21：新增「胡地」與「瑪俐的長毛巨魔ex」，並爬入 SVOM / SVOD 兩個初階牌組系列。
  * v2.35：新增「火箭隊的超夢ex」與「猛雷鼓ex」兩組 Leon 自選卡表。
  * v2.89：新增「呆呆王」與「超級路卡利歐」兩組 Leon 自選卡表。
+ * v2.104：新增「奧利瓦」/「鋁鋼橋龍」/「超級寶石海星」三組 Leon 自選卡表（Phase A+B+C 22 張 effect 同步實裝）。
  */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
@@ -460,6 +590,9 @@ export const PRESET_DECKS: Deck[] = [
   { ...THUNDER_DRUM_DECK, updatedAt: 0 },
   { ...SLOWKING_DECK, updatedAt: 0 },
   { ...MEGA_LUCARIO_DECK, updatedAt: 0 },
+  { ...OLIVA_DECK, updatedAt: 0 },
+  { ...ALLOY_BRIDGE_DRAGON_DECK, updatedAt: 0 },
+  { ...STARMIE_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */
