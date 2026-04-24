@@ -1317,6 +1317,16 @@ reg('寶可夢捕捉器', (st, idx) => {
 // Session 31 H1 — H 標批次實裝：狀態附加類攻擊（~25 張）
 // ══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * v2.91：檢查指定 CardInstance 是否對「混亂」免疫。
+ * 目前只有 呆呆獸｜憨憨臉（卡面：「這隻寶可夢不會【混亂】」）。
+ */
+function isConfusionImmune(inst: CardInstance | null, pool: Map<string, Card>): boolean {
+  if (!inst) return false;
+  const card = pool.get(inst.cardId);
+  return !!card?.abilities?.some(a => a.name === '憨憨臉');
+}
+
 /** 讓對手戰鬥寶可夢陷入指定狀態的 POST effect */
 function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'paralyzed'): AttackPostFn {
   return (state, aIdx, pool) => {
@@ -1325,6 +1335,10 @@ function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'par
     const def = { ...players[dIdx] };
     if (!def.active) return state;
     const defName = pool.get(def.active.cardId)?.name ?? '?';
+    // v2.91：憨憨臉免疫混亂
+    if (status === 'confused' && isConfusionImmune(def.active, pool)) {
+      return addLog(state, `${defName}｜憨憨臉：免疫【混亂】`, aIdx);
+    }
     const statusLabelMap: Record<string, string> = {
       poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
     };
@@ -1354,7 +1368,12 @@ regPost('奇麒麟|不祥波動', statusPost('confused'));
 regPost('願增猿|精神歪曲', statusPost('confused'));
 regPost('胡地|奇異駭入', statusPost('confused'));
 // 修建老匠|暴走：自己混亂（攻擊者自己中狀態）
-regPost('修建老匠|暴走', (state, aIdx) => {
+regPost('修建老匠|暴走', (state, aIdx, pool) => {
+  // v2.91：憨憨臉免疫混亂
+  if (isConfusionImmune(state.players[aIdx].active, pool)) {
+    const name = pool.get(state.players[aIdx].active!.cardId)?.name ?? '?';
+    return addLog(state, `${name}｜憨憨臉：免疫【混亂】`, aIdx);
+  }
   const players = [...state.players] as [PlayerState, PlayerState];
   const att = { ...players[aIdx] };
   if (att.active) att.active = { ...att.active, status: 'confused' };
@@ -1589,13 +1608,19 @@ regPre('潤水鴨|燕返', coinPlusDmg(10, 20));
 // ══════════════════════════════════════════════════════════════════════════════
 
 function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'paralyzed'): AttackPostFn {
-  return (state, aIdx) => {
+  return (state, aIdx, pool) => {
     const heads = Math.random() < 0.5;
     if (!heads) return addLog(state, '反面', aIdx);
     const dIdx = (1 - aIdx) as 0 | 1;
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, status };
+    if (!def.active) return state;
+    // v2.91：憨憨臉免疫混亂
+    if (status === 'confused' && isConfusionImmune(def.active, pool)) {
+      const name = pool.get(def.active.cardId)?.name ?? '?';
+      return addLog(state, `正面！但 ${name}｜憨憨臉：免疫【混亂】`, aIdx);
+    }
+    def.active = { ...def.active, status };
     players[dIdx] = def;
     return addLog({ ...state, players }, `正面！對手${
       status === 'poisoned' ? '中毒' : status === 'burned' ? '燒傷' :
@@ -2549,7 +2574,12 @@ regPost('電燈怪|錯亂閃光', statusPost('confused')); // 「8 個 counter�
 
 // ── C. 將自己混亂 2 張 ─────────────────────────────────────────────────────
 function selfConfusePost(): AttackPostFn {
-  return (state, aIdx) => {
+  return (state, aIdx, pool) => {
+    // v2.91：憨憨臉免疫混亂
+    if (isConfusionImmune(state.players[aIdx].active, pool)) {
+      const name = pool.get(state.players[aIdx].active!.cardId)?.name ?? '?';
+      return addLog(state, `${name}｜憨憨臉：免疫【混亂】`, aIdx);
+    }
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
     if (att.active) att.active = { ...att.active, status: 'confused' };

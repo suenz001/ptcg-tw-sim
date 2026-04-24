@@ -1,9 +1,64 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.90)  
+> 最後更新：2026-04-24 (v2.91)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.91 — 呆呆王/超路 9 張 DEFERRED 的前 5 張實裝（按卡面 rulesText）
+
+Leon 指示「按敘述做，先做 1-5」。每張都嚴格對照卡面，修不到的明寫理由。
+
+### 1. 呆呆獸 M-P 18072｜憨憨臉（被動狀態免疫）
+**卡面**：「這隻寶可夢不會【混亂】」
+**實作**：effects.ts 加 `isConfusionImmune()` helper + 4 處施加混亂的 hook 加 gate：
+- `statusPost('confused')`：對手戰鬥位施加混亂時檢查
+- `coinStatusPost('confused')`：擲幣類（如 火斑喵｜擊掌奇襲）
+- `修建老匠|暴走`：攻擊者自我混亂
+- `selfConfusePost()`：流氓熊貓/棄世猴 暴走
+任一處若目標為憨憨臉持有者 → 跳過混亂施加並 log「XX｜憨憨臉：免疫【混亂】」。
+
+### 2. 呆呆王 SV7 10934｜耀閃挑戰（copy-attack from own deck top）
+**卡面**：「將自己的牌庫上方 1 張卡丟棄，若那張卡為寶可夢卡（『擁有規則的寶可夢』除外），則選擇 1 個那隻寶可夢持有的招式，作為這個招式使用」
+**實作**：完整按卡面 — 引用 v2.57/v2.70 扮晶晶酒 copy-attack precedent：
+1. 丟牌庫頂 1 張到棄牌區
+2. 若非寶可夢 → 招式失敗（log）
+3. 若是擁有規則的寶可夢（types.ts 新增 `RULE_BOX_SUBTYPES`：ex/V/VMAX/VSTAR/GX/EX/MegaEvolution）→ 招式失敗（log）
+4. 若該寶可夢無招式 → 招式失敗
+5. 自動挑印刷傷害最高那招（同扮晶晶酒 — AttackPreFn 同步限制無法彈 UI 選招）
+6. 遞迴呼叫該招式的 ATTACK_PRE 取 damage + skipWeakRes + skipDefEffects
+7. 存 pendingCopyAttackKey，regPost 轉接到被複製招式的 ATTACK_POST
+
+### 3. 超級袋獸ex｜使者衝刺 + 4. 月石｜月光循環（同名一回合限制 + 條件 gate）
+**卡面共通**：「在使用了其他的『XX』的回合，這個特性無法使用」
+**實作**：新 infra — 
+- `types.ts`：PlayerState 加 `abilityNamesUsedThisTurn?: string[]`
+- `engine.ts` USE_ABILITY handler：使用前 `includes(ability.name)` 擋；使用後 `push`
+- `engine.ts` END_TURN：清除此欄位
+- `engine.ts` getUsableAbilities + USE_ABILITY：額外 hardcoded gate
+  - **使者衝刺**：戰鬥場限定（卡面「若這隻寶可夢在戰鬥場上」）
+  - **月光循環**：場上需有「太陽岩」+ 手牌需有 1 張基本【鬥】能量（卡面兩條件）
+
+### 5. 超級路卡利歐ex｜波動突刺（每張能量分別選目標）
+**卡面**：「從自己的棄牌區選擇最多 3 張『基本【鬥】能量』卡，以任意方式附於備戰寶可夢身上」（基礎 130 傷害）
+**實作**：新 pending chain，完全符合「以任意方式附於備戰」（每張能量可不同目標）：
+1. `regPre` 130 基礎傷害
+2. `regPost` 開 `discard-search` 選 0-3 張基本【鬥】能量（filter=`BasicFightingEnergy`，min=0 max=3）
+3. 新 resolver `pulse-thrust-energies-picked`：
+   - 若只有 1 隻備戰 → 全附
+   - 多隻備戰 → 取第 1 張開 `bench-choose`
+4. 新 resolver `pulse-thrust-attach-one`：附 1 張能量到選的備戰；若還有剩 → 再開下一個 bench-choose（chain）
+
+### 驗證
+本機 build ✓（13.52s）
+
+### DEFERRED 剩餘 6-9
+- 6. 超級勇氣 下回合同招禁
+- 7. 引力山岳（Stadium）Stage2 HP-30
+- 8. 硬岩【鬥】能量 招式效果免疫 shield
+- 9. 回力鏢能量 招式棄能後重附
 
 ---
 

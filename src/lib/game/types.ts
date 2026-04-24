@@ -211,7 +211,29 @@ export interface PlayerState {
    * v2.48：攻擊者太晶偵測從 attacks kludge 改為 tags（scraper 已遷移資料）。
    */
   teraKoBonusPrizeThisTurn?: boolean;
+  /**
+   * v2.91：本回合玩家已經使用過的**主動特性名稱**清單（同名特性一回合限 1 次）。
+   * 用於：使者衝刺（超級袋獸ex）/ 月光循環（月石）等卡面明寫「在使用了其他
+   * 的『XX』的回合，此特性無法使用」的規則。
+   * 與 CardInstance.abilityUsedThisTurn 不同：後者是「此卡實例一回合 1 次」
+   * （多隻同名可各用一次），本欄位是「本回合所有同名共享 1 次」。
+   * USE_ABILITY handler 於使用前檢查 includes，使用後 push name；END_TURN 清除。
+   */
+  abilityNamesUsedThisTurn?: string[];
 }
+
+// ── 擁有規則的寶可夢（Pokémon with a Rule Box）判定 ─────────────────────────
+/**
+ * PTCG 規則盒寶可夢 = ex / V / VMAX / VSTAR / GX / EX / Tag Team GX 等
+ * （有規則欄位的寶可夢卡）。用於：呆呆王｜耀閃挑戰 判定「擁有規則的寶可夢
+ * 除外」不能取它招式來複製。
+ *
+ * Scraper 目前寫入的 subtype 值：'ex' / 'VSTAR' / 'MegaEvolution' 等。
+ * 常見可能出現的都列在這：若官方推出新規則盒寶可夢要加。
+ */
+export const RULE_BOX_SUBTYPES = new Set<string>([
+  'ex', 'EX', 'V', 'VMAX', 'VSTAR', 'GX', 'MegaEvolution',
+]);
 
 // ── 待選擇狀態（訓練家/招式效果需要玩家做決定時）──────────────────────────
 

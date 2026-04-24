@@ -1199,6 +1199,30 @@ function handlePlaying(
       return addLog(state, `${pokeCard!.name} 的特性「${ability.name}」被可達鴨的濕氣消除`, aIdx);
     }
 
+    // v2.91：同名特性一回合限 1 次（例：使者衝刺 / 月光循環）
+    // 卡面「在使用了其他的『XX』的回合，此特性無法使用」= 同名跨實例共享 1 次。
+    if (attacker.abilityNamesUsedThisTurn?.includes(ability.name)) {
+      return state;
+    }
+
+    // v2.91 使者衝刺（超級袋獸ex）：戰鬥場限定
+    if (ability.name === '使者衝刺' && attacker.active?.iid !== action.iid) {
+      return state;
+    }
+
+    // v2.91 月光循環（月石）：場上需有「太陽岩」+ 手牌需有 1 張基本【鬥】能量
+    if (ability.name === '月光循環') {
+      const field = [...(attacker.active ? [attacker.active] : []), ...attacker.bench];
+      const hasSunstone = field.some(c => pool.get(c.cardId)?.name === '太陽岩');
+      if (!hasSunstone) return state;
+      const hasFightEnergy = attacker.hand.some(c => {
+        const cc = pool.get(c.cardId);
+        return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+          && (cc.name?.includes('【鬥】') ?? false);
+      });
+      if (!hasFightEnergy) return state;
+    }
+
     // 查找 ABILITY_EFFECTS
     const abilityFn = ABILITY_EFFECTS.get(`${pokeCard!.name}|${action.abilityIndex}`);
     if (!abilityFn) return state;
@@ -1210,6 +1234,11 @@ function handlePlaying(
     const updatedP = { ...updatedPlayers[aIdx] };
     updatedP.active = updatedP.active ? markUsed(updatedP.active) : null;
     updatedP.bench = updatedP.bench.map(markUsed);
+    // v2.91：記錄本回合用過的特性名稱（同名跨實例限 1 次用）
+    updatedP.abilityNamesUsedThisTurn = [
+      ...(updatedP.abilityNamesUsedThisTurn ?? []),
+      ability.name,
+    ];
     updatedPlayers[aIdx] = updatedP;
 
     let newState: GameState = addLog(
@@ -2026,6 +2055,10 @@ function handlePlaying(
     };
     if (currentPlayer.active) currentPlayer.active = clearAbilityFlag(currentPlayer.active);
     currentPlayer.bench = currentPlayer.bench.map(clearAbilityFlag);
+    // v2.91：清除同名特性使用紀錄（使者衝刺 / 月光循環 類）
+    if (currentPlayer.abilityNamesUsedThisTurn) {
+      delete currentPlayer.abilityNamesUsedThisTurn;
+    }
     // 清除 cantAttackThisTurn：若當前玩家的 active 本回合被招式封鎖過，
     // 回合結束時把罰則消耗完（否則 UI 反白會永久卡住）
     const clearCantAttackThisTurn = (c: CardInstance): CardInstance => {
@@ -2504,6 +2537,25 @@ export function getUsableAbilities(
       }
       // 可達鴨｜濕氣：自身 KO 類特性被消除（不列入可用清單）
       if (SELF_KO_ABILITY_NAMES.has(ab.name) && isSelfKOEffectBlocked(state, pool)) return;
+
+      // v2.91：同名特性一回合限 1 次（使者衝刺 / 月光循環 等）
+      if (player.abilityNamesUsedThisTurn?.includes(ab.name)) return;
+
+      // v2.91 使者衝刺（超級袋獸ex）：「若這隻寶可夢在戰鬥場上，...」→ 備戰時不顯示
+      if (ab.name === '使者衝刺' && player.active?.iid !== pk.iid) return;
+
+      // v2.91 月光循環（月石）：場上需有「太陽岩」+ 手牌需有 1 張基本【鬥】能量
+      if (ab.name === '月光循環') {
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        const hasSunstone = field.some(c => pool.get(c.cardId)?.name === '太陽岩');
+        if (!hasSunstone) return;
+        const hasFightEnergy = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+            && (cc.name?.includes('【鬥】') ?? false);
+        });
+        if (!hasFightEnergy) return;
+      }
       // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。
       // 條件：對手在他們剛結束的回合取過獎賞（TurnStart < LastTurnEnd）。
       // 不允許：自己回合內的自 KO（如黑夜魔靈 咒詛炸彈）— 此時 TurnStart == LastTurnEnd。
