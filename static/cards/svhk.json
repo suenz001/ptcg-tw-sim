@@ -481,7 +481,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010064.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/10064/",
     "scrapedAt": "2026-04-24T12:52:44.091Z",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。\n從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Ayaka Yoshida"
   },
@@ -495,7 +495,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010065.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/10065/",
     "scrapedAt": "2026-04-24T12:52:44.581Z",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "rulesText": "將自己的戰鬥寶可夢與備戰寶可夢互換。",
     "illustrator": "Studio Bora Inc."
   },
@@ -619,7 +619,7 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010073.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/10073/",
     "scrapedAt": "2026-04-24T12:52:48.237Z",
-    "regulationMark": "I",
+    "regulationMark": "G",
     "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "NC Empire"
   },

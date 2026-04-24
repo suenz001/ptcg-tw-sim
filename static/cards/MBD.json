@@ -127,7 +127,7 @@
       "Colorless"
     ],
     "illustrator": "takuyoa",
-    "regulationMark": "I",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -418,7 +418,7 @@
     "pokedexNumber": 978,
     "species": "擬態寶可夢",
     "illustrator": "Jerky",
-    "regulationMark": "I",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -433,7 +433,7 @@
     "scrapedAt": "2026-04-16T08:28:09.354Z",
     "rulesText": "這張卡必須在上個對手的回合自己的寶可夢【昏厥】了才可使用。\n \n雙方玩家各自將手牌全部放回牌庫並重洗。然後，從牌庫抽卡，自己抽出5張，對手抽出2張。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I",
+    "regulationMark": "H",
     "tags": [
       "ACE SPEC"
     ]
@@ -464,7 +464,7 @@
     "scrapedAt": "2026-04-16T08:28:10.849Z",
     "rulesText": "從自己的牌庫選擇最多2張HP為「70」以下的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "I"
+    "regulationMark": "H"
   },
   {
     "id": "14118",
@@ -478,7 +478,7 @@
     "scrapedAt": "2026-04-16T08:28:11.548Z",
     "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。\n \n從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Ayaka Yoshida",
-    "regulationMark": "I"
+    "regulationMark": "H"
   },
   {
     "id": "14119",
@@ -506,7 +506,7 @@
     "scrapedAt": "2026-04-16T08:28:13.007Z",
     "rulesText": "從自己的棄牌區選擇1張寶可夢卡或者基本能量卡，在給對手看過後加入手牌。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I"
+    "regulationMark": "H"
   },
   {
     "id": "14121",

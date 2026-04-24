@@ -1,9 +1,53 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.113)  
+> 最後更新：2026-04-24 (v2.114)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.114 — 修正 Leon 列出的 regulation 標 + /cards 加 G 標區 + 顯示啟用日期
+
+### Leon 指示
+1. SVC / SVD 兩個 set 應該**全部 G 標**
+2. 38 張個別卡的 regulation 要修正（scraper 誤標成 I）
+3. /cards 頁面按發售日期排序（已有但要確認 G 標 set 也顯示）
+4. /cards heading 顯示每個標的啟用日期
+
+### Regulation migration — 共修 59 張（scripts/migrate-regulation-v113.mjs）
+- **SVC 全 22 張 → G**（I/J 誤標 6 張改 G）
+- **SVD 全 147 張 → G**（I/J 誤標 12 張改 G）
+- svhk / svhm：高級球/寶可夢交替/老大的指令 各 3 張（I → G）
+- **SVK**：能量轉移 / 高級球 / 神奇糖果 / 寶可裝置3.0 / 老大的指令 共 5 張（I → G）
+- **SVQL**：能量回收 / 寶可夢交替 共 2 張（I → G）
+- **SVOD**：高級球 / 神奇糖果 / 寶可夢交替 / 老大的指令 共 4 張（I → G）
+- **SVOM**：高級球 / 神奇糖果 / 寶可夢交替 / 老大的指令 共 4 張（I → G）
+- **SVM**：能量回收 / 能量轉移 / 高級球 / 神奇糖果 / 寶可夢交替 / 老大的指令 共 6 張（I → G）
+- **MBD**：拉帝亞斯ex / 米立龍 / 不公印章 / 好友寶芬 / 高級球 / 夜間擔架 共 6 張（I → H）
+- **MBG**：桃歹郎ex / 米立龍 / 好友寶芬 / 高級球 / 神奇糖果 / 頂尖捕捉器 / 寶可夢交替 / 夜間擔架 共 8 張（I → H）
+
+### UI 改動（/cards 頁面）
+1. **markGroups ordered 加 'G'**：G 標區域現在也會顯示（最後）
+2. **heading 顯示啟用日期**：
+   - G 標（已輪替，不合法）
+   - H 標 (自 2024-02-02)
+   - I 標 (自 2025-02-07)
+   - J 標 (自 2026-01-16)
+
+啟用日期推算規則：每個 mark 取**台灣區第一個該 mark set 的發售日**：
+- G：SVC 2023-03-31（初階牌組）
+- H：SV5K/SV5M/svhk/svhm 同日發售 2024-02-02
+- I：SV9「對戰搭檔」2025-02-07
+- J：MC「超級進化初階牌組100」2026-01-16（主系列輪替；SVOD/SVOM 2025-03-07 為初階牌組 promo）
+
+### 4 張新 set 位置
+SVC / SVD / SVP1 / SVM 都是 G 標，依 releaseDate 升序排在 G 標區：
+SVC(2023-03-31) → SVD(2023-06-02) → SVP1(2023-06-02) → SVM(2024-11-29)。
+
+### 驗證
+- build ✓（14.13s）
+- migration 跑完 59 張 regulation 修正
 
 ---
 

@@ -295,17 +295,30 @@
     };
     for (const [, sets] of groups) sets.sort(byDateAsc);
 
-    // Ensure H → I → J order
+    // Ensure H → I → J → G（G 標為已輪替出標準賽）order
     const ordered = [];
-    for (const mark of ['H', 'I', 'J']) {
+    for (const mark of ['H', 'I', 'J', 'G']) {
       if (groups.has(mark)) ordered.push([mark, groups.get(mark)]);
     }
-    // Anything else
+    // Anything else (F/other)
     for (const [mark, sets] of groups) {
-      if (!['H', 'I', 'J'].includes(mark)) ordered.push([mark, sets]);
+      if (!['H', 'I', 'J', 'G'].includes(mark)) ordered.push([mark, sets]);
     }
     return ordered;
   })()}
+
+  {@const markStartDate: Record<string, string> = {
+    // v2.114 台灣賽制 regulation mark 啟用日期（以台灣區第一個該 mark set 發售日為準）
+    G: '2023-03-31',  // 起始組合ex 皮卡丘ex（已於 2026-02-06 輪替出標準賽制）
+    H: '2024-02-02',  // SV5K/SV5M/svhk/svhm 同日發售
+    I: '2025-02-07',  // SV9 對戰搭檔
+    J: '2026-01-16',  // MC 超級進化初階牌組 100（主系列 J 標啟用）
+  }}
+  {@const markLabel = (m: string, count: number) => {
+    const d = markStartDate[m];
+    const suffix = m === 'G' ? '（已輪替，不合法）' : d ? `(自 ${d})` : '';
+    return `${m} 標 · ${count} 個卡包 ${suffix}`;
+  }}
 
   <header>
     <a class="back" href="{base}/">← 首頁</a>
@@ -339,7 +352,7 @@
     <div class="markSection">
       <h2 class="markHeader">
         <span class="markBadge mark-{mark}">{mark}</span>
-        <span>{mark} 標 · {sets.length} 個卡包</span>
+        <span>{markLabel(mark, sets.length)}</span>
       </h2>
       <div class="setGrid">
         {#each sets as set (set.code)}

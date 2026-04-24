@@ -366,7 +366,7 @@
       "Colorless"
     ],
     "illustrator": "aky CG Works",
-    "regulationMark": "I",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -405,7 +405,7 @@
     "pokedexNumber": 978,
     "species": "擬態寶可夢",
     "illustrator": "Jerky",
-    "regulationMark": "I",
+    "regulationMark": "H",
     "stage": "Basic"
   },
   {
@@ -420,7 +420,7 @@
     "scrapedAt": "2026-04-16T08:28:28.767Z",
     "rulesText": "從自己的牌庫選擇最多2張HP為「70」以下的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。",
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "I"
+    "regulationMark": "H"
   },
   {
     "id": "14140",
@@ -434,7 +434,7 @@
     "scrapedAt": "2026-04-16T08:28:29.474Z",
     "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。\n \n從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Ayaka Yoshida",
-    "regulationMark": "I"
+    "regulationMark": "H"
   },
   {
     "id": "14141",
@@ -448,7 +448,7 @@
     "scrapedAt": "2026-04-16T08:28:30.179Z",
     "rulesText": "從自己的手牌選擇1張【2階進化】寶可夢卡，放置於自己的場上的可進化成那隻寶可夢的【基礎】寶可夢身上，跳過【1階進化】完成進化。（無法對自己的最初回合或剛使出的寶可夢使用。）",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "I"
+    "regulationMark": "H"
   },
   {
     "id": "14142",
@@ -462,7 +462,7 @@
     "scrapedAt": "2026-04-16T08:28:31.000Z",
     "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。然後，將自己的戰鬥寶可夢與備戰寶可夢互換。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I",
+    "regulationMark": "H",
     "tags": [
       "ACE SPEC"
     ]
@@ -479,7 +479,7 @@
     "scrapedAt": "2026-04-16T08:28:31.686Z",
     "rulesText": "將自己的戰鬥寶可夢與備戰寶可夢互換。",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "I"
+    "regulationMark": "H"
   },
   {
     "id": "14144",
@@ -507,7 +507,7 @@
     "scrapedAt": "2026-04-16T08:28:33.136Z",
     "rulesText": "從自己的棄牌區選擇1張寶可夢卡或者基本能量卡，在給對手看過後加入手牌。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "I"
+    "regulationMark": "H"
   },
   {
     "id": "14146",
