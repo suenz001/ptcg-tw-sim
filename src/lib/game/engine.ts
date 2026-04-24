@@ -251,6 +251,39 @@ const ZH_ENERGY_TYPE: Record<string, EnergyType> = {
 };
 
 /**
+ * v2.108 共用 helpers — 判定「基本 X 屬性能量」
+ * Scraper 對基本能量的 `pokemonType` 欄位通常留空（屬性從卡名【X】推），
+ * 所以判斷「基本草能量」時一定要從 name parse，不能信 pokemonType。
+ * v2.103 canAffordAttack 的繁茂 check 就是因為只檢查 pokemonType 才整個失效。
+ */
+export function isBasicEnergyOfType(ec: Card | undefined, type: EnergyType): boolean {
+  if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return false;
+  if (ec.pokemonType === type) return true;
+  const m = ec.name.match(/【(.+?)】/);
+  if (!m) return false;
+  return ZH_ENERGY_TYPE[m[1]] === type;
+}
+
+/**
+ * v2.108：場上是否有「大竺葵｜繁茂」在 ownerIdx 玩家側？
+ * 繁茂：自己所有寶可夢身上的「基本【草】能量」視為各提供 2 個【草】能量
+ * （這個特性的效果不會重複，多隻大竺葵也只算一次）。
+ */
+export function hasBloomAbilityOnField(
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  pool: Map<string, Card>,
+): boolean {
+  if (!state || ownerIdx == null) return false;
+  const owner = state.players[ownerIdx];
+  const all = [...(owner.active ? [owner.active] : []), ...owner.bench];
+  return all.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.abilities?.some(a => a.name === '繁茂');
+  });
+}
+
+/**
  * 取得一張能量卡提供的能量類型列表。
  * 基礎能量：1 個對應屬性；若 pokemonType 欄位未填，從卡名【X】推斷。
  * 特殊能量：M2 先一律視為 1 Colorless（M4 再完整實裝）。
@@ -358,13 +391,24 @@ export function getEnergyUnits(cardId: string, pool: Map<string, Card>): EnergyU
  * 火箭隊能量：1 張 = 2 units（等同 2 顆無屬性）
  * 未登記能量 fallback：1 張 = 1 unit（getEnergyUnits 回 [{Colorless}]）
  * 找不到卡的保底：1 unit（避免異常讓玩家卡死）。
+ *
+ * v2.108：加 state + ownerIdx 可選參數；若提供且場上有大竺葵｜繁茂，
+ *   則基本【草】能量視為 2 units（撤退支付能量時生效）。
  */
 export function totalEnergyUnits(
   attached: CardInstance[],
-  pool: Map<string, Card>
+  pool: Map<string, Card>,
+  state?: GameState,
+  ownerIdx?: 0 | 1,
 ): number {
+  const hasBloom = hasBloomAbilityOnField(state, ownerIdx, pool);
   let n = 0;
   for (const e of attached) {
+    const ec = pool.get(e.cardId);
+    if (hasBloom && isBasicEnergyOfType(ec, 'Grass')) {
+      n += 2;
+      continue;
+    }
     const units = getEnergyUnits(e.cardId, pool);
     n += units.length === 0 ? 1 : units.length;
   }
@@ -387,15 +431,9 @@ export function canAffordAttack(
 ): boolean {
   // v2.103 大竺葵｜繁茂：自己場上有大竺葵時，自己所有寶可夢身上的「基本【草】能量」視為 2 個【草】能量。
   //   「這個特性的效果不會重複」→ 多隻大竺葵也只算一次倍率。
-  let hasBloom = false;
-  if (state && attackerIdx != null) {
-    const owner = state.players[attackerIdx];
-    const allOwn = [...(owner.active ? [owner.active] : []), ...owner.bench];
-    hasBloom = allOwn.some(c => {
-      const card = pool.get(c.cardId);
-      return card?.abilities?.some(a => a.name === '繁茂');
-    });
-  }
+  // v2.108 修：原 check 用 `pokemonType === 'Grass'`，但基本能量的 pokemonType 欄位通常空，
+  //   屬性從卡名【草】推。改用 isBasicEnergyOfType 共用 helper。
+  const hasBloom = hasBloomAbilityOnField(state, attackerIdx, pool);
   // v2.103 燃火能量：若附於進化寶可夢身上，視為 3 個【無】能量；否則 1 個【無】能量
   const pokeCard = pool.get(pokemon.cardId);
   const pokeStage = pokeCard?.stage ?? pokeCard?.subtype;
@@ -415,7 +453,7 @@ export function canAffordAttack(
       continue;
     }
     // 大竺葵繁茂：基本【草】能量視為 2 個【草】units（僅在攻擊方有大竺葵時）
-    if (hasBloom && ec?.supertype === 'Energy' && ec?.subtype === 'Basic' && ec?.pokemonType === 'Grass') {
+    if (hasBloom && isBasicEnergyOfType(ec, 'Grass')) {
       units.push({ types: ['Grass'] }, { types: ['Grass'] });
       continue;
     }
@@ -928,7 +966,8 @@ function handlePlaying(
     ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
     if (hasSkyPathR && isBasicPokemonCard(activeCard)) retreatCost = 0;
     // v2.69：撤退成本用「能量單位」比對，不是卡片張數。火箭隊能量 1 張 = 2 units。
-    if (totalEnergyUnits(attacker.active.energyAttached, pool) < retreatCost) return state;
+    // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
+    if (totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx) < retreatCost) return state;
 
     // v2.63：若撤退需丟 ≥1 個能量，且附加能量包含多種屬性（或不同單位結構的特殊能量），
     // 開 pendingSelection 讓玩家選要丟哪幾個能量；否則沿用自動丟棄。
@@ -964,6 +1003,8 @@ function handlePlaying(
 
     // 自動丟棄能量（單屬性 or retreatCost=0，無需詢問）。
     // v2.69：從後方取，累積 units 直到 ≥ retreatCost；火箭隊能量 1 張 = 2 units。
+    // v2.108：大竺葵繁茂時，基本【草】能量 1 張 = 2 units。
+    const bloomOnR = hasBloomAbilityOnField(state, aIdx, pool);
     let paidUnits = 0;
     const keepE: CardInstance[] = [];
     const discardE: CardInstance[] = [];
@@ -971,8 +1012,13 @@ function handlePlaying(
       const e = attacker.active.energyAttached[i];
       if (paidUnits < retreatCost) {
         discardE.unshift(e);
-        const units = getEnergyUnits(e.cardId, pool);
-        paidUnits += units.length === 0 ? 1 : units.length;
+        const ec = pool.get(e.cardId);
+        if (bloomOnR && isBasicEnergyOfType(ec, 'Grass')) {
+          paidUnits += 2;
+        } else {
+          const units = getEnergyUnits(e.cardId, pool);
+          paidUnits += units.length === 0 ? 1 : units.length;
+        }
       } else {
         keepE.unshift(e);
       }
@@ -2699,7 +2745,8 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
   ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
   if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
   // v2.69：以能量單位計算（火箭隊能量 1 張 = 2 units）。
-  return totalEnergyUnits(player.active.energyAttached, pool) >= cost;
+  // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
+  return totalEnergyUnits(player.active.energyAttached, pool, state, state.activePlayerIndex) >= cost;
 }
 
 /**
@@ -2869,8 +2916,9 @@ RESOLVERS.set('retreat-energy-discard', (state, actorIdx, selectedIids, params, 
   }
 
   // 計算選中能量的總單位數
+  // v2.108：傳 state+actorIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
   const pickedInsts = attacker.active.energyAttached.filter(e => picked.has(e.iid));
-  if (totalEnergyUnits(pickedInsts, pool) < retreatCost) return state;
+  if (totalEnergyUnits(pickedInsts, pool, state, actorIdx) < retreatCost) return state;
 
   const bIdx = attacker.bench.findIndex(c => c.iid === newActiveIid);
   if (bIdx < 0) return state;

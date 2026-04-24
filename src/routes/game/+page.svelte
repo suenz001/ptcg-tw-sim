@@ -1114,12 +1114,13 @@
     }
     // v2.69：撤退能量選擇用「能量單位」判定（火箭隊能量 1 張 = 2 units）
     // 而非張數；要求選中能量單位總和 ≥ retreatCost。
+    // v2.108：傳 state+actorIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
     if (pendingSelection.type === 'active-energy-discard'
         && pendingSelection.effectKey === 'retreat-energy-discard') {
       const retreatCost = (pendingSelection.params?.retreatCost as number | undefined) ?? 0;
       if (selectionPicked.size === 0) return false;
       const pickedInsts = selectionItems.filter(it => selectionPicked.has(it.iid));
-      return totalEnergyUnits(pickedInsts, pool) >= retreatCost;
+      return totalEnergyUnits(pickedInsts, pool, game, pendingSelection.actorIdx as 0 | 1) >= retreatCost;
     }
     return selectionPicked.size >= pendingSelection.minCount
         && selectionPicked.size <= pendingSelection.maxCount;

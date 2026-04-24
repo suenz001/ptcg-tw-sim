@@ -3994,7 +3994,33 @@ function bothActiveEnergyMultiplyPre(base: number, per: number, label: string): 
     const dIdx = (1 - aIdx) as 0 | 1;
     const a = state.players[aIdx].active;
     const d = state.players[dIdx].active;
-    const count = (a ? countOneEnergy(a, 'all', pool) : 0) + (d ? countOneEnergy(d, 'all', pool) : 0);
+    // v2.108：若某方場上有大竺葵繁茂，該方寶可夢身上的「基本【草】能量」算 2 個。
+    // 萬葉陣雨 rulesText：「雙方戰鬥寶可夢身上附加的能量的數量 × 30」— 按 Leon 解讀，
+    // 繁茂倍率應套用於傷害計算（與日版 ruling 可能不一致，但符合 Leon 期待）。
+    function hasBloomOnSide(ownerIdx: 0 | 1): boolean {
+      const owner = state.players[ownerIdx];
+      const allOwn = [...(owner.active ? [owner.active] : []), ...owner.bench];
+      return allOwn.some(c => pool.get(c.cardId)?.abilities?.some(ab => ab.name === '繁茂'));
+    }
+    function isBasicGrass(ec: Card | undefined): boolean {
+      if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return false;
+      if (ec.pokemonType === 'Grass') return true;
+      const m = ec.name.match(/【(.+?)】/);
+      return !!m && m[1] === '草';
+    }
+    function countWithBloom(inst: CardInstance | null | undefined, ownerIdx: 0 | 1): number {
+      if (!inst) return 0;
+      const bloom = hasBloomOnSide(ownerIdx);
+      let n = 0;
+      for (const e of inst.energyAttached) {
+        const ec = pool.get(e.cardId);
+        if (!ec || ec.supertype !== 'Energy') continue;
+        if (bloom && isBasicGrass(ec)) n += 2;
+        else n += 1;
+      }
+      return n;
+    }
+    const count = countWithBloom(a, aIdx) + countWithBloom(d, dIdx);
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：雙方出場能量合計 ${count} → ${dmg}`, aIdx), damage: dmg };
   };

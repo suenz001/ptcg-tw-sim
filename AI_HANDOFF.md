@@ -1,9 +1,70 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.107)  
+> 最後更新：2026-04-24 (v2.108)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.108 — Bug：大竺葵｜繁茂 v2.103 的 check 無效（根因修）
+
+### 問題（Leon 回報實戰）
+大竺葵（特性 繁茂：基本【草】能量各提供 2 個【草】能量）v2.103 做的 check 完全失效：
+- 撤退（2無 cost）不能用 1 張基本草支付（理應可以）
+- 碧草面具ex 萬葉陣雨（3 草 cost）不能用 2 張基本草發動（理應 2→4 草夠 3 草）
+- 萬葉陣雨 ×N 傷害沒把繁茂倍率算進去
+
+### 根因
+v2.103 `canAffordAttack` 的繁茂 check：
+```typescript
+ec?.supertype === 'Energy' && ec?.subtype === 'Basic' && ec?.pokemonType === 'Grass'
+```
+但 scraper 對**基本能量的 `pokemonType` 欄位通常空**（屬性從卡名【X】推斷）。
+這個 check 永遠 false → 整個繁茂倍率在所有路徑都失效。
+
+跑 unit test 確認：
+- 大竺葵 M-P 055/M-P：abilities = [繁茂] ✓
+- 基本【草】能量 pokemonType = **undefined** ← 這裡
+- 舊 check: `pokemonType === 'Grass'` → false
+- 新 check: 從 name 抓【草】 → true
+
+### 修的東西
+1. **engine.ts** 新增共用 helpers：
+   - `isBasicEnergyOfType(card, type)` — 從 name【X】推判斷基本能量屬性
+   - `hasBloomAbilityOnField(state, ownerIdx, pool)` — 判定某方場上是否有繁茂
+2. **canAffordAttack** 的繁茂 check 改用 helper（取代 `pokemonType === 'Grass'`）
+3. **totalEnergyUnits** 加 optional `state + ownerIdx` 參數；繁茂時基本【草】能量 = 2 units
+4. **撤退主流程**（engine.ts line 969）改傳 state+aIdx 到 totalEnergyUnits
+5. **撤退自動丟能量**累計 units 時加 bloom-aware 分支（1 張基本草抵 2 units）
+6. **canRetreat** UI hook（engine.ts line 2741）同步傳 state
+7. **retreat-energy-discard resolver**（手動選能量路徑）同步傳 state
+8. **UI selectionValid**（+page.svelte line 1122）同步傳 game+actorIdx
+9. **effects.ts `bothActiveEnergyMultiplyPre`**（萬葉陣雨 ×N 傷害）加 bloom-aware countWithBloom — 某方有繁茂時該方的基本草能量算 2
+   - 註：日版 ruling 可能認為「能量的數量」指卡數非單位，按 Leon 期待實作
+
+### 驗證
+- build ✓（13.84s）
+- unit test：
+  - 大竺葵 abilities.繁茂 check → true ✓
+  - 基本【草】能量舊 check → false（確認原 bug）
+  - 基本【草】能量新 check → true（確認修復）
+
+### 所有場景現在行為
+| 場景 | 舊（bug） | 新 |
+|---|---|---|
+| 大竺葵身上附 1 基本草 → 撤退（CC） | ❌ 不能 | ✅ 可以（草算 2 無可抵 2 無） |
+| 碧草面具ex 附 2 基本草 + 場上有大竺葵 → 萬葉陣雨（GGG）| ❌ 能量不足 | ✅ 2→4 草 ≥ 3 草 cost 可發動 |
+| 萬葉陣雨 30+30×能量數，碧草面具附 2 基本草 | +60（2 張×30） | +120（2 張×2×30）|
+
+### 關於活力森林
+Leon 同時回報「活力森林沒實裝 — 第 2 回合 play 菊草葉無法當回合進化月桂葉」。
+檢查 engine.ts line 849-854 的 vigorousForestException 邏輯**看似正確**：
+- `stadiumName === '活力森林'` && baseCard/evoCard 都是 Grass → bypass justPlaced gate
+- unit test 進化 gate 模擬：`blocked = false` ✓
+
+**懷疑 Leon 測試時場上沒有打出「活力森林」Stadium 卡**（它是 Stadium 不是自動生效）。
+請 Leon 確認：測試時是否確實先打過活力森林到場上？若已打但仍不行，再回報。
 
 ---
 
