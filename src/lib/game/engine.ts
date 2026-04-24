@@ -2154,24 +2154,21 @@ function handlePlaying(
       const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
       let poisonBonus = 0;
       if (stadiumName === '危險密林' && poisonedCard?.pokemonType !== 'Darkness') poisonBonus += 20;
-      // 對手場上有「桃歹郎 劇毒支配」被動 → +50
-      const oppPokes = [
-        ...(state.players[dIdx].active ? [state.players[dIdx].active!] : []),
-        ...state.players[dIdx].bench,
-      ];
-      const hasDominatingPoison = oppPokes.some(c => {
-        const card = pool.get(c.cardId);
-        return card?.abilities?.some(a => a.name === '劇毒支配');
-      });
-      if (hasDominatingPoison && state.players[dIdx].active &&
-          // 只有 defender's active 是「桃歹郎」本體才啟動（劇毒支配只要求對手中毒時加傷）
-          state.players[dIdx].active.iid && true) {
+      // v2.123 劇毒支配（桃歹郎）卡面：附有此特性的**這隻寶可夢必須在戰鬥場**才生效。
+      // 舊版檢查 active+bench 所有位置，即使桃歹郎被老大指令換到備戰仍加傷 — bug。
+      // 修：只看對手 active 位是否為劇毒支配本體。
+      const dActiveCard = state.players[dIdx].active ? pool.get(state.players[dIdx].active.cardId) : null;
+      const hasDominatingPoisonOnActive = dActiveCard?.abilities?.some(a => a.name === '劇毒支配') ?? false;
+      if (hasDominatingPoisonOnActive) {
         poisonBonus += 50;
       }
       const newDmg = poisonPlayer.active.damage + 10 + poisonBonus;
       const poisonedHP = getEffectiveHP(poisonPlayer.active, pool, state);
       if (poisonedHP > 0 && newDmg >= poisonedHP) {
         // 被毒死 → 直接 KO，攻擊方（對手）取獎勵
+        // v2.123 修：原本 `return { ..., pendingPrizes }` 讓 activePlayerIndex（= 被毒方自己）
+        // 拿獎賞 — 完全錯誤。參考雪妖女 v2.70 selfKOInstance 風格：
+        // 對手直接從自己的 prize 堆搬到 hand，不走 pendingPrizes。
         const dIdxP = dIdx;
         const koDiscard2: CardInstance[] = [
           { ...poisonPlayer.active, damage: newDmg },
@@ -2183,11 +2180,28 @@ function handlePlaying(
         poisonPlayer.active = null;
         players[aIdx] = poisonPlayer;
         const poisonPrizes = prizesForKO(poisonedCard!);
+        // 對手直接取獎賞（不走 pendingPrizes，避免 activePlayerIndex 混淆）
+        const winner = { ...players[dIdxP] };
+        const take = Math.min(poisonPrizes, winner.prizes.length);
+        if (take > 0) {
+          winner.hand = [...winner.hand, ...winner.prizes.slice(0, take)];
+          winner.prizes = winner.prizes.slice(take);
+        }
+        players[dIdxP] = winner;
         let poisonState = addLog(
           { ...state, players },
-          `${poisonedCard?.name ?? '?'} 被中毒傷害擊倒！${players[dIdxP].name} 取得 ${poisonPrizes} 張獎勵牌。`,
+          `${poisonedCard?.name ?? '?'} 被中毒傷害擊倒！${players[dIdxP].name} 取得 ${take} 張獎勵牌。`,
           null
         );
+        // 勝利條件：對手獎賞全取完
+        if (winner.prizes.length === 0) {
+          return {
+            ...poisonState, phase: 'game-over',
+            winner: dIdxP,
+            winReason: `${winner.name} 取得所有獎勵牌`,
+          };
+        }
+        // 勝利條件：被毒死方備戰空
         if (poisonPlayer.bench.length === 0) {
           return {
             ...poisonState, phase: 'game-over',
@@ -2195,7 +2209,10 @@ function handlePlaying(
             winReason: `${poisonPlayer.name} 沒有可上場的寶可夢`,
           };
         }
-        return { ...poisonState, pendingPrizes: poisonPrizes };
+        // 被毒死方需要補戰鬥位 — 依 UI `myPlayer?.active===null` 條件自動 popup modal
+        // 不設 pendingPrizes（已直接取獎），也不切換 activePlayerIndex，讓被毒方補戰鬥後
+        // 下一次 END_TURN action 才真正換回合。
+        return poisonState;
       } else {
         poisonPlayer.active = { ...poisonPlayer.active, damage: newDmg };
         players[aIdx] = poisonPlayer;
@@ -2947,8 +2964,16 @@ export function getUsableAbilities(
       if (ab.name === '集客' && player.active?.iid !== pk.iid) return;
       // 精神抽出 / 龐克練肌 / 合金建造（v2.102）：只有本回合剛進化才能用
       if ((ab.name === '精神抽出' || ab.name === '龐克練肌' || ab.name === '合金建造') && !pk.evolvedThisTurn) return;
-      // 腎上腺腦力：身上必須附有至少 1 顆【惡】能量
-      if (ab.name === '腎上腺腦力' && (countEnergy(pk, pool).get('Darkness') ?? 0) < 1) return;
+      // 腎上腺腦力（願增猿）：身上 ≥1 顆【惡】能量 && 自己場上 ≥1 隻受傷（damage≥10）
+      //   && 對手場上 ≥1 隻寶可夢。v2.123 補後兩個 gate（Leon 反饋：不符條件就不顯按鈕）。
+      if (ab.name === '腎上腺腦力') {
+        if ((countEnergy(pk, pool).get('Darkness') ?? 0) < 1) return;
+        const selfField = [...(player.active ? [player.active] : []), ...player.bench];
+        if (!selfField.some(c => c.damage >= 10)) return;
+        const oppIdx = (1 - state.activePlayerIndex) as 0 | 1;
+        const opp = state.players[oppIdx];
+        if (!opp.active && opp.bench.length === 0) return;
+      }
       // v2.53 碧綠之舞：手牌必須至少有 1 張基本草能量（否則按了只會輸出警告 log，
       // Leon 反饋希望 UI 直接隱藏按鈕，而不是誤按後才提示）。
       if (ab.name === '碧綠之舞') {

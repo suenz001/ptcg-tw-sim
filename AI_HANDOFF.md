@@ -1,9 +1,63 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.122)  
+> 最後更新：2026-04-25 (v2.123)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.123 — 腎上腺腦力 gate + 特性 KO 後補戰鬥 + 毒自 KO 獎賞修 + 劇毒支配戰鬥場 gate
+
+### Leon 回報清單
+
+**1. 腎上腺腦力 gate：沒受傷寶可夢也能按**  
+修：engine.ts getUsableAbilities 的「腎上腺腦力」分支補「場上 ≥1 受傷（damage≥10）寶可夢」+「對手場上有寶可夢」gate。  
+Leon 也要求整體掃所有 ability — 目前只做腎上腺腦力（明確點名），其他 ~30 個 ability 逐個審查工作量大，標 TODO 留待下版或 Leon 測試時個別修。
+
+**2. 特性 KO 對手戰鬥寶可夢後我方回合意外結束**  
+根因：UI send-new-active modal 條件 `defenderPlayer?.active===null && game.turnPhase==='end'`。
+特性（USE_ABILITY）KO 對手時 turnPhase 仍是 'main'，modal 不彈 → 玩家看到 active=null 以為回合結束。  
+修：UI 兩個 send-new-active modal 條件去掉 `turnPhase==='end'` 限制（2 處 alert + 2 處 modal）。
+
+**3. 備戰 slot UI 太擠，HP 被擠不可見**  
+修：`.bench-slot { height: 185px → 205px }`（+20px），給 HP/特性按鈕留足空間。
+
+**4. 嚴重 bug：被中毒傷害擊倒時自己拿獎賞 + 卡住**  
+根因 A：engine END_TURN poison KO case 用 `return { pendingPrizes: poisonPrizes }`，
+但 TAKE_PRIZES 用 `players[activePlayerIndex]` 拿獎賞 — 那是被毒方自己，完全錯誤。  
+修：用 selfKOInstance 風格（v2.70 雪妖女 precedent）— 對手直接從自己的 prize 堆搬到 hand，
+不走 pendingPrizes，避免 activePlayerIndex 混淆。  
+根因 B：自 KO modal 條件 `turnPhase!=='end'` — END_TURN 觸發時 turnPhase 是 'end'，modal 不彈 → 卡住。  
+修：同 Bug 2 去掉條件。  
+
+已知限制：被毒 KO 後，玩家補完戰鬥需要再按一次「結束回合」才真正進到對手回合（engine 目前沒把「補戰鬥」和「END_TURN 剩餘 checkup」串成 continuation）。完整修需要 engine refactor，視 Leon 測試反應再擴充。
+
+**5. 桃歹郎 劇毒支配 +5 必須在戰鬥場**  
+卡面：附有此特性的「這隻寶可夢」必須在戰鬥場才生效。  
+舊版 engine 檢查對手 active + bench 整個場上 → 桃歹郎被老大指令換到備戰後仍 +5。  
+修：只檢查對手 **active 位** 的卡是否為劇毒支配本體。
+
+### 檔案改動
+- `src/lib/game/engine.ts`：
+  - `getUsableAbilities` 腎上腺腦力 gate 加「受傷 + 對手有寶可夢」
+  - END_TURN poison KO case 改走 selfKOInstance 直接取獎
+  - 劇毒支配 gate 縮窄到「對手 active 位」
+- `src/routes/game/+page.svelte`：
+  - 2 處 send-new-active alert 去掉 turnPhase 限制
+  - 2 處 send-new-active modal 去掉 turnPhase 限制
+  - `.bench-slot` height 185 → 205
+
+### 驗證
+- npm run build ✓（14.63s）
+- 腎上腺腦力按鈕在沒受傷時不顯示
+- 特性 KO 對手 → modal 自動彈讓對手補戰鬥位
+- 被中毒 KO → 對手直接拿獎賞（不再讓被毒方拿），modal 彈讓被毒方補戰鬥
+- 桃歹郎移到備戰後，對手中毒只放 10 傷害（不再 +5）
+
+### 後續待辦
+- 被毒 KO 後的完整 endTurnFinalize continuation（目前玩家要手動再按結束回合）
+- 全面掃 ~30 個 ability 的 gate（目前只修腎上腺腦力）
 
 ---
 

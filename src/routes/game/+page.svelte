@@ -2307,15 +2307,17 @@
             <button class="btn-xs primary" onclick={()=>dispatch(GameActions.takePrizes(pendingPrizes))}>取得</button>
           </div>
         {/if}
-        {#if game.phase==='playing' && defenderPlayer?.active===null && game.turnPhase==='end'}
+        <!-- v2.123：send-new-active alert 去掉 turnPhase==='end' 限制
+             特性/招式 KO 對手或自己時，不管 turnPhase 都要 popup 補戰鬥位，回合才能繼續。 -->
+        {#if game.phase==='playing' && defenderPlayer?.active===null}
           {#if isMyDefenderTurn()}
             <div class="alert warn-alert">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
           {:else if isMyTurn()}
             <div class="alert warn-alert">⚠️ 等待 {defenderPlayer?.name} 送出寶可夢</div>
           {/if}
         {/if}
-        <!-- 自 KO（如咒詛炸彈）：主動方自己戰鬥場變空，須從備戰區送出新戰鬥寶可夢 -->
-        {#if game.phase==='playing' && myPlayer?.active===null && game.turnPhase!=='end' && (myPlayer?.bench??[]).length>0 && !pendingSelection}
+        <!-- 自 KO（如咒詛炸彈、中毒）：主動方自己戰鬥場變空，須從備戰區送出新戰鬥寶可夢 -->
+        {#if game.phase==='playing' && myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection}
           <div class="alert warn-alert">⚠️ 你的戰鬥寶可夢已昏厥，請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
         {/if}
         {#if game.phase==='playing' && oppPlayer?.active===null && game.turnPhase!=='end' && (oppPlayer?.bench??[]).length>0 && !pendingSelection}
@@ -3097,8 +3099,10 @@
     </div>
   {/if}
 
-  <!-- Send New Active Modal（戰鬥寶可夢昏厥後派出新戰鬥寶可夢，使用統一的橫向 grid + 放大鏡介面） -->
-  {#if game && game.phase==='playing' && defenderPlayer?.active===null && game.turnPhase==='end' && isMyDefenderTurn()}
+  <!-- Send New Active Modal（戰鬥寶可夢昏厥後派出新戰鬥寶可夢，使用統一的橫向 grid + 放大鏡介面）
+       v2.123：去掉 turnPhase==='end' 限制 — 特性/招式 KO 時 turnPhase 仍為 'main'，
+       舊條件會不彈 modal 造成卡住。 -->
+  {#if game && game.phase==='playing' && defenderPlayer?.active===null && isMyDefenderTurn()}
     <div class="selection-overlay">
       <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
@@ -3135,8 +3139,10 @@
     </div>
   {/if}
 
-  <!-- Send New Active Modal（自 KO 版）：主動方自 KO（如咒詛炸彈）後自己戰鬥場空欄 → 從自己備戰區選 -->
-  {#if game && game.phase==='playing' && myPlayer?.active===null && game.turnPhase!=='end' && (myPlayer?.bench??[]).length>0 && !pendingSelection}
+  <!-- Send New Active Modal（自 KO 版）：主動方自 KO（如咒詛炸彈、中毒）後自己戰鬥場空欄 → 從自己備戰區選
+       v2.123：去掉 turnPhase!=='end' 限制 — 中毒於 END_TURN 觸發時 turnPhase 可能已是 'end'，
+       舊條件會擋掉 modal 造成當機。 -->
+  {#if game && game.phase==='playing' && myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection}
     <div class="selection-overlay">
       <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
@@ -3805,7 +3811,9 @@
      v2.51：加寬 slot（115→140px），能量 pip 移到右側垂直排列。
      v2.53：縮窄 slot 回 128px 並放大卡圖（Leon 反饋「牌變小空隙太大」），
             bench-nrg 條件渲染後沒能量時 img 置中填滿 slot。 */
-  .bench-slot{ flex:1 1 90px; min-width:90px; max-width:128px; height:185px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:hidden; }
+  /* v2.123：bench-slot 加高 20px（185 → 205），讓特性按鈕不會擠掉 HP 顯示
+     （Leon 反饋：備戰寶可夢血量常看不到） */
+  .bench-slot{ flex:1 1 90px; min-width:90px; max-width:128px; height:205px; background:rgba(0,0,0,.25); border:1px solid #2a4a2a; border-radius:6px; padding:.35rem; text-align:center; font-size:.72rem; position:relative; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.1rem; overflow:hidden; }
   .bench-slot:not(.bench-empty).energy-target{ border-color:#aaff44; cursor:pointer; }
   /* v2.49：限制圖片高度，把底部空間留給能量 pip / 進化按鈕 / 特性按鈕（名字/HP 已移到卡牌上方）
      v2.51：寬度讓 flex 自動分配（bench-middle 裡與能量 pip 共用一列；對手 bench 無 bench-middle 則直接填滿 slot）
