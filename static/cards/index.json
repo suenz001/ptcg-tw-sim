@@ -11,7 +11,8 @@
     },
     "coverImageUrl": "covers/MJ.png",
     "scrapedAt": "2026-04-16T08:40:39.689Z",
-    "releaseDate": "2026-02-26"
+    "releaseDate": "2026-02-26",
+    "count": 24
   },
   {
     "code": "SV5K",
@@ -25,7 +26,8 @@
     },
     "coverImageUrl": "covers/SV5K.png",
     "scrapedAt": "2026-04-16T07:50:24.999Z",
-    "releaseDate": "2024-02-02"
+    "releaseDate": "2024-02-02",
+    "count": 100
   },
   {
     "code": "SV5M",
@@ -39,7 +41,8 @@
     },
     "coverImageUrl": "covers/SV5M.png",
     "scrapedAt": "2026-04-16T07:49:06.962Z",
-    "releaseDate": "2024-02-02"
+    "releaseDate": "2024-02-02",
+    "count": 100
   },
   {
     "code": "SV5a",
@@ -53,7 +56,8 @@
     },
     "coverImageUrl": "covers/SV5a.png",
     "scrapedAt": "2026-04-16T07:51:42.989Z",
-    "releaseDate": "2024-04-03"
+    "releaseDate": "2024-04-03",
+    "count": 96
   },
   {
     "code": "SV6",
@@ -67,7 +71,8 @@
     },
     "coverImageUrl": "covers/SV6.png",
     "scrapedAt": "2026-04-16T07:53:00.895Z",
-    "releaseDate": "2024-05-10"
+    "releaseDate": "2024-05-10",
+    "count": 133
   },
   {
     "code": "SV6a",
@@ -80,7 +85,8 @@
     },
     "coverImageUrl": "covers/SV6a.png",
     "scrapedAt": "2026-04-16T07:54:43.541Z",
-    "releaseDate": "2024-06-21"
+    "releaseDate": "2024-06-21",
+    "count": 94
   },
   {
     "code": "SV7",
@@ -93,7 +99,8 @@
     },
     "coverImageUrl": "covers/SV7.png",
     "scrapedAt": "2026-04-16T07:56:01.174Z",
-    "releaseDate": "2024-08-02"
+    "releaseDate": "2024-08-02",
+    "count": 135
   },
   {
     "code": "SV7a",
@@ -107,7 +114,8 @@
     },
     "coverImageUrl": "covers/SV7a.png",
     "scrapedAt": "2026-04-16T07:57:46.945Z",
-    "releaseDate": "2024-09-27"
+    "releaseDate": "2024-09-27",
+    "count": 94
   },
   {
     "code": "SV8",
@@ -120,7 +128,8 @@
     },
     "coverImageUrl": "covers/SV8.png",
     "scrapedAt": "2026-04-16T07:59:02.734Z",
-    "releaseDate": "2024-10-25"
+    "releaseDate": "2024-10-25",
+    "count": 138
   },
   {
     "code": "SV8a",
@@ -134,7 +143,8 @@
     },
     "coverImageUrl": "covers/SV8a.png",
     "scrapedAt": "2026-04-16T08:01:07.033Z",
-    "releaseDate": "2024-12-20"
+    "releaseDate": "2024-12-20",
+    "count": 381
   },
   {
     "code": "M1L",
@@ -147,7 +157,8 @@
     },
     "coverImageUrl": "covers/M1L.png",
     "scrapedAt": "2026-04-16T08:16:43.852Z",
-    "releaseDate": "2025-08-15"
+    "releaseDate": "2025-08-15",
+    "count": 92
   },
   {
     "code": "M1S",
@@ -160,7 +171,8 @@
     },
     "coverImageUrl": "covers/M1S.png",
     "scrapedAt": "2026-04-16T08:15:30.428Z",
-    "releaseDate": "2025-08-15"
+    "releaseDate": "2025-08-15",
+    "count": 92
   },
   {
     "code": "M2",
@@ -173,7 +185,8 @@
     },
     "coverImageUrl": "covers/M2.png",
     "scrapedAt": "2026-04-16T08:17:56.312Z",
-    "releaseDate": "2025-10-09"
+    "releaseDate": "2025-10-09",
+    "count": 80
   },
   {
     "code": "M2a",
@@ -187,7 +200,8 @@
     },
     "coverImageUrl": "covers/M2a.png",
     "scrapedAt": "2026-04-16T08:19:18.390Z",
-    "releaseDate": "2025-12-05"
+    "releaseDate": "2025-12-05",
+    "count": 250
   },
   {
     "code": "MBD",
@@ -201,7 +215,8 @@
     },
     "coverImageUrl": "covers/MBD.png",
     "scrapedAt": "2026-04-16T08:28:01.888Z",
-    "releaseDate": "2025-09-19"
+    "releaseDate": "2025-09-19",
+    "count": 24
   },
   {
     "code": "MBG",
@@ -215,7 +230,8 @@
     },
     "coverImageUrl": "covers/MBG.png",
     "scrapedAt": "2026-04-16T08:28:21.248Z",
-    "releaseDate": "2025-09-19"
+    "releaseDate": "2025-09-19",
+    "count": 24
   },
   {
     "code": "SV10",
@@ -229,7 +245,8 @@
     },
     "coverImageUrl": "covers/SV10.png",
     "scrapedAt": "2026-04-16T07:11:55.699Z",
-    "releaseDate": "2025-05-02"
+    "releaseDate": "2025-05-02",
+    "count": 132
   },
   {
     "code": "SV11B",
@@ -243,7 +260,8 @@
     },
     "coverImageUrl": "covers/SV11B.png",
     "scrapedAt": "2026-04-16T08:12:18.580Z",
-    "releaseDate": "2025-06-20"
+    "releaseDate": "2025-06-20",
+    "count": 254
   },
   {
     "code": "SV11W",
@@ -257,7 +275,8 @@
     },
     "coverImageUrl": "covers/SV11W.png",
     "scrapedAt": "2026-04-16T08:08:59.091Z",
-    "releaseDate": "2025-06-20"
+    "releaseDate": "2025-06-20",
+    "count": 254
   },
   {
     "code": "SV9",
@@ -271,7 +290,8 @@
     },
     "coverImageUrl": "covers/SV9.png",
     "scrapedAt": "2026-04-16T08:05:56.176Z",
-    "releaseDate": "2025-02-07"
+    "releaseDate": "2025-02-07",
+    "count": 132
   },
   {
     "code": "SV9a",
@@ -284,7 +304,8 @@
     },
     "coverImageUrl": "covers/SV9a.png",
     "scrapedAt": "2026-04-16T08:07:38.291Z",
-    "releaseDate": "2025-03-28"
+    "releaseDate": "2025-03-28",
+    "count": 92
   },
   {
     "code": "SVQL",
@@ -298,7 +319,8 @@
     },
     "coverImageUrl": "covers/SVQL.png",
     "scrapedAt": "2026-04-22T01:01:36.632022Z",
-    "releaseDate": "2025-07-18"
+    "releaseDate": "2025-07-18",
+    "count": 23
   },
   {
     "code": "SVQP",
@@ -312,7 +334,8 @@
     },
     "coverImageUrl": "covers/SVQP.png",
     "scrapedAt": "2026-04-22T01:01:36.632405Z",
-    "releaseDate": "2025-07-18"
+    "releaseDate": "2025-07-18",
+    "count": 24
   },
   {
     "code": "M-P",
@@ -326,7 +349,8 @@
     },
     "coverImageUrl": "covers/M-P.png",
     "scrapedAt": "2026-04-22T01:01:36.634085Z",
-    "releaseDate": "2025-08-07"
+    "releaseDate": "2025-08-07",
+    "count": 98
   },
   {
     "code": "M3",
@@ -340,7 +364,8 @@
     },
     "coverImageUrl": "covers/M3.png",
     "scrapedAt": "2026-04-16T08:25:27.486Z",
-    "releaseDate": "2026-02-06"
+    "releaseDate": "2026-02-06",
+    "count": 117
   },
   {
     "code": "M4",
@@ -354,7 +379,8 @@
     },
     "coverImageUrl": "covers/M4.png",
     "scrapedAt": "2026-04-16T08:26:58.977Z",
-    "releaseDate": "2026-03-27"
+    "releaseDate": "2026-03-27",
+    "count": 83
   },
   {
     "code": "MC",
@@ -368,7 +394,8 @@
     },
     "coverImageUrl": "covers/MC.png",
     "scrapedAt": "2026-04-16T08:29:24.027Z",
-    "releaseDate": "2026-01-16"
+    "releaseDate": "2026-01-16",
+    "count": 774
   },
   {
     "code": "SVOD",
@@ -382,7 +409,8 @@
     },
     "coverImageUrl": "covers/SVOD.png",
     "scrapedAt": "2026-04-21T14:24:57.960Z",
-    "releaseDate": "2025-03-07"
+    "releaseDate": "2025-03-07",
+    "count": 23
   },
   {
     "code": "SVOM",
@@ -396,6 +424,7 @@
     },
     "coverImageUrl": "covers/SVOM.png",
     "scrapedAt": "2026-04-21T14:24:25.226Z",
-    "releaseDate": "2025-03-07"
+    "releaseDate": "2025-03-07",
+    "count": 23
   }
 ]
