@@ -1546,12 +1546,23 @@ function handlePlaying(
     // 弱點（×2）— 只對有實際傷害的招式套用。skipWeakRes 旗標跳過此計算。
     // v2.57：莉莉艾的皮皮ex｜妖精領域 — 我方場上有皮皮ex 時，對手【龍】寶可夢的弱點改為【超】。
     // 卡面允許「本無弱點」的龍寶可夢被加上【超】弱點。
+    // v2.101：鋁鋼橋龍ex｜金屬防禦強化 — 本回合弱點失效（weaknessDisabledThisTurn）
     let effectiveWeaknessType: string | undefined = defenderCard.weakness?.type;
     if (defenderCard.pokemonType === 'Dragon' && hasFairyZoneField(workingState, aIdx, pool)) {
       effectiveWeaknessType = 'Psychic';
     }
-    if (!skipWeakRes && baseDamage > 0 && effectiveWeaknessType && attackerCard.pokemonType === effectiveWeaknessType) {
+    const weaknessDisabled = !!defender.active.weaknessDisabledThisTurn;
+    if (!skipWeakRes && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType && attackerCard.pokemonType === effectiveWeaknessType) {
       baseDamage *= 2;
+    }
+    // v2.101：鋁鋼橋龍｜塗層攻擊 — 本回合此卡不受【基礎】寶可夢招式傷害
+    // 攻擊方 stage=Basic 且 defender 有 immuneToBasicAttackThisTurn → 傷害歸零（招式仍觸發其他 post 效果）
+    if (baseDamage > 0
+        && defender.active.immuneToBasicAttackThisTurn
+        && (attackerCard.stage ?? attackerCard.subtype) === 'Basic') {
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因塗層攻擊效果，不受【基礎】寶可夢招式傷害`, dIdx);
+      baseDamage = 0;
     }
 
     // 跨回合「這隻本回合受招式傷害 +N」旗標（例：超音波幼蟲｜刺耳聲）
@@ -2221,6 +2232,16 @@ function handlePlaying(
         n = { ...n };
         delete n.takeExtraDamageThisTurn;
       }
+      // v2.101：清除本回合已消耗完的 weaknessDisabledThisTurn / immuneToBasicAttackThisTurn
+      // （owner 是 nextP，攻擊方的 END_TURN = nextP 回合結束 — 即這些 self-buff 已走過完整一個對手回合）
+      if (c.weaknessDisabledThisTurn) {
+        n = { ...n };
+        delete n.weaknessDisabledThisTurn;
+      }
+      if (c.immuneToBasicAttackThisTurn) {
+        n = { ...n };
+        delete n.immuneToBasicAttackThisTurn;
+      }
       // Wave 39：清除消耗完的 deferredPrizeBonusThisTurn（同跨回合模型）
       if (c.deferredPrizeBonusThisTurn) {
         n = { ...n };
@@ -2260,8 +2281,23 @@ function handlePlaying(
       if (!c.cantAttachEnergyThisTurn) return c;
       const n = { ...c }; delete n.cantAttachEnergyThisTurn; return n;
     };
-    if (currentPlayer.active) currentPlayer.active = clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(currentPlayer.active)));
-    currentPlayer.bench = currentPlayer.bench.map(c => clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(c))));
+    // v2.101：自己 ATTACK_POST 對**自己**設的 NextTurn 旗標，於自己 END_TURN 時 promote 為 ThisTurn。
+    //   owner 就是 currentPlayer（aIdx 方）— 不同於 takeExtraDamageNextTurn 之類的 defender-side debuff。
+    //   卡面：鋁鋼橋龍ex 金屬防禦強化 / 鋁鋼橋龍 塗層攻擊
+    const promoteSelfNextToThis = (c: CardInstance): CardInstance => {
+      let n = c;
+      if (c.weaknessDisabledNextTurn) {
+        n = { ...n, weaknessDisabledThisTurn: true };
+        delete n.weaknessDisabledNextTurn;
+      }
+      if (c.immuneToBasicAttackNextTurn) {
+        n = { ...n, immuneToBasicAttackThisTurn: true };
+        delete n.immuneToBasicAttackNextTurn;
+      }
+      return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = promoteSelfNextToThis(clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(currentPlayer.active))));
+    currentPlayer.bench = currentPlayer.bench.map(c => promoteSelfNextToThis(clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(c)))));
     // Wave 36/39：清除 aIdx（本回合結束方）的玩家級 ThisTurn 旗標（若本回合已消耗完）
     if (
       currentPlayer.noAttacksThisTurn ||

@@ -1,9 +1,39 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.100)  
+> 最後更新：2026-04-24 (v2.101)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.101 — 三組預組 Phase A 第 2 批：6 張（跨回合 flag + 3 支援者）
+
+### 新增 CardInstance flag（types.ts）
+- `weaknessDisabledNextTurn` / `weaknessDisabledThisTurn` — 下個對手回合自身弱點消除
+- `immuneToBasicAttackNextTurn` / `immuneToBasicAttackThisTurn` — 下個對手回合不受【基礎】寶可夢招式傷害
+
+### engine.ts 改動
+- **attack pipeline weakness gate**：`weaknessDisabled` → 跳過 ×2 計算
+- **attack pipeline basic-immune gate**：attacker.stage === 'Basic' + defender 有 flag → baseDamage=0 + log
+- **END_TURN promote（新）**：在 currentPlayer（= 設 flag 的玩家）的 active/bench 上 `promoteSelfNextToThis`（跟既有 defender-side promote 方向相反）
+- **END_TURN clear**：在 nextP 的 active/bench 加 `weaknessDisabledThisTurn` / `immuneToBasicAttackThisTurn` 的清除邏輯（合併到既有 promotePending 裡）
+
+### 實裝（6 張）
+1. **奧利紐｜營養素**（0 damage）— regPost 開 heal-target minCount=1 maxCount=1 params.healAmount=40；resolver 沿用 _shared healResolver
+2. **鋁鋼橋龍ex｜金屬防禦強化**（220）— regPost push `weaknessDisabledNextTurn=true` 到 attacker.active
+3. **鋁鋼橋龍｜塗層攻擊**（120）— regPost push `immuneToBasicAttackNextTurn=true`
+4. **吉普索（Supporter）** — chained pending：discard-search 'Energy:Metal' 0-2 → heal-target 選【鋼】寶可夢附加（單隻鋼寶時自動附加）
+5. **滿充的體貼（Supporter）** — heal-target + validIids 限定超級 ex（subtype=ex + name.startsWith('超級')）；resolver 清傷害 + 能量回手牌
+6. **青木的手法（Supporter）** — discardHand → 3 階段 chained deck-search（Pokemon / Supporter / BasicEnergy 各 0-1）→ 最後 shuffle（pattern 沿用小光）
+
+### 驗證
+- npm run build ✓（14.11s）
+- 需實戰：弱點跨回合消除、基礎免疫、heal-target 單選、超級 ex 指定、多階段 deck-search
+
+### 剩餘 Phase B/C
+- **Phase B（6 張）**：活力森林 / 稜鏡塔 / 險惡廢墟 / 鋁鋼橋龍ex 合金建造 / 旋轉洛托姆 風扇呼喚 / 奧利瓦ex 油之機關槍
+- **Phase C（3 張）**：大竺葵 繁茂 / 古舊能量 / 燃火能量
 
 ---
 

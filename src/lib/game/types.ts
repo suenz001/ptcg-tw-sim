@@ -151,6 +151,33 @@ export interface CardInstance {
    * 禁用。在擁有者 END_TURN 清除。
    */
   blockedAttackNamesThisTurn?: string[];
+  /**
+   * v2.101：**下個對手回合此卡弱點失效**預約旗標（卡片層級）。
+   * 卡面範例：「鋁鋼橋龍ex｜金屬防禦強化 — 在下個對手的回合，這隻寶可夢的弱點全部消除。」
+   * 由**攻擊方**在自己 ATTACK_POST 設於自己的 active，於擁有者下個 END_TURN 時
+   * promote 為 weaknessDisabledThisTurn（即對手下個回合開始前）。
+   * 在對手（攻擊方）下個 END_TURN 時清除（由 attacker 的 END_TURN 負責 ThisTurn 清理）。
+   */
+  weaknessDisabledNextTurn?: boolean;
+  /**
+   * v2.101：**本回合此卡弱點失效**（由 weaknessDisabledNextTurn promote）。
+   * 於 engine 的 attack pipeline 的 weakness ×2 判定點加入此旗標檢查 —
+   * 若 defender.active 有此旗標則跳過 weakness。
+   */
+  weaknessDisabledThisTurn?: boolean;
+  /**
+   * v2.101：**下個對手回合此卡不受【基礎】寶可夢招式傷害**預約旗標。
+   * 卡面範例：「鋁鋼橋龍｜塗層攻擊 — 在下個對手的回合，這隻寶可夢不會受到【基礎】寶可夢招式的傷害。」
+   * 由攻擊方在自己 ATTACK_POST 設於自己的 active，於擁有者下個 END_TURN 時 promote。
+   * 注意：只擋「招式的傷害」，招式其他效果仍會觸發（此區別依卡面）。
+   */
+  immuneToBasicAttackNextTurn?: boolean;
+  /**
+   * v2.101：**本回合此卡不受【基礎】寶可夢招式傷害**（由 immuneToBasicAttackNextTurn promote）。
+   * 於 engine 的 attack pipeline：若 attacker card.stage === 'Basic' 且 defender 有此旗標 →
+   * baseDamage 歸零（招式仍會打出、其他效果仍觸發）。
+   */
+  immuneToBasicAttackThisTurn?: boolean;
 }
 
 export type SpecialCondition =
