@@ -431,7 +431,19 @@ export type GameAction =
   | { type: 'RETREAT'; newActiveIid: string }
   | { type: 'PLAY_TRAINER'; iid: string; params?: Record<string, unknown> }
   | { type: 'RESOLVE_SELECTION'; selectedIids: string[]; senderIdx?: 0 | 1 }
-  | { type: 'ATTACK'; attackIndex: number; discardedEnergyIids?: string[] }
+  | {
+      type: 'ATTACK';
+      attackIndex: number;
+      discardedEnergyIids?: string[];
+      /**
+       * v2.119：copy-attack 類招式（如 N的索羅亞克ex｜暗黑底牌）需要玩家先選：
+       *   - pokeIid：要複製招式的「源頭」寶可夢（備戰區某隻 N的寶可夢）
+       *   - attackIndex：該寶可夢 attacks 陣列的 index
+       * 由 UI 層在 initiateAttack 時彈 picker 讓玩家挑；regPre/regPost 讀取此欄位
+       * 轉接到被複製招式的 PRE/POST。無傳值時 fallback 為自動挑最高傷害招式。
+       */
+      copyAttackChoice?: { pokeIid: string; attackIndex: number };
+    }
   | { type: 'TAKE_PRIZES'; count: number }
   | { type: 'SEND_NEW_ACTIVE'; iid: string; senderIdx?: 0 | 1 }
   | { type: 'USE_STADIUM' }

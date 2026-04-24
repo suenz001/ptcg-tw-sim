@@ -1,9 +1,77 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.118)  
+> 最後更新：2026-04-25 (v2.119)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.119 — 音效換紙張質感 + 暗黑底牌 copy-attack + N的城堡 UI + 險惡廢墟全路徑
+
+### Leon 回報的 4 個問題
+
+**1. 音效**「卡牌放置/抽牌不該是嗶嗶聲，應該是刷刷刷」
+- 前版 deal/draw 用 `bandpass filter` 打 Q=1.5-2 白噪音 → 聽起來像電子短 beep
+- 改為 **paperSwish helper**：`highpass 350Hz + lowpass 1600±700Hz random` 夾擠 white noise，
+  gain envelope attack 8ms → exponential decay，多 burst 疊層做連續紙張摩擦感
+- draw: 1 burst 0.11s；deal: 2 bursts 0.09s；shuffle: 8 bursts 0.06s（隨機 filter jitter）
+- `src/lib/audio/sfx.ts` 加 `paperSwish(c, out, t, opts)` helper
+
+**2. N的索羅亞克ex｜暗黑底牌 copy-attack 實裝 +「要讓我選招式」**
+- v2.113 留 TODO，v2.119 完整實裝
+- 新增 GameAction ATTACK 可選欄位 `copyAttackChoice: { pokeIid, attackIndex }`
+- UI `initiateAttack` intercept：招式名 === '暗黑底牌' 時，彈 modal 列出備戰區所有 N的寶可夢 +
+  各自招式（能量 cost / damage 都顯示），玩家點招式 → dispatch ATTACK 帶 copyAttackChoice
+- `regPre '暗黑底牌'` 讀 action.copyAttackChoice → lookup `ATTACK_PRE.get('<pokeName>|<attackName>')` →
+  轉接呼叫；同時把 copiedKey 存到 `state.pendingCopyAttackKey`，讓 regPost 接力
+- `regPost '暗黑底牌'` 讀 pendingCopyAttackKey → 呼叫被複製招式的 POST → 清旗標
+- fallback：無 copyAttackChoice（AI 或舊 state）→ 自動挑備戰 N的寶可夢中印刷傷害最高的招式
+- Modal CSS：`.copy-attack-*` 系列深綠主題，每隻寶可夢一列 + 招式 button（帶 cost pip + damage）
+
+**3. N的城堡 UI 撤退按鈕沒出現**
+- v2.117 只改了 `RETREAT` action handler 的 cost 計算，**漏改 `canRetreat()`** 函式
+- `canRetreat()` 是 UI 決定撤退按鈕是否顯示的 gate；cost 沒歸零 → energyUnits 0 < 舊 cost → 返 false → 按鈕隱藏
+- 本版補上 canRetreat() 內同一段 N的城堡 hook（`stadiumName === 'N的城堡' && card.name.startsWith('N的') → cost = 0`）
+- 順便確認：拉帝亞斯ex 天空徑線 canRetreat() 已有對應 hook（line 2808~2813），無同類問題
+
+**4. 險惡廢墟只對 PLAY_BASIC 觸發**
+- 前版：險惡廢墟的 +2 指示物邏輯寫死在 engine PLAY_BASIC handler 裡
+- 從牌庫搜寶可夢到備戰（好友寶芬 / 呼朋引伴 / 大師球 / 赫普的包包）完全不經 PLAY_BASIC → 沒觸發
+- 重構：抽出 `applyBenchPlaceSideEffects(state, idx, placedIids, pool)` helper 放在 `_shared.ts`，
+  engine.ts PLAY_BASIC 和各 resolver 都呼叫它
+- 修正 resolver 清單：
+  - `pokemon_search.ts` 的 `bench-basic-from-deck`（好友寶芬 / 赫普的包包）
+  - `six_decks.ts` 的 `recruit-to-bench`（毒電嬰｜呼朋引伴）
+- helper 邏輯：Stadium === '險惡廢墟' → 非【惡】寶可夢 damage +20 + log
+
+### 檔案改動
+- `src/lib/audio/sfx.ts`：paperSwish helper + 重寫 playDeal / playDraw / playShuffle
+- `src/lib/game/types.ts`：GameAction ATTACK 加 copyAttackChoice
+- `src/lib/game/actions.ts`：attack helper 接第 3 參數 copyAttackChoice
+- `src/lib/game/effects/_shared.ts`：加 applyBenchPlaceSideEffects helper
+- `src/lib/game/effects.ts`：re-export applyBenchPlaceSideEffects
+- `src/lib/game/engine.ts`：
+  - canRetreat() 加 N的城堡 hook
+  - PLAY_BASIC 改用 applyBenchPlaceSideEffects helper
+  - import applyBenchPlaceSideEffects
+- `src/lib/game/effects/cards/six_decks.ts`：
+  - 暗黑底牌 regPre/regPost 實裝
+  - recruit-to-bench 補呼叫 applyBenchPlaceSideEffects
+  - import ATTACK_PRE/POST + applyBenchPlaceSideEffects
+- `src/lib/game/effects/cards/pokemon_search.ts`：bench-basic-from-deck 補呼叫 helper
+- `src/routes/game/+page.svelte`：
+  - copyAttackPicker state + resolveCopyAttack / cancelCopyAttack
+  - initiateAttack 加 '暗黑底牌' intercept
+  - modal template + CSS .copy-attack-*
+
+### 驗證
+- npm run build ✓（14.60s）
+- 紙張音（paperSwish）low-pass/high-pass 夾擠 noise 聽起來像連續刷動
+
+### 順帶注意（不阻塞但應留意）
+- v2.113 AZ的平和 用了 `type: 'own-bench-pokemon'` pending — 這個 type engine 不認得。
+  Leon 沒測，但是 latent bug。之後掃時一併修（同 v2.117 其他 pending-type regression 來源）。
 
 ---
 

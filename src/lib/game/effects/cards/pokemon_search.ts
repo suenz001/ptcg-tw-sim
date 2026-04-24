@@ -17,6 +17,7 @@
 import {
   reg, regR, regG,
   addLog, updatePlayer, withPending, shuffle,
+  applyBenchPlaceSideEffects,
 } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -75,7 +76,8 @@ regR('bench-basic-from-deck', (st, idx, iids, _params, pool) => {
   } else {
     st = addLog(st, '牌庫搜尋：未選擇任何卡', idx);
   }
-  return updatePlayer(st, idx, (p) => {
+  // 把 bench 增加 + deck remove + 重洗
+  st = updatePlayer(st, idx, (p) => {
     const selected = p.deck
       .filter(c => iids.includes(c.iid))
       .map(c => ({ ...c, justPlaced: true }));
@@ -83,6 +85,8 @@ regR('bench-basic-from-deck', (st, idx, iids, _params, pool) => {
     const bench = [...p.bench, ...selected].slice(0, 5);
     return { ...p, deck: shuffle(remaining), bench };
   });
+  // v2.119：觸發「放到備戰」的被動場地卡效果（險惡廢墟等）
+  return applyBenchPlaceSideEffects(st, idx, iids, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -151,49 +151,66 @@ function playCoin(c: AudioContext, out: GainNode, t: number): void {
   beep(c, out, t + 0.12, 900, 0.25, 'triangle', 0.28);
 }
 
-// ─ Deal（發牌）────────
-// 短 white noise burst，模擬紙張摩擦
-function playDeal(c: AudioContext, out: GainNode, t: number): void {
-  const src = c.createBufferSource();
-  src.buffer = noiseBuffer(c, 0.08);
-  const bp = c.createBiquadFilter();
-  bp.type = 'bandpass'; bp.frequency.value = 3000; bp.Q.value = 1.5;
-  const g = c.createGain();
-  g.gain.setValueAtTime(0.25, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-  src.connect(bp); bp.connect(g); g.connect(out);
-  src.start(t); src.stop(t + 0.1);
+// ─ 紙張「刷」通用 helper（v2.119 換音色 — Leon 反饋：之前像電子嗶嗶聲）────
+// 用 low-pass + high-pass 夾擠 white noise，讓它聽起來像紙張纖維摩擦而不是電子音：
+//   - low-pass ~1200~2200Hz 去掉刺耳的高頻
+//   - high-pass ~350Hz 去掉低頻隆隆聲，保留「刷」的 crinkle 質感
+//   - 短 envelope（attack 8ms / decay 跟 duration 一致）
+// 每個 burst 都用輕微 randomized filter freq，讓多 burst 聽起來更有「連續紙張」感。
+interface PaperSwishOpts {
+  bursts?: number;
+  durationPerBurst?: number;
+  gap?: number;
+  peakGain?: number;
+  lpCenter?: number;
+  lpJitter?: number;
 }
-
-// ─ Draw（抽牌）— 比 deal 再短、再清脆
-function playDraw(c: AudioContext, out: GainNode, t: number): void {
-  const src = c.createBufferSource();
-  src.buffer = noiseBuffer(c, 0.05);
-  const bp = c.createBiquadFilter();
-  bp.type = 'bandpass'; bp.frequency.value = 4500; bp.Q.value = 2;
-  const g = c.createGain();
-  g.gain.setValueAtTime(0.3, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-  src.connect(bp); bp.connect(g); g.connect(out);
-  src.start(t); src.stop(t + 0.07);
-}
-
-// ─ Shuffle — 連續幾個 noise burst
-function playShuffle(c: AudioContext, out: GainNode, t: number): void {
-  for (let i = 0; i < 5; i++) {
-    const start = t + i * 0.08;
+function paperSwish(c: AudioContext, out: GainNode, t: number, opts: PaperSwishOpts = {}): void {
+  const bursts = opts.bursts ?? 1;
+  const dur = opts.durationPerBurst ?? 0.1;
+  const gap = opts.gap ?? 0.02;
+  const peak = opts.peakGain ?? 0.28;
+  const lpC = opts.lpCenter ?? 1600;
+  const lpJ = opts.lpJitter ?? 700;
+  for (let i = 0; i < bursts; i++) {
+    const start = t + i * (dur + gap);
     const src = c.createBufferSource();
-    src.buffer = noiseBuffer(c, 0.06);
-    const bp = c.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 2500 + Math.random() * 2000;
-    bp.Q.value = 1.5;
+    src.buffer = noiseBuffer(c, dur);
+    const hp = c.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 350;
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = lpC + (Math.random() - 0.5) * lpJ;
+    lp.Q.value = 0.7;
     const g = c.createGain();
-    g.gain.setValueAtTime(0.18, start);
-    g.gain.exponentialRampToValueAtTime(0.001, start + 0.06);
-    src.connect(bp); bp.connect(g); g.connect(out);
-    src.start(start); src.stop(start + 0.08);
+    g.gain.setValueAtTime(0, start);
+    g.gain.linearRampToValueAtTime(peak, start + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, start + dur);
+    src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(out);
+    src.start(start); src.stop(start + dur + 0.05);
   }
+}
+
+// ─ Deal（發牌）— 兩個短紙張刷 ────
+function playDeal(c: AudioContext, out: GainNode, t: number): void {
+  paperSwish(c, out, t, { bursts: 2, durationPerBurst: 0.09, gap: 0.015, peakGain: 0.26, lpCenter: 1800 });
+}
+
+// ─ Draw（抽牌）— 單一紙張刷 ────
+function playDraw(c: AudioContext, out: GainNode, t: number): void {
+  paperSwish(c, out, t, { bursts: 1, durationPerBurst: 0.11, peakGain: 0.3, lpCenter: 1900 });
+}
+
+// ─ Shuffle — 多張紙互相摩擦（連續快速 burst）────
+function playShuffle(c: AudioContext, out: GainNode, t: number): void {
+  paperSwish(c, out, t, {
+    bursts: 8,
+    durationPerBurst: 0.06,
+    gap: 0.018,
+    peakGain: 0.2,
+    lpCenter: 1500,
+    lpJitter: 1000,
+  });
 }
 
 // ─ Click — UI 短 click

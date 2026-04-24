@@ -23,6 +23,7 @@ import {
   SPECIAL_ENERGY_ATTACH,
   clearActiveEffects,
   hasFairyZoneField,
+  applyBenchPlaceSideEffects,
 } from './effects';
 
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
@@ -867,17 +868,8 @@ function handlePlaying(
     if (placeFn && !isColorlessAbilityBlocked(afterPlace, card, pool)) {
       afterPlace = placeFn(afterPlace, aIdx, pool);
     }
-    // v2.102 險惡廢墟（Stadium）— 雙方玩家每次在自己的回合將【基礎】寶可夢
-    // （【惡】寶可夢除外）放置於備戰區時，在那隻寶可夢身上放置 2 個傷害指示物。
-    const currentStadium = afterPlace.activeStadium ? pool.get(afterPlace.activeStadium.cardId) : null;
-    if (currentStadium?.name === '險惡廢墟' && card.pokemonType !== 'Darkness') {
-      const refPlayers = [...afterPlace.players] as [PlayerState, PlayerState];
-      const refP = { ...refPlayers[aIdx] };
-      refP.bench = refP.bench.map(c => c.iid === placed.iid ? { ...c, damage: c.damage + 20 } : c);
-      refPlayers[aIdx] = refP;
-      afterPlace = addLog({ ...afterPlace, players: refPlayers },
-        `險惡廢墟：${card.name} 受到 2 個傷害指示物`, aIdx);
-    }
+    // v2.119 險惡廢墟：改走統一 helper（同時被 pokemon_search / six_decks 等 resolver 呼叫）
+    afterPlace = applyBenchPlaceSideEffects(afterPlace, aIdx, [placed.iid], pool);
     return afterPlace;
   }
 
@@ -2811,6 +2803,10 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
     ...player.bench,
   ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
   if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
+  // v2.119 修：canRetreat() 也要鏡射 N的城堡 hook（原 v2.117 只改了 RETREAT handler 的 cost，
+  //   導致 UI canRetreatNow 仍用舊 cost 計算，按鈕不出現）。
+  const stadiumNameCR = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
+  if (stadiumNameCR === 'N的城堡' && card?.name?.startsWith('N的')) cost = 0;
   // v2.69：以能量單位計算（火箭隊能量 1 張 = 2 units）。
   // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
   return totalEnergyUnits(player.active.energyAttached, pool, state, state.activePlayerIndex) >= cost;

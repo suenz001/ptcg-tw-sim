@@ -1301,6 +1301,18 @@
     const atkCard = getCard(activePlayer.active.cardId);
     const atk = atkCard?.attacks?.[attackIndex];
     if (!atkCard || !atk) return;
+    // v2.119 copy-attack intercept：暗黑底牌 要先讓玩家選備戰 N的寶可夢 + 招式
+    if (atk.name === '暗黑底牌') {
+      const candidates = activePlayer.bench
+        .map(b => ({ inst: b, card: getCard(b.cardId) }))
+        .filter(x => x.card?.name?.startsWith('N的') && (x.card?.attacks?.length ?? 0) > 0);
+      if (candidates.length === 0) {
+        dispatch(GameActions.attack(attackIndex));  // 沒目標就讓 engine 自己出錯 log
+        return;
+      }
+      copyAttackPicker = { sourceAttackIndex: attackIndex, candidates };
+      return;
+    }
     const key = `${atkCard.name}|${atk.name}`;
     const spec = ATTACK_PRE_DISCARD_CHOICE.get(key);
     if (!spec) {
@@ -1314,6 +1326,19 @@
       picked: new Set<string>(),
     };
   }
+
+  // v2.119 copy-attack picker（目前僅用於 N的索羅亞克ex｜暗黑底牌）
+  let copyAttackPicker = $state<{
+    sourceAttackIndex: number;
+    candidates: Array<{ inst: CardInstance; card: Card | undefined }>;
+  } | null>(null);
+  function resolveCopyAttack(pokeIid: string, attackIndex: number) {
+    if (!copyAttackPicker) return;
+    const src = copyAttackPicker.sourceAttackIndex;
+    copyAttackPicker = null;
+    dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
+  }
+  function cancelCopyAttack() { copyAttackPicker = null; }
 
   // 取得「可被挑選丟棄」的能量清單（依 scope 決定範圍）
   function getDiscardableEnergies(spec: PreDiscardSpec): Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string }> {
@@ -2874,6 +2899,48 @@
     </div>
   {/if}
 
+  <!-- v2.119 N的索羅亞克ex｜暗黑底牌 copy-attack picker ─────────────────── -->
+  {#if copyAttackPicker}
+    <div class="selection-overlay">
+      <div class="selection-modal copy-attack-modal">
+        <div class="sel-header">
+          <h3>🌑 暗黑底牌：選擇要使用的招式</h3>
+          <p class="sel-hint">從備戰區的「N的」寶可夢中選一隻，複製它的招式作為這個招式使用。</p>
+        </div>
+        <div class="copy-attack-list">
+          {#each copyAttackPicker.candidates as cand (cand.inst.iid)}
+            {#if cand.card}
+              <div class="copy-attack-poke">
+                <img src={cand.card.imageUrl} alt={cand.card.name} class="copy-attack-img"/>
+                <div class="copy-attack-col">
+                  <div class="copy-attack-name">{cand.card.name}</div>
+                  <div class="copy-attack-atks">
+                    {#each cand.card.attacks ?? [] as atk, aIdx}
+                      <button
+                        class="copy-attack-btn"
+                        onclick={() => resolveCopyAttack(cand.inst.iid, aIdx)}
+                        title={atk.effect ?? ''}
+                      >
+                        <span class="copy-atk-cost">
+                          {#each atk.cost as e}<span class="copy-atk-pip" style:background={ENERGY_COLOR[e]} title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                        </span>
+                        <span class="copy-atk-name">{atk.name}</span>
+                        {#if atk.damage}<span class="copy-atk-dmg">{atk.damage}</span>{/if}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              </div>
+            {/if}
+          {/each}
+        </div>
+        <div class="sel-footer">
+          <button class="btn-act secondary" onclick={cancelCopyAttack}>取消</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- Retreat Menu（置中橫向 grid，支援放大鏡，避免撞到畫面頂部） -->
   {#if floatingRetreatMenu && myPlayer?.active}
     <div class="selection-overlay" class:dragged={modalDragged} onclick={() => floatingRetreatMenu = null}>
@@ -3515,6 +3582,25 @@
     0%,100% { box-shadow: 0 0 8px 2px rgba(255,220,80,.5); transform: rotate(-.3deg); }
     50%     { box-shadow: 0 0 14px 4px rgba(255,220,80,.75); transform: rotate(.3deg); }
   }
+
+  /* ─── v2.119 Copy-attack picker（暗黑底牌） ──────────────── */
+  .copy-attack-modal{ max-width:560px; }
+  .copy-attack-list{ display:flex; flex-direction:column; gap:.8rem; padding:.5rem 0; max-height:60vh; overflow-y:auto; }
+  .copy-attack-poke{ display:flex; gap:.8rem; background:#1e2e1e; border:1px solid #3a5a3a; border-radius:8px; padding:.5rem; }
+  .copy-attack-img{ width:80px; height:auto; border-radius:4px; object-fit:cover; }
+  .copy-attack-col{ display:flex; flex-direction:column; gap:.35rem; flex:1; min-width:0; }
+  .copy-attack-name{ font-weight:600; color:#d8e8d8; font-size:.95rem; }
+  .copy-attack-atks{ display:flex; flex-direction:column; gap:.3rem; }
+  .copy-attack-btn{ display:flex; align-items:center; gap:.5rem; padding:.45rem .6rem;
+    background:#2a3a2a; border:1px solid #4a7a4a; border-radius:6px; cursor:pointer;
+    color:#eee; font-size:.88rem; text-align:left; }
+  .copy-attack-btn:hover{ background:#3a5a3a; border-color:#6aaa6a; }
+  .copy-atk-cost{ display:inline-flex; gap:.15rem; }
+  .copy-atk-pip{ display:inline-flex; width:1.2em; height:1.2em; border-radius:50%;
+    align-items:center; justify-content:center; color:#fff; font-size:.7rem; font-weight:700;
+    text-shadow:0 1px 1px rgba(0,0,0,.4); }
+  .copy-atk-name{ flex:1; }
+  .copy-atk-dmg{ font-weight:700; color:#ffcc44; font-variant-numeric:tabular-nums; }
 
   /* ─── v2.118 Header 音效控制 chip ────────────────────────── */
   .audio-chip{ display:inline-flex; align-items:center; gap:.3rem; padding:.1rem .4rem; }

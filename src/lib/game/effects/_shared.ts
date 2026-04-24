@@ -343,6 +343,48 @@ export function clearActiveEffects(poke: CardInstance): CardInstance {
  *      進棄牌。
  *   3. 回 updatePlayer(state, idx, p => ...)，純函式不 mutate。
  */
+/**
+ * v2.119：統一處理「把寶可夢放進備戰區」的共同副作用。
+ *
+ * 目前處理：
+ *   - 險惡廢墟（Stadium）— 雙方玩家將【基礎】寶可夢（【惡】寶可夢除外）放到備戰區時，
+ *     該寶可夢放置 2 個傷害指示物（20 傷）。
+ *
+ * 不處理（刻意保留獨立）：
+ *   - BENCH_PLACE_TRIGGERS（如喵喵ex｜殺手鐧捕捉）— 這個觸發目前只走 PLAY_BASIC 路徑；
+ *     從牌庫/棄牌搜寶可夢到備戰是否該觸發，PTCG 規則細節需個案判斷（本項 Leon 尚未反饋），
+ *     先保留現狀，避免 regression。
+ *
+ * 呼叫時機：任何 resolver 在「把寶可夢塞進 bench」後應呼叫此 helper，傳入新放入的 iid 清單。
+ * engine.ts 的 PLAY_BASIC 也已統一改用此 helper。
+ */
+export function applyBenchPlaceSideEffects(
+  state: GameState,
+  idx: 0 | 1,
+  placedIids: string[],
+  pool: Map<string, Card>,
+): GameState {
+  if (placedIids.length === 0) return state;
+  const stadium = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
+  if (stadium?.name !== '險惡廢墟') return state;
+
+  const p = state.players[idx];
+  const affected: string[] = [];
+  const newBench = p.bench.map(c => {
+    if (!placedIids.includes(c.iid)) return c;
+    const card = pool.get(c.cardId);
+    if (!card || card.pokemonType === 'Darkness') return c;
+    affected.push(card.name);
+    return { ...c, damage: c.damage + 20 };
+  });
+  if (affected.length === 0) return state;
+  state = updatePlayer(state, idx, pl => ({ ...pl, bench: newBench }));
+  for (const name of affected) {
+    state = addLog(state, `險惡廢墟：${name} 受到 2 個傷害指示物`, idx);
+  }
+  return state;
+}
+
 export function healResolver(
   st: GameState,
   idx: 0 | 1,

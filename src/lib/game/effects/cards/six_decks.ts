@@ -11,7 +11,7 @@
  */
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { regPre, regPost, regA, reg, regR, regG, addLog, drawCards, withPending, updatePlayer } from '../_shared';
+import { regPre, regPost, regA, reg, regR, regG, addLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST } from '../_shared';
 import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre } from '../../effects';
 
 // ─── 撕裂 70（skipDefEffects）───────────────────────────────────────────────
@@ -153,16 +153,21 @@ regR('recruit-to-bench', (state, aIdx, selectedIids, _params, pool) => {
   const p = { ...players[aIdx] };
   const picks = p.deck.filter(c => selectedIids.includes(c.iid));
   p.deck = p.deck.filter(c => !selectedIids.includes(c.iid));
+  const actuallyPlacedIids: string[] = [];
   for (const pk of picks) {
     if (p.bench.length < 5) {
       p.bench = [...p.bench, { ...pk, justPlaced: true }];
+      actuallyPlacedIids.push(pk.iid);
     }
   }
   // 重洗牌庫
   p.deck = [...p.deck].sort(() => Math.random() - 0.5);
   players[aIdx] = p;
   const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  return addLog({ ...state, players }, `呼朋引伴：從牌庫放 ${picks.length} 張基礎寶可夢到備戰（${names}），並重洗牌庫`, aIdx);
+  let s = addLog({ ...state, players }, `呼朋引伴：從牌庫放 ${picks.length} 張基礎寶可夢到備戰（${names}），並重洗牌庫`, aIdx);
+  // v2.119：觸發「放到備戰」的被動場地卡效果（險惡廢墟等）
+  s = applyBenchPlaceSideEffects(s, aIdx, actuallyPlacedIids, pool);
+  return s;
 });
 
 // 超級阿勃梭魯ex｜惡之鉤爪 200 — 看對手手牌棄 1
@@ -800,5 +805,75 @@ regR('az-peace-swap', (state, aIdx, selectedIids, _params, pool) => {
 //   - 蓋諾賽克特｜ACE消弭（canPlayTrainer gate，_shared.ts 維護）
 //   - 稜鏡能量 / 新衝天能量（engine canAffordAttack inline）
 //   - 空手道王的演練（karateKingBonusThisTurn → engine 打傷害時加）
-//   - N的索羅亞克ex｜暗黑底牌（copy-attack — 複雜度高，TODO v2.114）
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ─── N的索羅亞克ex｜暗黑底牌（copy-attack）v2.119 ─────────────────────────
+// 卡面：選擇 1 個自己備戰區的「N的寶可夢」持有的招式，作為此招式使用。
+//
+// 流程：
+//   1) UI intercept：打出此招式時，彈 modal 讓玩家選備戰 N的寶可夢 + 該寶可夢的招式
+//      → dispatch ATTACK 時把 { copyAttackChoice: { pokeIid, attackIndex } } 塞進 action
+//   2) regPre 讀 action.copyAttackChoice → 查詢該招的 effectKey（cardName|attackName）
+//      → 轉接到 ATTACK_PRE.get(copiedKey)（若未註冊則用印刷傷害）
+//      → 把 copiedKey 存到 state.pendingCopyAttackKey，讓 regPost 接力
+//   3) regPost 讀 state.pendingCopyAttackKey → 呼叫 ATTACK_POST.get(copiedKey)
+//      處理 pendingSelection 類附加效果；結束後清除旗標
+//   4) fallback：無 copyAttackChoice 時（例如 AI / 舊 state），自動挑備戰 N的寶可夢
+//      中「印刷傷害最高」的招式（同扮晶晶酒 precedent）
+regPre('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool, action) => {
+  const parseDmg = (s: string): number => {
+    const m = s.match(/^(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+  };
+  const choice = action?.copyAttackChoice;
+  const bench = state.players[aIdx].bench;
+  let nBench: CardInstance | null = null;
+  let pickedAttackIdx = -1;
+  if (choice) {
+    nBench = bench.find(b => b.iid === choice.pokeIid) ?? null;
+    pickedAttackIdx = choice.attackIndex;
+  } else {
+    // fallback：自動挑備戰 N的寶可夢最高印刷傷害招式
+    nBench = bench.find(b => pool.get(b.cardId)?.name?.startsWith('N的')) ?? null;
+    if (nBench) {
+      const atks = pool.get(nBench.cardId)?.attacks ?? [];
+      let bestIdx = 0, bestDmg = parseDmg(atks[0]?.damage ?? '');
+      for (let i = 1; i < atks.length; i++) {
+        const d = parseDmg(atks[i].damage);
+        if (d > bestDmg) { bestDmg = d; bestIdx = i; }
+      }
+      pickedAttackIdx = bestIdx;
+    }
+  }
+  if (!nBench) {
+    return { state: addLog(state, '暗黑底牌：備戰區沒有「N的」寶可夢', aIdx), damage: 0 };
+  }
+  const nCard = pool.get(nBench.cardId);
+  const pickedAtk = nCard?.attacks?.[pickedAttackIdx];
+  if (!nCard || !pickedAtk) {
+    return { state: addLog(state, `暗黑底牌：${nCard?.name ?? '?'} 沒有對應的招式`, aIdx), damage: 0 };
+  }
+  const copiedKey = `${nCard.name}|${pickedAtk.name}`;
+  let s = addLog(state, `暗黑底牌：使用 ${nCard.name} 的「${pickedAtk.name}」`, aIdx);
+  s = { ...s, pendingCopyAttackKey: copiedKey };
+  const copiedPre = ATTACK_PRE.get(copiedKey);
+  if (copiedPre) {
+    const sub = copiedPre(s, aIdx, pool, action);
+    return {
+      state: sub.state,
+      damage: sub.damage,
+      skipWeakRes: sub.skipWeakRes,
+      skipDefEffects: sub.skipDefEffects,
+    };
+  }
+  // 被複製招式未註冊 PRE：回印刷傷害
+  return { state: s, damage: parseDmg(pickedAtk.damage) };
+});
+regPost('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool) => {
+  const key = state.pendingCopyAttackKey;
+  const cleared: GameState = { ...state, pendingCopyAttackKey: undefined };
+  if (!key) return cleared;
+  const copiedPost = ATTACK_POST.get(key);
+  if (!copiedPost) return cleared;
+  return copiedPost(cleared, aIdx, pool);
+});

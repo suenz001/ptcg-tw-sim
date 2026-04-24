@@ -37,7 +37,11 @@ import {
   clearActiveEffects,
   healResolver,
   sameEvoName,
+  applyBenchPlaceSideEffects,
 } from './effects/_shared';
+
+// re-export helper 給 engine.ts / 其他 resolver 用
+export { applyBenchPlaceSideEffects };
 
 // 為 engine.ts / +page.svelte 的 import 路徑維持相容：re-export
 export { TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS, canPlayTrainer, clearActiveEffects };
