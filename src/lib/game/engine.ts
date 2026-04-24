@@ -85,6 +85,37 @@ export const SHARED_ONCE_PER_TURN_ABILITY_NAMES = new Set<string>([
   '月光循環',
   '使者衝刺',
 ]);
+
+/**
+ * v2.94：判定 attacks[] 中名稱以「[特性]」開頭的 entry 是否為「純被動特性」，
+ * 不該作為招式讓玩家主動使用（UI 反白 + ATTACK handler 拒絕執行）。
+ *
+ * 背景：scraper 把 PTCG 卡面 attacks 區塊裡所有 entry 一律爬成 `attacks[]`，
+ * 但其中名稱以「[特性]」開頭的 entry（全卡池 39 張）其實是被動特性的顯示形式，
+ * 不是可主動使用的招式。卡面範例：
+ *   - 酋雷姆｜[特性]反等離子 — 修改三重冰霜的能量需求
+ *   - 皮卡丘ex｜[特性]勤奮之心 — 滿 HP 時不會昏厥
+ *   - 拉帝亞斯ex｜[特性]天空徑線 — 基礎寶可夢撤退需求 0
+ *   - 大王銅象｜[特性]爆大身軀 — 對手不能使出競技場卡
+ *   - 美納斯ex｜[特性]璀璨鱗片 — 太晶免疫
+ *   … 等 36 張純被動特性
+ *
+ * **例外**：已在 ATTACK_PRE / ATTACK_POST 註冊 effect 的「[特性]」attack
+ * 視為「主動使用的自爆類 passive attack」（如彷徨夜靈｜[特性]咒詛炸彈、
+ * 黑夜魔靈｜[特性]咒詛炸彈、三合一磁怪｜[特性]過度放電），保留可用。
+ *
+ * 名稱比對：先 strip U+200C ZWJ 與空白字元，再 check `startsWith('[特性]')`。
+ *
+ * 根因修（scraper + migration）待做；此 helper 為引擎層 guard 的 bug 止血。
+ */
+export function isPassiveOnlyAttackEntry(cardName: string, attackName: string): boolean {
+  const cleaned = attackName.replace(/\u200C/g, '').replace(/\s+/g, '');
+  if (!cleaned.startsWith('[特性]')) return false;
+  // 例外：已註冊 effect 的主動 passive attack（自爆類）保留可用
+  const key = `${cardName}|${attackName}`;
+  if (ATTACK_PRE.has(key) || ATTACK_POST.has(key)) return false;
+  return true;
+}
 export function isSelfKOEffectBlocked(
   state: GameState,
   pool: Map<string, Card>
@@ -1439,6 +1470,15 @@ function handlePlaying(
     const attack = attacks[action.attackIndex];
     if (!attack) return state;
 
+    // v2.94：「[特性]XXX」顯示於 attacks 區塊但為純被動特性，不可作為招式使用
+    //   例：酋雷姆｜[特性]反等離子、皮卡丘ex｜[特性]勤奮之心 等 36 張
+    //   例外：彷徨夜靈/黑夜魔靈/三合一磁怪 的自爆類已註冊 ATTACK_PRE 保留可用
+    if (isPassiveOnlyAttackEntry(attackerCard.name, attack.name)) {
+      return addLog(state,
+        `${attackerCard.name}：「${attack.name}」為被動特性，無法作為招式使用`,
+        aIdx);
+    }
+
     // 確認能量足夠
     if (!canAffordAttack(attacker.active, attack.cost, pool)) return state;
 
@@ -2447,6 +2487,8 @@ export function getAvailableAttacks(
   }
   return card.attacks
     .map((atk, i) => {
+      // v2.94：「[特性]XXX」純被動特性不可作為招式使用（UI 反白）
+      if (isPassiveOnlyAttackEntry(card.name, atk.name)) return -1;
       // v2.92：單招下回合禁用（例：超級勇氣）— UI 層反白禁按
       if (player.active!.blockedAttackNamesThisTurn?.includes(atk.name)) return -1;
       return canAffordAttack(player.active!, atk.cost, pool) ? i : -1;

@@ -1,9 +1,53 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.93)  
+> 最後更新：2026-04-24 (v2.94)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.94 — Bug 修：「[特性]XXX」純被動特性不該被當作招式使用
+
+### 回報
+Leon 實戰：酋雷姆可以按按鈕「使出」`[特性]反等離子`，log 出現
+「玩家 1 的 酋雷姆 使出『[特性]反等離子』」。
+
+### 根因（scraper 系統性 bug）
+scraper 把 PTCG 卡面「attacks 區塊」所有 entry 一律爬成 `attacks[]`，
+但卡面上「[特性]XXX」格式的 entry 其實是**被動特性**，只是官方把它顯示在
+同一區塊。全卡池掃出 **39 張** 這類 entry：
+- **3 張**（彷徨夜靈 / 黑夜魔靈 / 三合一磁怪）是「主動使用的自爆類 passive
+  attack」— 已有 `ATTACK_PRE` 註冊，**正常可用**。
+- **其餘 36 張**（酋雷姆 反等離子、皮卡丘ex 勤奮之心、拉帝亞斯ex 天空徑線、
+  大王銅象 爆大身軀、美納斯ex 璀璨鱗片 等）是**純被動特性**，UI 卻冒出
+  可點擊按鈕 — 就是 Leon 遇到的 bug。
+
+### 修正（引擎層 guard）
+engine.ts 新增 `isPassiveOnlyAttackEntry(cardName, attackName)` helper：
+- 名稱 strip U+200C ZWJ + 空白後若以 `[特性]` 開頭
+- 且未在 `ATTACK_PRE` / `ATTACK_POST` 註冊（= 純被動）
+- → 判定為「純被動特性 entry」
+
+兩處套用：
+- `ATTACK` handler：回 log「XX：『YY』為被動特性，無法作為招式使用」並中止
+- `getAvailableAttacks`：UI 層反白（不出現在可選招式清單）
+
+這樣一次擋掉所有 36 張純被動卡的 UI bug；3 張自爆類依 ATTACK_PRE 判定保留可用。
+
+### 尚待做（根因修 + 個別實裝）
+1. **scraper 根因修**：讓 scraper 識別「[特性]」前綴把 entry 挪到 `abilities[]`，
+   + migration 腳本批次改既有 static/cards/*.json。此 guard 是止血不是根治。
+2. **反等離子完整實裝（酋雷姆）**：卡面「若對手棄牌區有『阿克羅瑪』→ 三重冰霜
+   能量改 1 個【無】」需要 cost override infra，且三重冰霜（丟光身上能量 +
+   選對手 3 隻各 110 傷）的 effect 也沒實裝過。需要 Leon 確認是否實裝。
+3. **其他 35 張純被動的個別實裝**：皮卡丘ex 勤奮之心 / 拉帝亞斯ex 天空徑線 /
+   大王銅象 爆大身軀 / 美納斯ex 璀璨鱗片 等，目前全部 deferred — 按需實裝。
+
+### 驗證
+- build ✓（13.66s）
+- 需實戰：酋雷姆｜[特性]反等離子 按鈕應消失（無法主動使用）；
+  彷徨夜靈/黑夜魔靈 咒詛炸彈應仍可正常自爆觸發。
 
 ---
 
