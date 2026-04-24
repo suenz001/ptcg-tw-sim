@@ -1,9 +1,53 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.108)  
+> 最後更新：2026-04-24 (v2.109)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.109 — Bug：活力森林 UI 沒放行 justPlaced 寶可夢的進化綠框
+
+### 問題（Leon 回報）
+「我在當下回合打出活力森林，然後打出迷你芙，但不能馬上進化成奧利紐。
+下一個回合可以，表示進化鏈沒問題，但應該要在當下回合就能進化。」
+
+### 根因
+v2.102 活力森林的 engine `EVOLVE` handler（line 887-892）有正確的
+`vigorousForestException` — 活力森林 + baseCard/evoCard 都是 Grass 時
+bypass `justPlaced` gate。
+
+但 **UI 的 `getEvolvableTargets`（engine.ts line 2699-2709）沒同步處理**：
+```typescript
+if (fp.justPlaced || fp.evolvedThisTurn) continue;  // ← 直接 skip
+```
+
+結果：
+- 剛 `justPlaced` 的迷你芙不會出現在 evolvable 清單
+- UI 不畫「可進化綠框」
+- Leon 根本沒機會觸發 EVOLVE action（拖曳目標被擋）
+
+Engine 通往 UI 兩路的 gate 不一致 — 經典 UI sync bug。
+
+### 修的東西
+`getEvolvableTargets`（engine.ts line 2699-2722）加活力森林 bypass：
+```typescript
+const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+const isForest = stadiumName === '活力森林';
+// 對每隻 fp：
+const forestBypassBase = isForest && fpCard.pokemonType === 'Grass';
+if (fp.justPlaced && !forestBypassBase) continue;
+// 在 per-evoCard filter 裡：justPlaced 的 fp 只有 evoCard 也是草才 bypass
+if (fp.justPlaced && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
+```
+
+### 驗證
+- build ✓
+- 邏輯鏡射 engine EVOLVE handler — UI 現在與 engine 行為一致
+
+### 結果
+場上有活力森林 → 打出迷你芙 → **UI 立刻顯示奧利紐可進化綠框** → 可拖曳進化 ✓
 
 ---
 

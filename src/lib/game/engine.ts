@@ -2696,12 +2696,27 @@ export function getEvolvableTargets(
     ...player.bench,
   ];
 
+  // v2.109：活力森林（Stadium）— 雙方的所有【草】寶可夢就算在剛使出的回合也可進化成【草】寶可夢。
+  //   engine EVOLVE handler 已處理此 bypass（line 887-892），UI 這邊也要同步放行才會顯示進化綠框。
+  const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+  const isForest = stadiumName === '活力森林';
+
   const result: Array<{ fromIid: string; toIids: string[] }> = [];
   for (const fp of fieldPokemon) {
-    if (fp.justPlaced || fp.evolvedThisTurn) continue;
+    if (fp.evolvedThisTurn) continue;
     const fpCard = pool.get(fp.cardId);
     if (!fpCard) continue;
-    const validEvos = handEvos.filter(evo => sameEvoName(pool.get(evo.cardId)?.evolvesFrom, fpCard.name));
+    // justPlaced 通常擋；但若活力森林且 fp 是草寶可夢，delay 到 per-evo 再判（evoCard 也要是草才 bypass）
+    const forestBypassBase = isForest && fpCard.pokemonType === 'Grass';
+    if (fp.justPlaced && !forestBypassBase) continue;
+    const validEvos = handEvos.filter(evo => {
+      const ec = pool.get(evo.cardId);
+      if (!ec) return false;
+      if (!sameEvoName(ec.evolvesFrom, fpCard.name)) return false;
+      // justPlaced 的 fp：只有活力森林 exception 可進化，且 evoCard 也必須是草
+      if (fp.justPlaced && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
+      return true;
+    });
     if (validEvos.length > 0) {
       result.push({ fromIid: fp.iid, toIids: validEvos.map(e => e.iid) });
     }
