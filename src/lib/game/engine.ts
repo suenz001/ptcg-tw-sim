@@ -209,6 +209,10 @@ export function getEffectiveHP(
       if (bonusFn) hp += bonusFn(card);
     }
   }
+  // v2.92：引力山岳（Stadium）— 雙方場上所有【2階進化】寶可夢最大 HP -30
+  if (state?.activeStadium?.name === '引力山岳' && card.stage === 'Stage2') {
+    hp = Math.max(0, hp - 30);
+  }
   return hp;
 }
 
@@ -1362,6 +1366,21 @@ function handlePlaying(
       );
     }
 
+    // v2.92：單招下回合禁用（例：超級勇氣）
+    // 檢查當前招式名是否在 blockedAttackNamesThisTurn 中 → 禁用
+    {
+      const attackIdx = action.attackIndex;
+      const actCard = pool.get(attacker.active.cardId);
+      const attackDef = actCard?.attacks?.[attackIdx];
+      const attackName = attackDef?.name;
+      if (attackName && attacker.active.blockedAttackNamesThisTurn?.includes(attackName)) {
+        const atkName = actCard?.name ?? '?';
+        return addLog(state,
+          `${atkName} 因上回合效果，本回合無法使用「${attackName}」`,
+          aIdx);
+      }
+    }
+
     // 玩家級「本回合所有寶可夢皆無法使用招式」（例：電擊魔獸｜雷電在地）
     if (attacker.noAttacksThisTurn) {
       const atkName = pool.get(attacker.active.cardId)?.name ?? '?';
@@ -1401,6 +1420,16 @@ function handlePlaying(
     const preFn = ATTACK_PRE.get(effectKey);
     let workingState: GameState = { ...state, players };
     let baseDamage = parseInt(attack.damage ?? '0', 10) || 0;
+    // v2.92：回力鏢能量 revive 快照 — 用於招式效果後把被丟棄的回力鏢能量重附回原本寶可夢。
+    // 卡面：「若因附有這張卡的寶可夢使用的招式的效果使這張卡被丟棄，
+    //         則在招式的傷害與效果的影響之後，重新附於原本的寶可夢身上。」
+    // 實作：snapshot 開打時 attacker.active 上所有「回力鏢能量」的 iids，
+    //       regPre/regPost 結束後檢查這些 iids 是否被搬到 attacker 的棄牌區，
+    //       若有 & attacker.active iid 未變 → 撤回棄牌、回附到 active.energyAttached。
+    const boomerangSnapshotIids: string[] = attacker.active.energyAttached
+      .filter(e => pool.get(e.cardId)?.name === '回力鏢能量')
+      .map(e => e.iid);
+    const boomerangAttackerActiveIid: string = attacker.active.iid;
     // Session 33 引擎旗標：招式可聲明
     //   skipWeakRes    ：傷害不計算弱點 / 抵抗力
     //   skipDefEffects ：傷害不計算對手戰鬥寶可夢身上的「附加效果」
@@ -1723,6 +1752,37 @@ function handlePlaying(
     const postFn = ATTACK_POST.get(effectKey);
     if (postFn) {
       newState = postFn(newState, aIdx, pool);
+    }
+
+    // ── v2.92：回力鏢能量 revive ─────────────────────────────────────────────
+    // 若 regPre/regPost 過程中把回力鏢能量搬到 attacker 的棄牌區，且 attacker.active
+    // 仍是同一隻（iid 未變），在「招式的傷害與效果的影響之後」把它們撤回原寶可夢。
+    if (boomerangSnapshotIids.length > 0) {
+      const curAtk = newState.players[aIdx].active;
+      const curDiscard = newState.players[aIdx].discard;
+      if (curAtk && curAtk.iid === boomerangAttackerActiveIid) {
+        const returnSet = new Set(boomerangSnapshotIids);
+        // 目前棄牌區中屬於快照範圍的回力鏢能量（經由招式效果被搬去）
+        const toReturn = curDiscard.filter(e => returnSet.has(e.iid));
+        if (toReturn.length > 0) {
+          const newDiscard = curDiscard.filter(e => !returnSet.has(e.iid));
+          // 只挑尚未在 active.energyAttached 中的（避免重複附加）
+          const attachedIidSet = new Set(curAtk.energyAttached.map(e => e.iid));
+          const actuallyReturn = toReturn.filter(e => !attachedIidSet.has(e.iid));
+          const newActive: CardInstance = {
+            ...curAtk,
+            energyAttached: [...curAtk.energyAttached, ...actuallyReturn],
+          };
+          const refPlayers = [...newState.players] as [PlayerState, PlayerState];
+          refPlayers[aIdx] = { ...refPlayers[aIdx], active: newActive, discard: newDiscard };
+          const atkName = pool.get(newActive.cardId)?.name ?? '?';
+          newState = addLog(
+            { ...newState, players: refPlayers },
+            `回力鏢能量：${actuallyReturn.length} 張重新附於 ${atkName}`,
+            aIdx,
+          );
+        }
+      }
     }
 
     // ── 被動反擊特性（毒刺、灼熱之軀、反擊等）— 只對有實際傷害的招式觸發 ──
@@ -2128,6 +2188,18 @@ function handlePlaying(
         n = { ...n, cantAttachEnergyThisTurn: true };
         delete n.cantAttachEnergyNextTurn;
       }
+      // v2.92：promote blockedAttackNamesNextTurn → blockedAttackNamesThisTurn
+      // （超級勇氣：在下個自己的回合，這隻寶可夢無法使用『超級勇氣』）
+      if (c.blockedAttackNamesNextTurn && c.blockedAttackNamesNextTurn.length > 0) {
+        n = {
+          ...n,
+          blockedAttackNamesThisTurn: [
+            ...(n.blockedAttackNamesThisTurn ?? []),
+            ...c.blockedAttackNamesNextTurn,
+          ],
+        };
+        delete n.blockedAttackNamesNextTurn;
+      }
       return n;
     };
     // 清除目前玩家 active/bench 上殘留的 damageBonusThisTurn（若攻擊未命中用掉）
@@ -2135,13 +2207,18 @@ function handlePlaying(
       if (!c.damageBonusThisTurn) return c;
       const n = { ...c }; delete n.damageBonusThisTurn; return n;
     };
+    // v2.92：於 aIdx 方清除本回合已消耗完的 blockedAttackNamesThisTurn
+    const clearBlockedAttackThisTurn = (c: CardInstance): CardInstance => {
+      if (!c.blockedAttackNamesThisTurn || c.blockedAttackNamesThisTurn.length === 0) return c;
+      const n = { ...c }; delete n.blockedAttackNamesThisTurn; return n;
+    };
     // Wave 39：清除 aIdx（擁有者）本回合殘留的 cantAttachEnergyThisTurn
     const clearCantAttachEnergy = (c: CardInstance): CardInstance => {
       if (!c.cantAttachEnergyThisTurn) return c;
       const n = { ...c }; delete n.cantAttachEnergyThisTurn; return n;
     };
-    if (currentPlayer.active) currentPlayer.active = clearCantAttachEnergy(clearDmgBonusThisTurn(currentPlayer.active));
-    currentPlayer.bench = currentPlayer.bench.map(c => clearCantAttachEnergy(clearDmgBonusThisTurn(c)));
+    if (currentPlayer.active) currentPlayer.active = clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(currentPlayer.active)));
+    currentPlayer.bench = currentPlayer.bench.map(c => clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(c))));
     // Wave 36/39：清除 aIdx（本回合結束方）的玩家級 ThisTurn 旗標（若本回合已消耗完）
     if (
       currentPlayer.noAttacksThisTurn ||
@@ -2342,7 +2419,11 @@ export function getAvailableAttacks(
     if (rocketCount < 4) return [];
   }
   return card.attacks
-    .map((atk, i) => (canAffordAttack(player.active!, atk.cost, pool) ? i : -1))
+    .map((atk, i) => {
+      // v2.92：單招下回合禁用（例：超級勇氣）— UI 層反白禁按
+      if (player.active!.blockedAttackNamesThisTurn?.includes(atk.name)) return -1;
+      return canAffordAttack(player.active!, atk.cost, pool) ? i : -1;
+    })
     .filter((i) => i >= 0);
 }
 

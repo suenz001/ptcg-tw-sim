@@ -137,6 +137,20 @@ export interface CardInstance {
    * 在對手（攻擊方）的 END_TURN 時清除。
    */
   deferredPrizeBonusThisTurn?: number;
+  /**
+   * v2.92：**單招下回合禁用**預約旗標（卡片層級）。
+   * 卡面範例：「超級勇氣 — 在下個自己的回合，這隻寶可夢無法使用『超級勇氣』」。
+   * 設於 ATTACK_POST（用該招時將招式名 push 到此陣列），於擁有者下個 END_TURN
+   * 時 promote 為 blockedAttackNamesThisTurn（即下個自己回合開始前）。
+   * 多招並存用陣列（未來可能有同一隻寶可夢累積多個禁用招式）。
+   */
+  blockedAttackNamesNextTurn?: string[];
+  /**
+   * v2.92：**單招本回合禁用**（由 blockedAttackNamesNextTurn promote 而來）。
+   * ATTACK handler / getAvailableAttacks 檢查：若當前要用的招式名 includes 其中 →
+   * 禁用。在擁有者 END_TURN 清除。
+   */
+  blockedAttackNamesThisTurn?: string[];
 }
 
 export type SpecialCondition =

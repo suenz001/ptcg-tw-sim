@@ -1,9 +1,52 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.91)  
+> 最後更新：2026-04-24 (v2.92)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.92 — 呆呆王/超路 DEFERRED 後 4 張實裝（6-9，按卡面 rulesText）
+
+Leon 指示「做完 6-9 再一起實戰驗證 1-9」。每張嚴格對照卡面，保留 1-5 的實作不變。
+
+### 6. 超級路卡利歐ex｜超級勇氣（270 + 下回合同招禁）
+**卡面**：「在下個自己的回合，這隻寶可夢無法使用『超級勇氣』」（基礎 270 傷害）
+**實作**：新 infra — CardInstance 加 `blockedAttackNamesNextTurn[]` / `blockedAttackNamesThisTurn[]`
+- `slowking_lucario_deck.ts`：regPre 270 傷害；regPost push `'超級勇氣'` 到 attacker.active 的 `blockedAttackNamesNextTurn`
+- `engine.ts` END_TURN：在擁有者下個 END_TURN promote NextTurn → ThisTurn（對齊 noAttacksNextTurn / cantAttachEnergyNextTurn 的既有 promote pattern）
+- `engine.ts` ATTACK handler：檢查 `blockedAttackNamesThisTurn.includes(attackName)` → 禁用（回 log「XX 因上回合效果，本回合無法使用『超級勇氣』」）
+- `engine.ts` getAvailableAttacks：UI 層同步反白
+- `engine.ts` END_TURN：於 aIdx 方清除本回合已消耗完的 ThisTurn 欄位
+
+### 7. 引力山岳 SV8 11286（Stadium）— 雙方 Stage2 HP-30
+**卡面**：「雙方場上所有【2階進化】寶可夢的最大 HP 各『-30』」
+**實作**：effectiveHP 層級擴充
+- `engine.ts` `getEffectiveHP`：新增 stadium hook — `activeStadium.name === '引力山岳' && card.stage === 'Stage2'` → `hp -= 30`（Math.max 0 保底）
+- `effects.ts` `effectiveHPInline`：加 `state?` 參數並套用同樣 hook；5 個 caller（hitBenchAll / bench-hit-N resolver / 轟鳴月ex|瘋癲攻擊 / forceSwitchOrHitPost / swap-hit 路徑）都傳入 state
+
+### 8. 硬岩【鬥】能量 M3 18057（Special Energy）— 招式效果 shield
+**卡面**：「只要這張卡附於寶可夢身上，視為提供 1 個【鬥】能量。附有這張卡的【鬥】寶可夢不會受到對手的寶可夢使用招式的效果的影響。（已經受到的效果不會消除。）」
+**實作**：
+- 屬性部分：SPECIAL_ENERGY_TYPES 已有 `'硬岩【鬥】能量' → ['Fighting']`（engine.ts）
+- Shield 部分：`effects.ts` 加 `hasEffectShield(inst, pool)` helper — 要求附帶此卡 AND 卡本體 `pokemonType === 'Fighting'`
+- Gate 於 `statusPost` / `coinStatusPost`（defender-targeting 施加狀態的 POST fn）— 若 defender 有 shield → log「XX｜硬岩【鬥】能量：免疫招式效果」並 skip
+- 未來當有更多 defender-side 效果被加入（例：discard defender energy / switch defender out），可同 pattern 加 gate
+
+### 9. 回力鏢能量 MC 17209（Special Energy）— revive after attack effects
+**卡面**：「只要這張卡附於寶可夢身上，視為提供 1 個【無】能量。若因附有這張卡的寶可夢使用的招式的效果使這張卡被丟棄，則在招式的傷害與效果的影響之後，重新附於原本的寶可夢身上」
+**實作**：engine.ts ATTACK handler
+- 在 preFn 執行前 snapshot：attacker.active 當前附帶的回力鏢能量 iids + attacker.active.iid
+- postFn 執行完後檢查：attacker.active 是否還是同一隻（iid 未變）？棄牌區是否有 snapshot 中的 iids？
+- 若都符合 → 從棄牌區移出、補回 active.energyAttached、log「回力鏢能量：N 張重新附於 XX」
+- 前提是 attacker active 沒被自 KO（iid 檢查即可涵蓋）
+
+### 驗證
+本機 build ✓（13.62s）
+
+### Leon 規劃
+「做完 6-9，我再一起用對戰實戰來驗證 1-9」— 所有 9 張 DEFERRED 已完整對卡面實裝，下一輪進實戰驗證。
 
 ---
 

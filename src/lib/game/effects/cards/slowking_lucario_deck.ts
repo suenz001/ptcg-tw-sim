@@ -389,10 +389,60 @@ regR('cipher-geek-top2', (st, idx, iids) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// DEFERRED — 6-9 等待 Leon 指示做引擎擴充
+// 超級路卡利歐ex｜超級勇氣（270 + 下回合同招禁）— v2.92
 // ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「在下個自己的回合，這隻寶可夢無法使用『超級勇氣』。」（基礎 270 傷害）
 //
-// 6. 超級路卡利歐ex｜超級勇氣 — 下回合同招禁（需 CardInstance.blockedAttackNameNextTurn）
-// 7. 引力山岳（Stadium）— 全場 Stage2 HP-30（需 effectiveHP stadium hook）
-// 8. 硬岩【鬥】能量 — 附鬥寶可夢不受招式效果影響（需 ATTACK pipeline shield hook）
-// 9. 回力鏢能量 — 被招式效果丟棄後重附（需 discard-energy flow hook）
+// 實裝：
+//   - regPre: 270 基礎傷害
+//   - regPost: 將 '超級勇氣' push 到 attacker active 的 blockedAttackNamesNextTurn
+//   - engine END_TURN promote NextTurn → ThisTurn（在 owner 下回合開始前）
+//   - engine ATTACK handler + getAvailableAttacks 檢查 blockedAttackNamesThisTurn
+regPre('超級路卡利歐ex|超級勇氣', (state) => ({ state, damage: 270 }));
+regPost('超級路卡利歐ex|超級勇氣', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  if (!p.active) return state;
+  const name = pool.get(p.active.cardId)?.name ?? '?';
+  const players = [...state.players] as typeof state.players;
+  const newActive = {
+    ...p.active,
+    blockedAttackNamesNextTurn: [
+      ...(p.active.blockedAttackNamesNextTurn ?? []),
+      '超級勇氣',
+    ],
+  };
+  players[aIdx] = { ...p, active: newActive };
+  return addLog({ ...state, players },
+    `超級勇氣：${name} 在下個自己的回合無法使用「超級勇氣」`, aIdx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 硬岩【鬥】能量 M3 18057（Special Energy）— v2.92
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「只要這張卡附於寶可夢身上，視為提供 1 個【鬥】能量。附有這張卡的【鬥】
+//   寶可夢不會受到對手的寶可夢使用招式的效果的影響。（已經受到的效果不會消除。）」
+//
+// 屬性部分：SPECIAL_ENERGY_TYPES 已有『硬岩【鬥】能量』→ Fighting（engine.ts 中央表）
+// Shield 部分：export helper `hasEffectShield(inst, pool)`，
+//   effects.ts 的 `statusPost` / `coinStatusPost` 等 defender-targeting POST 會檢查。
+//   詳見 effects.ts isConfusionImmune 的對稱實作，本模組不註冊 reg* — 是 passive。
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 回力鏢能量 MC 17209（Special Energy）— v2.92
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「只要這張卡附於寶可夢身上，視為提供 1 個【無】能量。若因附有這張卡的
+//   寶可夢使用的招式的效果使這張卡被丟棄，則在招式的傷害與效果的影響之後，
+//   重新附於原本的寶可夢身上。」
+//
+// 實裝：engine ATTACK handler 在 regPre/regPost 結束後，檢查 attacker active
+//   上原本附有的「回力鏢能量」是否被丟到棄牌區 → 若是，重附回 attacker active。
+//   （前提：attacker active 仍是原本的 inst，iid 未變）
+// 屬性：SPECIAL_ENERGY_TYPES 已有『回力鏢能量』→ Colorless。
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 引力山岳 SV8 11286（Stadium）— v2.92
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「雙方場上所有【2階進化】寶可夢的最大 HP 各『-30』。」
+// 實裝：engine.ts 的 getEffectiveHP + effects.ts 的 effectiveHPInline 已加
+//   gravity-mountain hook（v2.92）— 當 activeStadium.name === '引力山岳'
+//   且 card.stage === 'Stage2' → hp -= 30。本模組不需註冊 reg*。

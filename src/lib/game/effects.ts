@@ -328,8 +328,16 @@ export function koPrizeCount(card: Card): number {
   return isEx ? 2 : 1;
 }
 
-/** 計算 CardInstance 的有效 HP（含道具 HP 加成，與 engine.getEffectiveHP 對齊） */
-function effectiveHPInline(inst: CardInstance, pool: Map<string, Card>): number {
+/**
+ * 計算 CardInstance 的有效 HP（含道具 HP 加成 + 場地卡影響，與 engine.getEffectiveHP 對齊）。
+ * v2.92：加 `state` 參數以套用場地效果（例：引力山岳 Stage2 -30）。
+ * 現有 caller 都在 regPost / regR 內部，都持有 state；傳入即可。
+ */
+function effectiveHPInline(
+  inst: CardInstance,
+  pool: Map<string, Card>,
+  state?: GameState,
+): number {
   const card = pool.get(inst.cardId);
   if (!card) return 0;
   let hp = card.hp ?? 0;
@@ -339,6 +347,10 @@ function effectiveHPInline(inst: CardInstance, pool: Map<string, Card>): number 
       const bonusFn = TOOL_HP_BONUS.get(tool.name);
       if (bonusFn) hp += bonusFn(card);
     }
+  }
+  // v2.92：引力山岳（Stadium）— 雙方場上所有【2階進化】寶可夢最大 HP -30
+  if (state?.activeStadium?.name === '引力山岳' && card.stage === 'Stage2') {
+    hp = Math.max(0, hp - 30);
   }
   return hp;
 }
@@ -369,7 +381,7 @@ function hitBenchAll(
   for (const c of target.bench) {
     const card = pool.get(c.cardId);
     const newDmg = c.damage + amount;
-    const hp = effectiveHPInline(c, pool);
+    const hp = effectiveHPInline(c, pool, state);
     if (hp > 0 && newDmg >= hp) {
       koDiscards.push({ ...c, damage: newDmg });
       for (const e of c.energyAttached) koDiscards.push(e);
@@ -458,7 +470,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     if (!hitSet.has(c.iid)) { newBench.push(c); continue; }
     const card = pool.get(c.cardId);
     const newDmg = c.damage + amount;
-    const hp = effectiveHPInline(c, pool);
+    const hp = effectiveHPInline(c, pool, st);
     if (hp > 0 && newDmg >= hp) {
       koDiscards.push({ ...c, damage: newDmg });
       for (const e of c.energyAttached) koDiscards.push(e);
@@ -1327,6 +1339,28 @@ function isConfusionImmune(inst: CardInstance | null, pool: Map<string, Card>): 
   return !!card?.abilities?.some(a => a.name === '憨憨臉');
 }
 
+/**
+ * v2.92：檢查防禦方（戰鬥寶可夢）是否因附帶「硬岩【鬥】能量」而免疫對手招式效果。
+ * 卡面：「附有這張卡的【鬥】寶可夢不會受到對手的寶可夢使用招式的效果的影響。
+ *        （已經受到的效果不會消除。）」
+ * 規則：
+ *   - 已經施加的效果（例如目前的【中毒】）不會因附上此卡而消除 — 僅在效果施加時阻擋。
+ *   - 「招式的效果」不含招式本身的傷害（此能量只擋效果）；呼叫端的
+ *     regPost/statusPost 會 check 這個 shield 再決定是否施加。
+ *   - 僅防禦方卡本體為 pokemonType === 'Fighting' 時才成立（卡面明寫「【鬥】寶可夢」）。
+ *
+ * 呼叫時機：defender-targeting POST effect（statusPost、coinStatusPost 等）在施加前檢查。
+ */
+function hasEffectShield(inst: CardInstance | null, pool: Map<string, Card>): boolean {
+  if (!inst) return false;
+  const card = pool.get(inst.cardId);
+  if (!card || card.pokemonType !== 'Fighting') return false;
+  return inst.energyAttached.some(e => {
+    const ec = pool.get(e.cardId);
+    return ec?.name === '硬岩【鬥】能量';
+  });
+}
+
 /** 讓對手戰鬥寶可夢陷入指定狀態的 POST effect */
 function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'paralyzed'): AttackPostFn {
   return (state, aIdx, pool) => {
@@ -1338,6 +1372,10 @@ function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'par
     // v2.91：憨憨臉免疫混亂
     if (status === 'confused' && isConfusionImmune(def.active, pool)) {
       return addLog(state, `${defName}｜憨憨臉：免疫【混亂】`, aIdx);
+    }
+    // v2.92：硬岩【鬥】能量 — 對手招式效果完全免疫（對防禦方 status 施加）
+    if (hasEffectShield(def.active, pool)) {
+      return addLog(state, `${defName}｜硬岩【鬥】能量：免疫招式效果`, aIdx);
     }
     const statusLabelMap: Record<string, string> = {
       poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
@@ -1619,6 +1657,11 @@ function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'paralyz
     if (status === 'confused' && isConfusionImmune(def.active, pool)) {
       const name = pool.get(def.active.cardId)?.name ?? '?';
       return addLog(state, `正面！但 ${name}｜憨憨臉：免疫【混亂】`, aIdx);
+    }
+    // v2.92：硬岩【鬥】能量 — 對手招式效果完全免疫
+    if (hasEffectShield(def.active, pool)) {
+      const name = pool.get(def.active.cardId)?.name ?? '?';
+      return addLog(state, `正面！但 ${name}｜硬岩【鬥】能量：免疫招式效果`, aIdx);
     }
     def.active = { ...def.active, status };
     players[dIdx] = def;
@@ -6335,7 +6378,7 @@ regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
   if (att.active) {
     const attCard = pool.get(att.active.cardId);
     const newDmg = att.active.damage + 200;
-    const hp = effectiveHPInline(att.active, pool);
+    const hp = effectiveHPInline(att.active, pool, s);
     if (hp > 0 && newDmg >= hp) {
       // 自爆 KO
       const ko: CardInstance[] = [
@@ -7851,7 +7894,7 @@ function forceOppSwapThenDamagePost(dmg: number, label: string): AttackPostFn {
     if (d.bench.length === 0) {
       // 無備戰可換 → 對原戰鬥寶可夢補 dmg
       const newDmg = d.active.damage + dmg;
-      const hp = effectiveHPInline(d.active, _pool);
+      const hp = effectiveHPInline(d.active, _pool, state);
       const nm = _pool.get(d.active.cardId)?.name ?? '?';
       if (hp > 0 && newDmg >= hp) {
         // KO
@@ -7920,7 +7963,7 @@ regR('force-opp-swap-then-damage', (st, actorIdx, iids, params, pool) => {
 
   // 計算傷害（不計弱點 / 抵抗力 / 附加效果）
   const newDmg = swappingIn.damage + dmg;
-  const hp = effectiveHPInline(swappingIn, pool);
+  const hp = effectiveHPInline(swappingIn, pool, st);
   const players = [...st.players] as [PlayerState, PlayerState];
   let s: GameState = { ...st };
 
