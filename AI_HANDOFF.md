@@ -1,9 +1,40 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.102)  
+> 最後更新：2026-04-24 (v2.103)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.103 — 三組預組 Phase C：3 張（特殊能量 + 能量倍率特性）
+
+### engine.ts 關鍵改動
+1. **`SPECIAL_ENERGY_TYPES` 加 2 張**：
+   - `'古舊能量'`: 全屬性（Grass/Fire/Water/Lightning/Psychic/Fighting/Darkness/Metal/Dragon/Colorless）
+   - `'燃火能量'`: `['Colorless']`（基準 1 個無，倍率判定由 canAffordAttack 內 inline）
+2. **`getEnergyUnits` 古舊能量特例**：單 unit 含全屬性（可付任何 cost slot）；非常規「每屬性拆 1 unit」
+3. **`canAffordAttack` 加參數 `state?, attackerIdx?`**，內部：
+   - 攻擊方場上有繁茂特性 → 每張基本【草】能量算 2 個【草】units
+   - 被檢查寶可夢為進化型（Stage1/Stage2）+ 身上有燃火能量 → 該張能量算 3 個【無】units（非進化仍 1 個）
+   - 兩 call sites（ATTACK handler、getAvailableAttacks）都傳 state + aIdx
+4. **主 KO 獎賞計算**（line 1778）加 `ancientEnergyAdjust`：若被 KO 的 active 附有古舊能量 → -1 獎賞
+5. **END_TURN currentPlayer cleanup** 加燃火能量自棄邏輯：掃 active+bench 身上所有「燃火能量」entry，移到棄牌區
+
+### 實裝 3 張
+1. **古舊能量（ACE SPEC）** — 視為 1 個全屬性能量 + KO 時對方獎賞 -1
+2. **大竺葵｜繁茂**（被動特性）— 自己場上有大竺葵時所有寶可夢身上的基本草能量算 2 個（不重複疊加）
+3. **燃火能量** — 基本寶 1 個【無】；進化寶 3 個【無】；自己回合結束自棄
+
+### 驗證
+- build ✓（13.89s）
+- 需實戰：
+  - 古舊能量 KO：對方只取原本 -1 張獎賞
+  - 繁茂：自己場上有大竺葵時，草寶 1 張基本草能量可付 2【草】cost slot
+  - 燃火能量：進化寶身上的燃火能量視為 3 個無能量；回合結束自動丟到棄牌
+
+### 三組預組 effect 實裝全部完成
+Phase A 13 張（v2.100-v2.101） + Phase B 6 張（v2.102） + Phase C 3 張（v2.103） = **22 張全數實裝**（原計劃 21 張，實際 22 張）。下一步：建 preset（SLOWKING_DECK 已存，要加 OLIVA_DECK / ALLOY_BRIDGE_DRAGON_DECK / STARMIE_DECK）。
 
 ---
 

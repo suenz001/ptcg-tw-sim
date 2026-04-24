@@ -267,6 +267,10 @@ const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   // v2.35：火箭隊能量 — 只可附於「火箭隊的寶可夢」身上，視為 2 個「2 種屬性」的能量【超】與【惡】。
   // 以 [Psychic, Darkness] 表示 1 超 + 1 惡 = 共 2 單位；非火箭隊寶可夢時由 SPECIAL_ENERGY_ATTACH hook 自棄。
   '火箭隊能量': ['Psychic', 'Darkness'],
+  // v2.103 古舊能量（ACE SPEC）— 視為 1 個所有屬性的能量（1 unit 但 types 含全屬性，可付任何 cost slot）
+  '古舊能量': ['Grass', 'Fire', 'Water', 'Lightning', 'Psychic', 'Fighting', 'Darkness', 'Metal', 'Dragon', 'Colorless'],
+  // v2.103 燃火能量 — 視為 1 個【無】能量；若附於進化寶可夢則視為 3 個【無】能量（由 canAffordAttack 內 inline 判定）
+  '燃火能量': ['Colorless'],
 };
 
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {
@@ -336,6 +340,10 @@ export function getEnergyUnits(cardId: string, pool: Map<string, Card>): EnergyU
       { types: ['Psychic', 'Darkness'] },
     ];
   }
+  // v2.103 古舊能量（ACE SPEC）— 單一 unit，types 含全屬性，可付任何 cost slot
+  if (c.name === '古舊能量') {
+    return [{ types: SPECIAL_ENERGY_TYPES['古舊能量'] }];
+  }
   // 一般特殊能量：依 SPECIAL_ENERGY_TYPES 每個 type 拆成 1 個單純單位
   if (SPECIAL_ENERGY_TYPES[c.name]) {
     return SPECIAL_ENERGY_TYPES[c.name].map((t) => ({ types: [t] }));
@@ -373,11 +381,44 @@ export function totalEnergyUnits(
 export function canAffordAttack(
   pokemon: CardInstance,
   cost: EnergyType[],
-  pool: Map<string, Card>
+  pool: Map<string, Card>,
+  state?: GameState,
+  attackerIdx?: 0 | 1,
 ): boolean {
+  // v2.103 大竺葵｜繁茂：自己場上有大竺葵時，自己所有寶可夢身上的「基本【草】能量」視為 2 個【草】能量。
+  //   「這個特性的效果不會重複」→ 多隻大竺葵也只算一次倍率。
+  let hasBloom = false;
+  if (state && attackerIdx != null) {
+    const owner = state.players[attackerIdx];
+    const allOwn = [...(owner.active ? [owner.active] : []), ...owner.bench];
+    hasBloom = allOwn.some(c => {
+      const card = pool.get(c.cardId);
+      return card?.abilities?.some(a => a.name === '繁茂');
+    });
+  }
+  // v2.103 燃火能量：若附於進化寶可夢身上，視為 3 個【無】能量；否則 1 個【無】能量
+  const pokeCard = pool.get(pokemon.cardId);
+  const pokeStage = pokeCard?.stage ?? pokeCard?.subtype;
+  const isEvolution = pokeStage === 'Stage1' || pokeStage === 'Stage2';
+
   // 收集所有附加能量的「單位」
   const units: EnergyUnit[] = [];
   for (const e of pokemon.energyAttached) {
+    const ec = pool.get(e.cardId);
+    // 燃火能量特殊處理：進化寶可夢 → 3 個無屬性 units
+    if (ec?.name === '燃火能量') {
+      if (isEvolution) {
+        units.push({ types: ['Colorless'] }, { types: ['Colorless'] }, { types: ['Colorless'] });
+      } else {
+        units.push({ types: ['Colorless'] });
+      }
+      continue;
+    }
+    // 大竺葵繁茂：基本【草】能量視為 2 個【草】units（僅在攻擊方有大竺葵時）
+    if (hasBloom && ec?.supertype === 'Energy' && ec?.subtype === 'Basic' && ec?.pokemonType === 'Grass') {
+      units.push({ types: ['Grass'] }, { types: ['Grass'] });
+      continue;
+    }
     units.push(...getEnergyUnits(e.cardId, pool));
   }
 
@@ -1480,8 +1521,8 @@ function handlePlaying(
     const attack = attacks[action.attackIndex];
     if (!attack) return state;
 
-    // 確認能量足夠
-    if (!canAffordAttack(attacker.active, attack.cost, pool)) return state;
+    // 確認能量足夠（v2.103 傳 state+aIdx 讓 canAffordAttack 能判定大竺葵繁茂 / 燃火能量倍率）
+    if (!canAffordAttack(attacker.active, attack.cost, pool, state, aIdx)) return state;
 
     // ── 招式前置效果（修改傷害 / 丟棄能量等）────────────────────────────────
     const effectKey = `${attackerCard.name}|${attack.name}`;
@@ -1766,8 +1807,15 @@ function handlePlaying(
         const isTera = !!atkCard?.tags?.includes('太晶');
         if (isTera) whiteLilyBonus = 1;
       }
+      // v2.103 古舊能量（ACE SPEC）— 附有此能量的寶可夢被 KO 時，對方獎賞 -1
+      let ancientEnergyAdjust = 0;
+      const koInst = state.players[dIdx].active;
+      if (koInst) {
+        const hasAncient = koInst.energyAttached.some(e => pool.get(e.cardId)?.name === '古舊能量');
+        if (hasAncient) ancientEnergyAdjust = -1;
+      }
       // 獎賞牌下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
-      const prizes = Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus);
+      const prizes = Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + ancientEnergyAdjust);
       defPlayers[dIdx] = defenderState;
       newState = {
         ...newState, players: defPlayers,
@@ -2333,6 +2381,33 @@ function handlePlaying(
     };
     if (currentPlayer.active) currentPlayer.active = promoteSelfNextToThis(clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(currentPlayer.active))));
     currentPlayer.bench = currentPlayer.bench.map(c => promoteSelfNextToThis(clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(c)))));
+    // v2.103 燃火能量 — 「將附於寶可夢身上的這張卡，在自己的回合結束時丟棄。」
+    //   在 aIdx（自己）的 active + bench 各寶可夢身上移除所有燃火能量 entry，追加到 discard。
+    //   此處在 END_TURN 的 aIdx 方處理，符合卡面「自己的回合結束時」。
+    {
+      const extractBurnSoulEnergies = (c: CardInstance): { kept: CardInstance; removed: CardInstance[] } => {
+        const burnSoul = c.energyAttached.filter(e => pool.get(e.cardId)?.name === '燃火能量');
+        if (burnSoul.length === 0) return { kept: c, removed: [] };
+        const kept = { ...c, energyAttached: c.energyAttached.filter(e => pool.get(e.cardId)?.name !== '燃火能量') };
+        return { kept, removed: burnSoul };
+      };
+      let discardAdds: CardInstance[] = [];
+      if (currentPlayer.active) {
+        const { kept, removed } = extractBurnSoulEnergies(currentPlayer.active);
+        currentPlayer.active = kept;
+        discardAdds.push(...removed);
+      }
+      const newBench: CardInstance[] = [];
+      for (const c of currentPlayer.bench) {
+        const { kept, removed } = extractBurnSoulEnergies(c);
+        newBench.push(kept);
+        discardAdds.push(...removed);
+      }
+      currentPlayer.bench = newBench;
+      if (discardAdds.length > 0) {
+        currentPlayer.discard = [...currentPlayer.discard, ...discardAdds];
+      }
+    }
     // Wave 36/39：清除 aIdx（本回合結束方）的玩家級 ThisTurn 旗標（若本回合已消耗完）
     if (
       currentPlayer.noAttacksThisTurn ||
@@ -2536,7 +2611,8 @@ export function getAvailableAttacks(
     .map((atk, i) => {
       // v2.92：單招下回合禁用（例：超級勇氣）— UI 層反白禁按
       if (player.active!.blockedAttackNamesThisTurn?.includes(atk.name)) return -1;
-      return canAffordAttack(player.active!, atk.cost, pool) ? i : -1;
+      // v2.103：大竺葵繁茂 / 燃火能量倍率（傳 state+activePlayerIndex）
+      return canAffordAttack(player.active!, atk.cost, pool, state, state.activePlayerIndex) ? i : -1;
     })
     .filter((i) => i >= 0);
 }
