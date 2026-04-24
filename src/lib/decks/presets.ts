@@ -718,11 +718,11 @@ const CERULEDGE_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_ceruledge__',
   name: '蒼炎刃鬼（預組）',
   entries: [
-    { cardId: '14691', count: 4 }, // 蒼炎刃鬼ex (M2a 031/193)
+    { cardId: '14691', count: 3 }, // 蒼炎刃鬼ex (M2a 031/193)  v2.113 Leon 修正 4→3
     { cardId: '16616', count: 4 }, // 炭小侍 (MC 145/742)
     { cardId: '16843', count: 2 }, // 太陽岩 (MC 372/742)
     { cardId: '16842', count: 2 }, // 月石 (MC 371/742)
-    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061/080)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)  v2.113 Leon 修正 1→2
     { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
     { cardId: '9880', count: 1 },  // 螺釘地鼠 (SV5M 039/071)
     { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)

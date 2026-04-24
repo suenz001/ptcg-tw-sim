@@ -214,6 +214,11 @@ export interface PlayerState {
    */
   noAttacksNextTurn?: boolean;
   /**
+   * v2.113 空手道王的演練 — 本回合自己的寶可夢招式對對手戰鬥場的 ex +40 傷害。
+   * 打出 Supporter 當下設 true，回合結束時清除。
+   */
+  karateKingBonusThisTurn?: boolean;
+  /**
    * 本回合，此玩家所有寶可夢皆無法使用招式（由 noAttacksNextTurn promote）。
    * 在 END_TURN 時清除（於 aIdx 方）。
    */

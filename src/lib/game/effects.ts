@@ -356,6 +356,15 @@ function effectiveHPInline(
   if (state?.activeStadium?.name === '引力山岳' && card.stage === 'Stage2') {
     hp = Math.max(0, hp - 30);
   }
+  // v2.113 夠讚狗｜腎上腺力量 — 身上附【惡】能量時最大 HP +100
+  if (card.name === '夠讚狗') {
+    const hasDark = inst.energyAttached.some(e => {
+      const ec = pool.get(e.cardId);
+      return ec?.supertype === 'Energy' &&
+        (ec.pokemonType === 'Darkness' || (ec.subtype === 'Basic' && /【惡】/.test(ec.name)));
+    });
+    if (hasDark) hp += 100;
+  }
   return hp;
 }
 

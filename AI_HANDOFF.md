@@ -1,9 +1,74 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.112)  
+> 最後更新：2026-04-24 (v2.113)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.113 — 剩下 17 張 effect 全部實裝 + 蒼炎刃鬼 preset 修正
+
+### Leon 修正
+蒼炎刃鬼組寶可夢：
+- 蒼炎刃鬼ex × 4 → × 3
+- 喵喵ex × 1 → × 2
+
+### 本次實裝（17 張全到位）
+
+**寶可夢招式**（8 張）
+- N的達摩狒狒｜復燃（對手棄牌基本能量 × 30）
+- N的達摩狒狒｜火人加農炮（自棄能量 + 對手備戰 snipe 90）
+- N的扒手貓｜暗槓 30（查對手手牌 → 放 1 張到對手牌庫底部）
+- 超級阿勃梭魯ex｜惡之鉤爪 200（查對手手牌 → 棄 1）
+- 火箭隊的狃拉｜暗算（對手備戰 1 隻 × 其傷害指示物 × 20）
+- 超級甲賀忍蛙ex｜忍者飛旋 120+（身上水能量回手 → +80，總 200）
+- 毒電嬰｜呼朋引伴（牌庫搜 ≤2 基礎寶可夢放備戰 + 洗）
+
+**寶可夢特性 regA**（5 張）
+- N的索羅亞克ex｜交易（棄 1 手牌 → 抽 2，1/回合）
+- 火焰雞ex｜沸騰鬥志（棄牌區選基本能量附給自己寶可夢，1/回合）
+- 龜足巨鎧｜岩石武裝（手牌附基本鬥能量到鬥寶，1/回合）
+- 顫弦蠑螈｜惡棍衝天（牌庫附基本惡能量到備戰惡寶 + 2 傷 + 洗，1/回合）
+- 超級甲賀忍蛙ex｜必殺手裡劍（棄 1 水能量 → 對手 1 寶 6 傷，1/回合戰鬥位專用）
+
+**Passive / Engine hook**（3 張）
+- 夠讚狗｜腎上腺力量（engine.ts + effects.ts）：身上有【惡】能量時最大 HP +100、招式傷害 +100
+- 蓋諾賽克特｜ACE消弭（_shared.ts canPlayTrainer gate）：附 Tool 時禁對手從手牌出 ACE SPEC
+- 空手道王的演練（engine.ts damage bonus + END_TURN cleanup + types.ts 新欄位）：本回合對對手戰鬥位 ex +40
+
+**訓練家**（7 張）
+- N的ＰＰ提升劑（Item，棄牌區搜基本能量附給備戰 N 寶）
+- 阿杏的秘招（Supporter，牌庫搜 ≤2 基本惡能量附給惡寶 + 戰鬥位中毒）
+- 空手道王的演練（Supporter，本回合對 ex +40 flag）
+- 高溫燃燒器（Item，棄 1 火能量 + 提示選對手 Tool/特殊能量/Stadium 丟棄 — pending UI 未完整，log 提示）
+- 塔拉剛（Supporter，棄牌區搜【鬥】寶+基本鬥能量 ≤4 回手）
+- 完全體攪拌器（Item ACE SPEC，自棄牌庫 ≤5 + 洗）
+- AZ的平和（Supporter，戰鬥↔備戰互換，換入 ex 到備戰回 80）
+
+**特殊能量**（2 張 — engine canAffordAttack inline）
+- 稜鏡能量：非【基礎】寶（Stage1/Stage2）→ 1 個任屬 unit；否則 1 個【無】
+- 新衝天能量（ACE SPEC）：【2 階進化】→ 2 個任屬 units；否則 1 個【無】
+
+### Engine 改動摘要
+- `engine.ts` SPECIAL_ENERGY_TYPES 加 '稜鏡能量' / '新衝天能量'（fallback 為 Colorless）
+- `canAffordAttack` inline 依 stage 為這兩張特殊能量提供任屬 units
+- `canAffordAttack` attacker bonus 區塊加腎上腺力量（+100 if 惡能量）+ 空手道王的演練（+40 對 ex）
+- `effects.ts effectiveHPInline` 加夠讚狗｜腎上腺力量 HP +100
+- `_shared.ts canPlayTrainer` 加 ACE消弭 gate
+- `types.ts PlayerState` 加 `karateKingBonusThisTurn?: boolean`
+- END_TURN cleanup 加 `karateKingBonusThisTurn` 清除
+
+### 尚未實裝（留 v2.114+）
+- N的索羅亞克ex｜暗黑底牌 — copy-attack from 備戰 N 寶，需 copy-pattern pending + attack-index 選擇（類似謎擬Ｑ扮晶晶酒但多步）
+- 高溫燃燒器 pending UI — 目前只做棄能量 + log；選「對手場上某張 Tool/特殊能量/Stadium」的 pending type 需擴 pending-selection UI
+
+### 驗證
+- build ✓（13.58s）
+- 所有 17 張 effect code 進 six_decks.ts / engine.ts / effects.ts / _shared.ts / types.ts
+
+### Preset 更新
+蒼炎刃鬼組：蒼炎刃鬼ex 4→3、喵喵ex 1→2（總計仍 60 張）。
 
 ---
 

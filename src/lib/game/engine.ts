@@ -304,6 +304,10 @@ const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   '古舊能量': ['Grass', 'Fire', 'Water', 'Lightning', 'Psychic', 'Fighting', 'Darkness', 'Metal', 'Dragon', 'Colorless'],
   // v2.103 燃火能量 — 視為 1 個【無】能量；若附於進化寶可夢則視為 3 個【無】能量（由 canAffordAttack 內 inline 判定）
   '燃火能量': ['Colorless'],
+  // v2.113 稜鏡能量 — 1 個【無】；若附於非【基礎】寶可夢則視為 1 個所有屬性（inline）
+  '稜鏡能量': ['Colorless'],
+  // v2.113 新衝天能量（ACE SPEC）— 1 個【無】；若附於【2 階進化】寶可夢則視為 2 個所有屬性（inline）
+  '新衝天能量': ['Colorless'],
 };
 
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {
@@ -439,6 +443,10 @@ export function canAffordAttack(
   const pokeStage = pokeCard?.stage ?? pokeCard?.subtype;
   const isEvolution = pokeStage === 'Stage1' || pokeStage === 'Stage2';
 
+  // v2.113 稜鏡/新衝天能量的「任意屬性」types — 當附於對應 stage 時所有顏色可付
+  const ALL_TYPES: EnergyType[] = ['Grass', 'Fire', 'Water', 'Lightning', 'Psychic', 'Fighting', 'Darkness', 'Metal', 'Dragon', 'Colorless'];
+  const isStage2 = pokeStage === 'Stage2';
+
   // 收集所有附加能量的「單位」
   const units: EnergyUnit[] = [];
   for (const e of pokemon.energyAttached) {
@@ -447,6 +455,20 @@ export function canAffordAttack(
     if (ec?.name === '燃火能量') {
       if (isEvolution) {
         units.push({ types: ['Colorless'] }, { types: ['Colorless'] }, { types: ['Colorless'] });
+      } else {
+        units.push({ types: ['Colorless'] });
+      }
+      continue;
+    }
+    // v2.113 稜鏡能量：非【基礎】寶（Stage1 或 Stage2）→ 1 個任意屬性 unit；否則 1 個【無】
+    if (ec?.name === '稜鏡能量') {
+      units.push({ types: isEvolution ? ALL_TYPES : ['Colorless'] });
+      continue;
+    }
+    // v2.113 新衝天能量（ACE SPEC）：【2 階進化】寶 → 2 個任意屬性 units；否則 1 個【無】
+    if (ec?.name === '新衝天能量') {
+      if (isStage2) {
+        units.push({ types: ALL_TYPES }, { types: ALL_TYPES });
       } else {
         units.push({ types: ['Colorless'] });
       }
@@ -1667,6 +1689,25 @@ function handlePlaying(
       workingState = addLog(workingState, `「力量蛋白飲」啟動：${attackerCard.name} 招式傷害 +${b}`, aIdx);
     }
 
+    // v2.113 夠讚狗｜腎上腺力量 — 若攻擊方自身（夠讚狗）附有【惡】能量，招式傷害 +100
+    if (baseDamage > 0 && attackerCard.name === '夠讚狗') {
+      const hasDark = attacker.active.energyAttached.some(e => {
+        const ec = pool.get(e.cardId);
+        return ec?.supertype === 'Energy' &&
+          (ec.pokemonType === 'Darkness' || (ec.subtype === 'Basic' && /【惡】/.test(ec.name)));
+      });
+      if (hasDark) {
+        baseDamage += 100;
+        workingState = addLog(workingState, `「腎上腺力量」啟動：夠讚狗 招式傷害 +100`, aIdx);
+      }
+    }
+
+    // v2.113 空手道王的演練 — 本回合自己寶可夢招式對對手戰鬥場 ex +40
+    if (baseDamage > 0 && attacker.karateKingBonusThisTurn && defenderCard?.subtype === 'ex') {
+      baseDamage += 40;
+      workingState = addLog(workingState, `「空手道王的演練」啟動：對 ${defenderCard.name}（ex）+40`, aIdx);
+    }
+
     // 弱點（×2）— 只對有實際傷害的招式套用。skipWeakRes 旗標跳過此計算。
     // v2.57：莉莉艾的皮皮ex｜妖精領域 — 我方場上有皮皮ex 時，對手【龍】寶可夢的弱點改為【超】。
     // 卡面允許「本無弱點」的龍寶可夢被加上【超】弱點。
@@ -2463,7 +2504,8 @@ function handlePlaying(
       currentPlayer.cantPlaySupporterThisTurn ||
       currentPlayer.cantEvolveThisTurn ||
       currentPlayer.damageBoostFightingThisTurn ||
-      currentPlayer.teraKoBonusPrizeThisTurn
+      currentPlayer.teraKoBonusPrizeThisTurn ||
+      currentPlayer.karateKingBonusThisTurn
     ) {
       const cp = { ...currentPlayer };
       delete cp.noAttacksThisTurn;
@@ -2472,6 +2514,7 @@ function handlePlaying(
       delete cp.cantEvolveThisTurn;
       delete cp.damageBoostFightingThisTurn;
       delete cp.teraKoBonusPrizeThisTurn;
+      delete cp.karateKingBonusThisTurn;
       players[aIdx] = cp;
     } else {
       players[aIdx] = currentPlayer;

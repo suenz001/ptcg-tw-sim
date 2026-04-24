@@ -176,6 +176,23 @@ export function canPlayTrainer(
   actorIdx: 0 | 1,
   pool: Map<string, Card>
 ): boolean {
+  // v2.113 蓋諾賽克特｜ACE消弭 — 對手場上若有蓋諾賽克特且附有寶可夢道具，
+  //   則「本方」無法從手牌使出 ACE SPEC 卡。
+  const myCard = pool.get(
+    state.players[actorIdx].hand.find(c => pool.get(c.cardId)?.name === cardName)?.cardId ?? ''
+  );
+  if (myCard && (myCard.tags ?? []).includes('ACE SPEC')) {
+    const dIdx = (1 - actorIdx) as 0 | 1;
+    const oppAll = [
+      ...(state.players[dIdx].active ? [state.players[dIdx].active!] : []),
+      ...state.players[dIdx].bench,
+    ];
+    const aceBlocked = oppAll.some(p => {
+      const c = pool.get(p.cardId);
+      return c?.name === '蓋諾賽克特' && !!p.toolAttached;
+    });
+    if (aceBlocked) return false;
+  }
   const guard = TRAINER_GUARDS.get(cardName);
   return guard ? guard(state, actorIdx, pool) : true;
 }
