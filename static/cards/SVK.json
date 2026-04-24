@@ -1,0 +1,865 @@
+[
+  {
+    "id": "11131",
+    "name": "夢幻ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "SVK",
+    "collectorNumber": "001/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011131.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11131/",
+    "scrapedAt": "2026-04-24T11:12:50.607Z",
+    "regulationMark": "G",
+    "stage": "Basic",
+    "hp": 180,
+    "pokemonType": "Psychic",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "重啟",
+        "effect": "在自己的回合時可使用1次。從牌庫抽卡直到自己的手牌滿3張為止。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "基因駭入",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "選擇1個對手的戰鬥寶可夢持有的招式，作為這個招式使用。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "illustrator": "aky CG Works"
+  },
+  {
+    "id": "11132",
+    "name": "米立龍",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVK",
+    "collectorNumber": "002/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011132.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11132/",
+    "scrapedAt": "2026-04-24T11:12:51.199Z",
+    "regulationMark": "H",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Dragon",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "集客",
+        "effect": "若這隻寶可夢在戰鬥場上，則在自己的回合時可使用1次。查看自己的牌庫上方6張卡，從其中選擇1張支援者卡，在給對手看過後加入手牌。將剩餘卡放回牌庫並重洗。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "衝浪",
+        "cost": [
+          "Fire",
+          "Water"
+        ],
+        "damage": "50",
+        "effect": ""
+      }
+    ],
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 113,
+    "species": "擬態寶可夢",
+    "illustrator": "Jerky"
+  },
+  {
+    "id": "11133",
+    "name": "波波",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "SVK",
+    "collectorNumber": "003/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011133.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11133/",
+    "scrapedAt": "2026-04-24T11:12:51.740Z",
+    "regulationMark": "G",
+    "stage": "Basic",
+    "hp": 50,
+    "pokemonType": "Colorless",
+    "attacks": [
+      {
+        "name": "呼朋引伴",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫選擇最多2張【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。"
+      },
+      {
+        "name": "撞擊",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 16,
+    "species": "小鳥寶可夢",
+    "illustrator": "Oswaldo KATO"
+  },
+  {
+    "id": "11134",
+    "name": "比比鳥",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "SVK",
+    "collectorNumber": "004/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011134.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11134/",
+    "scrapedAt": "2026-04-24T11:12:52.309Z",
+    "regulationMark": "G",
+    "stage": "Stage1",
+    "hp": 80,
+    "pokemonType": "Colorless",
+    "attacks": [
+      {
+        "name": "羽擊",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "pokedexNumber": 17,
+    "species": "鳥寶可夢",
+    "evolvesFrom": "波波",
+    "illustrator": "Oswaldo KATO"
+  },
+  {
+    "id": "11135",
+    "name": "大比鳥ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "SVK",
+    "collectorNumber": "005/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011135.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11135/",
+    "scrapedAt": "2026-04-24T11:12:52.906Z",
+    "regulationMark": "G",
+    "stage": "Stage2",
+    "hp": 280,
+    "pokemonType": "Colorless",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "音速搜索",
+        "effect": "在自己的回合時可使用1次。從自己的牌庫任意選擇1張卡加入手牌。並且重洗牌庫。在這個回合，若已經使出了其他的「音速搜索」，則這個特性無法使用。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "狂風呼嘯",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "120",
+        "effect": "若希望，將場上的競技場卡丟棄。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "evolvesFrom": "比比鳥",
+    "illustrator": "takuyoa"
+  },
+  {
+    "id": "11136",
+    "name": "怒鸚哥ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "SVK",
+    "collectorNumber": "006/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011136.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11136/",
+    "scrapedAt": "2026-04-24T11:12:53.419Z",
+    "regulationMark": "G",
+    "stage": "Basic",
+    "hp": 160,
+    "pokemonType": "Colorless",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "裝酷重抽",
+        "effect": "只有在自己的最初回合可使用1次。將自己的手牌全部丟棄，從牌庫抽出6張卡。在這個回合，若已經使出了其他的「裝酷重抽」，則這個特性無法使用。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "幹勁十足",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": "從自己的棄牌區選擇最多2張基本能量卡，附於1隻備戰寶可夢身上。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "illustrator": "PLANETA Mochizuki"
+  },
+  {
+    "id": "11137",
+    "name": "能量貼紙",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "007/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011137.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11137/",
+    "scrapedAt": "2026-04-24T11:12:53.925Z",
+    "regulationMark": "G",
+    "rulesText": "擲1次硬幣若為正面，則從自己的棄牌區選擇1張基本能量卡，附於備戰寶可夢身上。",
+    "illustrator": "Ayaka Yoshida"
+  },
+  {
+    "id": "11138",
+    "name": "能量轉移",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "008/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011138.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11138/",
+    "scrapedAt": "2026-04-24T11:12:54.471Z",
+    "regulationMark": "I",
+    "rulesText": "選擇1個自己的場上寶可夢身上附加的基本能量，改附於自己的其他寶可夢身上。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "11139",
+    "name": "反擊捕捉器",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "009/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011139.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11139/",
+    "scrapedAt": "2026-04-24T11:12:55.039Z",
+    "regulationMark": "G",
+    "rulesText": "這張卡只有在自己剩餘獎賞卡張數比對手剩餘獎賞卡的張數多時才可使用。\n選擇對手的1隻備戰寶可夢，與戰鬥寶可夢互換。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "11140",
+    "name": "超級能量回收",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "010/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011140.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11140/",
+    "scrapedAt": "2026-04-24T11:12:55.613Z",
+    "regulationMark": "G",
+    "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。 \n從自己的棄牌區選擇最多4張基本能量卡，在給對手看過後加入手牌。（不可選擇因這張卡的效果而丟棄的能量卡。）",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "11141",
+    "name": "厲害釣竿",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "011/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011141.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11141/",
+    "scrapedAt": "2026-04-24T11:12:56.175Z",
+    "regulationMark": "G",
+    "rulesText": "從自己的棄牌區選擇寶可夢卡與基本能量卡合計最多3張，在給對手看過後放回牌庫並重洗。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "11142",
+    "name": "大地之容器",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "012/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011142.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11142/",
+    "scrapedAt": "2026-04-24T11:12:56.725Z",
+    "regulationMark": "G",
+    "rulesText": "這張卡必須將自己的1張手牌丟棄才可使用。\n \n 從自己的牌庫選擇最多2張基本能量卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "AYUMI ODASHIMA",
+    "tags": [
+      "古代"
+    ]
+  },
+  {
+    "id": "11143",
+    "name": "太晶珠",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "013/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011143.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11143/",
+    "scrapedAt": "2026-04-24T11:12:57.219Z",
+    "regulationMark": "H",
+    "rulesText": "從自己的牌庫選擇1張「太晶」寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Ayaka Yoshida"
+  },
+  {
+    "id": "11144",
+    "name": "朋友手冊",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "014/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011144.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11144/",
+    "scrapedAt": "2026-04-24T11:12:57.710Z",
+    "regulationMark": "G",
+    "rulesText": "從自己的棄牌區選擇最多2張支援者卡，在給對手看過後放回牌庫並重洗。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "11145",
+    "name": "好友寶芬",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "015/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011145.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11145/",
+    "scrapedAt": "2026-04-24T11:12:58.267Z",
+    "regulationMark": "H",
+    "rulesText": "從自己的牌庫選擇最多2張HP為「70」以下的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。",
+    "illustrator": "AYUMI ODASHIMA"
+  },
+  {
+    "id": "11146",
+    "name": "巢穴球",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "016/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011146.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11146/",
+    "scrapedAt": "2026-04-24T11:12:58.777Z",
+    "regulationMark": "G",
+    "rulesText": "從自己的牌庫選擇1張【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "11147",
+    "name": "完全體攪拌器",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "017/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011147.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11147/",
+    "scrapedAt": "2026-04-24T11:12:59.351Z",
+    "regulationMark": "H",
+    "rulesText": "從自己的牌庫任意選擇最多5張卡，將其丟棄。並且重洗牌庫。",
+    "illustrator": "Toyste Beach",
+    "tags": [
+      "ACE SPEC"
+    ]
+  },
+  {
+    "id": "11148",
+    "name": "高級球",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "018/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011148.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11148/",
+    "scrapedAt": "2026-04-24T11:12:59.876Z",
+    "regulationMark": "I",
+    "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。\n \n 從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Ayaka Yoshida"
+  },
+  {
+    "id": "11149",
+    "name": "神奇糖果",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "019/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011149.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11149/",
+    "scrapedAt": "2026-04-24T11:13:00.429Z",
+    "regulationMark": "I",
+    "rulesText": "從自己的手牌選擇1張【2階進化】寶可夢卡，放置於自己的場上的可進化成那隻寶可夢的【基礎】寶可夢身上，跳過【1階進化】完成進化。（無法對自己的最初回合與這個回合剛使出的寶可夢使用。）",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "11150",
+    "name": "貴重手推車",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "020/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011150.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11150/",
+    "scrapedAt": "2026-04-24T11:13:00.918Z",
+    "regulationMark": "H",
+    "rulesText": "從自己的牌庫選擇任意數量的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。",
+    "illustrator": "inose yukie",
+    "tags": [
+      "ACE SPEC"
+    ]
+  },
+  {
+    "id": "11151",
+    "name": "寶可裝置3.0",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "021/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011151.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11151/",
+    "scrapedAt": "2026-04-24T11:13:01.467Z",
+    "regulationMark": "I",
+    "rulesText": "查看自己的牌庫上方7張卡，從其中選擇1張支援者卡，在給對手看過後加入手牌。將剩餘卡放回牌庫並重洗。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "11152",
+    "name": "寶可夢交替",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "SVK",
+    "collectorNumber": "022/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011152.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11152/",
+    "scrapedAt": "2026-04-24T11:13:02.002Z",
+    "regulationMark": "I",
+    "rulesText": "將自己的戰鬥寶可夢與備戰寶可夢互換。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "11153",
+    "name": "緊急滑板",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
+    "setCode": "SVK",
+    "collectorNumber": "023/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011153.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11153/",
+    "scrapedAt": "2026-04-24T11:13:02.491Z",
+    "regulationMark": "H",
+    "rulesText": "附有這張卡的寶可夢，【撤退】所需的能量減少1個。若那隻寶可夢的剩餘HP為「30」以下，則【撤退】所需的能量全部消除。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "11154",
+    "name": "勇氣護符",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
+    "setCode": "SVK",
+    "collectorNumber": "024/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011154.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11154/",
+    "scrapedAt": "2026-04-24T11:13:03.025Z",
+    "regulationMark": "G",
+    "rulesText": "附有這張卡的【基礎】寶可夢的最大HP「+50」。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "11155",
+    "name": "招式學習器 演進",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
+    "setCode": "SVK",
+    "collectorNumber": "025/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011155.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11155/",
+    "scrapedAt": "2026-04-24T11:13:03.515Z",
+    "regulationMark": "G",
+    "rulesText": "附有這張卡的寶可夢，可使用這張卡上寫的招式。[需要有足夠使用招式的能量。]將寶可夢身上附加的這張卡，在自己的回合結束時丟棄。\n\n選擇最多2隻自己的備戰寶可夢，從自己的牌庫選擇從那些寶可夢進化而來的卡各1張，放置於各自身上完成進化。並且重洗牌庫。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "11156",
+    "name": "招式學習器 衰退",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
+    "setCode": "SVK",
+    "collectorNumber": "026/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011156.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11156/",
+    "scrapedAt": "2026-04-24T11:13:04.013Z",
+    "regulationMark": "G",
+    "rulesText": "附有這張卡的寶可夢，可使用這張卡上寫的招式。[需要有足夠使用招式的能量。]將寶可夢身上附加的這張卡，在自己的回合結束時丟棄。\n\n從對手的所有進化的寶可夢身上，各移除1張「進化卡」使其退化。將移除的卡放回對手的手牌。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "11157",
+    "name": "赤松",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVK",
+    "collectorNumber": "027/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011157.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11157/",
+    "scrapedAt": "2026-04-24T11:13:04.557Z",
+    "regulationMark": "H",
+    "rulesText": "從自己的牌庫選擇最多2張各不同屬性的基本能量卡，在給對手看過後，其中1張加入手牌，剩餘的能量卡附於自己的寶可夢身上。並且重洗牌庫。",
+    "illustrator": "GIDORA"
+  },
+  {
+    "id": "11158",
+    "name": "水蓮的照顧",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVK",
+    "collectorNumber": "028/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011158.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11158/",
+    "scrapedAt": "2026-04-24T11:13:05.092Z",
+    "regulationMark": "H",
+    "rulesText": "從自己的棄牌區選擇寶可夢卡（「擁有規則的寶可夢」除外）與基本能量卡合計最多3張，在給對手看過後加入手牌。",
+    "illustrator": "Atsushi Furusawa"
+  },
+  {
+    "id": "11159",
+    "name": "烏栗",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVK",
+    "collectorNumber": "029/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011159.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11159/",
+    "scrapedAt": "2026-04-24T11:13:05.624Z",
+    "regulationMark": "H",
+    "rulesText": "這張卡從2種效果中選擇1種使用。\n \n◆將自己的戰鬥寶可夢與備戰寶可夢互換。\n \n◆在這個回合，自己的寶可夢使用的招式，對對手的戰鬥場的「寶可夢【ex】・【V】」造成的傷害「+30」點。",
+    "illustrator": "GIDORA"
+  },
+  {
+    "id": "11160",
+    "name": "丹瑜",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVK",
+    "collectorNumber": "030/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011160.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11160/",
+    "scrapedAt": "2026-04-24T11:13:06.165Z",
+    "regulationMark": "H",
+    "rulesText": "這張卡可在先攻玩家的最初回合使用。\n \n將自己的手牌全部丟棄，從牌庫抽出5張卡。",
+    "illustrator": "kantaro"
+  },
+  {
+    "id": "11161",
+    "name": "奇樹",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVK",
+    "collectorNumber": "031/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011161.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11161/",
+    "scrapedAt": "2026-04-24T11:13:06.705Z",
+    "regulationMark": "G",
+    "rulesText": "雙方玩家各將自己的手牌全部翻回反面並重洗，放回牌庫下方。然後，各從牌庫抽出與自己剩餘獎賞卡的張數相同數量的卡。",
+    "illustrator": "Sanosuke Sakuma"
+  },
+  {
+    "id": "11162",
+    "name": "博士的研究",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVK",
+    "collectorNumber": "032/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011162.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11162/",
+    "scrapedAt": "2026-04-24T11:13:07.250Z",
+    "regulationMark": "G",
+    "rulesText": "將自己的手牌全部丟棄，從牌庫抽出7張卡。",
+    "illustrator": "kirisAki"
+  },
+  {
+    "id": "11163",
+    "name": "博士的研究",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVK",
+    "collectorNumber": "033/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011163.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11163/",
+    "scrapedAt": "2026-04-24T11:13:07.779Z",
+    "regulationMark": "G",
+    "rulesText": "將自己的手牌全部丟棄，從牌庫抽出7張卡。",
+    "illustrator": "kirisAki"
+  },
+  {
+    "id": "11164",
+    "name": "弗圖博士的劇本",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVK",
+    "collectorNumber": "034/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011164.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11164/",
+    "scrapedAt": "2026-04-24T11:13:08.275Z",
+    "regulationMark": "G",
+    "rulesText": "選擇1隻自己的場上寶可夢，放回手牌。（寶可夢以外的卡全部丟棄。）",
+    "illustrator": "hncl",
+    "tags": [
+      "未來"
+    ]
+  },
+  {
+    "id": "11165",
+    "name": "派帕",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVK",
+    "collectorNumber": "035/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011165.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11165/",
+    "scrapedAt": "2026-04-24T11:13:08.768Z",
+    "regulationMark": "G",
+    "rulesText": "從自己的牌庫選擇「物品」卡與「寶可夢道具」卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "GIDORA"
+  },
+  {
+    "id": "11166",
+    "name": "老大的指令",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "SVK",
+    "collectorNumber": "036/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011166.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11166/",
+    "scrapedAt": "2026-04-24T11:13:09.258Z",
+    "regulationMark": "I",
+    "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
+    "illustrator": "NC Empire"
+  },
+  {
+    "id": "11167",
+    "name": "城鎮百貨公司",
+    "supertype": "Trainer",
+    "subtype": "Stadium",
+    "setCode": "SVK",
+    "collectorNumber": "037/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011167.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11167/",
+    "scrapedAt": "2026-04-24T11:13:09.797Z",
+    "regulationMark": "G",
+    "rulesText": "雙方玩家在每個自己的回合時，可使用1次，可從自己的牌庫選擇1張「寶可夢道具」卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Oswaldo KATO"
+  },
+  {
+    "id": "11168",
+    "name": "海灘場地",
+    "supertype": "Trainer",
+    "subtype": "Stadium",
+    "setCode": "SVK",
+    "collectorNumber": "038/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011168.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11168/",
+    "scrapedAt": "2026-04-24T11:13:10.408Z",
+    "regulationMark": "G",
+    "rulesText": "雙方的所有【基礎】寶可夢【撤退】所需的能量，各減少1個。",
+    "illustrator": "Oswaldo KATO"
+  },
+  {
+    "id": "11169",
+    "name": "深缽鎮",
+    "supertype": "Trainer",
+    "subtype": "Stadium",
+    "setCode": "SVK",
+    "collectorNumber": "039/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011169.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11169/",
+    "scrapedAt": "2026-04-24T11:13:10.959Z",
+    "regulationMark": "G",
+    "rulesText": "雙方玩家在每個自己的回合時，可使用1次，可從自己的牌庫選擇1張【基礎】寶可夢卡（「擁有規則的寶可夢」除外），放置於備戰區。並且重洗牌庫。",
+    "illustrator": "Oswaldo KATO"
+  },
+  {
+    "id": "11170",
+    "name": "噴射能量",
+    "supertype": "Energy",
+    "subtype": "Special",
+    "setCode": "SVK",
+    "collectorNumber": "040/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011170.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11170/",
+    "scrapedAt": "2026-04-24T11:13:11.454Z",
+    "regulationMark": "G",
+    "rulesText": "只要這張卡附於寶可夢身上，視為提供1個【無】能量。 \n\n從手牌將這張卡附於備戰寶可夢身上時，將附有這張卡的寶可夢與戰鬥寶可夢互換。"
+  },
+  {
+    "id": "11171",
+    "name": "反轉能量",
+    "supertype": "Energy",
+    "subtype": "Special",
+    "setCode": "SVK",
+    "collectorNumber": "041/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011171.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11171/",
+    "scrapedAt": "2026-04-24T11:13:11.948Z",
+    "regulationMark": "G",
+    "rulesText": "只要這張卡附於寶可夢身上，視為提供1個【無】能量。 \n若自己剩餘獎賞卡的張數，比對手剩餘獎賞卡的張數多，則只要這張卡附於進化寶可夢（「擁有規則的寶可夢」除外）身上，視為提供3個所有屬性的能量。"
+  },
+  {
+    "id": "11172",
+    "name": "夜光能量",
+    "supertype": "Energy",
+    "subtype": "Special",
+    "setCode": "SVK",
+    "collectorNumber": "042/042",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011172.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11172/",
+    "scrapedAt": "2026-04-24T11:13:12.439Z",
+    "regulationMark": "G",
+    "rulesText": "只要這張卡附於寶可夢身上，視為提供1個所有屬性的能量。 \n\n若附有這張卡的寶可夢身上附有這張卡以外的特殊能量卡，則視為提供1個【無】能量。"
+  },
+  {
+    "id": "11173",
+    "name": "基本【草】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "SVK",
+    "collectorNumber": "GRA",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011173.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11173/",
+    "scrapedAt": "2026-04-24T11:13:12.999Z",
+    "regulationMark": "G"
+  },
+  {
+    "id": "11174",
+    "name": "基本【火】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "SVK",
+    "collectorNumber": "FIR",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011174.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11174/",
+    "scrapedAt": "2026-04-24T11:13:13.494Z",
+    "regulationMark": "G"
+  },
+  {
+    "id": "11175",
+    "name": "基本【水】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "SVK",
+    "collectorNumber": "WAT",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011175.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11175/",
+    "scrapedAt": "2026-04-24T11:13:14.111Z",
+    "regulationMark": "G"
+  },
+  {
+    "id": "11176",
+    "name": "基本【雷】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "SVK",
+    "collectorNumber": "LIG",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011176.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11176/",
+    "scrapedAt": "2026-04-24T11:13:14.677Z",
+    "regulationMark": "G"
+  },
+  {
+    "id": "11177",
+    "name": "基本【超】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "SVK",
+    "collectorNumber": "PSY",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011177.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11177/",
+    "scrapedAt": "2026-04-24T11:13:15.214Z",
+    "regulationMark": "G"
+  },
+  {
+    "id": "11178",
+    "name": "基本【鬥】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "SVK",
+    "collectorNumber": "FIG",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011178.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11178/",
+    "scrapedAt": "2026-04-24T11:13:15.754Z",
+    "regulationMark": "G"
+  },
+  {
+    "id": "11179",
+    "name": "基本【惡】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "SVK",
+    "collectorNumber": "DAR",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011179.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11179/",
+    "scrapedAt": "2026-04-24T11:13:16.250Z",
+    "regulationMark": "G"
+  },
+  {
+    "id": "11180",
+    "name": "基本【鋼】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "SVK",
+    "collectorNumber": "MET",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00011180.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/11180/",
+    "scrapedAt": "2026-04-24T11:13:16.802Z",
+    "regulationMark": "G"
+  }
+]

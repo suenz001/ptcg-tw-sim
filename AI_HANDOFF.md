@@ -1,9 +1,55 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.105)  
+> 最後更新：2026-04-24 (v2.106)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.106 — 新增牌組構築BOX 樂園騰龍（SVK，50 張）
+
+### 問題（Leon 發現）
+看到官網 detail/11147「完全體攪拌器」（卡面印 svK F、017/042、H 標、ACE SPEC），卡牌資料庫沒有這張。Leon 問：「他是屬於哪個卡包？」
+
+### 調查結果
+- **卡面視覺代號**是 `svK F`（其中 K = 牌組構築BOX、F = 該 box 序列號）
+- **官網 API 實際 expansionCode** 是 `SVK`（uppercase）— 透過 detail page link 反查確認：
+  `/tw/card-search/list/?expansionCodes=SVK` 回 50 張卡
+- 產品名稱：**牌組構築BOX 樂園騰龍**（2024-09-27 發售）
+- 卡面 logo 圖是 `twhk_SVK.png`（不是 `twhk_exp_*.png`）— 這是 scraper 沒自動識別的原因
+
+### 50 張組成
+- **regulation**：G 34 / H 10 / I 6（混合；per-card 由 .alpha 抓，正確）
+- **supertype**：Pokemon 6 / Trainer 33 / Energy 11
+- **tags**：ACE SPEC × 2 / 古代 × 1 / 未來 × 1
+- 其中「完全體攪拌器」(H, 017/042) 就是 Leon 看到的那張 ACE SPEC
+
+### 修的東西
+1. **`scripts/scrape/parse-card.js`** — setCode regex 放寬：
+   - 舊：`/twhk_exp_([A-Za-z0-9]+)\.png/`
+   - 新：`/twhk_(?:exp_)?([A-Za-z0-9]+)\.png/`
+   - 選擇器也從 `img[src*="/mark/twhk_exp_"]` 改為 `img[src*="/mark/twhk_"]`
+2. **`src/lib/cards/regulation.ts`** — 加 `SVK: 'H'`（H 是 fallback；per-card 以 .alpha 為準）
+3. **`scripts/scrape/scrape-all.js`** — DEFAULT_SETS 加 `'SVK'`（H mark 區塊）
+4. **`static/cards/SVK.json`** — 跑 scrape-set.js 產出，50 張
+5. **`static/covers/SVK.png`** — 從官方 products 頁下載（222 KB）
+6. **`static/cards/index.json`** — append SVK entry（regulationMark='H', releaseDate='2024-09-27'）
+
+### 驗證
+- build ✓（13.85s）
+- 完全體攪拌器 id 11147 parse 正確：`{setCode:'SVK', cn:'017/042', regulationMark:'H'}`
+- Standard legal filter：G 34 張會被擋、H 10 + I 6 = 16 張可用於牌組
+
+### 意義
+這是一個被爬蟲遺漏的 set。往後類似的「牌組構築BOX」系列（例如未來可能新增的），只要把 code 加到 DEFAULT_SETS + regulation.ts 就能直接跑（parse-card 現已識別無 `_exp_` 前綴的 logo）。
+
+### 全卡池變動
+- 29 set → **30 set**（新增 SVK）
+- 3579 → **3629** 張
+
+### Leon 的 Task 1 (AR/SAR 補爬) 還沒做
+Leon 也回報「M2 對戰圓形競技場 SAR 108/080 沒爬」。這是另一種情況：SAR 高編號通常超過 list page 顯示上限。需要下個 session 設計 scraper 改動再跑。
 
 ---
 

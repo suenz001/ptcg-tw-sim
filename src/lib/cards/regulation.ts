@@ -22,6 +22,7 @@ export const SET_REGULATION_MARK: Record<string, RegulationMark> = {
   SV7: 'H',  SV7a: 'H',
   SV8: 'H',  SV8a: 'H',
   MJ: 'H',
+  SVK: 'H',  // 牌組構築BOX 樂園騰龍（2024-09-27，含 G/H/I 混合卡；per-card 以 .alpha 為準）
 
   // ── I mark ────────────────────────────────────────────────────────
   SV9: 'I',  SV9a: 'I',

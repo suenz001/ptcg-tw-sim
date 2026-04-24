@@ -31,6 +31,7 @@ const DEFAULT_SETS = [
   'SV7', 'SV7a',
   'SV8', 'SV8a',
   'MJ',
+  'SVK',  // 牌組構築BOX 樂園騰龍（2024-09-27，混 G/H/I 卡；per-card regulation 由 .alpha 抓）
   // I mark
   'SV9', 'SV9a',
   'SV10',

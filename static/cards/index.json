@@ -426,5 +426,20 @@
     "scrapedAt": "2026-04-21T14:24:25.226Z",
     "releaseDate": "2025-03-07",
     "count": 23
+  },
+  {
+    "code": "SVK",
+    "name": "牌組構築BOX 樂園騰龍",
+    "regulationMark": "H",
+    "cardCount": 50,
+    "supertypeCounts": {
+      "Pokemon": 6,
+      "Trainer": 33,
+      "Energy": 11
+    },
+    "coverImageUrl": "covers/SVK.png",
+    "scrapedAt": "2026-04-24T11:13:16.802Z",
+    "releaseDate": "2024-09-27",
+    "count": 50
   }
 ]

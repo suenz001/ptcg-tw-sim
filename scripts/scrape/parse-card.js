@@ -115,9 +115,12 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
   // --- Card image + set code (from image URL) ---
   const cardImg = $('.cardImage img').first();
   if (cardImg.length) card.imageUrl = cardImg.attr('src') || '';
-  const setMark = $('img[src*="/mark/twhk_exp_"]').first();
+  // 常見格式：twhk_exp_SV8a.png（含 _exp_）
+  // 牌組構築BOX（SVK）格式：twhk_SVK.png（無 _exp_ 前綴）
+  const setMark = $('img[src*="/mark/twhk_"]').first();
   if (setMark.length) {
-    const m = (setMark.attr('src') || '').match(/twhk_exp_([A-Za-z0-9]+)\.png/);
+    const src = setMark.attr('src') || '';
+    const m = src.match(/twhk_(?:exp_)?([A-Za-z0-9]+)\.png/);
     if (m) card.setCode = m[1];
   }
 
