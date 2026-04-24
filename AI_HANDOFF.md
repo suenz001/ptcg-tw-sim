@@ -1,9 +1,44 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.99)  
+> 最後更新：2026-04-24 (v2.100)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.100 — 三組預組 Phase A 第 1 批：7 張簡單寶可夢招式
+
+三組新預組（奧利瓦 / 鋁鋼橋龍 / 超級寶石海星）共 21 張 effect 需實裝。
+先做最簡單的 7 張 stateless 寶可夢招式（不需新 engine flag 或 pending selection）。
+
+新檔 `src/lib/game/effects/cards/mega_decks.ts` 存放這三組預組的 effect。
+`hitBenchPickPost` helper 從 effects.ts export（`maroon_dragon_deck.ts` 類似 pattern）。
+
+### 實裝（7 張寶可夢招式）
+1. **奧利瓦ex｜芳香射擊**（160 基礎）— regPost 清 attacker.active.status
+2. **超級雪妖女ex｜怨言** — regPre damage = 對手手牌張數 × 50
+3. **超級寶石海星ex｜星雲光束**（210）— regPre 回傳 skipWeakRes + skipDefEffects
+4. **超級寶石海星ex｜噴射打擊**（120）— regPost 用 hitBenchPickPost 選 1 隻對手備戰 50 傷
+5. **超級大嘴娃ex｜貪心** — regPre damage = (6 - 自己剩餘獎賞) × 80
+6. **超級大嘴娃ex｜大啃咬** — regPre 條件 damage：對手戰鬥位有傷害指示物 → 30；無 → 260
+7. **旋轉洛托姆｜突擊著地**（70）— regPre gate：`state.activeStadium == null` → damage=0 + log「招式失敗」
+
+### 驗證
+- build ✓（13.54s）
+- 尚待實戰驗證
+
+### 後續 Phase A 剩餘（下一版）
+- 奧利紐｜營養素（heal-target pending）
+- 鋁鋼橋龍ex｜金屬防禦強化（新 flag: weaknessDisabledThisTurn）
+- 鋁鋼橋龍｜塗層攻擊（新 flag: immuneToBasicAttackThisTurn）
+- 吉普索 / 滿充的體貼 / 青木的手法（訓練家）
+
+### 後續 Phase B / C
+- Stadium 效果（活力森林 / 稜鏡塔 / 險惡廢墟）
+- 特性（大竺葵 繁茂 / 鋁鋼橋龍ex 合金建造 / 旋轉洛托姆 風扇呼喚）
+- 奧利瓦ex｜油之機關槍（6 次 damage distribute）
+- 古舊能量 / 燃火能量（特殊能量）
 
 ---
 
