@@ -270,6 +270,8 @@ import './effects/cards/energy_cards';
 import './effects/cards/slowking_lucario_deck';
 // v2.100：奧利瓦 / 鋁鋼橋龍 / 超級寶石海星 三組預組卡效果
 import './effects/cards/mega_decks';
+// v2.112：N的索羅亞克 / 火焰雞多龍 / 夠讚狗 / 顫弦蠑螈 / 蒼炎刃鬼 / 超級甲賀忍蛙 六組預組卡效果
+import './effects/cards/six_decks';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -2877,7 +2879,7 @@ regPost('懶人獺|悠哉', (state, aIdx) => {
 // 擲 N 次硬幣，正面出現次數 × k 點傷害。
 // ══════════════════════════════════════════════════════════════════════════════
 
-function coinHeadsMultiplyPre(flips: number, perHead: number, attackName: string): AttackPreFn {
+export function coinHeadsMultiplyPre(flips: number, perHead: number, attackName: string): AttackPreFn {
   return (state, aIdx, _pool) => {
     let heads = 0;
     for (let i = 0; i < flips; i++) if (Math.random() < 0.5) heads++;
@@ -4186,7 +4188,7 @@ function oppBenchMultiplyPre(base: number, per: number, label: string): AttackPr
   };
 }
 
-function bothBenchMultiplyPre(base: number, per: number, label: string): AttackPreFn {
+export function bothBenchMultiplyPre(base: number, per: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const count = state.players[aIdx].bench.length + state.players[dIdx].bench.length;

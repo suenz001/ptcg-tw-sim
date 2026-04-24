@@ -569,6 +569,212 @@ const STARMIE_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// v2.112 新增 6 組 Leon 自選卡表：N的索羅亞克 / 火焰雞多龍 / 夠讚狗 / 顫弦蠑螈 /
+//   蒼炎刃鬼 / 超級甲賀忍蛙
+// 套用「同 deck 一致性 + 最新 set 優先 + 低 cn 優先」預選規則，各張 60 張。
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** N的索羅亞克 預組（60 張）*/
+const N_ZOROARK_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_n_zoroark__',
+  name: 'N的索羅亞克（預組）',
+  entries: [
+    { cardId: '16941', count: 4 }, // N的索羅亞克ex (MC 470/742)
+    { cardId: '16940', count: 4 }, // N的索羅亞 (MC 469/742)
+    { cardId: '14789', count: 2 }, // N的捷克羅姆 (M2a 129/193)
+    { cardId: '16590', count: 2 }, // N的達摩狒狒 (MC 119/742)
+    { cardId: '16589', count: 2 }, // N的火紅不倒翁 (MC 118/742)
+    { cardId: '17016', count: 1 }, // N的萊希拉姆 (MC 545/742)
+    { cardId: '16928', count: 1 }, // N的扒手貓 (MC 457/742)
+    { cardId: '14671', count: 1 }, // 含羞苞 (M2a 011/193)
+    { cardId: '16829', count: 1 }, // 願增猿 (MC 358/742)
+    { cardId: '16962', count: 1 }, // 桃歹郎ex (MC 491/742)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061/080)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '17122', count: 3 }, // 高級球 (MC 651/742)
+    { cardId: '18047', count: 3 }, // 寶可平板 (M3 070/080)
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17141', count: 1 }, // 夜間擔架 (MC 670/742)
+    { cardId: '17106', count: 3 }, // N的ＰＰ提升劑 (MC 635/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742)
+    { cardId: '17152', count: 1 }, // 鎖鏈糬 (MC 681/742)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724/742)
+    { cardId: '11282', count: 3 }, // 席藍 (SV8 102/106)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17170', count: 1 }, // 阿杏的秘招 (MC 699/742)
+    { cardId: '17175', count: 1 }, // 空手道王的演練 (MC 704/742)
+    { cardId: '17182', count: 1 }, // 裁判 (MC 711/742)
+    { cardId: '14841', count: 2 }, // N的城堡 (M2a 181/193)
+    { cardId: '17214', count: 8 }, // 基本【惡】能量 (MC DAR)
+  ],
+};
+
+/** 火焰雞多龍 預組（60 張）*/
+const BLAZIKEN_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_blaziken_dragapult__',
+  name: '火焰雞多龍（預組）',
+  entries: [
+    { cardId: '17017', count: 4 }, // 多龍梅西亞 (MC 546/742)
+    { cardId: '17018', count: 4 }, // 多龍奇 (MC 547/742)
+    { cardId: '17019', count: 2 }, // 多龍巴魯托ex (MC 548/742)
+    { cardId: '12768', count: 2 }, // 火稚雞 (SV10 018/098)
+    { cardId: '12769', count: 1 }, // 力壯雞 (SV10 019/098)
+    { cardId: '12086', count: 2 }, // 火焰雞ex (SVM 016/175)
+    { cardId: '16829', count: 2 }, // 願增猿 (MC 358/742)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '14671', count: 1 }, // 含羞苞 (M2a 011/193)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061/080)
+    { cardId: '16758', count: 1 }, // 莉莉艾的皮皮ex (MC 287/742)
+    { cardId: '14672', count: 1 }, // 謝米 (M2a 012/193)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17126', count: 2 }, // 神奇糖果 (MC 655/742)
+    { cardId: '14392', count: 1 }, // 高溫燃燒器 (M2 074/080)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742)
+    { cardId: '18047', count: 3 }, // 寶可平板 (M3 070/080)
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724/742)
+    { cardId: '17167', count: 2 }, // 赤松 (MC 696/742)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '14395', count: 1 }, // 小光 (M2 077/080)
+    { cardId: '14020', count: 1 }, // 險惡廢墟 (M1L 063/063)
+    { cardId: '14849', count: 1 }, // 火箭隊的監視塔 (M2a 189/193)
+    { cardId: '17216', count: 3 }, // 基本【火】能量 (MC FIR)
+    { cardId: '17220', count: 3 }, // 基本【超】能量 (MC PSY)
+    { cardId: '17214', count: 2 }, // 基本【惡】能量 (MC DAR)
+  ],
+};
+
+/** 夠讚狗 預組（60 張）*/
+const OKIDOGI_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_okidogi__',
+  name: '夠讚狗（預組）',
+  entries: [
+    { cardId: '10478', count: 3 }, // 夠讚狗 (SV6 064/101)
+    { cardId: '10607', count: 1 }, // 月月熊 赫月 (SV6a 025/064)
+    { cardId: '16843', count: 3 }, // 太陽岩 (MC 372/742)
+    { cardId: '16842', count: 2 }, // 月石 (MC 371/742)
+    { cardId: '18019', count: 2 }, // 龜足巨鎧 (M3 042/080)
+    { cardId: '18018', count: 2 }, // 龜腳腳 (M3 041/080)
+    { cardId: '14332', count: 1 }, // 火焰鳥 (M2 014/080)
+    { cardId: '10622', count: 1 }, // 蓋諾賽克特 (SV6a 040/064)
+    { cardId: '18047', count: 4 }, // 寶可平板 (M3 070/080)
+    { cardId: '17125', count: 4 }, // 戰鬥鑼 (MC 654/742)
+    { cardId: '17131', count: 2 }, // 寶可裝置3.0 (MC 660/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '17107', count: 1 }, // 能量回收 (MC 636/742)
+    { cardId: '17159', count: 3 }, // 氣球 (MC 688/742)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724/742)
+    { cardId: '17182', count: 2 }, // 裁判 (MC 711/742)
+    { cardId: '18050', count: 2 }, // 塔拉剛 (M3 073/080)
+    { cardId: '17198', count: 1 }, // 松葉的信心 (MC 727/742)
+    { cardId: '14397', count: 3 }, // 對戰圓形競技場 (M2 079/080)
+    { cardId: '17215', count: 9 }, // 基本【鬥】能量 (MC FIG)
+    { cardId: '17210', count: 4 }, // 稜鏡能量 (MC 739/742)
+    { cardId: '17212', count: 1 }, // 古舊能量 (MC 741/742)
+  ],
+};
+
+/** 顫弦蠑螈 預組（60 張）*/
+const SALAZZLE_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_salazzle__',
+  name: '顫弦蠑螈（預組）',
+  entries: [
+    { cardId: '14374', count: 4 }, // 毒電嬰 (M2 056/080)
+    { cardId: '14375', count: 4 }, // 顫弦蠑螈 (M2 057/080)
+    { cardId: '16829', count: 3 }, // 願增猿 (MC 358/742)
+    { cardId: '13995', count: 1 }, // 超級阿勃梭魯ex (M1L 038/063)
+    { cardId: '16962', count: 1 }, // 桃歹郎ex (MC 491/742)
+    { cardId: '16961', count: 1 }, // 桃歹郎 (MC 490/742)
+    { cardId: '16919', count: 1 }, // 火箭隊的狃拉 (MC 448/742)
+    { cardId: '16958', count: 1 }, // 猛惡菇 (MC 487/742)
+    { cardId: '13997', count: 1 }, // 伊裴爾塔爾 (M1L 040/063)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '18047', count: 4 }, // 寶可平板 (M3 070/080)
+    { cardId: '17122', count: 3 }, // 高級球 (MC 651/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '17109', count: 2 }, // 能量轉移 (MC 638/742)
+    { cardId: '18404', count: 2 }, // 能量回收器 (M3 101/080)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742)
+    { cardId: '17159', count: 3 }, // 氣球 (MC 688/742)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724/742)
+    { cardId: '17166', count: 2 }, // 青木的手法 (MC 695/742)
+    { cardId: '17182', count: 1 }, // 裁判 (MC 711/742)
+    { cardId: '17176', count: 1 }, // 庫瑟洛斯奇的企圖 (MC 705/742)
+    { cardId: '17205', count: 1 }, // 火箭隊的拉姆達 (MC 734/742)
+    { cardId: '14849', count: 2 }, // 火箭隊的監視塔 (M2a 189/193)
+    { cardId: '17214', count: 10 }, // 基本【惡】能量 (MC DAR)
+  ],
+};
+
+/** 蒼炎刃鬼 預組（60 張）*/
+const CERULEDGE_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_ceruledge__',
+  name: '蒼炎刃鬼（預組）',
+  entries: [
+    { cardId: '14691', count: 4 }, // 蒼炎刃鬼ex (M2a 031/193)
+    { cardId: '16616', count: 4 }, // 炭小侍 (MC 145/742)
+    { cardId: '16843', count: 2 }, // 太陽岩 (MC 372/742)
+    { cardId: '16842', count: 2 }, // 月石 (MC 371/742)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061/080)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '9880', count: 1 },  // 螺釘地鼠 (SV5M 039/071)
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '18047', count: 4 }, // 寶可平板 (M3 070/080)
+    { cardId: '17125', count: 3 }, // 戰鬥鑼 (MC 654/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '11147', count: 1 }, // 完全體攪拌器 (SVK 017/042) ACE SPEC
+    { cardId: '17186', count: 4 }, // 丹瑜 (MC 715/742)
+    { cardId: '17200', count: 3 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724/742)
+    { cardId: '17193', count: 1 }, // 白蕾雅 (MC 722/742)
+    { cardId: '18500', count: 2 }, // 稜鏡塔 (M4 080/083)
+    { cardId: '17216', count: 6 }, // 基本【火】能量 (MC FIR)
+    { cardId: '17215', count: 13 },// 基本【鬥】能量 (MC FIG)
+  ],
+};
+
+/** 超級甲賀忍蛙 預組（60 張）*/
+const MEGA_GRENINJA_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_mega_greninja__',
+  name: '超級甲賀忍蛙（預組）',
+  entries: [
+    { cardId: '18440', count: 4 }, // 呱呱泡蛙 (M4 020/083)
+    { cardId: '18441', count: 2 }, // 呱頭蛙 (M4 021/083)
+    { cardId: '18442', count: 2 }, // 超級甲賀忍蛙ex (M4 022/083)
+    { cardId: '16679', count: 1 }, // 甲賀忍蛙ex (MC 208/742)
+    { cardId: '17017', count: 3 }, // 多龍梅西亞 (MC 546/742)
+    { cardId: '17018', count: 3 }, // 多龍奇 (MC 547/742)
+    { cardId: '17019', count: 1 }, // 多龍巴魯托ex (MC 548/742)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061/080)
+    { cardId: '14671', count: 1 }, // 含羞苞 (M2a 011/193)
+    { cardId: '14672', count: 1 }, // 謝米 (M2a 012/193)
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC 648/742)
+    { cardId: '18047', count: 4 }, // 寶可平板 (M3 070/080)
+    { cardId: '17122', count: 3 }, // 高級球 (MC 651/742)
+    { cardId: '17126', count: 2 }, // 神奇糖果 (MC 655/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17159', count: 2 }, // 氣球 (MC 688/742)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17189', count: 3 }, // 鬥子 (MC 718/742)
+    { cardId: '14395', count: 1 }, // 小光 (M2 077/080)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724/742)
+    { cardId: '17182', count: 1 }, // 裁判 (MC 711/742)
+    { cardId: '18495', count: 2 }, // AZ的平和 (M4 075/083)
+    { cardId: '14849', count: 2 }, // 火箭隊的監視塔 (M2a 189/193)
+    { cardId: '17221', count: 7 }, // 基本【水】能量 (MC WAT)
+    { cardId: '9770', count: 1 },  // 新衝天能量 (SV5K 071/071) ACE SPEC
+    { cardId: '17207', count: 1 }, // 燃火能量 (MC 736/742)
+  ],
+};
+
 /**
  * 所有內建預設牌組
  *
@@ -578,6 +784,7 @@ const STARMIE_DECK: Omit<Deck, 'updatedAt'> = {
  * v2.35：新增「火箭隊的超夢ex」與「猛雷鼓ex」兩組 Leon 自選卡表。
  * v2.89：新增「呆呆王」與「超級路卡利歐」兩組 Leon 自選卡表。
  * v2.104：新增「奧利瓦」/「鋁鋼橋龍」/「超級寶石海星」三組 Leon 自選卡表（Phase A+B+C 22 張 effect 同步實裝）。
+ * v2.112：新增「N的索羅亞克」/「火焰雞多龍」/「夠讚狗」/「顫弦蠑螈」/「蒼炎刃鬼」/「超級甲賀忍蛙」六組 Leon 自選卡表。
  */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
@@ -593,6 +800,12 @@ export const PRESET_DECKS: Deck[] = [
   { ...OLIVA_DECK, updatedAt: 0 },
   { ...ALLOY_BRIDGE_DRAGON_DECK, updatedAt: 0 },
   { ...STARMIE_DECK, updatedAt: 0 },
+  { ...N_ZOROARK_DECK, updatedAt: 0 },
+  { ...BLAZIKEN_DRAGAPULT_DECK, updatedAt: 0 },
+  { ...OKIDOGI_DECK, updatedAt: 0 },
+  { ...SALAZZLE_DECK, updatedAt: 0 },
+  { ...CERULEDGE_DECK, updatedAt: 0 },
+  { ...MEGA_GRENINJA_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */
