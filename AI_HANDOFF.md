@@ -1,9 +1,62 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.106)  
+> 最後更新：2026-04-24 (v2.107)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.107 — Task 1：補爬 M4 漏掉的 37 張 SAR/AR（系統性稽核）
+
+### 問題（Leon 提出）
+「卡牌資料庫裡面很多 AR SAR 等卡都沒有爬進去」。以 M2 對戰圓形競技場 SAR 108/080 為例。
+
+### 系統性稽核
+寫 one-liner 掃全 30 個 set：對每個 set 比 `maxN(collectorNumber 分子)` vs `denominator`。
+- 若 `maxN > denom` → 有抓到 SAR/AR 高編號（健康）
+- 若 `maxN == denom` → 可能沒高編號（或原本就沒）
+- 若 `maxN < denom` → 中段有漏（bug）
+
+30 個 set 結果：
+
+| 狀態 | Set |
+|---|---|
+| **無高編號卡**（官網本身就是 001~denom） | M2, M-P, M4 (before), MJ, SVK, SVQL, SVQP |
+| **有 SAR/AR 高編號**（健康） | SV5M/K/a、SV6/a、SV7/a、SV8/a、SV9/a、SV10、SV11B/W、M1S/L、M2a、M3、MBD/G、MC、SVOD/M |
+
+### 真正漏的 set：M4
+官網 M4 list page 有 **120 張**，我們 local 只 **83**（2026-04-16 爬）→ **漏 37 張**。
+跑 `node scripts/scrape/scrape-set.js M4 --resume`，補上 id 18521~18557（其中多張 SAR/AR/SSR 同名同卡不同印刷的 ex 寶可夢、支援者）。
+
+### 為什麼原本漏
+這 37 張的 `scrapedAt` 是 **2026-04-24**（今天），原本 2026-04-16 的爬蟲時這些卡還沒上架。**不是 scraper bug，是官網後續追加**。暗示：定期重跑 scraper 能自動撿到新增卡。
+
+### M2 與 SAR 108/080 的推測
+Leon 例子「M2 對戰圓形競技場 SAR 108/080」目前**不存在於官網 TW index**。官網 M2 list page 固定 80 張、keyword 搜「對戰圓形競技場」只有 1 筆（079/080 非 SAR）。可能原因：
+1. 卡面「SAR 108/080」是日版/英版才有，TW 還沒上
+2. Leon 記錯 cn 或 set（該 SAR 可能在別 set 裡）
+3. 官網下架或延期
+
+→ 留給 Leon 找到實際 detail URL 再補爬。
+
+### MJ 驗證
+原本 audit 顯示 `maxN=22 < denom=22`，看似有漏。實地查 24 張 cn：22 張是 001/022~022/022，剩 2 張是基本能量（cn 為 `GRA`、`LIG`，非 NNN/NNN 格式），`parseInt` 失敗造成 maxN 被低估 — **無漏爬**。
+
+### 修的東西
+1. 執行 `scripts/scrape/scrape-set.js M4 --resume` → M4.json 83 → 120 張
+2. 執行 `scripts/sync-card-counts.mjs` → index.json 的 M4 cardCount 同步
+
+### 驗證
+- M4 total=120、無 dup cn、maxN=120/083（高編號卡正確）
+- build ✓
+
+### 全卡池變動
+- 3629 → **3666** 張（+37）
+- set 數不變（仍 30 個）
+
+### 提示
+下次 Leon 發現類似「這張卡找不到」時，先用 `maxN vs denom` 掃，鎖定是 set 遺漏（例 M4）還是官網本身沒此卡（例 M2 SAR）。
 
 ---
 

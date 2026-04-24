@@ -371,16 +371,16 @@
     "code": "M4",
     "name": "忍者飛旋",
     "regulationMark": "J",
-    "cardCount": 83,
+    "cardCount": 120,
     "supertypeCounts": {
-      "Pokemon": 71,
-      "Trainer": 9,
+      "Pokemon": 96,
+      "Trainer": 21,
       "Energy": 3
     },
     "coverImageUrl": "covers/M4.png",
     "scrapedAt": "2026-04-16T08:26:58.977Z",
     "releaseDate": "2026-03-27",
-    "count": 83
+    "count": 120
   },
   {
     "code": "MC",
