@@ -1,9 +1,53 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.114)  
+> 最後更新：2026-04-25 (v2.115)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.115 — 刪 SVC/SVD/SVP1 全 set + SVM/MJ 重歸正確 mark + 回滾 G 標區
+
+### Leon 指示
+> 不是叫你把 G 標分出來  
+> 既然【SVC起始組合ex 皮卡丘ex&巴布土撥】、【SVD隨機ex初階牌組】、【SVP1ex特別組合】這 3 個卡包裡面完全沒有目前賽制可以用的卡牌，請直接刪除這個卡包和所有的卡片  
+> 【SVM雙ex初階牌組 Generations】的發售日期是 2024/11/29，請把卡包的位置放在【SV8超電突圍】的後面，【SV8a太晶慶典ex】的前面  
+> 確認【MJ New Trainer Journey】上線時間，如果確定真的是 2026/2/26 那就應該排在【M3虛無歸零】的後面  
+> 總之我的卡牌資料庫的卡包排序方式，是按照發售日期的
+
+我 v2.114 誤解了 Leon 的意思，以為他要把 G 標分出區塊顯示；實際上 Leon 是要**刪除**這些純 G 標卡包。
+
+### 改動
+1. **刪除 SVC / SVD / SVP1 三個 set**  
+   - 刪檔：static/cards/{SVC,SVD,SVP1}.json + .log + static/covers/{SVC,SVD,SVP1}.png  
+   - index.json 移除對應 entries  
+   - regulation.ts 移除對應 mapping（SVC / SVD / SVP1 均全 G，無現行賽制可用卡）  
+   - scrape-all.js DEFAULT_SETS 移除這 3 個 set
+
+2. **SVM 改 H 標**  
+   - 發售日 2024/11/29（H 標啟用 2024/2/2 之後），歸 H 標  
+   - 依 releaseDate 升序自然排在 SV8（2024/10/25）之後、SV8a（2024/12/20）之前  
+   - index.json 對應 entry 的 `regulationMark` 改為 "H"  
+   - SVM.json 裡個別卡的 regulationMark 不動（卡面真實值，本來就混收 G/H/I）
+
+3. **MJ 改 J 標**  
+   - 發售日 2026/2/26（J 標啟用 2026/1/16 之後），歸 J 標  
+   - 依 releaseDate 自然排在 M3（2026/2/6）後面  
+   - 卡面 mark 混收 H/I/J/G，保留不動（cardCount=24 中 15 H、4 I、2 J、3 G）  
+   - WebFetch 官網沒能獨立確認 2026/2/26，採信 scraper 當時（2026-04-16）抓到的資料
+
+4. **回滾 /cards/+page.svelte 的 G 標區塊**  
+   - 移除 `'G'` 從 `for (const mark of ['H', 'I', 'J', 'G'])` ordered array  
+   - 移除 markStartDate 的 G entry 和 markLabel 的 G 特殊 suffix  
+   - 保留 H/I/J 群組 heading 的啟用日期標註（Leon v2.114 要的）  
+   - 防禦性：非 H/I/J 的 mark 仍會 fallthrough 到 "other" 區塊（目前資料庫無此情況）
+
+### 驗證
+- npm run build ✓（14.43s，無 warning）
+- index.json 從 38 set → 35 set（扣掉 SVC/SVD/SVP1）
+- SVM regulationMark H，會排在 SV8 / SV8a 之間
+- MJ regulationMark J，會排在 M3（2026-02-06）之後
 
 ---
 

@@ -2,7 +2,7 @@
   {
     "code": "MJ",
     "name": "New Trainer Journey",
-    "regulationMark": "H",
+    "regulationMark": "J",
     "cardCount": 24,
     "supertypeCounts": {
       "Pokemon": 16,
@@ -445,7 +445,7 @@
   {
     "code": "SVM",
     "name": "雙ex初階牌組 Generations",
-    "regulationMark": "G",
+    "regulationMark": "H",
     "cardCount": 183,
     "supertypeCounts": {
       "Pokemon": 124,
@@ -456,51 +456,6 @@
     "scrapedAt": "2026-04-24T12:55:42.364Z",
     "releaseDate": "2024-11-29",
     "count": 183
-  },
-  {
-    "code": "SVC",
-    "name": "起始組合ex 皮卡丘ex&巴布土撥",
-    "regulationMark": "G",
-    "cardCount": 22,
-    "supertypeCounts": {
-      "Pokemon": 10,
-      "Trainer": 11,
-      "Energy": 1
-    },
-    "coverImageUrl": "covers/SVC.png",
-    "scrapedAt": "2026-04-24T12:51:02.266Z",
-    "releaseDate": "2023-03-31",
-    "count": 22
-  },
-  {
-    "code": "SVD",
-    "name": "隨機ex初階牌組",
-    "regulationMark": "G",
-    "cardCount": 147,
-    "supertypeCounts": {
-      "Pokemon": 109,
-      "Trainer": 29,
-      "Energy": 9
-    },
-    "coverImageUrl": "covers/SVD.png",
-    "scrapedAt": "2026-04-24T12:57:36.503Z",
-    "releaseDate": "2023-06-02",
-    "count": 147
-  },
-  {
-    "code": "SVP1",
-    "name": "ex特別組合",
-    "regulationMark": "G",
-    "cardCount": 7,
-    "supertypeCounts": {
-      "Pokemon": 7,
-      "Trainer": 0,
-      "Energy": 0
-    },
-    "coverImageUrl": "covers/SVP1.png",
-    "scrapedAt": "2026-04-24T12:50:21.001Z",
-    "releaseDate": "2023-06-02",
-    "count": 7
   },
   {
     "code": "SVPN",

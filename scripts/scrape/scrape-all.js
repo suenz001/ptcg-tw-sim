@@ -43,12 +43,9 @@ const DEFAULT_SETS = [
   'MC', 'M3', 'M4',
   'SVOD', 'SVOM',
   'M-P',  // 特典卡 超級進化（promo）
-  // v2.111 補爬：缺漏 set（Leon 要求「卡牌資料庫弄到最齊全」）
-  // G 標（已輪替出 Standard，仍爬進卡池供查閱）
-  'SVM',   // 朱紫高級寶可夢集合 183 張（含火焰雞ex 等 H 標卡）
-  'SVC',   // 朱紫入門 22 張
-  'SVD',   // 朱紫ex 入門 147 張
-  'SVP1',  // Promo 7 張
+  // v2.111 補爬：缺漏 set
+  // v2.115 移除 SVC/SVD/SVP1（完全無現行賽制可用卡，Leon 指示刪除）
+  'SVM',   // 雙ex初階牌組 Generations 183 張（2024/11/29，H 標時期 — 含 H 標卡為主）
   // H 標（Standard legal）
   'SVPN', 'SVPS',  // Promo 8+8
   'svhk', 'svhm',  // 朱紫擴充 24+24
