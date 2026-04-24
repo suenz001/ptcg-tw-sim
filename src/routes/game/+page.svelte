@@ -29,6 +29,8 @@
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
   import { VERSION } from '$lib/version';
+  import { playSfx } from '$lib/audio/sfx';
+  import { loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume } from '$lib/audio/settings';
 
   // ── 卡池 ────────────────────────────────────────────────────────────────────
   let pool = $state<Map<string, Card>>(new Map());
@@ -1132,9 +1134,25 @@
         && selectionPicked.size <= pendingSelection.maxCount;
   });
 
+  // ── 音效設定（v2.118）─────────────────────────────────────────────────────
+  let audioVolume = $state(0.5);
+  let audioMuted = $state(false);
+  let audioPanelOpen = $state(false);
+  function onVolumeChange(v: number) {
+    audioVolume = v;
+    saveVolume(v);
+  }
+  function onMuteToggle() {
+    audioMuted = !audioMuted;
+    saveMuted(audioMuted);
+  }
+
   // ── 初始化 ──────────────────────────────────────────────────────────────────
   onMount(async () => {
     decks = loadDecks();
+    loadAudioPrefs();
+    audioVolume = getAudioVolume();
+    audioMuted = isAudioMuted();
     // 匿名登入（線上對戰需要）
     onAuthStateChanged(auth, u => { myUid = u?.uid ?? null; });
     if (!auth.currentUser) await signInAnonymously(auth);
@@ -1243,6 +1261,7 @@
   // ── 動作分派（本機 + 線上共用） ─────────────────────────────────────────────
   async function dispatch(action: ReturnType<typeof GameActions[keyof typeof GameActions]>) {
     if (!game || !poolReady) return;
+    const prevState = game;
     const newState = applyAction(game, action as any, pool);
     // Debug：如果 action 被拒絕（state 沒變），印出 state 幫 debug
     if (newState === game) {
@@ -1262,6 +1281,11 @@
 
     // 視覺回饋
     if (action.type === 'ATTACH_ENERGY') triggerEnergyPulse(action.targetIid);
+
+    // v2.118 音效：action-based（state-diff 類在 $effect 觸發）
+    if (newState !== prevState) {
+      dispatchSfxForAction(action, prevState, newState);
+    }
 
     if (mode === 'online' && roomCode) {
       isSyncing = true;
@@ -1553,6 +1577,126 @@
             .replace('Pokemon','寶可夢')
             .replace('Energy','能量');
   }
+
+  // ─── v2.118 音效 / 攻擊動畫 ─────────────────────────────────────────────
+  // attackFx：目前正在播放的攻擊動畫。active slot 會掛 class 根據這個 state。
+  let attackFx = $state<{
+    attackerIdx: 0 | 1;
+    attackerIid: string;
+    defenderIid: string | null;
+    energyType: EnergyType;
+    ts: number;
+  } | null>(null);
+
+  function triggerAttackFx(attackerIdx: 0 | 1, attackerIid: string, defenderIid: string | null, energyType: EnergyType) {
+    const ts = Date.now();
+    attackFx = { attackerIdx, attackerIid, defenderIid, energyType, ts };
+    // 約略 600ms 後清除（shake 400ms + flash 500ms + buffer）
+    setTimeout(() => { if (attackFx?.ts === ts) attackFx = null; }, 600);
+  }
+
+  /** action dispatch 後觸發對應音效 / 動畫（v2.118） */
+  function dispatchSfxForAction(
+    action: ReturnType<typeof GameActions[keyof typeof GameActions]>,
+    prev: GameState,
+    next: GameState,
+  ): void {
+    try {
+      switch (action.type) {
+        case 'DRAW_CARD':
+          playSfx('draw');
+          break;
+        case 'MULLIGAN_DRAW_DECISION':
+          if ((action as any).accept) playSfx('draw');
+          break;
+        case 'FINISH_SETUP':
+          // 雙方 setup 都完成 → 進 playing，放擲硬幣音（開局象徵先攻）
+          if (prev.phase === 'setup' && next.phase === 'playing') playSfx('coin');
+          else playSfx('click');
+          break;
+        case 'ATTACH_ENERGY':
+        case 'PLAY_BASIC':
+        case 'BENCH_POKEMON':
+        case 'EVOLVE':
+        case 'USE_STADIUM':
+          playSfx('click');
+          break;
+        case 'RETREAT':
+          playSfx('shuffle', { volume: 0.5 });
+          break;
+        case 'END_TURN':
+          playSfx('click', { volume: 0.6 });
+          break;
+        case 'PLAY_TRAINER': {
+          playSfx('click');
+          // Trainer 常帶 draw/shuffle 效果 — 若手牌數上升 or deck 減少顯著，補 draw 音
+          const myIdx = next.activePlayerIndex;
+          const handDelta = next.players[myIdx].hand.length - prev.players[myIdx].hand.length;
+          if (handDelta > 0) setTimeout(() => playSfx('draw', { volume: 0.6 }), 100);
+          break;
+        }
+        case 'USE_ABILITY':
+          playSfx('click');
+          break;
+        case 'RESOLVE_SELECTION':
+          playSfx('click', { volume: 0.6 });
+          // 若 state 的 deck 縮短明顯，通常是搜卡動作，附加 shuffle 聲
+          {
+            const myIdx = next.activePlayerIndex;
+            const deckDelta = prev.players[myIdx].deck.length - next.players[myIdx].deck.length;
+            if (deckDelta >= 2) setTimeout(() => playSfx('shuffle', { volume: 0.4 }), 150);
+          }
+          break;
+        case 'ATTACK': {
+          // 攻擊音效 + 動畫 — 取 attacker 主屬性
+          const aIdx = prev.activePlayerIndex;
+          const attacker = prev.players[aIdx].active;
+          if (!attacker) break;
+          const atkCard = pool.get(attacker.cardId);
+          const etype: EnergyType = atkCard?.pokemonType ?? 'Colorless';
+          playSfx(`attack-${etype}` as `attack-${EnergyType}`);
+          const defender = next.players[1 - aIdx].active;
+          triggerAttackFx(aIdx as 0 | 1, attacker.iid, defender?.iid ?? null, etype);
+          break;
+        }
+        case 'TAKE_PRIZES':
+          playSfx('draw');
+          break;
+        case 'SEND_NEW_ACTIVE':
+          playSfx('click');
+          break;
+        default:
+          break;
+      }
+
+      // state-diff：status 轉移 / KO（獨立於 action type，checkup 等非 action 也會變）
+      detectStatusAndKOSfx(prev, next);
+    } catch {
+      // 音效失敗不影響遊戲
+    }
+  }
+
+  /** 比對 prev/next 找出新出現的異常狀態 + KO，播對應音效。 */
+  function detectStatusAndKOSfx(prev: GameState, next: GameState): void {
+    for (const idx of [0, 1] as const) {
+      const prevP = prev.players[idx];
+      const nextP = next.players[idx];
+      // 戰鬥位 KO（從有 → 無）
+      if (prevP.active && !nextP.active) {
+        playSfx('ko');
+      }
+      // 戰鬥位 status：比對同一 iid 前後狀態
+      if (prevP.active && nextP.active && prevP.active.iid === nextP.active.iid) {
+        if (!prevP.active.status && nextP.active.status) {
+          const s = nextP.active.status;
+          if (s === 'poisoned') playSfx('poison');
+          else if (s === 'burned') playSfx('burn');
+          else if (s === 'asleep') playSfx('sleep');
+          else if (s === 'confused') playSfx('confuse');
+        }
+      }
+    }
+  }
 </script>
 
 <svelte:window onkeydown={onGlobalKey} onpointermove={onWindowPointerMove} onpointerup={onWindowPointerUp} />
@@ -1838,6 +1982,20 @@
         <button class="chip stadium-chip clickable-chip" title="點擊查看卡片詳情" onclick={()=>openZoom(sId, null)}>🏟 {stadiumCard.name} 🔍</button>
       {/if}
       <span class="chip version-chip" title="應用程式版本 — 檢查是否同步到最新">v{VERSION}</span>
+      <!-- v2.118 音效控制：點擊 badge 切換 mute；hover 出現音量 slider -->
+      <span class="chip audio-chip" title={audioMuted ? '音效已靜音（點擊取消）' : '音效開啟（點擊靜音）'}>
+        <button class="audio-btn" onclick={onMuteToggle} aria-label={audioMuted ? '取消靜音' : '靜音'}>
+          {audioMuted ? '🔇' : audioVolume >= 0.5 ? '🔊' : audioVolume > 0 ? '🔉' : '🔈'}
+        </button>
+        <input
+          class="audio-slider"
+          type="range" min="0" max="1" step="0.05"
+          value={audioVolume}
+          oninput={(e) => onVolumeChange(parseFloat((e.currentTarget as HTMLInputElement).value))}
+          aria-label="音量"
+          title="音量 {Math.round(audioVolume * 100)}%"
+        />
+      </span>
     </span>
     {#if game.phase === 'playing' && activePlayer}
       {@const attEnergy = activePlayer.energyAttachedThisTurn}
@@ -1945,7 +2103,17 @@
               </div>
             </div>
           {:else}
-            <div class="active-card opp-active" out:scale={{ duration: 360, start: 0.55, opacity: 0 }}>
+            <div
+              class="active-card opp-active"
+              class:attack-shake={attackFx && oppPlayer.active && attackFx.attackerIid === oppPlayer.active.iid}
+              class:attack-flash={attackFx && oppPlayer.active && attackFx.defenderIid === oppPlayer.active.iid}
+              class:status-glow-poisoned={oppPlayer.active.status === 'poisoned'}
+              class:status-glow-burned={oppPlayer.active.status === 'burned'}
+              class:status-glow-asleep={oppPlayer.active.status === 'asleep'}
+              class:status-glow-confused={oppPlayer.active.status === 'confused'}
+              style={attackFx && oppPlayer.active && attackFx.defenderIid === oppPlayer.active.iid ? `--flash-color:${ENERGY_COLOR[attackFx.energyType]}` : undefined}
+              out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
+            >
               <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>
               <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）
                    v2.53：無能量時不渲染（避免空欄佔寬度） -->
@@ -2109,6 +2277,13 @@
             class:drop-zone={isMyTurn() && ((dragging?.kind==='energy'||dragging?.kind==='tool') || (dragging?.kind==='evolve'&&evolveTargetsFor(dragging.iid).includes(myPlayer.active.iid)))}
             class:drop-hover={dropTargetIid===myPlayer.active.iid}
             class:energy-pulse={energyAttachPulse===myPlayer.active.iid}
+            class:attack-shake={attackFx && attackFx.attackerIid === myPlayer.active.iid}
+            class:attack-flash={attackFx && attackFx.defenderIid === myPlayer.active.iid}
+            class:status-glow-poisoned={myPlayer.active.status === 'poisoned'}
+            class:status-glow-burned={myPlayer.active.status === 'burned'}
+            class:status-glow-asleep={myPlayer.active.status === 'asleep'}
+            class:status-glow-confused={myPlayer.active.status === 'confused'}
+            style={attackFx && myPlayer.active && attackFx.defenderIid === myPlayer.active.iid ? `--flash-color:${ENERGY_COLOR[attackFx.energyType]}` : undefined}
             data-drop-type="poke"
             data-drop-iid={myPlayer.active.iid}
             out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
@@ -3284,6 +3459,74 @@
     0%  { box-shadow: 0 0 0 rgba(170,255,68,0); }
     40% { box-shadow: 0 0 24px rgba(170,255,68,.9), inset 0 0 18px rgba(170,255,68,.4); transform:scale(1.04); }
     100%{ box-shadow: 0 0 0 rgba(170,255,68,0); transform:scale(1); }
+  }
+
+  /* ─── v2.118 攻擊動畫 ────────────────────────────────────────
+     attacker 卡橫向震動、defender 卡疊色 flash（顏色取自 attacker pokemonType） */
+  .active-card.attack-shake{ animation: attack-shake .4s cubic-bezier(.3,.1,.3,1); }
+  @keyframes attack-shake{
+    0%,100% { transform: translateX(0); }
+    20%     { transform: translateX(-10px) rotate(-1deg); }
+    45%     { transform: translateX(8px)  rotate(1deg); }
+    70%     { transform: translateX(-4px); }
+  }
+  .active-card.attack-flash{ position:relative; }
+  .active-card.attack-flash::after{
+    content:''; position:absolute; inset:0;
+    background: var(--flash-color, #fff);
+    opacity:0; border-radius:inherit; pointer-events:none;
+    mix-blend-mode:screen;
+    animation: attack-flash .5s ease-out;
+  }
+  @keyframes attack-flash{
+    0%   { opacity:0;   transform: scale(.9); }
+    25%  { opacity:.75; transform: scale(1.02); }
+    60%  { opacity:.4;  }
+    100% { opacity:0;   transform: scale(1); }
+  }
+
+  /* ─── v2.118 狀態異常光暈 ────────────────────────────────────
+     以 box-shadow 脈動呈現；不改動 DOM 結構、不佔位，不影響原先 UI。 */
+  .active-card.status-glow-poisoned{
+    animation: glow-poisoned 1.6s ease-in-out infinite;
+  }
+  @keyframes glow-poisoned{
+    0%,100% { box-shadow: 0 0 6px 1px rgba(170,80,220,.35), inset 0 0 10px rgba(170,80,220,.15); }
+    50%     { box-shadow: 0 0 16px 3px rgba(170,80,220,.8), inset 0 0 18px rgba(170,80,220,.35); }
+  }
+  .active-card.status-glow-burned{
+    animation: glow-burned 0.9s ease-in-out infinite;
+  }
+  @keyframes glow-burned{
+    0%,100% { box-shadow: 0 0 6px 1px rgba(255,120,60,.4), inset 0 0 10px rgba(255,120,60,.2); }
+    50%     { box-shadow: 0 0 18px 4px rgba(255,80,40,.9), inset 0 0 20px rgba(255,80,40,.4); }
+  }
+  .active-card.status-glow-asleep{
+    animation: glow-asleep 2.4s ease-in-out infinite;
+  }
+  @keyframes glow-asleep{
+    0%,100% { box-shadow: 0 0 6px 1px rgba(100,140,220,.3), inset 0 0 10px rgba(100,140,220,.1); }
+    50%     { box-shadow: 0 0 14px 3px rgba(100,140,220,.7), inset 0 0 18px rgba(100,140,220,.3); }
+  }
+  .active-card.status-glow-confused{
+    animation: glow-confused 0.6s ease-in-out infinite;
+  }
+  @keyframes glow-confused{
+    0%,100% { box-shadow: 0 0 8px 2px rgba(255,220,80,.5); transform: rotate(-.3deg); }
+    50%     { box-shadow: 0 0 14px 4px rgba(255,220,80,.75); transform: rotate(.3deg); }
+  }
+
+  /* ─── v2.118 Header 音效控制 chip ────────────────────────── */
+  .audio-chip{ display:inline-flex; align-items:center; gap:.3rem; padding:.1rem .4rem; }
+  .audio-btn{
+    background:transparent; border:none; cursor:pointer; font-size:1rem; padding:0;
+    line-height:1; color:inherit;
+  }
+  .audio-btn:hover{ filter: brightness(1.4); }
+  .audio-slider{
+    width:72px; height:3px; cursor:pointer;
+    accent-color:#5a8a5a;
+    background:transparent;
   }
 
   /* ── v2.42 牌庫洗牌動畫 ── */

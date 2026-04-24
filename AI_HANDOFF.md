@@ -1,9 +1,90 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.117)  
+> 最後更新：2026-04-25 (v2.118)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.118 — 對戰音效系統 + 攻擊動畫 + 狀態異常視覺（Leon 功能請求）
+
+### Leon 要求
+> 增加對戰時的音效：擲硬幣 / 發牌 / 抽牌 / 洗牌 / 選牌點選 /
+> 戰鬥寶可夢發動招式造成傷害（也可依屬性有動畫）/ 昏厥 / 中毒 / 灼燒 / 睡眠 / 混亂
+> 
+> 以上只是建議，你可以照你的 AI 想法自由發揮，我不設限制
+
+### 設計原則
+1. **零外部 asset**：音效用 Web Audio API 合成（OscillatorNode / GainNode / noise buffer）。
+   不需要 ship mp3、不會因 CDN 或版權壞掉，TypeScript 純程式碼即可。
+2. **輕量 UI 風**：音色偏 feedback 而非寫實，避免戰鬥過久疲勞。
+3. **非侵入**：動畫用 CSS class 掛在既有 `.active-card` 元素上，不新增 DOM 層。
+4. **可關 / 可調**：header 右上加 🔊 按鈕 + 音量 slider，偏好存 localStorage。
+
+### 新增 / 修改檔案
+- `src/lib/audio/sfx.ts`（新）— Web Audio 合成主模組
+  - `playSfx(name)`：播放指定音效
+  - `setMasterVolume(v)` / `setMuted(m)`
+  - 10 屬性攻擊音效：`attack-Grass` … `attack-Colorless` 各自不同 oscillator pattern
+  - 其餘：coin / deal / draw / shuffle / click / ko / poison / burn / sleep / confuse
+- `src/lib/audio/settings.ts`（新）— localStorage 持久化（volume + mute）
+- `src/routes/game/+page.svelte`
+  - header 加 🔊 / 🔇 按鈕 + 音量 slider
+  - dispatch 後呼叫 `dispatchSfxForAction(action, prev, next)`，按 action type 播音效
+  - `detectStatusAndKOSfx(prev, next)`：比對前後 state 找出新狀態 / KO → 對應音效
+  - ATTACK 觸發 `triggerAttackFx(...)`：attacker 卡震動 + defender 卡 flash（顏色取 attacker pokemonType）
+  - active-card 加 `class:attack-shake` / `class:attack-flash` / `class:status-glow-<status>` 4 種
+  - CSS：`@keyframes attack-shake / attack-flash / glow-poisoned / glow-burned / glow-asleep / glow-confused`
+
+### 屬性攻擊音色（ATTACK_PATTERNS）
+- Grass：柔和上升 triangle（500→800Hz）+ 高頻 noise
+- Fire：sawtooth 下降 + 中頻 noise（嘶吼感）
+- Water：sine 水滴下降（900→300Hz）
+- Lightning：短促 square + 高頻 crackle
+- Psychic：sine 金屬共鳴（1500→700Hz）
+- Fighting：低頻 impact（150→60Hz）+ 短 noise
+- Darkness：sawtooth 低頻 growl（200→80Hz）
+- Metal：square 敲擊 + 高頻 ring
+- Dragon：深厚 sawtooth + 中頻 noise（氣勢）
+- Colorless：中性 sine 漸降
+
+### 狀態異常 CSS 光暈（持續脈動，不佔位）
+- poisoned：紫色 `#aa50dc` 慢脈動（1.6s）
+- burned：橙紅 `#ff7830` 快脈動（0.9s）
+- asleep：藍色 `#6496dc` 緩慢呼吸（2.4s）
+- confused：黃色 `#ffdc50` + 輕微旋轉（0.6s）
+
+### 音效觸發事件表
+| Action | Sfx |
+|---|---|
+| DRAW_CARD / MULLIGAN_DRAW_DECISION (accept) | draw |
+| FINISH_SETUP（進入 playing） | coin |
+| ATTACH_ENERGY / PLAY_BASIC / BENCH_POKEMON / EVOLVE / USE_STADIUM / USE_ABILITY / SEND_NEW_ACTIVE | click |
+| RETREAT | shuffle（低音量） |
+| END_TURN | click |
+| PLAY_TRAINER | click +（若手牌增加）draw |
+| RESOLVE_SELECTION | click +（若牌庫縮短 ≥2 張）shuffle |
+| ATTACK | attack-`<pokemonType>` + shake/flash 動畫 |
+| TAKE_PRIZES | draw |
+| State-diff: active 消失 | ko |
+| State-diff: status undefined → X | poison/burn/sleep/confuse |
+
+### 瀏覽器政策處理
+- AudioContext 首次 play 時建立；若 `state === 'suspended'` 自動呼叫 `resume()`
+- 在使用者第一次 click/keydown 前音效可能不出（Chrome / Safari 保護），之後就正常
+- 合成失敗統一 try/catch — 不影響遊戲邏輯
+
+### 驗證
+- npm run build ✓（14.39s）
+- TypeScript 通過（`PendingSelection` / `GameState` 等 type 都保留）
+- 不動既有 DOM 結構，只加 class bindings + CSS keyframes
+
+### 後續可擴充
+- 屬性飛彈軌跡（SVG overlay，從 attacker → defender 劃線 + 粒子）
+- 洗牌 / 抽牌可加 `shuffle` / `draw` 的遊戲實際觸發點（目前只掛在 RESOLVE_SELECTION 的啟發式偵測）
+- Mulligan 相關音效
+- Leon 測試後再按回饋調整音量 / 音色 / 動畫長度
 
 ---
 
