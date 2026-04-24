@@ -289,11 +289,27 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
         // 官網 .evolution 區塊可能在 ex 卡前面列出同名的 GX / 非 ex 版本，
         // 例如 [小火龍, 火恐龍, 噴火龍, 噴火龍GX, 噴火龍ex]
         // 噴火龍ex 的 evolvesFrom 應該是 火恐龍（跳過同名的噴火龍和噴火龍GX）。
+        //
+        // v2.87: 加 strip 地區前綴（洗翠/伽勒爾/阿羅拉/帕底亞）— 官網會把地區
+        // 分身列在同一條進化鏈裡，例：
+        //   [木木梟, 投羽梟, 狙射樹梟, 狙射樹梟GX, 洗翠 狙射樹梟, 狙射樹梟ex]
+        // 狙射樹梟ex 的前階是 投羽梟，要跳過「洗翠 狙射樹梟」（同族地區分身）。
+        //
+        // ⚠️ 仍無法自動處理的情況（需人工 + fix-evolves-from-v* 腳本修正）：
+        //   - 分支進化（呆呆獸 → 呆殼獸 / 呆呆王；飛天螳螂 → 巨鉗螳螂 / 劈斧螳螂）
+        //     官網會把兩條分支列在同一條線，scraper 取 idx-1 會撈到另一條分支的卡
+        //   - Mega Stage1 from Basic（超級寶石海星ex ← 海星星，跳過中間 Stage1）
+        //     官網鏈會顯示 海星星 → 寶石海星 → 超級寶石海星ex，但正確前階是 Basic 海星星
         const cardBase = card.name.replace(/ex$/, '').trim();
+        const stripAll = (s) => s
+          .replace(/[<>]/g, '')
+          .replace(/^(洗翠|伽勒爾|阿羅拉|帕底亞) /, '')
+          .replace(/GX$/, '')
+          .replace(/ex$/, '')
+          .trim();
         let evoName = null;
         for (let i = idx - 1; i >= 0; i--) {
-          const clean = names[i].replace(/[<>]/g, '').replace(/GX$/, '').replace(/ex$/, '').trim();
-          if (clean !== cardBase) {
+          if (stripAll(names[i]) !== cardBase) {
             evoName = names[i].replace(/[<>]/g, '').replace(/GX$/, '');
             break;
           }

@@ -1,9 +1,46 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.86)  
+> 最後更新：2026-04-24 (v2.87)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.87 — 12 張 evolvesFrom 殘骸補修（v2.76 大清查漏的）
+
+### 問題
+v2.76 做過全卡池 evolvesFrom 清查，但用「evolvesFrom 等於卡名或 base 名」的判定，漏掉另一類 pattern — `evolvesFrom` 指向**卡池根本不存在**的前階名稱。掃全卡池發現 12 張殘骸：
+
+| 卡 | 錯誤 evo | 官網進化鏈 | 正確前階 |
+|---|---|---|---|
+| M2a 14763 火箭隊的烏鴉頭頭 | `<火箭隊的>黑暗鴉` | `<火箭隊的>黑暗鴉 → 火箭隊的烏鴉頭頭` | 火箭隊的黑暗鴉 |
+| SV7 10934 呆呆王 | 呆殼獸 | `呆呆獸 → 呆殼獸 → 呆呆王 → 呆呆王ex → 超級呆殼獸ex` | 呆呆獸 |
+| SV9 12519 雙彈瓦斯 | 伽勒爾 雙彈瓦斯 | `瓦斯彈 → 伽勒爾 雙彈瓦斯 → 雙彈瓦斯` | 瓦斯彈 |
+| M3 17989/18396 狙射樹梟ex | 洗翠 狙射樹梟 | `木木梟 → 投羽梟 → 狙射樹梟 → 狙射樹梟GX → 洗翠 狙射樹梟 → 狙射樹梟ex` | 投羽梟 |
+| M3 17998/18398/18414 超級寶石海星ex | 寶石海星 | `海星星 → 寶石海星 → 寶石海星GX → 超級寶石海星ex` | 海星星 (Mega from Basic) |
+| M4 18483 超級毒藻龍ex | 毒藻龍 | `垃垃藻 → 毒藻龍 → 超級毒藻龍ex` | 垃垃藻 (Mega from Basic) |
+| MC 16963 / SV5M 9885/10238 巨鉗螳螂ex | 劈斧螳螂 | `飛天螳螂 → 巨鉗螳螂 → 巨鉗螳螂GX → 劈斧螳螂 → 巨鉗螳螂ex` | 飛天螳螂 |
+
+### 根因
+scraper `.evolution` 區塊取 `idx - 1`（v2.76 已加 strip `<>`/GX/ex 同名跳過）遇到：
+- **地區分身**（洗翠/伽勒爾/阿羅拉 XX）：「洗翠 狙射樹梟」跟 cardBase「狙射樹梟」 strip 後不同 → 當成前階 → 錯
+- **分支進化**（呆呆獸 → 呆殼獸 / 呆呆王；飛天螳螂 → 巨鉗螳螂 / 劈斧螳螂）：官網把分支列同一條線，idx-1 會撈到另一條分支卡
+- **Mega Stage1 from Basic**（超級寶石海星ex Stage1 應從 Basic 海星星進化，跳過中間 Stage1 寶石海星）：idx-1 會撈到 Stage1 非 Mega 版
+
+### 主修
+1. **`scripts/fix-evolves-from-v4.mjs`** — 一次性修 12 張（all via 官網 `.evolution` + 卡池交叉驗證）
+2. **`scripts/scrape/parse-card.js`** — 強化 strip：加 `^(洗翠|伽勒爾|阿羅拉|帕底亞) ` 地區前綴（避免未來重爬再撞到地區分身）
+3. 註解說明仍需人工 fix 的 pattern：分支進化 + Mega Stage1 from Basic（需卡池 cross-reference）
+
+### 驗證
+- 跑 `node scripts/fix-evolves-from-v4.mjs` → 12/12 修正 OK, 0 skip, 0 missing
+- 跑全卡池 orphan 掃描 → **0 殘骸**
+- 本機 build ✓
+
+### 工具/資料遺留
+- `scripts/audit-12-orphans.mjs` — 未來可重跑，自動從官網抓進化鏈給疑點卡做 audit
+- `scripts/fix-evolves-from-v4.mjs` — 保留做紀錄
 
 ---
 
