@@ -117,15 +117,46 @@ export const ROCKET_WATCHTOWER_STADIUMS = new Set<string>(['火箭隊的監視�
 //   不受此卡影響；因此 ATTACK pipeline 的 active-hit 不需要閘門。
 export const BENCH_PROTECTION_STADIUMS = new Set<string>(['對戰圓形競技場']);
 
+// ── 靜態被動競技場 ── v2.96 ───────────────────────────────────────────────────
+// 卡面開頭是「只要…」「雙方…的…」「雙方場上…」格式的 Stadium，屬於「放下即生效、
+// 效果持續到被換場、無主動觸發」的純被動 stadium。玩家不需（也不該）按「使用」按鈕。
+//
+// 新增規則：加入新 Stadium 時若 rulesText 不含「可使用 1 次」語意，一律 passive。
+// 反之有「在自己的回合時，可使用 1 次」才屬主動 stadium（如衝浪海灘 / 釀光市 / 月光丘陵）。
+//
+// 注意：列在這裡的 stadium 不保證效果已實裝（例：險惡廢墟 / 活力森林 / 激動競技場
+// 等被動效果目前未實裝），但至少 UI 不會誤顯示「使用」按鈕。
+export const STATIC_PASSIVE_STADIUMS = new Set<string>([
+  '引力山岳',       // 2 階進化 HP -30（v2.92 實裝）
+  '激動競技場',     // 基礎 HP +30
+  '昂主花葉蒂',     // 超級花葉蒂ex HP +150
+  '險惡廢墟',       // 上備戰放 2 指示物（惡除外）
+  '活力森林',       // 草可剛出場進化
+  '暈眩山谷',       // 混亂不因進化恢復
+  'N的城堡',         // N 寶可夢撤退 0
+  '零之大空洞',     // 太晶備戰 8 隻
+  '化朗鎮',         // 赫普寶可夢傷害 +30
+  '夜間礦山',       // 太晶能量 +1 無
+  '危險密林',       // 中毒指示物 +2
+  '全金屬實驗室',   // 鋼寶可夢受傷 -30
+  '祭典會場',       // 附能量寶可夢免疫狀態
+  '中立中心',       // 非規則盒不受 ex/V 招式傷害
+  '石之洞窟',       // 大吾寶可夢受傷 -30
+  // 註：本 set 未實裝效果的 stadium 仍會放下成為場地（engine 預設行為），
+  // 但不會冒「使用」按鈕。個別被動效果需個別實裝到 engine/effects 層。
+]);
+
 // ── 被動競技場（UI 用）── v2.31 ───────────────────────────────────────────────
 // 純被動：放下即生效、效果持續到被換場，無主動觸發動作 → UI 不需顯示「使用競技場」按鈕。
-//   - 對戰圓形競技場：備戰保護
-//   - 阻礙之塔：雙方道具無效
-//   - 火箭隊的監視塔：雙方【無】寶可夢特性無效
+//   - BENCH_PROTECTION_STADIUMS：備戰保護（對戰圓形競技場）
+//   - JAMMING_TOWER_STADIUMS：雙方道具無效（阻礙之塔）
+//   - ROCKET_WATCHTOWER_STADIUMS：雙方【無】寶可夢特性無效（火箭監視塔）
+//   - STATIC_PASSIVE_STADIUMS：其他「只要場上即生效」類 stadium（引力山岳等，v2.96 加）
 // /routes/game/+page.svelte 的 `canUseStadium` 會透過 helper 過濾這組成員。
-// 新增純被動場地卡時記得加進來。
+// 新增純被動場地卡時記得加到上方 STATIC_PASSIVE_STADIUMS。
 export const PASSIVE_STADIUMS = new Set<string>([
   ...BENCH_PROTECTION_STADIUMS,
   ...JAMMING_TOWER_STADIUMS,
   ...ROCKET_WATCHTOWER_STADIUMS,
+  ...STATIC_PASSIVE_STADIUMS,
 ]);

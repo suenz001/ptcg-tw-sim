@@ -1197,9 +1197,18 @@
     return p > 0.5 ? '#2c7a3c' : p > 0.25 ? '#e0a020' : '#c00';
   }
   function retreatCostOf(inst: CardInstance): number {
-    const base = getCard(inst.cardId)?.retreatCost?.length ?? 0;
+    const card = getCard(inst.cardId);
+    let cost = card?.retreatCost?.length ?? 0;
     const tool = inst.toolAttached ? getCard(inst.toolAttached.cardId) : null;
-    return tool?.name === '氣球' ? Math.max(0, base - 2) : base;
+    if (tool?.name === '氣球') cost = Math.max(0, cost - 2);
+    // v2.96：天空徑線（拉帝亞斯ex）— 自己場上有拉帝亞斯ex 時基礎寶可夢撤退 0
+    // 鏡射 engine canRetreat 的 hook；UI 按鈕顯示「撤退（0⚡）」
+    if (cost > 0 && card && !card.evolvesFrom && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && myPlayer) {
+      const allMy = [...(myPlayer.active ? [myPlayer.active] : []), ...myPlayer.bench];
+      const hasSkyPath = allMy.some(c => getCard(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
+      if (hasSkyPath) cost = 0;
+    }
+    return cost;
   }
   function evoOptionsFor(fromIid: string): CardInstance[] {
     const entry = evolvableTargets.find(e => e.fromIid === fromIid);

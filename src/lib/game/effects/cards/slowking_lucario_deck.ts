@@ -358,33 +358,69 @@ regR('pulse-thrust-attach-one', (st, idx, iids, params, pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 暗碼迷的解讀 MC 17169（Supporter）
+// 暗碼迷的解讀 MC 17169（Supporter）— v2.96 改為有序兩步選擇
 // ══════════════════════════════════════════════════════════════════════════════
 // 卡面：「從自己的牌庫任意選擇 2 張卡。重洗剩餘牌庫，將所選的卡以任意順序
 //   排列，放回牌庫上方。」
+// v2.96（Leon 指示）：「放的這兩張卡應該有順序，先選要放回的第二張，再選要放
+//   在最上面的那張」→ 改為 chained pending：
+//     Step 1：選 1 張作為「牌庫上方第 2 張」（在 top 之下）
+//     Step 2：從剩餘牌庫選 1 張作為「牌庫最上方」
+//   最終 deck 順序：[topPick, secondPick, ...shuffle(remainingDeck)]
 regG('暗碼迷的解讀', (st, idx) => {
   return st.players[idx].deck.length > 0;
 });
 reg('暗碼迷的解讀', (st, idx) => {
   const p = st.players[idx];
   if (p.deck.length === 0) return addLog(st, '暗碼迷的解讀：牌庫已空', idx);
-  const pick = Math.min(2, p.deck.length);
+  if (p.deck.length === 1) {
+    // 牌庫只剩 1 張 — 卡面「任意選擇 2 張」不可能滿足，降級為放回那張 + 無可洗
+    return addLog(st, '暗碼迷的解讀：牌庫只剩 1 張，無需選擇', idx);
+  }
   const s = addLog(st,
-    `暗碼迷的解讀：從牌庫任意選擇 ${pick} 張卡（重洗剩餘，選的放牌庫上方）`,
+    '暗碼迷的解讀：先從牌庫選第 1 張（將放在牌庫上方第 2 位）',
     idx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Any',
-    minCount: pick, maxCount: pick,
-    effectKey: 'cipher-geek-top2',
+    minCount: 1, maxCount: 1,
+    effectKey: 'cipher-geek-pick-second',
   });
 });
-regR('cipher-geek-top2', (st, idx, iids) => {
+// Step 1 resolver：記住第 1 次選的卡，從 deck 暫移到 pending params，開 Step 2
+regR('cipher-geek-pick-second', (st, idx, iids) => {
+  if (iids.length !== 1) return st;
+  const secondIid = iids[0];
+  const p = st.players[idx];
+  const secondCard = p.deck.find(c => c.iid === secondIid);
+  if (!secondCard) return st;
+  // 暫移該卡到 params — 確保 Step 2 的 deck list 不再含這張（否則玩家會誤選同一張）
+  let s = updatePlayer(st, idx, pl => ({
+    ...pl,
+    deck: pl.deck.filter(c => c.iid !== secondIid),
+  }));
+  s = addLog(s, '暗碼迷的解讀：再從剩餘牌庫選第 2 張（將放在牌庫最上方）', idx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Any',
+    minCount: 1, maxCount: 1,
+    effectKey: 'cipher-geek-pick-top',
+    params: { reservedSecond: secondCard },
+  });
+});
+// Step 2 resolver：把 topPick 放牌庫最上方，reservedSecond 放第 2 位，其餘洗牌
+regR('cipher-geek-pick-top', (st, idx, iids, params) => {
+  if (iids.length !== 1) return st;
+  const topIid = iids[0];
+  const reservedSecond = params?.reservedSecond as CardInstance | undefined;
+  if (!reservedSecond) return st;
   return updatePlayer(st, idx, p => {
-    const chosen = p.deck.filter(c => iids.includes(c.iid));
-    const rest = p.deck.filter(c => !iids.includes(c.iid));
-    return { ...p, deck: [...chosen, ...shuffle(rest)] };
+    const topCard = p.deck.find(c => c.iid === topIid);
+    if (!topCard) return p;
+    const rest = p.deck.filter(c => c.iid !== topIid);
+    return { ...p, deck: [topCard, reservedSecond, ...shuffle(rest)] };
   });
 });
 

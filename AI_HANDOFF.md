@@ -1,9 +1,47 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.95)  
+> 最後更新：2026-04-24 (v2.96)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.96 — 3 Bug 修：引力山岳被動 / 天空徑線 UI / 暗碼迷的解讀順序
+
+Leon 實戰回報三個 bug。
+
+### Bug 1：引力山岳被誤當作主動 Stadium（Leon 特別點名此老毛病）
+**原因**：v2.92 我加引力山岳時只加了 `getEffectiveHP` 的 HP -30 hook，**漏加到 `PASSIVE_STADIUMS` 白名單** → UI 冒出「使用」按鈕。Leon 原話「我記得我之前也有提醒過你（之前也有發生過），但你還是搞砸了」。
+**修正**：全卡池掃 29 張 Stadium 分類被動/主動：
+- 主動（rulesText 含「可使用 1 次」）：衝浪海灘、神秘花園、釀光市、火箭隊的工廠、居民會館、夜間學院、壯偉碩木、月光丘陵、密阿雷市、稜鏡塔、尖釘鎮道館（11 張）
+- 純被動（rulesText「只要/雙方...」）：引力山岳、激動競技場、昂主花葉蒂、險惡廢墟、活力森林、暈眩山谷、N的城堡、零之大空洞、化朗鎮、夜間礦山、危險密林、全金屬實驗室、祭典會場、中立中心、石之洞窟（15 張被動 — 加新 `STATIC_PASSIVE_STADIUMS`，併入 `PASSIVE_STADIUMS`）
+
+注意：本 set 中部分 stadium 的被動效果尚未實裝（例：激動競技場 +30 HP、祭典會場 狀態免疫），但 UI 不再誤顯示「使用」按鈕。個別被動實裝為後續 task。
+
+Memory 補：`feedback_passive_stadium_whitelist.md` — 防再犯。
+
+### Bug 2：拉帝亞斯ex 天空徑線 撤退按鈕 UI 缺失
+**原因 A**：engine 的 `canRetreat` / ATTACK 路徑已有 `hasSkyPath` hook（v 較早版本實裝），但 v2.95 migration 前拉帝亞斯ex 的 abilities[] 是空的，hook 掃不到 → 以前撤退按鈕不出現。v2.95 migration 後 abilities[0]={name:'天空徑線'} 已就位，engine 層應能找到。
+**原因 B**：`/routes/game/+page.svelte` 的 `retreatCostOf()`（UI 顯示撤退 cost 用）**沒鏡射 engine hook** → 即使 engine 允許撤退，UI 仍顯示原 cost（例：「撤退（1⚡）」）誤導。
+**修正**：`retreatCostOf` 加天空徑線邏輯，掃 myPlayer 場上有天空徑線且 active 是基礎寶可夢 → cost=0。
+
+### Bug 3：暗碼迷的解讀 — 放回牌庫應有順序
+**原因**：原實作一次選 2 張 `deck-search` minCount=maxCount=2，回傳用 `p.deck.filter(iids)` 取回（順序依原牌庫位置，不是玩家指定）。
+**卡面**：「從自己的牌庫任意選擇 2 張卡。重洗剩餘牌庫，將所選的卡以任意順序排列，放回牌庫上方。」
+**Leon 指示**：「先選要放回的第二張，再選要放在最上面的那張」→ 實作成 chained pending 兩步。
+**修正**：改為 chained pending —
+- Step 1 `cipher-geek-pick-second`：選 1 張（放第 2 位）；resolver 把該卡暫移到 `params.reservedSecond`（從 deck filter 掉防止第 2 次選到同張），開 Step 2。
+- Step 2 `cipher-geek-pick-top`：從剩餘 deck 選 1 張（放最上方）；resolver 以 `[topCard, reservedSecond, ...shuffle(rest)]` 組回 deck。
+- 邊界：deck=0 → skip、deck=1 → 不做選擇（卡面「2 張」不可能滿足）。
+
+### 驗證
+- build ✓（13.79s）
+- 需實戰驗證：
+  1. 放下引力山岳應直接生效（無「使用」按鈕），場上 Stage2 HP -30
+  2. 15 張被動 stadium 都應無主動按鈕
+  3. 拉帝亞斯ex 在備戰，戰鬥場為基礎寶可夢 → 撤退按鈕應顯示「撤退（0⚡）」且可免費撤退
+  4. 暗碼迷的解讀 → 兩次選擇 UI，最終順序 = [top, second, ...洗牌]
 
 ---
 
