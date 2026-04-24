@@ -239,6 +239,30 @@ export function getEffectiveHP(
   if (state?.activeStadium?.name === '引力山岳' && card.stage === 'Stage2') {
     hp = Math.max(0, hp - 30);
   }
+  // v2.122 夠讚狗｜腎上腺力量 — 身上附【惡】能量時最大 HP +100
+  //   v2.120 只在 effects.ts 的 internal effectiveHPInline 加了這段，但 UI 的 hpTotal/
+  //   hpRemaining 以及實際 KO 判定全走這裡的 getEffectiveHP，導致 HP+100 完全沒真的生效。
+  //   搬到這裡 → UI 顯示與 KO 判定一致。
+  //   稜鏡能量 on Basic → 視為全屬性能量（含 Darkness）也算數（Leon v2.120 要求）。
+  if (card.name === '夠讚狗') {
+    const hostIsEvolution = !!card.evolvesFrom || card.stage === 'Stage1' || card.stage === 'Stage2';
+    const hasDark = inst.energyAttached.some(e => {
+      const ec = pool.get(e.cardId);
+      if (!ec || ec.supertype !== 'Energy') return false;
+      // 基本【惡】能量
+      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Darkness' || /【惡】/.test(ec.name))) return true;
+      // 特殊能量本身屬性含 Darkness
+      if (ec.pokemonType === 'Darkness') return true;
+      // 稜鏡能量 on Basic host → 視為全屬性（含 Darkness）
+      if (ec.name === '稜鏡能量' && !hostIsEvolution) return true;
+      // 古舊 / 夜光能量 → 單張全屬性
+      if (ec.name === '古舊能量' || ec.name === '夜光能量') return true;
+      // 火箭隊能量 → 提供【超】【惡】
+      if (ec.name === '火箭隊能量') return true;
+      return false;
+    });
+    if (hasDark) hp += 100;
+  }
   return hp;
 }
 

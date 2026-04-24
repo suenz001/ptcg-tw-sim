@@ -3575,7 +3575,13 @@
   .card-back-active .active-info{ color:#bbb; }
   .card-back-active .active-name{ font-style:italic; }
   .card-back-slot{ cursor:default !important; }
-  .active-info{ flex:1; min-width:0; }
+  /* v2.122：position + z-index 保險 — 避免 v2.118 .attack-flash::after 的
+     mix-blend-mode 殘留影響 hp-bar / tool-chip 等 inner element 顯示。
+     `isolation: isolate` 建立新 stacking context，::after 的 blend 只作用於
+     card 內部，不再滲到 active-info 元素上。 */
+  .active-info{ flex:1; min-width:0; position:relative; z-index:2; }
+  .active-card{ isolation:isolate; }
+  .hp-bar-wrap{ position:relative; z-index:2; }
   .active-name{ font-size:1rem; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:.2rem; }
   .active-hp{ font-size:.88rem; color:#ccc; }
   .active-nrg{ font-size:.8rem; color:#aaa; margin-top:.2rem; }

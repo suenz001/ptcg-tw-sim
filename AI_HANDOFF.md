@@ -1,9 +1,61 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.121)  
+> 最後更新：2026-04-25 (v2.122)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.122 — 夠讚狗 HP+100 真正生效 + 火人加農炮 bench 可點 + UI 血條/tool-chip stacking 保險
+
+### Leon 回報
+
+**1. 我方戰鬥寶可夢血條消失（對手正常）**
+**2. 夠讚狗 HP 沒 +100（圖顯示 100/280，但應 230）**  
+等等—— Leon 截圖是蒼炎刃鬼ex（280），不是夠讚狗。所以血條 bug 跟夠讚狗無關。  
+血條 bug 可能 root cause：v2.118 `.active-card.attack-flash::after` 用 `mix-blend-mode: screen`
++ `inset: 0` 覆蓋整個 card，class 移除後 still 有可能 in 某些瀏覽器下殘留 stacking 影響。
+
+但「夠讚狗 HP 沒 +100」是獨立的真 bug：
+- v2.120 我只把夠讚狗 hasDark 邏輯加在 effects.ts 的 internal `effectiveHPInline`
+- **UI 的 hpTotal/hpRemaining + KO 判定 全用 engine.getEffectiveHP**，那函式根本沒加這段邏輯
+- 結果：顯示 HP 不+100、KO 判定也不+100 → 實際上這個特性**完全沒生效**
+
+修法：把夠讚狗 + 稜鏡能量 on Basic host + 古舊 + 夜光 + 火箭隊能量 的 hasDark 邏輯
+搬到 `engine.getEffectiveHP`，UI 和 KO 判定共用 source of truth。
+
+**3. 火人加農炮 — 90 傷後點不到對手備戰**
+根因：`type: 'opp-bench-snipe'` — engine 根本沒這個 pending type（同 v2.117 AZ的平和 `own-bench-pokemon` bug pattern）。
+修：`opp-bench-snipe` → `opp-bench-choose`（engine 支援）。兩處都改（火人加農炮 + 暗算）。
+
+**4. 鎖鏈糬裝備時出現奇怪圓圈（100/280 下方）**
+沒法 100% 重現，但最可能：`.active-card.attack-flash::after` 的 `mix-blend-mode: screen` +
+`inset: 0` 覆蓋到 `.tool-chip` 位置時影響 composite。或 `.active-info` 的 stacking context
+讓某個子元素看起來「出框」。
+
+預防修法（兩個 UI bug 一起修）：
+- `.active-card { isolation: isolate }`：建立新 stacking context，::after 的 blend 只影響 card 內部
+- `.active-info { position: relative; z-index: 2 }`：強制 info 在 ::after 之上
+- `.hp-bar-wrap { position: relative; z-index: 2 }`：hp-bar 永遠在最頂
+
+### 檔案改動
+- `src/lib/audio/sfx.ts`：無改動（上版）
+- `src/lib/game/engine.ts`：
+  - `getEffectiveHP` 加夠讚狗 hasDark 邏輯（含稜鏡 on Basic / 古舊 / 夜光 / 火箭隊能量識別）
+- `src/lib/game/effects/cards/six_decks.ts`：
+  - `type: 'opp-bench-snipe'` → `'opp-bench-choose'`（火人加農炮 + 暗算）
+- `src/routes/game/+page.svelte`：
+  - `.active-info` / `.active-card` / `.hp-bar-wrap` 加 stacking context 保險
+
+### 驗證
+- npm run build ✓（14.60s）
+- 夠讚狗 + 1 鬥 + 1 稜鏡能量：HP 顯示 230，腎上腺力量招式 +100 同時生效
+- 火人加農炮 攻擊後可以點選對手備戰寶可夢
+
+### 備註
+- 血條 bug 若在 stacking context 修法後仍然出現，請 Leon 打開 devtools Inspector 選圓圈檢查 element + class，能加速定位
+- Leon 看到「HP 100/280」而非「230」在夠讚狗時 — 因為 UI 根本沒用帶加成的 HP；此版修好後 UI + 實際 KO 判定兩邊都會正確 +100
 
 ---
 

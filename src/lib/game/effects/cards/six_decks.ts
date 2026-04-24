@@ -88,7 +88,7 @@ regPost('N的達摩狒狒|火人加農炮', (state, aIdx, _dmg, pool) => {
     return addLog(state, '火人加農炮：對手無備戰寶可夢', aIdx);
   }
   return withPending(addLog(state, '火人加農炮：對 1 隻對手備戰寶可夢造成 90 傷害', aIdx), {
-    type: 'opp-bench-snipe',
+    type: 'opp-bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'fire-cannon-90',
@@ -203,7 +203,7 @@ regPost('火箭隊的狃拉|暗算', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) return addLog(state, '暗算：對手無備戰寶可夢', aIdx);
   return withPending(addLog(state, '暗算：對 1 隻對手備戰寶可夢造成（其傷害指示物數）×20 傷害', aIdx), {
-    type: 'opp-bench-snipe',
+    type: 'opp-bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'ambush-snipe-by-counters',
