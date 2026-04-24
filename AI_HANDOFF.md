@@ -1,9 +1,63 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.88)  
+> 最後更新：2026-04-24 (v2.89)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.89 — 新增預設牌組：呆呆王 + 超級路卡利歐 + 相關效果實裝
+
+### 問題集
+Leon 的兩組卡表（`deck_picture/呆呆王.txt`、`deck_picture/超級路卡利歐.txt`）一直等著做 preset。v2.70 session 已完成 Phase 1 對卡，Leon 也回答過所有疑點：
+- 呆呆獸 → M-P 18072（有「憨憨臉」特性）
+- 土龍弟弟×3 → MC 17045；土龍節節ex → MC 17046
+- 巨金怪 / 超級袋獸ex / 超級路卡利歐ex 等「卡表沒列前階」的 → 照卡表放
+- 暗碼迷的解讀、莉莉艾的決意、回力鏢能量 3 張筆誤修正
+- 超級路卡利歐ex evolvesFrom → 利歐路（Leon v2.77 全域批修過）
+
+### 主修
+
+**Preset 本體（`src/lib/decks/presets.ts`）**：
+- 新增 `SLOWKING_DECK`（id `__preset_slowking__`，60 張）
+- 新增 `MEGA_LUCARIO_DECK`（id `__preset_mega_lucario__`，60 張）
+- 掛到 `PRESET_DECKS[]` 末端，共 10 組內建牌組
+
+**新 effect 模組 `src/lib/game/effects/cards/slowking_lucario_deck.ts`（245 行）**：
+- 呆呆獸｜憨憨臉（特性：抽 1）
+- 呆呆王｜耀閃挑戰（簡化版：丟牌庫頂 + 120 基礎傷害，完整隨機 copy-attack 延後）
+- 呆呆王｜超念力（120）
+- 超級袋獸ex｜使者衝刺（特性：抽 2，戰鬥場限定，gate 已寫）
+- 超級袋獸ex｜機關槍合擊（200 + 擲到反面前正面數 × 50）
+- 靈幽馬｜陰森射擊（30）/ 幻影碎（自拔所有能量 + 選對手 1 隻放 12 個傷害指示物，新 resolver `phantom-shatter-place-counters`）
+- 太陽岩｜宇宙光束（70，gate: 備戰有月石；skipWeakRes）
+- 月石｜月光循環（特性 gate: 場上有太陽岩 + 手牌有基本【鬥】能量；丟 1 張 + 抽 3）
+- 月石｜力量寶石（50）
+- 超級路卡利歐ex｜波動突刺（130 + 棄牌區選最多 3 張基本鬥能量全附 1 隻備戰）
+- 超級路卡利歐ex｜超級勇氣（270，下回合同招禁未自動限制，log 提示）
+- 暗碼迷的解讀（Supporter：牌庫選最多 2 張放回頂 + 重洗，新 resolver `cipher-geek-top2`）
+
+**新 filter `BasicFightingEnergy`**：
+- `src/routes/game/+page.svelte`：pool filter + single-card filter + describeFilter 顯示文字 3 處
+- `src/lib/game/ai.ts`：hand filter + deck filter 2 處
+- 判定：`supertype=Energy && subtype=Basic && name.includes('【鬥】')` — 跟 BasicPsychicEnergy 對稱
+- 影響範圍：波動突刺（棄牌區附能）；若未來還有卡用到可直接復用
+
+### 已知缺口（等下個 session 做引擎擴充）
+註解寫在 `slowking_lucario_deck.ts` 檔尾：
+1. **引力山岳**（Stadium，全場 Stage2 HP-30）— 需要 engine `effectiveHP` 加 stadium hook
+2. **硬岩【鬥】能量**（附鬥寶可夢不受招式效果影響）— 需要 ATTACK pipeline shield hook
+3. **回力鏢能量**（被招式丟棄後重附原寶可夢）— 需要 discard-energy flow hook
+4. **呆呆王｜耀閃挑戰** 完整隨機 copy-attack — 現有 copy-attack 是複製對手當前招，不是隨機抽牌；需要新 UI flow
+5. **超級路卡利歐ex｜超級勇氣** 下回合同招禁 — 需要 `CardInstance.blockedAttackNameNextTurn` 欄位
+
+目前這 5 個的主體招式傷害/選目標流程都有跑，只是沒 enforce 後置限制，log 會提示。Leon 先試打看整體進化鏈、主力招式、搜尋機制能不能跑，若這 5 張的限制很關鍵再開獨立 session 擴充。
+
+### 驗證
+- 兩副 deck 60/60 張全部對到 pool 裡正確的 cardId
+- 本機 `npm run build` ✓
+- 新 filter 有對稱實作於 ai.ts + +page.svelte 3 處（feedback_effect_implementation_sop Checkpoint 7）
 
 ---
 

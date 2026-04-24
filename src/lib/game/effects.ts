@@ -265,6 +265,9 @@ import './effects/cards/abra_mawile_deck';
 import './effects/cards/maroon_dragon_deck';
 // v2.66：特殊能量卡 hook（富裕能量 / 感應【超】能量 / 火箭隊能量）
 import './effects/cards/energy_cards';
+// v2.89：呆呆王 + 超級路卡利歐 兩組預組卡效果（使者衝刺 / 機關槍合擊 / 波動突刺 /
+//        超級勇氣 / 月光循環 / 宇宙光束 / 幻影碎 / 暗碼迷的解讀 等）
+import './effects/cards/slowking_lucario_deck';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts

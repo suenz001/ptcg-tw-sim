@@ -1003,6 +1003,11 @@
           const card = pool.get(c.cardId);
           return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
         });
+        // v2.89 波動突刺：只基本【鬥】能量（排除硬岩【鬥】等 Special Energy）
+        if (f2 === 'BasicFightingEnergy') return pool0.filter(c => {
+          const card = pool.get(c.cardId);
+          return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
+        });
         if (f2.startsWith('Energy:')) {
           const t = f2.slice(7);
           return pool0.filter(c => {
@@ -1050,6 +1055,10 @@
           if (f === 'BasicPsychicEnergy') {
             // 奇跡修正檔 / 月光丘陵：只基本【超】能量。排除富裕能量/感應【超】等 Special Energy。
             return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
+          }
+          if (f === 'BasicFightingEnergy') {
+            // v2.89 波動突刺：只基本【鬥】能量。排除硬岩【鬥】等 Special Energy。
+            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
           }
           if (f === 'Pokemon')         return card.supertype === 'Pokemon';
           if (f === 'Trainer')         return card.supertype === 'Trainer';
@@ -1464,6 +1473,7 @@
       'Basic:HP70':                    'HP≤70 基礎寶可夢',
       'BasicEnergy':                   '基本能量',
       'BasicPsychicEnergy':            '基本【超】能量',
+      'BasicFightingEnergy':           '基本【鬥】能量',
       'Pokemon':                       '寶可夢',
       'PokemonOrEnergy':               '寶可夢或能量',
       'PokemonOrBasicEnergy':          '寶可夢或基本能量',

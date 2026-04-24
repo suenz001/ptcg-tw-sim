@@ -356,12 +356,98 @@ const THUNDER_DRUM_DECK: Omit<Deck, 'updatedAt'> = {
 };
 
 /**
+ * 呆呆王牌組（Leon 自選卡表）
+ *
+ * 主力：呆呆王｜耀閃挑戰（從牌庫頂丟一張寶可夢，使用其招式）+ 超級袋獸ex
+ * 的 使者衝刺 特性 + 拉帝亞斯ex / 吉雉雞ex / 喵喵ex / 莉莉艾的皮皮ex 等
+ * Basic ex 副力。夜間學院 強化手牌控制。
+ */
+const SLOWKING_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_slowking__',
+  name: '呆呆王',
+  entries: [
+    // ── 寶可夢（21 張）──
+    { cardId: '18072', count: 4 }, // 呆呆獸 (M-P 憨憨臉)
+    { cardId: '10934', count: 3 }, // 呆呆王 (SV7)
+    { cardId: '14071', count: 3 }, // 超級袋獸ex (M1S)
+    { cardId: '16783', count: 2 }, // 拉帝亞斯ex (MC)
+    { cardId: '16758', count: 1 }, // 莉莉艾的皮皮ex (MC)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3)
+    { cardId: '10629', count: 2 }, // 酋雷姆 (SV6a)
+    { cardId: '18479', count: 2 }, // 巨金怪 (M4 059/083)
+    { cardId: '14740', count: 1 }, // 靈幽馬 (M2a)
+    { cardId: '11526', count: 1 }, // 含羞苞 (SV8a)
+    // ── 訓練家・物品（17 張）──
+    { cardId: '17127', count: 1 }, // 頂尖捕捉器 (MC)
+    { cardId: '18407', count: 4 }, // 奇跡修正檔 (M3)
+    { cardId: '17141', count: 3 }, // 夜間擔架 (MC)
+    { cardId: '17122', count: 4 }, // 高級球 (MC)
+    { cardId: '17134', count: 1 }, // 寶可夢交替 (MC)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC)
+    // ── 訓練家・支援者（9 張）──
+    { cardId: '11689', count: 1 }, // 阿克羅瑪的執著 (SV8a)
+    { cardId: '17169', count: 3 }, // 暗碼迷的解讀 (MC)
+    { cardId: '17189', count: 1 }, // 鬥子 (MC)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC)
+    // ── 競技場（4 張）──
+    { cardId: '10646', count: 4 }, // 夜間學院 (SV6a)
+    // ── 能量（9 張）──
+    { cardId: '18056', count: 4 }, // 感應【超】能量 (M3)
+    { cardId: '17220', count: 4 }, // 基本【超】能量 (MC)
+    { cardId: '17209', count: 1 }, // 回力鏢能量 (MC)
+  ],
+};
+
+/**
+ * 超級路卡利歐 牌組（Leon 自選卡表）
+ *
+ * 主力：超級路卡利歐ex｜波動突刺（從棄牌區最多 3 張基本鬥能量附到備戰）
+ * 與 超級勇氣 270。利歐路直接進化到 超級路卡利歐ex（跳過普通路卡利歐ex）。
+ * 太陽岩 + 月石 做鬥能量搜尋加速。
+ */
+const MEGA_LUCARIO_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_mega_lucario__',
+  name: '超級路卡利歐',
+  entries: [
+    // ── 寶可夢（17 張）──
+    { cardId: '16843', count: 2 }, // 太陽岩 (MC)
+    { cardId: '16842', count: 2 }, // 月石 (MC)
+    { cardId: '14752', count: 3 }, // 超級路卡利歐ex (M2a)
+    { cardId: '16850', count: 4 }, // 利歐路 (MC)
+    { cardId: '17045', count: 3 }, // 土龍弟弟 (MC) — Leon 指定
+    { cardId: '17046', count: 1 }, // 土龍節節ex (MC) — Leon 指定
+    { cardId: '11655', count: 2 }, // 土龍節節 (SV8a)
+    // ── 訓練家・物品（21 張）──
+    { cardId: '17122', count: 3 }, // 高級球 (MC)
+    { cardId: '17134', count: 1 }, // 寶可夢交替 (MC)
+    { cardId: '17123', count: 4 }, // 力量蛋白飲 (MC)
+    { cardId: '17125', count: 4 }, // 戰鬥鑼 (MC)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC)
+    { cardId: '17133', count: 3 }, // 寶可平板 (MC)
+    { cardId: '17119', count: 3 }, // 好友寶芬 (MC)
+    { cardId: '17162', count: 1 }, // 極限腰帶 ACE SPEC (MC)
+    // ── 訓練家・支援者（9 張）──
+    { cardId: '17182', count: 2 }, // 裁判 (MC)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC)
+    // ── 競技場（2 張）──
+    { cardId: '11286', count: 1 }, // 引力山岳 (SV8)
+    { cardId: '12937', count: 1 }, // 阻礙之塔 (SV10)
+    // ── 能量（11 張）──
+    { cardId: '17215', count: 9 }, // 基本【鬥】能量 (MC)
+    { cardId: '18057', count: 2 }, // 硬岩【鬥】能量 (M3)
+  ],
+};
+
+/**
  * 所有內建預設牌組
  *
  * v2.13：移除「破空焰ex（火屬 · 自組）」—— 那是 Session 24 自組的嘗試用牌組，
  * 既非官方預組也沒跟上 MC 後的卡片規則，Leon 決定不再內建。
  * v2.21：新增「胡地」與「瑪俐的長毛巨魔ex」，並爬入 SVOM / SVOD 兩個初階牌組系列。
  * v2.35：新增「火箭隊的超夢ex」與「猛雷鼓ex」兩組 Leon 自選卡表。
+ * v2.89：新增「呆呆王」與「超級路卡利歐」兩組 Leon 自選卡表。
  */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
@@ -372,6 +458,8 @@ export const PRESET_DECKS: Deck[] = [
   { ...MARNIE_SCRAFTY_DECK, updatedAt: 0 },
   { ...ROCKET_MEWTWO_DECK, updatedAt: 0 },
   { ...THUNDER_DRUM_DECK, updatedAt: 0 },
+  { ...SLOWKING_DECK, updatedAt: 0 },
+  { ...MEGA_LUCARIO_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */
