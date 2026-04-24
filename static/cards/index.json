@@ -338,19 +338,48 @@
     "count": 24
   },
   {
-    "code": "M-P",
-    "name": "特典卡 超級進化",
-    "regulationMark": "J",
-    "cardCount": 95,
+    "code": "M-P-H",
+    "name": "M-P特典卡(H)",
+    "regulationMark": "H",
+    "cardCount": 8,
     "supertypeCounts": {
-      "Pokemon": 70,
-      "Trainer": 13,
-      "Energy": 12
+      "Pokemon": 7,
+      "Trainer": 1
     },
-    "coverImageUrl": "covers/M-P.png",
-    "scrapedAt": "2026-04-22T01:01:36.634085Z",
-    "releaseDate": "2025-08-07",
-    "count": 95
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014443.png",
+    "scrapedAt": "2026-04-25T00:00:00.000Z",
+    "releaseDate": null,
+    "count": 8
+  },
+  {
+    "code": "M-P-I",
+    "name": "M-P特典卡(I)",
+    "regulationMark": "I",
+    "cardCount": 52,
+    "supertypeCounts": {
+      "Pokemon": 32,
+      "Trainer": 11,
+      "Energy": 9
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014090.png",
+    "scrapedAt": "2026-04-25T00:00:00.000Z",
+    "releaseDate": null,
+    "count": 52
+  },
+  {
+    "code": "M-P-J",
+    "name": "M-P特典卡(J)",
+    "regulationMark": "J",
+    "cardCount": 35,
+    "supertypeCounts": {
+      "Pokemon": 31,
+      "Trainer": 1,
+      "Energy": 3
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018077.png",
+    "scrapedAt": "2026-04-25T00:00:00.000Z",
+    "releaseDate": null,
+    "count": 35
   },
   {
     "code": "M3",
@@ -400,7 +429,7 @@
   {
     "code": "SVOD",
     "name": "大吾的鐵啞鈴&巨金怪ex 初階牌組",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "cardCount": 23,
     "supertypeCounts": {
       "Pokemon": 9,
@@ -415,7 +444,7 @@
   {
     "code": "SVOM",
     "name": "瑪俐的莫魯貝可&長毛巨魔ex 初階牌組",
-    "regulationMark": "J",
+    "regulationMark": "I",
     "cardCount": 23,
     "supertypeCounts": {
       "Pokemon": 10,

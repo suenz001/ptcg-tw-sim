@@ -1,9 +1,65 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.115)  
+> 最後更新：2026-04-25 (v2.116)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.116 — SVOD/SVOM 改 I 標 + 拆 M-P 成 H/I/J 三包
+
+### Leon 指示
+> SVOD 大吾的鐵啞鈴&巨金怪ex 初階牌組 和 SVOM 瑪俐的莫魯貝可&長毛巨魔ex 初階牌組  
+> 發售日期皆為 2025/3/7，應該排在 SV9 對戰搭檔 後面才對  
+>
+> M-P 特典卡 超級進化 請改名為 M-P特典卡(H)、M-P特典卡(I)、M-P特典卡(J)，不要列出日期，  
+> 直接固定排在所有該賽制卡包的最後，並把裡面的卡包依 H/I/J 標拆出來，分別放在以上的卡包裡面  
+> 封面：H 用含羞苞 037、I 用莉莉艾的決意 018、J 用捷朵 081  
+> 因為 M-P 這個包不是固定時間發售的，是看哪個時間出了特典卡就把卡加進去
+
+### 1. SVOD/SVOM 重歸正確 mark
+- SET_REGULATION_MARK: SVOD/SVOM 從 J → I
+- index.json 兩個 entry 的 `regulationMark` 改 "I"
+- 依 releaseDate 2025-03-07 自然排在 I 群組內 SV9（2025/2/7）之後、SV9a（2025/3/28）之前
+- 卡面個別 regulationMark 不動（卡面真實值，不受 set-level mark 影響）
+
+### 2. M-P 拆成 H/I/J 三包
+原 M-P.json 95 張按 regulationMark 拆：
+- M-P-H.json: 8 張（Pokemon 7 + Trainer 1）
+- M-P-I.json: 52 張（Pokemon 32 + Trainer 11 + Energy 9）
+- M-P-J.json: 35 張（Pokemon 31 + Trainer 1 + Energy 3）
+
+每張卡的 `setCode` 從 "M-P" 改為 "M-P-H" / "M-P-I" / "M-P-J"；  
+`collectorNumber` 不動（"012/M-P" 是卡背真實印刷編號）。
+
+檔案改動：
+- `scripts/split-mp-v116.mjs`：一次性 migration
+- 刪原 `static/cards/M-P.json`
+- 刪原 `static/covers/M-P.png`（不再使用，改用官網卡圖 imageUrl 當封面）
+- `src/lib/cards/regulation.ts`：移除 `'M-P': 'J'`，加 `M-P-H/I/J`
+- `static/cards/index.json`：移除 M-P entry，加 3 entries（releaseDate null）
+
+### 3. M-P-H/I/J 排在各賽制最後
+利用現有的 `byDateAsc` sort 邏輯：**releaseDate 為 null 的 set 排到群組最後**。  
+所以 `releaseDate: null` 自然讓 M-P-H 排在 H 群組最末、M-P-I 排在 I 群組最末、M-P-J 排在 J 群組最末。  
+tile UI 已判斷 `{#if set.releaseDate}` 才顯示發售日，留 null 自動不顯示「發售 YYYY-MM-DD」字樣。
+
+### 4. 封面卡圖
+直接用官網卡圖 URL 當 coverImageUrl（`coverUrl()` 已支援 https:// 前綴）：
+- M-P-H: `tw00014443.png` (含羞苞 037)
+- M-P-I: `tw00014090.png` (莉莉艾的決意 018)
+- M-P-J: `tw00018077.png` (捷朵 081)
+
+### 未改動（故意保留）
+- `scripts/scrape/scrape-all.js` 的 DEFAULT_SETS 保留 `'M-P'`：官方 set code 仍是 M-P，未來要重爬 M-P 用；之後跑 split-mp-v116.mjs 即可重新拆分
+- `scripts/regulation.js` 的 `'M-P': 'J'`：scrape-time 用，不影響 runtime UI（runtime 用 src/lib/cards/regulation.ts）
+
+### 驗證
+- npm run build ✓（14.02s）
+- M-P-H/I/J card counts: 8 / 52 / 35 = 95 ✓
+- 沒有 src/ 寫死 `'M-P'` 字串（只剩註解 `(M-P 037)` 等）
+- `+page.ts` validate regex `/^[A-Za-z0-9-]+$/` 允許 dash，M-P-H/I/J 可正常 load
 
 ---
 

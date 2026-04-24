@@ -40,6 +40,10 @@ export const SET_REGULATION_MARK: Record<string, RegulationMark> = {
   M1S: 'I',  M1L: 'I',
   M2: 'I',   M2a: 'I',
   MBD: 'I',  MBG: 'I',
+  // v2.116: SVOD/SVOM 發售於 2025/3/7（I 標啟用 2025/2/7 之後、J 標啟用 2026/1/16 之前），
+  // 歸 I 標；會按 releaseDate 自然排在 SV9（2025/2/7）之後、SV9a（2025/3/28）之前。
+  SVOM: 'I',  // 瑪俐的莫魯貝可&長毛巨魔ex 初階牌組
+  SVOD: 'I',  // 大吾的鐵啞鈴&巨金怪ex 初階牌組
 
   // ── J mark ────────────────────────────────────────────────────────
   MC: 'J',
@@ -49,9 +53,14 @@ export const SET_REGULATION_MARK: Record<string, RegulationMark> = {
   // 會按 releaseDate 自然排在 M3（2026/2/6）之後（Leon 指示）。
   // 卡包內 H/I/J/G 混收，個別卡 regulationMark 依卡面真實值保留。
   MJ: 'J',
-  SVOM: 'J',  // 瑪俐的莫魯貝可&長毛巨魔ex 初階牌組
-  SVOD: 'J',  // 大吾的鐵啞鈴&巨金怪ex 初階牌組
-  'M-P': 'J',  // 特典卡 超級進化（promo，官網 M-P filter 只列當期合法的 promo）
+
+  // ── M-P 特典卡（promo）────────────────────────────────────────────
+  // v2.116: 把 M-P 拆成 H/I/J 三包，依卡面 mark 分別排在各賽制最後（無日期）。
+  // 原因：M-P 是 ongoing promo（不固定發售日），混合 H/I/J 標卡；按卡面 mark
+  // 拆開後，H/I/J 三區 tile 可以分別固定在各 mark 群組最末。
+  'M-P-H': 'H',
+  'M-P-I': 'I',
+  'M-P-J': 'J',
 };
 
 /** Marks currently legal in Standard format. */
