@@ -1,9 +1,63 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.94)  
+> 最後更新：2026-04-24 (v2.95)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.95 — 根因修：「[特性]XXX」entries 從 attacks[] 遷移到 abilities[]
+
+### Leon 指示
+v2.94 只做引擎層 guard 止血，Leon 要求做**根本之道** —
+把 73 個「[特性]XXX」entries 從 attacks[] 挪到 abilities[]，並修 scraper 根因。
+
+### 改動範圍
+1. **Scraper 根因修 `scripts/scrape/parse-card.js`**
+   原 regex `/^\[([^\]]+)\]/` 要求 rawName 第一字元是 `[`，但 PTCG 官網部分
+   skillName 帶 U+200C ZWJ 前綴（1-3 個），regex 對不上導致 entry 被誤分類到
+   attacks[]。修法：在 rawName 上 strip ZWJ 後才做 ability 偵測。
+
+2. **一次性 migration `scripts/migrate-bracket-ability-entries.mjs`**
+   掃全部 `static/cards/*.json`，對每張卡的 `attacks[]`：
+   - 名稱 strip ZWJ+空白後以 `[特性]` 開頭的 entry →
+   - 挪到 `abilities[]`，name 去「[特性]」前綴+ZWJ+空白，label='特性'，effect 原封保留
+   - 從 attacks[] 刪除
+   遷移結果：**73 個 entries**（7 個 set 檔）全部挪走、零衝突、零殘留。
+
+3. **Effects 實裝調整**
+   - **刪除** ZWJ-含 attack-style 註冊 6 條（effects.ts 4 條 + maroon_dragon_deck.ts 2 條）：
+     - 彷徨夜靈｜[特性]咒詛炸彈（regPre+regPost） — 改走既有 `regA('彷徨夜靈', 0, ...)`
+     - 黑夜魔靈｜[特性]咒詛炸彈（regPre+regPost）— 改走既有 `regA('黑夜魔靈', 0, ...)`
+     - 三合一磁怪｜[特性]過度放電（無空格/有空格兩組 regPre+regPost）
+   - **新增** `regA('三合一磁怪', 0, ...)` — 包 overvoltAttackPost 的邏輯改走 ability：
+     `findAbilityUserIid` 定位發動者 → self KO → 棄牌選 1-3 張基本【雷】能量 → 附於【雷】寶可夢
+
+4. **移除 v2.94 `isPassiveOnlyAttackEntry` guard**
+   資料層修乾淨後此 guard 已無作用（沒有 `[特性]XXX` entry 還留在 attacks[]），移除清理。
+
+5. **UI 保證**：`getUsableAbilities` 既有 `!ABILITY_EFFECTS.has` 檢查（line 2626），
+   尚未實裝 effect 的被動特性（如皮卡丘ex 勤奮之心 / 拉帝亞斯ex 天空徑線 / 大王銅象 爆大身軀 /
+   酋雷姆 反等離子 等 35 張）**不會冒出可點擊的特性按鈕** — UI 安全。
+
+### 驗證
+- Migration 第二次 run = 0 entries（零殘留）
+- 抽驗酋雷姆 / 彷徨夜靈 / 三合一磁怪 / 吉雉雞ex 結構都正確
+- npm run build ✓（13.18s）
+- 掃全卡池：attacks 中 0 個 [特性]，abilities 名稱無異常
+
+### 已實裝 regA 覆蓋（migration 後可以正常觸發的特性）
+彷徨夜靈｜咒詛炸彈（5）、黑夜魔靈｜咒詛炸彈（13）、三合一磁怪｜過度放電、
+吉雉雞ex｜扭轉乾坤、桃歹郎ex｜支配鎖鏈 — 這些原本就有 regA 實裝，migration
+後 abilities[0] 穩定存在，USE_ABILITY 可正常走 `ABILITY_EFFECTS.get(卡名|0)` 分發。
+
+### 尚未實裝（deferred — 待個別需求實戰時再做）
+酋雷姆｜反等離子、皮卡丘ex｜勤奮之心、拉帝亞斯ex｜天空徑線、大王銅象｜爆大身軀、
+美納斯ex｜璀璨鱗片、蓋諾賽克特｜ACE消弭、願增猿ex｜鬆口氣、麻花犬ex｜飽腹時間、
+鋁鋼橋龍ex｜合金建造、蜜集大蛇ex｜熟成充能、電蜘蛛｜複眼、古劍豹｜沉雪、
+好勝毛蟹/輕身鱈｜事先準備、狂歡浪舞鴨｜快節奏、拖拖蚓ex｜快掃拳返、
+爆炸頭水牛｜捲牆、安瓢蟲｜繁星花紋、搖籃百合｜任選黏液。
 
 ---
 

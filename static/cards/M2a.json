@@ -1867,12 +1867,6 @@
     "pokemonType": "Water",
     "attacks": [
       {
-        "name": "‌‌[特性] 沉雪",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合，從手牌將這張卡放置於備戰區時，可使用1次。將場上的競技場卡丟棄。"
-      },
-      {
         "name": "冰柱閉環",
         "cost": [
           "Water",
@@ -1894,7 +1888,14 @@
     "species": "災厄寶可夢",
     "illustrator": "toi8",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "沉雪",
+        "effect": "在自己的回合，從手牌將這張卡放置於備戰區時，可使用1次。將場上的競技場卡丟棄。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "14704",
@@ -1909,12 +1910,6 @@
     "hp": 200,
     "pokemonType": "Lightning",
     "attacks": [
-      {
-        "name": "‌‌[特性] 勤奮之心",
-        "cost": [],
-        "damage": "",
-        "effect": "‌這隻寶可夢的HP是全滿的狀態下，這隻寶可夢受到招式的傷害而【昏厥】時，這隻寶可夢不會【昏厥】，而是以剩餘HP為「10」的狀態留在場上。"
-      },
       {
         "name": "黃玉伏特",
         "cost": [
@@ -1938,7 +1933,14 @@
     "tags": [
       "太晶"
     ],
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "勤奮之心",
+        "effect": "‌這隻寶可夢的HP是全滿的狀態下，這隻寶可夢受到招式的傷害而【昏厥】時，這隻寶可夢不會【昏厥】，而是以剩餘HP為「10」的狀態留在場上。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "14705",
@@ -1989,12 +1991,6 @@
     "pokemonType": "Lightning",
     "attacks": [
       {
-        "name": "‌‌‌[特性] 過度放電",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次，若使用，則將這隻寶可夢【昏厥】。從自己的棄牌區選擇最多3張基本能量卡，以任意方式附於自己的【雷】寶可夢身上。"
-      },
-      {
         "name": "雷電球",
         "cost": [
           "Lightning",
@@ -2016,7 +2012,14 @@
     "evolvesFrom": "小磁怪",
     "illustrator": "Shinya Mizuno",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "過度放電",
+        "effect": "在自己的回合時可使用1次，若使用，則將這隻寶可夢【昏厥】。從自己的棄牌區選擇最多3張基本能量卡，以任意方式附於自己的【雷】寶可夢身上。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "14707",
@@ -3271,12 +3274,6 @@
     "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "‌[特性] 天空徑線",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在場上，自己的所有【基礎】寶可夢【撤退】所需的能量全部消除。"
-      },
-      {
         "name": "無限之刃",
         "cost": [
           "Psychic",
@@ -3301,7 +3298,14 @@
     ],
     "illustrator": "takuyoa",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "天空徑線",
+        "effect": "只要這隻寶可夢在場上，自己的所有【基礎】寶可夢【撤退】所需的能量全部消除。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "14736",
@@ -5336,12 +5340,6 @@
     "pokemonType": "Metal",
     "attacks": [
       {
-        "name": "‌‌[特性] 合金建造",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。從自己的棄牌區選擇最多2張「基本【鋼】能量」卡，以任意方式附於自己的【鋼】寶可夢身上。"
-      },
-      {
         "name": "金屬防禦強化",
         "cost": [
           "Metal",
@@ -5367,7 +5365,14 @@
     "evolvesFrom": "鋁鋼龍",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "合金建造",
+        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。從自己的棄牌區選擇最多2張「基本【鋼】能量」卡，以任意方式附於自己的【鋼】寶可夢身上。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "14783",
@@ -6109,12 +6114,6 @@
     "pokemonType": "Colorless",
     "attacks": [
       {
-        "name": "‌[特性] 捲牆",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢與自己的其他「爆炸頭水牛」在場上，自己的所有【無】屬性的【基礎】寶可夢受到對手的寶可夢招式的傷害「-60」點。無論有多少隻擁有這個特性的寶可夢，這個效果也不會重複。"
-      },
-      {
         "name": "潛力",
         "cost": [
           "Colorless",
@@ -6137,7 +6136,14 @@
     "species": "頭錘牛寶可夢",
     "illustrator": "GOSSAN",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "捲牆",
+        "effect": "只要這隻寶可夢與自己的其他「爆炸頭水牛」在場上，自己的所有【無】屬性的【基礎】寶可夢受到對手的寶可夢招式的傷害「-60」點。無論有多少隻擁有這個特性的寶可夢，這個效果也不會重複。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "14801",
@@ -8552,12 +8558,6 @@
     "pokemonType": "Lightning",
     "attacks": [
       {
-        "name": "‌‌[特性] 勤奮之心",
-        "cost": [],
-        "damage": "",
-        "effect": "‌這隻寶可夢的HP是全滿的狀態下，這隻寶可夢受到招式的傷害而【昏厥】時，這隻寶可夢不會【昏厥】，而是以剩餘HP為「10」的狀態留在場上。"
-      },
-      {
         "name": "黃玉伏特",
         "cost": [
           "Grass",
@@ -8580,7 +8580,14 @@
     "tags": [
       "太晶"
     ],
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "勤奮之心",
+        "effect": "‌這隻寶可夢的HP是全滿的狀態下，這隻寶可夢受到招式的傷害而【昏厥】時，這隻寶可夢不會【昏厥】，而是以剩餘HP為「10」的狀態留在場上。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "15983",

@@ -48,12 +48,6 @@
     "pokemonType": "Grass",
     "attacks": [
       {
-        "name": "‌[特性]複眼",
-        "cost": [],
-        "damage": "",
-        "effect": "這隻寶可夢使用的招式，對對手的戰鬥場的擁有特性的寶可夢造成的傷害「+50」點。"
-      },
-      {
         "name": "麻麻羅網",
         "cost": [
           "Grass",
@@ -75,7 +69,14 @@
     "evolvesFrom": "電電蟲",
     "illustrator": "mashu",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "複眼",
+        "effect": "這隻寶可夢使用的招式，對對手的戰鬥場的擁有特性的寶可夢造成的傷害「+50」點。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10585",
@@ -805,12 +806,6 @@
     "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "‌[特性]咒詛炸彈",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次，若使用，則將這隻寶可夢【昏厥】。在對手的1隻寶可夢身上放置5個傷害指示物。"
-      },
-      {
         "name": "鬼火",
         "cost": [
           "Psychic",
@@ -837,7 +832,14 @@
     "evolvesFrom": "夜巡靈",
     "illustrator": "Aya Kusube",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "咒詛炸彈",
+        "effect": "在自己的回合時可使用1次，若使用，則將這隻寶可夢【昏厥】。在對手的1隻寶可夢身上放置5個傷害指示物。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10602",
@@ -852,12 +854,6 @@
     "hp": 160,
     "pokemonType": "Psychic",
     "attacks": [
-      {
-        "name": "‌[特性]咒詛炸彈",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次，若使用，則將這隻寶可夢【昏厥】。在對手的1隻寶可夢身上放置13個傷害指示物。"
-      },
       {
         "name": "影子束縛",
         "cost": [
@@ -887,7 +883,14 @@
     "evolvesFrom": "彷徨夜靈",
     "illustrator": "danciao",
     "regulationMark": "H",
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "abilities": [
+      {
+        "name": "咒詛炸彈",
+        "effect": "在自己的回合時可使用1次，若使用，則將這隻寶可夢【昏厥】。在對手的1隻寶可夢身上放置13個傷害指示物。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10603",
@@ -1639,12 +1642,6 @@
     "pokemonType": "Darkness",
     "attacks": [
       {
-        "name": "‌[特性]鬆口氣",
-        "cost": [],
-        "damage": "",
-        "effect": "這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，若自己的場上有「桃歹郎ex」，則被獲得的獎賞卡減少1張。"
-      },
-      {
         "name": "惡劣頭擊",
         "cost": [
           "Darkness",
@@ -1664,7 +1661,14 @@
     ],
     "illustrator": "takuyoa",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "鬆口氣",
+        "effect": "這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，若自己的場上有「桃歹郎ex」，則被獲得的獎賞卡減少1張。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10620",
@@ -1679,12 +1683,6 @@
     "hp": 210,
     "pokemonType": "Darkness",
     "attacks": [
-      {
-        "name": "‌‌[特性]扭轉乾坤",
-        "cost": [],
-        "damage": "",
-        "effect": "在上個對手的回合，若自己的寶可夢【昏厥】了，則在自己的回合時可使用1次。從自己的牌庫抽出3張卡。在這個回合，若已經使出了其他的「扭轉乾坤」，則這個特性無法使用。"
-      },
       {
         "name": "殘酷箭",
         "cost": [
@@ -1705,7 +1703,14 @@
     ],
     "illustrator": "takuyoa",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "扭轉乾坤",
+        "effect": "在上個對手的回合，若自己的寶可夢【昏厥】了，則在自己的回合時可使用1次。從自己的牌庫抽出3張卡。在這個回合，若已經使出了其他的「扭轉乾坤」，則這個特性無法使用。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10621",
@@ -1720,12 +1725,6 @@
     "hp": 190,
     "pokemonType": "Darkness",
     "attacks": [
-      {
-        "name": "‌‌[特性]支配鎖鏈",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次。選擇1隻自己的備戰區的【惡】寶可夢（「桃歹郎ex」除外），與戰鬥寶可夢互換。然後，將新的戰鬥寶可夢【中毒】。在這個回合，若已經使出了其他的「支配鎖鏈」，則這個特性無法使用。"
-      },
       {
         "name": "煩煩爆炸",
         "cost": [
@@ -1745,7 +1744,14 @@
     ],
     "illustrator": "aky CG Works",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "支配鎖鏈",
+        "effect": "在自己的回合時可使用1次。選擇1隻自己的備戰區的【惡】寶可夢（「桃歹郎ex」除外），與戰鬥寶可夢互換。然後，將新的戰鬥寶可夢【中毒】。在這個回合，若已經使出了其他的「支配鎖鏈」，則這個特性無法使用。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10622",
@@ -1760,12 +1766,6 @@
     "hp": 110,
     "pokemonType": "Metal",
     "attacks": [
-      {
-        "name": "‌‌[特性]ACE消弭",
-        "cost": [],
-        "damage": "",
-        "effect": "若這隻寶可夢附有「寶可夢道具」卡，則對手無法從手牌使出「【ACE SPEC】」卡。"
-      },
       {
         "name": "磁力爆破",
         "cost": [
@@ -1792,7 +1792,14 @@
     "species": "古生代寶可夢",
     "illustrator": "Kazumasa Yasukuni",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "ACE消弭",
+        "effect": "若這隻寶可夢附有「寶可夢道具」卡，則對手無法從手牌使出「【ACE SPEC】」卡。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10623",
@@ -1860,12 +1867,6 @@
     "pokemonType": "Metal",
     "attacks": [
       {
-        "name": "‌‌[特性]爆大身軀",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在戰鬥場上，對手無法從手牌使出競技場卡。"
-      },
-      {
         "name": "鼻之金勾臂",
         "cost": [
           "Metal",
@@ -1896,7 +1897,14 @@
     "evolvesFrom": "銅象",
     "illustrator": "kawayoo",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "爆大身軀",
+        "effect": "只要這隻寶可夢在戰鬥場上，對手無法從手牌使出競技場卡。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10625",
@@ -2084,12 +2092,6 @@
     "pokemonType": "Dragon",
     "attacks": [
       {
-        "name": "‌‌[特性]反等離子",
-        "cost": [],
-        "damage": "",
-        "effect": "若對手的棄牌區有‌名稱中有「‌阿克羅瑪」的卡，則這隻寶可夢使用「‌三重冰霜」所需的能量，改為1個【無】能量。"
-      },
-      {
         "name": "三重冰霜",
         "cost": [
           "Water",
@@ -2110,7 +2112,14 @@
     "species": "境界寶可夢",
     "illustrator": "Shiburingaru",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "反等離子",
+        "effect": "若對手的棄牌區有‌名稱中有「‌阿克羅瑪」的卡，則這隻寶可夢使用「‌三重冰霜」所需的能量，改為1個【無】能量。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10630",
@@ -2715,12 +2724,6 @@
     "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "‌[特性]咒詛炸彈",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次，若使用，則將這隻寶可夢【昏厥】。在對手的1隻寶可夢身上放置5個傷害指示物。"
-      },
-      {
         "name": "鬼火",
         "cost": [
           "Psychic",
@@ -2747,7 +2750,14 @@
     "evolvesFrom": "夜巡靈",
     "illustrator": "James Turner",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "咒詛炸彈",
+        "effect": "在自己的回合時可使用1次，若使用，則將這隻寶可夢【昏厥】。在對手的1隻寶可夢身上放置5個傷害指示物。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10871",
@@ -2762,12 +2772,6 @@
     "hp": 160,
     "pokemonType": "Psychic",
     "attacks": [
-      {
-        "name": "‌[特性]咒詛炸彈",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次，若使用，則將這隻寶可夢【昏厥】。在對手的1隻寶可夢身上放置13個傷害指示物。"
-      },
       {
         "name": "影子束縛",
         "cost": [
@@ -2797,7 +2801,14 @@
     "evolvesFrom": "彷徨夜靈",
     "illustrator": "James Turner",
     "regulationMark": "H",
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "abilities": [
+      {
+        "name": "咒詛炸彈",
+        "effect": "在自己的回合時可使用1次，若使用，則將這隻寶可夢【昏厥】。在對手的1隻寶可夢身上放置13個傷害指示物。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10872",
@@ -3229,12 +3240,6 @@
     "pokemonType": "Darkness",
     "attacks": [
       {
-        "name": "‌[特性]鬆口氣",
-        "cost": [],
-        "damage": "",
-        "effect": "這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，若自己的場上有「桃歹郎ex」，則被獲得的獎賞卡減少1張。"
-      },
-      {
         "name": "惡劣頭擊",
         "cost": [
           "Darkness",
@@ -3254,7 +3259,14 @@
     ],
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "鬆口氣",
+        "effect": "這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，若自己的場上有「桃歹郎ex」，則被獲得的獎賞卡減少1張。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10882",
@@ -3269,12 +3281,6 @@
     "hp": 210,
     "pokemonType": "Darkness",
     "attacks": [
-      {
-        "name": "‌‌[特性]扭轉乾坤",
-        "cost": [],
-        "damage": "",
-        "effect": "在上個對手的回合，若自己的寶可夢【昏厥】了，則在自己的回合時可使用1次。從自己的牌庫抽出3張卡。在這個回合，若已經使出了其他的「扭轉乾坤」，則這個特性無法使用。"
-      },
       {
         "name": "殘酷箭",
         "cost": [
@@ -3295,7 +3301,14 @@
     ],
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "扭轉乾坤",
+        "effect": "在上個對手的回合，若自己的寶可夢【昏厥】了，則在自己的回合時可使用1次。從自己的牌庫抽出3張卡。在這個回合，若已經使出了其他的「扭轉乾坤」，則這個特性無法使用。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10883",
@@ -3310,12 +3323,6 @@
     "hp": 190,
     "pokemonType": "Darkness",
     "attacks": [
-      {
-        "name": "‌‌[特性]支配鎖鏈",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次。選擇1隻自己的備戰區的【惡】寶可夢（「桃歹郎ex」除外），與戰鬥寶可夢互換。然後，將新的戰鬥寶可夢【中毒】。在這個回合，若已經使出了其他的「支配鎖鏈」，則這個特性無法使用。"
-      },
       {
         "name": "煩煩爆炸",
         "cost": [
@@ -3335,7 +3342,14 @@
     ],
     "illustrator": "aky CG Works",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "支配鎖鏈",
+        "effect": "在自己的回合時可使用1次。選擇1隻自己的備戰區的【惡】寶可夢（「桃歹郎ex」除外），與戰鬥寶可夢互換。然後，將新的戰鬥寶可夢【中毒】。在這個回合，若已經使出了其他的「支配鎖鏈」，則這個特性無法使用。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10884",
@@ -3452,12 +3466,6 @@
     "pokemonType": "Darkness",
     "attacks": [
       {
-        "name": "‌[特性]鬆口氣",
-        "cost": [],
-        "damage": "",
-        "effect": "這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，若自己的場上有「桃歹郎ex」，則被獲得的獎賞卡減少1張。"
-      },
-      {
         "name": "惡劣頭擊",
         "cost": [
           "Darkness",
@@ -3477,7 +3485,14 @@
     ],
     "illustrator": "kantaro",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "鬆口氣",
+        "effect": "這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，若自己的場上有「桃歹郎ex」，則被獲得的獎賞卡減少1張。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10890",
@@ -3492,12 +3507,6 @@
     "hp": 210,
     "pokemonType": "Darkness",
     "attacks": [
-      {
-        "name": "‌‌[特性]扭轉乾坤",
-        "cost": [],
-        "damage": "",
-        "effect": "在上個對手的回合，若自己的寶可夢【昏厥】了，則在自己的回合時可使用1次。從自己的牌庫抽出3張卡。在這個回合，若已經使出了其他的「扭轉乾坤」，則這個特性無法使用。"
-      },
       {
         "name": "殘酷箭",
         "cost": [
@@ -3518,7 +3527,14 @@
     ],
     "illustrator": "kantaro",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "扭轉乾坤",
+        "effect": "在上個對手的回合，若自己的寶可夢【昏厥】了，則在自己的回合時可使用1次。從自己的牌庫抽出3張卡。在這個回合，若已經使出了其他的「扭轉乾坤」，則這個特性無法使用。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10891",
@@ -3533,12 +3549,6 @@
     "hp": 190,
     "pokemonType": "Darkness",
     "attacks": [
-      {
-        "name": "‌‌[特性]支配鎖鏈",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次。選擇1隻自己的備戰區的【惡】寶可夢（「桃歹郎ex」除外），與戰鬥寶可夢互換。然後，將新的戰鬥寶可夢【中毒】。在這個回合，若已經使出了其他的「支配鎖鏈」，則這個特性無法使用。"
-      },
       {
         "name": "煩煩爆炸",
         "cost": [
@@ -3558,7 +3568,14 @@
     ],
     "illustrator": "kantaro",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "支配鎖鏈",
+        "effect": "在自己的回合時可使用1次。選擇1隻自己的備戰區的【惡】寶可夢（「桃歹郎ex」除外），與戰鬥寶可夢互換。然後，將新的戰鬥寶可夢【中毒】。在這個回合，若已經使出了其他的「支配鎖鏈」，則這個特性無法使用。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10892",
@@ -3588,12 +3605,6 @@
     "pokemonType": "Darkness",
     "attacks": [
       {
-        "name": "‌‌[特性]支配鎖鏈",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次。選擇1隻自己的備戰區的【惡】寶可夢（「桃歹郎ex」除外），與戰鬥寶可夢互換。然後，將新的戰鬥寶可夢【中毒】。在這個回合，若已經使出了其他的「支配鎖鏈」，則這個特性無法使用。"
-      },
-      {
         "name": "煩煩爆炸",
         "cost": [
           "Darkness",
@@ -3612,7 +3623,14 @@
     ],
     "illustrator": "aky CG Works",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "支配鎖鏈",
+        "effect": "在自己的回合時可使用1次。選擇1隻自己的備戰區的【惡】寶可夢（「桃歹郎ex」除外），與戰鬥寶可夢互換。然後，將新的戰鬥寶可夢【中毒】。在這個回合，若已經使出了其他的「支配鎖鏈」，則這個特性無法使用。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10894",

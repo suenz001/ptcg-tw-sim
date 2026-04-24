@@ -190,7 +190,11 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
     const TAG_KEYWORDS = new Set(['太晶', '[太晶]']);
     $('.skillInformation .skill').each((_, el) => {
       const $el = $(el);
-      const rawName = $el.find('.skillName').text().trim();
+      // v2.95：PTCG 官網部分 skillName 帶 U+200C ZWJ 前綴（1-3 個），
+      //   會讓下面的 ability 前綴 regex (`^\[`) 偵測失敗，導致特性被誤分類到
+      //   attacks[]（參見 v2.95 commit — migration + scraper 根因修）。
+      //   這裡 strip ZWJ 確保偵測不被隱形字元干擾。
+      const rawName = $el.find('.skillName').text().trim().replace(/\u200C/g, '');
       const effect = $el.find('.skillEffect').text().trim();
       const damage = $el.find('.skillDamage').text().trim();
       const costImgs = $el.find('.skillCost img');

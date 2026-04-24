@@ -8516,7 +8516,9 @@ function overvoltAttackPost(label: string): AttackPostFn {
 
 // ── 註冊 ─────────────────────────────────────────────────────────────────
 
-// 彷徨夜靈 — 正統 ability 路徑（SV8a 等正確填入 abilities[] 的套牌）
+// 彷徨夜靈｜咒詛炸彈（5 counter）— 正統 ability 路徑
+// v2.95：JSON migration 後 abilities[0]={name:'咒詛炸彈'} 穩定存在，attack-style
+// ZWJ 變體註冊全部移除（見 v2.95 commit）。
 regA('彷徨夜靈', 0, (st, aIdx, pool) => {
   const userIid = findAbilityUserIid(st, aIdx, '彷徨夜靈', pool);
   if (!userIid) return st;
@@ -8536,16 +8538,42 @@ regA('彷徨夜靈', 0, (st, aIdx, pool) => {
   });
 });
 
-// 彷徨夜靈 — attack-style 變體（ZWJ U+200C + [特性]咒詛炸彈）
-regPre('彷徨夜靈|\u200c[特性]咒詛炸彈', (s, _a, _p) => ({ state: s, damage: 0 }));
-regPost('彷徨夜靈|\u200c[特性]咒詛炸彈', cursedBombAttackPost('咒詛炸彈'));
-
-// 三合一磁怪 — attack-style 變體（兩個 ZWJ*3 變體：有空格 / 無空格）
-regPre('三合一磁怪|\u200c\u200c\u200c[特性] 過度放電', (s, _a, _p) => ({ state: s, damage: 0 }));
-regPost('三合一磁怪|\u200c\u200c\u200c[特性] 過度放電', overvoltAttackPost('過度放電'));
-
-regPre('三合一磁怪|\u200c\u200c\u200c[特性]過度放電', (s, _a, _p) => ({ state: s, damage: 0 }));
-regPost('三合一磁怪|\u200c\u200c\u200c[特性]過度放電', overvoltAttackPost('過度放電'));
+// 三合一磁怪｜過度放電（自身 KO + 從棄牌選 1-3 張基本【雷】能量附自己【雷】寶可夢）
+// v2.95：JSON migration 後從 attack-style 改為正統 ability 路徑。
+// 行為對齊原 overvoltAttackPost（維持相同 semantics，不改既有 filter 規則）。
+regA('三合一磁怪', 0, (st, aIdx, pool) => {
+  const label = '過度放電';
+  const userIid = findAbilityUserIid(st, aIdx, '三合一磁怪', pool);
+  if (!userIid) return st;
+  // 可達鴨｜濕氣：自身 KO 類特性被消除
+  if (hasPsyduckDamp(st, pool)) {
+    return addLog(st, `${label}：被可達鴨的濕氣消除`, aIdx);
+  }
+  // (1) 自身 KO
+  let s = selfKOInstance(st, aIdx, userIid, pool, label);
+  if (s.phase === 'game-over') return s;
+  // (2) 棄牌區基本【雷】能量候選
+  const cand = s.players[aIdx].discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Lightning';
+  });
+  if (cand.length === 0) return addLog(s, `${label}：棄牌區無基本雷能量`, aIdx);
+  // (3) 場上是否還有雷寶可夢（self KO 後）
+  const hasLightning = [s.players[aIdx].active, ...s.players[aIdx].bench].some(c => {
+    if (!c) return false;
+    return pool.get(c.cardId)?.pokemonType === 'Lightning';
+  });
+  if (!hasLightning) return addLog(s, `${label}：場上無【雷】寶可夢，無法附加`, aIdx);
+  // (4) pending discard-search
+  const realMax = Math.min(3, cand.length);
+  const s2 = addLog(s, `${label}：從棄牌區選 1-${realMax} 張基本雷能量`, aIdx);
+  return withPending(s2, {
+    type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Energy:Lightning', minCount: 1, maxCount: realMax,
+    effectKey: 'overvolt-attach-pick-target',
+    params: { label },
+  });
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Wave 41 — 訓練家補實裝：

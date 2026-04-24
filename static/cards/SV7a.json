@@ -586,12 +586,6 @@
     "pokemonType": "Water",
     "attacks": [
       {
-        "name": "‌[特性]快節奏",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合，若將1張自己的手牌放回牌庫下方，則可使用1次。從牌庫抽卡直到自己的手牌滿5張為止。"
-      },
-      {
         "name": "水炮濺射",
         "cost": [
           "Water",
@@ -614,7 +608,14 @@
     "evolvesFrom": "湧躍鴨",
     "illustrator": "nagimiso",
     "regulationMark": "H",
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "abilities": [
+      {
+        "name": "快節奏",
+        "effect": "在自己的回合，若將1張自己的手牌放回牌庫下方，則可使用1次。從牌庫抽卡直到自己的手牌滿5張為止。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11046",
@@ -750,12 +751,6 @@
     "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "‌[特性]天空徑線",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在場上，自己的所有【基礎】寶可夢【撤退】所需的能量全部消除。"
-      },
-      {
         "name": "無限之刃",
         "cost": [
           "Psychic",
@@ -780,7 +775,14 @@
     ],
     "illustrator": "takuyoa",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "天空徑線",
+        "effect": "只要這隻寶可夢在場上，自己的所有【基礎】寶可夢【撤退】所需的能量全部消除。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11050",
@@ -1562,12 +1564,6 @@
     "pokemonType": "Metal",
     "attacks": [
       {
-        "name": "‌‌[特性]合金建造",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。從自己的棄牌區選擇最多2張「基本【鋼】能量」卡，以任意方式附於自己的【鋼】寶可夢身上。"
-      },
-      {
         "name": "金屬防禦強化",
         "cost": [
           "Metal",
@@ -1593,7 +1589,14 @@
     "evolvesFrom": "鋁鋼龍",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "合金建造",
+        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。從自己的棄牌區選擇最多2張「基本【鋼】能量」卡，以任意方式附於自己的【鋼】寶可夢身上。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11068",
@@ -2980,12 +2983,6 @@
     "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "‌[特性]天空徑線",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在場上，自己的所有【基礎】寶可夢【撤退】所需的能量全部消除。"
-      },
-      {
         "name": "無限之刃",
         "cost": [
           "Psychic",
@@ -3010,7 +3007,14 @@
     ],
     "illustrator": "takuyoa",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "天空徑線",
+        "effect": "只要這隻寶可夢在場上，自己的所有【基礎】寶可夢【撤退】所需的能量全部消除。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11444",
@@ -3073,12 +3077,6 @@
     "pokemonType": "Metal",
     "attacks": [
       {
-        "name": "‌‌[特性]合金建造",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。從自己的棄牌區選擇最多2張「基本【鋼】能量」卡，以任意方式附於自己的【鋼】寶可夢身上。"
-      },
-      {
         "name": "金屬防禦強化",
         "cost": [
           "Metal",
@@ -3104,7 +3102,14 @@
     "evolvesFrom": "鋁鋼龍",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "合金建造",
+        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。從自己的棄牌區選擇最多2張「基本【鋼】能量」卡，以任意方式附於自己的【鋼】寶可夢身上。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11446",
@@ -3270,12 +3275,6 @@
     "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "‌[特性]天空徑線",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢在場上，自己的所有【基礎】寶可夢【撤退】所需的能量全部消除。"
-      },
-      {
         "name": "無限之刃",
         "cost": [
           "Psychic",
@@ -3300,7 +3299,14 @@
     ],
     "illustrator": "OKACHEKE",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "天空徑線",
+        "effect": "只要這隻寶可夢在場上，自己的所有【基礎】寶可夢【撤退】所需的能量全部消除。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11453",
@@ -3315,12 +3321,6 @@
     "hp": 300,
     "pokemonType": "Metal",
     "attacks": [
-      {
-        "name": "‌‌[特性]合金建造",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。從自己的棄牌區選擇最多2張「基本【鋼】能量」卡，以任意方式附於自己的【鋼】寶可夢身上。"
-      },
       {
         "name": "金屬防禦強化",
         "cost": [
@@ -3347,7 +3347,14 @@
     "evolvesFrom": "鋁鋼龍",
     "illustrator": "Shinya Mizuno",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "合金建造",
+        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。從自己的棄牌區選擇最多2張「基本【鋼】能量」卡，以任意方式附於自己的【鋼】寶可夢身上。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11454",

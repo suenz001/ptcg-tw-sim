@@ -49,12 +49,6 @@
     "pokemonType": "Grass",
     "attacks": [
       {
-        "name": "‌[特性]繁星花紋",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。選擇1隻對手備戰區剩餘HP為「90」以下的寶可夢，與戰鬥寶可夢互換。"
-      },
-      {
         "name": "高速星星",
         "cost": [
           "Colorless",
@@ -73,7 +67,14 @@
     "evolvesFrom": "芭瓢蟲",
     "illustrator": "Masako Tomii",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "繁星花紋",
+        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。選擇1隻對手備戰區剩餘HP為「90」以下的寶可夢，與戰鬥寶可夢互換。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10898",
@@ -125,12 +126,6 @@
     "pokemonType": "Grass",
     "attacks": [
       {
-        "name": "‌[特性]任選黏液",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次。擲1次硬幣若為正面，則從【中毒】・【灼傷】・【混亂】中選擇1種，將對手的戰鬥寶可夢處於那個狀態。"
-      },
-      {
         "name": "瘴氣之風",
         "cost": [
           "Grass"
@@ -153,7 +148,14 @@
     "evolvesFrom": "觸手百合",
     "illustrator": "miki kudo",
     "regulationMark": "H",
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "abilities": [
+      {
+        "name": "任選黏液",
+        "effect": "在自己的回合時可使用1次。擲1次硬幣若為正面，則從【中毒】・【灼傷】・【混亂】中選擇1種，將對手的戰鬥寶可夢處於那個狀態。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10900",
@@ -439,12 +441,6 @@
     "pokemonType": "Grass",
     "attacks": [
       {
-        "name": "‌[特性]熟成充能",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次。從自己的手牌選擇1張「基本【草】能量」卡，附於自己的寶可夢身上。然後，將附上那張卡的寶可夢恢復「30」HP。"
-      },
-      {
         "name": "蜜糖風暴",
         "cost": [
           "Colorless",
@@ -466,7 +462,14 @@
     "evolvesFrom": "裹蜜蟲",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "abilities": [
+      {
+        "name": "熟成充能",
+        "effect": "在自己的回合時可使用1次。從自己的手牌選擇1張「基本【草】能量」卡，附於自己的寶可夢身上。然後，將附上那張卡的寶可夢恢復「30」HP。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10908",
@@ -952,12 +955,6 @@
     "pokemonType": "Water",
     "attacks": [
       {
-        "name": "‌[特性]事先準備",
-        "cost": [],
-        "damage": "",
-        "effect": "這隻寶可夢使用招式所需的【無】能量，減少自己的棄牌區的「海岱」的張數。"
-      },
-      {
         "name": "揮大拳",
         "cost": [
           "Water",
@@ -984,7 +981,14 @@
     "evolvesFrom": "好勝蟹",
     "illustrator": "nagimiso",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "事先準備",
+        "effect": "這隻寶可夢使用招式所需的【無】能量，減少自己的棄牌區的「海岱」的張數。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10920",
@@ -1085,12 +1089,6 @@
     "pokemonType": "Water",
     "attacks": [
       {
-        "name": "‌[特性]事先準備",
-        "cost": [],
-        "damage": "",
-        "effect": "這隻寶可夢使用招式所需的【無】能量，減少自己的棄牌區的「海岱」的張數。"
-      },
-      {
         "name": "音波刀鋒",
         "cost": [
           "Colorless",
@@ -1114,7 +1112,14 @@
     "species": "卸除寶可夢",
     "illustrator": "GOTO minori",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "事先準備",
+        "effect": "這隻寶可夢使用招式所需的【無】能量，減少自己的棄牌區的「海岱」的張數。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10923",
@@ -1894,12 +1899,6 @@
     "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "‌[特性]飽腹時間",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。將自己的所有進化寶可夢的HP全部恢復。然後，將恢復的寶可夢身上附加的能量全部丟棄。"
-      },
-      {
         "name": "奇跡閃耀",
         "cost": [
           "Colorless",
@@ -1920,7 +1919,14 @@
     "evolvesFrom": "狗仔包",
     "illustrator": "You Iribi",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "飽腹時間",
+        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。將自己的所有進化寶可夢的HP全部恢復。然後，將恢復的寶可夢身上附加的能量全部丟棄。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10942",
@@ -3158,12 +3164,6 @@
     "pokemonType": "Metal",
     "attacks": [
       {
-        "name": "‌[特性]快掃拳返",
-        "cost": [],
-        "damage": "",
-        "effect": "這隻寶可夢受到對手的寶可夢招式的傷害時，將與這隻寶可夢身上附加的【鋼】能量的數量×2個的相同數量的傷害指示物，放置於使用招式的寶可夢身上。"
-      },
-      {
         "name": "岩石封鎖",
         "cost": [
           "Colorless",
@@ -3191,7 +3191,14 @@
     ],
     "illustrator": "PLANETA Yamashita",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "快掃拳返",
+        "effect": "這隻寶可夢受到對手的寶可夢招式的傷害時，將與這隻寶可夢身上附加的【鋼】能量的數量×2個的相同數量的傷害指示物，放置於使用招式的寶可夢身上。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10970",
@@ -3459,12 +3466,6 @@
     "pokemonType": "Colorless",
     "attacks": [
       {
-        "name": "‌[特性]捲牆",
-        "cost": [],
-        "damage": "",
-        "effect": "只要這隻寶可夢與自己的其他「‌爆炸頭水牛」在場上，自己的所有【無】屬性的【基礎】寶可夢受到對手的寶可夢招式的傷害「-60」點。無論有多少隻擁有這個特性的寶可夢，這個效果也不會重複。"
-      },
-      {
         "name": "潛力",
         "cost": [
           "Colorless",
@@ -3487,7 +3488,14 @@
     "species": "頭錘牛寶可夢",
     "illustrator": "GOSSAN",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "捲牆",
+        "effect": "只要這隻寶可夢與自己的其他「‌爆炸頭水牛」在場上，自己的所有【無】屬性的【基礎】寶可夢受到對手的寶可夢招式的傷害「-60」點。無論有多少隻擁有這個特性的寶可夢，這個效果也不會重複。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10977",
@@ -4005,12 +4013,6 @@
     "pokemonType": "Grass",
     "attacks": [
       {
-        "name": "‌[特性]繁星花紋",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。選擇1隻對手備戰區剩餘HP為「90」以下的寶可夢，與戰鬥寶可夢互換。"
-      },
-      {
         "name": "高速星星",
         "cost": [
           "Colorless",
@@ -4029,7 +4031,14 @@
     "evolvesFrom": "芭瓢蟲",
     "illustrator": "HYOGONOSUKE",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "繁星花紋",
+        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。選擇1隻對手備戰區剩餘HP為「90」以下的寶可夢，與戰鬥寶可夢互換。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "10999",
@@ -4177,12 +4186,6 @@
     "pokemonType": "Water",
     "attacks": [
       {
-        "name": "‌[特性]事先準備",
-        "cost": [],
-        "damage": "",
-        "effect": "這隻寶可夢使用招式所需的【無】能量，減少自己的棄牌區的「海岱」的張數。"
-      },
-      {
         "name": "揮大拳",
         "cost": [
           "Water",
@@ -4209,7 +4212,14 @@
     "evolvesFrom": "好勝蟹",
     "illustrator": "Mitsuhiro Arita",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "事先準備",
+        "effect": "這隻寶可夢使用招式所需的【無】能量，減少自己的棄牌區的「海岱」的張數。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11003",
@@ -4520,12 +4530,6 @@
     "pokemonType": "Grass",
     "attacks": [
       {
-        "name": "‌[特性]熟成充能",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次。從自己的手牌選擇1張「基本【草】能量」卡，附於自己的寶可夢身上。然後，將附上那張卡的寶可夢恢復「30」HP。"
-      },
-      {
         "name": "蜜糖風暴",
         "cost": [
           "Colorless",
@@ -4547,7 +4551,14 @@
     "evolvesFrom": "裹蜜蟲",
     "illustrator": "5ban Graphics",
     "regulationMark": "H",
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "abilities": [
+      {
+        "name": "熟成充能",
+        "effect": "在自己的回合時可使用1次。從自己的手牌選擇1張「基本【草】能量」卡，附於自己的寶可夢身上。然後，將附上那張卡的寶可夢恢復「30」HP。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11011",
@@ -4704,12 +4715,6 @@
     "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "‌[特性]飽腹時間",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。將自己的所有進化寶可夢的HP全部恢復。然後，將恢復的寶可夢身上附加的能量全部丟棄。"
-      },
-      {
         "name": "奇跡閃耀",
         "cost": [
           "Colorless",
@@ -4730,7 +4735,14 @@
     "evolvesFrom": "狗仔包",
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "飽腹時間",
+        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。將自己的所有進化寶可夢的HP全部恢復。然後，將恢復的寶可夢身上附加的能量全部丟棄。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11015",
@@ -4791,12 +4803,6 @@
     "pokemonType": "Metal",
     "attacks": [
       {
-        "name": "‌[特性]快掃拳返",
-        "cost": [],
-        "damage": "",
-        "effect": "這隻寶可夢受到對手的寶可夢招式的傷害時，將與這隻寶可夢身上附加的【鋼】能量的數量×2個的相同數量的傷害指示物，放置於使用招式的寶可夢身上。"
-      },
-      {
         "name": "岩石封鎖",
         "cost": [
           "Colorless",
@@ -4824,7 +4830,14 @@
     ],
     "illustrator": "PLANETA Mochizuki",
     "regulationMark": "H",
-    "stage": "Basic"
+    "stage": "Basic",
+    "abilities": [
+      {
+        "name": "快掃拳返",
+        "effect": "這隻寶可夢受到對手的寶可夢招式的傷害時，將與這隻寶可夢身上附加的【鋼】能量的數量×2個的相同數量的傷害指示物，放置於使用招式的寶可夢身上。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11017",
@@ -4944,12 +4957,6 @@
     "pokemonType": "Grass",
     "attacks": [
       {
-        "name": "‌[特性]熟成充能",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合時可使用1次。從自己的手牌選擇1張「基本【草】能量」卡，附於自己的寶可夢身上。然後，將附上那張卡的寶可夢恢復「30」HP。"
-      },
-      {
         "name": "蜜糖風暴",
         "cost": [
           "Colorless",
@@ -4971,7 +4978,14 @@
     "evolvesFrom": "裹蜜蟲",
     "illustrator": "Teeziro",
     "regulationMark": "H",
-    "stage": "Stage2"
+    "stage": "Stage2",
+    "abilities": [
+      {
+        "name": "熟成充能",
+        "effect": "在自己的回合時可使用1次。從自己的手牌選擇1張「基本【草】能量」卡，附於自己的寶可夢身上。然後，將附上那張卡的寶可夢恢復「30」HP。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11023",
@@ -5035,12 +5049,6 @@
     "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "‌[特性]飽腹時間",
-        "cost": [],
-        "damage": "",
-        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。將自己的所有進化寶可夢的HP全部恢復。然後，將恢復的寶可夢身上附加的能量全部丟棄。"
-      },
-      {
         "name": "奇跡閃耀",
         "cost": [
           "Colorless",
@@ -5061,7 +5069,14 @@
     "evolvesFrom": "狗仔包",
     "illustrator": "Yuu Nishida",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "abilities": [
+      {
+        "name": "飽腹時間",
+        "effect": "在自己的回合，從手牌使出這張卡並完成進化時，可使用1次。將自己的所有進化寶可夢的HP全部恢復。然後，將恢復的寶可夢身上附加的能量全部丟棄。",
+        "label": "特性"
+      }
+    ]
   },
   {
     "id": "11025",

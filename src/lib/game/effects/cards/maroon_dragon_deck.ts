@@ -3,14 +3,14 @@
  *
  * 涵蓋卡：
  *   - 喵喵ex｜殺手鐧捕捉（BENCH_PLACE_TRIGGERS：上備戰時從牌庫搜支援者）
- *   - 黑夜魔靈｜咒詛炸彈（規範 ability 路徑 regA + attack-style ZWJ 變體 regPre/regPost，13 counter）
+ *   - 黑夜魔靈｜咒詛炸彈（regA，13 counter；v2.95 起 attack-style 變體全移除）
  *   - 多龍奇｜偵查指令（regA：查看牌庫上方 2 張選 1 加手牌，其餘放回下方）
  *   - 願增猿｜腎上腺腦力（regA：從自己 1 隻受傷寶可夢搬 ≤30 傷害到對手 1 隻寶可夢）
  *   - 特殊紅牌（Item + guard：對手剩餘獎賞 ≤3 才能用 → 對手洗回手牌抽 3）
  *   - 阿蜜的目光（Supporter + guard：戰鬥位寶可夢下次受招式 -30）
  *
  * 對 effects.ts 的硬依賴（從 '../../effects' 取用）：
- *   - findAbilityUserIid / selfKOInstance / cursedBombAttackPost / koPrizeCount
+ *   - findAbilityUserIid / selfKOInstance / koPrizeCount
  * 這些 helper 還留在 effects.ts 頂層（日後再統一搬）。
  *
  * 循環 import 安全：effects.ts 的 top-level `export function` 宣告完成後，
@@ -20,14 +20,13 @@
 
 import type { GameState, PlayerState, CardInstance } from '../../types';
 import {
-  reg, regR, regG, regPre, regPost, regA,
+  reg, regR, regG, regA,
   BENCH_PLACE_TRIGGERS,
   addLog, drawCards, updatePlayer, returnHandToDeck, withPending,
 } from '../_shared';
 import {
   findAbilityUserIid,
   selfKOInstance,
-  cursedBombAttackPost,
   koPrizeCount,
 } from '../../effects';
 
@@ -53,8 +52,9 @@ BENCH_PLACE_TRIGGERS.set('喵喵ex', (st, idx, pool) => {
   });
 });
 
-// ── 黑夜魔靈｜咒詛炸彈 — 13 counter 版本 ─────────────────────────────────────
-// 正統 ability 路徑（MC 等 abilities[] 填入的套牌）
+// ── 黑夜魔靈｜咒詛炸彈 — 13 counter ──────────────────────────────────────────
+// v2.95：JSON migration 後 abilities[0]={name:'咒詛炸彈'} 統一存在，attack-style
+// ZWJ 變體註冊全數移除。
 regA('黑夜魔靈', 0, (st, aIdx, pool) => {
   const userIid = findAbilityUserIid(st, aIdx, '黑夜魔靈', pool);
   if (!userIid) return st;
@@ -73,10 +73,6 @@ regA('黑夜魔靈', 0, (st, aIdx, pool) => {
     params: { label: '咒詛炸彈', userIid, includeActive: true, counters: 13 },
   });
 });
-
-// 黑夜魔靈 — attack-style 變體（ZWJ U+200C + [特性]咒詛炸彈，13 counter）
-regPre('黑夜魔靈|\u200c[特性]咒詛炸彈', (s, _a, _p) => ({ state: s, damage: 0 }));
-regPost('黑夜魔靈|\u200c[特性]咒詛炸彈', cursedBombAttackPost('咒詛炸彈', 13));
 
 // ── 多龍奇｜偵查指令 ─────────────────────────────────────────────────────────
 // 一回合一次：查看牌庫上方 2 張，選 1 張加手牌，其餘放回牌庫下方（不洗牌）。
