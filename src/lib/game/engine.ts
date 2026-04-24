@@ -766,6 +766,17 @@ function handlePlaying(
     if (placeFn && !isColorlessAbilityBlocked(afterPlace, card, pool)) {
       afterPlace = placeFn(afterPlace, aIdx, pool);
     }
+    // v2.102 險惡廢墟（Stadium）— 雙方玩家每次在自己的回合將【基礎】寶可夢
+    // （【惡】寶可夢除外）放置於備戰區時，在那隻寶可夢身上放置 2 個傷害指示物。
+    const currentStadium = afterPlace.activeStadium ? pool.get(afterPlace.activeStadium.cardId) : null;
+    if (currentStadium?.name === '險惡廢墟' && card.pokemonType !== 'Darkness') {
+      const refPlayers = [...afterPlace.players] as [PlayerState, PlayerState];
+      const refP = { ...refPlayers[aIdx] };
+      refP.bench = refP.bench.map(c => c.iid === placed.iid ? { ...c, damage: c.damage + 20 } : c);
+      refPlayers[aIdx] = refP;
+      afterPlace = addLog({ ...afterPlace, players: refPlayers },
+        `險惡廢墟：${card.name} 受到 2 個傷害指示物`, aIdx);
+    }
     return afterPlace;
   }
 
@@ -792,10 +803,14 @@ function handlePlaying(
       basePoke = attacker.bench.find(c => c.iid === action.fromIid) ?? null;
     }
     if (!basePoke) return state;
-    if (basePoke.justPlaced || basePoke.evolvedThisTurn) return state;
-
     const baseCard = pool.get(basePoke.cardId);
     if (!baseCard) return state;
+    // v2.102 活力森林（Stadium）— 雙方的所有【草】寶可夢就算在剛使出的回合也可進化成【草】寶可夢。
+    //   自己最初回合例外（line 775 `state.isFirstTurn` gate 照舊擋）。
+    const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+    const vigorousForestException = stadiumName === '活力森林' &&
+      baseCard.pokemonType === 'Grass' && evoCard.pokemonType === 'Grass';
+    if ((basePoke.justPlaced && !vigorousForestException) || basePoke.evolvedThisTurn) return state;
     if (!sameEvoName(evoCard.evolvesFrom, baseCard.name)) return state;
 
     // 進化：繼承傷害、能量、狀態；進化鏈堆疊保留被進化掉的 CardInstance（裸殼，附加物轉給頂層）
@@ -1160,6 +1175,26 @@ function handlePlaying(
           filter: 'Energy',
           effectKey: 'miracle-garden-draw',
           params: {},
+        },
+      };
+    }
+
+    // v2.102 稜鏡塔 — 棄 2 張手牌 → 抽 1 張
+    if (stadiumCard.name === '稜鏡塔') {
+      if (newState.players[aIdx].hand.length < 2) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '稜鏡塔：手牌不足 2 張', aIdx);
+      }
+      if (newState.players[aIdx].deck.length === 0) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '稜鏡塔：牌庫已空', aIdx);
+      }
+      return {
+        ...newState,
+        pendingSelection: {
+          type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+          minCount: 2, maxCount: 2, filter: '',
+          effectKey: 'prism-tower-draw1', params: {},
         },
       };
     }
@@ -2672,8 +2707,8 @@ export function getUsableAbilities(
       if (!ABILITY_EFFECTS.has(`${card.name}|${abIdx}`)) return;
       // 集客：只有出場才能用
       if (ab.name === '集客' && player.active?.iid !== pk.iid) return;
-      // 精神抽出 / 龐克練肌：只有本回合剛進化才能用
-      if ((ab.name === '精神抽出' || ab.name === '龐克練肌') && !pk.evolvedThisTurn) return;
+      // 精神抽出 / 龐克練肌 / 合金建造（v2.102）：只有本回合剛進化才能用
+      if ((ab.name === '精神抽出' || ab.name === '龐克練肌' || ab.name === '合金建造') && !pk.evolvedThisTurn) return;
       // 腎上腺腦力：身上必須附有至少 1 顆【惡】能量
       if (ab.name === '腎上腺腦力' && (countEnergy(pk, pool).get('Darkness') ?? 0) < 1) return;
       // v2.53 碧綠之舞：手牌必須至少有 1 張基本草能量（否則按了只會輸出警告 log，

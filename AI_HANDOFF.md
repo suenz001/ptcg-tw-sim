@@ -1,9 +1,39 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-24 (v2.101)  
+> 最後更新：2026-04-24 (v2.102)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.102 — 三組預組 Phase B：6 張（Stadium + 特性 + 複雜招式）
+
+### engine.ts 3 處改動
+1. **EVOLVE handler**：加 `vigorousForestException` — activeStadium=活力森林 + baseCard&evoCard 都是【草】時繞過 `justPlaced` gate（卡面：雙方草寶可夢剛出場可進化成草寶可夢）
+2. **PLAY_BASIC handler**：在 BENCH_PLACE_TRIGGERS 觸發後加險惡廢墟 hook — activeStadium=險惡廢墟 + card.pokemonType≠'Darkness' → 放 2 傷害指示物
+3. **USE_STADIUM handler**：加稜鏡塔分支 — 手牌≥2 + 牌庫≥1 gate → pending hand-discard 2 張 → resolver `prism-tower-draw1`
+4. **getUsableAbilities**：合金建造 加入 `evolvedThisTurn` 白名單（原本只有 精神抽出 / 龐克練肌）
+
+### mega_decks.ts 新增 6 張（+ 1 個 resolver）
+1. **稜鏡塔** — `regR('prism-tower-draw1')`：棄 iids + 抽 1
+2. **鋁鋼橋龍ex｜合金建造**（regA 進化時觸發）— Gate: `cardInst.evolvedThisTurn`，然後 chained pending：discard-search 'Energy:Metal' 0-2 → 單鋼寶自動附 / 多鋼寶選目標（`alloy-forge-pick` / `alloy-forge-commit`）
+3. **旋轉洛托姆｜風扇呼喚**（regA 首回合限定）— Gate: `state.turn <= 2`（兩個最初回合內都可觸發；自己回合由 activePlayerIndex 強制），deck-search filter='ColorlessPokeHP100' 0-3 加手牌 + shuffle
+4. **奧利瓦ex｜油之機關槍** — `regPre damage=0 + skipWeakRes + skipDefEffects`；regPost 開 `damage-distribute` pending includeActive=true counter=6 perCounter=20；新 resolver `olive-oil-distribute`（類似 dragapult-snipe，但 target 含 active）
+5. **活力森林**（engine EVOLVE exception，見上）
+6. **險惡廢墟**（engine PLAY_BASIC hook，見上）
+
+### UI 新 filter
++page.svelte line 1067 附近：新增 `ColorlessPokeHP100` filter（【無】屬 + hp≤100）。
+
+### 驗證
+- build ✓（13.70s）
+- 需實戰：稜鏡塔可使用；合金建造進化即觸發；風扇呼喚首回合限定；奧利瓦ex 6 次 20 傷自由分配含戰鬥場；活力森林剛出場草可進化；險惡廢墟上備戰非惡寶可夢放 2 指示物
+
+### Phase C 剩餘
+- 大竺葵｜繁茂（能量倍率）
+- 古舊能量（全屬性能量 + KO 時獎賞 -1）
+- 燃火能量（進化寶可夢提供 3 無能量 + 回合結束自動丟）
 
 ---
 

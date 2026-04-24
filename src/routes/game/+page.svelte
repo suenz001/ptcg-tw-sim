@@ -1068,6 +1068,10 @@
             const t = f.slice(7);
             return card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === t;
           }
+          // v2.102 旋轉洛托姆｜風扇呼喚：HP≤100 的【無】寶可夢
+          if (f === 'ColorlessPokeHP100') {
+            return card.supertype === 'Pokemon' && card.pokemonType === 'Colorless' && (card.hp ?? 999) <= 100;
+          }
           return true;
         });
       }

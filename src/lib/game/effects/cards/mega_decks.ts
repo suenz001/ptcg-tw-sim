@@ -8,10 +8,9 @@
  * 新 engine infra 時會在註解寫明、先 deferred、不做簡化版（feedback_effect_implementation_sop）。
  */
 
-import type { CardInstance, PlayerState } from '../../types';
-import type { Card } from '$lib/cards/types';
+import type { CardInstance, PlayerState, GameState } from '../../types';
 import {
-  reg, regR, regG, regPre, regPost,
+  reg, regR, regG, regA, regPre, regPost,
   addLog, updatePlayer, withPending, shuffle, discardHand,
   healResolver,
 } from '../_shared';
@@ -384,4 +383,235 @@ regR('aoki-phase3', (st, idx, iids, _params, pool) => {
   }
   // 洗牌
   return updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) }));
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 稜鏡塔（Stadium）resolver — 棄 2 張手牌後抽 1 張
+// （USE_STADIUM handler 在 engine.ts 設 pending，effectKey='prism-tower-draw1'）
+// ══════════════════════════════════════════════════════════════════════════════
+regR('prism-tower-draw1', (st, idx, iids) => {
+  return updatePlayer(st, idx, p => {
+    const toDiscard = p.hand.filter(c => iids.includes(c.iid));
+    const newHand = p.hand.filter(c => !iids.includes(c.iid));
+    const drawn = p.deck.slice(0, 1);
+    return {
+      ...p,
+      hand: [...newHand, ...drawn],
+      deck: p.deck.slice(1),
+      discard: [...p.discard, ...toDiscard],
+    };
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 鋁鋼橋龍ex ｜ 合金建造（進化時 ability：棄牌搜最多 2 張基本鋼能量附鋼寶）
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「在自己的回合，從手牌使出這張卡並完成進化時，可使用 1 次。從自己的棄牌區選擇
+//   最多 2 張『基本【鋼】能量』卡，以任意方式附於自己的【鋼】寶可夢身上。」
+// Gate：只能在剛進化的當回合使用（由 engine getUsableAbilities 的 evolvedThisTurn 白名單處理）。
+// 流程同吉普索（共用 alloy-forge-pick → alloy-forge-commit chain）。
+regA('鋁鋼橋龍ex', 0, (st, idx, pool, cardInst) => {
+  if (!cardInst?.evolvedThisTurn) {
+    return addLog(st, '合金建造：只能在從手牌使出並進化的當回合使用', idx);
+  }
+  const cand = st.players[idx].discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Metal';
+  });
+  if (cand.length === 0) return addLog(st, '合金建造：棄牌區無基本【鋼】能量', idx);
+  const metalPokes = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench]
+    .filter(c => pool.get(c.cardId)?.pokemonType === 'Metal');
+  if (metalPokes.length === 0) return addLog(st, '合金建造：場上無【鋼】寶可夢', idx);
+  const maxPick = Math.min(2, cand.length);
+  const s = addLog(st, `合金建造：從棄牌選 0-${maxPick} 張基本【鋼】能量`, idx);
+  return withPending(s, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Energy:Metal', minCount: 0, maxCount: maxPick,
+    effectKey: 'alloy-forge-pick',
+  });
+});
+regR('alloy-forge-pick', (st, idx, energyIids, _params, pool) => {
+  if (energyIids.length === 0) return addLog(st, '合金建造：未選擇能量', idx);
+  const metalPokes = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench]
+    .filter(c => pool.get(c.cardId)?.pokemonType === 'Metal');
+  if (metalPokes.length === 0) return addLog(st, '合金建造：場上無【鋼】寶可夢，能量留在棄牌區', idx);
+  if (metalPokes.length === 1) {
+    const target = metalPokes[0];
+    const tName = pool.get(target.cardId)?.name ?? '?';
+    const energies = st.players[idx].discard.filter(c => energyIids.includes(c.iid));
+    const s = addLog(st, `合金建造：將 ${energies.length} 張基本【鋼】能量附於 ${tName}`, idx);
+    return updatePlayer(s, idx, pl => {
+      const rest = pl.discard.filter(c => !energyIids.includes(c.iid));
+      if (pl.active && pl.active.iid === target.iid) {
+        return { ...pl, discard: rest, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } };
+      }
+      return { ...pl, discard: rest,
+        bench: pl.bench.map(c => c.iid === target.iid ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
+    });
+  }
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'alloy-forge-commit',
+    params: { energyIids, validIids: metalPokes.map(c => c.iid) },
+  });
+});
+regR('alloy-forge-commit', (st, idx, iids, params, pool) => {
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const targetIid = iids[0];
+  const p = st.players[idx];
+  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const tCard = pool.get(target.cardId);
+  if (tCard?.pokemonType !== 'Metal') return addLog(st, '合金建造：目標非【鋼】寶可夢，取消附加', idx);
+  const energies = p.discard.filter(c => energyIids.includes(c.iid));
+  if (energies.length === 0) return st;
+  const s = addLog(st, `合金建造：將 ${energies.length} 張基本【鋼】能量附於 ${tCard.name}`, idx);
+  return updatePlayer(s, idx, pl => {
+    const rest = pl.discard.filter(c => !energyIids.includes(c.iid));
+    if (pl.active && pl.active.iid === targetIid) {
+      return { ...pl, discard: rest, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } };
+    }
+    return { ...pl, discard: rest,
+      bench: pl.bench.map(c => c.iid === targetIid ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 旋轉洛托姆 ｜ 風扇呼喚（首回合限定特性）
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「只有在自己的最初回合可使用 1 次。從自己的牌庫選擇最多 3 張 HP 為『100』以下的
+//   【無】寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。」
+// Gate：state.turn <= 2（兩個最初回合內都可觸發；自己回合由 activePlayerIndex 強制）
+regA('旋轉洛托姆', 0, (st, idx) => {
+  // 「最初回合」= 先攻第 1 回合（turn=1）+ 後攻第 1 回合（turn=2）之一
+  if (st.turn > 2) {
+    return addLog(st, '風扇呼喚：只能在自己的最初回合使用', idx);
+  }
+  if (st.players[idx].deck.length === 0) {
+    return addLog(st, '風扇呼喚：牌庫已空', idx);
+  }
+  const s = addLog(st, '風扇呼喚：從牌庫選 0-3 張 HP≤100 的【無】寶可夢加手牌', idx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'ColorlessPokeHP100', minCount: 0, maxCount: 3,
+    effectKey: 'fan-call-hand',
+  });
+});
+regR('fan-call-hand', (st, idx, iids, _params, pool) => {
+  if (iids.length > 0) {
+    const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `風扇呼喚：${names} 加入手牌`, idx);
+    st = updatePlayer(st, idx, p => ({
+      ...p,
+      hand: [...p.hand, ...p.deck.filter(c => iids.includes(c.iid))],
+      deck: p.deck.filter(c => !iids.includes(c.iid)),
+    }));
+  } else {
+    st = addLog(st, '風扇呼喚：未選擇寶可夢', idx);
+  }
+  return updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) }));
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 奧利瓦ex ｜ 油之機關槍（選 6 次目標 × 20 傷，可選同一隻多次，不計弱抵）
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「選擇 6 次對手的寶可夢，對所選的所有寶可夢不計算弱點・抵抗力，
+//   造成其選擇次數×20 點傷害。（1 隻可選擇 2 次以上。）」
+// 實裝：damage-distribute pending with includeActive=true（可選對手任意寶可夢 含戰鬥場），
+//   totalCounters=6, counterDamage=20。傷害以指示物形式放置（不經 weakness pipeline）。
+regPre('奧利瓦ex|油之機關槍', (s) => ({ state: s, damage: 0, skipWeakRes: true, skipDefEffects: true }));
+regPost('奧利瓦ex|油之機關槍', (state, aIdx) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const dp = state.players[dIdx];
+  if (!dp.active && dp.bench.length === 0) return state;
+  const s = addLog(state, '油之機關槍：將 6 次 20 傷自由分配到對手任意寶可夢', aIdx);
+  return withPending(s, {
+    type: 'damage-distribute',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 6,
+    effectKey: 'olive-oil-distribute',
+    params: {
+      totalCounters: 6, placedCounters: 0, counterDamage: 20,
+      label: '油之機關槍', includeActive: true,
+    },
+  });
+});
+// resolver 類似 dragapult-snipe，但 target 含 active（根據 params.includeActive）
+regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
+  const totalCounters = (params?.totalCounters as number) ?? 6;
+  const placedBefore = (params?.placedCounters as number) ?? 0;
+  const counterDamage = (params?.counterDamage as number) ?? 20;
+  const label = (params?.label as string) ?? '油之機關槍';
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  if (selectedIids.length === 0) return st;
+
+  let s: GameState = st;
+  let placedThisBatch = 0;
+  const koNames: string[] = [];
+  let morePrizes = 0;
+
+  for (const iid of selectedIids) {
+    const defender = s.players[dIdx];
+    const target = defender.active?.iid === iid ? defender.active
+      : defender.bench.find(c => c.iid === iid);
+    if (!target) continue;
+    const targetCard = pool.get(target.cardId);
+    const tHp = targetCard?.hp ?? 0;
+    const newDmg = target.damage + counterDamage;
+    placedThisBatch++;
+
+    if (tHp > 0 && newDmg >= tHp) {
+      const ko: CardInstance[] = [
+        { ...target, damage: newDmg }, ...target.energyAttached,
+        ...(target.toolAttached ? [target.toolAttached] : []),
+        ...(target.evolvedFromStack ?? []),
+      ];
+      const prizes = targetCard?.name?.endsWith('ex') ? (targetCard.name.startsWith('超級') ? 3 : 2) : 1;
+      morePrizes += prizes;
+      koNames.push(targetCard?.name ?? '?');
+      const players = [...s.players] as [PlayerState, PlayerState];
+      if (defender.active?.iid === iid) {
+        players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...ko] };
+      } else {
+        players[dIdx] = {
+          ...defender,
+          bench: defender.bench.filter(c => c.iid !== iid),
+          discard: [...defender.discard, ...ko],
+        };
+      }
+      s = { ...s, players };
+    } else {
+      const players = [...s.players] as [PlayerState, PlayerState];
+      const newDef = { ...defender };
+      if (defender.active?.iid === iid) {
+        newDef.active = { ...defender.active!, damage: newDmg };
+      } else {
+        newDef.bench = defender.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
+      }
+      players[dIdx] = newDef;
+      s = { ...s, players };
+    }
+  }
+
+  if (koNames.length > 0) {
+    s = addLog(s, `${label}：${koNames.join('、')} 被擊倒！+${morePrizes} 張獎勵牌`, null);
+    s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + morePrizes };
+  }
+
+  const placedAfter = placedBefore + placedThisBatch;
+  const remaining = Math.max(0, totalCounters - placedAfter);
+  const defAfter = s.players[dIdx];
+  const stillHasTarget = !!defAfter.active || defAfter.bench.length > 0;
+  if (remaining > 0 && stillHasTarget) {
+    return withPending(s, {
+      type: 'damage-distribute',
+      actorIdx: actorIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: remaining,
+      effectKey: 'olive-oil-distribute',
+      params: { totalCounters, placedCounters: placedAfter, counterDamage, label, includeActive: true },
+    });
+  }
+  return addLog(s, `${label}：總計放置 ${placedAfter} 個 20 傷`, actorIdx);
 });
