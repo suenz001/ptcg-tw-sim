@@ -40,6 +40,47 @@ function isToolsJammed(state: GameState, pool: Map<string, Card>): boolean {
   return JAMMING_TOWER_STADIUMS.has(card.name);
 }
 
+// ── v2.136 零之大空洞：備戰位上限 ──────────────────────────────────────────────
+// 場上活動場地卡為「零之大空洞」且自己場上有「太晶」寶可夢時，該玩家備戰可放 8 隻；
+// 場地離場 / 失去太晶 → enforceBenchLimit 自動丟備戰至 5。
+// 太晶判定：card.tags?.includes('太晶')（v2.48 scraper 把太晶從 attacks 抽到 tags）。
+export function getBenchLimit(state: GameState, idx: 0 | 1, pool: Map<string, Card>): number {
+  const s = state.activeStadium;
+  if (!s) return 5;
+  const stadiumCard = pool.get(s.cardId);
+  if (stadiumCard?.name !== '零之大空洞') return 5;
+  const player = state.players[idx];
+  const all = [player.active, ...player.bench].filter((c): c is CardInstance => !!c);
+  const hasTera = all.some(c => pool.get(c.cardId)?.tags?.includes('太晶'));
+  return hasTera ? 8 : 5;
+}
+
+// 把超出當前 bench 上限的備戰寶可夢丟到棄牌區（卡面：當零之大空洞被換掉/失去太晶時觸發）。
+// 由 applyAction 末尾呼叫，自動補正。卡面要求「持有人先丟」— sim 用 activePlayerIndex 順序。
+function enforceBenchLimit(state: GameState, pool: Map<string, Card>): GameState {
+  if (state.phase !== 'playing') return state;
+  let s = state;
+  const order: (0 | 1)[] = [s.activePlayerIndex, (1 - s.activePlayerIndex) as 0 | 1];
+  for (const idx of order) {
+    const limit = getBenchLimit(s, idx, pool);
+    const p = s.players[idx];
+    if (p.bench.length <= limit) continue;
+    // 多餘的從尾端開始丟（玩家通常會先選擇 — 自動丟為 sim/AI fallback）
+    const drop = p.bench.slice(limit);
+    const keep = p.bench.slice(0, limit);
+    const discardAdds: CardInstance[] = [];
+    for (const inst of drop) {
+      discardAdds.push(inst, ...inst.energyAttached, ...(inst.toolAttached ? [inst.toolAttached] : []), ...(inst.evolvedFromStack ?? []));
+    }
+    const players = [...s.players] as [PlayerState, PlayerState];
+    players[idx] = { ...p, bench: keep, discard: [...p.discard, ...discardAdds] };
+    s = { ...s, players };
+    const dropNames = drop.map(d => pool.get(d.cardId)?.name ?? '?').join('、');
+    s = addLog(s, `零之大空洞效果失去：${players[idx].name} 將備戰多餘的 ${drop.length} 隻寶可夢（${dropNames}）丟棄`, idx);
+  }
+  return s;
+}
+
 // ── 火箭隊的監視塔（【無】寶可夢特性無效）── 輔助判定 ────────────────────────
 // 當場上活動場地卡為 ROCKET_WATCHTOWER_STADIUMS 所列競技場卡時，
 // 雙方所有【無】屬寶可夢（pokemonType === 'Colorless'）的特性全部消除。
@@ -808,7 +849,8 @@ function handleSetup(
 
   if (action.type === 'BENCH_POKEMON') {
     if (!player.active) return state; // 必須先選出場
-    if (player.bench.length >= 5) return state;
+    // v2.136 零之大空洞：場上有太晶寶可夢時上限可達 8
+    if (player.bench.length >= getBenchLimit(state, pIdx, pool)) return state;
     const iidx = player.hand.findIndex((c) => c.iid === action.iid);
     if (iidx < 0) return state;
     const card = player.hand[iidx];
@@ -994,7 +1036,8 @@ function handlePlaying(
   // ── 從手牌打出基礎寶可夢到備戰區 ─────────────────────────────────────────
   if (action.type === 'PLAY_BASIC') {
     if (state.turnPhase !== 'main') return state;
-    if (attacker.bench.length >= 5) return state;
+    // v2.136 零之大空洞：場上有太晶寶可夢時上限可達 8
+    if (attacker.bench.length >= getBenchLimit(state, aIdx, pool)) return state;
     const hIdx = attacker.hand.findIndex(c => c.iid === action.iid);
     if (hIdx < 0) return state;
     const inst = attacker.hand[hIdx];
@@ -2902,6 +2945,9 @@ export function applyAction(
   // v2.47 防禦層：備戰寶可夢不應持有異常狀態
   next = scrubBenchStatus(next);
 
+  // v2.136 零之大空洞：每次 dispatch 完，重新計算備戰上限。若場地離場/失去太晶 → 自動丟備戰至 5
+  next = enforceBenchLimit(next, pool);
+
   // v2.135 防禦層：若任一玩家在 'playing' 階段沒 active 也沒 bench → game-over
   // 漏網的 KO 路徑（self-return-to-hand / self-KO ability / 中毒/灼傷邊緣案例 等）若忘了
   // trigger game-over，sim 會 stuck loop。這裡做最後一道保險。
@@ -3121,7 +3167,8 @@ export function getPlayableBasics(state: GameState, pool: Map<string, Card>): st
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
   if (state.pendingSelection) return [];
   const player = state.players[state.activePlayerIndex];
-  if (player.bench.length >= 5) return [];
+  // v2.136 零之大空洞：場上有太晶寶可夢時上限可達 8
+  if (player.bench.length >= getBenchLimit(state, state.activePlayerIndex, pool)) return [];
   return player.hand
     .filter(inst => isBasicPokemonCard(pool.get(inst.cardId)))
     .map(inst => inst.iid);

@@ -3760,7 +3760,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "火炎獅",
+    "evolvesFrom": "小獅獅",
     "illustrator": "Keisuke Azuma"
   },
   {
@@ -3802,7 +3802,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "甲賀忍蛙ex",
+    "evolvesFrom": "呱頭蛙",
     "illustrator": "takuyoa"
   },
   {
@@ -3981,7 +3981,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "毒藻龍",
+    "evolvesFrom": "垃垃藻",
     "illustrator": "5ban Graphics"
   },
   {
@@ -4204,7 +4204,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "甲賀忍蛙ex",
+    "evolvesFrom": "呱頭蛙",
     "illustrator": "Susumu Maeya"
   },
   {
@@ -4288,7 +4288,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "毒藻龍",
+    "evolvesFrom": "垃垃藻",
     "illustrator": "Kazumasa Yasukuni"
   },
   {
@@ -4399,7 +4399,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "甲賀忍蛙ex",
+    "evolvesFrom": "呱頭蛙",
     "illustrator": "takuyoa"
   }
 ]

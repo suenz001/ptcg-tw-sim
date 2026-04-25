@@ -1,9 +1,76 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.135)  
+> 最後更新：2026-04-25 (v2.136)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.136 — 零之大空洞 Stadium 實裝 + 進化鏈 12 張 scraper bug 批修
+
+### Bug A — 零之大空洞 Stadium 效果未實裝
+卡面：「自己的場上有『太晶』寶可夢的玩家的可放置於備戰區的寶可夢數量改為 8 隻。
+（這張卡被丟棄時，或自己的場上沒有了『太晶』寶可夢時，將備戰區的寶可夢丟棄直到變為 5 隻為止。
+若雙方都要丟棄，則這張卡的持有人先丟棄。）」
+
+之前只列在 STATIC_PASSIVE_STADIUMS（v2.96，UI 不顯示「使用」按鈕）但效果未實作。
+
+**實作**（`src/lib/game/engine.ts`）：
+- 新增 `getBenchLimit(state, idx, pool): number` — 場地是「零之大空洞」且該玩家場上有「太晶」寶可夢（透過 `card.tags?.includes('太晶')` 判定）→ 回 8；否則 5。
+- 新增 `enforceBenchLimit(state, pool)` — 場地離場/失去太晶時，自動把備戰超出上限的寶可夢丟到棄牌區（連同附加能量/道具/進化棧）。卡面要求「持有人先丟」— sim 用 `activePlayerIndex` 順序處理。
+- 改 3 個 hot path：`BENCH_POKEMON`(line 811) / `PLAY_BASIC`(line 997) / `getPlayableBasics`(line 3124) 的 `>= 5` → `>= getBenchLimit(...)`。
+- 在 `applyAction` 末尾呼叫 `enforceBenchLimit` — 每次 dispatch 後重新計算上限。
+
+**未動的 5：** effects 內「能量轉移 / 呼朋引伴」等卡牌效果的 `5 - bench.length` 是「卡面寫的可搜尋上限」（例如「最多搜 3 隻放備戰」），這些是卡牌效果上限，不是場上 bench 上限，刻意保留 5。場上實際容量由 `enforceBenchLimit` 統一管控。
+
+### Bug B — 蒼炎刃鬼ex SVPS 006/008 進化鏈錯誤
+Leon 直接指出：scraper 抓 11100 (SVPS 006/008) `evolvesFrom = "紅蓮鎧騎ex"` ← 這是錯的。其他 7 張同名卡都是「炭小侍」（基本）。直接修 JSON。
+
+### Bug C — 全資料庫進化鏈健檢（找出 9 種 / 12 張錯誤）
+寫 audit script 跑 `static/cards/*.json` — 對所有 stage=Stage1/Stage2 的卡，檢查兩個 pattern：
+- **Pattern A**：同名卡的 `evolvesFrom` 不一致 → 至少有一個是 scraper 抓錯
+- **Pattern B**：`evolvesFrom` 指向 pool 裡找不到的卡名 → 100% scraper bug
+
+掃出 9 種同名不一致 + 3 張指向不存在前階（重疊在 A），共 **12 張卡** evolvesFrom 錯誤：
+
+| ID | 卡名 | set | 原 evolvesFrom（錯）| 修正為 |
+|---|---|---|---|---|
+| 12120 | 仙子伊布 | SVM | 葉伊布 | 伊布 |
+| 12105 | 冰鬼護 | SVM | 雪妖女 | 雪童子 |
+| 12111 | 阿羅拉 隆隆岩 | SVM | 阿羅拉 隆隆岩（自指自己） | 阿羅拉 隆隆石 |
+| 12098 | 呆呆王 | SVM | 呆殼獸（不在 pool） | 呆呆獸 |
+| 11107 | 仙子伊布ex | SVPN | 太陽伊布 | 伊布 |
+| 11100 | 蒼炎刃鬼ex | SVPS | 紅蓮鎧騎ex | 炭小侍 |
+| 18534 | 超級火炎獅ex | 083 | 火炎獅 | 小獅獅 |
+| 18535 | 超級甲賀忍蛙ex | 083 | 甲賀忍蛙ex | 呱頭蛙 |
+| 18551 | 超級甲賀忍蛙ex | 083 | 甲賀忍蛙ex | 呱頭蛙 |
+| 18557 | 超級甲賀忍蛙ex | 083 | 甲賀忍蛙ex | 呱頭蛙 |
+| 18539 | 超級毒藻龍ex | 083 | 毒藻龍（不在 pool） | 垃垃藻 |
+| 18553 | 超級毒藻龍ex | 083 | 毒藻龍（不在 pool） | 垃垃藻 |
+
+**判定原則**：
+- Stage1 mega 寶可夢 evolvesFrom = Basic（如超級火炎獅ex Stage1 ← 小獅獅 Basic）
+- Stage2 mega 寶可夢 evolvesFrom = Stage1（如超級噴火龍Xex Stage2 ← 火恐龍 Stage1）
+- 同名 ex / 非 ex 是同階，evolvesFrom 應一致（v2.35 教訓）
+- evolvesFrom 不應指向「自己」或不存在的卡名
+
+修完再跑 audit：Pattern A=0、Pattern B=0（資料庫進化鏈 100% 乾淨）。
+
+### sim 結果
+`node scripts/sim-sandbox.mjs 100` → 100/100 正常結束、0 卡住、0 崩潰、平均 14.6 回合。
+
+### 變更檔案
+- `src/lib/game/engine.ts`：新增 `getBenchLimit` + `enforceBenchLimit` helper；改 3 個 bench 上限 hot path
+- `src/lib/version.ts`：2.135 → 2.136
+- `static/cards/SVM.json`：4 張 evolvesFrom 修
+- `static/cards/SVPN.json`：1 張 evolvesFrom 修
+- `static/cards/SVPS.json`：1 張 evolvesFrom 修
+- `static/cards/M4.json`：6 張 evolvesFrom 修（083 set）
+
+### Leon 須注意
+- **進化鏈健檢自動腳本**：未來爬新 set 時建議重跑（audit script 在這次 commit log 末尾，可保留為日常檢查）
+- **零之大空洞 + 太晶**：實際遊戲若你想驗證，建議手動拖 4 隻太晶寶可夢上備戰、放下零之大空洞 → 應可放到 8 隻
 
 ---
 
