@@ -114,10 +114,18 @@ export type AttackPreFn = (
   skipDefEffects?: boolean;
 };
 
+/**
+ * v2.156：第 4 個參數 action 為可選（保持向後相容）— 讓 POST 也能讀 ATTACK action 上
+ * 玩家做的選擇（如 discardedEnergyIids），用於「PRE/POST 共享 chosenIids」的招式。
+ *
+ * 使用範例：激流水泵（option 招式）— 玩家在 PRE 階段挑選棄能量，POST 階段需要根據
+ * 玩家是否棄了 ≥3 個能量決定要不要觸發「對手備戰受 120」picker。
+ */
 export type AttackPostFn = (
   state: GameState,
   aIdx: 0 | 1,
-  pool: Map<string, Card>
+  pool: Map<string, Card>,
+  action?: Extract<GameAction, { type: 'ATTACK' }>
 ) => GameState;
 
 export const ATTACK_PRE  = new Map<string, AttackPreFn>();

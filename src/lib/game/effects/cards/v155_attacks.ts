@@ -23,15 +23,17 @@
  *  13. 阿賽斯特萊石（太陽伊布ex）        damage 0 + Post 對手所有進化退化（進化卡回對手牌庫並洗）
  *  14. 雀躍（捲捲耳）                    damage 0 + Post 與備戰互換
  *  15. 天仙石（仙子伊布ex）              damage 0 + Post opp-bench 2 隻回對手牌庫 + 下回合不能用
- *  16. 時間爆炸（帝牙盧卡）              damage 80 + 自動：若有能量則棄全能量並+80
+ *  16. 時間爆炸（帝牙盧卡）              damage 80 + modal-choice：玩家選棄全能量則 +80（v2.156）
  *  17. 破壞潮旋（洛奇亞ex）              damage 140 + 擲幣到反 → 棄對手戰鬥位 N 能量
- *  18. 激流水泵（厄鬼椪 水井面具ex）     damage 100 + 自動：若有≥3能量則棄3 + 對手備戰 120
+ *  18. 激流水泵（厄鬼椪 水井面具ex）     damage 100 + modal-choice：玩家選棄 3 能量則 對手備戰 120（v2.156）
  *  19. 音波拆裂（超級盔甲鳥ex）          damage 220 + 自身全能量回牌庫並洗
  *  20. 精神尖槍（代歐奇希斯）            damage 120 + 若能量單位≥cost+2 → 對手備戰 1 隻 120
  *
- * 簡化說明（故意偏離卡面的部分）：
- *   - 凡卡面寫「若希望」(option) 都改成「自動執行」最低代價路徑（沒能量就跳過）
- *     避免新 modal-choice 流程在 sim 中卡住或讓 AI 隨機選；玩家對戰仍可生效。
+ * v2.156：時間爆炸 / 激流水泵 升級為真正 modal-choice — 用 ATTACK_PRE_DISCARD_CHOICE
+ *   讓 UI 彈出能量挑選 modal，玩家自己決定要不要執行 option（之前是自動執行）。
+ *   配合 engine.ts 把 action 也傳給 ATTACK_POST，讓 POST 能讀同一 chosenIids。
+ *
+ * 簡化說明（仍偏離卡面的部分）：
  *   - 音波拆裂卡面是「對手 1 隻寶可夢」可選戰鬥位或備戰位，這裡簡化為打戰鬥位 220
  *     （事實上 220 對戰鬥位幾乎都能 KO，戰術上多數情境也會打戰鬥位）。
  *   - 天仙石的「上回合用過則無法使用」cooldown 用 cantAttackPending 一回合鎖招式
@@ -42,6 +44,7 @@ import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
   regPre, regPost, regR,
   shuffle, addLog, withPending,
+  ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
 import {
   coinHeadsMultiplyPre,
@@ -419,21 +422,34 @@ regR('v155-tianxianstone-return', (st, aIdx, iids, _params, pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// (16) 時間爆炸（帝牙盧卡）— 80 + 自動：若有能量則棄全能量並 +80
+// (16) 時間爆炸（帝牙盧卡）— 80 + 玩家可選棄全部能量回牌庫並重洗 → +80
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('帝牙盧卡|時間爆炸', (state, aIdx, pool) => {
+// v2.156：升級為真正 modal-choice — 用 ATTACK_PRE_DISCARD_CHOICE 讓 UI 彈出能量挑選 modal。
+//   玩家不選任何能量 → 80（不執行 option）
+//   玩家選任意 ≥1 個能量 → 視為「想執行 option」，PRE 強制棄全部能量回牌庫並洗 + 160 傷害
+// 卡面要求棄「全部」能量，所以實裝為 binary（不允許半棄）。
+ATTACK_PRE_DISCARD_CHOICE.set('帝牙盧卡|時間爆炸', {
+  min: 0, max: null, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+});
+regPre('帝牙盧卡|時間爆炸', (state, aIdx, _pool, action) => {
   const att = state.players[aIdx].active;
-  if (!att || att.energyAttached.length === 0) {
-    return { state: addLog(state, '時間爆炸：自身無能量 → 80', aIdx), damage: 80 };
+  if (!att) return { state, damage: 80 };
+  const allEnergies = att.energyAttached;
+  const chosenIids = action?.discardedEnergyIids ?? [];
+  // 不選 → 80；無能量 → 也是 80
+  if (chosenIids.length === 0 || allEnergies.length === 0) {
+    return { state: addLog(state, '時間爆炸：未棄能量 → 80', aIdx), damage: 80 };
   }
-  // 自動：棄全能量回牌庫並洗 → +80
-  const energies = att.energyAttached;
+  // 選了 ≥1 個 → 視為玩家想執行 option，依卡面強制棄全部
   const s2 = updatePlayerInline(state, aIdx, p => {
     if (!p.active) return p;
-    const newActive = { ...p.active, energyAttached: [] };
-    return { ...p, active: newActive, deck: shuffle([...p.deck, ...energies]) };
+    return {
+      ...p,
+      active: { ...p.active, energyAttached: [] },
+      deck: shuffle([...p.deck, ...allEnergies]),
+    };
   });
-  const log = addLog(s2, `時間爆炸：將自身 ${energies.length} 個能量回牌庫並重洗 → 80 + 80 = 160`, aIdx);
+  const log = addLog(s2, `時間爆炸：將自身 ${allEnergies.length} 個能量回牌庫並重洗 → 80 + 80 = 160`, aIdx);
   return { state: log, damage: 160 };
 });
 
@@ -464,29 +480,51 @@ regPost('洛奇亞ex|破壞潮旋', (state, aIdx) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// (18) 激流水泵（厄鬼椪 水井面具ex）— 100 + 自動：若有≥3 能量則棄 3 + 對手備戰 1 隻 120
+// (18) 激流水泵（厄鬼椪 水井面具ex）— 100 + 玩家可選棄 3 能量 → 對手備戰 1 隻 120
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('厄鬼椪 水井面具ex|激流水泵', (state) => ({ state, damage: 100 }));
-regPost('厄鬼椪 水井面具ex|激流水泵', (state, aIdx) => {
+// v2.156：升級為 modal-choice — UI 顯示能量挑選 modal（min=0 max=3）。
+//   玩家選 0 ~ 2 個 → 不執行 option（傷害 100，能量不動）
+//   玩家選滿 3 個 → 執行 option：棄 3 個指定能量回牌庫並洗 + 對手備戰 1 隻受 120
+// PRE 階段棄能量；POST 階段讀同一 action 觸發 hitBenchPickPost。
+ATTACK_PRE_DISCARD_CHOICE.set('厄鬼椪 水井面具ex|激流水泵', {
+  min: 0, max: 3, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+});
+regPre('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, _pool, action) => {
   const att = state.players[aIdx].active;
-  if (!att || att.energyAttached.length < 3) {
-    return addLog(state, '激流水泵：自身能量不足 3 個（不觸發棄能量+備戰打擊）', aIdx);
+  const chosenIids = action?.discardedEnergyIids ?? [];
+  // < 3 → 不執行（卡面要求棄 3）
+  if (!att || chosenIids.length < 3) {
+    return { state: addLog(state, '激流水泵：未棄滿 3 個能量（不執行 option）→ 100', aIdx), damage: 100 };
   }
-  const dIdx = (1 - aIdx) as 0 | 1;
-  if (state.players[dIdx].bench.length === 0) {
-    return addLog(state, '激流水泵：對手備戰無寶可夢（不觸發棄能量+備戰打擊）', aIdx);
+  // 棄玩家選的 3 個（取前 3 個 — UI 已限制 max=3）
+  const allowed = new Set(att.energyAttached.map(e => e.iid));
+  const capped = chosenIids.filter(id => allowed.has(id)).slice(0, 3);
+  const chosenSet = new Set(capped);
+  const discarded = att.energyAttached.filter(e => chosenSet.has(e.iid));
+  const remaining = att.energyAttached.filter(e => !chosenSet.has(e.iid));
+  if (discarded.length < 3) {
+    // 防呆：玩家送的 iid 對不上 active 能量 → 視為不執行
+    return { state: addLog(state, '激流水泵：能量挑選異常 → 100', aIdx), damage: 100 };
   }
-  // 自動棄前 3 個能量回牌庫並洗
-  const energies = att.energyAttached.slice(0, 3);
-  const remaining = att.energyAttached.slice(3);
-  let s = updatePlayerInline(state, aIdx, p => ({
+  const s2 = updatePlayerInline(state, aIdx, p => ({
     ...p,
     active: p.active ? { ...p.active, energyAttached: remaining } : p.active,
-    deck: shuffle([...p.deck, ...energies]),
+    deck: shuffle([...p.deck, ...discarded]),
   }));
-  s = addLog(s, '激流水泵：棄 3 個能量回自身牌庫並重洗 → 對手備戰 1 隻受 120', aIdx);
-  // 後續：picker 選 1 隻對手備戰受 120（hitBenchPickPost）
-  return hitBenchPickPost(s, aIdx, 'opp', 1, 120, '激流水泵');
+  return {
+    state: addLog(s2, '激流水泵：棄 3 個能量回自身牌庫並重洗 → 戰鬥位 100 + 對手備戰 1 隻受 120', aIdx),
+    damage: 100,
+  };
+});
+regPost('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, _pool, action) => {
+  // v2.156：POST 也讀 action — 玩家有棄滿 3 個才觸發備戰打擊
+  const chosenIids = action?.discardedEnergyIids ?? [];
+  if (chosenIids.length < 3) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  if (state.players[dIdx].bench.length === 0) {
+    return addLog(state, '激流水泵：對手備戰無寶可夢（已棄能量但無 bench 目標）', aIdx);
+  }
+  return hitBenchPickPost(state, aIdx, 'opp', 1, 120, '激流水泵');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

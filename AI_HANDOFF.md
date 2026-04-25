@@ -1,9 +1,63 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.155)  
+> 最後更新：2026-04-26 (v2.156)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.156 — 時間爆炸 / 激流水泵 升級為真正 modal-choice
+
+### 起因
+v2.155 為避免 sim 卡住，把 2 個「若希望(option)」招式做成自動執行：
+- **時間爆炸（帝牙盧卡）**：永遠棄全能量 +80（卡面是可選）
+- **激流水泵（厄鬼椪 水井面具ex）**：自動棄 3 + 對手備戰 120（卡面是可選）
+
+Leon 反映要正名為玩家可選。
+
+### 修法
+
+**1. engine.ts — `AttackPostFn` signature 加 `action?` 參數（向後相容）**
+原 POST 只收 `(state, aIdx, pool)` — 無法讀玩家在 PRE 階段做的選擇（`discardedEnergyIids`）。改成 `(state, aIdx, pool, action?)`，呼叫端 engine.ts 也帶上 action。所有現有 POST 函式不受影響（沒讀就忽略）。
+
+**2. 時間爆炸**
+```typescript
+ATTACK_PRE_DISCARD_CHOICE.set('帝牙盧卡|時間爆炸', {
+  min: 0, max: null, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+});
+regPre('帝牙盧卡|時間爆炸', (state, aIdx, _pool, action) => {
+  const chosenIids = action?.discardedEnergyIids ?? [];
+  if (chosenIids.length === 0) return { state: addLog(...), damage: 80 };
+  // 玩家選了 ≥1 → 視為「執行 option」，依卡面強制棄全部能量回牌庫並洗 + 160
+  ...
+});
+```
+UI 行為：玩家點招式 → 彈能量挑選 modal → 選 0 個 = 不執行（80 傷害）；選 ≥1 個 = 執行（強制棄全部 + 160 傷害）。
+
+**3. 激流水泵**
+```typescript
+ATTACK_PRE_DISCARD_CHOICE.set('厄鬼椪 水井面具ex|激流水泵', {
+  min: 0, max: 3, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+});
+regPre(... → 棄玩家選的 3 個能量回牌庫並洗，傷害 100);
+regPost(... → 讀同一 action.discardedEnergyIids，若 ≥3 則 hitBenchPickPost(120));
+```
+UI 行為：玩家點招式 → 彈能量挑選 modal（最多 3 個）→ 選 < 3 = 不執行（100 傷害）；選滿 3 = 執行（棄 3 + 戰鬥位 100 + 對手備戰 1 隻 120）。
+
+### 改動檔案
+- `src/lib/version.ts` — 2.155 → 2.156
+- `src/lib/game/effects/_shared.ts` — `AttackPostFn` 加 `action?` 參數
+- `src/lib/game/engine.ts` — `postFn(newState, aIdx, pool, action)` 把 action 傳下去
+- `src/lib/game/effects/cards/v155_attacks.ts` — 時間爆炸 / 激流水泵 改 modal-choice 版
+
+### 驗證
+- `npm run build` ✓
+- `node scripts/sim-sandbox.mjs 30` ✓ 30 局 0 bug
+
+### 後續
+- 18 個 v2.155 招式中還剩兩個簡化偏離卡面（音波拆裂打戰鬥位、天仙石 cooldown 鎖整隻）— 都不是 option 類，是「目標選擇」或「招式名鎖」，要升級需獨立工項。
+- engine 改動雖小但 invariant 微擴 — 任何子模組想做「PRE 棄能量 → POST 觸發 picker」現在都可走 action.discardedEnergyIids 共享。
 
 ---
 

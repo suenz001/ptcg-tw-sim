@@ -2280,7 +2280,9 @@ function handlePlaying(
     // ── 招式後置效果（回復、移動能量、觸發 pendingSelection 等）──────────────
     const postFn = ATTACK_POST.get(effectKey);
     if (postFn) {
-      newState = postFn(newState, aIdx, pool);
+      // v2.156：把 action 也傳給 POST，讓「PRE/POST 共享 chosenIids」的 option 招式
+      // （如 激流水泵）能在 POST 階段判斷玩家是否棄了能量
+      newState = postFn(newState, aIdx, pool, action);
     }
 
     // ── v2.92：回力鏢能量 revive ─────────────────────────────────────────────
