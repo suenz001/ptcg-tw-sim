@@ -1,9 +1,90 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.126)  
+> 最後更新：2026-04-25 (v2.127)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.127 — 預組未實裝招式/特性全數補完（9 張卡 / 4 招式 + 4 特性 + 2 條件式）
+
+### Leon 指示
+v2.126 audit 列出的「未實裝清單」要全部實裝：「我做牌組的目的就是優先實裝這些高機率被比賽使用的卡牌，讓玩家可以練習，當然要全部都實裝」。
+
+並且 v2.126 audit 我列「甲賀忍蛙ex｜變幻手裏劍」是 AI 幻覺被 Leon 嚴正糾正。事後查證：MC 208/742 甲賀忍蛙ex（陽炎影襲套組）**確實**有「變幻手裏劍」（100+；硬幣正面 +100），但 Leon 印象中是 SV5a 的甲賀忍蛙ex（忍之利刃 / 分身連打），所以 v2.127 把兩個版本都實裝才能涵蓋玩家可能的卡。
+
+另外 audit 說「酋雷姆｜反等離子」未實裝，Leon 質疑「我記得之前有修過了阿」。grep 結果：**確實沒實裝**（effects.ts / engine.ts 都搜不到「反等離子」或「電漿」相關字串）— audit 結果為真。v2.127 補實裝。
+
+### 同時記錄到記憶系統
+寫入 `feedback_audit_no_hallucination.md`：未來盤點清單必須**逐張卡 grep JSON 驗證**，不可直接從 audit script 輸出複製給 Leon。
+
+---
+
+### 實裝細節（9 張卡）
+
+#### 1) 甲賀忍蛙ex (MC 208/742)｜變幻手裏劍 100+
+- 卡面：擲 1 個硬幣，正面則加 100 傷害
+- 實作：`regPre('甲賀忍蛙ex|變幻手裏劍', coinPlusDmg(100, 100))`
+
+#### 2) 甲賀忍蛙ex (SV5a)｜忍之利刃 170
+- 卡面：可從牌庫選 1 張卡加入手牌，重洗牌庫
+- pre 設 `damage: 170`；post 開 `deck-search` pending（filter='any', min=0/max=1）
+- resolver `greninja-ninja-blade-search`：把選到的卡丟手牌、剩下重洗
+
+#### 3) 甲賀忍蛙ex (SV5a)｜分身連打
+- 卡面：棄 2 個能量 → 對手 2 隻寶可夢各受 120 傷（不計弱抗）
+- `ATTACK_PRE_DISCARD_CHOICE` set min=2/max=2/scope='attacker'
+- post 開 `opp-poke-choose` pending（min=2/max=2 — 真的隨意 2 隻）
+- resolver `greninja-clone-strike-snipe`：對選中的 2 隻各加 120 dmg
+
+#### 4) 月月熊 赫月｜經驗法則（特性）
+- 卡面：剛從手牌放置於備戰區時可用，從手牌附最多 2 張基本【鬥】能量到自己身上
+- gate：engine.ts `getUsableAbilities` 加 `if (ab.name === '經驗法則' && !pk.justPlaced) return;`（同 v2.126 螺釘地鼠 狂挖 pattern）
+- ability fn：開 `hand-discard` pending（filter='BasicFightingEnergy'）— resolver 改寫為「附加而非丟棄」
+- resolver `ursaluna-bm-attach`：手牌挑出選中能量、附到由 `params.hostIid` 指定的寶可夢
+
+#### 5) 菊草葉｜叫聲
+- 卡面：對手戰鬥位下回合招式 -20
+- 沿用 嘎啦嘎啦|叫聲 的 helper：`regPost('菊草葉|叫聲', defNextAtkReducePost(20))`
+
+#### 6) 呱頭蛙｜招集之術
+- 卡面：從牌庫選最多 3 張寶可夢加手牌，之後重洗
+- pre `damage: 0`；post 開 `deck-search` pending（filter='Pokemon', min=0/max=3）
+- resolver `froakie-summon-tactics`：把選到的卡加入手牌 + 重洗剩下
+
+#### 7) 巨金怪 (M4)｜彈回 60
+- 卡面：對手必須將戰鬥場與備戰寶可夢互換（由對手選）
+- pre 設 `damage: 60`；post 開 `bench-choose` pending — actorIdx=dIdx（對手選）
+- 沿用既有 resolver `force-opp-swap`（v1.92 已實裝）
+
+#### 8) 巨金怪 (M4)｜金屬之錘 150+
+- 卡面：可丟 3 個鋼能量 → +150（共 300）
+- `ATTACK_PRE_DISCARD_CHOICE` set min=0/max=3/scope='attacker'/baseDamage=150
+- pre 內 binary 邏輯：`discarded.length === 3` → return 300；否則 return 150
+
+#### 9) 酋雷姆｜反等離子（特性）+ 三重冰霜（被動 cost 改寫）
+- 卡面：對手棄牌區若有「阿克羅瑪博士」，則「三重冰霜」所需能量改為 1 顆【無】
+- 設計：被動特性，玩家不點「使用」按鈕；engine `canAffordAttack` 必須 hook
+- 實作：
+  - effects.ts 新 export `getKyuremElectroplasmaEffectiveCost(attackerName, attackName, state, pool, originalCost)` — 條件成立時把 cost 改為 `['Colorless']`
+  - engine.ts `canAffordAttack` 新增 `attackName?: string` 參數；最開頭呼叫 helper 改寫 cost
+  - 兩個 call site 都加傳 `attack.name` / `atk.name`
+
+---
+
+### 變更檔案
+- `src/lib/game/effects.ts`（+220 行）：9 張卡實裝 + 4 個 resolver + 1 個 export helper
+- `src/lib/game/engine.ts`：
+  - import `getKyuremElectroplasmaEffectiveCost`
+  - `canAffordAttack` 新增 `attackName?: string` 參數 + helper hook
+  - 兩個 call site 加傳 attack name
+  - `getUsableAbilities` 加 經驗法則 gate（仿 狂挖）
+- `src/lib/version.ts`：2.126 → 2.127
+
+### 驗證
+- npm run build：✓ 14.74s 通過、0 error
+- 沒踩到舊 regR / regPre / regPost 的 key 衝突（grep 確認）
 
 ---
 

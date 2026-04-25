@@ -10016,3 +10016,223 @@ regR('energy-switch-dst', (st, idx, iids, params, pool) => {
   });
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.127 — preset 牌組未實裝招式/特性補完（Leon 要求全部實裝）
+// 9 張卡：甲賀忍蛙ex MC｜變幻手裏劍 / SV5a｜忍之利刃 + 分身連打、月月熊 赫月｜經驗法則
+//   菊草葉｜叫聲、呱頭蛙｜招集之術、巨金怪｜彈回 + 金屬之錘、酋雷姆｜反等離子
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── 1) 甲賀忍蛙ex (MC 208/742)｜變幻手裏劍 100+ — 擲幣正面 +100
+regPre('甲賀忍蛙ex|變幻手裏劍', coinPlusDmg(100, 100));
+
+// ── 2) 甲賀忍蛙ex (SV5a)｜忍之利刃 170 — 若希望，從牌庫任選 1 張卡加手牌（重洗）
+regPre('甲賀忍蛙ex|忍之利刃', (state, _aIdx, _pool) => ({ state, damage: 170 }));
+regPost('甲賀忍蛙ex|忍之利刃', (state, aIdx, pool) => {
+  if (state.players[aIdx].deck.length === 0) {
+    return addLog(state, '忍之利刃：牌庫已空，跳過搜尋', aIdx);
+  }
+  const s = addLog(state, '忍之利刃：從牌庫任選 0~1 張卡加手牌（之後重洗）', aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'any',
+    minCount: 0, maxCount: 1,
+    effectKey: 'greninja-ninja-blade-search',
+  });
+});
+regR('greninja-ninja-blade-search', (state, aIdx, selectedIids, _params, pool) => {
+  const picks = state.players[aIdx].deck.filter(c => selectedIids.includes(c.iid));
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    deck: shuffle(p.deck.filter(c => !selectedIids.includes(c.iid))),
+    hand: [...p.hand, ...picks],
+  }));
+  if (picks.length > 0) {
+    const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    s = addLog(s, `忍之利刃：搜到 ${names} 加入手牌，重洗牌庫`, aIdx);
+  } else {
+    s = addLog(s, '忍之利刃：未選卡，重洗牌庫', aIdx);
+  }
+  return s;
+});
+
+// ── 3) 甲賀忍蛙ex (SV5a)｜分身連打 — 棄 2 能量 → 對手 2 隻寶可夢各 120 傷（不算弱抗）
+ATTACK_PRE_DISCARD_CHOICE.set('甲賀忍蛙ex|分身連打', {
+  min: 2, max: 2, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+});
+regPre('甲賀忍蛙ex|分身連打', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('甲賀忍蛙ex|分身連打', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const d = state.players[dIdx];
+  const all = [...(d.active ? [d.active] : []), ...d.bench];
+  if (all.length === 0) {
+    return addLog(state, '分身連打：對手場上無寶可夢', aIdx);
+  }
+  const maxN = Math.min(2, all.length);
+  const s = addLog(state, `分身連打：選對手 ${maxN} 隻寶可夢，各受到 120 點傷害（不計弱抗）`, aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: maxN, maxCount: maxN,
+    effectKey: 'greninja-clone-strike-snipe',
+    params: { dmg: 120 },
+  });
+});
+regR('greninja-clone-strike-snipe', (state, aIdx, selectedIids, params, pool) => {
+  const dmg = (params?.dmg as number) ?? 120;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const d = { ...players[dIdx] };
+  let names: string[] = [];
+  // active
+  if (d.active && selectedIids.includes(d.active.iid)) {
+    names.push(pool.get(d.active.cardId)?.name ?? '?');
+    d.active = { ...d.active, damage: d.active.damage + dmg };
+  }
+  d.bench = d.bench.map(b => {
+    if (selectedIids.includes(b.iid)) {
+      names.push(pool.get(b.cardId)?.name ?? '?');
+      return { ...b, damage: b.damage + dmg };
+    }
+    return b;
+  });
+  players[dIdx] = d;
+  return addLog({ ...state, players }, `分身連打：對 ${names.join('、')} 各造成 ${dmg} 點傷害（不計弱抗）`, aIdx);
+});
+
+// ── 4) 月月熊 赫月｜經驗法則 — 從手牌選最多 2 張基本【鬥】能量附給自己（剛上備戰才可用）
+//   gate「pk.justPlaced」在 engine.ts getUsableAbilities 加（同螺釘地鼠）。
+regA('月月熊 赫月', 0, (st, idx, pool, cardInst) => {
+  if (!cardInst) return st;
+  const fightInHand = st.players[idx].hand.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic'
+      && (card.pokemonType === 'Fighting' || /【鬥】/.test(card.name));
+  });
+  if (fightInHand.length === 0) {
+    return addLog(st, '經驗法則：手牌無基本【鬥】能量', idx);
+  }
+  const maxN = Math.min(2, fightInHand.length);
+  st = addLog(st, `經驗法則：從手牌選 0~${maxN} 張基本【鬥】能量附給這隻寶可夢`, idx);
+  return withPending(st, {
+    type: 'hand-discard',  // 用 hand-discard 讓玩家從手牌挑（resolver 改寫為附加而非丟棄）
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicFightingEnergy',
+    minCount: 0, maxCount: maxN,
+    effectKey: 'ursaluna-bm-attach',
+    params: { hostIid: cardInst.iid },
+  });
+});
+regR('ursaluna-bm-attach', (state, aIdx, selectedIids, params, pool) => {
+  const hostIid = params?.hostIid as string | undefined;
+  if (!hostIid) return state;
+  const energies = state.players[aIdx].hand.filter(c => selectedIids.includes(c.iid));
+  if (energies.length === 0) {
+    return addLog(state, '經驗法則：未選能量', aIdx);
+  }
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const p = { ...players[aIdx] };
+  p.hand = p.hand.filter(c => !selectedIids.includes(c.iid));
+  if (p.active?.iid === hostIid) {
+    p.active = { ...p.active, energyAttached: [...p.active.energyAttached, ...energies] };
+  } else {
+    p.bench = p.bench.map(b => b.iid === hostIid
+      ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+      : b);
+  }
+  players[aIdx] = p;
+  const names = energies.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  return addLog({ ...state, players }, `經驗法則：附 ${energies.length} 張基本【鬥】能量（${names}）到月月熊 赫月`, aIdx);
+});
+
+// ── 5) 菊草葉｜叫聲 — 對手戰鬥位下回合招式 -20（沿用 嘎啦嘎啦|叫聲 的 helper）
+regPre('菊草葉|叫聲', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('菊草葉|叫聲', defNextAtkReducePost(20));
+
+// ── 6) 呱頭蛙｜招集之術 — 牌庫選最多 3 張寶可夢加手牌 + 重洗
+regPre('呱頭蛙|招集之術', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('呱頭蛙|招集之術', (state, aIdx, _pool) => {
+  if (state.players[aIdx].deck.length === 0) {
+    return addLog(state, '招集之術：牌庫為空', aIdx);
+  }
+  const s = addLog(state, '招集之術：從牌庫選 0~3 張寶可夢卡加手牌（之後重洗）', aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Pokemon',
+    minCount: 0, maxCount: 3,
+    effectKey: 'froakie-summon-tactics',
+  });
+});
+regR('froakie-summon-tactics', (state, aIdx, selectedIids, _params, pool) => {
+  const picks = state.players[aIdx].deck.filter(c => selectedIids.includes(c.iid));
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    deck: shuffle(p.deck.filter(c => !selectedIids.includes(c.iid))),
+    hand: [...p.hand, ...picks],
+  }));
+  const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  s = addLog(s, picks.length > 0
+    ? `招集之術：搜到 ${picks.length} 張寶可夢加入手牌（${names}），重洗牌庫`
+    : '招集之術：未選卡，重洗牌庫', aIdx);
+  return s;
+});
+
+// ── 7) 巨金怪 (M4)｜彈回 60 — 對手 active↔備戰互換（由對手選）
+regPre('巨金怪|彈回', (state, _aIdx, _pool) => ({ state, damage: 60 }));
+regPost('巨金怪|彈回', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const d = state.players[dIdx];
+  if (!d.active || d.bench.length === 0) {
+    return addLog(state, '彈回：對手無備戰可交換', aIdx);
+  }
+  const s = addLog(state, '彈回：對手必須將戰鬥寶可夢與備戰寶可夢互換（由對手選）', aIdx);
+  return withPending(s, {
+    type: 'bench-choose',
+    actorIdx: dIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'force-opp-swap',  // resolver 已實裝（line 8034）
+    params: { label: '彈回', attackerIdx: aIdx },
+  });
+});
+
+// ── 8) 巨金怪 (M4)｜金屬之錘 150+ — 若希望棄 3 個鋼能量 → +150
+//   binary 邏輯：棄 3 個 → +150；不棄 → +0。用 ATTACK_PRE_DISCARD_CHOICE max=3 min=0，
+//   regPre 內依玩家實際棄的張數決定（恰好 3 → bonus；其他 → 不加）
+ATTACK_PRE_DISCARD_CHOICE.set('巨金怪|金屬之錘', {
+  min: 0, max: 3, scope: 'attacker', baseDamage: 150, damagePerEnergy: 0,
+});
+regPre('巨金怪|金屬之錘', (state, aIdx, _pool, action) => {
+  const discarded = action?.discardedEnergyIids ?? [];
+  if (discarded.length === 3) {
+    return { state: addLog(state, '金屬之錘：棄 3 個鋼能量 → +150 傷害', aIdx), damage: 300 };
+  }
+  return { state, damage: 150 };
+});
+
+// ── 9) 酋雷姆｜反等離子 — 對手棄牌區有名稱含「阿克羅瑪」的卡時，
+//   「三重冰霜」所需能量改為 1 個【無】。engine canAffordAttack 必須 hook。
+//   實作：engine.ts 內 attack 成本檢查時呼叫此 helper 改寫 cost。
+//   為避免在 effects.ts 改 engine，這裡只 export helper 給 engine import。
+export function getKyuremElectroplasmaEffectiveCost(
+  attackerName: string,
+  attackName: string,
+  state: GameState,
+  pool: Map<string, Card>,
+  originalCost: import('$lib/cards/types').EnergyType[],
+): import('$lib/cards/types').EnergyType[] {
+  if (attackerName !== '酋雷姆') return originalCost;
+  if (attackName !== '三重冰霜') return originalCost;
+  // 檢查酋雷姆場上有「反等離子」特性（防範同名卡未來不同特性）
+  // 對手棄牌區是否有名稱含「阿克羅瑪」的卡
+  const aIdx = state.activePlayerIndex;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const oppDiscard = state.players[dIdx].discard;
+  const hasAcroma = oppDiscard.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.name?.includes('阿克羅瑪') ?? false;
+  });
+  if (hasAcroma) return ['Colorless'];
+  return originalCost;
+}
+

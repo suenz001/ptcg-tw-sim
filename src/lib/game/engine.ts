@@ -24,6 +24,7 @@ import {
   clearActiveEffects,
   hasFairyZoneField,
   applyBenchPlaceSideEffects,
+  getKyuremElectroplasmaEffectiveCost,
 } from './effects';
 
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
@@ -486,7 +487,15 @@ export function canAffordAttack(
   pool: Map<string, Card>,
   state?: GameState,
   attackerIdx?: 0 | 1,
+  attackName?: string,
 ): boolean {
+  // v2.127 酋雷姆｜反等離子 — 對手棄牌區若有「阿克羅瑪」相關卡，三重冰霜成本改為 1 顆【無】
+  if (state && attackName) {
+    const attackerCard = pool.get(pokemon.cardId);
+    const attackerName = attackerCard?.name ?? '';
+    const overridden = getKyuremElectroplasmaEffectiveCost(attackerName, attackName, state, pool, cost);
+    if (overridden !== cost) cost = overridden;
+  }
   // v2.103 大竺葵｜繁茂：自己場上有大竺葵時，自己所有寶可夢身上的「基本【草】能量」視為 2 個【草】能量。
   //   「這個特性的效果不會重複」→ 多隻大竺葵也只算一次倍率。
   // v2.108 修：原 check 用 `pokemonType === 'Grass'`，但基本能量的 pokemonType 欄位通常空，
@@ -1644,7 +1653,8 @@ function handlePlaying(
     if (!attack) return state;
 
     // 確認能量足夠（v2.103 傳 state+aIdx 讓 canAffordAttack 能判定大竺葵繁茂 / 燃火能量倍率）
-    if (!canAffordAttack(attacker.active, attack.cost, pool, state, aIdx)) return state;
+    // v2.127 多傳 attack.name 讓 canAffordAttack 能判定 酋雷姆｜反等離子 條件式減費
+    if (!canAffordAttack(attacker.active, attack.cost, pool, state, aIdx, attack.name)) return state;
 
     // ── 招式前置效果（修改傷害 / 丟棄能量等）────────────────────────────────
     const effectKey = `${attackerCard.name}|${attack.name}`;
@@ -2816,7 +2826,8 @@ export function getAvailableAttacks(
       // v2.92：單招下回合禁用（例：超級勇氣）— UI 層反白禁按
       if (player.active!.blockedAttackNamesThisTurn?.includes(atk.name)) return -1;
       // v2.103：大竺葵繁茂 / 燃火能量倍率（傳 state+activePlayerIndex）
-      return canAffordAttack(player.active!, atk.cost, pool, state, state.activePlayerIndex) ? i : -1;
+      // v2.127：傳 atk.name 讓 canAffordAttack 能套用 酋雷姆｜反等離子 條件式減費
+      return canAffordAttack(player.active!, atk.cost, pool, state, state.activePlayerIndex, atk.name) ? i : -1;
     })
     .filter((i) => i >= 0);
 }
@@ -3014,6 +3025,8 @@ export function getUsableAbilities(
       // v2.126 螺釘地鼠｜狂挖 — 只有「從手牌將這張卡放置於備戰區的那個回合」可用
       //   pk.justPlaced 由 PLAY_BASIC 設、END_TURN 清，所以「下一回合不能用」自然成立
       if (ab.name === '狂挖' && !pk.justPlaced) return;
+      // v2.127 月月熊 赫月｜經驗法則 — 同 狂挖 pattern，只有剛從手牌放置於備戰區的回合可用
+      if (ab.name === '經驗法則' && !pk.justPlaced) return;
       // 腎上腺腦力（願增猿）：身上 ≥1 顆【惡】能量 && 自己場上 ≥1 隻受傷（damage≥10）
       //   && 對手場上 ≥1 隻寶可夢。v2.123 補後兩個 gate（Leon 反饋：不符條件就不顯按鈕）。
       if (ab.name === '腎上腺腦力') {
