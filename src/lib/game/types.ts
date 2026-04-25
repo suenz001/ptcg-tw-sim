@@ -219,6 +219,11 @@ export interface PlayerState {
    */
   karateKingBonusThisTurn?: boolean;
   /**
+   * v2.139 烏栗效果 2 — 本回合自己的寶可夢招式對對手戰鬥場的 ex/V +30 傷害。
+   * 打出 Supporter 當下設 true，回合結束時清除。
+   */
+  unrudaBonusThisTurn?: boolean;
+  /**
    * 本回合，此玩家所有寶可夢皆無法使用招式（由 noAttacksNextTurn promote）。
    * 在 END_TURN 時清除（於 aIdx 方）。
    */
@@ -291,7 +296,8 @@ export interface PendingSelection {
       | 'discard-search'    // 從棄牌區選擇（夜間擔架、能量回收器、奇跡修正檔）
       | 'hand-choose'       // 從手牌選擇但不丟棄（神奇糖果第一步）
       | 'damage-distribute' // 傷害指示物自由分配到多隻對手備戰（幻影奇襲、類似機制）
-      | 'active-energy-discard'; // v2.63 撤退時手動選擇要丟哪幾張附加能量（多屬性時詢問）
+      | 'active-energy-discard' // v2.63 撤退時手動選擇要丟哪幾張附加能量（多屬性時詢問）
+      | 'modal-choice';     // v2.139 二選一/多選一文字選單（烏栗 swap vs +30 / 火箭隊的工廠 三選一 等）
   /** 需要做選擇的玩家 */
   actorIdx: 0 | 1;
   /** 來源牌堆/目標的玩家（通常等於 actorIdx） */

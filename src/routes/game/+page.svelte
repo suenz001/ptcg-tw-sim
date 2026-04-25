@@ -1709,6 +1709,10 @@
       const label = pendingSelection?.params?.label as string | undefined;
       return label ? `${label}：放置傷害指示物` : '放置傷害指示物';
     }
+    if (type === 'modal-choice') {
+      const label = pendingSelection?.params?.label as string | undefined;
+      return label ? `${label}：選擇效果` : '選擇效果';
+    }
     return '請選擇';
   }
 
@@ -2904,11 +2908,27 @@
           {/if}
         {/if}
 
+        <!-- v2.139 modal-choice：兩/多選一文字選單（烏栗 等） -->
+        {#if pendingSelection.type === 'modal-choice'}
+          {@const opts = (pendingSelection.params?.options as Array<{id:string;text:string;disabled?:boolean}>) ?? []}
+          <div class="modal-choice-list">
+            {#each opts as opt}
+              <button class="btn-act modal-choice-btn"
+                disabled={!!opt.disabled}
+                onclick={() => { selectionPicked = new Set([opt.id]); confirmSelection(); }}>
+                {opt.text}
+              </button>
+            {/each}
+          </div>
+        {/if}
+
         <div class="sel-footer">
           {#if akamatsuSameTypeBlocked}
             <div class="sel-hint-warn">⚠ 赤松選 2 張能量時，兩張屬性必須不同</div>
           {/if}
-          {#if isDmgDist}
+          {#if pendingSelection.type === 'modal-choice'}
+            <!-- modal-choice 直接點按鈕 resolve，不需要確認/跳過 footer -->
+          {:else if isDmgDist}
             <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>
               確認本批次（{selectionBatchSum}／{pendingSelection.maxCount} 個指示物）
             </button>

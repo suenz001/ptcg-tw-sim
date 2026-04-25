@@ -435,6 +435,14 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       return { type: 'RESOLVE_SELECTION', selectedIids: discard.slice(0, count).map(c => c.iid) };
     }
 
+    // v2.139 modal-choice：兩/多選一文字選單（烏栗等）
+    case 'modal-choice': {
+      const opts = (sel.params?.options as Array<{ id: string; text: string; disabled?: boolean }>) ?? [];
+      // AI 簡化：選第一個非 disabled 選項
+      const first = opts.find(o => !o.disabled) ?? opts[0];
+      return { type: 'RESOLVE_SELECTION', selectedIids: first ? [first.id] : [] };
+    }
+
     default:
       return { type: 'RESOLVE_SELECTION', selectedIids: [] };
   }

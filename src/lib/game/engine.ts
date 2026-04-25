@@ -1894,6 +1894,19 @@ function handlePlaying(
       baseDamage += 40;
       workingState = addLog(workingState, `「空手道王的演練」啟動：對 ${defenderCard.name}（ex）+40`, aIdx);
     }
+    // v2.139 烏栗效果 2 — 本回合自方寶可夢招式對對手戰鬥場 ex/V +30
+    if (baseDamage > 0 && attacker.unrudaBonusThisTurn && defenderCard) {
+      const isExV = defenderCard.subtype === 'ex'
+        || defenderCard.name.endsWith('ex')
+        || defenderCard.name.endsWith('EX')
+        || defenderCard.name.endsWith('V')
+        || defenderCard.name.endsWith('VMAX')
+        || defenderCard.name.endsWith('VSTAR');
+      if (isExV) {
+        baseDamage += 30;
+        workingState = addLog(workingState, `「烏栗」啟動：對 ${defenderCard.name}（ex/V）+30`, aIdx);
+      }
+    }
 
     // 弱點（×2）— 只對有實際傷害的招式套用。skipWeakRes 旗標跳過此計算。
     // v2.57：莉莉艾的皮皮ex｜妖精領域 — 我方場上有皮皮ex 時，對手【龍】寶可夢的弱點改為【超】。
@@ -2777,7 +2790,8 @@ function handlePlaying(
       currentPlayer.cantEvolveThisTurn ||
       currentPlayer.damageBoostFightingThisTurn ||
       currentPlayer.teraKoBonusPrizeThisTurn ||
-      currentPlayer.karateKingBonusThisTurn
+      currentPlayer.karateKingBonusThisTurn ||
+      currentPlayer.unrudaBonusThisTurn
     ) {
       const cp = { ...currentPlayer };
       delete cp.noAttacksThisTurn;
@@ -2787,6 +2801,7 @@ function handlePlaying(
       delete cp.damageBoostFightingThisTurn;
       delete cp.teraKoBonusPrizeThisTurn;
       delete cp.karateKingBonusThisTurn;
+      delete cp.unrudaBonusThisTurn;
       players[aIdx] = cp;
     } else {
       players[aIdx] = currentPlayer;

@@ -1,9 +1,51 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.138)  
+> 最後更新：2026-04-25 (v2.139)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.139 — 引擎升級：modal-choice pending type + 烏栗完整實裝（#5）
+
+接續 v2.138。Leon 指定「請繼續」處理 #5 #7 #8 — v2.139 完成 #5（最簡單），#7 #8 持續延後（評估後工作量過大需另外規劃）。
+
+### 引擎升級：新增 `modal-choice` pending type
+這是通用的「文字選單二選一/多選一」pending type，未來其他類似需求（火箭隊的工廠三選一、稜鏡塔多選等）都可重用。
+
+**架構**：
+- `types.ts`：PendingSelection union 加 `'modal-choice'`
+- `params.options: Array<{ id: string; text: string; disabled?: boolean }>`
+- `selectedIids` 回傳 `[option.id]`
+- AI handler（`ai.ts`）：自動選第 1 個非 disabled 選項
+- UI 渲染（`+page.svelte`）：modal-choice-list 直接 render 按鈕，點擊即 resolve（不走 sel-footer 的「確認/跳過」flow）
+
+### 烏栗完整實裝
+從 v2.135 簡化版「固定 swap」→ 完整版二選一：
+- 選項 1：自方戰鬥場 ↔ 備戰互換（無備戰時 disabled）
+- 選項 2：本回合自方寶可夢招式對對手戰鬥場「ex/V」+30 傷害
+
+**新增 player flag**：`unrudaBonusThisTurn` — engine.ts 攻擊計算時檢查（在 weakness 前 +30），END_TURN 時清掉。卡面寫「ex/V」— engine 用 `subtype === 'ex' || name 結尾 ex/EX/V/VMAX/VSTAR` 判定。
+
+### sim 結果
+`node scripts/sim-tournament.mjs 2` → 1012 場 / 0 bug / 0 stuck。
+排名穩定（烏栗使用率本來就低，AI 用 swap 影響不大）。
+
+### 變更檔案
+- `src/lib/game/types.ts`：PendingSelection union 加 modal-choice；PlayerState 加 unrudaBonusThisTurn
+- `src/lib/game/effects.ts`：烏栗 reg/regR 改用 modal-choice
+- `src/lib/game/engine.ts`：unrudaBonus 攻擊 +30 檢查 + END_TURN 清除
+- `src/lib/game/ai.ts`：modal-choice 自動選首選
+- `src/routes/game/+page.svelte`：modal-choice UI render + selectionTitle 文字
+- `src/lib/version.ts`：2.138 → 2.139
+
+### Leon 須注意 — #7 #8 延後原因
+**#7 火箭羽毛玩家選張數**：需要打破 ATTACK_PRE 同步 flow（regPre 必須立即回傳 damage，無法等玩家 pending）。要做需引入新機制：「ATTACK_PRE 也能開 pending → resolver 算傷害」。預估 1-2 天工作。對 sim 影響不大（AI 全自動丟 = 最大化攻擊）。
+
+**#8 高溫燃燒器 mixed-pick**：需要新 pending type「同時看對手場上 Tool / 特殊能量 / Stadium 三類選 1」。可以仿 modal-choice + 動態 options（每張對手身上的 Tool/特殊能量都當一個 option），但要加圖標+卡名顯示。預估 0.5-1 天。
+
+兩個都建議 v2.140+ 一起做（連同更廣泛的 N 索羅亞克 fallback 邏輯改良）。
 
 ---
 

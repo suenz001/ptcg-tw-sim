@@ -10664,32 +10664,63 @@ reg('阿響的冒險', (st, idx, pool) => {
   });
 });
 
-// ── 烏栗（Supporter）— 簡化：固定執行效果 1（戰鬥↔備戰互換） ────────────────
-// 卡面有 2 選項，sim 端難以做「卡牌彈出 modal 二選一」，先固定 swap。
-// 若場上無備戰寶可夢可換，則 gate 不允許使用。
+// ── 烏栗（Supporter）— v2.139 完整實裝 modal 二選一 ────────────────────────
+// 卡面 2 選項：(1) 自己戰鬥場↔備戰互換  (2) 本回合自己寶可夢招式對 ex/V +30
+// gate：只要至少 1 個選項可用即允許使用
 regG('烏栗', (st, idx) => {
-  return st.players[idx].bench.length > 0;
+  // 選項 1 至少需要備戰；選項 2 任何時候都可用 → 永遠 true（除非整個場都空）
+  return !!st.players[idx].active;
 });
 reg('烏栗', (st, idx, _pool) => {
-  const p = st.players[idx];
-  if (p.bench.length === 0) return addLog(st, '烏栗：備戰區無寶可夢，無可互換', idx);
-  if (p.bench.length === 1) {
-    // 只 1 隻備戰自動互換
-    return updatePlayer(addLog(st, '烏栗：自方戰鬥↔備戰互換', idx), idx, pl => {
-      if (!pl.active) return pl;
-      const old = pl.active;
-      const newActive = pl.bench[0];
-      return { ...pl, active: { ...newActive, status: undefined }, bench: [old] };
-    });
-  }
-  // 多備戰 → 交給玩家挑
-  st = addLog(st, '烏栗：選 1 隻備戰寶可夢與戰鬥互換', idx);
+  const benchLen = st.players[idx].bench.length;
+  st = addLog(st, '烏栗：選擇 1 個效果使用', idx);
   return withPending(st, {
-    type: 'bench-choose',
+    type: 'modal-choice',
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
-    effectKey: 'unruda-swap',
+    effectKey: 'unruda-choice',
+    params: {
+      label: '烏栗',
+      options: [
+        // 若無備戰可換，選項 1 顯示 disabled
+        { id: 'swap', text: '①自方戰鬥↔備戰互換', disabled: benchLen === 0 },
+        { id: 'boost', text: '②本回合自方招式對 ex/V +30' },
+      ],
+    },
   });
+});
+regR('unruda-choice', (state, aIdx, iids, _params, _pool) => {
+  const choice = iids[0];
+  if (choice === 'swap') {
+    const p = state.players[aIdx];
+    if (p.bench.length === 0) {
+      return addLog(state, '烏栗：備戰區無寶可夢，互換失敗', aIdx);
+    }
+    if (p.bench.length === 1) {
+      return updatePlayer(addLog(state, '烏栗：自方戰鬥↔備戰互換', aIdx), aIdx, pl => {
+        if (!pl.active) return pl;
+        const old = pl.active;
+        const newActive = pl.bench[0];
+        return { ...pl, active: { ...newActive, status: undefined }, bench: [old] };
+      });
+    }
+    state = addLog(state, '烏栗：選 1 隻備戰寶可夢與戰鬥互換', aIdx);
+    return withPending(state, {
+      type: 'bench-choose',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'unruda-swap',
+    });
+  }
+  if (choice === 'boost') {
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const p = { ...players[aIdx] };
+    p.unrudaBonusThisTurn = true;  // v2.139 專屬 flag：對 ex/V +30（engine 檢查）
+    players[aIdx] = p;
+    return addLog({ ...state, players },
+      '烏栗：本回合自方寶可夢招式對對手戰鬥場「ex / V」+30 傷害', aIdx);
+  }
+  return state;
 });
 regR('unruda-swap', (state, aIdx, iids, _params, _pool) => {
   if (iids.length === 0) return state;
