@@ -286,6 +286,8 @@ import './effects/cards/lopunny_serperior_flareon_festival';
 //         超級妙蛙花 / 超級袋獸阿勃梭魯 / 青銅鐘多龍 九組預組卡新效果
 //         （日光轉移 / 金屬製造者 / 玻璃喇叭 / 超大冰淇淋；鈷藍指令、捲牆 inline）
 import './effects/cards/v154_decks';
+// v2.155：補實裝 20 個 preset 主力 ex 招式（audit 漏掃修正後找出的長期漏實裝）
+import './effects/cards/v155_attacks';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts

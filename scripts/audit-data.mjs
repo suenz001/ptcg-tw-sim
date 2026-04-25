@@ -109,9 +109,35 @@ const unimplAttacks = [...attackNames].filter(n => !eff.includes(n));
 const unimplAbilities = [...abilityNames].filter(n => !eff.includes(n));
 const unimplTrainers = [...trainerNames].filter(n => !eff.includes(n));
 
+// v2.155: 把未實裝招式再分類為「純傷害（effect 空）」vs「有 effect 但漏實裝」
+// 原因：v2.154 之前都把所有未實裝當純傷害，導致 20 個 preset 主力 ex 招式長期漏失
+// 取每張卡的同名 attack — 任一張該招式 effect 非空即視為「有效果」
+const attackEffectMap = new Map(); // name -> { hasEffect, sampleEffect, sampleCardName }
+for (const c of pool) {
+  if (c.supertype !== 'Pokemon') continue;
+  for (const a of c.attacks ?? []) {
+    if (!unimplAttacks.includes(a.name)) continue;
+    const eff2 = (a.effect || '').trim();
+    if (!attackEffectMap.has(a.name) || (eff2 && !attackEffectMap.get(a.name).hasEffect)) {
+      attackEffectMap.set(a.name, {
+        hasEffect: eff2.length > 0,
+        sampleEffect: eff2,
+        sampleCardName: c.name,
+      });
+    }
+  }
+}
+const pureDmgAttacks = unimplAttacks.filter(n => !attackEffectMap.get(n)?.hasEffect).sort();
+const missingAttacks = unimplAttacks.filter(n => attackEffectMap.get(n)?.hasEffect).sort();
+
 console.log(`\n招式：${attackNames.size} 種，未在 effects 出現：${unimplAttacks.length}`);
-console.log('  （多為純傷害招式，不需 effect 註冊；列出供確認）');
-for (const n of unimplAttacks.sort()) console.log(`  - ${n}`);
+console.log(`  └─ 純傷害（effect 空，不需註冊）：${pureDmgAttacks.length}`);
+for (const n of pureDmgAttacks) console.log(`     - ${n}`);
+console.log(`  └─ ⚠️ 有 effect 但漏實裝：${missingAttacks.length}`);
+for (const n of missingAttacks) {
+  const info = attackEffectMap.get(n);
+  console.log(`     - ${n}（${info.sampleCardName}）：${info.sampleEffect}`);
+}
 
 console.log(`\n特性：${abilityNames.size} 種，未在 effects 出現：${unimplAbilities.length}`);
 for (const n of unimplAbilities.sort()) console.log(`  - ${n}`);

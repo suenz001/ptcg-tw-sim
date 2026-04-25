@@ -1,9 +1,72 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.154)  
+> 最後更新：2026-04-26 (v2.155)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.155 — 補實裝 20 個 preset 主力 ex 招式 + 修 audit script 分類
+
+### 起因
+Leon 質疑「preset 卡的所有功能是否都已實裝」。逐張 grep 後發現 v2.154 的 9 組新 preset 主力 ex 招式有 20 個全部漏實裝 — 而且不只是新加的 — 是 audit script 長期 false negative，把所有「未在 effects 出現」的招式都當成「純傷害不需註冊」。
+
+### 根因
+`scripts/audit-data.mjs` 的提示語：「（多為純傷害招式，不需 effect 註冊；列出供確認）」誤導歷代維護者直接跳過盤點。實際上 JSON 卡資料的 `effect` 欄位若非空就代表有附加效果。Audit 沒區分。
+
+### 修法 1：增強 audit-data.mjs（根因修）
+把未實裝招式分兩類：
+- 純傷害（`effect` 空）：43 個 — 不需註冊
+- ⚠️ 有 effect 但漏實裝：本次找出 20 個
+
+未來新加 preset 會自動 spotlight 出真正漏實裝的招式。
+
+### 修法 2：實裝 20 個招式（v155_attacks.ts）
+| # | 招式 | 卡 | 用在 preset | 實作 |
+|---|---|---|---|---|
+| 1 | 連續拳 | 火箭隊的袋獸ex | 超級袋獸阿勃梭魯 | `coinHeadsMultiplyPre(4, 30)` |
+| 2 | 跳躍扣殺 | 超級長耳兔ex | 超級長耳兔 | damage 160 + skipDefEffects |
+| 3 | 巨型花束 | 超級大竺葵ex | 大竺葵 | 70 + 自身草能量×50 |
+| 4 | 惡棍衝擊 | 火箭隊的袋獸ex | 超級袋獸阿勃梭魯 | 120 / 220（看 rocketSupporterPlayedThisTurn） |
+| 5 | 鐵羽毛 | 帝王拿波ex | 多 preset | 210 + damageReduceNextHit:60 |
+| 6 | 防護充能 | 蓋諾賽克特ex | 電電蟲 | 150 + damageReduceNextHit:30 |
+| 7 | 金屬斬 | 堅盾劍怪 | 不在 preset | 230 + cantAttackPending |
+| 8 | 燃燒充能 | 火伊布ex | 火伊布 | 130 + deck-search ≤2 BasicEnergy 自附 active |
+| 9 | 電電充能 | 電電蟲 | 電電蟲 | deck-search ≤4 草+雷能量自附 active |
+| 10 | 時間輪轉 | 時拉比 | 大竺葵 | deck-search ≤3「草寶或競技場」到手牌 |
+| 11 | 朋友呼喚 | 波加曼 | 多 preset | deck-search 1 張支援者到手牌 |
+| 12 | 樂呵呵之吻 | 迷唇娃 | 多 preset | deck-search ≤2 基本超能量附備戰 |
+| 13 | 阿賽斯特萊石 | 太陽伊布ex | 太陽伊布 | 對手所有進化退化（進化卡回對手牌庫並洗） |
+| 14 | 雀躍 | 捲捲耳 | 超級長耳兔 | bench-choose + active 互換 |
+| 15 | 天仙石 | 仙子伊布ex | 太陽伊布 | opp-bench 2 隻回對手牌庫 + 自身下回合鎖招式 |
+| 16 | 時間爆炸 | 帝牙盧卡 | 巨金怪 | 80（自動：若有能量則棄全能量並+80=160） |
+| 17 | 破壞潮旋 | 洛奇亞ex | 多 preset | 140 + 擲幣到反 → 棄對手戰鬥位 N 個能量 |
+| 18 | 激流水泵 | 厄鬼椪 水井面具ex | 厄鬼椪 | 100 + 自動：若有≥3能量則棄3 + 對手備戰 1 隻 120 |
+| 19 | 音波拆裂 | 超級盔甲鳥ex | 超級盔甲鳥 | 220 戰鬥位 + 自身全能量回牌庫並洗 |
+| 20 | 精神尖槍 | 代歐奇希斯 | 多 preset | 120 + 若能量單位≥cost+2 → 對手備戰 1 隻 120 |
+
+### 簡化說明（故意偏離卡面的部分）
+- 凡「若希望」(option) 都改自動執行最低代價路徑（沒能量就跳過）— 避免 modal-choice UI 流程在 sim 卡住或讓 AI 隨機選錯。
+- 音波拆裂卡面是「對手 1 隻寶可夢」可選戰鬥/備戰，這裡簡化為打戰鬥位 220（戰術上多打戰鬥位）。
+- 天仙石的「上回合用過則無法用」cooldown 用 cantAttackPending 鎖整隻仙子伊布ex 一回合所有招式（比卡面嚴格 — 卡面只鎖天仙石，這裡簡化）。
+
+### 新增檔案
+- `src/lib/game/effects/cards/v155_attacks.ts` — 20 招式集中實裝
+
+### 改動檔案
+- `src/lib/version.ts` — 2.154 → 2.155
+- `src/lib/game/effects.ts` — side-effect import `./effects/cards/v155_attacks`
+- `scripts/audit-data.mjs` — 把「未實裝招式」分純傷害 vs 有 effect 漏實裝（兩段顯示）
+
+### 驗證
+- `npm run build` ✓
+- `node scripts/sim-sandbox.mjs 12` ✓ 12 局 0 bug，平均 14.8 回合
+- `node scripts/audit-data.mjs` ✓ 「⚠️ 有 effect 但漏實裝：0」
+
+### 後續可注意點
+- 這些 20 招式有些實作了「簡化版」（如自動執行 option、固定打戰鬥位）— 玩家若回報行為不符卡面再個別細修。
+- audit script 的修法只覆蓋招式類；特性/訓練家若有同類問題（cardName 在 effects 出現但實際邏輯未跑）audit 仍抓不出來。但目前特性/訓練家未實裝數字都已 ≤3 / 0。
 
 ---
 

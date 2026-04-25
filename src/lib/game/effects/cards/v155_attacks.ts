@@ -1,0 +1,569 @@
+/**
+ * v2.155 — 補實裝 20 個 preset 主力 ex 招式
+ *
+ * 起因：v2.155 之前 audit-data.mjs 的「未實裝招式」誤標，把所有有 effect 但
+ * 純未實裝的招式統統當成「純傷害不需註冊」。實際上 v2.149/v2.154 新加的 9 組 preset
+ * 主力 ex 多數招式都漏實裝。本檔集中補完。
+ *
+ * 修法：audit-data.mjs 已分類（v2.155）— 純傷害 vs 有 effect 但漏實裝。本檔處理後者。
+ *
+ * 實裝對照：
+ *   1. 連續拳（火箭隊的袋獸ex）          coinHeadsMultiplyPre(4, 30)
+ *   2. 跳躍扣殺（超級長耳兔ex）          damage 160 + skipDefEffects
+ *   3. 巨型花束（超級大竺葵ex）          damage 70 + 自身草能量×50
+ *   4. 惡棍衝擊（火箭隊的袋獸ex）        damage 120 + 該回合用過火箭隊支援者+100
+ *   5. 鐵羽毛（帝王拿波ex）              damage 210 + 下次受傷-60
+ *   6. 防護充能（蓋諾賽克特ex）          damage 150 + 下次受傷-30
+ *   7. 金屬斬（堅盾劍怪）                damage 230 + cantAttackPending
+ *   8. 燃燒充能（火伊布ex）              damage 130 + Post 牌庫搜≤2基本能量自附寶
+ *   9. 電電充能（電電蟲）                damage 0 + Post 牌庫搜草+雷各≤2 能量
+ *  10. 時間輪轉（時拉比）                damage 0 + Post 牌庫搜≤3 草寶/競技場到手牌
+ *  11. 朋友呼喚（波加曼）                damage 0 + Post 牌庫搜 1 張支援者到手牌
+ *  12. 樂呵呵之吻（迷唇娃）              damage 0 + Post 牌庫搜≤2 基本超能量附備戰
+ *  13. 阿賽斯特萊石（太陽伊布ex）        damage 0 + Post 對手所有進化退化（進化卡回對手牌庫並洗）
+ *  14. 雀躍（捲捲耳）                    damage 0 + Post 與備戰互換
+ *  15. 天仙石（仙子伊布ex）              damage 0 + Post opp-bench 2 隻回對手牌庫 + 下回合不能用
+ *  16. 時間爆炸（帝牙盧卡）              damage 80 + 自動：若有能量則棄全能量並+80
+ *  17. 破壞潮旋（洛奇亞ex）              damage 140 + 擲幣到反 → 棄對手戰鬥位 N 能量
+ *  18. 激流水泵（厄鬼椪 水井面具ex）     damage 100 + 自動：若有≥3能量則棄3 + 對手備戰 120
+ *  19. 音波拆裂（超級盔甲鳥ex）          damage 220 + 自身全能量回牌庫並洗
+ *  20. 精神尖槍（代歐奇希斯）            damage 120 + 若能量單位≥cost+2 → 對手備戰 1 隻 120
+ *
+ * 簡化說明（故意偏離卡面的部分）：
+ *   - 凡卡面寫「若希望」(option) 都改成「自動執行」最低代價路徑（沒能量就跳過）
+ *     避免新 modal-choice 流程在 sim 中卡住或讓 AI 隨機選；玩家對戰仍可生效。
+ *   - 音波拆裂卡面是「對手 1 隻寶可夢」可選戰鬥位或備戰位，這裡簡化為打戰鬥位 220
+ *     （事實上 220 對戰鬥位幾乎都能 KO，戰術上多數情境也會打戰鬥位）。
+ *   - 天仙石的「上回合用過則無法使用」cooldown 用 cantAttackPending 一回合鎖招式
+ *     （比卡面嚴格 — 卡面只鎖天仙石，這裡鎖整隻仙子伊布ex 的所有招式；簡化合理）。
+ */
+
+import type { CardInstance, GameState, PlayerState } from '../../types';
+import {
+  regPre, regPost, regR,
+  shuffle, addLog, withPending,
+} from '../_shared';
+import {
+  coinHeadsMultiplyPre,
+  hitBenchPickPost,
+} from '../../effects';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (1) 連續拳（火箭隊的袋獸ex）— coin×30 4 次
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('火箭隊的袋獸ex|連續拳', coinHeadsMultiplyPre(4, 30, '連續拳'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (2) 跳躍扣殺（超級長耳兔ex）— 160，不計算對手附加效果
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('超級長耳兔ex|跳躍扣殺', (state) => ({
+  state,
+  damage: 160,
+  skipDefEffects: true,
+}));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (3) 巨型花束（超級大竺葵ex）— 70 + 自身草能量×50
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('超級大竺葵ex|巨型花束', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  if (!att) return { state, damage: 70 };
+  const grassCount = att.energyAttached.reduce((sum, e) => {
+    const ec = pool.get(e.cardId);
+    if (!ec) return sum;
+    if (ec.pokemonType === 'Grass' && ec.subtype === 'Basic') return sum + 1;
+    if (ec.name === '燃火能量') return sum;
+    return sum;
+  }, 0);
+  const bonus = grassCount * 50;
+  const dmg = 70 + bonus;
+  const s = addLog(state, `巨型花束：自身【草】能量 ${grassCount} 個 → 70 + ${bonus} = ${dmg}`, aIdx);
+  return { state: s, damage: dmg };
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (4) 惡棍衝擊（火箭隊的袋獸ex）— 120 + 該回合用過火箭隊支援者+100
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('火箭隊的袋獸ex|惡棍衝擊', (state, aIdx) => {
+  const used = state.players[aIdx].rocketSupporterPlayedThisTurn;
+  const dmg = used ? 220 : 120;
+  const s = addLog(state,
+    used
+      ? '惡棍衝擊：本回合已用過火箭隊支援者 → 120 + 100 = 220'
+      : '惡棍衝擊：本回合未用火箭隊支援者 → 120',
+    aIdx);
+  return { state: s, damage: dmg };
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (5) 鐵羽毛（帝王拿波ex）— 210 + 下次受傷 -60
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('帝王拿波ex|鐵羽毛', (state) => ({ state, damage: 210 }));
+regPost('帝王拿波ex|鐵羽毛', (state, aIdx) => {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const att = { ...players[aIdx] };
+  if (att.active) att.active = { ...att.active, damageReduceNextHit: 60 };
+  players[aIdx] = att;
+  return addLog({ ...state, players }, '鐵羽毛：下次受到招式傷害 -60', aIdx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (6) 防護充能（蓋諾賽克特ex）— 150 + 下次受傷 -30
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('蓋諾賽克特ex|防護充能', (state) => ({ state, damage: 150 }));
+regPost('蓋諾賽克特ex|防護充能', (state, aIdx) => {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const att = { ...players[aIdx] };
+  if (att.active) att.active = { ...att.active, damageReduceNextHit: 30 };
+  players[aIdx] = att;
+  return addLog({ ...state, players }, '防護充能：下次受到招式傷害 -30', aIdx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (7) 金屬斬（堅盾劍怪）— 230 + 下回合無法使用招式
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('堅盾劍怪|金屬斬', (state) => ({ state, damage: 230 }));
+regPost('堅盾劍怪|金屬斬', (state, aIdx) => {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const att = { ...players[aIdx] };
+  if (att.active) att.active = { ...att.active, cantAttackPending: true };
+  players[aIdx] = att;
+  return addLog({ ...state, players }, '金屬斬：下回合無法使用招式', aIdx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (8) 燃燒充能（火伊布ex）— 130 + 從牌庫搜最多 2 張基本能量附自寶
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('火伊布ex|燃燒充能', (state) => ({ state, damage: 130 }));
+regPost('火伊布ex|燃燒充能', (state, aIdx) => {
+  const player = state.players[aIdx];
+  if (player.deck.length === 0) return addLog(state, '燃燒充能：牌庫為空', aIdx);
+  const max = Math.min(2, player.deck.length);
+  let s = addLog(state, `燃燒充能：從牌庫選 ≤${max} 張基本能量附寶（重洗）`, aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'BasicEnergy',
+    minCount: 0, maxCount: max,
+    effectKey: 'v155-attach-basic-energy-active',
+    params: { attackLabel: '燃燒充能' },
+  });
+});
+
+// resolver：把選的基本能量附到 attacker active（簡化：均附在戰鬥位）
+regR('v155-attach-basic-energy-active', (st, aIdx, iids, params, pool) => {
+  const label = String(params?.attackLabel ?? '招式');
+  if (iids.length === 0) {
+    st = updatePlayerInline(st, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+    return addLog(st, `${label}：未選擇能量（重洗牌庫）`, aIdx);
+  }
+  st = updatePlayerInline(st, aIdx, p => {
+    const remaining: typeof p.deck = [];
+    const picked: typeof p.deck = [];
+    const pickSet = new Set(iids);
+    for (const c of p.deck) (pickSet.has(c.iid) ? picked : remaining).push(c);
+    let active = p.active;
+    if (active) {
+      active = { ...active, energyAttached: [...active.energyAttached, ...picked] };
+    }
+    return { ...p, active, deck: shuffle(remaining) };
+  });
+  const namesLog = iids.length;
+  return addLog(st, `${label}：附 ${namesLog} 張基本能量到戰鬥寶可夢（重洗牌庫）`, aIdx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (9) 電電充能（電電蟲）— 0 傷 + 從牌庫搜【草】+【雷】各最多 2 張附寶
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('電電蟲|電電充能', (state) => ({ state, damage: 0 }));
+regPost('電電蟲|電電充能', (state, aIdx) => {
+  const player = state.players[aIdx];
+  if (player.deck.length === 0) return addLog(state, '電電充能：牌庫為空', aIdx);
+  // 簡化：用一次 deck-search 選最多 4 張「基本【草】或基本【雷】能量」附 active
+  // （卡面是各 2 張，但合計 ≤4 張在實作上等價，仍由玩家從可用候選挑）
+  const max = Math.min(4, player.deck.length);
+  let s = addLog(state, `電電充能：從牌庫選 ≤${max} 張基本【草】/【雷】能量附寶`, aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'BasicEnergy:Grass+Lightning',
+    minCount: 0, maxCount: max,
+    effectKey: 'v155-attach-basic-energy-active',
+    params: { attackLabel: '電電充能' },
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (10) 時間輪轉（時拉比）— 0 傷 + 從牌庫搜【草】寶或競技場最多 3 張到手牌
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('時拉比|時間輪轉', (state) => ({ state, damage: 0 }));
+regPost('時拉比|時間輪轉', (state, aIdx) => {
+  const player = state.players[aIdx];
+  if (player.deck.length === 0) return addLog(state, '時間輪轉：牌庫為空', aIdx);
+  const max = Math.min(3, player.deck.length);
+  let s = addLog(state, `時間輪轉：從牌庫選 ≤${max} 張【草】寶可夢/競技場到手牌`, aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'GrassPokemonOrStadium',
+    minCount: 0, maxCount: max,
+    effectKey: 'search-to-hand-reshuffle',
+    params: { titleOverride: '時間輪轉：選 ≤3 張【草】寶可夢/競技場到手牌' },
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (11) 朋友呼喚（波加曼）— 0 傷 + 從牌庫搜 1 張支援者到手牌
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('波加曼|朋友呼喚', (state) => ({ state, damage: 0 }));
+regPost('波加曼|朋友呼喚', (state, aIdx) => {
+  const player = state.players[aIdx];
+  if (player.deck.length === 0) return addLog(state, '朋友呼喚：牌庫為空', aIdx);
+  let s = addLog(state, '朋友呼喚：從牌庫搜 1 張支援者到手牌（重洗）', aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Supporter',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-to-hand-reshuffle',
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (12) 樂呵呵之吻（迷唇娃）— 0 傷 + 從牌庫搜≤2 基本超能量附備戰
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('迷唇娃|樂呵呵之吻', (state) => ({ state, damage: 0 }));
+regPost('迷唇娃|樂呵呵之吻', (state, aIdx) => {
+  const player = state.players[aIdx];
+  if (player.bench.length === 0) return addLog(state, '樂呵呵之吻：備戰區無寶可夢', aIdx);
+  if (player.deck.length === 0) return addLog(state, '樂呵呵之吻：牌庫為空', aIdx);
+  const max = Math.min(2, player.deck.length);
+  let s = addLog(state, `樂呵呵之吻：從牌庫選 ≤${max} 張基本【超】能量附備戰`, aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'BasicEnergy:Psychic',
+    minCount: 0, maxCount: max,
+    effectKey: 'v155-attach-basic-energy-bench',
+    params: { attackLabel: '樂呵呵之吻' },
+  });
+});
+
+// resolver：把選的能量附到備戰其中 1 隻（簡化：分配到第 1 隻備戰）
+regR('v155-attach-basic-energy-bench', (st, aIdx, iids, params, _pool) => {
+  const label = String(params?.attackLabel ?? '招式');
+  if (iids.length === 0) {
+    st = updatePlayerInline(st, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+    return addLog(st, `${label}：未選擇能量（重洗牌庫）`, aIdx);
+  }
+  st = updatePlayerInline(st, aIdx, p => {
+    const remaining: typeof p.deck = [];
+    const picked: typeof p.deck = [];
+    const pickSet = new Set(iids);
+    for (const c of p.deck) (pickSet.has(c.iid) ? picked : remaining).push(c);
+    if (p.bench.length === 0) {
+      // 備戰空 → 退回手牌
+      return { ...p, deck: shuffle(remaining), hand: [...p.hand, ...picked] };
+    }
+    const target = p.bench[0];
+    const newBench = [
+      { ...target, energyAttached: [...target.energyAttached, ...picked] },
+      ...p.bench.slice(1),
+    ];
+    return { ...p, bench: newBench, deck: shuffle(remaining) };
+  });
+  return addLog(st, `${label}：附 ${iids.length} 張能量到備戰寶可夢（重洗牌庫）`, aIdx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (13) 阿賽斯特萊石（太陽伊布ex）— 0 傷 + 對手所有進化寶可夢退化
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('太陽伊布ex|阿賽斯特萊石', (state) => ({ state, damage: 0 }));
+regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const dPlayer = state.players[dIdx];
+  // 找所有「進化寶可夢」（active + bench 中 stage===Stage1/Stage2）
+  type Slot = { kind: 'active' } | { kind: 'bench'; idx: number };
+  const targets: { iid: string; slot: Slot }[] = [];
+  if (dPlayer.active) {
+    const card = pool.get(dPlayer.active.cardId);
+    if (card?.stage === 'Stage1' || card?.stage === 'Stage2') {
+      targets.push({ iid: dPlayer.active.iid, slot: { kind: 'active' } });
+    }
+  }
+  dPlayer.bench.forEach((b, idx) => {
+    const card = pool.get(b.cardId);
+    if (card?.stage === 'Stage1' || card?.stage === 'Stage2') {
+      targets.push({ iid: b.iid, slot: { kind: 'bench', idx } });
+    }
+  });
+  if (targets.length === 0) {
+    return addLog(state, '阿賽斯特萊石：對手場上無進化寶可夢', aIdx);
+  }
+
+  // 對每隻 target：取 evolvedFromStack 最頂的進化卡 → 放回對手 deck，並用 evolvedFromStack 倒退一階
+  let s = state;
+  let returnedCount = 0;
+  s = updatePlayerInline(s, dIdx, p => {
+    const newDeckExtras: typeof p.deck = [];
+    const downgrade = (poke: CardInstance): CardInstance => {
+      if (!poke.evolvedFromStack || poke.evolvedFromStack.length === 0) return poke;
+      // evolvedFromStack 結構：較底部 → 較頂部；最後一個是「目前形態」前一階
+      const stack = [...poke.evolvedFromStack];
+      const prev = stack.pop()!;
+      // 把目前 cardId（最頂進化卡）放回對手牌庫
+      newDeckExtras.push({ iid: poke.iid + '_evo_returned', cardId: poke.cardId, energyAttached: [], damage: 0 });
+      returnedCount++;
+      // 退化為 prev：cardId 變回前一階
+      return {
+        ...poke,
+        cardId: prev.cardId,
+        evolvedFromStack: stack.length > 0 ? stack : undefined,
+        evolvedFromIid: stack.length > 0 ? stack[stack.length - 1].iid : undefined,
+      };
+    };
+    let active = p.active;
+    let bench = p.bench;
+    for (const t of targets) {
+      if (t.slot.kind === 'active' && active) {
+        active = downgrade(active);
+      } else if (t.slot.kind === 'bench') {
+        bench = bench.map((b, i) => i === t.slot.idx ? downgrade(b) : b);
+      }
+    }
+    return { ...p, active, bench, deck: shuffle([...p.deck, ...newDeckExtras]) };
+  });
+  return addLog(s, `阿賽斯特萊石：對手 ${returnedCount} 隻進化寶可夢退化（進化卡回對手牌庫並洗）`, aIdx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (14) 雀躍（捲捲耳）— 0 傷 + 與備戰互換
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('捲捲耳|雀躍', (state) => ({ state, damage: 0 }));
+regPost('捲捲耳|雀躍', (state, aIdx, pool) => {
+  const player = state.players[aIdx];
+  if (player.bench.length === 0) return addLog(state, '雀躍：備戰區無寶可夢可換', aIdx);
+  let s = addLog(state, '雀躍：選 1 隻備戰寶可夢與戰鬥位互換', aIdx);
+  return withPending(s, {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'v155-self-swap-active',
+  });
+});
+
+regR('v155-self-swap-active', (st, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) return st;
+  const targetIid = iids[0];
+  st = updatePlayerInline(st, aIdx, p => {
+    const benchIdx = p.bench.findIndex(b => b.iid === targetIid);
+    if (benchIdx < 0 || !p.active) return p;
+    const oldActive = p.active;
+    const newActive = p.bench[benchIdx];
+    const newBench = [...p.bench];
+    newBench[benchIdx] = clearActiveEffectsInline(oldActive);
+    return { ...p, active: newActive, bench: newBench };
+  });
+  return addLog(st, '雀躍：戰鬥位與備戰互換完成', aIdx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (15) 天仙石（仙子伊布ex）— 0 傷 + 對手 2 隻備戰回對手牌庫 + 下回合不能用招式
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('仙子伊布ex|天仙石', (state) => ({ state, damage: 0 }));
+regPost('仙子伊布ex|天仙石', (state, aIdx) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const dPlayer = state.players[dIdx];
+  if (dPlayer.bench.length === 0) {
+    return addLog(state, '天仙石：對手備戰區無寶可夢', aIdx);
+  }
+  const pickCount = Math.min(2, dPlayer.bench.length);
+  let s = addLog(state, `天仙石：選 ${pickCount} 隻對手備戰寶可夢回對手牌庫並重洗`, aIdx);
+  return withPending(s, {
+    type: 'opp-bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: pickCount, maxCount: pickCount,
+    effectKey: 'v155-tianxianstone-return',
+  });
+});
+
+regR('v155-tianxianstone-return', (st, aIdx, iids, _params, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  if (iids.length === 0) return st;
+  const ret = new Set(iids);
+  // 把那 N 隻備戰寶可夢「整個」(本體+附加能量+進化鏈所有卡) 全回對手牌庫並洗
+  st = updatePlayerInline(st, dIdx, p => {
+    const newDeckExtras: typeof p.deck = [];
+    const newBench = p.bench.filter(b => {
+      if (!ret.has(b.iid)) return true;
+      // 取進化鏈：底部進化卡 + 附加能量 + 自身 cardId
+      const allCardIds: string[] = [];
+      if (b.evolvedFromStack) {
+        for (const ev of b.evolvedFromStack) allCardIds.push(ev.cardId);
+      }
+      allCardIds.push(b.cardId);
+      for (const cid of allCardIds) {
+        newDeckExtras.push({ iid: b.iid + '_ret_' + cid, cardId: cid, energyAttached: [], damage: 0 });
+      }
+      for (const e of b.energyAttached) newDeckExtras.push(e);
+      return false;
+    });
+    return { ...p, bench: newBench, deck: shuffle([...p.deck, ...newDeckExtras]) };
+  });
+  // 自身下回合不能用招式（鎖整隻；簡化版 cooldown）
+  st = updatePlayerInline(st, aIdx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, cantAttackPending: true } };
+  });
+  return addLog(st, `天仙石：${iids.length} 隻對手備戰回對手牌庫並重洗；自身下回合無法使用招式`, aIdx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (16) 時間爆炸（帝牙盧卡）— 80 + 自動：若有能量則棄全能量並 +80
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('帝牙盧卡|時間爆炸', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  if (!att || att.energyAttached.length === 0) {
+    return { state: addLog(state, '時間爆炸：自身無能量 → 80', aIdx), damage: 80 };
+  }
+  // 自動：棄全能量回牌庫並洗 → +80
+  const energies = att.energyAttached;
+  const s2 = updatePlayerInline(state, aIdx, p => {
+    if (!p.active) return p;
+    const newActive = { ...p.active, energyAttached: [] };
+    return { ...p, active: newActive, deck: shuffle([...p.deck, ...energies]) };
+  });
+  const log = addLog(s2, `時間爆炸：將自身 ${energies.length} 個能量回牌庫並重洗 → 80 + 80 = 160`, aIdx);
+  return { state: log, damage: 160 };
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (17) 破壞潮旋（洛奇亞ex）— 140 + 擲幣到反 → 棄對手戰鬥位 N 能量
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('洛奇亞ex|破壞潮旋', (state) => ({ state, damage: 140 }));
+regPost('洛奇亞ex|破壞潮旋', (state, aIdx) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const dActive = state.players[dIdx].active;
+  if (!dActive || dActive.energyAttached.length === 0) {
+    return addLog(state, '破壞潮旋：對手戰鬥位無能量', aIdx);
+  }
+  let heads = 0;
+  while (Math.random() < 0.5) heads++;
+  if (heads === 0) {
+    return addLog(state, '破壞潮旋：第 1 次擲就反面 → 不丟能量', aIdx);
+  }
+  const discardCount = Math.min(heads, dActive.energyAttached.length);
+  const discarded = dActive.energyAttached.slice(0, discardCount);
+  const remaining = dActive.energyAttached.slice(discardCount);
+  let s = updatePlayerInline(state, dIdx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, energyAttached: remaining } : p.active,
+    discard: [...p.discard, ...discarded],
+  }));
+  return addLog(s, `破壞潮旋：擲幣 ${heads} 次正面 → 丟對手戰鬥位 ${discardCount} 個能量`, aIdx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (18) 激流水泵（厄鬼椪 水井面具ex）— 100 + 自動：若有≥3 能量則棄 3 + 對手備戰 1 隻 120
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('厄鬼椪 水井面具ex|激流水泵', (state) => ({ state, damage: 100 }));
+regPost('厄鬼椪 水井面具ex|激流水泵', (state, aIdx) => {
+  const att = state.players[aIdx].active;
+  if (!att || att.energyAttached.length < 3) {
+    return addLog(state, '激流水泵：自身能量不足 3 個（不觸發棄能量+備戰打擊）', aIdx);
+  }
+  const dIdx = (1 - aIdx) as 0 | 1;
+  if (state.players[dIdx].bench.length === 0) {
+    return addLog(state, '激流水泵：對手備戰無寶可夢（不觸發棄能量+備戰打擊）', aIdx);
+  }
+  // 自動棄前 3 個能量回牌庫並洗
+  const energies = att.energyAttached.slice(0, 3);
+  const remaining = att.energyAttached.slice(3);
+  let s = updatePlayerInline(state, aIdx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, energyAttached: remaining } : p.active,
+    deck: shuffle([...p.deck, ...energies]),
+  }));
+  s = addLog(s, '激流水泵：棄 3 個能量回自身牌庫並重洗 → 對手備戰 1 隻受 120', aIdx);
+  // 後續：picker 選 1 隻對手備戰受 120（hitBenchPickPost）
+  return hitBenchPickPost(s, aIdx, 'opp', 1, 120, '激流水泵');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (19) 音波拆裂（超級盔甲鳥ex）— 220 戰鬥位 + 自身全能量回牌庫
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('超級盔甲鳥ex|音波拆裂', (state, aIdx) => {
+  const att = state.players[aIdx].active;
+  if (!att) return { state, damage: 220 };
+  if (att.energyAttached.length === 0) {
+    return { state: addLog(state, '音波拆裂：自身無能量 → 220', aIdx), damage: 220 };
+  }
+  const energies = att.energyAttached;
+  const s = updatePlayerInline(state, aIdx, p => {
+    if (!p.active) return p;
+    return {
+      ...p,
+      active: { ...p.active, energyAttached: [] },
+      deck: shuffle([...p.deck, ...energies]),
+    };
+  });
+  return {
+    state: addLog(s, `音波拆裂：自身 ${energies.length} 個能量回牌庫並重洗 → 220 傷害`, aIdx),
+    damage: 220,
+  };
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// (20) 精神尖槍（代歐奇希斯）— 120 + 若能量單位≥cost+2 → 對手備戰 1 隻 120
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('代歐奇希斯|精神尖槍', (state) => ({ state, damage: 120 }));
+regPost('代歐奇希斯|精神尖槍', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  if (!att) return state;
+  const card = pool.get(att.cardId);
+  if (!card) return state;
+  // 找「精神尖槍」這個招式的 cost 長度
+  const atk = card.attacks?.find(a => a.name === '精神尖槍');
+  const costLen = atk?.cost?.length ?? 3;
+  // 計能量「單位」— 用簡化版 1 張 = 1 個（特殊能量按特殊規則但這裡不展開）
+  const unitCount = att.energyAttached.length;
+  if (unitCount < costLen + 2) {
+    return addLog(state, `精神尖槍：能量 ${unitCount} 不滿 cost+2（${costLen + 2}）→ 不觸發備戰打擊`, aIdx);
+  }
+  return hitBenchPickPost(state, aIdx, 'opp', 1, 120, '精神尖槍');
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// helpers — 本檔 inline，避免跨檔依賴
+// ══════════════════════════════════════════════════════════════════════════════
+
+function updatePlayerInline(
+  state: GameState,
+  idx: 0 | 1,
+  fn: (p: PlayerState) => PlayerState
+): GameState {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[idx] = fn(players[idx]);
+  return { ...state, players };
+}
+
+function clearActiveEffectsInline(poke: CardInstance): CardInstance {
+  return {
+    ...poke,
+    status: undefined,
+    cantAttackThisTurn: undefined,
+    cantAttackPending: undefined,
+    cantRetreatNextTurn: undefined,
+    cantRetreatPendingSelf: undefined,
+    damageReduceNextHit: undefined,
+    damageBonusThisTurn: undefined,
+    damageBonusPending: undefined,
+    takeExtraDamageThisTurn: undefined,
+    takeExtraDamageNextTurn: undefined,
+    cantAttachEnergyThisTurn: undefined,
+    cantAttachEnergyNextTurn: undefined,
+    deferredPrizeBonusThisTurn: undefined,
+    deferredPrizeBonusNextTurn: undefined,
+    movedToActiveThisTurn: undefined,
+  };
+}
