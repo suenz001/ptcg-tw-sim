@@ -69,7 +69,8 @@ regPre('N的達摩狒狒|復燃', (state, aIdx, pool) => {
 });
 
 // N的達摩狒狒｜火人加農炮 90（自棄所有能量 + 對手 1 備戰 90）— 用 regPost 後續
-regPost('N的達摩狒狒|火人加農炮', (state, aIdx, _dmg, pool) => {
+// v2.132：修簽名 (state, aIdx, _dmg, pool) → (state, aIdx, pool)
+regPost('N的達摩狒狒|火人加農炮', (state, aIdx, pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const att = { ...players[aIdx] };
   if (att.active) {
@@ -109,7 +110,11 @@ regR('fire-cannon-90', (state, aIdx, selectedIids, params, pool) => {
 
 // N的扒手貓｜暗槓 30 — 查對手手牌 → 選 1 張放對手牌庫「下方」
 // 簡化：用 hand-discard pending 讓玩家從對手手牌選 1 張；resolver 將該卡放回對手牌庫底部。
-regPost('N的扒手貓|暗槓', (state, aIdx, _dmg, pool) => {
+//
+// v2.132：原 postFn 簽名寫成 `(state, aIdx, _dmg, pool)` — 多塞 _dmg → pool 變 undefined →
+//   `pool.get(...)` 拋 TypeError → 整個 dispatch 失敗 → 連 30 傷害都沒套（Leon 透過
+//   暗黑底牌 copy-attack 觸發而看到「沒造成傷害也沒抽手牌」）。修為正確簽名 `(state, aIdx, pool)`。
+regPost('N的扒手貓|暗槓', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppHand = state.players[dIdx].hand;
   if (oppHand.length === 0) return addLog(state, '暗槓：對手手牌為空', aIdx);
@@ -171,7 +176,8 @@ regR('recruit-to-bench', (state, aIdx, selectedIids, _params, pool) => {
 });
 
 // 超級阿勃梭魯ex｜惡之鉤爪 200 — 看對手手牌棄 1
-regPost('超級阿勃梭魯ex|惡之鉤爪', (state, aIdx, _dmg, pool) => {
+// v2.132：修簽名（_dmg 多餘 → pool 變 undefined → throw）
+regPost('超級阿勃梭魯ex|惡之鉤爪', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppHand = state.players[dIdx].hand;
   if (oppHand.length === 0) return addLog(state, '惡之鉤爪：對手手牌為空', aIdx);
@@ -224,7 +230,8 @@ regR('ambush-snipe-by-counters', (state, aIdx, selectedIids, _params, pool) => {
 });
 
 // 超級甲賀忍蛙ex｜忍者飛旋 120+ — 若將 1 張水能量放回手牌，+80
-regPost('超級甲賀忍蛙ex|忍者飛旋', (state, aIdx, _dmg, pool) => {
+// v2.132：修簽名（雖然函式 body 沒用 pool，但簽名錯誤仍會在 TS strict 觸發 type 不符）
+regPost('超級甲賀忍蛙ex|忍者飛旋', (state, _aIdx, _pool) => {
   // 簡化版：若身上有水能量，自動把最後一張水回手並 +80（傷害已由 regPre 算，這裡靠 regPre 補）
   // 為維持 post-only，不直接影響 dmg — 改成 regPre 版本
   return state;

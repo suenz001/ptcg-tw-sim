@@ -872,6 +872,80 @@ function applyAutoDraw(state: GameState): GameState {
   );
 }
 
+// v2.132：sanity sweep — 招式 / resolver 結算後，掃雙方 active+bench，找出 damage ≥ HP
+//   卻仍留在場上的「zombie」寶可夢，強制移到棄牌、累計獎賞、清空位置。
+//   觸發點：Leon 回報幻影奇襲後對手 70HP 土龍弟弟仍在場、damage 200。理論上引擎主流程
+//   會 KO，但 postFn / 多目標 resolver / 反擊特性等可能漏掉某條 path。做防呆掃描。
+//
+//   為避免重複觸發 ON_KO 道具與獎賞動畫，sweep 使用簡化路徑：
+//   - 寶可夢 + 附加能量/道具/進化堆 全部丟棄牌區
+//   - 累計 prize 到 pendingPrizes（按 prizesForKO 算）
+//   - 不觸發 TOOL_PREVENT_KO / TOOL_ON_KO（這些本應在主 KO 路徑處理）
+//   - 寫一條 sanity log，方便日後 debug 知道是 fallback 觸發了
+function sanityKOSweep(
+  state: GameState,
+  attackerIdx: 0 | 1,
+  pool: Map<string, Card>,
+): GameState {
+  const dIdx = (1 - attackerIdx) as 0 | 1;
+  let s = state;
+  let prizesAcc = 0;
+  let anyKO = false;
+  // 只掃對手 — 自己 KO（咒詛炸彈等）有專屬流程，不該被這個 fallback 干擾
+  const player = { ...s.players[dIdx] };
+  // active
+  if (player.active) {
+    const card = pool.get(player.active.cardId);
+    const hp = card?.hp ?? 0;
+    if (hp > 0 && player.active.damage >= hp) {
+      anyKO = true;
+      const ko = player.active;
+      const koDiscard: CardInstance[] = [
+        ko, ...ko.energyAttached,
+        ...(ko.toolAttached ? [ko.toolAttached] : []),
+        ...(ko.evolvedFromStack ?? []),
+      ];
+      player.discard = [...player.discard, ...koDiscard];
+      player.active = null;
+      if (card) prizesAcc += prizesForKO(card);
+      s = addLog(s, `⚠️ KO sanity sweep：${card?.name ?? '?'} 被擊倒（戰鬥場，傷害 ${ko.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
+    }
+  }
+  // bench
+  const newBench: CardInstance[] = [];
+  for (const b of player.bench) {
+    const card = pool.get(b.cardId);
+    const hp = card?.hp ?? 0;
+    if (hp > 0 && b.damage >= hp) {
+      anyKO = true;
+      const koDiscard: CardInstance[] = [
+        b, ...b.energyAttached,
+        ...(b.toolAttached ? [b.toolAttached] : []),
+        ...(b.evolvedFromStack ?? []),
+      ];
+      player.discard = [...player.discard, ...koDiscard];
+      if (card) prizesAcc += prizesForKO(card);
+      s = addLog(s, `⚠️ KO sanity sweep：${card?.name ?? '?'} 被擊倒（備戰位，傷害 ${b.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
+    } else {
+      newBench.push(b);
+    }
+  }
+  player.bench = newBench;
+  if (!anyKO) return state;
+  const players = [...s.players] as [PlayerState, PlayerState];
+  players[dIdx] = player;
+  s = { ...s, players, pendingPrizes: (s.pendingPrizes ?? 0) + prizesAcc };
+  // 對手 active+bench 都空 → 直接終局
+  if (player.active === null && player.bench.length === 0) {
+    s = {
+      ...s, phase: 'game-over',
+      winner: attackerIdx,
+      winReason: `${player.name} 沒有可上場的寶可夢`,
+    };
+  }
+  return s;
+}
+
 // ── 正式對戰動作處理 ─────────────────────────────────────────────────────────
 
 function handlePlaying(
@@ -904,6 +978,8 @@ function handlePlaying(
     if (endTurnAfter && !newState.pendingSelection) {
       newState = { ...newState, turnPhase: 'end' };
     }
+    // v2.132：resolver 也可能 leave zombie（damage ≥ HP 卻沒移到棄牌）— sanity sweep 對手側
+    newState = sanityKOSweep(newState, actorIdx, pool);
     return newState;
   }
 
@@ -2077,6 +2153,12 @@ function handlePlaying(
         if (retal) newState = retal(newState, dIdx, pool);
       }
     }
+
+    // v2.132：sanity sweep — 雙方 active/bench 任何 damage ≥ HP 卻仍在場上者，強制 KO。
+    //   觸發點：Leon 用幻影奇襲 200 點打 70HP 土龍弟弟，土龍弟弟被觀察到「damage 200 仍在備戰」。
+    //   理論上 KO 流程已在上方處理，但 postFn / 反擊 / 多目標 resolver 可能漏處理某條 path。
+    //   做為防呆：每次招式結算後掃過全場，把 zombie 寶可夢移到棄牌（給對手獎賞）。
+    newState = sanityKOSweep(newState, aIdx, pool);
 
     return newState;
   }

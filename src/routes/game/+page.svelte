@@ -921,8 +921,9 @@
           if (!card) return false;
           if (f === 'Basic')      return isBasicPokemonCard(card);
           if (f === 'Basic:HP70') return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
-          if (f === 'Stage1')     return card.supertype === 'Pokemon' && card.subtype === 'Stage1';
-          if (f === 'Stage2')     return card.supertype === 'Pokemon' && card.subtype === 'Stage2';
+          // v2.132：用 stage 欄位（含 ex 進化），不靠 subtype — ex 寶可夢 subtype='ex' 會被排除
+          if (f === 'Stage1')     return card.supertype === 'Pokemon' && (card.stage ?? card.subtype) === 'Stage1';
+          if (f === 'Stage2')     return card.supertype === 'Pokemon' && (card.stage ?? card.subtype) === 'Stage2';
           if (f === 'Evolution')  return card.supertype === 'Pokemon' && !!card.evolvesFrom;
           if (f === 'PsychicBasic') return card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Psychic';
           if (f === 'Pokemon')    return card.supertype === 'Pokemon';

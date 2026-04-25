@@ -6720,31 +6720,31 @@ regPost('洛托姆|粉碎脈衝', (state, aIdx, pool) => {
 // 混亂類
 regPost('光電傘蜥|閃光彈', statusPost('confused'));
 regPost('火箭隊的大嘴蝠|奇異之光', statusPost('confused'));
-regPost('<火箭隊的>大嘴蝠|奇異之光', statusPost('confused'));
+regPost('火箭隊的大嘴蝠|奇異之光', statusPost('confused'));
 regPost('超能妙喵|蠱惑', statusPost('confused'));
 regPost('超音蝠|超音波', statusPost('confused'));
 regPost('死神棺|蠱惑', statusPost('confused'));
 regPost('花舞鳥|眩目舞', statusPost('confused'));
 regPost('音波龍|恐慌嚎鳴', statusPost('confused'));
-regPost('<火箭隊的>貓老大ex|殘酷斬', statusPost('confused'));
+regPost('火箭隊的貓老大ex|殘酷斬', statusPost('confused'));
 regPost('雙彈瓦斯|充滿瓦斯', statusPost('confused'));
 
 // 中毒類
 regPost('天蠍|毒擊', statusPost('poisoned'));
 regPost('鉗尾蠍|毒擊', statusPost('poisoned'));
 regPost('火箭隊的超音蝠|噴毒', statusPost('poisoned'));
-regPost('<火箭隊的>超音蝠|噴毒', statusPost('poisoned'));
+regPost('火箭隊的超音蝠|噴毒', statusPost('poisoned'));
 regPost('<莉佳的>臭臭花|噴毒', statusPost('poisoned'));
 regPost('哎呀球菇|毒之孢子', statusPost('poisoned'));
 regPost('灰塵山|垃圾射擊', statusPost('poisoned'));
-regPost('<火箭隊的>小拉達|險惡門牙', statusPost('poisoned'));
+regPost('火箭隊的小拉達|險惡門牙', statusPost('poisoned'));
 regPost('百足蜈蚣|噴毒', statusPost('poisoned'));
 
 // 睡眠類
 regPost('超級雪妖女ex|純粹雪', statusPost('asleep'));
 regPost('冰雪龍|冰凍之風', statusPost('asleep'));
 regPost('派拉斯特|蘑菇孢子', statusPost('asleep'));
-regPost('<火箭隊的>催眠貘|催眠光線', statusPost('asleep'));
+regPost('火箭隊的催眠貘|催眠光線', statusPost('asleep'));
 regPost('夢夢蝕|睡眠波動', statusPost('asleep'));
 
 // 灼傷類
@@ -6760,7 +6760,7 @@ regPost('墓仔狗|猛撞', selfHitPost(10));
 regPost('萊希拉姆|燃燒閃焰', selfHitPost(60));
 regPost('帕底亞 肯泰羅|捨身衝撞', selfHitPost(20));
 regPost('利牙魚|突擊', selfHitPost(10));
-regPost('<火箭隊的>團珠蛛|猛撞', selfHitPost(10));
+regPost('火箭隊的團珠蛛|猛撞', selfHitPost(10));
 regPost('火箭隊的椰蛋樹|捨身衝撞', selfHitPost(30));
 regPost('頑皮熊貓|突擊', selfHitPost(10));
 regPost('仆斬將軍|雙刃斬', selfHitPost(50));
@@ -6793,7 +6793,7 @@ regPost('沙基拉斯|猛撞', selfHitPost(20));
 regPost('超級赫拉克羅斯ex|推山', millOppDeckTopPost(2, '推山'));
 regPost('鐵骨土人|臂錘', millOppDeckTopPost(1, '臂錘'));
 regPost('厄鬼椪 礎石面具|推山', millOppDeckTopPost(1, '推山'));
-regPost('<火箭隊的>幼基拉斯|嚼山', millOppDeckTopPost(1, '嚼山'));
+regPost('火箭隊的幼基拉斯|嚼山', millOppDeckTopPost(1, '嚼山'));
 regPost('班基拉斯|斷裂頓足', millOppDeckTopPost(2, '斷裂頓足'));
 
 // ── (6) 自己 mill（將自己的牌庫頂 N 張丟棄）─ 沿用既有 millSelfDeckTopPost ─
@@ -6897,8 +6897,8 @@ regPost('呆火駝|呼朋引伴', (state, aIdx, _pool) => {
 });
 
 // ── (I) 條件式 +N 傷害（其他）──────────────────────────────────────────
-// <火箭隊的>尼多力諾｜角裂 60 + 若對手有傷害指示物 +60
-regPre('<火箭隊的>尼多力諾|角裂', (state, aIdx, _pool) => {
+// 火箭隊的尼多力諾｜角裂 60 + 若對手有傷害指示物 +60
+regPre('火箭隊的尼多力諾|角裂', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
   if (def && def.damage > 0) {

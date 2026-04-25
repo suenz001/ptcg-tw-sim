@@ -1,9 +1,59 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.131)  
+> 最後更新：2026-04-25 (v2.132)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.132 — 幻影奇襲 KO sanity sweep + 13 個未實裝 effect 修
+
+### Leon 回報 3 件事
+
+**Bug A — 幻影奇襲 後土龍弟弟「沒昏厥、damage 200/HP 70、被放到備戰」**
+找不到能 reproduce 的明確 path（log 線索有限、土龍弟弟無 active KO 觸發的特殊 ability、postFn 也沒重置 active）。為避免再發生：
+- 引擎加 `sanityKOSweep(state, attackerIdx, pool)` — 招式結算後 + RESOLVE_SELECTION 結算後，掃描對手 active+bench：任何 damage ≥ effectiveHP 卻仍在場上的 zombie 寶可夢，**強制移到棄牌、累計獎賞、空出位置**（active null / bench filter）。
+- log 寫「⚠️ KO sanity sweep：…」方便日後從 log 看出是 fallback 觸發了。
+- root cause 沒抓到，但 fallback 保證視覺/state 不會再卡 zombie。
+
+**Bug B — 小光 Stage1/Stage2 搜不到 ex 進化**
+卡面：搜「基礎 / 1 階進化 / 2 階進化」各一張。原 filter `card.subtype === 'Stage1'` — 但 ex 寶可夢 subtype='ex'，stage='Stage1'/'Stage2' 才是真正的階段。
+- ai.ts + +page.svelte：`Stage1`/`Stage2` filter 改為 `(card.stage ?? card.subtype) === 'Stage1'/'Stage2'` — ex 進化現在會被搜到。
+
+**Bug C — N的扒手貓 暗槓 透過 暗黑底牌 觸發 → 沒造成傷害也沒看手牌**
+根因：`regPost('N的扒手貓|暗槓', (state, aIdx, _dmg, pool) => {...})` 簽名錯了。AttackPostFn = `(state, aIdx, pool)`（3 參數）。多塞一個 _dmg 等於把 pool 收成 _dmg，內部 `pool.get(...)` 變成 `undefined.get(...)` → TypeError → dispatch 失敗 → 連 30 dmg 都沒套。修為正確簽名。
+
+### 連帶找到 4 個同類錯誤簽名
+六組預組裡還有 3 個 regPost 用了同樣的錯誤 4-arg 簽名，全部改回 3-arg：
+- `N的達摩狒狒|火人加農炮`（之前 Leon 反饋過點不到備戰，可能就是因為這個）
+- `超級阿勃梭魯ex|惡之鉤爪`
+- `超級甲賀忍蛙ex|忍者飛旋`（雖然 body 沒用 pool 沒崩，但簽名改正以防 TS strict）
+
+### 連帶找到 9 個註冊鍵卡名前綴錯誤
+`<火箭隊的>...|招式` 這 9 個 regPre/regPost 永遠不會 fire — v2.22 卡池載入時已經 strip `<>`，實際 card.name 沒 `<>`。全部改為 `火箭隊的...|招式`：
+- 火箭隊的大嘴蝠｜奇異之光
+- 火箭隊的貓老大ex｜殘酷斬
+- 火箭隊的超音蝠｜噴毒
+- 火箭隊的小拉達｜險惡門牙
+- 火箭隊的催眠貘｜催眠光線
+- 火箭隊的團珠蛛｜猛撞
+- 火箭隊的幼基拉斯｜嚼山
+- 火箭隊的尼多力諾｜角裂
+- （+ 1 註解）
+
+### 全 preset audit
+我用 Python 跑完 preset 卡表的 attack/ability/trainer 名稱 vs effects 註冊 key 比對，扣掉 false positive（被動特性 / 引擎 inline / Stadium passive），實際未實裝**剩 0 條**。所有掛在 preset 牌組裡的招式/特性/訓練家現在都有對應實裝。
+
+### 變更檔案
+- `src/lib/game/engine.ts`：sanityKOSweep helper + 招式結算 / RESOLVE_SELECTION 後呼叫
+- `src/lib/game/effects.ts`：9 個 `<火箭隊的>` 註冊鍵改正
+- `src/lib/game/effects/cards/six_decks.ts`：4 個 regPost 簽名修正
+- `src/lib/game/ai.ts` + `src/routes/game/+page.svelte`：Stage1/Stage2 filter 改用 `card.stage`
+- `src/lib/version.ts`：2.131 → 2.132
+
+### 驗證
+- npm run build：✓ 14.46s 通過、0 error
 
 ---
 
