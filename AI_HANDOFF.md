@@ -1,9 +1,61 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.148)  
+> 最後更新：2026-04-25 (v2.149)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.149 — 7 個特性實裝（伊布族 / 蜜集大蛇 / 祭典樂舞 全套）
+
+接續 v2.148 列出的 7 個未實裝特性，全部補完。
+
+### 1. 提升進化（伊布 SV8a 125）— engine 進化 gate bypass
+卡面：「只要這隻寶可夢在戰鬥場上，就算在自己的最初回合或者剛使出的回合，也可進化。」
+- engine.ts EVOLVE handler：base 在 active 位 + abilities 含 '提升進化' → bypass `state.isFirstTurn` 和 `basePoke.justPlaced` gate
+- getEvolvableTargets 同步加 bypass
+
+### 2. 虹色DNA（伊布ex SV8a 126）— engine 進化目標 bypass
+卡面：「這隻寶可夢可從手牌使出從『伊布』進化而來的『寶可夢ex』，放置於這隻寶可夢身上完成進化。」
+- engine.ts EVOLVE handler：base 卡有 '虹色DNA' + evoCard.evolvesFrom='伊布' + evoCard 是 ex → bypass 標準 sameEvoName 比對
+- getEvolvableTargets 同步加例外
+
+### 3. 璀璨結晶（Tool ACE SPEC）— canAffordAttack 能量折扣
+卡面：「附有這張卡的『太晶』寶可夢使用招式時，使用那個招式所需的能量減少 1 個。（減少的能量任何屬性皆可。）」
+- engine.ts canAffordAttack：太晶寶可夢 + toolAttached='璀璨結晶' + !toolsJammed → cost 移除 1 個（優先 Colorless，否則最後 1 個）
+
+### 4. 熟成充能（蜜集大蛇ex）— regA 能量附加 + heal
+卡面：「在自己的回合時可使用 1 次。從自己的手牌選擇 1 張『基本【草】能量』卡，附於自己的寶可夢身上。然後，將附上那張卡的寶可夢恢復 30 HP。」
+- 新檔 `effects/cards/lopunny_serperior_flareon_festival.ts`
+- regA：gate 手牌有基本草 + 場上有寶可夢；auto-pick 第 1 張 → 開 heal-target → resolver 附能量 + 回血 30
+
+### 5. 衝衝鼓（啪咚猴）— regA 條件式 search
+卡面：「若自己的戰鬥寶可夢為擁有特性『祭典樂舞』的寶可夢，則在自己的回合時可使用 1 次。從自己的牌庫任意選擇 1 張卡加入手牌。並且重洗牌庫。」
+- regG/regA：active.cardId.abilities 含 '祭典樂舞' → deck-search 'Any' max=1 → search-generic-to-hand resolver
+
+### 6. 搜尋寶石（貓頭夜鷹）— evolvedThisTurn 觸發
+卡面：「在自己的回合，從手牌使出這張卡並完成進化時，若自己的場上有『太晶』寶可夢，則可使用 1 次。從自己的牌庫選擇最多 2 張訓練家卡。」
+- engine.ts USE_ABILITY 白名單擴充：'搜尋寶石' 加入 evolvedThisTurn-only 列表
+- regA：gate cardInst.evolvedThisTurn + 場上有太晶；deck-search 'AnyTrainer' max=min(2, deck.length)
+
+### 7. 祭典樂舞（裹蜜蟲/角金魚/金魚王/綿綿泡芙）— 第 2 次招式 flow
+卡面：「若場上有『祭典會場』，則這隻寶可夢可使用持有的招式 2 次。」
+- types.ts 新增 `festivalDanceUsedThisTurn?: [boolean, boolean]` 旗標
+- engine.ts ATTACK handler 末尾：第 1 次招式打完，若 attacker 有 '祭典樂舞' + 場上 '祭典會場' + 旗標未設 + 對手 active 仍在 + 沒 pendingPrizes → turnPhase 維持 'main'，flag[aIdx]=true，玩家可再 attack 一次
+- engine.ts END_TURN 末尾清 flag[aIdx]
+- 簡化：第 1 次 KO 對手戰鬥位的情況 sim/UI 暫不支援第 2 次（KO→送新→第 2 attack 流程複雜）
+
+### 驗證
+- `npm run build` ✓ 15.19s
+- `node scripts/sim-sandbox.mjs 16` ✓ 16 局 0 bug、27 preset decks 全 OK
+
+### 改動檔案
+- `src/lib/version.ts` — 2.148 → 2.149
+- `src/lib/game/types.ts` — `festivalDanceUsedThisTurn` 加到 GameState
+- `src/lib/game/engine.ts` — 進化 gate bypass（提升進化/虹色DNA）+ canAffordAttack 璀璨結晶 + USE_ABILITY 搜尋寶石白名單 + ATTACK 祭典樂舞 second-attack + END_TURN flag clear
+- `src/lib/game/effects.ts` — 新 import side-effect
+- `src/lib/game/effects/cards/lopunny_serperior_flareon_festival.ts` — 新檔（熟成充能/衝衝鼓/搜尋寶石）
 
 ---
 

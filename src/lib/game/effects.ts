@@ -280,6 +280,8 @@ import './effects/cards/mega_decks';
 // v2.112：N的索羅亞克 / 火焰雞多龍 / 夠讚狗 / 顫弦蠑螈 / 蒼炎刃鬼 / 超級甲賀忍蛙 六組預組卡效果
 import './effects/cards/six_decks';
 // v2.135：阿響的火爆獸 / 火箭隊的烏鴉頭頭 兩組預組卡效果（在本檔末尾 inline 註冊）
+// v2.149：超級長耳兔 / 蜜集大蛇 / 火伊布 / 祭典樂舞 四組預組卡效果（熟成充能 / 衝衝鼓 / 搜尋寶石 / 祭典樂舞 註解）
+import './effects/cards/lopunny_serperior_flareon_festival';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts

@@ -373,6 +373,13 @@ export interface GameState {
    */
   stadiumPlayedThisTurn?: [boolean, boolean];
   /**
+   * v2.149 祭典樂舞：本回合是否已用過「祭典會場 + 祭典樂舞 寶可夢」的第 2 次招式 bonus [P1, P2]。
+   * 條件：場上有「祭典會場」+ attacker 有「祭典樂舞」特性 + 第 1 次招式未 KO 對手戰鬥位
+   * → 第 1 次招式打完，turnPhase 維持 'main'，玩家可再 attack 一次。打完第 2 次後正常切 'end'。
+   * END_TURN 重置 activePlayerIndex 側為 false（避免跨回合殘留）。
+   */
+  festivalDanceUsedThisTurn?: [boolean, boolean];
+  /**
    * 我方上次結束自己回合時，對手剩餘獎賞張數的快照 [P1 側快照, P2 側快照]。
    * 比較 snapshot vs 目前 opp 獎賞張數差即可得知「對手上個回合是否取得過獎賞（= 自己寶可夢是否在對手回合被擊倒）」。
    * 用於「不公印章」等需要『前一回合對手取過獎賞』判定的卡牌。

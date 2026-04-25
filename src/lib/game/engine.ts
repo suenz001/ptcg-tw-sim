@@ -580,6 +580,26 @@ export function canAffordAttack(
     const overridden2 = getUrsalunaBloodMoonEffectiveCost(attackerName, attackName, state, pool, cost);
     if (overridden2 !== cost) cost = overridden2;
   }
+  // v2.149 璀璨結晶（Tool ACE SPEC）：附有此 Tool 的「太晶」寶可夢使用招式時，
+  //   能量需求 -1 個（任意屬性）。優先扣 Colorless，否則扣最後 1 個。
+  //   阻礙之塔時道具失效。
+  {
+    const pokeCardForTool = pool.get(pokemon.cardId);
+    const isTera = pokeCardForTool?.tags?.includes('太晶');
+    const toolsJammed = state ? isToolsJammed(state, pool) : false;
+    if (isTera && !toolsJammed && pokemon.toolAttached) {
+      const toolCard = pool.get(pokemon.toolAttached.cardId);
+      if (toolCard?.name === '璀璨結晶' && cost.length > 0) {
+        // 優先扣 Colorless（最沒選擇空間的成本元素）
+        const colorlessIdx = cost.indexOf('Colorless');
+        if (colorlessIdx >= 0) {
+          cost = [...cost.slice(0, colorlessIdx), ...cost.slice(colorlessIdx + 1)];
+        } else {
+          cost = cost.slice(0, -1);  // 扣最後 1 個
+        }
+      }
+    }
+  }
   // v2.103 大竺葵｜繁茂：自己場上有大竺葵時，自己所有寶可夢身上的「基本【草】能量」視為 2 個【草】能量。
   //   「這個特性的效果不會重複」→ 多隻大竺葵也只算一次倍率。
   // v2.108 修：原 check 用 `pokemonType === 'Grass'`，但基本能量的 pokemonType 欄位通常空，
@@ -1102,7 +1122,6 @@ function handlePlaying(
   // ── 進化 ──────────────────────────────────────────────────────────────────
   if (action.type === 'EVOLVE') {
     if (state.turnPhase !== 'main') return state;
-    if (state.isFirstTurn) return state; // 第一回合不能進化
     // Wave 39：玩家級進化鎖（例：青銅鐘｜進化妨礙者）
     if (attacker.cantEvolveThisTurn) return state;
 
@@ -1124,6 +1143,10 @@ function handlePlaying(
     if (!basePoke) return state;
     const baseCard = pool.get(basePoke.cardId);
     if (!baseCard) return state;
+    // v2.149 提升進化（伊布 SV8a 125）：戰鬥場上時可第 1 回合或剛使出時進化
+    //   只有 base 在戰鬥場 + base 卡擁有此特性時 bypass isFirstTurn / justPlaced gate
+    const hasPushEvolveAbility = isActive && baseCard.abilities?.some(a => a.name === '提升進化');
+    if (state.isFirstTurn && !hasPushEvolveAbility) return state; // 第一回合不能進化
     // v2.102 活力森林（Stadium）— 雙方的所有【草】寶可夢就算在剛使出的回合也可進化成【草】寶可夢。
     //   自己最初回合例外（line 775 `state.isFirstTurn` gate 照舊擋）。
     // v2.110：bypass 不只 justPlaced，也 bypass evolvedThisTurn — 允許同回合連鎖進化
@@ -1131,8 +1154,14 @@ function handlePlaying(
     const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
     const vigorousForestException = stadiumName === '活力森林' &&
       baseCard.pokemonType === 'Grass' && evoCard.pokemonType === 'Grass';
-    if ((basePoke.justPlaced || basePoke.evolvedThisTurn) && !vigorousForestException) return state;
-    if (!sameEvoName(evoCard.evolvesFrom, baseCard.name)) return state;
+    if ((basePoke.justPlaced || basePoke.evolvedThisTurn) && !vigorousForestException && !hasPushEvolveAbility) return state;
+    // v2.149 虹色DNA（伊布ex SV8a 126）：從伊布進化的 ex 可放此寶可夢身上完成進化
+    //   標準 sameEvoName 檢查失敗時，若 base 卡有此特性 + evoCard.evolvesFrom='伊布' + evoCard 是 ex → 放行
+    const hasPrismaticDNA = baseCard.abilities?.some(a => a.name === '虹色DNA');
+    const prismaticDNAException = hasPrismaticDNA &&
+      sameEvoName(evoCard.evolvesFrom, '伊布') &&
+      evoCard.subtype === 'ex';
+    if (!sameEvoName(evoCard.evolvesFrom, baseCard.name) && !prismaticDNAException) return state;
 
     // 進化：繼承傷害、能量、狀態；進化鏈堆疊保留被進化掉的 CardInstance（裸殼，附加物轉給頂層）
     const prevStack = basePoke.evolvedFromStack ?? [];
@@ -1578,9 +1607,9 @@ function handlePlaying(
     // 集客（米立龍）限制：只有在出場時才能使用
     if (ability.name === '集客' && attacker.active?.iid !== action.iid) return state;
 
-    // 精神抽出（勇基拉 / 胡地）/ 龐克練肌（瑪俐的長毛巨魔ex）：
+    // 精神抽出（勇基拉 / 胡地）/ 龐克練肌（瑪俐的長毛巨魔ex）/ 搜尋寶石（貓頭夜鷹）：
     // 必須「本回合剛進化成此階段」才能使用（evolvedThisTurn）。
-    if ((ability.name === '精神抽出' || ability.name === '龐克練肌') && !targetPoke.evolvedThisTurn) {
+    if ((ability.name === '精神抽出' || ability.name === '龐克練肌' || ability.name === '搜尋寶石') && !targetPoke.evolvedThisTurn) {
       return state;
     }
 
@@ -2277,6 +2306,25 @@ function handlePlaying(
     //   做為防呆：每次招式結算後掃過全場，把 zombie 寶可夢移到棄牌（給對手獎賞）。
     newState = sanityKOSweep(newState, aIdx, pool);
 
+    // v2.149 祭典樂舞：場上有「祭典會場」+ attacker 有「祭典樂舞」特性 + 還沒用過 + 未 KO 對手 active
+    //   → turnPhase 維持 'main'，讓玩家可使用第 2 次招式。
+    //   簡化：若第 1 次招式 KO 對手戰鬥位（或 pendingPrizes > 0），不啟動 — KO 後流程複雜暫不支援。
+    if (newState.phase === 'playing' && newState.turnPhase === 'end') {
+      const stadiumCardF = newState.activeStadium ? pool.get(newState.activeStadium.cardId) : null;
+      const atkActiveF = newState.players[aIdx].active;
+      const atkCardF = atkActiveF ? pool.get(atkActiveF.cardId) : null;
+      const hasDance = atkCardF?.abilities?.some(a => a.name === '祭典樂舞') ?? false;
+      const danceUsed = newState.festivalDanceUsedThisTurn?.[aIdx] ?? false;
+      const oppActiveStillThere = newState.players[dIdx].active !== null;
+      const noPrizes = (newState.pendingPrizes ?? 0) === 0;
+      if (hasDance && stadiumCardF?.name === '祭典會場' && !danceUsed && oppActiveStillThere && noPrizes) {
+        const flag: [boolean, boolean] = [...(newState.festivalDanceUsedThisTurn ?? [false, false])] as [boolean, boolean];
+        flag[aIdx] = true;
+        newState = { ...newState, turnPhase: 'main', festivalDanceUsedThisTurn: flag };
+        newState = addLog(newState, `祭典樂舞：場上有「祭典會場」— 可再使用 1 次招式`, aIdx);
+      }
+    }
+
     return newState;
   }
 
@@ -2664,6 +2712,12 @@ function handlePlaying(
     // v2.91：清除同名特性使用紀錄（使者衝刺 / 月光循環 類）
     if (currentPlayer.abilityNamesUsedThisTurn) {
       delete currentPlayer.abilityNamesUsedThisTurn;
+    }
+    // v2.149：清除祭典樂舞 second-attack flag（END_TURN 後重置該玩家側）
+    if (state.festivalDanceUsedThisTurn?.[aIdx]) {
+      const newFlag: [boolean, boolean] = [...state.festivalDanceUsedThisTurn] as [boolean, boolean];
+      newFlag[aIdx] = false;
+      state = { ...state, festivalDanceUsedThisTurn: newFlag };
     }
     // 清除 cantAttackThisTurn：若當前玩家的 active 本回合被招式封鎖過，
     // 回合結束時把罰則消耗完（否則 UI 反白會永久卡住）
@@ -3080,7 +3134,6 @@ export function getEvolvableTargets(
   pool: Map<string, Card>
 ): Array<{ fromIid: string; toIids: string[] }> {
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
-  if (state.isFirstTurn) return [];
   const player = state.players[state.activePlayerIndex];
 
   // 手牌中的進化牌（有 evolvesFrom 且非基礎）
@@ -3105,17 +3158,29 @@ export function getEvolvableTargets(
   for (const fp of fieldPokemon) {
     const fpCard = pool.get(fp.cardId);
     if (!fpCard) continue;
+    // v2.149 提升進化（伊布 SV8a 125）：base 在戰鬥場 + 卡有此特性 → bypass isFirstTurn + justPlaced
+    const isFpActive = player.active?.iid === fp.iid;
+    const hasPushEvolveAbility = isFpActive && fpCard.abilities?.some(a => a.name === '提升進化');
+    // isFirstTurn gate（除了提升進化 bypass）
+    if (state.isFirstTurn && !hasPushEvolveAbility) continue;
     // 活力森林 bypass 對 base 的要求：base 是草寶可夢
     const forestBypassBase = isForest && fpCard.pokemonType === 'Grass';
-    // 原本的 gate：justPlaced OR evolvedThisTurn 擋。活力森林 exception 兩者都能豁免（per-evo 再確認 evoCard 也是草）
+    // 原本的 gate：justPlaced OR evolvedThisTurn 擋。活力森林 / 提升進化 exception 兩者都能豁免（per-evo 再確認）
     const baseBlocked = fp.justPlaced || fp.evolvedThisTurn;
-    if (baseBlocked && !forestBypassBase) continue;
+    if (baseBlocked && !forestBypassBase && !hasPushEvolveAbility) continue;
+    // v2.149 虹色DNA（伊布ex SV8a 126）：base 有此特性 → 從伊布進化的 ex 可從此 base 進化
+    const hasPrismaticDNA = fpCard.abilities?.some(a => a.name === '虹色DNA');
     const validEvos = handEvos.filter(evo => {
       const ec = pool.get(evo.cardId);
       if (!ec) return false;
-      if (!sameEvoName(ec.evolvesFrom, fpCard.name)) return false;
-      // 若 base 被擋但進到這裡 → 代表活力森林 bypass 成立，必須 evoCard 也是草
-      if (baseBlocked && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
+      // 標準路徑：sameEvoName 比對；虹色DNA 例外：evolvesFrom=伊布 + ex
+      const stdMatch = sameEvoName(ec.evolvesFrom, fpCard.name);
+      const dnaMatch = hasPrismaticDNA &&
+        sameEvoName(ec.evolvesFrom, '伊布') &&
+        ec.subtype === 'ex';
+      if (!stdMatch && !dnaMatch) return false;
+      // 若 base 被擋但進到這裡 → 代表 forest 或 提升進化 bypass 成立
+      if (baseBlocked && !hasPushEvolveAbility && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
       return true;
     });
     if (validEvos.length > 0) {
