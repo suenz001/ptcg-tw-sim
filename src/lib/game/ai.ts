@@ -77,11 +77,31 @@ export function getAIAction(
     return { type: 'EVOLVE', fromIid: t.fromIid, toIid: t.toIids[0] };
   }
 
-  // 打基礎寶可夢到備戰 — 盡量放滿 4 隻防止被一波擊倒
-  if (player.bench.length < 4) {
+  // 打基礎寶可夢到備戰
+  // v2.142：原本 < 4 — 對「需要備戰多樣性」的牌組（N索羅亞克 / 火箭隊烏鴉頭頭 等）
+  //   太保守。改為 < 5 放滿備戰，但**特別偏好「能進化」或「N/火箭隊冠名」的基礎**，
+  //   讓 N 索羅亞克 暗黑底牌 / 火箭羽毛 / R指令 等「依賴備戰多寶可夢」招式更強。
+  if (player.bench.length < 5) {
     const basics = getPlayableBasics(state, pool);
     if (basics.length > 0) {
-      return { type: 'PLAY_BASIC', iid: basics[0] };
+      // 排序：能進化的優先 → 冠名前綴（N的/火箭隊的/竹蘭的等）優先 → HP 高優先
+      const handEvolutionTargets = new Set<string>();
+      for (const inst of player.hand) {
+        const c = pool.get(inst.cardId);
+        if (c?.supertype === 'Pokemon' && c.evolvesFrom) handEvolutionTargets.add(c.evolvesFrom);
+      }
+      const score = (iid: string): number => {
+        const inst = player.hand.find(c => c.iid === iid);
+        if (!inst) return 0;
+        const card = pool.get(inst.cardId);
+        if (!card) return 0;
+        let s = card.hp ?? 0;
+        if (handEvolutionTargets.has(card.name)) s += 1000; // 大幅優先能進化的
+        if (/^(N的|火箭隊的|竹蘭的|阿響的|莉莉艾的|火箭隊)/.test(card.name)) s += 500; // 冠名次優先
+        return s;
+      };
+      const sorted = [...basics].sort((a, b) => score(b) - score(a));
+      return { type: 'PLAY_BASIC', iid: sorted[0] };
     }
   }
 
