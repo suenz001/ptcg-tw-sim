@@ -10798,13 +10798,88 @@ regR('mystery-box-step1', (state, aIdx, iids, _params, pool) => {
   s = { ...s, players };
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   s = addLog(s, `秘密箱：丟棄 ${picked.length} 張手牌（${names}）`, aIdx);
-  s = addLog(s, '秘密箱：從牌庫選物品/道具/支援者/競技場各 1 張加手牌並重洗', aIdx);
+  // v2.144 — 改為 4 步串接：物品 → 道具 → 支援者 → 競技場（各最多 1 張）
+  s = addLog(s, '秘密箱：第 1 步—從牌庫選 1 張「物品」加手牌（可跳過）', aIdx);
   return withPending(s, {
     type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'AnyTrainer', minCount: 0, maxCount: 4,
-    effectKey: 'search-to-hand-reshuffle',
-    params: { mysteryBox: true },  // resolver 自動 valid 各類別最多 1 張（簡化：UI 端不強制；engine 後處理）
+    filter: 'Item', minCount: 0, maxCount: 1,
+    effectKey: 'mystery-box-pick-item',
   });
+});
+
+// v2.144 — 秘密箱串接 resolver（不在中途重洗，最後一步才 shuffle）──
+regR('mystery-box-pick-item', (state, aIdx, iids, _params, pool) => {
+  let s = updatePlayer(state, aIdx, p => {
+    const chosen = p.deck.filter(c => iids.includes(c.iid));
+    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+    return { ...p, hand: [...p.hand, ...chosen], deck: remaining };
+  });
+  if (iids.length > 0) {
+    const card = pool.get(s.players[aIdx].hand[s.players[aIdx].hand.length - 1].cardId);
+    s = addLog(s, `秘密箱：取得「${card?.name ?? '?'}」（物品）`, aIdx);
+  } else {
+    s = addLog(s, '秘密箱：跳過物品', aIdx);
+  }
+  s = addLog(s, '秘密箱：第 2 步—從牌庫選 1 張「寶可夢道具」加手牌（可跳過）', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Tool', minCount: 0, maxCount: 1,
+    effectKey: 'mystery-box-pick-tool',
+  });
+});
+regR('mystery-box-pick-tool', (state, aIdx, iids, _params, pool) => {
+  let s = updatePlayer(state, aIdx, p => {
+    const chosen = p.deck.filter(c => iids.includes(c.iid));
+    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+    return { ...p, hand: [...p.hand, ...chosen], deck: remaining };
+  });
+  if (iids.length > 0) {
+    const card = pool.get(s.players[aIdx].hand[s.players[aIdx].hand.length - 1].cardId);
+    s = addLog(s, `秘密箱：取得「${card?.name ?? '?'}」（寶可夢道具）`, aIdx);
+  } else {
+    s = addLog(s, '秘密箱：跳過寶可夢道具', aIdx);
+  }
+  s = addLog(s, '秘密箱：第 3 步—從牌庫選 1 張「支援者」加手牌（可跳過）', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Supporter', minCount: 0, maxCount: 1,
+    effectKey: 'mystery-box-pick-supporter',
+  });
+});
+regR('mystery-box-pick-supporter', (state, aIdx, iids, _params, pool) => {
+  let s = updatePlayer(state, aIdx, p => {
+    const chosen = p.deck.filter(c => iids.includes(c.iid));
+    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+    return { ...p, hand: [...p.hand, ...chosen], deck: remaining };
+  });
+  if (iids.length > 0) {
+    const card = pool.get(s.players[aIdx].hand[s.players[aIdx].hand.length - 1].cardId);
+    s = addLog(s, `秘密箱：取得「${card?.name ?? '?'}」（支援者）`, aIdx);
+  } else {
+    s = addLog(s, '秘密箱：跳過支援者', aIdx);
+  }
+  s = addLog(s, '秘密箱：第 4 步—從牌庫選 1 張「競技場」加手牌（可跳過）', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Stadium', minCount: 0, maxCount: 1,
+    effectKey: 'mystery-box-pick-stadium',
+  });
+});
+regR('mystery-box-pick-stadium', (state, aIdx, iids, _params, pool) => {
+  // 最後一步：抽完重洗
+  let s = updatePlayer(state, aIdx, p => {
+    const chosen = p.deck.filter(c => iids.includes(c.iid));
+    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+    return { ...p, hand: [...p.hand, ...chosen], deck: shuffle(remaining) };
+  });
+  if (iids.length > 0) {
+    const card = pool.get(s.players[aIdx].hand[s.players[aIdx].hand.length - 1].cardId);
+    s = addLog(s, `秘密箱：取得「${card?.name ?? '?'}」（競技場）`, aIdx);
+  } else {
+    s = addLog(s, '秘密箱：跳過競技場', aIdx);
+  }
+  s = addLog(s, '秘密箱：完成搜尋並重洗牌庫', aIdx);
+  return s;
 });
 
 // ── 火箭隊的烏鴉頭頭｜火箭羽毛 60× v2.143 完整實裝（玩家自選張數） ──────────
@@ -10976,3 +11051,102 @@ regR('recall-rod', (state, aIdx, iids, _params, pool) => {
   }
   return s;
 });
+
+// ── v2.144 道具拆除器（Item）─────────────────────────────────────────────────
+// 卡面：選擇最多 2 張雙方場上寶可夢身上附加的「寶可夢道具」卡，將其丟棄。
+// 用 modal-choice 列雙方所有 Tool；玩家選 1 張 → resolver 丟掉 → 若還剩 ≥1 張 Tool
+// 開第 2 個 modal 讓玩家選第 2 張或結束。
+regG('道具拆除器', (st) => {
+  const allTools: string[] = [];
+  for (const idx of [0, 1] as const) {
+    const p = st.players[idx];
+    if (p.active?.toolAttached) allTools.push(p.active.toolAttached.iid);
+    for (const b of p.bench) if (b.toolAttached) allTools.push(b.toolAttached.iid);
+  }
+  return allTools.length > 0;
+});
+function buildToolRemoverOptions(st: GameState, pool: Map<string, Card>) {
+  const opts: { id: string; text: string }[] = [];
+  for (const idx of [0, 1] as const) {
+    const p = st.players[idx];
+    const sideLabel = idx === st.activePlayerIndex ? '我方' : '對手';
+    const all = [
+      ...(p.active ? [{ inst: p.active, pos: '戰鬥' as const }] : []),
+      ...p.bench.map(b => ({ inst: b, pos: '備戰' as const })),
+    ];
+    for (const { inst, pos } of all) {
+      if (!inst.toolAttached) continue;
+      const ownerName = pool.get(inst.cardId)?.name ?? '?';
+      const toolName = pool.get(inst.toolAttached.cardId)?.name ?? '?';
+      opts.push({
+        id: `${idx}:${inst.iid}`,
+        text: `🔧 ${sideLabel} ${pos} ${ownerName} 的「${toolName}」`,
+      });
+    }
+  }
+  return opts;
+}
+reg('道具拆除器', (st, idx, pool) => {
+  const opts = buildToolRemoverOptions(st, pool);
+  if (opts.length === 0) return addLog(st, '道具拆除器：場上沒有道具卡可丟棄', idx);
+  st = addLog(st, '道具拆除器：選 1 張雙方場上的道具卡丟棄（最多可丟 2 張）', idx);
+  return withPending(st, {
+    type: 'modal-choice',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'tool-remover-pick',
+    params: { label: '道具拆除器（第 1 張）', options: opts, picksLeft: 1 },
+  });
+});
+regR('tool-remover-pick', (state, aIdx, iids, params, pool) => {
+  if (iids.length === 0) return state;
+  const choice = iids[0];
+  const [pIdxStr, targetIid] = choice.split(':');
+  const pIdx = parseInt(pIdxStr) as 0 | 1;
+  let s = state;
+  const players = [...s.players] as [PlayerState, PlayerState];
+  const pp = { ...players[pIdx] };
+  let removedTool: typeof pp.bench[0]['toolAttached'] = undefined;
+  let ownerName = '?';
+  if (pp.active?.iid === targetIid) {
+    removedTool = pp.active.toolAttached;
+    ownerName = pool.get(pp.active.cardId)?.name ?? '?';
+    pp.active = { ...pp.active, toolAttached: undefined };
+  } else {
+    const bIdx = pp.bench.findIndex(b => b.iid === targetIid);
+    if (bIdx >= 0) {
+      const b = { ...pp.bench[bIdx] };
+      removedTool = b.toolAttached;
+      ownerName = pool.get(b.cardId)?.name ?? '?';
+      b.toolAttached = undefined;
+      pp.bench = [...pp.bench];
+      pp.bench[bIdx] = b;
+    }
+  }
+  if (!removedTool) return addLog(s, '道具拆除器：找不到目標道具', aIdx);
+  pp.discard = [...pp.discard, removedTool];
+  players[pIdx] = pp;
+  s = { ...s, players };
+  const tname = pool.get(removedTool.cardId)?.name ?? '?';
+  s = addLog(s, `道具拆除器：丟棄 ${ownerName} 身上的「${tname}」`, aIdx);
+
+  // 若還可以丟第 2 張，且場上還有 Tool → 開第 2 個 modal-choice 讓玩家選或結束
+  const picksLeft = (params?.picksLeft as number ?? 1) - 1;
+  if (picksLeft >= 1) {
+    const opts2 = buildToolRemoverOptions(s, pool);
+    if (opts2.length > 0) {
+      // 加「結束（不丟第 2 張）」選項
+      opts2.push({ id: 'end', text: '✋ 結束（不丟第 2 張）' });
+      s = withPending(s, {
+        type: 'modal-choice',
+        actorIdx: aIdx, sourcePlayerIdx: aIdx,
+        minCount: 1, maxCount: 1,
+        effectKey: 'tool-remover-pick',
+        params: { label: '道具拆除器（第 2 張）', options: opts2, picksLeft: 0 },
+      });
+    }
+  }
+  return s;
+});
+// 'end' choice handler — 沒做事，只是結束 chain
+regR('tool-remover-end', (state) => state);

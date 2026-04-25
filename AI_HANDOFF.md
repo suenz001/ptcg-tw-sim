@@ -1,9 +1,72 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.143)  
+> 最後更新：2026-04-25 (v2.144)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.144 — 對戰深色還原 / 道具拆除器真正實裝 / 秘密箱 4 步串接 / 9 種 tag 不一致驗證
+
+### 問題 4 件，源自 v2.143 後 Leon 回測
+
+#### 1. 對戰畫面被切成雙色（深綠 + 白）— 比之前還醜
+**根因**：v2.138 在 `src/routes/+layout.svelte` 加了 `:global(body){background:#f4f4f6}` baseline，
+但 `/game` 頁面 `<div class="game-page">` 自己只有部分區塊填深綠，viewport 比頁面內容高的部分露出 layout 白底，造成上深下白。
+
+**修法**：
+- 移除 `+layout.svelte` 的 `:global(body)` baseline（layout 只 render children，無 CSS）。
+- `src/routes/game/+page.svelte` 的 `<style>` 加 `:global(html){background:#162816}` + `:global(body){min-height:100vh;background:#162816}`，讓整個瀏覽器畫面（含 viewport 多出的部分）都是深綠。
+
+#### 2. 道具拆除器（Item）— 我宣稱實裝過但實際沒寫
+**根因**：v2.143 audit 結果顯示 preset 未實裝列表只有 `調換票` + `道具拆除器`，但我當時只 grep 到 `toolAttached` 字串就誤判為「已實裝」，沒真的查 reg。Leon 回測直接卡住。
+
+**修法**（`effects.ts` 結尾 `// ── v2.144 道具拆除器（Item）`）：
+- `regG`：場上至少 1 張 tool 才能用。
+- `reg`：建 `buildToolRemoverOptions()` 把雙方戰鬥/備戰所有 toolAttached.iid 列為 modal-choice options，標 owner（自己/對手）+ 寶可夢名 + 道具名，picksLeft=1 開第 1 個 modal。
+- `regR('tool-remover-pick')`：找到 tool 所屬的 pokemon（active or bench），把 tool 拔掉丟棄牌；如果 picksLeft > 0 且場上仍有 tool，開第 2 個 modal（多 1 個「結束」option）。
+- `regR('tool-remover-end')`：純 noop terminator。
+
+#### 3. 秘密箱 ACE — 4 類各 1 張，不是任意挑 4 張
+**Leon 訂正**：「現在一次讓玩家任意選 4 張牌是完全錯誤的」。卡面是「從牌庫選擇『物品』『寶可夢道具』『支援者』『競技場』卡各 1 張」。
+
+**修法**：把 `mystery-box-step1` 的 follow-up 從 `filter:'AnyTrainer' max=4` 改為 4 步串接：
+- `mystery-box-pick-item`：filter='Item' max=1 → 開 Tool 步
+- `mystery-box-pick-tool`：filter='Tool' max=1 → 開 Supporter 步
+- `mystery-box-pick-supporter`：filter='Supporter' max=1 → 開 Stadium 步
+- `mystery-box-pick-stadium`：filter='Stadium' max=1，最後 `shuffle(remaining)` 重洗（前 3 步不重洗，因為 step5 才是真正的「重洗」時點）。
+
+每步都允許 minCount=0（牌庫沒這類就 skip）。每步 log 都會寫「取得 XX」或「跳過 XX」。
+
+#### 4. 9 種 tag 不一致 — 對官方逐張驗證
+audit-data.mjs Pattern A 列出 9 種同名卡 tag 不一致。**我對官方 card-search 逐 ID 驗證後，9 種全部都是「by design」的不同版本**，不是 scraper bug：
+
+| 卡名 | ID（無 tag 那邊） | 結論 |
+|---|---|---|
+| 拉普拉斯ex | 14085 (M-P-I/013) | 官方 detail 頁無太晶 — 是非太晶版 promo |
+| 皮卡丘ex | 16698/MC, 18355/MC, 18367/MJ | 三張都驗證 detail 頁無太晶字樣 |
+| 甲賀忍蛙ex | 16679/MC/208 | detail 頁無太晶 |
+| 三首惡龍ex | 16949/MC, 13090/SV11W, 13855/SV11W | 三張 detail 頁皆無太晶 |
+| 密勒頓 | 16754/MC, 18373/MJ, 12410/SV8a | 官方未來 filter 不含此 3 ID（其他 ID `17023, 11224, 9893` 在） |
+| 密勒頓ex | 16755/MC/284 | 是太晶版（不是未來版 — 同名不同版） |
+| 故勒頓ex | 16896/MC/425, 12142/SVM/072 | 16896 是太晶版；12142 detail 無太晶且不在古代 filter |
+| 鐵脖頸 | 12419/SV8a/135 | 官方未來 filter `17099, 11660, 10085, 9008, 10685` — 不含 12419 |
+| 鐵轍跡 | 12405/SV8a/116 | 官方未來 filter `11641, 9892, 9160, 9362, 7706` — 不含 12405 |
+
+**結論**：9 種「不一致」都是 SV8a/MC/M-P/MJ 等特殊版（AR/SR/SP/promo）刻意不打 tag，跟一般版區分為不同卡。**JSON 不需要修**。
+
+`scripts/audit-data.mjs` Pattern A 應重新解讀為「資訊性提醒」而非「bug 列表」— 同名卡不同版本本來就會有不同 tag。
+
+### 驗證
+- `npm run build` ✓（15.21s）
+- `node scripts/sim-sandbox.mjs 4` ✓（4 局正常結束，0 bug）
+
+### 改動檔案
+- `src/lib/version.ts` — 2.143 → 2.144
+- `src/routes/+layout.svelte` — 移除 v2.138 baseline
+- `src/routes/game/+page.svelte` — `:global(html)+body` 深綠
+- `src/lib/game/effects.ts` — 道具拆除器全套（reg/regG/regR ×2）+ 秘密箱 step1 follow-up 改為 4 步串接（4 個新 regR）
 
 ---
 

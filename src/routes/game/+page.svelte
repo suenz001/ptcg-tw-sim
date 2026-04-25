@@ -3486,7 +3486,9 @@
 {/if}
 
 <style>
-  :global(body){ margin:0; background:#162816; }
+  /* v2.144：html + body 都填深綠，避免 viewport 高度大於頁面高度時看到瀏覽器預設背景（黑色） */
+  :global(html){ background:#162816; }
+  :global(body){ margin:0; background:#162816; min-height:100vh; }
 
   /* ════ Lobby / Setup ════ */
   .lobby,.setup-screen{ max-width:700px; margin:2rem auto; padding:1.5rem; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; }

@@ -4,14 +4,6 @@
 
 {@render children()}
 
-<style>
-  /* v2.138 全站基底白底 — 鎖定避免 game 頁 :global(body) 深綠 leak 到主選單/卡片頁/牌組編輯器 */
-  :global(body) {
-    margin: 0;
-    background: #f4f4f6;
-    color: #222;
-  }
-  :global(html) {
-    background: #f4f4f6;
-  }
-</style>
+<!-- v2.144：移除 v2.138 的 layout 白底 baseline — 它把 game 頁深綠切成雙色，
+     且實際上各頁的 :global(body) 已自己處理背景，不需要 baseline。 -->
+
