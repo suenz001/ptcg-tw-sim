@@ -564,15 +564,15 @@
     "code": "SV-P-I",
     "name": "SV-P特典卡(I)",
     "regulationMark": "I",
-    "cardCount": 26,
+    "cardCount": 23,
     "supertypeCounts": {
       "Pokemon": 10,
-      "Trainer": 8,
+      "Trainer": 5,
       "Energy": 8
     },
     "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012567.png",
     "scrapedAt": "2026-04-25T17:32:23.798013Z",
     "releaseDate": null,
-    "count": 26
+    "count": 23
   }
 ]

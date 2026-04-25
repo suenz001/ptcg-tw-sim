@@ -428,48 +428,6 @@
     "illustrator": "yuu"
   },
   {
-    "id": "13123",
-    "name": "高級球",
-    "supertype": "Trainer",
-    "subtype": "Item",
-    "setCode": "SV-P-I",
-    "collectorNumber": "252/SV-P",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013123.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13123/",
-    "scrapedAt": "2026-04-25T17:30:27.393Z",
-    "regulationMark": "I",
-    "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。\n  \n 從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
-    "illustrator": "Ayaka Yoshida"
-  },
-  {
-    "id": "13124",
-    "name": "寶可夢交替",
-    "supertype": "Trainer",
-    "subtype": "Item",
-    "setCode": "SV-P-I",
-    "collectorNumber": "253/SV-P",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013124.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13124/",
-    "scrapedAt": "2026-04-25T17:30:27.983Z",
-    "regulationMark": "I",
-    "rulesText": "將自己的戰鬥寶可夢與備戰寶可夢互換。",
-    "illustrator": "Studio Bora Inc."
-  },
-  {
-    "id": "13126",
-    "name": "老大的指令",
-    "supertype": "Trainer",
-    "subtype": "Supporter",
-    "setCode": "SV-P-I",
-    "collectorNumber": "255/SV-P",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013126.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13126/",
-    "scrapedAt": "2026-04-25T17:30:29.158Z",
-    "regulationMark": "I",
-    "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
-    "illustrator": "NC Empire"
-  },
-  {
     "id": "13127",
     "name": "黑連",
     "supertype": "Trainer",

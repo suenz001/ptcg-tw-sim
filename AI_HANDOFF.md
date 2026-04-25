@@ -1,9 +1,40 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.152)  
+> 最後更新：2026-04-25 (v2.153)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.153 — SV-P-I 再移 3 張誤判 G 卡（總共 12 張）
+
+接續 v2.152，Leon 又 flag 了 SV-P-I 第 3 批 3 張：
+- 252/SV-P 高級球
+- 253/SV-P 寶可夢交替
+- 255/SV-P 老大的指令
+
+注意：這 3 張的 collectorNumber 都 > 226（226 是 v2.151 確認的 I 標火箭隊袋獸ex），所以單純用「collectorNumber < 200」做 heuristic 也不準 — TW 官網的錯標完全沒規律，必須靠 Leon 手動 flag。
+
+### 累計 SV-P 誤判清單（v2.151 ~ v2.153 ）
+| 批次 | 卡 | collectorNumber |
+|---|---|---|
+| v2.152 #1 | 寶可夢交替 / 寶可夢交替 / 神奇糖果 / 老大的指令 | 014/092/104/178 |
+| v2.152 #2 | 精靈球 / 能量輸送 / 傷藥 / 粉碎之錘 / 寶可夢捕捉器 | 013/249/250/251/254 |
+| v2.153 #3 | 高級球 / 寶可夢交替 / 老大的指令 | 252/253/255 |
+
+### 處理
+- SV-P-I.json：26 → 23 張
+- index.json：SV-P-I count 改 23
+- pool 4000 → 3997
+
+### 驗證
+- `npm run build` ✓
+
+### 改動檔案
+- `src/lib/version.ts` — 2.152 → 2.153
+- `static/cards/SV-P-I.json` — 移除 13123/13124/13126
+- `static/cards/index.json` — SV-P-I count
 
 ---
 
