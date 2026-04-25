@@ -1,9 +1,32 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.127)  
+> 最後更新：2026-04-25 (v2.128)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.128 — 超級甲賀忍蛙 preset 換版本（MC → SV5a）
+
+### Leon 回報
+v2.127 我把甲賀忍蛙ex 的 MC 版（變幻手裏劍）+ SV5a 版（忍之利刃 / 分身連打）兩個版本的招式都實裝了，並且**保留**超級甲賀忍蛙 preset 內原本的 MC 版（id=16679, count=1）。
+
+Leon 指正：「超級甲賀忍蛙牌組裡面的 甲賀忍蛙ex，應該使用 甲賀忍蛙ex SV5a 這隻」— 比賽用的進化前是 SV5a 045/066（招式：忍之利刃 / 分身連打），不是 MC 版。
+
+### 修法
+`src/lib/decks/presets.ts` MEGA_GRENINJA_DECK：
+- `cardId: '16679'` (MC 208/742) → `cardId: '10292'` (SV5a 045/066)
+- 其他不動
+
+備註：MC 版（變幻手裏劍）的 effect 仍保留，因為 MC 卡還在卡池內（玩家自組牌組仍可選）。
+
+### 變更檔案
+- `src/lib/decks/presets.ts`：1 行 cardId 替換
+- `src/lib/version.ts`：2.127 → 2.128
+
+### 驗證
+- npm run build：✓ 通過
 
 ---
 

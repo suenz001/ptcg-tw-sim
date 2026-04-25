@@ -748,7 +748,7 @@ const MEGA_GRENINJA_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '18440', count: 4 }, // 呱呱泡蛙 (M4 020/083)
     { cardId: '18441', count: 2 }, // 呱頭蛙 (M4 021/083)
     { cardId: '18442', count: 2 }, // 超級甲賀忍蛙ex (M4 022/083)
-    { cardId: '16679', count: 1 }, // 甲賀忍蛙ex (MC 208/742)
+    { cardId: '10292', count: 1 }, // 甲賀忍蛙ex (SV5a 045/066)  v2.128 改用 SV5a 版（忍之利刃 / 分身連打）— 超級甲賀忍蛙牌組對應的進化前是這隻
     { cardId: '17017', count: 3 }, // 多龍梅西亞 (MC 546/742)
     { cardId: '17018', count: 3 }, // 多龍奇 (MC 547/742)
     { cardId: '17019', count: 1 }, // 多龍巴魯托ex (MC 548/742)
