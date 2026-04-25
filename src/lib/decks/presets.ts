@@ -871,8 +871,7 @@ const RAKI_TYPHLOSION_DECK: Omit<Deck, 'updatedAt'> = {
     // Pokemon 21
     { cardId: '12673', count: 4 }, // 阿響的火球鼠 (SV9a 015/063)
     { cardId: '12674', count: 4 }, // 阿響的火岩鼠 (SV9a 016/063)
-    // ⚠️ 卡表寫「阿響的火爆獸ex」×3 但 SV9a 只有非 ex 版（HP170），用此版本
-    { cardId: '12675', count: 3 }, // 阿響的火爆獸 (SV9a 017/063 非 ex)
+    { cardId: '12675', count: 3 }, // 阿響的火爆獸 (SV9a 017/063) — Leon v2.137 確認沒 ex
     { cardId: '11192', count: 1 }, // 比克提尼 (SV8 012/106)
     { cardId: '14692', count: 1 }, // 可達鴨 (M2a 032/193)
     { cardId: '12664', count: 1 }, // 謝米 (SV9a 006/063)
