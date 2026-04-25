@@ -2330,10 +2330,17 @@ function handlePlaying(
     const frosmothN = countFrosmoth(players[0]) + countFrosmoth(players[1]);
     if (frosmothN > 0) {
       const addCounters = frosmothN; // 每隻雪妖女放 1 個 → 共 N 個指示物 = N*10 傷害
+      // v2.125：嚴格排除「雪妖女」本體 — Leon 提醒「冰冷之帳不對雪妖女自己作用」
+      // 用 trim 防 scraper 字串前後空白；同時以 startsWith 排除「雪妖女ex」（若未來有的話）
+      // 但「超級雪妖女ex」是不同實體（不擁有冰冷之帳，直接被 abilities.length===0 擋）
+      const isFrosmothName = (card: Card | undefined): boolean => {
+        const n = (card?.name ?? '').trim();
+        return n === '雪妖女';
+      };
       const isFrosmothCheckupTarget = (c: CardInstance): boolean => {
         const card = pool.get(c.cardId);
         if (!card?.abilities || card.abilities.length === 0) return false;
-        if (card.name === '雪妖女') return false;
+        if (isFrosmothName(card)) return false;
         return true;
       };
       const affectedNames: string[] = [];

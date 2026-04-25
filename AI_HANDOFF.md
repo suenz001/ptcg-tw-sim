@@ -1,9 +1,30 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.124)  
+> 最後更新：2026-04-25 (v2.125)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.125 — 雪妖女冰冷之帳排除自身的 sanity 加強（Leon 提醒）
+
+### Leon 說明
+> 冰冷之帳：只要這隻寶可夢在場上，每次寶可夢檢查時，在雙方的擁有特性的所有寶可夢
+> （「雪妖女」除外）身上各放置 1 個傷害指示物。
+> 雪妖女特性不會對自己作用（不會 KO 自己）
+
+### 確認 + 加強
+- engine.ts 現有 `isFrosmothCheckupTarget` 已正確排除 `card.name === '雪妖女'`
+- 本版抽 `isFrosmothName(card)` helper 並加 `.trim()` 防 scraper 字串前後空白
+- 「超級雪妖女ex」沒有冰冷之帳特性（abilities 空），自動被 `abilities.length === 0` 擋
+
+### 更正 v2.124 AI_HANDOFF
+- v2.124 我提到「雪妖女冰冷之帳 self-KO 下版補 endTurnContinueAfterKO」 — **不需要**，
+  因為雪妖女**根本不會被自己冰冷之帳 KO**（卡面排除自身）。Leon 提醒此誤解。
+
+### 驗證
+- npm run build ✓（13.77s）
 
 ---
 
