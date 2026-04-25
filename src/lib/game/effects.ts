@@ -1384,10 +1384,15 @@ function isConfusionImmune(inst: CardInstance | null, pool: Map<string, Card>): 
  *     regPost/statusPost 會 check 這個 shield 再決定是否施加。
  *   - 僅防禦方卡本體為 pokemonType === 'Fighting' 時才成立（卡面明寫「【鬥】寶可夢」）。
  *
+ * v2.138 擴充：加入「薄霧能量」— 卡面「附有的寶可夢不受對手招式效果影響」，無屬性條件。
+ *
  * 呼叫時機：defender-targeting POST effect（statusPost、coinStatusPost 等）在施加前檢查。
  */
 function hasEffectShield(inst: CardInstance | null, pool: Map<string, Card>): boolean {
   if (!inst) return false;
+  // 薄霧能量 — 無屬性條件，附了就免疫
+  if (inst.energyAttached.some(e => pool.get(e.cardId)?.name === '薄霧能量')) return true;
+  // 硬岩【鬥】能量 — 限【鬥】寶可夢
   const card = pool.get(inst.cardId);
   if (!card || card.pokemonType !== 'Fighting') return false;
   return inst.energyAttached.some(e => {
@@ -1587,8 +1592,102 @@ reg('覺醒戰鼓', (st, idx, pool) => {
   });
 });
 
-// 賽吉（支援者）— 從牌庫找進化卡直接進化場上寶可夢（簡化：略跳）
-// 跳過 — 涉及複雜的進化鏈選擇
+// 賽吉（支援者）— v2.138 完整實裝
+// 卡面：從牌庫選 1 張可進化自己場上某隻寶可夢的【1 階】或【2 階】寶可夢，直接進化（無視 justPlaced）。
+// 流程：deck-search filter='Evolution'，玩家挑 1 → resolver 找場上能進化的目標自動進化。
+//   sim/AI 端 fallback：若候選有多個（對手場上 active+bench 同時可進化），挑 active 為主。
+regG('賽吉', (st, idx, pool) => {
+  if (st.players[idx].deck.length === 0) return false;
+  // 場上至少要有 1 隻能進化的寶可夢（active+bench）
+  const all = [st.players[idx].active, ...st.players[idx].bench].filter((c): c is CardInstance => !!c);
+  if (all.length === 0) return false;
+  // 牌庫有任何進化卡，且該前階在場上
+  const ownNames = new Set(all.map(c => pool.get(c.cardId)?.name ?? ''));
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return !!card?.evolvesFrom && ownNames.has(card.evolvesFrom);
+  });
+});
+reg('賽吉', (st, idx, pool) => {
+  const player = st.players[idx];
+  const all = [player.active, ...player.bench].filter((c): c is CardInstance => !!c);
+  const ownNames = new Set(all.map(c => pool.get(c.cardId)?.name ?? ''));
+  // filter 用 'Evolution'（已支援）— 但要再 narrow 為「前階在場上」
+  // 實作：只列出可實際進化的候選 iid
+  const validIids = player.deck.filter(c => {
+    const card = pool.get(c.cardId);
+    return !!card?.evolvesFrom && ownNames.has(card.evolvesFrom);
+  }).map(c => c.iid);
+  if (validIids.length === 0) return addLog(st, '賽吉：牌庫無可進化的進化卡', idx);
+  st = addLog(st, '賽吉：從牌庫選 1 張可進化自己場上寶可夢的進化卡，直接進化', idx);
+  return withPending(st, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Evolution', minCount: 0, maxCount: 1,
+    effectKey: 'sage-evolve',
+    params: { validIids },
+  });
+});
+regR('sage-evolve', (state, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) {
+    return addLog(state, '賽吉：未選擇進化卡', aIdx);
+  }
+  const evoIid = iids[0];
+  let s = state;
+  const players = [...s.players] as [PlayerState, PlayerState];
+  const p = { ...players[aIdx] };
+  // 從牌庫取出進化卡
+  const evoIdx = p.deck.findIndex(c => c.iid === evoIid);
+  if (evoIdx < 0) return addLog(state, '賽吉：找不到所選進化卡', aIdx);
+  const evoInst = p.deck[evoIdx];
+  const evoCard = pool.get(evoInst.cardId);
+  if (!evoCard?.evolvesFrom) return addLog(state, '賽吉：所選非進化卡', aIdx);
+
+  // 找場上能進化的目標 — active 優先
+  const tryEvolve = (target: CardInstance | null): CardInstance | null => {
+    if (!target) return null;
+    if (pool.get(target.cardId)?.name !== evoCard.evolvesFrom) return null;
+    return {
+      ...evoInst,
+      iid: target.iid,
+      damage: target.damage,
+      energyAttached: target.energyAttached,
+      toolAttached: target.toolAttached,
+      status: target.status,
+      evolvedFromStack: [...(target.evolvedFromStack ?? []), { ...target,
+        toolAttached: undefined, energyAttached: [], evolvedFromStack: undefined }],
+      evolvedThisTurn: true,
+      // 賽吉特殊：覆寫 justPlaced（賽吉允許剛上場立刻進化）
+      justPlaced: undefined,
+      movedToActiveThisTurn: undefined,
+      cantAttackThisTurn: undefined,
+      cantAttackPending: undefined,
+      cantRetreatNextTurn: undefined,
+      cantRetreatPendingSelf: undefined,
+      damageBonusThisTurn: undefined,
+      damageBonusPending: undefined,
+      damageReduceNextHit: undefined,
+      blockedAttackNamesThisTurn: undefined,
+      blockedAttackNamesNextTurn: undefined,
+      abilityUsedThisTurn: undefined,
+    };
+  };
+  let evolvedActive = tryEvolve(p.active);
+  if (evolvedActive) {
+    p.active = evolvedActive;
+  } else {
+    const benchIdx = p.bench.findIndex(b => pool.get(b.cardId)?.name === evoCard.evolvesFrom);
+    if (benchIdx < 0) return addLog(state, `賽吉：場上無「${evoCard.evolvesFrom}」可進化`, aIdx);
+    const evolved = tryEvolve(p.bench[benchIdx]);
+    if (!evolved) return addLog(state, '賽吉：進化處理失敗', aIdx);
+    p.bench = [...p.bench];
+    p.bench[benchIdx] = evolved;
+  }
+  // 從牌庫移除進化卡 + 重洗
+  p.deck = shuffle(p.deck.filter((_, i) => i !== evoIdx));
+  players[aIdx] = p;
+  s = { ...s, players };
+  return addLog(s, `賽吉：將 ${evoCard.name} 進化於場上的「${evoCard.evolvesFrom}」並重洗牌庫`, aIdx);
+});
 
 // 八朔（支援者）— 自己上回合被擊倒才可用，看牌庫頂 8 選 3
 regG('八朔', (st, idx) => {
@@ -10386,7 +10485,9 @@ regA('古劍豹', 0, (st, idx, pool, cardInst) => {
 
 // ── 鐵斑葉ex｜迅速游標 ─────────────────────────────────────────────────────
 // 卡面：上備戰時可使用 1 次 → 將這隻寶可夢與戰鬥寶可夢互換 + 任意能量改附給這隻。
-// 簡化版（v2.133）：只做互換；能量轉移 TODO（需要多階段 pending，未來再補）。
+// v2.138：完整實裝 — 互換後自動把舊戰鬥場（現備戰）所有能量改附給新戰鬥場（鐵斑葉ex）。
+//   卡面寫「任意能量」，玩家理論上可選張數，但實戰絕大多數選「全轉」（多選對自己有利），
+//   sim/AI 端用全轉版；UI 玩家若需要更精細控制可以後續加 modal。
 //   gate：pk.justPlaced（同 狂挖 / 經驗法則）
 regA('鐵斑葉ex', 0, (st, idx, pool, cardInst) => {
   if (!cardInst) return st;
@@ -10400,14 +10501,30 @@ regA('鐵斑葉ex', 0, (st, idx, pool, cardInst) => {
   const newActiveCard = pool.get(cardInst.cardId);
   const players = [...st.players] as [PlayerState, PlayerState];
   const newBench = [...player.bench];
-  newBench[benchIdx] = clearActiveEffects(player.active);
-  const newActive: CardInstance = { ...player.bench[benchIdx], movedToActiveThisTurn: true };
+  // 從舊戰鬥場拔出所有能量
+  const transferredEnergies = [...player.active.energyAttached];
+  const oldActiveCleared = {
+    ...clearActiveEffects(player.active),
+    energyAttached: [],
+  };
+  newBench[benchIdx] = oldActiveCleared;
+  // 新戰鬥場 = 鐵斑葉ex（從備戰移出），合併原有能量 + 轉移過來的能量
+  const newActive: CardInstance = {
+    ...player.bench[benchIdx],
+    energyAttached: [...player.bench[benchIdx].energyAttached, ...transferredEnergies],
+    movedToActiveThisTurn: true,
+  };
   players[idx] = { ...player, active: newActive, bench: newBench };
-  return addLog(
+  let s = addLog(
     { ...st, players },
-    `迅速游標：${oldActiveCard?.name ?? '?'} 退回備戰區，${newActiveCard?.name ?? '?'} 上場（能量轉移功能 TBD）`,
+    `迅速游標：${oldActiveCard?.name ?? '?'} 退回備戰區，${newActiveCard?.name ?? '?'} 上場`,
     idx,
   );
+  if (transferredEnergies.length > 0) {
+    const energyNames = transferredEnergies.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+    s = addLog(s, `迅速游標：將 ${transferredEnergies.length} 張能量（${energyNames}）改附於 ${newActiveCard?.name ?? '?'}`, idx);
+  }
+  return s;
 });
 
 // ── 波盪水ex｜藏青浪濤 — 招式不計算對手戰鬥場附加效果 ─────────────────────
@@ -10691,7 +10808,31 @@ regPre('火箭隊的烏鴉頭頭|火箭羽毛', (state, aIdx, pool) => {
 regPre('火箭隊的黑暗鴉|誑騙', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('火箭隊的黑暗鴉|誑騙', deckSearchToHandPost(1, 'Supporter', '誑騙'));
 
-// ── 火箭隊的黑暗鴉|無理取鬧 30（簡化：純傷害，封招式效果省略）─── 不需 reg
+// ── 火箭隊的黑暗鴉|無理取鬧 30 + 鎖對手戰鬥位 1 招式（下回合）── v2.138
+// 卡面：選 1 個對手戰鬥寶可夢持有的招式。下回合對手戰鬥位寶可夢無法使用此招式。
+// 簡化：sim/AI 端鎖「對手戰鬥位最後 1 個（通常最強）招式」；玩家若要自選可未來加 modal。
+//   若對手換戰鬥位，鎖招會自動失效（卡面就是這樣設計）。
+regPre('火箭隊的黑暗鴉|無理取鬧', (state, _aIdx, _pool) => ({ state, damage: 30 }));
+regPost('火箭隊的黑暗鴉|無理取鬧', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx];
+  if (!def.active) return state;
+  const defCard = pool.get(def.active.cardId);
+  const attacks = defCard?.attacks ?? [];
+  if (attacks.length === 0) return state;
+  // 取最後 1 招（通常是最強的）— 簡化版
+  const lockedName = attacks[attacks.length - 1].name;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const newDef = { ...def };
+  const cur = newDef.active!.blockedAttackNamesNextTurn ?? [];
+  newDef.active = {
+    ...newDef.active!,
+    blockedAttackNamesNextTurn: [...cur, lockedName],
+  };
+  players[dIdx] = newDef;
+  return addLog({ ...state, players },
+    `無理取鬧：${defCard?.name ?? '?'} 下回合無法使用「${lockedName}」`, aIdx);
+});
 
 // ── 火箭隊的多邊獸｜駭客攻擊 0 + 雙方棄 1 手牌 ───────────────────────────────
 regPre('火箭隊的多邊獸|駭客攻擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));

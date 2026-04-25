@@ -1,9 +1,64 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.137)  
+> 最後更新：2026-04-25 (v2.138)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.138 — 5 個 v2.117+ 待辦補完（#1 #2 #3 #6 #10）
+
+Leon 指定「1 2 3 5 6 7 8 10 先做」。其中 #1 #2 #3 #6 #10 在這版完成；#5 #7 #8 因為都需要新的 engine pending type 機制（modal-choice / break ATTACK_PRE flow / mixed-pick），是大工程，延後到 v2.139+ 引擎升級時一起做。
+
+### #1 主題鎖白底
+全站基底色透過 `+layout.svelte` 的 `:global(body){background:#f4f4f6}` 鎖死。game 頁面的 `:global(body){background:#162816}` 是戰鬥場景設計、保留；切回主選單/卡片頁/牌組編輯器時 layout baseline 會接管。
+
+### #2 鐵斑葉ex｜迅速游標 — 完整實裝
+從 v2.133 簡化版「只做互換」改為完整版：
+- 互換戰鬥場 ↔ 備戰
+- **舊戰鬥場（現備戰）所有能量自動轉移到新戰鬥場（鐵斑葉ex）**
+- 卡面寫「任意能量」，sim/AI 端用全轉版（實戰絕大多數選全轉最強）；UI 玩家若需要更精細控制可後續加 modal
+
+### #3 薄霧能量｜免疫對手招式效果
+擴充 `hasEffectShield(inst, pool)` helper：
+- 既有：硬岩【鬥】能量 — 限【鬥】寶可夢
+- v2.138 新增：薄霧能量 — **無屬性條件，附了就免疫**
+
+`statusPost`、`coinStatusPost` 等 defender-targeting POST helper 都會檢查這個 shield。
+
+### #6 火箭隊的黑暗鴉｜無理取鬧 — 鎖招式
+完整實裝：30 傷害 + 鎖對手戰鬥位 1 招式（下回合）。透過 `blockedAttackNamesNextTurn`（v2.92 既有機制，下回合開始 promote 為 `blockedAttackNamesThisTurn`）。
+
+簡化：sim/AI 端鎖「對手戰鬥位最後 1 個招式」（通常是最強的）；玩家若要自選可未來加 modal。對手換戰鬥位時鎖招會自動失效（卡面就是這樣設計）。
+
+### #10 賽吉（支援者）— 從牌庫直接進化
+從 v1.x 留下「簡化：略跳」改為完整實裝：
+- gate：牌庫有「前階在自己場上」的進化卡才能用
+- 玩家從牌庫挑 1 張進化卡 → resolver 找場上能進化的目標自動進化（active 優先）
+- 重洗牌庫
+- **覆寫 justPlaced**（賽吉允許剛上場立刻進化，這是卡面特殊規則）
+
+### sim 結果
+`node scripts/sim-tournament.mjs 2` → 1012 場 / 0 bug / 0 stuck / 0 例外
+新排名：超級路卡利歐 77.3%（不變）、**竹蘭的烈咬陸鯊EX 從第 6 → 第 2**（70.5%）— 賽吉實裝讓他能直接搜進化卡加速進化鏈。
+
+### 變更檔案
+- `src/routes/+layout.svelte`：加 baseline `:global(body){background:#f4f4f6}` + `:global(html)`
+- `src/lib/game/effects.ts`：
+  - 鐵斑葉ex 迅速游標 — 加完整能量轉移
+  - hasEffectShield helper — 加薄霧能量
+  - 無理取鬧 — 加 regPre/regPost + blockedAttackNamesNextTurn
+  - 賽吉 — 完整實裝（regG / reg / regR='sage-evolve'）
+- `src/lib/version.ts`：2.137 → 2.138
+
+### Leon 須注意 — 延後項目
+**#5 烏栗 modal 二選一**、**#7 火箭羽毛玩家選張數**、**#8 高溫燃燒器 mixed-pick** — 這 3 個都需要新的 engine pending type：
+- 烏栗：需要 `modal-choice` pending（兩個選項 modal）
+- 火箭羽毛：需要 break ATTACK_PRE 同步 flow（讓 PRE 等玩家選完才算傷害）
+- 高溫燃燒器：需要 `mixed-pick` pending（對手場上同時選 Tool/特殊能量/Stadium 三類）
+
+這 3 個建議一起做 v2.139（引擎升級）— 加 2 個新 pending type，再回來補 effect。目前 sim 端：烏栗 sim 用 swap、火箭羽毛 sim 自動全丟（最大化攻擊）、高溫燃燒器 sim log 提示後跳過。對 AI 對戰流程都不會卡住。
 
 ---
 
