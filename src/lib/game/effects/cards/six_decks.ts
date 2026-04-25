@@ -859,7 +859,13 @@ regPre('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool, action) => {
     pickedAttackIdx = choice.attackIndex;
   } else {
     // fallback：自動挑備戰 N的寶可夢最高印刷傷害招式
-    nBench = bench.find(b => pool.get(b.cardId)?.name?.startsWith('N的')) ?? null;
+    // v2.134：排除自己（N的索羅亞克ex）— 否則會選到另一隻索羅亞克ex 的「暗黑底牌」
+    //   形成無窮遞迴 stack overflow（sim 抓到的）。卡面也不允許複製自己。
+    const benchCandidates = bench.filter(b => {
+      const c = pool.get(b.cardId);
+      return c?.name?.startsWith('N的') && c.name !== 'N的索羅亞克ex';
+    });
+    nBench = benchCandidates[0] ?? null;
     if (nBench) {
       const atks = pool.get(nBench.cardId)?.attacks ?? [];
       let bestIdx = 0, bestDmg = parseDmg(atks[0]?.damage ?? '');
@@ -879,6 +885,10 @@ regPre('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool, action) => {
     return { state: addLog(state, `暗黑底牌：${nCard?.name ?? '?'} 沒有對應的招式`, aIdx), damage: 0 };
   }
   const copiedKey = `${nCard.name}|${pickedAtk.name}`;
+  // v2.134 防呆：拒絕複製自己（避免 stack overflow）
+  if (copiedKey === 'N的索羅亞克ex|暗黑底牌') {
+    return { state: addLog(state, '暗黑底牌：無法複製自己', aIdx), damage: 0 };
+  }
   let s = addLog(state, `暗黑底牌：使用 ${nCard.name} 的「${pickedAtk.name}」`, aIdx);
   s = { ...s, pendingCopyAttackKey: copiedKey };
   const copiedPre = ATTACK_PRE.get(copiedKey);

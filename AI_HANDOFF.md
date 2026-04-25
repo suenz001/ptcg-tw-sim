@@ -1,9 +1,60 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.133)  
+> 最後更新：2026-04-25 (v2.134)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.134 — sim 自我除錯：暗黑底牌遞迴 stack overflow 修復 + sandbox sim 腳本
+
+### 起因
+Leon 在 v2.133 push 後睡午覺，要求 Claude 自己跑 sim 找 bug：
+> 「如果都完成了，那就請自己對戰模擬測試看看有沒有 bug 或是哪張卡牌功能漏掉了」
+
+### sim 腳本：sandbox 友善版
+原 `scripts/sim-ai-battle.mjs` 寫死 `E:/ptcg-tw-sim/...` Windows 路徑，sandbox 跑不起來。新增 `scripts/sim-sandbox.mjs`：
+- `process.cwd()` 取代 hardcoded 路徑
+- 從 `PRESET_DECKS` 動態拉牌組（不必手刻 cardId 表）
+- matchups 加入 v2.133 兩組新預組：電電蟲 / 超級袋獸厄鬼椪 對打 + vs 魔靈多龍 / N的索羅亞克
+- 記錄最後 80 步 log + state snapshot 供 stuck_loop 排查
+
+### Bug 1：N的索羅亞克ex｜暗黑底牌 fallback 遞迴爆棧
+sim 第一次跑 → `RangeError: Maximum call stack size exceeded`。
+
+**根因**：暗黑底牌的 fallback 路徑（沒打開 UI 直接挑備戰最高傷害招式）裡，從備戰挑 N的寶可夢時沒排除「索羅亞克ex 自己」。當對方備戰另一隻索羅亞克ex 時，會挑到對方的「暗黑底牌」招式 → 透過 `pendingCopyAttackKey` 再次進入 regPre → 永遠遞迴。
+
+**修法**（`src/lib/game/effects/cards/six_decks.ts`）：
+1. fallback 候選 filter 排除 `name === 'N的索羅亞克ex'`
+2. `copiedKey === 'N的索羅亞克ex|暗黑底牌'` 雙重防呆 — log 警告後 damage=0 結束
+
+```ts
+const benchCandidates = bench.filter(b => {
+  const c = pool.get(b.cardId);
+  return c?.name?.startsWith('N的') && c.name !== 'N的索羅亞克ex';
+});
+nBench = benchCandidates[0] ?? null;
+// ...
+if (copiedKey === 'N的索羅亞克ex|暗黑底牌') {
+  return { state: addLog(state, '暗黑底牌：無法複製自己', aIdx), damage: 0 };
+}
+```
+
+### sim 結果（修完後）
+`node scripts/sim-sandbox.mjs 100` —
+- 總局數：100
+- 正常結束：100
+- 卡住無動作 / 卡住迴圈 / 例外崩潰：0 / 0 / 0
+- 平均回合：14.9（合理範圍）
+- 異常早輸（≤5 回合）：1 局（魔靈多龍 setup mulligan 多輪後備戰枯竭，自然落敗，非 bug）
+
+100 局乾淨，2 組新 preset + 既有 preset 全可正常打到 6 獎賞。
+
+### 變更檔案
+- `src/lib/game/effects/cards/six_decks.ts`：暗黑底牌 fallback filter + copiedKey 防呆
+- `scripts/sim-sandbox.mjs`：新增 sandbox-friendly sim 腳本（用 cwd / dynamic deck source）
+- `src/lib/version.ts`：2.133 → 2.134
 
 ---
 
