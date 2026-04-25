@@ -43,6 +43,7 @@ const DEFAULT_SETS = [
   'MC', 'M3', 'M4',
   'SVOD', 'SVOM',
   'M-P',  // 特典卡 超級進化（promo）
+  'SV-P', // 特典卡 朱&紫（promo, v2.151 補爬：火箭隊的袋獸ex 226/SV-P 等；爬完手動拆 SV-P-H/I/J，丟掉 A-G 老標）
   // v2.111 補爬：缺漏 set
   // v2.115 移除 SVC/SVD/SVP1（完全無現行賽制可用卡，Leon 指示刪除）
   'SVM',   // 雙ex初階牌組 Generations 183 張（2024/11/29，H 標時期 — 含 H 標卡為主）

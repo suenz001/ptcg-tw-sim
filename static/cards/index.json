@@ -545,5 +545,47 @@
     "scrapedAt": "2026-04-24T12:53:31.642Z",
     "releaseDate": "2024-02-02",
     "count": 24
+  },
+  {
+    "code": "SV-P-H",
+    "name": "SV-P特典卡(H)",
+    "regulationMark": "H",
+    "cardCount": 61,
+    "supertypeCounts": {
+      "Pokemon": 43,
+      "Trainer": 18
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010100.png",
+    "scrapedAt": "2026-04-25T17:32:23.797579Z",
+    "releaseDate": null,
+    "count": 61
+  },
+  {
+    "code": "SV-P-I",
+    "name": "SV-P特典卡(I)",
+    "regulationMark": "I",
+    "cardCount": 30,
+    "supertypeCounts": {
+      "Trainer": 12,
+      "Pokemon": 10,
+      "Energy": 8
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012567.png",
+    "scrapedAt": "2026-04-25T17:32:23.798013Z",
+    "releaseDate": null,
+    "count": 30
+  },
+  {
+    "code": "SV-P-J",
+    "name": "SV-P特典卡(J)",
+    "regulationMark": "J",
+    "cardCount": 5,
+    "supertypeCounts": {
+      "Trainer": 5
+    },
+    "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00007812.png",
+    "scrapedAt": "2026-04-25T17:32:23.798145Z",
+    "releaseDate": null,
+    "count": 5
   }
 ]

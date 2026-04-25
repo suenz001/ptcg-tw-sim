@@ -1,9 +1,48 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.150)  
+> 最後更新：2026-04-25 (v2.151)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.151 — 補爬 SV-P promo 整套（火箭隊的袋獸ex 等 96 張）
+
+### Leon 回報
+> 火箭隊的袋獸ex（226/SV-P）為什麼牌庫沒爬到？官方頁：
+> https://asia.pokemon-card.com/hk/card-search/detail/13457/
+
+### 根因
+我們的 `scripts/scrape/scrape-all.js` DEFAULT_SETS 有 `M-P`（特典卡 超級進化 promo）但**漏了 `SV-P`**（特典卡 朱&紫 promo）— 它們是兩個獨立的 promo set。火箭隊的袋獸ex 在 SV-P，所以從未進入卡池。
+
+### 修法
+1. **跑 scraper 抓全部 SV-P**：`node scripts/scrape/scrape-set.js SV-P --delay 400` → 抓到 238 張卡
+2. **按 regulation mark 拆**（沿用 M-P-H/I/J 同一 pattern）：
+   - SV-P-H：61 張（H 標 Standard）
+   - SV-P-I：30 張（I 標 Standard）— 含 12855 火箭隊的袋獸ex 226/SV-P
+   - SV-P-J：5 張（J 標 Standard）
+   - **丟棄**：A-G 共 142 張（賽制外，跟 M-P 處理一致）
+3. **更新 `static/cards/index.json`** — 加 SV-P-H/I/J 三個 entry（cardCount/supertypeCounts/coverImageUrl/regulationMark）
+4. **更新 `scrape-all.js` DEFAULT_SETS**：加 `'SV-P'` 並註解爬完拆 H/I/J 流程
+
+### 注意
+- TW 站 ID 跟 HK 站 ID 不同！Leon 用 HK URL（id 13457）但我們爬 TW 站，火箭隊的袋獸ex 在 TW 對應 id `12855`。功能一樣，只是 detail URL 數字不同。
+- 卡片資料正確：name=「火箭隊的袋獸ex」、setCode=`SV-P-I`、collectorNumber=`226/SV-P`、HP=230、reg=I。
+- 兩招式：連續拳（30×4 硬幣）/ 惡棍衝擊（120 + 火箭隊支援者打過 +100）。
+
+### 驗證
+- pool 從 3913 → 4009（+96 SV-P-H/I/J）
+- `npm run build` ✓
+- `node scripts/sim-sandbox.mjs 8` ✓ 8 局 0 bug、28 preset decks 全 OK
+
+### 改動檔案
+- `src/lib/version.ts` — 2.150 → 2.151
+- `static/cards/SV-P-H.json` 新（61 張）
+- `static/cards/SV-P-I.json` 新（30 張，含 12855 火箭隊的袋獸ex）
+- `static/cards/SV-P-J.json` 新（5 張）
+- `static/cards/index.json` — 加 3 個 SV-P-X entry
+- `scripts/scrape/scrape-all.js` — DEFAULT_SETS 加 'SV-P'
 
 ---
 
