@@ -257,6 +257,24 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           }
           return false;
         }
+        // v2.135：阿響牌組
+        if (f === 'RakiPokemonOrFireEnergy') {
+          if (card.supertype === 'Pokemon' && card.name.startsWith('阿響的')) return true;
+          if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+            if (card.pokemonType === 'Fire' || card.name.includes('【火】')) return true;
+          }
+          return false;
+        }
+        // v2.135：洛拍棒（牌庫頂 4 張中的支援者）
+        if (f === 'Supporter:TOP4') {
+          const top4 = new Set<string>((sel.params?.top4Iids as string[]) ?? []);
+          return top4.has(c.iid) && card.subtype === 'Supporter';
+        }
+        // v2.135：固定卡名搜尋（旅途牽絆 用 'Card:阿響的冒險'）
+        if (f.startsWith('Card:')) {
+          const want = f.slice(5);
+          return card.name === want;
+        }
         return true;
       });
       // 優先選 HP 高的寶可夢
@@ -409,6 +427,8 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'BasicFightingEnergy') {
           return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
         }
+        // v2.135：聖灰
+        if (f === 'Pokemon') return card.supertype === 'Pokemon';
         return true;
       });
       const count = Math.min(sel.maxCount, discard.length);

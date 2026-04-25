@@ -63,19 +63,23 @@ console.log(`✓ Loaded ${pool.size} cards, ${PRESET_DECKS.length} preset decks`
 
 const ELECTRIC = PRESET_DECKS.find(d => d.id === '__preset_electric_spider__');
 const KANGASKHAN = PRESET_DECKS.find(d => d.id === '__preset_mega_kangaskhan_ogerpon__');
+const RAKI = PRESET_DECKS.find(d => d.id === '__preset_raki_typhlosion__');
+const ROCKET_HK = PRESET_DECKS.find(d => d.id === '__preset_rocket_honchkrow__');
 const DRAGAPULT = PRESET_DECKS.find(d => d.name?.includes('魔靈多龍'));
 const N_ZOROARK = PRESET_DECKS.find(d => d.name === 'N的索羅亞克');
 
-if (!ELECTRIC || !KANGASKHAN) {
-  console.error('找不到 v2.133 新預組:', 'ELECTRIC=', !!ELECTRIC, 'KANGASKHAN=', !!KANGASKHAN);
+if (!RAKI || !ROCKET_HK) {
+  console.error('找不到 v2.135 新預組:', 'RAKI=', !!RAKI, 'ROCKET_HK=', !!ROCKET_HK);
   process.exit(1);
 }
 
 const matchups = [
-  [ELECTRIC, KANGASKHAN],
-  [ELECTRIC, DRAGAPULT ?? KANGASKHAN],
-  [KANGASKHAN, ELECTRIC],
-  [KANGASKHAN, N_ZOROARK ?? ELECTRIC],
+  [RAKI, ROCKET_HK],
+  [RAKI, KANGASKHAN ?? DRAGAPULT],
+  [ROCKET_HK, RAKI],
+  [ROCKET_HK, N_ZOROARK ?? ELECTRIC],
+  [RAKI, DRAGAPULT ?? KANGASKHAN],
+  [ROCKET_HK, ELECTRIC ?? KANGASKHAN],
 ];
 
 function simulateGame(d1, d2, seed) {

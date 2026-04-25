@@ -979,6 +979,23 @@
             }
             return false;
           }
+          // v2.135：阿響的冒險
+          if (f === 'RakiPokemonOrFireEnergy') {
+            if (card.supertype === 'Pokemon' && card.name.startsWith('阿響的')) return true;
+            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+              if (card.pokemonType === 'Fire' || card.name.includes('【火】')) return true;
+            }
+            return false;
+          }
+          // v2.135：洛拍棒
+          if (f === 'Supporter:TOP4') {
+            const top4 = new Set<string>((pendingSelection.params?.top4Iids as string[]) ?? []);
+            return top4.has(c.iid) && card.subtype === 'Supporter';
+          }
+          // v2.135：固定卡名（旅途牽絆 'Card:阿響的冒險'）
+          if (f.startsWith('Card:')) {
+            return card.name === f.slice(5);
+          }
           if (f.startsWith('Pokemon:')) {
             // 指定屬性的寶可夢，例 'Pokemon:Lightning'
             const t = f.slice(8);

@@ -863,6 +863,81 @@ const MEGA_KANGASKHAN_OGERPON_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/** 阿響的火爆獸 預組（60 張）— v2.135 Leon 提供卡表 */
+const RAKI_TYPHLOSION_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_raki_typhlosion__',
+  name: '阿響的火爆獸',
+  entries: [
+    // Pokemon 21
+    { cardId: '12673', count: 4 }, // 阿響的火球鼠 (SV9a 015/063)
+    { cardId: '12674', count: 4 }, // 阿響的火岩鼠 (SV9a 016/063)
+    // ⚠️ 卡表寫「阿響的火爆獸ex」×3 但 SV9a 只有非 ex 版（HP170），用此版本
+    { cardId: '12675', count: 3 }, // 阿響的火爆獸 (SV9a 017/063 非 ex)
+    { cardId: '11192', count: 1 }, // 比克提尼 (SV8 012/106)
+    { cardId: '14692', count: 1 }, // 可達鴨 (M2a 032/193)
+    { cardId: '12664', count: 1 }, // 謝米 (SV9a 006/063)
+    { cardId: '11526', count: 1 }, // 含羞苞 (SV8a 001/187)
+    { cardId: '12165', count: 2 }, // 土龍弟弟 (SVM 095/175)
+    { cardId: '9827', count: 1 },  // 土龍節節 (SV5K 057/071)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061/080)
+    { cardId: '14332', count: 1 }, // 火焰鳥 (M2 014/080)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    // Items 21
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC 662/742)
+    { cardId: '17126', count: 1 }, // 神奇糖果 (MC 655/742)
+    { cardId: '12552', count: 1 }, // 調換票 (SV9 090/100)
+    { cardId: '17141', count: 1 }, // 夜間擔架 (MC 670/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '10506', count: 1 }, // 秘密箱 (SV6 092/101) ACE SPEC
+    { cardId: '14811', count: 1 }, // 道具拆除器 (M2a 151/193)
+    { cardId: '12714', count: 1 }, // 聖灰 (SV9a 056/063)
+    { cardId: '17160', count: 2 }, // 猛攻手鐲 (MC 689/742) Tool
+    // Supporters 11
+    { cardId: '12721', count: 4 }, // 阿響的冒險 (SV9a 063/063)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724/742)
+    { cardId: '17184', count: 1 }, // 烏栗 (MC 713/742)
+    // Stadium 2
+    { cardId: '11286', count: 1 }, // 引力山岳 (SV8 106/106) — MC 無此卡
+    { cardId: '18500', count: 1 }, // 稜鏡塔 (M4 080/083)
+    // Energy 5
+    { cardId: '17216', count: 5 }, // 基本【火】能量 (MC FIR)
+  ],
+};
+
+/** 火箭隊的烏鴉頭頭 預組（60 張）— v2.135 Leon 提供卡表 */
+const ROCKET_HONCHKROW_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_rocket_honchkrow__',
+  name: '火箭隊的烏鴉頭頭',
+  entries: [
+    // Pokemon 13
+    { cardId: '14763', count: 4 }, // 火箭隊的烏鴉頭頭 (M2a 103/193)
+    { cardId: '16918', count: 4 }, // 火箭隊的黑暗鴉 (MC 447/742)
+    { cardId: '12832', count: 1 }, // 火箭隊的多邊獸Ⅱ (SV10 082/098)
+    { cardId: '12831', count: 2 }, // 火箭隊的多邊獸 (SV10 081/098)
+    { cardId: '14694', count: 2 }, // 火箭隊的急凍鳥 (M2a 034/193)
+    // Items 15
+    { cardId: '17146', count: 4 }, // 火箭隊的接收器 (MC 675/742)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC 662/742)
+    { cardId: '13154', count: 4 }, // 洛拍棒 (SVQP 018/023)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '11277', count: 1 }, // 奇跡耳麥 (SV8 097/106)
+    // Supporters 20
+    { cardId: '17202', count: 4 }, // 火箭隊的雅典娜 (MC 731/742)
+    { cardId: '17203', count: 4 }, // 火箭隊的阿波羅 (MC 732/742)
+    { cardId: '17206', count: 4 }, // 火箭隊的蘭斯 (MC 735/742)
+    { cardId: '17205', count: 4 }, // 火箭隊的拉姆達 (MC 734/742)
+    { cardId: '17204', count: 4 }, // 火箭隊的坂木 (MC 733/742)
+    // Stadium 4
+    { cardId: '12847', count: 4 }, // 火箭隊的工廠 (SV10 097/098) — MC 無此卡
+    // Energy 8
+    { cardId: '17213', count: 4 }, // 火箭隊能量 (MC 742/742) Special
+    { cardId: '17207', count: 4 }, // 燃火能量 (MC 736/742) Special
+  ],
+};
+
 /**
  * 所有內建預設牌組
  *
@@ -874,6 +949,7 @@ const MEGA_KANGASKHAN_OGERPON_DECK: Omit<Deck, 'updatedAt'> = {
  * v2.104：新增「奧利瓦」/「鋁鋼橋龍」/「超級寶石海星」三組 Leon 自選卡表（Phase A+B+C 22 張 effect 同步實裝）。
  * v2.112：新增「N的索羅亞克」/「火焰雞多龍」/「夠讚狗」/「顫弦蠑螈」/「蒼炎刃鬼」/「超級甲賀忍蛙」六組 Leon 自選卡表。
  * v2.133：新增「電電蟲」/「超級袋獸厄鬼椪」兩組 Leon 自選卡表。
+ * v2.135：新增「阿響的火爆獸」/「火箭隊的烏鴉頭頭」兩組 Leon 自選卡表。
  */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
@@ -897,6 +973,8 @@ export const PRESET_DECKS: Deck[] = [
   { ...MEGA_GRENINJA_DECK, updatedAt: 0 },
   { ...ELECTRIC_SPIDER_DECK, updatedAt: 0 },
   { ...MEGA_KANGASKHAN_OGERPON_DECK, updatedAt: 0 },
+  { ...RAKI_TYPHLOSION_DECK, updatedAt: 0 },
+  { ...ROCKET_HONCHKROW_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */

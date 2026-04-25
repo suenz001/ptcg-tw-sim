@@ -279,6 +279,7 @@ import './effects/cards/slowking_lucario_deck';
 import './effects/cards/mega_decks';
 // v2.112：N的索羅亞克 / 火焰雞多龍 / 夠讚狗 / 顫弦蠑螈 / 蒼炎刃鬼 / 超級甲賀忍蛙 六組預組卡效果
 import './effects/cards/six_decks';
+// v2.135：阿響的火爆獸 / 火箭隊的烏鴉頭頭 兩組預組卡效果（在本檔末尾 inline 註冊）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -10462,6 +10463,317 @@ regR('precious-cart-bench', (state, aIdx, selectedIids, _params, pool) => {
     s = applyBenchPlaceSideEffects(s, aIdx, picks.map(c => c.iid), pool);
   } else {
     s = addLog(s, '貴重手推車：未選卡，重洗牌庫', aIdx);
+  }
+  return s;
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.135 — 阿響的火爆獸 + 火箭隊的烏鴉頭頭 兩組 preset 卡效果
+//
+// 阿響的火爆獸 牌組：
+//   • 阿響的火球鼠｜火花 30 + 自棄 1 能量
+//   • 阿響的火岩鼠｜烈焰 40（純傷害）+ 旅途牽絆（regA：搜阿響的冒險到手）
+//   • 阿響的火爆獸｜拍檔爆破 40 + 棄牌區「阿響的冒險」×60
+//   • 阿響的火爆獸｜爆熱炮 160（純傷害）
+//   • 阿響的冒險（Supporter）— 搜「阿響的寶可夢 OR 基本火能量」≤3 加手 + 重洗
+//   • 比克提尼｜勝利聲援（PASSIVE_ATTACK_BONUS：自方火屬性進化寶可夢 +10）
+//   • 烏栗（Supporter）— 二選一：1) 自方戰鬥↔備戰互換，2) 本回合對 ex/V +30
+//   • 猛攻手鐲（Tool）— 對對手戰鬥場 ex +30
+//   • 聖灰（Item）— 從棄牌區挑最多 5 張寶可夢卡放回牌庫並重洗
+//   • 秘密箱 ACE（Item）— 棄 3 手牌，搜物品/道具/支援者/競技場各 1 張到手
+//
+// 火箭隊的烏鴉頭頭 牌組：
+//   • 火箭隊的烏鴉頭頭｜火箭羽毛 60×（手牌火箭隊支援者卡張數，自動全丟）
+//   • 火箭隊的烏鴉頭頭｜頭突 100（純傷害）
+//   • 火箭隊的黑暗鴉｜誑騙 0 + 牌庫搜支援者到手
+//   • 火箭隊的黑暗鴉｜無理取鬧 30（純傷害；封招式效果簡化省略）
+//   • 火箭隊的多邊獸｜駭客攻擊 0 + 雙方棄 1 手牌
+//   • 火箭隊的多邊獸Ⅱ｜R指令 20×（自方棄牌區火箭隊支援者卡張數）
+//   • 洛拍棒（Item）— 牌庫上方 4 張看，挑任意數量支援者加手 + 剩餘洗回
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── 比克提尼｜勝利聲援（被動）────────────────────────────────────────────────
+// 自己火屬性進化寶可夢使用招式對對手戰鬥場 +10。透過 PASSIVE_ATTACK_BONUS。
+PASSIVE_ATTACK_BONUS.set('勝利聲援', (att) => {
+  if (att.pokemonType !== 'Fire') return 0;
+  if (!att.evolvesFrom) return 0; // 進化寶可夢必有 evolvesFrom
+  return 10;
+});
+
+// ── 阿響的火球鼠｜火花 30 + 自棄 1 能量 ─────────────────────────────────────
+regPre('阿響的火球鼠|火花', (state, _aIdx, _pool) => ({ state, damage: 30 }));
+regPost('阿響的火球鼠|火花', selfDiscardNEnergyPost(1, '火花'));
+
+// ── 阿響的火岩鼠｜烈焰 40（無附加效果，預設處理）── 不需 reg
+
+// ── 阿響的火岩鼠｜旅途牽絆（特性）— 搜「阿響的冒險」到手 ────────────────────
+regA('阿響的火岩鼠', 0, (st, idx) => {
+  const p = st.players[idx];
+  if (p.deck.length === 0) return addLog(st, '旅途牽絆：牌庫為空', idx);
+  st = addLog(st, '旅途牽絆：從牌庫選 1 張「阿響的冒險」加手牌並重洗', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Card:阿響的冒險',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-to-hand-reshuffle',
+  });
+});
+
+// ── 阿響的火爆獸｜拍檔爆破 40 + 棄牌區「阿響的冒險」×60 ──────────────────────
+regPre('阿響的火爆獸|拍檔爆破', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const adventureCount = p.discard.filter(c => pool.get(c.cardId)?.name === '阿響的冒險').length;
+  const bonus = adventureCount * 60;
+  const damage = 40 + bonus;
+  const s = addLog(state, `拍檔爆破：棄牌區有 ${adventureCount} 張「阿響的冒險」→ +${bonus}（合計 ${damage}）`, aIdx);
+  return { state: s, damage };
+});
+
+// ── 阿響的火爆獸｜爆熱炮 160（無附加效果，預設處理）── 不需 reg
+
+// ── 阿響的冒險（Supporter）— 搜「阿響的寶可夢 OR 基本火能量」≤3 加手牌 ──────
+reg('阿響的冒險', (st, idx, pool) => {
+  if (st.players[idx].deck.length === 0) {
+    return addLog(st, '阿響的冒險：牌庫為空', idx);
+  }
+  st = addLog(st, '阿響的冒險：從牌庫選最多 3 張「阿響的寶可夢 / 基本火能量」加手牌並重洗', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'RakiPokemonOrFireEnergy',
+    minCount: 0, maxCount: 3,
+    effectKey: 'search-to-hand-reshuffle',
+  });
+});
+
+// ── 烏栗（Supporter）— 簡化：固定執行效果 1（戰鬥↔備戰互換） ────────────────
+// 卡面有 2 選項，sim 端難以做「卡牌彈出 modal 二選一」，先固定 swap。
+// 若場上無備戰寶可夢可換，則 gate 不允許使用。
+regG('烏栗', (st, idx) => {
+  return st.players[idx].bench.length > 0;
+});
+reg('烏栗', (st, idx, _pool) => {
+  const p = st.players[idx];
+  if (p.bench.length === 0) return addLog(st, '烏栗：備戰區無寶可夢，無可互換', idx);
+  if (p.bench.length === 1) {
+    // 只 1 隻備戰自動互換
+    return updatePlayer(addLog(st, '烏栗：自方戰鬥↔備戰互換', idx), idx, pl => {
+      if (!pl.active) return pl;
+      const old = pl.active;
+      const newActive = pl.bench[0];
+      return { ...pl, active: { ...newActive, status: undefined }, bench: [old] };
+    });
+  }
+  // 多備戰 → 交給玩家挑
+  st = addLog(st, '烏栗：選 1 隻備戰寶可夢與戰鬥互換', idx);
+  return withPending(st, {
+    type: 'bench-choose',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'unruda-swap',
+  });
+});
+regR('unruda-swap', (state, aIdx, iids, _params, _pool) => {
+  if (iids.length === 0) return state;
+  return updatePlayer(state, aIdx, pl => {
+    if (!pl.active) return pl;
+    const idx = pl.bench.findIndex(c => c.iid === iids[0]);
+    if (idx < 0) return pl;
+    const newActive = pl.bench[idx];
+    const newBench = [...pl.bench];
+    newBench.splice(idx, 1);
+    newBench.push(pl.active);
+    return { ...pl, active: { ...newActive, status: undefined }, bench: newBench };
+  });
+});
+
+// ── 猛攻手鐲（Tool）— 對對手戰鬥場 ex +30 ───────────────────────────────────
+TOOL_ATTACK_BONUS.set('猛攻手鐲', (_a, _ai, defCard) => {
+  const isEx = defCard.subtype === 'ex' || defCard.name.endsWith('ex') || defCard.name.endsWith('EX');
+  return isEx ? 30 : 0;
+});
+
+// ── 聖灰（Item）— 從棄牌區挑最多 5 張寶可夢卡放回牌庫並重洗 ─────────────────
+regG('聖灰', (st, idx, pool) => {
+  return st.players[idx].discard.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
+});
+reg('聖灰', (st, idx, pool) => {
+  const p = st.players[idx];
+  const pokeCount = p.discard.filter(c => pool.get(c.cardId)?.supertype === 'Pokemon').length;
+  if (pokeCount === 0) return addLog(st, '聖灰：棄牌區無寶可夢可選', idx);
+  st = addLog(st, '聖灰：從棄牌區挑最多 5 張寶可夢放回牌庫並重洗', idx);
+  return withPending(st, {
+    type: 'discard-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon', minCount: 0, maxCount: 5,
+    effectKey: 'sacred-ash-discard-to-deck',
+  });
+});
+regR('sacred-ash-discard-to-deck', (state, aIdx, iids, _params, pool) => {
+  let s = state;
+  const players = [...s.players] as [PlayerState, PlayerState];
+  const p = { ...players[aIdx] };
+  const picked = p.discard.filter(c => iids.includes(c.iid));
+  if (picked.length === 0) return addLog(s, '聖灰：未選任何卡', aIdx);
+  p.discard = p.discard.filter(c => !iids.includes(c.iid));
+  p.deck = shuffle([...p.deck, ...picked]);
+  players[aIdx] = p;
+  s = { ...s, players };
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  return addLog(s, `聖灰：${names}（${picked.length} 張）放回牌庫並重洗`, aIdx);
+});
+
+// ── 秘密箱 ACE（Item）— 棄 3 手牌，搜「物品/道具/支援者/競技場」各 1 張到手 ──
+regG('秘密箱', (st, idx) => {
+  // 卡面：「必須將自己的 3 張手牌丟棄才可使用」— 手牌（含此卡）需 ≥4 張
+  if (st.players[idx].hand.length < 4) return false;
+  if (st.players[idx].deck.length === 0) return false;
+  return true;
+});
+reg('秘密箱', (st, idx) => {
+  st = addLog(st, '秘密箱：先選 3 張手牌丟棄', idx);
+  return withPending(st, {
+    type: 'hand-discard', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: '', minCount: 3, maxCount: 3,
+    effectKey: 'mystery-box-step1',
+  });
+});
+regR('mystery-box-step1', (state, aIdx, iids, _params, pool) => {
+  let s = state;
+  const players = [...s.players] as [PlayerState, PlayerState];
+  const p = { ...players[aIdx] };
+  const picked = p.hand.filter(c => iids.includes(c.iid));
+  p.hand = p.hand.filter(c => !iids.includes(c.iid));
+  p.discard = [...p.discard, ...picked];
+  players[aIdx] = p;
+  s = { ...s, players };
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  s = addLog(s, `秘密箱：丟棄 ${picked.length} 張手牌（${names}）`, aIdx);
+  s = addLog(s, '秘密箱：從牌庫選物品/道具/支援者/競技場各 1 張加手牌並重洗', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'AnyTrainer', minCount: 0, maxCount: 4,
+    effectKey: 'search-to-hand-reshuffle',
+    params: { mysteryBox: true },  // resolver 自動 valid 各類別最多 1 張（簡化：UI 端不強制；engine 後處理）
+  });
+});
+
+// ── 火箭隊的烏鴉頭頭｜火箭羽毛 60×（手牌「火箭隊」支援者全丟）──────────────
+// 簡化：自動全丟手牌中的「火箭隊」支援者卡，每張 +60。
+regPre('火箭隊的烏鴉頭頭|火箭羽毛', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const idxs: number[] = [];
+  p.hand.forEach((c, i) => {
+    const card = pool.get(c.cardId);
+    if (card?.supertype === 'Trainer' && card.subtype === 'Supporter' && card.name.includes('火箭隊')) {
+      idxs.push(i);
+    }
+  });
+  if (idxs.length === 0) {
+    return { state: addLog(state, '火箭羽毛：手牌無「火箭隊」支援者', aIdx), damage: 0 };
+  }
+  const damage = idxs.length * 60;
+  const discarded = idxs.map(i => p.hand[i]);
+  const names = discarded.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = addLog(state, `火箭羽毛：丟 ${discarded.length} 張（${names}），造成 ${damage} 傷害`, aIdx);
+  s = updatePlayer(s, aIdx, pl => ({
+    ...pl,
+    hand: pl.hand.filter((_, i) => !idxs.includes(i)),
+    discard: [...pl.discard, ...discarded],
+  }));
+  return { state: s, damage };
+});
+
+// ── 火箭隊的烏鴉頭頭｜頭突 100（無附加效果） ─── 不需 reg
+
+// ── 火箭隊的黑暗鴉｜誑騙 0 + 搜支援者到手 ───────────────────────────────────
+regPre('火箭隊的黑暗鴉|誑騙', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('火箭隊的黑暗鴉|誑騙', deckSearchToHandPost(1, 'Supporter', '誑騙'));
+
+// ── 火箭隊的黑暗鴉|無理取鬧 30（簡化：純傷害，封招式效果省略）─── 不需 reg
+
+// ── 火箭隊的多邊獸｜駭客攻擊 0 + 雙方棄 1 手牌 ───────────────────────────────
+regPre('火箭隊的多邊獸|駭客攻擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('火箭隊的多邊獸|駭客攻擊', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const p = state.players[aIdx];
+  const op = state.players[dIdx];
+  if (p.hand.length === 0 && op.hand.length === 0) {
+    return addLog(state, '駭客攻擊：雙方手牌皆空', aIdx);
+  }
+  // 自己自動丟最右一張，對手隨機丟一張
+  let s = state;
+  const players = [...s.players] as [PlayerState, PlayerState];
+  if (p.hand.length > 0) {
+    const ip = { ...players[aIdx] };
+    const lastIdx = ip.hand.length - 1;
+    const drop = ip.hand[lastIdx];
+    ip.hand = ip.hand.slice(0, lastIdx);
+    ip.discard = [...ip.discard, drop];
+    players[aIdx] = ip;
+    s = { ...s, players };
+    s = addLog(s, `駭客攻擊：自己丟棄 ${pool.get(drop.cardId)?.name ?? '?'}`, aIdx);
+  }
+  // 對手由 ai/UI 自選 — 但簡化也自動丟最右一張
+  const players2 = [...s.players] as [PlayerState, PlayerState];
+  const o = { ...players2[dIdx] };
+  if (o.hand.length > 0) {
+    const lastIdx = o.hand.length - 1;
+    const drop = o.hand[lastIdx];
+    o.hand = o.hand.slice(0, lastIdx);
+    o.discard = [...o.discard, drop];
+    players2[dIdx] = o;
+    s = { ...s, players: players2 };
+    s = addLog(s, `駭客攻擊：對手丟棄 ${pool.get(drop.cardId)?.name ?? '?'}`, aIdx);
+  }
+  return s;
+});
+
+// ── 火箭隊的多邊獸Ⅱ｜R指令 20×（自方棄牌區「火箭隊」支援者卡張數） ────────
+regPre('火箭隊的多邊獸Ⅱ|R指令', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const count = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Trainer' && card.subtype === 'Supporter' && card.name.includes('火箭隊');
+  }).length;
+  const damage = count * 20;
+  const s = addLog(state, `R指令：棄牌區「火箭隊」支援者 ${count} 張 → ${damage} 傷害`, aIdx);
+  return { state: s, damage };
+});
+
+// ── 洛拍棒（Item）— 牌庫上方 4 張看，挑任意數量支援者加手 + 剩餘洗回 ────────
+regG('洛拍棒', (st, idx) => {
+  return st.players[idx].deck.length > 0;
+});
+reg('洛拍棒', (st, idx) => {
+  const p = st.players[idx];
+  const top4 = p.deck.slice(0, 4);
+  if (top4.length === 0) return addLog(st, '洛拍棒：牌庫為空', idx);
+  st = addLog(st, `洛拍棒：查看牌庫上方 ${top4.length} 張，選任意數量支援者加手牌`, idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Supporter:TOP4',
+    minCount: 0, maxCount: 4,
+    effectKey: 'recall-rod',
+    params: { top4Iids: top4.map(c => c.iid) },
+  });
+});
+regR('recall-rod', (state, aIdx, iids, _params, pool) => {
+  let s = state;
+  const players = [...s.players] as [PlayerState, PlayerState];
+  const p = { ...players[aIdx] };
+  const picked = p.deck.filter(c => iids.includes(c.iid));
+  p.hand = [...p.hand, ...picked];
+  p.deck = shuffle(p.deck.filter(c => !iids.includes(c.iid)));
+  players[aIdx] = p;
+  s = { ...s, players };
+  if (picked.length > 0) {
+    const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    s = addLog(s, `洛拍棒：${names}（${picked.length} 張）加手牌，剩餘洗回牌庫`, aIdx);
+  } else {
+    s = addLog(s, '洛拍棒：未選卡，剩餘洗回牌庫', aIdx);
   }
   return s;
 });

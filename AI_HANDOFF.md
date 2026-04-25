@@ -1,9 +1,81 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.134)  
+> 最後更新：2026-04-25 (v2.135)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.135 — 新增 2 個 preset：阿響的火爆獸 + 火箭隊的烏鴉頭頭（含 13 個新 effect + 1 個 engine 防呆）
+
+### Leon 提供卡表
+- `deck_picture/阿響的火爆獸.txt`（60 張）— 主軸：阿響的火球鼠 → 阿響的火岩鼠 → 阿響的火爆獸（×3）+ 阿響的冒險（×4）
+- `deck_picture/火箭隊的烏鴉頭頭.txt`（60 張）— 主軸：火箭隊的烏鴉頭頭｜火箭羽毛 ×60 / 火箭隊的多邊獸Ⅱ｜R指令
+
+Leon 明說「自己對戰模擬，自己除錯」。SOP：feedback_preset_deck_sop。
+
+### Phase 1：對卡（疑點與決定）
+- **「阿響的火爆獸ex」不存在於 pool**：SV9a 只有非 ex 版（HP 170）— 12675 普通版 / 12728 SR 變體。Leon 卡表寫 ex 應為筆誤或 UI 顯示誤導。決定使用 12675（普通版 ×3）並在 comment 註記「卡表寫 ex 但 SV9a 沒 ex 版」。
+- 訓練家全選 MC 版（17122 高級球 / 17119 好友寶芬 / 17133 寶可平板 / 17126 神奇糖果 / 17141 夜間擔架 / 17160 猛攻手鐲 / 17195 老大的指令 / 17200 莉莉艾的決意 / 17184 烏栗 / 17146 火箭隊的接收器 / 17202~17206 火箭隊全 5 個支援者）
+- 沒 MC 版的選最早出版：11286 引力山岳（SV8）/ 12847 火箭隊的工廠（SV10）/ 18500 稜鏡塔（M4）/ 18492 特殊紅牌（M4）/ 10506 秘密箱（SV6 only one）/ 12552 調換票（SV9 only one）/ 14811 道具拆除器（M2a）/ 12714 聖灰（SV9a）/ 13154 洛拍棒（SVQP only one）/ 11277 奇跡耳麥（SV8 only one）
+
+### Phase 2：進化鏈 — scraper bug 直接修
+- **阿響的火岩鼠 (12674) evolvesFrom = "煤炭龜"** ← scraper bug，正確應為「阿響的火球鼠」。直接修 `static/cards/SV9a.json`。
+- 其他進化鏈正常（火箭隊的黑暗鴉 → 烏鴉頭頭、火箭隊的多邊獸 → Ⅱ、土龍弟弟 → 節節 等）。
+
+### Phase 4：盤點未實裝 → 13 個
+**已實裝（不必再做）**：莉莉艾的決意 / 老大的指令 / 寶可平板 / 火箭隊的拉姆達 / 火箭隊的接收器 / 火箭隊的雅典娜 / 火箭隊的坂木 / 火箭隊的阿波羅 / 火箭隊的工廠 / 火箭隊的急凍鳥（抵抗之幕 + 暗黑冰霜）/ 火箭隊能量 / 燃火能量 / 鬥志之翼（火焰鳥）/ 喵喵ex（殺手鐧捕捉 + 夾尾巴逃跑）/ 含羞苞（癢癢花粉）/ 可達鴨（濕氣）/ 謝米（花之帷幔）/ 土龍弟弟 / 土龍節節（逃跑抽出）/ 吉雉雞ex / 特殊紅牌 / 引力山岳 / 稜鏡塔 / 奇跡耳麥。
+
+**新實裝（13 個，集中加在 effects.ts 末尾 v2.135 區塊）**：
+- 阿響的火球鼠｜火花 30 + 自棄 1 能量（用 selfDiscardNEnergyPost helper）
+- 阿響的火岩鼠｜旅途牽絆 (regA) — 牌庫搜「阿響的冒險」加手牌
+- 阿響的火爆獸｜拍檔爆破 40 + 棄牌區「阿響的冒險」×60（regPre）
+- 阿響的冒險（Supporter） — 牌庫搜「阿響的寶可夢 OR 基本火能量」≤3 加手牌（filter='RakiPokemonOrFireEnergy'）
+- 比克提尼｜勝利聲援（PASSIVE_ATTACK_BONUS — 自方火屬性進化寶可夢 +10）
+- 烏栗（Supporter）— 簡化版：固定執行效果 1（戰鬥↔備戰互換）；卡面有第 2 選項（對 ex/V +30）目前 sim 端不做選擇 modal
+- 猛攻手鐲（Tool）— TOOL_ATTACK_BONUS：對對手戰鬥場 ex +30
+- 聖灰（Item）— 從棄牌區挑最多 5 張寶可夢回牌庫並重洗（filter='Pokemon'）
+- 秘密箱 ACE（Item）— 棄 3 手牌→搜物品/道具/支援者/競技場各 1 張到手（簡化：開放選 4 張任意 Trainer）
+- 火箭隊的烏鴉頭頭｜火箭羽毛（regPre）— 自動全丟手牌中的「火箭隊」支援者，每張 ×60 傷害（仿「灰塵山｜丟棄」自動 discard pattern）
+- 火箭隊的黑暗鴉｜誑騙 0 + 牌庫搜支援者到手（deckSearchToHandPost）
+- 火箭隊的多邊獸｜駭客攻擊 0 + 雙方各棄 1 手牌（自動丟最右一張）
+- 火箭隊的多邊獸Ⅱ｜R指令 20×（自方棄牌區「火箭隊」支援者卡張數）
+- 洛拍棒（Item）— peek 牌庫上方 4 張，挑任意數量支援者加手 + 剩餘洗回（filter='Supporter:TOP4'）
+
+新 filter 同步加到 `ai.ts` + `+page.svelte` 兩個地方：`RakiPokemonOrFireEnergy` / `Supporter:TOP4` / `Card:<name>` / `discard-search:Pokemon`。
+
+### Bug A — sim 抓到 game-over 漏網 stuck loop
+sim 第一次跑 100 局 → 局 10「阿響 vs 多龍」stuck_loop：對手 `active=null + bench=0` 但 `phase` 仍為 'playing'，AI 反覆 END_TURN 無限迴圈。
+
+**根因**：`selfReturnToHandPost`（喵喵ex｜夾尾巴逃跑、煤炭龜｜火焰旋渦、其他 self-return 招式）把 `active = null` 後直接結束招式，沒檢查「自方無備戰可上 → game-over」。`sanityKOSweep` 只掃對手側 (line 902)，自方 active=null + bench=0 沒人管。
+
+**修法**（`src/lib/game/engine.ts:applyAction` 末尾）：加一道全域防呆 — 每次 dispatch 完，若 phase='playing' 且 `!pendingSelection`，掃雙方 `active===null && bench.length===0` → 強制 game-over，winner=對方。
+```ts
+for (const idx of [0, 1] as const) {
+  const p = next.players[idx];
+  if (p.active === null && p.bench.length === 0) {
+    next = { ...next, phase: 'game-over', winner: 1-idx, ... };
+    break;
+  }
+}
+```
+
+修完再跑 100 局：100 / 100 正常結束、0 卡住、0 崩潰、平均 13.8 回合。其中 4 局「早輸 ≤5 turn」全部是合法的「沒有可上場的寶可夢」自然落敗，非 bug。
+
+### 變更檔案
+- `src/lib/decks/presets.ts`：新增 `RAKI_TYPHLOSION_DECK` + `ROCKET_HONCHKROW_DECK` + 加入 PRESET_DECKS
+- `src/lib/game/effects.ts`：append v2.135 區塊（13 個新 effect）+ side-effect 註解（不開新檔，直接利用 effects.ts 內部 helper）
+- `src/lib/game/engine.ts`：applyAction 末尾加全域 game-over 防呆
+- `src/lib/game/ai.ts`：deck-search 加 4 個新 filter / discard-search 加 'Pokemon'
+- `src/routes/game/+page.svelte`：UI 端鏡射同樣 filter
+- `static/cards/SV9a.json`：阿響的火岩鼠 12674 evolvesFrom 修為「阿響的火球鼠」
+- `scripts/sim-sandbox.mjs`：matchups 加入 v2.135 兩組新預組
+- `src/lib/version.ts`：2.134 → 2.135
+
+### Leon 須注意
+- **「阿響的火爆獸ex」**：preset 用非 ex 版（id 12675），共 3 張。卡表寫 ex 但 SV9a 沒 ex 版本（只有 SV9a 阿響的鳳王ex 是 ex）。如有疑慮請確認；目前實作以非 ex 版運作。
+- **烏栗效果簡化**：固定執行第 1 選項（swap）；第 2 選項（對 ex/V +30）暫不接 modal。
 
 ---
 

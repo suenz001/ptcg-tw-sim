@@ -2900,7 +2900,33 @@ export function applyAction(
   }
 
   // v2.47 防禦層：備戰寶可夢不應持有異常狀態
-  return scrubBenchStatus(next);
+  next = scrubBenchStatus(next);
+
+  // v2.135 防禦層：若任一玩家在 'playing' 階段沒 active 也沒 bench → game-over
+  // 漏網的 KO 路徑（self-return-to-hand / self-KO ability / 中毒/灼傷邊緣案例 等）若忘了
+  // trigger game-over，sim 會 stuck loop。這裡做最後一道保險。
+  if (next.phase === 'playing' && !next.pendingSelection) {
+    for (const idx of [0, 1] as const) {
+      const p = next.players[idx];
+      if (p.active === null && p.bench.length === 0) {
+        const winner = (1 - idx) as 0 | 1;
+        next = {
+          ...next,
+          phase: 'game-over',
+          winner,
+          winReason: `${p.name} 沒有可上場的寶可夢`,
+          log: [
+            ...next.log,
+            { turn: next.turn, playerIndex: null as null,
+              message: `${p.name} 沒有可上場的寶可夢，${next.players[winner].name} 獲勝！` },
+          ],
+        };
+        break;
+      }
+    }
+  }
+
+  return next;
 }
 
 // ── 輔助查詢 ─────────────────────────────────────────────────────────────────
