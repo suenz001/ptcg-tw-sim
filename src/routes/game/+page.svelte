@@ -1456,10 +1456,25 @@
   }
   function cancelCopyAttack() { copyAttackPicker = null; }
 
-  // 取得「可被挑選丟棄」的能量清單（依 scope 決定範圍）
+  // 取得「可被挑選丟棄」的卡片清單（依 scope 決定範圍）
+  // v2.143 擴展：scope='hand-rocket-supporter' 時返回手牌中「火箭隊」支援者
+  //   返回項目仍用 hostInst 結構但 hostInst = activePlayer.active（佔位，UI 不會顯示來源）
+  //   ownerName 顯示卡名（讓玩家看清楚要丟哪張）
   function getDiscardableEnergies(spec: PreDiscardSpec): Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string; hostInst: CardInstance }> {
     if (!game || !activePlayer) return [];
     const out: Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string; hostInst: CardInstance }> = [];
+    if (spec.scope === 'hand-rocket-supporter') {
+      // v2.143 火箭羽毛：列出手牌中「火箭隊」支援者
+      const placeholder = activePlayer.active ?? activePlayer.bench[0];
+      if (!placeholder) return [];
+      for (const h of activePlayer.hand) {
+        const hc = getCard(h.cardId);
+        if (hc?.supertype === 'Trainer' && hc.subtype === 'Supporter' && hc.name.includes('火箭隊')) {
+          out.push({ iid: h.iid, cardId: h.cardId, ownerIid: 'hand', ownerName: hc.name, hostInst: placeholder });
+        }
+      }
+      return out;
+    }
     const addFrom = (host: CardInstance | null | undefined) => {
       if (!host) return;
       const hc = getCard(host.cardId);
@@ -3072,6 +3087,7 @@
     {@const pickedCount = preAttackDiscard.picked.size}
     {@const pickedAmount = computePickedAmount(spec, preAttackDiscard.picked, energies)}
     {@const isUnits = spec.countMode === 'units'}
+    {@const isHandDiscard = spec.scope === 'hand-rocket-supporter'}
     {@const unit = isUnits ? '個' : '張'}
     {@const minOk = pickedAmount >= spec.min}
     {@const maxOk = spec.max === null || pickedAmount <= spec.max}
@@ -3079,12 +3095,17 @@
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
-          <h3>⚡ {preAttackDiscard.attackName}：選擇要丟棄的能量</h3>
+          <h3>{isHandDiscard ? '🪶' : '⚡'} {preAttackDiscard.attackName}：選擇要丟棄的{isHandDiscard ? '火箭隊支援者' : '能量'}</h3>
           <p class="sel-hint">
             最少 {spec.min} {unit}{spec.max === null ? '（不限上限）' : `，最多 ${spec.max} ${unit}`}
             · 已選 {pickedCount} 張{isUnits ? `（= ${pickedAmount} 個能量）` : ''}
             {#if spec.damagePerEnergy > 0}· 預估傷害 <strong>{estDmg}</strong>{/if}
-            <br/>範圍：{spec.scope === 'attacker' ? '僅攻擊方出場寶可夢身上的能量' : spec.scope === 'own-bench' ? '僅自己備戰寶可夢身上的能量' : '自己場上任一寶可夢身上的能量'}
+            <br/>範圍：{
+              spec.scope === 'attacker' ? '僅攻擊方出場寶可夢身上的能量' :
+              spec.scope === 'own-bench' ? '僅自己備戰寶可夢身上的能量' :
+              isHandDiscard ? '從自己手牌中名稱含「火箭隊」的支援者卡' :
+              '自己場上任一寶可夢身上的能量'
+            }
             {#if isUnits}<br/><small style="color:#888">註：1 張燃火能量（附進化）= 3 個無能量；1 張火箭隊能量 = 2 個無能量。</small>{/if}
           </p>
         </div>
@@ -3096,19 +3117,22 @@
               <button class="sel-card" class:sel-picked={picked} onclick={() => togglePreAttackEnergy(e.iid)}>
                 <img src={ec.imageUrl} alt={ec.name}/>
                 <span class="sel-name">{ec.name}{isUnits && eUnits > 1 ? `（${eUnits}個）` : ''}</span>
-                <span class="sel-hp">附於 {e.ownerName}</span>
+                <span class="sel-hp">{isHandDiscard ? '在手牌中' : `附於 ${e.ownerName}`}</span>
                 {#if picked}<span class="sel-check">✓</span>{/if}
               </button>
             {/if}
           {/each}
           {#if energies.length === 0}
-            <p class="sel-empty">（沒有可丟棄的能量）</p>
+            <p class="sel-empty">（沒有可丟棄的{isHandDiscard ? '支援者' : '能量'}）</p>
           {/if}
         </div>
         <div class="sel-footer">
           <button class="btn-act primary" disabled={!minOk || !maxOk} onclick={confirmPreAttackDiscard}>
             確定使用招式（丟 {pickedCount} 張{isUnits ? `／${pickedAmount} 個能量` : ''}）
           </button>
+          {#if spec.min === 0}
+            <button class="btn-act secondary" onclick={() => { if (preAttackDiscard) { preAttackDiscard.picked = new Set(); confirmPreAttackDiscard(); } }}>不丟（0 傷害）</button>
+          {/if}
           <button class="btn-act secondary" onclick={cancelPreAttackDiscard}>取消</button>
         </div>
       </div>

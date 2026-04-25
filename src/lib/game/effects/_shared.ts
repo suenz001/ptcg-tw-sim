@@ -132,9 +132,14 @@ export function regPost(key: string, fn: AttackPostFn) { ATTACK_POST.set(key, fn
 export interface PreDiscardSpec {
   min: number;
   max: number | null; // null = 不限上限（全部）
-  scope: 'attacker' | 'any-own' | 'own-bench';
+  /**
+   * v2.143：scope 擴展支援手牌棄牌
+   * - 'attacker' / 'any-own' / 'own-bench'：丟自身能量（原有）
+   * - 'hand-rocket-supporter'：丟手牌中的「火箭隊」支援者（火箭羽毛）
+   */
+  scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter';
   baseDamage: number;
-  damagePerEnergy: number;
+  damagePerEnergy: number; // 對 hand-rocket-supporter 而言視為 damagePerCard
   /**
    * v2.129：min/max 的計數方式。
    * 'cards'（預設）：依玩家挑選的張數計算（過去行為）。

@@ -377,8 +377,8 @@ const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   '稜鏡能量': ['Colorless'],
   // v2.113 新衝天能量（ACE SPEC）— 1 個【無】；若附於【2 階進化】寶可夢則視為 2 個所有屬性（inline）
   '新衝天能量': ['Colorless'],
-  // v2.133 薄霧能量 — 視為 1 個【無】能量。卡面額外效果「附有的寶可夢不受對手招式效果影響」
-  //   屬於防守方免疫附加效果（damage 不擋）— 目前 engine 僅支援屬性 mapping，免疫 TODO。
+  // v2.133 薄霧能量 — 視為 1 個【無】能量。
+  //   v2.138 起「附有的寶可夢不受對手招式效果影響」已在 hasEffectShield helper 實裝。
   '薄霧能量': ['Colorless'],
 };
 

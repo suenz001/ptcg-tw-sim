@@ -10807,19 +10807,46 @@ regR('mystery-box-step1', (state, aIdx, iids, _params, pool) => {
   });
 });
 
-// ── 火箭隊的烏鴉頭頭｜火箭羽毛 60×（手牌「火箭隊」支援者全丟）──────────────
-// 簡化：自動全丟手牌中的「火箭隊」支援者卡，每張 +60。
-regPre('火箭隊的烏鴉頭頭|火箭羽毛', (state, aIdx, pool) => {
+// ── 火箭隊的烏鴉頭頭｜火箭羽毛 60× v2.143 完整實裝（玩家自選張數） ──────────
+// 卡面：從手牌任意數量「火箭隊」支援者丟棄，造成 ×60 傷害。
+// 註冊到 ATTACK_PRE_DISCARD_CHOICE — UI 端宣告招式時彈 modal 給玩家選張數，
+// 確認後 action.discardedEnergyIids 帶手牌 iid（v2.143 重用既有欄位，雖名為
+// energy 實際裝手牌 iid）。AI 端 fallback：自動全丟（最大化攻擊）。
+ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的烏鴉頭頭|火箭羽毛', {
+  min: 0,
+  max: null,  // 不限上限
+  scope: 'hand-rocket-supporter',
+  baseDamage: 0,
+  damagePerEnergy: 60,
+});
+regPre('火箭隊的烏鴉頭頭|火箭羽毛', (state, aIdx, pool, action) => {
   const p = state.players[aIdx];
-  const idxs: number[] = [];
-  p.hand.forEach((c, i) => {
-    const card = pool.get(c.cardId);
-    if (card?.supertype === 'Trainer' && card.subtype === 'Supporter' && card.name.includes('火箭隊')) {
-      idxs.push(i);
-    }
-  });
+  const chosenIids = action?.discardedEnergyIids;  // 玩家挑選的手牌 iid（PRE_DISCARD_CHOICE 流程）
+  let idxs: number[];
+  if (chosenIids && chosenIids.length > 0) {
+    // 玩家明確指定：用這幾張
+    const idSet = new Set(chosenIids);
+    idxs = [];
+    p.hand.forEach((c, i) => {
+      if (idSet.has(c.iid)) {
+        const card = pool.get(c.cardId);
+        if (card?.supertype === 'Trainer' && card.subtype === 'Supporter' && card.name.includes('火箭隊')) {
+          idxs.push(i);
+        }
+      }
+    });
+  } else {
+    // AI / 未開 modal fallback：自動全丟（最大化攻擊）
+    idxs = [];
+    p.hand.forEach((c, i) => {
+      const card = pool.get(c.cardId);
+      if (card?.supertype === 'Trainer' && card.subtype === 'Supporter' && card.name.includes('火箭隊')) {
+        idxs.push(i);
+      }
+    });
+  }
   if (idxs.length === 0) {
-    return { state: addLog(state, '火箭羽毛：手牌無「火箭隊」支援者', aIdx), damage: 0 };
+    return { state: addLog(state, '火箭羽毛：未丟棄任何手牌 → 0 傷害', aIdx), damage: 0 };
   }
   const damage = idxs.length * 60;
   const discarded = idxs.map(i => p.hand[i]);
