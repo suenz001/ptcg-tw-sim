@@ -423,7 +423,14 @@ export interface GameState {
 export interface LogEntry {
   turn: number;
   playerIndex: 0 | 1 | null; // null = 系統訊息
+  /** 公開訊息：所有人都看得到（含對手） */
   message: string;
+  /**
+   * v2.130：私有訊息覆寫（只給 playerIndex 所有者本人看）。
+   * 例：忍之利刃 attacker 看「搜到 氣球 加入手牌」，對手看 message=「搜到 一張卡片」。
+   * 若未設則所有人都看 message。null/undefined 表示沒有 private 版本。
+   */
+  privateMessage?: string;
 }
 
 // ── 動作 ────────────────────────────────────────────────────────────────────

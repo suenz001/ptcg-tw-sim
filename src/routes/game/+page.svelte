@@ -614,7 +614,9 @@
         const who = e.playerIndex === 0 ? `[T${e.turn} P0:${p0}]`
                   : e.playerIndex === 1 ? `[T${e.turn} P1:${p1}]`
                   : `[T${e.turn} —]`;
-        lines.push(`${who} ${e.message}`);
+        // v2.130：玩家匯出時自己看私有訊息；對手看公開版
+        const text = (e.privateMessage && e.playerIndex === myIdx) ? e.privateMessage : e.message;
+        lines.push(`${who} ${text}`);
       }
       blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
       filename = `ptcg-log-${stamp}.txt`;
@@ -2291,8 +2293,6 @@
               {/if}
               <div class="active-info">
                 <div class="active-name">{ac?.name}</div>
-                <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(oppPlayer.active)?hpRemaining(oppPlayer.active)/hpTotal(oppPlayer.active)*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),hpTotal(oppPlayer.active))}"></div></div>
-                <div class="active-hp">HP {hpRemaining(oppPlayer.active)}/{hpTotal(oppPlayer.active)}</div>
                 {#if oppPlayer.active.toolAttached}{@const tc=getCard(oppPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
                 {#if oppPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
                 {#if oppPlayer.active.status}<div class="status-chip status-{oppPlayer.active.status}">{
@@ -2302,6 +2302,11 @@
                   oppPlayer.active.status === 'confused' ? '😵 混亂' :
                   oppPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.status
                 }</div>{/if}
+              </div>
+              <!-- v2.130：血條移到卡牌最下方，避免被特性按鈕等 UI 蓋住（雙方統一） -->
+              <div class="active-hpbar-bottom">
+                <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(oppPlayer.active)?hpRemaining(oppPlayer.active)/hpTotal(oppPlayer.active)*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),hpTotal(oppPlayer.active))}"></div></div>
+                <span class="active-hp-text">HP {hpRemaining(oppPlayer.active)}/{hpTotal(oppPlayer.active)}</span>
               </div>
             </div>
           {/if}
@@ -2404,7 +2409,8 @@
 
       <div class="log-col" title="向下滾動可查看從戰鬥開始到現在的完整記錄">
         {#each [...(game.log??[])].reverse() as entry, i}
-          <div class="log-line" class:log-sys={entry.playerIndex===null} class:log-latest={i===0}>{entry.message}</div>
+          <!-- v2.130：privateMessage 只給 entry.playerIndex 本人看（對手 / 系統 fallback 到 message） -->
+          <div class="log-line" class:log-sys={entry.playerIndex===null} class:log-latest={i===0}>{entry.privateMessage && entry.playerIndex === myIdx ? entry.privateMessage : entry.message}</div>
         {/each}
       </div>
     </div>
@@ -2469,8 +2475,6 @@
             {/if}
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
-              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(myPlayer.active)?hpRemaining(myPlayer.active)/hpTotal(myPlayer.active)*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),hpTotal(myPlayer.active))}"></div></div>
-              <div class="active-hp">HP {hpRemaining(myPlayer.active)}/{hpTotal(myPlayer.active)}</div>
               {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
               {#if myPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
               {#if myPlayer.active.status}<div class="status-chip status-{myPlayer.active.status}">{
@@ -2481,6 +2485,11 @@
                 myPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.status
               }</div>{/if}
               {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡ 點此附加</div>{/if}
+            </div>
+            <!-- v2.130：血條移到卡牌最下方，避免被特性按鈕擠擋（雙方統一） -->
+            <div class="active-hpbar-bottom">
+              <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(myPlayer.active)?hpRemaining(myPlayer.active)/hpTotal(myPlayer.active)*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),hpTotal(myPlayer.active))}"></div></div>
+              <span class="active-hp-text">HP {hpRemaining(myPlayer.active)}/{hpTotal(myPlayer.active)}</span>
             </div>
             {#if evoOpts.length>0&&!pendingSelection&&isMyTurn()}
               <div class="evo-wrap">
@@ -4252,6 +4261,25 @@
   .ai-toggle input{ cursor:pointer; accent-color:#8a4aee; width:16px; height:16px; }
   .ai-chip{ background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; animation:pulse 1s infinite alternate; }
   @keyframes pulse{ from{ opacity:.7; } to{ opacity:1; } }
+
+  /* ── v2.130：戰鬥場卡牌底部血條（雙方統一）── */
+  /* 把血條從 .active-info 中拉出來，固定在 .active-card 底部，避開特性按鈕 / 進化按鈕 */
+  .active-hpbar-bottom{
+    position:absolute;
+    left:.4rem; right:.4rem;
+    bottom:.3rem;
+    display:flex; align-items:center; gap:.4rem;
+    padding:.15rem .35rem;
+    background:rgba(0,0,0,.6);
+    border-radius:6px;
+    z-index:3;  /* 高於 .active-info(z=2)，確保不被覆蓋 */
+    pointer-events:none;
+  }
+  .active-hpbar-bottom .hp-bar-wrap{ flex:1; height:9px; margin:0; background:#1a2a1a; border:1px solid #2a4a2a; border-radius:4px; }
+  .active-hpbar-bottom .active-hp-text{ font-size:.72rem; color:#cfe; white-space:nowrap; font-weight:600; text-shadow:0 1px 2px rgba(0,0,0,.7); }
+  /* 把進化按鈕往上挪，避免壓到底部血條 */
+  .active-card{ padding-bottom:1.95rem !important; }
+  .evo-wrap{ bottom:1.85rem !important; }
 
   /* ── v2.129：zoom-modal 內的 zoom-img 點擊全螢幕放大 ── */
   .zoom-img-btn{ position:relative; display:block; background:none; border:none; padding:0; cursor:zoom-in; }

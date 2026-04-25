@@ -1,9 +1,48 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.129)  
+> 最後更新：2026-04-25 (v2.130)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.130 — 戰鬥場血條移到底部 + 牌庫搜尋 log 對對手隱藏卡名
+
+### Leon 回報
+
+**Bug A — 我方戰鬥寶可夢血條不見**
+- 我方回合時血條被 UI（特性按鈕等）覆蓋；對手的血條仍可見。
+- 原因：`.active-info` 內 hp-bar-wrap 排在中間，被後面渲染的 ability-btn / chip 遮擋（特別是有特性按鈕時）。
+- 解法：把血條 + HP 文字從 `.active-info` 拉出來，做成獨立的 `.active-hpbar-bottom` 浮層，**絕對定位在 .active-card 底部**（z-index:3 高於 .active-info=2）。雙方統一使用同一容器 → 介面一致。
+- 配套：.active-card padding-bottom 1.95rem 留空間；.evo-wrap bottom 提到 1.85rem 避免壓到血條。
+
+**Bug B — 自牌庫搜尋類招式 log 對對手洩露卡名**
+- 例：忍之利刃、招集之術、search-generic-to-hand 等，會寫「搜到 氣球 加入手牌」。對手看到等於在看你的手牌牌型。
+- 解法：新增 LogEntry.privateMessage 欄位 + addPrivateLog helper。
+  - `message` = 公開版（脫敏，例「搜到 1 張卡加入手牌」）
+  - `privateMessage` = 私有版（卡名俱全，例「搜到 氣球 加入手牌」）
+  - UI 渲染：`entry.privateMessage && entry.playerIndex === myIdx` ? privateMessage : message
+  - 匯出 log 也走相同規則（自己匯出能看私有；別人匯出（理論上不會發生）只看公開）
+
+### 修改的 resolver
+- `greninja-ninja-blade-search`（忍之利刃）→ `addPrivateLog`
+- `froakie-summon-tactics`（招集之術）→ `addPrivateLog`
+- `search-generic-to-hand`（通用牌庫搜尋）→ `addPrivateLog`
+- 預期未來「對對手洩露卡名」的 resolver 都應該改用 `addPrivateLog`
+
+### 變更檔案
+- `src/lib/game/types.ts`：LogEntry 新增 `privateMessage?: string`
+- `src/lib/game/effects/_shared.ts`：新 helper `addPrivateLog(state, privateMsg, publicMsg, playerIdx)`
+- `src/lib/game/effects.ts`：import + re-export `addPrivateLog`；3 個牌庫搜尋 resolver 改用
+- `src/routes/game/+page.svelte`：
+  - .active-card 內 HP 條 + HP 文字搬到新 .active-hpbar-bottom 容器（雙方）
+  - log 渲染 + 匯出 都用 `entry.privateMessage && entry.playerIndex === myIdx ? privateMessage : message`
+  - CSS：.active-hpbar-bottom 絕對底部、padding-bottom 留空、evo-wrap 上移
+- `src/lib/version.ts`：2.129 → 2.130
+
+### 驗證
+- npm run build：✓ 13.94s 通過、0 error
 
 ---
 

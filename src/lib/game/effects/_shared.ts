@@ -289,6 +289,30 @@ export function addLog(
   };
 }
 
+/**
+ * v2.130：寫一筆「私有/公開分流」log。
+ * - 玩家 playerIdx 看 privateMsg（含具體卡名等敏感資訊）
+ * - 對手 / 系統看 publicMsg（脫敏版，例：「搜到 一張卡片」）
+ *
+ * 用途：自牌庫搜尋（忍之利刃 / 招集之術…）、查看牌庫頂等不應對對手揭露具體卡的場景。
+ */
+export function addPrivateLog(
+  state: GameState,
+  privateMsg: string,
+  publicMsg: string,
+  playerIdx: 0 | 1
+): GameState {
+  return {
+    ...state,
+    log: [...state.log, {
+      turn: state.turn,
+      playerIndex: playerIdx,
+      message: publicMsg,
+      privateMessage: privateMsg,
+    }],
+  };
+}
+
 export function drawCards(state: GameState, idx: 0 | 1, count: number): GameState {
   return updatePlayer(state, idx, (p) => {
     const n = Math.min(count, p.deck.length);

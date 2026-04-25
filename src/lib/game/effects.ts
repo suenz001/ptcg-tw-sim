@@ -31,7 +31,7 @@ import {
   // Public
   canPlayTrainer,
   // Helpers
-  shuffle, updatePlayer, addLog,
+  shuffle, updatePlayer, addLog, addPrivateLog,
   drawCards, discardHand, returnHandToDeck,
   withPending,
   clearActiveEffects,
@@ -8713,7 +8713,11 @@ regR('search-generic-to-hand', (st, idx, iids, _params, pool) => {
   }
   const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
   const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  st = addLog(st, `搜到：${names} 加入手牌（牌庫已重洗）`, idx);
+  // v2.130：對手看不到具體卡名（對手看 「搜到 X 張卡加入手牌」）
+  st = addPrivateLog(st,
+    `搜到：${names} 加入手牌（牌庫已重洗）`,
+    `搜到 ${chosen.length} 張卡加入手牌（牌庫已重洗）`,
+    idx);
   return updatePlayer(st, idx, (p) => {
     const picked = p.deck.filter(c => iids.includes(c.iid));
     const rest = p.deck.filter(c => !iids.includes(c.iid));
@@ -10050,7 +10054,11 @@ regR('greninja-ninja-blade-search', (state, aIdx, selectedIids, _params, pool) =
   }));
   if (picks.length > 0) {
     const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    s = addLog(s, `忍之利刃：搜到 ${names} 加入手牌，重洗牌庫`, aIdx);
+    // v2.130：自牌庫搜尋具體卡名僅給自己看；對手看脫敏版
+    s = addPrivateLog(s,
+      `忍之利刃：搜到 ${names} 加入手牌，重洗牌庫`,
+      `忍之利刃：搜到 ${picks.length} 張卡加入手牌，重洗牌庫`,
+      aIdx);
   } else {
     s = addLog(s, '忍之利刃：未選卡，重洗牌庫', aIdx);
   }
@@ -10222,10 +10230,16 @@ regR('froakie-summon-tactics', (state, aIdx, selectedIids, _params, pool) => {
     deck: shuffle(p.deck.filter(c => !selectedIids.includes(c.iid))),
     hand: [...p.hand, ...picks],
   }));
-  const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  s = addLog(s, picks.length > 0
-    ? `招集之術：搜到 ${picks.length} 張寶可夢加入手牌（${names}），重洗牌庫`
-    : '招集之術：未選卡，重洗牌庫', aIdx);
+  if (picks.length > 0) {
+    const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    // v2.130：對手看不到具體卡名
+    s = addPrivateLog(s,
+      `招集之術：搜到 ${picks.length} 張寶可夢加入手牌（${names}），重洗牌庫`,
+      `招集之術：搜到 ${picks.length} 張寶可夢加入手牌，重洗牌庫`,
+      aIdx);
+  } else {
+    s = addLog(s, '招集之術：未選卡，重洗牌庫', aIdx);
+  }
   return s;
 });
 
