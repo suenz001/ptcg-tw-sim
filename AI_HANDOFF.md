@@ -1,9 +1,55 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.151)  
+> 最後更新：2026-04-25 (v2.152)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.152 — SV-P 4+5 張誤判 G 標卡片移除（TW 官網系統性錯誤）
+
+### Leon 回報
+flagged 兩批共 9 張 SV-P 卡的 regulationMark 應是 G（賽制外）但被 v2.151 scraper 標成 I/J：
+
+| 第 1 批（SV-P-I 4 張）| 第 2 批（SV-P-J 5 張）|
+|---|---|
+| 014/SV-P 寶可夢交替 | 013/SV-P 精靈球 |
+| 092/SV-P 寶可夢交替 | 249/SV-P 能量輸送 |
+| 104/SV-P 神奇糖果 | 250/SV-P 傷藥 |
+| 178/SV-P 老大的指令 | 251/SV-P 粉碎之錘 |
+| | 254/SV-P 寶可夢捕捉器 |
+
+### 根因
+`scripts/scrape/parse-card.js` 使用 `<span class="alpha">` 抓 regulationMark，但 **TW 官網對 SV-P 老 promo 系統性錯標**：alpha class 會顯示「最新 era 的 mark」而不是真的 mark。
+
+實證：
+- 真 G 標卡（id 7800）→ alpha=G ✓
+- Leon 確認 G 標卡（id 7813/10114/10522/11522/7812/13120-13125）→ alpha=I 或 J ❌
+
+換句話說：scraper 對舊 set / 大部分 set 都正確，但 SV-P 這個跨多 era 的 promo set 是 TW 官網 bug 黑點。
+
+### 處理
+直接從卡池移除這 9 張（與 G 標卡一律不進 Standard pool 的 v2.151 政策一致）：
+- SV-P-I.json：30 → 26 張
+- SV-P-J.json：5 → 0 張 → **整個檔案刪除**
+- index.json：移除 SV-P-J entry，SV-P-I count 改 26
+
+### 風險
+SV-P-I 剩 26 張可能還有少數 mis-tag — 老 promo 的 collectorNumber < 200 多數應該是 G。Leon 之後若再發現可繼續手動 flag。
+
+scraper 邏輯不改 — 對其他 set 都對，只 SV-P 例外。註解在 commit message 說明 TW 系統性錯誤。
+
+### 驗證
+- pool 4009 → 4000（-9 張）
+- `npm run build` ✓
+- `scripts/sim-sandbox.mjs 4` ✓ 4 局 0 bug、28 preset decks 全 OK
+
+### 改動檔案
+- `src/lib/version.ts` — 2.151 → 2.152
+- `static/cards/SV-P-I.json` — 移除 4 張誤判
+- `static/cards/SV-P-J.json` — 刪除整檔（全 5 張誤判）
+- `static/cards/index.json` — 更新 SV-P-I count + 移除 SV-P-J entry
 
 ---
 
