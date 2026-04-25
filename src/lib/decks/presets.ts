@@ -1058,6 +1058,46 @@ const FLAREON_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/** 大吾的巨金怪 預組（60 張）— v2.150 Leon 提供卡表（SVOD starter） */
+const STEVEN_METAGROSS_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_steven_metagross__',
+  name: '大吾的巨金怪',
+  entries: [
+    // Pokemon 22
+    { cardId: '12586', count: 4 }, // 大吾的鐵啞鈴 (SVOD 006/020)
+    { cardId: '12587', count: 2 }, // 大吾的金屬怪 (SVOD 007/020)
+    { cardId: '12588', count: 3 }, // 大吾的巨金怪ex (SVOD 008/020)
+    { cardId: '14345', count: 1 }, // 波加曼 (M2 027/080)
+    { cardId: '14376', count: 1 }, // 帝王拿波ex (M2 058/080)
+    { cardId: '14779', count: 2 }, // 蓋諾賽克特ex (M2a 119/193)
+    { cardId: '18031', count: 1 }, // 超級盔甲鳥ex (M3 054/080)
+    { cardId: '14003', count: 1 }, // 超級大嘴娃ex (M1L 046/063)
+    { cardId: '14004', count: 1 }, // 帝牙盧卡 (M1L 047/063)
+    { cardId: '16758', count: 2 }, // 莉莉艾的皮皮ex (MC 287/742) — 妖精領域
+    { cardId: '16783', count: 1 }, // 拉帝亞斯ex (MC 312/742) — 天空徑線
+    { cardId: '18452', count: 1 }, // 代歐奇希斯 (M4 032/083)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061/080) — 殺手鐧捕捉
+    // Items 15
+    { cardId: '17119', count: 3 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17126', count: 3 }, // 神奇糖果 (MC 655/742)
+    { cardId: '17111', count: 2 }, // 能量回收器 (MC 640/742)
+    { cardId: '17141', count: 1 }, // 夜間擔架 (MC 670/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17158', count: 1 }, // 英雄斗篷 (MC 687/742) Tool ACE SPEC
+    // Supporters 13
+    { cardId: '17200', count: 3 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '12558', count: 3 }, // 小剛的發掘 (SV9 096/100)
+    { cardId: '17205', count: 3 }, // 火箭隊的拉姆達 (MC 734/742)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724/742)
+    { cardId: '17175', count: 1 }, // 空手道王的演練 (MC 704/742)
+    // Energy 10
+    { cardId: '17219', count: 5 }, // 基本【鋼】能量 (MC MET)
+    { cardId: '17220', count: 5 }, // 基本【超】能量 (MC PSY)
+  ],
+};
+
 /** 祭典樂舞 預組（60 張）— v2.148 Leon 提供卡表 */
 const FESTIVAL_LEAD_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_festival_lead__',
@@ -1135,6 +1175,7 @@ export const PRESET_DECKS: Deck[] = [
   { ...HONEY_SERPERIOR_DECK, updatedAt: 0 },
   { ...FLAREON_DECK, updatedAt: 0 },
   { ...FESTIVAL_LEAD_DECK, updatedAt: 0 },
+  { ...STEVEN_METAGROSS_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */

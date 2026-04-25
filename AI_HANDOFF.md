@@ -1,9 +1,46 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.149)  
+> 最後更新：2026-04-25 (v2.150)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.150 — 大吾的巨金怪 preset + 3 個特性實裝
+
+### Preset：大吾的巨金怪（SVOD starter, 60 張）
+Leon 提供卡表，主軸是 SVOD 起始牌組大吾的鐵啞鈴 → 大吾的金屬怪 → 大吾的巨金怪ex 進化鏈 + 蓋諾賽克特ex / 帝王拿波ex / 超級盔甲鳥ex / 超級大嘴娃ex / 帝牙盧卡 / 代歐奇希斯 / 拉帝亞斯ex 等多核心，搭 5 鋼 5 超能量。
+
+### 3 個新特性實裝
+
+#### 皇帝之勢（帝王拿波ex M2 058）
+卡面：「這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。」
+實作：在 `effects.ts` 的 `hasEffectShield(inst, pool)` helper 加新規則 — 若 inst.cardId 對應的卡有 abilities 含 '皇帝之勢' → return true。
+與薄霧能量同類，所有 statusPost / damageCounterPost 等對手招式效果在施加前都會 check 此 shield。
+
+#### 金屬信號（蓋諾賽克特ex）
+卡面：「在自己的回合時可使用 1 次。從自己的牌庫選擇最多 2 張【鋼】屬性的進化寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。」
+實作：`lopunny_serperior_flareon_festival.ts` 加 regA — gate 牌庫有【鋼】Stage1/Stage2 → 開 deck-search filter='Stage1Or2:Metal' max=2，重用 search-to-hand-reshuffle resolver。
+
+#### X啟動（大吾的巨金怪ex）
+卡面：「在自己的回合時可使用 1 次。從自己的牌庫選擇『基本【超】能量』卡與『基本【鋼】能量』卡最多各 1 張，以任意方式附於自己的【超】或者【鋼】寶可夢身上。並且重洗牌庫。」
+實作：兩步串接 pending：
+1. Step 1：deck-search filter='Energy:Psychic' max=1（params.titleOverride='X啟動 (1/2)：選 ≤1 張基本【超】能量'）
+2. Step 2：deck-search filter='Energy:Metal' max=1
+3. resolver `commitMetagrossEnergy`：把選的能量自動分配到自己場上的【超】或【鋼】寶可夢（active 優先，否則 bench 第 1 隻）；重洗牌庫
+4. 簡化：自動分配，不開額外 pending 讓玩家挑目標（與其他類似 pattern 一致）
+
+### 驗證
+- `npm run build` ✓ 15.35s
+- `node scripts/sim-sandbox.mjs 16` ✓ 16 局 0 bug、28 preset decks 全 OK
+- `audit-data.mjs` Pattern C — 訓練家 0 unimplemented；特性僅剩 3 inline-only false positive（劇毒支配/天空徑線/影藏）
+
+### 改動檔案
+- `src/lib/version.ts` — 2.149 → 2.150
+- `src/lib/decks/presets.ts` — 大吾的巨金怪 DECK + PRESET_DECKS
+- `src/lib/game/effects.ts` — `hasEffectShield` 加 '皇帝之勢' rule
+- `src/lib/game/effects/cards/lopunny_serperior_flareon_festival.ts` — 新 regA × 2 + 新 regR × 3 + commitMetagrossEnergy helper
 
 ---
 

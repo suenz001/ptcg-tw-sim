@@ -1394,8 +1394,10 @@ function hasEffectShield(inst: CardInstance | null, pool: Map<string, Card>): bo
   if (!inst) return false;
   // 薄霧能量 — 無屬性條件，附了就免疫
   if (inst.energyAttached.some(e => pool.get(e.cardId)?.name === '薄霧能量')) return true;
-  // 硬岩【鬥】能量 — 限【鬥】寶可夢
+  // v2.150 皇帝之勢（帝王拿波ex）— 寶可夢本身的特性，不會受到對手招式效果的影響
   const card = pool.get(inst.cardId);
+  if (card?.abilities?.some(a => a.name === '皇帝之勢')) return true;
+  // 硬岩【鬥】能量 — 限【鬥】寶可夢
   if (!card || card.pokemonType !== 'Fighting') return false;
   return inst.energyAttached.some(e => {
     const ec = pool.get(e.cardId);
