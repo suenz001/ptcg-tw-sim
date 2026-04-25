@@ -1,9 +1,48 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.146)  
+> 最後更新：2026-04-25 (v2.147)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.147 — 零之大空洞失效時玩家自選棄置（不再自動丟尾端）
+
+### Leon 回報
+> 零之大空洞效果失去的時候，應該由玩家自己選擇要丟棄哪幾隻多餘的寶可夢。
+> 例如玩家有 7 隻備戰寶可夢，失去效果時應由玩家自選哪 2 隻丟棄（丟棄不算昏厥，對手不獲得獎賞）。
+
+### 修法
+`src/lib/game/engine.ts` 的 `enforceBenchLimit` 從「自動丟尾端」改為「設 pending 由玩家選」：
+
+1. 若 `state.pendingSelection` 已存在 → return state（避免覆蓋既有 pending）
+2. 找順序中（activePlayerIndex 先，opponent 後）第一個 `bench.length > limit` 的玩家
+3. 設 `pendingSelection`：
+   - `type: 'bench-choose'`
+   - `actorIdx: idx` / `sourcePlayerIdx: idx`
+   - `minCount = maxCount = excess`（必須剛好選 N 隻）
+   - `effectKey: 'enforce-bench-limit'`
+   - `params.titleOverride: 零之大空洞效果失去：選 N 隻備戰寶可夢丟棄（剩 M 隻）`
+4. 玩家在 modal 選 N 隻 → resolver `enforce-bench-limit` 把選的搬到棄牌區（含附加能量、tool、進化下層卡）
+5. applyAction 末尾再 call `enforceBenchLimit`；若另一方還超過 → 再開一個 pending（自動串接）
+
+### 配套
+- **resolver** `enforce-bench-limit`（engine.ts 內 `RESOLVERS.set`）— 移 bench → discard，log「零之大空洞效果失去：X 將備戰多餘的 N 隻寶可夢（XX、YY）丟棄」
+- **AI** `ai.ts` autoResolveSelection 的 `'bench-choose'` 升級：`sel.minCount > 1` 時依「受傷越多 + HP 越低」排序選最沒價值的 N 隻
+- **UI** confirm 按鈕原本就有 `picked.size >= minCount && <= maxCount` gate（line 1182-1183），不需動
+
+### 注意：丟棄不是昏厥
+卡面寫「將備戰區的寶可夢丟棄」— 是直接搬到棄牌區，**不會給對手獎賞牌**（對比 KO 流程會 `pendingPrizes++`）。resolver 只搬 bench → discard，不動獎賞。
+
+### 驗證
+- `npm run build` ✓ 15.36s
+- `node scripts/sim-sandbox.mjs 8` ✓ 8 局 0 bug
+
+### 改動檔案
+- `src/lib/version.ts` — 2.146 → 2.147
+- `src/lib/game/engine.ts` — `enforceBenchLimit` 重寫 + 新 resolver `enforce-bench-limit`
+- `src/lib/game/ai.ts` — `bench-choose` 多選 fallback
 
 ---
 

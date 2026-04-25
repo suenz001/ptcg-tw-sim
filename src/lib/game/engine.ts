@@ -55,31 +55,66 @@ export function getBenchLimit(state: GameState, idx: 0 | 1, pool: Map<string, Ca
   return hasTera ? 8 : 5;
 }
 
-// 把超出當前 bench 上限的備戰寶可夢丟到棄牌區（卡面：當零之大空洞被換掉/失去太晶時觸發）。
-// 由 applyAction 末尾呼叫，自動補正。卡面要求「持有人先丟」— sim 用 activePlayerIndex 順序。
+// 當零之大空洞被換掉/失去太晶時，玩家的備戰上限掉回 5；超出的部分要由玩家自選棄置。
+// 由 applyAction 末尾呼叫。卡面要求「持有人先丟」— sim 用 activePlayerIndex 順序。
+//
+// v2.147 — 改為設 pending（玩家自選），不再自動棄尾端。
+//   流程：
+//     1) 若 state 已有 pendingSelection → 等下次 applyAction 再 trigger（避免 race）
+//     2) 找順序中第一個超過上限的玩家 → 設 bench-choose pending（minCount=maxCount=excess）
+//     3) 玩家解 pending → resolver 'enforce-bench-limit' 把選的搬棄牌區
+//     4) applyAction 末尾再 call enforceBenchLimit；若另一方還超過 → 再開一個 pending
+//   結果：兩邊都需棄時自動串接，且持有人（這裡用 activePlayerIndex 近似）先處理。
 function enforceBenchLimit(state: GameState, pool: Map<string, Card>): GameState {
   if (state.phase !== 'playing') return state;
-  let s = state;
-  const order: (0 | 1)[] = [s.activePlayerIndex, (1 - s.activePlayerIndex) as 0 | 1];
+  if (state.pendingSelection) return state;  // 已有 pending — 等
+  const order: (0 | 1)[] = [state.activePlayerIndex, (1 - state.activePlayerIndex) as 0 | 1];
   for (const idx of order) {
-    const limit = getBenchLimit(s, idx, pool);
-    const p = s.players[idx];
+    const limit = getBenchLimit(state, idx, pool);
+    const p = state.players[idx];
     if (p.bench.length <= limit) continue;
-    // 多餘的從尾端開始丟（玩家通常會先選擇 — 自動丟為 sim/AI fallback）
-    const drop = p.bench.slice(limit);
-    const keep = p.bench.slice(0, limit);
-    const discardAdds: CardInstance[] = [];
-    for (const inst of drop) {
-      discardAdds.push(inst, ...inst.energyAttached, ...(inst.toolAttached ? [inst.toolAttached] : []), ...(inst.evolvedFromStack ?? []));
-    }
-    const players = [...s.players] as [PlayerState, PlayerState];
-    players[idx] = { ...p, bench: keep, discard: [...p.discard, ...discardAdds] };
-    s = { ...s, players };
-    const dropNames = drop.map(d => pool.get(d.cardId)?.name ?? '?').join('、');
-    s = addLog(s, `零之大空洞效果失去：${players[idx].name} 將備戰多餘的 ${drop.length} 隻寶可夢（${dropNames}）丟棄`, idx);
+    const excess = p.bench.length - limit;
+    return {
+      ...state,
+      pendingSelection: {
+        type: 'bench-choose',
+        actorIdx: idx,
+        sourcePlayerIdx: idx,
+        filter: '',
+        minCount: excess,
+        maxCount: excess,
+        effectKey: 'enforce-bench-limit',
+        params: {
+          titleOverride: `零之大空洞效果失去：選 ${excess} 隻備戰寶可夢丟棄（剩 ${limit} 隻）`,
+        },
+      },
+    };
   }
-  return s;
+  return state;
 }
+
+// v2.147 — enforce-bench-limit resolver：把選的 bench iid 搬到棄牌區。
+RESOLVERS.set('enforce-bench-limit', (state, actorIdx, selectedIids, _params, pool) => {
+  const p = state.players[actorIdx];
+  const drop = p.bench.filter(c => selectedIids.includes(c.iid));
+  if (drop.length === 0) return state;
+  const keep = p.bench.filter(c => !selectedIids.includes(c.iid));
+  const discardAdds: CardInstance[] = [];
+  for (const inst of drop) {
+    discardAdds.push(
+      inst,
+      ...inst.energyAttached,
+      ...(inst.toolAttached ? [inst.toolAttached] : []),
+      ...(inst.evolvedFromStack ?? []),
+    );
+  }
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[actorIdx] = { ...p, bench: keep, discard: [...p.discard, ...discardAdds] };
+  let s: GameState = { ...state, players };
+  const dropNames = drop.map(d => pool.get(d.cardId)?.name ?? '?').join('、');
+  s = addLog(s, `零之大空洞效果失去：${players[actorIdx].name} 將備戰多餘的 ${drop.length} 隻寶可夢（${dropNames}）丟棄`, actorIdx);
+  return s;
+});
 
 // ── 火箭隊的監視塔（【無】寶可夢特性無效）── 輔助判定 ────────────────────────
 // 當場上活動場地卡為 ROCKET_WATCHTOWER_STADIUMS 所列競技場卡時，

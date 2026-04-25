@@ -332,7 +332,23 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         ? actorPlayer.bench.filter(c => validIids.includes(c.iid))
         : actorPlayer.bench;
       if (bench.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
-      // 選 HP 剩最少（最危險的）給支援，否則選最多 HP 的
+      // v2.147 — 多選時（如零之大空洞失效棄置）：依照「價值低」排序選 minCount 隻丟棄
+      //   價值低 = 受傷越多 + HP 上限越低 + 不是 ex/超級進化
+      const need = Math.max(1, sel.minCount ?? 1);
+      if (need > 1) {
+        const sorted = [...bench].sort((a, b) => {
+          const ca = pool.get(a.cardId);
+          const cb = pool.get(b.cardId);
+          const remA = (ca?.hp ?? 0) - a.damage;
+          const remB = (cb?.hp ?? 0) - b.damage;
+          // 越受傷越先丟
+          if (remA !== remB) return remA - remB;
+          // 等價值再比 HP（HP 低先丟）
+          return (ca?.hp ?? 0) - (cb?.hp ?? 0);
+        });
+        return { type: 'RESOLVE_SELECTION', selectedIids: sorted.slice(0, need).map(c => c.iid) };
+      }
+      // 單選：選 HP 剩最少（最危險的）給支援
       const pick = bench[0];
       return { type: 'RESOLVE_SELECTION', selectedIids: [pick.iid] };
     }
