@@ -713,7 +713,22 @@
     if (!shouldAct) return;
 
     const action = getAIAction(game!, pool, aiPlayerIndex);
-    if (!action) return;
+    if (!action) {
+      // v2.131：AI 應該行動但 getAIAction 拿不到 action — 防呆：在主階段就強制 END_TURN
+      //   避免 AI 卡住（曾發生於某 corner case：扭轉乾坤後 AI 沒下一步）。
+      const g = game!;
+      if (g.phase === 'playing'
+          && g.activePlayerIndex === aiPlayerIndex
+          && g.turnPhase === 'main'
+          && !g.pendingSelection
+          && (g.pendingPrizes ?? 0) === 0) {
+        console.warn('[AI fallback] getAIAction returned null in main phase → forcing END_TURN');
+        aiThinking = true;
+        dispatch({ type: 'END_TURN' } as any);
+        scheduleAI();
+      }
+      return;
+    }
 
     aiThinking = true;
     dispatch(action as any);

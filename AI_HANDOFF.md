@@ -1,9 +1,44 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.130)  
+> 最後更新：2026-04-25 (v2.131)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.131 — N的索羅亞克ex 交易 gate 修 + AI 卡住 fallback
+
+### Leon 回報
+
+**Bug A — 交易 gate 條件錯誤 + 不滿足條件不該顯示按鈕**
+卡面（爬蟲 effect 欄）：「在自己的回合，若將自己的 1 張手牌丟棄，則可使用 1 次。從自己的牌庫抽出 2 張卡。」
+
+只需要丟 1 張，所以手牌 ≥1 就能用。原實裝寫 `< 2` 是錯的（多算 1），所以 AI 在手牌剛好 1 張時跳「手牌不足（需要 ≥2）」。修法：
+- effects/cards/six_decks.ts：`hand.length < 2` → `=== 0`，且 log 改為「手牌為空，無法丟棄」
+- engine.ts getUsableAbilities：加 gate（`hand.length === 0 || deck.length === 0` → 隱藏按鈕；UI 自然不出現，AI 也不會嘗試）
+
+**Bug B — AI 卡住（含羞苞 + 扭轉乾坤後）**
+重現步驟（Leon 提供 log）：
+- 交易（棄 1 抽 2）✓
+- 好友寶芬（搜含羞苞到備戰）✓
+- 扭轉乾坤（抽 3）✓
+- 然後 AI 停在「⏳ 等待 🤖 AI 對手 行動…」
+
+根因（推測）：tickAI() 收到 `getAIAction()` 回 `null` 卻沒任何 fallback。`null` 表示「無事可做」，但若這時 AI 仍是 activePlayer/no pending/no prizes，沒人會再推 AI — $effect 也不會 retrigger（state 沒變）。AI 永遠卡在這裡。
+
+修法（防呆）：tickAI 中若 `action` 為 null 但仍 shouldAct（main phase + activePlayer === ai + 無 pending/prizes），強制 dispatch `END_TURN`。同時 console.warn 留證據以便日後追根因。
+
+備註：這是 fallback 而非 root-cause 修，因為從 log 看不出 getAIAction 為何返回 null（可能是某 ability fn 後 turnPhase 異常、或 evolve/play_basic gate 邊界）。Leon 若再次遇到，可從 console 警告抓堆疊。
+
+### 變更檔案
+- `src/lib/game/effects/cards/six_decks.ts`：交易 gate `< 2` → `=== 0`
+- `src/lib/game/engine.ts`：getUsableAbilities 加 交易 gate（hand 0 / deck 0 都隱藏）
+- `src/routes/game/+page.svelte`：tickAI fallback END_TURN
+- `src/lib/version.ts`：2.130 → 2.131
+
+### 驗證
+- npm run build：✓ 14.54s 通過、0 error
 
 ---
 

@@ -254,8 +254,11 @@ regPre('超級甲賀忍蛙ex|忍者飛旋', (state, aIdx, pool) => {
 // ─── Abilities（寶可夢特性，regA 1/回合）────────────────────────────────────
 
 // N的索羅亞克ex｜交易 — 棄 1 手牌 → 抽 2
+//   卡面：「在自己的回合，若將自己的 1 張手牌丟棄，則可使用 1 次。從自己的牌庫抽出 2 張卡。」
+//   v2.131：原 gate 寫 `< 2` 是錯的（卡面只需 1 張可丟）；改為 `=== 0`。
+//          getUsableAbilities 也加同樣的 gate（無手牌或牌庫空就隱藏按鈕）。
 regA('N的索羅亞克ex', 0, (st, idx) => {
-  if (st.players[idx].hand.length < 2) return addLog(st, '交易：手牌不足（需要 ≥2）', idx);
+  if (st.players[idx].hand.length === 0) return addLog(st, '交易：手牌為空，無法丟棄', idx);
   if (st.players[idx].deck.length === 0) return addLog(st, '交易：牌庫為空', idx);
   st = addLog(st, '交易：選 1 張手牌丟棄 → 抽 2 張', idx);
   return withPending(st, {

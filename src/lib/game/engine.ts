@@ -3096,6 +3096,12 @@ export function getUsableAbilities(
         });
         if (!hasWaterInHand) return;
       }
+      // v2.131 交易（N的索羅亞克ex）：手牌需 ≥1（要棄 1 張）且 牌庫需 ≥1（要抽 2 但卡面用詞是「抽出 2 張卡」— 至少要能抽 1 張）。
+      //   卡面只需棄 1 張就能用。我們不卡 deck≥2，因為 PTCG 規則一般是「抽到沒抽為止」。
+      if (ab.name === '交易') {
+        if (player.hand.length === 0) return;
+        if (player.deck.length === 0) return;
+      }
       // 可達鴨｜濕氣：自身 KO 類特性被消除（不列入可用清單）
       if (SELF_KO_ABILITY_NAMES.has(ab.name) && isSelfKOEffectBlocked(state, pool)) return;
 
