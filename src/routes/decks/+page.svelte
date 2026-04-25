@@ -57,6 +57,10 @@
   let setFilter = $state<string>('');
   let markFilter = $state<'All' | 'H' | 'I' | 'J'>('All');
   let pickerPreview = $state<Card | null>(null);
+  // v2.129 全螢幕卡牌放大 — 鏡射 /cards lightbox：preview 內點圖即放大；列表 thumb 也可直接放大
+  let lightboxUrl = $state<string | null>(null);
+  function openLightbox(url: string) { lightboxUrl = url; }
+  function closeLightbox() { lightboxUrl = null; }
 
   // Text format modal
   let showTextModal = $state(false);
@@ -564,7 +568,11 @@
   function closePreview() { pickerPreview = null; }
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') closePreview();
+    if (e.key === 'Escape') {
+      // v2.129：先關 lightbox，再關 preview（疊加狀態）
+      if (lightboxUrl) { closeLightbox(); return; }
+      closePreview();
+    }
   }
 
   // Sum of the active deck, used for the running count in the header.
@@ -846,7 +854,10 @@
 
       <!-- Top: image + quick info -->
       <div class="pv-top">
-        <img class="pv-img" src={pv.imageUrl} alt={pv.name} />
+        <button class="pv-img-btn" type="button" onclick={() => openLightbox(pv.imageUrl)} title="點擊放大">
+          <img class="pv-img" src={pv.imageUrl} alt={pv.name} />
+          <span class="pv-zoom-hint">🔍</span>
+        </button>
 
         <div class="pv-info">
           <h2 class="pv-name">{pv.name}</h2>
@@ -1073,6 +1084,20 @@
         </div>
       {/if}
     </div>
+  </div>
+{/if}
+
+<!-- v2.129 全螢幕卡牌放大（鏡射 /cards lightbox 樣式）─────────────────────── -->
+{#if lightboxUrl}
+  <div
+    class="lightboxOverlay"
+    role="dialog"
+    aria-modal="true"
+    aria-label="放大卡牌圖片"
+    onclick={closeLightbox}
+  >
+    <img class="lightboxImg" src={lightboxUrl} alt="放大圖片" onclick={(e) => e.stopPropagation()} />
+    <button class="lightboxClose" onclick={closeLightbox} aria-label="關閉">×</button>
   </div>
 {/if}
 
@@ -1855,5 +1880,68 @@
     padding: 0.1rem 0.35rem;
     border-radius: 3px;
     font-size: 0.82rem;
+  }
+
+  /* v2.129：preview modal 內的卡圖點擊放大 */
+  .pv-img-btn {
+    position: relative;
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: zoom-in;
+  }
+  .pv-img-btn:hover .pv-zoom-hint { opacity: 1; }
+  .pv-zoom-hint {
+    position: absolute;
+    top: 0.4rem; right: 0.4rem;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.4rem;
+    font-size: 0.85rem;
+    opacity: 0.6;
+    pointer-events: none;
+    transition: opacity 0.12s;
+  }
+  /* v2.129：全螢幕放大 lightbox（與 /cards 一致） */
+  .lightboxOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    cursor: zoom-out;
+    padding: 1rem;
+  }
+  .lightboxImg {
+    max-width: min(600px, 95vw);
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: 12px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+    cursor: default;
+  }
+  .lightboxClose {
+    position: absolute;
+    top: 1rem;
+    right: 1.25rem;
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: #fff;
+    font-size: 2rem;
+    line-height: 1;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .lightboxClose:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
 </style>

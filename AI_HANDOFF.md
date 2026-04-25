@@ -1,9 +1,87 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.128)  
+> 最後更新：2026-04-25 (v2.129)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.129 — 分身連打 KO/弱抗修 + 能量「單位數」棄牌 + 全域卡牌放大 lightbox
+
+### Leon 回報 3 個 bug + 1 feature
+**Feature**：牌組編輯器 / 對戰場 點擊卡牌應能全螢幕放大（類似 /cards 卡牌資料庫的 lightbox）。
+
+**Bug A — 分身連打 對 火箭隊的狃拉、吉雉雞ex 各 120 後，狃拉沒昏厥（顯示 HP 0/80（傷害 130））**
+- 根因：v2.127 我寫的 `greninja-clone-strike-snipe` resolver 直接 `damage += dmg`，沒做 KO 流程（沒移到棄牌、沒累計 pendingPrizes）。狃拉本來就帶 10 傷害，+120 = 130 ≥ 80 應該 KO 但沒觸發。
+- 顯示 `HP 0/80（傷害 130）`：UI 把 max(0, hp - damage) 顯示為「剩餘 HP」、實際 damage 沒卡 0 ≥ hp 的 KO 流程。
+
+**Bug B — 分身連打 卡面說「對手 2 隻寶可夢各受 120 點傷害。[在備戰區不計算弱點・抵抗力。]」**
+- 我之前實作成「全部不計弱抗」是錯的。
+- 正確：戰鬥場那隻仍計算弱抗；備戰位的才不計算。
+
+**Bug C — 分身連打 棄能量數計算**
+- 卡面：「棄 2 個能量」。Leon 解讀：1 張燃火能量（附於進化視為 3 顆無能量）就足以滿足「2 個」，不必再棄第二張。
+- 廣義規則：適用所有「棄 N 個能量」類招式 — UI 累計能量「單位數」而非「張數」。
+
+---
+
+### 修法
+
+#### 1) 重寫分身連打 resolver：`clone-strike-multi-hit`（effects.ts 通用化）
+新 resolver 走完整 KO 流程：
+- 對每個 selectedIid 逐一處理（含 active 跟 bench）
+- bench：先過 `resolveBenchGuard`（對戰圓形 / 花之帷幔等防護）；不套用弱抗
+- active：套用弱抗 ×2（手動 mirror engine.ts 的 weakness 計算）；無 skipDef 旗標
+- 每隻計 `newDmg = target.damage + dmg`、比對 `effectiveHPInline(target)`：
+  - 若 KO → `target` + 附加能量 + tool + 進化堆 → 棄牌；獎賞 `+1 / +2`（ex）
+  - active KO 後，若對手沒備戰 → `phase: 'game-over'` 直接結束
+  - 否則 → 寫回新 damage
+- log 標示「（戰鬥場）」/「（備戰位）」+ 實際傷害值
+
+#### 2) PreDiscardSpec 新增 `countMode?: 'cards' | 'units'`
+`effects/_shared.ts`：
+- `countMode: 'units'` → UI 對 min/max 比對「能量單位數」而非張數
+- 新 helper `getEnergyDiscardUnits(energyCardId, hostInst, pool)` — 鏡射 engine 的特殊能量規則：
+  - 燃火能量 附於進化（Stage1/Stage2）→ 3，否則 1
+  - 火箭隊能量 → 2
+  - 其他特殊/基本能量 → 1
+- effects.ts re-export 給 UI 用
+
+#### 3) UI（+page.svelte）支援 units mode
+- `getDiscardableEnergies` 回傳結構新增 `hostInst: CardInstance` 給 UI 算 units
+- 新 `computePickedAmount(spec, picked, energies)` — units 模式累加 unit 數
+- `togglePreAttackEnergy`：units 模式檢查「加入這張會否超過 max units」
+- `confirmPreAttackDiscard`：用 amount 對 min/max 比對
+- modal 顯示：標示張數 + units（例「已選 1 張（= 3 個能量）」）；單張 unit > 1 在卡名後加「（3個）」
+
+#### 4) 分身連打 spec 改用 units
+```ts
+ATTACK_PRE_DISCARD_CHOICE.set('甲賀忍蛙ex|分身連打', {
+  min: 2, max: null, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+  countMode: 'units',
+});
+```
+（max=null 因 1 張燃火 = 3 units 可超過 2 也合理）
+
+#### 5) 全域卡牌放大 lightbox（/decks + /game）
+鏡射 /cards 的 lightboxOverlay/lightboxImg/lightboxClose 樣式：
+- `/decks`：preview modal 內 .pv-img 包成 button → 點擊開 lightbox
+- `/game`：zoom-modal 內 .zoom-img 包成 button → 點擊開 lightbox（z-index:9999 確保在 zoom-overlay 之上）
+- 兩處 Esc 都先關 lightbox，再關下層 modal
+- 點黑底或 ✕ 關閉
+
+---
+
+### 變更檔案
+- `src/lib/game/effects.ts`：分身連打 spec 改 countMode='units' / max=null；resolver 重寫為 `clone-strike-multi-hit`（通用 KO 流程 + active 套弱抗、bench skipWeakRes）
+- `src/lib/game/effects/_shared.ts`：PreDiscardSpec 加 `countMode`；新 helper `getEnergyDiscardUnits`
+- `src/routes/game/+page.svelte`：UI units mode、lightbox 狀態 / 樣式 / Esc 處理、zoom-img 點擊放大
+- `src/routes/decks/+page.svelte`：lightbox 狀態 / 樣式 / Esc、preview pv-img 點擊放大
+- `src/lib/version.ts`：2.128 → 2.129
+
+### 驗證
+- npm run build：✓ 14.88s 通過、0 error
 
 ---
 

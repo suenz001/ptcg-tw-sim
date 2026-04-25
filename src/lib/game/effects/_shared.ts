@@ -135,9 +135,48 @@ export interface PreDiscardSpec {
   scope: 'attacker' | 'any-own' | 'own-bench';
   baseDamage: number;
   damagePerEnergy: number;
+  /**
+   * v2.129：min/max 的計數方式。
+   * 'cards'（預設）：依玩家挑選的張數計算（過去行為）。
+   * 'units'：依「能量單位數」累加 — 1 張燃火能量（附於進化）= 3 個無能量；
+   *           1 張火箭隊能量 = 2 個。用於卡面寫「丟 N 個能量」的招式（如 分身連打）。
+   * UI 比對 picked 累計 unit 數對 min/max；engine pre fn 透過 action.discardedEnergyIids
+   * 仍照「卡張數」傳，需要 unit 倍率時自行解讀。
+   */
+  countMode?: 'cards' | 'units';
 }
 
 export const ATTACK_PRE_DISCARD_CHOICE = new Map<string, PreDiscardSpec>();
+
+/**
+ * v2.129：計算「丟棄這張能量卡」算幾個能量單位。
+ * 鏡射 engine.ts canAffordAttack 內的特殊能量 unit 規則（但限縮為「discard 視角」）：
+ * - 燃火能量 附於進化寶可夢（Stage1/Stage2）：3 個無能量；否則 1 個。
+ * - 火箭隊能量：2 個（=2 顆無能量）。
+ * - 稜鏡能量：1 個（卡面寫「視為 1 個所有屬性能量」— 屬性彈性，但只算 1 個）。
+ * - 古舊能量 / 新衝天能量 / 其他特殊能量：1 個。
+ * - 基本能量：1 個。
+ * - 找不到卡：fallback 1 個。
+ *
+ * 用於 PreDiscardSpec.countMode='units' 的招式（如 分身連打）— UI 把玩家挑中的能量
+ * 累加 unit 數對 spec.min/max 比對；不影響 engine 內 cost 匹配（後者已自有完整邏輯）。
+ */
+export function getEnergyDiscardUnits(
+  energyCardId: string,
+  hostInst: CardInstance | null,
+  pool: Map<string, Card>,
+): number {
+  const ec = pool.get(energyCardId);
+  if (!ec) return 1;
+  if (ec.name === '燃火能量') {
+    if (!hostInst) return 1;
+    const hc = pool.get(hostInst.cardId);
+    const stage = hc?.stage ?? hc?.subtype;
+    return (stage === 'Stage1' || stage === 'Stage2') ? 3 : 1;
+  }
+  if (ec.name === '火箭隊能量') return 2;
+  return 1;
+}
 
 /** pokémonName|abilityIndex → 效果函式 */
 export const ABILITY_EFFECTS = new Map<string, EffectFn>();

@@ -18,7 +18,7 @@
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS } from '$lib/game/effects';
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits } from '$lib/game/effects';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
   import { auth } from '$lib/firebase';
@@ -82,6 +82,10 @@
   // 跟 selectionPicked 分開：selectionPicked 是 toggle 集合（單次唯一），這裡是計數器
   let selectionCounts = $state<Record<string, number>>({});
   let zoomCard = $state<Card | null>(null);
+  // v2.129：全螢幕卡牌放大 lightbox（鏡射 /cards 樣式）— 從任何 zoom-img 或 cards 點擊觸發
+  let lightboxUrl = $state<string | null>(null);
+  function openLightboxImg(url: string) { lightboxUrl = url; }
+  function closeLightboxImg() { lightboxUrl = null; }
   let zoomInst = $state<CardInstance | null>(null);
   // 堆疊：之前開過的 zoom — 用於「返回上一層」按鈕
   let zoomStack = $state<Array<{ card: Card; inst: CardInstance | null }>>([]);
@@ -663,6 +667,8 @@
   }
   function onGlobalKey(e: KeyboardEvent) {
     if (e.key === 'Escape') {
+      // v2.129：lightbox 最上層，Esc 先關 lightbox
+      if (lightboxUrl) { closeLightboxImg(); return; }
       // 若 zoom 有堆疊，Escape 先彈回上一層，沒堆疊才全關
       if (zoomCard && zoomStack.length > 0) { popZoom(); return; }
       closeZoom(); floatingEvoMenu = null; floatingRetreatMenu = null;
@@ -1416,14 +1422,14 @@
   function cancelCopyAttack() { copyAttackPicker = null; }
 
   // 取得「可被挑選丟棄」的能量清單（依 scope 決定範圍）
-  function getDiscardableEnergies(spec: PreDiscardSpec): Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string }> {
+  function getDiscardableEnergies(spec: PreDiscardSpec): Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string; hostInst: CardInstance }> {
     if (!game || !activePlayer) return [];
-    const out: Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string }> = [];
+    const out: Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string; hostInst: CardInstance }> = [];
     const addFrom = (host: CardInstance | null | undefined) => {
       if (!host) return;
       const hc = getCard(host.cardId);
       const hname = hc?.name ?? '?';
-      for (const e of host.energyAttached) out.push({ iid: e.iid, cardId: e.cardId, ownerIid: host.iid, ownerName: hname });
+      for (const e of host.energyAttached) out.push({ iid: e.iid, cardId: e.cardId, ownerIid: host.iid, ownerName: hname, hostInst: host });
     };
     if (spec.scope === 'attacker') {
       addFrom(activePlayer.active);
@@ -1437,14 +1443,38 @@
     return out;
   }
 
+  /**
+   * v2.129：依 PreDiscardSpec.countMode 計算「目前已選的數量」（cards 或 units）。
+   * units 模式下，需要透過 getDiscardableEnergies 找到 host 才能正確處理燃火能量等特殊規則。
+   */
+  function computePickedAmount(spec: PreDiscardSpec, picked: Set<string>, energies: ReturnType<typeof getDiscardableEnergies>): number {
+    if (spec.countMode !== 'units') return picked.size;
+    let n = 0;
+    for (const e of energies) {
+      if (picked.has(e.iid)) n += getEnergyDiscardUnits(e.cardId, e.hostInst, pool);
+    }
+    return n;
+  }
+
   function togglePreAttackEnergy(iid: string) {
     if (!preAttackDiscard) return;
     const picked = new Set(preAttackDiscard.picked);
     if (picked.has(iid)) {
       picked.delete(iid);
     } else {
-      const { max } = preAttackDiscard.spec;
-      if (max !== null && picked.size >= max) return;
+      const { max, countMode } = preAttackDiscard.spec;
+      if (max !== null) {
+        if (countMode === 'units') {
+          // 預估若加入這張會否超過 max units
+          const energies = getDiscardableEnergies(preAttackDiscard.spec);
+          const target = energies.find(e => e.iid === iid);
+          const addUnits = target ? getEnergyDiscardUnits(target.cardId, target.hostInst, pool) : 1;
+          const cur = computePickedAmount(preAttackDiscard.spec, picked, energies);
+          if (cur + addUnits > max) return;
+        } else if (picked.size >= max) {
+          return;
+        }
+      }
       picked.add(iid);
     }
     preAttackDiscard = { ...preAttackDiscard, picked };
@@ -1453,8 +1483,10 @@
   function confirmPreAttackDiscard() {
     if (!preAttackDiscard) return;
     const { attackIndex, spec, picked } = preAttackDiscard;
-    if (picked.size < spec.min) return;
-    if (spec.max !== null && picked.size > spec.max) return;
+    const energies = getDiscardableEnergies(spec);
+    const amount = computePickedAmount(spec, picked, energies);
+    if (amount < spec.min) return;
+    if (spec.max !== null && amount > spec.max) return;
     const iids = [...picked];
     preAttackDiscard = null;
     dispatch(GameActions.attack(attackIndex, iids));
@@ -2976,27 +3008,32 @@
     {@const spec = preAttackDiscard.spec}
     {@const energies = getDiscardableEnergies(spec)}
     {@const pickedCount = preAttackDiscard.picked.size}
-    {@const minOk = pickedCount >= spec.min}
-    {@const maxOk = spec.max === null || pickedCount <= spec.max}
-    {@const estDmg = spec.baseDamage + pickedCount * spec.damagePerEnergy}
+    {@const pickedAmount = computePickedAmount(spec, preAttackDiscard.picked, energies)}
+    {@const isUnits = spec.countMode === 'units'}
+    {@const unit = isUnits ? '個' : '張'}
+    {@const minOk = pickedAmount >= spec.min}
+    {@const maxOk = spec.max === null || pickedAmount <= spec.max}
+    {@const estDmg = spec.baseDamage + pickedAmount * spec.damagePerEnergy}
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>⚡ {preAttackDiscard.attackName}：選擇要丟棄的能量</h3>
           <p class="sel-hint">
-            最少 {spec.min} 張{spec.max === null ? '（不限上限）' : `，最多 ${spec.max} 張`}
-            · 已選 {pickedCount} 張
+            最少 {spec.min} {unit}{spec.max === null ? '（不限上限）' : `，最多 ${spec.max} ${unit}`}
+            · 已選 {pickedCount} 張{isUnits ? `（= ${pickedAmount} 個能量）` : ''}
             {#if spec.damagePerEnergy > 0}· 預估傷害 <strong>{estDmg}</strong>{/if}
             <br/>範圍：{spec.scope === 'attacker' ? '僅攻擊方出場寶可夢身上的能量' : spec.scope === 'own-bench' ? '僅自己備戰寶可夢身上的能量' : '自己場上任一寶可夢身上的能量'}
+            {#if isUnits}<br/><small style="color:#888">註：1 張燃火能量（附進化）= 3 個無能量；1 張火箭隊能量 = 2 個無能量。</small>{/if}
           </p>
         </div>
         <div class="sel-grid">
           {#each energies as e (e.iid)}{@const ec = getCard(e.cardId)}
             {#if ec}
               {@const picked = preAttackDiscard.picked.has(e.iid)}
+              {@const eUnits = isUnits ? getEnergyDiscardUnits(e.cardId, e.hostInst, pool) : 1}
               <button class="sel-card" class:sel-picked={picked} onclick={() => togglePreAttackEnergy(e.iid)}>
                 <img src={ec.imageUrl} alt={ec.name}/>
-                <span class="sel-name">{ec.name}</span>
+                <span class="sel-name">{ec.name}{isUnits && eUnits > 1 ? `（${eUnits}個）` : ''}</span>
                 <span class="sel-hp">附於 {e.ownerName}</span>
                 {#if picked}<span class="sel-check">✓</span>{/if}
               </button>
@@ -3008,7 +3045,7 @@
         </div>
         <div class="sel-footer">
           <button class="btn-act primary" disabled={!minOk || !maxOk} onclick={confirmPreAttackDiscard}>
-            確定使用招式（丟 {pickedCount} 張）
+            確定使用招式（丟 {pickedCount} 張{isUnits ? `／${pickedAmount} 個能量` : ''}）
           </button>
           <button class="btn-act secondary" onclick={cancelPreAttackDiscard}>取消</button>
         </div>
@@ -3207,7 +3244,11 @@
         {/if}
         <button class="zoom-close" onclick={closeZoom}>✕</button>
         <div class="zoom-body">
-          <img src={zoomCard.imageUrl} alt={zoomCard.name} class="zoom-img"/>
+          <!-- v2.129：點擊 zoom-img 開全螢幕 lightbox -->
+          <button class="zoom-img-btn" type="button" onclick={() => openLightboxImg(zoomCard!.imageUrl)} title="點擊放大">
+            <img src={zoomCard.imageUrl} alt={zoomCard.name} class="zoom-img"/>
+            <span class="zoom-img-hint">🔍</span>
+          </button>
           <div class="zoom-info">
             <div class="zoom-name">{zoomCard.name}</div>
             <div class="zoom-badges">
@@ -3343,6 +3384,15 @@
           <div class="card-back draw-fly-back"><span class="card-back-mark">?</span></div>
         </div>
       {/each}
+    </div>
+  {/if}
+
+  <!-- v2.129：全螢幕卡牌放大 lightbox（鏡射 /cards 樣式）—— 從 zoom-img 點擊或 ImageButton 觸發 -->
+  {#if lightboxUrl}
+    <div class="lightbox-overlay" role="dialog" aria-modal="true" aria-label="放大卡牌圖片"
+      onclick={closeLightboxImg}>
+      <img class="lightbox-img" src={lightboxUrl} alt="放大圖片" onclick={(e)=>e.stopPropagation()}/>
+      <button class="lightbox-close" onclick={closeLightboxImg} aria-label="關閉">×</button>
     </div>
   {/if}
 
@@ -4202,4 +4252,16 @@
   .ai-toggle input{ cursor:pointer; accent-color:#8a4aee; width:16px; height:16px; }
   .ai-chip{ background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; animation:pulse 1s infinite alternate; }
   @keyframes pulse{ from{ opacity:.7; } to{ opacity:1; } }
+
+  /* ── v2.129：zoom-modal 內的 zoom-img 點擊全螢幕放大 ── */
+  .zoom-img-btn{ position:relative; display:block; background:none; border:none; padding:0; cursor:zoom-in; }
+  .zoom-img-btn .zoom-img{ display:block; }
+  .zoom-img-hint{ position:absolute; top:0.4rem; right:0.4rem; background:rgba(0,0,0,0.55); color:#fff; padding:0.15rem 0.4rem; border-radius:0.4rem; font-size:0.85rem; opacity:0.7; pointer-events:none; transition:opacity 0.12s; }
+  .zoom-img-btn:hover .zoom-img-hint{ opacity:1; }
+
+  /* ── v2.129：全螢幕 lightbox（鏡射 /cards 樣式，但 z-index 比 zoom-overlay 高） ── */
+  .lightbox-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.92); display:flex; align-items:center; justify-content:center; z-index:9999; cursor:zoom-out; padding:1rem; }
+  .lightbox-img{ max-width:min(600px,95vw); max-height:92vh; object-fit:contain; border-radius:12px; box-shadow:0 8px 40px rgba(0,0,0,0.6); cursor:default; }
+  .lightbox-close{ position:absolute; top:1rem; right:1.25rem; background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:2rem; line-height:1; width:2.5rem; height:2.5rem; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .lightbox-close:hover{ background:rgba(255,255,255,0.3); }
 </style>

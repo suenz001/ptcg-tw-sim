@@ -38,6 +38,7 @@ import {
   healResolver,
   sameEvoName,
   applyBenchPlaceSideEffects,
+  getEnergyDiscardUnits,
 } from './effects/_shared';
 
 // re-export helper 給 engine.ts / 其他 resolver 用
@@ -45,7 +46,7 @@ export { applyBenchPlaceSideEffects };
 
 // 為 engine.ts / +page.svelte 的 import 路徑維持相容：re-export
 export { TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS, canPlayTrainer, clearActiveEffects };
-export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE };
+export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits };
 export { BENCH_PLACE_TRIGGERS };
 export { SPECIAL_ENERGY_ATTACH };
 export type { ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec };
@@ -10056,9 +10057,13 @@ regR('greninja-ninja-blade-search', (state, aIdx, selectedIids, _params, pool) =
   return s;
 });
 
-// ── 3) 甲賀忍蛙ex (SV5a)｜分身連打 — 棄 2 能量 → 對手 2 隻寶可夢各 120 傷（不算弱抗）
+// ── 3) 甲賀忍蛙ex (SV5a)｜分身連打 — 棄 2 個能量 → 對手 2 隻寶可夢各 120 傷
+//   卡面：「對手的 2 隻寶可夢各受到 120 點傷害。[在備戰區不計算弱點・抵抗力。]」
+//   ＝ 戰鬥場那隻仍計算弱抗；備戰位才不計。
+//   v2.129：能量丟棄改用 'units' — 1 張燃火能量（附於進化）= 3 個無能量單位 → 1 張就達標。
 ATTACK_PRE_DISCARD_CHOICE.set('甲賀忍蛙ex|分身連打', {
-  min: 2, max: 2, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+  min: 2, max: null, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+  countMode: 'units',
 });
 regPre('甲賀忍蛙ex|分身連打', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('甲賀忍蛙ex|分身連打', (state, aIdx, pool) => {
@@ -10069,35 +10074,81 @@ regPost('甲賀忍蛙ex|分身連打', (state, aIdx, pool) => {
     return addLog(state, '分身連打：對手場上無寶可夢', aIdx);
   }
   const maxN = Math.min(2, all.length);
-  const s = addLog(state, `分身連打：選對手 ${maxN} 隻寶可夢，各受到 120 點傷害（不計弱抗）`, aIdx);
+  const s = addLog(state, `分身連打：選對手 ${maxN} 隻寶可夢，各 120 點傷害（戰鬥場計算弱抗、備戰位不計）`, aIdx);
   return withPending(s, {
     type: 'opp-poke-choose',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: maxN, maxCount: maxN,
-    effectKey: 'greninja-clone-strike-snipe',
-    params: { dmg: 120 },
+    effectKey: 'clone-strike-multi-hit',
+    params: { dmg: 120, label: '分身連打' },
   });
 });
-regR('greninja-clone-strike-snipe', (state, aIdx, selectedIids, params, pool) => {
-  const dmg = (params?.dmg as number) ?? 120;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const d = { ...players[dIdx] };
-  let names: string[] = [];
-  // active
-  if (d.active && selectedIids.includes(d.active.iid)) {
-    names.push(pool.get(d.active.cardId)?.name ?? '?');
-    d.active = { ...d.active, damage: d.active.damage + dmg };
-  }
-  d.bench = d.bench.map(b => {
-    if (selectedIids.includes(b.iid)) {
-      names.push(pool.get(b.cardId)?.name ?? '?');
-      return { ...b, damage: b.damage + dmg };
+// v2.129：通用「對所選任一寶可夢造成 dmg；戰鬥場套弱抗、備戰不計」resolver。
+//   完整 KO 流程（取獎、棄牌、game-over check）。
+//   也可給未來其他「對 N 隻寶可夢各造成傷害（在備戰區不計算弱抗）」的招式重用。
+regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
+  const baseDmg = (params?.dmg as number) ?? 0;
+  const label = (params?.label as string) ?? '招式';
+  if (baseDmg <= 0 || selectedIids.length === 0) return st;
+  let s = st;
+  const attacker = st.players[actorIdx].active;
+  const attackerCard = attacker ? pool.get(attacker.cardId) : null;
+  for (const iid of selectedIids) {
+    const dIdx = (1 - actorIdx) as 0 | 1;
+    const defender = s.players[dIdx];
+    const isActive = defender.active?.iid === iid;
+    const target = isActive ? defender.active! : defender.bench.find(c => c.iid === iid);
+    if (!target) continue;
+    const targetCard = pool.get(target.cardId);
+    // 備戰區守護：對戰圓形 / 花之帷幔 等
+    if (!isActive) {
+      const g = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-damage');
+      if (g.blocked) {
+        s = addLog(s, `${label}：${targetCard?.name ?? '?'} 因${g.reason}不受傷害`, actorIdx);
+        continue;
+      }
     }
-    return b;
-  });
-  players[dIdx] = d;
-  return addLog({ ...state, players }, `分身連打：對 ${names.join('、')} 各造成 ${dmg} 點傷害（不計弱抗）`, aIdx);
+    // 戰鬥場：套用弱點 ×2；備戰位：不計弱抗（卡面明示）
+    let dmg = baseDmg;
+    if (isActive
+        && attackerCard?.pokemonType
+        && targetCard?.weakness?.type
+        && attackerCard.pokemonType === targetCard.weakness.type) {
+      dmg *= 2;
+    }
+    const newDmg = target.damage + dmg;
+    const hp = effectiveHPInline(target, pool, s);
+    const players = [...s.players] as [PlayerState, PlayerState];
+    if (hp > 0 && newDmg >= hp) {
+      // KO：棄牌遷移 + 累計獎賞 + 移除位置
+      const ko: CardInstance[] = [
+        { ...target, damage: newDmg },
+        ...target.energyAttached,
+        ...(target.toolAttached ? [target.toolAttached] : []),
+        ...(target.evolvedFromStack ?? []),
+      ];
+      const prizeCount = isExCard(targetCard) ? 2 : 1;
+      const newDef = { ...defender, discard: [...defender.discard, ...ko] };
+      if (isActive) newDef.active = null;
+      else newDef.bench = defender.bench.filter(c => c.iid !== iid);
+      players[dIdx] = newDef;
+      s = { ...s, players, pendingPrizes: (s.pendingPrizes ?? 0) + prizeCount };
+      s = addLog(s, `${label}：對 ${targetCard?.name ?? '?'}（${isActive ? '戰鬥場' : '備戰位'}）造成 ${dmg} 點傷害 → 被擊倒！+${prizeCount} 張獎勵牌`, actorIdx);
+      // 戰鬥場昏厥且對手沒有備戰 → game over
+      if (isActive && newDef.bench.length === 0) {
+        s = { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+        return s;
+      }
+    } else {
+      const newDef = { ...defender };
+      if (isActive) newDef.active = { ...target, damage: newDmg };
+      else newDef.bench = defender.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
+      players[dIdx] = newDef;
+      s = { ...s, players };
+      s = addLog(s, `${label}：對 ${targetCard?.name ?? '?'}（${isActive ? '戰鬥場' : '備戰位'}）造成 ${dmg} 點傷害`, actorIdx);
+    }
+  }
+  return s;
 });
 
 // ── 4) 月月熊 赫月｜經驗法則 — 從手牌選最多 2 張基本【鬥】能量附給自己（剛上備戰才可用）
