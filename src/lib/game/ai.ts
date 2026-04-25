@@ -119,10 +119,32 @@ export function getAIAction(
   const atkIdxs = getAvailableAttacks(state, pool);
   if (atkIdxs.length > 0 && player.active) {
     const card = pool.get(player.active.cardId);
+    // v2.141 評估招式潛在傷害 — 處理「暗黑底牌」這類複製招式
+    //   原本只看 attacks[i].damage，但暗黑底牌 damage='' 會被低估為 0。
+    //   改為：暗黑底牌時，跨備戰所有 N寶可夢的招式找最強 damage 作為估值。
+    const estimateDamage = (atkIdx: number): number => {
+      const atk = card?.attacks?.[atkIdx];
+      if (!atk) return 0;
+      const printedDmg = parseInt(atk.damage ?? '0') || 0;
+      if (printedDmg > 0) return printedDmg;
+      // 暗黑底牌（N的索羅亞克ex）— 估算備戰最強招式
+      if (card?.name === 'N的索羅亞克ex' && atk.name === '暗黑底牌') {
+        let best = 0;
+        for (const b of player.bench) {
+          const bc = pool.get(b.cardId);
+          if (!bc?.name?.startsWith('N的') || bc.name === 'N的索羅亞克ex') continue;
+          for (const a of bc.attacks ?? []) {
+            if (a.name === '暗黑底牌') continue;
+            const d = parseInt(a.damage ?? '0') || 0;
+            if (d > best) best = d;
+          }
+        }
+        return best;
+      }
+      return 0;
+    };
     const best = atkIdxs.reduce((prev, cur) => {
-      const pDmg = parseInt(card?.attacks?.[prev]?.damage ?? '0') || 0;
-      const cDmg = parseInt(card?.attacks?.[cur]?.damage ?? '0') || 0;
-      return cDmg > pDmg ? cur : prev;
+      return estimateDamage(cur) > estimateDamage(prev) ? cur : prev;
     });
     return { type: 'ATTACK', attackIndex: best };
   }
