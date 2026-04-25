@@ -104,6 +104,10 @@ const effDir = resolve(ROOT, 'src/lib/game/effects/cards');
 for (const f of readdirSync(effDir)) {
   if (f.endsWith('.ts')) eff += readFileSync(join(effDir, f), 'utf8');
 }
+// v2.155: 特性可能 inline 在 engine.ts 實裝（被動效果走 hook 而非 regA）
+//   為避免長期 false positive，把 engine.ts 也納入「已實裝」內容檢索
+//   範例：劇毒支配（桃歹郎）/ 天空徑線（拉帝亞斯ex）/ 影藏（超級耿鬼ex）— 都在 engine inline
+eff += readFileSync(resolve(ROOT, 'src/lib/game/engine.ts'), 'utf8');
 
 const unimplAttacks = [...attackNames].filter(n => !eff.includes(n));
 const unimplAbilities = [...abilityNames].filter(n => !eff.includes(n));
