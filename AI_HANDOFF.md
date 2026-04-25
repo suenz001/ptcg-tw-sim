@@ -1,9 +1,73 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.125)  
+> 最後更新：2026-04-25 (v2.126)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.126 — 螺釘地鼠 狂挖 修 + 伊裴爾塔爾 緊抓 實裝 + preset 名稱去後綴 + 預組未實裝盤點
+
+### Leon 回報
+
+**1. 螺釘地鼠｜狂挖（v2.126 修）**
+卡面：「在自己的回合，從手牌將這張卡放置於備戰區時，可使用 1 次。從自己的牌庫選擇最多 3 張『基本【鬥】能量』卡，將其丟棄。並且重洗牌庫。」
+
+舊實作（v2.34）兩個 bug：
+- 沒 gate「必須剛從手牌放置」(`pk.justPlaced`) — 隨時都能按
+- filter 用 `card.pokemonType === 'Fighting'`，但基本能量 pokemonType 常 undefined → 過濾為空
+
+修法：
+- engine.ts `getUsableAbilities` 加 gate `if (ab.name === '狂挖' && !pk.justPlaced) return;`
+- effects.ts 改用 `card.name.includes('【鬥】')` 判斷 + 用 deck-search pending 讓玩家選 0~3 張
+- 新 resolver `screwdig-discard-fight-e`：丟棄選到的能量到棄牌區 + 重洗
+
+**2. 伊裴爾塔爾｜緊抓 20（v2.126 新增）**
+卡面：「在下個對手的回合，受到這個招式的寶可夢無法撤退」
+- 新 regPre/regPost：regPost 設 defender.active.cantRetreatNextTurn=true（旗標 v1.62 已存在）
+
+**3. Preset 名稱改：去掉「（預組）」**
+這 6 個 preset 不是寶可夢官方預組（是我為玩家準備的策略組合）：
+- N的索羅亞克（預組）→ N的索羅亞克
+- 火焰雞多龍（預組）→ 火焰雞多龍
+- 夠讚狗（預組）→ 夠讚狗
+- 顫弦蠑螈（預組）→ 顫弦蠑螈
+- 蒼炎刃鬼（預組）→ 蒼炎刃鬼
+- 超級甲賀忍蛙（預組）→ 超級甲賀忍蛙
+
+保留「（預組）」（這 2 個是寶可夢官方預組）：
+- 超級耿鬼ex（預組）
+- 超級蒂安希ex（預組）
+
+**4. 預設牌組未實裝招式/特性盤點（audit）**
+跑 Python audit 對所有 preset 卡（245 張）做 attack/ability 名比對 effects.ts 註冊：
+
+真正未實裝、可能影響玩法的（過濾掉 engine inline 處理的被動特性 false positive）：
+- **月月熊 赫月｜經驗法則**（ability — 上備戰時手牌附 ≤2 張基本鬥能量）
+- **甲賀忍蛙ex｜變幻手裏劍**（attack — 擲 1 硬幣 +100）
+- **菊草葉｜叫聲**（attack — 下回合對手攻擊 -20，類似嘎啦嘎啦的「叫聲」但是不同卡）
+- **呱頭蛙｜招集之術**（attack — 牌庫搜 ≤3 張寶可夢加手牌 + 重洗）
+- **巨金怪｜彈回 / 金屬之錘**（兩招都未實裝）
+- **酋雷姆｜反等離子**（ability — 對手棄牌區有「阿克羅瑪」改三重冰霜能量需求）
+
+實際未實裝清單會根據 Leon 測試需求逐個補上。本版只修 Leon 明確點名的螺釘地鼠 + 伊裴爾塔爾。
+
+### 檔案改動
+- `src/lib/decks/presets.ts`：6 個 preset 名稱去 `（預組）` 後綴
+- `src/lib/game/engine.ts`：getUsableAbilities 加狂挖 `pk.justPlaced` gate
+- `src/lib/game/effects.ts`：
+  - 螺釘地鼠｜狂挖 重寫 — 用 deck-search pending + name 判斷基本鬥能量
+  - 伊裴爾塔爾｜緊抓 新增 regPre/regPost
+
+### 驗證
+- npm run build ✓（14.50s）
+- 螺釘地鼠剛從手牌放備戰時才顯示「狂挖」按鈕；下回合按鈕消失
+- 伊裴爾塔爾「緊抓」攻擊後對手戰鬥位下回合無法撤退（gate 由 cantRetreatNextTurn 旗標處理）
+
+### 後續可擴充
+- 預組未實裝清單上面 6~7 個招式/特性，視 Leon 測試需求逐個實裝
+- 月月熊 赫月｜經驗法則 跟螺釘地鼠｜狂挖 同 pattern（剛上備戰時觸發）— 之後可同時實裝
 
 ---
 

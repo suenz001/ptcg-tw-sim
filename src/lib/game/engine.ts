@@ -3011,6 +3011,9 @@ export function getUsableAbilities(
       if (ab.name === '集客' && player.active?.iid !== pk.iid) return;
       // 精神抽出 / 龐克練肌 / 合金建造（v2.102）：只有本回合剛進化才能用
       if ((ab.name === '精神抽出' || ab.name === '龐克練肌' || ab.name === '合金建造') && !pk.evolvedThisTurn) return;
+      // v2.126 螺釘地鼠｜狂挖 — 只有「從手牌將這張卡放置於備戰區的那個回合」可用
+      //   pk.justPlaced 由 PLAY_BASIC 設、END_TURN 清，所以「下一回合不能用」自然成立
+      if (ab.name === '狂挖' && !pk.justPlaced) return;
       // 腎上腺腦力（願增猿）：身上 ≥1 顆【惡】能量 && 自己場上 ≥1 隻受傷（damage≥10）
       //   && 對手場上 ≥1 隻寶可夢。v2.123 補後兩個 gate（Leon 反饋：不符條件就不顯按鈕）。
       if (ab.name === '腎上腺腦力') {

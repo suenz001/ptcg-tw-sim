@@ -578,7 +578,7 @@ const STARMIE_DECK: Omit<Deck, 'updatedAt'> = {
 /** N的索羅亞克 預組（60 張）*/
 const N_ZOROARK_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_n_zoroark__',
-  name: 'N的索羅亞克（預組）',
+  name: 'N的索羅亞克',
   entries: [
     { cardId: '16941', count: 4 }, // N的索羅亞克ex (MC 470/742)
     { cardId: '16940', count: 4 }, // N的索羅亞 (MC 469/742)
@@ -614,7 +614,7 @@ const N_ZOROARK_DECK: Omit<Deck, 'updatedAt'> = {
 /** 火焰雞多龍 預組（60 張）*/
 const BLAZIKEN_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_blaziken_dragapult__',
-  name: '火焰雞多龍（預組）',
+  name: '火焰雞多龍',
   entries: [
     { cardId: '17017', count: 4 }, // 多龍梅西亞 (MC 546/742)
     { cardId: '17018', count: 4 }, // 多龍奇 (MC 547/742)
@@ -651,7 +651,7 @@ const BLAZIKEN_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
 /** 夠讚狗 預組（60 張）*/
 const OKIDOGI_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_okidogi__',
-  name: '夠讚狗（預組）',
+  name: '夠讚狗',
   entries: [
     { cardId: '10478', count: 3 }, // 夠讚狗 (SV6 064/101)
     { cardId: '10607', count: 1 }, // 月月熊 赫月 (SV6a 025/064)
@@ -682,7 +682,7 @@ const OKIDOGI_DECK: Omit<Deck, 'updatedAt'> = {
 /** 顫弦蠑螈 預組（60 張）*/
 const SALAZZLE_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_salazzle__',
-  name: '顫弦蠑螈（預組）',
+  name: '顫弦蠑螈',
   entries: [
     { cardId: '14374', count: 4 }, // 毒電嬰 (M2 056/080)
     { cardId: '14375', count: 4 }, // 顫弦蠑螈 (M2 057/080)
@@ -716,7 +716,7 @@ const SALAZZLE_DECK: Omit<Deck, 'updatedAt'> = {
 /** 蒼炎刃鬼 預組（60 張）*/
 const CERULEDGE_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_ceruledge__',
-  name: '蒼炎刃鬼（預組）',
+  name: '蒼炎刃鬼',
   entries: [
     { cardId: '14691', count: 3 }, // 蒼炎刃鬼ex (M2a 031/193)  v2.113 Leon 修正 4→3
     { cardId: '16616', count: 4 }, // 炭小侍 (MC 145/742)
@@ -743,7 +743,7 @@ const CERULEDGE_DECK: Omit<Deck, 'updatedAt'> = {
 /** 超級甲賀忍蛙 預組（60 張）*/
 const MEGA_GRENINJA_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_mega_greninja__',
-  name: '超級甲賀忍蛙（預組）',
+  name: '超級甲賀忍蛙',
   entries: [
     { cardId: '18440', count: 4 }, // 呱呱泡蛙 (M4 020/083)
     { cardId: '18441', count: 2 }, // 呱頭蛙 (M4 021/083)

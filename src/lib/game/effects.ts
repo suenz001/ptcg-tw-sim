@@ -2338,19 +2338,44 @@ regA('鐵蟻ex', 0, (st, idx) => {
   });
 });
 
-// 螺釘地鼠 狂挖 — 放置時可用，丟最多 3 張基本鬥能量
+// 螺釘地鼠｜狂挖 — 從手牌將這張卡放置於備戰區的那個回合可用 1 次。
+//   牌庫選最多 3 張基本【鬥】能量丟棄並重洗。
+// v2.126 修：
+//   1) 用 deck-search pending 讓玩家選 0~3 張（卡面「最多 3 張」表示可選 0 張）
+//   2) filter 改 'Energy:Fighting'（基本能量 pokemonType 常為 undefined，UI 會用 name fallback）
+//   3) gate「必須剛從手牌放置」(pk.justPlaced) 在 engine.ts getUsableAbilities 加
 regA('螺釘地鼠', 0, (st, idx, pool) => {
-  const fighting = st.players[idx].deck.filter(c => {
+  // 牌庫無基本【鬥】能量 → 直接結束（卡面允許 0 張，但實質沒選頭）
+  // 基本能量 pokemonType 常為 undefined，從卡名【鬥】判斷才對
+  const hasFightE = st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.pokemonType === 'Fighting';
-  }).slice(0, 3);
-  st = addLog(st, '狂挖：丟最多 3 張基本鬥能量到棄牌', idx);
-  if (fighting.length === 0) return st;
-  return updatePlayer(st, idx, p => {
-    const fIids = new Set(fighting.map(c => c.iid));
-    const newDeck = p.deck.filter(c => !fIids.has(c.iid));
-    return { ...p, deck: shuffle(newDeck), discard: [...p.discard, ...fighting] };
+    if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+    return card.pokemonType === 'Fighting' || /【鬥】/.test(card.name);
   });
+  if (!hasFightE) {
+    return addLog(st, '狂挖：牌庫無基本【鬥】能量', idx);
+  }
+  st = addLog(st, '狂挖：從牌庫選 0~3 張基本【鬥】能量丟棄（之後重洗）', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Energy:Fighting',
+    minCount: 0, maxCount: 3,
+    effectKey: 'screwdig-discard-fight-e',
+  });
+});
+regR('screwdig-discard-fight-e', (state, aIdx, selectedIids, _params, pool) => {
+  const picks = state.players[aIdx].deck.filter(c => selectedIids.includes(c.iid));
+  const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    deck: shuffle(p.deck.filter(c => !selectedIids.includes(c.iid))),
+    discard: [...p.discard, ...picks],
+  }));
+  const msg = picks.length > 0
+    ? `狂挖：丟棄 ${picks.length} 張基本【鬥】能量（${names}），重洗牌庫`
+    : '狂挖：未選能量，重洗牌庫';
+  return addLog(s, msg, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -3923,6 +3948,20 @@ regPost('由克希|痛楚記憶', (state, aIdx, pool) => {
 });
 
 // 伊裴爾塔爾|侵蝕之風 — 對手已傷寶可夢各放置 2 個指示物
+// v2.126 伊裴爾塔爾｜緊抓 20 — 在下個對手回合，受到此招式的寶可夢無法撤退
+regPre('伊裴爾塔爾|緊抓', (state, _aIdx, _pool) => ({ state, damage: 20 }));
+regPost('伊裴爾塔爾|緊抓', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const def = { ...players[dIdx] };
+  if (!def.active) return state;
+  const defName = pool.get(def.active.cardId)?.name ?? '?';
+  def.active = { ...def.active, cantRetreatNextTurn: true };
+  players[dIdx] = def;
+  return addLog({ ...state, players },
+    `緊抓：${defName} 在下個對手回合無法撤退`, aIdx);
+});
+
 regPre('伊裴爾塔爾|侵蝕之風', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('伊裴爾塔爾|侵蝕之風', (state, aIdx, pool) => {
   return applyDamageToAllOpp(state, aIdx, pool, 20, true, '侵蝕之風');
