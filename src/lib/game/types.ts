@@ -405,6 +405,19 @@ export interface GameState {
    * 必須在呼叫方自己的 POST 最末清空，否則下一招會重複觸發。
    */
   pendingCopyAttackKey?: string;
+  /**
+   * v2.124：END_TURN 中途若有 self-KO（中毒/灼傷/雪妖女冰冷之帳），剩餘 checkup
+   * 與 finalize（清旗標 + 切換玩家）需要等被 KO 方補完戰鬥位後才繼續。
+   * 此欄位記錄「正在結束回合的玩家 idx」；SEND_NEW_ACTIVE handler 偵測到此值
+   * 不為 undefined → 補完後呼叫 finalizeEndTurn 完成切換玩家。
+   */
+  endTurnContinueAfterKO?: 0 | 1;
+  /**
+   * v2.124：搭配 endTurnContinueAfterKO 使用。SEND_NEW_ACTIVE re-dispatch END_TURN
+   * 完成 finalize 時，跳過所有寶可夢 checkup（毒/灼/睡/麻/雪妖女）— 因為這些已經
+   * 在第一次 END_TURN 跑過了，不可重複觸發傷害。
+   */
+  endTurnSkipCheckup?: boolean;
 }
 
 export interface LogEntry {

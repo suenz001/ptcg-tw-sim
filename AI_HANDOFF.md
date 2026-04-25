@@ -1,9 +1,67 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.123)  
+> 最後更新：2026-04-25 (v2.124)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.124 — 比對 PTCG 官方流程：checkup 順序修 + self-KO 後自動繼續到對手回合
+
+### Leon 提供的官方流程
+1. A 玩家回合：抽牌 → 行動 → 宣告招式（可略過）→ 結束
+2. 寶可夢檢查（兩個回合之間，順序：**中毒 → 灼傷 → 睡眠 → 麻痺 → 特性**）
+3. B 玩家回合開始
+
+中毒：1 個指示物（10 傷）；桃歹郎在戰鬥場 → +5 個指示物（+50 傷）  
+灼傷：2 個指示物（20 傷），擲幣正面解除  
+睡眠：擲幣正面解除  
+麻痺：麻痺後第一次寶可夢檢查解除  
+KO 由行動/招式造成 → 立即拿獎；checkup KO → 結算後拿獎  
+
+### 修正
+
+**Bug B：checkup 順序錯誤**  
+舊版 engine.ts 順序：中毒 → 灼傷 → **麻痺 → 睡眠** → 雪妖女  
+官方順序：中毒 → 灼傷 → **睡眠 → 麻痺** → 特性  
+修：交換麻痺與睡眠位置。
+
+**Bug A：self-KO 後補戰鬥要自動繼續到對手回合**  
+v2.123 的限制：被毒/灼 KO 後玩家補完戰鬥要再按一次「結束回合」才換對手。  
+v2.124 完整 continuation：
+- types.ts 加 `GameState.endTurnContinueAfterKO?: 0 | 1` + `endTurnSkipCheckup?: boolean`
+- engine.ts END_TURN 把整個 checkup 段（中毒/灼傷/睡眠/麻痺/雪妖女）包在
+  `if (!state.endTurnSkipCheckup) { ... }` 內
+- 中毒 KO / 灼傷 KO 時設 `endTurnContinueAfterKO = aIdx` 並 return（剩餘 checkup 跳過）
+- 對手獎賞改用 selfKOInstance 風格直接從 prize 堆搬到 hand（不走 pendingPrizes，
+  避免 activePlayerIndex 拿錯）
+- SEND_NEW_ACTIVE handler 偵測 `endTurnContinueAfterKO` → 補完後 re-dispatch END_TURN +
+  設 `endTurnSkipCheckup=true`（避免重跑 checkup 造成重複放傷害）→ engine 走進 finalize 階段
+  （清旗標 + 切換玩家 + 自動抽牌）→ 對手回合自動開始
+- finalize 結束時清 `endTurnSkipCheckup`
+
+灼傷 KO 也補同樣 selfKOInstance 直接取獎（v2.123 漏修了灼傷 case，本版補上）。
+
+### 檔案改動
+- `src/lib/game/types.ts`：GameState 加 `endTurnContinueAfterKO` + `endTurnSkipCheckup`
+- `src/lib/game/engine.ts`：
+  - END_TURN checkup 區塊包進 `if (!endTurnSkipCheckup)`
+  - 中毒 / 灼傷 KO 後 `set endTurnContinueAfterKO + return`，獎賞直接從對手 prize 取
+  - 睡眠 ↔ 麻痺 順序交換
+  - SEND_NEW_ACTIVE 偵測 flag → re-dispatch END_TURN with `endTurnSkipCheckup`
+  - finalize 結束清 `endTurnSkipCheckup`
+
+### 驗證
+- npm run build ✓（15.11s）
+- 中毒 KO 後玩家補戰鬥位 → 引擎自動完成回合結束流程（不需手動再按「結束回合」）
+- 灼傷 KO 同樣自動 continuation
+- checkup 順序符合 PTCG 官方
+
+### 注意事項
+- 雪妖女冰冷之帳的 self-KO 暫未加 endTurnContinueAfterKO，下版若遇到再補
+- 麻痺解除目前無條件在麻痺方自身 endTurn 時解除 — 符合 PTCG「麻痺後第一次自身 checkup 解除」
+- 寶可夢檢查目前只 check `players[aIdx].active`（結束回合方戰鬥位）— 符合常見實作
 
 ---
 

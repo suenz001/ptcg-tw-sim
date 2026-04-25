@@ -2128,6 +2128,23 @@ function handlePlaying(
       sendingIdx
     );
 
+    // v2.124：偵測 endTurnContinueAfterKO — 表示這是 self-KO 後補戰鬥位
+    // → 補完後 re-dispatch END_TURN 並設 endTurnSkipCheckup（避免重跑 checkup 造成重複放傷害），
+    // 直接進入 finalize（清旗標 + 切換玩家 + 抽牌）。
+    if (state.endTurnContinueAfterKO !== undefined) {
+      const continueIdx = state.endTurnContinueAfterKO;
+      let cleared: GameState = {
+        ...newState,
+        endTurnContinueAfterKO: undefined,
+        endTurnSkipCheckup: true,
+      };
+      // 確保 activePlayerIndex 正確，這樣 END_TURN 處理者是當初被 KO 的那方
+      if (cleared.activePlayerIndex !== continueIdx) {
+        cleared = { ...cleared, activePlayerIndex: continueIdx };
+      }
+      return applyAction(cleared, { type: 'END_TURN' }, pool);
+    }
+
     // 勝利條件：對手無法送出寶可夢（在送出前就要先檢查，這裡是送出後）
     return newState;
   }
@@ -2146,6 +2163,11 @@ function handlePlaying(
       };
     }
 
+    // v2.124：把所有寶可夢 checkup（中毒/灼傷/睡眠/麻痺/雪妖女）包在 skipCheckup gate 內。
+    // 第一次 END_TURN 跑 checkup；若 self-KO，設 endTurnContinueAfterKO + return；
+    // SEND_NEW_ACTIVE 補完戰鬥位後 re-dispatch END_TURN 並設 endTurnSkipCheckup=true，
+    // 這樣不會重跑 checkup（避免重複放傷害），直接進到 finalize。
+    if (!state.endTurnSkipCheckup) {
     // 特殊狀態：中毒 — 回合結束施加 10 傷害（危險密林競技場：+20 = 30 指示物）
     // 桃歹郎 劇毒支配 被動：對手中毒時指示物 +5
     const poisonPlayer = { ...players[aIdx] };
@@ -2210,9 +2232,9 @@ function handlePlaying(
           };
         }
         // 被毒死方需要補戰鬥位 — 依 UI `myPlayer?.active===null` 條件自動 popup modal
-        // 不設 pendingPrizes（已直接取獎），也不切換 activePlayerIndex，讓被毒方補戰鬥後
-        // 下一次 END_TURN action 才真正換回合。
-        return poisonState;
+        // v2.124：設 endTurnContinueAfterKO flag。SEND_NEW_ACTIVE handler 偵測到後
+        // 會 re-dispatch END_TURN 完成剩餘 checkup（灼/睡/麻/雪妖女）+ finalize（切換玩家）。
+        return { ...poisonState, endTurnContinueAfterKO: aIdx };
       } else {
         poisonPlayer.active = { ...poisonPlayer.active, damage: newDmg };
         players[aIdx] = poisonPlayer;
@@ -2239,11 +2261,24 @@ function handlePlaying(
         burnedPlayer.active = null;
         players[aIdx] = burnedPlayer;
         const burnPrizes = prizesForKO(burnedCard!);
-        let burnState = addLog({ ...state, players }, `${burnedCard?.name ?? '?'} 被燒傷傷害擊倒！${players[dIdx].name} 取得 ${burnPrizes} 張獎勵牌。`, null);
+        // v2.124 對手直接取獎（同毒 KO 修法，避免 activePlayerIndex 拿錯）
+        const burnWinner = { ...players[dIdx] };
+        const burnTake = Math.min(burnPrizes, burnWinner.prizes.length);
+        if (burnTake > 0) {
+          burnWinner.hand = [...burnWinner.hand, ...burnWinner.prizes.slice(0, burnTake)];
+          burnWinner.prizes = burnWinner.prizes.slice(burnTake);
+        }
+        players[dIdx] = burnWinner;
+        let burnState = addLog({ ...state, players },
+          `${burnedCard?.name ?? '?'} 被燒傷傷害擊倒！${players[dIdx].name} 取得 ${burnTake} 張獎勵牌。`, null);
+        // 勝利條件：對手取完獎
+        if (burnWinner.prizes.length === 0) {
+          return { ...burnState, phase: 'game-over', winner: dIdx, winReason: `${burnWinner.name} 取得所有獎勵牌` };
+        }
         if (burnedPlayer.bench.length === 0) {
           return { ...burnState, phase: 'game-over', winner: dIdx, winReason: `${burnedPlayer.name} 沒有可上場的寶可夢` };
         }
-        return { ...burnState, pendingPrizes: burnPrizes };
+        return { ...burnState, endTurnContinueAfterKO: aIdx };
       } else {
         // 燒傷傷害但未倒
         burnedPlayer.active = { ...burnedPlayer.active, damage: newBurnDmg };
@@ -2257,15 +2292,8 @@ function handlePlaying(
       }
     }
 
-    // 特殊狀態：麻痺 — 自動解除（回合結束後）
-    const paraPlayer = { ...players[aIdx] };
-    if (paraPlayer.active?.status === 'paralyzed') {
-      paraPlayer.active = { ...paraPlayer.active, status: undefined };
-      players[aIdx] = paraPlayer;
-      state = addLog({ ...state, players }, `${pool.get(paraPlayer.active.cardId)?.name ?? '?'} 的麻痺解除了！`, null);
-    }
-
-    // 特殊狀態：睡眠 — 擲硬幣決定是否醒來（在回合結束時檢查）
+    // v2.124 順序修正（按 PTCG 官方）：中毒 → 灼傷 → 睡眠 → 麻痺 → 特性
+    // 特殊狀態：睡眠 — 擲硬幣決定是否醒來（先於麻痺檢查）
     const sleepPlayer = { ...players[aIdx] };
     if (sleepPlayer.active?.status === 'asleep') {
       const wakeCoin = Math.random() < 0.5;
@@ -2274,6 +2302,14 @@ function handlePlaying(
         players[aIdx] = sleepPlayer;
         state = addLog({ ...state, players }, `${pool.get(sleepPlayer.active.cardId)?.name ?? '?'} 醒來了！`, null);
       }
+    }
+
+    // 特殊狀態：麻痺 — 自動解除（回合結束時，麻痺後第一次寶可夢檢查）
+    const paraPlayer = { ...players[aIdx] };
+    if (paraPlayer.active?.status === 'paralyzed') {
+      paraPlayer.active = { ...paraPlayer.active, status: undefined };
+      players[aIdx] = paraPlayer;
+      state = addLog({ ...state, players }, `${pool.get(paraPlayer.active.cardId)?.name ?? '?'} 的麻痺解除了！`, null);
     }
 
     // ── 雪妖女｜冰冷之帳 ─────────────────────────────────────────────────────
@@ -2395,6 +2431,8 @@ function handlePlaying(
         }
       }
     }
+
+    } // end of `if (!state.endTurnSkipCheckup)` — 寶可夢 checkup 區塊
 
     // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn / abilityUsedThisTurn）
     const currentPlayer = { ...players[aIdx] };
@@ -2671,6 +2709,8 @@ function handlePlaying(
         oppPrizesAtMyTurnStart: newTurnStart,
         rocketInMyDiscardAtMyLastTurnEnd: newRocketLastEnd,
         rocketInMyDiscardAtMyTurnStart: newRocketTurnStart,
+        // v2.124：finalize 結束時清掉 endTurnSkipCheckup（避免下次 endTurn 也跳過 checkup）
+        endTurnSkipCheckup: undefined,
       },
       `回合結束，換 ${players[nextIdx].name} 行動。`,
       null
