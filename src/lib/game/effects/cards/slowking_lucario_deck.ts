@@ -386,6 +386,7 @@ reg('暗碼迷的解讀', (st, idx) => {
     filter: 'Any',
     minCount: 1, maxCount: 1,
     effectKey: 'cipher-geek-pick-second',
+    params: { titleOverride: '暗碼迷的解讀：先從牌庫選第 1 張（將放在牌庫上方第 2 位）' },
   });
 });
 // Step 1 resolver：記住第 1 次選的卡，從 deck 暫移到 pending params，開 Step 2
@@ -407,7 +408,10 @@ regR('cipher-geek-pick-second', (st, idx, iids) => {
     filter: 'Any',
     minCount: 1, maxCount: 1,
     effectKey: 'cipher-geek-pick-top',
-    params: { reservedSecond: secondCard },
+    params: {
+      reservedSecond: secondCard,
+      titleOverride: '暗碼迷的解讀：再從剩餘牌庫選第 2 張（將放在牌庫最上方）',
+    },
   });
 });
 // Step 2 resolver：把 topPick 放牌庫最上方，reservedSecond 放第 2 位，其餘洗牌

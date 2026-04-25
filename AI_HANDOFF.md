@@ -1,9 +1,41 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.145)  
+> 最後更新：2026-04-25 (v2.146)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.146 — 暗碼迷 modal 標題 + 零之大空洞 8 隻備戰格 UI
+
+### Bug A：暗碼迷的解讀 modal 標題沒寫清楚兩步順序
+卡面：「從牌庫任意選擇 2 張卡。重洗剩餘牌庫，將所選的卡以任意順序排列放回牌庫上方。」
+v2.96 Leon 已指示拆兩步（先選第 2 張，再選最上方），但 modal 標題只顯示「從牌庫選擇」泛用文字，玩家分不清是哪一步。
+
+修法：兩步 pending 都加 `params.titleOverride`：
+- Step 1：「暗碼迷的解讀：先從牌庫選第 1 張（將放在牌庫上方第 2 位）」
+- Step 2：「暗碼迷的解讀：再從剩餘牌庫選第 2 張（將放在牌庫最上方）」
+（`selectionTitle()` 在 `+page.svelte:1715` 本來就會優先讀 `params.titleOverride`，所以只要寫進去 modal 自動換標題。）
+
+### Bug B：零之大空洞滿足條件後備戰仍只能放 5 隻
+卡面：自己場上有「太晶」寶可夢的玩家，備戰可放 8 隻。
+
+根因：engine 端 `getBenchLimit` v2.136 已經正確回 8，但 **UI 端兩個 `{#each Array(5)}` 是 hardcoded** — 對手 zone-bench（line 2278）+ 我方 zone-bench（line 2575）都只 render 5 格 slot，所以即使 engine 允許第 6~8 格，玩家根本看不到能放置的空位 → 拖牌沒地方放。
+
+修法：
+1. `+page.svelte` import `getBenchLimit`
+2. 新增兩個 derived：`myBenchLimit`、`oppBenchLimit`
+3. 把 `Array(5)` 改成 `Array(Math.max(5, benchLimit, bench.length))` — 永遠至少 5 格，但條件滿足時開到 8 格；用 `Math.max(..., bench.length)` 是防呆（即使條件失效但還沒 enforce 時不會把已存在的 Pokemon「砍掉」顯示）
+4. drop-zone 條件也改 — 我方 bench-empty 的 `(myPlayer.bench.length < 5)` → `< myBenchLimit`，這樣第 6~8 格也能拖牌進去
+
+### 驗證
+- `npm run build` ✓ 15.25s
+
+### 改動檔案
+- `src/lib/version.ts` — 2.145 → 2.146
+- `src/lib/game/effects/cards/slowking_lucario_deck.ts` — 暗碼迷 兩個 pending 加 `titleOverride`
+- `src/routes/game/+page.svelte` — import `getBenchLimit`，新增 `myBenchLimit`/`oppBenchLimit`，兩個 `Array(5)` 改動態，drop-zone gate 改用 `myBenchLimit`
 
 ---
 

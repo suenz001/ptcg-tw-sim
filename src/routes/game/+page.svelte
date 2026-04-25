@@ -14,7 +14,7 @@
     countEnergy, getEvolvableTargets,
     canRetreat, getPlayableTrainers, getPlayableBasics,
     getUsableAbilities, isBasicPokemonCard, getEffectiveHP,
-    totalEnergyUnits,
+    totalEnergyUnits, getBenchLimit,
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
@@ -823,6 +823,11 @@
   const oppIdx  = $derived<0 | 1>((1 - myIdx) as 0 | 1);
   const myPlayer  = $derived(game ? game.players[myIdx]  : null);
   const oppPlayer = $derived(game ? game.players[oppIdx] : null);
+  // v2.146：備戰位上限（零之大空洞 + 太晶寶可夢 → 8，否則 5）
+  //   UI 之前 hardcode Array(5)，當 engine 允許 8 時看不到第 6~8 格 → 玩家無法放第 6 隻起。
+  //   改為各自查 getBenchLimit 後決定要 render 幾格。
+  const myBenchLimit  = $derived(game && poolReady ? getBenchLimit(game, myIdx,  pool) : 5);
+  const oppBenchLimit = $derived(game && poolReady ? getBenchLimit(game, oppIdx, pool) : 5);
   // Setup 階段對手場上的寶可夢應該蓋牌（不能讓對手看到身分），等雙方都完成後（phase→playing）再揭曉
   const oppHidden = $derived(!!game && game.phase === 'setup');
 
@@ -2274,7 +2279,7 @@
         </div>
       </div>
       <div class="zone-bench">
-        {#each Array(5) as _, i}
+        {#each Array(Math.max(5, oppBenchLimit, oppPlayer?.bench.length ?? 0)) as _, i}
           {#if oppPlayer?.bench[i]}
             {@const b=oppPlayer.bench[i]}{@const bc=getCard(b.cardId)}
             {#if oppHidden}
@@ -2568,7 +2573,7 @@
       </div>
 
       <div class="zone-bench">
-        {#each Array(5) as _, i}
+        {#each Array(Math.max(5, myBenchLimit, myPlayer?.bench.length ?? 0)) as _, i}
           {#if myPlayer?.bench[i]}
             {@const b=myPlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
             <div class="bench-slot"
@@ -2618,7 +2623,7 @@
             </div>
           {:else}
             <div class="bench-slot bench-empty"
-              class:drop-zone={dragging?.kind==='basic'&&isMyTurn()&&(myPlayer?.bench.length??0)<5&&(game?.phase==='playing'||(game?.phase==='setup'&&!!myPlayer?.active))}
+              class:drop-zone={dragging?.kind==='basic'&&isMyTurn()&&(myPlayer?.bench.length??0)<myBenchLimit&&(game?.phase==='playing'||(game?.phase==='setup'&&!!myPlayer?.active))}
               class:drop-hover={dropBenchEmpty&&dragging?.kind==='basic'}
               data-drop-type="bench-empty"></div>
           {/if}
