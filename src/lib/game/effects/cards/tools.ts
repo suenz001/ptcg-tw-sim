@@ -94,6 +94,12 @@ TOOL_ATTACK_BONUS.set('極限腰帶', (_a, _ai, defCard) => {
 });
 TOOL_ATTACK_BONUS.set('鎖鏈糬', (_a, atkInst) => atkInst.status === 'poisoned' ? 40 : 0);
 TOOL_ATTACK_BONUS.set('驅勁能量 未來', () => 20);
+// v2.133 電氣球：附有的「皮卡丘ex」對對手戰鬥場的「寶可夢ex」+50
+TOOL_ATTACK_BONUS.set('電氣球', (attCard, _ai, defCard) => {
+  if (attCard.name !== '皮卡丘ex') return 0;
+  const isDefEx = defCard.subtype === 'ex' || defCard.name.endsWith('ex') || defCard.name.endsWith('EX');
+  return isDefEx ? 50 : 0;
+});
 
 // ── 特定屬性防禦（防守方帶此道具 → 特定屬性攻擊 -60，觸發即丟棄） ─────────
 TOOL_DEFENSE_REDUCE_BY_TYPE.set('福祿果', { amount: 60, types: ['Psychic'], discardOnTrigger: true });

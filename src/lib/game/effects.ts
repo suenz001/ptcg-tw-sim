@@ -47,6 +47,8 @@ export { applyBenchPlaceSideEffects };
 // 為 engine.ts / +page.svelte 的 import 路徑維持相容：re-export
 export { TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS, canPlayTrainer, clearActiveEffects };
 export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits };
+// v2.133 PASSIVE_PREVENT_KO 在本檔下方定義，匯出供 engine 使用
+// （直接在此先 forward-ref：宣告處放到 v2.133 區塊，之後會由 engine import）
 export { BENCH_PLACE_TRIGGERS };
 export { SPECIAL_ENERGY_ATTACH };
 export type { ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec };
@@ -1930,9 +1932,17 @@ export const PASSIVE_DAMAGE_REDUCE = new Map<string, number>([
  * engine 在 weakness 之前、已過 skipWeakRes/skipDefEffects 判斷區塊之外套用（屬於攻擊方效果，不受 skipDefEffects 影響）。
  * 多個來源可疊加（例如場上同時有 2 隻羅絲雷朵），以擁有特性的 Pokemon 張數乘算。
  */
-export const PASSIVE_ATTACK_BONUS = new Map<string, (attackerCard: Card) => number>([
+// v2.133：簽名擴充 — 第二參數加入 defenderCard 讓某些被動能依對手卡片資訊判定加成
+//   （原本 1-arg 的條目仍兼容；新加入的條目可選擇用第二參數）
+export const PASSIVE_ATTACK_BONUS = new Map<string, (attackerCard: Card, defenderCard?: Card) => number>([
   // 竹蘭的羅絲雷朵｜輝煌聲援 — 只要這隻在場上，自己「竹蘭的」寶可夢招式傷害 +30
   ['輝煌聲援', (att) => att.name.includes('竹蘭的') ? 30 : 0],
+  // v2.133 電蜘蛛｜複眼 — 自己的「電蜘蛛」攻擊時，對「擁有特性」的對手戰鬥場 +50
+  //   只在 attacker 真的是電蜘蛛時觸發（避免另一隻電蜘蛛在備戰也疊加）
+  ['複眼', (att, def) => {
+    if (att.name !== '電蜘蛛') return 0;
+    return (def?.abilities && def.abilities.length > 0) ? 50 : 0;
+  }],
 ]);
 
 /** 特性名 → 判斷是否完全免疫此攻擊 */
@@ -10275,6 +10285,33 @@ regPre('巨金怪|金屬之錘', (state, aIdx, _pool, action) => {
   return { state, damage: 150 };
 });
 
+// v2.133 月月熊 赫月ex｜老練招式（被動）— 「血月」所需【無】能量減少對手已獲得獎賞牌數
+//   原本血月 cost = 5×Colorless；對手已取 3 張獎賞 → 改為 2×Colorless。
+//   engine.ts canAffordAttack 開頭呼叫此 helper 改寫 cost。
+export function getUrsalunaBloodMoonEffectiveCost(
+  attackerName: string,
+  attackName: string,
+  state: GameState,
+  pool: Map<string, Card>,
+  originalCost: import('$lib/cards/types').EnergyType[],
+): import('$lib/cards/types').EnergyType[] {
+  if (attackerName !== '月月熊 赫月ex') return originalCost;
+  if (attackName !== '血月') return originalCost;
+  const aIdx = state.activePlayerIndex;
+  // 對手已獲得獎賞 = 6 - 對手剩餘獎賞
+  const oppPrizes = state.players[(1 - aIdx) as 0 | 1].prizes.length;
+  const taken = Math.max(0, 6 - oppPrizes);
+  // 從 originalCost 移除 `taken` 個 Colorless
+  if (taken === 0) return originalCost;
+  const reduced: import('$lib/cards/types').EnergyType[] = [];
+  let toRemove = taken;
+  for (const c of originalCost) {
+    if (c === 'Colorless' && toRemove > 0) { toRemove--; continue; }
+    reduced.push(c);
+  }
+  return reduced;
+}
+
 // ── 9) 酋雷姆｜反等離子 — 對手棄牌區有名稱含「阿克羅瑪」的卡時，
 //   「三重冰霜」所需能量改為 1 個【無】。engine canAffordAttack 必須 hook。
 //   實作：engine.ts 內 attack 成本檢查時呼叫此 helper 改寫 cost。
@@ -10301,3 +10338,130 @@ export function getKyuremElectroplasmaEffectiveCost(
   return originalCost;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.133 — 電電蟲 + 超級袋獸厄鬼椪 預組新卡實裝
+//   特性 6 個：複眼（已加 PASSIVE_ATTACK_BONUS）/ 勤奮之心 / 老練招式（已加 helper）
+//             / 迅速游標 / 藏青浪濤 / 沉雪
+//   訓練家/能量 3 個：貴重手推車（Item ACE SPEC）/ 電氣球（Tool）/ 薄霧能量（Special Energy）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── 皮卡丘ex｜勤奮之心 ─────────────────────────────────────────────────────
+// 卡面：HP 全滿時受招式而昏厥 → 不昏厥，剩下 HP=10 留場。
+// 簡化版：把皮卡丘ex 自身視為「自帶倖存鍛鍊器但不消耗」。engine 內 wouldBeKO 之後
+// 我們在 TOOL_PREVENT_KO 走完之後再加一個 PASSIVE_PREVENT_KO 檢查。
+// 由於改 engine 較大，先用以下做法：透過 PASSIVE_PREVENT_KO export 一個查詢函式，
+// 由 engine 在 KO 路徑檢查。
+export const PASSIVE_PREVENT_KO = new Map<string, (
+  holderInst: CardInstance, holderCard: Card, incomingDamage: number
+) => { prevent: boolean; leaveHP: number }>();
+PASSIVE_PREVENT_KO.set('勤奮之心', (inst, card, _dmg) => {
+  // 全血才能觸發（damage === 0）
+  if (inst.damage > 0) return { prevent: false, leaveHP: 0 };
+  // 一回合限一次：使用 inst.activeIndustryHeartUsedThisGame 作旗標（暫不限）
+  // 卡面沒明說「一場限一次」，所以每次滿血被打都觸發。
+  return { prevent: true, leaveHP: 10 };
+});
+
+// ── 古劍豹｜沉雪 ──────────────────────────────────────────────────────────
+// 卡面：「在自己的回合，從手牌將這張卡放置於備戰區時，可使用 1 次。將場上的競技場卡丟棄。」
+// gate：pk.justPlaced（同 狂挖 / 經驗法則 pattern，engine.ts getUsableAbilities 加）
+// 簡化：競技場卡丟回觸發方（古劍豹擁有者）的棄牌。引擎內 activeStadium 沒記擁有者，
+//   一般 PTCG 規則本來就是「丟回擁有者棄牌」，但因為我們缺資料，只能近似處理。
+regA('古劍豹', 0, (st, idx, pool, cardInst) => {
+  if (!cardInst) return st;
+  if (!st.activeStadium) return addLog(st, '沉雪：場上沒有競技場卡', idx);
+  const stadiumCard = pool.get(st.activeStadium.cardId);
+  const stadiumInst = st.activeStadium;
+  const players = [...st.players] as [PlayerState, PlayerState];
+  const me = { ...players[idx] };
+  me.discard = [...me.discard, stadiumInst];
+  players[idx] = me;
+  return addLog(
+    { ...st, players, activeStadium: undefined },
+    `沉雪：場上的競技場卡「${stadiumCard?.name ?? '?'}」被丟棄`,
+    idx,
+  );
+});
+
+// ── 鐵斑葉ex｜迅速游標 ─────────────────────────────────────────────────────
+// 卡面：上備戰時可使用 1 次 → 將這隻寶可夢與戰鬥寶可夢互換 + 任意能量改附給這隻。
+// 簡化版（v2.133）：只做互換；能量轉移 TODO（需要多階段 pending，未來再補）。
+//   gate：pk.justPlaced（同 狂挖 / 經驗法則）
+regA('鐵斑葉ex', 0, (st, idx, pool, cardInst) => {
+  if (!cardInst) return st;
+  const player = st.players[idx];
+  if (!player.active || player.active.iid === cardInst.iid) {
+    return addLog(st, '迅速游標：必須從備戰區發動且戰鬥場有寶可夢', idx);
+  }
+  const benchIdx = player.bench.findIndex(c => c.iid === cardInst.iid);
+  if (benchIdx < 0) return st;
+  const oldActiveCard = pool.get(player.active.cardId);
+  const newActiveCard = pool.get(cardInst.cardId);
+  const players = [...st.players] as [PlayerState, PlayerState];
+  const newBench = [...player.bench];
+  newBench[benchIdx] = clearActiveEffects(player.active);
+  const newActive: CardInstance = { ...player.bench[benchIdx], movedToActiveThisTurn: true };
+  players[idx] = { ...player, active: newActive, bench: newBench };
+  return addLog(
+    { ...st, players },
+    `迅速游標：${oldActiveCard?.name ?? '?'} 退回備戰區，${newActiveCard?.name ?? '?'} 上場（能量轉移功能 TBD）`,
+    idx,
+  );
+});
+
+// ── 波盪水ex｜藏青浪濤 — 招式不計算對手戰鬥場附加效果 ─────────────────────
+// 既有 regPre('波盪水ex|宣洩吼嘯') 已實裝（line 3114）；補上 skipDefEffects 旗標。
+// 為避免雙處同步遺漏，這裡 wrap 既有 PRE：先呼叫舊實作，再覆蓋 skipDefEffects=true。
+{
+  const oldPre = ATTACK_PRE.get('波盪水ex|宣洩吼嘯');
+  if (oldPre) {
+    regPre('波盪水ex|宣洩吼嘯', (state, aIdx, pool, action) => {
+      const r = oldPre(state, aIdx, pool, action);
+      return { ...r, skipDefEffects: true };
+    });
+  }
+}
+
+// ── 貴重手推車 (Item ACE SPEC) — 從牌庫選任意數量基礎寶可夢放備戰並重洗 ────
+regG('貴重手推車', (st, idx) => {
+  // 牌庫有基礎寶可夢 + 備戰未滿
+  const p = st.players[idx];
+  if (p.bench.length >= 5) return false;
+  return p.deck.length > 0;
+});
+reg('貴重手推車', (st, idx) => {
+  const p = st.players[idx];
+  const slots = 5 - p.bench.length;
+  if (slots <= 0) return addLog(st, '貴重手推車：備戰區已滿', idx);
+  st = addLog(st, `貴重手推車：從牌庫選 0~${slots} 張基礎寶可夢卡放置於備戰區`, idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Basic',
+    minCount: 0, maxCount: slots,
+    effectKey: 'precious-cart-bench',
+  });
+});
+regR('precious-cart-bench', (state, aIdx, selectedIids, _params, pool) => {
+  let s = state;
+  const players = [...s.players] as [PlayerState, PlayerState];
+  const p = { ...players[aIdx] };
+  const picks = p.deck.filter(c => selectedIids.includes(c.iid));
+  p.deck = shuffle(p.deck.filter(c => !selectedIids.includes(c.iid)));
+  const placedNames: string[] = [];
+  for (const pk of picks) {
+    if (p.bench.length >= 5) break;
+    const card = pool.get(pk.cardId);
+    p.bench = [...p.bench, { ...pk, justPlaced: true }];
+    placedNames.push(card?.name ?? '?');
+  }
+  players[aIdx] = p;
+  s = { ...s, players };
+  if (placedNames.length > 0) {
+    s = addLog(s, `貴重手推車：${placedNames.join('、')} 放置於備戰區，重洗牌庫`, aIdx);
+    s = applyBenchPlaceSideEffects(s, aIdx, picks.map(c => c.iid), pool);
+  } else {
+    s = addLog(s, '貴重手推車：未選卡，重洗牌庫', aIdx);
+  }
+  return s;
+});

@@ -25,6 +25,8 @@ import {
   hasFairyZoneField,
   applyBenchPlaceSideEffects,
   getKyuremElectroplasmaEffectiveCost,
+  getUrsalunaBloodMoonEffectiveCost,
+  PASSIVE_PREVENT_KO,
 } from './effects';
 
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
@@ -334,6 +336,9 @@ const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   '稜鏡能量': ['Colorless'],
   // v2.113 新衝天能量（ACE SPEC）— 1 個【無】；若附於【2 階進化】寶可夢則視為 2 個所有屬性（inline）
   '新衝天能量': ['Colorless'],
+  // v2.133 薄霧能量 — 視為 1 個【無】能量。卡面額外效果「附有的寶可夢不受對手招式效果影響」
+  //   屬於防守方免疫附加效果（damage 不擋）— 目前 engine 僅支援屬性 mapping，免疫 TODO。
+  '薄霧能量': ['Colorless'],
 };
 
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {
@@ -495,6 +500,9 @@ export function canAffordAttack(
     const attackerName = attackerCard?.name ?? '';
     const overridden = getKyuremElectroplasmaEffectiveCost(attackerName, attackName, state, pool, cost);
     if (overridden !== cost) cost = overridden;
+    // v2.133 月月熊 赫月ex｜老練招式 — 「血月」所需【無】減少對手已獲得獎賞數
+    const overridden2 = getUrsalunaBloodMoonEffectiveCost(attackerName, attackName, state, pool, cost);
+    if (overridden2 !== cost) cost = overridden2;
   }
   // v2.103 大竺葵｜繁茂：自己場上有大竺葵時，自己所有寶可夢身上的「基本【草】能量」視為 2 個【草】能量。
   //   「這個特性的效果不會重複」→ 多隻大竺葵也只算一次倍率。
@@ -1810,7 +1818,8 @@ function handlePlaying(
         for (const ab of c.abilities) {
           const fn = PASSIVE_ATTACK_BONUS.get(ab.name);
           if (!fn) continue;
-          const bonus = fn(attackerCard);
+          // v2.133：簽名擴充 — 把 defenderCard 也傳進去（複眼 等需要看對手卡）
+          const bonus = fn(attackerCard, defenderCard);
           if (bonus > 0) {
             baseDamage += bonus;
             workingState = addLog(workingState, `「${ab.name}」啟動：${attackerCard.name} 招式傷害 +${bonus}`, aIdx);
@@ -1991,6 +2000,23 @@ function handlePlaying(
               `${preventTool.name}：${defenderCard.name} 避免昏厥，剩餘 HP ${result.leaveHP}！`, null);
             preventedKO = true;
           }
+        }
+      }
+    }
+    // v2.133 被動防 KO（皮卡丘ex 勤奮之心 等）— 條件由 PASSIVE_PREVENT_KO map 內 fn 決定
+    if (!preventedKO && wouldBeKO && defenderState.active && defenderCard.abilities) {
+      for (const ab of defenderCard.abilities) {
+        const fn = PASSIVE_PREVENT_KO.get(ab.name);
+        if (!fn) continue;
+        const result = fn(defenderState.active, defenderCard, baseDamage);
+        if (result.prevent) {
+          const targetDamage = Math.max(0, defenderHP - result.leaveHP);
+          defenderState.active = { ...defenderState.active, damage: targetDamage };
+          defPlayers[dIdx] = defenderState;
+          newState = addLog({ ...newState, players: defPlayers, turnPhase: 'end' },
+            `「${ab.name}」啟動：${defenderCard.name} 避免昏厥，剩餘 HP ${result.leaveHP}！`, null);
+          preventedKO = true;
+          break;
         }
       }
     }
@@ -3109,6 +3135,12 @@ export function getUsableAbilities(
       if (ab.name === '狂挖' && !pk.justPlaced) return;
       // v2.127 月月熊 赫月｜經驗法則 — 同 狂挖 pattern，只有剛從手牌放置於備戰區的回合可用
       if (ab.name === '經驗法則' && !pk.justPlaced) return;
+      // v2.133 古劍豹｜沉雪、鐵斑葉ex｜迅速游標 — 同 justPlaced gate
+      if ((ab.name === '沉雪' || ab.name === '迅速游標') && !pk.justPlaced) return;
+      // v2.133 沉雪 額外 gate：場上沒有競技場卡時無意義
+      if (ab.name === '沉雪' && !state.activeStadium) return;
+      // v2.133 迅速游標 gate：必須從備戰發動（pk 不是 active）
+      if (ab.name === '迅速游標' && player.active?.iid === pk.iid) return;
       // 腎上腺腦力（願增猿）：身上 ≥1 顆【惡】能量 && 自己場上 ≥1 隻受傷（damage≥10）
       //   && 對手場上 ≥1 隻寶可夢。v2.123 補後兩個 gate（Leon 反饋：不符條件就不顯按鈕）。
       if (ab.name === '腎上腺腦力') {

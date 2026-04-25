@@ -775,6 +775,94 @@ const MEGA_GRENINJA_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/** 電電蟲 預組（60 張）— v2.133 Leon 提供卡表 */
+const ELECTRIC_SPIDER_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_electric_spider__',
+  name: '電電蟲',
+  entries: [
+    // Pokemon 19
+    { cardId: '10927', count: 2 }, // 電電蟲 (SV7 032/102)
+    { cardId: '10584', count: 1 }, // 電蜘蛛 (SV6a 002/064)
+    { cardId: '11213', count: 2 }, // 皮卡丘ex (SV8 033/106)
+    { cardId: '16695', count: 2 }, // 厄鬼椪 水井面具ex (MC 224/742)
+    { cardId: '16758', count: 2 }, // 莉莉艾的皮皮ex (MC 287/742)
+    { cardId: '16783', count: 2 }, // 拉帝亞斯ex (MC 312/742)
+    { cardId: '16960', count: 2 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)
+    { cardId: '11659', count: 1 }, // 月月熊 赫月ex (SV8a 134/187) — 卡表寫 SV5a 052/066 但 SV5a 沒這張
+    { cardId: '16548', count: 1 }, // 鐵斑葉ex (MC 077/742)
+    { cardId: '16622', count: 1 }, // 破空焰ex (MC 151/742)
+    { cardId: '16693', count: 1 }, // 波盪水ex (MC 222/742)
+    // Items 12
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17131', count: 1 }, // 寶可裝置3.0 (MC 660/742)
+    { cardId: '17141', count: 1 }, // 夜間擔架 (MC 670/742)
+    { cardId: '14811', count: 1 }, // 道具拆除器 (M2a 151/193)
+    { cardId: '17110', count: 1 }, // 能量輸送 (MC 639/742)
+    { cardId: '17146', count: 1 }, // 火箭隊的接收器 (MC 675/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17129', count: 1 }, // 貴重手推車 (MC 658/742) ACE SPEC
+    { cardId: '14823', count: 1 }, // 電氣球 (M2a 163/193) Tool
+    // Supporters 12
+    { cardId: '12558', count: 1 }, // 小剛的發掘 (SV9 096/100)
+    { cardId: '17167', count: 4 }, // 赤松 (MC 696/742)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724/742)
+    { cardId: '17205', count: 4 }, // 火箭隊的拉姆達 (MC 734/742)
+    // Stadiums 3
+    { cardId: '14843', count: 1 }, // 引力山岳 (M2a 183/193)
+    { cardId: '10997', count: 2 }, // 零之大空洞 (SV7 102/102)
+    // Energy 14
+    { cardId: '17218', count: 4 }, // 基本【雷】能量 (MC)
+    { cardId: '17217', count: 4 }, // 基本【草】能量 (MC)
+    { cardId: '17221', count: 2 }, // 基本【水】能量 (MC)
+    { cardId: '17219', count: 2 }, // 基本【鋼】能量 (MC)
+    { cardId: '17220', count: 2 }, // 基本【超】能量 (MC)
+  ],
+};
+
+/** 超級袋獸厄鬼椪 預組（60 張）— v2.133 Leon 提供卡表 */
+const MEGA_KANGASKHAN_OGERPON_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_mega_kangaskhan_ogerpon__',
+  name: '超級袋獸厄鬼椪',
+  entries: [
+    // Pokemon 18
+    { cardId: '14071', count: 2 }, // 超級袋獸ex (M1S 051/063)
+    { cardId: '16553', count: 3 }, // 厄鬼椪 碧草面具ex (MC 082/742)
+    { cardId: '16695', count: 2 }, // 厄鬼椪 水井面具ex (MC 224/742)
+    { cardId: '16758', count: 1 }, // 莉莉艾的皮皮ex (MC 287/742)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)
+    { cardId: '16783', count: 2 }, // 拉帝亞斯ex (MC 312/742)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '16829', count: 1 }, // 願增猿 (MC 358/742)
+    { cardId: '14692', count: 1 }, // 可達鴨 (M2a 032/193)
+    { cardId: '14703', count: 1 }, // 古劍豹 (M2a 043/193)
+    { cardId: '10286', count: 1 }, // 眷戀雲 (SV5a 039/066)
+    { cardId: '16878', count: 1 }, // 投擲猴 (MC 407/742)
+    // Items 14
+    { cardId: '17122', count: 4 }, // 高級球 (MC)
+    { cardId: '17109', count: 4 }, // 能量轉移 (MC 638/742)
+    { cardId: '17131', count: 2 }, // 寶可裝置3.0 (MC)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC)
+    { cardId: '17127', count: 1 }, // 頂尖捕捉器 (MC 656/742) ACE SPEC
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4)
+    // Supporters 10
+    { cardId: '17167', count: 4 }, // 赤松 (MC)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC)
+    { cardId: '11282', count: 2 }, // 席藍 (SV8 102/106)
+    { cardId: '17169', count: 1 }, // 暗碼迷的解讀 (MC 698/742)
+    // Stadiums 3
+    { cardId: '10997', count: 2 }, // 零之大空洞 (SV7)
+    { cardId: '10312', count: 1 }, // 居民會館 (SV5a 065/066)
+    // Energy 15
+    { cardId: '17217', count: 7 }, // 基本【草】能量 (MC)
+    { cardId: '17221', count: 2 }, // 基本【水】能量 (MC)
+    { cardId: '17220', count: 2 }, // 基本【超】能量 (MC)
+    { cardId: '12462', count: 2 }, // 薄霧能量 (SV8a 186/187)
+    { cardId: '17214', count: 1 }, // 基本【惡】能量 (MC)
+    { cardId: '17215', count: 1 }, // 基本【鬥】能量 (MC)
+  ],
+};
+
 /**
  * 所有內建預設牌組
  *
@@ -785,6 +873,7 @@ const MEGA_GRENINJA_DECK: Omit<Deck, 'updatedAt'> = {
  * v2.89：新增「呆呆王」與「超級路卡利歐」兩組 Leon 自選卡表。
  * v2.104：新增「奧利瓦」/「鋁鋼橋龍」/「超級寶石海星」三組 Leon 自選卡表（Phase A+B+C 22 張 effect 同步實裝）。
  * v2.112：新增「N的索羅亞克」/「火焰雞多龍」/「夠讚狗」/「顫弦蠑螈」/「蒼炎刃鬼」/「超級甲賀忍蛙」六組 Leon 自選卡表。
+ * v2.133：新增「電電蟲」/「超級袋獸厄鬼椪」兩組 Leon 自選卡表。
  */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
@@ -806,6 +895,8 @@ export const PRESET_DECKS: Deck[] = [
   { ...SALAZZLE_DECK, updatedAt: 0 },
   { ...CERULEDGE_DECK, updatedAt: 0 },
   { ...MEGA_GRENINJA_DECK, updatedAt: 0 },
+  { ...ELECTRIC_SPIDER_DECK, updatedAt: 0 },
+  { ...MEGA_KANGASKHAN_OGERPON_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */

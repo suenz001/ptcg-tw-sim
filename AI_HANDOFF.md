@@ -1,9 +1,58 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.132)  
+> 最後更新：2026-04-25 (v2.133)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.133 — 新增 2 個 preset：電電蟲 + 超級袋獸厄鬼椪（含 9 個新 effect）
+
+### Leon 提供卡表
+- `deck_picture/電電蟲.txt`（60 張）— 主軸：電電蟲 → 電蜘蛛 + 皮卡丘ex + 厄鬼椪 水井面具ex；副線多種 ex
+- `deck_picture/超級袋獸厄鬼椪.txt`（60 張）— 主軸：超級袋獸ex + 厄鬼椪 碧草面具ex + 厄鬼椪 水井面具ex
+
+Leon 在睡覺，要求自己一步一步實裝（含對卡、補實裝、build 驗證）。SOP：feedback_preset_deck_sop。
+
+### Phase 1：對卡（多 set 同名選擇）
+多 set 候選的卡優先選 MC（綜合卡盒）— 與既有 preset 一致。月月熊 赫月ex Leon 卡表寫 SV5a 052/066 但 SV5a 沒有此卡（只在 SV8a 134/187），改用 SV8a 並在 comment 註記。
+
+### Phase 2：進化鏈驗證
+全部 ex Pokemon stage=Basic（不需 evolvesFrom），電蜘蛛 evolvesFrom='電電蟲' ✓。
+
+### Phase 4：盤點未實裝 → 9 個
+所有「招式」都已在前波實裝（findRegPre/regPost 全 found）。但 6 個「特性」+ 3 個訓練家/能量未實裝：
+- 電蜘蛛｜複眼（passive +50）— 加入 PASSIVE_ATTACK_BONUS（簽名擴充第 2 參數 defenderCard）
+- 皮卡丘ex｜勤奮之心（KO survival）— 新建 PASSIVE_PREVENT_KO map + engine hook（鏡射 TOOL_PREVENT_KO 邏輯）
+- 月月熊 赫月ex｜老練招式（cost 動態減少）— 加 helper `getUrsalunaBloodMoonEffectiveCost`，hook 進 canAffordAttack
+- 鐵斑葉ex｜迅速游標（上備戰互換 + 能量轉移）— 簡化版：只做互換，能量轉移 TBD（多階段 pending 實作太大）
+- 古劍豹｜沉雪（上備戰丟競技場）— regA + justPlaced gate
+- 波盪水ex｜藏青浪濤（招式 skipDefEffects）— wrap 既有 宣洩吼嘯 regPre 加 skipDefEffects 旗標
+- 貴重手推車（Item ACE SPEC）— deck-search 'Basic' 放備戰 + 重洗
+- 電氣球（Tool）— TOOL_ATTACK_BONUS：皮卡丘ex 對對手 ex +50
+- 薄霧能量（Special Energy）— SPECIAL_ENERGY_TYPES 加 ['Colorless']；卡面「免疫對手招式效果」TODO
+
+### Phase 5：實裝補完
+詳見 effects.ts 末尾「v2.133」區塊 + engine.ts canAffordAttack/KO 流程 + tools.ts/types.ts。
+
+### Phase 6：本機 build 驗證
+- npm run build：✓ 15.04s 通過、0 error
+
+### Phase 7：sim 測試
+sim-ai-battle.mjs 腳本內含 Windows hardcoded 路徑（`E:/ptcg-tw-sim/...`），sandbox 環境跑不起來。Leon 收到後可在本機跑 `node scripts/sim-ai-battle.mjs 100` 驗證。
+
+### 變更檔案
+- `src/lib/decks/presets.ts`：新增 ELECTRIC_SPIDER_DECK + MEGA_KANGASKHAN_OGERPON_DECK + 加入 PRESET_DECKS
+- `src/lib/game/effects.ts`：擴 PASSIVE_ATTACK_BONUS 簽名 + 加複眼；新增 PASSIVE_PREVENT_KO map + 勤奮之心；新增 getUrsalunaBloodMoonEffectiveCost helper；append v2.133 區塊（古劍豹 沉雪 / 鐵斑葉ex 迅速游標 / 波盪水ex 藏青浪濤 wrap / 貴重手推車）
+- `src/lib/game/engine.ts`：PASSIVE_ATTACK_BONUS 呼叫加 defenderCard；canAffordAttack 加 老練招式 hook；KO 路徑加 PASSIVE_PREVENT_KO check；getUsableAbilities 加 沉雪 / 迅速游標 gate；SPECIAL_ENERGY_TYPES 加 薄霧能量
+- `src/lib/game/effects/cards/tools.ts`：TOOL_ATTACK_BONUS 加 電氣球
+- `src/lib/version.ts`：2.132 → 2.133
+
+### TODO（未來補）
+- 鐵斑葉ex 迅速游標 能量轉移階段
+- 薄霧能量 「不受對手招式效果影響」
+- 皮卡丘ex 勤奮之心 是否限「一場一次」？目前每次滿血都觸發
 
 ---
 
