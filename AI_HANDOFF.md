@@ -1,9 +1,49 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.144)  
+> 最後更新：2026-04-25 (v2.145)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.145 — 修：特性 KO 對手戰鬥寶可夢後 AI 不立即遞補 bug
+
+### Leon 回報
+> 我用腎上腺腦力打死 ai 戰鬥寶可夢後，對方不會立即派出備戰寶可夢，需要我按跳過攻擊以後才會。
+> 卡在「⚠️ 等待 🤖 AI 對手 送出寶可夢」「⚠️ 等待 🤖 AI 對手 送出新戰鬥寶可夢」。
+
+### 根因
+`src/routes/game/+page.svelte` 的 `tickAI()` 與 `$effect` 內的 `shouldAct` 判斷：
+```ts
+if (g.turnPhase === 'end' && g.players[ai].active === null) return true;
+```
+**只在 `turnPhase === 'end'` 時觸發 AI 遞補**。但腎上腺腦力是「特性」效果，發動時間是玩家 main phase。
+- 玩家用特性 → AI active KO → engine 設 `active=null`、`pendingPrizes++`
+- 玩家取獎勵牌 → `pendingPrizes` 歸零、玩家仍 main phase
+- AI shouldAct 因 turnPhase 仍 main 不觸發 → AI 永遠不送出新戰鬥位
+- 玩家試圖 END_TURN → engine `defender.active === null` gate 擋下不能結束
+- → 死鎖。玩家必須某種方式（按跳過攻擊）讓 turnPhase 切到 end，AI 才動
+
+### 修法
+`shouldAct` 拿掉 `turnPhase === 'end'` 限制：
+
+```ts
+// v2.145：active===null 不論 turnPhase 都立即遞補（特性 KO 對手後也要立刻動）
+if (g.players[ai].active === null && g.players[ai].bench.length > 0) return true;
+```
+
+`tickAI()` 與 `$effect` 兩處都修。`pendingPrizes > 0` / `pendingSelection` 已在前面 early-return，所以新檢查只會在「player 已取完獎賞、無其他 pending」時觸發 AI 動作。
+
+`getAIAction()` 本來就支援這個情況（`ai.ts:38` 第一條規則就是 `players[myIdx].active === null` → 回 SEND_NEW_ACTIVE，不挑 turnPhase），所以後端不需動。
+
+### 驗證
+- `npm run build` ✓ 14.21s
+- `node scripts/sim-sandbox.mjs 8` ✓ 8 局正常結束、0 bug
+
+### 改動檔案
+- `src/lib/version.ts` — 2.144 → 2.145
+- `src/routes/game/+page.svelte` — `tickAI()` + `$effect` 兩處 shouldAct 改寫
 
 ---
 

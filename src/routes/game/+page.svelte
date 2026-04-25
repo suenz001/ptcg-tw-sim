@@ -703,8 +703,10 @@
       if (g.pendingPrizes > 0) return g.activePlayerIndex === ai;
       if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
 
-      // 被擊倒需送出寶可夢
-      if (g.turnPhase === 'end' && g.players[ai].active === null) return true;
+      // v2.145：戰鬥寶可夢被擊倒（包含特性如腎上腺腦力 KO）→ 不論 turnPhase 都應立即遞補
+      //   — 之前只在 turnPhase==='end' 觸發，對手回合內被特性 KO 時 AI 不會自動補，
+      //     卡住玩家無法 END_TURN（因為 engine 端 END_TURN gate 要求對手 active 不為 null）。
+      if (g.players[ai].active === null && g.players[ai].bench.length > 0) return true;
 
       // 正常輪到自己
       return g.activePlayerIndex === ai;
@@ -748,7 +750,8 @@
       if (g.phase !== 'playing') return false;
       if (g.pendingPrizes > 0) return g.activePlayerIndex === ai;
       if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
-      if (g.turnPhase === 'end' && g.players[ai].active === null) return true;
+      // v2.145：active===null 不論 turnPhase 都立即遞補（特性 KO 對手後也要立刻動）
+      if (g.players[ai].active === null && g.players[ai].bench.length > 0) return true;
       return g.activePlayerIndex === ai;
     })();
 
