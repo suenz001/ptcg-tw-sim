@@ -282,6 +282,10 @@ import './effects/cards/six_decks';
 // v2.135：阿響的火爆獸 / 火箭隊的烏鴉頭頭 兩組預組卡效果（在本檔末尾 inline 註冊）
 // v2.149：超級長耳兔 / 蜜集大蛇 / 火伊布 / 祭典樂舞 四組預組卡效果（熟成充能 / 衝衝鼓 / 搜尋寶石 / 祭典樂舞 註解）
 import './effects/cards/lopunny_serperior_flareon_festival';
+// v2.154：土龍多龍 / 大竺葵 / 太陽伊布 / 巨金怪 / 水牛超級袋獸 / 莉莉艾的皮皮 /
+//         超級妙蛙花 / 超級袋獸阿勃梭魯 / 青銅鐘多龍 九組預組卡新效果
+//         （日光轉移 / 金屬製造者 / 玻璃喇叭 / 超大冰淇淋；鈷藍指令、捲牆 inline）
+import './effects/cards/v154_decks';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -2046,6 +2050,13 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (attackerCard: Card, defende
   ['複眼', (att, def) => {
     if (att.name !== '電蜘蛛') return 0;
     return (def?.abilities && def.abilities.length > 0) ? 50 : 0;
+  }],
+  // v2.154 鐵頭殼ex｜鈷藍指令 — 只要場上，自己「未來」寶可夢（鐵頭殼ex 除外）+20 傷害
+  //   engine 在 attacker 場上每張卡都會檢查 abilities → 鐵頭殼ex 觸發此項
+  //   bonus 套用到 attacker 卡 (att 是攻擊發動者本人，不是 鐵頭殼ex 自己)
+  ['鈷藍指令', (att) => {
+    if (att.name === '鐵頭殼ex') return 0;  // 鐵頭殼ex 自己除外
+    return att.tags?.includes('未來') ? 20 : 0;
   }],
 ]);
 

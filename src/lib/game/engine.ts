@@ -2012,6 +2012,28 @@ function handlePlaying(
       }
     }
 
+    // v2.154 爆炸頭水牛｜捲牆 — 場上有 2 隻以上爆炸頭水牛 + 防守方戰鬥位是【無】基礎 → -60
+    //   這是 field-wide buff，不只 defender 自己的 abilities，要掃 defender 整個場上
+    //   無論多少隻擁有此特性的寶可夢，效果不重複（最多 -60 一次）
+    if (!skipDefEffects && baseDamage > 0) {
+      const defAll: CardInstance[] = [
+        ...(defender.active ? [defender.active] : []),
+        ...defender.bench,
+      ];
+      const buffaloCount = defAll.filter(c => {
+        const card = pool.get(c.cardId);
+        return card?.name === '爆炸頭水牛' && card?.abilities?.some(a => a.name === '捲牆');
+      }).length;
+      if (buffaloCount >= 2) {
+        // 防守方戰鬥位必須是【無】基礎
+        const isColorless = defenderCard.pokemonType === 'Colorless';
+        const isBasic = !defenderCard.evolvesFrom && defenderCard.stage !== 'Stage1' && defenderCard.stage !== 'Stage2';
+        if (isColorless && isBasic) {
+          baseDamage = Math.max(0, baseDamage - 60);
+        }
+      }
+    }
+
     // 道具：特定屬性防禦（福祿果 / 巧可果 / 千香果 / 刺耳果 / 霹霹果 / 莓榴果）
     // 只要觸發就 -60 並丟棄，不受是否已被其他機制削到 0 影響（規則上 tool 仍消耗）
     // skipDefEffects 跳過，但不觸發道具也不丟棄。阻礙之塔時整個道具效果失效。

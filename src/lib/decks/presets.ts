@@ -1058,6 +1058,355 @@ const FLAREON_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/** 土龍多龍 預組（60 張）— v2.154 Leon 提供卡表 */
+const DUDUNSPARCE_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_dudunsparce_dragapult__',
+  name: '土龍多龍',
+  entries: [
+    // Pokemon 21
+    { cardId: '17017', count: 4 }, // 多龍梅西亞 (MC 546/742)
+    { cardId: '17018', count: 4 }, // 多龍奇 (MC 547/742)
+    { cardId: '17019', count: 3 }, // 多龍巴魯托ex (MC 548/742)
+    { cardId: '12540', count: 2 }, // 土龍弟弟 (SV9 078/100)
+    { cardId: '9827',  count: 1 }, // 土龍節節 (SV5K 057/071)
+    { cardId: '17046', count: 1 }, // 土龍節節ex (MC 575/742)
+    { cardId: '16829', count: 2 }, // 願增猿 (MC 358/742)
+    { cardId: '14671', count: 1 }, // 含羞苞 (M2a 011/193)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)
+    // Items 17
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC 662/742)
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '18492', count: 2 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17158', count: 1 }, // 英雄斗篷 (MC 687/742) ACE SPEC
+    // Supporters 10
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17167', count: 2 }, // 赤松 (MC 696/742)
+    { cardId: '18052', count: 1 }, // 鳴依的勉勵 (M3 075/080)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724/742)
+    // Stadium 3
+    { cardId: '14020', count: 3 }, // 險惡廢墟 (M1L 063/063)
+    // Energy 9
+    { cardId: '17220', count: 4 }, // 基本【超】能量 (MC PSY)
+    { cardId: '17216', count: 3 }, // 基本【火】能量 (MC FIR)
+    { cardId: '17214', count: 2 }, // 基本【惡】能量 (MC DAR)
+  ],
+};
+
+/** 大竺葵 預組（60 張）— v2.154 Leon 提供卡表 */
+const MEGANIUM_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_meganium__',
+  name: '大竺葵',
+  entries: [
+    // Pokemon 19
+    { cardId: '16553', count: 4 }, // 厄鬼椪 碧草面具ex (MC 082/742)
+    { cardId: '16487', count: 2 }, // 菊草葉 (MC 016/742)
+    { cardId: '14024', count: 2 }, // 月桂葉 (M1S 004/063)
+    { cardId: '14025', count: 2 }, // 大竺葵 (M1S 005/063)
+    { cardId: '10975', count: 1 }, // 旋轉洛托姆 (SV7 080/102)
+    { cardId: '10971', count: 4 }, // 咕咕 (SV7 076/102)
+    { cardId: '10972', count: 4 }, // 貓頭夜鷹 (SV7 077/102)
+    // Items 19
+    { cardId: '17119', count: 2 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17138', count: 4 }, // 捕蟲組合 (MC 667/742)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC 662/742)
+    { cardId: '17122', count: 1 }, // 高級球 (MC 651/742)
+    { cardId: '14812', count: 2 }, // 太晶珠 (M2a 152/193)
+    { cardId: '17109', count: 3 }, // 能量轉移 (MC 638/742)
+    { cardId: '17111', count: 1 }, // 能量回收器 (MC 640/742)
+    { cardId: '17134', count: 1 }, // 寶可夢交替 (MC 663/742)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742) ACE SPEC
+    // Supporters 8
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724/742)
+    { cardId: '17193', count: 1 }, // 白蕾雅 (MC 722/742)
+    { cardId: '17183', count: 1 }, // 水蓮的照顧 (MC 712/742)
+    // Stadium 3
+    { cardId: '14842', count: 2 }, // 活力森林 (M2a 182/193)
+    { cardId: '14844', count: 1 }, // 零之大空洞 (M2a 184/193)
+    // Energy 11
+    { cardId: '17217', count: 11 }, // 基本【草】能量 (MC GRA)
+  ],
+};
+
+/** 太陽伊布 預組（60 張）— v2.154 Leon 提供卡表 */
+const ESPEON_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_espeon__',
+  name: '太陽伊布',
+  entries: [
+    // Pokemon 21
+    { cardId: '16769', count: 2 }, // 太陽伊布ex (MC 298/742)
+    { cardId: '11651', count: 1 }, // 伊布ex (SV8a 126/187)
+    { cardId: '12411', count: 1 }, // 伊布 (SV8a 125/187)
+    { cardId: '16553', count: 2 }, // 厄鬼椪 碧草面具ex (MC 082/742)
+    { cardId: '16758', count: 2 }, // 莉莉艾的皮皮ex (MC 287/742)
+    { cardId: '16783', count: 2 }, // 拉帝亞斯ex (MC 312/742)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '16829', count: 2 }, // 願增猿 (MC 358/742)
+    { cardId: '14071', count: 2 }, // 超級袋獸ex (M1S 051/063)
+    { cardId: '16548', count: 1 }, // 鐵斑葉ex (MC 077/742)
+    { cardId: '16832', count: 1 }, // 鐵頭殼ex (MC 361/742)
+    { cardId: '10299', count: 1 }, // 月月熊 赫月 ex (SV5a 052/066)
+    { cardId: '11212', count: 1 }, // 古劍豹 (SV8 032/106)
+    // Items 12
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17109', count: 3 }, // 能量轉移 (MC 638/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742) ACE SPEC
+    { cardId: '14809', count: 1 }, // 玻璃喇叭 (M2a 149/193)
+    // Supporters 13
+    { cardId: '17167', count: 3 }, // 赤松 (MC 696/742)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724/742)
+    { cardId: '17169', count: 2 }, // 暗碼迷的解讀 (MC 698/742)
+    { cardId: '11282', count: 3 }, // 席藍 (SV8 102/106)
+    { cardId: '17182', count: 1 }, // 裁判 (MC 711/742)
+    { cardId: '12558', count: 1 }, // 小剛的發掘 (SV9 096/100)
+    // Stadium 3
+    { cardId: '14844', count: 3 }, // 零之大空洞 (M2a 184/193)
+    // Energy 11
+    { cardId: '17214', count: 3 }, // 基本【惡】能量 (MC DAR)
+    { cardId: '17217', count: 4 }, // 基本【草】能量 (MC GRA)
+    { cardId: '17220', count: 4 }, // 基本【超】能量 (MC PSY)
+  ],
+};
+
+/** 巨金怪 預組（60 張）— v2.154 Leon 提供卡表（含火箭隊的袋獸ex SV-P-I） */
+const METAGROSS_ROCKET_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_metagross_rocket__',
+  name: '巨金怪',
+  entries: [
+    // Pokemon 19
+    { cardId: '12396', count: 4 }, // 金屬怪 (SV8a 107/187)
+    { cardId: '9887',  count: 4 }, // 鐵啞鈴 (SV5M 046/071)
+    { cardId: '18479', count: 2 }, // 巨金怪 (M4 059/083)
+    { cardId: '10490', count: 2 }, // 席多藍恩 (SV6 076/101)
+    { cardId: '14779', count: 2 }, // 蓋諾賽克特ex (M2a 119/193)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '14672', count: 1 }, // 謝米 (M2a 012/193)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061/080)
+    { cardId: '14694', count: 1 }, // 火箭隊的急凍鳥 (M2a 034/193)
+    { cardId: '12855', count: 1 }, // 火箭隊的袋獸ex (SV-P-I 226/SV-P)
+    // Items 14
+    { cardId: '17129', count: 1 }, // 貴重手推車 (MC 658/742) ACE SPEC
+    { cardId: '17146', count: 4 }, // 火箭隊的接收器 (MC 675/742)
+    { cardId: '17122', count: 3 }, // 高級球 (MC 651/742)
+    { cardId: '17119', count: 1 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17111', count: 2 }, // 能量回收器 (MC 640/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    // Supporters 7
+    { cardId: '17205', count: 4 }, // 火箭隊的拉姆達 (MC 734/742)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724/742)
+    { cardId: '12558', count: 1 }, // 小剛的發掘 (SV9 096/100)
+    // Stadium 2
+    { cardId: '11286', count: 2 }, // 引力山岳 (SV8 106/106)
+    // Energy 18
+    { cardId: '17219', count: 18 }, // 基本【鋼】能量 (MC MET)
+  ],
+};
+
+/** 水牛超級袋獸 預組（60 張）— v2.154 Leon 提供卡表 */
+const KANGASKHAN_BOUFFALANT_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_kangaskhan_bouffalant__',
+  name: '水牛超級袋獸',
+  entries: [
+    // Pokemon 16
+    { cardId: '14071', count: 2 }, // 超級袋獸ex (M1S 051/063)
+    { cardId: '16783', count: 2 }, // 拉帝亞斯ex (MC 312/742)
+    { cardId: '10299', count: 1 }, // 月月熊 赫月 ex (SV5a 052/066)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061/080)
+    { cardId: '12167', count: 1 }, // 洛奇亞ex (SVM 097/175)
+    { cardId: '16758', count: 1 }, // 莉莉艾的皮皮ex (MC 287/742)
+    { cardId: '10976', count: 3 }, // 爆炸頭水牛 (SV7 081/102)
+    { cardId: '16829', count: 2 }, // 願增猿 (MC 358/742)
+    { cardId: '11048', count: 2 }, // 迷唇娃 (SV7a 018/064)
+    { cardId: '14692', count: 1 }, // 可達鴨 (M2a 032/193)
+    // Items 15
+    { cardId: '14391', count: 4 }, // 超大冰淇淋 (M2 073/080)
+    { cardId: '17131', count: 4 }, // 寶可裝置3.0 (MC 660/742)
+    { cardId: '17122', count: 2 }, // 高級球 (MC 651/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '17109', count: 1 }, // 能量轉移 (MC 638/742)
+    { cardId: '17134', count: 1 }, // 寶可夢交替 (MC 663/742)
+    { cardId: '17129', count: 1 }, // 貴重手推車 (MC 658/742)
+    // Supporters 14
+    { cardId: '17205', count: 4 }, // 火箭隊的拉姆達 (MC 734/742)
+    { cardId: '17195', count: 4 }, // 老大的指令 (MC 724/742)
+    { cardId: '17167', count: 2 }, // 赤松 (MC 696/742)
+    { cardId: '17169', count: 2 }, // 暗碼迷的解讀 (MC 698/742)
+    { cardId: '17182', count: 1 }, // 裁判 (MC 711/742)
+    { cardId: '12558', count: 1 }, // 小剛的發掘 (SV9 096/100)
+    // Stadium 3
+    { cardId: '11285', count: 2 }, // 激動競技場 (SV8 105/106)
+    { cardId: '15970', count: 1 }, // 阻礙之塔 (M2a 222/193)
+    // Energy 12
+    { cardId: '17220', count: 5 }, // 基本【超】能量 (MC PSY)
+    { cardId: '17214', count: 4 }, // 基本【惡】能量 (MC DAR)
+    { cardId: '12462', count: 3 }, // 薄霧能量 (SV8a 186/187) Special
+  ],
+};
+
+/** 莉莉艾的皮皮 預組（60 張）— v2.154 Leon 提供卡表 */
+const LILLIE_CLEFAIRY_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_lillie_clefairy__',
+  name: '莉莉艾的皮皮',
+  entries: [
+    // Pokemon 18
+    { cardId: '14071', count: 2 }, // 超級袋獸ex (M1S 051/063)
+    { cardId: '16553', count: 3 }, // 厄鬼椪 碧草面具ex (MC 082/742)
+    { cardId: '16758', count: 3 }, // 莉莉艾的皮皮ex (MC 287/742)
+    { cardId: '16783', count: 2 }, // 拉帝亞斯ex (MC 312/742)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)
+    { cardId: '16548', count: 1 }, // 鐵斑葉ex (MC 077/742)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '10286', count: 1 }, // 眷戀雲 (SV5a 039/066)
+    { cardId: '16878', count: 1 }, // 投擲猴 (MC 407/742)
+    { cardId: '14332', count: 1 }, // 火焰鳥 (M2 014/080)
+    { cardId: '14703', count: 1 }, // 古劍豹 (M2a 043/193)
+    // Items 13
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17109', count: 4 }, // 能量轉移 (MC 638/742)
+    { cardId: '17141', count: 1 }, // 夜間擔架 (MC 670/742)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742) ACE SPEC
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17163', count: 2 }, // 莉莉艾的珍珠 (MC 692/742)
+    // Supporters 11
+    { cardId: '17167', count: 1 }, // 赤松 (MC 696/742)
+    { cardId: '11282', count: 3 }, // 席藍 (SV8 102/106)
+    { cardId: '17200', count: 1 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17169', count: 3 }, // 暗碼迷的解讀 (MC 698/742)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724/742)
+    // Stadium 3
+    { cardId: '14844', count: 3 }, // 零之大空洞 (M2a 184/193)
+    // Energy 15
+    { cardId: '17217', count: 7 }, // 基本【草】能量 (MC GRA)
+    { cardId: '17220', count: 3 }, // 基本【超】能量 (MC PSY)
+    { cardId: '18056', count: 1 }, // 感應【超】能量 (M3 079/080) Special
+    { cardId: '17210', count: 4 }, // 稜鏡能量 (MC 739/742) Special
+  ],
+};
+
+/** 超級妙蛙花 預組（60 張）— v2.154 Leon 提供卡表 */
+const MEGA_VENUSAUR_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_mega_venusaur__',
+  name: '超級妙蛙花',
+  entries: [
+    // Pokemon 22
+    { cardId: '16487', count: 3 }, // 菊草葉 (MC 016/742)
+    { cardId: '16488', count: 3 }, // 月桂葉 (MC 017/742)
+    { cardId: '16489', count: 1 }, // 超級大竺葵ex (MC 018/742)
+    { cardId: '14025', count: 2 }, // 大竺葵 (M1S 005/063)
+    { cardId: '13958', count: 2 }, // 妙蛙種子 (M1L 001/063)
+    { cardId: '13959', count: 2 }, // 妙蛙草 (M1L 002/063)
+    { cardId: '13960', count: 2 }, // 超級妙蛙花ex (M1L 003/063)
+    { cardId: '16553', count: 4 }, // 厄鬼椪 碧草面具ex (MC 082/742)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    // Items 13
+    { cardId: '17133', count: 2 }, // 寶可平板 (MC 662/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17138', count: 4 }, // 捕蟲組合 (MC 667/742)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742) ACE SPEC
+    // Supporters 10
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724/742)
+    { cardId: '14395', count: 2 }, // 小光 (M2 077/080)
+    { cardId: '17183', count: 1 }, // 水蓮的照顧 (MC 712/742)
+    { cardId: '14080', count: 1 }, // 滿充的體貼 (M1S 060/063)
+    // Stadium 4
+    { cardId: '14842', count: 4 }, // 活力森林 (M2a 182/193)
+    // Energy 11
+    { cardId: '17217', count: 11 }, // 基本【草】能量 (MC GRA)
+  ],
+};
+
+/** 超級袋獸阿勃梭魯 預組（60 張）— v2.154 Leon 提供卡表 */
+const MEGA_KANGASKHAN_ABSOL_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_mega_kangaskhan_absol__',
+  name: '超級袋獸阿勃梭魯',
+  entries: [
+    // Pokemon 19
+    { cardId: '14071', count: 3 }, // 超級袋獸ex (M1S 051/063)
+    { cardId: '13995', count: 2 }, // 超級阿勃梭魯ex (M1L 038/063)
+    { cardId: '16553', count: 2 }, // 厄鬼椪 碧草面具ex (MC 082/742)
+    { cardId: '16695', count: 1 }, // 厄鬼椪 水井面具ex (MC 224/742)
+    { cardId: '16758', count: 1 }, // 莉莉艾的皮皮ex (MC 287/742)
+    { cardId: '10299', count: 1 }, // 月月熊 赫月 ex (SV5a 052/066)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)
+    { cardId: '16783', count: 1 }, // 拉帝亞斯ex (MC 312/742)
+    { cardId: '16962', count: 1 }, // 桃歹郎ex (MC 491/742)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '16829', count: 3 }, // 願增猿 (MC 358/742)
+    { cardId: '13997', count: 1 }, // 伊裴爾塔爾 (M1L 040/063)
+    // Items 11
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17109', count: 4 }, // 能量轉移 (MC 638/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742) ACE SPEC
+    // Supporters 13
+    { cardId: '17167', count: 3 }, // 赤松 (MC 696/742)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724/742)
+    { cardId: '11282', count: 3 }, // 席藍 (SV8 102/106)
+    { cardId: '12558', count: 2 }, // 小剛的發掘 (SV9 096/100)
+    { cardId: '17169', count: 2 }, // 暗碼迷的解讀 (MC 698/742)
+    // Stadium 3
+    { cardId: '14844', count: 3 }, // 零之大空洞 (M2a 184/193)
+    // Energy 14
+    { cardId: '17214', count: 5 }, // 基本【惡】能量 (MC DAR)
+    { cardId: '17217', count: 4 }, // 基本【草】能量 (MC GRA)
+    { cardId: '17220', count: 2 }, // 基本【超】能量 (MC PSY)
+    { cardId: '17221', count: 1 }, // 基本【水】能量 (MC WAT)
+    { cardId: '17210', count: 2 }, // 稜鏡能量 (MC 739/742) Special
+  ],
+};
+
+/** 青銅鐘多龍 預組（60 張）— v2.154 Leon 提供卡表 */
+const BRONZONG_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_bronzong_dragapult__',
+  name: '青銅鐘多龍',
+  entries: [
+    // Pokemon 21
+    { cardId: '17019', count: 2 }, // 多龍巴魯托ex (MC 548/742)
+    { cardId: '17018', count: 3 }, // 多龍奇 (MC 547/742)
+    { cardId: '17017', count: 3 }, // 多龍梅西亞 (MC 546/742)
+    { cardId: '9799',  count: 2 }, // 青銅鐘 (SV5K 029/071)
+    { cardId: '9798',  count: 2 }, // 銅鏡怪 (SV5K 028/071)
+    { cardId: '12151', count: 1 }, // 銅鏡怪 (SVM 081/175)
+    { cardId: '16829', count: 2 }, // 願增猿 (MC 358/742)
+    { cardId: '16783', count: 2 }, // 拉帝亞斯ex (MC 312/742)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '14671', count: 1 }, // 含羞苞 (M2a 011/193)
+    // Items 16
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17133', count: 3 }, // 寶可平板 (MC 662/742)
+    { cardId: '17122', count: 3 }, // 高級球 (MC 651/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17134', count: 1 }, // 寶可夢交替 (MC 663/742)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742) ACE SPEC
+    { cardId: '17159', count: 1 }, // 氣球 (MC 688/742) Tool
+    // Supporters 11
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17189', count: 3 }, // 鬥子 (MC 718/742)
+    { cardId: '17167', count: 2 }, // 赤松 (MC 696/742)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724/742)
+    // Stadium 3
+    { cardId: '14020', count: 2 }, // 險惡廢墟 (M1L 063/063)
+    { cardId: '14849', count: 1 }, // 火箭隊的監視塔 (M2a 189/193)
+    // Energy 9
+    { cardId: '17216', count: 2 }, // 基本【火】能量 (MC FIR)
+    { cardId: '17220', count: 2 }, // 基本【超】能量 (MC PSY)
+    { cardId: '17214', count: 2 }, // 基本【惡】能量 (MC DAR)
+    { cardId: '18056', count: 3 }, // 感應【超】能量 (M3 079/080) Special
+  ],
+};
+
 /** 大吾的巨金怪 預組（60 張）— v2.150 Leon 提供卡表（SVOD starter） */
 const STEVEN_METAGROSS_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_steven_metagross__',
@@ -1176,6 +1525,15 @@ export const PRESET_DECKS: Deck[] = [
   { ...FLAREON_DECK, updatedAt: 0 },
   { ...FESTIVAL_LEAD_DECK, updatedAt: 0 },
   { ...STEVEN_METAGROSS_DECK, updatedAt: 0 },
+  { ...DUDUNSPARCE_DRAGAPULT_DECK, updatedAt: 0 },
+  { ...MEGANIUM_DECK, updatedAt: 0 },
+  { ...ESPEON_DECK, updatedAt: 0 },
+  { ...METAGROSS_ROCKET_DECK, updatedAt: 0 },
+  { ...KANGASKHAN_BOUFFALANT_DECK, updatedAt: 0 },
+  { ...LILLIE_CLEFAIRY_DECK, updatedAt: 0 },
+  { ...MEGA_VENUSAUR_DECK, updatedAt: 0 },
+  { ...MEGA_KANGASKHAN_ABSOL_DECK, updatedAt: 0 },
+  { ...BRONZONG_DRAGAPULT_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */

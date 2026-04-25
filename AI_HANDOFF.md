@@ -1,9 +1,56 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.153)  
+> 最後更新：2026-04-26 (v2.154)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.154 — 9 個新 preset + 6 個新 effect 實裝
+
+### Leon 給的 9 張卡表（檔名）
+1. **土龍多龍** — 土龍多龍ex（弱抗鏈）+ 多龍奇 + 鐵頭殼ex（鈷藍指令 buff）
+2. **大竺葵** — 大竺葵（繁茂）+ 樹才怪 + 太陽伊布 ex
+3. **太陽伊布** — 太陽伊布 ex 主力 + 月伊布 ex
+4. **巨金怪** — 大吾的巨金怪（皇帝之勢 / 金屬信號 / X 啟動）+ 金屬怪（金屬製造者）
+5. **水牛超級袋獸** — 爆炸頭水牛（捲牆 -60）+ 超級袋獸 ex
+6. **莉莉艾的皮皮** — 莉莉艾的皮皮 ex（妖精領域）+ 皮可西
+7. **超級妙蛙花** — 超級妙蛙花 ex（日光轉移）+ 草系搭子
+8. **超級袋獸阿勃梭魯** — 超級袋獸 ex + 阿勃梭魯（破壞之眼，原已實裝）
+9. **青銅鐘多龍** — 青銅鐘 + 多龍 線（既存實裝）
+
+### 6 個新 effect 全實裝
+| 卡名 | 類型 | 實裝位置 |
+|---|---|---|
+| **超級妙蛙花ex｜日光轉移** | 特性（regA） | `v154_decks.ts` 2-step pending（選來源→選目標）|
+| **金屬怪｜金屬製造者** | 特性（regA） | `v154_decks.ts` peek top 4 + 自動分配【鋼】基本能量 |
+| **超大冰淇淋** | Item | `v154_decks.ts` regG（戰鬥寶能量單位 ≥3）+ reg 回 80 |
+| **玻璃喇叭** | Item | `v154_decks.ts` 太晶 gate + discard-search 'BasicEnergy' max=2，自動分配備戰【無】 |
+| **鐵頭殼ex｜鈷藍指令** | 特性（被動） | `effects.ts` PASSIVE_ATTACK_BONUS 場上其他「未來」+20 傷害 |
+| **爆炸頭水牛｜捲牆** | 特性（被動） | `engine.ts` 防守方戰鬥位是【無】基礎 + 同名 ≥2 → 受傷害 -60 |
+
+### 新增檔案
+- `src/lib/game/effects/cards/v154_decks.ts` — 4 個 effect 集中註冊（一次 import 一檔）
+
+### 改動檔案
+- `src/lib/version.ts` — 2.153 → 2.154
+- `src/lib/decks/presets.ts` — 加入 9 個 DECK 物件 + 對應到 PRESET_DECKS（28 → 37 組）
+- `src/lib/game/effects.ts` — 新增 PASSIVE_ATTACK_BONUS 鈷藍指令；side-effect import `./effects/cards/v154_decks`
+- `src/lib/game/engine.ts` — 傷害計算 inline 加捲牆 block（在 PASSIVE_DAMAGE_REDUCE 之後）
+
+### 實作備註
+- **鈷藍指令** 不需要改 engine — PASSIVE_ATTACK_BONUS map 已對攻擊方場上每隻寶可夢 iterate；自身排除靠 `att.name === '鐵頭殼ex'` 早返回。
+- **捲牆** 屬於「條件式且依場上同名數量」的場域型減傷，PASSIVE_DAMAGE_REDUCE 不適用（它是定額單體）。獨立 inline。
+- **日光轉移** 用 `withPending` 串兩個 picker — 第一個 heal-target picker 選來源（必須有 ≥1 顆草能量），resolver `sunlight-transfer-source` 開第二個 heal-target picker 選目標，resolver `sunlight-transfer-target` 真正搬能量。
+- **金屬製造者** peek top 4 → 多選基本【鋼】 → resolver 把選的 auto-attach 到場上【鋼】寶（戰鬥位優先），剩餘洗回牌庫底。
+- **玻璃喇叭** gate 三條件全須成立：場上有太晶 + 備戰有【無】寶可夢 + 棄牌區有基本能量；resolver 自動 round-robin 分配到備戰【無】。
+- 總卡池 3997 / 38 set / 37 preset。
+
+### 驗證
+- `npm run build` ✓
+- `node scripts/sim-sandbox.mjs 8` ✓ 8 局 0 bug，平均 18 回合
+- `node scripts/audit-data.mjs` ✓ 6 個新 effect 都不在未實裝清單
 
 ---
 
