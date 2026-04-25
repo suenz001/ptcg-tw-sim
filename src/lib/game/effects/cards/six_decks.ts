@@ -766,7 +766,120 @@ reg('高溫燃燒器', (st, idx, pool) => {
   p.discard = [...p.discard, eCard];
   players[idx] = p;
   st = addLog({ ...st, players }, '高溫燃燒器：丟棄 1 張基本【火】能量', idx);
-  return addLog(st, '高溫燃燒器：從對手場上選 1 張 Tool/特殊能量/Stadium 丟棄（TODO: 引擎尚未支援 mixed-pick pending，請手動執行）', idx);
+
+  // v2.140：用 modal-choice 列出對手場上所有 Tool / 特殊能量 / Stadium 三類候選，玩家選 1 個
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const oppAll: { inst: typeof dp.bench[0]; pos: 'active' | 'bench' }[] = [];
+  if (dp.active) oppAll.push({ inst: dp.active, pos: 'active' });
+  for (const b of dp.bench) oppAll.push({ inst: b, pos: 'bench' });
+
+  const options: { id: string; text: string }[] = [];
+  for (const { inst, pos } of oppAll) {
+    const ownerName = pool.get(inst.cardId)?.name ?? '?';
+    const posLabel = pos === 'active' ? '戰鬥' : '備戰';
+    if (inst.toolAttached) {
+      const t = pool.get(inst.toolAttached.cardId)?.name ?? '?';
+      options.push({ id: `tool:${inst.iid}`, text: `🔧 ${posLabel} ${ownerName} 的道具「${t}」` });
+    }
+    for (const e of inst.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (ec?.supertype === 'Energy' && ec?.subtype !== 'Basic') {
+        options.push({ id: `energy:${inst.iid}:${e.iid}`, text: `⚡ ${posLabel} ${ownerName} 的特殊能量「${ec?.name ?? '?'}」` });
+      }
+    }
+  }
+  if (st.activeStadium) {
+    const stadiumName = pool.get(st.activeStadium.cardId)?.name ?? '?';
+    options.push({ id: 'stadium', text: `🏟 場地卡「${stadiumName}」` });
+  }
+
+  if (options.length === 0) {
+    return addLog(st, '高溫燃燒器：對手場上無可丟棄的 Tool/特殊能量/Stadium', idx);
+  }
+
+  st = addLog(st, '高溫燃燒器：從對手場上選 1 張 Tool/特殊能量/Stadium 丟棄', idx);
+  return withPending(st, {
+    type: 'modal-choice',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'heat-burner-pick',
+    params: { label: '高溫燃燒器', options },
+  });
+});
+regR('heat-burner-pick', (state, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(state, '高溫燃燒器：未選擇目標', aIdx);
+  const choice = iids[0];
+  const dIdx = (1 - aIdx) as 0 | 1;
+  let s = state;
+  const players = [...s.players] as [PlayerState, PlayerState];
+
+  if (choice === 'stadium') {
+    if (!s.activeStadium) return addLog(s, '高溫燃燒器：場地已不存在', aIdx);
+    const sName = pool.get(s.activeStadium.cardId)?.name ?? '?';
+    // 場地丟到自己（行動方）的棄牌區（一般 stadium 換場規則）
+    const me = { ...players[aIdx] };
+    me.discard = [...me.discard, s.activeStadium];
+    players[aIdx] = me;
+    s = { ...s, players, activeStadium: undefined };
+    return addLog(s, `高溫燃燒器：場地卡「${sName}」被丟棄`, aIdx);
+  }
+
+  if (choice.startsWith('tool:')) {
+    const targetIid = choice.slice(5);
+    const dp = { ...players[dIdx] };
+    let toolName = '?';
+    let toolInst: typeof dp.bench[0]['toolAttached'] | undefined;
+    if (dp.active && dp.active.iid === targetIid) {
+      toolInst = dp.active.toolAttached;
+      if (!toolInst) return addLog(s, '高溫燃燒器：目標已無道具', aIdx);
+      toolName = pool.get(toolInst.cardId)?.name ?? '?';
+      dp.active = { ...dp.active, toolAttached: undefined };
+    } else {
+      const bIdx = dp.bench.findIndex(b => b.iid === targetIid);
+      if (bIdx < 0) return addLog(s, '高溫燃燒器：找不到目標', aIdx);
+      const b = { ...dp.bench[bIdx] };
+      toolInst = b.toolAttached;
+      if (!toolInst) return addLog(s, '高溫燃燒器：目標已無道具', aIdx);
+      toolName = pool.get(toolInst.cardId)?.name ?? '?';
+      b.toolAttached = undefined;
+      dp.bench = [...dp.bench];
+      dp.bench[bIdx] = b;
+    }
+    dp.discard = [...dp.discard, toolInst];
+    players[dIdx] = dp;
+    s = { ...s, players };
+    return addLog(s, `高溫燃燒器：丟棄對手的道具「${toolName}」`, aIdx);
+  }
+
+  if (choice.startsWith('energy:')) {
+    const parts = choice.split(':');
+    const targetIid = parts[1];
+    const energyIid = parts[2];
+    const dp = { ...players[dIdx] };
+    let removed: typeof dp.bench[0]['energyAttached'][0] | undefined;
+    if (dp.active && dp.active.iid === targetIid) {
+      removed = dp.active.energyAttached.find(e => e.iid === energyIid);
+      if (!removed) return addLog(s, '高溫燃燒器：找不到能量', aIdx);
+      dp.active = { ...dp.active, energyAttached: dp.active.energyAttached.filter(e => e.iid !== energyIid) };
+    } else {
+      const bIdx = dp.bench.findIndex(b => b.iid === targetIid);
+      if (bIdx < 0) return addLog(s, '高溫燃燒器：找不到目標', aIdx);
+      const b = { ...dp.bench[bIdx] };
+      removed = b.energyAttached.find(e => e.iid === energyIid);
+      if (!removed) return addLog(s, '高溫燃燒器：找不到能量', aIdx);
+      b.energyAttached = b.energyAttached.filter(e => e.iid !== energyIid);
+      dp.bench = [...dp.bench];
+      dp.bench[bIdx] = b;
+    }
+    dp.discard = [...dp.discard, removed];
+    players[dIdx] = dp;
+    s = { ...s, players };
+    const eName = pool.get(removed.cardId)?.name ?? '?';
+    return addLog(s, `高溫燃燒器：丟棄對手的特殊能量「${eName}」`, aIdx);
+  }
+
+  return s;
 });
 
 // 完全體攪拌器（Item ACE SPEC）— 從牌庫選 ≤5 張丟棄 + 重洗
@@ -858,22 +971,27 @@ regPre('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool, action) => {
     nBench = bench.find(b => b.iid === choice.pokeIid) ?? null;
     pickedAttackIdx = choice.attackIndex;
   } else {
-    // fallback：自動挑備戰 N的寶可夢最高印刷傷害招式
-    // v2.134：排除自己（N的索羅亞克ex）— 否則會選到另一隻索羅亞克ex 的「暗黑底牌」
-    //   形成無窮遞迴 stack overflow（sim 抓到的）。卡面也不允許複製自己。
+    // v2.140 改良 fallback：跨整個備戰區的所有 N的寶可夢與所有招式組合中，
+    //   挑「印刷傷害最高」的（含 ex 招式）— 原本只看第一隻備戰，導致 sim 勝率 10.6%。
+    // 排除：自己（索羅亞克ex 不能複製自己）、暗黑底牌（防遞迴）。
     const benchCandidates = bench.filter(b => {
       const c = pool.get(b.cardId);
       return c?.name?.startsWith('N的') && c.name !== 'N的索羅亞克ex';
     });
-    nBench = benchCandidates[0] ?? null;
-    if (nBench) {
-      const atks = pool.get(nBench.cardId)?.attacks ?? [];
-      let bestIdx = 0, bestDmg = parseDmg(atks[0]?.damage ?? '');
-      for (let i = 1; i < atks.length; i++) {
+    let best: { inst: CardInstance; atkIdx: number; dmg: number } | null = null;
+    for (const b of benchCandidates) {
+      const atks = pool.get(b.cardId)?.attacks ?? [];
+      for (let i = 0; i < atks.length; i++) {
+        if (atks[i].name === '暗黑底牌') continue; // 防遞迴
         const d = parseDmg(atks[i].damage);
-        if (d > bestDmg) { bestDmg = d; bestIdx = i; }
+        if (!best || d > best.dmg) {
+          best = { inst: b, atkIdx: i, dmg: d };
+        }
       }
-      pickedAttackIdx = bestIdx;
+    }
+    if (best) {
+      nBench = best.inst;
+      pickedAttackIdx = best.atkIdx;
     }
   }
   if (!nBench) {

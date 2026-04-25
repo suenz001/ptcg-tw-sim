@@ -1,9 +1,48 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.139)  
+> 最後更新：2026-04-25 (v2.140)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.140 — #8 高溫燃燒器完整實裝 + N索羅亞克 fallback 改良
+
+### #8 高溫燃燒器完整實裝（用 modal-choice 動態 options）
+從 v2.117 簡化版「log 提示後跳過」→ 完整版：
+- 棄 1 張基本【火】能量
+- 列出對手場上所有 3 類候選作為 modal-choice options：
+  - 🔧 戰鬥/備戰 寶可夢身上的 Tool
+  - ⚡ 戰鬥/備戰 寶可夢身上的特殊能量
+  - 🏟 場地卡（Stadium）
+- 玩家挑 1 個 → resolver 根據 id prefix 分派丟棄動作
+
+option.id 編碼：`tool:<iid>` / `energy:<iid>:<eid>` / `stadium`
+
+不需新 pending type — 利用 v2.139 加的 `modal-choice` 框架就解決了。這證明 modal-choice 的設計對「mixed-pick」場景也通用（之前評估錯誤）。
+
+### N索羅亞克ex｜暗黑底牌 fallback 改良
+原本：`benchCandidates[0]`（取第一隻 N的寶可夢）→ 局限於該寶可夢的招式選擇。
+改良：跨整個備戰區的所有 N的寶可夢 × 所有招式組合中，挑「印刷傷害最高」的（排除暗黑底牌防遞迴）。
+
+不過 sim 顯示 N索羅亞克勝率從 8% → 6.8%（沒救），原因不只 fallback 選擇：
+- AI 整體不會佈局「N的多種寶可夢」於備戰
+- 暗黑底牌複製的招式有附加效果（棄能量、搜牌等）AI 處理不順
+- 這是更深層的 AI 改良工程，預估 3-5 天
+
+### sim 結果
+`node scripts/sim-tournament.mjs 3` → 1518 場 / 0 bug / 0 stuck
+排名穩定，超級寶石海星 78.0% / 路卡利歐 72.7% 維持前兩名。
+
+### 變更檔案
+- `src/lib/game/effects/cards/six_decks.ts`：高溫燃燒器 + heat-burner-pick resolver；N索羅亞克 fallback 跨備戰最強招式
+- `src/lib/version.ts`：2.139 → 2.140
+
+### 還剩 v2.141+ 待補
+- **#7 火箭羽毛玩家選張數** — 仍需打破 ATTACK_PRE 同步 flow（持續延後）
+- **N索羅亞克 AI 整體布局改良** — 工程量大
+- **其他簡化卡** — 灰塵山 / 賽富豪 / 賽吉等若干 // 簡化 註解
 
 ---
 
