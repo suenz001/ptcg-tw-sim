@@ -1,9 +1,57 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-25 (v2.147)  
+> 最後更新：2026-04-25 (v2.148)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.148 — 調換票實裝 + 4 組新 preset（超級長耳兔 / 蜜集大蛇 / 火伊布 / 祭典樂舞）
+
+### 調換票（Item, SV9 090/100）
+卡面：「數過自己的獎賞卡張數後，全部翻回反面並重洗，放回牌庫下方。然後從牌庫上方抽出與放回張數相同數量的卡作為新獎賞卡放置。」
+
+實作 `effects/cards/items_misc.ts`：
+- `regG`：prizes ≥ 1 + deck ≥ 1 才能用
+- `reg`：count = prizes.length → shuffle(prizes) 放 deck 底 → deck top N 張變新 prizes
+- 不需 pending（純自動）
+
+### 新增 4 組 preset（對 Leon 確認過卡表）
+
+Leon 確認 4 個關鍵 Pokemon ID：
+- 超級長耳兔 deck — 捲捲耳 14389（M2 071, HP=70）/ 土龍弟弟 17045（MC 574, HP=70）
+- 火伊布 deck — 伊布 12411（SV8a 125, HP=50）/ 咕咕線 SV7 076/077（HP=70/100）
+
+| 牌組 | 主軸 | 備註 |
+|---|---|---|
+| 超級長耳兔 | 超級長耳兔ex M2 + 土龍節節ex / 莉莉艾的皮皮ex | 24 entries 60 張 |
+| 蜜集大蛇 | 蜜集大蛇ex SV7 + 大竺葵繁茂 + 厄鬼椪碧草面具ex | 23 entries 60 張 |
+| 火伊布 | SV8a 太晶慶典 火/葉/仙子伊布ex + 伊布ex 虹色DNA | 35 entries 60 張 |
+| 祭典樂舞 | 蜜蟲 + 啪咚猴 + 金魚王 祭典會場 多次招式 | 22 entries 60 張 |
+
+### 已知未實裝特性（v2.148 未補完，sim 不會 crash 但少最佳化）
+
+| 特性 | 卡 | 卡面 | 影響 |
+|---|---|---|---|
+| 提升進化 | 伊布 SV8a 125 | 戰鬥場上時可第 1 回合或剛使出時進化 | 火伊布 deck 進化稍慢 |
+| 虹色DNA | 伊布ex SV8a 126 | 從伊布進化的 ex 可放此寶可夢身上完成進化 | 火伊布 deck 多一條進化路徑（仍可走伊布→火伊布ex） |
+| 熟成充能 | 蜜集大蛇ex | 1 回 1 次：手牌 1 草能附寶可夢 + 回血 30 | 蜜集大蛇 archetype 主軸 |
+| 搜尋寶石 | 貓頭夜鷹 | 進化時若場上有太晶寶可夢 → 搜 2 張訓練家 | 火伊布 deck 過牌 |
+| 祭典樂舞 | 裹蜜蟲/角金魚/金魚王/綿綿泡芙 | 場上有祭典會場 → 招式可使用 2 次 | 祭典樂舞 deck 主機制 |
+| 衝衝鼓 | 啪咚猴 | 戰鬥位有祭典樂舞 → 搜 1 張卡到手牌 | 祭典樂舞 deck 加速 |
+| 璀璨結晶 | Tool ACE SPEC | 附有的太晶寶可夢招式 -1 能量 | 火伊布 deck 1 張 |
+
+留待 v2.149+ 補完。對 sim 不致命：所有未實裝特性都是 buff/draw 類，不影響遊戲規則正確性。
+
+### 驗證
+- `npm run build` ✓ 15.24s
+- `node scripts/sim-sandbox.mjs 12` ✓ 12 局正常結束、0 bug、27 preset decks 全部 OK
+
+### 改動檔案
+- `src/lib/version.ts` — 2.147 → 2.148
+- `src/lib/game/effects/cards/items_misc.ts` — 調換票 reg/regG
+- `src/lib/decks/presets.ts` — 4 個新 preset DECK + PRESET_DECKS array
 
 ---
 

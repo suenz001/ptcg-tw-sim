@@ -937,6 +937,162 @@ const ROCKET_HONCHKROW_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/** 超級長耳兔 預組（60 張）— v2.148 Leon 提供卡表 */
+const MEGA_LOPUNNY_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_mega_lopunny__',
+  name: '超級長耳兔',
+  entries: [
+    // Pokemon 17
+    { cardId: '14390', count: 2 }, // 超級長耳兔ex (M2 072/080)
+    { cardId: '14389', count: 2 }, // 捲捲耳 (M2 071/080) — Leon v2.148 確認 HP=70
+    { cardId: '17046', count: 1 }, // 土龍節節ex (MC 575/742)
+    { cardId: '9827',  count: 3 }, // 土龍節節 (SV5K 057/071) — 逃跑抽出 Stage1
+    { cardId: '17045', count: 4 }, // 土龍弟弟 (MC 574/742) — Leon v2.148 確認 HP=70
+    { cardId: '10975', count: 1 }, // 旋轉洛托姆 (SV7 080/102) — 風扇呼喚 ability
+    { cardId: '16758', count: 2 }, // 莉莉艾的皮皮ex (MC 287/742) — 妖精領域
+    { cardId: '14692', count: 1 }, // 可達鴨 (M2a 032/193) — 濕氣 ability
+    { cardId: '14703', count: 1 }, // 古劍豹 (M2a 043/193)
+    // Items 22
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC 662/742)
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '17131', count: 3 }, // 寶可裝置3.0 (MC 660/742)
+    { cardId: '18407', count: 2 }, // 奇跡修正檔 (M3 104/080)
+    { cardId: '17159', count: 3 }, // 氣球 (MC 688/742) Tool
+    // Supporters 13
+    { cardId: '17200', count: 3 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '14080', count: 3 }, // 滿充的體貼 (M1S 060/063)
+    { cardId: '17189', count: 3 }, // 鬥子 (MC 718/742)
+    { cardId: '17195', count: 4 }, // 老大的指令 (MC 724/742)
+    // Stadium 1
+    { cardId: '14397', count: 1 }, // 對戰圓形競技場 (M2 079/080)
+    // Energy 7
+    { cardId: '9912',  count: 4 }, // 薄霧能量 (SV5M 071/071) Special
+    { cardId: '17220', count: 2 }, // 基本【超】能量 (MC PSY)
+    { cardId: '17211', count: 1 }, // 富裕能量 (MC 740/742) ACE SPEC Special
+  ],
+};
+
+/** 蜜集大蛇 預組（60 張）— v2.148 Leon 提供卡表 */
+const HONEY_SERPERIOR_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_honey_serperior__',
+  name: '蜜集大蛇',
+  entries: [
+    // Pokemon 20
+    { cardId: '10905', count: 2 }, // 啃果蟲 (SV7 010/102)
+    { cardId: '10426', count: 2 }, // 裹蜜蟲 (SV6 012/101)
+    { cardId: '10907', count: 2 }, // 蜜集大蛇ex (SV7 012/102)
+    { cardId: '14023', count: 2 }, // 菊草葉 (M1S 003/063)
+    { cardId: '14024', count: 2 }, // 月桂葉 (M1S 004/063)
+    { cardId: '14025', count: 2 }, // 大竺葵 (M1S 005/063) — 繁茂 ability
+    { cardId: '16553', count: 4 }, // 厄鬼椪 碧草面具ex (MC 082/742)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)
+    { cardId: '13963', count: 1 }, // 時拉比 (M1L 006/063)
+    // Items 12
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742) ACE SPEC
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17138', count: 4 }, // 捕蟲組合 (MC 667/742)
+    { cardId: '17141', count: 1 }, // 夜間擔架 (MC 670/742)
+    { cardId: '14812', count: 1 }, // 太晶珠 (M2a 152/193)
+    { cardId: '17133', count: 1 }, // 寶可平板 (MC 662/742)
+    // Supporters 9
+    { cardId: '17169', count: 1 }, // 暗碼迷的解讀 (MC 698/742)
+    { cardId: '17183', count: 1 }, // 水蓮的照顧 (MC 712/742)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724/742)
+    { cardId: '14424', count: 1 }, // 小光 (M-P-I 028/M-P)
+    // Stadium 4
+    { cardId: '14842', count: 4 }, // 活力森林 (M2a 182/193)
+    // Energy 15
+    { cardId: '17217', count: 15 }, // 基本【草】能量 (MC GRA)
+  ],
+};
+
+/** 火伊布 預組（60 張）— v2.148 Leon 提供卡表 */
+const FLAREON_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_flareon__',
+  name: '火伊布',
+  entries: [
+    // Pokemon 22
+    { cardId: '12411', count: 2 }, // 伊布 (SV8a 125/187) — Leon v2.148 確認 HP=50
+    { cardId: '11651', count: 1 }, // 伊布ex (SV8a 126/187) 太晶
+    { cardId: '11547', count: 2 }, // 火伊布ex (SV8a 022/187) 太晶
+    { cardId: '11594', count: 1 }, // 仙子伊布ex (SV8a 069/187) 太晶
+    { cardId: '11528', count: 1 }, // 葉伊布ex (SV8a 003/187) 太晶
+    { cardId: '10975', count: 2 }, // 旋轉洛托姆 (SV7 080/102) — 風扇呼喚
+    { cardId: '10971', count: 4 }, // 咕咕 (SV7 076/102) — Leon v2.148 確認 HP=70
+    { cardId: '10972', count: 4 }, // 貓頭夜鷹 (SV7 077/102) — Leon v2.148 確認 HP=100
+    { cardId: '10452', count: 1 }, // 厄鬼椪 水井面具ex (SV6 038/101) 太晶
+    { cardId: '16758', count: 1 }, // 莉莉艾的皮皮ex (MC 287/742) — 妖精領域
+    { cardId: '11213', count: 1 }, // 皮卡丘ex (SV8 033/106) 太晶
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '16783', count: 1 }, // 拉帝亞斯ex (MC 312/742) — 天空徑線 inline
+    // Items 16
+    { cardId: '17119', count: 2 }, // 好友寶芬 (MC 648/742)
+    { cardId: '14812', count: 2 }, // 太晶珠 (M2a 152/193)
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17133', count: 3 }, // 寶可平板 (MC 662/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '17134', count: 1 }, // 寶可夢交替 (MC 663/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17151', count: 1 }, // 璀璨結晶 (MC 680/742) ACE SPEC Tool
+    // Supporters 9
+    { cardId: '17200', count: 1 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17167', count: 3 }, // 赤松 (MC 696/742)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724/742)
+    { cardId: '11282', count: 1 }, // 席藍 (SV8 102/106)
+    { cardId: '17175', count: 1 }, // 空手道王的演練 (MC 704/742)
+    { cardId: '17193', count: 1 }, // 白蕾雅 (MC 722/742)
+    // Stadium 3
+    { cardId: '14844', count: 2 }, // 零之大空洞 (M2a 184/193)
+    { cardId: '11286', count: 1 }, // 引力山岳 (SV8 106/106)
+    // Energy 10
+    { cardId: '17216', count: 2 }, // 基本【火】能量 (MC FIR)
+    { cardId: '17221', count: 2 }, // 基本【水】能量 (MC WAT)
+    { cardId: '17218', count: 2 }, // 基本【雷】能量 (MC LIG)
+    { cardId: '17220', count: 2 }, // 基本【超】能量 (MC PSY)
+    { cardId: '17217', count: 1 }, // 基本【草】能量 (MC GRA)
+    { cardId: '17219', count: 1 }, // 基本【鋼】能量 (MC MET)
+  ],
+};
+
+/** 祭典樂舞 預組（60 張）— v2.148 Leon 提供卡表 */
+const FESTIVAL_LEAD_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_festival_lead__',
+  name: '祭典樂舞',
+  entries: [
+    // Pokemon 20
+    { cardId: '10905', count: 4 }, // 啃果蟲 (SV7 010/102)
+    { cardId: '10426', count: 4 }, // 裹蜜蟲 (SV6 012/101)
+    { cardId: '10422', count: 4 }, // 敲音猴 (SV6 008/101)
+    { cardId: '10423', count: 4 }, // 啪咚猴 (SV6 009/101)
+    { cardId: '10440', count: 2 }, // 角金魚 (SV6 026/101)
+    { cardId: '12339', count: 1 }, // 金魚王 (SV8a 029/187)
+    { cardId: '14672', count: 1 }, // 謝米 (M2a 012/193)
+    // Items 19
+    { cardId: '17138', count: 4 }, // 捕蟲組合 (MC 667/742)
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC 662/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742) ACE SPEC
+    { cardId: '17159', count: 2 }, // 氣球 (MC 688/742) Tool
+    { cardId: '17160', count: 2 }, // 猛攻手鐲 (MC 689/742) Tool
+    // Supporters 11
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '12558', count: 2 }, // 小剛的發掘 (SV9 096/100)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC 724/742)
+    { cardId: '17183', count: 1 }, // 水蓮的照顧 (MC 712/742)
+    { cardId: '17184', count: 1 }, // 烏栗 (MC 713/742)
+    { cardId: '17175', count: 1 }, // 空手道王的演練 (MC 704/742)
+    // Stadium 4
+    { cardId: '10513', count: 4 }, // 祭典會場 (SV6 099/101)
+    // Energy 6
+    { cardId: '17217', count: 6 }, // 基本【草】能量 (MC GRA)
+  ],
+};
+
 /**
  * 所有內建預設牌組
  *
@@ -949,6 +1105,7 @@ const ROCKET_HONCHKROW_DECK: Omit<Deck, 'updatedAt'> = {
  * v2.112：新增「N的索羅亞克」/「火焰雞多龍」/「夠讚狗」/「顫弦蠑螈」/「蒼炎刃鬼」/「超級甲賀忍蛙」六組 Leon 自選卡表。
  * v2.133：新增「電電蟲」/「超級袋獸厄鬼椪」兩組 Leon 自選卡表。
  * v2.135：新增「阿響的火爆獸」/「火箭隊的烏鴉頭頭」兩組 Leon 自選卡表。
+ * v2.148：新增「超級長耳兔」/「蜜集大蛇」/「火伊布」/「祭典樂舞」四組 Leon 自選卡表。
  */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
@@ -974,6 +1131,10 @@ export const PRESET_DECKS: Deck[] = [
   { ...MEGA_KANGASKHAN_OGERPON_DECK, updatedAt: 0 },
   { ...RAKI_TYPHLOSION_DECK, updatedAt: 0 },
   { ...ROCKET_HONCHKROW_DECK, updatedAt: 0 },
+  { ...MEGA_LOPUNNY_DECK, updatedAt: 0 },
+  { ...HONEY_SERPERIOR_DECK, updatedAt: 0 },
+  { ...FLAREON_DECK, updatedAt: 0 },
+  { ...FESTIVAL_LEAD_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */
