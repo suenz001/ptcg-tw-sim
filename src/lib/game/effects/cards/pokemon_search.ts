@@ -46,25 +46,58 @@ reg('好友寶芬', (st, idx) => {
   });
 });
 
-// 赫普的包包 — 從牌庫選最多 2 隻「赫普的寶可夢」基礎寶可夢到備戰（簡化為任何基礎）
+// 赫普的包包 — 從牌庫選最多 2 隻「赫普的」基礎寶可夢到備戰
+// v2.159：完整實裝「赫普的」前綴限定
+//   - gate 至少 1 隻「赫普的」基礎在牌庫
+//   - filter 用新 'Basic:NamePrefix=赫普的'（UI 端 filter parser 同步擴展）
+//   - resolver 端驗證選的卡符合 prefix（防呆 / AI sim 模式 fallback）
 regG('赫普的包包', (st, idx, pool) => {
   if (st.players[idx].bench.length >= 5) return false;
   return st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && !card.evolvesFrom;
+    return card?.supertype === 'Pokemon' && !card.evolvesFrom && card.name.startsWith('赫普的');
   });
 });
 reg('赫普的包包', (st, idx) => {
   const slots = 5 - st.players[idx].bench.length;
   const takeMax = Math.min(2, slots);
-  st = addLog(st, `赫普的包包：從牌庫選至多 ${takeMax} 隻基礎寶可夢到備戰區`, idx);
+  st = addLog(st, `赫普的包包：從牌庫選至多 ${takeMax} 隻「赫普的」基礎寶可夢到備戰區`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Basic',
+    filter: 'Basic:NamePrefix=赫普的',
     minCount: 0, maxCount: takeMax,
-    effectKey: 'bench-basic-from-deck',
+    effectKey: 'bench-named-basic-from-deck',
+    params: { namePrefix: '赫普的' },
   });
+});
+
+// v2.159：bench-named-basic-from-deck — 同 bench-basic-from-deck 但 resolver 驗證 namePrefix
+regR('bench-named-basic-from-deck', (st, idx, iids, params, pool) => {
+  const namePrefix = String(params?.namePrefix ?? '');
+  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  // 驗證每張選的卡：必須是 prefix 開頭 + 基礎寶可夢
+  const valid = chosen.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && !card.evolvesFrom
+      && (!namePrefix || card.name.startsWith(namePrefix));
+  });
+  const validIids = valid.map(c => c.iid);
+  if (valid.length === 0) {
+    return updatePlayer(addLog(st, `${namePrefix ? '「'+namePrefix+'」' : ''}基礎寶可夢搜尋：未選擇符合條件的卡`, idx),
+      idx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
+  const names = valid.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `放到備戰區：${names}`, idx);
+  st = updatePlayer(st, idx, (p) => {
+    const selected = p.deck
+      .filter(c => validIids.includes(c.iid))
+      .map(c => ({ ...c, justPlaced: true }));
+    const remaining = p.deck.filter(c => !validIids.includes(c.iid));
+    const bench = [...p.bench, ...selected].slice(0, 5);
+    return { ...p, deck: shuffle(remaining), bench };
+  });
+  return applyBenchPlaceSideEffects(st, idx, validIids, pool);
 });
 
 regR('bench-basic-from-deck', (st, idx, iids, _params, pool) => {
@@ -93,15 +126,41 @@ regR('bench-basic-from-deck', (st, idx, iids, _params, pool) => {
 // 物品卡 — 搜尋牌庫（加手牌）
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 甜蜜球 — 從牌庫選 1 隻與對手出場寶可夢同名的寶可夢（簡化：選任意寶可夢加手牌）
-reg('甜蜜球', (st, idx) => {
-  st = addLog(st, '甜蜜球：從牌庫選 1 張寶可夢加手牌', idx);
+// 甜蜜球 — 從牌庫選 1 隻與對手出場寶可夢同名的寶可夢加手牌
+// v2.159：限定「與對手出場（戰鬥位+備戰位）寶可夢同名」（之前簡化為任意寶可夢）
+regG('甜蜜球', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const oppNames = new Set<string>();
+  if (st.players[dIdx].active) {
+    const c = pool.get(st.players[dIdx].active!.cardId);
+    if (c) oppNames.add(c.name);
+  }
+  for (const b of st.players[dIdx].bench) {
+    const c = pool.get(b.cardId);
+    if (c) oppNames.add(c.name);
+  }
+  if (oppNames.size === 0) return false;
+  return st.players[idx].deck.some(c => oppNames.has(pool.get(c.cardId)?.name ?? ''));
+});
+reg('甜蜜球', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const oppNames = new Set<string>();
+  if (st.players[dIdx].active) {
+    const c = pool.get(st.players[dIdx].active!.cardId);
+    if (c) oppNames.add(c.name);
+  }
+  for (const b of st.players[dIdx].bench) {
+    const c = pool.get(b.cardId);
+    if (c) oppNames.add(c.name);
+  }
+  st = addLog(st, `甜蜜球：從牌庫選 1 隻與對手場上同名的寶可夢加手牌（${[...oppNames].join('/')}）`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon',
+    filter: 'Pokemon:MatchOppName',
     minCount: 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
+    params: { matchOppNames: [...oppNames] },
   });
 });
 

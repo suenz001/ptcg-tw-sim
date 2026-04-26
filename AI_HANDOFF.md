@@ -1,9 +1,53 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.158)  
+> 最後更新：2026-04-26 (v2.159)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.159 — Wave 2 簡化升級：7 張卡符合卡面 + UI filter 擴展
+
+### 起因
+Leon 明令：「以後實裝卡片不要再搞簡化，直接安裝真實的功能」。已寫入 memory（feedback_no_simplification.md）。本版處理 grep 出的剩餘 `簡化`/`簡化策略`/`簡化版` 註解中能直接修的部分。
+
+### 7 張卡升級
+1. **烈火爆進（破空焰ex）** — `cantAttackPending` 鎖整隻 → `blockedAttackNamesNextTurn` 只鎖招式名（同 v2.157 天仙石）
+2. **鑰圈兒｜插入抽出** — 隨機棄 1 張 → `hand-discard` picker 玩家自選
+3. **龍之秘藥（Item）** — 任意寶可夢 heal → 限定【龍】寶可夢（gate + resolver 雙重驗證）
+4. **赫普的包包** — 任意基礎寶可夢 → 限定「赫普的」前綴（新 filter `Basic:NamePrefix=赫普的`）
+5. **甜蜜球** — 任意寶可夢 → 限定與對手場上同名（新 filter `Pokemon:MatchOppName`）
+6. **鐵骨土人｜蠻力** — 固定 +30+自傷 30 → modal-choice 玩家選執行（用 `ATTACK_PRE_DISCARD_CHOICE` 借殼為 binary）
+7. **貓頭夜鷹｜鉤爪搜尋** — 固定抽 2 張 → 70 + `deck-search` 玩家選 ≤2 張卡
+
+### Engine / UI 擴展
+- **UI filter parser** 加 3 種新 filter（`/src/routes/game/+page.svelte`）：
+  - `Basic:NamePrefix=XXX` — 基礎寶可夢且名字以 prefix 開頭
+  - `Pokemon:NamePrefix=XXX` — 寶可夢且名字以 prefix 開頭（同上但不限階段）
+  - `Pokemon:MatchOppName` — 寶可夢且名字與 `params.matchOppNames` 之一相符
+
+### 改動檔案
+- `src/lib/version.ts` — 2.158 → 2.159
+- `src/lib/game/effects.ts` — 烈火爆進 / 鑰圈兒 / 鐵骨土人 / 鉤爪搜尋
+- `src/lib/game/effects/cards/items_misc.ts` — 龍之秘藥
+- `src/lib/game/effects/cards/pokemon_search.ts` — 赫普的包包 / 甜蜜球 + 新 resolver
+- `src/routes/game/+page.svelte` — UI filter parser 擴展
+
+### 驗證
+- `npm run build` ✓
+- `node scripts/sim-sandbox.mjs 50` ✓ 50 局 0 bug
+
+### 尚未升級（需新 engine 機制，留作後續單獨工項）
+- **推理組合 / 蕾荷** — 牌庫頂 N 張排序放回（需新 `reorder-deck-top` pending type）
+- **朽木妖｜終極吸取** — heal=實際造成傷害（需新 `lastDealtDamage` ephemeral state）
+- **八爪武師｜觸手激怒** — 動態能量費用（需 `canAffordAttack` 條件 hook）
+- **雄偉牙｜地盤崩壞** — 古代支援者該回合用過 +N（需 `ancientSupporterPlayedThisTurn` flag，類似 v2.57 rocketSupporter）
+- **伊布｜鮮豔捕捉** — 3 張不同屬性能量（需 deck-search 動態 filter 或 chain pattern）
+- **危險光線** — 灼傷 + 混亂雙狀態（需 engine 多狀態 slot）
+- **懶人獺｜悠哉** — 下回合不能撤退（需 `cantRetreatNextTurn` flag）
+
+這些都是 engine 級擴展，每個都需獨立 design + commit。下波處理。
 
 ---
 

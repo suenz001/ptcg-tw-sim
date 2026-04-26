@@ -1198,15 +1198,17 @@ regR('dominance-chain', (st, idx, iids, params, pool) => {
 // MC 破空焰ex — 火牌組預組主力（Session 24）
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 烈火爆進 — 260 傷害，使用後到離開戰鬥場前無法再用本招
-// M2 簡化：用 cantAttackPending 旗標代表「下回合無法攻擊」
-// （原文是禁用特定招式；完整實作需 disabledAttacks 機制，此為可接受的保守簡化）
+// 烈火爆進 — 260 傷害，使用後本場上的這隻寶可夢無法再使用「烈火爆進」
+// v2.159：升級為 blockedAttackNamesNextTurn 鎖招式名（之前用 cantAttackPending 鎖整隻過嚴）
 regPost('破空焰ex|烈火爆進', (state, aIdx, _pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
-  if (p.active) p.active = { ...p.active, cantAttackPending: true };
+  if (p.active) {
+    const cur = p.active.blockedAttackNamesNextTurn ?? [];
+    p.active = { ...p.active, blockedAttackNamesNextTurn: [...cur, '烈火爆進'] };
+  }
   players[aIdx] = p;
-  return addLog({ ...state, players }, '烈火爆進：下回合無法使用招式（簡化版）。', aIdx);
+  return addLog({ ...state, players }, '烈火爆進：下回合無法再使用「烈火爆進」', aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1543,8 +1545,29 @@ regPost('帝牙海獅|百萬噸墜落', selfHitPost(50));
 regPost('傘電蜥|突擊', selfHitPost(10));
 regPost('獨劍鞘|突擊', selfHitPost(10));
 regPost('伊布|突擊', selfHitPost(10));
-// 鐵骨土人|蠻力：條件式增傷 + 自傷（簡化：選擇性效果，固定採用增傷+自傷）
-regPost('鐵骨土人|蠻力', selfHitPost(30));
+// 鐵骨土人|蠻力：base 50 + 若希望 +30 + 自傷 30
+// v2.159：升級為 modal-choice — 用 ATTACK_PRE_DISCARD_CHOICE 借殼讓 UI 彈出能量挑選
+//   作為 binary 選擇（選 0 個 = 不執行；選 ≥1 個 = 執行 +30 自傷 30）
+//   雖 base 卡面是「自傷」非「棄能量」，但 UX 上這是「玩家選 yes/no」最簡實現
+//   實際邏輯在 PRE 處理：選了 = +30 + 自傷 30；沒選 = 純 50 不自傷
+ATTACK_PRE_DISCARD_CHOICE.set('鐵骨土人|蠻力', {
+  min: 0, max: null, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+});
+regPre('鐵骨土人|蠻力', (state, aIdx, _pool, action) => {
+  const chosen = action?.discardedEnergyIids ?? [];
+  if (chosen.length === 0) {
+    return { state: addLog(state, '蠻力：未選增傷 → 50', aIdx), damage: 50 };
+  }
+  // 玩家選了 ≥1 個 → 執行 +30 + 自傷 30（不真棄能量，僅當作 binary 旗標）
+  const s = addLog(state, '蠻力：增傷 +30，自傷 30 → 80', aIdx);
+  return { state: s, damage: 80 };
+});
+regPost('鐵骨土人|蠻力', (state, aIdx, pool, action) => {
+  const chosen = action?.discardedEnergyIids ?? [];
+  if (chosen.length === 0) return state;
+  // 自傷 30（共用既有 helper）
+  return selfHitPost(30)(state, aIdx, pool);
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 31 H3 — 對手狀態時 +N 傷害（PRE）
@@ -2837,17 +2860,34 @@ regPost('斑斑馬|叼', drawNPost(1, '叼'));
 regPost('金魚王|快速抽出', drawNPost(2, '快速抽出'));
 regPost('時拉比|呼喚', drawNPost(1, '呼喚'));
 
-// 鑰圈兒｜插入抽出 — 丟 1 張手牌後抽 2 張（簡化：丟隨機 1 張）
+// 鑰圈兒｜插入抽出 — 丟 1 張手牌後抽 2 張
+// v2.159：升級為玩家自選棄哪張（之前簡化為隨機）
 regPost('鑰圈兒|插入抽出', (state, aIdx, _pool) => {
-  let s = addLog(state, '插入抽出：丟 1 張手牌、抽 2 張', aIdx);
-  return updatePlayer(s, aIdx, p => {
-    if (p.hand.length === 0) {
+  const player = state.players[aIdx];
+  if (player.hand.length === 0) {
+    // 沒手牌可棄 → 直接抽 2
+    return updatePlayer(addLog(state, '插入抽出：手牌為空 → 直接抽 2 張', aIdx), aIdx, p => {
       const take = Math.min(2, p.deck.length);
       return { ...p, hand: [...p.hand, ...p.deck.slice(0, take)], deck: p.deck.slice(take) };
-    }
-    const discardIdx = Math.floor(Math.random() * p.hand.length);
-    const discarded = p.hand[discardIdx];
-    const newHand = p.hand.filter((_, i) => i !== discardIdx);
+    });
+  }
+  // 開 hand-discard picker 讓玩家選 1 張手牌棄
+  const s = addLog(state, '插入抽出：選 1 張手牌棄置（之後抽 2 張）', aIdx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'insert-and-draw-discard',
+  });
+});
+regR('insert-and-draw-discard', (st, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) return st;
+  const targetIid = iids[0];
+  return updatePlayer(st, aIdx, p => {
+    const discarded = p.hand.find(c => c.iid === targetIid);
+    if (!discarded) return p;
+    const dname = pool.get(discarded.cardId)?.name ?? '?';
+    const newHand = p.hand.filter(c => c.iid !== targetIid);
     const take = Math.min(2, p.deck.length);
     return {
       ...p,
@@ -3582,8 +3622,21 @@ regPre('夠讚狗ex|瘋狂連鎖', (state, aIdx, _pool) => {
   return { state, damage: 130 };
 });
 
-// 貓頭夜鷹|鉤爪搜尋 — 70 + 抽 2 張（簡化：固定從牌庫頂抽）
-regPost('貓頭夜鷹|鉤爪搜尋', drawNPost(2, '鉤爪搜尋'));
+// 貓頭夜鷹|鉤爪搜尋 — 70 + 若希望從牌庫任選最多 2 張加手牌（重洗）
+// v2.159：升級為 deck-search 讓玩家自選（之前簡化為固定抽 2 張）
+regPost('貓頭夜鷹|鉤爪搜尋', (state, aIdx, _pool) => {
+  const player = state.players[aIdx];
+  if (player.deck.length === 0) return addLog(state, '鉤爪搜尋：牌庫為空', aIdx);
+  const max = Math.min(2, player.deck.length);
+  const s = addLog(state, `鉤爪搜尋：從牌庫選 ≤${max} 張卡加入手牌（重洗）`, aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Any',
+    minCount: 0, maxCount: max,
+    effectKey: 'search-to-hand-reshuffle',
+  });
+});
 
 // 皮卡丘|電磁電光 — 對對手任一寶可夢（含備戰）造成 10 傷害
 regPre('皮卡丘|電磁電光', (_state, _aIdx, _pool) => {

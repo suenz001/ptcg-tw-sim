@@ -929,6 +929,22 @@
           if (!card) return false;
           if (f === 'Basic')      return isBasicPokemonCard(card);
           if (f === 'Basic:HP70') return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
+          // v2.159：基礎寶可夢且名字以指定 prefix 開頭（如「赫普的」）
+          if (f.startsWith('Basic:NamePrefix=')) {
+            const prefix = f.slice('Basic:NamePrefix='.length);
+            return isBasicPokemonCard(card) && card.name.startsWith(prefix);
+          }
+          // v2.159：寶可夢且名字以指定 prefix 開頭（不限階段）
+          if (f.startsWith('Pokemon:NamePrefix=')) {
+            const prefix = f.slice('Pokemon:NamePrefix='.length);
+            return card.supertype === 'Pokemon' && card.name.startsWith(prefix);
+          }
+          // v2.159：寶可夢且名字含對手場上某寶可夢同名（甜蜜球）— params.matchOppNames 提供
+          if (f === 'Pokemon:MatchOppName') {
+            const names = (pendingSelection?.params?.matchOppNames as string[]) ?? [];
+            if (names.length === 0) return false;
+            return card.supertype === 'Pokemon' && names.includes(card.name);
+          }
           // v2.132：用 stage 欄位（含 ex 進化），不靠 subtype — ex 寶可夢 subtype='ex' 會被排除
           if (f === 'Stage1')     return card.supertype === 'Pokemon' && (card.stage ?? card.subtype) === 'Stage1';
           if (f === 'Stage2')     return card.supertype === 'Pokemon' && (card.stage ?? card.subtype) === 'Stage2';

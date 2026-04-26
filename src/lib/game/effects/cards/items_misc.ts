@@ -93,25 +93,35 @@ reg('好傷藥', (st, idx) => {
   });
 });
 
-// 龍之秘藥 — 回復 120 HP（簡化，原版有條件）
-// Guard: 場上至少 1 隻寶可夢有傷害
-regG('龍之秘藥', (st, idx) => {
+// 龍之秘藥 — 將自己的 1 隻【龍】寶可夢恢復 120 HP
+// v2.159：補上「龍寶可夢且有傷害」的完整 condition（之前簡化為任意寶可夢有傷害即可）
+regG('龍之秘藥', (st, idx, pool) => {
   const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
-  return all.some(c => c.damage > 0);
+  return all.some(c => c.damage > 0 && pool.get(c.cardId)?.pokemonType === 'Dragon');
 });
 reg('龍之秘藥', (st, idx) => {
-  st = addLog(st, '龍之秘藥：選擇回復 120 HP 的寶可夢', idx);
+  st = addLog(st, '龍之秘藥：選擇 1 隻【龍】寶可夢回復 120 HP', idx);
   return withPending(st, {
     type: 'heal-target',
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
-    effectKey: 'heal-120',
+    effectKey: 'heal-120-dragon-only',
     params: { healAmount: 120, discardEnergy: 0 },
   });
 });
 
 regR('heal-60-discard-1', healResolver);
 regR('heal-120', healResolver);
+// v2.159 龍之秘藥 — resolver 額外驗證目標必須是【龍】寶可夢
+regR('heal-120-dragon-only', (st, idx, iids, params, pool) => {
+  const iid = iids[0];
+  const player = st.players[idx];
+  const target = player.active?.iid === iid ? player.active : player.bench.find(c => c.iid === iid);
+  if (!target || pool.get(target.cardId)?.pokemonType !== 'Dragon') {
+    return addLog(st, '龍之秘藥：選擇的不是【龍】寶可夢，效果失敗', idx);
+  }
+  return healResolver(st, idx, iids, params, pool);
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 物品卡 — 棄牌區回收
