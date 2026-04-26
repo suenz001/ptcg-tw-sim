@@ -383,3 +383,259 @@ reg('調換票', (st, idx) => {
   });
   return addLog(s, `調換票：${count} 張獎賞洗回牌庫下方，重新抽 ${count} 張作為新獎賞`, idx);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.166 物品卡批次（卡池中未實裝的常見 Item）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── 開洞之鏟（Item / M-P-I）─────────────────────────────────────────────────
+// 卡面：將自己的牌庫上方 2 張卡丟棄。
+regG('開洞之鏟', (st, idx) => st.players[idx].deck.length > 0);
+reg('開洞之鏟', (st, idx) => {
+  return updatePlayer(addLog(st, '開洞之鏟：將自己的牌庫上方 2 張卡丟棄', idx), idx, p => {
+    const top2 = p.deck.slice(0, 2);
+    return { ...p, deck: p.deck.slice(top2.length), discard: [...p.discard, ...top2] };
+  });
+});
+
+// ── 粉碎之錘（Item / MC）────────────────────────────────────────────────────
+// 卡面：擲 1 次硬幣若為正面，則選擇 1 個對手的場上寶可夢身上附加的能量，將其丟棄。
+// gate：對手場上至少 1 隻寶可夢身上有能量（不論基本/特殊）
+// 流程：先 coin flip → 正面開 opp-poke-choose（限有能量的）→ resolver 丟最後一張能量
+regG('粉碎之錘', (st, idx) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
+  return all.some(pk => pk.energyAttached.length > 0);
+});
+reg('粉碎之錘', (st, idx) => {
+  const heads = Math.random() < 0.5;
+  st = addLog(st, `粉碎之錘：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
+  if (!heads) {
+    return addLog(st, '粉碎之錘：反面 → 無效', idx);
+  }
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
+  const cand = all.filter(pk => pk.energyAttached.length > 0);
+  if (cand.length === 0) return addLog(st, '粉碎之錘：對手場上沒有能量可丟', idx);
+  st = addLog(st, '粉碎之錘：選 1 隻對手寶可夢丟棄 1 張能量', idx);
+  return withPending(st, {
+    type: 'opp-poke-choose',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'crush-hammer-discard',
+    params: { includeActive: true, validIids: cand.map(c => c.iid) },
+  });
+});
+regR('crush-hammer-discard', (st, idx, iids, _params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const targetIid = iids[0];
+  if (!targetIid) return st;
+  const dp = st.players[dIdx];
+  const target = dp.active?.iid === targetIid
+    ? dp.active
+    : dp.bench.find(c => c.iid === targetIid) ?? null;
+  if (!target || target.energyAttached.length === 0) return st;
+  // 由後往前丟（最新附加的）
+  const lastIdx = target.energyAttached.length - 1;
+  const removed = target.energyAttached[lastIdx];
+  const energyName = pool.get(removed.cardId)?.name ?? '能量';
+  const targetName = pool.get(target.cardId)?.name ?? '?';
+  const s = addLog(st, `粉碎之錘：丟棄 ${targetName} 身上的 ${energyName}`, idx);
+  return updatePlayer(s, dIdx, p => {
+    const newEnergies = target.energyAttached.slice(0, lastIdx);
+    const updated = { ...target, energyAttached: newEnergies };
+    return {
+      ...p,
+      active: p.active?.iid === targetIid ? updated : p.active,
+      bench: p.bench.map(c => c.iid === targetIid ? updated : c),
+      discard: [...p.discard, removed],
+    };
+  });
+});
+
+// ── 派帕的三明治（Item / MC）────────────────────────────────────────────────
+// 卡面：將自己的戰鬥寶可夢恢復「30」HP。若那隻寶可夢為「派帕的寶可夢」，則恢復的 HP 改為「100」。
+regG('派帕的三明治', (st, idx) => {
+  return !!st.players[idx].active && st.players[idx].active!.damage > 0;
+});
+reg('派帕的三明治', (st, idx, pool) => {
+  if (!st.players[idx].active) return st;
+  const card = pool.get(st.players[idx].active!.cardId);
+  const name = card?.name ?? '?';
+  const isPiper = !!card?.name?.startsWith('派帕的');
+  const heal = isPiper ? 100 : 30;
+  st = addLog(st, `派帕的三明治：${name} 恢復 ${heal} HP${isPiper ? '（派帕的寶可夢）' : ''}`, idx);
+  return updatePlayer(st, idx, p => {
+    if (!p.active) return p;
+    return {
+      ...p,
+      active: { ...p.active, damage: Math.max(0, p.active.damage - heal) },
+    };
+  });
+});
+
+// ── 密阿雷格雷派餅（Item / M3）─────────────────────────────────────────────
+// 卡面：將自己的戰鬥寶可夢恢復「20」HP，特殊狀態也恢復 1 個。
+// 「特殊狀態恢復 1 個」依 v2.163 約定：先清 status 主格，否則清 secondaryStatus。
+regG('密阿雷格雷派餅', (st, idx) => {
+  const a = st.players[idx].active;
+  if (!a) return false;
+  return a.damage > 0 || !!a.status || !!a.secondaryStatus;
+});
+reg('密阿雷格雷派餅', (st, idx, pool) => {
+  if (!st.players[idx].active) return st;
+  const a = st.players[idx].active!;
+  const name = pool.get(a.cardId)?.name ?? '?';
+  // 決定要清哪個 status
+  let clearedLabel = '';
+  let nextStatus = a.status;
+  let nextSecondary = a.secondaryStatus;
+  if (a.status) { clearedLabel = a.status; nextStatus = undefined; }
+  else if (a.secondaryStatus) { clearedLabel = a.secondaryStatus; nextSecondary = undefined; }
+  const heal = Math.min(20, a.damage);
+  const bits: string[] = [];
+  if (heal > 0) bits.push(`恢復 ${heal} HP`);
+  if (clearedLabel) bits.push(`解除 ${clearedLabel}`);
+  st = addLog(st, `密阿雷格雷派餅：${name}${bits.length ? '：' + bits.join('，') : ''}`, idx);
+  return updatePlayer(st, idx, p => {
+    if (!p.active) return p;
+    return {
+      ...p,
+      active: {
+        ...p.active,
+        damage: Math.max(0, p.active.damage - 20),
+        status: nextStatus,
+        secondaryStatus: nextSecondary,
+      },
+    };
+  });
+});
+
+// ── 能量硬幣（Item / MC）────────────────────────────────────────────────────
+// 卡面：擲 2 次硬幣，若全部為正面，則從自己的牌庫選 1 張基本能量卡，附於自己的寶可夢身上。並重洗牌庫。
+regG('能量硬幣', (st, idx, pool) => {
+  // 牌庫至少 1 張基本能量 + 場上至少 1 隻寶可夢
+  const hasBasicEnergy = st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  });
+  const hasPoke = !!st.players[idx].active || st.players[idx].bench.length > 0;
+  return hasBasicEnergy && hasPoke;
+});
+reg('能量硬幣', (st, idx) => {
+  const c1 = Math.random() < 0.5;
+  const c2 = Math.random() < 0.5;
+  st = addLog(st, `能量硬幣：擲 2 次硬幣 ${c1 ? '正面' : '反面'} / ${c2 ? '正面' : '反面'}`, idx);
+  if (!(c1 && c2)) {
+    return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })),
+      '能量硬幣：未全部正面 → 重洗牌庫', idx);
+  }
+  st = addLog(st, '能量硬幣：全正面！從牌庫選 1 張基本能量附給寶可夢', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy',
+    minCount: 0, maxCount: 1,
+    effectKey: 'energy-coin-pick',
+  });
+});
+regR('energy-coin-pick', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) {
+    return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })),
+      '能量硬幣：未選擇能量（牌庫已重洗）', idx);
+  }
+  const energyIid = iids[0];
+  const energyName = pool.get(st.players[idx].deck.find(c => c.iid === energyIid)?.cardId ?? '')?.name ?? '?';
+  st = addLog(st, `能量硬幣：搜到 ${energyName}，選 1 隻寶可夢附加`, idx);
+  return withPending(st, {
+    type: 'bench-choose',  // 借 bench-choose（含 active）作為「選自己場上 1 隻」picker
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'energy-coin-attach',
+    params: { includeActive: true, energyIid, energyName },
+  });
+});
+regR('energy-coin-attach', (st, idx, iids, params, pool) => {
+  const targetIid = iids[0];
+  const energyIid = params?.energyIid as string | undefined;
+  if (!targetIid || !energyIid) return st;
+  const player = st.players[idx];
+  const energyInst = player.deck.find(c => c.iid === energyIid);
+  if (!energyInst) return st;
+  const energyName = pool.get(energyInst.cardId)?.name ?? '能量';
+  const targetInst = player.active?.iid === targetIid
+    ? player.active
+    : player.bench.find(c => c.iid === targetIid) ?? null;
+  const targetName = targetInst ? (pool.get(targetInst.cardId)?.name ?? '?') : '?';
+  st = addLog(st, `能量硬幣：${energyName} 附給 ${targetName}，牌庫重洗`, idx);
+  return updatePlayer(st, idx, p => {
+    const newDeck = shuffle(p.deck.filter(c => c.iid !== energyIid));
+    const attachTo = (pk: import('$lib/game/types').CardInstance) =>
+      pk.iid === targetIid
+        ? { ...pk, energyAttached: [...pk.energyAttached, energyInst] }
+        : pk;
+    return {
+      ...p,
+      active: p.active ? attachTo(p.active) : null,
+      bench: p.bench.map(attachTo),
+      deck: newDeck,
+    };
+  });
+});
+
+// ── 悠哉尾草棒（Item / MC）─────────────────────────────────────────────────
+// 卡面：這張卡只可在後攻玩家的最初回合使用。
+//       選擇 1 個對手的場上寶可夢身上附加的能量，放回對手的手牌。
+// gate：必須是後攻方第 1 回合（state.isFirstTurn=true 且 activePlayerIndex !== firstPlayerIdx）
+//       + 對手場上至少 1 隻寶可夢有能量
+regG('悠哉尾草棒', (st, idx) => {
+  // 後攻方第一回合：isFirstTurn 仍是 true，且當前 activePlayer 是後攻方（!== firstPlayerIdx）
+  if (!st.isFirstTurn) return false;
+  if (st.activePlayerIndex === st.firstPlayerIdx) return false;
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
+  return all.some(pk => pk.energyAttached.length > 0);
+});
+reg('悠哉尾草棒', (st, idx) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
+  const cand = all.filter(pk => pk.energyAttached.length > 0);
+  if (cand.length === 0) return addLog(st, '悠哉尾草棒：對手場上沒有能量', idx);
+  st = addLog(st, '悠哉尾草棒：選 1 隻對手寶可夢，1 張能量放回對手手牌', idx);
+  return withPending(st, {
+    type: 'opp-poke-choose',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'lazy-tail-grass-bounce',
+    params: { includeActive: true, validIids: cand.map(c => c.iid) },
+  });
+});
+regR('lazy-tail-grass-bounce', (st, idx, iids, _params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const targetIid = iids[0];
+  if (!targetIid) return st;
+  const dp = st.players[dIdx];
+  const target = dp.active?.iid === targetIid
+    ? dp.active
+    : dp.bench.find(c => c.iid === targetIid) ?? null;
+  if (!target || target.energyAttached.length === 0) return st;
+  const lastIdx = target.energyAttached.length - 1;
+  const removed = target.energyAttached[lastIdx];
+  const energyName = pool.get(removed.cardId)?.name ?? '能量';
+  const targetName = pool.get(target.cardId)?.name ?? '?';
+  const s = addLog(st, `悠哉尾草棒：將 ${targetName} 身上的 ${energyName} 放回對手手牌`, idx);
+  return updatePlayer(s, dIdx, p => {
+    const newEnergies = target.energyAttached.slice(0, lastIdx);
+    const updated = { ...target, energyAttached: newEnergies };
+    return {
+      ...p,
+      active: p.active?.iid === targetIid ? updated : p.active,
+      bench: p.bench.map(c => c.iid === targetIid ? updated : c),
+      hand: [...p.hand, removed],
+    };
+  });
+});
