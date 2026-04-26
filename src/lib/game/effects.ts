@@ -292,6 +292,7 @@ import './effects/cards/v155_attacks';
 //         供燃燒充能 / 電電充能 / 樂呵呵之吻 / 金屬製造者 / 玻璃喇叭 / X啟動 共用
 import './effects/cards/v158_energy_chain';
 import './effects/cards/v168_supporters';
+import './effects/cards/v169_supporters';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
