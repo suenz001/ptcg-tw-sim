@@ -2706,31 +2706,35 @@ function handlePlaying(
     // SEND_NEW_ACTIVE 補完戰鬥位後 re-dispatch END_TURN 並設 endTurnSkipCheckup=true，
     // 這樣不會重跑 checkup（避免重複放傷害），直接進到 finalize。
     if (!state.endTurnSkipCheckup) {
-    // 特殊狀態：中毒 — 回合結束施加 10 傷害（危險密林競技場：+20 = 30 指示物）
-    // 桃歹郎 劇毒支配 被動：對手中毒時指示物 +5
-    const poisonPlayer = { ...players[aIdx] };
-    // v2.163：同時兩狀態（如危險光線）— 中毒可能落在 secondaryStatus 格。
-    if (poisonPlayer.active?.status === 'poisoned' || poisonPlayer.active?.secondaryStatus === 'poisoned') {
+    // v2.181 修正：寶可夢檢查階段對「雙方戰鬥寶可夢」都跑中毒/灼傷判定（PTCG 官方規則）。
+    //   舊版只跑 players[aIdx]（剛結束回合的玩家），導致對手的中毒/灼傷寶可夢在自己回合
+    //   末才扣血、跨回合不扣血 — 違反規則。
+    //   - 中毒：每個寶可夢檢查階段（雙方回合結束都觸發）+10
+    //   - 灼傷：每個寶可夢檢查階段 +20，再擲幣決定是否解除
+    //   順序：先處理 aIdx 方（剛結束回合的玩家），再處理 dIdx 方（對手）。
+    //   KO 時 endTurnContinueAfterKO=aIdx 觸發 SEND_NEW_ACTIVE re-dispatch；
+    //   re-dispatch 帶 endTurnSkipCheckup=true 跳過剩餘 checkup（罕見的雙方同時 KO 不重跑）。
+
+    // ── 中毒（雙方各檢查一次）─────────────────────────────────────────────
+    for (const tIdx of [aIdx, dIdx] as const) {
+      const oIdx = (1 - tIdx) as 0 | 1;
+      const poisonPlayer = { ...players[tIdx] };
+      // v2.163：同時兩狀態（如危險光線）— 中毒可能落在 secondaryStatus 格。
+      if (poisonPlayer.active?.status !== 'poisoned' && poisonPlayer.active?.secondaryStatus !== 'poisoned') {
+        continue;
+      }
       const poisonedCard = pool.get(poisonPlayer.active.cardId);
       const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
       let poisonBonus = 0;
       if (stadiumName === '危險密林' && poisonedCard?.pokemonType !== 'Darkness') poisonBonus += 20;
-      // v2.123 劇毒支配（桃歹郎）卡面：附有此特性的**這隻寶可夢必須在戰鬥場**才生效。
-      // 舊版檢查 active+bench 所有位置，即使桃歹郎被老大指令換到備戰仍加傷 — bug。
-      // 修：只看對手 active 位是否為劇毒支配本體。
-      const dActiveCard = state.players[dIdx].active ? pool.get(state.players[dIdx].active.cardId) : null;
-      const hasDominatingPoisonOnActive = dActiveCard?.abilities?.some(a => a.name === '劇毒支配') ?? false;
-      if (hasDominatingPoisonOnActive) {
-        poisonBonus += 50;
-      }
+      // 劇毒支配（桃歹郎）— 「中毒方的對手」active 是劇毒支配時 +50
+      const oActiveCard = state.players[oIdx].active ? pool.get(state.players[oIdx].active.cardId) : null;
+      const hasDominatingPoisonOnActive = oActiveCard?.abilities?.some(a => a.name === '劇毒支配') ?? false;
+      if (hasDominatingPoisonOnActive) poisonBonus += 50;
       const newDmg = poisonPlayer.active.damage + 10 + poisonBonus;
       const poisonedHP = getEffectiveHP(poisonPlayer.active, pool, state);
       if (poisonedHP > 0 && newDmg >= poisonedHP) {
-        // 被毒死 → 直接 KO，攻擊方（對手）取獎勵
-        // v2.123 修：原本 `return { ..., pendingPrizes }` 讓 activePlayerIndex（= 被毒方自己）
-        // 拿獎賞 — 完全錯誤。參考雪妖女 v2.70 selfKOInstance 風格：
-        // 對手直接從自己的 prize 堆搬到 hand，不走 pendingPrizes。
-        const dIdxP = dIdx;
+        // 被毒死 → KO；獎賞給「中毒方的對手」(oIdx)
         const koDiscard2: CardInstance[] = [
           { ...poisonPlayer.active, damage: newDmg },
           ...poisonPlayer.active.energyAttached,
@@ -2739,58 +2743,47 @@ function handlePlaying(
         ];
         poisonPlayer.discard = [...poisonPlayer.discard, ...koDiscard2];
         poisonPlayer.active = null;
-        players[aIdx] = poisonPlayer;
+        players[tIdx] = poisonPlayer;
         const poisonPrizes = prizesForKO(poisonedCard!);
-        // 對手直接取獎賞（不走 pendingPrizes，避免 activePlayerIndex 混淆）
-        const winner = { ...players[dIdxP] };
+        const winner = { ...players[oIdx] };
         const take = Math.min(poisonPrizes, winner.prizes.length);
         if (take > 0) {
           winner.hand = [...winner.hand, ...winner.prizes.slice(0, take)];
           winner.prizes = winner.prizes.slice(take);
         }
-        players[dIdxP] = winner;
-        let poisonState = addLog(
+        players[oIdx] = winner;
+        const poisonState = addLog(
           { ...state, players },
-          `${poisonedCard?.name ?? '?'} 被中毒傷害擊倒！${players[dIdxP].name} 取得 ${take} 張獎勵牌。`,
+          `${poisonedCard?.name ?? '?'} 被中毒傷害擊倒！${players[oIdx].name} 取得 ${take} 張獎勵牌。`,
           null
         );
-        // 勝利條件：對手獎賞全取完
         if (winner.prizes.length === 0) {
-          return {
-            ...poisonState, phase: 'game-over',
-            winner: dIdxP,
-            winReason: `${winner.name} 取得所有獎勵牌`,
-          };
+          return { ...poisonState, phase: 'game-over', winner: oIdx, winReason: `${winner.name} 取得所有獎勵牌` };
         }
-        // 勝利條件：被毒死方備戰空
         if (poisonPlayer.bench.length === 0) {
-          return {
-            ...poisonState, phase: 'game-over',
-            winner: dIdxP,
-            winReason: `${poisonPlayer.name} 沒有可上場的寶可夢`,
-          };
+          return { ...poisonState, phase: 'game-over', winner: oIdx, winReason: `${poisonPlayer.name} 沒有可上場的寶可夢` };
         }
-        // 被毒死方需要補戰鬥位 — 依 UI `myPlayer?.active===null` 條件自動 popup modal
-        // v2.124：設 endTurnContinueAfterKO flag。SEND_NEW_ACTIVE handler 偵測到後
-        // 會 re-dispatch END_TURN 完成剩餘 checkup（灼/睡/麻/雪妖女）+ finalize（切換玩家）。
+        // SEND_NEW_ACTIVE 由被毒死方（tIdx）補；re-dispatch END_TURN 仍以 aIdx 為 activePlayerIndex
         return { ...poisonState, endTurnContinueAfterKO: aIdx };
       } else {
         poisonPlayer.active = { ...poisonPlayer.active, damage: newDmg };
-        players[aIdx] = poisonPlayer;
-        // 將中毒傷害記錄寫入 state（parameters 可重新賦值）
+        players[tIdx] = poisonPlayer;
         state = addLog({ ...state, players }, `中毒：${pool.get(poisonPlayer.active.cardId)?.name ?? '?'} 受到 10 傷害！`, null);
       }
     }
 
-    // 特殊狀態：燒傷 — 回合結束施加 20 傷害，然後擲硬幣決定是否解除
-    const burnedPlayer = { ...players[aIdx] };
-    // v2.163：同時兩狀態（如危險光線）— 灼傷可能落在 secondaryStatus 格。
-    if (burnedPlayer.active?.status === 'burned' || burnedPlayer.active?.secondaryStatus === 'burned') {
+    // ── 灼傷（雙方各檢查一次）─────────────────────────────────────────────
+    for (const tIdx of [aIdx, dIdx] as const) {
+      const oIdx = (1 - tIdx) as 0 | 1;
+      const burnedPlayer = { ...players[tIdx] };
+      if (burnedPlayer.active?.status !== 'burned' && burnedPlayer.active?.secondaryStatus !== 'burned') {
+        continue;
+      }
       const burnedCard = pool.get(burnedPlayer.active.cardId);
       const newBurnDmg = burnedPlayer.active.damage + 20;
       const burnedHP = getEffectiveHP(burnedPlayer.active, pool, state);
       if (burnedHP > 0 && newBurnDmg >= burnedHP) {
-        // 燒傷致死
+        // 燒傷致死 → KO；獎賞給對手 oIdx
         const koDiscard3: CardInstance[] = [
           { ...burnedPlayer.active, damage: newBurnDmg },
           ...burnedPlayer.active.energyAttached,
@@ -2799,28 +2792,25 @@ function handlePlaying(
         ];
         burnedPlayer.discard = [...burnedPlayer.discard, ...koDiscard3];
         burnedPlayer.active = null;
-        players[aIdx] = burnedPlayer;
+        players[tIdx] = burnedPlayer;
         const burnPrizes = prizesForKO(burnedCard!);
-        // v2.124 對手直接取獎（同毒 KO 修法，避免 activePlayerIndex 拿錯）
-        const burnWinner = { ...players[dIdx] };
+        const burnWinner = { ...players[oIdx] };
         const burnTake = Math.min(burnPrizes, burnWinner.prizes.length);
         if (burnTake > 0) {
           burnWinner.hand = [...burnWinner.hand, ...burnWinner.prizes.slice(0, burnTake)];
           burnWinner.prizes = burnWinner.prizes.slice(burnTake);
         }
-        players[dIdx] = burnWinner;
-        let burnState = addLog({ ...state, players },
-          `${burnedCard?.name ?? '?'} 被燒傷傷害擊倒！${players[dIdx].name} 取得 ${burnTake} 張獎勵牌。`, null);
-        // 勝利條件：對手取完獎
+        players[oIdx] = burnWinner;
+        const burnState = addLog({ ...state, players },
+          `${burnedCard?.name ?? '?'} 被燒傷傷害擊倒！${players[oIdx].name} 取得 ${burnTake} 張獎勵牌。`, null);
         if (burnWinner.prizes.length === 0) {
-          return { ...burnState, phase: 'game-over', winner: dIdx, winReason: `${burnWinner.name} 取得所有獎勵牌` };
+          return { ...burnState, phase: 'game-over', winner: oIdx, winReason: `${burnWinner.name} 取得所有獎勵牌` };
         }
         if (burnedPlayer.bench.length === 0) {
-          return { ...burnState, phase: 'game-over', winner: dIdx, winReason: `${burnedPlayer.name} 沒有可上場的寶可夢` };
+          return { ...burnState, phase: 'game-over', winner: oIdx, winReason: `${burnedPlayer.name} 沒有可上場的寶可夢` };
         }
         return { ...burnState, endTurnContinueAfterKO: aIdx };
       } else {
-        // 燒傷傷害但未倒
         burnedPlayer.active = { ...burnedPlayer.active, damage: newBurnDmg };
         // 擲硬幣：正面解除燒傷
         const burnCoin = Math.random() < 0.5;
@@ -2832,7 +2822,7 @@ function handlePlaying(
             burnedPlayer.active = { ...burnedPlayer.active, secondaryStatus: undefined };
           }
         }
-        players[aIdx] = burnedPlayer;
+        players[tIdx] = burnedPlayer;
         state = addLog({ ...state, players }, `燒傷：${burnedCard?.name ?? '?'} 受到 20 傷害！${burnCoin ? '（正面：燒傷解除）' : '（反面：燒傷持續）'}`, null);
       }
     }

@@ -1,9 +1,36 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.180)  
+> 最後更新：2026-04-26 (v2.181)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.181 — Bug 修：中毒/灼傷寶可夢檢查階段對「雙方」都要跑
+
+Leon 報告：中毒/灼傷只在自己回合結束時觸發、跨回合不扣血 — 違反 PTCG 官方規則。
+
+### 官方規則
+寶可夢檢查（Pokémon Checkup）發生在每位玩家回合結束 → 下回合開始之間，會對**雙方戰鬥寶可夢**檢查狀態：
+- **中毒**：每次寶可夢檢查 +1 傷害指示物（10 點）
+- **灼傷**：每次寶可夢檢查 +2 傷害指示物（20 點），擲幣正面解除
+
+### 修法（engine.ts END_TURN）
+原邏輯只跑 `players[aIdx]`（剛結束回合的玩家）。改成 for loop 對 `[aIdx, dIdx]` 雙方都跑：
+- 中毒區塊：`for (const tIdx of [aIdx, dIdx] as const)` — 各自獨立判定 KO、log、獎賞
+- 灼傷區塊：同上 + 各自擲幣
+- 「劇毒支配」+50 改用「中毒方對手」(oIdx) active 判定（不再 hardcode dIdx）
+- 危險密林 +20 對【惡】寶可夢過濾保留
+
+### Corner case
+- KO 仍走 `endTurnContinueAfterKO=aIdx` → SEND_NEW_ACTIVE 補完 → re-dispatch END_TURN with `endTurnSkipCheckup=true`
+- 「雙方同時被毒/燒 KO」極端情況下，re-dispatch 跳過剩餘 checkup（先 KO 那方走完，另一邊那次 checkup 漏跑）。實際發生率極低，後續若需精修可改為 step-based 進度追蹤。
+
+### 未動的部分
+睡眠/麻痺仍只跑 aIdx — 規則上：
+- 麻痺持續到擁有者下次寶可夢檢查（一個對手回合長度）— 實作正確
+- 睡眠 PTCG 標準也是「雙方寶可夢檢查擲幣」，但 Leon 只指出中毒/灼傷 bug，先不動
 
 ---
 
