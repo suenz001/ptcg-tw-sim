@@ -1,9 +1,51 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.165)  
+> 最後更新：2026-04-26 (v2.171)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.166-v2.171 — 卡池清掃自動實裝（45 張卡 / 6 個版本）
+
+Leon 指示：「自動運作 真的有疑義的卡片就先跳過 並記錄下來 之後再確認，其餘沒疑義的就一直執行 直到卡牌資料庫所有卡牌完成實裝」。
+
+### 起始狀況
+v2.165 結束後全 preset 已 0 未實裝。卡池整體（3997 張卡 / 1436 獨特名）掃描出 **108 張未實裝**：PokemonTool 16 / Supporter 40 / Item 29 / Stadium 9 / Special Energy 8。
+
+### 各版本實裝
+- **v2.166**（6 張 Item 基礎機制）：開洞之鏟、粉碎之錘、派帕的三明治、密阿雷格雷派餅、能量硬幣、悠哉尾草棒
+- **v2.167**（11 張 Item 搜尋類）：大師球、巢穴球、朋友手冊、能量貼紙、親送無人機、訂購盒、幫忙鈴、火箭隊的驚嚇炸彈、勝利之證、能量撢子、招式學習器機
+- **v2.168**（10 張 Supporter draw/heal）建立 `v168_supporters.ts`：妮莫、博士的研究、毅萬與馥好、千里、主持人的帶動、短褲小子、寶可夢中心的姐姐、由紫、派帕、老大的指令（烏羽）
+- **v2.169**（10 張 Supporter peek-top/disruption）建立 `v169_supporters.ts`：辛俐、杜若、正輝的輸送、女服務生、吹火人、越橘的一步棋、弗圖博士的劇本、皮拿、天星隊手下、奇樹
+- **v2.170**（5 張 PokemonTool）寫入 `tools.ts` 既有 TOOL_* maps：活力頭帶、赫普的講究頭帶、凸凸頭盔、火箭隊的催眠裝置、逆境保險
+- **v2.171**（3 張 Stadium）engine.ts USE_STADIUM 加 case + stadiums.ts resolver：慶祝開場樂、城鎮百貨公司、深缽鎮（新 UI filter `BasicNonRule`）
+
+### 統計
+共實裝 **45 張卡**，剩餘未實裝 **63 張**詳見 `SKIPPED_CARDS.md`。
+
+### 跳過原因（按需要的新引擎機制分組）
+- **化石類 Items**（5 張）：需要「Item-as-Pokemon」機制
+- **互動類 Supporter**：泰姆 / 馬志士的交易 / 奧爾迪加 等需要對手 yes/no
+- **player-level flag 類**：阿塞蘿拉的惡作劇 / 霍米加的演奏（下回合異常旗標）
+- **passive holder filter 類 Tools**：神聖護符 / 渾厚鱗片 / 硬硬束帶（需要 TOOL_DEFENSE map 支援 holder filter）
+- **Cost hook 類 Tools**：反擊增幅器（招式費用 -1【無】）
+- **Attack-injection Tools**：核心記憶碟 / 招式學習器系列（給寶可夢額外招式）
+- **passive Stadium**：海灘場地 / 樂園度假地（撤退 hook + holder filter）
+- **Special Energy passive**（8 張全部）：增強【草】/ 燃料【火】/ 泡沫【水】/ 磁鐵【鋼】/ 扣殺 / 噴射 / 反轉 / 治療 — 都需要新 hook（HP 加成 / 撤退 -N / 狀態免疫 / 條件變多色等）
+
+### 自動運作 Workflow（每個版本固定流程）
+1. `node /tmp/audit-pool.mjs > /tmp/unimpl.json` 掃描卡池
+2. 從未實裝清單中按 subtype 分批，挑「不需新引擎機制」的卡
+3. 寫實裝（直接 reg 或加進 TOOL_* / 模組）
+4. 疑義卡寫入 SKIPPED_CARDS.md
+5. `npm run build` ✓
+6. `node scripts/sim-ai-battle.mjs 15` ✓ 0 bug
+7. bump version + commit + push
+
+### 驗證
+每個版本：`npm run build` ✓ + sim 15 局 0 bug、0 卡住、0 崩潰 ✓
 
 ---
 
