@@ -1,9 +1,21 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.179)  
+> 最後更新：2026-04-26 (v2.180)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.180 — 重新啟動箱（Item）
+
+**重新啟動箱（Item / H）**：從棄牌附給場上所有「未來」寶可夢各 1 張基本能量。
+- gate：場上有「未來」tag 寶可夢 + 棄牌基本能量 ≥1
+- 流程：discard-search filter:'BasicEnergy' maxCount=min(未來寶可夢數, 棄牌基本能量數)
+- resolver 'restart-box-attach'：依場上未來寶可夢順序（戰鬥場→備戰）逐一分配 picked 能量
+- 卡面沒指定分配權，故順序固定（不開二段 pending 讓玩家選分配對象）
+
+H/I/J 實裝率：215→216 (+1)，剩 20 張未實裝。
 
 ---
 

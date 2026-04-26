@@ -28,6 +28,7 @@ import {
   healResolver,
 } from '../_shared';
 import type { EffectFn } from '../_shared';
+import type { CardInstance } from '../../types';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 物品卡 — 切換
@@ -1060,6 +1061,80 @@ regR('lazy-tail-grass-bounce', (st, idx, iids, _params, pool) => {
       hand: [...p.hand, removed],
     };
   });
+});
+
+// ── 重新啟動箱（Item / H）── v2.180 ───────────────────────────────────────────
+// 卡面：從棄牌區附給自己的所有「未來」寶可夢各 1 張基本能量卡。
+// 實裝：玩家從棄牌挑選 ≤N 張基本能量（N = 場上未來寶可夢數），
+//       resolver 依場上未來寶可夢順序（戰鬥場優先、再備戰）逐一附加，每隻 1 張。
+//       卡面沒指定分配權，故順序固定（不開二段 pending 讓玩家選分配對象）。
+// gate：場上未來寶可夢 ≥1 + 棄牌基本能量 ≥1。
+regG('重新啟動箱', (st, idx, pool) => {
+  const p = st.players[idx];
+  const futures = [...(p.active ? [p.active] : []), ...p.bench]
+    .filter(c => pool.get(c.cardId)?.tags?.includes('未來'));
+  if (futures.length === 0) return false;
+  const basicCount = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  }).length;
+  return basicCount >= 1;
+});
+reg('重新啟動箱', (st, idx, pool) => {
+  const p = st.players[idx];
+  const futures = [...(p.active ? [p.active] : []), ...p.bench]
+    .filter(c => pool.get(c.cardId)?.tags?.includes('未來'));
+  const basicCount = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  }).length;
+  const maxPick = Math.min(futures.length, basicCount);
+  st = addLog(st, `重新啟動箱：場上 ${futures.length} 隻「未來」寶可夢，從棄牌挑最多 ${maxPick} 張基本能量分配（每隻 1 張）`, idx);
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy', minCount: 0, maxCount: maxPick,
+    effectKey: 'restart-box-attach',
+    params: { futureIids: futures.map(f => f.iid) },
+  });
+});
+regR('restart-box-attach', (st, idx, iids, params, pool) => {
+  const futureIids = (params?.futureIids as string[]) ?? [];
+  const picked = st.players[idx].discard.filter(c => iids.includes(c.iid));
+  if (picked.length === 0) {
+    return addLog(st, '重新啟動箱：未選擇任何能量，效果結束', idx);
+  }
+  // 依 futureIids 順序逐一分配（picked[0]→futureIids[0], picked[1]→futureIids[1], …）
+  const assignmentMap = new Map<string, CardInstance>();
+  picked.forEach((e, i) => {
+    if (i < futureIids.length) assignmentMap.set(futureIids[i], e);
+  });
+  st = updatePlayer(st, idx, p => {
+    const remaining = p.discard.filter(c => !iids.includes(c.iid));
+    const attachTo = (c: CardInstance | null) => {
+      if (!c) return c;
+      const e = assignmentMap.get(c.iid);
+      return e ? { ...c, energyAttached: [...c.energyAttached, e] } : c;
+    };
+    return {
+      ...p,
+      discard: remaining,
+      active: attachTo(p.active),
+      bench: p.bench.map(c => attachTo(c) ?? c),
+    };
+  });
+  // log 每張附加
+  picked.forEach((e, i) => {
+    if (i >= futureIids.length) return;
+    const eName = pool.get(e.cardId)?.name ?? '能量';
+    const futureIid = futureIids[i];
+    const future = [
+      ...(st.players[idx].active ? [st.players[idx].active] : []),
+      ...st.players[idx].bench,
+    ].find(c => c?.iid === futureIid);
+    const futureName = future ? (pool.get(future.cardId)?.name ?? '?') : '?';
+    st = addLog(st, `重新啟動箱：${eName} 附給 ${futureName}`, idx);
+  });
+  return st;
 });
 
 // ── 除蟲噴霧（Item / I）── v2.179 ────────────────────────────────────────────

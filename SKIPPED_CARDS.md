@@ -53,8 +53,8 @@ v2.176 已實裝：
 - `[18493/J] 豐收漁網` (Item) — 棄牌【水】寶可夢 + 基本【水】能量各 ≤3
 - `[14833/I] 巴貝娜與荷蓮娜` (Supporter) — gate 場上需有 N 系列特定寶可夢（複雜）
 
-### 需「tag detection + bench-distribute」（1 張）
-- `[17142/H] 重新啟動箱` (Item) — 棄牌附給「未來」寶可夢各 1 張（tag 偵測 + 多目標分配）
+### 需「tag detection + bench-distribute」（已清）
+- `[17142/H] 重新啟動箱` — ✓ v2.180（items_misc.ts；discard-search BasicEnergy → 順序分配給未來寶可夢）
 
 ### 需「opp 牌庫操作」（已清）
 - `[11085/H] 妨害信函` — ✓ v2.177（items_misc.ts；對手手牌全洗回牌庫底再抽相同數）
