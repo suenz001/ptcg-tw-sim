@@ -43,9 +43,14 @@ export async function loadSet(
     // v2.71：migrate-trainer-branded.mjs 已把 JSON 層級的 `<>` 全部 strip，parse-card.js
     // 也改在存檔前 strip，所以這個 runtime strip 變成 defensive no-op — 留著以防
     // 有人手動塞回帶 `<>` 的 JSON 或重爬未 migrate 的老 set。
-    const cards = raw.map(c => (c.name && (c.name.includes('<') || c.name.includes('>')))
-      ? { ...c, name: c.name.replace(/[<>]/g, '') }
-      : c);
+    // v2.172：同時 strip U+200C (ZWNJ, zero-width non-joiner) — SV-P-I 的「寶可夢中心的姐姐」
+    // 卡名前帶 ZWNJ 字元，導致 effects.ts 的 reg('寶可夢中心的姐姐') 無法 match。
+    // 統一 normalize：移除 <>＜＞ 與 ZWNJ。
+    const cards = raw.map(c => {
+      if (!c.name) return c;
+      const cleaned = c.name.replace(/[<>＜＞‌]/g, '');
+      return cleaned !== c.name ? { ...c, name: cleaned } : c;
+    });
     setCache.set(setCode, cards);
     inflight.delete(setCode);
     return cards;

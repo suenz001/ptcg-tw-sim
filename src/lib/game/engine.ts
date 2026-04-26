@@ -1635,6 +1635,83 @@ function handlePlaying(
       };
     }
 
+    // v2.172 釀光市（I）— 雙方每回合 1 次：棄牌搜 ≤2 基本【雷】能量加手牌
+    if (stadiumCard.name === '釀光市') {
+      const validIids = newState.players[aIdx].discard
+        .filter(c => {
+          const card = pool.get(c.cardId);
+          return card?.supertype === 'Energy' && card.subtype === 'Basic'
+            && (card.name?.includes('【雷】') ?? false);
+        })
+        .map(c => c.iid);
+      if (validIids.length === 0) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '釀光市：棄牌區沒有基本【雷】能量', aIdx);
+      }
+      return {
+        ...newState,
+        pendingSelection: {
+          type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+          minCount: 0, maxCount: Math.min(2, validIids.length),
+          filter: 'BasicEnergy',
+          effectKey: 'lighting-city-pick',
+          params: { validIids },
+        },
+      };
+    }
+
+    // v2.172 衝浪海灘（I）— 雙方每回合 1 次：戰鬥場【水】↔備戰【水】互換
+    if (stadiumCard.name === '衝浪海灘') {
+      const player = newState.players[aIdx];
+      const activeCard = player.active ? pool.get(player.active.cardId) : null;
+      if (!player.active || activeCard?.pokemonType !== 'Water') {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '衝浪海灘：戰鬥場不是【水】寶可夢', aIdx);
+      }
+      const waterBenchIids = player.bench
+        .filter(c => pool.get(c.cardId)?.pokemonType === 'Water')
+        .map(c => c.iid);
+      if (waterBenchIids.length === 0) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '衝浪海灘：備戰沒有【水】寶可夢', aIdx);
+      }
+      return {
+        ...newState,
+        pendingSelection: {
+          type: 'bench-choose', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+          minCount: 1, maxCount: 1,
+          effectKey: 'surf-beach-swap',
+          params: { validIids: waterBenchIids },
+        },
+      };
+    }
+
+    // v2.172 密阿雷市（J）— 雙方每回合 1 次：牌庫搜 1 基礎放備戰，使用後回合結束
+    if (stadiumCard.name === '密阿雷市') {
+      if (newState.players[aIdx].bench.length >= 5) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '密阿雷市：備戰區已滿', aIdx);
+      }
+      const hasBasic = newState.players[aIdx].deck.some(c => {
+        const card = pool.get(c.cardId);
+        return card?.supertype === 'Pokemon' && card.subtype === 'Basic';
+      });
+      if (!hasBasic) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '密阿雷市：牌庫沒有基礎寶可夢', aIdx);
+      }
+      return {
+        ...newState,
+        pendingSelection: {
+          type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+          minCount: 0, maxCount: 1,
+          filter: 'Basic',
+          effectKey: 'miarey-city-place',
+          params: {},
+        },
+      };
+    }
+
     // 尖釘鎮道館 — 從牌庫選 1 張「瑪俐的」寶可夢加手牌並重洗
     // v2.70：即便牌庫沒有「瑪俐的」寶可夢也要開 UI（玩家可藉此查看牌庫內容），
     //       所以 minCount 設為 0 允許確認無選擇，候選數量不做 gate。

@@ -16,7 +16,7 @@
  * stadiumUsedThisTurn 旗標等引擎層狀態）。
  */
 
-import { regR, updatePlayer, shuffle, addLog } from '../_shared';
+import { regR, updatePlayer, shuffle, addLog, clearActiveEffects } from '../_shared';
 
 // ── 神秘花園（Stadium）──────────────────────────────────────────────────────
 // 丟 1 張超能量 → 抽到手牌數 = 己方場上超屬寶可夢數量
@@ -69,6 +69,57 @@ regR('moonlight-hill-heal', (st, idx, iids) => {
     const healBench = p.bench.map(c => ({ ...c, damage: Math.max(0, c.damage - 30) }));
     return { ...p, hand: newHand, discard: [...p.discard, ...toDiscard], active: healActive, bench: healBench };
   });
+});
+
+// ── v2.172 釀光市（Stadium / I）── 棄牌搜 ≤2 基本【雷】能量加手 ──────────
+regR('lighting-city-pick', (st, idx, iids, _params, _pool) => {
+  if (iids.length === 0) return addLog(st, '釀光市：未選擇能量', idx);
+  const set = new Set(iids);
+  return updatePlayer(addLog(st, `釀光市：${iids.length} 張基本【雷】能量加入手牌`, idx), idx, p => {
+    const got = p.discard.filter(c => set.has(c.iid));
+    const rest = p.discard.filter(c => !set.has(c.iid));
+    return { ...p, discard: rest, hand: [...p.hand, ...got] };
+  });
+});
+
+// ── v2.172 衝浪海灘（Stadium / I）── 戰鬥場【水】↔備戰【水】互換 ──────────
+regR('surf-beach-swap', (st, idx, iids, _params, pool) => {
+  const targetIid = iids[0];
+  if (!targetIid) return st;
+  const p = st.players[idx];
+  if (!p.active) return st;
+  const benchIdx = p.bench.findIndex(c => c.iid === targetIid);
+  if (benchIdx < 0) return st;
+  const newName = pool.get(p.bench[benchIdx].cardId)?.name ?? '?';
+  const oldName = pool.get(p.active.cardId)?.name ?? '?';
+  st = addLog(st, `衝浪海灘：${oldName} ↔ ${newName}（戰鬥/備戰互換）`, idx);
+  return updatePlayer(st, idx, pl => {
+    if (!pl.active) return pl;
+    const newBench = [...pl.bench];
+    const newActive = { ...pl.bench[benchIdx], justPlaced: false, movedToActiveThisTurn: true };
+    newBench[benchIdx] = clearActiveEffects(pl.active);
+    return { ...pl, active: newActive, bench: newBench };
+  });
+});
+
+// ── v2.172 密阿雷市（Stadium / J）── 牌庫搜 1 基礎放備戰 + 回合結束 ──────
+regR('miarey-city-place', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) {
+    return addLog(updatePlayer({ ...st, turnPhase: 'end' as const }, idx, p => ({ ...p, deck: shuffle(p.deck) })),
+      '密阿雷市：未選擇 — 此回合結束', idx);
+  }
+  const targetIid = iids[0];
+  const inst = st.players[idx].deck.find(c => c.iid === targetIid);
+  if (!inst) return st;
+  const name = pool.get(inst.cardId)?.name ?? '?';
+  st = addLog(st, `密阿雷市：${name} 放置到備戰區，重洗牌庫 — 此回合結束`, idx);
+  st = updatePlayer(st, idx, p => {
+    if (p.bench.length >= 5) return { ...p, deck: shuffle(p.deck) };
+    const placed = { ...inst, justPlaced: true };
+    const rest = p.deck.filter(c => c.iid !== targetIid);
+    return { ...p, deck: shuffle(rest), bench: [...p.bench, placed] };
+  });
+  return { ...st, turnPhase: 'end' as const };
 });
 
 // ── v2.171 城鎮百貨公司（Stadium）── 牌庫搜 1 道具加手牌 ─────────────────

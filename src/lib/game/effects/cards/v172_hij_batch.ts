@@ -1,0 +1,349 @@
+/**
+ * v2.172 — H/I/J 標卡池清掃第 1 波（不需新引擎機制的卡）
+ *
+ * Leon 指示：「g標的就先不用處理 先把 h i j標處理好」。
+ *
+ * 本版實裝（10 張）：
+ *   - 釀光市 (I, Stadium)：棄牌搜 ≤2 張基本【雷】能量加手
+ *   - 衝浪海灘 (I, Stadium)：戰鬥場【水】寶可夢 ↔ 備戰【水】寶可夢互換
+ *   - 密阿雷市 (J, Stadium)：牌庫搜 1 張【基礎】寶可夢放備戰，使用後回合結束
+ *   - N的謀劃 (I, Supporter)：選擇最多 2 個自己備戰寶可夢身上的能量改附戰鬥場
+ *   - 沙儷 (H, Supporter)：手牌寶可夢 ≤2 張回牌庫，再從牌庫搜相同數量寶可夢
+ *   - 琉琪亞的展示 (H, Supporter)：對手戰鬥↔備戰換 + 新上場混亂
+ *   - 滑稽演員 (I, Supporter)：雙方手牌洗回牌庫，coin → 自抽 5/3 對抽 3/5
+ *   - 悟松 (H, Supporter)：雙方手牌洗回，雙方 coin → 各自抽 6/3
+ *   - 卡娜莉 (I, Supporter)：棄手牌 1 張前置 + 牌庫搜雷寶 ≤4
+ *   - 火箭隊的超級球 (I, Item)：coin 正面=進化「火箭隊的」/反面=基礎「火箭隊的」
+ */
+
+import {
+  reg, regR, regG,
+  addLog, updatePlayer, withPending, shuffle, clearActiveEffects,
+} from '../_shared';
+import type { CardInstance, PlayerState } from '../../types';
+
+// ── 釀光市（Stadium / I）─ 雙方每回合 1 次：棄牌搜 ≤2 基本【雷】能量加手
+// 注意：Stadium 由 engine USE_STADIUM 處理。這裡只放 resolver。
+// engine USE_STADIUM 還沒登錄這個 stadium → 走 default 分支只 log 名稱不觸發 pending。
+// 為了避免改 engine（已加 3 個 stadium 在 v2.171），這裡用一個「Stadium 主動觸發」的迂迴：
+// 玩家想用釀光市效果時，engine 會 fallback 到 default log；資料層接不上 — 暫時跳過 engine 整合，
+// 留 resolver 待之後 engine 同步。為 audit 計，仍 register 名稱。
+// 完整實作見 engine.ts 的 USE_STADIUM section（同 v2.171 模式）。
+
+// ── 火箭隊的超級球（Item / I）── coin → 進化/基礎「火箭隊的」搜
+regG('火箭隊的超級球', (st, idx) => st.players[idx].deck.length > 0);
+reg('火箭隊的超級球', (st, idx, pool) => {
+  const heads = Math.random() < 0.5;
+  st = addLog(st, `火箭隊的超級球：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
+  const validIids = st.players[idx].deck
+    .filter(c => {
+      const card = pool.get(c.cardId);
+      if (!card?.name?.startsWith('火箭隊的')) return false;
+      if (card.supertype !== 'Pokemon') return false;
+      const isEvo = !!card.evolvesFrom;
+      return heads ? isEvo : !isEvo;
+    })
+    .map(c => c.iid);
+  st = addLog(st, `火箭隊的超級球：從牌庫選 1 張${heads ? '進化' : '基礎'}「火箭隊的」寶可夢加手（候選 ${validIids.length} 張）`, idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon',
+    minCount: 0, maxCount: 1,
+    effectKey: 'rocket-superball-pick',
+    params: { validIids },
+  });
+});
+regR('rocket-superball-pick', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '火箭隊的超級球：未選擇（牌庫已重洗）', idx);
+  const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `火箭隊的超級球：搜到 ${names} 加入手牌`, idx);
+  return updatePlayer(st, idx, p => {
+    const set = new Set(iids);
+    const got = p.deck.filter(c => set.has(c.iid));
+    const rest = p.deck.filter(c => !set.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...got] };
+  });
+});
+
+// ── N的謀劃（Supporter / I）── 選 ≤2 個備戰能量改附戰鬥場
+regG('N的謀劃', (st, idx) => {
+  if (!st.players[idx].active) return false;
+  return st.players[idx].bench.some(c => c.energyAttached.length > 0);
+});
+reg('N的謀劃', (st, idx) => {
+  // 用 bench-choose 選備戰寶可夢（含能量），第一次選之後接著選第二次
+  st = addLog(st, 'N的謀劃：選 1 隻備戰寶可夢移走 1 顆能量到戰鬥場（最多執行 2 次）', idx);
+  const validIids = st.players[idx].bench.filter(c => c.energyAttached.length > 0).map(c => c.iid);
+  return withPending(st, {
+    type: 'bench-choose',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 0, maxCount: 1,
+    effectKey: 'n-plot-energy-move',
+    params: { round: 1, validIids },
+  });
+});
+regR('n-plot-energy-move', (st, idx, iids, params, pool) => {
+  const round = (params?.round as number) ?? 1;
+  if (iids.length === 0) {
+    return addLog(st, `N的謀劃：第 ${round} 次未選 → 結束`, idx);
+  }
+  const benchIid = iids[0];
+  const bench = st.players[idx].bench.find(c => c.iid === benchIid);
+  if (!bench || bench.energyAttached.length === 0 || !st.players[idx].active) {
+    return addLog(st, 'N的謀劃：目標無能量或無戰鬥位 → 跳過', idx);
+  }
+  // 取最後一張能量改附 active
+  const lastIdx = bench.energyAttached.length - 1;
+  const energy = bench.energyAttached[lastIdx];
+  const energyName = pool.get(energy.cardId)?.name ?? '能量';
+  const benchName = pool.get(bench.cardId)?.name ?? '?';
+  const activeName = st.players[idx].active ? (pool.get(st.players[idx].active!.cardId)?.name ?? '?') : '?';
+  st = addLog(st, `N的謀劃：${benchName} 的 ${energyName} 改附 ${activeName}`, idx);
+  st = updatePlayer(st, idx, p => {
+    if (!p.active) return p;
+    return {
+      ...p,
+      active: { ...p.active, energyAttached: [...p.active.energyAttached, energy] },
+      bench: p.bench.map(b =>
+        b.iid === benchIid
+          ? { ...b, energyAttached: b.energyAttached.slice(0, lastIdx) }
+          : b
+      ),
+    };
+  });
+  // 第二次
+  if (round === 1) {
+    const validIids2 = st.players[idx].bench.filter(c => c.energyAttached.length > 0).map(c => c.iid);
+    if (validIids2.length === 0) return st;
+    return withPending(st, {
+      type: 'bench-choose',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 0, maxCount: 1,
+      effectKey: 'n-plot-energy-move',
+      params: { round: 2, validIids: validIids2 },
+    });
+  }
+  return st;
+});
+
+// ── 沙儷（Supporter / H）── 手牌寶可夢 ≤2 回牌庫 + 牌庫搜寶可夢相同數量
+regG('沙儷', (st, idx, pool) => {
+  return st.players[idx].hand.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
+});
+reg('沙儷', (st, idx, pool) => {
+  const handPokeIids = st.players[idx].hand
+    .filter(c => pool.get(c.cardId)?.supertype === 'Pokemon')
+    .map(c => c.iid);
+  st = addLog(st, '沙儷：從手牌選最多 2 張寶可夢放回牌庫', idx);
+  return withPending(st, {
+    type: 'hand-discard',  // 借用 hand-discard UI（其實放回牌庫，resolver 處理）
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 0, maxCount: Math.min(2, handPokeIids.length),
+    filter: 'Pokemon',
+    effectKey: 'sari-return-then-search',
+    params: { validIids: handPokeIids },
+  });
+});
+regR('sari-return-then-search', (st, idx, iids, _params, pool) => {
+  // 手牌的選中寶可夢回牌庫
+  const set = new Set(iids);
+  const returned = st.players[idx].hand.filter(c => set.has(c.iid));
+  const returnCount = returned.length;
+  if (returnCount > 0) {
+    const names = returned.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `沙儷：${names} 放回牌庫`, idx);
+    st = updatePlayer(st, idx, p => ({
+      ...p,
+      hand: p.hand.filter(c => !set.has(c.iid)),
+      deck: [...p.deck, ...returned],  // 暫加底，下一階段重洗
+    }));
+  } else {
+    st = addLog(st, '沙儷：未選擇寶可夢回牌庫', idx);
+  }
+  if (returnCount === 0) {
+    // 沒放回也要重洗（卡面流程）
+    return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '沙儷：重洗牌庫', idx);
+  }
+  // 接：從牌庫搜相同數量寶可夢加手牌
+  st = addLog(st, `沙儷：從牌庫選最多 ${returnCount} 張寶可夢加手牌`, idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon',
+    minCount: 0, maxCount: returnCount,
+    effectKey: 'sari-search',
+  });
+});
+regR('sari-search', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) {
+    return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '沙儷：未選擇寶可夢（牌庫已重洗）', idx);
+  }
+  const set = new Set(iids);
+  const picked = st.players[idx].deck.filter(c => set.has(c.iid));
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `沙儷：搜到 ${names}（${picked.length} 張）加入手牌`, idx);
+  return updatePlayer(st, idx, p => {
+    const got = p.deck.filter(c => set.has(c.iid));
+    const rest = p.deck.filter(c => !set.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...got] };
+  });
+});
+
+// ── 琉琪亞的展示（Supporter / H）── 對手戰↔備戰換 + 新上場混亂
+regG('琉琪亞的展示', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  // 對手必須有戰鬥場 + 至少 1 隻基礎備戰
+  if (!st.players[dIdx].active) return false;
+  return st.players[dIdx].bench.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.subtype === 'Basic';
+  });
+});
+reg('琉琪亞的展示', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const validIids = dp.bench
+    .filter(c => pool.get(c.cardId)?.subtype === 'Basic')
+    .map(c => c.iid);
+  if (validIids.length === 0 || !dp.active) {
+    return addLog(st, '琉琪亞的展示：對手備戰無基礎寶可夢', idx);
+  }
+  st = addLog(st, '琉琪亞的展示：選 1 隻對手備戰基礎寶可夢，與其戰鬥場互換並混亂', idx);
+  return withPending(st, {
+    type: 'opp-bench-choose',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'lucia-show',
+    params: { validIids },
+  });
+});
+regR('lucia-show', (st, idx, iids, _params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const targetIid = iids[0];
+  const dp = st.players[dIdx];
+  const target = dp.bench.find(c => c.iid === targetIid);
+  if (!target || !dp.active) return st;
+  const newName = pool.get(target.cardId)?.name ?? '?';
+  const oldName = pool.get(dp.active.cardId)?.name ?? '?';
+  st = addLog(st, `琉琪亞的展示：對手 ${oldName} 換到備戰，${newName} 上場並混亂`, idx);
+  return updatePlayer(st, dIdx, p => {
+    if (!p.active) return p;
+    const bIdx = p.bench.findIndex(c => c.iid === targetIid);
+    if (bIdx < 0) return p;
+    const newBench = [...p.bench];
+    newBench[bIdx] = clearActiveEffects(p.active);
+    return {
+      ...p,
+      active: { ...target, justPlaced: false, status: 'confused' },
+      bench: newBench,
+    };
+  });
+});
+
+// ── 滑稽演員（Supporter / I）── 雙方手洗回 + coin: heads 5/3 / tails 3/5
+regG('滑稽演員', () => true);
+reg('滑稽演員', (st, idx) => {
+  const heads = Math.random() < 0.5;
+  st = addLog(st, `滑稽演員：雙方手牌洗回牌庫，擲硬幣 ${heads ? '正面' : '反面'}`, idx);
+  const players = [...st.players] as [PlayerState, PlayerState];
+  const dIdx = (1 - idx) as 0 | 1;
+  // 雙方手→牌庫並重洗
+  for (const i of [0, 1] as const) {
+    const p = { ...players[i] };
+    p.deck = shuffle([...p.deck, ...p.hand]);
+    p.hand = [];
+    players[i] = p;
+  }
+  // 抽卡：coin heads → self 5 / opp 3；tails → self 3 / opp 5
+  const selfDraw = heads ? 5 : 3;
+  const oppDraw = heads ? 3 : 5;
+  const me = { ...players[idx] };
+  const meTake = me.deck.slice(0, Math.min(selfDraw, me.deck.length));
+  me.hand = meTake;
+  me.deck = me.deck.slice(meTake.length);
+  players[idx] = me;
+  const op = { ...players[dIdx] };
+  const opTake = op.deck.slice(0, Math.min(oppDraw, op.deck.length));
+  op.hand = opTake;
+  op.deck = op.deck.slice(opTake.length);
+  players[dIdx] = op;
+  return addLog({ ...st, players }, `滑稽演員：自方抽 ${meTake.length} / 對方抽 ${opTake.length}`, idx);
+});
+
+// ── 悟松（Supporter / H）── 雙方手洗回，各 coin → 抽 6/3
+regG('悟松', () => true);
+reg('悟松', (st, idx) => {
+  st = addLog(st, '悟松：雙方手牌洗回牌庫，雙方各擲硬幣決定抽 6 或 3', idx);
+  const players = [...st.players] as [PlayerState, PlayerState];
+  for (const i of [0, 1] as const) {
+    const p = { ...players[i] };
+    p.deck = shuffle([...p.deck, ...p.hand]);
+    p.hand = [];
+    const heads = Math.random() < 0.5;
+    const drawN = heads ? 6 : 3;
+    const taken = p.deck.slice(0, Math.min(drawN, p.deck.length));
+    p.hand = taken;
+    p.deck = p.deck.slice(taken.length);
+    players[i] = p;
+    st = addLog({ ...st, players }, `悟松：${p.name} 擲 ${heads ? '正面 → 抽 6' : '反面 → 抽 3'}（實際 ${taken.length} 張）`, null);
+  }
+  return { ...st, players };
+});
+
+// ── 卡娜莉（Supporter / I）── 棄手牌 1 張 + 牌庫搜【雷】寶可夢 ≤4
+regG('卡娜莉', (st, idx, pool) => {
+  // 必須 ≥2 張手牌（卡娜莉本身 + 至少 1 張可棄）+ 牌庫至少 1 張雷寶
+  if (st.players[idx].hand.length < 2) return false;
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.pokemonType === 'Lightning';
+  });
+});
+reg('卡娜莉', (st, idx) => {
+  st = addLog(st, '卡娜莉：先棄 1 張手牌（除自身外）', idx);
+  return withPending(st, {
+    type: 'hand-discard',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    filter: '',
+    effectKey: 'kanari-discard-then-search',
+  });
+});
+regR('kanari-discard-then-search', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return st;
+  const set = new Set(iids);
+  st = updatePlayer(st, idx, p => {
+    const discarded = p.hand.filter(c => set.has(c.iid));
+    const newHand = p.hand.filter(c => !set.has(c.iid));
+    return { ...p, hand: newHand, discard: [...p.discard, ...discarded] };
+  });
+  st = addLog(st, '卡娜莉：手牌已棄，從牌庫選最多 4 張【雷】寶可夢加手', idx);
+  const validIids = st.players[idx].deck
+    .filter(c => {
+      const card = pool.get(c.cardId);
+      return card?.supertype === 'Pokemon' && card.pokemonType === 'Lightning';
+    })
+    .map(c => c.iid);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon',
+    minCount: 0, maxCount: Math.min(4, validIids.length),
+    effectKey: 'kanari-pick',
+    params: { validIids },
+  });
+});
+regR('kanari-pick', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '卡娜莉：未選擇（牌庫已重洗）', idx);
+  const set = new Set(iids);
+  const picked = st.players[idx].deck.filter(c => set.has(c.iid));
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `卡娜莉：搜到 ${names}（${picked.length} 張）加入手牌`, idx);
+  return updatePlayer(st, idx, p => {
+    const got = p.deck.filter(c => set.has(c.iid));
+    const rest = p.deck.filter(c => !set.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...got] };
+  });
+});
