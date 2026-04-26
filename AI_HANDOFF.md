@@ -1,9 +1,38 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.182)  
+> 最後更新：2026-04-26 (v2.183)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.183 — Bug 修：先攻方第 1 回合沒抽牌
+
+Leon 報告：先攻方第 1 回合沒有抽牌。
+
+### 規則
+PTCG 現行國際規則（Sword & Shield 之後）：
+- **先攻第 1 回合**：抽牌、附能量、用支援者、進化都可以，**只是不能攻擊**
+- 後攻第 1 回合：全部可以
+
+舊規則（很久以前）才是「先攻第 1 回合不抽牌也不附能量也不用支援者」，現行規則只剩「不能攻擊」。
+
+### 舊行為（bug）
+engine.ts setup → playing 兩個 path（mulligan path + FINISH_SETUP path）都直接設 `turnPhase: 'main'`，**沒呼叫 applyAutoDraw**。導致：
+- 先攻方手牌停留在 setup 結束時的張數（7 張或 mulligan 補抽後的張數）
+- 第 2 回合（後攻方）的 END_TURN 才觸發 applyAutoDraw 給後攻方抽 1
+- 等先攻方第 2 回合（END_TURN 切回先攻），先攻方才抽到「第 1 張回合開始的牌」
+
+### 修法
+兩個 setup → playing path 都改：
+```ts
+turnPhase: 'draw',  // 改 'draw'，applyAutoDraw 抽完牌會設成 'main'
+...
+newState = applyAutoDraw(newState);
+```
+
+`engine.ts:1965` 的 `if (state.isFirstTurn && aIdx === state.firstPlayerIdx) return state; // 先手第 1 回合不能攻擊` 保留 — 唯一的先攻第 1 回合限制就是「不能攻擊」。
 
 ---
 

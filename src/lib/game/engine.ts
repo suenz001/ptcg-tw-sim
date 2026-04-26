@@ -903,11 +903,14 @@ function handleSetup(
       next = {
         ...next,
         phase: 'playing',
-        turnPhase: 'main',
+        turnPhase: 'draw',  // v2.183：改 'draw'，再由 applyAutoDraw 抽牌後設成 'main'
         activePlayerIndex: next.firstPlayerIdx,
         isFirstTurn: true,
       };
       next = addLog(next, `Setup 完成！${next.players[next.firstPlayerIdx].name} 先手行動中。`, null);
+      // v2.183 修：PTCG 現行規則先攻方第 1 回合也要抽牌（只是不能攻擊）。
+      //   舊版直接 turnPhase='main' 跳過抽牌 — 違反規則。
+      next = applyAutoDraw(next);
     }
     return next;
   }
@@ -972,11 +975,13 @@ function handleSetup(
       newState = {
         ...newState,
         phase: 'playing',
-        turnPhase: 'main',
+        turnPhase: 'draw',  // v2.183：改 'draw'，再由 applyAutoDraw 抽牌後設成 'main'
         activePlayerIndex: state.firstPlayerIdx,
         isFirstTurn: true,
       };
       newState = addLog(newState, `Setup 完成！${state.players[state.firstPlayerIdx].name} 先手行動中。`, null);
+      // v2.183 修：先攻第 1 回合也要抽牌（PTCG 現行規則）。
+      newState = applyAutoDraw(newState);
     }
     return newState;
   }
