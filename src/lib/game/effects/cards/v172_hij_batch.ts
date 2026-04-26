@@ -347,3 +347,144 @@ regR('kanari-pick', (st, idx, iids, _params, pool) => {
     return { ...p, deck: shuffle(rest), hand: [...p.hand, ...got] };
   });
 });
+
+// ── 捷朵（Supporter / J）── 抽 = 對手場上「超級進化寶可夢ex」數量
+// 「超級進化 ex」= name.startsWith('超級') && ex（與 prizesForKO 同邏輯）
+regG('捷朵', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
+  return all.some(c => {
+    const card = pool.get(c.cardId);
+    if (!card) return false;
+    const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
+    return isEx && card.name.startsWith('超級');
+  });
+});
+reg('捷朵', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
+  const megaCount = all.filter(c => {
+    const card = pool.get(c.cardId);
+    if (!card) return false;
+    const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
+    return isEx && card.name.startsWith('超級');
+  }).length;
+  st = addLog(st, `捷朵：對手場上有 ${megaCount} 隻超級進化ex → 抽 ${megaCount} 張`, idx);
+  if (megaCount === 0) return st;
+  return updatePlayer(st, idx, p => {
+    const taken = p.deck.slice(0, Math.min(megaCount, p.deck.length));
+    return { ...p, deck: p.deck.slice(taken.length), hand: [...p.hand, ...taken] };
+  });
+});
+
+// ── 瑪琪艾兒（Supporter / J）── 看對手手牌 + 抽 = 對手手牌中寶可夢數
+regG('瑪琪艾兒', (st, idx) => st.players[(1 - idx) as 0|1].hand.length > 0);
+reg('瑪琪艾兒', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const oppHand = st.players[dIdx].hand;
+  const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  const pokeCount = oppHand.filter(c => pool.get(c.cardId)?.supertype === 'Pokemon').length;
+  st = addLog(st, `瑪琪艾兒：查看對手手牌（${oppHand.length} 張）— ${handNames}`, idx);
+  st = addLog(st, `瑪琪艾兒：對手手牌寶可夢 ${pokeCount} 張 → 抽 ${pokeCount} 張`, idx);
+  if (pokeCount === 0) return st;
+  return updatePlayer(st, idx, p => {
+    const taken = p.deck.slice(0, Math.min(pokeCount, p.deck.length));
+    return { ...p, deck: p.deck.slice(taken.length), hand: [...p.hand, ...taken] };
+  });
+});
+
+// ── 可怕的哥哥（Supporter / I）── 對手 1 寶可夢 -1 道具 -1 特殊能量
+regG('可怕的哥哥', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
+  return all.some(pk => {
+    const hasTool = !!pk.toolAttached;
+    const hasSpecial = pk.energyAttached.some(e => {
+      const ec = pool.get(e.cardId);
+      return ec?.supertype === 'Energy' && ec.subtype === 'Special';
+    });
+    return hasTool || hasSpecial;
+  });
+});
+reg('可怕的哥哥', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
+  const cand = all.filter(pk => {
+    const hasTool = !!pk.toolAttached;
+    const hasSpecial = pk.energyAttached.some(e => {
+      const ec = pool.get(e.cardId);
+      return ec?.supertype === 'Energy' && ec.subtype === 'Special';
+    });
+    return hasTool || hasSpecial;
+  });
+  if (cand.length === 0) return addLog(st, '可怕的哥哥：對手無可拆道具/特殊能量', idx);
+  st = addLog(st, '可怕的哥哥：選 1 隻對手寶可夢，丟 1 道具 + 1 特殊能量', idx);
+  return withPending(st, {
+    type: 'opp-poke-choose',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'creepy-bro-strip',
+    params: { includeActive: true, validIids: cand.map(c => c.iid) },
+  });
+});
+regR('creepy-bro-strip', (st, idx, iids, _params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const targetIid = iids[0];
+  if (!targetIid) return st;
+  const dp = st.players[dIdx];
+  const target = dp.active?.iid === targetIid
+    ? dp.active
+    : dp.bench.find(c => c.iid === targetIid) ?? null;
+  if (!target) return st;
+  const targetName = pool.get(target.cardId)?.name ?? '?';
+  // 找 1 張特殊能量 + 1 張道具
+  const discardAdd: CardInstance[] = [];
+  let removedTool: CardInstance | undefined;
+  let toolName = '';
+  if (target.toolAttached) {
+    removedTool = target.toolAttached;
+    toolName = pool.get(removedTool.cardId)?.name ?? '道具';
+    discardAdd.push(removedTool);
+  }
+  let specialIdx = -1;
+  for (let i = target.energyAttached.length - 1; i >= 0; i--) {
+    const ec = pool.get(target.energyAttached[i].cardId);
+    if (ec?.supertype === 'Energy' && ec.subtype === 'Special') { specialIdx = i; break; }
+  }
+  let energyName = '';
+  if (specialIdx >= 0) {
+    const removed = target.energyAttached[specialIdx];
+    energyName = pool.get(removed.cardId)?.name ?? '特殊能量';
+    discardAdd.push(removed);
+  }
+  const bits: string[] = [];
+  if (toolName) bits.push(`丟 ${toolName}`);
+  if (energyName) bits.push(`丟 ${energyName}`);
+  st = addLog(st, `可怕的哥哥：${targetName}：${bits.length ? bits.join('，') : '無可丟'}`, idx);
+  return updatePlayer(st, dIdx, p => {
+    const apply = (pk: CardInstance) => {
+      if (pk.iid !== targetIid) return pk;
+      const newEnergies = specialIdx >= 0
+        ? [
+            ...pk.energyAttached.slice(0, specialIdx),
+            ...pk.energyAttached.slice(specialIdx + 1),
+          ]
+        : pk.energyAttached;
+      return {
+        ...pk,
+        toolAttached: undefined,
+        energyAttached: newEnergies,
+      };
+    };
+    return {
+      ...p,
+      active: p.active ? apply(p.active) : null,
+      bench: p.bench.map(apply),
+      discard: [...p.discard, ...discardAdd],
+    };
+  });
+});
