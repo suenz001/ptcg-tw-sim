@@ -100,6 +100,12 @@ TOOL_ATTACK_BONUS.set('電氣球', (attCard, _ai, defCard) => {
   const isDefEx = defCard.subtype === 'ex' || defCard.name.endsWith('ex') || defCard.name.endsWith('EX');
   return isDefEx ? 50 : 0;
 });
+// v2.170 活力頭帶：使用招式 +10 傷害
+TOOL_ATTACK_BONUS.set('活力頭帶', () => 10);
+// v2.170 赫普的講究頭帶：「赫普的」寶可夢招式 +30
+//   注意：「能量減少 1 個【無】」部分需要 cost hook，本版未實裝（已記入 SKIPPED）
+TOOL_ATTACK_BONUS.set('赫普的講究頭帶', (atkCard) =>
+  atkCard.name?.startsWith('赫普的') ? 30 : 0);
 
 // ── 特定屬性防禦（防守方帶此道具 → 特定屬性攻擊 -60，觸發即丟棄） ─────────
 TOOL_DEFENSE_REDUCE_BY_TYPE.set('福祿果', { amount: 60, types: ['Psychic'], discardOnTrigger: true });
@@ -181,6 +187,40 @@ TOOL_ON_DAMAGED.set('幸運頭盔', (state, dIdx) => {
   return updatePlayer(state, dIdx, p => {
     const taken = p.deck.slice(0, 2);
     return { ...p, deck: p.deck.slice(2), hand: [...p.hand, ...taken] };
+  });
+});
+// v2.170 凸凸頭盔：受傷時對攻擊方 +20 傷害（2 個傷害指示物）
+TOOL_ON_DAMAGED.set('凸凸頭盔', (state, _dIdx, aIdx) => {
+  return updatePlayer(addLog(state, '凸凸頭盔：對攻擊方放置 2 個傷害指示物（+20）', null), aIdx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, damage: p.active.damage + 20 } };
+  });
+});
+// v2.170 火箭隊的催眠裝置：受傷時若 holder 為「火箭隊的」寶可夢，將攻擊方睡眠
+TOOL_ON_DAMAGED.set('火箭隊的催眠裝置', (state, dIdx, aIdx, _dmg, pool) => {
+  const dp = state.players[dIdx];
+  const holder = dp.active;
+  if (!holder) return state;
+  const holderCard = pool.get(holder.cardId);
+  if (!holderCard?.name?.startsWith('火箭隊的')) return state;
+  return updatePlayer(addLog(state, '火箭隊的催眠裝置：將攻擊方睡眠', null), aIdx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, status: 'asleep' } };
+  });
+});
+// v2.170 逆境保險：受傷時若 holder 弱點屬性 = 攻擊方屬性，從牌庫抽 3 張
+TOOL_ON_DAMAGED.set('逆境保險', (state, dIdx, aIdx, _dmg, pool) => {
+  const dp = state.players[dIdx];
+  const ap = state.players[aIdx];
+  if (!dp.active || !ap.active) return state;
+  const dCard = pool.get(dp.active.cardId);
+  const aCard = pool.get(ap.active.cardId);
+  if (!dCard || !aCard) return state;
+  const weakness = dCard.weakness?.[0]?.type;
+  if (!weakness || weakness !== aCard.pokemonType) return state;
+  return updatePlayer(addLog(state, '逆境保險：弱點屬性匹配 → 抽 3 張', dIdx), dIdx, p => {
+    const taken = p.deck.slice(0, 3);
+    return { ...p, deck: p.deck.slice(taken.length), hand: [...p.hand, ...taken] };
   });
 });
 TOOL_ON_DAMAGED.set('奢華炸彈', (state, dIdx, aIdx) => {
