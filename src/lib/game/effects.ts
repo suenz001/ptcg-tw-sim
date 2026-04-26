@@ -9073,6 +9073,43 @@ regR('search-generic-to-hand', (st, idx, iids, _params, pool) => {
   });
 });
 
+// ── 能量輸送（Item / MC 639）── 從牌庫選 1 張基本能量加手牌（給對手看）+ 重洗
+// v2.165：實裝（之前未實裝；火箭隊的烏鴉頭頭 preset 用）
+//   卡面：「從自己的牌庫選擇1張基本能量卡，在給對手看過後加入手牌。並且重洗牌庫。」
+// 與 能量輸送PRO 差異：本卡只搜 1 張、不需要不同屬性、log 強制公開（卡面要求「給對手看過」）
+regG('能量輸送', (st, idx, pool) => {
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  });
+});
+reg('能量輸送', (st, idx) => {
+  st = addLog(st, '能量輸送：從牌庫選 1 張基本能量加入手牌（給對手看）', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy',
+    minCount: 0, maxCount: 1,
+    effectKey: 'energy-transfer-search',
+  });
+});
+regR('energy-transfer-search', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) {
+    return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })),
+      '能量輸送：未選擇任何能量（牌庫已重洗）', idx);
+  }
+  const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const pickedNames = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  // 卡面強制公開（給對手看過）— 用 addLog（公開）而非 addPrivateLog
+  st = addLog(st, `能量輸送：搜到 ${pickedNames} 加入手牌`, idx);
+  return updatePlayer(st, idx, (p) => {
+    const pickedIids = new Set(iids);
+    const pickedInDeck = p.deck.filter(c => pickedIids.has(c.iid));
+    const rest = p.deck.filter(c => !pickedIids.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...pickedInDeck] };
+  });
+});
+
 // ── 能量輸送PRO（Item） ── 從牌庫選任意張數不同屬性基本能量加手牌 ──────
 regG('能量輸送PRO', (st, idx, pool) => {
   return st.players[idx].deck.some(c => {

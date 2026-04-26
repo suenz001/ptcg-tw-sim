@@ -1,9 +1,38 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.164)  
+> 最後更新：2026-04-26 (v2.165)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.165 — 能量輸送 (Item) 補實裝 + 全 preset 未實裝清掃完畢
+
+### 起因
+寫了通用 audit 腳本 `/tmp/audit-unimpl.mjs` 跨所有 37 個 preset（346 種獨特卡牌）掃描招式 / 特性 / 訓練家 / 能量是否在 effects 中註冊。掃出唯一未實裝：**能量輸送 (Item, MC 639)**。
+
+### 卡面
+「從自己的牌庫選擇1張基本能量卡，在給對手看過後加入手牌。並且重洗牌庫。」
+
+### 實裝
+新增 `reg('能量輸送')` 與 `regR('energy-transfer-search')` 於 `effects.ts`：
+- `regG`：牌庫至少有 1 張基本能量
+- `reg`：開 deck-search picker，filter='BasicEnergy'，maxCount=1
+- `regR`：選到 → 公開 log（卡面強制要求「給對手看過」用 `addLog`，不用 `addPrivateLog`） → 加入手牌 → 重洗牌庫
+- 與「能量輸送PRO」差異：本卡只搜 1 張、不需要不同屬性、log 強制公開
+
+### 改動檔案
+- `src/lib/version.ts` — 2.164 → 2.165
+- `src/lib/game/effects.ts` — 新增 `能量輸送` reg + `energy-transfer-search` resolver
+
+### 驗證
+- audit script 二次掃描 → 0 張未實裝（招式 0 / 特性 0 / 訓練家能量 0）
+- `npm run build` ✓
+- `node scripts/sim-ai-battle.mjs 30` ✓ 30 局 0 bug
+
+### 後續
+全 preset 卡片功能實裝完畢。後續若有新增 preset / 新卡，可重跑 audit 腳本逐張補實裝。
 
 ---
 
