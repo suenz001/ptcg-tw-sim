@@ -22,22 +22,20 @@
  *  12. 樂呵呵之吻（迷唇娃）              damage 0 + Post 牌庫搜≤2 基本超能量附備戰
  *  13. 阿賽斯特萊石（太陽伊布ex）        damage 0 + Post 對手所有進化退化（進化卡回對手牌庫並洗）
  *  14. 雀躍（捲捲耳）                    damage 0 + Post 與備戰互換
- *  15. 天仙石（仙子伊布ex）              damage 0 + Post opp-bench 2 隻回對手牌庫 + 下回合不能用
+ *  15. 天仙石（仙子伊布ex）              damage 0 + Post opp-bench 2 隻回對手牌庫 + 下回合鎖「天仙石」（v2.157）
  *  16. 時間爆炸（帝牙盧卡）              damage 80 + modal-choice：玩家選棄全能量則 +80（v2.156）
  *  17. 破壞潮旋（洛奇亞ex）              damage 140 + 擲幣到反 → 棄對手戰鬥位 N 能量
  *  18. 激流水泵（厄鬼椪 水井面具ex）     damage 100 + modal-choice：玩家選棄 3 能量則 對手備戰 120（v2.156）
- *  19. 音波拆裂（超級盔甲鳥ex）          damage 220 + 自身全能量回牌庫並洗
+ *  19. 音波拆裂（超級盔甲鳥ex）          自身全能量回牌庫並洗 + 對手 1 隻寶可夢受 220（玩家選戰鬥/備戰，v2.157）
  *  20. 精神尖槍（代歐奇希斯）            damage 120 + 若能量單位≥cost+2 → 對手備戰 1 隻 120
  *
  * v2.156：時間爆炸 / 激流水泵 升級為真正 modal-choice — 用 ATTACK_PRE_DISCARD_CHOICE
  *   讓 UI 彈出能量挑選 modal，玩家自己決定要不要執行 option（之前是自動執行）。
  *   配合 engine.ts 把 action 也傳給 ATTACK_POST，讓 POST 能讀同一 chosenIids。
  *
- * 簡化說明（仍偏離卡面的部分）：
- *   - 音波拆裂卡面是「對手 1 隻寶可夢」可選戰鬥位或備戰位，這裡簡化為打戰鬥位 220
- *     （事實上 220 對戰鬥位幾乎都能 KO，戰術上多數情境也會打戰鬥位）。
- *   - 天仙石的「上回合用過則無法使用」cooldown 用 cantAttackPending 一回合鎖招式
- *     （比卡面嚴格 — 卡面只鎖天仙石，這裡鎖整隻仙子伊布ex 的所有招式；簡化合理）。
+ * v2.157：音波拆裂 / 天仙石 升級為符合卡面
+ *   - 音波拆裂：玩家可選戰鬥位/備戰位（用 opp-poke-choose + clone-strike-multi-hit）
+ *   - 天仙石 cooldown：blockedAttackNamesNextTurn 只鎖招式名（不鎖整隻寶可夢）
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
@@ -371,8 +369,9 @@ regR('v155-self-swap-active', (st, aIdx, iids, _params, pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// (15) 天仙石（仙子伊布ex）— 0 傷 + 對手 2 隻備戰回對手牌庫 + 下回合不能用招式
+// (15) 天仙石（仙子伊布ex）— 0 傷 + 對手 2 隻備戰回對手牌庫 + 下回合鎖「天仙石」
 // ══════════════════════════════════════════════════════════════════════════════
+// v2.157：cooldown 從「鎖整隻」精修為「只鎖天仙石招式名」（用 blockedAttackNamesNextTurn）
 regPre('仙子伊布ex|天仙石', (state) => ({ state, damage: 0 }));
 regPost('仙子伊布ex|天仙石', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
@@ -413,12 +412,16 @@ regR('v155-tianxianstone-return', (st, aIdx, iids, _params, pool) => {
     });
     return { ...p, bench: newBench, deck: shuffle([...p.deck, ...newDeckExtras]) };
   });
-  // 自身下回合不能用招式（鎖整隻；簡化版 cooldown）
+  // v2.157：cooldown 精修 — 只鎖「天仙石」招式名而非整隻寶可夢的所有招式
   st = updatePlayerInline(st, aIdx, p => {
     if (!p.active) return p;
-    return { ...p, active: { ...p.active, cantAttackPending: true } };
+    const cur = p.active.blockedAttackNamesNextTurn ?? [];
+    return {
+      ...p,
+      active: { ...p.active, blockedAttackNamesNextTurn: [...cur, '天仙石'] },
+    };
   });
-  return addLog(st, `天仙石：${iids.length} 隻對手備戰回對手牌庫並重洗；自身下回合無法使用招式`, aIdx);
+  return addLog(st, `天仙石：${iids.length} 隻對手備戰回對手牌庫並重洗；下回合無法再使用「天仙石」`, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -528,13 +531,17 @@ regPost('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, _pool, action) =>
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// (19) 音波拆裂（超級盔甲鳥ex）— 220 戰鬥位 + 自身全能量回牌庫
+// (19) 音波拆裂（超級盔甲鳥ex）— 自身全能量回牌庫 + 對手 1 隻寶可夢受 220
 // ══════════════════════════════════════════════════════════════════════════════
+// v2.157：升級為玩家可選戰鬥位/備戰位（之前簡化為只打戰鬥位）
+//   PRE: 棄自身能量回牌庫並洗（強制），主招式 damage=0（用 picker 套傷害）
+//   POST: 觸發 opp-poke-choose picker → clone-strike-multi-hit resolver
+//     resolver 已支援「戰鬥場套弱抗、備戰位不計」（卡面註明 [在備戰區不計算弱點・抵抗力]）
 regPre('超級盔甲鳥ex|音波拆裂', (state, aIdx) => {
   const att = state.players[aIdx].active;
-  if (!att) return { state, damage: 220 };
+  if (!att) return { state, damage: 0 };
   if (att.energyAttached.length === 0) {
-    return { state: addLog(state, '音波拆裂：自身無能量 → 220', aIdx), damage: 220 };
+    return { state: addLog(state, '音波拆裂：自身無能量', aIdx), damage: 0 };
   }
   const energies = att.energyAttached;
   const s = updatePlayerInline(state, aIdx, p => {
@@ -546,9 +553,25 @@ regPre('超級盔甲鳥ex|音波拆裂', (state, aIdx) => {
     };
   });
   return {
-    state: addLog(s, `音波拆裂：自身 ${energies.length} 個能量回牌庫並重洗 → 220 傷害`, aIdx),
-    damage: 220,
+    state: addLog(s, `音波拆裂：自身 ${energies.length} 個能量回牌庫並重洗`, aIdx),
+    damage: 0,
   };
+});
+regPost('超級盔甲鳥ex|音波拆裂', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const dPlayer = state.players[dIdx];
+  const targetCount = (dPlayer.active ? 1 : 0) + dPlayer.bench.length;
+  if (targetCount === 0) {
+    return addLog(state, '音波拆裂：對手場上無寶可夢', aIdx);
+  }
+  const s = addLog(state, '音波拆裂：選對手 1 隻寶可夢造成 220 傷害（戰鬥場計弱抗、備戰位不計）', aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'clone-strike-multi-hit', // v2.129 通用 resolver
+    params: { dmg: 220, label: '音波拆裂' },
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -1,9 +1,49 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.156)  
+> 最後更新：2026-04-26 (v2.157)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.157 — 音波拆裂 / 天仙石 cooldown 精修為符合卡面
+
+### 起因
+v2.155 還剩兩個簡化偏離卡面的招式：
+- 音波拆裂（超級盔甲鳥ex）：簡化為固定打對手戰鬥位 220
+- 天仙石（仙子伊布ex）：cooldown 用 cantAttackPending 鎖整隻仙子伊布ex 全部招式
+
+本版兩個都精修為符合卡面。
+
+### 修法
+
+**1. 音波拆裂 — 玩家可選戰鬥位/備戰位**
+卡面：「將自身能量回牌庫並重洗，對手 1 隻寶可夢受 220」+「[在備戰區不計算弱點・抵抗力]」
+- PRE: 棄自身能量回牌庫並洗，主招式 damage=0（傷害交給 picker）
+- POST: `withPending` opp-poke-choose（minCount=1, maxCount=1）→ 觸發 v2.129 通用 resolver `clone-strike-multi-hit`（已支援戰鬥場套弱抗、備戰位不計）
+
+**2. 天仙石 cooldown — 用 blockedAttackNamesNextTurn**
+之前用 cantAttackPending 鎖整隻仙子伊布ex 下回合所有招式（過嚴）。改為 push '天仙石' 到 `blockedAttackNamesNextTurn` — 仙子伊布ex 仍可使出其他招式（雖然她實際上只有天仙石一招，但這是符合卡面的正確機制）。
+
+### 改動檔案
+- `src/lib/version.ts` — 2.156 → 2.157
+- `src/lib/game/effects/cards/v155_attacks.ts` — 兩招式重寫
+
+### 驗證
+- `npm run build` ✓
+- `node scripts/sim-sandbox.mjs 50` ✓ 50 局 0 bug
+
+### v2.155 簡化收尾
+v2.155 列的 4 個簡化偏離卡面的招式現都已精修：
+| # | 招式 | v2.155 簡化 | 升級到 |
+|---|---|---|---|
+| 1 | 時間爆炸 | 自動棄全能量+80 | v2.156 modal-choice |
+| 2 | 激流水泵 | 自動棄 3+對手備戰 120 | v2.156 modal-choice |
+| 3 | 音波拆裂 | 固定打戰鬥位 220 | v2.157 玩家選戰鬥/備戰 |
+| 4 | 天仙石 cooldown | 鎖整隻 | v2.157 只鎖招式名 |
+
+20 個 v2.155 補實裝招式現已全部與卡面一致。
 
 ---
 
