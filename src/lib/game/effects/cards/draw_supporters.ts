@@ -330,3 +330,47 @@ regR('naruei-encourage-commit', (st, idx, iids, params, pool) => {
     };
   });
 });
+
+// ── 琵魯（Supporter / J）── v2.179 ────────────────────────────────────────────
+// 卡面：從牌庫抽卡直到自己的手牌滿 5 張為止。
+//       若希望，在從牌庫抽卡前，將自己的任意數量的手牌丟棄。
+// 實裝：開 hand-discard pending（任意 0~hand.length），resolver 棄掉所選 + 抽到 5。
+// gate：永遠可用（牌庫空也允許 — 卡面沒禁；丟掉手牌也可能是策略）。
+reg('琵魯', (st, idx) => {
+  st = addLog(st, '琵魯：選擇要丟棄的手牌（可不選），然後抽卡直到滿 5 張', idx);
+  const handLen = st.players[idx].hand.length;
+  if (handLen === 0) {
+    // 沒手牌可丟，直接抽到 5
+    const need = Math.max(0, 5 - st.players[idx].hand.length);
+    return drawCards(st, idx, need);
+  }
+  return withPending(st, {
+    type: 'hand-discard',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 0, maxCount: handLen,
+    effectKey: 'pirou-discard-then-draw',
+  });
+});
+regR('pirou-discard-then-draw', (st, idx, iids, _params, pool) => {
+  const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `琵魯：丟棄 ${chosen.length} 張手牌（${names}）`, idx);
+    st = updatePlayer(st, idx, p => ({
+      ...p,
+      hand: p.hand.filter(c => !iids.includes(c.iid)),
+      discard: [...p.discard, ...chosen],
+    }));
+  } else {
+    st = addLog(st, '琵魯：未丟棄任何手牌', idx);
+  }
+  const need = Math.max(0, 5 - st.players[idx].hand.length);
+  if (need > 0) {
+    st = addLog(st, `琵魯：抽到 5 張手牌（補 ${need} 張）`, idx);
+    st = drawCards(st, idx, need);
+  } else {
+    st = addLog(st, '琵魯：手牌已滿 5 張，不抽', idx);
+  }
+  return st;
+});
+

@@ -1,9 +1,19 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.178)  
+> 最後更新：2026-04-26 (v2.179)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.179 — 琵魯（Supporter）+ 除蟲噴霧（Item）
+
+**琵魯（Supporter / J）**：開 hand-discard pending 讓玩家任選棄牌，resolver 棄掉所選後 drawCards 補到 5。draw_supporters.ts 加 reg + regR。
+
+**除蟲噴霧（Item / I）**：複用既存 `force-opp-swap` resolver，items_misc.ts 加 reg/regG，對對手 idx 開 bench-choose pending（對手自己選哪隻備戰上場）。Gate：對手有戰鬥 + 至少 1 隻備戰。
+
+H/I/J 實裝率：212→215（+2），剩 21 張未實裝。
 
 ---
 

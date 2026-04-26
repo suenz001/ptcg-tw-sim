@@ -1062,6 +1062,28 @@ regR('lazy-tail-grass-bounce', (st, idx, iids, _params, pool) => {
   });
 });
 
+// ── 除蟲噴霧（Item / I）── v2.179 ────────────────────────────────────────────
+// 卡面：將對手的戰鬥寶可夢與備戰寶可夢互換。[由對手選擇放置於戰鬥場的寶可夢。]
+// 實裝：用既有 force-opp-swap resolver — 對對手開 bench-choose pending（min=1 max=1）。
+// gate：對手有 active + 至少 1 隻備戰。
+regG('除蟲噴霧', (st, idx) => {
+  const dp = st.players[(1 - idx) as 0 | 1];
+  return !!dp.active && dp.bench.length >= 1;
+});
+reg('除蟲噴霧', (st, idx, _pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  if (!dp.active || dp.bench.length === 0) return st;
+  st = addLog(st, '除蟲噴霧：對手必須將戰鬥寶可夢與備戰寶可夢互換（由對手選擇）', idx);
+  return withPending(st, {
+    type: 'bench-choose',
+    actorIdx: dIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'force-opp-swap',
+    params: { label: '除蟲噴霧', attackerIdx: idx },
+  });
+});
+
 // ── 妨害信函（Item / H）── v2.177 ────────────────────────────────────────────
 // 卡面：對手數過對手自己的手牌張數後，全部翻回反面並重洗，放回牌庫下方。
 //       然後，對手從牌庫抽出與放回的張數相同數量的卡。

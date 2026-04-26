@@ -21,8 +21,8 @@
 - `[12837/I] 火箭隊的妨礙機器人` (Item) — 互換對手手牌+獎賞
 - `[10116/H] 泰姆` (Supporter) — 對手猜 HP，正確抽 4
 
-### 需「對手抽卡互動」（1 張）
-- `[18051/J] 琵魯` (Supporter) — 棄手牌任意+抽到 5（需 hand-discard 串接）
+### 需「對手抽卡互動」（已清）
+- `[18051/J] 琵魯` — ✓ v2.179（draw_supporters.ts；hand-discard pending → drawCards 補到 5）
 
 ### 需「holder name/type filter on TOOL_*」（已全清）
 v2.176 已實裝：
@@ -41,8 +41,8 @@ v2.176 已實裝：
 - `[18358/H] 樂園度假地` — ✓ v2.177（engine RETREAT/canRetreat 加 stadium 名字 + 寶可夢名字 filter；加入 STATIC_PASSIVE_STADIUMS）
 - `[10996/H] 壯偉碩木` — 牌庫鏈式進化（基礎→1階→2階），需新 chain-evolve pending UI
 
-### 需「opp 互動 picker / 進化」（5 張）
-- `[14017/I] 除蟲噴霧` (Item) — 對手選擇換哪隻備戰上場
+### 需「opp 互動 picker / 進化」（剩 4 張）
+- `[14017/I] 除蟲噴霧` — ✓ v2.179（items_misc.ts；複用 force-opp-swap resolver，對對手開 bench-choose pending）
 - `[14077/I] 奇異時鐘` (Item) — 進化退化
 - `[18494/J] 變化之書` (Item) — 棄牌寶可夢 ↔ 場上寶可夢互換
 - `[17112/H] 鬼之假面` (Item) — 棄牌「厄鬼椪ex」↔ 場上「厄鬼椪ex」
