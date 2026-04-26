@@ -6,10 +6,10 @@
 
 ## 剩餘 H/I/J 卡 36 張（按需要的引擎升級分組）
 
-### 需「player-level next-turn flag」（3 張）
-- `[14014/I] 鐵之防禦強化` (Item) — 下回合自己【鋼】寶可夢受招式 -30
-- `[14100/I] 阿塞蘿拉的惡作劇` (Supporter) — 下回合 1 寶不受 ex 招式（gate: 對手獎賞 ≤2）
-- `[18497/J] 霍米加的演奏` (Supporter) — 下回合對手中毒寶可夢無法撤退
+### 需「player-level next-turn flag」（已全清，v2.174）
+- `[14014/I] 鐵之防禦強化` — ✓ v2.174（PlayerState.metalShieldNextTurn/ThisTurn）
+- `[14100/I] 阿塞蘿拉的惡作劇` — ✓ v2.174（CardInstance.immuneToExAttackNextTurn/ThisTurn）
+- `[18497/J] 霍米加的演奏` — ✓ v2.174（PlayerState.cantRetreatIfPoisonedNextTurn/ThisTurn）
 
 ### 需「Item-as-Pokemon」化石機制（5 張）
 - `[18045/J] 陳舊的顎之化石` / `[18046/J] 陳舊的鰭之化石` / `[17128/I] 陳舊的羽毛化石` / `[13947/H] 陳舊的背蓋化石` / `[10985/H] 陳舊的根狀化石`
@@ -37,9 +37,9 @@ v2.176 已實裝：
 ### 需「turn-end energy attach」（1 張）
 - `[17154/H] 力之沙漏` (Tool) — 自己回合結束從棄牌附 1 基本能量
 
-### 需「passive Stadium hook」（2 張）
-- `[18358/H] 樂園度假地` (Stadium) — 雙方「可達鴨」-1 撤退（passive holder filter）
-- `[10996/H] 壯偉碩木` (Stadium) — 牌庫鏈式進化（基礎→1階→2階）
+### 需「passive Stadium hook」（剩 1 張）
+- `[18358/H] 樂園度假地` — ✓ v2.177（engine RETREAT/canRetreat 加 stadium 名字 + 寶可夢名字 filter；加入 STATIC_PASSIVE_STADIUMS）
+- `[10996/H] 壯偉碩木` — 牌庫鏈式進化（基礎→1階→2階），需新 chain-evolve pending UI
 
 ### 需「opp 互動 picker / 進化」（5 張）
 - `[14017/I] 除蟲噴霧` (Item) — 對手選擇換哪隻備戰上場
@@ -56,8 +56,8 @@ v2.176 已實裝：
 ### 需「tag detection + bench-distribute」（1 張）
 - `[17142/H] 重新啟動箱` (Item) — 棄牌附給「未來」寶可夢各 1 張（tag 偵測 + 多目標分配）
 
-### 需「opp 牌庫操作」（1 張）
-- `[11085/H] 妨害信函` (Item) — 對手手牌洗回+對手抽相同數
+### 需「opp 牌庫操作」（已清）
+- `[11085/H] 妨害信函` — ✓ v2.177（items_misc.ts；對手手牌全洗回牌庫底再抽相同數）
 
 ### 需「coin → conditional search」（1 張）
 - `[17144/I] 火箭隊的超級球` (Item) — 已實裝 ✓ (v2.172)，從 list 移除

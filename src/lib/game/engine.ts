@@ -1292,6 +1292,10 @@ function handlePlaying(
     if (stadiumNameForRetreat === 'N的城堡' && activeCard?.name?.startsWith('N的')) {
       retreatCost = 0;
     }
+    // v2.177 樂園度假地（Stadium）：雙方所有「可達鴨」撤退成本 -1。
+    if (stadiumNameForRetreat === '樂園度假地' && activeCard?.name === '可達鴨') {
+      retreatCost = Math.max(0, retreatCost - 1);
+    }
     // v2.69：撤退成本用「能量單位」比對，不是卡片張數。火箭隊能量 1 張 = 2 units。
     // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
     if (totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx) < retreatCost) return state;
@@ -3542,6 +3546,8 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
   //   導致 UI canRetreatNow 仍用舊 cost 計算，按鈕不出現）。
   const stadiumNameCR = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
   if (stadiumNameCR === 'N的城堡' && card?.name?.startsWith('N的')) cost = 0;
+  // v2.177 樂園度假地：可達鴨撤退 -1（UI 鏡射）
+  if (stadiumNameCR === '樂園度假地' && card?.name === '可達鴨') cost = Math.max(0, cost - 1);
   // v2.69：以能量單位計算（火箭隊能量 1 張 = 2 units）。
   // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
   return totalEnergyUnits(player.active.energyAttached, pool, state, state.activePlayerIndex) >= cost;

@@ -1061,3 +1061,23 @@ regR('lazy-tail-grass-bounce', (st, idx, iids, _params, pool) => {
     };
   });
 });
+
+// ── 妨害信函（Item / H）── v2.177 ────────────────────────────────────────────
+// 卡面：對手數過對手自己的手牌張數後，全部翻回反面並重洗，放回牌庫下方。
+//       然後，對手從牌庫抽出與放回的張數相同數量的卡。
+// 實裝：對手手牌 → 洗回對手牌庫底 → 對手抽 N 張。
+// gate：對手手牌 ≥1（為 0 時打出沒意義，避免浪費 Item）。
+regG('妨害信函', (st, idx) => st.players[(1 - idx) as 0 | 1].hand.length >= 1);
+reg('妨害信函', (st, idx, _pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const handCount = st.players[dIdx].hand.length;
+  if (handCount === 0) return st;
+  st = addLog(st, `妨害信函：對手手牌 ${handCount} 張全部洗回牌庫底，再抽相同張數`, idx);
+  st = updatePlayer(st, dIdx, p => {
+    const shuffledHand = shuffle(p.hand);
+    return { ...p, hand: [], deck: [...p.deck, ...shuffledHand] };
+  });
+  st = drawCards(st, dIdx, handCount);
+  return st;
+});
+

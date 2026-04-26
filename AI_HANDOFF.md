@@ -1,9 +1,23 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.176)  
+> 最後更新：2026-04-26 (v2.177)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.177 — 樂園度假地 + 妨害信函 + SKIPPED 收尾整理
+
+### v2.174 既有功能納入 SKIPPED 清單
+v2.174 早就實裝過「player-level next-turn flag」3 張（鐵之防禦強化 / 阿塞蘿拉的惡作劇 / 霍米加的演奏），SKIPPED.md 漏更新，本版補入。
+
+### 卡片實裝
+- **樂園度假地（Stadium）** — engine RETREAT 計費和 canRetreat 都加 stadium 名稱+寶可夢名稱 filter，「可達鴨」撤退費用 -1；同步加入 STATIC_PASSIVE_STADIUMS 讓 UI 不顯示「使用」按鈕。
+- **妨害信函（Item）** — 對手手牌全部洗入牌庫底，然後對手抽相同張數。簡單動作，無互動 UI。gate：對手手牌 ≥1。
+
+剩餘大型機制：
+- 化石類 5 張（Item-as-Pokemon），對手 yes/no 互動 4 張，攻擊注入 / 進化退化 / 能量回手 / chain-evolve / opp picker 等都需新 pending type。
 
 ---
 

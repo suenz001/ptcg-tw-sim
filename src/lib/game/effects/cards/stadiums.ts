@@ -217,6 +217,7 @@ export const STATIC_PASSIVE_STADIUMS = new Set<string>([
   '祭典會場',       // 附能量寶可夢免疫狀態
   '中立中心',       // 非規則盒不受 ex/V 招式傷害
   '石之洞窟',       // 大吾寶可夢受傷 -30
+  '樂園度假地',     // v2.177：可達鴨撤退 -1
   // 註：本 set 未實裝效果的 stadium 仍會放下成為場地（engine 預設行為），
   // 但不會冒「使用」按鈕。個別被動效果需個別實裝到 engine/effects 層。
 ]);
