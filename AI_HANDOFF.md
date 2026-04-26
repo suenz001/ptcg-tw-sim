@@ -1,9 +1,39 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.181)  
+> 最後更新：2026-04-26 (v2.182)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.182 — 主動 Bug 健檢：睡眠雙方擲幣 + 混亂自傷 KO + 線上同步缺陷
+
+Leon 要求主動檢查 status 機制 bug。對照 PTCG 官方規則手冊，發現並修以下三個：
+
+### Bug A：睡眠擲幣只跑 aIdx 方
+官方規則：「Asleep — flip a coin between turns」=每位玩家結束回合的寶可夢檢查階段都擲幣。
+舊版 engine.ts END_TURN 只對 `players[aIdx]`（剛結束回合的玩家）擲幣，導致對手的睡眠寶可夢跨回合不擲幣 — 永遠醒不來。
+修：跟中毒/灼傷一樣套 `for (const tIdx of [aIdx, dIdx])`，雙方各擲幣。
+
+### Bug B：混亂攻擊自傷 30 沒檢 KO
+官方規則：「Confused — When attacks, flip coin. Tails: deals 30 damage to itself.」若這 30 點讓寶可夢 HP ≤0，應走 KO 流程（對手取獎賞）。
+舊版只 `attacker.active.damage += 30`，沒檢 KO — 殘血混亂寶可夢繼續打到負血但 KO 沒觸發。
+修：加 `getEffectiveHP` 比對，若 KO 走完整 KO 流程（discard + 對手取獎賞 + 勝利條件 + active=null 觸發 SEND_NEW_ACTIVE）。
+
+### Bug C：「跳過攻擊」按鈕沒 push 到 firestore
+舊版 onclick：`game = {...game, turnPhase: 'end'}` — 純 local mutation。
+線上模式下，host 跳過攻擊後 turnPhase 變化只在 host 端，guest 看不到對手即將結束回合的 UI 提示。
+修：onclick 改為 async，線上模式時跑 `pushGameState`（同步到 firestore）。
+
+### 麻痺機制驗證 = 正確
+PTCG 規則：「Recovers between turns（擁有者下次寶可夢檢查時自動解除）」
+engine 在 aIdx（剛結束回合方）的 checkup 解除自己的麻痺寶可夢 — 符合「擁有者下次自己 checkup」語義。**不需修**。
+
+### 線上 guest 抽牌延遲問題（待驗證）
+Leon 報告：「加入遊戲的玩家是按完掠過攻擊後才抽牌」。
+本版修了「跳過攻擊」push state 缺陷（修 C）— 這可能就是 root cause（host 跳過攻擊後 turnPhase 變化沒同步到 guest，導致 guest 端 reactivity 觸發點延後，看起來像是「按完才抽牌」）。
+若修法後現象仍存在，後續需加更精細的 onSnapshot debug log 追蹤 Svelte 5 deep proxy 與 firestore plain object 賦值的 reactivity 邊界。
 
 ---
 

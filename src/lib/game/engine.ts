@@ -1974,11 +1974,47 @@ function handlePlaying(
       return addLog({ ...state, players, turnPhase: 'end' },
         `${atkNameForStatus} 正在麻痺，無法使用招式！`, aIdx);
     }
-    // 特殊狀態：混亂 — 擲硬幣，反面自身受30傷害且攻擊失敗
+    // 特殊狀態：混亂 — 擲硬幣，反面自身受 30 傷害且攻擊失敗
+    // v2.182：補上「自傷致 KO」流程 — 30 自傷可能讓寶可夢昏厥（HP ≤ 30 + 已有傷害指示物）
     if (attacker.active.status === 'confused') {
       const coin = Math.random() < 0.5;
       if (!coin) {
         const selfDmg = (attacker.active.damage ?? 0) + 30;
+        const atkHP = getEffectiveHP(attacker.active, pool, state);
+        const atkCard = pool.get(attacker.active.cardId);
+        if (atkHP > 0 && selfDmg >= atkHP) {
+          // 混亂自傷致 KO → 對手取獎賞
+          const koDiscard: CardInstance[] = [
+            { ...attacker.active, damage: selfDmg },
+            ...attacker.active.energyAttached,
+            ...(attacker.active.toolAttached ? [attacker.active.toolAttached] : []),
+            ...(attacker.active.evolvedFromStack ?? []),
+          ];
+          const newAttacker: PlayerState = {
+            ...attacker,
+            discard: [...attacker.discard, ...koDiscard],
+            active: null,
+          };
+          players[aIdx] = newAttacker;
+          const koPrizes = atkCard ? prizesForKO(atkCard) : 1;
+          const winner = { ...players[dIdx] };
+          const take = Math.min(koPrizes, winner.prizes.length);
+          if (take > 0) {
+            winner.hand = [...winner.hand, ...winner.prizes.slice(0, take)];
+            winner.prizes = winner.prizes.slice(take);
+          }
+          players[dIdx] = winner;
+          const s = addLog({ ...state, players, turnPhase: 'end' as const },
+            `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！${players[dIdx].name} 取得 ${take} 張獎勵牌。`, aIdx);
+          if (winner.prizes.length === 0) {
+            return { ...s, phase: 'game-over', winner: dIdx, winReason: `${winner.name} 取得所有獎勵牌` };
+          }
+          if (newAttacker.bench.length === 0) {
+            return { ...s, phase: 'game-over', winner: dIdx, winReason: `${newAttacker.name} 沒有可上場的寶可夢` };
+          }
+          return s;  // active=null → UI 自動 popup SEND_NEW_ACTIVE
+        }
+        // 沒 KO：扣 30 傷然後 turnPhase=end
         players[aIdx] = { ...attacker, active: { ...attacker.active, damage: selfDmg } };
         return addLog({ ...state, players, turnPhase: 'end' },
           `${atkNameForStatus} 陷入混亂，自身受到 30 傷害，攻擊失敗！`, aIdx);
@@ -2828,18 +2864,25 @@ function handlePlaying(
     }
 
     // v2.124 順序修正（按 PTCG 官方）：中毒 → 灼傷 → 睡眠 → 麻痺 → 特性
-    // 特殊狀態：睡眠 — 擲硬幣決定是否醒來（先於麻痺檢查）
-    const sleepPlayer = { ...players[aIdx] };
-    if (sleepPlayer.active?.status === 'asleep') {
-      const wakeCoin = Math.random() < 0.5;
-      if (wakeCoin) {
-        sleepPlayer.active = { ...sleepPlayer.active, status: undefined };
-        players[aIdx] = sleepPlayer;
-        state = addLog({ ...state, players }, `${pool.get(sleepPlayer.active.cardId)?.name ?? '?'} 醒來了！`, null);
+    // v2.181：睡眠 — 雙方 active 都擲幣（PTCG 規則：every Pokémon Checkup, flip coin to wake）
+    //          舊版只跑 aIdx，導致對手睡眠寶可夢跨回合不擲幣 — 違反規則。
+    for (const tIdx of [aIdx, dIdx] as const) {
+      const sleepPlayer = { ...players[tIdx] };
+      if (sleepPlayer.active?.status === 'asleep') {
+        const wakeCoin = Math.random() < 0.5;
+        const sleeperName = pool.get(sleepPlayer.active.cardId)?.name ?? '?';
+        if (wakeCoin) {
+          sleepPlayer.active = { ...sleepPlayer.active, status: undefined };
+          players[tIdx] = sleepPlayer;
+          state = addLog({ ...state, players }, `${sleeperName} 醒來了！（睡眠：正面）`, null);
+        } else {
+          state = addLog({ ...state, players }, `${sleeperName} 仍在睡眠（反面）`, null);
+        }
       }
     }
 
-    // 特殊狀態：麻痺 — 自動解除（回合結束時，麻痺後第一次寶可夢檢查）
+    // 特殊狀態：麻痺 — 持續到「擁有者下次自己寶可夢檢查」自動解除（PTCG 規則）
+    //   只在「擁有麻痺寶可夢的玩家」結束自己回合時解除，所以僅跑 aIdx 是正確的。
     const paraPlayer = { ...players[aIdx] };
     if (paraPlayer.active?.status === 'paralyzed') {
       paraPlayer.active = { ...paraPlayer.active, status: undefined };
