@@ -17,6 +17,7 @@
 import type { Card } from '$lib/cards/types';
 import type {
   GameState, PlayerState, CardInstance, PendingSelection, GameAction,
+  SpecialCondition,
 } from '../types';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -221,6 +222,31 @@ export type AttachEnergyHookFn = (
   pool: Map<string, Card>,
 ) => GameState;
 export const SPECIAL_ENERGY_ATTACH = new Map<string, AttachEnergyHookFn>();
+
+/**
+ * v2.175：特殊能量被動效果 maps（同 TOOL_* 模式）。
+ *
+ * 觸發點：
+ *   1. SPECIAL_ENERGY_HP_BONUS — holder 有效 HP +N（影響 KO 判定 + UI 顯示）。
+ *      fn(holderCard) => N；如要排除「holder 必須是某屬性」，fn 內檢查 holderCard.pokemonType 後回 0。
+ *   2. SPECIAL_ENERGY_RETREAT_MOD — holder 撤退成本修正（同 TOOL_RETREAT_MOD shape）。
+ *      fn(holderCard, holderInst) => { reduceBy?, zero? }。
+ *   3. SPECIAL_ENERGY_STATUS_IMMUNE — holder 對哪些特殊狀態免疫（被施加時忽略）。
+ *      fn(holderCard) => Set<SpecialCondition>。空 Set 即不免疫。
+ *   4. SPECIAL_ENERGY_ON_DAMAGED — holder 在戰鬥場受到招式傷害時觸發（state mutate）。
+ *      同 TOOL_ON_DAMAGED shape：fn(state, dIdx, aIdx, damage, pool) => state。
+ *
+ * Engine 檢索方式：iterate energyAttached，pool.get(name) 比對 map key。
+ * （不像 TOOL_* 一張寶可夢只附 1 個道具，能量可附多張，所以要 iterate）
+ */
+export const SPECIAL_ENERGY_HP_BONUS = new Map<string, (holder: Card) => number>();
+export const SPECIAL_ENERGY_RETREAT_MOD = new Map<string, (
+  holder: Card, inst: CardInstance,
+) => { reduceBy?: number; zero?: boolean }>();
+export const SPECIAL_ENERGY_STATUS_IMMUNE = new Map<string, (holder: Card) => Set<SpecialCondition>>();
+export const SPECIAL_ENERGY_ON_DAMAGED = new Map<string, (
+  state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, damage: number, pool: Map<string, Card>,
+) => GameState>();
 
 export function canPlayTrainer(
   cardName: string,

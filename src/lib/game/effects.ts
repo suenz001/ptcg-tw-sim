@@ -25,6 +25,8 @@ import {
   ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
   BENCH_PLACE_TRIGGERS,
   SPECIAL_ENERGY_ATTACH,
+  SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD,
+  SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED,
   // Register functions
   reg, regR, regG,
   regPre, regPost, regA,
@@ -50,7 +52,7 @@ export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE, ge
 // v2.133 PASSIVE_PREVENT_KO 在本檔下方定義，匯出供 engine 使用
 // （直接在此先 forward-ref：宣告處放到 v2.133 區塊，之後會由 engine import）
 export { BENCH_PLACE_TRIGGERS };
-export { SPECIAL_ENERGY_ATTACH };
+export { SPECIAL_ENERGY_ATTACH, SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD, SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED };
 export type { ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec };
 
 // ── 道具（Pokemon Tool）模組 — v2.09 從本檔抽離 ────────────────────────────
@@ -373,6 +375,13 @@ function effectiveHPInline(
       const bonusFn = TOOL_HP_BONUS.get(tool.name);
       if (bonusFn) hp += bonusFn(card);
     }
+  }
+  // v2.175 特殊能量 HP bonus（增強【草】等）— iterate energyAttached
+  for (const e of inst.energyAttached) {
+    const ec = pool.get(e.cardId);
+    if (!ec) continue;
+    const fn = SPECIAL_ENERGY_HP_BONUS.get(ec.name);
+    if (fn) hp += fn(card);
   }
   // v2.92：引力山岳（Stadium）— 雙方場上所有【2階進化】寶可夢最大 HP -30
   if (state?.activeStadium?.name === '引力山岳' && card.stage === 'Stage2') {
@@ -1419,6 +1428,28 @@ function hasEffectShield(inst: CardInstance | null, pool: Map<string, Card>): bo
   });
 }
 
+/**
+ * v2.175 — Special Energy 狀態免疫判定
+ * holder 身上若附有 STATUS_IMMUNE 命中該狀態的特殊能量，回傳 immune（與卡名）。
+ */
+export function checkSpecialEnergyStatusImmune(
+  inst: CardInstance,
+  status: SpecialCondition,
+  pool: Map<string, Card>,
+): { immune: true; energyName: string } | { immune: false } {
+  const holderCard = pool.get(inst.cardId);
+  if (!holderCard) return { immune: false };
+  for (const e of inst.energyAttached) {
+    const ec = pool.get(e.cardId);
+    if (!ec) continue;
+    const fn = SPECIAL_ENERGY_STATUS_IMMUNE.get(ec.name);
+    if (!fn) continue;
+    const set = fn(holderCard);
+    if (set.has(status)) return { immune: true, energyName: ec.name };
+  }
+  return { immune: false };
+}
+
 /** 讓對手戰鬥寶可夢陷入指定狀態的 POST effect */
 function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'paralyzed'): AttackPostFn {
   return (state, aIdx, pool) => {
@@ -1434,6 +1465,14 @@ function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'par
     // v2.92：硬岩【鬥】能量 — 對手招式效果完全免疫（對防禦方 status 施加）
     if (hasEffectShield(def.active, pool)) {
       return addLog(state, `${defName}｜硬岩【鬥】能量：免疫招式效果`, aIdx);
+    }
+    // v2.175：泡沫【水】能量 — 對指定狀態免疫
+    const immune = checkSpecialEnergyStatusImmune(def.active, status, pool);
+    if (immune.immune) {
+      const statusLabelImmune: Record<string, string> = {
+        poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
+      };
+      return addLog(state, `${defName}｜${immune.energyName}：免疫【${statusLabelImmune[status]}】`, aIdx);
     }
     const statusLabelMap: Record<string, string> = {
       poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
@@ -2184,6 +2223,24 @@ reg('危險光線', (st, idx, pool) => {
   const def = { ...players[dIdx] };
   if (def.active) {
     const defName = pool.get(def.active.cardId)?.name ?? '?';
+    // v2.175：泡沫【水】等 SPECIAL_ENERGY_STATUS_IMMUNE 命中 → 對應狀態忽略
+    const immBurn = checkSpecialEnergyStatusImmune(def.active, 'burned', pool);
+    const immConf = checkSpecialEnergyStatusImmune(def.active, 'confused', pool);
+    if (immBurn.immune && immConf.immune) {
+      return addLog(st, `危險光線：${defName} 對【灼傷】【混亂】皆免疫`, idx);
+    }
+    if (immBurn.immune) {
+      def.active = { ...def.active, status: 'confused' };
+      players[dIdx] = def;
+      const s = addLog({ ...st, players }, `${defName}｜${immBurn.energyName}：免疫【灼傷】`, idx);
+      return addLog(s, `危險光線：${defName} 陷入【混亂】`, idx);
+    }
+    if (immConf.immune) {
+      def.active = { ...def.active, status: 'burned' };
+      players[dIdx] = def;
+      const s = addLog({ ...st, players }, `${defName}｜${immConf.energyName}：免疫【混亂】`, idx);
+      return addLog(s, `危險光線：${defName} 陷入【灼傷】`, idx);
+    }
     def.active = { ...def.active, status: 'confused', secondaryStatus: 'burned' };
     players[dIdx] = def;
     return addLog({ ...st, players }, `危險光線：${defName} 陷入【灼傷】+【混亂】`, idx);

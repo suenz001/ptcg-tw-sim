@@ -61,12 +61,15 @@
 ### 需「coin → conditional search」（1 張）
 - `[17144/I] 火箭隊的超級球` (Item) — 已實裝 ✓ (v2.172)，從 list 移除
 
-### 需「Special Energy 新 hook」（5 張全部）
-- `[18055/J] 增強【草】能量` — HP +20 if holder 草（需 SPECIAL_ENERGY_HP_BONUS）
-- `[18501/J] 燃料【火】能量` — 棄牌時放回手牌（需新 self-revive hook）
-- `[18502/J] 泡沫【水】能量` — 免特殊狀態 if holder 水（需 status immunity hook）
-- `[18503/J] 磁鐵【鋼】能量` — 撤退 0 if holder 鋼（需 retreat hook with type filter）
-- `[17208/I] 扣殺能量` — 受傷時對方 +20（同 凸凸頭盔，但 SPECIAL_ENERGY_ON_DAMAGED）
+### 需「Special Energy 新 hook」（剩 1 張）
+v2.175 加入 4 個 hook map（HP_BONUS / RETREAT_MOD / STATUS_IMMUNE / ON_DAMAGED）並實裝 4 張：
+- `[18055/J] 增強【草】能量` — 已實裝 ✓ (v2.175, HP_BONUS)
+- `[18502/J] 泡沫【水】能量` — 已實裝 ✓ (v2.175, STATUS_IMMUNE，wired into statusPost + 危險光線)
+- `[18503/J] 磁鐵【鋼】能量` — 已實裝 ✓ (v2.175, RETREAT_MOD)
+- `[17208/I] 扣殺能量` — 已實裝 ✓ (v2.175, ON_DAMAGED)
+
+剩餘：
+- `[18501/J] 燃料【火】能量` — 棄牌時放回手牌；需新 energy-discard hook（招式效果丟棄能量時觸發），engine 目前無此 hook 點
 
 ### 已實裝但 audit false-positive
 - `[12573/I] ‌寶可夢中心的姐姐` — v2.168 實裝；JSON 名前帶 U+200C ZWNJ。v2.172 在 pool.ts 加 ZWNJ strip 後 runtime 正確 match。

@@ -9,9 +9,13 @@
  * SPECIAL_ENERGY_ATTACH map 已移至 _shared.ts；engine.ts 透過 effects.ts re-export 取用。
  */
 
-import type { CardInstance } from '../../types';
+import type { CardInstance, SpecialCondition } from '../../types';
 import {
   SPECIAL_ENERGY_ATTACH,
+  SPECIAL_ENERGY_HP_BONUS,
+  SPECIAL_ENERGY_RETREAT_MOD,
+  SPECIAL_ENERGY_STATUS_IMMUNE,
+  SPECIAL_ENERGY_ON_DAMAGED,
   addLog, drawCards, updatePlayer, withPending,
 } from '../_shared';
 
@@ -93,3 +97,43 @@ SPECIAL_ENERGY_ATTACH.set('火箭隊能量', (st, idx, targetIid, pool) => {
     return { ...pl, active, bench, discard: [...pl.discard, rocketEnergyInst] };
   });
 });
+
+// ── 增強【草】能量（Special Energy） ──────────────────────────────────────────
+// 卡面：提供 1 個【草】能量。附於【草】寶可夢時，HP 上限 +20。
+// Hook：SPECIAL_ENERGY_HP_BONUS（engine getEffectiveHP 與 effects.ts effectiveHPInline）。
+SPECIAL_ENERGY_HP_BONUS.set('增強【草】能量', (holder) => {
+  return holder.pokemonType === 'Grass' ? 20 : 0;
+});
+
+// ── 磁鐵【鋼】能量（Special Energy） ──────────────────────────────────────────
+// 卡面：提供 1 個【鋼】能量。附於【鋼】寶可夢時，撤退所需能量為 0。
+// Hook：SPECIAL_ENERGY_RETREAT_MOD（engine RETREAT 計費前覆蓋）。
+SPECIAL_ENERGY_RETREAT_MOD.set('磁鐵【鋼】能量', (holder) => {
+  if (holder.pokemonType === 'Metal') return { zero: true };
+  return {};
+});
+
+// ── 扣殺能量（Special Energy） ────────────────────────────────────────────────
+// 卡面：提供 1 個【無】能量。只要這張卡附於戰鬥場的寶可夢身上，
+//   每當受到攻擊方招式造成的傷害（即使 HP 減為 0），對攻擊方戰鬥寶可夢
+//   放置 2 個傷害指示物（共 20 點）。
+// 實裝採取「holder 在 dIdx 的戰鬥場時，反彈 20 給 aIdx 戰鬥寶可夢」。
+SPECIAL_ENERGY_ON_DAMAGED.set('扣殺能量', (state, dIdx, aIdx, _damage, _pool) => {
+  // engine 已限定只在「holder 是戰鬥場 + 受傷 > 0」時呼叫此 hook
+  const s = addLog(state, '扣殺能量：對攻擊方戰鬥寶可夢放置 2 個傷害指示物（+20）', dIdx);
+  return updatePlayer(s, aIdx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, damage: p.active.damage + 20 } };
+  });
+});
+
+// ── 泡沫【水】能量（Special Energy） ──────────────────────────────────────────
+// 卡面：提供 1 個【水】能量。只要這張卡附於【水】寶可夢身上，
+//   該寶可夢不會受到「灼傷」「中毒」的影響。
+// Hook：SPECIAL_ENERGY_STATUS_IMMUNE（engine 在施加狀態時若 holder 命中則略過）。
+// 註：engine 目前已在 SPECIAL_CONDITION 施加路徑檢查此 map（v2.175）。
+SPECIAL_ENERGY_STATUS_IMMUNE.set('泡沫【水】能量', (holder) => {
+  if (holder.pokemonType !== 'Water') return new Set<SpecialCondition>();
+  return new Set<SpecialCondition>(['poisoned', 'burned']);
+});
+

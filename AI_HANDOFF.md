@@ -1,9 +1,50 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.171)  
+> 最後更新：2026-04-26 (v2.175)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.172-v2.175 — H/I/J 自動實裝續推（Special Energy 系統）
+
+延續 v2.166-v2.171 自動實裝路線，繼續處理 H/I/J 標未實裝卡。
+
+### v2.172 — H/I/J 第二批 Trainer + ZWNJ 修正
+- 建立 `effects/cards/v172_hij_batch.ts`（13 張）：火箭隊的超級球、N的謀劃、沙儷、琉琪亞的展示、滑稽演員、悟松、卡娜莉、捷朵、瑪琪艾兒、可怕的哥哥 等
+- `pool.ts`：name normalize 加 ZWNJ (U+200C) strip — 修「寶可夢中心的姐姐」reg 失配 bug
+- 多張 Stadium resolver: town-department-tool / deepbasin-place / lighting-city-pick / surf-beach-swap / miarey-city-place
+
+### v2.173-v2.174 — 跨回合 flag 機制 + 鐵之防禦強化等
+- `types.ts`：CardInstance 加 `immuneToExAttackNextTurn/ThisTurn`；PlayerState 加 `metalShieldNextTurn/ThisTurn`、`cantRetreatIfPoisonedNextTurn/ThisTurn`
+- `engine.ts`：END_TURN 升級 NextTurn → ThisTurn → 清除；新增 ATTACK_PRE 的 -30 hook（鐵之防禦強化）；阿塞蘿拉 immuneToEx hook；霍米加的演奏 RETREAT/canRetreat 阻擋
+- 新增 `effects/cards/v172_hij_batch.ts` 內含相關卡片實作
+
+### v2.175 — Special Energy passive hook map（本版）
+新增 4 個 hook map（`effects/_shared.ts`）：
+- `SPECIAL_ENERGY_HP_BONUS`：holder 有效 HP +N（影響 KO 判定 + UI 顯示）
+- `SPECIAL_ENERGY_RETREAT_MOD`：holder 撤退成本修正（reduceBy / zero）
+- `SPECIAL_ENERGY_STATUS_IMMUNE`：holder 對哪些特殊狀態免疫
+- `SPECIAL_ENERGY_ON_DAMAGED`：holder 在戰鬥場受招式傷害時觸發
+
+整合點：
+- `engine.ts` `getEffectiveHP`：iterate `energyAttached` 加總 HP_BONUS
+- `engine.ts` RETREAT 計費：iterate energy 套 RETREAT_MOD（`zero` 直接 0）
+- `engine.ts` TOOL_ON_DAMAGED 區段：同迴圈附加 SPECIAL_ENERGY_ON_DAMAGED
+- `effects.ts` `effectiveHPInline`：與 engine 同步加 HP_BONUS iterate
+- `effects.ts` 新增 helper `checkSpecialEnergyStatusImmune(inst, status, pool)`
+- `effects.ts` `statusPost`：對防禦方先做 STATUS_IMMUNE 判定（log: `{n}｜{energy}：免疫【中毒】`）
+- `effects.ts` 危險光線 dual-status：分別對 burned/confused 做 STATUS_IMMUNE 判定，可單側免疫
+
+卡片實裝（`effects/cards/energy_cards.ts`）：
+- **增強【草】能量**：附於【草】寶可夢時 HP +20
+- **磁鐵【鋼】能量**：附於【鋼】寶可夢時撤退費用 0
+- **扣殺能量**：戰鬥場 holder 受招式傷害時 → 對攻擊方戰鬥寶可夢放置 2 個傷害指示物（+20）
+- **泡沫【水】能量**：附於【水】寶可夢時免疫【中毒】【灼傷】
+
+跳過（記錄到 SKIPPED_CARDS.md）：
+- **燃料【火】能量**：「被招式效果丟棄時回到手牌」需要新 energy-discard hook，留待後續
 
 ---
 

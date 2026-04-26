@@ -21,6 +21,8 @@ import {
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
   SPECIAL_ENERGY_ATTACH,
+  SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD,
+  SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED,
   clearActiveEffects,
   hasFairyZoneField,
   applyBenchPlaceSideEffects,
@@ -314,6 +316,13 @@ export function getEffectiveHP(
       const bonusFn = TOOL_HP_BONUS.get(tool.name);
       if (bonusFn) hp += bonusFn(card);
     }
+  }
+  // v2.175 特殊能量 HP bonus（增強【草】等）— iterate energyAttached
+  for (const e of inst.energyAttached) {
+    const ec = pool.get(e.cardId);
+    if (!ec) continue;
+    const fn = SPECIAL_ENERGY_HP_BONUS.get(ec.name);
+    if (fn) hp += fn(card);
   }
   // v2.92：引力山岳（Stadium）— 雙方場上所有【2階進化】寶可夢最大 HP -30
   if (state?.activeStadium?.name === '引力山岳' && card.stage === 'Stage2') {
@@ -1233,6 +1242,18 @@ function handlePlaying(
         const r = mod(activeCard, attacker.active);
         if (r.zero) retreatCost = 0;
         else if (r.reduceBy) retreatCost = Math.max(0, retreatCost - r.reduceBy);
+      }
+    }
+    // v2.175 特殊能量 撤退修正（磁鐵【鋼】等）— iterate energyAttached
+    if (activeCard) {
+      for (const e of attacker.active.energyAttached) {
+        const ec = pool.get(e.cardId);
+        if (!ec) continue;
+        const fn = SPECIAL_ENERGY_RETREAT_MOD.get(ec.name);
+        if (!fn) continue;
+        const r = fn(activeCard, attacker.active);
+        if (r.zero) { retreatCost = 0; break; }
+        if (r.reduceBy) retreatCost = Math.max(0, retreatCost - r.reduceBy);
       }
     }
     // 重力之玉：雙方 active 任一帶此道具 → 雙方撤退 +1（阻礙之塔時失效）
@@ -2443,6 +2464,15 @@ function handlePlaying(
         const tool = pool.get(defenderState.active.toolAttached.cardId);
         if (tool) {
           const fn = TOOL_ON_DAMAGED.get(tool.name);
+          if (fn) newState = fn(newState, dIdx, aIdx, baseDamage, pool);
+        }
+      }
+      // v2.175 特殊能量 ON_DAMAGED（扣殺能量等）— iterate energyAttached
+      if (baseDamage > 0 && defenderState.active.energyAttached.length > 0) {
+        for (const e of defenderState.active.energyAttached) {
+          const ec = pool.get(e.cardId);
+          if (!ec) continue;
+          const fn = SPECIAL_ENERGY_ON_DAMAGED.get(ec.name);
           if (fn) newState = fn(newState, dIdx, aIdx, baseDamage, pool);
         }
       }
