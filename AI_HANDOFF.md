@@ -1,9 +1,50 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.159)  
+> 最後更新：2026-04-26 (v2.160)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.160 — Wave 3 簡化升級：3 個 engine 級擴展
+
+### Wave 3 升級對照
+| 卡 | 之前 | 現在 | 機制 |
+|---|---|---|---|
+| **雄偉牙｜地盤崩壞** | 固定丟對手牌庫頂 1 張 | 1 張 + 該回合用過「古代」支援者再 +3 | 新加 `ancientSupporterPlayedThisTurn` flag |
+| **朽木妖｜終極吸取** | 固定回血 50 | 回血 = 本招實際造成傷害（含弱抗減傷） | 新加 `state.lastDealtDamage` ephemeral |
+| **懶人獺｜悠哉** | （誤標）— 註解說簡化 | 已用 `cantRetreatPendingSelf` 完整實裝 | 清掉過期註解 |
+
+### Engine 擴展
+
+**1. PlayerState 加 `ancientSupporterPlayedThisTurn`**（types.ts）  
+- engine.ts ATTACH_TRAINER handler 內：tags 含「古代」的支援者打出時 set true（與 v2.57 rocketSupporter 同 pattern）  
+- emptyPlayer / END_TURN 重置  
+- 雄偉牙｜地盤崩壞 POST 讀 flag 決定丟 1 或 4 張
+
+**2. GameState 加 `lastDealtDamage`**（types.ts）  
+- engine.ts ATTACK handler 在套用傷害後寫入 state.lastDealtDamage = baseDamage（含弱抗 / 道具減傷的最終值）  
+- POST 函式可讀取（朽木妖｜終極吸取 已使用）  
+- 每次 ATTACK 開始時自動覆蓋；不需特別 reset
+
+### 改動檔案
+- `src/lib/version.ts` — 2.159 → 2.160
+- `src/lib/game/types.ts` — 加 `ancientSupporterPlayedThisTurn` / `lastDealtDamage`
+- `src/lib/game/engine.ts` — 古代 supporter flag / ATTACK 套用傷害寫 lastDealtDamage
+- `src/lib/game/effects.ts` — 雄偉牙地盤崩壞 / 朽木妖終極吸取 / 懶人獺悠哉註解清理
+
+### 驗證
+- `npm run build` ✓
+- `node scripts/sim-sandbox.mjs 50` ✓ 50 局 0 bug
+
+### 仍未升級（剩 4 個 engine 級工項）
+- **推理組合 / 蕾荷** — 牌庫頂 N 張排序放回（需新 `reorder-deck-top` pending type + UI 拖拉組件）
+- **八爪武師｜觸手激怒** — 動態能量費用（需 `canAffordAttack` 條件 hook）
+- **伊布｜鮮豔捕捉** — 3 張不同屬性能量（需 deck-search 動態 filter — 已選的屬性排除）
+- **危險光線** — 灼傷 + 混亂雙狀態（需 engine status 從單一 slot 改 array）
+
+每個都是獨立 engine 工項。下波處理。
 
 ---
 

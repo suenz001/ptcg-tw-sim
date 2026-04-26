@@ -205,6 +205,8 @@ export interface PlayerState {
   supporterPlayedThisTurn: boolean;
   /** v2.57：本回合是否已打出「名稱含『火箭隊』的支援者」— 火箭隊的工廠 gate 用 */
   rocketSupporterPlayedThisTurn?: boolean;
+  /** v2.160：本回合是否已打出「古代」標籤的支援者 — 雄偉牙｜地盤崩壞 條件用 */
+  ancientSupporterPlayedThisTurn?: boolean;
   /** 本回合是否已撤退 */
   retreatedThisTurn: boolean;
   /**
@@ -362,6 +364,13 @@ export interface GameState {
    * 設定後 UI 必須顯示選擇介面，玩家透過 RESOLVE_SELECTION 繼續
    */
   pendingSelection?: PendingSelection;
+  /**
+   * v2.160：上一次招式套用後實際造成的傷害量（含弱抗 / 道具減傷後最終值）。
+   * 由 engine ATTACK handler 在傷害套用點寫入；ATTACK_POST 可讀取。
+   * 招式效果如「朽木妖｜終極吸取（heal=實際傷害量）」依賴此值。
+   * 每次 ATTACK 開始時重置，避免跨 attack 殘留。
+   */
+  lastDealtDamage?: number;
   /** 目前場上的競技場牌（Stadium） */
   activeStadium?: CardInstance;
   /** 雙方本回合是否已使用競技場效果 [P1, P2] */

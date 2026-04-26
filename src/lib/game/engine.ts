@@ -697,6 +697,7 @@ function emptyPlayer(name: string): PlayerState {
     energyAttachedThisTurn: false,
     supporterPlayedThisTurn: false,
     rocketSupporterPlayedThisTurn: false,
+    ancientSupporterPlayedThisTurn: false,
     retreatedThisTurn: false,
   };
 }
@@ -1396,6 +1397,10 @@ function handlePlaying(
       // v2.57：名稱含「火箭隊」的支援者 → 同時記 rocketSupporterPlayedThisTurn，供「火箭隊的工廠」gate 使用。
       if (trainerCard.name.includes('火箭隊')) {
         attacker.rocketSupporterPlayedThisTurn = true;
+      }
+      // v2.160：tags 含「古代」的支援者 → 記 ancientSupporterPlayedThisTurn，供「地盤崩壞」條件用
+      if ((trainerCard.tags ?? []).includes('古代')) {
+        attacker.ancientSupporterPlayedThisTurn = true;
       }
     }
     players[aIdx] = attacker;
@@ -2097,8 +2102,10 @@ function handlePlaying(
       }
     }
 
+    // v2.160：把實際造成傷害寫入 state.lastDealtDamage，供 POST 讀取
+    //   （朽木妖｜終極吸取 heal=實際傷害量 等招式依賴此值）
     let newState: GameState = addLog(
-      workingState,
+      { ...workingState, lastDealtDamage: baseDamage },
       `${attacker.name} 的 ${attackerCard.name} 使出「${attack.name}」` +
         (baseDamage > 0 ? `，造成 ${baseDamage} 傷害！` : '！'),
       aIdx
@@ -2945,6 +2952,7 @@ function handlePlaying(
       energyAttachedThisTurn: false,
       supporterPlayedThisTurn: false,
       rocketSupporterPlayedThisTurn: false,
+      ancientSupporterPlayedThisTurn: false,
       retreatedThisTurn: false,
     };
 

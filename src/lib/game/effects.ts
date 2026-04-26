@@ -2963,7 +2963,8 @@ regPost('鐵螯龍蝦|喀嚓喀嚓', (state, aIdx, _pool) => {
 //   - 「自己所有寶可夢下回合都無法攻擊」（電擊魔獸｜雷電在地）延後（需 player-level flag）
 //   - 「僅基礎寶可夢/進化寶可夢無法攻擊」（帕底亞肯泰羅、鐵包袱）延後（需 pokemon-filter flag）
 //   - 「本次自願 +100 點並下回合不攻擊」（大王銅象｜鼻之金勾臂）延後（需 optional-choice UI）
-//   - 懶人獺｜悠哉「這隻寶可夢下回合無法撤退」簡化為僅 heal 60（self-cantRetreat 需 pending flag）
+//   - （已修，無效項目移除）懶人獺｜悠哉「這隻寶可夢下回合無法撤退」 — v1.62 後已用
+//     cantRetreatPendingSelf 完整實裝，註解早已過期。v2.160 清掉。
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── 輔助：對手戰鬥寶可夢下回合無法撤退（cantRetreatNextTurn）────────────────
@@ -3564,18 +3565,25 @@ regPost('巨炭山|山崩', (state, aIdx, _pool) => {
   }));
 });
 
-// 雄偉牙|地盤崩壞 — 基礎無傷害，丟對手牌庫頂 1 張（古代支援者條件簡化略）
-// 注意：本招式 damage 欄為空（無傷害），但需觸發牌庫丟棄
-regPre('雄偉牙|地盤崩壞', (state, aIdx, _pool) => {
+// 雄偉牙|地盤崩壞 — 0 傷害，丟對手牌庫頂 1 張；該回合用過「古代」支援者則再 +3 張（共 4 張）
+// v2.160：補實裝古代支援者條件（用 v2.160 加的 ancientSupporterPlayedThisTurn flag）
+regPre('雄偉牙|地盤崩壞', (state, _aIdx, _pool) => {
   return { state, damage: 0 };
 });
 regPost('雄偉牙|地盤崩壞', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const p = state.players[dIdx];
-  const take = Math.min(1, p.deck.length);
+  // 基礎丟 1 張；本回合用過「古代」支援者再 +3 張
+  const ancientUsed = state.players[aIdx].ancientSupporterPlayedThisTurn ?? false;
+  const targetCount = ancientUsed ? 4 : 1;
+  const take = Math.min(targetCount, p.deck.length);
   if (take === 0) return state;
   const discarded = p.deck.slice(0, take);
-  const s = addLog(state, `地盤崩壞：丟對手牌庫頂 ${take} 張`, aIdx);
+  const s = addLog(state,
+    ancientUsed
+      ? `地盤崩壞：本回合已用過「古代」支援者 → 丟對手牌庫頂 ${take} 張（1 + 3）`
+      : `地盤崩壞：丟對手牌庫頂 ${take} 張`,
+    aIdx);
   return updatePlayer(s, dIdx, pl => ({
     ...pl, deck: pl.deck.slice(take), discard: [...pl.discard, ...discarded]
   }));
@@ -3695,8 +3703,23 @@ regPost('皮卡丘|電磁電光', (state, aIdx, pool) => {
 //   (h) 從棄牌區各附 1 張【鬥】能量到備戰 — 重泥挽馬|泥巴庫存
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 朽木妖|終極吸取 — 50 傷害 + 自回血 50（簡化：不追實際傷害）
-regPost('朽木妖|終極吸取', selfHealPost(50, '終極吸取'));
+// 朽木妖|終極吸取 — 50 傷害 + 自回血 = 實際造成的傷害量
+// v2.160：用 state.lastDealtDamage 讀引擎套用後的實際傷害（含弱抗 / 道具減傷）
+regPost('朽木妖|終極吸取', (state, aIdx, pool) => {
+  const actual = state.lastDealtDamage ?? 0;
+  if (actual <= 0) return addLog(state, '終極吸取：實際傷害為 0，不回血', aIdx);
+  // 把 actual 傳給 selfHealPost 自製版本
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const att = { ...players[aIdx] };
+  if (!att.active) return state;
+  const attName = pool.get(att.active.cardId)?.name ?? '?';
+  const newDmg = Math.max(0, att.active.damage - actual);
+  const realHeal = att.active.damage - newDmg;
+  att.active = { ...att.active, damage: newDmg };
+  players[aIdx] = att;
+  return addLog({ ...state, players },
+    `終極吸取：${attName} 回復 ${realHeal} HP（=本招式造成的 ${actual} 傷害）`, aIdx);
+});
 
 // 洗翠 卡蒂狗|全部燒光 — 無傷害，丟棄競技場卡
 regPre('洗翠 卡蒂狗|全部燒光', (state, _aIdx, _pool) => ({ state, damage: 0 }));
