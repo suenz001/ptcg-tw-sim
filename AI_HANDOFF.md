@@ -1,9 +1,63 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.160)  
+> 最後更新：2026-04-26 (v2.163)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.161-163 — Wave 4 簡化升級：剩 3 張 engine 工項一次掃完
+
+承 v2.160 收尾未升級的 4 個 engine 級工項（除推理組合 / 蕾荷 reorder-deck-top 需新 pending type 外，其他 3 個一次處理）。
+
+### v2.161 — 八爪武師｜觸手激怒 動態能量費用
+
+**卡面**：本招原本費用 1 鬥 1 無；但若本卡有任何傷害指示物，費用變為 1 鬥。
+
+**修法**：在 `effects.ts` 加入 `getOctopusTentacleEffectiveCost(attackerInst, attackerName, attackName, originalCost)`，比 `getKyuremElectroplasmaEffectiveCost` 更窄（只看本卡 damage > 0 即觸發）。  
+**整合點**：`engine.ts` 的 `canAffordAttack` 讓 attack pipeline / `getAvailableAttacks` UI 都自動套用。  
+**注意**：「無」費可被任何能量湊；條件達成時實際只需要 1 顆鬥（或視為鬥的能量），而非 2 顆。
+
+### v2.162 — 伊布｜鮮豔捕捉 三張不同屬性能量
+
+**卡面**：從牌庫挑 3 張**屬性各不相同**的基本能量附給自身。
+
+**修法**：新增 UI filter `BasicEnergy:DistinctTypes`（`/src/routes/game/+page.svelte`）— 動態 filter，依 `selectionPicked` 中已選的能量屬性集合，把同屬性的剩餘能量在 picker 中過濾掉。  
+**reg**：伊布｜鮮豔捕捉 effect 改用 `pendingSelection.filter = 'BasicEnergy:DistinctTypes'`。
+
+### v2.163 — 危險光線 灼傷+混亂雙狀態
+
+**卡面**：對手戰鬥寶可夢同時陷入**灼傷+混亂**。  
+**過去簡化**：只設 `status='burned'`（單 slot 無法表達雙狀態）。
+
+**根源修法**：在 `CardInstance` 加 `secondaryStatus?: SpecialCondition` 第二格。  
+**約定**：行動類狀態（asleep/confused/paralyzed）放 `status` 主格；傷害類（poisoned/burned）優先放主格，若主格已被行動類佔用就放 `secondaryStatus`。PTCG 官方規則：行動類三者互斥、傷害類兩者互斥，但行動 + 傷害可共存。
+
+**Engine 變更**：
+- `engine.ts` 中毒 / 灼傷 checkup（line 2466、2540）改成 `status==='X' || secondaryStatus==='X'`
+- 燒傷 coin heads 解除時依 `status==='burned'` 還是 `secondaryStatus==='burned'` 清掉對應格
+- `scrubBenchStatus` 同時清兩格
+- `_shared.ts` 的 `clearActiveEffects` 加 `secondaryStatus: undefined`
+- 攻擊時的 asleep/paralyzed 攔截 + 混亂擲幣 + UI canRetreat / getAvailableAttacks 行動類 gate 仍只看 `status` 主格（per 約定）
+
+**reg 修法**：`危險光線` 設 `status: 'confused', secondaryStatus: 'burned'`，log 改寫具名。  
+**UI**：`+page.svelte` 戰鬥場 status chip 區段（雙方）加 `secondaryStatus` 第二個 chip。
+
+### 改動檔案
+- `src/lib/version.ts` — 2.160 → 2.163
+- `src/lib/game/types.ts` — `CardInstance.secondaryStatus`
+- `src/lib/game/engine.ts` — 中毒/灼傷 checkup、燒傷 cure、scrubBenchStatus、八爪 cost hook
+- `src/lib/game/effects.ts` — `getOctopusTentacleEffectiveCost`、伊布｜鮮豔捕捉 filter、危險光線 雙 status
+- `src/lib/game/effects/_shared.ts` — clearActiveEffects 清第二格
+- `src/routes/game/+page.svelte` — `BasicEnergy:DistinctTypes` filter、雙 status chip 顯示
+
+### 驗證
+- `npm run build` ✓
+- `node scripts/sim-ai-battle.mjs 20` ✓ 20 局 0 bug
+
+### 仍未升級
+- **推理組合 / 蕾荷** — 牌庫頂 N 張**排序**放回，需新 `reorder-deck-top` pending type + UI 拖拉組件。獨立大工項。
 
 ---
 

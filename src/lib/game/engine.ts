@@ -25,6 +25,7 @@ import {
   hasFairyZoneField,
   applyBenchPlaceSideEffects,
   getKyuremElectroplasmaEffectiveCost,
+  getOctopusTentacleEffectiveCost,
   getUrsalunaBloodMoonEffectiveCost,
   PASSIVE_PREVENT_KO,
 } from './effects';
@@ -579,6 +580,9 @@ export function canAffordAttack(
     // v2.133 月月熊 赫月ex｜老練招式 — 「血月」所需【無】減少對手已獲得獎賞數
     const overridden2 = getUrsalunaBloodMoonEffectiveCost(attackerName, attackName, state, pool, cost);
     if (overridden2 !== cost) cost = overridden2;
+    // v2.161 八爪武師｜觸手激怒 — 身上有傷害指示物則只需 1 個【鬥】
+    const overridden3 = getOctopusTentacleEffectiveCost(pokemon, attackerName, attackName, cost);
+    if (overridden3 !== cost) cost = overridden3;
   }
   // v2.149 璀璨結晶（Tool ACE SPEC）：附有此 Tool 的「太晶」寶可夢使用招式時，
   //   能量需求 -1 個（任意屬性）。優先扣 Colorless，否則扣最後 1 個。
@@ -2459,7 +2463,8 @@ function handlePlaying(
     // 特殊狀態：中毒 — 回合結束施加 10 傷害（危險密林競技場：+20 = 30 指示物）
     // 桃歹郎 劇毒支配 被動：對手中毒時指示物 +5
     const poisonPlayer = { ...players[aIdx] };
-    if (poisonPlayer.active?.status === 'poisoned') {
+    // v2.163：同時兩狀態（如危險光線）— 中毒可能落在 secondaryStatus 格。
+    if (poisonPlayer.active?.status === 'poisoned' || poisonPlayer.active?.secondaryStatus === 'poisoned') {
       const poisonedCard = pool.get(poisonPlayer.active.cardId);
       const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
       let poisonBonus = 0;
@@ -2533,7 +2538,8 @@ function handlePlaying(
 
     // 特殊狀態：燒傷 — 回合結束施加 20 傷害，然後擲硬幣決定是否解除
     const burnedPlayer = { ...players[aIdx] };
-    if (burnedPlayer.active?.status === 'burned') {
+    // v2.163：同時兩狀態（如危險光線）— 灼傷可能落在 secondaryStatus 格。
+    if (burnedPlayer.active?.status === 'burned' || burnedPlayer.active?.secondaryStatus === 'burned') {
       const burnedCard = pool.get(burnedPlayer.active.cardId);
       const newBurnDmg = burnedPlayer.active.damage + 20;
       const burnedHP = getEffectiveHP(burnedPlayer.active, pool, state);
@@ -2573,7 +2579,12 @@ function handlePlaying(
         // 擲硬幣：正面解除燒傷
         const burnCoin = Math.random() < 0.5;
         if (burnCoin) {
-          burnedPlayer.active = { ...burnedPlayer.active, status: undefined };
+          // v2.163：燒傷可能在 status 也可能在 secondaryStatus；只清掉燒傷那格。
+          if (burnedPlayer.active.status === 'burned') {
+            burnedPlayer.active = { ...burnedPlayer.active, status: undefined };
+          } else if (burnedPlayer.active.secondaryStatus === 'burned') {
+            burnedPlayer.active = { ...burnedPlayer.active, secondaryStatus: undefined };
+          }
         }
         players[aIdx] = burnedPlayer;
         state = addLog({ ...state, players }, `燒傷：${burnedCard?.name ?? '?'} 受到 20 傷害！${burnCoin ? '（正面：燒傷解除）' : '（反面：燒傷持續）'}`, null);
@@ -3043,9 +3054,9 @@ function scrubBenchStatus(state: GameState): GameState {
   const players = state.players.map((p) => {
     let benchChanged = false;
     const newBench = p.bench.map((b) => {
-      if (b.status !== undefined) {
+      if (b.status !== undefined || b.secondaryStatus !== undefined) {
         benchChanged = true;
-        return { ...b, status: undefined };
+        return { ...b, status: undefined, secondaryStatus: undefined };
       }
       return b;
     });

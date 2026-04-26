@@ -2171,15 +2171,22 @@ reg('寶可生機劑A', (st, idx) => {
 });
 regR('heal-150', healResolver);
 
-// 危險光線 — 對手戰鬥寶可夢灼傷（簡化：原本是灼傷+混亂但狀態 slot 單一）
+// 危險光線 — 對手戰鬥寶可夢同時陷入【灼傷】+【混亂】（v2.163 完整實裝）
+// 約定：行動類狀態（混亂）放 status 主格；傷害類狀態（灼傷）放 secondaryStatus。
+// 引擎 checkup 會掃兩格做毒/灼判定；攻擊前的混亂擲幣只看 status 主格。
 regG('危險光線', (st, idx) => !!st.players[(1-idx) as 0|1].active);
-reg('危險光線', (st, idx) => {
+reg('危險光線', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const players = [...st.players] as [PlayerState, PlayerState];
   const def = { ...players[dIdx] };
-  if (def.active) def.active = { ...def.active, status: 'burned' };
+  if (def.active) {
+    const defName = pool.get(def.active.cardId)?.name ?? '?';
+    def.active = { ...def.active, status: 'confused', secondaryStatus: 'burned' };
+    players[dIdx] = def;
+    return addLog({ ...st, players }, `危險光線：${defName} 陷入【灼傷】+【混亂】`, idx);
+  }
   players[dIdx] = def;
-  return addLog({ ...st, players }, '危險光線：對手戰鬥寶可夢灼傷', idx);
+  return st;
 });
 
 // 推理組合 — 看牌庫頂 3，簡化為洗回底
@@ -4189,8 +4196,24 @@ regPre('古鼎鹿|傲慢衝擊', (state, aIdx, _pool) => {
   return { state, damage: 220 };
 });
 
-// 八爪武師|觸手激怒 — 130 plain（簡化：動態能量費用條件略）
+// 八爪武師|觸手激怒 — 130 plain；v2.161 補實裝動態能量費用
+//   卡面：「若這隻寶可夢身上放置有傷害指示物，則這個招式只需要 1 個【鬥】能量即可使用。」
+//   實作：engine canAffordAttack 內呼叫 getOctopusTentacleEffectiveCost helper 改寫 cost。
 regPre('八爪武師|觸手激怒', (state, _aIdx, _pool) => ({ state, damage: 130 }));
+
+// canAffordAttack hook — 給 engine 呼叫
+export function getOctopusTentacleEffectiveCost(
+  attackerInst: CardInstance,
+  attackerName: string,
+  attackName: string,
+  originalCost: import('$lib/cards/types').EnergyType[],
+): import('$lib/cards/types').EnergyType[] {
+  if (attackerName !== '八爪武師') return originalCost;
+  if (attackName !== '觸手激怒') return originalCost;
+  if (attackerInst.damage <= 0) return originalCost;
+  // 身上有傷害指示物 → 改為 1 個【鬥】
+  return ['Fighting'];
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 38t v1.70 H 標第 15 波 — attach-energy × multiplier（20 張）
@@ -5706,9 +5729,20 @@ regPost('花葉蒂|小使者', deckSearchToHandPost(3, 'BasicEnergy', '小使者
 regPre('索財靈|小使者', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('索財靈|小使者', deckSearchToHandPost(2, 'BasicEnergy', '小使者'));
 
-// 伊布|鮮豔捕捉 — 最多 3 張各不同屬性的基本能量（簡化：3 張 basic energy）
+// 伊布|鮮豔捕捉 — 最多 3 張各不同屬性的基本能量
+// v2.162：用新 filter 'BasicEnergy:DistinctTypes' 讓 UI 端動態排除已選屬性
 regPre('伊布|鮮豔捕捉', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('伊布|鮮豔捕捉', deckSearchToHandPost(3, 'BasicEnergy', '鮮豔捕捉'));
+regPost('伊布|鮮豔捕捉', (state, aIdx, _pool) => {
+  const p = state.players[aIdx];
+  if (p.deck.length === 0) return addLog(state, '鮮豔捕捉：牌庫為空', aIdx);
+  const s = addLog(state, '鮮豔捕捉：從牌庫選最多 3 張各不同屬性的基本能量加手牌', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'BasicEnergy:DistinctTypes',
+    minCount: 0, maxCount: 3,
+    effectKey: 'search-to-hand-reshuffle',
+  });
+});
 
 // 光電傘蜥|拋物面充電 — 最多 4 張能量（包含特殊；簡化：4 張 Energy）
 regPre('光電傘蜥|拋物面充電', (state, _aIdx, _pool) => ({ state, damage: 0 }));

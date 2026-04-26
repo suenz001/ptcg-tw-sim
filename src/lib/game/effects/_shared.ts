@@ -383,6 +383,7 @@ export function clearActiveEffects(poke: CardInstance): CardInstance {
   return {
     ...poke,
     status: undefined,
+    secondaryStatus: undefined,
     cantAttackThisTurn: undefined,
     cantAttackPending: undefined,
     cantRetreatNextTurn: undefined,

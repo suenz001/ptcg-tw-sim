@@ -953,6 +953,24 @@
           if (f === 'Pokemon')    return card.supertype === 'Pokemon';
           if (f === 'Energy')     return card.supertype === 'Energy';
           if (f === 'BasicEnergy') return card.supertype === 'Energy' && card.subtype === 'Basic';
+          // v2.162：基本能量但已選的屬性要排除（伊布｜鮮豔捕捉）
+          //   filter 由 selectionItems 計算，但 deck 本身的「已選 picked set」會在 toggle 時改變 →
+          //   selectionItems 是 $derived，會自動 re-run 並重新過濾。
+          if (f === 'BasicEnergy:DistinctTypes') {
+            if (!(card.supertype === 'Energy' && card.subtype === 'Basic')) return false;
+            // 已選的能量屬性（不含本張）
+            const pickedTypes = new Set<string>();
+            for (const d of src.deck) {
+              if (d.iid === c.iid) continue; // 自己不算入「已選」
+              if (selectionPicked.has(d.iid)) {
+                const pc = pool.get(d.cardId);
+                if (pc?.pokemonType) pickedTypes.add(pc.pokemonType);
+              }
+            }
+            // 本張屬性必須不在已選 set 內（pokemonType 必有，因為基本能量都有）
+            if (!card.pokemonType) return false;
+            return !pickedTypes.has(card.pokemonType);
+          }
           if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
           if (f === 'MegaEx')     return card.supertype === 'Pokemon' && card.subtype === 'ex' && card.name.startsWith('超級');
           if (f === 'TeraPokemon') return card.supertype === 'Pokemon' && !!card.tags?.includes('太晶');
@@ -2378,6 +2396,14 @@
                   oppPlayer.active.status === 'confused' ? '😵 混亂' :
                   oppPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.status
                 }</div>{/if}
+                <!-- v2.163：同時兩狀態（如危險光線 灼傷+混亂） -->
+                {#if oppPlayer.active.secondaryStatus}<div class="status-chip status-{oppPlayer.active.secondaryStatus}">{
+                  oppPlayer.active.secondaryStatus === 'poisoned' ? '☠️ 中毒' :
+                  oppPlayer.active.secondaryStatus === 'burned' ? '🔥 燒傷' :
+                  oppPlayer.active.secondaryStatus === 'asleep' ? '💤 睡眠' :
+                  oppPlayer.active.secondaryStatus === 'confused' ? '😵 混亂' :
+                  oppPlayer.active.secondaryStatus === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.secondaryStatus
+                }</div>{/if}
               </div>
               <!-- v2.130：血條移到卡牌最下方，避免被特性按鈕等 UI 蓋住（雙方統一） -->
               <div class="active-hpbar-bottom">
@@ -2559,6 +2585,14 @@
                 myPlayer.active.status === 'asleep' ? '💤 睡眠' :
                 myPlayer.active.status === 'confused' ? '😵 混亂' :
                 myPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.status
+              }</div>{/if}
+              <!-- v2.163：同時兩狀態（如危險光線 灼傷+混亂） -->
+              {#if myPlayer.active.secondaryStatus}<div class="status-chip status-{myPlayer.active.secondaryStatus}">{
+                myPlayer.active.secondaryStatus === 'poisoned' ? '☠️ 中毒' :
+                myPlayer.active.secondaryStatus === 'burned' ? '🔥 燒傷' :
+                myPlayer.active.secondaryStatus === 'asleep' ? '💤 睡眠' :
+                myPlayer.active.secondaryStatus === 'confused' ? '😵 混亂' :
+                myPlayer.active.secondaryStatus === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.secondaryStatus
               }</div>{/if}
               {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡ 點此附加</div>{/if}
             </div>

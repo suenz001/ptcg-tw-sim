@@ -53,6 +53,19 @@ export interface CardInstance {
   /** 特殊狀態（M4 實裝） */
   status?: SpecialCondition;
   /**
+   * v2.163：第二個特殊狀態，專供「同時陷入兩種狀態」的招式使用（例：危險光線
+   * 同時灼傷+混亂）。PTCG 規則：行動類狀態（睡眠/混亂/麻痺）三者互斥，傷害類
+   * 狀態（中毒/灼傷）兩者互斥，但 1 個行動類 + 1 個傷害類可以共存。
+   *
+   * 約定：行動類狀態（asleep/confused/paralyzed）放 status；傷害類狀態
+   * （poisoned/burned）優先放 status（向下相容單狀態卡），若 status 已被
+   * 行動類佔用則改放 secondaryStatus。
+   *
+   * Engine checkup（中毒/灼傷）會同時掃描 status 與 secondaryStatus 兩格；
+   * 攻擊前的睡眠/麻痺/混亂判定只看 status（行動類永遠在主格）。
+   */
+  secondaryStatus?: SpecialCondition;
+  /**
    * 本回合剛從手牌打出到備戰區（PLAY_BASIC），不可進化。
    * 在 END_TURN 時清除。
    */
