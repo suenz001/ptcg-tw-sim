@@ -1571,6 +1571,70 @@ function handlePlaying(
       };
     }
 
+    // v2.171 慶祝開場樂 — 雙方每回合 1 次：自己所有寶可夢各回 10 HP，使用後回合結束
+    if (stadiumCard.name === '慶祝開場樂') {
+      const updated = [...newState.players] as [PlayerState, PlayerState];
+      const p = { ...updated[aIdx] };
+      const all = [...(p.active ? [p.active] : []), ...p.bench];
+      if (!all.some(c => c.damage > 0)) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '慶祝開場樂：沒有寶可夢需要回血', aIdx);
+      }
+      if (p.active) p.active = { ...p.active, damage: Math.max(0, p.active.damage - 10) };
+      p.bench = p.bench.map(c => ({ ...c, damage: Math.max(0, c.damage - 10) }));
+      updated[aIdx] = p;
+      return addLog({ ...newState, players: updated, turnPhase: 'end' as const },
+        '慶祝開場樂：自己所有寶可夢回 10 HP — 此回合結束', aIdx);
+    }
+
+    // v2.171 城鎮百貨公司 — 雙方每回合 1 次：從牌庫選 1 張寶可夢道具加手牌並重洗
+    if (stadiumCard.name === '城鎮百貨公司') {
+      const hasTool = newState.players[aIdx].deck.some(c => {
+        const card = pool.get(c.cardId);
+        return card?.supertype === 'Trainer' && card.subtype === 'PokemonTool';
+      });
+      if (!hasTool) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '城鎮百貨公司：牌庫沒有寶可夢道具', aIdx);
+      }
+      return {
+        ...newState,
+        pendingSelection: {
+          type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+          minCount: 0, maxCount: 1, filter: 'PokemonTool',
+          effectKey: 'town-department-tool', params: {},
+        },
+      };
+    }
+
+    // v2.171 深缽鎮 — 雙方每回合 1 次：從牌庫選 1 張【基礎】寶可夢（非規則）放備戰並重洗
+    if (stadiumCard.name === '深缽鎮') {
+      if (newState.players[aIdx].bench.length >= 5) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '深缽鎮：備戰區已滿', aIdx);
+      }
+      const hasBasic = newState.players[aIdx].deck.some(c => {
+        const card = pool.get(c.cardId);
+        if (!card || card.supertype !== 'Pokemon' || card.subtype !== 'Basic') return false;
+        // 排除「擁有規則的寶可夢」（ex / V / VMAX 等）
+        if (card.subtype === 'Basic' && (card.name.endsWith('ex') || card.name.endsWith('EX')
+            || !!card.rulesText?.includes('擁有規則'))) return false;
+        return true;
+      });
+      if (!hasBasic) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '深缽鎮：牌庫沒有合適的基礎寶可夢', aIdx);
+      }
+      return {
+        ...newState,
+        pendingSelection: {
+          type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+          minCount: 0, maxCount: 1, filter: 'BasicNonRule',
+          effectKey: 'deepbasin-place', params: {},
+        },
+      };
+    }
+
     // 尖釘鎮道館 — 從牌庫選 1 張「瑪俐的」寶可夢加手牌並重洗
     // v2.70：即便牌庫沒有「瑪俐的」寶可夢也要開 UI（玩家可藉此查看牌庫內容），
     //       所以 minCount 設為 0 允許確認無選擇，候選數量不做 gate。

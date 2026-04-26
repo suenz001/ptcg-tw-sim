@@ -939,6 +939,13 @@
           if (!card) return false;
           if (f === 'Basic')      return isBasicPokemonCard(card);
           if (f === 'Basic:HP70') return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
+          // v2.171 深缽鎮：基礎寶可夢且非「擁有規則」（排除 ex / V 等）
+          if (f === 'BasicNonRule') {
+            if (!isBasicPokemonCard(card)) return false;
+            const isRule = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX')
+              || !!card.rulesText?.includes('擁有規則');
+            return !isRule;
+          }
           // v2.159：基礎寶可夢且名字以指定 prefix 開頭（如「赫普的」）
           if (f.startsWith('Basic:NamePrefix=')) {
             const prefix = f.slice('Basic:NamePrefix='.length);

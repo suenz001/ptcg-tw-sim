@@ -71,6 +71,30 @@ regR('moonlight-hill-heal', (st, idx, iids) => {
   });
 });
 
+// ── v2.171 城鎮百貨公司（Stadium）── 牌庫搜 1 道具加手牌 ─────────────────
+regR('town-department-tool', (st, idx, iids) => {
+  return updatePlayer(st, idx, p => {
+    const set = new Set(iids);
+    const got = p.deck.filter(c => set.has(c.iid));
+    const rest = p.deck.filter(c => !set.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...got] };
+  });
+});
+
+// ── v2.171 深缽鎮（Stadium）── 牌庫搜 1 基礎非規則寶可夢放備戰 ────────────
+regR('deepbasin-place', (st, idx, iids) => {
+  return updatePlayer(st, idx, p => {
+    if (iids.length === 0) return { ...p, deck: shuffle(p.deck) };
+    if (p.bench.length >= 5) return { ...p, deck: shuffle(p.deck) };
+    const targetIid = iids[0];
+    const inst = p.deck.find(c => c.iid === targetIid);
+    if (!inst) return { ...p, deck: shuffle(p.deck) };
+    const placed = { ...inst, justPlaced: true };
+    const rest = p.deck.filter(c => c.iid !== targetIid);
+    return { ...p, deck: shuffle(rest), bench: [...p.bench, placed] };
+  });
+});
+
 // ── 尖釘鎮道館（Stadium）── v2.21 ───────────────────────────────────────────
 // 從牌庫選 1 張「瑪俐的」寶可夢加手牌並重洗（雙方玩家每回合 1 次）
 // v2.70：放寬 — 即使牌庫沒有「瑪俐的」寶可夢也能使用（engine 改以 minCount=0
