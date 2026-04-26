@@ -585,6 +585,428 @@ regR('energy-coin-attach', (st, idx, iids, params, pool) => {
   });
 });
 
+// ── 大師球（Item / SVE）────────────────────────────────────────────────────
+// 卡面：從自己的牌庫選 1 張寶可夢卡，給對手看後加入手牌。並重洗牌庫。
+regG('大師球', (st, idx, pool) => st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon'));
+reg('大師球', (st, idx) => {
+  st = addLog(st, '大師球：從牌庫選 1 張寶可夢加手牌（給對手看）', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon',
+    minCount: 0, maxCount: 1,
+    effectKey: 'master-ball-pick',
+  });
+});
+regR('master-ball-pick', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '大師球：未選擇（牌庫已重洗）', idx);
+  const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `大師球：搜到 ${names} 加入手牌`, idx);
+  return updatePlayer(st, idx, p => {
+    const set = new Set(iids);
+    const got = p.deck.filter(c => set.has(c.iid));
+    const rest = p.deck.filter(c => !set.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...got] };
+  });
+});
+
+// ── 巢穴球（Item / MC）─────────────────────────────────────────────────────
+// 卡面：從自己的牌庫選 1 張【基礎】寶可夢卡，放置於備戰區。並重洗牌庫。
+regG('巢穴球', (st, idx, pool) => {
+  if (st.players[idx].bench.length >= 5) return false;
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.subtype === 'Basic';
+  });
+});
+reg('巢穴球', (st, idx) => {
+  st = addLog(st, '巢穴球：從牌庫選 1 張基礎寶可夢放備戰', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Basic',
+    minCount: 0, maxCount: 1,
+    effectKey: 'nest-ball-place',
+  });
+});
+regR('nest-ball-place', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '巢穴球：未選擇（牌庫已重洗）', idx);
+  const iid = iids[0];
+  const inst = st.players[idx].deck.find(c => c.iid === iid);
+  if (!inst) return st;
+  const name = pool.get(inst.cardId)?.name ?? '?';
+  st = addLog(st, `巢穴球：${name} 放置到備戰區`, idx);
+  return updatePlayer(st, idx, p => {
+    if (p.bench.length >= 5) return p;
+    const placed = { ...inst, justPlaced: true };
+    const rest = p.deck.filter(c => c.iid !== iid);
+    return { ...p, deck: shuffle(rest), bench: [...p.bench, placed] };
+  });
+});
+
+// ── 朋友手冊（Item）────────────────────────────────────────────────────────
+// 卡面：從自己的棄牌區選最多 2 張支援者卡，給對手看後放回牌庫並重洗。
+regG('朋友手冊', (st, idx, pool) => {
+  return st.players[idx].discard.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Trainer' && card.subtype === 'Supporter';
+  });
+});
+reg('朋友手冊', (st, idx) => {
+  st = addLog(st, '朋友手冊：從棄牌區選最多 2 張支援者放回牌庫', idx);
+  return withPending(st, {
+    type: 'discard-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Supporter',
+    minCount: 0, maxCount: 2,
+    effectKey: 'friend-book-return',
+  });
+});
+regR('friend-book-return', (st, idx, iids, _params, pool) => {
+  const set = new Set(iids);
+  const picked = st.players[idx].discard.filter(c => set.has(c.iid));
+  if (picked.length === 0) return addLog(st, '朋友手冊：未選擇任何支援者', idx);
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `朋友手冊：${names}（${picked.length} 張）放回牌庫並重洗`, idx);
+  return updatePlayer(st, idx, p => {
+    const rest = p.discard.filter(c => !set.has(c.iid));
+    return { ...p, discard: rest, deck: shuffle([...p.deck, ...picked]) };
+  });
+});
+
+// ── 能量貼紙（Item）────────────────────────────────────────────────────────
+// 卡面：擲 1 次硬幣若為正面，則從自己的棄牌區選 1 張基本能量卡，附於備戰寶可夢身上。
+regG('能量貼紙', (st, idx, pool) => {
+  if (st.players[idx].bench.length === 0) return false;
+  return st.players[idx].discard.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  });
+});
+reg('能量貼紙', (st, idx) => {
+  const heads = Math.random() < 0.5;
+  st = addLog(st, `能量貼紙：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
+  if (!heads) return addLog(st, '能量貼紙：反面 → 無效果', idx);
+  st = addLog(st, '能量貼紙：從棄牌區選 1 張基本能量', idx);
+  return withPending(st, {
+    type: 'discard-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy',
+    minCount: 0, maxCount: 1,
+    effectKey: 'energy-sticker-pick',
+  });
+});
+regR('energy-sticker-pick', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(st, '能量貼紙：未選擇能量', idx);
+  const energyIid = iids[0];
+  const inst = st.players[idx].discard.find(c => c.iid === energyIid);
+  if (!inst) return st;
+  const energyName = pool.get(inst.cardId)?.name ?? '能量';
+  st = addLog(st, `能量貼紙：搜到 ${energyName}，選 1 隻備戰寶可夢附加`, idx);
+  return withPending(st, {
+    type: 'bench-choose',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'energy-sticker-attach',
+    params: { includeActive: false, energyIid, energyName },
+  });
+});
+regR('energy-sticker-attach', (st, idx, iids, params, pool) => {
+  const targetIid = iids[0];
+  const energyIid = params?.energyIid as string | undefined;
+  if (!targetIid || !energyIid) return st;
+  const player = st.players[idx];
+  const energyInst = player.discard.find(c => c.iid === energyIid);
+  if (!energyInst) return st;
+  const targetInst = player.bench.find(c => c.iid === targetIid);
+  if (!targetInst) return st;
+  const energyName = pool.get(energyInst.cardId)?.name ?? '能量';
+  const targetName = pool.get(targetInst.cardId)?.name ?? '?';
+  st = addLog(st, `能量貼紙：${energyName} 附給備戰 ${targetName}`, idx);
+  return updatePlayer(st, idx, p => ({
+    ...p,
+    discard: p.discard.filter(c => c.iid !== energyIid),
+    bench: p.bench.map(b => b.iid === targetIid
+      ? { ...b, energyAttached: [...b.energyAttached, energyInst] }
+      : b),
+  }));
+});
+
+// ── 親送無人機（Item / SV6a）─────────────────────────────────────────────
+// 卡面：擲 2 次硬幣，若全部為正面，則從自己的牌庫任意選擇 1 張卡加入手牌。並重洗牌庫。
+regG('親送無人機', (st, idx) => st.players[idx].deck.length > 0);
+reg('親送無人機', (st, idx) => {
+  const c1 = Math.random() < 0.5;
+  const c2 = Math.random() < 0.5;
+  st = addLog(st, `親送無人機：擲 2 次硬幣 ${c1 ? '正' : '反'} / ${c2 ? '正' : '反'}`, idx);
+  if (!(c1 && c2)) {
+    return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })),
+      '親送無人機：未全部正面 → 重洗牌庫', idx);
+  }
+  st = addLog(st, '親送無人機：全正面！從牌庫任選 1 張加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 0, maxCount: 1,
+    effectKey: 'gift-drone-pick',
+  });
+});
+regR('gift-drone-pick', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '親送無人機：未選擇（牌庫已重洗）', idx);
+  const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `親送無人機：搜到 ${names} 加入手牌`, idx);
+  return updatePlayer(st, idx, p => {
+    const set = new Set(iids);
+    const got = p.deck.filter(c => set.has(c.iid));
+    const rest = p.deck.filter(c => !set.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...got] };
+  });
+});
+
+// ── 訂購盒（Item）──────────────────────────────────────────────────────────
+// 卡面：若使用了這張卡，則自己的回合結束。從自己的牌庫選最多 2 張物品卡，給對手看後加入手牌並重洗。
+regG('訂購盒', (st, idx, pool) => {
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Trainer' && card.subtype === 'Item';
+  });
+});
+reg('訂購盒', (st, idx) => {
+  st = addLog(st, '訂購盒：從牌庫選最多 2 張物品卡加手牌（用後回合結束）', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Item',
+    minCount: 0, maxCount: 2,
+    effectKey: 'order-box-pick',
+  });
+});
+regR('order-box-pick', (st, idx, iids, _params, pool) => {
+  const set = new Set(iids);
+  const picked = st.players[idx].deck.filter(c => set.has(c.iid));
+  if (picked.length > 0) {
+    const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `訂購盒：搜到 ${names}（${picked.length} 張）加入手牌`, idx);
+  } else {
+    st = addLog(st, '訂購盒：未選擇任何物品卡', idx);
+  }
+  st = updatePlayer(st, idx, p => {
+    const got = p.deck.filter(c => set.has(c.iid));
+    const rest = p.deck.filter(c => !set.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...got] };
+  });
+  // 強制回合結束 — 把 turnPhase 設為 'end' 觸發引擎進入結束流程
+  return addLog({ ...st, turnPhase: 'end' as const }, '訂購盒：使用後自己的回合結束', idx);
+});
+
+// ── 幫忙鈴（Item）──────────────────────────────────────────────────────────
+// 卡面：這張卡只可在後攻玩家的最初回合使用。從自己的牌庫選 1 張支援者卡加手牌並重洗。
+regG('幫忙鈴', (st, idx, pool) => {
+  if (!st.isFirstTurn) return false;
+  if (st.activePlayerIndex === st.firstPlayerIdx) return false;
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Trainer' && card.subtype === 'Supporter';
+  });
+});
+reg('幫忙鈴', (st, idx) => {
+  st = addLog(st, '幫忙鈴：從牌庫選 1 張支援者加手牌（給對手看）', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Supporter',
+    minCount: 0, maxCount: 1,
+    effectKey: 'help-bell-pick',
+  });
+});
+regR('help-bell-pick', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '幫忙鈴：未選擇（牌庫已重洗）', idx);
+  const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `幫忙鈴：搜到 ${names} 加入手牌`, idx);
+  return updatePlayer(st, idx, p => {
+    const set = new Set(iids);
+    const got = p.deck.filter(c => set.has(c.iid));
+    const rest = p.deck.filter(c => !set.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...got] };
+  });
+});
+
+// ── 火箭隊的驚嚇炸彈（Item / MC）──────────────────────────────────────────
+// 卡面：擲 1 次硬幣若為正面，則在對手的 1 隻寶可夢身上放置 2 個傷害指示物。
+//       若為反面，則在自己的戰鬥寶可夢身上放置 2 個傷害指示物。
+regG('火箭隊的驚嚇炸彈', () => true);
+reg('火箭隊的驚嚇炸彈', (st, idx) => {
+  const heads = Math.random() < 0.5;
+  st = addLog(st, `火箭隊的驚嚇炸彈：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
+  if (!heads) {
+    // 反面：自己戰鬥場 +20 傷害
+    if (!st.players[idx].active) return st;
+    return updatePlayer(st, idx, p => ({
+      ...p,
+      active: p.active ? { ...p.active, damage: p.active.damage + 20 } : null,
+    }));
+  }
+  // 正面：選對手 1 隻 +20
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
+  if (all.length === 0) return st;
+  st = addLog(st, '火箭隊的驚嚇炸彈：選 1 隻對手寶可夢放置 2 個傷害指示物', idx);
+  return withPending(st, {
+    type: 'opp-poke-choose',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'rocket-scare-bomb-place',
+    params: { includeActive: true },
+  });
+});
+regR('rocket-scare-bomb-place', (st, idx, iids, _params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const targetIid = iids[0];
+  if (!targetIid) return st;
+  const dp = st.players[dIdx];
+  const target = dp.active?.iid === targetIid
+    ? dp.active
+    : dp.bench.find(c => c.iid === targetIid) ?? null;
+  if (!target) return st;
+  const tn = pool.get(target.cardId)?.name ?? '?';
+  st = addLog(st, `火箭隊的驚嚇炸彈：${tn} 受到 20 傷害`, idx);
+  return updatePlayer(st, dIdx, p => {
+    const upd = (pk: typeof target) => pk.iid === targetIid ? { ...pk, damage: pk.damage + 20 } : pk;
+    return {
+      ...p,
+      active: p.active && p.active.iid === targetIid ? { ...p.active, damage: p.active.damage + 20 } : p.active,
+      bench: p.bench.map(upd),
+    };
+  });
+});
+
+// ── 勝利之證（Item）────────────────────────────────────────────────────────
+// 卡面：擲 1 次硬幣若為正面，則從自己的牌庫選 1 張寶可夢卡，給對手看後加手牌。並重洗牌庫。
+regG('勝利之證', (st, idx, pool) => st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon'));
+reg('勝利之證', (st, idx) => {
+  const heads = Math.random() < 0.5;
+  st = addLog(st, `勝利之證：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
+  if (!heads) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '勝利之證：反面 → 重洗牌庫', idx);
+  st = addLog(st, '勝利之證：從牌庫選 1 張寶可夢加手牌', idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon',
+    minCount: 0, maxCount: 1,
+    effectKey: 'victory-proof-pick',
+  });
+});
+regR('victory-proof-pick', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '勝利之證：未選擇（牌庫已重洗）', idx);
+  const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `勝利之證：搜到 ${names} 加入手牌`, idx);
+  return updatePlayer(st, idx, p => {
+    const set = new Set(iids);
+    const got = p.deck.filter(c => set.has(c.iid));
+    const rest = p.deck.filter(c => !set.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...got] };
+  });
+});
+
+// ── 能量撢子（Item）────────────────────────────────────────────────────────
+// 卡面：查看對手的手牌，從其中選擇 1 張能量卡，放回對手的牌庫下方。
+regG('能量撢子', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  return st.players[dIdx].hand.some(c => pool.get(c.cardId)?.supertype === 'Energy');
+});
+reg('能量撢子', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const oppHand = st.players[dIdx].hand;
+  if (oppHand.length === 0) return addLog(st, '能量撢子：對手手牌為空', idx);
+  const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = addLog(st, `能量撢子：查看對手手牌（${oppHand.length} 張）— ${handNames}`, idx);
+  const energyIids = oppHand
+    .filter(c => pool.get(c.cardId)?.supertype === 'Energy')
+    .map(c => c.iid);
+  if (energyIids.length === 0) {
+    s = addLog(s, '能量撢子：對手手牌無能量卡（僅查看）', idx);
+    return withPending(s, {
+      type: 'hand-discard',  // 借用 hand-discard UI（sourcePlayerIdx=dIdx 對手手牌）
+      actorIdx: idx, sourcePlayerIdx: dIdx,
+      minCount: 0, maxCount: 0,
+      filter: 'Energy',
+      effectKey: 'energy-duster-pick',
+      params: { validIids: [] },
+    });
+  }
+  s = addLog(s, `能量撢子：選 1 張能量放回對手牌庫下方（候選 ${energyIids.length} 張）`, idx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 0, maxCount: 1,
+    filter: 'Energy',
+    effectKey: 'energy-duster-pick',
+    params: { validIids: energyIids },
+  });
+});
+regR('energy-duster-pick', (st, idx, iids, _params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  if (iids.length === 0) return addLog(st, '能量撢子：未選擇任何能量', idx);
+  const targetIid = iids[0];
+  const inst = st.players[dIdx].hand.find(c => c.iid === targetIid);
+  if (!inst) return st;
+  const name = pool.get(inst.cardId)?.name ?? '能量';
+  st = addLog(st, `能量撢子：對手的 ${name} 從手牌放回牌庫下方`, idx);
+  return updatePlayer(st, dIdx, p => ({
+    ...p,
+    hand: p.hand.filter(c => c.iid !== targetIid),
+    deck: [...p.deck, inst],  // 牌庫下方
+  }));
+});
+
+// ── 招式學習器機（Item）────────────────────────────────────────────────────
+// 卡面：從自己的牌庫選最多 3 張名稱中有「招式學習器」的「寶可夢道具」卡，給對手看後加手牌並重洗。
+regG('招式學習器機', (st, idx, pool) => {
+  return st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Trainer'
+      && card.subtype === 'PokemonTool'
+      && card.name?.includes('招式學習器');
+  });
+});
+reg('招式學習器機', (st, idx, pool) => {
+  // 牌庫中名稱含「招式學習器」的 PokemonTool iids
+  const validIids = st.players[idx].deck
+    .filter(c => {
+      const card = pool.get(c.cardId);
+      return card?.supertype === 'Trainer'
+        && card.subtype === 'PokemonTool'
+        && card.name?.includes('招式學習器');
+    })
+    .map(c => c.iid);
+  st = addLog(st, `招式學習器機：從牌庫選最多 3 張「招式學習器」道具加手牌（候選 ${validIids.length} 張）`, idx);
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'PokemonTool',
+    minCount: 0, maxCount: Math.min(3, validIids.length),
+    effectKey: 'tm-machine-pick',
+    params: { validIids },
+  });
+});
+regR('tm-machine-pick', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '招式學習器機：未選擇（牌庫已重洗）', idx);
+  const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `招式學習器機：搜到 ${names}（${picked.length} 張）加入手牌`, idx);
+  return updatePlayer(st, idx, p => {
+    const set = new Set(iids);
+    const got = p.deck.filter(c => set.has(c.iid));
+    const rest = p.deck.filter(c => !set.has(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...got] };
+  });
+});
+
 // ── 悠哉尾草棒（Item / MC）─────────────────────────────────────────────────
 // 卡面：這張卡只可在後攻玩家的最初回合使用。
 //       選擇 1 個對手的場上寶可夢身上附加的能量，放回對手的手牌。
