@@ -431,6 +431,61 @@ reg('可怕的哥哥', (st, idx, pool) => {
     params: { includeActive: true, validIids: cand.map(c => c.iid) },
   });
 });
+// ── 鐵之防禦強化（Item / I）── 下個對手回合自己【鋼】寶可夢受招式 -30
+// 設於自己 PlayerState 的 metalShieldNextTurn；於 nextIdx END_TURN promote 為 ThisTurn。
+// 在攻擊計算（engine line 2147~）defender 是【鋼】 + defendingPlayer 持 ThisTurn → -30。
+regG('鐵之防禦強化', () => true);
+reg('鐵之防禦強化', (st, idx) => {
+  st = addLog(st, '鐵之防禦強化：下個對手回合，自己所有【鋼】寶可夢受招式 -30', idx);
+  return updatePlayer(st, idx, p => ({ ...p, metalShieldNextTurn: true }));
+});
+
+// ── 阿塞蘿拉的惡作劇（Supporter / I）── 對手獎賞 ≤2 才可用，1 寶可夢下回合不受 ex 招式
+regG('阿塞蘿拉的惡作劇', (st, idx) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  if (st.players[dIdx].prizes.length > 2) return false;
+  return !!st.players[idx].active || st.players[idx].bench.length > 0;
+});
+reg('阿塞蘿拉的惡作劇', (st, idx) => {
+  st = addLog(st, '阿塞蘿拉的惡作劇：選 1 隻自己寶可夢，下個對手回合不受 ex 招式', idx);
+  return withPending(st, {
+    type: 'bench-choose',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'acerola-prank',
+    params: { includeActive: true },
+  });
+});
+regR('acerola-prank', (st, idx, iids, _params, pool) => {
+  const targetIid = iids[0];
+  if (!targetIid) return st;
+  const target = st.players[idx].active?.iid === targetIid
+    ? st.players[idx].active
+    : st.players[idx].bench.find(c => c.iid === targetIid) ?? null;
+  if (!target) return st;
+  const targetName = pool.get(target.cardId)?.name ?? '?';
+  st = addLog(st, `阿塞蘿拉的惡作劇：${targetName} 下個對手回合不受 ex 招式`, idx);
+  return updatePlayer(st, idx, p => {
+    const apply = (pk: CardInstance) => pk.iid === targetIid
+      ? { ...pk, immuneToExAttackNextTurn: true }
+      : pk;
+    return {
+      ...p,
+      active: p.active ? apply(p.active) : null,
+      bench: p.bench.map(apply),
+    };
+  });
+});
+
+// ── 霍米加的演奏（Supporter / J）── 下個對手回合，對手中毒寶可夢無法撤退
+// 設於對手 PlayerState 的 cantRetreatIfPoisonedNextTurn；於對手 END_TURN promote 為 ThisTurn。
+regG('霍米加的演奏', () => true);
+reg('霍米加的演奏', (st, idx) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  st = addLog(st, '霍米加的演奏：下個對手回合，對手【中毒】寶可夢無法撤退', idx);
+  return updatePlayer(st, dIdx, p => ({ ...p, cantRetreatIfPoisonedNextTurn: true }));
+});
+
 regR('creepy-bro-strip', (st, idx, iids, _params, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const targetIid = iids[0];

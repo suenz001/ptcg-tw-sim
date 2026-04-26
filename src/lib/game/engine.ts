@@ -1211,6 +1211,12 @@ function handlePlaying(
     if (attacker.active.status === 'asleep' || attacker.active.status === 'paralyzed') return state;
     // 招式效果「下個對手回合無法撤退」— cantRetreatNextTurn flag（v1.62）
     if (attacker.active.cantRetreatNextTurn) return state;
+    // v2.174 霍米加的演奏 — 對手玩家在我方下個回合的中毒寶可夢無法撤退
+    // 套用點：actor 自己的 cantRetreatIfPoisonedThisTurn + active 中毒（含 secondaryStatus）→ 阻擋
+    if (attacker.cantRetreatIfPoisonedThisTurn
+        && (attacker.active.status === 'poisoned' || attacker.active.secondaryStatus === 'poisoned')) {
+      return state;
+    }
     if (attacker.bench.length === 0) return state;
 
     const bIdx = attacker.bench.findIndex(c => c.iid === action.newActiveIid);
@@ -2144,6 +2150,34 @@ function handlePlaying(
       baseDamage = 0;
     }
 
+    // v2.174 阿塞蘿拉的惡作劇 — defender 在本回合不受 ex 招式的傷害與效果
+    // attacker 是 ex（subtype==='ex' || name 結尾 ex/EX）+ defender 有 immuneToExAttackThisTurn
+    //   → baseDamage=0，並設旗標讓 POST 階段跳過附加效果。
+    const attackerIsEx = attackerCard.subtype === 'ex'
+      || attackerCard.name.endsWith('ex') || attackerCard.name.endsWith('EX');
+    if (baseDamage > 0
+        && defender.active.immuneToExAttackThisTurn
+        && attackerIsEx) {
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因阿塞蘿拉的惡作劇效果，不受【ex】招式的傷害與效果`, dIdx);
+      baseDamage = 0;
+      // 同步把 skipDefEffects 之類的標誌打開（用 post 用的 absorbed flag）— 這裡簡化為
+      // 在 baseDamage 0 時也讓 POST 不執行追加效果（既有引擎在 damage=0 時多數 POST 已跳過，
+      // 但部分卡還是會執行；本卡語意是「全免」所以以 skipDefEffects=true 概念表示）。
+      skipDefEffects = true;
+    }
+
+    // v2.174 鐵之防禦強化 — 自己【鋼】寶可夢本回合受招式 -30
+    // defender 是【鋼】 + 防守方有 metalShieldThisTurn → 傷害 -30
+    if (baseDamage > 0
+        && defender.metalShieldThisTurn
+        && defenderCard.pokemonType === 'Metal') {
+      const reduced = Math.max(0, baseDamage - 30);
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因鐵之防禦強化效果，受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
+      baseDamage = reduced;
+    }
+
     // 跨回合「這隻本回合受招式傷害 +N」旗標（例：超音波幼蟲｜刺耳聲）
     // 由對手上個回合 ATTACK_POST 設於 takeExtraDamageNextTurn → 本回合開始前 promote 為 ThisTurn。
     // 不消耗旗標，本回合結束時在 END_TURN 統一清除。
@@ -2971,6 +3005,11 @@ function handlePlaying(
         n = { ...n };
         delete n.immuneToBasicAttackThisTurn;
       }
+      // v2.174 阿塞蘿拉的惡作劇 — 同 immune* 系列：對手（攻擊方）END_TURN 時清 ThisTurn
+      if (c.immuneToExAttackThisTurn) {
+        n = { ...n };
+        delete n.immuneToExAttackThisTurn;
+      }
       // Wave 39：清除消耗完的 deferredPrizeBonusThisTurn（同跨回合模型）
       if (c.deferredPrizeBonusThisTurn) {
         n = { ...n };
@@ -3023,6 +3062,11 @@ function handlePlaying(
         n = { ...n, immuneToBasicAttackThisTurn: true };
         delete n.immuneToBasicAttackNextTurn;
       }
+      // v2.174 阿塞蘿拉的惡作劇 — owner END_TURN 時 promote NextTurn → ThisTurn
+      if (c.immuneToExAttackNextTurn) {
+        n = { ...n, immuneToExAttackThisTurn: true };
+        delete n.immuneToExAttackNextTurn;
+      }
       return n;
     };
     if (currentPlayer.active) currentPlayer.active = promoteSelfNextToThis(clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(currentPlayer.active))));
@@ -3063,7 +3107,9 @@ function handlePlaying(
       currentPlayer.damageBoostFightingThisTurn ||
       currentPlayer.teraKoBonusPrizeThisTurn ||
       currentPlayer.karateKingBonusThisTurn ||
-      currentPlayer.unrudaBonusThisTurn
+      currentPlayer.unrudaBonusThisTurn ||
+      currentPlayer.metalShieldThisTurn ||
+      currentPlayer.cantRetreatIfPoisonedThisTurn
     ) {
       const cp = { ...currentPlayer };
       delete cp.noAttacksThisTurn;
@@ -3074,6 +3120,8 @@ function handlePlaying(
       delete cp.teraKoBonusPrizeThisTurn;
       delete cp.karateKingBonusThisTurn;
       delete cp.unrudaBonusThisTurn;
+      delete cp.metalShieldThisTurn;
+      delete cp.cantRetreatIfPoisonedThisTurn;
       players[aIdx] = cp;
     } else {
       players[aIdx] = currentPlayer;
@@ -3098,6 +3146,15 @@ function handlePlaying(
     if (nextP.cantEvolveNextTurn) {
       nextP.cantEvolveThisTurn = true;
       delete nextP.cantEvolveNextTurn;
+    }
+    // v2.174 promote 鐵之防禦強化 / 霍米加的演奏 旗標
+    if (nextP.metalShieldNextTurn) {
+      nextP.metalShieldThisTurn = true;
+      delete nextP.metalShieldNextTurn;
+    }
+    if (nextP.cantRetreatIfPoisonedNextTurn) {
+      nextP.cantRetreatIfPoisonedThisTurn = true;
+      delete nextP.cantRetreatIfPoisonedNextTurn;
     }
     players[nextIdx] = {
       ...nextP,
@@ -3383,6 +3440,11 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
   if (player.retreatedThisTurn || !player.active || player.bench.length === 0) return false;
   // 睡眠和麻痺時無法撤退
   if (player.active.status === 'asleep' || player.active.status === 'paralyzed') return false;
+  // v2.174 霍米加的演奏：自己的中毒寶可夢本回合無法撤退
+  if (player.cantRetreatIfPoisonedThisTurn
+      && (player.active.status === 'poisoned' || player.active.secondaryStatus === 'poisoned')) {
+    return false;
+  }
   const card = pool.get(player.active.cardId);
   let cost = card?.retreatCost?.length ?? 0;
   // 道具撤退修正（氣球 / 緊急滑板 / 驅勁能量 未來）— 阻礙之塔時道具失效

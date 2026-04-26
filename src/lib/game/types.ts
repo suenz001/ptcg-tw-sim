@@ -191,6 +191,16 @@ export interface CardInstance {
    * baseDamage 歸零（招式仍會打出、其他效果仍觸發）。
    */
   immuneToBasicAttackThisTurn?: boolean;
+  /**
+   * v2.174 阿塞蘿拉的惡作劇（Supporter / I）— 「在下個對手的回合，那隻寶可夢不會
+   * 受到對手的『寶可夢【ex】』招式的傷害與效果的影響。」
+   * 設於 ATTACK_POST 風格（reg 內把卡上立 NextTurn）；於擁有者下個 END_TURN 時 promote。
+   * Engine attack pipeline：attacker 是 ex（subtype==='ex' || name.endsWith('ex')）
+   * + defender 有 immuneToExAttackThisTurn → baseDamage=0 + 跳過 attack effects。
+   * 在對手（攻擊方）下個 END_TURN 時清除 ThisTurn（同 weakness/immune 系列）。
+   */
+  immuneToExAttackNextTurn?: boolean;
+  immuneToExAttackThisTurn?: boolean;
 }
 
 export type SpecialCondition =
@@ -220,6 +230,24 @@ export interface PlayerState {
   rocketSupporterPlayedThisTurn?: boolean;
   /** v2.160：本回合是否已打出「古代」標籤的支援者 — 雄偉牙｜地盤崩壞 條件用 */
   ancientSupporterPlayedThisTurn?: boolean;
+  /**
+   * v2.174 鐵之防禦強化（Item / I）— 在下個對手的回合，自己的所有【鋼】寶可夢
+   * 受到對手寶可夢招式的傷害 -30。打出時設於 self 的 NextTurn flag，於 nextIdx
+   * 的 END_TURN promote 為 ThisTurn（即對手回合開始前）。
+   * 攻擊計算時：defender 屬性為【鋼】 + defendingPlayer.metalShieldThisTurn → -30。
+   * ThisTurn flag 在「使用方」下回合 END_TURN 時清除（同 weakness/immune flag 模式）。
+   */
+  metalShieldNextTurn?: boolean;
+  metalShieldThisTurn?: boolean;
+  /**
+   * v2.174 霍米加的演奏（Supporter / J）— 在下個對手的回合，對手的【中毒】寶可夢
+   * 無法撤退（包含新中毒的）。
+   * 設於對手側的 cantRetreatIfPoisonedNextTurn；於該對手 END_TURN 時 promote。
+   * RETREAT handler 檢查 attacker.cantRetreatIfPoisonedThisTurn + active.status==='poisoned'
+   * → 阻擋撤退。
+   */
+  cantRetreatIfPoisonedNextTurn?: boolean;
+  cantRetreatIfPoisonedThisTurn?: boolean;
   /** 本回合是否已撤退 */
   retreatedThisTurn: boolean;
   /**
