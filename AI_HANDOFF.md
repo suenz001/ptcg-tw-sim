@@ -1,9 +1,30 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.177)  
+> 最後更新：2026-04-26 (v2.178)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.178 — H/I/J 卡牌實裝清單（HIJ_IMPLEMENTATION_STATUS.md）
+
+Leon 要求：建一份方便交接 + 自己查閱的完整清單，列出所有 H/I/J 標卡牌實裝狀態。
+
+### 產出
+- `HIJ_IMPLEMENTATION_STATUS.md`：236 張 H/I/J Trainer + Special Energy 全列表（**213 已實裝 / 23 未實裝，89.8%**）
+  - 統計總覽（按 Supporter/Item/PokemonTool/Stadium/Special Energy 分類）
+  - 未實裝 23 張按需新引擎機制分組，含卡面文字節錄
+  - 已實裝 213 張按 mark 分組顯示（壓縮顯示，一行多卡名）
+
+### 自動化 audit pipeline（`scripts/`）
+1. `audit-hij-cards.mjs`：掃 `static/cards/*.json`，過濾 H/I/J Trainer + Special Energy → `/tmp/hij_targets.json`
+2. `audit-hij-impl.mjs`：對 `effects.ts` / `engine.ts` / `effects/cards/*` 做 raw match 標記實裝狀態 → `/tmp/hij_audit.json`
+3. `build-hij-status-md.mjs`：合併 + 註記，產出 `HIJ_IMPLEMENTATION_STATUS.md`
+
+### 已知限制
+- raw match 可能 false positive（卡名出現但效果未實裝）和 false negative（命名 normalize 後失配）
+- 已知 false negative：`寶可夢中心的姐姐`（ZWNJ 前綴），用 `fixedFalseNeg` set 手工 override
 
 ---
 
