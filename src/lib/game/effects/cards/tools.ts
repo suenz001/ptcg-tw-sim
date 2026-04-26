@@ -59,7 +59,16 @@ export const TOOL_DEFENSE_REDUCE_BY_TYPE = new Map<string, {
   amount: number;
   types: EnergyType[];
   discardOnTrigger: boolean;
+  /** v2.176: holder 自身屬性過濾 — 只在 holder 屬於這些屬性時觸發；空 = 無 holder 限制 */
+  holderTypes?: EnergyType[];
 }>();
+/**
+ * v2.176: 防守方道具 — 攻擊方擁有特性時 -N（神聖護符）
+ * Hook：fn(attackerCard) => amount。回傳 0 = 不觸發。
+ */
+export const TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY = new Map<string, (
+  attackerCard: Card
+) => number>();
 export const TOOL_PREVENT_KO = new Map<string, (
   holderInst: CardInstance, holderCard: Card, incomingDamage: number
 ) => { prevent: boolean; leaveHP: number }>();
@@ -114,6 +123,19 @@ TOOL_DEFENSE_REDUCE_BY_TYPE.set('千香果', { amount: 60, types: ['Water'],   d
 TOOL_DEFENSE_REDUCE_BY_TYPE.set('刺耳果', { amount: 60, types: ['Darkness'], discardOnTrigger: true });
 TOOL_DEFENSE_REDUCE_BY_TYPE.set('霹霹果', { amount: 60, types: ['Metal'],   discardOnTrigger: true });
 TOOL_DEFENSE_REDUCE_BY_TYPE.set('莓榴果', { amount: 60, types: ['Dragon'],  discardOnTrigger: true });
+
+// v2.176 渾厚鱗片：附有這張卡的【龍】寶可夢，受到對手【草】【火】【水】【雷】招式 -50（不丟棄）
+TOOL_DEFENSE_REDUCE_BY_TYPE.set('渾厚鱗片', {
+  amount: 50,
+  types: ['Grass', 'Fire', 'Water', 'Lightning'],
+  discardOnTrigger: false,
+  holderTypes: ['Dragon'],
+});
+
+// v2.176 神聖護符：附有這張卡的寶可夢，受到對手擁有特性的寶可夢招式 -30（不丟棄）
+TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.set('神聖護符', (attackerCard) => {
+  return (attackerCard.abilities && attackerCard.abilities.length > 0) ? 30 : 0;
+});
 
 // ── 防 KO（滿血被 KO 時留 10 HP） ─────────────────────────────────────────
 TOOL_PREVENT_KO.set('倖存鍛鍊器', (inst, card) => {

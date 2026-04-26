@@ -16,7 +16,7 @@ import type {
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
   PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS,
-  TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE,
+  TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
@@ -609,6 +609,25 @@ export function canAffordAttack(
           cost = [...cost.slice(0, colorlessIdx), ...cost.slice(colorlessIdx + 1)];
         } else {
           cost = cost.slice(0, -1);  // 扣最後 1 個
+        }
+      }
+    }
+  }
+  // v2.176 反擊增幅器（PokemonTool）：若自己剩餘獎賞 > 對手，附有此 Tool 的寶可夢
+  //   招式所需能量 -1 個【無】。需有 Colorless 才生效（不轉換為其他屬性）。
+  //   阻礙之塔時道具失效。
+  if (state && pokemon.toolAttached && attackerIdx !== undefined) {
+    const toolsJammed = isToolsJammed(state, pool);
+    if (!toolsJammed) {
+      const toolCard = pool.get(pokemon.toolAttached.cardId);
+      if (toolCard?.name === '反擊增幅器') {
+        const myPrizes = state.players[attackerIdx].prizes.length;
+        const oppPrizes = state.players[(1 - attackerIdx) as 0 | 1].prizes.length;
+        if (myPrizes > oppPrizes) {
+          const colorlessIdx = cost.indexOf('Colorless');
+          if (colorlessIdx >= 0) {
+            cost = [...cost.slice(0, colorlessIdx), ...cost.slice(colorlessIdx + 1)];
+          }
         }
       }
     }
@@ -2239,17 +2258,35 @@ function handlePlaying(
       }
     }
 
-    // 道具：特定屬性防禦（福祿果 / 巧可果 / 千香果 / 刺耳果 / 霹霹果 / 莓榴果）
-    // 只要觸發就 -60 並丟棄，不受是否已被其他機制削到 0 影響（規則上 tool 仍消耗）
+    // 道具：特定屬性防禦（福祿果 / 巧可果 / 千香果 / 刺耳果 / 霹霹果 / 莓榴果 / 渾厚鱗片）
+    // 只要觸發就 -N，部分卡會丟棄；不受是否已被其他機制削到 0 影響（規則上 tool 仍消耗）
     // skipDefEffects 跳過，但不觸發道具也不丟棄。阻礙之塔時整個道具效果失效。
+    // v2.176：新增 holderTypes filter（渾厚鱗片需 holder 為【龍】）
+    //          + TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY（神聖護符）
     let defenseReduceToolToDiscard: CardInstance | null = null;
     if (!toolsJammed && !skipDefEffects && defender.active.toolAttached) {
       const defTool = pool.get(defender.active.toolAttached.cardId);
+      const defenderCardForTool = pool.get(defender.active.cardId);
       if (defTool) {
+        // 1. 屬性過濾型（福祿果系 + 渾厚鱗片）
         const defense = TOOL_DEFENSE_REDUCE_BY_TYPE.get(defTool.name);
         if (defense && attackerCard.pokemonType && defense.types.includes(attackerCard.pokemonType) && baseDamage > 0) {
-          baseDamage = Math.max(0, baseDamage - defense.amount);
-          if (defense.discardOnTrigger) defenseReduceToolToDiscard = defender.active.toolAttached;
+          // v2.176 holderTypes filter：若指定，holder 必須是其中一型
+          const holderOk = !defense.holderTypes
+            || (defenderCardForTool?.pokemonType
+                && defense.holderTypes.includes(defenderCardForTool.pokemonType));
+          if (holderOk) {
+            baseDamage = Math.max(0, baseDamage - defense.amount);
+            if (defense.discardOnTrigger) defenseReduceToolToDiscard = defender.active.toolAttached;
+          }
+        }
+        // 2. v2.176 攻擊方有特性型（神聖護符）— 不丟棄
+        const abilFn = TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.get(defTool.name);
+        if (abilFn && baseDamage > 0) {
+          const reduce = abilFn(attackerCard);
+          if (reduce > 0) {
+            baseDamage = Math.max(0, baseDamage - reduce);
+          }
         }
       }
     }

@@ -24,10 +24,11 @@
 ### 需「對手抽卡互動」（1 張）
 - `[18051/J] 琵魯` (Supporter) — 棄手牌任意+抽到 5（需 hand-discard 串接）
 
-### 需「holder name/type filter on TOOL_*」（3 張）
-- `[14393/I] 神聖護符` (Tool) — 對手有特性招式 -30（需 attacker 屬性過濾的新 hook）
-- `[14824/I] 渾厚鱗片` (Tool) — holder【龍】+ 受【草火水雷】-50（需 holder 屬性 filter）
-- `[14089/H] 反擊增幅器` (Tool) — 獎賞優勢 → 招式費用 -1【無】（需 cost hook）
+### 需「holder name/type filter on TOOL_*」（已全清）
+v2.176 已實裝：
+- `[14393/I] 神聖護符` — ✓ 新 map TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY
+- `[14824/I] 渾厚鱗片` — ✓ 擴充 TOOL_DEFENSE_REDUCE_BY_TYPE 加 holderTypes filter
+- `[14089/H] 反擊增幅器` — ✓ canAffordAttack inline cost reduction（同 璀璨結晶 pattern）
 
 ### 需「attack-injection」（2 張）
 - `[18049/J] 核心記憶碟` (Tool) — 給「超級基格爾德ex」額外招式

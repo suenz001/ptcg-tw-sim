@@ -1,9 +1,26 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.175)  
+> 最後更新：2026-04-26 (v2.176)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.176 — TOOL holder/attacker filter + cost-reduction（3 張清完）
+
+延續 H/I/J 自動實裝路線。本版專攻 SKIPPED 的「holder/attacker filter on TOOL_*」分組（3 張全清）。
+
+### 引擎/effect 整合
+- `effects/cards/tools.ts`：擴充 `TOOL_DEFENSE_REDUCE_BY_TYPE` shape 加 `holderTypes?: EnergyType[]`
+- `effects/cards/tools.ts`：新增 `TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY` map
+- `engine.ts` ATTACK 防禦階段：對 holderTypes 做過濾；新增 attacker-ability 路徑（神聖護符 -30）
+- `engine.ts` `canAffordAttack`：新加反擊增幅器 inline cost reduction（同 璀璨結晶 pattern；獎賞優勢時扣 1 個【無】）
+
+### 卡片實裝
+- **渾厚鱗片**：附【龍】寶可夢，受對手【草火水雷】招式 -50（不丟棄）
+- **神聖護符**：附寶可夢受對手「擁有特性的寶可夢」招式 -30（不丟棄）
+- **反擊增幅器**：自己獎賞 > 對手 → holder 招式所需能量 -1【無】
 
 ---
 
