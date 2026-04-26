@@ -21,6 +21,7 @@ import {
   shuffle,
 } from '../_shared';
 import { isBasicEnergyOfType, totalEnergyUnits } from '../../engine';
+import { startEnergyChain } from './v158_energy_chain';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 超級妙蛙花ex｜日光轉移（特性，不限次）
@@ -134,8 +135,8 @@ regR('sunlight-transfer-target', (st, idx, iids, params, pool) => {
 //   從其中選擇任意數量的『基本【鋼】能量』卡，以任意方式附於自己的寶可夢身上。
 //   將剩餘卡全部翻回反面並重洗，放回牌庫下方。」
 //
-// 簡化策略：自動把選的鋼能量附到自己的【鋼】寶可夢（active 優先，否則 bench）
-//   不開額外目標選擇 modal。剩餘卡洗一洗放牌庫底。
+// v2.158：升級為玩家自選分配 — top 4 leftover 仍洗回牌庫底；選的鋼能量先暫存到
+//   discard 然後呼叫 v158 chain，玩家逐張選自己的【鋼】寶可夢（active+bench）。
 regG('金屬怪', (st, idx) => {
   return st.players[idx].deck.length > 0;
 });
@@ -165,6 +166,10 @@ regA('金屬怪', 0, (st, idx, pool) => {
   });
 });
 regR('metal-maker-attach', (st, idx, energyIids, params, pool) => {
+  // v2.158：升級為玩家自選分配
+  //   1. top 4 中沒選的洗回牌庫底（不變）
+  //   2. 選的鋼能量先暫存到 discard
+  //   3. 呼叫 v158 chain 讓玩家逐張選【鋼】寶可夢分配
   const top4Iids = (params?.top4Iids as string[]) ?? [];
   let s = updatePlayer(st, idx, p => {
     const top4 = p.deck.filter(c => top4Iids.includes(c.iid));
@@ -172,35 +177,23 @@ regR('metal-maker-attach', (st, idx, energyIids, params, pool) => {
     // 驗證選的卡是基本【鋼】能量
     const validEnergies = top4.filter(c => energyIids.includes(c.iid) && isBasicEnergyOfType(pool.get(c.cardId), 'Metal'));
     const leftover = top4.filter(c => !validEnergies.some(e => e.iid === c.iid));
-    // 把選的鋼能量自動附到 active（如果是 Metal），否則 bench 第 1 隻 Metal
-    let newActive = p.active;
-    let newBench = p.bench;
-    if (validEnergies.length > 0) {
-      const pickTarget = (): { isActive: boolean; idx: number } | null => {
-        if (newActive && pool.get(newActive.cardId)?.pokemonType === 'Metal') {
-          return { isActive: true, idx: 0 };
-        }
-        const benchIdx = newBench.findIndex(b => pool.get(b.cardId)?.pokemonType === 'Metal');
-        if (benchIdx >= 0) return { isActive: false, idx: benchIdx };
-        return null;
-      };
-      const t = pickTarget();
-      if (t) {
-        if (t.isActive && newActive) {
-          newActive = { ...newActive, energyAttached: [...newActive.energyAttached, ...validEnergies] };
-        } else {
-          newBench = newBench.map((b, i) => i === t.idx ? { ...b, energyAttached: [...b.energyAttached, ...validEnergies] } : b);
-        }
-      }
-    }
-    // 剩餘 + 牌庫其餘 — leftover 放牌庫底（洗一洗），rest 放回原位
-    const newDeck = [...rest, ...shuffle(leftover)];
-    return { ...p, active: newActive, bench: newBench, deck: newDeck };
+    // leftover（top4 中沒選的）洗一洗放牌庫底；選的能量暫存 discard
+    return {
+      ...p,
+      deck: [...rest, ...shuffle(leftover)],
+      discard: [...p.discard, ...validEnergies],
+    };
   });
   if (energyIids.length === 0) {
     return addLog(s, '金屬製造者：未選擇能量（4 張全洗回牌庫底）', idx);
   }
-  return addLog(s, `金屬製造者：選 ${energyIids.length} 張基本【鋼】能量附寶可夢，剩餘洗回牌庫底`, idx);
+  // 啟動 chain — source='discard'（已搬好），scope='any-own'，filter='Metal'
+  return startEnergyChain(s, idx, energyIids, {
+    label: '金屬製造者',
+    source: 'discard',
+    scope: 'any-own',
+    filterType: 'Metal',
+  }, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -231,8 +224,8 @@ reg('超大冰淇淋', (st, idx, pool) => {
 // 卡面：「這張卡只有在自己的場上有『太晶』寶可夢時才可使用。
 //   選擇最多 2 隻自己的備戰區的【無】寶可夢，從棄牌區附給那些寶可夢各 1 張基本能量卡。」
 //
-// 簡化：用 discard-search 選 ≤2 張基本能量；resolver 自動分配給 bench 上的【無】寶可夢
-//   （AI 友善 — 不再開 bench-choose 二次 modal）
+// v2.158：升級為玩家自選分配 — 用 v158-energy-chain（source='discard', scope='bench-only',
+//   filterType='Colorless'）— 玩家逐張選備戰【無】寶可夢分配。
 regG('玻璃喇叭', (st, idx, pool) => {
   const all = [st.players[idx].active, ...st.players[idx].bench].filter((c): c is CardInstance => !!c);
   const hasTera = all.some(c => pool.get(c.cardId)?.tags?.includes('太晶'));
@@ -256,35 +249,18 @@ reg('玻璃喇叭', (st, idx, pool) => {
     return card?.supertype === 'Energy' && card.subtype === 'Basic';
   }).length;
   if (energyCount === 0) return addLog(st, '玻璃喇叭：棄牌區無基本能量', idx);
-  let s = addLog(st, `玻璃喇叭：從棄牌區選 ≤${Math.min(max, energyCount)} 張基本能量附給【無】備戰`, idx);
+  const s = addLog(st, `玻璃喇叭：從棄牌區選 ≤${Math.min(max, energyCount)} 張基本能量（接著逐張選備戰【無】目標）`, idx);
   return withPending(s, {
     type: 'discard-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'BasicEnergy',
     minCount: 0, maxCount: Math.min(max, energyCount),
-    effectKey: 'glass-trumpet-attach',
-    params: { titleOverride: '玻璃喇叭：選 ≤2 張基本能量附給備戰【無】寶可夢' },
+    effectKey: 'v158-energy-chain-start',
+    params: {
+      label: '玻璃喇叭',
+      source: 'discard',
+      scope: 'bench-only',
+      filterType: 'Colorless',
+    },
   });
-});
-regR('glass-trumpet-attach', (st, idx, energyIids, _params, pool) => {
-  if (energyIids.length === 0) return addLog(st, '玻璃喇叭：未選擇能量', idx);
-  let s = updatePlayer(st, idx, p => {
-    const energies = p.discard.filter(c => energyIids.includes(c.iid));
-    const newDiscard = p.discard.filter(c => !energyIids.includes(c.iid));
-    // 自動分配到備戰【無】寶可夢（按順序，每隻最多 1 張）
-    const colorlessBenchIdx = p.bench
-      .map((b, i) => ({ b, i, type: pool.get(b.cardId)?.pokemonType }))
-      .filter(x => x.type === 'Colorless')
-      .map(x => x.i);
-    const newBench = [...p.bench];
-    for (let k = 0; k < energies.length && k < colorlessBenchIdx.length; k++) {
-      const benchI = colorlessBenchIdx[k];
-      newBench[benchI] = {
-        ...newBench[benchI],
-        energyAttached: [...newBench[benchI].energyAttached, energies[k]],
-      };
-    }
-    return { ...p, discard: newDiscard, bench: newBench };
-  });
-  return addLog(s, `玻璃喇叭：將 ${energyIids.length} 張基本能量附給備戰【無】寶可夢`, idx);
 });

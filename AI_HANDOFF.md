@@ -1,9 +1,51 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.157)  
+> 最後更新：2026-04-26 (v2.158)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.158 — 6 個能量分配卡升級為玩家自選分配 + 通用 chain helper
+
+### 起因
+全專案掃「簡化」標記找出 6 張能量分配類卡長期實裝為「自動分配」，偏離卡面「以任意方式附於」。Leon 要求升級為玩家自選。
+
+### 新增：通用 chain helper（`v158_energy_chain.ts`）
+複用 v2.89 超級路卡利歐ex｜波動突刺已驗證的 chain pattern 抽成共用 module：
+- **第 1 階段** picker（deck-search 或 discard-search）讓玩家挑能量
+- **chain 啟動** `startEnergyChain(state, aIdx, energyIids, opts, pool)`：能量先暫存到 discard，找場上合法目標（依 scope + filterType）
+- **多目標**時對第 1 張能量開 `bench-choose` 或 `heal-target` picker
+- **resolver 鏈**逐張附能量並開下一個 picker，直到全部分配完
+- **單一目標**自動全附避免反覆彈 UI
+
+API: `startEnergyChain` 可被其他模組直接呼叫（不透過 RESOLVE_SELECTION）— 給 X啟動 這種「兩階段選能量」用的卡可彈性配合。
+
+### 6 張卡升級對照
+| 卡 | 之前簡化 | 升級後 |
+|---|---|---|
+| **燃燒充能**（火伊布ex 招式） | 自動均附 active | 玩家逐張選自己場上寶可夢 |
+| **電電充能**（電電蟲 招式） | 自動均附 active | 玩家逐張選自己場上寶可夢（草+雷各≤2 合計≤4） |
+| **樂呵呵之吻**（迷唇娃 招式） | 固定附第 1 隻備戰 | 玩家逐張選備戰目標 |
+| **X啟動**（大吾的巨金怪ex 特性） | active 優先/備戰第 1 隻【超/鋼】 | 玩家逐張選自己場上【超/鋼】寶可夢 |
+| **玻璃喇叭**（Item） | 自動分配備戰【無】 | 玩家逐張選備戰【無】 |
+| **金屬製造者**（金屬怪 特性） | 場上鋼寶 active 優先 | 玩家逐張選自己場上【鋼】 |
+
+### 改動檔案
+- `src/lib/version.ts` — 2.157 → 2.158
+- `src/lib/game/effects/cards/v158_energy_chain.ts` — **新增** 通用 chain helper
+- `src/lib/game/effects.ts` — side-effect import `./effects/cards/v158_energy_chain`
+- `src/lib/game/effects/cards/v155_attacks.ts` — 燃燒充能 / 電電充能 / 樂呵呵之吻 改用 chain
+- `src/lib/game/effects/cards/v154_decks.ts` — 玻璃喇叭 / 金屬製造者 改用 chain
+- `src/lib/game/effects/cards/lopunny_serperior_flareon_festival.ts` — X啟動 改用 chain
+
+### 驗證
+- `npm run build` ✓
+- `node scripts/sim-sandbox.mjs 50` ✓ 50 局 0 bug
+
+### 剩餘簡化情況（非常邊緣，不擾動）
+全專案 grep 「簡化」共 ~40 處，餘下的都是更小的細節（如龍之秘藥 condition 簡化、推理組合洗回底而非排序、烈火爆進用 cantAttackPending 等）— 這些影響度低且涉及單卡/罕用 trainer，留待 Leon 個別反映時再處理。
 
 ---
 

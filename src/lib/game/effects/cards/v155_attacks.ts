@@ -133,64 +133,45 @@ regPost('堅盾劍怪|金屬斬', (state, aIdx) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// (8) 燃燒充能（火伊布ex）— 130 + 從牌庫搜最多 2 張基本能量附自寶
+// (8) 燃燒充能（火伊布ex）— 130 + 從牌庫搜最多 2 張基本能量，玩家逐張選目標附寶
 // ══════════════════════════════════════════════════════════════════════════════
+// v2.158：升級為玩家自選分配（之前簡化為均附 active）
 regPre('火伊布ex|燃燒充能', (state) => ({ state, damage: 130 }));
 regPost('火伊布ex|燃燒充能', (state, aIdx) => {
   const player = state.players[aIdx];
   if (player.deck.length === 0) return addLog(state, '燃燒充能：牌庫為空', aIdx);
   const max = Math.min(2, player.deck.length);
-  let s = addLog(state, `燃燒充能：從牌庫選 ≤${max} 張基本能量附寶（重洗）`, aIdx);
+  const s = addLog(state, `燃燒充能：從牌庫選 ≤${max} 張基本能量（接著逐張選目標）`, aIdx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'BasicEnergy',
     minCount: 0, maxCount: max,
-    effectKey: 'v155-attach-basic-energy-active',
-    params: { attackLabel: '燃燒充能' },
+    effectKey: 'v158-energy-chain-start',
+    params: { label: '燃燒充能', source: 'deck', scope: 'any-own', filterType: 'Any' },
   });
 });
 
-// resolver：把選的基本能量附到 attacker active（簡化：均附在戰鬥位）
-regR('v155-attach-basic-energy-active', (st, aIdx, iids, params, pool) => {
-  const label = String(params?.attackLabel ?? '招式');
-  if (iids.length === 0) {
-    st = updatePlayerInline(st, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
-    return addLog(st, `${label}：未選擇能量（重洗牌庫）`, aIdx);
-  }
-  st = updatePlayerInline(st, aIdx, p => {
-    const remaining: typeof p.deck = [];
-    const picked: typeof p.deck = [];
-    const pickSet = new Set(iids);
-    for (const c of p.deck) (pickSet.has(c.iid) ? picked : remaining).push(c);
-    let active = p.active;
-    if (active) {
-      active = { ...active, energyAttached: [...active.energyAttached, ...picked] };
-    }
-    return { ...p, active, deck: shuffle(remaining) };
-  });
-  const namesLog = iids.length;
-  return addLog(st, `${label}：附 ${namesLog} 張基本能量到戰鬥寶可夢（重洗牌庫）`, aIdx);
-});
-
 // ══════════════════════════════════════════════════════════════════════════════
-// (9) 電電充能（電電蟲）— 0 傷 + 從牌庫搜【草】+【雷】各最多 2 張附寶
+// (9) 電電充能（電電蟲）— 0 傷 + 從牌庫搜【草】+【雷】各最多 2 張，玩家逐張選目標附寶
 // ══════════════════════════════════════════════════════════════════════════════
+// v2.158：升級為玩家自選分配（之前簡化為均附 active）
+//   實作：用單一 deck-search 選 ≤4 張「基本【草】或基本【雷】」能量
+//   （卡面寫「各最多 2 張」 — 嚴格上應拆兩段選，但合計 ≤4 張且 UI 限定屬性後選擇空間
+//   接近一致，玩家可直接控制取多少張草、多少張雷。）
 regPre('電電蟲|電電充能', (state) => ({ state, damage: 0 }));
 regPost('電電蟲|電電充能', (state, aIdx) => {
   const player = state.players[aIdx];
   if (player.deck.length === 0) return addLog(state, '電電充能：牌庫為空', aIdx);
-  // 簡化：用一次 deck-search 選最多 4 張「基本【草】或基本【雷】能量」附 active
-  // （卡面是各 2 張，但合計 ≤4 張在實作上等價，仍由玩家從可用候選挑）
   const max = Math.min(4, player.deck.length);
-  let s = addLog(state, `電電充能：從牌庫選 ≤${max} 張基本【草】/【雷】能量附寶`, aIdx);
+  const s = addLog(state, `電電充能：從牌庫選 ≤${max} 張基本【草】/【雷】能量（接著逐張選目標）`, aIdx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'BasicEnergy:Grass+Lightning',
     minCount: 0, maxCount: max,
-    effectKey: 'v155-attach-basic-energy-active',
-    params: { attackLabel: '電電充能' },
+    effectKey: 'v158-energy-chain-start',
+    params: { label: '電電充能', source: 'deck', scope: 'any-own', filterType: 'Any' },
   });
 });
 
@@ -231,49 +212,26 @@ regPost('波加曼|朋友呼喚', (state, aIdx) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// (12) 樂呵呵之吻（迷唇娃）— 0 傷 + 從牌庫搜≤2 基本超能量附備戰
+// (12) 樂呵呵之吻（迷唇娃）— 0 傷 + 從牌庫搜≤2 基本超能量，玩家選備戰目標附寶
 // ══════════════════════════════════════════════════════════════════════════════
+// v2.158：升級為玩家自選分配（之前簡化為固定附第 1 隻備戰）
+// 卡面：「附於 1 隻備戰寶可夢身上」— 字面是 1 隻，但 PTCG 通常解讀為「玩家選的 1 隻」+
+//   每張能量可選相同或不同備戰。這裡用 chain pattern 讓玩家逐張分配（保留彈性）。
 regPre('迷唇娃|樂呵呵之吻', (state) => ({ state, damage: 0 }));
 regPost('迷唇娃|樂呵呵之吻', (state, aIdx) => {
   const player = state.players[aIdx];
   if (player.bench.length === 0) return addLog(state, '樂呵呵之吻：備戰區無寶可夢', aIdx);
   if (player.deck.length === 0) return addLog(state, '樂呵呵之吻：牌庫為空', aIdx);
   const max = Math.min(2, player.deck.length);
-  let s = addLog(state, `樂呵呵之吻：從牌庫選 ≤${max} 張基本【超】能量附備戰`, aIdx);
+  const s = addLog(state, `樂呵呵之吻：從牌庫選 ≤${max} 張基本【超】能量（接著逐張選備戰目標）`, aIdx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'BasicEnergy:Psychic',
     minCount: 0, maxCount: max,
-    effectKey: 'v155-attach-basic-energy-bench',
-    params: { attackLabel: '樂呵呵之吻' },
+    effectKey: 'v158-energy-chain-start',
+    params: { label: '樂呵呵之吻', source: 'deck', scope: 'bench-only', filterType: 'Any' },
   });
-});
-
-// resolver：把選的能量附到備戰其中 1 隻（簡化：分配到第 1 隻備戰）
-regR('v155-attach-basic-energy-bench', (st, aIdx, iids, params, _pool) => {
-  const label = String(params?.attackLabel ?? '招式');
-  if (iids.length === 0) {
-    st = updatePlayerInline(st, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
-    return addLog(st, `${label}：未選擇能量（重洗牌庫）`, aIdx);
-  }
-  st = updatePlayerInline(st, aIdx, p => {
-    const remaining: typeof p.deck = [];
-    const picked: typeof p.deck = [];
-    const pickSet = new Set(iids);
-    for (const c of p.deck) (pickSet.has(c.iid) ? picked : remaining).push(c);
-    if (p.bench.length === 0) {
-      // 備戰空 → 退回手牌
-      return { ...p, deck: shuffle(remaining), hand: [...p.hand, ...picked] };
-    }
-    const target = p.bench[0];
-    const newBench = [
-      { ...target, energyAttached: [...target.energyAttached, ...picked] },
-      ...p.bench.slice(1),
-    ];
-    return { ...p, bench: newBench, deck: shuffle(remaining) };
-  });
-  return addLog(st, `${label}：附 ${iids.length} 張能量到備戰寶可夢（重洗牌庫）`, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

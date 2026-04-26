@@ -22,6 +22,7 @@ import {
   shuffle,
 } from '../_shared';
 import { isBasicEnergyOfType } from '../../engine';
+import { startEnergyChain } from './v158_energy_chain';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 蜜集大蛇ex｜熟成充能（特性）
@@ -286,60 +287,30 @@ function commitMetagrossEnergy(
   metIid: string | null,
   pool: Map<string, Card>,
 ): import('../../types').GameState {
-  let s = st;
-  const p = s.players[idx];
-  // 找目標寶可夢：active 優先（若是【超】或【鋼】），否則 bench 第 1 隻【超/鋼】
-  const findTarget = (forType: 'Psychic' | 'Metal'): CardInstance | null => {
-    if (p.active) {
-      const card = pool.get(p.active.cardId);
-      if (card?.pokemonType === forType || card?.pokemonType === 'Psychic' || card?.pokemonType === 'Metal') {
-        return p.active;
-      }
-    }
-    for (const b of p.bench) {
-      const card = pool.get(b.cardId);
-      if (card?.pokemonType === 'Psychic' || card?.pokemonType === 'Metal') return b;
-    }
-    return null;
-  };
-  // 把選好的能量從 deck 移除，附到目標
-  const energyMoves: Array<{ iid: string; targetIid: string }> = [];
-  if (psyIid) {
-    const target = findTarget('Psychic');
-    if (target) energyMoves.push({ iid: psyIid, targetIid: target.iid });
+  // v2.158：升級為玩家自選分配 — 把選的能量先從 deck 移到 discard，呼叫 v158 chain
+  //   讓玩家逐張選目標（限定【超】或【鋼】寶可夢；可含 active）
+  const moved: string[] = [];
+  if (psyIid) moved.push(psyIid);
+  if (metIid) moved.push(metIid);
+  if (moved.length === 0) {
+    return addLog(st, 'X啟動：未選任何能量', idx);
   }
-  if (metIid) {
-    const target = findTarget('Metal');
-    if (target) energyMoves.push({ iid: metIid, targetIid: target.iid });
-  }
-  if (energyMoves.length === 0 && (psyIid || metIid)) {
-    // 沒可附目標但有選能量 — 把能量回到 deck 重洗
-    s = updatePlayer(s, idx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
-    return addLog(s, 'X啟動：場上無可附能量的【超/鋼】寶可夢，能量留回牌庫並重洗', idx);
-  }
-  s = updatePlayer(s, idx, pl => {
-    const movedIids = energyMoves.map(m => m.iid);
-    const energies = pl.deck.filter(c => movedIids.includes(c.iid));
-    const newDeck = pl.deck.filter(c => !movedIids.includes(c.iid));
-    // 附加到目標
-    const attachToInst = (poke: CardInstance): CardInstance => {
-      const matched = energies.filter(e => energyMoves.some(m => m.iid === e.iid && m.targetIid === poke.iid));
-      if (matched.length === 0) return poke;
-      return { ...poke, energyAttached: [...poke.energyAttached, ...matched] };
-    };
+  // 移到 discard（暫存供 chain attach 用），同時 reshuffle deck
+  let s = updatePlayer(st, idx, pl => {
+    const movedSet = new Set(moved);
+    const energies = pl.deck.filter(c => movedSet.has(c.iid));
+    const newDeck = pl.deck.filter(c => !movedSet.has(c.iid));
     return {
       ...pl,
       deck: shuffle(newDeck),
-      active: pl.active ? attachToInst(pl.active) : null,
-      bench: pl.bench.map(attachToInst),
+      discard: [...pl.discard, ...energies],
     };
   });
-  const moveDescs = energyMoves.map(m => {
-    const e = pool.get(s.players[idx].deck.find(d => d.iid === m.iid)?.cardId ?? '')?.name
-      ?? (m.iid === psyIid ? '基本【超】能量' : '基本【鋼】能量');
-    const targetCard = [s.players[idx].active, ...s.players[idx].bench].find(c => c?.iid === m.targetIid);
-    const tname = targetCard ? pool.get(targetCard.cardId)?.name ?? '?' : '?';
-    return `${e}→${tname}`;
-  });
-  return addLog(s, `X啟動：${moveDescs.join('、')}（重洗牌庫）`, idx);
+  // 啟動 chain：source='discard'（已搬好），scope='any-own'，filter=【超】或【鋼】
+  return startEnergyChain(s, idx, moved, {
+    label: 'X啟動',
+    source: 'discard',
+    scope: 'any-own',
+    filterType: ['Psychic', 'Metal'],
+  }, pool);
 }

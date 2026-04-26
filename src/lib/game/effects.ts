@@ -288,6 +288,9 @@ import './effects/cards/lopunny_serperior_flareon_festival';
 import './effects/cards/v154_decks';
 // v2.155：補實裝 20 個 preset 主力 ex 招式（audit 漏掃修正後找出的長期漏實裝）
 import './effects/cards/v155_attacks';
+// v2.158：通用「逐張附能量到玩家選的目標寶可夢」chain helper
+//         供燃燒充能 / 電電充能 / 樂呵呵之吻 / 金屬製造者 / 玻璃喇叭 / X啟動 共用
+import './effects/cards/v158_energy_chain';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
