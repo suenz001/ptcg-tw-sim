@@ -2189,13 +2189,51 @@ reg('危險光線', (st, idx, pool) => {
   return st;
 });
 
-// 推理組合 — 看牌庫頂 3，簡化為洗回底
-reg('推理組合', (st, idx) => {
-  st = addLog(st, '推理組合：牌庫頂 3 張洗回底', idx);
-  return updatePlayer(st, idx, p => {
-    const top3 = p.deck.slice(0, 3);
-    const rest = p.deck.slice(3);
-    return { ...p, deck: [...shuffle(rest), ...top3] };
+// 推理組合 — 卡面：看牌庫頂 3 張，二選一：(A) 以任意順序排列放回頂；(B) 全部翻反洗回底
+// v2.164：完整實裝（modal-choice 二選一 → A 路徑開 reorder-deck-top）
+regG('推理組合', (st, idx) => st.players[idx].deck.length > 0);
+reg('推理組合', (st, idx, _pool) => {
+  const topN = Math.min(3, st.players[idx].deck.length);
+  st = addLog(st, `推理組合：選擇處理牌庫頂 ${topN} 張的方式`, idx);
+  return withPending(st, {
+    type: 'modal-choice',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'inference-combination-choice',
+    params: {
+      label: '推理組合',
+      options: [
+        { id: 'reorder', text: `①以任意順序排列頂 ${topN} 張，放回牌庫上方` },
+        { id: 'shuffle-bottom', text: `②將頂 ${topN} 張翻反並重洗，放回牌庫下方` },
+      ],
+    },
+  });
+});
+regR('inference-combination-choice', (state, aIdx, iids, _params, _pool) => {
+  const choice = iids[0];
+  const player = state.players[aIdx];
+  const topN = Math.min(3, player.deck.length);
+  const topCards = player.deck.slice(0, topN);
+  if (choice === 'shuffle-bottom') {
+    // (B) 全部翻反洗回底
+    state = addLog(state, `推理組合：將牌庫頂 ${topN} 張翻反並重洗放回下方`, aIdx);
+    return updatePlayer(state, aIdx, p => {
+      const rest = p.deck.slice(topN);
+      return { ...p, deck: [...shuffle(rest), ...shuffle(topCards)] };
+    });
+  }
+  // (A) 排序放回頂 — 開 reorder-deck-top picker
+  state = addLog(state, `推理組合：排序牌庫頂 ${topN} 張`, aIdx);
+  return withPending(state, {
+    type: 'reorder-deck-top',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: topN, maxCount: topN,  // 必須全部保留
+    effectKey: 'reorder-deck-top-apply',
+    params: {
+      candidateIids: topCards.map(c => c.iid),
+      allowDiscard: false,
+      titleOverride: '推理組合：排序牌庫頂',
+    },
   });
 });
 
@@ -2394,13 +2432,83 @@ reg('秋明', (st, idx) => {
   });
 });
 
-// 蕾荷 — 牌庫頂 5 張丟棄（簡化：不支援選擇排序）
-reg('蕾荷', (st, idx) => {
-  st = addLog(st, '蕾荷：牌庫頂 5 張丟棄', idx);
-  return updatePlayer(st, idx, p => {
-    const top5 = p.deck.slice(0, 5);
-    return { ...p, deck: p.deck.slice(5), discard: [...p.discard, ...top5] };
+// 蕾荷 — 卡面：看牌庫頂 5 張，選任意數量丟棄；剩餘以任意順序排列放回牌庫上方
+// v2.164：完整實裝（reorder-deck-top with allowDiscard=true）
+regG('蕾荷', (st, idx) => st.players[idx].deck.length > 0);
+reg('蕾荷', (st, idx, _pool) => {
+  const player = st.players[idx];
+  const topN = Math.min(5, player.deck.length);
+  const topCards = player.deck.slice(0, topN);
+  st = addLog(st, `蕾荷：查看牌庫頂 ${topN} 張，選擇丟棄哪些並排序剩餘`, idx);
+  return withPending(st, {
+    type: 'reorder-deck-top',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 0, maxCount: topN,  // 玩家可全丟（保留 0 張）也可全留
+    effectKey: 'reorder-deck-top-apply',
+    params: {
+      candidateIids: topCards.map(c => c.iid),
+      allowDiscard: true,
+      titleOverride: '蕾荷：丟棄+排序',
+    },
   });
+});
+
+// ── 共用 resolver：reorder-deck-top-apply ────────────────────────────────────
+// 玩家把 selectedIids 視為「保留並排序的 iid 列表」（index 0 = top of deck after apply）
+// allowDiscard：未列出的 candidateIid 視為丟棄；否則 safety net 強行附在尾部保留
+regR('reorder-deck-top-apply', (state, aIdx, iids, params, pool) => {
+  const candidateIids = (params?.candidateIids as string[] | undefined) ?? [];
+  const allowDiscard = (params?.allowDiscard as boolean | undefined) ?? false;
+  if (candidateIids.length === 0) return state;
+  const candidateSet = new Set(candidateIids);
+  // 過濾 selectedIids：只保留屬於候選且去重
+  const seen = new Set<string>();
+  const orderedKeep: string[] = [];
+  for (const id of iids) {
+    if (candidateSet.has(id) && !seen.has(id)) {
+      seen.add(id);
+      orderedKeep.push(id);
+    }
+  }
+  const missingIds = candidateIids.filter(id => !seen.has(id));
+  const discardIids: string[] = allowDiscard ? missingIds : [];
+  // 非允許丟棄時，玩家漏選的 iid 強行附在尾部維持原順序，避免遺失牌
+  const safetyAppend: string[] = allowDiscard ? [] : missingIds;
+  const finalKeep = [...orderedKeep, ...safetyAppend];
+
+  // 先取得卡名（在 mutate state 前讀 deck top N 對應 cardId）
+  const N = candidateIids.length;
+  const topByIid = new Map<string, CardInstance>();
+  for (const c of state.players[aIdx].deck.slice(0, N)) topByIid.set(c.iid, c);
+  const ownerNames = finalKeep.map(id => {
+    const c = topByIid.get(id);
+    return c ? (pool.get(c.cardId)?.name ?? '?') : '?';
+  });
+  const discardNames = discardIids.map(id => {
+    const c = topByIid.get(id);
+    return c ? (pool.get(c.cardId)?.name ?? '?') : '?';
+  });
+
+  // 套用：deck 頂 N 張替換成排序後的 keep；discard 加上丟棄的 inst
+  let newState = updatePlayer(state, aIdx, p => {
+    const remaining = p.deck.slice(N);
+    const keepInsts = finalKeep.map(id => topByIid.get(id)).filter((x): x is CardInstance => !!x);
+    const discardInsts = discardIids.map(id => topByIid.get(id)).filter((x): x is CardInstance => !!x);
+    return { ...p, deck: [...keepInsts, ...remaining], discard: [...p.discard, ...discardInsts] };
+  });
+
+  // log（公開 = 數量；私訊 = 順序與被丟棄的卡名）
+  const publicBits: string[] = [];
+  publicBits.push(`保留並排序牌庫頂 ${finalKeep.length} 張`);
+  if (discardIids.length > 0) publicBits.push(`丟棄 ${discardIids.length} 張`);
+  const privateBits: string[] = [];
+  if (finalKeep.length > 0) privateBits.push(`頂部順序：${ownerNames.join(' → ')}`);
+  if (discardNames.length > 0) privateBits.push(`丟棄：${discardNames.join('、')}`);
+  const publicMsg = publicBits.join('；');
+  if (privateBits.length > 0) {
+    return addPrivateLog(newState, `${publicMsg}（${privateBits.join('；')}）`, publicMsg, aIdx);
+  }
+  return addLog(newState, publicMsg, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

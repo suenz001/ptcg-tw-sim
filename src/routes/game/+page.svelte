@@ -81,6 +81,10 @@
   // damage-distribute 專用：每隻目標本批次要放幾個 counter
   // 跟 selectionPicked 分開：selectionPicked 是 toggle 集合（單次唯一），這裡是計數器
   let selectionCounts = $state<Record<string, number>>({});
+  // v2.164 reorder-deck-top 專用：玩家排序後保留的 iid（top first）+ 已丟棄的 iid
+  // 跟 selectionPicked 分開：reorder 是兩列 + 順序，不是單純 toggle 集合
+  let selectionReorderKeep = $state<string[]>([]);
+  let selectionReorderDiscard = $state<Set<string>>(new Set());
   let zoomCard = $state<Card | null>(null);
   // v2.129：全螢幕卡牌放大 lightbox（鏡射 /cards 樣式）— 從任何 zoom-img 或 cards 點擊觸發
   let lightboxUrl = $state<string | null>(null);
@@ -786,6 +790,12 @@
     modalOffset = { x: 0, y: 0 };
     modalDragged = false;
     modalDragStart = null;
+    // v2.164：reorder-deck-top 切到新 pending 時，從 candidateIids 初始化 keep 列表（保持原順序）
+    if (pendingSelection?.type === 'reorder-deck-top') {
+      const cand = (pendingSelection.params?.candidateIids as string[] | undefined) ?? [];
+      selectionReorderKeep = [...cand];
+      selectionReorderDiscard = new Set();
+    }
   });
   const evolvableTargets = $derived(game && poolReady ? getEvolvableTargets(game, pool) : []);
   const canRetreatNow    = $derived(game && poolReady ? canRetreat(game, pool) : false);
@@ -1201,6 +1211,11 @@
     if (akamatsuSameTypeBlocked) return false;
     if (pendingSelection.type === 'damage-distribute') {
       const n = selectionBatchSum;
+      return n >= pendingSelection.minCount && n <= pendingSelection.maxCount;
+    }
+    // v2.164 reorder-deck-top：用保留的 keep 列表長度當判定
+    if (pendingSelection.type === 'reorder-deck-top') {
+      const n = selectionReorderKeep.length;
       return n >= pendingSelection.minCount && n <= pendingSelection.maxCount;
     }
     // v2.69：撤退能量選擇用「能量單位」判定（火箭隊能量 1 張 = 2 units）
@@ -1709,12 +1724,49 @@
     if (pendingSelection?.type === 'damage-distribute') {
       // 展開計數器為扁平陣列：{A:2, B:1} → [A,A,B]（resolver 以 iid 出現次數計數）
       payload = Object.entries(selectionCounts).flatMap(([iid, n]) => Array(n).fill(iid));
+    } else if (pendingSelection?.type === 'reorder-deck-top') {
+      // v2.164：保留 + 排序的 iid 列表（top first）
+      payload = [...selectionReorderKeep];
     } else {
       payload = [...selectionPicked];
     }
     dispatch(GameActions.resolveSelection(payload, sid));
     selectionPicked = new Set();
     selectionCounts = {};
+    selectionReorderKeep = [];
+    selectionReorderDiscard = new Set();
+  }
+
+  // ── v2.164 reorder-deck-top UI 操作 ────────────────────────────────────────
+  // keep 列表是「保留並排序」（top first = index 0）；discard set 是「丟棄」候選
+  function reorderMoveUp(iid: string) {
+    const i = selectionReorderKeep.indexOf(iid);
+    if (i <= 0) return;
+    const arr = [...selectionReorderKeep];
+    [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
+    selectionReorderKeep = arr;
+  }
+  function reorderMoveDown(iid: string) {
+    const i = selectionReorderKeep.indexOf(iid);
+    if (i < 0 || i >= selectionReorderKeep.length - 1) return;
+    const arr = [...selectionReorderKeep];
+    [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]];
+    selectionReorderKeep = arr;
+  }
+  function reorderToDiscard(iid: string) {
+    const arr = selectionReorderKeep.filter(id => id !== iid);
+    selectionReorderKeep = arr;
+    const set = new Set(selectionReorderDiscard);
+    set.add(iid);
+    selectionReorderDiscard = set;
+  }
+  function reorderToKeep(iid: string) {
+    const set = new Set(selectionReorderDiscard);
+    set.delete(iid);
+    selectionReorderDiscard = set;
+    if (!selectionReorderKeep.includes(iid)) {
+      selectionReorderKeep = [...selectionReorderKeep, iid];
+    }
   }
 
   // v2.121 全域安全網：當 pending 的候選列表為空（例：搜卡但牌庫/棄牌/手牌無符合條件的卡）
@@ -1770,6 +1822,7 @@
       const label = pendingSelection?.params?.label as string | undefined;
       return label ? `${label}：選擇效果` : '選擇效果';
     }
+    if (type === 'reorder-deck-top') return '排序牌庫頂';
     return '請選擇';
   }
 
@@ -2981,6 +3034,54 @@
           {/if}
         {/if}
 
+        <!-- v2.164 reorder-deck-top：排序牌庫頂 N 張（推理組合 / 蕾荷） -->
+        {#if pendingSelection.type === 'reorder-deck-top' && game}
+          {@const allowDiscard = (pendingSelection.params?.allowDiscard as boolean | undefined) ?? false}
+          {@const candidateIids = (pendingSelection.params?.candidateIids as string[] | undefined) ?? []}
+          {@const ownerDeck = game.players[pendingSelection.actorIdx].deck}
+          {@const candById = new Map(ownerDeck.filter(c => candidateIids.includes(c.iid)).map(c => [c.iid, c] as const))}
+          <div class="reorder-deck-wrap">
+            <div class="reorder-section">
+              <div class="reorder-section-title">📥 保留並排序（牌庫頂 → 底）</div>
+              <div class="reorder-list">
+                {#each selectionReorderKeep as iid, i (iid)}{@const inst = candById.get(iid)}{@const c = inst ? getCard(inst.cardId) : null}
+                  {#if c && inst}
+                    <div class="reorder-item">
+                      <span class="reorder-pos">#{i + 1}</span>
+                      <span class="reorder-name" title={c.name}>{c.name}</span>
+                      <button class="reorder-btn" disabled={i === 0} onclick={() => reorderMoveUp(iid)} title="上移（更接近牌庫頂）">↑</button>
+                      <button class="reorder-btn" disabled={i === selectionReorderKeep.length - 1} onclick={() => reorderMoveDown(iid)} title="下移（更接近牌庫底）">↓</button>
+                      <button class="reorder-btn" onclick={(e) => {e.stopPropagation(); openZoom(inst.cardId, inst);}} title="放大查看">🔍</button>
+                      {#if allowDiscard}
+                        <button class="reorder-btn reorder-btn-discard" onclick={() => reorderToDiscard(iid)} title="丟棄這張">🗑</button>
+                      {/if}
+                    </div>
+                  {/if}
+                {/each}
+                {#if selectionReorderKeep.length === 0}
+                  <div class="reorder-empty">（沒有保留任何卡）</div>
+                {/if}
+              </div>
+            </div>
+            {#if allowDiscard && selectionReorderDiscard.size > 0}
+              <div class="reorder-section">
+                <div class="reorder-section-title">🗑 丟棄</div>
+                <div class="reorder-list">
+                  {#each [...selectionReorderDiscard] as iid (iid)}{@const inst = candById.get(iid)}{@const c = inst ? getCard(inst.cardId) : null}
+                    {#if c && inst}
+                      <div class="reorder-item reorder-item-discard">
+                        <span class="reorder-name" title={c.name}>{c.name}</span>
+                        <button class="reorder-btn" onclick={(e) => {e.stopPropagation(); openZoom(inst.cardId, inst);}} title="放大查看">🔍</button>
+                        <button class="reorder-btn" onclick={() => reorderToKeep(iid)} title="放回保留列表">↩</button>
+                      </div>
+                    {/if}
+                  {/each}
+                </div>
+              </div>
+            {/if}
+          </div>
+        {/if}
+
         <!-- v2.139 modal-choice：兩/多選一文字選單（烏栗 等） -->
         {#if pendingSelection.type === 'modal-choice'}
           {@const opts = (pendingSelection.params?.options as Array<{id:string;text:string;disabled?:boolean}>) ?? []}
@@ -3547,6 +3648,21 @@
   /* v2.144：html + body 都填深綠，避免 viewport 高度大於頁面高度時看到瀏覽器預設背景（黑色） */
   :global(html){ background:#162816; }
   :global(body){ margin:0; background:#162816; min-height:100vh; }
+
+  /* v2.164 reorder-deck-top — 排序牌庫頂 N 張 UI */
+  .reorder-deck-wrap { display:flex; flex-direction:column; gap:0.7rem; padding:0.5rem 0; max-height:60vh; overflow-y:auto; }
+  .reorder-section-title { font-weight:700; color:#cce5cc; margin-bottom:0.3rem; font-size:0.95rem; }
+  .reorder-list { display:flex; flex-direction:column; gap:0.3rem; }
+  .reorder-item { display:flex; align-items:center; gap:0.4rem; background:#2a3a2a; border:1px solid #3a5a3a; border-radius:6px; padding:0.35rem 0.5rem; }
+  .reorder-item-discard { background:#3a2a2a; border-color:#5a3a3a; opacity:0.85; }
+  .reorder-pos { font-weight:700; color:#88cc88; min-width:1.8rem; }
+  .reorder-name { flex:1; color:#f0f0f0; font-size:0.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .reorder-btn { background:#3a5a3a; border:1px solid #5a7a5a; color:#fff; cursor:pointer; padding:0.15rem 0.5rem; border-radius:4px; font-size:0.95rem; }
+  .reorder-btn:hover:not(:disabled) { background:#4a6a4a; }
+  .reorder-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  .reorder-btn-discard { background:#5a3a3a; border-color:#7a5a5a; }
+  .reorder-btn-discard:hover { background:#6a4a4a; }
+  .reorder-empty { color:#888; font-style:italic; padding:0.4rem 0.5rem; }
 
   /* ════ Lobby / Setup ════ */
   .lobby,.setup-screen{ max-width:700px; margin:2rem auto; padding:1.5rem; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; }

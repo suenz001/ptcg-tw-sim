@@ -1,9 +1,64 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.163)  
+> 最後更新：2026-04-26 (v2.164)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.164 — Wave 5 簡化升級：reorder-deck-top 機制 + 推理組合 / 蕾荷
+
+承 v2.163 收尾的最後一個未升級工項 — 排序牌庫頂 N 張。
+
+### 新增：`reorder-deck-top` PendingSelection type
+
+PTCG 規則：「以任意順序排列」需要玩家對 N 張卡做排序操作（並可能丟棄部分）。
+原本沒有對應 pending type — 推理組合「洗回底」、蕾荷「整批棄」都偏離卡面。
+
+新 type 設計（`types.ts`）：
+- `params.candidateIids: string[]` — 必填：要操作的 N 張 iid（必須是 deck 頂 N 張）
+- `params.allowDiscard?: boolean` — 蕾荷需要；推理組合 false
+- `params.titleOverride?: string` — UI 標題客製
+- selectedIids 解讀為「保留並排序的 iid 列表」（index 0 = top of deck after apply）
+- 未列出的 iid：若 allowDiscard 視為丟棄；否則 resolver 安全網強行附在尾部保留
+
+UI（`+page.svelte`）：
+- 兩列佈局：「📥 保留並排序」（每張有 ↑↓🔍 按鈕）+「🗑 丟棄」（蕾荷模式才有）
+- 用 `selectionReorderKeep: string[]` 與 `selectionReorderDiscard: Set<string>` 管理狀態
+- `confirmSelection` 對 reorder-deck-top 走專屬 payload 路徑（傳 keep 列表）
+- `selectionValid` 用 keep 列表長度判定（推理組合 minCount=N=maxCount，蕾荷 minCount=0,max=N）
+
+AI handler（`ai.ts`）：reorder-deck-top → 維持原順序全保留（最保守選擇）。
+
+共用 resolver `reorder-deck-top-apply`（`effects.ts`）：
+- 過濾 + 去重 selectedIids，找出實際 keep / discard 集合
+- 同步更新 deck（top N 替換成排序後 keep）+ discard（加上丟棄 inst）
+- 對自己 log 卡名（addPrivateLog 私訊）；對手只看數量（避免揭露牌庫順序）
+
+### 兩張卡完整實裝
+
+**推理組合**（卡面：看頂 3 張，二選一：A 排序放回頂；B 翻反洗回底）：
+- 改用 modal-choice 二選一 → A 路徑開 reorder-deck-top（minCount=N,maxCount=N，allowDiscard=false）
+- B 路徑保留原本「洗回底」邏輯
+
+**蕾荷**（卡面：看頂 5 張，選任意數量丟棄；剩餘排序放回頂）：
+- 直接開 reorder-deck-top（minCount=0,maxCount=N，allowDiscard=true）
+- 玩家在同一 modal 內既選丟棄又排序
+
+### 改動檔案
+- `src/lib/version.ts` — 2.163 → 2.164
+- `src/lib/game/types.ts` — `reorder-deck-top` 加入 PendingSelection.type union
+- `src/lib/game/ai.ts` — AI 的 reorder-deck-top handler（保留全部 + 原順序）
+- `src/lib/game/effects.ts` — 推理組合 / 蕾荷 重寫；新 `reorder-deck-top-apply` resolver
+- `src/routes/game/+page.svelte` — reorder UI render + 狀態 + helper + CSS
+
+### 驗證
+- `npm run build` ✓
+- `node scripts/sim-ai-battle.mjs 30` ✓ 30 局 0 bug、0 卡住、0 崩潰
+
+### 後續未盡事項
+無 — v2.158 起的「簡化卡升級」全系列收工。後續若 grep 到「簡化」字樣再個別處理。
 
 ---
 

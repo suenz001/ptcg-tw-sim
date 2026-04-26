@@ -501,6 +501,13 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       return { type: 'RESOLVE_SELECTION', selectedIids: first ? [first.id] : [] };
     }
 
+    // v2.164 reorder-deck-top：排序牌庫頂 N 張（推理組合 / 蕾荷）
+    case 'reorder-deck-top': {
+      const candIids = (sel.params?.candidateIids as string[] | undefined) ?? [];
+      // AI 簡化：保留所有候選並維持原順序（即使 allowDiscard 也不丟棄）
+      return { type: 'RESOLVE_SELECTION', selectedIids: [...candIids] };
+    }
+
     default:
       return { type: 'RESOLVE_SELECTION', selectedIids: [] };
   }

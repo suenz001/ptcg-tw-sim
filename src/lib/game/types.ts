@@ -312,7 +312,13 @@ export interface PendingSelection {
       | 'hand-choose'       // 從手牌選擇但不丟棄（神奇糖果第一步）
       | 'damage-distribute' // 傷害指示物自由分配到多隻對手備戰（幻影奇襲、類似機制）
       | 'active-energy-discard' // v2.63 撤退時手動選擇要丟哪幾張附加能量（多屬性時詢問）
-      | 'modal-choice';     // v2.139 二選一/多選一文字選單（烏栗 swap vs +30 / 火箭隊的工廠 三選一 等）
+      | 'modal-choice'      // v2.139 二選一/多選一文字選單（烏栗 swap vs +30 / 火箭隊的工廠 三選一 等）
+      | 'reorder-deck-top'; // v2.164 排序牌庫頂 N 張（推理組合 / 蕾荷）— 可選擇允許丟棄
+                            //   params.candidateIids: string[] — 要排序的 iid 列表（必填）
+                            //   params.allowDiscard?: boolean — 允許在排序時把部分 iid 丟棄（蕾荷）
+                            //   params.titleOverride?: string — UI 標題客製
+                            //   selectedIids 解讀為「保留並排序的 iid 列表」（index 0 = top of deck）
+                            //   未列出的 iid：若 allowDiscard 視為丟棄；否則 resolver 應抑制接受（minCount=候選數）
   /** 需要做選擇的玩家 */
   actorIdx: 0 | 1;
   /** 來源牌堆/目標的玩家（通常等於 actorIdx） */
