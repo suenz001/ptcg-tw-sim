@@ -6139,9 +6139,13 @@ regPost('烈咬陸鯊ex|音波奇襲', (state, aIdx, pool) => {
   return oppSnipePost(120, '音波奇襲')(s, aIdx, pool);
 });
 
-// ── 優雅貓跳過 / 大電海燕|風暴伏特 160 — 將自身所有能量改附於備戰（簡化：改附於 1 隻備戰）──
+// ── 大電海燕|風暴伏特 160 — 將自身所有能量「以任意方式」改附於備戰寶可夢 ──────
+//   v2.220：升級為逐張選擇 — 每張能量可附到不同備戰寶可夢（之前簡化為全部到 1 隻）
+//   實作：先把 active 上所有能量拔下來，依張數開 N 次 bench-choose pending，
+//        每次 resolver 把當前 1 張能量附到玩家選的備戰，再開下一個 pending；
+//        params.remainingEnergies 攜帶剩餘待分配的能量陣列。
 regPre('大電海燕|風暴伏特', (state, _aIdx, _pool) => ({ state, damage: 160 }));
-regPost('大電海燕|風暴伏特', (state, aIdx, pool) => {
+regPost('大電海燕|風暴伏特', (state, aIdx, _pool) => {
   const p = state.players[aIdx];
   if (!p.active || p.active.energyAttached.length === 0) {
     return addLog(state, '風暴伏特：自身無能量可改附', aIdx);
@@ -6150,13 +6154,55 @@ regPost('大電海燕|風暴伏特', (state, aIdx, pool) => {
     return addLog(state, '風暴伏特：備戰區沒有寶可夢', aIdx);
   }
   const energies = p.active.energyAttached;
-  let s = addLog(state, `風暴伏特：選擇 1 隻備戰寶可夢，將自身 ${energies.length} 張能量改附`, aIdx);
+  // 先把能量從 active 拔下來（暫存在 pending params 裡）
+  let s = updatePlayer(state, aIdx, pl => {
+    if (!pl.active) return pl;
+    return { ...pl, active: { ...pl.active, energyAttached: [] } };
+  });
+  s = addLog(s, `風暴伏特：將自身 ${energies.length} 張能量逐一改附於備戰寶可夢`, aIdx);
   return withPending(s, {
     type: 'bench-choose', actorIdx: aIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
-    effectKey: 'storm-volt-move',
+    effectKey: 'storm-volt-distribute',
+    params: { remainingEnergies: energies, totalCount: energies.length, placedCount: 0 },
   });
 });
+regR('storm-volt-distribute', (st, idx, iids, params, pool) => {
+  const remaining = (params?.remainingEnergies as CardInstance[] | undefined) ?? [];
+  const totalCount = (params?.totalCount as number) ?? remaining.length;
+  const placedCount = (params?.placedCount as number) ?? 0;
+  if (remaining.length === 0) return st;
+  const targetIid = iids[0];
+  const energy = remaining[0];
+  const rest = remaining.slice(1);
+  const p = st.players[idx];
+  const target = p.bench.find(c => c.iid === targetIid);
+  if (!target) {
+    // 目標不存在（例：被互換到別處）：把剩下的能量直接送到棄牌區避免遺失
+    let s = addLog(st, `風暴伏特：目標備戰已不存在，剩餘 ${remaining.length} 張能量送往棄牌區`, idx);
+    return updatePlayer(s, idx, pl => ({ ...pl, discard: [...pl.discard, ...remaining] }));
+  }
+  const targetName = pool.get(target.cardId)?.name ?? '?';
+  let s = addLog(st, `風暴伏特：將第 ${placedCount + 1}/${totalCount} 張能量改附於 ${targetName}`, idx);
+  s = updatePlayer(s, idx, pl => ({
+    ...pl,
+    bench: pl.bench.map(c => c.iid === targetIid
+      ? { ...c, energyAttached: [...c.energyAttached, energy] }
+      : c),
+  }));
+  if (rest.length > 0) {
+    return withPending(s, {
+      type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'storm-volt-distribute',
+      params: { remainingEnergies: rest, totalCount, placedCount: placedCount + 1 },
+    });
+  }
+  return s;
+});
+
+// ── （legacy）storm-volt-move resolver — 由「飄浮泡泡 太陽的樣子｜陽光支援」共用 ──
+//   陽光支援 卡面：「全部改附於1隻備戰寶可夢身上。」（單一目標，正確簡單版）
 regR('storm-volt-move', (st, idx, iids, _params, pool) => {
   const targetIid = iids[0];
   const p = st.players[idx];
@@ -6165,7 +6211,7 @@ regR('storm-volt-move', (st, idx, iids, _params, pool) => {
   if (!target) return st;
   const energies = p.active.energyAttached;
   const targetName = pool.get(target.cardId)?.name ?? '?';
-  let s = addLog(st, `風暴伏特：將 ${energies.length} 張能量改附於 ${targetName}`, idx);
+  let s = addLog(st, `陽光支援：將 ${energies.length} 張能量改附於 ${targetName}`, idx);
   return updatePlayer(s, idx, pl => {
     if (!pl.active) return pl;
     return {
@@ -8344,9 +8390,33 @@ regR('self-bench-return-to-deck', (st, actorIdx, selectedIids, params, _pool) =>
 regPre('喵喵ex|夾尾巴逃跑', (state, _a, _p) => ({ state, damage: 60 }));
 regPost('喵喵ex|夾尾巴逃跑', selfReturnToHandPost('夾尾巴逃跑'));
 
-// 賽富豪｜賽富迴旋 — 100 + 可選自身回牌庫（sim/AI 簡化：總是回）
+// 賽富豪｜賽富迴旋 — 100 + 「若希望」自身回牌庫
+//   v2.220：升級為 modal-choice — 玩家在 POST 階段選「回 / 不回」
 regPre('賽富豪|賽富迴旋', (state, _a, _p) => ({ state, damage: 100 }));
-regPost('賽富豪|賽富迴旋', selfReturnToDeckPost('賽富迴旋'));
+regPost('賽富豪|賽富迴旋', (state, aIdx, _pool) => {
+  const p = state.players[aIdx];
+  if (!p.active) return state;
+  const s = addLog(state, '賽富迴旋：選擇是否將自身（含附加）放回牌庫並重洗', aIdx);
+  return withPending(s, {
+    type: 'modal-choice',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'sigorhof-back-choice',
+    params: {
+      label: '賽富迴旋',
+      options: [
+        { id: 'return', text: '①將自身與附加的卡全部放回牌庫並重洗' },
+        { id: 'skip', text: '②不返回（保留戰鬥位）' },
+      ],
+    },
+  });
+});
+regR('sigorhof-back-choice', (state, aIdx, iids, _params, pool) => {
+  if (iids[0] === 'return') {
+    return selfReturnToDeckPost('賽富迴旋')(state, aIdx, pool);
+  }
+  return addLog(state, '賽富迴旋：選擇保留戰鬥位（不返回）', aIdx);
+});
 
 // 蚊香泳士｜跳躍衝天 — 120+120 = 240 + 自身回牌庫（sim/AI 簡化：總是選擇 +120）
 regPre('蚊香泳士|跳躍衝天', (state, aIdx, _p) => {
