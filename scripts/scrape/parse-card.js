@@ -288,6 +288,11 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
     // Pre-evolution (from .evolution section)
     // Format: "{prevName}  {thisName}  {nextName...}" — this card is in the middle
     // Heuristic: find this card's name in .evolution and the previous entry is evolvesFrom
+    //
+    // Known limitation: 化石進化鏈（陳舊的XX化石 → Stage1 → Stage2）的 Stage1 寶可夢
+    // 不會抓到 evolvesFrom，因為官網 .evolution block 只列寶可夢，化石（Trainer/Item）
+    // 不在區塊裡。所以 Stage1 寶可夢的 .evolution 只有自己 + Stage2，找不到前一階。
+    // 重爬後跑 `node scripts/migrate-fossil-evolves-from.mjs` 補回。
     const evo = $('.evolution').first();
     if (evo.length) {
       const names = evo.find('a, span').map((_, el) => $(el).text().trim()).get()

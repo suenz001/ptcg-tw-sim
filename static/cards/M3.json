@@ -900,7 +900,8 @@
     "species": "凍原寶可夢",
     "illustrator": "Hitoshi Ariga",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "陳舊的鰭之化石"
   },
   {
     "id": "18000",
@@ -1830,7 +1831,8 @@
     "species": "幼君寶可夢",
     "illustrator": "Tomoki Sone",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "陳舊的顎之化石"
   },
   {
     "id": "18021",
@@ -3402,7 +3404,8 @@
     "species": "幼君寶可夢",
     "illustrator": "Shimaris Yukichi",
     "regulationMark": "J",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "陳舊的顎之化石"
   },
   {
     "id": "18393",

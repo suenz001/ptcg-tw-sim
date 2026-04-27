@@ -2087,7 +2087,8 @@
     "species": "遠古鳥寶可夢",
     "illustrator": "Haru Akasaka",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "陳舊的羽毛化石"
   },
   {
     "id": "13405",
@@ -5360,7 +5361,8 @@
     "species": "遠古鳥寶可夢",
     "illustrator": "Ounishi",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "陳舊的羽毛化石"
   },
   {
     "id": "13822",

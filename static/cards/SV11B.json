@@ -1279,7 +1279,8 @@
     "species": "古代龜寶可夢",
     "illustrator": "Akino Fukuji",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "陳舊的背蓋化石"
   },
   {
     "id": "13716",
@@ -4970,7 +4971,8 @@
     "species": "古代龜寶可夢",
     "illustrator": "Gemi",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "陳舊的背蓋化石"
   },
   {
     "id": "13893",

@@ -1,9 +1,44 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.187)  
+> 最後更新：2026-04-27 (v2.188)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.188 — 化石進化鏈 evolvesFrom 補完 + engine hotfix
+
+### 兩個錯誤的修正
+1. **engine.ts EVOLVE handler 錯誤**（v2.187 加的）：我自作主張在 `EVOLVE` handler 加 `if (basePoke.fossilOnField) return state`，違反 PTCG 規則。Leon 卡面實證指出化石可被進化（顎之化石→寶寶暴龍→怪顎龍）。已移除（commit ce1bea1）。
+2. **AI 報告幻覺**：給 Leon 列化石進化鏈時把「Cover Fossil → Tirtouga → Carracosta」直接從英文寶可夢記憶翻成「龜腳腳 → 龜殼武士」（錯）。正確是「**原蓋海龜 → 肋骨海龜**」。已記入 `feedback_evolves_from_never_guess.md`（v2.188 化石事件）。
+
+### 5 條化石進化鏈（Leon 2026-04-27 確認）
+- 陳舊的背蓋化石 [H] → 原蓋海龜 [H/I] → 肋骨海龜 [H/I]
+- 陳舊的顎之化石 [J] → 寶寶暴龍 [J] → 怪顎龍 [J]
+- 陳舊的鰭之化石 [J] → 冰雪龍 [J] → 冰雪巨龍 [J]
+- 陳舊的羽毛化石 [I] → 始祖小鳥 [I] → 始祖大鳥 [I]
+- 陳舊的根狀化石 [H] → 觸手百合 [H] → 搖籃百合 [H]
+
+### 資料層補修（11 張 Stage1 卡）
+**Scraper 限制**：官網 .evolution block 只列寶可夢，化石（Trainer/Item）不在裡面。所以 Stage1 寶可夢的 .evolution 只有自己 + Stage2，scraper 找不到前一階，evolvesFrom 全部漏寫。Stage2 → Stage1 都正確。
+
+新增 `scripts/migrate-fossil-evolves-from.mjs`（可重跑 idempotent migration），patch 11 張 Stage1：
+- 原蓋海龜 ×3（SV7 022/102, SV11B 110/086, SV11B 025/086）
+- 寶寶暴龍 ×2（M3 043/080, M3 089/080）
+- 冰雪龍 ×1（M3 022/080）
+- 始祖小鳥 ×3（MC 392/742, SV11W 047/086, SV11W 129/086）
+- 觸手百合 ×2（SV7 003/102, SV7 104/102）
+
+`scripts/scrape/parse-card.js` 加註解標出 known limitation：重爬後須跑 migration 補回。
+
+### 文件修正
+- `FOSSIL_DESIGN.md`：「不能進化」字樣全改為「可被進化」
+- `src/lib/game/effects/cards/items_misc.ts`：化石 reg 區塊註解同步修正
+
+### 未做（v2.189+）
+- UI 端：手牌化石拖到備戰格 → PLAY_FOSSIL；化石顯示為寶可夢樣（HP60、能量 pip、Tool 槽）；永遠的【丟棄】按鈕
+- 5 張被動效果：根狀（對手 +1【無】）、背蓋（免疫招式效果）、羽毛（備戰免傷）、顎之（戰鬥位 -30）、鰭之（免疫支援者）
 
 ---
 
