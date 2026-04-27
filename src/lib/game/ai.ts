@@ -232,6 +232,22 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const top5 = new Set<string>((sel.params?.top5Iids as string[]) ?? []);
           return top5.has(c.iid) && isBasicPokemonCard(card);
         }
+        // v2.211 壯偉碩木 step 1：1 階寶可夢，evolvesFrom 必須符合場上某基底
+        if (f === 'SturdyMightTree:Stage1') {
+          if (card.supertype !== 'Pokemon') return false;
+          if ((card.stage ?? card.subtype) !== 'Stage1') return false;
+          if (!card.evolvesFrom) return false;
+          const baseNames = (sel.params?.baseNames as string[] | undefined) ?? [];
+          return baseNames.some(n => card.evolvesFrom === n || card.evolvesFrom!.replace(/<|>/g, '') === n);
+        }
+        // v2.211 壯偉碩木 step 2：2 階寶可夢，evolvesFrom = step1 進化後的卡名
+        if (f === 'SturdyMightTree:Stage2') {
+          if (card.supertype !== 'Pokemon') return false;
+          if ((card.stage ?? card.subtype) !== 'Stage2') return false;
+          if (!card.evolvesFrom) return false;
+          const fromName = (sel.params?.stage1Name as string | undefined) ?? '';
+          return card.evolvesFrom === fromName || card.evolvesFrom.replace(/<|>/g, '') === fromName;
+        }
         // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
         if (f === 'GrassBasicOrGrassEnergy:TOP7') {
           const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);

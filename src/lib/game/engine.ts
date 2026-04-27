@@ -1822,6 +1822,58 @@ function handlePlaying(
       };
     }
 
+    // v2.211 壯偉碩木（H）— 雙方每回合 1 次：從牌庫選 1 張可進化的【1階】寶可夢
+    //   放到對應的場上【基礎】身上完成進化；若進化了，可繼續選 1 張【2階】放上去
+    //   完成第二段進化。並重洗牌庫。
+    //   - isFirstTurn 不能進化（PTCG 規則同 EVOLVE）
+    //   - 剛使出（justPlaced）/ 剛進化（evolvedThisTurn）的寶可夢不能進化（同 EVOLVE）
+    //   - resolver 會二度驗證 evolvesFrom，UI candidate 也會 filter
+    if (stadiumCard.name === '壯偉碩木') {
+      if (state.isFirstTurn && aIdx === state.firstPlayerIdx) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '壯偉碩木：先攻第 1 回合無法進化', aIdx);
+      }
+      // 場上有效 base（非 justPlaced / evolvedThisTurn）
+      const ap = newState.players[aIdx];
+      const fieldPokemon: CardInstance[] = [
+        ...(ap.active ? [ap.active] : []),
+        ...ap.bench,
+      ];
+      const evoBaseNames = new Set<string>();
+      const evoBaseIids: string[] = [];
+      for (const fp of fieldPokemon) {
+        if (fp.justPlaced || fp.evolvedThisTurn) continue;
+        const fpCard = pool.get(fp.cardId);
+        if (!fpCard) continue;
+        evoBaseNames.add(fpCard.name);
+        evoBaseIids.push(fp.iid);
+      }
+      // 牌庫裡至少有 1 張 Stage1 evolvesFrom 場上某基底
+      const hasValidStage1 = ap.deck.some(c => {
+        const card = pool.get(c.cardId);
+        if (!card || card.supertype !== 'Pokemon') return false;
+        if ((card.stage ?? card.subtype) !== 'Stage1') return false;
+        if (!card.evolvesFrom) return false;
+        for (const baseName of evoBaseNames) {
+          if (sameEvoName(card.evolvesFrom, baseName)) return true;
+        }
+        return false;
+      });
+      if (!hasValidStage1) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '壯偉碩木：牌庫沒有可進化的【1階】寶可夢', aIdx);
+      }
+      return {
+        ...newState,
+        pendingSelection: {
+          type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+          minCount: 0, maxCount: 1, filter: 'SturdyMightTree:Stage1',
+          effectKey: 'sturdy-might-tree-step1',
+          params: { baseNames: Array.from(evoBaseNames), baseIids: evoBaseIids },
+        },
+      };
+    }
+
     // v2.172 釀光市（I）— 雙方每回合 1 次：棄牌搜 ≤2 基本【雷】能量加手牌
     if (stadiumCard.name === '釀光市') {
       const validIids = newState.players[aIdx].discard

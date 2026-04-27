@@ -19,7 +19,7 @@
 import {
   reg, regR, regG,
   addLog, updatePlayer, withPending, shuffle, clearActiveEffects,
-  healResolver,
+  healResolver, sameEvoName,
 } from '../_shared';
 import { getBenchLimit, isBasicPokemonCard } from '../../engine';
 import type { CardInstance, PlayerState } from '../../types';
@@ -848,4 +848,139 @@ regR('melody-flute-place', (st, idx, iids, _params, pool) => {
     // chosen 已搬到 bench，rest 洗回 deck 剩餘卡的後段
     deck: shuffle([...p.deck.slice(top5.length), ...rest]),
   }));
+});
+
+// ── 壯偉碩木 resolver（Stadium / H, v2.211）── ─────────────────────────────
+// USE_STADIUM 在 engine.ts 開 step1 pending（filter='SturdyMightTree:Stage1'）
+// → 玩家從牌庫挑 1 張可進化的 Stage1 卡
+// → resolver 找匹配 base、做 EVOLVE、洗牌庫，並開 step2 pending
+// → step2 玩家從牌庫挑 1 張可進化此 Stage1 的 Stage2 卡（可選 0 = 跳過）
+// → resolver 做 EVOLVE、洗牌庫
+//
+// gate 已在 engine 處理（先攻第 1 回合不能進化、justPlaced/evolvedThisTurn 排除）
+// 兩段都 minCount:0（玩家可中途放棄）
+regR('sturdy-might-tree-step1', (st, idx, iids, _params, pool) => {
+  const p = st.players[idx];
+  const pickedIid = iids[0];
+  if (!pickedIid) {
+    // 沒選 → 重洗 + 結束
+    return updatePlayer(addLog(st, '壯偉碩木：未選擇 → 重洗牌庫', idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const evoInst = p.deck.find(c => c.iid === pickedIid);
+  if (!evoInst) return st;
+  const evoCard = pool.get(evoInst.cardId);
+  if (!evoCard || !evoCard.evolvesFrom) {
+    return addLog(st, '壯偉碩木：選擇無效（非進化卡）', idx);
+  }
+  // 找場上匹配 base — 取第一個非 justPlaced/evolvedThisTurn 的 match
+  const fieldPokemon: CardInstance[] = [
+    ...(p.active ? [p.active] : []),
+    ...p.bench,
+  ];
+  const base = fieldPokemon.find(fp => {
+    if (fp.justPlaced || fp.evolvedThisTurn) return false;
+    const fpCard = pool.get(fp.cardId);
+    return fpCard && sameEvoName(evoCard.evolvesFrom, fpCard.name);
+  });
+  if (!base) {
+    return addLog(st, '壯偉碩木：場上無對應的基礎寶可夢可進化', idx);
+  }
+  const baseCard = pool.get(base.cardId)!;
+  // 進化（仿 engine EVOLVE 流程）
+  const isActive = p.active?.iid === base.iid;
+  const prevStack = base.evolvedFromStack ?? [];
+  const baseBare: CardInstance = { ...base, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined };
+  const evolved: CardInstance = {
+    ...evoInst,
+    damage: base.damage,
+    energyAttached: base.energyAttached,
+    toolAttached: base.toolAttached,
+    status: base.status,
+    evolvedFromIid: base.iid,
+    evolvedFromStack: [...prevStack, baseBare],
+    evolvedThisTurn: true,
+    justPlaced: false,
+  };
+  st = updatePlayer(st, idx, x => ({
+    ...x,
+    deck: x.deck.filter(c => c.iid !== pickedIid),  // 暫不洗牌庫，等 step2 結束
+    active: isActive ? evolved : x.active,
+    bench: isActive ? x.bench : x.bench.map(c => c.iid === base.iid ? evolved : c),
+  }));
+  st = addLog(st, `壯偉碩木：${baseCard.name} 進化為 ${evoCard.name}`, idx);
+  // 開 step2 — 找 Stage2 evolves from evoCard.name
+  const hasStage2 = st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    if (!card || card.supertype !== 'Pokemon') return false;
+    if ((card.stage ?? card.subtype) !== 'Stage2') return false;
+    if (!card.evolvesFrom) return false;
+    return sameEvoName(card.evolvesFrom, evoCard.name);
+  });
+  if (!hasStage2) {
+    // 牌庫沒 Stage2 可接 → 直接洗牌庫結束
+    return updatePlayer(addLog(st, '壯偉碩木：牌庫沒有可接續進化的【2階】寶可夢，重洗牌庫', idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  return withPending(st, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 0, maxCount: 1, filter: 'SturdyMightTree:Stage2',
+    effectKey: 'sturdy-might-tree-step2',
+    params: {
+      stage1Iid: evolved.iid,         // 場上剛進化好的 iid
+      stage1Name: evoCard.name,       // 用於 filter / log
+    },
+  });
+});
+
+regR('sturdy-might-tree-step2', (st, idx, iids, params, pool) => {
+  const p = st.players[idx];
+  const stage1Iid = params?.stage1Iid as string | undefined;
+  const stage1Name = (params?.stage1Name as string | undefined) ?? '?';
+  const pickedIid = iids[0];
+  if (!pickedIid) {
+    return updatePlayer(addLog(st, `壯偉碩木：未選擇【2階】 → 重洗牌庫`, idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  if (!stage1Iid) {
+    return addLog(st, '壯偉碩木：缺少 step1 進化目標，效果取消', idx);
+  }
+  const evoInst = p.deck.find(c => c.iid === pickedIid);
+  if (!evoInst) {
+    return updatePlayer(addLog(st, `壯偉碩木：找不到選的卡，重洗牌庫`, idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const evoCard = pool.get(evoInst.cardId);
+  if (!evoCard || !evoCard.evolvesFrom || !sameEvoName(evoCard.evolvesFrom, stage1Name)) {
+    return updatePlayer(addLog(st, `壯偉碩木：選擇的卡無法從 ${stage1Name} 進化`, idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  // 找場上 stage1Iid（可能在 active 或 bench）
+  const stage1 = p.active?.iid === stage1Iid ? p.active
+               : p.bench.find(c => c.iid === stage1Iid);
+  if (!stage1) {
+    return updatePlayer(addLog(st, `壯偉碩木：找不到 step1 進化的寶可夢`, idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const isActive = p.active?.iid === stage1Iid;
+  const prevStack = stage1.evolvedFromStack ?? [];
+  const stage1Bare: CardInstance = { ...stage1, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined };
+  const evolved: CardInstance = {
+    ...evoInst,
+    damage: stage1.damage,
+    energyAttached: stage1.energyAttached,
+    toolAttached: stage1.toolAttached,
+    status: stage1.status,
+    evolvedFromIid: stage1.iid,
+    evolvedFromStack: [...prevStack, stage1Bare],
+    evolvedThisTurn: true,
+    justPlaced: false,
+  };
+  st = updatePlayer(st, idx, x => ({
+    ...x,
+    deck: shuffle(x.deck.filter(c => c.iid !== pickedIid)),  // 完成所有進化後重洗
+    active: isActive ? evolved : x.active,
+    bench: isActive ? x.bench : x.bench.map(c => c.iid === stage1Iid ? evolved : c),
+  }));
+  return addLog(st, `壯偉碩木：${stage1Name} 進化為 ${evoCard.name}（重洗牌庫）`, idx);
 });

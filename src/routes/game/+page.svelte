@@ -1037,6 +1037,28 @@
             return !!card && card.supertype === 'Pokemon' && !card.evolvesFrom;
           });
         }
+        // v2.211 壯偉碩木 step 1：牌庫中 evolvesFrom 對得上場上某基底的 Stage1
+        if (f === 'SturdyMightTree:Stage1') {
+          const baseNames = (pendingSelection.params?.baseNames as string[] | undefined) ?? [];
+          return src.deck.filter(c => {
+            const card = pool.get(c.cardId);
+            if (!card || card.supertype !== 'Pokemon') return false;
+            if ((card.stage ?? card.subtype) !== 'Stage1') return false;
+            if (!card.evolvesFrom) return false;
+            return baseNames.some(n => card.evolvesFrom === n || card.evolvesFrom!.replace(/<|>/g, '') === n);
+          });
+        }
+        // v2.211 壯偉碩木 step 2：evolvesFrom = step 1 進化後的卡名
+        if (f === 'SturdyMightTree:Stage2') {
+          const fromName = (pendingSelection.params?.stage1Name as string | undefined) ?? '';
+          return src.deck.filter(c => {
+            const card = pool.get(c.cardId);
+            if (!card || card.supertype !== 'Pokemon') return false;
+            if ((card.stage ?? card.subtype) !== 'Stage2') return false;
+            if (!card.evolvesFrom) return false;
+            return card.evolvesFrom === fromName || card.evolvesFrom.replace(/<|>/g, '') === fromName;
+          });
+        }
         // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
         if (f === 'GrassBasicOrGrassEnergy:TOP7') {
           const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
