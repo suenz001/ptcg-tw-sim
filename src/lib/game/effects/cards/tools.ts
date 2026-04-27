@@ -91,8 +91,11 @@ TOOL_HP_BONUS.set('豪華斗篷', (card) => {
     || !!card.rulesText?.includes('擁有規則');
   return isRulePoke ? 0 : 100;
 });
-// 驅勁能量 古代/未來：簡化 — 不檢查「古代/未來」標籤，附上就生效（UI 層不會附錯）
-TOOL_HP_BONUS.set('驅勁能量 古代', () => 60);
+// 驅勁能量 古代/未來：v2.222 加 gate — 必須附在「古代/未來」寶可夢身上才生效
+//   卡面：「附有這張卡的『古代』寶可夢的最大HP +60」
+//   雖然 UI 端不會給玩家附錯，但若引擎/AI 強制附（如 ATTACK_POST 自動附），
+//   仍要檢查 tag 才不會變成 free HP buff 給非古代寶可夢
+TOOL_HP_BONUS.set('驅勁能量 古代', (card) => card.tags?.includes('古代') ? 60 : 0);
 // Wave 42：竹蘭的力量負重（道具）— 「竹蘭的」寶可夢 HP +70
 TOOL_HP_BONUS.set('竹蘭的力量負重', (card) => card.name.includes('竹蘭的') ? 70 : 0);
 

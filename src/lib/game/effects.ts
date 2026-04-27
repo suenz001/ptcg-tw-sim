@@ -5973,7 +5973,9 @@ regPost('伊布|鮮豔捕捉', (state, aIdx, _pool) => {
   });
 });
 
-// 光電傘蜥|拋物面充電 — 最多 4 張能量（包含特殊；簡化：4 張 Energy）
+// 光電傘蜥|拋物面充電 — 從牌庫選最多 4 張能量卡加手牌（含特殊能量）
+//   v2.222 釐清：filter 'Energy' = supertype===Energy（任意基本/特殊能量），
+//   無遺漏。舊註解「簡化：4 張 Energy」誤導，實為「正確實裝」。
 regPre('光電傘蜥|拋物面充電', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('光電傘蜥|拋物面充電', deckSearchToHandPost(4, 'Energy', '拋物面充電'));
 
