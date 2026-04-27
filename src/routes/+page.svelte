@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
-  import { auth } from '$lib/firebase';
+  import { auth, db } from '$lib/firebase';
   import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
+  import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
   import { VERSION } from '$lib/version';
 
   let user = $state<User | null>(null);
@@ -31,6 +32,36 @@
     );
     return unsubscribe;
   });
+
+  // 意見回饋相關狀態
+  let showFeedbackModal = $state(false);
+  let feedbackText = $state('');
+  let feedbackSubmitting = $state(false);
+  let feedbackStatus = $state<'idle' | 'success' | 'error'>('idle');
+
+  async function submitFeedback() {
+    if (!feedbackText.trim() || feedbackSubmitting) return;
+    feedbackSubmitting = true;
+    try {
+      await addDoc(collection(db, 'feedbacks'), {
+        content: feedbackText.trim(),
+        createdAt: serverTimestamp(),
+        uid: user?.uid || 'anonymous',
+        userAgent: navigator.userAgent
+      });
+      feedbackStatus = 'success';
+      feedbackText = '';
+      setTimeout(() => {
+        showFeedbackModal = false;
+        feedbackStatus = 'idle';
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to submit feedback:', err);
+      feedbackStatus = 'error';
+    } finally {
+      feedbackSubmitting = false;
+    }
+  }
 </script>
 
 <main>
@@ -60,6 +91,43 @@
       <span class="hint">（牌組實戰測試）</span>
     </p>
   </section>
+
+  <section class="feedback-section">
+    <h2>💬 意見回饋</h2>
+    <p>
+      發現 Bug 或是對模擬器有任何建議嗎？
+      <button class="link-btn" onclick={() => showFeedbackModal = true}>點此提交意見 →</button>
+    </p>
+  </section>
+
+  {#if showFeedbackModal}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div class="modal-overlay" onclick={() => { if(!feedbackSubmitting) showFeedbackModal = false; }} role="dialog">
+      <div class="modal-content" onclick={e => e.stopPropagation()}>
+        <h3>提交意見回饋</h3>
+        {#if feedbackStatus === 'success'}
+          <div class="success-msg">✅ 感謝你的回饋！已成功送出。</div>
+        {:else}
+          <textarea 
+            bind:value={feedbackText} 
+            placeholder="請描述你遇到的問題或建議..."
+            rows="5"
+            disabled={feedbackSubmitting}
+          ></textarea>
+          {#if feedbackStatus === 'error'}
+            <div class="error-msg">❌ 提交失敗，請稍後再試。</div>
+          {/if}
+          <div class="modal-actions">
+            <button class="btn-cancel" onclick={() => showFeedbackModal = false} disabled={feedbackSubmitting}>取消</button>
+            <button class="btn-submit" onclick={submitFeedback} disabled={!feedbackText.trim() || feedbackSubmitting}>
+              {feedbackSubmitting ? '送出中...' : '送出'}
+            </button>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 
   <footer class="disclaimer">
     <p>本站為熱愛 PTCG 的粉絲自製非營利專案，旨在推廣寶可夢集換式卡牌實體遊戲。</p>
@@ -134,8 +202,21 @@
     text-decoration: none;
     font-weight: 500;
   }
-  a:hover {
+  a:hover, .link-btn:hover {
     text-decoration: underline;
+  }
+  .link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #0066cc;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .feedback-section {
+    background: #f8fbff;
+    border-color: #cce0ff;
   }
   .hint {
     color: #888;
@@ -157,5 +238,78 @@
     color: #0066cc;
     font-weight: 500;
     font-size: 0.8rem;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  }
+  .modal-content {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  }
+  .modal-content h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+  }
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-family: inherit;
+    resize: vertical;
+    margin-bottom: 1rem;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+  }
+  .modal-actions button {
+    padding: 0.5rem 1.25rem;
+    border-radius: 6px;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn-cancel {
+    background: #f0f0f0;
+    border: 1px solid #ccc;
+    color: #333;
+  }
+  .btn-submit {
+    background: #0066cc;
+    border: 1px solid #005bb5;
+    color: white;
+  }
+  .btn-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .success-msg {
+    color: #2c7a3c;
+    background: #e6f6e6;
+    padding: 1rem;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: 500;
+  }
+  .error-msg {
+    color: #c00;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
   }
 </style>

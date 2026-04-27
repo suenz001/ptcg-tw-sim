@@ -1,5 +1,12 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { initTracking } from '$lib/tracking';
+
   let { children } = $props();
+
+  onMount(() => {
+    initTracking();
+  });
 </script>
 
 {@render children()}
