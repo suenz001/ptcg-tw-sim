@@ -296,6 +296,22 @@ export function isFossilItemCard(card: Card | undefined): boolean {
     && FOSSIL_ITEM_NAMES.has(card.name);
 }
 
+/**
+ * v2.191 陳舊的鰭之化石（J）— 「對手從手牌使出支援者卡時，這隻寶可夢不會
+ * 受到那個效果的影響。」
+ *
+ * 在「對手出 supporter 時試圖目標這隻 fossil」的 effect resolver 中呼叫此 helper
+ * 過濾掉鰭之化石。例：對手出某張 supporter 強迫指定對手某隻寶可夢做事 →
+ * 該寶可夢若是鰭之化石，則該效果對它無效。
+ *
+ * 目前實際出戰場機會極低（PTCG 常見 supporter 多數不會直接針對對手單一寶可夢）。
+ * 預留 helper 給未來 supporter target picker 用（檢查 picker 候選是否包含此化石）。
+ */
+export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string, Card>): boolean {
+  if (!inst.fossilOnField) return false;
+  return pool.get(inst.cardId)?.name === '陳舊的鰭之化石';
+}
+
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
 import { sameEvoName } from './effects/_shared';
@@ -2709,7 +2725,20 @@ function handlePlaying(
     }
 
     // ── 招式後置效果（回復、移動能量、觸發 pendingSelection 等）──────────────
-    const postFn = ATTACK_POST.get(effectKey);
+    // v2.191 陳舊的背蓋化石（戰鬥場）— 不會受到對手寶可夢使用招式的「效果」影響
+    //   傷害正常結算（已在 baseDamage 計算完成），這裡跳過 ATTACK_POST 階段——
+    //   絕大多數 POST 是對 defender 的附加效果（中毒、扣能量、丟道具等），
+    //   全跳過符合卡面語意。極少數 POST 包含 attacker self-effect（如自附能量）會被誤殺，
+    //   屬於可接受的 trade-off（PTCG 常見的 self-effect 通常在 ATTACK_PRE / 招式主流程處理）。
+    const defActiveAfterDmg = newState.players[dIdx].active;
+    const defCardAfterDmg = defActiveAfterDmg ? pool.get(defActiveAfterDmg.cardId) : null;
+    const shellFossilImmune = defActiveAfterDmg?.fossilOnField
+      && defCardAfterDmg?.name === '陳舊的背蓋化石';
+    if (shellFossilImmune) {
+      newState = addLog(newState,
+        `陳舊的背蓋化石：免疫招式的附加效果（傷害仍正常結算）`, dIdx);
+    }
+    const postFn = !shellFossilImmune ? ATTACK_POST.get(effectKey) : undefined;
     if (postFn) {
       // v2.156：把 action 也傳給 POST，讓「PRE/POST 共享 chosenIids」的 option 招式
       // （如 激流水泵）能在 POST 階段判斷玩家是否棄了能量

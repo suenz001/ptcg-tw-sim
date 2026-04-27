@@ -254,6 +254,12 @@ export function resolveBenchGuard(
     if (targetCard?.tags?.includes('太晶')) {
       return { blocked: true, reason: '太晶寶可夢 防禦效果' };
     }
+    // v2.191 陳舊的羽毛化石（在備戰時不受對手寶可夢招式的傷害）
+    // 同太晶 pattern：只在 kind='attack-damage' + target 為 bench 時 block
+    // resolveBenchGuard caller 已保證 target 在 bench，這裡只比對 cardName
+    if (targetCard?.name === '陳舊的羽毛化石') {
+      return { blocked: true, reason: '陳舊的羽毛化石 備戰免傷' };
+    }
   }
   return { blocked: false };
 }

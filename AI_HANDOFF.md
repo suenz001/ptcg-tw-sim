@@ -1,9 +1,48 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.190)  
+> 最後更新：2026-04-27 (v2.191)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.191 — 化石被動完成（羽毛 + 背蓋 + 鰭之，5/5）
+
+### 羽毛化石（I、備戰免傷）
+**規則**：「只要這隻寶可夢在備戰區，不會受到對手的寶可夢招式的傷害。」
+
+**實作**：跟太晶 tag 完全同 pattern——加到 `effects.ts` 的 `resolveBenchGuard` 既有路徑：
+```ts
+if (targetCard?.name === '陳舊的羽毛化石') {
+  return { blocked: true, reason: '陳舊的羽毛化石 備戰免傷' };
+}
+```
+所有用 `resolveBenchGuard` 的 caller（bench snipe / damage-distribute / attack-effect 對 bench）自動受惠。
+
+### 背蓋化石（H、不受招式效果影響）
+**規則**：「這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。」（傷害正常）
+
+**實作**：在 `engine.ts` ATTACK pipeline 的 `postFn` 呼叫前檢查 defender。是背蓋化石的 fossilOnField 時跳過整個 POST function 並 log。
+- 傷害仍正常結算（base damage 在 POST 之前已計算完）
+- 絕大多數 POST 是針對 defender 的附加效果（中毒、扣能量、丟道具），全跳符合卡面語意
+- 邊角：少數 POST 包含 attacker self-effect（自附能量等）會被一起跳掉，屬於可接受的 trade-off
+
+### 鰭之化石（J、不受對手支援者效果）
+**規則**：「對手從手牌使出支援者卡時，這隻寶可夢不會受到那個效果的影響。」
+
+**實作**：加 `isFinFossilSupporterImmune(inst, pool)` helper export。預留給未來會直接針對對手單一寶可夢的 supporter 卡使用（target picker 過濾候選）。
+
+PTCG 現役絕大多數 supporter 不會直接針對對手單一寶可夢，所以這個 helper 目前無 caller，純預留。等出現相關 supporter 卡實裝時再 wire up。
+
+### 5 張被動全部實裝完成
+- 顎之化石（v2.190）— 戰鬥位 -30 傷害 ✓
+- 根狀化石（v2.190）— 對手 Basic 招式 +1【無】成本 ✓
+- 羽毛化石（v2.191）— 備戰時免疫對手招式傷害 ✓
+- 背蓋化石（v2.191）— 戰鬥位免疫招式效果（傷害正常）✓
+- 鰭之化石（v2.191）— helper 預留 ✓（無 caller，待 supporter 卡需要時 wire）
+
+至此 v2.187-v2.191 化石機制完整實裝：手牌拖曳上場 → 化石作為 HP60【無】基礎寶可夢 → 可進化（顎之→寶寶暴龍→怪顎龍 等 5 條鏈）→ 可附 Tool/能量 → 不能撤退 → 不會中異常狀態 → 自己回合可【丟棄】非昏厥 → 各自被動效果生效。
 
 ---
 
