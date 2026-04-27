@@ -32,6 +32,10 @@ export const GameActions = {
 
   // M2 Phase C
   playBasic:         (iid: string): GameAction => ({ type: 'PLAY_BASIC', iid }),
+  // v2.187 化石 Item 作為 HP60【無】基礎寶可夢放到備戰
+  playFossil:        (iid: string): GameAction => ({ type: 'PLAY_FOSSIL', iid }),
+  // v2.187 場上化石自主丟棄（非昏厥，戰鬥場時走 SEND_NEW_ACTIVE 補位流程）
+  discardFossil:     (iid: string): GameAction => ({ type: 'DISCARD_FOSSIL', iid }),
   evolve:            (fromIid: string, toIid: string): GameAction =>
                        ({ type: 'EVOLVE', fromIid, toIid }),
   retreat:           (newActiveIid: string): GameAction =>

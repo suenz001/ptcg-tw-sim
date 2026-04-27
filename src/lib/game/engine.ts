@@ -3768,6 +3768,20 @@ export function getPlayableBasics(state: GameState, pool: Map<string, Card>): st
 }
 
 /**
+ * v2.189：列出手牌中可作為基礎寶可夢上場的「化石 Item」。
+ * 走 PLAY_FOSSIL action（不走 PLAY_TRAINER），UI 拖曳到備戰格時觸發。
+ */
+export function getPlayableFossils(state: GameState, pool: Map<string, Card>): string[] {
+  if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
+  if (state.pendingSelection) return [];
+  const player = state.players[state.activePlayerIndex];
+  if (player.bench.length >= getBenchLimit(state, state.activePlayerIndex, pool)) return [];
+  return player.hand
+    .filter(inst => isFossilItemCard(pool.get(inst.cardId)))
+    .map(inst => inst.iid);
+}
+
+/**
  * 列出目前行動玩家場上可使用的主動特性。
  * 回傳 { iid, abilityIndex, pokemonName, abilityName }[]
  */

@@ -12,8 +12,8 @@
     createGame, applyAction,
     getAvailableAttacks, hasPendingActions,
     countEnergy, getEvolvableTargets,
-    canRetreat, getPlayableTrainers, getPlayableBasics,
-    getUsableAbilities, isBasicPokemonCard, getEffectiveHP,
+    canRetreat, getPlayableTrainers, getPlayableBasics, getPlayableFossils,
+    getUsableAbilities, isBasicPokemonCard, isFossilItemCard, getEffectiveHP,
     totalEnergyUnits, getBenchLimit,
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
@@ -449,7 +449,7 @@
   });
 
   // ── 拖曳交互（v1.03 擴增 trainer 類） ─────────────────────────────────────
-  type DragKind = 'energy' | 'basic' | 'tool' | 'evolve' | 'trainer';
+  type DragKind = 'energy' | 'basic' | 'fossil' | 'tool' | 'evolve' | 'trainer';
   let dragging = $state<null | {
     iid: string; kind: DragKind; cardId: string; cardName: string;
     imageUrl: string;
@@ -554,6 +554,11 @@
         }
       } else if (benchEmpty) {
         await dispatch(GameActions.playBasic(d.iid));
+      }
+    } else if (d.kind === 'fossil') {
+      // v2.189 化石 Item 拖到備戰格：作為 HP60【無】基礎寶可夢上場
+      if (benchEmpty) {
+        await dispatch(GameActions.playFossil(d.iid));
       }
     } else if (d.kind === 'evolve' && tIid) {
       // 確認目標在合法進化清單裡
@@ -804,6 +809,10 @@
   );
   const playableBasicIids = $derived(
     game && poolReady ? new Set(getPlayableBasics(game, pool)) : new Set<string>()
+  );
+  // v2.189：化石 Item 可作為基礎寶可夢上場（走 PLAY_FOSSIL action）
+  const playableFossilIids = $derived(
+    game && poolReady ? new Set(getPlayableFossils(game, pool)) : new Set<string>()
   );
   // 手牌中「可進化」的卡（其場上有合法基底）
   const playableEvoIids = $derived(
@@ -2614,9 +2623,17 @@
       <div class="zone-active my-active-zone">
         <div class="zone-label-sm">
           我的出場
-          {#if canRetreatNow&&!pendingSelection&&isMyTurn()}
+          {#if canRetreatNow&&!pendingSelection&&isMyTurn()&&!myPlayer?.active?.fossilOnField}
             <button class="btn-retreat" onclick={(e)=>openFloatingRetreat(e)}>
               撤退（{retreatCostOf(myPlayer!.active!)}⚡）
+            </button>
+          {/if}
+          <!-- v2.189 化石卡【丟棄】按鈕：戰鬥場版本（自己回合 main phase 才出現） -->
+          {#if myPlayer?.active?.fossilOnField && isMyTurn() && game?.phase==='playing' && game?.turnPhase==='main' && !pendingSelection}
+            <button class="btn-retreat btn-fossil-discard"
+              title="把場上的化石丟棄到棄牌區（非昏厥，對手不抽獎賞）。戰鬥場丟棄需從備戰補 1 隻"
+              onclick={async () => { await dispatch(GameActions.discardFossil(myPlayer!.active!.iid)); }}>
+              🦴 丟棄化石
             </button>
           {/if}
         </div>
@@ -2746,11 +2763,19 @@
               {#each usableAbilities.filter(a=>a.iid===b.iid) as ab}
                 <button class="ability-btn-sm" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>✨{ab.abilityName}</button>
               {/each}
+              <!-- v2.189 化石卡【丟棄】按鈕：備戰版本 -->
+              {#if b.fossilOnField && isMyTurn() && game?.phase==='playing' && game?.turnPhase==='main' && !pendingSelection}
+                <button class="evo-btn-sm fossil-discard-btn"
+                  title="把化石丟棄到棄牌區（非昏厥，對手不抽獎賞）"
+                  onclick={(e)=>{e.stopPropagation();dispatch(GameActions.discardFossil(b.iid));}}>
+                  🦴 丟棄
+                </button>
+              {/if}
             </div>
           {:else}
             <div class="bench-slot bench-empty"
-              class:drop-zone={dragging?.kind==='basic'&&isMyTurn()&&(myPlayer?.bench.length??0)<myBenchLimit&&(game?.phase==='playing'||(game?.phase==='setup'&&!!myPlayer?.active))}
-              class:drop-hover={dropBenchEmpty&&dragging?.kind==='basic'}
+              class:drop-zone={(dragging?.kind==='basic'||dragging?.kind==='fossil')&&isMyTurn()&&(myPlayer?.bench.length??0)<myBenchLimit&&(game?.phase==='playing'||(game?.phase==='setup'&&!!myPlayer?.active))}
+              class:drop-hover={dropBenchEmpty&&(dragging?.kind==='basic'||dragging?.kind==='fossil')}
               data-drop-type="bench-empty"></div>
           {/if}
         {/each}
@@ -2792,6 +2817,7 @@
         {#if c}
           {@const isEnergyCard=c.supertype==='Energy'}
           {@const isBasicCard=isBasicPokemonCard(c)}
+          {@const isFossilCard=isFossilItemCard(c)}
           {@const isTrainerCard=c.supertype==='Trainer'}
           {@const isToolCard=c.supertype === 'Trainer' && c.subtype === 'PokemonTool'}
           {@const isEvolutionCard=c.supertype==='Pokemon'&&!!c.evolvesFrom}
@@ -2799,16 +2825,18 @@
           {@const canBasicPlay=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()&&game?.phase==='playing'}
           {@const canBasicSetup=isBasicCard&&game?.phase==='setup'&&!game?.setupDone[myIdx]&&isMyTurn()}
           {@const canBasic=canBasicPlay||canBasicSetup}
-          {@const canTrainer=(isTrainerCard||isToolCard)&&game?.phase==='playing'&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
+          {@const canFossil=isFossilCard&&playableFossilIids.has(inst.iid)&&isMyTurn()&&game?.phase==='playing'}
+          {@const canTrainer=(isTrainerCard||isToolCard)&&!isFossilCard&&game?.phase==='playing'&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
           {@const canEvolve=isEvolutionCard&&game?.phase==='playing'&&playableEvoIids.has(inst.iid)&&isMyTurn()&&!pendingSelection}
           {@const dragKind =
             canEnergy ? 'energy'
             : canBasic ? 'basic'
+            : canFossil ? 'fossil'
             : canEvolve ? 'evolve'
             : (canTrainer && isToolCard) ? 'tool'
             : canTrainer ? 'trainer'
             : null}
-          {@const isActionable = canEnergy || canBasic || canTrainer || canEvolve}
+          {@const isActionable = canEnergy || canBasic || canFossil || canTrainer || canEvolve}
           <div class="hand-card"
             class:selected={selectedEnergyIid===inst.iid}
             class:can-actionable={isActionable}
@@ -2828,6 +2856,7 @@
             <span class="hand-name">{c.name}</span>
             {#if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
             {:else if canBasic}<span class="hand-hint hl">📥 拖到備戰</span>
+            {:else if canFossil}<span class="hand-hint hl">🦴 化石放到備戰</span>
             {:else if canEvolve}<span class="hand-hint hl">🔺 拖到進化目標</span>
             {:else if canTrainer && isToolCard}<span class="hand-hint hl">🔧 拖到寶可夢</span>
             {:else if canTrainer}<span class="hand-hint hl">🎴 拖曳使用</span>
@@ -4287,6 +4316,11 @@
 
   .btn-retreat{ padding:.1rem .3rem; font-size:.62rem; background:#3a3a6a; border:1px solid #6a6aaa; border-radius:4px; color:#ccf; cursor:pointer; }
   .btn-retreat:hover{ background:#4a4a8a; }
+  /* v2.189 化石丟棄按鈕 — 棕色系與撤退按鈕區分 */
+  .btn-fossil-discard{ background:#5a3a2a; border-color:#aa6a4a; color:#fc8; margin-left:.3rem; }
+  .btn-fossil-discard:hover{ background:#7a4a3a; }
+  .fossil-discard-btn{ background:#5a3a2a; border-color:#aa6a4a; color:#fc8; }
+  .fossil-discard-btn:hover{ background:#7a4a3a; }
   .retreat-picker{ position:absolute; bottom:100%; left:0; right:0; z-index:20; display:flex; gap:.3rem; flex-wrap:wrap; align-items:center; background:#1a1a3a; border:1px solid #4a4a8a; border-radius:8px; padding:.4rem; font-size:.7rem; box-shadow:0 -4px 12px rgba(0,0,0,.6); }
   .retreat-label{ font-size:.72rem; color:#aaf; width:100%; }
 

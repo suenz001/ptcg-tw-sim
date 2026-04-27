@@ -1,9 +1,41 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.188)  
+> 最後更新：2026-04-27 (v2.189)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.189 — 化石機制 UI（拖曳 + 丟棄按鈕）
+
+### Engine helpers
+- `getPlayableFossils(state, pool)` — 列手牌中可走 PLAY_FOSSIL 上場的化石 Item iid（同 getPlayableBasics 但 filter `isFossilItemCard`）
+- `actions.ts`：新增 `GameActions.playFossil(iid)` / `GameActions.discardFossil(iid)` helper
+
+### +page.svelte UI
+- **DragKind 新增 `'fossil'` 類別**：手牌中化石 Item 走 'fossil' 而非 'trainer'（避免被 PLAY_TRAINER 路徑吃掉）
+- **手牌渲染**：新 `canFossil` derived（有空備戰格 + 主階段 + 自己回合），dragKind 推算優先序：energy → basic → **fossil** → evolve → tool → trainer
+- **手牌提示**：化石卡 hover 顯示「🦴 化石放到備戰」
+- **bench-empty drop-zone**：drag kind 接受 fossil（原本只接受 basic）
+- **drag 釋放**：`d.kind === 'fossil'` → dispatch `GameActions.playFossil(d.iid)`
+- **戰鬥場 action bar**：撤退按鈕對化石不顯示（`!myPlayer?.active?.fossilOnField`），改顯示「🦴 丟棄化石」按鈕（棕色系區別）
+- **備戰區**：化石卡顯示「🦴 丟棄」按鈕（同 evo-btn-sm 位置）
+- **CSS**：`.btn-fossil-discard` / `.fossil-discard-btn` 棕色配色
+
+### 玩家現在可以做的
+1. 從手牌拖化石 Item 到備戰格 → 上場為 HP60【無】基礎寶可夢
+2. 自己回合任何時候按【丟棄】把化石送進棄牌（戰鬥場走 active=null 補位、無獎賞；備戰直接消失）
+3. 拖進化卡到化石上 → 進化成對應 Stage1（v2.188 的 evolvesFrom 補完已 enable 此路徑）
+4. 拖能量到化石上、拖 Tool 到化石上、化石被攻擊扣血 — 全部走原有 Pokemon 路徑（fossilOnField=true 的 instance 對 engine 來說就是寶可夢）
+
+### 還沒做（v2.190+）
+5 張化石各自的被動效果：
+- 根狀（戰鬥場時對手【基礎】寶可夢招式 +1【無】成本）
+- 背蓋（不受對手寶可夢招式效果影響，但傷害正常）
+- 羽毛（在備戰時不受對手寶可夢招式傷害，含 bench snipe）
+- 顎之（戰鬥場時對手戰鬥位招式 -30 傷害）
+- 鰭之（對手出支援者卡時不受效果影響）
 
 ---
 
