@@ -1,9 +1,28 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.183)  
+> 最後更新：2026-04-26 (v2.184)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.184 — /cards 三項優化：卡包中文名 + 關鍵字搜尋 + 龍能量過濾修
+
+### 1. 卡牌詳細顯示「出自於卡包【XXX】」
+- `+page.ts`：load function 在 'set' 模式（含 ALL）一律回傳 `sets: SetSummary[]`，給 modal 用作 setCode→中文名 對照
+- `+page.svelte`：新增 `setNameByCode` derived map，modal foot 在原 `{setCode} · {collectorNumber} · ...` 下面加一行 `<p class="footSet">出自於卡包【{中文名}】</p>`
+
+### 2. 一般搜尋 / 關鍵字搜尋切換
+- 新狀態 `searchMode: 'normal' | 'keyword'`
+- 搜尋輸入框右側加切換按鈕（一般 / 關鍵字）
+- normal：原行為（卡名 / 卡號 / 招式名 / 特性名）
+- keyword：擴展到 rulesText、招式 effect、特性 label+effect、evolvesFrom — 玩家可用「30 傷害」「KO」「翻硬幣」等關鍵字找到對應功能的卡
+
+### 3. 移除彩色特殊能量的【龍】映射
+目前 PTCG 已無【龍】基本能量卡，所以「全屬性特殊能量」（古舊能量 / 夜光能量 / 新衝天能量 / 稜鏡能量）的 `ALL_TYPES` 映射不該包含 'Dragon'。
+- 改 `ALL_TYPES` 從 10 種屬性減為 9 種（移除 'Dragon'）
+- `ENERGY_ORDER`（屬性篩選按鈕列）保留 'Dragon' 讓玩家還能篩出龍屬性寶可夢
 
 ---
 

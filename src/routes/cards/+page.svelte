@@ -13,7 +13,7 @@
 
   type LoadData =
     | { mode: 'index'; sets: SetSummary[] }
-    | { mode: 'set'; setCode: string; setName?: string; cards: Card[] };
+    | { mode: 'set'; setCode: string; setName?: string; cards: Card[]; sets?: SetSummary[] };
 
   let { data }: { data: LoadData } = $props();
 
@@ -50,6 +50,10 @@
   }
 
   let query = $state('');
+  // v2.184：搜尋模式切換
+  //   normal  — 只搜卡名 / 招式名 / 特性名 / 卡號（原行為）
+  //   keyword — 全文搜尋，含 rulesText、招式 effect、特性 effect、特性 label
+  let searchMode = $state<'normal' | 'keyword'>('normal');
   // 多選：空 Set = 全部；非空 = 只顯示這些分類
   // 點一次加入、點兩次移除；按「全部」清空 Set。
   let selectedCategories = $state<Set<CategoryKey>>(new Set());
@@ -78,7 +82,10 @@
   //   - 無屬性能量（富裕能量、燃火能量等）→ 只有 Colorless
   //   - 單屬性特殊能量（增強【草】能量等）→ 該屬性 + Colorless
   //   - 雙屬性能量（火箭隊能量等）→ 對應的兩個屬性
-  const ALL_TYPES: EnergyType[] = ['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal','Dragon','Colorless'];
+  // v2.184：移除 'Dragon' — 目前無【龍】基本能量卡，故彩色特殊能量（古舊 / 夜光 /
+  //   新衝天 / 稜鏡）不該被視為提供龍能量。寶可夢屬性篩選的 ENERGY_ORDER 仍保留 Dragon
+  //   讓玩家可篩出龍屬性寶可夢；只有特殊能量映射的「all-types」這個概念排除 Dragon。
+  const ALL_TYPES: EnergyType[] = ['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal','Colorless'];
   const ENERGY_TYPE_MAP: Record<string, EnergyType[]> = {
     // 基本能量
     '基本【草】能量': ['Grass'],
@@ -220,6 +227,15 @@
   }
 
   const setCards = $derived(data.mode === 'set' ? data.cards : []);
+
+  // v2.184：setCode → 中文卡包名 對照（給 modal foot「出自於卡包【XXX】」用）
+  const setNameByCode = $derived.by(() => {
+    if (data.mode !== 'set') return {} as Record<string, string>;
+    const map: Record<string, string> = {};
+    for (const s of (data.sets ?? [])) map[s.code] = s.name;
+    return map;
+  });
+
   const filtered = $derived.by(() => {
     if (data.mode !== 'set') return [];
     const q = query.trim().toLowerCase();
@@ -251,6 +267,20 @@
         if (!c.regulationMark || !marks.has(c.regulationMark as RegMarkKey)) return false;
       }
       if (!q) return true;
+      // v2.184：兩種搜尋模式
+      if (searchMode === 'keyword') {
+        // 全文搜尋：卡名 / 卡號 / 招式名+effect / 特性 label+name+effect / rulesText / evolvesFrom
+        const haystack: string[] = [
+          c.name,
+          c.collectorNumber,
+          c.evolvesFrom ?? '',
+          c.rulesText ?? '',
+          ...(c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']),
+          ...(c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']),
+        ];
+        return haystack.some(s => s && s.toLowerCase().includes(q));
+      }
+      // normal 模式（原行為）：只搜卡名 / 卡號 / 招式名 / 特性名
       return (
         c.name.toLowerCase().includes(q) ||
         c.collectorNumber.includes(q) ||
@@ -380,7 +410,29 @@
   </header>
 
   <div class="controls">
-    <input type="search" bind:value={query} placeholder="搜尋卡名、招式、特性、卡號..." aria-label="搜尋" />
+    <div class="searchRow">
+      <input
+        type="search"
+        bind:value={query}
+        placeholder={searchMode === 'keyword'
+          ? '關鍵字搜尋（包含招式 / 特性敘述、效果文字、卡面 rules）...'
+          : '搜尋卡名、招式名、特性名、卡號...'}
+        aria-label="搜尋" />
+      <div class="searchModeToggle" role="group" aria-label="搜尋模式切換">
+        <button
+          class="modeBtn"
+          class:active={searchMode === 'normal'}
+          onclick={() => (searchMode = 'normal')}
+          title="只搜尋卡名 / 招式名 / 特性名 / 卡號"
+        >一般</button>
+        <button
+          class="modeBtn"
+          class:active={searchMode === 'keyword'}
+          onclick={() => (searchMode = 'keyword')}
+          title="關鍵字全文搜尋（含招式效果敘述、特性敘述、卡面 rules）"
+        >關鍵字</button>
+      </div>
+    </div>
     <div class="filters" role="group" aria-label="卡片分類篩選（可複選，再點一次取消）">
       <button
         class="filter"
@@ -606,6 +658,9 @@
               {#if selected.regulationMark}· {selected.regulationMark}{/if}
               {#if selected.illustrator}· 繪師 {selected.illustrator}{/if}
             </p>
+            {#if setNameByCode[selected.setCode]}
+              <p class="footSet">出自於卡包【{setNameByCode[selected.setCode]}】</p>
+            {/if}
           </div>
         </div>
       </div>
@@ -798,6 +853,40 @@
     border: 1px solid #ccc;
     border-radius: 6px;
     font-size: 0.95rem;
+  }
+  /* v2.184: 搜尋輸入 + 模式切換並排 */
+  .searchRow {
+    flex: 1;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    min-width: 320px;
+  }
+  .searchModeToggle {
+    display: flex;
+    gap: 0;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .modeBtn {
+    padding: 0.5rem 0.8rem;
+    border: 0;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #555;
+  }
+  .modeBtn + .modeBtn {
+    border-left: 1px solid #e0e0e0;
+  }
+  .modeBtn.active {
+    background: #1a1a1a;
+    color: #fff;
+  }
+  .modeBtn:hover:not(.active) {
+    background: #f0f0f0;
   }
   .filters {
     display: flex;
@@ -1187,5 +1276,12 @@
     border-top: 1px solid #eee;
     font-size: 0.8rem;
     color: #888;
+  }
+  /* v2.184: 顯示出自卡包中文名稱 */
+  .footSet {
+    margin: 0.25rem 0 0;
+    font-size: 0.85rem;
+    color: #555;
+    font-weight: 500;
   }
 </style>

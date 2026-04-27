@@ -47,7 +47,8 @@ export async function load({ fetch, url }) {
       mode: 'set' as const,
       setCode: 'ALL',
       setName: '全部 H / I / J 卡牌',
-      cards
+      cards,
+      sets,  // v2.184：給 modal foot 顯示「出自於卡包【XXX】」用
     };
   }
 
@@ -67,9 +68,11 @@ export async function load({ fetch, url }) {
   const cards: Card[] = await cardsRes.json();
 
   let setName: string | undefined;
+  let sets: SetSummary[] = [];
   if (indexRes.ok) {
-    const sets: SetSummary[] = await indexRes.json();
+    sets = await indexRes.json();
     setName = sets.find((s) => s.code === setCode)?.name;
   }
-  return { mode: 'set' as const, setCode, setName, cards };
+  // v2.184：sets 也回傳，給 modal foot 顯示「出自於卡包【XXX】」用
+  return { mode: 'set' as const, setCode, setName, cards, sets };
 }
