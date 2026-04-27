@@ -1,9 +1,33 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.189)  
+> 最後更新：2026-04-27 (v2.190)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.190 — 化石被動效果（顎之 + 根狀，2/5）
+
+### 顎之化石（J、戰鬥場）
+**規則**：「只要這隻寶可夢在戰鬥場上，對手的戰鬥寶可夢使用的招式的傷害「-30」點。」
+
+**Hook**：`engine.ts` base damage 計算的 metalShieldThisTurn -30 後面（弱點/抵抗力之後，dmg 計算 pipeline 中段）。
+- defender.active.fossilOnField + defenderCard.name='陳舊的顎之化石' → baseDamage = max(0, baseDamage - 30)
+- log：「陳舊的顎之化石：受到的傷害 -30（X → Y）」
+
+### 根狀化石（H、戰鬥場）
+**規則**：「只要這隻寶可夢在戰鬥場上，對手的【基礎】寶可夢使用招式所需的能量增加 1 個【無】能量。」
+
+**Hook**：`canAffordAttack` 既有 cost 修改邏輯後面（反擊增幅器之後）。
+- 攻擊方 stage=Basic（用 `isBasicPokemonCard`）+ 對手戰鬥場 fossilOnField + 陳舊的根狀化石 → cost 多一個 'Colorless'
+- 自然會反映在 UI 招式可用判定（`getPlayableAttacks` 走同函式）
+
+### 還沒做（v2.191+）
+3 張需要更動 hook：
+- **羽毛化石**（在備戰時不受招式傷害含 bench snipe）— 需 ATTACK pipeline 開始/結束 snapshot bench damage map，攻擊後 reset 化石的 damage delta（避免改所有 effect 的散點）
+- **背蓋化石**（不受招式效果）— 整合到 skipDefEffects 旗標（防守方是化石時 attack 後置效果跳過 defender side）
+- **鰭之化石**（不受對手支援者效果）— 需在支援者 effect resolver 加 guard（這個比較罕見、目前沒太多 supporter 直接針對單隻寶可夢）
 
 ---
 

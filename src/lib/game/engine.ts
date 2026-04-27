@@ -658,6 +658,22 @@ export function canAffordAttack(
       }
     }
   }
+  // v2.190 陳舊的根狀化石（戰鬥場）— 對手【基礎】寶可夢使用招式所需的能量增加 1 個【無】
+  //   攻擊方寶可夢 stage=Basic（或 isBasicPokemonCard）+ 對手戰鬥場是 fossilOnField=陳舊的根狀化石
+  //   → cost 加一個 'Colorless'
+  if (state && attackerIdx !== undefined) {
+    const dIdx = (1 - attackerIdx) as 0 | 1;
+    const defActive = state.players[dIdx].active;
+    if (defActive?.fossilOnField) {
+      const defCard = pool.get(defActive.cardId);
+      if (defCard?.name === '陳舊的根狀化石') {
+        const attackerCard = pool.get(pokemon.cardId);
+        if (isBasicPokemonCard(attackerCard)) {
+          cost = [...cost, 'Colorless'];
+        }
+      }
+    }
+  }
   // v2.103 大竺葵｜繁茂：自己場上有大竺葵時，自己所有寶可夢身上的「基本【草】能量」視為 2 個【草】能量。
   //   「這個特性的效果不會重複」→ 多隻大竺葵也只算一次倍率。
   // v2.108 修：原 check 用 `pokemonType === 'Grass'`，但基本能量的 pokemonType 欄位通常空，
@@ -2356,6 +2372,17 @@ function handlePlaying(
       const reduced = Math.max(0, baseDamage - 30);
       workingState = addLog(workingState,
         `${defenderCard.name} 因鐵之防禦強化效果，受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
+      baseDamage = reduced;
+    }
+
+    // v2.190 陳舊的顎之化石（戰鬥場）— 對手戰鬥寶可夢使用招式的傷害「-30」
+    // defender.active 是 fossilOnField + cardId 對應 陳舊的顎之化石 → 傷害 -30
+    if (baseDamage > 0
+        && defender.active.fossilOnField
+        && defenderCard.name === '陳舊的顎之化石') {
+      const reduced = Math.max(0, baseDamage - 30);
+      workingState = addLog(workingState,
+        `陳舊的顎之化石：受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
       baseDamage = reduced;
     }
 
