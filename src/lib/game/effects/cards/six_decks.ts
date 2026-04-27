@@ -352,48 +352,41 @@ regR('blaziken-boiling-attach', (state, aIdx, selectedPokeIids, params, pool) =>
 
 // 龜足巨鎧｜岩石武裝 — 手牌選 1 張「基本【鬥】能量」附給自己的【鬥】寶可夢（1/回合）
 // v2.117 修：pending type 改 heal-target + validIids（限【鬥】寶可夢）
+// v2.226 修：簡化 UI 流程 — 既然 gate（getUsableAbilities + 此處）已確保手牌有基本【鬥】
+//   能量、場上有【鬥】寶可夢，就不需要 UI 端再讓玩家挑能量（hand-discard pending
+//   會被 Leon 看成「棄牌」誤導）。直接開 heal-target 選目標寶可夢，resolver
+//   自動從手牌取第 1 張基本【鬥】能量附過去即可。
 regA('龜足巨鎧', 0, (st, idx, pool) => {
   const hasFighting = st.players[idx].hand.some(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card?.subtype === 'Basic' && /【鬥】/.test(card.name);
   });
   if (!hasFighting) return addLog(st, '岩石武裝：手牌無基本【鬥】能量', idx);
-  // 還要確認場上有【鬥】寶可夢
   const p = st.players[idx];
   const allMy = [...(p.active ? [p.active] : []), ...p.bench];
-  const hasFightPoke = allMy.some(c => pool.get(c.cardId)?.pokemonType === 'Fighting');
-  if (!hasFightPoke) return addLog(st, '岩石武裝：場上無【鬥】寶可夢', idx);
-  st = addLog(st, '岩石武裝：從手牌選 1 張基本【鬥】能量附給自己的【鬥】寶可夢', idx);
+  const fightPokes = allMy.filter(c => pool.get(c.cardId)?.pokemonType === 'Fighting');
+  if (fightPokes.length === 0) return addLog(st, '岩石武裝：場上無【鬥】寶可夢', idx);
+  st = addLog(st, '岩石武裝：選擇 1 隻【鬥】寶可夢，從手牌附 1 張基本【鬥】能量', idx);
   return withPending(st, {
-    type: 'hand-discard',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    filter: 'BasicFightingEnergy',
-    effectKey: 'rock-armor-pick-energy',
-  });
-});
-regR('rock-armor-pick-energy', (state, aIdx, selectedIids, _params, pool) => {
-  const p = state.players[aIdx];
-  const allMy = [...(p.active ? [p.active] : []), ...p.bench];
-  const fightIids = allMy.filter(c => pool.get(c.cardId)?.pokemonType === 'Fighting').map(c => c.iid);
-  return withPending(state, {
     type: 'heal-target',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'rock-armor-attach',
     params: {
-      energyIids: selectedIids,
-      validIids: fightIids,
+      validIids: fightPokes.map(c => c.iid),
       titleOverride: '選擇附加能量的【鬥】寶可夢（岩石武裝）',
     },
   });
 });
-regR('rock-armor-attach', (state, aIdx, selectedPokeIids, params, pool) => {
-  const energyIids = (params?.energyIids as string[]) ?? [];
+regR('rock-armor-attach', (state, aIdx, selectedPokeIids, _params, pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
-  const energy = p.hand.find(c => energyIids.includes(c.iid));
-  if (!energy) return addLog(state, '岩石武裝：能量不在手牌', aIdx);
+  // v2.226：自動取手牌第 1 張基本【鬥】能量（gate 保證至少有 1 張）
+  const energy = p.hand.find(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && /【鬥】/.test(card.name);
+  });
+  if (!energy) return addLog(state, '岩石武裝：手牌無基本【鬥】能量', aIdx);
   p.hand = p.hand.filter(c => c.iid !== energy.iid);
   const pIid = selectedPokeIids[0];
   let tgtName = '?';
@@ -702,6 +695,16 @@ reg('空手道王的演練', (st, idx) => {
 });
 
 // 塔拉剛（Supporter）— 棄牌區搜【鬥】寶可夢+基本【鬥】能量合計 ≤4 張加手牌
+// v2.226 加 regG：棄牌區無【鬥】寶可夢且無基本【鬥】能量時不可打出（UI 不顯示黃框）
+regG('塔拉剛', (st, idx, pool) => {
+  return st.players[idx].discard.some(c => {
+    const card = pool.get(c.cardId);
+    if (!card) return false;
+    if (card.supertype === 'Pokemon' && card.pokemonType === 'Fighting') return true;
+    if (card.supertype === 'Energy' && card.subtype === 'Basic' && /【鬥】/.test(card.name)) return true;
+    return false;
+  });
+});
 reg('塔拉剛', (st, idx, pool) => {
   const eligible = st.players[idx].discard.filter(c => {
     const card = pool.get(c.cardId);
@@ -883,6 +886,8 @@ regR('heat-burner-pick', (state, aIdx, iids, _params, pool) => {
 });
 
 // 完全體攪拌器（Item ACE SPEC）— 從牌庫選 ≤5 張丟棄 + 重洗
+// v2.226 加 regG：牌庫為空時不可打出
+regG('完全體攪拌器', (st, idx) => st.players[idx].deck.length > 0);
 reg('完全體攪拌器', (st, idx) => {
   if (st.players[idx].deck.length === 0) return addLog(st, '完全體攪拌器：牌庫為空', idx);
   st = addLog(st, '完全體攪拌器：從牌庫任意選擇最多 5 張丟棄並重洗', idx);

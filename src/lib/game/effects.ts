@@ -11119,6 +11119,8 @@ regPre('阿響的火爆獸|拍檔爆破', (state, aIdx, pool) => {
 // ── 阿響的火爆獸｜爆熱炮 160（無附加效果，預設處理）── 不需 reg
 
 // ── 阿響的冒險（Supporter）— 搜「阿響的寶可夢 OR 基本火能量」≤3 加手牌 ──────
+// v2.226 加 regG：牌庫為空時不可打出
+regG('阿響的冒險', (st, idx) => st.players[idx].deck.length > 0);
 reg('阿響的冒險', (st, idx, pool) => {
   if (st.players[idx].deck.length === 0) {
     return addLog(st, '阿響的冒險：牌庫為空', idx);

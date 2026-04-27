@@ -200,6 +200,8 @@ regR('alice-courage', (st, idx, iids, _params, pool) => {
 });
 
 // 探險家的嚮導 — 查看牌庫頂 6 張，選 2 張加手牌，其餘丟棄
+// v2.226 加 regG：牌庫為空時不可打出
+regG('探險家的嚮導', (st, idx) => st.players[idx].deck.length > 0);
 reg('探險家的嚮導', (st, idx) => {
   const top6Iids = st.players[idx].deck.slice(0, 6).map(c => c.iid);
   if (top6Iids.length === 0) {
