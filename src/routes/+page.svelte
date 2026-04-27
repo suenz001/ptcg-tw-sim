@@ -90,6 +90,12 @@
       <li><strong>M5</strong> 卡池擴充</li>
     </ol>
   </section>
+
+  <footer class="disclaimer">
+    <p>本站為熱愛 PTCG 的粉絲自製非營利專案，旨在推廣寶可夢集換式卡牌實體遊戲。</p>
+    <p>所有卡牌圖像、文字與商標之智慧財產權均歸屬 The Pokémon Company、Nintendo、Creatures Inc. 及 GAME FREAK inc. 所有。</p>
+    <p>本站絕無意侵犯官方權益，若版權方認為有任何不妥，請透過 <a href="mailto:suenz001@yahoo.com.tw">聯絡我們</a> 告知，本站將立即配合下架修改。</p>
+  </footer>
 </main>
 
 <style>
@@ -165,5 +171,21 @@
     color: #888;
     font-size: 0.85rem;
     margin-left: 0.5rem;
+  }
+  .disclaimer {
+    margin-top: 2.5rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid #ddd;
+    font-size: 0.8rem;
+    line-height: 1.7;
+    color: #888;
+  }
+  .disclaimer p {
+    margin: 0.3rem 0;
+  }
+  .disclaimer a {
+    color: #0066cc;
+    font-weight: 500;
+    font-size: 0.8rem;
   }
 </style>
