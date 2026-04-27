@@ -5292,22 +5292,28 @@ regPost('雙斧戰龍|斧擊在地', (state, aIdx, pool) => {
   return { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
 });
 
-// ── damage-counter bench (2 張) ────────────────────────────────────────────────
-// 10 點 = 1 個指示物。此處 AI 簡化：集中對單一備戰上（玩家透過 UI pendingSelection 之後可再拓展選多隻）
-// 振翼髮|飛來橫禍 (90 + 2 指示物放置於對手備戰)
+// ── damage-counter bench ────────────────────────────────────────────────
+// 10 點 = 1 個指示物。
+// 振翼髮|飛來橫禍 (90 + 2 指示物以「任意方式」放置於對手備戰)
 // 卡面："將2個傷害指示物以任意方式放置於對手的備戰寶可夢身上。"
 // → 「放置指示物」= 招式【效果】；會被對戰圓形擋，不受花之帷幔擋。
+//
+// v2.221：升級為 damage-distribute（複用 dragapult-snipe resolver；只允許備戰）—
+//   2 個 counter 可任意分配到對手 1~2 隻備戰（同隻 ×2 或不同隻各 ×1）
 regPre('振翼髮|飛來橫禍', (state, _aIdx, _pool) => ({ state, damage: 90 }));
 regPost('振翼髮|飛來橫禍', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) return state;
-  let s = addLog(state, '飛來橫禍：選擇對手備戰 1 隻放置 2 個傷害指示物（= 20 傷害）', aIdx);
+  let s = addLog(state, '飛來橫禍：將 2 個傷害指示物自由分配到對手備戰寶可夢', aIdx);
   return withPending(s, {
-    type: 'opp-bench-choose',
+    type: 'damage-distribute',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'snipe-variable',
-    params: { damage: 20, label: '飛來橫禍', kind: 'attack-effect' },
+    minCount: 1, maxCount: 2,
+    effectKey: 'dragapult-snipe',
+    params: {
+      totalCounters: 2, placedCounters: 0, counterDamage: 10,
+      label: '飛來橫禍', includeActive: false,
+    },
   });
 });
 
@@ -9081,18 +9087,23 @@ regR('overvolt-attach-pick-target', (st, idx, iids, params, pool) => {
           ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
     });
   }
-  // 多隻雷寶可夢：進第二步（sim/AI 簡化：全部附到單一目標）
+  // 多隻雷寶可夢：v2.221 升級為「逐張分配」（之前簡化為全部附到單一目標）
+  // 卡面：「以任意方式附於自己的【雷】寶可夢身上」— 每張能量可附到不同雷寶
   return withPending(st, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'overvolt-attach-commit',
-    params: { energyIids: iids, label },
+    params: { energyIids: iids, label, totalCount: iids.length, placedCount: 0 },
   });
 });
 
+// v2.221：升級為逐張分配（每張可附到不同雷寶可夢；同樣也可全部附到 1 隻）
 regR('overvolt-attach-commit', (st, idx, iids, params, pool) => {
   const label = (params?.label as string) ?? '過度放電';
   const energyIids = (params?.energyIids as string[]) ?? [];
+  const totalCount = (params?.totalCount as number) ?? energyIids.length;
+  const placedCount = (params?.placedCount as number) ?? 0;
+  if (energyIids.length === 0) return st;
   const targetIid = iids[0];
   const p = st.players[idx];
   const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
@@ -9101,19 +9112,31 @@ regR('overvolt-attach-commit', (st, idx, iids, params, pool) => {
   if (targetCard?.pokemonType !== 'Lightning') {
     return addLog(st, `${label}：目標非【雷】寶可夢，取消附加`, idx);
   }
-  const energies = p.discard.filter(c => energyIids.includes(c.iid));
-  if (energies.length === 0) return st;
-  const s = addLog(st, `${label}：將 ${energies.length} 張基本雷能量附加到 ${targetCard.name}`, idx);
-  return updatePlayer(s, idx, pl => {
-    const rest = pl.discard.filter(c => !energyIids.includes(c.iid));
+  const currentEnergyIid = energyIids[0];
+  const restIids = energyIids.slice(1);
+  const energy = p.discard.find(c => c.iid === currentEnergyIid);
+  if (!energy) return st;
+  let s = addLog(st,
+    `${label}：將第 ${placedCount + 1}/${totalCount} 張基本雷能量附加到 ${targetCard.name}`, idx);
+  s = updatePlayer(s, idx, pl => {
+    const rest = pl.discard.filter(c => c.iid !== currentEnergyIid);
     if (pl.active && pl.active.iid === targetIid) {
       return { ...pl, discard: rest,
-        active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } };
+        active: { ...pl.active, energyAttached: [...pl.active.energyAttached, energy] } };
     }
     return { ...pl, discard: rest,
       bench: pl.bench.map(c => c.iid === targetIid
-        ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
+        ? { ...c, energyAttached: [...c.energyAttached, energy] } : c) };
   });
+  if (restIids.length > 0) {
+    return withPending(s, {
+      type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'overvolt-attach-commit',
+      params: { energyIids: restIids, label, totalCount, placedCount: placedCount + 1 },
+    });
+  }
+  return s;
 });
 
 function overvoltAttackPost(label: string): AttackPostFn {
