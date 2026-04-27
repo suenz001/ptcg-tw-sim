@@ -17,7 +17,9 @@ const src = implFiles.map(f => fs.readFileSync(f, 'utf8')).join('\n\n----FILE---
 const results = [];
 for (const t of targets) {
   // Look for either a `reg('NAME'`-style call or a TOOL_*/SPECIAL_ENERGY_*/PASSIVE_/STATIC_*.set('NAME' or includes('NAME')
-  const n = t.name;
+  // v2.199：strip 卡名前後的 ZWNJ (U+200C) 與 angle brackets — pool.ts:51 已在 runtime
+  // 統一移除這些字元，effects.ts 用「乾淨」名 register，audit 比對也要先 strip 才能 match。
+  const n = t.name.replace(/[‌<>＜＞]/g, '');
   const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Patterns suggesting actual implementation:
   const patterns = [

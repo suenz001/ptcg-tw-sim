@@ -19,6 +19,7 @@
 import {
   reg, regR, regG,
   addLog, updatePlayer, withPending, shuffle, clearActiveEffects,
+  healResolver,
 } from '../_shared';
 import type { CardInstance, PlayerState } from '../../types';
 
@@ -576,3 +577,25 @@ reg('巴貝娜與荷蓮娜', (st, idx, _pool) => {
   st = addLog(st, '巴貝娜與荷蓮娜：本回合自己的「N 的」寶可夢招式 KO 對手戰鬥場時 +3 獎賞', idx);
   return updatePlayer(st, idx, p => ({ ...p, bagonElenaThisTurn: true }));
 });
+
+// ── 寶可夢中心的姐姐（Supporter / I）─ 將 1 隻自己寶可夢恢復 60 HP，特殊狀態全部恢復 ──
+// v2.199 實裝。pool.ts:51 已 strip ZWNJ（U+200C），所以 reg 用純名「寶可夢中心的姐姐」即可。
+// 機制：複用既有 heal-target pending + healResolver，新加 clearStatus param（v2.199
+//   _shared.ts 擴充）讓 resolver 一併移除 status / secondaryStatus 旗標。
+// Guard：場上至少 1 隻寶可夢「有傷害 OR 有特殊狀態」— 完全沒效果時不顯示卡片可用。
+//   secondaryStatus（v2.163 雙狀態）也算進去。
+regG('寶可夢中心的姐姐', (st, idx) => {
+  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  return all.some(c => c.damage > 0 || !!c.status || !!c.secondaryStatus);
+});
+reg('寶可夢中心的姐姐', (st, idx) => {
+  st = addLog(st, '寶可夢中心的姐姐：選 1 隻自己的寶可夢回復 60 HP 並恢復特殊狀態', idx);
+  return withPending(st, {
+    type: 'heal-target',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'heal-60-clear-status',
+    params: { healAmount: 60, discardEnergy: 0, clearStatus: true },
+  });
+});
+regR('heal-60-clear-status', healResolver);

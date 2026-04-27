@@ -1,9 +1,31 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.198)  
+> 最後更新：2026-04-27 (v2.199)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.199 — ‌寶可夢中心的姐姐（Supporter / I）
+
+**卡面**：將自己的 1 隻寶可夢恢復「60」HP，特殊狀態也全部恢復。
+
+**實裝**（src/lib/game/effects/cards/v172_hij_batch.ts）：
+- `regG`：場上至少 1 隻寶可夢「有傷害 OR 有 status OR 有 secondaryStatus（v2.163 雙狀態）」才可使用。
+- `reg`：開 `heal-target` pending（actor=self）+ params `{ healAmount: 60, discardEnergy: 0, clearStatus: true }`。
+- `regR('heal-60-clear-status', healResolver)`：複用 healResolver。
+
+**healResolver 擴充**（src/lib/game/effects/_shared.ts）：新增 `params.clearStatus` 旗標。為 true 時 resolver 額外 delete target.status / target.secondaryStatus，並在 log 末尾追加「解除特殊狀態」描述。
+
+**附帶修正**：scripts/audit-hij-impl.mjs 對 target.name strip ZWNJ (U+200C) — pool.ts:51 runtime 已 strip，effects.ts 用乾淨名 register，audit 比對前也得先 strip 才能 match。否則「‌寶可夢中心的姐姐」會被誤報為 missing（雖然 runtime 工作正常）。
+
+**進度**：H/I/J 卡剩餘 8 張未實裝。需引擎/UI 層較深的擴充才能做：
+- 對手互動 picker（modal-choice with `actorIdx ≠ idx`）：泰姆、馬志士的交易、火箭隊的妨礙機器人
+- 招式注入機制（PokemonTool 上寫的招式可被 holder 使用）：招式學習器 螢石、核心記憶碟
+- TOOL_ON_DAMAGED + 雙段 pending（選 attacker 能量 → 選 attacker 備戰）：手持循環扇
+- Stadium 兩階連進化（rare candy 風格）：壯偉碩木
+- peek-opp-deck-top 5 + 放對手備戰 + 重洗對手牌庫：配樂之笛
 
 ---
 

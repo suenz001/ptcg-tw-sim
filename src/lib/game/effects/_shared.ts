@@ -497,6 +497,10 @@ export function healResolver(
 ): GameState {
   const healAmount = (params?.healAmount as number) ?? 30;
   const discardCount = (params?.discardEnergy as number) ?? 0;
+  // v2.199 寶可夢中心的姐姐：除了回血也清掉特殊狀態（含 secondaryStatus，例 危險光線雙狀態）。
+  // 卡面寫「特殊狀態也全部恢復」— 只對戰鬥位有特殊狀態，但備戰位可能因 v2.163 secondaryStatus
+  // 仍殘留旗標，一併清空保險。
+  const clearStatus = params?.clearStatus === true;
   const iid = iids[0];
   // 附加 log：記錄實際回復的目標與數值（pre-log 僅提示「選擇…寶可夢」，未標明目標）
   const prevPlayer = st.players[idx];
@@ -508,6 +512,9 @@ export function healResolver(
     const actualHeal = Math.min(prevTarget.damage, healAmount);
     const parts = [`${name} 回復 ${actualHeal} HP`];
     if (discardCount > 0) parts.push(`丟棄 ${discardCount} 個能量`);
+    if (clearStatus && (prevTarget.status || prevTarget.secondaryStatus)) {
+      parts.push('解除特殊狀態');
+    }
     st = addLog(st, `→ ${parts.join('，')}`, idx);
   }
   return updatePlayer(st, idx, (p) => {
@@ -519,6 +526,10 @@ export function healResolver(
     const discarded = target.energyAttached.slice(-discardCount);
     const remaining = target.energyAttached.slice(0, target.energyAttached.length - discardCount);
     const healed: CardInstance = { ...target, damage: newDamage, energyAttached: remaining };
+    if (clearStatus) {
+      delete healed.status;
+      delete healed.secondaryStatus;
+    }
 
     return {
       ...p,
