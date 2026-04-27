@@ -1,9 +1,43 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.186)  
+> 最後更新：2026-04-27 (v2.187)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.187 — 化石機制核心 scaffold（engine-only，UI 留 v2.188）
+
+### 設計鎖定（FOSSIL_DESIGN.md）
+動工前已 commit `FOSSIL_DESIGN.md`，跟 Leon 對齊 5 個關鍵規則：
+1. 化石上場 = 寶可夢上場 → 險惡廢墟 / bench-place trigger 會觸發
+2. 化石可附 Tool / Energy（視為一般寶可夢）
+3. 被 KO 給對手 1 張獎賞（白蕾雅之類修飾卡照常）
+4. 背蓋化石「不受招式效果影響」≠ 不受傷害（只擋附加效果）
+5. 羽毛化石「備戰區不受招式傷害」包含 bench snipe
+
+外加：化石上場後永遠有【丟棄】按鈕（戰鬥場/備戰皆可），丟棄是非昏厥（對手不抽獎賞）；戰鬥場丟棄要從備戰補 1 隻。
+
+### Engine 改動（types.ts + engine.ts）
+- **CardInstance.fossilOnField?: boolean** — 標明 instance 雖 cardId 對應 Item 卡（subtype=Item），但目前作為 HP60【無】基礎寶可夢站場上。
+- **GameAction 新增**：`PLAY_FOSSIL` / `DISCARD_FOSSIL`
+- **FOSSIL_ITEM_NAMES** Set + `isFossilItemCard()` helper（engine.ts）— 5 張化石名稱白名單
+- **getEffectiveHP** 加 fossil short-circuit：`if (inst.fossilOnField) return 60`（不吃任何 Tool/能量/Stadium 加減）
+- **EVOLVE handler** 加 `basePoke.fossilOnField` guard（化石不能被進化）
+- **RETREAT handler** 加 `attacker.active.fossilOnField` guard（化石不能撤退）
+- **PLAY_FOSSIL handler**：從手牌打到備戰，設 `fossilOnField=true` + `justPlaced=true`，呼叫 `applyBenchPlaceSideEffects`（險惡廢墟 / bench-place trigger 會跑）
+- **DISCARD_FOSSIL handler**：自己回合 main phase 才能用；場上化石 + 附加的能量/Tool 整組移到棄牌區。若是戰鬥場 → active=null 讓 UI 偵測補位流程（同昏厥但無獎賞）
+- **scrubBenchStatus** 擴充為 fossil-immunity sweep：戰鬥場/備戰的化石持有 status / secondaryStatus 時清除（applyAction 末尾跑）
+
+### items_misc.ts 占位 reg
+5 張化石加 `regG=() => false` 阻擋一般 Item 路徑（PLAY_TRAINER 不能觸發），純 noop reg 讓 audit 識別已實裝。實際走 PLAY_FOSSIL / DISCARD_FOSSIL action。
+
+### 還沒做的（v2.188 起）
+- **UI 端**：手牌化石拖到備戰格 → dispatch PLAY_FOSSIL；化石顯示為寶可夢樣（卡圖、HP60 條、能量 pip 區、Tool 槽）；永遠的【丟棄】按鈕（戰鬥場/備戰）
+- **5 張被動效果**：根狀（對手基礎 +1【無】成本）、背蓋（免疫招式效果）、羽毛（備戰免疫招式傷害）、顎之（戰鬥位減傷 -30）、鰭之（免疫對手支援者效果）
+
+目前 v2.187 玩家還無法用化石（缺 UI 拖曳），但 engine 已經能正確處理 PLAY_FOSSIL / DISCARD_FOSSIL 兩個 action，sim/test 可走完整流程。
 
 ---
 

@@ -272,6 +272,30 @@ function isBasicPokemon(cardId: string, pool: Map<string, Card>): boolean {
   return isBasicPokemonCard(pool.get(cardId));
 }
 
+// ── v2.187 化石機制 ────────────────────────────────────────────────────────
+/**
+ * 化石 Item 名稱（5 張，全部 supertype=Trainer / subtype=Item，但卡面寫
+ * 「可作為 HP60【無】基礎寶可夢放置於場上」）。
+ * 命中此 set 的卡，在手牌時可走 PLAY_FOSSIL 上場（變成 fossilOnField=true 的
+ * CardInstance），上場後視為一般寶可夢但有專屬規則：
+ *   - HP 永遠 60、屬性永遠【無】、subtype Basic
+ *   - 不能進化、不能撤退、永不持有 status / secondaryStatus
+ *   - 自己回合 main phase 可走 DISCARD_FOSSIL 自主丟棄（非昏厥）
+ *   - 被打 KO 走正常昏厥流程（給對手 1 張獎賞）
+ */
+export const FOSSIL_ITEM_NAMES = new Set<string>([
+  '陳舊的根狀化石',
+  '陳舊的背蓋化石',
+  '陳舊的羽毛化石',
+  '陳舊的顎之化石',
+  '陳舊的鰭之化石',
+]);
+
+export function isFossilItemCard(card: Card | undefined): boolean {
+  return !!card && card.supertype === 'Trainer' && card.subtype === 'Item'
+    && FOSSIL_ITEM_NAMES.has(card.name);
+}
+
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
 import { sameEvoName } from './effects/_shared';
@@ -305,6 +329,8 @@ export function getEffectiveHP(
   state?: GameState
 ): number {
   if (!inst) return 0;
+  // v2.187：化石上場永遠 60HP，且不吃任何 Tool/能量/Stadium 加減
+  if (inst.fossilOnField) return 60;
   const card = pool.get(inst.cardId);
   if (!card) return 0;
   let hp = card.hp ?? 0;
@@ -1157,6 +1183,74 @@ function handlePlaying(
     return afterPlace;
   }
 
+  // ── v2.187 化石 Item 作為基礎寶可夢上場 ─────────────────────────────────
+  // 規則：化石卡（FOSSIL_ITEM_NAMES）打到備戰區，視為 HP60【無】基礎寶可夢。
+  // Leon 確認：險惡廢墟 / bench-place trigger 會觸發、可附 Tool/能量、被 KO 給 1 張獎賞。
+  if (action.type === 'PLAY_FOSSIL') {
+    if (state.turnPhase !== 'main') return state;
+    if (attacker.bench.length >= getBenchLimit(state, aIdx, pool)) return state;
+    const hIdx = attacker.hand.findIndex(c => c.iid === action.iid);
+    if (hIdx < 0) return state;
+    const inst = attacker.hand[hIdx];
+    const card = pool.get(inst.cardId);
+    if (!isFossilItemCard(card)) return state;
+
+    const placed: CardInstance = { ...inst, justPlaced: true, fossilOnField: true };
+    attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
+    attacker.bench = [...attacker.bench, placed];
+    players[aIdx] = attacker;
+    let afterPlace = addLog(
+      { ...state, players },
+      `${attacker.name} 將 ${card!.name} 作為【基礎】寶可夢放到備戰區（HP60／【無】）`,
+      aIdx
+    );
+    // 化石上場 = 寶可夢上場 → 跑同 PLAY_BASIC 的 bench-place 觸發路徑
+    afterPlace = applyBenchPlaceSideEffects(afterPlace, aIdx, [placed.iid], pool);
+    return afterPlace;
+  }
+
+  // ── v2.187 化石自主丟棄（場上化石 → 棄牌區，非昏厥）────────────────────
+  // 規則：自己回合 main phase 可走此 action 把場上化石丟掉。對手不抽獎賞。
+  // 若被丟棄的是戰鬥場 → 必須從備戰補 1 隻（走 SEND_NEW_ACTIVE pending 流程）。
+  if (action.type === 'DISCARD_FOSSIL') {
+    if (state.turnPhase !== 'main') return state;
+    // 戰鬥場
+    if (attacker.active?.iid === action.iid && attacker.active.fossilOnField) {
+      const card = pool.get(attacker.active.cardId);
+      const fossilName = card?.name ?? '化石';
+      // 把化石（含附加的能量、道具）整組丟棄
+      const discardEntries: CardInstance[] = [
+        { ...attacker.active, fossilOnField: undefined, status: undefined, secondaryStatus: undefined,
+          energyAttached: [], toolAttached: undefined },
+        ...attacker.active.energyAttached,
+        ...(attacker.active.toolAttached ? [attacker.active.toolAttached] : []),
+      ];
+      attacker.discard = [...attacker.discard, ...discardEntries];
+      attacker.active = null;
+      players[aIdx] = attacker;
+      // active=null 時 UI 會自動偵測並彈備戰選擇器（同昏厥後補位流程，但無獎賞）
+      return addLog({ ...state, players },
+        `${attacker.name} 將戰鬥場的 ${fossilName} 丟棄到棄牌區（非昏厥）`, aIdx);
+    }
+    // 備戰
+    const bIdx = attacker.bench.findIndex(b => b.iid === action.iid && b.fossilOnField);
+    if (bIdx < 0) return state;
+    const benchInst = attacker.bench[bIdx];
+    const benchCard = pool.get(benchInst.cardId);
+    const fossilName = benchCard?.name ?? '化石';
+    const discardEntries: CardInstance[] = [
+      { ...benchInst, fossilOnField: undefined, status: undefined, secondaryStatus: undefined,
+        energyAttached: [], toolAttached: undefined },
+      ...benchInst.energyAttached,
+      ...(benchInst.toolAttached ? [benchInst.toolAttached] : []),
+    ];
+    attacker.discard = [...attacker.discard, ...discardEntries];
+    attacker.bench = attacker.bench.filter((_, i) => i !== bIdx);
+    players[aIdx] = attacker;
+    return addLog({ ...state, players },
+      `${attacker.name} 將備戰區的 ${fossilName} 丟棄到棄牌區（非昏厥）`, aIdx);
+  }
+
   // ── 進化 ──────────────────────────────────────────────────────────────────
   if (action.type === 'EVOLVE') {
     if (state.turnPhase !== 'main') return state;
@@ -1179,6 +1273,8 @@ function handlePlaying(
       basePoke = attacker.bench.find(c => c.iid === action.fromIid) ?? null;
     }
     if (!basePoke) return state;
+    // v2.187：化石上場後不能被進化（化石本身不是真寶可夢卡，沒有進化路徑）
+    if (basePoke.fossilOnField) return state;
     const baseCard = pool.get(basePoke.cardId);
     if (!baseCard) return state;
     // v2.149 提升進化（伊布 SV8a 125）：戰鬥場上時可第 1 回合或剛使出時進化
@@ -1240,6 +1336,8 @@ function handlePlaying(
     if (state.turnPhase !== 'main') return state;
     if (attacker.retreatedThisTurn) return state;
     if (!attacker.active) return state;
+    // v2.187：化石卡卡面明確「無法撤退」
+    if (attacker.active.fossilOnField) return state;
     // 睡眠和麻痺時無法撤退
     if (attacker.active.status === 'asleep' || attacker.active.status === 'paralyzed') return state;
     // 招式效果「下個對手回合無法撤退」— cantRetreatNextTurn flag（v1.62）
@@ -3373,15 +3471,28 @@ function scrubBenchStatus(state: GameState): GameState {
   const players = state.players.map((p) => {
     let benchChanged = false;
     const newBench = p.bench.map((b) => {
+      // v2.187：化石永不持有任何狀態（戰鬥場或備戰）
+      if (b.fossilOnField && (b.status !== undefined || b.secondaryStatus !== undefined)) {
+        benchChanged = true;
+        return { ...b, status: undefined, secondaryStatus: undefined };
+      }
+      // 一般寶可夢：備戰區不應持有異常狀態（v2.47 規則）
       if (b.status !== undefined || b.secondaryStatus !== undefined) {
         benchChanged = true;
         return { ...b, status: undefined, secondaryStatus: undefined };
       }
       return b;
     });
-    if (benchChanged) {
+    // v2.187：戰鬥場上的化石也不該持有狀態
+    let activeChanged = false;
+    let newActive = p.active;
+    if (newActive?.fossilOnField && (newActive.status !== undefined || newActive.secondaryStatus !== undefined)) {
+      newActive = { ...newActive, status: undefined, secondaryStatus: undefined };
+      activeChanged = true;
+    }
+    if (benchChanged || activeChanged) {
       changed = true;
-      return { ...p, bench: newBench };
+      return { ...p, bench: newBench, active: newActive };
     }
     return p;
   }) as [PlayerState, PlayerState];

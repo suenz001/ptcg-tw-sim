@@ -201,6 +201,18 @@ export interface CardInstance {
    */
   immuneToExAttackNextTurn?: boolean;
   immuneToExAttackThisTurn?: boolean;
+  /**
+   * v2.187：化石上場旗標。標明此 instance 雖 cardId 對應 Item 卡（subtype=Item），
+   * 但目前作為 HP60【無】屬性【基礎】寶可夢站在場上（戰鬥場或備戰）。
+   *
+   * - 設於 PLAY_FOSSIL action（手牌 → 備戰）
+   * - getEffectiveHP / 弱抗 / 招式可附條件等 hook 都要 short-circuit
+   * - EVOLVE / RETREAT 直接拒絕
+   * - 永不持有 status / secondaryStatus（applyAction 末尾 sweep 清除）
+   * - 自己回合 main phase 可走 DISCARD_FOSSIL 直接丟棄（非昏厥、對手不抽獎賞）
+   * - 被打 KO 時走正常昏厥流程（給對手 1 張獎賞）
+   */
+  fossilOnField?: boolean;
 }
 
 export type SpecialCondition =
@@ -523,6 +535,8 @@ export type GameAction =
   // 正式對戰
   | { type: 'DRAW_CARD' }
   | { type: 'PLAY_BASIC'; iid: string }          // 從手牌打出基礎寶可夢到備戰區
+  | { type: 'PLAY_FOSSIL'; iid: string }         // v2.187 化石 Item 作為 HP60【無】基礎寶可夢放到備戰區
+  | { type: 'DISCARD_FOSSIL'; iid: string }      // v2.187 場上化石自主丟棄（非昏厥，對手不抽獎賞）
   | { type: 'ATTACH_ENERGY'; energyIid: string; targetIid: string }
   | { type: 'EVOLVE'; fromIid: string; toIid: string }
   | { type: 'RETREAT'; newActiveIid: string }

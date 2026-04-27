@@ -1245,3 +1245,32 @@ regR('fishnet-step2', (st, idx, iids, params, pool) => {
   }));
 });
 
+// ── 化石卡 5 張（v2.187 核心 scaffold）── ────────────────────────────────────
+// 共通機制：作為 HP60【無】基礎寶可夢上場、不能撤退/進化、不會中異常狀態、
+//          自己回合可丟棄（非昏厥）。詳細規則見 engine.ts FOSSIL_ITEM_NAMES /
+//          PLAY_FOSSIL / DISCARD_FOSSIL handler。
+//
+// 這些卡不走一般 Item 的 PLAY_TRAINER 路徑：
+//   - 從手牌打到備戰 → PLAY_FOSSIL action（UI 拖曳會觸發此 action）
+//   - 場上自主丟棄 → DISCARD_FOSSIL action
+//
+// 因此這裡只用「永遠 false 的 regG」佔位，讓一般 Item 路徑無法觸發。
+// 各自的被動效果（v2.188+）會在獨立 hook map 實裝。
+//
+// 名稱列表 = engine.ts FOSSIL_ITEM_NAMES（保持同步）：
+//   陳舊的根狀化石（H）、陳舊的背蓋化石（H）、陳舊的羽毛化石（I）、
+//   陳舊的顎之化石（J）、陳舊的鰭之化石（J）
+const FOSSIL_NAMES_LOCAL = [
+  '陳舊的根狀化石',
+  '陳舊的背蓋化石',
+  '陳舊的羽毛化石',
+  '陳舊的顎之化石',
+  '陳舊的鰭之化石',
+];
+for (const name of FOSSIL_NAMES_LOCAL) {
+  // 永遠 false：阻擋 Item 路徑（拖到 PLAY_TRAINER 不能用）
+  regG(name, () => false);
+  // reg fallback：不會被 PLAY_TRAINER 觸發到（因為 regG=false），但保留 noop 以利 audit 識別
+  reg(name, (st) => st);
+}
+

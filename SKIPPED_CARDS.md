@@ -11,9 +11,10 @@
 - `[14100/I] 阿塞蘿拉的惡作劇` — ✓ v2.174（CardInstance.immuneToExAttackNextTurn/ThisTurn）
 - `[18497/J] 霍米加的演奏` — ✓ v2.174（PlayerState.cantRetreatIfPoisonedNextTurn/ThisTurn）
 
-### 需「Item-as-Pokemon」化石機制（5 張）
+### 需「Item-as-Pokemon」化石機制（5 張，v2.187 engine scaffold 已完成）
 - `[18045/J] 陳舊的顎之化石` / `[18046/J] 陳舊的鰭之化石` / `[17128/I] 陳舊的羽毛化石` / `[13947/H] 陳舊的背蓋化石` / `[10985/H] 陳舊的根狀化石`
-- 化石 Item 可作為 HP60【無】寶可夢放置場上，自己回合可丟棄
+- v2.187 engine：CardInstance.fossilOnField flag、PLAY_FOSSIL/DISCARD_FOSSIL action handler、HP=60 short-circuit、不能撤退/進化、永不持有 status、丟棄非昏厥（戰鬥場走 active=null 補位）
+- v2.188+ 待補：UI 拖曳上場、化石寶可夢樣顯示、永遠的【丟棄】按鈕、5 張各別被動效果（根狀+1【無】成本、背蓋免疫招式效果、羽毛備戰免傷、顎之-30 戰鬥位減傷、鰭之免疫對手支援者）
 
 ### 需「對手 yes/no 互動」（4 張）
 - `[14018/I] 馬志士的交易` (Supporter) — 詢問對手是否互換獎賞
