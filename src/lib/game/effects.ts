@@ -10504,8 +10504,11 @@ regR('bug-catcher-set', (st, idx, iids, params, pool) => {
 });
 
 // ---- 能量轉移（Item）- 把 1 張基本能量從自己的寶可夢移到另一隻 -------------
-// 2 步：先選來源（自己寶可夢身上有基本能量者），再選其身上的基本能量，再選目的地寶可夢。
-// 為降低 UI 複雜度，此版簡化為：選來源寶可夢，自動挑第 1 張基本能量；然後選目的地。
+// v2.231 升級為完整 3 步：
+//   1. 選來源（自己寶可夢身上有基本能量者）— heal-target validIids
+//   2. 選來源身上的基本能量（多張時開 modal-choice 列舉，1 張時 fast path）
+//   3. 選目的地寶可夢 — heal-target
+// 之前簡化為「自動挑第 1 張基本能量」對多色寶可夢不正確。
 regG('能量轉移', (st, idx, pool) => {
   const p = st.players[idx];
   const allField = [...(p.active ? [p.active] : []), ...p.bench];
@@ -10541,13 +10544,58 @@ regR('energy-switch-src', (st, idx, iids, _params, pool) => {
   const p = st.players[idx];
   const srcPoke = p.active?.iid === srcIid ? p.active : p.bench.find(c => c.iid === srcIid);
   if (!srcPoke) return st;
-  // 取第 1 張基本能量作為移動對象
-  const energyInst = srcPoke.energyAttached.find(e => {
+  // 找來源身上所有基本能量
+  const basicEnergies = srcPoke.energyAttached.filter(e => {
     const card = pool.get(e.cardId);
     return card?.supertype === 'Energy' && card.subtype === 'Basic';
   });
-  if (!energyInst) return st;
+  if (basicEnergies.length === 0) return st;
   const srcName = pool.get(srcPoke.cardId)?.name ?? '?';
+  // v2.231：多張基本能量 → 開 modal-choice 讓玩家選；1 張時 fast path 直接走 dst
+  if (basicEnergies.length > 1) {
+    st = addLog(st, `能量轉移：${srcName} 身上有 ${basicEnergies.length} 張基本能量，選擇 1 張移出`, idx);
+    return withPending(st, {
+      type: 'modal-choice',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'energy-switch-pick-energy',
+      params: {
+        label: '能量轉移',
+        srcIid,
+        energyIids: basicEnergies.map(e => e.iid),
+        options: basicEnergies.map((e, i) => ({
+          id: `${i}`,
+          text: `${i + 1}. ${pool.get(e.cardId)?.name ?? '?'}`,
+        })),
+      },
+    });
+  }
+  // 1 張：fast path
+  return resolveEnergySwitchAfterPick(st, idx, srcIid, basicEnergies[0], pool);
+});
+// v2.231：玩家選完能量後，繼續選目的地
+regR('energy-switch-pick-energy', (st, idx, iids, params, pool) => {
+  const choiceIdx = parseInt(iids[0] ?? '0', 10);
+  const energyIids = (params?.energyIids as string[] | undefined) ?? [];
+  const srcIid = (params?.srcIid as string | undefined) ?? '';
+  const energyIid = energyIids[choiceIdx];
+  if (!srcIid || !energyIid) return st;
+  const p = st.players[idx];
+  const srcPoke = p.active?.iid === srcIid ? p.active : p.bench.find(c => c.iid === srcIid);
+  if (!srcPoke) return st;
+  const energyInst = srcPoke.energyAttached.find(e => e.iid === energyIid);
+  if (!energyInst) return st;
+  return resolveEnergySwitchAfterPick(st, idx, srcIid, energyInst, pool);
+});
+// v2.231 helper：取下能量並開目的地 pending（pick energy 之後 / 1 張時 fast path）
+function resolveEnergySwitchAfterPick(
+  st: GameState, idx: 0 | 1, srcIid: string,
+  energyInst: CardInstance, pool: Map<string, Card>,
+): GameState {
+  const srcPoke = st.players[idx].active?.iid === srcIid
+    ? st.players[idx].active
+    : st.players[idx].bench.find(c => c.iid === srcIid);
+  const srcName = srcPoke ? (pool.get(srcPoke.cardId)?.name ?? '?') : '?';
   const eName = pool.get(energyInst.cardId)?.name ?? '?';
   // 從來源移除 energyInst
   st = updatePlayer(st, idx, pl => {
@@ -10560,12 +10608,10 @@ regR('energy-switch-src', (st, idx, iids, _params, pool) => {
     return { ...pl, active, bench };
   });
   st = addLog(st, `能量轉移：從 ${srcName} 取下 ${eName}，選擇目的地寶可夢`, idx);
-  // 選目的地（所有自己的寶可夢，排除來源）
   const pp = st.players[idx];
   const allTargets = [...(pp.active ? [pp.active] : []), ...pp.bench]
     .filter(c => c.iid !== srcIid);
   if (allTargets.length === 0) {
-    // Fallback：沒別的寶可夢，能量回 hand（維持不空轉）
     st = addLog(st, '能量轉移：沒有其他寶可夢，能量移回手牌', idx);
     return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, energyInst] }));
   }
@@ -10580,7 +10626,7 @@ regR('energy-switch-src', (st, idx, iids, _params, pool) => {
       titleOverride: `能量轉移：選擇附加 ${eName} 的目的地寶可夢`,
     },
   });
-});
+}
 regR('energy-switch-dst', (st, idx, iids, params, pool) => {
   const dstIid = iids[0];
   const energyInst = params?.energyInstance as CardInstance | undefined;
