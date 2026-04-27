@@ -1,9 +1,64 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.200)  
+> 最後更新：2026-04-27 (v2.201)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.201 — modal-choice stepper UI + 泰姆（Supporter / H）
+
+### 引擎/UI 擴充：modal-choice stepper（+/- 按鈕版）
+
+Leon 規則「進入戰鬥後只要動滑鼠就可以完成遊戲，不需要使用鍵盤」（v2.201 對話新增記憶 feedback_mouse_only_battle.md）。所以對手互動 picker 第二張卡「泰姆」需要對手猜 HP — 不能用 number input，改用 +/- 按鈕 stepper。
+
+**機制設計**（不引入新 pending type，僅擴展 modal-choice）：
+- modal-choice pendingSelection.params 新增 optional 欄位：
+  ```ts
+  stepper?: { min: number; max: number; step: number; init: number }
+  ```
+- 有 stepper 時 UI 渲染 [−] / [當前值] / [+] / [✓ 確認]，無 stepper 時保持原 options 列表
+- selectedIids payload：stepper 模式回傳 `[String(currentValue)]`，options 模式回傳 `[option.id]`
+- AI handler 偵測 stepper → 直接送 `[String(stepper.init)]`
+
+**檔案改動**：
+- `types.ts`：未動（params 是 generic Record，不需要新增型別）
+- `+page.svelte:88`：新 `selectionStepperValue` $state
+- `+page.svelte:847`：modalSignature $effect 加 stepper init reset
+- `+page.svelte:1801`：confirmSelection 偵測 stepper，payload = `[String(value)]`
+- `+page.svelte:3217`：modal-choice 渲染分支 — 有 stepper 改顯示 stepper UI
+- `+page.svelte:4506`：CSS — 圓鈕 +/- + 中央數值顯示 + 確認鈕
+- `ai.ts:497`：modal-choice handler 偵測 stepper → 送 init 值
+
+### 泰姆（Supporter / H）
+
+**卡面**：從自己的手牌選 1 張寶可夢卡，向對手宣言名稱後翻反面放置。對手回答 HP。
+- 若正確 → 對手抽 4 張
+- 若不正確 → 自己抽 4 張
+- 然後將放置的卡放回自己的手牌（即無真正消耗）
+
+**實裝兩段 pending**（v172_hij_batch.ts）：
+
+**Step 1**：出卡方挑寶可夢卡  
+`type='hand-choose'` actor=自己，validIids 過濾 supertype='Pokemon'，UI 只 highlight 寶可夢卡。
+resolver `tym-step1-pick-poke` 從卡 JSON 抽出 HP，開 step 2。
+
+**Step 2**：對手猜 HP  
+`type='modal-choice'` actor=oppIdx + `params.stepper = { min: 30, max: 340, step: 10, init: 100 }`。
+resolver `tym-step2-guess-hp` 比對 `params.correctHP` 決定誰抽 4 張。
+
+**為什麼 init=100 而非實際 HP**：
+- 真人對手：猜 HP 是策略性互動，預設值不應該洩漏答案
+- AI 對手：v2.201 AI handler 拿 init 直接送 → AI 永遠猜 100，多數時候錯（出卡方抽 4）
+- 對手贏錢：對手準確答對才能抽 4 — 這是卡牌「考你 PTCG 知識」的設計意圖
+
+### H/I/J 進度
+229/236 → 230/236（剩 6 張）：
+- 引擎深擴（5 張）：招式注入（核心記憶碟、招式學習器 螢石）、TOOL_ON_DAMAGED 雙段 pending（手持循環扇）、Stadium 連進化（壯偉碩木）、opp-deck-peek（配樂之笛）
+- 出卡方自選 + opp peek（火箭隊的妨礙機器人）：嚴格說不是 picker — 是 random + 自選 Y/N
+
+下一步：RWD（手機橫屏 + 平板橫屏）— Leon 在 v2.199 對話確認順序為「先 picker 再 RWD」，picker 已完成 2/2 必要實作。
 
 ---
 

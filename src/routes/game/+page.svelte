@@ -85,6 +85,11 @@
   // 跟 selectionPicked 分開：reorder 是兩列 + 順序，不是單純 toggle 集合
   let selectionReorderKeep = $state<string[]>([]);
   let selectionReorderDiscard = $state<Set<string>>(new Set());
+  // v2.201 modal-choice stepper 專用：當前數值（泰姆猜 HP / 未來其他需要數字 stepper 的卡）
+  // 規則：modal-choice pendingSelection.params.stepper = { min, max, step, init }
+  // 啟用條件：params.stepper 存在 → UI 渲染 +/- 按鈕 + 確認 而非 options 列表
+  // 為何不用 number input：Leon 規則「戰鬥畫面只用滑鼠」（記憶 feedback_mouse_only_battle.md）
+  let selectionStepperValue = $state<number>(0);
   let zoomCard = $state<Card | null>(null);
   // v2.129：全螢幕卡牌放大 lightbox（鏡射 /cards 樣式）— 從任何 zoom-img 或 cards 點擊觸發
   let lightboxUrl = $state<string | null>(null);
@@ -838,6 +843,13 @@
       const cand = (pendingSelection.params?.candidateIids as string[] | undefined) ?? [];
       selectionReorderKeep = [...cand];
       selectionReorderDiscard = new Set();
+    }
+    // v2.201：modal-choice stepper 切到新 pending 時，從 params.stepper.init 初始化數值
+    if (pendingSelection?.type === 'modal-choice') {
+      const stepper = pendingSelection.params?.stepper as { min: number; max: number; step: number; init: number } | undefined;
+      if (stepper) {
+        selectionStepperValue = stepper.init;
+      }
     }
   });
   const evolvableTargets = $derived(game && poolReady ? getEvolvableTargets(game, pool) : []);
@@ -1786,6 +1798,10 @@
     } else if (pendingSelection?.type === 'reorder-deck-top') {
       // v2.164：保留 + 排序的 iid 列表（top first）
       payload = [...selectionReorderKeep];
+    } else if (pendingSelection?.type === 'modal-choice'
+        && pendingSelection.params?.stepper) {
+      // v2.201：modal-choice stepper（泰姆猜 HP 等）— payload 是當前 stepper 數值（字串化）
+      payload = [String(selectionStepperValue)];
     } else {
       payload = [...selectionPicked];
     }
@@ -3198,18 +3214,38 @@
           </div>
         {/if}
 
-        <!-- v2.139 modal-choice：兩/多選一文字選單（烏栗 等） -->
+        <!-- v2.139 modal-choice：兩/多選一文字選單（烏栗 等）
+             v2.201：擴展支援 stepper UI（params.stepper = {min, max, step, init}） — 泰姆猜 HP 用
+             stepper 與 options 互斥；options 為主、有 stepper 時切換到數字 +/- 模式 -->
         {#if pendingSelection.type === 'modal-choice'}
-          {@const opts = (pendingSelection.params?.options as Array<{id:string;text:string;disabled?:boolean}>) ?? []}
-          <div class="modal-choice-list">
-            {#each opts as opt}
-              <button class="btn-act modal-choice-btn"
-                disabled={!!opt.disabled}
-                onclick={() => { selectionPicked = new Set([opt.id]); confirmSelection(); }}>
-                {opt.text}
-              </button>
-            {/each}
-          </div>
+          {@const stepper = pendingSelection.params?.stepper as { min: number; max: number; step: number; init: number } | undefined}
+          {#if stepper}
+            <div class="modal-choice-stepper">
+              <button class="stepper-btn stepper-minus"
+                disabled={selectionStepperValue <= stepper.min}
+                onclick={() => { selectionStepperValue = Math.max(stepper.min, selectionStepperValue - stepper.step); }}
+                title="減 {stepper.step}">−</button>
+              <div class="stepper-value">{selectionStepperValue}</div>
+              <button class="stepper-btn stepper-plus"
+                disabled={selectionStepperValue >= stepper.max}
+                onclick={() => { selectionStepperValue = Math.min(stepper.max, selectionStepperValue + stepper.step); }}
+                title="加 {stepper.step}">+</button>
+              <button class="btn-act primary stepper-confirm"
+                onclick={() => confirmSelection()}>✓ 確認</button>
+            </div>
+            <p class="sel-hint stepper-hint">範圍 {stepper.min}–{stepper.max} · 每次 ±{stepper.step}</p>
+          {:else}
+            {@const opts = (pendingSelection.params?.options as Array<{id:string;text:string;disabled?:boolean}>) ?? []}
+            <div class="modal-choice-list">
+              {#each opts as opt}
+                <button class="btn-act modal-choice-btn"
+                  disabled={!!opt.disabled}
+                  onclick={() => { selectionPicked = new Set([opt.id]); confirmSelection(); }}>
+                  {opt.text}
+                </button>
+              {/each}
+            </div>
+          {/if}
         {/if}
 
         <div class="sel-footer">
@@ -4467,6 +4503,15 @@
   .sel-header:active{ cursor:grabbing; }
   .sel-header h3{ margin:0 0 .2rem; font-size:1.1rem; color:#aaffaa; }
   .sel-hint{ margin:0; font-size:.85rem; color:#aaa; }
+  /* v2.201 modal-choice stepper：泰姆猜 HP 等需要數字輸入的場景 — Leon 規則「戰鬥畫面只用滑鼠」
+     置中橫排：[−] [當前值] [+] [✓ 確認]，按鈕為大圓鈕方便手機/平板觸控 */
+  .modal-choice-stepper{ display:flex; align-items:center; justify-content:center; gap:.6rem; padding:.6rem 0; flex-wrap:wrap; }
+  .stepper-btn{ width:2.6rem; height:2.6rem; border-radius:50%; border:1px solid #4a6a4a; background:#1e3a1e; color:#fff; font-size:1.4rem; font-weight:700; cursor:pointer; user-select:none; }
+  .stepper-btn:hover:not(:disabled){ background:#2a4a2a; border-color:#5a8a5a; }
+  .stepper-btn:disabled{ opacity:.35; cursor:not-allowed; }
+  .stepper-value{ min-width:5rem; text-align:center; font-size:1.6rem; font-weight:700; color:#aaffaa; padding:0 .8rem; background:#0a180a; border:1px solid #2a4a2a; border-radius:8px; line-height:2.4rem; }
+  .stepper-confirm{ margin-left:.4rem; }
+  .stepper-hint{ text-align:center; }
   .sel-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:.4rem; overflow-y:auto; max-height:52vh; padding-right:.25rem; }
   .full-deck-view{ margin-top:.6rem; background:#0e1a0e; border:1px solid #2a4a2a; border-radius:6px; padding:.4rem .7rem; }
   .full-deck-view summary{ cursor:pointer; font-size:.85rem; color:#aaffcc; font-weight:600; }

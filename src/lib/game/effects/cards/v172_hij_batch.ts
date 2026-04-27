@@ -685,3 +685,94 @@ regR('masters-trade-decide', (st, oppIdx, iids, _params, _pool) => {
     return { ...p, deck: p.deck.slice(taken.length), hand: [...p.hand, ...taken] };
   });
 });
+
+// ── 泰姆（Supporter / H）─ 對手猜 HP（v2.201 第 2 張對手互動 picker） ───────
+// 卡面：從自己的手牌選 1 張寶可夢卡，向對手宣言名稱後翻反面放置。對手回答 HP。
+//   - 若正確 → 對手抽 4 張
+//   - 若不正確 → 自己抽 4 張
+//   - 然後將放置的卡放回自己的手牌（即無真正消耗）。
+//
+// Step 1 — 出卡方（actor=自己）從手牌挑 1 張寶可夢卡：
+//   pending type='hand-choose'（已存在於 types.ts:360 — 「從手牌選擇但不丟棄」）
+//   filter='Pokemon'：UI 只 highlight 寶可夢卡可選
+// Step 2 — 對手（actor=oppIdx）猜 HP：
+//   pending type='modal-choice' + params.stepper（v2.201 新增）
+//   stepper：min=30, max=340, step=10，init=100（中位數合理猜測，AI 拿 init = 不直接答對）
+//   猜對與否由 resolver 比對 params.correctHP（從 step 1 picked card 抽出）。
+//
+// 為什麼 init=100 而非實際 HP：
+//   - 真人對手：猜 HP 是策略性互動，預設值不應該洩漏答案
+//   - AI 對手：v2.201 AI handler 拿 init 直接送 → AI 永遠猜 100，多數時候錯（出卡方抽 4）
+//   - 對手贏錢：對手準確答對才能抽 4 — 這是卡牌「考你 PTCG 知識」的設計意圖
+regG('泰姆', (st, idx, pool) => {
+  // 手牌至少 1 張寶可夢卡才能用
+  return st.players[idx].hand.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
+});
+reg('泰姆', (st, idx, pool) => {
+  // hand-choose 的 validIids 只放手牌中的寶可夢 — UI 會把這些 iid highlight 為可選
+  const pokeIids = st.players[idx].hand
+    .filter(c => pool.get(c.cardId)?.supertype === 'Pokemon')
+    .map(c => c.iid);
+  st = addLog(st, '泰姆：選 1 張手牌寶可夢卡，讓對手猜 HP', idx);
+  return withPending(st, {
+    type: 'hand-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'tym-step1-pick-poke',
+    params: {
+      validIids: pokeIids,
+      titleOverride: '泰姆：選 1 張寶可夢卡（讓對手猜 HP）',
+    },
+  });
+});
+regR('tym-step1-pick-poke', (st, idx, iids, _params, pool) => {
+  const pickedIid = iids[0];
+  if (!pickedIid) return st;
+  const player = st.players[idx];
+  const picked = player.hand.find(c => c.iid === pickedIid);
+  if (!picked) return st;
+  const card = pool.get(picked.cardId);
+  if (!card || card.supertype !== 'Pokemon') {
+    return addLog(st, '泰姆：選擇的不是寶可夢卡，效果失敗', idx);
+  }
+  const hp = card.hp ?? 0;
+  if (hp <= 0) {
+    return addLog(st, `泰姆：${card.name} 沒有有效 HP 資料，效果失敗`, idx);
+  }
+  const oppIdx = (1 - idx) as 0 | 1;
+  st = addLog(st, `泰姆：${player.name} 宣告「${card.name}」— 等待 ${st.players[oppIdx].name} 猜 HP`, idx);
+  return withPending(st, {
+    type: 'modal-choice',
+    actorIdx: oppIdx, sourcePlayerIdx: oppIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'tym-step2-guess-hp',
+    params: {
+      label: `泰姆：${player.name} 宣告了「${card.name}」— 請猜這隻寶可夢的 HP`,
+      stepper: { min: 30, max: 340, step: 10, init: 100 },
+      correctHP: hp,
+      pickedCardName: card.name,
+    },
+  });
+});
+regR('tym-step2-guess-hp', (st, oppIdx, iids, params, _pool) => {
+  const guess = parseInt(iids[0] ?? '0', 10);
+  const correctHP = (params?.correctHP as number) ?? 0;
+  const cardName = (params?.pickedCardName as string) ?? '?';
+  const proposerIdx = (1 - oppIdx) as 0 | 1;
+  const proposerName = st.players[proposerIdx].name;
+  const oppName = st.players[oppIdx].name;
+  const drawIdx: 0 | 1 = guess === correctHP ? oppIdx : proposerIdx;
+  const drawName = st.players[drawIdx].name;
+  if (guess === correctHP) {
+    st = addLog(st,
+      `泰姆：${oppName} 猜「${cardName}」HP=${guess} — 正確！${oppName} 從牌庫抽 4 張`,
+      oppIdx);
+  } else {
+    st = addLog(st,
+      `泰姆：${oppName} 猜「${cardName}」HP=${guess}（正確 ${correctHP}）— 不正確！${proposerName} 從牌庫抽 4 張`,
+      oppIdx);
+  }
+  return updatePlayer(st, drawIdx, p => {
+    const taken = p.deck.slice(0, 4);
+    return { ...p, deck: p.deck.slice(taken.length), hand: [...p.hand, ...taken] };
+  });
+});

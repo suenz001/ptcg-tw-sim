@@ -494,7 +494,14 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
     }
 
     // v2.139 modal-choice：兩/多選一文字選單（烏栗等）
+    // v2.201 擴展：偵測 params.stepper（泰姆猜 HP 等）— AI 直接送 init 值
     case 'modal-choice': {
+      const stepper = sel.params?.stepper as { min: number; max: number; step: number; init: number } | undefined;
+      if (stepper) {
+        // AI 簡化：直接送出 init（卡牌設計 init 通常為「中位數合理猜測」）
+        // 泰姆 case 為避免 AI 直接答對，effect 側已將 init 設為「常見 HP 中位數 100」而非實際 HP
+        return { type: 'RESOLVE_SELECTION', selectedIids: [String(stepper.init)] };
+      }
       const opts = (sel.params?.options as Array<{ id: string; text: string; disabled?: boolean }>) ?? [];
       // AI 簡化：選第一個非 disabled 選項
       const first = opts.find(o => !o.disabled) ?? opts[0];
