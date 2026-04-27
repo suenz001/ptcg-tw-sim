@@ -8680,7 +8680,7 @@ regPre('美錄梅塔|重塑斧', selfToolDiscardOrFailPre(250, '重塑斧'));
 // 本波實裝（6 張）：
 //   • 含羞苞｜癢癢花粉 10 + cantPlayItem
 //   • 青銅鐘｜進化妨礙者 30 + cantEvolve
-//   • 吼叫尾ex｜絕叫 0 + cantPlaySupporter（「後攻最初回合限定」暫簡化為始終可用）
+//   • 吼叫尾ex｜絕叫 0 + cantPlaySupporter（v2.219 補「後攻最初回合限定」gate）
 //   • 電蜘蛛ex｜雷擊石 180 + 自丟所有能量 + cantPlayItem
 //   • 晶光花｜侵蝕碎塊 20 + 中毒 + cantAttachEnergy
 //   • 蝶結萌虻｜多餘花粉 30 + deferredPrizeBonus=2

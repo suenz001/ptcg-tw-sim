@@ -2240,6 +2240,19 @@ function handlePlaying(
           `${atkName} 因上回合效果，本回合無法使用「${attackName}」`,
           aIdx);
       }
+
+      // v2.219 — 後攻方最初回合限定招式（吼叫尾ex｜絕叫 等）
+      // 卡面：「這個招式只可在後攻玩家的最初回合使用。」
+      // 條件：state.isFirstTurn && aIdx 是後攻方（!= firstPlayerIdx）
+      const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫']);
+      if (attackName && SECOND_PLAYER_FIRST_TURN_ONLY.has(attackName)) {
+        const isSecondPlayer = aIdx !== state.firstPlayerIdx;
+        if (!state.isFirstTurn || !isSecondPlayer) {
+          return addLog(state,
+            `${atkName}：「${attackName}」只能在後攻方最初回合使用`,
+            aIdx);
+        }
+      }
     }
 
     // 玩家級「本回合所有寶可夢皆無法使用招式」（例：電擊魔獸｜雷電在地）
@@ -3895,6 +3908,12 @@ export function getAvailableAttacks(
     .map(({ atk }, i) => {
       // v2.92：單招下回合禁用（例：超級勇氣）— UI 層反白禁按
       if (player.active!.blockedAttackNamesThisTurn?.includes(atk.name)) return -1;
+      // v2.219：後攻方最初回合限定招式（吼叫尾ex｜絕叫）— UI 層反白
+      const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫']);
+      if (SECOND_PLAYER_FIRST_TURN_ONLY.has(atk.name)) {
+        const isSecondPlayer = state.activePlayerIndex !== state.firstPlayerIdx;
+        if (!state.isFirstTurn || !isSecondPlayer) return -1;
+      }
       // v2.103：大竺葵繁茂 / 燃火能量倍率（傳 state+activePlayerIndex）
       // v2.127：傳 atk.name 讓 canAffordAttack 能套用 酋雷姆｜反等離子 條件式減費
       return canAffordAttack(player.active!, atk.cost, pool, state, state.activePlayerIndex, atk.name) ? i : -1;
