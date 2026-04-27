@@ -467,6 +467,10 @@ const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   // v2.133 薄霧能量 — 視為 1 個【無】能量。
   //   v2.138 起「附有的寶可夢不受對手招式效果影響」已在 hasEffectShield helper 實裝。
   '薄霧能量': ['Colorless'],
+  // v2.195 燃料【火】能量 — 視為 1 個【火】能量。
+  //   附加效果（招式效果丟棄時放回手牌）由 ATTACK pipeline 的 fuelFireSnapshotIids
+  //   類比 boomerang revive 處理。
+  '燃料【火】能量': ['Fire'],
 };
 
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {
@@ -2231,6 +2235,17 @@ function handlePlaying(
       .filter(e => pool.get(e.cardId)?.name === '回力鏢能量')
       .map(e => e.iid);
     const boomerangAttackerActiveIid: string = attacker.active.iid;
+    // v2.195 燃料【火】能量 revive 快照（卡面：「若因附有這張卡的【火】寶可夢
+    // 使用的招式的效果使這張卡被丟棄，則在招式的傷害與效果的影響之後，這張卡
+    // 放回手牌。」）
+    // 條件：attacker.active 是【火】寶可夢 + 身上有燃料【火】能量。
+    // 實作：snapshot 開打前 attacker.active 上所有「燃料【火】能量」iids；
+    //       attack 結束後若這些 iid 出現在 attacker.discard，撈回 attacker.hand。
+    const fuelFireSnapshotIids: string[] = attackerCard?.pokemonType === 'Fire'
+      ? attacker.active.energyAttached
+          .filter(e => pool.get(e.cardId)?.name === '燃料【火】能量')
+          .map(e => e.iid)
+      : [];
     // Session 33 引擎旗標：招式可聲明
     //   skipWeakRes    ：傷害不計算弱點 / 抵抗力
     //   skipDefEffects ：傷害不計算對手戰鬥寶可夢身上的「附加效果」
@@ -2773,6 +2788,27 @@ function handlePlaying(
             aIdx,
           );
         }
+      }
+    }
+
+    // ── v2.195：燃料【火】能量 revive（送回手牌而非寶可夢）─────────────────
+    // 卡面：「若因附有這張卡的【火】寶可夢使用的招式的效果使這張卡被丟棄，
+    //        則在招式的傷害與效果的影響之後，這張卡放回手牌。」
+    // attacker 是【火】（snapshot 階段已 check）+ snapshot iid 出現在 attacker 棄牌
+    // → 撈回 attacker 手牌（即使 attacker.active 換了也撈，因為「放回手牌」與寶可夢解綁）
+    if (fuelFireSnapshotIids.length > 0) {
+      const aPlayer = newState.players[aIdx];
+      const returnSet = new Set(fuelFireSnapshotIids);
+      const toReturn = aPlayer.discard.filter(e => returnSet.has(e.iid));
+      if (toReturn.length > 0) {
+        const newDiscard = aPlayer.discard.filter(e => !returnSet.has(e.iid));
+        const refPlayers = [...newState.players] as [PlayerState, PlayerState];
+        refPlayers[aIdx] = { ...refPlayers[aIdx], hand: [...refPlayers[aIdx].hand, ...toReturn], discard: newDiscard };
+        newState = addLog(
+          { ...newState, players: refPlayers },
+          `燃料【火】能量：${toReturn.length} 張因招式效果被丟棄，放回手牌`,
+          aIdx,
+        );
       }
     }
 

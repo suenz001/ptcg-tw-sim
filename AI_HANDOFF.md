@@ -1,9 +1,25 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.194)  
+> 最後更新：2026-04-27 (v2.195)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.195 — 燃料【火】能量
+
+### 卡面規則
+「只要這張卡附於寶可夢身上，視為提供 1 個【火】能量。若因附有這張卡的【火】寶可夢使用的招式的效果使這張卡被丟棄，則在招式的傷害與效果的影響之後，這張卡放回手牌。」
+
+### 實裝
+1. **能量屬性**：`SPECIAL_ENERGY_TYPES` 加 `'燃料【火】能量': ['Fire']`，cost 計算自動視為 1 個【火】能量
+2. **revive 機制**：仿 boomerang energy pattern，在 ATTACK pipeline 開頭加 `fuelFireSnapshotIids` 快照
+   - 條件：`attackerCard?.pokemonType === 'Fire'` + attacker.active 上所有「燃料【火】能量」iids
+   - 攻擊結束後（POST 後、boomerang revive 後）：snapshot iid 若出現在 attacker.discard → 撈回 attacker.hand
+   - 不需要 attacker.active 持原（與回力鏢不同），因為「放回手牌」是與寶可夢解綁的
+
+H/I/J 進度：剩 12 張未實裝。
 
 ---
 
