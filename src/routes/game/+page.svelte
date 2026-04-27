@@ -4717,4 +4717,48 @@
   .lightbox-img{ max-width:min(600px,95vw); max-height:92vh; object-fit:contain; border-radius:12px; box-shadow:0 8px 40px rgba(0,0,0,0.6); cursor:default; }
   .lightbox-close{ position:absolute; top:1rem; right:1.25rem; background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:2rem; line-height:1; width:2.5rem; height:2.5rem; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; }
   .lightbox-close:hover{ background:rgba(255,255,255,0.3); }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     v2.202 RWD — 手機橫屏（≤950px）
+     ════════════════════════════════════════════════════════════════════════
+     目標尺寸：手機橫屏 width 800–950px / height 380–440px（iPhone 14/Pro Max、
+     Samsung S23 等橫屏 viewport）。桌機（>950px）保留現有 layout 完全不變。
+
+     關鍵預算（430px 高 viewport）：
+       header ~36 + 對手 field ~120 + 我方 field ~120 + hand strip ~80 + action bar ~70 = 426
+     現有桌機尺寸（active-card 170, bench-slot 205, hand-card 92, action-bar 160-200）
+     在這個 viewport 一定爆出去。本 breakpoint 把所有 slot/card 等比縮約 35-40%。
+
+     原則：
+       - 只動尺寸（width / height / padding / font-size）；layout flex 結構不動
+       - drag drop zone 用 runtime offsetWidth/Height 自動跟著縮，不用手調
+       - 動畫（attack-shake/flash、fly）用 transform + relative position，自動 OK
+       - v2.198 .battle-root min-height + overflow-y:auto fallback 不拔（撐底保險）
+     ════════════════════════════════════════════════════════════════════════ */
+  @media (max-width: 950px) and (orientation: landscape) {
+    /* ── 戰鬥場框（active card） ── */
+    .active-card{ min-height:108px; padding:0.3rem 0.35rem; gap:0.3rem; border-radius:6px; }
+    .active-card.active-empty{ min-height:96px; padding:0.7rem; font-size:0.78rem; }
+    /* ── 備戰格 ── */
+    .bench-slot{ flex:1 1 64px; min-width:64px; max-width:88px; height:128px; padding:0.2rem; font-size:0.62rem; gap:0.05rem; }
+    .bench-slot img{ max-width:74px; max-height:78px; }
+    /* ── 手牌卡 ── */
+    .hand-card{ width:64px; padding:0.18rem; gap:0.08rem; font-size:0.62rem; }
+    .hand-card img{ width:60px; }
+    .hand-card-name{ font-size:0.58rem; }
+    /* ── 戰鬥 header ── */
+    .battle-header{ padding:0.2rem 0.4rem; gap:0.3rem; font-size:0.78rem; }
+    /* ── field row ── */
+    .field-row{ padding:0.25rem 0.4rem; gap:0.3rem; }
+    /* ── hand strip ── */
+    .hand-strip{ padding:0.2rem 0.4rem 0.3rem; }
+    /* ── action bar：桌機 160-200px 太大 → 60-90px 緊湊 ── */
+    .action-bar{ min-height:60px; max-height:96px; padding:0.2rem 0.4rem; gap:0.3rem; }
+    /* ── 選擇 modal：手機 95vw 不夠（左右兩側貼邊難按）— 壓 92vw + max-h 78vh ── */
+    .selection-modal{ max-width:580px; width:92vw; max-height:78vh; padding:0.85rem; gap:0.5rem; }
+    .sel-header h3{ font-size:0.95rem; }
+    .sel-hint{ font-size:0.72rem; }
+    /* sel-grid 卡牌縮 */
+    .sel-grid{ grid-template-columns:repeat(auto-fill, minmax(60px, 1fr)); gap:0.3rem; max-height:46vh; }
+  }
 </style>

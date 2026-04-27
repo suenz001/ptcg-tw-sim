@@ -1,9 +1,57 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.201)  
+> 最後更新：2026-04-27 (v2.202)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.202 — RWD Phase 1：手機橫屏（≤950px）
+
+**目標尺寸**（記憶 reference_rwd_targets.md）：
+- 手機橫屏 width 800–950px / height 380–440px（iPhone 14/Pro Max、Samsung S23 等）
+- 桌機 (>950px) 保留現有 layout 完全不動
+
+**432px 高 viewport 預算**：
+```
+header ~36 + 對手 field ~120 + 我方 field ~120 + hand strip ~80 + action bar ~70 = 426
+```
+桌機尺寸（active-card 170px、bench-slot 205px、hand-card 92px、action-bar 160-200）會嚴重爆出去。本 breakpoint 把所有 slot/card 等比縮約 35-40%。
+
+**新增**（src/routes/game/+page.svelte 末段 `<style>` 內）：
+```css
+@media (max-width: 950px) and (orientation: landscape) {
+  .active-card{ min-height:108px; ... }              /* 170 → 108 */
+  .active-card.active-empty{ min-height:96px; ... }  /* 160 → 96 */
+  .bench-slot{ height:128px; max-width:88px; ... }   /* 205 → 128 */
+  .bench-slot img{ max-width:74px; max-height:78px; }
+  .hand-card{ width:64px; ... }                      /* 92 → 64 */
+  .hand-card img{ width:60px; }                      /* 88 → 60 */
+  .battle-header{ padding:0.2rem 0.4rem; }
+  .field-row{ padding:0.25rem 0.4rem; }
+  .hand-strip{ padding:0.2rem 0.4rem 0.3rem; }
+  .action-bar{ min-height:60px; max-height:96px; }   /* 160-200 → 60-96 */
+  .selection-modal{ max-width:580px; ... }
+}
+```
+
+**設計原則**：
+- 只動尺寸（width/height/padding/font-size），layout flex 結構不動
+- drag drop zone 用 runtime offsetWidth/Height — 自動跟著縮
+- 動畫（attack-shake/flash、fly）用 transform + relative position — 自動 OK
+- v2.198 `.battle-root` `min-height + overflow-y:auto` fallback 不拔（撐底保險，極端 viewport 還能滾動）
+
+**Phase 2（未做）**：平板橫屏（≤1280px），等手機橫屏跑順、Leon 確認 visual OK 後再做。
+
+**待 Leon 實機測試的潛在 bug**：
+- 能量 pip 直排在備戰格右側可能擠爆（pip 寬度沒縮）
+- 戰鬥場 status chip / 特性按鈕可能溢出
+- selection modal 內 sel-grid 卡牌縮放是否合適
+- 拖曳卡牌時 ghost 元素是否大小合適
+- setup 階段對手蓋牌動畫是否還對齊
+
+請 Leon 在手機 / 平板橫屏實機開戰一場，把看到不對的地方拍照或描述，下一輪 hotfix。
 
 ---
 
