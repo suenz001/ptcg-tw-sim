@@ -2521,13 +2521,20 @@
           </div>
         {/if}
         <!-- v2.123：send-new-active alert 去掉 turnPhase==='end' 限制
-             特性/招式 KO 對手或自己時，不管 turnPhase 都要 popup 補戰鬥位，回合才能繼續。 -->
-        {#if game.phase==='playing' && defenderPlayer?.active===null}
+             特性/招式 KO 對手或自己時，不管 turnPhase 都要 popup 補戰鬥位，回合才能繼續。
+             v2.197：加 !pendingSelection guard — 攻擊方還在 pending（如幻影奇襲分配
+             6 個 counter）時，防守方先別顯示「請派出戰鬥寶可夢」alert，等對方完成
+             pending 後 modal 才彈，避免畫面卡住的視覺感。 -->
+        {#if game.phase==='playing' && defenderPlayer?.active===null && !pendingSelection}
           {#if isMyDefenderTurn()}
             <div class="alert warn-alert">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
           {:else if isMyTurn()}
             <div class="alert warn-alert">⚠️ 等待 {defenderPlayer?.name} 送出寶可夢</div>
           {/if}
+        {/if}
+        <!-- 對方 pending 處理中（如幻影奇襲分配傷害）時，防守方顯示「等待對方完成」 -->
+        {#if game.phase==='playing' && defenderPlayer?.active===null && pendingSelection && isMyDefenderTurn()}
+          <div class="alert warn-alert">⏳ 等待 {game.players[pendingSelection.actorIdx].name} 完成當前操作後，再派出新的戰鬥寶可夢</div>
         {/if}
         <!-- 自 KO（如咒詛炸彈、中毒）：主動方自己戰鬥場變空，須從備戰區送出新戰鬥寶可夢 -->
         {#if game.phase==='playing' && myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection}
@@ -3440,8 +3447,11 @@
 
   <!-- Send New Active Modal（戰鬥寶可夢昏厥後派出新戰鬥寶可夢，使用統一的橫向 grid + 放大鏡介面）
        v2.123：去掉 turnPhase==='end' 限制 — 特性/招式 KO 時 turnPhase 仍為 'main'，
-       舊條件會不彈 modal 造成卡住。 -->
-  {#if game && game.phase==='playing' && defenderPlayer?.active===null && isMyDefenderTurn()}
+       舊條件會不彈 modal 造成卡住。
+       v2.197：加 !pendingSelection guard — 攻擊方還在 pending（如幻影奇襲分配
+       6 counter）時，防守方先不彈 modal；等 pending 結束後再彈，避免「modal 已開
+       但 button 按了沒反應」的卡頓視覺。 -->
+  {#if game && game.phase==='playing' && defenderPlayer?.active===null && isMyDefenderTurn() && !pendingSelection}
     <div class="selection-overlay">
       <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
