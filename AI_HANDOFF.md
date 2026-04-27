@@ -11,12 +11,18 @@
 
 Leon 報告：先攻方第 1 回合沒有抽牌。
 
-### 規則
-PTCG 現行國際規則（Sword & Shield 之後）：
-- **先攻第 1 回合**：抽牌、附能量、用支援者、進化都可以，**只是不能攻擊**
+### 規則（Leon 校正後）
+PTCG 現行國際規則：
+- **先攻第 1 回合**：抽牌、附能量、進化都可以
+  - 限制 1：**不能攻擊**
+  - 限制 2：**不能用支援者**（但卡面寫「先攻玩家的最初回合也可使用」的支援者可 bypass，如丹瑜、火箭隊的蘭斯）
 - 後攻第 1 回合：全部可以
 
-舊規則（很久以前）才是「先攻第 1 回合不抽牌也不附能量也不用支援者」，現行規則只剩「不能攻擊」。
+`engine.ts` 已正確實裝兩個限制：
+- 不能攻擊：line 1965 `if (state.isFirstTurn && aIdx === state.firstPlayerIdx) return state;`
+- 不能用支援者 + bypass：line 194-207 `canPlaySupporterOnFirstTurn(card)` 用 rulesText `/先攻玩家的最初回合/` 偵測（v2.71 task #271）
+
+唯一缺的是「抽牌」— 本版補上。
 
 ### 舊行為（bug）
 engine.ts setup → playing 兩個 path（mulligan path + FINISH_SETUP path）都直接設 `turnPhase: 'main'`，**沒呼叫 applyAutoDraw**。導致：
