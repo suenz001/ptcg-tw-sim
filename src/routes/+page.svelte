@@ -34,26 +34,8 @@
 </script>
 
 <main>
-  <h1>PTCG 對戰模擬器 <span class="version">v{VERSION}</span></h1>
-  <p class="tagline">Server-authoritative online battle simulator · 伺服器權威對戰</p>
-
-  <section>
-    <h2>連線狀態</h2>
-    <dl>
-      <dt>狀態</dt>
-      <dd>{status}</dd>
-      <dt>Firebase 專案</dt>
-      <dd>ptcg-tw-sim</dd>
-      {#if user}
-        <dt>匿名使用者 ID</dt>
-        <dd class="uid">{user.uid}</dd>
-      {/if}
-      {#if error}
-        <dt>錯誤</dt>
-        <dd class="error">{error}</dd>
-      {/if}
-    </dl>
-  </section>
+  <h1>PTCG 實體賽事演練引擎 <span class="version">v{VERSION}</span></h1>
+  <p class="tagline">Deck building testing and card database 牌組構築測試與卡牌資料庫</p>
 
   <section>
     <h2>卡牌資料庫</h2>
@@ -72,23 +54,11 @@
   </section>
 
   <section>
-    <h2>⚔️ 對戰</h2>
+    <h2>⚔️ 對戰演練</h2>
     <p>
-      <a href="{base}/game">開始對戰 →</a>
-      <span class="hint">（本機雙人傳遞對戰，實驗性）</span>
+      <a href="{base}/game">開始演練 →</a>
+      <span class="hint">（牌組實戰測試）</span>
     </p>
-  </section>
-
-  <section>
-    <h2>開發路線圖</h2>
-    <ol>
-      <li><strong>M0 ✅</strong> 卡牌資料管線（繁中卡名 + 效果）</li>
-      <li><strong>M1 ✅</strong> 牌組編輯器 + Firebase Auth + 雲端同步</li>
-      <li><strong>M2 🚧</strong> 最小規則引擎（本機雙人對戰）</li>
-      <li><strong>M3</strong> 配對 + 連線對戰</li>
-      <li><strong>M4</strong> 規則引擎擴充</li>
-      <li><strong>M5</strong> 卡池擴充</li>
-    </ol>
   </section>
 
   <footer class="disclaimer">
