@@ -984,3 +984,88 @@ regR('sturdy-might-tree-step2', (st, idx, iids, params, pool) => {
   }));
   return addLog(st, `壯偉碩木：${stage1Name} 進化為 ${evoCard.name}（重洗牌庫）`, idx);
 });
+
+// ── 火箭隊的妨礙機器人（Item / I, v2.212）───────────────────────────────────
+// 卡面：選擇 1 張對手的反面朝上的獎賞卡，並在不看正面的情況下，從對手的手牌
+//   選擇 1 張，查看各自的正面。若希望，令對手互換所選的卡。
+//   （在對戰結束前，那張獎賞卡維持正面朝上。）
+//
+// 設計：
+//   - 出卡方（idx）盲選 1 張對手獎賞 + 1 張對手手牌 — 因為都是反面，玩家無法
+//     做有意義的位置選擇 → 引擎隨機抽 1 張獎賞 + 1 張手牌（pos 由 RNG 決定）。
+//   - 翻面後，出卡方看到兩張卡的內容，由出卡方決定是否互換。
+//   - 互換 → 把獎賞卡放到對手手牌、把選中手牌放回獎賞區（同 index 互換）。
+//
+// 為何不做「玩家點位置」UI：
+//   - 卡面說「不看正面」→ 玩家點位置只是儀式感，沒有資訊優勢
+//   - 加 prize-choose pending 需動 +page.svelte / engine / ai 多處，CP 值低
+//   - 隨機抽就符合「盲選」精神（位置等價）
+//
+// gate：對手獎賞 ≥1 + 對手手牌 ≥1（任一空就完全沒效果）
+regG('火箭隊的妨礙機器人', (st, idx) => {
+  const opp = st.players[(1 - idx) as 0 | 1];
+  return opp.prizes.length > 0 && opp.hand.length > 0;
+});
+reg('火箭隊的妨礙機器人', (st, idx, pool) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  const opp = st.players[oppIdx];
+  // 隨機抽 1 張獎賞（位置）+ 1 張手牌（位置）
+  const prizeIndex = Math.floor(Math.random() * opp.prizes.length);
+  const handIndex = Math.floor(Math.random() * opp.hand.length);
+  const prizeInst = opp.prizes[prizeIndex];
+  const handInst = opp.hand[handIndex];
+  const prizeName = pool.get(prizeInst.cardId)?.name ?? '?';
+  const handName = pool.get(handInst.cardId)?.name ?? '?';
+  st = addLog(st, `火箭隊的妨礙機器人：盲選 ${opp.name} 的 1 張獎賞卡 + 1 張手牌`, idx);
+  st = addLog(st, `→ 翻開：獎賞卡=「${prizeName}」、手牌=「${handName}」`, idx);
+  return withPending(st, {
+    type: 'modal-choice',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'tr-disrupt-bot-swap-decide',
+    params: {
+      label: `火箭隊的妨礙機器人：${opp.name} 的獎賞卡=「${prizeName}」／手牌=「${handName}」 — 是否互換？`,
+      prizeIid: prizeInst.iid,
+      handIid: handInst.iid,
+      prizeName,
+      handName,
+      options: [
+        { id: 'no',  text: '❌ 不互換' },
+        { id: 'yes', text: '✅ 互換（對手獎賞 ↔ 對手手牌）' },
+      ],
+    },
+  });
+});
+regR('tr-disrupt-bot-swap-decide', (st, idx, iids, params, _pool) => {
+  const choice = iids[0];
+  const oppIdx = (1 - idx) as 0 | 1;
+  const oppName = st.players[oppIdx].name;
+  const prizeIid = params?.prizeIid as string | undefined;
+  const handIid = params?.handIid as string | undefined;
+  const prizeName = (params?.prizeName as string | undefined) ?? '?';
+  const handName = (params?.handName as string | undefined) ?? '?';
+  if (choice !== 'yes') {
+    return addLog(st, `火箭隊的妨礙機器人：選擇不互換 ${oppName} 的獎賞卡與手牌`, idx);
+  }
+  if (!prizeIid || !handIid) {
+    return addLog(st, '火箭隊的妨礙機器人：缺少互換目標 iid，效果取消', idx);
+  }
+  const opp = st.players[oppIdx];
+  const prizeIndex = opp.prizes.findIndex(c => c.iid === prizeIid);
+  const handIndex = opp.hand.findIndex(c => c.iid === handIid);
+  if (prizeIndex < 0 || handIndex < 0) {
+    return addLog(st, '火箭隊的妨礙機器人：互換目標已不存在，效果取消', idx);
+  }
+  const prizeInst = opp.prizes[prizeIndex];
+  const handInst = opp.hand[handIndex];
+  // 互換：手牌 → 獎賞區（同 index）、獎賞 → 手牌（append 到末端）
+  st = updatePlayer(st, oppIdx, p => {
+    const newPrizes = [...p.prizes];
+    newPrizes[prizeIndex] = handInst;
+    const newHand = p.hand.filter((_, i) => i !== handIndex);
+    newHand.push(prizeInst);
+    return { ...p, prizes: newPrizes, hand: newHand };
+  });
+  return addLog(st,
+    `火箭隊的妨礙機器人：互換 ${oppName} 的獎賞卡「${prizeName}」與手牌「${handName}」`, idx);
+});
