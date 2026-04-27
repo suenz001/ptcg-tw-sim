@@ -1,9 +1,61 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.199)  
+> 最後更新：2026-04-27 (v2.200)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.200 — 對手互動 picker 機制 + 馬志士的交易（Supporter / I）
+
+### 設計：Option C（online 優先）
+
+Leon 在 v2.199 對話確認以後所有 UI 設計**以 online 模式為第一順位**。本版完成「對手互動 picker」的引擎/UI 對齊（沒新增基礎設施 — 既有架構就能跑），實裝第一張使用此機制的卡：馬志士的交易。
+
+**actorIdx ≠ idx 的 modal route 路徑（既有實作確認 OK）：**
+1. **modal 顯示守門**（src/routes/game/+page.svelte:2929）：
+   - online：`actorIdx === myPlayerIndex` 才顯示 modal（對手不看到我方 picker，反之亦然）
+   - local：跟視角顯示 — Option C 接受「我幫對手選」trade-off
+   - AI：`actorIdx === human` 才顯示，AI 為 actor 時 AI loop 自動 resolve
+2. **resolve 守門**（engine.ts:1175 RESOLVE_SELECTION）：`action.senderIdx !== actorIdx` 拒絕，防搶 resolve
+3. **dispatch 帶 senderIdx**（+page.svelte:1781）：online 模式自動帶 myPlayerIndex
+4. **AI tickAI shouldAct**（+page.svelte:713）：`pendingSelection.actorIdx === ai` 觸發
+5. **AI modal-choice 預設**（ai.ts:497-502）：選 first non-disabled option — 卡牌設計時把 AI 默契選項排第一
+
+**此架構不需要動 engine / UI / Firestore 同步任何基礎設施** — Firestore 整個 game state push，state 變動自然帶過 pendingSelection；其他守門 v2.139 modal-choice pending 加進來時就已寫好。
+
+### Bug：proposer 側畫面缺乏「等待對手選擇」提示
+
+實裝過程發現的 polish bug：當 actorIdx 是對手時，proposer（出卡方）畫面只看到攻擊鈕灰掉、結束回合鈕消失，但不知道為什麼。原 action-btns 的 `{:else if pendingSelection}` waiting-msg 只在 `!isMyTurn()` 時才彈，proposer 是 active 玩家不會觸發。
+
+**修法**（src/routes/game/+page.svelte:2591）：在 alerts-col 加新 alert：
+```svelte
+{#if game.phase==='playing' && pendingSelection
+    && pendingSelection.actorIdx === oppIdx
+    && (mode === 'online' || aiPlayerIndex !== null)}
+  <div class="alert info-alert">⏳ 等待 {game.players[pendingSelection.actorIdx].name} 做出選擇…</div>
+{/if}
+```
+- 條件 `actorIdx === oppIdx`：actor 是對手（從我視角看）
+- 條件 `mode === 'online' || aiPlayerIndex !== null`：local 不需要這個 alert（modal 已在當前視角，不會卡住）
+
+### 馬志士的交易（Supporter / I）
+
+**卡面**：詢問對手是否希望「雙方玩家各自獲得 1 張獎賞卡」。若希望，雙方各取 1 張獎賞；若不希望，自己（出卡方）從牌庫抽 4 張。
+
+**實裝**（src/lib/game/effects/cards/v172_hij_batch.ts）：
+- `reg('馬志士的交易')`：開 modal-choice pending，`actorIdx = oppIdx`
+- options 順序刻意「no 在前、yes 在後」：AI 預設選 first → 'no'（拒絕）— 對 AI 自己有利的 default behaviour（不讓人類玩家輕易拿獎勵牌）
+- `regR('masters-trade-decide')`：選 yes → 雙方各取 1 張獎勵牌（含 win-condition 檢查）；選 no → 提案方抽 4 張
+
+### H/I/J 進度
+228/236 → 229/236（剩 7 張）：
+- 對手互動 picker（剩 1）：泰姆（對手猜 HP）
+- 出卡方 picker + opp peek（妨礙機器人）：嚴格說不是 picker — 是 random + 自選 Y/N
+- 引擎深擴（5 張）：招式注入（核心記憶碟、招式學習器 螢石）、TOOL_ON_DAMAGED 雙段 pending（手持循環扇）、Stadium 連進化（壯偉碩木）、opp-deck-peek（配樂之笛）
+
+下一步：泰姆（HP 猜測 modal — 從卡 JSON 抽 HP options 給 actor 選）。然後評估妨礙機器人（含 random 抽獎賞 / opp 手牌的 reveal 機制）。
 
 ---
 

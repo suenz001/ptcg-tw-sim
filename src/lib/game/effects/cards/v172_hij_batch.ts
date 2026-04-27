@@ -599,3 +599,89 @@ reg('寶可夢中心的姐姐', (st, idx) => {
   });
 });
 regR('heal-60-clear-status', healResolver);
+
+// ── 馬志士的交易（Supporter / I）─ 對手互動 picker（v2.200 首次實裝） ─────────
+// 卡面：詢問對手是否希望「雙方玩家各自獲得 1 張獎賞卡」。
+//   - 若對手希望，雙方玩家各自獲得 1 張獎賞卡。
+//   - 若不希望，自己（出卡方）從牌庫抽出 4 張卡。
+//
+// Option C 設計（Leon 在 v2.200 對話確認 online 模式優先）：
+//   - actorIdx = oppIdx（對手做決定）
+//   - online：對手畫面自動彈 modal-choice，出卡方畫面顯示「等待對手選擇中…」
+//   - local（單機雙人）：modal 顯示給當前視角（active），等於「我幫對手選」— 接受
+//     此 trade-off 換取流程不中斷（v2.198 對話確認）
+//   - AI（對手是 AI）：AI loop 自動 dispatch RESOLVE_SELECTION，預設選 first option；
+//     options 順序：先 'no'（拒絕）= 對 AI 自己有利的 default，再 'yes'（接受）。
+//
+// 為什麼 actorIdx ≠ idx 在現有 UI 已 work：
+//   1. selection-modal 顯示守門（+page.svelte:2929）：online 限 actorIdx===myPlayerIndex；
+//      local 跟視角；AI 限 actorIdx===human。已支援。
+//   2. confirmSelection 帶 senderIdx=myPlayerIndex（+page.svelte:1781）— engine
+//      RESOLVE_SELECTION 守門（engine.ts:1175）拒絕非 actor 的 sender，防搶 resolve。
+//   3. AI tickAI shouldAct 看 pendingSelection.actorIdx===ai（+page.svelte:713）— 已正確。
+//
+// gate：簡單 — 對手獎賞 ≥ 1 才有意義（卡面允許 0 但無效果，懶得做精確 gate）。
+// 實際 PTCG 規則沒寫禁止；資料層保險 gate = 出卡方獎賞 ≥ 1（避免雙方都已 prizes=0
+// 的詭異 corner case，理論上不會發生因為先取完獎賞的人應已勝利）。
+regG('馬志士的交易', () => true);
+reg('馬志士的交易', (st, idx) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  const oppName = st.players[oppIdx].name;
+  const myName = st.players[idx].name;
+  st = addLog(st, `馬志士的交易：${myName} 詢問 ${oppName} 是否「雙方各取 1 張獎勵牌」`, idx);
+  return withPending(st, {
+    type: 'modal-choice',
+    actorIdx: oppIdx,                 // 對手做決定（Option C 核心）
+    sourcePlayerIdx: oppIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'masters-trade-decide',
+    params: {
+      // options 順序：先 no 後 yes
+      // - online：人類對手會看 text 後選擇（順序不影響）
+      // - AI 對手：AI 預設 first option = 'no'（不讓人類玩家輕易拿獎勵牌）
+      options: [
+        { id: 'no',  text: `❌ 拒絕（${myName} 從牌庫抽 4 張）` },
+        { id: 'yes', text: '✅ 接受（雙方各取 1 張獎勵牌）' },
+      ],
+    },
+  });
+});
+regR('masters-trade-decide', (st, oppIdx, iids, _params, _pool) => {
+  const choice = iids[0];
+  const proposerIdx = (1 - oppIdx) as 0 | 1;
+  const proposerName = st.players[proposerIdx].name;
+  const oppName = st.players[oppIdx].name;
+  if (choice === 'yes') {
+    // 雙方各取 1 張獎賞 — 同時取，先 log 再操作
+    st = addLog(st, `馬志士的交易：${oppName} 接受 — 雙方各取 1 張獎勵牌`, oppIdx);
+    const players = [...st.players] as [PlayerState, PlayerState];
+    for (const i of [0, 1] as const) {
+      const p = { ...players[i] };
+      if (p.prizes.length > 0) {
+        const taken = p.prizes[0];
+        p.prizes = p.prizes.slice(1);
+        p.hand = [...p.hand, taken];
+      }
+      players[i] = p;
+    }
+    st = { ...st, players };
+    st = addLog(st, `→ ${proposerName} 取得 1 張獎勵牌`, proposerIdx);
+    st = addLog(st, `→ ${oppName} 取得 1 張獎勵牌`, oppIdx);
+    // win check：先檢查提案方（出卡回合就是提案方），再對手
+    if (st.players[proposerIdx].prizes.length === 0) {
+      return { ...st, phase: 'game-over' as const, winner: proposerIdx,
+        winReason: `${proposerName} 取得所有獎勵牌` };
+    }
+    if (st.players[oppIdx].prizes.length === 0) {
+      return { ...st, phase: 'game-over' as const, winner: oppIdx,
+        winReason: `${oppName} 取得所有獎勵牌` };
+    }
+    return st;
+  }
+  // 拒絕 → 提案方抽 4 張
+  st = addLog(st, `馬志士的交易：${oppName} 拒絕 — ${proposerName} 從牌庫抽 4 張`, oppIdx);
+  return updatePlayer(st, proposerIdx, p => {
+    const taken = p.deck.slice(0, 4);
+    return { ...p, deck: p.deck.slice(taken.length), hand: [...p.hand, ...taken] };
+  });
+});
