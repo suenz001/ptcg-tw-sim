@@ -30,7 +30,10 @@
   import { getAIAction } from '$lib/game/ai';
   import { VERSION } from '$lib/version';
   import { playSfx } from '$lib/audio/sfx';
-  import { loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume } from '$lib/audio/settings';
+  import { 
+    loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume,
+    getBgmTrack, setBgmTrack, getBgmVolume, setBgmVolume
+  } from '$lib/audio/settings';
 
   // ── 卡池 ────────────────────────────────────────────────────────────────────
   let pool = $state<Map<string, Card>>(new Map());
@@ -1384,10 +1387,14 @@
         && selectionPicked.size <= pendingSelection.maxCount;
   });
 
-  // ── 音效設定（v2.118）─────────────────────────────────────────────────────
+  // ── 音效與音樂設定（v2.118 + BGM）────────────────────────────────────────
+  let showSettingsModal = $state(false);
   let audioVolume = $state(0.5);
   let audioMuted = $state(false);
-  let audioPanelOpen = $state(false);
+  let bgmTrack = $state('none');
+  let bgmVolume = $state(0.5);
+  let bgmAudioEl: HTMLAudioElement | null = $state(null);
+
   function onVolumeChange(v: number) {
     audioVolume = v;
     saveVolume(v);
@@ -1396,6 +1403,14 @@
     audioMuted = !audioMuted;
     saveMuted(audioMuted);
   }
+  function onBgmTrackChange(track: string) {
+    bgmTrack = track;
+    setBgmTrack(track);
+  }
+  function onBgmVolumeChange(v: number) {
+    bgmVolume = v;
+    setBgmVolume(v);
+  }
 
   // ── 初始化 ──────────────────────────────────────────────────────────────────
   onMount(async () => {
@@ -1403,6 +1418,8 @@
     loadAudioPrefs();
     audioVolume = getAudioVolume();
     audioMuted = isAudioMuted();
+    bgmTrack = getBgmTrack();
+    bgmVolume = getBgmVolume();
     // 匿名登入（線上對戰需要）
     onAuthStateChanged(auth, u => { myUid = u?.uid ?? null; });
     if (!auth.currentUser) await signInAnonymously(auth);
@@ -2470,24 +2487,26 @@
         <button class="chip stadium-chip clickable-chip" title="點擊查看卡片詳情" onclick={()=>openZoom(sId, null)}>🏟 {stadiumCard.name} 🔍</button>
       {/if}
       <span class="chip version-chip" title="應用程式版本 — 檢查是否同步到最新">v{VERSION}</span>
-      <!-- v2.118 音效控制：點擊 badge 切換 mute；hover 出現音量 slider -->
-      <span class="chip audio-chip" title={audioMuted ? '音效已靜音（點擊取消）' : '音效開啟（點擊靜音）'}>
-        <button class="audio-btn" onclick={onMuteToggle} aria-label={audioMuted ? '取消靜音' : '靜音'}>
-          {audioMuted ? '🔇' : audioVolume >= 0.5 ? '🔊' : audioVolume > 0 ? '🔉' : '🔈'}
-        </button>
-        <input
-          class="audio-slider"
-          type="range" min="0" max="1" step="0.05"
-          value={audioVolume}
-          oninput={(e) => onVolumeChange(parseFloat((e.currentTarget as HTMLInputElement).value))}
-          aria-label="音量"
-          title="音量 {Math.round(audioVolume * 100)}%"
-        />
-      </span>
+      <!-- 音效與音樂設定（⚙️） -->
+      <button class="chip settings-chip" onclick={() => showSettingsModal = true} title="設定（音效與音樂）">
+        ⚙️ 設定
+      </button>
       <button class="chip fs-chip" onclick={toggleFullscreen} title={isFullscreen ? '退出全螢幕' : '全螢幕（隱藏瀏覽器列）'}>
         {isFullscreen ? '⛶' : '⛶'} {isFullscreen ? '退出全螢幕' : '全螢幕'}
       </button>
     </span>
+    
+    <!-- 背景音樂播放器 -->
+    {#if bgmTrack !== 'none'}
+      <audio 
+        src="{base}/music/{bgmTrack}.mp3" 
+        loop 
+        autoplay 
+        bind:this={bgmAudioEl} 
+        bind:volume={bgmVolume}
+      ></audio>
+    {/if}
+
     {#if game.phase === 'playing' && activePlayer}
       {@const attEnergy = activePlayer.energyAttachedThisTurn}
       {@const attSupp = activePlayer.supporterPlayedThisTurn}
@@ -3737,6 +3756,53 @@
     </div>
   {/if}
 
+  <!-- Settings Modal (Audio & BGM) -->
+  {#if showSettingsModal}
+    <div class="zoom-overlay" onclick={() => showSettingsModal = false}>
+      <div class="zoom-modal settings-modal" onclick={(e)=>e.stopPropagation()}>
+        <button class="zoom-close" onclick={() => showSettingsModal = false}>✕</button>
+        <h3 class="settings-title">⚙️ 設定</h3>
+        
+        <div class="settings-section">
+          <h4>🎵 背景音樂 (BGM)</h4>
+          <div class="setting-row">
+            <label for="bgm-select">選擇曲目：</label>
+            <select id="bgm-select" value={bgmTrack} onchange={(e) => onBgmTrackChange(e.currentTarget.value)}>
+              <option value="none">無 (關閉)</option>
+              <option value="Aim to Be a Pokemon Master">Aim to Be a Pokémon Master</option>
+              <option value="Pokemon XYZ Opening">Pokémon XYZ Opening</option>
+              <option value="We Go">We Go</option>
+            </select>
+          </div>
+          {#if bgmTrack !== 'none'}
+            <div class="setting-row">
+              <label for="bgm-vol">音樂音量：</label>
+              <input id="bgm-vol" type="range" min="0" max="1" step="0.05" value={bgmVolume} oninput={(e) => onBgmVolumeChange(parseFloat(e.currentTarget.value))} />
+              <span class="vol-text">{Math.round(bgmVolume * 100)}%</span>
+            </div>
+          {/if}
+        </div>
+
+        <div class="settings-section">
+          <h4>🔊 遊戲音效 (SFX)</h4>
+          <div class="setting-row">
+            <label for="sfx-mute">音效開關：</label>
+            <button id="sfx-mute" class="toggle-btn" onclick={onMuteToggle}>
+              {audioMuted ? '❌ 已靜音' : '✅ 開啟'}
+            </button>
+          </div>
+          {#if !audioMuted}
+            <div class="setting-row">
+              <label for="sfx-vol">音效音量：</label>
+              <input id="sfx-vol" type="range" min="0" max="1" step="0.05" value={audioVolume} oninput={(e) => onVolumeChange(parseFloat(e.currentTarget.value))} />
+              <span class="vol-text">{Math.round(audioVolume * 100)}%</span>
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- Zoom -->
   {#if zoomCard}
     <div class="zoom-overlay" onclick={closeZoom}>
@@ -4367,6 +4433,24 @@
     border:2px solid #1a1a1a;
     box-shadow:inset 0 0 6px rgba(0,0,0,.6);
   }
+
+  
+  /* Settings Modal CSS */
+  .settings-modal { max-width: 500px; padding: 2rem; }
+  .settings-title { font-size: 1.5rem; color: #aaffaa; margin-top: 0; margin-bottom: 1rem; border-bottom: 1px solid #3a5a3a; padding-bottom: 0.5rem; }
+  .settings-section { margin-bottom: 1.5rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid #2a4a2a; }
+  .settings-section h4 { color: #f0f0f0; margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; }
+  .setting-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem; font-size: 0.95rem; }
+  .setting-row label { flex: 0 0 100px; color: #ccc; }
+  .setting-row select, .setting-row input[type="range"] { flex: 1; }
+  .setting-row select { background: #2a3a2a; color: #fff; border: 1px solid #4a7a4a; padding: 0.4rem; border-radius: 4px; font-size: 0.95rem; }
+  .vol-text { flex: 0 0 45px; text-align: right; color: #aaa; font-variant-numeric: tabular-nums; }
+  .toggle-btn { flex: 1; background: #2a3a2a; color: #fff; border: 1px solid #4a7a4a; padding: 0.5rem; border-radius: 4px; cursor: pointer; text-align: center; }
+  .toggle-btn:hover { background: #3a4a3a; }
+  .settings-chip { background: #2a3a2a; border-color: #5a5a5a; cursor: pointer; }
+  .settings-chip:hover { background: #3a4a3a; }
+
+  .sel-grid{ display:flex; flex-wrap:wrap; gap:1.2rem; justify-content:center; }
   .draw-fly-card .card-back-mark{ font-size:1.15rem; font-weight:900; color:rgba(255,255,255,.85); text-shadow:0 1px 2px rgba(0,0,0,.7); font-family:'Times New Roman',serif; }
   @keyframes draw-fly{
     0%   { transform:translate(0,0) rotate(-8deg) scale(.7); opacity:0; }
