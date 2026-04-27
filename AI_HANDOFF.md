@@ -1,9 +1,32 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.191)  
+> 最後更新：2026-04-27 (v2.192)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.192 — 力之沙漏（PokemonTool / H）
+
+### 卡面規則
+「在自己的回合結束時，若附有這張卡的寶可夢在戰鬥場上，則可從自己的棄牌區選擇 1 張基本能量卡，附於那隻寶可夢身上。」
+
+### 實作
+`engine.ts` END_TURN handler 在 checkup 結束、清旗標前 inline hook：
+- active.toolAttached.cardId 是力之沙漏 + 阻礙之塔失效 check
+- 從 player.discard 找第一張基本能量（subtype='Basic' + supertype='Energy'）
+- 移到 active.energyAttached + log
+
+### 設計取捨
+卡面「則可」optional，但實作為**自動觸發**（不開 pending）：
+- 99% 玩家都選擇用，自動處理省去點擊
+- 避免 END_TURN pending re-dispatch 的複雜 state machine
+- 邊角：若玩家不想附（極罕見），目前不支援；未來如果需要，再升級為 modal-choice pending
+
+阻礙之塔（Stadium 道具失效）也有 guard。
+
+H/I/J 進度：剩 16 張未實裝。
 
 ---
 

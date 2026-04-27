@@ -3186,6 +3186,36 @@ function handlePlaying(
 
     } // end of `if (!state.endTurnSkipCheckup)` — 寶可夢 checkup 區塊
 
+    // ── v2.192 力之沙漏（PokemonTool）— 回合結束時，若戰鬥場寶可夢附有此 Tool，
+    //   從棄牌區附 1 張基本能量到那隻寶可夢。卡面「則可」optional，實作為自動觸發
+    //   （從棄牌挑第一張基本能量；極罕見的「不想附」case 不支援）。
+    //   阻礙之塔時道具失效。
+    {
+      const aPlayer = players[aIdx];
+      const active = aPlayer.active;
+      const toolsJammedET = isToolsJammed(state, pool);
+      if (active && !toolsJammedET && active.toolAttached) {
+        const toolCard = pool.get(active.toolAttached.cardId);
+        if (toolCard?.name === '力之沙漏') {
+          // 找棄牌區第一張基本能量
+          const eIdx = aPlayer.discard.findIndex(c => {
+            const card = pool.get(c.cardId);
+            return card?.supertype === 'Energy' && card.subtype === 'Basic';
+          });
+          if (eIdx >= 0) {
+            const energyInst = aPlayer.discard[eIdx];
+            const energyCard = pool.get(energyInst.cardId);
+            const newDiscard = aPlayer.discard.filter((_, i) => i !== eIdx);
+            const newActive = { ...active, energyAttached: [...active.energyAttached, energyInst] };
+            players[aIdx] = { ...aPlayer, active: newActive, discard: newDiscard };
+            state = addLog({ ...state, players },
+              `🔧 力之沙漏：從棄牌區將 ${energyCard?.name ?? '基本能量'} 附加到 ${pool.get(active.cardId)?.name ?? '?'}`,
+              aIdx);
+          }
+        }
+      }
+    }
+
     // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn / abilityUsedThisTurn）
     const currentPlayer = { ...players[aIdx] };
     currentPlayer.active = currentPlayer.active ? clearTurnFlags(currentPlayer.active) : null;
