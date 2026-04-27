@@ -179,6 +179,49 @@
     }
   }
 
+  /** Save ALL current decks to Firebase (explicit manual save). */
+  async function saveAllDecksToCloud() {
+    if (!firebaseUser) { alert('尚未登入，無法存檔。'); return; }
+    syncStatus = 'syncing';
+    try {
+      for (const d of decks) {
+        await withTimeout(syncDeckToCloud(firebaseUser.uid, d));
+      }
+      // Also persist locally
+      import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
+      syncStatus = 'synced';
+      alert('所有牌組已成功存檔至雲端！');
+    } catch (e) {
+      syncStatus = 'error';
+      syncError = e instanceof Error ? e.message : String(e);
+      alert('存檔失敗：' + syncError);
+    }
+  }
+
+  /** Force reload all decks from Firebase (discard local changes). */
+  async function loadAllDecksFromCloud() {
+    if (!firebaseUser) { alert('尚未登入，無法讀取。'); return; }
+    if (!confirm('確定要從雲端重新讀取牌組嗎？目前未存檔的本地變更將會被覆蓋。')) return;
+    syncStatus = 'syncing';
+    try {
+      const cloud = await withTimeout(loadDecksFromCloud(firebaseUser.uid));
+      if (cloud.length === 0) {
+        alert('雲端目前沒有任何牌組資料。');
+        syncStatus = 'synced';
+        return;
+      }
+      decks = cloud.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
+      activeId = decks[0]?.id ?? null;
+      syncStatus = 'synced';
+      alert(`已從雲端載入 ${cloud.length} 個牌組。`);
+    } catch (e) {
+      syncStatus = 'error';
+      syncError = e instanceof Error ? e.message : String(e);
+      alert('讀取失敗：' + syncError);
+    }
+  }
+
   // ── Lifecycle ──────────────────────────────────────────────────────────
   onMount(() => {
     // ① Load card pool (independent of auth)
@@ -634,7 +677,11 @@
     <aside class="rail">
       <div class="rail-head">
         <strong>我的牌組</strong>
-        <button class="small" onclick={createDeck}>+ 新增</button>
+        <div class="rail-actions">
+          <button class="small" onclick={createDeck}>+ 新增</button>
+          <button class="small cloud-btn" onclick={saveAllDecksToCloud} title="將所有牌組存檔至雲端">💾 存檔</button>
+          <button class="small cloud-btn" onclick={loadAllDecksFromCloud} title="從雲端重新讀取牌組">📥 讀取</button>
+        </div>
       </div>
       <ul class="deck-list">
         {#each decks as d (d.id)}
@@ -1165,6 +1212,18 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.5rem;
+  }
+  .rail-actions {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+  }
+  .cloud-btn {
+    background: #0066cc !important;
+    color: #fff !important;
+  }
+  .cloud-btn:hover {
+    background: #0052a3 !important;
   }
   .deck-list {
     list-style: none;
