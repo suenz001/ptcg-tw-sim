@@ -4,6 +4,12 @@
 
 {@render children()}
 
-<!-- v2.144：移除 v2.138 的 layout 白底 baseline — 它把 game 頁深綠切成雙色，
-     且實際上各頁的 :global(body) 已自己處理背景，不需要 baseline。 -->
-
+<style>
+  /* v2.202+：統一 body baseline — 所有頁面預設白底，
+     避免跨頁導航時殘留前一頁的深色背景（例如 /game 的墨綠）。
+     /game 頁的 :global(body) 會在該頁載入時覆蓋此值。 */
+  :global(body) {
+    margin: 0;
+    background: #f4f4f6;
+  }
+</style>
