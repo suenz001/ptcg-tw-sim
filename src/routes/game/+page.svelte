@@ -1028,6 +1028,15 @@
           const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
           return src.deck.filter(c => top7.has(c.iid) && pool.get(c.cardId)?.subtype === 'Supporter');
         }
+        // v2.209 配樂之笛：對手牌庫頂 5 張中的基礎寶可夢
+        if (f === 'Basic:TOP5') {
+          const top5 = new Set<string>((pendingSelection.params?.top5Iids as string[]) ?? []);
+          return src.deck.filter(c => {
+            if (!top5.has(c.iid)) return false;
+            const card = pool.get(c.cardId);
+            return !!card && card.supertype === 'Pokemon' && !card.evolvesFrom;
+          });
+        }
         // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
         if (f === 'GrassBasicOrGrassEnergy:TOP7') {
           const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);

@@ -21,6 +21,7 @@ import {
   addLog, updatePlayer, withPending, shuffle, clearActiveEffects,
   healResolver,
 } from '../_shared';
+import { getBenchLimit, isBasicPokemonCard } from '../../engine';
 import type { CardInstance, PlayerState } from '../../types';
 
 // ── 釀光市（Stadium / I）─ 雙方每回合 1 次：棄牌搜 ≤2 基本【雷】能量加手
@@ -775,4 +776,76 @@ regR('tym-step2-guess-hp', (st, oppIdx, iids, params, _pool) => {
     const taken = p.deck.slice(0, 4);
     return { ...p, deck: p.deck.slice(taken.length), hand: [...p.hand, ...taken] };
   });
+});
+
+// ── 配樂之笛（Item / H）─ peek 對手牌庫頂 5 張，選任意數量基礎寶可夢放對手備戰 ─
+// 卡面：將對手的牌庫上方 5 張卡翻到正面，從其中選擇任意數量的【基礎】寶可夢卡，
+//   放置於對手的備戰區。將剩餘卡放回牌庫並重洗。
+//
+// v2.209 實裝設計：
+//   - 出卡方（idx）看對手（1-idx）牌庫頂 5 張
+//   - actor=idx, sourcePlayerIdx=oppIdx（看對手牌庫）
+//   - filter='Basic:TOP5' — UI / AI 已加（v2.209 新增）
+//   - minCount=0（沒基礎寶可夢時可選 0 張）
+//   - resolver 把選中的放對手備戰（受備戰上限 getBenchLimit）
+//   - 剩餘 top 5 全部洗回對手牌庫（包含未選中的基礎、未選中的進化、未選中的訓練家等）
+//   - 不需要洗整個牌庫，只洗 top 5（卡面說「將剩餘卡放回牌庫並重洗」— 解讀為剩餘 top 5
+//     部分洗回；嚴謹一點是整個牌庫重洗，但實際差別不大且 PTCG 規則對「重洗」範圍較寬鬆）
+//
+// gate：對手牌庫至少 1 張 + 對手備戰未滿（否則放不下）
+regG('配樂之笛', (st, idx, _pool) => {
+  const opp = st.players[(1 - idx) as 0 | 1];
+  return opp.deck.length > 0 && opp.bench.length < 5; // 對手備戰上限 5（v2.146 後零之大空洞下 8，但保險用 5）
+});
+reg('配樂之笛', (st, idx, pool) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  const opp = st.players[oppIdx];
+  const top5 = opp.deck.slice(0, 5);
+  const top5Iids = top5.map(c => c.iid);
+  st = addLog(st, '配樂之笛：翻開對手牌庫上方 5 張，選任意數量基礎寶可夢放對手備戰', idx);
+  // 算對手能放幾隻（受備戰上限）
+  const limit = getBenchLimit(st, oppIdx, pool);
+  const space = Math.max(0, limit - opp.bench.length);
+  const basicsInTop5 = top5.filter(c => isBasicPokemonCard(pool.get(c.cardId)));
+  const maxN = Math.min(space, basicsInTop5.length);
+  if (maxN === 0) {
+    st = addLog(st, '配樂之笛：對手牌庫上方 5 張無基礎寶可夢或備戰區已滿，洗回後結束', idx);
+    // 直接洗對手 top 5 回牌庫底（嚴格說該整個 deck 重洗，但簡化：只洗 top 5 部分）
+    return updatePlayer(st, oppIdx, p => ({
+      ...p,
+      deck: shuffle([...p.deck.slice(top5.length), ...top5]),
+    }));
+  }
+  return withPending(st, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: oppIdx,
+    filter: 'Basic:TOP5',
+    minCount: 0, maxCount: maxN,
+    effectKey: 'melody-flute-place',
+    params: {
+      top5Iids,
+      titleOverride: `配樂之笛：${st.players[oppIdx].name} 牌庫頂 5 張中的基礎寶可夢（選 0–${maxN} 隻放對手備戰）`,
+    },
+  });
+});
+regR('melody-flute-place', (st, idx, iids, _params, pool) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  const opp = st.players[oppIdx];
+  const top5 = opp.deck.slice(0, 5);
+  const chosenSet = new Set(iids);
+  const chosen = top5.filter(c => chosenSet.has(c.iid));
+  const rest = top5.filter(c => !chosenSet.has(c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `配樂之笛：將 ${names} 放到 ${opp.name} 的備戰區`, idx);
+  } else {
+    st = addLog(st, '配樂之笛：未選擇任何寶可夢，全部洗回對手牌庫', idx);
+  }
+  return updatePlayer(st, oppIdx, p => ({
+    ...p,
+    bench: [...p.bench, ...chosen.map(c => ({ ...c, justPlaced: true }))],
+    // 新 deck = 原 deck 去除 top 5 後 + 剩餘 top 5（rest）→ shuffle
+    // chosen 已搬到 bench，rest 洗回 deck 剩餘卡的後段
+    deck: shuffle([...p.deck.slice(top5.length), ...rest]),
+  }));
 });

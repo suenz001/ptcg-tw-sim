@@ -227,6 +227,11 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);
           return top7.has(c.iid) && card.subtype === 'Supporter';
         }
+        // v2.209 配樂之笛：對手牌庫頂 5 張中的基礎寶可夢
+        if (f === 'Basic:TOP5') {
+          const top5 = new Set<string>((sel.params?.top5Iids as string[]) ?? []);
+          return top5.has(c.iid) && isBasicPokemonCard(card);
+        }
         // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
         if (f === 'GrassBasicOrGrassEnergy:TOP7') {
           const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);
