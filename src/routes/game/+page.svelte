@@ -4767,29 +4767,52 @@
        - v2.198 .battle-root min-height + overflow-y:auto fallback 不拔（撐底保險）
      ════════════════════════════════════════════════════════════════════════ */
   @media (max-width: 950px) and (orientation: landscape) {
+    /* ════════════════════════════════════════════════════════════════════
+       v2.204 hotfix：v2.202 版面跑掉 — 因為漏改幾個關鍵 height/min-height。
+       特別是 .hand-scroll min-height:170 + padding 30/22 是手牌區被撐到 ~200px
+       的真兇；.action-bar grid + min-height:160 也太大。本版補完所有大頭。
+
+       432px 高 viewport 驗算：
+         header 30 + field*2 (96 each) + hand-strip ~95 + action-bar 60 = 381 ✓
+       ════════════════════════════════════════════════════════════════════ */
+
     /* ── 戰鬥場框（active card） ── */
-    .active-card{ min-height:108px; padding:0.3rem 0.35rem; gap:0.3rem; border-radius:6px; }
-    .active-card.active-empty{ min-height:96px; padding:0.7rem; font-size:0.78rem; }
+    .active-card{ min-height:88px; padding:0.25rem 0.3rem; gap:0.25rem; border-radius:6px; }
+    .active-card.active-empty{ min-height:78px; padding:0.5rem; font-size:0.7rem; }
+    .active-img{ max-width:60px; max-height:84px; object-fit:contain; }
     /* ── 備戰格 ── */
-    .bench-slot{ flex:1 1 64px; min-width:64px; max-width:88px; height:128px; padding:0.2rem; font-size:0.62rem; gap:0.05rem; }
-    .bench-slot img{ max-width:74px; max-height:78px; }
+    .bench-slot{ flex:1 1 56px; min-width:56px; max-width:78px; height:96px; padding:0.15rem; font-size:0.58rem; gap:0.05rem; }
+    .bench-slot img{ max-width:60px; max-height:60px; }
     /* ── 手牌卡 ── */
-    .hand-card{ width:64px; padding:0.18rem; gap:0.08rem; font-size:0.62rem; }
-    .hand-card img{ width:60px; }
-    .hand-card-name{ font-size:0.58rem; }
+    .hand-card{ width:52px; padding:0.15rem; gap:0.06rem; font-size:0.58rem; }
+    .hand-card img{ width:48px; }
+    .hand-card-name{ font-size:0.54rem; line-height:1.05; }
     /* ── 戰鬥 header ── */
-    .battle-header{ padding:0.2rem 0.4rem; gap:0.3rem; font-size:0.78rem; }
+    .battle-header{ padding:0.15rem 0.4rem; gap:0.25rem; font-size:0.72rem; }
+    .battle-header .chip{ font-size:0.68rem; padding:0.1rem 0.35rem; }
     /* ── field row ── */
-    .field-row{ padding:0.25rem 0.4rem; gap:0.3rem; }
-    /* ── hand strip ── */
-    .hand-strip{ padding:0.2rem 0.4rem 0.3rem; }
-    /* ── action bar：桌機 160-200px 太大 → 60-90px 緊湊 ── */
-    .action-bar{ min-height:60px; max-height:96px; padding:0.2rem 0.4rem; gap:0.3rem; }
-    /* ── 選擇 modal：手機 95vw 不夠（左右兩側貼邊難按）— 壓 92vw + max-h 78vh ── */
-    .selection-modal{ max-width:580px; width:92vw; max-height:78vh; padding:0.85rem; gap:0.5rem; }
-    .sel-header h3{ font-size:0.95rem; }
-    .sel-hint{ font-size:0.72rem; }
-    /* sel-grid 卡牌縮 */
-    .sel-grid{ grid-template-columns:repeat(auto-fill, minmax(60px, 1fr)); gap:0.3rem; max-height:46vh; }
+    .field-row{ padding:0.2rem 0.35rem; gap:0.25rem; }
+    /* ── hand strip 結構：之前 hand-scroll 寫死 min-height:170 + padding 30/22 是大頭！ ── */
+    .hand-strip{ padding:0.15rem 0.4rem 0.25rem; }
+    .hand-scroll{ min-height:0; padding:8px 0.5rem 6px; perspective:none; }
+    /* ── action bar：grid → flex 自動換行；min-height 160 → 48 ── */
+    .action-bar{ display:flex; flex-wrap:wrap; min-height:48px; max-height:90px; padding:0.18rem 0.4rem; gap:0.3rem; align-items:center; justify-content:space-between; overflow-y:auto; }
+    .alerts-col{ max-width:160px; gap:0.1rem; }
+    .alert{ font-size:0.7rem; padding:0.15rem 0.4rem; }
+    .stadium-display{ padding:0.2rem 0.3rem; gap:0.1rem; }
+    .stadium-display img{ width:42px; }
+    .stadium-display-label{ font-size:0.62rem; }
+    .stadium-display-name{ font-size:0.62rem; max-width:80px; }
+    .action-btns{ gap:0.25rem; }
+    .btn-act{ padding:0.3rem 0.55rem; font-size:0.78rem; }
+    .btn-act.atk{ flex-direction:column; padding:0.2rem 0.4rem; min-height:42px; }
+    /* ── 選擇 modal ── */
+    .selection-modal{ max-width:580px; width:94vw; max-height:78vh; padding:0.7rem; gap:0.45rem; }
+    .sel-header h3{ font-size:0.9rem; }
+    .sel-hint{ font-size:0.7rem; }
+    .sel-grid{ grid-template-columns:repeat(auto-fill, minmax(56px, 1fr)); gap:0.3rem; max-height:42vh; }
+    /* ── stepper 鈕在手機上稍微再縮（仍維持 ≥40px 觸控最小） ── */
+    .stepper-btn{ width:2.4rem; height:2.4rem; font-size:1.2rem; }
+    .stepper-value{ min-width:4rem; font-size:1.3rem; line-height:2.2rem; }
   }
 </style>
