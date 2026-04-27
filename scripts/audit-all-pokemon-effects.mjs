@@ -53,7 +53,12 @@ function check(cardName, effectName) {
   if (new RegExp(`\\.name\\s*\\?\\.\\s*startsWith\\s*\\(\\s*['"\`]${esc(effectName)}['"\`]`).test(src)) return true;
   // 4. 全形 ｜ 註解
   if (new RegExp(`${esc(cardName)}｜${esc(effectName)}`).test(src)) return true;
-  // 5. 卡名+效果名都單獨出現（寬鬆 — map-based 註冊）
+  // 5. PASSIVE_* / TOOL_* / ABILITY_EFFECTS map registration by effect name only
+  //    （特性名是夠獨特的識別 — 若已在 *.set('特性名', ...) 或 Map [] 中出現，視為通用實裝
+  //    所有同特性名的寶可夢都受該 hook 影響）
+  if (new RegExp(`PASSIVE_(?:DAMAGE_REDUCE|IMMUNITY|RETALIATION|ATTACK_BONUS)[\\s\\S]{0,3000}?['"\`]${esc(effectName)}['"\`]`).test(src)) return true;
+  if (new RegExp(`TOOL_(?:HP_BONUS|ATTACK_BONUS|PREVENT_KO|ON_KO|ON_DAMAGED|RETREAT_MOD|DEFENSE_REDUCE_BY_TYPE)[\\s\\S]{0,500}?\\.set\\s*\\(\\s*['"\`]${esc(effectName)}['"\`]`).test(src)) return true;
+  // 6. 卡名+效果名都單獨出現（寬鬆 — map-based 註冊 / inline check）
   const hasCard = new RegExp(`['"\`]${esc(cardName)}['"\`]`).test(src);
   const hasEff = new RegExp(`['"\`]${esc(effectName)}['"\`]`).test(src);
   if (hasCard && hasEff) return true;

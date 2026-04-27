@@ -2110,6 +2110,7 @@ export const PASSIVE_DAMAGE_REDUCE = new Map<string, number>([
   ['密林之軀', 30],     // 巨蔓藤
   ['柔軟羊毛', 30],     // 毛毛角羊
   ['堅堅之軀', 30],     // 浩大鯨
+  ['堅硬身軀', 20],     // v2.217 鐵殼蛹（J） — 受招式傷害 -20
 ]);
 
 /**
@@ -2199,6 +2200,37 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
     if (att.active) att.active = { ...att.active, damage: att.active.damage + 30 };
     players[aIdx] = att;
     return { ...state, players };
+  }],
+  // v2.217 布里卡隆（J）｜尖刺盔甲 — 受到傷害時，將「自己身上【草】能量數×3」個傷害指示物
+  // 放置於攻擊者身上。換算：N 張草能量 → N × 3 × 10 = N × 30 傷害。
+  // 注意：是「能量卡張數」而非「能量單位數」（一張能量卡通常 = 1 個能量單位）。
+  ['尖刺盔甲', (state, dIdx, pool) => {
+    const aIdx = (1 - dIdx) as 0 | 1;
+    const def = state.players[dIdx].active;
+    if (!def) return state;
+    const grassCount = def.energyAttached.filter(e => {
+      const ec = pool.get(e.cardId);
+      if (!ec || ec.supertype !== 'Energy') return false;
+      // 基本【草】能量
+      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Grass' || /【草】/.test(ec.name))) return true;
+      // 特殊能量帶 Grass type（例：可挾持的 special grass energy）
+      if (ec.pokemonType === 'Grass') return true;
+      return false;
+    }).length;
+    if (grassCount === 0) return state;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) {
+      const dmg = grassCount * 30;
+      att.active = { ...att.active, damage: att.active.damage + dmg };
+      players[aIdx] = att;
+      const defName = pool.get(def.cardId)?.name ?? '?';
+      const attName = pool.get(att.active.cardId)?.name ?? '?';
+      return addLog({ ...state, players },
+        `尖刺盔甲：${defName} 草能量 ${grassCount} 張 → 對 ${attName} 造成 ${dmg} 傷害（${grassCount}×3 個傷害指示物）`,
+        dIdx);
+    }
+    return state;
   }],
 ]);
 

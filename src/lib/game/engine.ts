@@ -2518,6 +2518,42 @@ function handlePlaying(
       }
     }
 
+    // v2.217 灰塵山（J）｜垃圾洩氣 — 場上有灰塵山 + 攻擊者戰鬥場附有 PokemonTool → -20
+    // 卡面：「只要這隻寶可夢在場上，對手身上附有「寶可夢道具」卡的戰鬥寶可夢使用的招式的傷害「-20」點。」
+    // 多隻不疊加（卡面通常如此；保險用 has 而非 count）
+    if (!skipDefEffects && baseDamage > 0) {
+      const defAll: CardInstance[] = [
+        ...(defender.active ? [defender.active] : []),
+        ...defender.bench,
+      ];
+      const hasGarbageMountain = defAll.some(c => {
+        const card = pool.get(c.cardId);
+        return card?.name === '灰塵山' && card?.abilities?.some(a => a.name === '垃圾洩氣');
+      });
+      if (hasGarbageMountain && attacker.active?.toolAttached) {
+        const toolCard = pool.get(attacker.active.toolAttached.cardId);
+        if (toolCard?.subtype === 'PokemonTool') {
+          baseDamage = Math.max(0, baseDamage - 20);
+          workingState = addLog(workingState,
+            `垃圾洩氣：${attackerCard.name} 附有寶可夢道具 → 招式傷害 -20`, dIdx);
+        }
+      }
+    }
+
+    // v2.217 電龍（J）｜同步脈衝 — 自己手牌與對手手牌張數相同 → 招式傷害 +80
+    // 卡面：「若自己的手牌與對手的手牌張數相同，則這隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害「+80」點。」
+    // gate：only triggers when attacker is 電龍 自己（attacker.active.cardName === 電龍）
+    if (baseDamage > 0 && attackerCard.name === '電龍'
+        && attackerCard.abilities?.some(a => a.name === '同步脈衝')) {
+      const myHand = attacker.hand.length;
+      const oppHand = defender.hand.length;
+      if (myHand === oppHand) {
+        baseDamage += 80;
+        workingState = addLog(workingState,
+          `同步脈衝：雙方手牌均 ${myHand} 張 → ${attackerCard.name} 招式傷害 +80`, aIdx);
+      }
+    }
+
     // 道具：特定屬性防禦（福祿果 / 巧可果 / 千香果 / 刺耳果 / 霹霹果 / 莓榴果 / 渾厚鱗片）
     // 只要觸發就 -N，部分卡會丟棄；不受是否已被其他機制削到 0 影響（規則上 tool 仍消耗）
     // skipDefEffects 跳過，但不觸發道具也不丟棄。阻礙之塔時整個道具效果失效。
