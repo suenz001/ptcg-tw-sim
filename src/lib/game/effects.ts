@@ -8852,7 +8852,7 @@ regPost('蝶結萌虻|多餘花粉', oppActiveDeferredPrizeNextPost(2, '多餘�
 //   1. 彷徨夜靈|咒詛炸彈   — 自身昏厥 + 在對手 1 隻寶可夢身上放 5 個傷害指示物
 //   2. 三合一磁怪|過度放電 — 自身昏厥 + 從自己棄牌區選最多 3 張基本【雷】能量
 //                            以任意方式附於自己的【雷】寶可夢身上
-//                            （sim/AI 簡化：全部附於單一選擇的目標）
+//                            （v2.221 升級為「逐張分配」chain，每張能量可附不同雷寶）
 //
 // 兩張的卡牌資料在部分套牌登記為 abilities[]（→ regA），其餘套牌以 attacks[] 形式
 // 登記（名稱前綴 ZWJ U+200C + [特性]）。兩種路徑都需要註冊以確保涵蓋。
@@ -11412,9 +11412,11 @@ regPre('火箭隊的烏鴉頭頭|火箭羽毛', (state, aIdx, pool, action) => {
 regPre('火箭隊的黑暗鴉|誑騙', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('火箭隊的黑暗鴉|誑騙', deckSearchToHandPost(1, 'Supporter', '誑騙'));
 
-// ── 火箭隊的黑暗鴉|無理取鬧 30 + 鎖對手戰鬥位 1 招式（下回合）── v2.138
+// ── 火箭隊的黑暗鴉|無理取鬧 30 + 鎖對手戰鬥位 1 招式（下回合）── v2.138 / v2.230 升級
 // 卡面：選 1 個對手戰鬥寶可夢持有的招式。下回合對手戰鬥位寶可夢無法使用此招式。
-// 簡化：sim/AI 端鎖「對手戰鬥位最後 1 個（通常最強）招式」；玩家若要自選可未來加 modal。
+// v2.230：升級為 modal-choice — 玩家在 ATTACK_POST 階段從對手戰鬥位招式中選 1 個鎖
+//   （之前簡化為自動鎖最後 1 個，與卡面「選 1 個」不符）。
+//   若對手只有 1 招直接套用 fast path，無需 modal。
 //   若對手換戰鬥位，鎖招會自動失效（卡面就是這樣設計）。
 regPre('火箭隊的黑暗鴉|無理取鬧', (state, _aIdx, _pool) => ({ state, damage: 30 }));
 regPost('火箭隊的黑暗鴉|無理取鬧', (state, aIdx, pool) => {
@@ -11424,9 +11426,46 @@ regPost('火箭隊的黑暗鴉|無理取鬧', (state, aIdx, pool) => {
   const defCard = pool.get(def.active.cardId);
   const attacks = defCard?.attacks ?? [];
   if (attacks.length === 0) return state;
-  // 取最後 1 招（通常是最強的）— 簡化版
-  const lockedName = attacks[attacks.length - 1].name;
-  const players = [...state.players] as [PlayerState, PlayerState];
+  // 只有 1 招：直接鎖（無 modal）
+  if (attacks.length === 1) {
+    const lockedName = attacks[0].name;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const newDef = { ...def };
+    const cur = newDef.active!.blockedAttackNamesNextTurn ?? [];
+    newDef.active = {
+      ...newDef.active!,
+      blockedAttackNamesNextTurn: [...cur, lockedName],
+    };
+    players[dIdx] = newDef;
+    return addLog({ ...state, players },
+      `無理取鬧：${defCard?.name ?? '?'} 下回合無法使用「${lockedName}」`, aIdx);
+  }
+  // 多招：開 modal-choice 讓玩家選
+  const s = addLog(state, `無理取鬧：選擇 1 個對手 ${defCard?.name ?? '?'} 持有的招式鎖住`, aIdx);
+  return withPending(s, {
+    type: 'modal-choice',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'unreasonable-lock-attack',
+    params: {
+      label: '無理取鬧',
+      options: attacks.map((a, i) => ({ id: `${i}`, text: `${i + 1}. ${a.name}` })),
+      defenderName: defCard?.name ?? '?',
+      attackNames: attacks.map(a => a.name),
+    },
+  });
+});
+regR('unreasonable-lock-attack', (st, aIdx, iids, params, _pool) => {
+  const choiceIdx = parseInt(iids[0] ?? '0', 10);
+  const attackNames = (params?.attackNames as string[] | undefined) ?? [];
+  const lockedName = attackNames[choiceIdx];
+  const defenderName = (params?.defenderName as string | undefined) ?? '?';
+  if (!lockedName) return st;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = st.players[dIdx];
+  // 對手可能在等待期間換戰鬥位 — 若已不在原位則放棄鎖
+  if (!def.active) return addLog(st, `無理取鬧：對手戰鬥位已變動，鎖招失效`, aIdx);
+  const players = [...st.players] as [PlayerState, PlayerState];
   const newDef = { ...def };
   const cur = newDef.active!.blockedAttackNamesNextTurn ?? [];
   newDef.active = {
@@ -11434,43 +11473,86 @@ regPost('火箭隊的黑暗鴉|無理取鬧', (state, aIdx, pool) => {
     blockedAttackNamesNextTurn: [...cur, lockedName],
   };
   players[dIdx] = newDef;
-  return addLog({ ...state, players },
-    `無理取鬧：${defCard?.name ?? '?'} 下回合無法使用「${lockedName}」`, aIdx);
+  return addLog({ ...st, players },
+    `無理取鬧：${defenderName} 下回合無法使用「${lockedName}」`, aIdx);
 });
 
-// ── 火箭隊的多邊獸｜駭客攻擊 0 + 雙方棄 1 手牌 ───────────────────────────────
+// ── 火箭隊的多邊獸｜駭客攻擊 0 + 雙方各棄 1 手牌 ─────────────────────────────
+// v2.230 升級：原版簡化為「自己自動丟最右、對手自動丟最右」是錯的。
+//   卡面：「雙方玩家各自將自己的 1 張手牌丟棄」 → 兩邊都應該由各自玩家選。
+//   修法：先開玩家的 hand-discard pending（minCount=1，maxCount=1）；
+//   resolver 處理完玩家後再開對手的 hand-discard pending（actorIdx=dIdx）。
 regPre('火箭隊的多邊獸|駭客攻擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('火箭隊的多邊獸|駭客攻擊', (state, aIdx, pool) => {
+regPost('火箭隊的多邊獸|駭客攻擊', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const p = state.players[aIdx];
   const op = state.players[dIdx];
   if (p.hand.length === 0 && op.hand.length === 0) {
     return addLog(state, '駭客攻擊：雙方手牌皆空', aIdx);
   }
-  // 自己自動丟最右一張，對手隨機丟一張
-  let s = state;
-  const players = [...s.players] as [PlayerState, PlayerState];
+  // 先處理攻擊方（自己選 1 張丟）
   if (p.hand.length > 0) {
-    const ip = { ...players[aIdx] };
-    const lastIdx = ip.hand.length - 1;
-    const drop = ip.hand[lastIdx];
-    ip.hand = ip.hand.slice(0, lastIdx);
-    ip.discard = [...ip.discard, drop];
-    players[aIdx] = ip;
-    s = { ...s, players };
-    s = addLog(s, `駭客攻擊：自己丟棄 ${pool.get(drop.cardId)?.name ?? '?'}`, aIdx);
+    const s = addLog(state, '駭客攻擊：選 1 張自己手牌丟棄', aIdx);
+    return withPending(s, {
+      type: 'hand-discard',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'hack-attack-self-then-opp',
+    });
   }
-  // 對手由 ai/UI 自選 — 但簡化也自動丟最右一張
-  const players2 = [...s.players] as [PlayerState, PlayerState];
-  const o = { ...players2[dIdx] };
-  if (o.hand.length > 0) {
-    const lastIdx = o.hand.length - 1;
-    const drop = o.hand[lastIdx];
-    o.hand = o.hand.slice(0, lastIdx);
-    o.discard = [...o.discard, drop];
-    players2[dIdx] = o;
-    s = { ...s, players: players2 };
-    s = addLog(s, `駭客攻擊：對手丟棄 ${pool.get(drop.cardId)?.name ?? '?'}`, aIdx);
+  // 攻擊方手牌空 → 直接跳到對手
+  if (op.hand.length > 0) {
+    const s = addLog(state, '駭客攻擊：對手選 1 張自己手牌丟棄', aIdx);
+    return withPending(s, {
+      type: 'hand-discard',
+      actorIdx: dIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'hack-attack-opp-only',
+    });
+  }
+  return state;
+});
+regR('hack-attack-self-then-opp', (st, aIdx, iids, _params, pool) => {
+  // 攻擊方丟棄選的卡
+  let s = st;
+  const players = [...s.players] as [PlayerState, PlayerState];
+  const p = { ...players[aIdx] };
+  const dropped = p.hand.filter(c => iids.includes(c.iid));
+  p.hand = p.hand.filter(c => !iids.includes(c.iid));
+  p.discard = [...p.discard, ...dropped];
+  players[aIdx] = p;
+  s = { ...s, players };
+  if (dropped.length > 0) {
+    const names = dropped.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    s = addLog(s, `駭客攻擊：自己丟棄 ${names}`, aIdx);
+  }
+  // 接著要求對手做選擇
+  const dIdx = (1 - aIdx) as 0 | 1;
+  if (s.players[dIdx].hand.length === 0) return s;
+  s = addLog(s, '駭客攻擊：對手選 1 張自己手牌丟棄', aIdx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: dIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'hack-attack-opp-only',
+  });
+});
+regR('hack-attack-opp-only', (st, _aIdx, iids, _params, pool) => {
+  // 注意：actorIdx 是對手（dIdx），但 effectKey 從攻擊方視角觸發；
+  //   resolver 收到的 _aIdx 在 RESOLVERS 統一是 actorIdx（即對手 idx）
+  //   — 所以這裡直接用 _aIdx（=dIdx）操作 hand
+  const dIdx = _aIdx; // 對手選了，所以 actorIdx = dIdx
+  let s = st;
+  const players = [...s.players] as [PlayerState, PlayerState];
+  const o = { ...players[dIdx] };
+  const dropped = o.hand.filter(c => iids.includes(c.iid));
+  o.hand = o.hand.filter(c => !iids.includes(c.iid));
+  o.discard = [...o.discard, ...dropped];
+  players[dIdx] = o;
+  s = { ...s, players };
+  if (dropped.length > 0) {
+    const names = dropped.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    s = addLog(s, `駭客攻擊：對手丟棄 ${names}`, dIdx);
   }
   return s;
 });
