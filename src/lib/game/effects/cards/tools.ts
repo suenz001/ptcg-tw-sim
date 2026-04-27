@@ -148,12 +148,20 @@ TOOL_PREVENT_KO.set('倖存鍛鍊器', (inst, card) => {
 });
 
 // ── 被 KO 時效果 ───────────────────────────────────────────────────────────
+// v2.232 升級：原版簡化為「固定抽頂 3 張」；卡面實際是「從牌庫任意選擇最多
+//   3 張卡加入手牌，並重洗牌庫」— 應開 deck-search pending 讓玩家自選。
+//   actorIdx = dIdx（被 KO 方的玩家做選擇）。共用 search-to-hand-reshuffle。
 TOOL_ON_KO.set('希望護身符', (state, dIdx) => {
-  // 從牌庫抽 3 張（簡化為固定抽頂 3 張；原文為「任意選擇最多 3 張」）
-  state = addLog(state, '希望護身符：從牌庫抽 3 張', dIdx);
-  return updatePlayer(state, dIdx, p => {
-    const taken = p.deck.slice(0, 3);
-    return { ...p, deck: shuffle(p.deck.slice(3)), hand: [...p.hand, ...taken] };
+  if (state.players[dIdx].deck.length === 0) {
+    return addLog(state, '希望護身符：牌庫為空', dIdx);
+  }
+  state = addLog(state, '希望護身符：從牌庫任意選擇最多 3 張卡加手牌並重洗', dIdx);
+  return withPending(state, {
+    type: 'deck-search',
+    actorIdx: dIdx, sourcePlayerIdx: dIdx,
+    minCount: 0, maxCount: Math.min(3, state.players[dIdx].deck.length),
+    filter: 'any',
+    effectKey: 'search-to-hand-reshuffle',
   });
 });
 TOOL_ON_KO.set('沉重接力棒', (state, dIdx, _aIdx, pool) => {
