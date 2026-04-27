@@ -95,6 +95,32 @@
   let lightboxUrl = $state<string | null>(null);
   function openLightboxImg(url: string) { lightboxUrl = url; }
   function closeLightboxImg() { lightboxUrl = null; }
+
+  // ── 全螢幕切換（iOS Safari 隱藏分頁列/工具列） ─────────────────────────────
+  let isFullscreen = $state(false);
+  function toggleFullscreen() {
+    const doc = document as any;
+    const el = document.documentElement as any;
+    if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+      const req = el.requestFullscreen ?? el.webkitRequestFullscreen;
+      if (req) req.call(el).catch(() => {});
+    } else {
+      const exit = doc.exitFullscreen ?? doc.webkitExitFullscreen;
+      if (exit) exit.call(doc).catch(() => {});
+    }
+  }
+  onMount(() => {
+    const onFsChange = () => {
+      const doc = document as any;
+      isFullscreen = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange);
+    };
+  });
   let zoomInst = $state<CardInstance | null>(null);
   // 堆疊：之前開過的 zoom — 用於「返回上一層」按鈕
   let zoomStack = $state<Array<{ card: Card; inst: CardInstance | null }>>([]);
@@ -2392,6 +2418,9 @@
           title="音量 {Math.round(audioVolume * 100)}%"
         />
       </span>
+      <button class="chip fs-chip" onclick={toggleFullscreen} title={isFullscreen ? '退出全螢幕' : '全螢幕（隱藏瀏覽器列）'}>
+        {isFullscreen ? '⛶' : '⛶'} {isFullscreen ? '退出全螢幕' : '全螢幕'}
+      </button>
     </span>
     {#if game.phase === 'playing' && activePlayer}
       {@const attEnergy = activePlayer.energyAttachedThisTurn}
@@ -3956,6 +3985,8 @@
   .version-chip{ background:#2a1a3a; color:#c0a0e0; border-color:#4a3a6a; font-family:monospace; }
   .wait-chip{ background:#3a2a1a; color:#fa8; border-color:#5a3a1a; }
   .syncing-chip{ background:#3a3a1a; color:#ff8; border-color:#5a5a1a; }
+  .fs-chip{ background:#1a2a3a; color:#8cf; border-color:#2a4a6a; cursor:pointer; font-size:0.68rem; }
+  .fs-chip:hover{ background:#2a3a5a; }
   .waiting-msg{ color:#fa8; font-size:0.85rem; font-style:italic; }
   .turn-res{ display:flex; gap:0.3rem; align-items:center; margin-left:auto; }
   .res-item{ display:flex; align-items:center; gap:.2rem; padding:.15rem .4rem; border-radius:4px; background:#0e3a1e; border:1px solid #2a6a3a; font-size:.7rem; color:#9fa; }
