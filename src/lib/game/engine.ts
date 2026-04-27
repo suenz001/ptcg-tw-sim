@@ -1273,8 +1273,6 @@ function handlePlaying(
       basePoke = attacker.bench.find(c => c.iid === action.fromIid) ?? null;
     }
     if (!basePoke) return state;
-    // v2.187：化石上場後不能被進化（化石本身不是真寶可夢卡，沒有進化路徑）
-    if (basePoke.fossilOnField) return state;
     const baseCard = pool.get(basePoke.cardId);
     if (!baseCard) return state;
     // v2.149 提升進化（伊布 SV8a 125）：戰鬥場上時可第 1 回合或剛使出時進化
