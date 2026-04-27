@@ -1,9 +1,204 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.203)  
+> 最後更新：2026-04-27 (v2.215)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.215 — Tool 招式注入機制（招式學習器 螢石 + 核心記憶碟）
+
+H/I/J 標卡池 **236/236（100% 完成）** — 從 v1.62 第 7 波累積至今全部實裝。
+
+> 註：v2.214 commit 號被 Leon 的 BGM/SFX modal feature 佔用，本實裝 bump 為 v2.215 避撞。
+
+### 背景：tool-injects-attack 是新 mechanic
+PTCG 後期出了一類「附有此 tool 的寶可夢可使用 tool 上寫的招式」的卡（招式學習器系列、核心記憶碟）。
+原本 engine 只認 attacker.attacks，工具上寫的招式根本看不到 → 兩張 H/I/J 標卡卡死無法實裝。
+
+### 引擎核心：getEffectiveAttacks 合併器（engine.ts）
+
+```typescript
+export function getEffectiveAttacks(
+  state: GameState, inst: CardInstance, pool: Map<string, Card>
+): { atk: Attack; sourceCardName: string; isFromTool: boolean }[] {
+  // 1. 自己的招式（card.attacks）
+  // 2. 工具上的招式（inst.toolAttached.cardId 的 attacks，PokemonTool subtype only）
+  // 3. 阻礙之塔下 → tool 失效（同 isToolsJammed）
+}
+```
+
+- attackIndex 0~ownCount-1 = 自己；>= ownCount = tool 招式
+- engine / UI / AI 全部走這個 helper，single source of truth
+
+### ATTACK handler（engine.ts ~2266）
+- effectKey 改用 sourceCardName（`${sourceName}|${attack.name}`）
+  → tool 招式 hit `招式學習器 螢石|螢石` 這種 key（不再用 attacker.cardName）
+- ATTACK log 在工具招式時加註「（工具：XXX）」
+- blockedAttackNamesThisTurn 檢查也用 effective list
+
+### UI 同步（+page.svelte）
+- 招式按鈕：`{#each getEffectiveAttacks(...) as { atk, sourceCardName, isFromTool }, i}`
+  - 工具招式顯示 🔧 emoji 後綴 + `title="來自工具：XXX"` tooltip
+  - `class:atk-from-tool` 給 CSS 預留鉤子
+- initiateAttack：用 effective entry 的 sourceCardName 找 ATTACK_PRE_DISCARD_CHOICE spec key
+
+### AI 同步（ai.ts）
+- estimateDamage 改從 effective list 取 atk（不再只看 own attacks）
+
+### 新 TOOL_* hook（tools.ts）
+
+#### TOOL_ATTACH_GATE — 限定 holder
+```typescript
+export const TOOL_ATTACH_GATE = new Map<string, (holderCard: Card) => boolean>();
+```
+- toolAttachEffect 工廠：根據 gate 過濾 picker 候選；無 holder 符合 → 道具回手牌
+- attach-tool resolver：再做一次 double-check（防直接 dispatch 繞過 picker）
+
+#### TOOL_END_TURN_DISCARD — 自己回合結束自動棄
+```typescript
+export const TOOL_END_TURN_DISCARD = new Set<string>();
+```
+- engine.ts END_TURN handler 在 力之沙漏 hook 之後掃自己場上所有寶可夢的 toolAttached
+- 卡名在此 set → 把該 toolAttached 搬到 discard，target 寶可夢的 toolAttached 設 undefined
+- 無 jam guard：tool「自棄」屬於 cardface 固有規則，即使 nullify 仍應在自己回合結束離場
+
+### 兩張卡實裝
+
+#### 招式學習器 螢石（H, SV8 11281, PokemonTool）
+卡面：
+> 附有這張卡的寶可夢，可使用這張卡上寫的招式。將附於寶可夢身上的這張卡，在自己的回合結束時丟棄。
+> 招式 螢石 [草水超]：將這隻寶可夢身上附加的能量卡全部丟棄，將自己的所有「太晶」寶可夢的 HP 全部恢復。
+
+實裝：
+- `TOOL_END_TURN_DISCARD.add('招式學習器 螢石')` — 回合結束自棄
+- `regPost('招式學習器 螢石|螢石', ...)`：active 全棄能量 → 場上所有「太晶」tag 寶可夢 damage = 0
+- 一般 attach（無 holder gate）：toolAttachEffect
+
+#### 核心記憶碟（J, M3 18049, PokemonTool）
+卡面：
+> 附有這張卡的「超級基格爾德【ex】」可使用這張卡上寫的招式。
+> 招式 大地光炮 [鬥×4] 350：將這隻寶可夢身上附加的能量卡全部丟棄。
+
+實裝：
+- `TOOL_ATTACH_GATE.set('核心記憶碟', card => card.name === '超級基格爾德ex')`
+- `regPost('核心記憶碟|大地光炮', ...)`：active 全棄能量
+- 350 base damage 由 attack.damage 處理（engine 自動讀）
+
+### 連帶修 toolAttachEffect
+加 pool 參數讀卡（gate 需要 holderCard）；無有效 holder 時 addLog + 把道具放回手牌（不再 silent 失敗）。
+
+### 改動範圍
+- `src/lib/game/engine.ts`：+getEffectiveAttacks、ATTACK 用 effective list、END_TURN auto-discard
+- `src/lib/game/effects/cards/tools.ts`：+TOOL_ATTACH_GATE / TOOL_END_TURN_DISCARD、兩張卡完整實裝
+- `src/lib/game/effects.ts`：re-export 兩個新 map
+- `src/lib/game/ai.ts`：estimateDamage 用 effective list
+- `src/routes/game/+page.svelte`：getEffectiveAttacks 渲染 + initiateAttack
+- `src/lib/version.ts`：2.213 → 2.215
+
+### Audit 進度
+H/I/J: 234 → **236 / 236**（100%）
+
+---
+
+## v2.213 — Scraper 修：PokemonTool 上寫的招式
+
+### 問題
+parse-card.js 對 Trainer 卡只把 `.skill .skillEffect` 串成 rulesText，未抽出
+「附有這張卡的寶可夢可使用的招式」。6 張 PokemonTool 因此缺 attacks 欄位。
+
+### 修正
+- `scripts/scrape/parse-card.js`：
+  - 加 PokemonTool 分支
+  - 掃 `.skillInformation .skill`，skillName 非空者抽成 attacks（cost / damage / effect）
+- `scripts/migrate-pokemon-tool-attacks.mjs`：新建 migration
+  - 重爬 6 張卡，patch attacks 進對應 static/cards/*.json：
+    - M3/18049 核心記憶碟：大地光炮 [F,F,F,F] 350
+    - SV8/11281 招式學習器 螢石：螢石 [G,W,P]
+    - SV8a/12437 招式學習器 演進、12438 衰退：[C]
+    - SVK/11155 演進、11156 衰退：[C]
+
+### 註
+此版只修了 data layer；引擎完整實裝由 v2.215 完成。
+
+---
+
+## v2.212 — 火箭隊的妨礙機器人（Item / I）
+
+### 卡面
+> 選擇 1 張對手的反面朝上的獎賞卡，並在不看正面的情況下，從對手的手牌選擇 1 張，
+> 查看各自的正面。若希望，令對手互換所選的卡。
+
+### 實裝
+「不看正面」→ 玩家盲選位置無資訊優勢 → engine 隨機抽 1 張對手獎賞 + 1 張對手手牌：
+- log 翻面後給出卡方看
+- modal-choice 由出卡方決定是否互換（AI 預設選不互換）
+- 互換 = 對手獎賞 ↔ 對手手牌（同 prize index 互換 / 手牌 push 末端）
+
+### 檔案改動
+`src/lib/game/effects/cards/v172_hij_batch.ts`：+regG/reg/regR `tr-disrupt-bot-swap-decide`
+H/I/J: 233 → 234
+
+---
+
+## v2.211 — 壯偉碩木（Stadium / H）
+
+### 卡面
+> 雙方主動 Stadium，每回合 1 次：從牌庫選 1 張可進化的【1階】進化場上【基礎】，
+> 若進化成功可繼續選 1 張【2階】完成第二段進化。並重洗牌庫。
+
+### 實裝
+- `engine.ts USE_STADIUM '壯偉碩木'`：先攻第 1 回合 gate + 場上 base 掃描 + 牌庫 Stage1 候選檢查
+  → 開 deck-search pending（filter='SturdyMightTree:Stage1', minCount=0, maxCount=1）
+- 兩段 deck-search resolver（v172_hij_batch.ts）：
+  - `sturdy-might-tree-step1`：找場上匹配 base、做 EVOLVE、若有 Stage2 候選開 step2
+  - `sturdy-might-tree-step2`：驗證 evolvesFrom、做 EVOLVE、重洗牌庫
+- ai.ts / +page.svelte：+SturdyMightTree:Stage1 / Stage2 filter handler
+H/I/J: 232 → 233
+
+---
+
+## v2.210 — 手持循環扇（PokemonTool / J）
+
+### 卡面
+> 受到對手寶可夢招式的傷害時觸發：可從這隻寶可夢身上的能量中選 1 張，移到自己 1 隻備戰寶可夢身上。
+
+### 實裝
+TOOL_ON_DAMAGED hook（tools.ts）：
+- Step 1: modal-choice 列出 active 上所有能量讓玩家選 1 張
+- Step 2: opp-bench-choose（己方備戰選 1 隻）將該能量搬過去
+- resolver `cycle-fan-step1-pick-energy` / `cycle-fan-step2-place-energy`
+H/I/J: 231 → 232
+
+---
+
+## v2.209 — 配樂之笛（Item / H）
+
+### 卡面
+> 翻開對手牌庫上方 5 張，從中選任意數量的【基礎】寶可夢放對手備戰，剩餘洗回牌庫。
+
+### 實裝
+- gate：對手牌庫 ≥1 + 對手備戰未滿
+- deck-search pending：filter='Basic:TOP5', actor=idx, sourcePlayerIdx=oppIdx
+- resolver：放選中的 basic 進對手備戰（justPlaced=true）+ 剩餘 top5 洗回
+- ai.ts / +page.svelte：+'Basic:TOP5' filter handler
+H/I/J: 230 → 231
+
+---
+
+## v2.205~v2.208 — RWD 嘗試（已暫緩）
+
+連續嘗試手機橫屏 RWD 排版（≤950px + landscape orientation），多次未達理想效果。
+經 4 次迭代後 Leon 決定暫緩 RWD：**「算了我們還是先繼續我們的卡牌功能實裝，RWD 的部分晚點再處理」**
+
+### 仍保留的代碼
+- 自動 landscape 切換（Screen Orientation API + iOS 提示 overlay）
+- @media (max-width: 950px) and (orientation: landscape) 樣式
+- 手機板 .zoom-img-btn pointer-events:none（防 lightbox 連環彈 — Leon 回報的 bug）
+
+### 待辦
+未來重新評估時要從 layout 設計重新出發，目前的 vh-ratio 方案不足以解決根本問題。
 
 ---
 
