@@ -841,6 +841,30 @@
     }, 600);
   });
 
+  // v2.206 手機自動鎖橫屏：進戰鬥畫面（game !== null）時 try Screen Orientation API。
+  //   - Android Chrome（fullscreen 下）：lock('landscape') 會旋轉並鎖定
+  //   - iOS Safari：API 不支援 → silent fail，依靠 CSS overlay 提示用戶手動旋轉
+  //   - 桌機 / 平板：API 也會 silent fail（沒手機 sensor），不影響
+  // 離開戰鬥（game === null，回 lobby）→ unlock orientation
+  let orientationLocked = $state(false);
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const inBattle = game !== null;
+    if (inBattle && !orientationLocked) {
+      // 嘗試鎖橫向（async 但不 await — 失敗就跳過）
+      try {
+        const so = (screen as Screen & { orientation?: { lock?: (o: string) => Promise<void>; unlock?: () => void } }).orientation;
+        so?.lock?.('landscape').then(() => { orientationLocked = true; }).catch(() => {});
+      } catch { /* 不支援的瀏覽器：silent */ }
+    } else if (!inBattle && orientationLocked) {
+      try {
+        const so = (screen as Screen & { orientation?: { unlock?: () => void } }).orientation;
+        so?.unlock?.();
+      } catch {}
+      orientationLocked = false;
+    }
+  });
+
   // ── Derived ─────────────────────────────────────────────────────────────────
   const aIdx = $derived(game?.activePlayerIndex ?? 0);
   const dIdx = $derived((1 - aIdx) as 0 | 1);
@@ -2115,6 +2139,17 @@
 </script>
 
 <svelte:window onkeydown={onGlobalKey} onpointermove={onWindowPointerMove} onpointerup={onWindowPointerUp} />
+
+<!-- v2.206：手機直屏旋轉提示 — 進戰鬥（game !== null）且手機直屏時顯示。
+     CSS 用 @media (orientation: portrait) 守門：橫屏自動隱藏。
+     iOS Safari 不支援 screen.orientation.lock，依靠用戶手動旋轉。 -->
+{#if game}
+  <div class="rotate-prompt">
+    <div class="rotate-prompt-icon">📱</div>
+    <div class="rotate-prompt-text">請將手機旋轉至橫向<br/>以獲得最佳對戰體驗</div>
+    <div class="rotate-prompt-sub">（橫屏後此提示會自動消失）</div>
+  </div>
+{/if}
 
 <!-- ══════════════════════════════════════════════════════════════════════
      模式選擇 / Lobby
@@ -4775,19 +4810,41 @@
      ════════════════════════════════════════════════════════════════════════ */
   /* 桌機（>950px）：手機專屬 🔍 鈕預設隱藏；hover-peek 仍正常運作 */
   .hand-zoom-btn{ display:none; }
+  /* v2.206 手機直屏 fallback overlay（在 mobile 直屏時提示旋轉到橫向） */
+  .rotate-prompt{ display:none; }
+  @media (max-width: 950px) and (orientation: portrait) {
+    .rotate-prompt{
+      display:flex; position:fixed; inset:0; z-index:99999;
+      background:rgba(0,0,0,0.92); color:#fff;
+      align-items:center; justify-content:center;
+      flex-direction:column; gap:1rem;
+      font-family:system-ui,'Microsoft JhengHei',sans-serif;
+      padding:2rem; text-align:center;
+    }
+    .rotate-prompt-icon{ font-size:4rem; animation:rotate-hint 2s ease-in-out infinite; }
+    .rotate-prompt-text{ font-size:1.1rem; line-height:1.5; }
+    .rotate-prompt-sub{ font-size:0.85rem; color:#aaa; }
+    @keyframes rotate-hint {
+      0%, 100% { transform: rotate(0deg); }
+      50% { transform: rotate(90deg); }
+    }
+  }
 
   @media (max-width: 950px) and (orientation: landscape) {
     /* ════════════════════════════════════════════════════════════════════
-       v2.205：iOS Safari 橫屏可用高度可能只有 ~340px（URL bar 沒收）。
-       重新驗算 340px viewport 預算：
-         header 24 + field*2 (76 each) + hand-strip ~70 + action-bar 44 = 290 ✓
-       仍留 50px buffer 給 status chip / 動畫。
+       v2.206：強制不滑動 — battle-root 改 height:100dvh + overflow:hidden，
+       field-row 用 flex:1 1 0 + min-height:0 吞下剩餘空間。zoom-modal 縮小到
+       無需滾動，手機禁用 zoom→lightbox 二段（Leon 反映兩個畫面突兀）。
 
-       此版主修兩件事：
-         1. 進一步縮所有元素，吞下更小的 viewport
-         2. 新增手機專屬 .hand-zoom-btn（🔍 按鈕）— 取代桌機 hover-peek，
-            tap 即可開啟 openZoom 大圖檢視
+       340px viewport 預算（iOS Safari 橫屏 URL bar 沒收的最小情境）：
+         header 24 + field*2 (~75 each) + hand-strip 70 + action-bar 40 = 284 ✓
        ════════════════════════════════════════════════════════════════════ */
+
+    /* ── 強制不捲動：battle-root 鎖定 100dvh + overflow:hidden ── */
+    .battle-root{ height:100dvh; min-height:0; overflow:hidden; }
+    /* field-row 兩排吞下中間剩餘空間（彈性壓縮） */
+    .field-row{ flex:1 1 0; min-height:0; padding:0.15rem 0.3rem; gap:0.2rem; }
+    .battle-header, .hand-strip, .action-bar{ flex:0 0 auto; }
 
     /* ── 戰鬥場框（active card） ── */
     .active-card{ min-height:72px; padding:0.2rem 0.25rem; gap:0.2rem; border-radius:5px; }
@@ -4841,5 +4898,17 @@
     /* ── stepper（仍 ≥40px 觸控最小） ── */
     .stepper-btn{ width:2.4rem; height:2.4rem; font-size:1.2rem; }
     .stepper-value{ min-width:4rem; font-size:1.3rem; line-height:2.2rem; }
+
+    /* ── v2.206 zoom-modal 縮小到不用滾動 ── */
+    /* 卡圖縮小：桌機 312px → 手機 160px。zoom-modal width 96vw / max-height 88vh */
+    .zoom-modal{ max-width:560px; width:96vw; max-height:88vh; padding:0.7rem; gap:0.5rem; }
+    .zoom-img{ width:160px; max-width:42vw; }
+    .zoom-name{ font-size:1rem; }
+    .zoom-badges{ gap:0.25rem; }
+    .zoom-badges .badge{ font-size:0.66rem; padding:0.1rem 0.4rem; }
+    .zoom-meta, .zoom-state, .state-row{ font-size:0.74rem; }
+    /* zoom-img-btn 在手機上停用 lightbox 二段（直接顯示 zoom-modal 詳細資料即可） */
+    .zoom-img-btn{ cursor:default; pointer-events:none; }
+    .zoom-img-hint{ display:none; }
   }
 </style>
