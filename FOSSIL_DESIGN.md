@@ -52,7 +52,7 @@ fossilOnField?: boolean;
 | 招式傷害 / HP 路徑讀 `card.hp` 處 | 走 getEffectiveHP，已涵蓋 |
 | `pokemonType` 讀取 (effects.ts / engine.ts) | helper `getInstPokemonType(inst)`：fossilOnField → 'Colorless' |
 | `card.subtype` Basic 判定 | helper `isInstBasic(inst)`：fossilOnField → true |
-| `EVOLVE` action handler (engine.ts:1161) | base 是 fossilOnField → return state（不能進化） |
+| `EVOLVE` action handler (engine.ts:1161) | **化石可以被進化**（v2.188 Leon 指正）— 不加 guard，evolvesFrom 比對自然處理 |
 | `RETREAT` action handler | active fossilOnField → return state |
 | `getRetreatCost` 之類 UI helper | fossilOnField → return Infinity |
 | `applyStatus` / 中毒/灼傷/睡眠/麻痺/混亂施加處 | fossilOnField → no-op |
@@ -68,7 +68,7 @@ fossilOnField?: boolean;
 1. **手牌拖曳**：化石卡能拖到 bench drop zone（同 PLAY_BASIC 路徑），engine dispatch `PLAY_FOSSIL`。
 2. **化石卡顯示**：在備戰/戰鬥場，化石顯示為寶可夢樣式 — 卡圖、HP60 條、能量 pip 區（永遠空）、Tool slot（永遠空）。
 3. **丟棄按鈕**：自己回合，化石上有額外按鈕「丟棄化石」→ dispatch `DISCARD_FOSSIL`。
-4. **不顯示**：撤退按鈕（fossil 隱藏）、進化選項、特性按鈕、招式選擇。
+4. **不顯示**：撤退按鈕、特性按鈕、招式選擇。**進化選項要顯示**（化石可以進化成 Stage1）。
 
 ### 各被動效果（v2.188 起逐張實裝）
 
@@ -86,7 +86,7 @@ fossilOnField?: boolean;
 
 ### v2.187 — 核心 scaffold
 - types.ts 加 fossilOnField flag
-- engine.ts：getEffectiveHP / EVOLVE / RETREAT / status / KO / mulligan
+- engine.ts：getEffectiveHP / RETREAT / status / KO / mulligan（**EVOLVE 不加 guard**，化石可被進化）
 - 新增 PLAY_FOSSIL / DISCARD_FOSSIL action handler
 - 5 張化石 reg：可上場 + 可丟棄（無被動）
 - UI 拖曳支援 + 丟棄按鈕 + 顯示為寶可夢

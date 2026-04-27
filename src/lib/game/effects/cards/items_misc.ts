@@ -1246,9 +1246,10 @@ regR('fishnet-step2', (st, idx, iids, params, pool) => {
 });
 
 // ── 化石卡 5 張（v2.187 核心 scaffold）── ────────────────────────────────────
-// 共通機制：作為 HP60【無】基礎寶可夢上場、不能撤退/進化、不會中異常狀態、
-//          自己回合可丟棄（非昏厥）。詳細規則見 engine.ts FOSSIL_ITEM_NAMES /
-//          PLAY_FOSSIL / DISCARD_FOSSIL handler。
+// 共通機制：作為 HP60【無】基礎寶可夢上場、**可被進化**（化石→Stage1→Stage2，
+//          5 條鏈見 FOSSIL_DESIGN.md）、不能撤退、不會中異常狀態、自己回合可丟棄
+//          （非昏厥）。詳細規則見 engine.ts FOSSIL_ITEM_NAMES / PLAY_FOSSIL /
+//          DISCARD_FOSSIL handler。
 //
 // 這些卡不走一般 Item 的 PLAY_TRAINER 路徑：
 //   - 從手牌打到備戰 → PLAY_FOSSIL action（UI 拖曳會觸發此 action）
