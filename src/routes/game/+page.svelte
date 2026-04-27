@@ -2956,6 +2956,13 @@
             onpointerdown={(e)=>{leaveHandCard(); if(dragKind)startDrag(e, inst, dragKind, c);}}
             onclick={()=>{if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
             title={dragKind?`拖曳使用 · ${c.name}`:c.name}>
+            <!-- v2.205 手機專屬放大按鈕：手機沒 hover preview，所以加 🔍 鈕 tap → openZoom。
+                 stopPropagation 防止觸發外層 onpointerdown(startDrag) / onclick(selectedEnergyIid)。
+                 桌機（>950px）display:none 隱藏，桌機沿用 hover-peek。 -->
+            <button class="hand-zoom-btn"
+              onpointerdown={(e)=>e.stopPropagation()}
+              onclick={(e)=>{e.stopPropagation(); openZoom(inst.cardId, inst);}}
+              title="放大查看 {c.name}">🔍</button>
             <img src={c.imageUrl} alt={c.name}/>
             <span class="hand-name">{c.name}</span>
             {#if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
@@ -4766,52 +4773,72 @@
        - 動畫（attack-shake/flash、fly）用 transform + relative position，自動 OK
        - v2.198 .battle-root min-height + overflow-y:auto fallback 不拔（撐底保險）
      ════════════════════════════════════════════════════════════════════════ */
+  /* 桌機（>950px）：手機專屬 🔍 鈕預設隱藏；hover-peek 仍正常運作 */
+  .hand-zoom-btn{ display:none; }
+
   @media (max-width: 950px) and (orientation: landscape) {
     /* ════════════════════════════════════════════════════════════════════
-       v2.204 hotfix：v2.202 版面跑掉 — 因為漏改幾個關鍵 height/min-height。
-       特別是 .hand-scroll min-height:170 + padding 30/22 是手牌區被撐到 ~200px
-       的真兇；.action-bar grid + min-height:160 也太大。本版補完所有大頭。
+       v2.205：iOS Safari 橫屏可用高度可能只有 ~340px（URL bar 沒收）。
+       重新驗算 340px viewport 預算：
+         header 24 + field*2 (76 each) + hand-strip ~70 + action-bar 44 = 290 ✓
+       仍留 50px buffer 給 status chip / 動畫。
 
-       432px 高 viewport 驗算：
-         header 30 + field*2 (96 each) + hand-strip ~95 + action-bar 60 = 381 ✓
+       此版主修兩件事：
+         1. 進一步縮所有元素，吞下更小的 viewport
+         2. 新增手機專屬 .hand-zoom-btn（🔍 按鈕）— 取代桌機 hover-peek，
+            tap 即可開啟 openZoom 大圖檢視
        ════════════════════════════════════════════════════════════════════ */
 
     /* ── 戰鬥場框（active card） ── */
-    .active-card{ min-height:88px; padding:0.25rem 0.3rem; gap:0.25rem; border-radius:6px; }
-    .active-card.active-empty{ min-height:78px; padding:0.5rem; font-size:0.7rem; }
-    .active-img{ max-width:60px; max-height:84px; object-fit:contain; }
+    .active-card{ min-height:72px; padding:0.2rem 0.25rem; gap:0.2rem; border-radius:5px; }
+    .active-card.active-empty{ min-height:64px; padding:0.4rem; font-size:0.66rem; }
+    .active-img{ max-width:52px; max-height:74px; object-fit:contain; }
     /* ── 備戰格 ── */
-    .bench-slot{ flex:1 1 56px; min-width:56px; max-width:78px; height:96px; padding:0.15rem; font-size:0.58rem; gap:0.05rem; }
-    .bench-slot img{ max-width:60px; max-height:60px; }
+    .bench-slot{ flex:1 1 48px; min-width:48px; max-width:68px; height:78px; padding:0.1rem; font-size:0.55rem; gap:0.04rem; }
+    .bench-slot img{ max-width:52px; max-height:50px; }
     /* ── 手牌卡 ── */
-    .hand-card{ width:52px; padding:0.15rem; gap:0.06rem; font-size:0.58rem; }
-    .hand-card img{ width:48px; }
-    .hand-card-name{ font-size:0.54rem; line-height:1.05; }
+    .hand-card{ width:46px; padding:0.1rem; gap:0.04rem; font-size:0.55rem; position:relative; }
+    .hand-card img{ width:42px; }
+    .hand-card-name, .hand-name{ font-size:0.5rem; line-height:1.05; }
+    .hand-hint{ font-size:0.48rem; padding:0; }
+    /* ── 手機專屬 🔍 放大鈕（取代 hover-peek） ── */
+    .hand-zoom-btn{
+      display:flex; align-items:center; justify-content:center;
+      position:absolute; top:1px; right:1px; z-index:5;
+      width:18px; height:18px; padding:0;
+      background:rgba(0,0,0,0.65); color:#fff;
+      border:1px solid rgba(255,255,255,0.4); border-radius:50%;
+      font-size:10px; line-height:1;
+      cursor:pointer; touch-action:manipulation;
+    }
+    .hand-zoom-btn:hover{ background:rgba(0,0,0,0.85); }
     /* ── 戰鬥 header ── */
-    .battle-header{ padding:0.15rem 0.4rem; gap:0.25rem; font-size:0.72rem; }
-    .battle-header .chip{ font-size:0.68rem; padding:0.1rem 0.35rem; }
+    .battle-header{ padding:0.1rem 0.35rem; gap:0.2rem; font-size:0.68rem; }
+    .battle-header .chip{ font-size:0.62rem; padding:0.05rem 0.3rem; }
     /* ── field row ── */
-    .field-row{ padding:0.2rem 0.35rem; gap:0.25rem; }
-    /* ── hand strip 結構：之前 hand-scroll 寫死 min-height:170 + padding 30/22 是大頭！ ── */
-    .hand-strip{ padding:0.15rem 0.4rem 0.25rem; }
-    .hand-scroll{ min-height:0; padding:8px 0.5rem 6px; perspective:none; }
-    /* ── action bar：grid → flex 自動換行；min-height 160 → 48 ── */
-    .action-bar{ display:flex; flex-wrap:wrap; min-height:48px; max-height:90px; padding:0.18rem 0.4rem; gap:0.3rem; align-items:center; justify-content:space-between; overflow-y:auto; }
-    .alerts-col{ max-width:160px; gap:0.1rem; }
-    .alert{ font-size:0.7rem; padding:0.15rem 0.4rem; }
-    .stadium-display{ padding:0.2rem 0.3rem; gap:0.1rem; }
-    .stadium-display img{ width:42px; }
-    .stadium-display-label{ font-size:0.62rem; }
-    .stadium-display-name{ font-size:0.62rem; max-width:80px; }
-    .action-btns{ gap:0.25rem; }
-    .btn-act{ padding:0.3rem 0.55rem; font-size:0.78rem; }
-    .btn-act.atk{ flex-direction:column; padding:0.2rem 0.4rem; min-height:42px; }
+    .field-row{ padding:0.15rem 0.3rem; gap:0.2rem; }
+    /* ── hand strip ── */
+    .hand-strip{ padding:0.1rem 0.35rem 0.15rem; }
+    .hand-scroll{ min-height:0; padding:4px 0.4rem 2px; perspective:none; }
+    /* ── action bar ── */
+    .action-bar{ display:flex; flex-wrap:wrap; min-height:40px; max-height:72px; padding:0.15rem 0.35rem; gap:0.25rem; align-items:center; justify-content:space-between; overflow-y:auto; }
+    .alerts-col{ max-width:140px; gap:0.08rem; }
+    .alert{ font-size:0.66rem; padding:0.12rem 0.35rem; }
+    .stadium-display{ padding:0.15rem 0.25rem; gap:0.08rem; }
+    .stadium-display img{ width:36px; }
+    .stadium-display-label{ font-size:0.58rem; }
+    .stadium-display-name{ font-size:0.58rem; max-width:70px; }
+    .action-btns{ gap:0.2rem; }
+    .btn-act{ padding:0.25rem 0.45rem; font-size:0.72rem; }
+    .btn-act.atk{ flex-direction:column; padding:0.18rem 0.35rem; min-height:38px; gap:0.05rem; }
+    .btn-act.atk .atk-name{ font-size:0.66rem; }
+    .btn-act.atk .atk-dmg{ font-size:0.7rem; font-weight:700; }
     /* ── 選擇 modal ── */
-    .selection-modal{ max-width:580px; width:94vw; max-height:78vh; padding:0.7rem; gap:0.45rem; }
-    .sel-header h3{ font-size:0.9rem; }
-    .sel-hint{ font-size:0.7rem; }
-    .sel-grid{ grid-template-columns:repeat(auto-fill, minmax(56px, 1fr)); gap:0.3rem; max-height:42vh; }
-    /* ── stepper 鈕在手機上稍微再縮（仍維持 ≥40px 觸控最小） ── */
+    .selection-modal{ max-width:580px; width:96vw; max-height:82vh; padding:0.6rem; gap:0.4rem; }
+    .sel-header h3{ font-size:0.86rem; }
+    .sel-hint{ font-size:0.66rem; }
+    .sel-grid{ grid-template-columns:repeat(auto-fill, minmax(52px, 1fr)); gap:0.25rem; max-height:46vh; }
+    /* ── stepper（仍 ≥40px 觸控最小） ── */
     .stepper-btn{ width:2.4rem; height:2.4rem; font-size:1.2rem; }
     .stepper-value{ min-width:4rem; font-size:1.3rem; line-height:2.2rem; }
   }
