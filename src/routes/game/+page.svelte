@@ -4840,24 +4840,26 @@
          header 24 + field*2 (~75 each) + hand-strip 70 + action-bar 40 = 284 ✓
        ════════════════════════════════════════════════════════════════════ */
 
-    /* ── 強制不捲動：battle-root 鎖定 100dvh + overflow:hidden ── */
-    .battle-root{ height:100dvh; min-height:0; overflow:hidden; }
-    /* field-row 兩排吞下中間剩餘空間（彈性壓縮） */
-    .field-row{ flex:1 1 0; min-height:0; padding:0.15rem 0.3rem; gap:0.2rem; }
+    /* ── 強制不捲動：battle-root 鎖定 100dvh + overflow:hidden ──
+       v2.207：iOS 16 以下不支援 100dvh — 多寫一行 100vh 當 fallback。 */
+    .battle-root{ height:100vh; height:100dvh; min-height:0; overflow:hidden; }
+    /* field-row 兩排吞下中間剩餘空間（彈性壓縮）
+       v2.207：加 overflow:hidden 確保內容超出時不溢出影響其他 row 的位置。 */
+    .field-row{ flex:1 1 0; min-height:0; max-height:50%; overflow:hidden; padding:0.1rem 0.25rem; gap:0.2rem; }
     .battle-header, .hand-strip, .action-bar{ flex:0 0 auto; }
 
-    /* ── 戰鬥場框（active card） ── */
-    .active-card{ min-height:72px; padding:0.2rem 0.25rem; gap:0.2rem; border-radius:5px; }
-    .active-card.active-empty{ min-height:64px; padding:0.4rem; font-size:0.66rem; }
-    .active-img{ max-width:52px; max-height:74px; object-fit:contain; }
-    /* ── 備戰格 ── */
-    .bench-slot{ flex:1 1 48px; min-width:48px; max-width:68px; height:78px; padding:0.1rem; font-size:0.55rem; gap:0.04rem; }
-    .bench-slot img{ max-width:52px; max-height:50px; }
-    /* ── 手牌卡 ── */
-    .hand-card{ width:46px; padding:0.1rem; gap:0.04rem; font-size:0.55rem; position:relative; }
+    /* ── 戰鬥場框（active card）—— v2.207 縮到 60px 給 field-row 容身空間 ── */
+    .active-card{ min-height:60px; padding:0.18rem 0.22rem; gap:0.18rem; border-radius:5px; }
+    .active-card.active-empty{ min-height:56px; padding:0.35rem; font-size:0.62rem; }
+    .active-img{ max-width:44px; max-height:62px; object-fit:contain; }
+    /* ── 備戰格 —— v2.207 縮到 64px ── */
+    .bench-slot{ flex:1 1 44px; min-width:44px; max-width:62px; height:64px; padding:0.08rem; font-size:0.5rem; gap:0.03rem; }
+    .bench-slot img{ max-width:48px; max-height:42px; }
+    /* ── 手牌卡 —— v2.207 隱藏 hint 文字節省垂直空間，只留 img + 🔍 鈕 ── */
+    .hand-card{ width:46px; padding:0.08rem; gap:0.04rem; font-size:0.5rem; position:relative; }
     .hand-card img{ width:42px; }
-    .hand-card-name, .hand-name{ font-size:0.5rem; line-height:1.05; }
-    .hand-hint{ font-size:0.48rem; padding:0; }
+    .hand-card-name, .hand-name{ font-size:0.48rem; line-height:1; max-height:1.2em; overflow:hidden; }
+    .hand-hint{ display:none; }  /* 手機隱藏「⚡ 拖曳附加」「📥 拖到備戰」等提示 — 拖一拖就懂，省空間 */
     /* ── 手機專屬 🔍 放大鈕（取代 hover-peek） ── */
     .hand-zoom-btn{
       display:flex; align-items:center; justify-content:center;
@@ -4877,8 +4879,8 @@
     /* ── hand strip ── */
     .hand-strip{ padding:0.1rem 0.35rem 0.15rem; }
     .hand-scroll{ min-height:0; padding:4px 0.4rem 2px; perspective:none; }
-    /* ── action bar ── */
-    .action-bar{ display:flex; flex-wrap:wrap; min-height:40px; max-height:72px; padding:0.15rem 0.35rem; gap:0.25rem; align-items:center; justify-content:space-between; overflow-y:auto; }
+    /* ── action bar — v2.207 縮更緊湊：max-height 60，內部允許 scroll 防爆版 ── */
+    .action-bar{ display:flex; flex-wrap:wrap; min-height:36px; max-height:56px; padding:0.12rem 0.3rem; gap:0.2rem; align-items:center; justify-content:space-between; overflow-y:auto; }
     .alerts-col{ max-width:140px; gap:0.08rem; }
     .alert{ font-size:0.66rem; padding:0.12rem 0.35rem; }
     .stadium-display{ padding:0.15rem 0.25rem; gap:0.08rem; }
