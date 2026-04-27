@@ -4021,6 +4021,21 @@ regPost('啃果蟲|尋找朋友', (state, aIdx, _pool) => {
   });
 });
 
+// v2.216 土龍弟弟|尋找朋友（SVM 12165）— 同名招式但卡名不同
+// 卡面：「從自己的牌庫選擇 1 張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。」
+// 由 audit-all-preset-effects.mjs 偵測出 — 阿響的火爆獸 preset 用此卡。
+regPre('土龍弟弟|尋找朋友', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('土龍弟弟|尋找朋友', (state, aIdx, _pool) => {
+  let s = addLog(state, '尋找朋友：從牌庫選 1 張寶可夢加手牌', aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'Pokemon',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-pokemon-to-hand',
+  });
+});
+
 // 藍鱷|逆向噴射 — 30 傷害 + 自己戰鬥寶可夢與備戰寶可夢互換
 regPost('藍鱷|逆向噴射', (state, aIdx, _pool) => {
   const player = state.players[aIdx];

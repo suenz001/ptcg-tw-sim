@@ -132,6 +132,18 @@ regPost('堅盾劍怪|金屬斬', (state, aIdx) => {
   return addLog({ ...state, players }, '金屬斬：下回合無法使用招式', aIdx);
 });
 
+// ── 大吾的金屬怪｜金屬斬（SVOD 12587）— 70（base，from JSON）+ 下回合無法使用招式
+// 卡面：「在下個自己的回合，這隻寶可夢無法使用招式。」
+// damage 由 JSON 直接讀（70），只需 regPost 設 cantAttackPending flag。
+// v2.216 audit-all-preset-effects.mjs 偵測出（同名招式但卡名不同）。
+regPost('大吾的金屬怪|金屬斬', (state, aIdx) => {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const att = { ...players[aIdx] };
+  if (att.active) att.active = { ...att.active, cantAttackPending: true };
+  players[aIdx] = att;
+  return addLog({ ...state, players }, '金屬斬：下回合無法使用招式', aIdx);
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // (8) 燃燒充能（火伊布ex）— 130 + 從牌庫搜最多 2 張基本能量，玩家逐張選目標附寶
 // ══════════════════════════════════════════════════════════════════════════════
