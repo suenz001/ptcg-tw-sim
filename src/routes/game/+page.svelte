@@ -772,6 +772,44 @@
     }
   });
 
+  // v2.198 自動結束回合：依 PTCG 官方規則，「使用招式後（含招式內所有結算 — 傷害、分配指示物、
+  //   獎勵牌、補戰鬥位）」回合即結束，玩家不需手動按結束回合。
+  // 觸發條件 = canEndTurn（turnPhase==='end' + 無 pending）+ 玩家身分匹配當前回合方。
+  // 加 600ms 延遲讓玩家看清楚結算結果（KO 動畫 / 獎賞 / 新戰鬥位等）。
+  // - 本機雙人模式：永遠由當前 activePlayerIndex 那側自動觸發
+  // - 線上模式：只有自己是 activePlayerIndex 時自動觸發（避免雙端同時 dispatch END_TURN）
+  // - AI 模式：activePlayerIndex 是 AI 時讓 AI 迴圈自己處理（getAIAction 會回傳 END_TURN）
+  // 結束回合按鈕仍保留作為 fallback / 玩家想立即跳過 600ms 等待。
+  let autoEndTimer: ReturnType<typeof setTimeout> | null = null;
+  $effect(() => {
+    // 取消前一個 timer（state 變動時重新評估）
+    if (autoEndTimer !== null) { clearTimeout(autoEndTimer); autoEndTimer = null; }
+    if (!game || !poolReady) return;
+    const g = game;
+    if (g.phase !== 'playing') return;
+    if (g.turnPhase !== 'end') return;
+    if (hasPendingActions(g)) return;
+
+    // 線上：只有 activePlayerIndex 那側可自動觸發
+    if (mode === 'online') {
+      if (myPlayerIndex !== g.activePlayerIndex) return;
+    }
+    // AI 模式：AI 是當前活動玩家時讓 AI 迴圈處理
+    if (aiPlayerIndex !== null && g.activePlayerIndex === aiPlayerIndex) return;
+
+    // 延遲後若條件仍成立（沒被新 pending / KO / 取獎賞中斷）就 dispatch
+    autoEndTimer = setTimeout(() => {
+      autoEndTimer = null;
+      if (!game) return;
+      if (game.phase !== 'playing') return;
+      if (game.turnPhase !== 'end') return;
+      if (hasPendingActions(game)) return;
+      if (mode === 'online' && myPlayerIndex !== game.activePlayerIndex) return;
+      if (aiPlayerIndex !== null && game.activePlayerIndex === aiPlayerIndex) return;
+      dispatch(GameActions.endTurn());
+    }, 600);
+  });
+
   // ── Derived ─────────────────────────────────────────────────────────────────
   const aIdx = $derived(game?.activePlayerIndex ?? 0);
   const dIdx = $derived((1 - aIdx) as 0 | 1);
@@ -2307,7 +2345,14 @@
     </span>
     <span class="status-chips">
       {#if mode === 'online' && myPlayerIndex !== null}
-        <span class="chip role-chip">{myPlayerIndex === 0 ? '我是 P1 先手' : '我是 P2 後手'}</span>
+        <!-- v2.198 修：P1/P2 是座位編號（房主=P1、客人=P2），先後手由擲硬幣 game.firstPlayerIdx 決定，
+             跟座位無關。舊版寫死「P1=先手、P2=後手」是錯的：客人擲贏先攻時也會被顯示成「P2 後手」。 -->
+        <span class="chip role-chip">
+          我是 P{myPlayerIndex + 1}
+          {#if game?.firstPlayerIdx !== undefined}
+            · {game.firstPlayerIdx === myPlayerIndex ? '先手' : '後手'}
+          {/if}
+        </span>
         {#if isSyncing}<span class="chip syncing-chip">⏳ 同步中</span>{/if}
         {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip">等待對手行動</span>{/if}
       {/if}
@@ -3848,7 +3893,10 @@
   .zoomable:hover{ opacity:0.85; outline:2px solid #aaff4488; border-radius:3px; }
 
   /* ════ Battle ════ */
-  .battle-root{ height:100vh; display:flex; flex-direction:column; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; overflow:hidden; }
+  /* v2.198 viewport 適配：原 height:100vh + overflow:hidden 在視窗高度不足時（沒全螢幕、有 DevTools 開啟、行動裝置）
+     會把底部 hand-strip 切掉。改用 min-height + overflow-y:auto，讓視窗太小時整頁可滾動，手牌不會消失。
+     大視窗用戶不受影響（min-height:100vh 仍撐滿）。100dvh 為現代瀏覽器動態 viewport（行動裝置 URL bar 友善）。 */
+  .battle-root{ min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; overflow-y:auto; overflow-x:hidden; }
 
   .battle-header{ display:flex; align-items:center; gap:0.6rem; background:#0a180a; padding:0.35rem 0.75rem; border-bottom:1px solid #2a4a2a; flex-shrink:0; flex-wrap:wrap; }
   .small-back{ color:#88ccff; text-decoration:none; font-size:0.82rem; background:none; border:none; cursor:pointer; padding:0; }

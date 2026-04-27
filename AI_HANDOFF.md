@@ -1,9 +1,105 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.195)  
+> 最後更新：2026-04-27 (v2.198)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.198 — 三件 UX/Bug 修正（hand viewport / 自動結束回合 / P1 先後手顯示）
+
+Leon 一次回報三個問題，全部修掉：
+
+### Bug 1：未全螢幕時手牌被切掉
+
+**現象**：瀏覽器視窗高度不足（沒全螢幕、開了 DevTools、行動裝置等）時，畫面底部 hand-strip 被裁切，手牌完全看不到。
+
+**根因**：`+page.svelte` 的 `.battle-root` 樣式為 `height:100vh; overflow:hidden`，把整個畫面鎖在 viewport 高度內。當 inner content（header + 戰場 + hand-strip + action-bar）總高度超過 100vh 時，超出部分被 `overflow:hidden` 砍掉。
+
+**修法**（src/routes/game/+page.svelte:3858 附近 `.battle-root`）：
+```css
+.battle-root{
+  min-height:100vh; min-height:100dvh;
+  display:flex; flex-direction:column;
+  ...
+  overflow-y:auto; overflow-x:hidden;
+}
+```
+- `min-height:100vh` 取代 `height:100vh`：大視窗仍撐滿，小視窗則允許頁面自然撐高
+- `100dvh` 為現代瀏覽器動態 viewport（行動裝置 URL bar 動態收合時友善）
+- `overflow-y:auto` 取代 `overflow:hidden`：視窗太小時讓整頁可滾動，不再砍底部手牌
+
+### Bug 2：使用招式後自動結束回合（依 PTCG 官方規則）
+
+**Leon 說明**：「玩家使用招式後，完成招式內的內容後（如幻影奇襲造成 200 點傷害，並分配好對手備戰區的 6 個傷害指示物後）（如果對手寶可夢被昏厥後須派出備戰寶可夢上場），回合就結束了，就進入寶可夢檢查階段」。
+
+**修法**（src/routes/game/+page.svelte 增 `$effect`，緊接於 AI scheduler 之後）：
+```ts
+let autoEndTimer: ReturnType<typeof setTimeout> | null = null;
+$effect(() => {
+  if (autoEndTimer !== null) { clearTimeout(autoEndTimer); autoEndTimer = null; }
+  if (!game || !poolReady) return;
+  const g = game;
+  if (g.phase !== 'playing') return;
+  if (g.turnPhase !== 'end') return;
+  if (hasPendingActions(g)) return;
+  if (mode === 'online' && myPlayerIndex !== g.activePlayerIndex) return;
+  if (aiPlayerIndex !== null && g.activePlayerIndex === aiPlayerIndex) return;
+  autoEndTimer = setTimeout(() => {
+    autoEndTimer = null;
+    // 重新檢查（state 可能在延遲期間又變了）
+    if (!game || game.phase !== 'playing' || game.turnPhase !== 'end') return;
+    if (hasPendingActions(game)) return;
+    if (mode === 'online' && myPlayerIndex !== game.activePlayerIndex) return;
+    if (aiPlayerIndex !== null && game.activePlayerIndex === aiPlayerIndex) return;
+    dispatch(GameActions.endTurn());
+  }, 600);
+});
+```
+- 條件：`turnPhase === 'end'` + `!hasPendingActions(state)` + `phase === 'playing'`
+- Online 守門：`myPlayerIndex === activePlayerIndex` 才能觸發（避免雙端同時 dispatch END_TURN）
+- AI 模式守門：當前活動玩家是 AI 時跳過（讓 AI loop 自己處理 END_TURN，避免雙重 dispatch）
+- 600ms 延遲：讓玩家看清結算結果（KO 動畫 / 取獎賞 / 派新戰鬥位）後再自動 END_TURN
+- timer cleanup：state 變動時取消前一個 timer，下一輪重新評估
+
+「結束回合」按鈕保留作為 fallback / 玩家想立即跳過 600ms 等待時可用。
+此修法也涵蓋「跳過攻擊」、`慶祝開場樂` 等所有 `turnPhase='end'` 終結點 — 一律自動結束回合。
+
+### Bug 3：線上對戰「我是 P1 先手」恆顯示錯誤
+
+**現象**：作為 P1（房主）但實際擲幣後攻時，header 仍顯示「我是 P1 先手」。
+
+**根因**：src/routes/game/+page.svelte:2310 把 P1=先手、P2=後手 寫死。實際上 P1/P2 只是座位編號（房主=P1、客人=P2），先後手由 `game.firstPlayerIdx`（擲幣決定）獨立決定。
+
+**修法**：
+```svelte
+<span class="chip role-chip">
+  我是 P{myPlayerIndex + 1}
+  {#if game?.firstPlayerIdx !== undefined}
+    · {game.firstPlayerIdx === myPlayerIndex ? '先手' : '後手'}
+  {/if}
+</span>
+```
+直接查 `game.firstPlayerIdx` 對比 `myPlayerIndex` — 與座位脫鉤。
+
+---
+
+## v2.197 — 攻擊方還在 pending 時延後彈出「派出戰鬥寶可夢」 modal
+
+v2.196 修了畫面顯示，但 v2.197 修使用體驗：攻擊方多龍｜幻影奇襲打死防守方戰鬥寶可夢但還在分配 6 個傷害指示物時，防守方 UI 端立刻彈「請派出戰鬥寶可夢」alert 跟 modal — 但因攻擊方 pending 未完，dispatch 會被 engine reject，按鈕不動。
+
+**修法**：alert（src/routes/game/+page.svelte:2535）和 modal（line 3444）都加 `!pendingSelection` guard。攻擊方完成 pending 後 modal 才彈出。同時新增「⏳ 等待 X 完成當前操作後，再派出新的戰鬥寶可夢」alert（line 2543）讓防守方知道為何畫面停滯。
+
+---
+
+## v2.196 — 線上對戰隱私洩漏 hotfix
+
+**Leon 報的嚴重 bug**：對手使用「好友寶芬」時，我這邊看到他的選牌畫面（pending 內 candidates 是對手手牌的 cardId 清單，會洩漏對手手牌資訊）。
+
+**根因**：src/routes/game/+page.svelte:2872 的 fallback `mode !== 'online' && aiPlayerIndex === null` — 但 `mode` 在初始 state 為 `null`（未進房），讓 `mode !== 'online'` 評為 true，變成 `null !== 'online' && null === null` → true → 顯示 modal。
+
+**修法**：把 fallback 改為 strict `mode === 'local'`，只有確定本機雙人模式才顯示對手 modal。
 
 ---
 
