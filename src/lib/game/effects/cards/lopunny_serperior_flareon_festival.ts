@@ -6,7 +6,7 @@
  *   - 衝衝鼓（啪咚猴）：戰鬥位有「祭典樂舞」特性 → 1 回 1 次，從牌庫選 1 張卡加手牌 + 重洗
  *   - 搜尋寶石（貓頭夜鷹）：進化的當回合，若場上有「太晶」寶可夢 → 從牌庫選 ≤2 張訓練家
  *   - 祭典樂舞（裹蜜蟲/角金魚/金魚王/綿綿泡芙）：被動，場上有祭典會場 → 招式可使用 2 次
- *     簡化實作：第 1 次招式打完後，若條件成立，turnPhase 不切到 'end'，玩家可再 attack 一次
+ *     實作策略（不再簡化）：第 1 次招式打完後，若條件成立，turnPhase 不切到 'end'，玩家可再 attack 一次
  *
  * 引擎側已處理：
  *   - 提升進化（伊布）— EVOLVE handler / getEvolvableTargets bypass isFirstTurn + justPlaced
@@ -159,7 +159,7 @@ regA('貓頭夜鷹', 0, (st, idx, pool, cardInst) => {
 //   （若對手的戰鬥寶可夢因第 1 次的招式而【昏厥】了，則在下一隻寶可夢放置後，
 //   使用第 2 次的招式。）」
 //
-// 簡化實裝：
+// 實作策略（不再簡化）：
 //   引擎 ATTACK handler 末尾，若 attacker 有 '祭典樂舞' 特性 + 場上有 '祭典會場'
 //   + 還沒做過第 2 次 → 將 turnPhase 保持 'main' 並設 flag festivalDanceUsed[aIdx]=true
 //   讓玩家能再打一次同隻寶可夢。第 2 次打完正常切 'end'。END_TURN 重置 flag。
@@ -204,11 +204,11 @@ regA('蓋諾賽克特ex', 0, (st, idx, pool) => {
 // 流程：
 //   1. 選 1 張基本【超】能量（可跳過）
 //   2. 選 1 張基本【鋼】能量（可跳過）
-//   3. resolver：把選的能量自動分配到自己的【超】或【鋼】寶可夢（簡化：附到 active）
+//   3. resolver：v2.158 升級為 startEnergyChain — 玩家逐張選目標（不再簡化附 active）
 //   4. 重洗牌庫
 //
-// 簡化策略：直接把選的能量都附到 active（如果 active 是 超 或 鋼）；否則附到第 1 隻可附的備戰寶可夢。
-//   不開額外 pending 讓玩家挑目標 — 否則 UI 流程過於複雜。
+// v2.158 之後的策略（不再簡化）：commitMetagrossEnergy 把選的能量先搬到 discard，
+//   然後啟動 v158_energy_chain 讓玩家逐張選目標寶可夢（限定【超】或【鋼】，可含 active）。
 regA('大吾的巨金怪ex', 0, (st, idx, pool) => {
   const p = st.players[idx];
   const psyEnergyCount = p.deck.filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Psychic')).length;

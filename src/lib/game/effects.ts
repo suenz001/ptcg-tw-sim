@@ -2676,22 +2676,39 @@ regA('愛管侍', 0, (st, idx) => {
 });
 
 // 普隆隆姆 轟鳴引擎 — 丟 1 能量 → 抽至手牌 6 張
-// 簡化：固定丟 1 能量（若有）
+// v2.234 升級為玩家自選（之前簡化為固定丟手牌第 1 張能量）
+//   卡面：「將自己的 1 張手牌的能量卡放置於棄牌區。然後，從牌庫抽出
+//          至自己的手牌成為 6 張」— 「將自己的 1 張」是玩家選。
 regA('普隆隆姆', 0, (st, idx, pool) => {
   const energyInHand = st.players[idx].hand.filter(c =>
     pool.get(c.cardId)?.supertype === 'Energy'
   );
   if (energyInHand.length === 0) return addLog(st, '轟鳴引擎：手牌沒有能量', idx);
-  const toDiscard = energyInHand[0];
-  return updatePlayer(addLog(st, '普隆隆姆 轟鳴引擎：丟 1 能量 → 抽至 6 張', idx), idx, p => {
-    const newHand = p.hand.filter(c => c.iid !== toDiscard.iid);
+  st = addLog(st, '轟鳴引擎：選 1 張手牌能量丟棄，再從牌庫抽至手牌 6 張', idx);
+  return withPending(st, {
+    type: 'hand-discard',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    filter: 'Energy',
+    effectKey: 'noisuru-rumble',
+    params: { validIids: energyInHand.map(c => c.iid) },
+  });
+});
+regR('noisuru-rumble', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return st;
+  const dropped = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  if (dropped.length === 0) return st;
+  const names = dropped.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = addLog(st, `轟鳴引擎：丟棄 ${names}`, idx);
+  return updatePlayer(s, idx, p => {
+    const newHand = p.hand.filter(c => !iids.includes(c.iid));
     const drawN = Math.max(0, 6 - newHand.length);
     const taken = p.deck.slice(0, drawN);
     return {
       ...p,
       hand: [...newHand, ...taken],
       deck: p.deck.slice(drawN),
-      discard: [...p.discard, toDiscard],
+      discard: [...p.discard, ...dropped],
     };
   });
 });
@@ -3756,15 +3773,15 @@ regPre('眷戀雲|愛之同感', (state, aIdx, pool) => {
 //   (a) 對手牌庫頂丟棄 N 張 — 巨炭山|山崩、雄偉牙|地盤崩壞
 //   (b) 對手出場已灼傷才生效 — 焚焰蚣|焦黑吐息
 //   (c) 攻擊 + 自身施加狀態 — 熔岩蟲|熾熱熔岩（既有 statusPost）
-//   (d) 簡化：忽略特殊修正，當純傷害 — 故勒頓|撕裂
+//   (d) 暫略特殊修正，當純傷害 — 故勒頓|撕裂
 //   (e) 自身中毒則增傷 — 夠讚狗ex|瘋狂連鎖
-//   (f) 攻擊 + 抽 N 張 — 貓頭夜鷹|鉤爪搜尋（簡化：固定抽，不開搜尋 UI）
+//   (f) 攻擊 + 抽 N 張 — 貓頭夜鷹|鉤爪搜尋（v2.159 升級為 deck-search 玩家自選）
 //   (g) 對對手任一寶可夢造成傷害 — 皮卡丘|電磁電光（10 傷害，opp-poke-choose）
 //
-// 已知簡化：
+// 已知未補完項：
 //   - 地盤崩壞「古代支援者」附加 +3 張略（engine 未追蹤 supporter 類別）
 //   - 撕裂「不計算身上附加效果」略（engine 未實作弱點/抵抗修正）
-//   - 鉤爪搜尋簡化為抽 2 張（正式為從牌庫任選最多 2 張）
+//   - 鉤爪搜尋：v2.159 已升級為 deck-search 任選最多 2 張（不再簡化）
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 巨炭山|山崩 — 150 + 對手牌庫頂 2 張丟棄
