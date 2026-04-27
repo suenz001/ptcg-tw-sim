@@ -259,6 +259,99 @@ TOOL_ON_DAMAGED.set('奢華炸彈', (state, dIdx, aIdx) => {
   return addLog(state, '奢華炸彈：反彈 120 傷害！', null);
 });
 
+// v2.210 手持循環扇：受傷未 KO 時，holder 從 attacker.active 選 1 個能量，
+//   改附到 attacker 的 1 隻備戰寶可夢。對攻擊方不利（抽走主力能量）。
+// 卡面：「附有這張卡的寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，選擇 1 個
+//   使用招式的寶可夢身上附加的能量，改附於對手的備戰寶可夢身上。」
+// 觸發：holder 在戰鬥場 + 受到對手招式傷害（已由 engine ATTACK 流程確保）
+// actor = dIdx（防守方/holder 端做選擇）
+// 兩段 pending：
+//   1. modal-choice：列出 attacker.active 的能量為 options
+//   2. opp-bench-choose：選 attacker 備戰寶可夢
+TOOL_ON_DAMAGED.set('手持循環扇', (state, dIdx, aIdx, _dmg, pool) => {
+  const ap = state.players[aIdx];
+  if (!ap.active || ap.active.energyAttached.length === 0) {
+    // 攻擊方戰鬥位無能量 → 無效果
+    return state;
+  }
+  if (ap.bench.length === 0) {
+    // 攻擊方無備戰寶可夢 → 沒地方放，無效果
+    return state;
+  }
+  // 列出能量選項
+  const energyOptions = ap.active.energyAttached.map((e, i) => ({
+    id: `${i}`,
+    text: `${pool.get(e.cardId)?.name ?? '能量'}`,
+  }));
+  state = addLog(state,
+    '手持循環扇：選 1 個攻擊方能量改附到攻擊方備戰',
+    dIdx);
+  return withPending(state, {
+    type: 'modal-choice',
+    actorIdx: dIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'cycle-fan-step1-pick-energy',
+    params: { label: '手持循環扇：選 1 個攻擊方戰鬥位能量', options: energyOptions },
+  });
+});
+// resolver step 1: 移除選中能量，開 step 2 選 attacker bench
+regR('cycle-fan-step1-pick-energy', (st, dIdx, iids, _params, _pool) => {
+  const aIdx = (1 - dIdx) as 0 | 1;
+  const ap = st.players[aIdx];
+  const choiceIdx = parseInt(iids[0] ?? '-1', 10);
+  if (isNaN(choiceIdx) || choiceIdx < 0 || !ap.active || choiceIdx >= ap.active.energyAttached.length) {
+    return addLog(st, '手持循環扇：選擇無效，效果取消', dIdx);
+  }
+  const removed = ap.active.energyAttached[choiceIdx];
+  // 從 attacker.active 移除能量
+  st = updatePlayer(st, aIdx, p => {
+    if (!p.active) return p;
+    return {
+      ...p,
+      active: {
+        ...p.active,
+        energyAttached: [
+          ...p.active.energyAttached.slice(0, choiceIdx),
+          ...p.active.energyAttached.slice(choiceIdx + 1),
+        ],
+      },
+    };
+  });
+  // 開 step 2：選 attacker 備戰；用 params 暫存被移除的能量 CardInstance
+  return withPending(st, {
+    type: 'opp-bench-choose',
+    actorIdx: dIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'cycle-fan-step2-place-energy',
+    params: { energy: removed },
+  });
+});
+// resolver step 2: 把暫存能量附到選中的 attacker 備戰
+regR('cycle-fan-step2-place-energy', (st, dIdx, iids, params, pool) => {
+  const aIdx = (1 - dIdx) as 0 | 1;
+  const targetIid = iids[0];
+  const energy = params?.energy as CardInstance | undefined;
+  if (!targetIid || !energy) {
+    return addLog(st, '手持循環扇：缺少能量或目標，效果取消', dIdx);
+  }
+  const ap = st.players[aIdx];
+  const target = ap.bench.find(c => c.iid === targetIid);
+  if (!target) {
+    return addLog(st, '手持循環扇：找不到目標備戰寶可夢，效果取消', dIdx);
+  }
+  const energyName = pool.get(energy.cardId)?.name ?? '能量';
+  const targetName = pool.get(target.cardId)?.name ?? '?';
+  st = addLog(st,
+    `手持循環扇：${energyName} 改附到 ${targetName}（攻擊方備戰）`,
+    dIdx);
+  return updatePlayer(st, aIdx, p => ({
+    ...p,
+    bench: p.bench.map(c => c.iid === targetIid
+      ? { ...c, energyAttached: [...c.energyAttached, energy] }
+      : c),
+  }));
+});
+
 // ── 撤退成本修正 ──────────────────────────────────────────────────────────
 TOOL_RETREAT_MOD.set('緊急滑板', (card, inst) => {
   const hp = card.hp ?? 0;
