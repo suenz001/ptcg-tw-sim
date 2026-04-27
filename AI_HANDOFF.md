@@ -1,9 +1,40 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.192)  
+> 最後更新：2026-04-27 (v2.193)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.193 — 鬼之假面 + 變化之書（discard↔field swap）
+
+### 鬼之假面（Item / H）
+**規則**：「從自己的棄牌區選擇 1 張名稱中有「厄鬼椪」的「寶可夢【ex】」卡，與自己的場上的 1 隻名稱中有「厄鬜椪」的「寶可夢【ex】」互換（所附加的卡・傷害指示物・特殊狀態・效果等全部保留）。將換下的寶可夢丟棄。」
+
+### 變化之書（Item / J）
+**規則**：「『變化之書』只可 2 張同時使用。從自己的棄牌區選擇 1 張【基礎】寶可夢卡，與自己的場上的 1 隻【基礎】寶可夢互換（保留所有附加）。將換下的寶可夢丟棄。」
+
+### 實裝（兩段 pending swap）
+items_misc.ts 加 `oni-mask-step1/2`、`changing-book-step1/2` 兩組 resolver，pattern 相同：
+
+1. **regG**：棄牌 + 場上都有符合條件的寶可夢
+2. **reg**：開 discard-search pending（鬼之假面用 `Pokemon:NamePrefix=厄鬜椪`、變化之書用 `Basic`）
+3. **step1 resolver**：把 discard pick iid 存到 params，開 `bench-choose` w/ `includeActive: true` 選場上目標
+4. **step2 resolver**：執行 swap
+   - 場上 instance 的 cardId 改成 discard pick 的 cardId（保留 damage / energy / tool / status / evolvedFromStack 等所有 instance 級欄位）
+   - 場上**舊的** cardId 包成裸殼（damage=0、無 energy）→ 棄牌
+   - discard pick 從棄牌移除（搬到場上）
+
+### 變化之書「2 張同時使用」
+- regG 多一個 check：`p.hand` 中變化之書 ≥ 2 張（PLAY_TRAINER 已棄掉打出的那 1 張，但執行 reg 時 `state.players[aIdx].hand` 已扣除，所以 gate 在打出**前**算入手中那 1 張，需 ≥ 2 才允許打）
+- reg 內手動找第二張變化之書 instance 棄到 discard
+- 兩張變化之書都棄掉後，剩下走標準 swap 流程
+
+### 鬼之假面 ex tag fuzzy filter
+卡面要求「寶可夢【ex】」但 filter 用 `Pokemon:NamePrefix=厄鬼椪` 會 match 非 ex 版本。Deck building 通常只放 ex 版本，玩家自我約束。若選非 ex resolver 仍執行 swap（非嚴格防呆，trade-off）。
+
+H/I/J 進度：剩 14 張未實裝。
 
 ---
 

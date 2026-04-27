@@ -1245,6 +1245,210 @@ regR('fishnet-step2', (st, idx, iids, params, pool) => {
   }));
 });
 
+// ── 鬼之假面（Item / H）── v2.193 ────────────────────────────────────────────
+// 卡面：「從自己的棄牌區選擇1張名稱中有「厄鬼椪」的「寶可夢【ex】」卡，
+//        與自己的場上的1隻名稱中有「厄鬼椪」的「寶可夢【ex】」互換
+//        （所附加的卡・傷害指示物・特殊狀態・效果等全部保留）。將換下的寶可夢丟棄。」
+//
+// 實裝（兩階段 pending）：
+//   1. discard-search filter='Pokemon:NamePrefix=厄鬼椪' min=1 max=1 → 'oni-mask-step1'
+//   2. step1 resolver 暫存 picked discard iid → 開 bench-choose w/ includeActive
+//      讓玩家選場上的厄鬼椪 ex → 'oni-mask-step2'
+//   3. step2 resolver 執行 swap：
+//      - 場上目標的 cardId 改成 discard pick 的 cardId（保留 energy/tool/damage/status/evolvedFromStack）
+//      - 場上目標**舊的** cardId 裸殼 → 棄牌
+//      - discard pick 從棄牌移除
+//
+// 卡名 fuzzy filter：'Pokemon:NamePrefix=厄鬼椪' 會 match 厄鬼椪所有版本（含非 ex）。
+// 嚴格規則要求 ex，但 deck building 通常只放 ex 版本，玩家會自行避免選錯。
+// 若選非 ex resolver 仍會執行 swap（不限 ex），這是可接受的 trade-off。
+//
+// gate：棄牌有名字含厄鬼椪的寶可夢卡 + 場上 active/bench 有名字含厄鬼椪的寶可夢
+function hasOnishimaPoke(insts: import('../../types').CardInstance[],
+                          pool: Map<string, import('$lib/cards/types').Card>): boolean {
+  return insts.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.name.includes('厄鬼椪');
+  });
+}
+regG('鬼之假面', (st, idx, pool) => {
+  const p = st.players[idx];
+  const fieldInsts = [...(p.active ? [p.active] : []), ...p.bench];
+  return hasOnishimaPoke(p.discard, pool) && hasOnishimaPoke(fieldInsts, pool);
+});
+reg('鬼之假面', (st, idx, _pool) => {
+  st = addLog(st, '鬼之假面：從棄牌選 1 張「厄鬼椪 ex」', idx);
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon:NamePrefix=厄鬼椪', minCount: 1, maxCount: 1,
+    effectKey: 'oni-mask-step1',
+  });
+});
+regR('oni-mask-step1', (st, idx, iids, _params, _pool) => {
+  if (iids.length !== 1) {
+    return addLog(st, '鬼之假面：取消（未選擇）', idx);
+  }
+  st = addLog(st, '鬼之假面：再選擇場上的「厄鬼椪 ex」與其互換', idx);
+  return withPending(st, {
+    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'oni-mask-step2',
+    params: { includeActive: true, fromDiscardIid: iids[0] },
+  });
+});
+regR('oni-mask-step2', (st, idx, iids, params, pool) => {
+  const fromDiscardIid = (params?.fromDiscardIid as string) ?? '';
+  const targetIid = iids[0];
+  if (!fromDiscardIid || !targetIid) {
+    return addLog(st, '鬼之假面：取消（未選擇場上目標）', idx);
+  }
+  const p = st.players[idx];
+  const discardPick = p.discard.find(c => c.iid === fromDiscardIid);
+  if (!discardPick) return addLog(st, '鬼之假面：棄牌中找不到所選卡，取消', idx);
+  const fieldTarget = p.active?.iid === targetIid ? p.active
+    : p.bench.find(c => c.iid === targetIid);
+  if (!fieldTarget) return addLog(st, '鬼之假面：場上找不到所選目標，取消', idx);
+
+  const oldCardName = pool.get(fieldTarget.cardId)?.name ?? '?';
+  const newCardName = pool.get(discardPick.cardId)?.name ?? '?';
+
+  // 換下的寶可夢「裸殼」→ 棄牌（不帶 energy/tool/damage/status/evolvedFromStack）
+  const oldBare: import('../../types').CardInstance = {
+    iid: fieldTarget.iid + '-old-' + Date.now(),
+    cardId: fieldTarget.cardId,
+    damage: 0,
+    energyAttached: [],
+  };
+
+  // 互換：把場上 instance 的 cardId 改成 discardPick 的 cardId
+  const swapped: import('../../types').CardInstance = {
+    ...fieldTarget,
+    cardId: discardPick.cardId,
+    // 保留：damage/energy/tool/status/secondaryStatus/evolvedFromStack/各種旗標
+  };
+
+  st = addLog(st, `鬼之假面：${oldCardName} ↔ ${newCardName}（保留所有附加）；換下的 ${oldCardName} 丟棄`, idx);
+
+  return updatePlayer(st, idx, pl => ({
+    ...pl,
+    active: pl.active?.iid === targetIid ? swapped : pl.active,
+    bench: pl.bench.map(c => c.iid === targetIid ? swapped : c),
+    discard: [...pl.discard.filter(c => c.iid !== fromDiscardIid), oldBare],
+  }));
+});
+
+// ── 變化之書（Item / J）── v2.193 ────────────────────────────────────────────
+// 卡面：「『變化之書』只可2張同時使用。（效果是2張生效1次。）
+//        從自己的棄牌區選擇1張【基礎】寶可夢卡，與自己的場上的1隻【基礎】寶可夢互換
+//        （所附加的卡・傷害指示物・特殊狀態・效果等全部保留）。將換下的寶可夢丟棄。」
+//
+// 「2 張同時使用」實裝：
+//   - regG: 手牌中變化之書 ≥2 張 + 棄牌有基礎寶可夢 + 場上有基礎寶可夢
+//   - reg: 觸發時，PLAY_TRAINER 已把使出的第 1 張變化之書棄掉，這裡再從手牌
+//          找第 2 張同名卡棄掉，然後開 swap pending
+//
+// Swap pattern 同鬼之假面（兩階段）：
+//   1. discard-search filter='Basic' min=1 max=1 → 'changing-book-step1'
+//   2. step1 → bench-choose w/ includeActive，filter Basic Pokemon → 'changing-book-step2'
+//   3. step2 swap：保留 energy/tool/damage/status/evolvedFromStack
+function isBasicOnField(insts: import('../../types').CardInstance[],
+                       pool: Map<string, import('$lib/cards/types').Card>): boolean {
+  return insts.some(c => {
+    const card = pool.get(c.cardId);
+    return !!card && card.supertype === 'Pokemon' && !card.evolvesFrom
+      && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && card.subtype !== 'Other';
+  });
+}
+regG('變化之書', (st, idx, pool) => {
+  const p = st.players[idx];
+  // 必須手牌 ≥2 張同名（一張正在打出 = 還在 hand，另一張要棄）
+  const handBookCount = p.hand.filter(c => pool.get(c.cardId)?.name === '變化之書').length;
+  if (handBookCount < 2) return false;
+  const fieldInsts = [...(p.active ? [p.active] : []), ...p.bench];
+  // 棄牌中有基礎寶可夢
+  const hasBasicInDiscard = p.discard.some(c => {
+    const card = pool.get(c.cardId);
+    return !!card && card.supertype === 'Pokemon' && !card.evolvesFrom
+      && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && card.subtype !== 'Other';
+  });
+  return hasBasicInDiscard && isBasicOnField(fieldInsts, pool);
+});
+reg('變化之書', (st, idx, pool) => {
+  // 棄掉第二張變化之書（PLAY_TRAINER 已棄掉第一張）
+  const p = st.players[idx];
+  const secondBookIdx = p.hand.findIndex(c => pool.get(c.cardId)?.name === '變化之書');
+  if (secondBookIdx < 0) return addLog(st, '變化之書：缺第二張（gate 異常）', idx);
+  const secondBook = p.hand[secondBookIdx];
+  st = updatePlayer(st, idx, pl => ({
+    ...pl,
+    hand: pl.hand.filter((_, i) => i !== secondBookIdx),
+    discard: [...pl.discard, secondBook],
+  }));
+  st = addLog(st, '變化之書：2 張同時使用，第二張也棄到棄牌區', idx);
+  st = addLog(st, '變化之書：從棄牌選 1 張【基礎】寶可夢', idx);
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Basic', minCount: 1, maxCount: 1,
+    effectKey: 'changing-book-step1',
+  });
+});
+regR('changing-book-step1', (st, idx, iids, _params, _pool) => {
+  if (iids.length !== 1) {
+    return addLog(st, '變化之書：取消（未選擇）', idx);
+  }
+  st = addLog(st, '變化之書：再選擇場上的【基礎】寶可夢與其互換', idx);
+  return withPending(st, {
+    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'changing-book-step2',
+    params: { includeActive: true, fromDiscardIid: iids[0], filterBasic: true },
+  });
+});
+regR('changing-book-step2', (st, idx, iids, params, pool) => {
+  const fromDiscardIid = (params?.fromDiscardIid as string) ?? '';
+  const targetIid = iids[0];
+  if (!fromDiscardIid || !targetIid) {
+    return addLog(st, '變化之書：取消（未選擇場上目標）', idx);
+  }
+  const p = st.players[idx];
+  const discardPick = p.discard.find(c => c.iid === fromDiscardIid);
+  if (!discardPick) return addLog(st, '變化之書：棄牌中找不到所選卡，取消', idx);
+  const fieldTarget = p.active?.iid === targetIid ? p.active
+    : p.bench.find(c => c.iid === targetIid);
+  if (!fieldTarget) return addLog(st, '變化之書：場上找不到所選目標，取消', idx);
+
+  // 確認場上目標是基礎寶可夢（防呆）
+  const fieldCard = pool.get(fieldTarget.cardId);
+  if (!fieldCard || fieldCard.supertype !== 'Pokemon' || fieldCard.evolvesFrom
+      || fieldCard.subtype === 'Stage1' || fieldCard.subtype === 'Stage2') {
+    return addLog(st, '變化之書：場上目標非【基礎】寶可夢，取消', idx);
+  }
+
+  const oldCardName = fieldCard.name;
+  const newCardName = pool.get(discardPick.cardId)?.name ?? '?';
+
+  const oldBare: import('../../types').CardInstance = {
+    iid: fieldTarget.iid + '-old-' + Date.now(),
+    cardId: fieldTarget.cardId,
+    damage: 0,
+    energyAttached: [],
+  };
+
+  const swapped: import('../../types').CardInstance = {
+    ...fieldTarget,
+    cardId: discardPick.cardId,
+  };
+
+  st = addLog(st, `變化之書：${oldCardName} ↔ ${newCardName}（保留所有附加）；換下的 ${oldCardName} 丟棄`, idx);
+
+  return updatePlayer(st, idx, pl => ({
+    ...pl,
+    active: pl.active?.iid === targetIid ? swapped : pl.active,
+    bench: pl.bench.map(c => c.iid === targetIid ? swapped : c),
+    discard: [...pl.discard.filter(c => c.iid !== fromDiscardIid), oldBare],
+  }));
+});
+
 // ── 化石卡 5 張（v2.187 核心 scaffold）── ────────────────────────────────────
 // 共通機制：作為 HP60【無】基礎寶可夢上場、**可被進化**（化石→Stage1→Stage2，
 //          5 條鏈見 FOSSIL_DESIGN.md）、不能撤退、不會中異常狀態、自己回合可丟棄
