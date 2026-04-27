@@ -1,9 +1,36 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.193)  
+> 最後更新：2026-04-27 (v2.194)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.194 — 奇異時鐘（退化機制）
+
+### 卡面規則
+「選擇 1 隻自己的進化的【超】寶可夢，移除任意數量的「進化卡」使其退化。將移除的卡放回手牌。[退化的寶可夢在那個回合無法進化。]」
+
+### 實裝（兩段 pending）
+1. **bench-choose w/ includeActive** 選自己的【超】Stage1/Stage2 寶可夢 → `odd-clock-step1`
+2. **step1**：根據 target stack 長度決定退化選項
+   - **Stage1**（stack 長度 1）：自動退 1 層（不問），inline 跑 `doOddClockDevolve`
+   - **Stage2**（stack 長度 2）：modal-choice 問玩家選 1 / 2 層 → `odd-clock-step2`
+3. **doOddClockDevolve helper**（兩條路徑共用）：
+   - 移除的 cardIds = 當前 cardId + stack 倒數 (layers-1) 個
+   - 退化後 cardId = `stack[len-layers].cardId`
+   - 新 stack = `stack.slice(0, len-layers)`
+   - instance 保留 damage / energy / tool / status / evolvedFromStack 等 — 只改 cardId 和 evolvedFromStack
+   - 設 `evolvedThisTurn=true` 達成「那個回合無法進化」（既有 EVOLVE handler 已 check 此旗標）
+4. 移除的 cardIds 包成新 hand instance（產生新 iid）放回手牌
+
+### 設計取捨
+- 規則允許「移除任意數量」但實務上 1 / 2 層 cover 所有 case（Stage2 → Stage1 / Basic）
+- bench-choose 沒 candidate filter，靠 resolver 預判（非 Psychic 進化 → 取消）
+- evolvedThisTurn 旗標做「本回合不能再進化」的 lock（沿用既有 mechanism）
+
+H/I/J 進度：剩 13 張未實裝。
 
 ---
 

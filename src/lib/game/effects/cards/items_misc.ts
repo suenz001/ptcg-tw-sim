@@ -1449,6 +1449,135 @@ regR('changing-book-step2', (st, idx, iids, params, pool) => {
   }));
 });
 
+// ── 奇異時鐘（Item / I）── v2.194 ────────────────────────────────────────────
+// 卡面：「選擇1隻自己的進化的【超】寶可夢，移除任意數量的「進化卡」使其退化。
+//        將移除的卡放回手牌。[退化的寶可夢在那個回合無法進化。]」
+//
+// 實裝（兩段 pending）：
+//   1. bench-choose w/ includeActive 選自己的【超】Stage1/Stage2 寶可夢 → 'odd-clock-step1'
+//   2. step1：根據 target 的 stack 長度決定退化選項：
+//      - Stage1（stack 長度 1）：直接退 1 層（自動，不問）
+//      - Stage2（stack 長度 2）：modal-choice 1 / 2 層
+//   3. step2 / inline：執行 pop —
+//      - 移除 N 層（含當前頂層）→ 對應 cardId 包成新 hand instance 放回手牌
+//      - instance 的 cardId 改成 stack[len-N] 的 cardId
+//      - evolvedFromStack 切到 stack.slice(0, len - N)
+//      - 設 evolvedThisTurn=true（達成「那個回合無法進化」）
+function isPsychicEvoOnField(insts: import('../../types').CardInstance[],
+                            pool: Map<string, import('$lib/cards/types').Card>): boolean {
+  return insts.some(c => {
+    const card = pool.get(c.cardId);
+    if (!card || card.supertype !== 'Pokemon' || card.pokemonType !== 'Psychic') return false;
+    return card.subtype === 'Stage1' || card.subtype === 'Stage2'
+      || card.stage === 'Stage1' || card.stage === 'Stage2';
+  });
+}
+regG('奇異時鐘', (st, idx, pool) => {
+  const p = st.players[idx];
+  const fieldInsts = [...(p.active ? [p.active] : []), ...p.bench];
+  return isPsychicEvoOnField(fieldInsts, pool);
+});
+reg('奇異時鐘', (st, idx, _pool) => {
+  st = addLog(st, '奇異時鐘：選擇 1 隻自己的進化【超】寶可夢退化', idx);
+  return withPending(st, {
+    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'odd-clock-step1',
+    params: { includeActive: true, label: '選擇要退化的【超】進化寶可夢' },
+  });
+});
+regR('odd-clock-step1', (st, idx, iids, _params, pool) => {
+  const targetIid = iids[0];
+  if (!targetIid) return addLog(st, '奇異時鐘：取消（未選擇）', idx);
+  const p = st.players[idx];
+  const target = p.active?.iid === targetIid ? p.active
+    : p.bench.find(c => c.iid === targetIid);
+  if (!target) return addLog(st, '奇異時鐘：場上找不到所選目標', idx);
+
+  const tCard = pool.get(target.cardId);
+  if (!tCard || tCard.pokemonType !== 'Psychic') {
+    return addLog(st, '奇異時鐘：所選目標非【超】寶可夢，取消', idx);
+  }
+  const stage = tCard.subtype === 'Stage2' || tCard.stage === 'Stage2' ? 'Stage2'
+    : (tCard.subtype === 'Stage1' || tCard.stage === 'Stage1' ? 'Stage1' : 'Basic');
+  if (stage === 'Basic') {
+    return addLog(st, '奇異時鐘：所選目標非進化寶可夢，取消', idx);
+  }
+
+  if (stage === 'Stage1') {
+    // 自動退 1 層
+    return doOddClockDevolve(st, idx, targetIid, 1, pool);
+  }
+  // Stage2 → 問玩家退 1 還是 2 層
+  st = addLog(st, '奇異時鐘：選擇要退化的層數', idx);
+  return withPending(st, {
+    type: 'modal-choice', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'odd-clock-step2',
+    params: {
+      label: '奇異時鐘',
+      targetIid,
+      options: [
+        { id: '1', text: '①退化 1 層（→ 1 階進化）' },
+        { id: '2', text: '②退化 2 層（→ 基礎）' },
+      ],
+    },
+  });
+});
+regR('odd-clock-step2', (st, idx, iids, params, pool) => {
+  const choice = iids[0];
+  const targetIid = (params?.targetIid as string) ?? '';
+  if (!choice || !targetIid) return st;
+  const layers = choice === '2' ? 2 : 1;
+  return doOddClockDevolve(st, idx, targetIid, layers, pool);
+});
+function doOddClockDevolve(
+  st: import('../../types').GameState, idx: 0 | 1, targetIid: string, layers: number,
+  pool: Map<string, import('$lib/cards/types').Card>
+): import('../../types').GameState {
+  const p = st.players[idx];
+  const target = p.active?.iid === targetIid ? p.active
+    : p.bench.find(c => c.iid === targetIid);
+  if (!target) return addLog(st, '奇異時鐘：找不到目標，取消', idx);
+  const stack = target.evolvedFromStack ?? [];
+  if (stack.length < layers) {
+    return addLog(st, `奇異時鐘：堆疊深度不足以退化 ${layers} 層，取消`, idx);
+  }
+  // 移除的 cardIds：當前 cardId（最頂） + stack 倒數 layers-1 個
+  const removedCardIds: string[] = [target.cardId];
+  for (let i = 1; i < layers; i++) {
+    removedCardIds.push(stack[stack.length - i].cardId);
+  }
+  // 退化後的新 cardId = stack[stack.length - layers]
+  const newBaseInst = stack[stack.length - layers];
+  const newStack = stack.slice(0, stack.length - layers);
+  // 移除的卡 → 手牌（產生新 iid）
+  const handCards: import('../../types').CardInstance[] = removedCardIds.map(cid => ({
+    iid: target.iid + '-devo-' + cid + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+    cardId: cid,
+    damage: 0,
+    energyAttached: [],
+  }));
+  // 新 instance：保留 damage / energy / tool / status / 旗標 — 只改 cardId 和 evolvedFromStack
+  const devolved: import('../../types').CardInstance = {
+    ...target,
+    cardId: newBaseInst.cardId,
+    evolvedFromStack: newStack.length > 0 ? newStack : undefined,
+    evolvedFromIid: newStack.length > 0 ? newStack[newStack.length - 1].iid : undefined,
+    evolvedThisTurn: true, // 卡面「那個回合無法進化」
+  };
+  const oldName = pool.get(target.cardId)?.name ?? '?';
+  const newName = pool.get(newBaseInst.cardId)?.name ?? '?';
+  const cardNames = removedCardIds.map(cid => pool.get(cid)?.name ?? '?').join('、');
+  st = addLog(st, `奇異時鐘：${oldName} 退化 ${layers} 層成 ${newName}（移除：${cardNames} 放回手牌）`, idx);
+  return updatePlayer(st, idx, pl => ({
+    ...pl,
+    active: pl.active?.iid === targetIid ? devolved : pl.active,
+    bench: pl.bench.map(c => c.iid === targetIid ? devolved : c),
+    hand: [...pl.hand, ...handCards],
+  }));
+}
+
 // ── 化石卡 5 張（v2.187 核心 scaffold）── ────────────────────────────────────
 // 共通機制：作為 HP60【無】基礎寶可夢上場、**可被進化**（化石→Stage1→Stage2，
 //          5 條鏈見 FOSSIL_DESIGN.md）、不能撤退、不會中異常狀態、自己回合可丟棄
