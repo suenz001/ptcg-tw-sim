@@ -2868,10 +2868,15 @@
     </div>
   </div>
 
-  <!-- PendingSelection — 只對 actor 玩家顯示（避免對手看到或搶先操作） -->
+  <!-- PendingSelection — 只對 actor 玩家顯示（避免對手看到或搶先操作）
+       v2.196 修：mode='local' 嚴格 check，不接受 null。線上模式剛 join 時 mode 還未確定
+       但 pendingSelection 可能已從 firestore sync 進來，舊 condition `mode !== 'online'` 為
+       true 會錯誤顯示 modal（嚴重隱私 bug：對手看到我選牌畫面）。
+       本機雙人模式（mode='local'）視角會隨 actor 自動翻轉，actor 永遠等於當前視角，
+       不需另加 actor === myIdx check（會誤判）。 -->
   {#if pendingSelection && (
     (mode === 'online' && myPlayerIndex !== null && pendingSelection.actorIdx === myPlayerIndex)
-    || (mode !== 'online' && aiPlayerIndex === null)
+    || (mode === 'local' && aiPlayerIndex === null)
     || (aiPlayerIndex !== null && pendingSelection.actorIdx === (1 - aiPlayerIndex))
   )}
     {@const isPokePicker = pendingSelection.type==='bench-choose' || pendingSelection.type==='opp-bench-choose' || pendingSelection.type==='opp-poke-choose' || pendingSelection.type==='heal-target'}
