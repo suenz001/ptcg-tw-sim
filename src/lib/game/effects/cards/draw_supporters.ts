@@ -16,7 +16,7 @@ import {
   reg, regR, regG,
   addLog, updatePlayer, withPending,
   drawCards, discardHand, returnHandToDeck,
-  sameEvoName,
+  sameEvoName, shuffle,
 } from '../_shared';
 import type { CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -38,10 +38,34 @@ function isStage2PokemonCardLocal(
 // 即時支援者（無需互動）
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 管理員 — 抽 2 張
-reg('管理員', (st, idx) => {
+// 管理員 — 抽 2 張；若場上有「居民會館」則不丟棄這張，放回牌庫並重洗
+// v2.228 補：之前漏掉「若場上有居民會館，則不丟棄這張管理員，放回牌庫並重洗」
+reg('管理員', (st, idx, pool) => {
   st = addLog(st, '管理員：抽 2 張', idx);
-  return drawCards(st, idx, 2);
+  st = drawCards(st, idx, 2);
+  // 檢查活躍 stadium 是否為「居民會館」
+  const stadiumName = st.activeStadium ? pool.get(st.activeStadium.cardId)?.name : null;
+  if (stadiumName === '居民會館') {
+    // 把剛丟到棄牌的管理員撿回牌庫並重洗（取最後一張同名「管理員」即可）
+    const player = st.players[idx];
+    let foundIdx = -1;
+    for (let i = player.discard.length - 1; i >= 0; i--) {
+      if (pool.get(player.discard[i].cardId)?.name === '管理員') {
+        foundIdx = i;
+        break;
+      }
+    }
+    if (foundIdx >= 0) {
+      const inst = player.discard[foundIdx];
+      st = updatePlayer(st, idx, p => ({
+        ...p,
+        discard: [...p.discard.slice(0, foundIdx), ...p.discard.slice(foundIdx + 1)],
+        deck: shuffle([...p.deck, inst]),
+      }));
+      st = addLog(st, '管理員：場上有居民會館，將自身放回牌庫並重洗', idx);
+    }
+  }
+  return st;
 });
 
 // 帕底亞的夥伴 — 抽 3 張
@@ -50,10 +74,13 @@ reg('帕底亞的夥伴', (st, idx) => {
   return drawCards(st, idx, 3);
 });
 
-// 納莉 — 抽 4 張（回合結束手牌≥5棄手 M2 省略）
+// 納莉 — 抽 4 張；在使用此卡的回合結束時，若手牌 ≥5 張則全丟
+// v2.228 補：之前漏掉「END_TURN 手牌≥5 全丟」trigger
 reg('納莉', (st, idx) => {
-  st = addLog(st, '納莉：抽 4 張', idx);
-  return drawCards(st, idx, 4);
+  st = addLog(st, '納莉：抽 4 張（若回合結束時手牌 ≥5 將全部丟棄）', idx);
+  st = drawCards(st, idx, 4);
+  // 設旗標：END_TURN 在 engine.ts 處理「於 aIdx 方檢查 hand.length>=5 → 全丟」
+  return updatePlayer(st, idx, p => ({ ...p, nanuDiscardAtTurnEnd: true }));
 });
 
 // 丹瑜 — 手牌全丟，抽 5 張（先攻第一回合可用）
@@ -63,11 +90,16 @@ reg('丹瑜', (st, idx) => {
   return drawCards(st, idx, 5);
 });
 
-// 紫竽 — 手牌洗回牌庫，抽 4 張
+// 紫竽 — 手牌洗回牌庫，抽 4 張；若對手剩餘獎賞 ≤3 則改抽 8 張
+// v2.228 補：之前漏掉「若對手剩餘獎賞卡的張數為 3 張以下，則改爲抽出 8 張卡」
 reg('紫竽', (st, idx) => {
-  st = addLog(st, '紫竽：手牌洗回牌庫，抽 4 張', idx);
+  const oppPrizes = st.players[(1 - idx) as 0 | 1].prizes.length;
+  const drawN = oppPrizes <= 3 ? 8 : 4;
+  st = addLog(st,
+    `紫竽：手牌洗回牌庫，抽 ${drawN} 張（對手剩餘獎賞 ${oppPrizes} 張${oppPrizes <= 3 ? ' ≤3 → 8 張' : ''}）`,
+    idx);
   st = returnHandToDeck(st, idx);
-  return drawCards(st, idx, 4);
+  return drawCards(st, idx, drawN);
 });
 
 // 松葉的信心 — 丟 1 張手牌，從牌庫抽出與對手備戰寶可夢相同數量的卡

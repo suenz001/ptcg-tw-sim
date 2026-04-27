@@ -279,6 +279,11 @@ export interface PlayerState {
    */
   unrudaBonusThisTurn?: boolean;
   /**
+   * v2.228 納莉 — 「在使用了這張卡的回合結束時，若自己的手牌有 5 張以上，則將自己的手牌全部丟棄。」
+   * 打出納莉當下設 true；END_TURN 時於 aIdx 方檢查 hand.length >= 5 → 全丟，然後清除旗標。
+   */
+  nanuDiscardAtTurnEnd?: boolean;
+  /**
    * 本回合，此玩家所有寶可夢皆無法使用招式（由 noAttacksNextTurn promote）。
    * 在 END_TURN 時清除（於 aIdx 方）。
    */

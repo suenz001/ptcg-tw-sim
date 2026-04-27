@@ -3599,6 +3599,19 @@ function handlePlaying(
         currentPlayer.discard = [...currentPlayer.discard, ...discardAdds];
       }
     }
+    // v2.228 納莉：「在使用了這張卡的回合結束時，若自己的手牌有 5 張以上，
+    //   則將自己的手牌全部丟棄」— END_TURN 時於 aIdx 方檢查並丟棄
+    if (currentPlayer.nanuDiscardAtTurnEnd) {
+      if (currentPlayer.hand.length >= 5) {
+        const discarded = currentPlayer.hand;
+        currentPlayer.discard = [...currentPlayer.discard, ...discarded];
+        currentPlayer.hand = [];
+        state = addLog(state,
+          `納莉：回合結束時手牌 ${discarded.length} 張（≥5）→ 全部丟棄`,
+          aIdx);
+      }
+      delete currentPlayer.nanuDiscardAtTurnEnd;
+    }
     // Wave 36/39：清除 aIdx（本回合結束方）的玩家級 ThisTurn 旗標（若本回合已消耗完）
     if (
       currentPlayer.noAttacksThisTurn ||

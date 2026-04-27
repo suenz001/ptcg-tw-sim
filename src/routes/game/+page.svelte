@@ -1480,10 +1480,14 @@
   function hpTotal(inst: CardInstance | null | undefined): number {
     return inst ? getEffectiveHP(inst, pool, game ?? undefined) : 0;
   }
+  // v2.228 改寫：原本用 countEnergy（cost 檢查語意，全屬性能量會展開成 10 種屬性各 1）
+  //   → SEND_NEW_ACTIVE 等 picker UI 顯示「水×1 火×1 雷×1 ...」誤導又凌亂。
+  //   改為 delegate 到 energyPips（pip 顯示語意：1 張卡 = 1 個 pip），
+  //   全屬性卡（古舊/夜光/稜鏡基礎/新衝天）顯示「彩×1」即可。
   function energySummary(inst: CardInstance): string {
-    const counts = countEnergy(inst, pool);
-    if (counts.size === 0) return '無能量';
-    return [...counts.entries()].map(([t,n]) => `${ENERGY_LABEL[t]}×${n}`).join(' ');
+    const pips = energyPips(inst);
+    if (pips.length === 0) return '無能量';
+    return pips.map(p => `${p.label ?? ENERGY_LABEL[p.type as EnergyType]}×${p.count}`).join(' ');
   }
   /**
    * v2.47：備戰區專用的緊湊能量圖示 — 以小圓形彩色 pip 橫向排列，
