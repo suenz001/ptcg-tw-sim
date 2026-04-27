@@ -22,8 +22,9 @@ import type { Deck } from './types';
 /** Push a single deck to Firestore (create or overwrite). */
 export async function syncDeckToCloud(uid: string, deck: Deck): Promise<void> {
   const ref = doc(db, 'users', uid, 'decks', deck.id);
-  // serverTimestamp can't survive JSON round-trip; keep updatedAt as ISO string
-  await setDoc(ref, { ...deck });
+  // JSON round-trip strips `undefined` values which Firestore rejects
+  const clean = JSON.parse(JSON.stringify(deck));
+  await setDoc(ref, clean);
 }
 
 /** Remove a deck from Firestore. */
