@@ -4841,12 +4841,20 @@
        ════════════════════════════════════════════════════════════════════ */
 
     /* ── 強制不捲動：battle-root 鎖定 100dvh + overflow:hidden ──
-       v2.207：iOS 16 以下不支援 100dvh — 多寫一行 100vh 當 fallback。 */
+       v2.208：放棄 flex:1 1 0（不可預測的分配），改用 explicit vh 比例。
+       header 6vh + field 30vh×2 + hand 16vh + action 12vh = 94vh（剩 6vh buffer）。
+       每個 row flex:0 0 <vh> + overflow:hidden 確保內容超出時不擠到別 row。 */
     .battle-root{ height:100vh; height:100dvh; min-height:0; overflow:hidden; }
-    /* field-row 兩排吞下中間剩餘空間（彈性壓縮）
-       v2.207：加 overflow:hidden 確保內容超出時不溢出影響其他 row 的位置。 */
-    .field-row{ flex:1 1 0; min-height:0; max-height:50%; overflow:hidden; padding:0.1rem 0.25rem; gap:0.2rem; }
-    .battle-header, .hand-strip, .action-bar{ flex:0 0 auto; }
+    .battle-header{ flex:0 0 auto; max-height:7vh; padding:0.1rem 0.4rem; gap:0.2rem; font-size:0.66rem;
+                    overflow-x:auto; overflow-y:hidden; flex-wrap:nowrap; white-space:nowrap; }
+    .battle-header > *{ flex-shrink:0; }
+    .field-row{ flex:0 0 30vh; max-height:30vh; min-height:0; overflow:hidden;
+                padding:0.1rem 0.25rem; gap:0.2rem; }
+    .hand-strip{ flex:0 0 16vh; max-height:16vh; min-height:0; overflow:hidden;
+                 padding:0.1rem 0.35rem; }
+    .action-bar{ flex:0 0 12vh; max-height:12vh; min-height:0; padding:0.12rem 0.3rem; gap:0.2rem;
+                 display:flex; flex-wrap:nowrap; align-items:center; justify-content:space-between;
+                 overflow-x:auto; overflow-y:hidden; }
 
     /* ── 戰鬥場框（active card）—— v2.207 縮到 60px 給 field-row 容身空間 ── */
     .active-card{ min-height:60px; padding:0.18rem 0.22rem; gap:0.18rem; border-radius:5px; }
@@ -4871,16 +4879,10 @@
       cursor:pointer; touch-action:manipulation;
     }
     .hand-zoom-btn:hover{ background:rgba(0,0,0,0.85); }
-    /* ── 戰鬥 header ── */
-    .battle-header{ padding:0.1rem 0.35rem; gap:0.2rem; font-size:0.68rem; }
-    .battle-header .chip{ font-size:0.62rem; padding:0.05rem 0.3rem; }
-    /* ── field row ── */
-    .field-row{ padding:0.15rem 0.3rem; gap:0.2rem; }
-    /* ── hand strip ── */
-    .hand-strip{ padding:0.1rem 0.35rem 0.15rem; }
-    .hand-scroll{ min-height:0; padding:4px 0.4rem 2px; perspective:none; }
-    /* ── action bar — v2.207 縮更緊湊：max-height 60，內部允許 scroll 防爆版 ── */
-    .action-bar{ display:flex; flex-wrap:wrap; min-height:36px; max-height:56px; padding:0.12rem 0.3rem; gap:0.2rem; align-items:center; justify-content:space-between; overflow-y:auto; }
+    /* ── header chip 字體再縮 ── */
+    .battle-header .chip{ font-size:0.6rem; padding:0.05rem 0.3rem; }
+    /* ── hand-scroll: 砍 min-height + perspective（避免被撐高） ── */
+    .hand-scroll{ min-height:0; height:100%; padding:2px 0.4rem; perspective:none; align-items:center; }
     .alerts-col{ max-width:140px; gap:0.08rem; }
     .alert{ font-size:0.66rem; padding:0.12rem 0.35rem; }
     .stadium-display{ padding:0.15rem 0.25rem; gap:0.08rem; }
