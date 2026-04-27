@@ -164,35 +164,112 @@ TOOL_ON_KO.set('希望護身符', (state, dIdx) => {
     effectKey: 'search-to-hand-reshuffle',
   });
 });
+// v2.233 升級為玩家自選 + 逐張分配（之前簡化為「最近 3 張基本能量自動附第 1 個備戰」）
+//   卡面：「選擇最多 3 張那隻寶可夢身上附加的基本能量卡，以任意方式改附於
+//          自己的備戰寶可夢身上。」
+//   實作：
+//     1. 從 discard 倒序撈最近被 KO 的基本能量（最多 3 張）作為候選池
+//     2. 開 discard-search pending（filter='Any', minCount=0, maxCount=N，
+//        validIids 限定候選池）讓玩家挑要附的張數
+//     3. resolver 逐張開 heal-target pending（validIids 限備戰）讓玩家分配
 TOOL_ON_KO.set('沉重接力棒', (state, dIdx, _aIdx, pool) => {
-  // 只對【撤退】所需 4 能量的寶可夢生效
-  // 注意：此 hook 在 KO 後呼叫，被 KO 的 active 已經進棄牌。要從棄牌找能量。
-  // 簡化：移除棄牌區最近丟進去的基本能量（最多 3 張），改附於第一個備戰。
   const player = state.players[dIdx];
   if (player.bench.length === 0) return state;
-  // 找棄牌區最後 N 張基本能量（剛剛被 KO 時一起丟進去的）
-  const revIds: string[] = [];
-  for (let i = player.discard.length - 1; i >= 0 && revIds.length < 3; i--) {
+  // 從棄牌區倒序撈剛被 KO 寶可夢身上的基本能量（最多 3 張）
+  const candidateIids: string[] = [];
+  for (let i = player.discard.length - 1; i >= 0 && candidateIids.length < 3; i--) {
     const c = player.discard[i];
     const card = pool.get(c.cardId);
     if (card?.supertype === 'Energy' && card.subtype === 'Basic') {
-      revIds.push(c.iid);
+      candidateIids.push(c.iid);
     } else {
-      break; // 非能量則停止（只看最上面的批次）
+      break;
     }
   }
-  if (revIds.length === 0) return state;
-  const benchTarget = player.bench[0];
-  const benchName = benchTarget ? (pool.get(benchTarget.cardId)?.name ?? '備戰寶可夢') : '備戰寶可夢';
-  state = addLog(state, `沉重接力棒：將 ${revIds.length} 張基本能量附加到 ${benchName}`, dIdx);
-  return updatePlayer(state, dIdx, p => {
-    const energies = p.discard.filter(c => revIds.includes(c.iid));
-    const newDiscard = p.discard.filter(c => !revIds.includes(c.iid));
-    const target = p.bench[0];
-    const newBench = [...p.bench];
-    newBench[0] = { ...target, energyAttached: [...target.energyAttached, ...energies] };
-    return { ...p, discard: newDiscard, bench: newBench };
+  if (candidateIids.length === 0) return state;
+  state = addLog(state,
+    `沉重接力棒：選最多 ${candidateIids.length} 張基本能量改附於備戰寶可夢`, dIdx);
+  return withPending(state, {
+    type: 'discard-search',
+    actorIdx: dIdx, sourcePlayerIdx: dIdx,
+    filter: 'BasicEnergy',
+    minCount: 0, maxCount: candidateIids.length,
+    effectKey: 'heavy-baton-pick-energies',
+    params: { validIids: candidateIids },
   });
+});
+regR('heavy-baton-pick-energies', (st, idx, energyIids, _params, pool) => {
+  if (energyIids.length === 0) {
+    return addLog(st, '沉重接力棒：未選擇能量', idx);
+  }
+  const benchPokes = st.players[idx].bench;
+  if (benchPokes.length === 0) {
+    return addLog(st, '沉重接力棒：場上無備戰寶可夢，能量留在棄牌區', idx);
+  }
+  // 1 隻備戰：直接全附
+  if (benchPokes.length === 1) {
+    const target = benchPokes[0];
+    const tName = pool.get(target.cardId)?.name ?? '?';
+    const energies = st.players[idx].discard.filter(c => energyIids.includes(c.iid));
+    let s = addLog(st, `沉重接力棒：將 ${energies.length} 張基本能量附於 ${tName}`, idx);
+    return updatePlayer(s, idx, p => ({
+      ...p,
+      discard: p.discard.filter(c => !energyIids.includes(c.iid)),
+      bench: p.bench.map(c => c.iid === target.iid
+        ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+        : c),
+    }));
+  }
+  // 多隻備戰 → 逐張分配（同 v2.221 過度放電 / v2.225 合金建造 pattern）
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'heavy-baton-distribute',
+    params: {
+      energyIids, validIids: benchPokes.map(c => c.iid),
+      totalCount: energyIids.length, placedCount: 0,
+    },
+  });
+});
+regR('heavy-baton-distribute', (st, idx, iids, params, pool) => {
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const totalCount = (params?.totalCount as number) ?? energyIids.length;
+  const placedCount = (params?.placedCount as number) ?? 0;
+  if (energyIids.length === 0) return st;
+  const targetIid = iids[0];
+  const p = st.players[idx];
+  const target = p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const tCard = pool.get(target.cardId);
+  const currentEnergyIid = energyIids[0];
+  const restIids = energyIids.slice(1);
+  const energy = p.discard.find(c => c.iid === currentEnergyIid);
+  if (!energy) return st;
+  let s = addLog(st,
+    `沉重接力棒：將第 ${placedCount + 1}/${totalCount} 張基本能量附於 ${tCard?.name ?? '?'}`, idx);
+  s = updatePlayer(s, idx, pl => ({
+    ...pl,
+    discard: pl.discard.filter(c => c.iid !== currentEnergyIid),
+    bench: pl.bench.map(c => c.iid === targetIid
+      ? { ...c, energyAttached: [...c.energyAttached, energy] }
+      : c),
+  }));
+  if (restIids.length > 0) {
+    if (s.players[idx].bench.length === 0) {
+      return addLog(s, '沉重接力棒：備戰已空，剩餘能量留在棄牌區', idx);
+    }
+    return withPending(s, {
+      type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'heavy-baton-distribute',
+      params: {
+        energyIids: restIids,
+        validIids: s.players[idx].bench.map(c => c.iid),
+        totalCount, placedCount: placedCount + 1,
+      },
+    });
+  }
+  return s;
 });
 
 // ── 被擊倒時對手多獲 1 張獎賞 ─────────────────────────────────────────────

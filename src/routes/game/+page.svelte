@@ -1282,7 +1282,10 @@
       }
       case 'discard-search': {
         const f = pendingSelection.filter ?? '';
+        // v2.233：discard-search 也支援 validIids 限定（沉重接力棒：剛 KO 的能量批次）
+        const validIidsDiscard = pendingSelection.params?.validIids as string[] | undefined;
         return src.discard.filter(c => {
+          if (validIidsDiscard && !validIidsDiscard.includes(c.iid)) return false;
           const card = pool.get(c.cardId);
           if (!card) return false;
           if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon') || card.supertype === 'Energy';
