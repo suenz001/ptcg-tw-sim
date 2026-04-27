@@ -494,7 +494,7 @@ const ALLOY_BRIDGE_DRAGON_DECK: Omit<Deck, 'updatedAt'> = {
   name: '鋁鋼橋龍',
   entries: [
     // ── 寶可夢（21 張）──
-    { cardId: '16994', count: 4 }, // 鋁鋼龍 (MC 523)
+    { cardId: '10967', count: 4 }, // 鋁鋼龍 (SV7 072/102) — Leon 指定 v2.218
     { cardId: '16997', count: 3 }, // 鋁鋼橋龍ex (MC 526)
     { cardId: '14381', count: 1 }, // 鋁鋼橋龍 (M2 063/080) — Leon 指定
     { cardId: '14003', count: 1 }, // 超級大嘴娃ex (M1L 046)

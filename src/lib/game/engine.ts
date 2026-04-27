@@ -168,6 +168,9 @@ export const SELF_KO_ABILITY_NAMES = new Set<string>([
 export const SHARED_ONCE_PER_TURN_ABILITY_NAMES = new Set<string>([
   '月光循環',
   '使者衝刺',
+  // v2.218 風扇呼喚（旋轉洛托姆）— 卡面：「在這個回合，若已經使出了其他的「風扇呼喚」，
+  //   則這個特性無法使用。」多隻洛托姆同回合只能整個玩家側用 1 次。
+  '風扇呼喚',
 ]);
 
 // v2.94 的 isPassiveOnlyAttackEntry guard 於 v2.95 移除。
@@ -2344,7 +2347,10 @@ function handlePlaying(
     // （damageBonusThisTurn 下回合加傷原本就在 weakness 前，位置不動。）
     const defenderCard = getCard(defender.active.cardId, pool);
 
-    // 道具：我方攻擊 +N（極限腰帶 / 鎖鏈糬 / 驅勁能量 未來）— 阻礙之塔時全部失效
+    // 道具：我方攻擊 +N（極限腰帶 / 鎖鏈糬 / 驅勁能量 未來 / 猛攻手鐲 / 電氣球 / 活力頭帶 / 赫普的講究頭帶）
+    // 阻礙之塔時全部失效。
+    // v2.218 加 log — Leon 回報「極限腰帶 +50 沒生效」，加 log 讓未來能判斷
+    //   是 fn 沒被呼叫、bonus=0、還是 weakness 順序問題。
     const toolsJammed = isToolsJammed(state, pool);
     if (!toolsJammed && baseDamage > 0 && attacker.active.toolAttached) {
       const atkTool = pool.get(attacker.active.toolAttached.cardId);
@@ -2352,7 +2358,12 @@ function handlePlaying(
         const fn = TOOL_ATTACK_BONUS.get(atkTool.name);
         if (fn) {
           const bonus = fn(attackerCard, attacker.active, defenderCard, defender.active);
-          if (bonus > 0) baseDamage += bonus;
+          if (bonus > 0) {
+            baseDamage += bonus;
+            workingState = addLog(workingState,
+              `🔧 ${atkTool.name}：${attackerCard.name} 招式傷害 +${bonus}（${baseDamage - bonus} → ${baseDamage}）`,
+              aIdx);
+          }
         }
       }
     }

@@ -414,9 +414,12 @@ regA('鋁鋼橋龍ex', 0, (st, idx, pool, cardInst) => {
   if (!cardInst?.evolvedThisTurn) {
     return addLog(st, '合金建造：只能在從手牌使出並進化的當回合使用', idx);
   }
+  // v2.218 Bug fix：基本能量卡 JSON 通常 pokemonType=undefined，必須加 name fallback
+  // （與 v2.121 filter 修法同 root cause — 老版基本能量 scraper 沒抓 pokemonType）
   const cand = st.players[idx].discard.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Metal';
+    if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+    return card.pokemonType === 'Metal' || /【鋼】/.test(card.name ?? '');
   });
   if (cand.length === 0) return addLog(st, '合金建造：棄牌區無基本【鋼】能量', idx);
   const metalPokes = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench]
