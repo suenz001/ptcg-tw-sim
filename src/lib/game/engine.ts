@@ -8,7 +8,7 @@
  *   - M3 多人連線時只需傳送動作序列
  */
 
-import type { Card, EnergyType } from '$lib/cards/types';
+import type { Card, EnergyType, Attack } from '$lib/cards/types';
 import type {
   GameState, GameAction, CardInstance,
   PlayerState, LogEntry, TurnPhase, GamePhase
@@ -19,6 +19,7 @@ import {
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
+  TOOL_END_TURN_DISCARD,
   BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
   SPECIAL_ENERGY_ATTACH,
   SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD,
@@ -2224,13 +2225,14 @@ function handlePlaying(
 
     // v2.92：單招下回合禁用（例：超級勇氣）
     // 檢查當前招式名是否在 blockedAttackNamesThisTurn 中 → 禁用
+    // v2.214：用 effective list（含工具招式）
     {
       const attackIdx = action.attackIndex;
-      const actCard = pool.get(attacker.active.cardId);
-      const attackDef = actCard?.attacks?.[attackIdx];
+      const eff = getEffectiveAttacks(state, attacker.active, pool);
+      const attackDef = eff[attackIdx]?.atk;
       const attackName = attackDef?.name;
+      const atkName = pool.get(attacker.active.cardId)?.name ?? '?';
       if (attackName && attacker.active.blockedAttackNamesThisTurn?.includes(attackName)) {
-        const atkName = actCard?.name ?? '?';
         return addLog(state,
           `${atkName} 因上回合效果，本回合無法使用「${attackName}」`,
           aIdx);
@@ -2264,16 +2266,23 @@ function handlePlaying(
     }
 
     const attackerCard = getCard(attacker.active.cardId, pool);
-    const attacks = attackerCard.attacks ?? [];
-    const attack = attacks[action.attackIndex];
-    if (!attack) return state;
+    // v2.214：合併工具招式（招式學習器 螢石 / 核心記憶碟 等）
+    //   - 招式 source 為 tool 時，effectKey 用 tool 名（非 attackerCard 名）
+    //   - 阻礙之塔下 tool 失效 → getEffectiveAttacks 已過濾
+    const eff = getEffectiveAttacks(state, attacker.active, pool);
+    const effEntry = eff[action.attackIndex];
+    if (!effEntry) return state;
+    const attack = effEntry.atk;
+    const sourceName = effEntry.sourceCardName;
+    const isToolAttack = effEntry.isFromTool;
 
     // 確認能量足夠（v2.103 傳 state+aIdx 讓 canAffordAttack 能判定大竺葵繁茂 / 燃火能量倍率）
     // v2.127 多傳 attack.name 讓 canAffordAttack 能判定 酋雷姆｜反等離子 條件式減費
     if (!canAffordAttack(attacker.active, attack.cost, pool, state, aIdx, attack.name)) return state;
 
     // ── 招式前置效果（修改傷害 / 丟棄能量等）────────────────────────────────
-    const effectKey = `${attackerCard.name}|${attack.name}`;
+    // v2.214：tool 招式用 tool 名做 key（例：'招式學習器 螢石|螢石'）
+    const effectKey = `${sourceName}|${attack.name}`;
     const preFn = ATTACK_PRE.get(effectKey);
     let workingState: GameState = { ...state, players };
     let baseDamage = parseInt(attack.damage ?? '0', 10) || 0;
@@ -2595,6 +2604,7 @@ function handlePlaying(
     let newState: GameState = addLog(
       { ...workingState, lastDealtDamage: baseDamage },
       `${attacker.name} 的 ${attackerCard.name} 使出「${attack.name}」` +
+        (isToolAttack ? `（工具：${sourceName}）` : '') +
         (baseDamage > 0 ? `，造成 ${baseDamage} 傷害！` : '！'),
       aIdx
     );
@@ -3304,6 +3314,48 @@ function handlePlaying(
       }
     }
 
+    // ── v2.214 TOOL_END_TURN_DISCARD（招式學習器 螢石 等）─────────────────
+    //   卡面：「將附於寶可夢身上的這張卡，在自己的回合結束時丟棄」。
+    //   掃自己場上所有附有 TOOL_END_TURN_DISCARD 道具的寶可夢，把該道具搬到棄牌區。
+    //   阻礙之塔下道具失效，但「自棄」屬於 tool 自身的 self-clean 規則，仍然執行
+    //   （PTCG 官方判例：tool 即便被 nullify 仍會在自己回合結束時離場 — 道具效果不
+    //   觸發，但「離場」的時機是道具卡面寫死的固有行為。為一致性此處不加 jam guard）
+    {
+      const aPlayer = players[aIdx];
+      const allMine: CardInstance[] = [
+        ...(aPlayer.active ? [aPlayer.active] : []),
+        ...aPlayer.bench,
+      ];
+      let touched = false;
+      const newDiscards: CardInstance[] = [];
+      const stripIfDiscard = (c: CardInstance): CardInstance => {
+        if (!c.toolAttached) return c;
+        const tCard = pool.get(c.toolAttached.cardId);
+        if (!tCard || !TOOL_END_TURN_DISCARD.has(tCard.name)) return c;
+        newDiscards.push(c.toolAttached);
+        touched = true;
+        return { ...c, toolAttached: undefined };
+      };
+      if (touched || aPlayer.active) {
+        // intentionally always run map; touched 由內部判斷
+      }
+      const newActive = aPlayer.active ? stripIfDiscard(aPlayer.active) : null;
+      const newBench = aPlayer.bench.map(stripIfDiscard);
+      void allMine; // suppressed — only used conceptually
+      if (touched) {
+        players[aIdx] = {
+          ...aPlayer,
+          active: newActive,
+          bench: newBench,
+          discard: [...aPlayer.discard, ...newDiscards],
+        };
+        for (const t of newDiscards) {
+          const tName = pool.get(t.cardId)?.name ?? '?';
+          state = addLog({ ...state, players }, `🔧 ${tName}：自己回合結束，將附加的道具丟棄`, aIdx);
+        }
+      }
+    }
+
     // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn / abilityUsedThisTurn）
     const currentPlayer = { ...players[aIdx] };
     currentPlayer.active = currentPlayer.active ? clearTurnFlags(currentPlayer.active) : null;
@@ -3726,6 +3778,45 @@ export function applyAction(
 
 // ── 輔助查詢 ─────────────────────────────────────────────────────────────────
 
+/**
+ * v2.214：列出寶可夢實際可施放的招式（自己 + 工具上寫的）。
+ *
+ * 招式注入機制（招式學習器 螢石 / 核心記憶碟 等）：
+ *   - PokemonTool 卡上若有 attacks 欄位（v2.213 scraper 修），表示
+ *     「附有此 tool 的寶可夢可施放此招式」。
+ *   - 招式列表 = 自己卡的 attacks + 已附加 tool 的 attacks（合併）。
+ *   - attackIndex 0~ownCount-1 = 自己的招式；
+ *     attackIndex >= ownCount = tool 上的招式（effectKey 用 tool 名）。
+ *
+ * 阻礙之塔：tool 全部失效 → 工具招式不可用（同 TOOL_*）。
+ *
+ * 用途：getAvailableAttacks、ATTACK handler、UI、AI 都共用這個合併邏輯，
+ *   確保 attackIndex 在所有地方對應到相同招式（防 desync）。
+ */
+export function getEffectiveAttacks(
+  state: GameState,
+  inst: CardInstance,
+  pool: Map<string, Card>
+): { atk: Attack; sourceCardName: string; isFromTool: boolean }[] {
+  const card = pool.get(inst.cardId);
+  if (!card) return [];
+  const result: { atk: Attack; sourceCardName: string; isFromTool: boolean }[] = [];
+  for (const atk of card.attacks ?? []) {
+    result.push({ atk, sourceCardName: card.name, isFromTool: false });
+  }
+  // tool 招式 — 阻礙之塔失效時不算
+  const toolsJammed = isToolsJammed(state, pool);
+  if (!toolsJammed && inst.toolAttached) {
+    const toolCard = pool.get(inst.toolAttached.cardId);
+    if (toolCard?.subtype === 'PokemonTool' && toolCard.attacks?.length) {
+      for (const atk of toolCard.attacks) {
+        result.push({ atk, sourceCardName: toolCard.name, isFromTool: true });
+      }
+    }
+  }
+  return result;
+}
+
 /** 列出目前行動玩家可使用的招式（已滿足能量需求 + 未被狀態/效果封鎖的） */
 export function getAvailableAttacks(
   state: GameState,
@@ -3743,15 +3834,18 @@ export function getAvailableAttacks(
   // Wave 36：玩家級封鎖（電擊魔獸｜雷電在地類）
   if (player.noAttacksThisTurn) return [];
   const card = pool.get(player.active.cardId);
-  if (!card?.attacks) return [];
+  if (!card) return [];
   // v2.57 力量抑制者：自己場上「火箭隊的」寶可夢 < 4 → 禁用所有招式
   if (card.name === '火箭隊的超夢ex' && card.abilities?.some(a => a.name === '力量抑制者')) {
     const allOwn: CardInstance[] = [player.active, ...player.bench];
     const rocketCount = allOwn.filter(c => pool.get(c.cardId)?.name?.startsWith('火箭隊的')).length;
     if (rocketCount < 4) return [];
   }
-  return card.attacks
-    .map((atk, i) => {
+  // v2.214：合併工具招式（招式學習器 螢石 / 核心記憶碟 等）
+  const effective = getEffectiveAttacks(state, player.active, pool);
+  if (effective.length === 0) return [];
+  return effective
+    .map(({ atk }, i) => {
       // v2.92：單招下回合禁用（例：超級勇氣）— UI 層反白禁按
       if (player.active!.blockedAttackNamesThisTurn?.includes(atk.name)) return -1;
       // v2.103：大竺葵繁茂 / 燃火能量倍率（傳 state+activePlayerIndex）

@@ -29,7 +29,7 @@ import type { GameState, CardInstance } from '../../types';
 import type { EffectFn } from '../_shared';
 import {
   TRAINER_EFFECTS,
-  reg, regR,
+  reg, regR, regPost,
   addLog, updatePlayer, withPending, shuffle,
 } from '../_shared';
 
@@ -374,11 +374,30 @@ TOOL_BOTH_SIDES_RETREAT_PLUS.add('重力之玉');
 // ══════════════════════════════════════════════════════════════════════════════
 
 function toolAttachEffect(toolName: string): EffectFn {
-  return (st, idx, _pool, toolInst) => {
+  return (st, idx, pool, toolInst) => {
     const p = st.players[idx];
     const allInPlay = [...(p.active ? [p.active] : []), ...p.bench];
-    const validIids = allInPlay.filter(pk => !pk.toolAttached).map(pk => pk.iid);
-    if (validIids.length === 0) return addLog(st, `${toolName}：沒有可附加道具的寶可夢`, idx);
+    // v2.214：套用 TOOL_ATTACH_GATE — 不符合 holder 條件的寶可夢從候選排除
+    //   例：核心記憶碟 只能附「超級基格爾德ex」
+    const gate = TOOL_ATTACH_GATE.get(toolName);
+    const validIids = allInPlay
+      .filter(pk => !pk.toolAttached)
+      .filter(pk => {
+        if (!gate) return true;
+        const card = pool.get(pk.cardId);
+        return card ? gate(card) : false;
+      })
+      .map(pk => pk.iid);
+    if (validIids.length === 0) {
+      // gate 把所有 holder 過濾光時，clear 訊息提示
+      const reason = gate ? '無符合附加條件的寶可夢' : '沒有可附加道具的寶可夢';
+      // 把道具放回手牌（不要從手牌消失）
+      return updatePlayer(
+        addLog(st, `${toolName}：${reason}，道具回到手牌`, idx),
+        idx,
+        pl => ({ ...pl, hand: [...pl.hand, toolInst] })
+      );
+    }
     st = addLog(st, `${toolName}：選擇要附加的寶可夢`, idx);
     return withPending(st, {
       type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
@@ -409,6 +428,18 @@ regR('attach-tool', (st, idx, picked, params, pool) => {
   }
   const targetName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
   const toolName = pool.get(toolInst.cardId)?.name ?? '道具';
+  // v2.214：TOOL_ATTACH_GATE — 限定 holder（例：核心記憶碟 只能附超級基格爾德ex）
+  const gate = TOOL_ATTACH_GATE.get(toolName);
+  if (gate && target) {
+    const targetCard = pool.get(target.cardId);
+    if (!targetCard || !gate(targetCard)) {
+      return updatePlayer(
+        addLog(st, `${toolName}：附加失敗（${targetName} 不符合附加條件，道具回到手牌）`, idx),
+        idx,
+        pl => ({ ...pl, hand: [...pl.hand, toolInst] })
+      );
+    }
+  }
   st = addLog(st, `🔧 ${toolName} 附加到 ${targetName}`, idx);
   return updatePlayer(st, idx, p => {
     const attach = (pk: CardInstance): CardInstance =>
@@ -452,3 +483,108 @@ regR('attach-tool', (st, idx, picked, params, pool) => {
     }
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.214 — Tool 招式注入機制（招式學習器 螢石 / 核心記憶碟）
+//
+// 卡面：「附有這張卡的（特定）寶可夢，可使用這張卡上寫的招式」
+//   - 招式 attacks 由 scraper（v2.213）抽到 card.attacks
+//   - engine.ts ATTACK handler / getEffectiveAttacks 已合併 attacker.toolAttached.attacks
+//   - 這裡只需登錄招式效果（regPost effectKey='${tool 名}|${招式名}'）
+//     + 額外的 hook（attach gate、回合結束自棄）
+//
+// 1. TOOL_ATTACH_GATE — 附加閘門
+//    - fn(holderCard) => boolean (true = 可附加)
+//    - 在 attach-tool resolver 檢查；返 false 則退回手牌並 log
+//    - 用例：核心記憶碟 只能附「超級基格爾德ex」
+//
+// 2. TOOL_END_TURN_DISCARD — 持有方自己回合結束時自動棄
+//    - 在 engine.ts END_TURN handler 觸發（在 力之沙漏 hook 附近）
+//    - 用例：招式學習器 螢石（卡面「在自己的回合結束時丟棄」）
+// ══════════════════════════════════════════════════════════════════════════════
+
+export const TOOL_ATTACH_GATE = new Map<string, (holderCard: Card) => boolean>();
+export const TOOL_END_TURN_DISCARD = new Set<string>();
+
+// ── 招式學習器 螢石（H, M2/SV8 11281）──────────────────────────────────────
+// 卡面：附有這張卡的寶可夢，可使用這張卡上寫的招式。
+//       將附於寶可夢身上的這張卡，在自己的回合結束時丟棄。
+//
+// 招式：螢石 [草水超]
+//   將這隻寶可夢身上附加的能量卡全部丟棄，將自己的所有「太晶」寶可夢的 HP 全部恢復。
+//
+// 實裝：
+//   - 一般 attach（無 holder gate）→ toolAttachEffect 即可
+//   - TOOL_END_TURN_DISCARD 加入 → engine 在自己回合結束自棄
+//   - regPost('招式學習器 螢石|螢石') 招式效果：
+//     * 棄掉 active 上所有能量
+//     * 找場上所有「太晶」tag 寶可夢，HP 全恢復（damage = 0）
+TOOL_END_TURN_DISCARD.add('招式學習器 螢石');
+reg('招式學習器 螢石', toolAttachEffect('招式學習器 螢石'));
+
+regPost('招式學習器 螢石|螢石', (state, aIdx, pool) => {
+  const players = [...state.players] as [import('../../types').PlayerState, import('../../types').PlayerState];
+  const me = { ...players[aIdx] };
+  const active = me.active;
+  if (!active) return state;
+  // 1) 棄掉 active 上所有能量
+  const energyDiscard = active.energyAttached;
+  if (energyDiscard.length > 0) {
+    me.discard = [...me.discard, ...energyDiscard];
+    me.active = { ...active, energyAttached: [] };
+    state = addLog(state,
+      `招式學習器 螢石 / 螢石：${pool.get(active.cardId)?.name ?? '?'} 丟棄 ${energyDiscard.length} 張能量`,
+      aIdx);
+  }
+  // 2) 治癒場上所有太晶寶可夢
+  const isTera = (c: CardInstance | null): c is CardInstance =>
+    !!c && (pool.get(c.cardId)?.tags?.includes('太晶') ?? false);
+  const heal = (c: CardInstance): CardInstance => isTera(c) && c.damage > 0 ? { ...c, damage: 0 } : c;
+  if (me.active && isTera(me.active)) {
+    me.active = heal(me.active);
+  }
+  me.bench = me.bench.map(c => heal(c));
+  players[aIdx] = me;
+  // log healed names
+  const healedNames: string[] = [];
+  if (active && isTera(active) && active.damage > 0) healedNames.push(pool.get(active.cardId)?.name ?? '?');
+  for (const b of state.players[aIdx].bench) {
+    if (isTera(b) && b.damage > 0) healedNames.push(pool.get(b.cardId)?.name ?? '?');
+  }
+  if (healedNames.length > 0) {
+    state = addLog(state, `招式學習器 螢石 / 螢石：恢復場上太晶寶可夢的 HP（${healedNames.join('、')}）`, aIdx);
+  } else {
+    state = addLog(state, '招式學習器 螢石 / 螢石：場上無受傷的太晶寶可夢', aIdx);
+  }
+  return { ...state, players };
+});
+
+// ── 核心記憶碟（J, M3 18049）──────────────────────────────────────────────
+// 卡面：附有這張卡的「超級基格爾德ex」可使用這張卡上寫的招式。
+//
+// 招式：大地光炮 [鬥×4] 350
+//   將這隻寶可夢身上附加的能量卡全部丟棄。
+//
+// 實裝：
+//   - TOOL_ATTACH_GATE 限定 holder.name === '超級基格爾德ex'
+//   - regPost('核心記憶碟|大地光炮') 招式後棄全部能量
+//     350 base damage 由 attack.damage 處理（engine 自動讀）
+TOOL_ATTACH_GATE.set('核心記憶碟', (holderCard) => holderCard.name === '超級基格爾德ex');
+reg('核心記憶碟', toolAttachEffect('核心記憶碟'));
+
+regPost('核心記憶碟|大地光炮', (state, aIdx, pool) => {
+  const players = [...state.players] as [import('../../types').PlayerState, import('../../types').PlayerState];
+  const me = { ...players[aIdx] };
+  const active = me.active;
+  if (!active) return state;
+  const energyDiscard = active.energyAttached;
+  if (energyDiscard.length > 0) {
+    me.discard = [...me.discard, ...energyDiscard];
+    me.active = { ...active, energyAttached: [] };
+    players[aIdx] = me;
+    state = addLog({ ...state, players },
+      `核心記憶碟 / 大地光炮：${pool.get(active.cardId)?.name ?? '?'} 丟棄 ${energyDiscard.length} 張能量`,
+      aIdx);
+  }
+  return state;
+});

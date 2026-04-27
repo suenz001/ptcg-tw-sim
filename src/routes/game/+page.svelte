@@ -10,7 +10,7 @@
   import { PRESET_DECKS } from '$lib/decks/presets';
   import {
     createGame, applyAction,
-    getAvailableAttacks, hasPendingActions,
+    getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
     countEnergy, getEvolvableTargets,
     canRetreat, getPlayableTrainers, getPlayableBasics, getPlayableFossils,
     getUsableAbilities, isBasicPokemonCard, isFossilItemCard, getEffectiveHP,
@@ -1638,11 +1638,14 @@
   }
 
   // ── 招式宣告：若需要丟能量選擇則開 modal，否則直接派送 ─────────────────────
+  // v2.214：用 getEffectiveAttacks 取招式（含工具上寫的招式 — 招式學習器 螢石 等）
+  //   - tool 招式的 effectKey 用 tool 名做 key（與 engine 一致）
   function initiateAttack(attackIndex: number) {
     if (!game || !activePlayer?.active) return;
-    const atkCard = getCard(activePlayer.active.cardId);
-    const atk = atkCard?.attacks?.[attackIndex];
-    if (!atkCard || !atk) return;
+    const eff = getEffectiveAttacks(game, activePlayer.active, pool);
+    const entry = eff[attackIndex];
+    if (!entry) return;
+    const { atk, sourceCardName } = entry;
     // v2.119 copy-attack intercept：暗黑底牌 要先讓玩家選備戰 N的寶可夢 + 招式
     if (atk.name === '暗黑底牌') {
       const candidates = activePlayer.bench
@@ -1655,7 +1658,7 @@
       copyAttackPicker = { sourceAttackIndex: attackIndex, candidates };
       return;
     }
-    const key = `${atkCard.name}|${atk.name}`;
+    const key = `${sourceCardName}|${atk.name}`;
     const spec = ATTACK_PRE_DISCARD_CHOICE.get(key);
     if (!spec) {
       dispatch(GameActions.attack(attackIndex));
@@ -2735,13 +2738,14 @@
           </button>
         {:else if isMyTurn()}
           {#if game.turnPhase==='main' && activePlayer?.active}
-            {@const ac=getCard(activePlayer.active.cardId)}
-            {#each ac?.attacks??[] as atk,i}
-              <button class="btn-act atk" class:atk-ready={availableAttacks.includes(i)}
+            {@const eff=getEffectiveAttacks(game, activePlayer.active, pool)}
+            {#each eff as { atk, sourceCardName, isFromTool }, i}
+              <button class="btn-act atk" class:atk-ready={availableAttacks.includes(i)} class:atk-from-tool={isFromTool}
                 disabled={!availableAttacks.includes(i)||!!pendingSelection}
+                title={isFromTool ? `來自工具：${sourceCardName}` : ''}
                 onclick={()=>initiateAttack(i)}>
                 <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}</span>
-                <span class="atk-name">{atk.name}</span>
+                <span class="atk-name">{atk.name}{isFromTool ? ' 🔧' : ''}</span>
                 <span class="atk-dmg">{atk.damage||'—'}</span>
               </button>
             {/each}

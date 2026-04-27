@@ -13,7 +13,7 @@
 import type { Card } from '$lib/cards/types';
 import type { GameState, GameAction, CardInstance, PendingSelection } from './types';
 import {
-  getAvailableAttacks, getEvolvableTargets,
+  getAvailableAttacks, getEffectiveAttacks, getEvolvableTargets,
   getPlayableTrainers, getPlayableBasics,
   getUsableAbilities, canRetreat, isBasicPokemonCard,
 } from './engine';
@@ -139,11 +139,13 @@ export function getAIAction(
   const atkIdxs = getAvailableAttacks(state, pool);
   if (atkIdxs.length > 0 && player.active) {
     const card = pool.get(player.active.cardId);
+    // v2.214：用 effective list（含工具上寫的招式），attackIndex 對應到合併後 list
+    const eff = getEffectiveAttacks(state, player.active, pool);
     // v2.141 評估招式潛在傷害 — 處理「暗黑底牌」這類複製招式
     //   原本只看 attacks[i].damage，但暗黑底牌 damage='' 會被低估為 0。
     //   改為：暗黑底牌時，跨備戰所有 N寶可夢的招式找最強 damage 作為估值。
     const estimateDamage = (atkIdx: number): number => {
-      const atk = card?.attacks?.[atkIdx];
+      const atk = eff[atkIdx]?.atk;
       if (!atk) return 0;
       const printedDmg = parseInt(atk.damage ?? '0') || 0;
       if (printedDmg > 0) return printedDmg;
