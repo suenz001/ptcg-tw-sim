@@ -4153,15 +4153,58 @@ export function getUsableAbilities(
     card.abilities.forEach((ab, abIdx) => {
       // 只列出在 ABILITY_EFFECTS 中有登錄的主動特性
       if (!ABILITY_EFFECTS.has(`${card.name}|${abIdx}`)) return;
-      // 集客：只有出場才能用
-      if (ab.name === '集客' && player.active?.iid !== pk.iid) return;
+      // 集客：只有出場才能用 + 牌庫不空（v2.229 補資源 gate）
+      if (ab.name === '集客') {
+        if (player.active?.iid !== pk.iid) return;
+        if (player.deck.length === 0) return;
+      }
       // 精神抽出 / 龐克練肌 / 合金建造（v2.102）：只有本回合剛進化才能用
       if ((ab.name === '精神抽出' || ab.name === '龐克練肌' || ab.name === '合金建造') && !pk.evolvedThisTurn) return;
+      // v2.229 精神抽出（魔靈多龍系）：除 evolvedThisTurn 外還需牌庫不空（要看 top 5）
+      if (ab.name === '精神抽出' && player.deck.length === 0) return;
+      // v2.229 龐克練肌（瑪俐的長毛巨魔ex）：除 evolvedThisTurn 外還需牌庫有基本【惡】能量
+      if (ab.name === '龐克練肌') {
+        const hasDarkE = player.deck.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && /【惡】/.test(cc.name);
+        });
+        if (!hasDarkE) return;
+      }
+      // v2.229 合金建造（鋁鋼橋龍ex）：除 evolvedThisTurn 外還需棄牌區基本【鋼】能量 + 場上【鋼】寶可夢
+      //   — Leon v2.228 抓到沒 gate；卡面：「從棄牌區選最多 2 張基本鋼能量附給自己的鋼寶可夢」
+      if (ab.name === '合金建造') {
+        const hasMetalEInDiscard = player.discard.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+            && (cc.pokemonType === 'Metal' || /【鋼】/.test(cc.name));
+        });
+        if (!hasMetalEInDiscard) return;
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        const hasMetalPoke = field.some(c => pool.get(c.cardId)?.pokemonType === 'Metal');
+        if (!hasMetalPoke) return;
+      }
       // v2.126 螺釘地鼠｜狂挖 — 只有「從手牌將這張卡放置於備戰區的那個回合」可用
       //   pk.justPlaced 由 PLAY_BASIC 設、END_TURN 清，所以「下一回合不能用」自然成立
-      if (ab.name === '狂挖' && !pk.justPlaced) return;
+      //   v2.229 補：牌庫需有基本【鬥】能量
+      if (ab.name === '狂挖') {
+        if (!pk.justPlaced) return;
+        const hasFightEInDeck = player.deck.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && /【鬥】/.test(cc.name);
+        });
+        if (!hasFightEInDeck) return;
+      }
       // v2.127 月月熊 赫月｜經驗法則 — 同 狂挖 pattern，只有剛從手牌放置於備戰區的回合可用
-      if (ab.name === '經驗法則' && !pk.justPlaced) return;
+      //   v2.229 補：手牌需有基本【鬥】能量（Leon v2.228 抓到）
+      //   卡面：「從手牌選最多 2 張基本鬥能量附於這隻寶可夢」
+      if (ab.name === '經驗法則') {
+        if (!pk.justPlaced) return;
+        const hasFightEInHand = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && /【鬥】/.test(cc.name);
+        });
+        if (!hasFightEInHand) return;
+      }
       // v2.133 古劍豹｜沉雪、鐵斑葉ex｜迅速游標 — 同 justPlaced gate
       if ((ab.name === '沉雪' || ab.name === '迅速游標') && !pk.justPlaced) return;
       // v2.133 沉雪 額外 gate：場上沒有競技場卡時無意義
@@ -4271,7 +4314,118 @@ export function getUsableAbilities(
       //   先攻最初回合 = turn 1；後攻最初回合 = turn 2。turn > 2 時不論先/後攻
       //   都已過了最初回合，按鈕直接隱藏。
       //   （USE_ABILITY 必然 active player == 持卡方，所以不需另判 firstPlayerIdx）
-      if (ab.name === '風扇呼喚' && state.turn > 2) return;
+      //   v2.229 補：牌庫不空（搜空 deck 沒意義）
+      if (ab.name === '風扇呼喚') {
+        if (state.turn > 2) return;
+        if (player.deck.length === 0) return;
+      }
+      // ─── v2.229 大批主動特性 gate 補完（之前 audit 漏掉，按下才跳 log 的災難） ─────
+      // v2.229 桃歹郎ex｜支配鎖鏈：必須在戰鬥場 + 備戰有【惡】寶可夢（非桃歹郎ex）
+      if (ab.name === '支配鎖鏈') {
+        if (player.active?.iid !== pk.iid) return;
+        const validBench = player.bench.filter(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.pokemonType === 'Darkness' && cc?.name !== '桃歹郎ex';
+        });
+        if (validBench.length === 0) return;
+      }
+      // v2.229 普隆隆姆｜轟鳴引擎：手牌需有能量
+      if (ab.name === '轟鳴引擎') {
+        const hasEnergy = player.hand.some(c => pool.get(c.cardId)?.supertype === 'Energy');
+        if (!hasEnergy) return;
+      }
+      // v2.229 三合一磁怪｜過度放電：棄牌區有基本【雷】能量 + 場上有【雷】寶可夢
+      //   （此特性自 KO，所以不檢查可達鴨濕氣 — 已在 SELF_KO 區塊處理）
+      if (ab.name === '過度放電') {
+        const hasLightningE = player.discard.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && cc.pokemonType === 'Lightning';
+        });
+        if (!hasLightningE) return;
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        const hasLightningPoke = field.some(c => pool.get(c.cardId)?.pokemonType === 'Lightning');
+        if (!hasLightningPoke) return;
+      }
+      // v2.229 蜜集大蛇ex｜熟成充能：手牌有基本【草】能量 + 場上有寶可夢
+      if (ab.name === '熟成充能') {
+        const hasGrassE = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+            && (cc.pokemonType === 'Grass' || /【草】/.test(cc.name));
+        });
+        if (!hasGrassE) return;
+      }
+      // v2.229 啪咚猴｜衝衝鼓：戰鬥位是「祭典樂舞」寶可夢 + 牌庫不空
+      if (ab.name === '衝衝鼓') {
+        if (!player.active) return;
+        const activeCard = pool.get(player.active.cardId);
+        const isFestival = activeCard?.abilities?.some(a => a.name === '祭典樂舞');
+        if (!isFestival) return;
+        if (player.deck.length === 0) return;
+      }
+      // v2.229 貓頭夜鷹｜搜尋寶石：evolvedThisTurn + 場上太晶寶可夢 + 牌庫不空
+      if (ab.name === '搜尋寶石') {
+        if (!pk.evolvedThisTurn) return;
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        const hasTera = field.some(c => pool.get(c.cardId)?.tags?.includes('太晶'));
+        if (!hasTera) return;
+        if (player.deck.length === 0) return;
+      }
+      // v2.229 蓋諾賽克特ex｜金屬信號：牌庫有【鋼】進化寶可夢
+      if (ab.name === '金屬信號') {
+        const hasMetalEvo = player.deck.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Pokemon' && cc.pokemonType === 'Metal' && !!cc.evolvesFrom;
+        });
+        if (!hasMetalEvo) return;
+      }
+      // v2.229 大吾的巨金怪ex｜X啟動：牌庫有基本【超】或基本【鋼】能量 + 場上有【超】或【鋼】寶
+      if (ab.name === 'X啟動') {
+        const hasPsyOrMetalE = player.deck.some(c => {
+          const cc = pool.get(c.cardId);
+          if (cc?.supertype !== 'Energy' || cc.subtype !== 'Basic') return false;
+          return cc.pokemonType === 'Psychic' || cc.pokemonType === 'Metal'
+            || /【超】|【鋼】/.test(cc.name);
+        });
+        if (!hasPsyOrMetalE) return;
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        const hasPsyOrMetalPoke = field.some(c => {
+          const t = pool.get(c.cardId)?.pokemonType;
+          return t === 'Psychic' || t === 'Metal';
+        });
+        if (!hasPsyOrMetalPoke) return;
+      }
+      // v2.229 多龍奇｜偵查指令：牌庫不空
+      if (ab.name === '偵查指令' && player.deck.length === 0) return;
+      // v2.229 超級妙蛙花ex｜日光轉移：場上有寶可夢身上有基本【草】能量
+      if (ab.name === '日光轉移') {
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        const hasGrassEnergyOnField = field.some(p =>
+          p.energyAttached.some(e => {
+            const cc = pool.get(e.cardId);
+            return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+              && (cc.pokemonType === 'Grass' || /【草】/.test(cc.name));
+          }));
+        if (!hasGrassEnergyOnField) return;
+      }
+      // v2.229 金屬怪｜金屬製造者：牌庫不空 + 場上有【鋼】寶可夢
+      if (ab.name === '金屬製造者') {
+        if (player.deck.length === 0) return;
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        const hasMetal = field.some(c => pool.get(c.cardId)?.pokemonType === 'Metal');
+        if (!hasMetal) return;
+      }
+      // v2.229 竹蘭的尖牙陸鯊｜王者呼聲：牌庫有「竹蘭的」寶可夢
+      if (ab.name === '王者呼聲') {
+        const hasCynthia = player.deck.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Pokemon' && cc.name.includes('竹蘭的');
+        });
+        if (!hasCynthia) return;
+      }
+      // v2.229 阿響的火岩鼠｜旅途牽絆：牌庫不空
+      if (ab.name === '旅途牽絆' && player.deck.length === 0) return;
+      // ──────────────────────────────────────────────────────────────────────
       // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。
       // 條件：對手在他們剛結束的回合取過獎賞（TurnStart < LastTurnEnd）。
       // 不允許：自己回合內的自 KO（如黑夜魔靈 咒詛炸彈）— 此時 TurnStart == LastTurnEnd。
