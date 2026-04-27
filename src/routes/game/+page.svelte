@@ -1208,6 +1208,12 @@
             const t = f.slice(7) as EnergyType;
             return isBasicEnergyOfType(card, t);
           }
+          // v2.225 旋轉洛托姆｜風扇呼喚：HP≤100 的【無】屬性寶可夢卡
+          //   （之前 filter 漏在 deck-search chain，導致 fallback `return true` →
+          //    整副牌庫都能選。Leon v2.224 後反映 UI 顯示「任選 3 張牌」。）
+          if (f === 'ColorlessPokeHP100') {
+            return card.supertype === 'Pokemon' && card.pokemonType === 'Colorless' && (card.hp ?? 999) <= 100;
+          }
           return true;
         });
       }
@@ -2041,6 +2047,7 @@
       'PsychicBasic':                  '基礎【超】寶可夢',
       'RocketBasic':                   '火箭隊基礎寶可夢',
       'RocketSupporter':               '火箭隊支援者',
+      'ColorlessPokeHP100':            'HP≤100 的【無】寶可夢',
     };
     if (map[f]) return map[f];
     const typeMap: Record<string, string> = {
