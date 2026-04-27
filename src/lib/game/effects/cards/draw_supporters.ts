@@ -70,11 +70,43 @@ reg('紫竽', (st, idx) => {
   return drawCards(st, idx, 4);
 });
 
-// 松葉的信心 — 手牌洗回牌庫，抽 5 張
+// 松葉的信心 — 丟 1 張手牌，從牌庫抽出與對手備戰寶可夢相同數量的卡
+// v2.227 修根源：之前完全寫錯（複製紫竽/莉莉艾的「洗回牌庫抽 5」）。
+//   卡面：「這張卡必須將自己的 1 張手牌丟棄才可使用。
+//          從自己的牌庫抽出與對手的備戰寶可夢相同數量的卡。」
+//   regG：手牌至少 2 張（1 張支援者本身 + 1 張要丟）
+regG('松葉的信心', (st, idx) => st.players[idx].hand.length >= 2);
 reg('松葉的信心', (st, idx) => {
-  st = addLog(st, '松葉的信心：手牌洗回牌庫，抽 5 張', idx);
-  st = returnHandToDeck(st, idx);
-  return drawCards(st, idx, 5);
+  // 此時支援者已從手牌進棄牌，hand.length >= 1 表示有可丟的卡
+  if (st.players[idx].hand.length === 0) {
+    return addLog(st, '松葉的信心：手牌為空，無法支付丟棄 1 張的代價', idx);
+  }
+  st = addLog(st, '松葉的信心：選 1 張手牌丟棄，再從牌庫抽與對手備戰寶可夢相同數量的卡', idx);
+  return withPending(st, {
+    type: 'hand-discard',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'matsuba-confidence',
+  });
+});
+regR('matsuba-confidence', (st, idx, iids, _params, pool) => {
+  const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  if (chosen.length > 0) {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    st = addLog(st, `松葉的信心：丟棄 ${names}`, idx);
+  }
+  st = updatePlayer(st, idx, (p) => {
+    const toDiscard = p.hand.filter(c => iids.includes(c.iid));
+    const hand = p.hand.filter(c => !iids.includes(c.iid));
+    return { ...p, hand, discard: [...p.discard, ...toDiscard] };
+  });
+  const oppIdx = (1 - idx) as 0 | 1;
+  const benchN = st.players[oppIdx].bench.length;
+  if (benchN === 0) {
+    return addLog(st, '松葉的信心：對手備戰寶可夢 0 隻 → 抽 0 張', idx);
+  }
+  st = addLog(st, `松葉的信心：對手備戰寶可夢 ${benchN} 隻 → 抽 ${benchN} 張`, idx);
+  return drawCards(st, idx, benchN);
 });
 
 // 莉莉艾的決意 — 手牌洗回牌庫，抽 6 張（獎勵牌剩 6 張時抽 8 張）
