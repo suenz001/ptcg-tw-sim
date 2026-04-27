@@ -6538,28 +6538,12 @@ regR('discard-energy-attach-commit-bench', (st, idx, iids, params, pool) => {
   }));
 });
 
-// ── 多目標 snipe（2 張）─────────────────────────────────────────────────────
-// 甲賀忍蛙ex｜分身連打 — 丟 2 自身能量 → 對手 2 隻各 120
-regPre('甲賀忍蛙ex|分身連打', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('甲賀忍蛙ex|分身連打', (state, aIdx, pool) => {
-  let s = state;
-  const p = s.players[aIdx];
-  if (!p.active) return s;
-  if (p.active.energyAttached.length < 2) {
-    return addLog(s, '分身連打：自身能量不足 2 張', aIdx);
-  }
-  const removed = p.active.energyAttached.slice(-2);
-  s = addLog(s, '分身連打：丟棄自身 2 張能量', aIdx);
-  s = updatePlayer(s, aIdx, pl => {
-    if (!pl.active) return pl;
-    return {
-      ...pl,
-      active: { ...pl.active, energyAttached: pl.active.energyAttached.slice(0, -2) },
-      discard: [...pl.discard, ...removed],
-    };
-  });
-  return multiSnipePost(2, 120, '分身連打')(s, aIdx, pool);
-});
+// ── 多目標 snipe（1 張）─────────────────────────────────────────────────────
+// 甲賀忍蛙ex｜分身連打 — v2.222 移除：v2.129 已在 line 10665 重新實裝為
+//   ATTACK_PRE_DISCARD_CHOICE（玩家自選棄能量）+ opp-poke-choose（玩家自選 2 隻
+//   對手寶可夢，戰鬥場仍套弱抗、備戰位不計）。舊版 slice(-2) 自動丟最後 2 張+
+//   multiSnipePost(2, 120) 不正確（玩家無法選能量、目標、且戰/備抗區待遇相同）。
+//   保留舊登錄會讓後者覆蓋，但 dead code 容易誤導，整段移除。
 
 // 酋雷姆｜三重冰霜 — 丟自身全部能量 → 對手 3 隻各 110
 regPre('酋雷姆|三重冰霜', (state, _aIdx, _pool) => ({ state, damage: 0 }));
@@ -7883,9 +7867,9 @@ regPost('刺龍王ex|王之號召', (state, aIdx, pool) => {
   });
 });
 
-// (C) 甲賀忍蛙ex|忍之利刃 170 — 可選從牌庫任意 1 張加手牌（不限屬性）
-regPre('甲賀忍蛙ex|忍之利刃', (state, _aIdx, _pool) => ({ state, damage: 170 }));
-regPost('甲賀忍蛙ex|忍之利刃', deckSearchToHandPost(1, 'Any', '忍之利刃'));
+// (C) 甲賀忍蛙ex|忍之利刃 — v2.222 移除：v2.129 已在 line 10626 重新實裝為
+//   「若希望」可選 0~1 張，舊版 deckSearchToHandPost(1) 強制搜 1 張不正確；
+//   保留舊登錄會讓後者覆蓋前者，但這段註解化避免將來誤讀。
 
 // 美錄坦|搬運破爛 — 從牌庫選 1 張寶可夢道具卡加手牌並重洗
 regPre('美錄坦|搬運破爛', (state, _aIdx, _pool) => ({ state, damage: 0 }));
