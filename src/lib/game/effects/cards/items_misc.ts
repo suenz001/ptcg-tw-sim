@@ -1178,3 +1178,70 @@ reg('妨害信函', (st, idx, _pool) => {
   return st;
 });
 
+// ── 豐收漁網（Item / J）── v2.186 ─────────────────────────────────────────────
+// 卡面：「從自己的棄牌區選擇【水】寶可夢卡與『基本【水】能量』卡最多各 3 張，
+//        在給對手看過後放回牌庫並重洗。」
+// 實裝（兩階段 pending）：
+//   1. discard-search 'Pokemon:Water' min=0 max=min(3, count) → 'fishnet-step1'
+//   2. step1 resolver 暫存 picked iids 後，開 'Energy:Water' min=0 max=min(3, count) → 'fishnet-step2'
+//   3. step2 resolver 將兩階段 picked 全部從棄牌移到牌庫並重洗
+// gate：棄牌有 ≥1 張【水】寶可夢 或 基本【水】能量
+regG('豐收漁網', (st, idx, pool) => {
+  const p = st.players[idx];
+  const hasWaterPoke = p.discard.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.pokemonType === 'Water';
+  });
+  const hasBasicWater = p.discard.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name?.includes('【水】');
+  });
+  return hasWaterPoke || hasBasicWater;
+});
+reg('豐收漁網', (st, idx, pool) => {
+  const p = st.players[idx];
+  const waterPokeCount = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.pokemonType === 'Water';
+  }).length;
+  const maxStep1 = Math.min(3, waterPokeCount);
+  st = addLog(st, `豐收漁網：先從棄牌挑選最多 ${maxStep1} 張【水】寶可夢`, idx);
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon:Water', minCount: 0, maxCount: maxStep1,
+    effectKey: 'fishnet-step1',
+  });
+});
+regR('fishnet-step1', (st, idx, iids, _params, pool) => {
+  // 暫存 step1 picked iids，開 step2 選基本【水】能量
+  const p = st.players[idx];
+  const basicWaterCount = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name?.includes('【水】');
+  }).length;
+  const maxStep2 = Math.min(3, basicWaterCount);
+  st = addLog(st, `豐收漁網：再從棄牌挑選最多 ${maxStep2} 張基本【水】能量`, idx);
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Energy:Water', minCount: 0, maxCount: maxStep2,
+    effectKey: 'fishnet-step2',
+    params: { step1Iids: iids },
+  });
+});
+regR('fishnet-step2', (st, idx, iids, params, pool) => {
+  const step1Iids = (params?.step1Iids as string[]) ?? [];
+  const allIids = [...step1Iids, ...iids];
+  if (allIids.length === 0) {
+    return addLog(st, '豐收漁網：未選擇任何卡，效果結束', idx);
+  }
+  const p = st.players[idx];
+  const picks = p.discard.filter(c => allIids.includes(c.iid));
+  const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addLog(st, `豐收漁網：${picks.length} 張（${names}）放回牌庫並重洗`, idx);
+  return updatePlayer(st, idx, pl => ({
+    ...pl,
+    discard: pl.discard.filter(c => !allIids.includes(c.iid)),
+    deck: shuffle([...pl.deck, ...picks]),
+  }));
+});
+

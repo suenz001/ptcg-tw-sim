@@ -49,8 +49,8 @@ v2.176 已實裝：
 - `[10505/H] 配樂之笛` (Item) — 對手牌庫頂 5 任意基礎放對手備戰
 - `[10509/H] 手持循環扇` (Tool) — 受傷時對手能量改附其備戰（互動 picker）
 
-### 需「混合 filter」（2 張）
-- `[18493/J] 豐收漁網` (Item) — 棄牌【水】寶可夢 + 基本【水】能量各 ≤3
+### 需「混合 filter」（已全清）
+- `[18493/J] 豐收漁網` (Item) — ✓ v2.186（items_misc.ts；兩段 discard-search：先選≤3 張【水】寶可夢，再選≤3 張基本【水】能量，合併放回牌庫並重洗）
 - `[14833/I] 巴貝娜與荷蓮娜` — ✓ v2.185（v172_hij_batch.ts；player-level `bagonElenaThisTurn` flag + engine ATTACK KO bonus +3）
 
 ### 需「tag detection + bench-distribute」（已清）

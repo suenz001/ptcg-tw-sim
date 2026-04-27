@@ -1,9 +1,32 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.185)  
+> 最後更新：2026-04-27 (v2.186)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.186 — 豐收漁網（Item / J）
+
+### 卡片實裝
+**豐收漁網**（Item / J）：「從自己的棄牌區選擇【水】寶可夢卡與『基本【水】能量』卡最多各 3 張，在給對手看過後放回牌庫並重洗。」
+
+需要的引擎升級為「混合 filter」——同一張卡要連續挑兩種互斥的型別：寶可夢（屬性=【水】）+ 能量（subtype=Basic 且名稱含【水】），且各 ≤3 張。
+
+### 設計：兩段式 discard-search
+1. `reg('豐收漁網')`：先開 `discard-search` filter='Pokemon:Water' min=0 max=min(3, count)，effectKey='fishnet-step1'。
+2. `regR('fishnet-step1')`：把第一段選好的 iids 存到 pending.params.step1Iids，再開第二個 `discard-search` filter='Energy:Water' min=0 max=min(3, count)，effectKey='fishnet-step2'。
+3. `regR('fishnet-step2')`：合併 step1 + step2 的 iids，把對應卡從 discard 移除、塞回 deck 並 shuffle，並 log 全部選了哪些卡。
+
+### Filter 補丁
+`+page.svelte` 的 discard-search filter 鏈在 `Pokemon:NamePrefix=` 和 `Pokemon:MatchOppName` 之外，補了通用 `Pokemon:<EnergyType>` 規則（line ~1173），這樣 'Pokemon:Water' 才會匹配 supertype=Pokemon 且 pokemonType=Water 的卡。原本只有 deck-search 端有支援這個 prefix。
+
+### regG（可玩 gate）
+和 reg 同步：`p.discard.some(...)` 雙條件 OR——只要棄牌區有【水】寶可夢 *或* 基本【水】能量，就允許打出。否則整張卡失效（避免空效果浪費 item 行動）。
+
+### 進度
+SKIPPED_CARDS.md「混合 filter」章節清空（豐收漁網 + 巴貝娜與荷蓮娜 兩張都實裝）。剩下 17 張需新引擎機制（化石、攻擊注入、進化退化、配樂之笛、力之沙漏、壯偉碩木 chain-evolve、燃料【火】能量等）。
 
 ---
 

@@ -1170,6 +1170,11 @@
           if (f === 'Pokemon')         return card.supertype === 'Pokemon';
           if (f === 'Trainer')         return card.supertype === 'Trainer';
           if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
+          // v2.186：'Pokemon:<EnergyType>' 通用 filter（豐收漁網用）
+          if (f.startsWith('Pokemon:')) {
+            const t = f.slice(8) as EnergyType;
+            return card.supertype === 'Pokemon' && card.pokemonType === t;
+          }
           if (f.startsWith('Energy:')) {
             // e.g., 'Energy:Lightning' = 基本能量 + 指定屬性
             // v2.121：加 name fallback（基本能量 pokemonType 常 undefined）
