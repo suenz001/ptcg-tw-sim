@@ -51,7 +51,7 @@ v2.176 已實裝：
 
 ### 需「混合 filter」（2 張）
 - `[18493/J] 豐收漁網` (Item) — 棄牌【水】寶可夢 + 基本【水】能量各 ≤3
-- `[14833/I] 巴貝娜與荷蓮娜` (Supporter) — gate 場上需有 N 系列特定寶可夢（複雜）
+- `[14833/I] 巴貝娜與荷蓮娜` — ✓ v2.185（v172_hij_batch.ts；player-level `bagonElenaThisTurn` flag + engine ATTACK KO bonus +3）
 
 ### 需「tag detection + bench-distribute」（已清）
 - `[17142/H] 重新啟動箱` — ✓ v2.180（items_misc.ts；discard-search BasicEnergy → 順序分配給未來寶可夢）

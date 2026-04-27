@@ -2488,6 +2488,13 @@ function handlePlaying(
         const isTera = !!atkCard?.tags?.includes('太晶');
         if (isTera) whiteLilyBonus = 1;
       }
+      // v2.185：巴貝娜與荷蓮娜 — 本回合，攻擊方「N 的」寶可夢招式 KO 對手戰鬥位 → +3 獎勵牌。
+      let bagonElenaBonus = 0;
+      if (newState.players[aIdx].bagonElenaThisTurn) {
+        const atkActive = newState.players[aIdx].active;
+        const atkCard = atkActive ? pool.get(atkActive.cardId) : null;
+        if (atkCard?.name?.startsWith('N的')) bagonElenaBonus = 3;
+      }
       // v2.103 古舊能量（ACE SPEC）— 附有此能量的寶可夢被 KO 時，對方獎賞 -1
       let ancientEnergyAdjust = 0;
       const koInst = state.players[dIdx].active;
@@ -2496,7 +2503,7 @@ function handlePlaying(
         if (hasAncient) ancientEnergyAdjust = -1;
       }
       // 獎賞牌下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
-      const prizes = Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + ancientEnergyAdjust);
+      const prizes = Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + ancientEnergyAdjust);
       defPlayers[dIdx] = defenderState;
       newState = {
         ...newState, players: defPlayers,
@@ -2507,6 +2514,9 @@ function handlePlaying(
       }
       if (whiteLilyBonus > 0) {
         newState = addLog(newState, `「白蕾雅」效果發動：太晶寶可夢的招式 KO 對手戰鬥位 +${whiteLilyBonus} 張獎勵牌`, aIdx);
+      }
+      if (bagonElenaBonus > 0) {
+        newState = addLog(newState, `「巴貝娜與荷蓮娜」效果發動：「N 的」寶可夢招式 KO 對手戰鬥位 +${bagonElenaBonus} 張獎勵牌`, aIdx);
       }
       if (prizeAdjust < 0) {
         newState = addLog(newState, `「影藏」啟動：${attacker.name} 取得的獎勵牌減少 1 張`, null);
@@ -3218,7 +3228,8 @@ function handlePlaying(
       currentPlayer.karateKingBonusThisTurn ||
       currentPlayer.unrudaBonusThisTurn ||
       currentPlayer.metalShieldThisTurn ||
-      currentPlayer.cantRetreatIfPoisonedThisTurn
+      currentPlayer.cantRetreatIfPoisonedThisTurn ||
+      currentPlayer.bagonElenaThisTurn
     ) {
       const cp = { ...currentPlayer };
       delete cp.noAttacksThisTurn;
@@ -3231,6 +3242,7 @@ function handlePlaying(
       delete cp.unrudaBonusThisTurn;
       delete cp.metalShieldThisTurn;
       delete cp.cantRetreatIfPoisonedThisTurn;
+      delete cp.bagonElenaThisTurn;
       players[aIdx] = cp;
     } else {
       players[aIdx] = currentPlayer;

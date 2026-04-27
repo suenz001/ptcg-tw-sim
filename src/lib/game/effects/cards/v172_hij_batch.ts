@@ -543,3 +543,36 @@ regR('creepy-bro-strip', (st, idx, iids, _params, pool) => {
     };
   });
 });
+
+// ── 巴貝娜與荷蓮娜（Supporter / I）── v2.185 ──────────────────────────────────
+// 卡面：「這張卡必須自己的場上有『N的達摩狒狒』『N的索羅亞克【ex】』『N的雙倍多多冰』
+//        『N的齒輪怪』『N的萊希拉姆』『N的捷克羅姆』，才可使用。
+//        在這個回合，若對手的戰鬥寶可夢因自己的『N的寶可夢』使用的招式的傷害而【昏厥】了，
+//        則多獲得 3 張獎賞卡。」
+//
+// 實裝：
+//   - Gate（regG）：場上（active+bench）必須**全部**有這 6 種寶可夢
+//   - Effect（reg）：設 player-level flag `bagonElenaThisTurn = true`
+//   - +3 獎賞 hook 在 engine.ts ATTACK KO 區塊（同白蕾雅 pattern）
+//   - END_TURN 清旗標
+const REQUIRED_N_NAMES = [
+  'N的達摩狒狒',
+  'N的索羅亞克ex',
+  'N的雙倍多多冰',
+  'N的齒輪怪',
+  'N的萊希拉姆',
+  'N的捷克羅姆',
+];
+regG('巴貝娜與荷蓮娜', (st, idx, pool) => {
+  const p = st.players[idx];
+  const onField = new Set(
+    [...(p.active ? [p.active] : []), ...p.bench]
+      .map(c => pool.get(c.cardId)?.name)
+      .filter((n): n is string => !!n)
+  );
+  return REQUIRED_N_NAMES.every(n => onField.has(n));
+});
+reg('巴貝娜與荷蓮娜', (st, idx, _pool) => {
+  st = addLog(st, '巴貝娜與荷蓮娜：本回合自己的「N 的」寶可夢招式 KO 對手戰鬥場時 +3 獎賞', idx);
+  return updatePlayer(st, idx, p => ({ ...p, bagonElenaThisTurn: true }));
+});

@@ -306,6 +306,14 @@ export interface PlayerState {
    */
   teraKoBonusPrizeThisTurn?: boolean;
   /**
+   * v2.185：巴貝娜與荷蓮娜（Supporter / I）— 本回合，若對手戰鬥寶可夢因自己的「N 的」寶可夢
+   * 招式 KO，則多取 3 張獎勵牌。打出時設 true，KO 路徑於攻擊方獲獎前檢查此旗標 +
+   * 攻擊方 active.name 以「N的」開頭。在 END_TURN 時清除（於 aIdx 方）。
+   * Gate：場上 6 種特定 N 寶可夢（N的達摩狒狒 / N的索羅亞克ex / N的雙倍多多冰 /
+   *       N的齒輪怪 / N的萊希拉姆 / N的捷克羅姆）必須**全部**在場（active+bench）。
+   */
+  bagonElenaThisTurn?: boolean;
+  /**
    * v2.91：本回合玩家已經使用過的**主動特性名稱**清單（同名特性一回合限 1 次）。
    * 用於：使者衝刺（超級袋獸ex）/ 月光循環（月石）等卡面明寫「在使用了其他
    * 的『XX』的回合，此特性無法使用」的規則。

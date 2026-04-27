@@ -1,9 +1,32 @@
 # PTCG 對戰模擬器 — AI 交接紀錄
 
-> 最後更新：2026-04-26 (v2.184)  
+> 最後更新：2026-04-26 (v2.185)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.185 — 巴貝娜與荷蓮娜（Supporter / I）+ 危險密林規則確認
+
+### 卡片實裝
+**巴貝娜與荷蓮娜**（Supporter / I）：本回合「N 的」寶可夢招式 KO 對手戰鬥位 → +3 獎賞牌。
+
+採白蕾雅（teraKoBonusPrizeThisTurn）pattern：
+- `types.ts` PlayerState 加 `bagonElenaThisTurn?: boolean`
+- `engine.ts` ATTACK KO 區塊新增檢查：若 attacker.name 以「N的」開頭且 flag=true → +3
+- `engine.ts` END_TURN 清旗標
+- `v172_hij_batch.ts` reg/regG：gate 檢查場上**全部 6 種**N 系列寶可夢都在（active+bench）
+
+Gate 採嚴格解讀（卡面列 6 個名字 = 全部都要在場），符合 PTCG 慣例「list all required Pokémon」用法。
+Required: N的達摩狒狒、N的索羅亞克ex、N的雙倍多多冰、N的齒輪怪、N的萊希拉姆、N的捷克羅姆。
+
+### 危險密林規則驗證
+Leon 校對：危險密林（Stadium）+ 桃歹郎劇毒支配（特性）疊加邏輯應為 1+5+2=8 個傷害指示物。
+engine.ts:2769-2774 已正確實裝（中毒 +10 / 危險密林 +20 [非惡] / 劇毒支配 +50）。**無需改 code**。
+
+### 進度
+H/I/J 實裝率：216→217 (+1)，剩 19 張未實裝。
 
 ---
 
