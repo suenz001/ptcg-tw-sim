@@ -194,7 +194,7 @@ const ALAKAZAM_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '14056', count: 4 },  // 凱西 (M1S)
     { cardId: '14057', count: 4 },  // 勇基拉 (M1S)
     { cardId: '14058', count: 4 },  // 胡地 (M1S) — 特性精神抽出、招式手之力量
-    { cardId: '17045', count: 3 },  // 土龍弟弟 (MC)
+    { cardId: '12165', count: 3 },  // 土龍弟弟 (SVM 095/175) — Leon v2.224 統一
     { cardId: '11655', count: 3 },  // 土龍節節 (SV8a) — 非 ex 版；4 張效果相同，任選其一
     { cardId: '14692', count: 1 },  // 可達鴨 (M2a) — 特性濕氣
     { cardId: '16255', count: 1 },  // 謝米 (M2a 012/193) — 特性花之帷幔（備戰免招式傷害）
@@ -415,7 +415,7 @@ const MEGA_LUCARIO_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '16842', count: 2 }, // 月石 (MC)
     { cardId: '14752', count: 3 }, // 超級路卡利歐ex (M2a)
     { cardId: '16850', count: 4 }, // 利歐路 (MC)
-    { cardId: '17045', count: 3 }, // 土龍弟弟 (MC) — Leon 指定
+    { cardId: '12165', count: 3 }, // 土龍弟弟 (SVM 095/175) — Leon v2.224 統一
     { cardId: '17046', count: 1 }, // 土龍節節ex (MC) — Leon 指定
     { cardId: '11655', count: 2 }, // 土龍節節 (SV8a)
     // ── 訓練家・物品（21 張）──
@@ -500,7 +500,7 @@ const ALLOY_BRIDGE_DRAGON_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '14003', count: 1 }, // 超級大嘴娃ex (M1L 046)
     { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489)
     { cardId: '18038', count: 1 }, // 喵喵ex (M3 061)
-    { cardId: '17045', count: 4 }, // 土龍弟弟 (MC 574)
+    { cardId: '12165', count: 4 }, // 土龍弟弟 (SVM 095/175) — Leon v2.224 統一
     { cardId: '14465', count: 3 }, // 土龍節節 (M-P 045)
     { cardId: '17046', count: 1 }, // 土龍節節ex (MC 575)
     { cardId: '14799', count: 2 }, // 旋轉洛托姆 (M2a 139) — 風扇呼喚首回合搜無屬
@@ -947,7 +947,7 @@ const MEGA_LOPUNNY_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '14389', count: 2 }, // 捲捲耳 (M2 071/080) — Leon v2.148 確認 HP=70
     { cardId: '17046', count: 1 }, // 土龍節節ex (MC 575/742)
     { cardId: '9827',  count: 3 }, // 土龍節節 (SV5K 057/071) — 逃跑抽出 Stage1
-    { cardId: '17045', count: 4 }, // 土龍弟弟 (MC 574/742) — Leon v2.148 確認 HP=70
+    { cardId: '12165', count: 4 }, // 土龍弟弟 (SVM 095/175) — Leon v2.224 統一
     { cardId: '10975', count: 1 }, // 旋轉洛托姆 (SV7 080/102) — 風扇呼喚 ability
     { cardId: '16758', count: 2 }, // 莉莉艾的皮皮ex (MC 287/742) — 妖精領域
     { cardId: '14692', count: 1 }, // 可達鴨 (M2a 032/193) — 濕氣 ability
@@ -1067,7 +1067,7 @@ const DUDUNSPARCE_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '17017', count: 4 }, // 多龍梅西亞 (MC 546/742)
     { cardId: '17018', count: 4 }, // 多龍奇 (MC 547/742)
     { cardId: '17019', count: 3 }, // 多龍巴魯托ex (MC 548/742)
-    { cardId: '12540', count: 2 }, // 土龍弟弟 (SV9 078/100)
+    { cardId: '12165', count: 2 }, // 土龍弟弟 (SVM 095/175) — Leon v2.224 統一
     { cardId: '9827',  count: 1 }, // 土龍節節 (SV5K 057/071)
     { cardId: '17046', count: 1 }, // 土龍節節ex (MC 575/742)
     { cardId: '16829', count: 2 }, // 願增猿 (MC 358/742)

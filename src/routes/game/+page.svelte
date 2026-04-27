@@ -2144,9 +2144,17 @@
           if (!attacker) break;
           const atkCard = pool.get(attacker.cardId);
           const etype: EnergyType = atkCard?.pokemonType ?? 'Colorless';
+          // v2.224 — 沒有造成傷害的招式（如猛雷鼓ex｜濺射咆哮：棄手牌重抽）
+          //   不該觸發攻擊動畫（shake + flash 視覺效果只用在會造成傷害的招式）。
+          //   gate：依招式 attack.damage（'' / '0' / 0 → 視為無傷害）。
+          const atkData = atkCard?.attacks?.[action.attackIndex];
+          const rawDmg = (atkData?.damage ?? '').toString().trim();
+          const isZeroDamage = rawDmg === '' || rawDmg === '0';
           playSfx(`attack-${etype}` as `attack-${EnergyType}`);
-          const defender = next.players[1 - aIdx].active;
-          triggerAttackFx(aIdx as 0 | 1, attacker.iid, defender?.iid ?? null, etype);
+          if (!isZeroDamage) {
+            const defender = next.players[1 - aIdx].active;
+            triggerAttackFx(aIdx as 0 | 1, attacker.iid, defender?.iid ?? null, etype);
+          }
           break;
         }
         case 'TAKE_PRIZES':

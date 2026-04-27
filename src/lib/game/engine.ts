@@ -4254,6 +4254,11 @@ export function getUsableAbilities(
         });
         if (!hasFightEnergy) return;
       }
+      // v2.224 風扇呼喚（旋轉洛托姆）：「只有在自己的最初回合可使用 1 次」
+      //   先攻最初回合 = turn 1；後攻最初回合 = turn 2。turn > 2 時不論先/後攻
+      //   都已過了最初回合，按鈕直接隱藏。
+      //   （USE_ABILITY 必然 active player == 持卡方，所以不需另判 firstPlayerIdx）
+      if (ab.name === '風扇呼喚' && state.turn > 2) return;
       // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。
       // 條件：對手在他們剛結束的回合取過獎賞（TurnStart < LastTurnEnd）。
       // 不允許：自己回合內的自 KO（如黑夜魔靈 咒詛炸彈）— 此時 TurnStart == LastTurnEnd。
