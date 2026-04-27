@@ -10,22 +10,24 @@ service cloud.firestore {
 
     // ── 玩家基本資料與登入追蹤 ──────────────────────────────────────────────
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if isAdmin();
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if isAdmin();
       
       // 玩家的牌組
       match /decks/{deckId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-        allow read, write: if isAdmin();
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if isAdmin();
       }
     }
 
     // ── 意見回饋 ──────────────────────────────────────────────────────────
     match /feedbacks/{feedbackId} {
-      // 允許任何人（包含未登入）新增意見，但不能修改或刪除
-      allow create: if true;
-      // 只有管理員能讀取和管理
-      allow read, update, delete: if isAdmin();
+      // 允許任何人（包含未登入）新增與讀取意見（暫時開放給後台無須登入）
+      allow create, read: if true;
+      // 只有管理員能修改或刪除
+      allow update, delete: if isAdmin();
     }
 
     // ── 線上對戰房間 ──────────────────────────────────────────────────────
