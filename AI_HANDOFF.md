@@ -1,9 +1,60 @@
-# PTCG 對戰模擬器 — AI 交接紀錄
+# PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.202)  
+> 最後更新：2026-04-27 (v2.203)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.203 — 品牌重塑、版權聲明、全螢幕支援
+
+本版由 Anthropic Claude 執行，涵蓋 4 個 commit。
+
+### 1. 首頁品牌重塑（避免侵權）
+- **標題**：`PTCG 對戰模擬器` → **`PTCG 實體賽事演練引擎`**
+- **副標題**：`Server-authoritative online battle simulator · 伺服器權威對戰` → **`Deck building testing and card database 牌組構築測試與卡牌資料庫`**
+- **對戰區塊**：`⚔️ 對戰 → 開始對戰` → `⚔️ 對戰演練 → 開始演練（牌組實戰測試）`
+- **移除**：「連線狀態」區塊（Firebase 專案 / 匿名 ID 等）、「開發路線圖」區塊（M0-M5）
+  - Firebase auth 仍在背景正常運作，只是不再顯示於首頁
+- **`app.html` 同步更新**：`<title>` 和 `<meta description>` 改為新名稱
+
+### 2. 版權免責聲明
+- 首頁底部新增 `<footer class="disclaimer">`，三段式聲明：
+  1. 粉絲非營利專案聲明
+  2. 智慧財產權歸屬（The Pokémon Company / Nintendo / Creatures / GAME FREAK）
+  3. 「聯絡我們」→ `mailto:suenz001@yahoo.com.tw`
+- 樣式：小字灰色（`0.8rem / #888`），上方有 `border-top` 分隔
+
+### 3. 背景色閃爍修正
+- **問題**：跨頁導航時 body 背景在墨綠色（`#162816`，/game 頁）和白色（其他頁）之間閃爍
+- **原因**：每頁各自用 `:global(body)` 設定背景，SvelteKit client-side navigation 時殘留前一頁的值
+- **解法**：在 `+layout.svelte` 加入 `body { background: #f4f4f6 }` baseline，所有頁面預設白底；/game 頁的深綠會覆蓋此值
+- **歷史**：v2.138 曾加過類似 baseline 但被 v2.144 移除（因當時造成 game 頁雙色），本次重新加回並加了解釋註解
+
+### 4. 手機全螢幕支援（iOS Safari 分頁列問題）
+- **問題**：iOS Safari 橫屏時頂部分頁列 + 底部工具列吃掉 ~50-80px，遊戲畫面被擠壓
+- **解法（三層防禦）**：
+
+| 方案 | 檔案 | 做法 |
+|------|------|------|
+| Fullscreen API 按鈕 | `game/+page.svelte` | 對戰 header 新增「⛶ 全螢幕」按鈕，支援 `requestFullscreen` + `webkitRequestFullscreen` |
+| iOS PWA meta | `app.html` | `apple-mobile-web-app-capable=yes` + `black-translucent` status bar |
+| viewport 鎖定 | `app.html` | `viewport-fit=cover` + `maximum-scale=1` + `user-scalable=no` |
+
+- **iOS 已知限制**：Apple 不完整支援 Fullscreen API（僅 iPad video），手機上建議用「加入主畫面」(PWA) 方式全螢幕
+- **新增程式碼**：
+  - `toggleFullscreen()` 函式 + `isFullscreen` reactive state
+  - `onMount` 監聽 `fullscreenchange` / `webkitfullscreenchange` 事件
+  - `.fs-chip` CSS（藍色系按鈕，與其他 chip 一致）
+
+### 檔案變更清單
+| 檔案 | 變更 |
+|------|------|
+| `src/app.html` | 新增 iOS PWA meta、viewport-fit、更新 title/description |
+| `src/routes/+page.svelte` | 品牌重塑 + 移除區塊 + 版權聲明 footer |
+| `src/routes/+layout.svelte` | body baseline 背景色 |
+| `src/routes/game/+page.svelte` | 全螢幕 toggle 函式 + 按鈕 + CSS |
 
 ---
 
