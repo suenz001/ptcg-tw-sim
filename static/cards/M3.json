@@ -2893,7 +2893,20 @@
     "scrapedAt": "2026-04-16T08:26:19.943Z",
     "rulesText": "附有這張卡的「超級基格爾德【ex】」可使用這張卡上寫的招式。[需要有足夠使用招式的能量。]\n\n將這隻寶可夢身上附加的能量卡全部丟棄。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "J"
+    "regulationMark": "J",
+    "attacks": [
+      {
+        "name": "大地光炮",
+        "cost": [
+          "Fighting",
+          "Fighting",
+          "Fighting",
+          "Fighting"
+        ],
+        "damage": "350",
+        "effect": "將這隻寶可夢身上附加的能量卡全部丟棄。"
+      }
+    ]
   },
   {
     "id": "18050",

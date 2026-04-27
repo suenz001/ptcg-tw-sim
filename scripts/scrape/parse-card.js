@@ -382,6 +382,27 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
       .filter(Boolean);
     if (effectParts.length) card.rulesText = effectParts.join('\n\n');
 
+    // v2.213：PokemonTool 上寫的招式
+    // 卡面：「附有這張卡的寶可夢，可使用這張卡上寫的招式」（招式學習器 螢石 / 核心記憶碟 etc.）
+    // 官網 .skillInformation .skill 結構：
+    //   - 第 1 個 .skill 通常 skillName=空 → 道具規則文字（已被 rulesText 收）
+    //   - 第 2+ 個 .skill skillName 非空 + cost/damage/effect → 寶可夢可施放的招式
+    // 要求 supertype/subtype 已先分類（在上方 classifyTrainerOrEnergyByH3 完成）
+    if (card.supertype === 'Trainer' && card.subtype === 'PokemonTool') {
+      const toolAttacks = [];
+      $('.skillInformation .skill').each((_, el) => {
+        const $el = $(el);
+        const rawName = $el.find('.skillName').text().trim().replace(/‌/g, '');
+        if (!rawName) return; // 空名 = 道具規則文字 block，跳過
+        const damage = $el.find('.skillDamage').text().trim();
+        const costImgs = $el.find('.skillCost img');
+        const cost = energiesFromImages($, costImgs);
+        const effect = $el.find('.skillEffect').text().trim();
+        toolAttacks.push({ name: rawName, cost, damage, effect });
+      });
+      if (toolAttacks.length) card.attacks = toolAttacks;
+    }
+
     // Trainer 冠名卡打 tag（能量不判定）
     if (card.supertype === 'Trainer' && isTrainerBranded(card.name)) {
       card.tags = card.tags || [];

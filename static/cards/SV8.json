@@ -4157,7 +4157,19 @@
     "scrapedAt": "2026-04-16T08:00:17.111Z",
     "rulesText": "附有這張卡的寶可夢，可使用這張卡上寫的招式。[需要有足夠使用招式的能量。]將附於寶可夢身上的這張卡，在自己的回合結束時丟棄。\n\n將這隻寶可夢身上附加的能量卡全部丟棄，將自己的所有「太晶」寶可夢的HP全部恢復。",
     "illustrator": "Studio Bora Inc.",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "attacks": [
+      {
+        "name": "螢石",
+        "cost": [
+          "Grass",
+          "Water",
+          "Psychic"
+        ],
+        "damage": "",
+        "effect": "將這隻寶可夢身上附加的能量卡全部丟棄，將自己的所有「太晶」寶可夢的HP全部恢復。"
+      }
+    ]
   },
   {
     "id": "11282",
