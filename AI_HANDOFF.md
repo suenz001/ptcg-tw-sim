@@ -1,9 +1,23 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.246)  
+> 最後更新：2026-04-28 (v2.247)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.247 — KO cause tracking 補完：批次 bench 招式 helper
+
+v2.246 漏了兩個批次 helper（hitBenchAll / bench-hit-N resolver）的 recordOppKO instrumentation。
+這兩個 helper 被許多卡用到（例：宇宙終結射線、零之大空洞 啟動傷、捏捏軟糖、各種 bench-AOE 招式），
+原本 KO 後只走 pendingPrizes 累計、沒登錄 cause counter。
+
+修法：每隻 KO 都呼叫 `recordOppKO(s, targetIdx, card, 'attack')`（self-bench KO 由 helper 內部 self-skip 過濾）。
+batch helper 內維護 `koCards: (Card | undefined)[]` array，KO log 寫完後逐個記錄。
+
+### Build
+✅ `npm run build` 通過（prod 16.26s）
 
 ---
 

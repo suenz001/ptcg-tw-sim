@@ -445,6 +445,7 @@ function hitBenchAll(
   const newBench: CardInstance[] = [];
   const koDiscards: CardInstance[] = [];
   const koNames: string[] = [];
+  const koCards: (Card | undefined)[] = [];  // v2.246 KO cause tracking
 
   for (const c of target.bench) {
     const card = pool.get(c.cardId);
@@ -457,6 +458,7 @@ function hitBenchAll(
       for (const prev of c.evolvedFromStack ?? []) koDiscards.push(prev);
       if (card) morePrizes += koPrizeCount(card);
       koNames.push(card?.name ?? '?');
+      koCards.push(card);
     } else {
       newBench.push({ ...c, damage: newDmg });
     }
@@ -475,6 +477,10 @@ function hitBenchAll(
   if (koNames.length > 0) {
     s = addLog(s, `${attackLabel}：${koNames.join('、')} 被擊倒，${state.players[attackerIdx].name} 額外取得 ${morePrizes} 張獎勵牌`, null);
     s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + morePrizes };
+    // v2.246 KO cause tracking — 每隻 KO 都登錄為招式 KO（self-KO 由 recordOppKO 內部 skip）
+    for (const card of koCards) {
+      s = recordOppKO(s, targetIdx, card, 'attack');
+    }
   }
   return s;
 }
@@ -532,6 +538,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   const koDiscards: CardInstance[] = [];
   const hitNames: string[] = [];
   const koNames: string[] = [];
+  const koCards: (Card | undefined)[] = [];  // v2.246 KO cause tracking
   const hitSet = new Set(selectedIids);
 
   for (const c of target.bench) {
@@ -546,6 +553,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
       for (const prev of c.evolvedFromStack ?? []) koDiscards.push(prev);
       if (card) morePrizes += koPrizeCount(card);
       koNames.push(card?.name ?? '?');
+      koCards.push(card);
     } else {
       newBench.push({ ...c, damage: newDmg });
       hitNames.push(card?.name ?? '?');
@@ -562,6 +570,10 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   if (koNames.length > 0) {
     s = addLog(s, `${label}：${koNames.join('、')} 被擊倒，${st.players[actorIdx].name} 額外取得 ${morePrizes} 張獎勵牌`, null);
     s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + morePrizes };
+    // v2.246 KO cause tracking — 每隻 KO 都登錄為招式 KO（self-KO 由 recordOppKO 內部 skip）
+    for (const card of koCards) {
+      s = recordOppKO(s, targetIdx, card, 'attack');
+    }
   }
   return s;
 });
