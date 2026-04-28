@@ -341,14 +341,16 @@ regR('top-catcher-opp', (st, idx, iids, _params, pool) => {
 //   v3 hole：TurnStart 是 finalize 後（= checkup 之後）的 snapshot，所以中毒/灼傷/
 //           冰冷之帳等寶可夢檢查階段 KO 也會被誤算成「對手回合 KO」。但 PTCG 規則：
 //           寶可夢檢查不屬於任何玩家的回合，這些 KO 不該觸發本卡。
-// v2.245 fix（最終版）：
-//   改用 oppPrizesAtMainEnd（main phase 結束、checkup *之前* 的 snapshot）。
-//   gate：MainEnd < LastTurnEnd → 對手在 main phase 取過獎賞（招式 / 主動特性 KO）。
-//   checkup KO 不會修改 MainEnd，所以中毒/灼傷/冰冷之帳 不會誤觸發。
+//   v3 hole 仍存在：MainEnd snapshot 只區分「對手主回合 KO」vs「checkup KO」，但無法
+//                  區分「招式 KO」vs「主動特性 KO」。雖然不公印章卡面不嚴格要求區分，
+//                  但 v2.246 仍升級為精確 cause tracking 統一機制。
+// v2.246 fix（最終版）：使用 KO cause tracking counter
+//   合法觸發：對手主回合中的「招式 KO」+「主動特性 KO」（含 黑夜魔靈|咒詛炸彈）
+//   排除：checkup KO（中毒/灼傷/冰冷之帳）+ 自 KO（自己 main phase 自爆）
 regG('不公印章', (st, idx) => {
-  const lastEnd = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
-  const mainEnd = st.oppPrizesAtMainEnd?.[idx] ?? 6;
-  return mainEnd < lastEnd;
+  const attackKO = st.oppAttackKOdMeInLastOppTurn?.[idx] ?? 0;
+  const abilityKO = st.oppAbilityKOdMeInLastOppTurn?.[idx] ?? 0;
+  return (attackKO + abilityKO) > 0;
 });
 reg('不公印章', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;

@@ -1,9 +1,105 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-27 (v2.215)  
+> 最後更新：2026-04-28 (v2.246)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.246 — 完整 KO cause tracking（招式 vs 對手主動特性）
+
+### 背景：v2.245 修了「寶可夢檢查 phase 不算對手回合」的 snapshot bug 後，Leon 指出更深一層問題
+
+PTCG 卡面有兩類嚴格區分：
+1. 「上個對手的回合，自己的寶可夢昏厥了」→ attack + ability 都算（不公印章/扭轉乾坤/八朔/阿波羅）
+2. **「因招式的傷害昏厥的寶可夢」→ 只有 attack 算**（鐵斑葉|復仇刀鋒、普隆隆姆|捲土重來、古玉魚|嫉妒業火）
+
+舊版用 prizes-delta 推 KO 數，無法區分招式 vs 特性。Leon 明示：「我要做到完全嚴格需要追蹤每次 KO 的 cause」。
+
+### 引擎核心：8 個 GameState counter + recordOppKO helper
+
+**types.ts 新增 8 個欄位：**
+```ts
+oppAttackKOdMeThisTurn?: [number, number];        // 本回合內被對手招式 KO 計數 [P0, P1]
+oppAbilityKOdMeThisTurn?: [number, number];       // 本回合內被對手主動特性 KO 計數
+oppAttackKOdMyRocketThisTurn?: [number, number];  // 火箭隊寶可夢 attack KO（阿波羅 gate 用）
+oppAbilityKOdMyRocketThisTurn?: [number, number]; // 火箭隊寶可夢 ability KO
+// 對應 4 個 InLastOppTurn 變體（END_TURN snap+reset）
+```
+
+**effects/_shared.ts: recordOppKO helper**
+```ts
+recordOppKO(state, victimIdx, victimCard, cause: 'attack' | 'ability')
+```
+- 若 victimIdx === activePlayerIndex（自 KO）→ skip（自己回合 KO 自己不算）
+- 自動偵測 `victimCard.name.startsWith('火箭隊的')` → 同步累計 MyRocket counter
+- victim 視角：dIdx 收到 KO，所以 next[dIdx]++
+
+### END_TURN snap+reset 機制（engine.ts）
+END_TURN handler 入口（在 checkup phase 前）做：
+```ts
+oppAttackKOdMeInLastOppTurn = oppAttackKOdMeThisTurn;
+oppAttackKOdMeThisTurn = [0, 0];
+// 4 個 counter 同步處理
+```
+
+這保留「上個對手回合的 KO 計數」給下個自己回合的 gate 使用。
+
+### KO 點 instrument（全套）
+
+**engine.ts:**
+- Main attack KO（line ~2800）→ `recordOppKO(s, dIdx, defenderCard, 'attack')`
+- KO sanity sweep（lines 1130, 1148）→ `'attack'`
+
+**effects.ts inline KO（全部 'attack'）:**
+- 烏鴉頭頭|狙擊羽毛 active + bench resolver（684, 746）
+- 皮卡丘|電磁電光 active + bench resolver（3919, 4180）
+- 謝米|精刺奇襲 resolver（4018）
+- 由克希|痛楚記憶 / 伊裴爾塔爾|侵蝕之風 applyDamageToAllOpp 雙路徑（4239, 4265）
+- 綿綿泡芙|悄聲加害 active + resolver（4338, 4386）
+- 落雷風暴系列 snipe-variable + 戰鬥場直擊（4625, 4682）
+- swap-then-KO（5125）— 通用 swap-followed-by-damage helper
+- 棄世猴|同命戰鬥（5253）— 對手 KO 部分（自己 KO 部分自然由 recordOppKO self-skip 過濾）
+- 雙斧戰龍|斧擊在地（5322）
+- 多龍巴魯托ex|幻影奇襲 dragapult-snipe resolver（5427）
+- snipe-multi（鐵斑葉|復仇刀鋒等的群擊）（6495）
+- 轟鳴月ex|瘋癲攻擊（7017）— KO 對手部分（自爆部分不記）
+- 冰伊布ex|藍柱石（resolveLanzhushi 共用 helper）（7125）
+- snipeAllOppExPost（針對 ex/V 的群擊）（7714）
+- forceOppSwapDmgPost 兩路徑（8590, 8662）
+- clone-strike-multi-hit（10832）— 大吼大叫/三色炮/分身連打 共用 resolver
+
+**effects.ts 對手主動特性 KO（'ability'）:**
+- cursed-bomb resolver（黑夜魔靈|咒詛炸彈）
+
+**effects/cards/maroon_dragon_deck.ts:**
+- 願增猿|腎上腺腦力 → `'ability'`（對手主動特性 KO）
+
+**effects/cards/abra_mawile_deck.ts:**
+- 胡地|手之力量 → `'attack'`（招式效果 KO，仍屬招式）
+
+**effects/cards/mega_decks.ts:**
+- 奧利瓦ex|油之機關槍（oliva-six-counters resolver）→ `'attack'`
+
+### 7 張卡的 gate 統一改用新 counter
+
+**全範圍 gate（attack + ability）:**
+- 不公印章（items_misc.ts）
+- 八朔（effects.ts）
+- 吉雉雞ex|扭轉乾坤（effects.ts + engine.ts getUsableAbilities 雙處）
+- 火箭隊的阿波羅（用 MyRocket 變體）
+
+**只算招式 gate（卡面寫「因招式」）:**
+- 鐵斑葉|復仇刀鋒
+- 普隆隆姆|捲土重來
+- 古玉魚|嫉妒業火
+
+### 寶可夢檢查 phase 仍不記錄
+雪妖女|冰冷之帳、毒/灼傷的 checkup hook **絕對不**呼叫 recordOppKO — 保留 v2.245 的 mainEnd snapshot 機制處理 prize-based gate（雖然新 counter 也不會誤算了，但雙保險）。
+
+### Build
+✅ `npm run build` 通過（prod 16.24s）
 
 ---
 

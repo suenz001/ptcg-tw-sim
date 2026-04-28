@@ -12,7 +12,7 @@ import type { CardInstance, PlayerState, GameState } from '../../types';
 import {
   reg, regR, regG, regA, regPre, regPost,
   addLog, updatePlayer, withPending, shuffle, discardHand,
-  healResolver,
+  healResolver, recordOppKO,
 } from '../_shared';
 import { hitBenchPickPost } from '../../effects';
 
@@ -618,6 +618,8 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
         };
       }
       s = { ...s, players };
+      // v2.246：油之機關槍 = 招式 KO
+      s = recordOppKO(s, dIdx, targetCard, 'attack');
     } else {
       const players = [...s.players] as [PlayerState, PlayerState];
       const newDef = { ...defender };

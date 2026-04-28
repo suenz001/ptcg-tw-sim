@@ -23,6 +23,7 @@ import {
   reg, regR, regG, regA,
   BENCH_PLACE_TRIGGERS,
   addLog, drawCards, updatePlayer, returnHandToDeck, withPending,
+  recordOppKO,
 } from '../_shared';
 import {
   findAbilityUserIid,
@@ -217,6 +218,8 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
     s = addLog({ ...s, players },
       `腎上腺腦力：在 ${targetCard?.name ?? '?'} 身上放 ${amount} 傷害 → 被擊倒！+${prizes} 張獎勵牌`, actorIdx);
     s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
+    // v2.246：腎上腺腦力是「對手主動特性 KO」
+    s = recordOppKO(s, dIdx, targetCard, 'ability');
     if (isActive && newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx,
         winReason: `${defender.name} 沒有可上場的寶可夢` };

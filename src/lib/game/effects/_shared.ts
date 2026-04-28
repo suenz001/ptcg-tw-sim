@@ -299,6 +299,50 @@ export function sameEvoName(a: string | undefined, b: string | undefined): boole
 }
 
 /**
+ * v2.246 完整 KO cause tracking — 統一 KO 記錄入口。
+ *
+ * 在每個 KO 發生點呼叫此 helper，會更新對應的 thisTurn counter
+ * （oppAttackKOdMeThisTurn / oppAbilityKOdMeThisTurn 等）。
+ *
+ * 規則：
+ * 1. 自 KO（victimIdx === activePlayerIndex）不計入 — 因為「對手主動 KO 我方」要求 attacker ≠ victim
+ * 2. 寶可夢檢查階段 KO（中毒/灼傷/冰冷之帳 等）— **不要呼叫此 helper**，這是 checkup phase
+ * 3. cause 'attack' = 招式造成傷害 KO；cause 'ability' = 主動特性 KO
+ *
+ * 用法範例：
+ *   s = recordOppKO(s, dIdx, defenderCard, 'attack', pool);  // 招式 KO 對手
+ *   s = recordOppKO(s, dIdx, targetCard, 'ability', pool);   // 咒詛炸彈 KO 對手
+ */
+export function recordOppKO(
+  state: GameState,
+  victimIdx: 0 | 1,
+  victimCard: Card | undefined,
+  cause: 'attack' | 'ability',
+): GameState {
+  // 自 KO：攻擊方 KO 自己的寶可夢（咒詛炸彈自爆等） — 不算入「對手主動 KO 我方」
+  if (state.activePlayerIndex === victimIdx) return state;
+  const isRocket = victimCard?.supertype === 'Pokemon'
+    && (victimCard.name?.startsWith('火箭隊的') ?? false);
+  const fieldKey: keyof GameState = cause === 'attack'
+    ? 'oppAttackKOdMeThisTurn'
+    : 'oppAbilityKOdMeThisTurn';
+  const rocketKey: keyof GameState = cause === 'attack'
+    ? 'oppAttackKOdMyRocketThisTurn'
+    : 'oppAbilityKOdMyRocketThisTurn';
+  const cur = ((state[fieldKey] as [number, number] | undefined) ?? [0, 0]);
+  const next: [number, number] = [cur[0], cur[1]];
+  next[victimIdx]++;
+  let s: GameState = { ...state, [fieldKey]: next };
+  if (isRocket) {
+    const curR = ((s[rocketKey] as [number, number] | undefined) ?? [0, 0]);
+    const nextR: [number, number] = [curR[0], curR[1]];
+    nextR[victimIdx]++;
+    s = { ...s, [rocketKey]: nextR };
+  }
+  return s;
+}
+
+/**
  * v2.244 通用 helper：清掉 activeStadium 並丟回擁有者棄牌堆。
  * 一律用 state.activeStadiumOwnerIdx；若該欄位缺失則 fallback 到 fallbackIdx（觸發方）。
  * 同時清掉 stadiumUsedThisTurn / activeStadiumOwnerIdx，符合 PTCG「stadium 離場」規則。

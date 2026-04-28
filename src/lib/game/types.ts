@@ -483,6 +483,35 @@ export interface GameState {
    */
   oppPrizesAtMyTurnStart?: [number, number];
   /**
+   * v2.246：完整 KO cause tracking — 區分「對手用招式 KO」vs「對手用主動特性 KO」。
+   *
+   * PTCG 規則情境（從 victim 視角）：
+   *   - 招式 KO：對手用招式造成的傷害（含弱抗、tool 加成、反彈傷害）使我方寶可夢 KO
+   *   - 主動特性 KO：對手用主動特性（如黑夜魔靈|咒詛炸彈、願增猿|腎上腺腦力）KO 我方寶可夢
+   *   - checkup KO：寶可夢檢查階段（中毒、灼傷、checkup 觸發特性如冰冷之帳）— **不算**
+   *   - 自 KO：自己 KO 自己的寶可夢（攻擊方自爆）— **不算**「對手 KO 我方」
+   *
+   * 用途：
+   *   - 4 張原始觸發條件（扭轉乾坤、不公印章、八朔、阿波羅）：
+   *     attackKOd + abilityKOd > 0 → 條件滿足
+   *   - 3 張 revenge-damage（復仇刀鋒、捲土重來、嫉妒業火）卡面寫「因招式的傷害昏厥」：
+   *     attackKOd > 0（嚴格只算招式）
+   *   - 阿波羅另需 rocket 計數（victim 為「火箭隊的」寶可夢）
+   *
+   * 計數時機：每次 attack/ability KO 在 engine 內呼叫 recordOppKO helper
+   *   （效果產生 KO 即記，與 prize 計算同步）。
+   * Snapshot：END_TURN handler 開頭（checkup *之前*）將 thisTurn → InLastOppTurn 並 reset。
+   */
+  oppAttackKOdMeThisTurn?: [number, number];     // 對手用招式 KO 我方寶可夢的計數（victim 視角）
+  oppAbilityKOdMeThisTurn?: [number, number];    // 對手用主動特性 KO 我方寶可夢的計數
+  oppAttackKOdMyRocketThisTurn?: [number, number];  // 同上但只計火箭隊寶可夢
+  oppAbilityKOdMyRocketThisTurn?: [number, number]; // 同上但只計火箭隊寶可夢
+  // 對手剛結束回合的 snapshot（在 END_TURN 開頭、checkup 之前 snap）
+  oppAttackKOdMeInLastOppTurn?: [number, number];
+  oppAbilityKOdMeInLastOppTurn?: [number, number];
+  oppAttackKOdMyRocketInLastOppTurn?: [number, number];
+  oppAbilityKOdMyRocketInLastOppTurn?: [number, number];
+  /**
    * v2.245：對手剛結束回合的「主回合結束時」（寶可夢檢查 *之前*）的對手獎賞張數快照 [P1, P2]。
    *
    * PTCG 規則：「上個對手的回合自己的寶可夢昏厥了才可使用」這類觸發條件

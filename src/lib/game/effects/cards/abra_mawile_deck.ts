@@ -27,6 +27,7 @@ import {
   reg, regR, regG, regPre, regPost, regA,
   type AttackPostFn,
   shuffle, updatePlayer, addLog, drawCards, withPending,
+  recordOppKO,
 } from '../_shared';
 import {
   selfSwapPost, skipDefEffectsPre, countOppPokemon, koPrizeCount,
@@ -85,6 +86,8 @@ regPost('胡地|手之力量', (state, aIdx, pool) => {
       aIdx
     );
     s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
+    // v2.246：手之力量是招式 KO
+    s = recordOppKO(s, dIdx, defCard, 'attack');
     if (players[dIdx].bench.length === 0) {
       return { ...s, phase: 'game-over', winner: aIdx,
         winReason: `${defender.name} 沒有可上場的寶可夢` };

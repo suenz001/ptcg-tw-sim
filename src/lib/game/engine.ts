@@ -318,7 +318,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
-import { sameEvoName } from './effects/_shared';
+import { sameEvoName, recordOppKO } from './effects/_shared';
 export { sameEvoName };
 
 /**
@@ -877,6 +877,15 @@ export function createGame(
     oppPrizesAtMyTurnStart: [6, 6],
     oppPrizesAtMainEnd: [6, 6], // v2.245 主回合結束 snapshot（不含 checkup）
     rocketInMyDiscardAtMainEnd: [0, 0], // v2.245 主回合結束 snapshot（火箭隊寶可夢數）
+    // v2.246 完整 KO cause tracking
+    oppAttackKOdMeThisTurn: [0, 0],
+    oppAbilityKOdMeThisTurn: [0, 0],
+    oppAttackKOdMyRocketThisTurn: [0, 0],
+    oppAbilityKOdMyRocketThisTurn: [0, 0],
+    oppAttackKOdMeInLastOppTurn: [0, 0],
+    oppAbilityKOdMeInLastOppTurn: [0, 0],
+    oppAttackKOdMyRocketInLastOppTurn: [0, 0],
+    oppAbilityKOdMyRocketInLastOppTurn: [0, 0],
     stadiumPlayedThisTurn: [false, false],
   };
 
@@ -1120,6 +1129,8 @@ function sanityKOSweep(
       player.active = null;
       if (card) prizesAcc += prizesForKO(card);
       s = addLog(s, `⚠️ KO sanity sweep：${card?.name ?? '?'} 被擊倒（戰鬥場，傷害 ${ko.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
+      // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
+      s = recordOppKO(s, dIdx, card, 'attack');
     }
   }
   // bench
@@ -1137,6 +1148,8 @@ function sanityKOSweep(
       player.discard = [...player.discard, ...koDiscard];
       if (card) prizesAcc += prizesForKO(card);
       s = addLog(s, `⚠️ KO sanity sweep：${card?.name ?? '?'} 被擊倒（備戰位，傷害 ${b.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
+      // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
+      s = recordOppKO(s, dIdx, card, 'attack');
     } else {
       newBench.push(b);
     }
@@ -2803,6 +2816,8 @@ function handlePlaying(
         ...newState, players: defPlayers,
         pendingPrizes: prizes, turnPhase: 'end',
       };
+      // v2.246 KO cause tracking — 招式 KO 對手戰鬥位
+      newState = recordOppKO(newState, dIdx, defenderCard, 'attack');
       if (deferredBonus > 0) {
         newState = addLog(newState, `${defenderCard.name} 因「多餘花粉」遺留效果，+${deferredBonus} 張獎勵牌`, null);
       }
@@ -3106,6 +3121,16 @@ function handlePlaying(
         ...state,
         oppPrizesAtMainEnd: newMainEnd,
         rocketInMyDiscardAtMainEnd: newRocketMainEnd,
+        // v2.246 KO cause tracking — snap thisTurn → InLastOppTurn 並 reset thisTurn
+        // 從 oppIdx 視角：剛結束的 aIdx 回合是「上個對手回合」，KO 計數已在過程中累積到 thisTurn
+        oppAttackKOdMeInLastOppTurn: state.oppAttackKOdMeThisTurn ?? [0, 0],
+        oppAbilityKOdMeInLastOppTurn: state.oppAbilityKOdMeThisTurn ?? [0, 0],
+        oppAttackKOdMyRocketInLastOppTurn: state.oppAttackKOdMyRocketThisTurn ?? [0, 0],
+        oppAbilityKOdMyRocketInLastOppTurn: state.oppAbilityKOdMyRocketThisTurn ?? [0, 0],
+        oppAttackKOdMeThisTurn: [0, 0],
+        oppAbilityKOdMeThisTurn: [0, 0],
+        oppAttackKOdMyRocketThisTurn: [0, 0],
+        oppAbilityKOdMyRocketThisTurn: [0, 0],
       };
     }
 
@@ -4474,17 +4499,14 @@ export function getUsableAbilities(
       if (ab.name === '旅途牽絆' && player.deck.length === 0) return;
       // ──────────────────────────────────────────────────────────────────────
       // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。
-      // v2.245 修：嚴格區分「對手主回合 KO」vs「寶可夢檢查階段 KO」
-      //   PTCG 規則：寶可夢檢查不屬於任何玩家的回合，所以中毒/灼傷/冰冷之帳等
-      //   checkup KO 不算「對手回合 KO」，不能觸發此特性。
-      //   用 oppPrizesAtMainEnd（main phase 結束、checkup 之前的 snapshot）vs
-      //   oppPrizesAtMyLastTurnEnd（我上次回合結束 = 對手回合開始時 snapshot）。
-      //   若 mainEnd < lastEnd → 對手在 main phase 取過獎賞 = 主動 KO 我方寶可夢。
+      // v2.246 修：精確 KO cause tracking
+      //   合法觸發：對手主回合中的「招式 KO」+「主動特性 KO」（咒詛炸彈等）
+      //   排除：checkup KO（中毒/灼傷/冰冷之帳）+ 自 KO（自己 main phase 自爆）
       if (ab.name === '扭轉乾坤') {
         const myIdx = state.activePlayerIndex;
-        const lastEnd = state.oppPrizesAtMyLastTurnEnd?.[myIdx] ?? 6;
-        const mainEnd = state.oppPrizesAtMainEnd?.[myIdx] ?? 6;
-        if (mainEnd >= lastEnd) return;
+        const attackKO = state.oppAttackKOdMeInLastOppTurn?.[myIdx] ?? 0;
+        const abilityKO = state.oppAbilityKOdMeInLastOppTurn?.[myIdx] ?? 0;
+        if (attackKO + abilityKO === 0) return;
       }
       result.push({ iid: pk.iid, abilityIndex: abIdx, pokemonName: card.name, abilityName: ab.name });
     });
