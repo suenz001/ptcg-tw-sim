@@ -29,7 +29,7 @@ import type { GameState, CardInstance } from '../../types';
 import type { EffectFn } from '../_shared';
 import {
   TRAINER_EFFECTS,
-  reg, regR, regPost,
+  reg, regR, regG, regPost,
   addLog, updatePlayer, withPending, shuffle,
 } from '../_shared';
 
@@ -553,19 +553,23 @@ regR('attach-tool', (st, idx, picked, params, pool) => {
 // 這裡統一掃過所有 TOOL_* 結構，未被任何 reg() 蓋過者即註冊 toolAttachEffect。
 // ══════════════════════════════════════════════════════════════════════════════
 
+// v2.264：把「所有具備 attach-tool 機制的道具」集中到一個 export const，
+//   讓檔尾的 guard 自動登記也用同一份名單（含 氣球 / 龐克頭盔 / 等沒有 TOOL_* hook 的純機械道具）。
+export const ATTACH_TOOL_NAMES = new Set<string>([
+  '氣球', '龐克頭盔',
+  ...TOOL_HP_BONUS.keys(),
+  ...TOOL_ATTACK_BONUS.keys(),
+  ...TOOL_DEFENSE_REDUCE_BY_TYPE.keys(),
+  ...TOOL_PREVENT_KO.keys(),
+  ...TOOL_ON_KO.keys(),
+  ...TOOL_PRIZE_BONUS.keys(),
+  ...TOOL_ON_DAMAGED.keys(),
+  ...TOOL_RETREAT_MOD.keys(),
+  ...TOOL_BOTH_SIDES_RETREAT_PLUS,
+]);
+
 {
-  const toolNames = new Set<string>([
-    ...TOOL_HP_BONUS.keys(),
-    ...TOOL_ATTACK_BONUS.keys(),
-    ...TOOL_DEFENSE_REDUCE_BY_TYPE.keys(),
-    ...TOOL_PREVENT_KO.keys(),
-    ...TOOL_ON_KO.keys(),
-    ...TOOL_PRIZE_BONUS.keys(),
-    ...TOOL_ON_DAMAGED.keys(),
-    ...TOOL_RETREAT_MOD.keys(),
-    ...TOOL_BOTH_SIDES_RETREAT_PLUS,
-  ]);
-  for (const name of toolNames) {
+  for (const name of ATTACH_TOOL_NAMES) {
     if (!TRAINER_EFFECTS.has(name)) {
       reg(name, toolAttachEffect(name));
     }
@@ -676,3 +680,37 @@ regPost('核心記憶碟|大地光炮', (state, aIdx, pool) => {
   }
   return state;
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.264 — Tool 卡 TRAINER_GUARD 自動登記
+//
+// 背景：sim 抓到的 PLAY_TRAINER stuck loop（竹蘭的力量負重 等）— Tool 卡的
+//   resolver 在「沒有可附加道具的寶可夢」時把卡放回手牌並 log，但 UI 的
+//   getPlayableTrainers 沒對應 gate → AI 一直挑同一張 → 無限迴圈。
+//
+// 解法：對每張已登記 toolAttachEffect 的 Tool，自動 regG 一個 guard：
+//   - 場上至少 1 隻寶可夢可以附加（無 toolAttached + 通過 TOOL_ATTACH_GATE 才算）
+//   - 都不可附加 → guard 返回 false → UI 不亮卡、engine 拒絕
+//
+// 注意：必須在 TOOL_ATTACH_GATE 全部登記完之後才能跑（檔案最尾段）。
+// ══════════════════════════════════════════════════════════════════════════════
+
+{
+  const allToolNames = new Set<string>([
+    ...ATTACH_TOOL_NAMES,
+    ...TOOL_ATTACH_GATE.keys(), // v2.214 招式注入 tool（核心記憶碟、招式學習器螢石）
+  ]);
+  for (const name of allToolNames) {
+    regG(name, (state, actorIdx, pool) => {
+      const p = state.players[actorIdx];
+      const allInPlay = [...(p.active ? [p.active] : []), ...p.bench];
+      const gate = TOOL_ATTACH_GATE.get(name);
+      return allInPlay.some(pk => {
+        if (pk.toolAttached) return false;
+        if (!gate) return true;
+        const card = pool.get(pk.cardId);
+        return card ? gate(card) : false;
+      });
+    });
+  }
+}

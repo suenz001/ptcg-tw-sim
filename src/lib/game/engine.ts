@@ -4073,6 +4073,11 @@ export function getEvolvableTargets(
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
   const player = state.players[state.activePlayerIndex];
 
+  // v2.264：UI/AI 鏡射 engine 的 cantEvolveThisTurn gate（line 1314）。
+  //   缺這層會讓 AI 無限重發 EVOLVE → engine 預設返回原 state → stuck_loop。
+  //   sim 抓到的 7 場「青銅鐘多龍 EVOLVE 卡死」根因（青銅鐘｜進化妨礙者 對對手鎖進化）。
+  if (player.cantEvolveThisTurn) return [];
+
   // 手牌中的進化牌（有 evolvesFrom 且非基礎）
   const handEvos = player.hand.filter(inst => {
     const c = pool.get(inst.cardId);

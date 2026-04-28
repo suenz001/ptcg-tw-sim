@@ -1,9 +1,52 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.263)  
+> 最後更新：2026-04-29 (v2.264)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.264 — sim stuck_loop 全清 — UI/engine gate 鏡射兩個 P0 缺口
+
+### 背景
+v2.263 跑 sim 抓到 15 個 stuck_loop，全是 AI 重發同一個 action 但 engine 拒絕但不 log error 的「沉默 reject」。
+靜默 reject 的根因都是 UI 層（`getEvolvableTargets` / `getPlayableTrainers`）和 engine handler 之間的 gate 不同步：UI 給綠燈、engine 拒絕 → AI 死循環。
+
+### Bug #1 — `cantEvolveThisTurn` UI 鏡射缺失（P0，7/15 場）
+**位置**：`src/lib/game/engine.ts:4073` `getEvolvableTargets()`
+
+**根因**：青銅鐘｜進化妨礙者（招式）對對手玩家設 `cantEvolveThisTurn=true`，engine `EVOLVE` handler 在 line 1314 直接 `return state`。但 `getEvolvableTargets()` 沒檢查這個 flag，UI/AI 一直把進化卡列為可用 → AI 一直發 EVOLVE → engine 拒絕 → 同 hash 30+ 次 → stuck_loop。
+
+**修法**：在 `getEvolvableTargets` 開頭加：
+```ts
+if (player.cantEvolveThisTurn) return [];
+```
+與 `getPlayableTrainers` 已對 `cantPlayItemThisTurn` / `cantPlaySupporterThisTurn` 做 gate 鏡射的設計對齊。
+
+### Bug #2 — Tool 卡 TRAINER_GUARD 完全缺失（P0，剩餘 8/15 場全是這個）
+**位置**：`src/lib/game/effects/cards/tools.ts` 自動登記區塊
+
+**根因**：所有 attach-tool 道具（氣球 / 龐克頭盔 / 竹蘭的力量負重 / 莉莉艾的珍珠 / 核心記憶碟 / …）只有 `reg(name, toolAttachEffect(name))` 登記效果，沒有對應的 `regG()` 登記 guard。當場上所有寶可夢都已附道具或都被 TOOL_ATTACH_GATE 過濾掉時，resolver 會把卡「放回手牌」並 log，hand size 不變 → stuck_loop。
+
+例 1：竹蘭的烈咬陸鯊EX vs N的索羅亞克 — 場上唯一可附目標已附其他 tool，竹蘭的力量負重 一直放回手牌
+例 2：超級耿鬼ex（預組） — 鬼斯（active）已附氣球，沒備戰，龐克頭盔 一直放回手牌
+
+**修法**：
+1. 抽出 `ATTACH_TOOL_NAMES` set（含氣球、龐克頭盔 + 所有 TOOL_* map keys），既給 effect 自動登記用、也給 guard 自動登記用。
+2. 在 TOOL_ATTACH_GATE 全部登記完之後（檔案最尾段），對 `ATTACH_TOOL_NAMES ∪ TOOL_ATTACH_GATE.keys()` 自動 `regG`：
+   - 場上至少 1 隻寶可夢沒附 tool
+   - 通過 TOOL_ATTACH_GATE（核心記憶碟 限「超級基格爾德ex」等）
+   - 任一條件不符就 guard return false → UI/engine 同時拒絕
+
+### 結果
+- v2.263 sim：1332 場、15 stuck_loop
+- v2.264 sim：1332 場、**0 stuck_loop**
+- 所有勝率排名洗牌（青銅鐘多龍從 41.7% → 44.4%、超級耿鬼ex（預組） 因 tool 不再卡死也回升）
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
