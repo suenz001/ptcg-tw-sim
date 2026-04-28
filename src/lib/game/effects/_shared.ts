@@ -146,8 +146,19 @@ export interface PreDiscardSpec {
    * - 'attacker' / 'any-own' / 'own-bench'：丟自身能量（原有）
    * - 'hand-rocket-supporter'：丟手牌中的「火箭隊」支援者（火箭羽毛）
    * - 'hand-tool'（v2.254）：丟手牌中的「寶可夢道具」（灰塵山|丟棄）
+   * - 'binary-yes-no'（v2.255）：純 yes/no 選擇（蚊香泳士|跳躍衝天 等「若希望」招式）
+   *   UI 顯示 yes/no 兩按鈕 overlay 而非能量列表；regPre 看 action.discardedEnergyIids 長度判斷：
+   *   length=0 → no；length>=1 → yes（sentinel iid，不真的丟東西）
    */
-  scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter' | 'hand-tool';
+  scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter' | 'hand-tool' | 'binary-yes-no';
+  /**
+   * v2.255：scope='binary-yes-no' 時的提示文字。
+   *   choicePrompt：modal 主問句（例：「是否將自身回牌庫，增加 80 點傷害？」）
+   *   choiceYesLabel / choiceNoLabel：yes/no 按鈕文字（預設「是」/「否」）。
+   */
+  choicePrompt?: string;
+  choiceYesLabel?: string;
+  choiceNoLabel?: string;
   baseDamage: number;
   damagePerEnergy: number; // 對 hand-rocket-supporter 而言視為 damagePerCard
   /**

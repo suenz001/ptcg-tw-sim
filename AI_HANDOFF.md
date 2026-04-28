@@ -1,9 +1,54 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.254)  
+> 最後更新：2026-04-28 (v2.255)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.255 — 蚊香泳士|跳躍衝天 + 'binary-yes-no' scope（PRE 階段 yes/no overlay）
+
+### 卡面
+「若希望，增加 120 點傷害。這個情況下，將這隻寶可夢與附加的卡，全部放回自己的牌庫並重洗。」
+
+舊版自動 +120 + 回牌庫（玩家無選擇權，違反卡面「若希望」）。
+
+### Infra：新 scope 'binary-yes-no'
+擴充 ATTACK_PRE_DISCARD_CHOICE 的 PreDiscardSpec：
+- 新 scope value `'binary-yes-no'`
+- 新欄位：
+  - `choicePrompt?: string` — modal 主問句
+  - `choiceYesLabel?: string` — yes 按鈕文字（預設「是」）
+  - `choiceNoLabel?: string` — no 按鈕文字（預設「否」）
+
+### UI（routes/game/+page.svelte）
+新增專屬 yes/no overlay block — 在原本能量挑選 modal 之前 if 偵測 `spec.scope === 'binary-yes-no'`：
+- 顯示 `choicePrompt` + 兩個按鈕
+- 點 yes → dispatch `attack(idx, ['yes-token'])`（sentinel iid 表 yes）
+- 點 no → dispatch `attack(idx, [])`
+
+原本的能量挑選 modal 加 `&& spec.scope !== 'binary-yes-no'` guard 避免雙重渲染。
+
+### 蚊香泳士|跳躍衝天 實裝
+```ts
+ATTACK_PRE_DISCARD_CHOICE.set('蚊香泳士|跳躍衝天', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 120, damagePerEnergy: 0,
+  choicePrompt: '是否將這隻寶可夢與附加的卡放回牌庫並重洗，增加 120 點傷害？',
+  choiceYesLabel: '是（+120 + 回牌庫）',
+  choiceNoLabel: '否（保留戰鬥位）',
+});
+```
+- regPre 看 `chosenIids.length >= 1` 判 yes：120 → 240
+- regPost 同樣看 chosenIids 決定是否回牌庫
+- AI fallback（chosenIids === undefined）→ 預設 yes 最大化攻擊
+
+### audit-simplifications
+3 → 2 → **1**（剩波盪水|蜿蜒割裂 0~9 stepper，需要更複雜的 UI）
+
+### Build
+✅ `npm run build` 通過（prod 17.48s）
 
 ---
 

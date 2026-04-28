@@ -8565,11 +8565,36 @@ regR('sigorhof-back-choice', (state, aIdx, iids, _params, pool) => {
   return addLog(state, '賽富迴旋：選擇保留戰鬥位（不返回）', aIdx);
 });
 
-// 蚊香泳士｜跳躍衝天 — 120+120 = 240 + 自身回牌庫（sim/AI 簡化：總是選擇 +120）
-regPre('蚊香泳士|跳躍衝天', (state, aIdx, _p) => {
-  return { state: addLog(state, '跳躍衝天：選擇 +120（自身將回牌庫）', aIdx), damage: 240 };
+// 蚊香泳士｜跳躍衝天 — 卡面：「若希望，增加 120 點傷害。這個情況下，將這隻寶可夢與附加的卡，全部放回自己的牌庫並重洗。」
+// v2.255：完整實裝 — 借殼 ATTACK_PRE_DISCARD_CHOICE 加新 scope 'binary-yes-no'，
+//   UI 彈出 yes/no overlay 讓玩家決定是否 +120 + 自身回牌庫。
+//   - 選「否」 → 120 傷害，自身留場
+//   - 選「是」 → 240 傷害 + 自身回牌庫
+//   AI fallback：未指定 → 預設選「是」（最大化攻擊）。
+ATTACK_PRE_DISCARD_CHOICE.set('蚊香泳士|跳躍衝天', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 120, damagePerEnergy: 0,  // damagePerEnergy 不適用 binary，僅 placeholder
+  choicePrompt: '是否將這隻寶可夢與附加的卡放回牌庫並重洗，增加 120 點傷害？',
+  choiceYesLabel: '是（+120 + 回牌庫）',
+  choiceNoLabel: '否（保留戰鬥位）',
 });
-regPost('蚊香泳士|跳躍衝天', selfReturnToDeckPost('跳躍衝天'));
+regPre('蚊香泳士|跳躍衝天', (state, aIdx, _pool, action) => {
+  const chosenIids = action?.discardedEnergyIids;
+  // length>=1 = yes（玩家選了 +120），length=0 = no
+  // AI fallback（chosenIids === undefined）→ 預設 yes 最大化攻擊
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) {
+    return { state: addLog(state, '跳躍衝天：選擇「否」 → 120 傷害（自身留場）', aIdx), damage: 120 };
+  }
+  return { state: addLog(state, '跳躍衝天：選擇「是」 → 240 傷害（自身將回牌庫）', aIdx), damage: 240 };
+});
+regPost('蚊香泳士|跳躍衝天', (state, aIdx, pool, action) => {
+  // POST 階段也需要看 action 決定是否回牌庫（與 PRE 同步）
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) return state;  // 選否 → 不回牌庫
+  return selfReturnToDeckPost('跳躍衝天')(state, aIdx, pool);
+});
 
 // 白蓬蓬｜微風之禮 — 0 傷 + 自身回牌庫 + 從牌庫任選最多 3 張加手牌
 regPre('白蓬蓬|微風之禮', (state, _a, _p) => ({ state, damage: 0 }));

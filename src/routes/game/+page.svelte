@@ -3582,8 +3582,38 @@
     </div>
   {/if}
 
+  <!-- v2.255 招式前置：yes/no 二選一 overlay（蚊香泳士|跳躍衝天 等「若希望」招式） -->
+  {#if preAttackDiscard && game && preAttackDiscard.spec.scope === 'binary-yes-no'}
+    {@const spec = preAttackDiscard.spec}
+    {@const yesLabel = spec.choiceYesLabel ?? '是'}
+    {@const noLabel = spec.choiceNoLabel ?? '否'}
+    <div class="selection-overlay" class:dragged={modalDragged}>
+      <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>❓ {preAttackDiscard.attackName}</h3>
+          <p class="sel-hint">{spec.choicePrompt ?? '是否觸發此選用效果？'}</p>
+        </div>
+        <div class="sel-actions" style="justify-content:center;gap:24px;padding:24px">
+          <button class="btn-primary" style="padding:12px 32px;font-size:16px"
+            onclick={() => {
+              // sentinel iid 'yes-token' — engine 端 regPre 看 length>=1 = yes
+              const ai = preAttackDiscard.attackIndex;
+              preAttackDiscard = null;
+              dispatch(GameActions.attack(ai, ['yes-token']));
+            }}>{yesLabel}</button>
+          <button class="btn-ghost" style="padding:12px 32px;font-size:16px"
+            onclick={() => {
+              const ai = preAttackDiscard.attackIndex;
+              preAttackDiscard = null;
+              dispatch(GameActions.attack(ai, []));
+            }}>{noLabel}</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- 招式前置：丟棄能量選擇（v1.57 花冠射線 / 猛擂鼓 EX 等變動張數招式） -->
-  {#if preAttackDiscard && game}
+  {#if preAttackDiscard && game && preAttackDiscard.spec.scope !== 'binary-yes-no'}
     {@const spec = preAttackDiscard.spec}
     {@const energies = getDiscardableEnergies(spec)}
     {@const pickedCount = preAttackDiscard.picked.size}
