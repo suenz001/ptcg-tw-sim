@@ -1,9 +1,31 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.250)  
+> 最後更新：2026-04-28 (v2.251)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.251 — 超級甲賀忍蛙ex｜忍者飛旋 改為玩家選擇
+
+卡面：「若希望，將 1 個這隻寶可夢身上附加的【水】能量放回手牌，增加 80 點傷害。」
+
+舊版（v2.132~v2.250）regPre 自動找最後一張水能量回手 +80（玩家無選擇權，違反卡面「若希望」）。
+
+修法：借殼 ATTACK_PRE_DISCARD_CHOICE（既有機制，跟擦除球/分身連打/鐵骨土人|蠻力 同 pattern），spec `{ min: 0, max: 1, scope: 'attacker', baseDamage: 120, damagePerEnergy: 80 }`。UI 自動彈出能量選擇 modal 讓玩家選 0 / 1 張。
+
+regPre 接收 `action.discardedEnergyIids` 後嚴格驗證：
+- 選 0 張 → 120 base
+- 選 1 張水能量（基本水 / 卡名含「【水】」）→ 該能量「放回手牌」（不丟棄）+ 200
+- 選了非水能量 → 120 base，log 提示「未觸發 +80」
+
+只動 effects/cards/six_decks.ts 一個檔案（不動 UI、不動 spec 結構）。
+
+### Build
+✅ `npm run build` 通過（prod 16.44s）
+
+audit-simplifications 從 4 → 2 個真實簡化（蜿蜒割裂 / 灰塵山）。
 
 ---
 
