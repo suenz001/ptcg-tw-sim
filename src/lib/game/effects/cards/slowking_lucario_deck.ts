@@ -136,15 +136,22 @@ regA('超級袋獸ex', 0, (st, idx) => {
 });
 
 // ── 超級袋獸ex｜機關槍合擊 — 基礎 200 + 擲到反面前正面數 × 50 ──────────────
+// v2.252：每次擲幣 1 行 log（「第 N 次擲硬幣 — 正面/反面」），UI 逐個排隊播放動畫。
+//   舊版合併寫一行「擲到反面前正面 N 次」會被 UI parser 誤判成單次 heads 動畫，
+//   且 heads=0 時 message 仍含「正面」字樣 → 顯示錯誤面。
 regPre('超級袋獸ex|機關槍合擊', (state, aIdx) => {
+  let s = state;
   let heads = 0;
+  let count = 0;
   for (let i = 0; i < 20; i++) {
-    if (Math.random() < 0.5) heads++;
+    count++;
+    const isHeads = Math.random() < 0.5;
+    s = addLog(s, `機關槍合擊：第 ${count} 次擲硬幣 — ${isHeads ? '正面' : '反面（停止）'}`, aIdx);
+    if (isHeads) heads++;
     else break;
   }
   const dmg = 200 + heads * 50;
-  const s = addLog(state,
-    `機關槍合擊：擲到反面前正面 ${heads} 次 → 基礎 200 + ${heads}×50 = ${dmg} 傷害`, aIdx);
+  s = addLog(s, `機關槍合擊：${heads} 次正面 → 基礎 200 + ${heads}×50 = ${dmg} 傷害`, aIdx);
   return { state: s, damage: dmg };
 });
 

@@ -445,39 +445,71 @@
     for (const t of drawAnimTimers) clearTimeout(t);
   });
 
-  // ── 硬幣動畫（Session 28） ─────────────────────────────────────────────────
+  // ── 硬幣動畫（Session 28；v2.252：升級為 queue 支援連續多次擲幣） ─────────
+  // queue 機制：機關槍合擊、滾球、奔進 等「擲到反面前」類招式會連續擲多次硬幣，
+  // 每次擲幣 log 一行（格式『… — 正面』/『… — 反面』），UI 解析後逐個 push 到
+  // queue 排隊播放（每個 1.4s），玩家能完整看到每次擲幣結果。
   let coinFlip = $state<null | { result: 'heads' | 'tails'; label: string }>(null);
+  let coinFlipQueue = $state<Array<{ result: 'heads' | 'tails'; label: string }>>([]);
   let coinTimer: ReturnType<typeof setTimeout> | null = null;
   let lastLogProcessed = 0;
+  // 每個 flip 動畫播放時間（含 css 翻轉 + label 顯示）— 太短看不清、太長拖節奏
+  const COIN_FLIP_MS = 1400;
 
-  function showCoinFlip(result: 'heads' | 'tails', label: string) {
-    if (coinTimer) clearTimeout(coinTimer);
-    coinFlip = { result, label };
-    coinTimer = setTimeout(() => { coinFlip = null; coinTimer = null; }, 2200);
+  function processCoinQueue() {
+    if (coinFlipQueue.length === 0) {
+      coinFlip = null;
+      coinTimer = null;
+      return;
+    }
+    const next = coinFlipQueue[0];
+    coinFlipQueue = coinFlipQueue.slice(1);
+    coinFlip = next;
+    coinTimer = setTimeout(processCoinQueue, COIN_FLIP_MS);
+  }
+
+  function enqueueCoinFlip(result: 'heads' | 'tails', label: string) {
+    coinFlipQueue = [...coinFlipQueue, { result, label }];
+    if (!coinFlip) processCoinQueue();
   }
 
   // 監聽 log 新訊息，自動觸發硬幣動畫
+  // v2.252：parser 改寫支援多次擲幣
+  //   - 優先 match 「擲硬幣 … — 正面」/「擲硬幣 … — 反面」明確單次格式（破折號 — 後接結果）
+  //     → 一條訊息對應一次 flip，依序 push 到 queue
+  //   - fallback：includes '正面'/'反面' 的舊式匯總 log（連斬/咬棄/喀嚓喀嚓 等仍 1 次動畫）
+  //     避免破壞既有招式（每招總共 1 次動畫，跟舊行為一致）
   $effect(() => {
     if (!game || !game.log) { lastLogProcessed = 0; return; }
     const logs = game.log;
     if (logs.length <= lastLogProcessed) { lastLogProcessed = logs.length; return; }
     const fresh = logs.slice(lastLogProcessed);
     lastLogProcessed = logs.length;
-    // 只取最後一筆觸發硬幣的訊息（避免連續觸發多次）
     for (const entry of fresh) {
       const msg = entry.message;
+      // setup 先手特例（保留現有邏輯）
       if (msg.includes('擲硬幣') && msg.includes('先手')) {
         const winnerName = msg.replace(/^🪙?\s*擲硬幣：\s*/, '').replace(/\s*先手.*$/, '');
-        showCoinFlip(Math.random() < 0.5 ? 'heads' : 'tails', `${winnerName} 先手`);
-        return;
+        enqueueCoinFlip(Math.random() < 0.5 ? 'heads' : 'tails', `${winnerName} 先手`);
+        continue;
       }
+      // v2.252 新格式：明確單次擲幣 — 「… — 正面」 / 「… — 反面」
+      // 用全形破折號 — 結尾才視為「單次擲幣明確結果」，避免 heads=0 訊息中
+      // 「擲到反面前正面 0 次」誤判（該訊息已被 v2.252 改寫成多筆單次 log，不會走到這）
+      const single = msg.match(/—\s*(正面|反面)/);
+      if (single) {
+        enqueueCoinFlip(single[1] === '正面' ? 'heads' : 'tails', `擲硬幣：${single[1]}`);
+        continue;
+      }
+      // fallback：舊招式總結 log（連斬/咬棄 等寫「擲 N 次硬幣正面 X 次」一次帶過）
+      // 仍只觸發 1 次動畫，跟既有行為一致
       if (msg.includes('正面')) {
-        showCoinFlip('heads', '擲硬幣：正面');
-        return;
+        enqueueCoinFlip('heads', '擲硬幣：正面');
+        continue;
       }
       if (msg.includes('反面')) {
-        showCoinFlip('tails', '擲硬幣：反面');
-        return;
+        enqueueCoinFlip('tails', '擲硬幣：反面');
+        continue;
       }
     }
   });

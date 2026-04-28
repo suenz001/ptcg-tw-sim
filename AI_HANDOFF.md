@@ -1,9 +1,56 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.251)  
+> 最後更新：2026-04-28 (v2.252)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.252 — 多次擲幣動畫 queue + 機關槍合擊 / 滾球類 log 改寫
+
+### 問題
+「擲到反面前正面 N 次」類招式（機關槍合擊、滾球、奔進、連續舞步、螺旋衝刺、連續擲幣 共 6 個招式）：
+1. 一行 log 同時包含「正面」+「反面」字樣，UI parser 先 match「正面」→ 不論 heads 真實值都顯示正面動畫
+2. heads=0 時實際是首次反面，但動畫顯示正面（錯誤）
+3. 多次擲幣只有 1 次動畫（玩家看不到逐次結果）
+
+### 修法
+**選項 C**（依 Leon 指示）— UI 加 coin flip queue + log 每次擲幣分行寫：
+
+**UI（routes/game/+page.svelte）：**
+- 加 `coinFlipQueue` state（Array） + `enqueueCoinFlip()` + `processCoinQueue()`
+- 每個 flip 動畫播 1.4s，結束後自動彈下一個
+- $effect parser 改寫：先 match 明確單次格式 `/—\s*(正面|反面)/`（破折號 — 後接結果）→ enqueue
+- fallback：原 `includes('正面' / '反面')` 邏輯保留給舊招式（連斬/咬棄/喀嚓喀嚓 等仍 1 次動畫）
+- 改用 `continue` 而非 `return` — 一批 fresh logs 內所有 coin-flip 訊息都會 enqueue（不再「只取最後一筆」）
+
+**effects.ts coinUntilTailsMultiplyPre helper（5 張卡受惠）：**
+- 瑪力露|滾球、土狼犬|連續舞步、普隆隆姆|奔進、燈罩夜菇|螺旋衝刺、索財靈|連續擲幣
+- log 改寫成 N+1 行：`{attackName}：第 1 次擲硬幣 — 正面` / ... / `{attackName}：第 4 次擲硬幣 — 反面（停止）` + 結尾 1 行總結
+
+**effects/cards/slowking_lucario_deck.ts 機關槍合擊：**
+- 同 pattern 改寫
+
+### 範例 log（heads=3 → 350 傷害）
+```
+機關槍合擊：第 1 次擲硬幣 — 正面     ← 動畫 1
+機關槍合擊：第 2 次擲硬幣 — 正面     ← 動畫 2
+機關槍合擊：第 3 次擲硬幣 — 正面     ← 動畫 3
+機關槍合擊：第 4 次擲硬幣 — 反面（停止） ← 動畫 4
+機關槍合擊：3 次正面 → 基礎 200 + 3×50 = 350 傷害
+```
+
+heads=0 時也只顯示 1 次反面動畫（不再誤顯示正面）。
+
+### Build
+✅ `npm run build` 通過（prod 16.78s）
+
+### 改動
+- src/routes/game/+page.svelte：coin queue + parser
+- src/lib/game/effects.ts：coinUntilTailsMultiplyPre helper（5 張卡）
+- src/lib/game/effects/cards/slowking_lucario_deck.ts：機關槍合擊
+- src/lib/version.ts → 2.252
 
 ---
 

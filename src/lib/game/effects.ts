@@ -3456,16 +3456,24 @@ regPost('飄飄雛|躍起閃避', coinHeadsSelfImmuneNextPost('躍起閃避'));
 regPost('七夕青鳥|棉花之翼', coinHeadsSelfImmuneNextPost('棉花之翼'));
 
 // ── (C) coin-until-tails-multiply helper + 5 張 ───────────────────────────
+// v2.252：改為每次擲幣寫 1 行 log（格式「第 N 次擲硬幣 — 正面/反面」），
+//   UI parser（+page.svelte）逐個 enqueue 到 coinFlipQueue 排隊播放動畫，
+//   玩家能看到每次擲幣的結果（不再合併成 1 次動畫且 heads=0 顯示錯面的 bug）。
 function coinUntilTailsMultiplyPre(perHead: number, base: number, attackName: string): AttackPreFn {
   return (state, aIdx, _pool) => {
+    let s = state;
     let heads = 0;
+    let count = 0;
     // 安全上限 20 次防無限迴圈（理論概率近 0，但保護）
     for (let i = 0; i < 20; i++) {
-      if (Math.random() < 0.5) heads++;
+      count++;
+      const isHeads = Math.random() < 0.5;
+      s = addLog(s, `${attackName}：第 ${count} 次擲硬幣 — ${isHeads ? '正面' : '反面（停止）'}`, aIdx);
+      if (isHeads) heads++;
       else break;
     }
     const dmg = base + heads * perHead;
-    const s = addLog(state, `${attackName}：擲到反面前正面 ${heads} 次 → ${dmg} 傷害`, aIdx);
+    s = addLog(s, `${attackName}：${heads} 次正面 → 基礎 ${base} + ${heads}×${perHead} = ${dmg} 傷害`, aIdx);
     return { state: s, damage: dmg };
   };
 }
