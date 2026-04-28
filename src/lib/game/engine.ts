@@ -875,6 +875,8 @@ export function createGame(
     pendingPrizes: 0,
     oppPrizesAtMyLastTurnEnd: [6, 6],
     oppPrizesAtMyTurnStart: [6, 6],
+    oppPrizesAtMainEnd: [6, 6], // v2.245 主回合結束 snapshot（不含 checkup）
+    rocketInMyDiscardAtMainEnd: [0, 0], // v2.245 主回合結束 snapshot（火箭隊寶可夢數）
     stadiumPlayedThisTurn: [false, false],
   };
 
@@ -3078,6 +3080,35 @@ function handlePlaying(
       };
     }
 
+    // v2.245：在 checkup *之前* 取「對手主回合結束時」snapshot。
+    //   PTCG 規則：寶可夢檢查不屬於任何玩家的回合 → 中毒/灼傷/冰冷之帳等 checkup KO
+    //   不算「上個對手的回合自己的寶可夢昏厥」。本 snapshot 用於精確區分主動 KO vs checkup KO。
+    //   只在第一次 END_TURN（非 skipCheckup）時更新；re-dispatch 後保留原 snapshot。
+    //   雙 snapshot：(a) opp prize 用於 prize-based gate（不公印章/扭轉乾坤/八朔）
+    //               (b) 我方棄牌堆火箭隊寶可夢數 用於 rocket-based gate（阿波羅）
+    if (!state.endTurnSkipCheckup) {
+      const oppIdx = (1 - aIdx) as 0 | 1;
+      // (a) opp prize snapshot
+      const prevMainEnd = state.oppPrizesAtMainEnd ?? [6, 6] as [number, number];
+      const newMainEnd: [number, number] = [prevMainEnd[0], prevMainEnd[1]];
+      // 從「對手」視角看：剛結束回合的玩家 aIdx = 對手；對手獎賞 = players[aIdx].prizes.length
+      newMainEnd[oppIdx] = players[aIdx].prizes.length;
+      // (b) rocket-poke-in-discard snapshot（從即將進入新回合的玩家視角看自己的棄牌堆）
+      const countRocket = (pl: PlayerState): number =>
+        pl.discard.filter(c => {
+          const card = pool.get(c.cardId);
+          return card?.supertype === 'Pokemon' && card.name?.startsWith('火箭隊的');
+        }).length;
+      const prevRocketMainEnd = state.rocketInMyDiscardAtMainEnd ?? [0, 0] as [number, number];
+      const newRocketMainEnd: [number, number] = [prevRocketMainEnd[0], prevRocketMainEnd[1]];
+      newRocketMainEnd[oppIdx] = countRocket(players[oppIdx]);
+      state = {
+        ...state,
+        oppPrizesAtMainEnd: newMainEnd,
+        rocketInMyDiscardAtMainEnd: newRocketMainEnd,
+      };
+    }
+
     // v2.124：把所有寶可夢 checkup（中毒/灼傷/睡眠/麻痺/雪妖女）包在 skipCheckup gate 內。
     // 第一次 END_TURN 跑 checkup；若 self-KO，設 endTurnContinueAfterKO + return；
     // SEND_NEW_ACTIVE 補完戰鬥位後 re-dispatch END_TURN 並設 endTurnSkipCheckup=true，
@@ -4443,13 +4474,17 @@ export function getUsableAbilities(
       if (ab.name === '旅途牽絆' && player.deck.length === 0) return;
       // ──────────────────────────────────────────────────────────────────────
       // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。
-      // 條件：對手在他們剛結束的回合取過獎賞（TurnStart < LastTurnEnd）。
-      // 不允許：自己回合內的自 KO（如黑夜魔靈 咒詛炸彈）— 此時 TurnStart == LastTurnEnd。
+      // v2.245 修：嚴格區分「對手主回合 KO」vs「寶可夢檢查階段 KO」
+      //   PTCG 規則：寶可夢檢查不屬於任何玩家的回合，所以中毒/灼傷/冰冷之帳等
+      //   checkup KO 不算「對手回合 KO」，不能觸發此特性。
+      //   用 oppPrizesAtMainEnd（main phase 結束、checkup 之前的 snapshot）vs
+      //   oppPrizesAtMyLastTurnEnd（我上次回合結束 = 對手回合開始時 snapshot）。
+      //   若 mainEnd < lastEnd → 對手在 main phase 取過獎賞 = 主動 KO 我方寶可夢。
       if (ab.name === '扭轉乾坤') {
         const myIdx = state.activePlayerIndex;
         const lastEnd = state.oppPrizesAtMyLastTurnEnd?.[myIdx] ?? 6;
-        const turnStart = state.oppPrizesAtMyTurnStart?.[myIdx] ?? 6;
-        if (turnStart >= lastEnd) return;
+        const mainEnd = state.oppPrizesAtMainEnd?.[myIdx] ?? 6;
+        if (mainEnd >= lastEnd) return;
       }
       result.push({ iid: pk.iid, abilityIndex: abIdx, pokemonName: card.name, abilityName: ab.name });
     });

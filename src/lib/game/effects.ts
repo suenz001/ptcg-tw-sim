@@ -1779,14 +1779,17 @@ regR('sage-evolve', (state, aIdx, iids, _params, pool) => {
 //   「這張卡必須在上個對手的回合自己的寶可夢【昏厥】了才可使用。
 //     查看自己的牌庫上方8張卡，從其中選擇最多3張卡加入手牌。將剩餘卡放回牌庫並重洗。」
 //
-// v2.243 升級為與 吉雉雞ex|扭轉乾坤 / 不公印章 同一條判定（不再簡化）：
-//   snap = oppPrizesAtMyLastTurnEnd[idx] = 上次自己回合結束時對手剩餘獎賞數
-//     - 對手回合中若擊倒我方寶可夢，會 take prize → opp prizes 下降
-//     - 進到我方新回合時 current_opp_prizes < snap → 上回合對手取過獎賞 → 條件滿足
+// v2.243 升級為與 吉雉雞ex|扭轉乾坤 / 不公印章 同一條判定（不再簡化）。
+// v2.245 修：嚴格區分「對手主回合 KO」vs「寶可夢檢查階段 KO」
+//   PTCG 規則：寶可夢檢查不屬於任何玩家的回合 → 中毒/灼傷/冰冷之帳等 checkup KO
+//   不算「上個對手的回合自己的寶可夢昏厥」。
+//   用 oppPrizesAtMainEnd（main phase 結束、checkup 之前 snapshot）vs
+//      oppPrizesAtMyLastTurnEnd（我上次回合結束時 snapshot）。
+//   mainEnd < lastEnd → 對手在 main phase 取過獎賞 = 主動 KO 我方寶可夢。
 regG('八朔', (st, idx) => {
-  const oppIdx = (1 - idx) as 0 | 1;
-  const snap = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
-  return st.players[oppIdx].prizes.length < snap;
+  const lastEnd = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
+  const mainEnd = st.oppPrizesAtMainEnd?.[idx] ?? 6;
+  return mainEnd < lastEnd;
 });
 reg('八朔', (st, idx) => {
   const top8Iids = st.players[idx].deck.slice(0, 8).map(c => c.iid);
@@ -2638,17 +2641,15 @@ regA('賽富豪ex', 0, (st, idx, pool) => {
 // 吉雉雞ex 扭轉乾坤 — 「上個對手的回合自己的寶可夢昏厥了」才可用，抽 3
 //
 // v2.15 (Session 38bc) 升級為對手取獎賞數判定（不再簡化）。
-//   舊版判「棄牌區有寶可夢」這在 setup/mulligan 後就永遠成立，條件形同失效。
-//   新版用 oppPrizesAtMyLastTurnEnd snapshot vs 目前對手獎賞數：
-//     - snap = 上次自己回合結束時對手剩餘獎賞數
-//     - 若對手目前獎賞 < snap → 對手在他們剛結束的回合取過獎賞
-//     - 取獎賞 = 擊倒了我方寶可夢 → 可用
-//   getUsableAbilities 也有對應 guard（engine.ts），UI 上會直接反白按鈕。
+// v2.245 修：嚴格區分「對手主回合 KO」vs「寶可夢檢查階段 KO」（PTCG 規則）
+//   寶可夢檢查不屬於任何玩家的回合 → 中毒/灼傷/冰冷之帳等 checkup KO 不算
+//   「上個對手的回合昏厥」。改用 oppPrizesAtMainEnd（main phase 結束、checkup 之前）。
+//   getUsableAbilities 也已同步修（engine.ts）。
 regA('吉雉雞ex', 0, (st, idx) => {
-  const oppIdx = (1 - idx) as 0 | 1;
-  const snap = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
-  if (st.players[oppIdx].prizes.length >= snap) {
-    return addLog(st, '扭轉乾坤：上回合自己沒有寶可夢昏厥，無法使用', idx);
+  const lastEnd = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
+  const mainEnd = st.oppPrizesAtMainEnd?.[idx] ?? 6;
+  if (mainEnd >= lastEnd) {
+    return addLog(st, '扭轉乾坤：上個對手主回合自己沒有寶可夢昏厥，無法使用', idx);
   }
   return updatePlayer(addLog(st, '吉雉雞ex 扭轉乾坤：抽 3 張', idx), idx, p => {
     const taken = p.deck.slice(0, 3);
@@ -3293,36 +3294,43 @@ regPost('朝北鼻|力量猛攻', (state, aIdx, pool) => {
 regPost('豐蜜龍|甜蜜熔化', defCantAttackNextPost());
 
 // ── D. 上個對手回合被取走獎賞則傷害 +N（revenge-dmg-plus）───────────────────
+// 卡面共通條件：「在上個對手的回合，若自己的寶可夢因招式的傷害而【昏厥】了，則增加N點傷害」
+// v2.245 修：嚴格區分「對手主回合 KO」vs「寶可夢檢查階段 KO」（PTCG 規則）
+//   原版用 oppPrizesAtMyLastTurnEnd vs current opp prizes，會把中毒/灼傷/冰冷之帳等
+//   checkup KO 也算進去（誤觸發）。改用 oppPrizesAtMainEnd（main phase 結束、
+//   checkup 之前 snapshot）vs oppPrizesAtMyLastTurnEnd。
+//   注意：嚴格說卡面寫「因招式的傷害」， 對手特性如咒詛炸彈 / 腎上腺腦力 致 KO 也應排除，
+//   但目前 infra 還無法精確區分「招式」vs「特性」KO；本 fix 至少先排除 checkup KO。
 // 鐵斑葉｜復仇刀鋒 100+60
 regPre('鐵斑葉|復仇刀鋒', (state, aIdx, _pool) => {
-  const snap = state.oppPrizesAtMyLastTurnEnd?.[aIdx] ?? 6;
-  const oppIdx = (1 - aIdx) as 0 | 1;
-  const tookPrize = state.players[oppIdx].prizes.length < snap;
+  const lastEnd = state.oppPrizesAtMyLastTurnEnd?.[aIdx] ?? 6;
+  const mainEnd = state.oppPrizesAtMainEnd?.[aIdx] ?? 6;
+  const tookPrize = mainEnd < lastEnd;
   const bonus = tookPrize ? 60 : 0;
   const s = tookPrize
-    ? addLog(state, `復仇刀鋒：上個對手回合取過獎賞 → +60 傷害`, aIdx)
+    ? addLog(state, `復仇刀鋒：上個對手主回合取過獎賞 → +60 傷害`, aIdx)
     : state;
   return { state: s, damage: 100 + bonus };
 });
 // 普隆隆姆｜捲土重來 30+90
 regPre('普隆隆姆|捲土重來', (state, aIdx, _pool) => {
-  const snap = state.oppPrizesAtMyLastTurnEnd?.[aIdx] ?? 6;
-  const oppIdx = (1 - aIdx) as 0 | 1;
-  const tookPrize = state.players[oppIdx].prizes.length < snap;
+  const lastEnd = state.oppPrizesAtMyLastTurnEnd?.[aIdx] ?? 6;
+  const mainEnd = state.oppPrizesAtMainEnd?.[aIdx] ?? 6;
+  const tookPrize = mainEnd < lastEnd;
   const bonus = tookPrize ? 90 : 0;
   const s = tookPrize
-    ? addLog(state, `捲土重來：上個對手回合取過獎賞 → +90 傷害`, aIdx)
+    ? addLog(state, `捲土重來：上個對手主回合取過獎賞 → +90 傷害`, aIdx)
     : state;
   return { state: s, damage: 30 + bonus };
 });
 // 古玉魚｜嫉妒業火 50+90
 regPre('古玉魚|嫉妒業火', (state, aIdx, _pool) => {
-  const snap = state.oppPrizesAtMyLastTurnEnd?.[aIdx] ?? 6;
-  const oppIdx = (1 - aIdx) as 0 | 1;
-  const tookPrize = state.players[oppIdx].prizes.length < snap;
+  const lastEnd = state.oppPrizesAtMyLastTurnEnd?.[aIdx] ?? 6;
+  const mainEnd = state.oppPrizesAtMainEnd?.[aIdx] ?? 6;
+  const tookPrize = mainEnd < lastEnd;
   const bonus = tookPrize ? 90 : 0;
   const s = tookPrize
-    ? addLog(state, `嫉妒業火：上個對手回合取過獎賞 → +90 傷害`, aIdx)
+    ? addLog(state, `嫉妒業火：上個對手主回合取過獎賞 → +90 傷害`, aIdx)
     : state;
   return { state: s, damage: 50 + bonus };
 });
@@ -10140,15 +10148,15 @@ regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
 //       雙方手牌放回牌庫重洗。然後抽牌：自己 5 張，對手 3 張。
 // v2.70 gate：套用與「不公印章」相同的快照對比手法，但比的是
 //   「自己棄牌堆中火箭隊寶可夢數量」而不是「對手獎賞張數」。
-//   engine END_TURN 時分別快照：
-//     rocketInMyDiscardAtMyLastTurnEnd[aIdx] = 剛結束回合方的棄牌堆中火箭隊寶可夢數
-//     rocketInMyDiscardAtMyTurnStart[nextIdx] = 即將開始回合方的棄牌堆中火箭隊寶可夢數
-//   gate：turnStart > lastEnd → 對手上個回合我方有火箭隊寶可夢被擊倒（棄牌堆變多）。
-//   這樣能避開「自己回合內自 KO」誤觸發（turnStart 已鎖定，自 KO 只影響當下數而不影響快照）。
+// v2.245 修：嚴格區分「對手主回合 KO」vs「寶可夢檢查階段 KO」（PTCG 規則）
+//   寶可夢檢查不屬於任何玩家的回合 → 中毒/灼傷/冰冷之帳等 checkup KO 不算
+//   「上個對手的回合昏厥」。改用 rocketInMyDiscardAtMainEnd（main phase 結束、
+//   checkup 之前 snapshot）vs rocketInMyDiscardAtMyLastTurnEnd（我上次回合結束）。
+//   gate：mainEnd > lastEnd → 對手 main phase 中我方火箭隊寶可夢進了棄牌堆（被主動 KO）。
 regG('火箭隊的阿波羅', (st, idx) => {
   const lastEnd = st.rocketInMyDiscardAtMyLastTurnEnd?.[idx] ?? 0;
-  const turnStart = st.rocketInMyDiscardAtMyTurnStart?.[idx] ?? 0;
-  return turnStart > lastEnd;
+  const mainEnd = st.rocketInMyDiscardAtMainEnd?.[idx] ?? 0;
+  return mainEnd > lastEnd;
 });
 reg('火箭隊的阿波羅', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;

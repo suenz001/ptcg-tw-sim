@@ -483,6 +483,26 @@ export interface GameState {
    */
   oppPrizesAtMyTurnStart?: [number, number];
   /**
+   * v2.245：對手剛結束回合的「主回合結束時」（寶可夢檢查 *之前*）的對手獎賞張數快照 [P1, P2]。
+   *
+   * PTCG 規則：「上個對手的回合自己的寶可夢昏厥了才可使用」這類觸發條件
+   *   （吉雉雞ex|扭轉乾坤、不公印章、八朔、火箭隊的阿波羅 等）
+   * 只計算「對手主動行動 KO」（招式 / 主動特性），不含寶可夢檢查階段的中毒/灼傷/
+   * 雪妖女冰冷之帳 等。
+   *
+   * 因為寶可夢檢查不屬於任何玩家的回合，此 snapshot 必須在 checkup *之前* 取，
+   * 才能正確區分「對手主動 KO」vs「checkup 階段被動 KO」。
+   *
+   * 取點：END_TURN handler 開頭（在 checkup 區塊之前）。
+   *   newMainEnd[oppIdx] = players[aIdx].prizes.length
+   *   （aIdx = 結束回合的玩家；oppIdx = 即將進入新回合的玩家）
+   *
+   * 用法：在 oppIdx 視角下，比較 oppPrizesAtMyLastTurnEnd[me] vs oppPrizesAtMainEnd[me]。
+   * 若 MainEnd < LastTurnEnd → 對手在他們的主回合中取過獎賞（= 我方寶可夢被對手主動 KO）。
+   * 初始值 [6, 6]。
+   */
+  oppPrizesAtMainEnd?: [number, number];
+  /**
    * v2.70：我方上次結束自己回合時，自己棄牌堆中「火箭隊的」寶可夢數量的快照 [P1, P2]。
    * 與 rocketInMyDiscardAtMyTurnStart 對比，偵測「對手的回合內我方有火箭隊寶可夢被擊倒」。
    * 用於「火箭隊的阿波羅」等 gate 條件（類似不公印章，但只認火箭隊寶可夢）。
@@ -490,6 +510,13 @@ export interface GameState {
    * 初始值 [0, 0]（遊戲開始時棄牌堆為空）。
    */
   rocketInMyDiscardAtMyLastTurnEnd?: [number, number];
+  /**
+   * v2.245：對手主回合結束時（寶可夢檢查 *之前*）我方棄牌堆中火箭隊寶可夢數量快照 [P1, P2]。
+   * 與 oppPrizesAtMainEnd 同 pattern；用於火箭隊的阿波羅，排除 checkup 階段 KO。
+   * 取點：END_TURN handler 開頭。newRocketMainEnd[oppIdx] = countRocketPokeInDiscard(players[oppIdx]).
+   * 初始值 [0, 0]。
+   */
+  rocketInMyDiscardAtMainEnd?: [number, number];
   /**
    * v2.70：我方「這個回合開始時」自己棄牌堆中「火箭隊的」寶可夢數量的快照 [P1, P2]。
    * 與 rocketInMyDiscardAtMyLastTurnEnd 對比即可判定「對手上個回合造成過火箭隊寶可夢昏厥」：

@@ -336,13 +336,19 @@ regR('top-catcher-opp', (st, idx, iids, _params, pool) => {
 //   v2 fix：engine END_TURN 快照對手獎賞到 oppPrizesAtMyLastTurnEnd[idx]，比對目前 opp.prizes。
 //   v2 hole：這種只看「比 LastTurnEnd 少」的判定，無法區分「對手回合擊倒我方」vs
 //            「我自己回合內自 KO」（例如黑夜魔靈咒詛炸彈 在自己回合自爆 → opp 也取獎賞 → 誤觸發）。
-// v3 fix：加一個回合開始時的獨立快照 oppPrizesAtMyTurnStart[idx]，
-//         gate 條件改為 TurnStart < LastTurnEnd（= 對手在他們剛結束的回合取過獎賞）。
-//         自己回合的自 KO 只會讓「目前 opp.prizes」變少但 TurnStart 已鎖定，不會觸發。
+//   v3 fix：加一個回合開始時的獨立快照 oppPrizesAtMyTurnStart[idx]，
+//           gate 條件改為 TurnStart < LastTurnEnd（= 對手在他們剛結束的回合取過獎賞）。
+//   v3 hole：TurnStart 是 finalize 後（= checkup 之後）的 snapshot，所以中毒/灼傷/
+//           冰冷之帳等寶可夢檢查階段 KO 也會被誤算成「對手回合 KO」。但 PTCG 規則：
+//           寶可夢檢查不屬於任何玩家的回合，這些 KO 不該觸發本卡。
+// v2.245 fix（最終版）：
+//   改用 oppPrizesAtMainEnd（main phase 結束、checkup *之前* 的 snapshot）。
+//   gate：MainEnd < LastTurnEnd → 對手在 main phase 取過獎賞（招式 / 主動特性 KO）。
+//   checkup KO 不會修改 MainEnd，所以中毒/灼傷/冰冷之帳 不會誤觸發。
 regG('不公印章', (st, idx) => {
   const lastEnd = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
-  const turnStart = st.oppPrizesAtMyTurnStart?.[idx] ?? 6;
-  return turnStart < lastEnd;
+  const mainEnd = st.oppPrizesAtMainEnd?.[idx] ?? 6;
+  return mainEnd < lastEnd;
 });
 reg('不公印章', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
