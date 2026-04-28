@@ -95,21 +95,25 @@ reg('好傷藥', (st, idx) => {
   });
 });
 
-// 龍之秘藥 — 將自己的 1 隻【龍】寶可夢恢復 120 HP
-// v2.159 升級為完整 condition（不再簡化）；之前簡化為任意寶可夢有傷害即可。
+// 龍之秘藥 — 將自己的「戰鬥場的」【龍】寶可夢恢復 60 HP
+// 卡面（MC / SV7a，reg=H）：「將自己的戰鬥場的【龍】寶可夢恢復『60』HP。」
+// v2.262 修兩個 bug：HP 120 → 60；範圍從「任一【龍】寶可夢」限縮為「戰鬥場」。
+//   因為只能對戰鬥位 1 隻寶可夢用，不需要 pendingSelection — 直接 inline 處理。
 regG('龍之秘藥', (st, idx, pool) => {
-  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
-  return all.some(c => c.damage > 0 && pool.get(c.cardId)?.pokemonType === 'Dragon');
+  const a = st.players[idx].active;
+  if (!a) return false;
+  // 只能對戰鬥場的【龍】寶可夢使用，且必須有傷害（PDF §II-C-06）
+  return a.damage > 0 && pool.get(a.cardId)?.pokemonType === 'Dragon';
 });
-reg('龍之秘藥', (st, idx) => {
-  st = addLog(st, '龍之秘藥：選擇 1 隻【龍】寶可夢回復 120 HP', idx);
-  return withPending(st, {
-    type: 'heal-target',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'heal-120-dragon-only',
-    params: { healAmount: 120, discardEnergy: 0 },
-  });
+reg('龍之秘藥', (st, idx, pool) => {
+  const a = st.players[idx].active;
+  if (!a) return st;
+  const card = pool.get(a.cardId);
+  st = addLog(st, `龍之秘藥：${card?.name ?? '?'} 回復 60 HP`, idx);
+  return updatePlayer(st, idx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, damage: Math.max(0, p.active.damage - 60) } : null,
+  }));
 });
 
 regR('heal-60-discard-1', healResolver);

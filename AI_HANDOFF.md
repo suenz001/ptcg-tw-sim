@@ -1,9 +1,81 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.261)  
+> 最後更新：2026-04-28 (v2.262)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.262 — 全卡 audit 第一波 — 龍之秘藥（P0 兩個錯）
+
+### 背景
+延續 v2.260/v2.261 引擎層審查後，開始做卡牌效果層 audit。
+寫了 heuristic diff 腳本（`/tmp/ptcg-audit/heuristic-diff.mjs`）對 744 張已實裝 H/I/J 卡的「卡面數字 vs 程式碼數字」做自動比對，找出疑點。
+
+### Bug — 龍之秘藥（P0：HP 量錯 + 範圍錯）
+**卡面（MC / SV7a，reg=H）**：「將自己的戰鬥場的【龍】寶可夢恢復『60』HP。」
+
+**舊行為**（`items_misc.ts:98-113`）：
+```ts
+regG('龍之秘藥', (st, idx, pool) => {
+  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  return all.some(c => c.damage > 0 && pool.get(c.cardId)?.pokemonType === 'Dragon');
+});
+reg('龍之秘藥', (st, idx) => {
+  st = addLog(st, '龍之秘藥：選擇 1 隻【龍】寶可夢回復 120 HP', idx);
+  // ... healAmount: 120 + 任一寶可夢
+});
+```
+
+**兩個錯**：
+1. **HP 60 → 120**（多一倍）
+2. **範圍：戰鬥場 only → 任一**（連備戰位也能選）
+
+**修法**：
+```ts
+regG('龍之秘藥', (st, idx, pool) => {
+  const a = st.players[idx].active;
+  if (!a) return false;
+  return a.damage > 0 && pool.get(a.cardId)?.pokemonType === 'Dragon';
+});
+reg('龍之秘藥', (st, idx, pool) => {
+  const a = st.players[idx].active;
+  if (!a) return st;
+  // 直接 inline，不需要 pendingSelection
+  return updatePlayer(st, idx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, damage: Math.max(0, p.active.damage - 60) } : null,
+  }));
+});
+```
+
+### Heuristic diff 工具
+位置：`/tmp/ptcg-audit/heuristic-diff.mjs`（sandbox 暫存，不在 repo）
+工作邏輯：
+1. 對每個 reg/regA/regPre/regPost call 抽出卡名
+2. 對應卡 JSON 的 rulesText / abilities[].text / attacks[].text
+3. 提取數字（「N 張」「N 個」「N 點」「+N」「-N」「×N」「N HP」「『N』」等）
+4. 對比兩邊數字 set，找「卡面有但程式碼沒」的可疑點
+
+**v1 範圍 ≥10 ≤999**：找出 2 疑點（龍之秘藥真 bug + AZ的平和 false positive）
+**v2 範圍 ≥10**（過濾「N 階」結構詞）：1 疑點（AZ的平和，仍 false positive）
+**v3 擴大 body 至 80 行**：0 疑點（false negative — 把鄰近卡的數字 pollution 進來）
+
+**Heuristic 結論**：找到 1 個真 bug + 0 false positive 後就觸頂；要找更多 bug 需要更聚焦方法（手動高頻卡 audit 或實戰測試）。
+
+### 變更檔案
+- `src/lib/game/effects/cards/items_misc.ts`：龍之秘藥 P0 修
+- `src/lib/version.ts`：2.261 → 2.262
+
+### Build
+✅ `npm run build` 通過（prod 16.90s，game bundle 715.03 kB）
+
+### Audit 教訓
+- Heuristic 數字比對能找到「明顯數字錯」的 bug，但範圍受限
+- 卡面文字可能因為 set 不同有版本差異（同卡名不同 setCode），audit 時要看每個版本
+- 跨檔案的 multi-stage effects（reg + regR 用不同 effectKey）會被 heuristic 拆斷 → false positive
+- 用 LLM agent 做卡牌 audit 不可靠（之前 agent 把「healing 必須 damage>0」誤判 bug，跟 H/I/J 標誤判跳過）— 親自驗證仍是黃金標準
 
 ---
 
