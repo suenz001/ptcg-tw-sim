@@ -380,6 +380,55 @@ export function getEffectiveHP(
   if (state?.activeStadium?.name === '激動競技場' && card.stage === 'Basic') {
     hp += 30;
   }
+  // v2.268 wave 2：max HP 修正類被動特性 ─────────────────────────────────
+  // 樂天河童｜生機森巴 (SV9 Stage2 140HP) — 「只要這隻寶可夢在場上，
+  //   自己場上所有寶可夢的最大 HP 各「+40」。無論有多少隻⋯不重複。」
+  //   只查持有者的所屬玩家是否場上有此特性 → 該玩家所有寶可夢 +40。
+  //   要查「擁有者所屬玩家」，需要知道 inst 在哪一邊。直接掃 state.players[*]。
+  if (state) {
+    for (const p of state.players) {
+      const allP = [...(p.active ? [p.active] : []), ...p.bench];
+      const hasSamba = allP.some(c => {
+        const cc = pool.get(c.cardId);
+        return cc?.abilities?.some(a => a.name === '生機森巴');
+      });
+      if (!hasSamba) continue;
+      // 確認 inst 是這位玩家的寶可夢
+      if (allP.some(c => c.iid === inst.iid)) { hp += 40; break; }
+    }
+  }
+  // 修建老匠｜大師工藝 (SV11B Stage2 140HP) — 「這隻寶可夢的最大 HP，
+  //   依這隻寶可夢身上附加的【鬥】能量每 1 個『+40』。」
+  //   依 host 自身 fighting energy 數量加 HP。
+  if (card.name === '修建老匠') {
+    let fightingCount = 0;
+    for (const e of inst.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (!ec || ec.supertype !== 'Energy') continue;
+      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Fighting' || /【鬥】/.test(ec.name))) fightingCount++;
+      else if (ec.pokemonType === 'Fighting') fightingCount++;
+    }
+    hp += fightingCount * 40;
+  }
+  // 怖納噬草｜雜草魂 (SV8a Stage1 100HP) — 「這隻寶可夢的最大 HP，
+  //   依對手已經獲得的獎賞卡每 1 張『+50』。」
+  if (state && card.name === '怖納噬草') {
+    // 找出對手側 → 對手獎賞已被「攻擊方」取走，記錄在 state.players[opp].prizes 上
+    //   原始獎賞 6 張，prizes.length 為「剩餘張數」，已取 = 6 - prizes.length。
+    //   要找「持有者」對手；判斷 inst 屬於哪一邊：
+    let ownerIdx: 0 | 1 | -1 = -1;
+    for (let i = 0 as 0 | 1; i <= 1; i = (i + 1) as 0 | 1) {
+      const p = state.players[i];
+      if ((p.active && p.active.iid === inst.iid) || p.bench.some(c => c.iid === inst.iid)) {
+        ownerIdx = i; break;
+      }
+    }
+    if (ownerIdx >= 0) {
+      const opp = state.players[(1 - ownerIdx) as 0 | 1];
+      const oppPrizesTaken = 6 - (opp.prizes?.length ?? 6);
+      hp += oppPrizesTaken * 50;
+    }
+  }
   // v2.122 夠讚狗｜腎上腺力量 — 身上附【惡】能量時最大 HP +100
   //   v2.120 只在 effects.ts 的 internal effectiveHPInline 加了這段，但 UI 的 hpTotal/
   //   hpRemaining 以及實際 KO 判定全走這裡的 getEffectiveHP，導致 HP+100 完全沒真的生效。

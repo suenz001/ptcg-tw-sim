@@ -401,6 +401,45 @@ function effectiveHPInline(
   if (state?.activeStadium?.name === '激動競技場' && card.stage === 'Basic') {
     hp += 30;
   }
+  // v2.268 wave 2：max HP 修正類被動特性（鏡射 engine.ts getEffectiveHP）
+  // 樂天河童｜生機森巴 — 持有者所屬玩家場上所有寶可夢 +40 HP
+  if (state) {
+    for (const p of state.players) {
+      const allP = [...(p.active ? [p.active] : []), ...p.bench];
+      const hasSamba = allP.some(c => {
+        const cc = pool.get(c.cardId);
+        return cc?.abilities?.some(a => a.name === '生機森巴');
+      });
+      if (!hasSamba) continue;
+      if (allP.some(c => c.iid === inst.iid)) { hp += 40; break; }
+    }
+  }
+  // 修建老匠｜大師工藝 — 自身【鬥】能量 × 40 HP
+  if (card.name === '修建老匠') {
+    let fightingCount = 0;
+    for (const e of inst.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (!ec || ec.supertype !== 'Energy') continue;
+      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Fighting' || /【鬥】/.test(ec.name))) fightingCount++;
+      else if (ec.pokemonType === 'Fighting') fightingCount++;
+    }
+    hp += fightingCount * 40;
+  }
+  // 怖納噬草｜雜草魂 — 對手已獲獎賞數 × 50 HP
+  if (state && card.name === '怖納噬草') {
+    let ownerIdx: 0 | 1 | -1 = -1;
+    for (let i = 0 as 0 | 1; i <= 1; i = (i + 1) as 0 | 1) {
+      const p = state.players[i];
+      if ((p.active && p.active.iid === inst.iid) || p.bench.some(c => c.iid === inst.iid)) {
+        ownerIdx = i; break;
+      }
+    }
+    if (ownerIdx >= 0) {
+      const opp = state.players[(1 - ownerIdx) as 0 | 1];
+      const oppPrizesTaken = 6 - (opp.prizes?.length ?? 6);
+      hp += oppPrizesTaken * 50;
+    }
+  }
   // v2.113 夠讚狗｜腎上腺力量 — 身上附【惡】能量時最大 HP +100
   // v2.120 修：稜鏡能量附於基礎寶可夢時視為提供全屬性能量（含惡能量），也算數
   if (card.name === '夠讚狗') {
@@ -2319,6 +2358,62 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
       const attName = pool.get(att.active.cardId)?.name ?? '?';
       return addLog({ ...state, players },
         `尖刺盔甲：${defName} 草能量 ${grassCount} 張 → 對 ${attName} 造成 ${dmg} 傷害（${grassCount}×3 個傷害指示物）`,
+        dIdx);
+    }
+    return state;
+  }],
+  // v2.268 wave 2：被動反擊類（defender 持有此特性 → 反擊攻擊者）─────────
+  // 花岩怪｜怨恨旋渦 (MC Basic 80HP, Darkness)
+  // 卡面：「只要這隻寶可夢在場上，自己戰鬥場的【惡】寶可夢受到對手的寶可夢招式的傷害時，
+  //   在使用招式的寶可夢身上放置 1 個傷害指示物。」
+  // 簡化：本實裝以「持有者本身在 active 被打」觸發（持有者必為【惡】，符合卡面 active 條件）。
+  //   若日後需 field-wide（持有者在備戰時 active 是其他【惡】寶可夢也觸發），需擴 hook。
+  ['怨恨旋渦', (state, dIdx, pool) => {
+    const aIdx = (1 - dIdx) as 0 | 1;
+    const def = state.players[dIdx].active;
+    if (!def) return state;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) {
+      att.active = { ...att.active, damage: att.active.damage + 10 };
+      players[aIdx] = att;
+      const attName = pool.get(att.active.cardId)?.name ?? '?';
+      return addLog({ ...state, players },
+        `怨恨旋渦：${attName} 身上放置 1 個傷害指示物（+10）`,
+        dIdx);
+    }
+    return state;
+  }],
+  // 爆焰龜獸｜甲殼刺 (M3 Basic 120HP, Fire)
+  // 卡面：「這隻寶可夢在戰鬥場上受到對手的寶可夢招式的傷害時，選擇 1 個使用招式的寶可夢身上附加的能量，將其丟棄。」
+  // 自動丟最後一張能量（簡化選擇 — 引擎沒有「對手回合內讓被動反擊發 pendingSelection」的設計）
+  ['甲殼刺', (state, dIdx, pool) => {
+    const aIdx = (1 - dIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (!att.active || att.active.energyAttached.length === 0) return state;
+    const removed = att.active.energyAttached[att.active.energyAttached.length - 1];
+    const removedCard = pool.get(removed.cardId);
+    att.active = { ...att.active, energyAttached: att.active.energyAttached.slice(0, -1) };
+    att.discard = [...att.discard, removed];
+    players[aIdx] = att;
+    const attName = pool.get(att.active.cardId)?.name ?? '?';
+    return addLog({ ...state, players },
+      `甲殼刺：丟棄 ${attName} 身上的 ${removedCard?.name ?? '能量'}`,
+      dIdx);
+  }],
+  // 超級頭巾混混ex｜反擊雞冠 (M2a Stage1 330HP, Darkness)
+  // 卡面：「這隻寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置 5 個傷害指示物。」
+  ['反擊雞冠', (state, dIdx, pool) => {
+    const aIdx = (1 - dIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) {
+      att.active = { ...att.active, damage: att.active.damage + 50 };
+      players[aIdx] = att;
+      const attName = pool.get(att.active.cardId)?.name ?? '?';
+      return addLog({ ...state, players },
+        `反擊雞冠：${attName} 身上放置 5 個傷害指示物（+50）`,
         dIdx);
     }
     return state;

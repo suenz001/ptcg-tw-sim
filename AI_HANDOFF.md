@@ -1,9 +1,42 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.267)  
+> 最後更新：2026-04-29 (v2.268)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.268 — Pokemon Ability 全卡掃 — Wave 2（被動反擊 + max HP 修正 6 個）
+
+### Wave 2 內容
+
+**PASSIVE_RETALIATION**（自身 active 被打 → 反擊攻擊者）：
+- 花岩怪｜怨恨旋渦：攻擊者 +10（1 指示物）
+  - 卡面寫「自己戰鬥場的【惡】寶可夢被打」field-wide。本實裝簡化為「持有者本身在 active 被打」（持有者必為【惡】Basic 80HP，符合 active 屬性條件）。如未來持有者在備戰、active 是其他【惡】寶可夢的 case 出現，需擴 hook。
+- 爆焰龜獸｜甲殼刺：丟攻擊者 active 1 張能量（自動丟最後一張，PTCG 慣例給玩家選 — 但對手回合內無 pendingSelection 設計）
+- 超級頭巾混混ex｜反擊雞冠：攻擊者 +50（5 指示物）
+
+**effectiveHPInline / getEffectiveHP**（max HP 修正）：
+- 樂天河童｜生機森巴 (SV9 Stage2 140HP)：持有者所屬玩家場上所有寶可夢 +40 HP
+  - 卡面寫「不重複」，本實裝以「該玩家是否擁有持有者」做 binary check，**不疊加**（符合卡面）
+- 修建老匠｜大師工藝 (SV11B Stage2 140HP)：自身【鬥】能量 × 40 HP
+- 怖納噬草｜雜草魂 (SV8a Stage1 100HP)：對手已取獎賞數 × 50 HP
+
+### 重點實作筆記
+
+兩個 hook 點都改（engine.ts `getEffectiveHP` + effects.ts `effectiveHPInline`）— Leon 之前明確指出 v2.122 case：「夠讚狗 +HP 只改 effects.ts internal 不改 engine 的 getEffectiveHP，UI 顯示和 KO 判定就不一致」。本波從一開始就兩邊鏡射。
+
+### 驗證
+- `npm run build` ✅
+- `node scripts/sim-tournament.mjs 1` → 1332 場，1 個 SEND_NEW_ACTIVE 邊緣 bug（pre-existing，跟本波改動無關）
+- commit hash: 待補
+
+### 進度
+| 類別 | wave 1 後 | wave 2 後 | 剩餘 |
+|---|---|---|---|
+| Ability | 93/265 (35%) | 99/265 (37%) | 166 |
+| Attack | 755/1545 | 755/1545 | 790 |
 
 ---
 
