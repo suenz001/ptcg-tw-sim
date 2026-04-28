@@ -2643,12 +2643,19 @@ function handlePlaying(
     }
 
     // 被動特性：條件式完全免疫 — skipDefEffects 跳過
+    // v2.250：ImmunityCheck 可回傳 boolean（既有 entry）或 { immune, newState }
+    //   （順滑大衣 等需要寫 log 的特性）。後者會 chain 到 workingState。
     if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities) {
       for (const ab of defenderCard.abilities) {
         const immune = PASSIVE_IMMUNITY.get(ab.name);
-        if (immune && immune(attackerCard, baseDamage, state, aIdx, pool)) {
-          baseDamage = 0;
-          break;
+        if (!immune) continue;
+        const result = immune(attackerCard, baseDamage, workingState, aIdx, pool, defenderCard.name);
+        if (typeof result === 'boolean') {
+          if (result) { baseDamage = 0; break; }
+        } else {
+          // { immune, newState } — 統合 newState（含 log）
+          workingState = result.newState;
+          if (result.immune) { baseDamage = 0; break; }
         }
       }
     }

@@ -1,9 +1,57 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.248)  
+> 最後更新：2026-04-28 (v2.250)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.250 — 奇諾栗鼠ex 完整實裝（單獨）
+
+> v2.249 把奇諾栗鼠ex + 超級甲賀忍蛙ex 混在同一個 commit，已 revert（commit f30fc74）。
+> 本版只重做奇諾栗鼠ex 部分；超級甲賀忍蛙ex 之後再單獨處理。
+
+奇諾栗鼠ex（M4-071/083, Stage1, HP 240，從泡沫栗鼠進化）原本完全沒實裝：
+
+### 招式：能量巴掌（無）
+卡面：「造成這隻寶可夢身上附加的能量的數量×40點傷害。」
+實裝：複用 `selfAttachedEnergyMultiplyPre(0, 40, 'all', '能量巴掌')`，與奇諾栗鼠（非 ex）的特殊滾滾共用 helper。
+
+### 特性：順滑大衣
+卡面：「這隻寶可夢受到招式的傷害時，自己擲1次硬幣。若為正面，則這隻寶可夢不會受到那個傷害。」
+
+需要 PASSIVE_IMMUNITY infra 升級：既有 ImmunityCheck 簽名只能回傳 `boolean`，順滑大衣需要寫硬幣 log（玩家看不到擲硬幣會困惑）。
+
+擴充 ImmunityCheck signature：
+```ts
+type ImmunityCheck = (...args) => boolean | { immune: boolean; newState: GameState }
+```
+
+既有 4 個 entry（尾甲/礎石之勢/鐵壁硬殼/神秘之盾）回傳 boolean 仍向下相容。
+engine.ts loop 處理兩種 return type、若回傳 object 則 chain newState 到 workingState。
+
+新 entry：
+```ts
+['順滑大衣', (_att, _baseDmg, state, aIdx, _pool, defenderName) => {
+  const heads = Math.random() < 0.5;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const newState = addLog(state,
+    `${defenderName}｜順滑大衣：擲硬幣 ${heads ? '正面 → 免疫此招式傷害！' : '反面 → 受傷害'}`,
+    dIdx);
+  return { immune: heads, newState };
+}]
+```
+
+注意：engine 在算 baseDamage 路徑只 invoke 一次此 check（line 2646-2654），不會被 UI 預覽多次呼叫，故 Math.random() 安全。
+
+### Build
+✅ `npm run build` 通過（prod 17.19s）
+
+### 改動範圍（極小）
+- src/lib/game/effects.ts：1 行 regPre + ImmunityCheck signature + 新 entry
+- src/lib/game/engine.ts：PASSIVE_IMMUNITY loop 改用 union return type
+- src/lib/version.ts：→ 2.250
 
 ---
 
