@@ -3948,21 +3948,8 @@ regPost('皮卡丘|電磁電光', (state, aIdx, pool) => {
 
 // 朽木妖|終極吸取 — 50 傷害 + 自回血 = 實際造成的傷害量
 // v2.160：用 state.lastDealtDamage 讀引擎套用後的實際傷害（含弱抗 / 道具減傷）
-regPost('朽木妖|終極吸取', (state, aIdx, pool) => {
-  const actual = state.lastDealtDamage ?? 0;
-  if (actual <= 0) return addLog(state, '終極吸取：實際傷害為 0，不回血', aIdx);
-  // 把 actual 傳給 selfHealPost 自製版本
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const att = { ...players[aIdx] };
-  if (!att.active) return state;
-  const attName = pool.get(att.active.cardId)?.name ?? '?';
-  const newDmg = Math.max(0, att.active.damage - actual);
-  const realHeal = att.active.damage - newDmg;
-  att.active = { ...att.active, damage: newDmg };
-  players[aIdx] = att;
-  return addLog({ ...state, players },
-    `終極吸取：${attName} 回復 ${realHeal} HP（=本招式造成的 ${actual} 傷害）`, aIdx);
-});
+// v2.236：改用 selfHealByDealtPost 共用 helper（同 pattern 也用於鐵毒蛾|吸納、火神蛾|吸血）
+regPost('朽木妖|終極吸取', selfHealByDealtPost('終極吸取'));
 
 // 洗翠 卡蒂狗|全部燒光 — 無傷害，丟棄競技場卡
 regPre('洗翠 卡蒂狗|全部燒光', (state, _aIdx, _pool) => ({ state, damage: 0 }));
@@ -5875,12 +5862,32 @@ regPost('啃果蟲|營養素', healAnyOwnPost(30, '營養素'));
 regPre('花蓓蓓|療傷', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('花蓓蓓|療傷', healAnyOwnPost(30, '療傷'));
 
-// ── 造傷 + self heal by dealt-damage（2 張；簡化為 base dmg 30）───────────────
+// ── 造傷 + self heal by dealt-damage（2 張）─────────────────────────────────
+//   v2.236 升級為「實際造成的傷害量」(state.lastDealtDamage)，含弱抗 / 道具減傷
+//   原版簡化為 base dmg 30（對手有弱抗時不正確）。共用 selfHealByDealtPost helper
+//   （與朽木妖|終極吸取 同 pattern）。
+function selfHealByDealtPost(attackName: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const actual = state.lastDealtDamage ?? 0;
+    if (actual <= 0) return addLog(state, `${attackName}：實際傷害為 0，不回血`, aIdx);
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (!att.active) return state;
+    const attName = pool.get(att.active.cardId)?.name ?? '?';
+    const newDmg = Math.max(0, att.active.damage - actual);
+    const realHeal = att.active.damage - newDmg;
+    if (realHeal === 0) return addLog(state, `${attackName}：${attName} 沒有受傷，不回血`, aIdx);
+    att.active = { ...att.active, damage: newDmg };
+    players[aIdx] = att;
+    return addLog({ ...state, players },
+      `${attackName}：${attName} 回復 ${realHeal} HP（=本招式造成的 ${actual} 傷害）`, aIdx);
+  };
+}
 regPre('鐵毒蛾|吸納', (state, _aIdx, _pool) => ({ state, damage: 30 }));
-regPost('鐵毒蛾|吸納', selfHealPost(30, '吸納'));
+regPost('鐵毒蛾|吸納', selfHealByDealtPost('吸納'));
 
 regPre('火神蛾|吸血', (state, _aIdx, _pool) => ({ state, damage: 30 }));
-regPost('火神蛾|吸血', selfHealPost(30, '吸血'));
+regPost('火神蛾|吸血', selfHealByDealtPost('吸血'));
 
 // ── 呼朋引伴 / 組成陣形 系列（5 張）───────────────────────────────────────────
 regPre('狗仔包|香味', (state, _aIdx, _pool) => ({ state, damage: 0 }));
@@ -6002,8 +6009,8 @@ regPost('伊布|鮮豔捕捉', (state, aIdx, _pool) => {
 });
 
 // 光電傘蜥|拋物面充電 — 從牌庫選最多 4 張能量卡加手牌（含特殊能量）
-//   v2.222 釐清：filter 'Energy' = supertype===Energy（任意基本/特殊能量），
-//   無遺漏。舊註解「簡化：4 張 Energy」誤導，實為「正確實裝」。
+//   v2.235 已升級：filter 'Energy' = supertype===Energy（任意基本/特殊能量），
+//   無遺漏，符合卡面「能量卡」（不再簡化）。
 regPre('光電傘蜥|拋物面充電', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('光電傘蜥|拋物面充電', deckSearchToHandPost(4, 'Energy', '拋物面充電'));
 
