@@ -2567,7 +2567,10 @@ function handlePlaying(
     }
 
     // 被動特性：受傷減 N（Passive damage reduction）— skipDefEffects 跳過
-    if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities) {
+    // v2.266：火箭隊的監視塔對 Colorless 防守方的 PASSIVE_DAMAGE_REDUCE 也要擋
+    //   （e.g. 毛毛角羊｜柔軟羊毛 Colorless -30）。
+    if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities
+        && !isColorlessAbilityBlocked(state, defenderCard, pool)) {
       for (const ab of defenderCard.abilities) {
         const reduce = PASSIVE_DAMAGE_REDUCE.get(ab.name);
         if (reduce) baseDamage = Math.max(0, baseDamage - reduce);
@@ -2577,6 +2580,9 @@ function handlePlaying(
     // v2.154 爆炸頭水牛｜捲牆 — 場上有 2 隻以上爆炸頭水牛 + 防守方戰鬥位是【無】基礎 → -60
     //   這是 field-wide buff，不只 defender 自己的 abilities，要掃 defender 整個場上
     //   無論多少隻擁有此特性的寶可夢，效果不重複（最多 -60 一次）
+    // v2.266：火箭隊的監視塔（Colorless 特性消除）會擋掉每隻爆炸頭水牛的捲牆 →
+    //   filter 內加 isColorlessAbilityBlocked 閘門（爆炸頭水牛本身是 Colorless）。
+    //   stadiums.ts line 179-180 的註解就預告過這類「被動特性 × 監視塔」要個別補閘門。
     if (!skipDefEffects && baseDamage > 0) {
       const defAll: CardInstance[] = [
         ...(defender.active ? [defender.active] : []),
@@ -2584,7 +2590,11 @@ function handlePlaying(
       ];
       const buffaloCount = defAll.filter(c => {
         const card = pool.get(c.cardId);
-        return card?.name === '爆炸頭水牛' && card?.abilities?.some(a => a.name === '捲牆');
+        if (card?.name !== '爆炸頭水牛') return false;
+        if (!card.abilities?.some(a => a.name === '捲牆')) return false;
+        // 監視塔擋掉【無】寶可夢的特性（捲牆持有者爆炸頭水牛本身是 Colorless）
+        if (isColorlessAbilityBlocked(state, card, pool)) return false;
+        return true;
       }).length;
       if (buffaloCount >= 2) {
         // 防守方戰鬥位必須是【無】基礎
@@ -2668,7 +2678,10 @@ function handlePlaying(
     // 被動特性：條件式完全免疫 — skipDefEffects 跳過
     // v2.250：ImmunityCheck 可回傳 boolean（既有 entry）或 { immune, newState }
     //   （順滑大衣 等需要寫 log 的特性）。後者會 chain 到 workingState。
-    if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities) {
+    // v2.266：火箭隊的監視塔對 Colorless 防守方的 PASSIVE_IMMUNITY 也要擋
+    //   （e.g. 奇諾栗鼠ex｜順滑大衣 Colorless 擲幣免疫）。
+    if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities
+        && !isColorlessAbilityBlocked(state, defenderCard, pool)) {
       for (const ab of defenderCard.abilities) {
         const immune = PASSIVE_IMMUNITY.get(ab.name);
         if (!immune) continue;

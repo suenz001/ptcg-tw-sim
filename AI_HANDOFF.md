@@ -1,9 +1,40 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.265)  
+> 最後更新：2026-04-29 (v2.266)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.266 — 火箭隊的監視塔 vs Colorless 被動特性 — 廣補閘門
+
+### 背景
+Leon 回報：場上有火箭隊的監視塔 + 自己備戰 2 隻爆炸頭水牛（捲牆）時，超級甲賀忍蛙ex 用「忍者飛旋」攻擊 active，傷害仍被 -60。
+卡面：監視塔 = 「雙方場上所有【無】寶可夢的特性全部消除」。爆炸頭水牛是 Colorless（已 grep 確認 5 印 100% Colorless），捲牆理應被監視塔關掉。
+`stadiums.ts` line 179-180 的註解早寫過：「被動特性散落在 ATTACK_PRE/POST 各自檢查，若日後發現 Colorless 被動特性跟本機制互動有誤，再各自加 isColorlessAbilityBlocked 閘門。」這就是該 case。
+
+### 涉及的 Colorless 持有者（grep 後盤點）
+| Hook 表 | 特性 | 持有者 | pokemonType | 修否 |
+|---|---|---|---|---|
+| inline（捲牆） | 捲牆 | 爆炸頭水牛（5 印） | Colorless | ✅ |
+| PASSIVE_DAMAGE_REDUCE | 柔軟羊毛 | 毛毛角羊 | Colorless | ✅ |
+| PASSIVE_IMMUNITY | 順滑大衣 | 奇諾栗鼠ex | Colorless | ✅ |
+| PASSIVE_DAMAGE_REDUCE | 鑽石膜/堅硬甲殼/密林之軀/堅堅之軀/堅硬身軀 | 各種非 Colorless | — | 不需 |
+| PASSIVE_IMMUNITY | 尾甲/礎石之勢/鐵壁硬殼/神秘之盾 | Darkness/Fighting/Water/Metal | — | 不需 |
+| PASSIVE_RETALIATION | 毒刺 | 千針魚/毒薔薇/羅絲雷朵/蜈蚣王 | Darkness/Grass | — | 不需 |
+
+PASSIVE_ATTACK_BONUS 邏輯不一樣（攻擊方多卡掃描），暫不處理；下次有人遇到再修。
+
+### 修法（`src/lib/game/engine.ts` 三處）
+1. **PASSIVE_DAMAGE_REDUCE 套用點**（line 2570）— if 條件加 `&& !isColorlessAbilityBlocked(state, defenderCard, pool)`。defenderCard 自己持有特性，holder 級別 binary check 一次就夠。
+2. **PASSIVE_IMMUNITY 套用點**（line 2681）— 同樣加 `!isColorlessAbilityBlocked(state, defenderCard, pool)`。
+3. **爆炸頭水牛｜捲牆 inline（line 2585）** — filter 內逐一檢查每隻爆炸頭水牛是否被監視塔擋（雖然 5 印都 Colorless，per-instance check 抗未來 scraper 變動）。
+
+### 驗證
+- `npm run build` ✅
+- `node scripts/sim-tournament.mjs 1` → 1332 場、0 bug（沒有 regression）
+- commit hash: 待補
 
 ---
 
