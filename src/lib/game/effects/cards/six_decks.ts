@@ -761,9 +761,11 @@ regR('taragun-to-hand', (state, aIdx, selectedIids, _params, pool) => {
 });
 
 // 高溫燃燒器（Item）— 棄自己 1 張基本【火】能量 → 選對手場上 1 張 Tool/特殊能量/Stadium 丟棄
-// v2.117 修：加 regG 讓手牌無火能量時 UI 不顯示黃框（Leon 要求）。
-// 主 effect follow-up（選 Tool/特殊能量/Stadium）目前引擎沒有 mixed-pick pending type，
-// 留待未來擴充 — 先標記為 TODO，不會卡住遊戲（log 提示後直接結束）。
+// v2.117：加 regG 讓手牌無火能量時 UI 不顯示黃框（Leon 要求）。
+// v2.140：完整實裝 — 用 modal-choice 列出對手場上所有 3 類候選作 options，玩家挑 1 個，
+//   resolver 根據 option.id prefix（tool:/energy:/stadium）分派丟棄動作。
+// v2.257：AI heuristic 加在 ai.ts modal-choice case（effectKey='heat-burner-pick' 分流），
+//   優先順序：對手戰鬥位特殊能量 > 備戰位特殊能量 > 場地卡 > 戰鬥位 Tool > 備戰位 Tool。
 regG('高溫燃燒器', (st, idx, pool) => {
   const hasFire = st.players[idx].hand.some(c => {
     const card = pool.get(c.cardId);

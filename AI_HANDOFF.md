@@ -1,9 +1,84 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.256)  
+> 最後更新：2026-04-28 (v2.257)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.257 — 高溫燃燒器 AI heuristic 升級 + 清過時 TODO 註解
+
+### 背景
+Leon 反映「高溫燃燒器是使用率很高的卡牌」，希望我處理。原本被 v2.117 的過時 TODO 註解誤導，以為主 effect follow-up 還沒實裝；繼續往下讀程式碼才發現 v2.140 已用 modal-choice 完整實裝（列出對手場上所有 Tool/特殊能量/Stadium → 玩家挑 1 個 → resolver 分派丟棄），只是註解忘了清。
+
+確認功能完整後盤點還可升級的點 → 找到一個：**AI 對 modal-choice 的預設策略是「選第一個非 disabled option」**，對高溫燃燒器來說很傻 — option 順序是「戰鬥位 Tool → 戰鬥位特殊能量 → 備戰位 Tool → ... → Stadium」，AI 永遠優先丟對手戰鬥位的 Tool（通常價值低），而不是更核心的特殊能量。
+
+### Bug (a)：AI 選擇優先順序蠢
+`ai.ts:521` modal-choice case 對所有卡都用「第一個非 disabled」策略。
+
+修法：在 modal-choice case 加 `effectKey === 'heat-burner-pick'` 分流，按價值分桶 + 排序：
+```ts
+if (sel.effectKey === 'heat-burner-pick') {
+  const dIdx = (1 - sel.sourcePlayerIdx) as 0 | 1;
+  const oppActiveIid = state.players[dIdx].active?.iid;
+  const energyActive: Opt[] = [];
+  const energyBench: Opt[] = [];
+  const stadiums: Opt[] = [];
+  const toolActive: Opt[] = [];
+  const toolBench: Opt[] = [];
+  for (const o of opts) {
+    if (o.disabled) continue;
+    if (o.id === 'stadium') stadiums.push(o);
+    else if (o.id.startsWith('energy:')) {
+      const targetIid = o.id.split(':')[1];
+      (targetIid === oppActiveIid ? energyActive : energyBench).push(o);
+    } else if (o.id.startsWith('tool:')) {
+      const targetIid = o.id.split(':')[1];
+      (targetIid === oppActiveIid ? toolActive : toolBench).push(o);
+    }
+  }
+  const ordered = [...energyActive, ...energyBench, ...stadiums, ...toolActive, ...toolBench];
+  const pick = ordered[0] ?? opts.find(o => !o.disabled) ?? opts[0];
+  return { type: 'RESOLVE_SELECTION', selectedIids: pick ? [pick.id] : [] };
+}
+```
+
+優先順序設計理由：
+1. **對手戰鬥位特殊能量** — 最直接削弱對手當下回合攻擊（特殊能量常是攻擊核心：稜鏡能量、火箭隊能量、太晶能量、燃火能量等）
+2. **對手備戰位特殊能量** — 削弱即將上來主力的攻擊力
+3. **場地卡** — 規則改寫類影響大，但對自己的場地也會被丟，所以排第三
+4. **對手戰鬥位 Tool** — Tool 通常是被動小加成（HP+30、減能、減傷）
+5. **對手備戰位 Tool** — 最低優先
+
+只在 effectKey 命中時走新分支，不影響其他 modal-choice 卡的行為（火焰雞ex 沸騰鬥志、烏栗、N索羅亞克、N的扒手貓、泰姆 等）。
+
+### Bug (b)：清掉 v2.117 過時 TODO 註解
+`six_decks.ts:763-766` 寫的「主 effect follow-up 留待未來擴充 — 先標記為 TODO，不會卡住遊戲」是 v2.117 留下、v2.140 實裝完忘記清的註解，誤導下個 AI（也誤導了當前 session 的我）以為功能沒做。
+
+改為正確的版本演進註解：
+```
+// v2.117：加 regG 讓手牌無火能量時 UI 不顯示黃框（Leon 要求）。
+// v2.140：完整實裝 — 用 modal-choice 列出對手場上所有 3 類候選作 options，玩家挑 1 個，
+//   resolver 根據 option.id prefix（tool:/energy:/stadium）分派丟棄動作。
+// v2.257：AI heuristic 加在 ai.ts modal-choice case（effectKey='heat-burner-pick' 分流），
+//   優先順序：對手戰鬥位特殊能量 > 備戰位特殊能量 > 場地卡 > 戰鬥位 Tool > 備戰位 Tool。
+```
+
+### 變更檔案
+- `src/lib/game/ai.ts`：modal-choice case 加 effectKey-based heuristic 分流
+- `src/lib/game/effects/cards/six_decks.ts`：清過時 TODO 註解 + 補 v2.140/v2.257 演進歷史
+- `src/lib/version.ts`：2.256 → 2.257
+
+### Build
+✅ `npm run build` 通過（prod 16.94s）
+
+### 設計筆記（給後續 AI 的提醒）
+寫 modal-choice 的卡時，如果有「明顯的價值排序」（這張卡 AI 應該偏好哪種選擇？），考慮：
+1. 在 ai.ts modal-choice case 加 effectKey 分流（保持其他 modal-choice 卡的預設策略）
+2. 而不是改全域預設 — 因為不同卡的 option 排序意義不同
+
+可參考 v2.257 heat-burner-pick 模式做後續類似 heuristic（如：火焰雞ex 沸騰鬥志、烏栗 等若有清楚最優解）。
 
 ---
 

@@ -518,6 +518,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
 
     // v2.139 modal-choice：兩/多選一文字選單（烏栗等）
     // v2.201 擴展：偵測 params.stepper（泰姆猜 HP 等）— AI 直接送 init 值
+    // v2.257 擴展：effectKey 專屬 heuristic（高溫燃燒器：價值排序丟棄目標）
     case 'modal-choice': {
       const stepper = sel.params?.stepper as { min: number; max: number; step: number; init: number } | undefined;
       if (stepper) {
@@ -526,7 +527,37 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         return { type: 'RESOLVE_SELECTION', selectedIids: [String(stepper.init)] };
       }
       const opts = (sel.params?.options as Array<{ id: string; text: string; disabled?: boolean }>) ?? [];
-      // AI 簡化：選第一個非 disabled 選項
+
+      // v2.257 高溫燃燒器專屬：按價值排序選擇丟棄目標
+      //   id 格式：'tool:<iid>' / 'energy:<iid>:<eid>' / 'stadium'
+      //   優先順序：對手戰鬥位特殊能量 > 備戰位特殊能量 > 場地卡 > 戰鬥位 Tool > 備戰位 Tool
+      //   理由：特殊能量通常是攻擊核心（如稜鏡/火箭隊/太晶能量），戰鬥位的直接削弱當下回合對手攻擊力。
+      if (sel.effectKey === 'heat-burner-pick') {
+        const dIdx = (1 - sel.sourcePlayerIdx) as 0 | 1;
+        const oppActiveIid = state.players[dIdx].active?.iid;
+        type Opt = { id: string; text: string; disabled?: boolean };
+        const energyActive: Opt[] = [];
+        const energyBench: Opt[] = [];
+        const stadiums: Opt[] = [];
+        const toolActive: Opt[] = [];
+        const toolBench: Opt[] = [];
+        for (const o of opts) {
+          if (o.disabled) continue;
+          if (o.id === 'stadium') stadiums.push(o);
+          else if (o.id.startsWith('energy:')) {
+            const targetIid = o.id.split(':')[1];
+            (targetIid === oppActiveIid ? energyActive : energyBench).push(o);
+          } else if (o.id.startsWith('tool:')) {
+            const targetIid = o.id.split(':')[1];
+            (targetIid === oppActiveIid ? toolActive : toolBench).push(o);
+          }
+        }
+        const ordered = [...energyActive, ...energyBench, ...stadiums, ...toolActive, ...toolBench];
+        const pick = ordered[0] ?? opts.find(o => !o.disabled) ?? opts[0];
+        return { type: 'RESOLVE_SELECTION', selectedIids: pick ? [pick.id] : [] };
+      }
+
+      // 預設：選第一個非 disabled 選項
       const first = opts.find(o => !o.disabled) ?? opts[0];
       return { type: 'RESOLVE_SELECTION', selectedIids: first ? [first.id] : [] };
     }
