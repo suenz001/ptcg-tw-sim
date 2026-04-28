@@ -14,7 +14,7 @@
  * v2.05 (Session 38b2)：從 effects.ts 抽離，作為模組化第一步骨架。
  */
 
-import type { Card } from '$lib/cards/types';
+import type { Card, EnergyType } from '$lib/cards/types';
 import type {
   GameState, PlayerState, CardInstance, PendingSelection, GameAction,
   SpecialCondition,
@@ -158,6 +158,21 @@ export interface PreDiscardSpec {
    * 仍照「卡張數」傳，需要 unit 倍率時自行解讀。
    */
   countMode?: 'cards' | 'units';
+  /**
+   * v2.249：限定可選能量屬性 — UI 在 modal 中過濾掉不符合的能量卡（讓玩家無法誤選）。
+   *   - 卡面寫「將 1 張【水】能量放回手牌」→ energyTypeFilter: 'Water'
+   *   - 卡面只說「能量」（任意屬性）→ 不設此欄位
+   * 比對規則：能量卡 pokemonType === filter（基本能量），或卡名包含「【X】」字樣（fallback）。
+   */
+  energyTypeFilter?: EnergyType;
+  /**
+   * v2.249：被選中的能量處理方式 — PRE 回呼仍由各卡自定義，但 UI 端 modal 文字會依此調整：
+   *   - 'discard'（預設）：丟到棄牌堆 — 顯示「選擇要丟棄的能量」
+   *   - 'return-to-hand'：放回手牌 — 顯示「選擇要放回手牌的能量」
+   *   - 'return-to-deck'：洗回牌庫 — 顯示「選擇要洗回牌庫的能量」
+   * 注意：實際操作仍由 regPre fn 執行；此欄位純粹影響 UI 文案。
+   */
+  disposition?: 'discard' | 'return-to-hand' | 'return-to-deck';
 }
 
 export const ATTACK_PRE_DISCARD_CHOICE = new Map<string, PreDiscardSpec>();

@@ -1732,6 +1732,23 @@
       addFrom(activePlayer.active);
       for (const b of activePlayer.bench) addFrom(b);
     }
+    // v2.249：energyTypeFilter — 限制可選能量屬性（如 忍者飛旋 限【水】能量）
+    if (spec.energyTypeFilter) {
+      const wantType = spec.energyTypeFilter;
+      const typeMark = `【${({
+        Grass: '草', Fire: '火', Water: '水', Lightning: '雷', Psychic: '超',
+        Fighting: '鬥', Darkness: '惡', Metal: '鋼', Fairy: '妖', Dragon: '龍', Colorless: '無'
+      } as Record<string, string>)[wantType] ?? wantType}】`;
+      return out.filter(e => {
+        const ec = getCard(e.cardId);
+        if (!ec || ec.supertype !== 'Energy') return false;
+        // 基本能量：subtype === 'Basic' 且 pokemonType 對得上
+        if (ec.subtype === 'Basic' && ec.pokemonType === wantType) return true;
+        // fallback：卡名含「【X】」字樣（特殊能量裡的單一屬性能量等）
+        if (ec.name?.includes(typeMark)) return true;
+        return false;
+      });
+    }
     return out;
   }
 
@@ -3553,7 +3570,11 @@
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
-          <h3>{isHandDiscard ? '🪶' : '⚡'} {preAttackDiscard.attackName}：選擇要丟棄的{isHandDiscard ? '火箭隊支援者' : '能量'}</h3>
+          <h3>{isHandDiscard ? '🪶' : '⚡'} {preAttackDiscard.attackName}：選擇要{
+            spec.disposition === 'return-to-hand' ? '放回手牌' :
+            spec.disposition === 'return-to-deck' ? '洗回牌庫' :
+            '丟棄'
+          }的{isHandDiscard ? '火箭隊支援者' : (spec.energyTypeFilter ? `【${({Grass:'草',Fire:'火',Water:'水',Lightning:'雷',Psychic:'超',Fighting:'鬥',Darkness:'惡',Metal:'鋼',Fairy:'妖',Dragon:'龍',Colorless:'無'} as Record<string,string>)[spec.energyTypeFilter]}】能量` : '能量')}</h3>
           <p class="sel-hint">
             最少 {spec.min} {unit}{spec.max === null ? '（不限上限）' : `，最多 ${spec.max} ${unit}`}
             · 已選 {pickedCount} 張{isUnits ? `（= ${pickedAmount} 個能量）` : ''}

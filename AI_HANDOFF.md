@@ -1,9 +1,36 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.248)  
+> 最後更新：2026-04-28 (v2.249)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.249 — 奇諾栗鼠ex + 超級甲賀忍蛙ex 完整實裝
+
+### 奇諾栗鼠ex（從未實裝）
+- **能量巴掌**（招式）：自身能量數 × 40 → 用 `selfAttachedEnergyMultiplyPre(0, 40, 'all', '能量巴掌')`
+- **順滑大衣**（特性）：受招式傷害時擲硬幣，正面則不受該傷害
+
+順滑大衣需要 PASSIVE_IMMUNITY infra 升級 — 既有 ImmunityCheck 簽名只回傳 boolean，無法寫硬幣 log。
+擴充簽名為 `boolean | { immune: boolean; newState: GameState }`，既有 4 個 entry 仍向下相容。
+engine.ts loop 處理兩種型別、chain newState。
+
+### 超級甲賀忍蛙ex｜忍者飛旋（升級為玩家選擇）
+舊版自動找身上水能量回手 +80（玩家無選擇權）。
+卡面：「**若希望**，將 1 個這隻寶可夢身上附加的【水】能量放回手牌，增加 80 點傷害。」
+
+升級：用 ATTACK_PRE_DISCARD_CHOICE 借殼 + 兩個新 spec 欄位讓 modal 顯示正確：
+- `energyTypeFilter: 'Water'` — UI getDiscardableEnergies 過濾出只有水能量
+- `disposition: 'return-to-hand'` — modal 文案顯示「選擇要放回手牌的【水】能量」（不是「丟棄」）
+
+regPre 改用 action.discardedEnergyIids 處理玩家選擇：選 0 張 → 120；選 1 張 → 該水能量回手 + 200。
+
+### Build
+✅ `npm run build` 通過（prod 16.59s）
+
+audit-simplifications 從 4 → 3 個真實簡化（蜿蜒割裂 / 灰塵山 / 跳躍衝天）。
 
 ---
 
