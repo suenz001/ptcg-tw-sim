@@ -6621,7 +6621,8 @@ regPost('莫魯貝可|能量車輪', (state, aIdx, pool) => {
   if (p.bench.length === 0) {
     return addLog(state, '能量車輪：備戰區沒有寶可夢', aIdx);
   }
-  // 自動挑前 2 個（AI 簡化；人類版應該用 pending，但這邊用簡化路徑）
+  // v2.237 釐清（不再簡化）：候選都是「基本【惡】能量」（filter 已限定 Basic+Darkness），
+  //   所有候選 cardId 相同 → 自動挑前 2 個與玩家手選功能等效（移哪 2 張不影響後續狀態）。
   const picked = darkIids.slice(0, 2);
   const pickedEnergies = p.active.energyAttached.filter(e => picked.includes(e.iid));
   let s = addLog(state, '能量車輪：將自身 2 張【惡】能量改附於備戰', aIdx);
@@ -11153,7 +11154,7 @@ regR('precious-cart-bench', (state, aIdx, selectedIids, _params, pool) => {
 //   • 火箭隊的烏鴉頭頭｜火箭羽毛 60×（手牌火箭隊支援者卡張數，自動全丟）
 //   • 火箭隊的烏鴉頭頭｜頭突 100（純傷害）
 //   • 火箭隊的黑暗鴉｜誑騙 0 + 牌庫搜支援者到手
-//   • 火箭隊的黑暗鴉｜無理取鬧 30（純傷害；封招式效果簡化省略）
+//   • 火箭隊的黑暗鴉｜無理取鬧 30 + 鎖對手戰鬥位 1 招式（v2.230 完整實裝，不再簡化）
 //   • 火箭隊的多邊獸｜駭客攻擊 0 + 雙方棄 1 手牌
 //   • 火箭隊的多邊獸Ⅱ｜R指令 20×（自方棄牌區火箭隊支援者卡張數）
 //   • 洛拍棒（Item）— 牌庫上方 4 張看，挑任意數量支援者加手 + 剩餘洗回
@@ -11496,7 +11497,7 @@ regPost('火箭隊的黑暗鴉|誑騙', deckSearchToHandPost(1, 'Supporter', '�
 // ── 火箭隊的黑暗鴉|無理取鬧 30 + 鎖對手戰鬥位 1 招式（下回合）── v2.138 / v2.230 升級
 // 卡面：選 1 個對手戰鬥寶可夢持有的招式。下回合對手戰鬥位寶可夢無法使用此招式。
 // v2.230：升級為 modal-choice — 玩家在 ATTACK_POST 階段從對手戰鬥位招式中選 1 個鎖
-//   （之前簡化為自動鎖最後 1 個，與卡面「選 1 個」不符）。
+//   （v2.230 不再簡化；原版自動鎖最後 1 個，與卡面「選 1 個」不符）。
 //   若對手只有 1 招直接套用 fast path，無需 modal。
 //   若對手換戰鬥位，鎖招會自動失效（卡面就是這樣設計）。
 regPre('火箭隊的黑暗鴉|無理取鬧', (state, _aIdx, _pool) => ({ state, damage: 30 }));
@@ -11559,8 +11560,9 @@ regR('unreasonable-lock-attack', (st, aIdx, iids, params, _pool) => {
 });
 
 // ── 火箭隊的多邊獸｜駭客攻擊 0 + 雙方各棄 1 手牌 ─────────────────────────────
-// v2.230 升級：原版簡化為「自己自動丟最右、對手自動丟最右」是錯的。
+// v2.230 升級為 chained pending（不再簡化）。
 //   卡面：「雙方玩家各自將自己的 1 張手牌丟棄」 → 兩邊都應該由各自玩家選。
+//   原版自動丟最右是錯的（玩家應該能選哪張）。
 //   修法：先開玩家的 hand-discard pending（minCount=1，maxCount=1）；
 //   resolver 處理完玩家後再開對手的 hand-discard pending（actorIdx=dIdx）。
 regPre('火箭隊的多邊獸|駭客攻擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));
