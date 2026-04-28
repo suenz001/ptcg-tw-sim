@@ -1351,7 +1351,11 @@ function handlePlaying(
       evoCard.subtype === 'ex';
     if (!sameEvoName(evoCard.evolvesFrom, baseCard.name) && !prismaticDNAException) return state;
 
-    // 進化：繼承傷害、能量、狀態；進化鏈堆疊保留被進化掉的 CardInstance（裸殼，附加物轉給頂層）
+    // 進化：繼承傷害、能量、寶可夢道具；進化鏈堆疊保留被進化掉的 CardInstance（裸殼，附加物轉給頂層）
+    // v2.260 Bug #2 修：PDF §I-A-05「進化後特殊狀態全部消除」 — 不再繼承 basePoke.status。
+    //   spread `...evoInst` 後 status / secondaryStatus / 跨回合 flag（cantRetreatNextTurn /
+    //   damageReduceNextHit / cantAttackThisTurn 等）皆從 evoInst（新進化卡）繼承 default
+    //   undefined，等同於「特殊狀態與招式效果全部消除」。
     const prevStack = basePoke.evolvedFromStack ?? [];
     const baseBare: CardInstance = {
       ...basePoke,
@@ -1364,7 +1368,7 @@ function handlePlaying(
       damage: basePoke.damage,
       energyAttached: basePoke.energyAttached,
       toolAttached: basePoke.toolAttached,
-      status: basePoke.status,
+      // v2.260 Bug #2：不再寫 `status: basePoke.status` — 進化後特殊狀態必須消除（PDF §I-A-05）
       evolvedFromIid: basePoke.iid,
       evolvedFromStack: [...prevStack, baseBare],
       evolvedThisTurn: true,
@@ -2487,6 +2491,19 @@ function handlePlaying(
     if (!skipWeakRes && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType && attackerCard.pokemonType === effectiveWeaknessType) {
       baseDamage *= 2;
     }
+    // v2.260 Bug #1：抵抗力計算（PDF §I-A-01 步驟 4）
+    //   若受擊方寶可夢卡面抵抗力屬性 === 攻擊方寶可夢屬性 → 套用 resistance.value（"-30" 等）。
+    //   skipWeakRes 旗標同時跳過抵抗力計算（PDF §II-B-06「不計算弱點・抵抗力」）。
+    //   弱點導致 baseDamage 翻倍後再扣抵抗力；若扣到 ≤0 則結束傷害計算（依 PDF）。
+    //   未來若需「消除抵抗力」hook（如太陽岩 抵抗遮蔽），在此處加 effectiveResistance flag。
+    const resistanceValue = defenderCard.resistance?.value;  // 形如 "-30"
+    const resistanceType = defenderCard.resistance?.type;
+    if (!skipWeakRes && baseDamage > 0 && resistanceType && resistanceValue && attackerCard.pokemonType === resistanceType) {
+      const resistDelta = parseInt(resistanceValue, 10);  // "-30" → -30
+      if (!isNaN(resistDelta)) {
+        baseDamage = Math.max(0, baseDamage + resistDelta);
+      }
+    }
     // v2.101：鋁鋼橋龍｜塗層攻擊 — 本回合此卡不受【基礎】寶可夢招式傷害
     // 攻擊方 stage=Basic 且 defender 有 immuneToBasicAttackThisTurn → 傷害歸零（招式仍觸發其他 post 效果）
     if (baseDamage > 0
@@ -2497,9 +2514,10 @@ function handlePlaying(
       baseDamage = 0;
     }
 
-    // v2.174 阿塞蘿拉的惡作劇 — defender 在本回合不受 ex 招式的傷害與效果
-    // attacker 是 ex（subtype==='ex' || name 結尾 ex/EX）+ defender 有 immuneToExAttackThisTurn
-    //   → baseDamage=0，並設旗標讓 POST 階段跳過附加效果。
+    // v2.174 阿塞蘿拉的惡作劇 — defender 在本回合「不受 ex 招式的傷害與效果」
+    // 卡面同時涵蓋 PDF §C-16「不會受到招式的傷害」+ §C-17「不會受到招式的效果的影響」兩者。
+    // 故下方同時把 baseDamage 清 0（C-16）並設 skipDefEffects（C-17）— 是故意的耦合，不是 bug。
+    // 若未來新加只擋傷害不擋效果（純 C-16）或反之的卡，請拆成兩個獨立旗標。
     const attackerIsEx = attackerCard.subtype === 'ex'
       || attackerCard.name.endsWith('ex') || attackerCard.name.endsWith('EX');
     if (baseDamage > 0
@@ -2507,11 +2525,8 @@ function handlePlaying(
         && attackerIsEx) {
       workingState = addLog(workingState,
         `${defenderCard.name} 因阿塞蘿拉的惡作劇效果，不受【ex】招式的傷害與效果`, dIdx);
-      baseDamage = 0;
-      // 同步把 skipDefEffects 之類的標誌打開（用 post 用的 absorbed flag）— 這裡簡化為
-      // 在 baseDamage 0 時也讓 POST 不執行追加效果（既有引擎在 damage=0 時多數 POST 已跳過，
-      // 但部分卡還是會執行；本卡語意是「全免」所以以 skipDefEffects=true 概念表示）。
-      skipDefEffects = true;
+      baseDamage = 0;        // C-16 部分（傷害變 0）
+      skipDefEffects = true; // C-17 部分（跳過步驟 5 受擊方效果）
     }
 
     // v2.174 鐵之防禦強化 — 自己【鋼】寶可夢本回合受招式 -30
@@ -2813,18 +2828,36 @@ function handlePlaying(
         if (atkCard?.name?.startsWith('N的')) bagonElenaBonus = 3;
       }
       // v2.103 古舊能量（ACE SPEC）— 附有此能量的寶可夢被 KO 時，對方獎賞 -1
+      // v2.260 Bug #4：卡面「對戰中，自己的『古舊能量』的這個效果只生效 1 次」
+      //   per-player flag ancientEnergyMinusOneUsed[dIdx]：dIdx 玩家的古舊能量已生效則不再 -1
       let ancientEnergyAdjust = 0;
+      let ancientEnergyJustUsed = false;
       const koInst = state.players[dIdx].active;
       if (koInst) {
-        const hasAncient = koInst.energyAttached.some(e => pool.get(e.cardId)?.name === '古舊能量');
-        if (hasAncient) ancientEnergyAdjust = -1;
+        const usedFlags = state.ancientEnergyMinusOneUsed ?? [false, false];
+        if (!usedFlags[dIdx]) {
+          const hasAncient = koInst.energyAttached.some(e => pool.get(e.cardId)?.name === '古舊能量');
+          if (hasAncient) {
+            ancientEnergyAdjust = -1;
+            ancientEnergyJustUsed = true;
+          }
+        }
       }
       // 獎賞牌下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
       const prizes = Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + ancientEnergyAdjust);
       defPlayers[dIdx] = defenderState;
+      // v2.260 Bug #4：若古舊能量這次有 -1，per-player flag 設為 true（之後不再 -1）
+      const newAncientFlags: [boolean, boolean] = ancientEnergyJustUsed
+        ? (() => {
+            const f = [...(newState.ancientEnergyMinusOneUsed ?? [false, false])] as [boolean, boolean];
+            f[dIdx] = true;
+            return f;
+          })()
+        : (newState.ancientEnergyMinusOneUsed ?? [false, false]);
       newState = {
         ...newState, players: defPlayers,
         pendingPrizes: prizes, turnPhase: 'end',
+        ancientEnergyMinusOneUsed: newAncientFlags,
       };
       // v2.246 KO cause tracking — 招式 KO 對手戰鬥位
       newState = recordOppKO(newState, dIdx, defenderCard, 'attack');

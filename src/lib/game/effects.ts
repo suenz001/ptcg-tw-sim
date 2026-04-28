@@ -446,9 +446,17 @@ function hitBenchAll(
   const koDiscards: CardInstance[] = [];
   const koNames: string[] = [];
   const koCards: (Card | undefined)[] = [];  // v2.246 KO cause tracking
+  const teraImmunNames: string[] = [];        // v2.260 Bug #3 太晶備戰免疫名單
 
   for (const c of target.bench) {
     const card = pool.get(c.cardId);
+    // v2.260 Bug #3：太晶寶可夢規則 — 在備戰位免疫招式傷害（卡面規則性）
+    //   只擋招式傷害（這裡是 hitBenchAll 來自招式），**不擋**特性/效果放置指示物（C-07）
+    if (card?.tags?.includes('太晶')) {
+      teraImmunNames.push(card.name ?? '?');
+      newBench.push(c);  // 保持原狀，不放傷害
+      continue;
+    }
     const newDmg = c.damage + amount;
     const hp = effectiveHPInline(c, pool, state);
     if (hp > 0 && newDmg >= hp) {
@@ -474,6 +482,10 @@ function hitBenchAll(
   const who = targetIdx === attackerIdx ? '自己' : '對手';
   let s: GameState = { ...state, players };
   s = addLog(s, `${attackLabel}：對${who}所有備戰寶可夢各造成 ${amount} 傷害`, attackerIdx);
+  // v2.260 Bug #3：太晶寶可夢備戰免疫日誌
+  if (teraImmunNames.length > 0) {
+    s = addLog(s, `${attackLabel}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);
+  }
   if (koNames.length > 0) {
     s = addLog(s, `${attackLabel}：${koNames.join('、')} 被擊倒，${state.players[attackerIdx].name} 額外取得 ${morePrizes} 張獎勵牌`, null);
     s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + morePrizes };
@@ -539,11 +551,18 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   const hitNames: string[] = [];
   const koNames: string[] = [];
   const koCards: (Card | undefined)[] = [];  // v2.246 KO cause tracking
+  const teraImmunNames: string[] = [];        // v2.260 Bug #3 太晶備戰免疫名單
   const hitSet = new Set(selectedIids);
 
   for (const c of target.bench) {
     if (!hitSet.has(c.iid)) { newBench.push(c); continue; }
     const card = pool.get(c.cardId);
+    // v2.260 Bug #3：太晶寶可夢規則 — 在備戰位免疫招式傷害（卡面規則性）
+    if (card?.tags?.includes('太晶')) {
+      teraImmunNames.push(card.name ?? '?');
+      newBench.push(c);
+      continue;
+    }
     const newDmg = c.damage + amount;
     const hp = effectiveHPInline(c, pool, st);
     if (hp > 0 && newDmg >= hp) {
@@ -566,6 +585,10 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   let s: GameState = { ...st, players };
   if (hitNames.length > 0) {
     s = addLog(s, `${label}：對 ${hitNames.join('、')} 造成 ${amount} 傷害`, actorIdx);
+  }
+  // v2.260 Bug #3：太晶寶可夢備戰免疫日誌
+  if (teraImmunNames.length > 0) {
+    s = addLog(s, `${label}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);
   }
   if (koNames.length > 0) {
     s = addLog(s, `${label}：${koNames.join('、')} 被擊倒，${st.players[actorIdx].name} 額外取得 ${morePrizes} 張獎勵牌`, null);

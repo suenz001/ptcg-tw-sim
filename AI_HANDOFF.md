@@ -1,9 +1,73 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.259)  
+> 最後更新：2026-04-28 (v2.260)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.260 — PTCG 規則一致性審查 — 修 3 個 P0 + 1 個 P1 + 1 個 P2
+
+### 背景
+讀完 PDF《進階玩家規則教學手冊 ver 3.4》全 61 頁、PTCG_QUICK_LOOKUP 後做了 31 項規則審查（18 高風險 + 8 邊緣案例 + 5 規則類別），發現引擎有規則違反。本次一次性全修。
+
+### Bug #1 — 抵抗力計算未實裝（P0）
+**規則**：PDF §I-A-01 步驟 4「抵抗力的計算」+ §II-B B-06「不計算弱點・抵抗力」
+**舊行為**：`engine.ts` 全檔無 resistance 處理；`effects.ts:8294/8344` 程式碼註解自承「engine 未實作抵抗力」。卡池 H/I/J 標寶可夢 658/3081 張（≈21%）有抵抗力欄位（多為超能/惡屬性對【鬥】抵抗 -30），這些寶可夢被打時都算錯傷害。
+**修法**：`engine.ts` 弱點計算（line 2487）之後加抵抗力分支：
+```ts
+const resistanceValue = defenderCard.resistance?.value;  // "-30"
+const resistanceType = defenderCard.resistance?.type;
+if (!skipWeakRes && baseDamage > 0 && resistanceType && resistanceValue && attackerCard.pokemonType === resistanceType) {
+  const resistDelta = parseInt(resistanceValue, 10);
+  if (!isNaN(resistDelta)) baseDamage = Math.max(0, baseDamage + resistDelta);
+}
+```
+- `skipWeakRes` 旗標同時跳過弱點 + 抵抗力（B-06「不計算弱點・抵抗力」招式如「瑜伽踢」「打爆」「岩石踢」）
+- 弱點 ×2 後再扣抵抗力（步驟順序：3 弱點 → 4 抵抗力）
+- 抵抗力扣到 ≤0 → 取 0（PDF 步驟 4「結束傷害計算」邏輯等價）
+
+### Bug #2 — 進化時特殊狀態未清除（P0）
+**規則**：PDF §I-A-05「進化後，之前受到的效果的影響或特殊狀態全部消除」
+**舊行為**：`engine.ts:1367` 寫 `status: basePoke.status` 把進化前狀態（中毒/灼傷/睡眠/麻痺/混亂）直接繼承到進化後寶可夢。進化後仍持續中毒/灼傷，每回合多吃 10/20 點 — 嚴重影響牌組策略（「進化解狀態」是常用對策）。
+**修法**：刪除該行；`...evoInst` spread 從新進化卡 default 繼承 undefined，等同於「特殊狀態全部消除」。同時 `secondaryStatus` 與其他跨回合 flag（cantRetreatNextTurn / damageReduceNextHit / cantAttackThisTurn）也自動 reset。
+
+### Bug #3 — 太晶 ex 備戰位招式傷害免疫未實作（P0）
+**規則**：太晶寶可夢規則性「太晶寶可夢只要在備戰區，就不會受到對手寶可夢招式的傷害」
+**舊行為**：engine.ts 4 個 isTera 用途都跟備戰免疫無關（零之大空洞上限/璀璨結晶/白蕾雅/場上判定）。沒有對戰圓形競技場時，太晶 ex 在備戰被「貪婪危害」「絕殺」「黑曜石」等招式打死。
+**修法**：`effects.ts` 的 `hitBenchAll`（line 433+）與 `bench-hit-N` resolver（line 537+）加 isTera 檢查 — 受擊方是太晶寶可夢時跳過傷害放置，並在 log 寫出「{name} 為太晶寶可夢，在備戰位免疫招式傷害」。
+- **只擋招式傷害**，**不擋**特性/效果放置指示物（C-07，例如「散佈詛咒」「咒詛炸彈」「冰冷之帳」對備戰放指示物仍有效）— 規則一致
+
+### Bug #4 — 古舊能量每場 1 次減獎未追蹤（P1）
+**規則**：SV6 古舊能量卡面「對戰中，自己的『古舊能量』的這個效果只生效 1 次」
+**舊行為**：`engine.ts:2820` 每次 KO 都檢查身上有無古舊能量、有就 -1，沒有 per-game flag。
+**實戰影響**：低（古舊能量是 ACE SPEC 一副 1 張，且能量被棄就出局），但仍是規則違反。
+**修法**：`types.ts` GameState 加 `ancientEnergyMinusOneUsed?: [boolean, boolean]` per-player flag；engine.ts 古舊能量檢查加判斷：`!usedFlags[dIdx]` 才生效，生效後設 `newAncientFlags[dIdx] = true`。
+
+### Bug #5 — ex 全免實作混淆 C-16/C-17 語義（P2）
+**規則**：PDF §II-C-16「不會受到招式的傷害」vs §II-C-17「不會受到招式的效果的影響」是不同概念
+**舊行為**：`engine.ts:2500-2515` `immuneToExAttackThisTurn` 同時設 `baseDamage = 0` + `skipDefEffects = true` 但註解模糊。
+**實戰影響**：無（阿塞蘿拉的惡作劇本來就同時擋兩者，是故意耦合），但語義不清會讓未來實裝出錯。
+**修法**：改寫註解清楚標明「同時涵蓋 C-16 + C-17 是故意的；若未來新加只擋傷害不擋效果（純 C-16）或反之的卡，請拆成兩個獨立旗標」。
+
+### 變更檔案
+- `src/lib/game/engine.ts`：Bug #1 抵抗力計算、Bug #2 進化清狀態、Bug #4 古舊能量 flag、Bug #5 ex 全免註解
+- `src/lib/game/effects.ts`：Bug #3 太晶 ex 備戰免疫（hitBenchAll + bench-hit-N resolver）
+- `src/lib/game/types.ts`：Bug #4 GameState 加 `ancientEnergyMinusOneUsed`
+- `src/lib/version.ts`：2.259 → 2.260
+- `AI_HANDOFF.md`：v2.260 entry
+
+### 通過審查的項目（沒改但驗證過）
+- 撤退保留物（14 項）/ 進化保留物（A1-A4）/ 寶可夢檢查順序（中毒→灼傷→睡眠→麻痺）/ 招式宣告（睡眠/麻痺禁宣告、混亂擲幣前置 30 自傷）/ 競技場同名規則 / Mulligan 對手抽 N / 撤退剛附能量可作撤退費 / C-16 與效果指示物互動 / skipDefEffects 路由
+
+### 未驗證項（無對應實裝、暫不影響）
+- 招式失敗效果（D-01）— 模擬器目前未實裝有「擲幣決定對手招式失敗」的卡（如澈沙）
+- D-13 消除優先級 — 未實裝「全消除撤退能量」的卡（如阿響的熔岩蝸牛）
+- 「以 HP 1 留場」特性 vs 古舊能量 — 雖然有「結實」「堅忍之軀」類，但精確時序未驗證
+
+### Skill 安裝
+本次也建立了 `ptcg-rule-audit` skill — 規則審查官 SOP，含 PDF 章節摘要、18 高風險檢查項、8 邊緣案例、Bug 報告格式 + P0/P1/P2 矩陣。內容在 `/tmp/ptcg-skill/ptcg-rule-audit/SKILL.md`。要啟用請手動複製到 Windows `E:\ptcg-tw-sim\.claude\skills\ptcg-rule-audit\`（`.claude/` 在 .gitignore 不會污染 repo）。
 
 ---
 

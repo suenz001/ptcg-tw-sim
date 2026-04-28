@@ -555,6 +555,15 @@ export interface GameState {
    */
   rocketInMyDiscardAtMyTurnStart?: [number, number];
   /**
+   * v2.260 Bug #4：古舊能量「對戰中只生效 1 次」減獎追蹤（per-player）。
+   * 卡面：「附有這張卡的寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，被獲得的獎賞卡減少 1 張。
+   *   對戰中，自己的『古舊能量』的這個效果只生效 1 次。」
+   * [P1, P2] — 該玩家附有古舊能量的寶可夢被 KO 並觸發過 -1 後設為 true。
+   * 之後即使另一隻附古舊能量的寶可夢被 KO 也不再 -1。
+   * 初始值 [false, false]。
+   */
+  ancientEnergyMinusOneUsed?: [boolean, boolean];
+  /**
    * v2.70：copy-attack（例如 火箭隊的謎擬Ｑ｜扮晶晶酒）在 ATTACK_PRE 階段
    * 記下被複製招式的 effectKey（格式 `對手卡名|招式名`），好讓 ATTACK_POST
    * 可以轉接呼叫被複製招式的 POST（包含 pendingSelection 類附加效果）。
