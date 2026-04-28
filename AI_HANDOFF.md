@@ -1,9 +1,57 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.266)  
+> 最後更新：2026-04-29 (v2.267)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.267 — Pokemon Ability 全卡掃 — Wave 1（純被動 7 個）
+
+### 背景
+完成所有 Trainer / Tool / Stadium / SpecialEnergy 後，剩 H/I/J 卡庫中 179 個 Pokemon ability 和 790 個 attack 未實裝。
+寫了精準 audit script (`scripts/audit-impl-status.mjs`) 確認真實缺口，按效果類型分類後第 1 波先做最簡單的 7 個 — 純被動，只加 entry 進現有 PASSIVE_* map，不改 engine 流程。
+
+### 本波 7 個 Ability（全在 `effects.ts`）
+**PASSIVE_DAMAGE_REDUCE**（受招式傷害 -N）：
+- 火炎獅｜威嚇之牙：-30（M1S Stage1 130HP）
+- 重泥挽馬｜泥巴膜：-30（SV9a Stage1 150HP）
+
+**PASSIVE_ATTACK_BONUS**（自己場上有此持有者時，攻擊傷害 +N）：
+- 鹽石巨靈｜力之鹽：自己【鬥】寶可夢 +30（MC Stage2 180HP）
+- 君主蛇ex｜皇家聲援：自己寶可夢 +20（SV11B Stage2 320HP）
+- 赫普的卡比獸｜大方：「赫普的」寶可夢 +30（SV9 Basic 150HP）
+  - TODO：卡面寫「不疊加」，目前實裝會疊加；之後加 PASSIVE_*_NO_STACK 機制處理。
+
+**PASSIVE_IMMUNITY**（條件式完全免疫）：
+- 岩殿居蟹｜神秘石居：免疫 ex 招式（SV9a Stage1 150HP）
+- 美納斯ex｜璀璨鱗片：免疫太晶寶可夢招式（SV8 Stage1 270HP）
+  - 卡面寫「傷害與效果的影響」，目前只擋傷害；TODO 之後處理 status / 拔能量等廣義「效果」。
+
+### Audit 工具
+新加 `scripts/audit-impl-status.mjs`：
+- 寬鬆判定：卡名 / ability 名出現在任何 string literal 即算實裝（容忍 false positive）
+- 對 ability 額外查 `regA('Pokemon', index, ...)` 形式
+- 結果寫到 `/tmp/missing-impl.json` 供後續 wave 取用
+
+當前 audit 結果：
+| 類別 | 完成率 |
+|---|---|
+| Item / Supporter / Stadium / Tool / 特殊能量 | 100% |
+| Pokemon Ability | 32.5% (86/265 → wave 1 後 93/265) |
+| Pokemon Attack | 48.9% (755/1545) |
+
+### 後續 Wave 規劃
+- Wave 2：剩 60 多個 A-passive（PASSIVE_RETALIATION 反擊類、effectiveHPInline +HP 類、ATTACH_ENERGY hook 類）
+- Wave 3：B-active 主動類 32 個（regA 形式）
+- Wave 4：D-evolve 進化觸發 17 個
+- Wave 5+：X-other 52 個逐一研究
+
+### Build / Push
+- `npm run build` ✅
+- `node scripts/sim-tournament.mjs 1` → 1332 場 0 bug
+- commit hash: 待補
 
 ---
 

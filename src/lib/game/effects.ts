@@ -2150,6 +2150,14 @@ export const PASSIVE_DAMAGE_REDUCE = new Map<string, number>([
   ['柔軟羊毛', 30],     // 毛毛角羊
   ['堅堅之軀', 30],     // 浩大鯨
   ['堅硬身軀', 20],     // v2.217 鐵殼蛹（J） — 受招式傷害 -20
+  // v2.267 wave 1：純被動傷害減免 ───────────────────────────────────────
+  ['威嚇之牙', 30],     // 火炎獅 M1S Stage1 130HP — 「只要這隻寶可夢在戰鬥場上，
+                        //   對手的戰鬥寶可夢使用的招式的傷害『-30』點。」
+                        //   持有者只在 active 才生效，但 PASSIVE_DAMAGE_REDUCE
+                        //   套用點 (engine.ts) 是掃 defenderCard.abilities，
+                        //   defenderCard 必為 active，所以條件天然成立。
+  ['泥巴膜', 30],       // 重泥挽馬 SV9a Stage1 150HP — 「這隻寶可夢受到招式的傷害『-30』點。」
+                        //   無 active 限制，但同樣只有 active 會被攻擊，效果等價。
 ]);
 
 /**
@@ -2176,6 +2184,20 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (attackerCard: Card, defende
     if (att.name === '鐵頭殼ex') return 0;  // 鐵頭殼ex 自己除外
     return att.tags?.includes('未來') ? 20 : 0;
   }],
+  // v2.267 wave 1：被動攻擊加成 ───────────────────────────────────────
+  // 鹽石巨靈｜力之鹽 — 「只要這隻寶可夢在場上，自己的【鬥】寶可夢使用的招式，
+  //   對對手的戰鬥寶可夢造成的傷害『+30』點。」(MC Stage2 180HP)
+  ['力之鹽', (att) => att.pokemonType === 'Fighting' ? 30 : 0],
+  // 君主蛇ex｜皇家聲援 — 「只要這隻寶可夢在場上，自己的寶可夢使用的招式，
+  //   對對手的戰鬥寶可夢造成的傷害『+20』點。」(SV11B Stage2 320HP)
+  //   無條件 +20（君主蛇ex 自己也算）。多隻場上會疊加，但 PTCG 場上不會
+  //   有多隻 Stage2 ex，實務無疊加問題。
+  ['皇家聲援', () => 20],
+  // 赫普的卡比獸｜大方 — 「只要這隻寶可夢在場上，自己的『赫普的寶可夢』使用的招式，
+  //   對對手的戰鬥寶可夢造成的傷害『+30』點。無論有多少隻擁有這個特性的寶可夢，
+  //   這個效果也不會重複。」(SV9 Basic 150HP)
+  //   v2.267：先做疊加版（場上 2 隻 = 60），TODO 之後加 dedup 機制（PASSIVE_*_NO_STACK set）。
+  ['大方', (att) => att.name.includes('赫普的') ? 30 : 0],
 ]);
 
 /**
@@ -2215,6 +2237,16 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
       dIdx);
     return { immune: !!r.heads, newState };
   }],
+  // v2.267 wave 1：條件式免疫 ───────────────────────────────────────────
+  // 岩殿居蟹｜神秘石居 — 「這隻寶可夢不會受到對手的『寶可夢【ex】』招式的傷害。」
+  //   (SV9a Stage1 150HP) 卡面只擋傷害（不擋效果），跟「神秘之盾」不同（神秘之盾還擋 V/VMAX，
+  //   PTCG 繁中版實務沒 V/VMAX）。
+  ['神秘石居', (att) => att.subtype === 'ex'],
+  // 美納斯ex｜璀璨鱗片 — 「這隻寶可夢不會受到對手的『太晶』寶可夢招式的傷害與效果的影響。」
+  //   (SV8 Stage1 270HP) 太晶是 tags 元素（不是 subtype）。
+  //   v2.267：先做擋傷害版本，「效果的影響」需要更廣的 hook（status / 拔能量 / 移指示物 等）
+  //   暫不處理；如未來發現 bug 再加 PASSIVE_FULL_PROTECTION 類 set。
+  ['璀璨鱗片', (att) => (att.tags ?? []).includes('太晶')],
 ]);
 
 // ══════════════════════════════════════════════════════════════════════════════
