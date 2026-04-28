@@ -674,7 +674,7 @@ regPost('烏鴉頭頭|狙擊羽毛', (state, aIdx, _pool) => {
       ];
       const players = [...state.players] as [PlayerState, PlayerState];
       players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
-      const prizes = defCard!.name.endsWith('ex') || defCard!.name.endsWith('EX') ? 2 : 1;
+      const prizes = prizesForKOLocal(defCard);
       let s = addLog({ ...state, players }, `狙擊羽毛：120 傷害擊倒 ${defCard?.name ?? '?'}！${state.players[aIdx].name} 取得 ${prizes} 張獎勵牌。`, null);
       if (players[dIdx].bench.length === 0) {
         return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
@@ -728,7 +728,7 @@ regR('snipe-120', (st, actorIdx, selectedIids, _params, pool) => {
       ...(target.toolAttached ? [target.toolAttached] : []),
       ...(target.evolvedFromStack ?? []),
     ];
-    const prizes = targetCard!.name.endsWith('ex') || targetCard!.name.endsWith('EX') ? 2 : 1;
+    const prizes = prizesForKOLocal(targetCard);
     const players = [...st.players] as [PlayerState, PlayerState];
     const newDefender = { ...defender, discard: [...defender.discard, ...koDiscard] };
     if (isActive) {
@@ -3515,10 +3515,21 @@ regPost('葉伊布ex|苔紋瑪瑙', healAllOwnPost(100, true, '苔紋瑪瑙'));
 // 均為 regPre 判斷條件，若符合則 base + bonus，否則 base。
 // ══════════════════════════════════════════════════════════════════════════════
 
+// v2.238 釐清（不再簡化）：name 結尾比對加 subtype 雙重判定。
+//   - 普通 ex / 超級 ex：subtype === 'ex'（資料庫 621 張）
+//   - 6 張資料缺 subtype 但 name 結尾 ex（太晶慶典ex、超級耿鬜ex 等）→ 用 name 兜底
+// 注意：「是不是 ex」用本函式（boolean）；「KO 取幾張獎賞」應用 prizesForKOLocal（含 Mega ex = 3 張）。
 function isExCard(c: Card | undefined): boolean {
   if (!c) return false;
-  // PTCG ex / V 都可 KO 取 2 張；簡化：名字結尾 ex 或 EX
-  return c.name.endsWith('ex') || c.name.endsWith('EX');
+  return c.subtype === 'ex' || c.name.endsWith('ex') || c.name.endsWith('EX');
+}
+/** 與 engine.prizesForKO 同邏輯（避開 import cycle），統一給 effects.ts 內 KO 流程用。 */
+function prizesForKOLocal(c: Card | undefined): number {
+  if (!c) return 1;
+  if (!isExCard(c)) return 1;
+  // 超級進化寶可夢 ex（Mega ex）取 3 張獎賞（與 engine.prizesForKO 同步）
+  if (c.name.startsWith('超級')) return 3;
+  return 2;
 }
 function isEvolvedCard(c: Card | undefined): boolean {
   return c?.subtype === 'Stage1' || c?.subtype === 'Stage2';
@@ -3911,7 +3922,7 @@ regPost('皮卡丘|電磁電光', (state, aIdx, pool) => {
       ];
       const players = [...state.players] as [PlayerState, PlayerState];
       players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
-      const prizes = defCard!.name.endsWith('ex') || defCard!.name.endsWith('EX') ? 2 : 1;
+      const prizes = prizesForKOLocal(defCard);
       let s = addLog({ ...state, players }, `電磁電光：10 傷害擊倒 ${defCard?.name ?? '?'}！${state.players[aIdx].name} 取得 ${prizes} 張獎勵牌。`, null);
       if (players[dIdx].bench.length === 0) {
         return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
@@ -4012,7 +4023,7 @@ regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
       ...(target.toolAttached ? [target.toolAttached] : []),
       ...(target.evolvedFromStack ?? []),
     ];
-    const prizes = isExCard(targetCard) ? 2 : 1;
+    const prizes = prizesForKOLocal(targetCard);
     const players = [...st.players] as [PlayerState, PlayerState];
     players[dIdx] = { ...defender, bench: defender.bench.filter(c => c.iid !== targetIid),
       discard: [...defender.discard, ...koDiscard] };
@@ -4164,7 +4175,7 @@ regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
       ...(target.toolAttached ? [target.toolAttached] : []),
       ...(target.evolvedFromStack ?? []),
     ];
-    const prizes = targetCard!.name.endsWith('ex') || targetCard!.name.endsWith('EX') ? 2 : 1;
+    const prizes = prizesForKOLocal(targetCard);
     const players = [...st.players] as [PlayerState, PlayerState];
     const newDefender = { ...defender, discard: [...defender.discard, ...koDiscard] };
     if (isActive) {
@@ -4236,7 +4247,7 @@ function applyDamageToAllOpp(
         ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
         ...(defender.active.evolvedFromStack ?? []),
       ];
-      const p = isExCard(defCard) ? 2 : 1;
+      const p = prizesForKOLocal(defCard);
       prizesTotal += p;
       defender = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
       s = addLog(s, `${label}：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎勵牌。`, null);
@@ -4262,7 +4273,7 @@ function applyDamageToAllOpp(
         ...(b.toolAttached ? [b.toolAttached] : []),
         ...(b.evolvedFromStack ?? []),
       ];
-      const p = isExCard(card) ? 2 : 1;
+      const p = prizesForKOLocal(card);
       prizesTotal += p;
       defender = { ...defender, discard: [...defender.discard, ...koDiscard] };
       s = addLog(s, `${label}：${card?.name ?? '?'}（備戰）被擊倒！+${p} 張獎勵牌。`, null);
@@ -4329,7 +4340,7 @@ regPost('綿綿泡芙|悄聲加害', (state, aIdx, pool) => {
         ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
         ...(defender.active.evolvedFromStack ?? []),
       ];
-      const p = isExCard(defCard) ? 2 : 1;
+      const p = prizesForKOLocal(defCard);
       players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...ko] };
       let s = addLog({ ...state, players }, `悄聲加害：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎勵牌。`, null);
       if (players[dIdx].bench.length === 0) {
@@ -4373,7 +4384,7 @@ regR('snipe-20', (st, actorIdx, selectedIids, _params, pool) => {
       ...(target.toolAttached ? [target.toolAttached] : []),
       ...(target.evolvedFromStack ?? []),
     ];
-    const p = isExCard(targetCard) ? 2 : 1;
+    const p = prizesForKOLocal(targetCard);
     const players = [...st.players] as [PlayerState, PlayerState];
     const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
     if (isActive) newDefender.active = null;
@@ -4616,7 +4627,7 @@ regPost('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
         ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
         ...(defender.active.evolvedFromStack ?? []),
       ];
-      const p = isExCard(defCard) ? 2 : 1;
+      const p = prizesForKOLocal(defCard);
       players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...ko] };
       let s = addLog({ ...state, players }, `落雷風暴：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎勵牌。`, null);
       if (players[dIdx].bench.length === 0) {
@@ -4669,7 +4680,7 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
       ...(target.toolAttached ? [target.toolAttached] : []),
       ...(target.evolvedFromStack ?? []),
     ];
-    const p = isExCard(targetCard) ? 2 : 1;
+    const p = prizesForKOLocal(targetCard);
     const players = [...st.players] as [PlayerState, PlayerState];
     const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
     if (isActive) newDefender.active = null;
@@ -5107,7 +5118,7 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
       ...(newDefender.active.toolAttached ? [newDefender.active.toolAttached] : []),
       ...(newDefender.active.evolvedFromStack ?? []),
     ];
-    const prizes = isExCard(newActiveCard) ? 2 : 1;
+    const prizes = prizesForKOLocal(newActiveCard);
     newDefender = { ...newDefender, active: null, discard: [...newDefender.discard, ...koList] };
     players = [...s.players] as [PlayerState, PlayerState];
     players[dIdx] = newDefender;
@@ -5236,7 +5247,7 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
       ...(def.active.evolvedFromStack ?? []),
     ];
     players[dIdx] = { ...def, active: null, discard: [...def.discard, ...ko] };
-    selfPrizes += card ? (isExCard(card) ? 2 : 1) : 1;
+    selfPrizes += card ? (prizesForKOLocal(card)) : 1;
     s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 被擊倒！+${selfPrizes} 張獎勵牌`, null);
   }
   // 再 KO 自己出場（不算獎勵牌給對手，直接丟棄 — 但 PTCG 規則對方獲得獎勵）
@@ -5251,7 +5262,7 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
       ...(att.active.evolvedFromStack ?? []),
     ];
     players[aIdx] = { ...att, active: null, discard: [...att.discard, ...ko] };
-    const oppPrizes = card ? (isExCard(card) ? 2 : 1) : 1;
+    const oppPrizes = card ? (prizesForKOLocal(card)) : 1;
     s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也被擊倒，對手取得 ${oppPrizes} 張獎勵牌`, null);
     // 對手取獎：直接從對手 prizes 移到 hand
     const opponent = players[dIdx];
@@ -5297,7 +5308,7 @@ regPost('雙斧戰龍|斧擊在地', (state, aIdx, pool) => {
     ...(def.active.toolAttached ? [def.active.toolAttached] : []),
     ...(def.active.evolvedFromStack ?? []),
   ];
-  const prizes = card ? (isExCard(card) ? 2 : 1) : 1;
+  const prizes = card ? (prizesForKOLocal(card)) : 1;
   const players = [...state.players] as [PlayerState, PlayerState];
   players[dIdx] = { ...def, active: null, discard: [...def.discard, ...ko] };
   let s = addLog({ ...state, players }, `斧擊在地：${card?.name ?? '?'} 被特殊能量反噬 KO！+${prizes} 張獎勵牌`, null);
@@ -6457,7 +6468,7 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
         ...(target.toolAttached ? [target.toolAttached] : []),
         ...(target.evolvedFromStack ?? []),
       ];
-      const p = isExCard(targetCard) ? 2 : 1;
+      const p = prizesForKOLocal(targetCard);
       totalPrize += p;
       const players = [...s.players] as [PlayerState, PlayerState];
       const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
@@ -7677,7 +7688,7 @@ function snipeAllOppExPost(dmg: number, filterType: 'ex' | 'ex-or-v', label: str
           ...(cur.toolAttached ? [cur.toolAttached] : []),
           ...(cur.evolvedFromStack ?? []),
         ];
-        const p = isExCard(card) ? 2 : 1;
+        const p = prizesForKOLocal(card);
         totalPrize += p;
         const players = [...s.players] as [PlayerState, PlayerState];
         const nd = { ...defender, discard: [...defender.discard, ...ko] };
@@ -10796,7 +10807,7 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
         ...(target.toolAttached ? [target.toolAttached] : []),
         ...(target.evolvedFromStack ?? []),
       ];
-      const prizeCount = isExCard(targetCard) ? 2 : 1;
+      const prizeCount = prizesForKOLocal(targetCard);
       const newDef = { ...defender, discard: [...defender.discard, ...ko] };
       if (isActive) newDef.active = null;
       else newDef.bench = defender.bench.filter(c => c.iid !== iid);
