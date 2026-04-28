@@ -3032,15 +3032,32 @@ regPost('海豚俠|先鋒拳', (state, aIdx, _pool) => {
   return addLog(s, `先鋒拳：反彈 ${selfDmg} 傷害到自己！`, aIdx);
 });
 
-// 波盪水｜蜿蜒割裂 — 在自己身上放 9 個 counter，造成 9 × 20 = 180
-//   簡化：固定放 9 個（玩家/AI 的「最多」選擇）
-regPre('波盪水|蜿蜒割裂', (state, aIdx, _pool) => {
+// 波盪水｜蜿蜒割裂 — 卡面：「在這隻寶可夢身上放置最多 9 個傷害指示物，造成放置的數量 × 20 點傷害。」
+// v2.256：完整實裝 — 借殼 ATTACK_PRE_DISCARD_CHOICE 加新 scope 'self-counter-stepper'，
+//   UI 顯示 0~9 stepper（+/- 按鈕）讓玩家選 N 個指示物。
+//   - 選 N 個 → 自身 +N×10 傷害（放 N 個指示物 = +N*10 自傷）+ 招式 N×20 傷害
+//   AI fallback（chosenIids === undefined）→ 預設選 max=9 最大化攻擊。
+ATTACK_PRE_DISCARD_CHOICE.set('波盪水|蜿蜒割裂', {
+  min: 0, max: 9, scope: 'self-counter-stepper',
+  baseDamage: 0, damagePerEnergy: 20,    // 每個 counter +20 傷害
+  selfDamagePerCounter: 10,              // 每個 counter 自身 +10 傷害
+  choicePrompt: '選擇放置幾個傷害指示物（每個 = 自身 +10 傷害、招式 +20 傷害）',
+});
+regPre('波盪水|蜿蜒割裂', (state, aIdx, _pool, action) => {
+  const chosenIids = action?.discardedEnergyIids;
+  // length = 玩家選的 N 個 counter；undefined = AI 預設最大化
+  const n = chosenIids === undefined ? 9 : chosenIids.length;
+  if (n === 0) {
+    return { state: addLog(state, '蜿蜒割裂：選擇放 0 個指示物 → 0 傷害', aIdx), damage: 0 };
+  }
+  const selfDmg = n * 10;
+  const atkDmg = n * 20;
   const s = updatePlayer(state, aIdx, p => {
     if (!p.active) return p;
-    return { ...p, active: { ...p.active, damage: p.active.damage + 90 } };
+    return { ...p, active: { ...p.active, damage: p.active.damage + selfDmg } };
   });
-  const s2 = addLog(s, '蜿蜒割裂：在自己身上放置 9 個傷害指示物（+90 傷害）', aIdx);
-  return { state: s2, damage: 180 };
+  const s2 = addLog(s, `蜿蜒割裂：在自己身上放置 ${n} 個指示物（自身 +${selfDmg}）→ 招式 ${atkDmg} 傷害`, aIdx);
+  return { state: s2, damage: atkDmg };
 });
 
 // 吼叫尾｜大吼大叫 — 對手任 1 隻 × (自己 counter × 20)

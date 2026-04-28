@@ -149,16 +149,24 @@ export interface PreDiscardSpec {
    * - 'binary-yes-no'（v2.255）：純 yes/no 選擇（蚊香泳士|跳躍衝天 等「若希望」招式）
    *   UI 顯示 yes/no 兩按鈕 overlay 而非能量列表；regPre 看 action.discardedEnergyIids 長度判斷：
    *   length=0 → no；length>=1 → yes（sentinel iid，不真的丟東西）
+   * - 'self-counter-stepper'（v2.256）：玩家用 +/- 按鈕選 0~max 整數值（波盪水|蜿蜒割裂）
+   *   UI 顯示 stepper overlay；regPre 看 action.discardedEnergyIids.length = 玩家選的 N。
+   *   spec.min / spec.max 作為下/上限。spec.damagePerEnergy = 每個 counter 加的傷害。
    */
-  scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter' | 'hand-tool' | 'binary-yes-no';
+  scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter' | 'hand-tool' | 'binary-yes-no' | 'self-counter-stepper';
   /**
-   * v2.255：scope='binary-yes-no' 時的提示文字。
+   * v2.255：scope='binary-yes-no' / 'self-counter-stepper' 時的提示文字。
    *   choicePrompt：modal 主問句（例：「是否將自身回牌庫，增加 80 點傷害？」）
    *   choiceYesLabel / choiceNoLabel：yes/no 按鈕文字（預設「是」/「否」）。
    */
   choicePrompt?: string;
   choiceYesLabel?: string;
   choiceNoLabel?: string;
+  /**
+   * v2.256：scope='self-counter-stepper' 專用 — 每個 counter 對自身造成多少自傷（PRE 階段套用）。
+   * 例：蜿蜒割裂 = 10（每個指示物 = 10 自傷）。
+   */
+  selfDamagePerCounter?: number;
   baseDamage: number;
   damagePerEnergy: number; // 對 hand-rocket-supporter 而言視為 damagePerCard
   /**

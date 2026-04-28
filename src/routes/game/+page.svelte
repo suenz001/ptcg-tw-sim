@@ -3582,6 +3582,59 @@
     </div>
   {/if}
 
+  <!-- v2.256 招式前置：0~max stepper overlay（波盪水|蜿蜒割裂 等「最多 N 個指示物」招式） -->
+  {#if preAttackDiscard && game && preAttackDiscard.spec.scope === 'self-counter-stepper'}
+    {@const spec = preAttackDiscard.spec}
+    {@const minN = spec.min}
+    {@const maxN = spec.max ?? 9}
+    {@const currentN = preAttackDiscard.picked.size}
+    {@const estDmg = spec.baseDamage + currentN * spec.damagePerEnergy}
+    {@const estSelfDmg = currentN * (spec.selfDamagePerCounter ?? 0)}
+    <div class="selection-overlay" class:dragged={modalDragged}>
+      <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>🔢 {preAttackDiscard.attackName}</h3>
+          <p class="sel-hint">{spec.choicePrompt ?? `選擇放置幾個傷害指示物（${minN}~${maxN}）`}</p>
+          <p class="sel-hint">
+            預估傷害 <strong>{estDmg}</strong>
+            {#if (spec.selfDamagePerCounter ?? 0) > 0}
+              · 自身受 <strong>{estSelfDmg}</strong> 傷害
+            {/if}
+          </p>
+        </div>
+        <div class="sel-actions" style="justify-content:center;gap:16px;padding:24px;align-items:center">
+          <button class="btn-ghost" style="padding:8px 18px;font-size:18px;font-weight:bold"
+            disabled={currentN <= minN}
+            onclick={() => {
+              if (!preAttackDiscard) return;
+              const picked = new Set(preAttackDiscard.picked);
+              // 拿任一個 sentinel 出來
+              const first = picked.values().next().value;
+              if (first) picked.delete(first);
+              preAttackDiscard = { ...preAttackDiscard, picked };
+            }}>−</button>
+          <div style="font-size:32px;font-weight:bold;min-width:64px;text-align:center">{currentN}</div>
+          <button class="btn-ghost" style="padding:8px 18px;font-size:18px;font-weight:bold"
+            disabled={currentN >= maxN}
+            onclick={() => {
+              if (!preAttackDiscard) return;
+              const picked = new Set(preAttackDiscard.picked);
+              picked.add(`stepper-${picked.size}`);
+              preAttackDiscard = { ...preAttackDiscard, picked };
+            }}>+</button>
+          <button class="btn-primary" style="padding:12px 24px;font-size:16px;margin-left:24px"
+            onclick={() => {
+              if (!preAttackDiscard) return;
+              const ai = preAttackDiscard.attackIndex;
+              const iids = [...preAttackDiscard.picked];
+              preAttackDiscard = null;
+              dispatch(GameActions.attack(ai, iids));
+            }}>確認（放 {currentN} 個）</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- v2.255 招式前置：yes/no 二選一 overlay（蚊香泳士|跳躍衝天 等「若希望」招式） -->
   {#if preAttackDiscard && game && preAttackDiscard.spec.scope === 'binary-yes-no'}
     {@const spec = preAttackDiscard.spec}

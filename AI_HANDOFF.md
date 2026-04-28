@@ -1,9 +1,76 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.255)  
+> 最後更新：2026-04-28 (v2.256)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.256 — 波盪水|蜿蜒割裂 + 'self-counter-stepper' scope（PRE 階段 0~9 stepper overlay）
+
+### 卡面
+波盪水｜蜿蜒割裂：「在這隻寶可夢身上放置最多 9 個傷害指示物，造成放置的數量 × 20 點傷害。」
+
+舊版固定放 9 個 + 固定 180 傷害（含「簡化：固定放 9 個（玩家/AI 的『最多』選擇）」註解 — 玩家無選擇權，違反卡面「最多」字義）。
+
+### Infra：新 scope 'self-counter-stepper'
+擴充 ATTACK_PRE_DISCARD_CHOICE 的 PreDiscardSpec：
+- 新 scope value `'self-counter-stepper'`
+- 新欄位：
+  - `selfDamagePerCounter?: number` — 每個 counter 對自身造成的自傷（PRE 階段套用）
+- 沿用 v2.255 的 `choicePrompt` 欄位作 modal 主問句
+
+ATTACK_PRE_DISCARD_CHOICE 語意延伸：spec.min/max 變成「整數選擇下/上限」，spec.damagePerEnergy 變成「每個 counter +多少招式傷害」，spec.selfDamagePerCounter 變成「每個 counter +多少自身傷害」。`action.discardedEnergyIids.length` = 玩家選的 N 個 counter 數量（用 sentinel iid `stepper-0/1/2/...` 填充，不真的丟東西）。
+
+最終 scope union：
+```ts
+scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter' | 'hand-tool' | 'binary-yes-no' | 'self-counter-stepper';
+```
+
+### UI（routes/game/+page.svelte）
+新增專屬 stepper overlay block — 位於 v2.255 yes/no overlay 之前，if 偵測 `spec.scope === 'self-counter-stepper'`：
+- header 顯示 `choicePrompt`、即時預估傷害（baseDamage + N × damagePerEnergy）、預估自傷（N × selfDamagePerCounter）
+- 中間顯示大字當前 N（min~max 區間）+ `−` / `+` 按鈕（已到下/上限自動 disabled）
+- 「確認（放 N 個）」按鈕 → dispatch `attack(idx, [...picked])`，picked 為 sentinel iid 集合 `stepper-0`、`stepper-1` ...
+- 既有的「丟棄能量選擇 modal」block 不需動（v2.255 已加 `&& spec.scope !== 'binary-yes-no'` guard，且 stepper 的 `getDiscardableEnergies` 不會被呼叫，因為這個分支會在前面命中 stepper overlay）
+
+### 波盪水|蜿蜒割裂 實裝
+```ts
+ATTACK_PRE_DISCARD_CHOICE.set('波盪水|蜿蜒割裂', {
+  min: 0, max: 9, scope: 'self-counter-stepper',
+  baseDamage: 0, damagePerEnergy: 20,    // 每個 counter +20 傷害
+  selfDamagePerCounter: 10,              // 每個 counter 自身 +10 傷害
+  choicePrompt: '選擇放置幾個傷害指示物（每個 = 自身 +10 傷害、招式 +20 傷害）',
+});
+regPre('波盪水|蜿蜒割裂', (state, aIdx, _pool, action) => {
+  const chosenIids = action?.discardedEnergyIids;
+  // length = 玩家選的 N 個 counter；undefined = AI 預設最大化
+  const n = chosenIids === undefined ? 9 : chosenIids.length;
+  if (n === 0) {
+    return { state: addLog(state, '蜿蜒割裂：選擇放 0 個指示物 → 0 傷害', aIdx), damage: 0 };
+  }
+  const selfDmg = n * 10;
+  const atkDmg = n * 20;
+  const s = updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, damage: p.active.damage + selfDmg } };
+  });
+  const s2 = addLog(s, `蜿蜒割裂：在自己身上放置 ${n} 個指示物（自身 +${selfDmg}）→ 招式 ${atkDmg} 傷害`, aIdx);
+  return { state: s2, damage: atkDmg };
+});
+```
+
+行為：
+- 玩家選 N=0 → 招式 0 傷害（卡面允許「最多」含 0）
+- 玩家選 N=k → 自身 +k×10、招式 k×20
+- AI（chosenIids === undefined）→ 預設 9 最大化攻擊
+
+### audit-simplifications
+1 → **0**（所有歷史「簡化」註解都已轉為完整實裝）
+
+### Build
+✅ `npm run build` 通過（prod 16.87s，game bundle 713.48 kB）
 
 ---
 
