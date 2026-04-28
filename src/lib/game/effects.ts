@@ -4119,7 +4119,9 @@ regPost('重泥挽馬|泥巴庫存', (state, aIdx, pool) => {
   const player = state.players[aIdx];
   const benchLen = player.bench.length;
   if (benchLen === 0) return addLog(state, '泥巴庫存：沒有備戰寶可夢', aIdx);
-  // 從棄牌區取出最多 benchLen 張「基本【鬥】能量」（簡化：僅基本 Fighting 能量 subtype 判斷）
+  // 從棄牌區取出最多 benchLen 張「基本【鬥】能量」
+  // v2.242 釐清（不再簡化）：filter 限定 subtype==='Basic' 且 (name 含「鬥」或 pokemonType==='Fighting')，
+  //   排除「硬岩【鬥】」等特殊能量；候選同型 → 自動取前 N 張與卡面「各 1 張」等效。
   const fightingInDiscard: number[] = [];
   for (let i = 0; i < player.discard.length && fightingInDiscard.length < benchLen; i++) {
     const c = player.discard[i];
@@ -4835,28 +4837,43 @@ regPre('吞食獸|張大嘴', (state, aIdx, _pool) => {
   return { state: addLog(state, `張大嘴：自能量 ${selfE} vs 對手 ${defE}${bonus ? ' +160' : ''} → ${dmg}`, aIdx), damage: dmg };
 });
 
-// 三海地鼠ex|三色炮 — 自動從手牌丟最多 3 張能量卡，× 60，攻擊對手戰鬥寶可夢
-// （備戰區不計算弱抗；AI sim 直接打 active 簡化）
-regPre('三海地鼠ex|三色炮', (state, aIdx, pool) => {
-  const hand = state.players[aIdx].hand;
-  const energyInHand = hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy').slice(0, 3);
-  const dmg = energyInHand.length * 60;
-  return { state: addLog(state, `三色炮：丟棄 ${energyInHand.length} 張能量 → ${dmg}`, aIdx), damage: dmg };
-});
+// 三海地鼠ex|三色炮 — 從手牌丟最多 3 張能量卡，對對手 1 隻寶可夢造成 ×60 傷害
+//   卡面（資料庫驗證 SV5K 9795/10210）：「從自己的手牌將最多 3 張能量卡丟棄，
+//   對對手的 1 隻寶可夢，造成其張數×60 點傷害。[在備戰區不計算弱點・抵抗力。]」
+//
+// v2.242 升級為 opp-poke-choose（不再簡化為「直接打 active」）：
+//   1. PRE 不算傷害（damage=0），讓主流程不自動套用到 active
+//   2. POST 自動從手牌取最多 3 張能量丟棄（候選同型基本/特殊能量計入；player 選擇空間有限）
+//   3. 開 opp-poke-choose pending，玩家任選 1 隻對手寶可夢，clone-strike-multi-hit
+//      自動處理戰鬥場弱抗 / 備戰不計弱抗 / KO 流程
+regPre('三海地鼠ex|三色炮', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('三海地鼠ex|三色炮', (state, aIdx, pool) => {
-  return updatePlayer(state, aIdx, p => {
-    const toDiscard: CardInstance[] = [];
-    let remaining = 3;
-    const newHand: CardInstance[] = [];
-    for (const c of p.hand) {
-      if (remaining > 0 && pool.get(c.cardId)?.supertype === 'Energy') {
-        toDiscard.push(c);
-        remaining--;
-      } else {
-        newHand.push(c);
-      }
-    }
-    return { ...p, hand: newHand, discard: [...p.discard, ...toDiscard] };
+  // 先從手牌丟最多 3 張能量
+  const handEnergies = state.players[aIdx].hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+  const toDiscard = handEnergies.slice(0, 3);
+  const discardedCount = toDiscard.length;
+  if (discardedCount === 0) {
+    return addLog(state, '三色炮：手牌沒有能量卡', aIdx);
+  }
+  const discardIids = new Set(toDiscard.map(c => c.iid));
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    hand: p.hand.filter(c => !discardIids.has(c.iid)),
+    discard: [...p.discard, ...toDiscard],
+  }));
+  s = addLog(s, `三色炮：丟棄手牌 ${discardedCount} 張能量`, aIdx);
+  // 開 opp-poke-choose
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = s.players[dIdx];
+  if (!def.active && def.bench.length === 0) return s;
+  const dmg = discardedCount * 60;
+  s = addLog(s, `三色炮：選對手 1 隻寶可夢造成 ${dmg} 傷害（戰鬥場套弱抗、備戰不計）`, aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'clone-strike-multi-hit',
+    params: { dmg, label: '三色炮' },
   });
 });
 
