@@ -199,11 +199,11 @@ export const BENCH_PROTECTION_STADIUMS = new Set<string>(['對戰圓形競技場
 // 新增規則：加入新 Stadium 時若 rulesText 不含「可使用 1 次」語意，一律 passive。
 // 反之有「在自己的回合時，可使用 1 次」才屬主動 stadium（如衝浪海灘 / 釀光市 / 月光丘陵）。
 //
-// 注意：列在這裡的 stadium 不保證效果已實裝（例：險惡廢墟 / 活力森林 / 激動競技場
+// 注意：列在這裡的 stadium 不保證效果已實裝（例：險惡廢墟 / 活力森林
 // 等被動效果目前未實裝），但至少 UI 不會誤顯示「使用」按鈕。
 export const STATIC_PASSIVE_STADIUMS = new Set<string>([
   '引力山岳',       // 2 階進化 HP -30（v2.92 實裝）
-  '激動競技場',     // 基礎 HP +30
+  '激動競技場',     // 基礎 HP +30（v2.265 實裝）
   '昂主花葉蒂',     // 超級花葉蒂ex HP +150
   '險惡廢墟',       // 上備戰放 2 指示物（惡除外）
   '活力森林',       // 草可剛出場進化

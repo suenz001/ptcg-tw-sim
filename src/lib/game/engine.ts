@@ -375,6 +375,11 @@ export function getEffectiveHP(
   if (state?.activeStadium?.name === '引力山岳' && card.stage === 'Stage2') {
     hp = Math.max(0, hp - 30);
   }
+  // v2.265：激動競技場（Stadium）— 雙方場上所有【基礎】寶可夢最大 HP +30
+  //   （化石上場走 line 354 早退、不吃 Stadium 加減；本 hook 對 fossilOnField 不會觸發）
+  if (state?.activeStadium?.name === '激動競技場' && card.stage === 'Basic') {
+    hp += 30;
+  }
   // v2.122 夠讚狗｜腎上腺力量 — 身上附【惡】能量時最大 HP +100
   //   v2.120 只在 effects.ts 的 internal effectiveHPInline 加了這段，但 UI 的 hpTotal/
   //   hpRemaining 以及實際 KO 判定全走這裡的 getEffectiveHP，導致 HP+100 完全沒真的生效。

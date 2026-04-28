@@ -397,6 +397,10 @@ function effectiveHPInline(
   if (state?.activeStadium?.name === '引力山岳' && card.stage === 'Stage2') {
     hp = Math.max(0, hp - 30);
   }
+  // v2.265：激動競技場（Stadium）— 雙方場上所有【基礎】寶可夢最大 HP +30
+  if (state?.activeStadium?.name === '激動競技場' && card.stage === 'Basic') {
+    hp += 30;
+  }
   // v2.113 夠讚狗｜腎上腺力量 — 身上附【惡】能量時最大 HP +100
   // v2.120 修：稜鏡能量附於基礎寶可夢時視為提供全屬性能量（含惡能量），也算數
   if (card.name === '夠讚狗') {

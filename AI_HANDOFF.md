@@ -1,9 +1,42 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.264)  
+> 最後更新：2026-04-29 (v2.265)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.265 — 激動競技場（Stadium）效果實裝
+
+### 背景
+Leon 回報：打出激動競技場後，自己/對手場上的【基礎】寶可夢 HP 沒有加 30。
+查證後 `STATIC_PASSIVE_STADIUMS` 雖列了「激動競技場」（避免 UI 顯示「使用」按鈕），但 effective HP 計算層完全沒實裝這個被動。
+
+### 卡面
+- 名稱：激動競技場（SV8 105/106，H 標）
+- rulesText：「雙方場上所有【基礎】寶可夢的最大 HP 各「+30」。」
+
+### 修法
+參考 v2.92 引力山岳（同類別「修改 effective HP」的被動 Stadium）兩個 hook 點：
+
+1. **`src/lib/game/engine.ts` `getEffectiveHP()`** — 引力山岳 hook 後加：
+   ```ts
+   if (state?.activeStadium?.name === '激動競技場' && card.stage === 'Basic') {
+     hp += 30;
+   }
+   ```
+2. **`src/lib/game/effects.ts` `effectiveHPInline()`** — 同樣的 +30 / Basic gate（內部 helper）
+3. **`src/lib/game/effects/cards/stadiums.ts`** — 把 `STATIC_PASSIVE_STADIUMS` 註解中「激動競技場 等被動效果目前未實裝」拿掉，並在該卡標示 v2.265 實裝。
+
+### 邊緣案例
+- 化石（fossilOnField=true）走 `getEffectiveHP` line 354 早退（HP=60，不吃 Tool/能量/Stadium 加減）— 此 hook 不會觸發，與既有 fossil convention 一致。
+- ex 寶可夢的 stage 仍保留 'Basic'（per types.ts line 44 註解），所以 Basic ex 也吃到 +30。
+- 不影響 Stage1/Stage2 進化寶可夢（gate 是 `card.stage === 'Basic'`）。
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
