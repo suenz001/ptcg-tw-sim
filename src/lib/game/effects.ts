@@ -8164,24 +8164,52 @@ regPre('葉伊布|嫩葉之恩', (state, _aIdx, _pool) => ({ state, damage: 0 })
 regPost('葉伊布|嫩葉之恩', benchHandAttachFullHealPost('Grass', '嫩葉之恩'));
 
 // (G) 灰塵山|丟棄 — 手牌丟任意數量「寶可夢道具」×50 傷害
-// 簡化：現行 engine 不支援 pre 階段請 UI 選卡；
-// pre 自動把手牌所有「寶可夢道具」卡丟掉並按張數×50 計算 base damage。
-// （未來可改為 ATTACK_PRE_DISCARD_CHOICE 擴充 scope='hand-tool' 做選擇性丟）
-regPre('灰塵山|丟棄', (state, aIdx, pool) => {
+// v2.254：完整實裝 — 借殼 ATTACK_PRE_DISCARD_CHOICE + 新 scope 'hand-tool'，
+//   UI 彈出 modal 讓玩家自選要丟哪些道具（與 火箭羽毛 'hand-rocket-supporter' 同 pattern）。
+//   舊版自動全丟玩家無選擇權；現玩家可選 0~N 張。
+ATTACK_PRE_DISCARD_CHOICE.set('灰塵山|丟棄', {
+  min: 0,
+  max: null,           // 不限上限
+  scope: 'hand-tool',
+  baseDamage: 0,
+  damagePerEnergy: 50, // 每張 +50（damagePerCard 語意，scope=hand-* 時通用）
+});
+regPre('灰塵山|丟棄', (state, aIdx, pool, action) => {
   const p = state.players[aIdx];
-  const toolIdxs: number[] = [];
-  p.hand.forEach((c, i) => {
-    const card = pool.get(c.cardId);
-    if (card?.supertype === 'Trainer' && card.subtype === 'PokemonTool') toolIdxs.push(i);
-  });
-  if (toolIdxs.length === 0) return { state: addLog(state, '丟棄：手牌無寶可夢道具', aIdx), damage: 0 };
-  const damage = toolIdxs.length * 50;
-  const discarded = toolIdxs.map(i => p.hand[i]);
+  const chosenIids = action?.discardedEnergyIids;
+  let idxs: number[];
+  if (chosenIids && chosenIids.length > 0) {
+    // 玩家明確指定：用這幾張
+    const idSet = new Set(chosenIids);
+    idxs = [];
+    p.hand.forEach((c, i) => {
+      if (idSet.has(c.iid)) {
+        const card = pool.get(c.cardId);
+        if (card?.supertype === 'Trainer' && card.subtype === 'PokemonTool') {
+          idxs.push(i);
+        }
+      }
+    });
+  } else {
+    // AI / 未開 modal fallback：自動全丟（最大化攻擊）
+    idxs = [];
+    p.hand.forEach((c, i) => {
+      const card = pool.get(c.cardId);
+      if (card?.supertype === 'Trainer' && card.subtype === 'PokemonTool') {
+        idxs.push(i);
+      }
+    });
+  }
+  if (idxs.length === 0) {
+    return { state: addLog(state, '丟棄：未丟棄任何道具 → 0 傷害', aIdx), damage: 0 };
+  }
+  const damage = idxs.length * 50;
+  const discarded = idxs.map(i => p.hand[i]);
   const discardNames = discarded.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   let s = addLog(state, `丟棄：丟 ${discarded.length} 張道具（${discardNames}），造成 ${damage} 傷害`, aIdx);
   s = updatePlayer(s, aIdx, pl => ({
     ...pl,
-    hand: pl.hand.filter((_, i) => !toolIdxs.includes(i)),
+    hand: pl.hand.filter((_, i) => !idxs.includes(i)),
     discard: [...pl.discard, ...discarded],
   }));
   return { state: s, damage };

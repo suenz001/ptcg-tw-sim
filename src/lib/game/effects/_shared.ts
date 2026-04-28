@@ -145,8 +145,9 @@ export interface PreDiscardSpec {
    * v2.143：scope 擴展支援手牌棄牌
    * - 'attacker' / 'any-own' / 'own-bench'：丟自身能量（原有）
    * - 'hand-rocket-supporter'：丟手牌中的「火箭隊」支援者（火箭羽毛）
+   * - 'hand-tool'（v2.254）：丟手牌中的「寶可夢道具」（灰塵山|丟棄）
    */
-  scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter';
+  scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter' | 'hand-tool';
   baseDamage: number;
   damagePerEnergy: number; // 對 hand-rocket-supporter 而言視為 damagePerCard
   /**

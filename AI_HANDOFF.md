@@ -1,9 +1,39 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.253)  
+> 最後更新：2026-04-28 (v2.254)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.254 — 灰塵山|丟棄 完整實裝（玩家自選道具）
+
+舊版自動丟手牌所有道具，玩家無選擇權。
+
+修法：擴充 ATTACK_PRE_DISCARD_CHOICE 加 'hand-tool' scope（與 v2.143 'hand-rocket-supporter' 同 pattern）：
+
+**spec：**
+```ts
+ATTACK_PRE_DISCARD_CHOICE.set('灰塵山|丟棄', {
+  min: 0, max: null, scope: 'hand-tool',
+  baseDamage: 0, damagePerEnergy: 50,  // 每張道具 +50
+});
+```
+
+**UI（routes/game/+page.svelte）：**
+- `getDiscardableEnergies` 加 `hand-tool` 分支：列出手牌中所有 `subtype === 'PokemonTool'` 的卡
+- modal 標題加「寶可夢道具」case + 範圍說明加「從自己手牌中的寶可夢道具卡」
+
+**effects.ts 灰塵山|丟棄：**
+- regPre 接 `action.discardedEnergyIids`，篩選確實是 PokemonTool 才丟（防玩家亂選）
+- AI fallback 仍自動全丟最大化攻擊
+- 選 0 張 → 0 傷害
+
+audit-simplifications 從 3 → 2（剩波盪水蜿蜒割裂 / 蚊香泳士跳躍衝天，兩者需要 stepper / yes-no UI infra）。
+
+### Build
+✅ `npm run build` 通過（prod 16.71s）
 
 ---
 
