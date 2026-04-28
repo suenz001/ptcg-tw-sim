@@ -2642,8 +2642,8 @@ regA('賽富豪ex', 0, (st, idx, pool) => {
 
 // 吉雉雞ex 扭轉乾坤 — 「上個對手的回合自己的寶可夢昏厥了」才可用，抽 3
 //
-// v2.15 (Session 38bc)：改用與不公印章相同的判定基準
-//   舊版簡化為「棄牌區有寶可夢」，但這在 setup/mulligan 後就永遠成立，條件形同失效。
+// v2.15 (Session 38bc) 升級為對手取獎賞數判定（不再簡化）。
+//   舊版判「棄牌區有寶可夢」這在 setup/mulligan 後就永遠成立，條件形同失效。
 //   新版用 oppPrizesAtMyLastTurnEnd snapshot vs 目前對手獎賞數：
 //     - snap = 上次自己回合結束時對手剩餘獎賞數
 //     - 若對手目前獎賞 < snap → 對手在他們剛結束的回合取過獎賞
@@ -2713,11 +2713,15 @@ regR('noisuru-rumble', (st, idx, iids, _params, pool) => {
   });
 });
 
-// 鐵蟻ex 突然削退 — 放置時可用，丟對手牌庫頂 1 張
-// 簡化：主動觸發
-regA('鐵蟻ex', 0, (st, idx) => {
+// 鐵蟻ex｜突然削退 — 從手牌將這張卡放置於備戰區時，1/place 觸發，丟對手牌庫頂 1 張
+// v2.241 升級為 BENCH_PLACE_TRIGGERS 自動觸發（不再簡化為主動 regA 按鈕）
+// 卡面：「在自己的回合，從手牌將這張卡放置於備戰區時，可使用1次。將對手的牌庫上方1張卡丟棄。」
+BENCH_PLACE_TRIGGERS.set('鐵蟻ex', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
-  st = addLog(st, '鐵蟻ex 突然削退：丟對手牌庫頂 1 張', idx);
+  if (st.players[oppIdx].deck.length === 0) {
+    return addLog(st, '突然削退：對手牌庫為空', idx);
+  }
+  st = addLog(st, '突然削退：丟對手牌庫頂 1 張', idx);
   return updatePlayer(st, oppIdx, p => {
     const top = p.deck.slice(0, 1);
     return { ...p, deck: p.deck.slice(1), discard: [...p.discard, ...top] };
@@ -5873,10 +5877,10 @@ regPost('啃果蟲|營養素', healAnyOwnPost(30, '營養素'));
 regPre('花蓓蓓|療傷', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('花蓓蓓|療傷', healAnyOwnPost(30, '療傷'));
 
-// ── 造傷 + self heal by dealt-damage（2 張）─────────────────────────────────
+// ── 造傷 + self heal by dealt-damage（2 張；v2.236 不再簡化）─────────────────
 //   v2.236 升級為「實際造成的傷害量」(state.lastDealtDamage)，含弱抗 / 道具減傷
-//   原版簡化為 base dmg 30（對手有弱抗時不正確）。共用 selfHealByDealtPost helper
-//   （與朽木妖|終極吸取 同 pattern）。
+//   （原版只算 base dmg 30，對手有弱抗時不正確；共用 selfHealByDealtPost helper，
+//    與朽木妖|終極吸取 同 pattern）。
 function selfHealByDealtPost(attackName: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const actual = state.lastDealtDamage ?? 0;
@@ -10551,11 +10555,11 @@ regR('bug-catcher-set', (st, idx, iids, params, pool) => {
 });
 
 // ---- 能量轉移（Item）- 把 1 張基本能量從自己的寶可夢移到另一隻 -------------
-// v2.231 升級為完整 3 步：
+// v2.231 升級為完整 3 步（不再簡化）：
 //   1. 選來源（自己寶可夢身上有基本能量者）— heal-target validIids
 //   2. 選來源身上的基本能量（多張時開 modal-choice 列舉，1 張時 fast path）
 //   3. 選目的地寶可夢 — heal-target
-// 之前簡化為「自動挑第 1 張基本能量」對多色寶可夢不正確。
+// （之前自動挑第 1 張基本能量對多色寶可夢不正確）
 regG('能量轉移', (st, idx, pool) => {
   const p = st.players[idx];
   const allField = [...(p.active ? [p.active] : []), ...p.bench];
