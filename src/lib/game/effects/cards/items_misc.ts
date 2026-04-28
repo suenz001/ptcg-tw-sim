@@ -28,6 +28,7 @@ import {
   healResolver,
 } from '../_shared';
 import type { EffectFn } from '../_shared';
+import { flipCoinsWithLog } from '../../effects';
 import type { CardInstance } from '../../types';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -418,9 +419,9 @@ regG('粉碎之錘', (st, idx) => {
   return all.some(pk => pk.energyAttached.length > 0);
 });
 reg('粉碎之錘', (st, idx) => {
-  const heads = Math.random() < 0.5;
-  st = addLog(st, `粉碎之錘：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
-  if (!heads) {
+  const r = flipCoinsWithLog(st, 1, '粉碎之錘', idx);
+  st = r.state;
+  if (!r.heads) {
     return addLog(st, '粉碎之錘：反面 → 無效', idx);
   }
   const dIdx = (1 - idx) as 0 | 1;
@@ -534,14 +535,13 @@ regG('能量硬幣', (st, idx, pool) => {
   return hasBasicEnergy && hasPoke;
 });
 reg('能量硬幣', (st, idx) => {
-  const c1 = Math.random() < 0.5;
-  const c2 = Math.random() < 0.5;
-  st = addLog(st, `能量硬幣：擲 2 次硬幣 ${c1 ? '正面' : '反面'} / ${c2 ? '正面' : '反面'}`, idx);
-  if (!(c1 && c2)) {
+  const r = flipCoinsWithLog(st, 2, '能量硬幣', idx);
+  st = r.state;
+  if (r.heads < 2) {
     return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })),
-      '能量硬幣：未全部正面 → 重洗牌庫', idx);
+      `能量硬幣：${r.heads}/2 次正面（未全部正面）→ 重洗牌庫`, idx);
   }
-  st = addLog(st, '能量硬幣：全正面！從牌庫選 1 張基本能量附給寶可夢', idx);
+  st = addLog(st, '能量硬幣：2/2 次正面！從牌庫選 1 張基本能量附給寶可夢', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,

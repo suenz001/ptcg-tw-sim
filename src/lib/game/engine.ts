@@ -31,6 +31,7 @@ import {
   getOctopusTentacleEffectiveCost,
   getUrsalunaBloodMoonEffectiveCost,
   PASSIVE_PREVENT_KO,
+  flipCoinsWithLog,
 } from './effects';
 
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
@@ -2201,7 +2202,9 @@ function handlePlaying(
     // 特殊狀態：混亂 — 擲硬幣，反面自身受 30 傷害且攻擊失敗
     // v2.182：補上「自傷致 KO」流程 — 30 自傷可能讓寶可夢昏厥（HP ≤ 30 + 已有傷害指示物）
     if (attacker.active.status === 'confused') {
-      const coin = Math.random() < 0.5;
+      const flipResult = flipCoinsWithLog(state, 1, '混亂', aIdx);
+      state = flipResult.state;
+      const coin = flipResult.heads === 1;
       if (!coin) {
         const selfDmg = (attacker.active.damage ?? 0) + 30;
         const atkHP = getEffectiveHP(attacker.active, pool, state);
@@ -3253,7 +3256,9 @@ function handlePlaying(
       } else {
         burnedPlayer.active = { ...burnedPlayer.active, damage: newBurnDmg };
         // 擲硬幣：正面解除燒傷
-        const burnCoin = Math.random() < 0.5;
+        const burnFlip = flipCoinsWithLog(state, 1, `燒傷判定（${burnedCard?.name ?? '?'}）`, tIdx);
+        state = burnFlip.state;
+        const burnCoin = burnFlip.heads === 1;
         if (burnCoin) {
           // v2.163：燒傷可能在 status 也可能在 secondaryStatus；只清掉燒傷那格。
           if (burnedPlayer.active.status === 'burned') {
@@ -3263,7 +3268,7 @@ function handlePlaying(
           }
         }
         players[tIdx] = burnedPlayer;
-        state = addLog({ ...state, players }, `燒傷：${burnedCard?.name ?? '?'} 受到 20 傷害！${burnCoin ? '（正面：燒傷解除）' : '（反面：燒傷持續）'}`, null);
+        state = addLog({ ...state, players }, `燒傷：${burnedCard?.name ?? '?'} 受到 20 傷害 → ${burnCoin ? '正面：燒傷解除' : '反面：燒傷持續'}`, null);
       }
     }
 
@@ -3273,14 +3278,16 @@ function handlePlaying(
     for (const tIdx of [aIdx, dIdx] as const) {
       const sleepPlayer = { ...players[tIdx] };
       if (sleepPlayer.active?.status === 'asleep') {
-        const wakeCoin = Math.random() < 0.5;
         const sleeperName = pool.get(sleepPlayer.active.cardId)?.name ?? '?';
+        const sleepFlip = flipCoinsWithLog(state, 1, `睡眠判定（${sleeperName}）`, tIdx);
+        state = sleepFlip.state;
+        const wakeCoin = sleepFlip.heads === 1;
         if (wakeCoin) {
           sleepPlayer.active = { ...sleepPlayer.active, status: undefined };
           players[tIdx] = sleepPlayer;
-          state = addLog({ ...state, players }, `${sleeperName} 醒來了！（睡眠：正面）`, null);
+          state = addLog({ ...state, players }, `${sleeperName}：正面 → 醒來了！`, null);
         } else {
-          state = addLog({ ...state, players }, `${sleeperName} 仍在睡眠（反面）`, null);
+          state = addLog({ ...state, players }, `${sleeperName}：反面 → 仍在睡眠`, null);
         }
       }
     }

@@ -644,9 +644,9 @@ regPre('布魯皇|致命刺擊', (state, aIdx, _pool) => {
 
 // 伏擊 — 擲硬幣，正面 +20
 regPre('黑暗鴉|伏擊', (state, aIdx, _pool) => {
-  const heads = Math.random() < 0.5;
-  const s = addLog(state, `伏擊：硬幣 ${heads ? '正面！+20 傷害' : '反面'}`, aIdx);
-  return { state: s, damage: 10 + (heads ? 20 : 0) };
+  const r = flipCoinsWithLog(state, 1, '伏擊', aIdx);
+  const dmg = 10 + (r.heads ? 20 : 0);
+  return { state: addLog(r.state, `伏擊：${r.heads ? '+20' : '無加成'} → ${dmg} 傷害`, aIdx), damage: dmg };
 });
 
 // ── MBG 烏鴉頭頭 ──────────────────────────────────────────────────────────────
@@ -1104,16 +1104,16 @@ regPost('無極汰那|敲壞', (state, aIdx, pool) => {
 
 // 力量猛攻 — 擲硬幣，反面則下回合無法使用招式
 regPost('無極汰那|力量猛攻', (state, aIdx, _pool) => {
-  const coin = Math.random() < 0.5;
-  if (!coin) {
+  const r = flipCoinsWithLog(state, 1, '力量猛攻', aIdx);
+  if (!r.heads) {
     // tails → can't attack next turn (用 pending，將在擁有者下個回合開始時 promote)
-    const players = [...state.players] as [PlayerState, PlayerState];
+    const players = [...r.state.players] as [PlayerState, PlayerState];
     const p = { ...players[aIdx] };
     if (p.active) p.active = { ...p.active, cantAttackPending: true };
     players[aIdx] = p;
-    return addLog({ ...state, players }, '力量猛攻：反面！下回合無法使用招式。', aIdx);
+    return addLog({ ...r.state, players }, '力量猛攻：反面 → 下回合無法使用招式', aIdx);
   }
-  return addLog(state, '力量猛攻：正面！', aIdx);
+  return addLog(r.state, '力量猛攻：正面 → 無附加效果', aIdx);
 });
 
 // ── MBD 拉帝亞斯ex ──────────────────────────────────────────────────────────
@@ -1384,9 +1384,9 @@ regR('surfer-switch', (st, idx, iids, _params, pool) => {
 
 // 精靈球 — 擲硬幣，正面則從牌庫選 1 張寶可夢加手牌（物品）
 reg('精靈球', (st, idx) => {
-  const coin = Math.random() < 0.5;
-  if (!coin) return addLog(st, '精靈球：反面，什麼都沒發生。', idx);
-  st = addLog(st, '精靈球：正面！從牌庫選 1 張寶可夢加手牌', idx);
+  const r = flipCoinsWithLog(st, 1, '精靈球', idx);
+  if (!r.heads) return addLog(r.state, '精靈球：反面 → 什麼都沒發生', idx);
+  st = addLog(r.state, '精靈球：正面 → 從牌庫選 1 張寶可夢加手牌', idx);
   return withPending(st, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon', minCount: 0, maxCount: 1,
@@ -1397,10 +1397,10 @@ reg('精靈球', (st, idx) => {
 // 寶可夢捕捉器 — 擲硬幣，正面則選對手備戰與戰鬥寶可夢互換（物品）
 regG('寶可夢捕捉器', (st, idx) => st.players[(1 - idx) as 0 | 1].bench.length > 0);
 reg('寶可夢捕捉器', (st, idx) => {
-  const coin = Math.random() < 0.5;
-  if (!coin) return addLog(st, '寶可夢捕捉器：反面，什麼都沒發生。', idx);
+  const r = flipCoinsWithLog(st, 1, '寶可夢捕捉器', idx);
+  if (!r.heads) return addLog(r.state, '寶可夢捕捉器：反面 → 什麼都沒發生', idx);
   const oppIdx = (1 - idx) as 0 | 1;
-  st = addLog(st, '寶可夢捕捉器：正面！選對手備戰與戰鬥寶可夢互換', idx);
+  st = addLog(r.state, '寶可夢捕捉器：正面 → 選對手備戰與戰鬥寶可夢互換', idx);
   return withPending(st, {
     type: 'opp-bench-choose', actorIdx: idx, sourcePlayerIdx: oppIdx,
     minCount: 1, maxCount: 1, effectKey: 'gust-opp',
@@ -1816,9 +1816,9 @@ reg('八朔', (st, idx) => {
 
 // 朵拉塞娜（支援者）— 手牌洗回，擲硬幣正面抽 8 反面抽 3
 reg('朵拉塞娜', (st, idx) => {
-  const coin = Math.random() < 0.5;
-  const drawN = coin ? 8 : 3;
-  st = addLog(st, `朵拉塞娜：${coin ? '正面' : '反面'}！手牌洗回，抽 ${drawN} 張`, idx);
+  const r = flipCoinsWithLog(st, 1, '朵拉塞娜', idx);
+  const drawN = r.heads ? 8 : 3;
+  st = addLog(r.state, `朵拉塞娜：${r.heads ? '正面' : '反面'} → 手牌洗回，抽 ${drawN} 張`, idx);
   return updatePlayer(st, idx, p => {
     const newDeck = shuffle([...p.deck, ...p.hand]);
     const hand = newDeck.slice(0, drawN);
@@ -1865,8 +1865,9 @@ regR('search-to-hand-reshuffle', (st, idx, iids, _params, _pool) => {
 
 function coinPlusDmg(base: number, bonus: number): AttackPreFn {
   return (state, aIdx) => {
-    const heads = Math.random() < 0.5;
-    return { state: addLog(state, heads ? `正面！+${bonus}` : '反面', aIdx), damage: base + (heads ? bonus : 0) };
+    const r = flipCoinsWithLog(state, 1, '招式擲幣', aIdx);
+    const dmg = base + (r.heads ? bonus : 0);
+    return { state: addLog(r.state, r.heads ? `→ +${bonus}（${dmg}）` : `→ 無加成（${dmg}）`, aIdx), damage: dmg };
   };
 }
 regPre('瑪力露麗|嬉鬧', coinPlusDmg(30, 30));
@@ -1887,8 +1888,9 @@ regPre('潤水鴨|燕返', coinPlusDmg(10, 20));
 
 function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'paralyzed'): AttackPostFn {
   return (state, aIdx, pool) => {
-    const heads = Math.random() < 0.5;
-    if (!heads) return addLog(state, '反面', aIdx);
+    const r = flipCoinsWithLog(state, 1, '招式擲幣', aIdx);
+    if (!r.heads) return addLog(r.state, '→ 無附加狀態', aIdx);
+    state = r.state;
     const dIdx = (1 - aIdx) as 0 | 1;
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
@@ -2177,13 +2179,14 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   // 堅盾劍怪 神秘之盾 — 免疫 ex/V 招式
   ['神秘之盾', (att) => att.subtype === 'ex' || att.name.endsWith('V') || att.name.endsWith('VMAX')],
   // v2.250 奇諾栗鼠ex 順滑大衣 — 受招式傷害時擲硬幣，正面則不受該傷害
+  // v2.253 改用 flipCoinsWithLog（log 含「— 正面/反面」明確格式 → UI queue 觸發動畫）
   ['順滑大衣', (_att, _baseDmg, state, aIdx, _pool, defenderName) => {
-    const heads = Math.random() < 0.5;
     const dIdx = (1 - aIdx) as 0 | 1;
-    const newState = addLog(state,
-      `${defenderName ?? '?'}｜順滑大衣：擲硬幣 ${heads ? '正面 → 免疫此招式傷害！' : '反面 → 受傷害'}`,
+    const r = flipCoinsWithLog(state, 1, `${defenderName ?? '?'}｜順滑大衣`, dIdx);
+    const newState = addLog(r.state,
+      `${defenderName ?? '?'}｜順滑大衣：${r.heads ? '正面 → 免疫此招式傷害！' : '反面 → 受傷害'}`,
       dIdx);
-    return { immune: heads, newState };
+    return { immune: !!r.heads, newState };
   }],
 ]);
 
@@ -2491,9 +2494,9 @@ reg('黑連', (st, idx) => updatePlayer(addLog(st, '黑連：抽 3 張', idx), i
 
 // 野餐女孩 — 擲硬幣 正面抽 4 反面抽 2
 reg('野餐女孩', (st, idx) => {
-  const heads = Math.random() < 0.5;
-  const n = heads ? 4 : 2;
-  st = addLog(st, '野餐女孩：' + (heads ? '正面' : '反面') + ' 抽 ' + n + ' 張', idx);
+  const r = flipCoinsWithLog(st, 1, '野餐女孩', idx);
+  const n = r.heads ? 4 : 2;
+  st = addLog(r.state, `野餐女孩：${r.heads ? '正面' : '反面'} → 抽 ${n} 張`, idx);
   return updatePlayer(st, idx, p => {
     const taken = p.deck.slice(0, n);
     return { ...p, deck: p.deck.slice(n), hand: [...p.hand, ...taken] };
@@ -3064,12 +3067,38 @@ regPost('吼叫尾|大吼大叫', (state, aIdx, _pool) => {
 // Session 38j H 標第 7 波 雜項（硬幣、混亂、抽卡、下回合減傷）27 張
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * v2.253：擲幣統一 helper — 擲 N 次硬幣，每次寫 1 行「— 正面」/「— 反面」log，
+ * UI 偵測（+page.svelte coinFlipQueue）會逐個排隊播放動畫。
+ *
+ * - count=1：log「{label}：擲硬幣 — 正面」（不寫「第 1 次」）
+ * - count≥2：log「{label}：第 N 次擲硬幣 — 正面」
+ * 回傳 { state, heads } — heads = 累計正面數，caller 自行決定總結 log 與傷害計算。
+ */
+export function flipCoinsWithLog(
+  state: GameState,
+  count: number,
+  label: string,
+  aIdx: 0 | 1,
+): { state: GameState; heads: number } {
+  let s = state;
+  let heads = 0;
+  for (let i = 0; i < count; i++) {
+    const isHeads = Math.random() < 0.5;
+    const prefix = count === 1 ? '' : `第 ${i + 1} 次`;
+    s = addLog(s, `${label}：${prefix}擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
+    if (isHeads) heads++;
+  }
+  return { state: s, heads };
+}
+
 /** 簡易 coin flip +N helper：基礎傷害 + (正面 ? N : 0) */
 function coinPlusPre(base: number, bonus: number, attackName: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    const heads = Math.random() < 0.5;
-    const s = addLog(state, `${attackName}：硬幣 ${heads ? '正面！+' + bonus + ' 傷害' : '反面'}`, aIdx);
-    return { state: s, damage: base + (heads ? bonus : 0) };
+    const r = flipCoinsWithLog(state, 1, attackName, aIdx);
+    const dmg = base + (r.heads ? bonus : 0);
+    const s = addLog(r.state, `${attackName}：${r.heads ? `+${bonus} 傷害` : '無加成'} → ${dmg}`, aIdx);
+    return { state: s, damage: dmg };
   };
 }
 
@@ -3083,11 +3112,11 @@ regPre('普隆隆姆|擊飛', coinPlusPre(90, 90, '擊飛'));
 
 // 貓鼠斬｜連斬 — 擲 3 次硬幣，1 正 +20 / 2 正 +50 / 3 正 +80
 regPre('貓鼠斬|連斬', (state, aIdx, _pool) => {
-  let heads = 0;
-  for (let i = 0; i < 3; i++) if (Math.random() < 0.5) heads++;
-  const bonus = heads === 3 ? 80 : heads === 2 ? 50 : heads === 1 ? 20 : 0;
-  const s = addLog(state, `連斬：擲 3 次硬幣正面 ${heads} 次（+${bonus} 傷害）`, aIdx);
-  return { state: s, damage: 10 + bonus };
+  const r = flipCoinsWithLog(state, 3, '連斬', aIdx);
+  const bonus = r.heads === 3 ? 80 : r.heads === 2 ? 50 : r.heads === 1 ? 20 : 0;
+  const dmg = 10 + bonus;
+  const s = addLog(r.state, `連斬：${r.heads} 次正面 → 基礎 10 + ${bonus} = ${dmg} 傷害`, aIdx);
+  return { state: s, damage: dmg };
 });
 
 // ── B. 將對手混亂（regPost statusPost('confused')）6 張 ──────────────────
@@ -3201,20 +3230,18 @@ regPost('太陽伊布ex|精神出局', oppDiscardRandomHand(1, '精神出局'));
 
 // 巨牙鯊｜咬棄 — 擲 3 次硬幣，丟對手正面數量的手牌（不看正面）
 regPost('巨牙鯊|咬棄', (state, aIdx, _pool) => {
-  let heads = 0;
-  for (let i = 0; i < 3; i++) if (Math.random() < 0.5) heads++;
-  const s = addLog(state, `咬棄：擲 3 次硬幣正面 ${heads} 次，丟對手 ${heads} 張手牌`, aIdx);
-  return oppDiscardRandomHand(heads, '咬棄')(s, aIdx, new Map());
+  const r = flipCoinsWithLog(state, 3, '咬棄', aIdx);
+  const s = addLog(r.state, `咬棄：${r.heads} 次正面 → 丟對手 ${r.heads} 張手牌`, aIdx);
+  return oppDiscardRandomHand(r.heads, '咬棄')(s, aIdx, new Map());
 });
 
 // 鐵螯龍蝦｜喀嚓喀嚓 — 擲 2 次硬幣，對手牌庫上方正面數的牌丟棄
 regPost('鐵螯龍蝦|喀嚓喀嚓', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  let heads = 0;
-  for (let i = 0; i < 2; i++) if (Math.random() < 0.5) heads++;
-  let s = addLog(state, `喀嚓喀嚓：擲 2 次硬幣正面 ${heads} 次，丟對手牌庫頂 ${heads} 張`, aIdx);
+  const r = flipCoinsWithLog(state, 2, '喀嚓喀嚓', aIdx);
+  const s = addLog(r.state, `喀嚓喀嚓：${r.heads} 次正面 → 丟對手牌庫頂 ${r.heads} 張`, aIdx);
   return updatePlayer(s, dIdx, p => {
-    const take = Math.min(heads, p.deck.length);
+    const take = Math.min(r.heads, p.deck.length);
     if (take === 0) return p;
     const discarded = p.deck.slice(0, take);
     return { ...p, deck: p.deck.slice(take), discard: [...p.discard, ...discarded] };
@@ -3314,9 +3341,9 @@ regPost('雙劍鞘|猛擊在地', selfCantAttackNextPost());
 
 // 朝北鼻｜力量猛攻 — 擲 1 次硬幣反面，自己下回合無法使用招式（60 dmg baseline）
 regPost('朝北鼻|力量猛攻', (state, aIdx, pool) => {
-  const tails = Math.random() >= 0.5;
-  if (!tails) return state;
-  const s = addLog(state, `力量猛攻：擲 1 次硬幣反面，自己下個回合無法使用招式`, aIdx);
+  const r = flipCoinsWithLog(state, 1, '力量猛攻', aIdx);
+  if (r.heads) return r.state;  // 正面：無附加效果
+  const s = addLog(r.state, `力量猛攻：反面 → 自己下個回合無法使用招式`, aIdx);
   return selfCantAttackNextPost()(s, aIdx, pool);
 });
 
@@ -3377,10 +3404,9 @@ regPost('懶人獺|悠哉', (state, aIdx) => {
 
 export function coinHeadsMultiplyPre(flips: number, perHead: number, attackName: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    let heads = 0;
-    for (let i = 0; i < flips; i++) if (Math.random() < 0.5) heads++;
-    const dmg = heads * perHead;
-    const s = addLog(state, `${attackName}：擲 ${flips} 次硬幣正面 ${heads} 次 → ${dmg} 傷害`, aIdx);
+    const r = flipCoinsWithLog(state, flips, attackName, aIdx);
+    const dmg = r.heads * perHead;
+    const s = addLog(r.state, `${attackName}：${r.heads}/${flips} 次正面 → ${r.heads}×${perHead} = ${dmg} 傷害`, aIdx);
     return { state: s, damage: dmg };
   };
 }
@@ -3420,11 +3446,11 @@ regPre('袋獸|迷昏拳', coinHeadsMultiplyPre(2, 90, '迷昏拳'));
 // ── (A) coin-tails-fail helper + 4 張 ─────────────────────────────────────
 function coinTailsFailPre(base: number, attackName: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    const heads = Math.random() < 0.5;
-    if (!heads) {
-      return { state: addLog(state, `${attackName}：擲硬幣反面 → 招式失敗`, aIdx), damage: 0 };
+    const r = flipCoinsWithLog(state, 1, attackName, aIdx);
+    if (!r.heads) {
+      return { state: addLog(r.state, `${attackName}：反面 → 招式失敗`, aIdx), damage: 0 };
     }
-    return { state: addLog(state, `${attackName}：擲硬幣正面 → ${base} 傷害`, aIdx), damage: base };
+    return { state: addLog(r.state, `${attackName}：正面 → ${base} 傷害`, aIdx), damage: base };
   };
 }
 regPre('單卵細胞球|偷襲', coinTailsFailPre(30, '偷襲'));
@@ -3438,13 +3464,13 @@ regPre('阿羅拉 地鼠|偷襲', coinTailsFailPre(30, '偷襲'));
 // 不擋招式附加效果如異常狀態/放指示物，與卡面語意完全一致）。
 function coinHeadsSelfImmuneNextPost(attackName: string): AttackPostFn {
   return (state, aIdx, _pool) => {
-    const heads = Math.random() < 0.5;
-    if (!heads) return addLog(state, `${attackName}：擲硬幣反面 → 無追加效果`, aIdx);
-    const players = [...state.players] as [PlayerState, PlayerState];
+    const r = flipCoinsWithLog(state, 1, attackName, aIdx);
+    if (!r.heads) return addLog(r.state, `${attackName}：反面 → 無追加效果`, aIdx);
+    const players = [...r.state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
     if (att.active) att.active = { ...att.active, damageReduceNextHit: 9999 };
     players[aIdx] = att;
-    return addLog({ ...state, players }, `${attackName}：擲硬幣正面 → 下回合免疫招式傷害`, aIdx);
+    return addLog({ ...r.state, players }, `${attackName}：正面 → 下回合免疫招式傷害`, aIdx);
   };
 }
 regPost('泥偶小人|鐵壁', coinHeadsSelfImmuneNextPost('鐵壁'));
@@ -5033,12 +5059,13 @@ regPost('蒼炎刃鬼ex|紫水晶激怒', selfDiscardAllEnergyPost('紫水晶激
 
 function coinHeadsOppDiscardEnergyPost(label: string): AttackPostFn {
   return (state, aIdx, pool) => {
-    const heads = Math.random() < 0.5;
-    if (!heads) return addLog(state, `${label}：反面，無追加效果`, aIdx);
+    const r = flipCoinsWithLog(state, 1, label, aIdx);
+    if (!r.heads) return addLog(r.state, `${label}：反面 → 無追加效果`, aIdx);
+    state = r.state;
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
     if (!def || def.energyAttached.length === 0) {
-      return addLog(state, `${label}：正面！但對手出場無附加能量`, aIdx);
+      return addLog(state, `${label}：正面 → 但對手出場無附加能量`, aIdx);
     }
     const defName = pool.get(def.cardId)?.name ?? '?';
     // 從後往前丟 1 張（最近附加優先）
@@ -5057,11 +5084,13 @@ function coinHeadsOppDiscardEnergyPost(label: string): AttackPostFn {
 
 function coinTripleHeadsPre(base: number, b1: number, b2: number, b3: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    let heads = 0;
-    for (let i = 0; i < 3; i++) if (Math.random() < 0.5) heads++;
-    const bonus = heads === 3 ? b3 : heads === 2 ? b2 : heads === 1 ? b1 : 0;
+    const r = flipCoinsWithLog(state, 3, label, aIdx);
+    const bonus = r.heads === 3 ? b3 : r.heads === 2 ? b2 : r.heads === 1 ? b1 : 0;
     const dmg = base + bonus;
-    return { state: addLog(state, `${label}：3 硬幣正面 ${heads} 次 → +${bonus}，合 ${dmg}`, aIdx), damage: dmg };
+    return {
+      state: addLog(r.state, `${label}：${r.heads}/3 次正面 → 基礎 ${base} + ${bonus} = ${dmg} 傷害`, aIdx),
+      damage: dmg,
+    };
   };
 }
 
@@ -6910,15 +6939,9 @@ regPre('怖納噬草|強力尖刺', (state, aIdx, pool) => {
   if (!att) return { state, damage: 0 };
   const n = countOneEnergy(att, 'all', pool);
   if (n === 0) return { state: addLog(state, '強力尖刺：自身無能量', aIdx), damage: 0 };
-  let heads = 0;
-  const seq: string[] = [];
-  for (let i = 0; i < n; i++) {
-    const h = Math.random() < 0.5;
-    if (h) heads++;
-    seq.push(h ? '正' : '反');
-  }
-  const dmg = heads * 80;
-  const s = addLog(state, `強力尖刺：擲 ${n} 次硬幣 [${seq.join(' ')}] → 正面 ${heads} 次 × 80 = ${dmg}`, aIdx);
+  const r = flipCoinsWithLog(state, n, '強力尖刺', aIdx);
+  const dmg = r.heads * 80;
+  const s = addLog(r.state, `強力尖刺：${r.heads}/${n} 次正面 → ${r.heads}×80 = ${dmg} 傷害`, aIdx);
   return { state: s, damage: dmg };
 });
 
@@ -6929,15 +6952,9 @@ regPre('椰蛋樹|投球時刻', (state, aIdx, pool) => {
   const def = state.players[dIdx].active;
   const n = (att ? countOneEnergy(att, 'all', pool) : 0) + (def ? countOneEnergy(def, 'all', pool) : 0);
   if (n === 0) return { state: addLog(state, '投球時刻：雙方出場皆無能量', aIdx), damage: 0 };
-  let heads = 0;
-  const seq: string[] = [];
-  for (let i = 0; i < n; i++) {
-    const h = Math.random() < 0.5;
-    if (h) heads++;
-    seq.push(h ? '正' : '反');
-  }
-  const dmg = heads * 60;
-  const s = addLog(state, `投球時刻：擲 ${n} 次硬幣 [${seq.join(' ')}] → 正面 ${heads} 次 × 60 = ${dmg}`, aIdx);
+  const r = flipCoinsWithLog(state, n, '投球時刻', aIdx);
+  const dmg = r.heads * 60;
+  const s = addLog(r.state, `投球時刻：${r.heads}/${n} 次正面 → ${r.heads}×60 = ${dmg} 傷害`, aIdx);
   return { state: s, damage: dmg };
 });
 
@@ -7539,16 +7556,16 @@ regPre('迷唇姐|精神強念', (state, aIdx, _pool) => {
 // ── (J) coin + 既有 helper 組合 ────────────────────────────────────────
 // 大岩蛇｜綁緊 30 + 擲硬幣正面則對手【麻痺】
 regPost('大岩蛇|綁緊', (state, aIdx, pool) => {
-  const heads = Math.random() < 0.5;
-  if (!heads) return addLog(state, '綁緊：擲硬幣反面 → 無附加效果', aIdx);
-  return statusPost('paralyzed')(addLog(state, '綁緊：擲硬幣正面 → 對手【麻痺】', aIdx), aIdx, pool);
+  const r = flipCoinsWithLog(state, 1, '綁緊', aIdx);
+  if (!r.heads) return addLog(r.state, '綁緊：反面 → 無附加效果', aIdx);
+  return statusPost('paralyzed')(addLog(r.state, '綁緊：正面 → 對手【麻痺】', aIdx), aIdx, pool);
 });
 
 // 破破袋｜酸液炸彈 10 + 擲硬幣正面則丟對手戰鬥 1 張能量
 regPost('破破袋|酸液炸彈', (state, aIdx, pool) => {
-  const heads = Math.random() < 0.5;
-  if (!heads) return addLog(state, '酸液炸彈：擲硬幣反面 → 無附加效果', aIdx);
-  return discardOppActiveEnergyPost('酸液炸彈', 'any')(addLog(state, '酸液炸彈：擲硬幣正面', aIdx), aIdx, pool);
+  const r = flipCoinsWithLog(state, 1, '酸液炸彈', aIdx);
+  if (!r.heads) return addLog(r.state, '酸液炸彈：反面 → 無附加效果', aIdx);
+  return discardOppActiveEnergyPost('酸液炸彈', 'any')(addLog(r.state, '酸液炸彈：正面 → 丟對手能量', aIdx), aIdx, pool);
 });
 
 // ── (K) 抽卡到 6 張 ──────────────────────────────────────────────────

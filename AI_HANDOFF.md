@@ -1,9 +1,66 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.252)  
+> 最後更新：2026-04-28 (v2.253)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.253 — 全專案擲幣 log 統一 helper（與遊戲動畫一致化）
+
+Leon 要求：「卡牌的說明內容，包含擲幣的敘述都與遊戲的呈現方式一致」。
+
+### 統一 helper：`flipCoinsWithLog(state, count, label, aIdx) → { state, heads }`
+寫在 effects.ts，export 給 engine + 子模組共用：
+- `count=1`：log 「{label}：擲硬幣 — 正面」
+- `count≥2`：log 「{label}：第 N 次擲硬幣 — 正面」
+- 內部呼叫 `addLog` N 次（每次擲幣 1 行），UI parser（v2.252 加的 coinFlipQueue）依序播放動畫
+- 回傳累計 heads，caller 自行決定總結 log 與後續邏輯
+
+### 全專案 refactor — 影響範圍
+
+**effects.ts helpers（全部改用 flipCoinsWithLog）**：
+- `coinPlusPre` — 擊飛/打滾 等 6 張
+- `coinHeadsMultiplyPre` — 三重旋轉/二連擊/亂抓 等 25 張
+- `coinTailsFailPre` — 偷襲 等 4 張
+- `coinHeadsSelfImmuneNextPost` — 鐵壁/挖洞 等 7 張
+- `coinPlusDmg` (Session 31 H5) — 嬉鬧/咬盡 等 11 張
+- `coinStatusPost` (Session 31 H6) — coin → status 6 張
+- `coinHeadsOppDiscardEnergyPost` — 神秘光束 等 6 張
+- `coinTripleHeadsPre` — 3 硬幣 1/2/3 各加成
+- `coinUntilTailsMultiplyPre` (v2.252 已改) — 滾球/連續擲幣 等 5 張
+
+**個別招式/卡**：
+- 黑暗鴉|伏擊
+- 無極汰那|力量猛攻
+- 朝北鼻|力量猛攻
+- 貓鼠斬|連斬（3 硬幣）
+- 巨牙鯊|咬棄（3 硬幣）
+- 鐵螯龍蝦|喀嚓喀嚓（2 硬幣）
+- 怖納噬草|強力尖刺（自身能量數次）
+- 椰蛋樹|投球時刻（雙方能量總數次）
+- 大岩蛇|綁緊
+- 破破袋|酸液炸彈
+- 朵拉塞娜（Supporter）
+- 野餐女孩（Supporter）
+- 精靈球（Item）
+- 寶可夢捕捉器（Item）
+- 粉碎之錘（items_misc.ts）
+- 能量硬幣（items_misc.ts，2 硬幣）
+- 順滑大衣（PASSIVE_IMMUNITY entry）
+
+**engine.ts 狀態 checkup**：
+- 混亂自傷判定（line ~2204）
+- 燒傷 checkup（line ~3266）
+- 睡眠 checkup（line ~3279）
+
+### 受惠卡牌總計
+~70+ 張卡（招式 + 特性 + 訓練家 + 狀態 checkup），現在所有擲幣都會逐次顯示動畫，
+log 格式統一為「— 正面 / — 反面」破折號結尾，UI parser 排隊播放動畫。
+
+### Build
+✅ `npm run build` 通過（prod 16.68s）
 
 ---
 
