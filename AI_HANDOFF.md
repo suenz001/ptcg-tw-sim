@@ -1,9 +1,52 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.260)  
+> 最後更新：2026-04-28 (v2.261)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.261 — PTCG 規則審查第四波 — C-13 退化清狀態（P1+P2）
+
+### 背景
+v2.260 修了進化（§I-A-05）的特殊狀態清除 bug；本次第四波審查發現**退化（§II-C-13）也有同類問題**，且影響 2 個實裝路徑。
+
+### Bug — C-13 退化未清除特殊狀態與跨回合 flag（P1 + P2）
+**規則**：PDF §II-C-13「退化後特殊狀態與附加效果消除」+「退化後視為新上場，當回合不可進化」
+
+**舊行為**：兩個退化實作都用 `...target/...poke` spread 保留所有欄位，只覆寫 `cardId/evolvedFromStack`：
+1. `items_misc.ts:1570` 奇異時鐘退化：註解明寫「保留 damage / energy / tool / status / 旗標」— 主動寫錯（status 應消除）。但有設 `evolvedThisTurn: true` ✓
+2. `v155_attacks.ts:281` 阿賽斯特萊石（太陽伊布ex 招式）退化：spread 保留所有 + **沒設 evolvedThisTurn**（兩個 bug 疊加）
+
+**修法**：兩處 `devolved` instance 顯式清掉以下欄位：
+- `status`、`secondaryStatus`（特殊狀態）
+- `cantAttackThisTurn`、`cantAttackPending`（無法使用招式）
+- `cantRetreatNextTurn`（無法撤退）
+- `damageReduceNextHit`（下次受傷 -X）
+
+阿賽斯特萊石額外設 `evolvedThisTurn: true`（防止退化後當回合再進化）。
+
+### 第四波其他審查通過項
+- **能量附加每回合 1 張**：`engine.ts:2138-2161` energyAttachedThisTurn flag + END_TURN 重置 ✓
+- **卡牌效果附能不計入計數**：handAttachEnergyPost 等直接寫 energyAttached 不觸 flag ✓
+- **退化分層移除進化卡**：從 evolvedFromStack 最頂層 pop（不是直接退到 Basic）✓
+- **退化保留物**：damage/energy/tool 都正確保留 ✓
+- **戰鬥/備戰/中毒/灼傷昏厥的能量道具處理**：4 路徑都正確進棄牌堆 ✓
+- **ex/超級進化獎賞**：prizesForKO 正確（一般 1 / ex 2 / 超級 ex 3）✓
+- **互換動作機制**：supporters_gust.ts gust-opp resolver 正確 ✓
+
+### Agent 誤判（false positive 排除）
+- **「純樸」(C-17) vs C-04 互換未實裝** — 當前 H/I/J 標卡池無「不會受到對手寶可夢使用招式的效果的影響」這個敘述的特性（grep static/cards 確認 0 張）；阿塞蘿拉的惡作劇（v2.174）已實裝 C-17 + C-16 耦合
+- **混亂自傷雙 KO 順序錯** — 混亂反面 = 招式失敗（招式沒打出對手），不會造成「自身 + 對手同時 KO」場景
+
+### 變更檔案
+- `src/lib/game/effects/cards/items_misc.ts`：奇異時鐘退化清狀態
+- `src/lib/game/effects/cards/v155_attacks.ts`：阿賽斯特萊石退化清狀態 + 設 evolvedThisTurn
+- `src/lib/version.ts`：2.260 → 2.261
+
+### Build
+✅ `npm run build` 通過
 
 ---
 

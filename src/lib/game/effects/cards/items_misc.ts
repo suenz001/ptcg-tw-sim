@@ -1566,13 +1566,21 @@ function doOddClockDevolve(
     damage: 0,
     energyAttached: [],
   }));
-  // 新 instance：保留 damage / energy / tool / status / 旗標 — 只改 cardId 和 evolvedFromStack
+  // v2.261 Bug C-13：退化規則 — 保留 damage / energy / tool（PDF §II-C-13），
+  //   清除特殊狀態與附加效果（跟進化規則一致 — PDF 明文「退化後特殊狀態與附加效果消除」）。
   const devolved: import('../../types').CardInstance = {
     ...target,
     cardId: newBaseInst.cardId,
     evolvedFromStack: newStack.length > 0 ? newStack : undefined,
     evolvedFromIid: newStack.length > 0 ? newStack[newStack.length - 1].iid : undefined,
     evolvedThisTurn: true, // 卡面「那個回合無法進化」
+    // v2.261 清狀態 + 跨回合 flag（PDF §II-C-13 消除物）
+    status: undefined,
+    secondaryStatus: undefined,
+    cantAttackThisTurn: undefined,
+    cantAttackPending: undefined,
+    cantRetreatNextTurn: undefined,
+    damageReduceNextHit: undefined,
   };
   const oldName = pool.get(target.cardId)?.name ?? '?';
   const newName = pool.get(newBaseInst.cardId)?.name ?? '?';

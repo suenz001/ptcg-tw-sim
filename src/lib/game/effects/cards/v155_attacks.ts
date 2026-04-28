@@ -287,11 +287,21 @@ regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
       newDeckExtras.push({ iid: poke.iid + '_evo_returned', cardId: poke.cardId, energyAttached: [], damage: 0 });
       returnedCount++;
       // 退化為 prev：cardId 變回前一階
+      // v2.261 Bug C-13：退化規則 — 保留 damage / energy / tool（PDF §II-C-13），
+      //   但清除特殊狀態與附加效果，且設 evolvedThisTurn 防本回合再進化。
       return {
         ...poke,
         cardId: prev.cardId,
         evolvedFromStack: stack.length > 0 ? stack : undefined,
         evolvedFromIid: stack.length > 0 ? stack[stack.length - 1].iid : undefined,
+        evolvedThisTurn: true,  // v2.261：退化後視為新上場，當回合不可進化
+        // v2.261 清狀態 + 跨回合 flag（PDF §II-C-13 消除物）
+        status: undefined,
+        secondaryStatus: undefined,
+        cantAttackThisTurn: undefined,
+        cantAttackPending: undefined,
+        cantRetreatNextTurn: undefined,
+        damageReduceNextHit: undefined,
       };
     };
     let active = p.active;
