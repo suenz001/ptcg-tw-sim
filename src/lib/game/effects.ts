@@ -2149,24 +2149,14 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (attackerCard: Card, defende
   }],
 ]);
 
-/**
- * 特性名 → 判斷是否完全免疫此攻擊。
- *
- * v2.249 簽名擴充：可選回傳 `{ immune: boolean; newState: GameState }`，讓特性
- * 在判定免疫的同時 mutate state（例如「順滑大衣」需要寫硬幣 log）。
- * 既有 entry 回傳 boolean 仍向下相容；engine.ts loop 兩種型別都處理。
- *
- * 注意：engine 在算 baseDamage 路徑只會 invoke 一次此 check（line 2646-2654），
- * 不會被 UI 預覽多次呼叫，故含 Math.random() 的判定（順滑大衣）安全。
- */
+/** 特性名 → 判斷是否完全免疫此攻擊 */
 export type ImmunityCheck = (
   attackerCard: Card,
   baseDamage: number,
   state: GameState,
   aIdx: 0 | 1,
-  pool: Map<string, Card>,
-  defenderName?: string,
-) => boolean | { immune: boolean; newState: GameState };
+  pool: Map<string, Card>
+) => boolean;
 export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   // 奇麒麟ex 尾甲 — 免疫 Basic ex 招式
   ['尾甲', (att) => att.subtype === 'ex' && !att.evolvesFrom],
@@ -2176,15 +2166,6 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   ['鐵壁硬殼', (_att, baseDamage) => baseDamage >= 200],
   // 堅盾劍怪 神秘之盾 — 免疫 ex/V 招式
   ['神秘之盾', (att) => att.subtype === 'ex' || att.name.endsWith('V') || att.name.endsWith('VMAX')],
-  // v2.249 奇諾栗鼠ex 順滑大衣 — 受招式傷害時擲硬幣，正面則不受該傷害
-  ['順滑大衣', (_att, _baseDmg, state, aIdx, _pool, defenderName) => {
-    const heads = Math.random() < 0.5;
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const newState = addLog(state,
-      `${defenderName ?? '?'}｜順滑大衣：擲硬幣 ${heads ? '正面 → 免疫此招式傷害！' : '反面 → 受傷害'}`,
-      dIdx);
-    return { immune: heads, newState };
-  }],
 ]);
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -4605,8 +4586,6 @@ function bothActiveEnergyMultiplyPre(base: number, per: number, label: string): 
 
 // 自身附加（filter）
 regPre('奇諾栗鼠|特殊滾滾', selfAttachedEnergyMultiplyPre(0, 70, 'special', '特殊滾滾'));
-// v2.249 奇諾栗鼠ex｜能量巴掌 — 自身附加能量數 × 40
-regPre('奇諾栗鼠ex|能量巴掌', selfAttachedEnergyMultiplyPre(0, 40, 'all', '能量巴掌'));
 regPre('巨炭山|機槍瀝青', selfAttachedEnergyMultiplyPre(40, 80, 'Fire', '機槍瀝青'));
 regPre('吉雉雞|能量羽毛', selfAttachedEnergyMultiplyPre(0, 30, 'all', '能量羽毛'));
 regPre('刺龍王ex|水炮', selfAttachedEnergyMultiplyPre(50, 50, 'Water', '水炮'));
