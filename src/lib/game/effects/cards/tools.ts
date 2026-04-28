@@ -148,8 +148,8 @@ TOOL_PREVENT_KO.set('倖存鍛鍊器', (inst, card) => {
 });
 
 // ── 被 KO 時效果 ───────────────────────────────────────────────────────────
-// v2.232 升級：原版簡化為「固定抽頂 3 張」；卡面實際是「從牌庫任意選擇最多
-//   3 張卡加入手牌，並重洗牌庫」— 應開 deck-search pending 讓玩家自選。
+// v2.232 升級為 deck-search pending（不再簡化）；原版固定抽頂 3 張是錯的。
+//   卡面實際是「從牌庫任意選擇最多 3 張卡加入手牌，並重洗牌庫」— 應讓玩家自選。
 //   actorIdx = dIdx（被 KO 方的玩家做選擇）。共用 search-to-hand-reshuffle。
 TOOL_ON_KO.set('希望護身符', (state, dIdx) => {
   if (state.players[dIdx].deck.length === 0) {

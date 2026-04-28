@@ -95,7 +95,7 @@ reg('好傷藥', (st, idx) => {
 });
 
 // 龍之秘藥 — 將自己的 1 隻【龍】寶可夢恢復 120 HP
-// v2.159：補上「龍寶可夢且有傷害」的完整 condition（之前簡化為任意寶可夢有傷害即可）
+// v2.159 升級為完整 condition（不再簡化）；之前簡化為任意寶可夢有傷害即可。
 regG('龍之秘藥', (st, idx, pool) => {
   const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
   return all.some(c => c.damage > 0 && pool.get(c.cardId)?.pokemonType === 'Dragon');

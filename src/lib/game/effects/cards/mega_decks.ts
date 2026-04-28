@@ -5,7 +5,7 @@
  *   - 超級寶石海星ex / 超級雪妖女ex（水系 Mega 混合）
  *
  * 每張卡嚴格按 static/cards/*.json 的 rulesText 實裝；遇到卡面描述需要
- * 新 engine infra 時會在註解寫明、先 deferred、不做簡化版（feedback_effect_implementation_sop）。
+ * 新 engine infra 時會在註解寫明、先 deferred（不再簡化，per feedback_effect_implementation_sop）。
  */
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
@@ -453,8 +453,8 @@ regR('alloy-forge-pick', (st, idx, energyIids, _params, pool) => {
         bench: pl.bench.map(c => c.iid === target.iid ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
     });
   }
-  // v2.225 多隻鋼寶可夢 → 逐張分配（卡面：「以任意方式附於」）
-  //   舊版簡化：選 1 隻把所有能量塞給它（Leon 反映：能量應可分散）。
+  // v2.225 多隻鋼寶可夢 → 逐張分配，升級為 chained pending（不再簡化）。
+  //   卡面：「以任意方式附於」；舊版選 1 隻把所有能量塞給它，Leon 反映能量應可分散。
   //   修法：每張能量都開 1 個 heal-target pending 讓玩家選目標，
   //         params.energyIids 攜帶剩餘待分配的 iid 陣列；resolver 附完當前 1 張後 spawn 下一個。
   return withPending(st, {
