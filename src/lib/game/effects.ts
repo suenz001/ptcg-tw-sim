@@ -3010,13 +3010,24 @@ regPre('波盪水|蜿蜒割裂', (state, aIdx, _pool) => {
   return { state: s2, damage: 180 };
 });
 
-// 吼叫尾｜大吼大叫 — 對手 bench 1 隻 × (自己 counter × 20)
-//   原文「對手的 1 隻寶可夢」，但備戰區不計弱點抵抗；簡化為只打 bench
+// 吼叫尾｜大吼大叫 — 對手任 1 隻 × (自己 counter × 20)
+//   v2.235：升級為 opp-poke-choose（戰鬥場套弱抗、備戰不計）
+//   共用 clone-strike-multi-hit resolver（與甲賀忍蛙ex|分身連打 同 pattern）
 regPost('吼叫尾|大吼大叫', (state, aIdx, _pool) => {
   const n = selfActiveCounters(state, aIdx);
   const amount = n * 20;
   if (amount === 0) return state;
-  return hitBenchPickPost(state, aIdx, 'opp', 1, amount, '大吼大叫');
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx];
+  if (!def.active && def.bench.length === 0) return state;
+  const s = addLog(state, `大吼大叫：選對手 1 隻寶可夢造成 ${amount} 傷害（戰鬥場套弱抗、備戰不計）`, aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'clone-strike-multi-hit',
+    params: { dmg: amount, label: '大吼大叫' },
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -4208,7 +4219,7 @@ regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
 //   (c) 全體指示物（2 張）:由克希|痛楚記憶（全體 +20）、伊裴爾塔爾|侵蝕之風（已傷 +20）
 //   (d) HP 設定（2 張）:蜈蚣王|偏道一回（剩 10）、恰雷姆ex|氣功指壓（剩 50）
 //   (e) 條件失敗（1 張）:古鼎鹿|傲慢衝擊（220，若自身 ≥4 指示物則失敗）
-//   (f) 簡化 plain（1 張）:八爪武師|觸手激怒（130；動態能量費用略）
+//   (f) plain（1 張）:八爪武師|觸手激怒（130；v2.161 已升級為動態能量費用 hook）
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** 對 opp 全體或已傷寶可夢各加 amount 傷害，含 KO 處理 */
