@@ -1,9 +1,25 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.247)  
+> 最後更新：2026-04-28 (v2.248)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.248 — Simplification audit 標籤清理（coin-heads-immune-next）
+
+跑 `node scripts/audit-simplifications.mjs` 結果剩 5 個「還在簡化」，其中 coin-heads-immune-next（泥偶小人/泥偶巨人/土龍弟弟/電電蟲/東施喵/飄飄雛/七夕青鳥 共 7 張）的「簡化」標籤是誤導：
+
+卡面寫「在下個對手的回合，這隻寶可夢不會受到招式的傷害」— **語意僅限「招式傷害」**，沒包含招式附加效果（異常狀態、放指示物等）。
+現有實作 `damageReduceNextHit = 9999` 把招式傷害降到 0，附加效果照常觸發 — 與卡面語意完全一致，**不是簡化**。
+
+舊註解寫「『效果不受影響』部分暫未處理」會讓人以為有 bug；實際上 PTCG 規則「招式傷害 ≠ 招式效果」，這張卡只擋傷害是設計如此。改寫註解避免後續誤改。
+
+audit 從 5 → 4，剩 4 個真實簡化（六道忍蛙 / 蜿蜒割裂 / 灰塵山|丟棄 / 跳躍衝天）需要 engine + UI 改動，留待後續。
+
+### Build
+✅ `npm run build` 通過
 
 ---
 

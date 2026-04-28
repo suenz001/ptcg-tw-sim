@@ -3414,8 +3414,9 @@ regPre('搬運小匠|全力拳', coinTailsFailPre(40, '全力拳'));
 regPre('阿羅拉 地鼠|偷襲', coinTailsFailPre(30, '偷襲'));
 
 // ── (B) coin-heads-immune-next helper + 7 張 ──────────────────────────────
-// 擲 1 次硬幣若正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害（簡化：
-// damageReduceNextHit = 9999，實質免疫傷害；「效果不受影響」部分暫未處理）
+// 擲 1 次硬幣若正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害。
+// 實作：damageReduceNextHit = 9999 → 招式傷害降到 0（卡面範圍即「招式傷害」，
+// 不擋招式附加效果如異常狀態/放指示物，與卡面語意完全一致）。
 function coinHeadsSelfImmuneNextPost(attackName: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const heads = Math.random() < 0.5;
