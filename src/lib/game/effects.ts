@@ -1775,13 +1775,19 @@ regR('sage-evolve', (state, aIdx, iids, _params, pool) => {
   return addLog(s, `賽吉：將 ${evoCard.name} 進化於場上的「${evoCard.evolvesFrom}」並重洗牌庫`, aIdx);
 });
 
-// 八朔（支援者）— 自己上回合被擊倒才可用，看牌庫頂 8 選 3
+// 八朔（支援者）— 上個對手的回合自己的寶可夢昏厥了才可用，看牌庫頂 8 選 3
+//   卡面（資料庫驗證 SV6 10512/10576、MC 17192）：
+//   「這張卡必須在上個對手的回合自己的寶可夢【昏厥】了才可使用。
+//     查看自己的牌庫上方8張卡，從其中選擇最多3張卡加入手牌。將剩餘卡放回牌庫並重洗。」
+//
+// v2.243 升級為與 吉雉雞ex|扭轉乾坤 / 不公印章 同一條判定（不再簡化）：
+//   snap = oppPrizesAtMyLastTurnEnd[idx] = 上次自己回合結束時對手剩餘獎賞數
+//     - 對手回合中若擊倒我方寶可夢，會 take prize → opp prizes 下降
+//     - 進到我方新回合時 current_opp_prizes < snap → 上回合對手取過獎賞 → 條件滿足
 regG('八朔', (st, idx) => {
-  // 我們沒追蹤「上回合是否被擊倒」，保守檢查棄牌有寶可夢
-  return st.players[idx].discard.some(c => {
-    // 簡化為棄牌區有任何卡即允許（實戰中大多滿足）
-    return true;
-  });
+  const oppIdx = (1 - idx) as 0 | 1;
+  const snap = st.oppPrizesAtMyLastTurnEnd?.[idx] ?? 6;
+  return st.players[oppIdx].prizes.length < snap;
 });
 reg('八朔', (st, idx) => {
   const top8Iids = st.players[idx].deck.slice(0, 8).map(c => c.iid);
@@ -11030,10 +11036,9 @@ export function getKyuremElectroplasmaEffectiveCost(
 
 // ── 皮卡丘ex｜勤奮之心 ─────────────────────────────────────────────────────
 // 卡面：HP 全滿時受招式而昏厥 → 不昏厥，剩下 HP=10 留場。
-// 簡化版：把皮卡丘ex 自身視為「自帶倖存鍛鍊器但不消耗」。engine 內 wouldBeKO 之後
-// 我們在 TOOL_PREVENT_KO 走完之後再加一個 PASSIVE_PREVENT_KO 檢查。
-// 由於改 engine 較大，先用以下做法：透過 PASSIVE_PREVENT_KO export 一個查詢函式，
-// 由 engine 在 KO 路徑檢查。
+// v2.133 實裝為 PASSIVE_PREVENT_KO map（不再簡化）：engine 在 wouldBeKO 路徑
+// 走完 TOOL_PREVENT_KO 後再查 PASSIVE_PREVENT_KO，命中則攔下擊倒並留 leaveHP。
+// 與「自帶倖存鍛鍊器但不消耗」效果等價，且不依賴實際 Tool 卡。
 export const PASSIVE_PREVENT_KO = new Map<string, (
   holderInst: CardInstance, holderCard: Card, incomingDamage: number
 ) => { prevent: boolean; leaveHP: number }>();

@@ -789,8 +789,8 @@ regR('tym-step2-guess-hp', (st, oppIdx, iids, params, _pool) => {
 //   - minCount=0（沒基礎寶可夢時可選 0 張）
 //   - resolver 把選中的放對手備戰（受備戰上限 getBenchLimit）
 //   - 剩餘 top 5 全部洗回對手牌庫（包含未選中的基礎、未選中的進化、未選中的訓練家等）
-//   - 不需要洗整個牌庫，只洗 top 5（卡面說「將剩餘卡放回牌庫並重洗」— 解讀為剩餘 top 5
-//     部分洗回；嚴謹一點是整個牌庫重洗，但實際差別不大且 PTCG 規則對「重洗」範圍較寬鬆）
+//   - 整個牌庫重洗（fast path 與 resolver 都用 shuffle([...deck.slice(5), ...top5])，
+//     重組完整 deck 後 shuffle，符合卡面「將剩餘卡放回牌庫並重洗」）
 //
 // gate：對手牌庫至少 1 張 + 對手備戰未滿（否則放不下）
 regG('配樂之笛', (st, idx, _pool) => {
@@ -810,7 +810,8 @@ reg('配樂之笛', (st, idx, pool) => {
   const maxN = Math.min(space, basicsInTop5.length);
   if (maxN === 0) {
     st = addLog(st, '配樂之笛：對手牌庫上方 5 張無基礎寶可夢或備戰區已滿，洗回後結束', idx);
-    // 直接洗對手 top 5 回牌庫底（嚴格說該整個 deck 重洗，但簡化：只洗 top 5 部分）
+    // v2.243 釐清（不再簡化）：concat(rest, top5) 後 shuffle = 整個 deck 重洗，
+    //   符合卡面「將剩餘卡放回牌庫並重洗」。
     return updatePlayer(st, oppIdx, p => ({
       ...p,
       deck: shuffle([...p.deck.slice(top5.length), ...top5]),
