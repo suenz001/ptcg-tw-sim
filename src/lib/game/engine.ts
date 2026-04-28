@@ -1565,11 +1565,27 @@ function handlePlaying(
           return addLog(state, `規則：場上已有相同名稱的競技場（${trainerCard.name}），無法重複打出`, aIdx);
         }
       }
-      if (prevStadium) attacker.discard = [...attacker.discard, prevStadium];
+      // v2.244 stadium 換新時，舊 stadium 應丟回原擁有者棄牌堆（不一定是 attacker）
+      if (prevStadium) {
+        const prevOwnerIdx = state.activeStadiumOwnerIdx ?? aIdx;
+        if (prevOwnerIdx === aIdx) {
+          attacker.discard = [...attacker.discard, prevStadium];
+        } else {
+          players[prevOwnerIdx] = {
+            ...players[prevOwnerIdx],
+            discard: [...players[prevOwnerIdx].discard, prevStadium],
+          };
+        }
+      }
       players[aIdx] = attacker;
       const newPlayed: [boolean, boolean] = [played[0], played[1]];
       newPlayed[aIdx] = true;
-      let newState: GameState = { ...state, players, activeStadium: trainerInst, stadiumPlayedThisTurn: newPlayed };
+      let newState: GameState = {
+        ...state, players,
+        activeStadium: trainerInst,
+        activeStadiumOwnerIdx: aIdx, // v2.244 標記擁有者
+        stadiumPlayedThisTurn: newPlayed,
+      };
       newState = addLog(newState, `${attacker.name} 打出競技場：${trainerCard.name}！`, aIdx);
       const effectFn = TRAINER_EFFECTS.get(trainerCard.name);
       if (effectFn) return effectFn(newState, aIdx, pool, trainerInst);

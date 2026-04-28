@@ -298,6 +298,32 @@ export function sameEvoName(a: string | undefined, b: string | undefined): boole
   return stripEx(a) === stripEx(b);
 }
 
+/**
+ * v2.244 通用 helper：清掉 activeStadium 並丟回擁有者棄牌堆。
+ * 一律用 state.activeStadiumOwnerIdx；若該欄位缺失則 fallback 到 fallbackIdx（觸發方）。
+ * 同時清掉 stadiumUsedThisTurn / activeStadiumOwnerIdx，符合 PTCG「stadium 離場」規則。
+ */
+export function discardActiveStadium(
+  state: GameState,
+  fallbackIdx: 0 | 1,
+): GameState {
+  const stadium = state.activeStadium;
+  if (!stadium) return state;
+  const ownerIdx = state.activeStadiumOwnerIdx ?? fallbackIdx;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[ownerIdx] = {
+    ...players[ownerIdx],
+    discard: [...players[ownerIdx].discard, stadium],
+  };
+  return {
+    ...state,
+    players,
+    activeStadium: undefined,
+    activeStadiumOwnerIdx: undefined,
+    stadiumUsedThisTurn: undefined,
+  };
+}
+
 export function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {

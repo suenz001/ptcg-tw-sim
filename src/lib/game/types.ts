@@ -445,6 +445,12 @@ export interface GameState {
   lastDealtDamage?: number;
   /** 目前場上的競技場牌（Stadium） */
   activeStadium?: CardInstance;
+  /**
+   * v2.244 場上 stadium 的擁有者（0=P1, 1=P2）。
+   * PTCG 規則：stadium 從場上移除時（被覆蓋 / 被招式效果丟掉）放回擁有者的棄牌堆。
+   * 一律在 activeStadium 被設定時同步設定本欄；activeStadium 被清為 undefined 時亦清掉。
+   */
+  activeStadiumOwnerIdx?: 0 | 1;
   /** 雙方本回合是否已使用競技場效果 [P1, P2] */
   stadiumUsedThisTurn?: [boolean, boolean];
   /**

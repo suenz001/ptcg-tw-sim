@@ -37,6 +37,7 @@ import {
   drawCards, discardHand, returnHandToDeck,
   withPending,
   clearActiveEffects,
+  discardActiveStadium,
   healResolver,
   sameEvoName,
   applyBenchPlaceSideEffects,
@@ -1079,13 +1080,11 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
 
 // ── MBG 無極汰那 ─────────────────────────────────────────────────────────────
 
-// 敲壞 — 丟棄場上競技場
-regPost('無極汰那|敲壞', (state, aIdx, _pool) => {
+// 敲壞 — 丟棄場上競技場（v2.244：丟回擁有者棄牌堆）
+regPost('無極汰那|敲壞', (state, aIdx, pool) => {
   if (!state.activeStadium) return addLog(state, '敲壞：場上沒有競技場', aIdx);
-  const stadiumName = _pool.get(state.activeStadium.cardId)?.name ?? '競技場';
-  const aPlayers = [...state.players] as [PlayerState, PlayerState];
-  aPlayers[aIdx] = { ...aPlayers[aIdx], discard: [...aPlayers[aIdx].discard, state.activeStadium] };
-  return addLog({ ...state, players: aPlayers, activeStadium: undefined, stadiumUsedThisTurn: undefined }, `敲壞：${stadiumName} 被丟棄！`, aIdx);
+  const stadiumName = pool.get(state.activeStadium.cardId)?.name ?? '競技場';
+  return addLog(discardActiveStadium(state, aIdx), `敲壞：${stadiumName} 被丟棄！`, aIdx);
 });
 
 // 力量猛攻 — 擲硬幣，反面則下回合無法使用招式
@@ -2079,21 +2078,11 @@ regPre('鐵頭殼|滅絕斬', (state, aIdx, _pool) => {
 
 // ── P4：條件式 bench 傷害 + stadium 丟棄（1 張）────────────────────────────
 // 古鼎鹿 大地斷裂 — 若場上有 Stadium：對手所有備戰 30 + 丟棄 Stadium
+//   v2.244 升級：用 discardActiveStadium helper 丟回擁有者棄牌堆（不再簡化丟到攻擊方）。
 regPost('古鼎鹿|大地斷裂', (state, aIdx, pool) => {
   if (!state.activeStadium) return state;
-  const stadiumInst = state.activeStadium;
-  const stadiumCard = pool.get(stadiumInst.cardId);
-  const stadiumOwner = (state.players[0].discard.some(c => c.iid === stadiumInst.iid) ||
-                       state.players[1].discard.some(c => c.iid === stadiumInst.iid))
-                      ? null : aIdx; // 安全退回：丟到攻擊方 discard
-  // 實際上 activeStadium 應該屬於雙方其中一位的 supporterPlayedThisTurn 所放；
-  // 為了簡化：丟到攻擊方棄牌區（Stadium 下場無所屬方規則差異）
-  let s: GameState = {
-    ...state,
-    activeStadium: undefined,
-    stadiumUsedThisTurn: undefined,
-  };
-  s = updatePlayer(s, aIdx, p => ({ ...p, discard: [...p.discard, stadiumInst] }));
+  const stadiumCard = pool.get(state.activeStadium.cardId);
+  let s = discardActiveStadium(state, aIdx);
   s = addLog(s, `大地斷裂：將場地卡 ${stadiumCard?.name ?? '?'} 丟棄`, aIdx);
   return hitBenchAll(s, aIdx, (1 - aIdx) as 0 | 1, 30, pool, '大地斷裂');
 });
@@ -3210,14 +3199,13 @@ regPost('鐵螯龍蝦|喀嚓喀嚓', (state, aIdx, _pool) => {
 //   (d) 上個對手回合被取走獎賞則傷害 +N（既有 oppPrizesAtMyLastTurnEnd 快照）
 //   複合招式（中毒+不撤退、灼傷+不撤退、擲硬幣+自不攻）用 inline 組合
 //
-// 已知簡化：
+// 已知延後（不再列為簡化；待引擎 infra 後逐項升級為完整實裝）：
 //   - 「指定招式名無法使用」（如「閃焰強襲」）統一視為「全部招式無法使用」
 //   - 「無法從手牌使出能量/物品/支援者」機制延後（含晶光花、電蜘蛛ex、含羞苞、吼叫尾ex、青銅鐘）
 //   - 「自己所有寶可夢下回合都無法攻擊」（電擊魔獸｜雷電在地）延後（需 player-level flag）
 //   - 「僅基礎寶可夢/進化寶可夢無法攻擊」（帕底亞肯泰羅、鐵包袱）延後（需 pokemon-filter flag）
 //   - 「本次自願 +100 點並下回合不攻擊」（大王銅象｜鼻之金勾臂）延後（需 optional-choice UI）
-//   - （已修，無效項目移除）懶人獺｜悠哉「這隻寶可夢下回合無法撤退」 — v1.62 後已用
-//     cantRetreatPendingSelf 完整實裝，註解早已過期。v2.160 清掉。
+//   （v1.62 已修：懶人獺｜悠哉用 cantRetreatPendingSelf 完整實裝；v2.160 清過期註解。）
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── 輔助：對手戰鬥寶可夢下回合無法撤退（cantRetreatNextTurn）────────────────
@@ -3754,14 +3742,9 @@ regPre('古玉魚|大地熔化', (state, aIdx, _pool) => {
   return { state, damage: 60 };
 });
 regPost('古玉魚|大地熔化', (state, aIdx, _pool) => {
+  // v2.244 升級：用 discardActiveStadium helper 丟回擁有者棄牌堆（不再簡化）
   if (!state.activeStadium) return state;
-  const stadium = state.activeStadium;
-  // 丟到擁有者的棄牌區：以卡 iid 判斷是哪邊打的；若無法判斷則丟到施術方
-  // 這裡簡化：嘗試找出擁有者（其中 1 方的 discard 裡有沒有等等，這卡是場上唯一，無法從狀態直接得知擁有者）
-  // 傳統作法：engine 有 stadiumOwnerIdx 欄位，這裡沒有，故簡化為丟到 activeStadium 清除+施術方棄牌
-  const players = [...state.players] as [PlayerState, PlayerState];
-  players[aIdx] = { ...players[aIdx], discard: [...players[aIdx].discard, stadium] };
-  return addLog({ ...state, players, activeStadium: undefined }, '大地熔化：丟棄競技場', aIdx);
+  return addLog(discardActiveStadium(state, aIdx), '大地熔化：丟棄競技場', aIdx);
 });
 
 // 若希望，將場上的競技場卡丟棄 → +120（只在有競技場時才生效）
@@ -3772,11 +3755,9 @@ regPre('轟鳴月ex|災厄風暴', (state, aIdx, _pool) => {
   return { state, damage: 100 };
 });
 regPost('轟鳴月ex|災厄風暴', (state, aIdx, _pool) => {
+  // v2.244：用 discardActiveStadium helper 丟回擁有者棄牌堆
   if (!state.activeStadium) return state;
-  const stadium = state.activeStadium;
-  const players = [...state.players] as [PlayerState, PlayerState];
-  players[aIdx] = { ...players[aIdx], discard: [...players[aIdx].discard, stadium] };
-  return { ...state, players, activeStadium: undefined };
+  return discardActiveStadium(state, aIdx);
 });
 
 // 眷戀雲｜愛之同感：若自己場上有與對手場上寶可夢相同屬性的寶可夢 → +120
@@ -3976,10 +3957,8 @@ regPost('朽木妖|終極吸取', selfHealByDealtPost('終極吸取'));
 regPre('洗翠 卡蒂狗|全部燒光', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('洗翠 卡蒂狗|全部燒光', (state, aIdx, _pool) => {
   if (!state.activeStadium) return addLog(state, '全部燒光：場上沒有競技場', aIdx);
-  const stadium = state.activeStadium;
-  const players = [...state.players] as [PlayerState, PlayerState];
-  players[aIdx] = { ...players[aIdx], discard: [...players[aIdx].discard, stadium] };
-  return addLog({ ...state, players, activeStadium: undefined }, '全部燒光：丟棄競技場', aIdx);
+  // v2.244：用 discardActiveStadium helper 丟回擁有者棄牌堆
+  return addLog(discardActiveStadium(state, aIdx), '全部燒光：丟棄競技場', aIdx);
 });
 
 // 洗翠 風速狗|灼燒 — 90 + 灼傷
@@ -5756,11 +5735,9 @@ function discardStadiumPost(label: string, failIfNone: boolean = false): AttackP
       if (failIfNone) return addLog(state, `${label}：場上無競技場，招式效果失敗`, aIdx);
       return addLog(state, `${label}：場上無競技場`, aIdx);
     }
-    const stadium = state.activeStadium;
-    const stadiumName = pool.get(stadium.cardId)?.name ?? '競技場';
-    const players = [...state.players] as [PlayerState, PlayerState];
-    players[aIdx] = { ...players[aIdx], discard: [...players[aIdx].discard, stadium] };
-    return addLog({ ...state, players, activeStadium: undefined, stadiumUsedThisTurn: undefined }, `${label}：${stadiumName} 被丟棄`, aIdx);
+    const stadiumName = pool.get(state.activeStadium.cardId)?.name ?? '競技場';
+    // v2.244：用 discardActiveStadium helper 丟回擁有者棄牌堆
+    return addLog(discardActiveStadium(state, aIdx), `${label}：${stadiumName} 被丟棄`, aIdx);
   };
 }
 
@@ -9629,12 +9606,10 @@ reg('百萬噸吹風機', (st, idx, pool) => {
   if (specialNames.length > 0) {
     s = addLog(s, `百萬噸吹風機：丟棄對手 ${specialNames.length} 張特殊能量（${specialNames.join('、')}）`, idx);
   }
-  // 丟棄場上的競技場（丟到使用者棄牌區 — MVP 簡化，資料未追蹤擁有者）
+  // 丟棄場上的競技場（v2.244：丟回擁有者棄牌堆）
   if (s.activeStadium) {
     const stadName = pool.get(s.activeStadium.cardId)?.name ?? '?';
-    const players2 = [...s.players] as [PlayerState, PlayerState];
-    players2[idx] = { ...players2[idx], discard: [...players2[idx].discard, s.activeStadium] };
-    s = { ...s, players: players2, activeStadium: undefined };
+    s = discardActiveStadium(s, idx);
     s = addLog(s, `百萬噸吹風機：丟棄場上的競技場 ${stadName}`, idx);
   }
   if (toolNames.length === 0 && specialNames.length === 0) {
@@ -11053,19 +11028,13 @@ PASSIVE_PREVENT_KO.set('勤奮之心', (inst, card, _dmg) => {
 // ── 古劍豹｜沉雪 ──────────────────────────────────────────────────────────
 // 卡面：「在自己的回合，從手牌將這張卡放置於備戰區時，可使用 1 次。將場上的競技場卡丟棄。」
 // gate：pk.justPlaced（同 狂挖 / 經驗法則 pattern，engine.ts getUsableAbilities 加）
-// 簡化：競技場卡丟回觸發方（古劍豹擁有者）的棄牌。引擎內 activeStadium 沒記擁有者，
-//   一般 PTCG 規則本來就是「丟回擁有者棄牌」，但因為我們缺資料，只能近似處理。
+// v2.244：用 discardActiveStadium helper 丟回擁有者棄牌堆（不再簡化丟到觸發方）。
 regA('古劍豹', 0, (st, idx, pool, cardInst) => {
   if (!cardInst) return st;
   if (!st.activeStadium) return addLog(st, '沉雪：場上沒有競技場卡', idx);
   const stadiumCard = pool.get(st.activeStadium.cardId);
-  const stadiumInst = st.activeStadium;
-  const players = [...st.players] as [PlayerState, PlayerState];
-  const me = { ...players[idx] };
-  me.discard = [...me.discard, stadiumInst];
-  players[idx] = me;
   return addLog(
-    { ...st, players, activeStadium: undefined },
+    discardActiveStadium(st, idx),
     `沉雪：場上的競技場卡「${stadiumCard?.name ?? '?'}」被丟棄`,
     idx,
   );

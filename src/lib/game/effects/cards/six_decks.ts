@@ -11,7 +11,7 @@
  */
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { regPre, regPost, regA, reg, regR, regG, addLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST } from '../_shared';
+import { regPre, regPost, regA, reg, regR, regG, addLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, discardActiveStadium } from '../_shared';
 import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre } from '../../effects';
 
 // ─── 撕裂 70（skipDefEffects）───────────────────────────────────────────────
@@ -826,11 +826,8 @@ regR('heat-burner-pick', (state, aIdx, iids, _params, pool) => {
   if (choice === 'stadium') {
     if (!s.activeStadium) return addLog(s, '高溫燃燒器：場地已不存在', aIdx);
     const sName = pool.get(s.activeStadium.cardId)?.name ?? '?';
-    // 場地丟到自己（行動方）的棄牌區（一般 stadium 換場規則）
-    const me = { ...players[aIdx] };
-    me.discard = [...me.discard, s.activeStadium];
-    players[aIdx] = me;
-    s = { ...s, players, activeStadium: undefined };
+    // v2.244：用 discardActiveStadium helper 丟回擁有者棄牌堆
+    s = discardActiveStadium(s, aIdx);
     return addLog(s, `高溫燃燒器：場地卡「${sName}」被丟棄`, aIdx);
   }
 
