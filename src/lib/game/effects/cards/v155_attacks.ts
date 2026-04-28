@@ -48,6 +48,7 @@ import {
   coinHeadsMultiplyPre,
   hitBenchPickPost,
 } from '../../effects';
+import { getEnergyUnits } from '../../engine';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // (1) 連續拳（火箭隊的袋獸ex）— coin×30 4 次
@@ -556,8 +557,9 @@ regPost('代歐奇希斯|精神尖槍', (state, aIdx, pool) => {
   // 找「精神尖槍」這個招式的 cost 長度
   const atk = card.attacks?.find(a => a.name === '精神尖槍');
   const costLen = atk?.cost?.length ?? 3;
-  // 計能量「單位」— 用簡化版 1 張 = 1 個（特殊能量按特殊規則但這裡不展開）
-  const unitCount = att.energyAttached.length;
+  // v2.239 釐清（不再簡化）：用 engine.getEnergyUnits 算正確的「能量單位」
+  //   （火箭隊能量 1 張 = 2 unit、特殊能量各依規則；與 ATTACK_PRE_DISCARD_CHOICE 同邏輯）
+  const unitCount = att.energyAttached.reduce((acc, e) => acc + getEnergyUnits(e.cardId, pool).length, 0);
   if (unitCount < costLen + 2) {
     return addLog(state, `精神尖槍：能量 ${unitCount} 不滿 cost+2（${costLen + 2}）→ 不觸發備戰打擊`, aIdx);
   }

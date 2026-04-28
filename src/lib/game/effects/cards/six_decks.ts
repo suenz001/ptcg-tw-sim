@@ -109,7 +109,9 @@ regR('fire-cannon-90', (state, aIdx, selectedIids, params, pool) => {
 });
 
 // N的扒手貓｜暗槓 30 — 查對手手牌 → 選 1 張放對手牌庫「下方」
-// 簡化：用 hand-discard pending 讓玩家從對手手牌選 1 張；resolver 將該卡放回對手牌庫底部。
+// v2.239 釐清（不再簡化）：技術上 reuse hand-discard pending（已含「查看對手手牌 + 限定 iid」邏輯，
+//   不需新增 pending type）；resolver 把該卡 push 到 opp.deck 末端 = 牌庫下方。
+//   加 titleOverride 讓 UI 顯示「選 1 張放回對手牌庫下方」而非預設「選擇丟棄的手牌」。
 //
 // v2.132：原 postFn 簽名寫成 `(state, aIdx, _dmg, pool)` — 多塞 _dmg → pool 變 undefined →
 //   `pool.get(...)` 拋 TypeError → 整個 dispatch 失敗 → 連 30 傷害都沒套（Leon 透過
@@ -125,7 +127,10 @@ regPost('N的扒手貓|暗槓', (state, aIdx, pool) => {
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'lie-cheat-to-deck-bottom',
-    params: { validIids: oppHand.map(c => c.iid) },
+    params: {
+      validIids: oppHand.map(c => c.iid),
+      titleOverride: '暗槓：選 1 張放回對手牌庫下方',
+    },
   });
 });
 regR('lie-cheat-to-deck-bottom', (state, aIdx, selectedIids, _params, pool) => {
@@ -352,10 +357,11 @@ regR('blaziken-boiling-attach', (state, aIdx, selectedPokeIids, params, pool) =>
 
 // 龜足巨鎧｜岩石武裝 — 手牌選 1 張「基本【鬥】能量」附給自己的【鬥】寶可夢（1/回合）
 // v2.117 修：pending type 改 heal-target + validIids（限【鬥】寶可夢）
-// v2.226 修：簡化 UI 流程 — 既然 gate（getUsableAbilities + 此處）已確保手牌有基本【鬥】
-//   能量、場上有【鬥】寶可夢，就不需要 UI 端再讓玩家挑能量（hand-discard pending
-//   會被 Leon 看成「棄牌」誤導）。直接開 heal-target 選目標寶可夢，resolver
-//   自動從手牌取第 1 張基本【鬥】能量附過去即可。
+// v2.226 / v2.239 釐清（不再簡化）：
+//   gate（getUsableAbilities + 此處）已確保手牌有基本【鬥】能量、場上有【鬥】寶可夢。
+//   所有候選都是「基本【鬥】能量」（cardId 雖可能不同但 game state 等效），
+//   自動取手牌第 1 張與玩家手選功能等效；不開 hand-discard 也避免 Leon 誤解為「棄牌」。
+//   直接開 heal-target 選目標寶可夢，resolver 自動取手牌第 1 張基本【鬥】能量附過去。
 regA('龜足巨鎧', 0, (st, idx, pool) => {
   const hasFighting = st.players[idx].hand.some(c => {
     const card = pool.get(c.cardId);
