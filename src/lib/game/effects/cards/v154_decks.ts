@@ -200,15 +200,17 @@ regR('metal-maker-attach', (st, idx, energyIids, params, pool) => {
 // 超大冰淇淋（Item）
 // ══════════════════════════════════════════════════════════════════════════════
 // 卡面：「將自己的身上附有 3 個以上能量的戰鬥寶可夢恢復『80』HP。」
+// v2.263：修 sim crash — totalEnergyUnits 第 1 參數是 CardInstance[] (energyAttached)，
+//   原本傳整個 active CardInstance 會在 for...of 時 throw "not iterable"。
 regG('超大冰淇淋', (st, idx, pool) => {
   const active = st.players[idx].active;
   if (!active) return false;
-  return totalEnergyUnits(active, pool) >= 3;
+  return totalEnergyUnits(active.energyAttached, pool, st, idx) >= 3;
 });
 reg('超大冰淇淋', (st, idx, pool) => {
   const p = st.players[idx];
   if (!p.active) return addLog(st, '超大冰淇淋：戰鬥位無寶可夢', idx);
-  if (totalEnergyUnits(p.active, pool) < 3) {
+  if (totalEnergyUnits(p.active.energyAttached, pool, st, idx) < 3) {
     return addLog(st, '超大冰淇淋：戰鬥寶可夢身上不足 3 個能量', idx);
   }
   const name = pool.get(p.active.cardId)?.name ?? '?';

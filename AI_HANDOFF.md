@@ -1,9 +1,41 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.262)  
+> 最後更新：2026-04-29 (v2.263)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.263 — 跑全 preset sim 找 bug — 超大冰淇淋 sim crash 修復
+
+### 背景
+v2.262 後，Leon 要求跑 `node scripts/sim-tournament.mjs 1` 全 preset 自動對戰來找隱藏 bug。
+跑 1332 場結果出現 15 個 stuck_loop bug，但更嚴重的是 sim 過程中遇到一個會直接 throw `TypeError: attached is not iterable` 的卡片：超大冰淇淋。
+
+### Bug — 超大冰淇淋 sim crash（P0）
+**位置**：`src/lib/game/effects/cards/v154_decks.ts:203, 211`
+
+**根因**：`totalEnergyUnits(...)` 第 1 參數型別是 `CardInstance[]`（即 `energyAttached` 陣列），但 regG / reg 兩處都直接傳了整個 `active`（`CardInstance`）。函式內部 `for (const e of attached)` 觸發 `not iterable` crash。
+
+**修法**：
+```ts
+// regG
+return totalEnergyUnits(active.energyAttached, pool, st, idx) >= 3;
+// reg
+if (totalEnergyUnits(p.active.energyAttached, pool, st, idx) < 3) { ... }
+```
+（並補上 `st, idx` 第 3、4 參數，跟其它呼叫點一致以正確處理 PrismaticEnergy 之類特殊能量）
+
+### 沒在這次處理的問題（待 v2.264+）
+跑 sim 同時抓出 15 個 `stuck_loop` bug：
+- 7 場跟 **青銅鐘多龍** 有關（EVOLVE 動作卡死）
+- 其它包括 PLAY_TRAINER 卡死、超級耿鬼ex（預組）vs 大竺葵 等
+- 這些屬於 AI 動作選擇層的死循環，非規則錯誤；下一輪會挑 EVOLVE pattern 先看
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
