@@ -10325,11 +10325,14 @@ reg('火箭隊的拉姆達', (st, idx) => {
   });
 });
 
-// ---- 火箭隊的工廠（Stadium）- known gap stub --------------------------------
+// ---- 火箭隊的工廠（Stadium）— v2.57 實裝、實作在 engine.ts ----------------
 // 卡面：在這個回合從手牌使出了名稱中有「火箭隊」的支援者卡的玩家，可從自己的牌庫抽出 2 張卡。
-// 實裝狀態：未實裝。需要在 engine USE_STADIUM 加分支 + per-player `rocketSupporterPlayedThisTurn`
-//   旗標、在 PLAY_TRAINER Supporter 路徑設旗標、END_TURN 清旗標。
-// 目前以 stadium「不觸發」通過：Leon 可手動放置／被動佔位（擠掉對方其他場地卡）。
+// 實裝路徑（不在這個檔案）：
+//   - engine.ts PLAY_TRAINER Supporter 路徑：名稱含「火箭隊」→ 設 rocketSupporterPlayedThisTurn 旗標
+//   - engine.ts USE_STADIUM 路徑：name === '火箭隊的工廠' → 檢查旗標 + 抽 2 張
+//   - engine.ts END_TURN：清旗標
+//   - types.ts PlayerState.rocketSupporterPlayedThisTurn 欄位
+// v2.63 Bug B 後續調過抽卡按鈕觸發條件。
 
 // ---- 碧草面具ex｜碧綠之舞（Ability）- 1/回合 附加基本草能量到自身 + 抽 1 ----
 // 卡面原文：「從自己的手牌選擇1張『基本【草】能量』卡，附於這隻寶可夢身上。

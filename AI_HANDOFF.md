@@ -1,9 +1,39 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.257)  
+> 最後更新：2026-04-28 (v2.258)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.258 — 清掉 effects.ts 火箭隊的工廠過時 stub 註解
+
+延續 v2.257 (b) 的同模式問題：`effects.ts:10328` 寫「火箭隊的工廠（Stadium）- known gap stub - 未實裝」，但實際 v2.57 早就在 `engine.ts:1722` 完整實裝（PLAY_TRAINER 設 `rocketSupporterPlayedThisTurn` 旗標 → USE_STADIUM gate + 抽 2 張 → END_TURN 清旗標）。
+
+註解誤導下個 AI（包括這次 session 的我）以為功能沒做。改寫成 cross-file 路徑指引：
+```
+// ---- 火箭隊的工廠（Stadium）— v2.57 實裝、實作在 engine.ts ----------------
+// 卡面：在這個回合從手牌使出了名稱中有「火箭隊」的支援者卡的玩家，可從自己的牌庫抽出 2 張卡。
+// 實裝路徑（不在這個檔案）：
+//   - engine.ts PLAY_TRAINER Supporter 路徑：名稱含「火箭隊」→ 設 rocketSupporterPlayedThisTurn 旗標
+//   - engine.ts USE_STADIUM 路徑：name === '火箭隊的工廠' → 檢查旗標 + 抽 2 張
+//   - engine.ts END_TURN：清旗標
+//   - types.ts PlayerState.rocketSupporterPlayedThisTurn 欄位
+// v2.63 Bug B 後續調過抽卡按鈕觸發條件。
+```
+
+### Pattern：跨檔案實裝的 effects.ts 註解
+有些卡的效果不是用 reg/regA/regPre 這種 effects.ts 的標準 hook，而是直接寫在 engine.ts（被動 stadium / per-player 旗標 / 引擎核心規則覆寫）。當 effects.ts 裡留有「卡面說明 + 待實裝」的註解但沒對應 reg call，就要警覺：可能 v2.x 已實裝、但人在 effects.ts 留了過時 stub 沒清。
+
+未來檢查方式：grep `known gap stub` / `未實裝` / `留待未來` → 對每條 grep `engine.ts` 看有沒有實裝路徑。
+
+### 變更檔案
+- `src/lib/game/effects.ts`：清掉 4 行過時 stub，改寫為跨檔案實裝路徑指引
+- `src/lib/version.ts`：2.257 → 2.258
+
+### Build
+✅ `npm run build` 通過
 
 ---
 
