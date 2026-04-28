@@ -682,9 +682,7 @@
 {/if}
 
 <style>
-  :global(body) {
-    background: #f4f4f6;
-  }
+
   header {
     max-width: 1200px;
     margin: 1rem auto 0.5rem;

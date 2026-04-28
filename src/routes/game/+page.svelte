@@ -2255,6 +2255,10 @@
   }
 </script>
 
+<svelte:head>
+  {@html '<style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }</style>'}
+</svelte:head>
+
 <svelte:window onkeydown={onGlobalKey} onpointermove={onWindowPointerMove} onpointerup={onWindowPointerUp} />
 
 <!-- v2.206：手機直屏旋轉提示 — 進戰鬥（game !== null）且手機直屏時顯示。
@@ -4127,9 +4131,7 @@
 {/if}
 
 <style>
-  /* v2.144：html + body 都填深綠，避免 viewport 高度大於頁面高度時看到瀏覽器預設背景（黑色） */
-  :global(html){ background:#162816; }
-  :global(body){ margin:0; background:#162816; min-height:100vh; }
+  /* v2.144：html + body 背景色改由頂端 svelte:head 動態注入，避免污染其他頁面 */
 
   /* v2.164 reorder-deck-top — 排序牌庫頂 N 張 UI */
   .reorder-deck-wrap { display:flex; flex-direction:column; gap:0.7rem; padding:0.5rem 0; max-height:60vh; overflow-y:auto; }

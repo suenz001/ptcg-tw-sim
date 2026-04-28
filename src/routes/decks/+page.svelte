@@ -1149,10 +1149,7 @@
 {/if}
 
 <style>
-  :global(body) {
-    margin: 0;
-    background: #f4f4f6;
-  }
+
   main {
     max-width: 1200px;
     margin: 1.5rem auto;

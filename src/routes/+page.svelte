@@ -137,10 +137,7 @@
 </main>
 
 <style>
-  :global(body) {
-    margin: 0;
-    background: #f4f4f6;
-  }
+
   .version { font-size: 0.75rem; font-weight: 400; color: #888; font-family: monospace; vertical-align: middle; margin-left: 0.3rem; background: #e8e4ee; padding: 0.1rem 0.4rem; border-radius: 3px; }
   main {
     max-width: 680px;
