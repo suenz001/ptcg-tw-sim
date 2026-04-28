@@ -1,9 +1,57 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-28 (v2.258)  
+> 最後更新：2026-04-28 (v2.259)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.259 — 清掉 effects.ts v2.35 inventory 大塊過時 stub 註解
+
+延續 v2.257/v2.258 同 pattern。`effects.ts:10140-10171` 是 v2.35 寫的兩組預組 inventory comment（火箭隊的超夢ex + 猛雷鼓ex），列出當時的卡表進度，包含 5 處「known gap」/「stub」標記：
+
+| inventory comment 標記 | 實際實裝狀態 |
+|---|---|
+| 操陷蛛｜充能（known gap） | v2.57 regA 在 effects.ts:10462 |
+| 急凍鳥｜抵抗之幕（known gap） | v2.57 PASSIVE_IMMUNITY hook（163/246/250）|
+| 莉莉艾的皮皮ex｜妖精領域（known gap） | v2.57 弱點覆寫 hook（215 + engine.ts:2479）|
+| 超夢ex｜力量抑制者（known gap） | v2.57 engine ATTACK gate（engine.ts:2302）+ v2.63 Bug C 細修 |
+| 寶可裝置3.0（stub — 無實裝 Tool） | v2.52/v2.56 完整實裝（effects.ts:10618 起）|
+
+5 個全部已實裝完。同檔案 10584 行（「v2.57 進度：→ 全部已實裝」）就有對應紀錄，但 inventory comment 沒同步更新，繼續宣告「known gap」「stub」「完整實作待日後 session」— 完美的死殼 pattern。
+
+整段重寫成「v2.35 → v2.57 → v2.63 演進歷史」+ pattern 警告：
+```
+// 演進歷史：
+//   v2.35：建立兩組 preset 卡表 + 大部分 effect 實裝；4 個 ability 與 1 個 stub
+//          tool 留 known-gap stub（純 log 不阻塞遊戲）。
+//   v2.57：把 4 個 known gap ability 全部補完：[...]
+//   v2.52/v2.56：寶可裝置3.0 完整實裝（牌庫頂 7 → 選 1 張支援者，10618 起）。
+//   v2.63 Bug C：力量抑制者 gate 細節調整（含戰鬥場計入 4 隻）。
+//
+// 故本檔案 10148-10170 行的「known gap」inventory comment 已在 v2.258 清掉。
+// 若未來再新增類似批次卡表，記得別重複「inventory comment」pattern：
+// 那種大塊註解很快就過時，演進歷史寫到對應 reg 旁邊更耐用。
+```
+
+### Pattern 教訓（v2.257~v2.259 三連發整理）
+**過時 stub 註解出現的三種 pattern**：
+1. 單張卡 TODO：寫在卡 reg 上方，後續實裝完忘了清（v2.117 高溫燃燒器 / v2.257 修）
+2. 跨檔案實裝路徑：實裝在 engine.ts 但 effects.ts 留說明，沒寫對應路徑（v2.258 火箭隊的工廠 修）
+3. 批次卡表 inventory：列出整套 preset 進度，後續逐張補完但 inventory 沒同步（v2.259 修）
+
+**未來預防**：
+- 別寫批次 inventory comment（很快過時）— 把演進寫到單張 reg 旁邊
+- 寫「known gap」/「TODO」/「stub」/「未實裝」字樣時，留下「實裝路徑」線索（哪個 player/state field、哪個 engine handler 該動），讓未來實裝完的人知道要清這條註解
+- 看到「known gap」字樣，**永遠先 grep 一次實際 reg/handler**，不要從註解直接信
+
+### 變更檔案
+- `src/lib/game/effects.ts`：縮減 32 行 inventory comment → 17 行演進歷史
+- `src/lib/version.ts`：2.258 → 2.259
+
+### Build
+✅ `npm run build` 通過
 
 ---
 

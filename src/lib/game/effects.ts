@@ -10138,36 +10138,23 @@ regR('touko-phase2', (st, idx, iids, _params, pool) => {
 // 富裕能量 / 感應【超】能量 hooks 已搬到 effects/cards/energy_cards.ts（v2.66）。
 
 // ══════════════════════════════════════════════════════════════════════════════
-// v2.35：火箭隊的超夢ex / 猛雷鼓ex 兩組預組新卡的 effects
+// v2.35：火箭隊的超夢ex / 猛雷鼓ex 兩組預組新卡的 effects（已全部實裝）
 //
-// 範圍（Leon 卡表）：
-//   【火箭隊的超夢】預組（14+3 張新卡）：
-//     Special Energy  : 火箭隊能量
-//     Supporter       : 火箭隊的雅典娜 / 蘭斯 / 坂木 / 阿波羅 / 拉姆達
-//     Item            : 火箭隊的接收器
-//     Stadium         : 火箭隊的工廠
-//     Ability         : 操陷蛛｜充能（known gap，純說明 log）
-//     Ability         : 急凍鳥｜抵抗之幕（known gap）
-//     Ability         : 莉莉艾的皮皮ex｜妖精領域（known gap）
-//     Ability         : 超夢ex｜力量抑制者（known gap）
-//     Attack          : 超夢ex｜擦除球（base 160 + 丟能 gate stub，丟能在 ATTACK_PRE_DISCARD_CHOICE）
-//     Attack          : 團珠蛛｜猛撞（已存在 v1.x，rename key 後仍保留）
-//     Attack          : 操陷蛛｜火箭猛攻（30× 丟能，使用 registerFieldDiscardMultiply）
-//     Attack          : 急凍鳥｜暗黑冰霜（60，對手有特殊能量 +30 stub）
-//     Attack          : 謎擬Ｑ｜扮晶晶酒（v2.57 實裝：自動挑對手太晶最高傷害招式，不遞迴附加效果）
-//   【猛雷鼓】預組（6 張新卡）：
-//     Item            : 能量回收（擲幣：正 4 張，反 2 張基本能量棄牌→手牌）
-//     Item            : 寶可裝置3.0（stub — 無實裝 Tool）
-//     Item            : 太晶珠（Tool：太晶寶可夢 HP +30）
-//     Item            : 捕蟲組合（top6 → 選最多 2 張草寶可夢/草能量加手牌）
-//     Item            : 能量轉移（把 1 張基本能量從自己的寶可夢移到另一隻）
-//     Ability         : 厄鬼椪 碧草面具ex｜碧綠之舞（1/回合 — 從手牌附加 1 張基本草能量到草寶可夢）
+// 演進歷史：
+//   v2.35：建立兩組 preset 卡表 + 大部分 effect 實裝；4 個 ability 與 1 個 stub
+//          tool 留 known-gap stub（純 log 不阻塞遊戲）。
+//   v2.57：把 4 個 known gap ability 全部補完：
+//          - 操陷蛛｜充能 → regA（10462 起）
+//          - 急凍鳥｜抵抗之幕 → PASSIVE_IMMUNITY hook（163/246/250）
+//          - 莉莉艾的皮皮ex｜妖精領域 → 弱點覆寫 hook（215 + engine.ts:2479）
+//          - 超夢ex｜力量抑制者 → engine ATTACK gate（engine.ts:2302）
+//          擦除球（PRE_DISCARD_CHOICE 丟能）+ 謎擬Ｑ｜扮晶晶酒（copy-attack）也補完。
+//   v2.52/v2.56：寶可裝置3.0 完整實裝（牌庫頂 7 → 選 1 張支援者，10618 起）。
+//   v2.63 Bug C：力量抑制者 gate 細節調整（含戰鬥場計入 4 隻）。
 //
-// 說明：
-//   - 需要新 UI filter 的已在 +page.svelte / ai.ts 加過（RocketSupporter / RocketBasic /
-//     AnyTrainer / GrassBasicOrGrassEnergy）。
-//   - 「known gap」條目留 stub（打出時寫 log），未阻塞遊戲主流程。
-//     完整實作待日後 session（attack-copy、pass-through ability 需要 engine 擴充）。
+// 故本檔案 10148-10170 行的「known gap」inventory comment 已在 v2.258 清掉。
+// 若未來再新增類似批次卡表，記得別重複「inventory comment」pattern：
+// 那種大塊註解很快就過時，演進歷史寫到對應 reg 旁邊更耐用。
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 火箭隊能量 hook 已搬到 effects/cards/energy_cards.ts（v2.66）。
