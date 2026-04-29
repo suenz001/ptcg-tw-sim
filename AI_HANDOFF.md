@@ -16271,3 +16271,36 @@ Leon 反映手機直式對戰 UI（MobilePortraitBattle.svelte）有三個問題
 - `sim-tournament.mjs 1` → 1332 場 / 0 bug（修前 2 個）
 - 版本 2.288 → 2.289
 - commit: `307354c`
+
+---
+
+## v2.290 — 烈焰馬｜快走 特性實裝
+
+**Commit:** 0dab30e
+
+### 功能
+- **烈焰馬｜快走**（I-mark：SV9a 12672、SV9a 12727、MC 16561）
+  - 效果：「在自己的回合時可使用1次。從自己的牌庫抽出1張卡。」
+  - 純 `regA` 實裝，無額外 pending 流程
+
+### 實作細節
+1. **`src/lib/game/effects/cards/v172_hij_batch.ts`**
+   - Import 追加 `regA`, `drawCards`
+   - 末尾新增：
+     ```typescript
+     regA('烈焰馬', 0, (st, idx) => {
+       return drawCards(addLog(st, '快走：從牌庫抽出 1 張卡', idx), idx, 1);
+     });
+     ```
+2. **`src/lib/game/engine.ts`** → `getUsableAbilities`
+   - 新增 deck-length gate（牌庫為空時隱藏按鈕）：
+     `if (ab.name === '快走' && player.deck.length === 0) return;`
+
+### 排除說明
+- H-mark 的烈焰馬（svhk 10053、MC 16559/16560）無快走特性 → 不實裝（regulationMark "H"）
+
+### Sim 結果
+- 1332 games，0 bugs（第一次 1 bug 為 鋁鋼橋龍 vs 胡地 maxiter 偶發，第二次 0 bugs 確認屬非相關 flaky）
+
+### 下一步
+- 待 Leon 指示下一張未實裝卡
