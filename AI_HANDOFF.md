@@ -1,9 +1,32 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.269)  
+> 最後更新：2026-04-29 (v2.270)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.270 — Phase 1 緊急修 — 加入流程 + 牌組 UX
+
+### Bug 1：列表點「加入」跳「請先選擇牌組」
+**根因**：v2.269 重寫 `handleJoinRoom` 移除 `myDeckId` 檢查，但 `handleJoinFromList` 是另一個獨立函式我忘記改：
+```js
+if (!myName.trim() || !myDeckId) { ... }  // ← 舊檢查仍在
+```
+**修法**：移除 `!myDeckId` 條件，只檢查名稱。
+
+### Bug 2：「準備完成」按鈕點不到
+**根因**：v2.269 流程是「下拉選牌組 → 按『套用牌組』→ 按『準備完成』」三段式，使用者選了 dropdown 但沒按「套用牌組」就以為可以準備。「準備完成」的 disabled 條件是 `!seat.deckEntries`，所以 dropdown 選了之後仍 disabled。
+
+**修法**：select 改 `onchange={handleDeckChange}` 自動套用 — 移除「套用牌組」按鈕，留兩段式（選 → 準備）。並加狀態提示：
+- 未選 → 「請選擇一個牌組」
+- 選了但尚未套用完成 → 「套用中⋯」（黃字）
+- 套用成功（seat.deckEntries 60 張）→ 「✓ 牌組已套用」（綠字）
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 

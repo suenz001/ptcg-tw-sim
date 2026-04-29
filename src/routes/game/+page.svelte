@@ -1508,7 +1508,8 @@
 
   // 從房間列表一鍵加入
   async function handleJoinFromList(rc: string) {
-    if (!myName.trim() || !myDeckId) { onlineError = '請先填寫名稱和選擇牌組'; return; }
+    // v2.270：v2.269 重構後加入時不需選牌組（房內才選），只檢查名稱
+    if (!myName.trim()) { onlineError = '請先填寫玩家名稱'; return; }
     joinInput = rc;
     await handleJoinRoom();
   }
@@ -1932,12 +1933,22 @@
   }
 
   async function handleSetDeck() {
-    if (!roomCode || !myDeckId) { onlineError = '請選擇牌組'; return; }
+    if (!roomCode || !myDeckId) { return; }
     const deck = allDecks.find(d => d.id === myDeckId);
     if (!deck) return;
+    if (deck.entries.length !== 60) {
+      onlineError = `所選牌組張數為 ${deck.entries.length}（應為 60 張），請選別的牌組`;
+      return;
+    }
     onlineError = '';
     try { await setSeatDeck(roomCode, deck.entries); }
     catch (e: any) { onlineError = e.message ?? '設定牌組失敗'; }
+  }
+  // v2.270：select onchange 自動套用，省去「套用牌組」按鈕
+  async function handleDeckChange(e: Event) {
+    const t = e.target as HTMLSelectElement;
+    myDeckId = t.value;
+    if (myDeckId) await handleSetDeck();
   }
 
   async function handleToggleReady() {
@@ -2535,10 +2546,12 @@
 
           <!-- 我的座位操作面板 -->
           {#if mySeatIdx >= 0 && (mySeatIdx === 0 || mySeatIdx === 1)}
+            {@const mySeat = roomData.seats[mySeatIdx]}
+            {@const hasValidDeck = !!mySeat.deckEntries && mySeat.deckEntries.length === 60}
             <div class="my-seat-panel">
               <h3>你的位置：對戰玩家 {mySeatIdx + 1}</h3>
-              <label>選擇牌組
-                <select bind:value={myDeckId} disabled={roomData.seats[mySeatIdx].ready}>
+              <label>選擇牌組（選擇後自動套用）
+                <select value={myDeckId} onchange={handleDeckChange} disabled={mySeat.ready}>
                   <option value="">— 選擇 —</option>
                   {#if PRESET_DECKS.length > 0}
                     <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
@@ -2548,21 +2561,20 @@
                   {/if}
                 </select>
               </label>
+              {#if hasValidDeck}
+                <p class="muted small" style="color:#aaffaa;">✓ 牌組已套用（{mySeat.deckEntries?.length ?? 0} 張）</p>
+              {:else if myDeckId}
+                <p class="muted small" style="color:#ffcc66;">套用中⋯ 若沒進度請重選</p>
+              {:else}
+                <p class="muted small">請選擇一個牌組</p>
+              {/if}
               <div class="seat-actions">
-                <button class="btn-secondary"
-                  onclick={handleSetDeck}
-                  disabled={!myDeckId || roomData.seats[mySeatIdx].ready}>
-                  套用牌組
-                </button>
-                <button class="btn-primary {roomData.seats[mySeatIdx].ready ? 'unready' : ''}"
+                <button class="btn-primary {mySeat.ready ? 'unready' : ''}"
                   onclick={handleToggleReady}
-                  disabled={!roomData.seats[mySeatIdx].deckEntries || roomData.seats[mySeatIdx].deckEntries.length !== 60}>
-                  {roomData.seats[mySeatIdx].ready ? '取消準備' : '準備完成'}
+                  disabled={!hasValidDeck}>
+                  {mySeat.ready ? '取消準備' : '準備完成'}
                 </button>
               </div>
-              {#if !roomData.seats[mySeatIdx].deckEntries}
-                <p class="muted small">請先選擇牌組並按「套用牌組」</p>
-              {/if}
             </div>
           {:else if mySeatIdx >= 2}
             <div class="my-seat-panel spectator-panel">
