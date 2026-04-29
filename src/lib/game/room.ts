@@ -92,12 +92,18 @@ export function findMySeatIdx(seats: Seat[], uid: string | null): number {
   return -1;
 }
 
+/** 計算 entries 加總張數（entries 是「種類」，不是「總張數」） */
+export function countDeckCards(entries: DeckEntry[] | null | undefined): number {
+  if (!entries) return 0;
+  return entries.reduce((sum, e) => sum + (e.count ?? 0), 0);
+}
+
 /** 雙方 P1/P2 都坐人且 ready 時為 true */
 export function bothPlayersReady(seats: Seat[]): boolean {
   const p1 = seats[0], p2 = seats[1];
   return !!(p1.uid && p2.uid && p1.ready && p2.ready
-    && p1.deckEntries && p1.deckEntries.length === 60
-    && p2.deckEntries && p2.deckEntries.length === 60);
+    && countDeckCards(p1.deckEntries) === 60
+    && countDeckCards(p2.deckEntries) === 60);
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────────────────
@@ -256,7 +262,7 @@ export async function setSeatReady(
   if (myIdx < 0) throw new Error('你不在此房間');
   if (data.seats[myIdx].role === 'spectator') throw new Error('觀戰位不能準備');
   const seat = data.seats[myIdx];
-  if (ready && (!seat.deckEntries || seat.deckEntries.length !== 60)) {
+  if (ready && countDeckCards(seat.deckEntries) !== 60) {
     throw new Error('請先選擇 60 張牌組');
   }
 

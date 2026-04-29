@@ -26,7 +26,7 @@
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, startGame,
-    findMySeatIdx, bothPlayersReady,
+    findMySeatIdx, bothPlayersReady, countDeckCards,
     type Room, type Seat,
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
@@ -1936,8 +1936,9 @@
     if (!roomCode || !myDeckId) { return; }
     const deck = allDecks.find(d => d.id === myDeckId);
     if (!deck) return;
-    if (deck.entries.length !== 60) {
-      onlineError = `所選牌組張數為 ${deck.entries.length}（應為 60 張），請選別的牌組`;
+    const totalCards = countDeckCards(deck.entries);
+    if (totalCards !== 60) {
+      onlineError = `所選牌組張數為 ${totalCards}（應為 60 張），請選別的牌組`;
       return;
     }
     onlineError = '';
@@ -2496,8 +2497,8 @@
                   <div class="seat-label">對戰玩家 {i + 1}</div>
                   {#if s.uid}
                     <div class="seat-name">{s.name}{isMine ? '（你）' : ''}</div>
-                    {#if s.deckEntries && s.deckEntries.length === 60}
-                      <div class="seat-deck-info">✓ 已選牌組（{s.deckEntries.length} 張）</div>
+                    {#if countDeckCards(s.deckEntries) === 60}
+                      <div class="seat-deck-info">✓ 已選牌組（60 張）</div>
                     {:else}
                       <div class="seat-deck-info muted">尚未選擇牌組</div>
                     {/if}
@@ -2547,7 +2548,7 @@
           <!-- 我的座位操作面板 -->
           {#if mySeatIdx >= 0 && (mySeatIdx === 0 || mySeatIdx === 1)}
             {@const mySeat = roomData.seats[mySeatIdx]}
-            {@const hasValidDeck = !!mySeat.deckEntries && mySeat.deckEntries.length === 60}
+            {@const hasValidDeck = countDeckCards(mySeat.deckEntries) === 60}
             <div class="my-seat-panel">
               <h3>你的位置：對戰玩家 {mySeatIdx + 1}</h3>
               <label>選擇牌組（選擇後自動套用）
@@ -2562,7 +2563,7 @@
                 </select>
               </label>
               {#if hasValidDeck}
-                <p class="muted small" style="color:#aaffaa;">✓ 牌組已套用（{mySeat.deckEntries?.length ?? 0} 張）</p>
+                <p class="muted small" style="color:#aaffaa;">✓ 牌組已套用（{countDeckCards(mySeat.deckEntries)} 張）</p>
               {:else if myDeckId}
                 <p class="muted small" style="color:#ffcc66;">套用中⋯ 若沒進度請重選</p>
               {:else}
