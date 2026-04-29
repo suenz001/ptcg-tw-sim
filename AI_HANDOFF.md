@@ -1,9 +1,61 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.272)  
+> 最後更新：2026-04-29 (v2.277)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.277 — Pokemon Ability Wave 3：撤退成本修正特性 hook（5 張卡）
+
+### 動機
+H/I/J 標 ability audit 顯示 168 張未實裝。本波切「撤退成本修正」這個共通機制：
+建立 `ABILITY_RETREAT_MOD` 統一 hook，一次實裝 5 張採用「撤退費 zero / reduce / add」的特性。
+過去這類效果（天空徑線/N的城堡/樂園度假地）都是在 engine.ts inline hard-code，新 hook 把
+未來同類特性的入口統一到 effects.ts 的 Map，加新卡只需 `ABILITY_RETREAT_MOD.set(...)`。
+
+### 新增 hook：`ABILITY_RETREAT_MOD`（effects.ts）
+```ts
+export type AbilityRetreatModParams = {
+  holderInst, holderCard, holderPosition: 'active'|'bench', holderOwnerIdx,
+  retreatingInst, retreatingCard, retreatingOwnerIdx,
+  state, pool,
+  countEnergy: (inst) => Map<EnergyType, number>,  // engine 注入
+};
+ABILITY_RETREAT_MOD: Map<string, (p) => { zero?, reduceBy?, addBy? }>
+```
+
+engine.ts 新 helper `applyAbilityRetreatMod(state, retreatingInst, retreatingCard, retreatingOwnerIdx, baseCost, pool)`：
+1. 掃雙方 active + bench 所有寶可夢的 abilities
+2. 對每個有登錄的特性 invoke callback
+3. 累計 zero / totalReduce / totalAdd
+4. 套用順序：zero → cost=0；再 cost = max(0, cost - totalReduce)；再 cost += totalAdd
+
+整合到 `canRetreat`（UI 鏡射）+ RETREAT handler（實際扣除），兩處同步。
+ROCKET_WATCHTOWER（【無】特性無效）已 gate；本批 5 張無【無】屬，但預防未來新增。
+
+### 5 張卡實裝
+| 卡名 | 特性 | 卡面文字 | 套用 |
+|---|---|---|---|
+| 小火龍 (M2/M-P-I) | 一身輕 | 若身上沒附能量，自身撤退能量歸零 | zero（holder=retreating, energy=0） |
+| 阿響的熔岩蝸牛 (M2a/SV9a) | 溶化流動 | 同上 | zero |
+| 鋁鋼橋龍 (MC/SV7/SV8a) | 鋼之橋 | 自方場上，自方所有附【鋼】能量寶可夢撤退能量歸零 | zero（同陣營 + countEnergy.Metal≥1） |
+| 陸地水母 (SVM) | 森林秘道 | 在自方備戰時，自方戰鬥寶可夢撤退 -2 | reduceBy=2（持有者必在 bench） |
+| 阿利多斯 (SV5a) | 大網 | 自方場上時，對方戰鬥場進化寶可夢撤退 +1 | addBy=1（對手陣營 + evolvesFrom 存在） |
+
+### 設計細節
+- 「鋼之橋」用 engine 注入的 `countEnergy` 取得屬性 map，正確處理特殊能量（反偷襲能量、反應【鋼】能量等將來新加）。
+- 「鋼之橋（zero）+ 大網（addBy）」並存時：zero 先把 cost 歸零，再 +1 → 最終 1。符合 PTCG 官方裁定「零之後仍可加」。
+- 「天空徑線 / N的城堡 / 樂園度假地」目前仍 inline 在 engine（v2.119 修過），未來可逐步搬進 ABILITY_RETREAT_MOD（天空徑線）/ STADIUM_RETREAT_MOD（後兩者）統一管理 — 本波先建骨架。
+
+### 觸碰檔案
+- `src/lib/game/effects.ts` — 新 ABILITY_RETREAT_MOD type + Map + 5 entries（`PASSIVE_IMMUNITY` 區塊後、Session 32 H12 區塊前）
+- `src/lib/game/engine.ts` — import ABILITY_RETREAT_MOD；新 `applyAbilityRetreatMod` helper（在 canRetreat 之前）；canRetreat + RETREAT handler 兩處呼叫
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 

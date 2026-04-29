@@ -2289,6 +2289,100 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
 ]);
 
 // ══════════════════════════════════════════════════════════════════════════════
+// v2.277 Wave 3 — 被動特性：撤退成本修正（ABILITY_RETREAT_MOD）
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// 撤退成本修正類特性（不屬於招式效果，而是 passive ability）。engine 在 canRetreat
+// + RETREAT handler 兩處呼叫，在 TOOL_RETREAT_MOD / SPECIAL_ENERGY_RETREAT_MOD /
+// 重力之玉 / 天空徑線 / N的城堡 / 樂園度假地 等 inline hook 之後套用，作為最後一層。
+//
+// 套用順序：
+//   先彙總所有 entry 的 r.zero / r.reduceBy / r.addBy
+//   1) 任一 zero → cost = 0
+//   2) cost = max(0, cost - sum(reduceBy))
+//   3) cost = cost + sum(addBy)
+//
+// 這個順序處理「鋼之橋（zero）vs 大網（addBy）」並存的情況：
+//   鋼之橋先把 cost 歸零，大網再加 1 → 最終 cost = 1。
+//
+// 火箭監視塔（【無】寶可夢特性無效）／可達鴨濕氣（自 KO 特性無效）等 disable hook
+// 不需檢查（ABILITY_RETREAT_MOD 不會用在【無】屬特性，也不是「自我 KO」類），
+// engine 套用時也不必特別 gate。
+export type AbilityRetreatModParams = {
+  /** 持有此特性的寶可夢實例 */
+  holderInst: CardInstance;
+  /** 持有此特性的寶可夢卡片資料 */
+  holderCard: Card;
+  /** 持有者位置：active 或 bench */
+  holderPosition: 'active' | 'bench';
+  /** 持有者所屬玩家 index */
+  holderOwnerIdx: 0 | 1;
+  /** 正在撤退的寶可夢實例（總是某玩家的 active） */
+  retreatingInst: CardInstance;
+  /** 正在撤退的寶可夢卡片資料 */
+  retreatingCard: Card;
+  /** 撤退者所屬玩家 index */
+  retreatingOwnerIdx: 0 | 1;
+  state: GameState;
+  pool: Map<string, Card>;
+  /** engine 注入：取得寶可夢身上各屬性能量數量（含特殊能量處理） */
+  countEnergy: (inst: CardInstance) => Map<string, number>;
+};
+
+export const ABILITY_RETREAT_MOD = new Map<string, (
+  p: AbilityRetreatModParams
+) => { zero?: boolean; reduceBy?: number; addBy?: number }>([
+  // 小火龍｜一身輕（M2/M-P-I）—
+  //   「若這隻寶可夢身上沒有附加能量卡，則這隻寶可夢【撤退】所需的能量全部消除。」
+  //   只對自身生效；holder 必須等於 retreating（即小火龍自己上場時撤退）。
+  ['一身輕', (p) => {
+    if (p.holderInst.iid !== p.retreatingInst.iid) return {};
+    if (p.retreatingInst.energyAttached.length > 0) return {};
+    return { zero: true };
+  }],
+
+  // 阿響的熔岩蝸牛｜溶化流動（M2a/SV9a）— 與一身輕同效果
+  ['溶化流動', (p) => {
+    if (p.holderInst.iid !== p.retreatingInst.iid) return {};
+    if (p.retreatingInst.energyAttached.length > 0) return {};
+    return { zero: true };
+  }],
+
+  // 鋁鋼橋龍｜鋼之橋（MC/SV7/SV8a）—
+  //   「只要這隻寶可夢在場上，自己的所有身上附有【鋼】能量的寶可夢
+  //    【撤退】所需的能量全部消除。」
+  //   - 持有者只要在自己場上（active 或 bench）即生效。
+  //   - 撤退者必須是同陣營，且身上至少 1 個 Metal 能量單位。
+  //     使用 countEnergy 取得能量類型 map，可正確處理特殊能量（如反偷襲能量）。
+  ['鋼之橋', (p) => {
+    if (p.holderOwnerIdx !== p.retreatingOwnerIdx) return {};
+    const energyMap = p.countEnergy(p.retreatingInst);
+    if ((energyMap.get('Metal') ?? 0) < 1) return {};
+    return { zero: true };
+  }],
+
+  // 陸地水母｜森林秘道（SVM）—
+  //   「只要這隻寶可夢在備戰區，自己的戰鬥寶可夢【撤退】所需的能量減少 2 個。」
+  //   - 持有者必須在自己備戰區（不在戰鬥場）。
+  //   - 撤退者必須同陣營（撤退者一定是 active，所以條件天然成立）。
+  ['森林秘道', (p) => {
+    if (p.holderOwnerIdx !== p.retreatingOwnerIdx) return {};
+    if (p.holderPosition !== 'bench') return {};
+    return { reduceBy: 2 };
+  }],
+
+  // 阿利多斯｜大網（SV5a）—
+  //   「只要這隻寶可夢在場上，對手的戰鬥場的進化寶可夢【撤退】所需的能量增加 1 個。」
+  //   - 持有者只要在自己場上（active 或 bench）即生效。
+  //   - 撤退者必須是對手且為進化寶可夢（有 evolvesFrom）。
+  ['大網', (p) => {
+    if (p.holderOwnerIdx === p.retreatingOwnerIdx) return {};
+    if (!p.retreatingCard.evolvesFrom) return {};
+    return { addBy: 1 };
+  }],
+]);
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Session 32 H12 — 被動特性：受傷反擊（中毒/灼傷/放指示物）
 // ══════════════════════════════════════════════════════════════════════════════
 

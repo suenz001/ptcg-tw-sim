@@ -20,6 +20,7 @@ import {
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_END_TURN_DISCARD,
+  ABILITY_RETREAT_MOD,
   BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
   SPECIAL_ENERGY_ATTACH,
   SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD,
@@ -1511,6 +1512,8 @@ function handlePlaying(
     if (stadiumNameForRetreat === '樂園度假地' && activeCard?.name === '可達鴨') {
       retreatCost = Math.max(0, retreatCost - 1);
     }
+    // v2.277 Wave 3：套用 ABILITY_RETREAT_MOD（一身輕 / 溶化流動 / 鋼之橋 / 森林秘道 / 大網）
+    retreatCost = applyAbilityRetreatMod(state, attacker.active, activeCard, aIdx, retreatCost, pool);
     // v2.69：撤退成本用「能量單位」比對，不是卡片張數。火箭隊能量 1 張 = 2 units。
     // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
     if (totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx) < retreatCost) return state;
@@ -4200,6 +4203,83 @@ export function getEvolvableTargets(
 }
 
 /**
+ * v2.277 Wave 3：套用「撤退成本修正類特性」（ABILITY_RETREAT_MOD）。
+ *
+ * 掃描雙方所有場上寶可夢的 abilities，對每個有登錄到 ABILITY_RETREAT_MOD
+ * 的特性呼叫 callback，匯總 zero / reduceBy / addBy，按以下順序套用：
+ *   1) 任一 zero 來源 → cost 直接歸零
+ *   2) cost = max(0, cost - sum(reduceBy))
+ *   3) cost += sum(addBy)
+ *
+ * 套用點：canRetreat（UI 鏡射）+ RETREAT handler（實際扣除），兩處同步呼叫
+ * 確保 UI/engine 一致。
+ *
+ * 注意：本 helper 不檢查 ROCKET_WATCHTOWER（【無】特性無效）/ 可達鴨濕氣
+ * （自 KO 特性無效）— 目前登錄到 ABILITY_RETREAT_MOD 的 5 個特性都不屬這兩類。
+ * 若未來新增【無】屬寶可夢的撤退特性，需在此 gate。
+ */
+function applyAbilityRetreatMod(
+  state: GameState,
+  retreatingInst: CardInstance,
+  retreatingCard: Card | undefined,
+  retreatingOwnerIdx: 0 | 1,
+  baseCost: number,
+  pool: Map<string, Card>,
+): number {
+  if (!retreatingCard) return baseCost;
+  if (ABILITY_RETREAT_MOD.size === 0) return baseCost;
+
+  let zero = false;
+  let totalReduce = 0;
+  let totalAdd = 0;
+
+  const countEnergyHelper = (inst: CardInstance) => {
+    // countEnergy 回傳 Map<EnergyType, number>；ABILITY_RETREAT_MOD callback
+    // 簽名為 Map<string, number>，TS 上相容（EnergyType 是 string literal union）
+    return countEnergy(inst, pool) as unknown as Map<string, number>;
+  };
+
+  for (const ownerIdx of [0, 1] as const) {
+    const player = state.players[ownerIdx];
+    const allInstances: Array<{ inst: CardInstance; position: 'active' | 'bench' }> = [];
+    if (player.active) allInstances.push({ inst: player.active, position: 'active' });
+    for (const b of player.bench) allInstances.push({ inst: b, position: 'bench' });
+
+    for (const { inst, position } of allInstances) {
+      const card = pool.get(inst.cardId);
+      if (!card?.abilities) continue;
+      // 火箭隊監視塔：【無】寶可夢特性無效
+      if (isColorlessAbilityBlocked(state, card, pool)) continue;
+      for (const ab of card.abilities) {
+        const fn = ABILITY_RETREAT_MOD.get(ab.name);
+        if (!fn) continue;
+        const r = fn({
+          holderInst: inst,
+          holderCard: card,
+          holderPosition: position,
+          holderOwnerIdx: ownerIdx,
+          retreatingInst,
+          retreatingCard,
+          retreatingOwnerIdx,
+          state,
+          pool,
+          countEnergy: countEnergyHelper,
+        });
+        if (r.zero) zero = true;
+        if (r.reduceBy) totalReduce += r.reduceBy;
+        if (r.addBy) totalAdd += r.addBy;
+      }
+    }
+  }
+
+  let cost = baseCost;
+  if (zero) cost = 0;
+  cost = Math.max(0, cost - totalReduce);
+  cost = cost + totalAdd;
+  return cost;
+}
+
+/**
  * 目前行動玩家是否可以撤退出場寶可夢。
  */
 export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
@@ -4245,6 +4325,8 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
   if (stadiumNameCR === 'N的城堡' && card?.name?.startsWith('N的')) cost = 0;
   // v2.177 樂園度假地：可達鴨撤退 -1（UI 鏡射）
   if (stadiumNameCR === '樂園度假地' && card?.name === '可達鴨') cost = Math.max(0, cost - 1);
+  // v2.277 Wave 3：套用 ABILITY_RETREAT_MOD（一身輕 / 溶化流動 / 鋼之橋 / 森林秘道 / 大網）
+  cost = applyAbilityRetreatMod(state, player.active, card, state.activePlayerIndex, cost, pool);
   // v2.69：以能量單位計算（火箭隊能量 1 張 = 2 units）。
   // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
   return totalEnergyUnits(player.active.energyAttached, pool, state, state.activePlayerIndex) >= cost;
