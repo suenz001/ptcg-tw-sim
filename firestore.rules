@@ -45,9 +45,9 @@ service cloud.firestore {
       // 目前小社群信任模型下 acceptable。
       allow update: if request.auth != null;
 
-      // 刪除：只有 host 可刪
-      allow delete: if request.auth != null
-                    && request.auth.uid == resource.data.hostUid;
+      // 刪除：authed user 都可刪（v2.275 client 只在「最後一人離房」時呼叫；
+      //   以及房主主動關房）
+      allow delete: if request.auth != null;
 
       // ── 聊天訊息子集合（v2.272 Phase 2）──────────────────────────
       match /messages/{msgId} {

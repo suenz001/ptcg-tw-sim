@@ -26,7 +26,7 @@
 import { db, auth } from '$lib/firebase';
 import {
   doc, setDoc, updateDoc, onSnapshot, getDoc, serverTimestamp,
-  collection, query, where, limit, orderBy, addDoc,
+  collection, query, where, limit, orderBy, addDoc, deleteDoc,
 } from 'firebase/firestore';
 import type { GameState } from './types';
 
@@ -274,21 +274,33 @@ export async function setSeatReady(
   await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
 }
 
-/** v2.274：離開房間 — 從 seats 中清空自己的座位（不刪 doc） */
+/**
+ * v2.274：離開房間 — 從 seats 清空自己的座位。
+ * v2.275：清空後若整個房間沒人（所有 seats[].uid 都 null），自動刪除房間 doc。
+ *   注意：messages subcollection 不會被 deleteDoc 連帶刪除（Firestore 限制），
+ *   會殘留但因為 room doc 沒了也不會被 list；下次同房號生成時舊訊息可能干擾，
+ *   但房號是 4 碼隨機 + 排除易混字，撞號機率極低，先不處理。
+ */
 export async function leaveRoom(roomCode: string): Promise<void> {
   const uid = auth.currentUser?.uid;
-  if (!uid) return; // 未登入直接 return（client 可能直接清 state）
+  if (!uid) return;
   const ref = doc(db, 'rooms', roomCode.toUpperCase());
   const snap = await getDoc(ref);
-  if (!snap.exists()) return; // 房間不在了
+  if (!snap.exists()) return;
   const data = snap.data() as RoomData;
-  if (data.status !== 'lobby') return; // 遊戲中不能離（避免狀態不一致；client 該防護）
+  if (data.status !== 'lobby') return;
   const myIdx = findMySeatIdx(data.seats, uid);
-  if (myIdx < 0) return; // 我不在房內
+  if (myIdx < 0) return;
   const newSeats = data.seats.map((s, i) =>
     i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false } : s
   );
-  await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+  // v2.275：檢查清完我之後是否全空
+  const allEmpty = newSeats.every(s => s.uid === null);
+  if (allEmpty) {
+    await deleteDoc(ref);
+  } else {
+    await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+  }
 }
 
 /** 啟動遊戲（坐 P1 的客戶端在雙方 ready 後呼叫） */
