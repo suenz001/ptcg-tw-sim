@@ -2386,6 +2386,9 @@
 
 <svelte:window onkeydown={onGlobalKey} onpointermove={onWindowPointerMove} onpointerup={onWindowPointerUp} />
 
+<!-- v2.288：手機直式 + 戰鬥中時鎖 body 滑動，禁止 iOS Safari 整頁 bounce / pull-to-refresh -->
+<svelte:body class:mp-locked={isPortraitMobile && !!game} />
+
 <!-- v2.206：手機直屏旋轉提示 — 進戰鬥（game !== null）且手機直屏時顯示。
      CSS 用 @media (orientation: portrait) 守門：橫屏自動隱藏。
      iOS Safari 不支援 screen.orientation.lock，依靠用戶手動旋轉。 -->
@@ -2763,7 +2766,11 @@
       onInitiateAttack={initiateAttack}
       onOpenZoom={openZoom}
       onOpenSettings={() => showSettingsModal = true}
-      onLeave={() => { if (mode === 'online') leaveOnlineGame(); else mode = null; }}
+      onLeave={() => {
+        // v2.288 修：本機模式必須同時清 game 才能脫離 battle template（頂層條件是 {#if !game}）
+        if (mode === 'online') leaveOnlineGame();
+        else { game = null; mode = null; }
+      }}
     />
   {:else}
 
@@ -5533,6 +5540,17 @@
     }
   }
 
+  /* v2.288：手機直式 + 戰鬥中鎖 body 滑動（禁止 iOS Safari pull-to-refresh / bounce） */
+  :global(body.mp-locked) {
+    overflow: hidden !important;
+    overscroll-behavior: none;
+    touch-action: none;
+    position: fixed;
+    width: 100%;
+    height: 100dvh;
+  }
+  :global(html:has(body.mp-locked)) { overflow: hidden; overscroll-behavior: none; }
+
   /* ════════════════════════════════════════════════════════════════════
      v2.286 Phase 3：手機直屏（≤600px portrait）modal RWD 適配
      ────────────────────────────────────────────────────────────────────
@@ -5578,6 +5596,25 @@
     .lightbox-img {
       max-width: 96vw; max-height: 86vh;
     }
+
+    /* v2.288：本機雙人對戰 lobby — 手機直式改上下排（避免左右超出） */
+    .player-setup {
+      grid-template-columns: 1fr !important;
+      gap: 0.6rem !important;
+    }
+    .vs-badge { font-size: 1.2rem !important; padding: 0.2rem 0; }
+    .setup-card { padding: 0.7rem; }
+    .setup-card h2 { font-size: 0.95rem; }
+
+    /* lobby 整體緊縮 */
+    .lobby { padding: 0.8rem !important; }
+    .lobby h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+    .lobby-subtitle { font-size: 0.78rem; margin: -0.3rem 0 0.6rem; }
+    .mode-cards { gap: 0.6rem; }
+    .mode-card { padding: 1rem !important; }
+
+    /* 線上 lobby 房間相關元素 */
+    .seat-area { grid-template-columns: 1fr !important; gap: 0.4rem; }
   }
 
   @media (max-width: 950px) and (orientation: landscape) {

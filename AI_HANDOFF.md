@@ -1,9 +1,42 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.287)  
+> 最後更新：2026-04-29 (v2.288)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.288 — 修：拖曳整頁滑動 + lobby 手機左右排版 + 退出按鈕無效
+
+### Bugs
+1. **拖曳整頁滑動**：手機觸控拖曳時整頁會 pull-to-refresh / bounce
+2. **本機雙人 lobby 左右排版超出手機畫面**：玩家1 | VS | 玩家2 三欄並排，手機直式塞不下要左右滑
+3. **左上「←」退出按鈕沒效果**：點了沒反應，無法回 lobby
+
+### 根因
+1. iOS Safari 預設 overscroll-behavior:auto，body 沒鎖會整頁 bounce。
+2. `.player-setup { grid-template-columns: 1fr auto 1fr }` 桌機橫排，手機直式（≤390px 寬）三欄擠不下。
+3. onLeave callback 只設了 `mode = null`，但頂層條件是 `{#if !game}`，game 還在 → 仍走 battle template，看起來像「沒反應」。
+
+### 修法
+1. 加 `<svelte:body class:mp-locked={isPortraitMobile && !!game} />` + global CSS：
+   ```css
+   :global(body.mp-locked) {
+     overflow: hidden; overscroll-behavior: none; touch-action: none;
+     position: fixed; width: 100%; height: 100dvh;
+   }
+   ```
+   只在「手機直式 + 戰鬥中」鎖；lobby / 桌機不影響。
+2. `.player-setup` 在 `@media (max-width:600px) and (orientation:portrait)` 改 `grid-template-columns: 1fr`（上下排），順便縮 lobby 各元素 padding/font-size 配合手機。線上 lobby 的 `.seat-area` 也同步改一欄。
+3. onLeave 改成本機模式同時清 `game = null; mode = null;` — 才能脫離 battle template 回 lobby。
+
+### 觸碰檔案
+- `src/routes/game/+page.svelte` — onLeave callback、`<svelte:body>` class、global CSS、portrait media query 加 lobby 規則
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
