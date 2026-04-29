@@ -1,9 +1,49 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.278)  
+> 最後更新：2026-04-29 (v2.279)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.279 — 對戰版面 UI 緊縮 + 平板放大鏡
+
+### 動機
+Leon 反映：(A) 桌機瀏覽對戰時右側出現滑桿（版面太高超過 viewport）；(B) 平板用無法 hover 看手牌大圖（手機有 🔍 鈕、平板沒有）。
+
+### 改動
+
+#### A. 桌機 hand 區塊上下空白縮減（`+page.svelte` style）
+| 規則 | before | after | 原因 |
+|---|---|---|---|
+| `.hand-strip` padding | `.35rem .7rem .5rem` | `.2rem .7rem .25rem` | 上下空白縮約 50% |
+| `.hand-label` margin-bottom | `.25rem` | `.15rem` | 縮 label 與卡之間距 |
+| `.hand-scroll` padding | `30px 1rem 22px` | `14px 1rem 8px` | 30px 上 padding 是給 hover-peek `translateY(-14px)` 預留升起空間，砍到剛好 14 即可；下 padding 22→8 |
+| `.hand-scroll` min-height | 170px | 150px | 卡牌實際高度約 130，留 20px buffer |
+
+整體 hand 區塊高度從約 195px 縮到 ~155px（少約 40px），桌機 viewport 不再被擠出滾輪。
+
+#### B. 平板顯示放大鈕（手機已有，桌機不需）
+原本 `.hand-zoom-btn` 只在 `@media (max-width:950px) and (orientation:landscape)` 顯示；改用 `@media (hover: none)` — 任何不能 hover 的裝置（iPad/Android tablet/Surface 觸控/觸控筆電）都顯示 🔍。
+
+```css
+@media (hover: none) {
+  .hand-zoom-btn{ display:flex; ... 24×24px ... }
+  .hand-card.hover-peek{ transform: ...原樣...; }  /* 禁用升起避免 stylus 誤觸 */
+}
+```
+
+平板看到 24×24 鈕；手機 media query 會再 cascade 覆寫成 18×18（更精緻）。Cascade order：default `display:none` → `(hover:none)` 24×24 → 手機 media 18×18。
+
+桌機（有 hover）保持 `.hand-zoom-btn{display:none}`，沿用 hover-peek 看大圖（hand-preview-float overlay）。
+
+### 觸碰檔案
+- `src/routes/game/+page.svelte` — `.hand-strip / .hand-label / .hand-scroll` 縮空白；新加 `@media (hover: none)` 區塊讓 .hand-zoom-btn 在平板顯示
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
