@@ -1,9 +1,32 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.284)  
+> 最後更新：2026-04-29 (v2.285)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.285 — 修：手機直式不再強制提示轉橫
+
+### Bug
+v2.284 加了手機直式 layout（MobilePortraitBattle）後，Leon 反映手機對戰仍會跳出「請將手機旋轉至橫向」全螢幕 overlay。
+
+### 根因
+v2.206 加的 `.rotate-prompt` overlay：CSS media query `@media (max-width: 950px) and (orientation: portrait)` 強制顯示，z-index:99999 蓋滿全螢幕。當時設計目的是「手機直屏 layout 太擠 → 提示用戶轉橫」，但 v2.284 加了直式 layout 之後這個提示反而擋住。
+
+### 修法
+媒體查詢加 `min-width: 601px` 條件 → `@media (min-width: 601px) and (max-width: 950px) and (orientation: portrait)`：
+- ≤600 portrait → 走 MobilePortraitBattle 元件（直式 friendly）→ 不再提示
+- 601-950 portrait → 「平板直屏 / 大手機直屏」灰色地帶，仍走桌機 layout 看起來擠 → 繼續提示轉橫
+- >950 一律不提示（不變）
+
+### 觸碰檔案
+- `src/routes/game/+page.svelte` — `.rotate-prompt` media query 加 `min-width:601px`
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 

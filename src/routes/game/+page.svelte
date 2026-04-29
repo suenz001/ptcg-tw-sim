@@ -5510,9 +5510,12 @@
       box-shadow: 0 3px 8px rgba(0,0,0,.35);
     }
   }
-  /* v2.206 手機直屏 fallback overlay（在 mobile 直屏時提示旋轉到橫向） */
+  /* v2.206 手機直屏 fallback overlay（在 mobile 直屏時提示旋轉到橫向）
+     v2.285：加 min-width:601 — 手機（≤600）直式走 MobilePortraitBattle 元件（v2.284 起），
+     不再強制轉橫；只剩「平板直屏 / 大手機直屏（601-950）」走桌機 layout 看起來擠，
+     繼續顯示轉橫提示引導用戶。 */
   .rotate-prompt{ display:none; }
-  @media (max-width: 950px) and (orientation: portrait) {
+  @media (min-width: 601px) and (max-width: 950px) and (orientation: portrait) {
     .rotate-prompt{
       display:flex; position:fixed; inset:0; z-index:99999;
       background:rgba(0,0,0,0.92); color:#fff;
