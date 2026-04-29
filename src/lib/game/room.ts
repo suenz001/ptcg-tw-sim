@@ -1,14 +1,26 @@
 /**
- * Firestore 房間管理（M3 線上對戰）
+ * Firestore 房間管理（v2.269 重構：座位制 lobby）
  *
- * 路徑：rooms/{roomCode}  （4 碼大寫房號，如 "AB3X"）
+ * 路徑：rooms/{roomCode}  （4 碼大寫房號）
  *
- * Schema:
- *   hostUid / hostName / hostDeckEntries[]
- *   guestUid / guestName / guestDeckEntries[]   ← guest 加入後填入
- *   gameState: GameState | null                  ← host 建遊戲後填入
- *   status: 'waiting' | 'ready' | 'playing' | 'ended'
+ * Schema v2（2026-04-29 起）：
+ *   roomName: string                          ← 房間名稱
+ *   hostUid / hostName                        ← 房主（建房者；維持房權只用於關房）
+ *   status: 'lobby' | 'playing' | 'ended'
+ *   seats: Seat[10]                           ← [p1, p2, spectator×8]
+ *   gameState: GameState | null
+ *   schemaVersion: 2                          ← v2.269 起；v1 舊房間應由 UI 顯示「不相容」並強制離開
  *   createdAt / updatedAt
+ *
+ * Seat：
+ *   role: 'p1' | 'p2' | 'spectator'
+ *   uid: string | null                        ← null = 空位
+ *   name: string | null
+ *   deckEntries: DeckEntry[] | null           ← p1/p2 才會用；spectator 永遠 null
+ *   ready: boolean                            ← 只 p1/p2 有意義；spectator 永遠 false
+ *
+ * 雙方 P1/P2 都 ready 時，由「目前坐 P1 的玩家 client」觸發 startGame（status 從 lobby → playing）。
+ * 用 status==='lobby' && gameState==null 做雙重 guard 避免 race。
  */
 
 import { db, auth } from '$lib/firebase';
@@ -18,15 +30,26 @@ import {
 } from 'firebase/firestore';
 import type { GameState } from './types';
 
+export type DeckEntry = { cardId: string; count: number };
+
+export type SeatRole = 'p1' | 'p2' | 'spectator';
+
+export interface Seat {
+  role: SeatRole;
+  uid: string | null;
+  name: string | null;
+  deckEntries: DeckEntry[] | null;
+  ready: boolean;
+}
+
 export interface RoomData {
+  roomName: string;
   hostUid: string;
   hostName: string;
-  hostDeckEntries: { cardId: string; count: number }[];
-  guestUid:   string | null;
-  guestName:  string | null;
-  guestDeckEntries: { cardId: string; count: number }[] | null;
-  gameState:  GameState | null;
-  status: 'waiting' | 'ready' | 'playing' | 'ended';
+  status: 'lobby' | 'playing' | 'ended';
+  seats: Seat[];
+  gameState: GameState | null;
+  schemaVersion: number;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -34,6 +57,10 @@ export interface RoomData {
 export interface Room extends RoomData {
   roomId: string;
 }
+
+export const SEAT_LAYOUT_VERSION = 2;
+export const TOTAL_SEATS = 10;
+export const SPECTATOR_SEATS = 8;
 
 // ── 工具 ─────────────────────────────────────────────────────────────────────
 
@@ -45,57 +72,209 @@ export function generateRoomCode(): string {
   return code;
 }
 
+function emptySeats(): Seat[] {
+  const seats: Seat[] = [
+    { role: 'p1', uid: null, name: null, deckEntries: null, ready: false },
+    { role: 'p2', uid: null, name: null, deckEntries: null, ready: false },
+  ];
+  for (let i = 0; i < SPECTATOR_SEATS; i++) {
+    seats.push({ role: 'spectator', uid: null, name: null, deckEntries: null, ready: false });
+  }
+  return seats;
+}
+
+/** 找出 seats 中 uid 對應的座位索引；找不到回 -1 */
+export function findMySeatIdx(seats: Seat[], uid: string | null): number {
+  if (!uid) return -1;
+  for (let i = 0; i < seats.length; i++) {
+    if (seats[i].uid === uid) return i;
+  }
+  return -1;
+}
+
+/** 雙方 P1/P2 都坐人且 ready 時為 true */
+export function bothPlayersReady(seats: Seat[]): boolean {
+  const p1 = seats[0], p2 = seats[1];
+  return !!(p1.uid && p2.uid && p1.ready && p2.ready
+    && p1.deckEntries && p1.deckEntries.length === 60
+    && p2.deckEntries && p2.deckEntries.length === 60);
+}
+
 // ── CRUD ─────────────────────────────────────────────────────────────────────
 
-/** 建立新房間，回傳房號 */
+/** 建立新房間（host 預設坐 P1，無牌組、未準備）；回傳房號 */
 export async function createRoom(
+  roomName: string,
   hostName: string,
-  hostDeckEntries: { cardId: string; count: number }[]
 ): Promise<string> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('尚未登入');
 
   const code = generateRoomCode();
-  await setDoc(doc(db, 'rooms', code), {
+  const seats = emptySeats();
+  // host 預設坐 P1
+  seats[0] = { role: 'p1', uid, name: hostName, deckEntries: null, ready: false };
+
+  const data: RoomData = {
+    roomName: roomName.trim() || `${hostName} 的房間`,
     hostUid: uid,
     hostName,
-    hostDeckEntries,
-    guestUid: null,
-    guestName: null,
-    guestDeckEntries: null,
+    status: 'lobby',
+    seats,
     gameState: null,
-    status: 'waiting',
+    schemaVersion: SEAT_LAYOUT_VERSION,
+  };
+  await setDoc(doc(db, 'rooms', code), {
+    ...data,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
   return code;
 }
 
-/** Guest 加入房間 */
+/** Guest 加入房間 — 預設坐第一個空 spectator 位 */
 export async function joinRoom(
   roomCode: string,
   guestName: string,
-  guestDeckEntries: { cardId: string; count: number }[]
 ): Promise<Room> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('尚未登入');
 
-  const ref  = doc(db, 'rooms', roomCode.toUpperCase().trim());
+  const ref = doc(db, 'rooms', roomCode.toUpperCase().trim());
   const snap = await getDoc(ref);
 
-  if (!snap.exists())                   throw new Error('找不到房間，請確認房號');
-  const data = snap.data() as RoomData;
-  if (data.status !== 'waiting')        throw new Error('房間已滿或已結束');
-  if (data.hostUid === uid)             throw new Error('不能加入自己建立的房間');
+  if (!snap.exists()) throw new Error('找不到房間，請確認房號');
+  const data = snap.data() as Partial<RoomData>;
+  if ((data.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) {
+    throw new Error('此房間是舊版本，請對方建立新房間');
+  }
+  if (data.status !== 'lobby') throw new Error('房間已開始或已結束');
+  const seats = (data.seats ?? []) as Seat[];
+
+  // 若我已在房內（重連），不重複加
+  if (findMySeatIdx(seats, uid) >= 0) {
+    return { ...(data as RoomData), roomId: snap.id };
+  }
+
+  // 找第一個空觀戰位（seats[2..9]）
+  let targetIdx = -1;
+  for (let i = 2; i < seats.length; i++) {
+    if (seats[i].uid === null) { targetIdx = i; break; }
+  }
+  // 觀戰位都滿 → 試 P1/P2 空位
+  if (targetIdx === -1) {
+    for (let i = 0; i < 2; i++) {
+      if (seats[i].uid === null) { targetIdx = i; break; }
+    }
+  }
+  if (targetIdx === -1) throw new Error('房間已滿');
+
+  const newSeats = seats.map((s, i) => {
+    if (i !== targetIdx) return s;
+    return { ...s, uid, name: guestName, deckEntries: null, ready: false };
+  });
 
   await updateDoc(ref, {
-    guestUid: uid,
-    guestName,
-    guestDeckEntries,
-    status: 'ready',
+    seats: newSeats,
     updatedAt: serverTimestamp(),
   });
-  return { ...data, roomId: snap.id };
+  return { ...(data as RoomData), seats: newSeats, roomId: snap.id };
+}
+
+/** 移動到指定座位（須為空位）；自己原本座位會清空 */
+export async function takeSeat(
+  roomCode: string,
+  targetIdx: number,
+): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('尚未登入');
+  if (targetIdx < 0 || targetIdx >= TOTAL_SEATS) throw new Error('座位編號錯誤');
+
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('房間不存在');
+  const data = snap.data() as RoomData;
+  if (data.status !== 'lobby') throw new Error('房間已開始，無法移動座位');
+
+  const seats = data.seats;
+  const myIdx = findMySeatIdx(seats, uid);
+  if (myIdx === targetIdx) return; // 同一位
+  if (seats[targetIdx].uid !== null) throw new Error('該座位已被占用');
+
+  const myName = myIdx >= 0 ? seats[myIdx].name : null;
+  const newSeats = seats.map((s, i) => {
+    if (i === myIdx) {
+      // 清空原座位
+      return { ...s, uid: null, name: null, deckEntries: null, ready: false };
+    }
+    if (i === targetIdx) {
+      return { ...s, uid, name: myName, deckEntries: null, ready: false };
+    }
+    return s;
+  });
+
+  await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+}
+
+/** 在當前座位設定牌組；只有 P1/P2 才有用 */
+export async function setSeatDeck(
+  roomCode: string,
+  deckEntries: DeckEntry[],
+): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('尚未登入');
+
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('房間不存在');
+  const data = snap.data() as RoomData;
+
+  const myIdx = findMySeatIdx(data.seats, uid);
+  if (myIdx < 0) throw new Error('你不在此房間');
+  if (data.seats[myIdx].role === 'spectator') throw new Error('觀戰位不能設牌組');
+
+  const newSeats = data.seats.map((s, i) =>
+    i === myIdx ? { ...s, deckEntries, ready: false } : s
+  );
+  await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+}
+
+/** 切換準備狀態 */
+export async function setSeatReady(
+  roomCode: string,
+  ready: boolean,
+): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('尚未登入');
+
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('房間不存在');
+  const data = snap.data() as RoomData;
+
+  const myIdx = findMySeatIdx(data.seats, uid);
+  if (myIdx < 0) throw new Error('你不在此房間');
+  if (data.seats[myIdx].role === 'spectator') throw new Error('觀戰位不能準備');
+  const seat = data.seats[myIdx];
+  if (ready && (!seat.deckEntries || seat.deckEntries.length !== 60)) {
+    throw new Error('請先選擇 60 張牌組');
+  }
+
+  const newSeats = data.seats.map((s, i) => i === myIdx ? { ...s, ready } : s);
+  await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+}
+
+/** 啟動遊戲（坐 P1 的客戶端在雙方 ready 後呼叫） */
+export async function startGame(
+  roomCode: string,
+  gameState: GameState,
+): Promise<void> {
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  await updateDoc(ref, {
+    gameState: JSON.parse(JSON.stringify(gameState)),
+    status: 'playing',
+    updatedAt: serverTimestamp(),
+  });
 }
 
 /** 監聽房間狀態，回傳取消訂閱函式 */
@@ -114,31 +293,27 @@ export function subscribeRoom(
   );
 }
 
-/** 監聽所有可加入的房間（status=waiting），排除自己建的 */
+/** 監聽所有可加入的 lobby 房間（status='lobby'） */
 export function subscribeOpenRooms(
   callback: (rooms: Room[]) => void,
   onError?: (err: Error) => void,
 ): () => void {
-  // 注意：刻意不使用 orderBy('createdAt') 以避開需要部署 composite index
-  // （status ASC + createdAt DESC）— 改為 client-side 排序，少量房間負擔可忽略。
   const q = query(
     collection(db, 'rooms'),
-    where('status', '==', 'waiting'),
+    where('status', '==', 'lobby'),
     limit(50),
   );
   return onSnapshot(
     q,
     snap => {
-      // 每次 snapshot 時重新讀 uid（auth 可能在 subscription 之後才完成）
-      const myUid = auth.currentUser?.uid ?? '';
       const rooms: Room[] = [];
       snap.forEach(d => {
         const data = d.data() as RoomData;
-        // 排除自己建的房間
-        if (myUid && data.hostUid === myUid) return;
+        // 過濾舊版本房間
+        if ((data.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) return;
         rooms.push({ ...data, roomId: d.id });
       });
-      // client-side 排序：createdAt 新→舊；serverTimestamp 尚未回寫時放最前
+      // client-side 排序：createdAt 新→舊
       rooms.sort((a, b) => {
         const ta = (a.createdAt as { seconds?: number } | null | undefined)?.seconds ?? Infinity;
         const tb = (b.createdAt as { seconds?: number } | null | undefined)?.seconds ?? Infinity;
@@ -154,10 +329,9 @@ export function subscribeOpenRooms(
   );
 }
 
-/** 推送最新 GameState 到 Firestore */
+/** 推送最新 GameState 到 Firestore（遊戲中由 P1/P2 發起 action 後使用） */
 export async function pushGameState(roomCode: string, gameState: GameState): Promise<void> {
   await updateDoc(doc(db, 'rooms', roomCode), {
-    // Firestore 不支援 undefined 欄位，先序列化去除
     gameState: JSON.parse(JSON.stringify(gameState)),
     status: gameState.phase === 'game-over' ? 'ended' : 'playing',
     updatedAt: serverTimestamp(),

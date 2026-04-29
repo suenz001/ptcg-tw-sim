@@ -25,7 +25,9 @@
   import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
-    type Room,
+    takeSeat, setSeatDeck, setSeatReady, startGame,
+    findMySeatIdx, bothPlayersReady,
+    type Room, type Seat,
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
   import { VERSION } from '$lib/version';
@@ -58,20 +60,24 @@
   let aiThinking = $state(false);
   let aiTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // ── 線上模式狀態 ─────────────────────────────────────────────────────────────
+  // ── 線上模式狀態（v2.269 座位制重構） ──────────────────────────────────
   let myUid       = $state<string | null>(null);
   let myName      = $state('');
-  let myDeckId    = $state('');
+  let myDeckId    = $state('');           // 在房間內選牌組用
+  let roomNameInput = $state('');         // 建房時的房間名稱
   /** 'choose' → 選建立/加入；'create' → 填資料建房間；'join' → 輸入房號；'room' → 房間等待中 */
   let onlineStep  = $state<'choose' | 'create' | 'join' | 'room'>('choose');
   let roomCode    = $state('');          // 建立或加入後得到的房號
   let joinInput   = $state('');          // 輸入框裡打的房號
-  let amIHost     = $state(false);
+  let amIHost     = $state(false);       // 是否為房主（用來顯示「關房」等按鈕）
   let roomData    = $state<Room | null>(null);
   let onlineLoading = $state(false);
   let onlineError   = $state('');
   let isSyncing     = $state(false);
-  let myPlayerIndex = $state<0 | 1 | null>(null); // null = 本機模式（無限制）
+  /** v2.269：從 roomData.seats 推導 — 0=P1, 1=P2, null=觀戰或未在房 */
+  let myPlayerIndex = $state<0 | 1 | null>(null);
+  /** v2.269：當前座位索引 (0..9)；觀戰位 ≥2 */
+  let mySeatIdx = $state<number>(-1);
   let unsubRoom:    (() => void) | null = null;
   // 可加入的開放房間列表（onlineStep='join' 時即時訂閱）
   let openRooms = $state<Room[]>([]);
@@ -1847,16 +1853,14 @@
     );
   }
 
-  // ── 線上 Lobby ───────────────────────────────────────────────────────────────
+  // ── 線上 Lobby（v2.269 座位制重構） ────────────────────────────────────
   async function handleCreateRoom() {
-    if (!myName.trim() || !myDeckId) { onlineError = '請填寫名稱和選擇牌組'; return; }
-    const deck = allDecks.find(d => d.id === myDeckId);
-    if (!deck) return;
+    if (!myName.trim()) { onlineError = '請輸入玩家名稱'; return; }
+    if (!roomNameInput.trim()) { onlineError = '請輸入房間名稱'; return; }
     onlineLoading = true; onlineError = '';
     try {
-      roomCode = await createRoom(myName.trim(), deck.entries);
+      roomCode = await createRoom(roomNameInput.trim(), myName.trim());
       amIHost = true;
-      myPlayerIndex = 0;
       onlineStep = 'room';
       startRoomSubscription();
     } catch(e: any) { onlineError = e.message ?? '建立房間失敗'; }
@@ -1864,16 +1868,13 @@
   }
 
   async function handleJoinRoom() {
-    if (!myName.trim() || !myDeckId) { onlineError = '請填寫名稱和選擇牌組'; return; }
+    if (!myName.trim()) { onlineError = '請輸入玩家名稱'; return; }
     if (!joinInput.trim()) { onlineError = '請輸入房號'; return; }
-    const deck = allDecks.find(d => d.id === myDeckId);
-    if (!deck) return;
     onlineLoading = true; onlineError = '';
     try {
-      await joinRoom(joinInput.trim(), myName.trim(), deck.entries);
+      await joinRoom(joinInput.trim(), myName.trim());
       roomCode = joinInput.trim().toUpperCase();
       amIHost = false;
-      myPlayerIndex = 1;
       onlineStep = 'room';
       startRoomSubscription();
     } catch(e: any) { onlineError = e.message ?? '加入房間失敗'; }
@@ -1889,35 +1890,70 @@
     if (!room) { onlineError = '房間不存在或連線中斷'; return; }
     roomData = room;
 
-    // Host 看到 guest 已加入 → 建立遊戲並推送
-    if (amIHost && room.status === 'ready' && !room.gameState) {
-      checkAndStartOnlineGame();
-    }
+    // 從 seats 推導我的座位
+    const idx = findMySeatIdx(room.seats, myUid);
+    mySeatIdx = idx;
+    myPlayerIndex = (idx === 0) ? 0 : (idx === 1) ? 1 : null;
 
     // 兩邊收到 gameState → 更新畫面
     if (room.gameState) {
       game = room.gameState;
+      return;
+    }
+
+    // 雙方 P1/P2 都 ready → 由坐 P1 的 client 觸發 startGame
+    if (room.status === 'lobby' && bothPlayersReady(room.seats) && idx === 0 && poolReady) {
+      checkAndStartOnlineGame();
     }
   }
 
   function checkAndStartOnlineGame() {
-    if (!amIHost || !poolReady || !roomData) return;
-    if (roomData.status !== 'ready' || roomData.gameState) return;
-    if (!roomData.guestDeckEntries || !roomData.guestName) return;
+    if (!poolReady || !roomData) return;
+    if (roomData.status !== 'lobby' || roomData.gameState) return;
+    const p1 = roomData.seats[0], p2 = roomData.seats[1];
+    if (!p1.uid || !p2.uid || !p1.deckEntries || !p2.deckEntries) return;
+    if (!p1.ready || !p2.ready) return;
 
     const newGame = createGame(
-      { name: roomData.hostName, entries: roomData.hostDeckEntries },
-      { name: roomData.guestName, entries: roomData.guestDeckEntries },
+      { name: p1.name ?? 'P1', entries: p1.deckEntries },
+      { name: p2.name ?? 'P2', entries: p2.deckEntries },
       pool
     );
     game = newGame;
-    pushGameState(roomCode, newGame).catch(console.error);
+    startGame(roomCode, newGame).catch(console.error);
+  }
+
+  // ── 房間內互動 ─────────────────────────────────────────────────────────
+  async function handleTakeSeat(targetIdx: number) {
+    if (!roomCode) return;
+    onlineError = '';
+    try { await takeSeat(roomCode, targetIdx); }
+    catch (e: any) { onlineError = e.message ?? '移動座位失敗'; }
+  }
+
+  async function handleSetDeck() {
+    if (!roomCode || !myDeckId) { onlineError = '請選擇牌組'; return; }
+    const deck = allDecks.find(d => d.id === myDeckId);
+    if (!deck) return;
+    onlineError = '';
+    try { await setSeatDeck(roomCode, deck.entries); }
+    catch (e: any) { onlineError = e.message ?? '設定牌組失敗'; }
+  }
+
+  async function handleToggleReady() {
+    if (!roomCode || mySeatIdx < 0) return;
+    const seat = roomData?.seats[mySeatIdx];
+    if (!seat) return;
+    onlineError = '';
+    try { await setSeatReady(roomCode, !seat.ready); }
+    catch (e: any) { onlineError = e.message ?? '切換準備狀態失敗'; }
   }
 
   function leaveOnlineGame() {
     unsubRoom?.(); unsubRoom = null;
     game = null; roomCode = ''; roomData = null;
-    onlineStep = 'choose'; onlineError = ''; myPlayerIndex = null;
+    onlineStep = 'choose'; onlineError = ''; myPlayerIndex = null; mySeatIdx = -1;
+    roomNameInput = ''; myDeckId = '';
     mode = null;
   }
 
@@ -2371,19 +2407,9 @@
 
     {:else if onlineStep === 'create'}
       <div class="online-form">
-        <h2>建立房間（你是先手）</h2>
-        <label>你的名稱<input class="name-input" placeholder="輸入名稱" bind:value={myName} /></label>
-        <label>選擇牌組
-          <select bind:value={myDeckId}>
-            <option value="">— 選擇 —</option>
-            {#if PRESET_DECKS.length > 0}
-              <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-            {/if}
-            {#if decks.length > 0}
-              <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-            {/if}
-          </select>
-        </label>
+        <h2>建立房間</h2>
+        <label>玩家名稱<input class="name-input" placeholder="輸入你的名稱" bind:value={myName} /></label>
+        <label>房間名稱<input class="name-input" placeholder="輸入房間名稱" bind:value={roomNameInput} /></label>
         {#if onlineError}<p class="warn">{onlineError}</p>{/if}
         <div class="form-btns">
           <button class="btn-primary" onclick={handleCreateRoom} disabled={onlineLoading}>
@@ -2395,19 +2421,8 @@
 
     {:else if onlineStep === 'join'}
       <div class="online-form">
-        <h2>加入房間（你是後手）</h2>
-        <label>你的名稱<input class="name-input" placeholder="輸入名稱" bind:value={myName} /></label>
-        <label>選擇牌組
-          <select bind:value={myDeckId}>
-            <option value="">— 選擇 —</option>
-            {#if PRESET_DECKS.length > 0}
-              <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-            {/if}
-            {#if decks.length > 0}
-              <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-            {/if}
-          </select>
-        </label>
+        <h2>加入房間</h2>
+        <label>玩家名稱<input class="name-input" placeholder="輸入你的名稱" bind:value={myName} /></label>
 
         <!-- 公開房間列表 -->
         <div class="open-rooms-section">
@@ -2421,9 +2436,10 @@
             <ul class="open-room-list">
               {#each openRooms as r (r.roomId)}
                 <li class="open-room-row">
-                  <span class="or-host">🎮 {r.hostName}</span>
+                  <span class="or-host">🎮 {r.roomName ?? r.hostName}</span>
+                  <span class="or-host-name">房主：{r.hostName}</span>
                   <span class="or-code">房號 {r.roomId}</span>
-                  <button class="btn-sm primary" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim() || !myDeckId}>
+                  <button class="btn-sm primary" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim()}>
                     加入
                   </button>
                 </li>
@@ -2448,27 +2464,121 @@
       </div>
 
     {:else if onlineStep === 'room'}
-      <!-- 等待室 -->
-      <div class="room-waiting">
-        {#if amIHost}
-          <div class="room-code-display">
-            <div class="room-code-label">你的房號</div>
-            <div class="room-code-value">{roomCode}</div>
-            <div class="room-code-hint">把這個房號告訴對手</div>
+      <!-- 房間等待室（座位制） -->
+      <div class="room-lobby">
+        <div class="room-header">
+          <div>
+            <div class="room-title">{roomData?.roomName ?? '房間'}</div>
+            <div class="room-code-inline">房號 <strong>{roomCode}</strong></div>
           </div>
-          {#if roomData?.guestName}
-            <p class="join-notice">✅ <strong>{roomData.guestName}</strong> 已加入！正在準備遊戲…</p>
-          {:else}
-            <p class="muted waiting-pulse">等待對手加入房間…</p>
+          <button class="btn-secondary" onclick={leaveOnlineGame}>離開房間</button>
+        </div>
+
+        {#if roomData}
+          <div class="seat-area">
+            <!-- 左側：對戰位 P1 / P2 -->
+            <div class="battle-seats">
+              {#each [0, 1] as i}
+                {@const s = roomData.seats[i]}
+                {@const isMine = mySeatIdx === i}
+                <div class="seat battle-seat {s.uid ? 'taken' : 'empty'} {isMine ? 'mine' : ''} {s.ready ? 'ready' : ''}">
+                  <div class="seat-label">對戰玩家 {i + 1}</div>
+                  {#if s.uid}
+                    <div class="seat-name">{s.name}{isMine ? '（你）' : ''}</div>
+                    {#if s.deckEntries && s.deckEntries.length === 60}
+                      <div class="seat-deck-info">✓ 已選牌組（{s.deckEntries.length} 張）</div>
+                    {:else}
+                      <div class="seat-deck-info muted">尚未選擇牌組</div>
+                    {/if}
+                    <div class="seat-status">{s.ready ? '✅ 已準備' : '⏳ 未準備'}</div>
+                  {:else}
+                    <div class="seat-empty-hint">空位（點擊入坐）</div>
+                    <button class="btn-sm primary"
+                      onclick={() => handleTakeSeat(i)}
+                      disabled={onlineLoading}>
+                      入坐
+                    </button>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+
+            <!-- 右側：8 個觀戰位 -->
+            <div class="spectator-seats">
+              <div class="spectator-label">觀戰位（{roomData.seats.slice(2).filter(s => s.uid).length}/8）</div>
+              <div class="spectator-grid">
+                {#each roomData.seats.slice(2) as s, i (i)}
+                  {@const seatIdx = i + 2}
+                  {@const isMine = mySeatIdx === seatIdx}
+                  <div class="seat spec-seat {s.uid ? 'taken' : 'empty'} {isMine ? 'mine' : ''}">
+                    {#if s.uid}
+                      <div class="seat-name small">{s.name}{isMine ? '（你）' : ''}</div>
+                    {:else if !mySeatIdx || mySeatIdx === seatIdx}
+                      <button class="btn-spec-take"
+                        onclick={() => handleTakeSeat(seatIdx)}
+                        disabled={onlineLoading || mySeatIdx < 0}>
+                        + 入坐
+                      </button>
+                    {:else}
+                      <span class="seat-empty-hint small">空位</span>
+                      <button class="btn-spec-take small"
+                        onclick={() => handleTakeSeat(seatIdx)}
+                        disabled={onlineLoading || mySeatIdx < 0}>
+                        移到此
+                      </button>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            </div>
+          </div>
+
+          <!-- 我的座位操作面板 -->
+          {#if mySeatIdx >= 0 && (mySeatIdx === 0 || mySeatIdx === 1)}
+            <div class="my-seat-panel">
+              <h3>你的位置：對戰玩家 {mySeatIdx + 1}</h3>
+              <label>選擇牌組
+                <select bind:value={myDeckId} disabled={roomData.seats[mySeatIdx].ready}>
+                  <option value="">— 選擇 —</option>
+                  {#if PRESET_DECKS.length > 0}
+                    <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                  {/if}
+                  {#if decks.length > 0}
+                    <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                  {/if}
+                </select>
+              </label>
+              <div class="seat-actions">
+                <button class="btn-secondary"
+                  onclick={handleSetDeck}
+                  disabled={!myDeckId || roomData.seats[mySeatIdx].ready}>
+                  套用牌組
+                </button>
+                <button class="btn-primary {roomData.seats[mySeatIdx].ready ? 'unready' : ''}"
+                  onclick={handleToggleReady}
+                  disabled={!roomData.seats[mySeatIdx].deckEntries || roomData.seats[mySeatIdx].deckEntries.length !== 60}>
+                  {roomData.seats[mySeatIdx].ready ? '取消準備' : '準備完成'}
+                </button>
+              </div>
+              {#if !roomData.seats[mySeatIdx].deckEntries}
+                <p class="muted small">請先選擇牌組並按「套用牌組」</p>
+              {/if}
+            </div>
+          {:else if mySeatIdx >= 2}
+            <div class="my-seat-panel spectator-panel">
+              <h3>你目前在觀戰位</h3>
+              <p class="muted">移動到「對戰玩家 1/2」位才能加入對戰；或等待對戰開始進入觀戰模式。</p>
+            </div>
+          {/if}
+
+          {#if onlineError}<p class="warn">{onlineError}</p>{/if}
+
+          {#if bothPlayersReady(roomData.seats)}
+            <p class="muted waiting-pulse">⏳ 雙方已準備，遊戲即將開始⋯</p>
           {/if}
         {:else}
-          <div class="room-code-display guest">
-            <div class="room-code-label">已加入房間</div>
-            <div class="room-code-value">{roomCode}</div>
-          </div>
-          <p class="muted waiting-pulse">等待 <strong>{roomData?.hostName ?? '主場'}</strong> 開始遊戲…</p>
+          <p class="muted">載入房間中⋯</p>
         {/if}
-        <button class="btn-secondary" onclick={leaveOnlineGame}>離開房間</button>
       </div>
     {/if}
   </main>
@@ -4208,7 +4318,7 @@
   .manual-code label{ margin-top:.5rem; }
   .manual-code button{ margin-top:.5rem; }
 
-  /* 等待室 */
+  /* 等待室 — 舊版（已不使用，但保留以防其他地方引用） */
   .room-waiting{ display:flex; flex-direction:column; align-items:center; gap:1.25rem; padding:2rem; }
   .room-code-display{ text-align:center; background:#1e2e1e; border:1px solid #3a5a3a; border-radius:12px; padding:1.5rem 2rem; }
   .room-code-display.guest{ border-color:#4a5a8a; background:#1e1e2e; }
@@ -4218,6 +4328,55 @@
   .join-notice{ color:#aaffaa; font-size:0.95rem; }
   .waiting-pulse{ animation:pulse-opacity 2s ease-in-out infinite; }
   @keyframes pulse-opacity{ 0%,100%{opacity:1}50%{opacity:0.5} }
+
+  /* ── v2.269 座位制 lobby ── */
+  .room-lobby{ display:flex; flex-direction:column; gap:1rem; padding:1rem; }
+  .room-header{ display:flex; justify-content:space-between; align-items:center; padding:0.75rem 1rem;
+    background:#1e2e1e; border:1px solid #3a5a3a; border-radius:10px; }
+  .room-title{ font-size:1.2rem; font-weight:700; color:#aaffaa; }
+  .room-code-inline{ font-size:0.9rem; color:#aaa; margin-top:0.2rem; }
+  .room-code-inline strong{ color:#ffdd55; font-family:monospace; letter-spacing:0.15em; }
+
+  .seat-area{ display:grid; grid-template-columns:1fr 1.2fr; gap:1rem; }
+  @media (max-width:700px){ .seat-area{ grid-template-columns:1fr; } }
+
+  .battle-seats{ display:flex; flex-direction:column; gap:0.75rem; }
+  .seat{ background:#1e2e1e; border:2px solid #3a5a3a; border-radius:10px; padding:0.75rem;
+    display:flex; flex-direction:column; gap:0.4rem; min-height:5rem; }
+  .seat.empty{ border-style:dashed; opacity:0.7; }
+  .seat.taken{ background:#1e2e2e; }
+  .seat.mine{ border-color:#ffdd55; box-shadow:0 0 8px rgba(255,221,85,0.3); }
+  .seat.ready{ background:#1e3a1e; border-color:#5aaa5a; }
+  .battle-seat{ min-height:7rem; }
+  .seat-label{ font-size:0.8rem; color:#888; font-weight:600; }
+  .seat-name{ font-size:1.05rem; font-weight:700; color:#fff; }
+  .seat-name.small{ font-size:0.9rem; }
+  .seat-deck-info{ font-size:0.8rem; color:#aaffaa; }
+  .seat-deck-info.muted{ color:#888; }
+  .seat-status{ font-size:0.85rem; color:#ffdd55; }
+  .seat-empty-hint{ font-size:0.85rem; color:#666; }
+  .seat-empty-hint.small{ font-size:0.75rem; }
+
+  .spectator-seats{ background:#181a24; border:1px solid #2a2a3a; border-radius:10px; padding:0.75rem; }
+  .spectator-label{ font-size:0.85rem; color:#aaa; margin-bottom:0.5rem; font-weight:600; }
+  .spectator-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:0.4rem; }
+  @media (max-width:500px){ .spectator-grid{ grid-template-columns:repeat(2,1fr); } }
+  .spec-seat{ min-height:3.5rem; padding:0.4rem; align-items:center; justify-content:center; text-align:center; }
+  .btn-spec-take{ background:none; border:1px dashed #555; color:#888; border-radius:6px;
+    padding:0.3rem 0.5rem; font:inherit; font-size:0.8rem; cursor:pointer; }
+  .btn-spec-take:hover:not(:disabled){ border-color:#aaffaa; color:#aaffaa; }
+  .btn-spec-take.small{ font-size:0.7rem; padding:0.2rem 0.4rem; }
+
+  .my-seat-panel{ background:#1e2e3e; border:1px solid #4a6a8a; border-radius:10px; padding:1rem;
+    display:flex; flex-direction:column; gap:0.6rem; }
+  .my-seat-panel h3{ margin:0; font-size:1rem; color:#aaccff; }
+  .my-seat-panel select{ padding:0.4rem 0.6rem; border:1px solid #4a6a8a; border-radius:6px;
+    background:#1a2a3a; color:#f0f0f0; font:inherit; }
+  .my-seat-panel.spectator-panel{ background:#2a2a3a; border-color:#5a5a6a; }
+  .seat-actions{ display:flex; gap:0.5rem; flex-wrap:wrap; }
+  .btn-primary.unready{ background:#7a3a3a; }
+  .btn-primary.unready:hover:not(:disabled){ background:#9a4a4a; }
+  .or-host-name{ font-size:0.8rem; color:#aaa; }
 
   .btn-primary{ display:inline-block; background:#2a7a2a; color:#fff; border:none; border-radius:8px; padding:0.6rem 1.4rem; font:inherit; font-size:1rem; font-weight:600; cursor:pointer; text-decoration:none; }
   .btn-primary:hover:not(:disabled){ background:#3a9a3a; }

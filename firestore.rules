@@ -2,7 +2,7 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
     // Check if the user is the admin
     function isAdmin() {
       return request.auth != null && request.auth.token.email == 'suenz001@yahoo.com.tw';
@@ -13,7 +13,7 @@ service cloud.firestore {
       allow read: if true;
       allow write: if request.auth != null && request.auth.uid == userId;
       allow write: if isAdmin();
-      
+
       // 玩家的牌組
       match /decks/{deckId} {
         allow read: if true;
@@ -30,25 +30,24 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // ── 線上對戰房間 ──────────────────────────────────────────────────────
+    // ── 線上對戰房間（v2.269 重構：座位制 lobby）──────────────────────────
     match /rooms/{roomCode} {
-      // 任何已登入用戶可讀取（用來透過房號加入）
+      // 任何已登入用戶可讀取（看 lobby 列表 + 加入後讀房間狀態）
       allow read: if request.auth != null;
       allow read, write: if isAdmin();
 
-      // 只有 host 可以建立房間
+      // 建立房間：只有自己（hostUid）可建
       allow create: if request.auth != null
                     && request.auth.uid == request.resource.data.hostUid;
 
-      // host 或 guest 可以更新（推送狀態、打出動作）
-      allow update: if request.auth != null
-                    && (
-                      request.auth.uid == resource.data.hostUid
-                      || request.auth.uid == resource.data.guestUid
-                      || (resource.data.status == 'waiting'
-                          && resource.data.guestUid == null
-                          && request.resource.data.guestUid == request.auth.uid)
-                    );
+      // 更新：任何已登入用戶都可寫（client API 自己保護 seat 完整性）
+      // 注意：這假設 client 端可信。多人惡意篡改場景下需要 Cloud Functions 介入；
+      // 目前小社群信任模型下 acceptable。
+      allow update: if request.auth != null;
+
+      // 刪除：只有 host 可刪
+      allow delete: if request.auth != null
+                    && request.auth.uid == resource.data.hostUid;
     }
   }
 }

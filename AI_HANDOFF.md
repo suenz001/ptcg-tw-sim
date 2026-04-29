@@ -1,9 +1,88 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.268)  
+> 最後更新：2026-04-29 (v2.269)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.269 — 線上對戰 lobby 重構 Phase 1（座位制 + 房間內選牌組）
+
+### 背景
+Leon 要求重構線上對戰房間：
+1. 點建立房間 → 房內有多座位（左 P1/P2 對戰位，右 8 個觀戰位）
+2. 房間內才選牌組、可在座位之間移動
+3. 雙方 P1/P2 都按「準備完成」自動開戰
+4. 觀戰者進入觀戰模式（Phase 3 才做）
+5. 修正建立/加入房間標題的「（你是先手）/（你是後手）」舊字樣（已用擲幣決定，先手後手不再固定）
+
+本版（Phase 1）做基本架構：座位制 + 房間內選牌組 + 自動開戰；**聊天室在 Phase 2、觀戰視角在 Phase 3**。
+
+### Schema 重構（`src/lib/game/room.ts`）
+
+舊 schema (v1)：
+```ts
+{ hostUid, hostName, hostDeckEntries, guestUid, guestName, guestDeckEntries, gameState, status: 'waiting'|'ready'|'playing'|'ended' }
+```
+
+新 schema (v2)：
+```ts
+{
+  roomName: string,
+  hostUid: string, hostName: string,
+  status: 'lobby' | 'playing' | 'ended',
+  seats: Seat[10],          // [p1, p2, spectator×8]
+  gameState: GameState | null,
+  schemaVersion: 2,
+}
+type Seat = {
+  role: 'p1' | 'p2' | 'spectator',
+  uid: string | null,
+  name: string | null,
+  deckEntries: DeckEntry[] | null,
+  ready: boolean,
+};
+```
+
+新增 API：
+- `createRoom(roomName, hostName)` — 不傳 deck，host 預設坐 P1
+- `joinRoom(roomCode, name)` — 預設坐第一個空 spectator（觀戰位）
+- `takeSeat(roomCode, idx)` — 移動座位（須空）；自己原座位清空
+- `setSeatDeck(roomCode, deckEntries)` — 在當前座位設牌組
+- `setSeatReady(roomCode, ready)` — 切換準備（前提：deck 已選滿 60 張）
+- `startGame(roomCode, gameState)` — 由坐 P1 的 client 在雙方 ready 時觸發
+
+helper：`findMySeatIdx(seats, uid)`、`bothPlayersReady(seats)`
+
+### Firestore Rules 改寫
+原本根據 hostUid/guestUid 鎖寫權限；新版簡化為「authed user 都可寫」（client API 自己保護 seat 完整性，CEL 不支援 `list.map()` 語法在 rules 內逐 seat 比對）。
+**安全模型**：信任社群 — 多人惡意篡改場景下需 Cloud Functions 介入，目前 acceptable。
+
+### UI 重寫（`src/routes/game/+page.svelte`）
+
+- 移除「（你是先手）/（你是後手）」標題
+- 建房表單：只填【玩家名稱】+【房間名稱】（不選 deck）
+- 加入表單：只填【玩家名稱】（不選 deck）；房間列表顯示房名 + 房主名稱
+- 房間頁（座位制）：
+  - 左側：對戰玩家 1 / 2 兩格（顯示 name / 牌組狀態 / 準備狀態 / 入坐按鈕）
+  - 右側：8 觀戰位 grid（顯示已坐者；空位 + 入坐按鈕）
+  - 我的位置面板：選牌組 dropdown + 套用牌組按鈕 + 準備完成切換
+  - 雙方 P1/P2 都 ready → P1 client 自動觸發 startGame
+- 「我」標記：座位 highlight 為金色邊框
+
+### Schema 不相容處置
+v1 舊房間（沒有 `schemaVersion` 或 < 2）會被新 client 過濾掉，不顯示在 lobby 列表；嘗試加入會擋下並提示「此房間是舊版本」。
+
+**強烈建議**部署 v2.269 前先清空 Firestore `rooms/` collection — 教學在另一段給 Leon。
+
+### 後續 Phase
+- **Phase 2 (v2.270)**：聊天室（`rooms/{code}/messages` subcollection + 右下浮動視窗）
+- **Phase 3 (v2.271)**：觀戰視角切換（看 P1 / 看 P2 / 自動切換；spectator gate 擋 applyAction）
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
