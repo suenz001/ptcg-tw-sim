@@ -2206,8 +2206,15 @@ export const PASSIVE_DAMAGE_REDUCE = new Map<string, number>([
  * 多個來源可疊加（例如場上同時有 2 隻羅絲雷朵），以擁有特性的 Pokemon 張數乘算。
  */
 // v2.133：簽名擴充 — 第二參數加入 defenderCard 讓某些被動能依對手卡片資訊判定加成
-//   （原本 1-arg 的條目仍兼容；新加入的條目可選擇用第二參數）
-export const PASSIVE_ATTACK_BONUS = new Map<string, (attackerCard: Card, defenderCard?: Card) => number>([
+// v2.278 Wave 4：再擴 state / aIdx / pool — 讓被動能依場上局勢（獎賞數、自方場上其他寶可夢）判定加成
+//   （原本 1~2 arg 的條目仍兼容；新加入的條目可選擇使用後三個參數）
+export const PASSIVE_ATTACK_BONUS = new Map<string, (
+  attackerCard: Card,
+  defenderCard?: Card,
+  state?: GameState,
+  aIdx?: 0 | 1,
+  pool?: Map<string, Card>,
+) => number>([
   // 竹蘭的羅絲雷朵｜輝煌聲援 — 只要這隻在場上，自己「竹蘭的」寶可夢招式傷害 +30
   ['輝煌聲援', (att) => att.name.includes('竹蘭的') ? 30 : 0],
   // v2.133 電蜘蛛｜複眼 — 自己的「電蜘蛛」攻擊時，對「擁有特性」的對手戰鬥場 +50
@@ -2237,6 +2244,50 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (attackerCard: Card, defende
   //   這個效果也不會重複。」(SV9 Basic 150HP)
   //   v2.267：先做疊加版（場上 2 隻 = 60），TODO 之後加 dedup 機制（PASSIVE_*_NO_STACK set）。
   ['大方', (att) => att.name.includes('赫普的') ? 30 : 0],
+
+  // v2.278 Wave 4：「自身招式」+ 對局狀態判定 ─────────────────────────
+  //
+  // 仆斬將軍｜大將（M2a/MC Stage2 170HP）—
+  //   「這隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害，
+  //    依對手已經獲得的獎賞卡每 1 張『+30』點。」
+  //   - att.name === '仆斬將軍' gate：只有仆斬將軍自己攻擊時才生效
+  //     （PASSIVE_ATTACK_BONUS engine 對攻擊方場上每張卡都會 invoke 此 fn，
+  //     但 attackerCard 永遠是攻擊發動者本人，所以這個 gate 等價於「只在
+  //     仆斬將軍自己攻擊時加成」）。
+  //   - 對手「已獲得獎賞」= 6 - opp.prizes.length（剩餘的相反）。
+  //   - 場上有多隻仆斬將軍時，PASSIVE 會疊加 — 但 PTCG 規則 Stage2 同名最多 4 張、
+  //     場上很難有 2 隻活著的仆斬將軍同時當 attacker 與 helper；不做 dedup。
+  ['大將', (att, _def, state, aIdx) => {
+    if (att.name !== '仆斬將軍') return 0;
+    if (!state || aIdx == null) return 0;
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const taken = 6 - state.players[dIdx].prizes.length;
+    return taken * 30;
+  }],
+
+  // 飯匙蛇｜激動力量（M2 Basic 120HP）—
+  //   「若自己的場上有【惡】屬性的『超級進化寶可夢【ex】』，
+  //    則這隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害『+120』點。」
+  //   - att.name === '飯匙蛇' gate：只有飯匙蛇自己攻擊時才生效。
+  //   - 條件：自方場上 active 或 bench 任一張為 Darkness 屬 + subtype='ex' + name 開頭「超級」
+  //     （Mega ex 識別模式：與專案其他地方一致，見 prizesForKO / pokemon_search.ts 等）。
+  ['激動力量', (att, _def, state, aIdx, pool) => {
+    if (att.name !== '飯匙蛇') return 0;
+    if (!state || aIdx == null || !pool) return 0;
+    const me = state.players[aIdx];
+    const all = [
+      ...(me.active ? [me.active] : []),
+      ...me.bench,
+    ];
+    for (const inst of all) {
+      const c = pool.get(inst.cardId);
+      if (!c) continue;
+      if (c.subtype === 'ex' && c.name.startsWith('超級') && c.pokemonType === 'Darkness') {
+        return 120;
+      }
+    }
+    return 0;
+  }],
 ]);
 
 /**

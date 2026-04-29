@@ -1,9 +1,59 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.277)  
+> 最後更新：2026-04-29 (v2.278)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.278 — Pokemon Ability Wave 4：擴 PASSIVE_ATTACK_BONUS 簽名 + 2 張條件式加傷特性
+
+### 動機
+H/I/J 標 ability 還有 ~163 張未實裝。本波切「自身招式 +N 但需依場上局勢判定」這個共通機制：
+擴 `PASSIVE_ATTACK_BONUS` 簽名加 `state / aIdx / pool` 參數，讓特性可以依
+獎賞數、場上其他寶可夢屬性 / subtype 判定加成。一次實裝 2 張代表性的卡。
+
+### Hook 簽名擴充（向下相容）
+```ts
+// 之前（v2.133）
+PASSIVE_ATTACK_BONUS: Map<string, (att, def?) => number>
+
+// 現在（v2.278）
+PASSIVE_ATTACK_BONUS: Map<string, (
+  att, def?, state?, aIdx?, pool?
+) => number>
+```
+
+既有的 1~2 arg entry 不需改（TS optional 參數），新增 entry 才用後三個參數。
+engine.ts 呼叫端從 `fn(attackerCard, defenderCard)` 改為
+`fn(attackerCard, defenderCard, workingState, aIdx, pool)`。
+
+### 2 張卡實裝
+
+| 卡名 | 特性 | 卡面文字 | 套用 |
+|---|---|---|---|
+| 仆斬將軍 (M2a/MC, Stage2 170HP) | 大將 | 自身招式依「對手已獲得獎賞」每張 +30 | gate `att.name === '仆斬將軍'`；`taken = 6 - opp.prizes.length`；返 `taken * 30` |
+| 飯匙蛇 (M2, Basic 120HP, Darkness) | 激動力量 | 自方場上有【惡】超級進化ex 時，自身招式 +120 | gate `att.name === '飯匙蛇'`；掃 `me.active + me.bench` 找 `subtype==='ex' && name.startsWith('超級') && pokemonType==='Darkness'`；返 120 |
+
+### 設計細節
+- **「自身招式」gate 模式**：PASSIVE_ATTACK_BONUS 對攻擊方場上每張卡都會 invoke fn，
+  但 attackerCard 永遠是攻擊發動者本人。所以 `if (att.name !== '仆斬將軍') return 0`
+  等價於「只在仆斬將軍自己攻擊時加成」— 即使場上同時有羅絲雷朵（輝煌聲援）也不會誤觸。
+- **「對手已獲得獎賞」**：用 `6 - opp.prizes.length`（剩餘的相反），與 v2.246 KO cause
+  tracking 的 prizes snapshot 邏輯一致。
+- **超級進化 ex 識別**：`subtype === 'ex' && name.startsWith('超級')`（與 prizesForKO /
+  pokemon_search.ts 中超級信號 / mega_decks.ts 中滿充的體貼 同模式，避免幻覺）。
+- **疊加**：場上 2 隻仆斬將軍時兩個 ability slot 都會 invoke，會疊加（PTCG Stage2 ex 在
+  本卡庫沒這個情境，實務不發生；如要 dedup 可加 PASSIVE_*_NO_STACK set）。
+
+### 觸碰檔案
+- `src/lib/game/effects.ts` — PASSIVE_ATTACK_BONUS 簽名擴充 + 2 entries（仆斬將軍｜大將、飯匙蛇｜激動力量）
+- `src/lib/game/engine.ts` — 呼叫端改傳 5 參數
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 

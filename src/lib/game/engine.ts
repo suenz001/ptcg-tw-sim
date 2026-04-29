@@ -2490,7 +2490,9 @@ function handlePlaying(
           const fn = PASSIVE_ATTACK_BONUS.get(ab.name);
           if (!fn) continue;
           // v2.133：簽名擴充 — 把 defenderCard 也傳進去（複眼 等需要看對手卡）
-          const bonus = fn(attackerCard, defenderCard);
+          // v2.278：再擴 state / aIdx / pool — 讓「大將（依對手獎賞數）」「激動力量
+          //         （場上有 Darkness Mega ex）」這類依場上局勢的特性能拿到資訊
+          const bonus = fn(attackerCard, defenderCard, workingState, aIdx, pool);
           if (bonus > 0) {
             baseDamage += bonus;
             workingState = addLog(workingState, `「${ab.name}」啟動：${attackerCard.name} 招式傷害 +${bonus}`, aIdx);
