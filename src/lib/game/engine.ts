@@ -4700,6 +4700,8 @@ export function getUsableAbilities(
       }
       // v2.229 阿響的火岩鼠｜旅途牽絆：牌庫不空
       if (ab.name === '旅途牽絆' && player.deck.length === 0) return;
+      // v2.290 烈焰馬｜快走：牌庫不空（要抽 1 張）
+      if (ab.name === '快走' && player.deck.length === 0) return;
       // ──────────────────────────────────────────────────────────────────────
       // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。
       // v2.246 修：精確 KO cause tracking

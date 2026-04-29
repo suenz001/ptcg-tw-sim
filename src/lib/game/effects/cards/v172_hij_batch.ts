@@ -17,8 +17,8 @@
  */
 
 import {
-  reg, regR, regG,
-  addLog, updatePlayer, withPending, shuffle, clearActiveEffects,
+  reg, regR, regG, regA,
+  addLog, updatePlayer, withPending, shuffle, clearActiveEffects, drawCards,
   healResolver, sameEvoName,
 } from '../_shared';
 import { getBenchLimit, isBasicPokemonCard } from '../../engine';
@@ -1069,4 +1069,11 @@ regR('tr-disrupt-bot-swap-decide', (st, idx, iids, params, _pool) => {
   });
   return addLog(st,
     `火箭隊的妨礙機器人：互換 ${oppName} 的獎賞卡「${prizeName}」與手牌「${handName}」`, idx);
+});
+
+// ── 烈焰馬｜快走（特性 / I-mark: SV9a 12672, SV9a 12727, MC 16561）────────────────────
+// 效果：「在自己的回合時可使用1次。從自己的牌庫抽出1張卡。」
+// 條件：自己的回合、牌庫至少 1 張
+regA('烈焰馬', 0, (st, idx) => {
+  return drawCards(addLog(st, '快走：從牌庫抽出 1 張卡', idx), idx, 1);
 });
