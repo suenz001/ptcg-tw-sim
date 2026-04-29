@@ -4996,8 +4996,11 @@
   .hp-bar-wrap.sm{ height:5px; }
   .hp-bar{ height:100%; border-radius:3px; transition: width .55s cubic-bezier(.3,.8,.3,1), background .3s ease-out; }
 
-  /* v2.03：action-bar 還原為原本 160/200；靠 overflow:visible 讓場地卡不會被切 */
-  .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:stretch; min-height:160px; max-height:200px; overflow:visible; }
+  /* v2.03：action-bar 還原為原本 160/200；靠 overflow:visible 讓場地卡不會被切
+     v2.283：min/max-height (160/200) 改 height:180 固定 — 自己回合 vs 對手回合 action-btns
+     寬度差異大（攻擊按鈕群 vs 「等待…」字串）+ alerts-col 數量不同，原 40px 變動範圍會
+     讓 .playmat grid minmax(0,1fr) 平分時兩個 row 高度跟著伸縮 → 回合切換時整個畫面晃。 */
+  .action-bar{ display:grid; grid-template-columns:auto 1fr auto auto; gap:.5rem; padding:.3rem .7rem; background:rgba(0,0,0,.6); border-top:1px solid #2a4a2a; border-bottom:1px solid #2a4a2a; flex-shrink:0; align-items:stretch; height:180px; overflow:visible; }
   .alerts-col, .action-btns, .stadium-display{ align-self:center; }
   .stadium-display{ display:flex; flex-direction:column; align-items:center; gap:.25rem; padding:.35rem .5rem; border:1px solid #3a5a8a; background:rgba(26,42,74,.6); border-radius:6px; cursor:pointer; transition:transform .2s ease, box-shadow .2s ease; }
   .stadium-display:hover{ transform:scale(1.05); box-shadow:0 0 12px rgba(136,170,255,.4); }
@@ -5147,8 +5150,9 @@
     .bench-slot{ height:180px; }
     .bench-slot img{ max-height:108px; }
 
-    /* action-bar 縮約 15% — log-col 寬度小幅縮 */
-    .action-bar{ min-height:135px; max-height:170px; padding:0.25rem 0.6rem; }
+    /* action-bar 縮約 15% — log-col 寬度小幅縮
+       v2.283：固定 height:150 消除回合切換時的 layout 晃動（同桌機 baseline 邏輯） */
+    .action-bar{ height:150px; min-height:0; max-height:none; padding:0.25rem 0.6rem; }
     .log-col{ width:340px; }
 
     /* hand-strip 維持 v2.279 縮減後尺寸；hand-card 略縮 */

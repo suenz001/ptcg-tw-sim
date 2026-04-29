@@ -1,9 +1,36 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.282)  
+> 最後更新：2026-04-29 (v2.283)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.283 — 固定 action-bar 高度，消除回合切換畫面晃動
+
+### Bug
+Leon 反映自己回合 vs 對手回合切換時整個畫面晃動。
+
+### 根因
+`.action-bar` 設定 `min-height:160px max-height:200px` — 高度有 40px 變動範圍：
+- 自己回合：action-btns 內有攻擊按鈕群（多顆 .btn-act.atk）+ 結束回合鈕；alerts-col 可能多條 alert（pendingPrizes / send-new-active 等）
+- 對手回合：action-btns 只有單一 `<span class="waiting-msg">⏳ 等待…</span>`；alerts-col 通常 0-1 條
+
+回合切換時 action-bar 內容大量變動 → 高度在 160~200 之間伸縮。配合 v2.282 把 `.playmat` 改 `grid-template-rows: minmax(0,1fr) auto minmax(0,1fr)`，action-bar (auto) 高度變動會讓兩個 field-row 1fr 平分時跟著伸縮 → 整個畫面位移。
+
+### 修法
+桌機 `.action-bar` 改 `height:180px`（在 160-200 中間取值），完全消除變動範圍。
+v2.282 media query 內也同步改 `height:150px; min-height:0; max-height:none`。
+
+實際 alerts 1-3 條約 90px、action-btns ~110px、log-col `max-height:100%` 自帶滾動 — 都遠小於 180/150，不會有溢出問題。
+
+### 觸碰檔案
+- `src/routes/game/+page.svelte` — `.action-bar` 桌機 baseline + v2.282 media query 兩處 height 改 fixed
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
