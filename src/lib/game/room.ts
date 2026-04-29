@@ -26,7 +26,7 @@
 import { db, auth } from '$lib/firebase';
 import {
   doc, setDoc, updateDoc, onSnapshot, getDoc, serverTimestamp,
-  collection, query, where, limit,
+  collection, query, where, limit, orderBy, addDoc,
 } from 'firebase/firestore';
 import type { GameState } from './types';
 
@@ -342,4 +342,66 @@ export async function pushGameState(roomCode: string, gameState: GameState): Pro
     status: gameState.phase === 'game-over' ? 'ended' : 'playing',
     updatedAt: serverTimestamp(),
   });
+}
+
+// ── 聊天室（v2.272 Phase 2）──────────────────────────────────────────
+/**
+ * 路徑：rooms/{roomCode}/messages/{msgId}
+ *
+ * 訊息保留：純前端訂閱顯示（不做主動清理）；房主關房時可考慮一併清掉訊息（目前未做）。
+ */
+
+export interface ChatMessage {
+  id: string;
+  uid: string;
+  name: string;
+  text: string;
+  createdAt?: { seconds?: number } | null;
+}
+
+const MAX_MESSAGE_LENGTH = 200;
+const MESSAGES_LIMIT = 100;
+
+export async function sendMessage(
+  roomCode: string,
+  senderName: string,
+  text: string,
+): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('尚未登入');
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  if (trimmed.length > MAX_MESSAGE_LENGTH) {
+    throw new Error(`訊息超過 ${MAX_MESSAGE_LENGTH} 字`);
+  }
+  const ref = collection(db, 'rooms', roomCode.toUpperCase(), 'messages');
+  await addDoc(ref, {
+    uid,
+    name: senderName,
+    text: trimmed,
+    createdAt: serverTimestamp(),
+  });
+}
+
+/** 訂閱聊天訊息（最近 100 筆，依 createdAt 升序） */
+export function subscribeMessages(
+  roomCode: string,
+  callback: (msgs: ChatMessage[]) => void,
+): () => void {
+  const q = query(
+    collection(db, 'rooms', roomCode.toUpperCase(), 'messages'),
+    orderBy('createdAt', 'asc'),
+    limit(MESSAGES_LIMIT),
+  );
+  return onSnapshot(
+    q,
+    snap => {
+      const msgs: ChatMessage[] = [];
+      snap.forEach(d => {
+        msgs.push({ id: d.id, ...(d.data() as Omit<ChatMessage, 'id'>) });
+      });
+      callback(msgs);
+    },
+    err => { console.error('[Chat] subscribe error:', err); callback([]); }
+  );
 }

@@ -48,6 +48,17 @@ service cloud.firestore {
       // 刪除：只有 host 可刪
       allow delete: if request.auth != null
                     && request.auth.uid == resource.data.hostUid;
+
+      // ── 聊天訊息子集合（v2.272 Phase 2）──────────────────────────
+      match /messages/{msgId} {
+        // 讀：authed 都可讀（房間內任何人都看得到聊天）
+        allow read: if request.auth != null;
+        // 建立：authed 且 uid 必須等於自己（防止偽造他人發言）
+        allow create: if request.auth != null
+                      && request.auth.uid == request.resource.data.uid;
+        // 不允許 update / delete（保留訊息歷史）
+        allow update, delete: if isAdmin();
+      }
     }
   }
 }

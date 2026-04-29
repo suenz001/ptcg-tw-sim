@@ -1,9 +1,54 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.270)  
+> 最後更新：2026-04-29 (v2.272)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.272 — 線上對戰 lobby Phase 2：聊天室
+
+### 設計
+- Firestore：`rooms/{code}/messages/{msgId}` subcollection
+  - 訊息 schema：`{ uid, name, text, createdAt }`
+  - 限長 200 字、訂閱最近 100 筆、`orderBy createdAt asc`
+- room.ts 新 API：`sendMessage / subscribeMessages / type ChatMessage`
+- Firestore Rules（**部署後須在 Firebase Console 重貼一次**）：messages 子集合
+  - 讀：authed
+  - 建立：authed 且 `request.auth.uid == request.resource.data.uid`（防偽造他人發言）
+  - 不允許 update / delete（保留歷史；admin 可清）
+
+### UI
+房間頁底部加聊天區塊（lobby 階段顯示）：
+- 上方訊息歷史（max 240px 高、自動捲到底）
+- 下方輸入框 + 送出按鈕（Enter 送出、Shift+Enter 換行）
+- 我的訊息靠右綠底、別人靠左藍底；顯示玩家名 + 時間
+- 觀戰者進房後也可聊天；未入坐者禁用
+
+進入遊戲後（status='playing'）目前**不顯示**聊天（遊戲畫面已滿；Phase 3 觀戰視角時再考慮加進去）。
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
+
+---
+
+## v2.271 — 修牌組張數計算（緊急修）
+
+### Bug
+選 60 張預設牌組顯示「張數為 26」並阻擋套用。
+
+### 根因
+`DeckEntry[]` 是「卡牌種類陣列」（`{cardId, count}`），`length=26` 是不同卡的種類數；要 `reduce sum count` 才是總張數。
+
+### 修法
+- room.ts 加 `countDeckCards(entries)` helper
+- `bothPlayersReady` / `setSeatReady` / `handleSetDeck` / `hasValidDeck` / 座位顯示 5 處全改用它
+
+### Build / Push
+- `npm run build` ✅
+- commit `7603469`
 
 ---
 

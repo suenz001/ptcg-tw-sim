@@ -27,7 +27,8 @@
     createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, startGame,
     findMySeatIdx, bothPlayersReady, countDeckCards,
-    type Room, type Seat,
+    sendMessage, subscribeMessages,
+    type Room, type Seat, type ChatMessage,
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
   import { VERSION } from '$lib/version';
@@ -83,6 +84,11 @@
   let openRooms = $state<Room[]>([]);
   let openRoomsErr = $state('');
   let unsubOpenRooms: (() => void) | null = null;
+  // v2.272 Phase 2：聊天室
+  let chatMessages = $state<ChatMessage[]>([]);
+  let chatInput = $state('');
+  let unsubMessages: (() => void) | null = null;
+  let chatScrollEl: HTMLElement | null = $state(null);
 
   // ── UI 互動狀態 ─────────────────────────────────────────────────────────────
   let selectedEnergyIid = $state<string | null>(null);
@@ -1885,6 +1891,15 @@
   function startRoomSubscription() {
     unsubRoom?.();
     unsubRoom = subscribeRoom(roomCode, handleRoomUpdate);
+    // v2.272：訂閱聊天訊息
+    unsubMessages?.();
+    unsubMessages = subscribeMessages(roomCode, msgs => {
+      chatMessages = msgs;
+      // 自動捲到底（用 setTimeout 等 DOM 更新）
+      setTimeout(() => {
+        if (chatScrollEl) chatScrollEl.scrollTop = chatScrollEl.scrollHeight;
+      }, 50);
+    });
   }
 
   function handleRoomUpdate(room: Room | null) {
@@ -1963,10 +1978,32 @@
 
   function leaveOnlineGame() {
     unsubRoom?.(); unsubRoom = null;
+    unsubMessages?.(); unsubMessages = null;
+    chatMessages = []; chatInput = '';
     game = null; roomCode = ''; roomData = null;
     onlineStep = 'choose'; onlineError = ''; myPlayerIndex = null; mySeatIdx = -1;
     roomNameInput = ''; myDeckId = '';
     mode = null;
+  }
+
+  // v2.272：發送聊天訊息
+  async function handleSendMessage() {
+    const text = chatInput.trim();
+    if (!text || !roomCode || !myName.trim()) return;
+    try {
+      await sendMessage(roomCode, myName.trim(), text);
+      chatInput = '';
+    } catch (e: any) {
+      onlineError = e.message ?? '訊息傳送失敗';
+    }
+  }
+  function handleChatKey(e: KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
+  }
+  function fmtChatTime(ts: { seconds?: number } | null | undefined): string {
+    if (!ts?.seconds) return '';
+    const d = new Date(ts.seconds * 1000);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   }
 
   // ── 選擇互動 ─────────────────────────────────────────────────────────────────
@@ -2589,6 +2626,40 @@
           {#if bothPlayersReady(roomData.seats)}
             <p class="muted waiting-pulse">⏳ 雙方已準備，遊戲即將開始⋯</p>
           {/if}
+
+          <!-- v2.272 Phase 2：聊天室 -->
+          <div class="chat-area">
+            <div class="chat-header">💬 聊天室</div>
+            <div class="chat-messages" bind:this={chatScrollEl}>
+              {#if chatMessages.length === 0}
+                <p class="muted small chat-empty">尚無訊息，先說聲哈囉吧！</p>
+              {:else}
+                {#each chatMessages as m (m.id)}
+                  <div class="chat-msg {m.uid === myUid ? 'mine' : ''}">
+                    <span class="chat-name">{m.name}</span>
+                    <span class="chat-time">{fmtChatTime(m.createdAt)}</span>
+                    <div class="chat-text">{m.text}</div>
+                  </div>
+                {/each}
+              {/if}
+            </div>
+            <div class="chat-input-row">
+              <input
+                class="chat-input"
+                type="text"
+                placeholder="輸入訊息（Enter 送出，最多 200 字）"
+                maxlength="200"
+                bind:value={chatInput}
+                onkeydown={handleChatKey}
+                disabled={mySeatIdx < 0}
+              />
+              <button class="btn-primary chat-send"
+                onclick={handleSendMessage}
+                disabled={!chatInput.trim() || mySeatIdx < 0}>
+                送出
+              </button>
+            </div>
+          </div>
         {:else}
           <p class="muted">載入房間中⋯</p>
         {/if}
@@ -4390,6 +4461,28 @@
   .btn-primary.unready{ background:#7a3a3a; }
   .btn-primary.unready:hover:not(:disabled){ background:#9a4a4a; }
   .or-host-name{ font-size:0.8rem; color:#aaa; }
+
+  /* ── v2.272 Phase 2 聊天室 ── */
+  .chat-area{ background:#1a1a24; border:1px solid #3a3a4a; border-radius:10px;
+    display:flex; flex-direction:column; overflow:hidden; min-height:200px; max-height:340px; }
+  .chat-header{ background:#252535; padding:0.5rem 0.8rem; font-size:0.85rem; font-weight:600;
+    color:#aaccff; border-bottom:1px solid #3a3a4a; }
+  .chat-messages{ flex:1; overflow-y:auto; padding:0.5rem 0.8rem; display:flex; flex-direction:column; gap:0.4rem;
+    min-height:120px; max-height:240px; }
+  .chat-empty{ text-align:center; color:#666; margin:auto; }
+  .chat-msg{ background:#222230; border:1px solid #2a2a3a; border-radius:8px; padding:0.4rem 0.6rem;
+    align-self:flex-start; max-width:75%; }
+  .chat-msg.mine{ align-self:flex-end; background:#1e3a3a; border-color:#3a6a6a; }
+  .chat-name{ font-size:0.75rem; font-weight:700; color:#aaccff; margin-right:0.4rem; }
+  .chat-msg.mine .chat-name{ color:#aaffaa; }
+  .chat-time{ font-size:0.7rem; color:#888; }
+  .chat-text{ font-size:0.9rem; color:#f0f0f0; word-break:break-word; white-space:pre-wrap; }
+  .chat-input-row{ display:flex; gap:0.4rem; padding:0.5rem; border-top:1px solid #3a3a4a; background:#1e1e28; }
+  .chat-input{ flex:1; padding:0.4rem 0.6rem; border:1px solid #3a3a4a; border-radius:6px;
+    background:#0e0e18; color:#f0f0f0; font:inherit; font-size:0.85rem; }
+  .chat-input:focus{ outline:1px solid #5a7aaa; }
+  .chat-input:disabled{ opacity:0.4; }
+  .chat-send{ font-size:0.85rem; padding:0.4rem 0.9rem; }
 
   .btn-primary{ display:inline-block; background:#2a7a2a; color:#fff; border:none; border-radius:8px; padding:0.6rem 1.4rem; font:inherit; font-size:1rem; font-weight:600; cursor:pointer; text-decoration:none; }
   .btn-primary:hover:not(:disabled){ background:#3a9a3a; }
