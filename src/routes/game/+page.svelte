@@ -25,7 +25,7 @@
   import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
-    takeSeat, setSeatDeck, setSeatReady, startGame,
+    takeSeat, setSeatDeck, setSeatReady, startGame, leaveRoom,
     findMySeatIdx, bothPlayersReady, countDeckCards,
     sendMessage, subscribeMessages,
     type Room, type Seat, type ChatMessage,
@@ -1976,7 +1976,12 @@
     catch (e: any) { onlineError = e.message ?? '切換準備狀態失敗'; }
   }
 
-  function leaveOnlineGame() {
+  async function leaveOnlineGame() {
+    // v2.274：先從 Firestore 移除自己的座位（不阻擋；失敗也繼續清 client state）
+    if (roomCode) {
+      try { await leaveRoom(roomCode); }
+      catch (e) { console.warn('[leaveRoom] failed:', e); }
+    }
     unsubRoom?.(); unsubRoom = null;
     unsubMessages?.(); unsubMessages = null;
     chatMessages = []; chatInput = '';

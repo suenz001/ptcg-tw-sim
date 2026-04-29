@@ -157,9 +157,13 @@ export async function joinRoom(
   if (data.status !== 'lobby') throw new Error('房間已開始或已結束');
   const seats = (data.seats ?? []) as Seat[];
 
-  // 若我已在房內（重連），不重複加
-  if (findMySeatIdx(seats, uid) >= 0) {
-    return { ...(data as RoomData), roomId: snap.id };
+  // v2.274：若我殘留在房內（前次沒清掉座位），更新名字後 return
+  //   不再像舊版直接 return（避免改名重進時座位仍顯示舊名）
+  const existingIdx = findMySeatIdx(seats, uid);
+  if (existingIdx >= 0) {
+    const newSeats = seats.map((s, i) => i === existingIdx ? { ...s, name: guestName } : s);
+    await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+    return { ...(data as RoomData), seats: newSeats, roomId: snap.id };
   }
 
   // 找第一個空觀戰位（seats[2..9]）
@@ -267,6 +271,23 @@ export async function setSeatReady(
   }
 
   const newSeats = data.seats.map((s, i) => i === myIdx ? { ...s, ready } : s);
+  await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+}
+
+/** v2.274：離開房間 — 從 seats 中清空自己的座位（不刪 doc） */
+export async function leaveRoom(roomCode: string): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return; // 未登入直接 return（client 可能直接清 state）
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return; // 房間不在了
+  const data = snap.data() as RoomData;
+  if (data.status !== 'lobby') return; // 遊戲中不能離（避免狀態不一致；client 該防護）
+  const myIdx = findMySeatIdx(data.seats, uid);
+  if (myIdx < 0) return; // 我不在房內
+  const newSeats = data.seats.map((s, i) =>
+    i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false } : s
+  );
   await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
 }
 
