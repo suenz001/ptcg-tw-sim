@@ -16270,3 +16270,4 @@ Leon 反映手機直式對戰 UI（MobilePortraitBattle.svelte）有三個問題
 - `npm run build` ✓（17s）
 - `sim-tournament.mjs 1` → 1332 場 / 0 bug（修前 2 個）
 - 版本 2.288 → 2.289
+- commit: `307354c`
