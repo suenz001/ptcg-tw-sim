@@ -306,7 +306,8 @@
     <span class="mp-spacer"></span>
     {#if aiThinking}<span class="mp-tag">🤖</span>{/if}
     {#if isSyncing}<span class="mp-tag">⏳</span>{/if}
-    {#if isSetup && isMyTurn && !game.setupDone[myIdx]}
+    {#if isSetup && !game.setupDone[myIdx]}
+      <!-- v2.287 修：setup 階段雙方各自準備，不依 isMyTurn 判定（後手玩家 isMyTurn=false 會看不到按鈕） -->
       <button class="mp-end-btn" disabled={!myPlayer.active}
         onclick={() => onAction(GameActions.finishSetup(myIdx))}>✅ 準備</button>
     {:else if canEndTurn}
@@ -451,7 +452,13 @@
     {:else}
       {#each myPlayer.hand as inst (inst.iid)}
         {@const c = cardOf(inst)}
-        {@const playable = playableBasicIids.has(inst.iid) || playableEvoIids.has(inst.iid) || playableTrainerIids.has(inst.iid) || playableFossilIids.has(inst.iid) || (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection)}
+        {@const playable = (
+          playableBasicIids.has(inst.iid) || playableEvoIids.has(inst.iid) ||
+          playableTrainerIids.has(inst.iid) || playableFossilIids.has(inst.iid) ||
+          (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection) ||
+          /* v2.287 修：setup 階段基礎寶可夢可放（不分先後手） */
+          (isSetup && !game.setupDone[myIdx] && isBasicMon(c) && (!myPlayer.active || myPlayer.bench.length < 5))
+        )}
         <button class="mp-hand-card" class:mp-playable={playable} onclick={() => tapHand(inst)} title={c?.name}>
           {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
         </button>
@@ -523,6 +530,13 @@
     font-family: system-ui, 'Microsoft JhengHei', sans-serif;
     overflow: hidden;
     user-select: none;
+    /* v2.287：iPhone 動態島 / 瀏海 / home indicator 安全區
+       padding 算進 100dvh 內（border-box 預設）；safe-area 兩端各退一些避免被遮 */
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-left: env(safe-area-inset-left, 0);
+    padding-right: env(safe-area-inset-right, 0);
   }
 
   /* ── Top bar ────────────────────────────────────────────────────── */

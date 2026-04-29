@@ -1,9 +1,33 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.286)  
+> 最後更新：2026-04-29 (v2.287)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.287 — 修：iPhone 動態島遮擋 + setup 後手玩家準備按鈕消失
+
+### Bug
+1. iPhone 動態島區域遮住 top bar 內容（Leon 圖：top bar 被動態島切掉）
+2. setup 階段「準備完成」按鈕沒出現 → 玩家卡住，無法開戰
+
+### 根因
+1. `.mp` 沒處理 `env(safe-area-inset-top/bottom)`，內容貼螢幕邊緣被 iPhone 14 Pro+ 動態島 / home indicator 遮住。`viewport-fit=cover` meta tag 已存在但元件沒用 safe-area。
+2. 「準備完成」按鈕條件寫了 `isSetup && isMyTurn && !setupDone[myIdx]`。但 setup 階段 `game.activePlayerIndex` 通常是先手玩家 idx（log 顯示 AI 是先手），所以後手玩家（玩家1）的 `isMyTurn=false` → 按鈕完全不出現。實際上 PTCG setup 是雙方各自準備（不分輪流），不該卡 isMyTurn。
+
+### 修法
+1. `.mp` 加 `padding-top/bottom/left/right: env(safe-area-inset-*)` + `box-sizing: border-box`，把內容從動態島下方開始排，下方避開 home indicator。
+2. 「準備完成」按鈕條件移除 `isMyTurn`：`{#if isSetup && !game.setupDone[myIdx]}` — 雙方各自準備。
+3. 順帶修：手牌 highlight 在 setup 階段也判斷 `isBasicMon(c) && (!myPlayer.active || myPlayer.bench.length < 5)` → setup 時基礎寶可夢卡顯示黃框。
+
+### 觸碰檔案
+- `src/routes/game/MobilePortraitBattle.svelte` — 3 處修改
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
