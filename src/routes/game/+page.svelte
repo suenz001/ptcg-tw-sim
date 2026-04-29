@@ -33,10 +33,12 @@
   import { getAIAction } from '$lib/game/ai';
   import { VERSION } from '$lib/version';
   import { playSfx } from '$lib/audio/sfx';
-  import { 
+  import {
     loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume,
     getBgmTrack, setBgmTrack, getBgmVolume, setBgmVolume
   } from '$lib/audio/settings';
+  // v2.284 Phase 1：手機直式 layout 元件 — 用條件 render 切換
+  import MobilePortraitBattle from './MobilePortraitBattle.svelte';
 
   // ── 卡池 ────────────────────────────────────────────────────────────────────
   let pool = $state<Map<string, Card>>(new Map());
@@ -136,6 +138,22 @@
     return () => {
       document.removeEventListener('fullscreenchange', onFsChange);
       document.removeEventListener('webkitfullscreenchange', onFsChange);
+    };
+  });
+
+  // ── v2.284 手機直式偵測 ──────────────────────────────────────────────
+  // ≤600px 寬 + portrait 方向 → 切換到 MobilePortraitBattle 元件（雙軌並行）。
+  // 桌機 / 平板 / 手機橫屏仍走原 .battle-root 橫式 layout。
+  let isPortraitMobile = $state(false);
+  onMount(() => {
+    const mq = window.matchMedia('(max-width: 600px) and (orientation: portrait)');
+    const onChange = (e: MediaQueryListEvent | MediaQueryList) => { isPortraitMobile = e.matches; };
+    onChange(mq);
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else (mq as any).addListener(onChange);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', onChange);
+      else (mq as any).removeListener(onChange);
     };
   });
   let zoomInst = $state<CardInstance | null>(null);
@@ -2725,6 +2743,30 @@
 {:else}
 <div class="battle-root">
 
+  <!-- v2.284 Phase 1：手機直式（≤600px portrait）切換到 MobilePortraitBattle 元件。
+       桌機 / 平板 / 手機橫屏走原 layout。setup 階段不切（lobby form 已 portrait friendly）。
+       Modals（pendingSelection / lightbox / zoom-modal 等）保留在 .battle-root 內、
+       conditional 之外，always render — 兩種 layout 都能觸發 modal。 -->
+  {#if isPortraitMobile && game?.phase === 'playing'}
+    <MobilePortraitBattle
+      {game}
+      {pool}
+      {myIdx}
+      {oppIdx}
+      stadiumCard={stadiumCard ?? null}
+      {pendingSelection}
+      isMyTurn={isMyTurn()}
+      {canEndTurn}
+      {aiThinking}
+      {isSyncing}
+      version={VERSION}
+      onOpenZoom={openZoom}
+      onEndTurn={() => dispatch(GameActions.endTurn())}
+      onOpenSettings={() => showSettingsModal = true}
+      onLeave={() => { if (mode === 'online') leaveOnlineGame(); else mode = null; }}
+    />
+  {:else}
+
   <!-- ── 頂部資訊列 ── -->
   <header class="battle-header">
     {#if mode === 'online'}
@@ -3356,6 +3398,7 @@
       {/if}
     </div>
   </div>
+  {/if}<!-- /isPortraitMobile && playing -->
 
   <!-- PendingSelection — 只對 actor 玩家顯示（避免對手看到或搶先操作）
        v2.196 修：mode='local' 嚴格 check，不接受 null。線上模式剛 join 時 mode 還未確定

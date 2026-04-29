@@ -1,9 +1,50 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.283)  
+> 最後更新：2026-04-29 (v2.284)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.284 — Phase 1：手機直式 layout（雙軌並行，viewer-only）
+
+### 背景
+Leon 反映現有手機橫式（從桌機縮小）「彆扭」、常有畫面內容看不到。提議參考 PTCG Live 手機版改用直式排版，雙軌並行：保留桌機/平板現有橫式 layout，新增手機直式版。
+
+### Phase 1 範圍（本版）
+**新增元件** `src/routes/game/MobilePortraitBattle.svelte`：
+- Layout（上→下）：Header chip 列 → 對手區（紅）→ Log → 我方區（藍）→ 手牌底部 scroll
+- 對手區：info bar（獎勵/牌庫/棄牌）→ bench×5 橫向縮小 → active 中央大圖
+- 我方區：active 大圖 → bench×5 → info bar + 結束回合按鈕
+- 對手手牌**不顯示卡圖**（隱私），只在 header chip 顯示張數，省下空間給 log
+- 點任何卡片觸發 onOpenZoom callback（共用 +page.svelte 的 zoom modal）
+- 結束回合按鈕透過 onEndTurn callback dispatch
+- 純 viewer：**不做拖曳/攻擊/撤退/特性**（Phase 2 加）
+
+**+page.svelte 整合**：
+- import MobilePortraitBattle
+- 加 `isPortraitMobile` state（`window.matchMedia('(max-width: 600px) and (orientation: portrait)')`）
+- 在 `<div class="battle-root">` 開頭加 conditional：`{#if isPortraitMobile && playing}<MobilePortraitBattle/>{:else}原本layout{/if}`
+- Modals（pendingSelection / lightbox / zoom-modal / send-new-active 等）保留在 .battle-root 內、conditional 之外，always render — 兩種 layout 都能觸發 modal
+
+### 設計細節
+- 斷點 `≤600px AND portrait` — 嚴格手機直式才切，平板/手機橫屏走原 layout
+- Phase 1 互動限制：AI 模式可全程觀戰，雙人模式只能結束回合（之後 Phase 2 加拖曳 + 攻擊 + 撤退 + 特性等）
+- 對手手牌只 chip 顯示張數（Leon 要求）→ 省垂直空間給 log
+
+### Phase 計畫（之後逐步）
+- Phase 2：手牌→active/bench 拖曳 + 附能量 + 進化 + trainer 拖曳 + 攻擊按鈕（active 卡點開選招）+ 撤退 + 特性按鈕
+- Phase 3：抽牌動畫適配 + zoom modal RWD + selection-modal RWD
+- Phase 4：polish — 狀態異常 glow、攻擊動畫、log scroll auto
+
+### 觸碰檔案
+- `src/routes/game/MobilePortraitBattle.svelte` — 新元件
+- `src/routes/game/+page.svelte` — import + isPortraitMobile state + conditional render
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
