@@ -2525,27 +2525,59 @@
 
         {#if roomData}
           <div class="seat-area">
-            <!-- 左側：對戰位 P1 / P2 -->
+            <!-- 左側：對戰位 P1 / P2（我的座位內嵌牌組+準備） -->
             <div class="battle-seats">
               {#each [0, 1] as i}
                 {@const s = roomData.seats[i]}
                 {@const isMine = mySeatIdx === i}
+                {@const myDeckCount = countDeckCards(s.deckEntries)}
+                {@const hasValidDeck = myDeckCount === 60}
                 <div class="seat battle-seat {s.uid ? 'taken' : 'empty'} {isMine ? 'mine' : ''} {s.ready ? 'ready' : ''}">
                   <div class="seat-label">對戰玩家 {i + 1}</div>
                   {#if s.uid}
                     <div class="seat-name">{s.name}{isMine ? '（你）' : ''}</div>
-                    {#if countDeckCards(s.deckEntries) === 60}
-                      <div class="seat-deck-info">✓ 已選牌組（60 張）</div>
+                    {#if isMine}
+                      <!-- 我的座位：內嵌牌組選擇 + 準備按鈕 -->
+                      <select class="seat-deck-select"
+                        value={myDeckId}
+                        onchange={handleDeckChange}
+                        disabled={s.ready}>
+                        <option value="">— 選擇牌組 —</option>
+                        {#if PRESET_DECKS.length > 0}
+                          <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                        {/if}
+                        {#if decks.length > 0}
+                          <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                        {/if}
+                      </select>
+                      {#if hasValidDeck}
+                        <div class="seat-deck-info">✓ 牌組已套用（60 張）</div>
+                      {:else if myDeckId}
+                        <div class="seat-deck-info" style="color:#ffcc66;">套用中⋯</div>
+                      {:else}
+                        <div class="seat-deck-info muted">請選牌組</div>
+                      {/if}
+                      <button class="btn-sm primary {s.ready ? 'unready' : ''}"
+                        onclick={handleToggleReady}
+                        disabled={!hasValidDeck}>
+                        {s.ready ? '取消準備' : '準備完成'}
+                      </button>
                     {:else}
-                      <div class="seat-deck-info muted">尚未選擇牌組</div>
+                      <!-- 別人坐：只顯示狀態 -->
+                      {#if hasValidDeck}
+                        <div class="seat-deck-info">✓ 已選牌組（60 張）</div>
+                      {:else}
+                        <div class="seat-deck-info muted">尚未選擇牌組</div>
+                      {/if}
+                      <div class="seat-status">{s.ready ? '✅ 已準備' : '⏳ 未準備'}</div>
                     {/if}
-                    <div class="seat-status">{s.ready ? '✅ 已準備' : '⏳ 未準備'}</div>
                   {:else}
-                    <div class="seat-empty-hint">空位（點擊入坐）</div>
+                    <!-- 空位 -->
+                    <div class="seat-empty-hint">空位</div>
                     <button class="btn-sm primary"
                       onclick={() => handleTakeSeat(i)}
-                      disabled={onlineLoading}>
-                      入坐
+                      disabled={onlineLoading || mySeatIdx < 0}>
+                      入坐此位
                     </button>
                   {/if}
                 </div>
@@ -2562,18 +2594,11 @@
                   <div class="seat spec-seat {s.uid ? 'taken' : 'empty'} {isMine ? 'mine' : ''}">
                     {#if s.uid}
                       <div class="seat-name small">{s.name}{isMine ? '（你）' : ''}</div>
-                    {:else if !mySeatIdx || mySeatIdx === seatIdx}
+                    {:else}
                       <button class="btn-spec-take"
                         onclick={() => handleTakeSeat(seatIdx)}
                         disabled={onlineLoading || mySeatIdx < 0}>
                         + 入坐
-                      </button>
-                    {:else}
-                      <span class="seat-empty-hint small">空位</span>
-                      <button class="btn-spec-take small"
-                        onclick={() => handleTakeSeat(seatIdx)}
-                        disabled={onlineLoading || mySeatIdx < 0}>
-                        移到此
                       </button>
                     {/if}
                   </div>
@@ -2581,45 +2606,6 @@
               </div>
             </div>
           </div>
-
-          <!-- 我的座位操作面板 -->
-          {#if mySeatIdx >= 0 && (mySeatIdx === 0 || mySeatIdx === 1)}
-            {@const mySeat = roomData.seats[mySeatIdx]}
-            {@const hasValidDeck = countDeckCards(mySeat.deckEntries) === 60}
-            <div class="my-seat-panel">
-              <h3>你的位置：對戰玩家 {mySeatIdx + 1}</h3>
-              <label>選擇牌組（選擇後自動套用）
-                <select value={myDeckId} onchange={handleDeckChange} disabled={mySeat.ready}>
-                  <option value="">— 選擇 —</option>
-                  {#if PRESET_DECKS.length > 0}
-                    <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-                  {/if}
-                  {#if decks.length > 0}
-                    <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-                  {/if}
-                </select>
-              </label>
-              {#if hasValidDeck}
-                <p class="muted small" style="color:#aaffaa;">✓ 牌組已套用（{countDeckCards(mySeat.deckEntries)} 張）</p>
-              {:else if myDeckId}
-                <p class="muted small" style="color:#ffcc66;">套用中⋯ 若沒進度請重選</p>
-              {:else}
-                <p class="muted small">請選擇一個牌組</p>
-              {/if}
-              <div class="seat-actions">
-                <button class="btn-primary {mySeat.ready ? 'unready' : ''}"
-                  onclick={handleToggleReady}
-                  disabled={!hasValidDeck}>
-                  {mySeat.ready ? '取消準備' : '準備完成'}
-                </button>
-              </div>
-            </div>
-          {:else if mySeatIdx >= 2}
-            <div class="my-seat-panel spectator-panel">
-              <h3>你目前在觀戰位</h3>
-              <p class="muted">移動到「對戰玩家 1/2」位才能加入對戰；或等待對戰開始進入觀戰模式。</p>
-            </div>
-          {/if}
 
           {#if onlineError}<p class="warn">{onlineError}</p>{/if}
 
@@ -4451,13 +4437,17 @@
   .btn-spec-take:hover:not(:disabled){ border-color:#aaffaa; color:#aaffaa; }
   .btn-spec-take.small{ font-size:0.7rem; padding:0.2rem 0.4rem; }
 
-  .my-seat-panel{ background:#1e2e3e; border:1px solid #4a6a8a; border-radius:10px; padding:1rem;
-    display:flex; flex-direction:column; gap:0.6rem; }
-  .my-seat-panel h3{ margin:0; font-size:1rem; color:#aaccff; }
-  .my-seat-panel select{ padding:0.4rem 0.6rem; border:1px solid #4a6a8a; border-radius:6px;
-    background:#1a2a3a; color:#f0f0f0; font:inherit; }
-  .my-seat-panel.spectator-panel{ background:#2a2a3a; border-color:#5a5a6a; }
-  .seat-actions{ display:flex; gap:0.5rem; flex-wrap:wrap; }
+  /* v2.273：內嵌座位卡內的牌組 dropdown + 準備按鈕 */
+  .seat-deck-select{ padding:0.35rem 0.5rem; border:1px solid #4a6a8a; border-radius:6px;
+    background:#1a2a3a; color:#f0f0f0; font:inherit; font-size:0.85rem; width:100%; }
+  .seat-deck-select:disabled{ opacity:0.6; }
+  .battle-seat .btn-sm{ width:fit-content; align-self:flex-start; }
+  .btn-sm.primary{ background:#2a7a2a; color:#fff; border:none; border-radius:6px;
+    padding:0.35rem 0.8rem; font:inherit; font-size:0.85rem; cursor:pointer; font-weight:600; }
+  .btn-sm.primary:hover:not(:disabled){ background:#3a9a3a; }
+  .btn-sm.primary:disabled{ opacity:0.4; cursor:not-allowed; }
+  .btn-sm.primary.unready{ background:#7a3a3a; }
+  .btn-sm.primary.unready:hover:not(:disabled){ background:#9a4a4a; }
   .btn-primary.unready{ background:#7a3a3a; }
   .btn-primary.unready:hover:not(:disabled){ background:#9a4a4a; }
   .or-host-name{ font-size:0.8rem; color:#aaa; }
