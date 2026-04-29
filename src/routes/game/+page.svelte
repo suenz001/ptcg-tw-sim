@@ -4571,7 +4571,14 @@
      大視窗用戶不受影響（min-height:100vh 仍撐滿）。100dvh 為現代瀏覽器動態 viewport（行動裝置 URL bar 友善）。 */
   .battle-root{ min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; overflow-y:auto; overflow-x:hidden; }
 
-  .battle-header{ display:flex; align-items:center; gap:0.6rem; background:#0a180a; padding:0.35rem 0.75rem; border-bottom:1px solid #2a4a2a; flex-shrink:0; flex-wrap:wrap; }
+  /* v2.280：桌機 header 改 nowrap + overflow-x:auto。
+     原本 flex-wrap:wrap 在 setup 階段 header chips 少不會換行，但遊戲開始後 turn-res
+     （4 個資源 chip）+ 動態 chips（同步中/AI 思考中等）會擠到第 2~3 行，
+     header 額外多 26-30px×N → 撐高 .battle-root 超過視窗，右側出滾輪。
+     改 nowrap + overflow-x:auto 後 chip 太多時水平捲動（桌機通常很寬，正常 1080p 不會觸發），
+     header 高度永遠是 1 行，setup vs playing 視覺一致。flex-shrink:0 防 chip 內容被壓扁。 */
+  .battle-header{ display:flex; align-items:center; gap:0.6rem; background:#0a180a; padding:0.35rem 0.75rem; border-bottom:1px solid #2a4a2a; flex-shrink:0; flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; }
+  .battle-header > *{ flex-shrink:0; }
   .small-back{ color:#88ccff; text-decoration:none; font-size:0.82rem; background:none; border:none; cursor:pointer; padding:0; }
   .small-back:hover{ text-decoration:underline; }
   .turn-info{ flex:1; font-size:0.88rem; }

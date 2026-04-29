@@ -1,9 +1,31 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.279)  
+> 最後更新：2026-04-29 (v2.280)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.280 — 桌機 battle-header 改 nowrap，避免 setup→playing 撐高出滾輪
+
+### Bug
+v2.279 把 hand 區塊縮約 40px 後，setup 完成時桌機已不出滾輪；但遊戲開始後又出現右側滾輪。
+
+### 根因
+`.battle-header` 桌機版設定 `flex-wrap:wrap`。setup 階段 header chips 少（回合資訊、手牌張數、phase tag、版本、設定、全螢幕）→ 1 行裝得下；遊戲開始 (`game.phase === 'playing'`) 時 +page.svelte line 2801 條件式 render `turn-res` 區塊（填能/支援者/撤退/競技場 4 個 res-item），加上動態 chips（同步中/AI 思考中/回合等待等），總寬度超過 1 行 → wrap 到第 2~3 行 → header 多 26~30px×N → 撐到 .battle-root 超過視窗。
+
+### 修法
+桌機 `.battle-header` 改 `flex-wrap:nowrap` + `overflow-x:auto; overflow-y:hidden`（與手機 media query 同策略）。chip 太多時水平捲動而非垂直撐高。加 `.battle-header > * { flex-shrink:0 }` 防 chip 內容被壓扁。
+
+桌機通常 ≥1080p 寬，正常情境一行裝得下 turn-res；視窗變窄時 header 內水平捲動（極少數情境會觸發），總比整頁出滾輪好。
+
+### 觸碰檔案
+- `src/routes/game/+page.svelte` — `.battle-header` flex-wrap 改 nowrap
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
