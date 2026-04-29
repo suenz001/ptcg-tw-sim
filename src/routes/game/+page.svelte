@@ -89,6 +89,8 @@
   let chatInput = $state('');
   let unsubMessages: (() => void) | null = null;
   let chatScrollEl: HTMLElement | null = $state(null);
+  // v2.276 Phase 3：觀戰視角切換
+  let spectatorView = $state<'p1' | 'p2' | 'auto'>('auto');
 
   // ── UI 互動狀態 ─────────────────────────────────────────────────────────────
   let selectedEnergyIid = $state<string | null>(null);
@@ -971,11 +973,21 @@
   const usableAbilities = $derived(game && poolReady ? getUsableAbilities(game, pool) : []);
   const stadiumCard = $derived(game?.activeStadium ? pool.get(game.activeStadium.cardId) : null);
 
+  // v2.276：觀戰者判定（線上模式且坐在 spectator 位）
+  const isSpectator = $derived(mode === 'online' && mySeatIdx >= 2);
+
   // ── 視角固定：AI模式/線上模式我方永遠在下方，本機雙人模式隨行動方翻轉 ──────
   // 注意：線上模式必須優先判斷，否則預設 aiPlayerIndex=1 會讓雙方都算成 myIdx=0
   // Setup 階段本機雙人：翻到尚未完成 setup 的那一方
+  // v2.276：觀戰者依 spectatorView 決定看哪一邊（auto = 跟著當前 active player）
   const myIdx   = $derived<0 | 1>(
-    mode === 'online' ? ((myPlayerIndex ?? 0) as 0 | 1) :
+    mode === 'online' ? (
+      isSpectator
+        ? (spectatorView === 'p1' ? 0
+            : spectatorView === 'p2' ? 1
+            : ((game?.activePlayerIndex ?? 0) as 0 | 1))
+        : ((myPlayerIndex ?? 0) as 0 | 1)
+    ) :
     aiPlayerIndex !== null ? ((1 - aiPlayerIndex) as 0 | 1) :
     (game?.phase === 'setup' && myPlayerIndex === null
       // 本機雙人 setup：優先處理 mulligan 補抽，再看 setup 完成狀態
@@ -1661,6 +1673,11 @@
   // ── 動作分派（本機 + 線上共用） ─────────────────────────────────────────────
   async function dispatch(action: ReturnType<typeof GameActions[keyof typeof GameActions]>) {
     if (!game || !poolReady) return;
+    // v2.276 Phase 3：觀戰者所有 action 都被擋（read-only）
+    if (isSpectator) {
+      console.log('[Spectator] action blocked:', action.type);
+      return;
+    }
     const prevState = game;
     const newState = applyAction(game, action as any, pool);
     // Debug：如果 action 被拒絕（state 沒變），印出 state 幫 debug
@@ -2441,7 +2458,11 @@
   {:else}
   <!-- ─── 線上 Lobby ─── -->
   <main class="lobby">
-    <button class="back-btn" onclick={() => { mode=null; onlineStep='choose'; onlineError=''; }}>← 返回</button>
+    <!-- v2.276：'room' step 不顯示返回鈕（避免使用者跳離但沒呼叫 leaveRoom，造成空房殘留）；
+         在房間內要走右上「離開房間」按鈕（onclick=leaveOnlineGame）才會清座位 -->
+    {#if onlineStep !== 'room'}
+      <button class="back-btn" onclick={() => { mode=null; onlineStep='choose'; onlineError=''; }}>← 返回</button>
+    {/if}
     <h1>🌐 線上連線對戰</h1>
 
     {#if onlineStep === 'choose'}
@@ -2738,6 +2759,18 @@
         </span>
         {#if isSyncing}<span class="chip syncing-chip">⏳ 同步中</span>{/if}
         {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip">等待對手行動</span>{/if}
+      {/if}
+      <!-- v2.276 Phase 3：觀戰模式 — 視角切換 -->
+      {#if isSpectator}
+        <span class="chip spec-chip">👀 觀戰中（看 P{myIdx + 1}）</span>
+        <span class="spec-toolbar">
+          <button class="spec-btn {spectatorView === 'p1' ? 'active' : ''}"
+            onclick={() => spectatorView = 'p1'}>看 P1</button>
+          <button class="spec-btn {spectatorView === 'p2' ? 'active' : ''}"
+            onclick={() => spectatorView = 'p2'}>看 P2</button>
+          <button class="spec-btn {spectatorView === 'auto' ? 'active' : ''}"
+            onclick={() => spectatorView = 'auto'}>自動切換</button>
+        </span>
       {/if}
       {#if aiPlayerIndex !== null && aiThinking}<span class="chip ai-chip">🤖 AI 思考中…</span>{/if}
       {#if stadiumCard && game.activeStadium}
@@ -4456,6 +4489,14 @@
   .btn-primary.unready{ background:#7a3a3a; }
   .btn-primary.unready:hover:not(:disabled){ background:#9a4a4a; }
   .or-host-name{ font-size:0.8rem; color:#aaa; }
+
+  /* v2.276 Phase 3：觀戰模式 toolbar */
+  .spec-chip{ background:#3a3a5a; color:#ffcc66; border:1px solid #5a5a8a; }
+  .spec-toolbar{ display:inline-flex; gap:0.25rem; align-items:center; }
+  .spec-btn{ background:#2a2a3a; color:#aaa; border:1px solid #3a3a4a; border-radius:6px;
+    padding:0.25rem 0.6rem; font:inherit; font-size:0.8rem; cursor:pointer; }
+  .spec-btn:hover{ background:#3a3a4a; color:#fff; }
+  .spec-btn.active{ background:#4a3a6a; color:#ffcc66; border-color:#6a5a8a; font-weight:600; }
 
   /* ── v2.272 Phase 2 聊天室 ── */
   .chat-area{ background:#1a1a24; border:1px solid #3a3a4a; border-radius:10px;
