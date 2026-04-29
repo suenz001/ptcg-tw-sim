@@ -2743,11 +2743,12 @@
 {:else}
 <div class="battle-root">
 
-  <!-- v2.284 Phase 1：手機直式（≤600px portrait）切換到 MobilePortraitBattle 元件。
-       桌機 / 平板 / 手機橫屏走原 layout。setup 階段不切（lobby form 已 portrait friendly）。
+  <!-- v2.286 Phase 2-4：手機直式（≤600px portrait）切換到 MobilePortraitBattle 元件。
+       桌機 / 平板 / 手機橫屏走原 layout。setup + playing 都切（MobilePortraitBattle 內部
+       自行依 phase 切換 setup「拖手牌」vs playing「結束回合」按鈕）。
        Modals（pendingSelection / lightbox / zoom-modal 等）保留在 .battle-root 內、
        conditional 之外，always render — 兩種 layout 都能觸發 modal。 -->
-  {#if isPortraitMobile && game?.phase === 'playing'}
+  {#if isPortraitMobile && game}
     <MobilePortraitBattle
       {game}
       {pool}
@@ -2755,13 +2756,12 @@
       {oppIdx}
       stadiumCard={stadiumCard ?? null}
       {pendingSelection}
-      isMyTurn={isMyTurn()}
-      {canEndTurn}
       {aiThinking}
       {isSyncing}
       version={VERSION}
+      onAction={dispatch}
+      onInitiateAttack={initiateAttack}
       onOpenZoom={openZoom}
-      onEndTurn={() => dispatch(GameActions.endTurn())}
       onOpenSettings={() => showSettingsModal = true}
       onLeave={() => { if (mode === 'online') leaveOnlineGame(); else mode = null; }}
     />
@@ -5530,6 +5530,53 @@
     @keyframes rotate-hint {
       0%, 100% { transform: rotate(0deg); }
       50% { transform: rotate(90deg); }
+    }
+  }
+
+  /* ════════════════════════════════════════════════════════════════════
+     v2.286 Phase 3：手機直屏（≤600px portrait）modal RWD 適配
+     ────────────────────────────────────────────────────────────────────
+     當 MobilePortraitBattle 元件觸發既有 modal（pendingSelection / zoom-modal /
+     selection-modal / lightbox / settings-modal 等）時，這些 modal 原桌機尺寸
+     在 ≤600px viewport 會擠爛。以下覆寫 modal 的 width/padding/font-size，讓
+     modal 在手機直屏也能舒適閱讀 + 操作。
+     ════════════════════════════════════════════════════════════════════ */
+  @media (max-width: 600px) and (orientation: portrait) {
+    /* selection-modal（pendingSelection 通用 modal） */
+    .selection-modal {
+      width: 96vw; max-width: 96vw;
+      padding: 0.6rem; gap: 0.4rem;
+      max-height: 88vh;
+      border-radius: 10px;
+    }
+    .sel-header h3 { font-size: 0.95rem; }
+    .sel-hint { font-size: 0.7rem; }
+    .sel-grid {
+      grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)) !important;
+      gap: 0.25rem;
+      max-height: 50vh;
+    }
+
+    /* zoom-modal（卡牌詳細 / 放大） */
+    .zoom-modal {
+      width: 96vw; max-width: 96vw;
+      padding: 0.7rem; gap: 0.55rem;
+      max-height: 92vh;
+      border-radius: 10px;
+    }
+    .zoom-img { width: 56vw; max-width: 56vw; }
+    .zoom-img-btn { cursor: default; pointer-events: none; }
+    .zoom-img-hint { display: none; }
+
+    /* settings-modal */
+    .settings-modal {
+      max-width: 92vw;
+      padding: 1rem;
+    }
+
+    /* lightbox（全螢幕大圖） */
+    .lightbox-img {
+      max-width: 96vw; max-height: 86vh;
     }
   }
 

@@ -1,9 +1,90 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.285)  
+> 最後更新：2026-04-29 (v2.286)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.286 — 手機直式 layout 完整實裝（Phase 2-4）
+
+### 背景
+v2.284 Phase 1（viewer-only）Leon 反映：「一頁滑動才看完、手牌只看到 3 張、不能左右滑動」。要求重寫 layout + 一頁不滑 + 手牌橫滑 + 完成 Phase 2/3/4 一起驗收。
+
+### 重寫內容
+
+#### Layout（一頁不滑、目標 ~620-680px 主流手機 viewport）
+完全重寫 `MobilePortraitBattle.svelte`：
+```
+Top bar (32px)：← 離開 · 回合 X · phase · 結束/準備 · ⚙
+對手 bench×5 (56px) — 橫向縮小，無圖只縮圖
+對手 chips (22px) — 獎勵/牌庫/棄牌/手牌張數/stadium
+對手 active (110px) — 大圖 + HP bar + 能量 + 狀態
+Log (flex:1, min 50px) — 反序顯示，最新在上
+我方 active (110px) — 大圖 + HP bar + 能量 + 狀態 + 點開動作 hint
+我方 chips (22px)
+我方 bench×5 (56px) — 橫向，可進化/可特性 highlight 黃框
+手牌 (96px) — 橫向 scroll，64px 寬卡，touch-overflow scroll
+```
+固定總高 ~600px + flex log 80-200px = fit ≤780px viewport。
+
+#### Phase 2 — 互動完整（tap-action paradigm）
+點手牌 → bottom sheet 列出可用動作（依卡類型）：
+- 基礎寶可夢：`🃏 放戰鬥場` / `📥 放備戰`
+- 化石 Item：`🦴 放化石到備戰`
+- 進化卡：`🔺 進化（候選 N）`，多目標時開二級 sheet
+- 訓練家/工具：`🎴 使用 / 拖到目標`
+- 能量：`⚡ 附加能量到…`，再選目標寶可夢
+
+點 active → bottom sheet 列：
+- 招式（含工具來源 🔧）
+- 撤退 → 選備戰目標
+- 特性（若有）
+- 查看詳情
+
+點 bench → 特性 / 查看詳情
+
+互動透過 `onAction(GameAction)` callback 統一 dispatch；攻擊走 `onInitiateAttack(idx)`（共用 +page.svelte 的 ATTACK_PRE_DISCARD_CHOICE 流程）。setup 階段也支援（finishSetup 按鈕、放戰鬥場/備戰）。
+
+#### Phase 3 — Modal RWD（既有 modal 適配手機直屏）
++page.svelte 加 `@media (max-width: 600px) and (orientation: portrait)` 區塊，覆寫：
+- `.selection-modal` width 96vw、padding 縮小、`.sel-grid` minmax 72→54
+- `.zoom-modal` width 96vw、padding 縮、zoom-img 56vw、停用 lightbox 二段
+- `.settings-modal` 92vw
+- `.lightbox-img` 96vw / 86vh
+
+Modals 共用 +page.svelte 既有實作，MobilePortraitBattle 不重寫，避免維護兩套。
+
+#### Phase 4 — Polish
+- HP bar 顏色依比例：>60% 綠、30-60% 黃 (`#ec6→#c84`)、<30% 紅 (`#e66→#c44`)
+- Active 卡狀態異常 glow：中毒紫、灼傷橙、睡眠藍霧、麻痺黃、混亂紫
+- Log 已 reverse-first 自動置頂（不需 auto-scroll）
+- 手牌可打出時黃框 highlight
+
+### Props 介面
+```ts
+interface Props {
+  game, pool, myIdx, oppIdx, stadiumCard, pendingSelection,
+  aiThinking, isSyncing, version,
+  onAction: (GameAction) => void,         // dispatch 統一入口
+  onInitiateAttack: (idx) => void,         // 共用 +page initiateAttack（處理 ATTACK_PRE_DISCARD_CHOICE）
+  onOpenZoom, onOpenSettings, onLeave,
+}
+```
+元件內部呼叫 engine helpers（`getEffectiveAttacks` / `getEvolvableTargets` / `getUsableAbilities` / `getPlayable*` / `canRetreat`）算可用動作，不靠 props 傳大量 derived。
+
+### +page.svelte 整合改動
+- conditional 從 `isPortraitMobile && playing` 改 `isPortraitMobile && game`（含 setup）
+- 移除舊 props（isMyTurn, canEndTurn 等不需要），加 onAction/onInitiateAttack
+
+### 觸碰檔案
+- `src/routes/game/MobilePortraitBattle.svelte` — 完全重寫（550→700+ 行）
+- `src/routes/game/+page.svelte` — conditional + props + 新 modal RWD media query
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 

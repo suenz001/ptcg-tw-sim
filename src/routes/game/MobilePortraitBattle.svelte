@@ -1,24 +1,47 @@
 <!--
-  v2.284 Phase 1：手機直式 layout（≤600px portrait）
+  v2.286 Phase 2-4：手機直式 layout 完整實裝（≤600px portrait）
 
-  雙軌並行：當 viewport 是手機直式時，+page.svelte 改 render 此元件而非原本的橫式
-  .battle-root。共用 +page.svelte 的 game state / dispatch / pool — 透過 props 傳入。
+  設計目標（Leon 反映 v2.284 一頁滑動、手牌只看到 3 張）：
+  ───────────────────────────────────────────────────────────────────
+  1. **一頁不滑動**：用 flex:1 的 log 區吞剩餘空間，其他 row 固定高度
+  2. **手牌底部橫向 scroll**：可滑動檢視全部手牌
+  3. **點選 paradigm**：點任何卡片彈 bottom sheet 顯示可用動作（手機友善）
+  4. **支援 setup 階段**：手牌基礎卡 tap 後可選「放戰鬥場 / 放備戰」+ 準備完成鈕
 
-  Phase 1 範圍：viewer-only + 結束回合 + 點卡開 zoom
-    - 不做拖曳互動（Phase 2 加）
-    - 不做攻擊 / 撤退 / 特性按鈕（Phase 2/3 加）
-    - 但 AI 模式可全程觀戰
+  Layout（上→下，目標 ~600-650px 主流手機 viewport）：
+    Top bar (32px)：⚙ · 回合 X · 我N 對N · phase · 結束回合鈕
+    對手 bench×5 (56px) — 橫向，無圖只縮圖
+    對手 chips (22px) — 獎勵/牌庫/棄牌
+    對手 active (105px) — 大圖 + HP bar + 能量
+    Log (flex:1, min 60px) — 反序顯示
+    我方 active (110px) — 大圖 + HP bar + 能量 + 攻擊/撤退/特性按鈕
+    我方 chips (22px)
+    我方 bench×5 (56px)
+    手牌 (98px) — 橫向 scroll，70px 寬卡
 
-  Layout（上→下）：
-    Header（單行 chip：回合 / 雙方手牌張數 / phase / stadium）
-    對手區（紅）：info（獎勵/牌庫/棄牌）→ bench×5（橫向）→ active（中央大）
-    Log（flex:1 撐剩餘空間，反序顯示）
-    我方區（藍）：active（大）→ bench×5 → info + 結束回合
-    手牌橫向 scroll（底部固定）
+  互動 paradigm：
+  ───────────────────────────────────────────────────────────────────
+  - 點手牌：開 hand-action sheet（依卡類型列出可用動作）
+  - 點 active：開 active-action sheet（攻擊/撤退/特性/詳情）
+  - 點 bench：開 bench-action sheet（進化/特性/詳情）
+  - 點 chip / stadium：開 zoom（既有 modal）
+  - 結束回合 / 設定 / 離開：top bar 直接按
+
+  共用底層：
+  - 接 props 取得 game state，內部呼叫 engine helpers 計算可用動作
+  - 透過 onAction(GameAction) callback 把動作丟給 +page.svelte 的 dispatch
+  - 複雜流程（攻擊的 ATTACK_PRE_DISCARD_CHOICE）走 onInitiateAttack callback
+  - Modal（pendingSelection / zoom-modal 等）由 +page.svelte 的既有 modal 處理
 -->
 <script lang="ts">
   import type { GameState, CardInstance, PendingSelection } from '$lib/game/types';
   import type { Card } from '$lib/cards/types';
+  import {
+    getEffectiveAttacks, getEvolvableTargets, getPlayableTrainers,
+    getPlayableBasics, getPlayableFossils, getUsableAbilities,
+    canRetreat as engineCanRetreat,
+  } from '$lib/game/engine';
+  import { GameActions } from '$lib/game/actions';
 
   interface Props {
     game: GameState;
@@ -27,14 +50,13 @@
     oppIdx: 0 | 1;
     stadiumCard?: Card | null;
     pendingSelection?: PendingSelection | null;
-    isMyTurn: boolean;
-    canEndTurn: boolean;
     aiThinking: boolean;
     isSyncing: boolean;
     version: string;
-    // Callbacks (給 +page.svelte 的 handlers)
+    // Callbacks
+    onAction: (action: ReturnType<(typeof GameActions)[keyof typeof GameActions]>) => void | Promise<void>;
+    onInitiateAttack: (attackIndex: number) => void;
     onOpenZoom: (cardId: string, inst: CardInstance | null) => void;
-    onEndTurn: () => void;
     onOpenSettings: () => void;
     onLeave: () => void;
   }
@@ -42,15 +64,35 @@
   let {
     game, pool, myIdx, oppIdx,
     stadiumCard, pendingSelection,
-    isMyTurn, canEndTurn, aiThinking, isSyncing, version,
-    onOpenZoom, onEndTurn, onOpenSettings, onLeave,
+    aiThinking, isSyncing, version,
+    onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
   }: Props = $props();
 
+  // ── Derived state ─────────────────────────────────────────────────
   let myPlayer = $derived(game.players[myIdx]);
   let oppPlayer = $derived(game.players[oppIdx]);
+  let isMyTurn = $derived(game.activePlayerIndex === myIdx);
+  let isMainPhase = $derived(game.turnPhase === 'main');
+  let isSetup = $derived(game.phase === 'setup');
+  let isPlaying = $derived(game.phase === 'playing');
+  let canEndTurn = $derived(isPlaying && game.turnPhase === 'end' && isMyTurn);
+  let canRetreatNow = $derived(isPlaying && isMyTurn && isMainPhase && engineCanRetreat(game, pool));
+  let evolvableTargets = $derived(isPlaying && isMyTurn && isMainPhase ? getEvolvableTargets(game, pool) : []);
+  let usableAbilities = $derived(isPlaying && isMyTurn && isMainPhase && !pendingSelection ? getUsableAbilities(game, pool) : []);
+  let playableTrainerIids = $derived(isPlaying && isMyTurn && isMainPhase ? new Set(getPlayableTrainers(game, pool)) : new Set<string>());
+  let playableBasicIids = $derived(isPlaying && isMyTurn && isMainPhase ? new Set(getPlayableBasics(game, pool)) : new Set<string>());
+  let playableFossilIids = $derived(isPlaying && isMyTurn && isMainPhase ? new Set(getPlayableFossils(game, pool)) : new Set<string>());
+  let playableEvoIids = $derived(new Set<string>(evolvableTargets.flatMap(e => e.toIids)));
 
-  // 取卡片資料 + 計算 HP
-  function cardOf(inst: CardInstance | null) {
+  // 招式有效列表（含工具來源）
+  let effectiveAttacks = $derived(
+    isPlaying && isMyTurn && isMainPhase && myPlayer.active
+      ? getEffectiveAttacks(game, myPlayer.active, pool)
+      : []
+  );
+
+  // ── Helpers ────────────────────────────────────────────────────────
+  function cardOf(inst: CardInstance | null): Card | null {
     if (!inst) return null;
     return pool.get(inst.cardId) ?? null;
   }
@@ -58,181 +100,422 @@
     const c = cardOf(inst);
     return Math.max(0, (c?.hp ?? 0) - inst.damage);
   }
-  function hpMax(inst: CardInstance) {
-    return cardOf(inst)?.hp ?? 0;
+  function hpMax(inst: CardInstance) { return cardOf(inst)?.hp ?? 0; }
+  // v2.286 Phase 4：HP bar 顏色 — <30% 紅、<60% 黃、其他綠
+  function hpClass(inst: CardInstance): string {
+    const max = hpMax(inst);
+    if (max === 0) return 'hp-ok';
+    const ratio = hpRemaining(inst) / max;
+    if (ratio < 0.3) return 'hp-low';
+    if (ratio < 0.6) return 'hp-mid';
+    return 'hp-ok';
+  }
+
+  // ── Bottom sheet state（點選 paradigm） ──────────────────────────
+  type SheetState =
+    | { type: 'hand'; inst: CardInstance }
+    | { type: 'active' }
+    | { type: 'bench'; inst: CardInstance }
+    | { type: 'pick-energy-target'; energyIid: string }
+    | { type: 'pick-evolve-target'; evoIid: string; candidates: string[] }
+    | null;
+  let sheet = $state<SheetState>(null);
+  function closeSheet() { sheet = null; }
+
+  // ── Hand tap：依卡類型決定 sheet 內容 ──────────────────────────────
+  function tapHand(inst: CardInstance) {
+    sheet = { type: 'hand', inst };
+  }
+
+  function isEnergy(c: Card | null): boolean { return !!c && c.supertype === 'Energy'; }
+  function isTrainer(c: Card | null): boolean { return !!c && c.supertype === 'Trainer' && c.subtype !== 'PokemonTool'; }
+  function isToolCard(c: Card | null): boolean { return !!c && c.supertype === 'Trainer' && c.subtype === 'PokemonTool'; }
+  function isBasicMon(c: Card | null): boolean { return !!c && c.supertype === 'Pokemon' && !c.evolvesFrom; }
+  function isEvoMon(c: Card | null): boolean { return !!c && c.supertype === 'Pokemon' && !!c.evolvesFrom; }
+
+  // 手牌動作 dispatch
+  async function playBasicToActive(iid: string) {
+    closeSheet();
+    await onAction(GameActions.placeActive(iid, myIdx));
+  }
+  async function playBasicToBench(iid: string) {
+    closeSheet();
+    if (isSetup) {
+      await onAction(GameActions.benchPokemon(iid, myIdx));
+    } else {
+      await onAction(GameActions.playBasic(iid));
+    }
+  }
+  async function playFossil(iid: string) {
+    closeSheet();
+    await onAction(GameActions.playFossil(iid));
+  }
+  async function playTrainer(iid: string) {
+    closeSheet();
+    await onAction(GameActions.playTrainer(iid));
+  }
+  async function attachEnergy(energyIid: string, targetIid: string) {
+    closeSheet();
+    await onAction(GameActions.attachEnergy(energyIid, targetIid));
+  }
+  async function evolveTo(fromIid: string, evoIid: string) {
+    closeSheet();
+    await onAction(GameActions.evolve(fromIid, evoIid));
+  }
+  async function retreatTo(benchIid: string) {
+    closeSheet();
+    await onAction(GameActions.retreat(benchIid));
+  }
+  async function useAbility(iid: string, abilityIndex: number) {
+    closeSheet();
+    await onAction(GameActions.useAbility(iid, abilityIndex));
+  }
+
+  // 取「手牌可選動作」list（給 sheet 用）
+  function handActions(inst: CardInstance): Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean }> {
+    const c = cardOf(inst);
+    if (!c) return [];
+    const out: Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean }> = [];
+    const iid = inst.iid;
+
+    // 基礎寶可夢
+    if (isBasicMon(c)) {
+      const canPlayBasic = playableBasicIids.has(iid) || (isSetup && !myPlayer.active);
+      const canPlayBench = (isSetup && myPlayer.bench.length < 5) || playableBasicIids.has(iid);
+      if (canPlayBasic && !myPlayer.active) {
+        out.push({ label: '🃏 放到戰鬥場', action: () => playBasicToActive(iid), primary: true });
+      }
+      if (canPlayBench && myPlayer.bench.length < 5) {
+        out.push({ label: '📥 放到備戰區', action: () => playBasicToBench(iid) });
+      }
+    }
+    // 化石 Item
+    if (playableFossilIids.has(iid)) {
+      out.push({ label: '🦴 放化石到備戰', action: () => playFossil(iid), primary: true });
+    }
+    // 進化卡
+    if (isEvoMon(c) && playableEvoIids.has(iid)) {
+      const targets = evolvableTargets.filter(e => e.toIids.includes(iid)).map(e => e.fromIid);
+      if (targets.length === 1) {
+        out.push({ label: `🔺 進化（${nameOfIid(targets[0])}）`, action: () => evolveTo(targets[0], iid), primary: true });
+      } else if (targets.length > 1) {
+        out.push({ label: '🔺 選進化目標…', action: () => { sheet = { type: 'pick-evolve-target', evoIid: iid, candidates: targets }; }, primary: true });
+      }
+    }
+    // 訓練家（含工具）
+    if (playableTrainerIids.has(iid) && (isTrainer(c) || isToolCard(c))) {
+      out.push({ label: '🎴 使用 / 拖到目標', action: () => playTrainer(iid), primary: true });
+    }
+    // 能量卡
+    if (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection) {
+      out.push({ label: '⚡ 附加能量到…', action: () => { sheet = { type: 'pick-energy-target', energyIid: iid }; }, primary: true });
+    }
+    // 永遠可：查看詳情
+    out.push({ label: '🔍 查看詳情', action: () => { closeSheet(); onOpenZoom(inst.cardId, inst); } });
+    return out;
+  }
+
+  function nameOfIid(iid: string): string {
+    const all = [
+      ...(myPlayer.active ? [myPlayer.active] : []),
+      ...myPlayer.bench,
+      ...myPlayer.hand,
+    ];
+    const inst = all.find(i => i.iid === iid);
+    if (!inst) return iid;
+    return cardOf(inst)?.name ?? iid;
+  }
+
+  // 取「active 可選動作」list
+  function activeActions(): Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean }> {
+    if (!myPlayer.active) return [];
+    const out: Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean }> = [];
+    const aId = myPlayer.active.iid;
+    // 攻擊（若 main phase 且有可用招式）
+    if (effectiveAttacks.length > 0) {
+      effectiveAttacks.forEach((eff, i) => {
+        const ok = isPlaying && isMyTurn && isMainPhase && !pendingSelection;
+        out.push({
+          label: `⚔️ ${eff.atk.name}${eff.atk.damage ? ' · ' + eff.atk.damage : ''}${eff.isFromTool ? ' 🔧' : ''}`,
+          action: () => { closeSheet(); onInitiateAttack(i); },
+          disabled: !ok,
+          primary: ok,
+        });
+      });
+    }
+    // 撤退
+    if (canRetreatNow && myPlayer.bench.length > 0) {
+      myPlayer.bench.forEach(b => {
+        const c = cardOf(b);
+        out.push({
+          label: `🔄 撤退 → ${c?.name ?? '?'}`,
+          action: () => retreatTo(b.iid),
+        });
+      });
+    }
+    // 特性
+    const myAbil = usableAbilities.filter(u => u.iid === aId);
+    myAbil.forEach(u => {
+      out.push({
+        label: `✨ 特性「${u.abilityName}」`,
+        action: () => useAbility(aId, u.abilityIndex),
+        primary: true,
+      });
+    });
+    out.push({ label: '🔍 查看詳情', action: () => { closeSheet(); onOpenZoom(myPlayer.active!.cardId, myPlayer.active); } });
+    return out;
+  }
+
+  // 取「bench 可選動作」list
+  function benchActions(inst: CardInstance): Array<{ label: string; action: () => void; primary?: boolean }> {
+    const out: Array<{ label: string; action: () => void; primary?: boolean }> = [];
+    // 該 bench 上的特性
+    const benchAbil = usableAbilities.filter(u => u.iid === inst.iid);
+    benchAbil.forEach(u => {
+      out.push({
+        label: `✨ 特性「${u.abilityName}」`,
+        action: () => useAbility(inst.iid, u.abilityIndex),
+        primary: true,
+      });
+    });
+    out.push({ label: '🔍 查看詳情', action: () => { closeSheet(); onOpenZoom(inst.cardId, inst); } });
+    return out;
+  }
+
+  // 取「能量附加目標」 list
+  function energyTargets(): CardInstance[] {
+    const out: CardInstance[] = [];
+    if (myPlayer.active) out.push(myPlayer.active);
+    out.push(...myPlayer.bench);
+    return out;
   }
 </script>
 
-<div class="mp-battle">
+<div class="mp">
 
-  <!-- Header：單行 chip，水平 scroll -->
-  <header class="mp-header">
-    <button class="mp-chip mp-back" onclick={onLeave}>← 離開</button>
-    <span class="mp-chip mp-turn">回合 {game.turn}</span>
-    <span class="mp-chip mp-phase">
-      {#if game.turnPhase === 'main'}主階段
-      {:else if game.turnPhase === 'draw'}抽牌
-      {:else}結束{/if}
+  <!-- ─── Top bar：1 行 ─── -->
+  <header class="mp-top">
+    <button class="mp-icon-btn" onclick={onLeave} title="離開">←</button>
+    <span class="mp-turn-text">回合 {game.turn}</span>
+    <span class="mp-phase">
+      {#if isSetup}🎴 設置
+      {:else if game.turnPhase === 'main'}{isMyTurn ? '🟢 你的回合' : '🔴 對手回合'}
+      {:else if game.turnPhase === 'draw'}📥 抽牌
+      {:else}⏭ 結束{/if}
     </span>
-    <span class="mp-chip mp-hand-mine">✋ 我 {myPlayer.hand.length}</span>
-    <span class="mp-chip mp-hand-opp">🂠 對手 {oppPlayer.hand.length}</span>
-    {#if stadiumCard && game.activeStadium}
-      <button class="mp-chip mp-stadium" onclick={() => onOpenZoom(game.activeStadium!.cardId, null)}>
-        🏟 {stadiumCard.name}
-      </button>
+    <span class="mp-spacer"></span>
+    {#if aiThinking}<span class="mp-tag">🤖</span>{/if}
+    {#if isSyncing}<span class="mp-tag">⏳</span>{/if}
+    {#if isSetup && isMyTurn && !game.setupDone[myIdx]}
+      <button class="mp-end-btn" disabled={!myPlayer.active}
+        onclick={() => onAction(GameActions.finishSetup(myIdx))}>✅ 準備</button>
+    {:else if canEndTurn}
+      <button class="mp-end-btn" onclick={() => onAction(GameActions.endTurn())}>⏭ 結束</button>
     {/if}
-    {#if isSyncing}<span class="mp-chip mp-sync">⏳ 同步</span>{/if}
-    {#if aiThinking}<span class="mp-chip mp-ai">🤖 AI 思考</span>{/if}
-    <span class="mp-chip mp-version">v{version}</span>
-    <button class="mp-chip mp-settings" onclick={onOpenSettings}>⚙️</button>
+    <button class="mp-icon-btn" onclick={onOpenSettings} title="設定">⚙</button>
   </header>
 
-  <!-- 對手區 -->
-  <section class="mp-area mp-opp-area">
-    <!-- info bar：獎勵 / 牌庫 / 棄牌 -->
-    <div class="mp-info-bar">
-      <div class="mp-info-cell">🎁 獎勵 <strong>{oppPlayer.prizes.length}</strong></div>
-      <div class="mp-info-cell">📚 牌庫 <strong>{oppPlayer.deck.length}</strong></div>
-      <div class="mp-info-cell">🗑 棄牌 <strong>{oppPlayer.discard.length}</strong></div>
-    </div>
-
-    <!-- bench：橫向縮小 -->
-    <div class="mp-bench" class:mp-empty={oppPlayer.bench.length === 0}>
-      {#if oppPlayer.bench.length === 0}
-        <div class="mp-bench-empty-hint">（備戰區空）</div>
-      {:else}
-        {#each oppPlayer.bench as inst (inst.iid)}
-          {@const c = cardOf(inst)}
-          <button class="mp-bench-slot" onclick={() => onOpenZoom(inst.cardId, inst)}
-            title={c?.name}>
-            {#if c?.imageUrl}
-              <img src={c.imageUrl} alt={c.name}/>
-            {/if}
-            <div class="mp-mini-hp">{hpRemaining(inst)}</div>
-          </button>
-        {/each}
-      {/if}
-    </div>
-
-    <!-- active 中央大圖 -->
-    <div class="mp-active-row">
-      {#if oppPlayer.active}
-        {@const c = cardOf(oppPlayer.active)}
-        <button class="mp-active mp-active-opp" onclick={() => onOpenZoom(oppPlayer.active!.cardId, oppPlayer.active!)}>
-          {#if c?.imageUrl}
-            <img src={c.imageUrl} alt={c.name}/>
+  <!-- ─── 對手 bench ─── -->
+  <div class="mp-row mp-opp-bench">
+    {#each Array(5).fill(null) as _, i}
+      {@const inst = oppPlayer.bench[i]}
+      {#if inst}
+        {@const c = cardOf(inst)}
+        <button class="mp-slot mp-opp-slot" onclick={() => onOpenZoom(inst.cardId, inst)}>
+          {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
+          <span class="mp-slot-hp">{hpRemaining(inst)}</span>
+          {#if inst.energyAttached.length > 0}
+            <span class="mp-slot-eg">⚡{inst.energyAttached.length}</span>
           {/if}
-          <div class="mp-active-info">
-            <div class="mp-active-name">{c?.name ?? '?'}</div>
-            <div class="mp-hp-bar">
-              <div class="mp-hp-fill" style="width:{hpMax(oppPlayer.active) > 0 ? (hpRemaining(oppPlayer.active)/hpMax(oppPlayer.active)*100) : 0}%"></div>
-              <span class="mp-hp-text">HP {hpRemaining(oppPlayer.active)}/{hpMax(oppPlayer.active)}</span>
-            </div>
-            {#if oppPlayer.active.energyAttached.length > 0}
-              <div class="mp-energy-count">⚡ {oppPlayer.active.energyAttached.length}</div>
-            {/if}
-            {#if oppPlayer.active.status}
-              <div class="mp-status">{oppPlayer.active.status}</div>
-            {/if}
-          </div>
         </button>
       {:else}
-        <div class="mp-active-empty">（對手戰鬥場空）</div>
+        <div class="mp-slot mp-empty"></div>
       {/if}
-    </div>
-  </section>
+    {/each}
+  </div>
 
-  <!-- Log：撐剩餘空間 -->
+  <!-- ─── 對手 chips: 獎勵/牌庫/棄牌（緊湊） ─── -->
+  <div class="mp-chips mp-opp-chips">
+    <span class="mp-chip">🎁 {oppPlayer.prizes.length}</span>
+    <span class="mp-chip">📚 {oppPlayer.deck.length}</span>
+    <button class="mp-chip mp-clickable" onclick={() => onOpenZoom(oppPlayer.discard[oppPlayer.discard.length - 1]?.cardId ?? '', null)} disabled={oppPlayer.discard.length === 0}>🗑 {oppPlayer.discard.length}</button>
+    <span class="mp-chip">🂠 對手手牌 {oppPlayer.hand.length}</span>
+    {#if stadiumCard && game.activeStadium}
+      <button class="mp-chip mp-clickable" onclick={() => onOpenZoom(game.activeStadium!.cardId, null)}>🏟</button>
+    {/if}
+  </div>
+
+  <!-- ─── 對手 active ─── -->
+  <div class="mp-active-row">
+    {#if oppPlayer.active}
+      {@const inst = oppPlayer.active}
+      {@const c = cardOf(inst)}
+      <button class="mp-active mp-active-opp mp-status-{inst.status ?? 'none'}" onclick={() => onOpenZoom(inst.cardId, inst)}>
+        {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
+        <div class="mp-active-info">
+          <div class="mp-active-name">{c?.name ?? '?'}</div>
+          <div class="mp-hp {hpClass(inst)}">
+            <div class="mp-hp-fill" style="width:{hpMax(inst) ? (hpRemaining(inst)/hpMax(inst)*100) : 0}%"></div>
+            <span>HP {hpRemaining(inst)}/{hpMax(inst)}</span>
+          </div>
+          <div class="mp-meta">
+            {#if inst.energyAttached.length > 0}<span>⚡{inst.energyAttached.length}</span>{/if}
+            {#if inst.toolAttached}<span>🔧</span>{/if}
+            {#if inst.status}<span class="mp-status">{inst.status}</span>{/if}
+          </div>
+        </div>
+      </button>
+    {:else}
+      <div class="mp-active-empty">（對手戰鬥場空）</div>
+    {/if}
+  </div>
+
+  <!-- ─── Log（撐空間） ─── -->
   <section class="mp-log">
-    {#each [...(game.log ?? [])].reverse() as entry, i}
-      <div class="mp-log-line" class:mp-log-latest={i === 0} class:mp-log-sys={entry.playerIndex === null}>
+    {#each [...(game.log ?? [])].reverse().slice(0, 30) as entry, i (i + (entry.message ?? ''))}
+      <div class="mp-log-line" class:latest={i === 0} class:sys={entry.playerIndex === null}>
         {entry.privateMessage && entry.playerIndex === myIdx ? entry.privateMessage : entry.message}
       </div>
     {/each}
   </section>
 
-  <!-- 我方區 -->
-  <section class="mp-area mp-my-area">
-    <!-- active 大圖 -->
-    <div class="mp-active-row">
-      {#if myPlayer.active}
-        {@const c = cardOf(myPlayer.active)}
-        <button class="mp-active mp-active-mine" onclick={() => onOpenZoom(myPlayer.active!.cardId, myPlayer.active!)}>
-          {#if c?.imageUrl}
-            <img src={c.imageUrl} alt={c.name}/>
-          {/if}
-          <div class="mp-active-info">
-            <div class="mp-active-name">{c?.name ?? '?'}</div>
-            <div class="mp-hp-bar">
-              <div class="mp-hp-fill" style="width:{hpMax(myPlayer.active) > 0 ? (hpRemaining(myPlayer.active)/hpMax(myPlayer.active)*100) : 0}%"></div>
-              <span class="mp-hp-text">HP {hpRemaining(myPlayer.active)}/{hpMax(myPlayer.active)}</span>
-            </div>
-            {#if myPlayer.active.energyAttached.length > 0}
-              <div class="mp-energy-count">⚡ {myPlayer.active.energyAttached.length}</div>
-            {/if}
-            {#if myPlayer.active.status}
-              <div class="mp-status">{myPlayer.active.status}</div>
+  <!-- ─── 我方 active ─── -->
+  <div class="mp-active-row">
+    {#if myPlayer.active}
+      {@const inst = myPlayer.active}
+      {@const c = cardOf(inst)}
+      <button class="mp-active mp-active-mine mp-status-{inst.status ?? 'none'}"
+        class:mp-actionable={isPlaying && isMyTurn && isMainPhase && !pendingSelection}
+        onclick={() => sheet = { type: 'active' }}>
+        {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
+        <div class="mp-active-info">
+          <div class="mp-active-name">{c?.name ?? '?'}</div>
+          <div class="mp-hp {hpClass(inst)}">
+            <div class="mp-hp-fill" style="width:{hpMax(inst) ? (hpRemaining(inst)/hpMax(inst)*100) : 0}%"></div>
+            <span>HP {hpRemaining(inst)}/{hpMax(inst)}</span>
+          </div>
+          <div class="mp-meta">
+            {#if inst.energyAttached.length > 0}<span>⚡{inst.energyAttached.length}</span>{/if}
+            {#if inst.toolAttached}<span>🔧</span>{/if}
+            {#if inst.status}<span class="mp-status">{inst.status}</span>{/if}
+            {#if isPlaying && isMyTurn && isMainPhase}
+              <span class="mp-tap-hint">👆 點開動作</span>
             {/if}
           </div>
+        </div>
+      </button>
+    {:else if isSetup}
+      <div class="mp-active-empty">點手牌的基礎寶可夢 → 放到戰鬥場</div>
+    {:else}
+      <div class="mp-active-empty">（戰鬥場空 — 待派出新寶可夢）</div>
+    {/if}
+  </div>
+
+  <!-- ─── 我方 chips: 獎勵/牌庫/棄牌 ─── -->
+  <div class="mp-chips mp-my-chips">
+    <span class="mp-chip">🎁 {myPlayer.prizes.length}</span>
+    <span class="mp-chip">📚 {myPlayer.deck.length}</span>
+    <button class="mp-chip mp-clickable" onclick={() => onOpenZoom(myPlayer.discard[myPlayer.discard.length - 1]?.cardId ?? '', null)} disabled={myPlayer.discard.length === 0}>🗑 {myPlayer.discard.length}</button>
+    <span class="mp-chip mp-mine">✋ {myPlayer.hand.length}</span>
+    <span class="mp-chip mp-version">v{version}</span>
+  </div>
+
+  <!-- ─── 我方 bench ─── -->
+  <div class="mp-row mp-my-bench">
+    {#each Array(5).fill(null) as _, i}
+      {@const inst = myPlayer.bench[i]}
+      {#if inst}
+        {@const c = cardOf(inst)}
+        {@const hasUsableAbility = usableAbilities.some(u => u.iid === inst.iid)}
+        {@const isEvoTarget = evolvableTargets.some(e => e.fromIid === inst.iid)}
+        <button class="mp-slot mp-my-slot"
+          class:mp-actionable={hasUsableAbility || isEvoTarget}
+          onclick={() => sheet = { type: 'bench', inst }}>
+          {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
+          <span class="mp-slot-hp">{hpRemaining(inst)}</span>
+          {#if inst.energyAttached.length > 0}
+            <span class="mp-slot-eg">⚡{inst.energyAttached.length}</span>
+          {/if}
+          {#if hasUsableAbility}<span class="mp-slot-ab">✨</span>{/if}
         </button>
       {:else}
-        <div class="mp-active-empty">（戰鬥場空 — 待派出）</div>
+        <div class="mp-slot mp-empty"></div>
       {/if}
-    </div>
+    {/each}
+  </div>
 
-    <!-- bench -->
-    <div class="mp-bench" class:mp-empty={myPlayer.bench.length === 0}>
-      {#if myPlayer.bench.length === 0}
-        <div class="mp-bench-empty-hint">（備戰區空）</div>
-      {:else}
-        {#each myPlayer.bench as inst (inst.iid)}
-          {@const c = cardOf(inst)}
-          <button class="mp-bench-slot mp-bench-mine" onclick={() => onOpenZoom(inst.cardId, inst)}
-            title={c?.name}>
-            {#if c?.imageUrl}
-              <img src={c.imageUrl} alt={c.name}/>
-            {/if}
-            <div class="mp-mini-hp">{hpRemaining(inst)}</div>
-          </button>
-        {/each}
-      {/if}
-    </div>
-
-    <!-- info bar + 結束回合 -->
-    <div class="mp-info-bar mp-my-info">
-      <div class="mp-info-cell">🎁 獎勵 <strong>{myPlayer.prizes.length}</strong></div>
-      <div class="mp-info-cell">📚 牌庫 <strong>{myPlayer.deck.length}</strong></div>
-      <div class="mp-info-cell">🗑 棄牌 <strong>{myPlayer.discard.length}</strong></div>
-      {#if isMyTurn && canEndTurn && !pendingSelection}
-        <button class="mp-end-turn" onclick={onEndTurn}>⏭ 結束回合</button>
-      {/if}
-    </div>
-  </section>
-
-  <!-- 手牌：底部固定 -->
+  <!-- ─── 手牌橫向 scroll（底部固定） ─── -->
   <footer class="mp-hand">
     {#if myPlayer.hand.length === 0}
       <div class="mp-hand-empty">（手牌空）</div>
     {:else}
       {#each myPlayer.hand as inst (inst.iid)}
         {@const c = cardOf(inst)}
-        <button class="mp-hand-card" onclick={() => onOpenZoom(inst.cardId, inst)}
-          title={c?.name ?? ''}>
-          {#if c?.imageUrl}
-            <img src={c.imageUrl} alt={c.name}/>
-          {/if}
+        {@const playable = playableBasicIids.has(inst.iid) || playableEvoIids.has(inst.iid) || playableTrainerIids.has(inst.iid) || playableFossilIids.has(inst.iid) || (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection)}
+        <button class="mp-hand-card" class:mp-playable={playable} onclick={() => tapHand(inst)} title={c?.name}>
+          {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
         </button>
       {/each}
     {/if}
   </footer>
 </div>
 
+<!-- ─── Bottom Sheet：動作選單 ─── -->
+{#if sheet}
+  <div class="mp-sheet-overlay" onclick={closeSheet} role="presentation">
+    <div class="mp-sheet" onclick={(e) => e.stopPropagation()} role="dialog">
+      {#if sheet.type === 'hand'}
+        {@const acts = handActions(sheet.inst)}
+        {@const c = cardOf(sheet.inst)}
+        <div class="mp-sheet-title">{c?.name ?? '?'}</div>
+        {#if acts.length === 0}
+          <div class="mp-sheet-empty">本回合無可執行動作</div>
+        {/if}
+        {#each acts as a}
+          <button class="mp-sheet-btn" class:primary={a.primary} disabled={a.disabled} onclick={a.action}>{a.label}</button>
+        {/each}
+      {:else if sheet.type === 'active'}
+        {@const acts = activeActions()}
+        <div class="mp-sheet-title">戰鬥寶可夢動作</div>
+        {#if acts.length === 0}
+          <div class="mp-sheet-empty">本回合無可執行動作</div>
+        {/if}
+        {#each acts as a}
+          <button class="mp-sheet-btn" class:primary={a.primary} disabled={a.disabled} onclick={a.action}>{a.label}</button>
+        {/each}
+      {:else if sheet.type === 'bench'}
+        {@const acts = benchActions(sheet.inst)}
+        {@const c = cardOf(sheet.inst)}
+        <div class="mp-sheet-title">{c?.name ?? '?'}</div>
+        {#each acts as a}
+          <button class="mp-sheet-btn" class:primary={a.primary} onclick={a.action}>{a.label}</button>
+        {/each}
+      {:else if sheet.type === 'pick-energy-target'}
+        <div class="mp-sheet-title">⚡ 選擇附加目標</div>
+        {#each energyTargets() as tinst}
+          {@const c = cardOf(tinst)}
+          <button class="mp-sheet-btn primary" onclick={() => attachEnergy(sheet!.type === 'pick-energy-target' ? sheet.energyIid : '', tinst.iid)}>
+            {c?.name ?? '?'}（HP {hpRemaining(tinst)}/{hpMax(tinst)} · ⚡{tinst.energyAttached.length}）
+          </button>
+        {/each}
+      {:else if sheet.type === 'pick-evolve-target'}
+        <div class="mp-sheet-title">🔺 選擇進化目標</div>
+        {#each (sheet.type === 'pick-evolve-target' ? sheet.candidates : []) as fromIid}
+          <button class="mp-sheet-btn primary" onclick={() => evolveTo(fromIid, (sheet as { evoIid: string }).evoIid)}>
+            {nameOfIid(fromIid)}
+          </button>
+        {/each}
+      {/if}
+      <button class="mp-sheet-cancel" onclick={closeSheet}>取消</button>
+    </div>
+  </div>
+{/if}
+
 <style>
-  /* ─────────────────────────────────────────────────────────────────────
-     v2.284 Phase 1 — 手機直式 layout 樣式
-     全部用 mp- 前綴避免和 +page.svelte 既有 .battle-root 樣式衝突。
-     ───────────────────────────────────────────────────────────────────── */
-  .mp-battle {
+  /* ════════════════════════════════════════════════════════════════════
+     v2.286：手機直式完整 layout — 一頁不滑、手牌橫滑、tap-action 互動
+     ════════════════════════════════════════════════════════════════════ */
+  .mp {
     height: 100vh; height: 100dvh;
     display: flex; flex-direction: column;
     background: #1a2e1a;
@@ -242,132 +525,152 @@
     user-select: none;
   }
 
-  /* ── Header chip 列 ─────────────────────────────────────────────────── */
-  .mp-header {
-    flex: 0 0 auto;
-    display: flex; gap: 0.3rem; align-items: center;
-    padding: 0.35rem 0.5rem;
+  /* ── Top bar ────────────────────────────────────────────────────── */
+  .mp-top {
+    flex: 0 0 32px;
+    display: flex; align-items: center; gap: 0.3rem;
+    padding: 0 0.4rem;
     background: #0a180a;
     border-bottom: 1px solid #2a4a2a;
-    overflow-x: auto; overflow-y: hidden;
-    white-space: nowrap;
+    font-size: 0.72rem;
   }
-  .mp-header::-webkit-scrollbar { height: 0; }
-  .mp-chip {
-    flex-shrink: 0;
-    background: #2a3a2a; border: 1px solid #4a6a4a; color: #f0f0f0;
-    padding: 0.22rem 0.5rem; border-radius: 12px;
-    font-size: 0.7rem; font-weight: 500;
-    cursor: default;
+  .mp-icon-btn {
+    background: transparent; color: #8cf;
+    border: 1px solid #2a4a6a; border-radius: 4px;
+    padding: 2px 8px; font-size: 0.78rem; cursor: pointer;
   }
-  .mp-back, .mp-stadium, .mp-settings { cursor: pointer; }
-  .mp-back { background: #1a2a3a; border-color: #2a4a6a; color: #8cf; }
-  .mp-turn { background: #2a3a4a; border-color: #4a6a8a; color: #cef; }
-  .mp-phase { background: #2a2a4a; border-color: #4a4a6a; color: #ccf; }
-  .mp-hand-mine { background: #1a3a1a; border-color: #2a6a2a; color: #afa; }
-  .mp-hand-opp { background: #3a1a2a; border-color: #6a2a4a; color: #faa; }
-  .mp-stadium { background: #3a2a4a; border-color: #6a4a8a; color: #fcf; }
-  .mp-sync { background: #3a3a1a; border-color: #5a5a1a; color: #ff8; }
-  .mp-ai { background: #3a2a1a; border-color: #5a3a1a; color: #fa8; }
-  .mp-version { background: #2a1a3a; border-color: #4a3a6a; color: #c0a0e0; font-family: monospace; }
-  .mp-settings { background: #2a2a2a; border-color: #4a4a4a; }
+  .mp-turn-text { color: #cef; font-weight: 600; }
+  .mp-phase { color: #ffd44a; font-size: 0.7rem; }
+  .mp-spacer { flex: 1; }
+  .mp-tag {
+    background: #3a2a1a; color: #fa8;
+    border: 1px solid #5a3a1a; border-radius: 8px;
+    padding: 1px 6px; font-size: 0.7rem;
+  }
+  .mp-end-btn {
+    background: linear-gradient(180deg, #3a8a3a, #2a6a2a);
+    color: #fff;
+    border: 1px solid #4a8a4a; border-radius: 4px;
+    padding: 3px 10px; font-size: 0.74rem; font-weight: 700;
+    cursor: pointer;
+  }
+  .mp-end-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .mp-end-btn:active { background: linear-gradient(180deg, #2a6a2a, #1a5a1a); }
 
-  /* ── 對手 / 我方 area ─────────────────────────────────────────────────── */
-  .mp-area {
-    flex: 0 0 auto;
-    display: flex; flex-direction: column; gap: 0.25rem;
-    padding: 0.4rem 0.5rem;
+  /* ── Bench rows（橫向縮小） ─────────────────────────────────────── */
+  .mp-row {
+    flex: 0 0 56px;
+    display: flex; gap: 4px;
+    padding: 4px 6px;
+    overflow-x: auto;
   }
-  .mp-opp-area {
-    background: linear-gradient(180deg, rgba(80,30,30,0.4), rgba(40,20,20,0.15));
-    border-bottom: 2px solid #4a2a2a;
-  }
-  .mp-my-area {
-    background: linear-gradient(0deg, rgba(30,40,80,0.4), rgba(20,30,40,0.15));
-    border-top: 2px solid #2a4a6a;
-  }
-
-  /* info bar：3 格 + (我方多一個結束回合) */
-  .mp-info-bar {
-    display: flex; gap: 0.3rem;
-    font-size: 0.68rem;
-  }
-  .mp-info-cell {
-    flex: 1;
+  .mp-row::-webkit-scrollbar { height: 0; }
+  .mp-opp-bench { background: linear-gradient(180deg, rgba(80,30,30,0.5), rgba(60,20,20,0.3)); }
+  .mp-my-bench { background: linear-gradient(0deg, rgba(30,40,80,0.5), rgba(20,30,40,0.3)); }
+  .mp-slot {
+    flex: 1 1 0; min-width: 50px; max-width: 64px; height: 48px;
     background: rgba(0,0,0,0.4);
-    padding: 0.2rem 0.35rem;
-    border-radius: 4px;
-    text-align: center;
-    color: #ccc;
-  }
-  .mp-info-cell strong { color: #f0f0f0; font-size: 0.78rem; margin-left: 2px; }
-
-  /* bench 橫向 */
-  .mp-bench {
-    display: flex; gap: 0.2rem;
-    overflow-x: auto; overflow-y: hidden;
-    padding: 0.1rem 0;
-    min-height: 70px;
-  }
-  .mp-bench::-webkit-scrollbar { height: 0; }
-  .mp-bench.mp-empty { justify-content: center; align-items: center; }
-  .mp-bench-empty-hint { color: #666; font-size: 0.7rem; font-style: italic; }
-  .mp-bench-slot {
-    flex-shrink: 0;
-    width: 52px; height: 70px;
-    background: rgba(0,0,0,0.35);
-    border: 1px solid #5a3a3a;
-    border-radius: 4px;
-    padding: 2px;
+    border: 1px solid #3a5a3a; border-radius: 4px;
+    padding: 1px;
     cursor: pointer;
     position: relative;
-    display: flex; flex-direction: column; align-items: center;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
   }
-  .mp-bench-slot.mp-bench-mine { border-color: #3a6a3a; }
-  .mp-bench-slot img {
-    width: 100%; height: 50px;
-    object-fit: contain;
+  .mp-opp-slot { border-color: #5a3a3a; }
+  .mp-my-slot { border-color: #3a6a3a; }
+  .mp-empty {
+    border-style: dashed; border-color: rgba(255,255,255,0.1);
+    background: transparent; cursor: default;
+  }
+  .mp-slot img {
+    width: 100%; height: 100%;
+    object-fit: cover; border-radius: 3px;
     pointer-events: none;
   }
-  .mp-mini-hp {
-    font-size: 0.58rem;
-    color: #afa;
-    font-weight: 600;
+  .mp-slot-hp {
+    position: absolute; bottom: 1px; left: 1px;
+    background: rgba(0,0,0,0.7); color: #afa;
+    padding: 0 3px; border-radius: 3px;
+    font-size: 0.55rem; font-weight: 700;
   }
+  .mp-slot-eg {
+    position: absolute; top: 1px; right: 1px;
+    background: rgba(0,0,0,0.7); color: #ffd44a;
+    padding: 0 3px; border-radius: 3px;
+    font-size: 0.55rem;
+  }
+  .mp-slot-ab {
+    position: absolute; top: 1px; left: 1px;
+    background: rgba(255,212,74,0.85); color: #000;
+    padding: 0 3px; border-radius: 3px;
+    font-size: 0.6rem;
+  }
+  .mp-actionable { box-shadow: 0 0 6px rgba(255,212,74,0.6); border-color: #e0b030 !important; }
 
-  /* active 中央大圖 */
+  /* ── Chips row（獎勵/牌庫/棄牌 緊湊） ───────────────────────────── */
+  .mp-chips {
+    flex: 0 0 22px;
+    display: flex; gap: 4px;
+    padding: 0 6px;
+    overflow-x: auto;
+    align-items: center;
+    font-size: 0.65rem;
+  }
+  .mp-chips::-webkit-scrollbar { height: 0; }
+  .mp-opp-chips { background: rgba(80,30,30,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .mp-my-chips { background: rgba(30,40,80,0.3); border-top: 1px solid rgba(255,255,255,0.05); }
+  .mp-chip {
+    flex-shrink: 0;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 1px 6px;
+    color: #ddd; font-size: 0.62rem;
+    white-space: nowrap;
+  }
+  .mp-chip.mp-mine { color: #afa; }
+  .mp-chip.mp-version { color: #c0a0e0; font-family: monospace; margin-left: auto; }
+  button.mp-chip { cursor: pointer; }
+  button.mp-chip:disabled { opacity: 0.4; cursor: default; }
+  button.mp-clickable { background: rgba(60,40,80,0.5); border-color: rgba(180,140,220,0.3); }
+
+  /* ── Active 大圖 ─────────────────────────────────────────────────── */
   .mp-active-row {
+    flex: 0 0 auto;
     display: flex; justify-content: center;
-    padding: 0.15rem 0;
+    padding: 4px 8px;
   }
   .mp-active {
-    display: flex; gap: 0.5rem; align-items: center;
+    display: flex; gap: 8px; align-items: center;
     background: rgba(0,0,0,0.5);
-    border: 2px solid #5a3a3a;
-    border-radius: 6px;
-    padding: 0.35rem;
+    border: 2px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 4px;
     cursor: pointer;
     width: 100%; max-width: 360px;
+    height: 100px;
   }
-  .mp-active.mp-active-mine { border-color: #3a6a3a; }
+  .mp-active.mp-active-opp { border-color: #5a3a3a; background: linear-gradient(180deg, rgba(80,30,30,0.5), rgba(40,20,20,0.4)); }
+  .mp-active.mp-active-mine { border-color: #3a6a3a; background: linear-gradient(0deg, rgba(30,60,30,0.5), rgba(20,40,20,0.4)); }
+  .mp-active.mp-actionable { border-color: #e0b030; box-shadow: 0 0 12px rgba(255,212,74,0.4); }
   .mp-active img {
-    width: 90px;
-    border-radius: 4px;
+    width: 70px; height: 92px;
+    object-fit: contain; border-radius: 4px;
     flex-shrink: 0;
     pointer-events: none;
   }
   .mp-active-info {
-    flex: 1;
-    display: flex; flex-direction: column; gap: 0.2rem;
-    min-width: 0;
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; gap: 4px;
   }
   .mp-active-name {
-    font-size: 0.85rem; font-weight: 600;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 0.85rem; font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .mp-hp-bar {
+  .mp-hp {
     position: relative;
-    height: 16px;
+    height: 14px;
     background: rgba(0,0,0,0.6);
     border: 1px solid rgba(255,255,255,0.15);
     border-radius: 3px;
@@ -376,89 +679,81 @@
   .mp-hp-fill {
     position: absolute; top: 0; left: 0; bottom: 0;
     background: linear-gradient(90deg, #6c6, #4a4);
-    transition: width 0.3s ease;
+    transition: width 0.3s ease, background 0.3s ease;
   }
-  .mp-hp-text {
+  /* v2.286 Phase 4：HP bar 顏色依比例 */
+  .mp-hp.hp-mid .mp-hp-fill { background: linear-gradient(90deg, #ec6, #c84); }
+  .mp-hp.hp-low .mp-hp-fill { background: linear-gradient(90deg, #e66, #c44); }
+  /* v2.286 Phase 4：active 卡狀態異常 glow */
+  .mp-active.mp-status-poisoned { box-shadow: 0 0 14px rgba(180, 90, 220, 0.6); border-color: #a060c0; }
+  .mp-active.mp-status-burned { box-shadow: 0 0 14px rgba(255, 100, 50, 0.7); border-color: #d04a20; }
+  .mp-active.mp-status-asleep { box-shadow: 0 0 14px rgba(120, 160, 220, 0.6); border-color: #5080c0; opacity: 0.85; }
+  .mp-active.mp-status-paralyzed { box-shadow: 0 0 14px rgba(255, 220, 60, 0.6); border-color: #d0b020; }
+  .mp-active.mp-status-confused { box-shadow: 0 0 14px rgba(220, 100, 220, 0.6); border-color: #c050c0; }
+  .mp-hp span {
     position: relative; z-index: 1;
-    display: block;
-    text-align: center;
-    font-size: 0.68rem;
-    line-height: 16px;
-    color: #fff;
-    text-shadow: 0 0 3px rgba(0,0,0,0.9);
+    display: block; text-align: center;
+    font-size: 0.62rem; line-height: 14px;
+    color: #fff; text-shadow: 0 0 3px rgba(0,0,0,0.9);
   }
-  .mp-energy-count, .mp-status {
-    font-size: 0.7rem;
-    background: rgba(0,0,0,0.4);
-    padding: 0.1rem 0.4rem;
-    border-radius: 3px;
-    display: inline-block;
-    width: fit-content;
+  .mp-meta {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    font-size: 0.66rem;
   }
-  .mp-status { color: #ff8; }
+  .mp-meta span { background: rgba(0,0,0,0.4); padding: 0 5px; border-radius: 3px; }
+  .mp-meta .mp-status { color: #ff8; }
+  .mp-tap-hint { color: #ffd44a; animation: mp-pulse 1.5s ease-in-out infinite; }
+  @keyframes mp-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
   .mp-active-empty {
     width: 100%; max-width: 360px;
-    text-align: center;
-    padding: 1rem;
-    color: #888;
-    font-size: 0.78rem;
-    border: 2px dashed #444;
-    border-radius: 6px;
+    text-align: center; padding: 0.8rem;
+    color: #888; font-size: 0.78rem;
+    border: 2px dashed #444; border-radius: 6px;
     background: rgba(0,0,0,0.25);
   }
 
-  /* ── Log 區（撐空間） ───────────────────────────────────────────────── */
+  /* ── Log（撐空間） ─────────────────────────────────────────────── */
   .mp-log {
-    flex: 1; min-height: 60px;
+    flex: 1 1 auto; min-height: 50px;
     overflow-y: auto;
-    padding: 0.4rem 0.6rem;
-    font-size: 0.72rem;
-    line-height: 1.45;
-    background: rgba(0,0,0,0.35);
+    padding: 4px 8px;
+    font-size: 0.68rem;
+    line-height: 1.35;
+    background: rgba(0,0,0,0.4);
     border-top: 1px solid rgba(255,255,255,0.05);
     border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex; flex-direction: column;
   }
   .mp-log-line {
-    padding: 0.18rem 0;
+    padding: 1px 0;
     border-bottom: 1px solid rgba(255,255,255,0.04);
-    color: #ccc;
+    color: #bbb;
   }
-  .mp-log-line.mp-log-latest {
-    color: #ffd44a; font-weight: 600;
-  }
-  .mp-log-line.mp-log-sys {
-    color: #8cf; font-style: italic;
-  }
+  .mp-log-line.latest { color: #ffd44a; font-weight: 600; }
+  .mp-log-line.sys { color: #8cf; font-style: italic; }
 
-  /* ── 我方 info bar 含結束回合按鈕 ───────────────────────────────────── */
-  .mp-end-turn {
-    flex: 0 0 auto;
-    background: linear-gradient(180deg, #3a8a3a, #2a6a2a);
-    color: #fff;
-    border: 1px solid #4a8a4a;
-    border-radius: 4px;
-    padding: 0.25rem 0.6rem;
-    font-size: 0.78rem; font-weight: 600;
-    cursor: pointer;
-  }
-  .mp-end-turn:active { background: linear-gradient(180deg, #2a6a2a, #1a5a1a); }
-
-  /* ── 手牌底部固定 ──────────────────────────────────────────────────── */
+  /* ── 手牌底部橫向 scroll ─────────────────────────────────────── */
   .mp-hand {
-    flex: 0 0 auto;
-    display: flex;
-    gap: 0.25rem;
-    overflow-x: auto; overflow-y: hidden;
-    padding: 0.4rem 0.5rem 0.5rem;
+    flex: 0 0 96px;
+    display: flex; gap: 4px;
+    overflow-x: auto;
+    padding: 4px 6px;
     background: #0a160a;
     border-top: 2px solid #2a5a2a;
-    min-height: 100px;
+    -webkit-overflow-scrolling: touch;
   }
   .mp-hand::-webkit-scrollbar { height: 0; }
-  .mp-hand-empty { color: #666; font-style: italic; align-self: center; padding: 0 1rem; font-size: 0.72rem; }
+  .mp-hand-empty {
+    color: #666; font-style: italic;
+    align-self: center; padding: 0 1rem;
+    font-size: 0.72rem;
+  }
   .mp-hand-card {
     flex-shrink: 0;
-    width: 64px; height: 88px;
+    width: 64px; height: 86px;
     border: 1px solid #3a5a3a;
     border-radius: 4px;
     padding: 0;
@@ -471,5 +766,78 @@
     object-fit: cover;
     pointer-events: none;
   }
+  .mp-hand-card.mp-playable {
+    border-color: #e0b030;
+    box-shadow: 0 0 8px rgba(255,212,74,0.5);
+  }
   .mp-hand-card:active { transform: scale(0.95); }
+
+  /* ── Bottom Sheet ─────────────────────────────────────────────── */
+  .mp-sheet-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: flex; align-items: flex-end;
+    z-index: 9000;
+    animation: mp-fade-in 0.15s ease-out;
+  }
+  @keyframes mp-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .mp-sheet {
+    width: 100%;
+    background: #1a2e2a;
+    border-top-left-radius: 16px; border-top-right-radius: 16px;
+    border: 1px solid #4a6a4a;
+    border-bottom: none;
+    padding: 0.8rem 1rem 1.2rem;
+    display: flex; flex-direction: column; gap: 0.5rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    animation: mp-slide-up 0.2s ease-out;
+  }
+  @keyframes mp-slide-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .mp-sheet-title {
+    font-size: 1rem; font-weight: 700;
+    color: #ffd44a;
+    text-align: center;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .mp-sheet-empty {
+    text-align: center; color: #888; font-size: 0.85rem;
+    padding: 0.8rem;
+  }
+  .mp-sheet-btn {
+    width: 100%;
+    background: rgba(0,0,0,0.4);
+    color: #f0f0f0;
+    border: 1px solid #4a6a4a;
+    border-radius: 6px;
+    padding: 0.65rem 0.8rem;
+    font-size: 0.92rem;
+    text-align: left;
+    cursor: pointer;
+  }
+  .mp-sheet-btn.primary {
+    background: linear-gradient(180deg, #3a8a3a, #2a6a2a);
+    border-color: #4a8a4a;
+    font-weight: 600;
+  }
+  .mp-sheet-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .mp-sheet-btn:active:not(:disabled) { transform: scale(0.98); }
+  .mp-sheet-cancel {
+    width: 100%;
+    background: rgba(60,40,40,0.6);
+    color: #faa;
+    border: 1px solid #5a3a3a;
+    border-radius: 6px;
+    padding: 0.55rem;
+    font-size: 0.88rem;
+    cursor: pointer;
+    margin-top: 0.3rem;
+  }
 </style>
