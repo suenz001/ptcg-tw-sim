@@ -1,9 +1,44 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.280)  
+> 最後更新：2026-04-29 (v2.281)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.281 — 筆電/矮視窗 RWD：max-height ≤850 鎖死視窗，根治滾輪
+
+### Bug
+v2.280 修了 header nowrap 後 Leon 反映「右邊還是可以捲動」。
+
+### 根因
+桌機 layout 設計總高約 825px（header 50 + field-row 230×2 + action-bar 160 + hand-strip 155）。
+1080p+ 視窗夠用，但筆電 1366×768 扣掉 chrome bar / 書籤列 / 任務列後內容區僅約 600px → 整體溢出 → 出滾輪。
+v2.280 nowrap 只解決 header 換行的微量增高，不是根因。
+
+「setup 不出滾輪、playing 出」的真正原因是 viewport 高度恰好卡在臨界值附近（playing 多 turn-res 那一點點高度剛好把版面推出視窗邊緣）。
+
+### 修法
+新增 `@media (max-height: 850px) and (min-width: 951px)` 媒體查詢 — 「視窗不夠高的桌機/筆電」專用：
+
+- `.battle-root height:100vh + overflow:hidden`（鎖死視窗，不再出滾輪）
+- `.playmat grid-template-rows: minmax(0,1fr) auto minmax(0,1fr)`（從 230 → 0，由剩餘空間平分）
+- `.field-row` 加 `min-height:0; overflow:hidden`（讓 grid 可被壓縮）
+- `.active-card 170→140` / `.bench-slot 205→165` / img max-height 縮約 17%
+- `.action-bar 160-200 → 120-150`（log-col 寬 380→320）
+- `.hand-scroll min-height 150→130` + `.hand-card width 92→84`
+
+新總和約 **560-640px**，1366×768 筆電可用內容區 ~600 剛好夠，不會溢出。
+
+1080p+ 視窗（高 >850）不觸發此 media query，保留原桌機 layout。寬 ≤950 已有手機 media query 處理，新規則 `min-width:951` 互斥不重疊。
+
+### 觸碰檔案
+- `src/routes/game/+page.svelte` — 加 `@media (max-height: 850px) and (min-width: 951px)` 區塊（line 5117 附近）
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
