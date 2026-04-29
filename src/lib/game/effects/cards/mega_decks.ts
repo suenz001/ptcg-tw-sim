@@ -11,7 +11,7 @@
 import type { CardInstance, PlayerState, GameState } from '../../types';
 import {
   reg, regR, regG, regA, regPre, regPost,
-  addLog, updatePlayer, withPending, shuffle, discardHand,
+  addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardHand,
   healResolver, recordOppKO,
 } from '../_shared';
 import { hitBenchPickPost } from '../../effects';
@@ -538,7 +538,11 @@ regR('fan-call-hand', (st, idx, iids, _params, pool) => {
   if (iids.length > 0) {
     const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `風扇呼喚：${names} 加入手牌`, idx);
+    // v2.286：搜牌結果只有自己能看到，對手只看到張數
+    st = addPrivateLog(st,
+      `風扇呼喚：${names} 加入手牌`,
+      `風扇呼喚：搜到 ${chosen.length} 張卡加入手牌`,
+      idx);
     st = updatePlayer(st, idx, p => ({
       ...p,
       hand: [...p.hand, ...p.deck.filter(c => iids.includes(c.iid))],

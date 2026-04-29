@@ -53,6 +53,8 @@
     aiThinking: boolean;
     isSyncing: boolean;
     version: string;
+    pendingPrizes?: number;
+    canUseStadium?: boolean;
     // Callbacks
     onAction: (action: ReturnType<(typeof GameActions)[keyof typeof GameActions]>) => void | Promise<void>;
     onInitiateAttack: (attackIndex: number) => void;
@@ -65,6 +67,8 @@
     game, pool, myIdx, oppIdx,
     stadiumCard, pendingSelection,
     aiThinking, isSyncing, version,
+    pendingPrizes = 0,
+    canUseStadium = false,
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
   }: Props = $props();
 
@@ -362,7 +366,7 @@
     <button class="mp-chip mp-clickable" onclick={() => onOpenZoom(oppPlayer.discard[oppPlayer.discard.length - 1]?.cardId ?? '', null)} disabled={oppPlayer.discard.length === 0}>🗑 {oppPlayer.discard.length}</button>
     <span class="mp-chip">🂠 對手手牌 {oppPlayer.hand.length}</span>
     {#if stadiumCard && game.activeStadium}
-      <button class="mp-chip mp-clickable" onclick={() => onOpenZoom(game.activeStadium!.cardId, null)}>🏟</button>
+      <button class="mp-chip mp-clickable mp-stadium" onclick={() => onOpenZoom(game.activeStadium!.cardId, null)}>🏟 {stadiumCard.name}</button>
     {/if}
   </div>
 
@@ -438,8 +442,19 @@
     <span class="mp-chip">📚 {myPlayer.deck.length}</span>
     <button class="mp-chip mp-clickable" onclick={() => onOpenZoom(myPlayer.discard[myPlayer.discard.length - 1]?.cardId ?? '', null)} disabled={myPlayer.discard.length === 0}>🗑 {myPlayer.discard.length}</button>
     <span class="mp-chip mp-mine">✋ {myPlayer.hand.length}</span>
-    <span class="mp-chip mp-version">v{version}</span>
+    {#if canUseStadium && isMyTurn}
+      <button class="mp-chip mp-clickable mp-stadium-btn" onclick={() => onAction(GameActions.useStadium())}>🏟 使用能力</button>
+    {:else}
+      <span class="mp-chip mp-version">v{version}</span>
+    {/if}
   </div>
+
+  {#if (pendingPrizes ?? 0) > 0 && isMyTurn}
+    <div class="mp-prize-alert">
+      🏆 取 {pendingPrizes} 張獎勵牌
+      <button class="mp-prize-btn" onclick={() => onAction(GameActions.takePrizes(pendingPrizes!))}>取得</button>
+    </div>
+  {/if}
 
   <!-- ─── 我方 bench ─── -->
   <div class="mp-row mp-my-bench">
@@ -889,5 +904,30 @@
     line-height: 1.2;
     padding: 0 2px;
     pointer-events: none;
+  }
+
+  /* v2.286：獎賞卡 alert + 競技場能力按鈕 */
+  .mp-prize-alert {
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    background: linear-gradient(90deg, rgba(200,160,40,0.35), rgba(180,140,30,0.2));
+    border: 1px solid #a08020;
+    border-radius: 4px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem; font-weight: 600;
+    color: #ffe060;
+    margin: 4px 10px;
+  }
+  .mp-prize-btn {
+    background: linear-gradient(180deg, #c09030, #a07020);
+    color: #fff; border: 1px solid #d0a040;
+    border-radius: 4px; padding: 0.2rem 0.6rem;
+    font-size: 0.72rem; font-weight: 700;
+    cursor: pointer;
+  }
+  .mp-prize-btn:active { background: #906818; }
+  .mp-stadium-btn {
+    background: linear-gradient(180deg, #4a3a8a, #3a2a6a);
+    color: #e8d0ff;
+    border: 1px solid #6a4aaa;
   }
 </style>
