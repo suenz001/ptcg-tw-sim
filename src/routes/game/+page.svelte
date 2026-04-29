@@ -2410,9 +2410,10 @@
   <main class="lobby">
     <button class="back-btn" onclick={() => mode=null}>← 返回</button>
     <h1>🖥️ 本機雙人對戰</h1>
+    <p class="lobby-subtitle">遊戲開始時會擲硬幣決定先後手</p>
     <div class="player-setup">
       <div class="setup-card">
-        <h2>玩家 1（先手）</h2>
+        <h2>玩家 1</h2>
         <input class="name-input" placeholder="玩家名稱" bind:value={p1Name} />
         <select bind:value={p1DeckId}>
           <option value="">— 選擇牌組 —</option>
@@ -2426,7 +2427,7 @@
       </div>
       <div class="vs-badge">VS</div>
       <div class="setup-card" class:ai-card={aiPlayerIndex===1}>
-        <h2>玩家 2（後手）{#if aiPlayerIndex===1}<span class="ai-tag">🤖 AI</span>{/if}</h2>
+        <h2>玩家 2{#if aiPlayerIndex===1}<span class="ai-tag">🤖 AI</span>{/if}</h2>
         <label class="ai-toggle">
           <input type="checkbox" checked={aiPlayerIndex===1} onchange={(e)=>{
             aiPlayerIndex = (e.currentTarget as HTMLInputElement).checked ? 1 : null;
@@ -4369,6 +4370,7 @@
   /* ════ Lobby / Setup ════ */
   .lobby,.setup-screen{ max-width:700px; margin:2rem auto; padding:1.5rem; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; }
   .lobby h1{ font-size:1.8rem; margin-bottom:1rem; }
+  .lobby-subtitle{ color:#9aa; font-size:0.85rem; margin:-0.5rem 0 0.8rem; text-align:center; }
   .back{ color:#88ccff; font-size:0.9rem; text-decoration:none; display:inline-block; margin-bottom:1rem; }
   .back:hover{ text-decoration:underline; }
   .back-btn{ background:none; border:none; color:#88ccff; font-size:0.9rem; cursor:pointer; padding:0; margin-bottom:1rem; }
@@ -5115,44 +5117,45 @@
   .hand-scroll{ display:flex; justify-content:center; gap:0; padding:14px 1rem 8px; overflow:hidden; min-height:150px; perspective:900px; }
 
   /* ════════════════════════════════════════════════════════════════════════
-     v2.281：筆電 / 矮視窗桌機（高 ≤850px、寬 ≥951px）專屬 layout — 鎖死視窗 + 縮元素
+     v2.282：桌機/筆電 layout 鎖死視窗 — 適用所有 ≤1080p 視窗（max-height:1080 + min-width:951）
      ────────────────────────────────────────────────────────────────────────
-     桌機 baseline 設計總高約 825px（header 50 + field-row 230×2 + action-bar 160 +
-     hand-strip 155）。Leon 反映遊戲開始後右側出滾輪 — 排查發現是 viewport.innerHeight
-     不到 825 就溢出（典型筆電 1366×768 扣 chrome bar 130 後內容區僅 ~600px）。
+     v2.281 設 max-height:850 是錯估 — Leon 1920×1080 viewport innerHeight 約 900-950
+     (chrome bar + bookmarks + taskbar 取走 130-180)，850 threshold 不觸發 → 仍沿用桌機
+     baseline ~825px layout，邊緣 case 還是會溢出滾輪。
 
-     v2.280 修了 header flex-wrap 的問題，但那只是表象；根因是「桌機尺寸假設視窗夠高」。
-     這個 breakpoint 用 max-height 而非 max-width — 視窗不夠高就觸發，不論寬度。
+     v2.282 把 threshold 放寬到 max-height:1080（基本上覆蓋所有 1080p 以下桌機 viewport），
+     縮幅從 17% 降到 ~12%，保留更多卡牌大小。原桌機 baseline (max-height >1080) 只剩
+     超大螢幕（4K / 1440p 全螢幕）會用到。
 
-     寬 ≤950（手機 media query）已有專屬處理；高 ≤850 寬 ≥951 是平板/筆電灰色地帶，
-     之前 fall through 到桌機規則導致溢出。新規則參考手機策略：100dvh + overflow:hidden
-     + 內部 flex 比例分配，但保留桌機尺寸感（卡牌不縮太誇張）。
-
-     1080p+ 視窗（高 >850）不受影響，保留現有桌機 layout。
+     核心策略不變：
+       - .battle-root 100vh + overflow:hidden（鎖死視窗，不出滾輪）
+       - .playmat grid minmax(0,1fr) auto minmax(0,1fr)（兩 row 平分剩餘空間）
+       - .field-row min-height:0 + overflow:hidden（讓 grid 可被壓縮）
+       - 元素縮 ~12%（active-card 170→150 / bench-slot 205→180 / action-bar 160→135）
      ════════════════════════════════════════════════════════════════════════ */
-  @media (max-height: 850px) and (min-width: 951px) {
-    /* battle-root 鎖死視窗 + 不出滾輪 — 內容塞不下時內部 overflow */
+  @media (max-height: 1080px) and (min-width: 951px) {
+    /* battle-root 鎖死視窗 + 不出滾輪 */
     .battle-root{ height:100vh; height:100dvh; min-height:0; overflow:hidden; }
 
     /* playmat grid 改 minmax(0,1fr) — 由 .battle-root 剩餘空間平分，不再強制 230 */
     .playmat{ grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr); min-height:0; overflow:hidden; }
-    .field-row{ min-height:0; overflow:hidden; padding:0.35rem 0.5rem; }
+    .field-row{ min-height:0; overflow:hidden; padding:0.4rem 0.6rem; }
 
-    /* active-card / bench-slot 縮 ~17%，留餘裕給 row */
-    .active-card{ min-height:140px; padding:0.3rem 0.4rem; }
-    .active-card.active-empty{ min-height:130px; padding:0.6rem; }
-    .bench-slot{ height:165px; }
-    .bench-slot img{ max-height:96px; }
+    /* active-card / bench-slot 縮 ~12%（之前 v2.281 縮 17% 太多；保留更多卡牌大小） */
+    .active-card{ min-height:150px; padding:0.35rem 0.45rem; }
+    .active-card.active-empty{ min-height:140px; padding:0.8rem; }
+    .bench-slot{ height:180px; }
+    .bench-slot img{ max-height:108px; }
 
-    /* action-bar 縮 — log-col 也縮寬避免擠掉 action-btns */
-    .action-bar{ min-height:120px; max-height:150px; padding:0.2rem 0.5rem; }
-    .log-col{ width:320px; }
+    /* action-bar 縮約 15% — log-col 寬度小幅縮 */
+    .action-bar{ min-height:135px; max-height:170px; padding:0.25rem 0.6rem; }
+    .log-col{ width:340px; }
 
-    /* hand-strip 維持 v2.279 縮減後尺寸；min-height 再縮一些 */
-    .hand-strip{ padding:0.15rem 0.5rem 0.2rem; }
-    .hand-scroll{ padding:10px 0.8rem 6px; min-height:130px; }
-    .hand-card{ width:84px; }
-    .hand-card img{ width:80px; }
+    /* hand-strip 維持 v2.279 縮減後尺寸；hand-card 略縮 */
+    .hand-strip{ padding:0.18rem 0.6rem 0.22rem; }
+    .hand-scroll{ padding:12px 0.9rem 7px; min-height:140px; }
+    .hand-card{ width:88px; }
+    .hand-card img{ width:84px; }
   }
 
   .hand-scroll > .hand-card + .hand-card{ margin-left: calc(var(--hand-overlap, 0px) * -1); }

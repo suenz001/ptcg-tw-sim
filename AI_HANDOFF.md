@@ -1,9 +1,40 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.281)  
+> 最後更新：2026-04-29 (v2.282)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.282 — RWD threshold 放寬 + 修本機對戰 lobby 舊「先手/後手」字串
+
+### Bugs
+1. v2.281 設 `max-height: 850` 是錯估 — Leon 1920×1080 viewport innerHeight 約 900-950（chrome bar + bookmarks + taskbar 取走 130-180），850 threshold 不觸發 → 仍沿用桌機 baseline ~825 layout，邊緣 case 仍出滾輪。
+2. 本機雙人對戰 lobby（`{:else if mode === 'local'}` 區塊）`<h2>玩家 1（先手）</h2>` / `<h2>玩家 2（後手）...</h2>` 是舊版 hard-coded 字串，現在版本擲硬幣決定先後（v2.119 起），lobby 不該寫死。
+
+### 修法
+
+**Bug 1 — RWD threshold**：把 v2.281 的 `@media (max-height: 850px)` 改成 `(max-height: 1080px)`。基本上覆蓋所有 1080p 以下桌機 viewport。同時把元素縮幅從 17% 降到 ~12%（保留更多卡牌大小）：
+- `.active-card 170→150`（v2.281 是 140，回升）
+- `.bench-slot 205→180`（v2.281 是 165，回升）+ img max-height 96→108
+- `.action-bar 160-200 → 135-170`（v2.281 是 120-150，回升）
+- `.hand-card 92→88`（v2.281 是 84）
+
+新總和 ~700px，1920×1080 viewport innerHeight 950 → 留 250px buffer，安全。
+1080p 全螢幕 / 4K / 1440p 等視窗高 >1080 才不觸發此 media query，保留原桌機 baseline。
+
+**Bug 2 — lobby 字串**：
+- `<h2>玩家 1（先手）</h2>` → `<h2>玩家 1</h2>`
+- `<h2>玩家 2（後手）{ai}</h2>` → `<h2>玩家 2{ai}</h2>`
+- h1 下加 `<p class="lobby-subtitle">遊戲開始時會擲硬幣決定先後手</p>` + 新 CSS
+
+### 觸碰檔案
+- `src/routes/game/+page.svelte` — media query threshold 850→1080 + 縮幅調整 + lobby 字串修正
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
 
 ---
 
