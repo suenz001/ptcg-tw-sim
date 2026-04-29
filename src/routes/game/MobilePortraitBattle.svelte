@@ -202,9 +202,14 @@
         out.push({ label: '🔺 選進化目標…', action: () => { sheet = { type: 'pick-evolve-target', evoIid: iid, candidates: targets }; }, primary: true });
       }
     }
-    // 訓練家（含工具）
+    // 訓練家（含工具、競技場）— v2.289：依 subtype 顯示清楚標籤
     if (playableTrainerIids.has(iid) && (isTrainer(c) || isToolCard(c))) {
-      out.push({ label: '🎴 使用 / 拖到目標', action: () => playTrainer(iid), primary: true });
+      const sub = c?.subtype ?? '';
+      const tLabel = sub === 'Stadium' ? '🏟 放置競技場'
+                   : sub === 'PokemonTool' ? '🔧 附加道具到寶可夢'
+                   : sub === 'Supporter' ? '👤 使用支援者'
+                   : '🎴 使用此卡';
+      out.push({ label: tLabel, action: () => playTrainer(iid), primary: true });
     }
     // 能量卡
     if (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection) {
@@ -289,9 +294,22 @@
     out.push(...myPlayer.bench);
     return out;
   }
+
+  // ── v2.289：iOS Safari 整頁滑動鎖 ─────────────────────────────────
+  // touchmove 以 {passive:false} 掛在組件 root；對 .mp-row / .mp-hand /
+  // .mp-log / .mp-chips / .mp-sheet 內部觸控放行（允許捲動），其餘 preventDefault。
+  function preventScroll(node: HTMLElement) {
+    const handler = (e: TouchEvent) => {
+      const t = e.target as Element | null;
+      if (t?.closest('.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet')) return;
+      e.preventDefault();
+    };
+    node.addEventListener('touchmove', handler, { passive: false });
+    return { destroy() { node.removeEventListener('touchmove', handler); } };
+  }
 </script>
 
-<div class="mp">
+<div class="mp" use:preventScroll>
 
   <!-- ─── Top bar：1 行 ─── -->
   <header class="mp-top">
@@ -310,8 +328,10 @@
       <!-- v2.287 修：setup 階段雙方各自準備，不依 isMyTurn 判定（後手玩家 isMyTurn=false 會看不到按鈕） -->
       <button class="mp-end-btn" disabled={!myPlayer.active}
         onclick={() => onAction(GameActions.finishSetup(myIdx))}>✅ 準備</button>
-    {:else if canEndTurn}
-      <button class="mp-end-btn" onclick={() => onAction(GameActions.endTurn())}>⏭ 結束</button>
+    {:else if isMyTurn && isPlaying && !pendingSelection && game.pendingPrizes === 0}
+      <!-- v2.289：不限 turnPhase==='end'，主階段也顯示（等同「跳過攻擊 + 結束回合」合一）
+           engine END_TURN 自帶 pendingPrizes / defender.active=null 雙重 gate -->
+      <button class="mp-end-btn" onclick={() => onAction(GameActions.endTurn())}>⏭ 結束回合</button>
     {/if}
     <button class="mp-icon-btn" onclick={onOpenSettings} title="設定">⚙</button>
   </header>
@@ -459,8 +479,12 @@
           /* v2.287 修：setup 階段基礎寶可夢可放（不分先後手） */
           (isSetup && !game.setupDone[myIdx] && isBasicMon(c) && (!myPlayer.active || myPlayer.bench.length < 5))
         )}
+        {@const isPlayableTrainer = playableTrainerIids.has(inst.iid) && !!c && (c.supertype === 'Trainer')}
         <button class="mp-hand-card" class:mp-playable={playable} onclick={() => tapHand(inst)} title={c?.name}>
           {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
+          {#if isPlayableTrainer && isMyTurn}
+            <div class="mp-card-hint">{c?.subtype === 'Stadium' ? '🏟' : c?.subtype === 'Supporter' ? '👤' : '🎴'}</div>
+          {/if}
         </button>
       {/each}
     {/if}
@@ -853,5 +877,17 @@
     font-size: 0.88rem;
     cursor: pointer;
     margin-top: 0.3rem;
+  }
+
+  /* v2.289：手牌可打出的訓練家/競技場 右上角小 badge */
+  .mp-card-hint {
+    position: absolute;
+    top: 1px; right: 1px;
+    background: rgba(0,0,0,0.75);
+    border-radius: 3px;
+    font-size: 0.65rem;
+    line-height: 1.2;
+    padding: 0 2px;
+    pointer-events: none;
   }
 </style>

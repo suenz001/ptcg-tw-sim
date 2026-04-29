@@ -16216,3 +16216,57 @@ Leon：「這 60 張牌有那些特性和效果還沒處理的，我們先來處
 
 ### 後續
 魔靈多龍預設牌組 v2.01 完整實裝完畢。接下來可挑下一個日本 meta 預設牌組（尚有 35 個）。
+
+---
+
+## 📝 2026-04-29 Session（v2.289）— 手機直式 RWD 三個 UI bug 修正
+
+### 問題背景
+Leon 反映手機直式對戰 UI（MobilePortraitBattle.svelte）有三個問題：
+1. 找不到「結束回合」按鈕
+2. 找不到放競技場卡的地方（手牌競技場卡無明確 UI 提示）
+3. 拖曳手指會整頁滑動
+
+### 根因分析
+
+**Bug 1：回合結束按鈕永遠不出現**
+- `canEndTurn = isPlaying && game.turnPhase === 'end' && isMyTurn`
+- `turnPhase === 'end'` 只在攻擊後由 engine 設定，或由桌機版「跳過攻擊 →」按鈕手動設定
+- MobilePortraitBattle 沒有「跳過攻擊」機制 → 玩家不攻擊時 `turnPhase` 永遠停在 `'main'` → 按鈕永遠不出現
+
+**Bug 2：競技場卡無法辨識可放置**
+- handActions 競技場/訓練家的 sheet 按鈕標籤寫「使用 / 拖到目標」，讓人誤以為需要拖拽
+- 手牌卡片上只有 golden glow 但無文字提示，不夠直覺
+
+**Bug 3：整頁滑動鎖靠不住**
+- iOS Safari：即使 `body.mp-locked` 有 `overflow:hidden + touch-action:none`，內部元素的 touchmove 仍可穿透造成 bounce
+- `.mp` 根 div 沒有 `{passive:false}` 的 touchmove 攔截
+
+### 修正（MobilePortraitBattle.svelte）
+
+**Fix 1：結束回合按鈕**
+- 改條件：`canEndTurn` → `isMyTurn && isPlaying && !pendingSelection && game.pendingPrizes === 0`
+- 主階段也顯示（等同「跳過攻擊 + 結束回合」合一）
+- engine `END_TURN` 自帶 `pendingPrizes > 0` / `defender.active === null` 雙重 gate，多按無害
+- 按鈕文字從「⏭ 結束」改為「⏭ 結束回合」（更清楚）
+
+**Fix 2：手牌卡片 + Sheet 標籤**
+- `handActions` 依 `subtype` 顯示明確標籤：
+  - `Stadium` → `🏟 放置競技場`
+  - `PokemonTool` → `🔧 附加道具到寶可夢`
+  - `Supporter` → `👤 使用支援者`
+  - 其他 → `🎴 使用此卡`
+- 手牌卡片：可打出的訓練家/競技場右上角顯示 emoji badge（🏟/👤/🎴）
+
+**Fix 3：整頁滑動鎖**
+- 新增 `preventScroll` Svelte action（掛在 `.mp` root div，`{passive:false}`）
+- handler 判斷 `e.target.closest('.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet')` 放行，其餘 `preventDefault()`
+- 雙重保護：配合既有 `body.mp-locked` CSS
+
+**Bonus：sim stuck_loop 清零**
+- 原 baseline 有 2 個 `stuck_loop`（竹蘭的烈咬陸鯊EX vs 巨金怪），本版 sim 順帶清零
+
+### 驗證
+- `npm run build` ✓（17s）
+- `sim-tournament.mjs 1` → 1332 場 / 0 bug（修前 2 個）
+- 版本 2.288 → 2.289
