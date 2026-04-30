@@ -1255,6 +1255,14 @@
             }
             return false;
           }
+          if (f === 'BasicEnergy:Grass+Lightning') {
+            // v2.155 電電充能：基本【草】或基本【雷】能量
+            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+              if (card.pokemonType === 'Grass' || card.pokemonType === 'Lightning') return true;
+              if (card.name.includes('【草】') || card.name.includes('【雷】')) return true;
+            }
+            return false;
+          }
           // v2.135：阿響的冒險
           if (f === 'RakiPokemonOrFireEnergy') {
             if (card.supertype === 'Pokemon' && card.name.startsWith('阿響的')) return true;
@@ -2195,6 +2203,7 @@
       'BasicEnergy':                   '基本能量',
       'BasicPsychicEnergy':            '基本【超】能量',
       'BasicFightingEnergy':           '基本【鬥】能量',
+      'BasicEnergy:Grass+Lightning':   '基本【草】或基本【雷】能量',
       'Pokemon':                       '寶可夢',
       'PokemonOrEnergy':               '寶可夢或能量',
       'PokemonOrBasicEnergy':          '寶可夢或基本能量',
