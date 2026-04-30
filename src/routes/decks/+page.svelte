@@ -1152,7 +1152,7 @@
 
   main {
     max-width: 1200px;
-    margin: 1.5rem auto;
+    margin: calc(1.5rem + env(safe-area-inset-top, 0)) auto 1.5rem;
     padding: 0 1rem 3rem;
     font-family: system-ui, -apple-system, 'Microsoft JhengHei', sans-serif;
     color: #1a1a1a;

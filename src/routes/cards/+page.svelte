@@ -685,7 +685,7 @@
 
   header {
     max-width: 1200px;
-    margin: 1rem auto 0.5rem;
+    margin: calc(1rem + env(safe-area-inset-top, 0)) auto 0.5rem;
     padding: 0 1rem;
     font-family: system-ui, 'Microsoft JhengHei', sans-serif;
   }
