@@ -2761,6 +2761,8 @@
       {pendingSelection}
       {aiThinking}
       {isSyncing}
+      {canUseStadium}
+      {pendingPrizes}
       version={VERSION}
       onAction={dispatch}
       onInitiateAttack={initiateAttack}
