@@ -4378,16 +4378,16 @@ function applyAbilityRetreatMod(
 /**
  * 目前行動玩家是否可以撤退出場寶可夢。
  */
-export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
-  if (state.phase !== 'playing' || state.turnPhase !== 'main') return false;
+export function getRetreatCost(state: GameState, pool: Map<string, Card>): number | null {
+  if (state.phase !== 'playing' || state.turnPhase !== 'main') return null;
   const player = state.players[state.activePlayerIndex];
-  if (player.retreatedThisTurn || !player.active || player.bench.length === 0) return false;
+  if (player.retreatedThisTurn || !player.active || player.bench.length === 0) return null;
   // 睡眠和麻痺時無法撤退
-  if (player.active.status === 'asleep' || player.active.status === 'paralyzed') return false;
+  if (player.active.status === 'asleep' || player.active.status === 'paralyzed') return null;
   // v2.174 霍米加的演奏：自己的中毒寶可夢本回合無法撤退
   if (player.cantRetreatIfPoisonedThisTurn
       && (player.active.status === 'poisoned' || player.active.secondaryStatus === 'poisoned')) {
-    return false;
+    return null;
   }
   const card = pool.get(player.active.cardId);
   let cost = card?.retreatCost?.length ?? 0;
@@ -4423,9 +4423,16 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
   if (stadiumNameCR === '樂園度假地' && card?.name === '可達鴨') cost = Math.max(0, cost - 1);
   // v2.277 Wave 3：套用 ABILITY_RETREAT_MOD（一身輕 / 溶化流動 / 鋼之橋 / 森林秘道 / 大網）
   cost = applyAbilityRetreatMod(state, player.active, card, state.activePlayerIndex, cost, pool);
+  return cost;
+}
+
+export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
+  const cost = getRetreatCost(state, pool);
+  if (cost === null) return false;
+  const player = state.players[state.activePlayerIndex];
   // v2.69：以能量單位計算（火箭隊能量 1 張 = 2 units）。
   // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
-  return totalEnergyUnits(player.active.energyAttached, pool, state, state.activePlayerIndex) >= cost;
+  return totalEnergyUnits(player.active!.energyAttached, pool, state, state.activePlayerIndex) >= cost;
 }
 
 /**

@@ -37,9 +37,9 @@
   import type { GameState, CardInstance, PendingSelection } from '$lib/game/types';
   import type { Card } from '$lib/cards/types';
   import {
-    getEffectiveAttacks, getEvolvableTargets, getPlayableTrainers,
+    getEffectiveAttacks, getAvailableAttacks, getEvolvableTargets, getPlayableTrainers,
     getPlayableBasics, getPlayableFossils, getUsableAbilities,
-    canRetreat as engineCanRetreat,
+    canRetreat as engineCanRetreat, getRetreatCost,
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
 
@@ -93,6 +93,16 @@
     isPlaying && isMyTurn && isMainPhase && myPlayer.active
       ? getEffectiveAttacks(game, myPlayer.active, pool)
       : []
+  );
+  let availableAttackIndices = $derived(
+    isPlaying && isMyTurn && isMainPhase
+      ? getAvailableAttacks(game, pool)
+      : []
+  );
+  let currentRetreatCost = $derived(
+    isPlaying && isMyTurn && isMainPhase
+      ? getRetreatCost(game, pool)
+      : null
   );
 
   // ── Helpers ────────────────────────────────────────────────────────
@@ -250,7 +260,7 @@
     // 攻擊（若 main phase 且有可用招式）
     if (effectiveAttacks.length > 0) {
       effectiveAttacks.forEach((eff, i) => {
-        const ok = isPlaying && isMyTurn && isMainPhase && !pendingSelection;
+        const ok = isPlaying && isMyTurn && isMainPhase && !pendingSelection && availableAttackIndices.includes(i);
         out.push({
           label: `⚔️ ${eff.atk.name}${eff.atk.damage ? ' · ' + eff.atk.damage : ''}${eff.isFromTool ? ' 🔧' : ''}`,
           action: () => { closeSheet(); onInitiateAttack(i); },
@@ -263,8 +273,9 @@
     if (canRetreatNow && myPlayer.bench.length > 0) {
       myPlayer.bench.forEach(b => {
         const c = cardOf(b);
+        const costLabel = currentRetreatCost !== null ? ` (-${currentRetreatCost})` : '';
         out.push({
-          label: `🔄 撤退 → ${c?.name ?? '?'}`,
+          label: `🔄 撤退${costLabel} → ${c?.name ?? '?'}`,
           action: () => retreatTo(b.iid),
         });
       });
