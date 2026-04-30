@@ -197,7 +197,7 @@ const ALAKAZAM_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '12165', count: 3 },  // 土龍弟弟 (SVM 095/175) — Leon v2.224 統一
     { cardId: '11655', count: 3 },  // 土龍節節 (SV8a) — 非 ex 版；4 張效果相同，任選其一
     { cardId: '14692', count: 1 },  // 可達鴨 (M2a) — 特性濕氣
-    { cardId: '16255', count: 1 },  // 謝米 (M2a 012/193) — 特性花之帷幔（備戰免招式傷害）
+    { cardId: '14672', count: 1 },  // 謝米 (M2a 012/193) — 特性花之帷幔（備戰免招式傷害）
     { cardId: '16960', count: 1 },  // 吉雉雞ex (MC) — 扭轉乾坤
     // ── 訓練家・物品（16 張）──
     { cardId: '17119', count: 4 },  // 好友寶芬 (MC)
@@ -247,7 +247,7 @@ const MARNIE_SCRAFTY_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '13997', count: 1 },  // 伊裴爾塔爾 (M1L 040/063)
     { cardId: '17020', count: 1 },  // 米立龍 (MC)
     { cardId: '14692', count: 1 },  // 可達鴨 (M2a) — 特性濕氣
-    { cardId: '17980', count: 1 },  // 謝米 (M3)
+    { cardId: '14672', count: 1 },  // 謝米 (M2a 012/193)
     // ── 訓練家・物品（15 張）──
     { cardId: '17119', count: 3 },  // 好友寶芬 (MC)
     { cardId: '17133', count: 4 },  // 寶可平板 (MC)
@@ -874,7 +874,7 @@ const RAKI_TYPHLOSION_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '12675', count: 3 }, // 阿響的火爆獸 (SV9a 017/063) — Leon v2.137 確認沒 ex
     { cardId: '11192', count: 1 }, // 比克提尼 (SV8 012/106)
     { cardId: '14692', count: 1 }, // 可達鴨 (M2a 032/193)
-    { cardId: '12664', count: 1 }, // 謝米 (SV9a 006/063)
+    { cardId: '14672', count: 1 }, // 謝米 (M2a 012/193)
     { cardId: '11526', count: 1 }, // 含羞苞 (SV8a 001/187)
     { cardId: '12165', count: 2 }, // 土龍弟弟 (SVM 095/175)
     { cardId: '9827', count: 1 },  // 土龍節節 (SV5K 057/071)
