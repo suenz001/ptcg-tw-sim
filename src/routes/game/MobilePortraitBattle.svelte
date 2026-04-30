@@ -465,7 +465,7 @@
     <button class="mp-chip mp-clickable" onclick={() => onOpenZoom(myPlayer.discard[myPlayer.discard.length - 1]?.cardId ?? '', null)} disabled={myPlayer.discard.length === 0}>🗑 {myPlayer.discard.length}</button>
     <span class="mp-chip mp-mine">✋ {myPlayer.hand.length}</span>
     {#if canUseStadium && isMyTurn}
-      <button class="mp-chip mp-clickable mp-stadium-btn" onclick={() => onAction(GameActions.useStadium())}>🏟 使用能力</button>
+      <button class="mp-chip mp-clickable mp-stadium-btn" onclick={() => onAction(GameActions.useStadium())}>🏟 使用競技場</button>
     {:else}
       <span class="mp-chip mp-version">v{version}</span>
     {/if}
@@ -634,7 +634,9 @@
 
   /* ── Bench rows（橫向縮小） ─────────────────────────────────────── */
   .mp-row {
-    flex: 0 0 80px;
+    flex: 1; /* 讓雙方備戰區能吸收多餘垂直空間 */
+    min-height: 80px;
+    max-height: 140px;
     display: flex; gap: 4px;
     padding: 4px 6px;
     overflow-x: auto;
@@ -643,7 +645,7 @@
   .mp-opp-bench { background: linear-gradient(180deg, rgba(80,30,30,0.5), rgba(60,20,20,0.3)); }
   .mp-my-bench { background: linear-gradient(0deg, rgba(30,40,80,0.5), rgba(20,30,40,0.3)); }
   .mp-slot {
-    flex: 1 1 0; min-width: 52px; max-width: 72px; height: 72px;
+    flex: 1 1 0; min-width: 52px; max-width: 90px; height: 100%;
     background: rgba(0,0,0,0.4);
     border: 1px solid #3a5a3a; border-radius: 4px;
     padding: 1px;
@@ -742,7 +744,7 @@
     display: flex; align-items: center; justify-content: center;
   }
   .mp-card-back-mark { color: #eebb44; font-weight: 700; font-family: serif; font-size: 1.5rem; }
-  .mp-slot.mp-card-back { padding: 0; width: 46px; height: 72px; }
+  .mp-slot.mp-card-back { padding: 0; width: auto; height: 100%; }
   .mp-card-back.mp-active-card-back { width: 62px; height: 82px; flex-shrink: 0; }
 
   .mp-active-info {
@@ -802,7 +804,7 @@
 
   /* ── Log（撐空間） ─────────────────────────────────────────────── */
   .mp-log {
-    flex: 0 0 auto; min-height: 44px; max-height: 88px;
+    flex: 1; min-height: 50px; max-height: 120px;
     overflow-y: auto;
     padding: 3px 8px;
     font-size: 0.65rem;
