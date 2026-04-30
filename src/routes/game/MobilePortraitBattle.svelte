@@ -634,9 +634,9 @@
 
   /* ── Bench rows（橫向縮小） ─────────────────────────────────────── */
   .mp-row {
-    flex: 1; /* 讓雙方備戰區能吸收多餘垂直空間 */
+    flex: 0.8; /* 備戰區彈性，但比例低於戰鬥區 */
     min-height: 80px;
-    max-height: 140px;
+    max-height: 110px;
     display: flex; gap: 4px;
     padding: 4px 6px;
     overflow-x: auto;
@@ -714,7 +714,9 @@
 
   /* ── Active 大圖 ─────────────────────────────────────────────────── */
   .mp-active-row {
-    flex: 0 0 auto;
+    flex: 1.2;
+    min-height: 88px;
+    max-height: 160px;
     display: flex; justify-content: center;
     padding: 4px 8px;
   }
@@ -725,14 +727,15 @@
     border-radius: 8px;
     padding: 4px;
     cursor: pointer;
-    width: 100%; max-width: 360px;
-    height: 88px;
+    width: 100%; max-width: 380px;
+    height: 100%;
   }
   .mp-active.mp-active-opp { border-color: #5a3a3a; background: linear-gradient(180deg, rgba(80,30,30,0.5), rgba(40,20,20,0.4)); }
   .mp-active.mp-active-mine { border-color: #3a6a3a; background: linear-gradient(0deg, rgba(30,60,30,0.5), rgba(20,40,20,0.4)); }
   .mp-active.mp-actionable { border-color: #e0b030; box-shadow: 0 0 12px rgba(255,212,74,0.4); }
   .mp-active img {
-    width: 62px; height: 82px;
+    height: 100%; width: auto;
+    max-width: 120px;
     object-fit: contain; border-radius: 4px;
     flex-shrink: 0;
     pointer-events: none;
@@ -745,7 +748,7 @@
   }
   .mp-card-back-mark { color: #eebb44; font-weight: 700; font-family: serif; font-size: 1.5rem; }
   .mp-slot.mp-card-back { padding: 0; width: auto; height: 100%; }
-  .mp-card-back.mp-active-card-back { width: 62px; height: 82px; flex-shrink: 0; }
+  .mp-card-back.mp-active-card-back { height: 100%; aspect-ratio: 63/88; flex-shrink: 0; }
 
   .mp-active-info {
     flex: 1; min-width: 0;
