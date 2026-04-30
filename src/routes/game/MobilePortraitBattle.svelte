@@ -634,7 +634,7 @@
 
   /* ── Bench rows（橫向縮小） ─────────────────────────────────────── */
   .mp-row {
-    flex: 0 0 56px;
+    flex: 0 0 80px;
     display: flex; gap: 4px;
     padding: 4px 6px;
     overflow-x: auto;
@@ -643,7 +643,7 @@
   .mp-opp-bench { background: linear-gradient(180deg, rgba(80,30,30,0.5), rgba(60,20,20,0.3)); }
   .mp-my-bench { background: linear-gradient(0deg, rgba(30,40,80,0.5), rgba(20,30,40,0.3)); }
   .mp-slot {
-    flex: 1 1 0; min-width: 50px; max-width: 64px; height: 48px;
+    flex: 1 1 0; min-width: 52px; max-width: 72px; height: 72px;
     background: rgba(0,0,0,0.4);
     border: 1px solid #3a5a3a; border-radius: 4px;
     padding: 1px;
@@ -667,13 +667,13 @@
     position: absolute; bottom: 1px; left: 1px;
     background: rgba(0,0,0,0.7); color: #afa;
     padding: 0 3px; border-radius: 3px;
-    font-size: 0.55rem; font-weight: 700;
+    font-size: 0.62rem; font-weight: 700;
   }
   .mp-slot-eg {
     position: absolute; top: 1px; right: 1px;
     background: rgba(0,0,0,0.7); color: #ffd44a;
     padding: 0 3px; border-radius: 3px;
-    font-size: 0.55rem;
+    font-size: 0.62rem;
   }
   .mp-slot-ab {
     position: absolute; top: 1px; left: 1px;
@@ -724,13 +724,13 @@
     padding: 4px;
     cursor: pointer;
     width: 100%; max-width: 360px;
-    height: 100px;
+    height: 88px;
   }
   .mp-active.mp-active-opp { border-color: #5a3a3a; background: linear-gradient(180deg, rgba(80,30,30,0.5), rgba(40,20,20,0.4)); }
   .mp-active.mp-active-mine { border-color: #3a6a3a; background: linear-gradient(0deg, rgba(30,60,30,0.5), rgba(20,40,20,0.4)); }
   .mp-active.mp-actionable { border-color: #e0b030; box-shadow: 0 0 12px rgba(255,212,74,0.4); }
   .mp-active img {
-    width: 70px; height: 92px;
+    width: 62px; height: 82px;
     object-fit: contain; border-radius: 4px;
     flex-shrink: 0;
     pointer-events: none;
@@ -742,8 +742,8 @@
     display: flex; align-items: center; justify-content: center;
   }
   .mp-card-back-mark { color: #eebb44; font-weight: 700; font-family: serif; font-size: 1.5rem; }
-  .mp-slot.mp-card-back { padding: 0; width: 46px; height: 64px; }
-  .mp-card-back.mp-active-card-back { width: 70px; height: 92px; flex-shrink: 0; }
+  .mp-slot.mp-card-back { padding: 0; width: 46px; height: 72px; }
+  .mp-card-back.mp-active-card-back { width: 62px; height: 82px; flex-shrink: 0; }
 
   .mp-active-info {
     flex: 1; min-width: 0;
@@ -802,11 +802,11 @@
 
   /* ── Log（撐空間） ─────────────────────────────────────────────── */
   .mp-log {
-    flex: 1 1 auto; min-height: 50px;
+    flex: 0 0 auto; min-height: 44px; max-height: 88px;
     overflow-y: auto;
-    padding: 4px 8px;
-    font-size: 0.68rem;
-    line-height: 1.35;
+    padding: 3px 8px;
+    font-size: 0.65rem;
+    line-height: 1.3;
     background: rgba(0,0,0,0.4);
     border-top: 1px solid rgba(255,255,255,0.05);
     border-bottom: 1px solid rgba(255,255,255,0.05);
