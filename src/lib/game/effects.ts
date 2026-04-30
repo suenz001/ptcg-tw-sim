@@ -306,6 +306,7 @@ import './effects/cards/v158_energy_chain';
 import './effects/cards/v168_supporters';
 import './effects/cards/v169_supporters';
 import './effects/cards/v172_hij_batch';
+import './effects/cards/v2306_meta_pokemon';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts

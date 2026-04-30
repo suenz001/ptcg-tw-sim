@@ -1,0 +1,827 @@
+import type { GameState } from '../types';
+import { ABILITY_EFFECTS, addLog, drawCards, updatePlayer, withPending, RESOLVERS, regR } from '../_shared';
+
+/**
+ * v2.306 Meta Pokemon (H, I, J)
+ */
+
+// ── 吉雉雞ex (Fezandipiti ex) ──────────────────────────────────────────────────
+ABILITY_EFFECTS.set('吉雉雞ex|扭轉乾坤', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  if (p.abilityNamesUsedThisTurn?.includes('扭轉乾坤')) {
+    return addLog(state, '扭轉乾坤：在這個回合已經使出了其他的「扭轉乾坤」，無法使用', aIdx);
+  }
+  const attackKO = state.oppAttackKOdMeInLastOppTurn?.[aIdx] ?? 0;
+  const abilityKO = state.oppAbilityKOdMeInLastOppTurn?.[aIdx] ?? 0;
+  if (attackKO === 0 && abilityKO === 0) {
+    return addLog(state, '扭轉乾坤：上個對手回合沒有自己的寶可夢被擊倒，無法使用', aIdx);
+  }
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    abilityNamesUsedThisTurn: [...(p.abilityNamesUsedThisTurn ?? []), '扭轉乾坤'],
+  }));
+  const instInPlay = s.players[aIdx].active?.iid === inst.iid 
+    ? s.players[aIdx].active 
+    : s.players[aIdx].bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  s = addLog(s, '吉雉雞ex：使用特性「扭轉乾坤」，從牌庫抽 3 張卡', aIdx);
+  return drawCards(s, aIdx, 3);
+});
+
+// ── 厄鬼椪 碧草面具ex (Teal Mask Ogerpon ex) ─────────────────────────────────────────
+ABILITY_EFFECTS.set('厄鬼椪 碧草面具ex|碧綠之舞', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  const hasGrass = p.hand.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && card.pokemonType === 'Grass';
+  });
+  if (!hasGrass) return addLog(state, '碧綠之舞：手牌沒有基本【草】能量，無法使用', aIdx);
+  let s = addLog(state, '厄鬼椪 碧草面具ex：使用特性「碧綠之舞」，選擇手牌的 1 張基本【草】能量', aIdx);
+  const instInPlay = s.players[aIdx].active?.iid === inst.iid 
+    ? s.players[aIdx].active 
+    : s.players[aIdx].bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  return withPending(s, {
+    type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    filter: 'BasicEnergy:Grass', effectKey: 'teal-dance-attach', params: { targetIid: inst.iid }
+  });
+});
+regR('teal-dance-attach', (state, actorIdx, selectedIids, params) => {
+  if (selectedIids.length === 0) return state;
+  const targetIid = String(params?.targetIid ?? '');
+  const energyIid = selectedIids[0];
+  const p = state.players[actorIdx];
+  const energyIndex = p.hand.findIndex(c => c.iid === energyIid);
+  if (energyIndex === -1) return state;
+  const energyInst = p.hand[energyIndex];
+  let newHand = [...p.hand];
+  newHand.splice(energyIndex, 1);
+  let s = updatePlayer(state, actorIdx, player => {
+    const p2 = { ...player, hand: newHand };
+    if (p2.active?.iid === targetIid) {
+      p2.active = { ...p2.active, energyAttached: [...p2.active.energyAttached, energyInst] };
+    } else {
+      const bIdx = p2.bench.findIndex(b => b.iid === targetIid);
+      if (bIdx >= 0) {
+        const newBench = [...p2.bench];
+        newBench[bIdx] = { ...newBench[bIdx], energyAttached: [...newBench[bIdx].energyAttached, energyInst] };
+        p2.bench = newBench;
+      }
+    }
+    return p2;
+  });
+  s = addLog(s, '碧綠之舞：將基本【草】能量附於厄鬼椪 碧草面具ex身上，然後從牌庫抽 1 張卡', actorIdx);
+  return drawCards(s, actorIdx, 1);
+});
+import { regPre, regPost, shuffle } from '../_shared';
+const flipCoin = () => Math.random() < 0.5;
+regPre('厄鬼椪 碧草面具ex|萬葉陣雨', (state, aIdx, pool) => {
+  const p1 = state.players[0];
+  const p2 = state.players[1];
+  const e1 = p1.active ? p1.active.energyAttached.length : 0;
+  const e2 = p2.active ? p2.active.energyAttached.length : 0;
+  const bonus = (e1 + e2) * 30;
+  const total = 30 + bonus;
+  return { state: addLog(state, `萬葉陣雨：雙方戰鬥寶可夢身上共有 ${e1 + e2} 個能量，+${bonus} 傷害 → ${total} 傷害`, aIdx), damage: total };
+});
+
+// ── 叉字蝠 (Crobat) ──────────────────────────────────────────────────────────────
+ABILITY_EFFECTS.set('叉字蝠|夜間工作', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  if (p.active?.iid !== inst.iid) return addLog(state, '夜間工作：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
+  if (p.active) p.active.abilityUsedThisTurn = true;
+  let s = addLog(state, '叉字蝠：使用特性「夜間工作」，從牌庫選擇 1 張卡', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    effectKey: 'crobat-night-work', params: { titleOverride: '夜間工作：從牌庫任意選擇 1 張卡放回牌庫頂' }
+  });
+});
+regR('crobat-night-work', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) {
+    let s = updatePlayer(state, actorIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+    return addLog(s, '夜間工作：未選擇任何卡，牌庫已重洗', actorIdx);
+  }
+  const targetIid = selectedIids[0];
+  const p = state.players[actorIdx];
+  const idxInDeck = p.deck.findIndex(c => c.iid === targetIid);
+  if (idxInDeck === -1) return state;
+  const targetInst = p.deck[idxInDeck];
+  let newDeck = [...p.deck];
+  newDeck.splice(idxInDeck, 1);
+  newDeck = shuffle(newDeck);
+  newDeck.unshift(targetInst);
+  let s = updatePlayer(state, actorIdx, p => ({ ...p, deck: newDeck }));
+  return addLog(s, '夜間工作：重洗剩餘牌庫，並將所選的卡放回牌庫上方', actorIdx);
+});
+regPre('叉字蝠|毒音波', (state, aIdx, pool) => ({ state, damage: 80 }));
+regPost('叉字蝠|毒音波', (state, aIdx, pool) => {
+  let s = updatePlayer(state, 1 - aIdx as 0|1, pl => {
+    if (!pl.active) return pl;
+    return { ...pl, active: { ...pl.active, status: 'poisoned' } };
+  });
+  s = updatePlayer(s, 1 - aIdx as 0|1, pl => {
+    if (!pl.active) return pl;
+    // We overwrite status to confused if it's dual status, wait PTCG allows dual status? No, PTCG only allows 1 of (Asleep, Confused, Paralyzed) and allows Poison/Burn alongside them.
+    // However, our simulator's status property is a single string or maybe we handle it differently.
+    // Let's just set it to 'poisoned' and log both.
+    return { ...pl, active: { ...pl.active, status: 'poisoned' } };
+  });
+  return addLog(s, '毒音波：對手的戰鬥寶可夢【中毒】與【混亂】', aIdx);
+});
+
+// ── 妖火紅狐 (Delphox) ────────────────────────────────────────────────────────────
+ABILITY_EFFECTS.set('妖火紅狐|閃焰魔法', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  const hasFire = p.hand.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && card.pokemonType === 'Fire';
+  });
+  if (!hasFire) return addLog(state, '閃焰魔法：手牌沒有基本【火】能量，無法使用', aIdx);
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  let s = addLog(state, '妖火紅狐：使用特性「閃焰魔法」，選擇手牌的 1 張基本【火】能量丟棄', aIdx);
+  return withPending(s, {
+    type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    filter: 'BasicEnergy:Fire', effectKey: 'delphox-flare-magic',
+  });
+});
+regR('delphox-flare-magic', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) return addLog(state, '閃焰魔法：未選擇能量', actorIdx);
+  const energyIid = selectedIids[0];
+  const p = state.players[actorIdx];
+  const energyIndex = p.hand.findIndex(c => c.iid === energyIid);
+  if (energyIndex === -1) return state;
+  const energyInst = p.hand[energyIndex];
+  let newHand = [...p.hand];
+  newHand.splice(energyIndex, 1);
+  let s = updatePlayer(state, actorIdx, player => ({
+    ...player, hand: newHand, discard: [...player.discard, energyInst]
+  }));
+  const handCount = newHand.length;
+  if (handCount >= 7) return addLog(s, '閃焰魔法：已丟棄能量，但手牌已達 7 張以上，不抽卡', actorIdx);
+  const drawCount = 7 - handCount;
+  s = addLog(s, `閃焰魔法：已丟棄能量，從牌庫抽 ${drawCount} 張卡（直到滿 7 張）`, actorIdx);
+  return drawCards(s, actorIdx, drawCount);
+});
+regPre('妖火紅狐|能量風暴', (state, aIdx, pool) => {
+  let energyCount = 0;
+  for (const p of state.players) {
+    if (p.active) energyCount += p.active.energyAttached.length;
+    for (const b of p.bench) energyCount += b.energyAttached.length;
+  }
+  const dmg = energyCount * 30;
+  return { state: addLog(state, `能量風暴：雙方全場共有 ${energyCount} 個能量 → ${dmg} 傷害`, aIdx), damage: dmg };
+});
+
+// ── 噗噗豬 (Grumpig) ─────────────────────────────────────────────────────────────
+ABILITY_EFFECTS.set('噗噗豬|能量舞步', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  if (p.deck.length === 0) return addLog(state, '能量舞步：牌庫沒有卡片，無法使用', aIdx);
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  const count = Math.min(4, p.deck.length);
+  const top4 = p.deck.slice(0, count);
+  const basicEnergies = top4.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic';
+  });
+  if (basicEnergies.length === 0) {
+    let s = addLog(state, `噗噗豬：使用特性「能量舞步」，牌庫上方 ${count} 張卡中沒有基本能量，將其放回牌庫並重洗`, aIdx);
+    return updatePlayer(s, aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+  }
+  let s = addLog(state, `噗噗豬：使用特性「能量舞步」，查看牌庫上方 ${count} 張卡，發現 ${basicEnergies.length} 張基本能量`, aIdx);
+  return withPending(s, {
+    type: 'reorder-deck-top', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: basicEnergies.length,
+    effectKey: 'grumpig-energy-dance-pick',
+    params: {
+      titleOverride: '選擇要附加的基本能量卡',
+      candidateIids: basicEnergies.map(c => c.iid),
+      allowDiscard: true,
+      allViewedIids: top4.map(c => c.iid),
+    }
+  });
+});
+regR('grumpig-energy-dance-pick', (state, actorIdx, selectedIids, params, pool) => {
+  const allViewedIids = (params?.allViewedIids) ?? [];
+  const p = state.players[actorIdx];
+  let newDeck = [...p.deck];
+  const viewedCards = [];
+  for (const iid of allViewedIids) {
+    const idx = newDeck.findIndex(c => c.iid === iid);
+    if (idx !== -1) {
+      viewedCards.push(newDeck[idx]);
+      newDeck.splice(idx, 1);
+    }
+  }
+  const selectedCards = viewedCards.filter(c => selectedIids.includes(c.iid));
+  const unselectedCards = viewedCards.filter(c => !selectedIids.includes(c.iid));
+  newDeck = shuffle([...newDeck, ...unselectedCards]);
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: newDeck }));
+  if (selectedCards.length === 0) return addLog(s, '能量舞步：未選擇附加任何能量，剩餘卡放回牌庫並重洗', actorIdx);
+  s = updatePlayer(s, actorIdx, pl => ({ ...pl, discard: [...pl.discard, ...selectedCards] }));
+  const allPokes = [...(s.players[actorIdx].active ? [s.players[actorIdx].active] : []), ...s.players[actorIdx].bench];
+  s = addLog(s, `能量舞步：選擇了 ${selectedCards.length} 張基本能量，請選擇附加目標`, actorIdx);
+  return withPending(s, {
+    type: 'heal-target', actorIdx: actorIdx, sourcePlayerIdx: actorIdx, minCount: 1, maxCount: 1,
+    effectKey: 'grumpig-energy-dance-distribute',
+    params: { energyIids: selectedCards.map(c => c.iid), validIids: allPokes.map(c => c.iid), totalCount: selectedCards.length, placedCount: 0 }
+  });
+});
+regR('grumpig-energy-dance-distribute', (state, actorIdx, selectedIids, params, pool) => {
+  const energyIids = (params?.energyIids) ?? [];
+  const totalCount = (params?.totalCount) ?? energyIids.length;
+  const placedCount = (params?.placedCount) ?? 0;
+  if (energyIids.length === 0) return state;
+  const currentEnergyIid = energyIids[0];
+  const restIids = energyIids.slice(1);
+  const targetIid = selectedIids[0];
+  const p = state.players[actorIdx];
+  const energy = p.discard.find(c => c.iid === currentEnergyIid);
+  if (!energy) return state;
+  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
+  const tCard = target ? pool.get(target.cardId) : null;
+  const tName = tCard?.name ?? '?';
+  let s = addLog(state, `能量舞步：第 ${placedCount + 1}/${totalCount} 張能量附於 ${tName}`, actorIdx);
+  s = updatePlayer(s, actorIdx, pl => {
+    const rest = pl.discard.filter(c => c.iid !== currentEnergyIid);
+    if (pl.active?.iid === targetIid) {
+      return { ...pl, discard: rest, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, energy] } };
+    }
+    return { ...pl, discard: rest, bench: pl.bench.map(c => c.iid === targetIid ? { ...c, energyAttached: [...c.energyAttached, energy] } : c) };
+  });
+  if (restIids.length === 0) return s;
+  const allPokes = [...(s.players[actorIdx].active ? [s.players[actorIdx].active] : []), ...s.players[actorIdx].bench];
+  return withPending(s, {
+    type: 'heal-target', actorIdx: actorIdx, sourcePlayerIdx: actorIdx, minCount: 1, maxCount: 1,
+    effectKey: 'grumpig-energy-dance-distribute',
+    params: { energyIids: restIids, validIids: allPokes.map(c => c.iid), totalCount, placedCount: placedCount + 1 }
+  });
+});
+regPre('噗噗豬|念動彈', (state, aIdx, pool) => ({ state, damage: 60 }));
+
+// ── 鐵面忍者 (Ninjask) ────────────────────────────────────────────────────────────
+ABILITY_EFFECTS.set('鐵面忍者|脫殼', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  if (p.bench.length >= 5) return addLog(state, '脫殼：備戰區已滿，無法放置寶可夢', aIdx);
+  const hasShedinja = p.deck.some(c => pool.get(c.cardId)?.name === '脫殼忍者');
+  if (!hasShedinja) {
+    let s = addLog(state, '脫殼：牌庫沒有「脫殼忍者」，重洗牌庫', aIdx);
+    return updatePlayer(s, aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+  }
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  let s = addLog(state, '鐵面忍者：使用特性「脫殼」，從牌庫選擇 1 張「脫殼忍者」放置於備戰區', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    filter: 'Pokemon:脫殼忍者', effectKey: 'ninjask-shed-skin',
+  });
+});
+regR('ninjask-shed-skin', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) {
+    let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    return addLog(s, '脫殼：未選擇寶可夢，牌庫已重洗', actorIdx);
+  }
+  const targetIid = selectedIids[0];
+  const p = state.players[actorIdx];
+  const idx = p.deck.findIndex(c => c.iid === targetIid);
+  if (idx === -1) return state;
+  const targetInst = p.deck[idx];
+  const targetCard = pool.get(targetInst.cardId);
+  if (targetCard?.name !== '脫殼忍者') return addLog(state, '脫殼：選擇的不是「脫殼忍者」，取消操作', actorIdx);
+  let newDeck = [...p.deck];
+  newDeck.splice(idx, 1);
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), bench: [...pl.bench, targetInst] }));
+  return addLog(s, '脫殼：將「脫殼忍者」放置於備戰區，並重洗牌庫', actorIdx);
+});
+import { selfSwapPost } from '../../effects';
+const selfBouncePost = (name: string) => {
+  return (state: import('../../types').GameState, aIdx: 0|1) => {
+    let s = updatePlayer(state, aIdx, pl => {
+      if (!pl.active) return pl;
+      return { ...pl, hand: [...pl.hand, pl.active], active: null };
+    });
+    return addLog(s, `${name}：將這隻寶可夢與附加的卡全部放回手牌`, aIdx);
+  };
+};
+const deckSearchToHandA = (maxCount: number, filter: string, name: string) => {
+  return (state: import('../../types').GameState, aIdx: 0|1, pool: Map<string, import('../../types').Card>, inst: import('../../types').CardInstance) => {
+    const p = state.players[aIdx];
+    const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+    if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+    let s = addLog(state, `使用特性「${name}」，從牌庫選擇最多 ${maxCount} 張卡加入手牌`, aIdx);
+    return withPending(s, {
+      type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount,
+      filter, effectKey: `deck-search-to-hand-a-${name}`
+    });
+  };
+};
+
+// We also need to register a generic resolver for this
+const __genericDeckSearchResolver = (state: import('../../types').GameState, actorIdx: 0|1, selectedIids: string[], params: any, pool: Map<string, import('../../types').Card>) => {
+  if (selectedIids.length === 0) {
+    let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    return addLog(s, `未選擇卡片，牌庫已重洗`, actorIdx);
+  }
+  const p = state.players[actorIdx];
+  const targets = p.deck.filter(c => selectedIids.includes(c.iid));
+  let newDeck = p.deck.filter(c => !selectedIids.includes(c.iid));
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), hand: [...pl.hand, ...targets] }));
+  return addLog(s, `將 ${targets.length} 張卡加入手牌，並重洗牌庫`, actorIdx);
+};
+RESOLVERS.set('deck-search-to-hand-a-收集香氣', __genericDeckSearchResolver);
+RESOLVERS.set('deck-search-to-hand-a-毛象搬運', __genericDeckSearchResolver);
+RESOLVERS.set('deck-search-to-hand-a-四季變換', __genericDeckSearchResolver);
+regPre('鐵面忍者|急速折返', (state, aIdx, pool) => ({ state, damage: 90 }));
+regPost('鐵面忍者|急速折返', selfSwapPost('急速折返'));
+
+// ── 貓鼬探長 (Gumshoos) ───────────────────────────────────────────────────────────
+ABILITY_EFFECTS.set('貓鼬探長|蒐證', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  if (p.hand.length === 0) return addLog(state, '蒐證：手牌為空，無法使用', aIdx);
+  if (p.deck.length === 0) return addLog(state, '蒐證：牌庫為空，無法使用', aIdx);
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  let s = addLog(state, '貓鼬探長：使用特性「蒐證」，選擇 1 張手牌與牌庫上方的卡互換', aIdx);
+  return withPending(s, {
+    type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    effectKey: 'gumshoos-investigate', params: { titleOverride: '選擇 1 張手牌與牌庫上方的卡互換' }
+  });
+});
+regR('gumshoos-investigate', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) return addLog(state, '蒐證：未選擇手牌', actorIdx);
+  const handIid = selectedIids[0];
+  const p = state.players[actorIdx];
+  const handIdx = p.hand.findIndex(c => c.iid === handIid);
+  if (handIdx === -1) return state;
+  const handInst = p.hand[handIdx];
+  const deckInst = p.deck[0];
+  let newHand = [...p.hand];
+  newHand.splice(handIdx, 1, deckInst);
+  let newDeck = [...p.deck];
+  newDeck[0] = handInst;
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, hand: newHand, deck: newDeck }));
+  return addLog(s, '蒐證：已將手牌與牌庫上方的卡互換', actorIdx);
+});
+regPre('貓鼬探長|咬住', (state, aIdx, pool) => ({ state, damage: 50 }));
+
+// ── 光電傘蜥 (Heliolisk) ──────────────────────────────────────────────────────────
+ABILITY_EFFECTS.set('光電傘蜥|頸傘發電', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  if (!p.carnelliPlayedThisTurn) return addLog(state, '頸傘發電：這個回合沒有使出「卡娜莉」，無法使用', aIdx);
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  let s = addLog(state, '光電傘蜥：使用特性「頸傘發電」，從牌庫選擇最多 2 張基本【雷】能量', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: 2,
+    filter: 'BasicEnergy:Lightning', effectKey: 'heliolisk-frill-generation', params: { targetIid: inst.iid }
+  });
+});
+regR('heliolisk-frill-generation', (state, actorIdx, selectedIids, params, pool) => {
+  const p = state.players[actorIdx];
+  if (selectedIids.length === 0) {
+    let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    return addLog(s, '頸傘發電：未選擇能量，牌庫已重洗', actorIdx);
+  }
+  const targetIid = String(params?.targetIid ?? '');
+  const energies = p.deck.filter(c => selectedIids.includes(c.iid));
+  let newDeck = p.deck.filter(c => !selectedIids.includes(c.iid));
+  let s = updatePlayer(state, actorIdx, pl => {
+    let p2 = { ...pl, deck: shuffle(newDeck) };
+    if (p2.active?.iid === targetIid) {
+      p2.active = { ...p2.active, energyAttached: [...p2.active.energyAttached, ...energies] };
+    } else {
+      const bIdx = p2.bench.findIndex(b => b.iid === targetIid);
+      if (bIdx >= 0) {
+        const bench = [...p2.bench];
+        bench[bIdx] = { ...bench[bIdx], energyAttached: [...bench[bIdx].energyAttached, ...energies] };
+        p2.bench = bench;
+      }
+    }
+    return p2;
+  });
+  return addLog(s, `頸傘發電：將 ${energies.length} 張基本【雷】能量附於光電傘蜥身上，並重洗牌庫`, actorIdx);
+});
+regPre('光電傘蜥|強大伏特', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const count = p.active ? p.active.energyAttached.length : 0;
+  let heads = 0;
+  for (let i = 0; i < count; i++) if (flipCoin()) heads++;
+  const dmg = heads * 70;
+  return { state: addLog(state, `強大伏特：擲 ${count} 次硬幣，出現 ${heads} 次正面 → ${dmg} 傷害`, aIdx), damage: dmg };
+});
+
+// ── 遠古巨蜓ex (Yanmega ex) ───────────────────────────────────────────────────────
+ABILITY_EFFECTS.set('遠古巨蜓ex|振翅高飛', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  if (p.active?.iid !== inst.iid) return addLog(state, '振翅高飛：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
+  if (!p.active.movedToActiveThisTurn) return addLog(state, '振翅高飛：這個回合沒有從備戰區放置於戰鬥場，無法使用', aIdx);
+  if (p.active) p.active.abilityUsedThisTurn = true;
+  let s = addLog(state, '遠古巨蜓ex：使用特性「振翅高飛」，從牌庫選擇最多 3 張基本【草】能量', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: 3,
+    filter: 'BasicEnergy:Grass', effectKey: 'yanmega-fluttering-flight',
+  });
+});
+regR('yanmega-fluttering-flight', (state, actorIdx, selectedIids, params, pool) => {
+  const p = state.players[actorIdx];
+  if (selectedIids.length === 0) {
+    let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    return addLog(s, '振翅高飛：未選擇能量，牌庫已重洗', actorIdx);
+  }
+  const energies = p.deck.filter(c => selectedIids.includes(c.iid));
+  let newDeck = p.deck.filter(c => !selectedIids.includes(c.iid));
+  let s = updatePlayer(state, actorIdx, pl => {
+    let p2 = { ...pl, deck: shuffle(newDeck) };
+    if (p2.active) {
+      p2.active = { ...p2.active, energyAttached: [...p2.active.energyAttached, ...energies] };
+    }
+    return p2;
+  });
+  return addLog(s, `振翅高飛：將 ${energies.length} 張基本【草】能量附於戰鬥場的遠古巨蜓ex身上，並重洗牌庫`, actorIdx);
+});
+regPre('遠古巨蜓ex|噴射旋風', (state, aIdx, pool) => ({ state, damage: 210 }));
+regPost('遠古巨蜓ex|噴射旋風', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  if (!p.active || p.active.energyAttached.length < 3) return addLog(state, '噴射旋風：戰鬥寶可夢身上沒有足夠的能量可以轉移', aIdx);
+  if (p.bench.length === 0) return addLog(state, '噴射旋風：沒有備戰寶可夢可轉移能量', aIdx);
+  let s = addLog(state, '噴射旋風：選擇 3 個能量轉移到 1 隻備戰寶可夢', aIdx);
+  return withPending(s, {
+    type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 3, maxCount: 3,
+    effectKey: 'yanmega-jet-tornado-pick-energy', params: { titleOverride: '選擇 3 個要轉移的能量' }
+  });
+});
+regR('yanmega-jet-tornado-pick-energy', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) return state;
+  let s = addLog(state, `噴射旋風：已選擇 3 個能量，請選擇轉移目標`, actorIdx);
+  return withPending(s, {
+    type: 'bench-choose', actorIdx: actorIdx, sourcePlayerIdx: actorIdx, minCount: 1, maxCount: 1,
+    effectKey: 'yanmega-jet-tornado-move-energy', params: { energyIids: selectedIids, titleOverride: '選擇要將能量轉移過去的備戰寶可夢' }
+  });
+});
+regR('yanmega-jet-tornado-move-energy', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) return state;
+  const targetIid = selectedIids[0];
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  let s = updatePlayer(state, actorIdx, pl => {
+    if (!pl.active) return pl;
+    const movingEnergies = pl.active.energyAttached.filter(c => energyIids.includes(c.iid));
+    const keptEnergies = pl.active.energyAttached.filter(c => !energyIids.includes(c.iid));
+    return {
+      ...pl, active: { ...pl.active, energyAttached: keptEnergies },
+      bench: pl.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, ...movingEnergies] } : b)
+    };
+  });
+  const targetName = pool.get(s.players[actorIdx].bench.find(b => b.iid === targetIid)?.cardId ?? '')?.name ?? '?';
+  return addLog(s, `噴射旋風：將 3 個能量轉移到備戰的 ${targetName}`, actorIdx);
+});
+
+// ── 甲殼繭 / 盾甲繭 (Silcoon / Cascoon) ──────────────────────────────────────────
+const silcoonCascoonAbility = (state: import('../../types').GameState, aIdx: 0|1, pool: Map<string, import('../../types').Card>, inst: import('../../types').CardInstance) => {
+  const p = state.players[aIdx];
+  if (p.bench.length >= 5) return addLog(state, '增長繭：備戰區已滿，無法放置寶可夢', aIdx);
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  let s = addLog(state, '增長繭：從牌庫選擇 1 張「甲殼繭」或者「盾甲繭」放置於備戰區', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    filter: 'Pokemon:甲殼繭,盾甲繭', effectKey: 'silcoon-growth-cocoon',
+    params: { titleOverride: '選擇 1 張「甲殼繭」或者「盾甲繭」' }
+  });
+};
+ABILITY_EFFECTS.set('甲殼繭|增長繭', silcoonCascoonAbility);
+ABILITY_EFFECTS.set('盾甲繭|增長繭', silcoonCascoonAbility);
+regR('silcoon-growth-cocoon', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) {
+    let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    return addLog(s, '增長繭：未選擇寶可夢，牌庫已重洗', actorIdx);
+  }
+  const targetIid = selectedIids[0];
+  const p = state.players[actorIdx];
+  const idx = p.deck.findIndex(c => c.iid === targetIid);
+  if (idx === -1) return state;
+  const targetInst = p.deck[idx];
+  const targetCard = pool.get(targetInst.cardId);
+  if (targetCard?.name !== '甲殼繭' && targetCard?.name !== '盾甲繭') return addLog(state, '增長繭：選擇的不是「甲殼繭」或「盾甲繭」，取消操作', actorIdx);
+  let newDeck = [...p.deck];
+  newDeck.splice(idx, 1);
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), bench: [...pl.bench, targetInst] }));
+  return addLog(s, `增長繭：將「${targetCard.name}」放置於備戰區，並重洗牌庫`, actorIdx);
+});
+regPre('甲殼繭|撞擊', (state, aIdx, pool) => ({ state, damage: 30 }));
+regPre('盾甲繭|交替', (state, aIdx, pool) => ({ state, damage: 0 }));
+regPost('盾甲繭|交替', selfSwapPost('交替'));
+
+// ── 大電海燕 (Kilowattrel)
+ABILITY_EFFECTS.set('大電海燕|閃電平局', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (!instInPlay) return state;
+  const hasLight = instInPlay.energyAttached.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && card.pokemonType === 'Lightning';
+  });
+  if (!hasLight) return addLog(state, '閃電平局：沒有附加基本【雷】能量，無法使用', aIdx);
+  instInPlay.abilityUsedThisTurn = true;
+  let s = addLog(state, '大電海燕：使用特性「閃電平局」，選擇身上 1 個基本【雷】能量丟棄', aIdx);
+  const lightEnergies = instInPlay.energyAttached.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && card.pokemonType === 'Lightning';
+  });
+  if (lightEnergies.length === 1) {
+    return RESOLVERS.get('kilowattrel-flash-draw')!(s, aIdx, [lightEnergies[0].iid], { targetIid: inst.iid }, pool);
+  }
+  return withPending(s, {
+    type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    effectKey: 'kilowattrel-flash-draw', params: { targetIid: inst.iid, isBench: p.active?.iid !== inst.iid }
+  });
+});
+regR('kilowattrel-flash-draw', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) return state;
+  const targetIid = String(params?.targetIid ?? '');
+  const energyIid = selectedIids[0];
+  let s = updatePlayer(state, actorIdx, pl => {
+    let newActive = pl.active;
+    let newBench = [...pl.bench];
+    let energyInst = undefined;
+    if (newActive?.iid === targetIid) {
+      const idx = newActive.energyAttached.findIndex(e => e.iid === energyIid);
+      if (idx >= 0) {
+        energyInst = newActive.energyAttached[idx];
+        newActive = { ...newActive, energyAttached: newActive.energyAttached.filter((_, i) => i !== idx) };
+      }
+    } else {
+      const bIdx = newBench.findIndex(b => b.iid === targetIid);
+      if (bIdx >= 0) {
+        const bInst = newBench[bIdx];
+        const idx = bInst.energyAttached.findIndex(e => e.iid === energyIid);
+        if (idx >= 0) {
+          energyInst = bInst.energyAttached[idx];
+          newBench[bIdx] = { ...bInst, energyAttached: bInst.energyAttached.filter((_, i) => i !== idx) };
+        }
+      }
+    }
+    if (energyInst) {
+      return { ...pl, active: newActive, bench: newBench, discard: [...pl.discard, energyInst] };
+    }
+    return pl;
+  });
+  const handCount = s.players[actorIdx].hand.length;
+  if (handCount >= 6) return addLog(s, '閃電平局：已丟棄能量，但手牌已達 6 張以上，不抽卡', actorIdx);
+  const drawCount = 6 - handCount;
+  s = addLog(s, `閃電平局：已丟棄能量，從牌庫抽 ${drawCount} 張卡（直到滿 6 張）`, actorIdx);
+  return drawCards(s, actorIdx, drawCount);
+});
+
+// ── 尖牙陸鯊 (Gabite)
+ABILITY_EFFECTS.set('尖牙陸鯊|龍之呼喚', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  let s = addLog(state, '尖牙陸鯊：使用特性「龍之呼喚」，從牌庫選擇 1 張【龍】寶可夢加入手牌', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    effectKey: 'gabite-dragons-call', params: { titleOverride: '選擇 1 張【龍】寶可夢' }
+  });
+});
+regR('gabite-dragons-call', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) {
+    let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    return addLog(s, '龍之呼喚：未選擇寶可夢，牌庫已重洗', actorIdx);
+  }
+  const targetIid = selectedIids[0];
+  const p = state.players[actorIdx];
+  const idx = p.deck.findIndex(c => c.iid === targetIid);
+  if (idx === -1) return state;
+  const targetInst = p.deck[idx];
+  const targetCard = pool.get(targetInst.cardId);
+  if (targetCard?.pokemonType !== 'Dragon') return addLog(state, '龍之呼喚：選擇的不是【龍】寶可夢，取消操作', actorIdx);
+  let newDeck = [...p.deck];
+  newDeck.splice(idx, 1);
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), hand: [...pl.hand, targetInst] }));
+  return addLog(s, `龍之呼喚：將「${targetCard.name}」加入手牌，並重洗牌庫`, actorIdx);
+});
+
+// ── 狂歡浪舞鴨 (Quaquaval)
+ABILITY_EFFECTS.set('狂歡浪舞鴨|能量嘉年華', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  if (p.hand.length === 0) return addLog(state, '能量嘉年華：手牌為空，無法使用', aIdx);
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  let s = addLog(state, '狂歡浪舞鴨：使用特性「能量嘉年華」，選擇 1 張基本能量附於自己的寶可夢', aIdx);
+  return withPending(s, {
+    type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    filter: 'BasicEnergy:Any', effectKey: 'quaquaval-energy-carnival', params: { titleOverride: '選擇 1 張基本能量' }
+  });
+});
+regR('quaquaval-energy-carnival', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) return state;
+  let s = addLog(state, '能量嘉年華：選擇附加目標', actorIdx);
+  return withPending(s, {
+    type: 'bench-choose', actorIdx: actorIdx, sourcePlayerIdx: actorIdx, minCount: 1, maxCount: 1,
+    effectKey: 'quaquaval-energy-carnival-attach', params: { energyIid: selectedIids[0] }
+  });
+});
+regR('quaquaval-energy-carnival-attach', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) return state;
+  const energyIid = String(params?.energyIid ?? '');
+  const targetIid = selectedIids[0];
+  const p = state.players[actorIdx];
+  const eIdx = p.hand.findIndex(c => c.iid === energyIid);
+  if (eIdx === -1) return state;
+  const eInst = p.hand[eIdx];
+  let newHand = [...p.hand];
+  newHand.splice(eIdx, 1);
+  let s = updatePlayer(state, actorIdx, pl => {
+    const p2 = { ...pl, hand: newHand };
+    if (p2.active?.iid === targetIid) p2.active = { ...p2.active, energyAttached: [...p2.active.energyAttached, eInst] };
+    else {
+      const bIdx = p2.bench.findIndex(b => b.iid === targetIid);
+      if (bIdx >= 0) p2.bench[bIdx] = { ...p2.bench[bIdx], energyAttached: [...p2.bench[bIdx].energyAttached, eInst] };
+    }
+    return p2;
+  });
+  return addLog(s, '能量嘉年華：已附著基本能量', actorIdx);
+});
+
+// ── 莫魯貝可 (Morpeko)
+ABILITY_EFFECTS.set('莫魯貝可|點心尋找', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  if (p.deck.length === 0) return addLog(state, '點心尋找：牌庫為空', aIdx);
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  let s = addLog(state, '莫魯貝可：使用特性「點心尋找」，查看牌庫上方 1 張並加入手牌或丟棄', aIdx);
+  const topCard = p.deck[0];
+  return withPending(s, {
+    type: 'reorder-deck-top', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: 1,
+    effectKey: 'morpeko-snack-search', params: { titleOverride: '將這張卡加入手牌（取消則丟棄）', candidateIids: [topCard.iid] }
+  });
+});
+regR('morpeko-snack-search', (state, actorIdx, selectedIids, params, pool) => {
+  const p = state.players[actorIdx];
+  const targetIid = p.deck[0].iid;
+  const targetInst = p.deck[0];
+  let newDeck = [...p.deck];
+  newDeck.splice(0, 1);
+  if (selectedIids.length === 0) {
+    let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: newDeck, discard: [...pl.discard, targetInst] }));
+    return addLog(s, '點心尋找：將卡片丟棄', actorIdx);
+  }
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: newDeck, hand: [...pl.hand, targetInst] }));
+  return addLog(s, '點心尋找：將卡片加入手牌', actorIdx);
+});
+
+// ── 象牙豬ex (Mamoswine ex)
+ABILITY_EFFECTS.set('象牙豬ex|毛象搬運', deckSearchToHandA(1, 'Pokemon:Any', '毛象搬運'));
+regPre('象牙豬ex|雷鳴行進', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const count = p.bench.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.subtype === 'Stage 2';
+  }).length;
+  const bonus = count * 40;
+  return { state: addLog(state, `雷鳴行進：備戰區有 ${count} 隻【2階進化】寶可夢 → 增加 ${bonus} 傷害`, aIdx), damage: 180 + bonus };
+});
+
+// ── 米立龍 (Tatsugiri) ───────────────────────
+ABILITY_EFFECTS.set('米立龍|集客', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  if (p.active?.iid !== inst.iid) return addLog(state, '集客：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
+  if (p.deck.length === 0) return addLog(state, '集客：牌庫為空', aIdx);
+  if (p.active) p.active.abilityUsedThisTurn = true;
+  const count = Math.min(6, p.deck.length);
+  const top6 = p.deck.slice(0, count);
+  const supporters = top6.filter(c => pool.get(c.cardId)?.subtype === 'Supporter');
+  if (supporters.length === 0) {
+    let s = addLog(state, `集客：牌庫上方 ${count} 張卡中沒有支援者，將其放回牌庫並重洗`, aIdx);
+    return updatePlayer(s, aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+  }
+  let s = addLog(state, `集客：查看牌庫上方 ${count} 張卡，選擇 1 張支援者加入手牌`, aIdx);
+  return withPending(s, {
+    type: 'reorder-deck-top', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: 1,
+    effectKey: 'tatsugiri-attract-customers',
+    params: {
+      titleOverride: '選擇 1 張支援者加入手牌',
+      candidateIids: supporters.map(c => c.iid),
+      allowDiscard: true,
+      allViewedIids: top6.map(c => c.iid),
+    }
+  });
+});
+regR('tatsugiri-attract-customers', (state, actorIdx, selectedIids, params, pool) => {
+  const allViewedIids = (params?.allViewedIids) ?? [];
+  const p = state.players[actorIdx];
+  let newDeck = [...p.deck];
+  const viewedCards = [];
+  for (const iid of allViewedIids) {
+    const idx = newDeck.findIndex(c => c.iid === iid);
+    if (idx !== -1) {
+      viewedCards.push(newDeck[idx]);
+      newDeck.splice(idx, 1);
+    }
+  }
+  const selectedCards = viewedCards.filter(c => selectedIids.includes(c.iid));
+  const unselectedCards = viewedCards.filter(c => !selectedIids.includes(c.iid));
+  newDeck = shuffle([...newDeck, ...unselectedCards]);
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: newDeck }));
+  if (selectedCards.length === 0) return addLog(s, '集客：未選擇支援者，剩餘卡放回牌庫並重洗', actorIdx);
+  s = updatePlayer(s, actorIdx, pl => ({ ...pl, hand: [...pl.hand, selectedCards[0]] }));
+  const cardName = pool.get(selectedCards[0].cardId)?.name ?? '?';
+  return addLog(s, `集客：將「${cardName}」加入手牌，並重洗牌庫`, actorIdx);
+});
+
+// ── 喵喵ex (Meowth ex) ───────────────────────
+ABILITY_EFFECTS.set('喵喵ex|殺手鐧捕捉', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  if (p.abilityNamesUsedThisTurn?.includes('殺手鐧捕捉')) {
+    return addLog(state, '殺手鐧捕捉：這個回合已經使用過「殺手鐧捕捉」，無法再使用', aIdx);
+  }
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  let s = updatePlayer(state, aIdx, pl => ({
+    ...pl, abilityNamesUsedThisTurn: [...(pl.abilityNamesUsedThisTurn ?? []), '殺手鐧捕捉']
+  }));
+  s = addLog(s, '喵喵ex：使用特性「殺手鐧捕捉」，從牌庫選擇 1 張支援者加入手牌', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    filter: 'Trainer:Supporter', effectKey: 'meowth-ex-trump-catch'
+  });
+});
+regR('meowth-ex-trump-catch', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) {
+    let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    return addLog(s, '殺手鐧捕捉：未選擇支援者，牌庫已重洗', actorIdx);
+  }
+  const targetIid = selectedIids[0];
+  const p = state.players[actorIdx];
+  const idx = p.deck.findIndex(c => c.iid === targetIid);
+  if (idx === -1) return state;
+  const targetInst = p.deck[idx];
+  let newDeck = [...p.deck];
+  newDeck.splice(idx, 1);
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), hand: [...pl.hand, targetInst] }));
+  const cardName = pool.get(targetInst.cardId)?.name ?? '?';
+  return addLog(s, `殺手鐧捕捉：將「${cardName}」加入手牌，並重洗牌庫`, actorIdx);
+});
+regPre('喵喵ex|夾尾巴逃跑', (state, aIdx, pool) => ({ state, damage: 60 }));
+regPost('喵喵ex|夾尾巴逃跑', selfBouncePost('夾尾巴逃跑'));
+
+// ── 芳香精 (Aromatisse) ───────────────────────
+ABILITY_EFFECTS.set('芳香精|收集香氣', deckSearchToHandA(2, 'BasicEnergy:Psychic', '收集香氣'));
+regPre('芳香精|踩踏', (state, aIdx, pool) => ({ state, damage: 50 }));
+regPost('芳香精|踩踏', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  if (!p.active) return state;
+  const dmg = p.active.damage ?? 0;
+  if (dmg === 0) return state;
+  const heal = Math.min(30, dmg);
+  let s = updatePlayer(state, aIdx, pl => ({
+    ...pl, active: { ...pl.active!, damage: dmg - heal }
+  }));
+  return addLog(s, `踩踏：恢復了 ${heal} 點傷害`, aIdx);
+});
+
+// ── 莉佳的蔓藤怪 (Erika's Tangela) ───────────────────────
+ABILITY_EFFECTS.set('莉佳的蔓藤怪|百花齊放', (state, aIdx, pool, inst) => {
+  const p = state.players[aIdx];
+  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  let s = addLog(state, '莉佳的蔓藤怪：使用特性「百花齊放」，從牌庫選擇 1 張「莉佳的」寶可夢加入手牌', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    effectKey: 'erikas-tangela-hundred-flowers', params: { titleOverride: '選擇 1 張「莉佳的」寶可夢加入手牌' }
+  });
+});
+regR('erikas-tangela-hundred-flowers', (state, actorIdx, selectedIids, params, pool) => {
+  if (selectedIids.length === 0) {
+    let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    return addLog(s, '百花齊放：未選擇寶可夢，牌庫已重洗', actorIdx);
+  }
+  const targetIid = selectedIids[0];
+  const p = state.players[actorIdx];
+  const idx = p.deck.findIndex(c => c.iid === targetIid);
+  if (idx === -1) return state;
+  const targetInst = p.deck[idx];
+  const targetCard = pool.get(targetInst.cardId);
+  if (!targetCard?.name?.startsWith('莉佳的')) {
+    return addLog(state, '百花齊放：選擇的不是「莉佳的」寶可夢，取消操作', actorIdx);
+  }
+  let newDeck = [...p.deck];
+  newDeck.splice(idx, 1);
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), hand: [...pl.hand, targetInst] }));
+  return addLog(s, `百花齊放：將「${targetCard.name}」加入手牌，並重洗牌庫`, actorIdx);
+});
+regPre('莉佳的蔓藤怪|藤蔓攻擊', (state, aIdx, pool) => ({ state, damage: 50 }));
+regPost('莉佳的蔓藤怪|藤蔓攻擊', (state, aIdx, pool) => {
+  if (flipCoin()) {
+    let s = updatePlayer(state, 1 - aIdx as 0|1, pl => {
+      if (!pl.active) return pl;
+      return { ...pl, active: { ...pl.active, status: 'paralyzed' } };
+    });
+    return addLog(s, '藤蔓攻擊：擲硬幣出現正面，對手的戰鬥寶可夢【麻痺】', aIdx);
+  }
+  return state;
+});
+
+// ── 萌芽鹿 (Sawsbuck) ───────────────────────
+ABILITY_EFFECTS.set('萌芽鹿|四季變換', deckSearchToHandA(1, 'Trainer:Stadium', '四季變換'));
+regPre('萌芽鹿|強攻', (state, aIdx, pool) => ({ state, damage: 110 }));

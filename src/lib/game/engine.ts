@@ -2104,7 +2104,7 @@ function handlePlaying(
 
     // 精神抽出（勇基拉 / 胡地）/ 龐克練肌（瑪俐的長毛巨魔ex）/ 搜尋寶石（貓頭夜鷹）：
     // 必須「本回合剛進化成此階段」才能使用（evolvedThisTurn）。
-    if ((ability.name === '精神抽出' || ability.name === '龐克練肌' || ability.name === '搜尋寶石') && !targetPoke.evolvedThisTurn) {
+    if ((ability.name === '精神抽出' || ability.name === '龐克練肌' || ability.name === '搜尋寶石' || ability.name === '能量舞步' || ability.name === '脫殼') && !targetPoke.evolvedThisTurn) {
       return state;
     }
 
@@ -3963,6 +3963,7 @@ function handlePlaying(
       supporterPlayedThisTurn: false,
       rocketSupporterPlayedThisTurn: false,
       ancientSupporterPlayedThisTurn: false,
+      carnelliPlayedThisTurn: false,
       retreatedThisTurn: false,
     };
 
@@ -4542,7 +4543,7 @@ export function getUsableAbilities(
         if (player.deck.length === 0) return;
       }
       // 精神抽出 / 龐克練肌 / 合金建造（v2.102）：只有本回合剛進化才能用
-      if ((ab.name === '精神抽出' || ab.name === '龐克練肌' || ab.name === '合金建造') && !pk.evolvedThisTurn) return;
+      if ((ab.name === '精神抽出' || ab.name === '龐克練肌' || ab.name === '合金建造' || ab.name === '能量舞步' || ab.name === '脫殼') && !pk.evolvedThisTurn) return;
       // v2.229 精神抽出（魔靈多龍系）：除 evolvedThisTurn 外還需牌庫不空（要看 top 5）
       if (ab.name === '精神抽出' && player.deck.length === 0) return;
       // v2.229 龐克練肌（瑪俐的長毛巨魔ex）：除 evolvedThisTurn 外還需牌庫有基本【惡】能量
@@ -4588,8 +4589,8 @@ export function getUsableAbilities(
         });
         if (!hasFightEInHand) return;
       }
-      // v2.133 古劍豹｜沉雪、鐵斑葉ex｜迅速游標 — 同 justPlaced gate
-      if ((ab.name === '沉雪' || ab.name === '迅速游標') && !pk.justPlaced) return;
+      // v2.133 古劍豹｜沉雪、鐵斑葉ex｜迅速游標、喵喵ex｜殺手鐧捕捉 — 同 justPlaced gate
+      if ((ab.name === '沉雪' || ab.name === '迅速游標' || ab.name === '殺手鐧捕捉') && !pk.justPlaced) return;
       // v2.133 沉雪 額外 gate：場上沒有競技場卡時無意義
       if (ab.name === '沉雪' && !state.activeStadium) return;
       // v2.133 迅速游標 gate：必須從備戰發動（pk 不是 active）

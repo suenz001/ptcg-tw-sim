@@ -304,6 +304,7 @@ regG('卡娜莉', (st, idx, pool) => {
   });
 });
 reg('卡娜莉', (st, idx) => {
+  st = updatePlayer(st, idx, p => ({ ...p, carnelliPlayedThisTurn: true }));
   st = addLog(st, '卡娜莉：先棄 1 張手牌（除自身外）', idx);
   return withPending(st, {
     type: 'hand-discard',

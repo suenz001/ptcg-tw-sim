@@ -1,9 +1,28 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-04-29 (v2.288)  
+> 最後更新：2026-05-01 (v2.306)  
 > 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.306 — 寶可夢：實裝米立龍、喵喵ex、芳香精等5張濾牌特性卡片
+
+### 功能
+延續「濾牌/搜尋」特性的補齊工作，本次實裝了以下 5 張具有實用特性的寶可夢：
+- **米立龍 (Tatsugiri)** 特性「集客」：在戰鬥場時，查看牌庫上方 6 張卡，將 1 張支援者加入手牌。
+- **喵喵ex (Meowth ex)** 特性「殺手鐧捕捉」：從手牌放置於備戰區時，從牌庫搜尋 1 張支援者加入手牌（並修正 `engine.ts` 使其相容 `justPlaced` 判定）。
+- **芳香精 (Aromatisse)** 特性「收集香氣」：從牌庫搜尋最多 2 張基本【超】能量加入手牌。
+- **莉佳的蔓藤怪 (Erika's Tangela)** 特性「百花齊放」：從牌庫搜尋 1 張「莉佳的寶可夢」加入手牌。
+- **萌芽鹿 (Sawsbuck)** 特性「四季變換」：從牌庫搜尋 1 張競技場卡加入手牌。
+
+### 修正
+修復了 `check_missing_abilities.cjs` 腳本的正規表示式掃描邏輯，讓它能正確辨識以 `ABILITY_EFFECTS.set` 註冊的特性，消除大量誤報。
+
+### Build / Push
+- `npm run build` ✅
+- 版本號推進至 `v2.306`
 
 ---
 
@@ -16498,3 +16517,23 @@ Leon 反映手機直式對戰 UI（MobilePortraitBattle.svelte）有三個問題
 
 ### 下一步
 - 待 Leon 指示下一張未實裝卡
+
+---
+
+## v2.307 — 修復損毀的 v2306_meta_pokemon.ts 與 A11y 警告
+
+### 目標
+修復因為前次作業意外導致 `v2306_meta_pokemon.ts` 檔案毀損的問題，並解決 Svelte A11y 警告使專案無法成功 Build 的錯誤。
+
+### 修復內容
+1. **重建 `v2306_meta_pokemon.ts`**：
+   - 從過往邏輯還原了 20 隻高優先級 Meta 寶可夢的特性與招式實作。
+   - 修正了在宣告特性時缺少 import 的 `flipCoin`、`selfBouncePost`、`deckSearchToHandA` 等 helper 方法，改為 Local 實作以消除 Vite build 階段的 unresolved import 錯誤。
+   - 修復了不小心造成編碼錯誤（mojibake）及語法解析失效（Unexpected string literal）的迴歸錯誤。
+2. **解決 `MobilePortraitBattle.svelte` A11y 警告**：
+   - `svelte-ignore` 了 `a11y_click_events_have_key_events` 等警告，確保 `npm run build` 成功。
+3. **更新版號**：
+   - `version.ts` 升級至 `2.307`。
+
+### 驗證
+- `npm run build` 成功通過！

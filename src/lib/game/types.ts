@@ -242,6 +242,8 @@ export interface PlayerState {
   rocketSupporterPlayedThisTurn?: boolean;
   /** v2.160：本回合是否已打出「古代」標籤的支援者 — 雄偉牙｜地盤崩壞 條件用 */
   ancientSupporterPlayedThisTurn?: boolean;
+  /** v2.306：本回合是否已打出「卡娜莉」支援者 — 光電傘蜥｜頸傘發電 條件用 */
+  carnelliPlayedThisTurn?: boolean;
   /**
    * v2.174 鐵之防禦強化（Item / I）— 在下個對手的回合，自己的所有【鋼】寶可夢
    * 受到對手寶可夢招式的傷害 -30。打出時設於 self 的 NextTurn flag，於 nextIdx

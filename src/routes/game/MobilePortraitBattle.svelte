@@ -550,8 +550,13 @@
 
 <!-- ─── Bottom Sheet：動作選單 ─── -->
 {#if sheet}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div class="mp-sheet-overlay" onclick={closeSheet} role="presentation">
-    <div class="mp-sheet" onclick={(e) => e.stopPropagation()} role="dialog">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <div class="mp-sheet" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
       {#if sheet.type === 'hand'}
         {@const acts = handActions(sheet.inst)}
         {@const c = cardOf(sheet.inst)}
