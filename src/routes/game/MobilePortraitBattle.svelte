@@ -671,7 +671,8 @@
     padding: 4px 6px;
     overflow-x: auto;
   }
-  .mp-row::-webkit-scrollbar { height: 0; }
+  .mp-row::-webkit-scrollbar { display: none; }
+  .mp-row { scrollbar-width: none; }
   .mp-opp-bench { background: linear-gradient(180deg, rgba(80,30,30,0.5), rgba(60,20,20,0.3)); }
   .mp-my-bench { background: linear-gradient(0deg, rgba(30,40,80,0.5), rgba(20,30,40,0.3)); }
   .mp-slot {
@@ -723,8 +724,10 @@
     overflow-x: auto;
     align-items: center;
     font-size: 0.65rem;
+    position: relative; z-index: 10;
   }
-  .mp-chips::-webkit-scrollbar { height: 0; }
+  .mp-chips::-webkit-scrollbar { display: none; }
+  .mp-chips { scrollbar-width: none; }
   .mp-opp-chips { background: rgba(80,30,30,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); }
   .mp-my-chips { background: rgba(30,40,80,0.3); border-top: 1px solid rgba(255,255,255,0.05); }
   .mp-chip {
