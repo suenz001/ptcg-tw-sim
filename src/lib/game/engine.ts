@@ -2992,6 +2992,50 @@ function handlePlaying(
           if (fn) newState = fn(newState, dIdx, aIdx, baseDamage, pool);
         }
       }
+
+      // v2.301 Bug fix：TOOL_ON_DAMAGED（凸凸頭盔 +20、奢華炸彈 +120）或 SPECIAL_ENERGY
+      // 可能把反傷加到攻擊方身上，若此時攻擊方 HP 歸零，sanityKOSweep 只掃 dIdx 不掃 aIdx，
+      // 導致攻擊方留在場上「zombie」。在這裡立即偵測並處理攻擊方 KO。
+      {
+        const retaliatedAtk = newState.players[aIdx].active;
+        if (retaliatedAtk) {
+          const retAtkCard = pool.get(retaliatedAtk.cardId);
+          const retAtkHP = retAtkCard?.hp ?? 0;
+          if (retAtkHP > 0 && retaliatedAtk.damage >= retAtkHP) {
+            const retKoDiscard: CardInstance[] = [
+              retaliatedAtk,
+              ...retaliatedAtk.energyAttached,
+              ...(retaliatedAtk.toolAttached ? [retaliatedAtk.toolAttached] : []),
+              ...(retaliatedAtk.evolvedFromStack ?? []),
+            ];
+            const retKOPrizes = prizesForKO(retAtkCard!);
+            const retPlayers = [...newState.players] as [PlayerState, PlayerState];
+            retPlayers[aIdx] = {
+              ...retPlayers[aIdx],
+              active: null,
+              discard: [...retPlayers[aIdx].discard, ...retKoDiscard],
+            };
+            newState = addLog(
+              { ...newState, players: retPlayers, pendingPrizes: (newState.pendingPrizes ?? 0) + retKOPrizes },
+              `${retAtkCard!.name} 被反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${retKOPrizes} 張獎勵牌。`,
+              null,
+            );
+            // 攻擊方沒有備戰寶可夢 → 直接終局
+            if (retPlayers[aIdx].bench.length === 0) {
+              return {
+                ...newState,
+                phase: 'game-over',
+                winner: dIdx,
+                winReason: `${retPlayers[aIdx].name} 沒有可上場的寶可夢`,
+                log: [
+                  ...newState.log,
+                  { turn: newState.turn, playerIndex: null as null, message: `${retPlayers[aIdx].name} 沒有可上場的寶可夢，${newState.players[dIdx].name} 獲勝！` },
+                ],
+              };
+            }
+          }
+        }
+      }
     }
 
     // ── 龐克頭盔反彈 40：在防守方狀態已提交後套用，避免被覆蓋 ──────────────────
