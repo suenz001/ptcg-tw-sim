@@ -1263,6 +1263,22 @@
             }
             return false;
           }
+          if (f === 'BasicEnergy:Grass') {
+            // v2.305 電電充能第一段：基本【草】能量
+            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+              if (card.pokemonType === 'Grass') return true;
+              if (card.name.includes('【草】')) return true;
+            }
+            return false;
+          }
+          if (f === 'BasicEnergy:Lightning') {
+            // v2.305 電電充能第二段：基本【雷】能量
+            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+              if (card.pokemonType === 'Lightning') return true;
+              if (card.name.includes('【雷】')) return true;
+            }
+            return false;
+          }
           // v2.135：阿響的冒險
           if (f === 'RakiPokemonOrFireEnergy') {
             if (card.supertype === 'Pokemon' && card.name.startsWith('阿響的')) return true;
@@ -2178,7 +2194,11 @@
     if (type === 'hand-discard')    return '選擇丟棄的手牌';
     if (type === 'hand-choose')     return '從手牌選擇';
     if (type === 'active-energy-discard') return '選擇撤退要丟棄的能量';
-    if (type === 'heal-target')     return '選擇回復的寶可夢';
+    if (type === 'heal-target') {
+      const override2 = pendingSelection?.params?.titleOverride;
+      if (typeof override2 === 'string' && override2.length > 0) return override2;
+      return '選擇回復的寶可夢';
+    }
     if (type === 'discard-search')  return '從棄牌區選擇';
     if (type === 'damage-distribute') {
       const label = pendingSelection?.params?.label as string | undefined;
@@ -2204,6 +2224,8 @@
       'BasicPsychicEnergy':            '基本【超】能量',
       'BasicFightingEnergy':           '基本【鬥】能量',
       'BasicEnergy:Grass+Lightning':   '基本【草】或基本【雷】能量',
+      'BasicEnergy:Grass':             '基本【草】能量',
+      'BasicEnergy:Lightning':         '基本【雷】能量',
       'Pokemon':                       '寶可夢',
       'PokemonOrEnergy':               '寶可夢或能量',
       'PokemonOrBasicEnergy':          '寶可夢或基本能量',

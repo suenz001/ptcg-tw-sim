@@ -49,6 +49,7 @@ import {
   hitBenchPickPost,
 } from '../../effects';
 import { getEnergyUnits } from '../../engine';
+import { startEnergyChain } from './v158_energy_chain';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // (1) 連續拳（火箭隊的袋獸ex）— coin×30 4 次
@@ -166,26 +167,63 @@ regPost('火伊布ex|燃燒充能', (state, aIdx) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// (9) 電電充能（電電蟲）— 0 傷 + 從牌庫搜【草】+【雷】各最多 2 張，玩家逐張選目標附寶
+// (9) 電電充能（電電蟲）— 0 傷 + 從牌庫搜【草】最多 2 張、再搜【雷】最多 2 張
 // ══════════════════════════════════════════════════════════════════════════════
-// v2.158：升級為玩家自選分配（之前簡化為均附 active）
-//   實作：用單一 deck-search 選 ≤4 張「基本【草】或基本【雷】」能量
-//   （卡面寫「各最多 2 張」 — 嚴格上應拆兩段選，但合計 ≤4 張且 UI 限定屬性後選擇空間
-//   接近一致，玩家可直接控制取多少張草、多少張雷。）
+// v2.305 升級：兩段式——先選草（≤2），再選雷（≤2），確實符合「各最多 2 張」卡面規則
 regPre('電電蟲|電電充能', (state) => ({ state, damage: 0 }));
 regPost('電電蟲|電電充能', (state, aIdx) => {
   const player = state.players[aIdx];
   if (player.deck.length === 0) return addLog(state, '電電充能：牌庫為空', aIdx);
-  const max = Math.min(4, player.deck.length);
-  const s = addLog(state, `電電充能：從牌庫選 ≤${max} 張基本【草】/【雷】能量（接著逐張選目標）`, aIdx);
+  const maxGrass = Math.min(2, player.deck.length);
+  const s = addLog(state, `電電充能：選最多 ${maxGrass} 張基本【草】能量（接著選最多 2 張基本【雷】）`, aIdx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'BasicEnergy:Grass+Lightning',
-    minCount: 0, maxCount: max,
-    effectKey: 'v158-energy-chain-start',
-    params: { label: '電電充能', source: 'deck', scope: 'any-own', filterType: 'Any' },
+    filter: 'BasicEnergy:Grass',
+    minCount: 0, maxCount: maxGrass,
+    effectKey: 'v155-bugcharge-grass',
+    params: { label: '電電充能' },
   });
+});
+
+// 電電充能 第一段 resolver：草選完 → 開第二段選雷
+regR('v155-bugcharge-grass', (st, aIdx, grassIids, params, pool) => {
+  const label = String(params?.label ?? '電電充能');
+  const player = st.players[aIdx];
+  const maxLightning = Math.min(2, player.deck.length);
+  if (maxLightning === 0) {
+    if (grassIids.length === 0) {
+      st = updatePlayerInline(st, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+      return addLog(st, `${label}：未選擇任何能量`, aIdx);
+    }
+    return startEnergyChain(st, aIdx, grassIids, {
+      label, source: 'deck', scope: 'any-own', filterType: 'Any',
+    }, pool);
+  }
+  const s = addLog(st, `${label}：已選 ${grassIids.length} 張【草】，接著選最多 ${maxLightning} 張基本【雷】能量`, aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'BasicEnergy:Lightning',
+    minCount: 0, maxCount: maxLightning,
+    effectKey: 'v155-bugcharge-lightning',
+    params: { label, grassIids },
+  });
+});
+
+// 電電充能 第二段 resolver：雷選完 → 合併草+雷 → 進 startEnergyChain
+regR('v155-bugcharge-lightning', (st, aIdx, lightningIids, params, pool) => {
+  const label = String(params?.label ?? '電電充能');
+  const grassIids = (params?.grassIids as string[]) ?? [];
+  const allIids = [...grassIids, ...lightningIids];
+  if (allIids.length === 0) {
+    st = updatePlayerInline(st, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+    return addLog(st, `${label}：未選擇任何能量`, aIdx);
+  }
+  const s = addLog(st, `${label}：共選 ${grassIids.length} 張【草】+ ${lightningIids.length} 張【雷】，開始附能`, aIdx);
+  return startEnergyChain(s, aIdx, allIids, {
+    label, source: 'deck', scope: 'any-own', filterType: 'Any',
+  }, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

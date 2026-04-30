@@ -149,6 +149,9 @@ export function startEnergyChain(
   // 多個合法目標 → 對第 1 張能量開 picker
   const firstEnergy = energyIids[0];
   const remainingEnergies = energyIids.slice(1);
+  // 查出第 1 張能量的卡名，用於 UI 標頭
+  const firstEnergyInDiscard = st.players[aIdx].discard.find(c => c.iid === firstEnergy);
+  const firstEnergyCardName = firstEnergyInDiscard ? (pool.get(firstEnergyInDiscard.cardId)?.name ?? '能量') : '能量';
   st = addLog(st, `${label}：選擇要附第 1 張能量的目標寶可夢（共 ${energyIids.length} 張待附）`, aIdx);
   return withPending(st, {
     type: scope === 'bench-only' ? 'bench-choose' : 'heal-target',
@@ -159,6 +162,7 @@ export function startEnergyChain(
       label, scope, filterType,
       currentEnergy: firstEnergy,
       remainingEnergies,
+      titleOverride: `${label}：將「${firstEnergyCardName}」附到哪一隻寶可夢？`,
     },
   });
 }
@@ -264,6 +268,9 @@ regR('v158-energy-chain-attach', (st, aIdx, iids, params, pool) => {
   // 多目標 → 對下一張開 picker（chain）
   const next = remainingEnergies[0];
   const rest = remainingEnergies.slice(1);
+  // 查出下一張能量的卡名，用於 UI 標頭
+  const nextEnergyInDiscard = st.players[aIdx].discard.find(c => c.iid === next);
+  const nextEnergyCardName = nextEnergyInDiscard ? (pool.get(nextEnergyInDiscard.cardId)?.name ?? '能量') : '能量';
   st = addLog(st, `${label}：選擇下一張能量目標（剩 ${remainingEnergies.length} 張待附）`, aIdx);
   return withPending(st, {
     type: scope === 'bench-only' ? 'bench-choose' : 'heal-target',
@@ -274,6 +281,7 @@ regR('v158-energy-chain-attach', (st, aIdx, iids, params, pool) => {
       label, scope, filterType,
       currentEnergy: next,
       remainingEnergies: rest,
+      titleOverride: `${label}：將「${nextEnergyCardName}」附到哪一隻寶可夢？`,
     },
   });
 });
