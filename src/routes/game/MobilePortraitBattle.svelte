@@ -346,13 +346,19 @@
       {@const inst = oppPlayer.bench[i]}
       {#if inst}
         {@const c = cardOf(inst)}
-        <button class="mp-slot mp-opp-slot" onclick={() => onOpenZoom(inst.cardId, inst)}>
-          {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
-          <span class="mp-slot-hp">{hpRemaining(inst)}</span>
-          {#if inst.energyAttached.length > 0}
-            <span class="mp-slot-eg">⚡{inst.energyAttached.length}</span>
-          {/if}
-        </button>
+        {#if game.phase === 'setup'}
+          <div class="mp-slot mp-card-back" title="準備中...">
+            <span class="mp-card-back-mark">?</span>
+          </div>
+        {:else}
+          <button class="mp-slot mp-opp-slot" onclick={() => onOpenZoom(inst.cardId, inst)}>
+            {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
+            <span class="mp-slot-hp">{hpRemaining(inst)}</span>
+            {#if inst.energyAttached.length > 0}
+              <span class="mp-slot-eg">⚡{inst.energyAttached.length}</span>
+            {/if}
+          </button>
+        {/if}
       {:else}
         <div class="mp-slot mp-empty"></div>
       {/if}
@@ -375,21 +381,37 @@
     {#if oppPlayer.active}
       {@const inst = oppPlayer.active}
       {@const c = cardOf(inst)}
-      <button class="mp-active mp-active-opp mp-status-{inst.status ?? 'none'}" onclick={() => onOpenZoom(inst.cardId, inst)}>
-        {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
-        <div class="mp-active-info">
-          <div class="mp-active-name">{c?.name ?? '?'}</div>
-          <div class="mp-hp {hpClass(inst)}">
-            <div class="mp-hp-fill" style="width:{hpMax(inst) ? (hpRemaining(inst)/hpMax(inst)*100) : 0}%"></div>
-            <span>HP {hpRemaining(inst)}/{hpMax(inst)}</span>
+      {#if game.phase === 'setup'}
+        <div class="mp-active mp-active-opp mp-status-none" title="準備中...">
+          <div class="mp-card-back mp-active-card-back">
+            <span class="mp-card-back-mark">?</span>
           </div>
-          <div class="mp-meta">
-            {#if inst.energyAttached.length > 0}<span>⚡{inst.energyAttached.length}</span>{/if}
-            {#if inst.toolAttached}<span>🔧</span>{/if}
-            {#if inst.status}<span class="mp-status">{inst.status}</span>{/if}
+          <div class="mp-active-info">
+            <div class="mp-active-name">？？？</div>
+            <div class="mp-hp hp-high">
+              <div class="mp-hp-fill" style="width:100%"></div>
+              <span>HP ???/???</span>
+            </div>
+            <div class="mp-meta"><span>準備中</span></div>
           </div>
         </div>
-      </button>
+      {:else}
+        <button class="mp-active mp-active-opp mp-status-{inst.status ?? 'none'}" onclick={() => onOpenZoom(inst.cardId, inst)}>
+          {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
+          <div class="mp-active-info">
+            <div class="mp-active-name">{c?.name ?? '?'}</div>
+            <div class="mp-hp {hpClass(inst)}">
+              <div class="mp-hp-fill" style="width:{hpMax(inst) ? (hpRemaining(inst)/hpMax(inst)*100) : 0}%"></div>
+              <span>HP {hpRemaining(inst)}/{hpMax(inst)}</span>
+            </div>
+            <div class="mp-meta">
+              {#if inst.energyAttached.length > 0}<span>⚡{inst.energyAttached.length}</span>{/if}
+              {#if inst.toolAttached}<span>🔧</span>{/if}
+              {#if inst.status}<span class="mp-status">{inst.status}</span>{/if}
+            </div>
+          </div>
+        </button>
+      {/if}
     {:else}
       <div class="mp-active-empty">（對手戰鬥場空）</div>
     {/if}
@@ -713,6 +735,16 @@
     flex-shrink: 0;
     pointer-events: none;
   }
+  .mp-card-back {
+    background: repeating-linear-gradient(45deg, #1f4277, #1f4277 8px, #1a3a6a 8px, #1a3a6a 16px);
+    border: 2px solid #eebb44;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mp-card-back-mark { color: #eebb44; font-weight: 700; font-family: serif; font-size: 1.5rem; }
+  .mp-slot.mp-card-back { padding: 0; width: 46px; height: 64px; }
+  .mp-card-back.mp-active-card-back { width: 70px; height: 92px; flex-shrink: 0; }
+
   .mp-active-info {
     flex: 1; min-width: 0;
     display: flex; flex-direction: column; gap: 4px;

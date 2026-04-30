@@ -2751,6 +2751,18 @@
        自行依 phase 切換 setup「拖手牌」vs playing「結束回合」按鈕）。
        Modals（pendingSelection / lightbox / zoom-modal 等）保留在 .battle-root 內、
        conditional 之外，always render — 兩種 layout 都能觸發 modal。 -->
+
+  <!-- 背景音樂播放器 (全域) -->
+  {#if bgmTrack !== 'none'}
+    <audio 
+      src="{base}/music/{bgmTrack}.mp3" 
+      loop 
+      autoplay 
+      bind:this={bgmAudioEl} 
+      bind:volume={bgmVolume}
+    ></audio>
+  {/if}
+
   {#if isPortraitMobile && game}
     <MobilePortraitBattle
       {game}
@@ -2838,18 +2850,6 @@
         {isFullscreen ? '⛶' : '⛶'} {isFullscreen ? '退出全螢幕' : '全螢幕'}
       </button>
     </span>
-    
-    <!-- 背景音樂播放器 -->
-    {#if bgmTrack !== 'none'}
-      <audio 
-        src="{base}/music/{bgmTrack}.mp3" 
-        loop 
-        autoplay 
-        bind:this={bgmAudioEl} 
-        bind:volume={bgmVolume}
-      ></audio>
-    {/if}
-
     {#if game.phase === 'playing' && activePlayer}
       {@const attEnergy = activePlayer.energyAttachedThisTurn}
       {@const attSupp = activePlayer.supporterPlayedThisTurn}
