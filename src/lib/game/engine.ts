@@ -2999,13 +2999,52 @@ function handlePlaying(
       const refPlayers = [...newState.players] as [PlayerState, PlayerState];
       const atkP = { ...refPlayers[aIdx] };
       if (atkP.active) {
-        atkP.active = { ...atkP.active, damage: atkP.active.damage + punkReflectDamage };
+        const atkNewDmg = atkP.active.damage + punkReflectDamage;
+        const atkCardForKO = pool.get(atkP.active.cardId);
+        const atkHP = atkCardForKO?.hp ?? 0;
+        atkP.active = { ...atkP.active, damage: atkNewDmg };
         refPlayers[aIdx] = atkP;
         newState = addLog(
           { ...newState, players: refPlayers },
           `🔧 龐克頭盔：${attackerCard.name} 受到 ${punkReflectDamage} 傷害反擊！`,
           null,
         );
+        // v2.300 Bug fix：反彈傷害打死攻擊方時，需立即 KO 處理（sanityKOSweep 只掃 dIdx，不掃 aIdx）
+        if (atkHP > 0 && atkNewDmg >= atkHP) {
+          const deadAtk = atkP.active;
+          const koDiscard: CardInstance[] = [
+            deadAtk,
+            ...deadAtk.energyAttached,
+            ...(deadAtk.toolAttached ? [deadAtk.toolAttached] : []),
+            ...(deadAtk.evolvedFromStack ?? []),
+          ];
+          const punkKOPrizes = prizesForKO(atkCardForKO!);
+          const punkRefPlayers2 = [...newState.players] as [PlayerState, PlayerState];
+          punkRefPlayers2[aIdx] = {
+            ...punkRefPlayers2[aIdx],
+            active: null,
+            discard: [...punkRefPlayers2[aIdx].discard, ...koDiscard],
+          };
+          // 防守方（dIdx）得到獎賞牌（放進 pendingPrizes 讓 UI 取牌）
+          newState = addLog(
+            { ...newState, players: punkRefPlayers2, pendingPrizes: (newState.pendingPrizes ?? 0) + punkKOPrizes },
+            `${attackerCard.name} 被龐克頭盔的反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${punkKOPrizes} 張獎勵牌。`,
+            null,
+          );
+          // 若攻擊方場上空了（無備戰）→ 直接終局
+          if (punkRefPlayers2[aIdx].bench.length === 0) {
+            return {
+              ...newState,
+              phase: 'game-over',
+              winner: dIdx,
+              winReason: `${punkRefPlayers2[aIdx].name} 沒有可上場的寶可夢`,
+              log: [
+                ...newState.log,
+                { turn: newState.turn, playerIndex: null as null, message: `${punkRefPlayers2[aIdx].name} 沒有可上場的寶可夢，${newState.players[dIdx].name} 獲勝！` },
+              ],
+            };
+          }
+        }
       }
     }
 
