@@ -122,9 +122,16 @@
     | { type: 'bench'; inst: CardInstance }
     | { type: 'pick-energy-target'; energyIid: string }
     | { type: 'pick-evolve-target'; evoIid: string; candidates: string[] }
+    | { type: 'discard'; list: CardInstance[]; owner: string }
     | null;
   let sheet = $state<SheetState>(null);
   function closeSheet() { sheet = null; }
+
+  // ── 開啟棄牌區清單 sheet ──────────────────────────────────────────
+  function openDiscard(list: CardInstance[], owner: string) {
+    if (list.length === 0) return;
+    sheet = { type: 'discard', list: [...list].reverse(), owner };
+  }
 
   // ── Hand tap：依卡類型決定 sheet 內容 ──────────────────────────────
   function tapHand(inst: CardInstance) {
@@ -369,7 +376,7 @@
   <div class="mp-chips mp-opp-chips">
     <span class="mp-chip">🎁 {oppPlayer.prizes.length}</span>
     <span class="mp-chip">📚 {oppPlayer.deck.length}</span>
-    <button class="mp-chip mp-clickable" onclick={() => onOpenZoom(oppPlayer.discard[oppPlayer.discard.length - 1]?.cardId ?? '', null)} disabled={oppPlayer.discard.length === 0}>🗑 {oppPlayer.discard.length}</button>
+    <button class="mp-chip mp-clickable" onclick={() => openDiscard(oppPlayer.discard, '對手')} disabled={oppPlayer.discard.length === 0}>🗑 {oppPlayer.discard.length}</button>
     <span class="mp-chip">🂠 對手手牌 {oppPlayer.hand.length}</span>
     {#if stadiumCard && game.activeStadium}
       <button class="mp-chip mp-clickable mp-stadium" onclick={() => onOpenZoom(game.activeStadium!.cardId, null)}>🏟 {stadiumCard.name}</button>
@@ -462,7 +469,7 @@
   <div class="mp-chips mp-my-chips">
     <span class="mp-chip">🎁 {myPlayer.prizes.length}</span>
     <span class="mp-chip">📚 {myPlayer.deck.length}</span>
-    <button class="mp-chip mp-clickable" onclick={() => onOpenZoom(myPlayer.discard[myPlayer.discard.length - 1]?.cardId ?? '', null)} disabled={myPlayer.discard.length === 0}>🗑 {myPlayer.discard.length}</button>
+    <button class="mp-chip mp-clickable" onclick={() => openDiscard(myPlayer.discard, '我方')} disabled={myPlayer.discard.length === 0}>🗑 {myPlayer.discard.length}</button>
     <span class="mp-chip mp-mine">✋ {myPlayer.hand.length}</span>
     {#if canUseStadium && isMyTurn}
       <button class="mp-chip mp-clickable mp-stadium-btn" onclick={() => onAction(GameActions.useStadium())}>🏟 使用競技場</button>
@@ -573,6 +580,18 @@
             {nameOfIid(fromIid)}
           </button>
         {/each}
+      {:else if sheet.type === 'discard'}
+        <div class="mp-sheet-title">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
+        <div class="mp-discard-list">
+          {#each sheet.list as inst (inst.iid)}
+            {@const c = pool.get(inst.cardId)}
+            <div class="mp-discard-row">
+              <span class="mp-discard-name">{c?.name ?? '?'}</span>
+              <span class="mp-discard-type">{c?.supertype === 'Pokemon' ? '🐾' : c?.supertype === 'Energy' ? '⚡' : '🃏'}</span>
+              <button class="mp-discard-zoom" onclick={() => { closeSheet(); onOpenZoom(inst.cardId, inst); }} title="放大查看">🔍</button>
+            </div>
+          {/each}
+        </div>
       {/if}
       <button class="mp-sheet-cancel" onclick={closeSheet}>取消</button>
     </div>
@@ -930,6 +949,46 @@
     cursor: pointer;
     margin-top: 0.3rem;
   }
+
+  /* v2.297：棄牌區清單 sheet */
+  .mp-discard-list {
+    display: flex; flex-direction: column;
+    gap: 2px;
+    max-height: 52vh;
+    overflow-y: auto;
+  }
+  .mp-discard-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .mp-discard-row:nth-child(even) { background: rgba(255,255,255,0.04); }
+  .mp-discard-name {
+    flex: 1;
+    font-size: 0.86rem;
+    color: #e8e8e8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mp-discard-type {
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  .mp-discard-zoom {
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: #fff;
+    transition: background 0.15s;
+  }
+  .mp-discard-zoom:active { background: rgba(255,255,255,0.2); }
 
   /* v2.289：手牌可打出的訓練家/競技場 右上角小 badge */
   .mp-card-hint {
