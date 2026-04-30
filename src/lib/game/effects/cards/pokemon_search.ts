@@ -16,7 +16,7 @@
 
 import {
   reg, regR, regG,
-  addLog, updatePlayer, withPending, shuffle,
+  addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   applyBenchPlaceSideEffects,
 } from '../_shared';
 

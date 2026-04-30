@@ -18,7 +18,7 @@
 
 import {
   reg, regR, regG,
-  addLog, updatePlayer, withPending, shuffle,
+  addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   drawCards, healResolver,
 } from '../_shared';
 

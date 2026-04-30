@@ -21,7 +21,7 @@
 
 import {
   reg, regR, regG,
-  addLog, updatePlayer, withPending,
+  addLog, addPrivateLog, updatePlayer, withPending,
   shuffle,
   drawCards, returnHandToDeck,
   clearActiveEffects,

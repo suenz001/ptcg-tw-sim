@@ -15,7 +15,7 @@
 
 import {
   reg, regR, regG,
-  addLog, updatePlayer, withPending, shuffle,
+  addLog, addPrivateLog, updatePlayer, withPending, shuffle,
 } from '../_shared';
 import type { CardInstance, PlayerState } from '../../types';
 

@@ -18,7 +18,7 @@
 
 import {
   reg, regR, regG, regA,
-  addLog, updatePlayer, withPending, shuffle, clearActiveEffects, drawCards,
+  addLog, addPrivateLog, updatePlayer, withPending, shuffle, clearActiveEffects, drawCards,
   healResolver, sameEvoName,
 } from '../_shared';
 import { getBenchLimit, isBasicPokemonCard } from '../../engine';
