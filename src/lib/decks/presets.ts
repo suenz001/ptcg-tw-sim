@@ -244,7 +244,7 @@ const MARNIE_SCRAFTY_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '10447', count: 2 },  // 雪妖女 (SV6)
     { cardId: '16829', count: 3 },  // 願增猿 (MC) — 腎上腺腦力
     { cardId: '11526', count: 1 },  // 含羞苞 (SV8a)
-    { cardId: '16951', count: 1 },  // 伊裴爾塔爾 (MC)
+    { cardId: '13997', count: 1 },  // 伊裴爾塔爾 (M1L 040/063)
     { cardId: '17020', count: 1 },  // 米立龍 (MC)
     { cardId: '14692', count: 1 },  // 可達鴨 (M2a) — 特性濕氣
     { cardId: '17980', count: 1 },  // 謝米 (M3)
