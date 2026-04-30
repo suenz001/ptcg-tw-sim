@@ -235,9 +235,12 @@ regPost('瑪俐的搗蛋小妖|偷盜', (state, aIdx, _pool) => {
 
 // ── 瑪俐的長毛巨魔ex｜龐克練肌（特性）─ 進化當回合可用 1 次
 //    從牌庫選最多 5 張基本【惡】能量附於自身（重洗牌庫）
-regA('瑪俐的長毛巨魔ex', 0, (st, idx, pool) => {
+regA('瑪俐的長毛巨魔ex', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
-  if (!p.active) return addLog(st, '龐克練肌：沒有戰鬥寶可夢', idx);
+  const allPokes = [...(p.active ? [p.active] : []), ...p.bench];
+  const src = cardInst ? allPokes.find(c => c.iid === cardInst.iid) : p.active;
+  if (!src) return addLog(st, '龐克練肌：找不到該寶可夢', idx);
+
   const cand = p.deck.filter(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Darkness';
@@ -249,25 +252,33 @@ regA('瑪俐的長毛巨魔ex', 0, (st, idx, pool) => {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Energy:Darkness', minCount: 0, maxCount: maxN,
     effectKey: 'punk-training-attach',
-    params: { label: '龐克練肌', validIids: cand.map(c => c.iid) },
+    params: { label: '龐克練肌', validIids: cand.map(c => c.iid), targetIid: src.iid },
   });
 });
 regR('punk-training-attach', (st, idx, iids, params, pool) => {
   const label = (params?.label as string) ?? '龐克練肌';
+  const targetIid = params?.targetIid as string | undefined;
   const p = st.players[idx];
-  if (!p.active) return st;
+  
   const picked = p.deck.filter(c => iids.includes(c.iid));
-  const targetName = pool.get(p.active.cardId)?.name ?? '戰鬥寶可夢';
   if (picked.length === 0) return addLog(st, `${label}：未選擇能量（重洗牌庫）`, idx);
+
+  const isActive = p.active?.iid === targetIid;
+  const isBench = p.bench.some(c => c.iid === targetIid);
+  if (!isActive && !isBench) return addLog(st, `${label}：目標寶可夢已不在場上`, idx);
+
+  const targetName = '瑪俐的長毛巨魔ex';
   const s = addLog(st, `${label}：將 ${picked.length} 張【惡】能量附加到 ${targetName}（重洗牌庫）`, idx);
-  return updatePlayer(s, idx, pl => {
-    if (!pl.active) return pl;
-    return {
-      ...pl,
-      deck: shuffle(pl.deck.filter(c => !iids.includes(c.iid))),
-      active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...picked] },
-    };
-  });
+  return updatePlayer(s, idx, pl => ({
+    ...pl,
+    deck: shuffle(pl.deck.filter(c => !iids.includes(c.iid))),
+    active: (pl.active && pl.active.iid === targetIid)
+      ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...picked] }
+      : pl.active,
+    bench: pl.bench.map(c => c.iid === targetIid
+      ? { ...c, energyAttached: [...c.energyAttached, ...picked] }
+      : c),
+  }));
 });
 
 // ── 瑪俐的長毛巨魔ex｜暗影子彈 — 180，另對對手 1 隻備戰寶可夢造成 30 傷害 ──────
