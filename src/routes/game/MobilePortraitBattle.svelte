@@ -39,7 +39,7 @@
   import {
     getEffectiveAttacks, getAvailableAttacks, getEvolvableTargets, getPlayableTrainers,
     getPlayableBasics, getPlayableFossils, getUsableAbilities,
-    canRetreat as engineCanRetreat, getRetreatCost,
+    canRetreat as engineCanRetreat, getRetreatCost, getBenchLimit
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
 
@@ -75,6 +75,8 @@
   // ── Derived state ─────────────────────────────────────────────────
   let myPlayer = $derived(game.players[myIdx]);
   let oppPlayer = $derived(game.players[oppIdx]);
+  let myBenchLimit = $derived(getBenchLimit(game, myIdx, pool));
+  let oppBenchLimit = $derived(getBenchLimit(game, oppIdx, pool));
   let isMyTurn = $derived(game.activePlayerIndex === myIdx);
   let isMainPhase = $derived(game.turnPhase === 'main');
   let isSetup = $derived(game.phase === 'setup');
@@ -360,7 +362,7 @@
 
   <!-- ─── 對手 bench ─── -->
   <div class="mp-row mp-opp-bench">
-    {#each Array(5).fill(null) as _, i}
+    {#each Array(Math.max(5, oppBenchLimit, oppPlayer.bench.length)) as _, i}
       {@const inst = oppPlayer.bench[i]}
       {#if inst}
         {@const c = cardOf(inst)}
@@ -498,7 +500,7 @@
 
   <!-- ─── 我方 bench ─── -->
   <div class="mp-row mp-my-bench">
-    {#each Array(5).fill(null) as _, i}
+    {#each Array(Math.max(5, myBenchLimit, myPlayer.bench.length)) as _, i}
       {@const inst = myPlayer.bench[i]}
       {#if inst}
         {@const c = cardOf(inst)}
@@ -532,7 +534,7 @@
           playableTrainerIids.has(inst.iid) || playableFossilIids.has(inst.iid) ||
           (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection) ||
           /* v2.287 修：setup 階段基礎寶可夢可放（不分先後手） */
-          (isSetup && !game.setupDone[myIdx] && isBasicMon(c) && (!myPlayer.active || myPlayer.bench.length < 5))
+          (isSetup && !game.setupDone[myIdx] && isBasicMon(c) && (!myPlayer.active || myPlayer.bench.length < myBenchLimit))
         )}
         {@const isPlayableTrainer = playableTrainerIids.has(inst.iid) && !!c && (c.supertype === 'Trainer')}
         <button class="mp-hand-card" class:mp-playable={playable} onclick={() => tapHand(inst)} title={c?.name}>
