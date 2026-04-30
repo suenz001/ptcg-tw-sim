@@ -1060,16 +1060,24 @@
   }
   .close {
     position: absolute;
-    top: 1.25rem;
-    right: 1.25rem;
-    background: transparent;
+    top: 1rem;
+    right: 1rem;
+    width: 2.2rem;
+    height: 2.2rem;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
     border: none;
-    font-size: 1.8rem;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
-    color: #666;
-    line-height: 1;
+    color: #333;
+    z-index: 10;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
   }
   .close:hover {
+    background: #fff;
     color: #000;
   }
   .detailGrid {

@@ -5352,10 +5352,10 @@
   .zoom-overlay{ position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.88); display:flex; align-items:flex-start; justify-content:center; padding:1rem; padding-top:calc(env(safe-area-inset-top, 2rem) + 1rem); font-family:system-ui,'Microsoft JhengHei',sans-serif; }
   /* v2.69：卡牌詳細 modal 整體等比放大 20%（Leon 反饋） */
   .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.44rem; max-width:864px; width:96vw; max-height:calc(100vh - env(safe-area-inset-top, 2rem) - 3rem); margin:auto; display:flex; flex-direction:column; gap:.9rem; color:#f0f0f0; overflow-y:auto; position:relative; }
-  .zoom-close{ position:absolute; top:1.25rem; right:1.25rem; background:transparent; border:none; color:#aaa; font-size:1.44rem; cursor:pointer; padding:.24rem .48rem; border-radius:4px; line-height:1; }
-  .zoom-close:hover{ background:#2a3a2a; color:#fff; }
-  /* v2.32：放到 × 左邊（top-right），避免擋到卡牌圖。.zoom-close 大約 1.6–2rem 寬，所以 back 從 right:3rem 開始留一些間距。 */
-  .zoom-back{ position:absolute; top:1.25rem; right:4.5rem; background:#2a4a6a; border:1px solid #4a6a8a; color:#cce; font-size:.98rem; cursor:pointer; padding:.3rem .72rem; border-radius:4px; line-height:1; }
+  .zoom-close{ position:absolute; top:1rem; right:1rem; width:2.2rem; height:2.2rem; background:rgba(0,0,0,0.6); border-radius:50%; border:none; color:#eee; font-size:1.44rem; display:flex; align-items:center; justify-content:center; cursor:pointer; line-height:1; z-index:10; box-shadow:0 2px 6px rgba(0,0,0,0.4); }
+  .zoom-close:hover{ background:#fff; color:#000; }
+  /* v2.32：放到 × 左邊（top-right），避免擋到卡牌圖。.zoom-close 大約 2.2rem 寬，所以 back 從 right:4rem 開始留一些間距。 */
+  .zoom-back{ position:absolute; top:1.25rem; right:4.5rem; background:#2a4a6a; border:1px solid #4a6a8a; color:#cce; font-size:.98rem; cursor:pointer; padding:.3rem .72rem; border-radius:4px; line-height:1; z-index:10; box-shadow:0 2px 6px rgba(0,0,0,0.4); }
   .zoom-back:hover{ background:#3a5a8a; color:#fff; }
   .zoom-body{ display:flex; gap:1.5rem; align-items:flex-start; flex-wrap:wrap; }
   .zoom-img{ width:312px; max-width:90vw; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.7); flex-shrink:0; }
