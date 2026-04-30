@@ -177,11 +177,11 @@ reg('黑暗球', (st, idx) => {
 });
 
 regR('search-pokemon-to-hand', (st, idx, iids, _params, pool) => {
-  // Log 顯示搜到哪張卡（公開資訊：官方規則搜牌庫結果需公開給對手看）
+  // Log 顯示搜到哪張卡（依用戶要求，改為不公開具體卡名）
   const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
   if (chosen.length > 0) {
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `搜到：${names} 加入手牌`, idx);
+    st = addPrivateLog(st, `搜到：${names} 加入手牌`, `搜到 ${chosen.length} 張卡加入手牌`, idx);
   } else {
     st = addLog(st, '牌庫搜尋：未選擇任何卡', idx);
   }

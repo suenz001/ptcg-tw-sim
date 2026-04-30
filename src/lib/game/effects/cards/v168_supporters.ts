@@ -166,7 +166,7 @@ regR('piper-item-pick', (st, idx, iids, _params, pool) => {
   if (set.size > 0) {
     const picked = st.players[idx].deck.filter(c => set.has(c.iid));
     const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `派帕：搜到物品 ${names}`, idx);
+    st = addPrivateLog(st, `派帕：搜到物品 ${names}`, `派帕：搜到 ${picked.length} 張卡`, idx);
   } else {
     st = addLog(st, '派帕：未選物品', idx);
   }
@@ -190,7 +190,7 @@ regR('piper-tool-pick', (st, idx, iids, _params, pool) => {
   if (set.size > 0) {
     const picked = st.players[idx].deck.filter(c => set.has(c.iid));
     const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `派帕：搜到道具 ${names}`, idx);
+    st = addPrivateLog(st, `派帕：搜到道具 ${names}`, `派帕：搜到 ${picked.length} 張卡`, idx);
   } else {
     st = addLog(st, '派帕：未選道具', idx);
   }

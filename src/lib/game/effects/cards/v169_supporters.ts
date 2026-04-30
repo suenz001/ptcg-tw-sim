@@ -71,7 +71,7 @@ regR('tora-pokemon', (st, idx, iids, params, pool) => {
   const set = new Set(iids);
   if (set.size > 0) {
     const picked = st.players[idx].deck.filter(c => set.has(c.iid));
-    st = addLog(st, `杜若：搜到寶可夢 ${picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、')}`, idx);
+    st = addPrivateLog(st, `杜若：搜到寶可夢 ${picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、')}`, `杜若：搜到 ${picked.length} 張寶可夢`, idx);
   }
   st = updatePlayer(st, idx, p => {
     const got = p.deck.filter(c => set.has(c.iid));
@@ -95,7 +95,7 @@ regR('tora-trainer', (st, idx, iids, params, pool) => {
   const set = new Set(iids);
   if (set.size > 0) {
     const picked = st.players[idx].deck.filter(c => set.has(c.iid));
-    st = addLog(st, `杜若：搜到訓練家 ${picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、')}`, idx);
+    st = addPrivateLog(st, `杜若：搜到訓練家 ${picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、')}`, `杜若：搜到 ${picked.length} 張訓練家`, idx);
   } else {
     st = addLog(st, '杜若：未選訓練家', idx);
   }
@@ -132,7 +132,7 @@ regR('masaki-transport', (st, idx, iids, params, pool) => {
   const set = new Set(iids);
   if (set.size > 0) {
     const picked = st.players[idx].deck.filter(c => set.has(c.iid));
-    st = addLog(st, `正輝的輸送：搜到 ${picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、')}（${picked.length} 張）加入手牌`, idx);
+    st = addPrivateLog(st, `正輝的輸送：搜到 ${picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、')} 加入手牌`, `正輝的輸送：搜到 ${picked.length} 張卡加入手牌`, idx);
   } else {
     st = addLog(st, '正輝的輸送：未選擇寶可夢', idx);
   }
@@ -254,7 +254,7 @@ regR('firebreather-pick', (st, idx, iids, _params, pool) => {
   }
   const picked = st.players[idx].deck.filter(c => set.has(c.iid));
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  st = addLog(st, `吹火人：搜到 ${names}（${picked.length} 張）加入手牌`, idx);
+  st = addPrivateLog(st, `吹火人：搜到 ${names} 加入手牌`, `吹火人：搜到 ${picked.length} 張卡加入手牌`, idx);
   return updatePlayer(st, idx, p => {
     const got = p.deck.filter(c => set.has(c.iid));
     const rest = p.deck.filter(c => !set.has(c.iid));

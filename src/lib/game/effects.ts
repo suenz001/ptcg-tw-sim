@@ -9795,8 +9795,8 @@ regR('energy-transfer-search', (st, idx, iids, _params, pool) => {
   }
   const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
   const pickedNames = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  // 卡面強制公開（給對手看過）— 用 addLog（公開）而非 addPrivateLog
-  st = addLog(st, `能量輸送：搜到 ${pickedNames} 加入手牌`, idx);
+  // 依用戶要求，所有找牌加入手牌皆不公開
+  st = addPrivateLog(st, `能量輸送：搜到 ${pickedNames} 加入手牌`, `能量輸送：搜到 ${picked.length} 張卡加入手牌`, idx);
   return updatePlayer(st, idx, (p) => {
     const pickedIids = new Set(iids);
     const pickedInDeck = p.deck.filter(c => pickedIids.has(c.iid));
@@ -9839,7 +9839,7 @@ regR('energy-pro-search', (st, idx, iids, _params, pool) => {
     kept.push(c);
   }
   const keptNames = kept.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  st = addLog(st, `能量輸送PRO：搜到 ${keptNames}（${kept.length} 張）加入手牌`, idx);
+  st = addPrivateLog(st, `能量輸送PRO：搜到 ${keptNames}（${kept.length} 張）加入手牌`, `能量輸送PRO：搜到 ${kept.length} 張卡加入手牌`, idx);
   if (dupes.length > 0) {
     st = addLog(st, `（同屬重複 ${dupes.length} 張放回牌庫）`, idx);
   }
@@ -9966,7 +9966,7 @@ regR('akuroma-step1-stadium', (st, idx, iids, _params, pool) => {
   if (iids.length > 0) {
     const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    s = addLog(s, `阿克羅瑪的執著：搜到 ${names}（競技場）加入手牌`, idx);
+    s = addPrivateLog(s, `阿克羅瑪的執著：搜到 ${names}（競技場）加入手牌`, `阿克羅瑪的執著：搜到 ${chosen.length} 張卡加入手牌`, idx);
     s = updatePlayer(s, idx, (p) => {
       const picked = p.deck.filter(c => iids.includes(c.iid));
       const rest = p.deck.filter(c => !iids.includes(c.iid));
@@ -9990,7 +9990,7 @@ regR('akuroma-step2-energy', (st, idx, iids, _params, pool) => {
   if (iids.length > 0) {
     const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    s = addLog(s, `阿克羅瑪的執著：搜到 ${names}（能量）加入手牌`, idx);
+    s = addPrivateLog(s, `阿克羅瑪的執著：搜到 ${names}（能量）加入手牌`, `阿克羅瑪的執著：搜到 ${chosen.length} 張卡加入手牌`, idx);
     s = updatePlayer(s, idx, (p) => {
       const picked = p.deck.filter(c => iids.includes(c.iid));
       const rest = p.deck.filter(c => !iids.includes(c.iid));

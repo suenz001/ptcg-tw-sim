@@ -615,7 +615,7 @@ regR('master-ball-pick', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '大師球：未選擇（牌庫已重洗）', idx);
   const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  st = addLog(st, `大師球：搜到 ${names} 加入手牌`, idx);
+  st = addPrivateLog(st, `大師球：搜到 ${names} 加入手牌`, `大師球：搜到 ${picked.length} 張卡加入手牌`, idx);
   return updatePlayer(st, idx, p => {
     const set = new Set(iids);
     const got = p.deck.filter(c => set.has(c.iid));
@@ -769,7 +769,7 @@ regR('gift-drone-pick', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '親送無人機：未選擇（牌庫已重洗）', idx);
   const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  st = addLog(st, `親送無人機：搜到 ${names} 加入手牌`, idx);
+  st = addPrivateLog(st, `親送無人機：搜到 ${names} 加入手牌`, `親送無人機：搜到 ${picked.length} 張卡加入手牌`, idx);
   return updatePlayer(st, idx, p => {
     const set = new Set(iids);
     const got = p.deck.filter(c => set.has(c.iid));
@@ -801,7 +801,7 @@ regR('order-box-pick', (st, idx, iids, _params, pool) => {
   const picked = st.players[idx].deck.filter(c => set.has(c.iid));
   if (picked.length > 0) {
     const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `訂購盒：搜到 ${names}（${picked.length} 張）加入手牌`, idx);
+    st = addPrivateLog(st, `訂購盒：搜到 ${names} 加入手牌`, `訂購盒：搜到 ${picked.length} 張卡加入手牌`, idx);
   } else {
     st = addLog(st, '訂購盒：未選擇任何物品卡', idx);
   }
@@ -838,7 +838,7 @@ regR('help-bell-pick', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '幫忙鈴：未選擇（牌庫已重洗）', idx);
   const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  st = addLog(st, `幫忙鈴：搜到 ${names} 加入手牌`, idx);
+  st = addPrivateLog(st, `幫忙鈴：搜到 ${names} 加入手牌`, `幫忙鈴：搜到 ${picked.length} 張卡加入手牌`, idx);
   return updatePlayer(st, idx, p => {
     const set = new Set(iids);
     const got = p.deck.filter(c => set.has(c.iid));
@@ -917,7 +917,7 @@ regR('victory-proof-pick', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '勝利之證：未選擇（牌庫已重洗）', idx);
   const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  st = addLog(st, `勝利之證：搜到 ${names} 加入手牌`, idx);
+  st = addPrivateLog(st, `勝利之證：搜到 ${names} 加入手牌`, `勝利之證：搜到 ${picked.length} 張卡加入手牌`, idx);
   return updatePlayer(st, idx, p => {
     const set = new Set(iids);
     const got = p.deck.filter(c => set.has(c.iid));
@@ -1011,7 +1011,7 @@ regR('tm-machine-pick', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '招式學習器機：未選擇（牌庫已重洗）', idx);
   const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  st = addLog(st, `招式學習器機：搜到 ${names}（${picked.length} 張）加入手牌`, idx);
+  st = addPrivateLog(st, `招式學習器機：搜到 ${names} 加入手牌`, `招式學習器機：搜到 ${picked.length} 張卡加入手牌`, idx);
   return updatePlayer(st, idx, p => {
     const set = new Set(iids);
     const got = p.deck.filter(c => set.has(c.iid));
