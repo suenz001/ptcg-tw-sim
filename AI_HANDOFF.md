@@ -7,6 +7,23 @@
 
 ---
 
+## v2.296 — 實裝炎武王特性「烈火亂舞」
+
+### 功能
+卡面：「在自己的回合時，可不限次數使用。從自己的手牌選擇 1 張「基本【火】能量」卡，附於自己的寶可夢身上。
+
+### 實裝決策
+1. 新增 `UNLIMITED_USE_ABILITY_NAMES` 白名單（engine.ts），將 `烈火亂舞` 列入，引擎跳過 `abilityUsedThisTurn` gate 與標記。
+2. `getUsableAbilities` 對不限次數特性即使 `abilityUsedThisTurn=true` 也展示按鈕。
+3. `regA('炎武王', 0, ...)` + 兩個 resolver 實裝選能量→選目標流程。
+4. `getUsableAbilities` 加入烈火亂舞的手牌 gate（手牌沒有基本【火】能量時隐藏按鈕）。
+
+### Build / Push
+- `npm run build` ✅
+- 版本號推進至 `v2.296`
+
+---
+
 ## v2.295 — 修正直式排版中戰鬥場與備戰區卡牌大小比例
 
 ### Bug / UX Issues

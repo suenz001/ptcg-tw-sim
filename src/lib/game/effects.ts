@@ -12232,3 +12232,84 @@ regR('tool-remover-pick', (state, aIdx, iids, params, pool) => {
 });
 // 'end' choice handler — 沒做事，只是結束 chain
 regR('tool-remover-end', (state) => state);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SV11W 炎武王｜烈火亂舞（v2.296）
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「在自己的回合時，可不限次數使用。從自己的手牌選擇 1 張「基本【火】能量」
+//         卡，附於自己的寶可夢身上。」
+// 實裝要點：
+//   - 此特性不受每回合 1 次限制（已在 UNLIMITED_USE_ABILITY_NAMES 白名單）
+//   - 附加目標是「自己任何一隻寶可夢」（戰鬥 + 備戰）
+//   - 手牌選 1 張 BasicFireEnergy → bench-or-active choose 選目標
+// ──────────────────────────────────────────────────────────────────────────────
+regA('炎武王', 0, (st, idx, pool) => {
+  const player = st.players[idx];
+  // gate：手牌需有基本【火】能量
+  const fireEnergyIids = player.hand
+    .filter(c => {
+      const cc = pool.get(c.cardId);
+      return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+        && (cc.pokemonType === 'Fire' || /【火】/.test(cc.name));
+    })
+    .map(c => c.iid);
+  if (fireEnergyIids.length === 0) {
+    return addLog(st, '烈火亂舞：手牌中沒有基本【火】能量', idx);
+  }
+  st = addLog(st, '烈火亂舞：從手牌選 1 張基本【火】能量附於自己的寶可夢', idx);
+  return withPending(st, {
+    type: 'hand-choose',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, filter: '',
+    effectKey: 'inferno-fandango-pick-energy',
+    params: { validIids: fireEnergyIids },
+  });
+});
+
+regR('inferno-fandango-pick-energy', (st, idx, iids, _params, pool) => {
+  const energyIid = iids[0];
+  if (!energyIid) return st;
+  const player = st.players[idx];
+  const energyInst = player.hand.find(c => c.iid === energyIid);
+  if (!energyInst) return st;
+  const energyName = pool.get(energyInst.cardId)?.name ?? '能量';
+  // 從手牌移除能量（暫存 params）並要求選附加目標
+  st = updatePlayer(st, idx, p => ({
+    ...p,
+    hand: p.hand.filter(c => c.iid !== energyIid),
+  }));
+  st = addLog(st, `烈火亂舞：選擇要附加 ${energyName} 的寶可夢`, idx);
+  const field = [
+    ...(player.active ? [player.active] : []),
+    ...player.bench,
+  ];
+  return withPending(st, {
+    type: 'heal-target',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, filter: '',
+    effectKey: 'inferno-fandango-attach',
+    params: { energyIid, energyCardId: energyInst.cardId, validIids: field.map(c => c.iid) },
+  });
+});
+
+regR('inferno-fandango-attach', (st, idx, iids, params, pool) => {
+  const targetIid = iids[0];
+  const energyIid = params?.energyIid as string | undefined;
+  const energyCardId = params?.energyCardId as string | undefined;
+  if (!targetIid || !energyIid || !energyCardId) return st;
+  const energyInst: import('./types').CardInstance = { iid: energyIid, cardId: energyCardId, damage: 0, energyAttached: [] };
+  const energyName = pool.get(energyCardId)?.name ?? '能量';
+  return updatePlayer(st, idx, p => {
+    const attachTo = (inst: import('./types').CardInstance | null): import('./types').CardInstance | null => {
+      if (!inst || inst.iid !== targetIid) return inst;
+      const name = pool.get(inst.cardId)?.name ?? '?';
+      st = addLog(st, `烈火亂舞：將 ${energyName} 附加到 ${name}`, idx);
+      return { ...inst, energyAttached: [...inst.energyAttached, energyInst] };
+    };
+    return {
+      ...p,
+      active: attachTo(p.active) as import('./types').CardInstance | null,
+      bench: p.bench.map(c => attachTo(c) ?? c),
+    };
+  });
+});

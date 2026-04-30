@@ -175,6 +175,15 @@ export const SHARED_ONCE_PER_TURN_ABILITY_NAMES = new Set<string>([
   '風扇呼喚',
 ]);
 
+/**
+ * v2.295 「不限次數」主動特性白名單。
+ * 卡面明寫「可不限次數使用」的特性列於此，
+ * 引擎將跳過每回合 1 次的 abilityUsedThisTurn gate 與標記。
+ */
+export const UNLIMITED_USE_ABILITY_NAMES = new Set<string>([
+  '烈火亂舞', // 炎武王 — 在自己的回合時，可不限次數使用：從手牌選拉1張「基本【火】能量」卡附於自己的寶可夢身上。
+]);
+
 // v2.94 的 isPassiveOnlyAttackEntry guard 於 v2.95 移除。
 // 根因修已完成：scraper 修 ZWJ strip（parse-card.js）+ migration 腳本把全卡池
 // 73 個「[特性]XXX」entry 從 attacks[] 搬到 abilities[]（v2.95 同 commit），
@@ -2083,12 +2092,12 @@ function handlePlaying(
     const targetPoke = allPokes.find(c => c.iid === action.iid);
     if (!targetPoke) return state;
 
-    // 檢查是否已用過特性
-    if (targetPoke.abilityUsedThisTurn) return state;
-
     const pokeCard = pool.get(targetPoke.cardId);
     const ability = pokeCard?.abilities?.[action.abilityIndex];
     if (!ability) return state;
+
+    // 檢查是否已用過特性（不限次數特性跳過）
+    if (targetPoke.abilityUsedThisTurn && !UNLIMITED_USE_ABILITY_NAMES.has(ability.name)) return state;
 
     // 集客（米立龍）限制：只有在出場時才能使用
     if (ability.name === '集客' && attacker.active?.iid !== action.iid) return state;
@@ -2144,13 +2153,15 @@ function handlePlaying(
     const abilityFn = ABILITY_EFFECTS.get(`${pokeCard!.name}|${action.abilityIndex}`);
     if (!abilityFn) return state;
 
-    // 標記已使用
-    const markUsed = (c: CardInstance): CardInstance =>
-      c.iid === action.iid ? { ...c, abilityUsedThisTurn: true } : c;
+    // 標記已使用（不限次數特性跳過）
     const updatedPlayers = [...state.players] as [PlayerState, PlayerState];
     const updatedP = { ...updatedPlayers[aIdx] };
-    updatedP.active = updatedP.active ? markUsed(updatedP.active) : null;
-    updatedP.bench = updatedP.bench.map(markUsed);
+    if (!UNLIMITED_USE_ABILITY_NAMES.has(ability.name)) {
+      const markUsed = (c: CardInstance): CardInstance =>
+        c.iid === action.iid ? { ...c, abilityUsedThisTurn: true } : c;
+      updatedP.active = updatedP.active ? markUsed(updatedP.active) : null;
+      updatedP.bench = updatedP.bench.map(markUsed);
+    }
     // v2.91 → v2.93 修正：只有白名單特性（月光循環/使者衝刺）才記錄到
     // abilityNamesUsedThisTurn；一般特性的「每回合 1 次」由 per-instance
     // 的 abilityUsedThisTurn flag 負責。
@@ -4503,7 +4514,14 @@ export function getUsableAbilities(
   ];
   const result: Array<{ iid: string; abilityIndex: number; pokemonName: string; abilityName: string }> = [];
   for (const pk of allPokes) {
-    if (pk.abilityUsedThisTurn) continue;
+    // 不限次數特性（如烈火亂舞）即使 abilityUsedThisTurn 也繼續顯示
+    if (pk.abilityUsedThisTurn) {
+      const card = pool.get(pk.cardId);
+      const hasUnlimited = card?.abilities?.some((ab, i) =>
+        UNLIMITED_USE_ABILITY_NAMES.has(ab.name) && ABILITY_EFFECTS.has(`${card.name}|${i}`)
+      );
+      if (!hasUnlimited) continue;
+    }
     const card = pool.get(pk.cardId);
     if (!card?.abilities) continue;
     // 火箭隊的監視塔：【無】屬寶可夢的特性全部消除
@@ -4785,6 +4803,15 @@ export function getUsableAbilities(
       if (ab.name === '旅途牽絆' && player.deck.length === 0) return;
       // v2.290 烈焰馬｜快走：牌庫不空（要抽 1 張）
       if (ab.name === '快走' && player.deck.length === 0) return;
+      // v2.295 烈火亂舞（炎武王）：手牌需有基本【火】能量（且場上有寶可夢可附）
+      if (ab.name === '烈火亂舞') {
+        const hasFireEInHand = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+            && (cc.pokemonType === 'Fire' || /【火】/.test(cc.name));
+        });
+        if (!hasFireEInHand) return;
+      }
       // ──────────────────────────────────────────────────────────────────────
       // 扭轉乾坤：上個『對手的回合』自己寶可夢昏厥了才可用（同不公印章邏輯）。
       // v2.246 修：精確 KO cause tracking
