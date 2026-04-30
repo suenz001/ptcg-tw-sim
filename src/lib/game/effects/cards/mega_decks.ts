@@ -15,6 +15,7 @@ import {
   healResolver, recordOppKO,
 } from '../_shared';
 import { hitBenchPickPost } from '../../effects';
+import { isBasicEnergyOfType } from '../../engine';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 奧利瓦ex ｜ 芳香射擊（160 + 自身清特殊狀態）
@@ -176,7 +177,7 @@ regG('吉普索', (st, idx, pool) => {
   // 棄牌區有基本鋼能量 + 場上有鋼寶可夢
   const hasMetalEnergy = st.players[idx].discard.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Metal';
+    return isBasicEnergyOfType(card, 'Metal');
   });
   const hasMetalPoke = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench]
     .some(c => pool.get(c.cardId)?.pokemonType === 'Metal');
@@ -185,7 +186,7 @@ regG('吉普索', (st, idx, pool) => {
 reg('吉普索', (st, idx, pool) => {
   const cand = st.players[idx].discard.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Metal';
+    return isBasicEnergyOfType(card, 'Metal');
   });
   const maxPick = Math.min(2, cand.length);
   const s = addLog(st, `吉普索：從棄牌區選 0-${maxPick} 張基本【鋼】能量`, idx);
@@ -418,8 +419,7 @@ regA('鋁鋼橋龍ex', 0, (st, idx, pool, cardInst) => {
   // （與 v2.121 filter 修法同 root cause — 老版基本能量 scraper 沒抓 pokemonType）
   const cand = st.players[idx].discard.filter(c => {
     const card = pool.get(c.cardId);
-    if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-    return card.pokemonType === 'Metal' || /【鋼】/.test(card.name ?? '');
+    return isBasicEnergyOfType(card, 'Metal');
   });
   if (cand.length === 0) return addLog(st, '合金建造：棄牌區無基本【鋼】能量', idx);
   const metalPokes = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench]

@@ -32,6 +32,7 @@ import {
 import {
   selfSwapPost, skipDefEffectsPre, countOppPokemon, koPrizeCount,
 } from '../../effects';
+import { isBasicEnergyOfType } from '../../engine';
 
 // ── 凱西｜瞬間移動攻擊 — 10，可選擇與備戰互換 ────────────────────────────────
 regPre('凱西|瞬間移動攻擊', (state, _aIdx, _pool) => ({ state, damage: 10 }));
@@ -243,7 +244,7 @@ regA('瑪俐的長毛巨魔ex', 0, (st, idx, pool, cardInst) => {
 
   const cand = p.deck.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Darkness';
+    return isBasicEnergyOfType(card, 'Darkness');
   });
   if (cand.length === 0) return addLog(st, '龐克練肌：牌庫沒有基本【惡】能量', idx);
   const maxN = Math.min(5, cand.length);
