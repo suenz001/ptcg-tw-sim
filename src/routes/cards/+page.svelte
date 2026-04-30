@@ -675,7 +675,7 @@
       aria-label="放大卡牌圖片"
       onclick={closeLightbox}
     >
-      <img class="lightboxImg" src={lightbox} alt="放大圖片" onclick={(e) => e.stopPropagation()} />
+      <img class="lightboxImg" src={lightbox} alt="放大圖片" onclick={closeLightbox} />
       <button class="lightboxClose" onclick={closeLightbox} aria-label="關閉">×</button>
     </div>
   {/if}
@@ -1040,9 +1040,10 @@
     inset: 0;
     background: rgba(0, 0, 0, 0.6);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     padding: 1rem;
+    padding-top: calc(env(safe-area-inset-top, 2rem) + 1rem);
     z-index: 100;
   }
   .modalInner {
@@ -1050,7 +1051,8 @@
     border-radius: 12px;
     max-width: 900px;
     width: 100%;
-    max-height: 90vh;
+    max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem);
+    margin: auto;
     overflow-y: auto;
     position: relative;
     padding: 1.5rem;
@@ -1058,8 +1060,8 @@
   }
   .close {
     position: absolute;
-    top: 0.5rem;
-    right: 0.75rem;
+    top: 1.25rem;
+    right: 1.25rem;
     background: transparent;
     border: none;
     font-size: 1.8rem;
@@ -1141,8 +1143,9 @@
   }
   .lightboxClose {
     position: absolute;
-    top: 1rem;
-    right: 1.25rem;
+    top: 4rem;
+    top: calc(env(safe-area-inset-top, 2rem) + 1.5rem);
+    right: 1.5rem;
     background: rgba(255, 255, 255, 0.15);
     border: none;
     color: #fff;

@@ -7,6 +7,33 @@
 
 ---
 
+## v2.292 — 手機版安全區域修復 (iOS Dynamic Island) 最終版
+
+### Bug
+Leon / User 反報：手機版（iPhone 14/15/16 Pro 動態島）上，卡牌詳情彈出視窗（白底框）與全螢幕大圖（黑底 Lightbox）的右上角「×」關閉按鈕，剛好被系統狀態列（時間、電池）與動態島遮擋，完全無法點擊。
+
+### 根因
+1. **Flexbox Overflow 陷阱**：原本用 `align-items: center` 垂直置中，當 `modalInner` 內容大於螢幕高度時，會往上溢出突破 `padding-top`，直接頂到 `y=0`。
+2. **Invalid CSS 語法**：先前試圖使用 `max(env(...) + 0.5rem, 1.5rem)` 語法，但在 iOS Safari 被視為無效 CSS 規則而直接忽略，導致 `top` 屬性遺失。
+
+### 修法
+1. `.modal`, `.pv-overlay`, `.zoom-overlay`, `.lightbox-overlay` 從 `align-items: center` 改為 `align-items: flex-start`，並搭配 `padding-top: calc(env(safe-area-inset-top, 2rem) + 1rem)`，確保彈窗絕對不會溢出至系統狀態列。
+2. `.modalInner`, `.pv-inner`, `.zoom-modal`, `.lightbox-img` 加上 `margin: auto` 來保持置中，並設置 `max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem)` 確保在安全區內可捲動。
+3. `.lightboxClose` / `.lightbox-close` 使用安全的雙後備語法：`top: 4rem; top: calc(env(safe-area-inset-top, 2rem) + 1.5rem);` 保證距離螢幕頂部 56px 以上。
+4. **UX 優化**：增加點擊全螢幕大圖片本身（Lightbox image）也可直接關閉大圖的功能。
+
+### 觸碰檔案
+- `src/routes/cards/+page.svelte`
+- `src/routes/decks/+page.svelte`
+- `src/routes/game/+page.svelte`
+- `src/lib/game/engine.ts` (版本號提升至 v2.289)
+
+### Build / Push
+- `npm run build` ✅
+- commit hash: 待補
+
+---
+
 ## v2.288 — 修：拖曳整頁滑動 + lobby 手機左右排版 + 退出按鈕無效
 
 ### Bugs

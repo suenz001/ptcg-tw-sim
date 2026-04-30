@@ -1143,7 +1143,7 @@
     aria-label="放大卡牌圖片"
     onclick={closeLightbox}
   >
-    <img class="lightboxImg" src={lightboxUrl} alt="放大圖片" onclick={(e) => e.stopPropagation()} />
+    <img class="lightboxImg" src={lightboxUrl} alt="放大圖片" onclick={closeLightbox} />
     <button class="lightboxClose" onclick={closeLightbox} aria-label="關閉">×</button>
   </div>
 {/if}
@@ -1593,9 +1593,10 @@
     background: rgba(0, 0, 0, 0.72);
     z-index: 100;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     padding: 1rem;
+    padding-top: calc(env(safe-area-inset-top, 2rem) + 1rem);
     cursor: zoom-out;
   }
   .pv-inner {
@@ -1603,7 +1604,8 @@
     border-radius: 12px;
     max-width: 760px;
     width: 100%;
-    max-height: 92vh;
+    max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem);
+    margin: auto;
     overflow-y: auto;
     position: relative;
     padding: 1.5rem;
@@ -1612,8 +1614,8 @@
   }
   .pv-close {
     position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
+    top: 1.25rem;
+    right: 1.25rem;
     width: 2rem;
     height: 2rem;
     border-radius: 50%;
@@ -1982,8 +1984,9 @@
   }
   .lightboxClose {
     position: absolute;
-    top: 1rem;
-    right: 1.25rem;
+    top: 4rem;
+    top: calc(env(safe-area-inset-top, 2rem) + 1.5rem);
+    right: 1.5rem;
     background: rgba(255, 255, 255, 0.15);
     border: none;
     color: #fff;

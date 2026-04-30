@@ -4393,7 +4393,7 @@
   {#if lightboxUrl}
     <div class="lightbox-overlay" role="dialog" aria-modal="true" aria-label="放大卡牌圖片"
       onclick={closeLightboxImg}>
-      <img class="lightbox-img" src={lightboxUrl} alt="放大圖片" onclick={(e)=>e.stopPropagation()}/>
+      <img class="lightbox-img" src={lightboxUrl} alt="放大圖片" onclick={closeLightboxImg}/>
       <button class="lightbox-close" onclick={closeLightboxImg} aria-label="關閉">×</button>
     </div>
   {/if}
@@ -5349,13 +5349,13 @@
   .dmg-ko-tag{ display:inline-block; margin-left:.3rem; background:#ff2040; color:#fff; font-weight:800; padding:.05rem .35rem; border-radius:3px; font-size:.7rem; letter-spacing:.05em; }
 
 
-  .zoom-overlay{ position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.88); display:flex; align-items:center; justify-content:center; font-family:system-ui,'Microsoft JhengHei',sans-serif; }
+  .zoom-overlay{ position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.88); display:flex; align-items:flex-start; justify-content:center; padding:1rem; padding-top:calc(env(safe-area-inset-top, 2rem) + 1rem); font-family:system-ui,'Microsoft JhengHei',sans-serif; }
   /* v2.69：卡牌詳細 modal 整體等比放大 20%（Leon 反饋） */
-  .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.44rem; max-width:864px; width:96vw; max-height:92vh; display:flex; flex-direction:column; gap:.9rem; color:#f0f0f0; overflow-y:auto; position:relative; }
-  .zoom-close{ position:absolute; top:.7rem; right:.8rem; background:transparent; border:none; color:#aaa; font-size:1.44rem; cursor:pointer; padding:.24rem .48rem; border-radius:4px; line-height:1; }
+  .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.44rem; max-width:864px; width:96vw; max-height:calc(100vh - env(safe-area-inset-top, 2rem) - 3rem); margin:auto; display:flex; flex-direction:column; gap:.9rem; color:#f0f0f0; overflow-y:auto; position:relative; }
+  .zoom-close{ position:absolute; top:1.25rem; right:1.25rem; background:transparent; border:none; color:#aaa; font-size:1.44rem; cursor:pointer; padding:.24rem .48rem; border-radius:4px; line-height:1; }
   .zoom-close:hover{ background:#2a3a2a; color:#fff; }
   /* v2.32：放到 × 左邊（top-right），避免擋到卡牌圖。.zoom-close 大約 1.6–2rem 寬，所以 back 從 right:3rem 開始留一些間距。 */
-  .zoom-back{ position:absolute; top:.7rem; right:3.2rem; background:#2a4a6a; border:1px solid #4a6a8a; color:#cce; font-size:.98rem; cursor:pointer; padding:.3rem .72rem; border-radius:4px; line-height:1; }
+  .zoom-back{ position:absolute; top:1.25rem; right:4.5rem; background:#2a4a6a; border:1px solid #4a6a8a; color:#cce; font-size:.98rem; cursor:pointer; padding:.3rem .72rem; border-radius:4px; line-height:1; }
   .zoom-back:hover{ background:#3a5a8a; color:#fff; }
   .zoom-body{ display:flex; gap:1.5rem; align-items:flex-start; flex-wrap:wrap; }
   .zoom-img{ width:312px; max-width:90vw; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.7); flex-shrink:0; }
@@ -5474,9 +5474,9 @@
   .zoom-img-btn:hover .zoom-img-hint{ opacity:1; }
 
   /* ── v2.129：全螢幕 lightbox（鏡射 /cards 樣式，但 z-index 比 zoom-overlay 高） ── */
-  .lightbox-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.92); display:flex; align-items:center; justify-content:center; z-index:9999; cursor:zoom-out; padding:1rem; }
-  .lightbox-img{ max-width:min(600px,95vw); max-height:92vh; object-fit:contain; border-radius:12px; box-shadow:0 8px 40px rgba(0,0,0,0.6); cursor:default; }
-  .lightbox-close{ position:absolute; top:1rem; right:1.25rem; background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:2rem; line-height:1; width:2.5rem; height:2.5rem; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .lightbox-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.92); display:flex; align-items:flex-start; justify-content:center; z-index:9999; cursor:zoom-out; padding:1rem; padding-top:calc(env(safe-area-inset-top, 2rem) + 1rem); }
+  .lightbox-img{ margin:auto; max-width:min(600px,95vw); max-height:calc(100vh - env(safe-area-inset-top, 2rem) - 3rem); object-fit:contain; border-radius:12px; box-shadow:0 8px 40px rgba(0,0,0,0.6); cursor:default; }
+  .lightbox-close{ position:absolute; top:4rem; top:calc(env(safe-area-inset-top, 2rem) + 1.5rem); right:1.5rem; background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:2rem; line-height:1; width:2.5rem; height:2.5rem; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; }
   .lightbox-close:hover{ background:rgba(255,255,255,0.3); }
 
   /* ════════════════════════════════════════════════════════════════════════
