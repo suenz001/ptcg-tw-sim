@@ -96,7 +96,7 @@ regR('surf-beach-swap', (st, idx, iids, _params, pool) => {
   return updatePlayer(st, idx, pl => {
     if (!pl.active) return pl;
     const newBench = [...pl.bench];
-    const newActive = { ...pl.bench[benchIdx], justPlaced: false, movedToActiveThisTurn: true };
+    const newActive = { ...pl.bench[benchIdx], justPlaced: false, playedFromHand: false, movedToActiveThisTurn: true };
     newBench[benchIdx] = clearActiveEffects(pl.active);
     return { ...pl, active: newActive, bench: newBench };
   });

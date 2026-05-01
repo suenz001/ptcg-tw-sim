@@ -71,6 +71,12 @@ export interface CardInstance {
    */
   justPlaced?: boolean;
   /**
+   * 本回合剛從手牌打出放置。
+   * 用於區分 Setup 或牌庫特召（不具備此 flag），以判定部分特性（如狂挖、經驗法則）。
+   * 在 END_TURN 時清除。
+   */
+  playedFromHand?: boolean;
+  /**
    * 本回合已進化過，不可再次進化。
    * 在 END_TURN 時清除。
    */

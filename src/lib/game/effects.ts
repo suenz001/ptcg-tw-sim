@@ -1824,7 +1824,7 @@ regR('sage-evolve', (state, aIdx, iids, _params, pool) => {
         toolAttached: undefined, energyAttached: [], evolvedFromStack: undefined }],
       evolvedThisTurn: true,
       // 賽吉特殊：覆寫 justPlaced（賽吉允許剛上場立刻進化）
-      justPlaced: undefined,
+      justPlaced: undefined, playedFromHand: undefined,
       movedToActiveThisTurn: undefined,
       cantAttackThisTurn: undefined,
       cantAttackPending: undefined,
@@ -5502,7 +5502,7 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
   // swap first — v2.08：離開戰鬥場清狀態旗標
   const newBench = [...defender.bench];
   newBench[benchIdx] = clearActiveEffects(oldActive);
-  let newDefender = { ...defender, active: { ...newActiveOrig, justPlaced: false }, bench: newBench };
+  let newDefender = { ...defender, active: { ...newActiveOrig, justPlaced: false, playedFromHand: false }, bench: newBench };
   let s: GameState = { ...st };
   let players = [...s.players] as [PlayerState, PlayerState];
   players[dIdx] = newDefender;
@@ -8711,7 +8711,7 @@ function selfReturnToHandPost(label: string): AttackPostFn {
       // 主體（含目前 cardId 與 iid）
       { ...inst, damage: 0, energyAttached: [], toolAttached: undefined,
         status: undefined, evolvedFromStack: undefined,
-        evolvedThisTurn: undefined, justPlaced: undefined, movedToActiveThisTurn: undefined,
+        evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
         damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
         abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
         cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
@@ -8741,7 +8741,7 @@ function selfReturnToDeckPost(label: string): AttackPostFn {
     const returning: CardInstance[] = [
       { ...inst, damage: 0, energyAttached: [], toolAttached: undefined,
         status: undefined, evolvedFromStack: undefined,
-        evolvedThisTurn: undefined, justPlaced: undefined, movedToActiveThisTurn: undefined,
+        evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
         damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
         abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
         cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
@@ -8773,7 +8773,7 @@ function selfReturnToDeckThenSearchPost(maxSearch: number, label: string): Attac
     const returning: CardInstance[] = [
       { ...inst, damage: 0, energyAttached: [], toolAttached: undefined,
         status: undefined, evolvedFromStack: undefined,
-        evolvedThisTurn: undefined, justPlaced: undefined, movedToActiveThisTurn: undefined,
+        evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
         damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
         abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
         cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
@@ -8830,7 +8830,7 @@ regR('self-bench-return-to-deck', (st, actorIdx, selectedIids, params, _pool) =>
   const returning: CardInstance[] = [
     { ...picked, damage: 0, energyAttached: [], toolAttached: undefined,
       status: undefined, evolvedFromStack: undefined,
-      evolvedThisTurn: undefined, justPlaced: undefined, movedToActiveThisTurn: undefined,
+      evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
       damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
       abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
       cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
@@ -9901,7 +9901,7 @@ regR('wind-vortex-return', (st, idx, iids, _params, pool) => {
     status: undefined,
     evolvedFromStack: undefined,
     evolvedThisTurn: undefined,
-    justPlaced: undefined,
+    justPlaced: undefined, playedFromHand: undefined,
     movedToActiveThisTurn: undefined,
     damageBonusThisTurn: undefined,
     damageReduceNextHit: undefined,

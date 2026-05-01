@@ -238,7 +238,7 @@ regR('lucia-show', (st, idx, iids, _params, pool) => {
     newBench[bIdx] = clearActiveEffects(p.active);
     return {
       ...p,
-      active: { ...target, justPlaced: false, status: 'confused' },
+      active: { ...target, justPlaced: false, playedFromHand: false, status: 'confused' },
       bench: newBench,
     };
   });
@@ -899,7 +899,7 @@ regR('sturdy-might-tree-step1', (st, idx, iids, _params, pool) => {
     evolvedFromIid: base.iid,
     evolvedFromStack: [...prevStack, baseBare],
     evolvedThisTurn: true,
-    justPlaced: false,
+    justPlaced: false, playedFromHand: false,
   };
   st = updatePlayer(st, idx, x => ({
     ...x,
@@ -967,7 +967,7 @@ regR('sturdy-might-tree-step2', (st, idx, iids, params, pool) => {
     evolvedFromIid: stage1.iid,
     evolvedFromStack: [...prevStack, stage1Bare],
     evolvedThisTurn: true,
-    justPlaced: false,
+    justPlaced: false, playedFromHand: false,
   };
   st = updatePlayer(st, idx, x => ({
     ...x,

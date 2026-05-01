@@ -344,7 +344,7 @@ regR('fortu-script', (st, idx, iids, _params, pool) => {
   const tool = target.toolAttached;
   // 寶可夢回手（重置 damage, status, energyAttached, toolAttached, evolvedFromStack）
   const cleanInsts: CardInstance[] = [
-    { ...target, damage: 0, status: undefined, secondaryStatus: undefined, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined, evolvedFromIid: undefined, justPlaced: false, evolvedThisTurn: false },
+    { ...target, damage: 0, status: undefined, secondaryStatus: undefined, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined, evolvedFromIid: undefined, justPlaced: false, playedFromHand: false, evolvedThisTurn: false },
     ...evoStack.map(e => ({ ...e, damage: 0, status: undefined, secondaryStatus: undefined, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined })),
   ];
   const discardInsts: CardInstance[] = [...energies, ...(tool ? [tool] : [])];

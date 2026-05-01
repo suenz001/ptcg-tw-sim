@@ -867,11 +867,12 @@ function emptyPlayer(name: string): PlayerState {
 
 /** 清除 CardInstance 上的回合旗標（於擁有者 END_TURN 執行） */
 function clearTurnFlags(c: CardInstance): CardInstance {
-  if (!c.justPlaced && !c.evolvedThisTurn && !c.movedToActiveThisTurn) return c;
+  if (!c.justPlaced && !c.evolvedThisTurn && !c.movedToActiveThisTurn && !c.playedFromHand) return c;
   const n = { ...c };
   delete n.justPlaced;
   delete n.evolvedThisTurn;
   delete n.movedToActiveThisTurn;
+  delete n.playedFromHand;
   return n;
 }
 
@@ -1071,6 +1072,7 @@ function handleSetup(
       // 把舊的放回手牌（清除 justPlaced 以免帶回手牌後殘留）
       const returning = { ...player.active };
       delete returning.justPlaced;
+      delete returning.playedFromHand;
       player.hand = [...player.hand, returning];
     }
     player.hand = player.hand.filter((_, i) => i !== iidx);
@@ -1283,7 +1285,7 @@ function handlePlaying(
     const card = pool.get(inst.cardId);
     if (!isBasicPokemonCard(card)) return state;
 
-    const placed = { ...inst, justPlaced: true };
+    const placed = { ...inst, justPlaced: true, playedFromHand: true };
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
     attacker.bench = [...attacker.bench, placed];
     players[aIdx] = attacker;
@@ -1315,7 +1317,7 @@ function handlePlaying(
     const card = pool.get(inst.cardId);
     if (!isFossilItemCard(card)) return state;
 
-    const placed: CardInstance = { ...inst, justPlaced: true, fossilOnField: true };
+    const placed: CardInstance = { ...inst, justPlaced: true, fossilOnField: true, playedFromHand: true };
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
     attacker.bench = [...attacker.bench, placed];
     players[aIdx] = attacker;
@@ -4571,7 +4573,7 @@ export function getUsableAbilities(
       //   pk.justPlaced 由 PLAY_BASIC 設、END_TURN 清，所以「下一回合不能用」自然成立
       //   v2.229 補：牌庫需有基本【鬥】能量
       if (ab.name === '狂挖') {
-        if (!pk.justPlaced) return;
+        if (!pk.playedFromHand) return;
         const hasFightEInDeck = player.deck.some(c => {
           const cc = pool.get(c.cardId);
           return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && /【鬥】/.test(cc.name);
@@ -4582,15 +4584,15 @@ export function getUsableAbilities(
       //   v2.229 補：手牌需有基本【鬥】能量（Leon v2.228 抓到）
       //   卡面：「從手牌選最多 2 張基本鬥能量附於這隻寶可夢」
       if (ab.name === '經驗法則') {
-        if (!pk.justPlaced) return;
+        if (!pk.playedFromHand) return;
         const hasFightEInHand = player.hand.some(c => {
           const cc = pool.get(c.cardId);
           return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && /【鬥】/.test(cc.name);
         });
         if (!hasFightEInHand) return;
       }
-      // v2.133 古劍豹｜沉雪、鐵斑葉ex｜迅速游標、喵喵ex｜殺手鐧捕捉 — 同 justPlaced gate
-      if ((ab.name === '沉雪' || ab.name === '迅速游標' || ab.name === '殺手鐧捕捉') && !pk.justPlaced) return;
+      // v2.133 古劍豹｜沉雪、鐵斑葉ex｜迅速游標、喵喵ex｜殺手鐧捕捉 — 同 playedFromHand gate
+      if ((ab.name === '沉雪' || ab.name === '迅速游標' || ab.name === '殺手鐧捕捉') && !pk.playedFromHand) return;
       // v2.133 沉雪 額外 gate：場上沒有競技場卡時無意義
       if (ab.name === '沉雪' && !state.activeStadium) return;
       // v2.133 迅速游標 gate：必須從備戰發動（pk 不是 active）

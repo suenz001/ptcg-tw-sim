@@ -149,7 +149,7 @@ regA('土龍節節', 0, (st, idx, pool, cardInst) => {
   const returning: CardInstance[] = [
     { ...src, damage: 0, energyAttached: [], toolAttached: undefined,
       status: undefined, evolvedFromStack: undefined,
-      evolvedThisTurn: undefined, justPlaced: undefined, movedToActiveThisTurn: undefined,
+      evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
       damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
       abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
       cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
