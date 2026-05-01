@@ -141,20 +141,33 @@
     };
   });
 
-  // ── v2.284 手機直式偵測 ──────────────────────────────────────────────
+  // ── v2.284 手機直式偵測 & 平板/1366x768 橫屏縮小版偵測 ──────────────────────
   // ≤600px 寬 + portrait 方向 → 切換到 MobilePortraitBattle 元件（雙軌並行）。
-  // 桌機 / 平板 / 手機橫屏仍走原 .battle-root 橫式 layout。
+  // 桌機 / 大螢幕 走原 .battle-root 橫式 layout。
+  // 平板 / 1366x768 走 .battle-root.tablet-layout 橫式縮小配置。
   let isPortraitMobile = $state(false);
+  let isTabletLayout = $state(false);
+
   onMount(() => {
-    const mq = window.matchMedia('(max-width: 600px) and (orientation: portrait)');
-    const onChange = (e: MediaQueryListEvent | MediaQueryList) => { isPortraitMobile = e.matches; };
-    onChange(mq);
-    if (mq.addEventListener) mq.addEventListener('change', onChange);
-    else (mq as any).addListener(onChange);
-    return () => {
-      if (mq.removeEventListener) mq.removeEventListener('change', onChange);
-      else (mq as any).removeListener(onChange);
+    const onResize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      
+      // 手機直式 (MobilePortraitBattle)
+      isPortraitMobile = w <= 600 && h > w;
+      
+      // 極小手機橫屏（交給原本的 @media max-width: 950px and orientation: landscape 處理）
+      const isLandscapeMobile = w <= 950 && w > h;
+      
+      // 平板 / 1366x768 筆電 等中型螢幕
+      // 若寬 <= 1366 或是高 <= 850，且不是極小手機，就開啟 tablet-layout 縮小配置
+      // 以免 1366x768 或 iPad 橫屏時被擠斷
+      isTabletLayout = !isPortraitMobile && !isLandscapeMobile && (w <= 1366 || h <= 850);
     };
+    
+    window.addEventListener('resize', onResize);
+    onResize(); // 初始化
+    return () => window.removeEventListener('resize', onResize);
   });
   let zoomInst = $state<CardInstance | null>(null);
   // 堆疊：之前開過的 zoom — 用於「返回上一層」按鈕
@@ -2775,7 +2788,7 @@
      正式對戰（Play Mat 佈局） — setup 和 playing 共用此畫面
   ══════════════════════════════════════════════════════════════════════ -->
 {:else}
-<div class="battle-root">
+<div class="battle-root" class:tablet-layout={isTabletLayout}>
 
   <!-- v2.286 Phase 2-4：手機直式（≤600px portrait）切換到 MobilePortraitBattle 元件。
        桌機 / 平板 / 手機橫屏走原 layout。setup + playing 都切（MobilePortraitBattle 內部
@@ -5203,47 +5216,70 @@
   .hand-scroll{ display:flex; justify-content:center; gap:0; padding:14px 1rem 8px; overflow:hidden; min-height:150px; perspective:900px; }
 
   /* ════════════════════════════════════════════════════════════════════════
-     v2.282：桌機/筆電 layout 鎖死視窗 — 適用所有 ≤1080p 視窗（max-height:1080 + min-width:951）
+     v2.313：平板與 1366x768 筆電 專屬橫向縮小版配置（透過 JS .tablet-layout 控制）
      ────────────────────────────────────────────────────────────────────────
-     v2.281 設 max-height:850 是錯估 — Leon 1920×1080 viewport innerHeight 約 900-950
-     (chrome bar + bookmarks + taskbar 取走 130-180)，850 threshold 不觸發 → 仍沿用桌機
-     baseline ~825px layout，邊緣 case 還是會溢出滾輪。
-
-     v2.282 把 threshold 放寬到 max-height:1080（基本上覆蓋所有 1080p 以下桌機 viewport），
-     縮幅從 17% 降到 ~12%，保留更多卡牌大小。原桌機 baseline (max-height >1080) 只剩
-     超大螢幕（4K / 1440p 全螢幕）會用到。
-
-     核心策略不變：
-       - .battle-root 100vh + overflow:hidden（鎖死視窗，不出滾輪）
-       - .playmat grid minmax(0,1fr) auto minmax(0,1fr)（兩 row 平分剩餘空間）
-       - .field-row min-height:0 + overflow:hidden（讓 grid 可被壓縮）
-       - 元素縮 ~12%（active-card 170→150 / bench-slot 205→180 / action-bar 160→135）
+     取代原本的 max-height: 1080px media query。
+     給予 1366x768 與 iPad 更合適的等比例縮放，避免 1366x768 高度不足（~650px）
+     導致下半部手牌區被切斷的問題。
+     獨立的 CSS scope 完美隔離了與大螢幕版（1920x1080+）的干擾。
      ════════════════════════════════════════════════════════════════════════ */
-  @media (max-height: 1080px) and (min-width: 951px) {
-    /* battle-root 鎖死視窗 + 不出滾輪 */
-    .battle-root{ height:100vh; height:100dvh; min-height:0; overflow:hidden; }
-
-    /* playmat grid 改 minmax(0,1fr) — 由 .battle-root 剩餘空間平分，不再強制 230 */
-    .playmat{ grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr); min-height:0; overflow:hidden; }
-    .field-row{ min-height:0; overflow:hidden; padding:0.4rem 0.6rem; }
-
-    /* active-card / bench-slot 縮 ~12%（之前 v2.281 縮 17% 太多；保留更多卡牌大小） */
-    .active-card{ min-height:150px; padding:0.35rem 0.45rem; }
-    .active-card.active-empty{ min-height:140px; padding:0.8rem; }
-    .bench-slot{ height:180px; }
-    .bench-slot img{ max-height:108px; }
-
-    /* action-bar 縮約 15% — log-col 寬度小幅縮
-       v2.283：固定 height:150 消除回合切換時的 layout 晃動（同桌機 baseline 邏輯） */
-    .action-bar{ height:150px; min-height:0; max-height:none; padding:0.25rem 0.6rem; }
-    .log-col{ width:340px; }
-
-    /* hand-strip 維持 v2.279 縮減後尺寸；hand-card 略縮 */
-    .hand-strip{ padding:0.18rem 0.6rem 0.22rem; }
-    .hand-scroll{ padding:12px 0.9rem 7px; min-height:140px; }
-    .hand-card{ width:88px; }
-    .hand-card img{ width:84px; }
+  :global(.battle-root.tablet-layout) {
+    /* 鎖死視窗 + 不出滾輪 */
+    height: 100vh; height: 100dvh; min-height: 0; overflow: hidden;
   }
+  
+  :global(.battle-root.tablet-layout .playmat) {
+    /* 由 .battle-root 剩餘空間平分，不再強制 230 */
+    grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr); 
+    min-height: 0; overflow: hidden;
+  }
+  
+  :global(.battle-root.tablet-layout .field-row) {
+    min-height: 0; overflow: hidden; padding: 0.2rem 0.4rem;
+  }
+  
+  :global(.battle-root.tablet-layout .active-card) {
+    min-height: 120px; padding: 0.25rem 0.35rem; gap: 0.2rem;
+  }
+  :global(.battle-root.tablet-layout .active-card.active-empty) {
+    min-height: 110px; padding: 0.5rem;
+  }
+  :global(.battle-root.tablet-layout .active-img) {
+    max-height: 110px; max-width: 80px; object-fit: contain;
+  }
+  
+  :global(.battle-root.tablet-layout .bench-slot) {
+    height: 135px;
+  }
+  :global(.battle-root.tablet-layout .bench-slot img) {
+    max-height: 80px;
+  }
+  
+  :global(.battle-root.tablet-layout .action-bar) {
+    height: 125px; min-height: 0; max-height: none; padding: 0.2rem 0.4rem;
+  }
+  :global(.battle-root.tablet-layout .log-col) {
+    width: 280px;
+  }
+  
+  :global(.battle-root.tablet-layout .hand-strip) {
+    padding: 0.15rem 0.4rem 0.2rem;
+  }
+  :global(.battle-root.tablet-layout .hand-scroll) {
+    padding: 8px 0.6rem 5px; min-height: 120px;
+  }
+  :global(.battle-root.tablet-layout .hand-card) {
+    width: 76px; padding: 0.2rem; gap: 0.1rem;
+  }
+  :global(.battle-root.tablet-layout .hand-card img) {
+    width: 72px;
+  }
+  
+  /* Font sizes and compact spacing */
+  :global(.battle-root.tablet-layout .action-btns) { gap: 0.25rem; }
+  :global(.battle-root.tablet-layout .btn-act) { padding: 0.35rem 0.5rem; font-size: 0.82rem; }
+  :global(.battle-root.tablet-layout .btn-act.atk) { min-height: 44px; }
+  :global(.battle-root.tablet-layout .turn-info) { font-size: 0.8rem; }
 
   .hand-scroll > .hand-card + .hand-card{ margin-left: calc(var(--hand-overlap, 0px) * -1); }
   .hand-card{ flex-shrink:0; width:92px; background:#0e1e0e; border:1.5px solid #2a3a2a; border-radius:6px; padding:.25rem; text-align:center; cursor:default; display:flex; flex-direction:column; align-items:center; gap:.12rem;
