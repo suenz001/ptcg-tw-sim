@@ -107,7 +107,7 @@ const CYNTHIA_GARCHOMP_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '17133', count: 4 },  // 寶可平板 (MC)
     { cardId: '11676', count: 1 },  // 夜間擔架 (SV8a)
     { cardId: '12718', count: 3 },  // 竹蘭的力量負重 (SV9a · 道具)
-    { cardId: '12720', count: 3 },  // 裁判 (SV9a)
+    { cardId: '17182', count: 3 },  // 裁判 (MC 711/742)
     { cardId: '17195', count: 3 },  // 老大的指令 (MC)
     { cardId: '17200', count: 4 },  // 莉莉艾的決意 (MC)
     { cardId: '12844', count: 3 },  // 火箭隊的拉姆達 (SV10)
