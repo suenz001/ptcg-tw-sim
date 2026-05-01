@@ -298,10 +298,7 @@ reg('悟松', (st, idx) => {
 regG('卡娜莉', (st, idx, pool) => {
   // 必須 ≥2 張手牌（卡娜莉本身 + 至少 1 張可棄）+ 牌庫至少 1 張雷寶
   if (st.players[idx].hand.length < 2) return false;
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.pokemonType === 'Lightning';
-  });
+  return st.players[idx].deck.length > 0;
 });
 reg('卡娜莉', (st, idx) => {
   st = updatePlayer(st, idx, p => ({ ...p, carnelliPlayedThisTurn: true }));
@@ -912,16 +909,10 @@ regR('sturdy-might-tree-step1', (st, idx, iids, _params, pool) => {
   }));
   st = addLog(st, `壯偉碩木：${baseCard.name} 進化為 ${evoCard.name}`, idx);
   // 開 step2 — 找 Stage2 evolves from evoCard.name
-  const hasStage2 = st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    if (!card || card.supertype !== 'Pokemon') return false;
-    if ((card.stage ?? card.subtype) !== 'Stage2') return false;
-    if (!card.evolvesFrom) return false;
-    return sameEvoName(card.evolvesFrom, evoCard.name);
-  });
+  const hasStage2 = st.players[idx].deck.length > 0;
   if (!hasStage2) {
-    // 牌庫沒 Stage2 可接 → 直接洗牌庫結束
-    return updatePlayer(addLog(st, '壯偉碩木：牌庫沒有可接續進化的【2階】寶可夢，重洗牌庫', idx),
+    // 牌庫沒卡 → 直接洗牌庫結束
+    return updatePlayer(addLog(st, '壯偉碩木：牌庫為空', idx),
       idx, x => ({ ...x, deck: shuffle(x.deck) }));
   }
   return withPending(st, {

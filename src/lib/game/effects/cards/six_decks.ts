@@ -437,11 +437,7 @@ regR('rock-armor-attach', (state, aIdx, selectedPokeIids, _params, pool) => {
 // v2.117 修：filter 'BasicDarknessEnergy' engine 不認得 → 改用 'Energy:Darkness'。
 //   pending type 'attach-energy-bench-dark' 不存在 → 改用 heal-target + validIids（限備戰【惡】）。
 regA('顫弦蠑螈', 0, (st, idx, pool) => {
-  const hasDark = st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && /【惡】/.test(card.name);
-  });
-  if (!hasDark) return addLog(st, '惡棍衝天：牌庫無基本【惡】能量', idx);
+  if (st.players[idx].deck.length === 0) return addLog(st, '惡棍衝天：牌庫為空', idx);
   const hasDarkBench = st.players[idx].bench.some(b => {
     const card = pool.get(b.cardId);
     return card?.pokemonType === 'Darkness';
@@ -613,11 +609,7 @@ regR('n-pp-attach', (state, aIdx, selectedPokeIids, params, pool) => {
 // 'BasicDarknessEnergy' / 'DarknessOwn' → UI 既顯示非惡能量、又卡在無法附加。全部改成
 // engine 原生支援的 filter / pending type。
 regG('阿杏的秘招', (st, idx, pool) => {
-  const hasDarkE = st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && /【惡】/.test(card.name);
-  });
-  if (!hasDarkE) return false;
+  if (st.players[idx].deck.length === 0) return false;
   const allMy = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
   return allMy.some(pk => pool.get(pk.cardId)?.pokemonType === 'Darkness');
 });

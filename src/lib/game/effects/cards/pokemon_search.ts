@@ -28,10 +28,7 @@ import {
 regG('好友寶芬', (st, idx, pool) => {
   // 備戰要有空位，且牌庫要有 HP≤70 的基礎寶可夢
   if (st.players[idx].bench.length >= 5) return false;
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && !card.evolvesFrom && (card.hp ?? 0) <= 70;
-  });
+  return st.players[idx].deck.length > 0;
 });
 reg('好友寶芬', (st, idx) => {
   const slots = 5 - st.players[idx].bench.length;
@@ -51,12 +48,9 @@ reg('好友寶芬', (st, idx) => {
 //   - gate 至少 1 隻「赫普的」基礎在牌庫
 //   - filter 用新 'Basic:NamePrefix=赫普的'（UI 端 filter parser 同步擴展）
 //   - resolver 端驗證選的卡符合 prefix（防呆 / AI sim 模式 fallback）
-regG('赫普的包包', (st, idx, pool) => {
+regG('赫普的包包', (st, idx) => {
   if (st.players[idx].bench.length >= 5) return false;
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && !card.evolvesFrom && card.name.startsWith('赫普的');
-  });
+  return st.players[idx].deck.length > 0;
 });
 reg('赫普的包包', (st, idx) => {
   const slots = 5 - st.players[idx].bench.length;
@@ -140,8 +134,7 @@ regG('甜蜜球', (st, idx, pool) => {
     if (c) oppNames.add(c.name);
   }
   if (oppNames.size === 0) return false;
-  return st.players[idx].deck.some(c => oppNames.has(pool.get(c.cardId)?.name ?? ''));
-});
+  return st.players[idx].deck.length > 0;
 reg('甜蜜球', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const oppNames = new Set<string>();
@@ -220,10 +213,7 @@ regR('brocks-dig-basic', (st, idx, iids, _params, pool) => {
     });
   }
   // 玩家選了 0 張 → 開第二段：選 1 隻進化寶可夢
-  const hasEvolution = st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && !!card.evolvesFrom;
-  });
+  const hasEvolution = st.players[idx].deck.length > 0;
   if (!hasEvolution) {
     st = updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) }));
     return addLog(st, '小剛的發掘：未選基礎寶可夢，且牌庫中無進化寶可夢，結束', idx);
@@ -280,10 +270,7 @@ regR('ultra-ball-discard', (st, idx, iids, _params, pool) => {
 // 超級信號 — 從牌庫搜尋 1 張「超級進化寶可夢 ex」加手牌
 // ⚠️ 必須只過濾「超級進化 ex」（名字開頭「超級」），普通 ex（桃歹郎ex / 拉帝亞斯ex）不可被搜到
 regG('超級信號', (st, idx, pool) =>
-  st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.name.startsWith('超級') && (card.subtype === 'ex' || card.name.endsWith('ex'));
-  })
+  st.players[idx].deck.length > 0
 );
 reg('超級信號', (st, idx) => {
   st = addLog(st, '超級信號：從牌庫選 1 張超級進化寶可夢 ex 加手牌', idx);

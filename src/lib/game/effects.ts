@@ -9732,12 +9732,7 @@ regA('三合一磁怪', 0, (st, aIdx, pool) => {
 
 // ── 珍寶配件（Item） ── 從牌庫選最多 5 張寶可夢道具加手牌 ────────────────
 // 資料結構：道具 supertype='Pokemon' subtype='Other'（與 UI 'Tool' filter 對應）
-regG('珍寶配件', (st, idx, pool) => {
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Trainer' && card.subtype === 'PokemonTool';
-  });
-});
+regG('', (st, idx) => st.players[idx].deck.length > 0);
 reg('珍寶配件', (st, idx) => {
   st = addLog(st, '珍寶配件：從牌庫選最多 5 張寶可夢道具加手牌', idx);
   return withPending(st, {
@@ -9802,12 +9797,7 @@ regR('energy-transfer-search', (st, idx, iids, _params, pool) => {
 });
 
 // ── 能量輸送PRO（Item） ── 從牌庫選任意張數不同屬性基本能量加手牌 ──────
-regG('能量輸送PRO', (st, idx, pool) => {
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic';
-  });
-});
+regG('', (st, idx) => st.players[idx].deck.length > 0);
 reg('能量輸送PRO', (st, idx) => {
   st = addLog(st, '能量輸送PRO：從牌庫選任意張數基本能量加手牌（同屬只取 1 張）', idx);
   return withPending(st, {

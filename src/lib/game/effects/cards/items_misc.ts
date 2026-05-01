@@ -530,11 +530,7 @@ reg('密阿雷格雷派餅', (st, idx, pool) => {
 // ── 能量硬幣（Item / MC）────────────────────────────────────────────────────
 // 卡面：擲 2 次硬幣，若全部為正面，則從自己的牌庫選 1 張基本能量卡，附於自己的寶可夢身上。並重洗牌庫。
 regG('能量硬幣', (st, idx, pool) => {
-  // 牌庫至少 1 張基本能量 + 場上至少 1 隻寶可夢
-  const hasBasicEnergy = st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic';
-  });
+  const hasBasicEnergy = st.players[idx].deck.length > 0;
   const hasPoke = !!st.players[idx].active || st.players[idx].bench.length > 0;
   return hasBasicEnergy && hasPoke;
 });
@@ -600,7 +596,7 @@ regR('energy-coin-attach', (st, idx, iids, params, pool) => {
 
 // ── 大師球（Item / SVE）────────────────────────────────────────────────────
 // 卡面：從自己的牌庫選 1 張寶可夢卡，給對手看後加入手牌。並重洗牌庫。
-regG('大師球', (st, idx, pool) => st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon'));
+regG('大師球', (st, idx) => st.players[idx].deck.length > 0);
 reg('大師球', (st, idx) => {
   st = addLog(st, '大師球：從牌庫選 1 張寶可夢加手牌（給對手看）', idx);
   return withPending(st, {
@@ -628,10 +624,7 @@ regR('master-ball-pick', (st, idx, iids, _params, pool) => {
 // 卡面：從自己的牌庫選 1 張【基礎】寶可夢卡，放置於備戰區。並重洗牌庫。
 regG('巢穴球', (st, idx, pool) => {
   if (st.players[idx].bench.length >= 5) return false;
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.subtype === 'Basic';
-  });
+  return st.players[idx].deck.length > 0;
 });
 reg('巢穴球', (st, idx) => {
   st = addLog(st, '巢穴球：從牌庫選 1 張基礎寶可夢放備戰', idx);
@@ -780,12 +773,7 @@ regR('gift-drone-pick', (st, idx, iids, _params, pool) => {
 
 // ── 訂購盒（Item）──────────────────────────────────────────────────────────
 // 卡面：若使用了這張卡，則自己的回合結束。從自己的牌庫選最多 2 張物品卡，給對手看後加入手牌並重洗。
-regG('訂購盒', (st, idx, pool) => {
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Trainer' && card.subtype === 'Item';
-  });
-});
+regG('', (st, idx) => st.players[idx].deck.length > 0);
 reg('訂購盒', (st, idx) => {
   st = addLog(st, '訂購盒：從牌庫選最多 2 張物品卡加手牌（用後回合結束）', idx);
   return withPending(st, {
@@ -819,10 +807,7 @@ regR('order-box-pick', (st, idx, iids, _params, pool) => {
 regG('幫忙鈴', (st, idx, pool) => {
   if (!st.isFirstTurn) return false;
   if (st.activePlayerIndex === st.firstPlayerIdx) return false;
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Trainer' && card.subtype === 'Supporter';
-  });
+  return st.players[idx].deck.length > 0;
 });
 reg('幫忙鈴', (st, idx) => {
   st = addLog(st, '幫忙鈴：從牌庫選 1 張支援者加手牌（給對手看）', idx);
@@ -899,7 +884,7 @@ regR('rocket-scare-bomb-place', (st, idx, iids, _params, pool) => {
 
 // ── 勝利之證（Item）────────────────────────────────────────────────────────
 // 卡面：擲 1 次硬幣若為正面，則從自己的牌庫選 1 張寶可夢卡，給對手看後加手牌。並重洗牌庫。
-regG('勝利之證', (st, idx, pool) => st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon'));
+regG('勝利之證', (st, idx) => st.players[idx].deck.length > 0);
 reg('勝利之證', (st, idx) => {
   const heads = Math.random() < 0.5;
   st = addLog(st, `勝利之證：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
@@ -979,14 +964,7 @@ regR('energy-duster-pick', (st, idx, iids, _params, pool) => {
 
 // ── 招式學習器機（Item）────────────────────────────────────────────────────
 // 卡面：從自己的牌庫選最多 3 張名稱中有「招式學習器」的「寶可夢道具」卡，給對手看後加手牌並重洗。
-regG('招式學習器機', (st, idx, pool) => {
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Trainer'
-      && card.subtype === 'PokemonTool'
-      && card.name?.includes('招式學習器');
-  });
-});
+regG('', (st, idx) => st.players[idx].deck.length > 0);
 reg('招式學習器機', (st, idx, pool) => {
   // 牌庫中名稱含「招式學習器」的 PokemonTool iids
   const validIids = st.players[idx].deck

@@ -47,12 +47,8 @@ SPECIAL_ENERGY_ATTACH.set('感應【超】能量', (st, idx, targetIid, pool) =>
   if (benchSlots <= 0) {
     return addLog(st, '感應【超】能量：備戰區已滿，略過搜尋', idx);
   }
-  // 牌庫要有基礎【超】寶可夢
-  const hasPsychicBasic = p.deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon'
-      && !card.evolvesFrom && card.pokemonType === 'Psychic';
-  });
+  // 牌庫要有卡
+  const hasPsychicBasic = p.deck.length > 0;
   if (!hasPsychicBasic) {
     return addLog(st, '感應【超】能量：牌庫沒有基礎【超】寶可夢', idx);
   }

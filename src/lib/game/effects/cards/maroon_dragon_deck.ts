@@ -36,13 +36,7 @@ BENCH_PLACE_TRIGGERS.set('喵喵ex', (st, idx, pool) => {
   if (st.players[idx].deck.length === 0) {
     return addLog(st, '殺手鐧捕捉：牌庫為空', idx);
   }
-  const hasSupp = st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Trainer' && card?.subtype === 'Supporter';
-  });
-  if (!hasSupp) {
-    return addLog(st, '殺手鐧捕捉：牌庫中沒有支援者可選', idx);
-  }
+  const hasSupp = st.players[idx].deck.length > 0;
   st = addLog(st, '殺手鐧捕捉：從牌庫選 1 張支援者加入手牌', idx);
   return withPending(st, {
     type: 'deck-search',

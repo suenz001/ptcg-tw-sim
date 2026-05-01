@@ -223,12 +223,7 @@ regR('waitress-attach', (st, idx, iids, params, pool) => {
 });
 
 // ── 吹火人 — 牌庫搜 ≤7 基本【火】能量加手 ──────────────────────────────────
-regG('吹火人', (st, idx, pool) => {
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name?.includes('【火】');
-  });
-});
+regG('', (st, idx) => st.players[idx].deck.length > 0);
 reg('吹火人', (st, idx, pool) => {
   const validIids = st.players[idx].deck
     .filter(c => {

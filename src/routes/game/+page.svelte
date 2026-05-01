@@ -3603,7 +3603,7 @@
             }
             return [...map.values()].sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name));
           })()}
-          <details class="full-deck-view">
+          <details class="full-deck-view" open={selectionItems.length === 0}>
             <summary>📖 查看牌庫剩餘全部（{srcP.deck.length} 張，推斷獎賞卡）</summary>
             <div class="full-deck-note">※ 對照你的原牌組，不在清單中的 6 張通常是獎賞卡（或已在手牌/場上/棄牌）</div>
             <div class="full-deck-list">
