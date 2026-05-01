@@ -299,7 +299,7 @@ const ROCKET_MEWTWO_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '17133', count: 1 }, // 寶可平板 (MC)
     { cardId: '17109', count: 1 }, // 能量轉移 (MC)
     // ── 寶可夢道具（2 張）──
-    { cardId: '11029', count: 1 }, // 勇氣護符 (SV7)
+    { cardId: '17160', count: 1 }, // 猛攻手鐲 (MC)
     { cardId: '17162', count: 1 }, // 極限腰帶 ACE SPEC (MC)
     // ── 訓練家・支援者（14 張）──
     { cardId: '17202', count: 2 }, // 火箭隊的雅典娜 (MC)
