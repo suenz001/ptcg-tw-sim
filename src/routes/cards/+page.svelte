@@ -1049,7 +1049,7 @@
   .modalInner {
     background: #fff;
     border-radius: 12px;
-    max-width: 900px;
+    max-width: 1170px;
     width: 100%;
     max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem);
     margin: auto;
@@ -1062,8 +1062,8 @@
     position: absolute;
     top: 1rem;
     right: 1rem;
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2.8rem;
+    height: 2.8rem;
     background: rgba(255, 255, 255, 0.9);
     border-radius: 50%;
     border: none;
@@ -1082,8 +1082,8 @@
   }
   .detailGrid {
     display: grid;
-    grid-template-columns: minmax(200px, 260px) 1fr;
-    gap: 1.5rem;
+    grid-template-columns: minmax(260px, 338px) 1fr;
+    gap: 1.9rem;
   }
   @media (max-width: 640px) {
     .detailGrid {
@@ -1172,15 +1172,16 @@
   }
   .detailInfo h2 {
     margin: 0 0 0.25rem;
+    font-size: 1.95rem;
   }
   .tag {
     color: #666;
     margin: 0 0 0.5rem;
-    font-size: 0.9rem;
+    font-size: 1.15rem;
   }
   .evo {
     color: #666;
-    font-size: 0.9rem;
+    font-size: 1.15rem;
     margin: 0.25rem 0 0.75rem;
   }
   .tagChips {
@@ -1195,11 +1196,11 @@
     background: #eef2ff;
     color: #4338ca;
     border-radius: 10px;
-    font-size: 0.8rem;
+    font-size: 1.05rem;
     font-weight: 500;
   }
   .detailInfo h3 {
-    font-size: 0.95rem;
+    font-size: 1.25rem;
     margin: 1rem 0 0.4rem;
     color: #333;
   }
@@ -1218,9 +1219,10 @@
   }
   .skillName {
     font-weight: 600;
+    font-size: 1.15rem;
   }
   .abilityLabel {
-    font-size: 0.8rem;
+    font-size: 1.05rem;
     padding: 0.1rem 0.4rem;
     background: #e04a2f;
     color: #fff;
@@ -1229,12 +1231,13 @@
   .damage {
     margin-left: auto;
     font-weight: 700;
+    font-size: 1.2rem;
     font-variant-numeric: tabular-nums;
   }
   .skillEffect,
   .rules {
     margin: 0.4rem 0 0;
-    font-size: 0.9rem;
+    font-size: 1.15rem;
     color: #333;
     line-height: 1.6;
     white-space: pre-wrap;
@@ -1252,14 +1255,14 @@
     height: 1.4em;
     border-radius: 50%;
     color: #fff;
-    font-size: 0.75rem;
+    font-size: 1rem;
     font-weight: 700;
     text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
   }
   .energyDot.small {
     width: 1.1em;
     height: 1.1em;
-    font-size: 0.7rem;
+    font-size: 0.9rem;
   }
   .stats {
     display: flex;
@@ -1268,7 +1271,7 @@
     margin-top: 0.75rem;
     padding-top: 0.75rem;
     border-top: 1px solid #eee;
-    font-size: 0.9rem;
+    font-size: 1.15rem;
   }
   .stats div {
     display: flex;
@@ -1283,13 +1286,13 @@
     margin-top: 1rem;
     padding-top: 0.75rem;
     border-top: 1px solid #eee;
-    font-size: 0.8rem;
+    font-size: 1.05rem;
     color: #888;
   }
   /* v2.184: 顯示出自卡包中文名稱 */
   .footSet {
     margin: 0.25rem 0 0;
-    font-size: 0.85rem;
+    font-size: 1.1rem;
     color: #555;
     font-weight: 500;
   }

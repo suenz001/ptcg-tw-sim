@@ -1602,7 +1602,7 @@
   .pv-inner {
     background: #fff;
     border-radius: 12px;
-    max-width: 900px;
+    max-width: 1170px;
     width: 100%;
     max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem);
     margin: auto;
@@ -1616,12 +1616,12 @@
     position: absolute;
     top: 1.25rem;
     right: 1.25rem;
-    width: 2rem;
-    height: 2rem;
+    width: 2.6rem;
+    height: 2.6rem;
     border-radius: 50%;
     border: 1px solid #ddd;
     background: #f4f4f4;
-    font-size: 1.1rem;
+    font-size: 1.45rem;
     line-height: 1;
     cursor: pointer;
     z-index: 1;
@@ -1630,8 +1630,8 @@
 
   .pv-top {
     display: grid;
-    grid-template-columns: minmax(200px, 260px) 1fr;
-    gap: 1.5rem;
+    grid-template-columns: minmax(260px, 338px) 1fr;
+    gap: 1.9rem;
     align-items: start;
   }
   @media (max-width: 640px) {
@@ -1647,7 +1647,7 @@
 
   .pv-name {
     margin: 0 0 0.5rem;
-    font-size: 1.3rem;
+    font-size: 1.7rem;
   }
   .pv-badges {
     display: flex;
@@ -1661,31 +1661,31 @@
     padding: 0.15rem 0.5rem;
     border-radius: 4px;
     color: #fff;
-    font-size: 0.8rem;
+    font-size: 1.05rem;
     font-weight: 700;
   }
   .sub-badge {
     padding: 0.15rem 0.5rem;
     background: #eee;
     border-radius: 4px;
-    font-size: 0.8rem;
+    font-size: 1.05rem;
   }
   .hp-badge {
     padding: 0.15rem 0.5rem;
     background: #ffe5e5;
     color: #c00;
     border-radius: 4px;
-    font-size: 0.8rem;
+    font-size: 1.05rem;
     font-weight: 700;
   }
   .pv-evolve {
     margin: 0.25rem 0 0.5rem;
-    font-size: 0.85rem;
+    font-size: 1.1rem;
     color: #666;
   }
   .pv-setinfo {
     margin: 0.5rem 0 0;
-    font-size: 0.8rem;
+    font-size: 1.05rem;
     color: #999;
   }
 
@@ -1699,7 +1699,7 @@
     gap: 0.6rem;
   }
   .pv-rules {
-    font-size: 0.9rem;
+    font-size: 1.15rem;
     color: #444;
     white-space: pre-wrap;
   }
@@ -1715,7 +1715,7 @@
     grid-row: 1;
     background: #c00;
     color: #fff;
-    font-size: 0.7rem;
+    font-size: 0.9rem;
     font-weight: 700;
     padding: 0.1rem 0.35rem;
     border-radius: 3px;
@@ -1723,12 +1723,12 @@
   }
   .ab-name {
     grid-row: 1;
-    font-size: 0.95rem;
+    font-size: 1.25rem;
   }
   .ab-effect {
     grid-column: 1 / -1;
     margin: 0;
-    font-size: 0.85rem;
+    font-size: 1.1rem;
     color: #444;
   }
 
@@ -1741,15 +1741,15 @@
     flex-wrap: wrap;
   }
   .atk-cost { display: flex; gap: 0.2rem; flex-wrap: wrap; }
-  .atk-name { font-size: 0.95rem; }
+  .atk-name { font-size: 1.25rem; }
   .atk-dmg {
     margin-left: auto;
     font-weight: 700;
-    font-size: 1rem;
+    font-size: 1.3rem;
   }
   .atk-effect {
     margin: 0;
-    font-size: 0.85rem;
+    font-size: 1.1rem;
     color: #444;
   }
 
@@ -1758,18 +1758,18 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1.3rem;
-    height: 1.3rem;
+    width: 1.7rem;
+    height: 1.7rem;
     border-radius: 50%;
-    font-size: 0.65rem;
+    font-size: 0.85rem;
     font-weight: 700;
     color: #fff;
     flex-shrink: 0;
   }
   .energy-pip.sm {
-    width: 1.1rem;
-    height: 1.1rem;
-    font-size: 0.6rem;
+    width: 1.4rem;
+    height: 1.4rem;
+    font-size: 0.8rem;
   }
 
   /* Weakness / Resistance / Retreat */
@@ -1778,7 +1778,7 @@
     flex-wrap: wrap;
     gap: 0.75rem;
     margin-top: 0.5rem;
-    font-size: 0.85rem;
+    font-size: 1.1rem;
     color: #555;
     align-items: center;
   }
@@ -1798,7 +1798,7 @@
     gap: 0.6rem;
   }
   .pv-count-label {
-    font-size: 0.9rem;
+    font-size: 1.15rem;
     margin-right: auto;
   }
 
