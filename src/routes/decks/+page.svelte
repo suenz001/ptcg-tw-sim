@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
-  import type { Card } from '$lib/cards/types';
+  import type { Card, EnergyType } from '$lib/cards/types';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import { loadAllSets, loadIndex, buildCardIndex } from '$lib/cards/pool';
   import {
@@ -53,10 +53,118 @@
 
   // ── UI state ───────────────────────────────────────────────────────────
   let search = $state('');
-  let supertypeFilter = $state<'All' | 'Pokemon' | 'Trainer' | 'Energy'>('All');
+  let searchMode = $state<'normal' | 'keyword'>('normal');
   let setFilter = $state<string>('');
-  let markFilter = $state<'All' | 'H' | 'I' | 'J'>('All');
   let pickerPreview = $state<Card | null>(null);
+
+  // ── Category filter (chip multi-select) ────────────────────────────────
+  type CategoryKey = 'Pokemon' | 'Supporter' | 'Item' | 'Tool' | 'Stadium' | 'BasicEnergy' | 'SpecialEnergy';
+  const CATEGORY_LABEL: Record<CategoryKey, string> = {
+    Pokemon: '寶可夢', Supporter: '支援者', Item: '物品',
+    Tool: '寶可夢道具', Stadium: '競技場',
+    BasicEnergy: '基本能量', SpecialEnergy: '特殊能量'
+  };
+  const CATEGORY_ORDER: CategoryKey[] = ['Pokemon', 'Supporter', 'Item', 'Tool', 'Stadium', 'BasicEnergy', 'SpecialEnergy'];
+  let selectedCategories = $state<Set<CategoryKey>>(new Set());
+
+  function cardCategory(c: Card): CategoryKey {
+    if (c.supertype === 'Energy') return c.subtype === 'Basic' ? 'BasicEnergy' : 'SpecialEnergy';
+    if (c.supertype === 'Pokemon') return 'Pokemon';
+    if (c.subtype === 'PokemonTool') return 'Tool';
+    if (c.subtype === 'Supporter') return 'Supporter';
+    if (c.subtype === 'Stadium') return 'Stadium';
+    return 'Item';
+  }
+  function toggleCategory(cat: CategoryKey) {
+    const next = new Set(selectedCategories);
+    if (next.has(cat)) next.delete(cat); else next.add(cat);
+    selectedCategories = next;
+  }
+  function clearCategories() { selectedCategories = new Set(); }
+
+  // ── Tag filter ─────────────────────────────────────────────────────────
+  type TagKey = 'ACE SPEC' | '古代' | '未來' | '太晶' | '超級進化' | '訓練家冠名';
+  const TAG_ORDER: TagKey[] = ['ACE SPEC', '古代', '未來', '太晶', '超級進化', '訓練家冠名'];
+  let selectedTags = $state<Set<TagKey>>(new Set());
+
+  function isMegaEx(c: Card): boolean {
+    return c.supertype === 'Pokemon' && c.subtype === 'ex' && c.name.startsWith('超級');
+  }
+  function hasTag(c: Card, tag: TagKey): boolean {
+    if (tag === '超級進化') return isMegaEx(c);
+    return (c.tags ?? []).includes(tag);
+  }
+  function toggleTag(tag: TagKey) {
+    const next = new Set(selectedTags);
+    if (next.has(tag)) next.delete(tag); else next.add(tag);
+    selectedTags = next;
+  }
+  function clearTags() { selectedTags = new Set(); }
+
+  // ── Type filter ────────────────────────────────────────────────────────
+  const ENERGY_ORDER: EnergyType[] = [
+    'Grass', 'Fire', 'Water', 'Lightning', 'Psychic',
+    'Fighting', 'Darkness', 'Metal', 'Dragon', 'Colorless'
+  ];
+  let selectedTypes = $state<Set<EnergyType>>(new Set());
+
+  const ALL_TYPES: EnergyType[] = ['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal','Colorless'];
+  const ENERGY_TYPE_MAP: Record<string, EnergyType[]> = {
+    '基本【草】能量': ['Grass'], '基本【火】能量': ['Fire'],
+    '基本【水】能量': ['Water'], '基本【雷】能量': ['Lightning'],
+    '基本【超】能量': ['Psychic'], '基本【鬥】能量': ['Fighting'],
+    '基本【惡】能量': ['Darkness'], '基本【鋼】能量': ['Metal'],
+    '古舊能量': ALL_TYPES, '夜光能量': ALL_TYPES, '新衝天能量': ALL_TYPES, '稜鏡能量': ALL_TYPES,
+    '增強【草】能量': ['Grass','Colorless'], '燃料【火】能量': ['Fire','Colorless'],
+    '泡沫【水】能量': ['Water','Colorless'], '感應【超】能量': ['Psychic','Colorless'],
+    '硬岩【鬥】能量': ['Fighting','Colorless'], '磁鐵【鋼】能量': ['Metal','Colorless'],
+    '火箭隊能量': ['Psychic','Darkness'],
+    '富裕能量': ['Colorless'], '燃火能量': ['Colorless'], '噴射能量': ['Colorless'],
+    '回力鏢能量': ['Colorless'], '扣殺能量': ['Colorless'], '薄霧能量': ['Colorless'],
+  };
+  function cardTypes(c: Card): EnergyType[] {
+    if (c.pokemonType) return [c.pokemonType];
+    if (c.supertype === 'Energy') return ENERGY_TYPE_MAP[c.name] ?? ['Colorless'];
+    return [];
+  }
+  function toggleType(t: EnergyType) {
+    const next = new Set(selectedTypes);
+    if (next.has(t)) next.delete(t); else next.add(t);
+    selectedTypes = next;
+  }
+  function clearTypes() { selectedTypes = new Set(); }
+
+  // ── Stage filter ───────────────────────────────────────────────────────
+  type StageKey = 'Basic' | 'Stage1' | 'Stage2';
+  const STAGE_LABEL: Record<StageKey, string> = { Basic: '基礎', Stage1: '1階進化', Stage2: '2階進化' };
+  const STAGE_ORDER: StageKey[] = ['Basic', 'Stage1', 'Stage2'];
+  let selectedStages = $state<Set<StageKey>>(new Set());
+
+  function cardStage(c: Card): StageKey | null {
+    if (c.supertype !== 'Pokemon') return null;
+    if (c.stage) return c.stage;
+    if (c.subtype === 'Basic') return 'Basic';
+    if (c.subtype === 'Stage1') return 'Stage1';
+    if (c.subtype === 'Stage2') return 'Stage2';
+    return c.evolvesFrom ? 'Stage1' : 'Basic';
+  }
+  function toggleStage(s: StageKey) {
+    const next = new Set(selectedStages);
+    if (next.has(s)) next.delete(s); else next.add(s);
+    selectedStages = next;
+  }
+  function clearStages() { selectedStages = new Set(); }
+
+  // ── Regulation mark filter ─────────────────────────────────────────────
+  type RegMarkKey = 'H' | 'I' | 'J';
+  const REG_MARK_ORDER: RegMarkKey[] = ['H', 'I', 'J'];
+  let selectedRegMarks = $state<Set<RegMarkKey>>(new Set());  
+  function toggleRegMark(m: RegMarkKey) {
+    const next = new Set(selectedRegMarks);
+    if (next.has(m)) next.delete(m); else next.add(m);
+    selectedRegMarks = next;
+  }
+  function clearRegMarks() { selectedRegMarks = new Set(); }
   // v2.129 全螢幕卡牌放大 — 鏡射 /cards lightbox：preview 內點圖即放大；列表 thumb 也可直接放大
   let lightboxUrl = $state<string | null>(null);
   function openLightbox(url: string) { lightboxUrl = url; }
@@ -132,15 +240,52 @@
   const filteredPool = $derived.by(() => {
     if (!poolReady) return [] as Card[];
     const q = search.trim().toLowerCase();
+    const cats = selectedCategories;
+    const tags = selectedTags;
+    const types = selectedTypes;
+    const stages = selectedStages;
+    const marks = selectedRegMarks;
     return pool.filter((c) => {
-      if (supertypeFilter !== 'All' && c.supertype !== supertypeFilter) return false;
-      if (setFilter && c.setCode !== setFilter) return false;
-      if (markFilter !== 'All' && c.regulationMark !== markFilter) return false;
-      if (q) {
-        const hay = `${c.name} ${c.setCode} ${c.collectorNumber}`.toLowerCase();
-        if (!hay.includes(q)) return false;
+      // Category chip filter
+      if (cats.size > 0 && !cats.has(cardCategory(c))) return false;
+      // Tag chip filter (OR)
+      if (tags.size > 0) {
+        let any = false;
+        for (const t of tags) { if (hasTag(c, t)) { any = true; break; } }
+        if (!any) return false;
       }
-      return true;
+      // Type chip filter (OR)
+      if (types.size > 0) {
+        const ct = cardTypes(c);
+        if (ct.length === 0 || !ct.some(t => types.has(t))) return false;
+      }
+      // Stage chip filter (OR)
+      if (stages.size > 0) {
+        const stage = cardStage(c);
+        if (!stage || !stages.has(stage)) return false;
+      }
+      // Regulation mark chip filter (OR)
+      if (marks.size > 0) {
+        if (!c.regulationMark || !marks.has(c.regulationMark as RegMarkKey)) return false;
+      }
+      // Set filter (dropdown)
+      if (setFilter && c.setCode !== setFilter) return false;
+      // Search
+      if (!q) return true;
+      if (searchMode === 'keyword') {
+        const haystack: string[] = [
+          c.name, c.collectorNumber, c.evolvesFrom ?? '', c.rulesText ?? '',
+          ...(c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']),
+          ...(c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']),
+        ];
+        return haystack.some(s => s && s.toLowerCase().includes(q));
+      }
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.collectorNumber.includes(q) ||
+        (c.attacks ?? []).some((a) => a.name.toLowerCase().includes(q)) ||
+        (c.abilities ?? []).some((a) => a.name.toLowerCase().includes(q))
+      );
     });
   });
 
@@ -824,26 +969,71 @@
 
     <!-- ── Card picker ──────────────────────────────────────────────── -->
     <section class="picker">
-      <div class="filters">
-        <input
-          class="search"
-          placeholder="搜尋卡片名稱 / 卡號…"
-          bind:value={search}
-        />
-        <div class="filter-row">
-          <select bind:value={supertypeFilter}>
-            <option value="All">全部類型</option>
-            <option value="Pokemon">寶可夢</option>
-            <option value="Trainer">訓練家</option>
-            <option value="Energy">能量</option>
-          </select>
-          <select bind:value={markFilter}>
-            <option value="All">H · I · J</option>
-            <option value="H">H 標</option>
-            <option value="I">I 標</option>
-            <option value="J">J 標</option>
-          </select>
-          <select bind:value={setFilter}>
+      <div class="pk-filters">
+        <div class="pk-search-row">
+          <input
+            class="pk-search"
+            placeholder={searchMode === 'keyword'
+              ? '關鍵字搜尋（含招式 / 特性敘述、效果）...'
+              : '搜尋卡名、招式名、特性名、卡號...'}
+            bind:value={search}
+          />
+          <div class="pk-mode-toggle" role="group" aria-label="搜尋模式">
+            <button class="pk-mode-btn" class:active={searchMode === 'normal'}
+              onclick={() => (searchMode = 'normal')} title="只搜名稱 / 卡號">一般</button>
+            <button class="pk-mode-btn" class:active={searchMode === 'keyword'}
+              onclick={() => (searchMode = 'keyword')} title="全文關鍵字搜尋">關鍵字</button>
+          </div>
+        </div>
+        <div class="pk-chip-row" role="group" aria-label="分類">
+          <button class="pk-chip" class:active={selectedCategories.size === 0}
+            onclick={clearCategories}>全部</button>
+          {#each CATEGORY_ORDER as cat (cat)}
+            <button class="pk-chip" class:active={selectedCategories.has(cat)}
+              onclick={() => toggleCategory(cat)}>{CATEGORY_LABEL[cat]}</button>
+          {/each}
+        </div>
+        <div class="pk-chip-row" role="group" aria-label="標籤">
+          <span class="pk-label">標籤：</span>
+          <button class="pk-chip pk-chip-tag" class:active={selectedTags.size === 0}
+            onclick={clearTags}>不限</button>
+          {#each TAG_ORDER as tag (tag)}
+            <button class="pk-chip pk-chip-tag" class:active={selectedTags.has(tag)}
+              onclick={() => toggleTag(tag)}>{tag}</button>
+          {/each}
+        </div>
+        <div class="pk-chip-row" role="group" aria-label="屬性">
+          <span class="pk-label">屬性：</span>
+          <button class="pk-chip pk-chip-type" class:active={selectedTypes.size === 0}
+            onclick={clearTypes}>不限</button>
+          {#each ENERGY_ORDER as etype (etype)}
+            <button class="pk-chip pk-chip-type" class:active={selectedTypes.has(etype)}
+              onclick={() => toggleType(etype)} style:--type-bg={ENERGY_COLOR[etype]}>
+              <span class="pk-type-dot" style:background={ENERGY_COLOR[etype]}>{ENERGY_LABEL[etype]}</span>
+            </button>
+          {/each}
+        </div>
+        <div class="pk-chip-row" role="group" aria-label="階段">
+          <span class="pk-label">階段：</span>
+          <button class="pk-chip pk-chip-stage" class:active={selectedStages.size === 0}
+            onclick={clearStages}>不限</button>
+          {#each STAGE_ORDER as stg (stg)}
+            <button class="pk-chip pk-chip-stage" class:active={selectedStages.has(stg)}
+              onclick={() => toggleStage(stg)}>{STAGE_LABEL[stg]}</button>
+          {/each}
+        </div>
+        <div class="pk-chip-row" role="group" aria-label="賽季">
+          <span class="pk-label">賽季：</span>
+          <button class="pk-chip pk-chip-mark" class:active={selectedRegMarks.size === 0}
+            onclick={clearRegMarks}>不限</button>
+          {#each REG_MARK_ORDER as m (m)}
+            <button class="pk-chip pk-chip-mark" class:active={selectedRegMarks.has(m)}
+              onclick={() => toggleRegMark(m)}>{m} 標</button>
+          {/each}
+        </div>
+        <div class="pk-chip-row">
+          <span class="pk-label">卡包：</span>
+          <select class="pk-set-select" bind:value={setFilter}>
             <option value="">全部卡包</option>
             {#each sets as s}
               <option value={s.code}>
@@ -1376,25 +1566,125 @@
     flex-direction: column;
     min-height: 0;
   }
-  .filters {
+  /* ── Picker filter system ────────────────────────────────────── */
+  .pk-filters {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.45rem;
+    margin-bottom: 0.5rem;
   }
-  .search {
-    padding: 0.45rem 0.6rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font: inherit;
-  }
-  .filter-row {
+  .pk-search-row {
     display: flex;
     gap: 0.4rem;
-    flex-wrap: wrap;
+    align-items: center;
   }
-  .filter-row select {
-    padding: 0.35rem 0.5rem;
+  .pk-search {
+    flex: 1;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
     font: inherit;
+    font-size: 0.88rem;
+  }
+  .pk-mode-toggle {
+    display: flex;
+    gap: 0;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #fff;
+    flex-shrink: 0;
+  }
+  .pk-mode-btn {
+    padding: 0.4rem 0.6rem;
+    border: 0;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: #555;
+  }
+  .pk-mode-btn + .pk-mode-btn { border-left: 1px solid #e0e0e0; }
+  .pk-mode-btn.active { background: #1a1a1a; color: #fff; }
+  .pk-mode-btn:hover:not(.active) { background: #f0f0f0; }
+
+  .pk-chip-row {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .pk-label {
+    color: #6b7280;
+    font-size: 0.78rem;
+    margin-right: 0.1rem;
+    flex-shrink: 0;
+  }
+  .pk-chip {
+    padding: 0.3rem 0.65rem;
+    border: 1px solid #ccc;
+    background: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: #333;
+    white-space: nowrap;
+  }
+  .pk-chip.active {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+  .pk-chip:hover:not(.active) { background: #f5f5f5; }
+
+  /* Tag chips */
+  .pk-chip-tag { color: #4b5563; }
+  .pk-chip-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+
+  /* Type chips */
+  .pk-chip-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    color: #4b5563;
+  }
+  .pk-chip-type.active {
+    background: var(--type-bg, #6366f1);
+    color: #fff;
+    border-color: var(--type-bg, #6366f1);
+  }
+  .pk-chip-type.active .pk-type-dot {
+    background: rgba(255,255,255,0.35) !important;
+  }
+  .pk-type-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.2em;
+    height: 1.2em;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.3);
+    flex-shrink: 0;
+  }
+
+  /* Stage chips */
+  .pk-chip-stage { border-color: #6c5a8a; font-size: 0.75rem; }
+  .pk-chip-stage.active { background: #6c5a8a; color: #fff; border-color: #6c5a8a; }
+
+  /* Regulation mark chips */
+  .pk-chip-mark { border-color: #5a7a8a; font-size: 0.75rem; }
+  .pk-chip-mark.active { background: #5a7a8a; color: #fff; border-color: #5a7a8a; }
+
+  /* Set dropdown */
+  .pk-set-select {
+    padding: 0.3rem 0.5rem;
+    font: inherit;
+    font-size: 0.82rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    max-width: 260px;
   }
   .muted {
     color: #888;
