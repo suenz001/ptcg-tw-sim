@@ -9773,12 +9773,7 @@ regR('search-generic-to-hand', (st, idx, iids, _params, pool) => {
 // v2.165：實裝（之前未實裝；火箭隊的烏鴉頭頭 preset 用）
 //   卡面：「從自己的牌庫選擇1張基本能量卡，在給對手看過後加入手牌。並且重洗牌庫。」
 // 與 能量輸送PRO 差異：本卡只搜 1 張、不需要不同屬性、log 強制公開（卡面要求「給對手看過」）
-regG('能量輸送', (st, idx, pool) => {
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic';
-  });
-});
+regG('能量輸送', (st, idx) => st.players[idx].deck.length > 0);
 reg('能量輸送', (st, idx) => {
   st = addLog(st, '能量輸送：從牌庫選 1 張基本能量加入手牌（給對手看）', idx);
   return withPending(st, {
@@ -9943,15 +9938,7 @@ regR('wind-vortex-return', (st, idx, iids, _params, pool) => {
 });
 
 // ── 阿克羅瑪的執著（Supporter） ── 從牌庫選競技場卡 + 能量卡各 1 張加手牌
-regG('阿克羅瑪的執著', (st, idx, pool) => {
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    if (!card) return false;
-    if (card.supertype === 'Trainer' && card.subtype === 'Stadium') return true;
-    if (card.supertype === 'Energy') return true;
-    return false;
-  });
-});
+regG('阿克羅瑪的執著', (st, idx) => st.players[idx].deck.length > 0);
 reg('阿克羅瑪的執著', (st, idx) => {
   st = addLog(st, '阿克羅瑪的執著：步驟 1／2 — 從牌庫選 1 張競技場卡加手牌', idx);
   return withPending(st, {
@@ -10151,15 +10138,7 @@ reg('力量蛋白飲', (st, idx) => {
 });
 
 // ── 8. 戰鬥鑼（Item）— 搜 1 張 [鬥] 基礎寶可夢 或 基本【鬥】能量 ───────────
-regG('戰鬥鑼', (st, idx, pool) => {
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    if (!card) return false;
-    if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
-    if (card.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Fighting') return true;
-    return false;
-  });
-});
+regG('戰鬥鑼', (st, idx) => st.players[idx].deck.length > 0);
 reg('戰鬥鑼', (st, idx) => {
   st = addLog(st, '戰鬥鑼：從牌庫選 1 張 [鬥] 基礎寶可夢 或 基本【鬥】能量加入手牌', idx);
   return withPending(st, {
@@ -10173,15 +10152,7 @@ reg('戰鬥鑼', (st, idx) => {
 
 // ── 9. 寶可平板（Item）— 搜 1 張「非擁有規則」寶可夢 ─────────────────────
 // 「擁有規則」= ex / VMAX / VSTAR / TAG TEAM 等。MVP 以 subtype==='ex' 或 name 尾 ex/EX 判定。
-regG('寶可平板', (st, idx, pool) => {
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    if (!card || card.supertype !== 'Pokemon') return false;
-    const isRule = card.subtype === 'ex'
-      || card.name.endsWith('ex') || card.name.endsWith('EX');
-    return !isRule;
-  });
-});
+regG('寶可平板', (st, idx) => st.players[idx].deck.length > 0);
 reg('寶可平板', (st, idx) => {
   st = addLog(st, '寶可平板：從牌庫選 1 張「非擁有規則」寶可夢加入手牌', idx);
   return withPending(st, {
@@ -10197,9 +10168,7 @@ reg('寶可平板', (st, idx) => {
 //        attach resolver 由 TOOL_* 自動登記區塊統一註冊 toolAttachEffect。 ────────
 
 // ── 11. 火箭隊的拉姆達（Supporter）— 搜 1 張訓練家卡加手牌 ────────────────
-regG('火箭隊的拉姆達', (st, idx, pool) => {
-  return st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Trainer');
-});
+regG('火箭隊的拉姆達', (st, idx) => st.players[idx].deck.length > 0);
 reg('火箭隊的拉姆達', (st, idx) => {
   st = addLog(st, '火箭隊的拉姆達：從牌庫選 1 張訓練家卡加入手牌', idx);
   return withPending(st, {
@@ -10460,13 +10429,7 @@ regR('touko-phase2', (st, idx, iids, _params, pool) => {
 // 火箭隊能量 hook 已搬到 effects/cards/energy_cards.ts（v2.66）。
 
 // ---- 火箭隊的接收器（Item）- 搜「火箭隊」Supporter 加手牌 ------------------
-regG('火箭隊的接收器', (st, idx, pool) =>
-  st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Trainer' && card.subtype === 'Supporter'
-      && card.name.includes('火箭隊');
-  })
-);
+regG('火箭隊的接收器', (st, idx) => st.players[idx].deck.length > 0);
 reg('火箭隊的接收器', (st, idx) => {
   st = addLog(st, '火箭隊的接收器：從牌庫選 1 張「火箭隊」支援者加手牌', idx);
   return withPending(st, {
@@ -10494,13 +10457,7 @@ reg('火箭隊的雅典娜', (st, idx, pool) => {
 //   會呼叫 canPlaySupporterOnFirstTurn(card) 檢查 rulesText 是否包含
 //   「先攻玩家的最初回合」，命中就 bypass。v2.69 起改成由 engine 統一處理，
 //   所以這裡不需要對這張卡做任何特例。
-regG('火箭隊的蘭斯', (st, idx, pool) =>
-  st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon'
-      && !card.evolvesFrom && card.name.includes('火箭隊的');
-  })
-);
+regG('火箭隊的蘭斯', (st, idx) => st.players[idx].deck.length > 0);
 reg('火箭隊的蘭斯', (st, idx) => {
   st = addLog(st, '火箭隊的蘭斯：從牌庫選最多 3 張基礎的「火箭隊」寶可夢加手牌', idx);
   return withPending(st, {
