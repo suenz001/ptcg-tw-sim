@@ -4679,13 +4679,13 @@
   .battle-header > *{ flex-shrink:0; }
   .small-back{ color:#88ccff; text-decoration:none; font-size:0.82rem; background:none; border:none; cursor:pointer; padding:0; }
   .small-back:hover{ text-decoration:underline; }
-  .turn-info{ flex:1; font-size:0.88rem; }
+  .turn-info{ flex:1; font-size:0.88rem; white-space:nowrap; }
   .hint{ color:#888; font-size:0.75rem; }
   .phase-tag{ font-size:0.78rem; color:#aaffaa; background:#0e2e0e; padding:0.18rem 0.5rem; border-radius:4px; }
-  .hand-counts{ display:flex; gap:0.28rem; align-items:center; flex-wrap:wrap; }
+  .hand-counts{ display:flex; gap:0.28rem; align-items:center; flex-wrap:nowrap; }
   .hand-count-chip{ background:#1a2a3a; color:#9cf; border-color:#2a4a6a; font-size:0.7rem; padding:0.14rem 0.45rem; }
   .hand-count-chip.hc-active{ background:#2a3e1a; color:#cfa; border-color:#4a6a2a; box-shadow:0 0 4px rgba(150,255,100,.25); }
-  .status-chips{ display:flex; gap:0.3rem; flex-wrap:wrap; }
+  .status-chips{ display:flex; gap:0.3rem; flex-wrap:nowrap; }
   .chip{ font-size:0.68rem; padding:0.1rem 0.35rem; border-radius:10px; background:#1a3a1a; color:#8f8; border:1px solid #2a5a2a; }
   .role-chip{ background:#1a1a3a; color:#aaf; border-color:#2a2a5a; }
   .version-chip{ background:#2a1a3a; color:#c0a0e0; border-color:#4a3a6a; font-family:monospace; }
@@ -5273,6 +5273,20 @@
   }
   :global(.battle-root.tablet-layout .hand-card img) {
     width: 72px;
+  }
+  
+  /* Stadium card needs to be shrunk so it doesn't overflow the 125px action bar */
+  :global(.battle-root.tablet-layout .stadium-display img) {
+    width: 60px;
+  }
+  :global(.battle-root.tablet-layout .stadium-display) {
+    padding: 0.2rem 0.3rem; gap: 0.15rem;
+  }
+  :global(.battle-root.tablet-layout .stadium-display-label) {
+    font-size: 0.65rem;
+  }
+  :global(.battle-root.tablet-layout .stadium-display-name) {
+    font-size: 0.65rem; max-width: 80px;
   }
   
   /* Font sizes and compact spacing */
