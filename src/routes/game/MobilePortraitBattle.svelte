@@ -39,7 +39,8 @@
   import {
     getEffectiveAttacks, getAvailableAttacks, getEvolvableTargets, getPlayableTrainers,
     getPlayableBasics, getPlayableFossils, getUsableAbilities,
-    canRetreat as engineCanRetreat, getRetreatCost, getBenchLimit
+    canRetreat as engineCanRetreat, getRetreatCost, getBenchLimit,
+    getEffectiveHP
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
 
@@ -113,10 +114,9 @@
     return pool.get(inst.cardId) ?? null;
   }
   function hpRemaining(inst: CardInstance) {
-    const c = cardOf(inst);
-    return Math.max(0, (c?.hp ?? 0) - inst.damage);
+    return Math.max(0, getEffectiveHP(inst, pool, game) - inst.damage);
   }
-  function hpMax(inst: CardInstance) { return cardOf(inst)?.hp ?? 0; }
+  function hpMax(inst: CardInstance) { return getEffectiveHP(inst, pool, game); }
   // v2.286 Phase 4：HP bar 顏色 — <30% 紅、<60% 黃、其他綠
   function hpClass(inst: CardInstance): string {
     const max = hpMax(inst);
