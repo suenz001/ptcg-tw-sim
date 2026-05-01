@@ -1195,7 +1195,7 @@ function sanityKOSweep(
       player.discard = [...player.discard, ...koDiscard];
       player.active = null;
       if (card) prizesAcc += prizesForKO(card);
-      s = addLog(s, `⚠️ KO sanity sweep：${card?.name ?? '?'} 被擊倒（戰鬥場，傷害 ${ko.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
+      s = addLog(s, `⚠️ 系統擊倒檢查：${card?.name ?? '?'} 被擊倒（戰鬥場，傷害 ${ko.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack');
     }
@@ -1214,7 +1214,7 @@ function sanityKOSweep(
       ];
       player.discard = [...player.discard, ...koDiscard];
       if (card) prizesAcc += prizesForKO(card);
-      s = addLog(s, `⚠️ KO sanity sweep：${card?.name ?? '?'} 被擊倒（備戰位，傷害 ${b.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
+      s = addLog(s, `⚠️ 系統擊倒檢查：${card?.name ?? '?'} 被擊倒（備戰位，傷害 ${b.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack');
     } else {
