@@ -135,6 +135,7 @@ regG('甜蜜球', (st, idx, pool) => {
   }
   if (oppNames.size === 0) return false;
   return st.players[idx].deck.length > 0;
+});
 reg('甜蜜球', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const oppNames = new Set<string>();
