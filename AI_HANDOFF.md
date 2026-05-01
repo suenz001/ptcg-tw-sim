@@ -16537,3 +16537,18 @@ Leon 反映手機直式對戰 UI（MobilePortraitBattle.svelte）有三個問題
 
 ### 驗證
 - `npm run build` 成功通過！
+
+---
+
+## v2.308 — 修復手機直式版 HP 顯示與道具增益不同步問題
+
+### 目標
+修復手機直式對戰版面 (`MobilePortraitBattle.svelte`) 中，配戴「勇氣護符」等增加血量道具或競技場卡時，HP Bar 顯示錯誤的 Bug（如配戴 +50 HP 道具時仍顯示上限為原卡血量，甚至產生 0/50 的不死狀態顯示）。
+
+### 修復內容
+- 在 `MobilePortraitBattle.svelte` 的 `hpMax` 與 `hpRemaining` 涵式中，放棄原先直接讀取 `cardOf(inst)?.hp` 的邏輯。
+- 改為直接匯入並使用 `src/lib/game/engine.ts` 中統一的 `getEffectiveHP(inst, pool, game)` helper，這樣手機版也能與桌機版一樣完美支援 **道具加血 (如勇氣護符)**、**競技場變更 (如激動競技場/引力山岳)** 以及 **特性 HP 加成 (如夠讚狗/怖納噬草等)** 的動態計算。
+- 將版本推進至 `2.308`。
+
+### 驗證
+- 重新 `npm run build` 確認無錯誤且編譯順利通過。
