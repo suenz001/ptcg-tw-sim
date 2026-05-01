@@ -11683,11 +11683,7 @@ regR('unruda-swap', (state, aIdx, iids, _params, _pool) => {
   });
 });
 
-// ── 猛攻手鐲（Tool）— 對對手戰鬥場 ex +30 ───────────────────────────────────
-TOOL_ATTACK_BONUS.set('猛攻手鐲', (_a, _ai, defCard) => {
-  const isEx = defCard.subtype === 'ex' || defCard.name.endsWith('ex') || defCard.name.endsWith('EX');
-  return isEx ? 30 : 0;
-});
+
 
 // ── 聖灰（Item）— 從棄牌區挑最多 5 張寶可夢卡放回牌庫並重洗 ─────────────────
 regG('聖灰', (st, idx, pool) => {

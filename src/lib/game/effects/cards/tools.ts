@@ -112,6 +112,11 @@ TOOL_ATTACK_BONUS.set('電氣球', (attCard, _ai, defCard) => {
   const isDefEx = defCard.subtype === 'ex' || defCard.name.endsWith('ex') || defCard.name.endsWith('EX');
   return isDefEx ? 50 : 0;
 });
+// ── 猛攻手鐲（Tool）— 對對手戰鬥場 ex +30 ───────────────────────────────────
+TOOL_ATTACK_BONUS.set('猛攻手鐲', (_a, _ai, defCard) => {
+  const isEx = defCard.subtype === 'ex' || defCard.name.endsWith('ex') || defCard.name.endsWith('EX');
+  return isEx ? 30 : 0;
+});
 // v2.170 活力頭帶：使用招式 +10 傷害
 TOOL_ATTACK_BONUS.set('活力頭帶', () => 10);
 // v2.170 赫普的講究頭帶：「赫普的」寶可夢招式 +30

@@ -1614,7 +1614,7 @@ function handlePlaying(
     const trainerCard = pool.get(trainerInst.cardId);
     if (!trainerCard) return state;
 
-    const isTool = trainerCard.supertype === 'Pokemon' && trainerCard.subtype === 'Other';
+    const isTool = trainerCard.supertype === 'Trainer' && trainerCard.subtype === 'PokemonTool';
     const isTrainer = trainerCard.supertype === 'Trainer';
     if (!isTool && !isTrainer) return state;
 
