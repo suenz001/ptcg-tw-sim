@@ -1602,7 +1602,7 @@
   .pv-inner {
     background: #fff;
     border-radius: 12px;
-    max-width: 760px;
+    max-width: 900px;
     width: 100%;
     max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem);
     margin: auto;
@@ -1630,18 +1630,19 @@
 
   .pv-top {
     display: grid;
-    grid-template-columns: 180px 1fr;
+    grid-template-columns: minmax(200px, 260px) 1fr;
     gap: 1.5rem;
     align-items: start;
   }
-  @media (max-width: 560px) {
+  @media (max-width: 640px) {
     .pv-top { grid-template-columns: 1fr; }
     .pv-img { width: 140px; }
   }
   .pv-img {
-    width: 180px;
+    width: 100%;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    display: block;
   }
 
   .pv-name {

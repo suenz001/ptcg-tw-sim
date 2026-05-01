@@ -16559,3 +16559,11 @@ Leon 反映手機直式對戰 UI（MobilePortraitBattle.svelte）有三個問題
 
 ### 變動
 - 應 Leon 要求，將預設牌組「火箭隊的超夢ex」中的 **勇氣護符** (cardId 11029) 替換為 **猛攻手鐲** (cardId 17160)。
+
+---
+
+## v2.310 — 組牌系統卡片預覽介面放大
+
+### 變動
+- 修改了 `src/routes/decks/+page.svelte` 中卡片預覽 (`Card preview modal`) 的樣式。
+- 將 Modal 最大寬度由 `760px` 提升至 `900px`，並將左側卡片圖面由固定 `180px` 改為佔滿欄寬 (`100%`)，完美對齊與「瀏覽牌庫」(`/cards`) 一致的版面大小與閱讀體驗。
