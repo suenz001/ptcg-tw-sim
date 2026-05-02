@@ -1,6 +1,31 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
 > 最後更新：2026-05-02 (v2.326)
+> 最後更新：2026-05-02 (v2.327)
+> AI：Hermes (MiniMax-M2.7)
+
+---
+
+## v2.327 — 修復 six_decks.ts shuffle 未匯入（63 場遊戲全部 crash Bug）
+
+### 問題
+`sim-tournament.mjs 1` 跑出 63 場 `shuffle is not defined` exception，全數發生在對戰雙方其中一方為「顫弦蠑螈」preset 時。
+
+### 根因
+`six_decks.ts` 的 `rascal-skyward-pick` resolver（惡棍衝天）直接使用 `shuffle()`，但 `shuffle` 並未從 `_shared` import，導致 RuntimeError。
+
+### 修正
+在 `six_decks.ts` import 清單中加入 `shuffle`。
+
+### 修改檔案
+- `src/lib/game/effects/cards/six_decks.ts`：import 加入 `shuffle`
+- `src/lib/version.ts`：2.326 → 2.327
+
+### Build / Push
+- TypeScript 編譯通過
+- 已推送至 `6964efd`
+
+
 > AI：Hermes (MiniMax-M2.7)
 
 ---
