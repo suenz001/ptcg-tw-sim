@@ -1314,10 +1314,15 @@
             const t = f.slice(8);
             return card.supertype === 'Pokemon' && card.pokemonType === t;
           }
-          if (f.startsWith('Energy:')) {
+            if (f.startsWith('Energy:')) {
             // v2.121：加 name fallback（基本能量 pokemonType 常為 undefined）
             const t = f.slice(7) as EnergyType;
             return isBasicEnergyOfType(card, t);
+          }
+          // v2.321：Trainer: prefix 處理（殺手鐧捕捉 filter='Trainer:Supporter'）
+          if (f.startsWith('Trainer:')) {
+            const sub = f.slice(8); // e.g. 'Supporter', 'Item', 'Stadium', 'PokemonTool'
+            return card.supertype === 'Trainer' && card.subtype === sub;
           }
           // v2.225 旋轉洛托姆｜風扇呼喚：HP≤100 的【無】屬性寶可夢卡
           //   （之前 filter 漏在 deck-search chain，導致 fallback `return true` →

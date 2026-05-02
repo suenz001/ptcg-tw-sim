@@ -340,6 +340,37 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const want = f.slice(5);
           return card.name === want;
         }
+        // v2.321：通用 prefix filters（與 UI +page.svelte 對齊）
+        if (f.startsWith('Trainer:')) {
+          const sub = f.slice(8); // e.g. 'Supporter', 'Item', 'Stadium', 'PokemonTool'
+          return card.supertype === 'Trainer' && card.subtype === sub;
+        }
+        if (f.startsWith('Pokemon:')) {
+          const t = f.slice(8);
+          return card.supertype === 'Pokemon' && card.pokemonType === t;
+        }
+        if (f.startsWith('Energy:')) {
+          if (card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+          const t = f.slice(7);
+          return card.pokemonType === t || card.name.includes(`【${t}】`);
+        }
+        if (f.startsWith('Basic:NamePrefix=')) {
+          const prefix = f.slice('Basic:NamePrefix='.length);
+          return isBasicPokemonCard(card) && card.name.startsWith(prefix);
+        }
+        if (f.startsWith('Pokemon:NamePrefix=')) {
+          const prefix = f.slice('Pokemon:NamePrefix='.length);
+          return card.supertype === 'Pokemon' && card.name.startsWith(prefix);
+        }
+        if (f === 'MarniePokemon') return card.supertype === 'Pokemon' && card.name.startsWith('瑪俐的');
+        if (f === 'BasicNonRule') {
+          if (!isBasicPokemonCard(card)) return false;
+          const isRule = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX');
+          return !isRule;
+        }
+        if (f === 'ColorlessPokeHP100') {
+          return card.supertype === 'Pokemon' && card.pokemonType === 'Colorless' && (card.hp ?? 999) <= 100;
+        }
         return true;
       });
       // 優先選 HP 高的寶可夢
