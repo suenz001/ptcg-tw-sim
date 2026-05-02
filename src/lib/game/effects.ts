@@ -937,11 +937,7 @@ regR('gengar-move-energy', (st, idx, iids, params, pool) => {
 // 充溢之光 — 從牌庫選最多 2 張基本能量，附於自身（POST；無傷害）
 regPost('克雷色利亞|充溢之光', (state, aIdx, pool) => {
   const player = state.players[aIdx];
-  const hasEnergy = player.deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.subtype === 'Basic';
-  });
-  if (!hasEnergy) return addLog(state, '充溢之光：牌庫中沒有基本能量', aIdx);
+  if (player.deck.length === 0) return addLog(state, '充溢之光：牌庫為空', aIdx);
   let s = addLog(state, '充溢之光：從牌庫選最多 2 張基本能量附於自身', aIdx);
   return withPending(s, {
     type: 'deck-search',
@@ -1215,11 +1211,7 @@ regPost('拉帝亞斯ex|無限之刃', (state, aIdx, _pool) => {
 regPost('謎擬Q|呼朋引伴', (state, aIdx, _pool) => {
   const player = state.players[aIdx];
   if (player.bench.length >= 5) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
-  const hasBasic = player.deck.some(c => {
-    // 過濾在 selection UI 中完成，這裡直接開啟選擇
-    return true;
-  });
-  if (!hasBasic) return addLog(state, '呼朋引伴：牌庫中沒有寶可夢', aIdx);
+  if (player.deck.length === 0) return addLog(state, '呼朋引伴：牌庫為空', aIdx);
   let s = addLog(state, '呼朋引伴：從牌庫選 1 隻基礎寶可夢放備戰', aIdx);
   return withPending(s, {
     type: 'deck-search',
@@ -1782,13 +1774,7 @@ regG('賽吉', (st, idx, pool) => {
   if (st.players[idx].deck.length === 0) return false;
   // 場上至少要有 1 隻能進化的寶可夢（active+bench）
   const all = [st.players[idx].active, ...st.players[idx].bench].filter((c): c is CardInstance => !!c);
-  if (all.length === 0) return false;
-  // 牌庫有任何進化卡，且該前階在場上
-  const ownNames = new Set(all.map(c => pool.get(c.cardId)?.name ?? ''));
-  return st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return !!card?.evolvesFrom && ownNames.has(card.evolvesFrom);
-  });
+  return all.length > 0;
 });
 reg('賽吉', (st, idx, pool) => {
   const player = st.players[idx];
@@ -1800,8 +1786,12 @@ reg('賽吉', (st, idx, pool) => {
     const card = pool.get(c.cardId);
     return !!card?.evolvesFrom && ownNames.has(card.evolvesFrom);
   }).map(c => c.iid);
-  if (validIids.length === 0) return addLog(st, '賽吉：牌庫無可進化的進化卡', idx);
-  st = addLog(st, '賽吉：從牌庫選 1 張可進化自己場上寶可夢的進化卡，直接進化', idx);
+  
+  if (validIids.length === 0) {
+    st = addLog(st, '賽吉：牌庫內無對應的進化卡（僅進行搜尋與重洗）', idx);
+  } else {
+    st = addLog(st, '賽吉：從牌庫選 1 張可進化自己場上寶可夢的進化卡，直接進化', idx);
+  }
   return withPending(st, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Evolution', minCount: 0, maxCount: 1,
@@ -2842,14 +2832,9 @@ reg('庫瑟洛斯奇的企圖', (st, idx) => {
 });
 
 // 席藍 — 搜最多 3 張 ex 寶可夢加手牌
-regG('席藍', (st, idx, pool) =>
-  st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && (card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX'));
-  })
-);
-reg('席藍', (st, idx) => {
-  st = addLog(st, '席藍：從牌庫選最多 3 張寶可夢 ex 加手牌', idx);
+regG('席藍', (st, idx) => st.players[idx].deck.length > 0);
+reg('席藍', (st, idx, pool) => {
+  st = addLog(st, '席藍：搜尋牌庫，選擇最多 3 張寶可夢 ex 加手牌', idx);
   return withPending(st, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'ex', minCount: 0, maxCount: 3,
@@ -10088,15 +10073,9 @@ regPost('竹蘭的烈咬陸鯊ex|龍之爆發', selfDiscardAllEnergyPost('龍之
 // 每回合 1 次（ABILITY_USED 一次性規則由 engine 管控）：從牌庫選 1 張「竹蘭的」寶可夢加手牌。
 regA('竹蘭的尖牙陸鯊', 0, (st, idx, pool) => {
   const p = st.players[idx];
-  const hasTarget = p.deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon'
-      && card.name.includes('竹蘭的');
-  });
-  if (!hasTarget) {
-    return addLog(st, '王者呼聲：牌庫沒有「竹蘭的」寶可夢可搜', idx);
-  }
-  st = addLog(st, '王者呼聲：從牌庫選 1 張「竹蘭的」寶可夢加入手牌', idx);
+  if (p.deck.length === 0) return addLog(st, '王者呼聲：牌庫為空', idx);
+  
+  st = addLog(st, '王者呼聲：從牌庫搜尋 1 張「竹蘭的」寶可夢加入手牌', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -10558,11 +10537,9 @@ reg('火箭隊的阿波羅', (st, idx) => {
 });
 
 // ---- 火箭隊的拉姆達（Supporter）- 搜任意 1 張訓練家加手牌 -------------------
-regG('火箭隊的拉姆達', (st, idx, pool) =>
-  st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Trainer')
-);
-reg('火箭隊的拉姆達', (st, idx) => {
-  st = addLog(st, '火箭隊的拉姆達：從牌庫選 1 張訓練家卡加手牌', idx);
+regG('火箭隊的拉姆達', (st, idx) => st.players[idx].deck.length > 0);
+reg('火箭隊的拉姆達', (st, idx, pool) => {
+  st = addLog(st, '火箭隊的拉姆達：從牌庫搜尋 1 張訓練家卡加手牌', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -10893,18 +10870,9 @@ regR('pokegear-fetch-supporter', (st, idx, iids, params, _pool) => {
 });
 
 // ---- 太晶珠（Item）- 從牌庫搜 1 張「太晶」寶可夢加手牌 -----------------------
-// v2.52：修正 — 太晶珠是 **Item**（搜尋牌庫），不是 Tool（HP +30）。
-// 之前 v2.48 誤把它登錄成 TOOL_HP_BONUS，實際卡面文字：
-//   「從自己的牌庫選擇1張『太晶』寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。」
-// = 典型 deck-search → search-pokemon-to-hand 流程（filter: TeraPokemon）。
-regG('太晶珠', (st, idx, pool) =>
-  st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && !!card.tags?.includes('太晶');
-  })
-);
-reg('太晶珠', (st, idx) => {
-  st = addLog(st, '太晶珠：從牌庫選 1 張「太晶」寶可夢卡加手牌', idx);
+regG('太晶珠', (st, idx) => st.players[idx].deck.length > 0);
+reg('太晶珠', (st, idx, pool) => {
+  st = addLog(st, '太晶珠：從牌庫搜尋 1 張「太晶」寶可夢卡加手牌', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,

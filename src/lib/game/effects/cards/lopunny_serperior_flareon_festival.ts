@@ -178,20 +178,13 @@ regA('貓頭夜鷹', 0, (st, idx, pool, cardInst) => {
 //   在給對手看過後加入手牌。並且重洗牌庫。」
 // 實作：deck-search 用 'Pokemon' 寬 filter，resolver 內 validate 鋼屬性 + 進化階段
 regA('蓋諾賽克特ex', 0, (st, idx, pool) => {
-  const cand = st.players[idx].deck.filter(c => {
-    const card = pool.get(c.cardId);
-    if (card?.supertype !== 'Pokemon') return false;
-    if (card.pokemonType !== 'Metal') return false;
-    return card.stage === 'Stage1' || card.stage === 'Stage2';
-  });
-  if (cand.length === 0) return addLog(st, '金屬信號：牌庫中無【鋼】進化寶可夢', idx);
-  const max = Math.min(2, cand.length);
-  let s = addLog(st, `金屬信號：從牌庫選 ≤${max} 張【鋼】進化寶可夢加入手牌（重洗）`, idx);
-  return withPending(s, {
+  if (st.players[idx].deck.length === 0) return addLog(st, '金屬信號：牌庫為空', idx);
+  st = addLog(st, '金屬信號：從牌庫選最多 2 張【鋼】進化寶可夢加入手牌', idx);
+  return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Stage1Or2:Metal',
-    minCount: 0, maxCount: max,
+    minCount: 0, maxCount: 2,
     effectKey: 'search-to-hand-reshuffle',
     params: { titleOverride: '金屬信號：選 ≤2 張【鋼】進化寶可夢加入手牌' },
   });
@@ -211,11 +204,7 @@ regA('蓋諾賽克特ex', 0, (st, idx, pool) => {
 //   然後啟動 v158_energy_chain 讓玩家逐張選目標寶可夢（限定【超】或【鋼】，可含 active）。
 regA('大吾的巨金怪ex', 0, (st, idx, pool) => {
   const p = st.players[idx];
-  const psyEnergyCount = p.deck.filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Psychic')).length;
-  const metEnergyCount = p.deck.filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Metal')).length;
-  if (psyEnergyCount === 0 && metEnergyCount === 0) {
-    return addLog(st, 'X啟動：牌庫中無基本【超】或基本【鋼】能量', idx);
-  }
+  if (p.deck.length === 0) return addLog(st, 'X啟動：牌庫為空', idx);
   // 場上必須有 超 或 鋼 寶可夢
   const hasTarget = [p.active, ...p.bench].some(c => {
     if (!c) return false;
@@ -223,26 +212,15 @@ regA('大吾的巨金怪ex', 0, (st, idx, pool) => {
     return card?.pokemonType === 'Psychic' || card?.pokemonType === 'Metal';
   });
   if (!hasTarget) return addLog(st, 'X啟動：場上無【超】或【鋼】寶可夢', idx);
-  let s = addLog(st, 'X啟動：選 ≤1 張基本【超】能量 → ≤1 張基本【鋼】能量（自動附於【超】或【鋼】寶可夢）', idx);
-  // Step 1: 先選 超能量
-  if (psyEnergyCount > 0) {
-    return withPending(s, {
-      type: 'deck-search',
-      actorIdx: idx, sourcePlayerIdx: idx,
-      filter: 'Energy:Psychic',
-      minCount: 0, maxCount: 1,
-      effectKey: 'metagross-x-start-psy',
-      params: { titleOverride: 'X啟動 (1/2)：選 ≤1 張基本【超】能量' },
-    });
-  }
-  // 沒超能量 → 直接走鋼
-  return withPending(s, {
+  
+  st = addLog(st, 'X啟動：從牌庫搜尋基本【超】能量與基本【鋼】能量各最多 1 張（自動附於【超】或【鋼】寶可夢）', idx);
+  return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Energy:Metal',
+    filter: 'Energy:Psychic',
     minCount: 0, maxCount: 1,
-    effectKey: 'metagross-x-start-met-only',
-    params: { titleOverride: 'X啟動 (2/2)：選 ≤1 張基本【鋼】能量' },
+    effectKey: 'metagross-x-start-psy',
+    params: { titleOverride: 'X啟動 (1/2)：選 ≤1 張基本【超】能量' },
   });
 });
 
@@ -251,11 +229,7 @@ regR('metagross-x-start-psy', (st, idx, iids, _params, pool) => {
   let s = st;
   // 把選的超能量留著，先標記在 params 之後再 commit
   const psyChosenIid: string | null = iids[0] ?? null;
-  const metEnergyCount = s.players[idx].deck.filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Metal')).length;
-  if (metEnergyCount === 0) {
-    // 沒鋼能量 → 直接 commit psy
-    return commitMetagrossEnergy(s, idx, psyChosenIid, null, pool);
-  }
+  
   return withPending(s, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -273,11 +247,6 @@ regR('metagross-x-start-met', (st, idx, iids, params, pool) => {
   const metChosenIid: string | null = iids[0] ?? null;
   const psyChosenIid = (params?.psyChosenIid as string | null | undefined) ?? null;
   return commitMetagrossEnergy(st, idx, psyChosenIid, metChosenIid, pool);
-});
-
-regR('metagross-x-start-met-only', (st, idx, iids, _params, pool) => {
-  const metChosenIid: string | null = iids[0] ?? null;
-  return commitMetagrossEnergy(st, idx, null, metChosenIid, pool);
 });
 
 function commitMetagrossEnergy(

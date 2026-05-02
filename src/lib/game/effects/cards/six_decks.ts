@@ -443,17 +443,22 @@ regA('顫弦蠑螈', 0, (st, idx, pool) => {
     return card?.pokemonType === 'Darkness';
   });
   if (!hasDarkBench) return addLog(st, '惡棍衝天：備戰無【惡】寶可夢', idx);
-  st = addLog(st, '惡棍衝天：從牌庫選 1 張基本【惡】能量附給備戰【惡】寶可夢（+2 傷害）', idx);
+  // v2.324: 即使不確定有無惡能量也要讓玩家搜尋（可檢視牌庫 + 重洗）— PTCG 隱藏資訊規則
+  st = addLog(st, '惡棍衝天：從牌庫搜尋 1 張基本【惡】能量附給備戰【惡】寶可夢（+2 傷害）', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Energy:Darkness',
-    minCount: 1, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'rascal-skyward-pick',
   });
 });
 regR('rascal-skyward-pick', (state, aIdx, selectedIids, _params, pool) => {
   const p = state.players[aIdx];
+  if (selectedIids.length === 0) {
+    let s = updatePlayer(state, aIdx, pl => ({ ...pl, deck: shuffle([...pl.deck]) }));
+    return addLog(s, '惡棍衝天：未選擇能量（重洗牌庫）', aIdx);
+  }
   const darkBenchIids = p.bench.filter(b => pool.get(b.cardId)?.pokemonType === 'Darkness').map(b => b.iid);
   return withPending(state, {
     type: 'heal-target',
@@ -617,11 +622,7 @@ reg('阿杏的秘招', (st, idx, pool) => {
   const p = st.players[idx];
   const allMy = [...(p.active ? [p.active] : []), ...p.bench];
   const darkPokeIids = allMy.filter(c => pool.get(c.cardId)?.pokemonType === 'Darkness').map(c => c.iid);
-  const deckDarkECount = p.deck.filter(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && /【惡】/.test(card.name);
-  }).length;
-  const maxPoke = Math.min(2, darkPokeIids.length, deckDarkECount);
+  const maxPoke = Math.min(2, darkPokeIids.length);
   st = addLog(st, `阿杏的秘招：選 1~${maxPoke} 隻【惡】寶可夢，之後從牌庫搜對應張數基本【惡】能量附上`, idx);
   return withPending(st, {
     type: 'heal-target',
@@ -630,7 +631,6 @@ reg('阿杏的秘招', (st, idx, pool) => {
     effectKey: 'akyo-pick-pokes',
     params: {
       validIids: darkPokeIids,
-      deckDarkECount,
       titleOverride: `選擇要附基本【惡】能量的寶可夢（最多 ${maxPoke} 隻）`,
     },
   });
@@ -640,23 +640,17 @@ regR('akyo-pick-pokes', (state, aIdx, selectedPokeIids, params) => {
   if (selectedPokeIids.length === 0) {
     return addLog(state, '阿杏的秘招：未選寶可夢，放棄效果', aIdx);
   }
-  const deckDarkECount = (params?.deckDarkECount as number) ?? 0;
   const nPokes = selectedPokeIids.length;
-  const maxE = Math.min(nPokes, deckDarkECount);
-  // v2.121：若牌庫無基本【惡】能量（maxE=0），整個效果已無意義，直接結束
-  if (maxE <= 0) {
-    return addLog(state, '阿杏的秘招：牌庫已無基本【惡】能量，結束效果', aIdx);
-  }
+  // v2.324：不再預判牌庫能量數，直接允許搜尋與所選寶可夢同張數的能量
   return withPending(state, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'Energy:Darkness',
-    // v2.121：minCount 降為 0，讓玩家可以「不選（跳過）」或「放棄」
-    minCount: 0, maxCount: maxE,
+    minCount: 0, maxCount: nPokes,
     effectKey: 'akyo-pick-energies',
     params: {
       pokeIids: selectedPokeIids,
-      titleOverride: `從牌庫選 0~${maxE} 張基本【惡】能量`,
+      titleOverride: `從牌庫選 0~${nPokes} 張基本【惡】能量`,
     },
   });
 });

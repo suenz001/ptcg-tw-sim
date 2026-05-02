@@ -1,9 +1,36 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-02 (v2.324)
-> AI：Gemini / Claude（Google DeepMind / Anthropic）  
+> 最後更新：2026-05-02 (v2.325)
+> AI：Antigravity (Google DeepMind)
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 部署：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.325 — 隱藏資訊規則全面稽核與重構 (Hidden Information Refactoring)
+
+### 核心變更：移除所有非法牌庫 Gate (regG)
+- **背景**：根據 PTCG 官方規則，牌庫內容為隱藏資訊。所有涉及搜尋牌庫的效果，不應因「牌庫內無合法目標」而阻擋打出或使用。
+- **修正**：全面掃描並移除 `src/lib/game` 下所有對 `deck` 進行 `.some()`、`.filter()` 等內容檢查的 `regG`。
+- **實裝卡片/機制**：
+  - **競技場 (engine.ts)**：城鎮百貨公司、深缽鎮、壯偉碩木、密阿雷市。
+  - **特性/招式 (effects.ts)**：克雷色利亞 (充溢之光)、謎擬Q (呼朋引伴)、竹蘭的尖牙陸鯊 (王者呼聲)。
+  - **訓練家卡 (effects.ts)**：賽吉、席藍、火箭隊的拉姆達、太晶珠。
+  - **六大預組 (six_decks.ts)**：顫弦蠑螈 (惡棍衝天)、阿杏的秘招。
+
+### 日誌中性化：杜絕資訊洩露
+- **問題**：原先部分邏輯在搜尋前會根據牌庫是否有目標而記錄不同 Log (例如「發現目標並搜尋」vs「搜尋牌庫並重洗」)，這會向對手洩露牌庫內容。
+- **修正**：所有搜尋動作在啟動時統一使用中性日誌 (例如「從牌庫搜尋 X 卡...」)，直到搜尋完成後由 Resolver 記錄結果。
+
+### 修改檔案
+- `src/lib/game/engine.ts`：重構競技場 `USE_STADIUM` 邏輯。
+- `src/lib/game/effects.ts`：重構多張關鍵卡片的 `regG` 與 `reg` 函式。
+- `src/lib/game/effects/cards/six_decks.ts`：修正特性與支援者的搜尋邏輯。
+- `src/lib/version.ts`：2.324 → 2.325
+
+### Build / Push
+- TypeScript 編譯通過。
+- 已推送至 `v2.325`。
 
 ---
 

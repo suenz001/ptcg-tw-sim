@@ -1912,14 +1912,6 @@ function handlePlaying(
 
     // v2.171 城鎮百貨公司 — 雙方每回合 1 次：從牌庫選 1 張寶可夢道具加手牌並重洗
     if (stadiumCard.name === '城鎮百貨公司') {
-      const hasTool = newState.players[aIdx].deck.some(c => {
-        const card = pool.get(c.cardId);
-        return card?.supertype === 'Trainer' && card.subtype === 'PokemonTool';
-      });
-      if (!hasTool) {
-        const revert: [boolean, boolean] = [used[0], used[1]];
-        return addLog({ ...state, stadiumUsedThisTurn: revert }, '城鎮百貨公司：牌庫沒有寶可夢道具', aIdx);
-      }
       return {
         ...newState,
         pendingSelection: {
@@ -1936,18 +1928,6 @@ function handlePlaying(
         const revert: [boolean, boolean] = [used[0], used[1]];
         return addLog({ ...state, stadiumUsedThisTurn: revert }, '深缽鎮：備戰區已滿', aIdx);
       }
-      const hasBasic = newState.players[aIdx].deck.some(c => {
-        const card = pool.get(c.cardId);
-        if (!card || card.supertype !== 'Pokemon' || card.subtype !== 'Basic') return false;
-        // 排除「擁有規則的寶可夢」（ex / V / VMAX 等）
-        if (card.subtype === 'Basic' && (card.name.endsWith('ex') || card.name.endsWith('EX')
-            || !!card.rulesText?.includes('擁有規則'))) return false;
-        return true;
-      });
-      if (!hasBasic) {
-        const revert: [boolean, boolean] = [used[0], used[1]];
-        return addLog({ ...state, stadiumUsedThisTurn: revert }, '深缽鎮：牌庫沒有合適的基礎寶可夢', aIdx);
-      }
       return {
         ...newState,
         pendingSelection: {
@@ -1961,9 +1941,6 @@ function handlePlaying(
     // v2.211 壯偉碩木（H）— 雙方每回合 1 次：從牌庫選 1 張可進化的【1階】寶可夢
     //   放到對應的場上【基礎】身上完成進化；若進化了，可繼續選 1 張【2階】放上去
     //   完成第二段進化。並重洗牌庫。
-    //   - isFirstTurn 不能進化（PTCG 規則同 EVOLVE）
-    //   - 剛使出（justPlaced）/ 剛進化（evolvedThisTurn）的寶可夢不能進化（同 EVOLVE）
-    //   - resolver 會二度驗證 evolvesFrom，UI candidate 也會 filter
     if (stadiumCard.name === '壯偉碩木') {
       if (state.isFirstTurn && aIdx === state.firstPlayerIdx) {
         const revert: [boolean, boolean] = [used[0], used[1]];
@@ -1983,21 +1960,6 @@ function handlePlaying(
         if (!fpCard) continue;
         evoBaseNames.add(fpCard.name);
         evoBaseIids.push(fp.iid);
-      }
-      // 牌庫裡至少有 1 張 Stage1 evolvesFrom 場上某基底
-      const hasValidStage1 = ap.deck.some(c => {
-        const card = pool.get(c.cardId);
-        if (!card || card.supertype !== 'Pokemon') return false;
-        if ((card.stage ?? card.subtype) !== 'Stage1') return false;
-        if (!card.evolvesFrom) return false;
-        for (const baseName of evoBaseNames) {
-          if (sameEvoName(card.evolvesFrom, baseName)) return true;
-        }
-        return false;
-      });
-      if (!hasValidStage1) {
-        const revert: [boolean, boolean] = [used[0], used[1]];
-        return addLog({ ...state, stadiumUsedThisTurn: revert }, '壯偉碩木：牌庫沒有可進化的【1階】寶可夢', aIdx);
       }
       return {
         ...newState,
@@ -2066,14 +2028,6 @@ function handlePlaying(
       if (newState.players[aIdx].bench.length >= 5) {
         const revert: [boolean, boolean] = [used[0], used[1]];
         return addLog({ ...state, stadiumUsedThisTurn: revert }, '密阿雷市：備戰區已滿', aIdx);
-      }
-      const hasBasic = newState.players[aIdx].deck.some(c => {
-        const card = pool.get(c.cardId);
-        return card?.supertype === 'Pokemon' && card.subtype === 'Basic';
-      });
-      if (!hasBasic) {
-        const revert: [boolean, boolean] = [used[0], used[1]];
-        return addLog({ ...state, stadiumUsedThisTurn: revert }, '密阿雷市：牌庫沒有基礎寶可夢', aIdx);
       }
       return {
         ...newState,
@@ -4665,13 +4619,9 @@ export function getUsableAbilities(
         const hasFightPoke = field.some(c => pool.get(c.cardId)?.pokemonType === 'Fighting');
         if (!hasFightPoke) return;
       }
-      // v2.117 惡棍衝天（顫弦蠑螈）：牌庫需有基本【惡】能量 && 備戰需有【惡】寶可夢。
+      // v2.117 惡棍衝天（顫弦蠑螈）：備戰需有【惡】寶可夢。
+      //   v2.324：移除牌庫惡能量 gate（隱藏資訊規則）
       if (ab.name === '惡棍衝天') {
-        const hasDarkEInDeck = player.deck.some(c => {
-          const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && /【惡】/.test(cc.name);
-        });
-        if (!hasDarkEInDeck) return;
         const hasDarkBench = player.bench.some(b => pool.get(b.cardId)?.pokemonType === 'Darkness');
         if (!hasDarkBench) return;
       }
@@ -4776,23 +4726,12 @@ export function getUsableAbilities(
         if (!hasTera) return;
         if (player.deck.length === 0) return;
       }
-      // v2.229 蓋諾賽克特ex｜金屬信號：牌庫有【鋼】進化寶可夢
-      if (ab.name === '金屬信號') {
-        const hasMetalEvo = player.deck.some(c => {
-          const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Pokemon' && cc.pokemonType === 'Metal' && !!cc.evolvesFrom;
-        });
-        if (!hasMetalEvo) return;
-      }
-      // v2.229 大吾的巨金怪ex｜X啟動：牌庫有基本【超】或基本【鋼】能量 + 場上有【超】或【鋼】寶
+      // v2.229 蓋諾賽克特ex｜金屬信號
+      //   v2.324：移除牌庫鋼進化寶可夢 gate（隱藏資訊規則）— 讓玩家可搜尋牌庫
+      // (no gate needed — deck content is hidden info)
+      // v2.229 大吾的巨金怪ex｜X啟動：場上有【超】或【鋼】寶可夢
+      //   v2.324：移除牌庫超/鋼能量 gate（隱藏資訊規則）
       if (ab.name === 'X啟動') {
-        const hasPsyOrMetalE = player.deck.some(c => {
-          const cc = pool.get(c.cardId);
-          if (cc?.supertype !== 'Energy' || cc.subtype !== 'Basic') return false;
-          return cc.pokemonType === 'Psychic' || cc.pokemonType === 'Metal'
-            || /【超】|【鋼】/.test(cc.name);
-        });
-        if (!hasPsyOrMetalE) return;
         const field = [...(player.active ? [player.active] : []), ...player.bench];
         const hasPsyOrMetalPoke = field.some(c => {
           const t = pool.get(c.cardId)?.pokemonType;
@@ -4820,14 +4759,9 @@ export function getUsableAbilities(
         const hasMetal = field.some(c => pool.get(c.cardId)?.pokemonType === 'Metal');
         if (!hasMetal) return;
       }
-      // v2.229 竹蘭的尖牙陸鯊｜王者呼聲：牌庫有「竹蘭的」寶可夢
-      if (ab.name === '王者呼聲') {
-        const hasCynthia = player.deck.some(c => {
-          const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Pokemon' && cc.name.includes('竹蘭的');
-        });
-        if (!hasCynthia) return;
-      }
+      // v2.229 竹蘭的尖牙陸鯊｜王者呼聲
+      //   v2.324：移除牌庫竹蘭寶可夢 gate（隱藏資訊規則）— 讓玩家可搜尋牌庫
+      // (no gate needed — deck content is hidden info)
       // v2.229 阿響的火岩鼠｜旅途牽絆：牌庫不空
       if (ab.name === '旅途牽絆' && player.deck.length === 0) return;
       // v2.290 烈焰馬｜快走：牌庫不空（要抽 1 張）
