@@ -1,9 +1,31 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-02 (v2.321)
+> 最後更新：2026-05-02 (v2.322)
 > AI：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 部署：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.322 — 修正 Trainer:Supporter filter 導致殺手鐧捕捉可選全牌庫
+
+### 問題
+殺手鐧捕捉使用 filter `'Trainer:Supporter'`，但 UI（`+page.svelte`）和 AI（`ai.ts`）的 deck-search filter chain 都沒有處理 `Trainer:` prefix，fallback 到 `return true` — 導致玩家可以從牌庫選任何卡片（不限支援者）。
+
+### 修正
+- **`+page.svelte`**：在 deck-search filter chain 中加入 `Trainer:` prefix handler（`card.supertype === 'Trainer' && card.subtype === sub`）
+- **`ai.ts`**：同步加入 `Trainer:` prefix handler，同時補齊缺失的 `Pokemon:`、`Energy:`、`Basic:NamePrefix=`、`Pokemon:NamePrefix=`、`MarniePokemon`、`BasicNonRule`、`ColorlessPokeHP100` 等 filter 處理
+
+### 設計筆記
+此 bug 源自 v2.320 將殺手鐧捕捉的 filter 從 `'Supporter'` 改為 `'Trainer:Supporter'`（與 v2306_meta_pokemon.ts 對齊），但未同步更新 UI 和 AI 的 filter chain。教訓：新增 filter string 時必須同時確認 UI（`+page.svelte`）和 AI（`ai.ts`）都有對應處理。
+
+### 修改檔案
+- `src/routes/game/+page.svelte`：deck-search filter chain 加 `Trainer:` prefix
+- `src/lib/game/ai.ts`：deck-search filter chain 加 `Trainer:` 等多個缺失 prefix
+- `src/lib/version.ts`：2.321 → 2.322
+
+### Build / Push
+- 已推送至 `v2.322`
 
 ---
 
