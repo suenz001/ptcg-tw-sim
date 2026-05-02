@@ -33,6 +33,9 @@ import {
   getUrsalunaBloodMoonEffectiveCost,
   PASSIVE_PREVENT_KO,
   flipCoinsWithLog,
+  promptPlayAbilities,
+  ON_PLAY_FROM_HAND_ABILITIES,
+  ON_EVOLVE_FROM_HAND_ABILITIES,
 } from './effects';
 
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
@@ -1302,6 +1305,8 @@ function handlePlaying(
     }
     // v2.119 險惡廢墟：改走統一 helper（同時被 pokemon_search / six_decks 等 resolver 呼叫）
     afterPlace = applyBenchPlaceSideEffects(afterPlace, aIdx, [placed.iid], pool);
+    // v2.320：自動提示「從手牌放置於備戰區時」的特性（如殺手鐧捕捉、狂挖等）
+    afterPlace = promptPlayAbilities(afterPlace, aIdx, card, placed, pool, false);
     return afterPlace;
   }
 
@@ -1448,11 +1453,14 @@ function handlePlaying(
       attacker.bench = attacker.bench.map(c => c.iid === action.fromIid ? evolved : c);
     }
     players[aIdx] = attacker;
-    return addLog(
+    let afterEvolve = addLog(
       { ...state, players },
       `${attacker.name} 的 ${baseCard.name} 進化為 ${evoCard.name}！`,
       aIdx
     );
+    // v2.320：自動提示「從手牌進化時」的特性（如龐克練肌、精神抽出等）
+    afterEvolve = promptPlayAbilities(afterEvolve, aIdx, evoCard, evolved, pool, true);
+    return afterEvolve;
   }
 
   // ── 撤退 ──────────────────────────────────────────────────────────────────
@@ -4539,6 +4547,8 @@ export function getUsableAbilities(
     card.abilities.forEach((ab, abIdx) => {
       // 只列出在 ABILITY_EFFECTS 中有登錄的主動特性
       if (!ABILITY_EFFECTS.has(`${card.name}|${abIdx}`)) return;
+      // v2.320：已改為自動提示的特性，不在手動清單中顯示
+      if (ON_PLAY_FROM_HAND_ABILITIES.has(ab.name) || ON_EVOLVE_FROM_HAND_ABILITIES.has(ab.name)) return;
       // 集客：只有出場才能用 + 牌庫不空（v2.229 補資源 gate）
       if (ab.name === '集客') {
         if (player.active?.iid !== pk.iid) return;

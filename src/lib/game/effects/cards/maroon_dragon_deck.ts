@@ -31,19 +31,28 @@ import {
   koPrizeCount,
 } from '../../effects';
 
-// ── 喵喵ex｜殺手鐧捕捉 — 上備戰時查看牌庫，選 1 張支援者加手牌，洗牌庫 ──────
-BENCH_PLACE_TRIGGERS.set('喵喵ex', (st, idx, pool) => {
-  if (st.players[idx].deck.length === 0) {
-    return addLog(st, '殺手鐧捕捉：牌庫為空', idx);
+// ── 喵喵ex｜殺手鐧捕捉 — v2.320 改為 promptPlayAbilities 互動提示 ──────────
+// 原本在 BENCH_PLACE_TRIGGERS 自動觸發；現改為 regA 路徑，
+// 由 promptPlayAbilities 詢問玩家後呼叫。
+// 注意：v2306_meta_pokemon.ts 中有另一個以 '喵喵ex|殺手鐧捕捉' 為 key 的版本，
+//       但 engine 用的是 pokemonName|abilityIndex（'喵喵ex|0'），所以以本 regA 為準。
+regA('喵喵ex', 0, (st, aIdx, pool, inst) => {
+  const p = st.players[aIdx];
+  if (p.abilityNamesUsedThisTurn?.includes('殺手鐧捕捉')) {
+    return addLog(st, '殺手鐧捕捉：這個回合已經使用過「殺手鐧捕捉」，無法再使用', aIdx);
   }
-  const hasSupp = st.players[idx].deck.length > 0;
-  st = addLog(st, '殺手鐧捕捉：從牌庫選 1 張支援者加入手牌', idx);
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Supporter',
-    minCount: 0, maxCount: 1,
-    effectKey: 'search-generic-to-hand',
+  if (p.deck.length === 0) {
+    return addLog(st, '殺手鐧捕捉：牌庫為空', aIdx);
+  }
+  const instInPlay = p.active?.iid === inst?.iid ? p.active : p.bench.find(c => c.iid === inst?.iid);
+  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  let s = updatePlayer(st, aIdx, pl => ({
+    ...pl, abilityNamesUsedThisTurn: [...(pl.abilityNamesUsedThisTurn ?? []), '殺手鐧捕捉']
+  }));
+  s = addLog(s, '喵喵ex：使用特性「殺手鐧捕捉」，從牌庫選擇 1 張支援者加入手牌', aIdx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    filter: 'Trainer:Supporter', effectKey: 'meowth-ex-trump-catch',
   });
 });
 

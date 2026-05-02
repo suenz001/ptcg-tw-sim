@@ -3042,10 +3042,11 @@ regR('noisuru-rumble', (st, idx, iids, _params, pool) => {
   });
 });
 
-// 鐵蟻ex｜突然削退 — 從手牌將這張卡放置於備戰區時，1/place 觸發，丟對手牌庫頂 1 張
-// v2.241 升級為 BENCH_PLACE_TRIGGERS 自動觸發（不再簡化為主動 regA 按鈕）
+// 鐵蟻ex｜突然削退 — v2.320 改為 promptPlayAbilities 互動提示
+// 原本在 BENCH_PLACE_TRIGGERS 自動觸發（v2.241）；現改為 regA 路徑，
+// 由 promptPlayAbilities 詢問玩家後呼叫。
 // 卡面：「在自己的回合，從手牌將這張卡放置於備戰區時，可使用1次。將對手的牌庫上方1張卡丟棄。」
-BENCH_PLACE_TRIGGERS.set('鐵蟻ex', (st, idx) => {
+regA('鐵蟻ex', 0, (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
   if (st.players[oppIdx].deck.length === 0) {
     return addLog(st, '突然削退：對手牌庫為空', idx);
@@ -12257,3 +12258,172 @@ regR('inferno-fandango-attach', (st, idx, iids, params, pool) => {
     };
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.320 — 「從手牌使出/進化時」特性自動提示機制
+// 將原本分散在 BENCH_PLACE_TRIGGERS / getUsableAbilities 的特性觸發，
+// 統一為放置/進化後立即彈出「是否使用特性？」的 modal-choice 詢問。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 「從手牌放置於備戰區時」可發動 1 次的特性名稱 */
+export const ON_PLAY_FROM_HAND_ABILITIES = new Set([
+  '殺手鐧捕捉',   // 喵喵ex — 搜支援者
+  '狂挖',         // 螺釘地鼠 — 牌庫選鬥能量丟棄
+  '經驗法則',     // 月月熊 赫月 — 手牌鬥能量附給自己
+  '沉雪',         // 古劍豹 — 丟棄場上競技場
+  '迅速游標',     // 鐵斑葉ex — 與戰鬥場互換+搬能量
+  '突然削退',     // 鐵蟻ex — 丟對手牌庫頂
+]);
+
+/** 「從手牌進化時」可發動 1 次的特性名稱 */
+export const ON_EVOLVE_FROM_HAND_ABILITIES = new Set([
+  '龐克練肌',     // 瑪俐的長毛巨魔ex — 搜惡能量附於瑪俐的寶可夢
+  '精神抽出',     // 勇基拉/胡地 — 抽卡
+  '搜尋寶石',     // 貓頭夜鷹 — 場上有太晶時搜訓練家
+  '能量舞步',     // 噗噗豬 — 牌庫上方4張找基本能量
+  '脫殼',         // 鐵面忍者 — 搜脫殼忍者上備戰
+  '合金建造',     // 鋁鋼橋龍ex — 棄牌區鋼能量附給鋼寶可夢
+]);
+
+/**
+ * 詢問玩家是否使用「從手牌放置/進化時」的特性。
+ * 彈出 modal-choice（是/否），玩家選「是」則自動執行對應的 ABILITY_EFFECTS。
+ */
+export function askUsePlayAbility(
+  state: GameState,
+  idx: 0 | 1,
+  pool: Map<string, Card>,
+  inst: CardInstance,
+  abilityName: string,
+  abilityKey: string
+): GameState {
+  const cardName = pool.get(inst.cardId)?.name ?? '?';
+  return withPending(state, {
+    type: 'modal-choice',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'resolve-play-ability-prompt',
+    params: {
+      label: `是否使用 ${cardName} 的「${abilityName}」特性？`,
+      options: [
+        { id: 'yes', text: '✅ 使用特性' },
+        { id: 'no', text: '❌ 不使用' }
+      ],
+      abilityKey,
+      targetIid: inst.iid
+    }
+  });
+}
+
+// ── resolve-play-ability-prompt resolver ─────────────────────────────────────
+regR('resolve-play-ability-prompt', (state, actorIdx, selectedIids, params, pool) => {
+  const choice = selectedIids[0] ?? 'no';
+  if (choice !== 'yes') {
+    return state; // 玩家選擇不使用，直接繼續
+  }
+  const abilityKey = params?.abilityKey as string;
+  const targetIid = params?.targetIid as string;
+  if (!abilityKey) return state;
+
+  const fn = ABILITY_EFFECTS.get(abilityKey);
+  if (!fn) return state;
+
+  const player = state.players[actorIdx];
+  const inst = player.active?.iid === targetIid
+    ? player.active
+    : player.bench.find(c => c.iid === targetIid);
+  if (!inst) return state;
+
+  return fn(state, actorIdx, pool, inst);
+});
+
+/**
+ * 在 PLAY_BASIC / EVOLVE 後呼叫，檢查該寶可夢是否有「從手牌使出/進化時」的特性，
+ * 若有則自動彈出詢問 modal。
+ *
+ * @param isEvolve  true = 進化觸發；false = 從手牌放置觸發
+ */
+export function promptPlayAbilities(
+  state: GameState,
+  aIdx: 0 | 1,
+  card: Card,
+  inst: CardInstance,
+  pool: Map<string, Card>,
+  isEvolve: boolean
+): GameState {
+  if (!card.abilities) return state;
+  // 如果已經有 pendingSelection（例如 BENCH_PLACE_TRIGGERS 已觸發），不要覆蓋
+  if (state.pendingSelection) return state;
+
+  for (let i = 0; i < card.abilities.length; i++) {
+    const ab = card.abilities[i];
+    const key = `${card.name}|${i}`;
+    // 只處理有在 ABILITY_EFFECTS 註冊的特性
+    if (!ABILITY_EFFECTS.has(key)) continue;
+
+    const isPlay = ON_PLAY_FROM_HAND_ABILITIES.has(ab.name);
+    const isEvolveAb = ON_EVOLVE_FROM_HAND_ABILITIES.has(ab.name);
+
+    // ── 放置觸發 ──
+    if (!isEvolve && isPlay) {
+      // 各特性的前置條件 gate（與 getUsableAbilities 中的 gate 對應）
+      if (ab.name === '沉雪' && !state.activeStadium) continue;
+      if (ab.name === '迅速游標' && state.players[aIdx].active?.iid === inst.iid) continue;
+      if (ab.name === '經驗法則') {
+        const hasFight = state.players[aIdx].hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc?.subtype === 'Basic'
+            && (cc.pokemonType === 'Fighting' || /【鬥】/.test(cc.name));
+        });
+        if (!hasFight) continue;
+      }
+      if (ab.name === '狂挖') {
+        const hasFightDeck = state.players[aIdx].deck.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc?.subtype === 'Basic' && /【鬥】/.test(cc.name);
+        });
+        if (!hasFightDeck) continue;
+      }
+      if (ab.name === '殺手鐧捕捉') {
+        if (state.players[aIdx].deck.length === 0) continue;
+        if (state.players[aIdx].abilityNamesUsedThisTurn?.includes('殺手鐧捕捉')) continue;
+      }
+      if (ab.name === '突然削退') {
+        const oppIdx = (1 - aIdx) as 0 | 1;
+        if (state.players[oppIdx].deck.length === 0) continue;
+      }
+      return askUsePlayAbility(state, aIdx, pool, inst, ab.name, key);
+    }
+
+    // ── 進化觸發 ──
+    if (isEvolve && isEvolveAb) {
+      if (ab.name === '精神抽出' && state.players[aIdx].deck.length === 0) continue;
+      if (ab.name === '龐克練肌') {
+        const hasDarkE = state.players[aIdx].deck.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc?.subtype === 'Basic' && /【惡】/.test(cc.name);
+        });
+        if (!hasDarkE) continue;
+      }
+      if (ab.name === '搜尋寶石') {
+        const field = [...(state.players[aIdx].active ? [state.players[aIdx].active] : []), ...state.players[aIdx].bench];
+        const hasTera = field.some(c => pool.get(c!.cardId)?.tags?.includes('太晶'));
+        if (!hasTera) continue;
+        if (state.players[aIdx].deck.length === 0) continue;
+      }
+      if (ab.name === '合金建造') {
+        const hasMetalEInDiscard = state.players[aIdx].discard.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc?.subtype === 'Basic'
+            && (cc.pokemonType === 'Metal' || /【鋼】/.test(cc.name));
+        });
+        if (!hasMetalEInDiscard) continue;
+        const field = [...(state.players[aIdx].active ? [state.players[aIdx].active] : []), ...state.players[aIdx].bench];
+        const hasMetalPoke = field.some(c => pool.get(c!.cardId)?.pokemonType === 'Metal');
+        if (!hasMetalPoke) continue;
+      }
+      return askUsePlayAbility(state, aIdx, pool, inst, ab.name, key);
+    }
+  }
+  return state;
+}
