@@ -246,11 +246,21 @@ regA('瑪俐的長毛巨魔ex', 0, (st, idx, pool, cardInst) => {
     const card = pool.get(c.cardId);
     return isBasicEnergyOfType(card, 'Darkness');
   });
-  if (cand.length === 0) return addLog(st, '龐克練肌：牌庫沒有基本【惡】能量', idx);
+  // v2.323：即使沒有惡能量也要讓玩家執行搜尋（可檢視牌庫 + 重洗）— PTCG 隱藏資訊規則
   const maxN = Math.min(5, cand.length);
   // 找場上所有「瑪俐的」寶可夢
   const mariPokes = allPokes.filter(c => pool.get(c.cardId)?.name?.startsWith('瑪俐的'));
   if (mariPokes.length === 0) return addLog(st, '龐克練肌：場上沒有「瑪俐的」寶可夢', idx);
+  if (maxN === 0) {
+    // 無惡能量 — 仍展示牌庫搜尋 UI（minCount=0, maxCount=0 → 玩家只能按確認 → 重洗）
+    const s = addLog(st, '龐克練肌：搜尋牌庫（重洗牌庫）', idx);
+    return withPending(s, {
+      type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+      filter: 'Energy:Darkness', minCount: 0, maxCount: 0,
+      effectKey: 'punk-training-attach',
+      params: { label: '龐克練肌', validIids: [] },
+    });
+  }
   const s = addLog(st, `龐克練肌：從牌庫選最多 ${maxN} 張基本【惡】能量，以任意方式附於自己的「瑪俐的」寶可夢身上`, idx);
   return withPending(s, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,

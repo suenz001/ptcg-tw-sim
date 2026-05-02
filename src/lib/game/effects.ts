@@ -395,11 +395,12 @@ function effectiveHPInline(
     if (fn) hp += fn(card);
   }
   // v2.92：引力山岳（Stadium）— 雙方場上所有【2階進化】寶可夢最大 HP -30
-  if (state?.activeStadium?.name === '引力山岳' && card.stage === 'Stage2') {
+  const stadiumNameEff = state?.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
+  if (stadiumNameEff === '引力山岳' && card.stage === 'Stage2') {
     hp = Math.max(0, hp - 30);
   }
   // v2.265：激動競技場（Stadium）— 雙方場上所有【基礎】寶可夢最大 HP +30
-  if (state?.activeStadium?.name === '激動競技場' && card.stage === 'Basic') {
+  if (stadiumNameEff === '激動競技場' && card.stage === 'Basic') {
     hp += 30;
   }
   // v2.268 wave 2：max HP 修正類被動特性（鏡射 engine.ts getEffectiveHP）
@@ -3079,22 +3080,19 @@ regA('鐵蟻ex', 0, (st, idx) => {
 //   2) filter 改 'Energy:Fighting'（基本能量 pokemonType 常為 undefined，UI 會用 name fallback）
 //   3) gate「必須剛從手牌放置」(pk.justPlaced) 在 engine.ts getUsableAbilities 加
 regA('螺釘地鼠', 0, (st, idx, pool) => {
-  // 牌庫無基本【鬥】能量 → 直接結束（卡面允許 0 張，但實質沒選頭）
-  // 基本能量 pokemonType 常為 undefined，從卡名【鬥】判斷才對
-  const hasFightE = st.players[idx].deck.some(c => {
+  // v2.323：即使沒有鬥能量也要讓玩家執行搜尋（可檢視牌庫 + 重洗）— PTCG 隱藏資訊規則
+  const fightEnergyIids = st.players[idx].deck.filter(c => {
     const card = pool.get(c.cardId);
     if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
     return card.pokemonType === 'Fighting' || /【鬥】/.test(card.name);
-  });
-  if (!hasFightE) {
-    return addLog(st, '狂挖：牌庫無基本【鬥】能量', idx);
-  }
+  }).map(c => c.iid);
+  const maxN = Math.min(3, fightEnergyIids.length);
   st = addLog(st, '狂挖：從牌庫選 0~3 張基本【鬥】能量丟棄（之後重洗）', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Energy:Fighting',
-    minCount: 0, maxCount: 3,
+    minCount: 0, maxCount: maxN,
     effectKey: 'screwdig-discard-fight-e',
   });
 });
@@ -5537,7 +5535,7 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
       ...(newDefender.active.evolvedFromStack ?? []),
     ];
     const prizes = prizesForKOLocal(newActiveCard);
-    newDefender = { ...newDefender, active: null, discard: [...newDefender.discard, ...koList] };
+    newDefender = { ...newDefender, active: null as any, discard: [...newDefender.discard, ...koList] };
     players = [...s.players] as [PlayerState, PlayerState];
     players[dIdx] = newDefender;
     s = addLog({ ...s, players }, `${label}：${newActiveName} 被擊倒！+${prizes} 張獎勵牌`, null);

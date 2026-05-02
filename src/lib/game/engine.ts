@@ -402,12 +402,13 @@ export function getEffectiveHP(
     if (fn) hp += fn(card);
   }
   // v2.92：引力山岳（Stadium）— 雙方場上所有【2階進化】寶可夢最大 HP -30
-  if (state?.activeStadium?.name === '引力山岳' && card.stage === 'Stage2') {
+  const stadiumNameHP = state?.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
+  if (stadiumNameHP === '引力山岳' && card.stage === 'Stage2') {
     hp = Math.max(0, hp - 30);
   }
   // v2.265：激動競技場（Stadium）— 雙方場上所有【基礎】寶可夢最大 HP +30
   //   （化石上場走 line 354 早退、不吃 Stadium 加減；本 hook 對 fossilOnField 不會觸發）
-  if (state?.activeStadium?.name === '激動競技場' && card.stage === 'Basic') {
+  if (stadiumNameHP === '激動競技場' && card.stage === 'Basic') {
     hp += 30;
   }
   // v2.268 wave 2：max HP 修正類被動特性 ─────────────────────────────────
@@ -4578,15 +4579,7 @@ export function getUsableAbilities(
       // 精神抽出 / 龐克練肌 / 合金建造（v2.102）：只有本回合剛進化才能用
       if ((ab.name === '精神抽出' || ab.name === '龐克練肌' || ab.name === '合金建造' || ab.name === '能量舞步' || ab.name === '脫殼') && !pk.evolvedThisTurn) return;
       // v2.229 精神抽出（魔靈多龍系）：除 evolvedThisTurn 外還需牌庫不空（要看 top 5）
-      if (ab.name === '精神抽出' && player.deck.length === 0) return;
-      // v2.229 龐克練肌（瑪俐的長毛巨魔ex）：除 evolvedThisTurn 外還需牌庫有基本【惡】能量
-      if (ab.name === '龐克練肌') {
-        const hasDarkE = player.deck.some(c => {
-          const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && /【惡】/.test(cc.name);
-        });
-        if (!hasDarkE) return;
-      }
+      // v2.323：龐克練肌 移除牌庫惡能量 gate（隱藏資訊規則）
       // v2.229 合金建造（鋁鋼橋龍ex）：除 evolvedThisTurn 外還需棄牌區基本【鋼】能量 + 場上【鋼】寶可夢
       //   — Leon v2.228 抓到沒 gate；卡面：「從棄牌區選最多 2 張基本鋼能量附給自己的鋼寶可夢」
       if (ab.name === '合金建造') {
@@ -4602,14 +4595,9 @@ export function getUsableAbilities(
       }
       // v2.126 螺釘地鼠｜狂挖 — 只有「從手牌將這張卡放置於備戰區的那個回合」可用
       //   pk.justPlaced 由 PLAY_BASIC 設、END_TURN 清，所以「下一回合不能用」自然成立
-      //   v2.229 補：牌庫需有基本【鬥】能量
+      //   v2.323：移除牌庫鬥能量 gate（隱藏資訊規則）
       if (ab.name === '狂挖') {
         if (!pk.playedFromHand) return;
-        const hasFightEInDeck = player.deck.some(c => {
-          const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && /【鬥】/.test(cc.name);
-        });
-        if (!hasFightEInDeck) return;
       }
       // v2.127 月月熊 赫月｜經驗法則 — 同 狂挖 pattern，只有剛從手牌放置於備戰區的回合可用
       //   v2.229 補：手牌需有基本【鬥】能量（Leon v2.228 抓到）
