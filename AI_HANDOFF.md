@@ -1,9 +1,47 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+> 最後更新：2026-05-03 (v2.333)
 > 最後更新：2026-05-03 (v2.332)
 > 最後更新：2026-05-03 (v2.331)
 > 最後更新：2026-05-03 (v2.329)
 > 最後更新：2026-05-02 (v2.327)
+
+## v2.333 — 修復線上模式 P2 被誤判成 AI 回合，導致攻擊後不自動結束
+
+### 問題
+使用者確認在 `https://suenz001.github.io/ptcg-tw-sim/game` 且版本為 `v2.332` 時，P2 使用招式後仍會停在「⏭ 結束回合」按鈕；P1 則會短暫顯示該按鈕後自動結束。
+
+### 根因
+`+page.svelte` 的 `aiPlayerIndex` 預設值是 `1`：
+```ts
+let aiPlayerIndex = $state<0 | 1 | null>(1);
+```
+線上模式雖然不是 AI 對戰，但 `autoEndTimer` 內的 AI gate 沒有排除線上模式：
+```ts
+if (aiPlayerIndex !== null && g.activePlayerIndex === aiPlayerIndex) return;
+```
+因此當目前回合方是 P2（`activePlayerIndex === 1`）時，autoEndTimer 會誤判「這是 AI 的回合，交給 AI loop 處理」，直接 return，不會自動 dispatch `END_TURN`。
+
+這完全符合現象：
+- P1：`activePlayerIndex=0`，不等於預設 `aiPlayerIndex=1` → 自動結束正常
+- P2：`activePlayerIndex=1`，等於預設 `aiPlayerIndex=1` → 被 AI gate 擋住，卡在結束回合按鈕
+
+### 修復
+AI gate 改成只在非線上模式生效：
+```ts
+if (mode !== 'online' && aiPlayerIndex !== null && g.activePlayerIndex === aiPlayerIndex) return;
+```
+setTimeout callback 內的同樣 gate 也一起修正。
+
+### 修改檔案
+- `src/routes/game/+page.svelte`：autoEndTimer 的 AI gate 加上 `mode !== 'online'`
+- `src/lib/version.ts`：2.332 → 2.333
+
+### Build / Push
+- `npm run build` 通過
+- 已推送至 `main`
+
+---
 
 ## v2.332 — 修復線上模式 P2 使用招式後未自動結束回合
 
@@ -34,7 +72,7 @@ game.activePlayerIndex === myPlayerIndex
 
 ### Build / Push
 - `npm run build` 通過
-- 已推送至 `待填`
+- 已推送至 `main`
 
 ---
 

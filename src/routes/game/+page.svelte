@@ -908,8 +908,9 @@
       if (myPlayerIndex === null) return;
       if (g.activePlayerIndex !== myPlayerIndex) return;
     }
-    // AI 模式：AI 是當前活動玩家時讓 AI 迴圈處理
-    if (aiPlayerIndex !== null && g.activePlayerIndex === aiPlayerIndex) return;
+    // AI 模式：AI 是當前活動玩家時讓 AI 迴圈處理。
+    // v2.333 fix：線上模式也保留 aiPlayerIndex 預設值 1（UI 用），不能用它阻擋 P2 自動結束。
+    if (mode !== 'online' && aiPlayerIndex !== null && g.activePlayerIndex === aiPlayerIndex) return;
 
     // 延遲後若條件仍成立（沒被新 pending / KO / 取獎賞中斷）就 dispatch
     autoEndTimer = setTimeout(() => {
@@ -922,7 +923,7 @@
         if (myPlayerIndex === null) return;
         if (game.activePlayerIndex !== myPlayerIndex) return;
       }
-      if (aiPlayerIndex !== null && game.activePlayerIndex === aiPlayerIndex) return;
+      if (mode !== 'online' && aiPlayerIndex !== null && game.activePlayerIndex === aiPlayerIndex) return;
       dispatch(GameActions.endTurn());
     }, 600);
   });
