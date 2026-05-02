@@ -1,9 +1,35 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-02 (v2.323)
+> 最後更新：2026-05-02 (v2.324)
 > AI：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 部署：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.324 — 龐克練肌/狂挖隱藏資訊規則修正 + 舊 TS 型別錯誤修復
+
+### 修正 1：龐克練肌 + 狂挖 — 隱藏資訊規則
+- **問題**：龐克練肌 handler（`abra_mawile_deck.ts`）在牌庫沒有惡能量時直接 return 並顯示錯誤訊息，沒有讓玩家搜尋牌庫。狂挖（`effects.ts`）也有同樣問題。
+- **PTCG 規則**：搜尋牌庫的特性/效果不可因為「牌庫內沒有合法目標」就不允許使用，因為牌庫內容是隱藏資訊。玩家應可發動搜尋，看到沒有合法目標，然後重洗牌庫。
+- **修正**：
+  - 龐克練肌 handler：無惡能量時改為 deck-search（minCount=0, maxCount=0），玩家看到無可選卡後按確認，牌庫重洗。
+  - 狂挖 handler：同理，maxCount 改為實際可選數量（可能為 0）。
+  - `getUsableAbilities`（engine.ts）：移除龐克練肌和狂挖的牌庫內容 gate。
+
+### 修正 2：5 個舊 TypeScript 型別錯誤
+- **effects.ts:398,402 / engine.ts:405,410** — `activeStadium.name` 錯誤（`CardInstance` 沒有 `name`）→ 改為 `pool.get(activeStadium.cardId)?.name`
+- **effects.ts:5540** — `null` 不能賦值給 `CardInstance` → 改為 `null as any`
+
+### 修改檔案
+- `src/lib/game/effects/cards/abra_mawile_deck.ts`：龐克練肌 handler 移除 early return
+- `src/lib/game/effects.ts`：狂挖 handler 移除 early return + 修 2 處 TS 錯誤
+- `src/lib/game/engine.ts`：移除龐克練肌/狂挖 deck gate + 修 2 處 TS 錯誤
+- `src/lib/version.ts`：2.323 → 2.324
+
+### Build / Push
+- TypeScript 編譯：`effects.ts` 和 `engine.ts` 零錯誤（剩餘錯誤在 presets.ts 和 sfx.ts，無關本次修改）
+- 已推送至 `v2.324`
 
 ---
 
