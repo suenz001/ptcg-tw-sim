@@ -1,8 +1,42 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+> 最後更新：2026-05-03 (v2.332)
 > 最後更新：2026-05-03 (v2.331)
 > 最後更新：2026-05-03 (v2.329)
 > 最後更新：2026-05-02 (v2.327)
+
+## v2.332 — 修復線上模式 P2 使用招式後未自動結束回合
+
+### 問題
+線上對戰中，P2 使用招式後仍需手動按「⏭ 結束回合」，而 P1 常常會在約 1 秒後自動結束。
+
+### 根因
+`+page.svelte` 的 `autoEndTimer` 在 v2.329 之後使用 `turn % 2` 判斷目前是不是自己的回合，但這個判斷是錯的。
+
+原因是本遊戲的 `turn` 並不是「每換一位玩家就 +1」，而是只在其中一側結束回合時才遞增，因此 `turn` 的奇偶值無法可靠對應到 P1 / P2。
+
+結果：
+- 自動結束回合的 gate 會在某些回合誤判當前玩家
+- P1 / P2 的表現會不一致
+- 攻擊後即使已進入 `turnPhase='end'`，仍不會自動 dispatch `END_TURN`
+
+### 修復
+把 `autoEndTimer` 的線上模式 gate 改回直接使用：
+```ts
+game.activePlayerIndex === myPlayerIndex
+```
+
+這和 `isMyTurn`、AI 行動判斷、engine 狀態來源完全一致，不再使用錯誤的 `turn % 2` 推論。
+
+### 修改檔案
+- `src/routes/game/+page.svelte`：autoEndTimer 前後兩段 gate 皆改用 `activePlayerIndex === myPlayerIndex`
+- `src/lib/version.ts`：2.331 → 2.332
+
+### Build / Push
+- `npm run build` 通過
+- 已推送至 `待填`
+
+---
 
 ## v2.331 — 修復線上模式「跳過攻擊」未立即結束回合
 

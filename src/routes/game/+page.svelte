@@ -901,10 +901,12 @@
     if (g.turnPhase !== 'end') return;
     if (hasPendingActions(g)) return;
 
-    // 線上：只有處於自己回合的一方可自動觸發
-    // v2.329 fix：activePlayerIndex 未被設定（一直是 undefined），改用 turn%2 判斷
+    // 線上：只有當前 active player 自己那一端可自動觸發
+    // v2.332 fix：不能用 turn%2 判斷，因為本遊戲的 turn 不會在每次換手時 +1。
+    // 直接以 engine 維護的 activePlayerIndex 為準，與 isMyTurn / AI 判斷保持一致。
     if (mode === 'online') {
-      if ((g.turn % 2) !== myPlayerIndex) return;
+      if (myPlayerIndex === null) return;
+      if (g.activePlayerIndex !== myPlayerIndex) return;
     }
     // AI 模式：AI 是當前活動玩家時讓 AI 迴圈處理
     if (aiPlayerIndex !== null && g.activePlayerIndex === aiPlayerIndex) return;
@@ -916,7 +918,10 @@
       if (game.phase !== 'playing') return;
       if (game.turnPhase !== 'end') return;
       if (hasPendingActions(game)) return;
-      if (mode === 'online' && (game.turn % 2) !== myPlayerIndex) return;
+      if (mode === 'online') {
+        if (myPlayerIndex === null) return;
+        if (game.activePlayerIndex !== myPlayerIndex) return;
+      }
       if (aiPlayerIndex !== null && game.activePlayerIndex === aiPlayerIndex) return;
       dispatch(GameActions.endTurn());
     }, 600);
