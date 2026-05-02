@@ -12366,10 +12366,13 @@ export function promptPlayAbilities(
 
     // ── 放置觸發 ──
     if (!isEvolve && isPlay) {
-      // 各特性的前置條件 gate（與 getUsableAbilities 中的 gate 對應）
-      if (ab.name === '沉雪' && !state.activeStadium) continue;
-      if (ab.name === '迅速游標' && state.players[aIdx].active?.iid === inst.iid) continue;
+      // 各特性的前置條件 gate — 只保留「公開資訊」的檢查
+      // v2.321：依 v2.316 原則（PTCG 隱藏資訊規則），牌庫搜尋類特性
+      // 不應因「牌庫裡沒有目標」就禁止使用，玩家可藉此檢視牌庫內容。
+      if (ab.name === '沉雪' && !state.activeStadium) continue;        // 場上無競技場 → 無意義
+      if (ab.name === '迅速游標' && state.players[aIdx].active?.iid === inst.iid) continue; // 必須從備戰發動
       if (ab.name === '經驗法則') {
+        // 卡面：「從手牌選最多 2 張基本鬥能量附於這隻寶可夢」— 手牌是玩家可見資訊
         const hasFight = state.players[aIdx].hand.some(c => {
           const cc = pool.get(c.cardId);
           return cc?.supertype === 'Energy' && cc?.subtype === 'Basic'
@@ -12377,47 +12380,39 @@ export function promptPlayAbilities(
         });
         if (!hasFight) continue;
       }
-      if (ab.name === '狂挖') {
-        const hasFightDeck = state.players[aIdx].deck.some(c => {
-          const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc?.subtype === 'Basic' && /【鬥】/.test(cc.name);
-        });
-        if (!hasFightDeck) continue;
-      }
+      // 狂挖：牌庫搜尋 → 不檢查牌庫內容（v2.321 修正）
+      // 殺手鐧捕捉：牌庫搜尋 → 不檢查牌庫是否為空（v2.321 修正）
       if (ab.name === '殺手鐧捕捉') {
-        if (state.players[aIdx].deck.length === 0) continue;
         if (state.players[aIdx].abilityNamesUsedThisTurn?.includes('殺手鐧捕捉')) continue;
       }
       if (ab.name === '突然削退') {
         const oppIdx = (1 - aIdx) as 0 | 1;
-        if (state.players[oppIdx].deck.length === 0) continue;
+        if (state.players[oppIdx].deck.length === 0) continue; // 對手牌庫空 → 確實無法丟
       }
       return askUsePlayAbility(state, aIdx, pool, inst, ab.name, key);
     }
 
     // ── 進化觸發 ──
     if (isEvolve && isEvolveAb) {
-      if (ab.name === '精神抽出' && state.players[aIdx].deck.length === 0) continue;
-      if (ab.name === '龐克練肌') {
-        const hasDarkE = state.players[aIdx].deck.some(c => {
-          const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc?.subtype === 'Basic' && /【惡】/.test(cc.name);
-        });
-        if (!hasDarkE) continue;
-      }
+      // v2.321：移除牌庫/棄牌區內容檢查，只保留公開資訊 gate
+      // 龐克練肌：牌庫搜尋 → 不檢查牌庫是否有惡能量（v2.321 修正）
+      // 精神抽出：查看牌庫上方 → 不檢查牌庫是否為空（v2.321 修正）
       if (ab.name === '搜尋寶石') {
+        // 場上有太晶寶可夢是公開可見的條件
         const field = [...(state.players[aIdx].active ? [state.players[aIdx].active] : []), ...state.players[aIdx].bench];
         const hasTera = field.some(c => pool.get(c!.cardId)?.tags?.includes('太晶'));
         if (!hasTera) continue;
-        if (state.players[aIdx].deck.length === 0) continue;
+        // 不檢查牌庫是否為空（v2.321 修正）
       }
       if (ab.name === '合金建造') {
+        // 棄牌區是公開資訊 → 保留此檢查
         const hasMetalEInDiscard = state.players[aIdx].discard.some(c => {
           const cc = pool.get(c.cardId);
           return cc?.supertype === 'Energy' && cc?.subtype === 'Basic'
             && (cc.pokemonType === 'Metal' || /【鋼】/.test(cc.name));
         });
         if (!hasMetalEInDiscard) continue;
+        // 場上鋼寶可夢是公開資訊 → 保留此檢查
         const field = [...(state.players[aIdx].active ? [state.players[aIdx].active] : []), ...state.players[aIdx].bench];
         const hasMetalPoke = field.some(c => pool.get(c!.cardId)?.pokemonType === 'Metal');
         if (!hasMetalPoke) continue;
