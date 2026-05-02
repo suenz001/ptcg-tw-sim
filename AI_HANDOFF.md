@@ -1,9 +1,186 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-01 (v2.306)  
-> 執行者：Gemini / Claude（Google DeepMind / Anthropic）  
+> 最後更新：2026-05-02 (v2.320)  
+> AI：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
-> 發佈：https://suenz001.github.io/ptcg-tw-sim/game
+> 部署：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.320 — 重構手牌使出/進化特性為互動式提示 (promptPlayAbilities)
+
+### 功能
+將所有「從手牌使出/進化時」觸發的寶可夢特性，從原本自動執行的 `BENCH_PLACE_TRIGGERS` 或 `getUsableAbilities` 手動按鈕機制，統一重構為**由玩家主動確認的 Modal 互動流程**。
+
+#### 新系統架構 (effects.ts)
+- 新增 `ON_PLAY_FROM_HAND_ABILITIES` Set（放置觸發）：殺手鐧捕捉、狂挖、經驗法則、沉雪、迅速游標、突然削退
+- 新增 `ON_EVOLVE_FROM_HAND_ABILITIES` Set（進化觸發）：龐克練肌、精神抽出、搜尋寶石、能量舞步、脫殼、合金建造
+- 新增 `askUsePlayAbility()`：彈出 modal-choice 詢問「是否使用特性？」
+- 新增 `resolve-play-ability-prompt` resolver：玩家確認後執行 `ABILITY_EFFECTS` 對應函式
+- 新增 `promptPlayAbilities()` coordinator：在 PLAY_BASIC / EVOLVE 後自動掃描可用特性
+
+#### 引擎整合 (engine.ts)
+- `PLAY_BASIC` 結尾呼叫 `promptPlayAbilities(state, aIdx, card, placed, pool, false)`
+- `EVOLVE` 結尾呼叫 `promptPlayAbilities(state, aIdx, evoCard, evolved, pool, true)`
+- `getUsableAbilities()` 過濾掉自動提示特性，避免重複顯示手動按鈕
+
+#### 遷移的 BENCH_PLACE_TRIGGERS
+- **喵喵ex｜殺手鐧捕捉**：從 `BENCH_PLACE_TRIGGERS` 改為 `regA('喵喵ex', 0, ...)`，含完整的 `abilityNamesUsedThisTurn` tracking
+- **鐵蟻ex｜突然削退**：從 `BENCH_PLACE_TRIGGERS` 改為 `regA('鐵蟻ex', 0, ...)`
+
+#### 關鍵設計筆記
+- `ABILITY_EFFECTS` 的 key 格式是 `pokemonName|abilityIndex`（數字），不是 `pokemonName|abilityName`
+- `promptPlayAbilities` 內含各特性的前置條件 gate（沉雪檢查場地、經驗法則檢查手牌鬥能量等）
+- 若已有 `pendingSelection`（如先前的 trigger 已設），`promptPlayAbilities` 會跳過避免覆蓋
+- v2306_meta_pokemon.ts 中存在以 `'喵喵ex|殺手鐧捕捉'` 為 key 的舊版實作（死 key），不影響功能
+
+### 修改檔案
+- `src/lib/game/effects.ts`：+170 行新系統 + 鐵蟻ex regA
+- `src/lib/game/effects/cards/maroon_dragon_deck.ts`：喵喵ex 改 regA
+- `src/lib/game/engine.ts`：import + hook + filter
+- `src/lib/version.ts`：2.319 → 2.320
+
+### Build / Push
+- TypeScript 編譯通過（零新增錯誤）
+- 已推送至 `v2.320`
+
+---
+
+## v2.319 — 修復致命 Bug：道具出場時被全部棄掉
+
+### 功能
+修復 engine.ts 中的重大錯誤：判斷「道具卡」時 supertype 檢查寫錯，導致所有道具卡被打出時被當作寶可夢處理而全部棄掉。同時修復 Defiance Band（反抗頭帶）未被正確註冊的問題。
+
+### Build / Push
+- 已推送至 `v2.319`
+
+---
+
+## v2.318 — iPad 道具標籤 UI 修正 + KO 翻譯掃描
+
+### 功能
+- 修復 iPad 上道具標籤（tool-chip）被壓縮的 CSS 問題
+- 掃描並確認 KO 相關翻譯正確性
+- 確認 Defiance Band 實裝完成
+
+### Build / Push
+- 已推送至 `v2.318`
+
+---
+
+## v2.317 — 實裝 playedFromHand 旗標
+
+### 功能
+新增 `playedFromHand` flag 用於區分「從手牌放置」和「從牌庫/Setup 放置」，修復螺釘地鼠｜狂挖在 Setup 階段錯誤觸發的問題。
+
+### 修改檔案
+- `src/lib/game/engine.ts`：PLAY_BASIC 設定 `playedFromHand: true`
+- `src/lib/game/types.ts`：CardInstance 新增 `playedFromHand?: boolean`
+
+### Build / Push
+- 已推送至 `v2.317`
+
+---
+
+## v2.316 — 修復牌庫搜尋 guard + 空搜尋自動全覽
+
+### 功能
+- 修復所有卡牌邏輯檔案中殘留的錯誤 deck search guard
+- 當搜尋結果為空時自動開啟全牌庫檢視（符合 PTCG 規則：對手可以確認你的牌庫中確實沒有目標）
+- v2.316 hotfix：修復 pokemon_search.ts 語法錯誤導致 build 失敗
+
+### Build / Push
+- 已推送至 `v2.316`（含 hotfix）
+
+---
+
+## v2.315 — 修復牌庫搜尋訓練家的非法 guard
+
+### 功能
+移除牌庫搜尋型訓練家卡的 `regG` guard（PTCG 隱藏資訊規則：玩家不知道牌庫內容，不能根據牌庫是否有目標卡來禁止打出搜尋卡）。
+
+### Build / Push
+- 已推送至 `v2.315`
+
+---
+
+## v2.314 — iPad 佈局溢位 Hotfix
+
+### 功能
+修復 iPad 橫向佈局中元素溢位和換行問題。
+
+### Build / Push
+- 已推送至 `v2.314`
+
+---
+
+## v2.313 — 平板 / 1366x768 專用橫向佈局
+
+### 功能
+實裝平板（1366x768 解析度）專用的橫向對戰佈局。
+
+### Build / Push
+- 已推送至 `v2.313`
+
+---
+
+## v2.312 — 牌組編輯器篩選升級
+
+### 功能
+將牌組編輯器的篩選器升級為 chip-based 多選介面，與卡片頁面一致。
+
+### Build / Push
+- 已推送至 `v2.312`
+
+---
+
+## v2.311 — 全域卡片詳情 Modal 放大 30%
+
+### 功能
+全站卡片詳情彈窗放大 30%，提升閱讀體驗。
+
+### Build / Push
+- 已推送至 `v2.311`
+
+---
+
+## v2.310 — 牌組編輯器卡片預覽放大
+
+### 功能
+牌組編輯器的卡片預覽彈窗大小與卡片頁面一致。
+
+### Build / Push
+- 已推送至 `v2.310`
+
+---
+
+## v2.309 — 預設牌組調整：勇氣護符 → 反抗頭帶
+
+### 功能
+將火箭隊超夢牌組中的勇氣護符替換為反抗頭帶。
+
+### Build / Push
+- 已推送至 `v2.309`
+
+---
+
+## v2.308 — 修復手機 HP 顯示
+
+### 功能
+修復手機版 HP 顯示未使用 `getEffectiveHP`（不計算道具和競技場加成）的問題。
+
+### Build / Push
+- 已推送至 `v2.308`
+
+---
+
+## v2.307 — 修復損壞的 v2306_meta_pokemon.ts
+
+### 功能
+修復 v2306_meta_pokemon.ts 檔案損壞問題，解決 build 錯誤和 a11y 警告。
+
+### Build / Push
+- 已推送至 `v2.307`
 
 ---
 
@@ -16611,8 +16788,8 @@ Leon 反映手機直式對戰 UI（MobilePortraitBattle.svelte）有三個問題
 
 ---
 
-## v2.315 �X �ץ��u�M��P�w�d�P�v����D�k���b (Guard) ���~
+## v2.315 �X �ץ��u�M��P�w�d�P�v����D�k���b (Guard) ���~
 
-### �ܰ�
-- **PTCG �P�w�p����T�W�h���**�G�̾ڹ��� PTCG �W�h�A���a�û��i�H�o�ʡu�q�P�w�M��Y�S�w�d���v���ĪG�A�Y�ϸӵP�w���w�g�S���ŦX���󪺥d���]�]���P�w�ݩ󤣤��}��T�^�A�b�M���H�u���������d�P�v����í��~�P�w�C
-- **�����L�ר��b (regG)**�G�ץ��F�԰��r�B��q��e�B��q��ePRO�B�_�i���O�B���b�����ԩi�F�B���b�����������B���b���������B���Jù�������۵��d���I�����C�쥻�{���|�b�I��e���ݵP�w�A�Y�P�w���S���ؼХd���N�|�����ϦǤ������A�o�O���~����@�C�{�b�u�n�u�P�w�j�� 0 �i�]deck.length > 0�^�v�A�t�δN�|���\���a���`�o�ʨí��~�P�w�C
+### �ܰ�
+- **PTCG �P�w�p����T�W�h���**�G�̾ڹ��� PTCG �W�h�A���a�û��i�H�o�ʡu�q�P�w�M��Y�S�w�d���v���ĪG�A�Y�ϸӵP�w���w�g�S���ŦX���󪺥d���]�]���P�w�ݩ󤣤��}��T�^�A�b�M���H�u���������d�P�v����í��~�P�w�C
+- **�����L�ר��b (regG)**�G�ץ��F�԰��r�B��q��e�B��q��ePRO�B�_�i���O�B���b�����ԩi�F�B���b�����������B���b���������B���Jù�������۵��d���I�����C�쥻�{���|�b�I��e���ݵP�w�A�Y�P�w���S���ؼХd���N�|�����ϦǤ������A�o�O���~����@�C�{�b�u�n�u�P�w�j�� 0 �i�]deck.length > 0�^�v�A�t�δN�|���\���a���`�o�ʨí��~�P�w�C
