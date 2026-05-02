@@ -901,9 +901,10 @@
     if (g.turnPhase !== 'end') return;
     if (hasPendingActions(g)) return;
 
-    // 線上：只有 activePlayerIndex 那側可自動觸發
+    // 線上：只有處於自己回合的一方可自動觸發
+    // v2.329 fix：activePlayerIndex 未被設定（一直是 undefined），改用 turn%2 判斷
     if (mode === 'online') {
-      if (myPlayerIndex !== g.activePlayerIndex) return;
+      if ((g.turn % 2) !== myPlayerIndex) return;
     }
     // AI 模式：AI 是當前活動玩家時讓 AI 迴圈處理
     if (aiPlayerIndex !== null && g.activePlayerIndex === aiPlayerIndex) return;
@@ -915,7 +916,7 @@
       if (game.phase !== 'playing') return;
       if (game.turnPhase !== 'end') return;
       if (hasPendingActions(game)) return;
-      if (mode === 'online' && myPlayerIndex !== game.activePlayerIndex) return;
+      if (mode === 'online' && (game.turn % 2) !== myPlayerIndex) return;
       if (aiPlayerIndex !== null && game.activePlayerIndex === aiPlayerIndex) return;
       dispatch(GameActions.endTurn());
     }, 600);
@@ -3467,7 +3468,7 @@
   {#if pendingSelection && (
     (mode === 'online' && myPlayerIndex !== null && pendingSelection.actorIdx === myPlayerIndex)
     || (mode === 'local' && aiPlayerIndex === null)
-    || (aiPlayerIndex !== null && pendingSelection.actorIdx === (1 - aiPlayerIndex))
+    || (mode !== 'online' && aiPlayerIndex !== null && pendingSelection.actorIdx === (1 - aiPlayerIndex))
   )}
     {@const isPokePicker = pendingSelection.type==='bench-choose' || pendingSelection.type==='opp-bench-choose' || pendingSelection.type==='opp-poke-choose' || pendingSelection.type==='heal-target'}
     {@const isDmgDist   = pendingSelection.type==='damage-distribute'}

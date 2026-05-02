@@ -16,6 +16,7 @@ import {
   getAvailableAttacks, getEffectiveAttacks, getEvolvableTargets,
   getPlayableTrainers, getPlayableBasics,
   getUsableAbilities, canRetreat, isBasicPokemonCard,
+  getEffectiveHP,
 } from './engine';
 
 // ── 主要入口 ──────────────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ export function getAIAction(
   if (state.players[myIdx].active === null && state.players[myIdx].bench.length > 0) {
     return {
       type: 'SEND_NEW_ACTIVE',
-      iid: pickBestActive(state.players[myIdx].bench, pool).iid,
+      iid: pickBestActive(state.players[myIdx].bench, pool, state).iid,
       senderIdx: myIdx,
     };
   }
@@ -607,9 +608,9 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
 
 // ── 輔助 ──────────────────────────────────────────────────────────────────────
 
-/** 從備戰區選最佳的送出（HP 最高） */
-function pickBestActive(bench: CardInstance[], pool: Map<string, Card>): CardInstance {
+/** 從備戰區選最佳的送出（effective HP 最高，考慮已受傷害） */
+function pickBestActive(bench: CardInstance[], pool: Map<string, Card>, state?: GameState): CardInstance {
   return bench.reduce((a, b) =>
-    (pool.get(a.cardId)?.hp ?? 0) >= (pool.get(b.cardId)?.hp ?? 0) ? a : b
+    getEffectiveHP(a, pool, state) >= getEffectiveHP(b, pool, state) ? a : b
   );
 }

@@ -3233,15 +3233,16 @@ function handlePlaying(
     const sendingIdx: 0 | 1 = action.senderIdx ?? aIdx;
     const sendingPlayer = { ...players[sendingIdx] };
 
-    if (sendingPlayer.active !== null) return state; // 還有出場寶可夢
+    if (sendingPlayer.active !== null) {
+      console.warn('[SEND_NEW_ACTIVE REJECT] gate1: active !== null', { sendingIdx, active: sendingPlayer.active?.cardId });
+      return state; // 還有出勤寶可夢
+    }
 
     const benchIdx = sendingPlayer.bench.findIndex((c) => c.iid === action.iid);
-    if (benchIdx < 0) return state;
-
-    // Session 34：設 movedToActiveThisTurn（供「在這個回合若從備戰區放到戰鬥場」條件用）。
-    // 注意：SEND_NEW_ACTIVE 通常發生在對手回合（被擊倒後自動補上場）；
-    // 設旗標的目的是在「自己下一回合」使用此旗標進行傷害加成判斷 — clearTurnFlags 在
-    // 擁有者的 END_TURN 才觸發，所以對被擊倒方而言，下回合使用「暴衝閃光」類仍可判定 true。
+    if (benchIdx < 0) {
+      console.warn('[SEND_NEW_ACTIVE REJECT] gate2: benchIdx < 0', { sendingIdx, actionIid: action.iid, benchIids: sendingPlayer.bench.map(c => c.iid) });
+      return state;
+    }
     const newActive = { ...sendingPlayer.bench[benchIdx], movedToActiveThisTurn: true };
     sendingPlayer.bench = sendingPlayer.bench.filter((_, i) => i !== benchIdx);
     sendingPlayer.active = newActive;

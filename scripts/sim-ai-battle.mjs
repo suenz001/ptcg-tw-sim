@@ -18,7 +18,7 @@ const VERBOSE = process.argv.includes('--verbose');
 console.log(`⚔️  AI vs AI 模擬 — ${ROUNDS} 局\n`);
 
 // ── Step 1: 打包 engine + ai 為 ESM ────────────────────────────────────────
-const OUT = 'E:/ptcg-tw-sim/.tmp-sim-bundle.mjs';
+const OUT = '/tmp/ptcg-work/repo/.tmp-sim-bundle.mjs';
 
 // 建一個臨時入口，從 src 匯出需要的函式
 const entry = `
@@ -26,7 +26,7 @@ const entry = `
   export { GameActions } from './src/lib/game/actions';
   export { getAIAction } from './src/lib/game/ai';
 `;
-const ENTRY_PATH = 'E:/ptcg-tw-sim/.tmp-sim-entry.ts';
+const ENTRY_PATH = '/tmp/ptcg-work/repo/.tmp-sim-entry.ts';
 writeFileSync(ENTRY_PATH, entry);
 
 await build({
@@ -37,8 +37,8 @@ await build({
   platform: 'node',
   target: 'node20',
   alias: {
-    '$lib': 'E:/ptcg-tw-sim/src/lib',
-    '$app/paths': 'E:/ptcg-tw-sim/scripts/shim-app-paths.mjs',
+    '$lib': '/tmp/ptcg-work/repo/src/lib',
+    '$app/paths': '/tmp/ptcg-work/repo/scripts/shim-app-paths.mjs',
   },
   external: [],
   logLevel: 'warning',
@@ -49,7 +49,7 @@ const mod = await import(pathToFileURL(OUT).href);
 const { createGame, applyAction, hasPendingActions, GameActions, getAIAction } = mod;
 
 // ── Step 2: 載入 pool ──────────────────────────────────────────────────────
-const cardsDir = 'E:/ptcg-tw-sim/static/cards';
+const cardsDir = '/tmp/ptcg-work/repo/static/cards';
 const pool = new Map();
 for (const f of readdirSync(cardsDir)) {
   if (!f.endsWith('.json') || f === 'index.json') continue;
