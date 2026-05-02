@@ -561,6 +561,12 @@ const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   //   附加效果（招式效果丟棄時放回手牌）由 ATTACK pipeline 的 fuelFireSnapshotIids
   //   類比 boomerang revive 處理。
   '燃料【火】能量': ['Fire'],
+  // v2.330 增強【草】能量 — 視為 1 個【草】能量；HP+20 由 SPECIAL_ENERGY_HP_BONUS hook 處理。
+  '增強【草】能量': ['Grass'],
+  // v2.330 泡沫【水】能量 — 視為 1 個【水】能量；免疫灼傷/中毒由 SPECIAL_ENERGY_STATUS_IMMUNE hook 處理。
+  '泡沫【水】能量': ['Water'],
+  // v2.330 磁鐵【鋼】能量 — 視為 1 個【鋼】能量；撤退為 0 由 SPECIAL_ENERGY_RETREAT_MOD hook 處理。
+  '磁鐵【鋼】能量': ['Metal'],
 };
 
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {
