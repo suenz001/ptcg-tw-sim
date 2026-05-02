@@ -49,6 +49,23 @@ function isToolsJammed(state: GameState, pool: Map<string, Card>): boolean {
   return JAMMING_TOWER_STADIUMS.has(card.name);
 }
 
+// v2.322：蓋諾賽克特｜ACE消弭 — 若對手場上有蓋諾賽克特且附有寶可夢道具，
+//   則當前玩家不能從手牌使出 ACE SPEC 卡。
+function isAceCancelActive(state: GameState, playerIdx: 0 | 1, pool: Map<string, Card>): boolean {
+  const oppIdx = (1 - playerIdx) as 0 | 1;
+  const opp = state.players[oppIdx];
+  const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
+  return allOpp.some(pk => {
+    const c = pool.get(pk.cardId);
+    if (!c) return false;
+    // 必須是蓋諾賽克特（非 ex 版本）且有 ACE消弭 特性
+    if (c.name !== '蓋諾賽克特') return false;
+    if (!c.abilities?.some(a => a.name === 'ACE消弭')) return false;
+    // 必須附有寶可夢道具（且道具未被阻礙之塔無效化 → 阻礙之塔只無效道具效果，不影響特性判定）
+    return !!pk.toolAttached;
+  });
+}
+
 // ── v2.136 零之大空洞：備戰位上限 ──────────────────────────────────────────────
 // 場上活動場地卡為「零之大空洞」且自己場上有「太晶」寶可夢時，該玩家備戰可放 8 隻；
 // 場地離場 / 失去太晶 → enforceBenchLimit 自動丟備戰至 5。
@@ -1639,6 +1656,8 @@ function handlePlaying(
     // Wave 39：玩家級物品 / 支援者鎖（例：含羞苞｜癢癢花粉、吼叫尾ex｜絕叫、電蜘蛛ex｜雷擊石）
     if (trainerCard.subtype === 'Item' && attacker.cantPlayItemThisTurn) return state;
     if (trainerCard.subtype === 'Supporter' && attacker.cantPlaySupporterThisTurn) return state;
+    // v2.322：蓋諾賽克特｜ACE消弭 — 對手有附道具的蓋諾賽克特時，不能打 ACE SPEC
+    if (trainerCard.tags?.includes('ACE SPEC') && isAceCancelActive(state, aIdx, pool)) return state;
 
     // 義務性前置檢查：夜間擔架棄牌為空、寶可夢交替備戰為空等情況禁止打出
     if (!canPlayTrainer(trainerCard.name, state, aIdx, pool)) return state;
@@ -4480,6 +4499,8 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       // Wave 43 fix：玩家級物品/支援者鎖也要在可用清單裡濾掉（否則 AI 會挑到被鎖的卡、engine 靜默 no-op → AI 當機）
       if (c.subtype === 'Item' && player.cantPlayItemThisTurn) return false;
       if (c.subtype === 'Supporter' && player.cantPlaySupporterThisTurn) return false;
+      // v2.322：蓋諾賽克特｜ACE消弭 — 對手有附道具的蓋諾賽克特時，不能打 ACE SPEC
+      if (c.tags?.includes('ACE SPEC') && isAceCancelActive(state, state.activePlayerIndex, pool)) return false;
       // 義務性檢查：缺合法目標的卡不可打出
       if (!canPlayTrainer(c.name, state, state.activePlayerIndex, pool)) return false;
       return true;

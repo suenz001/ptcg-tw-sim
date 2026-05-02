@@ -1120,7 +1120,7 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
   const baseName = baseInstPrev ? (pool.get(baseInstPrev.cardId)?.name ?? '?') : '?';
   st = addLog(st, `神奇糖果：${baseName} 直接進化為 ${stage2Name}！`, idx);
 
-  return updatePlayer(st, idx, p => {
+  let result = updatePlayer(st, idx, p => {
     const stage2Inst = p.hand.find(i => i.iid === stage2Iid);
     if (!stage2Inst) return p;
 
@@ -1153,6 +1153,20 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
       bench: p.bench.map(evolve),
     };
   });
+
+  // v2.322：神奇糖果進化後也要觸發「進化時」特性（龐克練肌、精神抽出等）
+  const evolvedPlayer = result.players[idx];
+  const evolvedInst = evolvedPlayer.active?.cardId === stage2InstPrev?.cardId
+    ? evolvedPlayer.active
+    : evolvedPlayer.bench.find(c => c.cardId === stage2InstPrev?.cardId && c.evolvedThisTurn);
+  if (evolvedInst && stage2InstPrev) {
+    const evoCard = pool.get(stage2InstPrev.cardId);
+    if (evoCard) {
+      result = promptPlayAbilities(result, idx as 0 | 1, evoCard, evolvedInst, pool, true);
+    }
+  }
+
+  return result;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
