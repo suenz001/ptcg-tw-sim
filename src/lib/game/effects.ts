@@ -5054,7 +5054,7 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
     }
   }
   const newDmg = target.damage + dmg;
-  const hp = targetCard?.hp ?? 0;
+  const hp = effectiveHPInline(target, pool, st);
   if (hp > 0 && newDmg >= hp) {
     const ko: CardInstance[] = [
       { ...target, damage: newDmg },
@@ -5073,7 +5073,7 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
     if (isActive && newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
     }
-    return { ...s, pendingPrizes: p };
+    return { ...s, pendingPrizes: (st.pendingPrizes ?? 0) + p };
   }
   const players = [...st.players] as [PlayerState, PlayerState];
   const newDefender = { ...defender };
@@ -5805,7 +5805,7 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
     if (!target) continue; // 若該寶可夢已被此批次稍早的 counter 擊倒，後續 counter 作廢
 
     const targetCard = pool.get(target.cardId);
-    const tHp = targetCard?.hp ?? 0;
+    const tHp = effectiveHPInline(target, pool, s);
     const newDmg = target.damage + counterDamage;
     placedThisBatch++;
 

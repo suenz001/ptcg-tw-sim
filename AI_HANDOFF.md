@@ -1,6 +1,43 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
 > 最後更新：2026-05-02 (v2.325)
+> 最後更新：2026-05-02 (v2.326)
+> AI：Hermes (MiniMax-M2.7)
+
+---
+
+## v2.326 — 修復備戰寶可夢被「系統擊倒檢查」誤判擊倒 Bug
+
+### 問題
+使用暗影子彈打倒胡地後，備戰的吉雉雞ex（HP=210，攜帶英雄斗篷+100HP，實際HP=310）卻被 `sanityKOSweep` 誤判為 KO。
+
+### 根因
+`sanityKOSweep` 用 `card?.hp ?? 0`（基礎 HP），而 `bench-hit-N`/`hitBenchAll`/`snipe-variable`/`dragapult-snipe` 用 `effectiveHPInline`（含道具/能量/場地加成），兩者不一致。
+
+### 修正
+
+#### 修正 1（engine.ts ~1206-1221）：`sanityKOSweep` 改用 `getEffectiveHP`
+- active 段落：`hp = card?.hp ?? 0` → `hp = getEffectiveHP(inst, pool, s)`
+- bench 段落：同樣改用 `getEffectiveHP`
+
+#### 修正 2（effects.ts ~5076）：`snipe-variable` 獎勵牌累加修正
+- `pendingPrizes: p` → `pendingPrizes: (st.pendingPrizes ?? 0) + p`
+- 避免覆蓋既有的獎勵牌計數
+
+#### 修正 3（effects.ts ~5057）：`snipe-variable` KO 判定改用 `effectiveHPInline`
+- `hp = targetCard?.hp ?? 0` → `hp = effectiveHPInline(target, pool, st)`
+
+#### 修正 4（effects.ts ~5808）：`dragapult-snipe` KO 判定改用 `effectiveHPInline`
+- `tHp = targetCard?.hp ?? 0` → `tHp = effectiveHPInline(target, pool, s)`
+
+### 修改檔案
+- `src/lib/game/engine.ts`：sanityKOSweep active + bench 段落改用 getEffectiveHP
+- `src/lib/game/effects.ts`：snipe-variable KO 判定 + pendingPrizes 累加；dragapult-snipe KO 判定
+- `src/lib/version.ts`：2.325 → 2.326
+
+### Build / Push
+- TypeScript 編譯通過（零新增錯誤）
+
 > AI：Antigravity (Google DeepMind)
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 部署：https://suenz001.github.io/ptcg-tw-sim/game

@@ -1203,11 +1203,12 @@ function sanityKOSweep(
   const player = { ...s.players[dIdx] };
   // active
   if (player.active) {
-    const card = pool.get(player.active.cardId);
-    const hp = card?.hp ?? 0;
-    if (hp > 0 && player.active.damage >= hp) {
+    const inst = player.active;
+    const card = pool.get(inst.cardId);
+    const hp = getEffectiveHP(inst, pool, s);
+    if (hp > 0 && inst.damage >= hp) {
       anyKO = true;
-      const ko = player.active;
+      const ko = inst;
       const koDiscard: CardInstance[] = [
         ko, ...ko.energyAttached,
         ...(ko.toolAttached ? [ko.toolAttached] : []),
@@ -1224,8 +1225,9 @@ function sanityKOSweep(
   // bench
   const newBench: CardInstance[] = [];
   for (const b of player.bench) {
-    const card = pool.get(b.cardId);
-    const hp = card?.hp ?? 0;
+    const inst = b;
+    const card = pool.get(inst.cardId);
+    const hp = getEffectiveHP(inst, pool, s);
     if (hp > 0 && b.damage >= hp) {
       anyKO = true;
       const koDiscard: CardInstance[] = [
