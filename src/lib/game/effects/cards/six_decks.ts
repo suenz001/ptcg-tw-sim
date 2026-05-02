@@ -11,7 +11,7 @@
  */
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { regPre, regPost, regA, reg, regR, regG, addLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium } from '../_shared';
+import { regPre, regPost, regA, reg, regR, regG, addLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle } from '../_shared';
 import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre } from '../../effects';
 
 // ─── 撕裂 70（skipDefEffects）───────────────────────────────────────────────
