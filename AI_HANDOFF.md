@@ -1,8 +1,50 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-02 (v2.326)
+> 最後更新：2026-05-03 (v2.329)
 > 最後更新：2026-05-02 (v2.327)
-> AI：Hermes (MiniMax-M2.7)
+
+## v2.329 — 修復 2 個 bug
+
+### Bug 1：線上模式 P2(join方) 攻擊/跳過攻擊後不自動換到對手回合
+
+**症狀**：線上對戰，P2（join 方）使用招式或跳過攻擊後，回合停在 `turnPhase='end'`，不自動換到對手（P1）回合。
+
+**根因**：`autoEndTimer` $effect（`+page.svelte` line 906）用 `myPlayerIndex !== g.activePlayerIndex` 做 gate，但 `activePlayerIndex` 在遊戲狀態中從未被設定（一直是 `undefined`），導致：
+- P1：`myPlayerIndex=0`，`activePlayerIndex=undefined` → `0 !== undefined` → `true` → `return`（P1 不會自動結束）
+- P2：`myPlayerIndex=1`，`activePlayerIndex=undefined` → `1 !== undefined` → `true` → `return`（P2 不會自動結束）
+
+攻擊後 `turnPhase='end'` 已在 engine.ts 正確設定，真正原因是計時器 gate 將雙方都擋掉了。
+
+**修復**：
+- 改用 `turn % 2` 判斷當前回合方：P1=奇數，P2=偶數（`g.turn % 2`）
+- `+page.svelte` line 906：`myPlayerIndex !== g.activePlayerIndex` → `(g.turn % 2) !== myPlayerIndex`
+- 同時修正 setTimeout callback 內的同樣邏輯（line 918）
+
+### Bug 2：AI 補戰鬥位時 effective HP 修復（`pickBestActive` call site 未傳 `state`）
+
+**根因**：`pickBestActive` 函式已改用 `getEffectiveHP`（含已受傷害），但 `ai.ts:42` 的 call site 沒傳 `state` 參數，導致 `getEffectiveHP` 無法正確計算。
+
+**修復**：`ai.ts:42` 的 `pickBestActive(state.players[myIdx].bench, pool)` → `pickBestActive(state.players[myIdx].bench, pool, state)`
+
+### Bug 3：線上模式 PendingSelection modal 隱私 bug（對手能看到不該看到的選牌 UI）
+
+**症狀**：線上對手使用「尖釘鎮道館」「赤松」等功能時，雙方都能看到選擇畫面（對手不該看到）。
+
+**根因**：`+page.svelte` line 3471 的第三條件 `(aiPlayerIndex !== null && pendingSelection.actorIdx === (1 - aiPlayerIndex))` 缺少 `mode` 限定。在線上模式（`aiPlayerIndex !== null` 但 `mode === 'online'`）時仍會滿足，導致錯誤顯示。
+
+**修復**：加 `mode !== 'online'` guard：
+```svelte
+|| (mode !== 'online' && aiPlayerIndex !== null && pendingSelection.actorIdx === (1 - aiPlayerIndex))
+```
+
+### 修改檔案
+- `src/routes/game/+page.svelte`：autoEndTimer gate 修覆 + PendingSelection visibility guard
+- `src/lib/game/ai.ts`：`pickBestActive` call site 補上 `state` 參數
+- `src/lib/game/engine.ts`：SEND_NEW_ACTIVE REJECT gate 加 console.warn debug log
+
+### Build / Push
+- TypeScript 編譯通過（既有 TS errors 不受影響）
+- 已推送至 `40aa4c7`
 
 ---
 
