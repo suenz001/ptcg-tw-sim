@@ -3140,18 +3140,7 @@
               </button>
             {/each}
             <button class="btn-act secondary" disabled={!!pendingSelection}
-              onclick={async ()=>{
-                if(!game) return;
-                game = {...game, turnPhase: 'end'};
-                // v2.182：線上模式必須 push 到 firestore，否則對手看不到 turnPhase 變化，
-                //        且自己的「結束回合」按鈕在對手端不會出現對應 UI 變化。
-                if (mode === 'online' && roomCode) {
-                  isSyncing = true;
-                  try { await pushGameState(roomCode, game); }
-                  catch (e) { console.error('[Online] skip-attack push failed:', e); }
-                  finally { isSyncing = false; }
-                }
-              }}>跳過攻擊 →</button>
+              onclick={()=>dispatch(GameActions.endTurn())}>跳過攻擊 →</button>
           {/if}
           {#if canUseStadium && isMyTurn()}
             <button class="btn-act stadium-btn" onclick={()=>dispatch(GameActions.useStadium())}>

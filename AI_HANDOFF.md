@@ -1,7 +1,38 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+> 最後更新：2026-05-03 (v2.331)
 > 最後更新：2026-05-03 (v2.329)
 > 最後更新：2026-05-02 (v2.327)
+
+## v2.331 — 修復線上模式「跳過攻擊」未立即結束回合
+
+### 問題
+線上對戰桌機版 UI 中，玩家按下「跳過攻擊 →」後，只是把本地 `turnPhase` 改成 `'end'` 並 push 到 Firestore，沒有直接 dispatch `END_TURN`。結果仍依賴 `autoEndTimer` $effect 去補送 `END_TURN`，在 P2 / 線上同步情境下會出現需要再手動點一次「⏭ 結束回合」的症狀。
+
+### 根因
+`+page.svelte` 的桌機版「跳過攻擊」按鈕走的是一條特例路徑：
+- **舊路徑**：直接 `game = {...game, turnPhase: 'end'}` + `pushGameState(roomCode, game)`
+- **正常/可工作的路徑**：`dispatch(GameActions.endTurn())` → `applyAction(..., END_TURN, ...)` → engine 正常做 checkup / 換手 / 抽牌 / 線上同步
+
+也就是說，桌機版 skip-attack 沒有走正式的 action pipeline，而是走「手動改 state + 等 autoEndTimer 補發」的旁路。這條旁路在 mobile 版不存在：`MobilePortraitBattle.svelte` 的「⏭ 結束回合」本來就是直接 dispatch `END_TURN`，因此不會卡住。
+
+### 修復
+把桌機版「跳過攻擊 →」按鈕改為直接 dispatch：
+```svelte
+onclick={()=>dispatch(GameActions.endTurn())}
+```
+
+移除原本手動改 `turnPhase` / 手動 push Firestore 的旁路邏輯，讓 skip-attack 與 mobile 的 end-turn 共用同一條正式流程。
+
+### 修改檔案
+- `src/routes/game/+page.svelte`：桌機版「跳過攻擊 →」按鈕改成直接 `dispatch(GameActions.endTurn())`
+- `src/lib/version.ts`：2.330 → 2.331
+
+### Build / Push
+- `npm run build` 通過
+- 已推送至 `main`
+
+---
 
 ## v2.329 — 修復 2 個 bug
 
