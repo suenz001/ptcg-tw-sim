@@ -9,7 +9,7 @@
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROUNDS = Number(process.argv[2] ?? 100);
 const MAX_TURNS_PER_GAME = 200;   // 超過視為卡住
@@ -18,7 +18,8 @@ const VERBOSE = process.argv.includes('--verbose');
 console.log(`⚔️  AI vs AI 模擬 — ${ROUNDS} 局\n`);
 
 // ── Step 1: 打包 engine + ai 為 ESM ────────────────────────────────────────
-const OUT = '/tmp/ptcg-work/repo/.tmp-sim-bundle.mjs';
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
+const OUT = join(REPO_ROOT, '.tmp-sim-bundle.mjs');
 
 // 建一個臨時入口，從 src 匯出需要的函式
 const entry = `
@@ -26,7 +27,7 @@ const entry = `
   export { GameActions } from './src/lib/game/actions';
   export { getAIAction } from './src/lib/game/ai';
 `;
-const ENTRY_PATH = '/tmp/ptcg-work/repo/.tmp-sim-entry.ts';
+const ENTRY_PATH = join(REPO_ROOT, '.tmp-sim-entry.ts');
 writeFileSync(ENTRY_PATH, entry);
 
 await build({
@@ -37,8 +38,8 @@ await build({
   platform: 'node',
   target: 'node20',
   alias: {
-    '$lib': '/tmp/ptcg-work/repo/src/lib',
-    '$app/paths': '/tmp/ptcg-work/repo/scripts/shim-app-paths.mjs',
+    '$lib': join(REPO_ROOT, 'src/lib'),
+    '$app/paths': join(REPO_ROOT, 'scripts/shim-app-paths.mjs'),
   },
   external: [],
   logLevel: 'warning',
@@ -49,7 +50,7 @@ const mod = await import(pathToFileURL(OUT).href);
 const { createGame, applyAction, hasPendingActions, GameActions, getAIAction } = mod;
 
 // ── Step 2: 載入 pool ──────────────────────────────────────────────────────
-const cardsDir = '/tmp/ptcg-work/repo/static/cards';
+const cardsDir = join(REPO_ROOT, 'static/cards');
 const pool = new Map();
 for (const f of readdirSync(cardsDir)) {
   if (!f.endsWith('.json') || f === 'index.json') continue;

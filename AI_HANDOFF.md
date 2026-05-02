@@ -1,10 +1,29 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+> 最後更新：2026-05-03 (v2.334)
 > 最後更新：2026-05-03 (v2.333)
 > 最後更新：2026-05-03 (v2.332)
 > 最後更新：2026-05-03 (v2.331)
 > 最後更新：2026-05-03 (v2.329)
 > 最後更新：2026-05-02 (v2.327)
+
+## v2.334 — 稽核 v2.326+ 後清理 previous-model artifacts
+
+### 背景
+使用者要求確認 v2.326 起前一個模型的作業，擔心有亂改內容。逐 commit review v2.326~v2.333 後，功能性修正大多合理，但發現兩個需要清理的小問題：
+
+1. `engine.ts` 的 `SEND_NEW_ACTIVE` gate 留有 debug `console.warn`。
+2. `scripts/sim-ai-battle.mjs` 被硬編碼為 `/tmp/ptcg-work/repo`，只適用目前機器，換路徑或其他人 clone 後會壞。
+
+### 修復
+- 移除 `SEND_NEW_ACTIVE REJECT` debug `console.warn`，恢復為 silent reject（原本正常 gate）。
+- `sim-ai-battle.mjs` 改用 `import.meta.url` 推導 repo root，再用 `join(REPO_ROOT, ...)` 組路徑，不再硬編碼本機暫存路徑。
+
+### 驗證
+- `npm run build` 通過
+- `node scripts/sim-ai-battle.mjs 1` 正常結束 1/1，無 stuck / crash
+
+---
 
 ## v2.333 — 修復線上模式 P2 被誤判成 AI 回合，導致攻擊後不自動結束
 

@@ -3239,16 +3239,10 @@ function handlePlaying(
     const sendingIdx: 0 | 1 = action.senderIdx ?? aIdx;
     const sendingPlayer = { ...players[sendingIdx] };
 
-    if (sendingPlayer.active !== null) {
-      console.warn('[SEND_NEW_ACTIVE REJECT] gate1: active !== null', { sendingIdx, active: sendingPlayer.active?.cardId });
-      return state; // 還有出勤寶可夢
-    }
+    if (sendingPlayer.active !== null) return state; // 還有出場寶可夢
 
     const benchIdx = sendingPlayer.bench.findIndex((c) => c.iid === action.iid);
-    if (benchIdx < 0) {
-      console.warn('[SEND_NEW_ACTIVE REJECT] gate2: benchIdx < 0', { sendingIdx, actionIid: action.iid, benchIids: sendingPlayer.bench.map(c => c.iid) });
-      return state;
-    }
+    if (benchIdx < 0) return state;
     const newActive = { ...sendingPlayer.bench[benchIdx], movedToActiveThisTurn: true };
     sendingPlayer.bench = sendingPlayer.bench.filter((_, i) => i !== benchIdx);
     sendingPlayer.active = newActive;
