@@ -1,9 +1,31 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-02 (v2.322)
+> 最後更新：2026-05-02 (v2.323)
 > AI：Gemini / Claude（Google DeepMind / Anthropic）  
 > 專案：https://github.com/suenz001/ptcg-tw-sim  
 > 部署：https://suenz001.github.io/ptcg-tw-sim/game
+
+---
+
+## v2.323 — 實裝蓋諾賽克特 ACE消弭 + 修正神奇糖果進化不觸發特性
+
+### 功能 1：蓋諾賽克特｜ACE消弭 特性實裝
+- **效果**：若蓋諾賽克特附有寶可夢道具卡，則對手無法從手牌使出 ACE SPEC 卡。
+- **實作**：在 `engine.ts` 新增 `isAceCancelActive()` helper，掃描對手場上（戰鬥 + 備戰）是否有附道具的蓋諾賽克特。在 `PLAY_TRAINER` action gate 和 `getPlayableTrainers()` UI filter 中加入 ACE SPEC 檢查。
+- **判定條件**：`card.tags?.includes('ACE SPEC')` — ACE SPEC 在卡片 JSON 中以 tags 陣列標記。
+
+### 功能 2：修復神奇糖果進化不觸發特性 Bug
+- **問題**：正常 EVOLVE action 會在最後呼叫 `promptPlayAbilities()`，但神奇糖果走的是自己的 `rare-candy-evolve` resolver，進化後直接 return，完全沒有觸發龐克練肌等進化特性。
+- **修正**：在 `rare-candy-evolve` resolver 中，進化完成後追加 `promptPlayAbilities(result, idx, evoCard, evolvedInst, pool, true)` 呼叫。
+
+### 修改檔案
+- `src/lib/game/engine.ts`：新增 `isAceCancelActive()` + PLAY_TRAINER gate + getPlayableTrainers filter
+- `src/lib/game/effects.ts`：`rare-candy-evolve` resolver 加 `promptPlayAbilities` 呼叫
+- `src/lib/version.ts`：2.322 → 2.323
+
+### Build / Push
+- TypeScript 編譯通過（零新增錯誤）
+- 已推送至 `v2.323`
 
 ---
 
