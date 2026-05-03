@@ -47,20 +47,6 @@ safeUnlink(ENTRY_PATH);
 // ── Load engine ───────────────────────────────────────────────────────────────
 const { createGame, applyAction, isBenchProtected } = await import(pathToFileURL(OUT).href);
 
-// ── Attack cost checker (engine.ts has canAffordAttack but doesn't export it) ─
-function canAffordAttack(activeInst, costArr, _pool, state, playerIdx, _atkName) {
-  // costArr: array of energy types like ['Fire','Colorless','Colorless']
-  // Count available energy of each type
-  const available = { ...state.players[playerIdx].energy };
-  // Collect all attached energy from active Pokemon
-  const attached = activeInst.energyAttached ?? [];
-  for (const e of attached) {
-    // energyAttached cards have energyType field or we look up in pool
-    available['Colorless'] = (available['Colorless'] ?? 0) + 1; // simplified: all attached count as colorless
-  }
-  return costArr.every(c => (available[c] ?? 0) > 0);
-}
-
 // ── Build card pool ───────────────────────────────────────────────────────────
 const pool = new Map();
 for (const f of readdirSync(join(REPO_ROOT, 'static/cards'))) {
@@ -69,7 +55,7 @@ for (const f of readdirSync(join(REPO_ROOT, 'static/cards'))) {
     pool.set(String(c.id), c);
   }
 }
-// Add virtual colorless energy (needed for engine energy matching)
+// Virtual colorless basic energy (not in pool — used for headless test energy matching)
 pool.set('colorless-test', {
   id: 'colorless-test', name: '基本【無】能量',
   supertype: 'Energy', subtype: 'Basic', pokemonType: 'Colorless',
@@ -157,48 +143,67 @@ function test(name, fn) {
     failed++;
   }
 }
-
-// ── T1: 小火馬｜蓄能量 ────────────────────────────────────────────────────────
+// ── T1: 小火馬｜蓄能量 ───────────────────────────────────────────────────────
+//  小火馬 Basic Fire Pokemon，附 1 燃火能量（Special）以滿足 [C] 攻擊代價。
+//  deckSearchToHandPost 創建 pendingSelection(type='deck-search')，
+//  需要 RESOLVE_SELECTION 完成。
+//
+//  重要：engine.ts 先手第1回合 guard：
+//    `if (state.isFirstTurn && aIdx === state.firstPlayerIdx) return state;`
+//  → 設 firstPlayerIdx: 1（讓 P1 是後手）避開限制。
 console.log('\n── T1: 小火馬｜蓄能量 ──────────────────────────────────────');
 {
-  const ponyta = inst(CID.ponyta);
-  // Deck has 1 fire energy at top
-  const deckWithFire = [inst(CID.fireE), ...Array(19).fill(null).map(() => inst(CID.fireE))];
-
+  // 燃火能量（Special Energy）：engine 視為 1 個【無】能量
+  const burnedE = instE(CID.burnedE); // cardId 14851（燃火能量 SV6）
+  // 基本火能量：用於附能量 + 放 deck 頂
+  const basicFireE = instE(CID.fireE); // cardId 14428（基本【火】能量）
+  // Deck 只有 1 張基本火能量
   let state = baseState({
     players: [
-      { ...baseState().players[0], active: ponyta, deck: deckWithFire, hand: [] },
-      { ...baseState().players[1], active: inst(CID.goldeen) },
+      {
+        ...baseState().players[0],
+        active: { ...inst(CID.ponyta), energyAttached: [burnedE] },
+        hand: [],
+        deck: [basicFireE],
+      },
+      { ...baseState().players[1], active: inst(CID.goldeen), hand: [], deck: Array(20).fill(null).map((_, i) => inst(`o${i}`)) },
     ],
+    firstPlayerIdx: 1, // P1 是後手，避開 isFirstTurn guard
+    isFirstTurn: false,
   });
 
-  const card = pool.get(CID.ponyta);
-  const atkIdx = card.attacks.findIndex(a => a.name === '蓄能量');
+  const atkIdx = pool.get(CID.ponyta)?.attacks?.findIndex(a => a.name === '蓄能量') ?? -1;
+  assert.ok(atkIdx >= 0, '蓄能量 attack should exist on 小火馬');
 
-  test('T1-1: canAffordAttack [C] on 小火馬蓄能量', () => {
-    const result = canAffordAttack(ponyta, card.attacks[atkIdx].cost, pool, state, 0, card.attacks[atkIdx].name);
-    assert.equal(result, true, 'should afford [C] cost');
-  });
-
-  test('T1-2: ATTACK(蓄能量) should produce pendingSelection(type=deck-search)', () => {
+  test('T1: ATTACK(蓄能量) should add 1 BasicEnergy from deck to hand', () => {
+    // ATTACK 後：deckSearchToHandPost 創建 pendingSelection
     const next = applyAction(state, { type: 'ATTACK', attackIndex: atkIdx }, pool);
-    assert.ok(next.pendingSelection, `pendingSelection should exist, got ${JSON.stringify(next.pendingSelection)}`);
-    if (next.pendingSelection) {
-      assert.equal(next.pendingSelection.type, 'deck-search',
-        `expected deck-search, got ${next.pendingSelection.type}`);
-    }
-  });
+    assert.ok(next.pendingSelection?.type === 'deck-search',
+      `expected pendingSelection(type=deck-search), got: ${JSON.stringify(next.pendingSelection)}`);
+    assert.equal(next.pendingSelection.actorIdx, 0, 'actorIdx should be 0 (P1)');
+    assert.equal(next.pendingSelection.filter, 'BasicEnergy', 'filter should be BasicEnergy');
 
-  test('T1-3: RESOLVE_SELECTION(deck fire) should add fire energy to hand', () => {
-    let next = applyAction(state, { type: 'ATTACK', attackIndex: atkIdx }, pool);
-    const deckFireIid = next.players[0].deck[0].iid;
-    next = applyAction(next, { type: 'RESOLVE_SELECTION', selection: deckFireIid, selectedIids: [deckFireIid] }, pool);
-    const handFire = next.players[0].hand.filter(c => c.cardId === CID.fireE);
-    assert.ok(handFire.length >= 1, `hand should have fire energy, got ${handFire.length} cards`);
-    assert.ok(!next.pendingSelection, 'pendingSelection should be cleared');
+    // deck[0] = basicFireE
+    const deckTop = next.players[0].deck[0];
+    console.log('    [T1] deckTop iid:', deckTop?.iid, '| cardId:', deckTop?.cardId, '| name:', pool.get(deckTop?.cardId)?.name);
+    assert.ok(deckTop, 'deck top should exist');
+
+    // RESOLVE_SELECTION：選擇牌庫頂的基本火能量
+    const afterResolve = applyAction(next, {
+      type: 'RESOLVE_SELECTION',
+      senderIdx: 0,
+      selectedIids: [deckTop.iid],
+    }, pool);
+
+    const hand = afterResolve.players[0].hand;
+    const addedEnergy = hand.filter(c => {
+      const cd = pool.get(c.cardId);
+      return cd?.supertype === 'Energy' && (cd.subtype === 'Basic' || cd.name === '基本【無】能量');
+    });
+    assert.ok(addedEnergy.length >= 1,
+      `hand should have at least 1 basic energy after RESOLVE_SELECTION, got ${addedEnergy.length}`);
   });
 }
-
 // ── T2: 力之沙漏 ─────────────────────────────────────────────────────────────
 console.log('\n── T2: 力之沙漏 ───────────────────────────────────────────');
 {
@@ -256,106 +261,101 @@ console.log('\n── T2: 力之沙漏 ─────────────�
 }
 
 // ── T3: 奇諾栗鼠ex｜能量巴掌 ─────────────────────────────────────────────────
+//  regPre('奇諾栗鼠ex|能量巴掌', selfAttachedEnergyMultiplyPre(0, 40, 'all', '能量巴掌'));
+//  damage = 0 + 40 * count_of_all_attached_energy (燃火=Special/Colorless, filter='all')
+//  0 attached → 0, 1 attached → 40, 2 attached → 80
+//  使用 hp=999 確保不 KO
 console.log('\n── T3: 奇諾栗鼠ex｜能量巴掌 ───────────────────────────────');
 {
   const card = pool.get(CID.cinccinoEx);
   const atkIdx = card.attacks.findIndex(a => a.name === '能量巴掌');
-  const cinccino = inst(CID.cinccinoEx);
-  const fireE = instE(CID.burnedE); // 燃火能量 SV6 14851
+  assert.ok(atkIdx >= 0, '能量巴掌 should exist on 奇諾栗鼠ex');
+  const fireE = instE(CID.burnedE);
+  const fireE2 = instE(CID.burnedE);
+  // hp=999 測試用法無效（getEffectiveHP 用 card.hp，非 inst.hp）
+  // 改用真實高HP寶可夢：土龍節節 HP=140（cardId 14465）做 defender
+  const DEFENDER = '14465'; // 土龍節節 HP=140
+  const defenderHP = pool.get(DEFENDER)?.hp ?? 140;
+  const defender = { ...inst(DEFENDER), damage: 0, energyAttached: [] };
 
   let state = baseState({
     players: [
-      {
-        ...baseState().players[0],
-        active: { ...cinccino, energyAttached: [] },
-        hand: [inst(CID.burnedE)],
-        deck: [],
-        discard: [],
-      },
-      {
-        ...baseState().players[1],
-        active: { ...inst(CID.goldeen), damage: 0, hp: 60, energyAttached: [] },
-        deck: [],
-      },
+      { ...baseState().players[0], active: { ...inst(CID.cinccinoEx), energyAttached: [] }, hand: [], deck: [], discard: [] },
+      { ...baseState().players[1], active: defender },
     ],
   });
 
-  test('T3-1: canAffordAttack [C] on 奇諾栗鼠ex能量巴掌', () => {
-    const result = canAffordAttack(cinccino, card.attacks[atkIdx].cost, pool, state, 0, card.attacks[atkIdx].name);
-    assert.equal(result, true);
-  });
-
-  test('T3-2: 0 attached → 0×40 = 0 bonus → 40 base damage', () => {
+  test('T3-1: 0 attached energy → 0 damage', () => {
     let next = applyAction(state, { type: 'ATTACK', attackIndex: atkIdx }, pool);
     const opp = next.players[1].active;
-    assert.ok(opp !== null, 'opponent active should still exist (not KO)');
-    if (opp) assert.equal(opp.damage, 40, `expected 40 damage (base 40× with 0 attached), got ${opp.damage}`);
+    assert.ok(opp !== null, 'opponent active should exist');
+    assert.equal(opp.damage, 0, `expected 0 damage (0 + 40×0), got ${opp.damage}`);
   });
 
-  // 1 attached燃火 energy
-  state = {
-    ...state,
+  // 1 attached燃火
+  state = { ...state,
     players: [
-      { ...state.players[0], active: { ...cinccino, energyAttached: [fireE] } },
-      { ...state.players[1], active: { ...inst(CID.goldeen), damage: 0, hp: 60, energyAttached: [] } },
+      { ...state.players[0], active: { ...inst(CID.cinccinoEx), energyAttached: [fireE] } },
+      { ...state.players[1], active: { ...defender, damage: 0 } },
     ],
   };
-  test('T3-3: 1 attached燃火 → 40 + 1×40 = 80 damage', () => {
+  test('T3-2: 1 attached燃火 → 40 damage', () => {
     let next = applyAction(state, { type: 'ATTACK', attackIndex: atkIdx }, pool);
     const opp = next.players[1].active;
-    assert.ok(opp !== null, 'opponent active should still exist (not KO)');
-    if (opp) assert.equal(opp.damage, 80, `expected 80 damage (40+40), got ${opp.damage}`);
+    assert.ok(opp !== null, 'opponent active should exist');
+    assert.equal(opp.damage, 40, `expected 40 damage (0 + 40×1燃火), got ${opp.damage}`);
   });
 
-  // 2 attached燃火 energies
-  const fireE2 = instE(CID.burnedE);
-  state = {
-    ...state,
+  // 2 attached燃火
+  state = { ...state,
     players: [
-      { ...state.players[0], active: { ...cinccino, energyAttached: [fireE, fireE2] } },
-      { ...state.players[1], active: { ...inst(CID.goldeen), damage: 0, hp: 60, energyAttached: [] } },
+      { ...state.players[0], active: { ...inst(CID.cinccinoEx), energyAttached: [fireE, fireE2] } },
+      { ...state.players[1], active: { ...defender, damage: 0 } },
     ],
   };
-  test('T3-4: 2 attached燃火 → 40 + 2×40 = 120 damage', () => {
+  test('T3-3: 2 attached燃火 → 80 damage', () => {
     let next = applyAction(state, { type: 'ATTACK', attackIndex: atkIdx }, pool);
     const opp = next.players[1].active;
-    assert.ok(opp !== null, 'opponent active should still exist (not KO)');
-    if (opp) assert.equal(opp.damage, 120, `expected 120 damage (40+80), got ${opp.damage}`);
+    assert.ok(opp !== null, `opponent active should exist (defender HP=${defenderHP}, 80 dmg non-lethal)`);
+    assert.equal(opp.damage, 80, `expected 80 damage (0 + 40×2燃火), got ${opp.damage}`);
   });
 }
 
-// ── T4: 炎武王 高溫重壓 ──────────────────────────────────────────────────────
+// ── T4: 炎武王 高溫重壓 ─────────────────────────────────────────────────────
+//  費用 [Fire][Fire][Fire][Colorless] = 3火 + 1無
+//  高溫重壓無附能量效果，純120傷害
+//  getEffectiveHP 用 card.hp（goldeen=50），120 dmg 直接 KO → 改用 HP=180 的怪顎龍(13974)做 defender
 console.log('\n── T4: 炎武王｜高溫重壓 ───────────────────────────────────');
 {
-  // NOTE: 烈火亂舞 不存在於卡池。炎武王 SV11W 13370 的招式是「高溫重壓」[FFF][C] 120
-  // （無附能量效果）。T4 改測「高溫重壓」費用邏輯是否正確。
   const card = pool.get(CID.centiskorch);
   const atkIdx = card.attacks.findIndex(a => a.name === '高溫重壓');
   if (atkIdx === -1) {
-    console.log('  ⚠️  T4: 炎武王 13370 not found, skipping');
+    console.log('  ⚠️  炎武王 13370 not found, skipping');
   } else {
-    const centi = inst(CID.centiskorch, { energyAttached: [instE(CID.fireE), instE(CID.fireE), instE(CID.fireE), instE(CID.colorlessE)] });
-    let state = baseState({
+    const fireE1 = instE(CID.fireE);
+    const fireE2 = instE(CID.fireE);
+    const fireE3 = instE(CID.fireE);
+    const colE = instE(CID.colorlessE);
+    const centi = inst(CID.centiskorch, {
+      energyAttached: [fireE1, fireE2, fireE3, colE],
+    });
+    const DEFENDER = '13974'; // 怪顎龍 HP=180
+    const defender = { ...inst(DEFENDER), damage: 0, energyAttached: [] };
+    const state = baseState({
       players: [
         { ...baseState().players[0], active: centi, hand: [], deck: Array(20).fill(null).map(() => inst(CID.fireE)) },
-        { ...baseState().players[1], active: inst(CID.goldeen) },
+        { ...baseState().players[1], active: defender },
       ],
     });
 
-    test('T4-1: canAffordAttack [F][F][F][C] on 炎武王高溫重壓', () => {
-      const result = canAffordAttack(centi, card.attacks[atkIdx].cost, pool, state, 0, card.attacks[atkIdx].name);
-      assert.equal(result, true, 'should afford [F][F][F][C]');
-    });
-
-    test('T4-2: ATTACK(高溫重壓) should deal 120 damage', () => {
+    test('T4: ATTACK(高溫重壓) should deal 120 damage', () => {
       let next = applyAction(state, { type: 'ATTACK', attackIndex: atkIdx }, pool);
       const opp = next.players[1].active;
-      assert.ok(opp !== null, 'opponent active should still exist (not KO)');
-      if (opp) assert.equal(opp.damage, 120, `expected 120 damage, got ${opp.damage}`);
+      assert.ok(opp !== null, `opponent active should exist (defender HP=180, 120 dmg non-lethal)`);
+      assert.equal(opp.damage, 120, `expected 120 damage, got ${opp?.damage}`);
     });
   }
 }
-
 // ── T5: 對戰圓形競技場 ────────────────────────────────────────────────────────
 console.log('\n── T5: 對戰圓形競技場 ────────────────────────────────────');
 {
