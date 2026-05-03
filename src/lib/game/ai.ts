@@ -35,18 +35,21 @@ export function getAIAction(
   if (state.phase !== 'playing') return null;
 
   // ── 以下動作無論是否輪到我，只要「是我要做的」就要處理 ───────────────
-  // 1a. 我作為防守方，active 被擊倒 → 送新出場（優先於一切）
+  // 1a. 待選擇必須優先解析：engine 在 pendingSelection 存在時只接受 RESOLVE_SELECTION。
+  // v2.335：若 active 同時為 null（例如招式效果/反彈傷害造成自 KO，但招式還有搜牌 pending），
+  //   也必須先完成 pendingSelection，再送新戰鬥寶可夢；否則 AI 會重送 SEND_NEW_ACTIVE 被 engine 拒絕。
+  if (state.pendingSelection) {
+    if (state.pendingSelection.actorIdx === myIdx) return autoResolveSelection(state, pool);
+    return null;
+  }
+
+  // 1b. 我作為防守方，active 被擊倒 → 送新出場
   if (state.players[myIdx].active === null && state.players[myIdx].bench.length > 0) {
     return {
       type: 'SEND_NEW_ACTIVE',
       iid: pickBestActive(state.players[myIdx].bench, pool, state).iid,
       senderIdx: myIdx,
     };
-  }
-
-  // 1b. 我要 resolve 的 pendingSelection（對手用老大的指令等，actor 可能是對手）
-  if (state.pendingSelection && state.pendingSelection.actorIdx === myIdx) {
-    return autoResolveSelection(state, pool);
   }
 
   // ── 以下只在輪到我時處理 ─────────────────────────────────────────────
@@ -56,9 +59,6 @@ export function getAIAction(
   if (state.pendingPrizes > 0) {
     return { type: 'TAKE_PRIZES', count: state.pendingPrizes };
   }
-
-  // 3. 若有對手的 pendingSelection，我什麼都不能做 — 等對手
-  if (state.pendingSelection) return null;
 
   const player = state.players[myIdx];
 

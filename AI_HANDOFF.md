@@ -1,11 +1,50 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+> 最後更新：2026-05-03 (v2.335)
 > 最後更新：2026-05-03 (v2.334)
 > 最後更新：2026-05-03 (v2.333)
 > 最後更新：2026-05-03 (v2.332)
 > 最後更新：2026-05-03 (v2.331)
 > 最後更新：2026-05-03 (v2.329)
 > 最後更新：2026-05-02 (v2.327)
+
+## v2.335 — 修復祭典樂舞 KO 後第 2 次招式 + AI stuck_loop 判定
+
+### 稽核依據
+- `static/cards/SV6.json` / `SV8a.json` 的「祭典樂舞」卡面：
+  - 「若場上有『祭典會場』，則這隻寶可夢可使用持有的招式 2 次。」
+  - 「若對手的戰鬥寶可夢因第 1 次的招式而昏厥了，則在下一隻寶可夢放置後，使用第 2 次的招式。」
+- `PTCG RULES/PTCG_RULES.md` / `.json`：一般規則為「使用招式後即結束本回合」，但卡牌效果優先；昏厥處理為先取獎勵牌，若戰鬥寶可夢昏厥則由該玩家放置下一隻戰鬥寶可夢。
+
+### 根因
+1. v2.149 的祭典樂舞實裝仍有簡化條件：第 1 次招式後只有在 `oppActiveStillThere && noPrizes` 時才設 `festivalDanceUsedThisTurn` 並回到 `main`。
+   - 這與卡面 KO 但仍可在對手送新戰鬥寶可夢後使用第 2 次招式的文字不一致。
+   - 實際症狀：第 1 次招式 KO 對手戰鬥位後，取獎勵牌與對手送新 active 後仍停在 `turnPhase='end'`，無法第 2 次攻擊。
+2. AI stuck_loop 檢測與 AI 行動優先序也有兩個邊界問題：
+   - `getAIAction()` 原先在 `pendingSelection` 存在且自己 active 為 null 時，會先送 `SEND_NEW_ACTIVE`，但 engine 在 pendingSelection 存在時只接受 `RESOLVE_SELECTION`。
+   - 模擬腳本舊的 stuck_loop hash 太粗，只看 action/hand 等摘要，可能把合法連續操作誤判為 stuck。
+
+### 修復
+- `src/lib/game/engine.ts`
+  - 新增 `startFestivalDanceSecondAttackWindow()`：第 1 次招式結算後，只要 attacker 仍是「祭典樂舞」且場上仍有「祭典會場」，就先保留第 2 次招式權（設 `festivalDanceUsedThisTurn[aIdx]=true`）。
+  - 新增 `maybeResumeFestivalDanceSecondAttack()`：在 `RESOLVE_SELECTION` / `TAKE_PRIZES` / `SEND_NEW_ACTIVE` 後，若已無 pendingSelection、pendingPrizes=0、雙方 active 都存在，且祭典條件仍成立，將 `turnPhase` 回到 `main`。
+  - 第 2 次招式後因 flag 已 true，不會再次開第 3 次攻擊；`END_TURN` 既有清 flag 邏輯保留。
+- `src/lib/game/ai.ts`
+  - 將 `pendingSelection` 解析優先於 `SEND_NEW_ACTIVE`，避免 AI 在 engine 只接受 RESOLVE_SELECTION 時重複送新 active 被拒絕。
+- `scripts/sim-ai-battle.mjs` / `scripts/sim-tournament.mjs`
+  - stuck_loop 僅在「applyAction 前後 state 完全相同」且同一拒絕重複時才計數，避免合法狀態變化被誤判。
+- `scripts/test-festival-dance.mjs`
+  - 新增祭典樂舞 regression：
+    1. 非 KO 的第 1 次攻擊立即回到 main。
+    2. KO 對手 active 的第 1 次攻擊，取獎 + 對手送新 active 後回到 main，且第 2 次攻擊後正常進 end。
+
+### 驗證
+- `node scripts/test-festival-dance.mjs`：通過
+- `node scripts/sim-ai-battle.mjs 20`：20/20 正常結束，stuck_no_action=0、stuck_loop=0、exception=0
+- `node scripts/sim-tournament.mjs 1`：1332/1332 完成，總 bug=0；祭典樂舞排名列 bug=0
+- `npm run build`：通過
+
+---
 
 ## v2.334 — 稽核 v2.326+ 後清理 previous-model artifacts
 

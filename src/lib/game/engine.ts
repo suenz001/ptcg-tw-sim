@@ -915,6 +915,75 @@ function addLog(
   };
 }
 
+function hasFestivalDanceActive(state: GameState, idx: 0 | 1, pool: Map<string, Card>): boolean {
+  const active = state.players[idx].active;
+  const card = active ? pool.get(active.cardId) : null;
+  return card?.abilities?.some(a => a.name === '祭典樂舞') ?? false;
+}
+
+function hasFestivalVenue(state: GameState, pool: Map<string, Card>): boolean {
+  const stadium = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
+  return stadium?.name === '祭典會場';
+}
+
+function canResumeFestivalDanceSecondAttack(
+  state: GameState,
+  idx: 0 | 1,
+  pool: Map<string, Card>,
+): boolean {
+  const oppIdx = (1 - idx) as 0 | 1;
+  return state.phase === 'playing'
+    && state.turnPhase === 'end'
+    && !state.pendingSelection
+    && (state.pendingPrizes ?? 0) === 0
+    && state.players[idx].active !== null
+    && state.players[oppIdx].active !== null
+    && hasFestivalDanceActive(state, idx, pool)
+    && hasFestivalVenue(state, pool);
+}
+
+/**
+ * 祭典樂舞：「若場上有『祭典會場』，則這隻寶可夢可使用持有的招式 2 次。
+ * （若對手的戰鬥寶可夢因第 1 次的招式而昏厥，則在下一隻寶可夢放置後，使用第 2 次的招式。）」
+ *
+ * 這裡只負責「第 1 次招式剛結算完」：先預約/消耗本回合的第 2 次招式權。
+ * 若沒有待選擇、待取獎勵、待補戰鬥位，立即回到 main；否則由下方
+ * maybeResumeFestivalDanceSecondAttack() 在 RESOLVE_SELECTION / TAKE_PRIZES /
+ * SEND_NEW_ACTIVE 後續流程完成時回到 main。
+ */
+function startFestivalDanceSecondAttackWindow(
+  state: GameState,
+  idx: 0 | 1,
+  pool: Map<string, Card>,
+): GameState {
+  if (state.phase !== 'playing' || state.turnPhase !== 'end') return state;
+  if (!hasFestivalDanceActive(state, idx, pool)) return state;
+  if (!hasFestivalVenue(state, pool)) return state;
+  if (state.festivalDanceUsedThisTurn?.[idx]) return state;
+
+  const flag: [boolean, boolean] = [...(state.festivalDanceUsedThisTurn ?? [false, false])] as [boolean, boolean];
+  flag[idx] = true;
+  let next: GameState = { ...state, festivalDanceUsedThisTurn: flag };
+
+  if (canResumeFestivalDanceSecondAttack(next, idx, pool)) {
+    next = { ...next, turnPhase: 'main' };
+    return addLog(next, `祭典樂舞：場上有「祭典會場」— 可再使用 1 次招式`, idx);
+  }
+
+  return addLog(next, `祭典樂舞：已保留第 2 次招式，待獎勵牌／新戰鬥寶可夢等處理完成後可使用`, idx);
+}
+
+function maybeResumeFestivalDanceSecondAttack(
+  state: GameState,
+  pool: Map<string, Card>,
+): GameState {
+  const idx = state.activePlayerIndex;
+  if (!state.festivalDanceUsedThisTurn?.[idx]) return state;
+  if (!canResumeFestivalDanceSecondAttack(state, idx, pool)) return state;
+  const next = { ...state, turnPhase: 'main' as const };
+  return addLog(next, `祭典樂舞：處理完成，可使用第 2 次招式`, idx);
+}
+
 // ── 遊戲建立 ────────────────────────────────────────────────────────────────
 
 export interface DeckSpec {
@@ -1300,6 +1369,7 @@ function handlePlaying(
     }
     // v2.132：resolver 也可能 leave zombie（damage ≥ HP 卻沒移到棄牌）— sanity sweep 對手側
     newState = sanityKOSweep(newState, actorIdx, pool);
+    newState = maybeResumeFestivalDanceSecondAttack(newState, pool);
     return newState;
   }
 
@@ -3182,24 +3252,9 @@ function handlePlaying(
     //   做為防呆：每次招式結算後掃過全場，把 zombie 寶可夢移到棄牌（給對手獎賞）。
     newState = sanityKOSweep(newState, aIdx, pool);
 
-    // v2.149 祭典樂舞：場上有「祭典會場」+ attacker 有「祭典樂舞」特性 + 還沒用過 + 未 KO 對手 active
-    //   → turnPhase 維持 'main'，讓玩家可使用第 2 次招式。
-    //   簡化：若第 1 次招式 KO 對手戰鬥位（或 pendingPrizes > 0），不啟動 — KO 後流程複雜暫不支援。
-    if (newState.phase === 'playing' && newState.turnPhase === 'end') {
-      const stadiumCardF = newState.activeStadium ? pool.get(newState.activeStadium.cardId) : null;
-      const atkActiveF = newState.players[aIdx].active;
-      const atkCardF = atkActiveF ? pool.get(atkActiveF.cardId) : null;
-      const hasDance = atkCardF?.abilities?.some(a => a.name === '祭典樂舞') ?? false;
-      const danceUsed = newState.festivalDanceUsedThisTurn?.[aIdx] ?? false;
-      const oppActiveStillThere = newState.players[dIdx].active !== null;
-      const noPrizes = (newState.pendingPrizes ?? 0) === 0;
-      if (hasDance && stadiumCardF?.name === '祭典會場' && !danceUsed && oppActiveStillThere && noPrizes) {
-        const flag: [boolean, boolean] = [...(newState.festivalDanceUsedThisTurn ?? [false, false])] as [boolean, boolean];
-        flag[aIdx] = true;
-        newState = { ...newState, turnPhase: 'main', festivalDanceUsedThisTurn: flag };
-        newState = addLog(newState, `祭典樂舞：場上有「祭典會場」— 可再使用 1 次招式`, aIdx);
-      }
-    }
+    // v2.335：祭典樂舞完整 state-machine：第 1 次招式即使 KO 對手戰鬥位，也要先保留
+    // 第 2 次招式權；待獎勵牌與對手新戰鬥寶可夢處理完成後，再回到 main 使用第 2 次招式。
+    newState = startFestivalDanceSecondAttackWindow(newState, aIdx, pool);
 
     return newState;
   }
@@ -3230,7 +3285,7 @@ function handlePlaying(
       };
     }
 
-    return newState;
+    return maybeResumeFestivalDanceSecondAttack(newState, pool);
   }
 
   // ── 對手送出新的出場寶可夢（被擊倒後） ──────────────────────────────────
@@ -3274,7 +3329,7 @@ function handlePlaying(
     }
 
     // 勝利條件：對手無法送出寶可夢（在送出前就要先檢查，這裡是送出後）
-    return newState;
+    return maybeResumeFestivalDanceSecondAttack(newState, pool);
   }
 
   // ── 結束回合 ──────────────────────────────────────────────────────────────

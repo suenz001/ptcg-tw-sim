@@ -61,7 +61,7 @@ function simulateGame(d1, d2) {
   let state = createGame({ name: d1.name, entries: d1.entries },
                          { name: d2.name, entries: d2.entries }, pool);
   let iter = 0;
-  let lastHash = '';
+  let lastRejectHash = '';
   let stuckCount = 0;
 
   while (state.phase !== 'game-over' && iter < MAX_TURNS_PER_GAME * 20) {
@@ -83,17 +83,23 @@ function simulateGame(d1, d2) {
     const action = getAIAction(state, pool, actorIdx);
     if (!action) return { outcome: 'stuck_no_action', iter };
 
-    const hash = JSON.stringify({ p: state.phase, t: state.turnPhase, tn: state.turn,
-      a: state.activePlayerIndex, ha: state.players[0].hand.length,
-      hb: state.players[1].hand.length, act: action.type });
-    if (hash === lastHash) {
-      stuckCount++;
-      if (stuckCount > 30) return { outcome: 'stuck_loop', iter, action };
-    } else stuckCount = 0;
-    lastHash = hash;
-
+    const beforeFull = JSON.stringify(state);
     try {
-      state = applyAction(state, action, pool);
+      const nextState = applyAction(state, action, pool);
+      const afterFull = JSON.stringify(nextState);
+      // 只在 action 被 engine 拒絕（state 完全沒變）且同一拒絕重複時才判 stuck_loop。
+      // 舊版只看 action.type / hand length，會把多次合法 SEND_NEW_ACTIVE 誤判成 stuck。
+      if (afterFull === beforeFull) {
+        const rejectHash = JSON.stringify({ before: beforeFull, action });
+        if (rejectHash === lastRejectHash) stuckCount++;
+        else stuckCount = 1;
+        lastRejectHash = rejectHash;
+        if (stuckCount > 30) return { outcome: 'stuck_loop', iter, action };
+      } else {
+        stuckCount = 0;
+        lastRejectHash = '';
+      }
+      state = nextState;
     } catch (e) {
       return { outcome: 'exception', iter, error: e.message };
     }

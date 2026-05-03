@@ -161,9 +161,11 @@ regA('貓頭夜鷹', 0, (st, idx, pool, cardInst) => {
 //
 // 實作策略（不再簡化）：
 //   引擎 ATTACK handler 末尾，若 attacker 有 '祭典樂舞' 特性 + 場上有 '祭典會場'
-//   + 還沒做過第 2 次 → 將 turnPhase 保持 'main' 並設 flag festivalDanceUsed[aIdx]=true
-//   讓玩家能再打一次同隻寶可夢。第 2 次打完正常切 'end'。END_TURN 重置 flag。
-//   詳細處理見 engine.ts ATTACK handler 末尾 + types.ts。
+//   + 還沒做過第 2 次 → 先設 flag festivalDanceUsed[aIdx]=true。
+//   若沒有待選擇/待取獎/待補戰鬥位，立即回到 main；若第 1 次 KO 對手戰鬥位，
+//   則在 TAKE_PRIZES + SEND_NEW_ACTIVE 後回到 main，讓玩家使用第 2 次招式。
+//   第 2 次打完正常切 'end'。END_TURN 重置 flag。
+//   詳細處理見 engine.ts startFestivalDanceSecondAttackWindow / maybeResumeFestivalDanceSecondAttack。
 //
 // 此檔不註冊 regA — 純被動，attack flow 直接讀 ability。
 

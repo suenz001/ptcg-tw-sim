@@ -23,5 +23,6 @@ static/cards/*.tmp
 # Sim / build temp files
 .tmp-sim-*
 .tmp-H-*
+.tmp-festival-test-*
 .sim-test.mjs
 .tmp-sim-bundle.mjs

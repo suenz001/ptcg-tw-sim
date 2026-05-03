@@ -468,9 +468,11 @@ export interface GameState {
    */
   stadiumPlayedThisTurn?: [boolean, boolean];
   /**
-   * v2.149 祭典樂舞：本回合是否已用過「祭典會場 + 祭典樂舞 寶可夢」的第 2 次招式 bonus [P1, P2]。
-   * 條件：場上有「祭典會場」+ attacker 有「祭典樂舞」特性 + 第 1 次招式未 KO 對手戰鬥位
-   * → 第 1 次招式打完，turnPhase 維持 'main'，玩家可再 attack 一次。打完第 2 次後正常切 'end'。
+   * v2.149/v2.335 祭典樂舞：本回合是否已保留/使用「祭典會場 + 祭典樂舞 寶可夢」的第 2 次招式 bonus [P1, P2]。
+   * 條件：場上有「祭典會場」+ attacker 有「祭典樂舞」特性。
+   * → 第 1 次招式打完先設 flag；若無待選擇/待取獎/待補戰鬥位，turnPhase 維持 'main'。
+   * → 若第 1 次招式 KO 對手戰鬥位，待 TAKE_PRIZES + SEND_NEW_ACTIVE 後回到 'main' 使用第 2 次招式。
+   * 打完第 2 次後正常切 'end'。
    * END_TURN 重置 activePlayerIndex 側為 false（避免跨回合殘留）。
    */
   festivalDanceUsedThisTurn?: [boolean, boolean];
