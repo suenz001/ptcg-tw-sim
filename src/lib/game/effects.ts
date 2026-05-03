@@ -27,6 +27,7 @@ import {
   SPECIAL_ENERGY_ATTACH,
   SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD,
   SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED,
+  OPP_ENERGY_ATTACH_PASSIVE,
   // Register functions
   reg, regR, regG,
   regPre, regPost, regA,
@@ -54,7 +55,7 @@ export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE, ge
 // v2.133 PASSIVE_PREVENT_KO 在本檔下方定義，匯出供 engine 使用
 // （直接在此先 forward-ref：宣告處放到 v2.133 區塊，之後會由 engine import）
 export { BENCH_PLACE_TRIGGERS };
-export { SPECIAL_ENERGY_ATTACH, SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD, SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED };
+export { SPECIAL_ENERGY_ATTACH, SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD, SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED, OPP_ENERGY_ATTACH_PASSIVE };
 export type { ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec };
 
 // ── 道具（Pokemon Tool）模組 — v2.09 從本檔抽離 ────────────────────────────
@@ -12486,3 +12487,346 @@ export function promptPlayAbilities(
   }
   return state;
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 被動特性鉤子（OPP_ENERGY_ATTACH_PASSIVE）
+// 觸發時機：engine.ts ATTACH_ENERGY handler，對手能量附著完成後
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 耿鬼ex SV5K 047/071｜侵蝕詛咒
+// 卡面效果：「只要這隻寶可夢在場上，每次對手從手牌將能量卡附於寶可夢身上時，
+//            在那隻寶可夢身上放置2個傷害指示物。」
+OPP_ENERGY_ATTACH_PASSIVE.set('侵蝕詛咒', (state, gIdx, _oppIdx, targetIid, pool) => {
+  const player = state.players[gIdx];
+  const isActive = player.active?.iid === targetIid;
+  const benchIdx = player.bench.findIndex(c => c.iid === targetIid);
+
+  let updatedActive = player.active;
+  let updatedBench = player.bench;
+
+  if (isActive && player.active) {
+    updatedActive = { ...player.active, damage: player.active.damage + 20 };
+  } else if (benchIdx >= 0) {
+    updatedBench = player.bench.map((c, i) =>
+      i === benchIdx ? { ...c, damage: c.damage + 20 } : c
+    );
+  } else {
+    return state; // target not found
+  }
+
+  const updatedPlayers = [...state.players] as [PlayerState, PlayerState];
+  updatedPlayers[gIdx] = { ...player, active: updatedActive, bench: updatedBench };
+
+  const targetInst = isActive ? updatedActive! : updatedBench[benchIdx];
+  const targetName = pool.get(targetInst.cardId)?.name ?? '?';
+
+  return addLog(
+    { ...state, players: updatedPlayers },
+    `侵蝕詛咒：對手${targetName}被放置2個傷害指示物`,
+    gIdx,
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 主動特性（regA）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 幸福蛋ex SV6 085/101｜幸福切換
+// 卡面效果：「在自己的回合時可使用1次。選擇1個自己的場上寶可夢身上附加的基本能量，
+//            改附於自己的其他寶可夢身上。」
+// 實作：複用現有 energy-switch 機制（energy-switch-src → energy-switch-pick-energy → energy-switch-dst）
+regA('幸福蛋ex', 0, (st, idx, pool) => {
+  const p = st.players[idx];
+  // 找有基本能量的自己寶可夢（排除沒有能量的）
+  const sources = [...(p.active ? [p.active] : []), ...p.bench].filter(poke =>
+    poke.energyAttached.some(e => {
+      const card = pool.get(e.cardId);
+      return card?.supertype === 'Energy' && card.subtype === 'Basic';
+    })
+  );
+  if (sources.length === 0) {
+    return addLog(st, '幸福切換：沒有寶可夢身上有基本能量', idx);
+  }
+  return withPending(st, {
+    type: 'heal-target',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'happy-switch-src',
+    params: {
+      validIids: sources.map(c => c.iid),
+      titleOverride: '幸福切換：選擇要移出基本能量的寶可夢',
+    },
+  });
+});
+regR('happy-switch-src', (st, idx, iids, _params, pool) => {
+  // 複用 energy-switch-src 邏輯（只是 effectKey 不同）
+  const srcIid = iids[0];
+  if (!srcIid) return st;
+  const p = st.players[idx];
+  const srcPoke = p.active?.iid === srcIid ? p.active : p.bench.find(c => c.iid === srcIid);
+  if (!srcPoke) return st;
+  const basicEnergies = srcPoke.energyAttached.filter(e => {
+    const card = pool.get(e.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic';
+  });
+  if (basicEnergies.length === 0) return st;
+  const srcName = pool.get(srcPoke.cardId)?.name ?? '?';
+  if (basicEnergies.length > 1) {
+    return withPending(st, {
+      type: 'modal-choice',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'happy-switch-pick',
+      params: {
+        label: '幸福切換',
+        srcIid,
+        energyIids: basicEnergies.map(e => e.iid),
+        options: basicEnergies.map((e, i) => ({
+          id: `${i}`,
+          text: `${i + 1}. ${pool.get(e.cardId)?.name ?? '?'}`,
+        })),
+      },
+    });
+  }
+  // 1 張 fast path
+  return resolveEnergySwitchAfterPick(st, idx, srcIid, basicEnergies[0], pool);
+});
+regR('happy-switch-pick', (st, idx, iids, params, pool) => {
+  const choiceIdx = parseInt(iids[0] ?? '0', 10);
+  const energyIids = (params?.energyIids as string[] | undefined) ?? [];
+  const srcIid = (params?.srcIid as string | undefined) ?? '';
+  const energyIid = energyIids[choiceIdx];
+  if (!srcIid || !energyIid) return st;
+  const p = st.players[idx];
+  const srcPoke = p.active?.iid === srcIid ? p.active : p.bench.find(c => c.iid === srcIid);
+  if (!srcPoke) return st;
+  const energyInst = srcPoke.energyAttached.find(e => e.iid === energyIid);
+  if (!energyInst) return st;
+  return resolveEnergySwitchAfterPick(st, idx, srcIid, energyInst, pool);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 招式後處理（regPost）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 倫琴貓ex SV6 041/101｜突刺目光
+// 費用：[無][無] / 傷害：120
+// 效果：「查看對手的手牌，從其中選擇1張卡，將其丟棄。」
+regPre('倫琴貓ex|突刺目光', (state, _aIdx, _pool) => ({ state, damage: 120 }));
+regPost('倫琴貓ex|突刺目光', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const oppHand = state.players[dIdx].hand;
+  if (oppHand.length === 0) {
+    return addLog(state, '突刺目光：對手手牌為空', aIdx);
+  }
+  // 先讓雙方都看到對手手牌內容（公開 log）
+  const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = addLog(state, `突刺目光：查看對手手牌（${oppHand.length} 張）— ${handNames}`, aIdx);
+  // 讓攻擊方玩家選擇要丟棄的卡
+  return withPending(s, {
+    type: 'modal-choice',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'electro-shot-discard',
+    params: {
+      label: '突刺目光：選擇要丟棄的卡',
+      options: oppHand.map((c, i) => ({
+        id: c.iid,
+        text: `${i + 1}. ${pool.get(c.cardId)?.name ?? '?'}`,
+      })),
+    },
+  });
+});
+regR('electro-shot-discard', (st, idx, iids, params, pool) => {
+  // idx = 攻擊方玩家
+  const dIdx = (1 - idx) as 0 | 1;
+  const selectedIid = iids[0];
+  if (!selectedIid) return st;
+  const oppPlayer = st.players[dIdx];
+  const cardInst = oppPlayer.hand.find(c => c.iid === selectedIid);
+  if (!cardInst) return st;
+  const cardName = pool.get(cardInst.cardId)?.name ?? '?';
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[dIdx] = {
+    ...oppPlayer,
+    hand: oppPlayer.hand.filter(c => c.iid !== selectedIid),
+    discard: [...oppPlayer.discard, cardInst],
+  };
+  return addLog({ ...st, players }, `突刺目光：將對手 ${cardName} 丟棄`, idx);
+});
+
+// 耿鬼ex SV5K 047/071｜戲法舞步
+// 費用：[惡][惡] / 傷害：160
+// 效果：「若希望，選擇1個對手的戰鬥寶可夢身上附加的能量，改附於對手的備戰寶可夢身上。」
+regPre('耿鬼ex|戲法舞步', (state, _aIdx, _pool) => ({ state, damage: 160 }));
+regPost('耿鬼ex|戲法舞步', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const opp = state.players[dIdx];
+  // 對手active上要有能量才能移
+  const activeEnergies = opp.active?.energyAttached ?? [];
+  if (activeEnergies.length === 0) {
+    return addLog(state, '戲法舞步：對手戰鬥寶可夢沒有附能量', aIdx);
+  }
+  if (opp.bench.length === 0) {
+    return addLog(state, '戲法舞步：對手備戰區沒有寶可夢，無法移動能量', aIdx);
+  }
+  // 讓玩家選擇要移動哪張能量（用 modal-choice）
+  return withPending(state, {
+    type: 'modal-choice',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'trick-step-energy',
+    params: {
+      label: '戲法舞步：選擇要移動的能量',
+      options: activeEnergies.map((e, i) => ({
+        id: e.iid,
+        text: `${i + 1}. ${pool.get(e.cardId)?.name ?? '?'}`,
+      })),
+    },
+  });
+});
+regR('trick-step-energy', (st, idx, iids, pool) => {
+  // idx = 攻擊方（發動方）
+  const dIdx = (1 - idx) as 0 | 1;
+  const energyIid = iids[0]; // 能量 iid 直接就是 id
+  if (!energyIid) return st;
+  const opp = st.players[dIdx];
+  const energyInst = opp.active?.energyAttached.find(e => e.iid === energyIid);
+  if (!energyInst) return st;
+  const oppActiveName = pool.get(opp.active!.cardId)?.name ?? '?';
+  const eName = pool.get(energyInst.cardId)?.name ?? '?';
+
+  // 1. 從 active 移除能量
+  const newActive = {
+    ...opp.active!,
+    energyAttached: opp.active!.energyAttached.filter(e => e.iid !== energyIid),
+  };
+  // 2. 讓玩家選目的地 bench Pokemon（用 bench-choose）
+  // 注意：newActive 的 energyAttached 已移除，benchPokemon 不變
+  let s = addLog({ ...st, players: [...st.players] as [PlayerState, PlayerState] },
+    `戲法舞步：從 ${oppActiveName} 取下 ${eName}，選擇目的地備戰寶可夢`, idx);
+  s.players[dIdx] = { ...opp, active: newActive };
+  return withPending(s, {
+    type: 'bench-choose',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'trick-step-dst',
+    params: {
+      validIids: opp.bench.map(c => c.iid),
+      titleOverride: '戲法舞步：選擇能量要移至的備戰寶可夢',
+      energyIid, // 傳遞到下一個 resolver
+    },
+  });
+});
+regR('trick-step-dst', (st, idx, iids, params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const benchTargetIid = iids[0];
+  const energyIid = (params?.energyIid as string | undefined) ?? '';
+  if (!benchTargetIid || !energyIid) return st;
+  const opp = st.players[dIdx];
+  const benchTarget = opp.bench.find(c => c.iid === benchTargetIid);
+  if (!benchTarget) return st;
+  // 能量在 newActive 的 energyAttached 中（已被 step1 移除），
+  // 需要從 newActive 取得 energyInst
+  const energyInst = opp.active?.energyAttached.find(e => e.iid === energyIid);
+  if (!energyInst) return st;
+  const eName = pool.get(energyInst.cardId)?.name ?? '?';
+  const targetName = pool.get(benchTarget.cardId)?.name ?? '?';
+
+  // 1. 從 active 移除 energyInst（再次確認）
+  const newActive = {
+    ...opp.active!,
+    energyAttached: opp.active!.energyAttached.filter(e => e.iid !== energyIid),
+  };
+  // 2. 將能量附加到 bench target
+  const newBench = opp.bench.map(c =>
+    c.iid === benchTargetIid
+      ? { ...c, energyAttached: [...c.energyAttached, energyInst] }
+      : c
+  );
+
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...opp, active: newActive, bench: newBench };
+  return addLog({ ...st, players },
+    `戲法舞步：${eName} 從戰鬥場移至 ${targetName} 的備戰`, idx);
+});
+
+// 來悲粗茶ex SV5a 009/066｜熬返
+// 費用：[無] / 無直接傷害
+// 效果：「在給對手看過自己的棄牌區的所有『基本【草】能量』卡後，
+//        將與其張數×2個的相同數量的傷害指示物，放置於對手的1隻寶可夢身上。
+//        然後，將給對手看過的能量卡放回牌庫並重洗。」
+regPost('來悲粗茶ex|熬返', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  // 找出棄牌區所有基本草能量
+  const grassEnergies = p.discard.filter(e => {
+    const card = pool.get(e.cardId);
+    if (!card) return false;
+    if (card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+    // 草屬性：pokemonType === 'Grass' 或 name 含【草】
+    return card.pokemonType === 'Grass' || /【草】/.test(card.name);
+  });
+  if (grassEnergies.length === 0) {
+    return addLog(state, '熬返：棄牌區沒有基本草能量', aIdx);
+  }
+  const names = grassEnergies.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  // 先記公開 log（雙方都看到有草能量，但不揭露準確張數細節）
+  let s = addLog(state, `熬返：展示棄牌區草能量（${grassEnergies.length} 張）— ${names}`, aIdx);
+  // 讓對手確認（給對手看過）— 這裡用 addPrivateLog 讓對手也看到
+  const dIdx = (1 - aIdx) as 0 | 1;
+  s = addPrivateLog(s, `對手來悲粗茶ex的熬返展示了：${names}`, `熬返：展示${grassEnergies.length}張基本草能量`, dIdx);
+  // 讓攻擊方選擇對手哪隻寶可夢
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'brew-back-target',
+    params: {
+      includeActive: true,
+      grassCount: grassEnergies.length,
+      grassEnergyIids: grassEnergies.map(e => e.iid),
+    },
+  });
+});
+regR('brew-back-target', (st, idx, iids, params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const targetIid = iids[0];
+  const grassCount = (params?.grassCount as number) ?? 0;
+  const grassEnergyIids = (params?.grassEnergyIids as string[] | undefined) ?? [];
+  if (!targetIid || grassCount === 0) return st;
+
+  const dmg = grassCount * 20; // 每張草能量 = 2 個傷害指示物 = 20 傷害
+  const opp = st.players[dIdx];
+  const isActive = opp.active?.iid === targetIid;
+  const benchIdx = opp.bench.findIndex(c => c.iid === targetIid);
+
+  let updatedActive = opp.active;
+  let updatedBench = opp.bench;
+  let targetName = '?';
+
+  if (isActive && opp.active) {
+    updatedActive = { ...opp.active, damage: opp.active.damage + dmg };
+    targetName = pool.get(opp.active.cardId)?.name ?? '?';
+  } else if (benchIdx >= 0) {
+    updatedBench = opp.bench.map((c, i) =>
+      i === benchIdx ? { ...c, damage: c.damage + dmg } : c
+    );
+    targetName = pool.get(opp.bench[benchIdx].cardId)?.name ?? '?';
+  } else {
+    return st;
+  }
+
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...opp, active: updatedActive, bench: updatedBench };
+
+  // 將那些草能量從棄牌區移到牌庫頂並重洗
+  const p = st.players[idx];
+  const toReturn = p.discard.filter(e => grassEnergyIids.includes(e.iid));
+  const remainingDiscard = p.discard.filter(e => !grassEnergyIids.includes(e.iid));
+  const newDeck = shuffle([...p.deck, ...toReturn]);
+  players[idx] = { ...p, discard: remainingDiscard, deck: newDeck };
+
+  let s = addLog({ ...st, players },
+    `熬返：${targetName} 受到 ${dmg} 傷害（${grassCount} 張草能量 × 2），${grassCount} 張草能量回牌庫`, idx);
+  return addPrivateLog(s, `你的來悲粗茶熬返將 ${toReturn.map(e => pool.get(e.cardId)?.name ?? '?').join('、')} 回牌庫`, '', dIdx);
+});

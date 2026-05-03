@@ -13,6 +13,7 @@ import type {
   GameState, GameAction, CardInstance,
   PlayerState, LogEntry, TurnPhase, GamePhase
 } from './types';
+import { RULE_BOX_SUBTYPES } from './types';
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
   PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS,
@@ -25,6 +26,7 @@ import {
   SPECIAL_ENERGY_ATTACH,
   SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD,
   SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED,
+  OPP_ENERGY_ATTACH_PASSIVE,
   clearActiveEffects,
   clearFestivalVenueProtectedStatuses,
   hasFairyZoneField,
@@ -38,6 +40,37 @@ import {
   ON_PLAY_FROM_HAND_ABILITIES,
   ON_EVOLVE_FROM_HAND_ABILITIES,
 } from './effects';
+
+// v2.341：鐵荊棘ex SV5a 033/066｜初始化
+// 「只要這隻寶可夢在戰鬥場上，雙方場上『擁有規則的寶可夢』（『未來』寶可夢除外）的特性全部消除。」
+// 實作：使用 Rule Box 檢查（isRuleBox）遮蔽任意特性的發動。
+// 觸發時機：在 engine.ts USE_ABILITY handler 的 ability 後檢查。
+function isInitializeBlocking(
+  state: GameState,
+  targetPoke: CardInstance,
+  pool: Map<string, Card>
+): boolean {
+  // 目標必須是「擁有規則的寶可夢」
+  const targetCard = pool.get(targetPoke.cardId);
+  if (!targetCard) return false;
+  const isRuleBox = (targetCard.subtype && RULE_BOX_SUBTYPES.has(targetCard.subtype))
+    || (targetCard.tags ?? []).some(t => RULE_BOX_SUBTYPES.has(t));
+  if (!isRuleBox) return false;
+
+  // 「未來」寶可夢不受影響
+  const isFuture = (targetCard.tags ?? []).includes('未來');
+  if (isFuture) return false;
+
+  // 檢查任一方場上是否有 鐵荊棘ex 在 active
+  for (const player of state.players) {
+    if (!player.active) continue;
+    const activeCard = pool.get(player.active.cardId);
+    if (!activeCard?.abilities) continue;
+    const hasInit = activeCard.abilities.some(ab => ab.name === '初始化');
+    if (hasInit) return true;
+  }
+  return false;
+}
 
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
 // 當場上活動場地卡為 JAMMING_TOWER_STADIUMS 所列競技場卡時，雙方所有【道具】不發動效果。
@@ -2211,6 +2244,11 @@ function handlePlaying(
     // 火箭隊的監視塔：場上此 Stadium 時，【無】屬寶可夢的特性全部消除
     if (isColorlessAbilityBlocked(state, pokeCard, pool)) return state;
 
+    // 初始化（鐵荊棘ex）：遮蔽 rule box 寶可夢的特性
+    if (isInitializeBlocking(state, targetPoke, pool)) {
+      return addLog(state, `${pokeCard!.name} 的特性「${ability.name}」被初始化消除`, aIdx);
+    }
+
     // 可達鴨｜濕氣：自身 KO 類特性被消除
     if (SELF_KO_ABILITY_NAMES.has(ability.name) && isSelfKOEffectBlocked(state, pool)) {
       return addLog(state, `${pokeCard!.name} 的特性「${ability.name}」被可達鴨的濕氣消除`, aIdx);
@@ -2343,6 +2381,25 @@ function handlePlaying(
     const attachHook = SPECIAL_ENERGY_ATTACH.get(energyName);
     if (attachHook) {
       afterAttach = attachHook(afterAttach, aIdx, target.iid, pool);
+    }
+    // v2.341：對手附能被動特性鉤子（例：耿鬼ex｜侵蝕詛咒）
+    // 遍歷對手（dIdx）場上所有寶可夢，檢查被動特性是否在 OPP_ENERGY_ATTACH_PASSIVE map 中
+    const opp = players[1 - aIdx];
+    const oppField: CardInstance[] = [
+      ...(opp.active ? [opp.active] : []),
+      ...opp.bench,
+    ];
+    const processedOppAb = new Set<string>();
+    for (const inst of oppField) {
+      const card = pool.get(inst.cardId);
+      if (!card?.abilities) continue;
+      for (const ab of card.abilities) {
+        if (processedOppAb.has(ab.name)) continue;
+        const fn = OPP_ENERGY_ATTACH_PASSIVE.get(ab.name);
+        if (!fn) continue;
+        processedOppAb.add(ab.name);
+        afterAttach = fn(afterAttach, (1 - aIdx) as 0 | 1, aIdx as 0 | 1, target.iid, pool);
+      }
     }
     return clearFestivalVenueProtectedStatuses(afterAttach, pool);
   }

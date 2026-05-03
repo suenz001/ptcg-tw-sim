@@ -268,6 +268,25 @@ export const SPECIAL_ENERGY_ON_DAMAGED = new Map<string, (
   state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, damage: number, pool: Map<string, Card>,
 ) => GameState>();
 
+/**
+ * v2.341：被動特性——對手附能時自動觸發。
+ *
+ * 鍵：寶可夢卡名；值：fn(state, gIdx, oppIdx, targetIid, pool)
+ *   - gIdx    ：擁有此特性的寶可夢所屬玩家 index（發動方）
+ *   - oppIdx  ：執行附能的對手玩家 index
+ *   - targetIid：被附能的寶可夢 instance iid（發動方的寶可夢）
+ *   回傳：更新後的 GameState
+ *
+ * 觸發點：engine.ts ATTACH_ENERGY handler，能量附著完成後。
+ */
+export const OPP_ENERGY_ATTACH_PASSIVE = new Map<string, (
+  state: GameState,
+  gIdx: 0 | 1,
+  oppIdx: 0 | 1,
+  targetIid: string,
+  pool: Map<string, Card>,
+) => GameState>();
+
 export function canPlayTrainer(
   cardName: string,
   state: GameState,
