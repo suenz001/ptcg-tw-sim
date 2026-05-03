@@ -291,6 +291,8 @@ import './effects/cards/slowking_lucario_deck';
 import './effects/cards/mega_decks';
 // v2.112：N的索羅亞克 / 火焰雞多龍 / 夠讚狗 / 顫弦蠑螈 / 蒼炎刃鬼 / 超級甲賀忍蛙 六組預組卡效果
 import './effects/cards/six_decks';
+// v2.340：M2/M2a 超級快龍ex / 花舞鳥ex / 超級噴火龍Xex / 超級噴火駝ex focused batch
+import './effects/cards/m2_dragon_charizard_batch';
 // v2.135：阿響的火爆獸 / 火箭隊的烏鴉頭頭 兩組預組卡效果（在本檔末尾 inline 註冊）
 // v2.149：超級長耳兔 / 蜜集大蛇 / 火伊布 / 祭典樂舞 四組預組卡效果（熟成充能 / 衝衝鼓 / 搜尋寶石 / 祭典樂舞 註解）
 import './effects/cards/lopunny_serperior_flareon_festival';

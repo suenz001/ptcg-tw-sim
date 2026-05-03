@@ -203,6 +203,7 @@ export const SHARED_ONCE_PER_TURN_ABILITY_NAMES = new Set<string>([
  */
 export const UNLIMITED_USE_ABILITY_NAMES = new Set<string>([
   '烈火亂舞', // 炎武王 — 在自己的回合時，可不限次數使用：從手牌選拉1張「基本【火】能量」卡附於自己的寶可夢身上。
+  '激動渦輪', // 花舞鳥ex — 場上有【火】超級進化ex 時，可不限次數使用：手牌基本【火】能量附於備戰【火】寶可夢。
 ]);
 
 // v2.94 的 isPassiveOnlyAttackEntry guard 於 v2.95 移除。
@@ -4747,6 +4748,37 @@ export function getUsableAbilities(
       if (ab.name === '交易') {
         if (player.hand.length === 0) return;
         if (player.deck.length === 0) return;
+      }
+      // v2.340 哈克龍｜進化指引：持有者身上需有能量，牌庫需有進化寶可夢。
+      if (ab.name === '進化指引') {
+        if (pk.energyAttached.length === 0) return;
+        const hasEvolution = player.deck.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Pokemon' && (
+            cc.stage === 'Stage1' || cc.stage === 'Stage2' ||
+            cc.subtype === 'Stage1' || cc.subtype === 'Stage2'
+          );
+        });
+        if (!hasEvolution) return;
+      }
+      // v2.340 超級快龍ex｜天空搬運：需有備戰可互換。
+      if (ab.name === '天空搬運' && player.bench.length === 0) return;
+      // v2.340 花舞鳥ex｜激動渦輪：場上有【火】超級進化ex + 手牌火能 + 備戰火寶可夢。
+      if (ab.name === '激動渦輪') {
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        const hasFireMegaEx = field.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.name?.startsWith('超級') && cc?.name?.endsWith('ex') && cc?.pokemonType === 'Fire';
+        });
+        if (!hasFireMegaEx) return;
+        const hasFireEnergy = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' &&
+            (cc.pokemonType === 'Fire' || cc.name.includes('【火】'));
+        });
+        if (!hasFireEnergy) return;
+        const hasFireBench = player.bench.some(c => pool.get(c.cardId)?.pokemonType === 'Fire');
+        if (!hasFireBench) return;
       }
       // 可達鴨｜濕氣：自身 KO 類特性被消除（不列入可用清單）
       if (SELF_KO_ABILITY_NAMES.has(ab.name) && isSelfKOEffectBlocked(state, pool)) return;

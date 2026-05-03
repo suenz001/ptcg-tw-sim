@@ -1,5 +1,6 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+> 最後更新：2026-05-03 (v2.340)
 > 最後更新：2026-05-03 (v2.339)
 > 最後更新：2026-05-03 (v2.337)
 > 最後更新：2026-05-03 (v2.335)
@@ -9,6 +10,37 @@
 > 最後更新：2026-05-03 (v2.331)
 > 最後更新：2026-05-03 (v2.329)
 > 最後更新：2026-05-02 (v2.327)
+
+## v2.340 — M2/M2a 超級快龍ex + 花舞鳥ex + 超級噴火龍Xex focused batch
+
+### 修改內容
+- `src/lib/game/effects/cards/m2_dragon_charizard_batch.ts`（新增）
+  - `超級快龍ex｜天空搬運`：主動特性，選 1 隻備戰與戰鬥寶可夢互換。
+  - `超級快龍ex｜龍之滑翔`：330 傷害，選擇/丟棄 2 個自身能量；headless fallback 丟最後 2 個。
+  - `哈克龍｜進化指引`：身上有能量時，牌庫搜 1 張進化寶可夢加手。
+  - `花舞鳥ex｜激動渦輪`：場上有【火】超級進化ex 時，不限次數，手牌基本【火】能量附於備戰【火】寶可夢。
+  - `超級噴火駝ex｜炙燒`：對手戰鬥寶可夢灼傷時 80+160。
+  - `超級噴火龍Xex｜烈獄狂火X`：丟棄自己場上任意數量【火】能量，造成張數×90。
+  - `火恐龍 SVQL｜大字爆炎`：依使用者指定補上 G-reg 這張的丟 1 自身能量效果。
+- `src/lib/game/engine.ts`
+  - `激動渦輪` 加入不限次數主動特性白名單。
+  - `getUsableAbilities` 補 `進化指引` / `天空搬運` / `激動渦輪` 顯示 gate。
+- `src/lib/game/effects.ts`
+  - 匯入新 batch 檔。
+- `scripts/test-m2-dragon-charizard-batch.mjs`
+  - 新增 7 個 focused regression tests。
+
+### 已確認現況
+- `迷你龍 M2a`：只有純傷害 `頭錘`，不需特殊 hook。
+- `小火龍 M2 011/080`：`一身輕` 已由既有 `ABILITY_RETREAT_MOD` 實裝；`火種` 純傷害不需 hook。
+- `火恐龍 M2`：`吐火` 純傷害不需 hook。
+- `超級噴火駝ex｜火山流星`：既有 `registerSelfDiscardMultiply(... max=2 ...)` 已實裝，本次補的是 `炙燒`。
+
+### 驗證結果
+- `node scripts/test-m2-dragon-charizard-batch.mjs` ✅ 7/7
+- `node scripts/test-cinccino-deck-focused.mjs` ✅ 11/11
+- `node scripts/test-p2-abilities.mjs` ✅
+- `npm run build` ✅（僅既有 Svelte a11y warnings）
 
 ## v2.338 — 小火馬蓄能量實裝 + 力之沙漏改為玩家選擇
 
