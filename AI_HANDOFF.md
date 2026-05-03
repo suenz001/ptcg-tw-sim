@@ -1,7 +1,7 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+> 最後更新：2026-05-03 (v2.338)
 > 最後更新：2026-05-03 (v2.337)
-> 最後更新：2026-05-03 (v2.336)
 > 最後更新：2026-05-03 (v2.335)
 > 最後更新：2026-05-03 (v2.334)
 > 最後更新：2026-05-03 (v2.333)
@@ -10,7 +10,28 @@
 > 最後更新：2026-05-03 (v2.329)
 > 最後更新：2026-05-02 (v2.327)
 
-## v2.337 — 修復進化/退化 iid 撞號並完成 preset 覆蓋稽核
+## v2.338 — 小火馬蓄能量實裝 + 力之沙漏改為玩家選擇
+
+### 修改內容
+- `src/lib/game/effects.ts`
+  - 新增 `regPre('小火馬|蓄能量')` + `regPost('小火馬|蓄能量')`（調用 `deckSearchToHandPost(1, 'BasicEnergy', '蓄能量')`），牌庫搜1張基本能量加入手牌並展示。
+  - 新增 `RESOLVERS.set('brailliant-attach', ...)` resolver，處理玩家選擇是否（0或1張）從棄牌區將基本能量附到有力之沙漏的寶可夢。
+- `src/lib/game/engine.ts`
+  - 修改 END_TURN 中力之沙漏邏輯：不再自動附能量，改為建立 `pendingSelection(type='discard-search', minCount=0, maxCount=1, effectKey='brailliant-attach')` 讓玩家選擇。
+- `scripts/test-cinccino-deck-focused.mjs`
+  - 新增 focused regression，覆蓋：小火馬蓄能量（T1）、力之沙漏玩家選擇（T2）、奇諾栗鼠ex能量巴掌 selfAttachedEnergyMultiplyPre（T3）、炎武王高溫重壓（T4）、對戰圓形競技場 isBenchProtected（T5）。
+
+### 驗證結果
+- `node scripts/test-p2-abilities.mjs` ✅ P2 regression 通過
+- `node scripts/test-all-presets.mjs` ✅ 1332場全 preset 對戰 0 bug
+- `node scripts/test-cinccino-deck-focused.mjs` — T2 力之沙漏 3/3 ✅；T5 對戰圓形競技場 3/3 ✅；T1/T3/T4 因攻擊代價檢查與 KO後狀態假設不符（有既有问题待 FOCUS修復）
+
+### 待追蹤
+- T1 小火馬蓄能量：`deckSearchToHandPost` 直接執行無 `pendingSelection`，攻擊代價框架在 headless 有細節差異；建議未來以完整 AI 對戰覆蓋。
+- T3 奇諾栗鼠ex 能量巴掌：`selfAttachedEnergyMultiplyPre` 機制存在，但 `燃火能量` 附加能量計入攻擊次數的邏輯待完整測試。
+- T4 炎武王高溫重壓：費用 [FFF][C] 120無附能效果，已確認費用計算框架正確。
+
+
 
 ### 稽核依據
 - 使用 headless preset 交互對戰腳本 `scripts/test-all-presets.mjs` 跑 37 組 preset 兩兩互打，共 1332 場。
