@@ -26,6 +26,7 @@ import {
   SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD,
   SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED,
   clearActiveEffects,
+  clearFestivalVenueProtectedStatuses,
   hasFairyZoneField,
   applyBenchPlaceSideEffects,
   getKyuremElectroplasmaEffectiveCost,
@@ -1781,6 +1782,7 @@ function handlePlaying(
         stadiumPlayedThisTurn: newPlayed,
       };
       newState = addLog(newState, `${attacker.name} 打出競技場：${trainerCard.name}！`, aIdx);
+      newState = clearFestivalVenueProtectedStatuses(newState, pool);
       const effectFn = TRAINER_EFFECTS.get(trainerCard.name);
       if (effectFn) return effectFn(newState, aIdx, pool, trainerInst);
       return newState;
@@ -2311,7 +2313,7 @@ function handlePlaying(
     if (attachHook) {
       afterAttach = attachHook(afterAttach, aIdx, target.iid, pool);
     }
-    return afterAttach;
+    return clearFestivalVenueProtectedStatuses(afterAttach, pool);
   }
 
   // ── 宣告招式 ──────────────────────────────────────────────────────────────

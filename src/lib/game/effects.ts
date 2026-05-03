@@ -1546,6 +1546,45 @@ export function checkSpecialEnergyStatusImmune(
   return { immune: false };
 }
 
+/** 祭典會場：身上附有能量卡的寶可夢不會陷入特殊狀態。 */
+export function isFestivalVenueStatusProtected(
+  state: GameState,
+  inst: CardInstance,
+  pool: Map<string, Card>,
+): boolean {
+  const stadium = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
+  return stadium?.name === '祭典會場' && (inst.energyAttached?.length ?? 0) > 0;
+}
+
+/** 祭典會場：雙方身上附有能量卡的寶可夢，將受到的特殊狀態全部恢復。 */
+export function clearFestivalVenueProtectedStatuses(
+  state: GameState,
+  pool: Map<string, Card>,
+): GameState {
+  const stadium = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
+  if (stadium?.name !== '祭典會場') return state;
+
+  let changed = false;
+  const players = state.players.map((player) => {
+    let nextPlayer = player;
+    if (player.active?.status && (player.active.energyAttached?.length ?? 0) > 0) {
+      nextPlayer = { ...nextPlayer, active: { ...player.active, status: undefined } };
+      changed = true;
+    }
+    const bench = nextPlayer.bench.map((pk) => {
+      if (!pk.status || (pk.energyAttached?.length ?? 0) === 0) return pk;
+      changed = true;
+      return { ...pk, status: undefined };
+    });
+    if (bench.some((pk, i) => pk !== nextPlayer.bench[i])) {
+      nextPlayer = { ...nextPlayer, bench };
+    }
+    return nextPlayer;
+  }) as [PlayerState, PlayerState];
+
+  return changed ? { ...state, players } : state;
+}
+
 /** 讓對手戰鬥寶可夢陷入指定狀態的 POST effect */
 function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'paralyzed'): AttackPostFn {
   return (state, aIdx, pool) => {
@@ -1573,6 +1612,9 @@ function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'par
     const statusLabelMap: Record<string, string> = {
       poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
     };
+    if (isFestivalVenueStatusProtected(state, def.active, pool)) {
+      return addLog(state, `${defName}｜祭典會場：免疫【${statusLabelMap[status]}】`, aIdx);
+    }
     def.active = { ...def.active, status };
     players[dIdx] = def;
     return addLog({ ...state, players }, `${defName} 陷入【${statusLabelMap[status]}】`, aIdx);
@@ -7585,6 +7627,9 @@ function selfStatusPost(status: SpecialCondition): AttackPostFn {
     const statusLabelMap: Record<string, string> = {
       poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
     };
+    if (isFestivalVenueStatusProtected(state, att.active, pool)) {
+      return addLog(state, `${attName}｜祭典會場：免疫【${statusLabelMap[status]}】`, aIdx);
+    }
     att.active = { ...att.active, status };
     players[aIdx] = att;
     return addLog({ ...state, players }, `${attName} 陷入【${statusLabelMap[status]}】`, aIdx);

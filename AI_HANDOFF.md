@@ -1,5 +1,6 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+> 最後更新：2026-05-03 (v2.336)
 > 最後更新：2026-05-03 (v2.335)
 > 最後更新：2026-05-03 (v2.334)
 > 最後更新：2026-05-03 (v2.333)
@@ -7,6 +8,38 @@
 > 最後更新：2026-05-03 (v2.331)
 > 最後更新：2026-05-03 (v2.329)
 > 最後更新：2026-05-02 (v2.327)
+
+## v2.336 — 修復祭典會場附能量寶可夢特殊狀態免疫與恢復
+
+### 稽核依據
+- `static/cards/SV6.json` id `10513` / `static/cards/SV8a.json` id `12457` 的「祭典會場」卡面：
+  - 「雙方的所有身上附有能量卡的寶可夢不會陷入特殊狀態，並將受到的特殊狀態全部恢復。」
+- 既有特殊狀態流程集中在 `src/lib/game/effects.ts` 的 `statusPost()` / `selfStatusPost()`，競技場放置與手動附能量流程則在 `src/lib/game/engine.ts`。
+
+### 根因
+- `statusPost()` 與 `selfStatusPost()` 原本只檢查憨憨臉、招式效果護盾與特殊能量免疫，沒有檢查「祭典會場」+ 身上有能量的免疫條件。
+- 競技場放置與附能量後也沒有共用 hook 來恢復已經受到特殊狀態的符合條件寶可夢。
+
+### 修復
+- `src/lib/game/effects.ts`
+  - 新增 `isFestivalVenueStatusProtected()`：場上競技場為「祭典會場」且目標寶可夢身上有能量時，判定特殊狀態免疫。
+  - 新增 `clearFestivalVenueProtectedStatuses()`：掃描雙方 active / bench，清除身上有能量寶可夢的既有特殊狀態。
+  - `statusPost()` / `selfStatusPost()` 寫入特殊狀態前先套用祭典會場免疫 gate。
+- `src/lib/game/engine.ts`
+  - 打出競技場後呼叫 `clearFestivalVenueProtectedStatuses()`，讓「祭典會場」進場時立即恢復符合條件的寶可夢。
+  - 手動附能量後呼叫同一 helper，讓「祭典會場」已在場時，附能量到已有特殊狀態的寶可夢會立即恢復。
+- `scripts/test-festival-venue.mjs`
+  - 新增 regression，涵蓋對手特殊狀態免疫、自身副作用特殊狀態免疫、競技場進場恢復，以及附能量後恢復。
+
+### 驗證
+- `node scripts/test-festival-venue.mjs`：通過
+- `node scripts/test-festival-dance.mjs`：通過
+- `node scripts/sim-ai-battle.mjs 20`：20/20 正常結束，stuck_no_action=0、stuck_loop=0、exception=0
+- `node scripts/sim-tournament.mjs 1`：1332/1332 完成，總 bug=0
+- `npm run build`：通過（僅既有 Svelte a11y / unused CSS warnings）
+- `git diff --check`：通過
+
+---
 
 ## v2.335 — 修復祭典樂舞 KO 後第 2 次招式 + AI stuck_loop 判定
 
