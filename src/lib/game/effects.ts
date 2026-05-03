@@ -1977,6 +1977,34 @@ regR('search-to-hand-reshuffle', (st, idx, iids, _params, _pool) => {
   });
 });
 
+// ── v2.247 力之沙漏｜brailliant-attach ──────────────────────────────────────
+// 玩家在 END_TURN 時選擇是否將棄牌區的基本能量附到有力之沙漏的寶可夢。
+// selectedIids = []（跳過）或 [energyIid]（選擇1張能量）。
+RESOLVERS.set('brailliant-attach', (st, idx, iids, params, pool) => {
+  const player = st.players[idx];
+  const active = player.active;
+  if (!active || iids.length === 0) {
+    // 玩家選擇跳過
+    return addLog(st, `⚡ 力之沙漏：選擇跳過，不附能量`, idx);
+  }
+  // 將選中的能量實例從 discard 移到 active.energyAttached
+  const energyInst = player.discard.find(c => c.iid === iids[0]);
+  if (!energyInst) return addLog(st, `⚡ 力之沙漏：選擇無效（能量不存在）`, idx);
+  const energyCard = pool.get(energyInst.cardId);
+  const newDiscard = player.discard.filter(c => c.iid !== iids[0]);
+  const newActive = { ...active, energyAttached: [...active.energyAttached, energyInst] };
+  const newPlayer = { ...player, active: newActive, discard: newDiscard };
+  let s = { ...st, players: [...st.players] as [typeof player, typeof player] };
+  (s as any).pendingSelection = undefined;
+  s.players[idx] = newPlayer;
+  s = addLog(s, `⚡ 力之沙漏：將 ${energyCard?.name ?? '基本能量'} 附加到 ${pool.get(active.cardId)?.name ?? '?'}`, idx);
+  // 若 endTurnAfter，設定 turnPhase 為 end 以繼續 END_TURN 流程
+  if (params?.endTurnAfter) {
+    s = { ...s, turnPhase: 'end' };
+  }
+  return s;
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 31 H5 — 擲硬幣正面 +N 傷害（PRE）
 // ══════════════════════════════════════════════════════════════════════════════
@@ -6441,7 +6469,11 @@ regPost('沙漠蜻蜓ex|風暴返', selfSwapPost('風暴返'));
 regPre('鍬農炮蟲|伏特替換', (state, _aIdx, _pool) => ({ state, damage: 90 }));
 regPost('鍬農炮蟲|伏特替換', selfSwapPost('伏特替換'));
 
-// ── 牌庫選基本能量到手牌（4 張） ────────────────────────────────────────────
+// ── 牌庫選基本能量到手牌（1張 — 小火馬 svhk） ──────────────────────────────
+regPre('小火馬|蓄能量', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('小火馬|蓄能量', deckSearchToHandPost(1, 'BasicEnergy', '蓄能量'));
+
+// ── 牌庫選基本能量到手牌（2張 — 基拉祈） ──────────────────────────────────
 regPre('基拉祈|蓄能量', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('基拉祈|蓄能量', deckSearchToHandPost(2, 'BasicEnergy', '蓄能量'));
 

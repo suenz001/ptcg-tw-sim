@@ -3709,9 +3709,8 @@ function handlePlaying(
 
     } // end of `if (!state.endTurnSkipCheckup)` — 寶可夢 checkup 區塊
 
-    // ── v2.192 力之沙漏（PokemonTool）— 回合結束時，若戰鬥場寶可夢附有此 Tool，
-    //   從棄牌區附 1 張基本能量到那隻寶可夢。卡面「則可」optional，實作為自動觸發
-    //   （從棄牌挑第一張基本能量；極罕見的「不想附」case 不支援）。
+    // ── v2.247 力之沙漏（PokemonTool）— 回合結束時，若戰鬥場寶可夢附有此 Tool，
+    //   可以從棄牌區將 1 張基本能量附於該寶可夢。改為玩家選擇而非自動附能量。
     //   阻礙之塔時道具失效。
     {
       const aPlayer = players[aIdx];
@@ -3720,20 +3719,32 @@ function handlePlaying(
       if (active && !toolsJammedET && active.toolAttached) {
         const toolCard = pool.get(active.toolAttached.cardId);
         if (toolCard?.name === '力之沙漏') {
-          // 找棄牌區第一張基本能量
-          const eIdx = aPlayer.discard.findIndex(c => {
-            const card = pool.get(c.cardId);
-            return card?.supertype === 'Energy' && card.subtype === 'Basic';
-          });
-          if (eIdx >= 0) {
-            const energyInst = aPlayer.discard[eIdx];
-            const energyCard = pool.get(energyInst.cardId);
-            const newDiscard = aPlayer.discard.filter((_, i) => i !== eIdx);
-            const newActive = { ...active, energyAttached: [...active.energyAttached, energyInst] };
-            players[aIdx] = { ...aPlayer, active: newActive, discard: newDiscard };
-            state = addLog({ ...state, players },
-              `🔧 力之沙漏：從棄牌區將 ${energyCard?.name ?? '基本能量'} 附加到 ${pool.get(active.cardId)?.name ?? '?'}`,
-              aIdx);
+          // 检查是否已有 pendingSelection（避免覆蓋）
+          const hasPending = (state as any).pendingSelection;
+          if (!hasPending) {
+            // 找棄牌區第一張基本能量（用於檢查是否存在）
+            const hasBasic = aPlayer.discard.some(c => {
+              const card = pool.get(c.cardId);
+              return card?.supertype === 'Energy' && card.subtype === 'Basic';
+            });
+            if (hasBasic) {
+              // 建立 pendingSelection 讓玩家選擇是否附能量（0~1張）
+              state = {
+                ...state,
+                players,
+                pendingSelection: {
+                  type: 'discard-search',
+                  actorIdx: aIdx,
+                  sourcePlayerIdx: aIdx,
+                  filter: 'BasicEnergy',
+                  minCount: 0,
+                  maxCount: 1,
+                  effectKey: 'brailliant-attach',
+                  params: { endTurnAfter: true },
+                },
+              };
+              return state; // 停止其餘 END_TURN 處理，等待玩家選擇
+            }
           }
         }
       }
