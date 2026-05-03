@@ -1,5 +1,6 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+> 最後更新：2026-05-03 (v2.337)
 > 最後更新：2026-05-03 (v2.336)
 > 最後更新：2026-05-03 (v2.335)
 > 最後更新：2026-05-03 (v2.334)
@@ -8,6 +9,54 @@
 > 最後更新：2026-05-03 (v2.331)
 > 最後更新：2026-05-03 (v2.329)
 > 最後更新：2026-05-02 (v2.327)
+
+## v2.337 — 修復進化/退化 iid 撞號並完成 preset 覆蓋稽核
+
+### 稽核依據
+- 使用 headless preset 交互對戰腳本 `scripts/test-all-presets.mjs` 跑 37 組 preset 兩兩互打，共 1332 場。
+- 使用 `scripts/audit-preset-card-coverage.mjs` 靜態掃描 37 組 preset 牌組共 339 張不重複卡，對照 `TRAINER_EFFECTS`、`ATTACK_PRE/POST`、`ABILITY_EFFECTS`、特殊能量、Tool、Stadium、passive helper 與 engine source references。
+- 唯一 runtime 異常起初出現在 `太陽伊布 vs 青銅鐘多龍`，症狀為 `no_state_change:EVOLVE` / `USE_ABILITY` no-op。
+
+### 根因
+- 一般 `EVOLVE` 會讓場上寶可夢的 `iid` 變成手牌進化卡的 `iid`；但部分特殊進化路徑（例如賽吉）保留場上寶可夢 `iid`。
+- `太陽伊布ex｜阿賽斯特萊石` 退化效果把進化卡放回牌庫時，原本用固定 `${poke.iid}_evo_returned` 當回牌庫進化卡 iid。
+- 同一條進化鏈被多次退化/再進化後，可能讓手牌/牌庫/場上出現不同卡名但相同 iid，例如 Stage1 / Stage2 或進化鏈底層卡與場上頂層寶可夢撞 iid。
+- Engine 的 `EVOLVE` / `USE_ABILITY` 都以 iid 尋找目標，撞號後可能抓到錯的卡，導致 action 被 engine 拒絕且 state 不變。
+
+### 修復
+- `src/lib/game/engine.ts`
+  - 一般 `EVOLVE` 後保留 `basePoke.iid`，讓場上的「這隻寶可夢」維持穩定身份。
+  - 寫入 `evolvedFromStack` 的底層卡改給獨立 iid，避免 KO / 回收 / 退化後與場上頂層卡撞號。
+- `src/lib/game/effects.ts`
+  - `賽吉` 特殊進化路徑寫入 `evolvedFromStack` 時，同樣給底層卡獨立 iid。
+- `src/lib/game/effects/cards/v155_attacks.ts`
+  - `太陽伊布ex｜阿賽斯特萊石` 退化回牌庫的進化卡改用含 cardId 與隨機尾碼的唯一 iid，不再用固定 `${poke.iid}_evo_returned`。
+- `scripts/test-evolve-iid-regression.mjs`
+  - 新增 deterministic regression：`太陽伊布 vs 青銅鐘多龍` 跑 1000 個 seeds，確認不再出現 no-op action。
+- `scripts/test-all-presets.mjs`
+  - 新增所有 preset 兩兩交互對戰腳本，模擬瀏覽器 `tickAI` 的 actor 選擇邏輯（pending selection / KO 後補 active / active player）。
+- `scripts/audit-preset-card-coverage.mjs`
+  - 新增 preset 卡片覆蓋稽核腳本，對照 registry、passive helper 與 source references。
+- `.gitignore`
+  - 加入上述腳本產生的 `.tmp-*` bundle / entry patterns。
+
+### Preset 覆蓋稽核結果
+- preset deck：37 組。
+- 不重複 preset 卡：339 張。
+- 有效果文字 / 需處理的效果項目：381 項。
+- 明確 hook / registry：328 項。
+- 通用規則或無效果文字：12 項。
+- source-mentioned / engine hard-code / passive helper：41 項。
+- 完全找不到實裝跡象：0 項。
+- 舊 `scripts/audit-all-preset-effects.mjs` 報出的 3 項（鑽石膜、老練招式、灼熱之軀）確認為 false positive，實際分別走 `PASSIVE_DAMAGE_REDUCE`、`getUrsalunaBloodMoonEffectiveCost()`、`PASSIVE_RETALIATION`。
+
+### 驗證
+- `node scripts/test-evolve-iid-regression.mjs`：通過（1000 deterministic seeds）。
+- `node scripts/test-p2-abilities.mjs`：通過。
+- `node scripts/test-all-presets.mjs`：1332/1332 games，total bugs=0。
+- `npm run build`：通過（僅既有 Svelte a11y / unused CSS warnings）。
+
+---
 
 ## v2.336 — 修復祭典會場附能量寶可夢特殊狀態免疫與恢復
 

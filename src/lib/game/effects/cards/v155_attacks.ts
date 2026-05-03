@@ -321,8 +321,16 @@ regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
       // evolvedFromStack 結構：較底部 → 較頂部；最後一個是「目前形態」前一階
       const stack = [...poke.evolvedFromStack];
       const prev = stack.pop()!;
-      // 把目前 cardId（最頂進化卡）放回對手牌庫
-      newDeckExtras.push({ iid: poke.iid + '_evo_returned', cardId: poke.cardId, energyAttached: [], damage: 0 });
+      // 把目前 cardId（最頂進化卡）放回對手牌庫。
+      // 必須給回牌庫的「實體卡」新的唯一 iid；同一條進化鏈可能被多次退化，
+      // 若固定使用 `${poke.iid}_evo_returned`，Stage1/Stage2 會在手牌/牌庫中撞 iid，
+      // 導致 EVOLVE 以 toIid 找到錯的卡。
+      newDeckExtras.push({
+        iid: `${poke.iid}_evo_returned_${poke.cardId}_${Math.random().toString(36).slice(2, 8)}`,
+        cardId: poke.cardId,
+        energyAttached: [],
+        damage: 0
+      });
       returnedCount++;
       // 退化為 prev：cardId 變回前一階
       // v2.261 Bug C-13：退化規則 — 保留 damage / energy / tool（PDF §II-C-13），

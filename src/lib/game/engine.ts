@@ -775,6 +775,24 @@ export function canAffordAttack(
       }
     }
   }
+  // P2-2 赫普的講究頭帶（PokemonTool）：附有此 Tool 的「赫普的」寶可夢使用招式時，
+  //   能量需求 -1 個【無】。需有 Colorless 才生效（不轉換為其他屬性）。
+  //   阻礙之塔時道具失效。
+  {
+    const toolsJammed = state ? isToolsJammed(state, pool) : false;
+    if (!toolsJammed && pokemon.toolAttached) {
+      const toolCard = pool.get(pokemon.toolAttached.cardId);
+      if (toolCard?.name === '赫普的講究頭帶') {
+        const pokeCardForHeadband = pool.get(pokemon.cardId);
+        if (pokeCardForHeadband?.name?.startsWith('赫普的')) {
+          const colorlessIdx = cost.indexOf('Colorless');
+          if (colorlessIdx >= 0) {
+            cost = [...cost.slice(0, colorlessIdx), ...cost.slice(colorlessIdx + 1)];
+          }
+        }
+      }
+    }
+  }
   // v2.190 陳舊的根狀化石（戰鬥場）— 對手【基礎】寶可夢使用招式所需的能量增加 1 個【無】
   //   攻擊方寶可夢 stage=Basic（或 isBasicPokemonCard）+ 對手戰鬥場是 fossilOnField=陳舊的根狀化石
   //   → cost 加一個 'Colorless'
@@ -852,9 +870,14 @@ export function canAffordAttack(
   const used = new Array(units.length).fill(false);
   const tryMatch = (i: number): boolean => {
     if (i >= typedCost.length) {
-      let remaining = 0;
-      for (const u of used) if (!u) remaining++;
-      return remaining >= colorlessCost;
+    // 最後檢查剩餘 unit 中有多少可以當【無】
+    // 只有 types 含 'Colorless' 的 unit 才能滿足 Colorless cost
+    // （基本【火】/【水】等 → types=['Fire']，不能當無；硬岩【鬥】→ types=['Fighting']，也不能）
+    let remainingColorless = 0;
+    for (let k = 0; k < units.length; k++) {
+      if (!used[k] && units[k].types.includes('Colorless')) remainingColorless++;
+    }
+    return remainingColorless >= colorlessCost;
     }
     const need = typedCost[i];
     for (let j = 0; j < units.length; j++) {
@@ -1527,12 +1550,19 @@ function handlePlaying(
     const prevStack = basePoke.evolvedFromStack ?? [];
     const baseBare: CardInstance = {
       ...basePoke,
+      // evolvedFromStack 裡保存的是「下層卡片實體」，不能與場上的頂層寶可夢共用 iid。
+      // 否則 KO/退化/回收後，手牌或牌庫會出現不同卡名但相同 iid，EVOLVE/USE_ABILITY 會錯抓。
+      iid: `${basePoke.iid}_base_${basePoke.cardId}_${Math.random().toString(36).slice(2, 8)}`,
       energyAttached: [],
       toolAttached: undefined,
       evolvedFromStack: undefined, // 避免遞迴巢狀
     };
     const evolved: CardInstance = {
       ...evoInst,
+      // 保留場上寶可夢的 iid 作為「這隻寶可夢」的穩定身份。
+      // 若使用手牌進化卡的 iid，退化/回牌庫後再進化可能讓場上兩隻寶可夢共享 iid，
+      // 造成 USE_ABILITY / 選擇目標等 action 錯抓到另一隻寶可夢。
+      iid: basePoke.iid,
       damage: basePoke.damage,
       energyAttached: basePoke.energyAttached,
       toolAttached: basePoke.toolAttached,
@@ -2552,16 +2582,21 @@ function handlePlaying(
     }
 
     // Wave 42：被動特性 +N 攻擊傷害（攻擊方場上）— 例如 竹蘭的羅絲雷朵｜輝煌聲援 對「竹蘭的」寶可夢 +30
-    // 多隻擁有同特性的寶可夢可疊加（場上每一隻都會算一次）。
+    // P2-3 fix：「大方」等特性，明文「不重複」，需 dedup by ability name。
+    // P2-4 fix：火箭隊的監視塔在場時，【無】寶可夢的被動特性應被消除。
     if (baseDamage > 0) {
       const attAll: CardInstance[] = [
         ...(attacker.active ? [attacker.active] : []),
         ...attacker.bench,
       ];
+      const processedAbNames = new Set<string>();
       for (const inst of attAll) {
         const c = pool.get(inst.cardId);
         if (!c?.abilities) continue;
         for (const ab of c.abilities) {
+          if (processedAbNames.has(ab.name)) continue; // P2-3: 不重複
+          // P2-4: 監視塔壓制【無】寶可夢的被動特性
+          if (isColorlessAbilityBlocked(state, c, pool)) continue;
           const fn = PASSIVE_ATTACK_BONUS.get(ab.name);
           if (!fn) continue;
           // v2.133：簽名擴充 — 把 defenderCard 也傳進去（複眼 等需要看對手卡）
@@ -2569,6 +2604,7 @@ function handlePlaying(
           //         （場上有 Darkness Mega ex）」這類依場上局勢的特性能拿到資訊
           const bonus = fn(attackerCard, defenderCard, workingState, aIdx, pool);
           if (bonus > 0) {
+            processedAbNames.add(ab.name);
             baseDamage += bonus;
             workingState = addLog(workingState, `「${ab.name}」啟動：${attackerCard.name} 招式傷害 +${bonus}`, aIdx);
           }

@@ -26,3 +26,7 @@ static/cards/*.tmp
 .tmp-festival-test-*
 .sim-test.mjs
 .tmp-sim-bundle.mjs
+.tmp-all-presets-*
+.tmp-p2-test-*
+.tmp-test-evolve-iid-*
+.tmp-audit-preset-card-coverage-*

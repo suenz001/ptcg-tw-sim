@@ -1516,12 +1516,13 @@ function hasEffectShield(inst: CardInstance | null, pool: Map<string, Card>): bo
   // v2.150 皇帝之勢（帝王拿波ex）— 寶可夢本身的特性，不會受到對手招式效果的影響
   const card = pool.get(inst.cardId);
   if (card?.abilities?.some(a => a.name === '皇帝之勢')) return true;
-  // 硬岩【鬥】能量 — 限【鬥】寶可夢
-  if (!card || card.pokemonType !== 'Fighting') return false;
-  return inst.energyAttached.some(e => {
-    const ec = pool.get(e.cardId);
-    return ec?.name === '硬岩【鬥】能量';
-  });
+  // 硬岩【鬥】能量 — 限【鬥】寶可夢（pokemonType === 'Fighting'）附有此能量時免疫
+  // 官網卡面：「附有這張卡的【鬥】寶可夢不會受到對手的寶可夢使用招式的效果的影響。」
+  // 只檢查 pokemonType，不擴展到其他屬性+硬岩的組合（Fire+硬岩不享有免疫）。
+  if (!card) return false;
+  const hasHardRock = inst.energyAttached.some(e => pool.get(e.cardId)?.name === '硬岩【鬥】能量');
+  if (!hasHardRock) return false;
+  return card.pokemonType === 'Fighting';
 }
 
 /**
@@ -1597,9 +1598,11 @@ function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'par
     if (status === 'confused' && isConfusionImmune(def.active, pool)) {
       return addLog(state, `${defName}｜憨憨臉：免疫【混亂】`, aIdx);
     }
-    // v2.92：硬岩【鬥】能量 — 對手招式效果完全免疫（對防禦方 status 施加）
-    if (hasEffectShield(def.active, pool)) {
-      return addLog(state, `${defName}｜硬岩【鬥】能量：免疫招式效果`, aIdx);
+    // v2.92：硬岩【鬥】能量 — 官網：「附有這張卡的【鬥】寶可夢不會受到對手的寶可夢使用招式的效果的影響。」
+    // 免疫對象是「被攻擊的寶可夢（def）」，所以檢查 def.active 是否為【鬥】寶可夢且附有硬岩。
+    if (def.active && hasEffectShield(def.active, pool)) {
+      const defName2 = pool.get(def.active.cardId)?.name ?? '?';
+      return addLog(state, `${defName2}｜硬岩【鬥】能量：免疫招式效果`, aIdx);
     }
     // v2.175：泡沫【水】能量 — 對指定狀態免疫
     const immune = checkSpecialEnergyStatusImmune(def.active, status, pool);
@@ -1868,6 +1871,7 @@ regR('sage-evolve', (state, aIdx, iids, _params, pool) => {
       toolAttached: target.toolAttached,
       status: target.status,
       evolvedFromStack: [...(target.evolvedFromStack ?? []), { ...target,
+        iid: `${target.iid}_base_${target.cardId}_${Math.random().toString(36).slice(2, 8)}`,
         toolAttached: undefined, energyAttached: [], evolvedFromStack: undefined }],
       evolvedThisTurn: true,
       // 賽吉特殊：覆寫 justPlaced（賽吉允許剛上場立刻進化）
@@ -2014,10 +2018,10 @@ function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'paralyz
       const name = pool.get(def.active.cardId)?.name ?? '?';
       return addLog(state, `正面！但 ${name}｜憨憨臉：免疫【混亂】`, aIdx);
     }
-    // v2.92：硬岩【鬥】能量 — 對手招式效果完全免疫
-    if (hasEffectShield(def.active, pool)) {
-      const name = pool.get(def.active.cardId)?.name ?? '?';
-      return addLog(state, `正面！但 ${name}｜硬岩【鬥】能量：免疫招式效果`, aIdx);
+    // v2.92：硬岩【鬥】能量 — 免疫對象是被攻擊的寶可夢（def）
+    if (def.active && hasEffectShield(def.active, pool)) {
+      const defCoinName = pool.get(def.active.cardId)?.name ?? '?';
+      return addLog(state, `正面！但 ${defCoinName}｜硬岩【鬥】能量：免疫招式效果`, aIdx);
     }
     def.active = { ...def.active, status };
     players[dIdx] = def;
@@ -2290,7 +2294,8 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (
   // 赫普的卡比獸｜大方 — 「只要這隻寶可夢在場上，自己的『赫普的寶可夢』使用的招式，
   //   對對手的戰鬥寶可夢造成的傷害『+30』點。無論有多少隻擁有這個特性的寶可夢，
   //   這個效果也不會重複。」(SV9 Basic 150HP)
-  //   v2.267：先做疊加版（場上 2 隻 = 60），TODO 之後加 dedup 機制（PASSIVE_*_NO_STACK set）。
+  // P2-3 fix：此特性在 engine.ts 的 PASSIVE_ATTACK_BONUS loop 中，
+  //   透過 PASSIVE_ATTACK_NO_STACK set 確保只加成一次（dedup by ability name）。
   ['大方', (att) => att.name.includes('赫普的') ? 30 : 0],
 
   // v2.278 Wave 4：「自身招式」+ 對局狀態判定 ─────────────────────────
