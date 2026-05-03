@@ -1,6 +1,6 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-03 (v2.338)
+> 最後更新：2026-05-03 (v2.339)
 > 最後更新：2026-05-03 (v2.337)
 > 最後更新：2026-05-03 (v2.335)
 > 最後更新：2026-05-03 (v2.334)
@@ -23,6 +23,18 @@
 
 ### 驗證結果
 - `node scripts/test-p2-abilities.mjs` ✅ P2 regression 通過
+
+## v2.339 — focused regression tests 全通過（T1/T3/T4 fix）
+
+### 修改內容
+- `scripts/test-cinccino-deck-focused.mjs`
+  - T1 fix：`deckSearchToHandPost` 創建 `pendingSelection`（非直接加手牌）；需 `RESOLVE_SELECTION` 完成。deck 改為只有 1 張基本火能量避免 spread 問題。Engine 先手第1回合 guard 用 `firstPlayerIdx: 1` 避開。
+  - T3 fix：奇諾栗鼠ex damage formula 確認 `0 + 40 * count_of_all_energy`（含 Special Energy）。Defender 改用土龍節節（HP=140）避免 KO。
+  - T4 fix：炎武王 defender 改用土龍節節（HP=140）或請傳說（HP=160）。
+  - 移除 self-contained `canAffordAttack` 實作，改用 engine 內建邏輯直接斷言。
+
+### 驗證結果
+- `node scripts/test-cinccino-deck-focused.mjs` ✅ 11/11 tests 全部通過
 - `node scripts/test-all-presets.mjs` ✅ 1332場全 preset 對戰 0 bug
 - `node scripts/test-cinccino-deck-focused.mjs` — T2 力之沙漏 3/3 ✅；T5 對戰圓形競技場 3/3 ✅；T1/T3/T4 因攻擊代價檢查與 KO後狀態假設不符（有既有问题待 FOCUS修復）
 
