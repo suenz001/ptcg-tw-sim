@@ -519,6 +519,7 @@ export function clearActiveEffects(poke: CardInstance): CardInstance {
     ...poke,
     status: undefined,
     secondaryStatus: undefined,
+    poisonDamagePerCheckup: undefined,
     cantAttackThisTurn: undefined,
     cantAttackPending: undefined,
     cantRetreatNextTurn: undefined,
@@ -638,6 +639,7 @@ export function healResolver(
     if (clearStatus) {
       delete healed.status;
       delete healed.secondaryStatus;
+      delete healed.poisonDamagePerCheckup;
     }
 
     return {

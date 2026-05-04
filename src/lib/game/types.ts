@@ -52,6 +52,8 @@ export interface CardInstance {
   evolvedFromStack?: CardInstance[];
   /** 特殊狀態（M4 實裝） */
   status?: SpecialCondition;
+  /** 強化中毒每次寶可夢檢查放置的傷害量；未設定則一般中毒 10。 */
+  poisonDamagePerCheckup?: number;
   /**
    * v2.163：第二個特殊狀態，專供「同時陷入兩種狀態」的招式使用（例：危險光線
    * 同時灼傷+混亂）。PTCG 規則：行動類狀態（睡眠/混亂/麻痺）三者互斥，傷害類

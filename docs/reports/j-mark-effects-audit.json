@@ -1,18 +1,18 @@
 {
   "summary": {
-    "generatedAt": "2026-05-04T07:29:08.802Z",
+    "generatedAt": "2026-05-04T07:45:43.272Z",
     "jCards": 355,
     "totalRecords": 545,
     "abilities": 58,
     "attacks": 416,
     "cardOnly": 71,
-    "implementedGuess": 154,
-    "missingCandidates": 140,
+    "implementedGuess": 168,
+    "missingCandidates": 126,
     "byStatus": {
-      "implemented": 154,
+      "implemented": 168,
       "not-needed": 197,
       "needs-review": 54,
-      "missing": 140
+      "missing": 126
     },
     "byPriority": {
       "P1": 124,
@@ -2262,13 +2262,20 @@
       "effectText": "擲1次硬幣若為正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害與效果的影響。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "粉蝶蛹|躲藏",
+          "regPre('粉蝶蛹|躲藏'",
+          "regPost('粉蝶蛹|躲藏'"
+        ],
+        "nameOnlyMatches": [
+          "|躲藏'",
+          "躲藏"
+        ],
         "kind": "Attack"
       }
     },
@@ -2695,13 +2702,21 @@
       "effectText": "將對手的戰鬥寶可夢【中毒】與【灼傷】。將這隻寶可夢與備戰寶可夢互換。",
       "category": "status-condition",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "焰后蜥ex|剋命銳爪",
+          "焰后蜥ex｜剋命銳爪",
+          "regPre('焰后蜥ex|剋命銳爪'",
+          "regPost('焰后蜥ex|剋命銳爪'"
+        ],
+        "nameOnlyMatches": [
+          "|剋命銳爪'",
+          "剋命銳爪"
+        ],
         "kind": "Attack"
       }
     },
@@ -4631,13 +4646,21 @@
       "effectText": "這隻寶可夢也受到70點傷害。將對手的戰鬥寶可夢【中毒】與【麻痺】。",
       "category": "status-condition",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "龍王蠍|危害之尾",
+          "龍王蠍｜危害之尾",
+          "regPre('龍王蠍|危害之尾'",
+          "regPost('龍王蠍|危害之尾'"
+        ],
+        "nameOnlyMatches": [
+          "|危害之尾'",
+          "危害之尾"
+        ],
         "kind": "Attack"
       }
     },
@@ -5861,13 +5884,20 @@
       "effectText": "擲1次硬幣若為正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害與效果的影響。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "粉蝶蛹|躲藏",
+          "regPre('粉蝶蛹|躲藏'",
+          "regPost('粉蝶蛹|躲藏'"
+        ],
+        "nameOnlyMatches": [
+          "|躲藏'",
+          "躲藏"
+        ],
         "kind": "Attack"
       }
     },
@@ -6401,13 +6431,21 @@
       "effectText": "這隻寶可夢也受到70點傷害。將對手的戰鬥寶可夢【中毒】與【麻痺】。",
       "category": "status-condition",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "龍王蠍|危害之尾",
+          "龍王蠍｜危害之尾",
+          "regPre('龍王蠍|危害之尾'",
+          "regPost('龍王蠍|危害之尾'"
+        ],
+        "nameOnlyMatches": [
+          "|危害之尾'",
+          "危害之尾"
+        ],
         "kind": "Attack"
       }
     },
@@ -6621,13 +6659,21 @@
       "effectText": "將對手的戰鬥寶可夢【中毒】與【灼傷】。將這隻寶可夢與備戰寶可夢互換。",
       "category": "status-condition",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "焰后蜥ex|剋命銳爪",
+          "焰后蜥ex｜剋命銳爪",
+          "regPre('焰后蜥ex|剋命銳爪'",
+          "regPost('焰后蜥ex|剋命銳爪'"
+        ],
+        "nameOnlyMatches": [
+          "|剋命銳爪'",
+          "剋命銳爪"
+        ],
         "kind": "Attack"
       }
     },
@@ -10779,13 +10825,21 @@
       "effectText": "將對手的戰鬥寶可夢【中毒】。因這個【中毒】而放置的傷害指示物的數量改為16個。",
       "category": "status-condition",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級毒藻龍ex|致死猛毒",
+          "超級毒藻龍ex｜致死猛毒",
+          "regPre('超級毒藻龍ex|致死猛毒'",
+          "regPost('超級毒藻龍ex|致死猛毒'"
+        ],
+        "nameOnlyMatches": [
+          "|致死猛毒'",
+          "致死猛毒"
+        ],
         "kind": "Attack"
       }
     },
@@ -12548,13 +12602,21 @@
       "effectText": "將對手的戰鬥寶可夢【中毒】。因這個【中毒】而放置的傷害指示物的數量改為16個。",
       "category": "status-condition",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級毒藻龍ex|致死猛毒",
+          "超級毒藻龍ex｜致死猛毒",
+          "regPre('超級毒藻龍ex|致死猛毒'",
+          "regPost('超級毒藻龍ex|致死猛毒'"
+        ],
+        "nameOnlyMatches": [
+          "|致死猛毒'",
+          "致死猛毒"
+        ],
         "kind": "Attack"
       }
     },
@@ -12985,13 +13047,21 @@
       "effectText": "將對手的戰鬥寶可夢【中毒】。因這個【中毒】而放置的傷害指示物的數量改為16個。",
       "category": "status-condition",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級毒藻龍ex|致死猛毒",
+          "超級毒藻龍ex｜致死猛毒",
+          "regPre('超級毒藻龍ex|致死猛毒'",
+          "regPost('超級毒藻龍ex|致死猛毒'"
+        ],
+        "nameOnlyMatches": [
+          "|致死猛毒'",
+          "致死猛毒"
+        ],
         "kind": "Attack"
       }
     },
@@ -13301,13 +13371,21 @@
       "effectText": "將對手的戰鬥寶可夢【中毒】與【睡眠】。",
       "category": "status-condition",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "莉佳的霸王花ex|粉綻放",
+          "莉佳的霸王花ex｜粉綻放",
+          "regPre('莉佳的霸王花ex|粉綻放'",
+          "regPost('莉佳的霸王花ex|粉綻放'"
+        ],
+        "nameOnlyMatches": [
+          "|粉綻放'",
+          "粉綻放"
+        ],
         "kind": "Attack"
       }
     },
@@ -14299,13 +14377,20 @@
       "effectText": "擲1次硬幣若為正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害與效果的影響。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "瑪力露|躲藏",
+          "regPre('瑪力露|躲藏'",
+          "regPost('瑪力露|躲藏'"
+        ],
+        "nameOnlyMatches": [
+          "|躲藏'",
+          "躲藏"
+        ],
         "kind": "Attack"
       }
     },
@@ -14775,13 +14860,20 @@
       "effectText": "在上個對手的回合，若自己的寶可夢因招式的傷害而【昏厥】了，則增加120點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "故勒頓ex|緋紅之牙",
+          "故勒頓ex｜緋紅之牙",
+          "regPre('故勒頓ex|緋紅之牙'"
+        ],
+        "nameOnlyMatches": [
+          "|緋紅之牙'",
+          "緋紅之牙"
+        ],
         "kind": "Attack"
       }
     },
@@ -15132,13 +15224,21 @@
       "effectText": "擲1次硬幣若為正面，則將對手的戰鬥寶可夢【麻痺】。",
       "category": "status-condition",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "托戈德瑪爾ex|麻痺針",
+          "托戈德瑪爾ex｜麻痺針",
+          "regPre('托戈德瑪爾ex|麻痺針'",
+          "regPost('托戈德瑪爾ex|麻痺針'"
+        ],
+        "nameOnlyMatches": [
+          "|麻痺針'",
+          "麻痺針"
+        ],
         "kind": "Attack"
       }
     },
@@ -16471,13 +16571,20 @@
       "effectText": "擲1次硬幣若為正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害與效果的影響。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "瑪力露|躲藏",
+          "regPre('瑪力露|躲藏'",
+          "regPost('瑪力露|躲藏'"
+        ],
+        "nameOnlyMatches": [
+          "|躲藏'",
+          "躲藏"
+        ],
         "kind": "Attack"
       }
     },

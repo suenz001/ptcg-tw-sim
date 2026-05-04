@@ -3511,7 +3511,8 @@ function handlePlaying(
       const oActiveCard = state.players[oIdx].active ? pool.get(state.players[oIdx].active.cardId) : null;
       const hasDominatingPoisonOnActive = oActiveCard?.abilities?.some(a => a.name === '劇毒支配') ?? false;
       if (hasDominatingPoisonOnActive) poisonBonus += 50;
-      const newDmg = poisonPlayer.active.damage + 10 + poisonBonus;
+      const poisonBaseDamage = poisonPlayer.active.poisonDamagePerCheckup ?? 10;
+      const newDmg = poisonPlayer.active.damage + poisonBaseDamage + poisonBonus;
       const poisonedHP = getEffectiveHP(poisonPlayer.active, pool, state);
       if (poisonedHP > 0 && newDmg >= poisonedHP) {
         // 被毒死 → KO；獎賞給「中毒方的對手」(oIdx)
