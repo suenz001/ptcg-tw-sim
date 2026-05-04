@@ -12869,3 +12869,56 @@ regPost('妙喵|小憩', selfHealPost(20, '小憩'));
 
 // 芳香精｜吸取之吻：50；將這隻寶可夢恢復 30 HP。
 regPost('芳香精|吸取之吻', selfHealPost(30, '吸取之吻'));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// J 標 Batch A2 — M3 變動傷害簡單招式（來源：static/cards/M3.json）
+// ══════════════════════════════════════════════════════════════════════════════
+
+function attachedEnergyNameIncludes(inst: CardInstance | null | undefined, pool: Map<string, Card>, typeLabel: string): number {
+  if (!inst) return 0;
+  let count = 0;
+  for (const e of inst.energyAttached) {
+    const ec = pool.get(e.cardId);
+    if (ec?.name?.includes(`【${typeLabel}】`)) count++;
+  }
+  return count;
+}
+
+// 波爾凱尼恩｜強力蒸汽：擲與身上【水】能量數相同次數硬幣，正面數 × 90。
+regPre('波爾凱尼恩|強力蒸汽', (state, aIdx, pool) => {
+  const waterCount = attachedEnergyNameIncludes(state.players[aIdx].active, pool, '水');
+  const r = flipCoinsWithLog(state, waterCount, '強力蒸汽', aIdx);
+  const damage = r.heads * 90;
+  return { state: addLog(r.state, `強力蒸汽：${r.heads}/${waterCount} 次正面 → ${damage} 傷害`, aIdx), damage };
+});
+
+// 倫琴貓｜猛力進攻：自己已獲得獎賞卡張數 × 70。
+regPre('倫琴貓|猛力進攻', (state, aIdx, _pool) => {
+  const taken = 6 - state.players[aIdx].prizes.length;
+  return { state, damage: Math.max(0, taken) * 70 };
+});
+
+// 寶寶暴龍｜勃然大怒：自身傷害指示物數量 × 20。
+regPre('寶寶暴龍|勃然大怒', (state, aIdx, _pool) => {
+  const counters = Math.floor((state.players[aIdx].active?.damage ?? 0) / 10);
+  return { state, damage: counters * 20 };
+});
+
+// 摔角鷹人｜復仇踢：若自己的備戰寶可夢身上有傷害指示物，+60。
+regPre('摔角鷹人|復仇踢', (state, aIdx, _pool) => {
+  const hasDamagedBench = state.players[aIdx].bench.some(c => c.damage > 0);
+  return { state, damage: 30 + (hasDamagedBench ? 60 : 0) };
+});
+
+// 耿鬼｜意志劫持：10 + 對手備戰寶可夢數量 × 30。
+regPre('耿鬼|意志劫持', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  return { state, damage: 10 + state.players[dIdx].bench.length * 30 };
+});
+
+// 古劍豹｜上升利刃：若對手戰鬥寶可夢為 ex，+80。
+regPre('古劍豹|上升利刃', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defCard = state.players[dIdx].active ? pool.get(state.players[dIdx].active!.cardId) : undefined;
+  return { state, damage: 80 + (isExCard(defCard) ? 80 : 0) };
+});

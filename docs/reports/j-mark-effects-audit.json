@@ -1,18 +1,18 @@
 {
   "summary": {
-    "generatedAt": "2026-05-04T01:08:58.715Z",
+    "generatedAt": "2026-05-04T01:19:07.776Z",
     "jCards": 355,
     "totalRecords": 545,
     "abilities": 58,
     "attacks": 416,
     "cardOnly": 71,
-    "implementedGuess": 61,
-    "missingCandidates": 228,
+    "implementedGuess": 69,
+    "missingCandidates": 220,
     "byStatus": {
-      "missing": 228,
+      "missing": 220,
       "not-needed": 197,
       "needs-review": 59,
-      "implemented": 61
+      "implemented": 69
     },
     "byPriority": {
       "P1": 124,
@@ -436,13 +436,20 @@
       "effectText": "擲與這隻寶可夢身上附加的【水】能量的數量相同次數的硬幣，造成正面出現的次數×90點傷害。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "波爾凱尼恩|強力蒸汽",
+          "波爾凱尼恩｜強力蒸汽",
+          "regPre('波爾凱尼恩|強力蒸汽'"
+        ],
+        "nameOnlyMatches": [
+          "|強力蒸汽'",
+          "強力蒸汽"
+        ],
         "kind": "Attack"
       }
     },
@@ -3012,13 +3019,20 @@
       "effectText": "擲與這隻寶可夢身上附加的【水】能量的數量相同次數的硬幣，造成正面出現的次數×90點傷害。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "波爾凱尼恩|強力蒸汽",
+          "波爾凱尼恩｜強力蒸汽",
+          "regPre('波爾凱尼恩|強力蒸汽'"
+        ],
+        "nameOnlyMatches": [
+          "|強力蒸汽'",
+          "強力蒸汽"
+        ],
         "kind": "Attack"
       }
     },
@@ -3137,13 +3151,20 @@
       "effectText": "造成自己已經獲得的獎賞卡的張數×70點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "倫琴貓|猛力進攻",
+          "倫琴貓｜猛力進攻",
+          "regPre('倫琴貓|猛力進攻'"
+        ],
+        "nameOnlyMatches": [
+          "|猛力進攻'",
+          "猛力進攻"
+        ],
         "kind": "Attack"
       }
     },
@@ -4080,13 +4101,20 @@
       "effectText": "造成這隻寶可夢身上放置的傷害指示物的數量×20點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "寶寶暴龍|勃然大怒",
+          "寶寶暴龍｜勃然大怒",
+          "regPre('寶寶暴龍|勃然大怒'"
+        ],
+        "nameOnlyMatches": [
+          "|勃然大怒'",
+          "勃然大怒"
+        ],
         "kind": "Attack"
       }
     },
@@ -4166,13 +4194,20 @@
       "effectText": "若自己的備戰寶可夢身上放置有傷害指示物，則增加60點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "摔角鷹人|復仇踢",
+          "摔角鷹人｜復仇踢",
+          "regPre('摔角鷹人|復仇踢'"
+        ],
+        "nameOnlyMatches": [
+          "|復仇踢'",
+          "復仇踢"
+        ],
         "kind": "Attack"
       }
     },
@@ -4347,13 +4382,20 @@
       "effectText": "增加對手的備戰寶可夢的數量×30點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "耿鬼|意志劫持",
+          "耿鬼｜意志劫持",
+          "regPre('耿鬼|意志劫持'"
+        ],
+        "nameOnlyMatches": [
+          "|意志劫持'",
+          "意志劫持"
+        ],
         "kind": "Attack"
       }
     },
@@ -4566,13 +4608,20 @@
       "effectText": "若對手的戰鬥寶可夢為「寶可夢【ex】」，則增加80點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "古劍豹|上升利刃",
+          "古劍豹｜上升利刃",
+          "regPre('古劍豹|上升利刃'"
+        ],
+        "nameOnlyMatches": [
+          "|上升利刃'",
+          "上升利刃"
+        ],
         "kind": "Attack"
       }
     },
@@ -6097,13 +6146,20 @@
       "effectText": "造成這隻寶可夢身上放置的傷害指示物的數量×20點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "寶寶暴龍|勃然大怒",
+          "寶寶暴龍｜勃然大怒",
+          "regPre('寶寶暴龍|勃然大怒'"
+        ],
+        "nameOnlyMatches": [
+          "|勃然大怒'",
+          "勃然大怒"
+        ],
         "kind": "Attack"
       }
     },
