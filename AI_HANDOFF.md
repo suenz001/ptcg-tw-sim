@@ -76,14 +76,14 @@
 
 | 項目 | 說明 | 狀態 |
 |---|---|---|
-| J 標未實裝卡 | audit 結果：needs-review: 54、missing: 112（以 P2/P3 為主）；詳見 `docs/reports/j-mark-effects-audit.md` | 進行中 |
+| J 標未實裝卡 | audit 結果：implemented: 184、needs-review: 54、missing: 110（以 P2/P3 為主）；詳見 `docs/reports/j-mark-effects-audit.md` | 進行中 |
 | 複雜道具/卡（需深層引擎擴充）| 馬志士的交易、火箭隊的妨礙機器人（對手互動 picker）；招式學習器螢石 / 核心記憶碟（招式注入機制）；手持循環扇（TOOL_ON_DAMAGED 雙段 pending）；壯偉碩木（Stadium 兩階進化）；配樂之笛（peek-opp-deck-top 5） | 暫緩 |
 
 ### 🟡 中優先（機制缺陷）
 
 | 項目 | 說明 |
 |---|---|
-| `PASSIVE_*_NO_STACK` 機制 | 赫普的卡比獸｜大方 卡面寫「不疊加」，目前多隻疊加。需加 PASSIVE_*_NO_STACK set 防重複。（美納斯ex｜璀璨鱗片 亦同） |
+| `PASSIVE_*_NO_STACK` 機制 | 赫普的卡比獸｜大方已用 `processedAbNames` 依特性名去重；後續若遇到其他卡面明寫「不重複」的 PASSIVE 類效果，仍需確認是否能共用此 dedup 或需建立更通用的 no-stack 清單。 |
 | `PASSIVE_IMMUNITY` 廣義效果 | 目前只擋傷害；卡面「傷害與效果的影響」應也擋 status / 拔能量等廣義效果。 |
 | Ability gate 全面審查 | 目前只確認修了「腎上腺腦力」gate；其餘約 30 個 ability 待逐一驗證是否需要 gate。 |
 

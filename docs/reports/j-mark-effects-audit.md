@@ -1,6 +1,6 @@
 # J 標效果實裝 Audit
 
-Generated: 2026-05-04T07:59:18.344Z
+Generated: 2026-05-04T12:15:31.064Z
 
 ## Summary
 
@@ -9,15 +9,15 @@ Generated: 2026-05-04T07:59:18.344Z
 - Abilities: 58
 - Attacks: 416
 - Card-only/no structured attacks: 71
-- Implemented: 182
+- Implemented: 184
 - Needs review: 54
-- Missing candidates: 112
+- Missing candidates: 110
 - Not needed: 197
 
 ## By Status
 
-- implemented: 182
-- missing: 112
+- implemented: 184
+- missing: 110
 - needs-review: 54
 - not-needed: 197
 
@@ -112,7 +112,6 @@ Generated: 2026-05-04T07:59:18.344Z
 | P4 | M4 | 18429 | 九尾 | Attack | 九尾狐搬動 | attack-other | 選擇1隻自己的備戰寶可夢，將所選的寶可夢身上放置的傷害指示物，全部改放於對手的戰鬥寶可夢身上。 |
 | P2 | M4 | 18430 | 鳳王 | Attack | 復生火焰 | discard-pile-op | 從自己的棄牌區選擇最多3張【基礎】寶可夢卡，放置於備戰區。 |
 | P2 | M4 | 18430 | 鳳王 | Attack | 紅蓮之翼 | energy-op | 130 選擇1個這隻寶可夢身上附加的【火】能量，將其丟棄。 |
-| P3 | M4 | 18435 | 超級火炎獅ex | Attack | 吠 | cross-turn-effect | 80 在下個對手的回合，受到這個招式的寶可夢使用招式的傷害「-50」點。 |
 | P2 | M4 | 18438 | 信使鳥 | Attack | 幸福禮物 | hand-op | 雙方玩家若希望，各自從自己的手牌選擇最多3張基本能量卡，以任意方式附於自己的寶可夢身上。（對手先選擇。） |
 | P2 | M4 | 18439 | 凱路迪歐 | Attack | 能量反射 | energy-op | 70 選擇1個這隻寶可夢身上附加的能量，改附於備戰寶可夢身上。 |
 | P2 | M4 | 18444 | 冰岩怪 | Attack | 冰山崩裂 | deck-search-or-deck-op | 60× 將自己的牌庫上方6張卡丟棄，造成其中「基本【水】能量」卡的張數×60點傷害。 |
@@ -142,7 +141,6 @@ Generated: 2026-05-04T07:59:18.344Z
 | P3 | 083 | 18525 | 電龍 | Attack | 閃光伏特 | cross-turn-effect | 140 在下個自己的回合，這隻寶可夢無法使用「閃光伏特」。 |
 | P2 | 083 | 18526 | 哲爾尼亞斯 | Attack | 大地風暴 | energy-op | 30× 造成自己的所有寶可夢身上附加的【超】能量的數量×30點傷害。 |
 | P2 | 083 | 18527 | 念力土偶 | Attack | 退化光線 | hand-op | 50 從對手的進化的戰鬥寶可夢身上，移除1張「進化卡」使其退化。將移除的卡放回對手的手牌。 |
-| P3 | 083 | 18534 | 超級火炎獅ex | Attack | 吠 | cross-turn-effect | 80 在下個對手的回合，受到這個招式的寶可夢使用招式的傷害「-50」點。 |
 | P2 | 083 | 18536 | 超級花葉蒂ex | Attack | 永生綻放 | deck-search-or-deck-op | 200 從自己的牌庫選擇最多4張「基本【超】能量」卡，以任意方式附於備戰寶可夢身上。並且重洗牌庫。 |
 | P2 | 083 | 18537 | 南瓜怪人ex | Attack | 幽靈之觸 | hand-op | 140 在不看正面的情況下，從對手的手牌選擇1張，將其丟棄。 |
 | P4 | 083 | 18538 | 勾帕路翁ex | Ability | 金屬之路 | ability-other | 在自己的回合，從備戰區將這隻寶可夢放置於戰鬥場時，可使用1次。選擇自己的場上寶可夢身上附加的任意數量的【鋼】能量卡，改附於這隻寶可夢身上。 |
@@ -155,6 +153,8 @@ Generated: 2026-05-04T07:59:18.344Z
 | P4 | MC | 16768 | 瑪力露麗ex | Ability | 收集泡泡 | ability-other | 在自己的回合時，可不限次數使用。選擇1個自己的場上寶可夢身上附加的能量，改附於這隻寶可夢身上。 |
 | P2 | MC | 16768 | 瑪力露麗ex | Attack | 能量氣球 | energy-op | 60+ 增加這隻寶可夢身上附加的【超】能量的數量×40點傷害。 |
 | P2 | MC | 16838 | 戰舞郎 | Attack | 旋轉抽出 | deck-search-or-deck-op | 將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。 |
+| P3 | MC | 16871 | 小碎鑽 | Ability | 雙重屬性 | field-passive | 只要這隻寶可夢在場上，改為【鬥】與【超】2種屬性。 |
+| P3 | MC | 16896 | 故勒頓ex | Attack | 衝擊打擊 | cross-turn-effect | 200 在下個自己的回合，這隻寶可夢無法使用「衝擊打擊」。 |
 
 ## First 50 Needs Review (same effect name exists; verify exact card behavior)
 

@@ -1,18 +1,18 @@
 {
   "summary": {
-    "generatedAt": "2026-05-04T07:59:18.344Z",
+    "generatedAt": "2026-05-04T12:15:31.064Z",
     "jCards": 355,
     "totalRecords": 545,
     "abilities": 58,
     "attacks": 416,
     "cardOnly": 71,
-    "implementedGuess": 182,
-    "missingCandidates": 112,
+    "implementedGuess": 184,
+    "missingCandidates": 110,
     "byStatus": {
-      "implemented": 182,
+      "implemented": 184,
       "not-needed": 197,
       "needs-review": 54,
-      "missing": 112
+      "missing": 110
     },
     "byPriority": {
       "P1": 124,
@@ -8371,13 +8371,19 @@
       "effectText": "在下個對手的回合，受到這個招式的寶可夢使用招式的傷害「-50」點。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級火炎獅ex|吠",
+          "regPost('超級火炎獅ex|吠'"
+        ],
+        "nameOnlyMatches": [
+          "|吠'",
+          "吠"
+        ],
         "kind": "Attack"
       }
     },
@@ -12329,13 +12335,19 @@
       "effectText": "在下個對手的回合，受到這個招式的寶可夢使用招式的傷害「-50」點。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級火炎獅ex|吠",
+          "regPost('超級火炎獅ex|吠'"
+        ],
+        "nameOnlyMatches": [
+          "|吠'",
+          "吠"
+        ],
         "kind": "Attack"
       }
     },
