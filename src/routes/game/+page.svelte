@@ -33,6 +33,7 @@
   import { getAIAction } from '$lib/game/ai';
   import { VERSION } from '$lib/version';
   import { playSfx } from '$lib/audio/sfx';
+  import { parseCoinFlipAnimationEvents } from '$lib/game/coinAnimation';
   import {
     loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume,
     getBgmTrack, setBgmTrack, getBgmVolume, setBgmVolume
@@ -538,23 +539,8 @@
         enqueueCoinFlip(Math.random() < 0.5 ? 'heads' : 'tails', `${winnerName} 先手`);
         continue;
       }
-      // v2.252 新格式：明確單次擲幣 — 「… — 正面」 / 「… — 反面」
-      // 用全形破折號 — 結尾才視為「單次擲幣明確結果」，避免 heads=0 訊息中
-      // 「擲到反面前正面 0 次」誤判（該訊息已被 v2.252 改寫成多筆單次 log，不會走到這）
-      const single = msg.match(/—\s*(正面|反面)/);
-      if (single) {
-        enqueueCoinFlip(single[1] === '正面' ? 'heads' : 'tails', `擲硬幣：${single[1]}`);
-        continue;
-      }
-      // fallback：舊招式總結 log（連斬/咬棄 等寫「擲 N 次硬幣正面 X 次」一次帶過）
-      // 仍只觸發 1 次動畫，跟既有行為一致
-      if (msg.includes('正面')) {
-        enqueueCoinFlip('heads', '擲硬幣：正面');
-        continue;
-      }
-      if (msg.includes('反面')) {
-        enqueueCoinFlip('tails', '擲硬幣：反面');
-        continue;
+      for (const event of parseCoinFlipAnimationEvents(msg)) {
+        enqueueCoinFlip(event.result, event.label);
       }
     }
   });

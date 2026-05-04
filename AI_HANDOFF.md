@@ -1,5 +1,6 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+> 最後更新：2026-05-04 (v2.341)
 > 最後更新：2026-05-03 (v2.340)
 > 最後更新：2026-05-03 (v2.339)
 > 最後更新：2026-05-03 (v2.337)
@@ -10,6 +11,32 @@
 > 最後更新：2026-05-03 (v2.331)
 > 最後更新：2026-05-03 (v2.329)
 > 最後更新：2026-05-02 (v2.327)
+
+## v2.341 — 超級袋獸ex 機關槍合擊硬幣動畫順序修正
+
+### 症狀
+- `超級袋獸ex｜機關槍合擊` 的戰鬥 log 與傷害計算正確，但前端硬幣動畫會被傷害總結句中的「正面」字樣誤判，導致動畫順序看起來像先反面停止、再出現正面次數。
+
+### 卡文依據
+- `static/cards/M1S.json`：`超級袋獸ex`（ID `14071`，M1S 051/063，I 標）
+- `機關槍合擊`：`200+`，費用 `[Colorless, Colorless, Colorless]`
+- 效果：`擲硬幣直到出現反面，增加正面出現的次數×50點傷害。`
+
+### 修改內容
+- `src/lib/game/coinAnimation.ts`（新增）
+  - 抽出 battle-log → coin animation parser。
+  - 明確單次 log（`— 正面` / `— 反面`）會依序產生動畫。
+  - 不含「硬幣」的傷害總結句不再觸發 fallback 動畫，避免 `機關槍合擊：N 次正面 → ...` 多塞一個正面動畫。
+- `src/routes/game/+page.svelte`
+  - 改用 `parseCoinFlipAnimationEvents()` enqueue 硬幣動畫，保留先手擲幣特例。
+- `scripts/test-coin-animation-parser.mjs`（新增）
+  - 覆蓋 `正、正、反、傷害總結` 的順序，預期動畫為 `heads, heads, tails`。
+  - 覆蓋舊式含「硬幣」總結仍保留一次 fallback 動畫。
+
+### 驗證結果
+- `node scripts/test-coin-animation-parser.mjs` ✅
+- `git diff --check` ✅
+- `npm run build` ✅（僅既有 Svelte a11y / unused CSS warnings）
 
 ## v2.340 — M2/M2a 超級快龍ex + 花舞鳥ex + 超級噴火龍Xex focused batch
 
