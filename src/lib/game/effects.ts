@@ -311,6 +311,7 @@ import './effects/cards/v169_supporters';
 import './effects/cards/v172_hij_batch';
 import './effects/cards/v2306_meta_pokemon';
 import './effects/cards/v2346_j_mark_batch';
+import './effects/cards/v2347_j_mark_batch';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts

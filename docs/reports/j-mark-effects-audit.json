@@ -1,18 +1,18 @@
 {
   "summary": {
-    "generatedAt": "2026-05-04T07:01:22.188Z",
+    "generatedAt": "2026-05-04T07:29:08.802Z",
     "jCards": 355,
     "totalRecords": 545,
     "abilities": 58,
     "attacks": 416,
     "cardOnly": 71,
-    "implementedGuess": 140,
-    "missingCandidates": 154,
+    "implementedGuess": 154,
+    "missingCandidates": 140,
     "byStatus": {
-      "implemented": 140,
+      "implemented": 154,
       "not-needed": 197,
       "needs-review": 54,
-      "missing": 154
+      "missing": 140
     },
     "byPriority": {
       "P1": 124,
@@ -303,13 +303,21 @@
       "effectText": "將這隻寶可夢身上附加的能量卡全部丟棄，對手的1隻寶可夢受到90點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "bench-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "投羽梟|羽毛射擊",
+          "投羽梟｜羽毛射擊",
+          "regPre('投羽梟|羽毛射擊'",
+          "regPost('投羽梟|羽毛射擊'"
+        ],
+        "nameOnlyMatches": [
+          "|羽毛射擊'",
+          "羽毛射擊"
+        ],
         "kind": "Attack"
       }
     },
@@ -716,13 +724,21 @@
       "effectText": "將3個這隻寶可夢身上附加的能量丟棄，對手的1隻寶可夢受到280點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "bench-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級噴火龍Yex|炎獄狂爆Y",
+          "超級噴火龍Yex｜炎獄狂爆Y",
+          "regPre('超級噴火龍Yex|炎獄狂爆Y'",
+          "regPost('超級噴火龍Yex|炎獄狂爆Y'"
+        ],
+        "nameOnlyMatches": [
+          "|炎獄狂爆Y'",
+          "炎獄狂爆Y"
+        ],
         "kind": "Attack"
       }
     },
@@ -1317,13 +1333,20 @@
       "effectText": "對手的1隻備戰寶可夢也受到20點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "bench-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "凱路迪歐|穿通",
+          "凱路迪歐｜穿通",
+          "regPost('凱路迪歐|穿通'"
+        ],
+        "nameOnlyMatches": [
+          "|穿通'",
+          "穿通"
+        ],
         "kind": "Attack"
       }
     },
@@ -2428,13 +2451,21 @@
       "effectText": "將這隻寶可夢身上附加的能量卡全部丟棄，對手的1隻寶可夢受到90點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "bench-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "投羽梟|羽毛射擊",
+          "投羽梟｜羽毛射擊",
+          "regPre('投羽梟|羽毛射擊'",
+          "regPost('投羽梟|羽毛射擊'"
+        ],
+        "nameOnlyMatches": [
+          "|羽毛射擊'",
+          "羽毛射擊"
+        ],
         "kind": "Attack"
       }
     },
@@ -8468,13 +8499,20 @@
       "effectText": "對手的1隻備戰寶可夢也受到20點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "bench-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "凱路迪歐|穿通",
+          "凱路迪歐｜穿通",
+          "regPost('凱路迪歐|穿通'"
+        ],
+        "nameOnlyMatches": [
+          "|穿通'",
+          "穿通"
+        ],
         "kind": "Attack"
       }
     },
@@ -9315,13 +9353,21 @@
       "effectText": "將雙方的所有寶可夢各恢復「30」HP。",
       "category": "heal",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級花葉蒂ex|溫柔之光",
+          "超級花葉蒂ex｜溫柔之光",
+          "regPre('超級花葉蒂ex|溫柔之光'",
+          "regPost('超級花葉蒂ex|溫柔之光'"
+        ],
+        "nameOnlyMatches": [
+          "|溫柔之光'",
+          "溫柔之光"
+        ],
         "kind": "Attack"
       }
     },
@@ -12276,13 +12322,21 @@
       "effectText": "將雙方的所有寶可夢各恢復「30」HP。",
       "category": "heal",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級花葉蒂ex|溫柔之光",
+          "超級花葉蒂ex｜溫柔之光",
+          "regPre('超級花葉蒂ex|溫柔之光'",
+          "regPost('超級花葉蒂ex|溫柔之光'"
+        ],
+        "nameOnlyMatches": [
+          "|溫柔之光'",
+          "溫柔之光"
+        ],
         "kind": "Attack"
       }
     },
@@ -12832,13 +12886,21 @@
       "effectText": "將雙方的所有寶可夢各恢復「30」HP。",
       "category": "heal",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級花葉蒂ex|溫柔之光",
+          "超級花葉蒂ex｜溫柔之光",
+          "regPre('超級花葉蒂ex|溫柔之光'",
+          "regPost('超級花葉蒂ex|溫柔之光'"
+        ],
+        "nameOnlyMatches": [
+          "|溫柔之光'",
+          "溫柔之光"
+        ],
         "kind": "Attack"
       }
     },
@@ -13360,13 +13422,20 @@
       "effectText": "造成自己的場上「莉佳的寶可夢」的數量×40點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "莉佳的大食花|花園輪舞",
+          "莉佳的大食花｜花園輪舞",
+          "regPre('莉佳的大食花|花園輪舞'"
+        ],
+        "nameOnlyMatches": [
+          "|花園輪舞'",
+          "花園輪舞"
+        ],
         "kind": "Attack"
       }
     },
@@ -13681,13 +13750,21 @@
       "effectText": "將3個這隻寶可夢身上附加的能量丟棄，對手的1隻寶可夢受到280點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "bench-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級噴火龍Yex|炎獄狂爆Y",
+          "超級噴火龍Yex｜炎獄狂爆Y",
+          "regPre('超級噴火龍Yex|炎獄狂爆Y'",
+          "regPost('超級噴火龍Yex|炎獄狂爆Y'"
+        ],
+        "nameOnlyMatches": [
+          "|炎獄狂爆Y'",
+          "炎獄狂爆Y"
+        ],
         "kind": "Attack"
       }
     },
@@ -14791,13 +14868,21 @@
       "effectText": "對手的1隻寶可夢受到50點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "bench-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "禿鷹娜ex|骨之射擊",
+          "禿鷹娜ex｜骨之射擊",
+          "regPre('禿鷹娜ex|骨之射擊'",
+          "regPost('禿鷹娜ex|骨之射擊'"
+        ],
+        "nameOnlyMatches": [
+          "|骨之射擊'",
+          "骨之射擊"
+        ],
         "kind": "Attack"
       }
     },
@@ -15502,13 +15587,21 @@
       "effectText": "將2個這隻寶可夢身上附加的能量丟棄，對手的1隻備戰寶可夢也受到50點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "bench-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "青木的姆克鷹|羽毛強襲",
+          "青木的姆克鷹｜羽毛強襲",
+          "regPre('青木的姆克鷹|羽毛強襲'",
+          "regPost('青木的姆克鷹|羽毛強襲'"
+        ],
+        "nameOnlyMatches": [
+          "|羽毛強襲'",
+          "羽毛強襲"
+        ],
         "kind": "Attack"
       }
     },
@@ -16727,13 +16820,21 @@
       "effectText": "將2個這隻寶可夢身上附加的能量丟棄，對手的1隻備戰寶可夢也受到50點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "bench-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "青木的姆克鷹|羽毛強襲",
+          "青木的姆克鷹｜羽毛強襲",
+          "regPre('青木的姆克鷹|羽毛強襲'",
+          "regPost('青木的姆克鷹|羽毛強襲'"
+        ],
+        "nameOnlyMatches": [
+          "|羽毛強襲'",
+          "羽毛強襲"
+        ],
         "kind": "Attack"
       }
     },
@@ -17000,13 +17101,21 @@
       "effectText": "將3個這隻寶可夢身上附加的能量丟棄，對手的1隻寶可夢受到280點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "bench-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級噴火龍Yex|炎獄狂爆Y",
+          "超級噴火龍Yex｜炎獄狂爆Y",
+          "regPre('超級噴火龍Yex|炎獄狂爆Y'",
+          "regPost('超級噴火龍Yex|炎獄狂爆Y'"
+        ],
+        "nameOnlyMatches": [
+          "|炎獄狂爆Y'",
+          "炎獄狂爆Y"
+        ],
         "kind": "Attack"
       }
     },
