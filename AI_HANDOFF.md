@@ -1,5 +1,62 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+
+> 最後更新：2026-05-04 (v2.349)
+
+## v2.349 — J 標剩餘 P1 效果批次
+
+### 重要規則更新
+- 每次實作新卡片功能前，必須先查 `static/cards/` 原始資料，或線上卡表 `https://suenz001.github.io/ptcg-tw-sim/cards?set=ALL` 確認卡牌內容。
+- `static/cards/` 是網站卡牌資料庫來源。
+- G 標卡不實裝。
+- 正式網站網址是 `https://suenz001.github.io/ptcg-tw-sim/game`。
+- 每次完成更新後，必須同步更新本檔 `AI_HANDOFF.md`。
+
+### Commit
+- `a760709 feat: implement J-mark remaining P1 effects v2.349`
+
+### 修改內容
+- `src/lib/game/effects/cards/v2349_j_mark_batch.ts`（新增）
+  - `沙河馬｜潑沙`：下回合對手使用招式前擲 1 次硬幣，反面則招式失敗。
+  - `章魚桶｜墨汁噴射`：下回合對手使用招式前擲 2 次硬幣，只要有反面則招式失敗。
+  - `超級基格爾德ex｜虛無歸零`：對手所有寶可夢各擲 1 次硬幣，正面各受到 150 傷害。
+  - `卡比獸｜大胃王`：擲到反面為止，依正面數從牌庫附基本能量到自身。
+  - `肯泰羅｜群起瞄準`：選對手 1 隻寶可夢，依自己場上肯泰羅數量擲硬幣，正面 ×50 傷害。
+  - `步哨鼠｜臨檢`：擲 3 次硬幣，依正面數將對手手牌放回牌庫並重洗。
+  - `托戈德瑪爾ex｜尖尖回轉`：若上個自己的回合也使用此招式，傷害從 80 提升為 160。
+  - `超級差不多娃娃ex｜萬花筒華爾滋`：擲 3 次硬幣，正面數 ×2，從牌庫附基本能量到自身。
+- `src/lib/game/effects.ts`：匯入 v2349 batch。
+- `src/lib/game/types.ts`：新增跨回合暫存欄位：
+  - `attackFailureFlipCountPending`
+  - `attackFailureFlipCountThisTurn`
+  - `pointySpinNextTurn`
+  - `pointySpinThisTurn`
+- `src/lib/game/engine.ts`：新增下回合干擾命中擲幣判定、pending → thisTurn 回合切換、尖尖回轉連續使用判定。
+- `src/lib/game/effects/_shared.ts`：清除換位/離場效果時同步清除上述暫存欄位。
+- `src/lib/version.ts`：版本更新至 `2.349`。
+- `docs/reports/j-mark-effects-audit.json` / `.md`：更新 audit 報告。
+
+### Audit 結果
+```text
+J cards: 355
+Total records: 545
+Implemented: 182
+Needs review: 54
+Missing candidates: 112
+P1 missing: 0
+```
+
+### 驗證結果
+- `node scripts/audit-j-mark-effects.mjs` ✅
+- `npm run build` ✅
+- `node scripts/test-p2-abilities.mjs` ✅
+- `node scripts/test-colorless-cost-regression.mjs` ✅
+- `node scripts/test-all-presets.mjs` ✅
+- `node scripts/sim-sandbox.mjs` ✅
+
+補充：`sim-sandbox` 曾隨機出現早輸，但原因是沒有可上場寶可夢；沒有卡住、例外或迴圈，exit code 為 0。
+
+
 > 最後更新：2026-05-04 (v2.341)
 > 最後更新：2026-05-03 (v2.340)
 > 最後更新：2026-05-03 (v2.339)
