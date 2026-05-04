@@ -1,6 +1,6 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-04 (v2.351)
+> 最後更新：2026-05-04 (v2.352)
 > 正式網址：https://suenz001.github.io/ptcg-tw-sim/game
 > 卡牌資料庫：https://suenz001.github.io/ptcg-tw-sim/cards?set=ALL
 
@@ -76,7 +76,7 @@
 
 | 項目 | 說明 | 狀態 |
 |---|---|---|
-| J 標未實裝卡 | audit 結果：implemented: 184、needs-review: 54、missing: 110（以 P2/P3 為主）；詳見 `docs/reports/j-mark-effects-audit.md` | 進行中 |
+| J 標未實裝卡 | audit 結果：implemented: 207、needs-review: 54、missing: 87（以 P2/P3/P4 為主）；詳見 `docs/reports/j-mark-effects-audit.md` | 進行中 |
 | 複雜道具/卡（需深層引擎擴充）| 馬志士的交易、火箭隊的妨礙機器人（對手互動 picker）；招式學習器螢石 / 核心記憶碟（招式注入機制）；手持循環扇（TOOL_ON_DAMAGED 雙段 pending）；壯偉碩木（Stadium 兩階進化）；配樂之笛（peek-opp-deck-top 5） | 暫緩 |
 
 ### 🟡 中優先（機制缺陷）
@@ -102,6 +102,7 @@
 
 | 版本 | 摘要 |
 |---|---|
+| v2.352 | J 標低風險 P2/P3 批次：綠葉充能、基因充能、精神高速、冰山崩裂、日光旋繞、紅蓮之翼、鼻衝撞、粉碎箭、能量反射、閃光伏特/黑暗打擊/衝擊打擊 cooldown、蓋亞波減傷 |
 | v2.351 | 實裝超級火炎獅ex｜吠 + 修復攻擊方自身 damageReduceNextHit 引擎 bug + 修復疾風直撞對手KO後誤觸發 |
 | v2.350 | 修復奇跡修正檔限定【超】備戰目標 + 棄牌區寶可夢上場時重置傷害 |
 | v2.349 | J 標剩餘 P1 效果批次（沙河馬、章魚桶、超級基格爾德ex、托戈德瑪爾ex 等 8 張）|

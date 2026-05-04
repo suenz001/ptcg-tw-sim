@@ -1,18 +1,18 @@
 {
   "summary": {
-    "generatedAt": "2026-05-04T12:15:31.064Z",
+    "generatedAt": "2026-05-04T12:22:25.854Z",
     "jCards": 355,
     "totalRecords": 545,
     "abilities": 58,
     "attacks": 416,
     "cardOnly": 71,
-    "implementedGuess": 184,
-    "missingCandidates": 110,
+    "implementedGuess": 207,
+    "missingCandidates": 87,
     "byStatus": {
-      "implemented": 184,
+      "implemented": 207,
       "not-needed": 197,
       "needs-review": 54,
-      "missing": 110
+      "missing": 87
     },
     "byPriority": {
       "P1": 124,
@@ -1370,13 +1370,21 @@
       "effectText": "選擇1個這隻寶可夢身上附加的能量，改附於備戰寶可夢身上。",
       "category": "energy-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "凱路迪歐|能量反射",
+          "凱路迪歐｜能量反射",
+          "regPre('凱路迪歐|能量反射'",
+          "regPost('凱路迪歐|能量反射'"
+        ],
+        "nameOnlyMatches": [
+          "|能量反射'",
+          "能量反射"
+        ],
         "kind": "Attack"
       }
     },
@@ -1530,13 +1538,20 @@
       "effectText": "從自己的牌庫選擇最多2張「基本【超】能量」卡，附於這隻寶可夢身上。並且重洗牌庫。",
       "category": "deck-search-or-deck-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "代歐奇希斯|基因充能",
+          "代歐奇希斯｜基因充能",
+          "regPre('代歐奇希斯|基因充能'"
+        ],
+        "nameOnlyMatches": [
+          "|基因充能'",
+          "基因充能"
+        ],
         "kind": "Attack"
       }
     },
@@ -1846,13 +1861,18 @@
       "effectText": "在下個自己的回合，這隻寶可夢無法使用「閃光伏特」。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "電龍|閃光伏特"
+        ],
+        "nameOnlyMatches": [
+          "|閃光伏特'",
+          "閃光伏特"
+        ],
         "kind": "Attack"
       }
     },
@@ -2202,13 +2222,20 @@
       "effectText": "若自己的棄牌區有「鳴依的勉勵」，則增加150點傷害。",
       "category": "discard-pile-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "君主蛇|日光旋繞",
+          "君主蛇｜日光旋繞",
+          "regPre('君主蛇|日光旋繞'"
+        ],
+        "nameOnlyMatches": [
+          "|日光旋繞'",
+          "日光旋繞"
+        ],
         "kind": "Attack"
       }
     },
@@ -2525,13 +2552,21 @@
       "effectText": "選擇1個對手的戰鬥寶可夢身上附加的能量，將其丟棄。",
       "category": "energy-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "狙射樹梟ex|粉碎箭",
+          "狙射樹梟ex｜粉碎箭",
+          "regPre('狙射樹梟ex|粉碎箭'",
+          "regPost('狙射樹梟ex|粉碎箭'"
+        ],
+        "nameOnlyMatches": [
+          "|粉碎箭'",
+          "粉碎箭"
+        ],
         "kind": "Attack"
       }
     },
@@ -3911,13 +3946,21 @@
       "effectText": "選擇3個這隻寶可夢身上附加的能量，將其丟棄。",
       "category": "energy-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "大朝北鼻|鼻衝撞",
+          "大朝北鼻｜鼻衝撞",
+          "regPre('大朝北鼻|鼻衝撞'",
+          "regPost('大朝北鼻|鼻衝撞'"
+        ],
+        "nameOnlyMatches": [
+          "|鼻衝撞'",
+          "鼻衝撞"
+        ],
         "kind": "Attack"
       }
     },
@@ -4400,13 +4443,19 @@
       "effectText": "在下個對手的回合，這隻寶可夢受到招式的傷害「-30」點。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級基格爾德ex|蓋亞波",
+          "超級基格爾德ex｜蓋亞波"
+        ],
+        "nameOnlyMatches": [
+          "|蓋亞波'",
+          "蓋亞波"
+        ],
         "kind": "Attack"
       }
     },
@@ -4732,13 +4781,18 @@
       "effectText": "在下個自己的回合，這隻寶可夢無法使用「黑暗打擊」。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "伊裴爾塔爾ex|黑暗打擊"
+        ],
+        "nameOnlyMatches": [
+          "|黑暗打擊'",
+          "黑暗打擊"
+        ],
         "kind": "Attack"
       }
     },
@@ -6357,13 +6411,21 @@
       "effectText": "選擇3個這隻寶可夢身上附加的能量，將其丟棄。",
       "category": "energy-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "大朝北鼻|鼻衝撞",
+          "大朝北鼻｜鼻衝撞",
+          "regPre('大朝北鼻|鼻衝撞'",
+          "regPost('大朝北鼻|鼻衝撞'"
+        ],
+        "nameOnlyMatches": [
+          "|鼻衝撞'",
+          "鼻衝撞"
+        ],
         "kind": "Attack"
       }
     },
@@ -6624,13 +6686,21 @@
       "effectText": "選擇1個對手的戰鬥寶可夢身上附加的能量，將其丟棄。",
       "category": "energy-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "狙射樹梟ex|粉碎箭",
+          "狙射樹梟ex｜粉碎箭",
+          "regPre('狙射樹梟ex|粉碎箭'",
+          "regPost('狙射樹梟ex|粉碎箭'"
+        ],
+        "nameOnlyMatches": [
+          "|粉碎箭'",
+          "粉碎箭"
+        ],
         "kind": "Attack"
       }
     },
@@ -6852,13 +6922,19 @@
       "effectText": "在下個對手的回合，這隻寶可夢受到招式的傷害「-30」點。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級基格爾德ex|蓋亞波",
+          "超級基格爾德ex｜蓋亞波"
+        ],
+        "nameOnlyMatches": [
+          "|蓋亞波'",
+          "蓋亞波"
+        ],
         "kind": "Attack"
       }
     },
@@ -6955,13 +7031,18 @@
       "effectText": "在下個自己的回合，這隻寶可夢無法使用「黑暗打擊」。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "伊裴爾塔爾ex|黑暗打擊"
+        ],
+        "nameOnlyMatches": [
+          "|黑暗打擊'",
+          "黑暗打擊"
+        ],
         "kind": "Attack"
       }
     },
@@ -7400,13 +7481,19 @@
       "effectText": "在下個對手的回合，這隻寶可夢受到招式的傷害「-30」點。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級基格爾德ex|蓋亞波",
+          "超級基格爾德ex｜蓋亞波"
+        ],
+        "nameOnlyMatches": [
+          "|蓋亞波'",
+          "蓋亞波"
+        ],
         "kind": "Attack"
       }
     },
@@ -7602,13 +7689,19 @@
       "effectText": "在下個對手的回合，這隻寶可夢受到招式的傷害「-30」點。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級基格爾德ex|蓋亞波",
+          "超級基格爾德ex｜蓋亞波"
+        ],
+        "nameOnlyMatches": [
+          "|蓋亞波'",
+          "蓋亞波"
+        ],
         "kind": "Attack"
       }
     },
@@ -7895,13 +7988,20 @@
       "effectText": "從自己的牌庫選擇1張「基本【草】能量」卡，附於這隻寶可夢身上。並且重洗牌庫。",
       "category": "deck-search-or-deck-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "胖胖哈力|綠葉充能",
+          "胖胖哈力｜綠葉充能",
+          "regPre('胖胖哈力|綠葉充能'"
+        ],
+        "nameOnlyMatches": [
+          "|綠葉充能'",
+          "綠葉充能"
+        ],
         "kind": "Attack"
       }
     },
@@ -8147,13 +8247,21 @@
       "effectText": "選擇1個這隻寶可夢身上附加的【火】能量，將其丟棄。",
       "category": "energy-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "鳳王|紅蓮之翼",
+          "鳳王｜紅蓮之翼",
+          "regPre('鳳王|紅蓮之翼'",
+          "regPost('鳳王|紅蓮之翼'"
+        ],
+        "nameOnlyMatches": [
+          "|紅蓮之翼'",
+          "紅蓮之翼"
+        ],
         "kind": "Attack"
       }
     },
@@ -8644,13 +8752,21 @@
       "effectText": "選擇1個這隻寶可夢身上附加的能量，改附於備戰寶可夢身上。",
       "category": "energy-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "凱路迪歐|能量反射",
+          "凱路迪歐｜能量反射",
+          "regPre('凱路迪歐|能量反射'",
+          "regPost('凱路迪歐|能量反射'"
+        ],
+        "nameOnlyMatches": [
+          "|能量反射'",
+          "能量反射"
+        ],
         "kind": "Attack"
       }
     },
@@ -8932,13 +9048,20 @@
       "effectText": "將自己的牌庫上方6張卡丟棄，造成其中「基本【水】能量」卡的張數×60點傷害。",
       "category": "deck-search-or-deck-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "冰岩怪|冰山崩裂",
+          "冰岩怪｜冰山崩裂",
+          "regPre('冰岩怪|冰山崩裂'"
+        ],
+        "nameOnlyMatches": [
+          "|冰山崩裂'",
+          "冰山崩裂"
+        ],
         "kind": "Attack"
       }
     },
@@ -9210,13 +9333,18 @@
       "effectText": "在下個自己的回合，這隻寶可夢無法使用「閃光伏特」。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "電龍|閃光伏特"
+        ],
+        "nameOnlyMatches": [
+          "|閃光伏特'",
+          "閃光伏特"
+        ],
         "kind": "Attack"
       }
     },
@@ -9300,13 +9428,20 @@
       "effectText": "從自己的牌庫選擇最多2張「基本【超】能量」卡，附於這隻寶可夢身上。並且重洗牌庫。",
       "category": "deck-search-or-deck-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "代歐奇希斯|基因充能",
+          "代歐奇希斯｜基因充能",
+          "regPre('代歐奇希斯|基因充能'"
+        ],
+        "nameOnlyMatches": [
+          "|基因充能'",
+          "基因充能"
+        ],
         "kind": "Attack"
       }
     },
@@ -9432,13 +9567,21 @@
       "effectText": "若希望，從牌庫抽卡直到自己的手牌滿5張為止。",
       "category": "deck-search-or-deck-op",
       "priority": "P2",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "代歐奇希斯|精神高速",
+          "代歐奇希斯｜精神高速",
+          "regPre('代歐奇希斯|精神高速'",
+          "regPost('代歐奇希斯|精神高速'"
+        ],
+        "nameOnlyMatches": [
+          "|精神高速'",
+          "精神高速"
+        ],
         "kind": "Attack"
       }
     },
@@ -11944,13 +12087,18 @@
       "effectText": "在下個自己的回合，這隻寶可夢無法使用「閃光伏特」。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "電龍|閃光伏特"
+        ],
+        "nameOnlyMatches": [
+          "|閃光伏特'",
+          "閃光伏特"
+        ],
         "kind": "Attack"
       }
     },
@@ -14998,13 +15146,18 @@
       "effectText": "在下個自己的回合，這隻寶可夢無法使用「衝擊打擊」。",
       "category": "cross-turn-effect",
       "priority": "P3",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "故勒頓ex|衝擊打擊"
+        ],
+        "nameOnlyMatches": [
+          "|衝擊打擊'",
+          "衝擊打擊"
+        ],
         "kind": "Attack"
       }
     },
