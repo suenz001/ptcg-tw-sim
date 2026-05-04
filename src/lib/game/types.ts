@@ -43,6 +43,13 @@ export interface CardInstance {
   damageReduceNextHit?: number;
   /** 下一次輪到自己行動時不能撤退（老匠、關節技等），行動後清除 */
   cantRetreatNextTurn?: boolean;
+  /** 受到「下次使用招式前擲硬幣，反面則失敗」類效果的預約擲幣數。 */
+  attackFailureFlipCountPending?: number;
+  /** 本回合使用招式前需擲硬幣的數量；只要出現反面，招式失敗。 */
+  attackFailureFlipCountThisTurn?: number;
+  /** 托戈德瑪爾ex｜尖尖回轉：下個自己的回合若再用此招式 +80。 */
+  pointySpinNextTurn?: boolean;
+  pointySpinThisTurn?: boolean;
   /**
    * 進化鏈：下層被進化掉的 CardInstance 堆疊（由底到頂，不含當前卡）。
    * - 被擊倒時要一併進棄牌區（PTCG 官方規則）

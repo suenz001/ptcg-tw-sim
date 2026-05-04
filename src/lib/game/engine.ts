@@ -2484,6 +2484,25 @@ function handlePlaying(
       );
     }
 
+    // 潑沙 / 墨汁噴射類：下次使用招式時擲 N 次硬幣，只要有反面則招式失敗。
+    if (attacker.active.attackFailureFlipCountThisTurn && attacker.active.attackFailureFlipCountThisTurn > 0) {
+      const flipCount = attacker.active.attackFailureFlipCountThisTurn;
+      let s = state;
+      let hasTails = false;
+      for (let i = 1; i <= flipCount; i++) {
+        const heads = Math.random() < 0.5;
+        if (!heads) hasTails = true;
+        s = addLog(s, `干擾命中判定：第 ${i}/${flipCount} 次擲硬幣 — ${heads ? '正面' : '反面'}`, aIdx);
+      }
+      const nextActive = { ...attacker.active };
+      delete nextActive.attackFailureFlipCountThisTurn;
+      players[aIdx] = { ...attacker, active: nextActive };
+      if (hasTails) {
+        return addLog({ ...s, players, turnPhase: 'end' }, '干擾命中判定：出現反面，招式失敗！', aIdx);
+      }
+      state = addLog({ ...s, players }, '干擾命中判定：全部正面，招式繼續', aIdx);
+    }
+
     // v2.92：單招下回合禁用（例：超級勇氣）
     // 檢查當前招式名是否在 blockedAttackNamesThisTurn 中 → 禁用
     // v2.214：用 effective list（含工具招式）
@@ -3926,6 +3945,10 @@ function handlePlaying(
         n = { ...n, cantRetreatNextTurn: true };
         delete n.cantRetreatPendingSelf;
       }
+      if (c.attackFailureFlipCountPending && c.attackFailureFlipCountPending > 0) {
+        n = { ...n, attackFailureFlipCountThisTurn: c.attackFailureFlipCountPending };
+        delete n.attackFailureFlipCountPending;
+      }
       // Wave 36：清除本回合已消耗完的 takeExtraDamageThisTurn（對手本回合結束 = 本方下回合開始）
       if (c.takeExtraDamageThisTurn) {
         n = { ...n };
@@ -3990,6 +4013,14 @@ function handlePlaying(
     //   卡面：鋁鋼橋龍ex 金屬防禦強化 / 鋁鋼橋龍 塗層攻擊
     const promoteSelfNextToThis = (c: CardInstance): CardInstance => {
       let n = c;
+      if (c.pointySpinThisTurn) {
+        n = { ...n };
+        delete n.pointySpinThisTurn;
+      }
+      if (c.pointySpinNextTurn) {
+        n = { ...n, pointySpinThisTurn: true };
+        delete n.pointySpinNextTurn;
+      }
       if (c.weaknessDisabledNextTurn) {
         n = { ...n, weaknessDisabledThisTurn: true };
         delete n.weaknessDisabledNextTurn;

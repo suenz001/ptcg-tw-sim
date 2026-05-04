@@ -1,18 +1,18 @@
 {
   "summary": {
-    "generatedAt": "2026-05-04T07:45:43.272Z",
+    "generatedAt": "2026-05-04T07:59:18.344Z",
     "jCards": 355,
     "totalRecords": 545,
     "abilities": 58,
     "attacks": 416,
     "cardOnly": 71,
-    "implementedGuess": 168,
-    "missingCandidates": 126,
+    "implementedGuess": 182,
+    "missingCandidates": 112,
     "byStatus": {
-      "implemented": 168,
+      "implemented": 182,
       "not-needed": 197,
       "needs-review": 54,
-      "missing": 126
+      "missing": 112
     },
     "byPriority": {
       "P1": 124,
@@ -3940,13 +3940,21 @@
       "effectText": "在下個對手的回合，受到這個招式的寶可夢使用招式時，對手擲1次硬幣。若為反面，則那個招式失敗。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "沙河馬|潑沙",
+          "沙河馬｜潑沙",
+          "regPre('沙河馬|潑沙'",
+          "regPost('沙河馬|潑沙'"
+        ],
+        "nameOnlyMatches": [
+          "|潑沙'",
+          "潑沙"
+        ],
         "kind": "Attack"
       }
     },
@@ -4425,13 +4433,21 @@
       "effectText": "對於對手的所有寶可夢，各自擲1次硬幣，所有出現正面的寶可夢，各受到150點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級基格爾德ex|虛無歸零",
+          "超級基格爾德ex｜虛無歸零",
+          "regPre('超級基格爾德ex|虛無歸零'",
+          "regPost('超級基格爾德ex|虛無歸零'"
+        ],
+        "nameOnlyMatches": [
+          "|虛無歸零'",
+          "虛無歸零"
+        ],
         "kind": "Attack"
       }
     },
@@ -5187,13 +5203,21 @@
       "effectText": "擲硬幣直到出現反面，從自己的牌庫選擇最多與正面出現的次數相同數量的基本能量卡，附於這隻寶可夢身上。並且重洗牌庫。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "卡比獸|大胃王",
+          "卡比獸｜大胃王",
+          "regPre('卡比獸|大胃王'",
+          "regPost('卡比獸|大胃王'"
+        ],
+        "nameOnlyMatches": [
+          "|大胃王'",
+          "大胃王"
+        ],
         "kind": "Attack"
       }
     },
@@ -6861,13 +6885,21 @@
       "effectText": "對於對手的所有寶可夢，各自擲1次硬幣，所有出現正面的寶可夢，各受到150點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級基格爾德ex|虛無歸零",
+          "超級基格爾德ex｜虛無歸零",
+          "regPre('超級基格爾德ex|虛無歸零'",
+          "regPost('超級基格爾德ex|虛無歸零'"
+        ],
+        "nameOnlyMatches": [
+          "|虛無歸零'",
+          "虛無歸零"
+        ],
         "kind": "Attack"
       }
     },
@@ -7401,13 +7433,21 @@
       "effectText": "對於對手的所有寶可夢，各自擲1次硬幣，所有出現正面的寶可夢，各受到150點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級基格爾德ex|虛無歸零",
+          "超級基格爾德ex｜虛無歸零",
+          "regPre('超級基格爾德ex|虛無歸零'",
+          "regPost('超級基格爾德ex|虛無歸零'"
+        ],
+        "nameOnlyMatches": [
+          "|虛無歸零'",
+          "虛無歸零"
+        ],
         "kind": "Attack"
       }
     },
@@ -7595,13 +7635,21 @@
       "effectText": "對於對手的所有寶可夢，各自擲1次硬幣，所有出現正面的寶可夢，各受到150點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級基格爾德ex|虛無歸零",
+          "超級基格爾德ex｜虛無歸零",
+          "regPre('超級基格爾德ex|虛無歸零'",
+          "regPost('超級基格爾德ex|虛無歸零'"
+        ],
+        "nameOnlyMatches": [
+          "|虛無歸零'",
+          "虛無歸零"
+        ],
         "kind": "Attack"
       }
     },
@@ -8419,13 +8467,21 @@
       "effectText": "在下個對手的回合，受到這個招式的寶可夢使用招式時，對手擲2次硬幣。只要出現1次反面，則那個招式失敗。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "章魚桶|墨汁噴射",
+          "章魚桶｜墨汁噴射",
+          "regPre('章魚桶|墨汁噴射'",
+          "regPost('章魚桶|墨汁噴射'"
+        ],
+        "nameOnlyMatches": [
+          "|墨汁噴射'",
+          "墨汁噴射"
+        ],
         "kind": "Attack"
       }
     },
@@ -10989,13 +11045,21 @@
       "effectText": "選擇1隻對手的寶可夢，擲與自己的場上的，名稱中有「肯泰羅」的寶可夢的數量相同次數的硬幣。所選的寶可夢受到正面出現的次數×50點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "肯泰羅|群起瞄準",
+          "肯泰羅｜群起瞄準",
+          "regPre('肯泰羅|群起瞄準'",
+          "regPost('肯泰羅|群起瞄準'"
+        ],
+        "nameOnlyMatches": [
+          "|群起瞄準'",
+          "群起瞄準"
+        ],
         "kind": "Attack"
       }
     },
@@ -11077,13 +11141,21 @@
       "effectText": "擲3次硬幣。若出現正面，則查看對手的手牌，從其中選擇與正面出現的次數相同數量的卡，放回對手的牌庫並重洗。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "步哨鼠|臨檢",
+          "步哨鼠｜臨檢",
+          "regPre('步哨鼠|臨檢'",
+          "regPost('步哨鼠|臨檢'"
+        ],
+        "nameOnlyMatches": [
+          "|臨檢'",
+          "臨檢"
+        ],
         "kind": "Attack"
       }
     },
@@ -12117,13 +12189,21 @@
       "effectText": "選擇1隻對手的寶可夢，擲與自己的場上的，名稱中有「肯泰羅」的寶可夢的數量相同次數的硬幣。所選的寶可夢受到正面出現的次數×50點傷害。[在備戰區不計算弱點・抵抗力。]",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "肯泰羅|群起瞄準",
+          "肯泰羅｜群起瞄準",
+          "regPre('肯泰羅|群起瞄準'",
+          "regPost('肯泰羅|群起瞄準'"
+        ],
+        "nameOnlyMatches": [
+          "|群起瞄準'",
+          "群起瞄準"
+        ],
         "kind": "Attack"
       }
     },
@@ -12146,13 +12226,21 @@
       "effectText": "擲3次硬幣。若出現正面，則查看對手的手牌，從其中選擇與正面出現的次數相同數量的卡，放回對手的牌庫並重洗。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "步哨鼠|臨檢",
+          "步哨鼠｜臨檢",
+          "regPre('步哨鼠|臨檢'",
+          "regPost('步哨鼠|臨檢'"
+        ],
+        "nameOnlyMatches": [
+          "|臨檢'",
+          "臨檢"
+        ],
         "kind": "Attack"
       }
     },
@@ -15262,13 +15350,21 @@
       "effectText": "在上個自己的回合，若這隻寶可夢使用了「尖尖回轉」，則增加80點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "托戈德瑪爾ex|尖尖回轉",
+          "托戈德瑪爾ex｜尖尖回轉",
+          "regPre('托戈德瑪爾ex|尖尖回轉'",
+          "regPost('托戈德瑪爾ex|尖尖回轉'"
+        ],
+        "nameOnlyMatches": [
+          "|尖尖回轉'",
+          "尖尖回轉"
+        ],
         "kind": "Attack"
       }
     },
@@ -15724,13 +15820,21 @@
       "effectText": "擲3次硬幣，從自己的牌庫選擇最多與正面出現的次數×2張相同數量的基本能量卡，以任意方式附於自己的寶可夢身上。並且重洗牌庫。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級差不多娃娃ex|萬花筒華爾滋",
+          "超級差不多娃娃ex｜萬花筒華爾滋",
+          "regPre('超級差不多娃娃ex|萬花筒華爾滋'",
+          "regPost('超級差不多娃娃ex|萬花筒華爾滋'"
+        ],
+        "nameOnlyMatches": [
+          "|萬花筒華爾滋'",
+          "萬花筒華爾滋"
+        ],
         "kind": "Attack"
       }
     },
@@ -17034,13 +17138,21 @@
       "effectText": "擲3次硬幣，從自己的牌庫選擇最多與正面出現的次數×2張相同數量的基本能量卡，以任意方式附於自己的寶可夢身上。並且重洗牌庫。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級差不多娃娃ex|萬花筒華爾滋",
+          "超級差不多娃娃ex｜萬花筒華爾滋",
+          "regPre('超級差不多娃娃ex|萬花筒華爾滋'",
+          "regPost('超級差不多娃娃ex|萬花筒華爾滋'"
+        ],
+        "nameOnlyMatches": [
+          "|萬花筒華爾滋'",
+          "萬花筒華爾滋"
+        ],
         "kind": "Attack"
       }
     },
