@@ -3,10 +3,17 @@ import path from 'node:path';
 
 const root = process.cwd();
 const cardsDir = path.join(root, 'static', 'cards');
+const effectsCardsDir = path.join(root, 'src', 'lib', 'game', 'effects', 'cards');
+const effectCardFiles = fs.existsSync(effectsCardsDir)
+  ? fs.readdirSync(effectsCardsDir)
+      .filter((f) => f.endsWith('.ts'))
+      .map((f) => path.join(effectsCardsDir, f))
+  : [];
 const codeFiles = [
   path.join(root, 'src', 'lib', 'game', 'effects.ts'),
   path.join(root, 'src', 'lib', 'game', 'effects', '_shared.ts'),
   path.join(root, 'src', 'lib', 'game', 'engine.ts'),
+  ...effectCardFiles,
 ].filter((p) => fs.existsSync(p));
 
 const codeText = codeFiles.map((p) => fs.readFileSync(p, 'utf8')).join('\n');
