@@ -3825,7 +3825,8 @@
             <div class="coin-face coin-heads">🪙</div>
             <div class="coin-face coin-tails">⚫</div>
           </div>
-          <div class="coin-label" in:fly={{ y: 20, duration: 300, delay: 1400 }}>{coinFlip.label}</div>
+          <!-- delay 600ms：讓文字在硬幣翻面後立即出現，並在 1400ms 換下一次前保持可見 -->
+          <div class="coin-label" in:fly={{ y: 20, duration: 300, delay: 600 }}>{coinFlip.label}</div>
         {/key}
       </div>
     </div>
