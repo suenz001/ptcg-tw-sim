@@ -1231,7 +1231,8 @@ function handleSetup(
     }
     player.hand = player.hand.filter((_, i) => i !== iidx);
     // Setup 放的寶可夢設 justPlaced — 直到該玩家第一次 END_TURN 才能進化
-    player.active = { ...card, justPlaced: true };
+    // 同時重置 damage，防止棄牌區撈回的寶可夢帶舊傷害值上場
+    player.active = { ...card, justPlaced: true, damage: 0 };
     players[pIdx] = player;
     return addLog({ ...state, players }, `${player.name} 選擇了出場寶可夢`, null);
   }
@@ -1245,8 +1246,9 @@ function handleSetup(
     const card = player.hand[iidx];
     if (!isBasicPokemon(card.cardId, pool)) return state;
     player.hand = player.hand.filter((_, i) => i !== iidx);
-    // Setup 放的寶可夢設 justPlaced
-    player.bench = [...player.bench, { ...card, justPlaced: true }];
+    // 從手牌上場時一律重置 damage（防止從棄牌區撈回的寶可夢帶著舊傷害值上場，
+    // 導致 sanityKOSweep 立即再度 KO — e.g. 夜間擔架撈回已被擊倒的寶可夢）
+    player.bench = [...player.bench, { ...card, justPlaced: true, damage: 0 }];
     players[pIdx] = player;
     return { ...state, players };
   }

@@ -235,26 +235,19 @@ regR('miracle-codec-energy', (st, idx, iids, _params, pool) => {
   const player = st.players[idx];
   const energyInst = player.discard.find(c => c.iid === energyIid);
   const energyName = energyInst ? (pool.get(energyInst.cardId)?.name ?? '超能量') : '超能量';
-  if (player.bench.length === 0) {
-    // 直接附到出場寶可夢
-    const activeName = player.active ? (pool.get(player.active.cardId)?.name ?? '出場寶可夢') : '出場寶可夢';
-    st = addLog(st, `奇跡修正檔：將 ${energyName} 附加到 ${activeName}`, idx);
-    return updatePlayer(st, idx, (p) => {
-      const energyCard = p.discard.find(c => c.iid === energyIid);
-      if (!energyCard || !p.active) return p;
-      return {
-        ...p,
-        discard: p.discard.filter(c => c.iid !== energyIid),
-        active: { ...p.active, energyAttached: [...p.active.energyAttached, energyCard] },
-      };
-    });
+  // 只有【超】屬性備戰寶可夢才能成為目標
+  const psychicBench = player.bench.filter(b => pool.get(b.cardId)?.pokemonType === 'Psychic');
+  if (psychicBench.length === 0) {
+    // 備戰區沒有【超】寶可夢（正常流程不應到此，因為 regG 已攔截；防禦性 return）
+    return st;
   }
+  const validIids = psychicBench.map(b => b.iid);
   return withPending(st, {
     type: 'bench-choose',
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'miracle-codec-attach',
-    params: { energyIid, energyName },
+    params: { energyIid, energyName, validIids },
   });
 });
 regR('miracle-codec-attach', (st, idx, iids, params, pool) => {
