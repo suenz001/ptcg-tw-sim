@@ -904,14 +904,14 @@ export function canAffordAttack(
   const used = new Array(units.length).fill(false);
   const tryMatch = (i: number): boolean => {
     if (i >= typedCost.length) {
-    // 最後檢查剩餘 unit 中有多少可以當【無】
-    // 只有 types 含 'Colorless' 的 unit 才能滿足 Colorless cost
-    // （基本【火】/【水】等 → types=['Fire']，不能當無；硬岩【鬥】→ types=['Fighting']，也不能）
-    let remainingColorless = 0;
-    for (let k = 0; k < units.length; k++) {
-      if (!used[k] && units[k].types.includes('Colorless')) remainingColorless++;
-    }
-    return remainingColorless >= colorlessCost;
+      // 最後檢查剩餘 unit 數量是否足以支付【無】費用。
+      // PTCG 規則中【無】費用可由任意屬性的能量支付；
+      // 有色需求已在前面的 typedCost 回溯中先行保留並匹配。
+      let remaining = 0;
+      for (let k = 0; k < units.length; k++) {
+        if (!used[k]) remaining++;
+      }
+      return remaining >= colorlessCost;
     }
     const need = typedCost[i];
     for (let j = 0; j < units.length; j++) {
