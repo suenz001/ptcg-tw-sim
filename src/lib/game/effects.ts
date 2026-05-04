@@ -12830,3 +12830,42 @@ regR('brew-back-target', (st, idx, iids, params, pool) => {
     `熬返：${targetName} 受到 ${dmg} 傷害（${grassCount} 張草能量 × 2），${grassCount} 張草能量回牌庫`, idx);
   return addPrivateLog(s, `你的來悲粗茶熬返將 ${toReturn.map(e => pool.get(e.cardId)?.name ?? '?').join('、')} 回牌庫`, '', dIdx);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// J 標 Batch A1 — M3 簡單招式效果（來源：static/cards/M3.json）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 圓絲蛛｜緊纏之絲：10；在下個對手的回合，受到這個招式的寶可夢無法撤退。
+regPost('圓絲蛛|緊纏之絲', defCantRetreatNextPost());
+
+// 阿利多斯｜毒陣：50；中毒 + 下個對手回合無法撤退。
+regPost('阿利多斯|毒陣', (state, aIdx, pool) => {
+  const s1 = statusPost('poisoned')(state, aIdx, pool);
+  return defCantRetreatNextPost()(s1, aIdx, pool);
+});
+
+// 君主蛇｜皇家指令：自己的場上寶可夢數量 × 20。
+regPre('君主蛇|皇家指令', (state, aIdx, _pool) => {
+  const p = state.players[aIdx];
+  const count = (p.active ? 1 : 0) + p.bench.length;
+  return { state, damage: count * 20 };
+});
+
+// 彩粉蝶｜穿堂風：60；若場上有競技場卡，+60。
+regPre('彩粉蝶|穿堂風', (state, aIdx, _pool) => {
+  const bonus = state.activeStadium ? 60 : 0;
+  const s = bonus > 0 ? addLog(state, '穿堂風：場上有競技場卡 → +60 傷害', aIdx) : state;
+  return { state: s, damage: 60 + bonus };
+});
+
+// 爆焰龜獸｜高溫吐息：80；擲1次硬幣若為正面，+80。
+regPre('爆焰龜獸|高溫吐息', coinPlusPre(80, 80, '高溫吐息'));
+
+// 小貓怪｜雙重抓：擲2次硬幣，正面數 × 10。
+regPre('小貓怪|雙重抓', coinHeadsMultiplyPre(2, 10, '雙重抓'));
+
+// 妙喵｜小憩：將這隻寶可夢恢復 20 HP。
+regPost('妙喵|小憩', selfHealPost(20, '小憩'));
+
+// 芳香精｜吸取之吻：50；將這隻寶可夢恢復 30 HP。
+regPost('芳香精|吸取之吻', selfHealPost(30, '吸取之吻'));
