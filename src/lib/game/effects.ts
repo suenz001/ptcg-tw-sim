@@ -315,6 +315,7 @@ import './effects/cards/v2347_j_mark_batch';
 import './effects/cards/v2348_j_mark_batch';
 import './effects/cards/v2349_j_mark_batch';
 import './effects/cards/v2352_j_mark_batch';
+import './effects/cards/v2353_j_mark_batch';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
