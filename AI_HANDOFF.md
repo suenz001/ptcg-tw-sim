@@ -70,6 +70,86 @@
 
 ---
 
+## 下一個 AI Agent 接手提示詞
+
+請將以下提示詞交給下一個 AI agent：
+
+```text
+你要接手 ptcg-tw-sim 的 J 標卡牌效果實裝。請使用繁體中文回覆。
+
+工作路徑：/tmp/ptcg-work/repo
+正式網址：https://suenz001.github.io/ptcg-tw-sim/game
+卡牌資料庫：https://suenz001.github.io/ptcg-tw-sim/cards?set=ALL
+目前版本：v2.352
+目前最新 commit：44f73b9 feat: implement J-mark low-risk effects v2.352
+
+重要鐵律：
+1. 每次實作卡牌效果前，必須先查 static/cards/ 原始 JSON 或線上卡表確認卡牌內容；static/cards/ 是網站資料庫來源。
+2. 禁止從記憶猜卡名、招式、特性或效果；實作前要確認卡名、ID、regulationMark、招式費用、傷害、效果原文。
+3. G 標卡不實裝。
+4. 不要使用或提到 ptcg-tw-sim.web.app 作為部署網址；正確網址是 suenz001.github.io。
+5. 每次完成更新前必須：跑 audit/build/regression、更新 src/lib/version.ts、更新 AI_HANDOFF.md、commit 並 push。
+
+開始工作前請先執行：
+cd /tmp/ptcg-work/repo
+git pull --ff-only
+git status --short
+node scripts/audit-j-mark-effects.mjs
+sed -n '1,220p' AI_HANDOFF.md
+sed -n '1,40p' src/lib/version.ts
+
+目前 J 標 audit 狀態（v2.352）：
+- J cards: 355
+- Total records: 545
+- implemented: 207
+- not-needed: 197
+- needs-review: 54
+- missing: 87
+- missing unique cards: 約 81
+- remaining priority：P2 約 43、P3 約 25、P4 約 19
+
+近期已完成：
+- v2.349 清完 P1 missing。
+- v2.350 修奇跡修正檔限定【超】備戰目標、棄牌區寶可夢上場重置傷害。
+- v2.351 實裝超級火炎獅ex｜吠，修 damageReduceNextHit 攻擊方 debuff，以及疾風直撞對手 KO 後誤觸發。
+- v2.352 新增 src/lib/game/effects/cards/v2352_j_mark_batch.ts，實裝多個低風險 P2/P3：胖胖哈力｜綠葉充能、代歐奇希斯｜基因充能/精神高速、冰岩怪｜冰山崩裂、君主蛇｜日光旋繞、鳳王｜紅蓮之翼、大朝北鼻｜鼻衝撞、狙射樹梟ex｜粉碎箭、凱路迪歐｜能量反射、電龍｜閃光伏特、伊裴爾塔爾ex｜黑暗打擊、故勒頓ex｜衝擊打擊、超級基格爾德ex｜蓋亞波。
+
+建議下一步：
+1. 重新讀 docs/reports/j-mark-effects-audit.json，列出 remaining missing。
+2. 先挑低風險 P2/P3，而非深層 UI/engine 大改：
+   - hand-op 中可用現有 hand-discard / ATTACK_PRE_DISCARD_CHOICE 的項目。
+   - energy-op 中可用 active-energy-discard、bench-choose、discard-search/deck-search 的項目。
+   - deck-search-or-deck-op 中可用 deck-search / 抽到 N / 丟牌庫上方 N 張的項目。
+   - cross-turn-effect 中已有 blockedAttackNamesNextTurn、damageReduceNextHit、attackFailureFlipCountPending 等可重用欄位。
+3. 暫緩或小心處理需要全新 UI/雙方互動的卡，例如：馬志士的交易、火箭隊的妨礙機器人、招式學習器螢石/核心記憶碟、手持循環扇、壯偉碩木、配樂之笛。
+4. 實作位置優先新增 batch module：src/lib/game/effects/cards/v2353_j_mark_batch.ts，並在 src/lib/game/effects.ts import。
+5. 若新增選擇器，先確認 +page.svelte selectionItems 是否支援該 pendingSelection type/filter/params.validIids，並且 online action 要帶 senderIdx。
+6. 每批完成後至少跑：
+   node scripts/audit-j-mark-effects.mjs
+   npm run build
+   node scripts/test-p2-abilities.mjs
+   node scripts/test-colorless-cost-regression.mjs
+   node scripts/test-all-presets.mjs
+   node scripts/sim-sandbox.mjs
+7. 若只是重跑 audit 造成 generatedAt 時間戳 dirty，而沒有內容改變，可視情況還原報告；若 missing/implemented 數字改變，請提交報告。
+8. 完成後把 AI_HANDOFF.md 的「最後更新」、J audit 數字、版本歷史更新到新版本，並 push。
+
+注意既有機制/坑：
+- 版本號只改 src/lib/version.ts，不改 package.json。
+- 【無】費用可由任意屬性能量支付；不要回退 Colorless cost fix。
+- 判斷基礎寶可夢要用 isBasicPokemonCard(card)，不要用 card.subtype === 'Basic'。
+- KO 路徑必須處理 evolvedFromStack。
+- 所有 KO 判定要用 getEffectiveHP，不要直接讀 card.hp。
+- 牌庫內容是隱藏資訊，不能用 regG 因牌庫沒有目標而擋出牌；搜尋啟動 log 要中性。
+- 赫普的卡比獸｜大方已由 processedAbNames 去重，不要把它當未修 bug。
+- SEND_NEW_ACTIVE 只有 sendingIdx === activePlayerIndex 時才設 movedToActiveThisTurn。
+- 攻擊方自身 damageReduceNextHit debuff 不受 skipDefEffects 保護，需在弱點前套用。
+
+請從 audit missing 裡挑下一批，先查 static/cards 原文，再實作、驗證、更新 handoff、commit/push。
+```
+
+---
+
 ## 待辦事項
 
 ### 🔴 高優先（功能缺口）
