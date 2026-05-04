@@ -495,10 +495,11 @@
   // queue 機制：機關槍合擊、滾球、奔進 等「擲到反面前」類招式會連續擲多次硬幣，
   // 每次擲幣 log 一行（格式『… — 正面』/『… — 反面』），UI 解析後逐個 push 到
   // queue 排隊播放（每個 1.4s），玩家能完整看到每次擲幣結果。
-  let coinFlip = $state<null | { result: 'heads' | 'tails'; label: string }>(null);
-  let coinFlipQueue = $state<Array<{ result: 'heads' | 'tails'; label: string }>>([]);
+  let coinFlip = $state<null | { result: 'heads' | 'tails'; label: string; id: number }>(null);
+  let coinFlipQueue = $state<Array<{ result: 'heads' | 'tails'; label: string; id: number }>>([]);
   let coinTimer: ReturnType<typeof setTimeout> | null = null;
   let lastLogProcessed = 0;
+  let coinFlipIdCounter = 0; // 每次擲幣獨立 id，讓 {#key} 強制重建 DOM、重播 CSS 動畫
   // 每個 flip 動畫播放時間（含 css 翻轉 + label 顯示）— 太短看不清、太長拖節奏
   const COIN_FLIP_MS = 1400;
 
@@ -515,7 +516,7 @@
   }
 
   function enqueueCoinFlip(result: 'heads' | 'tails', label: string) {
-    coinFlipQueue = [...coinFlipQueue, { result, label }];
+    coinFlipQueue = [...coinFlipQueue, { result, label, id: coinFlipIdCounter++ }];
     if (!coinFlip) processCoinQueue();
   }
 
@@ -3818,10 +3819,13 @@
   {#if coinFlip}
     <div class="coin-overlay" in:fade={{ duration: 200 }} out:fade={{ duration: 250 }}>
       <div class="coin-stage">
-        <div class="coin coin-{coinFlip.result}">
-          <div class="coin-face coin-heads">🪙</div>
-          <div class="coin-face coin-tails">⚫</div>
-        </div>
+        {#key coinFlip.id}
+          <!-- key = 每次擲幣唯一 id，確保連續同結果（例如連 3 正面）也會重建 DOM、重播 CSS 動畫 -->
+          <div class="coin coin-{coinFlip.result}">
+            <div class="coin-face coin-heads">🪙</div>
+            <div class="coin-face coin-tails">⚫</div>
+          </div>
+        {/key}
         <div class="coin-label" in:fly={{ y: 20, duration: 300, delay: 1400 }}>{coinFlip.label}</div>
       </div>
     </div>
