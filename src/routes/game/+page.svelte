@@ -3820,13 +3820,13 @@
     <div class="coin-overlay" in:fade={{ duration: 200 }} out:fade={{ duration: 250 }}>
       <div class="coin-stage">
         {#key coinFlip.id}
-          <!-- key = 每次擲幣唯一 id，確保連續同結果（例如連 3 正面）也會重建 DOM、重播 CSS 動畫 -->
+          <!-- key = 每次擲幣唯一 id，確保連續同結果（例如連 3 正面）也會重建 DOM、重播 CSS 動畫與文字 -->
           <div class="coin coin-{coinFlip.result}">
             <div class="coin-face coin-heads">🪙</div>
             <div class="coin-face coin-tails">⚫</div>
           </div>
+          <div class="coin-label" in:fly={{ y: 20, duration: 300, delay: 1400 }}>{coinFlip.label}</div>
         {/key}
-        <div class="coin-label" in:fly={{ y: 20, duration: 300, delay: 1400 }}>{coinFlip.label}</div>
       </div>
     </div>
   {/if}
