@@ -2192,6 +2192,7 @@ function defNextAtkReducePost(n: number): AttackPostFn {
 }
 regPost('黑魯加|大聲咆哮', defNextAtkReducePost(100));
 regPost('嘎啦嘎啦|叫聲', defNextAtkReducePost(40));
+regPost('超級火炎獅ex|吠', defNextAtkReducePost(50)); // 受招寶可夢下回合使用招式傷害 -50
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 38g H13 — bench snipe / spray 批次（13 張）

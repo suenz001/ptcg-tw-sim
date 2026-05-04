@@ -2629,6 +2629,19 @@ function handlePlaying(
       workingState = addLog(workingState, `${atkName} 招式傷害 +${dmgBonus}（下回合加傷效果）`, aIdx);
     }
 
+    // 攻擊方自身的招式傷害削減旗標（由上回合對手的「吠」/「大聲咆哮」/「叫聲」等效果設置）
+    // 這是攻擊方自己身上的 debuff，不受 skipDefEffects 影響，弱點計算前套用。
+    if (baseDamage > 0 && attacker.active.damageReduceNextHit) {
+      const penalty = attacker.active.damageReduceNextHit;
+      baseDamage = Math.max(0, baseDamage - penalty);
+      const newAtk = { ...attacker.active };
+      delete newAtk.damageReduceNextHit;
+      players[aIdx] = { ...players[aIdx], active: newAtk };
+      workingState = { ...workingState, players };
+      const atkName2 = pool.get(newAtk.cardId)?.name ?? '?';
+      workingState = addLog(workingState, `${atkName2} 招式傷害 -${penalty}（受招致使傷害削減效果）`, aIdx);
+    }
+
     // ── v2.97：攻擊方 +N bonus 全部在 weakness 前套用（PTCG 規則） ───────────
     // 先前實作順序錯誤（bonus 於 weakness 後加）導致 Leon 實戰計算不符：
     //   270 × 2 + 60 = 600（錯）；正確 (270 + 60) × 2 = 660
@@ -3415,7 +3428,11 @@ function handlePlaying(
 
     const benchIdx = sendingPlayer.bench.findIndex((c) => c.iid === action.iid);
     if (benchIdx < 0) return state;
-    const newActive = { ...sendingPlayer.bench[benchIdx], movedToActiveThisTurn: true };
+    // movedToActiveThisTurn 只在「自己的回合」補場時設置（用於疾風直撞等條件招式）。
+    // 若是因對手回合 KO 後被迫補場（sendingIdx ≠ activePlayerIndex），則不設，
+    // 避免下一自己回合疾風直撞 +170 誤觸發。
+    const isOwnTurn = sendingIdx === state.activePlayerIndex;
+    const newActive = { ...sendingPlayer.bench[benchIdx], ...(isOwnTurn ? { movedToActiveThisTurn: true } : {}) };
     sendingPlayer.bench = sendingPlayer.bench.filter((_, i) => i !== benchIdx);
     sendingPlayer.active = newActive;
 
