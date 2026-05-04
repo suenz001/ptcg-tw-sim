@@ -12922,3 +12922,36 @@ regPre('古劍豹|上升利刃', (state, aIdx, pool) => {
   const defCard = state.players[dIdx].active ? pool.get(state.players[dIdx].active!.cardId) : undefined;
   return { state, damage: 80 + (isExCard(defCard) ? 80 : 0) };
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// J 標 Batch A3 — M4/MC 簡單招式效果（來源：static/cards/M4.json、MC.json）
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 雷丘｜快速攻擊：20；擲1次硬幣若正面，+50。
+regPre('雷丘|快速攻擊', coinPlusPre(20, 50, '快速攻擊'));
+
+// 密勒頓ex｜強子電光：120；若對手戰鬥寶可夢為 ex，+120。
+regPre('密勒頓ex|強子電光', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defCard = state.players[dIdx].active ? pool.get(state.players[dIdx].active!.cardId) : undefined;
+  return { state, damage: 120 + (isExCard(defCard) ? 120 : 0) };
+});
+
+// 布里卡隆｜圍困：160；下個對手回合，受到招式的寶可夢無法撤退。
+regPost('布里卡隆|圍困', defCantRetreatNextPost());
+
+// 超級火炎獅ex｜大爆炸之火：290 - 自身傷害指示物數量×10。
+regPre('超級火炎獅ex|大爆炸之火', (state, aIdx, _pool) => {
+  const counters = Math.floor((state.players[aIdx].active?.damage ?? 0) / 10);
+  return { state, damage: Math.max(0, 290 - counters * 10) };
+});
+
+// 天秤偶｜連續旋轉：擲硬幣直到反面，正面數×30。
+regPre('天秤偶|連續旋轉', coinUntilTailsMultiplyPre(30, 0, '連續旋轉'));
+
+// 堅果啞鈴｜特殊鞭打：70；若自身附有特殊能量，+70。
+regPre('堅果啞鈴|特殊鞭打', (state, aIdx, pool) => {
+  const active = state.players[aIdx].active;
+  const hasSpecial = !!active?.energyAttached.some(e => pool.get(e.cardId)?.subtype === 'Special');
+  return { state, damage: 70 + (hasSpecial ? 70 : 0) };
+});

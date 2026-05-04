@@ -1,6 +1,6 @@
 # J 標效果實裝 Audit
 
-Generated: 2026-05-04T01:19:07.776Z
+Generated: 2026-05-04T02:20:34.705Z
 
 ## Summary
 
@@ -9,15 +9,15 @@ Generated: 2026-05-04T01:19:07.776Z
 - Abilities: 58
 - Attacks: 416
 - Card-only/no structured attacks: 71
-- Implemented: 69
+- Implemented: 76
 - Needs review: 59
-- Missing candidates: 220
+- Missing candidates: 213
 - Not needed: 197
 
 ## By Status
 
-- implemented: 69
-- missing: 220
+- implemented: 76
+- missing: 213
 - needs-review: 59
 - not-needed: 197
 
@@ -152,9 +152,9 @@ Generated: 2026-05-04T01:19:07.776Z
 | P1 | M4 | 18423 | 大針蜂ex | Attack | 針蜂轟鳴 | variable-damage | 110× 造成自己的場上的「大針蜂（包含『寶可夢【ex】』）」的數量×110點傷害。 |
 | P1 | M4 | 18424 | 尖牙籠 | Attack | 整隻咬 | variable-damage | 80+ 若對手的戰鬥寶可夢沒有【撤退】所需的能量，則增加80點傷害。 |
 | P2 | M4 | 18426 | 胖胖哈力 | Attack | 綠葉充能 | deck-search-or-deck-op | 20 從自己的牌庫選擇1張「基本【草】能量」卡，附於這隻寶可夢身上。並且重洗牌庫。 |
-| P1 | M4 | 18427 | 布里卡隆 | Attack | 圍困 | cannot-retreat | 160 在下個對手的回合，受到這個招式的寶可夢無法撤退。 |
 | P4 | M4 | 18429 | 九尾 | Attack | 九尾狐搬動 | attack-other | 選擇1隻自己的備戰寶可夢，將所選的寶可夢身上放置的傷害指示物，全部改放於對手的戰鬥寶可夢身上。 |
 | P2 | M4 | 18430 | 鳳王 | Attack | 復生火焰 | discard-pile-op | 從自己的棄牌區選擇最多3張【基礎】寶可夢卡，放置於備戰區。 |
+| P2 | M4 | 18430 | 鳳王 | Attack | 紅蓮之翼 | energy-op | 130 選擇1個這隻寶可夢身上附加的【火】能量，將其丟棄。 |
 
 ## First 50 Needs Review (same effect name exists; verify exact card behavior)
 

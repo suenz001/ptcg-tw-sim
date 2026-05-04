@@ -1,18 +1,18 @@
 {
   "summary": {
-    "generatedAt": "2026-05-04T01:19:07.776Z",
+    "generatedAt": "2026-05-04T02:20:34.705Z",
     "jCards": 355,
     "totalRecords": 545,
     "abilities": 58,
     "attacks": 416,
     "cardOnly": 71,
-    "implementedGuess": 69,
-    "missingCandidates": 220,
+    "implementedGuess": 76,
+    "missingCandidates": 213,
     "byStatus": {
-      "missing": 220,
+      "missing": 213,
       "not-needed": 197,
       "needs-review": 59,
-      "implemented": 69
+      "implemented": 76
     },
     "byPriority": {
       "P1": 124,
@@ -7639,13 +7639,20 @@
       "effectText": "在下個對手的回合，受到這個招式的寶可夢無法撤退。",
       "category": "cannot-retreat",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "布里卡隆|圍困",
+          "布里卡隆｜圍困",
+          "regPost('布里卡隆|圍困'"
+        ],
+        "nameOnlyMatches": [
+          "|圍困'",
+          "圍困"
+        ],
         "kind": "Attack"
       }
     },
@@ -8034,13 +8041,20 @@
       "effectText": "減少這隻寶可夢身上放置的傷害指示物的數量×10點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級火炎獅ex|大爆炸之火",
+          "超級火炎獅ex｜大爆炸之火",
+          "regPre('超級火炎獅ex|大爆炸之火'"
+        ],
+        "nameOnlyMatches": [
+          "|大爆炸之火'",
+          "大爆炸之火"
+        ],
         "kind": "Attack"
       }
     },
@@ -9592,13 +9606,20 @@
       "effectText": "擲硬幣直到出現反面，造成正面出現的次數×30點傷害。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "天秤偶|連續旋轉",
+          "天秤偶｜連續旋轉",
+          "regPre('天秤偶|連續旋轉'"
+        ],
+        "nameOnlyMatches": [
+          "|連續旋轉'",
+          "連續旋轉"
+        ],
         "kind": "Attack"
       }
     },
@@ -10306,13 +10327,20 @@
       "effectText": "若這隻寶可夢身上附有特殊能量卡，則增加70點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "堅果啞鈴|特殊鞭打",
+          "堅果啞鈴｜特殊鞭打",
+          "regPre('堅果啞鈴|特殊鞭打'"
+        ],
+        "nameOnlyMatches": [
+          "|特殊鞭打'",
+          "特殊鞭打"
+        ],
         "kind": "Attack"
       }
     },
@@ -11832,13 +11860,20 @@
       "effectText": "減少這隻寶可夢身上放置的傷害指示物的數量×10點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "超級火炎獅ex|大爆炸之火",
+          "超級火炎獅ex｜大爆炸之火",
+          "regPre('超級火炎獅ex|大爆炸之火'"
+        ],
+        "nameOnlyMatches": [
+          "|大爆炸之火'",
+          "大爆炸之火"
+        ],
         "kind": "Attack"
       }
     },
@@ -13637,13 +13672,20 @@
       "effectText": "擲1次硬幣若為正面，則增加50點傷害。",
       "category": "coin-flip",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "雷丘|快速攻擊",
+          "雷丘｜快速攻擊",
+          "regPre('雷丘|快速攻擊'"
+        ],
+        "nameOnlyMatches": [
+          "|快速攻擊'",
+          "快速攻擊"
+        ],
         "kind": "Attack"
       }
     },
@@ -13762,13 +13804,20 @@
       "effectText": "若對手的戰鬥寶可夢為「寶可夢【ex】」，則增加120點傷害。",
       "category": "variable-damage",
       "priority": "P1",
-      "implementedGuess": false,
-      "implementationStatus": "missing",
+      "implementedGuess": true,
+      "implementationStatus": "implemented",
       "implementationEvidence": {
-        "exact": false,
-        "nameOnly": false,
-        "exactMatches": [],
-        "nameOnlyMatches": [],
+        "exact": true,
+        "nameOnly": true,
+        "exactMatches": [
+          "密勒頓ex|強子電光",
+          "密勒頓ex｜強子電光",
+          "regPre('密勒頓ex|強子電光'"
+        ],
+        "nameOnlyMatches": [
+          "|強子電光'",
+          "強子電光"
+        ],
         "kind": "Attack"
       }
     },
