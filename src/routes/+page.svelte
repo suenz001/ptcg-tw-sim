@@ -93,10 +93,11 @@
   </section>
 
   <section class="changelog-section">
-    <h2>📋 版本更新記錄</h2>
+    <details class="changelog-outer">
+    <summary><h2>📋 版本更新記錄</h2></summary>
     <div class="changelog-list">
 
-      <details open>
+      <details>
         <summary><span class="ver-badge">v2.363</span> 修復桃歹郎ex｜支配鎖鏈備戰特性</summary>
         <ul>
           <li>修復「支配鎖鏈」備戰特性：移除錯誤的「必須在戰鬥場」限制，桃歹郎ex 在備戰區也能正常使用特性</li>
@@ -186,6 +187,7 @@
       </details>
 
     </div>
+    </details>
   </section>
   <section class="feedback-section">
     <h2>💬 意見回饋</h2>
@@ -313,6 +315,26 @@
   .changelog-section {
     background: #fafafa;
     border-color: #e0e0e0;
+  }
+  .changelog-outer > summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+  }
+  .changelog-outer > summary::-webkit-details-marker { display: none; }
+  .changelog-outer > summary h2 {
+    margin: 0;
+    user-select: none;
+  }
+  .changelog-outer > summary h2::before {
+    content: "▶ ";
+    font-size: 0.75em;
+    color: #888;
+    margin-right: 0.3em;
+  }
+  .changelog-outer[open] > summary h2::before {
+    content: "▼ ";
   }
   .changelog-list {
     display: flex;
