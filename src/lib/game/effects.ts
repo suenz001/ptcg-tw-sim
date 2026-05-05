@@ -328,6 +328,7 @@ import './effects/cards/v2380_j_attacks_batch';
 import './effects/cards/v2380_j_abilities_batch';
 import './effects/cards/v2390_j_trainers_batch';
 import './effects/cards/v2400_i_wave1_recharge_status';
+import './effects/cards/v2401_i_wave2_draw_swap_search';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts

@@ -98,6 +98,19 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.41</span> I 標 Wave 2 — 抽牌/換場/牌庫搜能量批次實裝（11 張）</summary>
+        <ul>
+          <li>新檔 v2401_i_wave2_draw_swap_search.ts（240 行）— 含 4 個 helper factory + 4 組 declarative 表</li>
+          <li>抽 N 張（2 張）：阿響的皮丘｜麻麻抽出 / 赫普的啪嚓海膽ex｜扣殺閃電</li>
+          <li>自身換場（1 張）：風妖精｜急速折返</li>
+          <li>對手換場（5 張）：駒刀小兵/蓋蓋蟲/怒鸚哥/萌芽鹿｜推倒、哈約克｜吼叫（復用 force-opp-swap resolver）</li>
+          <li>牌庫挑基本能量附自身（3 張）：蛋蛋｜果實盈滿、急凍鳥｜冰冷羽擊、雷電雲｜充電</li>
+          <li>helper：drawNPost / forceOppSwapPostInline / selfSwapPostInline / deckSearchBasicEnergyPost；resolver wave2-deck-energy-attach-self</li>
+          <li>不動 effects.ts 既有實裝（只加 1 行 import）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.40</span> I 標 Wave 1 — Recharge + 狀態類批次實裝（declarative 風格）</summary>
         <ul>
           <li>新檔 v2400_i_wave1_recharge_status.ts — 用 helper factory + declarative array 大幅縮減 code 量（每張卡 1-2 行）</li>
