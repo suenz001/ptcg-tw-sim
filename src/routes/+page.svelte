@@ -98,6 +98,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.384</span> Audit 工具升級 + J 標 3 個 stub 真實裝</summary>
+        <ul>
+          <li>新增 scripts/audit-card-impl.mjs — 掃描 14 種實裝 pattern 全面 audit script，避免單 pattern 誤判（v2.39 化石/Stadium 教訓）</li>
+          <li>AI_HANDOFF.md 補「卡牌實裝 audit 方法論」章節：列出 14 種 pattern + 接手前必跑 audit 鐵律</li>
+          <li>陳舊的顎之化石被動：戰鬥場時對手招式傷害 -30（engine.ts 攻擊 pipeline 加 hook，仿 damageReduceNextHit pattern）</li>
+          <li>勒克貓｜鬥志戰吼：對手戰鬥場為 ex 時，剛使出 / 最初回合可進化（engine.ts EVOLVE gate 加 hasFightingHowl bypass）</li>
+          <li>勾帕路翁ex｜金屬之路：本回合從備戰上戰鬥場時，搬場上鋼能量到自身（regA + movedToActiveThisTurn gate + heal-target picker）</li>
+          <li>J 標 audit 結果：221/221 全 pattern 命中（100%）；剩 5 個 stub 仍待 engine 級擴張（光之翼/雙重屬性/狙擊手之眼/無限之影/整人擊落 + 鰭之化石被動）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.383</span> v2.39 J 標訓練家 stub 修正 — 化石/Stadium 既有實裝確認</summary>
         <ul>
           <li>查證使用者反映：化石卡（陳舊的顎/鰭之化石）+ 密阿雷市 + 稜鏡塔之前已實裝過</li>

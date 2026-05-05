@@ -1606,7 +1606,15 @@ function handlePlaying(
     const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
     const vigorousForestException = stadiumName === '活力森林' &&
       baseCard.pokemonType === 'Grass' && evoCard.pokemonType === 'Grass';
-    if ((basePoke.justPlaced || basePoke.evolvedThisTurn) && !vigorousForestException && !hasPushEvolveAbility) return state;
+    // v2.384 勒克貓｜鬥志戰吼：若對手的戰鬥寶可夢為「寶可夢【ex】」，
+    //   則這隻寶可夢就算在自己的最初回合或者剛使出的回合，也可進化。
+    //   evoCard 是「貓鼬刀」（從勒克貓進化而來），但本 hook 對 base 是勒克貓 +
+    //   對手 active 是 ex 時 bypass justPlaced gate。
+    const oppActive = state.players[1 - aIdx as 0 | 1]?.active;
+    const oppActiveCard = oppActive ? pool.get(oppActive.cardId) : undefined;
+    const oppIsEx = oppActiveCard?.subtype === 'ex' || (oppActiveCard?.name?.endsWith('ex') ?? false);
+    const hasFightingHowl = baseCard.name === '勒克貓' && oppIsEx;
+    if ((basePoke.justPlaced || basePoke.evolvedThisTurn) && !vigorousForestException && !hasPushEvolveAbility && !hasFightingHowl) return state;
     // v2.149 虹色DNA（伊布ex SV8a 126）：從伊布進化的 ex 可放此寶可夢身上完成進化
     //   標準 sameEvoName 檢查失敗時，若 base 卡有此特性 + evoCard.evolvesFrom='伊布' + evoCard 是 ex → 放行
     const hasPrismaticDNA = baseCard.abilities?.some(a => a.name === '虹色DNA');
@@ -3087,6 +3095,13 @@ function handlePlaying(
     if (!skipDefEffects && baseDamage > 0 && defenderState.active.damageReduceNextHit) {
       baseDamage = Math.max(0, baseDamage - defenderState.active.damageReduceNextHit);
       defenderState.active = { ...defenderState.active, damageReduceNextHit: undefined };
+    }
+    // v2.384：陳舊的顎之化石（化石上場）被動 — 戰鬥場時對手招式傷害 -30
+    if (!skipDefEffects && baseDamage > 0 && defenderState.active.fossilOnField) {
+      const defCardFossil = pool.get(defenderState.active.cardId);
+      if (defCardFossil?.name === '陳舊的顎之化石') {
+        baseDamage = Math.max(0, baseDamage - 30);
+      }
     }
 
     const newDamage = defenderState.active.damage + baseDamage;

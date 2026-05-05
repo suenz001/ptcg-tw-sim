@@ -176,6 +176,67 @@ git diff --stat HEAD | head      # 大檔尺寸變動異常即懷疑被截斷
 
 ---
 
+## 卡牌實裝 audit 方法論（v2.384 補強）
+
+### 為什麼簡單 grep `reg('卡名',...)` 會誤判
+v2.39 audit 化石卡與 Stadium 時用「reg('卡名',...)」單 pattern 比對，誤判為「未實裝」，
+實際上既有路徑走的是：
+- **化石卡** → `PLAY_FOSSIL` / `DISCARD_FOSSIL` action（不走 PLAY_TRAINER），
+  items_misc.ts 用 `regG=false` 阻擋一般 Item 路徑
+- **Stadium** → `engine.ts USE_STADIUM` 內嵌 `if (stadiumCard.name === 'XXX')` case
+  （不走 PLAY_TRAINER reg）
+
+教訓：實裝路徑遠不止 `reg(...)`，至少有 14 種 pattern。
+
+### 建議流程：用 `scripts/audit-card-impl.mjs`
+這個腳本會掃 codebase 對每個目標卡片檢查 14 種 pattern：
+
+```bash
+node scripts/audit-card-impl.mjs --reg=J             # 列出指定 regulation 全部卡的覆蓋情況
+node scripts/audit-card-impl.mjs --name=狙擊手之眼   # 查單張卡
+node scripts/audit-card-impl.mjs --reg=J -v          # verbose 模式（也列已命中的細節）
+```
+
+涵蓋的 14 種 pattern：
+
+**Trainer 類**：
+1. `reg('卡名', ...)` — PLAY_TRAINER 路徑
+2. `regG('卡名', ...)` — PLAY_TRAINER gate
+3. `FOSSIL_NAMES_LOCAL` / `FOSSIL_ITEM_NAMES` set — 化石卡專屬
+4. `stadiumCard.name === '卡名'` — USE_STADIUM 內嵌 case
+5. `STATIC_PASSIVE_STADIUMS` / `PASSIVE_STADIUMS` set — Stadium 被動
+6. `JAMMING_TOWER_STADIUMS` / `ROCKET_WATCHTOWER_STADIUMS` / `BENCH_PROTECTION_STADIUMS`
+
+**Pokémon 類**：
+7. `regPre('卡名|招式', ...)` / `regPost`
+8. `ATTACK_PRE.set` / `ATTACK_POST.set`
+9. `regA('卡名', N, ...)` / `ABILITY_EFFECTS.set`
+10. `PASSIVE_DAMAGE_REDUCE` / `PASSIVE_IMMUNITY` / `PASSIVE_RETALIATION` /
+    `PASSIVE_ATTACK_BONUS` / `PASSIVE_PREVENT_KO` / `ABILITY_RETREAT_MOD` set
+    — 被動特性（key 是 ability name 不是 pokemon name）
+11. `BENCH_PLACE_TRIGGERS.set('卡名', ...)`
+12. `engine.ts` 內嵌 `if (ab.name === '特性名')` / `ability.name ===` / `a.name ===`
+
+**Energy 類**：
+13. `SPECIAL_ENERGY_ATTACH` / `SPECIAL_ENERGY_HP_BONUS` / `SPECIAL_ENERGY_RETREAT_MOD` /
+    `SPECIAL_ENERGY_STATUS_IMMUNE` / `SPECIAL_ENERGY_ON_DAMAGED` set
+
+**Tool 類**：
+14. `TOOL_HP_BONUS` / `TOOL_ATTACK_BONUS` / `TOOL_DEFENSE_REDUCE_BY_TYPE` /
+    `TOOL_PREVENT_KO` / `TOOL_ON_KO` / `TOOL_PRIZE_BONUS` / `TOOL_ON_DAMAGED` /
+    `TOOL_RETREAT_MOD` / 其他 TOOL_* set
+
+### 接手前必跑的 audit
+**任何「audit J 標 / H 標 / 某 set」的請求，先跑 audit-card-impl.mjs，**
+**不要用單一 grep / regex 自行比對。** 這個腳本是 v2.384 後的標準。
+
+### audit 命中 ≠ 功能完整
+audit 只檢查「實裝痕跡」是否存在。但實際功能可能是 stub（reg 註冊但 callback 只 log）。
+若要區分「stub vs 真實裝」，看程式碼註解內的「v2.X stub — 需 engine 級擴張」標記。
+逐步轉真實裝是另一個工作（v2.382 / v2.384 等批次處理）。
+
+---
+
 ## 下一個 AI Agent 接手提示詞
 
 請將以下提示詞交給下一個 AI agent：

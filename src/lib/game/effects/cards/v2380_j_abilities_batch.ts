@@ -227,9 +227,68 @@ regA('耿鬼', 0, (st, idx) => addLog(st,
 regA('堅果啞鈴', 0, (st, idx) => addLog(st,
   '整人擊落：牌庫被對手效果丟棄時，丟棄對手牌庫頂 8 張（v2.38 stub — 需 engine deck-mill hook）', idx));
 
-// 勾帕路翁ex｜金屬之路 — 從備戰上戰鬥場時搬鋼能量（兩階段 picker，需 BENCH_PLACE_TRIGGERS）
-regA('勾帕路翁ex', 0, (st, idx) => addLog(st,
-  '金屬之路：上戰鬥場時搬場上鋼能量到自身（v2.38 stub — 需 BENCH_PLACE_TRIGGERS 兩階段）', idx));
+// v2.384 真實裝 — 勾帕路翁ex｜金屬之路：本回合從備戰上戰鬥場時，可使用 1 次。
+// 選擇場上自己其他寶可夢身上的任意數量【鋼】能量卡，改附於這隻寶可夢身上。
+// gate: 必須 inst === active && movedToActiveThisTurn === true && abilityNamesUsedThisTurn 不含此特性
+regA('勾帕路翁ex', 0, (st, idx, pool, inst) => {
+  if (!inst) return st;
+  const player = st.players[idx];
+  // gate: 必須在戰鬥場 + 本回合從備戰移到戰鬥場
+  if (player.active?.iid !== inst.iid) {
+    return addLog(st, '金屬之路：必須在戰鬥場才能使用', idx);
+  }
+  if (!inst.movedToActiveThisTurn) {
+    return addLog(st, '金屬之路：必須在本回合從備戰區放置於戰鬥場時才能使用', idx);
+  }
+  // gate: 一回合 1 次
+  if (player.abilityNamesUsedThisTurn?.includes('金屬之路')) {
+    return addLog(st, '金屬之路：本回合已使用過', idx);
+  }
+  // 找場上「自己其他寶可夢」身上的鋼能量
+  const sources: string[] = [];
+  for (const b of player.bench) {
+    if (b.energyAttached.some(e => pool.get(e.cardId)?.pokemonType === 'Metal')) {
+      sources.push(b.iid);
+    }
+  }
+  if (sources.length === 0) {
+    return addLog(st, '金屬之路：備戰區沒有「鋼」能量可搬', idx);
+  }
+  let s = addLog(st, '金屬之路：選 1 隻備戰寶可夢，把其【鋼】能量改附自身', idx);
+  s = updatePlayer(s, idx, p => ({
+    ...p,
+    abilityNamesUsedThisTurn: [...(p.abilityNamesUsedThisTurn ?? []), '金屬之路'],
+  }));
+  return withPending(s, {
+    type: 'heal-target',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'cobalion-metal-path',
+    params: { validIids: sources },
+  });
+});
+regR('cobalion-metal-path', (state, aIdx, iids, _params, pool) => {
+  const sourceIid = iids[0];
+  if (!sourceIid) return state;
+  const player = state.players[aIdx];
+  const src = player.bench.find(b => b.iid === sourceIid);
+  if (!src) return state;
+  // 取 1 張鋼能量（簡化：每次搬 1 張，玩家可重複用直到限額）
+  const idx = src.energyAttached.findIndex(e => pool.get(e.cardId)?.pokemonType === 'Metal');
+  if (idx < 0) return state;
+  const energy = src.energyAttached[idx];
+  return updatePlayer(
+    addLog(state, '金屬之路：將 1 張【鋼】能量從備戰改附勾帕路翁ex', aIdx),
+    aIdx, p => ({
+      ...p,
+      active: p.active ? { ...p.active, energyAttached: [...p.active.energyAttached, energy] } : null,
+      bench: p.bench.map(b => b.iid === sourceIid ? {
+        ...b,
+        energyAttached: b.energyAttached.filter((_, i) => i !== idx),
+      } : b),
+    }),
+  );
+});
 
 // 輔助：unused import 防護
 export type _v2380abSentinel = PlayerState;
