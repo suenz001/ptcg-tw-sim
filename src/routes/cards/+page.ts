@@ -10,7 +10,7 @@ import type { Card, SetSummary } from '$lib/cards/types';
  *
  * Card JSONs live under static/cards/*.json, fetched at runtime.
  */
-export async function load({ fetch, url }) {
+export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url: URL }) {
   const setCode = url.searchParams.get('set');
 
   if (!setCode) {

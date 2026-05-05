@@ -128,6 +128,52 @@ catch(e){ console.log('ERROR:',e.message); }
 | 修復方式 | `git show PARENT:src/lib/game/engine.ts` 還原完整版，再用 Python str.replace() 重新套用 patch |
 | 結論 | **engine.ts 禁止使用 Edit tool，一律用 Python open/read/replace/write**
 
+#### 事故紀錄：v2.371-v2.372 mount layer truncation（2026-05-05）
+
+| 項目 | 內容 |
+|------|------|
+| 觸發操作 | 用 Python `with open(...) as f: f.write(src)` 寫 engine.ts / _shared.ts / +page.svelte 等大檔 |
+| 症狀 | os.path.getsize 顯示尺寸 OK，但實際內容末尾被截斷在中段（甚至跨字元邊界）。下次 read 回來末尾不完整。 |
+| 影響範圍 | working tree 中至少 14 個檔案曾被靜默截斷；同一 working tree 跨 session 仍會殘留 stale 截斷狀態 |
+| 根本原因 | 推測 sandbox/mount layer 對 `with open() as f` 的 buffer flush 有 race condition |
+| 修復方式 | 1) 從 git HEAD 取乾淨版（`git show HEAD:path`）2) 改用 `os.write(fd, content) + os.fsync(fd) + os.O_TRUNC` 寫入 3) 寫完立刻 read 比對長度與末尾 |
+| 結論 | **大檔（engine.ts / effects.ts / _shared.ts / +page.svelte 等）寫入一律用 os.write+fsync+O_TRUNC，禁用 `with open() as f: f.write()` 模式** |
+
+#### 安全寫入範本（必背）
+
+```python
+import os, subprocess
+
+# 1) 從 git HEAD 取乾淨版（避免讀進已被 mount truncate 的 working tree 內容）
+src = subprocess.check_output(['git','show','HEAD:path/to/file']).decode('utf-8')
+
+# 2) 用 str.replace() 修改
+new_src = src.replace(old_anchor, new_content, 1)
+new_src.encode('utf-8')  # 驗證 UTF-8 完整性
+
+# 3) os.write + os.fsync + O_TRUNC 強制寫入
+fd = os.open('path/to/file', os.O_WRONLY | os.O_TRUNC | os.O_CREAT, 0o644)
+n = os.write(fd, new_src.encode('utf-8'))
+os.fsync(fd)
+os.close(fd)
+
+# 4) 立刻驗證
+expected_bytes = len(new_src.encode('utf-8'))
+assert os.path.getsize('path/to/file') == expected_bytes
+read_back = open('path/to/file','r',encoding='utf-8').read()
+assert read_back == new_src
+```
+
+#### 接手前自查（5 秒鐘）
+
+每次接手 / 開始修檔前，先跑：
+```bash
+git status -s | wc -l            # 看是否有 working tree 殘留
+git diff --stat HEAD | head      # 大檔尺寸變動異常即懷疑被截斷
+```
+
+如果發現某個你**沒動過**的檔案 `git diff` 顯示尾段被砍掉，那是過往 session 的 mount truncation 殘留 — 用 `git restore <file>` 或 `git checkout HEAD -- <file>` 還原即可（不需要 commit）。
+
 ---
 
 ## 下一個 AI Agent 接手提示詞

@@ -929,7 +929,7 @@ reg('AZ的平和', (st, idx, pool) => {
     return addLog(st, 'AZ的平和：需要戰鬥位 + 備戰區寶可夢', idx);
   }
   return withPending(addLog(st, 'AZ的平和：選 1 隻備戰寶可夢與戰鬥寶可夢互換', idx), {
-    type: 'own-bench-pokemon',
+    type: 'bench-choose',
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'az-peace-swap',

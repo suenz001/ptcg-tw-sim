@@ -26,7 +26,7 @@ regPost('奧利瓦ex|芳香射擊', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att || !att.status) return state;
   const name = pool.get(att.cardId)?.name ?? '?';
-  const newActive: CardInstance = { ...att, status: null };
+  const newActive: CardInstance = { ...att, status: undefined };
   const players = [...state.players] as typeof state.players;
   players[aIdx] = { ...state.players[aIdx], active: newActive };
   return addLog({ ...state, players },

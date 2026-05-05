@@ -331,7 +331,7 @@ TOOL_ON_DAMAGED.set('逆境保險', (state, dIdx, aIdx, _dmg, pool) => {
   const dCard = pool.get(dp.active.cardId);
   const aCard = pool.get(ap.active.cardId);
   if (!dCard || !aCard) return state;
-  const weakness = dCard.weakness?.[0]?.type;
+  const weakness = dCard.weakness?.type;
   if (!weakness || weakness !== aCard.pokemonType) return state;
   return updatePlayer(addLog(state, '逆境保險：弱點屬性匹配 → 抽 3 張', dIdx), dIdx, p => {
     const taken = p.deck.slice(0, 3);
@@ -468,6 +468,7 @@ TOOL_BOTH_SIDES_RETREAT_PLUS.add('重力之玉');
 
 function toolAttachEffect(toolName: string): EffectFn {
   return (st, idx, pool, toolInst) => {
+    if (!toolInst) return st;
     const p = st.players[idx];
     const allInPlay = [...(p.active ? [p.active] : []), ...p.bench];
     // v2.214：套用 TOOL_ATTACH_GATE — 不符合 holder 條件的寶可夢從候選排除

@@ -22,11 +22,19 @@ import {
   drawCards, healResolver,
 } from '../_shared';
 
+// v2.374：v168 寫於早期，drawCards 接 PlayerState；現行 _shared.drawCards 接 GameState。
+// 為避免大規模重構，內嵌一個 PlayerState 版 helper（行為等同 _shared.drawCards 但作用於單一 player）。
+function drawCardsP<P extends { hand: any[]; deck: any[] }>(p: P, n: number): P {
+  const taken = p.deck.slice(0, n);
+  return { ...p, hand: [...p.hand, ...taken], deck: p.deck.slice(n) };
+}
+
+
 // ── 妮莫 — 抽 3 ─────────────────────────────────────────────────────────────
 regG('妮莫', (st, idx) => st.players[idx].deck.length > 0);
 reg('妮莫', (st, idx) => {
   st = addLog(st, '妮莫：從牌庫抽 3 張', idx);
-  return updatePlayer(st, idx, p => drawCards(p, 3));
+  return drawCards(st, idx, 3);
 });
 
 // ── 博士的研究 — 棄全手 → 抽 7 ─────────────────────────────────────────────
@@ -35,7 +43,7 @@ reg('博士的研究', (st, idx) => {
   st = addLog(st, '博士的研究：手牌全棄 → 從牌庫抽 7 張', idx);
   return updatePlayer(st, idx, p => {
     const discardedHand = [...p.discard, ...p.hand];
-    return drawCards({ ...p, hand: [], discard: discardedHand }, 7);
+    return drawCardsP({ ...p, hand: [], discard: discardedHand }, 7);
   });
 });
 
@@ -44,10 +52,10 @@ regG('毅萬與馥好', (st, idx) => st.players[idx].deck.length > 0);
 reg('毅萬與馥好', (st, idx) => {
   st = addLog(st, '毅萬與馥好：抽 2 張', idx);
   return updatePlayer(st, idx, p => {
-    let p2 = drawCards(p, 2);
+    let p2 = drawCardsP(p, 2);
     // 注意：「手牌 ≥10」是抽完 2 張之後再判定
     if (p2.hand.length >= 10) {
-      p2 = drawCards(p2, 2);
+      p2 = drawCardsP(p2, 2);
     }
     return p2;
   });
@@ -62,7 +70,7 @@ reg('千里', (st, idx, pool) => {
   const isEx = oppCard?.subtype === 'ex';
   const draw = isEx ? 4 : 2;
   st = addLog(st, `千里：抽 ${draw} 張${isEx ? '（對手戰鬥場為 ex）' : ''}`, idx);
-  return updatePlayer(st, idx, p => drawCards(p, draw));
+  return drawCards(st, idx, draw);
 });
 
 // ── 主持人的帶動 — 抽 2，對手獎賞 ≤3 再抽 2 ─────────────────────────────
@@ -71,7 +79,7 @@ reg('主持人的帶動', (st, idx) => {
   const dIdx = (1 - idx) as 0 | 1;
   const draw = st.players[dIdx].prizes.length <= 3 ? 4 : 2;
   st = addLog(st, `主持人的帶動：抽 ${draw} 張${draw === 4 ? '（對手獎賞 ≤3）' : ''}`, idx);
-  return updatePlayer(st, idx, p => drawCards(p, draw));
+  return drawCards(st, idx, draw);
 });
 
 // ── 短褲小子 — 手牌洗回牌庫 → 抽 5 ─────────────────────────────────────────
@@ -80,7 +88,7 @@ reg('短褲小子', (st, idx) => {
   st = addLog(st, '短褲小子：手牌洗回牌庫 → 抽 5 張', idx);
   return updatePlayer(st, idx, p => {
     const newDeck = shuffle([...p.deck, ...p.hand]);
-    return drawCards({ ...p, hand: [], deck: newDeck }, 5);
+    return drawCardsP({ ...p, hand: [], deck: newDeck }, 5);
   });
 });
 

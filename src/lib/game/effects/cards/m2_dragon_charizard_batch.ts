@@ -43,7 +43,7 @@ function isEvolutionPokemon(card: Card | undefined): boolean {
   if (!card || card.supertype !== 'Pokemon') return false;
   return card.stage === 'Stage1' || card.stage === 'Stage2'
     || card.subtype === 'Stage1' || card.subtype === 'Stage2'
-    || card.subtype === 'ex' && (card.stage === 'Stage1' || card.stage === 'Stage2');
+    || card.subtype === 'ex' && ((card.stage as string) === 'Stage1' || (card.stage as string) === 'Stage2');
 }
 
 function selfField(p: PlayerState): CardInstance[] {

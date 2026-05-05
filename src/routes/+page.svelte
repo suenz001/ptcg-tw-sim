@@ -98,6 +98,22 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.374</span> 火箭腦力實裝 + tsc 警告全清 + AI_HANDOFF 鐵律補充</summary>
+        <ul>
+          <li>新實裝特性：火箭隊的以歐路普｜火箭腦力（移動「火箭隊的」寶可夢身上指示物到自己其他寶可夢）</li>
+          <li>tsc 既有警告從 86 個全部清乾淨：v2306 inst undefined gate（51 個）、v168 drawCards 老 API 重構（14 個）、abra_mawile_deck params 型別（7 個）、其他散落 14 個</li>
+          <li>AI_HANDOFF.md 補新鐵律：os.write+fsync+O_TRUNC 寫大檔範本 + 接手前自查（避免 mount layer truncation 殘留）</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v2.373</span> UI 補版本更新記錄</summary>
+        <ul>
+          <li>補回 v2.37 / v2.371 / v2.372 三條紀錄（之前 push 但 changelog 沒同步）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.372</span> 監視之眼通用標籤化 + 修 v172 末尾截斷</summary>
         <ul>
           <li>探探鼠｜監視之眼改用通用標籤 set（MOVE_DAMAGE_COUNTER_ABILITIES）統一 gate 移放傷害指示物類特性</li>

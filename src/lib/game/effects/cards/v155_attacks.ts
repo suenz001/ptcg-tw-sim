@@ -356,7 +356,8 @@ regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
       if (t.slot.kind === 'active' && active) {
         active = downgrade(active);
       } else if (t.slot.kind === 'bench') {
-        bench = bench.map((b, i) => i === t.slot.idx ? downgrade(b) : b);
+        const benchIdx = t.slot.idx;
+        bench = bench.map((b, i) => i === benchIdx ? downgrade(b) : b);
       }
     }
     return { ...p, active, bench, deck: shuffle([...p.deck, ...newDeckExtras]) };

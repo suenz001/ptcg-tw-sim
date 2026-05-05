@@ -322,6 +322,7 @@ import './effects/cards/v2359_j_mark_batch';
 import './effects/cards/v2360_j_mark_batch';
 import './effects/cards/v2362_new_decks_batch';
 import './effects/cards/v2370_new_decks_batch';
+import './effects/cards/v2374_rocket_brain';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -12698,7 +12699,7 @@ regPost('耿鬼ex|戲法舞步', (state, aIdx, pool) => {
     },
   });
 });
-regR('trick-step-energy', (st, idx, iids, pool) => {
+regR('trick-step-energy', (st, idx, iids, _params, pool) => {
   // idx = 攻擊方（發動方）
   const dIdx = (1 - idx) as 0 | 1;
   const energyIid = iids[0]; // 能量 iid 直接就是 id

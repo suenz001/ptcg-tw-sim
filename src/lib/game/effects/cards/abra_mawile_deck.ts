@@ -270,7 +270,7 @@ regA('瑪俐的長毛巨魔ex', 0, (st, idx, pool, cardInst) => {
   });
 });
 regR('punk-training-attach', (st, idx, iids, params, pool) => {
-  const label = (params?.label) ?? '龐克練肌';
+  const label = ((params?.label as string | undefined) ?? '龐克練肌');
   const p = st.players[idx];
 
   const picked = p.deck.filter(c => iids.includes(c.iid));
@@ -319,10 +319,10 @@ regR('punk-training-attach', (st, idx, iids, params, pool) => {
   });
 });
 regR('punk-training-distribute', (st, idx, iids, params, pool) => {
-  const label = (params?.label) ?? '龐克練肌';
-  const energyIids = (params?.energyIids) ?? [];
-  const totalCount = (params?.totalCount) ?? energyIids.length;
-  const placedCount = (params?.placedCount) ?? 0;
+  const label = ((params?.label as string | undefined) ?? '龐克練肌');
+  const energyIids = ((params?.energyIids as string[] | undefined) ?? []);
+  const totalCount = ((params?.totalCount as number | undefined) ?? energyIids.length);
+  const placedCount = ((params?.placedCount as number | undefined) ?? 0);
   if (energyIids.length === 0) return st;
 
   const currentEnergyIid = energyIids[0];
