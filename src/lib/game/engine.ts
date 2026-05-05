@@ -34,6 +34,7 @@ import {
   getKyuremElectroplasmaEffectiveCost,
   getOctopusTentacleEffectiveCost,
   getUrsalunaBloodMoonEffectiveCost,
+  getDecidueyeSnipeEffectiveCost,
   PASSIVE_PREVENT_KO,
   flipCoinsWithLog,
   promptPlayAbilities,
@@ -783,6 +784,11 @@ export function canAffordAttack(
     // v2.161 八爪武師｜觸手激怒 — 身上有傷害指示物則只需 1 個【鬥】
     const overridden3 = getOctopusTentacleEffectiveCost(pokemon, attackerName, attackName, cost);
     if (overridden3 !== cost) cost = overridden3;
+    // v2.385 狙射樹梟ex｜狙擊手之眼 — 對手手牌 = 4 張時無能量 cost 消除
+    if (attackerCard) {
+      const overridden4 = getDecidueyeSnipeEffectiveCost(attackerCard, state, cost);
+      if (overridden4 !== cost) cost = overridden4;
+    }
   }
   // v2.149 璀璨結晶（Tool ACE SPEC）：附有此 Tool 的「太晶」寶可夢使用招式時，
   //   能量需求 -1 個（任意屬性）。優先扣 Colorless，否則扣最後 1 個。
@@ -3096,13 +3102,8 @@ function handlePlaying(
       baseDamage = Math.max(0, baseDamage - defenderState.active.damageReduceNextHit);
       defenderState.active = { ...defenderState.active, damageReduceNextHit: undefined };
     }
-    // v2.384：陳舊的顎之化石（化石上場）被動 — 戰鬥場時對手招式傷害 -30
-    if (!skipDefEffects && baseDamage > 0 && defenderState.active.fossilOnField) {
-      const defCardFossil = pool.get(defenderState.active.cardId);
-      if (defCardFossil?.name === '陳舊的顎之化石') {
-        baseDamage = Math.max(0, baseDamage - 30);
-      }
-    }
+    // v2.385 BUG FIX：移除 v2.384 加的重複「陳舊的顎之化石 -30」hook
+    //   （v2.190 line 2903 早已實裝過，v2.384 audit 失誤導致重複扣傷害 60）
 
     const newDamage = defenderState.active.damage + baseDamage;
     // 有效 HP = 基礎 HP + 道具加成（英雄斗篷/勇氣護符/豪華斗篷/驅勁能量古代）
@@ -3191,6 +3192,15 @@ function handlePlaying(
       }
     }
 
+    // v2.385 耿鬼｜無限之影：受招式 KO 時，本體放回手牌（能量 / 道具 / 進化堆仍丟棄）
+    //   仍算 KO（給對手獎賞），只改變 defender 本體去向。
+    let infiniteShadowReturnsToHand = false;
+    if (!preventedKO && wouldBeKO && defenderCard.abilities?.some(a => a.name === '無限之影')) {
+      infiniteShadowReturnsToHand = true;
+      newState = addLog(newState,
+        `無限之影：${defenderCard.name} 招式 KO 不丟棄，本體放回手牌（能量/道具/進化堆仍丟棄）`,
+        dIdx);
+    }
     if (!preventedKO && wouldBeKO) {
       // 道具：被 KO 時獎賞加成（豪華斗篷 +1 / 莉莉艾的珍珠 -1 等）— 阻礙之塔時失效
       let prizeTool = 0;
@@ -3212,7 +3222,28 @@ function handlePlaying(
       // 先記錄被 KO 的道具名以便觸發 ON_KO 後續效果
       const onKOTool = updatedActive.toolAttached ? pool.get(updatedActive.toolAttached.cardId) : null;
 
-      defenderState.discard = [...defenderState.discard, ...koDiscard];
+      if (infiniteShadowReturnsToHand) {
+        // 無限之影：本體回手牌（清除 damage/能量/道具/進化堆，類似全新一張卡）
+        const cleanInst: CardInstance = {
+          ...updatedActive,
+          damage: 0,
+          energyAttached: [],
+          toolAttached: undefined,
+          evolvedFromStack: undefined,
+          status: undefined,
+          secondaryStatus: undefined,
+        };
+        // 其餘附件（能量、道具、進化堆）丟到棄牌
+        const ancillaryDiscard: CardInstance[] = [
+          ...updatedActive.energyAttached,
+          ...(updatedActive.toolAttached ? [updatedActive.toolAttached] : []),
+          ...(updatedActive.evolvedFromStack ?? []),
+        ];
+        defenderState.discard = [...defenderState.discard, ...ancillaryDiscard];
+        defenderState.hand = [...defenderState.hand, cleanInst];
+      } else {
+        defenderState.discard = [...defenderState.discard, ...koDiscard];
+      }
       defenderState.active = null;
       // Wave 39：蝶結萌虻｜多餘花粉 — 跨回合獎賞加成
       const deferredBonus = (updatedActive.deferredPrizeBonusThisTurn && updatedActive.deferredPrizeBonusThisTurn > 0)

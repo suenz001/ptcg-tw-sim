@@ -11477,6 +11477,27 @@ export function getKyuremElectroplasmaEffectiveCost(
   return originalCost;
 }
 
+/**
+ * v2.385 狙射樹梟ex｜狙擊手之眼 — 若對手手牌恰為 4 張，
+ *   則狙射樹梟ex 使用招式所需的【無】能量全部消除。
+ *   範圍：對狙射樹梟ex 持有的所有招式生效（卡面非 attack-specific）。
+ */
+export function getDecidueyeSnipeEffectiveCost(
+  attackerCard: Card,
+  state: GameState,
+  originalCost: import('$lib/cards/types').EnergyType[],
+): import('$lib/cards/types').EnergyType[] {
+  if (attackerCard.name !== '狙射樹梟ex') return originalCost;
+  // 防範同名卡未來不同特性 — 必須有「狙擊手之眼」特性
+  if (!attackerCard.abilities?.some(a => a.name === '狙擊手之眼')) return originalCost;
+  // 對手手牌恰為 4 張
+  const dIdx = (1 - state.activePlayerIndex) as 0 | 1;
+  if (state.players[dIdx].hand.length !== 4) return originalCost;
+  // 移除 cost 中的 Colorless（【無】能量需求消除）
+  const filtered = originalCost.filter(c => c !== 'Colorless');
+  return filtered.length === originalCost.length ? originalCost : filtered;
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // v2.133 — 電電蟲 + 超級袋獸厄鬼椪 預組新卡實裝
 //   特性 6 個：複眼（已加 PASSIVE_ATTACK_BONUS）/ 勤奮之心 / 老練招式（已加 helper）

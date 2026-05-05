@@ -98,6 +98,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.385</span> J 標 2 個 stub 真實裝 + v2.384 重複 hook bug fix</summary>
+        <ul>
+          <li>狙射樹梟ex｜狙擊手之眼：對手手牌恰為 4 張時，狙射樹梟ex 招式所需的【無】能量全部消除（effects.ts 加 getDecidueyeSnipeEffectiveCost helper，仿酋雷姆三重冰霜 pattern；engine.ts cost 計算處加 overridden4 呼叫）</li>
+          <li>耿鬼｜無限之影：受招式 KO 時，本體放回手牌（能量/道具/進化堆仍丟棄、仍給對手獎賞），engine.ts KO 處理 path 加 hook</li>
+          <li>BUG FIX：移除 v2.384 加的重複「陳舊的顎之化石 -30」hook（v2.190 line 2903 早已實裝，v2.384 audit 失誤導致對手攻擊時被扣兩次 30 = -60 傷害）</li>
+          <li>剩 4 個 stub 待後續：整人擊落 / 光之翼 / 雙重屬性 / 鰭之化石被動（皆需更大範圍 engine 改動）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.384</span> Audit 工具升級 + J 標 3 個 stub 真實裝</summary>
         <ul>
           <li>新增 scripts/audit-card-impl.mjs — 掃描 14 種實裝 pattern 全面 audit script，避免單 pattern 誤判（v2.39 化石/Stadium 教訓）</li>
