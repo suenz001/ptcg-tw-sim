@@ -29,6 +29,7 @@ import {
   sameEvoName,
   updatePlayer,
   withPending,
+  triggerOakeyeMillIfApplicable,
 } from '../_shared';
 
 // ── 私有工具函式 ──────────────────────────────────────────────────────────────
@@ -146,11 +147,14 @@ regPost('河馬獸|龍捲風噴射', (state, aIdx, pool) => {
     deck: p.deck.slice(count),
     discard: [...p.discard, ...milled],
   }));
-  return addLog(
+  s = addLog(
     s,
     `龍捲風噴射：塔拉剛效果 → 將對手牌庫上方 ${count} 張（${milledNames}）丟棄`,
     aIdx,
   );
+  // v2.388 堅果啞鈴｜整人擊落 trigger
+  s = triggerOakeyeMillIfApplicable(s, dIdx, milled, pool);
+  return s;
 });
 
 // ── 群組 F：代歐奇希斯｜精神防護 ────────────────────────────────────────────

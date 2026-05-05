@@ -2831,7 +2831,15 @@ function handlePlaying(
       effectiveWeaknessType = 'Psychic';
     }
     const weaknessDisabled = !!defender.active.weaknessDisabledThisTurn;
-    if (!skipWeakRes && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType && attackerCard.pokemonType === effectiveWeaknessType) {
+    // v2.388 小碎鑽｜雙重屬性 — 場上時改為【鬥】+【超】2 種屬性。
+    //   對方招式屬性 == 鬥或超 都觸發弱點 / 抵抗力。
+    const attackerHasDualType = attackerCard.name === '小碎鑽'
+      && attackerCard.abilities?.some(a => a.name === '雙重屬性');
+    const attackerEffectiveTypes: string[] = attackerHasDualType
+      ? ['Fighting', 'Psychic']
+      : (attackerCard.pokemonType ? [attackerCard.pokemonType] : []);
+    if (!skipWeakRes && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType
+        && attackerEffectiveTypes.includes(effectiveWeaknessType)) {
       baseDamage *= 2;
     }
     // v2.260 Bug #1：抵抗力計算（PDF §I-A-01 步驟 4）
@@ -2841,7 +2849,9 @@ function handlePlaying(
     //   未來若需「消除抵抗力」hook（如太陽岩 抵抗遮蔽），在此處加 effectiveResistance flag。
     const resistanceValue = defenderCard.resistance?.value;  // 形如 "-30"
     const resistanceType = defenderCard.resistance?.type;
-    if (!skipWeakRes && baseDamage > 0 && resistanceType && resistanceValue && attackerCard.pokemonType === resistanceType) {
+    // v2.388 小碎鑽｜雙重屬性 — 抵抗力同步用 attackerEffectiveTypes
+    if (!skipWeakRes && baseDamage > 0 && resistanceType && resistanceValue
+        && attackerEffectiveTypes.includes(resistanceType)) {
       const resistDelta = parseInt(resistanceValue, 10);  // "-30" → -30
       if (!isNaN(resistDelta)) {
         baseDamage = Math.max(0, baseDamage + resistDelta);

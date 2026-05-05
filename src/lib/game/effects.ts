@@ -44,6 +44,7 @@ import {
   sameEvoName,
   applyBenchPlaceSideEffects,
   getEnergyDiscardUnits,
+  triggerOakeyeMillIfApplicable,
 } from './effects/_shared';
 
 // re-export helper 給 engine.ts / 其他 resolver 用
@@ -6355,16 +6356,19 @@ function millSelfDeckTopPost(n: number, label: string): AttackPostFn {
 }
 
 function millOppDeckTopPost(n: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const p = state.players[dIdx];
     if (p.deck.length === 0) return addLog(state, `${label}：對手牌庫為空`, aIdx);
     const taken = p.deck.slice(0, n);
-    return updatePlayer(
+    let s = updatePlayer(
       addLog(state, `${label}：對手牌庫頂 ${taken.length} 張丟入棄牌區`, aIdx),
       dIdx,
       pl => ({ ...pl, deck: pl.deck.slice(taken.length), discard: [...pl.discard, ...taken] }),
     );
+    // v2.388 堅果啞鈴｜整人擊落 trigger
+    s = triggerOakeyeMillIfApplicable(s, dIdx, taken, pool);
+    return s;
   };
 }
 
@@ -9552,6 +9556,17 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
   if (!isActive && isBenchProtected(st, pool)) {
     const name = pool.get(target.cardId)?.name ?? '?';
     let s = addLog(st, `${label}：${name} 因對戰圓形競技場效果不受傷害指示物`, actorIdx);
+    if (userIid) {
+      s = selfKOInstance(s, actorIdx, userIid, pool, label);
+    }
+    return s;
+  }
+  // v2.388 超級皮可西ex｜光之翼免疫對手特性效果（咒詛炸彈）
+  const targetCardForImmunity = pool.get(target.cardId);
+  if (targetCardForImmunity?.abilities?.some(a => a.name === '光之翼')) {
+    let s = addLog(st,
+      `${label}：${targetCardForImmunity.name} 因「光之翼」不受對手特性效果影響（不放指示物）`,
+      actorIdx);
     if (userIid) {
       s = selfKOInstance(s, actorIdx, userIid, pool, label);
     }

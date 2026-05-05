@@ -24,12 +24,14 @@
  *   - 凍原堡壘             engine.ts passive damage reduce
  *   - 灰塵山｜垃圾洩氣     engine.ts passive damage reduce
  *
- * 未實裝 stub（需 engine 改動，標 TODO 留下次）：
- *   - 狙射樹梟ex｜狙擊手之眼  能量 cost 修正（需 engine cost calc hook）
- *   - 勒克貓｜鬥志戰吼        進化 gate（需 engine evolve gate hook）
- *   - 耿鬼｜無限之影          KO 替代回手牌（需 engine KO replacement hook）
- *   - 堅果啞鈴｜整人擊落      牌庫被丟棄時觸發（需 engine deck-mill hook）
- *   - 勾帕路翁ex｜金屬之路    進場時搬能量（兩階段 picker，需 BENCH_PLACE_TRIGGERS）
+ * 已陸續真實裝（截至 v2.388，皆在 engine.ts / 其他模組 hook）：
+ *   - 狙射樹梟ex｜狙擊手之眼（v2.385 effects.ts getDecidueyeSnipeEffectiveCost）
+ *   - 勒克貓｜鬥志戰吼（v2.384 engine.ts EVOLVE gate hasFightingHowl）
+ *   - 耿鬼｜無限之影（v2.385 engine.ts KO 替代回手牌 hook）
+ *   - 堅果啞鈴｜整人擊落（v2.388 _shared.ts triggerOakeyeMillIfApplicable）
+ *   - 勾帕路翁ex｜金屬之路（v2.384 本檔 regA + movedToActiveThisTurn）
+ *   - 超級皮可西ex｜光之翼（v2.387 + v2.388 補完 cursed-bomb immunity）
+ *   - 小碎鑽｜雙重屬性（v2.388 engine.ts attackerEffectiveTypes 弱點/抵抗力）
  */
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
@@ -204,10 +206,16 @@ regA('超級皮可西ex', 0, (st, idx) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 小碎鑽｜雙重屬性 — 場上時屬性改為【鬥】+【超】2 種
+// 小碎鑽｜雙重屬性（v2.388 真實裝 — engine.ts hook）
+// 卡面：「只要這隻寶可夢在場上，改為【鬥】與【超】2 種屬性。」
+//
+// 實裝路徑（不在本檔，本檔只 reg noop 提供 audit 命中）：
+// - engine.ts 弱點計算（line ~2834）：attackerEffectiveTypes 改為陣列，
+//   小碎鑽攻擊時對方招式弱點屬性為【鬥】或【超】皆觸發 ×2。
+// - engine.ts 抵抗力計算（line ~2845）：同步改 attackerEffectiveTypes.includes(resistance.type)。
+// 對手側查「對【鬥】/【超】寶可夢」類效果，後續可在 PASSIVE_DAMAGE_REDUCE 等
+// 對 holder.pokemonType 查詢處用同 helper 加 short-circuit。
 // ══════════════════════════════════════════════════════════════════════════════
-// 設計：需要在 engine 計算 pokemonType 的所有點（弱點、能量需求、屬性檢查）注入此 hook。
-// 暫用 noop regA stub 命中 audit，未來統一改用 POKEMON_TYPE_OVERRIDE map。
 regA('小碎鑽', 0, (st, idx) => {
   return addLog(st, '雙重屬性：場上時改為【鬥】+【超】2 種屬性（v2.38 stub — 需 engine 級擴張）', idx);
 });

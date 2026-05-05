@@ -98,6 +98,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.388</span> J 標所有 stub 一口氣補完（光之翼/雙重屬性/鰭之化石/整人擊落）</summary>
+        <ul>
+          <li>光之翼補完：cursed-bomb resolver 加 immunity（彷徨夜靈/黑夜魔靈咒詛炸彈對超級皮可西ex 不放指示物）</li>
+          <li>小碎鑽｜雙重屬性：engine.ts 弱點 + 抵抗力計算改用 attackerEffectiveTypes 陣列（小碎鑽攻擊時對方【鬥】或【超】弱點皆觸發 ×2）</li>
+          <li>陳舊的鰭之化石被動：老大的指令（gust supporter）filter 排除鰭之化石（regG + reg validIids 過濾）</li>
+          <li>堅果啞鈴｜整人擊落：_shared.ts 加 triggerOakeyeMillIfApplicable helper；effects.ts millOppDeckTopPost + v2360 龍捲風噴射 加 trigger 呼叫</li>
+          <li>v2380_j_abilities 檔頭 stub 列表全部標為已真實裝</li>
+          <li>J 標 audit 工具持續 100% pattern 命中；功能層真實裝率約 99% 以上</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.387</span> 超級皮可西ex｜光之翼真實裝</summary>
         <ul>
           <li>光之翼：超級皮可西ex 不受對手寶可夢特性效果影響</li>

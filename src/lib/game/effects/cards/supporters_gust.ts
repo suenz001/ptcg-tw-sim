@@ -20,11 +20,24 @@ import {
 // 老大的指令 — 選 1 隻對手備戰寶可夢與其戰鬥寶可夢互換
 // ══════════════════════════════════════════════════════════════════════════════
 
-regG('老大的指令', (st, idx) => st.players[(1 - idx) as 0 | 1].bench.length > 0);
-reg('老大的指令', (st, idx) => {
+regG('老大的指令', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
-  if (st.players[oppIdx].bench.length === 0) {
-    return addLog(st, '老大的指令：對手備戰區沒有寶可夢', idx);
+  // v2.388 陳舊的鰭之化石被動 — 不受對手支援者影響：filter 排除
+  const validBench = st.players[oppIdx].bench.filter(b => {
+    const card = pool.get(b.cardId);
+    return !(b.fossilOnField && card?.name === '陳舊的鰭之化石');
+  });
+  return validBench.length > 0;
+});
+reg('老大的指令', (st, idx, pool) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  // v2.388 陳舊的鰭之化石被動 — 不受對手支援者影響：filter 排除
+  const validIids = st.players[oppIdx].bench.filter(b => {
+    const card = pool.get(b.cardId);
+    return !(b.fossilOnField && card?.name === '陳舊的鰭之化石');
+  }).map(b => b.iid);
+  if (validIids.length === 0) {
+    return addLog(st, '老大的指令：對手備戰區沒有可呼叫的寶可夢（鰭之化石被動免疫）', idx);
   }
   st = addLog(st, '老大的指令：選擇要呼叫的對手備戰寶可夢', idx);
   return withPending(st, {
@@ -32,6 +45,7 @@ reg('老大的指令', (st, idx) => {
     actorIdx: idx, sourcePlayerIdx: oppIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'gust-opp',
+    params: { validIids },
   });
 });
 

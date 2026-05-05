@@ -321,6 +321,59 @@ export function isAbilityBlockedByOakEye(
   return hasOakEye(state, pool);
 }
 
+/**
+ * v2.388 — 堅果啞鈴｜整人擊落 trigger 檢查
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 卡面（M4 18481）：「在對手的回合，這張卡因對手的招式・特性・物品卡・支援者卡的
+ *   效果而從牌庫被丟棄時，將對手的牌庫上方 8 張卡丟棄。」
+ *
+ * 在每個「對手讓我方牌庫被丟棄」的 resolver 結束時呼叫此 helper：
+ *   triggerOakeyeMillIfApplicable(state, victimIdx, milledCards, pool)
+ *
+ * - victimIdx: 被 mill 的玩家（堅果啞鈴擁有者）
+ * - milledCards: 從 victim 牌庫被丟到棄牌的卡清單
+ *
+ * 動作：若 milled 含「堅果啞鈴」+ 是對手的回合 → 對 oppIdx 牌庫頂 8 張丟棄。
+ *
+ * 已套用 trigger 的路徑（v2.388）：
+ *   - effects.ts millOppDeckTopPost helper（涵蓋 巨炭山｜山崩、雄偉牙｜地盤崩壞、
+ *     花岩怪｜崩山 10、鐵螯龍蝦｜喀嚓喀嚓 等所有「對手牌庫頂 N 張丟」招式）
+ *   - effects/cards/v2360_j_mark_batch.ts 河馬獸｜龍捲風噴射（塔拉剛效果）
+ *
+ * 未套用 trigger 的路徑（已知但 follow-up）：
+ *   - 紫竽（看對手牌庫頂 N 張選 1 張丟）— 對手主動讓己方牌庫丟，目前不在路徑
+ *   - 「特殊紅牌」/「庫瑟洛斯奇的企圖」等對手手牌洗回牌庫類 — 不算「牌庫被丟棄」
+ *   - 對手特性主動 mill 我方牌庫 — 目前 J 標 set 中無此類卡
+ */
+export function triggerOakeyeMillIfApplicable(
+  state: GameState,
+  victimIdx: 0 | 1,
+  milledCards: CardInstance[],
+  pool: Map<string, Card>,
+): GameState {
+  // 條件 1：milled 含堅果啞鈴
+  const hasOakNail = milledCards.some(c => pool.get(c.cardId)?.name === '堅果啞鈴');
+  if (!hasOakNail) return state;
+  // 條件 2：是「對手的回合」（victim 不是當前 active 玩家）
+  const oppIdx = (1 - victimIdx) as 0 | 1;
+  if (state.activePlayerIndex !== oppIdx) return state;
+  // 動作：對手牌庫頂 8 張丟棄
+  const oppPlayer = state.players[oppIdx];
+  if (oppPlayer.deck.length === 0) {
+    return addLog(state,
+      '整人擊落：堅果啞鈴從牌庫被丟棄，但對手牌庫為空，無效果',
+      victimIdx);
+  }
+  const milled = oppPlayer.deck.slice(0, 8);
+  return updatePlayer(
+    addLog(state,
+      `整人擊落：堅果啞鈴從牌庫被丟棄 → 對手牌庫頂 ${milled.length} 張丟入棄牌區`,
+      victimIdx),
+    oppIdx,
+    pl => ({ ...pl, deck: pl.deck.slice(milled.length), discard: [...pl.discard, ...milled] }),
+  );
+}
+
 
 /**
  * v2.341：被動特性——對手附能時自動觸發。
