@@ -290,5 +290,94 @@ regR('cobalion-metal-path', (state, aIdx, iids, _params, pool) => {
   );
 });
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 麻麻鰻｜電氣發電機（v2.386 真實裝）
+// 卡面（M2a 14708 / MC 16728 / SV11B 13723, 13901）：「在自己的回合時可使用 1 次。
+//   從自己的棄牌區選擇 1 張『基本【雷】能量』卡，附於備戰寶可夢身上。」
+// 兩階段 picker（仿奇跡修正檔 pattern）：
+//   1. discard-search filter='BasicEnergy:Lightning' 選 1 張基本雷能量
+//   2. bench-choose 選 1 隻備戰寶可夢
+//   3. 把能量從棄牌區移到目標備戰寶可夢
+// ══════════════════════════════════════════════════════════════════════════════
+regA('麻麻鰻', 0, (st, idx, pool) => {
+  const player = st.players[idx];
+  // gate: 一回合 1 次
+  if (player.abilityNamesUsedThisTurn?.includes('電氣發電機')) {
+    return addLog(st, '電氣發電機：本回合已使用過', idx);
+  }
+  // gate: 棄牌區至少 1 張基本【雷】能量
+  const hasBasicLight = player.discard.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic'
+      && (card.pokemonType === 'Lightning' || card.name.includes('【雷】'));
+  });
+  if (!hasBasicLight) {
+    return addLog(st, '電氣發電機：棄牌區無基本【雷】能量', idx);
+  }
+  // gate: 至少 1 隻備戰寶可夢
+  if (player.bench.length === 0) {
+    return addLog(st, '電氣發電機：備戰區無寶可夢', idx);
+  }
+  let s = addLog(st, '電氣發電機：從棄牌區選 1 張基本【雷】能量', idx);
+  s = updatePlayer(s, idx, p => ({
+    ...p,
+    abilityNamesUsedThisTurn: [...(p.abilityNamesUsedThisTurn ?? []), '電氣發電機'],
+  }));
+  return withPending(s, {
+    type: 'discard-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy:Lightning',
+    minCount: 1, maxCount: 1,
+    effectKey: 'eelektross-generator-energy',
+  });
+});
+
+regR('eelektross-generator-energy', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return st;
+  const energyIid = iids[0];
+  const player = st.players[idx];
+  const energyInst = player.discard.find(c => c.iid === energyIid);
+  const energyName = energyInst ? (pool.get(energyInst.cardId)?.name ?? '【雷】能量') : '【雷】能量';
+  if (player.bench.length === 0) {
+    // 備戰區為空（防禦性 — 在 regA gate 已擋過，但保險）
+    return addLog(st, '電氣發電機：備戰區無寶可夢，附加取消', idx);
+  }
+  const validIids = player.bench.map(b => b.iid);
+  return withPending(st, {
+    type: 'bench-choose',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'eelektross-generator-attach',
+    params: { energyIid, energyName, validIids },
+  });
+});
+
+regR('eelektross-generator-attach', (st, idx, iids, params, pool) => {
+  const energyIid = params?.energyIid as string;
+  if (!energyIid) return st;
+  const targetIid = iids[0];
+  const player = st.players[idx];
+  const target = player.bench.find(c => c.iid === targetIid);
+  const targetName = target ? (pool.get(target.cardId)?.name ?? '備戰寶可夢') : '備戰寶可夢';
+  const energyName = (params?.energyName as string | undefined)
+    ?? (() => {
+      const e = player.discard.find(c => c.iid === energyIid);
+      return e ? (pool.get(e.cardId)?.name ?? '【雷】能量') : '【雷】能量';
+    })();
+  st = addLog(st, `電氣發電機：將 ${energyName} 從棄牌區附加到 ${targetName}`, idx);
+  return updatePlayer(st, idx, p => {
+    const energyCard = p.discard.find(c => c.iid === energyIid);
+    if (!energyCard) return p;
+    return {
+      ...p,
+      discard: p.discard.filter(c => c.iid !== energyIid),
+      bench: p.bench.map(c => c.iid === targetIid
+        ? { ...c, energyAttached: [...c.energyAttached, energyCard] }
+        : c),
+    };
+  });
+});
+
 // 輔助：unused import 防護
 export type _v2380abSentinel = PlayerState;

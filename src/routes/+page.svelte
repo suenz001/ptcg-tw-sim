@@ -98,6 +98,15 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.386</span> 麻麻鰻｜電氣發電機真實裝 + 鬥志戰吼確認</summary>
+        <ul>
+          <li>麻麻鰻｜電氣發電機（M2a/MC/SV11B 4 印）：在自己的回合可使用 1 次，從棄牌區選 1 張基本【雷】能量附於備戰寶可夢</li>
+          <li>實作：仿奇跡修正檔兩階段 picker（discard-search BasicEnergy:Lightning → bench-choose → 附能量），一回合 1 次 abilityNamesUsedThisTurn gate</li>
+          <li>勒克貓｜鬥志戰吼：v2.384 已實裝（engine.ts EVOLVE gate hasFightingHowl bypass），確認 hook 仍在 line 1622</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.385</span> J 標 2 個 stub 真實裝 + v2.384 重複 hook bug fix</summary>
         <ul>
           <li>狙射樹梟ex｜狙擊手之眼：對手手牌恰為 4 張時，狙射樹梟ex 招式所需的【無】能量全部消除（effects.ts 加 getDecidueyeSnipeEffectiveCost helper，仿酋雷姆三重冰霜 pattern；engine.ts cost 計算處加 overridden4 呼叫）</li>
