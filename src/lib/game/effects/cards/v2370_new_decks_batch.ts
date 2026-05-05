@@ -17,11 +17,11 @@
  *   D. 雷吉奇卡斯｜寶石破壞   CCCC，100；若對手戰鬥場為「太晶」寶可夢則 +230
  *
  * 設計取捨：
- *   - 可達鴨｜濕氣（消除「將自己昏厥的特性」）：屬於極窄條件式特性消除（PTCG 中
- *     僅針對「使用後讓自己昏厥」的特性如桃歹郎ex｜支配鎖鏈），需擴 engine 才能
- *     正確判斷「自我犧牲特性」標記，本波 stub 註解保留，未來實裝。
- *   - 探探鼠｜監視之眼（傷害指示物無法改放）：需新增 ENGINE-level damage-counter
- *     移動 hook（目前 engine 沒有獨立 hook 點），影響範圍小，本波 stub 保留。
+ *   - 可達鴨｜濕氣 — v2.65 已既存實裝（effects.ts hasPsyduckDamp），新版 M2a 可達鴨
+ *     的 abilities[0].name === '濕氣' 直接被既有 hook 認得，無需重做。
+ *   - 探探鼠｜監視之眼 — v2.371 已補實裝（maroon_dragon_deck.ts hasOakEye + engine.ts
+ *     腎上腺腦力 gate），目前覆蓋「願增猿｜腎上腺腦力」此類「移放傷害指示物」特性。
+ *     未來新增同類特性時，只要在其 regA 入口加 hasOakEye 檢查即可。
  */
 
 import type { CardInstance, PlayerState } from '../../types';
@@ -175,5 +175,7 @@ regPre('雷吉奇卡斯|寶石破壞', (state, aIdx, pool) => {
   return { state: logged, damage: 100 + (isTera ? 230 : 0) };
 });
 
-// stub — 未來實裝（可達鴨｜濕氣、探探鼠｜監視之眼），見檔頭註解
+// stub 區已淨空 — 可達鴨｜濕氣（v2.65 既存）/ 探探鼠｜監視之眼（v2.371）皆完整實裝。
+
+// 輔助：避免 TS 把未使用的型別 import 標記成 unused
 export type _v2370Sentinel = PlayerState;

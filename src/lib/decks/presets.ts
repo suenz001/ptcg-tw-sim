@@ -14,6 +14,7 @@ import type { Deck } from './types';
 const GENGAR_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_mbg__',
   name: '超級耿鬼ex（預組）',
+  createdAt: '',
   entries: [
     // ── 寶可夢 ──
     { cardId: '14129', count: 4 }, // 鬼斯
@@ -49,6 +50,7 @@ const GENGAR_DECK: Omit<Deck, 'updatedAt'> = {
 const DIANCIE_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_mbd__',
   name: '超級蒂安希ex（預組）',
+  createdAt: '',
   entries: [
     // ── 寶可夢 ──
     { cardId: '14105', count: 2 }, // 布魯
@@ -90,6 +92,7 @@ const DIANCIE_DECK: Omit<Deck, 'updatedAt'> = {
 const CYNTHIA_GARCHOMP_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_cynthia_garchomp__',
   name: '竹蘭的烈咬陸鯊EX',
+  createdAt: '',
   entries: [
     // ── 寶可夢（19 張）──
     { cardId: '12702', count: 3 },  // <竹蘭的>烈咬陸鯊ex (SV9a)
@@ -138,6 +141,7 @@ const CYNTHIA_GARCHOMP_DECK: Omit<Deck, 'updatedAt'> = {
 const MARRUNE_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_marrune_dragapult__',
   name: '魔靈多龍',
+  createdAt: '',
   entries: [
     // ── 寶可夢（20 張）──
     { cardId: '16960', count: 1 },  // 吉雉雞ex (MC) — 扭轉乾坤
@@ -189,6 +193,7 @@ const MARRUNE_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
 const ALAKAZAM_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_alakazam__',
   name: '胡地',
+  createdAt: '',
   entries: [
     // ── 寶可夢（21 張）──
     { cardId: '14056', count: 4 },  // 凱西 (M1S)
@@ -235,6 +240,7 @@ const ALAKAZAM_DECK: Omit<Deck, 'updatedAt'> = {
 const MARNIE_SCRAFTY_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_marnie_scrafty__',
   name: '瑪俐的長毛巨魔ex',
+  createdAt: '',
   entries: [
     // ── 寶可夢（20 張）──
     { cardId: '12610', count: 3 },  // <瑪俐的>長毛巨魔ex (SVOM)
@@ -283,6 +289,7 @@ const MARNIE_SCRAFTY_DECK: Omit<Deck, 'updatedAt'> = {
 const ROCKET_MEWTWO_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_rocket_mewtwo__',
   name: '火箭隊的超夢ex',
+  createdAt: '',
   entries: [
     // ── 寶可夢（15 張）──
     { cardId: '16761', count: 2 }, // <火箭隊的>超夢ex (MC)
@@ -331,6 +338,7 @@ const ROCKET_MEWTWO_DECK: Omit<Deck, 'updatedAt'> = {
 const THUNDER_DRUM_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_thunder_drum__',
   name: '猛雷鼓ex',
+  createdAt: '',
   entries: [
     // ── 寶可夢（10 張）──
     { cardId: '17025', count: 4 }, // 猛雷鼓ex (MC)
@@ -365,6 +373,7 @@ const THUNDER_DRUM_DECK: Omit<Deck, 'updatedAt'> = {
 const SLOWKING_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_slowking__',
   name: '呆呆王',
+  createdAt: '',
   entries: [
     // ── 寶可夢（21 張）──
     { cardId: '18072', count: 4 }, // 呆呆獸 (M-P 憨憨臉)
@@ -409,6 +418,7 @@ const SLOWKING_DECK: Omit<Deck, 'updatedAt'> = {
 const MEGA_LUCARIO_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_mega_lucario__',
   name: '超級路卡利歐',
+  createdAt: '',
   entries: [
     // ── 寶可夢（17 張）──
     { cardId: '16843', count: 2 }, // 太陽岩 (MC)
@@ -450,6 +460,7 @@ const MEGA_LUCARIO_DECK: Omit<Deck, 'updatedAt'> = {
 const OLIVA_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_oliva__',
   name: '奧利瓦',
+  createdAt: '',
   entries: [
     // ── 寶可夢（20 張）──
     { cardId: '16542', count: 2 }, // 奧利瓦ex (MC 071)
@@ -492,6 +503,7 @@ const OLIVA_DECK: Omit<Deck, 'updatedAt'> = {
 const ALLOY_BRIDGE_DRAGON_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_alloy_bridge_dragon__',
   name: '鋁鋼橋龍',
+  createdAt: '',
   entries: [
     // ── 寶可夢（21 張）──
     { cardId: '10967', count: 4 }, // 鋁鋼龍 (SV7 072/102) — Leon 指定 v2.218
@@ -534,6 +546,7 @@ const ALLOY_BRIDGE_DRAGON_DECK: Omit<Deck, 'updatedAt'> = {
 const STARMIE_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_starmie__',
   name: '超級寶石海星',
+  createdAt: '',
   entries: [
     // ── 寶可夢（17 張）──
     { cardId: '16657', count: 3 }, // 雪童子 (MC 186)
@@ -579,6 +592,7 @@ const STARMIE_DECK: Omit<Deck, 'updatedAt'> = {
 const N_ZOROARK_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_n_zoroark__',
   name: 'N的索羅亞克',
+  createdAt: '',
   entries: [
     { cardId: '16941', count: 4 }, // N的索羅亞克ex (MC 470/742)
     { cardId: '16940', count: 4 }, // N的索羅亞 (MC 469/742)
@@ -615,6 +629,7 @@ const N_ZOROARK_DECK: Omit<Deck, 'updatedAt'> = {
 const BLAZIKEN_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_blaziken_dragapult__',
   name: '火焰雞多龍',
+  createdAt: '',
   entries: [
     { cardId: '17017', count: 4 }, // 多龍梅西亞 (MC 546/742)
     { cardId: '17018', count: 4 }, // 多龍奇 (MC 547/742)
@@ -652,6 +667,7 @@ const BLAZIKEN_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
 const OKIDOGI_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_okidogi__',
   name: '夠讚狗',
+  createdAt: '',
   entries: [
     { cardId: '10478', count: 3 }, // 夠讚狗 (SV6 064/101)
     { cardId: '10607', count: 1 }, // 月月熊 赫月 (SV6a 025/064)
@@ -683,6 +699,7 @@ const OKIDOGI_DECK: Omit<Deck, 'updatedAt'> = {
 const SALAZZLE_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_salazzle__',
   name: '顫弦蠑螈',
+  createdAt: '',
   entries: [
     { cardId: '14374', count: 4 }, // 毒電嬰 (M2 056/080)
     { cardId: '14375', count: 4 }, // 顫弦蠑螈 (M2 057/080)
@@ -717,6 +734,7 @@ const SALAZZLE_DECK: Omit<Deck, 'updatedAt'> = {
 const CERULEDGE_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_ceruledge__',
   name: '蒼炎刃鬼',
+  createdAt: '',
   entries: [
     { cardId: '14691', count: 3 }, // 蒼炎刃鬼ex (M2a 031/193)  v2.113 Leon 修正 4→3
     { cardId: '16616', count: 4 }, // 炭小侍 (MC 145/742)
@@ -744,6 +762,7 @@ const CERULEDGE_DECK: Omit<Deck, 'updatedAt'> = {
 const MEGA_GRENINJA_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_mega_greninja__',
   name: '超級甲賀忍蛙',
+  createdAt: '',
   entries: [
     { cardId: '18440', count: 4 }, // 呱呱泡蛙 (M4 020/083)
     { cardId: '18441', count: 2 }, // 呱頭蛙 (M4 021/083)
@@ -779,6 +798,7 @@ const MEGA_GRENINJA_DECK: Omit<Deck, 'updatedAt'> = {
 const ELECTRIC_SPIDER_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_electric_spider__',
   name: '電電蟲',
+  createdAt: '',
   entries: [
     // Pokemon 19
     { cardId: '10927', count: 2 }, // 電電蟲 (SV7 032/102)
@@ -824,6 +844,7 @@ const ELECTRIC_SPIDER_DECK: Omit<Deck, 'updatedAt'> = {
 const MEGA_KANGASKHAN_OGERPON_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_mega_kangaskhan_ogerpon__',
   name: '超級袋獸厄鬼椪',
+  createdAt: '',
   entries: [
     // Pokemon 18
     { cardId: '14071', count: 2 }, // 超級袋獸ex (M1S 051/063)
@@ -867,6 +888,7 @@ const MEGA_KANGASKHAN_OGERPON_DECK: Omit<Deck, 'updatedAt'> = {
 const RAKI_TYPHLOSION_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_raki_typhlosion__',
   name: '阿響的火爆獸',
+  createdAt: '',
   entries: [
     // Pokemon 21
     { cardId: '12673', count: 4 }, // 阿響的火球鼠 (SV9a 015/063)
@@ -910,6 +932,7 @@ const RAKI_TYPHLOSION_DECK: Omit<Deck, 'updatedAt'> = {
 const ROCKET_HONCHKROW_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_rocket_honchkrow__',
   name: '火箭隊的烏鴉頭頭',
+  createdAt: '',
   entries: [
     // Pokemon 13
     { cardId: '14763', count: 4 }, // 火箭隊的烏鴉頭頭 (M2a 103/193)
@@ -941,6 +964,7 @@ const ROCKET_HONCHKROW_DECK: Omit<Deck, 'updatedAt'> = {
 const MEGA_LOPUNNY_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_mega_lopunny__',
   name: '超級長耳兔',
+  createdAt: '',
   entries: [
     // Pokemon 17
     { cardId: '14390', count: 2 }, // 超級長耳兔ex (M2 072/080)
@@ -978,6 +1002,7 @@ const MEGA_LOPUNNY_DECK: Omit<Deck, 'updatedAt'> = {
 const HONEY_SERPERIOR_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_honey_serperior__',
   name: '蜜集大蛇',
+  createdAt: '',
   entries: [
     // Pokemon 20
     { cardId: '10905', count: 2 }, // 啃果蟲 (SV7 010/102)
@@ -1014,6 +1039,7 @@ const HONEY_SERPERIOR_DECK: Omit<Deck, 'updatedAt'> = {
 const FLAREON_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_flareon__',
   name: '火伊布',
+  createdAt: '',
   entries: [
     // Pokemon 22
     { cardId: '12411', count: 2 }, // 伊布 (SV8a 125/187) — Leon v2.148 確認 HP=50
@@ -1062,6 +1088,7 @@ const FLAREON_DECK: Omit<Deck, 'updatedAt'> = {
 const DUDUNSPARCE_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_dudunsparce_dragapult__',
   name: '土龍多龍',
+  createdAt: '',
   entries: [
     // Pokemon 21
     { cardId: '17017', count: 4 }, // 多龍梅西亞 (MC 546/742)
@@ -1099,6 +1126,7 @@ const DUDUNSPARCE_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
 const MEGANIUM_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_meganium__',
   name: '大竺葵',
+  createdAt: '',
   entries: [
     // Pokemon 19
     { cardId: '16553', count: 4 }, // 厄鬼椪 碧草面具ex (MC 082/742)
@@ -1135,6 +1163,7 @@ const MEGANIUM_DECK: Omit<Deck, 'updatedAt'> = {
 const ESPEON_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_espeon__',
   name: '太陽伊布',
+  createdAt: '',
   entries: [
     // Pokemon 21
     { cardId: '16769', count: 2 }, // 太陽伊布ex (MC 298/742)
@@ -1178,6 +1207,7 @@ const ESPEON_DECK: Omit<Deck, 'updatedAt'> = {
 const METAGROSS_ROCKET_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_metagross_rocket__',
   name: '巨金怪',
+  createdAt: '',
   entries: [
     // Pokemon 19
     { cardId: '12396', count: 4 }, // 金屬怪 (SV8a 107/187)
@@ -1213,6 +1243,7 @@ const METAGROSS_ROCKET_DECK: Omit<Deck, 'updatedAt'> = {
 const KANGASKHAN_BOUFFALANT_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_kangaskhan_bouffalant__',
   name: '水牛超級袋獸',
+  createdAt: '',
   entries: [
     // Pokemon 16
     { cardId: '14071', count: 2 }, // 超級袋獸ex (M1S 051/063)
@@ -1254,6 +1285,7 @@ const KANGASKHAN_BOUFFALANT_DECK: Omit<Deck, 'updatedAt'> = {
 const LILLIE_CLEFAIRY_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_lillie_clefairy__',
   name: '莉莉艾的皮皮',
+  createdAt: '',
   entries: [
     // Pokemon 18
     { cardId: '14071', count: 2 }, // 超級袋獸ex (M1S 051/063)
@@ -1294,6 +1326,7 @@ const LILLIE_CLEFAIRY_DECK: Omit<Deck, 'updatedAt'> = {
 const MEGA_VENUSAUR_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_mega_venusaur__',
   name: '超級妙蛙花',
+  createdAt: '',
   entries: [
     // Pokemon 22
     { cardId: '16487', count: 3 }, // 菊草葉 (MC 016/742)
@@ -1329,6 +1362,7 @@ const MEGA_VENUSAUR_DECK: Omit<Deck, 'updatedAt'> = {
 const MEGA_KANGASKHAN_ABSOL_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_mega_kangaskhan_absol__',
   name: '超級袋獸阿勃梭魯',
+  createdAt: '',
   entries: [
     // Pokemon 19
     { cardId: '14071', count: 3 }, // 超級袋獸ex (M1S 051/063)
@@ -1369,6 +1403,7 @@ const MEGA_KANGASKHAN_ABSOL_DECK: Omit<Deck, 'updatedAt'> = {
 const BRONZONG_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_bronzong_dragapult__',
   name: '青銅鐘多龍',
+  createdAt: '',
   entries: [
     // Pokemon 21
     { cardId: '17019', count: 2 }, // 多龍巴魯托ex (MC 548/742)
@@ -1411,6 +1446,7 @@ const BRONZONG_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
 const STEVEN_METAGROSS_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_steven_metagross__',
   name: '大吾的巨金怪',
+  createdAt: '',
   entries: [
     // Pokemon 22
     { cardId: '12586', count: 4 }, // 大吾的鐵啞鈴 (SVOD 006/020)
@@ -1451,6 +1487,7 @@ const STEVEN_METAGROSS_DECK: Omit<Deck, 'updatedAt'> = {
 const FESTIVAL_LEAD_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_festival_lead__',
   name: '祭典樂舞',
+  createdAt: '',
   entries: [
     // Pokemon 20
     { cardId: '10905', count: 4 }, // 啃果蟲 (SV7 010/102)
@@ -1487,6 +1524,7 @@ const FESTIVAL_LEAD_DECK: Omit<Deck, 'updatedAt'> = {
 const TYRANITAR_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_tyranitar__',
   name: '班基拉斯',
+  createdAt: '',
   entries: [
     // Pokemon 20
     { cardId: '12520', count: 3 }, // 班基拉斯 (SV9 058/100)
@@ -1526,6 +1564,7 @@ const TYRANITAR_DECK: Omit<Deck, 'updatedAt'> = {
 const MEGA_DIANCIE_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_mega_diancie__',
   name: '超級蒂安希',
+  createdAt: '',
   entries: [
     // Pokemon 16
     { cardId: '16758', count: 2 }, // 莉莉艾的皮皮ex (MC)
@@ -1562,6 +1601,7 @@ const MEGA_DIANCIE_DECK: Omit<Deck, 'updatedAt'> = {
 const GEM_MEGANIUM_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_gem_meganium__',
   name: '寶石大竺葵',
+  createdAt: '',
   entries: [
     // Pokemon 20
     { cardId: '16553', count: 4 }, // 厄鬼椪 碧草面具ex (MC)
@@ -1600,6 +1640,7 @@ const GEM_MEGANIUM_DECK: Omit<Deck, 'updatedAt'> = {
 const MEGA_SHARPEDO_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_mega_sharpedo__',
   name: '超級巨牙鯊',
+  createdAt: '',
   entries: [
     // Pokemon 20
     { cardId: '14368', count: 4 }, // 利牙魚 (M2 050/080)
@@ -1655,6 +1696,7 @@ const MEGA_SHARPEDO_DECK: Omit<Deck, 'updatedAt'> = {
 const MAGI_GEM_STARMIE_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_magi_gem_starmie__',
   name: '魔靈超級寶石海星',
+  createdAt: '',
   entries: [
     // Pokemon 18
     { cardId: '17997', count: 3 }, // 海星星 (M3 020/080)
@@ -1672,17 +1714,18 @@ const MAGI_GEM_STARMIE_DECK: Omit<Deck, 'updatedAt'> = {
     { cardId: '17122', count: 4 }, // 高級球 (MC)
     { cardId: '17134', count: 1 }, // 寶可夢交替 (MC)
     { cardId: '17159', count: 1 }, // 氣球 (MC)
-    // Supporters 13
+    // Supporters 14（v2.371：+1 赤松）
     { cardId: '17200', count: 3 }, // 莉莉艾的決意 (MC)
     { cardId: '17166', count: 4 }, // 青木的手法 (MC)
     { cardId: '17195', count: 2 }, // 老大的指令 (MC)
     { cardId: '17189', count: 2 }, // 鬥子 (MC)
     { cardId: '17185', count: 1 }, // 賽吉 (MC)
     { cardId: '18078', count: 1 }, // 滿充的體貼 (M-P-I)
+    { cardId: '17167', count: 1 }, // 赤松 (MC) — v2.371 使用者修正補入
     // Stadium 4
     { cardId: '14020', count: 4 }, // 險惡廢墟 (M1L)
-    // Energy 11
-    { cardId: '17214', count: 3 }, // 基本【惡】能量 (MC) — 使用者文本能量(11)與分項加總(10)不符，補 1 張湊 60
+    // Energy 10（v2.371：基本【惡】3→2，缺的 1 張用赤松補回支援者區）
+    { cardId: '17214', count: 2 }, // 基本【惡】能量 (MC)
     { cardId: '17221', count: 6 }, // 基本【水】能量 (MC)
     { cardId: '17207', count: 1 }, // 燃火能量 (MC)
     { cardId: '17212', count: 1 }, // 古舊能量 ACE SPEC (MC)
@@ -1693,6 +1736,7 @@ const MAGI_GEM_STARMIE_DECK: Omit<Deck, 'updatedAt'> = {
 const GEM_BELLIBOLT_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_gem_bellibolt__',
   name: '寶石猛雷鼓',
+  createdAt: '',
   entries: [
     // Pokemon 21
     { cardId: '17025', count: 2 }, // 猛雷鼓ex (MC 554/742)
@@ -1735,6 +1779,7 @@ const GEM_BELLIBOLT_DECK: Omit<Deck, 'updatedAt'> = {
 const URSALUNA_BLOODMOON_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_ursaluna_bloodmoon__',
   name: '月月熊 赫月',
+  createdAt: '',
   entries: [
     // Pokemon 11
     { cardId: '16843', count: 3 }, // 太陽岩 (MC)
@@ -1769,6 +1814,7 @@ const URSALUNA_BLOODMOON_DECK: Omit<Deck, 'updatedAt'> = {
 const CRABOMINABLE_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_crabominable__',
   name: '岩殿居蟹',
+  createdAt: '',
   entries: [
     // Pokemon 11
     { cardId: '14673', count: 4 }, // 石居蟹 (M2a 013/193)
@@ -1805,6 +1851,7 @@ const CRABOMINABLE_DECK: Omit<Deck, 'updatedAt'> = {
 const ANCIENT_FLYGON_DECK: Omit<Deck, 'updatedAt'> = {
   id: '__preset_ancient_flygon__',
   name: '遠古巨蜓',
+  createdAt: '',
   entries: [
     // Pokemon 19
     { cardId: '14662', count: 4 }, // 蜻蜻蜓 (M2a 002/193)
@@ -1839,52 +1886,52 @@ const ANCIENT_FLYGON_DECK: Omit<Deck, 'updatedAt'> = {
 };
 
 export const PRESET_DECKS: Deck[] = [
-  { ...GENGAR_DECK, updatedAt: 0 },
-  { ...DIANCIE_DECK, updatedAt: 0 },
-  { ...CYNTHIA_GARCHOMP_DECK, updatedAt: 0 },
-  { ...MARRUNE_DRAGAPULT_DECK, updatedAt: 0 },
-  { ...ALAKAZAM_DECK, updatedAt: 0 },
-  { ...MARNIE_SCRAFTY_DECK, updatedAt: 0 },
-  { ...ROCKET_MEWTWO_DECK, updatedAt: 0 },
-  { ...THUNDER_DRUM_DECK, updatedAt: 0 },
-  { ...SLOWKING_DECK, updatedAt: 0 },
-  { ...MEGA_LUCARIO_DECK, updatedAt: 0 },
-  { ...OLIVA_DECK, updatedAt: 0 },
-  { ...ALLOY_BRIDGE_DRAGON_DECK, updatedAt: 0 },
-  { ...STARMIE_DECK, updatedAt: 0 },
-  { ...N_ZOROARK_DECK, updatedAt: 0 },
-  { ...BLAZIKEN_DRAGAPULT_DECK, updatedAt: 0 },
-  { ...OKIDOGI_DECK, updatedAt: 0 },
-  { ...SALAZZLE_DECK, updatedAt: 0 },
-  { ...CERULEDGE_DECK, updatedAt: 0 },
-  { ...MEGA_GRENINJA_DECK, updatedAt: 0 },
-  { ...ELECTRIC_SPIDER_DECK, updatedAt: 0 },
-  { ...MEGA_KANGASKHAN_OGERPON_DECK, updatedAt: 0 },
-  { ...RAKI_TYPHLOSION_DECK, updatedAt: 0 },
-  { ...ROCKET_HONCHKROW_DECK, updatedAt: 0 },
-  { ...MEGA_LOPUNNY_DECK, updatedAt: 0 },
-  { ...HONEY_SERPERIOR_DECK, updatedAt: 0 },
-  { ...FLAREON_DECK, updatedAt: 0 },
-  { ...FESTIVAL_LEAD_DECK, updatedAt: 0 },
-  { ...STEVEN_METAGROSS_DECK, updatedAt: 0 },
-  { ...DUDUNSPARCE_DRAGAPULT_DECK, updatedAt: 0 },
-  { ...MEGANIUM_DECK, updatedAt: 0 },
-  { ...ESPEON_DECK, updatedAt: 0 },
-  { ...METAGROSS_ROCKET_DECK, updatedAt: 0 },
-  { ...KANGASKHAN_BOUFFALANT_DECK, updatedAt: 0 },
-  { ...LILLIE_CLEFAIRY_DECK, updatedAt: 0 },
-  { ...MEGA_VENUSAUR_DECK, updatedAt: 0 },
-  { ...MEGA_KANGASKHAN_ABSOL_DECK, updatedAt: 0 },
-  { ...BRONZONG_DRAGAPULT_DECK, updatedAt: 0 },
-  { ...TYRANITAR_DECK, updatedAt: 0 },
-  { ...MEGA_DIANCIE_DECK, updatedAt: 0 },
-  { ...GEM_MEGANIUM_DECK, updatedAt: 0 },
-  { ...MEGA_SHARPEDO_DECK, updatedAt: 0 },
-  { ...MAGI_GEM_STARMIE_DECK, updatedAt: 0 },
-  { ...GEM_BELLIBOLT_DECK, updatedAt: 0 },
-  { ...URSALUNA_BLOODMOON_DECK, updatedAt: 0 },
-  { ...CRABOMINABLE_DECK, updatedAt: 0 },
-  { ...ANCIENT_FLYGON_DECK, updatedAt: 0 },
+  { ...GENGAR_DECK, updatedAt: '' },
+  { ...DIANCIE_DECK, updatedAt: '' },
+  { ...CYNTHIA_GARCHOMP_DECK, updatedAt: '' },
+  { ...MARRUNE_DRAGAPULT_DECK, updatedAt: '' },
+  { ...ALAKAZAM_DECK, updatedAt: '' },
+  { ...MARNIE_SCRAFTY_DECK, updatedAt: '' },
+  { ...ROCKET_MEWTWO_DECK, updatedAt: '' },
+  { ...THUNDER_DRUM_DECK, updatedAt: '' },
+  { ...SLOWKING_DECK, updatedAt: '' },
+  { ...MEGA_LUCARIO_DECK, updatedAt: '' },
+  { ...OLIVA_DECK, updatedAt: '' },
+  { ...ALLOY_BRIDGE_DRAGON_DECK, updatedAt: '' },
+  { ...STARMIE_DECK, updatedAt: '' },
+  { ...N_ZOROARK_DECK, updatedAt: '' },
+  { ...BLAZIKEN_DRAGAPULT_DECK, updatedAt: '' },
+  { ...OKIDOGI_DECK, updatedAt: '' },
+  { ...SALAZZLE_DECK, updatedAt: '' },
+  { ...CERULEDGE_DECK, updatedAt: '' },
+  { ...MEGA_GRENINJA_DECK, updatedAt: '' },
+  { ...ELECTRIC_SPIDER_DECK, updatedAt: '' },
+  { ...MEGA_KANGASKHAN_OGERPON_DECK, updatedAt: '' },
+  { ...RAKI_TYPHLOSION_DECK, updatedAt: '' },
+  { ...ROCKET_HONCHKROW_DECK, updatedAt: '' },
+  { ...MEGA_LOPUNNY_DECK, updatedAt: '' },
+  { ...HONEY_SERPERIOR_DECK, updatedAt: '' },
+  { ...FLAREON_DECK, updatedAt: '' },
+  { ...FESTIVAL_LEAD_DECK, updatedAt: '' },
+  { ...STEVEN_METAGROSS_DECK, updatedAt: '' },
+  { ...DUDUNSPARCE_DRAGAPULT_DECK, updatedAt: '' },
+  { ...MEGANIUM_DECK, updatedAt: '' },
+  { ...ESPEON_DECK, updatedAt: '' },
+  { ...METAGROSS_ROCKET_DECK, updatedAt: '' },
+  { ...KANGASKHAN_BOUFFALANT_DECK, updatedAt: '' },
+  { ...LILLIE_CLEFAIRY_DECK, updatedAt: '' },
+  { ...MEGA_VENUSAUR_DECK, updatedAt: '' },
+  { ...MEGA_KANGASKHAN_ABSOL_DECK, updatedAt: '' },
+  { ...BRONZONG_DRAGAPULT_DECK, updatedAt: '' },
+  { ...TYRANITAR_DECK, updatedAt: '' },
+  { ...MEGA_DIANCIE_DECK, updatedAt: '' },
+  { ...GEM_MEGANIUM_DECK, updatedAt: '' },
+  { ...MEGA_SHARPEDO_DECK, updatedAt: '' },
+  { ...MAGI_GEM_STARMIE_DECK, updatedAt: '' },
+  { ...GEM_BELLIBOLT_DECK, updatedAt: '' },
+  { ...URSALUNA_BLOODMOON_DECK, updatedAt: '' },
+  { ...CRABOMINABLE_DECK, updatedAt: '' },
+  { ...ANCIENT_FLYGON_DECK, updatedAt: '' },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */

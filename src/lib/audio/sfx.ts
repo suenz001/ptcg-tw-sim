@@ -345,6 +345,8 @@ const ATTACK_PATTERNS: Record<EnergyType, AttackPattern> = {
   Metal:     { osc: { type: 'square', start: 800, end: 800, peakGain: 0.2 }, noise: { hp: 4000, peakGain: 0.15 }, durationSec: 0.3 },
   // 龍：氣勢深厚（低頻 saw + 中頻 triangle）
   Dragon:    { osc: { type: 'sawtooth', start: 350, end: 120, peakGain: 0.35 }, noise: { hp: 500, lp: 3000, peakGain: 0.1 }, durationSec: 0.55 },
+  // 妖：高頻 sparkle（v2.371 補：EnergyType 包含 Fairy 但 PTCG 繁中版實務不使用，僅為型別完整性）
+  Fairy:     { osc: { type: 'sine', start: 1800, end: 1200, peakGain: 0.22 }, noise: { hp: 4000, peakGain: 0.06 }, durationSec: 0.35 },
   // 無：中性 sine
   Colorless: { osc: { type: 'sine', start: 600, end: 400, peakGain: 0.25 }, durationSec: 0.3 },
 };
