@@ -1,6 +1,6 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-05 (v2.353)
+> 最後更新：2026-05-05 (v2.354)
 > 正式網址：https://suenz001.github.io/ptcg-tw-sim/game
 > 卡牌資料庫：https://suenz001.github.io/ptcg-tw-sim/cards?set=ALL
 
@@ -80,7 +80,7 @@
 工作路徑：/tmp/ptcg-work/repo
 正式網址：https://suenz001.github.io/ptcg-tw-sim/game
 卡牌資料庫：https://suenz001.github.io/ptcg-tw-sim/cards?set=ALL
-目前版本：v2.353
+目前版本：v2.354
 目前最新 commit：（請執行 git log --oneline -1 確認）
 
 重要鐵律：
@@ -98,22 +98,22 @@ node scripts/audit-j-mark-effects.mjs
 sed -n '1,220p' AI_HANDOFF.md
 sed -n '1,40p' src/lib/version.ts
 
-目前 J 標 audit 狀態（v2.352）：
+目前 J 標 audit 狀態（v2.354）：
 - J cards: 355
 - Total records: 545
-- implemented: 207
+- implemented: ~239（+13 from v2.354）
 - not-needed: 197
 - needs-review: 54
-- missing: 87
-- missing unique cards: 約 81
-- remaining priority：P2 約 43、P3 約 25、P4 約 19
+- missing: ~55
+- remaining priority：P2 約 30、P3 約 18、P4 約 19
 
 近期已完成：
 - v2.349 清完 P1 missing。
 - v2.350 修奇跡修正檔限定【超】備戰目標、棄牌區寶可夢上場重置傷害。
 - v2.351 實裝超級火炎獅ex｜吠，修 damageReduceNextHit 攻擊方 debuff，以及疾風直撞對手 KO 後誤觸發。
-- v2.353 新增 src/lib/game/effects/cards/v2353_j_mark_batch.ts，實裝低風險 P2/P3 批次（19 個 card-attack 組合）：瑪力露麗ex/超級差不多娃娃ex/優雅貓/哲爾尼亞斯（能量倍乘）、焰后蜥ex/戰舞郎/小箭雀/雷吉艾斯ex/雷吉斯奇魯ex（牌庫/棄牌搜尋）、大嘴娃/超級皮可西ex/土地雲/南瓜怪人ex/禿鷹娜ex/朽木妖（手牌操作）、茸茸羊/電飛鼠（跨回合）、鳳王(復生火焰)/超級花葉蒂ex（棄牌/牌庫放備戰）。
 - v2.352 新增 src/lib/game/effects/cards/v2352_j_mark_batch.ts，實裝多個低風險 P2/P3：胖胖哈力｜綠葉充能、代歐奇希斯｜基因充能/精神高速、冰岩怪｜冰山崩裂、君主蛇｜日光旋繞、鳳王｜紅蓮之翼、大朝北鼻｜鼻衝撞、狙射樹梟ex｜粉碎箭、凱路迪歐｜能量反射、電龍｜閃光伏特、伊裴爾塔爾ex｜黑暗打擊、故勒頓ex｜衝擊打擊、超級基格爾德ex｜蓋亞波。
+- v2.353 新增 src/lib/game/effects/cards/v2353_j_mark_batch.ts，實裝低風險 P2/P3 批次（19 個 card-attack 組合）：瑪力露麗ex/超級差不多娃娃ex/優雅貓/哲爾尼亞斯（能量倍乘）、焰后蜥ex/戰舞郎/小箭雀/雷吉艾斯ex/雷吉斯奇魯ex（牌庫/棄牌搜尋）、大嘴娃/超級皮可西ex/土地雲/南瓜怪人ex/禿鷹娜ex/朽木妖（手牌操作）、茸茸羊/電飛鼠（跨回合）、鳳王(復生火焰)/超級花葉蒂ex（棄牌/牌庫放備戰）。
+- v2.354 新增 src/lib/game/effects/cards/v2354_j_mark_batch.ts，實裝低風險 P2/P3 批次（13 組）：雙劍鞘|劍武備（手牌計數×60）、多麗米亞|手部造型（盲丟對手手牌至5張）、念力土偶|退化光線（50傷+對手active退化回手牌）、超級毒藻龍ex|腐蝕液（移除全場道具+特殊能量）、老翁龍|龍之強襲（120+selfBlock）、莉佳的口呆花|葉子旋風（70+cantAttackPending）、大嘴蝠|隱密飛行（30+immuneToBasicAttack）、頓甲|接二連三（20+damageBonusPending+120）、樹才怪|考驗之旅（搜「變化之書」）、咚咚鼠|擺尾發電（棄牌區雷能附雷寶可夢）、彩粉蝶|大飛翅（手牌洗入牌庫底+抽4）、烈箭鷹|穹天狩獵（擲幣盲丟對手1手牌）、莉佳的霸王花ex|動人香氣（全場回血30）。
 
 建議下一步：
 1. 重新讀 docs/reports/j-mark-effects-audit.json，列出 remaining missing。
@@ -123,7 +123,7 @@ sed -n '1,40p' src/lib/version.ts
    - deck-search-or-deck-op 中可用 deck-search / 抽到 N / 丟牌庫上方 N 張的項目。
    - cross-turn-effect 中已有 blockedAttackNamesNextTurn、damageReduceNextHit、attackFailureFlipCountPending 等可重用欄位。
 3. 暫緩或小心處理需要全新 UI/雙方互動的卡，例如：馬志士的交易、火箭隊的妨礙機器人、招式學習器螢石/核心記憶碟、手持循環扇、壯偉碩木、配樂之笛。
-4. 實作位置優先新增 batch module：src/lib/game/effects/cards/v2354_j_mark_batch.ts，並在 src/lib/game/effects.ts import。
+4. 實作位置優先新增 batch module：src/lib/game/effects/cards/v2355_j_mark_batch.ts，並在 src/lib/game/effects.ts import。
 5. 若新增選擇器，先確認 +page.svelte selectionItems 是否支援該 pendingSelection type/filter/params.validIids，並且 online action 要帶 senderIdx。
 6. 每批完成後至少跑：
    node scripts/audit-j-mark-effects.mjs
@@ -157,7 +157,7 @@ sed -n '1,40p' src/lib/version.ts
 
 | 項目 | 說明 | 狀態 |
 |---|---|---|
-| J 標未實裝卡 | v2.353 後 audit 結果：implemented ~226（+19）、missing ~68、needs-review 54；詳見 `docs/reports/j-mark-effects-audit.md` | 進行中 |
+| J 標未實裝卡 | v2.354 後 audit 結果：implemented ~239（+13）、missing ~55、needs-review 54；詳見 `docs/reports/j-mark-effects-audit.md` | 進行中 |
 | 複雜道具/卡（需深層引擎擴充）| 馬志士的交易、火箭隊的妨礙機器人（對手互動 picker）；招式學習器螢石 / 核心記憶碟（招式注入機制）；手持循環扇（TOOL_ON_DAMAGED 雙段 pending）；壯偉碩木（Stadium 兩階進化）；配樂之笛（peek-opp-deck-top 5） | 暫緩 |
 
 ### 🟡 中優先（機制缺陷）
@@ -183,6 +183,7 @@ sed -n '1,40p' src/lib/version.ts
 
 | 版本 | 摘要 |
 |---|---|
+| v2.354 | J 標低風險 P2/P3 批次（13 組）：雙劍鞘劍武備、多麗米亞手部造型、念力土偶退化光線、超級毒藻龍ex腐蝕液、老翁龍龍之強襲、莉佳的口呆花葉子旋風、大嘴蝠隱密飛行、頓甲接二連三、樹才怪考驗之旅、咚咚鼠擺尾發電、彩粉蝶大飛翅、烈箭鷹穹天狩獵、莉佳的霸王花ex動人香氣 |
 | v2.353 | J 標低風險 P2/P3 批次（19 組）：能量倍乘（瑪力露麗ex/超級差不多娃娃ex/優雅貓/哲爾尼亞斯）、牌庫棄牌搜尋（焰后蜥ex/戰舞郎/小箭雀/雷吉艾斯ex/雷吉斯奇魯ex）、手牌操作（大嘴娃/超級皮可西ex/土地雲/南瓜怪人ex/禿鷹娜ex/朽木妖）、跨回合（茸茸羊/電飛鼠）、備戰（鳳王復生/超級花葉蒂ex） |
 | v2.352 | J 標低風險 P2/P3 批次：綠葉充能、基因充能、精神高速、冰山崩裂、日光旋繞、紅蓮之翼、鼻衝撞、粉碎箭、能量反射、閃光伏特/黑暗打擊/衝擊打擊 cooldown、蓋亞波減傷 |
 | v2.351 | 實裝超級火炎獅ex｜吠 + 修復攻擊方自身 damageReduceNextHit 引擎 bug + 修復疾風直撞對手KO後誤觸發 |
