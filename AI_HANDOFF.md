@@ -1,6 +1,6 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-05 (v2.360 + AI 工具注意事項)
+> 最後更新：2026-05-05 (v2.363 + engine.ts Edit tool 截斷事故紀錄)
 > 正式網址：https://suenz001.github.io/ptcg-tw-sim/game
 > 卡牌資料庫：https://suenz001.github.io/ptcg-tw-sim/cards?set=ALL
 > 📌 **通用交接提示詞**（所有任務適用）：[docs/AI_GENERIC_HANDOFF.md](./docs/AI_GENERIC_HANDOFF.md)
@@ -114,8 +114,19 @@ catch(e){ console.log('ERROR:',e.message); }
 "
 ```
 
-> 此規則同樣適用於其他含大量中文的長 TypeScript 檔案。
+> **⛔ `src/lib/game/engine.ts` 是高風險檔案（~5200行）：此檔案使用 Edit tool 必定截斷末尾，已有 v2.363 事故紀錄。**
+> 此規則同樣適用於其他含大量中文的長 TypeScript 檔案（engine.ts / effects.ts 等）。
 > 截斷問題在上游已知，短期內不會修復，請務必用 Python 方案。
+
+#### 事故紀錄：v2.363 engine.ts 截斷（2026-05-05）
+
+| 項目 | 內容 |
+|------|------|
+| 觸發操作 | 用 Edit tool 在 engine.ts line 5061 刪除一行 |
+| 症狀 | 檔案從 5237 行被截斷至約 5232 行，末尾 `});` 消失 |
+| CI 結果 | GitHub Actions build 失敗（32s，vite build 語法錯誤） |
+| 修復方式 | `git show PARENT:src/lib/game/engine.ts` 還原完整版，再用 Python str.replace() 重新套用 patch |
+| 結論 | **engine.ts 禁止使用 Edit tool，一律用 Python open/read/replace/write**
 
 ---
 
