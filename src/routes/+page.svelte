@@ -98,6 +98,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.383</span> v2.39 J 標訓練家 stub 修正 — 化石/Stadium 既有實裝確認</summary>
+        <ul>
+          <li>查證使用者反映：化石卡（陳舊的顎/鰭之化石）+ 密阿雷市 + 稜鏡塔之前已實裝過</li>
+          <li>v2.39 stub 對這 3 張卡誤加 regG/reg 與「需 v2.4+ 擴張」log，覆蓋既有 noop reg + 留下誤導訊息</li>
+          <li>v2390_j_trainers_batch.ts 改寫為純 audit 註解索引（移除所有錯誤 reg/regG 註冊）</li>
+          <li>確認既有實裝路徑：化石卡走 items_misc.ts FOSSIL_NAMES_LOCAL + engine PLAY_FOSSIL action；密阿雷市 / 稜鏡塔走 engine USE_STADIUM case + stadiums.ts / mega_decks.ts resolver</li>
+          <li>昂主花葉蒂保留 v2.382 真實裝（超級花葉蒂ex HP +150）</li>
+          <li>J 標訓練家 audit 命中：29/29（全部正確覆蓋既有實裝路徑）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.382</span> J 標複雜特性續實裝 — 3 個 stub 轉真實裝</summary>
         <ul>
           <li>伊裴爾塔爾ex｜死亡靈魂：OHKO 對手所有 HP ≤50 寶可夢（用 +9999 damage + sanityKOSweep 處理 KO）</li>
