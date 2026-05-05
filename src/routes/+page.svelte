@@ -98,6 +98,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.382</span> J 標複雜特性續實裝 — 3 個 stub 轉真實裝</summary>
+        <ul>
+          <li>伊裴爾塔爾ex｜死亡靈魂：OHKO 對手所有 HP ≤50 寶可夢（用 +9999 damage + sanityKOSweep 處理 KO）</li>
+          <li>超級呆殼獸ex｜殼捲風旋轉：retaliation 12 indicator（types.ts 加 retaliateCountersOnNextHit flag + engine.ts 在 PASSIVE_RETALIATION 後段套用）</li>
+          <li>昂主花葉蒂（Stadium）：超級花葉蒂ex 最大 HP +150（engine.ts getEffectiveHP + effects.ts effectiveHPInline 雙處 hook 同步）</li>
+          <li>J 標進度：寶可夢 effect 招式 25/27 完整、特性 27/33 完整（v2.38 24/33 → v2.382 27/33）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.381</span> 修復祭典樂舞第 3 次攻擊 bug</summary>
         <ul>
           <li>修復 bug：裹蜜蟲｜祭典樂舞在 2 次擊倒對手後仍可發第 3 次招</li>

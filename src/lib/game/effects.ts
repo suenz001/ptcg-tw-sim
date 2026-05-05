@@ -422,6 +422,10 @@ function effectiveHPInline(
   if (stadiumNameEff === '激動競技場' && card.stage === 'Basic') {
     hp += 30;
   }
+  // v2.382：昂主花葉蒂（Stadium, M4）— 雙方場上所有「超級花葉蒂ex」最大 HP +150
+  if (stadiumNameEff === '昂主花葉蒂' && card.name === '超級花葉蒂ex') {
+    hp += 150;
+  }
   // v2.268 wave 2：max HP 修正類被動特性（鏡射 engine.ts getEffectiveHP）
   // 樂天河童｜生機森巴 — 持有者所屬玩家場上所有寶可夢 +40 HP
   if (state) {

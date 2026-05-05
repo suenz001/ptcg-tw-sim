@@ -41,6 +41,12 @@ export interface CardInstance {
   evolvedFromIid?: string;
   /** 下一次被攻擊時傷害 -N（攻擊後自動清除），用於「下回合受傷減 N」效果 */
   damageReduceNextHit?: number;
+  /**
+   * v2.382：超級呆殼獸ex｜殼捲風旋轉 — 下次受招式傷害時，對攻擊方放 N 個指示物（= N×10 damage）。
+   * 一次性 flag，消費後清除。卡面語意「下個對手回合」 — 自己下回合無法被攻擊，
+   * 所以等同於「下次受招式時觸發」。
+   */
+  retaliateCountersOnNextHit?: number;
   /** 下一次輪到自己行動時不能撤退（老匠、關節技等），行動後清除 */
   cantRetreatNextTurn?: boolean;
   /** 受到「下次使用招式前擲硬幣，反面則失敗」類效果的預約擲幣數。 */

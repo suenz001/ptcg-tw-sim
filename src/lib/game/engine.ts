@@ -446,6 +446,10 @@ export function getEffectiveHP(
   if (stadiumNameHP === '激動競技場' && card.stage === 'Basic') {
     hp += 30;
   }
+  // v2.382：昂主花葉蒂（Stadium, M4）— 雙方場上所有「超級花葉蒂ex」最大 HP +150
+  if (stadiumNameHP === '昂主花葉蒂' && card.name === '超級花葉蒂ex') {
+    hp += 150;
+  }
   // v2.268 wave 2：max HP 修正類被動特性 ─────────────────────────────────
   // 樂天河童｜生機森巴 (SV9 Stage2 140HP) — 「只要這隻寶可夢在場上，
   //   自己場上所有寶可夢的最大 HP 各「+40」。無論有多少隻⋯不重複。」
@@ -3486,6 +3490,35 @@ function handlePlaying(
       for (const ab of defenderCard.abilities) {
         const retal = PASSIVE_RETALIATION.get(ab.name);
         if (retal) newState = retal(newState, dIdx, pool);
+      }
+    }
+
+    // v2.382：殼捲風旋轉 retaliation — defender 有 retaliateCountersOnNextHit flag
+    //   → 對 attacker active 放 N 個指示物（= N×10 damage），消費後清除 flag。
+    //   只對有實際傷害的招式觸發（與 PASSIVE_RETALIATION 同準則）。
+    if (baseDamage > 0) {
+      const dPlayer = newState.players[dIdx];
+      const retalN = dPlayer.active?.retaliateCountersOnNextHit;
+      if (retalN && retalN > 0) {
+        const refPlayers = [...newState.players] as [PlayerState, PlayerState];
+        // 套用 retaliation damage 到 attacker active
+        if (refPlayers[aIdx].active) {
+          refPlayers[aIdx] = {
+            ...refPlayers[aIdx],
+            active: { ...refPlayers[aIdx].active!, damage: refPlayers[aIdx].active!.damage + retalN * 10 },
+          };
+        }
+        // 消費 flag
+        if (refPlayers[dIdx].active) {
+          const newAct = { ...refPlayers[dIdx].active! };
+          delete newAct.retaliateCountersOnNextHit;
+          refPlayers[dIdx] = { ...refPlayers[dIdx], active: newAct };
+        }
+        newState = addLog(
+          { ...newState, players: refPlayers },
+          `殼捲風旋轉反擊：對攻擊方放 ${retalN} 個傷害指示物（${retalN * 10} 點傷害）`,
+          dIdx,
+        );
       }
     }
 

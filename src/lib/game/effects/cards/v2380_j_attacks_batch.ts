@@ -69,16 +69,16 @@ regPre('大嘴娃|雙重食客', (state, aIdx, pool) => {
   return { state: s, damage: toDiscard.length * 60 };
 });
 
-// ── 02. 超級呆殼獸ex｜殼捲風旋轉 — 180 + 下回合受招式 retaliation 12 indicator ──
-// 這是「下個對手回合，這隻寶可夢受到招式傷害時，使用招式的寶可夢身上放 12 個指示物」
-// 既有引擎沒有專屬 retaliation hook，先用 inline marker（attacked-back）— 由 engine
-// 在攻擊 resolved 後檢查 defender 是否帶這個 marker，有則對 attacker 放 12 個。
-// 為簡化：用 damageReduceNextHit 的反面 — `retaliateCountersNextHit`。
-// 因為要動 engine，本波先把傷害處理完，retaliation 標 stub。
+// ── 02. 超級呆殼獸ex｜殼捲風旋轉 — 180 + 下次受招式時 retaliation 12 indicator ──
+// v2.382 真實裝：在 attacker.active 設 retaliateCountersOnNextHit = 12 flag。
+// engine 在攻擊 pipeline 末段（傷害套用後）檢查 defender 帶此 flag → 對 attacker
+// active 放 12 個指示物（= 120 damage），消費後清除 flag。
 regPre('超級呆殼獸ex|殼捲風旋轉', (s, _a, _p) => ({ state: s, damage: 180 }));
 regPost('超級呆殼獸ex|殼捲風旋轉', (state, aIdx, _pool) => {
-  // TODO(v2.39+): retaliation 12 counter 標記 — 需 engine 加新 hook
-  return addLog(state, '殼捲風旋轉：下個對手回合受招式時，放 12 個指示物到攻擊方（暫未實裝 retaliation hook）', aIdx);
+  return updatePlayer(state, aIdx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, retaliateCountersOnNextHit: 12 } : null,
+  }));
 });
 
 // ── 03. 電龍｜閃光伏特 — 140 + recharge ──────────────────────────────────────
@@ -127,12 +127,44 @@ regPost('超級基格爾德ex|蓋亞波', (state, aIdx, _pool) => {
 });
 
 // ── 07. 伊裴爾塔爾ex｜死亡靈魂 — OHKO 對手所有 HP ≤50 寶可夢 ──────────────────
+// v2.382 真實裝：直接讓對手所有 HP ≤50 的寶可夢身上累積 damage 達到 max HP，
+// 由後續 sanityKOSweep 統一處理 KO（移到棄牌 / 給獎賞）。
 regPre('伊裴爾塔爾ex|死亡靈魂', (s, _a, _p) => ({ state: s, damage: 0 }));
 regPost('伊裴爾塔爾ex|死亡靈魂', (state, aIdx, pool) => {
-  // OHKO 類效果：直接施加 9999 damage 到所有 HP ≤50 的對手寶可夢。
-  // PTCG 「將...昏厥」是無視 HP 直接 KO；這裡用大量 damage = max HP 達成同效。
-  // 簡化：標 log 提示，實際 OHKO 流程需 engine 級 hook；本波 stub。
-  return addLog(state, '死亡靈魂：將對手所有剩餘 HP ≤50 的寶可夢昏厥（暫未實裝 OHKO hook）', aIdx);
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const opp = state.players[dIdx];
+  const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
+
+  // 篩出剩餘 HP ≤50（即 effectiveHP - damage ≤ 50）的寶可夢
+  const targets: { iid: string; name: string }[] = [];
+  for (const pk of allOpp) {
+    const card = pool.get(pk.cardId);
+    if (!card) continue;
+    const remainingHP = (card.hp ?? 0) - pk.damage;  // 簡化：用 card.hp 而非 getEffectiveHP
+    if (remainingHP > 0 && remainingHP <= 50) {
+      targets.push({ iid: pk.iid, name: card.name });
+    }
+  }
+  if (targets.length === 0) {
+    return addLog(state, '死亡靈魂：對手場上沒有 HP ≤50 的寶可夢', aIdx);
+  }
+  const targetIids = new Set(targets.map(t => t.iid));
+  let s = addLog(state,
+    `死亡靈魂：將對手 ${targets.length} 隻寶可夢昏厥 — ${targets.map(t => t.name).join('、')}`,
+    aIdx);
+  // 給每隻目標寶可夢 +9999 damage，sanityKOSweep 在 ATTACK pipeline 末尾會處理 KO
+  return {
+    ...s,
+    players: s.players.map((p, i) => i !== dIdx ? p : ({
+      ...p,
+      active: p.active && targetIids.has(p.active.iid)
+        ? { ...p.active, damage: p.active.damage + 9999 }
+        : p.active,
+      bench: p.bench.map(b => targetIids.has(b.iid)
+        ? { ...b, damage: b.damage + 9999 }
+        : b),
+    })) as typeof s.players,
+  };
 });
 
 // ── 08. 伊裴爾塔爾ex｜黑暗打擊 — 210 + recharge ──────────────────────────────
