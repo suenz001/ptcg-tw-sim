@@ -98,6 +98,15 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.381</span> 修復祭典樂舞第 3 次攻擊 bug</summary>
+        <ul>
+          <li>修復 bug：裹蜜蟲｜祭典樂舞在 2 次擊倒對手後仍可發第 3 次招</li>
+          <li>原因：第 2 次招式 KO 後，TAKE_PRIZES / SEND_NEW_ACTIVE 觸發 maybeResumeFestivalDanceSecondAttack 時，flag 仍為 true → 又把 turnPhase 重設為 main，開放第 3 次攻擊</li>
+          <li>修法：types.ts 新增 festivalDanceSecondAttackUsed flag（第 2 次招式 spent 標記），engine.ts 在 startFestivalDanceSecondAttackWindow / maybeResumeFestivalDanceSecondAttack 雙 hook 處檢查；END_TURN 同步清除</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.38</span> J 標補實裝大批次（92.6% 覆蓋）</summary>
         <ul>
           <li>新實裝 J 標寶可夢 effect 招式 25 個：雙重食客 / 殼捲風旋轉 / 閃光伏特 / 射攻月亮 / 巨岩墜落 / 蓋亞波 / 死亡靈魂 / 黑暗打擊 / 狡兔三窟 / 地震 / 九尾狐搬動 / 幸福禮物 / 小使者 / 大地風暴 / 岩石投擲 / 毒液衝擊 / 防守壓制 / 力量衝撞 / 咬碎 / 雷吉充能 / 能量氣球 / 衝擊打擊 / 能量粉碎 / 耳之力 / 勇鳥猛攻</li>

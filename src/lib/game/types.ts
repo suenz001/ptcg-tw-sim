@@ -502,6 +502,18 @@ export interface GameState {
    */
   festivalDanceUsedThisTurn?: [boolean, boolean];
   /**
+   * v2.381 BUG FIX：祭典樂舞「第 2 次招式已用過」flag。
+   *
+   * 原本只用 festivalDanceUsedThisTurn 控管，但有 bug：第 2 次招式 KO 後，
+   * TAKE_PRIZES / SEND_NEW_ACTIVE 觸發 maybeResumeFestivalDanceSecondAttack 時，
+   * 看 festivalDanceUsedThisTurn=true + canResume true → 又把 turnPhase 設為 main，
+   * 開放第 3 次攻擊。
+   *
+   * 此 flag 在「第 2 次招式正式進入 main 階段」時 set 為 true，maybeResume 看到此 flag
+   * 已 true 就不再開窗。END_TURN 與 festivalDanceUsedThisTurn 一同清除。
+   */
+  festivalDanceSecondAttackUsed?: [boolean, boolean];
+  /**
    * 我方上次結束自己回合時，對手剩餘獎賞張數的快照 [P1 側快照, P2 側快照]。
    * 比較 snapshot vs 目前 opp 獎賞張數差即可得知「對手上個回合是否取得過獎賞（= 自己寶可夢是否在對手回合被擊倒）」。
    * 用於「不公印章」等需要『前一回合對手取過獎賞』判定的卡牌。

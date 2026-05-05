@@ -1027,14 +1027,27 @@ function startFestivalDanceSecondAttackWindow(
   if (state.phase !== 'playing' || state.turnPhase !== 'end') return state;
   if (!hasFestivalDanceActive(state, idx, pool)) return state;
   if (!hasFestivalVenue(state, pool)) return state;
-  if (state.festivalDanceUsedThisTurn?.[idx]) return state;
 
+  // v2.381 BUG FIX：第 2 次招式已用過 → 不再開窗（flag2 = SecondAttackUsed）
+  if (state.festivalDanceSecondAttackUsed?.[idx]) return state;
+
+  // 第 2 次招式才剛打完（flag1 已 true）→ set flag2 標記「窗已關閉」
+  if (state.festivalDanceUsedThisTurn?.[idx]) {
+    const used2: [boolean, boolean] = [...(state.festivalDanceSecondAttackUsed ?? [false, false])] as [boolean, boolean];
+    used2[idx] = true;
+    return { ...state, festivalDanceSecondAttackUsed: used2 };
+  }
+
+  // 第 1 次招式剛打完，set flag1 並（如有條件）立即開窗
   const flag: [boolean, boolean] = [...(state.festivalDanceUsedThisTurn ?? [false, false])] as [boolean, boolean];
   flag[idx] = true;
   let next: GameState = { ...state, festivalDanceUsedThisTurn: flag };
 
   if (canResumeFestivalDanceSecondAttack(next, idx, pool)) {
-    next = { ...next, turnPhase: 'main' };
+    // 立即進第 2 次：同時 set flag2 表示「窗已開啟並進行中」
+    const used2: [boolean, boolean] = [...(next.festivalDanceSecondAttackUsed ?? [false, false])] as [boolean, boolean];
+    used2[idx] = true;
+    next = { ...next, turnPhase: 'main', festivalDanceSecondAttackUsed: used2 };
     return addLog(next, `祭典樂舞：場上有「祭典會場」— 可再使用 1 次招式`, idx);
   }
 
@@ -1047,8 +1060,13 @@ function maybeResumeFestivalDanceSecondAttack(
 ): GameState {
   const idx = state.activePlayerIndex;
   if (!state.festivalDanceUsedThisTurn?.[idx]) return state;
+  // v2.381 BUG FIX：flag2 已 true 表示第 2 次招式已開窗（或正在進行）→ 不再 resume
+  if (state.festivalDanceSecondAttackUsed?.[idx]) return state;
   if (!canResumeFestivalDanceSecondAttack(state, idx, pool)) return state;
-  const next = { ...state, turnPhase: 'main' as const };
+  // resume 同時 set flag2 標記「窗已開啟」，避免重入
+  const used2: [boolean, boolean] = [...(state.festivalDanceSecondAttackUsed ?? [false, false])] as [boolean, boolean];
+  used2[idx] = true;
+  const next = { ...state, turnPhase: 'main' as const, festivalDanceSecondAttackUsed: used2 };
   return addLog(next, `祭典樂舞：處理完成，可使用第 2 次招式`, idx);
 }
 
@@ -4000,10 +4018,16 @@ function handlePlaying(
       delete currentPlayer.abilityNamesUsedThisTurn;
     }
     // v2.149：清除祭典樂舞 second-attack flag（END_TURN 後重置該玩家側）
+    // v2.381：同時清除 festivalDanceSecondAttackUsed（第 2 次招式 spent flag）
     if (state.festivalDanceUsedThisTurn?.[aIdx]) {
       const newFlag: [boolean, boolean] = [...state.festivalDanceUsedThisTurn] as [boolean, boolean];
       newFlag[aIdx] = false;
       state = { ...state, festivalDanceUsedThisTurn: newFlag };
+    }
+    if (state.festivalDanceSecondAttackUsed?.[aIdx]) {
+      const newFlag2: [boolean, boolean] = [...state.festivalDanceSecondAttackUsed] as [boolean, boolean];
+      newFlag2[aIdx] = false;
+      state = { ...state, festivalDanceSecondAttackUsed: newFlag2 };
     }
     // 清除 cantAttackThisTurn：若當前玩家的 active 本回合被招式封鎖過，
     // 回合結束時把罰則消耗完（否則 UI 反白會永久卡住）
