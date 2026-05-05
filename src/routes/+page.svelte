@@ -98,6 +98,37 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.372</span> 監視之眼通用標籤化 + 修 v172 末尾截斷</summary>
+        <ul>
+          <li>探探鼠｜監視之眼改用通用標籤 set（MOVE_DAMAGE_COUNTER_ABILITIES）統一 gate 移放傷害指示物類特性</li>
+          <li>目前覆蓋：願增猿｜腎上腺腦力、火箭隊的以歐路普｜火箭腦力（全資料庫掃描共 2 條再印 6 套）</li>
+          <li>未來新增同類特性只需把名字加進 set 即可自動受監視之眼禁用</li>
+          <li>修復 v172_hij_batch.ts 末尾 UTF-8 截斷（v2.360 commit 留下的孤兒 byte）</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v2.371</span> 魔靈寶石海星牌組微調 + 探探鼠監視之眼補實裝</summary>
+        <ul>
+          <li>魔靈超級寶石海星牌組：基本【惡】能量 3→2 張，補 1 張赤松</li>
+          <li>探探鼠｜監視之眼補實裝：場上有探探鼠時，雙方願增猿｜腎上腺腦力等「移放傷害指示物」特性無法使用</li>
+          <li>可達鴨｜濕氣：交叉確認 v2.65 既存實裝（hasPsyduckDamp）已涵蓋 M2a 14692 可達鴨</li>
+          <li>tsc 既有警告大量清理：updatedAt/createdAt 型別不同步 + sfx.ts 補 Fairy 屬性（從 ~600+ 降至 86）</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v2.37</span> 新增 5 套預設牌組（魔靈寶石海星/寶石猛雷鼓/月月熊赫月/岩殿居蟹/遠古巨蜓）</summary>
+        <ul>
+          <li>新增預設牌組：魔靈超級寶石海星 / 寶石猛雷鼓 / 月月熊 赫月 / 岩殿居蟹 / 遠古巨蜓（共 5 套）</li>
+          <li>新實裝招式：石居蟹｜覺醒（從牌庫直接進化）、岩殿居蟹｜偉大剪（120 + 跳過附加效果）</li>
+          <li>新實裝招式：蜻蜻蜓｜吹飛（強制對手換場）、雷吉奇卡斯｜寶石破壞（對太晶寶可夢 +230）</li>
+          <li>班基拉斯牌組微調：競技場「危險密林」改為「險惡廢墟」</li>
+          <li>既有實裝交叉確認：雪妖女｜冰冷之帳、岩殿居蟹｜神秘石居、海星星/雪妖女/蜻蜻蜓銳利羽/可達鴨衝撞/探探鼠咬住等純傷害招式</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.363</span> 修復桃歹郎ex｜支配鎖鏈備戰特性</summary>
         <ul>
           <li>修復「支配鎖鏈」備戰特性：移除錯誤的「必須在戰鬥場」限制，桃歹郎ex 在備戰區也能正常使用特性</li>
