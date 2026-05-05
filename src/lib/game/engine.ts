@@ -16,7 +16,7 @@ import type {
 import { RULE_BOX_SUBTYPES } from './types';
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
-  PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS,
+  PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
@@ -341,6 +341,34 @@ export function isBasicPokemonCard(card: Card | undefined): card is Card {
 /** 從 pool 判斷一張牌是否為「基礎寶可夢」 */
 function isBasicPokemon(cardId: string, pool: Map<string, Card>): boolean {
   return isBasicPokemonCard(pool.get(cardId));
+}
+
+/**
+ * v2.42 新增：是否可在起手對戰準備時放置於戰鬥場（PLACE_ACTIVE）。
+ *
+ * 卡面：閃焰王牌（M1L 13974，Stage2）—「【特性】瞬間爆發力：進行對戰準備
+ *       將寶可夢放置於戰鬥場上時，若手牌有這張卡，則可將這張卡反面朝上
+ *       放置於戰鬥場。」
+ *
+ * 注意：此例外只允許「戰鬥場」(active)；備戰位仍只能放基礎寶可夢。
+ *
+ * 不使用 type guard（`card is Card`），因為 isBasicPokemonCard 已是 type guard，
+ * 串接會導致 TS 把 false branch 推導成 never。改回傳 boolean。
+ */
+export function canBeInitialActiveCard(card: Card | undefined): boolean {
+  if (!card) return false;
+  if (card.supertype !== 'Pokemon') return false;
+  if (card.subtype === 'Other') return false;
+  // 基礎寶可夢
+  if (card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && !card.evolvesFrom) return true;
+  // 含「瞬間爆發力」特性的寶可夢（閃焰王牌）
+  if (card.abilities?.some((ab) => ab.name === '瞬間爆發力')) return true;
+  return false;
+}
+
+/** 從 pool 判斷一張牌是否「可作為起始戰鬥寶可夢」（基礎 OR 瞬間爆發力） */
+function canBeInitialActive(cardId: string, pool: Map<string, Card>): boolean {
+  return canBeInitialActiveCard(pool.get(cardId));
 }
 
 // ── v2.187 化石機制 ────────────────────────────────────────────────────────
@@ -1183,7 +1211,8 @@ function dealOpeningHand(player: PlayerState, pool: Map<string, Card>): number {
       if (top) player.hand.push(top);
     }
     attempts++;
-    if (player.hand.some((c) => isBasicPokemon(c.cardId, pool))) break;
+    // v2.42：閃焰王牌「瞬間爆發力」可作為起始戰鬥寶可夢 → 視同基礎，避免被誤判 mulligan
+    if (player.hand.some((c) => canBeInitialActive(c.cardId, pool))) break;
     mulligans++;
   } while (attempts < 10);
   return mulligans;
@@ -1259,7 +1288,8 @@ function handleSetup(
     const iidx = player.hand.findIndex((c) => c.iid === action.iid);
     if (iidx < 0) return state;
     const card = player.hand[iidx];
-    if (!isBasicPokemon(card.cardId, pool)) return state;
+    // v2.42：起手戰鬥場放置 — 基礎寶可夢，或 含「瞬間爆發力」特性（閃焰王牌）。
+    if (!canBeInitialActive(card.cardId, pool)) return state;
     if (player.active) {
       // 把舊的放回手牌（清除 justPlaced 以免帶回手牌後殘留）
       const returning = { ...player.active };
@@ -2762,22 +2792,26 @@ function handlePlaying(
         ...(attacker.active ? [attacker.active] : []),
         ...attacker.bench,
       ];
-      const processedAbNames = new Set<string>();
+      // v2.42 Bug 修正：原本所有 PASSIVE_ATTACK_BONUS 都 dedup by ability name（一張只算 1 次），
+      //   但卡面語意只有「大方」等明確規定不疊加。其他如「輝煌聲援」應隨場上同名張數疊加
+      //   （e.g. 2 隻竹蘭的羅絲雷朵 → +60）。改成只 dedup PASSIVE_ATTACK_NO_STACK 中的特性。
+      const processedNoStackNames = new Set<string>();
       for (const inst of attAll) {
         const c = pool.get(inst.cardId);
         if (!c?.abilities) continue;
+        // P2-4: 監視塔壓制【無】寶可夢的被動特性
+        if (isColorlessAbilityBlocked(state, c, pool)) continue;
         for (const ab of c.abilities) {
-          if (processedAbNames.has(ab.name)) continue; // P2-3: 不重複
-          // P2-4: 監視塔壓制【無】寶可夢的被動特性
-          if (isColorlessAbilityBlocked(state, c, pool)) continue;
           const fn = PASSIVE_ATTACK_BONUS.get(ab.name);
           if (!fn) continue;
+          // 卡面明文「不重複」的特性 dedup by name；其他特性每隻場上寶可夢都獨立加成
+          if (PASSIVE_ATTACK_NO_STACK.has(ab.name) && processedNoStackNames.has(ab.name)) continue;
           // v2.133：簽名擴充 — 把 defenderCard 也傳進去（複眼 等需要看對手卡）
           // v2.278：再擴 state / aIdx / pool — 讓「大將（依對手獎賞數）」「激動力量
           //         （場上有 Darkness Mega ex）」這類依場上局勢的特性能拿到資訊
           const bonus = fn(attackerCard, defenderCard, workingState, aIdx, pool);
           if (bonus > 0) {
-            processedAbNames.add(ab.name);
+            if (PASSIVE_ATTACK_NO_STACK.has(ab.name)) processedNoStackNames.add(ab.name);
             baseDamage += bonus;
             workingState = addLog(workingState, `「${ab.name}」啟動：${attackerCard.name} 招式傷害 +${bonus}`, aIdx);
           }

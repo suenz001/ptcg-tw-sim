@@ -329,6 +329,7 @@ import './effects/cards/v2380_j_abilities_batch';
 import './effects/cards/v2390_j_trainers_batch';
 import './effects/cards/v2400_i_wave1_recharge_status';
 import './effects/cards/v2401_i_wave2_draw_swap_search';
+import './effects/cards/v2402_mega_gardevoir';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -2396,6 +2397,18 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (
     }
     return 0;
   }],
+]);
+
+/**
+ * v2.42 Bug fix：原本 engine 對 PASSIVE_ATTACK_BONUS 全部 dedup by ability 名（一張只算 1 次）。
+ *   但卡面語意只有「大方（赫普的卡比獸）」明確規定「無論有多少隻擁有這個特性的寶可夢，
+ *   這個效果也不會重複」 — 其他「只要這隻寶可夢在場上 +N」類本應疊加。
+ *
+ * 此 Set 列出「明確規定不疊加」的特性。engine 對不在這個 Set 的特性，每隻場上擁有
+ * 該特性的寶可夢都會獨立加 N，達成卡面期望（例：場上 2 隻竹蘭的羅絲雷朵 → +60）。
+ */
+export const PASSIVE_ATTACK_NO_STACK: ReadonlySet<string> = new Set([
+  '大方',  // 赫普的卡比獸 — 卡面明文「不重複」
 ]);
 
 /**

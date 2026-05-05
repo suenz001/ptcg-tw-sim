@@ -270,14 +270,19 @@ reg('越橘的一步棋', (st, idx) => {
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon:Type=Darkness',  // UI parser 已支援 Pokemon:Type=X 之類；若不存在則退化（不限制 + 後置驗證）
+    // v2.42 修正：原本 'Pokemon:Type=Darkness' UI 沒有對應 case → 落到 generic Pokemon:
+    //          parser 切出 t='Type=Darkness' 比對 pokemonType 永遠 false → 永遠空清單。
+    //          改用專屬 'DarknessPokemon:TOP7'：UI 既限定 top7 又只列【惡】寶可夢。
+    filter: 'DarknessPokemon:TOP7',
     minCount: 0, maxCount: 1,
     effectKey: 'lingonberry-pick',
-    params: { topIids: top7.map(c => c.iid) },
+    // 同時保留 topIids（resolver 用於識別 top7 範圍洗回剩餘）+ 新格式 top7Iids（UI 過濾用）
+    params: { topIids: top7.map(c => c.iid), top7Iids: top7.map(c => c.iid) },
   });
 });
 regR('lingonberry-pick', (st, idx, iids, params, pool) => {
-  const topIids = (params?.topIids as string[] | undefined) ?? [];
+  const topIids = (params?.topIids as string[] | undefined)
+    ?? (params?.top7Iids as string[] | undefined) ?? [];
   if (iids.length === 0) {
     st = addLog(st, '越橘的一步棋：未選擇', idx);
     return updatePlayer(st, idx, p => {

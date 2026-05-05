@@ -14,7 +14,7 @@
     countEnergy, getEvolvableTargets,
     canRetreat, getPlayableTrainers, getPlayableBasics, getPlayableFossils,
     getUsableAbilities, isBasicPokemonCard, isFossilItemCard, getEffectiveHP,
-    totalEnergyUnits, getBenchLimit,
+    totalEnergyUnits, getBenchLimit, canBeInitialActiveCard,
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
@@ -1127,6 +1127,17 @@
             if (!top5.has(c.iid)) return false;
             const card = pool.get(c.cardId);
             return !!card && card.supertype === 'Pokemon' && !card.evolvesFrom;
+          });
+        }
+        // v2.42 越橘的一步棋：牌庫頂 7 張中的【惡】屬性寶可夢卡（任意階段）
+        // ── 修正夜間學院互動 bug：原 filter 'Pokemon:Type=Darkness' 落到 generic
+        //    Pokemon: parser → t='Type=Darkness' 比對 pokemonType 永遠 false。
+        if (f === 'DarknessPokemon:TOP7') {
+          const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
+          return src.deck.filter(c => {
+            if (!top7.has(c.iid)) return false;
+            const card = pool.get(c.cardId);
+            return !!card && card.supertype === 'Pokemon' && card.pokemonType === 'Darkness';
           });
         }
         // Bug fix (#19 金屬怪): 牌庫頂 4 張中的基本【鋼】能量（不顯示整個牌庫）
@@ -3419,7 +3430,9 @@
           {@const canEnergy=isEnergyCard&&game?.phase==='playing'&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()}
           {@const canBasicPlay=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()&&game?.phase==='playing'}
           {@const canBasicSetup=isBasicCard&&game?.phase==='setup'&&!game?.setupDone[myIdx]&&isMyTurn()}
-          {@const canBasic=canBasicPlay||canBasicSetup}
+          <!-- v2.42 閃焰王牌｜瞬間爆發力 — 起手 setup 可放戰鬥場（不限基礎） -->
+          {@const canSetupActiveSpecial=!isBasicCard&&canBeInitialActiveCard(c)&&game?.phase==='setup'&&!game?.setupDone[myIdx]&&isMyTurn()&&!myPlayer?.active}
+          {@const canBasic=canBasicPlay||canBasicSetup||canSetupActiveSpecial}
           {@const canFossil=isFossilCard&&playableFossilIids.has(inst.iid)&&isMyTurn()&&game?.phase==='playing'}
           {@const canTrainer=(isTrainerCard||isToolCard)&&!isFossilCard&&game?.phase==='playing'&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
           {@const canEvolve=isEvolutionCard&&game?.phase==='playing'&&playableEvoIids.has(inst.iid)&&isMyTurn()&&!pendingSelection}
