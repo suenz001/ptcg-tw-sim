@@ -98,6 +98,19 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.40</span> I 標 Wave 1 — Recharge + 狀態類批次實裝（declarative 風格）</summary>
+        <ul>
+          <li>新檔 v2400_i_wave1_recharge_status.ts — 用 helper factory + declarative array 大幅縮減 code 量（每張卡 1-2 行）</li>
+          <li>Recharge 招式 7 張：利歐路｜加速突刺 / 自爆磁怪｜閃光伏特 / 雪暴馬｜冰霜颱風 / 赫普的蒼響ex｜無畏斬 / 厄鬼椪 碧草面具｜鬼之錘 / 派帕的獒教父ex｜大佬頭擊 / 棄世猴｜衝擊打擊</li>
+          <li>純狀態（必中）4 張：隨風球｜不祥之風 / N的齒輪組｜轉轉齒輪 / 大吾的念力土偶｜不祥之光 / 火箭隊的臭臭泥｜渾身臭臭</li>
+          <li>擲幣狀態 5 張：冰砌鵝｜嚴寒頭錘 / 三合一磁怪｜電擊 / 狩獵鳳蝶｜麻痺粉 / 青藤蛇｜緊束 / 鴨嘴火獸｜灼燒</li>
+          <li>helper 復用：effects.ts 既有 statusPost / coinStatusPost（含憨憨臉/硬岩鬥能量/特殊能量 immunity 完整鏈）；本檔自定 inline rechargePost</li>
+          <li>架構：對 effects.ts 主檔僅加 3 個 export（statusPost / coinStatusPost / selfHitPost）+ 1 個 import；不改既有實裝</li>
+          <li>共 16 張 I 標寶可夢招式 effect 實裝；剩餘 22 張 Wave 1 候選含複雜複合效果留下波</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.389</span> J 標 5 張卡完全互動實裝</summary>
         <ul>
           <li>大嘴娃｜雙重食客 + 超級皮可西ex｜射攻月亮：新增 PreDiscardSpec scope='hand-energy'，+page.svelte UI handler 列出手牌能量卡讓玩家挑 0-2/0-4 張，regPre 改用 action.discardedEnergyIids</li>

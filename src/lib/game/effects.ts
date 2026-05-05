@@ -327,6 +327,7 @@ import './effects/cards/v2374_rocket_brain';
 import './effects/cards/v2380_j_attacks_batch';
 import './effects/cards/v2380_j_abilities_batch';
 import './effects/cards/v2390_j_trainers_batch';
+import './effects/cards/v2400_i_wave1_recharge_status';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -1611,7 +1612,7 @@ export function clearFestivalVenueProtectedStatuses(
 }
 
 /** 讓對手戰鬥寶可夢陷入指定狀態的 POST effect */
-function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'paralyzed'): AttackPostFn {
+export function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'paralyzed'): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const players = [...state.players] as [PlayerState, PlayerState];
@@ -1714,7 +1715,7 @@ regPost('闇黑酋雷姆ex|冰河期', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** 攻擊後自傷 N */
-function selfHitPost(amount: number): AttackPostFn {
+export function selfHitPost(amount: number): AttackPostFn {
   return (state, aIdx, pool) => {
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
@@ -2056,7 +2057,7 @@ regPre('潤水鴨|燕返', coinPlusDmg(10, 20));
 // Session 31 H6 — 擲硬幣正面附加狀態（POST）
 // ══════════════════════════════════════════════════════════════════════════════
 
-function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'paralyzed'): AttackPostFn {
+export function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'paralyzed'): AttackPostFn {
   return (state, aIdx, pool) => {
     const r = flipCoinsWithLog(state, 1, '招式擲幣', aIdx);
     if (!r.heads) return addLog(r.state, '→ 無附加狀態', aIdx);
