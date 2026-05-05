@@ -98,6 +98,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.387</span> 超級皮可西ex｜光之翼真實裝</summary>
+        <ul>
+          <li>光之翼：超級皮可西ex 不受對手寶可夢特性效果影響</li>
+          <li>engine.ts hook 1：冰冷之帳 checkup（line 3897 isFrosmothCheckupTarget）— 持有光之翼者免疫雪妖女放指示物</li>
+          <li>engine.ts hook 2：攻擊 pipeline PASSIVE_RETALIATION（line 3534）— 攻擊方持有光之翼 → 免疫毒刺/灼熱之軀/反擊/尖刺盔甲等對手反擊特性</li>
+          <li>未來補完：對手主動特性對此寶可夢造成效果（咒詛炸彈、整人擊落等）的 short-circuit</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.386</span> 麻麻鰻｜電氣發電機真實裝 + 鬥志戰吼確認</summary>
         <ul>
           <li>麻麻鰻｜電氣發電機（M2a/MC/SV11B 4 印）：在自己的回合可使用 1 次，從棄牌區選 1 張基本【雷】能量附於備戰寶可夢</li>

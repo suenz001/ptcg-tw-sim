@@ -3532,11 +3532,17 @@ function handlePlaying(
     }
 
     // ── 被動反擊特性（毒刺、灼熱之軀、反擊等）— 只對有實際傷害的招式觸發 ──
-    if (baseDamage > 0 && defenderCard.abilities) {
+    // v2.387：超級皮可西ex｜光之翼 — 攻擊方持有此特性時，免疫對手特性反擊效果。
+    const attackerHasMagicalShine = attackerCard?.abilities?.some(a => a.name === '光之翼') ?? false;
+    if (baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
       for (const ab of defenderCard.abilities) {
         const retal = PASSIVE_RETALIATION.get(ab.name);
         if (retal) newState = retal(newState, dIdx, pool);
       }
+    } else if (baseDamage > 0 && defenderCard.abilities && attackerHasMagicalShine) {
+      newState = addLog(newState,
+        `光之翼：${attackerCard?.name ?? '?'} 不受對手特性效果影響（${defenderCard.abilities.map(a => a.name).join('、')} 無效）`,
+        aIdx);
     }
 
     // v2.382：殼捲風旋轉 retaliation — defender 有 retaliateCountersOnNextHit flag
@@ -3894,10 +3900,16 @@ function handlePlaying(
         const n = (card?.name ?? '').trim();
         return n === '雪妖女';
       };
+      // v2.387：超級皮可西ex｜光之翼 — 不受對手寶可夢特性效果影響，
+      //   冰冷之帳對其無效（不放指示物）。
+      const hasMagicalShine = (card: Card | undefined): boolean => {
+        return card?.abilities?.some(a => a.name === '光之翼') ?? false;
+      };
       const isFrosmothCheckupTarget = (c: CardInstance): boolean => {
         const card = pool.get(c.cardId);
         if (!card?.abilities || card.abilities.length === 0) return false;
         if (isFrosmothName(card)) return false;
+        if (hasMagicalShine(card)) return false;  // 光之翼免疫
         return true;
       };
       const affectedNames: string[] = [];
