@@ -1653,6 +1653,22 @@ function handlePlaying(
         && (attacker.active.status === 'poisoned' || attacker.active.secondaryStatus === 'poisoned')) {
       return state;
     }
+
+    // v2.360 黏美龍｜黏滑失足 — 對手場上有此特性，撤退前擲幣，反面撤退失敗
+    // 規則：「這個特性的效果不會重複」— 只要至少 1 隻黏美龍有此特性即觸發，不疊加。
+    {
+      const hasStickFoot = [
+        ...(defender.active ? [defender.active] : []),
+        ...defender.bench,
+      ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '黏滑失足'));
+      if (hasStickFoot) {
+        const r = flipCoinsWithLog(state, 1, '黏滑失足', aIdx);
+        if (!r.heads) {
+          return addLog(r.state, '黏滑失足：反面 → 撤退所需能量不丟棄，不進行互換', aIdx);
+        }
+        state = r.state; // 正面：繼續正常撤退流程
+      }
+    }
     if (attacker.bench.length === 0) return state;
 
     const bIdx = attacker.bench.findIndex(c => c.iid === action.newActiveIid);
@@ -2802,6 +2818,23 @@ function handlePlaying(
     }
 
     // v2.174 鐵之防禦強化 — 自己【鋼】寶可夢本回合受招式 -30
+    // v2.360 代歐奇希斯｜精神防護 — 攻擊方擁有特性時，傷害歸零
+    // 攻擊方 card 有 abilities（且陣列非空）+ defender 有 immuneToAbilityPokemonThisTurn → 傷害歸零
+    if (baseDamage > 0
+        && defender.active.immuneToAbilityPokemonThisTurn
+        && attackerCard.abilities && attackerCard.abilities.length > 0) {
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因精神防護效果，不受擁有特性的寶可夢招式傷害`, dIdx);
+      baseDamage = 0;
+    }
+    // v2.360 具甲武者｜要害斬 — 完全免疫（傷害歸零 + 跳過防守效果）
+    if (baseDamage > 0 && defender.active.immuneToAllAttackThisTurn) {
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因要害斬效果，不受招式的傷害與效果影響`, dIdx);
+      baseDamage = 0;
+      skipDefEffects = true;
+    }
+
     // defender 是【鋼】 + 防守方有 metalShieldThisTurn → 傷害 -30
     if (baseDamage > 0
         && defender.metalShieldThisTurn
@@ -4031,6 +4064,15 @@ function handlePlaying(
         n = { ...n };
         delete n.immuneToExAttackThisTurn;
       }
+      // v2.360 代歐奇希斯｜精神防護 / 具甲武者｜要害斬 — 對手回合結束時清 ThisTurn 旗標
+      if (c.immuneToAbilityPokemonThisTurn) {
+        n = { ...n };
+        delete n.immuneToAbilityPokemonThisTurn;
+      }
+      if (c.immuneToAllAttackThisTurn) {
+        n = { ...n };
+        delete n.immuneToAllAttackThisTurn;
+      }
       // Wave 39：清除消耗完的 deferredPrizeBonusThisTurn（同跨回合模型）
       if (c.deferredPrizeBonusThisTurn) {
         n = { ...n };
@@ -4095,6 +4137,15 @@ function handlePlaying(
       if (c.immuneToExAttackNextTurn) {
         n = { ...n, immuneToExAttackThisTurn: true };
         delete n.immuneToExAttackNextTurn;
+      }
+      // v2.360 代歐奇希斯｜精神防護 / 具甲武者｜要害斬 — owner END_TURN 時 promote NextTurn → ThisTurn
+      if (c.immuneToAbilityPokemonNextTurn) {
+        n = { ...n, immuneToAbilityPokemonThisTurn: true };
+        delete n.immuneToAbilityPokemonNextTurn;
+      }
+      if (c.immuneToAllAttackNextTurn) {
+        n = { ...n, immuneToAllAttackThisTurn: true };
+        delete n.immuneToAllAttackNextTurn;
       }
       return n;
     };
@@ -4207,6 +4258,8 @@ function handlePlaying(
       rocketSupporterPlayedThisTurn: false,
       ancientSupporterPlayedThisTurn: false,
       carnelliPlayedThisTurn: false,
+      magearnaPlayedThisTurn: false,
+      talarongPlayedThisTurn: false,
       retreatedThisTurn: false,
     };
 

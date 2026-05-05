@@ -388,6 +388,8 @@ reg('瑪琪艾兒', (st, idx, pool) => {
   const pokeCount = oppHand.filter(c => pool.get(c.cardId)?.supertype === 'Pokemon').length;
   st = addLog(st, `瑪琪艾兒：查看對手手牌（${oppHand.length} 張）— ${handNames}`, idx);
   st = addLog(st, `瑪琪艾兒：對手手牌寶可夢 ${pokeCount} 張 → 抽 ${pokeCount} 張`, idx);
+  // v2.360：設旗標供 妙喵｜拍檔攻擊 判斷本回合是否出過瑪琪艾兒
+  st = updatePlayer(st, idx, p => ({ ...p, magearnaPlayedThisTurn: true }));
   if (pokeCount === 0) return st;
   return updatePlayer(st, idx, p => {
     const taken = p.deck.slice(0, Math.min(pokeCount, p.deck.length));
@@ -1065,7 +1067,4 @@ regR('tr-disrupt-bot-swap-decide', (st, idx, iids, params, _pool) => {
 
 // ── 烈焰馬｜快走（特性 / I-mark: SV9a 12672, SV9a 12727, MC 16561）────────────────────
 // 效果：「在自己的回合時可使用1次。從自己的牌庫抽出1張卡。」
-// 條件：自己的回合、牌庫至少 1 張
-regA('烈焰馬', 0, (st, idx) => {
-  return drawCards(addLog(st, '快走：從牌庫抽出 1 張卡', idx), idx, 1);
-});
+// 條�

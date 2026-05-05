@@ -216,6 +216,12 @@ export interface CardInstance {
    */
   immuneToExAttackNextTurn?: boolean;
   immuneToExAttackThisTurn?: boolean;
+  /** v2.360 代歐奇希斯｜精神防護 — 下個對手回合不受擁有特性的寶可夢招式傷害 */
+  immuneToAbilityPokemonNextTurn?: boolean;
+  immuneToAbilityPokemonThisTurn?: boolean;
+  /** v2.360 具甲武者｜要害斬 — 下個對手回合不受招式的傷害與效果影響 */
+  immuneToAllAttackNextTurn?: boolean;
+  immuneToAllAttackThisTurn?: boolean;
   /**
    * v2.187：化石上場旗標。標明此 instance 雖 cardId 對應 Item 卡（subtype=Item），
    * 但目前作為 HP60【無】屬性【基礎】寶可夢站在場上（戰鬥場或備戰）。
@@ -259,6 +265,10 @@ export interface PlayerState {
   ancientSupporterPlayedThisTurn?: boolean;
   /** v2.306：本回合是否已打出「卡娜莉」支援者 — 光電傘蜥｜頸傘發電 條件用 */
   carnelliPlayedThisTurn?: boolean;
+  /** v2.360：瑪琪艾兒 supporter played - 妙喵｜拍檔攻擊 用 */
+  magearnaPlayedThisTurn?: boolean;
+  /** v2.360：塔拉剛 supporter played - 河馬獸｜龍捲風噴射 用 */
+  talarongPlayedThisTurn?: boolean;
   /**
    * v2.174 鐵之防禦強化（Item / I）— 在下個對手的回合，自己的所有【鋼】寶可夢
    * 受到對手寶可夢招式的傷害 -30。打出時設於 self 的 NextTurn flag，於 nextIdx

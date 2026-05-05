@@ -718,6 +718,8 @@ regG('塔拉剛', (st, idx, pool) => {
   });
 });
 reg('塔拉剛', (st, idx, pool) => {
+  // v2.360：設旗標供 河馬獸｜龍捲風噴射 判斷本回合是否出過塔拉剛
+  st = updatePlayer(st, idx, p => ({ ...p, talarongPlayedThisTurn: true }));
   const eligible = st.players[idx].discard.filter(c => {
     const card = pool.get(c.cardId);
     if (!card) return false;
