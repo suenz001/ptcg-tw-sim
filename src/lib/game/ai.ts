@@ -150,10 +150,35 @@ export function getAIAction(
     return { type: 'PLAY_TRAINER', iid: sorted[0] };
   }
 
-  // 使用主動特性
+  // 使用主動特性（帶代價評估）
+  // v2.358：AI 不能無腦用所有可用特性，必須評估「使用是否划算」。
+  //   交易（N的索羅亞克ex）= 弃1抽2，淨賺1。
+  //   但若：手牌已滿（>=8）或牌庫過淺（<5），使用會造成淨損失或遊戲後期風險，應跳過。
+  //   其他抽牌特性同理：手牌 >= 8 或 牌庫即將見底 時應節制。
   const abilities = getUsableAbilities(state, pool);
   if (abilities.length > 0) {
-    return { type: 'USE_ABILITY', iid: abilities[0].iid, abilityIndex: abilities[0].abilityIndex };
+    // 對每個可用特性評分；分數 <= 0 代表不該用
+    const scored = abilities.map(ab => {
+      const inst = [...(player.active ? [player.active] : []), ...player.bench].find(p => p.iid === ab.iid);
+      const card = pool.get(ab.iid);
+      let score = 10; // 預設：值得用
+
+      // === 交易（N的索羅亞克ex）====================
+      if (ab.abilityName === '交易') {
+        // 手牌已滿（>= 8）：抽到也沒空間放，浪費一張
+        if (player.hand.length >= 8) score = 0;
+        // 牌庫 < 5：後期抽一張少一張，風險太高
+        else if (player.deck.length < 5) score = 0;
+      }
+
+      return { ab, score };
+    });
+
+    // 選分數最高的可用特性（分數相同則用第一個）
+    const best = scored.reduce((a, b) => b.score > a.score ? b : a);
+    if (best.score > 0) {
+      return { type: 'USE_ABILITY', iid: best.ab.iid, abilityIndex: best.ab.abilityIndex };
+    }
   }
 
   // 攻擊（選傷害最高的）
