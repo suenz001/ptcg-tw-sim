@@ -630,14 +630,16 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
 
 /**
  * 從備戰區選最佳的送出。
- * v2.357 修復：不再只看 HP，改为优先选「当前就能发招式」的宝可梦。
- * - Zoroark ex 的价值在备战场用暗黑底牌复制招式，除非它自己能发招式，否则不优先送上场。
- * - 优先：能发招式的 > HP 最高的 > Zoroark ex（万不得已才选）
+ * v2.357 修正：
+ * - Zoroark ex 應該**優先**送上場（暗黑底牌需要它在 active 才能複製備戰招式）
+ * - 那些高能量需求的（N's 萊希拉姆 / 達摩狒狒）不該輕易上 active，因為它們
+ *   沒能量就打不了招式，且 HP 高並不構成選擇它們的理由
+ * - 優先順序：Zoroark ex > 能發招式的 > HP 最高的普通寶可夢
  */
 function pickBestActive(bench: CardInstance[], pool: Map<string, Card>, state?: GameState): CardInstance {
   if (!bench.length) return bench[0]; // fallback
 
-  // 辅助：检查某只宝可梦是否「当前就能发招式」
+  // 輔助：檢查某只寶可夢是否「當前就能發招式」
   const canAttackNow = (inst: CardInstance): boolean => {
     const card = pool.get(inst.cardId);
     if (!card?.attacks?.length) return false;
@@ -649,38 +651,19 @@ function pickBestActive(bench: CardInstance[], pool: Map<string, Card>, state?: 
     return false;
   };
 
-  // 分类：能发招的 vs 不能发招的
-  const canAtk: CardInstance[] = [];
-  const cannotAtk: CardInstance[] = [];
-  for (const b of bench) {
-    const card = pool.get(b.cardId);
-    // Zoroark ex：即使不能发招式，也要降低优先级（其价值在备战场复制招式）
-    const isZoroarkEx = card?.name === 'N的索羅亞克ex';
-    if (canAttackNow(b)) {
-      canAtk.push(b);
-    } else if (!isZoroarkEx) {
-      // 普通宝可梦不能发招式，但 Zoroark ex 单独归类
-      cannotAtk.push(b);
-    }
-    // Zoroark ex 本身不放 cannotAtk，最后再处理
-  }
+  // Zoroark ex：暗黑底牌需要它在 active，應該優先送上場
+  const zoroarkEx = bench.find(b => pool.get(b.cardId)?.name === 'N的索羅亞克ex');
+  if (zoroarkEx) return zoroarkEx;
 
+  // 能發招式的，選 HP 最高的
+  const canAtk = bench.filter(b => canAttackNow(b));
   if (canAtk.length > 0) {
-    // 优先选能发招的，HP 最高的
     return canAtk.reduce((a, b) =>
       getEffectiveHP(a, pool, state) >= getEffectiveHP(b, pool, state) ? a : b
     );
   }
 
-  // 没有能发招的：选 Zoroark ex 以外的 HP 最高
-  const others = bench.filter(b => pool.get(b.cardId)?.name !== 'N的索羅亞克ex');
-  if (others.length > 0) {
-    return others.reduce((a, b) =>
-      getEffectiveHP(a, pool, state) >= getEffectiveHP(b, pool, state) ? a : b
-    );
-  }
-
-  // 万不得已：只有 Zoroark ex，HP 最高
+  // 都不能發招式：選 HP 最高的普通寶可夢
   return bench.reduce((a, b) =>
     getEffectiveHP(a, pool, state) >= getEffectiveHP(b, pool, state) ? a : b
   );
