@@ -1833,6 +1833,15 @@ function handlePlaying(
     // Wave 39：玩家級物品 / 支援者鎖（例：含羞苞｜癢癢花粉、吼叫尾ex｜絕叫、電蜘蛛ex｜雷擊石）
     if (trainerCard.subtype === 'Item' && attacker.cantPlayItemThisTurn) return state;
     if (trainerCard.subtype === 'Supporter' && attacker.cantPlaySupporterThisTurn) return state;
+    // v2.362 班基拉斯｜威迫目光 — 對手戰鬥場有此特性（且未被消除）時，本方無法使出物品卡
+    if (trainerCard.subtype === 'Item') {
+      const oppIdxIT = (1 - aIdx) as 0 | 1;
+      const oppActIT = state.players[oppIdxIT].active;
+      if (oppActIT && !oppActIT.abilityNullifiedThisTurn) {
+        const oppActCardIT = pool.get(oppActIT.cardId);
+        if (oppActCardIT?.abilities?.some(a => a.name === '威迫目光')) return state;
+      }
+    }
     // v2.322：蓋諾賽克特｜ACE消弭 — 對手有附道具的蓋諾賽克特時，不能打 ACE SPEC
     if (trainerCard.tags?.includes('ACE SPEC') && isAceCancelActive(state, aIdx, pool)) return state;
 
@@ -2318,6 +2327,11 @@ function handlePlaying(
     // 查找 ABILITY_EFFECTS
     const abilityFn = ABILITY_EFFECTS.get(`${pokeCard!.name}|${action.abilityIndex}`);
     if (!abilityFn) return state;
+
+    // v2.362 振翼髮｜暗夜羽擊 — 若特性被消除，無法使用
+    if (targetPoke?.abilityNullifiedThisTurn) {
+      return addLog(state, `${pokeCard!.name} 的特性「${ability.name}」已被消除，無法使用`, aIdx);
+    }
 
     // 標記已使用（不限次數特性跳過）
     const updatedPlayers = [...state.players] as [PlayerState, PlayerState];
@@ -4078,6 +4092,15 @@ function handlePlaying(
         n = { ...n };
         delete n.immuneToAllAttackThisTurn;
       }
+      // v2.362 振翼髮｜暗夜羽擊 — 清除上回合已消耗的 abilityNullifiedThisTurn；promote NextTurn → ThisTurn
+      if (c.abilityNullifiedThisTurn) {
+        n = { ...n };
+        delete n.abilityNullifiedThisTurn;
+      }
+      if (c.abilityNullifiedNextTurn) {
+        n = { ...n, abilityNullifiedThisTurn: true };
+        delete n.abilityNullifiedNextTurn;
+      }
       // Wave 39：清除消耗完的 deferredPrizeBonusThisTurn（同跨回合模型）
       if (c.deferredPrizeBonusThisTurn) {
         n = { ...n };
@@ -4771,6 +4794,15 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       // Wave 43 fix：玩家級物品/支援者鎖也要在可用清單裡濾掉（否則 AI 會挑到被鎖的卡、engine 靜默 no-op → AI 當機）
       if (c.subtype === 'Item' && player.cantPlayItemThisTurn) return false;
       if (c.subtype === 'Supporter' && player.cantPlaySupporterThisTurn) return false;
+      // v2.362 班基拉斯｜威迫目光 — 對手戰鬥場有此特性時，物品卡不可打出
+      if (c.subtype === 'Item') {
+        const oppIdxUI = (1 - state.activePlayerIndex) as 0 | 1;
+        const oppActUI = state.players[oppIdxUI].active;
+        if (oppActUI && !oppActUI.abilityNullifiedThisTurn) {
+          const oppActCardUI = pool.get(oppActUI.cardId);
+          if (oppActCardUI?.abilities?.some(a => a.name === '威迫目光')) return false;
+        }
+      }
       // v2.322：蓋諾賽克特｜ACE消弭 — 對手有附道具的蓋諾賽克特時，不能打 ACE SPEC
       if (c.tags?.includes('ACE SPEC') && isAceCancelActive(state, state.activePlayerIndex, pool)) return false;
       // 義務性檢查：缺合法目標的卡不可打出
@@ -4835,6 +4867,8 @@ export function getUsableAbilities(
     }
     const card = pool.get(pk.cardId);
     if (!card?.abilities) continue;
+    // v2.362 振翼髮｜暗夜羽擊：特性被消除的寶可夢不列入可用清單
+    if (pk.abilityNullifiedThisTurn) continue;
     // 火箭隊的監視塔：【無】屬寶可夢的特性全部消除
     if (isColorlessAbilityBlocked(state, card, pool)) continue;
     card.abilities.forEach((ab, abIdx) => {

@@ -1482,6 +1482,158 @@ const FESTIVAL_LEAD_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+
+/** 班基拉斯 預組（60 張）— v2.362 */
+const TYRANITAR_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_tyranitar__',
+  name: '班基拉斯',
+  entries: [
+    // Pokemon 20
+    { cardId: '12520', count: 3 }, // 班基拉斯 (SV9 058/100)
+    { cardId: '12133', count: 1 }, // 沙基拉斯 (SVM 063/175)
+    { cardId: '12132', count: 4 }, // 幼基拉斯 (SVM 062/175)
+    { cardId: '17019', count: 1 }, // 多龍巴魯托ex (MC)
+    { cardId: '17018', count: 3 }, // 多龍奇 (MC)
+    { cardId: '17017', count: 3 }, // 多龍梅西亞 (MC)
+    { cardId: '14443', count: 2 }, // 含羞苞 (M-P-H)
+    { cardId: '10469', count: 2 }, // 願增猿 (SV6 055/101)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC)
+    // Items 15
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC)
+    { cardId: '17126', count: 3 }, // 神奇糖果 (MC)
+    { cardId: '17122', count: 1 }, // 高級球 (MC)
+    { cardId: '17141', count: 1 }, // 夜間擔架 (MC)
+    { cardId: '17111', count: 1 }, // 能量回收器 (MC)
+    { cardId: '17104', count: 1 }, // 不公印章 ACE SPEC (MC)
+    // Supporters 13
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC)
+    { cardId: '17167', count: 3 }, // 赤松 (MC)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC)
+    { cardId: '17205', count: 2 }, // 火箭隊的拉姆達 (MC)
+    { cardId: '17182', count: 1 }, // 裁判 (MC)
+    // Stadiums 2
+    { cardId: '14849', count: 1 }, // 火箭隊的監視塔 (M2a)
+    { cardId: '9769',  count: 1 }, // 危險密林 (SV5K)
+    // Energy 10
+    { cardId: '17214', count: 5 }, // 基本【惡】能量 (MC)
+    { cardId: '17220', count: 3 }, // 基本【超】能量 (MC)
+    { cardId: '17216', count: 2 }, // 基本【火】能量 (MC)
+  ],
+};
+
+/** 超級蒂安希 預組（60 張）— v2.362 */
+const MEGA_DIANCIE_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_mega_diancie__',
+  name: '超級蒂安希',
+  entries: [
+    // Pokemon 16
+    { cardId: '16758', count: 2 }, // 莉莉艾的皮皮ex (MC)
+    { cardId: '15975', count: 2 }, // 超級蒂安希ex (M2a)
+    { cardId: '16779', count: 3 }, // 夜巡靈 (MC)
+    { cardId: '16780', count: 2 }, // 彷徨夜靈 (MC)
+    { cardId: '16781', count: 2 }, // 黑夜魔靈 (MC)
+    { cardId: '13398', count: 1 }, // 輕飄飄 (SV11W 041/086)
+    { cardId: '9803',  count: 1 }, // 振翼髮 (SV5K 033/071)
+    { cardId: '16783', count: 2 }, // 拉帝亞斯ex (MC)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3)
+    // Items 18
+    { cardId: '17122', count: 4 }, // 高級球 (MC)
+    { cardId: '17133', count: 3 }, // 寶可平板 (MC)
+    { cardId: '18407', count: 4 }, // 奇跡修正檔 (M3)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC)
+    { cardId: '17127', count: 1 }, // 頂尖捕捉器 ACE SPEC (MC)
+    { cardId: '17154', count: 3 }, // 力之沙漏 Tool (MC)
+    // Supporters 11
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC)
+    { cardId: '17186', count: 3 }, // 丹瑜 (MC)
+    { cardId: '17182', count: 2 }, // 裁判 (MC)
+    // Stadiums 3
+    { cardId: '14847', count: 3 }, // 神秘花園 (M2a)
+    // Energy 12
+    { cardId: '18056', count: 4 }, // 感應【超】能量 (M3)
+    { cardId: '17220', count: 8 }, // 基本【超】能量 (MC)
+  ],
+};
+
+/** 寶石大竺葵 預組（60 張）— v2.362 */
+const GEM_MEGANIUM_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_gem_meganium__',
+  name: '寶石大竺葵',
+  entries: [
+    // Pokemon 20
+    { cardId: '16553', count: 4 }, // 厄鬼椪 碧草面具ex (MC)
+    { cardId: '10972', count: 4 }, // 貓頭夜鷹 (SV7 077/102)
+    { cardId: '10971', count: 3 }, // 咕咕 (SV7 076/102)
+    { cardId: '12412', count: 1 }, // 咕咕 (SV8a 127/187)
+    { cardId: '14025', count: 2 }, // 大竺葵 (M1S 005/063)
+    { cardId: '14024', count: 2 }, // 月桂葉 (M1S 004/063)
+    { cardId: '14023', count: 2 }, // 菊草葉 (M1S 003/063)
+    { cardId: '10975', count: 1 }, // 旋轉洛托姆 (SV7)
+    { cardId: '10588', count: 1 }, // 卡璞・哞哞 (SV6a 006/064)
+    // Items 17
+    { cardId: '17138', count: 4 }, // 捕蟲組合 (MC)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC)
+    { cardId: '17119', count: 2 }, // 好友寶芬 (MC)
+    { cardId: '14812', count: 2 }, // 太晶珠 (M2a)
+    { cardId: '17109', count: 2 }, // 能量轉移 (MC)
+    { cardId: '17107', count: 1 }, // 能量回收 (MC)
+    { cardId: '17134', count: 1 }, // 寶可夢交替 (MC)
+    { cardId: '17104', count: 1 }, // 不公印章 ACE SPEC (MC)
+    // Supporters 9
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC)
+    { cardId: '14424', count: 1 }, // 小光 (M-P-I)
+    { cardId: '17183', count: 1 }, // 水蓮的照顧 (MC)
+    { cardId: '17195', count: 2 }, // 老大的指令 (MC)
+    { cardId: '17193', count: 1 }, // 白蕾雅 (MC)
+    // Stadiums 3
+    { cardId: '14081', count: 2 }, // 活力森林 (M1S)
+    { cardId: '10997', count: 1 }, // 零之大空洞 (SV7)
+    // Energy 11
+    { cardId: '17217', count: 11 }, // 基本【草】能量 (MC)
+  ],
+};
+
+/** 超級巨牙鯊 預組（60 張）— v2.362 */
+const MEGA_SHARPEDO_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_mega_sharpedo__',
+  name: '超級巨牙鯊',
+  entries: [
+    // Pokemon 20
+    { cardId: '14368', count: 4 }, // 利牙魚 (M2 050/080)
+    { cardId: '14374', count: 2 }, // 毒電嬰 (M2 056/080)
+    { cardId: '14375', count: 2 }, // 顫弦蠑螈 (M2 057/080)
+    { cardId: '10469', count: 2 }, // 願增猿 (SV6 055/101)
+    { cardId: '14137', count: 2 }, // 桃歹郎ex (MBG)
+    { cardId: '10496', count: 2 }, // 米立龍 (SV6 082/101)
+    { cardId: '14389', count: 1 }, // 捲捲耳 (M2 071/080)
+    { cardId: '14390', count: 1 }, // 超級長耳兔ex (M2)
+    { cardId: '14369', count: 3 }, // 超級巨牙鯊ex (M2)
+    { cardId: '13997', count: 1 }, // 伊裴爾塔爾 (M1L 040/063)
+    // Items 17
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC)
+    { cardId: '17122', count: 4 }, // 高級球 (MC)
+    { cardId: '14078', count: 1 }, // 超級信號 (M1S)
+    { cardId: '17104', count: 1 }, // 不公印章 ACE SPEC (MC)
+    { cardId: '17141', count: 1 }, // 夜間擔架 (MC)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC)
+    { cardId: '17152', count: 2 }, // 鎖鏈糬 (MC)
+    // Supporters 13
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC)
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC)
+    { cardId: '17182', count: 4 }, // 裁判 (MC)
+    { cardId: '14080', count: 1 }, // 滿充的體貼 (M1S)
+    { cardId: '17188', count: 1 }, // 探險家的嚮導 (MC)
+    // Stadiums 2
+    { cardId: '11286', count: 1 }, // 引力山岳 (SV8)
+    { cardId: '14849', count: 1 }, // 火箭隊的監視塔 (M2a)
+    // Energy 8
+    { cardId: '17214', count: 8 }, // 基本【惡】能量 (MC)
+  ],
+};
+
 /**
  * 所有內建預設牌組
  *
@@ -1495,6 +1647,7 @@ const FESTIVAL_LEAD_DECK: Omit<Deck, 'updatedAt'> = {
  * v2.133：新增「電電蟲」/「超級袋獸厄鬼椪」兩組 Leon 自選卡表。
  * v2.135：新增「阿響的火爆獸」/「火箭隊的烏鴉頭頭」兩組 Leon 自選卡表。
  * v2.148：新增「超級長耳兔」/「蜜集大蛇」/「火伊布」/「祭典樂舞」四組 Leon 自選卡表。
+ * v2.362：新增「班基拉斯」/「超級蒂安希」/「寶石大竺葵」/「超級巨牙鯊」四組 Leon 自選卡表。
  */
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: 0 },
@@ -1534,6 +1687,10 @@ export const PRESET_DECKS: Deck[] = [
   { ...MEGA_VENUSAUR_DECK, updatedAt: 0 },
   { ...MEGA_KANGASKHAN_ABSOL_DECK, updatedAt: 0 },
   { ...BRONZONG_DRAGAPULT_DECK, updatedAt: 0 },
+  { ...TYRANITAR_DECK, updatedAt: 0 },
+  { ...MEGA_DIANCIE_DECK, updatedAt: 0 },
+  { ...GEM_MEGANIUM_DECK, updatedAt: 0 },
+  { ...MEGA_SHARPEDO_DECK, updatedAt: 0 },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */

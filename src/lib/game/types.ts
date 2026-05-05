@@ -234,6 +234,12 @@ export interface CardInstance {
    * - 被打 KO 時走正常昏厥流程（給對手 1 張獎賞）
    */
   fossilOnField?: boolean;
+  /** v2.362 振翼髮｜暗夜羽擊 — 特性被消除旗標（跨回合 promote 模型）
+   * NextTurn 由攻擊 ATTACK_POST 設置；END_TURN 時 promotePending 將 NextTurn → ThisTurn。
+   * ThisTurn 表示本回合無法使用此寶可夢的主動特性，同時被動封鎖。
+   */
+  abilityNullifiedNextTurn?: boolean;
+  abilityNullifiedThisTurn?: boolean;
 }
 
 export type SpecialCondition =

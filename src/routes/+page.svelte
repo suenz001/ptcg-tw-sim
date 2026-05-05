@@ -97,6 +97,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v2.362</span> 新增 4 套預設牌組 + 特性消除機制</summary>
+        <ul>
+          <li>新增預設牌組：班基拉斯 / 超級蒂安希 / 寶石大竺葵 / 超級巨牙鯊（共 4 套）</li>
+          <li>新實裝效果：振翼髮｜暗夜羽擊（消除對手特性）、班基拉斯｜威迫目光（封對手物品卡）</li>
+          <li>新實裝效果：超級巨牙鯊ex｜飢渴下巴、輕飄飄｜海之影、伊裴爾塔爾｜黑暗羽毛、幼基拉斯｜咬碎</li>
+        </ul>
+      </details>
+      <details>
         <summary><span class="ver-badge">v2.361</span> Bug 修復批次 — 5項修正</summary>
         <ul>
           <li>Bug #17 擔架：棄牌區寶可夢取回後，清除 KO 前的狀態異常與傷害指示物</li>
