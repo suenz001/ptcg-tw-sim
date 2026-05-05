@@ -5232,4 +5232,6 @@ RESOLVERS.set('retreat-energy-discard', (state, actorIdx, selectedIids, params, 
   return {
     ...state,
     players,
-    log: [...state.log, { turn: state.turn, play
+    log: [...state.log, { turn: state.turn, playerIndex: actorIdx, message: msg }],
+  };
+});
