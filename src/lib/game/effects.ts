@@ -323,6 +323,9 @@ import './effects/cards/v2360_j_mark_batch';
 import './effects/cards/v2362_new_decks_batch';
 import './effects/cards/v2370_new_decks_batch';
 import './effects/cards/v2374_rocket_brain';
+import './effects/cards/v2380_j_attacks_batch';
+import './effects/cards/v2380_j_abilities_batch';
+import './effects/cards/v2390_j_trainers_batch';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts

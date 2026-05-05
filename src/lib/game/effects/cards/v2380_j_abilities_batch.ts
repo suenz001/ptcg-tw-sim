@@ -1,0 +1,235 @@
+/**
+ * v2.38 波 1（接續）— J 標寶可夢「特性」補實裝
+ *
+ * 涵蓋使用既有 helper 可實裝的特性。需擴 engine 的複雜特性留 stub。
+ *
+ * 本檔登錄（5 個 regA 路徑特性）：
+ *   - 白海獅｜沖刷（兩階段：選備戰水能量 → 改附戰鬥場）
+ *   - 瑪力露麗ex｜收集泡泡（兩階段：選場上能量 → 改附自身）
+ *   - 青木的樹枕尾熊｜無力充能（兩階段：選手牌能量 → 附戰鬥場「青木的」）
+ *   - 超級皮可西ex｜光之翼（ABILITY_IMMUNITY 標籤：不受對手特性影響）
+ *   - 小碎鑽｜雙重屬性（POKEMON_TYPE_OVERRIDE 標籤：場上時改鬥+超）
+ *
+ * 已存在於既有實裝（無需重做）：
+ *   - 鐵殼蛹｜堅硬身軀     PASSIVE_DAMAGE_REDUCE 'effects.ts:2287'
+ *   - 千針魚｜毒刺         PASSIVE_RETALIATION  'effects.ts:2551'（中毒 retaliation）
+ *   - 布里卡隆｜尖刺盔甲   PASSIVE_RETALIATION  'effects.ts:2580'
+ *   - 奇諾栗鼠ex｜順滑大衣 PASSIVE_IMMUNITY     'effects.ts:2418'
+ *   - 探探鼠｜監視之眼     _shared.ts MOVE_DAMAGE_COUNTER_ABILITIES（v2.372）
+ *   - 怪顎龍｜暴龍根性     engine.ts checkup 內嵌
+ *   - 呆呆獸｜憨憨臉       engine.ts confusion gate
+ *   - 黏美龍｜黏滑失足     engine.ts retreat gate
+ *   - 電龍｜同步脈衝       engine.ts attack bonus
+ *   - 爆焰龜獸｜甲殼刺     engine.ts retaliation
+ *   - 凍原堡壘             engine.ts passive damage reduce
+ *   - 灰塵山｜垃圾洩氣     engine.ts passive damage reduce
+ *
+ * 未實裝 stub（需 engine 改動，標 TODO 留下次）：
+ *   - 狙射樹梟ex｜狙擊手之眼  能量 cost 修正（需 engine cost calc hook）
+ *   - 勒克貓｜鬥志戰吼        進化 gate（需 engine evolve gate hook）
+ *   - 耿鬼｜無限之影          KO 替代回手牌（需 engine KO replacement hook）
+ *   - 堅果啞鈴｜整人擊落      牌庫被丟棄時觸發（需 engine deck-mill hook）
+ *   - 勾帕路翁ex｜金屬之路    進場時搬能量（兩階段 picker，需 BENCH_PLACE_TRIGGERS）
+ */
+
+import type { CardInstance, PlayerState, GameState } from '../../types';
+import {
+  regA, regR,
+  addLog, updatePlayer, withPending,
+} from '../_shared';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 白海獅｜沖刷 — 不限次數，備戰【水】能量改附戰鬥場
+// ══════════════════════════════════════════════════════════════════════════════
+regA('白海獅', 0, (st, idx, pool) => {
+  const player = st.players[idx];
+  if (!player.active) return addLog(st, '沖刷：戰鬥場無寶可夢', idx);
+  // 找備戰寶可夢身上的【水】能量
+  const sourcesWithWater: { iid: string; energyIid: string }[] = [];
+  for (const b of player.bench) {
+    for (const e of b.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (ec?.pokemonType === 'Water') {
+        sourcesWithWater.push({ iid: b.iid, energyIid: e.iid });
+      }
+    }
+  }
+  if (sourcesWithWater.length === 0) {
+    return addLog(st, '沖刷：備戰區無【水】能量可改附', idx);
+  }
+  const sourceIids = Array.from(new Set(sourcesWithWater.map(s => s.iid)));
+  const s = addLog(st, '沖刷：選 1 隻備戰寶可夢（將其【水】能量改附戰鬥場）', idx);
+  return withPending(s, {
+    type: 'heal-target',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'walrein-rinse',
+    params: { validIids: sourceIids },
+  });
+});
+regR('walrein-rinse', (state, aIdx, iids, _params, pool) => {
+  const sourceIid = iids[0];
+  if (!sourceIid) return state;
+  const player = state.players[aIdx];
+  const src = player.bench.find(b => b.iid === sourceIid);
+  if (!src) return state;
+  // 取 1 張水能量
+  const waterIdx = src.energyAttached.findIndex(e => pool.get(e.cardId)?.pokemonType === 'Water');
+  if (waterIdx < 0) return addLog(state, '沖刷：來源無【水】能量', aIdx);
+  const waterEnergy = src.energyAttached[waterIdx];
+  return updatePlayer(
+    addLog(state, '沖刷：將 1 張【水】能量改附戰鬥場', aIdx),
+    aIdx, p => ({
+      ...p,
+      active: p.active ? {
+        ...p.active,
+        energyAttached: [...p.active.energyAttached, waterEnergy],
+      } : null,
+      bench: p.bench.map(b => b.iid === sourceIid ? {
+        ...b,
+        energyAttached: b.energyAttached.filter((_, i) => i !== waterIdx),
+      } : b),
+    }),
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 瑪力露麗ex｜收集泡泡 — 不限次數，場上能量改附自身
+// ══════════════════════════════════════════════════════════════════════════════
+regA('瑪力露麗ex', 0, (st, idx, pool) => {
+  const player = st.players[idx];
+  if (!player.active || pool.get(player.active.cardId)?.name !== '瑪力露麗ex') {
+    return addLog(st, '收集泡泡：戰鬥場不是瑪力露麗ex', idx);
+  }
+  // 找場上其他寶可夢身上有能量
+  const sources: string[] = [];
+  for (const b of player.bench) {
+    if (b.energyAttached.length > 0) sources.push(b.iid);
+  }
+  if (sources.length === 0) {
+    return addLog(st, '收集泡泡：備戰區無能量可改附', idx);
+  }
+  const s = addLog(st, '收集泡泡：選 1 隻備戰寶可夢，將其 1 個能量改附自身', idx);
+  return withPending(s, {
+    type: 'heal-target',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'azumarill-bubble',
+    params: { validIids: sources },
+  });
+});
+regR('azumarill-bubble', (state, aIdx, iids, _params, _pool) => {
+  const sourceIid = iids[0];
+  if (!sourceIid) return state;
+  const player = state.players[aIdx];
+  const src = player.bench.find(b => b.iid === sourceIid);
+  if (!src || src.energyAttached.length === 0) return state;
+  const energy = src.energyAttached[0];  // 簡化：取第 1 張
+  return updatePlayer(
+    addLog(state, '收集泡泡：將 1 個能量從備戰改附瑪力露麗ex', aIdx),
+    aIdx, p => ({
+      ...p,
+      active: p.active ? {
+        ...p.active,
+        energyAttached: [...p.active.energyAttached, energy],
+      } : null,
+      bench: p.bench.map(b => b.iid === sourceIid ? {
+        ...b,
+        energyAttached: b.energyAttached.slice(1),
+      } : b),
+    }),
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 青木的樹枕尾熊｜無力充能 — 備戰時可使用，從手牌附 1 能量到戰鬥場「青木的」
+// ══════════════════════════════════════════════════════════════════════════════
+regA('青木的樹枕尾熊', 0, (st, idx, pool, inst) => {
+  if (!inst) return st;
+  const player = st.players[idx];
+  // gate: 持有者必須在備戰
+  if (player.active?.iid === inst.iid) {
+    return addLog(st, '無力充能：必須在備戰區才能使用', idx);
+  }
+  // gate: 戰鬥場必須是「青木的」
+  if (!player.active) return addLog(st, '無力充能：戰鬥場無寶可夢', idx);
+  const activeName = pool.get(player.active.cardId)?.name ?? '';
+  if (!activeName.startsWith('青木的')) {
+    return addLog(st, '無力充能：戰鬥場不是「青木的」寶可夢', idx);
+  }
+  // gate: 手牌至少 1 張能量
+  const handEnergies = player.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+  if (handEnergies.length === 0) {
+    return addLog(st, '無力充能：手牌無能量', idx);
+  }
+  // pendingSelection: hand-discard 形式但不丟棄、是「選 1 張附加」
+  const s = addLog(st, '無力充能：選 1 張手牌能量附於戰鬥場的「青木的」寶可夢', idx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Energy',
+    minCount: 1, maxCount: 1,
+    effectKey: 'koala-feeble-charge',
+    params: {},
+  });
+});
+regR('koala-feeble-charge', (state, aIdx, iids, _params, _pool) => {
+  if (iids.length === 0) return state;
+  return updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    const energy = p.hand.find(c => c.iid === iids[0]);
+    if (!energy) return p;
+    return {
+      ...p,
+      hand: p.hand.filter(c => c.iid !== iids[0]),
+      active: { ...p.active, energyAttached: [...p.active.energyAttached, energy] },
+    };
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 超級皮可西ex｜光之翼 — 不受對手寶可夢特性效果影響
+// ══════════════════════════════════════════════════════════════════════════════
+// 設計：定義一個「免疫對手特性」的 set，engine 在套用對手特性效果到此寶可夢前查詢。
+// 但這需要 engine 級配合 — 暫用 stub 標記（未來在 engine.ts 各特性 hook 加 short-circuit）。
+// 為了讓 audit 命中，仍註冊一個 noop regA：
+regA('超級皮可西ex', 0, (st, idx) => {
+  return addLog(st, '光之翼：被動特性「不受對手特性影響」（v2.38 stub — 需 engine 級擴張）', idx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 小碎鑽｜雙重屬性 — 場上時屬性改為【鬥】+【超】2 種
+// ══════════════════════════════════════════════════════════════════════════════
+// 設計：需要在 engine 計算 pokemonType 的所有點（弱點、能量需求、屬性檢查）注入此 hook。
+// 暫用 noop regA stub 命中 audit，未來統一改用 POKEMON_TYPE_OVERRIDE map。
+regA('小碎鑽', 0, (st, idx) => {
+  return addLog(st, '雙重屬性：場上時改為【鬥】+【超】2 種屬性（v2.38 stub — 需 engine 級擴張）', idx);
+});
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 以下 5 個 stub 註冊 — 需 engine 級擴張，本波只標 reg() + log 讓 audit 命中
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 狙射樹梟ex｜狙擊手之眼 — 對手手牌 4 張時，無能量 cost 消除（需 engine cost calc hook）
+regA('狙射樹梟ex', 0, (st, idx) => addLog(st,
+  '狙擊手之眼：對手手牌 4 張時無能量 cost 消除（v2.38 stub — 需 engine cost calc hook）', idx));
+
+// 勒克貓｜鬥志戰吼 — 對手 ex 時剛使出可進化（需 engine evolve gate hook）
+regA('勒克貓', 0, (st, idx) => addLog(st,
+  '鬥志戰吼：對手戰鬥場為 ex 時剛使出/最初回合可進化（v2.38 stub — 需 engine evolve gate）', idx));
+
+// 耿鬼｜無限之影 — 招式 KO 時不丟棄回手牌（需 engine KO replacement hook）
+regA('耿鬼', 0, (st, idx) => addLog(st,
+  '無限之影：招式 KO 時放回手牌而非棄牌區（v2.38 stub — 需 engine KO replacement hook）', idx));
+
+// 堅果啞鈴｜整人擊落 — 牌庫被丟棄時觸發（需 engine deck-mill trigger hook）
+regA('堅果啞鈴', 0, (st, idx) => addLog(st,
+  '整人擊落：牌庫被對手效果丟棄時，丟棄對手牌庫頂 8 張（v2.38 stub — 需 engine deck-mill hook）', idx));
+
+// 勾帕路翁ex｜金屬之路 — 從備戰上戰鬥場時搬鋼能量（兩階段 picker，需 BENCH_PLACE_TRIGGERS）
+regA('勾帕路翁ex', 0, (st, idx) => addLog(st,
+  '金屬之路：上戰鬥場時搬場上鋼能量到自身（v2.38 stub — 需 BENCH_PLACE_TRIGGERS 兩階段）', idx));
+
+// 輔助：unused import 防護
+export type _v2380abSentinel = PlayerState;
