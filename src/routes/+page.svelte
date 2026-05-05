@@ -97,6 +97,12 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v2.363</span> 修復桃歹郎ex｜支配鎖鏈備戰特性</summary>
+        <ul>
+          <li>修復「支配鎖鏈」備戰特性：移除錯誤的「必須在戰鬥場」限制，桃歹郎ex 在備戰區也能正常使用特性</li>
+        </ul>
+      </details>
+            <details>
         <summary><span class="ver-badge">v2.362</span> 新增 4 套預設牌組 + 特性消除機制</summary>
         <ul>
           <li>新增預設牌組：班基拉斯 / 超級蒂安希 / 寶石大竺葵 / 超級巨牙鯊（共 4 套）</li>

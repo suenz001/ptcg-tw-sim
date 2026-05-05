@@ -5057,9 +5057,9 @@ export function getUsableAbilities(
         if (player.deck.length === 0) return;
       }
       // ─── v2.229 大批主動特性 gate 補完（之前 audit 漏掉，按下才跳 log 的災難） ─────
-      // v2.229 桃歹郎ex｜支配鎖鏈：必須在戰鬥場 + 備戰有【惡】寶可夢（非桃歹郎ex）
+      // v2.363 桃歹郎ex｜支配鎖鏈：備戰特性，不限戰鬥場；備戰有【惡】寶可夢（非桃歹郎ex）才可用
+      // （v2.229 錯誤加入「必須在戰鬥場」gate，已移除）
       if (ab.name === '支配鎖鏈') {
-        if (player.active?.iid !== pk.iid) return;
         const validBench = player.bench.filter(c => {
           const cc = pool.get(c.cardId);
           return cc?.pokemonType === 'Darkness' && cc?.name !== '桃歹郎ex';
@@ -5232,6 +5232,4 @@ RESOLVERS.set('retreat-energy-discard', (state, actorIdx, selectedIids, params, 
   return {
     ...state,
     players,
-    log: [...state.log, { turn: state.turn, playerIndex: actorIdx, message: msg }],
-  };
-});
+    log: [...state.log, { turn: state.turn, play
