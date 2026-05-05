@@ -1,6 +1,6 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-05 (v2.356)
+> 最後更新：2026-05-05 (v2.357)
 > 正式網址：https://suenz001.github.io/ptcg-tw-sim/game
 > 卡牌資料庫：https://suenz001.github.io/ptcg-tw-sim/cards?set=ALL
 > 📌 **通用交接提示詞**（所有任務適用）：[docs/AI_GENERIC_HANDOFF.md](./docs/AI_GENERIC_HANDOFF.md)
@@ -81,7 +81,7 @@
 工作路徑：/tmp/ptcg-work/repo
 正式網址：https://suenz001.github.io/ptcg-tw-sim/game
 卡牌資料庫：https://suenz001.github.io/ptcg-tw-sim/cards?set=ALL
-目前版本：v2.355
+目前版本：v2.357
 目前最新 commit：（請執行 git log --oneline -1 確認）
 
 重要鐵律：
@@ -182,6 +182,8 @@ sed -n '1,40p' src/lib/version.ts
 
 | 版本 | 摘要 |
 |---|---|
+| v2.357 | AI 能量填附修復（ai.ts）：附能量前先檢查招式是否已可發動；選擇能量時優先匹配寶可夢屬性；pickBestActive 優先選能發招的寶可夢， Zoroark ex 降優先級（萬不得已才送上场） |
+| v2.356 | （同 v2.355，handoff 整理版）|
 | v2.355 | J 標 P2/P3 批次（10 組）+ engine 特性：代歐奇希斯精神強念、哲爾尼亞斯大地之門/光明角擊、冰雪巨龍冰冷寒氣、雷吉艾斯ex冰之牢籠補丁、具甲武者潛力、鑰圈兒記憶之鎖、怪顎龍亂暴；engine怪顎龍暴龍根性(HP+150)、冰雪巨龍凍原堡壘(-50 field passive) |
 | v2.354 | J 標低風險 P2/P3 批次（13 組）：雙劍鞘劍武備、多麗米亞手部造型、念力土偶退化光線、超級毒藻龍ex腐蝕液、老翁龍龍之強襲、莉佳的口呆花葉子旋風、大嘴蝠隱密飛行、頓甲接二連三、樹才怪考驗之旅、咚咚鼠擺尾發電、彩粉蝶大飛翅、烈箭鷹穹天狩獵、莉佳的霸王花ex動人香氣 |
 | v2.353 | J 標低風險 P2/P3 批次（19 組）：能量倍乘（瑪力露麗ex/超級差不多娃娃ex/優雅貓/哲爾尼亞斯）、牌庫棄牌搜尋（焰后蜥ex/戰舞郎/小箭雀/雷吉艾斯ex/雷吉斯奇魯ex）、手牌操作（大嘴娃/超級皮可西ex/土地雲/南瓜怪人ex/禿鷹娜ex/朽木妖）、跨回合（茸茸羊/電飛鼠）、備戰（鳳王復生/超級花葉蒂ex） |

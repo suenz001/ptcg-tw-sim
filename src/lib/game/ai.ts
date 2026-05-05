@@ -16,7 +16,7 @@ import {
   getAvailableAttacks, getEffectiveAttacks, getEvolvableTargets,
   getPlayableTrainers, getPlayableBasics,
   getUsableAbilities, canRetreat, isBasicPokemonCard,
-  getEffectiveHP,
+  getEffectiveHP, canAffordAttack,
 } from './engine';
 
 // ── 主要入口 ──────────────────────────────────────────────────────────────────
@@ -106,12 +106,32 @@ export function getAIAction(
     }
   }
 
-  // 附加能量（附到出場寶可夢，若無則附備戰）
+  // 附加能量（附到出场宝可梦，若无则附备战）
+  // v2.357 修复：
+  //   1. 只有在「当前没有任何招式可发」时才附能量，避免招式已够能时继续乱填。
+  //   2. 选择能量时优先选「与宝可梦属性匹配」的能量，减少填错属性的问题。
   if (!player.energyAttachedThisTurn && player.active) {
-    const energyInHand = player.hand.find(c => pool.get(c.cardId)?.supertype === 'Energy');
-    if (energyInHand) {
-      // 優先附到出場
-      return { type: 'ATTACH_ENERGY', energyIid: energyInHand.iid, targetIid: player.active.iid };
+    const availableAttacks = getAvailableAttacks(state, pool);
+    // 若已有招式可发，不附能量（能量应留给真正需要的宝可梦）
+    if (availableAttacks.length > 0) {
+      // 有招式可用，跳过填能量
+    } else {
+      // 还不能发招式，找一张能量附上
+      const activeCard = pool.get(player.active.cardId);
+      const activeType = activeCard?.pokemonType;
+      // 从手牌中找能量：有匹配属性优先，否则随便拿一张
+      const energyCandidates = player.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+      const energyInHand = energyCandidates.find(c => {
+        const ec = pool.get(c.cardId);
+        if (!ec) return false;
+        // 优先选属性匹配的
+        // pokemonType 匹配（如 Darkness = Darkness）；卡名匹配（如「基本【惡】能量」含【惡】）
+        return ec.pokemonType === activeType ||
+          ec.name.includes(`【${activeType}】`);
+      }) ?? energyCandidates[0]; // 没有匹配的就用第一张
+      if (energyInHand) {
+        return { type: 'ATTACH_ENERGY', energyIid: energyInHand.iid, targetIid: player.active.iid };
+      }
     }
   }
 
@@ -608,8 +628,59 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
 
 // ── 輔助 ──────────────────────────────────────────────────────────────────────
 
-/** 從備戰區選最佳的送出（effective HP 最高，考慮已受傷害） */
+/**
+ * 從備戰區選最佳的送出。
+ * v2.357 修復：不再只看 HP，改为优先选「当前就能发招式」的宝可梦。
+ * - Zoroark ex 的价值在备战场用暗黑底牌复制招式，除非它自己能发招式，否则不优先送上场。
+ * - 优先：能发招式的 > HP 最高的 > Zoroark ex（万不得已才选）
+ */
 function pickBestActive(bench: CardInstance[], pool: Map<string, Card>, state?: GameState): CardInstance {
+  if (!bench.length) return bench[0]; // fallback
+
+  // 辅助：检查某只宝可梦是否「当前就能发招式」
+  const canAttackNow = (inst: CardInstance): boolean => {
+    const card = pool.get(inst.cardId);
+    if (!card?.attacks?.length) return false;
+    for (const atk of card.attacks) {
+      if (canAffordAttack(inst, atk.cost, pool, state, state?.activePlayerIndex, atk.name)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // 分类：能发招的 vs 不能发招的
+  const canAtk: CardInstance[] = [];
+  const cannotAtk: CardInstance[] = [];
+  for (const b of bench) {
+    const card = pool.get(b.cardId);
+    // Zoroark ex：即使不能发招式，也要降低优先级（其价值在备战场复制招式）
+    const isZoroarkEx = card?.name === 'N的索羅亞克ex';
+    if (canAttackNow(b)) {
+      canAtk.push(b);
+    } else if (!isZoroarkEx) {
+      // 普通宝可梦不能发招式，但 Zoroark ex 单独归类
+      cannotAtk.push(b);
+    }
+    // Zoroark ex 本身不放 cannotAtk，最后再处理
+  }
+
+  if (canAtk.length > 0) {
+    // 优先选能发招的，HP 最高的
+    return canAtk.reduce((a, b) =>
+      getEffectiveHP(a, pool, state) >= getEffectiveHP(b, pool, state) ? a : b
+    );
+  }
+
+  // 没有能发招的：选 Zoroark ex 以外的 HP 最高
+  const others = bench.filter(b => pool.get(b.cardId)?.name !== 'N的索羅亞克ex');
+  if (others.length > 0) {
+    return others.reduce((a, b) =>
+      getEffectiveHP(a, pool, state) >= getEffectiveHP(b, pool, state) ? a : b
+    );
+  }
+
+  // 万不得已：只有 Zoroark ex，HP 最高
   return bench.reduce((a, b) =>
     getEffectiveHP(a, pool, state) >= getEffectiveHP(b, pool, state) ? a : b
   );
