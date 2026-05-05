@@ -437,32 +437,106 @@ regPost('青木的勇士雄鷹|勇鳥猛攻', (state, aIdx, _pool) => {
   }));
 });
 
-// ── 12. 信使鳥｜幸福禮物 — 雙方各選 ≤3 基本能量附加（簡化：只自己側） ────────
+// ── 12. 信使鳥｜幸福禮物 — 雙方各選 ≤3 基本能量附加（v2.389 完整互動） ────────
+// 卡面：「雙方玩家若希望，各自從自己的手牌選擇最多 3 張基本能量卡，
+//        以任意方式附於自己的寶可夢身上。（對手先選擇。）」
+//
+// 跨 player pending chain（actorIdx 動態切換）：
+//   Stage A: hand-discard actorIdx=dIdx，對手選 0-3 基本能量（卡面「對手先」）
+//   Stage A resolver: 把對手選的能量分配到對手 active（簡化：不互動選目標，預設 active）
+//                     完成後觸發 Stage B
+//   Stage B: hand-discard actorIdx=aIdx，自己選 0-3 基本能量
+//   Stage B resolver: 把自己選的能量分配到自己 active
+//
+// 互動精細度：本波分配目標固定為 active（卡面允許任意寶可夢，但 chain 過深 — 多選張數
+// 時要 N+1 階段 picker）。下次擴張：每張能量加 bench-choose 選目標。
 regPre('信使鳥|幸福禮物', (s, _a, _p) => ({ state: s, damage: 0 }));
 regPost('信使鳥|幸福禮物', (state, aIdx, pool) => {
-  // 簡化：只觸發自己側挑能量加附（對手側互動需 inter-player pending，本波 stub）
-  const player = state.players[aIdx];
-  const handBasic = player.hand.filter(c => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  // 對手手牌是否有基本能量？無 → 跳過對手側
+  const oppHandHasBasic = state.players[dIdx].hand.some(c => {
     const cc = pool.get(c.cardId);
     return cc?.supertype === 'Energy' && cc.subtype === 'Basic';
   });
-  if (handBasic.length === 0) {
-    return addLog(state, '幸福禮物：手牌無基本能量', aIdx);
+  // 我方手牌是否有？無 → 跳過自己側
+  const ownHandHasBasic = state.players[aIdx].hand.some(c => {
+    const cc = pool.get(c.cardId);
+    return cc?.supertype === 'Energy' && cc.subtype === 'Basic';
+  });
+  if (!oppHandHasBasic && !ownHandHasBasic) {
+    return addLog(state, '幸福禮物：雙方手牌皆無基本能量，無效果', aIdx);
   }
-  const s = addLog(state, '幸福禮物：自己選 ≤3 張基本能量分配給場上寶可夢（簡化版：對手側未實裝）', aIdx);
+  // 卡面對手先選；若對手手牌無基本能量，跳過直接到我方
+  if (oppHandHasBasic) {
+    const s = addLog(state, '幸福禮物：對手先選 ≤3 張基本能量附於對手寶可夢', aIdx);
+    return withPending(s, {
+      type: 'hand-discard',
+      actorIdx: dIdx, sourcePlayerIdx: dIdx,
+      minCount: 0, maxCount: 3,
+      filter: 'BasicEnergy',
+      effectKey: 'lucky-gift-opp',
+      params: { attackerIdx: aIdx },
+    });
+  }
+  // 對手無基本能量 → 直接到我方
+  if (ownHandHasBasic) {
+    const s = addLog(state, '幸福禮物：對手無基本能量，自己選 ≤3 張基本能量', aIdx);
+    return withPending(s, {
+      type: 'hand-discard',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 0, maxCount: 3,
+      filter: 'BasicEnergy',
+      effectKey: 'lucky-gift-self',
+      params: {},
+    });
+  }
+  return state;
+});
+
+// Stage A resolver — 對手選完，附加到對手 active；接著觸發 Stage B 自己側
+regR('lucky-gift-opp', (state, dIdx, iids, params, pool) => {
+  const attackerIdx = (params?.attackerIdx as 0 | 1) ?? ((1 - dIdx) as 0 | 1);
+  let s = state;
+  if (iids.length > 0) {
+    s = updatePlayer(s, dIdx, p => {
+      if (!p.active) return p;
+      const chosen = p.hand.filter(c => iids.includes(c.iid));
+      const newHand = p.hand.filter(c => !iids.includes(c.iid));
+      return {
+        ...p,
+        hand: newHand,
+        active: { ...p.active, energyAttached: [...p.active.energyAttached, ...chosen] },
+      };
+    });
+    s = addLog(s, `幸福禮物：對手附加 ${iids.length} 張基本能量到戰鬥場`, dIdx);
+  } else {
+    s = addLog(s, '幸福禮物：對手選擇不分配能量', dIdx);
+  }
+  // 觸發 Stage B：我方選
+  const ownHandHasBasic = s.players[attackerIdx].hand.some(c => {
+    const cc = pool.get(c.cardId);
+    return cc?.supertype === 'Energy' && cc.subtype === 'Basic';
+  });
+  if (!ownHandHasBasic) {
+    return addLog(s, '幸福禮物：自己手牌無基本能量，效果結束', attackerIdx);
+  }
+  s = addLog(s, '幸福禮物：自己選 ≤3 張基本能量', attackerIdx);
   return withPending(s, {
     type: 'hand-discard',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    actorIdx: attackerIdx, sourcePlayerIdx: attackerIdx,
     minCount: 0, maxCount: 3,
     filter: 'BasicEnergy',
     effectKey: 'lucky-gift-self',
     params: {},
   });
 });
-regR('lucky-gift-self', (state, aIdx, iids, _params, pool) => {
-  // 簡化：把選的能量直接塞進戰鬥位（理想應讓玩家對每張選目標）
-  if (iids.length === 0) return state;
-  return updatePlayer(state, aIdx, p => {
+
+// Stage B resolver — 自己側分配
+regR('lucky-gift-self', (state, aIdx, iids, _params, _pool) => {
+  if (iids.length === 0) {
+    return addLog(state, '幸福禮物：自己選擇不分配能量', aIdx);
+  }
+  let s = updatePlayer(state, aIdx, p => {
     if (!p.active) return p;
     const chosen = p.hand.filter(c => iids.includes(c.iid));
     const newHand = p.hand.filter(c => !iids.includes(c.iid));
@@ -472,6 +546,7 @@ regR('lucky-gift-self', (state, aIdx, iids, _params, pool) => {
       active: { ...p.active, energyAttached: [...p.active.energyAttached, ...chosen] },
     };
   });
+  return addLog(s, `幸福禮物：自己附加 ${iids.length} 張基本能量到戰鬥場`, aIdx);
 });
 
 // 輔助：避免 unused import

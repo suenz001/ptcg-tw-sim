@@ -75,25 +75,72 @@ regR('walrein-rinse', (state, aIdx, iids, _params, pool) => {
   const player = state.players[aIdx];
   const src = player.bench.find(b => b.iid === sourceIid);
   if (!src) return state;
-  // 取 1 張水能量
-  const waterIdx = src.energyAttached.findIndex(e => pool.get(e.cardId)?.pokemonType === 'Water');
-  if (waterIdx < 0) return addLog(state, '沖刷：來源無【水】能量', aIdx);
-  const waterEnergy = src.energyAttached[waterIdx];
+  // 取所有水能量
+  const waterEnergies = src.energyAttached.filter(e => pool.get(e.cardId)?.pokemonType === 'Water');
+  if (waterEnergies.length === 0) return addLog(state, '沖刷：來源無【水】能量', aIdx);
+  // v2.389 多張水能量 → modal-choice 讓玩家選 1 張；1 張 fast path
+  if (waterEnergies.length > 1) {
+    const srcName = pool.get(src.cardId)?.name ?? '?';
+    return withPending(
+      addLog(state, `沖刷：${srcName} 身上有 ${waterEnergies.length} 張【水】能量，選擇 1 張移出`, aIdx),
+      {
+        type: 'modal-choice',
+        actorIdx: aIdx, sourcePlayerIdx: aIdx,
+        minCount: 1, maxCount: 1,
+        effectKey: 'walrein-rinse-pick-energy',
+        params: {
+          label: '沖刷',
+          sourceIid,
+          energyIids: waterEnergies.map(e => e.iid),
+          options: waterEnergies.map((e, i) => ({
+            id: `${i}`,
+            text: `${i + 1}. ${pool.get(e.cardId)?.name ?? '?'}`,
+          })),
+        },
+      },
+    );
+  }
+  return walreinRinseAttach(state, aIdx, sourceIid, waterEnergies[0].iid, pool);
+});
+
+// stage 3 resolver — 玩家選完能量後執行附加
+regR('walrein-rinse-pick-energy', (state, aIdx, iids, params, pool) => {
+  const choiceIdx = parseInt(iids[0] ?? '0', 10);
+  const energyIids = (params?.energyIids as string[] | undefined) ?? [];
+  const sourceIid = (params?.sourceIid as string | undefined) ?? '';
+  const energyIid = energyIids[choiceIdx];
+  if (!sourceIid || !energyIid) return state;
+  return walreinRinseAttach(state, aIdx, sourceIid, energyIid, pool);
+});
+
+function walreinRinseAttach(
+  state: GameState,
+  aIdx: 0 | 1,
+  sourceIid: string,
+  energyIid: string,
+  pool: Map<string, import('$lib/cards/types').Card>,
+): GameState {
   return updatePlayer(
     addLog(state, '沖刷：將 1 張【水】能量改附戰鬥場', aIdx),
-    aIdx, p => ({
-      ...p,
-      active: p.active ? {
-        ...p.active,
-        energyAttached: [...p.active.energyAttached, waterEnergy],
-      } : null,
-      bench: p.bench.map(b => b.iid === sourceIid ? {
-        ...b,
-        energyAttached: b.energyAttached.filter((_, i) => i !== waterIdx),
-      } : b),
-    }),
+    aIdx, p => {
+      const src = p.bench.find(b => b.iid === sourceIid);
+      if (!src) return p;
+      const waterEnergy = src.energyAttached.find(e => e.iid === energyIid);
+      if (!waterEnergy) return p;
+      return {
+        ...p,
+        active: p.active ? {
+          ...p.active,
+          energyAttached: [...p.active.energyAttached, waterEnergy],
+        } : null,
+        bench: p.bench.map(b => b.iid === sourceIid ? {
+          ...b,
+          energyAttached: b.energyAttached.filter(e => e.iid !== energyIid),
+        } : b),
+      };
+    },
   );
-});
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 瑪力露麗ex｜收集泡泡 — 不限次數，場上能量改附自身
@@ -120,28 +167,73 @@ regA('瑪力露麗ex', 0, (st, idx, pool) => {
     params: { validIids: sources },
   });
 });
-regR('azumarill-bubble', (state, aIdx, iids, _params, _pool) => {
+regR('azumarill-bubble', (state, aIdx, iids, _params, pool) => {
   const sourceIid = iids[0];
   if (!sourceIid) return state;
   const player = state.players[aIdx];
   const src = player.bench.find(b => b.iid === sourceIid);
   if (!src || src.energyAttached.length === 0) return state;
-  const energy = src.energyAttached[0];  // 簡化：取第 1 張
+  // v2.389 多張能量 → modal-choice；1 張 fast path
+  if (src.energyAttached.length > 1) {
+    const srcName = pool.get(src.cardId)?.name ?? '?';
+    return withPending(
+      addLog(state, `收集泡泡：${srcName} 身上有 ${src.energyAttached.length} 張能量，選擇 1 張移出`, aIdx),
+      {
+        type: 'modal-choice',
+        actorIdx: aIdx, sourcePlayerIdx: aIdx,
+        minCount: 1, maxCount: 1,
+        effectKey: 'azumarill-bubble-pick-energy',
+        params: {
+          label: '收集泡泡',
+          sourceIid,
+          energyIids: src.energyAttached.map(e => e.iid),
+          options: src.energyAttached.map((e, i) => ({
+            id: `${i}`,
+            text: `${i + 1}. ${pool.get(e.cardId)?.name ?? '?'}`,
+          })),
+        },
+      },
+    );
+  }
+  return azumarillBubbleAttach(state, aIdx, sourceIid, src.energyAttached[0].iid);
+});
+
+regR('azumarill-bubble-pick-energy', (state, aIdx, iids, params, _pool) => {
+  const choiceIdx = parseInt(iids[0] ?? '0', 10);
+  const energyIids = (params?.energyIids as string[] | undefined) ?? [];
+  const sourceIid = (params?.sourceIid as string | undefined) ?? '';
+  const energyIid = energyIids[choiceIdx];
+  if (!sourceIid || !energyIid) return state;
+  return azumarillBubbleAttach(state, aIdx, sourceIid, energyIid);
+});
+
+function azumarillBubbleAttach(
+  state: GameState,
+  aIdx: 0 | 1,
+  sourceIid: string,
+  energyIid: string,
+): GameState {
   return updatePlayer(
     addLog(state, '收集泡泡：將 1 個能量從備戰改附瑪力露麗ex', aIdx),
-    aIdx, p => ({
-      ...p,
-      active: p.active ? {
-        ...p.active,
-        energyAttached: [...p.active.energyAttached, energy],
-      } : null,
-      bench: p.bench.map(b => b.iid === sourceIid ? {
-        ...b,
-        energyAttached: b.energyAttached.slice(1),
-      } : b),
-    }),
+    aIdx, p => {
+      const src = p.bench.find(b => b.iid === sourceIid);
+      if (!src) return p;
+      const energy = src.energyAttached.find(e => e.iid === energyIid);
+      if (!energy) return p;
+      return {
+        ...p,
+        active: p.active ? {
+          ...p.active,
+          energyAttached: [...p.active.energyAttached, energy],
+        } : null,
+        bench: p.bench.map(b => b.iid === sourceIid ? {
+          ...b,
+          energyAttached: b.energyAttached.filter(e => e.iid !== energyIid),
+        } : b),
+      };
+    },
   );
-});
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 青木的樹枕尾熊｜無力充能 — 備戰時可使用，從手牌附 1 能量到戰鬥場「青木的」

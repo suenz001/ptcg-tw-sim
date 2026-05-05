@@ -153,7 +153,7 @@ export interface PreDiscardSpec {
    *   UI 顯示 stepper overlay；regPre 看 action.discardedEnergyIids.length = 玩家選的 N。
    *   spec.min / spec.max 作為下/上限。spec.damagePerEnergy = 每個 counter 加的傷害。
    */
-  scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter' | 'hand-tool' | 'binary-yes-no' | 'self-counter-stepper';
+  scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter' | 'hand-tool' | 'hand-energy' | 'binary-yes-no' | 'self-counter-stepper';
   /**
    * v2.255：scope='binary-yes-no' / 'self-counter-stepper' 時的提示文字。
    *   choicePrompt：modal 主問句（例：「是否將自身回牌庫，增加 80 點傷害？」）

@@ -1863,6 +1863,18 @@
       }
       return out;
     }
+    if (spec.scope === 'hand-energy') {
+      // v2.389 雙重食客 / 射攻月亮：列出手牌中「能量卡」
+      const placeholder = activePlayer.active ?? activePlayer.bench[0];
+      if (!placeholder) return [];
+      for (const h of activePlayer.hand) {
+        const hc = getCard(h.cardId);
+        if (hc?.supertype === 'Energy') {
+          out.push({ iid: h.iid, cardId: h.cardId, ownerIid: 'hand', ownerName: hc.name, hostInst: placeholder });
+        }
+      }
+      return out;
+    }
     const addFrom = (host: CardInstance | null | undefined) => {
       if (!host) return;
       const hc = getCard(host.cardId);
@@ -4002,7 +4014,7 @@
     {@const pickedCount = preAttackDiscard.picked.size}
     {@const pickedAmount = computePickedAmount(spec, preAttackDiscard.picked, energies)}
     {@const isUnits = spec.countMode === 'units'}
-    {@const isHandDiscard = spec.scope === 'hand-rocket-supporter' || spec.scope === 'hand-tool'}
+    {@const isHandDiscard = spec.scope === 'hand-rocket-supporter' || spec.scope === 'hand-tool' || spec.scope === 'hand-energy'}
     {@const isHandTool = spec.scope === 'hand-tool'}
     {@const unit = isUnits ? '個' : '張'}
     {@const minOk = pickedAmount >= spec.min}
@@ -4013,6 +4025,7 @@
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>{isHandDiscard ? '🪶' : '⚡'} {preAttackDiscard.attackName}：選擇要丟棄的{
             spec.scope === 'hand-rocket-supporter' ? '火箭隊支援者' :
+            spec.scope === 'hand-energy' ? '能量卡' :
             isHandTool ? '寶可夢道具' :
             '能量'
           }</h3>
@@ -4024,6 +4037,7 @@
               spec.scope === 'attacker' ? '僅攻擊方出場寶可夢身上的能量' :
               spec.scope === 'own-bench' ? '僅自己備戰寶可夢身上的能量' :
               spec.scope === 'hand-rocket-supporter' ? '從自己手牌中名稱含「火箭隊」的支援者卡' :
+              spec.scope === 'hand-energy' ? '從自己手牌中的能量卡（任意屬性）' :
               isHandTool ? '從自己手牌中的寶可夢道具卡' :
               '自己場上任一寶可夢身上的能量'
             }

@@ -98,6 +98,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.389</span> J 標 5 張卡完全互動實裝</summary>
+        <ul>
+          <li>大嘴娃｜雙重食客 + 超級皮可西ex｜射攻月亮：新增 PreDiscardSpec scope='hand-energy'，+page.svelte UI handler 列出手牌能量卡讓玩家挑 0-2/0-4 張，regPre 改用 action.discardedEnergyIids</li>
+          <li>瑪力露麗ex｜收集泡泡 + 白海獅｜沖刷：來源寶可夢身上能量 > 1 張時開 modal-choice 讓玩家選哪張能量；只 1 張走 fast path（仿能量轉移 v2.231 pattern）</li>
+          <li>信使鳥｜幸福禮物：跨 player pending chain — Stage A actorIdx=dIdx 對手先選 0-3 張基本能量；Stage A resolver 附加完後觸發 Stage B actorIdx=aIdx 我方選 0-3 張；handle 雙方任一無基本能量的 path</li>
+          <li>所有 5 張卡從「簡化版（自動處理）」轉為「完全互動」實裝；J 標真實裝 100%</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.388</span> J 標所有 stub 一口氣補完（光之翼/雙重屬性/鰭之化石/整人擊落）</summary>
         <ul>
           <li>光之翼補完：cursed-bomb resolver 加 immunity（彷徨夜靈/黑夜魔靈咒詛炸彈對超級皮可西ex 不放指示物）</li>
