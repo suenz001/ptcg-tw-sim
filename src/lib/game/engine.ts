@@ -384,7 +384,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
-import { sameEvoName, recordOppKO } from './effects/_shared';
+import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye } from './effects/_shared';
 export { sameEvoName };
 
 /**
@@ -4923,7 +4923,9 @@ export function getUsableAbilities(
       if (ab.name === '迅速游標' && player.active?.iid === pk.iid) return;
       // 腎上腺腦力（願增猿）：身上 ≥1 顆【惡】能量 && 自己場上 ≥1 隻受傷（damage≥10）
       //   && 對手場上 ≥1 隻寶可夢。v2.123 補後兩個 gate（Leon 反饋：不符條件就不顯按鈕）。
-      // v2.371：再加「探探鼠｜監視之眼」場上檢查（雙方任一方有 → 不顯按鈕）。
+      // v2.371→v2.372：再加「探探鼠｜監視之眼」檢查；改為通用標籤
+      //   isAbilityBlockedByOakEye（MOVE_DAMAGE_COUNTER_ABILITIES set），新增同類特性
+      //   時只要把名字加進 set 即可自動受 gate 保護。
       if (ab.name === '腎上腺腦力') {
         if ((countEnergy(pk, pool).get('Darkness') ?? 0) < 1) return;
         const selfField = [...(player.active ? [player.active] : []), ...player.bench];
@@ -4931,13 +4933,9 @@ export function getUsableAbilities(
         const oppIdx = (1 - state.activePlayerIndex) as 0 | 1;
         const opp = state.players[oppIdx];
         if (!opp.active && opp.bench.length === 0) return;
-        // 場上有「探探鼠」（任一方）→ 此類「移放傷害指示物」特性無法使用
-        const hasOakEye = state.players.some(pl => {
-          const all = [...(pl.active ? [pl.active] : []), ...pl.bench];
-          return all.some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '監視之眼'));
-        });
-        if (hasOakEye) return;
       }
+      // v2.372 通用「移放傷害指示物」特性 → 探探鼠｜監視之眼禁用
+      if (isAbilityBlockedByOakEye(state, ab.name, pool)) return;
       // v2.53 碧綠之舞：手牌必須至少有 1 張基本草能量（否則按了只會輸出警告 log，
       // Leon 反饋希望 UI 直接隱藏按鈕，而不是誤按後才提示）。
       if (ab.name === '碧綠之舞') {

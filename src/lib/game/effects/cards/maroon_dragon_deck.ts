@@ -24,6 +24,7 @@ import {
   BENCH_PLACE_TRIGGERS,
   addLog, drawCards, updatePlayer, returnHandToDeck, withPending,
   recordOppKO,
+  isAbilityBlockedByOakEye,
 } from '../_shared';
 import {
   findAbilityUserIid,
@@ -131,23 +132,9 @@ regR('scouting-order', (st, idx, iids, params, pool) => {
 // 流程：
 //   1. heal-target：選「身上有 ≥10 傷害」的己方寶可夢 → 根據當前傷害計算轉移量
 //   2. opp-poke-choose：選對手 1 隻寶可夢 → +轉移量 傷害（含 KO 判定）
-// 探探鼠｜監視之眼（v2.371）— 雙方任一方場上有「探探鼠」時，所有「移放傷害指示物」
-// 類特性（含 願增猿｜腎上腺腦力）無法觸發。卡面：「雙方的所有寶可夢身上放置的傷害
-// 指示物，無法改放於其他寶可夢身上。」
-function hasOakEye(state: GameState, pool: Map<string, { abilities?: Array<{ name?: string }> }>): boolean {
-  for (const p of state.players) {
-    const all: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
-    for (const pk of all) {
-      const card = pool.get(pk.cardId);
-      if (card?.abilities?.some(a => a.name === '監視之眼')) return true;
-    }
-  }
-  return false;
-}
-
 regA('願增猿', 0, (st, idx, pool) => {
-  // v2.371 探探鼠｜監視之眼 — 阻擋「移放傷害指示物」類特性
-  if (hasOakEye(st, pool)) {
+  // v2.372 探探鼠｜監視之眼 — 改用 _shared.ts 的通用標籤判定（MOVE_DAMAGE_COUNTER_ABILITIES）
+  if (isAbilityBlockedByOakEye(st, '腎上腺腦力', pool)) {
     return addLog(st, '腎上腺腦力：被探探鼠的監視之眼消除（傷害指示物無法改放）', idx);
   }
   const p = st.players[idx];

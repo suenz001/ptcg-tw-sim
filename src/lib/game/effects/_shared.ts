@@ -268,6 +268,60 @@ export const SPECIAL_ENERGY_ON_DAMAGED = new Map<string, (
   state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, damage: number, pool: Map<string, Card>,
 ) => GameState>();
 
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.372 — 探探鼠｜監視之眼支援：通用「移放傷害指示物」特性 set + helper
+// ──────────────────────────────────────────────────────────────────────────────
+// 探探鼠｜監視之眼（M4 068/083）卡面：「雙方的所有寶可夢身上放置的傷害指示物，
+//   無法改放於其他寶可夢身上。」
+// 這個 hook 統一在「特性可用性 gate」與「特性 callback 入口」兩處檢查；以後新增
+// 任何「移放傷害指示物」類特性，只要把特性名稱加到 MOVE_DAMAGE_COUNTER_ABILITIES
+// 即可自動受到監視之眼禁用，無需散落式 inline check。
+//
+// 命中清單來源：scripts 全資料庫掃描 abilities.effect 含「改放/移放/搬到/轉移到」
+//   等動作詞 + 必含「傷害指示物」（v2.372 命中 2 條，覆蓋所有再印 set）。
+//
+// ⚠️ 維護鐵律：新增「將某寶可夢身上的傷害指示物搬到另一隻」類特性時：
+//   1) 把特性名加進 MOVE_DAMAGE_COUNTER_ABILITIES
+//   2) 在該特性的 regA callback 入口呼叫 isAbilityBlockedByOakEye()
+//   3) 在 engine.ts 對應「特性可用性 gate」也加同樣檢查（避免 UI 顯示按鈕但點下無效）
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 「移放傷害指示物」類特性名稱集合 — 監視之眼 gate 的標籤源。
+ * 增刪此 set 即同步影響 engine.ts ability gate 與各特性 regA 的 hasOakEye 判定。
+ */
+export const MOVE_DAMAGE_COUNTER_ABILITIES: ReadonlySet<string> = new Set([
+  '腎上腺腦力',  // 願增猿（SV6/SV8a/M2a/MC/M-P-H 共 6 印）— 從己方搬最多 30 傷害給對手
+  '火箭腦力',    // 火箭隊的以歐路普（SV10）— 火箭隊寶可夢身上指示物搬到自己其他寶可夢
+]);
+
+/**
+ * 場上是否有「探探鼠」（任一方任一場上位置）— 通用 hook，給所有「移放傷害指示物」
+ * 類特性的 gate / callback 入口共用。
+ */
+export function hasOakEye(state: GameState, pool: Map<string, Card>): boolean {
+  for (const p of state.players) {
+    const all: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
+    for (const pk of all) {
+      const card = pool.get(pk.cardId);
+      if (card?.abilities?.some(a => a.name === '監視之眼')) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 此特性是否被「探探鼠｜監視之眼」禁用？= 屬於 MOVE_DAMAGE_COUNTER_ABILITIES
+ *   且場上有探探鼠。caller 在 ability gate / callback 入口呼叫一次即可 short-circuit。
+ */
+export function isAbilityBlockedByOakEye(
+  state: GameState, abilityName: string, pool: Map<string, Card>,
+): boolean {
+  if (!MOVE_DAMAGE_COUNTER_ABILITIES.has(abilityName)) return false;
+  return hasOakEye(state, pool);
+}
+
+
 /**
  * v2.341：被動特性——對手附能時自動觸發。
  *
