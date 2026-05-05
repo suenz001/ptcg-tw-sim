@@ -1,8 +1,9 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
-> 最後更新：2026-05-05 (v2.355)
+> 最後更新：2026-05-05 (v2.356)
 > 正式網址：https://suenz001.github.io/ptcg-tw-sim/game
 > 卡牌資料庫：https://suenz001.github.io/ptcg-tw-sim/cards?set=ALL
+> 📌 **通用交接提示詞**（所有任務適用）：[docs/AI_GENERIC_HANDOFF.md](./docs/AI_GENERIC_HANDOFF.md)
 
 ---
 
