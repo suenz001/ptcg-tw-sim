@@ -519,6 +519,16 @@ export function getEffectiveHP(
     });
     if (hasDark) hp += 100;
   }
+  // v2.355 怪顎龍｜暴龍根性 — 身上附有特殊能量卡時最大 HP +150
+  // 卡面：「若這隻寶可夢身上附有特殊能量卡，則最大 HP 值是「+150」。」
+  // 判定：energyAttached 中有任意一張 supertype=Energy 且 subtype!=='Basic' 的卡
+  if (card.name === '怪顎龍' && card.abilities?.some(a => a.name === '暴龍根性')) {
+    const hasSpecial = inst.energyAttached.some(e => {
+      const ec = pool.get(e.cardId);
+      return ec?.supertype === 'Energy' && ec.subtype !== 'Basic';
+    });
+    if (hasSpecial) hp += 150;
+  }
   return hp;
 }
 
@@ -2881,6 +2891,39 @@ function handlePlaying(
           baseDamage = Math.max(0, baseDamage - 20);
           workingState = addLog(workingState,
             `垃圾洩氣：${attackerCard.name} 附有寶可夢道具 → 招式傷害 -20`, dIdx);
+        }
+      }
+    }
+
+    // v2.355 冰雪巨龍｜凍原堡壘 — 防守方場上有冰雪巨龍(凍原堡壘)且防守 active 附有【水】能量 → -50
+    // 卡面：「只要這隻寶可夢在場上，對手的招式對自己的戰鬥寶可夢造成的傷害，
+    //        若戰鬥寶可夢身上附有【水】能量，則傷害「-50」點。」
+    // gate：skipDefEffects 跳過、baseDamage>0 才算
+    if (!skipDefEffects && baseDamage > 0) {
+      const defAll2: CardInstance[] = [
+        ...(defender.active ? [defender.active] : []),
+        ...defender.bench,
+      ];
+      const hasFrozenFortress = defAll2.some(c => {
+        const card = pool.get(c.cardId);
+        return card?.name === '冰雪巨龍' && card?.abilities?.some(a => a.name === '凍原堡壘');
+      });
+      if (hasFrozenFortress && defender.active) {
+        const hasWater = defender.active.energyAttached.some(e => {
+          const ec = pool.get(e.cardId);
+          if (!ec || ec.supertype !== 'Energy') return false;
+          // 基本【水】能量
+          if (ec.subtype === 'Basic' && (ec.pokemonType === 'Water' || /【水】/.test(ec.name ?? ''))) return true;
+          // 特殊能量本身屬性含 Water
+          if (ec.pokemonType === 'Water') return true;
+          // 古舊能量 / 夜光能量 → 全屬性
+          if (ec.name === '古舊能量' || ec.name === '夜光能量') return true;
+          return false;
+        });
+        if (hasWater) {
+          baseDamage = Math.max(0, baseDamage - 50);
+          workingState = addLog(workingState,
+            `凍原堡壘：${pool.get(defender.active.cardId)?.name ?? '?'} 附有【水】能量 → 招式傷害 -50`, dIdx);
         }
       }
     }
