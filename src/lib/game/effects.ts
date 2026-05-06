@@ -339,6 +339,7 @@ import './effects/cards/v2560_i_wave6_complex';
 import './effects/cards/v2570_i_wave7_heal_dualstatus';
 import './effects/cards/v2580_i_wave8_misc2';
 import './effects/cards/v2590_i_wave9_misc3';
+import './effects/cards/v2600_i_wave10_conditional';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
