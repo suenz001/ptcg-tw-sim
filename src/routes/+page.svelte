@@ -123,6 +123,19 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.5</span> I 標 Wave 3b — 棄能量類批次（18 張）</summary>
+        <ul>
+          <li>新檔 v2500_i_wave3b_discard.ts — 4 個 helper inline + declarative array</li>
+          <li>A 棄自身固定 N 個能量（9 張）：伽勒爾 堵攔熊龐克粉碎/火箭隊的黑魯加燃燒殆盡/舞天鵝空氣斬/雷電雲災難伏特（棄1） + 蓋歐卡漩渦波/象牙豬暴雪刀鋒/噴火駝力量踩踏/卡璞・鳴鳴雷電爆破（棄2） + 巨炭山巨體碰撞（棄3）</li>
+          <li>B 棄自身全部能量（2 張）：洛托姆ex十萬伏特(130) / 超級拉帝亞斯ex幻想脈衝(300)</li>
+          <li>C 棄對手戰鬥場 1 個能量（4 張）：浮潛鼬潮旋(30)/瑪俐的滑滑小子咬碎(50)/火箭隊的班基拉斯打穿衝撞(180) + 勾帕路翁神聖刀鋒(20，限特殊能量)</li>
+          <li>D 棄競技場 +N（2 張）：象牙豬摧毀(120+120)/超級摔角鷹人ex筋斗強襲(120+140)；場上有競技場才 +N，並丟棄</li>
+          <li>E 棄手牌能量門檻（1 張）：蘭螳花花切舞(130)，需手牌 2 張基本草，否則招式失敗</li>
+          <li>所有 helper inline 在新檔；不動 effects.ts 主檔（只加 1 行 import）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.49</span> I 標 Wave 3a — 條件 +N / 擲幣倍率 / 狙擊備戰 批次實裝（30 張）</summary>
         <ul>
           <li>新檔 v2490_i_wave3a_conditional.ts — 11 個 helper factory + declarative array pattern</li>
