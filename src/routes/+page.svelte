@@ -5,7 +5,7 @@
   import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
   import {
     collection, addDoc, serverTimestamp,
-    query, where, orderBy, limit, getDocs, onSnapshot,
+    query, where, limit, getDocs, onSnapshot,
     type Unsubscribe,
   } from 'firebase/firestore';
   import { VERSION } from '$lib/version';
@@ -118,11 +118,12 @@
 
     // Path 1: 依 uid（已登入或同 anon session）
     try {
+      // v2.71：拿掉 orderBy('createdAt', 'desc') 避免需要 Firestore 複合索引
+      //   （where + orderBy 需要建索引；玩家 feedback 量少，client-side 排序即可）
       const qUid = query(
         collection(db, 'feedbacks'),
         where('uid', '==', user.uid),
-        orderBy('createdAt', 'desc'),
-        limit(20),
+        limit(50),  // 比 20 多撈一些，client-side 取前 20 才不會丟最新
       );
       unsubUidQuery = onSnapshot(qUid,
         (snap) => {
@@ -142,11 +143,11 @@
     // Path 2: 依 deviceId（跨匿名 session）— 只有在 deviceId 不是 unknown 才訂
     if (deviceId !== 'unknown') {
       try {
+        // v2.71：同上拿掉 orderBy 避免需要複合索引
         const qDev = query(
           collection(db, 'feedbacks'),
           where('deviceId', '==', deviceId),
-          orderBy('createdAt', 'desc'),
-          limit(20),
+          limit(50),
         );
         unsubDeviceQuery = onSnapshot(qDev,
           (snap) => {
@@ -261,6 +262,16 @@
     <details class="changelog-outer">
     <summary><h2>📋 版本更新記錄</h2></summary>
     <div class="changelog-list">
+
+      <details>
+        <summary><span class="ver-badge">v2.71</span> 修玩家回饋系統 — 拿掉 orderBy 避開索引需求</summary>
+        <ul>
+          <li>v2.7 上線後玩家端 console 回報 FirebaseError："The query requires an index"</li>
+          <li>原因：where + orderBy 同用會要求 Firestore 複合索引（feedbacks: uid asc + createdAt desc / deviceId asc + createdAt desc），未建索引兩條 onSnapshot 都直接 throw</li>
+          <li>修法：拿掉 query 內的 orderBy('createdAt', 'desc')，改 client-side（mergeFeedbacks）排序；limit 由 20 → 50（多撈避免邊界丟最新）</li>
+          <li>不必動 firestore.indexes.json / firebase deploy --only firestore:indexes</li>
+        </ul>
+      </details>
 
       <details>
         <summary><span class="ver-badge">v2.7</span> 修玩家回饋系統 — onSnapshot 即時 + deviceId 雙路徑</summary>
