@@ -346,10 +346,9 @@ regA('勾帕路翁ex', 0, (st, idx, pool, inst) => {
   if (!inst.movedToActiveThisTurn) {
     return addLog(st, '金屬之路：必須在本回合從備戰區放置於戰鬥場時才能使用', idx);
   }
-  // gate: 一回合 1 次
-  if (player.abilityNamesUsedThisTurn?.includes('金屬之路')) {
-    return addLog(st, '金屬之路：本回合已使用過', idx);
-  }
+  // v2.471 移除 ad-hoc abilityNamesUsedThisTurn gate（誤把 per-instance 寫成 shared）
+  // 卡面：「從備戰區放置於戰鬥場時可使用 1 次」 = per-instance + per-trigger（movedToActiveThisTurn）
+  // engine 已用 abilityUsedThisTurn 自動處理一回合 1 次
   // 找場上「自己其他寶可夢」身上的鋼能量
   const sources: string[] = [];
   for (const b of player.bench) {
@@ -360,11 +359,8 @@ regA('勾帕路翁ex', 0, (st, idx, pool, inst) => {
   if (sources.length === 0) {
     return addLog(st, '金屬之路：備戰區沒有「鋼」能量可搬', idx);
   }
-  let s = addLog(st, '金屬之路：選 1 隻備戰寶可夢，把其【鋼】能量改附自身', idx);
-  s = updatePlayer(s, idx, p => ({
-    ...p,
-    abilityNamesUsedThisTurn: [...(p.abilityNamesUsedThisTurn ?? []), '金屬之路'],
-  }));
+  // v2.471 移除 abilityNamesUsedThisTurn 寫入（per-instance gate 由 engine 處理）
+  const s = addLog(st, '金屬之路：選 1 隻備戰寶可夢，把其【鋼】能量改附自身', idx);
   return withPending(s, {
     type: 'heal-target',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -408,10 +404,9 @@ regR('cobalion-metal-path', (state, aIdx, iids, _params, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regA('麻麻鰻', 0, (st, idx, pool) => {
   const player = st.players[idx];
-  // gate: 一回合 1 次
-  if (player.abilityNamesUsedThisTurn?.includes('電氣發電機')) {
-    return addLog(st, '電氣發電機：本回合已使用過', idx);
-  }
+  // v2.471 移除 ad-hoc abilityNamesUsedThisTurn gate（誤把 per-instance 寫成 shared）
+  // 卡面：「在自己的回合時可使用 1 次」 = per-instance；engine 已用 abilityUsedThisTurn 自動處理
+  // 場上 N 隻麻麻鰻 → 各可發動 1 次（user 回報 bug）
   // gate: 棄牌區至少 1 張基本【雷】能量
   const hasBasicLight = player.discard.some(c => {
     const card = pool.get(c.cardId);
@@ -425,11 +420,8 @@ regA('麻麻鰻', 0, (st, idx, pool) => {
   if (player.bench.length === 0) {
     return addLog(st, '電氣發電機：備戰區無寶可夢', idx);
   }
-  let s = addLog(st, '電氣發電機：從棄牌區選 1 張基本【雷】能量', idx);
-  s = updatePlayer(s, idx, p => ({
-    ...p,
-    abilityNamesUsedThisTurn: [...(p.abilityNamesUsedThisTurn ?? []), '電氣發電機'],
-  }));
+  // v2.471 移除 abilityNamesUsedThisTurn 寫入（per-instance gate 由 engine 處理）
+  const s = addLog(st, '電氣發電機：從棄牌區選 1 張基本【雷】能量', idx);
   return withPending(s, {
     type: 'discard-search',
     actorIdx: idx, sourcePlayerIdx: idx,

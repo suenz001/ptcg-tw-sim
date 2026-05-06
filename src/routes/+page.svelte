@@ -123,6 +123,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.471</span> Bug fix — 麻麻鰻電氣發電機 / 勾帕路翁ex金屬之路 多隻只能發動 1 次</summary>
+        <ul>
+          <li>玩家回報：場上有複數的麻麻鰻時，特性「電氣發電機」仍然只能發動一次（應該每隻 1 次，總共 N 次）</li>
+          <li>原因：v2.386 實作時誤把 per-instance gate（abilityUsedThisTurn）寫成 shared once-per-turn（abilityNamesUsedThisTurn）</li>
+          <li>判斷規則：卡面寫「使出其他同名特性則無法使用」 → SHARED；卡面只寫「在自己的回合時可使用 1 次」 → per-instance</li>
+          <li>修正 2 個誤判：移除「電氣發電機」「金屬之路」的 ad-hoc abilityNamesUsedThisTurn gate；改回 engine 自動的 per-instance abilityUsedThisTurn 處理</li>
+          <li>順手把「扭轉乾坤」「殺手鐧捕捉」（卡面真的明文 SHARED）補進 engine.SHARED_ONCE_PER_TURN_ABILITY_NAMES，未來實作層忘記寫 gate 時 engine 也擋</li>
+          <li>場上 2 隻麻麻鰻 → 各可發動 1 次「電氣發電機」（總共 2 次，需棄牌區有 2 張基本【雷】能量）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.47</span> 對戰演練 — 備戰區 8 格自適應（零之大空洞場景）</summary>
         <ul>
           <li>玩家回報：零之大空洞觸發後備戰上限 5→8，8 隻在原 layout 下會被切到</li>
