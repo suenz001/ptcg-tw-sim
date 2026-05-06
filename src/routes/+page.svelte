@@ -123,6 +123,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.44</span> SEO 完整化 — Meta tags / sitemap / robots</summary>
+        <ul>
+          <li>src/app.html 補完整 SEO + 社群預覽 meta（保留現有 PWA 設定）：keywords / robots / canonical / og:type/title/description/url/locale/site_name / twitter:card 等</li>
+          <li>新增 static/sitemap.xml — 主路徑 4 條（/, /cards, /decks, /game），priority + changefreq + lastmod；GSC 可直接提交</li>
+          <li>新增 static/robots.txt — Allow all + Disallow /_app/（SvelteKit 內部 chunk 對 SEO 無價值）+ Sitemap 指引</li>
+          <li>title / description 強化關鍵字密度：PTCG / 寶可夢卡牌 / 台灣 / 繁體中文 / H I J 標 / 線上對戰 / 牌組構築</li>
+          <li>v2.431 已 push GSC 驗證檔（static/googlec112ab47fcd31fe0.html）；本版本完成後可回 GSC 點驗證 + Sitemap 提交 sitemap.xml</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.43</span> 新增玩家社群連結 — LINE 群組</summary>
         <ul>
           <li>首頁新增「💬 玩家社群」區塊（在「對戰演練」與「版本更新記錄」之間），含 LINE 群組邀請 QR Code + 直連按鈕</li>
