@@ -3031,7 +3031,7 @@
           <span class="pile-label">棄牌</span>
         </div>
       </div>
-      <div class="zone-bench">
+      <div class="zone-bench" class:bench-extended={oppBenchLimit > 5}>
         {#each Array(Math.max(5, oppBenchLimit, oppPlayer?.bench.length ?? 0)) as _, i}
           {#if oppPlayer?.bench[i]}
             {@const b=oppPlayer.bench[i]}{@const bc=getCard(b.cardId)}
@@ -3364,7 +3364,7 @@
         {/if}
       </div>
 
-      <div class="zone-bench">
+      <div class="zone-bench" class:bench-extended={myBenchLimit > 5}>
         {#each Array(Math.max(5, myBenchLimit, myPlayer?.bench.length ?? 0)) as _, i}
           {#if myPlayer?.bench[i]}
             {@const b=myPlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
@@ -5144,6 +5144,45 @@
   .hand-card:not(.arriving){ transition: opacity .18s ease-out; }
 
   .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:visible; min-width:0; }
+
+  /* v2.47：零之大空洞場景（備戰上限 5→8）— 自動縮小 slot + 必要時橫向捲動 */
+  .zone-bench.bench-extended {
+    overflow-x: auto;
+    overflow-y: visible;
+    /* 平滑捲動 + 觸控支援 */
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #4a6a4a #0e1e0e;
+  }
+  .zone-bench.bench-extended::-webkit-scrollbar {
+    height: 6px;
+  }
+  .zone-bench.bench-extended::-webkit-scrollbar-track {
+    background: #0e1e0e;
+    border-radius: 3px;
+  }
+  .zone-bench.bench-extended::-webkit-scrollbar-thumb {
+    background: #4a6a4a;
+    border-radius: 3px;
+  }
+  .zone-bench.bench-extended::-webkit-scrollbar-thumb:hover {
+    background: #6a8a6a;
+  }
+  /* slot 縮小：90→78 min；128→112 max（讓 8 隻在 1280+ 螢幕能完整顯示，不需捲動） */
+  .zone-bench.bench-extended .bench-slot {
+    flex: 1 1 78px;
+    min-width: 78px;
+    max-width: 112px;
+  }
+  .zone-bench.bench-extended .bench-empty {
+    flex: 1 1 78px;
+    min-width: 78px;
+    max-width: 112px;
+  }
+  .zone-bench.bench-extended .bench-slot img {
+    max-width: 92px;
+    max-height: 110px;
+  }
   /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
      避免撐大 zone-bench 把下方手牌擠出 viewport。
      v2.51：加寬 slot（115→140px），能量 pip 移到右側垂直排列。

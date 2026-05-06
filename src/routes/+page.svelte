@@ -123,6 +123,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.47</span> 對戰演練 — 備戰區 8 格自適應（零之大空洞場景）</summary>
+        <ul>
+          <li>玩家回報：零之大空洞觸發後備戰上限 5→8，8 隻在原 layout 下會被切到</li>
+          <li>新增雙保險自適應：bench 上限 &gt;5 時加 .bench-extended class</li>
+          <li>(1) slot 自動縮小：min-width 90→78、max-width 128→112，1280px+ 螢幕能 8 隻完整顯示不需捲</li>
+          <li>(2) 必要時橫向捲動：overflow-x: auto + 細滾動條（綠色配合遊戲主題）；觸控設備支援慣性捲動</li>
+          <li>my + opp 兩個 bench 都套用，捲動互相獨立</li>
+          <li>5 格上限的一般場景完全不影響（class 只在限制 &gt;5 才加）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.464</span> 實裝泥巴魚｜飛撲圈套（I 標）</summary>
         <ul>
           <li>卡面：30 點傷害；下個對手回合，受到此招的寶可夢無法撤退；下個自己回合，受到此招的寶可夢受到招式傷害「+100」</li>
