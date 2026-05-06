@@ -98,6 +98,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.42</span> Bug fixes — 4 個常用卡互動修正</summary>
+        <ul>
+          <li>夜間學院 + 越橘的一步棋互動：原 filter 'Pokemon:Type=Darkness' 在 UI deck-search parser 沒有對應 case → 落到 generic Pokemon: 分支後比對 pokemonType==='Type=Darkness' 永遠 false → 即使夜間學院剛把超級耿鬼ex 放牌庫頂也找不到。改用專屬 'DarknessPokemon:TOP7' filter（限定 top7 + 只列【惡】寶可夢）</li>
+          <li>超級沙奈朵ex 兩個招式（原本完全沒實裝）：盈溢祈願 — 0 + 從牌庫挑基本【超】能量依序附給每隻備戰寶可夢，重洗牌庫；超級交響樂 — 50 × 自己所有寶可夢身上附加的【超】能量總數。新檔 v2402_mega_gardevoir.ts</li>
+          <li>竹蘭的羅絲蕾朵 +30 多隻疊加：原 PASSIVE_ATTACK_BONUS engine loop 對所有特性 dedup by ability name → 場上 2 隻只 +30。新增 PASSIVE_ATTACK_NO_STACK set 只含「大方」（卡面明文「不重複」），其他特性每隻場上擁有者都獨立加成。2 隻竹蘭的羅絲雷朵 → +60；比克提尼｜勝利聲援 / 鐵頭殼ex｜鈷藍指令 等也比照辦理</li>
+          <li>閃焰王牌｜瞬間爆發力起手戰鬥場放置：新增 canBeInitialActiveCard helper（基礎 OR 含「瞬間爆發力」特性）；engine setup PLACE_ACTIVE check + dealOpeningHand mulligan 都改用此 helper；UI 增加 canSetupActiveSpecial flag 讓 Stage2 with 瞬間爆發力 可以拖到戰鬥場</li>
+          <li>新鐵律：寫入大檔（engine.ts / effects.ts / +page.svelte）後務必驗證 file 完整性（mount layer 偶會截斷尾端 UTF-8 多位元組字元），需用 Python os.write+os.fsync+O_TRUNC pattern 寫入</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.41</span> I 標 Wave 2 — 抽牌/換場/牌庫搜能量批次實裝（11 張）</summary>
         <ul>
           <li>新檔 v2401_i_wave2_draw_swap_search.ts（240 行）— 含 4 個 helper factory + 4 組 declarative 表</li>
