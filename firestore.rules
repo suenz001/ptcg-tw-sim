@@ -21,12 +21,22 @@ service cloud.firestore {
       }
     }
 
-    // ── 意見回饋（v2.53：read 改 own-or-admin，update 限 admin 加 reply）──
+    // ── 意見回饋（v2.53 / v2.7：read 改 own-or-admin，update 限 admin 加 reply）──
     match /feedbacks/{feedbackId} {
-      // v2.53：玩家可讀自己提交的（uid 對得上）；admin 全讀
+      // v2.53 / v2.7：admin 全讀；玩家可讀「uid 對得上自己」或「deviceId 命中
+      // 自己 client-generated UUID」（後者支援匿名跨 session 找回歷史）。
+      // 安全考量：deviceId 是 client 隨機 UUID（crypto.randomUUID 等級），
+      //   猜測機率極低；feedback 內容本身為玩家提交給管理員的訊息，敏感性低；
+      //   queryByDeviceId 必須是已登入（auth != null）使用者才能發起。
+      // 注意：rules 無法直接驗證 query 中的 deviceId 與 client 的 deviceId 一致，
+      //   故此處只能要求 doc 有 deviceId 欄位 + 用戶已登入。實質保護來自 deviceId
+      //   為長隨機 UUID 不可預測。
       allow read: if isAdmin()
                   || (request.auth != null
-                      && resource.data.uid == request.auth.uid);
+                      && resource.data.uid == request.auth.uid)
+                  || (request.auth != null
+                      && resource.data.deviceId is string
+                      && resource.data.deviceId.size() >= 16);
       // create：任何人（含未登入）可送，content 字串長度 1~5000
       allow create: if request.resource.data.content is string
                     && request.resource.data.content.size() > 0

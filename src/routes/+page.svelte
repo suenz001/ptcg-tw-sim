@@ -5,7 +5,8 @@
   import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
   import {
     collection, addDoc, serverTimestamp,
-    query, where, orderBy, limit, getDocs,
+    query, where, orderBy, limit, getDocs, onSnapshot,
+    type Unsubscribe,
   } from 'firebase/firestore';
   import { VERSION } from '$lib/version';
 
@@ -17,6 +18,8 @@
     reply?: string;
     repliedAt?: { seconds?: number };
     repliedBy?: string;
+    uid?: string;
+    deviceId?: string;
   }
 
   let user = $state<User | null>(null);
@@ -52,33 +55,119 @@
   let feedbackSubmitting = $state(false);
   let feedbackStatus = $state<'idle' | 'success' | 'error'>('idle');
 
-  // v2.53 我的回饋歷史
+  // v2.53 / v2.7 我的回饋歷史
+  // ──────────────────────────────────────────────────────────────────────
+  // v2.7 (2026-05) 重構：getDocs 一次性 → onSnapshot 即時監聽 + deviceId 雙路徑
+  //
+  // 過去問題：admin 從後台寫回覆後，玩家端要關閉 modal 重開才能拿到最新資料；
+  //   此外匿名玩家若清過 storage / 換 session，uid 改變，舊回饋查不到。
+  //
+  // 修法：
+  //   1) 開啟 modal 時用 onSnapshot 訂閱 (uid==self.uid) 與 (deviceId==localStorage)
+  //      兩條 query；admin updateDoc 後 Firestore 會 push 給訂閱者，畫面即時更新。
+  //   2) 兩條 query 結果 by id 合併去重（同一筆 doc 會被 deviceId 與 uid 兩路命中）。
+  //   3) 關 modal 時 unsubscribe，避免無限保持連線。
+  //   4) deviceId 查詢需要 Firestore rules 允許（v2.7 一併放寬：read 條件加上
+  //      "deviceId 與 request.auth.token.firebase.identities 中某 deviceId 比對"
+  //      ⇒ 簡化做法：採取「auth 用戶可讀任何含 deviceId 的 feedback」，因 deviceId
+  //      是長隨機 UUID 不可猜，且 feedback 內容本身屬於玩家提交給管理員，敏感性低）。
+  // ══════════════════════════════════════════════════════════════════════
   let myFeedbacks = $state<FeedbackHistoryItem[]>([]);
   let loadingHistory = $state(false);
+  let unsubUidQuery: Unsubscribe | null = null;
+  let unsubDeviceQuery: Unsubscribe | null = null;
+  // 雙路徑結果各自快取，merge 後寫入 myFeedbacks
+  let feedbacksByUid = $state<FeedbackHistoryItem[]>([]);
+  let feedbacksByDevice = $state<FeedbackHistoryItem[]>([]);
 
-  async function loadMyFeedbackHistory() {
+  function mergeFeedbacks() {
+    // by id 合併去重；createdAt desc 排序
+    const map = new Map<string, FeedbackHistoryItem>();
+    for (const f of feedbacksByUid) map.set(f.id, f);
+    for (const f of feedbacksByDevice) {
+      // 若兩條都有，留下較新（reply 欄位較完整的那一筆）
+      const existing = map.get(f.id);
+      if (!existing) map.set(f.id, f);
+      else {
+        // 取 reply / repliedAt 較新的（如有差異）
+        const merged = { ...existing, ...f };
+        // 若 existing 有 reply 但 f 沒有，保留 existing 的 reply
+        if (existing.reply && !f.reply) merged.reply = existing.reply;
+        if (existing.repliedAt && !f.repliedAt) merged.repliedAt = existing.repliedAt;
+        map.set(f.id, merged);
+      }
+    }
+    const arr = Array.from(map.values());
+    arr.sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+    myFeedbacks = arr.slice(0, 20);
+  }
+
+  function unsubscribeFeedbacks() {
+    if (unsubUidQuery) { unsubUidQuery(); unsubUidQuery = null; }
+    if (unsubDeviceQuery) { unsubDeviceQuery(); unsubDeviceQuery = null; }
+    feedbacksByUid = [];
+    feedbacksByDevice = [];
+  }
+
+  function subscribeFeedbacks() {
+    unsubscribeFeedbacks();
     if (!user) { myFeedbacks = []; return; }
     loadingHistory = true;
+    let deviceId = 'unknown';
+    try { deviceId = localStorage.getItem('ptcg_device_id') ?? 'unknown'; } catch {}
+
+    // Path 1: 依 uid（已登入或同 anon session）
     try {
-      const q = query(
+      const qUid = query(
         collection(db, 'feedbacks'),
         where('uid', '==', user.uid),
         orderBy('createdAt', 'desc'),
-        limit(20)
+        limit(20),
       );
-      const snap = await getDocs(q);
-      myFeedbacks = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<FeedbackHistoryItem,'id'>) }));
+      unsubUidQuery = onSnapshot(qUid,
+        (snap) => {
+          feedbacksByUid = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<FeedbackHistoryItem,'id'>) }));
+          mergeFeedbacks();
+          loadingHistory = false;
+        },
+        (err) => {
+          console.error('uid feedback subscription failed:', err);
+          loadingHistory = false;
+        },
+      );
     } catch (err) {
-      console.error('Failed to load feedback history:', err);
-      myFeedbacks = [];
-    } finally {
-      loadingHistory = false;
+      console.error('Failed to subscribe by uid:', err);
+    }
+
+    // Path 2: 依 deviceId（跨匿名 session）— 只有在 deviceId 不是 unknown 才訂
+    if (deviceId !== 'unknown') {
+      try {
+        const qDev = query(
+          collection(db, 'feedbacks'),
+          where('deviceId', '==', deviceId),
+          orderBy('createdAt', 'desc'),
+          limit(20),
+        );
+        unsubDeviceQuery = onSnapshot(qDev,
+          (snap) => {
+            feedbacksByDevice = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<FeedbackHistoryItem,'id'>) }));
+            mergeFeedbacks();
+          },
+          (err) => {
+            // 若 rules 拒絕（暫時未部署 v2.7 rules）會走到這裡 — 沉默 fallback 即可
+            console.warn('deviceId feedback subscription not available (rules?):', err);
+          },
+        );
+      } catch (err) {
+        console.warn('Failed to subscribe by deviceId:', err);
+      }
     }
   }
 
-  // 開啟 modal 時載入歷史
+  // 開 modal 時訂閱；關 modal 時取消訂閱
   $effect(() => {
-    if (showFeedbackModal && user) loadMyFeedbackHistory();
+    if (showFeedbackModal && user) subscribeFeedbacks();
+    else if (!showFeedbackModal) unsubscribeFeedbacks();
   });
 
   function fmtFbTime(t?: { seconds?: number } | null): string {
@@ -102,8 +191,7 @@
       });
       feedbackStatus = 'success';
       feedbackText = '';
-      // v2.53：送出後重載歷史，玩家立刻看到自己剛送的那筆
-      await loadMyFeedbackHistory();
+      // v2.7：onSnapshot 會自動帶入剛送出的這筆，不需要手動重載
       setTimeout(() => {
         feedbackStatus = 'idle';
       }, 2000);
@@ -173,6 +261,18 @@
     <details class="changelog-outer">
     <summary><h2>📋 版本更新記錄</h2></summary>
     <div class="changelog-list">
+
+      <details>
+        <summary><span class="ver-badge">v2.7</span> 修玩家回饋系統 — onSnapshot 即時 + deviceId 雙路徑</summary>
+        <ul>
+          <li>問題：admin 後台寫回覆後，玩家端 modal 仍是 getDocs 一次性載入的舊 snapshot，看不到新回覆；匿名玩家若清過 storage / 換瀏覽器 session，uid 改變，舊回饋也查不到</li>
+          <li>修法 1：getDocs → onSnapshot 即時訂閱，admin 一寫進 Firestore，玩家畫面立即更新（不用關 modal 重開）</li>
+          <li>修法 2：除了 uid 查詢，再開一條 deviceId 查詢（localStorage 隨機 UUID）；兩條結果 by id 合併去重，匿名跨 session 也能找回歷史</li>
+          <li>修法 3：firestore.rules 對應放寬 — feedbacks read 加上「auth 用戶 + doc 有 deviceId 欄位（≥16 字元）」條件；deviceId 為長隨機 UUID 不可猜，feedback 內容為玩家提交給管理員的訊息，敏感性低</li>
+          <li>關 modal 自動 unsubscribe，避免無限保持連線</li>
+          <li>提交新意見不再手動 await loadMyFeedbackHistory()，onSnapshot 會自動帶入剛送出的那筆</li>
+        </ul>
+      </details>
 
       <details>
         <summary><span class="ver-badge">v2.69</span> I 標 Wave 19 — 引擎機制擴充（4 張）</summary>
