@@ -3,8 +3,21 @@
   import { base } from '$app/paths';
   import { auth, db } from '$lib/firebase';
   import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
-  import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+  import {
+    collection, addDoc, serverTimestamp,
+    query, where, orderBy, limit, getDocs,
+  } from 'firebase/firestore';
   import { VERSION } from '$lib/version';
+
+  // v2.53 我的回饋歷史 + admin 回覆顯示
+  interface FeedbackHistoryItem {
+    id: string;
+    content: string;
+    createdAt?: { seconds?: number };
+    reply?: string;
+    repliedAt?: { seconds?: number };
+    repliedBy?: string;
+  }
 
   let user = $state<User | null>(null);
   let error = $state<string | null>(null);
@@ -39,20 +52,59 @@
   let feedbackSubmitting = $state(false);
   let feedbackStatus = $state<'idle' | 'success' | 'error'>('idle');
 
+  // v2.53 我的回饋歷史
+  let myFeedbacks = $state<FeedbackHistoryItem[]>([]);
+  let loadingHistory = $state(false);
+
+  async function loadMyFeedbackHistory() {
+    if (!user) { myFeedbacks = []; return; }
+    loadingHistory = true;
+    try {
+      const q = query(
+        collection(db, 'feedbacks'),
+        where('uid', '==', user.uid),
+        orderBy('createdAt', 'desc'),
+        limit(20)
+      );
+      const snap = await getDocs(q);
+      myFeedbacks = snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<FeedbackHistoryItem,'id'>) }));
+    } catch (err) {
+      console.error('Failed to load feedback history:', err);
+      myFeedbacks = [];
+    } finally {
+      loadingHistory = false;
+    }
+  }
+
+  // 開啟 modal 時載入歷史
+  $effect(() => {
+    if (showFeedbackModal && user) loadMyFeedbackHistory();
+  });
+
+  function fmtFbTime(t?: { seconds?: number } | null): string {
+    if (!t?.seconds) return '?';
+    return new Date(t.seconds * 1000).toLocaleString('zh-TW');
+  }
+
   async function submitFeedback() {
     if (!feedbackText.trim() || feedbackSubmitting) return;
     feedbackSubmitting = true;
     try {
+      // v2.53：附加 deviceId（給 admin 跨 anon session 識別同裝置玩家）
+      let deviceId = 'unknown';
+      try { deviceId = localStorage.getItem('ptcg_device_id') ?? 'unknown'; } catch {}
       await addDoc(collection(db, 'feedbacks'), {
         content: feedbackText.trim(),
         createdAt: serverTimestamp(),
         uid: user?.uid || 'anonymous',
-        userAgent: navigator.userAgent
+        userAgent: navigator.userAgent,
+        deviceId,
       });
       feedbackStatus = 'success';
       feedbackText = '';
+      // v2.53：送出後重載歷史，玩家立刻看到自己剛送的那筆
+      await loadMyFeedbackHistory();
       setTimeout(() => {
-        showFeedbackModal = false;
         feedbackStatus = 'idle';
       }, 2000);
     } catch (err) {
@@ -121,6 +173,19 @@
     <details class="changelog-outer">
     <summary><h2>📋 版本更新記錄</h2></summary>
     <div class="changelog-list">
+
+      <details>
+        <summary><span class="ver-badge">v2.53</span> 意見回覆系統 — 玩家歷史 + 管理員後台</summary>
+        <ul>
+          <li>玩家端：意見回饋 modal 開啟時自動載入自己的歷史回饋（最近 20 筆），顯示提交時間、內容、admin 回覆（如有）</li>
+          <li>已有回覆的回饋會標記「✓ 已回覆」並用綠色框顯示管理員回覆內容 + 回覆時間</li>
+          <li>提交新意見時會自動附加 deviceId（讓 admin 識別同裝置玩家，跨 anon session）</li>
+          <li>新增後台路由 /admin/feedbacks — 僅 suenz001@yahoo.com.tw 進得去；列出最近 100 則回饋，可加/編輯回覆、刪除</li>
+          <li>Firestore rules 改：feedbacks read 改 own-or-admin（玩家可讀自己 uid 提交的）；update/delete 限 admin</li>
+          <li>限制：anon 登入每次 uid 不同，玩家若清快取/換裝置會看不到舊歷史；email 登入則跨 session 完整保留</li>
+          <li>記得部署：firebase deploy --only firestore:rules</li>
+        </ul>
+      </details>
 
       <details>
         <summary><span class="ver-badge">v2.52</span> 殭屍房間自動清理</summary>
@@ -600,27 +665,61 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div class="modal-overlay" onclick={() => { if(!feedbackSubmitting) showFeedbackModal = false; }} role="dialog">
-      <div class="modal-content" onclick={e => e.stopPropagation()}>
-        <h3>提交意見回饋</h3>
-        {#if feedbackStatus === 'success'}
-          <div class="success-msg">✅ 感謝你的回饋！已成功送出。</div>
-        {:else}
-          <textarea 
-            bind:value={feedbackText} 
-            placeholder="請描述你遇到的問題或建議..."
-            rows="5"
-            disabled={feedbackSubmitting}
-          ></textarea>
-          {#if feedbackStatus === 'error'}
-            <div class="error-msg">❌ 提交失敗，請稍後再試。</div>
-          {/if}
-          <div class="modal-actions">
-            <button class="btn-cancel" onclick={() => showFeedbackModal = false} disabled={feedbackSubmitting}>取消</button>
-            <button class="btn-submit" onclick={submitFeedback} disabled={!feedbackText.trim() || feedbackSubmitting}>
-              {feedbackSubmitting ? '送出中...' : '送出'}
-            </button>
+      <div class="modal-content fb-modal" onclick={e => e.stopPropagation()}>
+        <h3>💬 意見回饋</h3>
+
+        <!-- v2.53 我的回饋歷史 + admin 回覆 -->
+        {#if loadingHistory}
+          <div class="fb-history-loading">載入歷史回饋中...</div>
+        {:else if myFeedbacks.length > 0}
+          <div class="fb-history-section">
+            <h4>📋 我的回饋歷史</h4>
+            <div class="fb-history-list">
+              {#each myFeedbacks as fb (fb.id)}
+                <div class="fb-history-item" class:has-reply={!!fb.reply}>
+                  <div class="fb-h-meta">
+                    <span class="fb-h-time">📅 {fmtFbTime(fb.createdAt)}</span>
+                    {#if fb.reply}<span class="fb-h-replied">✓ 已回覆</span>{/if}
+                  </div>
+                  <div class="fb-h-content">{fb.content}</div>
+                  {#if fb.reply}
+                    <div class="fb-h-reply">
+                      <div class="fb-h-reply-header">
+                        <strong>💬 管理員回覆</strong>
+                        <span class="fb-h-reply-time">{fmtFbTime(fb.repliedAt)}</span>
+                      </div>
+                      <div class="fb-h-reply-text">{fb.reply}</div>
+                    </div>
+                  {/if}
+                </div>
+              {/each}
+            </div>
           </div>
         {/if}
+
+        <!-- 提交新意見 -->
+        <div class="fb-new-section">
+          <h4>{myFeedbacks.length > 0 ? '✉️ 提交新意見' : '✉️ 提交意見'}</h4>
+          {#if feedbackStatus === 'success'}
+            <div class="success-msg">✅ 感謝你的回饋！已送出。管理員回覆後可再次開啟此視窗查看。</div>
+          {:else}
+            <textarea
+              bind:value={feedbackText}
+              placeholder="請描述你遇到的問題或建議..."
+              rows="4"
+              disabled={feedbackSubmitting}
+            ></textarea>
+            {#if feedbackStatus === 'error'}
+              <div class="error-msg">❌ 提交失敗，請稍後再試。</div>
+            {/if}
+            <div class="modal-actions">
+              <button class="btn-cancel" onclick={() => showFeedbackModal = false} disabled={feedbackSubmitting}>關閉</button>
+              <button class="btn-submit" onclick={submitFeedback} disabled={!feedbackText.trim() || feedbackSubmitting}>
+                {feedbackSubmitting ? '送出中...' : '送出'}
+              </button>
+            </div>
+          {/if}
+        </div>
       </div>
     </div>
   {/if}
@@ -892,6 +991,92 @@
     color: #c00;
     margin-bottom: 1rem;
     font-size: 0.9rem;
+  }
+
+  /* v2.53 意見回饋 modal 歷史顯示 */
+  :global(.fb-modal) {
+    max-width: 600px !important;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+  .fb-history-loading {
+    color: #888;
+    font-size: 0.86rem;
+    padding: 0.5rem 0;
+  }
+  .fb-history-section {
+    margin: 0.8rem 0 1.2rem 0;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px dashed #ccc;
+  }
+  .fb-history-section h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.95rem;
+    color: #2c4a6a;
+  }
+  .fb-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .fb-history-item {
+    background: #f7f7fa;
+    border: 1px solid #d8d8e0;
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+  }
+  .fb-history-item.has-reply {
+    border-left: 3px solid #06C755;
+  }
+  .fb-h-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.74rem;
+    color: #666;
+    margin-bottom: 0.3rem;
+  }
+  .fb-h-replied {
+    background: #06C755;
+    color: #fff;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+  .fb-h-content {
+    white-space: pre-wrap;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: #1a1a1a;
+  }
+  .fb-h-reply {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    background: #e8f5e8;
+    border-radius: 4px;
+    border-left: 3px solid #06C755;
+  }
+  .fb-h-reply-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.78rem;
+    color: #2c4a2c;
+    margin-bottom: 0.25rem;
+  }
+  .fb-h-reply-time { color: #5a7a5a; font-weight: normal; }
+  .fb-h-reply-text {
+    white-space: pre-wrap;
+    font-size: 0.86rem;
+    color: #1a3a1a;
+  }
+  .fb-new-section h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.95rem;
+    color: #2c4a6a;
   }
 
   /* v2.43 玩家社群區塊 */

@@ -11,24 +11,27 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
-    // ── 玩家基本資料與登入追蹤（v2.46：private — own-or-admin only）────────
+    // ── 玩家基本資料與登入追蹤 ────────────────────────────────────────────
     match /users/{userId} {
       allow read: if isSelf(userId) || isAdmin();
       allow write: if isSelf(userId) || isAdmin();
-
-      // 玩家的牌組（v2.46：私人牌組）
       match /decks/{deckId} {
         allow read: if isSelf(userId) || isAdmin();
         allow write: if isSelf(userId) || isAdmin();
       }
     }
 
-    // ── 意見回饋 ──────────────────────────────────────────────────────────
+    // ── 意見回饋（v2.53：read 改 own-or-admin，update 限 admin 加 reply）──
     match /feedbacks/{feedbackId} {
-      allow read: if isAdmin();
+      // v2.53：玩家可讀自己提交的（uid 對得上）；admin 全讀
+      allow read: if isAdmin()
+                  || (request.auth != null
+                      && resource.data.uid == request.auth.uid);
+      // create：任何人（含未登入）可送，content 字串長度 1~5000
       allow create: if request.resource.data.content is string
                     && request.resource.data.content.size() > 0
                     && request.resource.data.content.size() <= 5000;
+      // v2.53：update / delete 限 admin（admin 用後台 /admin/feedbacks 加 reply）
       allow update, delete: if isAdmin();
     }
 
@@ -47,9 +50,7 @@ service cloud.firestore {
                        || request.auth.uid == resource.data.hostUid
                     );
 
-      // v2.52：delete 增加「stale lobby 房間」規則 — 任何 authed 用戶可清理
-      // 條件：status='lobby' 且 updatedAt 超過 10 分鐘 → 視為殭屍房間
-      // 解決玩家直接關電腦/瀏覽器沒觸發 leaveRoom，房間 doc 永遠殘留問題
+      // v2.52：stale lobby 房間任何 authed 用戶可清理
       allow delete: if request.auth != null && (
                        request.auth.uid in resource.data.memberUids
                        || request.auth.uid == resource.data.hostUid
@@ -61,10 +62,8 @@ service cloud.firestore {
 
       allow read, write: if isAdmin();
 
-      // ── 聊天訊息子集合 ───────────────────────────────────────────
       match /messages/{msgId} {
         allow read: if request.auth != null;
-
         allow create: if request.auth != null
                       && request.resource.data.uid == request.auth.uid
                       && request.resource.data.text is string
@@ -72,7 +71,6 @@ service cloud.firestore {
                       && request.resource.data.text.size() <= 500
                       && request.resource.data.name is string
                       && request.resource.data.name.size() <= 50;
-
         allow update, delete: if isAdmin();
       }
     }
