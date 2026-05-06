@@ -175,6 +175,22 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.69</span> I 標 Wave 19 — 引擎機制擴充（4 張）</summary>
+        <ul>
+          <li>引擎變更：types.ts CardInstance 新增 4 個欄位（damageTakenLastOppTurn / attackUsedThisTurn+attackUsedLastSelfTurn / paralyzeFangPending / koAtMyNextEndOfTurn）</li>
+          <li>engine.ts ATTACK 損害應用：defender 累積 damageTakenLastOppTurn += baseDamage（重裝角擊用）</li>
+          <li>engine.ts ATTACK_POST 結算後：寫入攻擊方 active.attackUsedThisTurn = atkName（瘋狂炸彈追蹤）</li>
+          <li>engine.ts ATTACH_ENERGY：附加完成後若 target.paralyzeFangPending → 自動放 80 點傷害（麻痺門牙觸發）</li>
+          <li>engine.ts END_TURN（aIdx 方）：清 damageTakenLastOppTurn / promote attackUsedThisTurn → LastSelfTurn / 清 paralyzeFangPending / 觸發 koAtMyNextEndOfTurn → KO（damage = HP）</li>
+          <li>超級赫拉克羅斯ex 重裝角擊 100+：上個對手回合受傷累計加成</li>
+          <li>雙彈瓦斯 瘋狂炸彈 50+：上個自己回合用過「充滿瓦斯」+120</li>
+          <li>帕奇利茲 麻痺門牙 10：下個對手回合附能量觸發 80 點</li>
+          <li>火箭隊的臭泥 浸蝕污泥 0：下個對手回合結束時 KO defender</li>
+          <li>I 標 Wave 1+...+19 累計：450+4 = 454 張，引擎覆蓋率 ~98%</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.68</span> I 標 Wave 18 — 複製招式類收尾（5 張）</summary>
         <ul>
           <li>索羅亞克欺詐：複製對手戰鬥場印刷傷害最高的招式（沿用 N的索羅亞克ex 暗黑底牌 v2.119 模式）</li>

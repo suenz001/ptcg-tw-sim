@@ -125,6 +125,31 @@ export interface CardInstance {
    */
   damageBonusPending?: number;
   /**
+   * v2.69 超級赫拉克羅斯ex｜重裝角擊 — 累計上個對手回合此寶可夢受到的招式傷害。
+   * 在每次 ATTACK 對 defender 結算後 +baseDamage；於 defender 自己回合的 END_TURN 時清為 0。
+   * 攻擊方 PRE 階段讀取此值用於 +N 計算。
+   */
+  damageTakenLastOppTurn?: number;
+  /**
+   * v2.69 雙彈瓦斯｜瘋狂炸彈 — 本回合與上個自己回合此寶可夢使用的招式名稱。
+   * - attackUsedThisTurn：ATTACK_POST 結算後寫入
+   * - attackUsedLastSelfTurn：於攻擊方自己 END_TURN 時 promote thisTurn → lastSelfTurn
+   *   並清除 thisTurn（若本回合未攻擊則 lastSelfTurn 變 undefined）
+   */
+  attackUsedThisTurn?: string;
+  attackUsedLastSelfTurn?: string;
+  /**
+   * v2.69 帕奇利茲｜麻痺門牙 — 設於受擊寶可夢 (defender)；下個對手回合此寶可夢
+   * 收到對手附加能量時自動放 8 個傷害指示物（80 點）。於 defender 自己回合
+   * END_TURN 時清除。
+   */
+  paralyzeFangPending?: boolean;
+  /**
+   * v2.69 火箭隊的臭泥｜浸蝕污泥 — 設於受擊寶可夢 (defender)；於 defender 自己回合
+   * END_TURN 時將其昏厥（damage = HP）。於該 END_TURN 觸發後清除。
+   */
+  koAtMyNextEndOfTurn?: boolean;
+  /**
    * 自己寶可夢下個自己回合不可撤退（懶人獺 悠哉）。
    * 設於 ATTACK_POST，於擁有者下回合開始（nextIdx promote）時變成 cantRetreatNextTurn=true，
    * 於該回合 END_TURN 照 clearCantRetreat 規則清除。

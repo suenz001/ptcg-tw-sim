@@ -2517,6 +2517,20 @@ function handlePlaying(
         afterAttach = fn(afterAttach, (1 - aIdx) as 0 | 1, aIdx as 0 | 1, target.iid, pool);
       }
     }
+    // v2.69 帕奇利茲｜麻痺門牙 — 若 target 有 paralyzeFangPending flag，放 8 個傷害指示物（80 點）
+    if (target.paralyzeFangPending) {
+      const targetCardName = getCard(target.cardId, pool).name;
+      afterAttach = addLog(afterAttach, `麻痺門牙：${targetCardName} 因附加能量被放 8 個傷害指示物（+80 點）`, aIdx);
+      const newPlayers = [...afterAttach.players] as [PlayerState, PlayerState];
+      const updateInst = (c: CardInstance): CardInstance =>
+        c.iid === target!.iid ? { ...c, damage: (c.damage ?? 0) + 80 } : c;
+      newPlayers[aIdx] = {
+        ...newPlayers[aIdx],
+        active: newPlayers[aIdx].active && newPlayers[aIdx].active!.iid === target.iid ? updateInst(newPlayers[aIdx].active!) : newPlayers[aIdx].active,
+        bench: newPlayers[aIdx].bench.map(updateInst),
+      };
+      afterAttach = { ...afterAttach, players: newPlayers };
+    }
     return clearFestivalVenueProtectedStatuses(afterAttach, pool);
   }
 
@@ -3384,7 +3398,9 @@ function handlePlaying(
         };
       }
     } else if (!preventedKO) {
-      defenderState.active = { ...defenderState.active!, damage: newDamage };
+      // v2.69 重裝角擊追蹤 — 累計 defender 受到的招式傷害（在 defender 自己 END_TURN 時 reset）
+      const accumDmgTaken = (defenderState.active!.damageTakenLastOppTurn ?? 0) + (baseDamage > 0 ? baseDamage : 0);
+      defenderState.active = { ...defenderState.active!, damage: newDamage, damageTakenLastOppTurn: accumDmgTaken };
       defPlayers[dIdx] = defenderState;
       newState = { ...newState, players: defPlayers, turnPhase: 'end' };
 
@@ -3524,6 +3540,16 @@ function handlePlaying(
       // v2.156：把 action 也傳給 POST，讓「PRE/POST 共享 chosenIids」的 option 招式
       // （如 激流水泵）能在 POST 階段判斷玩家是否棄了能量
       newState = postFn(newState, aIdx, pool, action);
+    }
+
+    // v2.69 瘋狂炸彈追蹤 — 招式結算後寫入攻擊方 active.attackUsedThisTurn
+    {
+      const curAtk = newState.players[aIdx].active;
+      if (curAtk) {
+        const newPlayers = [...newState.players] as [PlayerState, PlayerState];
+        newPlayers[aIdx] = { ...newPlayers[aIdx], active: { ...curAtk, attackUsedThisTurn: attack.name } };
+        newState = { ...newState, players: newPlayers };
+      }
     }
 
     // ── v2.92：回力鏢能量 revive ─────────────────────────────────────────────
@@ -4182,6 +4208,56 @@ function handlePlaying(
     };
     if (currentPlayer.active) currentPlayer.active = clearCantRetreat(currentPlayer.active);
     currentPlayer.bench = currentPlayer.bench.map(clearCantRetreat);
+
+    // v2.69 重裝角擊：清除本回合結束方（aIdx）pokemon 的 damageTakenLastOppTurn
+    //   原則：「上個對手回合受到的傷害」於對手下回合（=本方下個回合）重置；
+    //   實作：每位玩家自己 END_TURN 時清空自己 pokemon 的 lastOppTurn 累計（接下來
+    //   對手回合會從 0 開始累積，下個自己回合即可讀取正確值）。
+    const clearDmgTakenLastOppTurn = (c: CardInstance): CardInstance => {
+      if (c.damageTakenLastOppTurn === undefined) return c;
+      const n = { ...c }; delete n.damageTakenLastOppTurn; return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = clearDmgTakenLastOppTurn(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(clearDmgTakenLastOppTurn);
+
+    // v2.69 瘋狂炸彈：promote attackUsedThisTurn → attackUsedLastSelfTurn（於擁有者 END_TURN）
+    //   若本回合未攻擊（thisTurn = undefined），lastSelfTurn 也清為 undefined（避免長期殘留）
+    const promoteAttackUsed = (c: CardInstance): CardInstance => {
+      const n = { ...c };
+      if (c.attackUsedThisTurn !== undefined) {
+        n.attackUsedLastSelfTurn = c.attackUsedThisTurn;
+        delete n.attackUsedThisTurn;
+      } else if (c.attackUsedLastSelfTurn !== undefined) {
+        delete n.attackUsedLastSelfTurn;
+      }
+      return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = promoteAttackUsed(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(promoteAttackUsed);
+
+    // v2.69 麻痺門牙：清除本回合結束方 pokemon 的 paralyzeFangPending
+    //   設定時機：對手 ATTACK_POST 在我方 (defender) 上設下；於 defender 自己 END_TURN 時清除
+    const clearParalyzeFang = (c: CardInstance): CardInstance => {
+      if (!c.paralyzeFangPending) return c;
+      const n = { ...c }; delete n.paralyzeFangPending; return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = clearParalyzeFang(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(clearParalyzeFang);
+
+    // v2.69 浸蝕污泥：於 defender 自己 END_TURN 時，將 koAtMyNextEndOfTurn pokemon KO
+    //   實作：把 damage 直接設為 HP（讓既有 KO 流程在下一輪招式或 sanityKOSweep 處理）
+    //   清除 flag（消費完）
+    const triggerSludgeKO = (c: CardInstance): CardInstance => {
+      if (!c.koAtMyNextEndOfTurn) return c;
+      const card = pool.get(c.cardId);
+      const hp = card?.hp ?? 0;
+      const n = { ...c, damage: hp };
+      delete n.koAtMyNextEndOfTurn;
+      return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = triggerSludgeKO(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(triggerSludgeKO);
+
     players[aIdx] = currentPlayer;
 
     // Wave 36：於 aIdx（本回合結束方）自己的卡 promote takeExtraDamageNextTurn → ThisTurn
