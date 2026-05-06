@@ -353,7 +353,15 @@ export function subscribeRoom(
   );
 }
 
-/** 監聽所有可加入的 lobby 房間（status='lobby'） */
+/**
+ * 監聽所有可加入的 lobby 房間（status='lobby'）。
+ * v2.52：加殭屍房間（stale = updatedAt > 10 分鐘前）過濾顯示 + 被動清理。
+ *   原因：玩家直接關電腦/瀏覽器不會觸發 leaveRoom → 房間 doc 永遠殘留。
+ *   anon 登入每次 uid 不同，重啟後也無法認回「我的舊房間」自己刪。
+ *   解：任何進 lobby 的玩家順手把 stale 房間 delete 掉（rules 已放寬允許）。
+ */
+const ROOM_STALE_THRESHOLD_MS = 10 * 60 * 1000;  // 10 分鐘
+
 export function subscribeOpenRooms(
   callback: (rooms: Room[]) => void,
   onError?: (err: Error) => void,
@@ -366,11 +374,22 @@ export function subscribeOpenRooms(
   return onSnapshot(
     q,
     snap => {
+      const now = Date.now();
       const rooms: Room[] = [];
+      const staleRoomIds: string[] = [];
       snap.forEach(d => {
         const data = d.data() as RoomData;
         // 過濾舊版本房間
         if ((data.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) return;
+        // v2.52：判定是否為 stale lobby 房間
+        const updatedAtSec = (data.updatedAt as { seconds?: number } | null | undefined)?.seconds;
+        if (typeof updatedAtSec === 'number') {
+          const ageMs = now - updatedAtSec * 1000;
+          if (ageMs > ROOM_STALE_THRESHOLD_MS) {
+            staleRoomIds.push(d.id);
+            return;  // 不顯示，加入待清理清單
+          }
+        }
         rooms.push({ ...data, roomId: d.id });
       });
       // client-side 排序：createdAt 新→舊
@@ -380,6 +399,11 @@ export function subscribeOpenRooms(
         return tb - ta;
       });
       callback(rooms);
+      // 被動清理：發 deleteDoc 對 stale 房間（fire-and-forget；rules 已允許）
+      // 不 await，不 block lobby 顯示；失敗（rules 拒絕）也忽略
+      for (const roomId of staleRoomIds) {
+        deleteDoc(doc(db, 'rooms', roomId)).catch(() => { /* ignore */ });
+      }
     },
     err => {
       console.error('[Room] list error:', err);

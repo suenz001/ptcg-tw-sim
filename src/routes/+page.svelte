@@ -123,6 +123,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.52</span> 殭屍房間自動清理</summary>
+        <ul>
+          <li>玩家回報：開房後直接關電腦沒退出，房間不會消失，自己也連不回去</li>
+          <li>根因：客戶端關閉不會觸發 leaveRoom；anon 登入每次 uid 不同，無法認回「我的舊房間」</li>
+          <li>方案：(1) Lobby 客戶端拉房間後過濾 updatedAt &gt; 10 分鐘的 stale 房間，不顯示；(2) 順手對 stale 房間發 deleteDoc 被動清理</li>
+          <li>Firestore rules 補：authed 用戶可刪除 lobby 狀態 + updatedAt &gt; 10 分鐘前的房間（不影響進行中的對戰，因為 status='playing' 不符合條件）</li>
+          <li>記得部署：firebase deploy --only firestore:rules</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.51</span> I 標 Wave 3c — 擲幣狀態 / 進化來源條件 / 自身指示物 / 自殘 (13 張)</summary>
         <ul>
           <li>新檔 v2510_i_wave3c_status_self.ts</li>
