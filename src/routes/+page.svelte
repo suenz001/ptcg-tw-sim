@@ -175,6 +175,23 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.56</span> I 標 Wave 6 — 複雜互動卡 10 張</summary>
+        <ul>
+          <li>瑪夏多｜暗影側踢 (60 + 若 KO 對手 → 自身下回合免疫招式傷害)</li>
+          <li>雪吞蟲｜躲藏 (擲 1 正面 → 下回合免疫招式)</li>
+          <li>瑪狃拉｜報應爪 (20 + 自身 HP ≤ 50 → +170)</li>
+          <li>流氓鱷｜復仇獠牙 (60 + 上對手回合自方寶可夢被招式 KO → +160；用既有 oppAttackKOdMeInLastOppTurn 機制)</li>
+          <li>巨蔓藤｜肌力鞭打 (120 + 自身能量比 cost 多 2 個 → +140，cost=4 故 ≥6 觸發)</li>
+          <li>焚焰蚣｜緊束粉碎 (50 + 擲 2 次硬幣 → 棄對手戰鬥場 N 個能量)</li>
+          <li>超級暴雪王ex｜山崩之錘 (棄牌庫頂 6 → 其中基本【水】數 ×100)</li>
+          <li>蓋諾賽克特｜昆蟲加農炮 (任選 1 對手寶可夢 × 自身草能量數 ×20，不計弱抗 — 新 resolver wave6-snipe-any-opp-flat)</li>
+          <li>雪絨蛾｜冰凍羽擊 (對手所有寶可夢各 20 + 對手戰鬥場睡眠，不計弱抗)</li>
+          <li>千面避役｜擊斃 (自動選雙方場上 HP 最低寶可夢直接昏厥，自身除外)</li>
+          <li>I 標 Wave 1+2+3+4+5+6 累計：16+11+61+35+9+10 = 142 張寶可夢招式 effect 實裝</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.55</span> I 標 Wave 5 — Meta 卡 9 張實裝</summary>
         <ul>
           <li>流氓鱷ex｜窮追不捨 (80 + 對手下回合無法撤退) / 強力啃咬 (140 + 自身有道具 +140)</li>
