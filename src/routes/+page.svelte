@@ -123,6 +123,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.45</span> 對戰演練 — 1024×576 解析度模式（auto-fit zoom + 手動切換）</summary>
+        <ul>
+          <li>玩家反映 1024×576 螢幕容納不下原 tablet-layout（設計基準 1280×720），加 CSS zoom 機制</li>
+          <li>新增「自動」模式：依視窗大小自動算 ratio = min(w/1280, h/720)，下限 0.6；&gt;0.97 則維持 100%；1024×576 自動會落在約 80%</li>
+          <li>新增手動切換：100% / 90% / 80% / 75% 五檔可選；存入 localStorage 跨 session 保留</li>
+          <li>UI：對戰演練畫面右上角設定 ⚙️ → 新增「🖥️ 畫面縮放」區塊；下拉選單 + 即時預覽當前縮放比例</li>
+          <li>實作：CSS zoom 屬性套用於 .battle-root（modern Chrome/Safari/Edge/Firefox 126+ 都支援）；modal 內容也會跟著縮放，互動座標由瀏覽器自動轉換</li>
+          <li>不影響桌機（≥1280×720）使用者；手機直式繼續走 MobilePortraitBattle 元件</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.44</span> SEO 完整化 — Meta tags / sitemap / robots</summary>
         <ul>
           <li>src/app.html 補完整 SEO + 社群預覽 meta（保留現有 PWA 設定）：keywords / robots / canonical / og:type/title/description/url/locale/site_name / twitter:card 等</li>

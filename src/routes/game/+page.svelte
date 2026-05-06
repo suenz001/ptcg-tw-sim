@@ -149,7 +149,45 @@
   let isPortraitMobile = $state(false);
   let isTabletLayout = $state(false);
 
+  // ── v2.45 解析度模式（Leon 反映 1024×576 螢幕容納不下 tablet-layout）──────────
+  // 模式：
+  //   'auto'  → 依視窗大小自動算 zoom（小於 1280×720 時 fit-to-window）
+  //   '100' / '90' / '80' / '75' → 強制套用該百分比 zoom
+  // gameZoom 為實際應用的數值（0.6 ~ 1）；存入 localStorage 跨 session 保留
+  let resolutionMode = $state<'auto' | '100' | '90' | '80' | '75'>('auto');
+  let gameZoom = $state(1);
+
+  function recomputeZoom() {
+    if (typeof window === 'undefined') return;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (resolutionMode === 'auto') {
+      // 手機 portrait 走另一個元件，不縮放
+      if (isPortraitMobile) { gameZoom = 1; return; }
+      // 設計基準：tablet-layout 最佳於 1280×720。低於此尺寸線性縮小到 0.6 下限
+      const targetW = 1280, targetH = 720;
+      const ratio = Math.min(w / targetW, h / targetH, 1);
+      gameZoom = ratio < 0.97 ? Math.max(0.6, +ratio.toFixed(3)) : 1;
+    } else {
+      gameZoom = parseInt(resolutionMode, 10) / 100;
+    }
+  }
+
+  function setResolutionMode(mode: 'auto' | '100' | '90' | '80' | '75') {
+    resolutionMode = mode;
+    try { localStorage.setItem('ptcgGameResolutionMode', mode); } catch {}
+    recomputeZoom();
+  }
+
   onMount(() => {
+    // 載入 localStorage 設定
+    try {
+      const saved = localStorage.getItem('ptcgGameResolutionMode');
+      if (saved && ['auto','100','90','80','75'].includes(saved)) {
+        resolutionMode = saved as 'auto' | '100' | '90' | '80' | '75';
+      }
+    } catch {}
+
     const onResize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -164,6 +202,9 @@
       // 若寬 <= 1366 或是高 <= 850，且不是極小手機，就開啟 tablet-layout 縮小配置
       // 以免 1366x768 或 iPad 橫屏時被擠斷
       isTabletLayout = !isPortraitMobile && !isLandscapeMobile && (w <= 1366 || h <= 850);
+      
+      // v2.45：依視窗 / 設定重算 game zoom
+      recomputeZoom();
     };
     
     window.addEventListener('resize', onResize);
@@ -2828,7 +2869,7 @@
      正式對戰（Play Mat 佈局） — setup 和 playing 共用此畫面
   ══════════════════════════════════════════════════════════════════════ -->
 {:else}
-<div class="battle-root" class:tablet-layout={isTabletLayout}>
+<div class="battle-root" class:tablet-layout={isTabletLayout} class:zoomed={gameZoom !== 1} style="--game-zoom: {gameZoom};">
 
   <!-- v2.286 Phase 2-4：手機直式（≤600px portrait）切換到 MobilePortraitBattle 元件。
        桌機 / 平板 / 手機橫屏走原 layout。setup + playing 都切（MobilePortraitBattle 內部
@@ -4315,6 +4356,25 @@
             </div>
           {/if}
         </div>
+
+        <!-- v2.45 解析度模式 — 為 1024×576 等小螢幕玩家加 fit-to-window 縮放 -->
+        <div class="settings-section">
+          <h4>🖥️ 畫面縮放</h4>
+          <div class="setting-row">
+            <label for="res-mode">解析度模式：</label>
+            <select id="res-mode" value={resolutionMode} onchange={(e) => setResolutionMode(e.currentTarget.value as 'auto' | '100' | '90' | '80' | '75')}>
+              <option value="auto">自動（推薦）</option>
+              <option value="100">100% — 原始尺寸</option>
+              <option value="90">90% — 微縮</option>
+              <option value="80">80% — 1024×576 適用</option>
+              <option value="75">75% — 更小視窗</option>
+            </select>
+          </div>
+          <div class="setting-hint">
+            目前縮放：{Math.round(gameZoom * 100)}%
+            ・自動模式會依視窗大小自動套用，1024×576 約落在 80%
+          </div>
+        </div>
       </div>
     </div>
   {/if}
@@ -5042,6 +5102,15 @@
   
   /* Settings Modal CSS */
   .settings-modal { max-width: 500px; padding: 2rem; }
+  .setting-hint { font-size: 0.78rem; color: #aac; margin-top: 0.4rem; padding-left: 0.5rem; }
+
+  /* v2.45 解析度模式 — 用 CSS zoom 縮小整個 .battle-root */
+  /* zoom 屬性 modern browser 都支援（Chrome/Safari/Edge/Firefox 126+），
+     效果：等比縮小整個 layout 含 modal 內容；rendering 對齊 sub-pixel 但仍清晰。
+     遊戲設計基準是 1280×720（tablet-layout）；對 1024×576 玩家設 80% 即 1024×576 視覺尺寸 = 1280×720 設計尺寸，完美適配。 */
+  :global(.battle-root.zoomed) {
+    zoom: var(--game-zoom, 1);
+  }
   .settings-title { font-size: 1.5rem; color: #aaffaa; margin-top: 0; margin-bottom: 1rem; border-bottom: 1px solid #3a5a3a; padding-bottom: 0.5rem; }
   .settings-section { margin-bottom: 1.5rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid #2a4a2a; }
   .settings-section h4 { color: #f0f0f0; margin-top: 0; margin-bottom: 1rem; font-size: 1.1rem; }
