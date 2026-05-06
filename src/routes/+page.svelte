@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.77</span> H/I/J 標殘餘清理（6 張，不含 G 標）</summary>
+        <ul>
+          <li>之前 audit 因字符邊界 / 跨行字串誤報 + 當波 deferred 的殘餘卡</li>
+          <li>H：厄鬼椪 碧草面具ex 萬葉陣雨（雙方戰鬥能量×30）</li>
+          <li>I：超級雷電獸ex 狂暴噴射(若希望棄全+130)/小霞的暴鯉龍 嘩啦嘩啦恐慌(牌庫頂7棄+小霞×70)/吃吼霸ex 極限俯衝(120+希望120+自殘50)/佛烈托斯 鐵之震動(自方鋼能量任移動 [TODO engine])</li>
+          <li>J：超能妙喵 戲法舞步(對手戰鬥1能量改備戰)</li>
+          <li>纏紅鶴ex [ex規則]：scraper artifact，不實裝（不是真招式）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.76</span> H 標 Wave 3 — 複雜批收尾（28 張）</summary>
         <ul>
           <li>‌喵喵亂抓(zero-width name) / 骨紋巨聲鱷純樸 / 帝牙海獅凍結獠牙 / 皮可西揮指(複製對手戰鬥場招) / 艾姆利多神之爆炸(由克希+亞克諾姆條件) / 克雷色利亞弦月光芒(翻獎賞)</li>
