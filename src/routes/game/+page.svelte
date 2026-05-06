@@ -2072,8 +2072,10 @@
       return;
     }
 
-    // 雙方 P1/P2 都 ready → 由坐 P1 的 client 觸發 startGame
-    if (room.status === 'lobby' && bothPlayersReady(room.seats) && idx === 0 && poolReady) {
+    // v2.72：雙方 P1/P2 都 ready → P1 或 P2 任一 client 都可觸發 startGame
+    //   原本只 P1 觸發 → host 關瀏覽器後 P2 卡死；現改 idx >= 0（任一玩家），
+    //   並由 startGame 內部 Firestore transaction 防 race（兩方同時寫只有一方 commit）。
+    if (room.status === 'lobby' && bothPlayersReady(room.seats) && (idx === 0 || idx === 1) && poolReady) {
       checkAndStartOnlineGame();
     }
   }

@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.72</span> 修殭屍房間 — host 離線後 P2 也能觸發 startGame</summary>
+        <ul>
+          <li>問題：原本只 P1（seat 0）client 在「雙方 ready」時觸發 startGame；如果 P1 直接關瀏覽器，P2 永遠卡在「雙方已準備，遊戲即將開始⋯」</li>
+          <li>修法：放寬 game/+page.svelte 觸發條件 idx === 0 → idx === 0 || idx === 1，P1/P2 任一方都可呼叫 startGame</li>
+          <li>room.ts startGame 改用 Firestore runTransaction 內部 read-then-write，確保兩方同時寫時只有一方 commit（status==='lobby' && !gameState 雙重 guard）；對方 onSnapshot 收到 winner 的 gameState 自動同步</li>
+          <li>不需要重建索引或部署 rules</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.71</span> 修玩家回饋系統 — 拿掉 orderBy 避開索引需求</summary>
         <ul>
           <li>v2.7 上線後玩家端 console 回報 FirebaseError："The query requires an index"</li>

@@ -19,14 +19,16 @@
  *   deckEntries: DeckEntry[] | null           ← p1/p2 才會用；spectator 永遠 null
  *   ready: boolean                            ← 只 p1/p2 有意義；spectator 永遠 false
  *
- * 雙方 P1/P2 都 ready 時，由「目前坐 P1 的玩家 client」觸發 startGame（status 從 lobby → playing）。
- * 用 status==='lobby' && gameState==null 做雙重 guard 避免 race。
+ * 雙方 P1/P2 都 ready 時，P1 或 P2 任一 client 都可觸發 startGame（status 從 lobby → playing）。
+ * v2.72 起 startGame 用 Firestore runTransaction，內部 read-then-write 確保只有一方寫入 gameState；
+ * 解決 host (P1) 關瀏覽器後 P2 卡死的殭屍房間 bug。
  */
 
 import { db, auth } from '$lib/firebase';
 import {
   doc, setDoc, updateDoc, onSnapshot, getDoc, serverTimestamp,
   collection, query, where, limit, orderBy, addDoc, deleteDoc,
+  runTransaction,
 } from 'firebase/firestore';
 import type { GameState } from './types';
 
@@ -324,17 +326,41 @@ export async function leaveRoom(roomCode: string): Promise<void> {
   }
 }
 
-/** 啟動遊戲（坐 P1 的客戶端在雙方 ready 後呼叫） */
+/**
+ * 啟動遊戲。
+ *
+ * v2.72 改：原本只 P1 client 呼叫；若 host (P1) 直接關瀏覽器，P2 永遠卡在
+ *   「雙方已準備，遊戲即將開始⋯」殭屍狀態。改成 P1/P2 任一方都可呼叫，
+ *   用 Firestore transaction 防止雙方同時寫造成不同 gameState 競爭：
+ *   tx 內 read 後再 check status==='lobby' && !gameState，否則 abort。
+ *
+ * 若回傳 false 代表 transaction abort（通常是對方已先寫入 gameState），
+ * 呼叫端不必再做事，onSnapshot 會帶來最終狀態。
+ */
 export async function startGame(
   roomCode: string,
   gameState: GameState,
-): Promise<void> {
+): Promise<boolean> {
   const ref = doc(db, 'rooms', roomCode.toUpperCase());
-  await updateDoc(ref, {
-    gameState: JSON.parse(JSON.stringify(gameState)),
-    status: 'playing',
-    updatedAt: serverTimestamp(),
-  });
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return false;
+      const data = snap.data() as RoomData;
+      // 已被對方先寫過 → abort，避免覆蓋對方的 gameState
+      if (data.status !== 'lobby') return false;
+      if (data.gameState) return false;
+      tx.update(ref, {
+        gameState: JSON.parse(JSON.stringify(gameState)),
+        status: 'playing',
+        updatedAt: serverTimestamp(),
+      });
+      return true;
+    });
+  } catch (err) {
+    console.error('startGame transaction failed:', err);
+    return false;
+  }
 }
 
 /** 監聽房間狀態，回傳取消訂閱函式 */
