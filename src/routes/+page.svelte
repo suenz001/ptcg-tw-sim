@@ -123,6 +123,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.48</span> 實裝仙子伊布ex 兩招（H 標）</summary>
+        <ul>
+          <li>魔法魅惑 [PCC] 160 點傷害；下個對手回合，受到此招的寶可夢使用招式傷害「-100」 — 復用 defNextAtkReducePost(100)，對手換場 → clearActiveEffects 清旗標</li>
+          <li>天仙石 [WLP] 0 點傷害；選 0~2 隻對手備戰寶可夢，連附加卡（能量/道具/進化來源）全部放回對手牌庫並重洗</li>
+          <li>天仙石 anti-spam gate：使用後此 attacker 下回合無法再用「天仙石」（per-attacker via blockedAttackNamesNextTurn，跟「烈火爆進」同 pattern）</li>
+          <li>清除回 deck 時所有臨時狀態（damage / 異常 / 各種旗標）都清成 fresh，evolvedFromStack 也一併還原</li>
+          <li>檔案：effects.ts 在「泥巴魚｜飛撲圈套」附近插入 regPre/regPost + sylveon-skystone-bounce resolver</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.471</span> Bug fix — 麻麻鰻電氣發電機 / 勾帕路翁ex金屬之路 多隻只能發動 1 次</summary>
         <ul>
           <li>玩家回報：場上有複數的麻麻鰻時，特性「電氣發電機」仍然只能發動一次（應該每隻 1 次，總共 N 次）</li>

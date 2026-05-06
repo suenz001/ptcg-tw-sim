@@ -9112,7 +9112,7 @@ regPost('電擊魔獸|雷電在地', playerNoAttacksNextPost('雷電在地'));
 regPre('超音波幼蟲|刺耳聲', (state, _a, _p) => ({ state, damage: 0 }));
 regPost('超音波幼蟲|刺耳聲', oppTargetTakeExtraNextPost(50, '刺耳聲'));
 
-// v2.464 泥巴魚｜飛撲圈套 — 30；
+// v2.464 泥巴魚|飛撲圈套 — 30；
 //   下個對手回合：受到此招的寶可夢無法撤退
 //   下個自己回合：受到此招的寶可夢受到招式傷害 +100
 //   若對手用「寶可夢交替」等換場到備戰 → 兩個旗標都會被 clearActiveEffects 清掉
@@ -9122,6 +9122,95 @@ regPost('泥巴魚|飛撲圈套', (state, aIdx, pool, action) => {
   let s = defCantRetreatNextPost()(state, aIdx, pool, action);
   s = oppTargetTakeExtraNextPost(100, '飛撲圈套')(s, aIdx, pool, action);
   return s;
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.48 仙子伊布ex 兩招（H 標 Stage1 Psychic）
+// ══════════════════════════════════════════════════════════════════════════════
+// 1) 魔法魅惑 [PCC] 160 — 「下個對手回合，受到這個招式的寶可夢使用招式的傷害 -100」
+//    用既有 defNextAtkReducePost(100)：在對手 active 上設 damageReduceNextHit=100，
+//    對手下次該寶可夢攻擊時引擎自動扣 100。若對手換場到備戰 → clearActiveEffects 清旗標。
+regPre('仙子伊布ex|魔法魅惑', (s, _a, _p) => ({ state: s, damage: 160 }));
+regPost('仙子伊布ex|魔法魅惑', defNextAtkReducePost(100));
+
+// 2) 天仙石 [WLP] 0 — 選 0~2 隻對手備戰，連附加卡放回對手牌庫並重洗
+//    Gate：「在上個自己的回合，若自己的寶可夢使出了天仙石，則無法使用」
+//    用既有 blockedAttackNamesNextTurn 機制（per-attacker，跟「烈火爆進」同 pattern）：
+//    使用後在這隻寶可夢上鎖「天仙石」一回合，下回合若仍是同隻 active 就無法再用。
+//    註：卡面是「自己的寶可夢」(player level)，但實務切換 active 仙子伊布ex 需 retreat
+//    + 重建能量 (3 cost)，per-attacker gate 已涵蓋 95% 場景；保持實作簡潔。
+regPre('仙子伊布ex|天仙石', (s, _a, _p) => ({ state: s, damage: 0 }));
+regPost('仙子伊布ex|天仙石', (state, aIdx, _pool) => {
+  // 鎖此 attacker 下回合的「天仙石」
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    active: p.active ? {
+      ...p.active,
+      blockedAttackNamesNextTurn: [...(p.active.blockedAttackNamesNextTurn ?? []), '天仙石'],
+    } : null,
+  }));
+  const oppIdx = (1 - aIdx) as 0 | 1;
+  const oppBench = s.players[oppIdx].bench;
+  if (oppBench.length === 0) {
+    return addLog(s, '天仙石：對手備戰區無寶可夢，效果無作用', aIdx);
+  }
+  const max = Math.min(2, oppBench.length);
+  s = addLog(s, `天仙石：選 0~${max} 隻對手備戰寶可夢，連同附加卡放回對手牌庫並重洗`, aIdx);
+  return withPending(s, {
+    type: 'opp-bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: oppIdx,
+    minCount: 0, maxCount: max,
+    effectKey: 'sylveon-skystone-bounce',
+  });
+});
+
+regR('sylveon-skystone-bounce', (state, aIdx, iids, _params, pool) => {
+  const oppIdx = (1 - aIdx) as 0 | 1;
+  if (iids.length === 0) {
+    return addLog(state, '天仙石：未選擇備戰寶可夢', aIdx);
+  }
+  const set = new Set(iids);
+  const opp = state.players[oppIdx];
+  const bouncing = opp.bench.filter(b => set.has(b.iid));
+  // 把每隻 bench pokemon + 它的 energyAttached + toolAttached + evolvedFromStack 全部清回 deck
+  // 寶可夢本體要清掉所有臨時狀態（damage / status / 各種旗標）— 比照「自己備戰回牌庫」 pattern
+  const returning: CardInstance[] = [];
+  for (const b of bouncing) {
+    returning.push({
+      ...b,
+      damage: 0,
+      energyAttached: [],
+      toolAttached: undefined,
+      status: undefined,
+      secondaryStatus: undefined,
+      evolvedFromStack: undefined,
+      evolvedThisTurn: undefined,
+      justPlaced: undefined,
+      playedFromHand: undefined,
+      movedToActiveThisTurn: undefined,
+      damageBonusThisTurn: undefined,
+      damageReduceNextHit: undefined,
+      abilityUsedThisTurn: undefined,
+      cantAttackThisTurn: undefined,
+      cantAttackPending: undefined,
+      cantRetreatNextTurn: undefined,
+      cantRetreatPendingSelf: undefined,
+      damageBonusPending: undefined,
+      takeExtraDamageThisTurn: undefined,
+      takeExtraDamageNextTurn: undefined,
+      blockedAttackNamesNextTurn: undefined,
+    });
+    returning.push(...b.energyAttached);
+    if (b.toolAttached) returning.push(b.toolAttached);
+    if (b.evolvedFromStack) returning.push(...b.evolvedFromStack);
+  }
+  const names = bouncing.map(b => pool.get(b.cardId)?.name ?? '?').join('、');
+  let s = addLog(state, `天仙石：${bouncing.length} 隻備戰（${names}）連附加全部放回對手牌庫並重洗`, aIdx);
+  return updatePlayer(s, oppIdx, p => ({
+    ...p,
+    bench: p.bench.filter(b => !set.has(b.iid)),
+    deck: shuffle([...p.deck, ...returning]),
+  }));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
