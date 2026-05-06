@@ -61,6 +61,12 @@ export interface RoomData {
   schemaVersion: number;
   createdAt?: unknown;
   updatedAt?: unknown;
+  /**
+   * v2.73 心跳機制：每個座位玩家 client 每 15s 更新自己那格時間戳；
+   * 沒在房內的玩家不會更新 → 對手 lastSeenAt 老舊代表離線；
+   * room.updatedAt 也會被 heartbeat bump，所以 updatedAt > 5min 即代表整房沒人活著。
+   */
+  heartbeats?: { [seatIdx: number]: unknown };
 }
 
 export interface Room extends RoomData {
@@ -388,6 +394,35 @@ export function subscribeRoom(
  */
 const ROOM_STALE_THRESHOLD_MS = 10 * 60 * 1000;  // 10 分鐘
 
+/**
+ * v2.73：清掉非 lobby 的殭屍房（playing/ended，updatedAt > 5min）。
+ * 邏輯：subscribeOpenRooms 主 query 只看 lobby；playing 房不在玩家瀏覽清單，
+ *   但若整房沒人持續 heartbeat，updatedAt 老化 → 視為殭屍房。
+ *   此處用 getDocs 一次性掃，刪除 5 分鐘內無 heartbeat 的非 lobby 房。
+ *   每次玩家進大廳會被觸發一次（fire-and-forget），不影響大廳渲染。
+ */
+async function cleanupStaleNonLobbyRooms(): Promise<void> {
+  const now = Date.now();
+  const threshold = HEARTBEAT_STALE_MS;
+  // 不能用 where('status','!=','lobby')（Firestore 不支援單一 != 在組合 query）
+  // 改成兩條：playing / ended
+  const { getDocs } = await import('firebase/firestore');
+  for (const status of ['playing', 'ended'] as const) {
+    try {
+      const q = query(collection(db, 'rooms'), where('status', '==', status), limit(50));
+      const snap = await getDocs(q);
+      snap.forEach(d => {
+        const data = d.data() as RoomData;
+        const updatedAtSec = (data.updatedAt as { seconds?: number } | null | undefined)?.seconds;
+        if (typeof updatedAtSec !== 'number') return;
+        if (now - updatedAtSec * 1000 > threshold) {
+          deleteDoc(doc(db, 'rooms', d.id)).catch(() => { /* rules deny → ignore */ });
+        }
+      });
+    } catch { /* ignore */ }
+  }
+}
+
 export function subscribeOpenRooms(
   callback: (rooms: Room[]) => void,
   onError?: (err: Error) => void,
@@ -430,6 +465,9 @@ export function subscribeOpenRooms(
       for (const roomId of staleRoomIds) {
         deleteDoc(doc(db, 'rooms', roomId)).catch(() => { /* ignore */ });
       }
+      // v2.73：另外掃 playing/ended 殭屍房（updatedAt > 5min，含心跳停止情況）
+      //   不在 onSnapshot 主流程，每次 lobby 重整時 fire-and-forget 一次 query
+      cleanupStaleNonLobbyRooms().catch(() => { /* ignore */ });
     },
     err => {
       console.error('[Room] list error:', err);
@@ -437,6 +475,52 @@ export function subscribeOpenRooms(
       callback([]);
     }
   );
+}
+
+// ── v2.73 殭屍房間心跳機制 ─────────────────────────────────────────────
+/**
+ * 「無心跳即殭屍」門檻：超過此時間沒收到對手心跳 → UI 視為離線。
+ * 5 分鐘比較保守，避免短暫網路抖動誤判。
+ */
+export const HEARTBEAT_STALE_MS = 5 * 60 * 1000;
+
+/**
+ * 心跳寫入：玩家 client 在房內時每 15 秒呼叫一次，更新
+ *   1) seats.{idx}.lastSeenAt 邏輯位置（透過 heartbeats.{idx} 實現，
+ *      避免 array element update 麻煩）
+ *   2) room.updatedAt（讓 lobby 殭屍掃也能依 updatedAt 判定整房 alive）
+ *
+ * @param roomCode 房號
+ * @param seatIdx 自己的 seat index（0=P1, 1=P2, 2~9=spectator）
+ */
+export async function heartbeat(roomCode: string, seatIdx: number): Promise<void> {
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  try {
+    await updateDoc(ref, {
+      [`heartbeats.${seatIdx}`]: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (err) {
+    // rules 拒絕（房間已被刪 / 我已被踢）— 不噴錯，靜默
+    console.warn('[heartbeat] failed (room may have been removed):', err);
+  }
+}
+
+/**
+ * 判定指定座位是否「心跳過期」。
+ *   - 沒 heartbeats 紀錄（舊版房 / 剛建立還沒第一次 heartbeat）→ false（不視為 stale）
+ *   - 有紀錄但超過 thresholdMs 沒更新 → true
+ */
+export function isSeatStale(
+  roomData: RoomData,
+  seatIdx: number,
+  thresholdMs: number = HEARTBEAT_STALE_MS,
+): boolean {
+  const hb = roomData.heartbeats?.[seatIdx];
+  if (!hb) return false;
+  const hbSec = (hb as { seconds?: number } | null | undefined)?.seconds;
+  if (typeof hbSec !== 'number') return false;
+  return Date.now() - hbSec * 1000 > thresholdMs;
 }
 
 /** 推送最新 GameState 到 Firestore（遊戲中由 P1/P2 發起 action 後使用） */

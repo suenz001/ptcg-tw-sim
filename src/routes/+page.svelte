@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.73</span> 殭屍房間心跳偵測 + 主動清理（前後台同步）</summary>
+        <ul>
+          <li>v2.72 改成 P1/P2 都能觸發 startGame 沒解決根本問題：對手離線就算硬開遊戲也沒得玩。需要的是房間自動清理機制</li>
+          <li>RoomData 加 heartbeats: { [seatIdx]: Timestamp } 欄位；玩家在房內 client 每 15 秒寫 heartbeats.{my_idx} = serverTimestamp() + bump room.updatedAt</li>
+          <li>對手心跳超過 5 分鐘沒更新 → UI 跳警示橫幅「對方已離線超過 5 分鐘」+ 紅色「解散房間」按鈕，玩家手動清掉殭屍房</li>
+          <li>subscribeOpenRooms 加掃 playing/ended 殭屍房：每次玩家進大廳，fire-and-forget 一次掃 status=playing/ended 中 updatedAt > 5min 的房，發 deleteDoc 清掉</li>
+          <li>firestore.rules 放寬：rooms delete 條件加上「任何 auth 用戶可刪 updatedAt > 5min 的房（不分狀態）」；解決 host 關瀏覽器後 playing 房永遠殘留問題</li>
+          <li>房內 leaveRoom / onDestroy 自動 stopHeartbeat 避免離開後還在背景發送請求</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.72</span> 修殭屍房間 — host 離線後 P2 也能觸發 startGame</summary>
         <ul>
           <li>問題：原本只 P1（seat 0）client 在「雙方 ready」時觸發 startGame；如果 P1 直接關瀏覽器，P2 永遠卡在「雙方已準備，遊戲即將開始⋯」</li>

@@ -28,6 +28,7 @@
     takeSeat, setSeatDeck, setSeatReady, startGame, leaveRoom,
     findMySeatIdx, bothPlayersReady, countDeckCards,
     sendMessage, subscribeMessages,
+    heartbeat, isSeatStale, HEARTBEAT_STALE_MS,
     type Room, type Seat, type ChatMessage,
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
@@ -83,6 +84,8 @@
   /** v2.269：當前座位索引 (0..9)；觀戰位 ≥2 */
   let mySeatIdx = $state<number>(-1);
   let unsubRoom:    (() => void) | null = null;
+  // v2.73 殭屍房間心跳機制
+  let heartbeatTimer: number | null = null;
   // 可加入的開放房間列表（onlineStep='join' 時即時訂閱）
   let openRooms = $state<Room[]>([]);
   let openRoomsErr = $state('');
@@ -1624,6 +1627,7 @@
   });
 
   onDestroy(() => {
+    stopHeartbeat();
     unsubRoom?.();
     unsubOpenRooms?.();
     if (aiTimer !== null) clearTimeout(aiTimer);
@@ -2043,9 +2047,60 @@
     finally { onlineLoading = false; }
   }
 
+  // v2.73 殭屍房間心跳機制：玩家在房內時每 15s 寫 lastSeenAt 到 Firestore
+  function startHeartbeat() {
+    stopHeartbeat();
+    const tick = () => {
+      if (!roomCode || !roomData || !myUid) return;
+      const idx = findMySeatIdx(roomData.seats, myUid);
+      if (idx < 0) return;
+      heartbeat(roomCode, idx).catch(() => { /* silent */ });
+    };
+    tick();
+    heartbeatTimer = window.setInterval(tick, 15000);
+  }
+  function stopHeartbeat() {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+
+  let oppStale = $derived((() => {
+    if (!roomData) return false;
+    const idx = mySeatIdx;
+    if (idx !== 0 && idx !== 1) return false;
+    const oppIdx = (1 - idx) as 0 | 1;
+    const oppSeat = roomData.seats[oppIdx];
+    if (!oppSeat?.uid) return false;
+    return isSeatStale(roomData, oppIdx, HEARTBEAT_STALE_MS);
+  })());
+
+  async function dismissZombieRoom() {
+    if (!roomCode || !roomData) return;
+    if (!confirm('確定要解散此房間嗎？\n\n偵測到對方已離線超過 5 分鐘，房間將被刪除，雙方都會回到大廳。')) return;
+    onlineLoading = true;
+    try {
+      const { deleteDoc, doc: docRef } = await import('firebase/firestore');
+      const { db } = await import('$lib/firebase');
+      await deleteDoc(docRef(db, 'rooms', roomCode.toUpperCase()));
+      stopHeartbeat();
+      unsubRoom?.(); unsubRoom = null;
+      unsubMessages?.(); unsubMessages = null;
+      game = null; roomCode = ''; roomData = null;
+      onlineStep = 'menu';
+      mode = null;
+    } catch (err: any) {
+      onlineError = err?.message ?? '解散房間失敗';
+    } finally {
+      onlineLoading = false;
+    }
+  }
+
   function startRoomSubscription() {
     unsubRoom?.();
     unsubRoom = subscribeRoom(roomCode, handleRoomUpdate);
+    startHeartbeat();
     // v2.272：訂閱聊天訊息
     unsubMessages?.();
     unsubMessages = subscribeMessages(roomCode, msgs => {
@@ -2136,6 +2191,7 @@
   async function leaveOnlineGame() {
     // v2.274：先從 Firestore 移除自己的座位（不阻擋；失敗也繼續清 client state）
     if (roomCode) {
+      stopHeartbeat();
       try { await leaveRoom(roomCode); }
       catch (e) { console.warn('[leaveRoom] failed:', e); }
     }
@@ -2510,7 +2566,37 @@
 </script>
 
 <svelte:head>
-  {@html '<style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }</style>'}
+  {@html '<style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }
+  /* v2.73 殭屍房警示 banner */
+  .zombie-warning {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: linear-gradient(90deg, rgba(255, 80, 80, 0.15), rgba(255, 140, 80, 0.12));
+    border: 1px solid rgba(255, 100, 100, 0.4);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin: 0.75rem 0;
+    color: #fff;
+  }
+  .zw-icon { font-size: 1.8rem; flex-shrink: 0; }
+  .zw-text { flex: 1; line-height: 1.45; }
+  .zw-text strong { color: #ffb3b3; font-size: 1.05rem; }
+  .zw-sub { font-size: 0.85rem; color: rgba(255, 255, 255, 0.7); margin-top: 0.2rem; }
+  .zw-btn {
+    background: #c0392b !important;
+    color: #fff !important;
+    border: none;
+    padding: 0.6rem 1.1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .zw-btn:hover { background: #a83121 !important; }
+  .zw-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+</style>'}
 </svelte:head>
 
 <svelte:window onkeydown={onGlobalKey} onpointermove={onWindowPointerMove} onpointerup={onWindowPointerUp} />
@@ -2699,6 +2785,20 @@
           </div>
           <button class="btn-secondary" onclick={leaveOnlineGame}>離開房間</button>
         </div>
+
+        <!-- v2.73 殭屍房警示 + 解散按鈕 -->
+        {#if oppStale}
+          <div class="zombie-warning">
+            <div class="zw-icon">⚠️</div>
+            <div class="zw-text">
+              <strong>對方已離線超過 5 分鐘</strong>
+              <div class="zw-sub">可能是關閉了瀏覽器或斷線。建議解散房間，雙方都會回到大廳。</div>
+            </div>
+            <button class="btn-danger zw-btn" onclick={dismissZombieRoom} disabled={onlineLoading}>
+              解散房間
+            </button>
+          </div>
+        {/if}
 
         {#if roomData}
           <div class="seat-area">
