@@ -803,6 +803,10 @@ export function canAffordAttack(
   attackerIdx?: 0 | 1,
   attackName?: string,
 ): boolean {
+  // v2.78 鼓擊 — 招式所需 +N【無】
+  if (pokemon.attackCostIncreaseColorlessThisTurn && pokemon.attackCostIncreaseColorlessThisTurn > 0) {
+    cost = [...cost, ...Array(pokemon.attackCostIncreaseColorlessThisTurn).fill('Colorless' as EnergyType)];
+  }
   // v2.127 酋雷姆｜反等離子 — 對手棄牌區若有「阿克羅瑪」相關卡，三重冰霜成本改為 1 顆【無】
   if (state && attackName) {
     const attackerCard = pool.get(pokemon.cardId);
@@ -1796,6 +1800,10 @@ function handlePlaying(
     }
     // v2.277 Wave 3：套用 ABILITY_RETREAT_MOD（一身輕 / 溶化流動 / 鋼之橋 / 森林秘道 / 大網）
     retreatCost = applyAbilityRetreatMod(state, attacker.active, activeCard, aIdx, retreatCost, pool);
+    // v2.78 鼓擊 — 撤退所需 +N【無】
+    if (attacker.active.retreatCostIncreaseThisTurn && attacker.active.retreatCostIncreaseThisTurn > 0) {
+      retreatCost += attacker.active.retreatCostIncreaseThisTurn;
+    }
     // v2.69：撤退成本用「能量單位」比對，不是卡片張數。火箭隊能量 1 張 = 2 units。
     // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
     if (totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx) < retreatCost) return state;
@@ -1985,9 +1993,22 @@ function handlePlaying(
         attacker.ancientSupporterPlayedThisTurn = true;
       }
     }
+    // v2.78 莊嚴之劍 — 記錄支援者 tags 到 GameState.supporterTagsUsedThisTurn[aIdx]
+    let v278SupTagsToAdd: string[] = [];
+    if (trainerCard.subtype === 'Supporter' && (trainerCard.tags ?? []).length > 0) {
+      v278SupTagsToAdd = trainerCard.tags!;
+    }
     players[aIdx] = attacker;
 
     let newState: GameState = { ...state, players };
+    if (v278SupTagsToAdd.length > 0) {
+      const cur = newState.supporterTagsUsedThisTurn ?? [[], []];
+      const newSup: [string[], string[]] = [
+        aIdx === 0 ? [...cur[0], ...v278SupTagsToAdd] : cur[0],
+        aIdx === 1 ? [...cur[1], ...v278SupTagsToAdd] : cur[1],
+      ];
+      newState = { ...newState, supporterTagsUsedThisTurn: newSup };
+    }
 
     const effectFn = TRAINER_EFFECTS.get(trainerCard.name);
     if (effectFn) {
@@ -2531,6 +2552,23 @@ function handlePlaying(
       };
       afterAttach = { ...afterAttach, players: newPlayers };
     }
+    // v2.78 引夢貘人｜白日夢 — defender 有 endTurnOnOppAttachEnergyThisTurn → 對手回合結束
+    if (target.endTurnOnOppAttachEnergyThisTurn) {
+      const newPlayers2 = [...afterAttach.players] as [PlayerState, PlayerState];
+      const updateInst = (c: CardInstance): CardInstance => {
+        if (c.iid !== target!.iid) return c;
+        const n = { ...c };
+        delete n.endTurnOnOppAttachEnergyThisTurn;
+        return n;
+      };
+      newPlayers2[aIdx] = {
+        ...newPlayers2[aIdx],
+        active: newPlayers2[aIdx].active && newPlayers2[aIdx].active!.iid === target.iid ? updateInst(newPlayers2[aIdx].active!) : newPlayers2[aIdx].active,
+        bench: newPlayers2[aIdx].bench.map(updateInst),
+      };
+      afterAttach = addLog({ ...afterAttach, players: newPlayers2 }, '[白日夢]對手附能量於受招式者 → 對手回合結束（一次性，flag 清除）', aIdx);
+      return applyAction(afterAttach, { type: 'END_TURN' }, pool);
+    }
     return clearFestivalVenueProtectedStatuses(afterAttach, pool);
   }
 
@@ -2701,6 +2739,11 @@ function handlePlaying(
 
     // 確認能量足夠（v2.103 傳 state+aIdx 讓 canAffordAttack 能判定大竺葵繁茂 / 燃火能量倍率）
     // v2.127 多傳 attack.name 讓 canAffordAttack 能判定 酋雷姆｜反等離子 條件式減費
+    // v2.78 凍結獠牙 — 全場低能量鎖招（player-level）
+    if (state.lowEnergyCantAttackThisTurn?.[aIdx]
+        && attacker.active.energyAttached.length <= 2) {
+      return addLog(state, '[凍結獠牙]能量 ≤ 2 的寶可夢無法使用招式（鎖在 lowEnergyCantAttackThisTurn）', aIdx);
+    }
     if (!canAffordAttack(attacker.active, attack.cost, pool, state, aIdx, attack.name)) return state;
 
     // ── 招式前置效果（修改傷害 / 丟棄能量等）────────────────────────────────
@@ -2881,6 +2924,10 @@ function handlePlaying(
     if (defenderCard.pokemonType === 'Dragon' && hasFairyZoneField(workingState, aIdx, pool)) {
       effectiveWeaknessType = 'Psychic';
     }
+    // v2.78 智揮猩｜掌握弱點 — 弱點屬性改為指定值（如 'Colorless'）
+    if (defender.active.weaknessOverrideTypeThisTurn) {
+      effectiveWeaknessType = defender.active.weaknessOverrideTypeThisTurn;
+    }
     const weaknessDisabled = !!defender.active.weaknessDisabledThisTurn;
     // v2.388 小碎鑽｜雙重屬性 — 場上時改為【鬥】+【超】2 種屬性。
     //   對方招式屬性 == 鬥或超 都觸發弱點 / 抵抗力。
@@ -2892,6 +2939,17 @@ function handlePlaying(
     if (!skipWeakRes && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType
         && attackerEffectiveTypes.includes(effectiveWeaknessType)) {
       baseDamage *= 2;
+    }
+    // v2.78 密勒頓｜防護代碼 — 若 defender 有 immuneToExAttackTagThisTurn，
+    //   且 attacker 是 ex + 帶有對應 tag，傷害變 0
+    if (baseDamage > 0 && defender.active.immuneToExAttackTagThisTurn) {
+      const targetTag = defender.active.immuneToExAttackTagThisTurn;
+      const attackerIsEx = attackerCard.subtype?.includes('ex') || attackerCard.name?.endsWith('ex');
+      const attackerHasTag = attackerCard.tags?.includes(targetTag);
+      if (attackerIsEx && attackerHasTag) {
+        workingState = addLog(workingState, `${defenderCard.name}：[防護代碼]免疫帶「${targetTag}」tag 的 ex 招式傷害（${baseDamage} → 0）`, dIdx);
+        baseDamage = 0;
+      }
     }
     // v2.260 Bug #1：抵抗力計算（PDF §I-A-01 步驟 4）
     //   若受擊方寶可夢卡面抵抗力屬性 === 攻擊方寶可夢屬性 → 套用 resistance.value（"-30" 等）。
@@ -3535,7 +3593,12 @@ function handlePlaying(
       newState = addLog(newState,
         `陳舊的背蓋化石：免疫招式的附加效果（傷害仍正常結算）`, dIdx);
     }
-    const postFn = !shellFossilImmune ? ATTACK_POST.get(effectKey) : undefined;
+    // v2.78 純樸 — defender immuneToAttackEffectsThisTurn → skip ATTACK_POST 附加效果
+    const postBlocked = newState.players[dIdx].active?.immuneToAttackEffectsThisTurn ?? false;
+    const postFn = (!shellFossilImmune && !postBlocked) ? ATTACK_POST.get(effectKey) : undefined;
+    if (postBlocked) {
+      newState = addLog(newState, '[純樸]defender 不受招式效果影響（傷害仍正常結算）', dIdx);
+    }
     if (postFn) {
       // v2.156：把 action 也傳給 POST，讓「PRE/POST 共享 chosenIids」的 option 招式
       // （如 激流水泵）能在 POST 階段判斷玩家是否棄了能量
@@ -4199,8 +4262,51 @@ function handlePlaying(
       if (!c.cantAttackThisTurn) return c;
       const n = { ...c }; delete n.cantAttackThisTurn; return n;
     };
+    // v2.78 清除 currentPlayer 各 ThisTurn flag
+    const clearV278ThisTurn = (c: CardInstance): CardInstance => {
+      let n = c;
+      if (c.immuneToAttackEffectsThisTurn) { n = { ...n }; delete n.immuneToAttackEffectsThisTurn; }
+      if (c.attackCostIncreaseColorlessThisTurn) { n = { ...n }; delete n.attackCostIncreaseColorlessThisTurn; }
+      if (c.retreatCostIncreaseThisTurn) { n = { ...n }; delete n.retreatCostIncreaseThisTurn; }
+      if (c.endTurnOnOppAttachEnergyThisTurn) { n = { ...n }; delete n.endTurnOnOppAttachEnergyThisTurn; }
+      if (c.immuneToExAttackTagThisTurn) { n = { ...n }; delete n.immuneToExAttackTagThisTurn; }
+      if (c.weaknessOverrideTypeThisTurn) { n = { ...n }; delete n.weaknessOverrideTypeThisTurn; }
+      return n;
+    };
+    // v2.78 觸發滲透寒氣等延遲傷害（於擁有者 END_TURN 時應用）
+    const applyDamageAtMyEnd = (c: CardInstance): CardInstance => {
+      if (!c.damageAtMyNextEndOfTurn || c.damageAtMyNextEndOfTurn <= 0) return c;
+      const n = { ...c, damage: (c.damage ?? 0) + c.damageAtMyNextEndOfTurn };
+      delete n.damageAtMyNextEndOfTurn;
+      return n;
+    };
     if (currentPlayer.active) currentPlayer.active = clearCantAttackThisTurn(currentPlayer.active);
     currentPlayer.bench = currentPlayer.bench.map(clearCantAttackThisTurn);
+    // v2.78 觸發 currentPlayer 側的延遲傷害 + 清除 ThisTurn flags
+    if (currentPlayer.active) currentPlayer.active = applyDamageAtMyEnd(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(applyDamageAtMyEnd);
+    if (currentPlayer.active) currentPlayer.active = clearV278ThisTurn(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(clearV278ThisTurn);
+    // v2.78 重置 currentPlayer supporterTagsUsedThisTurn
+    {
+      const cur = state.supporterTagsUsedThisTurn ?? [[], []];
+      const newSup: [string[], string[]] = [cur[0], cur[1]];
+      newSup[aIdx] = [];
+      state = { ...state, supporterTagsUsedThisTurn: newSup };
+    }
+    // v2.78 凍結獠牙 lowEnergyCantAttack — currentPlayer side this-turn flag clear；對手 next → this
+    {
+      const curN = state.lowEnergyCantAttackNextTurn ?? [false, false];
+      const curT = state.lowEnergyCantAttackThisTurn ?? [false, false];
+      const newN: [boolean, boolean] = [curN[0], curN[1]];
+      const newT: [boolean, boolean] = [curT[0], curT[1]];
+      const dIdxLocal = (1 - aIdx) as 0 | 1;
+      // 對手側 next → this（即將進入對手回合，對手 = next player）
+      if (newN[dIdxLocal]) { newT[dIdxLocal] = true; newN[dIdxLocal] = false; }
+      // currentPlayer 側 this 已過完，清除
+      newT[aIdx] = false;
+      state = { ...state, lowEnergyCantAttackNextTurn: newN, lowEnergyCantAttackThisTurn: newT };
+    }
     // 清除 cantRetreatNextTurn：flag 由上個對手回合設下，作用於本回合；本回合結束時清除
     const clearCantRetreat = (c: CardInstance): CardInstance => {
       if (!c.cantRetreatNextTurn) return c;
@@ -4348,6 +4454,35 @@ function handlePlaying(
       if (c.cantAttachEnergyNextTurn) {
         n = { ...n, cantAttachEnergyThisTurn: true };
         delete n.cantAttachEnergyNextTurn;
+      }
+      // v2.78 鼓擊 — 撤退費 / 招式 cost +N（next → this）
+      if (c.attackCostIncreaseColorlessNextTurn && c.attackCostIncreaseColorlessNextTurn > 0) {
+        n = { ...n, attackCostIncreaseColorlessThisTurn: c.attackCostIncreaseColorlessNextTurn };
+        delete n.attackCostIncreaseColorlessNextTurn;
+      }
+      if (c.retreatCostIncreaseNextTurn && c.retreatCostIncreaseNextTurn > 0) {
+        n = { ...n, retreatCostIncreaseThisTurn: c.retreatCostIncreaseNextTurn };
+        delete n.retreatCostIncreaseNextTurn;
+      }
+      // v2.78 純樸 — defender 不受招式效果影響（next → this）
+      if (c.immuneToAttackEffectsNextTurn) {
+        n = { ...n, immuneToAttackEffectsThisTurn: true };
+        delete n.immuneToAttackEffectsNextTurn;
+      }
+      // v2.78 白日夢
+      if (c.endTurnOnOppAttachEnergyNextTurn) {
+        n = { ...n, endTurnOnOppAttachEnergyThisTurn: true };
+        delete n.endTurnOnOppAttachEnergyNextTurn;
+      }
+      // v2.78 防護代碼 — defender 不受帶 tag 的 ex 招式傷害
+      if (c.immuneToExAttackTagNextTurn) {
+        n = { ...n, immuneToExAttackTagThisTurn: c.immuneToExAttackTagNextTurn };
+        delete n.immuneToExAttackTagNextTurn;
+      }
+      // v2.78 智揮猩｜掌握弱點
+      if (c.weaknessOverrideTypeNextTurn) {
+        n = { ...n, weaknessOverrideTypeThisTurn: c.weaknessOverrideTypeNextTurn };
+        delete n.weaknessOverrideTypeNextTurn;
       }
       // v2.92：promote blockedAttackNamesNextTurn → blockedAttackNamesThisTurn
       // （超級勇氣：在下個自己的回合，這隻寶可夢無法使用『超級勇氣』）

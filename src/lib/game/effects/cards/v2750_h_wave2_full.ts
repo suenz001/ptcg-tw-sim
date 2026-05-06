@@ -1245,10 +1245,11 @@ regPost('凱羅斯|慢嚼碎', (state, aIdx, pool) => {
 //   並 log 提示玩家「卡面是下回合結束時」。注意：這是已知簡化（待 engine v2.76 補完整 hook）
 regPre('冰伊布|滲透寒氣', (s) => ({ state: s, damage: 30 }));
 regPost('冰伊布|滲透寒氣', (state, aIdx, _pool) => {
+  // v2.78 用 damageAtMyNextEndOfTurn = 90 (9 個指示物)；engine 在 defender 自己 END_TURN 時應用
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '滲透寒氣：[依卡面]下個對手回合結束時 defender 放 9 個指示物（暫用立即放 90 dmg；待 engine 補完整延遲 hook）', aIdx), dIdx, p => ({
+  return updatePlayer(addLog(state, '滲透寒氣：下個對手回合結束時 defender 放 9 個傷害指示物（90 點）', aIdx), dIdx, p => ({
     ...p,
-    active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) + 90 } : null,
+    active: p.active ? { ...p.active, damageAtMyNextEndOfTurn: 90 } : null,
   }));
 });
 

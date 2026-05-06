@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.78</span> 引擎機制大整修 — 處理所有 [TODO engine] 卡片</summary>
+        <ul>
+          <li>新增 CardInstance state 欄位 (10 個)：damageAtMyNextEndOfTurn / immuneToAttackEffectsNextTurn+ThisTurn / attackCostIncreaseColorlessNextTurn+ThisTurn / retreatCostIncreaseNextTurn+ThisTurn / endTurnOnOppAttachEnergyNextTurn+ThisTurn / immuneToExAttackTagNextTurn+ThisTurn / weaknessOverrideTypeNextTurn+ThisTurn</li>
+          <li>新增 GameState state 欄位 (3 個)：supporterTagsUsedThisTurn / lowEnergyCantAttackNextTurn+ThisTurn</li>
+          <li>engine.ts 7 個 hook 點：canAffordAttack 加 cost 增量；retreat cost 加增量；ATTACK damage 弱點 override；ATTACK damage 防護代碼 tag-immune；ATTACK_POST skip 純樸；ATTACK PRE 凍結獠牙鎖；ATTACH_ENERGY 白日夢觸發 END_TURN；END_TURN promote/clear/apply 滲透寒氣傷害 + 重置 supporter tags</li>
+          <li>USE_TRAINER：使支援者時 push tags 到 GameState.supporterTagsUsedThisTurn[idx]</li>
+          <li>更新卡片實裝（移除 [TODO engine]）：純樸/凍結獠牙/鼓擊/莊嚴之劍/白日夢/智揮猩掌握弱點/防護代碼/滲透寒氣 全部完整實裝按卡牌原文</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.77</span> H/I/J 標殘餘清理（6 張，不含 G 標）</summary>
         <ul>
           <li>之前 audit 因字符邊界 / 跨行字串誤報 + 當波 deferred 的殘餘卡</li>

@@ -149,6 +149,25 @@ export interface CardInstance {
    * END_TURN 時將其昏厥（damage = HP）。於該 END_TURN 觸發後清除。
    */
   koAtMyNextEndOfTurn?: boolean;
+  /** v2.78 冰伊布｜滲透寒氣 — 於擁有者 END_TURN 時，自動為此寶可夢加上 N 點傷害。觸發後清除。 */
+  damageAtMyNextEndOfTurn?: number;
+  /** v2.78 骨紋巨聲鱷｜純樸 — 下回合不受對手寶可使用招式 ATTACK_POST 附加效果（傷害仍結算）。 */
+  immuneToAttackEffectsNextTurn?: boolean;
+  immuneToAttackEffectsThisTurn?: boolean;
+  /** v2.78 轟擂金剛猩｜鼓擊 — 下回合招式所需 +N【無】，撤退所需 +N【無】。 */
+  attackCostIncreaseColorlessNextTurn?: number;
+  attackCostIncreaseColorlessThisTurn?: number;
+  retreatCostIncreaseNextTurn?: number;
+  retreatCostIncreaseThisTurn?: number;
+  /** v2.78 引夢貘人｜白日夢 — 下回合對手附能量於此 → 對手回合結束。 */
+  endTurnOnOppAttachEnergyNextTurn?: boolean;
+  endTurnOnOppAttachEnergyThisTurn?: boolean;
+  /** v2.78 密勒頓｜防護代碼 — 下回合不受帶指定 tag 的 ex 招式傷害。離開戰鬥場時清除。 */
+  immuneToExAttackTagNextTurn?: string;
+  immuneToExAttackTagThisTurn?: string;
+  /** v2.78 智揮猩｜掌握弱點 — 下回合此寶可的弱點屬性改為指定值（如【無】）。 */
+  weaknessOverrideTypeNextTurn?: string;
+  weaknessOverrideTypeThisTurn?: string;
   /**
    * 自己寶可夢下個自己回合不可撤退（懶人獺 悠哉）。
    * 設於 ATTACK_POST，於擁有者下回合開始（nextIdx promote）時變成 cantRetreatNextTurn=true，
@@ -609,6 +628,11 @@ export interface GameState {
    * 初始值 [6, 6]。
    */
   oppPrizesAtMainEnd?: [number, number];
+  /** v2.78 莊嚴之劍 — 本回合自方已使出的支援者卡 tags。END_TURN 重置。 */
+  supporterTagsUsedThisTurn?: [string[], string[]];
+  /** v2.78 帝牙海獅｜凍結獠牙 — 對手能量 ≤2 寶可夢無法用招式（player-level lock）。 */
+  lowEnergyCantAttackNextTurn?: [boolean, boolean];
+  lowEnergyCantAttackThisTurn?: [boolean, boolean];
   /**
    * v2.70：我方上次結束自己回合時，自己棄牌堆中「火箭隊的」寶可夢數量的快照 [P1, P2]。
    * 與 rocketInMyDiscardAtMyTurnStart 對比，偵測「對手的回合內我方有火箭隊寶可夢被擊倒」。

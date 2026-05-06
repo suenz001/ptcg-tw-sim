@@ -49,9 +49,11 @@ regPre('‌喵喵|亂抓', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('骨紋巨聲鱷|純樸', (s) => ({ state: s, damage: 0 }));
 regPost('骨紋巨聲鱷|純樸', (state, aIdx, _pool) => {
-  // [TODO engine] 嚴謹實作需新增 flag immuneToAttackEffectsNextTurn (不影響傷害但忽略效果)
-  // 此處先設下普通 logger，玩家手動處理
-  return addLog(state, '純樸：[卡面]這隻寶可夢不會受到對手寶可夢使用招式的效果的影響（玩家手動執行）', aIdx);
+  // v2.78 用新 flag immuneToAttackEffectsNextTurn — engine 在 ATTACK_POST 階段 skip
+  return updatePlayer(addLog(state, '純樸：下回合不受對手寶可夢使用招式的附加效果影響（傷害仍結算）', aIdx), aIdx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, immuneToAttackEffectsNextTurn: true } : null,
+  }));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -61,11 +63,13 @@ regPost('骨紋巨聲鱷|純樸', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('帝牙海獅|凍結獠牙', (s) => ({ state: s, damage: 60 }));
 regPost('帝牙海獅|凍結獠牙', (state, aIdx, _pool) => {
+  // v2.78 用 player-level state.lowEnergyCantAttackNextTurn[opp] = true
+  // engine 在 ATTACK PRE 階段：state.lowEnergyCantAttackThisTurn[aIdx] && energy ≤ 2 → 失敗
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '凍結獠牙：[卡面]下回合對手能量≤2 的寶可夢全部無法用招式（簡化：只設 defender cantAttackPending；其他寶可夢請玩家手動）', aIdx), dIdx, p => ({
-    ...p,
-    active: p.active && p.active.energyAttached.length <= 2 ? { ...p.active, cantAttackPending: true } : p.active,
-  }));
+  const cur = state.lowEnergyCantAttackNextTurn ?? [false, false];
+  const newN: [boolean, boolean] = [cur[0], cur[1]];
+  newN[dIdx] = true;
+  return addLog({ ...state, lowEnergyCantAttackNextTurn: newN }, '凍結獠牙：下回合對手所有能量 ≤2 寶可夢無法使用招式', aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -238,10 +242,11 @@ regPre('密勒頓ex|抵制伏特', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('智揮猩|掌握弱點', (s) => ({ state: s, damage: 0 }));
 regPost('智揮猩|掌握弱點', (state, aIdx, _pool) => {
+  // v2.78 用 weaknessOverrideTypeNextTurn = 'Colorless'
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '掌握弱點：[卡面]下回合 defender 弱點改為【無】（簡化為移除弱點）', aIdx), dIdx, p => ({
+  return updatePlayer(addLog(state, '掌握弱點：下回合 defender 弱點屬性改為【無】（×2 仍計算）', aIdx), dIdx, p => ({
     ...p,
-    active: p.active ? { ...p.active, weaknessDisabledNextTurn: true } : null,
+    active: p.active ? { ...p.active, weaknessOverrideTypeNextTurn: 'Colorless' } : null,
   }));
 });
 
@@ -327,15 +332,12 @@ regPost('魔牆人偶|相仿秀', (state, aIdx, pool) => {
 //    [TODO engine] 需追蹤 supporterUsedTagsThisTurn — 目前無
 //    Best-effort: 自方棄牌頂端是否為「未來」支援者
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('鐵武者|莊嚴之劍', (state, aIdx, pool) => {
-  // 簡化檢查：自棄牌區最近 5 張中是否有「未來」支援者
-  const recent = state.players[aIdx].discard.slice(-5);
-  const hasFutureSupp = recent.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.subtype === 'Supporter' && card.tags?.includes('未來');
-  });
-  if (hasFutureSupp) return { state: addLog(state, '莊嚴之劍：[簡化]最近棄牌有未來支援者 → 100+100 = 200', aIdx), damage: 200 };
-  return { state: addLog(state, '莊嚴之劍：未觸發 → 100', aIdx), damage: 100 };
+regPre('鐵武者|莊嚴之劍', (state, aIdx, _pool) => {
+  // v2.78 engine 已追蹤 state.supporterTagsUsedThisTurn[aIdx]
+  const tags = state.supporterTagsUsedThisTurn?.[aIdx] ?? [];
+  const hasFutureSupp = tags.includes('未來');
+  if (hasFutureSupp) return { state: addLog(state, '莊嚴之劍：本回合用過未來支援者 → 100+100 = 200', aIdx), damage: 200 };
+  return { state: addLog(state, '莊嚴之劍：本回合未使出未來支援者 → 100', aIdx), damage: 100 };
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -353,10 +355,15 @@ regPost('優雅貓|能量攪拌', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('轟擂金剛猩|鼓擊', (s) => ({ state: s, damage: 60 }));
 regPost('轟擂金剛猩|鼓擊', (state, aIdx, _pool) => {
+  // v2.78 設置兩個新 flag：attackCostIncreaseColorlessNextTurn + retreatCostIncreaseNextTurn
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '鼓擊：[卡面]下回合 defender 招式+撤退費 各 +1【無】（簡化：只設 cantRetreatNextTurn）', aIdx), dIdx, p => ({
+  return updatePlayer(addLog(state, '鼓擊：下回合 defender 招式+撤退費各 +1【無】能量', aIdx), dIdx, p => ({
     ...p,
-    active: p.active ? { ...p.active, cantRetreatNextTurn: true } : null,
+    active: p.active ? {
+      ...p.active,
+      attackCostIncreaseColorlessNextTurn: 1,
+      retreatCostIncreaseNextTurn: 1,
+    } : null,
   }));
 });
 
@@ -385,10 +392,11 @@ regPost('迷唇姐|邀請之吻', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('引夢貘人|白日夢', (s) => ({ state: s, damage: 80 }));
 regPost('引夢貘人|白日夢', (state, aIdx, _pool) => {
+  // v2.78 設 defender.endTurnOnOppAttachEnergyNextTurn — engine 在 ATTACH_ENERGY 觸發 END_TURN
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '白日夢：[卡面]下回合若對手附能量於 defender 則對手回合結束（簡化：設 paralyzeFangPending 模擬懲罰）', aIdx), dIdx, p => ({
+  return updatePlayer(addLog(state, '白日夢：下回合若對手附能量於受招式者，則對手回合結束', aIdx), dIdx, p => ({
     ...p,
-    active: p.active ? { ...p.active, paralyzeFangPending: true } : null,
+    active: p.active ? { ...p.active, endTurnOnOppAttachEnergyNextTurn: true } : null,
   }));
 });
 
@@ -476,8 +484,13 @@ regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool) => {
 //    [TODO engine] 玩家層級 flag — 暫無，best-effort log only
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('密勒頓|防護代碼', (s) => ({ state: s, damage: 40 }));
-regPost('密勒頓|防護代碼', (state, aIdx, _pool) => {
-  return addLog(state, '防護代碼：[卡面]下回合自方所有未來寶可不受 ex 招式傷害（玩家手動處理）', aIdx);
+regPost('密勒頓|防護代碼', (state, aIdx, pool) => {
+  // v2.78 對自方所有「未來」寶可夢設 immuneToExAttackTagNextTurn = '未來'
+  return updatePlayer(addLog(state, '防護代碼：下回合自方所有未來寶可不受帶「未來」tag 的 ex 招式傷害', aIdx), aIdx, p => ({
+    ...p,
+    active: p.active && pool.get(p.active.cardId)?.tags?.includes('未來') ? { ...p.active, immuneToExAttackTagNextTurn: '未來' } : p.active,
+    bench: p.bench.map(b => pool.get(b.cardId)?.tags?.includes('未來') ? { ...b, immuneToExAttackTagNextTurn: '未來' } : b),
+  }));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
