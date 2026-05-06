@@ -334,6 +334,7 @@ import './effects/cards/v2490_i_wave3a_conditional';
 import './effects/cards/v2500_i_wave3b_discard';
 import './effects/cards/v2510_i_wave3c_status_self';
 import './effects/cards/v2540_i_wave4_misc';
+import './effects/cards/v2550_i_wave5_meta';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts

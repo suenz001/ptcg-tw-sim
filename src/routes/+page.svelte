@@ -175,6 +175,21 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.55</span> I 標 Wave 5 — Meta 卡 9 張實裝</summary>
+        <ul>
+          <li>流氓鱷ex｜窮追不捨 (80 + 對手下回合無法撤退) / 強力啃咬 (140 + 自身有道具 +140)</li>
+          <li>拉普拉斯ex｜水炮迴旋 (×水能量 + 自身換場)</li>
+          <li>千面避役｜水射擊 (110 + 自身棄 1 能量)</li>
+          <li>蒼炎刃鬼｜煉獄斬 (220 + 棄手牌 4 張基本【火】否則失敗)</li>
+          <li>奇魯莉安｜呼喚信號 (從牌庫挑 ≤3 寶可夢加手 + 重洗)</li>
+          <li>閃焰王牌｜閃焰渦輪 (50 + 牌庫挑 ≤3 基本能量依序附備戰)</li>
+          <li>巨翅飛魚｜呼朋引伴 (從牌庫挑 ≤2 基礎寶可夢放備戰)</li>
+          <li>蓋歐卡｜逆流 (棄牌區基本水能量 ×20，然後放回牌庫並重洗)</li>
+          <li>I 標 Wave 1+2+3+4+5 累計：16+11+61+35+9 = 132 張寶可夢招式 effect 實裝</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.54</span> I 標 Wave 4 — 剩餘批次（35 張）</summary>
         <ul>
           <li>新檔 v2540_i_wave4_misc.ts</li>
