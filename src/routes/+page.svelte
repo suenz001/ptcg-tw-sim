@@ -123,6 +123,25 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.462</span> Bug fix — 蜜集大蛇ex｜蜜糖風暴永遠只 30 傷</summary>
+        <ul>
+          <li>玩家回報：蜜集大蛇ex 招式蜜糖風暴怎麼打都只有 30 傷害</li>
+          <li>原因：原本只實裝特性（熟成充能），招式沒寫 regPre。卡面 damage 字串是 '30+'，引擎只取 parseInt = 30，無法套用「+30 × 自方所有寶可夢身上的【草】能量數」公式</li>
+          <li>修正：lopunny_serperior_flareon_festival.ts 補 regPre('蜜集大蛇ex|蜜糖風暴') 計算 30 + 30 × Σ(grass energies on all own pokemon)</li>
+          <li>實際範例：自方共 4 隻草寶可夢、各帶 1 個草能量 → 30 + 4×30 = 150；帶 8 個草能量 → 30 + 8×30 = 270</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v2.461</span> Hotfix — Svelte 把 changelog 文字 &#123;uid&#125; 當變數導致首頁空白</summary>
+        <ul>
+          <li>v2.46 changelog 寫了「users/&#123;uid&#125;」，Svelte template 把 &#123;uid&#125; 解析為變數→ uid 未定義 → ReferenceError → 整頁 mount 失敗</li>
+          <li>修法：把 &#123; &#125; 換成 HTML entity &amp;#123; &amp;#125;，視覺一樣是大括號但 Svelte parser 不會解析</li>
+          <li>新鐵律：Svelte template 內任何 user-facing &#123;…&#125; sample text，一律用 HTML entity 或全形括號，避免被當 expression</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.46</span> 安全性強化 — Firestore rules 收緊 + room 成員驗證</summary>
         <ul>
           <li>玩家個資私有化：users/&#123;uid&#125; 與 users/&#123;uid&#125;/decks 全部改為「only own-or-admin 可讀寫」（之前 read 是 public，導致 email / deviceId / userAgent / loginCount + 雲端牌組任何人可撈）</li>

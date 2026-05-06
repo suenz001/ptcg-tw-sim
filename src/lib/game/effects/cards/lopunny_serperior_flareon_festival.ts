@@ -17,7 +17,7 @@
 import type { CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import {
-  reg, regR, regG, regA,
+  reg, regR, regG, regA, regPre,
   addLog, updatePlayer, withPending,
   shuffle,
 } from '../_shared';
@@ -285,3 +285,26 @@ function commitMetagrossEnergy(
     filterType: ['Psychic', 'Metal'],
   }, pool);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v2.462 蜜集大蛇ex｜蜜糖風暴（招式）— 修永遠只 30 點 bug
+// 卡面：「30+ 增加自己的所有寶可夢身上附加的【草】能量的數量×30 點傷害。」
+// 公式：30 + 30 × Σ(自方所有寶可夢身上 pokemonType==='Grass' 的能量數)
+// 之前無 regPre → 引擎只取 parseInt('30+') = 30，沒套+N 公式
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('蜜集大蛇ex|蜜糖風暴', (state, aIdx, pool) => {
+  const player = state.players[aIdx];
+  const allOwn: CardInstance[] = [
+    ...(player.active ? [player.active] : []),
+    ...player.bench,
+  ];
+  let grassCount = 0;
+  for (const pk of allOwn) {
+    for (const e of pk.energyAttached) {
+      const ec = pool.get(e.cardId);
+      // 廣義【草】能量：基本【草】 + 名稱含【草】(如富裕能量等多色不算，需嚴格用 pokemonType)
+      if (ec?.pokemonType === 'Grass') grassCount++;
+    }
+  }
+  return { state, damage: 30 + grassCount * 30 };
+});
