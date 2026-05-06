@@ -2400,15 +2400,28 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (
 ]);
 
 /**
- * v2.42 Bug fix：原本 engine 對 PASSIVE_ATTACK_BONUS 全部 dedup by ability 名（一張只算 1 次）。
- *   但卡面語意只有「大方（赫普的卡比獸）」明確規定「無論有多少隻擁有這個特性的寶可夢，
- *   這個效果也不會重複」 — 其他「只要這隻寶可夢在場上 +N」類本應疊加。
+ * v2.42 / v2.422 Bug fix：原本 engine 對 PASSIVE_ATTACK_BONUS 全部 dedup by ability 名
+ *   （一張只算 1 次）。但卡面語意可分兩類：
  *
- * 此 Set 列出「明確規定不疊加」的特性。engine 對不在這個 Set 的特性，每隻場上擁有
- * 該特性的寶可夢都會獨立加 N，達成卡面期望（例：場上 2 隻竹蘭的羅絲雷朵 → +60）。
+ *   (A) 「自己的 X 寶可夢使用的招式 +N」型 — 主語=友方所有符合的 attacker，
+ *       per-source 疊加（場上 N 隻擁有特性者貢獻 +N×N）。例：輝煌聲援、力之鹽、
+ *       皇家聲援、勝利聲援、鈷藍指令。
+ *
+ *   (B) 「這隻寶可夢使用的招式 +N」/「自己的『X』攻擊時」型 — 主語=擁有特性者
+ *       本人（=attacker），條件式：場上有 1+ 符合的擁有特性者就觸發一次。
+ *       fn 內通常有 `att.name === 'X'` gate；engine loop 對 bench 的同名也會
+ *       invoke 一次 → 場上 2 隻同名 → 加倍，**錯誤**。需 dedup by name。
+ *
+ *   (C) 卡面明文「無論有多少隻擁有這個特性的寶可夢，這個效果也不會重複」 —
+ *       強制 NO_STACK。例：大方。
+ *
+ * 此 Set 列出 (B)+(C) 類；engine 對其餘特性允許 per-source 疊加。
  */
 export const PASSIVE_ATTACK_NO_STACK: ReadonlySet<string> = new Set([
-  '大方',  // 赫普的卡比獸 — 卡面明文「不重複」
+  '大方',      // (C) 赫普的卡比獸 — 卡面明文「不重複」
+  '激動力量',  // (B) 飯匙蛇 — 「這隻寶可夢使用的招式」+ 條件式有【惡】Mega ex
+  '大將',      // (B) 仆斬將軍 — 「這隻寶可夢使用的招式」依對手獎賞數
+  '複眼',      // (B) 電蜘蛛 — 「自己的『電蜘蛛』攻擊時」對擁有特性的對手 +50
 ]);
 
 /**

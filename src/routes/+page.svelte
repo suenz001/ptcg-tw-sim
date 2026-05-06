@@ -98,6 +98,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.422</span> 修正 PASSIVE_ATTACK_BONUS 疊加副作用 — 飯匙蛇激動力量 / 仆斬將軍大將 / 電蜘蛛複眼</summary>
+        <ul>
+          <li>v2.42 改 engine loop 為「per-source 疊加 + NO_STACK set 例外」後，「這隻寶可夢使用的招式」型特性出現副作用：fn 內 att.name === 'X' gate，但 engine loop 對 bench 同名也 invoke fn 一次 → 場上 2 隻飯匙蛇 → +240 是錯的</li>
+          <li>把 PASSIVE_ATTACK_BONUS 條目分成兩類：(A)「自己的 X 寶可夢使用的招式 +N」型 = 友方 attacker 主語，per-source 疊加（輝煌聲援/力之鹽/皇家聲援/勝利聲援/鈷藍指令）；(B)「這隻寶可夢使用的招式 +N」/「自己的『X』攻擊時」型 = 擁有特性者本人，條件式不疊加（激動力量/大將/複眼）</li>
+          <li>新增到 PASSIVE_ATTACK_NO_STACK：激動力量（飯匙蛇場上有【惡】Mega ex 時 +120 一次）、大將（仆斬將軍 +30×對手已得獎賞，per-attacker）、複眼（電蜘蛛攻擊「擁有特性」對手 +50 一次）</li>
+          <li>規則總結：卡面寫「這隻寶可夢使用的招式 / 自己的『X』攻擊時 +N」→ NO_STACK；卡面寫「自己的 X 寶可夢使用的招式 +N」→ 疊加</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.42</span> Bug fixes — 4 個常用卡互動修正</summary>
         <ul>
           <li>夜間學院 + 越橘的一步棋互動：原 filter 'Pokemon:Type=Darkness' 在 UI deck-search parser 沒有對應 case → 落到 generic Pokemon: 分支後比對 pokemonType==='Type=Darkness' 永遠 false → 即使夜間學院剛把超級耿鬼ex 放牌庫頂也找不到。改用專屬 'DarknessPokemon:TOP7' filter（限定 top7 + 只列【惡】寶可夢）</li>
