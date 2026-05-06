@@ -26,7 +26,7 @@
 
 import { db, auth } from '$lib/firebase';
 import {
-  doc, setDoc, updateDoc, onSnapshot, getDoc, serverTimestamp,
+  doc, setDoc, updateDoc, onSnapshot, getDoc, getDocs, serverTimestamp,
   collection, query, where, limit, orderBy, addDoc, deleteDoc,
   runTransaction,
 } from 'firebase/firestore';
@@ -406,7 +406,6 @@ async function cleanupStaleNonLobbyRooms(): Promise<void> {
   const threshold = HEARTBEAT_STALE_MS;
   // 不能用 where('status','!=','lobby')（Firestore 不支援單一 != 在組合 query）
   // 改成兩條：playing / ended
-  const { getDocs } = await import('firebase/firestore');
   for (const status of ['playing', 'ended'] as const) {
     try {
       const q = query(collection(db, 'rooms'), where('status', '==', status), limit(50));
@@ -521,6 +520,14 @@ export function isSeatStale(
   const hbSec = (hb as { seconds?: number } | null | undefined)?.seconds;
   if (typeof hbSec !== 'number') return false;
   return Date.now() - hbSec * 1000 > thresholdMs;
+}
+
+/**
+ * v2.732：刪除整個房間 doc（解散按鈕用）。
+ * Rules 已放寬「updatedAt > 5min 任何 auth 用戶可刪」，所以對手心跳停 5 分鐘後可呼叫成功。
+ */
+export async function deleteRoom(roomCode: string): Promise<void> {
+  await deleteDoc(doc(db, 'rooms', roomCode.toUpperCase()));
 }
 
 /** 推送最新 GameState 到 Firestore（遊戲中由 P1/P2 發起 action 後使用） */

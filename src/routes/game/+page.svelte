@@ -28,7 +28,7 @@
     takeSeat, setSeatDeck, setSeatReady, startGame, leaveRoom,
     findMySeatIdx, bothPlayersReady, countDeckCards,
     sendMessage, subscribeMessages,
-    heartbeat, isSeatStale, HEARTBEAT_STALE_MS,
+    heartbeat, isSeatStale, HEARTBEAT_STALE_MS, deleteRoom,
     type Room, type Seat, type ChatMessage,
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
@@ -2081,9 +2081,7 @@
     if (!confirm('確定要解散此房間嗎？\n\n偵測到對方已離線超過 5 分鐘，房間將被刪除，雙方都會回到大廳。')) return;
     onlineLoading = true;
     try {
-      const { deleteDoc, doc: docRef } = await import('firebase/firestore');
-      const { db } = await import('$lib/firebase');
-      await deleteDoc(docRef(db, 'rooms', roomCode.toUpperCase()));
+      await deleteRoom(roomCode);
       stopHeartbeat();
       unsubRoom?.(); unsubRoom = null;
       unsubMessages?.(); unsubMessages = null;
