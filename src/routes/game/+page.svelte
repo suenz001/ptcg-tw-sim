@@ -2088,7 +2088,7 @@
       unsubRoom?.(); unsubRoom = null;
       unsubMessages?.(); unsubMessages = null;
       game = null; roomCode = ''; roomData = null;
-      onlineStep = 'menu';
+      onlineStep = 'choose';
       mode = null;
     } catch (err: any) {
       onlineError = err?.message ?? '解散房間失敗';
@@ -2566,37 +2566,7 @@
 </script>
 
 <svelte:head>
-  {@html '<style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }
-  /* v2.73 殭屍房警示 banner */
-  .zombie-warning {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    background: linear-gradient(90deg, rgba(255, 80, 80, 0.15), rgba(255, 140, 80, 0.12));
-    border: 1px solid rgba(255, 100, 100, 0.4);
-    border-radius: 10px;
-    padding: 1rem 1.25rem;
-    margin: 0.75rem 0;
-    color: #fff;
-  }
-  .zw-icon { font-size: 1.8rem; flex-shrink: 0; }
-  .zw-text { flex: 1; line-height: 1.45; }
-  .zw-text strong { color: #ffb3b3; font-size: 1.05rem; }
-  .zw-sub { font-size: 0.85rem; color: rgba(255, 255, 255, 0.7); margin-top: 0.2rem; }
-  .zw-btn {
-    background: #c0392b !important;
-    color: #fff !important;
-    border: none;
-    padding: 0.6rem 1.1rem;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    flex-shrink: 0;
-  }
-  .zw-btn:hover { background: #a83121 !important; }
-  .zw-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-</style>'}
+  {@html '<style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }</style>'}
 </svelte:head>
 
 <svelte:window onkeydown={onGlobalKey} onpointermove={onWindowPointerMove} onpointerup={onWindowPointerUp} />
@@ -6039,4 +6009,33 @@
     .zoom-img-btn{ cursor:default; pointer-events:none; }
     .zoom-img-hint{ display:none; }
   }
+
+  /* v2.73 殭屍房警示 banner */
+  .zombie-warning {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: linear-gradient(90deg, rgba(255, 80, 80, 0.15), rgba(255, 140, 80, 0.12));
+    border: 1px solid rgba(255, 100, 100, 0.4);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin: 0.75rem 0;
+    color: #fff;
+  }
+  .zw-icon { font-size: 1.8rem; flex-shrink: 0; }
+  .zw-text { flex: 1; line-height: 1.45; }
+  .zw-text strong { color: #ffb3b3; font-size: 1.05rem; }
+  .zw-sub { font-size: 0.85rem; color: rgba(255, 255, 255, 0.7); margin-top: 0.2rem; }
+  .zw-btn {
+    background: #c0392b !important;
+    color: #fff !important;
+    border: none;
+    padding: 0.6rem 1.1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .zw-btn:hover { background: #a83121 !important; }
+  .zw-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

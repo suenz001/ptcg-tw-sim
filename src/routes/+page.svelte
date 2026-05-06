@@ -264,6 +264,14 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.731</span> 修 v2.73 build 錯誤</summary>
+        <ul>
+          <li>v2.73 dismissZombieRoom 內 onlineStep = 'menu' 但 type 只允許 'join'/'choose'/'create'/'room'，改 'choose' 修 svelte-check 編譯失敗</li>
+          <li>另外修：CSS 原本誤插到 svelte:head 內聯 style 字串中間造成 Unterminated string constant，改插到檔案末端正規 style block</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.73</span> 殭屍房間心跳偵測 + 主動清理（前後台同步）</summary>
         <ul>
           <li>v2.72 改成 P1/P2 都能觸發 startGame 沒解決根本問題：對手離線就算硬開遊戲也沒得玩。需要的是房間自動清理機制</li>
