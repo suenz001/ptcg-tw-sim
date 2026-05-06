@@ -346,6 +346,7 @@ import './effects/cards/v2630_i_wave13_misc6';
 import './effects/cards/v2640_i_wave14_misc7';
 import './effects/cards/v2650_i_wave15_misc8';
 import './effects/cards/v2660_i_wave16_misc9';
+import './effects/cards/v2670_i_wave17_complex2';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
