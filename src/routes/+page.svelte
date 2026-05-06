@@ -123,6 +123,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.463</span> 對戰演練 — 1024×576 解析度 zoom 調更積極 + 加 70/65/60% 手動檔</summary>
+        <ul>
+          <li>玩家回報：1024×576 在 Mac Safari 上 v2.45 80% zoom 仍會切到右側卡牌（瀏覽器 UI 額外吃掉幾十 px 高度）</li>
+          <li>auto 算法基準改 1280×720 → 1366×768；下限 0.6 → 0.55</li>
+          <li>新公式：1024×576 → 約 75%；1280×720 → 約 94%；1366×768 → 100%（無縮放）</li>
+          <li>設定下拉新增 70% / 65% / 60% 三檔；提示文字加「若還是看到卡牌被切，可手動往下調」</li>
+          <li>之前選 80% 的玩家可能要重新設成 auto 或手動 70%；切版仍存在的話可降到 65% 或 60%</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.462</span> Bug fix — 蜜集大蛇ex｜蜜糖風暴永遠只 30 傷</summary>
         <ul>
           <li>玩家回報：蜜集大蛇ex 招式蜜糖風暴怎麼打都只有 30 傷害</li>

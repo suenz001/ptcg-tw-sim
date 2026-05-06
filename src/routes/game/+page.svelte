@@ -154,7 +154,7 @@
   //   'auto'  → 依視窗大小自動算 zoom（小於 1280×720 時 fit-to-window）
   //   '100' / '90' / '80' / '75' → 強制套用該百分比 zoom
   // gameZoom 為實際應用的數值（0.6 ~ 1）；存入 localStorage 跨 session 保留
-  let resolutionMode = $state<'auto' | '100' | '90' | '80' | '75'>('auto');
+  let resolutionMode = $state<'auto' | '100' | '90' | '80' | '75' | '70' | '65' | '60'>('auto');
   let gameZoom = $state(1);
 
   function recomputeZoom() {
@@ -164,16 +164,18 @@
     if (resolutionMode === 'auto') {
       // 手機 portrait 走另一個元件，不縮放
       if (isPortraitMobile) { gameZoom = 1; return; }
-      // 設計基準：tablet-layout 最佳於 1280×720。低於此尺寸線性縮小到 0.6 下限
-      const targetW = 1280, targetH = 720;
+      // v2.463：基準改為 1366×768（之前 1280×720 對 1024×576 zoom 0.8 仍切到右側，
+      //   特別是 Mac Safari 瀏覽器 UI 額外吃高度）。
+      //   1366×768 → 1.0；1280×720 → ~0.94；1024×576 → ~0.75
+      const targetW = 1366, targetH = 768;
       const ratio = Math.min(w / targetW, h / targetH, 1);
-      gameZoom = ratio < 0.97 ? Math.max(0.6, +ratio.toFixed(3)) : 1;
+      gameZoom = ratio < 0.97 ? Math.max(0.55, +ratio.toFixed(3)) : 1;
     } else {
       gameZoom = parseInt(resolutionMode, 10) / 100;
     }
   }
 
-  function setResolutionMode(mode: 'auto' | '100' | '90' | '80' | '75') {
+  function setResolutionMode(mode: 'auto' | '100' | '90' | '80' | '75' | '70' | '65' | '60') {
     resolutionMode = mode;
     try { localStorage.setItem('ptcgGameResolutionMode', mode); } catch {}
     recomputeZoom();
@@ -183,8 +185,8 @@
     // 載入 localStorage 設定
     try {
       const saved = localStorage.getItem('ptcgGameResolutionMode');
-      if (saved && ['auto','100','90','80','75'].includes(saved)) {
-        resolutionMode = saved as 'auto' | '100' | '90' | '80' | '75';
+      if (saved && ['auto','100','90','80','75','70','65','60'].includes(saved)) {
+        resolutionMode = saved as 'auto' | '100' | '90' | '80' | '75' | '70' | '65' | '60';
       }
     } catch {}
 
@@ -4362,17 +4364,21 @@
           <h4>🖥️ 畫面縮放</h4>
           <div class="setting-row">
             <label for="res-mode">解析度模式：</label>
-            <select id="res-mode" value={resolutionMode} onchange={(e) => setResolutionMode(e.currentTarget.value as 'auto' | '100' | '90' | '80' | '75')}>
+            <select id="res-mode" value={resolutionMode} onchange={(e) => setResolutionMode(e.currentTarget.value as 'auto' | '100' | '90' | '80' | '75' | '70' | '65' | '60')}>
               <option value="auto">自動（推薦）</option>
               <option value="100">100% — 原始尺寸</option>
               <option value="90">90% — 微縮</option>
-              <option value="80">80% — 1024×576 適用</option>
-              <option value="75">75% — 更小視窗</option>
+              <option value="80">80%</option>
+              <option value="75">75% — 1024×576 推薦</option>
+              <option value="70">70%</option>
+              <option value="65">65%</option>
+              <option value="60">60% — 極小視窗</option>
             </select>
           </div>
           <div class="setting-hint">
             目前縮放：{Math.round(gameZoom * 100)}%
-            ・自動模式會依視窗大小自動套用，1024×576 約落在 80%
+            <br/>・自動模式依視窗自動算（基準 1366×768）；1024×576 約落在 75%
+            <br/>・若還是看到卡牌被切，可手動往下調 70% / 65% / 60%
           </div>
         </div>
       </div>
