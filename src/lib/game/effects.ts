@@ -330,6 +330,7 @@ import './effects/cards/v2390_j_trainers_batch';
 import './effects/cards/v2400_i_wave1_recharge_status';
 import './effects/cards/v2401_i_wave2_draw_swap_search';
 import './effects/cards/v2402_mega_gardevoir';
+import './effects/cards/v2490_i_wave3a_conditional';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts

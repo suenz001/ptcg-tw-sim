@@ -123,6 +123,25 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.49</span> I 標 Wave 3a — 條件 +N / 擲幣倍率 / 狙擊備戰 批次實裝（30 張）</summary>
+        <ul>
+          <li>新檔 v2490_i_wave3a_conditional.ts — 11 個 helper factory + declarative array pattern</li>
+          <li>A 擲幣 ×K 倍率（4 張）：大嘴雀機關槍鑽 / 傘電蜥雙重抓 / 豆蟋蟀躍動 / 白海獅摔打</li>
+          <li>B 自身能量數 ×K（3 張）：椰蛋樹木之重壓 / 火紅不倒翁/達摩狒狒火炎球</li>
+          <li>C 獎賞數條件（3 張）：蒼響界限破壞 / 大鋼蛇歡迎之尾 / 捷克羅姆ex電爆發</li>
+          <li>D 對手能量 ×K（1 張）：巨鍛匠大橫掃</li>
+          <li>E 對手指示物 ×K（1 張）：脫殼忍者傷害律動</li>
+          <li>F 狙擊單隻備戰（5 張）：巨石丁岩石踢 / 長耳兔魯莽踢 / 雪暴馬冰之射擊 / 赫普的蒼響ex剎那斬 / 波皇子瞄準俯衝</li>
+          <li>G 對手所有備戰各 +N（1 張）：N的雙倍多多冰暴風雪</li>
+          <li>H 雙方所有備戰各 +N（1 張）：臭臭花灑口水</li>
+          <li>I 自身下回合受招 -N（8 張）：超級暴雪王ex冰霜屏障 / 大炭車防守壓制 / 齒輪兒/齒輪組堅硬齒輪 / 赫普的鋼鎧鴉鋼翼 / 甲殼龍防守壓制 / 火箭隊的火焰鳥ex火焰屏障 / 珍珠貝硬殼壓制</li>
+          <li>J 擲幣全正面 +K（1 張）：穿著熊必殺金勾臂</li>
+          <li>K 自方場上條件 +N（2 張）：雷公電氣墜落 / 破破舵輪大地能量</li>
+          <li>不動 effects.ts 主檔（只加 1 行 import）；I 標寶可夢招式覆蓋率 ~30 張提升</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.48</span> 實裝仙子伊布ex 兩招（H 標）</summary>
         <ul>
           <li>魔法魅惑 [PCC] 160 點傷害；下個對手回合，受到此招的寶可夢使用招式傷害「-100」 — 復用 defNextAtkReducePost(100)，對手換場 → clearActiveEffects 清旗標</li>
