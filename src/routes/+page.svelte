@@ -123,6 +123,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.51</span> I 標 Wave 3c — 擲幣狀態 / 進化來源條件 / 自身指示物 / 自殘 (13 張)</summary>
+        <ul>
+          <li>新檔 v2510_i_wave3c_status_self.ts</li>
+          <li>A 擲幣狀態 (7 張)：多多冰冰凍光束 / 單首龍泰山壓頂 / 麻麻鰻魚王雷電牙 / 火箭隊的茸茸羊電擊 / 火箭隊的阿柏蛇扯後腿 / 魔牆人偶念力 / 小霞的海星星泡沫光線</li>
+          <li>B 進化來源條件 +N (2 張)：自爆磁怪衝天電光（從三合一磁怪進化 +120）/ 小霞的寶石海星乍然閃光（從小霞的海星星進化 +80）</li>
+          <li>C 自身傷害指示物 (3 張)：吃吼霸ex駭浪反攻（30+指示物×10）/ 派帕的獒教父ex幹勁衝撞（30+無傷害+120）/ 鐵炮魚抓狂（指示物×10）</li>
+          <li>D 自殘類 (1 張)：火箭隊的拉達顧前不顧後（90 + 擲 2 全反 → 自身 90）</li>
+          <li>I 標 Wave 3 三批次合計：3a (30 張) + 3b (18 張) + 3c (13 張) = 61 張</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.5</span> I 標 Wave 3b — 棄能量類批次（18 張）</summary>
         <ul>
           <li>新檔 v2500_i_wave3b_discard.ts — 4 個 helper inline + declarative array</li>
