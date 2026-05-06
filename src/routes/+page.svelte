@@ -175,6 +175,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.57</span> I 標 Wave 7 — 自身回血 + skipResistance + 雙重狀態（17 張）</summary>
+        <ul>
+          <li>A 純自身回血 12 張：蓮帽小童超級吸取 / 小海獅泡沫吸取 / 斗笠菇超級吸取 / 厄鬼椪 水井面具泡沫吸取 / 啃果蟲小吸取 / 派拉斯吸血 / 畢力吉翁終極吸取 / 莉莉艾的萌虻紋絲不動 / 皮卡丘放鬆休息 / 大宇怪冥想 / 食夢夢睡覺(自睡+回血) / 盔甲鳥羽棲(回血+下回合不能撤退)</li>
+          <li>B 不計算抵抗力 3 張：雷吉洛克毀壞者金勾臂(120) / 龍頭地鼠ex巨岩墜落(200) / 師父鼬衝天粉碎(80)</li>
+          <li>C 雙重狀態 2 張：毒粉蛾薄暮之毒(100+中毒+睡眠) / 火箭隊的黑魯加惡之火種(灼傷+混亂)；用 status + secondaryStatus 兩個 layer 同時上</li>
+          <li>I 標 Wave 1+2+...+7 累計：16+11+61+35+9+10+17 = 159 張寶可夢招式 effect 實裝</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.56</span> I 標 Wave 6 — 複雜互動卡 10 張</summary>
         <ul>
           <li>瑪夏多｜暗影側踢 (60 + 若 KO 對手 → 自身下回合免疫招式傷害)</li>
