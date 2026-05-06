@@ -48,6 +48,13 @@ export interface RoomData {
   hostName: string;
   status: 'lobby' | 'playing' | 'ended';
   seats: Seat[];
+  /**
+   * v2.46：去重的房內成員 uid 列表（從 seats 自動推導）。
+   * Firestore rules 無法直接迭代 array of objects 來檢查 seat[i].uid，
+   * 故維護這個 flat 列表給 rules 用 `request.auth.uid in memberUids` 判斷。
+   * 任何寫入 seats 的地方都必須同時更新此欄位（用 computeMemberUids 工具）。
+   */
+  memberUids: string[];
   gameState: GameState | null;
   schemaVersion: number;
   createdAt?: unknown;
@@ -81,6 +88,18 @@ function emptySeats(): Seat[] {
     seats.push({ role: 'spectator', uid: null, name: null, deckEntries: null, ready: false });
   }
   return seats;
+}
+
+/**
+ * v2.46：從 seats 推導 memberUids（去重 + 過濾 null）。
+ * Firestore rules 用此欄位做成員驗證。
+ */
+function computeMemberUids(seats: Seat[]): string[] {
+  const set = new Set<string>();
+  for (const s of seats) {
+    if (s.uid) set.add(s.uid);
+  }
+  return Array.from(set);
 }
 
 /** 找出 seats 中 uid 對應的座位索引；找不到回 -1 */
@@ -127,6 +146,7 @@ export async function createRoom(
     hostName,
     status: 'lobby',
     seats,
+    memberUids: computeMemberUids(seats), // v2.46
     gameState: null,
     schemaVersion: SEAT_LAYOUT_VERSION,
   };
@@ -162,7 +182,7 @@ export async function joinRoom(
   const existingIdx = findMySeatIdx(seats, uid);
   if (existingIdx >= 0) {
     const newSeats = seats.map((s, i) => i === existingIdx ? { ...s, name: guestName } : s);
-    await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+    await updateDoc(ref, { seats: newSeats, memberUids: computeMemberUids(newSeats), updatedAt: serverTimestamp() });
     return { ...(data as RoomData), seats: newSeats, roomId: snap.id };
   }
 
@@ -186,6 +206,7 @@ export async function joinRoom(
 
   await updateDoc(ref, {
     seats: newSeats,
+    memberUids: computeMemberUids(newSeats), // v2.46
     updatedAt: serverTimestamp(),
   });
   return { ...(data as RoomData), seats: newSeats, roomId: snap.id };
@@ -223,7 +244,7 @@ export async function takeSeat(
     return s;
   });
 
-  await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+  await updateDoc(ref, { seats: newSeats, memberUids: computeMemberUids(newSeats), updatedAt: serverTimestamp() });
 }
 
 /** 在當前座位設定牌組；只有 P1/P2 才有用 */
@@ -246,7 +267,7 @@ export async function setSeatDeck(
   const newSeats = data.seats.map((s, i) =>
     i === myIdx ? { ...s, deckEntries, ready: false } : s
   );
-  await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+  await updateDoc(ref, { seats: newSeats, memberUids: computeMemberUids(newSeats), updatedAt: serverTimestamp() });
 }
 
 /** 切換準備狀態 */
@@ -271,7 +292,7 @@ export async function setSeatReady(
   }
 
   const newSeats = data.seats.map((s, i) => i === myIdx ? { ...s, ready } : s);
-  await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+  await updateDoc(ref, { seats: newSeats, memberUids: computeMemberUids(newSeats), updatedAt: serverTimestamp() });
 }
 
 /**
@@ -299,7 +320,7 @@ export async function leaveRoom(roomCode: string): Promise<void> {
   if (allEmpty) {
     await deleteDoc(ref);
   } else {
-    await updateDoc(ref, { seats: newSeats, updatedAt: serverTimestamp() });
+    await updateDoc(ref, { seats: newSeats, memberUids: computeMemberUids(newSeats), updatedAt: serverTimestamp() });
   }
 }
 

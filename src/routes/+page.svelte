@@ -123,6 +123,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.46</span> 安全性強化 — Firestore rules 收緊 + room 成員驗證</summary>
+        <ul>
+          <li>玩家個資私有化：users/{uid} 與 users/{uid}/decks 全部改為「only own-or-admin 可讀寫」（之前 read 是 public，導致 email / deviceId / userAgent / loginCount + 雲端牌組任何人可撈）</li>
+          <li>意見回饋（feedbacks）讀權限改 admin-only（之前公開可讀）；create 加 content 字串長度驗證 1~5000 字</li>
+          <li>對戰房間（rooms）update / delete 收緊：只允許房內成員（在 memberUids 內）或 host 才能寫入；新加 memberUids: string[] 欄位由 room.ts 在所有 seat 變動時自動維護</li>
+          <li>聊天訊息（messages）加 schema 驗證：text 必須是字串、長度 1~500；name 字串長度 ≤ 50；防止繞過 client 端 200 字限制塞長文</li>
+          <li>建房（rooms create）驗證：hostUid 必須是自己 + memberUids 必須含 hostUid</li>
+          <li>不影響現有功能：deck 載入仍走 own uid（cloud.ts loadDecksFromCloud(uid) 不變）；lobby 列表 / 加入房間 / 對戰過程 / 聊天 全都不受影響</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.45</span> 對戰演練 — 1024×576 解析度模式（auto-fit zoom + 手動切換）</summary>
         <ul>
           <li>玩家反映 1024×576 螢幕容納不下原 tablet-layout（設計基準 1280×720），加 CSS zoom 機制</li>

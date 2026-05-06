@@ -3,60 +3,86 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Check if the user is the admin
+    // ── helper：管理員判定 ────────────────────────────────────────────────
     function isAdmin() {
       return request.auth != null && request.auth.token.email == 'suenz001@yahoo.com.tw';
     }
+    function isSelf(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
 
-    // ── 玩家基本資料與登入追蹤 ──────────────────────────────────────────────
+    // ── 玩家基本資料與登入追蹤（v2.46：private — own-or-admin only）────────
     match /users/{userId} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
-      allow write: if isAdmin();
+      // 讀：只能讀自己 / admin（防 email + deviceId 外洩）
+      allow read: if isSelf(userId) || isAdmin();
+      // 寫：只能寫自己 / admin
+      allow write: if isSelf(userId) || isAdmin();
 
-      // 玩家的牌組
+      // 玩家的牌組（v2.46：私人牌組）
       match /decks/{deckId} {
-        allow read: if true;
-        allow write: if request.auth != null && request.auth.uid == userId;
-        allow write: if isAdmin();
+        allow read: if isSelf(userId) || isAdmin();
+        allow write: if isSelf(userId) || isAdmin();
       }
     }
 
     // ── 意見回饋 ──────────────────────────────────────────────────────────
     match /feedbacks/{feedbackId} {
-      // 允許任何人（包含未登入）新增與讀取意見（暫時開放給後台無須登入）
-      allow create, read: if true;
-      // 只有管理員能修改或刪除
+      // v2.46：讀改 admin only（之前 read: if true 暴露 uid + userAgent + content）
+      allow read: if isAdmin();
+      // 建立：任何人（含未登入）可送，但 content 必須為字串且 ≤ 5000 字（防灌水）
+      allow create: if request.resource.data.content is string
+                    && request.resource.data.content.size() > 0
+                    && request.resource.data.content.size() <= 5000;
+      // 修改/刪除：只 admin
       allow update, delete: if isAdmin();
     }
 
-    // ── 線上對戰房間（v2.269 重構：座位制 lobby）──────────────────────────
+    // ── 線上對戰房間（v2.269 重構：座位制 lobby）── v2.46 加 memberUids 限制
+    // 設計：room.ts 寫入時自動維護 memberUids: string[]（seats 中所有非 null uid 的去重列表）
+    //       規則用 memberUids 做成員驗證（Firestore rules 無法直接迭代 array of objects）
     match /rooms/{roomCode} {
-      // 任何已登入用戶可讀取（看 lobby 列表 + 加入後讀房間狀態）
+      // 讀：authed（lobby 列表 + 已加入後的房間狀態）
       allow read: if request.auth != null;
+
+      // 建立：必須是 hostUid = 自己；建立時 memberUids 必須含 hostUid
+      allow create: if request.auth != null
+                    && request.resource.data.hostUid == request.auth.uid
+                    && request.resource.data.memberUids is list
+                    && request.auth.uid in request.resource.data.memberUids;
+
+      // 更新：只允許「房內成員」或「正在加入的人」更新
+      //   - 已是房內成員（在現有 memberUids 中）→ 可更新（含改 seats、推 gameState 等）
+      //   - 還沒在 memberUids 但即將加入（uid 出現在 new memberUids 中）→ 允許（joinRoom）
+      //   - 房主特權保留（即使 host 暫離開，仍可寫入）
+      allow update: if request.auth != null && (
+                       request.auth.uid in resource.data.memberUids
+                       || request.auth.uid in request.resource.data.memberUids
+                       || request.auth.uid == resource.data.hostUid
+                    );
+
+      // 刪除：只允許房內成員（含 host）刪除（leaveRoom 在「最後一人離房」時呼叫 → 該人仍在 memberUids 中）
+      allow delete: if request.auth != null && (
+                       request.auth.uid in resource.data.memberUids
+                       || request.auth.uid == resource.data.hostUid
+                    );
+
+      // 管理員 always 可以
       allow read, write: if isAdmin();
 
-      // 建立房間：只有自己（hostUid）可建
-      allow create: if request.auth != null
-                    && request.auth.uid == request.resource.data.hostUid;
-
-      // 更新：任何已登入用戶都可寫（client API 自己保護 seat 完整性）
-      // 注意：這假設 client 端可信。多人惡意篡改場景下需要 Cloud Functions 介入；
-      // 目前小社群信任模型下 acceptable。
-      allow update: if request.auth != null;
-
-      // 刪除：authed user 都可刪（v2.275 client 只在「最後一人離房」時呼叫；
-      //   以及房主主動關房）
-      allow delete: if request.auth != null;
-
-      // ── 聊天訊息子集合（v2.272 Phase 2）──────────────────────────
+      // ── 聊天訊息子集合（v2.272 Phase 2）── v2.46 加 schema 驗證
       match /messages/{msgId} {
-        // 讀：authed 都可讀（房間內任何人都看得到聊天）
         allow read: if request.auth != null;
-        // 建立：authed 且 uid 必須等於自己（防止偽造他人發言）
+
+        // 建立：authed + uid = 自己 + text 字串 ≤ 500 字 + name 字串 ≤ 50 字
         allow create: if request.auth != null
-                      && request.auth.uid == request.resource.data.uid;
-        // 不允許 update / delete（保留訊息歷史）
+                      && request.resource.data.uid == request.auth.uid
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() > 0
+                      && request.resource.data.text.size() <= 500
+                      && request.resource.data.name is string
+                      && request.resource.data.name.size() <= 50;
+
+        // 不允許 update / delete（保留歷史）— admin 例外
         allow update, delete: if isAdmin();
       }
     }
