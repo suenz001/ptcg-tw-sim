@@ -92,10 +92,45 @@
     </p>
   </section>
 
+  <!-- v2.43 社群連結：LINE 群組 + QR Code -->
+  <section class="community-section">
+    <h2>💬 玩家社群</h2>
+    <p class="community-desc">
+      想找對手切磋、討論牌組、回報 bug 或追蹤更新嗎？歡迎加入我們的 LINE 群組！
+    </p>
+    <div class="community-card">
+      <div class="qr-block">
+        <img src="{base}/line-group-qr.png" alt="LINE 群組邀請 QR Code" class="qr-image" />
+        <span class="qr-caption">掃描 QR Code</span>
+      </div>
+      <div class="link-block">
+        <p class="link-label">或點擊連結直接加入：</p>
+        <a class="line-button"
+           href="https://line.me/ti/g2/UyxBE5oRISqn-Df0t-pmxgGRiOJ-ewkXgzNlIw?utm_source=invitation&utm_medium=link_copy&utm_campaign=default"
+           target="_blank"
+           rel="noopener noreferrer">
+          <span class="line-icon">LINE</span>
+          <span>加入 PTCG 演練群組 →</span>
+        </a>
+        <p class="community-hint">（免費・隨時可退出・歡迎所有玩家）</p>
+      </div>
+    </div>
+  </section>
+
   <section class="changelog-section">
     <details class="changelog-outer">
     <summary><h2>📋 版本更新記錄</h2></summary>
     <div class="changelog-list">
+
+      <details>
+        <summary><span class="ver-badge">v2.43</span> 新增玩家社群連結 — LINE 群組</summary>
+        <ul>
+          <li>首頁新增「💬 玩家社群」區塊（在「對戰演練」與「版本更新記錄」之間），含 LINE 群組邀請 QR Code + 直連按鈕</li>
+          <li>QR Code 圖片：static/line-group-qr.png（650×650 PNG，error correction H，從邀請 URL 自動產生）</li>
+          <li>視覺：綠色漸層卡片背景，LINE 品牌色 #06C755 按鈕；響應式 layout（480px 以下置中）</li>
+          <li>歡迎玩家加入群組找對手、討論牌組、回報 bug、追蹤更新</li>
+        </ul>
+      </details>
 
       <details>
         <summary><span class="ver-badge">v2.422</span> 修正 PASSIVE_ATTACK_BONUS 疊加副作用 — 飯匙蛇激動力量 / 仆斬將軍大將 / 電蜘蛛複眼</summary>
@@ -692,5 +727,97 @@
     color: #c00;
     margin-bottom: 1rem;
     font-size: 0.9rem;
+  }
+
+  /* v2.43 玩家社群區塊 */
+  .community-section {
+    background: linear-gradient(135deg, #f0f9f0 0%, #e8f5e8 100%);
+    border: 1px solid #c8e6c8;
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    margin-top: 1.5rem;
+  }
+  .community-section h2 {
+    margin-top: 0;
+  }
+  .community-desc {
+    margin: 0 0 1rem 0;
+    color: #2c4a2c;
+    font-size: 0.95rem;
+  }
+  .community-card {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .qr-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    background: #fff;
+    padding: 0.75rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .qr-image {
+    width: 140px;
+    height: 140px;
+    display: block;
+    image-rendering: pixelated;
+  }
+  .qr-caption {
+    font-size: 0.78rem;
+    color: #555;
+  }
+  .link-block {
+    flex: 1;
+    min-width: 200px;
+  }
+  .link-label {
+    margin: 0 0 0.6rem 0;
+    color: #2c4a2c;
+    font-size: 0.95rem;
+  }
+  .line-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: #06C755;
+    color: #fff !important;
+    padding: 0.7rem 1.2rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: background 0.15s, transform 0.1s;
+    box-shadow: 0 2px 6px rgba(6,199,85,0.25);
+  }
+  .line-button:hover {
+    background: #05a847;
+    transform: translateY(-1px);
+  }
+  .line-icon {
+    background: #fff;
+    color: #06C755;
+    font-weight: 800;
+    font-size: 0.78rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+  .community-hint {
+    margin: 0.6rem 0 0 0;
+    font-size: 0.78rem;
+    color: #5a7a5a;
+  }
+  @media (max-width: 480px) {
+    .community-card {
+      justify-content: center;
+    }
+    .link-block {
+      text-align: center;
+    }
   }
 </style>
