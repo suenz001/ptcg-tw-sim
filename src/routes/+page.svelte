@@ -175,6 +175,19 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.68</span> I 標 Wave 18 — 複製招式類收尾（5 張）</summary>
+        <ul>
+          <li>索羅亞克欺詐：複製對手戰鬥場印刷傷害最高的招式（沿用 N的索羅亞克ex 暗黑底牌 v2.119 模式）</li>
+          <li>阿響的樹才怪試著模仿：擲幣正面 → 同上</li>
+          <li>流氓熊貓無理取鬧 30：自動選對手戰鬥場印刷傷害最高招式 → 下回合 defender 無法使用</li>
+          <li>九尾靈怪變化：棄牌庫頂 1，若是支援者卡則執行該支援者效果（透過 TRAINER_EFFECTS 表動態執行）</li>
+          <li>火箭隊的貓老大ex高傲指令：翻對手牌庫頂 10 張，自動挑寶可夢印刷傷害最高的招式使用 + 對手牌庫重洗</li>
+          <li>I 標 Wave 1+...+18 累計：445+5 = 450 張寶可夢招式 effect 實裝</li>
+          <li>剩餘 ≤10 張為帕奇利茲麻痺門牙（attach trigger hook）+ 火箭隊的臭泥浸蝕污泥（KO timer）+ 超級赫拉克羅斯ex 重裝角擊（上回合受傷追蹤）+ 雙彈瓦斯瘋狂炸彈完整版（last attack 追蹤）— 需引擎新機制，列入後續版本</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.67</span> I 標 Wave 17 — 複雜批 II（22 張）</summary>
         <ul>
           <li>反傷類 (1 張)：藏瑪然特強大猛擊(70+下回合受招式對攻擊方放與受傷相同指示物)</li>
