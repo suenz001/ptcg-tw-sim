@@ -351,6 +351,7 @@ import './effects/cards/v2680_i_wave18_copy_attacks';
 import './effects/cards/v2690_i_wave19_engine_hooks';
 import './effects/cards/v2740_h_wave1_simple';
 import './effects/cards/v2750_h_wave2_full';
+import './effects/cards/v2760_h_wave3_complex';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
