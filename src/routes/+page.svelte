@@ -123,6 +123,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.464</span> 實裝泥巴魚｜飛撲圈套（I 標）</summary>
+        <ul>
+          <li>卡面：30 點傷害；下個對手回合，受到此招的寶可夢無法撤退；下個自己回合，受到此招的寶可夢受到招式傷害「+100」</li>
+          <li>復用既有兩個 helper：defCantRetreatNextPost（cantRetreatNextTurn）+ oppTargetTakeExtraNextPost（takeExtraDamageNextTurn）</li>
+          <li>關鍵互動：若對手用「寶可夢交替」/「老大的指令」等強制把該寶可夢換到備戰 → 兩個旗標都會被 clearActiveEffects 清除（既有機制），+100 加成自動失效</li>
+          <li>檔案：effects.ts 在「超音波幼蟲｜刺耳聲」附近插入 regPre/regPost</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.463</span> 對戰演練 — 1024×576 解析度 zoom 調更積極 + 加 70/65/60% 手動檔</summary>
         <ul>
           <li>玩家回報：1024×576 在 Mac Safari 上 v2.45 80% zoom 仍會切到右側卡牌（瀏覽器 UI 額外吃掉幾十 px 高度）</li>

@@ -9112,6 +9112,18 @@ regPost('電擊魔獸|雷電在地', playerNoAttacksNextPost('雷電在地'));
 regPre('超音波幼蟲|刺耳聲', (state, _a, _p) => ({ state, damage: 0 }));
 regPost('超音波幼蟲|刺耳聲', oppTargetTakeExtraNextPost(50, '刺耳聲'));
 
+// v2.464 泥巴魚｜飛撲圈套 — 30；
+//   下個對手回合：受到此招的寶可夢無法撤退
+//   下個自己回合：受到此招的寶可夢受到招式傷害 +100
+//   若對手用「寶可夢交替」等換場到備戰 → 兩個旗標都會被 clearActiveEffects 清掉
+//   （cantRetreatNextTurn / takeExtraDamageNextTurn / takeExtraDamageThisTurn 均在 clearActiveEffects 列表內）
+regPre('泥巴魚|飛撲圈套', (state, _a, _p) => ({ state, damage: 30 }));
+regPost('泥巴魚|飛撲圈套', (state, aIdx, pool, action) => {
+  let s = defCantRetreatNextPost()(state, aIdx, pool, action);
+  s = oppTargetTakeExtraNextPost(100, '飛撲圈套')(s, aIdx, pool, action);
+  return s;
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // Wave 37 — 強制對手將戰鬥寶可夢與備戰寶可夢互換（由對手選）
 //
