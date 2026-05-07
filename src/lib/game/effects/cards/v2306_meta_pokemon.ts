@@ -1,13 +1,13 @@
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { ABILITY_EFFECTS, addLog, drawCards, updatePlayer, withPending, RESOLVERS, regR } from '../_shared';
+import { ABILITY_EFFECTS, addLog, drawCards, updatePlayer, withPending, RESOLVERS, regR, regA } from '../_shared';
 
 /**
  * v2.306 Meta Pokemon (H, I, J)
  */
 
 // ── 吉雉雞ex (Fezandipiti ex) ──────────────────────────────────────────────────
-ABILITY_EFFECTS.set('吉雉雞ex|扭轉乾坤', (state, aIdx, pool, inst) => {
+regA('吉雉雞ex', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   if (p.abilityNamesUsedThisTurn?.includes('扭轉乾坤')) {
@@ -31,7 +31,7 @@ ABILITY_EFFECTS.set('吉雉雞ex|扭轉乾坤', (state, aIdx, pool, inst) => {
 });
 
 // ── 厄鬼椪 碧草面具ex (Teal Mask Ogerpon ex) ─────────────────────────────────────────
-ABILITY_EFFECTS.set('厄鬼椪 碧草面具ex|碧綠之舞', (state, aIdx, pool, inst) => {
+regA('厄鬼椪 碧草面具ex', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   const hasGrass = p.hand.some(c => {
@@ -89,7 +89,7 @@ regPre('厄鬼椪 碧草面具ex|萬葉陣雨', (state, aIdx, pool) => {
 });
 
 // ── 叉字蝠 (Crobat) ──────────────────────────────────────────────────────────────
-ABILITY_EFFECTS.set('叉字蝠|夜間工作', (state, aIdx, pool, inst) => {
+regA('叉字蝠', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   if (p.active?.iid !== inst.iid) return addLog(state, '夜間工作：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
@@ -122,7 +122,7 @@ regPre('叉字蝠|毒音波', (state, aIdx, pool) => ({ state, damage: 80 }));
 regPost('叉字蝠|毒音波', statusPost('poisoned'));
 
 // ── 妖火紅狐 (Delphox) ────────────────────────────────────────────────────────────
-ABILITY_EFFECTS.set('妖火紅狐|閃焰魔法', (state, aIdx, pool, inst) => {
+regA('妖火紅狐', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   const hasFire = p.hand.some(c => {
@@ -167,7 +167,7 @@ regPre('妖火紅狐|能量風暴', (state, aIdx, pool) => {
 });
 
 // ── 噗噗豬 (Grumpig) ─────────────────────────────────────────────────────────────
-ABILITY_EFFECTS.set('噗噗豬|能量舞步', (state, aIdx, pool, inst) => {
+regA('噗噗豬', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   if (p.deck.length === 0) return addLog(state, '能量舞步：牌庫沒有卡片，無法使用', aIdx);
@@ -254,7 +254,7 @@ regR('grumpig-energy-dance-distribute', (state, actorIdx, selectedIids, params, 
 regPre('噗噗豬|念動彈', (state, aIdx, pool) => ({ state, damage: 60 }));
 
 // ── 鐵面忍者 (Ninjask) ────────────────────────────────────────────────────────────
-ABILITY_EFFECTS.set('鐵面忍者|脫殼', (state, aIdx, pool, inst) => {
+regA('鐵面忍者', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   if (p.bench.length >= 5) return addLog(state, '脫殼：備戰區已滿，無法放置寶可夢', aIdx);
@@ -331,7 +331,7 @@ regPre('鐵面忍者|急速折返', (state, aIdx, pool) => ({ state, damage: 90 
 regPost('鐵面忍者|急速折返', selfSwapPost('急速折返'));
 
 // ── 貓鼬探長 (Gumshoos) ───────────────────────────────────────────────────────────
-ABILITY_EFFECTS.set('貓鼬探長|蒐證', (state, aIdx, pool, inst) => {
+regA('貓鼬探長', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   if (p.hand.length === 0) return addLog(state, '蒐證：手牌為空，無法使用', aIdx);
@@ -362,7 +362,7 @@ regR('gumshoos-investigate', (state, actorIdx, selectedIids, params, pool) => {
 regPre('貓鼬探長|咬住', (state, aIdx, pool) => ({ state, damage: 50 }));
 
 // ── 光電傘蜥 (Heliolisk) ──────────────────────────────────────────────────────────
-ABILITY_EFFECTS.set('光電傘蜥|頸傘發電', (state, aIdx, pool, inst) => {
+regA('光電傘蜥', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   if (!p.carnelliPlayedThisTurn) return addLog(state, '頸傘發電：這個回合沒有使出「卡娜莉」，無法使用', aIdx);
@@ -409,7 +409,7 @@ regPre('光電傘蜥|強大伏特', (state, aIdx, pool) => {
 });
 
 // ── 遠古巨蜓ex (Yanmega ex) ───────────────────────────────────────────────────────
-ABILITY_EFFECTS.set('遠古巨蜓ex|振翅高飛', (state, aIdx, pool, inst) => {
+regA('遠古巨蜓ex', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   if (p.active?.iid !== inst.iid) return addLog(state, '振翅高飛：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
@@ -488,8 +488,8 @@ const silcoonCascoonAbility = (state: GameState, aIdx: 0|1, pool: Map<string, Ca
     params: { titleOverride: '選擇 1 張「甲殼繭」或者「盾甲繭」' }
   });
 };
-ABILITY_EFFECTS.set('甲殼繭|增長繭', silcoonCascoonAbility);
-ABILITY_EFFECTS.set('盾甲繭|增長繭', silcoonCascoonAbility);
+regA('甲殼繭', 0, silcoonCascoonAbility);
+// v2.94 移除：盾甲繭|增長繭 — JSON 無此 abilities，dead code
 regR('silcoon-growth-cocoon', (state, actorIdx, selectedIids, params, pool) => {
   if (selectedIids.length === 0) {
     let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
@@ -511,31 +511,7 @@ regPre('甲殼繭|撞擊', (state, aIdx, pool) => ({ state, damage: 30 }));
 regPre('盾甲繭|交替', (state, aIdx, pool) => ({ state, damage: 0 }));
 regPost('盾甲繭|交替', selfSwapPost('交替'));
 
-// ── 大電海燕 (Kilowattrel)
-ABILITY_EFFECTS.set('大電海燕|閃電平局', (state, aIdx, pool, inst) => {
-  if (!inst) return state;
-  const p = state.players[aIdx];
-  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
-  if (!instInPlay) return state;
-  const hasLight = instInPlay.energyAttached.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && card.pokemonType === 'Lightning';
-  });
-  if (!hasLight) return addLog(state, '閃電平局：沒有附加基本【雷】能量，無法使用', aIdx);
-  instInPlay.abilityUsedThisTurn = true;
-  let s = addLog(state, '大電海燕：使用特性「閃電平局」，選擇身上 1 個基本【雷】能量丟棄', aIdx);
-  const lightEnergies = instInPlay.energyAttached.filter(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && card.pokemonType === 'Lightning';
-  });
-  if (lightEnergies.length === 1) {
-    return RESOLVERS.get('kilowattrel-flash-draw')!(s, aIdx, [lightEnergies[0].iid], { targetIid: inst.iid }, pool);
-  }
-  return withPending(s, {
-    type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    effectKey: 'kilowattrel-flash-draw', params: { targetIid: inst.iid, isBench: p.active?.iid !== inst.iid }
-  });
-});
+// ── 大電海燕 (Kilowattrel) — v2.94 移除 dead code（JSON 無此 ability）
 regR('kilowattrel-flash-draw', (state, actorIdx, selectedIids, params, pool) => {
   if (selectedIids.length === 0) return state;
   const targetIid = String(params?.targetIid ?? '');
@@ -573,18 +549,7 @@ regR('kilowattrel-flash-draw', (state, actorIdx, selectedIids, params, pool) => 
   return drawCards(s, actorIdx, drawCount);
 });
 
-// ── 尖牙陸鯊 (Gabite)
-ABILITY_EFFECTS.set('尖牙陸鯊|龍之呼喚', (state, aIdx, pool, inst) => {
-  if (!inst) return state;
-  const p = state.players[aIdx];
-  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
-  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
-  let s = addLog(state, '尖牙陸鯊：使用特性「龍之呼喚」，從牌庫選擇 1 張【龍】寶可夢加入手牌', aIdx);
-  return withPending(s, {
-    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    effectKey: 'gabite-dragons-call', params: { titleOverride: '選擇 1 張【龍】寶可夢' }
-  });
-});
+// ── 尖牙陸鯊 (Gabite) — v2.94 移除 dead code（JSON 無此 ability）
 regR('gabite-dragons-call', (state, actorIdx, selectedIids, params, pool) => {
   if (selectedIids.length === 0) {
     let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
@@ -603,19 +568,7 @@ regR('gabite-dragons-call', (state, actorIdx, selectedIids, params, pool) => {
   return addLog(s, `龍之呼喚：將「${targetCard.name}」加入手牌，並重洗牌庫`, actorIdx);
 });
 
-// ── 狂歡浪舞鴨 (Quaquaval)
-ABILITY_EFFECTS.set('狂歡浪舞鴨|能量嘉年華', (state, aIdx, pool, inst) => {
-  if (!inst) return state;
-  const p = state.players[aIdx];
-  if (p.hand.length === 0) return addLog(state, '能量嘉年華：手牌為空，無法使用', aIdx);
-  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
-  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
-  let s = addLog(state, '狂歡浪舞鴨：使用特性「能量嘉年華」，選擇 1 張基本能量附於自己的寶可夢', aIdx);
-  return withPending(s, {
-    type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    filter: 'BasicEnergy:Any', effectKey: 'quaquaval-energy-carnival', params: { titleOverride: '選擇 1 張基本能量' }
-  });
-});
+// ── 狂歡浪舞鴨 (Quaquaval) — v2.94 移除 dead code（JSON 為「快節奏」非「能量嘉年華」；fn 不符卡面）
 regR('quaquaval-energy-carnival', (state, actorIdx, selectedIids, params, pool) => {
   if (selectedIids.length === 0) return state;
   let s = addLog(state, '能量嘉年華：選擇附加目標', actorIdx);
@@ -646,20 +599,7 @@ regR('quaquaval-energy-carnival-attach', (state, actorIdx, selectedIids, params,
   return addLog(s, '能量嘉年華：已附著基本能量', actorIdx);
 });
 
-// ── 莫魯貝可 (Morpeko)
-ABILITY_EFFECTS.set('莫魯貝可|點心尋找', (state, aIdx, pool, inst) => {
-  if (!inst) return state;
-  const p = state.players[aIdx];
-  if (p.deck.length === 0) return addLog(state, '點心尋找：牌庫為空', aIdx);
-  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
-  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
-  let s = addLog(state, '莫魯貝可：使用特性「點心尋找」，查看牌庫上方 1 張並加入手牌或丟棄', aIdx);
-  const topCard = p.deck[0];
-  return withPending(s, {
-    type: 'reorder-deck-top', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: 1,
-    effectKey: 'morpeko-snack-search', params: { titleOverride: '將這張卡加入手牌（取消則丟棄）', candidateIids: [topCard.iid] }
-  });
-});
+// ── 莫魯貝可 (Morpeko) — v2.94 移除 dead code（JSON 為「搜尋點心」非「點心尋找」；fn 不符卡面）
 regR('morpeko-snack-search', (state, actorIdx, selectedIids, params, pool) => {
   const p = state.players[actorIdx];
   const targetIid = p.deck[0].iid;
@@ -675,7 +615,7 @@ regR('morpeko-snack-search', (state, actorIdx, selectedIids, params, pool) => {
 });
 
 // ── 象牙豬ex (Mamoswine ex)
-ABILITY_EFFECTS.set('象牙豬ex|毛象搬運', deckSearchToHandA(1, 'Pokemon:Any', '毛象搬運'));
+regA('象牙豬ex', 0, deckSearchToHandA(1, 'Pokemon:Any', '毛象搬運'));
 regPre('象牙豬ex|雷鳴行進', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const count = p.bench.filter(c => {
@@ -687,7 +627,7 @@ regPre('象牙豬ex|雷鳴行進', (state, aIdx, pool) => {
 });
 
 // ── 米立龍 (Tatsugiri) ───────────────────────
-ABILITY_EFFECTS.set('米立龍|集客', (state, aIdx, pool, inst) => {
+regA('米立龍', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   if (p.active?.iid !== inst.iid) return addLog(state, '集客：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
@@ -735,23 +675,7 @@ regR('tatsugiri-attract-customers', (state, actorIdx, selectedIids, params, pool
 });
 
 // ── 喵喵ex (Meowth ex) ───────────────────────
-ABILITY_EFFECTS.set('喵喵ex|殺手鐧捕捉', (state, aIdx, pool, inst) => {
-  if (!inst) return state;
-  const p = state.players[aIdx];
-  if (p.abilityNamesUsedThisTurn?.includes('殺手鐧捕捉')) {
-    return addLog(state, '殺手鐧捕捉：這個回合已經使用過「殺手鐧捕捉」，無法再使用', aIdx);
-  }
-  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
-  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
-  let s = updatePlayer(state, aIdx, pl => ({
-    ...pl, abilityNamesUsedThisTurn: [...(pl.abilityNamesUsedThisTurn ?? []), '殺手鐧捕捉']
-  }));
-  s = addLog(s, '喵喵ex：使用特性「殺手鐧捕捉」，從牌庫選擇 1 張支援者加入手牌', aIdx);
-  return withPending(s, {
-    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    filter: 'Trainer:Supporter', effectKey: 'meowth-ex-trump-catch'
-  });
-});
+// v2.94 移除 喵喵ex 殺手鐧捕捉 dead code — 真正實裝在 maroon_dragon_deck.ts 的 regA('喵喵ex', 0, ...)
 regR('meowth-ex-trump-catch', (state, actorIdx, selectedIids, params, pool) => {
   if (selectedIids.length === 0) {
     let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
@@ -772,7 +696,7 @@ regPre('喵喵ex|夾尾巴逃跑', (state, aIdx, pool) => ({ state, damage: 60 }
 regPost('喵喵ex|夾尾巴逃跑', selfBouncePost('夾尾巴逃跑'));
 
 // ── 芳香精 (Aromatisse) ───────────────────────
-ABILITY_EFFECTS.set('芳香精|收集香氣', deckSearchToHandA(2, 'BasicEnergy:Psychic', '收集香氣'));
+regA('芳香精', 0, deckSearchToHandA(2, 'BasicEnergy:Psychic', '收集香氣'));
 regPre('芳香精|踩踏', (state, aIdx, pool) => ({ state, damage: 50 }));
 regPost('芳香精|踩踏', (state, aIdx, pool) => {
   const p = state.players[aIdx];
@@ -787,7 +711,7 @@ regPost('芳香精|踩踏', (state, aIdx, pool) => {
 });
 
 // ── 莉佳的蔓藤怪 (Erika's Tangela) ───────────────────────
-ABILITY_EFFECTS.set('莉佳的蔓藤怪|百花齊放', (state, aIdx, pool, inst) => {
+regA('莉佳的蔓藤怪', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
@@ -828,5 +752,5 @@ regPost('莉佳的蔓藤怪|藤蔓攻擊', (state, aIdx, pool) => {
 });
 
 // ── 萌芽鹿 (Sawsbuck) ───────────────────────
-ABILITY_EFFECTS.set('萌芽鹿|四季變換', deckSearchToHandA(1, 'Trainer:Stadium', '四季變換'));
+regA('萌芽鹿', 0, deckSearchToHandA(1, 'Trainer:Stadium', '四季變換'));
 regPre('萌芽鹿|強攻', (state, aIdx, pool) => ({ state, damage: 110 }));

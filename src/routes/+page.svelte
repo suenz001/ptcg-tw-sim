@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.94</span> 修 v2306 21 個 ABILITY_EFFECTS key bug + 鐵掌力士｜大力捕捉器 + audit + 鐵律</summary>
+        <ul>
+          <li>修復 v2306_meta_pokemon.ts 的 21 個 <code>ABILITY_EFFECTS.set</code> key bug — 引擎查表用 <code>&#39;卡名&#124;abilityIndex&#39;</code>（數字），但 v2306 用 <code>&#39;卡名&#124;特性名&#39;</code> 全部 dead</li>
+          <li>15 個 convert 為 <code>regA(&#39;卡名&#39;, 0, fn)</code>：吉雉雞ex 扭轉乾坤 / 厄鬼椪 碧草面具ex 碧綠之舞 / 米立龍 集客 / 叉字蝠 夜間工作 / 妖火紅狐 閃焰魔法 / 噗噗豬 能量舞步 / 鐵面忍者 脫殼 / 貓鼬探長 蒐證 / 光電傘蜥 頸傘發電 / 遠古巨蜓ex 振翅高飛 / 甲殼繭 增長繭 / 象牙豬ex 毛象搬運 / 芳香精 收集香氣 / 莉佳的蔓藤怪 百花齊放 / 萌芽鹿 四季變換</li>
+          <li>1 個刪除（已有重複實裝）：喵喵ex 殺手鐧捕捉（maroon_dragon_deck.ts 已有 regA）</li>
+          <li>5 個刪除 dead code：盾甲繭 增長繭 / 大電海燕 閃電平局 / 尖牙陸鯊 龍之呼喚（JSON 無 abilities）；狂歡浪舞鴨 能量嘉年華 / 莫魯貝可 點心尋找（JSON 為不同效果，fn 邏輯與卡面不符）</li>
+          <li>實裝鐵掌力士｜大力捕捉器 — 從手牌使出這張卡並完成進化時可使用 1 次：選 1 隻對手備戰寶可夢與戰鬥場互換（復用 gust-opp resolver）</li>
+          <li>effects.ts <code>ON_EVOLVE_FROM_HAND_ABILITIES</code> Set 加入 <code>&#39;大力捕捉器&#39;</code></li>
+          <li>simplified audit：掃描 src/lib/game/effects/ 找出 25 筆真正的簡化點（已過濾「升級為完整」之類歷史註解）</li>
+          <li>更新 ptcg-push 鐵律：Rule 6（ABILITY_EFFECTS key 必須用 regA helper）+ Rule 7（嚴禁簡化實裝）</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.93b</span> 高使用率特性實裝完整（剩 2 張）</summary>
         <ul>
           <li>岩殿居蟹（SV11B）｜結實 — HP 全滿被招式 KO 時留 10 HP（與勤奮之心同邏輯，PASSIVE_PREVENT_KO 加 1 行即可）</li>

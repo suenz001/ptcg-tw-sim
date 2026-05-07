@@ -332,3 +332,31 @@ function openCleansingNextPick(st: GameState, idx: 0 | 1, _pool: Map<string, Car
     },
   });
 }
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3) 鐵掌力士｜大力捕捉器 (v2.94)
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「在自己的回合，從手牌使出這張卡並完成進化時，可使用 1 次。
+//        選擇 1 隻對手的備戰寶可夢，與戰鬥寶可夢互換。」
+//
+// 設計：
+//   - 加入 ON_EVOLVE_FROM_HAND_ABILITIES Set（engine.ts 在 EVOLVE 後 prompt 玩家）
+//   - regA 觸發：選 1 隻對手備戰 → 與對手戰鬥場互換（復用 'gust-opp' resolver）
+//   - 'gust-opp' 已實裝於 supporters_gust.ts，會把選中的對手備戰換到對手戰鬥場
+// ══════════════════════════════════════════════════════════════════════════════
+regA('鐵掌力士', 0, (st, idx, _pool, _cardInst) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const opp = st.players[dIdx];
+  if (!opp.active) return addLog(st, '大力捕捉器：對手戰鬥場無寶可夢', idx);
+  if (opp.bench.length === 0) return addLog(st, '大力捕捉器：對手備戰區無寶可夢', idx);
+  const s = addLog(st, '大力捕捉器：選 1 隻對手備戰寶可夢與戰鬥場互換', idx);
+  return withPending(s, {
+    type: 'opp-bench-choose',
+    actorIdx: idx,
+    sourcePlayerIdx: dIdx,
+    minCount: 1,
+    maxCount: 1,
+    effectKey: 'gust-opp',
+  });
+});
