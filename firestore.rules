@@ -60,10 +60,11 @@ service cloud.firestore {
                        || request.auth.uid == resource.data.hostUid
                     );
 
-      // v2.52 / v2.73：stale 房間任何 authed 用戶可清理
-      //   v2.52：lobby 房 + 10 分鐘無更新
-      //   v2.73：任何狀態（lobby/playing/ended）+ 5 分鐘無 heartbeat（updatedAt 老化）
-      //          解決 host 關瀏覽器後 P2 卡死、playing 房永遠殘留問題
+      // v2.52 / v2.73 / v2.81：stale 房間清理規則
+      //   v2.52：lobby 房 + 10 分鐘無更新 → 任何 authed 用戶可刪
+      //   v2.73：playing 房 + 5 分鐘無 heartbeat → 任何 authed 用戶可刪
+      //   v2.81：⚠️ ended 房永久保留供 admin 後台查歷史對戰紀錄；
+      //          原本「不分狀態 5min 任何人可刪」的條款移除
       allow delete: if request.auth != null && (
                        request.auth.uid in resource.data.memberUids
                        || request.auth.uid == resource.data.hostUid
@@ -71,7 +72,10 @@ service cloud.firestore {
                           resource.data.status == 'lobby'
                           && resource.data.updatedAt < request.time - duration.value(10, 'm')
                        )
-                       || resource.data.updatedAt < request.time - duration.value(5, 'm')
+                       || (
+                          resource.data.status == 'playing'
+                          && resource.data.updatedAt < request.time - duration.value(5, 'm')
+                       )
                     );
 
       allow read, write: if isAdmin();

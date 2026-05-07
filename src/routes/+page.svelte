@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.81</span> 修 v2.73 過度清理 — ended 房永久保留</summary>
+        <ul>
+          <li>v2.73 殭屍房清理規則放太寬：「updatedAt > 5min 任何 auth 用戶可刪 (不分狀態)」 + 主動掃 playing/ended 殭屍 → admin 後台的歷史對戰紀錄被慢慢吃光</li>
+          <li>修法：room.ts cleanupStaleNonLobbyRooms 只掃 playing；firestore.rules 把 stale-clean 限定為 lobby (10min) 或 playing (5min)，ended 房永久保留供 admin 後台查</li>
+          <li>⚠️ 已被刪掉的 ended 房 Firestore 無法復原；本次修正只能保護未來新增的紀錄</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.8</span> 修卡片資料一致性 — 移除 纏紅鶴ex 多餘的 [ex規則] 條目</summary>
         <ul>
           <li>纏紅鶴ex 在 SV-P-H.json 的 attacks[] 裡有一筆 scraper 誤收的「[ex規則] 寶可夢ex 昏厥時對手獲 2 張獎賞」條目（這是所有 ex 卡共通的卡面文字，不是真招式）</li>

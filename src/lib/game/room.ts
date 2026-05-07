@@ -406,7 +406,8 @@ async function cleanupStaleNonLobbyRooms(): Promise<void> {
   const threshold = HEARTBEAT_STALE_MS;
   // 不能用 where('status','!=','lobby')（Firestore 不支援單一 != 在組合 query）
   // 改成兩條：playing / ended
-  for (const status of ['playing', 'ended'] as const) {
+  // v2.81：只清 playing 殭屍房；ended 房永久保留供 admin 查歷史對戰
+  for (const status of ['playing'] as const) {
     try {
       const q = query(collection(db, 'rooms'), where('status', '==', status), limit(50));
       const snap = await getDocs(q);
