@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.86</span> 選擇 modal 兩個 UX 改進</summary>
+        <ul>
+          <li>每個選擇 modal 底部加全域拖曳提示「💡 提示：按住上方標題列可拖曳視窗到不擋場面的位置」（用 CSS ::after 一次套到所有 .selection-modal）</li>
+          <li>單選模式（maxCount === 1）優化：已選 1 張時點另一張卡會自動取消舊的並選新的（之前要先點舊的取消才能換選）</li>
+          <li>多選模式不變：仍要點同一張才能取消，避免誤觸破壞已選清單</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.85</span> 對戰 UI 加 user-select: none 防誤選反白</summary>
         <ul>
           <li>玩家提議：操作時偶爾會看到 UI 文字被瀏覽器誤反白（連點/拖曳卡片時容易發生）</li>

@@ -2234,8 +2234,17 @@
   }
   function toggleSelection(iid: string) {
     const next = new Set(selectionPicked);
-    if (next.has(iid)) { next.delete(iid); }
-    else if (pendingSelection && next.size < pendingSelection.maxCount) { next.add(iid); }
+    if (next.has(iid)) {
+      // 點已選 → 取消
+      next.delete(iid);
+    } else if (pendingSelection?.maxCount === 1 && next.size === 1) {
+      // v2.86 單選模式優化：已選 1 張時點另一張 → 自動取消舊的、選新的（不必先點舊的取消）
+      next.clear();
+      next.add(iid);
+    } else if (pendingSelection && next.size < pendingSelection.maxCount) {
+      // 多選模式或還沒選滿 → 加入
+      next.add(iid);
+    }
     selectionPicked = next;
   }
   // damage-distribute：點擊目標 +1 counter；達到 maxCount 後不再加
@@ -6056,5 +6065,23 @@
   .battle-root input, .battle-root textarea, .battle-root select {
     user-select: text;
     -webkit-user-select: text;
+  }
+
+  /* v2.86 modal 底部拖曳提示（避免玩家不知道視窗可拖開） */
+  .selection-modal::after {
+    content: '💡 提示：按住上方標題列可拖曳視窗到不擋場面的位置';
+    display: block;
+    text-align: center;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.55);
+    padding: 0.4rem 0.5rem 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: 0;
+    user-select: none;
+    pointer-events: none;
+  }
+  /* 拖曳後（dragged）視窗背景透明 — 提示也跟著淡化但仍可見 */
+  .selection-overlay.dragged .selection-modal::after {
+    color: rgba(255, 255, 255, 0.4);
   }
 </style>
