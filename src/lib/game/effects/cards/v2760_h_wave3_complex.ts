@@ -333,8 +333,9 @@ regPost('魔牆人偶|相仿秀', (state, aIdx, pool) => {
 //    Best-effort: 自方棄牌頂端是否為「未來」支援者
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('鐵武者|莊嚴之劍', (state, aIdx, _pool) => {
-  // v2.78 engine 已追蹤 state.supporterTagsUsedThisTurn[aIdx]
-  const tags = state.supporterTagsUsedThisTurn?.[aIdx] ?? [];
+  // v2.84 engine 追蹤 supporterTagsUsedThisTurn 改 object 結構
+  const sup = state.supporterTagsUsedThisTurn;
+  const tags = aIdx === 0 ? (sup?.p1 ?? []) : (sup?.p2 ?? []);
   const hasFutureSupp = tags.includes('未來');
   if (hasFutureSupp) return { state: addLog(state, '莊嚴之劍：本回合用過未來支援者 → 100+100 = 200', aIdx), damage: 200 };
   return { state: addLog(state, '莊嚴之劍：本回合未使出未來支援者 → 100', aIdx), damage: 100 };

@@ -2002,11 +2002,11 @@ function handlePlaying(
 
     let newState: GameState = { ...state, players };
     if (v278SupTagsToAdd.length > 0) {
-      const cur = newState.supporterTagsUsedThisTurn ?? [[], []];
-      const newSup: [string[], string[]] = [
-        aIdx === 0 ? [...cur[0], ...v278SupTagsToAdd] : cur[0],
-        aIdx === 1 ? [...cur[1], ...v278SupTagsToAdd] : cur[1],
-      ];
+      const cur = newState.supporterTagsUsedThisTurn ?? { p1: [], p2: [] };
+      const newSup = {
+        p1: aIdx === 0 ? [...cur.p1, ...v278SupTagsToAdd] : cur.p1,
+        p2: aIdx === 1 ? [...cur.p2, ...v278SupTagsToAdd] : cur.p2,
+      };
       newState = { ...newState, supporterTagsUsedThisTurn: newSup };
     }
 
@@ -4289,9 +4289,10 @@ function handlePlaying(
     currentPlayer.bench = currentPlayer.bench.map(clearV278ThisTurn);
     // v2.78 重置 currentPlayer supporterTagsUsedThisTurn
     {
-      const cur = state.supporterTagsUsedThisTurn ?? [[], []];
-      const newSup: [string[], string[]] = [cur[0], cur[1]];
-      newSup[aIdx] = [];
+      const cur = state.supporterTagsUsedThisTurn ?? { p1: [], p2: [] };
+      const newSup = { p1: cur.p1, p2: cur.p2 };
+      if (aIdx === 0) newSup.p1 = [];
+      else newSup.p2 = [];
       state = { ...state, supporterTagsUsedThisTurn: newSup };
     }
     // v2.78 凍結獠牙 lowEnergyCantAttack — currentPlayer side this-turn flag clear；對手 next → this

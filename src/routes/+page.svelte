@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.84</span> 找到連線對戰真正根因 — Firestore 不允許 array of arrays</summary>
+        <ul>
+          <li>真正根因：v2.78 加的 GameState 欄位 supporterTagsUsedThisTurn 型別是 [string&#91;&#93;, string&#91;&#93;] 即 nested array of arrays，但 Firestore 明確禁止「array within array」</li>
+          <li>每次 dispatch 後 pushGameState 帶這個欄位寫入 Firestore 都被拒收 → 本地狀態更新成功但對方 onSnapshot 永遠收不到新 gameState → 雙方狀態不同步 → 都看到等待對手行動</li>
+          <li>v2.82 _syncSeq 與 v2.83 停心跳都治標未治本（pushGameState 早就 silent fail，問題與心跳無關）</li>
+          <li>修法：types.ts supporterTagsUsedThisTurn 從 [string&#91;&#93;, string&#91;&#93;] 改為 &#123; p1: string&#91;&#93;; p2: string&#91;&#93; &#125; object 結構（Firestore 允許 map 中含 array）</li>
+          <li>engine.ts USE_TRAINER 寫入 + END_TURN 重置 + 鐵武者莊嚴之劍 PRE 讀取，全部改用 .p1 / .p2 存取</li>
+          <li>感謝 user 提示「只有連線對戰出問題」— 把焦點導向 Firestore 序列化層而非 engine reducer</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.83</span> 回滾 v2.82 _syncSeq 拒收邏輯 + 改用「playing 期間停心跳」防 race</summary>
         <ul>
           <li>v2.82 _syncSeq 拒收造成新 bug：雙方並發 dispatch 時 seq 從同一基準各自 +1，互相被拒收 → 連線對戰雙方 deadlock 都看到「等待對手行動」</li>

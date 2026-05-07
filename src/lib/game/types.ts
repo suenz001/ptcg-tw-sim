@@ -628,8 +628,9 @@ export interface GameState {
    * 初始值 [6, 6]。
    */
   oppPrizesAtMainEnd?: [number, number];
-  /** v2.78 莊嚴之劍 — 本回合自方已使出的支援者卡 tags。END_TURN 重置。 */
-  supporterTagsUsedThisTurn?: [string[], string[]];
+  /** v2.78 莊嚴之劍 — 本回合自方已使出的支援者卡 tags。END_TURN 重置。
+   *  v2.84：改 object 結構（p1/p2）避開 Firestore nested array 不允許的限制。 */
+  supporterTagsUsedThisTurn?: { p1: string[]; p2: string[] };
   /** v2.78 帝牙海獅｜凍結獠牙 — 對手能量 ≤2 寶可夢無法用招式（player-level lock）。 */
   lowEnergyCantAttackNextTurn?: [boolean, boolean];
   lowEnergyCantAttackThisTurn?: [boolean, boolean];
