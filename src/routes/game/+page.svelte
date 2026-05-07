@@ -1809,7 +1809,12 @@
       return;
     }
     const prevState = game;
-    const newState = applyAction(game, action as any, pool);
+    let newState = applyAction(game, action as any, pool);
+    // v2.82 線上同步序號 — 每次 dispatch 自增，用於 handleRoomUpdate 拒收倒退的 snapshot
+    if (newState !== prevState) {
+      const prevSeq = (prevState as any)?._syncSeq ?? 0;
+      newState = { ...newState, _syncSeq: prevSeq + 1 };
+    }
     // Debug：如果 action 被拒絕（state 沒變），印出 state 幫 debug
     if (newState === game) {
       console.warn('[PTCG] action 被 engine 拒絕:', action.type, {
@@ -2121,6 +2126,14 @@
 
     // 兩邊收到 gameState → 更新畫面
     if (room.gameState) {
+      // v2.82 拒收倒退的 snapshot（心跳 race 導致 Firestore push gameState 未 commit 時，
+      //   onSnapshot 可能先送來舊 gameState，會把本地剛 dispatch 的新狀態倒回去）
+      const incomingSeq = (room.gameState as any)?._syncSeq ?? 0;
+      const localSeq = (game as any)?._syncSeq ?? 0;
+      if (game && incomingSeq < localSeq) {
+        console.log('[v2.82 sync] ignoring stale snapshot (incoming seq', incomingSeq, '< local seq', localSeq, ')');
+        return;
+      }
       game = room.gameState;
       return;
     }

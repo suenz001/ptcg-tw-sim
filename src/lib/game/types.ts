@@ -627,6 +627,11 @@ export interface GameState {
    * 若 MainEnd < LastTurnEnd → 對手在他們的主回合中取過獎賞（= 我方寶可夢被對手主動 KO）。
    * 初始值 [6, 6]。
    */
+  /**
+   * v2.82 線上同步序號 — 每次 dispatch 後自增，用於拒收因心跳寫入觸發的舊 snapshot
+   * （避免本地新狀態被 Firestore 心跳 race 倒推回舊 gameState）。
+   */
+  _syncSeq?: number;
   oppPrizesAtMainEnd?: [number, number];
   /** v2.78 莊嚴之劍 — 本回合自方已使出的支援者卡 tags。END_TURN 重置。 */
   supporterTagsUsedThisTurn?: [string[], string[]];
