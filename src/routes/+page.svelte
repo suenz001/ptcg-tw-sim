@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.88</span> 戰鬥 log 著色與粗體優化</summary>
+        <ul>
+          <li>玩家提議：戰鬥敘述 log 過於單調 — 新增 render-side tokenizer 把 message 切片，依類別套不同顏色 / 粗體</li>
+          <li>類別色票：招式/特性【XX】金色粗體 · 被擊倒紅色粗體 · +N 張獎勵牌金黃粗體 · 傷害數字橘紅 · 回 HP 翠綠 · 狀態異常紫色 · 進化翠綠 · 擲硬幣淡黃 · 抽牌/重洗/搜尋牌庫淡灰</li>
+          <li>整行樣式：「回合結束，換 X 行動」自動套 turn-marker 分隔器（淡藍色 border + 背景）· 勝負訊息加金色 box</li>
+          <li>私有訊息（onlyOwner）多加 🔒 icon 與淡紫色 border-left，避免玩家誤以為對手也看得到</li>
+          <li>純 render-side：不動 LogEntry / addLog API、不影響 game state、不影響連線同步</li>
+          <li>不依靠顏色獨佔資訊：粗體 + emoji + 【】 同時使用，色弱友善</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.87</span> 同類能量批次附加 picker 改 +/- 計數器 UI</summary>
         <ul>
           <li>玩家提議：龐克練肌（瑪俐的長毛巨魔ex）這種「附多張同種類能量到多隻寶可夢」的卡，舊版要逐張選目標 + 逐張按確認，操作非常繁瑣</li>

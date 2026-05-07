@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
   import { onMount, onDestroy } from 'svelte';
   import { fly, scale, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -3349,7 +3350,15 @@
       <div class="log-col" title="向下滾動可查看從戰鬥開始到現在的完整記錄">
         {#each [...(game.log??[])].reverse() as entry, i}
           <!-- v2.130：privateMessage 只給 entry.playerIndex 本人看（對手 / 系統 fallback 到 message） -->
-          <div class="log-line" class:log-sys={entry.playerIndex===null} class:log-latest={i===0}>{entry.privateMessage && entry.playerIndex === myIdx ? entry.privateMessage : entry.message}</div>
+          <!-- v2.88：tokenize 後依類別套色 + 整行類別（turn-marker / victory）-->
+          {@const _isPrivate = !!(entry.privateMessage && entry.playerIndex === myIdx)}
+          {@const _msgText = _isPrivate ? entry.privateMessage : entry.message}
+          {@const _lineCls = logLineClass(_msgText ?? '')}
+          {@const _tokens = tokenizeLogMessage(_msgText ?? '')}
+          <div class="log-line {_lineCls}" class:log-sys={entry.playerIndex===null} class:log-latest={i===0} class:log-private={_isPrivate}>
+            {#if _isPrivate}<span class="log-private-icon" title="只有你看得到">🔒</span>{/if}
+            {#each _tokens as tok}<span class={tok.cls}>{tok.text}</span>{/each}
+          </div>
         {/each}
       </div>
     </div>
@@ -5487,6 +5496,31 @@
   .log-line:last-child{ border-bottom:none; }
   .log-sys{ color:#aaffcc; font-weight:600; }
   .log-latest{ background:rgba(170,255,204,.06); padding-left:.3rem; border-left:2px solid #aaffcc; }
+  /* v2.88 戰鬥 log 著色 — 各類別 token 樣式 ─────────────────────────── */
+  .log-line .log-bracket   { color:#ffd166; font-weight:700; }       /* 招式/特性名【XX】*/
+  .log-line .log-ko        { color:#ff6b6b; font-weight:700; }       /* 被擊倒 / KO */
+  .log-line .log-prize     { color:#ffc93c; font-weight:700; }       /* +N 張獎勵牌 */
+  .log-line .log-damage    { color:#ff8a65; font-weight:600; }       /* N 點傷害 */
+  .log-line .log-heal      { color:#7fdc7f; font-weight:600; }       /* 回 N HP */
+  .log-line .log-status    { color:#ce93d8; font-weight:600; }       /* 中毒/灼傷/麻痺/睡眠/混亂 */
+  .log-line .log-evolve    { color:#7fdc7f; font-weight:600; }       /* 進化成 */
+  .log-line .log-coin      { color:#fff59d; font-weight:600; }       /* 擲硬幣/正面/反面 */
+  .log-line .log-secondary { color:#7a8a7a; }                        /* 抽牌/重洗/搜尋牌庫（淡化）*/
+  /* 整行類別 ──────────────────────────────────────────────────────── */
+  .log-line.log-turn-marker {
+    background:rgba(170,200,255,.08); border-top:1px solid rgba(170,200,255,.3);
+    border-bottom:1px solid rgba(170,200,255,.3); margin:.3rem 0;
+    padding:.35rem .3rem; color:#bcd4ff; font-weight:700;
+  }
+  .log-line.log-victory {
+    background:rgba(255,200,80,.12); border:1px solid rgba(255,200,80,.5);
+    border-radius:4px; padding:.4rem; margin:.3rem 0;
+    color:#ffe082; font-weight:700;
+  }
+  .log-line.log-private {
+    background:rgba(170,140,255,.05); border-left:2px solid rgba(170,140,255,.4); padding-left:.3rem;
+  }
+  .log-private-icon { margin-right:.2rem; opacity:.8; font-size:.85em; }
 
   .btn-retreat{ padding:.1rem .3rem; font-size:.62rem; background:#3a3a6a; border:1px solid #6a6aaa; border-radius:4px; color:#ccf; cursor:pointer; }
   .btn-retreat:hover{ background:#4a4a8a; }
