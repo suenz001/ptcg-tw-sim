@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.8</span> 修卡片資料一致性 — 移除 纏紅鶴ex 多餘的 [ex規則] 條目</summary>
+        <ul>
+          <li>纏紅鶴ex 在 SV-P-H.json 的 attacks[] 裡有一筆 scraper 誤收的「[ex規則] 寶可夢ex 昏厥時對手獲 2 張獎賞」條目（這是所有 ex 卡共通的卡面文字，不是真招式）</li>
+          <li>所有其他 ex 卡都正確排除這段，唯獨此張因 SV-P promo 版面差異被誤收</li>
+          <li>清掉後資料庫一致；引擎本來就內建處理 ex KO 獎賞 +1，行為不變</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.79</span> 佛烈托斯 鐵之震動完整 UI 實裝</summary>
         <ul>
           <li>原本因「自由分配能量」UI 缺工而 fallback 為玩家手動移動，現完整實裝</li>
