@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.91</span> Wave 1 — 7 個 helper 統一加招式效果免疫檢查</summary>
+        <ul>
+          <li>v2.89/v2.90 audit 找到 29 處繞過免疫的路徑，本波先修「修 1 個 helper = 同時修多卡」的 7 個共用 helper</li>
+          <li>defCantAttackNextPost — 對手下回合無法使用招式（雪絨蛾｜冰冷寒氣）</li>
+          <li>defNextAtkReducePost — 對手下次傷害 -N（黑魯加｜大聲咆哮、嘎啦嘎啦｜叫聲、超級火炎獅ex｜吠）</li>
+          <li>defToolDiscardPre — 丟對手戰鬥場道具（金魚王｜啄落、破破舵輪｜破壞船錨、烈雀｜啄食、拉達｜削落、燃燒蟲｜啄落、派帕的貪心栗鼠｜咬取）</li>
+          <li>defToolDiscardParalyzePre — 丟道具+麻痺（N的電電蟲｜劈哩啪啦短路）</li>
+          <li>oppTargetTakeExtraNextPost — 對手下回合受招式 +N（超音波幼蟲｜刺耳聲、泥巴魚｜飛撲圈套）</li>
+          <li>oppActiveCantAttachEnergyNextPost — 對手下回合不能附能量（晶光花｜侵蝕碎塊）</li>
+          <li>oppActiveDeferredPrizeNextPost — 若 KO 多 +N 張獎勵（蝶結萌虻｜多餘花粉）</li>
+          <li>statusPost helper 重構：原本只走 hasEffectShield（薄霧/硬岩/皇帝之勢），改成走 canApplyAttackEffectToTarget 涵蓋抵抗之幕</li>
+          <li>defToolDiscardPre/Paralyze 設計：被免疫擋下時「傷害仍正常造成」（卡面有列傷害值的部分屬招式傷害，不被招式效果免疫擋），只有 tool 丟棄/麻痺等「招式效果」部分被擋</li>
+          <li>單一 push 同時修補約 15+ 招式</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.90</span> 招式效果與免疫標籤化重構</summary>
         <ul>
           <li>玩家建議：把招式效果免疫做成統一的標籤管理，未來新增免疫卡只要加一行即可</li>

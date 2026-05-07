@@ -1771,11 +1771,15 @@ export function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused'
     if (status === 'confused' && isConfusionImmune(def.active, pool)) {
       return addLog(state, `${defName}｜憨憨臉：免疫【混亂】`, aIdx);
     }
-    // v2.92：硬岩【鬥】能量 — 官網：「附有這張卡的【鬥】寶可夢不會受到對手的寶可夢使用招式的效果的影響。」
-    // 免疫對象是「被攻擊的寶可夢（def）」，所以檢查 def.active 是否為【鬥】寶可夢且附有硬岩。
-    if (def.active && hasEffectShield(def.active, pool)) {
-      const defName2 = pool.get(def.active.cardId)?.name ?? '?';
-      return addLog(state, `${defName2}｜硬岩【鬥】能量：免疫招式效果`, aIdx);
+    // v2.91：統一走 canApplyAttackEffectToTarget — 涵蓋薄霧能量 / 硬岩【鬥】能量 /
+    // 皇帝之勢 / 抵抗之幕（基礎火箭隊）。
+    if (def.active) {
+      const defCardForGuard = pool.get(def.active.cardId);
+      const guardSP = canApplyAttackEffectToTarget(state, aIdx, def.active, defCardForGuard, pool);
+      if (guardSP.blocked) {
+        const defName2 = pool.get(def.active.cardId)?.name ?? '?';
+        return addLog(state, `${defName2}｜${guardSP.reason}`, aIdx);
+      }
     }
     // v2.175：泡沫【水】能量 — 對指定狀態免疫
     const immune = checkSpecialEnergyStatusImmune(def.active, status, pool);
@@ -2313,11 +2317,18 @@ regPost('鐵斑葉ex|稜鏡刀鋒', selfCantAttackNextPost());
 
 // 對手受招後下回合無法攻擊
 function defCantAttackNextPost(): AttackPostFn {
-  return (state, aIdx) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, cantAttackPending: true };
+    if (!def.active) return state;
+    // v2.91 招式效果免疫檢查
+    const defCard = pool.get(def.active.cardId);
+    const guard = canApplyAttackEffectToTarget(state, aIdx, def.active, defCard, pool);
+    if (guard.blocked) {
+      return addLog(state, `${defCard?.name ?? '?'}｜${guard.reason}（不施加「下回合無法使用招式」）`, aIdx);
+    }
+    def.active = { ...def.active, cantAttackPending: true };
     players[dIdx] = def;
     return { ...state, players };
   };
@@ -2347,11 +2358,18 @@ regPost('飄飄球|膨脹', selfDmgReducePost(10));
 
 // 對手受招後下回合使用招式傷害 -N
 function defNextAtkReducePost(n: number): AttackPostFn {
-  return (state, aIdx) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, damageReduceNextHit: n };
+    if (!def.active) return state;
+    // v2.91 招式效果免疫檢查
+    const defCard = pool.get(def.active.cardId);
+    const guard = canApplyAttackEffectToTarget(state, aIdx, def.active, defCard, pool);
+    if (guard.blocked) {
+      return addLog(state, `${defCard?.name ?? '?'}｜${guard.reason}（不施加「下次受招式 -${n}」）`, aIdx);
+    }
+    def.active = { ...def.active, damageReduceNextHit: n };
     players[dIdx] = def;
     return addLog({ ...state, players }, `對手下次使用招式傷害 -${n}`, aIdx);
   };
@@ -8415,6 +8433,16 @@ function defToolDiscardPre(base: number, label: string): AttackPreFn {
     if (!def || !def.toolAttached) {
       return { state: addLog(state, `${label}：對手戰鬥寶可夢無道具`, aIdx), damage: base };
     }
+    // v2.91 招式效果免疫檢查（傷害仍然造成，只是不丟道具）
+    const defCardForGuard = pool.get(def.cardId);
+    const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCardForGuard, pool);
+    if (guard.blocked) {
+      const dName = pool.get(def.cardId)?.name ?? '?';
+      return {
+        state: addLog(state, `${label}：${dName}｜${guard.reason}（不丟道具，傷害正常造成）`, aIdx),
+        damage: base,
+      };
+    }
     const toolName = pool.get(def.toolAttached.cardId)?.name ?? '?';
     const discarded = def.toolAttached;
     const defName = pool.get(def.cardId)?.name ?? '?';
@@ -9248,10 +9276,17 @@ function playerNoAttacksNextPost(label: string): AttackPostFn {
  * 若對手此攻擊被擊倒（active 已 null），旗標自然失效。
  */
 function oppTargetTakeExtraNextPost(bonus: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
     if (!d.active) return state;
+    // v2.91 招式效果免疫檢查
+    const defCard = pool.get(d.active.cardId);
+    const guard = canApplyAttackEffectToTarget(state, aIdx, d.active, defCard, pool);
+    if (guard.blocked) {
+      return addLog(state,
+        `${label}：${defCard?.name ?? '?'}｜${guard.reason}（不施加「下回合受招式 +${bonus}」）`, aIdx);
+    }
     const players = [...state.players] as [PlayerState, PlayerState];
     players[dIdx] = {
       ...d,
@@ -9586,6 +9621,16 @@ function defToolDiscardParalyzePre(base: number, label: string): AttackPreFn {
     if (!def || !def.toolAttached) {
       return { state: addLog(state, `${label}：對手戰鬥寶可夢無道具（不觸發麻痺）`, aIdx), damage: base };
     }
+    // v2.91 招式效果免疫檢查（傷害仍然造成，但不丟道具也不麻痺）
+    const defCardForGuard = pool.get(def.cardId);
+    const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCardForGuard, pool);
+    if (guard.blocked) {
+      const dName = pool.get(def.cardId)?.name ?? '?';
+      return {
+        state: addLog(state, `${label}：${dName}｜${guard.reason}（不丟道具、不麻痺，傷害正常造成）`, aIdx),
+        damage: base,
+      };
+    }
     const defName = pool.get(def.cardId)?.name ?? '?';
     const toolName = pool.get(def.toolAttached.cardId)?.name ?? '?';
     const discarded = def.toolAttached;
@@ -9677,6 +9722,13 @@ function oppActiveCantAttachEnergyNextPost(label: string): AttackPostFn {
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
     if (!d.active) return state;
+    // v2.91 招式效果免疫檢查
+    const defCard = pool.get(d.active.cardId);
+    const guard = canApplyAttackEffectToTarget(state, aIdx, d.active, defCard, pool);
+    if (guard.blocked) {
+      return addLog(state,
+        `${label}：${defCard?.name ?? '?'}｜${guard.reason}（不施加「下回合不能附能量」）`, aIdx);
+    }
     const dName = pool.get(d.active.cardId)?.name ?? '?';
     const players = [...state.players] as [PlayerState, PlayerState];
     players[dIdx] = { ...d, active: { ...d.active, cantAttachEnergyNextTurn: true } };
@@ -9689,6 +9741,13 @@ function oppActiveDeferredPrizeNextPost(bonus: number, label: string): AttackPos
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
     if (!d.active) return state;
+    // v2.91 招式效果免疫檢查
+    const defCard = pool.get(d.active.cardId);
+    const guard = canApplyAttackEffectToTarget(state, aIdx, d.active, defCard, pool);
+    if (guard.blocked) {
+      return addLog(state,
+        `${label}：${defCard?.name ?? '?'}｜${guard.reason}（不施加「KO 多 +${bonus} 張獎勵」）`, aIdx);
+    }
     const dName = pool.get(d.active.cardId)?.name ?? '?';
     const players = [...state.players] as [PlayerState, PlayerState];
     players[dIdx] = {
