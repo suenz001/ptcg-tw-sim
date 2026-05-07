@@ -1576,22 +1576,78 @@ function hasEffectShield(inst: CardInstance | null, pool: Map<string, Card>): bo
 }
 
 /**
- * v2.89 統一檢查：「招式效果」是否可施加於指定目標寶可夢。
+ * v2.90 「招式效果免疫」declarative tag map
+ *
+ * 設計：未來新增「免疫招式效果」的卡（特殊能量 / 特性 / Tool）只要往本 map .set() 一行即可，
+ *      canApplyAttackEffectToTarget 會自動檢查所有註冊項。
+ *
+ * kind 列舉：
+ *   - 'energy-on-target'  — 目標身上附有此名稱的能量（薄霧能量、硬岩【鬥】能量）
+ *   - 'self-ability'      — 目標自身擁有此名稱的特性（帝王拿波ex 皇帝之勢）
+ *   - 'field-ability'     — defender 場上有此名稱特性（火箭隊的急凍鳥 抵抗之幕）
+ *
+ * filter（可選）：
+ *   - requireType: 目標寶可夢屬性必須相符（硬岩【鬥】只保護【鬥】寶可夢）
+ *   - targetFilter: 'BasicRocket' — 目標必須是【基礎】火箭隊（抵抗之幕）
+ *
+ * 不在本 map 內的免疫機制：
+ *   - 純樸（immuneToAttackEffectsThisTurn flag）— engine ATTACK_POST 直接 short-circuit
+ *   - 陳舊的背蓋化石（fossilOnField）— engine ATTACK_POST 直接 short-circuit
+ *   - 對戰圓形 / 太晶 / 花之帷幔 — resolveBenchGuard 處理（限備戰目標）
+ */
+export type AttackEffectImmunityKind =
+  | 'energy-on-target'
+  | 'self-ability'
+  | 'field-ability';
+
+export interface AttackEffectImmunityRule {
+  kind: AttackEffectImmunityKind;
+  requireType?: EnergyType;       // 限制目標寶可夢屬性（如 Fighting）
+  targetFilter?: 'BasicRocket';   // 額外限制目標類別
+}
+
+export const ATTACK_EFFECT_IMMUNITY = new Map<string, AttackEffectImmunityRule>([
+  // 特殊能量
+  ['薄霧能量',         { kind: 'energy-on-target' }],
+  ['硬岩【鬥】能量',   { kind: 'energy-on-target', requireType: 'Fighting' }],
+  // 自身特性
+  ['皇帝之勢',         { kind: 'self-ability' }],
+  // 場上特性
+  ['抵抗之幕',         { kind: 'field-ability', targetFilter: 'BasicRocket' }],
+]);
+
+/**
+ * v2.90 「招式效果」分類 informational tag
+ *
+ * 標記每個 attack 的 POST 屬性，協助未來 audit / debug / 玩家提示：
+ *
+ * - ATTACK_EFFECT_ONLY: 純招式效果（regPre damage = 0，全部效果走 regPost），如：
+ *     胡地|手之力量、來悲粗茶ex|熬返
+ *
+ * - ATTACK_DAMAGE_PLUS_EFFECT: 招式傷害 + 招式效果混合，如：
+ *     多龍巴魯托ex|幻影奇襲（200 傷害 + 6 指示物）
+ *     奧利瓦ex|油之機關槍（0 + 6×20 指示物，但分類為混合因為傷害以指示物形式表達）
+ *
+ * 兩個 set 是 informational，不直接驅動行為。免疫檢查仍由 ATTACK_EFFECT_IMMUNITY 走。
+ */
+export const ATTACK_EFFECT_ONLY = new Set<string>([
+  '胡地|手之力量',
+  '來悲粗茶ex|熬返',
+]);
+
+export const ATTACK_DAMAGE_PLUS_EFFECT = new Set<string>([
+  '多龍巴魯托ex|幻影奇襲',
+  '奧利瓦ex|油之機關槍',
+]);
+
+/**
+ * v2.89/v2.90 統一檢查：「招式效果」是否可施加於指定目標寶可夢。
  *
  * PTCG 規則區分：
  *   - 招式傷害（attack-damage）— 卡面有列傷害值（如 210），走 weakness/resistance/減傷管線
  *   - 招式效果（attack-effect）— 卡面文字描述的效果（放傷害指示物、施加狀態、棄能量等）
  *
- * 「招式效果」對 defender 的免疫機制（本 helper 檢查的目標）：
- *   - 薄霧能量（附於目標）— 任何屬性寶可夢免疫招式效果
- *   - 硬岩【鬥】能量（附於目標 + 目標為【鬥】寶可夢）— 免疫招式效果
- *   - 帝王拿波ex 皇帝之勢（特性，自身）— 免疫招式效果
- *   - 火箭隊的急凍鳥 抵抗之幕（場上特性）— 自方所有【基礎】火箭隊寶可夢免疫招式效果
- *
- * 注意：
- *   - 純樸（自身 immuneToAttackEffectsThisTurn）與 陳舊的背蓋化石（fossilOnField）由 engine
- *     在 ATTACK_POST 階段直接 short-circuit 整個 regPost，不需呼叫端再檢查。
- *   - 對戰圓形 / 太晶 / 花之帷幔 由 resolveBenchGuard 處理（限備戰目標）。
+ * 本 helper 走 ATTACK_EFFECT_IMMUNITY map declarative 檢查（v2.90 重構）。
  *
  * 使用時機：在「直接放傷害指示物 / 對 defender 施加效果」的招式 regPost 或 resolver 中，
  *           實際對 target 加 damage 前呼叫。回傳 blocked: true 時應 log 並 skip 該目標。
@@ -1599,7 +1655,7 @@ function hasEffectShield(inst: CardInstance | null, pool: Map<string, Card>): bo
  * 真實案例：
  *   - 胡地｜手之力量（手牌張數×2 個指示物 → 對手戰鬥場）
  *   - 來悲粗茶ex｜熬返（草能量×2 個指示物 → 對手選 1 隻）
- *   - 多龍巴魯托ex｜幻影奇襲（6 個指示物 → 對手備戰自由分配）
+ *   - 多龍巴魯托ex｜幻影奇襲（6 個指示物 → 對手備戰自由分配；200 傷害不受此影響）
  *   - 奧利瓦ex｜油之機關槍（6×20 → 對手任意自由分配）
  *   - cursed-bomb（彷徨夜靈/黑夜魔靈 等：N 個指示物 → 任選對手）
  */
@@ -1610,22 +1666,34 @@ export function canApplyAttackEffectToTarget(
   targetCard: Card | undefined,
   pool: Map<string, Card>,
 ): { blocked: true; reason: string } | { blocked: false } {
-  // 1. hasEffectShield — 薄霧能量 / 硬岩【鬥】能量 / 帝王拿波ex 皇帝之勢
-  if (hasEffectShield(target, pool)) {
-    // 細分判斷出具體哪一個（用於 log 訊息）
-    const energyNames = target.energyAttached.map(e => pool.get(e.cardId)?.name ?? '');
-    if (energyNames.includes('薄霧能量')) {
-      return { blocked: true, reason: '薄霧能量 免疫招式效果' };
-    }
-    if (energyNames.includes('硬岩【鬥】能量')) {
-      return { blocked: true, reason: '硬岩【鬥】能量 免疫招式效果' };
-    }
-    return { blocked: true, reason: '皇帝之勢 免疫招式效果' };
-  }
-  // 2. 火箭隊的急凍鳥 抵抗之幕（target 必須是【基礎】火箭隊）
   const dIdx = (1 - atkIdx) as 0 | 1;
-  if (hasRocketVeil(state, dIdx, pool) && isRocketBasicTarget(targetCard)) {
-    return { blocked: true, reason: '火箭隊的急凍鳥 抵抗之幕 效果' };
+  for (const [name, rule] of ATTACK_EFFECT_IMMUNITY) {
+    if (rule.kind === 'energy-on-target') {
+      // 目標身上附有此名稱的能量；若有 requireType，目標屬性必須相符
+      if (rule.requireType && targetCard?.pokemonType !== rule.requireType) continue;
+      if (target.energyAttached.some(e => pool.get(e.cardId)?.name === name)) {
+        return { blocked: true, reason: `${name} 免疫招式效果` };
+      }
+    } else if (rule.kind === 'self-ability') {
+      // 目標自身擁有此名稱特性
+      if (targetCard?.abilities?.some(a => a.name === name)) {
+        return { blocked: true, reason: `${name} 免疫招式效果` };
+      }
+    } else if (rule.kind === 'field-ability') {
+      // defender 場上有此名稱特性 + 目標符合 targetFilter
+      const defender = state.players[dIdx];
+      const allDef = [defender.active, ...defender.bench].filter((c): c is CardInstance => !!c);
+      const hasFieldAbility = allDef.some(c => {
+        const card = pool.get(c.cardId);
+        return card?.abilities?.some(a => a.name === name);
+      });
+      if (!hasFieldAbility) continue;
+      // 檢查 targetFilter
+      if (rule.targetFilter === 'BasicRocket') {
+        if (!isRocketBasicTarget(targetCard)) continue;
+      }
+      return { blocked: true, reason: `${name} 效果` };
+    }
   }
   return { blocked: false };
 }

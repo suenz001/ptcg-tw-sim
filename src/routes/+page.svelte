@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.90</span> 招式效果與免疫標籤化重構</summary>
+        <ul>
+          <li>玩家建議：把招式效果免疫做成統一的標籤管理，未來新增免疫卡只要加一行即可</li>
+          <li>新增 ATTACK_EFFECT_IMMUNITY declarative map（effects.ts）— 集中管理所有 defender 端的招式效果免疫機制</li>
+          <li>支援 3 種 immunity kind：energy-on-target（薄霧/硬岩）/ self-ability（皇帝之勢）/ field-ability（抵抗之幕）</li>
+          <li>支援額外 filter：requireType（硬岩限【鬥】）/ targetFilter（抵抗之幕限基礎火箭隊）</li>
+          <li>v2.89 的 canApplyAttackEffectToTarget 重構為 walk map 而非 hardcoded 4 條 if — 未來新增免疫卡：ATTACK_EFFECT_IMMUNITY.set('卡名', &#123; kind: '...', ... &#125;) 一行搞定</li>
+          <li>新增 informational tag set：ATTACK_EFFECT_ONLY（純招式效果，無招式傷害）/ ATTACK_DAMAGE_PLUS_EFFECT（混合，如幻影奇襲 200 傷害 + 6 指示物）</li>
+          <li>確認多龍巴魯托ex|幻影奇襲：200 招式傷害走正常管線（不受薄霧擋）+ 6 指示物 per-target 走免疫檢查（受薄霧擋）— 兩段路徑分離，邏輯正確</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.89</span> 修「招式效果 vs 招式傷害」邏輯 bug</summary>
         <ul>
           <li>玩家回報：胡地｜手之力量（手牌數 × 2 個傷害指示物）這類沒有招式傷害數值、純粹「放傷害指示物」的招式效果，繞過了 defender 的招式效果免疫</li>
