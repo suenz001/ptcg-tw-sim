@@ -1576,6 +1576,61 @@ function hasEffectShield(inst: CardInstance | null, pool: Map<string, Card>): bo
 }
 
 /**
+ * v2.89 統一檢查：「招式效果」是否可施加於指定目標寶可夢。
+ *
+ * PTCG 規則區分：
+ *   - 招式傷害（attack-damage）— 卡面有列傷害值（如 210），走 weakness/resistance/減傷管線
+ *   - 招式效果（attack-effect）— 卡面文字描述的效果（放傷害指示物、施加狀態、棄能量等）
+ *
+ * 「招式效果」對 defender 的免疫機制（本 helper 檢查的目標）：
+ *   - 薄霧能量（附於目標）— 任何屬性寶可夢免疫招式效果
+ *   - 硬岩【鬥】能量（附於目標 + 目標為【鬥】寶可夢）— 免疫招式效果
+ *   - 帝王拿波ex 皇帝之勢（特性，自身）— 免疫招式效果
+ *   - 火箭隊的急凍鳥 抵抗之幕（場上特性）— 自方所有【基礎】火箭隊寶可夢免疫招式效果
+ *
+ * 注意：
+ *   - 純樸（自身 immuneToAttackEffectsThisTurn）與 陳舊的背蓋化石（fossilOnField）由 engine
+ *     在 ATTACK_POST 階段直接 short-circuit 整個 regPost，不需呼叫端再檢查。
+ *   - 對戰圓形 / 太晶 / 花之帷幔 由 resolveBenchGuard 處理（限備戰目標）。
+ *
+ * 使用時機：在「直接放傷害指示物 / 對 defender 施加效果」的招式 regPost 或 resolver 中，
+ *           實際對 target 加 damage 前呼叫。回傳 blocked: true 時應 log 並 skip 該目標。
+ *
+ * 真實案例：
+ *   - 胡地｜手之力量（手牌張數×2 個指示物 → 對手戰鬥場）
+ *   - 來悲粗茶ex｜熬返（草能量×2 個指示物 → 對手選 1 隻）
+ *   - 多龍巴魯托ex｜幻影奇襲（6 個指示物 → 對手備戰自由分配）
+ *   - 奧利瓦ex｜油之機關槍（6×20 → 對手任意自由分配）
+ *   - cursed-bomb（彷徨夜靈/黑夜魔靈 等：N 個指示物 → 任選對手）
+ */
+export function canApplyAttackEffectToTarget(
+  state: GameState,
+  atkIdx: 0 | 1,
+  target: CardInstance,
+  targetCard: Card | undefined,
+  pool: Map<string, Card>,
+): { blocked: true; reason: string } | { blocked: false } {
+  // 1. hasEffectShield — 薄霧能量 / 硬岩【鬥】能量 / 帝王拿波ex 皇帝之勢
+  if (hasEffectShield(target, pool)) {
+    // 細分判斷出具體哪一個（用於 log 訊息）
+    const energyNames = target.energyAttached.map(e => pool.get(e.cardId)?.name ?? '');
+    if (energyNames.includes('薄霧能量')) {
+      return { blocked: true, reason: '薄霧能量 免疫招式效果' };
+    }
+    if (energyNames.includes('硬岩【鬥】能量')) {
+      return { blocked: true, reason: '硬岩【鬥】能量 免疫招式效果' };
+    }
+    return { blocked: true, reason: '皇帝之勢 免疫招式效果' };
+  }
+  // 2. 火箭隊的急凍鳥 抵抗之幕（target 必須是【基礎】火箭隊）
+  const dIdx = (1 - atkIdx) as 0 | 1;
+  if (hasRocketVeil(state, dIdx, pool) && isRocketBasicTarget(targetCard)) {
+    return { blocked: true, reason: '火箭隊的急凍鳥 抵抗之幕 效果' };
+  }
+  return { blocked: false };
+}
+
+/**
  * v2.175 — Special Energy 狀態免疫判定
  * holder 身上若附有 STATUS_IMMUNE 命中該狀態的特殊能量，回傳 immune（與卡名）。
  */
@@ -5950,12 +6005,26 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
   for (const iid of selectedIids) batchTally.set(iid, (batchTally.get(iid) ?? 0) + 1);
 
   // 依序施加，每放 1 個 counter 即檢查 KO（因為 KO 後不能再放到已離場的寶可夢）
+  // v2.89：每個 target 都要單獨檢查招式效果免疫（薄霧/硬岩/皇帝之勢/抵抗之幕）
+  const blockedTargets = new Set<string>();
   for (const iid of selectedIids) {
     const defender = s.players[dIdx];
     const target = defender.bench.find(c => c.iid === iid);
     if (!target) continue; // 若該寶可夢已被此批次稍早的 counter 擊倒，後續 counter 作廢
 
     const targetCard = pool.get(target.cardId);
+
+    // v2.89 招式效果免疫檢查（per-target）
+    const guard = canApplyAttackEffectToTarget(s, actorIdx, target, targetCard, pool);
+    if (guard.blocked) {
+      if (!blockedTargets.has(iid)) {
+        blockedTargets.add(iid);
+        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${guard.reason}（該指示物無效）`, actorIdx);
+      }
+      placedThisBatch++; // 仍計數本批次（消耗 counter，但不放置）
+      continue;
+    }
+
     const tHp = effectiveHPInline(target, pool, s);
     const newDmg = target.damage + counterDamage;
     placedThisBatch++;
@@ -9724,6 +9793,18 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
     }
     return s;
   }
+  // v2.89 招式效果免疫（薄霧/硬岩/皇帝之勢/抵抗之幕）— 雖然 cursed-bomb 多為「[特性]招式」
+  // 嚴格說也屬「特性效果」（被光之翼擋的概念），但對 defender 而言放傷害指示物的免疫機制
+  // 應與招式效果一致處理。
+  const guardCB = canApplyAttackEffectToTarget(st, actorIdx, target, targetCardForImmunity, pool);
+  if (guardCB.blocked) {
+    let s = addLog(st,
+      `${label}：${targetCardForImmunity?.name ?? '?'} ${guardCB.reason}（不放指示物）`, actorIdx);
+    if (userIid) {
+      s = selfKOInstance(s, actorIdx, userIid, pool, label);
+    }
+    return s;
+  }
   const targetCard = pool.get(target.cardId);
   const tHp = targetCard?.hp ?? 0;
   const newDmg = target.damage + addDmg;
@@ -12981,6 +13062,15 @@ regR('brew-back-target', (st, idx, iids, params, pool) => {
   let updatedActive = opp.active;
   let updatedBench = opp.bench;
   let targetName = '?';
+
+  // v2.89 規則修正：熬返 = 招式效果（無招式傷害值），須檢查 defender 的招式效果免疫
+  const target = isActive ? opp.active : (benchIdx >= 0 ? opp.bench[benchIdx] : null);
+  if (!target) return st;
+  const targetCardCheck = pool.get(target.cardId);
+  const guard = canApplyAttackEffectToTarget(st, idx, target, targetCardCheck, pool);
+  if (guard.blocked) {
+    return addLog(st, `熬返：${targetCardCheck?.name ?? '?'} ${guard.reason}（不放傷害指示物）`, idx);
+  }
 
   if (isActive && opp.active) {
     updatedActive = { ...opp.active, damage: opp.active.damage + dmg };

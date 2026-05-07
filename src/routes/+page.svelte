@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.89</span> 修「招式效果 vs 招式傷害」邏輯 bug</summary>
+        <ul>
+          <li>玩家回報：胡地｜手之力量（手牌數 × 2 個傷害指示物）這類沒有招式傷害數值、純粹「放傷害指示物」的招式效果，繞過了 defender 的招式效果免疫</li>
+          <li>PTCG 規則區分：招式傷害（卡面有列傷害值，走弱抗管線）vs 招式效果（卡面文字描述的效果，如放指示物 / 施加狀態）</li>
+          <li>「招式效果」對 defender 的免疫機制：薄霧能量、硬岩【鬥】能量（限【鬥】寶可夢）、帝王拿波ex 皇帝之勢、火箭隊的急凍鳥 抵抗之幕（基礎火箭隊）</li>
+          <li>新增統一 helper canApplyAttackEffectToTarget — 集中所有 defender 端招式效果免疫判定</li>
+          <li>套到 5 個 counter-placement 路徑：胡地｜手之力量、來悲粗茶ex｜熬返、多龍巴魯托ex｜幻影奇襲、奧利瓦ex｜油之機關槍、cursed-bomb（彷徨夜靈、黑夜魔靈 等）</li>
+          <li>注意：純樸 / 陳舊的背蓋化石 已由 engine 在 ATTACK_POST 階段 short-circuit 整個 regPost，不需呼叫端再檢查</li>
+          <li>幻影奇襲 / 油之機關槍 為「分配 N 個指示物」類型，per-target 檢查 — 個別寶可夢被擋的指示物消耗（不重新分配）</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.88</span> 戰鬥 log 著色與粗體優化</summary>
         <ul>
           <li>玩家提議：戰鬥敘述 log 過於單調 — 新增 render-side tokenizer 把 message 切片，依類別套不同顏色 / 粗體</li>

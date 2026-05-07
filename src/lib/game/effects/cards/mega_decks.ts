@@ -14,7 +14,7 @@ import {
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardHand,
   healResolver, recordOppKO,
 } from '../_shared';
-import { hitBenchPickPost } from '../../effects';
+import { hitBenchPickPost, canApplyAttackEffectToTarget } from '../../effects';
 import { isBasicEnergyOfType } from '../../engine';
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
 
@@ -541,12 +541,24 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
   const koNames: string[] = [];
   let morePrizes = 0;
 
+  // v2.89 招式效果免疫 per-target 檢查
+  const blockedTargetsOO = new Set<string>();
   for (const iid of selectedIids) {
     const defender = s.players[dIdx];
     const target = defender.active?.iid === iid ? defender.active
       : defender.bench.find(c => c.iid === iid);
     if (!target) continue;
     const targetCard = pool.get(target.cardId);
+    // v2.89 招式效果免疫
+    const guardOO = canApplyAttackEffectToTarget(s, actorIdx, target, targetCard, pool);
+    if (guardOO.blocked) {
+      if (!blockedTargetsOO.has(iid)) {
+        blockedTargetsOO.add(iid);
+        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${guardOO.reason}（該指示物無效）`, actorIdx);
+      }
+      placedThisBatch++;
+      continue;
+    }
     const tHp = targetCard?.hp ?? 0;
     const newDmg = target.damage + counterDamage;
     placedThisBatch++;

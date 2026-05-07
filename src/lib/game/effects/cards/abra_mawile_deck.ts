@@ -31,6 +31,7 @@ import {
 } from '../_shared';
 import {
   selfSwapPost, skipDefEffectsPre, countOppPokemon, koPrizeCount,
+  canApplyAttackEffectToTarget,
 } from '../../effects';
 import { isBasicEnergyOfType } from '../../engine';
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
@@ -64,6 +65,12 @@ regPost('胡地|手之力量', (state, aIdx, pool) => {
   const counters = handCount * 2;
   const addDmg = counters * 10;
   const defCard = pool.get(defender.active.cardId);
+  // v2.89 招式效果免疫檢查（薄霧能量 / 硬岩【鬥】能量 / 帝王拿波ex 皇帝之勢 / 火箭隊的急凍鳥 抵抗之幕）
+  const guardHF = canApplyAttackEffectToTarget(state, aIdx, defender.active, defCard, pool);
+  if (guardHF.blocked) {
+    return addLog(state,
+      `手之力量：${defCard?.name ?? '?'} ${guardHF.reason}（不放傷害指示物）`, aIdx);
+  }
   const newDmg = defender.active.damage + addDmg;
   const defHP = defCard?.hp ?? 0;
   let s = addLog(
