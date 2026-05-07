@@ -5311,6 +5311,31 @@ export function getUsableAbilities(
         if (!player.active.movedToActiveThisTurn) return;
         if (!player.bench.some(b => b.energyAttached.length > 0)) return;
       }
+      // ─── v2.96 補 5 個既實裝但缺 gate 的特性（按下才跳「無法使用」是壞 UX） ─────
+      // 振翅高飛（遠古巨蜓ex）：戰鬥場 + 本回合移到戰鬥場 + 牌庫不空
+      if (ab.name === '振翅高飛') {
+        if (player.active?.iid !== pk.iid) return;
+        if (!player.active.movedToActiveThisTurn) return;
+        if (player.deck.length === 0) return;
+      }
+      // 夜間工作（叉字蝠）：在戰鬥場 + 牌庫不空
+      if (ab.name === '夜間工作') {
+        if (player.active?.iid !== pk.iid) return;
+        if (player.deck.length === 0) return;
+      }
+      // 蒐證（貓鼬探長）：手牌 ≥ 1 + 牌庫 ≥ 1（要互換 1 張手牌與牌庫頂）
+      if (ab.name === '蒐證') {
+        if (player.hand.length === 0) return;
+        if (player.deck.length === 0) return;
+      }
+      // 搜尋點心（莫魯貝可，v2.95 實裝）：牌庫不空（要看牌庫頂 1 張）
+      if (ab.name === '搜尋點心' && player.deck.length === 0) return;
+      // 增長繭（甲殼繭）：本回合進化 + 備戰未滿（要從牌庫搜進化形態放備戰）
+      if (ab.name === '增長繭') {
+        if (!pk.evolvedThisTurn) return;
+        if (player.bench.length >= 5) return;
+        if (player.deck.length === 0) return;
+      }
       // v2.133 沉雪 額外 gate：場上沒有競技場卡時無意義
       if (ab.name === '沉雪' && !state.activeStadium) return;
       // v2.133 迅速游標 gate：必須從備戰發動（pk 不是 active）

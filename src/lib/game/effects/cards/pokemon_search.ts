@@ -171,11 +171,12 @@ reg('黑暗球', (st, idx) => {
 });
 
 regR('search-pokemon-to-hand', (st, idx, iids, _params, pool) => {
-  // Log 顯示搜到哪張卡（依用戶要求，改為不公開具體卡名）
+  // v2.96：卡面有「給對手看過」（高級球 / 黑暗球 / 甜蜜球 / 超級信號 / 小剛的發掘 stage2 等共用此 resolver）
+  // → 必須公開卡名給對手 log（PTCG 防作弊驗證機制）
   const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
   if (chosen.length > 0) {
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addPrivateLog(st, `搜到：${names} 加入手牌`, `搜到 ${chosen.length} 張卡加入手牌`, idx);
+    st = addLog(st, `搜到：${names} 加入手牌`, idx);
   } else {
     st = addLog(st, '牌庫搜尋：未選擇任何卡', idx);
   }
@@ -206,7 +207,8 @@ regR('brocks-dig-basic', (st, idx, iids, _params, pool) => {
     // 玩家選了至少 1 隻基礎寶可夢 → 加手牌，結束
     const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addPrivateLog(st, `小剛的發掘：搜到 ${names} 加入手牌`, `小剛的發掘：搜到 ${chosen.length} 隻基礎寶可夢加入手牌`, idx);
+    // v2.96：卡面「給對手看過」→ 公開卡名
+    st = addLog(st, `小剛的發掘：搜到 ${names} 加入手牌`, idx);
     return updatePlayer(st, idx, (p) => {
       const picked = p.deck.filter(c => iids.includes(c.iid));
       const remaining = p.deck.filter(c => !iids.includes(c.iid));

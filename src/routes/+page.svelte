@@ -264,6 +264,31 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.96</span> 兩條鐵律審計：揭示資訊（addLog vs addPrivateLog）+ 特性按鈕 gate</summary>
+        <ul>
+          <li><b>Audit 1：揭示資訊規則</b> — 卡面有「給對手看過」者，對手 log 必須能驗證具體卡名（PTCG 線上版透過 log 取代實體桌上「給對手看」的防作弊機制）</li>
+          <li>掃 122 個必揭示位點（64 寶可夢招式/特性 + 58 訓練家），找到 18 處違規（誤用 <code>addPrivateLog</code>，對手只看到張數）</li>
+          <li>修補 <code>pokemon_search.ts</code> <code>search-pokemon-to-hand</code> resolver — 高級球 / 黑暗球 / 甜蜜球 / 超級信號 / 小剛的發掘 stage2 等多卡共用，從 <code>addPrivateLog</code> 改 <code>addLog</code></li>
+          <li>修補 <code>brocks-dig-basic</code> resolver — 小剛的發掘 stage1 同樣公開卡名</li>
+          <li>修補 <code>fan-call-hand</code> resolver — 旋轉洛托姆 風扇呼喚 公開卡名</li>
+          <li>修補 <code>items_misc.ts</code>：大師球 / 訂購盒 / 幫忙鈴 / 勝利之證 / 招式學習器機 共 5 處</li>
+          <li>修補 <code>v168_supporters.ts</code>：派帕（物品 + 道具 兩個位點）</li>
+          <li>修補 <code>v169_supporters.ts</code>：杜若（寶可夢 + 訓練家）/ 正輝的輸送 / 吹火人 共 4 處</li>
+          <li>修補 <code>v172_hij_batch.ts</code>：火箭隊的超級球 / 沙儷 / 卡娜莉 共 3 處</li>
+          <li>保留 <code>addPrivateLog</code>：親送無人機（卡面無「給對手看過」，無 filter 限制）</li>
+          <li><b>Audit 2：特性按鈕 gate</b> — 卡面有觸發條件的特性，<code>getUsableAbilities()</code> 必須加 gate；不能依賴 fn 內 <code>if (!條件) return addLog(&#39;無法使用&#39;)</code>，那會讓玩家點完才看到錯誤訊息</li>
+          <li>掃 63 個有觸發條件的特性，已 gate 19 個 / 自動觸發類已加進 <code>ON_PLAY_FROM_HAND_ABILITIES</code> &amp; <code>ON_EVOLVE_FROM_HAND_ABILITIES</code> / 補 gate 5 個</li>
+          <li>補 振翅高飛（遠古巨蜓ex）— gate：戰鬥場 + <code>movedToActiveThisTurn</code> + 牌庫不空（user 親身踩到此 bug）</li>
+          <li>補 夜間工作（叉字蝠）— gate：在戰鬥場 + 牌庫不空</li>
+          <li>補 蒐證（貓鼬探長）— gate：手牌 ≥ 1 + 牌庫 ≥ 1</li>
+          <li>補 搜尋點心（莫魯貝可，v2.95 實裝）— gate：牌庫不空</li>
+          <li>補 增長繭（甲殼繭）— gate：本回合進化 + 備戰 &lt; 5 + 牌庫不空</li>
+          <li>未 gate 但未實裝的特性（屬未來 wave）：三成能量 / 全開能量 / 劇毒粉塵 / 勸誘羽 / 原始之翼 / 尖刺纏身 / 平靜之光 / 恐慌牢籠 / 挑戰角擊 / 暗中咬住 / 曲扭未來 / 柔柔治癒 / 沙之羽擊 / 溫柔鰭 / 燒灼蒸汽 / 發酵果汁 / 瞬間移動者 / 繁星花紋 / 臨場之錘 / 臨場背負 / 臨場選擇 / 裝酷重抽 / 貪慾點餐 / 邀請眨眼 / 重步跳躍 / 飛身進場 / 飽腹時間 等</li>
+          <li>新增 <code>SKILL.md</code> Iron Rule 8（揭示資訊）+ Iron Rule 9（特性按鈕 gate）</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.95</span> 清孤兒 regR + 實裝快節奏/搜尋點心 + 15 regA 驗證報告</summary>
         <ul>
           <li>v2.94 殘留清理：刪除 5 個孤兒 <code>regR</code>（<code>ABILITY_EFFECTS.set</code> 已刪、resolver 殘留 dead code）— 大電海燕 閃電平局 / 尖牙陸鯊 龍之呼喚 / 狂歡浪舞鴨 能量嘉年華 + attach / 莫魯貝可 點心尋找</li>
