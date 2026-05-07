@@ -854,7 +854,7 @@
       if (g.phase !== 'playing') return false;
 
       // 取獎勵牌或選擇 — 由誰的行動決定
-      if (g.pendingPrizes > 0) return g.activePlayerIndex === ai;
+      if ((g.pendingPrizes?.[ai] ?? 0) > 0) return true;
       if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
 
       // v2.145：戰鬥寶可夢被擊倒（包含特性如腎上腺腦力 KO）→ 不論 turnPhase 都應立即遞補
@@ -882,7 +882,8 @@
           && g.activePlayerIndex === aiPlayerIndex
           && g.turnPhase === 'main'
           && !g.pendingSelection
-          && (g.pendingPrizes ?? 0) === 0) {
+          && (g.pendingPrizes?.[0] ?? 0) === 0
+          && (g.pendingPrizes?.[1] ?? 0) === 0) {
         console.warn('[AI fallback] getAIAction returned null in main phase → forcing END_TURN');
         aiThinking = true;
         dispatch({ type: 'END_TURN' } as any);
@@ -907,7 +908,7 @@
     const shouldAct = (() => {
       if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0;
       if (g.phase !== 'playing') return false;
-      if (g.pendingPrizes > 0) return g.activePlayerIndex === ai;
+      if ((g.pendingPrizes?.[ai] ?? 0) > 0) return true;
       if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
       // v2.145：active===null 不論 turnPhase 都立即遞補（特性 KO 對手後也要立刻動）
       if (g.players[ai].active === null && g.players[ai].bench.length > 0) return true;
@@ -1000,7 +1001,10 @@
   const activePlayer   = $derived(game ? game.players[aIdx] : null);
   const defenderPlayer = $derived(game ? game.players[dIdx] : null);
   const availableAttacks = $derived(game && poolReady ? getAvailableAttacks(game, pool) : []);
-  const pendingPrizes    = $derived(game?.pendingPrizes ?? 0);
+  // v2.98：pendingPrizes 改為 [P1 owed, P2 owed]
+  const pendingPrizesArr = $derived<[number, number]>(game?.pendingPrizes ?? [0, 0]);
+  const myPendingPrizes  = $derived(pendingPrizesArr[myPlayerIndex ?? 0] ?? 0);
+  const oppPendingPrizes = $derived(pendingPrizesArr[(1 - (myPlayerIndex ?? 0)) as 0 | 1] ?? 0);
   const pendingSelection = $derived(game?.pendingSelection ?? null);
 
   // v2.44：切換新 modal 時重置拖曳偏移量
@@ -1115,8 +1119,8 @@
       if (game.phase === 'setup') return !game.setupDone[hIdx];
       if (game.pendingSelection) return game.pendingSelection.actorIdx === hIdx;
       if (game.turnPhase === 'end' && game.players[hIdx].active === null) return true;
-      // 取獎勵由 activePlayerIndex 決定 — 我 KO 對方後換我取獎勵，UI 須允許取
-      if (game.pendingPrizes > 0) return game.activePlayerIndex === hIdx;
+      // v2.98：取獎賞由 owner 決定（pendingPrizes[hIdx] > 0 即可取，不論誰的回合）
+      if ((game.pendingPrizes?.[hIdx] ?? 0) > 0) return true;
       return game.activePlayerIndex === hIdx;
     }
     return true; // 本機雙人模式
@@ -3005,7 +3009,7 @@
       {aiThinking}
       {isSyncing}
       {canUseStadium}
-      {pendingPrizes}
+      pendingPrizes={myPendingPrizes}
       version={VERSION}
       onAction={dispatch}
       onInitiateAttack={initiateAttack}
@@ -3263,10 +3267,10 @@
             {/if}
           {/if}
         {/if}
-        {#if pendingPrizes > 0 && isMyTurn()}
+        {#if myPendingPrizes > 0}
           <div class="alert prize-alert">
-            🏆 取 {pendingPrizes} 張獎勵牌
-            <button class="btn-xs primary" onclick={()=>dispatch(GameActions.takePrizes(pendingPrizes))}>取得</button>
+            🏆 取 {myPendingPrizes} 張獎勵牌
+            <button class="btn-xs primary" onclick={()=>dispatch(GameActions.takePrizes(myPendingPrizes, (myPlayerIndex ?? 0) as 0 | 1, (myPlayerIndex ?? 0) as 0 | 1))}>取得</button>
           </div>
         {/if}
         <!-- v2.123：send-new-active alert 去掉 turnPhase==='end' 限制

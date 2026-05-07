@@ -17,6 +17,7 @@ import {
 import { hitBenchPickPost, canApplyAttackEffectToTarget } from '../../effects';
 import { isBasicEnergyOfType } from '../../engine';
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
+import { addPendingPrize } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 奧利瓦ex ｜ 芳香射擊（160 + 自身清特殊狀態）
@@ -597,7 +598,7 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
 
   if (koNames.length > 0) {
     s = addLog(s, `${label}：${koNames.join('、')} 被擊倒！+${morePrizes} 張獎勵牌`, null);
-    s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + morePrizes };
+    s = addPendingPrize(s, aIdx, morePrizes);
   }
 
   const placedAfter = placedBefore + placedThisBatch;

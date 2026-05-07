@@ -31,6 +31,7 @@ import {
   selfKOInstance,
   koPrizeCount,
 } from '../../effects';
+import { addPendingPrize } from '../_shared';
 
 // ── 喵喵ex｜殺手鐧捕捉 — v2.320 改為 promptPlayAbilities 互動提示 ──────────
 // 原本在 BENCH_PLACE_TRIGGERS 自動觸發；現改為 regA 路徑，
@@ -225,7 +226,7 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
     players[dIdx] = newDefender;
     s = addLog({ ...s, players },
       `腎上腺腦力：在 ${targetCard?.name ?? '?'} 身上放 ${amount} 傷害 → 被擊倒！+${prizes} 張獎勵牌`, actorIdx);
-    s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
+    s = addPendingPrize(s, actorIdx, prizes);
     // v2.246：腎上腺腦力是「對手主動特性 KO」
     s = recordOppKO(s, dIdx, targetCard, 'ability');
     if (isActive && newDefender.bench.length === 0) {

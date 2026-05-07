@@ -761,3 +761,27 @@ export function healResolver(
     };
   });
 }
+
+
+// ── pendingPrizes helpers (v2.98) ────────────────────────────────────────────
+// 統一管理 [P1, P2] tuple 的累計與查詢。所有「+N pendingPrizes」必須走這裡，
+// 不再允許 prizes.slice() + hand: [...] 直接派發到手牌（除引擎 TAKE_PRIZES handler）。
+
+/** 對 ownerIdx 側累計 n 張待領獎賞。owner = 應該取走獎賞的玩家。 */
+export function addPendingPrize(state: GameState, ownerIdx: 0 | 1, n: number): GameState {
+  if (n <= 0) return state;
+  const pp: [number, number] = [...(state.pendingPrizes ?? [0, 0])] as [number, number];
+  pp[ownerIdx] += n;
+  return { ...state, pendingPrizes: pp };
+}
+
+/** 查詢 ownerIdx 側待領獎賞數量。 */
+export function getPendingPrize(state: GameState, ownerIdx: 0 | 1): number {
+  return state.pendingPrizes?.[ownerIdx] ?? 0;
+}
+
+/** 雙方任一側 > 0 → 阻擋 END_TURN / festival second attack 等 gate。 */
+export function hasAnyPendingPrize(state: GameState): boolean {
+  const pp = state.pendingPrizes ?? [0, 0];
+  return pp[0] > 0 || pp[1] > 0;
+}

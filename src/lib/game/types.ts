@@ -511,10 +511,11 @@ export interface GameState {
   winner?: 0 | 1;
   winReason?: string;
   /**
-   * 擊倒後待取獎勵數量（攻擊方需要行動）
+   * v2.98：每側待領獎賞 [P1 owed, P2 owed]。
+   * idx 為「應該取走的 owner」。由 addPendingPrize() 統一寫入。
    * M2 只用到 1（一般擊倒），ex 系列為 2（M4 處理）
    */
-  pendingPrizes: number;
+  pendingPrizes: [number, number];
   /**
    * 待處理的互動選擇（訓練家效果觸發時設定）
    * 設定後 UI 必須顯示選擇介面，玩家透過 RESOLVE_SELECTION 繼續
@@ -735,7 +736,7 @@ export type GameAction =
        */
       copyAttackChoice?: { pokeIid: string; attackIndex: number };
     }
-  | { type: 'TAKE_PRIZES'; count: number }
+  | { type: 'TAKE_PRIZES'; count: number; playerIdx: 0 | 1; senderIdx?: 0 | 1 }
   | { type: 'SEND_NEW_ACTIVE'; iid: string; senderIdx?: 0 | 1 }
   | { type: 'USE_STADIUM' }
   | { type: 'USE_ABILITY'; iid: string; abilityIndex: number }

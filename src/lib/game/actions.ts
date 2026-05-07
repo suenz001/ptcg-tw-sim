@@ -25,7 +25,9 @@ export const GameActions = {
                          ...(discardedEnergyIids && discardedEnergyIids.length > 0 && { discardedEnergyIids }),
                          ...(copyAttackChoice && { copyAttackChoice }),
                        }),
-  takePrizes:        (count: number): GameAction => ({ type: 'TAKE_PRIZES', count }),
+  takePrizes:        (count: number, playerIdx: 0 | 1, senderIdx?: 0 | 1): GameAction =>
+                       ({ type: 'TAKE_PRIZES', count, playerIdx,
+                          ...(senderIdx !== undefined && { senderIdx }) }),
   sendNewActive:     (iid: string, senderIdx?: 0 | 1): GameAction =>
                        ({ type: 'SEND_NEW_ACTIVE', iid, ...(senderIdx !== undefined && { senderIdx }) }),
   endTurn:           (): GameAction => ({ type: 'END_TURN' }),

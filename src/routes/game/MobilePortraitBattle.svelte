@@ -352,7 +352,7 @@
       <!-- v2.287 修：setup 階段雙方各自準備，不依 isMyTurn 判定（後手玩家 isMyTurn=false 會看不到按鈕） -->
       <button class="mp-end-btn" disabled={!myPlayer.active}
         onclick={() => onAction(GameActions.finishSetup(myIdx))}>✅ 準備</button>
-    {:else if isMyTurn && isPlaying && !pendingSelection && game.pendingPrizes === 0}
+    {:else if isMyTurn && isPlaying && !pendingSelection && (game.pendingPrizes?.[0] ?? 0) === 0 && (game.pendingPrizes?.[1] ?? 0) === 0}
       <!-- v2.289：不限 turnPhase==='end'，主階段也顯示（等同「跳過攻擊 + 結束回合」合一）
            engine END_TURN 自帶 pendingPrizes / defender.active=null 雙重 gate -->
       <button class="mp-end-btn" onclick={() => onAction(GameActions.endTurn())}>⏭ 結束回合</button>
@@ -491,10 +491,10 @@
     {/if}
   </div>
 
-  {#if (pendingPrizes ?? 0) > 0 && isMyTurn}
+  {#if (pendingPrizes ?? 0) > 0}
     <div class="mp-prize-alert">
       🏆 取 {pendingPrizes} 張獎勵牌
-      <button class="mp-prize-btn" onclick={() => onAction(GameActions.takePrizes(pendingPrizes!))}>取得</button>
+      <button class="mp-prize-btn" onclick={() => onAction(GameActions.takePrizes(pendingPrizes!, myIdx, myIdx))}>取得</button>
     </div>
   {/if}
 

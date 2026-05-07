@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.98</span> pendingPrizes 重構：每側待領獎賞 tuple 化</summary>
+        <ul>
+          <li>引擎 <code>GameState.pendingPrizes</code> 從單一數字改為「兩個 number 的 tuple」（P1 待領 / P2 待領）</li>
+          <li>新增 <code>addPendingPrize(state, ownerIdx, n)</code> / <code>getPendingPrize</code> / <code>hasAnyPendingPrize</code> helper，所有寫入點統一走 helper</li>
+          <li>引擎 <code>TAKE_PRIZES</code> action 接受 <code>playerIdx</code> 參數，由 owner 各自取（不再依賴 activePlayerIndex）</li>
+          <li>修正 5 處「自爆 KO / 反彈 KO / 冰冷之帳 / 棄世猴同命戰鬥 / 瘋癲攻擊自殺」原本直接 prizes.slice 派發給對手手牌的暴力處理 — 改走 pendingPrizes 由對手手動 click 取獎，符合實體 PTCG 流程</li>
+          <li>UI 新增 <code>myPendingPrizes</code> derived；取獎按鈕拿掉 isMyTurn gate（對手回合也能 click 取自己應得獎賞）</li>
+          <li>AI 取獎邏輯移到 activePlayerIndex gate 之前，AI 對手回合內也會自動 take prize</li>
+          <li>SKILL.md 新增 Rule 10：所有 pendingPrizes 寫入必須走 helper，禁止 prizes.slice + hand 直接派發</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.97-hotfix</span> 修 v2.961 changelog 大括號沒 escape 導致空白頁</summary>
         <ul>
           <li>嚴重 bug：v2.961 changelog 內「&#123;abilityName&#125;」沒做 HTML entity escape，被 Svelte parser 當成 JavaScript expression 求值</li>

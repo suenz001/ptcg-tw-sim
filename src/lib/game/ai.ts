@@ -52,13 +52,14 @@ export function getAIAction(
     };
   }
 
+  // 2. 取獎勵牌（v2.98：移到 activePlayerIndex gate 之前 — owner 在對手回合也可取）
+  const aiPending = state.pendingPrizes?.[myIdx] ?? 0;
+  if (aiPending > 0) {
+    return { type: 'TAKE_PRIZES', count: aiPending, playerIdx: myIdx };
+  }
+
   // ── 以下只在輪到我時處理 ─────────────────────────────────────────────
   if (state.activePlayerIndex !== myIdx) return null;
-
-  // 2. 取獎勵牌（只有攻擊方會有 pendingPrizes）
-  if (state.pendingPrizes > 0) {
-    return { type: 'TAKE_PRIZES', count: state.pendingPrizes };
-  }
 
   const player = state.players[myIdx];
 

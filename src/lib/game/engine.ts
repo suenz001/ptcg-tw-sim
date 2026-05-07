@@ -417,6 +417,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
 import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye } from './effects/_shared';
+import { addPendingPrize, getPendingPrize, hasAnyPendingPrize } from './effects/_shared';
 export { sameEvoName };
 
 /**
@@ -1048,7 +1049,7 @@ function canResumeFestivalDanceSecondAttack(
   return state.phase === 'playing'
     && state.turnPhase === 'end'
     && !state.pendingSelection
-    && (state.pendingPrizes ?? 0) === 0
+    && !hasAnyPendingPrize(state)
     && state.players[idx].active !== null
     && state.players[oppIdx].active !== null
     && hasFestivalDanceActive(state, idx, pool)
@@ -1165,7 +1166,7 @@ export function createGame(
     mulliganCounts: [m1, m2],
     pendingMulliganDraw: [extraForP1, extraForP2],
     log: [],
-    pendingPrizes: 0,
+    pendingPrizes: [0, 0],
     oppPrizesAtMyLastTurnEnd: [6, 6],
     oppPrizesAtMyTurnStart: [6, 6],
     oppPrizesAtMainEnd: [6, 6], // v2.245 主回合結束 snapshot（不含 checkup）
@@ -1458,7 +1459,7 @@ function sanityKOSweep(
   if (!anyKO) return state;
   const players = [...s.players] as [PlayerState, PlayerState];
   players[dIdx] = player;
-  s = { ...s, players, pendingPrizes: (s.pendingPrizes ?? 0) + prizesAcc };
+  s = addPendingPrize({ ...s, players }, attackerIdx, prizesAcc);
   // 對手 active+bench 都空 → 直接終局
   if (player.active === null && player.bench.length === 0) {
     s = {
@@ -3424,9 +3425,10 @@ function handlePlaying(
         : (newState.ancientEnergyMinusOneUsed ?? [false, false]);
       newState = {
         ...newState, players: defPlayers,
-        pendingPrizes: prizes, turnPhase: 'end',
+        turnPhase: 'end',
         ancientEnergyMinusOneUsed: newAncientFlags,
       };
+      newState = addPendingPrize(newState, aIdx, prizes);
       // v2.246 KO cause tracking — 招式 KO 對手戰鬥位
       newState = recordOppKO(newState, dIdx, defenderCard, 'attack');
       if (deferredBonus > 0) {
@@ -3514,7 +3516,7 @@ function handlePlaying(
               discard: [...retPlayers[aIdx].discard, ...retKoDiscard],
             };
             newState = addLog(
-              { ...newState, players: retPlayers, pendingPrizes: (newState.pendingPrizes ?? 0) + retKOPrizes },
+              addPendingPrize({ ...newState, players: retPlayers }, dIdx, retKOPrizes),
               `${retAtkCard!.name} 被反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${retKOPrizes} 張獎勵牌。`,
               null,
             );
@@ -3569,7 +3571,7 @@ function handlePlaying(
           };
           // 防守方（dIdx）得到獎賞牌（放進 pendingPrizes 讓 UI 取牌）
           newState = addLog(
-            { ...newState, players: punkRefPlayers2, pendingPrizes: (newState.pendingPrizes ?? 0) + punkKOPrizes },
+            addPendingPrize({ ...newState, players: punkRefPlayers2 }, dIdx, punkKOPrizes),
             `${attackerCard.name} 被龐克頭盔的反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${punkKOPrizes} 張獎勵牌。`,
             null,
           );
@@ -3736,27 +3738,34 @@ function handlePlaying(
 
   // ── 取獎勵牌 ──────────────────────────────────────────────────────────────
   if (action.type === 'TAKE_PRIZES') {
-    if (state.pendingPrizes <= 0) return state;
-    const count = Math.min(action.count, attacker.prizes.length, state.pendingPrizes);
-    const taken = attacker.prizes.slice(0, count);
-    attacker.prizes = attacker.prizes.slice(count);
-    attacker.hand = [...attacker.hand, ...taken];
-    players[aIdx] = attacker;
+    // v2.98：playerIdx 指明哪一側取獎；不再依賴 activePlayerIndex（對手回合也可取）
+    const ownerIdx = action.playerIdx;
+    const owed = getPendingPrize(state, ownerIdx);
+    if (owed <= 0) return state;
+    const taker = { ...state.players[ownerIdx] };
+    const count = Math.min(action.count, taker.prizes.length, owed);
+    const taken = taker.prizes.slice(0, count);
+    taker.prizes = taker.prizes.slice(count);
+    taker.hand = [...taker.hand, ...taken];
+    const newPlayers2 = [...state.players] as [PlayerState, PlayerState];
+    newPlayers2[ownerIdx] = taker;
+    const newPP: [number, number] = [...(state.pendingPrizes ?? [0, 0])] as [number, number];
+    newPP[ownerIdx] = Math.max(0, owed - count);
 
     let newState: GameState = addLog(
-      { ...state, players, pendingPrizes: 0 },
-      `${attacker.name} 取得了 ${count} 張獎勵牌（剩餘 ${attacker.prizes.length} 張）`,
-      aIdx
+      { ...state, players: newPlayers2, pendingPrizes: newPP },
+      `${taker.name} 取得了 ${count} 張獎勵牌（剩餘 ${taker.prizes.length} 張）`,
+      ownerIdx
     );
 
     // 勝利條件：獎勵牌全取完
-    if (attacker.prizes.length <= 0) {
+    if (taker.prizes.length <= 0) {
       return {
         ...newState,
         phase: 'game-over',
-        winner: aIdx,
-        winReason: `${attacker.name} 取得所有獎勵牌`,
-        log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${attacker.name} 取得所有獎勵牌，獲勝！` }]
+        winner: ownerIdx,
+        winReason: `${taker.name} 取得所有獎勵牌`,
+        log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${taker.name} 取得所有獎勵牌，獲勝！` }]
       };
     }
 
@@ -3813,7 +3822,7 @@ function handlePlaying(
 
   // ── 結束回合 ──────────────────────────────────────────────────────────────
   if (action.type === 'END_TURN') {
-    if (state.pendingPrizes > 0) return state;  // 取獎勵前不能結束
+    if (hasAnyPendingPrize(state)) return state;  // 取獎勵前不能結束
     if (defender.active === null) return state; // 對手必須先送出寶可夢
 
     // 勝利條件：對手備戰區也空了（雙重保險）
@@ -4114,34 +4123,16 @@ function handlePlaying(
         state = addLog({ ...state, players },
           `冰冷之帳：${affectedNames.join('、')}`, null);
       }
-      // 直接取獎：owner i 側寶可夢被 KO → 對手 (1-i) 從自己獎賞堆取牌進手牌
+      // v2.98：累計到 pendingPrizes，由玩家透過 TAKE_PRIZES 各自取走（含對手回合可取）
       for (const i of [0, 1] as const) {
         const owed = koPrizesByOwner[i];
         if (owed <= 0) continue;
         const winnerIdx = (1 - i) as 0 | 1;
         const winner = players[winnerIdx];
         state = addLog({ ...state, players },
-          `冰冷之帳：${players[i].name} 有寶可夢被擊倒，${winner.name} 取得 ${owed} 張獎勵牌。`,
+          `冰冷之帳：${players[i].name} 有寶可夢被擊倒，${winner.name} 將取得 ${owed} 張獎勵牌。`,
           null);
-        const take = Math.min(owed, winner.prizes.length);
-        if (take > 0) {
-          const taken = winner.prizes.slice(0, take);
-          players[winnerIdx] = {
-            ...winner,
-            prizes: winner.prizes.slice(take),
-            hand: [...winner.hand, ...taken],
-          };
-          state = addLog({ ...state, players },
-            `${winner.name} 取走 ${take} 張獎勵牌（剩餘 ${players[winnerIdx].prizes.length} 張）`,
-            null);
-        }
-        // 勝利條件：勝方獎賞全取完
-        if (players[winnerIdx].prizes.length === 0) {
-          return {
-            ...state, phase: 'game-over',
-            winner: winnerIdx, winReason: `${winner.name} 取得所有獎勵牌`,
-          };
-        }
+        state = addPendingPrize(state, winnerIdx, owed);
       }
       // 勝利條件：任一方戰鬥寶可夢被擊倒 + 備戰已空 → 對手勝
       for (const i of [0, 1] as const) {
@@ -4931,7 +4922,7 @@ export function getAvailableAttacks(
 
 /** 判斷是否有待處理的緊急事項（需要先解決才能 END_TURN） */
 export function hasPendingActions(state: GameState): boolean {
-  return state.pendingPrizes > 0 ||
+  return hasAnyPendingPrize(state) ||
     !!state.pendingSelection ||
     // 雙方都必須有 active 才能結束回合（防守方被擊倒後必須先送新 active）
     state.players[0].active === null ||

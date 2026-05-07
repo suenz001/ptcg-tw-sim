@@ -35,6 +35,7 @@ import {
 } from '../../effects';
 import { isBasicEnergyOfType } from '../../engine';
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
+import { addPendingPrize } from '../_shared';
 
 // ── 凱西｜瞬間移動攻擊 — 10，可選擇與備戰互換 ────────────────────────────────
 regPre('凱西|瞬間移動攻擊', (state, _aIdx, _pool) => ({ state, damage: 10 }));
@@ -94,7 +95,7 @@ regPost('胡地|手之力量', (state, aIdx, pool) => {
       `手之力量：${defCard?.name ?? '?'} 被擊倒！+${prizes} 張獎勵牌`,
       aIdx
     );
-    s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
+    s = addPendingPrize(s, aIdx, prizes);
     // v2.246：手之力量是招式 KO
     s = recordOppKO(s, dIdx, defCard, 'attack');
     if (players[dIdx].bench.length === 0) {
