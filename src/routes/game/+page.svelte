@@ -1419,11 +1419,15 @@
         return validIidsOppB ? base.filter(c => validIidsOppB.includes(c.iid)) : base;
       }
       case 'damage-distribute': {
-        // 傷害指示物自由分配（幻影奇襲）— 預設只能選對手備戰；
-        // 若效果允許 includeActive，則把對手戰鬥寶可夢也納入。
         const includeActiveDD = pendingSelection.params?.includeActive === true;
         if (includeActiveDD && src.active) return [src.active, ...src.bench];
         return src.bench;
+      }
+      case 'energy-distribute': {
+        // v2.87 同類能量自由分配：自方寶可夢，依 validIids 過濾
+        const all = [...(src.active ? [src.active] : []), ...src.bench];
+        const validIidsED = pendingSelection.params?.validIids as string[] | undefined;
+        return validIidsED ? all.filter(c => validIidsED.includes(c.iid)) : all;
       }
       case 'hand-discard': {
         const f2 = pendingSelection.filter ?? '';
@@ -1559,6 +1563,11 @@
     if (!pendingSelection) return false;
     if (akamatsuSameTypeBlocked) return false;
     if (pendingSelection.type === 'damage-distribute') {
+      const n = selectionBatchSum;
+      return n >= pendingSelection.minCount && n <= pendingSelection.maxCount;
+    }
+    // v2.87 energy-distribute：count 總和必須 = totalCount
+    if (pendingSelection.type === 'energy-distribute') {
       const n = selectionBatchSum;
       return n >= pendingSelection.minCount && n <= pendingSelection.maxCount;
     }
@@ -2247,9 +2256,11 @@
     }
     selectionPicked = next;
   }
-  // damage-distribute：點擊目標 +1 counter；達到 maxCount 後不再加
+  // damage-distribute / energy-distribute：點擊目標 +1 counter
   function incrementCount(iid: string) {
-    if (!pendingSelection || pendingSelection.type !== 'damage-distribute') return;
+    if (!pendingSelection) return;
+    if (pendingSelection.type !== 'damage-distribute'
+        && pendingSelection.type !== 'energy-distribute') return;
     if (selectionBatchSum >= pendingSelection.maxCount) return;
     selectionCounts = { ...selectionCounts, [iid]: (selectionCounts[iid] ?? 0) + 1 };
   }
@@ -2265,8 +2276,9 @@
     // 線上模式帶 senderIdx 避免對手搶先 resolve
     const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
     let payload: string[];
-    if (pendingSelection?.type === 'damage-distribute') {
-      // 展開計數器為扁平陣列：{A:2, B:1} → [A,A,B]（resolver 以 iid 出現次數計數）
+    if (pendingSelection?.type === 'damage-distribute'
+        || pendingSelection?.type === 'energy-distribute') {
+      // 展開計數器為扁平陣列：{A:2, B:1} → [A,A,B]
       payload = Object.entries(selectionCounts).flatMap(([iid, n]) => Array(n).fill(iid));
     } else if (pendingSelection?.type === 'reorder-deck-top') {
       // v2.164：保留 + 排序的 iid 列表（top first）
@@ -2330,6 +2342,7 @@
   const pendingStuckEmpty = $derived.by(() => {
     if (!pendingSelection) return false;
     if (pendingSelection.type === 'damage-distribute') return false;
+    if (pendingSelection.type === 'energy-distribute') return false;
     if (pendingSelection.minCount <= 0) return false;
     return selectionItems.length === 0;
   });
@@ -2369,6 +2382,12 @@
     if (type === 'damage-distribute') {
       const label = pendingSelection?.params?.label as string | undefined;
       return label ? `${label}：放置傷害指示物` : '放置傷害指示物';
+    }
+    if (type === 'energy-distribute') {
+      const label = pendingSelection?.params?.label as string | undefined;
+      const eName = pendingSelection?.params?.energyTypeName as string | undefined;
+      const tail = eName ? `分配【${eName}】能量` : '分配能量';
+      return label ? `${label}：${tail}` : tail;
     }
     if (type === 'modal-choice') {
       const label = pendingSelection?.params?.label as string | undefined;
@@ -3624,15 +3643,18 @@
   )}
     {@const isPokePicker = pendingSelection.type==='bench-choose' || pendingSelection.type==='opp-bench-choose' || pendingSelection.type==='opp-poke-choose' || pendingSelection.type==='heal-target'}
     {@const isDmgDist   = pendingSelection.type==='damage-distribute'}
+    {@const isEnergyDist = pendingSelection.type==='energy-distribute'}
     {@const dmgTotal    = (pendingSelection.params?.totalCounters as number | undefined) ?? pendingSelection.maxCount}
     {@const dmgPlaced   = (pendingSelection.params?.placedCounters as number | undefined) ?? 0}
     {@const dmgPer      = (pendingSelection.params?.counterDamage as number | undefined) ?? 10}
+    {@const energyTotal = (pendingSelection.params?.totalCount as number | undefined) ?? pendingSelection.maxCount}
+    {@const energyPlaced = (pendingSelection.params?.placedCount as number | undefined) ?? 0}
+    {@const energyTypeName = (pendingSelection.params?.energyTypeName as string | undefined) ?? ''}
     <div class="selection-overlay" class:dragged={modalDragged}>
-      <div class="selection-modal" class:retreat-modal={isPokePicker || isDmgDist} style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+      <div class="selection-modal" class:retreat-modal={isPokePicker || isDmgDist || isEnergyDist} style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>{selectionTitle(pendingSelection.type)}</h3>
           {#if isDmgDist}
-            <!-- 幻影奇襲類：頂部進度條顯示「已放置 X/totalCounters」— X 含本批次即時累加 -->
             <div class="dmg-progress">
               <div class="dmg-progress-bar">
                 <div class="dmg-progress-fill" style="width:{Math.min(100, ((dmgPlaced + selectionBatchSum) / dmgTotal) * 100)}%"></div>
@@ -3644,6 +3666,20 @@
               <p class="sel-hint">
                 本批次剩餘可放 <strong>{pendingSelection.maxCount - selectionBatchSum}</strong>／{pendingSelection.maxCount} 個
                 · 點目標 +1、按「－」鍵 或 右鍵 -1 · 確認後若還有指示物會再開此視窗
+              </p>
+            </div>
+          {:else if isEnergyDist}
+            <!-- v2.87 同類能量分配 -->
+            <div class="dmg-progress">
+              <div class="dmg-progress-bar">
+                <div class="dmg-progress-fill" style="width:{Math.min(100, ((energyPlaced + selectionBatchSum) / energyTotal) * 100)}%"></div>
+              </div>
+              <div class="dmg-progress-text">
+                已附加 <strong>{energyPlaced + selectionBatchSum}</strong>／{energyTotal} 張{energyTypeName ? `【${energyTypeName}】` : ''}能量
+              </div>
+              <p class="sel-hint">
+                本批次剩餘可附 <strong>{pendingSelection.maxCount - selectionBatchSum}</strong>／{pendingSelection.maxCount} 張
+                · 點目標 +1、右鍵 -1 · 全部分配完後按「確認」一次套用
               </p>
             </div>
           {:else}
@@ -3725,6 +3761,44 @@
               {/if}
             {/each}
             {#if selectionItems.length===0}<p class="sel-empty">（對手沒有備戰寶可夢，無法分配）</p>{/if}
+          </div>
+        {:else if isEnergyDist}
+          <!-- v2.87 同類能量分配 +/- 計數器 -->
+          {@const srcActiveIidE = game?.players[pendingSelection.sourcePlayerIdx].active?.iid ?? null}
+          {@const batchFullE = selectionBatchSum >= pendingSelection.maxCount}
+          <div class="retreat-grid">
+            {#each selectionItems as item}{@const c=getCard(item.cardId)}
+              {#if c}
+                {@const eff=hpTotal(item)}
+                {@const rem=hpRemaining(item)}
+                {@const cntE=selectionCounts[item.iid] ?? 0}
+                {@const isActivePoke = item.iid === srcActiveIidE}
+                <div class="retreat-card" class:sel-picked={cntE>0} class:is-active-poke={isActivePoke}>
+                  <button class="retreat-zoom" title="放大檢視：{c.name}"
+                    onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
+                  {#if cntE > 0}
+                    <button class="dmg-minus" title="移除 1 張能量（右鍵 快捷）"
+                      onclick={(e)=>{e.stopPropagation();decrementCount(item.iid);}}>−</button>
+                  {/if}
+                  <button class="retreat-pick" disabled={batchFullE}
+                    oncontextmenu={(e)=>{e.preventDefault();decrementCount(item.iid);}}
+                    onclick={(e)=>{e.stopPropagation();incrementCount(item.iid);}}>
+                    {#if isActivePoke}<span class="retreat-active-badge" title="目前戰鬥寶可夢">⚔️ 我方戰鬥寶可夢</span>{/if}
+                    <img src={c.imageUrl} alt={c.name}/>
+                    <div class="retreat-name">{c.name}</div>
+                    <div class="retreat-hp">HP {rem}/{eff}</div>
+                    <div class="retreat-nrg">{energySummary(item)}</div>
+                    {#if cntE > 0}
+                      <div class="dmg-preview">
+                        +{cntE} 張{energyTypeName ? `【${energyTypeName}】` : ''}能量
+                      </div>
+                    {/if}
+                  </button>
+                  {#if cntE > 0}<span class="dmg-badge">×{cntE}</span>{/if}
+                </div>
+              {/if}
+            {/each}
+            {#if selectionItems.length===0}<p class="sel-empty">（場上沒有可附加的寶可夢）</p>{/if}
           </div>
         {:else}
           <div class="sel-grid">

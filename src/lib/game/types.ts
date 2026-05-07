@@ -447,6 +447,7 @@ export interface PendingSelection {
       | 'discard-search'    // 從棄牌區選擇（夜間擔架、能量回收器、奇跡修正檔）
       | 'hand-choose'       // 從手牌選擇但不丟棄（神奇糖果第一步）
       | 'damage-distribute' // 傷害指示物自由分配到多隻對手備戰（幻影奇襲、類似機制）
+      | 'energy-distribute' // v2.87 同類能量自由分配（+/- 計數器 UI；龐克練肌 / 過度放電 / 合金建造）
       | 'active-energy-discard' // v2.63 撤退時手動選擇要丟哪幾張附加能量（多屬性時詢問）
       | 'modal-choice'      // v2.139 二選一/多選一文字選單（烏栗 swap vs +30 / 火箭隊的工廠 三選一 等）
       | 'reorder-deck-top'; // v2.164 排序牌庫頂 N 張（推理組合 / 蕾荷）— 可選擇允許丟棄

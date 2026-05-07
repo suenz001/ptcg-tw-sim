@@ -16,6 +16,7 @@ import {
 } from '../_shared';
 import { hitBenchPickPost } from '../../effects';
 import { isBasicEnergyOfType } from '../../engine';
+import { dispatchEnergyDistributePending } from './v158_energy_chain';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 奧利瓦ex ｜ 芳香射擊（160 + 自身清特殊狀態）
@@ -453,65 +454,13 @@ regR('alloy-forge-pick', (st, idx, energyIids, _params, pool) => {
         bench: pl.bench.map(c => c.iid === target.iid ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
     });
   }
-  // v2.225 多隻鋼寶可夢 → 逐張分配，升級為 chained pending（不再簡化）。
-  //   卡面：「以任意方式附於」；舊版選 1 隻把所有能量塞給它，Leon 反映能量應可分散。
-  //   修法：每張能量都開 1 個 heal-target pending 讓玩家選目標，
-  //         params.energyIids 攜帶剩餘待分配的 iid 陣列；resolver 附完當前 1 張後 spawn 下一個。
-  return withPending(st, {
-    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'alloy-forge-commit',
-    params: {
-      energyIids, validIids: metalPokes.map(c => c.iid),
-      totalCount: energyIids.length, placedCount: 0,
-    },
-  });
+  // v2.87 多隻鋼寶可夢 + 全部能量同屬性（基本【鋼】）→ 改用 +/- 計數器 UI。
+  return dispatchEnergyDistributePending(
+    addLog(st, `合金建造：請以「+/-」分配 ${energyIids.length} 張【鋼】能量到 ${metalPokes.length} 隻【鋼】寶可夢`, idx),
+    idx, energyIids, metalPokes.map(c => c.iid), { label: '合金建造', energyType: 'Metal' });
 });
-regR('alloy-forge-commit', (st, idx, iids, params, pool) => {
-  const energyIids = (params?.energyIids as string[]) ?? [];
-  const totalCount = (params?.totalCount as number) ?? energyIids.length;
-  const placedCount = (params?.placedCount as number) ?? 0;
-  if (energyIids.length === 0) return st;
-  const targetIid = iids[0];
-  const p = st.players[idx];
-  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
-  if (!target) return st;
-  const tCard = pool.get(target.cardId);
-  if (tCard?.pokemonType !== 'Metal') return addLog(st, '合金建造：目標非【鋼】寶可夢，取消附加', idx);
-  // v2.225：只附「當前 1 張」，剩下的 spawn 下一個 pending
-  const currentEnergyIid = energyIids[0];
-  const restIids = energyIids.slice(1);
-  const energy = p.discard.find(c => c.iid === currentEnergyIid);
-  if (!energy) return st;
-  let s = addLog(st,
-    `合金建造：將第 ${placedCount + 1}/${totalCount} 張基本【鋼】能量附於 ${tCard.name}`, idx);
-  s = updatePlayer(s, idx, pl => {
-    const rest = pl.discard.filter(c => c.iid !== currentEnergyIid);
-    if (pl.active && pl.active.iid === targetIid) {
-      return { ...pl, discard: rest, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, energy] } };
-    }
-    return { ...pl, discard: rest,
-      bench: pl.bench.map(c => c.iid === targetIid ? { ...c, energyAttached: [...c.energyAttached, energy] } : c) };
-  });
-  // 還有剩 → spawn 下一個 pending；用最新 state 重算 metal validIids（防備有寶可夢被換下場）
-  if (restIids.length > 0) {
-    const metalPokes = [...(s.players[idx].active ? [s.players[idx].active!] : []), ...s.players[idx].bench]
-      .filter(c => pool.get(c.cardId)?.pokemonType === 'Metal');
-    if (metalPokes.length === 0) {
-      return addLog(s, '合金建造：場上已無【鋼】寶可夢，剩餘能量留在棄牌區', idx);
-    }
-    return withPending(s, {
-      type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'alloy-forge-commit',
-      params: {
-        energyIids: restIids, validIids: metalPokes.map(c => c.iid),
-        totalCount, placedCount: placedCount + 1,
-      },
-    });
-  }
-  return s;
-});
+// v2.87：alloy-forge-commit 已被 v87-energy-distribute-flat 取代。
+regR('alloy-forge-commit', (st, _idx, _iids, _params, _pool) => st);
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 旋轉洛托姆 ｜ 風扇呼喚（首回合限定特性）

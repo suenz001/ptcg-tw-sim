@@ -33,6 +33,7 @@ import {
   selfSwapPost, skipDefEffectsPre, countOppPokemon, koPrizeCount,
 } from '../../effects';
 import { isBasicEnergyOfType } from '../../engine';
+import { dispatchEnergyDistributePending } from './v158_energy_chain';
 
 // ── 凱西｜瞬間移動攻擊 — 10，可選擇與備戰互換 ────────────────────────────────
 regPre('凱西|瞬間移動攻擊', (state, _aIdx, _pool) => ({ state, damage: 10 }));
@@ -304,76 +305,14 @@ regR('punk-training-attach', (st, idx, iids, params, pool) => {
     });
   }
 
-  // 多隻瑪俐的寶可夢 → 逐張選附加目標
-  s = addLog(s, `${label}：請選擇每張【惡】能量的附加目標（重洗牌庫完成）`, idx);
-  return withPending(s, {
-    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'punk-training-distribute',
-    params: {
-      label,
-      energyIids: picked.map(c => c.iid),
-      validIids: mariPokes.map(c => c.iid),
-      totalCount: picked.length, placedCount: 0,
-    },
-  });
+  // v2.87 多隻「瑪俐的」寶可夢 + 全部能量同屬性（基本【惡】）→ 改用 +/- 計數器 UI
+  s = addLog(s, `${label}：請以「+/-」分配 ${picked.length} 張【惡】能量到 ${mariPokes.length} 隻「瑪俐的」寶可夢（重洗牌庫完成）`, idx);
+  return dispatchEnergyDistributePending(s, idx, picked.map(c => c.iid),
+    mariPokes.map(c => c.iid), { label, energyType: 'Darkness' });
 });
-regR('punk-training-distribute', (st, idx, iids, params, pool) => {
-  const label = ((params?.label as string | undefined) ?? '龐克練肌');
-  const energyIids = ((params?.energyIids as string[] | undefined) ?? []);
-  const totalCount = ((params?.totalCount as number | undefined) ?? energyIids.length);
-  const placedCount = ((params?.placedCount as number | undefined) ?? 0);
-  if (energyIids.length === 0) return st;
-
-  const currentEnergyIid = energyIids[0];
-  const restIids = energyIids.slice(1);
-  const targetIid = iids[0];
-  const p = st.players[idx];
-
-  // 能量暫存在 discard 中（punk-training-attach 導入）
-  const energy = p.discard.find(c => c.iid === currentEnergyIid);
-  if (!energy) {
-    if (restIids.length === 0) return st;
-    const ap2 = [...(st.players[idx].active ? [st.players[idx].active] : []), ...st.players[idx].bench];
-    const mn2 = ap2.filter(c => pool.get(c.cardId)?.name?.startsWith('瑪俐的'));
-    return withPending(st, {
-      type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-      minCount: 1, maxCount: 1, effectKey: 'punk-training-distribute',
-      params: { label, energyIids: restIids, validIids: mn2.map(c => c.iid), totalCount, placedCount: placedCount + 1 },
-    });
-  }
-
-  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
-  const tCard = target ? pool.get(target.cardId) : null;
-  if (!target || !tCard?.name?.startsWith('瑪俐的')) {
-    return addLog(st, `${label}：目標不是「瑪俐的」寶可夢，取消附加`, idx);
-  }
-
-  const tName = tCard.name;
-  let s = addLog(st, `${label}：第 ${placedCount + 1}/${totalCount} 張【惡】能量附於 ${tName}`, idx);
-  s = updatePlayer(s, idx, pl => {
-    const rest = pl.discard.filter(c => c.iid !== currentEnergyIid);
-    if (pl.active?.iid === targetIid) {
-      return { ...pl, discard: rest, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, energy] } };
-    }
-    return { ...pl, discard: rest, bench: pl.bench.map(c => c.iid === targetIid ? { ...c, energyAttached: [...c.energyAttached, energy] } : c) };
-  });
-
-  if (restIids.length === 0) return s;
-
-  const ap = [...(s.players[idx].active ? [s.players[idx].active] : []), ...s.players[idx].bench];
-  const mn = ap.filter(c => pool.get(c.cardId)?.name?.startsWith('瑪俐的'));
-  if (mn.length === 0) return addLog(s, `${label}：場上已無「瑪俐的」寶可夢，剩餘能量留在棄牌區`, idx);
-  return withPending(s, {
-    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1, effectKey: 'punk-training-distribute',
-    params: {
-      label, energyIids: restIids,
-      validIids: mn.map(c => c.iid),
-      totalCount, placedCount: placedCount + 1,
-    },
-  });
-});
+// v2.87：punk-training-distribute 已被 v87-energy-distribute-flat 取代（同屬性 +/- UI）。
+// 保留 stub 處理舊 game state 復原情境 — no-op 結束 pending。
+regR('punk-training-distribute', (st, _idx, _iids, _params, _pool) => st);
 
 // ── 瑪俐的長毛巨魔ex｜暗影子彈 — 180，另對對手 1 隻備戰寶可夢造成 30 傷害 ──────
 regPre('瑪俐的長毛巨魔ex|暗影子彈', (state, _aIdx, _pool) => ({ state, damage: 180 }));

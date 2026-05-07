@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.87</span> 同類能量批次附加 picker 改 +/- 計數器 UI</summary>
+        <ul>
+          <li>玩家提議：龐克練肌（瑪俐的長毛巨魔ex）這種「附多張同種類能量到多隻寶可夢」的卡，舊版要逐張選目標 + 逐張按確認，操作非常繁瑣</li>
+          <li>新增 PendingSelection 類型 energy-distribute：與 damage-distribute（幻影奇襲）同款 +/- 計數器 UI，一次分配完所有能量按一次確認即可</li>
+          <li>同類能量自動偵測：若該批次能量全部同屬性（如全 5 張基本【惡】能量）走 +/- UI；屬性混合（如太樂巴戈斯稜鏡充能各 1 張不同屬性）維持舊版逐張 picker（每張不可互換）</li>
+          <li>已套用同款 UI：龐克練肌（5 張【惡】）/ 過度放電（1-3 張【雷】）/ 合金建造（搜【鋼】）+ 通用 startEnergyChain helper（帶動所有 v158 chain 用戶：燃燒充能 / 玻璃喇叭 / 樂呵呵之吻 / X啟動 / 金屬製造者 等）</li>
+          <li>UI 細節：頂部進度條顯示「已附加 X/N 張【屬性】能量」、卡面 +/- 按鈕、右鍵 -1 快捷、達到 maxCount 後 +1 鈕鎖定</li>
+          <li>混合屬性卡片不變（稜鏡充能 / 沉重接力棒 / 風暴伏特 等）卡面語義要求每張獨立指定目標</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.86</span> 選擇 modal 兩個 UX 改進</summary>
         <ul>
           <li>每個選擇 modal 底部加全域拖曳提示「💡 提示：按住上方標題列可拖曳視窗到不擋場面的位置」（用 CSS ::after 一次套到所有 .selection-modal）</li>

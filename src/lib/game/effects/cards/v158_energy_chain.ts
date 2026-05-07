@@ -57,6 +57,128 @@ function pokemonMatchesType(card: Card | undefined, filter: EnergyTypeFilter): b
   return card.pokemonType === filter;
 }
 
+// v2.87 中文屬性顯示名（給 UI 標頭用）
+const ZH_BY_TYPE: Record<string, string> = {
+  Grass: '草', Fire: '火', Water: '水', Lightning: '雷',
+  Psychic: '超', Fighting: '鬥', Darkness: '惡', Metal: '鋼',
+  Dragon: '龍', Colorless: '無', Fairy: '妖',
+};
+
+/**
+ * v2.87 偵測能量陣列是否「全部同屬性」。
+ * 同屬性才能用單一計數器來代表「N 張同質能量分散到目標」。
+ */
+export function detectSameEnergyType(
+  energies: CardInstance[],
+  pool: Map<string, Card>,
+): SingleType | null {
+  if (energies.length === 0) return null;
+  const nameToType = (name: string): SingleType | null => {
+    if (name.includes('【草】')) return 'Grass';
+    if (name.includes('【火】')) return 'Fire';
+    if (name.includes('【水】')) return 'Water';
+    if (name.includes('【雷】')) return 'Lightning';
+    if (name.includes('【超】')) return 'Psychic';
+    if (name.includes('【鬥】')) return 'Fighting';
+    if (name.includes('【惡】')) return 'Darkness';
+    if (name.includes('【鋼】')) return 'Metal';
+    if (name.includes('【龍】')) return 'Dragon';
+    if (name.includes('【無】')) return 'Colorless';
+    return null;
+  };
+  let firstType: SingleType | null = null;
+  for (const e of energies) {
+    const c = pool.get(e.cardId);
+    if (!c) return null;
+    if (c.supertype !== 'Energy' || c.subtype !== 'Basic') return null;
+    const t = (c.pokemonType as SingleType | undefined) ?? nameToType(c.name);
+    if (!t) return null;
+    if (firstType === null) firstType = t;
+    else if (firstType !== t) return null;
+  }
+  return firstType;
+}
+
+/**
+ * v2.87 共用 resolver：energy-distribute 平展模式
+ *   selectedIids: 長度 = totalCount，每個元素 = 該張能量要附給哪一隻寶可夢
+ */
+regR('v87-energy-distribute-flat', (st, aIdx, selectedIids, params, pool) => {
+  const label = String(params?.label ?? '能量分配');
+  const energyIids = ((params?.energyIids as string[] | undefined) ?? []).slice();
+  const energyTypeName = (params?.energyTypeName as string | undefined) ?? '';
+
+  if (selectedIids.length === 0 || energyIids.length === 0) {
+    return addLog(st, `${label}：未分配任何能量`, aIdx);
+  }
+  const useCount = Math.min(selectedIids.length, energyIids.length);
+  const tally = new Map<string, number>();
+  let s: GameState = st;
+
+  for (let i = 0; i < useCount; i++) {
+    const targetIid = selectedIids[i];
+    const energyIid = energyIids[i];
+    const p = s.players[aIdx];
+    const energyInst = p.discard.find(c => c.iid === energyIid);
+    if (!energyInst) continue;
+    const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
+    if (!target) continue;
+    s = updatePlayer(s, aIdx, pl => {
+      const restDiscard = pl.discard.filter(c => c.iid !== energyIid);
+      const attach = (poke: CardInstance) => poke.iid === targetIid
+        ? { ...poke, energyAttached: [...poke.energyAttached, energyInst] }
+        : poke;
+      return {
+        ...pl,
+        discard: restDiscard,
+        active: pl.active ? attach(pl.active) : pl.active,
+        bench: pl.bench.map(attach),
+      };
+    });
+    tally.set(targetIid, (tally.get(targetIid) ?? 0) + 1);
+  }
+
+  const parts: string[] = [];
+  for (const [iid, n] of tally) {
+    const player = s.players[aIdx];
+    const tInst = player.active?.iid === iid ? player.active : player.bench.find(c => c.iid === iid);
+    const name = tInst ? (pool.get(tInst.cardId)?.name ?? '?') : '?';
+    parts.push(`${name}×${n}`);
+  }
+  const typeLabel = energyTypeName ? `【${energyTypeName}】` : '';
+  if (parts.length > 0) {
+    s = addLog(s, `${label}：${parts.join('、')} 共 ${useCount} 張${typeLabel}能量`, aIdx);
+  }
+  return s;
+});
+
+/**
+ * v2.87 開出 energy-distribute pending 的便利 helper。
+ */
+export function dispatchEnergyDistributePending(
+  st: GameState,
+  aIdx: 0 | 1,
+  energyIids: string[],
+  validIids: string[],
+  opts: { label: string; energyType: SingleType },
+): GameState {
+  const energyTypeName = ZH_BY_TYPE[opts.energyType] ?? '';
+  return withPending(st, {
+    type: 'energy-distribute',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: energyIids.length, maxCount: energyIids.length,
+    effectKey: 'v87-energy-distribute-flat',
+    params: {
+      label: opts.label,
+      energyIids,
+      validIids,
+      totalCount: energyIids.length,
+      placedCount: 0,
+      energyTypeName,
+    },
+  });
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // 核心 helper：直接呼叫版（給其他模組複用，不透過 RESOLVE_SELECTION）
 // ══════════════════════════════════════════════════════════════════════════════
@@ -146,10 +268,33 @@ export function startEnergyChain(
     return addLog(st, `${label}：場上僅有 1 個合法目標 → 全 ${energyIids.length} 張能量附到 ${tname}`, aIdx);
   }
 
-  // 多個合法目標 → 對第 1 張能量開 picker
+  // v2.87 同屬性偵測：若所有能量都同屬性 → 改用 +/- 計數器 UI（一次選完不必逐張按）
+  const energyInsts = st.players[aIdx].discard.filter(c => energyIids.includes(c.iid));
+  const sameType = detectSameEnergyType(energyInsts, pool);
+  if (sameType) {
+    const zh = ZH_BY_TYPE[sameType] ?? '';
+    st = addLog(st,
+      `${label}：請以「+/-」分配 ${energyIids.length} 張${zh ? `【${zh}】` : ''}能量到 ${validTargets.length} 隻可附目標`,
+      aIdx);
+    return withPending(st, {
+      type: 'energy-distribute',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: energyIids.length, maxCount: energyIids.length,
+      effectKey: 'v87-energy-distribute-flat',
+      params: {
+        label,
+        energyIids,
+        validIids: validTargets.map(c => c.iid),
+        totalCount: energyIids.length,
+        placedCount: 0,
+        energyTypeName: zh,
+      },
+    });
+  }
+
+  // 多個合法目標 + 混合屬性 → 維持原本逐張 chain
   const firstEnergy = energyIids[0];
   const remainingEnergies = energyIids.slice(1);
-  // 查出第 1 張能量的卡名，用於 UI 標頭
   const firstEnergyInDiscard = st.players[aIdx].discard.find(c => c.iid === firstEnergy);
   const firstEnergyCardName = firstEnergyInDiscard ? (pool.get(firstEnergyInDiscard.cardId)?.name ?? '能量') : '能量';
   st = addLog(st, `${label}：選擇要附第 1 張能量的目標寶可夢（共 ${energyIids.length} 張待附）`, aIdx);

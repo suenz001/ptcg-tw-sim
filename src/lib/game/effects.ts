@@ -9846,57 +9846,26 @@ regR('overvolt-attach-pick-target', (st, idx, iids, params, pool) => {
           ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
     });
   }
-  // 多隻雷寶可夢：v2.221 升級為「逐張分配」（之前簡化為全部附到單一目標）
-  // 卡面：「以任意方式附於自己的【雷】寶可夢身上」— 每張能量可附到不同雷寶
-  return withPending(st, {
-    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'overvolt-attach-commit',
-    params: { energyIids: iids, label, totalCount: iids.length, placedCount: 0 },
+  // 多隻雷寶可夢：v2.87 改用 +/- 計數器 UI（同屬性能量批次分配，省下逐張按確認）。
+  return withPending(addLog(st,
+    `${label}：請以「+/-」分配 ${iids.length} 張【雷】能量到 ${lightningSelf.length} 隻【雷】寶可夢`,
+    idx), {
+    type: 'energy-distribute',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: iids.length, maxCount: iids.length,
+    effectKey: 'v87-energy-distribute-flat',
+    params: {
+      label,
+      energyIids: iids,
+      validIids: lightningSelf.map(c => c.iid),
+      totalCount: iids.length, placedCount: 0,
+      energyTypeName: '雷',
+    },
   });
 });
 
-// v2.221：升級為逐張分配（每張可附到不同雷寶可夢；同樣也可全部附到 1 隻）
-regR('overvolt-attach-commit', (st, idx, iids, params, pool) => {
-  const label = (params?.label as string) ?? '過度放電';
-  const energyIids = (params?.energyIids as string[]) ?? [];
-  const totalCount = (params?.totalCount as number) ?? energyIids.length;
-  const placedCount = (params?.placedCount as number) ?? 0;
-  if (energyIids.length === 0) return st;
-  const targetIid = iids[0];
-  const p = st.players[idx];
-  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
-  if (!target) return st;
-  const targetCard = pool.get(target.cardId);
-  if (targetCard?.pokemonType !== 'Lightning') {
-    return addLog(st, `${label}：目標非【雷】寶可夢，取消附加`, idx);
-  }
-  const currentEnergyIid = energyIids[0];
-  const restIids = energyIids.slice(1);
-  const energy = p.discard.find(c => c.iid === currentEnergyIid);
-  if (!energy) return st;
-  let s = addLog(st,
-    `${label}：將第 ${placedCount + 1}/${totalCount} 張基本雷能量附加到 ${targetCard.name}`, idx);
-  s = updatePlayer(s, idx, pl => {
-    const rest = pl.discard.filter(c => c.iid !== currentEnergyIid);
-    if (pl.active && pl.active.iid === targetIid) {
-      return { ...pl, discard: rest,
-        active: { ...pl.active, energyAttached: [...pl.active.energyAttached, energy] } };
-    }
-    return { ...pl, discard: rest,
-      bench: pl.bench.map(c => c.iid === targetIid
-        ? { ...c, energyAttached: [...c.energyAttached, energy] } : c) };
-  });
-  if (restIids.length > 0) {
-    return withPending(s, {
-      type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'overvolt-attach-commit',
-      params: { energyIids: restIids, label, totalCount, placedCount: placedCount + 1 },
-    });
-  }
-  return s;
-});
+// v2.87：overvolt-attach-commit 已被 v87-energy-distribute-flat 取代。
+regR('overvolt-attach-commit', (st, _idx, _iids, _params, _pool) => st);
 
 function overvoltAttackPost(label: string): AttackPostFn {
   return (state, aIdx, pool) => {
