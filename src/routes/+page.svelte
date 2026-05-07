@@ -264,6 +264,36 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.95</span> 清孤兒 regR + 實裝快節奏/搜尋點心 + 15 regA 驗證報告</summary>
+        <ul>
+          <li>v2.94 殘留清理：刪除 5 個孤兒 <code>regR</code>（<code>ABILITY_EFFECTS.set</code> 已刪、resolver 殘留 dead code）— 大電海燕 閃電平局 / 尖牙陸鯊 龍之呼喚 / 狂歡浪舞鴨 能量嘉年華 + attach / 莫魯貝可 點心尋找</li>
+          <li>保留 <code>meowth-ex-trump-catch</code> resolver — 因 maroon_dragon_deck.ts:56 仍引用（喵喵ex 殺手鐧捕捉 走 deck-search 流程）</li>
+          <li>實裝 狂歡浪舞鴨｜快節奏 — 「將 1 張手牌放回牌庫下方，抽到手牌滿 5 張」（手牌 picker → resolver 把卡 push 到 <code>deck[length-1]</code>，非丟棄非重洗）</li>
+          <li>實裝 莫魯貝可｜搜尋點心 — 「查看牌庫上方 1 張卡，回復原樣，若希望將那張卡丟棄」（log 顯示卡名給玩家本人 → modal-choice 保留 vs 丟棄）</li>
+          <li>v2.94 已 convert 的 15 個 <code>regA</code> fn body 對比卡面文字，10 ✅ + 5 ⚠️：</li>
+        <li>3. 米立龍｜集客 ⚠️：log 為 actor-only，對手看不到挑的支援者卡名</li>
+        <li>10. 遠古巨蜓ex｜振翅高飛 ⚠️：movedToActiveThisTurn gate 與「從備戰過來」依賴 engine 旗標；resolver 0-path shuffle 正常</li>
+        <li>12. 象牙豬ex｜毛象搬運 ⚠️：deckSearchToHandA generic resolver，actor-only log（缺「給對手看過」）</li>
+        <li>13. 芳香精｜收集香氣 ⚠️：同 #12 actor-only log</li>
+        <li>15. 萌芽鹿｜四季變換 ⚠️：同 #12 actor-only log</li>
+          <li>其他（10 個）已逐項驗證 ✅：</li>
+        <li>1. 吉雉雞ex｜扭轉乾坤 ✅</li>
+        <li>2. 厄鬼椪 碧草面具ex｜碧綠之舞 ✅</li>
+        <li>4. 叉字蝠｜夜間工作 ✅</li>
+        <li>5. 妖火紅狐｜閃焰魔法 ✅</li>
+        <li>6. 噗噗豬｜能量舞步 ✅</li>
+        <li>7. 鐵面忍者｜脫殼 ✅</li>
+        <li>8. 貓鼬探長｜蒐證 ✅</li>
+        <li>9. 光電傘蜥｜頸傘發電 ✅</li>
+        <li>11. 甲殼繭｜增長繭 ✅</li>
+        <li>14. 莉佳的蔓藤怪｜百花齊放 ✅（filter 未限制 picker，但 resolver 有檢查；log actor-only）</li>
+          <li>5 個 ⚠️ 共同問題：「給對手看過」這條卡面要求未實裝 — 目前都是 actor-only log，對手畫面看不到挑了哪張卡（屬 UI / 公平性層級，不影響遊戲狀態正確性，可在後續 wave 統一修）</li>
+          <li>遠古巨蜓ex｜振翅高飛 的 <code>movedToActiveThisTurn</code> gate 屬 engine 旗標依賴，若有「資源沒附到正確目標」報告再追</li>
+          <li>未發現嚴重簡化（自動選 HP 最低 / 50% 機率 / 全部附 1 隻 之類）— v2.94 audit 已清完</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.94</span> 修 v2306 21 個 ABILITY_EFFECTS key bug + 鐵掌力士｜大力捕捉器 + audit + 鐵律</summary>
         <ul>
           <li>修復 v2306_meta_pokemon.ts 的 21 個 <code>ABILITY_EFFECTS.set</code> key bug — 引擎查表用 <code>&#39;卡名&#124;abilityIndex&#39;</code>（數字），但 v2306 用 <code>&#39;卡名&#124;特性名&#39;</code> 全部 dead</li>

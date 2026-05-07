@@ -360,3 +360,113 @@ regA('鐵掌力士', 0, (st, idx, _pool, _cardInst) => {
     effectKey: 'gust-opp',
   });
 });
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 4) 狂歡浪舞鴨｜快節奏 (v2.95)
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「在自己的回合，若將 1 張自己的手牌放回牌庫下方，則可使用 1 次。
+//        從牌庫抽卡直到自己的手牌滿 5 張為止。」
+//
+// 設計：
+//   - regA 觸發；engine 處理 abilityUsedThisTurn gate
+//   - cost: 任意 1 張手牌放回牌庫下方（不是丟棄、不是重洗）
+//   - 抽牌：抽到手牌 = 5 張為止；若手牌 ≥5 則只支付 cost 不抽
+//   - 「牌庫下方」= deck[deck.length-1]（PTCG 慣例：deck[0] 是頂、deck[end] 是底）
+// ══════════════════════════════════════════════════════════════════════════════
+regA('狂歡浪舞鴨', 0, (st, idx, _pool, _cardInst) => {
+  const p = st.players[idx];
+  if (p.hand.length === 0) {
+    return addLog(st, '快節奏：手牌為空，無法支付 1 張手牌的代價', idx);
+  }
+  const s = addLog(st, '狂歡浪舞鴨：使用特性「快節奏」，選擇 1 張手牌放回牌庫下方', idx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'quaquaval-fast-tempo',
+    params: { titleOverride: '快節奏：選 1 張手牌放回牌庫下方' },
+  });
+});
+regR('quaquaval-fast-tempo', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return st;
+  const handIid = iids[0];
+  const p = st.players[idx];
+  const handIdx = p.hand.findIndex(c => c.iid === handIid);
+  if (handIdx === -1) return st;
+  const cardInst = p.hand[handIdx];
+  const cardName = pool.get(cardInst.cardId)?.name ?? '?';
+  // 1. 把該手牌移到牌庫下方（不是丟棄、不是重洗）
+  let s = updatePlayer(st, idx, pl => {
+    const newHand = [...pl.hand];
+    newHand.splice(handIdx, 1);
+    return { ...pl, hand: newHand, deck: [...pl.deck, cardInst] };
+  });
+  s = addLog(s, `快節奏：將「${cardName}」放回牌庫下方`, idx);
+  // 2. 抽到手牌 = 5 張為止
+  const newHandLen = s.players[idx].hand.length;
+  if (newHandLen >= 5) {
+    return addLog(s, '快節奏：手牌已達 5 張以上，不抽卡', idx);
+  }
+  const drawCount = 5 - newHandLen;
+  s = addLog(s, `快節奏：從牌庫抽卡直到手牌滿 5 張（抽 ${drawCount} 張）`, idx);
+  return drawCards(s, idx, drawCount);
+});
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 5) 莫魯貝可｜搜尋點心 (v2.95)
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「在自己的回合時可使用 1 次。查看自己的牌庫上方 1 張卡，回復原樣。
+//        若希望，將那張卡丟棄。」
+//
+// 設計：
+//   - regA 觸發；engine 處理 abilityUsedThisTurn gate
+//   - peek 牌庫頂 1 張 → 用 modal-choice 帶 options「保留 / 丟棄」
+//   - 卡名透過 log 顯示（owner-only — actorIdx == 自己 的 log 不會洩露給對手）
+//   - 「回復原樣」= 不丟棄則卡片留在 deck[0]（不動）；
+//     「丟棄」=  deck.shift → discard
+// ══════════════════════════════════════════════════════════════════════════════
+regA('莫魯貝可', 0, (st, idx, pool, _cardInst) => {
+  const p = st.players[idx];
+  if (p.deck.length === 0) {
+    return addLog(st, '搜尋點心：牌庫為空，無法使用', idx);
+  }
+  const topInst = p.deck[0];
+  const topName = pool.get(topInst.cardId)?.name ?? '?';
+  const s = addLog(st, `莫魯貝可：使用特性「搜尋點心」，查看牌庫上方 1 張卡 → 「${topName}」`, idx);
+  return withPending(s, {
+    type: 'modal-choice', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'morpeko-snack-search-v295',
+    params: {
+      label: '搜尋點心',
+      titleOverride: `搜尋點心：牌庫頂為「${topName}」，要將其丟棄嗎？`,
+      options: [
+        { id: 'keep', text: '保留（回復原樣）' },
+        { id: 'discard', text: `將「${topName}」丟棄` },
+      ],
+    },
+  });
+});
+regR('morpeko-snack-search-v295', (st, idx, iids, _params, pool) => {
+  const choice = iids[0];
+  if (choice === 'keep') {
+    return addLog(st, '搜尋點心：選擇保留，牌庫頂卡片回復原樣', idx);
+  }
+  // 'discard'
+  const p = st.players[idx];
+  if (p.deck.length === 0) {
+    return addLog(st, '搜尋點心：牌庫已空，無卡可丟棄', idx);
+  }
+  const topInst = p.deck[0];
+  const topName = pool.get(topInst.cardId)?.name ?? '?';
+  let s = updatePlayer(st, idx, pl => ({
+    ...pl,
+    deck: pl.deck.slice(1),
+    discard: [...pl.discard, topInst],
+  }));
+  s = addLog(s, `搜尋點心：將「${topName}」丟棄`, idx);
+  return s;
+});
+
