@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.79</span> 佛烈托斯 鐵之震動完整 UI 實裝</summary>
+        <ul>
+          <li>原本因「自由分配能量」UI 缺工而 fallback 為玩家手動移動，現完整實裝</li>
+          <li>用 damage-distribute 風格 picker：先收集自方場上所有【鋼】能量列為一個池，玩家點選自方寶可夢 N 次（N = 鋼能量總數），每點一次代表分配 1 個能量</li>
+          <li>Resolver 從 source 拆下能量 + 依玩家點擊順序附給目標寶可夢</li>
+          <li>H 標 189 張全部 100% 完整實裝（含[ex規則] scraper artifact 不需做的 1 張）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.78</span> 引擎機制大整修 — 處理所有 [TODO engine] 卡片</summary>
         <ul>
           <li>新增 CardInstance state 欄位 (10 個)：damageAtMyNextEndOfTurn / immuneToAttackEffectsNextTurn+ThisTurn / attackCostIncreaseColorlessNextTurn+ThisTurn / retreatCostIncreaseNextTurn+ThisTurn / endTurnOnOppAttachEnergyNextTurn+ThisTurn / immuneToExAttackTagNextTurn+ThisTurn / weaknessOverrideTypeNextTurn+ThisTurn</li>

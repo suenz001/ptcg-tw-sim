@@ -6,7 +6,7 @@
  */
 
 import {
-  regPre, regPost, addLog, updatePlayer,
+  regPre, regPost, regR, addLog, updatePlayer, withPending,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
@@ -86,10 +86,80 @@ regPre('吃吼霸ex|極限俯衝', (s) => ({ state: s, damage: 240 }));
 regPost('吃吼霸ex|極限俯衝', selfHitPost(50, '極限俯衝'));
 
 // 佛烈托斯|鐵之震動 20 — 自方場上鋼能量任意改附自方寶可夢
-//   [TODO engine] 自由分配 UI 暫無，記 log 提示玩家手動執行
+//   v2.79 用 damage-distribute 風格 picker（玩家點選目標寶可夢分配次數 = 能量數）
+//   流程：先收集所有自方場上鋼能量為一個 list，然後讓玩家點選 N 次目標寶可夢，
+//   每次點擊代表分配 1 個能量。Resolver 把所有 source 能量拆下、依玩家點擊順序附給目標。
 regPre('佛烈托斯|鐵之震動', (s) => ({ state: s, damage: 20 }));
-regPost('佛烈托斯|鐵之震動', (state, aIdx, _pool) => {
-  return addLog(state, '鐵之震動：[卡面]自方場上鋼能量任意改附自方寶可夢（請玩家手動移動）', aIdx);
+regPost('佛烈托斯|鐵之震動', (state, aIdx, pool) => {
+  const player = state.players[aIdx];
+  // 收集所有自方場上鋼能量
+  const sourceEnergies: Array<{ energyIid: string; sourceIid: string }> = [];
+  if (player.active) {
+    for (const e of player.active.energyAttached) {
+      const card = pool.get(e.cardId);
+      if (card?.pokemonType === 'Metal') {
+        sourceEnergies.push({ energyIid: e.iid, sourceIid: player.active.iid });
+      }
+    }
+  }
+  for (const b of player.bench) {
+    for (const e of b.energyAttached) {
+      const card = pool.get(e.cardId);
+      if (card?.pokemonType === 'Metal') {
+        sourceEnergies.push({ energyIid: e.iid, sourceIid: b.iid });
+      }
+    }
+  }
+  if (sourceEnergies.length === 0) return addLog(state, '鐵之震動：自方場上無【鋼】能量', aIdx);
+  const totalCount = sourceEnergies.length;
+  return withPending(addLog(state, `鐵之震動：點選自方寶可夢 ${totalCount} 次，分配 ${totalCount} 張鋼能量`, aIdx), {
+    type: 'damage-distribute',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: totalCount, maxCount: totalCount,
+    effectKey: 'h-energy-redistribute',
+    params: {
+      sourceEnergies,
+      target: 'self',
+      titleOverride: `鐵之震動：分配 ${totalCount} 張【鋼】能量（點目標寶可夢，每點一次 = 1 個能量）`,
+    },
+  });
+});
+
+regR('h-energy-redistribute', (state, aIdx, iids, params, _pool) => {
+  const sourceEnergies = (params?.sourceEnergies as Array<{ energyIid: string; sourceIid: string }> | undefined) ?? [];
+  if (sourceEnergies.length === 0 || iids.length === 0) return state;
+  return updatePlayer(addLog(state, `鐵之震動：分配 ${iids.length} 張鋼能量到自方寶可夢`, aIdx), aIdx, p => {
+    const energyIidSet = new Set(sourceEnergies.map(s => s.energyIid));
+    // 1) 拆下所有 source 能量
+    const collectedEnergies: CardInstance[] = [];
+    let newActive = p.active;
+    if (newActive) {
+      collectedEnergies.push(...newActive.energyAttached.filter(e => energyIidSet.has(e.iid)));
+      newActive = { ...newActive, energyAttached: newActive.energyAttached.filter(e => !energyIidSet.has(e.iid)) };
+    }
+    let newBench = p.bench.map(b => {
+      const removed = b.energyAttached.filter(e => energyIidSet.has(e.iid));
+      collectedEnergies.push(...removed);
+      return { ...b, energyAttached: b.energyAttached.filter(e => !energyIidSet.has(e.iid)) };
+    });
+    // 2) 按 iids 順序分配
+    const distMap = new Map<string, CardInstance[]>();
+    for (let i = 0; i < iids.length && i < collectedEnergies.length; i++) {
+      if (!distMap.has(iids[i])) distMap.set(iids[i], []);
+      distMap.get(iids[i])!.push(collectedEnergies[i]);
+    }
+    // 3) 附加到目標
+    if (newActive && distMap.has(newActive.iid)) {
+      newActive = { ...newActive, energyAttached: [...newActive.energyAttached, ...distMap.get(newActive.iid)!] };
+    }
+    newBench = newBench.map(b => {
+      if (distMap.has(b.iid)) {
+        return { ...b, energyAttached: [...b.energyAttached, ...distMap.get(b.iid)!] };
+      }
+      return b;
+    });
+    return { ...p, active: newActive, bench: newBench };
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
