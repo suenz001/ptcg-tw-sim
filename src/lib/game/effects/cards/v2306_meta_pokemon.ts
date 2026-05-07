@@ -312,21 +312,28 @@ const deckSearchToHandA = (maxCount: number, filter: string, name: string) => {
   };
 };
 
-// We also need to register a generic resolver for this
-const __genericDeckSearchResolver = (state: GameState, actorIdx: 0|1, selectedIids: string[], params: any, pool: Map<string, Card>) => {
-  if (selectedIids.length === 0) {
-    let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
-    return addLog(s, `未選擇卡片，牌庫已重洗`, actorIdx);
-  }
-  const p = state.players[actorIdx];
-  const targets = p.deck.filter(c => selectedIids.includes(c.iid));
-  let newDeck = p.deck.filter(c => !selectedIids.includes(c.iid));
-  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), hand: [...pl.hand, ...targets] }));
-  return addLog(s, `將 ${targets.length} 張卡加入手牌，並重洗牌庫`, actorIdx);
+// v2.961: 修揭示資訊 bug — 此 resolver 共用 3 張卡（芳香精｜收集香氣、
+// 象牙豬ex｜毛象搬運、萌芽鹿｜四季變換），三張卡卡面都有「給對手看過」字樣，
+// 因此 log 必須公開具體卡名（per Iron Rule 8）。
+// effectKey 格式：'deck-search-to-hand-a-{abilityName}' — 從 effectKey 反推 ability name 作為 log prefix。
+const __genericDeckSearchResolverFactory = (abilityName: string) => {
+  return (state: GameState, actorIdx: 0|1, selectedIids: string[], params: any, pool: Map<string, Card>) => {
+    if (selectedIids.length === 0) {
+      let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+      return addLog(s, `${abilityName}：未選擇卡片，牌庫已重洗`, actorIdx);
+    }
+    const p = state.players[actorIdx];
+    const targets = p.deck.filter(c => selectedIids.includes(c.iid));
+    let newDeck = p.deck.filter(c => !selectedIids.includes(c.iid));
+    let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), hand: [...pl.hand, ...targets] }));
+    // Iron Rule 8：卡面有「給對手看過」→ addLog 公開具體卡名（防作弊驗證 filter 限制）
+    const names = targets.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    return addLog(s, `${abilityName}：將「${names}」加入手牌，並重洗牌庫（給對手看）`, actorIdx);
+  };
 };
-RESOLVERS.set('deck-search-to-hand-a-收集香氣', __genericDeckSearchResolver);
-RESOLVERS.set('deck-search-to-hand-a-毛象搬運', __genericDeckSearchResolver);
-RESOLVERS.set('deck-search-to-hand-a-四季變換', __genericDeckSearchResolver);
+RESOLVERS.set('deck-search-to-hand-a-收集香氣', __genericDeckSearchResolverFactory('收集香氣'));
+RESOLVERS.set('deck-search-to-hand-a-毛象搬運', __genericDeckSearchResolverFactory('毛象搬運'));
+RESOLVERS.set('deck-search-to-hand-a-四季變換', __genericDeckSearchResolverFactory('四季變換'));
 regPre('鐵面忍者|急速折返', (state, aIdx, pool) => ({ state, damage: 90 }));
 regPost('鐵面忍者|急速折返', selfSwapPost('急速折返'));
 

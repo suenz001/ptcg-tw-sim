@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.961</span> 修 v2.96 漏掉的 __genericDeckSearchResolver 揭示資訊</summary>
+        <ul>
+          <li>v2.96 audit 漏掉 v2306 的 __genericDeckSearchResolver — 此 resolver 共用 3 張卡，全都漏揭示</li>
+          <li>芳香精｜收集香氣（搜【超】能量 ≤2 加手）— 卡面有「給對手看過」</li>
+          <li>象牙豬ex｜毛象搬運（搜寶可夢 1 加手）— 卡面有「給對手看過」</li>
+          <li>萌芽鹿｜四季變換（搜競技場 1 加手）— 卡面有「給對手看過」</li>
+          <li>修法：__genericDeckSearchResolver 改寫為 factory pattern，傳入 abilityName 作為 log prefix；log 公開具體卡名「{abilityName}：將「A、B」加入手牌（給對手看）」</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.96</span> 兩條鐵律審計：揭示資訊（addLog vs addPrivateLog）+ 特性按鈕 gate</summary>
         <ul>
           <li><b>Audit 1：揭示資訊規則</b> — 卡面有「給對手看過」者，對手 log 必須能驗證具體卡名（PTCG 線上版透過 log 取代實體桌上「給對手看」的防作弊機制）</li>
