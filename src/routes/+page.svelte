@@ -264,13 +264,24 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.97-hotfix</span> 修 v2.961 changelog 大括號沒 escape 導致空白頁</summary>
+        <ul>
+          <li>嚴重 bug：v2.961 changelog 內「&#123;abilityName&#125;」沒做 HTML entity escape，被 Svelte parser 當成 JavaScript expression 求值</li>
+          <li>運行時 ReferenceError: abilityName is not defined → 整個 app 在首頁就崩潰，全黑空白</li>
+          <li>違反 ptcg-push 鐵律 1（Svelte template 特殊字符 ＜＞｛｝ 必須 escape）</li>
+          <li>修法：把 changelog 內裸 &#123; &#125; 改為 &amp;#123; &amp;#125; HTML entity</li>
+          <li>未來嚴禁在 changelog 等 svelte template 內容裡放裸大括號（包含示例程式碼、template literal 範例）</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.961</span> 修 v2.96 漏掉的 __genericDeckSearchResolver 揭示資訊</summary>
         <ul>
           <li>v2.96 audit 漏掉 v2306 的 __genericDeckSearchResolver — 此 resolver 共用 3 張卡，全都漏揭示</li>
           <li>芳香精｜收集香氣（搜【超】能量 ≤2 加手）— 卡面有「給對手看過」</li>
           <li>象牙豬ex｜毛象搬運（搜寶可夢 1 加手）— 卡面有「給對手看過」</li>
           <li>萌芽鹿｜四季變換（搜競技場 1 加手）— 卡面有「給對手看過」</li>
-          <li>修法：__genericDeckSearchResolver 改寫為 factory pattern，傳入 abilityName 作為 log prefix；log 公開具體卡名「{abilityName}：將「A、B」加入手牌（給對手看）」</li>
+          <li>修法：__genericDeckSearchResolver 改寫為 factory pattern，傳入 abilityName 作為 log prefix；log 公開具體卡名「&#123;abilityName&#125;：將「A、B」加入手牌（給對手看）」</li>
         </ul>
       </details>
 
