@@ -1051,6 +1051,11 @@
   const playableEvoIids = $derived(
     new Set<string>(evolvableTargets.flatMap(e => e.toIids))
   );
+  // v2.981：任一方有待領獎賞時，鎖住所有 main-phase 動作（除了取獎賞按鈕）
+  // 確保獎賞流程順序：取完才能攻擊、使用競技場、特性、撤退、附能量等
+  const anyPendingPrize = $derived(
+    game ? ((game.pendingPrizes?.[0] ?? 0) > 0 || (game.pendingPrizes?.[1] ?? 0) > 0) : false
+  );
   const canEndTurn = $derived(
     game?.phase === 'playing' && game.turnPhase === 'end' && !hasPendingActions(game)
   );
@@ -3311,7 +3316,7 @@
             onclick={()=>dispatch(GameActions.finishSetup(myIdx))}>
             ✅ 準備完成
           </button>
-        {:else if isMyTurn()}
+        {:else if isMyTurn() && !anyPendingPrize}
           {#if game.turnPhase==='main' && activePlayer?.active}
             {@const eff=getEffectiveAttacks(game, activePlayer.active, pool)}
             {#each eff as { atk, sourceCardName, isFromTool }, i}
@@ -3335,6 +3340,8 @@
           {#if canEndTurn}
             <button class="btn-act primary" onclick={()=>dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
           {/if}
+        {:else if isMyTurn() && anyPendingPrize}
+          <span class="waiting-msg">🏆 請先取獎勵牌再繼續行動</span>
         {:else if pendingSelection}
           <span class="waiting-msg">⏳ 等待 {game.players[pendingSelection.actorIdx].name} 選擇中…</span>
         {:else}

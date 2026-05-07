@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.981</span> 修 v2.98 pending prize 期間其他動作未鎖 bug</summary>
+        <ul>
+          <li>玩家報告：冰冷之帳 KO 對手後，雖然出現「取得獎賞」按鈕，但玩家還能同時按攻擊、跳過攻擊、使用競技場 等按鈕，順序錯誤</li>
+          <li>v2.98 refactor 沒做完整 — engine 只在 END_TURN 入口擋 pending prize，主 ATTACK/USE_STADIUM/USE_ABILITY 等 action 都沒擋</li>
+          <li>UI 也沒 gate — 任一方有 pending prize 時還會顯示其他 main-phase 按鈕</li>
+          <li>修法 1：engine.ts pendingSelection gate 之後加 hasAnyPendingPrize early-return — 除 TAKE_PRIZES / SEND_NEW_ACTIVE / RESOLVE_SELECTION 外所有 action 都擋</li>
+          <li>修法 2：+page.svelte 加 anyPendingPrize derived，gate 攻擊/跳過攻擊/競技場/特性/結束回合 等所有 main-phase 按鈕；改顯示「請先取獎勵牌再繼續行動」提示</li>
+          <li>確保獎賞流程順序：取完才能繼續其他動作（符合 PTCG 規則 — 獎賞取得是即時的，不能晚於後續動作）</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.98</span> pendingPrizes 重構：每側待領獎賞 tuple 化</summary>
         <ul>
           <li>引擎 <code>GameState.pendingPrizes</code> 從單一數字改為「兩個 number 的 tuple」（P1 待領 / P2 待領）</li>

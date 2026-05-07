@@ -1487,6 +1487,16 @@ function handlePlaying(
   // ── 若有待選擇，只允許 RESOLVE_SELECTION ────────────────────────────────
   if (state.pendingSelection && action.type !== 'RESOLVE_SELECTION') return state;
 
+  // ── v2.981 若有任一方待領獎賞，只允許 TAKE_PRIZES / SEND_NEW_ACTIVE / RESOLVE_SELECTION ──
+  // 防止 pending prize 期間玩家進行其他 main-phase 動作（攻擊、使用競技場、特性、撤退、附能量等）
+  // 這個 gate 確保獎賞流程的順序性 — 獎賞必須先取完才能繼續其他動作
+  if (
+    hasAnyPendingPrize(state)
+    && action.type !== 'TAKE_PRIZES'
+    && action.type !== 'SEND_NEW_ACTIVE'
+    && action.type !== 'RESOLVE_SELECTION'
+  ) return state;
+
   // ── 選擇解析 ──────────────────────────────────────────────────────────────
   if (action.type === 'RESOLVE_SELECTION') {
     if (!state.pendingSelection) return state;
