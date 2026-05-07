@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.99</span> 修 火箭隊的操陷蛛｜火箭猛攻 雙重註冊 bug + 招式邏輯 audit</summary>
+        <ul>
+          <li>玩家發現：火箭隊的操陷蛛 火箭猛攻 卡面是「自方場上火箭隊寶可夢數 × 30」，但程式做的是「棄 1 個能量 → 30」— 完全亂做</li>
+          <li>根因：v2650_i_wave15_misc8.ts 有正確 regPre（自方寶可夢數 × 30），但 effects.ts:11082 又用 registerFieldDiscardMultiply 註冊一次（棄能 × 30），且 effects.ts 後載入 → 覆蓋了正確版本</li>
+          <li>修法：刪 effects.ts:11080-11082 那 3 行（含上方註解），讓 wave 檔規則生效</li>
+          <li>Audit：寫 audit_v299.py 自動化掃描 2510 招式、284 特性，比對 JSON 卡面 vs ts 程式邏輯</li>
+          <li>掃描出 53 個雙重註冊衝突（其中 36 個是 wave 檔被 effects.ts 後勝覆蓋）— 多數兩邊邏輯一致，操陷蛛是這次確認唯一邏輯不符的</li>
+          <li>產出 attack_logic_audit_v2_99.md 完整報告供日後 review</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.981</span> 修 v2.98 pending prize 期間其他動作未鎖 bug</summary>
         <ul>
           <li>玩家報告：冰冷之帳 KO 對手後，雖然出現「取得獎賞」按鈕，但玩家還能同時按攻擊、跳過攻擊、使用競技場 等按鈕，順序錯誤</li>
