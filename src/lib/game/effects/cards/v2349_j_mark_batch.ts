@@ -1,5 +1,6 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { addLog, regPost, regPre, regR, shuffle, updatePlayer, withPending } from '../_shared';
+import { canApplyAttackEffectToTarget } from '../../effects';
 
 function flipFixed(state: GameState, aIdx: 0 | 1, label: string, count: number): { state: GameState; heads: number } {
   let s = state;
@@ -41,16 +42,32 @@ function damageOneNoKo(state: GameState, targetPlayerIdx: 0 | 1, targetIid: stri
   });
 }
 
-function damageAllOppByCoin(state: GameState, aIdx: 0 | 1, amount: number, label: string): GameState {
+function damageAllOppByCoin(
+  state: GameState,
+  aIdx: 0 | 1,
+  amount: number,
+  label: string,
+  pool?: Map<string, any>,
+): GameState {
   const dIdx = 1 - aIdx as 0 | 1;
   let s = state;
   const targets = [s.players[dIdx].active, ...s.players[dIdx].bench].filter((c): c is CardInstance => !!c);
   for (const t of targets) {
     const isHeads = Math.random() < 0.5;
     s = addLog(s, `${label}：對 ${t.iid} 擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
-    if (isHeads) s = damageOneNoKo(s, dIdx, t.iid, amount);
+    if (!isHeads) continue;
+    // v2.92 招式效果免疫檢查（per-target；無 pool 時跳過 — 向後相容）
+    if (pool) {
+      const tCard = pool.get(t.cardId);
+      const guard = canApplyAttackEffectToTarget(s, aIdx, t, tCard, pool);
+      if (guard.blocked) {
+        s = addLog(s, `${label}：${tCard?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
+        continue;
+      }
+    }
+    s = damageOneNoKo(s, dIdx, t.iid, amount);
   }
-  return addLog(s, `${label}：正面的對手寶可夢各受到 ${amount} 傷害`, aIdx);
+  return addLog(s, `${label}：正面且未被擋下的對手寶可夢各受到 ${amount} 傷害`, aIdx);
 }
 
 function attachBasicEnergyFromDeckToActive(state: GameState, aIdx: 0 | 1, pool: Map<string, any>, maxCount: number, label: string): GameState {
@@ -89,7 +106,7 @@ regPost('章魚桶|墨汁噴射', (state, aIdx) => setDefenderAttackFailure(stat
 
 // 超級基格爾德ex｜虛無歸零：對手所有寶可夢各擲 1 次，正面各 150。
 regPre('超級基格爾德ex|虛無歸零', (state) => ({ state, damage: 0 }));
-regPost('超級基格爾德ex|虛無歸零', (state, aIdx) => damageAllOppByCoin(state, aIdx, 150, '虛無歸零'));
+regPost('超級基格爾德ex|虛無歸零', (state, aIdx, pool) => damageAllOppByCoin(state, aIdx, 150, '虛無歸零', pool));
 
 // 卡比獸｜大胃王：擲到反面，依正面數從牌庫附基本能量到自身（自動選前 N 張）。
 regPre('卡比獸|大胃王', (state) => ({ state, damage: 0 }));
@@ -116,6 +133,17 @@ regR('j-taurus-group-aim', (state, aIdx, iids, _params, pool) => {
   const dmg = r.heads * 50;
   const target = iids[0];
   if (!target || dmg <= 0) return addLog(r.state, `群起瞄準：${r.heads}/${count} 次正面，未造成傷害`, aIdx);
+  // v2.92 招式效果免疫檢查（指示物放置屬招式效果）
+  const tInst = state.players[dIdx].active?.iid === target
+    ? state.players[dIdx].active!
+    : state.players[dIdx].bench.find(b => b.iid === target);
+  if (tInst) {
+    const tCard = pool.get(tInst.cardId);
+    const guard = canApplyAttackEffectToTarget(r.state, aIdx, tInst, tCard, pool);
+    if (guard.blocked) {
+      return addLog(r.state, `群起瞄準：${tCard?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
+    }
+  }
   return addLog(damageOneNoKo(r.state, dIdx, target, dmg), `群起瞄準：${r.heads}/${count} 次正面 → ${dmg} 傷害`, aIdx);
 });
 

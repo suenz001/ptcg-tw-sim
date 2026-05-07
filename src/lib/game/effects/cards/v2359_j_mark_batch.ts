@@ -41,6 +41,7 @@ import {
   withPending,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
+import { canApplyAttackEffectToTarget } from '../../effects';
 
 // ── 私有工具函式 ──────────────────────────────────────────────────────────────
 
@@ -538,6 +539,12 @@ regPost('鬼斯通|纏擾', (state, aIdx, pool) => {
   const def = state.players[dIdx].active;
   if (!def) return state;
   const defName = pool.get(def.cardId)?.name ?? '?';
+  // v2.92 招式效果免疫檢查（指示物放置屬招式效果）
+  const defCard = pool.get(def.cardId);
+  const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCard, pool);
+  if (guard.blocked) {
+    return addLog(state, `纏擾：${defName}｜${guard.reason}（不放指示物）`, aIdx);
+  }
   const players = [...state.players] as [PlayerState, PlayerState];
   players[dIdx] = {
     ...state.players[dIdx],

@@ -20,6 +20,7 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
+import { statusPost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper A: 擲 1 次硬幣 +N
@@ -265,37 +266,26 @@ for (const [key, coins, per] of DICE_MULTIPLY) {
 
 // 雙倍多多冰|雙重冰凍 90× — ×K 但只要 1 次正面就麻痺
 regPre('雙倍多多冰|雙重冰凍', coinFlipMultiplyPre(2, 90, '雙重冰凍'));
-regPost('雙倍多多冰|雙重冰凍', (state, aIdx, _pool) => {
-  // 50% 機率（合理估算 1+ heads in 2 flips = 75%）— 簡化：另擲一次決定麻痺
-  const dIdx = (1 - aIdx) as 0 | 1;
+regPost('雙倍多多冰|雙重冰凍', (state, aIdx, pool) => {
   // 75% chance at least 1 head: P(heads at least once in 2 flips) = 0.75
   if (Math.random() < 0.75) {
-    return updatePlayer(
-      addLog(state, '雙重冰凍：對手戰鬥寶可夢被【麻痺】', aIdx),
-      dIdx, p => ({
-        ...p,
-        active: p.active ? { ...p.active, status: 'paralyzed' } : null,
-      }),
-    );
+    // v2.92：走 statusPost — 內含薄霧/硬岩/皇帝之勢/抵抗之幕/泡沫/祭典會場 完整免疫檢查
+    const s = addLog(state, '雙重冰凍：擲幣判定 — 至少 1 次正面', aIdx);
+    return statusPost('paralyzed')(s, aIdx, pool);
   }
-  return state;
+  return addLog(state, '雙重冰凍：擲幣判定 — 全反面，無附加狀態', aIdx);
 });
 
 // 巴大蝶|鱗粉颶風 60× — ×K 但 ≥2 次正面才麻痺
 regPre('巴大蝶|鱗粉颶風', coinFlipMultiplyPre(4, 60, '鱗粉颶風'));
-regPost('巴大蝶|鱗粉颶風', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
+regPost('巴大蝶|鱗粉颶風', (state, aIdx, pool) => {
   // P(2+ heads in 4 flips) = 1 - C(4,0)*0.5^4 - C(4,1)*0.5^4 = 1 - 1/16 - 4/16 = 11/16 ≈ 0.6875
   if (Math.random() < 0.6875) {
-    return updatePlayer(
-      addLog(state, '鱗粉颶風：對手戰鬥寶可夢被【麻痺】（2+ 次正面）', aIdx),
-      dIdx, p => ({
-        ...p,
-        active: p.active ? { ...p.active, status: 'paralyzed' } : null,
-      }),
-    );
+    // v2.92：走 statusPost — 內含完整免疫檢查
+    const s = addLog(state, '鱗粉颶風：擲幣判定 — 2+ 次正面', aIdx);
+    return statusPost('paralyzed')(s, aIdx, pool);
   }
-  return state;
+  return addLog(state, '鱗粉颶風：擲幣判定 — 不足 2 次正面，無附加狀態', aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

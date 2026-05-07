@@ -11,7 +11,7 @@ import {
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, statusPost, flipCoinsWithLog } from '../../effects';
+import { coinStatusPost, statusPost, flipCoinsWithLog, canApplyAttackEffectToTarget } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper
@@ -551,10 +551,20 @@ regPost('下石鳥|墜擊射', (state, aIdx, pool) => {
     effectKey: 'h-wave3-hit-any-120',
   });
 });
-regR('h-wave3-hit-any-120', (state, aIdx, iids, _params, _pool) => {
+regR('h-wave3-hit-any-120', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const tIid = iids[0];
+  // v2.92 招式效果免疫檢查（卡面雖標 skipWeakRes 但 120 視為「對任意 1 隻放指示物」屬招式效果）
+  const opp = state.players[dIdx];
+  const tInst = opp.active?.iid === tIid ? opp.active : opp.bench.find(b => b.iid === tIid);
+  if (tInst) {
+    const tCard = pool.get(tInst.cardId);
+    const guard = canApplyAttackEffectToTarget(state, aIdx, tInst, tCard, pool);
+    if (guard.blocked) {
+      return addLog(state, `墜擊射：${tCard?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
+    }
+  }
   return updatePlayer(state, dIdx, p => ({
     ...p,
     active: p.active && p.active.iid === tIid ? { ...p.active, damage: (p.active.damage ?? 0) + 120 } : p.active,

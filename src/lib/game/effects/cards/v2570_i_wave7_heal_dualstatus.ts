@@ -14,6 +14,7 @@ import {
   addLog, updatePlayer,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
+import { canApplyAttackEffectToTarget } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: 自身回血 N 點
@@ -107,8 +108,16 @@ for (const [key, dmg] of SKIP_RES) {
 // ══════════════════════════════════════════════════════════════════════════════
 // 毒粉蛾|薄暮之毒 100 + 對手戰鬥場 中毒+睡眠
 regPre('毒粉蛾|薄暮之毒', (s) => ({ state: s, damage: 100 }));
-regPost('毒粉蛾|薄暮之毒', (state, aIdx, _pool) => {
+regPost('毒粉蛾|薄暮之毒', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  if (!def) return state;
+  // v2.92 招式效果免疫檢查（雙重狀態整體屬招式效果，被擋則皆不施加）
+  const defCard = pool.get(def.cardId);
+  const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCard, pool);
+  if (guard.blocked) {
+    return addLog(state, `薄暮之毒：${defCard?.name ?? '?'}｜${guard.reason}（不施加雙重狀態）`, aIdx);
+  }
   return updatePlayer(
     addLog(state, '薄暮之毒：對手戰鬥寶可夢【中毒】+【睡眠】', aIdx),
     dIdx, p => ({
@@ -124,8 +133,16 @@ regPost('毒粉蛾|薄暮之毒', (state, aIdx, _pool) => {
 
 // 火箭隊的黑魯加|惡之火種 0 + 對手戰鬥場 灼傷+混亂
 regPre('火箭隊的黑魯加|惡之火種', (s) => ({ state: s, damage: 0 }));
-regPost('火箭隊的黑魯加|惡之火種', (state, aIdx, _pool) => {
+regPost('火箭隊的黑魯加|惡之火種', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  if (!def) return state;
+  // v2.92 招式效果免疫檢查（雙重狀態整體屬招式效果）
+  const defCard = pool.get(def.cardId);
+  const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCard, pool);
+  if (guard.blocked) {
+    return addLog(state, `惡之火種：${defCard?.name ?? '?'}｜${guard.reason}（不施加雙重狀態）`, aIdx);
+  }
   return updatePlayer(
     addLog(state, '惡之火種：對手戰鬥寶可夢【灼傷】+【混亂】', aIdx),
     dIdx, p => ({

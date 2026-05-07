@@ -17,7 +17,7 @@ import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import {
   coinStatusPost, statusPost, coinHeadsMultiplyPre, flipCoinsWithLog,
-  hitBenchPickPost,
+  hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard,
 } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1424,12 +1424,21 @@ regPost('焰后蜥|突然炙烤', (state, aIdx, pool) => {
 regPre('死神棺|冥府之律', (s) => ({ state: s, damage: 0 }));
 regPost('死神棺|冥府之律', (state, aIdx, pool) => {
   let s = state;
+  const dIdx = (1 - aIdx) as 0 | 1;
   for (const idx of [0, 1] as const) {
     const p = s.players[idx];
     const updateOne = (c: CardInstance | null): CardInstance | null => {
       if (!c) return c;
       const card = pool.get(c.cardId);
       if (!card?.abilities || card.abilities.length === 0) return c;
+      // v2.92 招式效果免疫檢查（僅對手側；自方側不需要 — 是攻擊者自己場上）
+      if (idx === dIdx) {
+        const guard = canApplyAttackEffectToTarget(s, aIdx, c, card, pool);
+        if (guard.blocked) {
+          s = addLog(s, `冥府之律：${card.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
+          return c;
+        }
+      }
       return { ...c, damage: (c.damage ?? 0) + 60 };
     };
     s = updatePlayer(s, idx, pl => ({
@@ -1443,14 +1452,24 @@ regPost('死神棺|冥府之律', (state, aIdx, pool) => {
 
 // 雷丘|捲入伏特 — 此寶可外，雙方有指示物的所有寶可夢受 50（不計弱抗）
 regPre('雷丘|捲入伏特', (s) => ({ state: s, damage: 0 }));
-regPost('雷丘|捲入伏特', (state, aIdx, _pool) => {
+regPost('雷丘|捲入伏特', (state, aIdx, pool) => {
   let s = state;
   const myActiveIid = s.players[aIdx].active?.iid;
+  const dIdx = (1 - aIdx) as 0 | 1;
   for (const idx of [0, 1] as const) {
     const updateOne = (c: CardInstance | null): CardInstance | null => {
       if (!c) return c;
       if (c.iid === myActiveIid) return c;  // 排除自身
       if ((c.damage ?? 0) === 0) return c;  // 排除無指示物
+      // v2.92 招式效果免疫檢查（僅對手側；指示物放置屬招式效果）
+      if (idx === dIdx) {
+        const card = pool.get(c.cardId);
+        const guard = canApplyAttackEffectToTarget(s, aIdx, c, card, pool);
+        if (guard.blocked) {
+          s = addLog(s, `捲入伏特：${card?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
+          return c;
+        }
+      }
       return { ...c, damage: (c.damage ?? 0) + 50 };
     };
     s = updatePlayer(s, idx, pl => ({
@@ -1464,12 +1483,32 @@ regPost('雷丘|捲入伏特', (state, aIdx, _pool) => {
 
 // 河馬獸|大沙風暴 150 — 雙方所有有指示物的備戰寶可夢受 40（不計弱抗）
 regPre('河馬獸|大沙風暴', (s) => ({ state: s, damage: 150 }));
-regPost('河馬獸|大沙風暴', (state, aIdx, _pool) => {
+regPost('河馬獸|大沙風暴', (state, aIdx, pool) => {
   let s = state;
+  const dIdx = (1 - aIdx) as 0 | 1;
   for (const idx of [0, 1] as const) {
     s = updatePlayer(s, idx, p => ({
       ...p,
-      bench: p.bench.map(b => (b.damage ?? 0) > 0 ? { ...b, damage: (b.damage ?? 0) + 40 } : b),
+      bench: p.bench.map(b => {
+        if ((b.damage ?? 0) <= 0) return b;
+        // v2.92 對手側 per-target check
+        if (idx === dIdx) {
+          const bCard = pool.get(b.cardId);
+          // resolveBenchGuard 涵蓋對戰圓形 / 太晶 / 花之帷幔 / 抵抗之幕（針對 bench）
+          const bench = resolveBenchGuard(s, pool, aIdx, bCard, 'attack-effect');
+          if (bench.blocked) {
+            s = addLog(s, `大沙風暴：${bCard?.name ?? '?'}｜${bench.reason}（不放指示物）`, aIdx);
+            return b;
+          }
+          // 再走 canApplyAttackEffectToTarget 涵蓋薄霧/硬岩/皇帝之勢
+          const eff = canApplyAttackEffectToTarget(s, aIdx, b, bCard, pool);
+          if (eff.blocked) {
+            s = addLog(s, `大沙風暴：${bCard?.name ?? '?'}｜${eff.reason}（不放指示物）`, aIdx);
+            return b;
+          }
+        }
+        return { ...b, damage: (b.damage ?? 0) + 40 };
+      }),
     }));
   }
   return addLog(s, '大沙風暴：雙方所有有指示物備戰寶可受 40', aIdx);
@@ -1489,13 +1528,22 @@ regPre('隨風球|一同爆炸', (state, aIdx, pool) => {
 });
 regPost('隨風球|一同爆炸', (state, aIdx, pool) => {
   let s = state;
+  const dIdx = (1 - aIdx) as 0 | 1;
   for (const idx of [0, 1] as const) {
     s = updatePlayer(s, idx, p => {
       const updateOne = (c: CardInstance | null): CardInstance | null => {
         if (!c) return c;
         const card = pool.get(c.cardId);
-        if (card?.name === '飄飄球' || card?.name === '隨風球') return { ...c, damage: (c.damage ?? 0) + 30 };
-        return c;
+        if (card?.name !== '飄飄球' && card?.name !== '隨風球') return c;
+        // v2.92 招式效果免疫檢查（僅對手側）
+        if (idx === dIdx) {
+          const guard = canApplyAttackEffectToTarget(s, aIdx, c, card, pool);
+          if (guard.blocked) {
+            s = addLog(s, `一同爆炸：${card.name}｜${guard.reason}（不放指示物）`, aIdx);
+            return c;
+          }
+        }
+        return { ...c, damage: (c.damage ?? 0) + 30 };
       };
       return {
         ...p,
@@ -1669,11 +1717,25 @@ regPost('謎擬Ｑex|惡作劇之手', (state, aIdx, _pool) => {
     effectKey: 'h-wave2-place-3-counters',
   });
 });
-regR('h-wave2-place-3-counters', (state, aIdx, iids, _params, _pool) => {
+regR('h-wave2-place-3-counters', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const set = new Set(iids);
-  return updatePlayer(state, dIdx, p => {
+  let s = state;
+  // v2.92 先走 per-target check，把被擋的 iid 從 set 移除
+  const opp = s.players[dIdx];
+  const allOpp: CardInstance[] = [...(opp.active ? [opp.active] : []), ...opp.bench];
+  for (const c of allOpp) {
+    if (!set.has(c.iid)) continue;
+    const card = pool.get(c.cardId);
+    const guard = canApplyAttackEffectToTarget(s, aIdx, c, card, pool);
+    if (guard.blocked) {
+      s = addLog(s, `惡作劇之手：${card?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
+      set.delete(c.iid);
+    }
+  }
+  if (set.size === 0) return s;
+  return updatePlayer(s, dIdx, p => {
     const updateOne = (c: CardInstance | null): CardInstance | null => {
       if (!c) return c;
       if (!set.has(c.iid)) return c;

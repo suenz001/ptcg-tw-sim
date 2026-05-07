@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.92</span> Wave 2 — 22 張個別招式加上招式效果免疫檢查</summary>
+        <ul>
+          <li>承接 v2.91 Wave 1（7 helper + statusPost）；本波處理 audit 列表上 22 張個別卡片</li>
+          <li>A.1 純指示物 / 副效果（12 張）— per-target 加 canApplyAttackEffectToTarget：
+            超級基格爾德ex｜虛無歸零、肯泰羅｜群起瞄準、鬼斯通｜纏擾、伊裴爾塔爾ex｜死亡靈魂、
+            九尾｜九尾狐搬動、雪絨蛾｜冰凍羽擊、死神棺｜冥府之律、雷丘｜捲入伏特、
+            河馬獸｜大沙風暴（bench 額外傷害走 resolveBenchGuard 涵蓋對戰圓形/太晶）、
+            隨風球｜一同爆炸、謎擬Ｑex｜惡作劇之手、下石鳥｜墜擊射</li>
+          <li>A.2 KO 類（4 張）— KO 前 check，被擋則 skip KO（自殘部分照常）：
+            棄世猴｜同命戰鬥、雙斧戰龍｜斧擊在地、轟鳴月ex｜瘋癲攻擊、冰伊布ex｜藍柱石</li>
+          <li>A.3 inline status（6 張）— 改用 statusPost / 加 inline check：
+            叉字蝠｜毒音波、莉佳的蔓藤怪｜藤蔓攻擊、雙倍多多冰｜雙重冰凍、巴大蝶｜鱗粉颶風、
+            毒粉蛾｜薄暮之毒（雙重狀態：先 check 再 inline）、火箭隊的黑魯加｜惡之火種（雙重狀態同上）</li>
+          <li>coinStatusPost helper 也順手對齊 statusPost — 走 canApplyAttackEffectToTarget 取代 hasEffectShield</li>
+          <li>河馬獸 大沙風暴 設計：主傷 150 走主管線（含弱抗/減傷），bench 額外 +40 屬招式效果走
+            resolveBenchGuard（對戰圓形/太晶/花之帷幔）+ canApplyAttackEffectToTarget（薄霧/硬岩/皇帝之勢）</li>
+          <li>雙重狀態最小修法：先 check 一次後再 inline 設雙狀態；被擋則整體 skip</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.91</span> Wave 1 — 7 個 helper 統一加招式效果免疫檢查</summary>
         <ul>
           <li>v2.89/v2.90 audit 找到 29 處繞過免疫的路徑，本波先修「修 1 個 helper = 同時修多卡」的 7 個共用 helper</li>

@@ -39,7 +39,7 @@ import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
 } from '../_shared';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, canApplyAttackEffectToTarget } from '../../effects';
 
 // ── 01. 大嘴娃｜雙重食客 — 60× 丟棄手牌能量張數 ─────────────────────────────
 // 玩家在 PRE 階段選 0..2 張手牌能量丟棄；damage = 60 × 丟棄張數。
@@ -137,19 +137,28 @@ regPost('伊裴爾塔爾ex|死亡靈魂', (state, aIdx, pool) => {
 
   // 篩出剩餘 HP ≤50（即 effectiveHP - damage ≤ 50）的寶可夢
   const targets: { iid: string; name: string }[] = [];
+  const blocked: string[] = [];
   for (const pk of allOpp) {
     const card = pool.get(pk.cardId);
     if (!card) continue;
     const remainingHP = (card.hp ?? 0) - pk.damage;  // 簡化：用 card.hp 而非 getEffectiveHP
     if (remainingHP > 0 && remainingHP <= 50) {
+      // v2.92 招式效果免疫檢查（OHKO 屬招式效果，per-target）
+      const guard = canApplyAttackEffectToTarget(state, aIdx, pk, card, pool);
+      if (guard.blocked) {
+        blocked.push(`${card.name}｜${guard.reason}`);
+        continue;
+      }
       targets.push({ iid: pk.iid, name: card.name });
     }
   }
+  let s = state;
+  for (const b of blocked) s = addLog(s, `死亡靈魂：${b}（不昏厥）`, aIdx);
   if (targets.length === 0) {
-    return addLog(state, '死亡靈魂：對手場上沒有 HP ≤50 的寶可夢', aIdx);
+    return addLog(s, '死亡靈魂：對手場上沒有 HP ≤50 的寶可夢可昏厥', aIdx);
   }
   const targetIids = new Set(targets.map(t => t.iid));
-  let s = addLog(state,
+  s = addLog(s,
     `死亡靈魂：將對手 ${targets.length} 隻寶可夢昏厥 — ${targets.map(t => t.name).join('、')}`,
     aIdx);
   // 給每隻目標寶可夢 +9999 damage，sanityKOSweep 在 ATTACK pipeline 末尾會處理 KO
@@ -232,6 +241,12 @@ regR('kitsune-move-counters', (state, aIdx, iids, _params, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppActive = state.players[dIdx].active;
   if (!oppActive) return state;
+  // v2.92 招式效果免疫檢查（搬指示物到對手 = 對對手放指示物，屬招式效果）
+  const oppCard = pool.get(oppActive.cardId);
+  const guard = canApplyAttackEffectToTarget(state, aIdx, oppActive, oppCard, pool);
+  if (guard.blocked) {
+    return addLog(state, `九尾狐搬動：${oppCard?.name ?? '?'}｜${guard.reason}（不搬指示物）`, aIdx);
+  }
 
   let s = state;
   s = updatePlayer(s, aIdx, p => ({

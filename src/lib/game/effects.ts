@@ -2223,10 +2223,15 @@ export function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'
       const name = pool.get(def.active.cardId)?.name ?? '?';
       return addLog(state, `正面！但 ${name}｜憨憨臉：免疫【混亂】`, aIdx);
     }
-    // v2.92：硬岩【鬥】能量 — 免疫對象是被攻擊的寶可夢（def）
-    if (def.active && hasEffectShield(def.active, pool)) {
-      const defCoinName = pool.get(def.active.cardId)?.name ?? '?';
-      return addLog(state, `正面！但 ${defCoinName}｜硬岩【鬥】能量：免疫招式效果`, aIdx);
+    // v2.92：統一走 canApplyAttackEffectToTarget — 涵蓋薄霧能量 / 硬岩【鬥】能量 /
+    // 皇帝之勢 / 抵抗之幕（基礎火箭隊）。
+    if (def.active) {
+      const defCardForGuard = pool.get(def.active.cardId);
+      const guardCSP = canApplyAttackEffectToTarget(state, aIdx, def.active, defCardForGuard, pool);
+      if (guardCSP.blocked) {
+        const defCoinName = pool.get(def.active.cardId)?.name ?? '?';
+        return addLog(state, `正面！但 ${defCoinName}｜${guardCSP.reason}`, aIdx);
+      }
     }
     def.active = { ...def.active, status };
     players[dIdx] = def;
@@ -5934,16 +5939,22 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
   const def = players[dIdx];
   if (def.active) {
     const card = pool.get(def.active.cardId);
-    const ko: CardInstance[] = [
-      { ...def.active, damage: (card?.hp ?? 0) },
-      ...def.active.energyAttached,
-      ...(def.active.toolAttached ? [def.active.toolAttached] : []),
-      ...(def.active.evolvedFromStack ?? []),
-    ];
-    players[dIdx] = { ...def, active: null, discard: [...def.discard, ...ko] };
-    selfPrizes += card ? (prizesForKOLocal(card)) : 1;
-    s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 被擊倒！+${selfPrizes} 張獎勵牌`, null);
-    s = recordOppKO(s, dIdx, card, 'attack');
+    // v2.92 招式效果免疫檢查（KO 屬招式效果，被擋則跳過 KO 對手；自己仍照常 KO）
+    const guardKO = canApplyAttackEffectToTarget(s, aIdx, def.active, card, pool);
+    if (guardKO.blocked) {
+      s = addLog(s, `同命戰鬥：${card?.name ?? '?'}｜${guardKO.reason}（不昏厥對手）`, aIdx);
+    } else {
+      const ko: CardInstance[] = [
+        { ...def.active, damage: (card?.hp ?? 0) },
+        ...def.active.energyAttached,
+        ...(def.active.toolAttached ? [def.active.toolAttached] : []),
+        ...(def.active.evolvedFromStack ?? []),
+      ];
+      players[dIdx] = { ...def, active: null, discard: [...def.discard, ...ko] };
+      selfPrizes += card ? (prizesForKOLocal(card)) : 1;
+      s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 被擊倒！+${selfPrizes} 張獎勵牌`, null);
+      s = recordOppKO(s, dIdx, card, 'attack');
+    }
   }
   // 再 KO 自己出場（不算獎勵牌給對手，直接丟棄 — 但 PTCG 規則對方獲得獎勵）
   players = [...s.players] as [PlayerState, PlayerState];
@@ -5997,6 +6008,11 @@ regPost('雙斧戰龍|斧擊在地', (state, aIdx, pool) => {
   if (!hasSpecial) return addLog(state, '斧擊在地：對手戰鬥寶可夢無特殊能量，無效', aIdx);
   // 直接 KO
   const card = pool.get(def.active.cardId);
+  // v2.92 招式效果免疫檢查（KO 屬招式效果）
+  const guardAxe = canApplyAttackEffectToTarget(state, aIdx, def.active, card, pool);
+  if (guardAxe.blocked) {
+    return addLog(state, `斧擊在地：${card?.name ?? '?'}｜${guardAxe.reason}（不昏厥）`, aIdx);
+  }
   const ko: CardInstance[] = [
     { ...def.active, damage: (card?.hp ?? 0) },
     ...def.active.energyAttached,
@@ -7707,20 +7723,26 @@ regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
   const def = s.players[dIdx];
   if (def.active) {
     const defCard = pool.get(def.active.cardId);
-    const ko: CardInstance[] = [
-      { ...def.active, damage: defCard?.hp ?? 0 },
-      ...def.active.energyAttached,
-      ...(def.active.toolAttached ? [def.active.toolAttached] : []),
-      ...(def.active.evolvedFromStack ?? []),
-    ];
-    const prizes = defCard ? koPrizeCount(defCard) : 1;
-    const players = [...s.players] as [PlayerState, PlayerState];
-    players[dIdx] = { ...def, active: null, discard: [...def.discard, ...ko] };
-    s = addLog({ ...s, players }, `瘋癲攻擊：${defCard?.name ?? '?'} 被擊倒！+${prizes} 張獎勵牌`, null);
-    s = recordOppKO(s, dIdx, defCard, 'attack');
-    s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
-    if (players[dIdx].bench.length === 0) {
-      return { ...s, phase: 'game-over', winner: aIdx, winReason: `${def.name} 沒有可上場的寶可夢` };
+    // v2.92 招式效果免疫檢查（KO 屬招式效果，被擋則跳過 KO；自己仍照常受 200）
+    const guardThund = canApplyAttackEffectToTarget(s, aIdx, def.active, defCard, pool);
+    if (guardThund.blocked) {
+      s = addLog(s, `瘋癲攻擊：${defCard?.name ?? '?'}｜${guardThund.reason}（不昏厥對手）`, aIdx);
+    } else {
+      const ko: CardInstance[] = [
+        { ...def.active, damage: defCard?.hp ?? 0 },
+        ...def.active.energyAttached,
+        ...(def.active.toolAttached ? [def.active.toolAttached] : []),
+        ...(def.active.evolvedFromStack ?? []),
+      ];
+      const prizes = defCard ? koPrizeCount(defCard) : 1;
+      const players = [...s.players] as [PlayerState, PlayerState];
+      players[dIdx] = { ...def, active: null, discard: [...def.discard, ...ko] };
+      s = addLog({ ...s, players }, `瘋癲攻擊：${defCard?.name ?? '?'} 被擊倒！+${prizes} 張獎勵牌`, null);
+      s = recordOppKO(s, dIdx, defCard, 'attack');
+      s = { ...s, pendingPrizes: (s.pendingPrizes ?? 0) + prizes };
+      if (players[dIdx].bench.length === 0) {
+        return { ...s, phase: 'game-over', winner: aIdx, winReason: `${def.name} 沒有可上場的寶可夢` };
+      }
     }
   }
   // (2) 自己受 200 傷害（若超過 HP → 自爆 KO，對方取獎）
@@ -7810,6 +7832,11 @@ function resolveLanzhushi(
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx];
   const card = pool.get(target.cardId);
+  // v2.92 招式效果免疫檢查（KO 屬招式效果）
+  const guardLanz = canApplyAttackEffectToTarget(state, aIdx, target, card, pool);
+  if (guardLanz.blocked) {
+    return addLog(state, `藍柱石：${card?.name ?? '?'}｜${guardLanz.reason}（不昏厥）`, aIdx);
+  }
   const ko: CardInstance[] = [
     { ...target, damage: (card?.hp ?? 0) },
     ...target.energyAttached,

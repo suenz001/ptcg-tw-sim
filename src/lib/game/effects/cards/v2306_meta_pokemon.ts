@@ -118,20 +118,8 @@ regR('crobat-night-work', (state, actorIdx, selectedIids, params, pool) => {
   return addLog(s, '夜間工作：重洗剩餘牌庫，並將所選的卡放回牌庫上方', actorIdx);
 });
 regPre('叉字蝠|毒音波', (state, aIdx, pool) => ({ state, damage: 80 }));
-regPost('叉字蝠|毒音波', (state, aIdx, pool) => {
-  let s = updatePlayer(state, 1 - aIdx as 0|1, pl => {
-    if (!pl.active) return pl;
-    return { ...pl, active: { ...pl.active, status: 'poisoned' } };
-  });
-  s = updatePlayer(s, 1 - aIdx as 0|1, pl => {
-    if (!pl.active) return pl;
-    // We overwrite status to confused if it's dual status, wait PTCG allows dual status? No, PTCG only allows 1 of (Asleep, Confused, Paralyzed) and allows Poison/Burn alongside them.
-    // However, our simulator's status property is a single string or maybe we handle it differently.
-    // Let's just set it to 'poisoned' and log both.
-    return { ...pl, active: { ...pl.active, status: 'poisoned' } };
-  });
-  return addLog(s, '毒音波：對手的戰鬥寶可夢【中毒】與【混亂】', aIdx);
-});
+// v2.92：改用 statusPost('poisoned') — 內含薄霧/硬岩/皇帝之勢/抵抗之幕/泡沫/祭典會場 全套免疫檢查
+regPost('叉字蝠|毒音波', statusPost('poisoned'));
 
 // ── 妖火紅狐 (Delphox) ────────────────────────────────────────────────────────────
 ABILITY_EFFECTS.set('妖火紅狐|閃焰魔法', (state, aIdx, pool, inst) => {
@@ -300,7 +288,7 @@ regR('ninjask-shed-skin', (state, actorIdx, selectedIids, params, pool) => {
   let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), bench: [...pl.bench, targetInst] }));
   return addLog(s, '脫殼：將「脫殼忍者」放置於備戰區，並重洗牌庫', actorIdx);
 });
-import { selfSwapPost } from '../../effects';
+import { selfSwapPost, statusPost } from '../../effects';
 const selfBouncePost = (name: string) => {
   return (state: GameState, aIdx: 0|1) => {
     let s = updatePlayer(state, aIdx, pl => {
@@ -831,14 +819,12 @@ regR('erikas-tangela-hundred-flowers', (state, actorIdx, selectedIids, params, p
 });
 regPre('莉佳的蔓藤怪|藤蔓攻擊', (state, aIdx, pool) => ({ state, damage: 50 }));
 regPost('莉佳的蔓藤怪|藤蔓攻擊', (state, aIdx, pool) => {
+  // v2.92：擲幣正面則走 statusPost('paralyzed')（內含完整免疫檢查）
   if (flipCoin()) {
-    let s = updatePlayer(state, 1 - aIdx as 0|1, pl => {
-      if (!pl.active) return pl;
-      return { ...pl, active: { ...pl.active, status: 'paralyzed' } };
-    });
-    return addLog(s, '藤蔓攻擊：擲硬幣出現正面，對手的戰鬥寶可夢【麻痺】', aIdx);
+    const s = addLog(state, '藤蔓攻擊：擲硬幣 — 正面', aIdx);
+    return statusPost('paralyzed')(s, aIdx, pool);
   }
-  return state;
+  return addLog(state, '藤蔓攻擊：擲硬幣 — 反面，無附加狀態', aIdx);
 });
 
 // ── 萌芽鹿 (Sawsbuck) ───────────────────────

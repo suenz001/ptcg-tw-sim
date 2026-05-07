@@ -21,6 +21,7 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
+import { canApplyAttackEffectToTarget, statusPost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 瑪夏多|暗影側踢 60 + 若 KO 對手 → 下回合免疫招式
@@ -215,16 +216,35 @@ regR('wave6-snipe-any-opp-flat', (state, aIdx, iids, params, _pool) => {
 // 9. 雪絨蛾|冰凍羽擊 對手所有寶可夢各 20 + 對手戰鬥場睡眠（不計弱抗）
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('雪絨蛾|冰凍羽擊', (s) => ({ state: s, damage: 0 }));
-regPost('雪絨蛾|冰凍羽擊', (state, aIdx, _pool) => {
+regPost('雪絨蛾|冰凍羽擊', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   let s = addLog(state, '冰凍羽擊：對手所有寶可夢各受到 20 點傷害（不計弱抗）+ 對手戰鬥場睡眠', aIdx);
-  return updatePlayer(s, dIdx, p => {
+  // v2.92 招式效果免疫檢查（per-target；指示物放置屬招式效果）
+  const opp = s.players[dIdx];
+  const blockedActive = opp.active
+    ? canApplyAttackEffectToTarget(s, aIdx, opp.active, pool.get(opp.active.cardId), pool).blocked
+    : false;
+  const benchBlocked = new Set<string>();
+  for (const b of opp.bench) {
+    const g = canApplyAttackEffectToTarget(s, aIdx, b, pool.get(b.cardId), pool);
+    if (g.blocked) {
+      benchBlocked.add(b.iid);
+      s = addLog(s, `冰凍羽擊：${pool.get(b.cardId)?.name ?? '?'}｜${g.reason}（不放指示物）`, aIdx);
+    }
+  }
+  if (blockedActive && opp.active) {
+    s = addLog(s, `冰凍羽擊：${pool.get(opp.active.cardId)?.name ?? '?'}｜免疫，不放指示物`, aIdx);
+  }
+  s = updatePlayer(s, dIdx, p => {
     const newActive = p.active
-      ? { ...p.active, damage: (p.active.damage ?? 0) + 20, status: 'asleep' as const }
+      ? { ...p.active, damage: (p.active.damage ?? 0) + (blockedActive ? 0 : 20) }
       : null;
-    const newBench = p.bench.map(b => ({ ...b, damage: (b.damage ?? 0) + 20 }));
+    const newBench = p.bench.map(b => ({ ...b, damage: (b.damage ?? 0) + (benchBlocked.has(b.iid) ? 0 : 20) }));
     return { ...p, active: newActive, bench: newBench };
   });
+  // 睡眠走 statusPost — 內含薄霧 / 硬岩 / 皇帝之勢 / 抵抗之幕 / 泡沫 / 祭典會場 / 憨憨臉 全套檢查
+  s = statusPost('asleep')(s, aIdx, pool);
+  return s;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
