@@ -267,10 +267,10 @@
         <summary><span class="ver-badge">v2.82</span> 修連線對戰回合回朔 — 心跳 race 導致 gameState 被舊 snapshot 倒推</summary>
         <ul>
           <li>重大 bug：v2.73 心跳機制與 pushGameState race condition — 玩家 dispatch 動作後，本地 gameState 更新但 push 還沒 commit；同一時間心跳 updateDoc 觸發 onSnapshot，回傳的 gameState 是 push 前的舊版本；handleRoomUpdate 把本地新狀態倒回成舊狀態，造成「抽完牌又回到上一個動作 / log 紀錄回朔 / P2 回合被略過」</li>
-          <li>修法：gameState 加 _syncSeq 序號，每次 dispatch 自增。handleRoomUpdate 比較 incoming seq 與 local seq，若 incoming < local 即拒收（避免心跳 race 把本地新狀態倒退）</li>
+          <li>修法：gameState 加 _syncSeq 序號，每次 dispatch 自增。handleRoomUpdate 比較 incoming seq 與 local seq，若 incoming &lt; local 即拒收（避免心跳 race 把本地新狀態倒退）</li>
           <li>types.ts: GameState 加 _syncSeq?: number 欄位</li>
           <li>game/+page.svelte: dispatch 後 newState._syncSeq = prevSeq + 1；handleRoomUpdate 拒收 stale snapshot</li>
-          <li>原理：對手動作會 push gameState 帶更高的 seq → 我方 incoming > local → 接受。心跳寫入不改 seq，舊 gameState 對應舊 seq → 拒收</li>
+          <li>原理：對手動作會 push gameState 帶更高的 seq → 我方 incoming &gt; local → 接受。心跳寫入不改 seq，舊 gameState 對應舊 seq → 拒收</li>
         </ul>
       </details>
 
