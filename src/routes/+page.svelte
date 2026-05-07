@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.93a</span> 高使用率特性實裝（3 張）</summary>
+        <ul>
+          <li>玩家提示：先處理高使用率卡再做 110 張特性 backlog。確認 5 張中 4 張未實裝（岩殿居蟹｜神秘石居 已實裝舊版，新版 SV11B 結實 留 v2.93b）</li>
+          <li>奇樹的大電海燕｜閃光抽出 — 棄自身 1 張基本【雷】能量 → 抽到手牌滿 6 張</li>
+          <li>阿響的鳳王ex｜金色火焰 — 1 回 1 次手牌【火】×≤2 附於備戰「阿響的」寶可夢（兩階段 chained pending）</li>
+          <li>三首惡龍ex｜貪婪食客 — engine.ts inline KO bonus（攻擊方有此特性 + 被 KO 對手戰鬥場為【基礎】 → +1 獎賞）</li>
+          <li>新檔 src/lib/game/effects/cards/v2930_high_use_abilities.ts；effects.ts 加 side-effect import</li>
+          <li>1 回合 1 次靠 engine 既有 abilityUsedThisTurn gate（per-instance）</li>
+          <li>剩餘 2 張（岩殿居蟹｜結實、拉帝歐斯｜潔淨支援）需新 hook，留 v2.93b</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.92</span> Wave 2 — 22 張個別招式加上招式效果免疫檢查</summary>
         <ul>
           <li>承接 v2.91 Wave 1（7 helper + statusPost）；本波處理 audit 列表上 22 張個別卡片</li>

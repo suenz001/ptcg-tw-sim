@@ -328,6 +328,7 @@ import './effects/cards/v2380_j_attacks_batch';
 import './effects/cards/v2380_j_abilities_batch';
 import './effects/cards/v2390_j_trainers_batch';
 import './effects/cards/v2400_i_wave1_recharge_status';
+import './effects/cards/v2930_high_use_abilities';
 import './effects/cards/v2401_i_wave2_draw_swap_search';
 import './effects/cards/v2402_mega_gardevoir';
 import './effects/cards/v2490_i_wave3a_conditional';

@@ -1,0 +1,200 @@
+/**
+ * v2.93a — 高使用率特性實裝（部分）
+ *
+ * 本檔實裝 3 張卡之中的 2 張（剩 1 張在 engine.ts 加 KO bonus hook）：
+ *   1. 奇樹的大電海燕｜閃光抽出（M2a/MC/SV9 — I 標）
+ *   2. 阿響的鳳王ex｜金色火焰（M2a/SV9a — I 標）
+ *
+ * 設計原則：
+ *   - 嚴格依照 official 卡面文字實裝，不簡化
+ *   - 1 回合 1 次靠 engine 既有 abilityUsedThisTurn gate（per-instance）
+ *   - 各 resolver 用既有 chained pending pattern（仿 麻麻鰻｜電氣發電機 / 龐克練肌）
+ */
+
+import type { CardInstance, PlayerState, GameState } from '../../types';
+import {
+  regA, regR,
+  addLog, updatePlayer, withPending,
+  drawCards,
+} from '../_shared';
+import type { Card } from '$lib/cards/types';
+
+// 導出 sentinel 防止 unused import warnings
+export type _v2930Sentinel = PlayerState | GameState | Card;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 1) 奇樹的大電海燕｜閃光抽出
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「在自己的回合，若將 1 個這隻寶可夢身上附加的『基本【雷】能量』丟棄，
+//        則可使用 1 次。從牌庫抽卡直到自己的手牌滿 6 張為止。」
+//
+// 設計：
+//   - regA 主動觸發；engine 會處理 abilityUsedThisTurn gate
+//   - cost: 自身寶可夢身上必須有「基本【雷】能量」可棄；觸發時自動棄第 1 張匹配的
+//   - 抽牌：抽到手牌 = 6 張為止；若手牌 ≥6 已滿則無效但仍消耗能量
+//   - 若牌庫空則抽到牌庫空為止（不報錯）
+// ══════════════════════════════════════════════════════════════════════════════
+regA('奇樹的大電海燕', 0, (st, idx, pool, cardInst) => {
+  const p = st.players[idx];
+  // 找觸發源寶可夢實例（同名場上有多隻時用 cardInst 區分；fallback active）
+  const allPokes: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
+  const src = cardInst
+    ? allPokes.find(c => c.iid === cardInst.iid)
+    : allPokes.find(c => pool.get(c.cardId)?.name === '奇樹的大電海燕');
+  if (!src) return addLog(st, '閃光抽出：找不到奇樹的大電海燕', idx);
+
+  // gate: 必須有基本【雷】能量在身上
+  const lightningEnergyIdx = src.energyAttached.findIndex(e => {
+    const card = pool.get(e.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic'
+      && (card.pokemonType === 'Lightning' || card.name.includes('【雷】'));
+  });
+  if (lightningEnergyIdx < 0) {
+    return addLog(st, '閃光抽出：身上無基本【雷】能量可棄', idx);
+  }
+
+  // 棄能量
+  const discarded = src.energyAttached[lightningEnergyIdx];
+  const isActive = p.active?.iid === src.iid;
+  let s = updatePlayer(st, idx, pl => {
+    const newAttached = src.energyAttached.filter((_, i) => i !== lightningEnergyIdx);
+    if (isActive && pl.active) {
+      return {
+        ...pl,
+        active: { ...pl.active, energyAttached: newAttached },
+        discard: [...pl.discard, discarded],
+      };
+    }
+    return {
+      ...pl,
+      bench: pl.bench.map(c => c.iid === src.iid ? { ...c, energyAttached: newAttached } : c),
+      discard: [...pl.discard, discarded],
+    };
+  });
+  const energyName = pool.get(discarded.cardId)?.name ?? '基本【雷】能量';
+  s = addLog(s, `閃光抽出：棄自身 ${energyName}`, idx);
+
+  // 抽到手牌 = 6 張
+  const handCount = s.players[idx].hand.length;
+  const need = Math.max(0, 6 - handCount);
+  if (need === 0) {
+    return addLog(s, '閃光抽出：手牌已滿 6 張，不抽（能量仍消耗）', idx);
+  }
+  const deckLeft = s.players[idx].deck.length;
+  const actualDraw = Math.min(need, deckLeft);
+  if (actualDraw === 0) {
+    return addLog(s, '閃光抽出：牌庫已空，無法抽牌', idx);
+  }
+  s = drawCards(s, idx, actualDraw);
+  return addLog(s, `閃光抽出：抽到手牌滿 6 張（共抽 ${actualDraw} 張）`, idx);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 2) 阿響的鳳王ex｜金色火焰
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「在自己的回合時可使用 1 次。從自己的手牌選擇最多 2 張『基本【火】能量』卡，
+//        附於備戰區的 1 隻『阿響的寶可夢』身上。」
+//
+// 兩階段 chained pending：
+//   1. hand-discard filter='Energy:Fire' 選 0~2 張
+//   2. bench-choose 限「阿響的」備戰寶可夢 → 把選的能量附過去
+//
+// 注意：
+//   - 卡面說「最多 2 張」 → minCount: 0（玩家可選 0 張等於不發動，但仍消耗 ability gate）
+//     實際引擎處理：若選 0 張就 no-op return（不消耗 abilityUsedThisTurn）
+//   - 「備戰區的」 → 不含戰鬥場；validIids 只取 bench
+//   - 「阿響的寶可夢」 → name 開頭含「阿響的」
+// ══════════════════════════════════════════════════════════════════════════════
+regA('阿響的鳳王ex', 0, (st, idx, pool, _cardInst) => {
+  const p = st.players[idx];
+
+  // gate: 手牌至少 1 張基本【火】能量
+  const fireEnergies = p.hand.filter(c => {
+    const card = pool.get(c.cardId);
+    if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+    return card.pokemonType === 'Fire' || card.name.includes('【火】');
+  });
+  if (fireEnergies.length === 0) {
+    return addLog(st, '金色火焰：手牌沒有基本【火】能量', idx);
+  }
+
+  // gate: 備戰區至少 1 隻「阿響的」寶可夢
+  const ayanoBench = p.bench.filter(c => pool.get(c.cardId)?.name?.startsWith('阿響的'));
+  if (ayanoBench.length === 0) {
+    return addLog(st, '金色火焰：備戰區無「阿響的」寶可夢', idx);
+  }
+
+  const max = Math.min(2, fireEnergies.length);
+  const s = addLog(st,
+    `金色火焰：從手牌選 0~${max} 張基本【火】能量，附於備戰區 1 隻「阿響的」寶可夢`,
+    idx);
+  return withPending(s, {
+    type: 'hand-discard', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Energy:Fire',
+    minCount: 0, maxCount: max,
+    effectKey: 'gold-flame-pick-energy',
+    params: { validIids: fireEnergies.map(c => c.iid) },
+  });
+});
+
+regR('gold-flame-pick-energy', (st, idx, energyIids, _params, pool) => {
+  if (energyIids.length === 0) {
+    return addLog(st, '金色火焰：未選擇能量', idx);
+  }
+  const p = st.players[idx];
+  // 重新檢查備戰區「阿響的」寶可夢（防備中途換場）
+  const ayanoBench = p.bench.filter(c => pool.get(c.cardId)?.name?.startsWith('阿響的'));
+  if (ayanoBench.length === 0) {
+    return addLog(st, '金色火焰：備戰區已無「阿響的」寶可夢，能量留在手牌', idx);
+  }
+
+  // 1 隻備戰直接附；多隻開 bench-choose pending
+  if (ayanoBench.length === 1) {
+    const target = ayanoBench[0];
+    const tName = pool.get(target.cardId)?.name ?? '?';
+    const energies = p.hand.filter(c => energyIids.includes(c.iid));
+    let s = addLog(st,
+      `金色火焰：將 ${energies.length} 張基本【火】能量附於 ${tName}`, idx);
+    return updatePlayer(s, idx, pl => ({
+      ...pl,
+      hand: pl.hand.filter(c => !energyIids.includes(c.iid)),
+      bench: pl.bench.map(c => c.iid === target.iid
+        ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+        : c),
+    }));
+  }
+
+  return withPending(st, {
+    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'gold-flame-attach',
+    params: {
+      energyIids,
+      validIids: ayanoBench.map(c => c.iid),
+    },
+  });
+});
+
+regR('gold-flame-attach', (st, idx, iids, params, pool) => {
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  if (iids.length === 0 || energyIids.length === 0) return st;
+  const targetIid = iids[0];
+  const p = st.players[idx];
+  const target = p.bench.find(c => c.iid === targetIid);
+  if (!target) return st;
+  const tCard = pool.get(target.cardId);
+  if (!tCard?.name?.startsWith('阿響的')) {
+    return addLog(st, '金色火焰：目標非「阿響的」寶可夢，取消附加', idx);
+  }
+  const tName = tCard.name;
+  const energies = p.hand.filter(c => energyIids.includes(c.iid));
+  let s = addLog(st,
+    `金色火焰：將 ${energies.length} 張基本【火】能量附於 ${tName}`, idx);
+  return updatePlayer(s, idx, pl => ({
+    ...pl,
+    hand: pl.hand.filter(c => !energyIids.includes(c.iid)),
+    bench: pl.bench.map(c => c.iid === targetIid
+      ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+      : c),
+  }));
+});

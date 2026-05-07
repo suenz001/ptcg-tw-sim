@@ -3384,6 +3384,17 @@ function handlePlaying(
         const atkCard = atkActive ? pool.get(atkActive.cardId) : null;
         if (atkCard?.name?.startsWith('N的')) bagonElenaBonus = 3;
       }
+      // v2.93a：三首惡龍ex｜貪婪食客 — 若招式 KO 對手【基礎】寶可夢 → +1 獎勵牌
+      // 卡面：「若對手的【基礎】寶可夢因這隻寶可夢使用的招式的傷害而【昏厥】了，則多獲得 1 張獎賞卡。」
+      // 條件：attacker 必須是擁有「貪婪食客」特性的寶可夢（即場上 active 為三首惡龍ex）；
+      //       且被 KO 的對手寶可夢 subtype === 'Basic'。
+      let greedyGourmetBonus = 0;
+      const atkActiveGG = newState.players[aIdx].active;
+      const atkCardGG = atkActiveGG ? pool.get(atkActiveGG.cardId) : null;
+      if (atkCardGG?.abilities?.some(a => a.name === '貪婪食客')
+          && defenderCard?.subtype === 'Basic') {
+        greedyGourmetBonus = 1;
+      }
       // v2.103 古舊能量（ACE SPEC）— 附有此能量的寶可夢被 KO 時，對方獎賞 -1
       // v2.260 Bug #4：卡面「對戰中，自己的『古舊能量』的這個效果只生效 1 次」
       //   per-player flag ancientEnergyMinusOneUsed[dIdx]：dIdx 玩家的古舊能量已生效則不再 -1
@@ -3401,7 +3412,7 @@ function handlePlaying(
         }
       }
       // 獎賞牌下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
-      const prizes = Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + ancientEnergyAdjust);
+      const prizes = Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + ancientEnergyAdjust);
       defPlayers[dIdx] = defenderState;
       // v2.260 Bug #4：若古舊能量這次有 -1，per-player flag 設為 true（之後不再 -1）
       const newAncientFlags: [boolean, boolean] = ancientEnergyJustUsed
