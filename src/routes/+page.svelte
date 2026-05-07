@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.83</span> 回滾 v2.82 _syncSeq 拒收邏輯 + 改用「playing 期間停心跳」防 race</summary>
+        <ul>
+          <li>v2.82 _syncSeq 拒收造成新 bug：雙方並發 dispatch 時 seq 從同一基準各自 +1，互相被拒收 → 連線對戰雙方 deadlock 都看到「等待對手行動」</li>
+          <li>修法：拿掉 dispatch 內 _syncSeq 賦值與 handleRoomUpdate 拒收邏輯（types.ts 同步移除欄位）</li>
+          <li>原 race 改用更安全方式：playing 狀態時不寫心跳。心跳 updateDoc 不再與 pushGameState 競爭 onSnapshot，徹底排除回合回朔</li>
+          <li>殭屍房偵測影響：lobby 期間仍寫心跳（殭屍清理沿用）；playing 房任一方 dispatch 都會 bump updatedAt，cleanup 規則對 playing &gt; 5min 無更新仍可清</li>
+          <li>對手離線偵測影響：playing 期間 oppStale 用 updatedAt（最後一次 pushGameState 時間）取代心跳；對手 5min 沒任何動作 → 視為離線（合理）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.82</span> 修連線對戰回合回朔 — 心跳 race 導致 gameState 被舊 snapshot 倒推</summary>
         <ul>
           <li>重大 bug：v2.73 心跳機制與 pushGameState race condition — 玩家 dispatch 動作後，本地 gameState 更新但 push 還沒 commit；同一時間心跳 updateDoc 觸發 onSnapshot，回傳的 gameState 是 push 前的舊版本；handleRoomUpdate 把本地新狀態倒回成舊狀態，造成「抽完牌又回到上一個動作 / log 紀錄回朔 / P2 回合被略過」</li>
