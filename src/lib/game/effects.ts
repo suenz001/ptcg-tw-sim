@@ -11893,6 +11893,16 @@ PASSIVE_PREVENT_KO.set('勤奮之心', (inst, card, _dmg) => {
   return { prevent: true, leaveHP: 10 };
 });
 
+// v2.93b 岩殿居蟹（SV11B）｜結實 ─────────────────────────────────────────────
+// 卡面：「這隻寶可夢的HP是全滿的狀態下，這隻寶可夢受到招式的傷害而【昏厥】時，
+//        這隻寶可夢不會【昏厥】，而是以剩餘HP為「10」的狀態留在場上。」
+// 邏輯與「勤奮之心」完全一致 — 直接共用 PASSIVE_PREVENT_KO 機制。
+// 注意：岩殿居蟹 SV11B 版本特性是「結實」；M2a/MC/SV9a 版本是「神秘石居」（在 PASSIVE_IMMUNITY 已實裝）。
+PASSIVE_PREVENT_KO.set('結實', (inst, _card, _dmg) => {
+  if (inst.damage > 0) return { prevent: false, leaveHP: 0 };
+  return { prevent: true, leaveHP: 10 };
+});
+
 // ── 古劍豹｜沉雪 ──────────────────────────────────────────────────────────
 // 卡面：「在自己的回合，從手牌將這張卡放置於備戰區時，可使用 1 次。將場上的競技場卡丟棄。」
 // gate：pk.justPlaced（同 狂挖 / 經驗法則 pattern，engine.ts getUsableAbilities 加）

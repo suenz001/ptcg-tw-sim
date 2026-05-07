@@ -5302,6 +5302,15 @@ export function getUsableAbilities(
       }
       // v2.133 古劍豹｜沉雪、鐵斑葉ex｜迅速游標、喵喵ex｜殺手鐧捕捉 — 同 playedFromHand gate
       if ((ab.name === '沉雪' || ab.name === '迅速游標' || ab.name === '殺手鐧捕捉') && !pk.playedFromHand) return;
+      // v2.93b 拉帝歐斯｜潔淨支援 — 觸發 gate：active 必須是「超級拉帝亞斯ex」+ 本回合移到戰鬥場
+      //   且自方備戰至少 1 隻有附加能量。
+      if (ab.name === '潔淨支援') {
+        if (!player.active) return;
+        const activeCard = pool.get(player.active.cardId);
+        if (activeCard?.name !== '超級拉帝亞斯ex') return;
+        if (!player.active.movedToActiveThisTurn) return;
+        if (!player.bench.some(b => b.energyAttached.length > 0)) return;
+      }
       // v2.133 沉雪 額外 gate：場上沒有競技場卡時無意義
       if (ab.name === '沉雪' && !state.activeStadium) return;
       // v2.133 迅速游標 gate：必須從備戰發動（pk 不是 active）

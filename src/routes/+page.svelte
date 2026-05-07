@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.93b</span> 高使用率特性實裝完整（剩 2 張）</summary>
+        <ul>
+          <li>岩殿居蟹（SV11B）｜結實 — HP 全滿被招式 KO 時留 10 HP（與勤奮之心同邏輯，PASSIVE_PREVENT_KO 加 1 行即可）</li>
+          <li>注意：岩殿居蟹有兩個版本特性 — M2a/MC/SV9a 版本「神秘石居」（不受 ex 招式傷害，已實裝）；SV11B 版本「結實」（本波新加）</li>
+          <li>拉帝歐斯（M1S）｜潔淨支援 — 當「超級拉帝亞斯ex」從備戰移到戰鬥場時可用 1 次：選備戰寶可夢的能量轉移到戰鬥場</li>
+          <li>觸發 gate：自方回合 + active 為超級拉帝亞斯ex + active.movedToActiveThisTurn=true + 備戰有能量</li>
+          <li>UX：chained pending — bench-choose（選 1 隻備戰）→ modal-choice stepper（轉幾張）→ 回到 bench-choose（可從另一隻繼續）→ 不選結束</li>
+          <li>v2.93a + v2.93b 共完成 5 張高使用率特性，實裝完成度 1933+5=1938 / 2043 = 94.86%</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.93a</span> 高使用率特性實裝（3 張）</summary>
         <ul>
           <li>玩家提示：先處理高使用率卡再做 110 張特性 backlog。確認 5 張中 4 張未實裝（岩殿居蟹｜神秘石居 已實裝舊版，新版 SV11B 結實 留 v2.93b）</li>

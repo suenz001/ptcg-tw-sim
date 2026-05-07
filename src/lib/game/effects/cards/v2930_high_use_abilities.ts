@@ -198,3 +198,137 @@ regR('gold-flame-attach', (st, idx, iids, params, pool) => {
       : c),
   }));
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3) 拉帝歐斯（M1S）｜潔淨支援
+// ══════════════════════════════════════════════════════════════════════════════
+// 卡面：「在自己的回合，從備戰區將自己的『超級拉帝亞斯【ex】』放置於戰鬥場時，
+//        可使用 1 次。選擇自己的備戰寶可夢身上附加的任意數量的能量卡，
+//        改附於戰鬥寶可夢身上。」
+//
+// 觸發條件（自方回合 + 自己的）：
+//   - 場上 active 必須是「超級拉帝亞斯ex」
+//   - active.movedToActiveThisTurn === true（撤退 / KO 後 promote / 換場 等）
+//   - 自方備戰至少 1 隻有附加能量
+//   - 1 回合 1 次（per-instance：拉帝歐斯 abilityUsedThisTurn）
+//
+// UX 設計（chained pending，分多次選擇給玩家最大彈性）：
+//   1. bench-choose pending：選 1 隻備戰寶可夢（minCount=0 maxCount=1）。0 = 結束
+//   2. modal-choice (stepper)：「從 {pokeName}（{n} 張能量）轉移幾張？」
+//   3. 把該寶可夢「最後 n 張」能量轉到戰鬥場（保留前面幾張）
+//   4. 回到步驟 1，玩家可繼續從別隻備戰轉移；選 0 結束
+//
+// 注意：getUsableAbilities 需在 engine.ts 加 gate（已在 v2.93b 同步加）。
+//   這裡的 regA fn 只負責真正觸發後的 picker chain。
+// ══════════════════════════════════════════════════════════════════════════════
+regA('拉帝歐斯', 0, (st, idx, pool, _cardInst) => {
+  const p = st.players[idx];
+  // gate：active 必須是超級拉帝亞斯ex 且本回合移到戰鬥場
+  if (!p.active) return addLog(st, '潔淨支援：戰鬥場無寶可夢', idx);
+  const activeName = pool.get(p.active.cardId)?.name;
+  if (activeName !== '超級拉帝亞斯ex') {
+    return addLog(st, '潔淨支援：戰鬥場非「超級拉帝亞斯ex」', idx);
+  }
+  if (!p.active.movedToActiveThisTurn) {
+    return addLog(st, '潔淨支援：戰鬥場寶可夢非「本回合從備戰移到戰鬥場」', idx);
+  }
+  // gate：備戰至少 1 隻有附加能量
+  const benchWithEnergy = p.bench.filter(c => c.energyAttached.length > 0);
+  if (benchWithEnergy.length === 0) {
+    return addLog(st, '潔淨支援：備戰寶可夢身上無能量可轉移', idx);
+  }
+
+  const s = addLog(st,
+    '潔淨支援：選 1 隻備戰寶可夢，將其身上的任意數量能量轉移到戰鬥場（選擇 0 結束）', idx);
+  return withPending(s, {
+    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 0, maxCount: 1,
+    effectKey: 'cleansing-support-pick-bench',
+    params: {
+      validIids: benchWithEnergy.map(c => c.iid),
+      titleOverride: '潔淨支援：選 1 隻備戰寶可夢轉移能量（不選=結束）',
+    },
+  });
+});
+
+regR('cleansing-support-pick-bench', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) {
+    return addLog(st, '潔淨支援：結束能量轉移', idx);
+  }
+  const benchIid = iids[0];
+  const p = st.players[idx];
+  const benchPoke = p.bench.find(c => c.iid === benchIid);
+  if (!benchPoke || benchPoke.energyAttached.length === 0) {
+    return addLog(st, '潔淨支援：選定的備戰寶可夢無能量', idx);
+  }
+  const benchName = pool.get(benchPoke.cardId)?.name ?? '?';
+  const eCount = benchPoke.energyAttached.length;
+
+  const s = addLog(st,
+    `潔淨支援：要從 ${benchName}（${eCount} 張能量）轉移幾張到戰鬥場？`, idx);
+  return withPending(s, {
+    type: 'modal-choice', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'cleansing-support-transfer',
+    params: {
+      label: `潔淨支援：從 ${benchName} 轉移幾張能量？`,
+      stepper: { min: 0, max: eCount, step: 1, init: eCount },
+      benchIid,
+      benchName,
+    },
+  });
+});
+
+regR('cleansing-support-transfer', (st, idx, selectedIids, params, pool) => {
+  // selectedIids[0] 是 stepper value 字串（modal-choice stepper 慣例）
+  const transferN = parseInt(selectedIids[0] ?? '0', 10);
+  const benchIid = (params?.benchIid as string) ?? '';
+  const benchName = (params?.benchName as string) ?? '?';
+  if (transferN <= 0 || !benchIid) {
+    // 0 = 跳過此 Pokemon，但繼續詢問下一個
+    const s = addLog(st, `潔淨支援：跳過 ${benchName}`, idx);
+    return openCleansingNextPick(s, idx, pool);
+  }
+
+  const p = st.players[idx];
+  const benchPoke = p.bench.find(c => c.iid === benchIid);
+  if (!benchPoke || !p.active) return st;
+  const eCount = benchPoke.energyAttached.length;
+  const actualN = Math.min(transferN, eCount);
+  // 取「最後 actualN 張」能量轉移到 active
+  const transferred = benchPoke.energyAttached.slice(-actualN);
+  const remaining = benchPoke.energyAttached.slice(0, eCount - actualN);
+
+  let s = updatePlayer(st, idx, pl => {
+    if (!pl.active) return pl;
+    return {
+      ...pl,
+      active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...transferred] },
+      bench: pl.bench.map(c => c.iid === benchIid ? { ...c, energyAttached: remaining } : c),
+    };
+  });
+  s = addLog(s,
+    `潔淨支援：從 ${benchName} 轉移 ${actualN} 張能量到戰鬥場`, idx);
+
+  return openCleansingNextPick(s, idx, pool);
+});
+
+// helper：開啟下一輪「選備戰」picker（若還有備戰有能量）
+function openCleansingNextPick(st: GameState, idx: 0 | 1, _pool: Map<string, Card>): GameState {
+  const p = st.players[idx];
+  const benchWithEnergy = p.bench.filter(c => c.energyAttached.length > 0);
+  if (benchWithEnergy.length === 0) {
+    return addLog(st, '潔淨支援：備戰已無能量可轉移，結束', idx);
+  }
+  const s = addLog(st,
+    `潔淨支援：可繼續從 ${benchWithEnergy.length} 隻備戰寶可夢轉移能量（不選=結束）`, idx);
+  return withPending(s, {
+    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 0, maxCount: 1,
+    effectKey: 'cleansing-support-pick-bench',
+    params: {
+      validIids: benchWithEnergy.map(c => c.iid),
+      titleOverride: '潔淨支援：選下一隻備戰寶可夢（不選=結束）',
+    },
+  });
+}
