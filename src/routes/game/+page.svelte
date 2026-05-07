@@ -6041,4 +6041,20 @@
   }
   .zw-btn:hover { background: #a83121 !important; }
   .zw-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  /* v2.85 防止對戰 UI 誤選文字（user-select: none） */
+  /* 範圍只在 .battle-root（對戰頁），首頁／卡牌資料庫等不影響 */
+  .battle-root, .battle-root * {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* 例外 — 以下區塊保留可選文字（玩家可能想 copy 紀錄、訊息、房號、卡片描述等） */
+  .battle-root .log-col, .battle-root .log-col *,
+  .battle-root .chat-messages, .battle-root .chat-messages *,
+  .battle-root .modal-body, .battle-root .modal-body *,
+  .battle-root .room-code-inline, .battle-root .room-code-inline *,
+  .battle-root input, .battle-root textarea, .battle-root select {
+    user-select: text;
+    -webkit-user-select: text;
+  }
 </style>

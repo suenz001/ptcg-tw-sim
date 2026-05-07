@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.85</span> 對戰 UI 加 user-select: none 防誤選反白</summary>
+        <ul>
+          <li>玩家提議：操作時偶爾會看到 UI 文字被瀏覽器誤反白（連點/拖曳卡片時容易發生）</li>
+          <li>對 .battle-root 範圍內所有元素套 user-select: none / -webkit-user-select: none</li>
+          <li>例外保留可選文字：對戰 log（.log-col）/ 聊天訊息（.chat-messages）/ modal-body 卡片詳細資訊 / 房號 / form input&#x2F;textarea&#x2F;select</li>
+          <li>首頁、卡牌資料庫等其他頁面不受影響</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.84</span> 找到連線對戰真正根因 — Firestore 不允許 array of arrays</summary>
         <ul>
           <li>真正根因：v2.78 加的 GameState 欄位 supporterTagsUsedThisTurn 型別是 [string&#91;&#93;, string&#91;&#93;] 即 nested array of arrays，但 Firestore 明確禁止「array within array」</li>
