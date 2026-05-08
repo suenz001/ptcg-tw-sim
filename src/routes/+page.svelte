@@ -264,6 +264,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.14</span> Deep audit 13 個 bug 修補 — 對手 X 效果方向 / 玩家選擇 picker / Math.random 換 flipCoinsWithLog</summary>
+        <ul>
+          <li><b>背景</b>：v3.13 後做更深一層 audit，發現 13 個既有實裝違反 Iron Rules 的 bug：1 個 P0（picker 方向錯）、5 個 Rule 7（自動代玩家做選擇）、1 個 Rule 8（公開揭示）、4 個 Math.random 替代 flipCoinsWithLog（缺 coin 動畫＋對手驗證 cue）、2 個 missing addLog。</li>
+          <li><b>P0 嚴重 — 靈幽馬｜幻影碎</b>：原 <code>sourcePlayerIdx: aIdx</code> 是錯的，<code>opp-poke-choose</code> 的 <code>sourcePlayerIdx</code> 應指向「目標方」（對手 dIdx），picker 才會顯示對手寶可夢。原 bug 導致 picker 顯示自己寶可夢 → 12 counter 全失效，整個招式形同無效。改為 <code>dIdx</code>。</li>
+          <li><b>P1 Rule 7 違反（5 張，原本自動代玩家做選擇）</b>：</li>
+          <li>　・<b>粉碎之錘</b>：原本選完寶可夢後自動取末尾能量。改成 <code>active-energy-discard</code> picker chain（先選目標寶可夢 → 再選該寶可夢身上 1 張能量）。</li>
+          <li>　・<b>悠哉尾草棒</b>：同粉碎之錘，picker chain 改成玩家選能量。</li>
+          <li>　・<b>火箭隊的閃電鳥｜阻礙之翼</b>：原本對手戰鬥場末尾能量 + 隨機對手備戰雙重 auto-pick。改成 <code>active-energy-discard（sourcePlayerIdx=dIdx）</code> → <code>bench-choose（sourcePlayerIdx=dIdx）</code> chain，玩家選能量 + 選對手備戰目標。</li>
+          <li>　・<b>謝米｜能量反射</b>：原本自身末尾能量 + 第 1 隻備戰雙重 auto-pick。比照 v2352 凱路迪歐｜能量反射做法，改成 <code>active-energy-discard</code> → <code>bench-choose</code> chain。</li>
+          <li>　・<b>願增猿｜腎上腺腦力</b>：原本 <code>amount = min(damage, 30)</code> 強制全搬，違反卡面「最多 3 個」的玩家選張數權。改成 source picker → <code>modal-choice</code>（選 1~3 個 counter）→ 對手目標 picker。當來源 ≤10 傷害時 1 個 auto-pick 跳過 modal。</li>
+          <li><b>P1 Rule 8 違反 — 多龍奇｜偵查指令</b>：原本選完牌後 <code>addLog</code> 公開卡名給對手看，但卡面無「給對手看過」字樣 → 對手不應看到具體卡名。改用 <code>addPrivateLog</code>，對手 console 只顯示張數。</li>
+          <li><b>P2 Math.random 替代（4 張）</b>：以下卡片原本用 <code>Math.random() &lt; 0.5</code>（缺 coin 動畫＋連線對戰對手驗證 cue），改用 <code>flipCoinsWithLog</code>：能量貼紙 / 親送無人機（2 次擲幣）/ 火箭隊的驚嚇炸彈 / 勝利之證。</li>
+          <li><b>P2 missing addLog — 火箭隊的驚嚇炸彈 反面</b>：原本反面分支只默默 +20 給自己戰鬥場，玩家看不到 log。補上「反面 → 自己戰鬥位放 2 個傷害指示物（+20 傷害）」訊息。</li>
+          <li><b>引擎擴充</b>：<code>active-energy-discard</code> picker 在 <code>game/+page.svelte</code> 加上 <code>params.targetIid</code> 支援 — 可從 src 玩家「指定 iid 的寶可夢」（active 或 bench）身上挑能量；解決粉碎之錘 / 悠哉尾草棒「對手任何寶可夢身上挑能量」需求。</li>
+          <li><b>遵守 Iron Rules</b>：所有改動既有檔走 Python pipeline；新增 5 個 resolver 用 <code>regR</code>（不違反 Rule 12）；changelog 內 <code>&lt;</code>/<code>&#39;</code>/<code>&amp;</code>/<code>&#123;</code>/<code>&#125;</code> 等特殊字符 HTML entity escape</li>
+          <li>tsc 0 error</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.13</span> Bug audit P2 — B5-B8 細節修補（5 張卡：玩家選擇 / 目標限定 / filter 太寬）</summary>
         <ul>
           <li><b>背景</b>：承 v3.10/v3.11/v3.12（共 19 張 confirmed bug 已修），本版處理 audit 報告 Section B 的 P2/Suspect 區（B5-B8 + 額外 2 張同類）。修補方向：把「自動代玩家做選擇」改為「玩家選擇 picker」，並修正 filter 太寬。</li>

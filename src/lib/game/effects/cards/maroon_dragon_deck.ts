@@ -22,7 +22,7 @@ import type { GameState, PlayerState, CardInstance } from '../../types';
 import {
   reg, regR, regG, regA,
   BENCH_PLACE_TRIGGERS,
-  addLog, drawCards, updatePlayer, returnHandToDeck, withPending,
+  addLog, addPrivateLog, drawCards, updatePlayer, returnHandToDeck, withPending,
   recordOppKO,
   isAbilityBlockedByOakEye,
 } from '../_shared';
@@ -105,8 +105,14 @@ regR('scouting-order', (st, idx, iids, params, pool) => {
   const top2Iids = (params?.top2Iids as string[]) ?? [];
   const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
   if (chosen.length > 0) {
+    // v3.14 修 Rule 8：卡面無「給對手看過」字樣 → 對手不應看到具體卡名。
+    //   原 addLog 公開卡名違反 PTCG 規則「未揭示資訊」原則。改用 addPrivateLog：
+    //   privateMsg（本人）顯示卡名；publicMsg（對手）只顯示張數。
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `偵查指令：將 ${names} 加入手牌（剩餘放回牌庫下方）`, idx);
+    st = addPrivateLog(st,
+      `偵查指令：將 ${names} 加入手牌（剩餘放回牌庫下方）`,
+      `偵查指令：將 ${chosen.length} 張卡加入手牌（剩餘放回牌庫下方）`,
+      idx);
   } else {
     st = addLog(st, '偵查指令：未選取任何卡（全數放回牌庫下方）', idx);
   }
@@ -167,33 +173,69 @@ regR('adrenal-brain-src', (st, idx, iids, params, pool) => {
   const p = st.players[idx];
   const source = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
   if (!source) return st;
-  // 轉移量 = min(來源目前傷害, 30)；PTCG 傷害一律 10 的倍數，所以不需 round
-  const amount = Math.min(source.damage, 30);
-  const newDmg = source.damage - amount;
+  // v3.14 修 Rule 7：卡面「選擇最多 3 個傷害指示物」應由玩家選張數 1~3
+  //   （受來源實際 counter 上限）。原 min(damage, 30) 強制全搬違反「最多」語義。
+  //   maxCounters = min(damage/10, 3)；= 1 則 auto-pick 跳過 modal。
+  const maxCounters = Math.min(Math.floor(source.damage / 10), 3);
+  if (maxCounters <= 0) {
+    return addLog(st, '腎上腺腦力：來源傷害不足（無 counter 可搬）', idx);
+  }
   const sourceName = pool.get(source.cardId)?.name ?? '?';
-  st = addLog(st, `腎上腺腦力：從 ${sourceName} 身上移除 ${amount} 傷害（回復 ${amount} HP）`, idx);
-  st = updatePlayer(st, idx, pl => {
-    if (pl.active && pl.active.iid === targetIid) {
-      return { ...pl, active: { ...pl.active, damage: newDmg } };
+  if (maxCounters === 1) {
+    return _adrenalCountChosen(st, idx, targetIid, sourceName, 1, pool);
+  }
+  st = addLog(st, `腎上腺腦力：選擇要搬移的指示物張數（1~${maxCounters}）`, idx);
+  const options: { id: string; text: string }[] = [];
+  for (let n = 1; n <= maxCounters; n++) {
+    options.push({ id: String(n), text: `${n} 個（${n * 10} 傷害）` });
+  }
+  return withPending(st, {
+    type: 'modal-choice',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'adrenal-brain-count',
+    params: { label: '腎上腺腦力', sourceIid: targetIid, sourceName, options },
+  });
+});
+
+regR('adrenal-brain-count', (st, idx, iids, params, pool) => {
+  const choice = iids[0];
+  const sourceIid = (params?.sourceIid as string) ?? '';
+  const sourceName = (params?.sourceName as string) ?? '?';
+  const count = parseInt(choice ?? '1', 10) || 1;
+  if (!sourceIid) return st;
+  return _adrenalCountChosen(st, idx, sourceIid, sourceName, count, pool);
+});
+
+// helper：搬移 N 個指示物 → 接「選對手 1 隻」
+function _adrenalCountChosen(
+  st: GameState, idx: 0 | 1, sourceIid: string, sourceName: string, count: number,
+  _pool: Map<string, import('$lib/cards/types').Card>,
+): GameState {
+  const amount = count * 10;
+  let s = st;
+  s = addLog(s, `腎上腺腦力：從 ${sourceName} 身上移除 ${amount} 傷害（回復 ${amount} HP）`, idx);
+  s = updatePlayer(s, idx, pl => {
+    if (pl.active && pl.active.iid === sourceIid) {
+      return { ...pl, active: { ...pl.active, damage: Math.max(0, pl.active.damage - amount) } };
     }
     return { ...pl,
-      bench: pl.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c) };
+      bench: pl.bench.map(c => c.iid === sourceIid ? { ...c, damage: Math.max(0, c.damage - amount) } : c) };
   });
-  // 下一步：選對手 1 隻寶可夢 +amount 傷害
   const dIdx = (1 - idx) as 0 | 1;
-  const dp = st.players[dIdx];
+  const dp = s.players[dIdx];
   if (!dp.active && dp.bench.length === 0) {
-    return addLog(st, '腎上腺腦力：對手無可選寶可夢（效果中斷）', idx);
+    return addLog(s, '腎上腺腦力：對手無可選寶可夢（效果中斷）', idx);
   }
-  st = addLog(st, `腎上腺腦力：選對手 1 隻寶可夢 +${amount} 傷害`, idx);
-  return withPending(st, {
+  s = addLog(s, `腎上腺腦力：選對手 1 隻寶可夢 +${amount} 傷害`, idx);
+  return withPending(s, {
     type: 'opp-poke-choose',
     actorIdx: idx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'adrenal-brain-target',
     params: { includeActive: true, amount },
   });
-});
+}
 
 regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
   const dIdx = (1 - actorIdx) as 0 | 1;

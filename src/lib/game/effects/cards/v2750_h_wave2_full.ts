@@ -2271,20 +2271,46 @@ regPre('修建老匠|堅毅橫掃', (s) => ({ state: s, damage: 250 }));
 // === Section 30: 雜項 ===
 // ══════════════════════════════════════════════════════════════════════════════
 // 謝米|能量反射 60 — 移 1 自身能量到備戰
+// v3.14 修 Rule 7：原「自動取末尾能量 + 第 1 隻備戰」雙重 auto-pick 違反卡面
+//   「選擇 1 個能量改附於備戰寶可夢」（兩端皆要玩家選）。改成 active-energy-discard
+//   → bench-choose chain（同 v2352 凱路迪歐|能量反射做法）。
 regPre('謝米|能量反射', (s) => ({ state: s, damage: 60 }));
 regPost('謝米|能量反射', (state, aIdx, _pool) => {
   const a = state.players[aIdx].active;
   if (!a || a.energyAttached.length === 0 || state.players[aIdx].bench.length === 0) return state;
-  // 簡化：自動移末尾能量到第 1 隻備戰
-  const last = a.energyAttached[a.energyAttached.length - 1];
-  return updatePlayer(addLog(state, '能量反射：自身末尾 1 個能量改附第 1 隻備戰', aIdx), aIdx, p => {
-    if (!p.active || p.bench.length === 0) return p;
+  return withPending(addLog(state, '能量反射：選擇 1 個自身能量', aIdx), {
+    type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1, effectKey: 'v3140-shaymin-energy-reflect-pick',
+    params: { titleOverride: '選擇要改附的自身能量' },
+  });
+});
+regR('v3140-shaymin-energy-reflect-pick', (state, aIdx, iids) => {
+  if (iids.length === 0) return state;
+  return withPending(addLog(state, '能量反射：選擇要附上的備戰寶可夢', aIdx), {
+    type: 'bench-choose', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1, effectKey: 'v3140-shaymin-energy-reflect-commit',
+    params: { energyIid: iids[0], titleOverride: '選擇要改附能量的備戰寶可夢' },
+  });
+});
+regR('v3140-shaymin-energy-reflect-commit', (state, aIdx, iids, params, pool) => {
+  const energyIid = params?.energyIid as string | undefined;
+  const targetIid = iids[0];
+  if (!energyIid || !targetIid) return state;
+  let movedName = '能量';
+  const s = updatePlayer(state, aIdx, pl => {
+    if (!pl.active) return pl;
+    const moved = pl.active.energyAttached.find(e => e.iid === energyIid);
+    if (!moved) return pl;
+    movedName = pool.get(moved.cardId)?.name ?? '能量';
     return {
-      ...p,
-      active: { ...p.active, energyAttached: p.active.energyAttached.slice(0, -1) },
-      bench: p.bench.map((b, i) => i === 0 ? { ...b, energyAttached: [...b.energyAttached, last] } : b),
+      ...pl,
+      active: { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => e.iid !== energyIid) },
+      bench: pl.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, moved] } : b),
     };
   });
+  const target = s.players[aIdx].bench.find(b => b.iid === targetIid);
+  const tName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  return addLog(s, `能量反射：將 ${movedName} 改附於 ${tName}`, aIdx);
 });
 
 // 阿羅拉 椰蛋樹ex|嗡嗡榍石 — 擲幣正→對手戰鬥場基礎KO/反→對手1備戰基礎KO

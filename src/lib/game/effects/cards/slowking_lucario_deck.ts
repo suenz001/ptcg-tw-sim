@@ -185,9 +185,13 @@ regPost('靈幽馬|幻影碎', (state, aIdx, pool) => {
       aIdx);
   }
   // 選對手 1 隻放 12 個指示物
+  // v3.14 修：原 sourcePlayerIdx: aIdx 是 bug — opp-poke-choose 的 sourcePlayerIdx
+  // 應指向「目標方」（對手 dIdx），picker 才會顯示對手寶可夢。原值導致 picker 顯示
+  // 自己寶可夢 → 玩家無法選對手 → 12 counter 全失效（P0 嚴重）。
+  const dIdx = (1 - aIdx) as 0 | 1;
   return withPending(s, {
     type: 'opp-poke-choose',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'phantom-shatter-place-counters',
     params: { counters: 12 },

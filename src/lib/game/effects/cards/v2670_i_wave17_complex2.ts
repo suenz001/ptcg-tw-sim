@@ -217,6 +217,10 @@ regR('wave17-rocket-mirror', (state, aIdx, iids, _params, _pool) => {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 7. 火箭隊的閃電鳥｜阻礙之翼 30 — 對手戰鬥場 1 個能量改附對手備戰
+// ──────────────────────────────────────────────────────────────────────────────
+// v3.14 修 Rule 7：原本「取末尾能量 + 隨機備戰」雙重 auto-pick 違反卡面「玩家選 1
+//   個能量 + 改附（指定）對手備戰」。改成 chain：active-energy-discard（對手戰鬥場
+//   能量 picker，sourcePlayerIdx=dIdx）→ bench-choose（對手備戰，sourcePlayerIdx=dIdx）。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('火箭隊的閃電鳥|阻礙之翼', (s) => ({ state: s, damage: 30 }));
 regPost('火箭隊的閃電鳥|阻礙之翼', (state, aIdx, _pool) => {
@@ -225,15 +229,41 @@ regPost('火箭隊的閃電鳥|阻礙之翼', (state, aIdx, _pool) => {
   if (!opp.active || opp.active.energyAttached.length === 0 || opp.bench.length === 0) {
     return addLog(state, '阻礙之翼：條件不足（對手戰鬥場無能量或備戰無寶可夢）', aIdx);
   }
-  // 取對手戰鬥最末 1 能量, 附給對手備戰隨機 (簡化)
-  const last = opp.active.energyAttached[opp.active.energyAttached.length - 1];
-  const benchIdx = Math.floor(Math.random() * opp.bench.length);
+  return withPending(addLog(state, '阻礙之翼：選擇對手戰鬥場 1 張能量（將改附對手備戰）', aIdx), {
+    type: 'active-energy-discard',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'v3140-zapdos-jamming-pick-energy',
+    params: { titleOverride: '選擇要改附的對手能量' },
+  });
+});
+regR('v3140-zapdos-jamming-pick-energy', (state, aIdx, iids) => {
+  const energyIid = iids[0];
+  if (!energyIid) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  return withPending(addLog(state, '阻礙之翼：選擇要改附能量的對手備戰寶可夢', aIdx), {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'v3140-zapdos-jamming-attach',
+    params: { energyIid, titleOverride: '選擇要改附能量的對手備戰' },
+  });
+});
+regR('v3140-zapdos-jamming-attach', (state, aIdx, iids, params, pool) => {
+  const targetIid = iids[0];
+  const energyIid = params?.energyIid as string | undefined;
+  if (!targetIid || !energyIid) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const opp = state.players[dIdx];
+  const energyInst = opp.active?.energyAttached.find(e => e.iid === energyIid);
+  if (!energyInst) return state;
+  const eName = pool.get(energyInst.cardId)?.name ?? '?';
   return updatePlayer(
-    addLog(state, '阻礙之翼：對手戰鬥場 1 個能量改附對手備戰（隨機選）', aIdx),
+    addLog(state, `阻礙之翼：將對手戰鬥位 ${eName} 改附對手備戰`, aIdx),
     dIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.slice(0, -1) } : null,
-      bench: p.bench.map((b, i) => i === benchIdx ? { ...b, energyAttached: [...b.energyAttached, last] } : b),
+      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== energyIid) } : null,
+      bench: p.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, energyInst] } : b),
     }),
   );
 });

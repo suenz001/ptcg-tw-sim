@@ -444,6 +444,9 @@ regG('粉碎之錘', (st, idx) => {
   return all.some(pk => pk.energyAttached.length > 0);
 });
 reg('粉碎之錘', (st, idx) => {
+  // v3.14 修 Rule 7：原本選完寶可夢自動取末尾能量。卡面寫「選擇 1 個能量」
+  // 應由玩家選擇。改成 flipCoinsWithLog → opp-poke-choose（選目標寶可夢）→
+  // active-energy-discard（選該寶可夢身上的 1 張能量）chain。
   const r = flipCoinsWithLog(st, 1, '粉碎之錘', idx);
   st = r.state;
   if (!r.heads) {
@@ -459,28 +462,42 @@ reg('粉碎之錘', (st, idx) => {
     type: 'opp-poke-choose',
     actorIdx: idx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
-    effectKey: 'crush-hammer-discard',
+    effectKey: 'crush-hammer-pick-poke',
     params: { includeActive: true, validIids: cand.map(c => c.iid) },
   });
 });
-regR('crush-hammer-discard', (st, idx, iids, _params, pool) => {
-  const dIdx = (1 - idx) as 0 | 1;
+// v3.14 第二步：玩家在選中的寶可夢身上挑 1 張能量丟棄
+//   active-energy-discard 擴充：透過 params.targetIid 指定 iid，picker 讀該寶可夢
+//   的 energyAttached（無論 active 或 bench）。
+regR('crush-hammer-pick-poke', (st, idx, iids) => {
   const targetIid = iids[0];
   if (!targetIid) return st;
+  const dIdx = (1 - idx) as 0 | 1;
+  return withPending(st, {
+    type: 'active-energy-discard',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'crush-hammer-discard',
+    params: { targetIid, titleOverride: '選擇要丟棄的對手能量' },
+  });
+});
+regR('crush-hammer-discard', (st, idx, iids, params, pool) => {
+  const energyIid = iids[0];
+  const targetIid = params?.targetIid as string | undefined;
+  if (!energyIid || !targetIid) return st;
+  const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const target = dp.active?.iid === targetIid
     ? dp.active
     : dp.bench.find(c => c.iid === targetIid) ?? null;
-  if (!target || target.energyAttached.length === 0) return st;
-  // 由後往前丟（最新附加的）
-  const lastIdx = target.energyAttached.length - 1;
-  const removed = target.energyAttached[lastIdx];
+  if (!target) return st;
+  const removed = target.energyAttached.find(e => e.iid === energyIid);
+  if (!removed) return st;
   const energyName = pool.get(removed.cardId)?.name ?? '能量';
   const targetName = pool.get(target.cardId)?.name ?? '?';
   const s = addLog(st, `粉碎之錘：丟棄 ${targetName} 身上的 ${energyName}`, idx);
   return updatePlayer(s, dIdx, p => {
-    const newEnergies = target.energyAttached.slice(0, lastIdx);
-    const updated = { ...target, energyAttached: newEnergies };
+    const updated = { ...target, energyAttached: target.energyAttached.filter(e => e.iid !== energyIid) };
     return {
       ...p,
       active: p.active?.iid === targetIid ? updated : p.active,
@@ -720,9 +737,10 @@ regG('能量貼紙', (st, idx, pool) => {
   });
 });
 reg('能量貼紙', (st, idx) => {
-  const heads = Math.random() < 0.5;
-  st = addLog(st, `能量貼紙：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
-  if (!heads) return addLog(st, '能量貼紙：反面 → 無效果', idx);
+  // v3.14 改用 flipCoinsWithLog（含對手驗證 cue + coin 動畫）— 替代原本 Math.random
+  const r = flipCoinsWithLog(st, 1, '能量貼紙', idx);
+  st = r.state;
+  if (!r.heads) return addLog(st, '能量貼紙：反面 → 無效果', idx);
   st = addLog(st, '能量貼紙：從棄牌區選 1 張基本能量', idx);
   return withPending(st, {
     type: 'discard-search',
@@ -772,10 +790,10 @@ regR('energy-sticker-attach', (st, idx, iids, params, pool) => {
 // 卡面：擲 2 次硬幣，若全部為正面，則從自己的牌庫任意選擇 1 張卡加入手牌。並重洗牌庫。
 regG('親送無人機', (st, idx) => st.players[idx].deck.length > 0);
 reg('親送無人機', (st, idx) => {
-  const c1 = Math.random() < 0.5;
-  const c2 = Math.random() < 0.5;
-  st = addLog(st, `親送無人機：擲 2 次硬幣 ${c1 ? '正' : '反'} / ${c2 ? '正' : '反'}`, idx);
-  if (!(c1 && c2)) {
+  // v3.14 改用 flipCoinsWithLog（每次擲幣 1 行 log，含對手驗證 cue + coin 動畫）
+  const r = flipCoinsWithLog(st, 2, '親送無人機', idx);
+  st = r.state;
+  if (r.heads < 2) {
     return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })),
       '親送無人機：未全部正面 → 重洗牌庫', idx);
   }
@@ -871,11 +889,14 @@ regR('help-bell-pick', (st, idx, iids, _params, pool) => {
 //       若為反面，則在自己的戰鬥寶可夢身上放置 2 個傷害指示物。
 regG('火箭隊的驚嚇炸彈', () => true);
 reg('火箭隊的驚嚇炸彈', (st, idx) => {
-  const heads = Math.random() < 0.5;
-  st = addLog(st, `火箭隊的驚嚇炸彈：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
-  if (!heads) {
-    // 反面：自己戰鬥場 +20 傷害
+  // v3.14 改用 flipCoinsWithLog 替代 Math.random + 反面分支補 addLog
+  //   （原本反面只默默扣自己 20 HP，玩家看不到 log）。
+  const r = flipCoinsWithLog(st, 1, '火箭隊的驚嚇炸彈', idx);
+  st = r.state;
+  if (!r.heads) {
+    // 反面：自己戰鬥場 +20 傷害（v3.14 補 log）
     if (!st.players[idx].active) return st;
+    st = addLog(st, '火箭隊的驚嚇炸彈：反面 → 自己戰鬥位放 2 個傷害指示物（+20 傷害）', idx);
     return updatePlayer(st, idx, p => ({
       ...p,
       active: p.active ? { ...p.active, damage: p.active.damage + 20 } : null,
@@ -920,9 +941,10 @@ regR('rocket-scare-bomb-place', (st, idx, iids, _params, pool) => {
 // 卡面：擲 1 次硬幣若為正面，則從自己的牌庫選 1 張寶可夢卡，給對手看後加手牌。並重洗牌庫。
 regG('勝利之證', (st, idx) => st.players[idx].deck.length > 0);
 reg('勝利之證', (st, idx, pool) => {
-  const heads = Math.random() < 0.5;
-  st = addLog(st, `勝利之證：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
-  if (!heads) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '勝利之證：反面 → 重洗牌庫', idx);
+  // v3.14 改用 flipCoinsWithLog 替代 Math.random — 含 coin 動畫與對手驗證 cue
+  const r = flipCoinsWithLog(st, 1, '勝利之證', idx);
+  st = r.state;
+  if (!r.heads) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '勝利之證：反面 → 重洗牌庫', idx);
   st = addLog(st, '勝利之證：從牌庫選 1 張寶可夢加手牌', idx);
   // v2.993：卡面寫「選 1 張」mandatory；牌庫無寶可夢時允許 Pass
   const hasPoke = st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
@@ -1071,23 +1093,38 @@ reg('悠哉尾草棒', (st, idx, pool) => {
     params: { includeActive: true, validIids: cand.map(c => c.iid) },
   });
 });
-regR('lazy-tail-grass-bounce', (st, idx, iids, _params, pool) => {
-  const dIdx = (1 - idx) as 0 | 1;
+// v3.14 修 Rule 7：原本選完寶可夢自動拿末尾能量。卡面寫「選擇 1 個能量」應玩家選。
+//   改成 opp-poke-choose（pick 目標寶可夢）→ active-energy-discard（pick 該寶可夢
+//   身上能量）chain。
+regR('lazy-tail-grass-bounce', (st, idx, iids) => {
   const targetIid = iids[0];
   if (!targetIid) return st;
+  const dIdx = (1 - idx) as 0 | 1;
+  return withPending(st, {
+    type: 'active-energy-discard',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'lazy-tail-grass-pick-energy',
+    params: { targetIid, titleOverride: '選擇要放回對手手牌的能量' },
+  });
+});
+regR('lazy-tail-grass-pick-energy', (st, idx, iids, params, pool) => {
+  const energyIid = iids[0];
+  const targetIid = params?.targetIid as string | undefined;
+  if (!energyIid || !targetIid) return st;
+  const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const target = dp.active?.iid === targetIid
     ? dp.active
     : dp.bench.find(c => c.iid === targetIid) ?? null;
-  if (!target || target.energyAttached.length === 0) return st;
-  const lastIdx = target.energyAttached.length - 1;
-  const removed = target.energyAttached[lastIdx];
+  if (!target) return st;
+  const removed = target.energyAttached.find(e => e.iid === energyIid);
+  if (!removed) return st;
   const energyName = pool.get(removed.cardId)?.name ?? '能量';
   const targetName = pool.get(target.cardId)?.name ?? '?';
   const s = addLog(st, `悠哉尾草棒：將 ${targetName} 身上的 ${energyName} 放回對手手牌`, idx);
   return updatePlayer(s, dIdx, p => {
-    const newEnergies = target.energyAttached.slice(0, lastIdx);
-    const updated = { ...target, energyAttached: newEnergies };
+    const updated = { ...target, energyAttached: target.energyAttached.filter(e => e.iid !== energyIid) };
     return {
       ...p,
       active: p.active?.iid === targetIid ? updated : p.active,

@@ -1644,7 +1644,15 @@
         return validIids2 ? src.hand.filter(c => validIids2.includes(c.iid)) : src.hand;
       }
       // v2.63 撤退選擇要丟棄的附加能量（戰鬥寶可夢身上有多屬性時才彈出）
+      // v3.14 擴充：支援 params.targetIid（粉碎之錘 / 悠哉尾草棒）— 從 src 玩家
+      //   「指定 iid」的寶可夢身上挑能量；可以是 active 或 bench；找不到則 fallback active。
       case 'active-energy-discard': {
+        const targetIid = pendingSelection.params?.targetIid as string | undefined;
+        if (targetIid) {
+          const tgt = src.active?.iid === targetIid ? src.active
+                    : src.bench.find(b => b.iid === targetIid);
+          return tgt?.energyAttached ?? [];
+        }
         return src.active?.energyAttached ?? [];
       }
       case 'heal-target':  {
