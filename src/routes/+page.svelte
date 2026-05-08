@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.991</span> 33 對 wave-vs-effects 重複註冊全檢 — 修剩餘 active bug + dead-code 清理</summary>
+        <ul>
+          <li>v2.99 操陷蛛修完後做完整 audit：33 對 wave 檔 vs effects.ts 的重複註冊全檢</li>
+          <li>機制驗證：effects.ts 在頂部 import wave 檔（先註冊），自身內聯 reg 後執行（後勝）— 所有 33 對都是 effects.ts 覆蓋 wave</li>
+          <li>分類：A 一致 26 / B 兩邊都錯 0 / C effects 對 wave 錯 5 / D wave 對 effects 錯 0 / E 兩邊都不完全對 2</li>
+          <li>修 effects.ts active bug：仙子伊布ex｜天仙石 minCount 改 max（卡面寫「選 2 隻」是強制）</li>
+          <li>修 effects.ts active bug：米立龍｜集客 fetch-supporter resolver 加公開揭示所選支援者（Iron Rule 8）</li>
+          <li>修 wave dead-code 邏輯（避免未來載入順序變更而活化）：</li>
+          <li>　• 喵喵ex｜夾尾巴逃跑 (Post)：selfBouncePost 改拆能量/道具/進化棧</li>
+          <li>　• 阿利多斯｜毒陣 (Post)：改用 statusPost 走完整免疫檢查</li>
+          <li>　• 天秤偶｜連續旋轉 (Pre)：用 flip1 取代 Math.random</li>
+          <li>　• 倫琴貓｜猛力進攻 (Pre)：用 aIdx 取代 (1-aIdx)，符合卡面「自己已取」</li>
+          <li>　• 修建老匠｜暴走 (Post)：加憨憨臉免疫檢查</li>
+          <li>產出 dupe_audit_full_v2_99_1.md 完整對照表供日後 review</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v2.99</span> 修 火箭隊的操陷蛛｜火箭猛攻 雙重註冊 bug + 招式邏輯 audit</summary>
         <ul>
           <li>玩家發現：火箭隊的操陷蛛 火箭猛攻 卡面是「自方場上火箭隊寶可夢數 × 30」，但程式做的是「棄 1 個能量 → 30」— 完全亂做</li>

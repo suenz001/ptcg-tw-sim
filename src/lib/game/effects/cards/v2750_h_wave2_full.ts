@@ -1635,11 +1635,24 @@ regR('h-wave2-bounce-non-selected', (state, aIdx, selectedIids, _params, _pool) 
 // === Section 29: 自殘混亂 ===
 // ══════════════════════════════════════════════════════════════════════════════
 // 修建老匠|暴走 80 — 自身混亂
+// v2.991：加憨憨臉（Klutz）免疫檢查；此 wave 註冊被 effects.ts 1826 覆蓋（已正確），改正以防未來載入順序變更
+//         inline 檢查避免從 effects.ts 引入未 export 的 isConfusionImmune
 regPre('修建老匠|暴走', (s) => ({ state: s, damage: 80 }));
-regPost('修建老匠|暴走', (state, aIdx, _pool) => updatePlayer(addLog(state, '暴走：自身【混亂】', aIdx), aIdx, p => ({
-  ...p,
-  active: p.active ? { ...p.active, status: 'confused' as const } : null,
-})));
+regPost('修建老匠|暴走', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  if (att) {
+    const card = pool.get(att.cardId);
+    const hasKlutz = !!(card?.abilities?.some(a => a.name === '憨憨臉'));
+    if (hasKlutz) {
+      const name = card?.name ?? '?';
+      return addLog(state, `${name}｜憨憨臉：免疫【混亂】`, aIdx);
+    }
+  }
+  return updatePlayer(addLog(state, '暴走：自身【混亂】', aIdx), aIdx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, status: 'confused' as const } : null,
+  }));
+});
 
 // 修建老匠|堅毅橫掃 250 — 若特殊狀態能量任用（cost 寬鬆但 base damage 確定）
 regPre('修建老匠|堅毅橫掃', (s) => ({ state: s, damage: 250 }));

@@ -291,9 +291,24 @@ regR('ninjask-shed-skin', (state, actorIdx, selectedIids, params, pool) => {
 import { selfSwapPost, statusPost } from '../../effects';
 const selfBouncePost = (name: string) => {
   return (state: GameState, aIdx: 0|1) => {
+    // v2.991：拆能量、道具、進化棧底逐一回手牌（與 effects.ts selfReturnToHandPost 一致）
     let s = updatePlayer(state, aIdx, pl => {
       if (!pl.active) return pl;
-      return { ...pl, hand: [...pl.hand, pl.active], active: null };
+      const inst = pl.active;
+      const returning: CardInstance[] = [
+        { ...inst, damage: 0, energyAttached: [], toolAttached: undefined,
+          status: undefined, evolvedFromStack: undefined,
+          evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined,
+          movedToActiveThisTurn: undefined, damageBonusThisTurn: undefined,
+          damageReduceNextHit: undefined, abilityUsedThisTurn: undefined,
+          cantAttackThisTurn: undefined, cantAttackPending: undefined,
+          cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
+          damageBonusPending: undefined },
+        ...inst.energyAttached,
+        ...(inst.toolAttached ? [inst.toolAttached] : []),
+        ...(inst.evolvedFromStack ?? []),
+      ];
+      return { ...pl, hand: [...pl.hand, ...returning], active: null };
     });
     return addLog(s, `${name}：將這隻寶可夢與附加的卡全部放回手牌`, aIdx);
   };

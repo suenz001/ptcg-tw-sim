@@ -41,7 +41,7 @@ import {
   withPending,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget } from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost } from '../../effects';
 
 // ── 私有工具函式 ──────────────────────────────────────────────────────────────
 
@@ -233,18 +233,11 @@ regPost('青木的勇士雄鷹|緊抓', cantRetreatNextFn('緊抓'));
 
 // 阿利多斯（M3 Stage1 Grass 110HP）｜毒陣：50，中毒 + 下回合無法撤退
 // 卡面：「50 對手的戰鬥寶可夢中毒。對手的戰鬥寶可夢下次回合無法撤退。」
-regPost('阿利多斯|毒陣', (state, aIdx) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const def = { ...players[dIdx] };
-  if (!def.active) return state;
-  def.active = {
-    ...def.active,
-    status: 'poisoned',
-    cantRetreatNextTurn: true,
-  };
-  players[dIdx] = def;
-  return addLog({ ...state, players }, '毒陣：對手中毒 + 下回合無法撤退', aIdx);
+// v2.991：改用 effects.ts 的 statusPost 走完整免疫檢查（憨憨臉/薄霧/抵抗之幕/祭典會場）+ cantRetreatNextFn
+//         （此 wave 註冊被 effects.ts 13263 覆蓋；改正以防未來載入順序變更）
+regPost('阿利多斯|毒陣', (state, aIdx, pool) => {
+  const s1 = statusPost('poisoned')(state, aIdx, pool);
+  return cantRetreatNextFn('毒陣')(s1, aIdx, pool);
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -433,16 +426,16 @@ regPre('摔角鷹人|復仇踢', (state, aIdx) => {
 
 // 天秤偶（M4 Basic Fighting 70HP）｜連續旋轉：30×（擲到反面止）
 // 卡面：「擲硬幣直到出現反面，增加正面出現的次數×30 點傷害。」
+// v2.991：改用本檔 flip1 helper（走標準 flip log）
+//         此 wave 註冊被 effects.ts 13371 覆蓋；改正以防未來載入順序變更
 regPre('天秤偶|連續旋轉', (state, aIdx) => {
   let s = state;
   let heads = 0;
-  let count = 0;
   // 安全上限 20 次防無限迴圈
   for (let i = 0; i < 20; i++) {
-    count++;
-    const isHeads = Math.random() < 0.5;
-    s = addLog(s, `連續旋轉：第 ${count} 次擲硬幣 — ${isHeads ? '正面' : '反面（停止）'}`, aIdx);
-    if (isHeads) heads++;
+    const r = flip1('連續旋轉', s, aIdx);
+    s = r.state;
+    if (r.heads) heads++;
     else break;
   }
   const dmg = heads * 30;
@@ -479,14 +472,15 @@ regPre('雷丘|快速攻擊', (state, aIdx) => {
 });
 
 // 倫琴貓（M3 Stage2 Lightning 150HP）｜猛力進攻：70×對手已取獎賞張數
-// 卡面：「70× 增加對手已經獲得的獎賞卡的數量×70 點傷害。」
-// 初始獎賞 = 6，taken = 6 - prizes.length（同 桃歹郎ex 邏輯）
+// 卡面：「70× 造成自己已經獲得的獎賞卡的張數×70 點傷害。」
+// v2.991：卡面是「自己已取」非「對手已取」；當玩家 X 抽獎賞，X 自身 prizes.length 減少。
+//         taken_by_me = 6 - state.players[aIdx].prizes.length。
+//         此 wave 註冊被 effects.ts 13317 覆蓋（已正確），改正以防未來載入順序變更。
 regPre('倫琴貓|猛力進攻', (state, aIdx) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const taken = 6 - state.players[dIdx].prizes.length;
-  const dmg = taken * 70;
+  const taken = 6 - state.players[aIdx].prizes.length;
+  const dmg = Math.max(0, taken) * 70;
   return {
-    state: addLog(state, `猛力進攻：對手已取 ${taken} 張獎賞 → ${dmg}`, aIdx),
+    state: addLog(state, `猛力進攻：自己已取 ${taken} 張獎賞 → ${dmg}`, aIdx),
     damage: dmg,
   };
 });

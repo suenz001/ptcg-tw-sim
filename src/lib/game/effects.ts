@@ -1298,9 +1298,19 @@ regA('米立龍', 0, (st, idx) => {
   });
 });
 
-regR('fetch-supporter', (st, idx, iids, params, _pool) => {
+regR('fetch-supporter', (st, idx, iids, params, pool) => {
   const top6Iids = (params?.top6Iids as string[]) ?? [];
-  return updatePlayer(st, idx, (p) => {
+  let s = st;
+  // v2.991：卡面「在給對手看過後加入手牌」— 公開揭示所選支援者（Iron Rule 8）
+  if (iids.length > 0) {
+    const p = s.players[idx];
+    const chosenInst = p.deck.find(c => c.iid === iids[0]);
+    const cardName = chosenInst ? (pool.get(chosenInst.cardId)?.name ?? '?') : '?';
+    s = addLog(s, `集客：將「${cardName}」加入手牌（給對手看過）`, idx);
+  } else {
+    s = addLog(s, '集客：未選擇支援者，剩餘卡放回牌庫並重洗', idx);
+  }
+  return updatePlayer(s, idx, (p) => {
     const top6 = p.deck.filter(c => top6Iids.includes(c.iid));
     const rest = p.deck.filter(c => !top6Iids.includes(c.iid));
     const chosen = top6.filter(c => iids.includes(c.iid));
@@ -9368,11 +9378,12 @@ regPost('仙子伊布ex|天仙石', (state, aIdx, _pool) => {
     return addLog(s, '天仙石：對手備戰區無寶可夢，效果無作用', aIdx);
   }
   const max = Math.min(2, oppBench.length);
-  s = addLog(s, `天仙石：選 0~${max} 隻對手備戰寶可夢，連同附加卡放回對手牌庫並重洗`, aIdx);
+  s = addLog(s, `天仙石：選 ${max} 隻對手備戰寶可夢，連同附加卡放回對手牌庫並重洗`, aIdx);
   return withPending(s, {
     type: 'opp-bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: oppIdx,
-    minCount: 0, maxCount: max,
+    // v2.991：卡面寫「選 2 隻」是強制；對手備戰<2 時取全部（max 已是 Math.min(2,oppBench.length)）
+    minCount: max, maxCount: max,
     effectKey: 'sylveon-skystone-bounce',
   });
 });
