@@ -193,7 +193,10 @@ export function dispatchEnergyDistributePending(
 //
 export interface EnergyChainOpts {
   label: string;
-  source: 'deck' | 'discard';
+  // v3.12: 加入 'hand' 來源（艾姆利多｜滿載心田、阿羅拉椰蛋樹ex｜熱帶狂燒）。
+  // 'hand' 與 'deck' 一樣會把選的能量先搬到 attacker.discard 暫存，
+  // 後續 chain 流程一致。'hand' 不需要 reshuffle。
+  source: 'deck' | 'discard' | 'hand';
   scope: 'bench-only' | 'any-own';
   filterType?: EnergyTypeFilter;
 }
@@ -218,12 +221,18 @@ export function startEnergyChain(
   }
 
   // 把選的能量從 source 取出，先放到 attacker.discard 暫存
+  // v3.12: 'hand' 與 'deck' 同樣搬到 discard 緩衝；'discard' 已在 discard 不需動
   st = updatePlayer(st, aIdx, p => {
     const pickSet = new Set(energyIids);
     if (source === 'deck') {
       const picked = p.deck.filter(c => pickSet.has(c.iid));
       const remaining = p.deck.filter(c => !pickSet.has(c.iid));
       return { ...p, deck: shuffle(remaining), discard: [...p.discard, ...picked] };
+    }
+    if (source === 'hand') {
+      const picked = p.hand.filter(c => pickSet.has(c.iid));
+      const remaining = p.hand.filter(c => !pickSet.has(c.iid));
+      return { ...p, hand: remaining, discard: [...p.discard, ...picked] };
     }
     // source === 'discard' 已在 discard 中，無需移動
     return p;
@@ -327,7 +336,8 @@ export function startEnergyChain(
 regR('v158-energy-chain-start', (st, aIdx, energyIids, params, pool) => {
   return startEnergyChain(st, aIdx, energyIids, {
     label: String(params?.label ?? '招式'),
-    source: (params?.source as 'deck' | 'discard') ?? 'deck',
+    // v3.12: 多支援 'hand' source
+    source: (params?.source as 'deck' | 'discard' | 'hand') ?? 'deck',
     scope: (params?.scope as 'bench-only' | 'any-own') ?? 'any-own',
     filterType: params?.filterType as EnergyTypeFilter | undefined,
   }, pool);

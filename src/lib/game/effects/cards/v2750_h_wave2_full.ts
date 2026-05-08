@@ -19,6 +19,8 @@ import {
   coinStatusPost, statusPost, coinHeadsMultiplyPre, flipCoinsWithLog,
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard,
 } from '../../effects';
+// v3.12: 海紋石之雨升級為多目標分配，借 startEnergyChain 處理
+import { startEnergyChain } from './v158_energy_chain';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -768,7 +770,7 @@ function deckTopPeekEnergyAttachToAnyPost(peekN: number, maxAttach: number, labe
   };
 }
 
-regR('v311-deck-peek-energy-to-any-stage1', (state, aIdx, iids, params, _pool) => {
+regR('v311-deck-peek-energy-to-any-stage1', (state, aIdx, iids, params, pool) => {
   const label = (params?.label as string) ?? '';
   const p = state.players[aIdx];
   if (iids.length === 0) {
@@ -777,35 +779,14 @@ regR('v311-deck-peek-energy-to-any-stage1', (state, aIdx, iids, params, _pool) =
   if (!p.active && p.bench.length === 0) {
     return updatePlayer(addLog(state, `${label}：場上無寶可夢，剩餘洗回`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
   }
-  const allOwn = [
-    ...(p.active ? [p.active.iid] : []),
-    ...p.bench.map(b => b.iid),
-  ];
-  if (allOwn.length === 1) {
-    const targetIid = allOwn[0];
-    const energySet = new Set(iids);
-    const energies = p.deck.filter(c => energySet.has(c.iid));
-    const restDeck = p.deck.filter(c => !energySet.has(c.iid));
-    return updatePlayer(addLog(state, `${label}：${iids.length} 張能量附到場上唯一寶可夢（剩餘洗回）`, aIdx), aIdx, pl => ({
-      ...pl,
-      deck: shuffle(restDeck),
-      active: pl.active && pl.active.iid === targetIid
-        ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] }
-        : pl.active,
-      bench: pl.bench.map(b => b.iid === targetIid
-        ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
-        : b),
-    }));
-  }
-  // [deferred-detail] 簡化：所有能量都附給同一隻接收寶可夢；
-  // 卡面允許「以任意方式附於自己的寶可夢身上」即多能量分配多隻，下版改為 energy-distribute picker
-  return withPending(addLog(state, `${label}：選 1 隻自方寶可夢接收 ${iids.length} 張能量`, aIdx), {
-    type: 'heal-target',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'v311-deck-peek-energy-to-any-stage2',
-    params: { energyIids: iids, label },
-  });
+  // v3.12: 使用 startEnergyChain 支援多目標分配（卡面「以任意方式附於自己的寶可夢身上」）。
+  // chain helper 會：(a) 把能量從 deck 搬到 discard 緩衝、(b) reshuffle deck、
+  // (c) 場上 1 隻自動全附；多隻同類能量 → +/- 計數器；多隻混合屬性 → 逐張 picker。
+  return startEnergyChain(state, aIdx, iids, {
+    label,
+    source: 'deck',
+    scope: 'any-own',
+  }, pool);
 });
 
 regR('v311-deck-peek-energy-to-any-stage2', (state, aIdx, picked, params, pool) => {

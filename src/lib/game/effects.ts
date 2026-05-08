@@ -7279,6 +7279,8 @@ function discardEnergyAttachPost(
   typeFilter: EnergyType | null,
   label: string,
 ): AttackPostFn {
+  // v3.12 升級：改用 v158-energy-chain-start resolver（source: 'discard'），
+  // 支援多目標分配（單一目標自動全附；同類能量批次 +/- UI；混合屬性逐張 picker）。
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     const cand = p.discard.filter(c => {
@@ -7292,81 +7294,21 @@ function discardEnergyAttachPost(
     }
     const realMax = Math.min(max, cand.length);
     const filterStr = typeFilter ? `Energy:${typeFilter}` : 'BasicEnergy';
-    const s = addLog(state, `${label}：從棄牌區選 1-${realMax} 張基本能量`, aIdx);
+    const s = addLog(state, `${label}：從棄牌區選 0-${realMax} 張基本能量`, aIdx);
     return withPending(s, {
       type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: filterStr, minCount: 1, maxCount: realMax,
-      effectKey: 'discard-energy-attach-pick-target',
-      params: { label },
+      filter: filterStr,
+      // v3.12: minCount=0 允許「不選」
+      minCount: 0, maxCount: realMax,
+      effectKey: 'v158-energy-chain-start',
+      params: {
+        label,
+        source: 'discard',
+        scope: 'any-own',
+      },
     });
   };
 }
-regR('discard-energy-attach-pick-target', (st, idx, iids, params, pool) => {
-  const label = (params?.label as string) ?? '棄牌能量附加';
-  const p = st.players[idx];
-  const allSelf = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
-  if (allSelf.length === 0) return st;
-  // 若場上只有 1 隻寶可夢，直接附加
-  if (allSelf.length === 1) {
-    const target = allSelf[0];
-    const energies = p.discard.filter(c => iids.includes(c.iid));
-    const targetName = pool.get(target.cardId)?.name ?? '?';
-    let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到 ${targetName}`, idx);
-    return updatePlayer(s, idx, pl => {
-      const rest = pl.discard.filter(c => !iids.includes(c.iid));
-      if (pl.active && pl.active.iid === target.iid) {
-        return {
-          ...pl,
-          discard: rest,
-          active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] },
-        };
-      }
-      return {
-        ...pl,
-        discard: rest,
-        bench: pl.bench.map(c => c.iid === target.iid
-          ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
-          : c),
-      };
-    });
-  }
-  // 多隻寶可夢：進第二步
-  return withPending(st, {
-    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'discard-energy-attach-commit',
-    params: { energyIids: iids, label },
-  });
-});
-regR('discard-energy-attach-commit', (st, idx, iids, params, pool) => {
-  const label = (params?.label as string) ?? '棄牌能量附加';
-  const energyIids = (params?.energyIids as string[]) ?? [];
-  const targetIid = iids[0];
-  const p = st.players[idx];
-  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
-  if (!target) return st;
-  const energies = p.discard.filter(c => energyIids.includes(c.iid));
-  if (energies.length === 0) return st;
-  const targetName = pool.get(target.cardId)?.name ?? '?';
-  let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到 ${targetName}`, idx);
-  return updatePlayer(s, idx, pl => {
-    const rest = pl.discard.filter(c => !energyIids.includes(c.iid));
-    if (pl.active && pl.active.iid === targetIid) {
-      return {
-        ...pl,
-        discard: rest,
-        active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] },
-      };
-    }
-    return {
-      ...pl,
-      discard: rest,
-      bench: pl.bench.map(c => c.iid === targetIid
-        ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
-        : c),
-    };
-  });
-});
 
 // 多目標 snipe：對手任意 N 隻寶可夢各 D 傷害
 function multiSnipePost(targetCount: number, damage: number, label: string): AttackPostFn {
@@ -7472,9 +7414,27 @@ regPost('土地雲|真氣之拳', (state, aIdx, pool) => {
   return withPending(s, {
     type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'BasicEnergy', minCount: 1, maxCount: 1,
-    effectKey: 'discard-energy-attach-pick-target',
+    // v3.12: 改用新 resolver（原 'discard-energy-attach-pick-target' 已 chain 化）
+    effectKey: 'v312-attach-energy-to-active',
     params: { label: '真氣之拳' },
   });
+});
+
+// v3.12 補：把選自棄牌區的能量附於自方戰鬥寶可夢（土地雲|真氣之拳 等用）
+regR('v312-attach-energy-to-active', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '附於自身';
+  const p = st.players[idx];
+  if (!p.active) return addLog(st, `${label}：自身不在場上`, idx);
+  if (iids.length === 0) return addLog(st, `${label}：未選擇能量`, idx);
+  const energies = p.discard.filter(c => iids.includes(c.iid));
+  if (energies.length === 0) return addLog(st, `${label}：能量遺失`, idx);
+  const tname = pool.get(p.active.cardId)?.name ?? '?';
+  let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到 ${tname}（戰鬥場）`, idx);
+  return updatePlayer(s, idx, pl => ({
+    ...pl,
+    discard: pl.discard.filter(c => !iids.includes(c.iid)),
+    active: pl.active ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } : null,
+  }));
 });
 
 regPre('多麗米亞|能量支援', (state, _aIdx, _pool) => ({ state, damage: 30 }));
@@ -8473,6 +8433,9 @@ function handAttachEnergyPost(
   typeFilter: EnergyType | null,
   label: string,
 ): AttackPostFn {
+  // v3.12 升級：原本只支援單一目標寶可夢接收（多目標也是全附給同一隻）。
+  // 現透過 v158-energy-chain-start resolver 將「source: hand」能量分配到自方任意寶可夢，
+  // 場上 1 隻自動全附；多隻同類型 → +/- 計數器 UI；多隻混合屬性 → 逐張 picker。
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     const cand = p.hand.filter(c => {
@@ -8488,66 +8451,18 @@ function handAttachEnergyPost(
     return withPending(s, {
       type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx,
       filter: filterStr,
-      minCount: 1, maxCount: realMax,
-      effectKey: 'hand-energy-attach-pick-target',
-      params: { label, validIids: cand.map(c => c.iid) },
+      // v3.12: minCount=0 改為符合卡面允許「不選」的彈性（艾姆利多/熱帶狂燒/幸運貼附）
+      minCount: 0, maxCount: realMax,
+      effectKey: 'v158-energy-chain-start',
+      params: {
+        label,
+        source: 'hand',
+        scope: 'any-own',
+        validIids: cand.map(c => c.iid),
+      },
     });
   };
 }
-regR('hand-energy-attach-pick-target', (st, idx, iids, params, pool) => {
-  const label = (params?.label as string) ?? '手牌附能';
-  const p = st.players[idx];
-  const allSelf = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
-  if (allSelf.length === 0) return st;
-  if (allSelf.length === 1) {
-    const target = allSelf[0];
-    const energies = p.hand.filter(c => iids.includes(c.iid));
-    const tname = pool.get(target.cardId)?.name ?? '?';
-    let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到 ${tname}`, idx);
-    return updatePlayer(s, idx, pl => {
-      const restHand = pl.hand.filter(c => !iids.includes(c.iid));
-      if (pl.active && pl.active.iid === target.iid) {
-        return { ...pl, hand: restHand, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } };
-      }
-      return {
-        ...pl, hand: restHand,
-        bench: pl.bench.map(c => c.iid === target.iid
-          ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
-          : c),
-      };
-    });
-  }
-  return withPending(st, {
-    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'hand-energy-attach-commit',
-    params: { energyIids: iids, label },
-  });
-});
-regR('hand-energy-attach-commit', (st, idx, iids, params, pool) => {
-  const label = (params?.label as string) ?? '手牌附能';
-  const energyIids = (params?.energyIids as string[]) ?? [];
-  const targetIid = iids[0];
-  const p = st.players[idx];
-  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
-  if (!target) return st;
-  const energies = p.hand.filter(c => energyIids.includes(c.iid));
-  if (energies.length === 0) return st;
-  const tname = pool.get(target.cardId)?.name ?? '?';
-  let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到 ${tname}`, idx);
-  return updatePlayer(s, idx, pl => {
-    const restHand = pl.hand.filter(c => !energyIids.includes(c.iid));
-    if (pl.active && pl.active.iid === targetIid) {
-      return { ...pl, hand: restHand, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } };
-    }
-    return {
-      ...pl, hand: restHand,
-      bench: pl.bench.map(c => c.iid === targetIid
-        ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
-        : c),
-    };
-  });
-});
 
 // ── Helper: deckSameNameBenchPost — 從牌庫選最多 N 張「同名卡」放備戰 ─────
 function deckSameNameBenchPost(max: number, cardName: string, label: string): AttackPostFn {

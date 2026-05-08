@@ -264,6 +264,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.12</span> 多目標能量分配 picker — B1-B3 完整實裝 + A8 海紋石之雨升級</summary>
+        <ul>
+          <li><b>背景</b>：v3.11 deferred 列表的 B1-B3 三張卡（艾姆利多｜滿載心田 / 阿羅拉椰蛋樹ex｜熱帶狂燒 / 莫魯貝可｜撿拾附上）卡面寫「以任意方式附於自己的寶可夢身上」即「多張能量分配給多隻寶可夢」。原 helper（<code>handAttachEnergyPost</code> / <code>discardEnergyAttachPost</code>）只能讓全部能量附到同一隻；同期 v3.11 的 A8 拉普拉斯ex｜海紋石之雨也是這個簡化點。</li>
+          <li><b>關鍵發現</b>：v2.158 已有 <code>v158_energy_chain.ts</code> 提供「逐張附能量到玩家選的目標寶可夢」chain pattern，且 v2.87 同類能量批次 +/- UI 也已整合進去。本次只需擴充 source 支援 <code>&#39;hand&#39;</code>，再讓三個 helper 改走 chain 即可。</li>
+          <li><b>引擎擴充</b>：</li>
+          <li>　・<code>EnergyChainOpts.source</code> 從 <code>&#39;deck&#39;|&#39;discard&#39;</code> 擴為 <code>&#39;deck&#39;|&#39;discard&#39;|&#39;hand&#39;</code></li>
+          <li>　・<code>startEnergyChain</code> 對 <code>source: &#39;hand&#39;</code> 把選的能量先從手牌搬到棄牌區暫存，後續流程沿用</li>
+          <li>　・<code>v158-energy-chain-start</code> resolver 同步加 <code>&#39;hand&#39;</code> 容忍</li>
+          <li><b>helper 升級（影響範圍：使用此 helper 的所有招式）</b>：</li>
+          <li>　・<code>handAttachEnergyPost(max, typeFilter, label)</code> — 改用 <code>v158-energy-chain-start</code> resolver，<code>source: &#39;hand&#39;</code>。</li>
+          <li>　・<code>discardEnergyAttachPost(max, typeFilter, label)</code> — 改用 <code>v158-energy-chain-start</code> resolver，<code>source: &#39;discard&#39;</code>。</li>
+          <li>　・場上只有 1 隻自方寶可夢 → 自動全附；多隻同類能量 → +/- 計數器 UI；多隻混合屬性 → 逐張 picker</li>
+          <li>　・<code>minCount</code> 由 1 改為 0（卡面允許「任意數量」）</li>
+          <li><b>B1-B3 完整實裝</b>（自動沿用升級後 helper）：</li>
+          <li>　・<b>艾姆利多｜滿載心田</b>（無能量，從手牌選最多 2 張基本【超】能量，附於自己任意寶可夢）— 原為自動全附給單一目標；現玩家可自由分配</li>
+          <li>　・<b>阿羅拉 椰蛋樹ex｜熱帶狂燒</b>（草水，150 傷，從手牌選任意數量基本能量附於自己任意寶可夢）— 同樣升級為多目標分配</li>
+          <li>　・<b>莫魯貝可｜撿拾附上</b>（雷，從棄牌區選最多 2 張基本能量附於自己任意寶可夢）— 從棄牌區附能也升級為多目標</li>
+          <li><b>A8 海紋石之雨升級</b>：v311 stage1 resolver 改呼叫 <code>startEnergyChain</code>（<code>source: &#39;deck&#39;</code>）。卡面「以任意方式附於自己的寶可夢」現完整支援多目標分配；剩餘洗回。</li>
+          <li><b>連帶修補</b>：土地雲｜真氣之拳原本走已被 chain 化的 <code>discard-energy-attach-pick-target</code> resolver；新增 <code>v312-attach-energy-to-active</code> 接手（卡面「附於這隻寶可夢」嚴格附於自身）。</li>
+          <li><b>UI 不變</b>：複用既有 <code>energy-distribute</code>（+/- 計數器）/ <code>heal-target</code>（單目標逐張）picker — 不需改 game/+page.svelte。</li>
+          <li><b>遵守 Iron Rules</b>：所有改動既有檔（version.ts / effects.ts / v158_energy_chain.ts / v2750_h_wave2_full.ts / +page.svelte）走 Python pipeline；新 resolver 用 <code>regR</code>（_shared.ts 的 RESOLVERS Map），不違反 Rule 12；changelog 內 <code>&lt;</code>/<code>&#39;</code> 等特殊字符 HTML entity escape</li>
+          <li>tsc 0 error</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.11</span> Bug audit P1 — 7 張招式（特定目標限制 / peek 機制 / 未實裝）</summary>
         <ul>
           <li><b>Audit 背景</b>：承 v3.10，繼續處理 P1 共 7 張卡（缺 tag gate / peek vs search 機制錯 / 兩張未實裝）。同時新增 3 個 helper + 2 個 picker filter（<code>Energy:TOP_N</code> / <code>Basic:TOP_N</code>）。</li>
