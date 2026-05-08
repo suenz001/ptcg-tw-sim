@@ -65,6 +65,11 @@ import {
   hasMeloettaExDebut,
   magearnaAutoHealAmount,
 } from './effects/cards/v3000_g3_wave2';
+// v3.08 Deferred Wave C helpers — 古空棘魚｜潛入記憶（進化前招式擴展）
+import {
+  hasArchaeoglobinDiveMemory,
+  getAttacksFromEvolvedFromStack,
+} from './effects/cards/v3080_deferred_wave_c';
 
 // v2.341：鐵荊棘ex SV5a 033/066｜初始化
 // 「只要這隻寶可夢在戰鬥場上，雙方場上『擁有規則的寶可夢』（『未來』寶可夢除外）的特性全部消除。」
@@ -5574,6 +5579,26 @@ export function getEffectiveAttacks(
     if (toolCard?.subtype === 'PokemonTool' && toolCard.attacks?.length) {
       for (const atk of toolCard.attacks) {
         result.push({ atk, sourceCardName: toolCard.name, isFromTool: true });
+      }
+    }
+  }
+  // v3.08 古空棘魚｜潛入記憶 — 自方場上有古空棘魚 + inst 是進化卡 → 加進化前所有招式
+  //   卡面：「自己的所有進化寶可夢，可使用進化前持有的所有招式。需要有足夠使用招式的能量。」
+  //   - 識別自方：透過 inst 屬於 active 或 bench 來判斷 ownerIdx；用 active.iid / bench.iid 比對。
+  //   - cost 沿用各自卡面定義；canAffordAttack 對 base.attacks 也成立（傳入此 inst.energyAttached）。
+  //   - 重名招式不去重（卡面允許「使用進化前持有的所有招式」）。
+  let ownerIdx: 0 | 1 | undefined;
+  if (state.players[0].active?.iid === inst.iid || state.players[0].bench.some(b => b.iid === inst.iid)) {
+    ownerIdx = 0;
+  } else if (state.players[1].active?.iid === inst.iid || state.players[1].bench.some(b => b.iid === inst.iid)) {
+    ownerIdx = 1;
+  }
+  if (ownerIdx != null) {
+    const ownerPlayer = state.players[ownerIdx];
+    if (hasArchaeoglobinDiveMemory(ownerPlayer, pool)) {
+      const lowerAttacks = getAttacksFromEvolvedFromStack(inst, pool);
+      for (const { atk, sourceCardName } of lowerAttacks) {
+        result.push({ atk, sourceCardName, isFromTool: false });
       }
     }
   }

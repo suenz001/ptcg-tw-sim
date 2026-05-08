@@ -22,6 +22,8 @@ import {
   updatePlayer,
   withPending,
 } from '../_shared';
+// v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
+import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
 
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
@@ -99,6 +101,10 @@ regPost('念力土偶|退化光線', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const dp = state.players[dIdx];
   if (!dp.active) return addLog(state, '退化光線：對手無戰鬥寶可夢', aIdx);
+  // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋退化卡回對手手牌
+  if (_v3080OppHasMenasure(state, aIdx, pool)) {
+    return addLog(state, '退化光線：對手場上有【平穩境地】，效果無效', aIdx);
+  }
 
   const defCard = pool.get(dp.active.cardId);
   const isEvolved = defCard?.stage === 'Stage1' || defCard?.stage === 'Stage2';

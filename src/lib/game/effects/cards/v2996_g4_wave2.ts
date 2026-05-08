@@ -43,6 +43,8 @@ import {
 } from '../_shared';
 import { flipCoinsWithLog } from '../../effects';
 import type { Card } from '$lib/cards/types';
+// v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
+import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
 
 // 導出 sentinel 防止 unused import warnings
 export type _v2996Sentinel = PlayerState | GameState | Card | CardInstance;
@@ -273,6 +275,10 @@ regA('始祖大鳥', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   if (!cardInst || p.active?.iid !== cardInst.iid) {
     return addLog(st, '原始之翼：始祖大鳥不在戰鬥場', idx);
+  }
+  // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 整個效果無效
+  if (_v3080OppHasMenasure(st, idx, pool)) {
+    return addLog(st, '原始之翼：對手場上有【平穩境地】，效果無效', idx);
   }
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
@@ -803,12 +809,17 @@ regR('kitree-iron-bundle-flow-attach', (st, idx, iids, params, pool) => {
 //   step2：若正面 → active-energy-discard（sourcePlayerIdx=oppIdx，使 src=對手）
 //   step3：resolver — 從對手戰鬥位移除選中能量，加到對手手牌（不丟棄！）
 // ══════════════════════════════════════════════════════════════════════════════
-regA('毒粉蛾', 0, (st, idx, _pool, _cardInst) => {
+regA('毒粉蛾', 0, (st, idx, pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   if (!dp.active) return addLog(st, '微風吹拂：對手戰鬥場無寶可夢', idx);
   if (dp.active.energyAttached.length === 0) {
     return addLog(st, '微風吹拂：對手戰鬥位沒有能量', idx);
+  }
+  // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 整個效果無效（仍消耗每回合 1 次？
+  //   保守採卡面解讀「效果不發生」→ 直接 short-circuit、不啟動擲幣，避免浪費觸發）
+  if (_v3080OppHasMenasure(st, idx, pool)) {
+    return addLog(st, '微風吹拂：對手場上有【平穩境地】，效果無效', idx);
   }
   const r = flipCoinsWithLog(st, 1, '微風吹拂', idx);
   if (r.heads === 0) return addLog(r.state, '微風吹拂：反面，效果無效', idx);

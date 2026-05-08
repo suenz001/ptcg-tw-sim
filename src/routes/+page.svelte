@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.08</span> Deferred Wave C — Group 3 剩餘 4 張最複雜 deferred passive（廣域堡壘 / 平穩境地 / 潛入記憶 / 多重轉接*）</summary>
+        <ul>
+          <li><b>1. 超甲狂犀｜廣域堡壘（H）</b> — 「只要這隻寶可夢在戰鬥場上，對手從手牌使出支援者卡時，自己的所有寶可夢不會受到那個效果的影響。」實作：擴展 v3.06 的 <code>isImmuneToOppTrainer</code> 路徑，新增綜合 helper <code>isImmuneToOppSupporter(state, defenderIdx, targetInst, pool)</code>，內部 OR：(a) 寶可夢自身的緊張感／融合為雪 (b) 自方戰鬥場有廣域堡壘。已將「老大的指令」「老大的指令（烏羽）」兩張高頻 Supporter 的 validIids 過濾改用新 helper。頂尖捕捉器是 Item 類，繼續用舊 isImmuneToOppTrainer（不擋廣域堡壘）。</li>
+          <li><b>2. 美納斯｜平穩境地（H）</b> — 「只要這隻寶可夢在場上，對手的場上寶可夢與那隻寶可夢身上附加的所有卡，無法放回手牌。」Phase 1 實作：新增 helper <code>oppHasMenasureCalmGround(state, ownerIdx, pool)</code>，已在 6 處「對手寶可夢/附加卡 → 對手手牌」hook 加 gate：</li>
+          <li>　・<b>退化進化卡回對手手牌</b>（3 張）：念力土偶｜退化光線、超能豔鴕｜奧密之眼、始祖大鳥｜原始之翼</li>
+          <li>　・<b>對手能量回對手手牌</b>（3 張）：悠哉尾草棒、毒粉蛾｜微風吹拂、effects.ts <code>returnOppActiveEnergyPost</code> helper（涵蓋高傲雉雞｜反轉之風 等多張共用此 post）</li>
+          <li>　・Phase 2 deferred：其他零散散點若有遺漏可逐個補上</li>
+          <li><b>3. 古空棘魚｜潛入記憶（H）</b> — 「只要這隻寶可夢在場上，自己的所有進化寶可夢，可使用進化前持有的所有招式。需要有足夠使用招式的能量。」實作：擴展 engine.ts 的 <code>getEffectiveAttacks</code> — 自方場上有古空棘魚（含 active 或 bench）+ inst 是進化卡（evolvedFromStack 至少 1 張）→ 把 evolvedFromStack 中每張 cardId 的 attacks 全部累加進 effective attacks。重名招式不去重（卡面允許）；cost 沿用各自卡面定義；UI / canAffordAttack / ATTACK handler 全部自動受惠（getEffectiveAttacks 是三方共用 helper）。</li>
+          <li><b>4. 洛托姆ex｜多重轉接（I） &mdash; [DEFERRED v3.08]</b> — 「只要這隻寶可夢在場上，名稱中有『洛托姆』的自己的所有寶可夢，各自身上最多可附有 2 張『寶可夢道具』卡。」Defer 原因：CardInstance.toolAttached 為單一物件，要支援 2 張需改為 array；影響面 grep <code>toolAttached</code> 達 200+ 處（ATTACH_TOOL / TOOL_ON_DAMAGED / TOOL_PRIZE_BONUS / 取獎賞時 tool 棄牌邏輯 等所有 tool hook 都需 loop 處理），且特性消除時清理多附道具的邏輯也需新加。獨立 wave 處理整個 toolAttached 重構與全面 hook 適配。</li>
+          <li><b>Iron Rule 11 / 12 遵守</b>：所有既有檔（version.ts / effects.ts / engine.ts / supporters_gust.ts / v168_supporters.ts / items_misc.ts / v2354 / v2760 / v2996）改動一律走 Python pipeline；新檔 v3080_deferred_wave_c.ts 用 Write 工具；register 函式為空 body（純 helper 模組、無 Map .set()），仍由 effects.ts body 末端 import + 呼叫保持模板一致。</li>
+          <li>tsc 0 error</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.07</span> Deferred Wave D — 3 張需要手牌 UI 元件層 hook 的特性（超能妙喵 / 火神蛾 / 齒輪怪）</summary>
         <ul>
           <li><b>新 hook ON_DISCARD_FROM_HAND</b> — 玩家從手牌主動棄 1 張指定卡，觸發場上對應 trigger holder 的特性。新增 <code>USE_HAND_DISCARD_ABILITY</code> action type、<code>ON_DISCARD_FROM_HAND_ABILITIES</code> Map（key=trigger holder 卡名 → effect fn），以及 +page.svelte / MobilePortraitBattle.svelte 的手牌渲染按鈕（紫色「棄此卡 → 觸發 X」）。每回合限 1 次（用 abilityNamesUsedThisTurn 追蹤該特性名）</li>

@@ -388,6 +388,8 @@ import {
   getBenchImmunityAbilityName as _v3060GetBenchImmName,
   attackerHasSpecialEnergy as _v3060AttackerHasSE,
 } from './effects/cards/v3060_deferred_wave_b';
+// v3.08 Deferred Wave C helper — 美納斯｜平穩境地（對手寶可夢/附加卡 → 對手手牌阻擋）
+import { oppHasMenasureCalmGround as _v3080OppHasMenasureCG } from './effects/cards/v3080_deferred_wave_c';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -6519,6 +6521,10 @@ function returnOppActiveEnergyPost(n: number, label: string): AttackPostFn {
     const defender = state.players[dIdx];
     if (!defender.active) return state;
     const defName = pool.get(defender.active.cardId)?.name ?? '?';
+    // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋對手能量回對手手牌
+    if (_v3080OppHasMenasureCG(state, aIdx, pool)) {
+      return addLog(state, `${label}：對手場上有【平穩境地】，能量回手效果無效`, aIdx);
+    }
     const energies = defender.active.energyAttached;
     if (energies.length === 0) {
       return addLog(state, `${label}：${defName} 沒有能量可放回`, aIdx);
@@ -14080,3 +14086,14 @@ registerV3060DeferredWaveBPassives();
 // effect fn 由前文 import 後直接寫入 Map literal；register 函式留空（無 .set() 需要 lazy）。
 import { registerV3070DeferredWaveD } from './effects/cards/v3070_deferred_wave_d';
 registerV3070DeferredWaveD();
+
+// v3.08 Deferred Wave C — Group 3 剩餘 4 張最複雜 deferred passive
+//   - 超甲狂犀｜廣域堡壘：擴展 isImmuneToOppTrainer 路徑（新 helper isImmuneToOppSupporter 含廣域堡壘）
+//     已在 supporters_gust.ts / v168_supporters.ts 的 老大的指令 系列 改用新 helper
+//   - 美納斯｜平穩境地：oppHasMenasureCalmGround helper，已在 effects.ts (returnOppActiveEnergyPost)
+//     / items_misc.ts (悠哉尾草棒) / v2354 (退化光線) / v2760 (奧密之眼) / v2996 (原始之翼/微風吹拂) inline gate
+//   - 古空棘魚｜潛入記憶：engine.ts getEffectiveAttacks 擴展加 evolvedFromStack 招式
+//   - [DEFERRED] 洛托姆ex｜多重轉接：toolAttached 改 array 重構工程量大，留待獨立 wave
+// register 函式為空 body，僅維持 wave 模板一致；所有 hook 都是 helper 直接 import 使用，無 Map .set()。
+import { registerV3080DeferredWaveC } from './effects/cards/v3080_deferred_wave_c';
+registerV3080DeferredWaveC();

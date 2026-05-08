@@ -12,6 +12,8 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, statusPost, flipCoinsWithLog, canApplyAttackEffectToTarget } from '../../effects';
+// v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
+import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper
@@ -408,6 +410,10 @@ regPre('超能豔鴕|奧密之眼', (s) => ({ state: s, damage: 0 }));
 regPost('超能豔鴕|奧密之眼', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
+  // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋進化卡回對手手牌
+  if (_v3080OppHasMenasure(state, aIdx, pool)) {
+    return addLog(state, '奧密之眼：對手場上有【平穩境地】，效果無效', aIdx);
+  }
   const evolvedAll: CardInstance[] = [...(opp.active ? [opp.active] : []), ...opp.bench]
     .filter(c => {
       const card = pool.get(c.cardId);

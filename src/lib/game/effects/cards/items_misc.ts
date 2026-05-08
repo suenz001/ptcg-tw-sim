@@ -27,6 +27,10 @@ import {
   clearActiveEffects,
   healResolver,
 } from '../_shared';
+// v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
+import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
+// v3.08 美納斯｜平穩境地 — 阻擋對手寶可夢/附加卡 → 對手手牌
+import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
 import type { EffectFn } from '../_shared';
 import { flipCoinsWithLog } from '../../effects';
 import type { CardInstance } from '../../types';
@@ -295,11 +299,20 @@ regR('miracle-codec-attach', (st, idx, iids, params, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 頂尖捕捉器 — 選 1 隻對手備戰 → 換到對手場上；再選自己備戰 → 切換自己
-regG('頂尖捕捉器', (st, idx) => st.players[(1 - idx) as 0 | 1].bench.length > 0);
-reg('頂尖捕捉器', (st, idx) => {
+// v3.06 緊張感 / 融合為雪 — 對手 trainer 免疫：filter 排除
+regG('頂尖捕捉器', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
-  if (st.players[oppIdx].bench.length === 0) {
-    return addLog(st, '頂尖捕捉器：對手備戰區沒有寶可夢', idx);
+  const valid = st.players[oppIdx].bench.filter(b => !_v3060IsImmuneOppTrainer(b, pool));
+  return valid.length > 0;
+});
+reg('頂尖捕捉器', (st, idx, pool) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  // v3.06 緊張感 / 融合為雪 — 對手 trainer 免疫：filter 排除
+  const validIids = st.players[oppIdx].bench
+    .filter(b => !_v3060IsImmuneOppTrainer(b, pool))
+    .map(b => b.iid);
+  if (validIids.length === 0) {
+    return addLog(st, '頂尖捕捉器：對手備戰區沒有可呼叫的寶可夢（緊張感/融合為雪 免疫）', idx);
   }
   st = addLog(st, '頂尖捕捉器：選擇要呼叫的對手備戰寶可夢', idx);
   return withPending(st, {
@@ -307,6 +320,7 @@ reg('頂尖捕捉器', (st, idx) => {
     actorIdx: idx, sourcePlayerIdx: oppIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'top-catcher-opp',
+    params: { validIids },
   });
 });
 regR('top-catcher-opp', (st, idx, iids, _params, pool) => {
@@ -1027,16 +1041,22 @@ regR('tm-machine-pick', (st, idx, iids, _params, pool) => {
 //       選擇 1 個對手的場上寶可夢身上附加的能量，放回對手的手牌。
 // gate：必須是後攻方第 1 回合（state.isFirstTurn=true 且 activePlayerIndex !== firstPlayerIdx）
 //       + 對手場上至少 1 隻寶可夢有能量
-regG('悠哉尾草棒', (st, idx) => {
+regG('悠哉尾草棒', (st, idx, pool) => {
   // 後攻方第一回合：isFirstTurn 仍是 true，且當前 activePlayer 是後攻方（!== firstPlayerIdx）
   if (!st.isFirstTurn) return false;
   if (st.activePlayerIndex === st.firstPlayerIdx) return false;
+  // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋整個效果
+  if (_v3080OppHasMenasure(st, idx, pool)) return false;
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
   return all.some(pk => pk.energyAttached.length > 0);
 });
-reg('悠哉尾草棒', (st, idx) => {
+reg('悠哉尾草棒', (st, idx, pool) => {
+  // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 整個效果不發生
+  if (_v3080OppHasMenasure(st, idx, pool)) {
+    return addLog(st, '悠哉尾草棒：對手場上有【平穩境地】，效果無效', idx);
+  }
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const all = [...(dp.active ? [dp.active] : []), ...dp.bench];

@@ -21,6 +21,11 @@ import {
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   drawCards, healResolver,
 } from '../_shared';
+// v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
+import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
+void _v3060IsImmuneOppTrainer;
+// v3.08 對手 supporter 免疫綜合 helper（含廣域堡壘）
+import { isImmuneToOppSupporter as _v3080IsImmuneOppSupp } from './v3080_deferred_wave_c';
 
 // v2.374：v168 寫於早期，drawCards 接 PlayerState；現行 _shared.drawCards 接 GameState。
 // 為避免大規模重構，內嵌一個 PlayerState 版 helper（行為等同 _shared.drawCards 但作用於單一 player）。
@@ -209,11 +214,21 @@ regR('piper-tool-pick', (st, idx, iids, _params, pool) => {
 // ── 老大的指令（烏羽）— 等同於「老大的指令」 ──────────────────────────────
 // 卡面：選擇 1 隻對手的備戰寶可夢，與戰鬥寶可夢互換。
 // 重用既有的 'gust-opp' resolver。
-regG('老大的指令（烏羽）', (st, idx) => st.players[(1 - idx) as 0 | 1].bench.length > 0);
-reg('老大的指令（烏羽）', (st, idx) => {
+// v3.06 緊張感 / 融合為雪 — 對手 trainer 免疫：filter 排除
+regG('老大的指令（烏羽）', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
-  if (st.players[oppIdx].bench.length === 0) {
-    return addLog(st, '老大的指令（烏羽）：對手備戰區沒有寶可夢', idx);
+  // v3.06 + v3.08：緊張感 / 融合為雪 / 廣域堡壘 — 對手 supporter 免疫過濾
+  const valid = st.players[oppIdx].bench.filter(b => !_v3080IsImmuneOppSupp(st, oppIdx, b, pool));
+  return valid.length > 0;
+});
+reg('老大的指令（烏羽）', (st, idx, pool) => {
+  const oppIdx = (1 - idx) as 0 | 1;
+  // v3.06 + v3.08：緊張感 / 融合為雪 / 廣域堡壘 — 對手 supporter 免疫過濾
+  const validIids = st.players[oppIdx].bench
+    .filter(b => !_v3080IsImmuneOppSupp(st, oppIdx, b, pool))
+    .map(b => b.iid);
+  if (validIids.length === 0) {
+    return addLog(st, '老大的指令（烏羽）：對手備戰區沒有可呼叫的寶可夢（緊張感/融合為雪/廣域堡壘 免疫）', idx);
   }
   st = addLog(st, '老大的指令（烏羽）：選擇要呼叫的對手備戰寶可夢', idx);
   return withPending(st, {
@@ -221,6 +236,7 @@ reg('老大的指令（烏羽）', (st, idx) => {
     actorIdx: idx, sourcePlayerIdx: oppIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'gust-opp',  // 重用 supporters_gust.ts 的 resolver
+    params: { validIids },
   });
 });
 

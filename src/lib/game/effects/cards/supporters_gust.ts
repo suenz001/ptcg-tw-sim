@@ -15,6 +15,11 @@ import {
   addLog, updatePlayer, withPending,
   clearActiveEffects,
 } from '../_shared';
+// v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
+import { isImmuneToOppTrainer as _isImmuneOppTrainer_unused } from './v3060_deferred_wave_b';
+void _isImmuneOppTrainer_unused;
+// v3.08 對手 supporter 免疫綜合 helper（含廣域堡壘 — 超甲狂犀戰鬥場時整體免疫）
+import { isImmuneToOppSupporter } from './v3080_deferred_wave_c';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 老大的指令 — 選 1 隻對手備戰寶可夢與其戰鬥寶可夢互換
@@ -23,21 +28,29 @@ import {
 regG('老大的指令', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
   // v2.388 陳舊的鰭之化石被動 — 不受對手支援者影響：filter 排除
+  // v3.06 緊張感 / 融合為雪 — 對手 trainer 免疫：filter 排除
+  // v3.08 廣域堡壘 — 超甲狂犀戰鬥場時，整個自方場上對 supporter 免疫
   const validBench = st.players[oppIdx].bench.filter(b => {
     const card = pool.get(b.cardId);
-    return !(b.fossilOnField && card?.name === '陳舊的鰭之化石');
+    if (b.fossilOnField && card?.name === '陳舊的鰭之化石') return false;
+    if (isImmuneToOppSupporter(st, oppIdx, b, pool)) return false;
+    return true;
   });
   return validBench.length > 0;
 });
 reg('老大的指令', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
   // v2.388 陳舊的鰭之化石被動 — 不受對手支援者影響：filter 排除
+  // v3.06 緊張感 / 融合為雪 — 對手 trainer 免疫：filter 排除
+  // v3.08 廣域堡壘 — 超甲狂犀戰鬥場時，整個自方場上對 supporter 免疫
   const validIids = st.players[oppIdx].bench.filter(b => {
     const card = pool.get(b.cardId);
-    return !(b.fossilOnField && card?.name === '陳舊的鰭之化石');
+    if (b.fossilOnField && card?.name === '陳舊的鰭之化石') return false;
+    if (isImmuneToOppSupporter(st, oppIdx, b, pool)) return false;
+    return true;
   }).map(b => b.iid);
   if (validIids.length === 0) {
-    return addLog(st, '老大的指令：對手備戰區沒有可呼叫的寶可夢（鰭之化石被動免疫）', idx);
+    return addLog(st, '老大的指令：對手備戰區沒有可呼叫的寶可夢（化石/緊張感/融合為雪/廣域堡壘 免疫）', idx);
   }
   st = addLog(st, '老大的指令：選擇要呼叫的對手備戰寶可夢', idx);
   return withPending(st, {
