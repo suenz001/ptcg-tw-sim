@@ -604,13 +604,15 @@ regR('energy-coin-attach', (st, idx, iids, params, pool) => {
 // ── 大師球（Item / SVE）────────────────────────────────────────────────────
 // 卡面：從自己的牌庫選 1 張寶可夢卡，給對手看後加入手牌。並重洗牌庫。
 regG('大師球', (st, idx) => st.players[idx].deck.length > 0);
-reg('大師球', (st, idx) => {
+reg('大師球', (st, idx, pool) => {
   st = addLog(st, '大師球：從牌庫選 1 張寶可夢加手牌（給對手看）', idx);
+  // v2.993：卡面寫「選 1 張」mandatory；牌庫無寶可夢時允許 Pass
+  const hasPoke = st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon',
-    minCount: 0, maxCount: 1,
+    minCount: hasPoke ? 1 : 0, maxCount: 1,
     effectKey: 'master-ball-pick',
   });
 });
@@ -634,13 +636,18 @@ regG('巢穴球', (st, idx, pool) => {
   if (st.players[idx].bench.length >= 5) return false;
   return st.players[idx].deck.length > 0;
 });
-reg('巢穴球', (st, idx) => {
+reg('巢穴球', (st, idx, pool) => {
   st = addLog(st, '巢穴球：從牌庫選 1 張基礎寶可夢放備戰', idx);
+  // v2.993：卡面寫「選 1 張」mandatory；牌庫無基礎寶可夢時允許 Pass
+  const hasBasic = st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card?.subtype === 'Basic';
+  });
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Basic',
-    minCount: 0, maxCount: 1,
+    minCount: hasBasic ? 1 : 0, maxCount: 1,
     effectKey: 'nest-ball-place',
   });
 });
@@ -762,7 +769,8 @@ reg('親送無人機', (st, idx) => {
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 0, maxCount: 1,
+    // v2.993：擲幣 gate 已通過，且牌庫至少有 1 張（regG 確認 deck.length > 0）→ minCount: 1
+    minCount: 1, maxCount: 1,
     effectKey: 'gift-drone-pick',
   });
 });
@@ -818,13 +826,15 @@ regG('幫忙鈴', (st, idx, pool) => {
   if (st.activePlayerIndex === st.firstPlayerIdx) return false;
   return st.players[idx].deck.length > 0;
 });
-reg('幫忙鈴', (st, idx) => {
+reg('幫忙鈴', (st, idx, pool) => {
   st = addLog(st, '幫忙鈴：從牌庫選 1 張支援者加手牌（給對手看）', idx);
+  // v2.993：卡面寫「選 1 張」mandatory；牌庫無支援者時允許 Pass
+  const hasSupporter = st.players[idx].deck.some(c => pool.get(c.cardId)?.subtype === 'Supporter');
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Supporter',
-    minCount: 0, maxCount: 1,
+    minCount: hasSupporter ? 1 : 0, maxCount: 1,
     effectKey: 'help-bell-pick',
   });
 });
@@ -895,16 +905,18 @@ regR('rocket-scare-bomb-place', (st, idx, iids, _params, pool) => {
 // ── 勝利之證（Item）────────────────────────────────────────────────────────
 // 卡面：擲 1 次硬幣若為正面，則從自己的牌庫選 1 張寶可夢卡，給對手看後加手牌。並重洗牌庫。
 regG('勝利之證', (st, idx) => st.players[idx].deck.length > 0);
-reg('勝利之證', (st, idx) => {
+reg('勝利之證', (st, idx, pool) => {
   const heads = Math.random() < 0.5;
   st = addLog(st, `勝利之證：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
   if (!heads) return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })), '勝利之證：反面 → 重洗牌庫', idx);
   st = addLog(st, '勝利之證：從牌庫選 1 張寶可夢加手牌', idx);
+  // v2.993：卡面寫「選 1 張」mandatory；牌庫無寶可夢時允許 Pass
+  const hasPoke = st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon',
-    minCount: 0, maxCount: 1,
+    minCount: hasPoke ? 1 : 0, maxCount: 1,
     effectKey: 'victory-proof-pick',
   });
 });

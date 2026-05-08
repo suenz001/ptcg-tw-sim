@@ -1260,16 +1260,21 @@ regPost('拉帝亞斯ex|無限之刃', (state, aIdx, _pool) => {
 // ── MBD 謎擬Q ─────────────────────────────────────────────────────────────────
 
 // 呼朋引伴 — 從牌庫選 1 隻基礎寶可夢放備戰（POST；無傷害）
-regPost('謎擬Q|呼朋引伴', (state, aIdx, _pool) => {
+regPost('謎擬Q|呼朋引伴', (state, aIdx, pool) => {
   const player = state.players[aIdx];
   if (player.bench.length >= 5) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
   if (player.deck.length === 0) return addLog(state, '呼朋引伴：牌庫為空', aIdx);
+  // v2.993：卡面寫「選擇 1 張」mandatory；若牌庫無基礎寶可夢則允許 Pass
+  const hasBasic = player.deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card?.subtype === 'Basic';
+  });
   let s = addLog(state, '呼朋引伴：從牌庫選 1 隻基礎寶可夢放備戰', aIdx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'Basic',
-    minCount: 0, maxCount: 1,
+    minCount: hasBasic ? 1 : 0, maxCount: 1,
     effectKey: 'bench-basic-from-deck', // 複用好友寶芬的 resolver
   });
 });
@@ -1519,13 +1524,15 @@ regR('surfer-switch', (st, idx, iids, _params, pool) => {
 });
 
 // 精靈球 — 擲硬幣，正面則從牌庫選 1 張寶可夢加手牌（物品）
-reg('精靈球', (st, idx) => {
+reg('精靈球', (st, idx, pool) => {
   const r = flipCoinsWithLog(st, 1, '精靈球', idx);
   if (!r.heads) return addLog(r.state, '精靈球：反面 → 什麼都沒發生', idx);
   st = addLog(r.state, '精靈球：正面 → 從牌庫選 1 張寶可夢加手牌', idx);
+  // v2.993：卡面寫「選 1 張」mandatory；牌庫無寶可夢時允許 Pass
+  const hasPoke = st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
   return withPending(st, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon', minCount: 0, maxCount: 1,
+    filter: 'Pokemon', minCount: hasPoke ? 1 : 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
   });
 });
@@ -2032,7 +2039,8 @@ reg('賽吉', (st, idx, pool) => {
   }
   return withPending(st, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Evolution', minCount: 0, maxCount: 1,
+    // v2.993：卡面寫「選 1 張」mandatory；牌庫無可進化卡時允許 Pass
+    filter: 'Evolution', minCount: validIids.length > 0 ? 1 : 0, maxCount: 1,
     effectKey: 'sage-evolve',
     params: { validIids },
   });
@@ -2121,7 +2129,8 @@ reg('八朔', (st, idx) => {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'TOP8', minCount: 0, maxCount: 3,
     effectKey: 'search-to-hand-reshuffle',
-    params: { top8Iids },
+    // v2.993：八朔卡面無「給對手看過」→ 私下揭示
+    params: { top8Iids, privateReveal: true },
   });
 });
 
@@ -2162,11 +2171,32 @@ regR('hydai-bottom-draw4', (st, idx, iids, _params, pool) => {
 });
 
 // search-to-hand-reshuffle：從 TOP N 選幾張加手牌（剩餘放回重洗）
-regR('search-to-hand-reshuffle', (st, idx, iids, _params, _pool) => {
+// v2.993：依 Iron Rule 8 加入揭示 log。預設 addLog（公開）— 大多數 caller 卡面寫「給對手看過」。
+//   若 params.privateReveal === true → 改用 addPrivateLog（對手只見計數）。八朔、仙后 等卡使用此 flag。
+regR('search-to-hand-reshuffle', (st, idx, iids, params, pool) => {
+  const player = st.players[idx];
+  const chosen = player.deck.filter(c => iids.includes(c.iid));
+  const remaining = player.deck.filter(c => !iids.includes(c.iid));
+  // 揭示 log
+  if (chosen.length === 0) {
+    st = addLog(st, '牌庫搜尋：未選擇任何卡（牌庫已重洗）', idx);
+  } else {
+    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    if ((params as any)?.privateReveal === true) {
+      // 私下揭示：自己看到名稱、對手只看到計數
+      st = addPrivateLog(st,
+        `搜到：${names} 加入手牌（牌庫已重洗）`,
+        `搜到 ${chosen.length} 張卡加入手牌（牌庫已重洗）`,
+        idx);
+    } else {
+      // 公開揭示（卡面「給對手看過」）
+      st = addLog(st, `搜到：${names} 加入手牌（牌庫已重洗）`, idx);
+    }
+  }
   return updatePlayer(st, idx, p => {
-    const chosen = p.deck.filter(c => iids.includes(c.iid));
-    const remaining = p.deck.filter(c => !iids.includes(c.iid));
-    return { ...p, hand: [...p.hand, ...chosen], deck: shuffle(remaining) };
+    const picked = p.deck.filter(c => iids.includes(c.iid));
+    const rest = p.deck.filter(c => !iids.includes(c.iid));
+    return { ...p, hand: [...p.hand, ...picked], deck: shuffle(rest) };
   });
 });
 
@@ -3161,11 +3191,13 @@ regR('earth-pot-step2', (st, idx, iids, _params, pool) => {
 });
 
 // MJ 超級球 — 看牌庫頂 7 選 1 寶可夢加手牌
-reg('超級球', (st, idx) => {
+reg('超級球', (st, idx, pool) => {
   st = addLog(st, '超級球：從牌庫選 1 張寶可夢加手牌', idx);
+  // v2.993：卡面寫「選 1 張」mandatory；牌庫無寶可夢時允許 Pass
+  const hasPoke = st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
   return withPending(st, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon', minCount: 0, maxCount: 1,
+    filter: 'Pokemon', minCount: hasPoke ? 1 : 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
   });
 });
@@ -3195,6 +3227,8 @@ reg('仙后', (st, idx) => {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: '', minCount: 0, maxCount: 2,
     effectKey: 'search-to-hand-reshuffle',
+    // v2.993：仙后卡面無「給對手看過」→ 私下揭示
+    params: { privateReveal: true },
   });
 });
 
@@ -10292,7 +10326,27 @@ reg('珍寶配件', (st, idx) => {
   });
 });
 
-// 通用 resolver：選到的卡加入手牌、重洗牌庫、log 卡名
+// v2.993：私下版本通用 resolver — 選到的卡加入手牌、重洗、addPrivateLog（自己看到名稱、對手看計數）
+// 用於卡面「沒寫『給對手看過』」的搜尋類效果（如：啪咚猴 衝衝鼓）。
+regR('search-generic-to-hand-private', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) {
+    return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })),
+      '牌庫搜尋：未選擇任何卡（牌庫已重洗）', idx);
+  }
+  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  st = addPrivateLog(st,
+    `搜到：${names} 加入手牌（牌庫已重洗）`,
+    `搜到 ${chosen.length} 張卡加入手牌（牌庫已重洗）`,
+    idx);
+  return updatePlayer(st, idx, (p) => {
+    const picked = p.deck.filter(c => iids.includes(c.iid));
+    const rest = p.deck.filter(c => !iids.includes(c.iid));
+    return { ...p, deck: shuffle(rest), hand: [...p.hand, ...picked] };
+  });
+});
+
+// 通用 resolver（公開）：選到的卡加入手牌、重洗牌庫、log 卡名
 regR('search-generic-to-hand', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) {
     return addLog(updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) })),
@@ -10300,11 +10354,9 @@ regR('search-generic-to-hand', (st, idx, iids, _params, pool) => {
   }
   const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
   const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  // v2.130：對手看不到具體卡名（對手看 「搜到 X 張卡加入手牌」）
-  st = addPrivateLog(st,
-    `搜到：${names} 加入手牌（牌庫已重洗）`,
-    `搜到 ${chosen.length} 張卡加入手牌（牌庫已重洗）`,
-    idx);
+  // v2.993：所有此 resolver 的 caller 卡面都寫「給對手看過」→ 公開揭示卡名（Iron Rule 8）
+  // 影響：戰鬥鑼、寶可平板、火箭隊的拉姆達、珍寶配件、王者呼聲（竹蘭的尖牙陸鯊）
+  st = addLog(st, `搜到：${names} 加入手牌（牌庫已重洗）`, idx);
   return updatePlayer(st, idx, (p) => {
     const picked = p.deck.filter(c => iids.includes(c.iid));
     const rest = p.deck.filter(c => !iids.includes(c.iid));
@@ -10317,13 +10369,18 @@ regR('search-generic-to-hand', (st, idx, iids, _params, pool) => {
 //   卡面：「從自己的牌庫選擇1張基本能量卡，在給對手看過後加入手牌。並且重洗牌庫。」
 // 與 能量輸送PRO 差異：本卡只搜 1 張、不需要不同屬性、log 強制公開（卡面要求「給對手看過」）
 regG('能量輸送', (st, idx) => st.players[idx].deck.length > 0);
-reg('能量輸送', (st, idx) => {
+reg('能量輸送', (st, idx, pool) => {
   st = addLog(st, '能量輸送：從牌庫選 1 張基本能量加入手牌（給對手看）', idx);
+  // v2.993：卡面寫「選 1 張」mandatory；牌庫無基本能量時允許 Pass
+  const hasBE = st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic';
+  });
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'BasicEnergy',
-    minCount: 0, maxCount: 1,
+    minCount: hasBE ? 1 : 0, maxCount: 1,
     effectKey: 'energy-transfer-search',
   });
 });
@@ -10334,8 +10391,8 @@ regR('energy-transfer-search', (st, idx, iids, _params, pool) => {
   }
   const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
   const pickedNames = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  // 依用戶要求，所有找牌加入手牌皆不公開
-  st = addPrivateLog(st, `能量輸送：搜到 ${pickedNames} 加入手牌`, `能量輸送：搜到 ${picked.length} 張卡加入手牌`, idx);
+  // v2.993：能量輸送卡面寫「在給對手看過後加入手牌」→ 公開揭示（Iron Rule 8）
+  st = addLog(st, `能量輸送：搜到 ${pickedNames} 加入手牌`, idx);
   return updatePlayer(st, idx, (p) => {
     const pickedIids = new Set(iids);
     const pickedInDeck = p.deck.filter(c => pickedIids.has(c.iid));
@@ -10477,13 +10534,15 @@ regR('wind-vortex-return', (st, idx, iids, _params, pool) => {
 
 // ── 阿克羅瑪的執著（Supporter） ── 從牌庫選競技場卡 + 能量卡各 1 張加手牌
 regG('阿克羅瑪的執著', (st, idx) => st.players[idx].deck.length > 0);
-reg('阿克羅瑪的執著', (st, idx) => {
+reg('阿克羅瑪的執著', (st, idx, pool) => {
   st = addLog(st, '阿克羅瑪的執著：步驟 1／2 — 從牌庫選 1 張競技場卡加手牌', idx);
+  // v2.993：卡面寫「各 1 張」mandatory；牌庫無競技場時允許 Pass
+  const hasStadium = st.players[idx].deck.some(c => pool.get(c.cardId)?.subtype === 'Stadium');
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Stadium',
-    minCount: 0, maxCount: 1,
+    minCount: hasStadium ? 1 : 0, maxCount: 1,
     effectKey: 'akuroma-step1-stadium',
   });
 });
@@ -10492,7 +10551,8 @@ regR('akuroma-step1-stadium', (st, idx, iids, _params, pool) => {
   if (iids.length > 0) {
     const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    s = addPrivateLog(s, `阿克羅瑪的執著：搜到 ${names}（競技場）加入手牌`, `阿克羅瑪的執著：搜到 ${chosen.length} 張卡加入手牌`, idx);
+    // v2.993：卡面寫「給對手看過」→ 公開揭示（Iron Rule 8）
+    s = addLog(s, `阿克羅瑪的執著：搜到 ${names}（競技場）加入手牌`, idx);
     s = updatePlayer(s, idx, (p) => {
       const picked = p.deck.filter(c => iids.includes(c.iid));
       const rest = p.deck.filter(c => !iids.includes(c.iid));
@@ -10503,11 +10563,13 @@ regR('akuroma-step1-stadium', (st, idx, iids, _params, pool) => {
   }
   // Step 2
   s = addLog(s, '阿克羅瑪的執著：步驟 2／2 — 從牌庫選 1 張能量卡加手牌', idx);
+  // v2.993：卡面寫「各 1 張」mandatory；牌庫無能量卡時允許 Pass
+  const hasEnergy = s.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Energy');
   return withPending(s, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Energy',
-    minCount: 0, maxCount: 1,
+    minCount: hasEnergy ? 1 : 0, maxCount: 1,
     effectKey: 'akuroma-step2-energy',
   });
 });
@@ -10516,7 +10578,8 @@ regR('akuroma-step2-energy', (st, idx, iids, _params, pool) => {
   if (iids.length > 0) {
     const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    s = addPrivateLog(s, `阿克羅瑪的執著：搜到 ${names}（能量）加入手牌`, `阿克羅瑪的執著：搜到 ${chosen.length} 張卡加入手牌`, idx);
+    // v2.993：卡面寫「給對手看過」→ 公開揭示（Iron Rule 8）
+    s = addLog(s, `阿克羅瑪的執著：搜到 ${names}（能量）加入手牌`, idx);
     s = updatePlayer(s, idx, (p) => {
       const picked = p.deck.filter(c => iids.includes(c.iid));
       const rest = p.deck.filter(c => !iids.includes(c.iid));
@@ -11821,11 +11884,8 @@ regR('froakie-summon-tactics', (state, aIdx, selectedIids, _params, pool) => {
   }));
   if (picks.length > 0) {
     const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    // v2.130：對手看不到具體卡名
-    s = addPrivateLog(s,
-      `招集之術：搜到 ${picks.length} 張寶可夢加入手牌（${names}），重洗牌庫`,
-      `招集之術：搜到 ${picks.length} 張寶可夢加入手牌，重洗牌庫`,
-      aIdx);
+    // v2.993：卡面寫「給對手看過」→ 公開揭示（Iron Rule 8）
+    s = addLog(s, `招集之術：搜到 ${picks.length} 張寶可夢加入手牌（${names}），重洗牌庫`, aIdx);
   } else {
     s = addLog(s, '招集之術：未選卡，重洗牌庫', aIdx);
   }

@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.993</span> minCount audit + 揭示資訊 resolver 修正（Iron Rule 8）</summary>
+        <ul>
+          <li>修正 18 處 minCount: 0 違反卡片敘述：卡面寫「選 1 張」mandatory 但允許玩家直接 Pass。動態判斷牌庫候選池：有候選 → minCount: 1，無候選 → minCount: 0（允許 Pass）</li>
+          <li>影響高頻卡：大師球、幫忙鈴、高級球、巢穴球、甜蜜球、超級信號、精靈球、賽吉、能量輸送、謎擬Q｜呼朋引伴、火箭隊的超級球、超級球（MJ）、阿克羅瑪的執著（兩階段）、親送無人機、勝利之證、黑暗球、啪咚猴｜衝衝鼓</li>
+          <li>修正共用 resolver 違反 Iron Rule 8（揭示資訊）— search-generic-to-hand：addPrivateLog → addLog（卡面「給對手看過」公開揭示）。影響：戰鬥鑼、寶可平板、火箭隊的拉姆達、珍寶配件、王者呼聲（竹蘭的尖牙陸鯊）</li>
+          <li>新增 search-generic-to-hand-private resolver — 給卡面無「給對手看過」者使用（如：啪咚猴｜衝衝鼓）</li>
+          <li>修 search-to-hand-reshuffle resolver 完全沒 log 的 bug — 預設 addLog（公開揭示），新加 params.privateReveal 旗標。影響 public 揭示：高級香氛、席藍、大地之容器 step2、貓頭夜鷹｜搜尋寶石、蓋諾賽克特ex｜金屬信號；private（八朔、仙后）標旗標</li>
+          <li>個別 bug：阿克羅瑪的執著 step1+step2、呱頭蛙｜招集之術、能量輸送 — 違反「給對手看過」一律改 addLog</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.992</span> Group 1 — 22 張 H/I 被動特性實裝（16 張完整 + 6 張 deferred）</summary>
         <ul>
           <li>受傷減 N（A 類）：多麗米亞｜毛皮大衣（-20）/ 爆炸頭水牛ex｜爆炸頭防守（-30）— 加入 PASSIVE_DAMAGE_REDUCE</li>

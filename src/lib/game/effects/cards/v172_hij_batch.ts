@@ -51,7 +51,8 @@ reg('火箭隊的超級球', (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon',
-    minCount: 0, maxCount: 1,
+    // v2.993：卡面寫「選 1 張」mandatory；候選 0 張時允許 Pass
+    minCount: validIids.length > 0 ? 1 : 0, maxCount: 1,
     effectKey: 'rocket-superball-pick',
     params: { validIids },
   });

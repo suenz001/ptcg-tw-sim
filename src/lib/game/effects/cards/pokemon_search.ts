@@ -148,24 +148,32 @@ reg('甜蜜球', (st, idx, pool) => {
     if (c) oppNames.add(c.name);
   }
   st = addLog(st, `甜蜜球：從牌庫選 1 隻與對手場上同名的寶可夢加手牌（${[...oppNames].join('/')}）`, idx);
+  // v2.993：卡面寫「選擇 1 張」mandatory；牌庫無同名寶可夢時允許 Pass
+  const hasMatch = st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && oppNames.has(card.name);
+  });
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon:MatchOppName',
-    minCount: 0, maxCount: 1,
+    minCount: hasMatch ? 1 : 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
     params: { matchOppNames: [...oppNames] },
   });
 });
 
 // 黑暗球 — 查看牌庫底 7 張，選 1 張寶可夢加手牌
-reg('黑暗球', (st, idx) => {
+reg('黑暗球', (st, idx, pool) => {
   st = addLog(st, '黑暗球：從牌庫選 1 張寶可夢加手牌', idx);
+  // v2.993：卡面寫「選 1 張」mandatory；牌庫底 7 張無寶可夢時允許 Pass
+  const bottom7 = st.players[idx].deck.slice(-7);
+  const hasPoke = bottom7.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon',
-    minCount: 0, maxCount: 1,
+    minCount: hasPoke ? 1 : 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
   });
 });
@@ -261,11 +269,13 @@ regR('ultra-ball-discard', (st, idx, iids, _params, pool) => {
     const toDiscard = p.hand.filter(c => iids.includes(c.iid));
     return { ...p, hand: p.hand.filter(c => !iids.includes(c.iid)), discard: [...p.discard, ...toDiscard] };
   });
+  // v2.993：卡面寫「選 1 張」mandatory；牌庫無寶可夢時允許 Pass
+  const hasPoke = st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon',
-    minCount: 0, maxCount: 1,
+    minCount: hasPoke ? 1 : 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
   });
 });
@@ -275,13 +285,18 @@ regR('ultra-ball-discard', (st, idx, iids, _params, pool) => {
 regG('超級信號', (st, idx, pool) =>
   st.players[idx].deck.length > 0
 );
-reg('超級信號', (st, idx) => {
+reg('超級信號', (st, idx, pool) => {
   st = addLog(st, '超級信號：從牌庫選 1 張超級進化寶可夢 ex 加手牌', idx);
+  // v2.993：卡面寫「選 1 張」mandatory；牌庫無超級進化 ex 時允許 Pass
+  const hasMegaEx = st.players[idx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && (card.name?.startsWith('超級') ?? false) && (card.name?.includes('ex') ?? false);
+  });
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'MegaEx',
-    minCount: 0, maxCount: 1,
+    minCount: hasMegaEx ? 1 : 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
   });
 });

@@ -110,8 +110,10 @@ regA('啪咚猴', 0, (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Any',
-    minCount: 0, maxCount: 1,
-    effectKey: 'search-generic-to-hand',
+    // v2.993：卡面「選 1 張」mandatory；deck.length 已 gate > 0 → minCount: 1
+    minCount: 1, maxCount: 1,
+    // v2.993：衝衝鼓卡面無「給對手看過」→ 用私下版 resolver
+    effectKey: 'search-generic-to-hand-private',
   });
 });
 
