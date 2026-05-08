@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.9992</span> hotfix — 真正修 v2.999 ESM TDZ（v2.9991 沒解決）</summary>
+        <ul>
+          <li>v2.9991 把 v2999 import 移到 effects.ts 末尾以為解決，但 ESM imports 是 hoisted 的（無論 source 中第幾行都會在模組 body 之前評估），所以還是 TDZ</li>
+          <li>瀏覽器 console 仍報 ReferenceError: Cannot access &#39;go&#39; before initialization（minified PASSIVE_ATTACK_BONUS）</li>
+          <li>真正修法：v2999_g3_wave1.ts 內 3 個 PASSIVE_ATTACK_BONUS.set(...) 從模組 top-level 搬進 export function registerV2999G3W1Passives() 裡，由 effects.ts 在自己 body 末端呼叫此函式（此時 Map 已初始化）</li>
+          <li>新 Iron Rule：所有 wave/cards 子檔案不可在 module top-level 對 effects.ts 內 Map 做 .set() — 必須用 register() pattern lazy 註冊</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.9991</span> hotfix — 修 v2.999 循環 import 導致 500 error</summary>
         <ul>
           <li>v2.999 推送後使用者回報「對戰演練的網頁點進去當掉」（500 Internal Error）</li>

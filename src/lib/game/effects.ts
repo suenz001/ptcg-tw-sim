@@ -13864,4 +13864,7 @@ regPre('堅果啞鈴|特殊鞭打', (state, aIdx, pool) => {
 // v2.9991 hotfix: 此檔案需在 PASSIVE_ATTACK_BONUS Map 宣告之後 import
 //   原本放在頂端 (L362) 會因 ESM 模組載入順序在 Map.set() 時拋 TypeError
 //   (PASSIVE_ATTACK_BONUS = undefined)。移到末尾確保 Map 已初始化。
-import './effects/cards/v2999_g3_wave1';
+// v2.9992 hotfix: 從 v2999_g3_wave1 拿 register 函式（不再依賴 module top-level .set()）
+import { registerV2999G3W1Passives } from './effects/cards/v2999_g3_wave1';
+// 在 effects.ts 自己 body 末端呼叫，確保 PASSIVE_ATTACK_BONUS 已初始化
+registerV2999G3W1Passives();

@@ -80,18 +80,7 @@ function hasAbilityOnSide(
 //     attacker self-gate；就算備戰另有棄世猴，gate 仍只觸發一次（attackerCard
 //     永遠是攻擊發動者本人）。
 // ════════════════════════════════════════════════════════════════════════════
-PASSIVE_ATTACK_BONUS.set('憤怒穴', (att, _def, state, aIdx, _pool) => {
-  if (att.name !== '棄世猴') return 0;
-  if (!state || aIdx == null) return 0;
-  const me = state.players[aIdx];
-  if (!me.active) return 0;
-  const card = att; // attacker card
-  // 確認 attacker 真的是棄世猴（active 位置的 card 同名才算）
-  if (card.name !== '棄世猴') return 0;
-  // 戰鬥場棄世猴的傷害值；指示物 = damage / 10
-  const counters = Math.floor((me.active.damage ?? 0) / 10);
-  return counters >= 2 ? 120 : 0;
-});
+// 棄世猴｜憤怒穴 — 已搬到 registerV2999G3W1Passives()，避免 ESM TDZ
 
 // ════════════════════════════════════════════════════════════════════════════
 // B5. 肋骨海龜｜原始心得
@@ -108,12 +97,7 @@ PASSIVE_ATTACK_BONUS.set('憤怒穴', (att, _def, state, aIdx, _pool) => {
 // 註：engine 在「攻擊方場上每張卡」上 invoke fn，attackerCard=發動者本人。
 //   只要場上有肋骨海龜（即此 fn 被 invoke 一次），條件成立就 +30。
 // ════════════════════════════════════════════════════════════════════════════
-PASSIVE_ATTACK_BONUS.set('原始心得', (_att, def) => {
-  if (!def) return 0;
-  const isEvolution = !!def.evolvesFrom
-    || def.stage === 'Stage1' || def.stage === 'Stage2';
-  return isEvolution ? 30 : 0;
-});
+// 肋骨海龜｜原始心得 — 已搬到 registerV2999G3W1Passives()，避免 ESM TDZ
 
 // ════════════════════════════════════════════════════════════════════════════
 // B6. 裙兒小姐｜大晴天
@@ -126,9 +110,7 @@ PASSIVE_ATTACK_BONUS.set('原始心得', (_att, def) => {
 //     per-source 疊加（場上 2 隻裙兒小姐就 +40）。
 //   - attacker.pokemonType in {Grass, Fire} 才生效。
 // ════════════════════════════════════════════════════════════════════════════
-PASSIVE_ATTACK_BONUS.set('大晴天', (att) => {
-  return (att.pokemonType === 'Grass' || att.pokemonType === 'Fire') ? 20 : 0;
-});
+// 裙兒小姐｜大晴天 — 已搬到 registerV2999G3W1Passives()，避免 ESM TDZ
 
 // ════════════════════════════════════════════════════════════════════════════
 // C7. 鐵轍跡｜二重核心
@@ -236,4 +218,48 @@ export function gearCoatingReduce(
     return false;
   });
   return hasMetal ? 20 : 0;
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// v2.9992 hotfix: register PASSIVE_ATTACK_BONUS .set() 改成 lazy register
+//
+// 根因：v2.999 把 .set() 直接寫在模組 top-level，但本檔與 effects.ts 形成循環
+//   import — 執行 .set() 時 PASSIVE_ATTACK_BONUS Map 還在 TDZ（undefined），
+//   導致整個 effects.ts 模組初始化拋 TypeError，game 頁 500。
+//
+// 修法：把 .set() 包進 register 函式，由 effects.ts 在自己 body 末端（Map 已初始化
+//   後）呼叫此函式。這時 PASSIVE_ATTACK_BONUS 已是真正的 Map 物件，.set() 可正常
+//   執行。
+// ════════════════════════════════════════════════════════════════════════════
+
+let _v2999G3W1Registered = false;
+
+export function registerV2999G3W1Passives(): void {
+  if (_v2999G3W1Registered) return; // idempotent
+  _v2999G3W1Registered = true;
+
+  // 棄世猴｜憤怒穴 — 身上 ≥2 指示物時 +120
+  PASSIVE_ATTACK_BONUS.set('憤怒穴', (att, _def, state, aIdx, _pool) => {
+    if (att.name !== '棄世猴') return 0;
+    if (!state || aIdx == null) return 0;
+    const me = state.players[aIdx];
+    if (!me.active) return 0;
+    if (att.name !== '棄世猴') return 0;
+    const counters = Math.floor((me.active.damage ?? 0) / 10);
+    return counters >= 2 ? 120 : 0;
+  });
+
+  // 肋骨海龜｜原始心得 — 對對手戰鬥場進化寶可夢 +30
+  PASSIVE_ATTACK_BONUS.set('原始心得', (_att, def) => {
+    if (!def) return 0;
+    const isEvolution = !!def.evolvesFrom
+      || def.stage === 'Stage1' || def.stage === 'Stage2';
+    return isEvolution ? 30 : 0;
+  });
+
+  // 裙兒小姐｜大晴天 — 自方【草】/【火】寶可夢 +20
+  PASSIVE_ATTACK_BONUS.set('大晴天', (att) => {
+    return (att.pokemonType === 'Grass' || att.pokemonType === 'Fire') ? 20 : 0;
+  });
 }
