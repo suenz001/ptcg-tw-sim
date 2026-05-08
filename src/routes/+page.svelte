@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.9993</span> 新增 IRON_RULES.md 永久存檔 12 條鐵律</summary>
+        <ul>
+          <li>把 outputs/ptcg-push/SKILL.md 的 12 條 Iron Rules 抽出來放到 repo 內 IRON_RULES.md</li>
+          <li>原本 SKILL.md 在 outputs 沙盒內，未來 session 看不到；放到 repo 的好處是 git 永久保存，新 agent 一進來就能 grep 到</li>
+          <li>Rule 11 + 12 是這次 v2.999 系列踩到的最大坑：mount-truncate 與 ESM TDZ register pattern</li>
+          <li>純文件提交，不影響運作；若要查鐵律請看 IRON_RULES.md</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.9992</span> hotfix — 真正修 v2.999 ESM TDZ（v2.9991 沒解決）</summary>
         <ul>
           <li>v2.9991 把 v2999 import 移到 effects.ts 末尾以為解決，但 ESM imports 是 hoisted 的（無論 source 中第幾行都會在模組 body 之前評估），所以還是 TDZ</li>
