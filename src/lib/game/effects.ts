@@ -357,6 +357,8 @@ import './effects/cards/v2770_cross_mark_cleanup';
 import './effects/cards/v2995_g4_wave1';
 import './effects/cards/v2996_g4_wave2';
 import './effects/cards/v2997_g4_wave3';
+import './effects/cards/v2998_g2';
+import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -12300,6 +12302,10 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
     }
     return state;
   }],
+  // v2.998 沙漠蜻蜓｜沙之羽擊 — 在戰鬥場被招式 KO 時，將對手牌庫上方 2 張卡丟棄
+  // 卡面：「進化時 + 被招式 KO 時，各可使用 1 次」— 此處為 KO 端，進化端走 regA。
+  // PASSIVE_ON_KO 只在「被招式 KO」時觸發（engine 篩選），不會誤觸特性 KO。
+  ['沙之羽擊', (state, dIdx, aIdx, pool, defCard) => desertDragonflyOnKo(state, dIdx, aIdx, pool, defCard)],
 ]);
 
 /** 受招式傷害時的廣義 hook(造成 ≥1 傷害即觸發，不需 KO) */
@@ -13212,6 +13218,7 @@ export const ON_PLAY_FROM_HAND_ABILITIES = new Set([
   '沉雪',         // 古劍豹 — 丟棄場上競技場
   '迅速游標',     // 鐵斑葉ex — 與戰鬥場互換+搬能量
   '突然削退',     // 鐵蟻ex — 丟對手牌庫頂
+  '臨場背負',     // v2.998 大蔥鴨 — 牌庫搜寶可夢道具附身 + 重洗
 ]);
 
 /** 「從手牌進化時」可發動 1 次的特性名稱 */
@@ -13223,6 +13230,20 @@ export const ON_EVOLVE_FROM_HAND_ABILITIES = new Set([
   '脫殼',         // 鐵面忍者 — 搜脫殼忍者上備戰
   '合金建造',     // 鋁鋼橋龍ex — 棄牌區鋼能量附給鋼寶可夢
   '大力捕捉器',   // v2.94 鐵掌力士 — 對手備戰 1 隻 ↔ 戰鬥場
+  // v2.998 Group 2 — 12 張進化觸發特性 + 1 張雙觸發（沙之羽擊也走 PASSIVE_ON_KO）
+  '繁星花紋',     // 安瓢蟲 — HP≤90 對手備戰 ↔ 戰鬥場互換
+  '使壞之尾',     // 雙尾怪手 — 擲 2 幣，正面數量隨機抽對手手牌放回牌庫並重洗
+  '柔柔治癒',     // 風妖精 — 戰鬥場是【草】寶可夢時全恢復 HP + 棄能量
+  '飽腹時間',     // 麻花犬ex — 自方所有進化全恢復 HP + 棄能量
+  '臨場之錘',     // 巧鍛匠 — 擲 1 幣，正面則丟對手戰鬥位 1 個能量
+  '恐慌牢籠',     // 怖納噬草 — 對手戰鬥場【混亂】
+  '貪慾點餐',     // 派帕的藏飽栗鼠 — 棄牌區搜最多 2 張「派帕的三明治」入手
+  '亂咬',         // 火箭隊的叉字蝠ex — 對手 2 隻寶可夢各放 2 個傷害指示物
+  '暗中咬住',     // 火箭隊的大嘴蝠 — 對手 1 隻寶可夢放 2 個傷害指示物
+  '邀請眨眼',     // 莉莉艾的蝶結萌虻 — 看對手手牌 → 任意數量基礎寶可夢放對手備戰
+  '挑戰角擊',     // 赫普的毛毛角羊 — 對手備戰 ↔ 戰鬥場互換
+  '尖刺纏身',     // 鬃岩狼人 — 棄牌區搜最多 2 張「扣殺能量」附於這隻
+  '沙之羽擊',     // 沙漠蜻蜓 — 對手牌庫上方 2 張丟棄（KO 時亦觸發；見 PASSIVE_ON_KO）
 ]);
 
 /**

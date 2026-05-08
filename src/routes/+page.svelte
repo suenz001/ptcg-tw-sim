@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.998</span> Group 2 — 18 張進化/手牌觸發特性實裝（14 張完整 + 4 張 deferred）</summary>
+        <ul>
+          <li>新建 v2998_g2.ts 集中 14 張進化/上備戰/被招式 KO 觸發特性（regA + regR）；effects.ts 同步擴充 ON_EVOLVE_FROM_HAND_ABILITIES（+13）/ ON_PLAY_FROM_HAND_ABILITIES（+1）/ PASSIVE_ON_KO（+1）</li>
+          <li>進化觸發類（12）：安瓢蟲｜繁星花紋（HP&lt;=90 對手備戰互換）、雙尾怪手｜使壞之尾（擲 2 幣，正面數隨機抽對手手牌放回牌庫並重洗）、風妖精｜柔柔治癒（戰鬥場【草】寶可夢全恢復+棄能量）、麻花犬ex｜飽腹時間（自方所有進化寶可夢全恢復+棄能量）、巧鍛匠｜臨場之錘（擲 1 幣，正面則丟對手戰鬥位 1 個能量）、怖納噬草｜恐慌牢籠（對手戰鬥場【混亂】）、派帕的藏飽栗鼠｜貪慾點餐（棄牌區搜最多 2 張派帕的三明治公開揭示加手）、火箭隊的叉字蝠ex｜亂咬（對手 2 隻寶可夢各 +2 個傷害指示物）、火箭隊的大嘴蝠｜暗中咬住（對手 1 隻 +2 個指示物）、莉莉艾的蝶結萌虻｜邀請眨眼（看對手手牌挑任意數量基礎寶可夢放對手備戰）、赫普的毛毛角羊｜挑戰角擊（對手備戰互換戰鬥場）、鬃岩狼人｜尖刺纏身（棄牌區搜最多 2 張扣殺能量附身）</li>
+          <li>放置觸發類（1）：大蔥鴨｜臨場背負（牌庫搜 1 張寶可夢道具附身+重洗）</li>
+          <li>雙觸發（1）：沙漠蜻蜓｜沙之羽擊 — 進化時走 ON_EVOLVE_FROM_HAND_ABILITIES（regA），被招式 KO 時走 PASSIVE_ON_KO（desertDragonflyOnKo helper）；兩個觸發點各算 1 次，互不消耗</li>
+          <li>揭示資訊（Iron Rule 8）：派帕的三明治抽到加手 / 邀請眨眼查看對手手牌與放置動作 / 使壞之尾揭示抽到的對手手牌名 — 都公開 addLog；互換、放指示物、混亂、棄能量等公開動作亦同</li>
+          <li>Deferred（4）：海豚俠｜全能變身、鋼炮臂蝦｜返回重載（兩張需新 hook ON_RETREAT_TO_BENCH 涵蓋撤退/招式互換/特性互換等所有從戰鬥場回備戰情境）；超能妙喵｜誘導之尾、火神蛾｜熱浪鱗粉（兩張需新 hook ON_DISCARD_FROM_HAND 由玩家主動丟卡觸發）</li>
+          <li>共用 resolver：v2998-swap-opp-active-bench（繁星花紋/挑戰角擊）、rocket-crobat-mass-bite（亂咬/暗中咬住共用 counters 機制）；helpers：findTriggerSource、swapOppActiveWithBench、desertDragonflyMill2</li>
+          <li>tsc 全綠（0 error）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.997</span> Group 4 Wave 3 — 10 張條件 passive + 能量計算類特性實裝（Group 4 完結）</summary>
         <ul>
           <li>新建 v2997_g4_wave3.ts 集中註解；實際實裝以 effects.ts 末段 export helper + engine.ts hook 為主</li>
