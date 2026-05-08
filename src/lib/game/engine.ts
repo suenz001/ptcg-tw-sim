@@ -444,6 +444,16 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye } from './effects/_shared';
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize } from './effects/_shared';
 export { sameEvoName };
+// v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發
+import {
+  isOppStadiumPlayBlocked,
+  isOppEvilEyeBlocking,
+  isOppItemPlayBlocked,
+  isAbilityNullifiedByPassive,
+  hasRocketTyranitarSandstorm,
+  getOppRetreatTriggers,
+  hasRocketAmpharosDarkPulse,
+} from './effects/cards/v3001_g3_wave3';
 
 /**
  * 判斷一張寶可夢卡是否為「2 階進化」。
@@ -1573,6 +1583,12 @@ function handlePlaying(
         `${attacker.name} 的 ${card.name} 因「全能靈魂」效果，無法從手牌放上場（只能由「全能變身」放置）`,
         aIdx);
     }
+    // v3.01 Wave 3 — 火箭隊的阿柏怪｜瞪眼效用：對手戰鬥場有 → 我方擁有特性的寶可夢
+    //   （『火箭隊的』除外）不能從手牌放置於場上（PLAY_BASIC 路徑）
+    if (isOppEvilEyeBlocking(state, aIdx, card, pool)) {
+      return addLog(state,
+        `${attacker.name} 的 ${card.name} 因對手「瞪眼效用」效果，無法從手牌放置於場上`, aIdx);
+    }
 
     // Bug fix (#17 擔架): 從手牌放出時清除任何殘留的戰鬥狀態
     // (正常流程不應有殘留，但若卡片曾透過擔架從棄牌取回，防禦性清除)
@@ -1682,6 +1698,13 @@ function handlePlaying(
     const evoCard = pool.get(evoInst.cardId);
     if (!evoCard || evoCard.supertype !== 'Pokemon' || !evoCard.evolvesFrom) return state;
 
+    // v3.01 Wave 3 — 火箭隊的阿柏怪｜瞪眼效用：對手戰鬥場有 → 我方擁有特性的寶可夢
+    //   （『火箭隊的』除外）不能從手牌進化放置於場上（EVOLVE 路徑）
+    if (isOppEvilEyeBlocking(state, aIdx, evoCard, pool)) {
+      return addLog(state,
+        `${attacker.name} 的 ${evoCard.name} 因對手「瞪眼效用」效果，無法從手牌放置於場上（進化）`, aIdx);
+    }
+
     // 在場上（出場或備戰）找基底
     let basePoke: CardInstance | null = null;
     let isActive = false;
@@ -1773,6 +1796,25 @@ function handlePlaying(
     );
     // v2.320：自動提示「從手牌進化時」的特性（如龐克練肌、精神抽出等）
     afterEvolve = promptPlayAbilities(afterEvolve, aIdx, evoCard, evolved, pool, true);
+
+    // v3.01 Wave 3 — 火箭隊的電龍｜黑暗脈衝：對手場上有 → 該進化卡 +4 指示物
+    //   卡面明文「不重複」 → 多隻只 +4 一次（per-evolution）
+    if (hasRocketAmpharosDarkPulse(afterEvolve, aIdx, pool)) {
+      const updateInst = (inst: CardInstance) => inst.iid === evolved.iid
+        ? { ...inst, damage: (inst.damage ?? 0) + 40 } : inst;
+      const updPlayer = afterEvolve.players[aIdx];
+      const newPl: PlayerState = {
+        ...updPlayer,
+        active: updPlayer.active ? updateInst(updPlayer.active) : null,
+        bench: updPlayer.bench.map(updateInst),
+      };
+      const newPlayers: [PlayerState, PlayerState] = [...afterEvolve.players] as [PlayerState, PlayerState];
+      newPlayers[aIdx] = newPl;
+      afterEvolve = addLog({ ...afterEvolve, players: newPlayers },
+        `黑暗脈衝：${evoCard.name} 身上放置 4 個傷害指示物`,
+        (1 - aIdx) as 0 | 1);
+    }
+
     return afterEvolve;
   }
 
@@ -1939,11 +1981,57 @@ function handlePlaying(
     players[aIdx] = attacker;
 
     const newActiveCard = pool.get(newActive.cardId);
-    return addLog(
+    let retreatState: GameState = addLog(
       { ...state, players },
       `${attacker.name} 的 ${activeCard?.name ?? '?'} 撤退，${newActiveCard?.name ?? '?'} 上場！`,
       aIdx
     );
+
+    // v3.01 Wave 3 — 對手戰鬥寶可夢回備戰時觸發類（熔岩地域 / 漩渦言靈 / 凹洞）
+    {
+      const trig = getOppRetreatTriggers(retreatState, aIdx, retreatingPoke, newActive, pool);
+      if (trig.burnNewActive || trig.confuseNewActive || trig.countersOnRetreater > 0) {
+        const ownerIdx = (1 - aIdx) as 0 | 1;
+        if (trig.burnNewActive) {
+          const upd = retreatState.players[aIdx];
+          if (upd.active) {
+            const newPlayers2: [PlayerState, PlayerState] = [...retreatState.players] as [PlayerState, PlayerState];
+            newPlayers2[aIdx] = { ...upd, active: { ...upd.active, status: 'burned' } };
+            retreatState = addLog({ ...retreatState, players: newPlayers2 },
+              `熔岩地域：${pool.get(upd.active.cardId)?.name ?? '?'} 進入【灼傷】狀態`,
+              ownerIdx);
+          }
+        }
+        if (trig.confuseNewActive) {
+          const upd = retreatState.players[aIdx];
+          if (upd.active) {
+            const newPlayers3: [PlayerState, PlayerState] = [...retreatState.players] as [PlayerState, PlayerState];
+            const targetActive = newPlayers3[aIdx].active;
+            if (targetActive) {
+              if (targetActive.status === 'burned') {
+                newPlayers3[aIdx] = { ...newPlayers3[aIdx], active: { ...targetActive, secondaryStatus: 'confused' } };
+              } else {
+                newPlayers3[aIdx] = { ...newPlayers3[aIdx], active: { ...targetActive, status: 'confused' } };
+              }
+              retreatState = addLog({ ...retreatState, players: newPlayers3 },
+                `漩渦言靈：${pool.get(targetActive.cardId)?.name ?? '?'} 進入【混亂】狀態`,
+                ownerIdx);
+            }
+          }
+        }
+        if (trig.countersOnRetreater > 0) {
+          const upd = retreatState.players[aIdx];
+          const benchUpd = upd.bench.map(b => b.iid === retreatingPoke.iid
+            ? { ...b, damage: (b.damage ?? 0) + trig.countersOnRetreater } : b);
+          const newPlayers4: [PlayerState, PlayerState] = [...retreatState.players] as [PlayerState, PlayerState];
+          newPlayers4[aIdx] = { ...upd, bench: benchUpd };
+          retreatState = addLog({ ...retreatState, players: newPlayers4 },
+            `凹洞：${pool.get(retreatingPoke.cardId)?.name ?? '?'} 身上放置 ${trig.countersOnRetreater} 個傷害指示物`,
+            ownerIdx);
+        }
+      }
+    }
+    return retreatState;
   }
 
   // ── 打出訓練家牌（含道具卡 Tool 和競技場 Stadium）──────────────────────────
@@ -1985,6 +2073,19 @@ function handlePlaying(
     if (trainerCard.tags?.includes('ACE SPEC') && isAceCancelActive(state, aIdx, pool)) return state;
 
     // 義務性前置檢查：夜間擔架棄牌為空、寶可夢交替備戰為空等情況禁止打出
+    // v3.01 Wave 3 — 對手戰鬥場特性禁止本方打出 trainer
+    // ① 大王銅象｜爆大身軀 — 對手戰鬥場有 → 我方無法使出『競技場』卡
+    if (trainerCard.subtype === 'Stadium' && isOppStadiumPlayBlocked(state, aIdx, pool)) {
+      return addLog(state,
+        `${attacker.name} 因對手「爆大身軀」效果，無法從手牌使出競技場卡`, aIdx);
+    }
+    // ② 胖嘟嘟ex｜海之詛咒 — 對手戰鬥場有 → 我方無法使出『物品』卡也無法附『寶可夢道具』
+    if ((trainerCard.subtype === 'Item' || trainerCard.subtype === 'PokemonTool')
+        && isOppItemPlayBlocked(state, aIdx, pool)) {
+      return addLog(state,
+        `${attacker.name} 因對手「海之詛咒」效果，無法從手牌使出物品卡或附上寶可夢道具`, aIdx);
+    }
+
     if (!canPlayTrainer(trainerCard.name, state, aIdx, pool)) return state;
 
     // 移出手牌
@@ -2483,6 +2584,13 @@ function handlePlaying(
     // v2.362 振翼髮｜暗夜羽擊 — 若特性被消除，無法使用
     if (targetPoke?.abilityNullifiedThisTurn) {
       return addLog(state, `${pokeCard!.name} 的特性「${ability.name}」已被消除，無法使用`, aIdx);
+    }
+    // v3.01 Wave 3 — 振翼髮｜暗夜羽擊（passive）/ 海兔獸｜黏著束縛 — dispatch 時也擋
+    if (targetPoke && pokeCard) {
+      const ownerLoc: 'active' | 'bench' = state.players[aIdx].active?.iid === targetPoke.iid ? 'active' : 'bench';
+      if (isAbilityNullifiedByPassive(state, aIdx, targetPoke, pokeCard, ability.name, ownerLoc, pool)) {
+        return addLog(state, `${pokeCard.name} 的特性「${ability.name}」被對手特性消除，無法使用`, aIdx);
+      }
     }
 
     // 標記已使用（不限次數特性跳過）
@@ -4387,6 +4495,86 @@ function handlePlaying(
       }
     }
 
+    // v3.01 Wave 3 — 火箭隊的班基拉斯｜揚沙（寶可夢檢查時放指示物）
+    {
+      for (const ownerIdx of [0, 1] as const) {
+        if (!hasRocketTyranitarSandstorm({ ...state, players }, ownerIdx, pool)) continue;
+        const oppIdx = (1 - ownerIdx) as 0 | 1;
+        const opp = { ...players[oppIdx] };
+        const sandstormAffected: string[] = [];
+        let sandstormPrizes = 0;
+        let sandstormActiveDied = false;
+
+        const isBasicPokemonInst = (inst: CardInstance): boolean => {
+          const c = pool.get(inst.cardId);
+          if (!c || c.supertype !== 'Pokemon') return false;
+          if (c.evolvesFrom) return false;
+          if (c.stage && c.stage !== 'Basic') return false;
+          return true;
+        };
+
+        if (opp.active && isBasicPokemonInst(opp.active)) {
+          const newDmg = opp.active.damage + 20;
+          const card = pool.get(opp.active.cardId);
+          const hp = getEffectiveHP(opp.active, pool, state);
+          sandstormAffected.push(`${card?.name ?? '?'}(-20)`);
+          if (hp > 0 && newDmg >= hp) {
+            const koDiscard: CardInstance[] = [
+              { ...opp.active, damage: newDmg },
+              ...opp.active.energyAttached,
+              ...(opp.active.toolAttached ? [opp.active.toolAttached] : []),
+              ...(opp.active.evolvedFromStack ?? []),
+            ];
+            opp.discard = [...opp.discard, ...koDiscard];
+            sandstormPrizes += prizesForKO(card!);
+            sandstormActiveDied = true;
+            opp.active = null;
+          } else {
+            opp.active = { ...opp.active, damage: newDmg };
+          }
+        }
+        const newOppBench: CardInstance[] = [];
+        for (const b of opp.bench) {
+          if (!isBasicPokemonInst(b)) { newOppBench.push(b); continue; }
+          const newDmg = b.damage + 20;
+          const card = pool.get(b.cardId);
+          const hp = getEffectiveHP(b, pool, state);
+          sandstormAffected.push(`${card?.name ?? '?'}(-20)`);
+          if (hp > 0 && newDmg >= hp) {
+            const koDiscard: CardInstance[] = [
+              { ...b, damage: newDmg },
+              ...b.energyAttached,
+              ...(b.toolAttached ? [b.toolAttached] : []),
+              ...(b.evolvedFromStack ?? []),
+            ];
+            opp.discard = [...opp.discard, ...koDiscard];
+            sandstormPrizes += prizesForKO(card!);
+          } else {
+            newOppBench.push({ ...b, damage: newDmg });
+          }
+        }
+        opp.bench = newOppBench;
+        players[oppIdx] = opp;
+
+        if (sandstormAffected.length > 0) {
+          state = addLog({ ...state, players },
+            `揚沙：${sandstormAffected.join('、')}`, ownerIdx);
+        }
+        if (sandstormPrizes > 0) {
+          state = addLog({ ...state, players },
+            `揚沙：${players[oppIdx].name} 有寶可夢被擊倒，${players[ownerIdx].name} 將取得 ${sandstormPrizes} 張獎勵牌。`,
+            ownerIdx);
+          state = addPendingPrize(state, ownerIdx, sandstormPrizes);
+        }
+        if (sandstormActiveDied && players[oppIdx].bench.length === 0 && players[oppIdx].active === null) {
+          return {
+            ...state, phase: 'game-over',
+            winner: ownerIdx, winReason: `${players[oppIdx].name} 沒有可上場的寶可夢`,
+          };
+        }
+      }
+    }
+
     } // end of `if (!state.endTurnSkipCheckup)` — 寶可夢 checkup 區塊
 
     // ── v2.247 力之沙漏（PokemonTool）— 回合結束時，若戰鬥場寶可夢附有此 Tool，
@@ -5496,7 +5684,11 @@ export function getUsableAbilities(
     if (pk.abilityNullifiedThisTurn) continue;
     // 火箭隊的監視塔：【無】屬寶可夢的特性全部消除
     if (isColorlessAbilityBlocked(state, card, pool)) continue;
+    // v3.01 Wave 3 — 振翼髮｜暗夜羽擊（passive）/ 海兔獸｜黏著束縛 location 標識
+    const pkLocation: 'active' | 'bench' = state.players[state.activePlayerIndex].active?.iid === pk.iid ? 'active' : 'bench';
     card.abilities.forEach((ab, abIdx) => {
+      // v3.01 Wave 3 — 暗夜羽擊（passive）/ 黏著束縛 特性消除：被消除的特性不列入清單
+      if (isAbilityNullifiedByPassive(state, state.activePlayerIndex, pk, card, ab.name, pkLocation, pool)) return;
       // 只列出在 ABILITY_EFFECTS 中有登錄的主動特性
       if (!ABILITY_EFFECTS.has(`${card.name}|${abIdx}`)) return;
       // v2.320：已改為自動提示的特性，不在手動清單中顯示

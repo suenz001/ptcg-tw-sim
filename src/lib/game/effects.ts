@@ -13887,3 +13887,10 @@ registerV2999G3W1Passives();
 // hasBugAegislashShield 已在頂部 import 給 resolveBenchGuard 用。
 import { registerV3000G3W2Passives } from './effects/cards/v3000_g3_wave2';
 registerV3000G3W2Passives();
+
+// v3.01 Group 3 Wave 3 — 14 張最複雜 passive（多需新 hook）
+// 同 lazy register pattern：本波無對 effects.ts 內 Map 的 .set() 需要做，
+//   但保留模板以利未來擴充。helpers 全部由 engine.ts 直接 import 使用。
+// 對手不能使出 X / 對手特性消除 / 寶可夢檢查指示物 / 撤退觸發 / 進化觸發 等 hook 全部 inline 在 engine.ts。
+import { registerV3001G3W3Passives } from './effects/cards/v3001_g3_wave3';
+registerV3001G3W3Passives();

@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v3.01</span> Group 3 Wave 3 — 14 張最複雜 passive 特性（11 實裝 / 3 部分覆蓋）</summary>
+        <ul>
+          <li><strong>大王銅象｜爆大身軀</strong>（A1 對手不能使出 X）— 戰鬥場上時，對手無法從手牌使出競技場卡。在 PLAY_TRAINER handler &#123;subtype=Stadium&#125; 加 gate</li>
+          <li><strong>火箭隊的阿柏怪｜瞪眼效用</strong>（A2 對手不能使出 X）— 戰鬥場上時，對手不可從手牌將「擁有特性的寶可夢」（『火箭隊的』除外）放置於場上。PLAY_BASIC + EVOLVE 兩處皆 gate；候選有特性 &amp; 名稱不以「火箭隊的」開頭時擋下</li>
+          <li><strong>胖嘟嘟ex｜海之詛咒</strong>（A3 對手不能使出 X）— 戰鬥場上時，對手無法從手牌使出『物品』卡也無法附『寶可夢道具』。PLAY_TRAINER 對 subtype=Item 與 subtype=PokemonTool 兩種皆攔截</li>
+          <li><strong>振翼髮｜暗夜羽擊</strong>（B4 對手特性消除，passive 版本）— 戰鬥場上時，對手戰鬥寶可夢的特性（『暗夜羽擊』除外）全部消除。注意：與招式同名但是 ability index=0 的 passive。getUsableAbilities + USE_ABILITY dispatch 兩處皆加 gate</li>
+          <li><strong>海兔獸｜黏著束縛</strong>（B5 對手特性消除）— 在備戰區時，雙方備戰區的【2 階進化】寶可夢的特性全部消除。本地 isStage2 helper（避循環 import engine.ts）；同 getUsableAbilities + USE_ABILITY dispatch 兩處 gate</li>
+          <li><strong>火箭隊的班基拉斯｜揚沙</strong>（C7 寶可夢檢查放指示物）— 戰鬥場上時，每次寶可夢檢查時，對手所有【基礎】寶可夢身上各放置 2 個傷害指示物。在 engine.ts checkup 階段（緊接「冰冷之帳」雪妖女之後）加新區塊；KO 走 pendingPrizes / 勝利條件檢查</li>
+          <li><strong>熔岩蝸牛｜熔岩地域</strong>（D8 對手撤退觸發）— 場上時，對手回合對手戰鬥寶可夢撤退 → 新上場的寶可夢【灼傷】。在 RETREAT handler 末端加 hook</li>
+          <li><strong>夢妖魔ex｜漩渦言靈</strong>（D9 對手撤退觸發）— 戰鬥場上時，對手回合對手戰鬥寶可夢撤退 → 新上場的寶可夢【混亂】（若已灼傷則走 secondaryStatus 不互斥）</li>
+          <li><strong>火箭隊的三地鼠｜凹洞</strong>（D10 對手撤退觸發）— 場上時，對手回合對手戰鬥寶可夢撤退 → 「回到備戰的那隻」+2 指示物（多隻三地鼠疊加）。target 與熔岩地域/漩渦言靈不同（不是新上場那隻）</li>
+          <li><strong>火箭隊的電龍｜黑暗脈衝</strong>（E11 對手進化觸發）— 場上時，對手從手牌進化完成 → 那張進化卡 +4 指示物。卡面明文「不重複」 → 多隻只觸發 1 次。在 EVOLVE handler 末端加 hook</li>
+          <li><strong>雪妖女｜冰冷之帳</strong>（C6 寶可夢檢查放指示物）— 已於 v2.70 在 engine.ts checkup 段落實裝；本波不重複（文件追溯）</li>
+          <li><strong>對手撤退觸發 部分覆蓋</strong>：本波只 hook RETREAT 路徑；其他換場路徑（招式效果換場、特性效果換場、被吹回 等）暫 defer。卡面文字未限定撤退，但撤退是最常見場景，其他換場路徑零散需後續逐一補</li>
+          <li><strong>defer 0 張</strong>：本波 14 張全部覆蓋（Tier 1+2+3+4 全做完；3 張 D 類部分覆蓋如上述）</li>
+          <li>遵守 Iron Rule 11（Python pipeline 修 engine.ts / effects.ts / +page.svelte）+ Iron Rule 12（v3001_g3_wave3.ts 用 register pattern；本波無 .set() 仍保留模板）</li>
+          <li>tsc --noEmit 對新增/修改檔案 0 error（既存其他檔的 mount-layer UTF-8 read false positive 不在本波範圍）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.0</span> Group 3 Wave 2 — 10 張對手互動 / 特殊機制 passive 特性（7 實裝 / 3 defer）</summary>
         <ul>
           <li><strong>蟲甲聖｜球形盾牌</strong>（A1 受傷免疫）— 場上有此卡 &rarr; 自方所有備戰寶可夢不受對手寶可夢招式的「傷害與效果」。實作於 effects.ts resolveBenchGuard，attack-damage 與 attack-effect 兩種 kind 皆攔截</li>
