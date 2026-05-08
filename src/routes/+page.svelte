@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.999</span> Group 3 Wave 1 — 10 張條件 +HP/+傷害/-傷害類 passive 特性實裝</summary>
+        <ul>
+          <li>新建 v2999_g3_wave1.ts 集中本波 helper export（hasIronTracksDualCore / steelixPalaceReduce / bronzongShelterReduce / gearCoatingReduce）；effects.ts 加 import；engine.ts 加 attackerEffectiveTypes 與 PASSIVE_DAMAGE_REDUCE_COND 後續 inline hooks</li>
+          <li>條件 +max HP（3 張，早於本波由 v2.122 / engine.ts getEffectiveHP 完成 — 列在文件追溯）：夠讚狗｜腎上腺力量（附【惡】+100）、怖納噬草｜雜草魂（對手已取獎賞每張 +50）、修建老匠｜大師工藝（自身【鬥】能量每張 +40）</li>
+          <li>條件 +招式傷害（3 張）：夠讚狗｜腎上腺力量（附【惡】時 +100，已實裝；列在追溯）；新實裝 — 棄世猴｜憤怒穴（自身傷害指示物 ≥ 2 時招式 +120）、PASSIVE_ATTACK_BONUS 加 entry</li>
+          <li>+N 攻擊端 buff（2 張）：肋骨海龜｜原始心得（自方寶可夢對對手戰鬥場進化寶可夢 +30，per-source 疊加）、裙兒小姐｜大晴天（自方【草】/【火】寶可夢 +20，per-source 疊加）— 都加到 PASSIVE_ATTACK_BONUS</li>
+          <li>屬性切換（1 張）：鐵轍跡｜二重核心 — 身上附「驅勁能量 未來」時改為【鬥】+【鋼】2 種屬性，影響弱點/抵抗力比對；engine.ts attackerEffectiveTypes 加閘門呼叫 hasIronTracksDualCore（與小碎鑽｜雙重屬性 同模式）</li>
+          <li>受傷 -N（3 張）— inline 在 engine.ts damage pipeline，與 灰塵山 / 冰雪巨龍 同模式（skipDefEffects gate + 監視塔閘門略過：青銅鐘 / 齒輪怪 是【鋼】、大吾的小碎鑽 是【鬥】，皆非【無】）：</li>
+          <li>　• 大吾的小碎鑽｜岩石宮殿（在備戰時自方「大吾的」寶可夢受招式傷害 -30，卡面明文「不重複」→ 觸發即 -30 一次）</li>
+          <li>　• 青銅鐘｜守護之鐘（場上有青銅鐘時自方所有寶可夢 -10；保守按 has-not-count 不疊加，避免濫用）</li>
+          <li>　• 齒輪怪｜齒輪塗層（場上有齒輪怪時自方附【鋼】能量寶可夢 -20；同樣保守 has-not-count 不疊加）</li>
+          <li>tsc 全綠（0 error）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.998</span> Group 2 — 18 張進化/手牌觸發特性實裝（14 張完整 + 4 張 deferred）</summary>
         <ul>
           <li>新建 v2998_g2.ts 集中 14 張進化/上備戰/被招式 KO 觸發特性（regA + regR）；effects.ts 同步擴充 ON_EVOLVE_FROM_HAND_ABILITIES（+13）/ ON_PLAY_FROM_HAND_ABILITIES（+1）/ PASSIVE_ON_KO（+1）</li>

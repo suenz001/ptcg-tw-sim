@@ -50,6 +50,12 @@ import {
   ON_PLAY_FROM_HAND_ABILITIES,
   ON_EVOLVE_FROM_HAND_ABILITIES,
 } from './effects';
+import {
+  hasIronTracksDualCore,
+  steelixPalaceReduce,
+  bronzongShelterReduce,
+  gearCoatingReduce,
+} from './effects/cards/v2999_g3_wave1';
 
 // v2.341：鐵荊棘ex SV5a 033/066｜初始化
 // 「只要這隻寶可夢在戰鬥場上，雙方場上『擁有規則的寶可夢』（『未來』寶可夢除外）的特性全部消除。」
@@ -2996,9 +3002,15 @@ function handlePlaying(
     //   對方招式屬性 == 鬥或超 都觸發弱點 / 抵抗力。
     const attackerHasDualType = attackerCard.name === '小碎鑽'
       && attackerCard.abilities?.some(a => a.name === '雙重屬性');
+    // v2.999 鐵轍跡｜二重核心 — 身上附有「驅勁能量 未來」 時，屬性改為【闘】+【鋼】 2 種
+    //   helper 判定 attacker.active 絑定（板戰 attacker.bench 的鐵轍跡不算數）。
+    const attackerHasIronTracksDual = !!attacker.active
+      && hasIronTracksDualCore(attacker.active, attackerCard, pool);
     const attackerEffectiveTypes: string[] = attackerHasDualType
       ? ['Fighting', 'Psychic']
-      : (attackerCard.pokemonType ? [attackerCard.pokemonType] : []);
+      : attackerHasIronTracksDual
+        ? ['Fighting', 'Metal']
+        : (attackerCard.pokemonType ? [attackerCard.pokemonType] : []);
     if (!skipWeakRes && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType
         && attackerEffectiveTypes.includes(effectiveWeaknessType)) {
       baseDamage *= 2;
@@ -3119,6 +3131,39 @@ function handlePlaying(
         }
       }
     }
+
+    // v2.999 Group 3 Wave 1 ：團體 -N 受傷減免（大吾的小碎鑽 / 青銅鐘 / 齒輪怪）
+    //   skipDefEffects 跳過；baseDamage>0 才算；同樣遵 火箭隊的監視塔 閘門
+    //   （青銅鐘 / 齒輪怪是【鋼】 / 大吾的小碎鑽是【闘】，都非【無】→ 監視塔
+    //    對其無效；這列 helper 木木會逐個當成 ability holder 個別閘門）
+    if (!skipDefEffects && baseDamage > 0) {
+      // 大吾的小碎鑽｜岩石宮殿 — 備戰區時，自方「大吾的」寶可夢受招式傷害 -30
+      //   （多隻不重複；大吾的小碎鑽是【闘】…監視塔擋不到，略監視塔閘門）
+      const palaceReduce = steelixPalaceReduce(workingState, dIdx, defenderCard, pool);
+      if (palaceReduce > 0) {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - palaceReduce);
+        workingState = addLog(workingState,
+          `「岩石宮殿」：${defenderCard.name} 受傷害 -${palaceReduce}（${before} → ${baseDamage}）`, dIdx);
+      }
+      // 青銅鐘｜守護之鐘 — 自方寶可夢受傷害 -10
+      const bronzongReduce = bronzongShelterReduce(workingState, dIdx, pool);
+      if (bronzongReduce > 0) {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - bronzongReduce);
+        workingState = addLog(workingState,
+          `「守護之鐘」：${defenderCard.name} 受傷害 -${bronzongReduce}（${before} → ${baseDamage}）`, dIdx);
+      }
+      // 齒輪怪｜齒輪塗層 — 自方附【鋼】能量寶可夢受傷害 -20
+      const gearReduce = gearCoatingReduce(workingState, dIdx, defender.active, pool);
+      if (gearReduce > 0) {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - gearReduce);
+        workingState = addLog(workingState,
+          `「齒輪塗層」：${defenderCard.name} 受傷害 -${gearReduce}（${before} → ${baseDamage}）`, dIdx);
+      }
+    }
+
 
     // v2.154 爆炸頭水牛｜捲牆 — 場上有 2 隻以上爆炸頭水牛 + 防守方戰鬥位是【無】基礎 → -60
     //   這是 field-wide buff，不只 defender 自己的 abilities，要掃 defender 整個場上

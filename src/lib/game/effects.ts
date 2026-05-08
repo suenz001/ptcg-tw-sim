@@ -359,6 +359,7 @@ import './effects/cards/v2996_g4_wave2';
 import './effects/cards/v2997_g4_wave3';
 import './effects/cards/v2998_g2';
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
+import './effects/cards/v2999_g3_wave1';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
