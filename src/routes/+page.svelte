@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.994</span> 修 3 個遺留 tsc errors + 確認赫月/酋雷姆 cost helper 已實裝</summary>
+        <ul>
+          <li>修 mega_decks.ts:601 — olive-oil-distribute resolver 用 aIdx typo（應為 actorIdx）導致 KO 後 addPendingPrize 失敗（油之機關槍多隻 KO 時對手獎賞少給）</li>
+          <li>修 v2500_i_wave3b_discard.ts:108-109 — discardStadiumPost helper 內 delete 用 Record&lt;string,unknown&gt; cast 不符 GameState 型別。改用 undefined 賦值（types.ts 上 activeStadium / activeStadiumOwnerIdx 是 optional）</li>
+          <li>tsc error 全清零（先前 3 個 → 0 個）</li>
+          <li>Audit 確認赫月ex｜老練招式（getUrsalunaBloodMoonEffectiveCost）+ 酋雷姆｜反等離子（getKyuremElectroplasmaEffectiveCost）早於 v2.133 已完整實裝，hook 在 engine canAffordAttack — 無需重做</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.993</span> minCount audit + 揭示資訊 resolver 修正（Iron Rule 8）</summary>
         <ul>
           <li>修正 18 處 minCount: 0 違反卡片敘述：卡面寫「選 1 張」mandatory 但允許玩家直接 Pass。動態判斷牌庫候選池：有候選 → minCount: 1，無候選 → minCount: 0（允許 Pass）</li>

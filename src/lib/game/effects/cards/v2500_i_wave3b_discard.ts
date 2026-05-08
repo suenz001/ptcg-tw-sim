@@ -104,9 +104,9 @@ function discardStadiumPostInline(label: string): AttackPostFn {
     const removed: CardInstance = { ...state.activeStadium };
     const stadiumName = pool.get(removed.cardId)?.name ?? '?';
     const ownerIdx = state.activeStadiumOwnerIdx;
-    let s: typeof state = { ...state };
-    delete (s as Record<string, unknown>).activeStadium;
-    delete (s as Record<string, unknown>).activeStadiumOwnerIdx;
+    // v2.994 修 tsc error：GameState 沒有 string index signature，改用 undefined 賦值
+    //  （activeStadium / activeStadiumOwnerIdx 在 types.ts 都是 optional）
+    let s: typeof state = { ...state, activeStadium: undefined, activeStadiumOwnerIdx: undefined };
     if (ownerIdx === 0 || ownerIdx === 1) {
       s = updatePlayer(s, ownerIdx, p => ({ ...p, discard: [...p.discard, removed] }));
     }
