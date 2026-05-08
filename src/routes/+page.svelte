@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.9994</span> 手機版能量數字字色修正</summary>
+        <ul>
+          <li>使用者回報：手機版（直式）戰鬥場顯示的「⚡N」中，⚡（lightning emoji）是亮黃色，但 N（張數）是深色（幾乎黑）幾乎看不見</li>
+          <li>根因：.mp-active 是 &lt;button&gt; 元素，預設文字色是 buttontext system color（多數系統為深灰/黑）。CSS 未明確設 color → 數字字色 inherit 自 button 預設深色。emoji ⚡ 因為由 OS 字型染色不受 CSS 影響所以顯示正常</li>
+          <li>修法 A：.mp-active 設 color: #f0f0f0（亮色備援，整個 button 內 default 文字皆亮）</li>
+          <li>修法 B：.mp-meta span 額外明確設 color: #ffd44a（與 ⚡ emoji 同黃色，雙重保險）</li>
+          <li>桌機版未受影響（用 div 而非 button 故無此問題）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.9993</span> 新增 IRON_RULES.md 永久存檔 12 條鐵律</summary>
         <ul>
           <li>把 outputs/ptcg-push/SKILL.md 的 12 條 Iron Rules 抽出來放到 repo 內 IRON_RULES.md</li>

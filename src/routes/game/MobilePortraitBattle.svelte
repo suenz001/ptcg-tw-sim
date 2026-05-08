@@ -769,6 +769,9 @@
     cursor: pointer;
     width: 100%; max-width: 380px;
     height: 100%;
+    /* v2.9994: 明確設定亮色，避免 button 預設深色（buttontext system color）讓
+       inside 文字（如 mp-meta 內的能量數字 ⚡N 的 N）難以辨識。 */
+    color: #f0f0f0;
   }
   .mp-active.mp-active-opp { border-color: #5a3a3a; background: linear-gradient(180deg, rgba(80,30,30,0.5), rgba(40,20,20,0.4)); }
   .mp-active.mp-active-mine { border-color: #3a6a3a; background: linear-gradient(0deg, rgba(30,60,30,0.5), rgba(20,40,20,0.4)); }
@@ -830,7 +833,9 @@
     display: flex; gap: 6px; flex-wrap: wrap;
     font-size: 0.66rem;
   }
-  .mp-meta span { background: rgba(0,0,0,0.4); padding: 0 5px; border-radius: 3px; }
+  /* v2.9994: 明確設定能量/道具/狀態指示器文字為亮黃，與 ⚡ emoji 顏色一致；
+     避免在某些 device 上 button 預設文字色覆蓋導致數字深色難讀。 */
+  .mp-meta span { background: rgba(0,0,0,0.4); padding: 0 5px; border-radius: 3px; color: #ffd44a; }
   .mp-meta .mp-status { color: #ff8; }
   .mp-tap-hint { color: #ffd44a; animation: mp-pulse 1.5s ease-in-out infinite; }
   @keyframes mp-pulse {
