@@ -254,6 +254,16 @@ export function resolveBenchGuard(
       return { blocked: true, reason: '蟲甲聖 球形盾牌 效果' };
     }
   }
+  // v3.06 斯魔茶｜藏隱 / 小霞的鯉魚王｜深度下潛 —
+  //   「只要這隻寶可夢在備戰區，不會受到對手的寶可夢招式的傷害與效果的影響。」
+  //   resolveBenchGuard caller 已保證 target 在備戰區，故此處直接判定 targetCard
+  //   自身是否擁有此特性。
+  if (kind === 'attack-damage' || kind === 'attack-effect') {
+    if (_v3060BenchImmAbil(targetCard)) {
+      const abName = _v3060GetBenchImmName(targetCard) ?? '備戰免疫';
+      return { blocked: true, reason: `${targetCard?.name ?? '?'} ${abName} 效果` };
+    }
+  }
   if (kind === 'attack-effect') {
     // v2.57：火箭隊的急凍鳥「抵抗之幕」— 我方基礎火箭隊寶可夢不受對手【招式的效果】影響。
     // 因 resolveBenchGuard 僅在 target 為 bench 時被呼叫，這裡檢查備戰區上的目標即可。
@@ -372,6 +382,12 @@ import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v3.0 Group 3 Wave 2 helper — 用於 resolveBenchGuard 蟲甲聖球形盾牌
 import { hasBugAegislashShield } from './effects/cards/v3000_g3_wave2';
+// v3.06 Deferred Wave B helper — 在備戰時免疫對手招式（藏隱 / 深度下潛）
+import {
+  hasBenchAttackImmunityAbility as _v3060BenchImmAbil,
+  getBenchImmunityAbilityName as _v3060GetBenchImmName,
+  attackerHasSpecialEnergy as _v3060AttackerHasSE,
+} from './effects/cards/v3060_deferred_wave_b';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -569,6 +585,15 @@ function hitBenchAll(
     if (card?.tags?.includes('太晶')) {
       teraImmunNames.push(card.name ?? '?');
       newBench.push(c);  // 保持原狀，不放傷害
+      continue;
+    }
+    // v3.06 斯魔茶｜藏隱 / 小霞的鯉魚王｜深度下潛 —
+    //   「只要這隻寶可夢在備戰區，不會受到對手的寶可夢招式的傷害與效果的影響。」
+    //   只在 attackerIdx !== targetIdx（對手對自己施招）時生效；自爆 / 自殘類 self-bench
+    //   傷害不擋。
+    if (attackerIdx !== targetIdx && _v3060BenchImmAbil(card)) {
+      teraImmunNames.push(`${card?.name ?? '?'}（${_v3060GetBenchImmName(card) ?? '備戰免疫'}）`);
+      newBench.push(c);
       continue;
     }
     const newDmg = c.damage + amount;
@@ -1713,6 +1738,10 @@ export function canApplyAttackEffectToTarget(
     } else if (rule.kind === 'self-ability') {
       // 目標自身擁有此名稱特性
       if (targetCard?.abilities?.some(a => a.name === name)) {
+        // v3.06 肋骨海龜｜全能硬殼 special-case — 還需 attacker 身上附有特殊能量才生效
+        if (name === '全能硬殼') {
+          if (!_v3060AttackerHasSE(state, atkIdx, pool)) continue;
+        }
         return { blocked: true, reason: `${name} 免疫招式效果` };
       }
     } else if (rule.kind === 'field-ability') {
@@ -13995,3 +14024,10 @@ registerV3001G3W3Passives();
 //   - 超能妙喵｜誘導之尾、火神蛾｜熱浪鱗粉、齒輪怪｜緊急迴轉 仍 deferred（待手牌觸發 hook 補）
 import { registerV3050DeferredWaveA } from './effects/cards/v3050_deferred_wave_a';
 registerV3050DeferredWaveA();
+
+// v3.06 Deferred Wave B — 5 張免疫類 passive 特性
+//   - 藏隱 / 深度下潛：在 resolveBenchGuard / hitBenchAll inline 處理（self-ability gate）
+//   - 緊張感 / 融合為雪：對手 trainer resolver 內呼叫 isImmuneToOppTrainer 過濾候選
+//   - 全能硬殼：PASSIVE_IMMUNITY entry + ATTACK_EFFECT_IMMUNITY entry（special-case）
+import { registerV3060DeferredWaveBPassives } from './effects/cards/v3060_deferred_wave_b';
+registerV3060DeferredWaveBPassives();

@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v3.06</span> Deferred Wave B — 5 張免疫類 passive（藏隱 / 深度下潛 / 緊張感 / 融合為雪 / 全能硬殼）</summary>
+        <ul>
+          <li><b>1. 斯魔茶｜藏隱（H / SV5a / SV8a）</b> — 「只要這隻寶可夢在備戰區，不會受到對手的寶可夢招式的傷害與效果的影響。」實作於 effects.ts 的 <code>resolveBenchGuard</code>（kind=attack-damage / attack-effect 兩條路徑）+ <code>hitBenchAll</code>（self-ability skip，與太晶相同 pattern）；只在 attackerIdx ≠ targetIdx 時生效，不擋自方自爆 / 自殘類傷害</li>
+          <li><b>2. 小霞的鯉魚王｜深度下潛（I / MC / SV9a）</b> — 同上條件，與藏隱共用同一 self-ability gate</li>
+          <li><b>3. 斧牙龍｜緊張感（H / SV6a）</b> — 「對手從手牌使出物品卡或者支援者卡時，這隻寶可夢不會受到那個效果的影響。」Phase 1 實作：提供 <code>isImmuneToOppTrainer(targetInst, pool)</code> helper；在 老大的指令 / 老大的指令（烏羽）/ 頂尖捕捉器 三張高頻 trainer 的 候選 pool / validIids 過濾排除帶此特性的對手寶可夢（與『陳舊的鰭之化石被動』相同 filter pattern）</li>
+          <li><b>4. 浩大鯨ex｜融合為雪（I / SV10）</b> — 同上條件，與緊張感共用同一 helper</li>
+          <li><b>5. 肋骨海龜｜全能硬殼（H / SV11B）</b> — 「這隻寶可夢不會受到對手的身上附有特殊能量卡的寶可夢招式的傷害與效果的影響。」實作：<code>PASSIVE_IMMUNITY</code> 加入 entry，從 <code>state.players[aIdx].active.energyAttached</code> 掃 special energy；<code>ATTACK_EFFECT_IMMUNITY</code> self-ability kind 內加 special-case（name === &#39;全能硬殼&#39; → 額外檢查 attacker 特殊能量）涵蓋招式效果免疫</li>
+          <li><b>Phase 2 deferred</b>：對手 trainer 免疫 helper 已 export，未來逐張 trainer resolver（獵人狙擊 / 沙儷 / 鎖鏈鎖喉 / 杜若 等指定對手寶可夢類）可逐張接入；本波先涵蓋影響面最大的 Gust / Top Catcher 三張</li>
+          <li><b>Iron Rule 11 / 12 遵守</b>：所有 effects.ts / 既有 cards 子檔的修改一律走 Python pipeline；新檔案 v3060_deferred_wave_b.ts 用 Write 工具；Map .set() 全部包進 <code>registerV3060DeferredWaveBPassives()</code> 由 effects.ts body 末端呼叫，避開 TDZ 循環依賴</li>
+          <li>tsc 0 error</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.05</span> Deferred Wave A — 「從戰鬥場回備戰時」觸發類特性新 hook（2 張完整實裝 + 3 張續 deferred）</summary>
         <ul>
           <li><b>新 hook ON_RETREAT_TO_BENCH</b> — 寶可夢從戰鬥場回備戰時觸發 1 次特性，仿 ON_PLAY_FROM_HAND / ON_EVOLVE_FROM_HAND 模板。本波先 hook 在撤退（RETREAT）路徑；招式互換 / 特性互換 / 風扇呼喚被吹回 等其他「active→bench」路徑暫未涵蓋，後續 wave 補</li>
