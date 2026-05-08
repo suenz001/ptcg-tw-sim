@@ -4914,7 +4914,7 @@ function handlePlaying(
       // v3.20 多重轉接：力之沙漏可在 toolAttached 或 extraTools
       const _hasLouTool = active && !toolsJammedET
         && getAllAttachedTools(active).some(t => pool.get(t.cardId)?.name === '力之沙漏');
-      if (_hasLouTool) {
+      if (_hasLouTool && !aPlayer.lourisToolUsedThisTurn) {
         const hasPending = (state as any).pendingSelection;
         if (!hasPending) {
           const hasBasic = aPlayer.discard.some(c => {
@@ -4922,9 +4922,12 @@ function handlePlaying(
             return card?.supertype === 'Energy' && card.subtype === 'Basic';
           });
           if (hasBasic) {
+            // v3.24 set per-turn flag 避免重複觸發
+            const newPlayers = [...players] as [PlayerState, PlayerState];
+            newPlayers[aIdx] = { ...aPlayer, lourisToolUsedThisTurn: true };
             state = {
               ...state,
-              players,
+              players: newPlayers,
               pendingSelection: {
                 type: 'discard-search',
                 actorIdx: aIdx,
@@ -5438,6 +5441,7 @@ function handlePlaying(
       magearnaPlayedThisTurn: false,
       talarongPlayedThisTurn: false,
       retreatedThisTurn: false,
+      lourisToolUsedThisTurn: false, // v3.24 力之沙漏 per-turn flag reset
     };
 
     // 重置競技場使用旗標（當前玩家的回合結束時清除其旗標）

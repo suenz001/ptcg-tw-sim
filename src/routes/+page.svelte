@@ -263,6 +263,16 @@
     <summary><h2>📋 版本更新記錄</h2></summary>
     <div class="changelog-list">
 
+      <details open>
+        <summary><span class="ver-badge">v3.24</span> hotfix — 力之沙漏 重複觸發 prompt 無限循環</summary>
+        <ul>
+          <li>使用者回報：力之沙漏觸發 prompt 後玩家可以選了又再選，系統一直重複</li>
+          <li>根因：engine END_TURN handler 設 pendingSelection 後 return state，turn 沒真的結束。玩家 RESOLVE_SELECTION 後再按「結束回合」→ END_TURN 又從頭跑 → 力之沙漏 hook 又觸發 → 棄牌區還有基本能量就再 prompt → 無限循環</li>
+          <li>修法：加 PlayerState.lourisToolUsedThisTurn per-turn flag。END_TURN 設 prompt 之前 check flag，且 set flag 再 return state；下回合開始時 reset 為 false（與其他 per-turn flag 同地點 reset）</li>
+          <li>影響：玩家本回合最多只能用 1 次力之沙漏（符合卡面「在自己的回合結束時，可以...」每回合 1 次）</li>
+        </ul>
+      </details>
+
       <details>
         <summary><span class="ver-badge">v3.23</span> hotfix — 超級沙奈朵ex 超級交響樂 0 傷害 bug</summary>
         <ul>

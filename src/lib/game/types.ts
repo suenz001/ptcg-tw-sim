@@ -366,6 +366,11 @@ export interface PlayerState {
   cantRetreatIfPoisonedThisTurn?: boolean;
   /** 本回合是否已撤退 */
   retreatedThisTurn: boolean;
+  /** v3.24 力之沙漏 per-turn flag — 避免 END_TURN 重複觸發 prompt
+   *   bug 場景：END_TURN 設 pendingSelection 後 return state，turn 沒真正結束。
+   *   resolver 完成後 user 再按結束回合 → END_TURN 又進 hook → 棄牌區還有
+   *   基本能量就再 prompt → 無限循環。 */
+  lourisToolUsedThisTurn?: boolean;
   /**
    * 招式效果設下的「下個自己回合，自己所有寶可夢（含新上場的）無法使用招式」預約旗標。
    * 例：電擊魔獸｜雷電在地。
