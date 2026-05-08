@@ -13311,6 +13311,16 @@ export const ON_EVOLVE_FROM_HAND_ABILITIES = new Set([
 ]);
 
 /**
+ * v3.05 — 「從戰鬥場回備戰時」可發動 1 次的特性名稱。
+ * 觸發時機：寶可夢從戰鬥場回到備戰區（撤退、招式效果換場、特性效果換場、被吹回）。
+ * 本波先 hook 在 RETREAT 路徑；其他路徑（招式 / 特性 / 風扇呼喚等）後續逐一補上。
+ */
+export const ON_RETREAT_TO_BENCH_ABILITIES = new Set([
+  '全能變身',     // 海豚俠 — 與牌庫的「海豚俠ex」互換並保留全部附加
+  '返回重載',     // 鋼炮臂蝦 — 從手牌附最多 2 張基本【水】能量
+]);
+
+/**
  * 詢問玩家是否使用「從手牌放置/進化時」的特性。
  * 彈出 modal-choice（是/否），玩家選「是」則自動執行對應的 ABILITY_EFFECTS。
  */
@@ -13979,3 +13989,9 @@ registerV3000G3W2Passives();
 // 對手不能使出 X / 對手特性消除 / 寶可夢檢查指示物 / 撤退觸發 / 進化觸發 等 hook 全部 inline 在 engine.ts。
 import { registerV3001G3W3Passives } from './effects/cards/v3001_g3_wave3';
 registerV3001G3W3Passives();
+
+// v3.05 Deferred Wave A — 5 張需新 hook 特性卡（Phase 1 兩張本波實裝）
+//   - 海豚俠｜全能變身 + 鋼炮臂蝦｜返回重載 走新 hook ON_RETREAT_TO_BENCH（撤退路徑）
+//   - 超能妙喵｜誘導之尾、火神蛾｜熱浪鱗粉、齒輪怪｜緊急迴轉 仍 deferred（待手牌觸發 hook 補）
+import { registerV3050DeferredWaveA } from './effects/cards/v3050_deferred_wave_a';
+registerV3050DeferredWaveA();

@@ -455,6 +455,12 @@ import {
   hasRocketAmpharosDarkPulse,
 } from './effects/cards/v3001_g3_wave3';
 
+// v3.05 Deferred Wave A — 自身寶可夢從戰鬥場回備戰時觸發類（ON_RETREAT_TO_BENCH）
+//   ON_RETREAT_TO_BENCH_ABILITIES：白名單 Set，列出有此觸發機制的特性名（卡面文義「從戰鬥場回到備戰區時，可使用 1 次」）
+//   askUseRetreatToBenchAbility：開 modal-choice 詢問玩家是否使用該特性（仿 askUsePlayAbility）
+import { ON_RETREAT_TO_BENCH_ABILITIES } from './effects';
+import { askUseRetreatToBenchAbility } from './effects/cards/v3050_deferred_wave_a';
+
 /**
  * 判斷一張寶可夢卡是否為「2 階進化」。
  * 同樣不能只看 subtype === 'Stage2'（Stage2 ex 的 subtype 是 'ex'）。
@@ -2028,6 +2034,34 @@ function handlePlaying(
           retreatState = addLog({ ...retreatState, players: newPlayers4 },
             `凹洞：${pool.get(retreatingPoke.cardId)?.name ?? '?'} 身上放置 ${trig.countersOnRetreater} 個傷害指示物`,
             ownerIdx);
+        }
+      }
+    }
+
+    // v3.05 Deferred Wave A — 自身寶可夢從戰鬥場回備戰時觸發類特性（ON_RETREAT_TO_BENCH）
+    //   觸發點：retreatingPoke 已從戰鬥場回到 bench；此時詢問玩家是否使用對應特性。
+    //   範圍：海豚俠｜全能變身、鋼炮臂蝦｜返回重載 等列在 ON_RETREAT_TO_BENCH_ABILITIES Set 中的特性。
+    //   注意：retreatingPoke 在 bench 中（refresh from retreatState 取最新副本）；
+    //         需檢查 abilityUsedThisTurn 旗標避免同回合再觸發。
+    //   並發保證：modal-choice 期間 engine 鎖其他 action（pendingSelection 已設）→ 不會 race。
+    {
+      const cur = retreatState.players[aIdx];
+      const benchInst = cur.bench.find(c => c.iid === retreatingPoke.iid);
+      if (benchInst && !benchInst.abilityUsedThisTurn) {
+        const benchCard = pool.get(benchInst.cardId);
+        if (benchCard?.abilities) {
+          for (let i = 0; i < benchCard.abilities.length; i++) {
+            const ab = benchCard.abilities[i];
+            if (!ON_RETREAT_TO_BENCH_ABILITIES.has(ab.name)) continue;
+            const abilityKey = `${benchCard.name}|${i}`;
+            // 確認 ABILITY_EFFECTS 有註冊（避免無對應 fn 也彈 modal）
+            if (!ABILITY_EFFECTS.has(abilityKey)) continue;
+            // 詢問玩家使用 → 回傳含 pendingSelection 的 state，玩家選 yes 後走 resolver
+            retreatState = askUseRetreatToBenchAbility(
+              retreatState, aIdx, benchInst, ab.name, abilityKey, benchCard.name);
+            // 一次只詢問 1 個（同一隻寶可夢通常只有 1 個觸發特性）
+            break;
+          }
         }
       }
     }

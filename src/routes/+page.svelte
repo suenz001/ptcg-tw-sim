@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v3.05</span> Deferred Wave A — 「從戰鬥場回備戰時」觸發類特性新 hook（2 張完整實裝 + 3 張續 deferred）</summary>
+        <ul>
+          <li><b>新 hook ON_RETREAT_TO_BENCH</b> — 寶可夢從戰鬥場回備戰時觸發 1 次特性，仿 ON_PLAY_FROM_HAND / ON_EVOLVE_FROM_HAND 模板。本波先 hook 在撤退（RETREAT）路徑；招式互換 / 特性互換 / 風扇呼喚被吹回 等其他「active→bench」路徑暫未涵蓋，後續 wave 補</li>
+          <li><b>實作機制</b>：effects.ts 新增 <code>ON_RETREAT_TO_BENCH_ABILITIES</code> Set；engine.ts RETREAT handler 末端詢問玩家是否使用該特性（modal-choice）；玩家選「是」走 <code>resolve-retreat-to-bench-ability-prompt</code> resolver 執行對應 ABILITY_EFFECTS 並 mark <code>abilityUsedThisTurn</code></li>
+          <li><b>1. 海豚俠｜全能變身（H / SV6 / SV8a / MC）</b> — 從牌庫選 1 張「海豚俠ex」與這張卡互換，所附加的卡・傷害指示物・特殊狀態・效果等全部保留。互換後海豚俠放回牌庫並重洗。實作上沿用同一 inst.iid 換 cardId（保留全部 attachments 零搬運），原海豚俠以乾淨 inst（清除 attachments）放回牌庫</li>
+          <li><b>2. 鋼炮臂蝦｜返回重載（I / M1S）</b> — 從手牌選最多 2 張「基本【水】能量」附於這隻寶可夢身上。走 hand-choose UI，filter 需含名稱「【水】」+ 基本能量</li>
+          <li><b>Deferred（3）</b>：超能妙喵｜誘導之尾（手牌棄悠哉尾草棒觸發 → 對手備戰 ↔ 戰鬥位互換）；火神蛾｜熱浪鱗粉（手牌棄基本【火】能量觸發 → 對手戰鬥位灼傷）；齒輪怪｜緊急迴轉（手牌的這張卡為條件 → 對手 2 階進化在場時放這張卡到備戰）。三張需新 hook ON_DISCARD_FROM_HAND / ON_HAND_ACTIVATE，需要新增手牌渲染按鈕 + 新 action types，工程量較大故 Phase 2 續 deferred</li>
+          <li>tsc 0 error；svelte-check 既有 13 errors 與本波改動無關（皆為其他檔的 type narrow / EPERM 暫時性 IO 問題）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.04</span> hotfix — ACE SPEC 道具消失 bug（璀璨結晶 / 反擊增幅器 / 力之沙漏）</summary>
         <ul>
           <li>使用者回報：附璀璨結晶到寶可夢上，log 顯示「璀璨結晶（道具）效果尚未實裝」，道具直接消失</li>
