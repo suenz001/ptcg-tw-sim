@@ -367,6 +367,290 @@ regR('h-wave2-pickup-energy-to-bench-stage2', (state, aIdx, picked, params, pool
   );
 });
 
+// v3.10 從牌庫挑 ≤N 基本能量 → 附到 1 隻備戰寶可夢身上（雙階段 pending）
+//   逐電犬｜輸電衝刺 / 烈咬陸鯊ex｜水炮著陸 等卡使用此 pattern
+//   階段 1 deck-search 挑能量；階段 2 bench-choose 選備戰目標
+function deckSearchAttachToBenchPost(max: number, label: string, type?: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (p.bench.length === 0) return addLog(state, `${label}：備戰區沒有寶可夢`, aIdx);
+    if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
+    // 統計牌庫對應能量數量上限（避免 maxCount 超過實際可選）
+    const validCount = p.deck.filter(c => {
+      const card = pool.get(c.cardId);
+      if (!(card?.supertype === 'Energy' && card.subtype === 'Basic')) return false;
+      if (type && card.pokemonType !== type) return false;
+      return true;
+    }).length;
+    const realMax = Math.min(max, validCount);
+    if (realMax === 0) {
+      // 牌庫無對應能量 → 仍須重洗（卡面：「並且重洗牌庫」）
+      return updatePlayer(addLog(state, `${label}：牌庫無對應基本能量；重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    }
+    // 篩選 filter 用 BasicEnergy 或細項類型；engine 若需 type filter，picker 上自行篩
+    return withPending(addLog(state, `${label}：從牌庫挑 0~${realMax} 張基本能量（重洗後挑選；附到 1 隻備戰）`, aIdx), {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: type ? (`BasicEnergy:${type}` as const) : 'BasicEnergy',
+      minCount: 0, maxCount: realMax,
+      effectKey: 'v310-deck-pickup-energy-to-bench-stage1',
+      params: { label },
+    });
+  };
+}
+
+regR('v310-deck-pickup-energy-to-bench-stage1', (state, aIdx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '';
+  // 卡面：「並且重洗牌庫」— 無論是否選到能量，剩餘牌庫都要重洗
+  if (iids.length === 0) {
+    return updatePlayer(addLog(state, `${label}：未選擇能量；重洗`, aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
+  const p = state.players[aIdx];
+  if (p.bench.length === 0) {
+    // 備戰沒人 → 把選到的能量直接洗回牌庫（卡面要求附備戰，但備戰空時無解，回洗保留資源）
+    return addLog(state, `${label}：備戰區沒有寶可夢，能量留在牌庫並重洗`, aIdx);
+  }
+  // 把選到的能量從 deck 抽出，剩餘 deck 重洗，並 chain 到 stage2 選備戰目標
+  return withPending(addLog(state, `${label}：選 1 隻備戰寶可夢接收能量（已挑 ${iids.length} 張）`, aIdx), {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'v310-deck-pickup-energy-to-bench-stage2',
+    params: { energyIids: iids, label },
+  });
+});
+
+regR('v310-deck-pickup-energy-to-bench-stage2', (state, aIdx, picked, params, pool) => {
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const label = (params?.label as string) ?? '';
+  if (picked.length === 0 || energyIids.length === 0) return state;
+  const targetIid = picked[0];
+  const energySet = new Set(energyIids);
+  const p = state.players[aIdx];
+  // 從 deck 撈出能量；剩餘 deck 重洗
+  const energies = p.deck.filter(c => energySet.has(c.iid));
+  const restDeck = p.deck.filter(c => !energySet.has(c.iid));
+  const target = p.bench.find(b => b.iid === targetIid);
+  const targetName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const newBench = p.bench.map(b =>
+    b.iid === targetIid
+      ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+      : b
+  );
+  const energyNames = energies.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  const newPlayers = [...state.players] as [import('../../types').PlayerState, import('../../types').PlayerState];
+  newPlayers[aIdx] = { ...p, deck: shuffle(restDeck), bench: newBench };
+  return addLog(
+    { ...state, players: newPlayers },
+    `${label}：${energyNames}（${energies.length} 張）附到 ${targetName} 身上（重洗）`,
+    aIdx,
+  );
+});
+
+// v3.10 從牌庫挑 ≤N 基本能量 → 附到「自方任一寶可夢」身上（active + bench 皆可）
+//   黑魯加｜鼓勵 / 七夕青鳥｜哼唱充能 / 風妖精ex｜能量之禮 等卡使用
+//   階段 1 deck-search；階段 2 用 heal-target picker（涵蓋戰鬥場 + 備戰）
+export function deckSearchAttachToAnyPost(max: number, label: string, type?: string, sameTypes: boolean = false): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    const hasAnyTarget = !!p.active || p.bench.length > 0;
+    if (!hasAnyTarget) return addLog(state, `${label}：自方場上無寶可夢`, aIdx);
+    if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
+    const validCount = p.deck.filter(c => {
+      const card = pool.get(c.cardId);
+      if (!(card?.supertype === 'Energy' && card.subtype === 'Basic')) return false;
+      if (type && card.pokemonType !== type) return false;
+      return true;
+    }).length;
+    const realMax = Math.min(max, validCount);
+    if (realMax === 0) {
+      return updatePlayer(addLog(state, `${label}：牌庫無對應基本能量；重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    }
+    return withPending(addLog(state, `${label}：從牌庫挑 0~${realMax} 張基本能量（附到自方任一寶可夢；重洗）`, aIdx), {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: sameTypes ? 'BasicEnergyDistinctTypes' : (type ? (`BasicEnergy:${type}` as const) : 'BasicEnergy'),
+      minCount: 0, maxCount: realMax,
+      effectKey: 'v310-deck-pickup-energy-to-any-stage1',
+      params: { label },
+    });
+  };
+}
+
+regR('v310-deck-pickup-energy-to-any-stage1', (state, aIdx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '';
+  if (iids.length === 0) {
+    return updatePlayer(addLog(state, `${label}：未選擇能量；重洗`, aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
+  const p = state.players[aIdx];
+  if (!p.active && p.bench.length === 0) {
+    return addLog(state, `${label}：場上沒有寶可夢，能量留在牌庫並重洗`, aIdx);
+  }
+  // 場上只有 1 隻寶可夢時可省略 stage2，直接附給該唯一目標
+  const allOwn = [
+    ...(p.active ? [p.active.iid] : []),
+    ...p.bench.map(b => b.iid),
+  ];
+  if (allOwn.length === 1) {
+    const targetIid = allOwn[0];
+    const energySet = new Set(iids);
+    const energies = p.deck.filter(c => energySet.has(c.iid));
+    const restDeck = p.deck.filter(c => !energySet.has(c.iid));
+    return updatePlayer(addLog(state, `${label}：${iids.length} 張能量附到場上唯一寶可夢（重洗）`, aIdx), aIdx, pl => ({
+      ...pl,
+      deck: shuffle(restDeck),
+      active: pl.active && pl.active.iid === targetIid
+        ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] }
+        : pl.active,
+      bench: pl.bench.map(b => b.iid === targetIid
+        ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+        : b),
+    }));
+  }
+  // 多隻 → heal-target 選目標（包含 active + bench）
+  return withPending(addLog(state, `${label}：選 1 隻自方寶可夢接收能量（已挑 ${iids.length} 張）`, aIdx), {
+    type: 'heal-target',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'v310-deck-pickup-energy-to-any-stage2',
+    params: { energyIids: iids, label },
+  });
+});
+
+regR('v310-deck-pickup-energy-to-any-stage2', (state, aIdx, picked, params, pool) => {
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const label = (params?.label as string) ?? '';
+  if (picked.length === 0 || energyIids.length === 0) return state;
+  const targetIid = picked[0];
+  const energySet = new Set(energyIids);
+  const p = state.players[aIdx];
+  const energies = p.deck.filter(c => energySet.has(c.iid));
+  const restDeck = p.deck.filter(c => !energySet.has(c.iid));
+  const isActive = p.active?.iid === targetIid;
+  const target = isActive ? p.active : p.bench.find(b => b.iid === targetIid);
+  const targetName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const energyNames = energies.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  const newPlayers = [...state.players] as [import('../../types').PlayerState, import('../../types').PlayerState];
+  newPlayers[aIdx] = {
+    ...p,
+    deck: shuffle(restDeck),
+    active: isActive && p.active
+      ? { ...p.active, energyAttached: [...p.active.energyAttached, ...energies] }
+      : p.active,
+    bench: isActive
+      ? p.bench
+      : p.bench.map(b => b.iid === targetIid
+          ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+          : b),
+  };
+  return addLog(
+    { ...state, players: newPlayers },
+    `${label}：${energyNames}（${energies.length} 張）附到 ${targetName} 身上（重洗）`,
+    aIdx,
+  );
+});
+
+// v3.10 從棄牌區挑 ≤N 基本能量 → 附到「自方任一寶可夢」身上（active + bench 皆可）
+//   目前無已知 caller，但保留 export 以備未來「黑魯加 棄牌版鼓勵」類卡使用。
+//   (未在 v3.10 實際使用 — 7 張 bug 中的 active+bench 類都是「牌庫」來源)
+export function discardSearchAttachToAnyPost(max: number, label: string, type?: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    const hasAnyTarget = !!p.active || p.bench.length > 0;
+    if (!hasAnyTarget) return addLog(state, `${label}：自方場上無寶可夢`, aIdx);
+    if (p.discard.length === 0) return addLog(state, `${label}：棄牌區為空`, aIdx);
+    const validIids = p.discard.filter(c => {
+      const card = pool.get(c.cardId);
+      if (!(card?.supertype === 'Energy' && card.subtype === 'Basic')) return false;
+      if (type && card.pokemonType !== type) return false;
+      return true;
+    }).map(c => c.iid);
+    if (validIids.length === 0) return addLog(state, `${label}：棄牌區無對應基本能量`, aIdx);
+    return withPending(addLog(state, `${label}：從棄牌區挑 0~${Math.min(max, validIids.length)} 張基本能量（附到自方任一寶可夢）`, aIdx), {
+      type: 'discard-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'BasicEnergy',
+      minCount: 0, maxCount: Math.min(max, validIids.length),
+      effectKey: 'v310-discard-pickup-energy-to-any-stage1',
+      params: { validIids, label },
+    });
+  };
+}
+
+regR('v310-discard-pickup-energy-to-any-stage1', (state, aIdx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '';
+  if (iids.length === 0) {
+    return addLog(state, `${label}：未選擇能量，效果結束`, aIdx);
+  }
+  const p = state.players[aIdx];
+  if (!p.active && p.bench.length === 0) {
+    return addLog(state, `${label}：場上沒有寶可夢，能量留在棄牌區`, aIdx);
+  }
+  const allOwn = [
+    ...(p.active ? [p.active.iid] : []),
+    ...p.bench.map(b => b.iid),
+  ];
+  if (allOwn.length === 1) {
+    const targetIid = allOwn[0];
+    const energySet = new Set(iids);
+    const energies = p.discard.filter(c => energySet.has(c.iid));
+    const restDiscard = p.discard.filter(c => !energySet.has(c.iid));
+    return updatePlayer(addLog(state, `${label}：${iids.length} 張能量附到場上唯一寶可夢`, aIdx), aIdx, pl => ({
+      ...pl,
+      discard: restDiscard,
+      active: pl.active && pl.active.iid === targetIid
+        ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] }
+        : pl.active,
+      bench: pl.bench.map(b => b.iid === targetIid
+        ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+        : b),
+    }));
+  }
+  return withPending(addLog(state, `${label}：選 1 隻自方寶可夢接收能量（已挑 ${iids.length} 張）`, aIdx), {
+    type: 'heal-target',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'v310-discard-pickup-energy-to-any-stage2',
+    params: { energyIids: iids, label },
+  });
+});
+
+regR('v310-discard-pickup-energy-to-any-stage2', (state, aIdx, picked, params, pool) => {
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const label = (params?.label as string) ?? '';
+  if (picked.length === 0 || energyIids.length === 0) return state;
+  const targetIid = picked[0];
+  const energySet = new Set(energyIids);
+  const p = state.players[aIdx];
+  const energies = p.discard.filter(c => energySet.has(c.iid));
+  const restDiscard = p.discard.filter(c => !energySet.has(c.iid));
+  const isActive = p.active?.iid === targetIid;
+  const target = isActive ? p.active : p.bench.find(b => b.iid === targetIid);
+  const targetName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const energyNames = energies.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  const newPlayers = [...state.players] as [import('../../types').PlayerState, import('../../types').PlayerState];
+  newPlayers[aIdx] = {
+    ...p,
+    discard: restDiscard,
+    active: isActive && p.active
+      ? { ...p.active, energyAttached: [...p.active.energyAttached, ...energies] }
+      : p.active,
+    bench: isActive
+      ? p.bench
+      : p.bench.map(b => b.iid === targetIid
+          ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+          : b),
+  };
+  return addLog(
+    { ...state, players: newPlayers },
+    `${label}：${energyNames}（${energies.length} 張）附到 ${targetName} 身上`,
+    aIdx,
+  );
+});
+
+// 同名 export：discardSearchAttachToBenchPost 已在上方定義，供其他檔（v2670）import 使用
+export { discardSearchAttachToBenchPost };
+
 // 自身互換戰鬥/備戰
 function selfSwapPostInline(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
@@ -613,10 +897,12 @@ regPost('花舞鳥|呼朋引伴', deckSearchBasicToBenchPost(2, '呼朋引伴'))
 // ══════════════════════════════════════════════════════════════════════════════
 // 黑魯加|鼓勵 — 牌庫挑最多 2 張基本能量，以任意方式附於自己的寶可夢
 regPre('黑魯加|鼓勵', (s) => ({ state: s, damage: 0 }));
-regPost('黑魯加|鼓勵', deckSearchBasicEnergiesAnyPost(2, '鼓勵'));
+// v3.10 修 bug：原本 deckSearchBasicEnergiesAnyPost 加到手牌；卡面是「附於自己的寶可夢身上」（active + bench）
+regPost('黑魯加|鼓勵', deckSearchAttachToAnyPost(2, '鼓勵'));
 // 七夕青鳥|哼唱充能 — 同上 (最多 2)
 regPre('七夕青鳥|哼唱充能', (s) => ({ state: s, damage: 0 }));
-regPost('七夕青鳥|哼唱充能', deckSearchBasicEnergiesAnyPost(2, '哼唱充能'));
+// v3.10 修 bug：原本 deckSearchBasicEnergiesAnyPost 加到手牌；卡面是「附於自己的寶可夢身上」（active + bench）
+regPost('七夕青鳥|哼唱充能', deckSearchAttachToAnyPost(2, '哼唱充能'));
 
 // 蒼響ex|鋼鐵武器 20 + 牌庫挑 1 基本鋼能量附自身
 regPre('蒼響ex|鋼鐵武器', (s) => ({ state: s, damage: 20 }));
@@ -642,11 +928,13 @@ regPost('蒼響ex|鋼鐵武器', (state, aIdx, pool) => {
 
 // 逐電犬|輸電衝刺 50 + 牌庫挑最多 2 基本雷能量分配備戰
 regPre('逐電犬|輸電衝刺', (s) => ({ state: s, damage: 50 }));
-regPost('逐電犬|輸電衝刺', deckSearchBasicEnergiesAnyPost(2, '輸電衝刺'));
+// v3.10 修 bug：原本 deckSearchBasicEnergiesAnyPost 加到手牌；卡面是「附於備戰寶可夢身上」（限基本【雷】）
+regPost('逐電犬|輸電衝刺', deckSearchAttachToBenchPost(2, '輸電衝刺', 'Lightning'));
 
 // 鬃岩狼人|渦輪刀鋒 50 + 棄牌挑最多 2 基本鬥能量分配備戰
 regPre('鬃岩狼人|渦輪刀鋒', (s) => ({ state: s, damage: 50 }));
-regPost('鬃岩狼人|渦輪刀鋒', discardSearchBasicEnergiesPost(2, '渦輪刀鋒', 'Fighting'));
+// v3.10 修 bug：原本 discardSearchBasicEnergiesPost 加到手牌；卡面是「附於備戰寶可夢身上」
+regPost('鬃岩狼人|渦輪刀鋒', discardSearchAttachToBenchPost(2, '渦輪刀鋒', 'Fighting'));
 
 // 花舞鳥|能量支援 — 棄牌區挑最多 2 基本能量附 1 隻備戰
 regPre('花舞鳥|能量支援', (s) => ({ state: s, damage: 0 }));
@@ -683,17 +971,14 @@ regR('h-wave2-discard-back-to-deck', (state, aIdx, iids, _params, _pool) => {
 });
 
 // 帕奇利茲|啪滋啪滋充電 — 擲 3 次硬幣，從棄牌區選 ≤正面數 基本雷能量分配備戰
+//   v3.10 修 bug：原本 effectKey 'h-wave2-pickup-energy-to-hand' 加到手牌；
+//   卡面是「以任意方式附於備戰寶可夢身上」 → 改用 discardSearchAttachToBenchPost 雙階段 pending
 regPre('帕奇利茲|啪滋啪滋充電', (s) => ({ state: s, damage: 0 }));
-regPost('帕奇利茲|啪滋啪滋充電', (state, aIdx, _pool) => {
+regPost('帕奇利茲|啪滋啪滋充電', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 3, '啪滋啪滋充電', aIdx);
   if (r.heads === 0) return addLog(r.state, '啪滋啪滋充電：0 正面', aIdx);
-  return withPending(addLog(r.state, `啪滋啪滋充電：${r.heads} 正面 → 從棄牌挑 0~${r.heads} 張基本雷能量加手`, aIdx), {
-    type: 'discard-search',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'BasicEnergy',
-    minCount: 0, maxCount: r.heads,
-    effectKey: 'h-wave2-pickup-energy-to-hand',
-  });
+  // 動態 max = heads（呼叫共用 helper 但帶上 heads 上限）
+  return discardSearchAttachToBenchPost(r.heads, '啪滋啪滋充電', 'Lightning')(r.state, aIdx, pool);
 });
 
 // 夠讚狗ex|猛毒筋力 — 牌庫挑 ≤2 基本惡能量附自身 + 自身中毒
@@ -736,54 +1021,58 @@ regPost('太樂巴戈斯|稜鏡充能', deckSearchBasicEnergiesAnyPost(3, '稜�
 // === Section 13: 條件 +N ===
 // ══════════════════════════════════════════════════════════════════════════════
 // 雷伊布ex|閃光尖矛 60+ — 若希望，棄最多 2 張自方備戰基本能量，N×90
+//
+// v3.10 修 bug：原本 POST 直接加 defender.active.damage，繞過了引擎的
+//   弱點/抵抗力計算（baseDamage 後 ×2 / -30 流程） → 對水弱寶可夢實際傷害不對。
+// 修法：把「棄能量 + bonus」整體移到 PRE，state 與 damage 一起回傳，
+//   engine 拿 baseDamage(60+bonus) 套標準弱抗流程。
+//
+// 簡化（待後續 P2 改進）：自動棄最多 2 張（即 +180 上限）。
+//   卡面「若希望」屬玩家選擇，目前 engine 不支援 PRE 階段的互動 picker，
+//   先以「自動棄到上限」對齊現有相同 pattern（恐怖獠牙等）。標記 [deferred]。
 regPre('雷伊布ex|閃光尖矛', (state, aIdx, pool) => {
-  // 簡化版自動判斷：自方備戰所有基本能量數，若 ≥1 自動棄 1
-  let basicEnergyCount = 0;
-  for (const b of state.players[aIdx].bench) {
-    for (const e of b.energyAttached) {
-      const card = pool.get(e.cardId);
-      if (card?.supertype === 'Energy' && card.subtype === 'Basic') {
-        basicEnergyCount++;
-        if (basicEnergyCount >= 2) break;
-      }
-    }
-    if (basicEnergyCount >= 2) break;
-  }
-  // 預設 0（不希望）— PRE 不互動，故只用 base
-  return { state, damage: 60 };
-});
-regPost('雷伊布ex|閃光尖矛', (state, aIdx, pool) => {
-  // POST 階段提供互動：選 0~2 個自方備戰基本能量
-  // 簡化：自動棄最多 2 個 → +N×90 加給對手戰鬥
-  let benchEnergyIids: { benchIdx: number; iid: string }[] = [];
+  // 收集自方備戰所有基本能量 iid（依 bench 順序、能量陣列順序）
+  type BenchEnergyRef = { benchIdx: number; iid: string };
+  const benchEnergyRefs: BenchEnergyRef[] = [];
   state.players[aIdx].bench.forEach((b, bi) => {
     for (const e of b.energyAttached) {
       const card = pool.get(e.cardId);
       if (card?.supertype === 'Energy' && card.subtype === 'Basic') {
-        benchEnergyIids.push({ benchIdx: bi, iid: e.iid });
+        benchEnergyRefs.push({ benchIdx: bi, iid: e.iid });
       }
     }
   });
-  benchEnergyIids = benchEnergyIids.slice(0, 2);
-  if (benchEnergyIids.length === 0) return addLog(state, '閃光尖矛：自方備戰無基本能量', aIdx);
-  const set = new Set(benchEnergyIids.map(x => x.iid));
-  let s = updatePlayer(state, aIdx, p => ({
-    ...p,
-    bench: p.bench.map(b => ({
-      ...b,
-      energyAttached: b.energyAttached.filter(e => !set.has(e.iid)),
-    })),
-    discard: [...p.discard, ...p.bench.flatMap(b => b.energyAttached.filter(e => set.has(e.iid)))],
-  }));
-  const bonus = benchEnergyIids.length * 90;
-  // 加給對手戰鬥場（卡面是「增加傷害」屬於 PRE 階段邏輯，但因互動需 POST，這裡直接補 damage）
-  const dIdx = (1 - aIdx) as 0 | 1;
-  s = updatePlayer(addLog(s, `閃光尖矛：棄 ${benchEnergyIids.length} 張備戰能量 → 對手戰鬥場 +${bonus}`, aIdx), dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) + bonus } : null,
-  }));
-  return s;
+  // 上限 2 張（卡面）
+  const picked = benchEnergyRefs.slice(0, 2);
+  if (picked.length === 0) {
+    return { state: addLog(state, '閃光尖矛：自方備戰無基本能量 → 60', aIdx), damage: 60 };
+  }
+  // 棄能量（從各備戰過濾掉所選 iids，丟進棄牌區）
+  const set = new Set(picked.map(x => x.iid));
+  const newState = updatePlayer(state, aIdx, p => {
+    const removed = p.bench.flatMap(b => b.energyAttached.filter(e => set.has(e.iid)));
+    return {
+      ...p,
+      bench: p.bench.map(b => ({
+        ...b,
+        energyAttached: b.energyAttached.filter(e => !set.has(e.iid)),
+      })),
+      discard: [...p.discard, ...removed],
+    };
+  });
+  const bonus = picked.length * 90;
+  const total = 60 + bonus;
+  return {
+    state: addLog(newState, `閃光尖矛：棄 ${picked.length} 張備戰能量 → 60+${bonus} = ${total}（弱抗前）`, aIdx),
+    damage: total,
+    breakdown: [
+      { value: 60, label: '基礎' },
+      { value: bonus, label: `棄${picked.length}基本能量` },
+    ],
+  };
 });
+// POST 已不需要再處理 bonus（已在 PRE 完成棄能 + return damage）
+// regPost 留空（無註冊）— engine 自動套用弱抗流程
 
 // 鐵磐岩|調整角擊 170 — 雙方手牌張數同 否則失敗
 regPre('鐵磐岩|調整角擊', sameHandCountPre(170, '調整角擊'));

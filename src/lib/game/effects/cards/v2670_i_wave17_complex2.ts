@@ -22,6 +22,8 @@
  */
 
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, discardActiveStadium } from '../_shared';
+// v3.10 import 修 bug 用的兩個 helper（原本 wave17 內自己 inline 寫成「加手」）
+import { deckSearchAttachToAnyPost, discardSearchAttachToBenchPost } from './v2750_h_wave2_full';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -255,21 +257,13 @@ regPost('小灰怪|挪動一下', (state, aIdx, _pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 8. 風妖精ex｜能量之禮 — 從牌庫挑 ≤3 張基本能量，自由分配（簡化：全附給戰鬥場）
+// 8. 風妖精ex｜能量之禮 — 從牌庫挑 ≤3 張基本能量，附於自方任一寶可夢身上
+//   v3.10 修 bug：原本 effectKey 'wave13-deck-take-any' 加到手牌；
+//   卡面是「以任意方式附於自己的寶可夢身上」 → 改用 deckSearchAttachToAnyPost
+//   (active + bench 皆可選；雙階段 pending：deck-search → heal-target)
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('風妖精ex|能量之禮', (s) => ({ state: s, damage: 0 }));
-regPost('風妖精ex|能量之禮', (state, aIdx, _pool) => {
-  const p = state.players[aIdx];
-  if (p.deck.length === 0) return state;
-  const s = addLog(state, '能量之禮：從牌庫挑 0~3 張基本能量加手（玩家手動分配，重洗）', aIdx);
-  return withPending(s, {
-    type: 'deck-search',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'BasicEnergy',
-    minCount: 0, maxCount: 3,
-    effectKey: 'wave13-deck-take-any',
-  });
-});
+regPost('風妖精ex|能量之禮', deckSearchAttachToAnyPost(3, '能量之禮'));
 
 // 熔蟻獸｜舔舔捕捉 — 牌庫挑【火】寶可夢卡與「基本【火】能量」卡合計 ≤3 加手
 regPre('熔蟻獸|舔舔捕捉', (s) => ({ state: s, damage: 0 }));
@@ -287,34 +281,22 @@ regPost('熔蟻獸|舔舔捕捉', (state, aIdx, _pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 9. 圖圖犬｜能量寫生 — 擲 3 次, 從棄牌區挑 ≤正面數 基本能量任意分配備戰
-//   簡化：附給戰鬥場（玩家手動移動）
+// 9. 圖圖犬｜能量寫生 — 擲 3 次, 從棄牌區挑 ≤正面數 基本能量分配備戰
+//   v3.10 修 bug：原本 effectKey 'wave17-pickup-energy-to-hand' 加到手牌；
+//   卡面是「以任意方式附於備戰寶可夢身上」 → 改用 discardSearchAttachToBenchPost
+//   動態 max = heads（卡面「最多與正面出現的次數相同數量」）
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('圖圖犬|能量寫生', (s) => ({ state: s, damage: 0 }));
-regPost('圖圖犬|能量寫生', (state, aIdx, _pool) => {
+regPost('圖圖犬|能量寫生', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 3, '能量寫生', aIdx);
   if (r.heads === 0) return addLog(r.state, '能量寫生：0 正面', aIdx);
-  const s = addLog(r.state, `能量寫生：${r.heads} 正面 → 從棄牌區挑 0~${r.heads} 張基本能量加手（玩家手動分配）`, aIdx);
-  return withPending(s, {
-    type: 'discard-search',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'BasicEnergy',
-    minCount: 0, maxCount: r.heads,
-    effectKey: 'wave17-pickup-energy-to-hand',
-  });
+  // 注意：卡面未限基本能量類型（任意基本能量）
+  return discardSearchAttachToBenchPost(r.heads, '能量寫生')(r.state, aIdx, pool);
 });
-regR('wave17-pickup-energy-to-hand', (state, aIdx, iids, _params, _pool) => {
-  if (iids.length === 0) return state;
-  const set = new Set(iids);
-  return updatePlayer(
-    addLog(state, `從棄牌區挑 ${iids.length} 張卡加手`, aIdx),
-    aIdx, p => {
-      const picked = p.discard.filter(c => set.has(c.iid));
-      const rest = p.discard.filter(c => !set.has(c.iid));
-      return { ...p, discard: rest, hand: [...p.hand, ...picked] };
-    },
-  );
-});
+// 舊 resolver 'wave17-pickup-energy-to-hand' 已 obsolete（A12 唯一 caller）
+//   保留 dead key 不會造成 runtime error（resolver Map 查不到時 engine 已有 fallback），
+//   但仍清掉以避免 grep 噪音。
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 10. 賽富豪｜抓到飽 — 擲幣到反, 從牌庫挑 ≤正面數加手

@@ -263,6 +263,28 @@
     <summary><h2>📋 版本更新記錄</h2></summary>
     <div class="changelog-list">
 
+      <details open>
+        <summary><span class="ver-badge">v3.10</span> Bug audit P0 — 7 張附能量招式（加手牌 → 附場上）+ 1 張弱抗計算錯誤</summary>
+        <ul>
+          <li><b>Audit 背景</b>：v3.09 修了花舞鳥｜能量支援後，全面掃描所有「搜能量」類招式。發現 7 張同類 bug（卡面要求附到場上，但實裝把能量加到手牌），與 1 張弱抗 / 抵抗力繞過 bug。本版優先修 P0 共 8 張。</li>
+          <li><b>同類 bug — 應附到場上但實裝加手牌（7 張）</b>：</li>
+          <li>　・<b>鬃岩狼人｜渦輪刀鋒</b>（棄牌區 ≤2 基本【鬥】→ 備戰）：原 helper <code>discardSearchBasicEnergiesPost</code> 加手；改用 <code>discardSearchAttachToBenchPost(2, &#39;渦輪刀鋒&#39;, &#39;Fighting&#39;)</code></li>
+          <li>　・<b>逐電犬｜輸電衝刺</b>（牌庫 ≤2 基本【雷】→ 備戰）：新 helper <code>deckSearchAttachToBenchPost(max, label, type)</code>，雙階段 pending：deck-search 挑能量 → bench-choose 選備戰目標 → 重洗</li>
+          <li>　・<b>帕奇利茲｜啪滋啪滋充電</b>（擲 3 幣，棄牌區 ≤heads 基本【雷】→ 備戰）：原 inline 用 effectKey <code>h-wave2-pickup-energy-to-hand</code>；改呼叫 <code>discardSearchAttachToBenchPost(heads, &#39;啪滋啪滋充電&#39;, &#39;Lightning&#39;)</code></li>
+          <li>　・<b>黑魯加｜鼓勵</b>（牌庫 ≤2 基本能量 → 自方任一寶可夢，含戰鬥場）：新 helper <code>deckSearchAttachToAnyPost(max, label, type?, sameTypes?)</code>，階段 2 用 <code>heal-target</code> picker 涵蓋 active + bench</li>
+          <li>　・<b>七夕青鳥｜哼唱充能</b>（同上，牌庫 ≤2）：改用 <code>deckSearchAttachToAnyPost(2, &#39;哼唱充能&#39;)</code></li>
+          <li>　・<b>風妖精ex｜能量之禮</b>（牌庫 ≤3）：原 effectKey <code>wave13-deck-take-any</code> 加手；改用 <code>deckSearchAttachToAnyPost(3, &#39;能量之禮&#39;)</code></li>
+          <li>　・<b>圖圖犬｜能量寫生</b>（擲 3 幣，棄牌區 ≤heads 基本能量 → 備戰）：原 effectKey <code>wave17-pickup-energy-to-hand</code> 加手；改呼叫 <code>discardSearchAttachToBenchPost(heads, &#39;能量寫生&#39;)</code></li>
+          <li><b>弱抗繞過 bug — 雷伊布ex｜閃光尖矛 60+</b>（卡面：若希望，棄 ≤2 自方備戰基本能量，+(N×90) 增加傷害）：</li>
+          <li>　・舊作法：PRE 只回傳 60、POST 自動棄能量並 <code>defender.active.damage += bonus</code>，<b>繞過引擎的弱點 ×2 / 抵抗力 -30 計算流程</b>，對水弱寶可夢實際傷害數值錯誤。</li>
+          <li>　・新作法：把「棄能量 + bonus」整體移到 PRE，PRE 回傳 <code>&#123; state, damage: 60+bonus, breakdown &#125;</code>，engine 用 baseDamage 套標準弱抗 → POST 不再加 damage。</li>
+          <li>　・[deferred]：「若希望」目前簡化為「自動棄到上限 2 張」（最大化傷害），與其他相同 pattern 招式（恐怖獠牙等）一致；玩家選擇式 picker 待後續 P2 audit 改進。</li>
+          <li><b>新增 helpers（v2750_h_wave2_full.ts 內）</b>：<code>deckSearchAttachToBenchPost</code> / <code>deckSearchAttachToAnyPost</code> / <code>discardSearchAttachToAnyPost</code>（含對應 stage1/stage2 resolver 共 6 個），<code>discardSearchAttachToBenchPost</code> 改 export 供 v2670 使用</li>
+          <li><b>遵守 Iron Rules</b>：所有改動既有檔（version.ts / v2750_h_wave2_full.ts / v2670_i_wave17_complex2.ts / +page.svelte）走 Python pipeline；新 helper 只用 <code>regR</code>（_shared.ts 的 RESOLVERS Map），不違反 Rule 12。</li>
+          <li>tsc 0 error</li>
+        </ul>
+      </details>
+
       <details>
         <summary><span class="ver-badge">v3.09</span> hotfix — 花舞鳥｜能量支援 卡面行為錯誤（拿到手牌 → 附到備戰）</summary>
         <ul>
@@ -273,7 +295,7 @@
         </ul>
       </details>
 
-      <details open>
+      <details>
         <summary><span class="ver-badge">v3.08</span> Deferred Wave C — Group 3 剩餘 4 張最複雜 deferred passive（廣域堡壘 / 平穩境地 / 潛入記憶 / 多重轉接*）</summary>
         <ul>
           <li><b>1. 超甲狂犀｜廣域堡壘（H）</b> — 「只要這隻寶可夢在戰鬥場上，對手從手牌使出支援者卡時，自己的所有寶可夢不會受到那個效果的影響。」實作：擴展 v3.06 的 <code>isImmuneToOppTrainer</code> 路徑，新增綜合 helper <code>isImmuneToOppSupporter(state, defenderIdx, targetInst, pool)</code>，內部 OR：(a) 寶可夢自身的緊張感／融合為雪 (b) 自方戰鬥場有廣域堡壘。已將「老大的指令」「老大的指令（烏羽）」兩張高頻 Supporter 的 validIids 過濾改用新 helper。頂尖捕捉器是 Item 類，繼續用舊 isImmuneToOppTrainer（不擋廣域堡壘）。</li>
