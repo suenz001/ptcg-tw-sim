@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.997</span> Group 4 Wave 3 — 10 張條件 passive + 能量計算類特性實裝（Group 4 完結）</summary>
+        <ul>
+          <li>新建 v2997_g4_wave3.ts 集中註解；實際實裝以 effects.ts 末段 export helper + engine.ts hook 為主</li>
+          <li>能量計算類（5）：好勝毛蟹｜事先準備（招式所需【無】減自方棄牌「海岱」張數）、輕身鱈｜事先準備（同上，共用 helper）、熾焰咆哮虎ex｜喧鬧競技（招式所需【無】減對手備戰寶可夢數量）、瑪力露麗｜亮亮泡（自方場上有「太晶」寶可夢時「捨身衝撞」cost 改為 1【超】）、音波龍｜調諧迴響（雙方手牌張數相同時「恐慌嚎鳴」cost 全部消除）</li>
+          <li>condition passive（3）：請假王ex｜懶怠個性（對手場上沒有 ex/V 時無法使用招式 — engine getAvailableAttacks + ATTACK handler 兩處 gate）、小嘴蝸 / 蓋蓋蟲｜刺激進化（自方場上有 partner 時 bypass isFirstTurn + justPlaced + evolvedThisTurn — engine EVOLVE handler + getEvolvableTargets 兩處鏡射）</li>
+          <li>rule marker（1）：海豚俠ex｜全能靈魂（block 從手牌正常 PLAY_BASIC，只能由「全能變身」放置 — engine PLAY_BASIC handler 加 gate）</li>
+          <li>Deferred（1）：齒輪怪｜緊急迴轉 — 「手牌中觸發特性」需要新的 ON_HAND_ACTIVATE 機制 + UI 改動，engine 沒現成 hook → 標記 deferred 待獨立 wave 處理</li>
+          <li>5 個 cost helper export 在 effects.ts 末段（pattern 同 v2.133 getKyuremElectroplasmaEffectiveCost）；engine canAffordAttack 在 line 826 區 hook 共 8 個 cost helper（原 4 + 新 4，事先準備兩張共用一個）</li>
+          <li>tsc 全綠（0 error）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.996</span> Group 4 Wave 2 — 10 張牌庫/手牌/棄牌操作類主動特性實裝</summary>
         <ul>
           <li>新建 v2996_g4_wave2.ts 集中實裝 10 張主動特性（regA），都是 ABILITY_AUDIT_V2_98.md Group 4 中需要操作牌庫/手牌/棄牌或對手互動的卡</li>

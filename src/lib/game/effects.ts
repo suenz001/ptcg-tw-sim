@@ -356,6 +356,7 @@ import './effects/cards/v2760_h_wave3_complex';
 import './effects/cards/v2770_cross_mark_cleanup';
 import './effects/cards/v2995_g4_wave1';
 import './effects/cards/v2996_g4_wave2';
+import './effects/cards/v2997_g4_wave3';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -11999,6 +12000,187 @@ export function getDecidueyeSnipeEffectiveCost(
   const filtered = originalCost.filter(c => c !== 'Colorless');
   return filtered.length === originalCost.length ? originalCost : filtered;
 }
+
+/**
+ * v2.997 好勝毛蟹｜事先準備 / 輕身鱈｜事先準備
+ *   卡面：「這隻寶可夢使用招式所需的【無】能量，減少自己的棄牌區的『海岱』的張數。」
+ *   範圍：對持有此特性的寶可夢的所有招式生效（卡面非 attack-specific）。
+ *   實作：count 自方棄牌區內 cardName === '海岱' 的張數 N，從 cost 移除 N 個 Colorless。
+ *   兩張卡共用同一個 helper（卡名 OR 判斷）。
+ */
+export function getCorphishPreparationEffectiveCost(
+  attackerName: string,
+  _attackName: string,
+  state: GameState,
+  pool: Map<string, Card>,
+  originalCost: import('$lib/cards/types').EnergyType[],
+): import('$lib/cards/types').EnergyType[] {
+  if (attackerName !== '好勝毛蟹' && attackerName !== '輕身鱈') return originalCost;
+  const aIdx = state.activePlayerIndex;
+  const ownDiscard = state.players[aIdx].discard;
+  const haidaiCount = ownDiscard.reduce((acc, c) => {
+    const card = pool.get(c.cardId);
+    return acc + (card?.name === '海岱' ? 1 : 0);
+  }, 0);
+  if (haidaiCount === 0) return originalCost;
+  // 從 originalCost 移除最多 haidaiCount 個 Colorless
+  const reduced: import('$lib/cards/types').EnergyType[] = [];
+  let toRemove = haidaiCount;
+  for (const c of originalCost) {
+    if (c === 'Colorless' && toRemove > 0) { toRemove--; continue; }
+    reduced.push(c);
+  }
+  return reduced.length === originalCost.length ? originalCost : reduced;
+}
+
+/**
+ * v2.997 熾焰咆哮虎ex｜喧鬧競技
+ *   卡面：「這隻寶可夢使用招式所需的【無】能量，減少對手的備戰寶可夢的數量。」
+ *   範圍：對熾焰咆哮虎ex 持有的所有招式生效。
+ *   實作：對手備戰數 N（最多 5），從 cost 移除 N 個 Colorless。
+ */
+export function getSkeledirgeRowdyContestEffectiveCost(
+  attackerName: string,
+  _attackName: string,
+  state: GameState,
+  _pool: Map<string, Card>,
+  originalCost: import('$lib/cards/types').EnergyType[],
+): import('$lib/cards/types').EnergyType[] {
+  if (attackerName !== '熾焰咆哮虎ex') return originalCost;
+  const aIdx = state.activePlayerIndex;
+  const oppBenchCount = state.players[(1 - aIdx) as 0 | 1].bench.length;
+  if (oppBenchCount === 0) return originalCost;
+  const reduced: import('$lib/cards/types').EnergyType[] = [];
+  let toRemove = oppBenchCount;
+  for (const c of originalCost) {
+    if (c === 'Colorless' && toRemove > 0) { toRemove--; continue; }
+    reduced.push(c);
+  }
+  return reduced.length === originalCost.length ? originalCost : reduced;
+}
+
+/**
+ * v2.997 瑪力露麗｜亮亮泡
+ *   卡面：「若自己的場上有『太晶』寶可夢，則這隻寶可夢使用『捨身衝撞』所需的能量，
+ *         改為 1 個【超】能量。」
+ *   範圍：限定 attackName === '捨身衝撞'。
+ *   實作：自方場上（active+bench）有 tag 太晶 的寶可夢時，cost 整個替換為 ['Psychic']。
+ */
+export function getAzumarillSparkleSplashEffectiveCost(
+  attackerName: string,
+  attackName: string,
+  state: GameState,
+  pool: Map<string, Card>,
+  originalCost: import('$lib/cards/types').EnergyType[],
+): import('$lib/cards/types').EnergyType[] {
+  if (attackerName !== '瑪力露麗') return originalCost;
+  if (attackName !== '捨身衝撞') return originalCost;
+  const aIdx = state.activePlayerIndex;
+  const me = state.players[aIdx];
+  const all: CardInstance[] = [...(me.active ? [me.active] : []), ...me.bench];
+  const hasTera = all.some(c => pool.get(c.cardId)?.tags?.includes('太晶'));
+  if (!hasTera) return originalCost;
+  return ['Psychic'];
+}
+
+/**
+ * v2.997 音波龍｜調諧迴響
+ *   卡面：「若自己的手牌與對手的手牌張數相同，則這隻寶可夢使用『恐慌嚎鳴』所需的
+ *         能量全部消除。」
+ *   範圍：限定 attackName === '恐慌嚎鳴'。
+ *   實作：state.players[aIdx].hand.length === state.players[1-aIdx].hand.length 時，
+ *         cost 替換為空陣列 []。
+ */
+export function getSonidoTuningResonanceEffectiveCost(
+  attackerName: string,
+  attackName: string,
+  state: GameState,
+  _pool: Map<string, Card>,
+  originalCost: import('$lib/cards/types').EnergyType[],
+): import('$lib/cards/types').EnergyType[] {
+  if (attackerName !== '音波龍') return originalCost;
+  if (attackName !== '恐慌嚎鳴') return originalCost;
+  const aIdx = state.activePlayerIndex;
+  if (state.players[aIdx].hand.length !== state.players[(1 - aIdx) as 0 | 1].hand.length) {
+    return originalCost;
+  }
+  return [];
+}
+
+/**
+ * v2.997 請假王ex｜懶怠個性
+ *   卡面：「若對手的場上沒有『寶可夢【ex】・【V】』，則這隻寶可夢無法使用招式。」
+ *   範圍：對 請假王ex 的所有招式生效。
+ *   實作：engine getAvailableAttacks + ATTACK handler 兩處呼叫此 helper，
+ *         若對手場上沒有任何 ex/V 寶可夢 → 回傳 true（禁止）。
+ *   ex/V 判定：subtype === 'ex' / name 結尾含 ex/EX/V/VMAX/VSTAR（與既有 isExV 一致）。
+ */
+export function isLazyTraitBlockingAttack(
+  attacker: CardInstance,
+  state: GameState,
+  pool: Map<string, Card>,
+): boolean {
+  const atkCard = pool.get(attacker.cardId);
+  if (atkCard?.name !== '請假王ex') return false;
+  // 防範同名卡未來不同特性 — 必須有「懶怠個性」特性
+  if (!atkCard.abilities?.some(a => a.name === '懶怠個性')) return false;
+  const aIdx = state.activePlayerIndex;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const opp = state.players[dIdx];
+  const oppAll: CardInstance[] = [...(opp.active ? [opp.active] : []), ...opp.bench];
+  const hasExV = oppAll.some(inst => {
+    const c = pool.get(inst.cardId);
+    if (!c) return false;
+    return c.subtype === 'ex'
+      || c.name.endsWith('ex')
+      || c.name.endsWith('EX')
+      || c.name.endsWith('V')
+      || c.name.endsWith('VMAX')
+      || c.name.endsWith('VSTAR');
+  });
+  return !hasExV; // 沒有 ex/V → block attack
+}
+
+/**
+ * v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化
+ *   卡面：「若自己的場上有『蓋蓋蟲』（小嘴蝸 持有此特性時的對應卡名相反），
+ *         則這隻寶可夢就算在自己的最初回合或者剛使出的回合，也可進化。」
+ *   範圍：base 是小嘴蝸 / 蓋蓋蟲，且 base 卡有「刺激進化」特性。
+ *   實作：engine canEvolve（getEvolvableTargets）+ EVOLVE handler 兩處呼叫，
+ *         若 base 卡名相符 + 自方場上（active+bench）有 partner → 允許 bypass
+ *         isFirstTurn / justPlaced / evolvedThisTurn 三項 gate。
+ *   注意：partner 自身不需要有此特性（卡面條件是「場上有 X」，不限同名疊加）。
+ */
+export function hasShellinkEvolveBypass(
+  baseCard: Card,
+  state: GameState,
+  ownerIdx: 0 | 1,
+  pool: Map<string, Card>,
+): boolean {
+  // base 必須是小嘴蝸 或 蓋蓋蟲，且有「刺激進化」特性
+  if (baseCard.name !== '小嘴蝸' && baseCard.name !== '蓋蓋蟲') return false;
+  if (!baseCard.abilities?.some(a => a.name === '刺激進化')) return false;
+  // partner = 另一張（小嘴蝸 → 蓋蓋蟲；蓋蓋蟲 → 小嘴蝸）
+  const partnerName = baseCard.name === '小嘴蝸' ? '蓋蓋蟲' : '小嘴蝸';
+  const me = state.players[ownerIdx];
+  const all: CardInstance[] = [...(me.active ? [me.active] : []), ...me.bench];
+  return all.some(c => pool.get(c.cardId)?.name === partnerName);
+}
+
+/**
+ * v2.997 海豚俠ex｜全能靈魂（rule marker）
+ *   卡面：「這張卡只可依據『海豚俠』的特性『全能變身』的效果放置於場上。」
+ *   實作：engine PLAY_BASIC handler 進入時呼叫；若卡名為 海豚俠ex 且有此特性 →
+ *         回傳 true → engine 拒絕從手牌打出（傳回原 state + addLog）。
+ *   全能變身（H 標）目前未實裝（engine 沒對應 hook），但本 marker 仍 block
+ *   PLAY_BASIC，避免玩家直接從手牌打出海豚俠ex。
+ */
+export function isAllPowerSoulBlocked(card: Card | undefined): boolean {
+  if (!card) return false;
+  if (card.name !== '海豚俠ex') return false;
+  return card.abilities?.some(a => a.name === '全能靈魂') ?? false;
+}
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // v2.133 — 電電蟲 + 超級袋獸厄鬼椪 預組新卡實裝

@@ -37,6 +37,13 @@ import {
   getOctopusTentacleEffectiveCost,
   getUrsalunaBloodMoonEffectiveCost,
   getDecidueyeSnipeEffectiveCost,
+  getCorphishPreparationEffectiveCost,
+  getSkeledirgeRowdyContestEffectiveCost,
+  getAzumarillSparkleSplashEffectiveCost,
+  getSonidoTuningResonanceEffectiveCost,
+  isLazyTraitBlockingAttack,
+  hasShellinkEvolveBypass,
+  isAllPowerSoulBlocked,
   PASSIVE_PREVENT_KO,
   flipCoinsWithLog,
   promptPlayAbilities,
@@ -828,6 +835,18 @@ export function canAffordAttack(
       const overridden4 = getDecidueyeSnipeEffectiveCost(attackerCard, state, cost);
       if (overridden4 !== cost) cost = overridden4;
     }
+    // v2.997 好勝毛蟹／輕身鱈｜事先準備 — 招式所需【無】減自方棄牌「海岱」張數
+    const overridden5 = getCorphishPreparationEffectiveCost(attackerName, attackName, state, pool, cost);
+    if (overridden5 !== cost) cost = overridden5;
+    // v2.997 熾焰咆哮虎ex｜喧鬧競技 — 招式所需【無】減對手備戰寶可夢數量
+    const overridden6 = getSkeledirgeRowdyContestEffectiveCost(attackerName, attackName, state, pool, cost);
+    if (overridden6 !== cost) cost = overridden6;
+    // v2.997 瑪力露麗｜亮亮泡 — 自方場上有「太晶」寶可夢時，「捨身衝撞」cost 改為 1【超】
+    const overridden7 = getAzumarillSparkleSplashEffectiveCost(attackerName, attackName, state, pool, cost);
+    if (overridden7 !== cost) cost = overridden7;
+    // v2.997 音波龍｜調諧迴響 — 雙方手牌張數相同時，「恐慌嚎鳴」cost 全部消除
+    const overridden8 = getSonidoTuningResonanceEffectiveCost(attackerName, attackName, state, pool, cost);
+    if (overridden8 !== cost) cost = overridden8;
   }
   // v2.149 璀璨結晶（Tool ACE SPEC）：附有此 Tool 的「太晶」寶可夢使用招式時，
   //   能量需求 -1 個（任意屬性）。優先扣 Colorless，否則扣最後 1 個。
@@ -1532,6 +1551,13 @@ function handlePlaying(
     const inst = attacker.hand[hIdx];
     const card = pool.get(inst.cardId);
     if (!isBasicPokemonCard(card)) return state;
+    // v2.997 海豚俠ex｜全能靈魂 — 「這張卡只可依據海豚俠的特性『全能變身』放置於場上」
+    //   block 從手牌正常 PLAY_BASIC（全能變身另路徑放上場時不會走此 handler）
+    if (isAllPowerSoulBlocked(card)) {
+      return addLog(state,
+        `${attacker.name} 的 ${card.name} 因「全能靈魂」效果，無法從手牌放上場（只能由「全能變身」放置）`,
+        aIdx);
+    }
 
     // Bug fix (#17 擔架): 從手牌放出時清除任何殘留的戰鬥狀態
     // (正常流程不應有殘留，但若卡片曾透過擔架從棄牌取回，防禦性清除)
@@ -1655,7 +1681,9 @@ function handlePlaying(
     // v2.149 提升進化（伊布 SV8a 125）：戰鬥場上時可第 1 回合或剛使出時進化
     //   只有 base 在戰鬥場 + base 卡擁有此特性時 bypass isFirstTurn / justPlaced gate
     const hasPushEvolveAbility = isActive && baseCard.abilities?.some(a => a.name === '提升進化');
-    if (state.isFirstTurn && !hasPushEvolveAbility) return state; // 第一回合不能進化
+    // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化也 bypass isFirstTurn gate（卡面：「最初回合或剛使出的回合也可進化」）
+    const hasShellinkBypassFirst = hasShellinkEvolveBypass(baseCard, state, aIdx, pool);
+    if (state.isFirstTurn && !hasPushEvolveAbility && !hasShellinkBypassFirst) return state; // 第一回合不能進化
     // v2.102 活力森林（Stadium）— 雙方的所有【草】寶可夢就算在剛使出的回合也可進化成【草】寶可夢。
     //   自己最初回合例外（line 775 `state.isFirstTurn` gate 照舊擋）。
     // v2.110：bypass 不只 justPlaced，也 bypass evolvedThisTurn — 允許同回合連鎖進化
@@ -1671,7 +1699,12 @@ function handlePlaying(
     const oppActiveCard = oppActive ? pool.get(oppActive.cardId) : undefined;
     const oppIsEx = oppActiveCard?.subtype === 'ex' || (oppActiveCard?.name?.endsWith('ex') ?? false);
     const hasFightingHowl = baseCard.name === '勒克貓' && oppIsEx;
-    if ((basePoke.justPlaced || basePoke.evolvedThisTurn) && !vigorousForestException && !hasPushEvolveAbility && !hasFightingHowl) return state;
+    // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化 — 自方場上有 partner 時 bypass isFirstTurn + justPlaced + evolvedThisTurn
+    const hasShellinkBypass = hasShellinkEvolveBypass(baseCard, state, aIdx, pool);
+    // v2.997 isFirstTurn gate 也補入 bypass（line 1658 上方已 return state，此處重新補放行）
+    // — 改寫 line 1658 的 gate 較危險；採用「在 line 1674 的 justPlaced gate 加 bypass」
+    //   並讓 line 1658 的 isFirstTurn gate 額外考量本特性。
+    if ((basePoke.justPlaced || basePoke.evolvedThisTurn) && !vigorousForestException && !hasPushEvolveAbility && !hasFightingHowl && !hasShellinkBypass) return state;
     // v2.149 虹色DNA（伊布ex SV8a 126）：從伊布進化的 ex 可放此寶可夢身上完成進化
     //   標準 sameEvoName 檢查失敗時，若 base 卡有此特性 + evoCard.evolvesFrom='伊布' + evoCard 是 ex → 放行
     const hasPrismaticDNA = baseCard.abilities?.some(a => a.name === '虹色DNA');
@@ -2662,6 +2695,15 @@ function handlePlaying(
       return addLog(
         { ...state, players, turnPhase: 'end' },
         `${atkName} 因上回合效果，本回合無法使用招式！`,
+        aIdx
+      );
+    }
+    // v2.997 請假王ex｜懶怠個性 — 對手場上沒有 ex/V 時無法使用招式
+    if (isLazyTraitBlockingAttack(attacker.active, state, pool)) {
+      const atkName = pool.get(attacker.active.cardId)?.name ?? '?';
+      return addLog(
+        { ...state, players, turnPhase: 'end' },
+        `${atkName} 因「懶怠個性」效果，對手場上沒有寶可夢【ex】・【V】，無法使用招式！`,
         aIdx
       );
     }
@@ -4978,6 +5020,8 @@ export function getAvailableAttacks(
   if (player.active.status === 'asleep') return [];
   if (player.active.status === 'paralyzed') return [];
   if (player.active.cantAttackThisTurn) return [];
+  // v2.997 請假王ex｜懶怠個性 — 對手場上沒有 ex/V 時，UI 直接反白
+  if (isLazyTraitBlockingAttack(player.active, state, pool)) return [];
   // Wave 36：玩家級封鎖（電擊魔獸｜雷電在地類）
   if (player.noAttacksThisTurn) return [];
   const card = pool.get(player.active.cardId);
@@ -5058,13 +5102,15 @@ export function getEvolvableTargets(
     // v2.149 提升進化（伊布 SV8a 125）：base 在戰鬥場 + 卡有此特性 → bypass isFirstTurn + justPlaced
     const isFpActive = player.active?.iid === fp.iid;
     const hasPushEvolveAbility = isFpActive && fpCard.abilities?.some(a => a.name === '提升進化');
-    // isFirstTurn gate（除了提升進化 bypass）
-    if (state.isFirstTurn && !hasPushEvolveAbility) continue;
+    // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化 — bypass isFirstTurn + justPlaced + evolvedThisTurn
+    const hasShellinkBypassUI = hasShellinkEvolveBypass(fpCard, state, state.activePlayerIndex, pool);
+    // isFirstTurn gate（除了提升進化 / 刺激進化 bypass）
+    if (state.isFirstTurn && !hasPushEvolveAbility && !hasShellinkBypassUI) continue;
     // 活力森林 bypass 對 base 的要求：base 是草寶可夢
     const forestBypassBase = isForest && fpCard.pokemonType === 'Grass';
-    // 原本的 gate：justPlaced OR evolvedThisTurn 擋。活力森林 / 提升進化 exception 兩者都能豁免（per-evo 再確認）
+    // 原本的 gate：justPlaced OR evolvedThisTurn 擋。活力森林 / 提升進化 / 刺激進化 exception 三者都能豁免（per-evo 再確認）
     const baseBlocked = fp.justPlaced || fp.evolvedThisTurn;
-    if (baseBlocked && !forestBypassBase && !hasPushEvolveAbility) continue;
+    if (baseBlocked && !forestBypassBase && !hasPushEvolveAbility && !hasShellinkBypassUI) continue;
     // v2.149 虹色DNA（伊布ex SV8a 126）：base 有此特性 → 從伊布進化的 ex 可從此 base 進化
     const hasPrismaticDNA = fpCard.abilities?.some(a => a.name === '虹色DNA');
     const validEvos = handEvos.filter(evo => {
@@ -5076,8 +5122,8 @@ export function getEvolvableTargets(
         sameEvoName(ec.evolvesFrom, '伊布') &&
         ec.subtype === 'ex';
       if (!stdMatch && !dnaMatch) return false;
-      // 若 base 被擋但進到這裡 → 代表 forest 或 提升進化 bypass 成立
-      if (baseBlocked && !hasPushEvolveAbility && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
+      // 若 base 被擋但進到這裡 → 代表 forest / 提升進化 / 刺激進化 bypass 成立
+      if (baseBlocked && !hasPushEvolveAbility && !hasShellinkBypassUI && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
       return true;
     });
     if (validEvos.length > 0) {
