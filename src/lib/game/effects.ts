@@ -280,11 +280,13 @@ export function resolveBenchGuard(
     if (targetCard?.tags?.includes('太晶')) {
       return { blocked: true, reason: '太晶寶可夢 防禦效果' };
     }
-    // v2.191 陳舊的羽毛化石（在備戰時不受對手寶可夢招式的傷害）
-    // 同太晶 pattern：只在 kind='attack-damage' + target 為 bench 時 block
-    // resolveBenchGuard caller 已保證 target 在 bench，這裡只比對 cardName
+  }
+  // v3.21 陳舊的羽毛化石（I）備戰免疫：卡面明寫「傷害與效果」皆免——
+  //   v2.191 原實裝只擋 attack-damage 是 bug；本波擴展到 attack-damage|attack-effect 兩者。
+  //   caller 已保證 target 在 bench，這裡只比對 cardName。
+  if (kind === 'attack-damage' || kind === 'attack-effect') {
     if (targetCard?.name === '陳舊的羽毛化石') {
-      return { blocked: true, reason: '陳舊的羽毛化石 備戰免傷' };
+      return { blocked: true, reason: '陳舊的羽毛化石 備戰免傷+免效果' };
     }
   }
   return { blocked: false };
@@ -1732,6 +1734,18 @@ export function canApplyAttackEffectToTarget(
   targetCard: Card | undefined,
   pool: Map<string, Card>,
 ): { blocked: true; reason: string } | { blocked: false } {
+  // v3.21 陳舊的背蓋化石（H）— 卡面「不會受到對手寶可夢招式的『效果』影響」。
+  //   engine.ts ATTACK_POST 階段的 short-circuit 只擋 POST 階段，
+  //   但這裡 helper 涵蓋的是「直接放指示物 / 多目標 / 招式效果觸發」等通道
+  //   （足球 / 卡害穴 / 多龍巴魯托ex 幻影奇襲 等），
+  //   v2.191 漏未處理 → v3.21 在此開頭加 short-circuit 修補。
+  //   僅 fossilOnField 即觸發；外部 caller 已保證 target.iid 為當前指定目標。
+  if (target.fossilOnField) {
+    const fossilCard = pool.get(target.cardId);
+    if (fossilCard?.name === '陳舊的背蓋化石') {
+      return { blocked: true, reason: '陳舊的背蓋化石 免疫招式效果' };
+    }
+  }
   const dIdx = (1 - atkIdx) as 0 | 1;
   for (const [name, rule] of ATTACK_EFFECT_IMMUNITY) {
     if (rule.kind === 'energy-on-target') {
@@ -14068,3 +14082,11 @@ registerV3070DeferredWaveD();
 // register 函式為空 body，僅維持 wave 模板一致；所有 hook 都是 helper 直接 import 使用，無 Map .set()。
 import { registerV3080DeferredWaveC } from './effects/cards/v3080_deferred_wave_c';
 registerV3080DeferredWaveC();
+
+// v3.21 奧爾迪加 (Supporter, G) + 化石卡完整補漏
+//   - 奧爾迪加：借 hand-choose + modal-choice 兩階段 pendingSelection，透過 actorIdx
+//     切換達成「對手 yes/no」機制（UI 已原生支援）
+//   - 化石補漏在本 effects.ts inline 改完（resolveBenchGuard 羽毛 / canApplyAttackEffectToTarget 背蓋）
+//   - 鰭之化石整合進 v3080_deferred_wave_c.ts 的 isImmuneToOppSupporter（單獨 patch）
+import { registerV3210Ordiga } from './effects/cards/v3210_ordiga';
+registerV3210Ordiga();

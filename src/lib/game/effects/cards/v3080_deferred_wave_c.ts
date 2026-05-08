@@ -149,6 +149,14 @@ export function isImmuneToOppSupporter(
   pool: Map<string, Card> | undefined,
 ): boolean {
   if (!pool) return false;
+  // v3.21 條件 0：陳舊的鰭之化石（J）— 卡面「不會受到對手的支援者卡的影響」。
+  //   之前僅在 supporters_gust.ts 兩處內聯過濾，其他走 isImmuneToOppSupporter
+  //   的 supporter resolver 沒涵蓋 → 整合到此 helper 首行。未來新增召叫類 supporter
+  //   只要走此 helper 自動 cover 鰭之化石免疫。
+  if (targetInst?.fossilOnField) {
+    const fossilCard = pool.get(targetInst.cardId);
+    if (fossilCard?.name === '陳舊的鰭之化石') return true;
+  }
   // 條件 1：v3.06 個別免疫特性
   if (isImmuneToOppTrainer(targetInst, pool)) return true;
   // 條件 2：v3.08 廣域堡壘整體免疫

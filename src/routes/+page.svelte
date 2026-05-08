@@ -264,6 +264,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.21</span> 奧爾迪加（Supporter, G）新實裝 + 化石卡 audit 補漏（3 張）</summary>
+        <ul>
+          <li><b>新卡：奧爾迪加</b>（SV8a 189/187, G）— 「查看對手的手牌，從其中任意選擇 1 張卡，放回對手的牌庫下方。然後，對手若希望，從牌庫抽出 1 張卡。」</li>
+          <li><b>實裝機制</b>：重用既有 hand-choose &#43; modal-choice 兩階段 pendingSelection。流程：
+            <ol>
+              <li>出牌者開 hand-choose（actorIdx=自己, sourcePlayerIdx=對手）— UI 顯示對手手牌明牌供選</li>
+              <li>resolver 把選中的卡從對手手牌移除 push 到對手牌庫末尾（&#61;牌庫下方），公開揭示卡名</li>
+              <li>開 modal-choice（actorIdx=對手）— UI 自動切換到對手端顯示 yes/no 模態</li>
+              <li>resolver 看對手選 yes &#8594; 對手抽 1 張；no &#8594; 結束</li>
+            </ol>
+          </li>
+          <li><b>「對手 yes/no」互動機制</b>：不需新 pendingSelection type。既有 modal-choice 只要把 actorIdx 設為對手，UI gate（<code>pendingSelection.actorIdx === myPlayerIndex</code>）自動讓對手端顯示。連線對戰天然適用；單機 AI fallback 在 ai.ts modal-choice case 已處理。</li>
+          <li><b>化石卡 audit 補漏（v2.187 → v3.20 累積發現 3 個缺漏）</b>：
+            <ul>
+              <li><b>陳舊的羽毛化石（I）</b>— 原實裝只擋 attack-damage；卡面寫「備戰區不受傷害與效果」，補為 <code>attack-damage</code> &#43; <code>attack-effect</code> 兩者皆擋（effects.ts <code>resolveBenchGuard</code>）。先前走「狙擊備戰設狀態 / 放指示物」類招式會漏掉羽毛化石的免疫。</li>
+              <li><b>陳舊的背蓋化石（H）</b>— 原實裝只在 engine.ts ATTACK&#95;POST 階段 short-circuit；但 <code>canApplyAttackEffectToTarget</code> 路徑（手之力量 / 卡害穴 / 幻影奇襲 等累積 10&#43; 張招式效果）未檢查，本波在 helper 開頭加 short-circuit。</li>
+              <li><b>陳舊的鰭之化石（J）</b>— 原實裝僅在 supporters_gust.ts 內聯過濾老大的指令；其他走 <code>isImmuneToOppSupporter</code> 的 supporter resolver（覆蓋緊張感 / 融合為雪 / 廣域堡壘）並未 cover 鰭之化石 — 本波整合到 helper 首行規則 0，未來新增召叫類 / 操作對手寶可夢類 supporter 自動吃到鰭之化石免疫。</li>
+            </ul>
+          </li>
+          <li><b>未動到（已正確）</b>：陳舊的根狀化石（H, +1【無】能量需求） / 陳舊的顎之化石（J, 戰鬥場 -30）兩張實裝完整且正確，本波不變動。</li>
+          <li><b>Iron Rule 遵守</b>：Rule 11 — effects.ts / v3080&#95;deferred&#95;wave&#95;c.ts / version.ts / +page.svelte 一律走 Python pipeline（HEAD blob &#8594; in-memory replace &#8594; safe&#95;write &#43; fsync）。Rule 12 — v3210&#95;ordiga.ts 只透過 <code>reg</code> / <code>regR</code> helper 註冊（統一存 _shared.ts Map，leaf module 無循環依賴 / TDZ 風險）。</li>
+          <li>tsc 0 error，svelte-check 0 error。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.20</span> 洛托姆ex｜多重轉接 — toolAttached → extraTools array 重構（major refactor，跳號 v3.20）</summary>
         <ul>
           <li><b>卡面</b>：洛托姆ex（M2 029/080）特性「多重轉接」— 「只要這隻寶可夢在場上，名稱中有『洛托姆』的自己的所有寶可夢，各自身上最多可附有 2 張『寶可夢道具』卡。（這個特性消除時，將身上多附的『寶可夢道具』卡丟棄。）」</li>
