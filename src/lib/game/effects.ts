@@ -359,7 +359,6 @@ import './effects/cards/v2996_g4_wave2';
 import './effects/cards/v2997_g4_wave3';
 import './effects/cards/v2998_g2';
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
-import './effects/cards/v2999_g3_wave1';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -13861,3 +13860,8 @@ regPre('堅果啞鈴|特殊鞭打', (state, aIdx, pool) => {
   const hasSpecial = !!active?.energyAttached.some(e => pool.get(e.cardId)?.subtype === 'Special');
   return { state, damage: 70 + (hasSpecial ? 70 : 0) };
 });
+
+// v2.9991 hotfix: 此檔案需在 PASSIVE_ATTACK_BONUS Map 宣告之後 import
+//   原本放在頂端 (L362) 會因 ESM 模組載入順序在 Map.set() 時拋 TypeError
+//   (PASSIVE_ATTACK_BONUS = undefined)。移到末尾確保 Map 已初始化。
+import './effects/cards/v2999_g3_wave1';

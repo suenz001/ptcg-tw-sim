@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.9991</span> hotfix — 修 v2.999 循環 import 導致 500 error</summary>
+        <ul>
+          <li>v2.999 推送後使用者回報「對戰演練的網頁點進去當掉」（500 Internal Error）</li>
+          <li>根因：v2999_g3_wave1.ts 中以模組頂層 PASSIVE_ATTACK_BONUS.set(...) 註冊棄世猴/原始心得/大晴天 三張卡的 +N 傷害；但其 import 寫在 effects.ts 第 362 行，而 PASSIVE_ATTACK_BONUS Map 在 effects.ts 第 2548 行才被宣告</li>
+          <li>ESM 模組評估順序：第 362 行載入 v2999 模組時，PASSIVE_ATTACK_BONUS 仍是 undefined（temporal dead zone），呼叫 .set() 立即拋 TypeError；整個 effects.ts 模組無法完成初始化，連帶讓 game 頁面 client-side 載入時崩潰</li>
+          <li>修法：將 v2999_g3_wave1 import 從頂端移到 effects.ts 末尾（在 PASSIVE_ATTACK_BONUS 宣告之後），確保模組載入時 Map 已初始化</li>
+          <li>新 Iron Rule 候選：所有對 effects.ts 內 Map（PASSIVE_xxx / ABILITY_EFFECTS / TRAINER_EFFECTS 等）做 .set() 的子模組，import 必須放在 Map 宣告之後（或乾脆放 effects.ts 檔案末尾）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.999</span> Group 3 Wave 1 — 10 張條件 +HP/+傷害/-傷害類 passive 特性實裝</summary>
         <ul>
           <li>新建 v2999_g3_wave1.ts 集中本波 helper export（hasIronTracksDualCore / steelixPalaceReduce / bronzongShelterReduce / gearCoatingReduce）；effects.ts 加 import；engine.ts 加 attackerEffectiveTypes 與 PASSIVE_DAMAGE_REDUCE_COND 後續 inline hooks</li>
