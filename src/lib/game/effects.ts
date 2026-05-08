@@ -1783,6 +1783,10 @@ export function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused'
     if (status === 'confused' && isConfusionImmune(def.active, pool)) {
       return addLog(state, `${defName}｜憨憨臉：免疫【混亂】`, aIdx);
     }
+    // v2.992：不眠（咕咕）— 免疫睡眠
+    if (status === 'asleep' && isSleepImmune(def.active, pool)) {
+      return addLog(state, `${defName}｜不眠：免疫【睡眠】`, aIdx);
+    }
     // v2.91：統一走 canApplyAttackEffectToTarget — 涵蓋薄霧能量 / 硬岩【鬥】能量 /
     // 皇帝之勢 / 抵抗之幕（基礎火箭隊）。
     if (def.active) {
@@ -2235,6 +2239,11 @@ export function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'
       const name = pool.get(def.active.cardId)?.name ?? '?';
       return addLog(state, `正面！但 ${name}｜憨憨臉：免疫【混亂】`, aIdx);
     }
+    // v2.992：不眠（咕咕）— 免疫睡眠
+    if (status === 'asleep' && isSleepImmune(def.active, pool)) {
+      const name = pool.get(def.active.cardId)?.name ?? '?';
+      return addLog(state, `正面！但 ${name}｜不眠：免疫【睡眠】`, aIdx);
+    }
     // v2.92：統一走 canApplyAttackEffectToTarget — 涵蓋薄霧能量 / 硬岩【鬥】能量 /
     // 皇帝之勢 / 抵抗之幕（基礎火箭隊）。
     if (def.active) {
@@ -2486,6 +2495,9 @@ export const PASSIVE_DAMAGE_REDUCE = new Map<string, number>([
                         //   defenderCard 必為 active，所以條件天然成立。
   ['泥巴膜', 30],       // 重泥挽馬 SV9a Stage1 150HP — 「這隻寶可夢受到招式的傷害『-30』點。」
                         //   無 active 限制，但同樣只有 active 會被攻擊，效果等價。
+  // v2.992 Group 1 (A 類)
+  ['毛皮大衣', 20],     // 多麗米亞(H) — 受招式傷害 -20
+  ['爆炸頭防守', 30],   // 爆炸頭水牛ex(I) — 受招式傷害 -30
 ]);
 
 /**
@@ -2652,6 +2664,8 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   //   v2.267：先做擋傷害版本，「效果的影響」需要更廣的 hook（status / 拔能量 / 移指示物 等）
   //   暫不處理；如未來發現 bug 再加 PASSIVE_FULL_PROTECTION 類 set。
   ['璀璨鱗片', (att) => (att.tags ?? []).includes('太晶')],
+  // v2.992 仙子伊布(H) | 神秘守護 — 不受對手 ex 招式的傷害
+  ['神秘守護', (att) => att.subtype === 'ex' || att.name.endsWith('ex') || att.name.endsWith('EX')],
 ]);
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2877,6 +2891,62 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
         dIdx);
     }
     return state;
+  }],
+  // v2.992 Group 1 反擊
+  // 鐵脖頸(H) | 自動用武 — 戰鬥場受傷時放 3 指示物到攻擊者
+  ['自動用武', (state, dIdx, pool) => {
+    const aIdx = (1 - dIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) {
+      att.active = { ...att.active, damage: att.active.damage + 30 };
+      players[aIdx] = att;
+      const attName = pool.get(att.active.cardId)?.name ?? '?';
+      return addLog({ ...state, players },
+        `自動用武：${attName} 身上放置 3 個傷害指示物（+30）`,
+        dIdx);
+    }
+    return state;
+  }],
+  // 赫普的啪嚓海膽ex(I) | 反擊針 — 戰鬥場受傷時放 3 指示物到攻擊者
+  ['反擊針', (state, dIdx, pool) => {
+    const aIdx = (1 - dIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) {
+      att.active = { ...att.active, damage: att.active.damage + 30 };
+      players[aIdx] = att;
+      const attName = pool.get(att.active.cardId)?.name ?? '?';
+      return addLog({ ...state, players },
+        `反擊針：${attName} 身上放置 3 個傷害指示物（+30）`,
+        dIdx);
+    }
+    return state;
+  }],
+  // 拖拖蚓ex(H) | 快掃拳返 — 受傷時放 (鋼能量數×2) 個指示物
+  ['快掃拳返', (state, dIdx, pool) => {
+    const aIdx = (1 - dIdx) as 0 | 1;
+    const def = state.players[dIdx].active;
+    if (!def) return state;
+    const metalCount = def.energyAttached.filter(e => {
+      const ec = pool.get(e.cardId);
+      if (!ec || ec.supertype !== 'Energy') return false;
+      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Metal' || /【鋼】/.test(ec.name))) return true;
+      if (ec.pokemonType === 'Metal') return true;
+      return false;
+    }).length;
+    if (metalCount === 0) return state;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (!att.active) return state;
+    const counters = metalCount * 2;
+    const dmg = counters * 10;
+    att.active = { ...att.active, damage: att.active.damage + dmg };
+    players[aIdx] = att;
+    const attName = pool.get(att.active.cardId)?.name ?? '?';
+    return addLog({ ...state, players },
+      `快掃拳返：鋼能量 ${metalCount} 個 → ${attName} 身上放置 ${counters} 個傷害指示物（+${dmg}）`,
+      dIdx);
   }],
 ]);
 
@@ -11900,6 +11970,144 @@ PASSIVE_PREVENT_KO.set('結實', (inst, _card, _dmg) => {
   if (inst.damage > 0) return { prevent: false, leaveHP: 0 };
   return { prevent: true, leaveHP: 10 };
 });
+
+// v2.992 超級摔角鷹人ex(I) | 堅忍之軀 — 受 KO 時擲幣，正面留 10HP
+// fn 是 pure 簽名(無 state)，用 Math.random 擲(engine 套用 prevent KO 命中時自動寫 log)
+// 卡面無滿血條件，與勤奮之心/結實不同。
+PASSIVE_PREVENT_KO.set('堅忍之軀', (_inst, _card, _dmg) => {
+  const heads = Math.random() < 0.5;
+  if (!heads) return { prevent: false, leaveHP: 0 };
+  return { prevent: true, leaveHP: 10 };
+});
+
+// ============================================================================
+// v2.992 Group 1 — 7 new passive hook maps
+// ============================================================================
+
+/** 條件式被動受傷減免：fn(inst, card) => 要減的點數(0=不觸發) */
+export const PASSIVE_DAMAGE_REDUCE_COND = new Map<string, (
+  inst: CardInstance, card: Card,
+) => number>([
+  // 雷吉洛克(I) | 岩石盔甲 — 附能量時受招式傷害 -30
+  ['岩石盔甲', (inst) => inst.energyAttached.length > 0 ? 30 : 0],
+]);
+
+/** 受招式傷害時擲硬幣免傷 */
+export const PASSIVE_COIN_AVOID = new Map<string, (
+  inst: CardInstance, card: Card, pool: Map<string, Card>,
+) => boolean>([
+  // 變隱龍(H) | 躲藏高手 — 無條件擲幣
+  ['躲藏高手', () => true],
+  // 吉雉雞(H) | 腎上腺費洛蒙 — 附惡能量時擲幣
+  ['腎上腺費洛蒙', (inst, _card, pool) => {
+    return inst.energyAttached.some(e => {
+      const ec = pool.get(e.cardId);
+      if (!ec || ec.supertype !== 'Energy') return false;
+      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Darkness' || /【惡】/.test(ec.name))) return true;
+      if (ec.pokemonType === 'Darkness') return true;
+      return false;
+    });
+  }],
+]);
+
+/** 被招式 KO 時對攻擊者放指示物 */
+export const PASSIVE_KO_RETALIATION = new Map<string, { counters: number }>([
+  // 沙鈴仙人掌(I) | 炸裂針 — 戰鬥場 KO 時放 6 個指示物
+  ['炸裂針', { counters: 6 }],
+]);
+
+/** 受招式 KO 時的廣義 hook(不只放指示物) */
+export type PassiveOnKoFn = (
+  state: GameState,
+  dIdx: 0 | 1,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>,
+  defenderCard: Card,
+) => GameState;
+export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
+  // 桃歹郎(I) | 最後鎖鏈 — 從牌庫任選 1 張加手 + 重洗
+  ['最後鎖鏈', (state, dIdx, _aIdx, _pool, _defCard) => {
+    if (state.players[dIdx].deck.length === 0) {
+      return addLog(state, '最後鎖鏈：牌庫為空，無法觸發', dIdx);
+    }
+    const s = addLog(state, '最後鎖鏈：從牌庫任選 1 張加手牌（並重洗）', dIdx);
+    return withPending(s, {
+      type: 'deck-search',
+      actorIdx: dIdx, sourcePlayerIdx: dIdx,
+      filter: 'Any',
+      minCount: 0, maxCount: 1,
+      effectKey: 'search-to-hand-reshuffle',
+    });
+  }],
+  // 願增猿ex(H) | 鬆口氣 — 場上有桃歹郎ex 則對手 pendingPrize -1
+  ['鬆口氣', (state, dIdx, aIdx, pool, _defCard) => {
+    const me = state.players[dIdx];
+    const all = [...(me.active ? [me.active] : []), ...me.bench];
+    const hasMomotaroEx = all.some(inst => {
+      const c = pool.get(inst.cardId);
+      return c?.name === '桃歹郎ex' || (c?.name === '桃歹郎' && c?.subtype === 'ex');
+    });
+    if (!hasMomotaroEx) return state;
+    const pp: [number, number] = [...(state.pendingPrizes ?? [0, 0])] as [number, number];
+    if (pp[aIdx] > 0) {
+      pp[aIdx] = Math.max(0, pp[aIdx] - 1);
+      return addLog({ ...state, pendingPrizes: pp },
+        '「鬆口氣」啟動：場上有桃歹郎ex → 對手獲得的獎賞牌 -1', dIdx);
+    }
+    return state;
+  }],
+]);
+
+/** 受招式傷害時的廣義 hook(造成 ≥1 傷害即觸發，不需 KO) */
+export type PassiveOnDamagedFn = (
+  state: GameState,
+  dIdx: 0 | 1,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>,
+  defenderCard: Card,
+) => GameState;
+export const PASSIVE_ON_DAMAGED = new Map<string, PassiveOnDamagedFn>([
+  // 火箭隊的瓦斯彈(I) | 警備濁霧 — 戰鬥場受傷時搜 ≤2 張瓦斯彈到備戰
+  ['警備濁霧', (state, dIdx, _aIdx, _pool, _defCard) => {
+    const me = state.players[dIdx];
+    const slots = 5 - me.bench.length;
+    if (slots <= 0) return addLog(state, '警備濁霧：備戰區已滿', dIdx);
+    if (me.deck.length === 0) return addLog(state, '警備濁霧：牌庫為空', dIdx);
+    const s = addLog(state,
+      `警備濁霧：從牌庫選最多 ${Math.min(2, slots)} 張「瓦斯彈」放置於備戰區（並重洗）`, dIdx);
+    return withPending(s, {
+      type: 'deck-search',
+      actorIdx: dIdx, sourcePlayerIdx: dIdx,
+      filter: 'NameContains:瓦斯彈',
+      minCount: 0, maxCount: Math.min(2, slots),
+      effectKey: 'search-bench-reshuffle',
+    });
+  }],
+]);
+
+/** 被招式 KO 時，若攻擊者符合 predicate 則對手獎賞 0 */
+export const PASSIVE_PREVENT_PRIZE = new Map<string, (
+  attackerCard: Card,
+) => boolean>([
+  // 脫殼忍者(I) | 脆弱蛻殼 — 被 ex 攻擊者 KO 時對手 0 獎賞
+  ['脆弱蛻殼', (att) => att.subtype === 'ex' || att.name.endsWith('ex') || att.name.endsWith('EX')],
+]);
+
+/** 攻擊方持有此特性 → 攻擊時自動帶這些 buff */
+export const PASSIVE_ATTACKER_BUFF = new Map<string, { skipDefEffects?: boolean }>([
+  // 波盪水ex(H) | 藏青浪濤 — 自身招式不計算對手戰鬥場附加效果(永遠 skipDefEffects)
+  ['藏青浪濤', { skipDefEffects: true }],
+]);
+
+// ============================================================================
+// v2.992 Group 1 — 狀態免疫 helper：isSleepImmune (咕咕 | 不眠)
+// ============================================================================
+function isSleepImmune(inst: CardInstance | null, pool: Map<string, Card>): boolean {
+  if (!inst) return false;
+  const card = pool.get(inst.cardId);
+  return !!card?.abilities?.some(a => a.name === '不眠');
+}
+
 
 // ── 古劍豹｜沉雪 ──────────────────────────────────────────────────────────
 // 卡面：「在自己的回合，從手牌將這張卡放置於備戰區時，可使用 1 次。將場上的競技場卡丟棄。」

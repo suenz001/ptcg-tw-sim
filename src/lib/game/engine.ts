@@ -17,6 +17,8 @@ import { RULE_BOX_SUBTYPES } from './types';
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
   PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
+  PASSIVE_DAMAGE_REDUCE_COND, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
+  PASSIVE_ON_DAMAGED, PASSIVE_PREVENT_PRIZE, PASSIVE_ATTACKER_BUFF,
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
@@ -2790,6 +2792,13 @@ function handlePlaying(
     //                    （含被動減傷特性、防禦道具、下次被攻擊 -N、條件式完全免疫）
     let skipWeakRes = false;
     let skipDefEffects = false;
+    // v2.992 PASSIVE_ATTACKER_BUFF（波盪水ex 藏青浪濤）— 攻擊者持有特性 → 自動 skipDefEffects
+    if (attackerCard?.abilities) {
+      for (const ab of attackerCard.abilities) {
+        const buf = PASSIVE_ATTACKER_BUFF.get(ab.name);
+        if (buf?.skipDefEffects) skipDefEffects = true;
+      }
+    }
     if (preFn) {
       const preResult = preFn(workingState, aIdx, pool, action);
       workingState = preResult.state;
@@ -3059,6 +3068,12 @@ function handlePlaying(
       for (const ab of defenderCard.abilities) {
         const reduce = PASSIVE_DAMAGE_REDUCE.get(ab.name);
         if (reduce) baseDamage = Math.max(0, baseDamage - reduce);
+        // v2.992 條件式減免（雷吉洛克 岩石盔甲 等）
+        const condFn = PASSIVE_DAMAGE_REDUCE_COND.get(ab.name);
+        if (condFn && defender.active) {
+          const reduceN = condFn(defender.active, defenderCard);
+          if (reduceN > 0) baseDamage = Math.max(0, baseDamage - reduceN);
+        }
       }
     }
 
@@ -3211,6 +3226,21 @@ function handlePlaying(
           workingState = result.newState;
           if (result.immune) { baseDamage = 0; break; }
         }
+      }
+    }
+
+    // v2.992 被動擲幣免傷（變隱龍 躲藏高手 / 吉雉雞 腎上腺費洛蒙）
+    if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities
+        && !isColorlessAbilityBlocked(state, defenderCard, pool)) {
+      for (const ab of defenderCard.abilities) {
+        const coinFn = PASSIVE_COIN_AVOID.get(ab.name);
+        if (!coinFn || !defender.active) continue;
+        if (!coinFn(defender.active, defenderCard, pool)) continue;
+        const r = flipCoinsWithLog(workingState, 1, `${defenderCard.name}｜${ab.name}`, dIdx);
+        workingState = addLog(r.state,
+          `${defenderCard.name}｜${ab.name}：${r.heads ? '正面 → 免疫此招式傷害！' : '反面 → 受傷害'}`,
+          dIdx);
+        if (r.heads) { baseDamage = 0; break; }
       }
     }
 
@@ -3422,8 +3452,22 @@ function handlePlaying(
           }
         }
       }
+      // v2.992 PASSIVE_PREVENT_PRIZE（脫殼忍者 脆弱蛻殼）— 若攻擊方符合 predicate 則獎賞改 0
+      let preventPrizeAll = false;
+      if (defenderCard.abilities) {
+        for (const ab of defenderCard.abilities) {
+          const fnPP = PASSIVE_PREVENT_PRIZE.get(ab.name);
+          if (fnPP && fnPP(attackerCard)) {
+            preventPrizeAll = true;
+            newState = addLog(newState,
+              `「${ab.name}」啟動：${defenderCard.name} 被 ${attackerCard.name} KO，但對手無法獲得獎賞卡`, null);
+            break;
+          }
+        }
+      }
       // 獎賞牌下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
-      const prizes = Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + ancientEnergyAdjust);
+      const prizes = preventPrizeAll ? 0
+        : Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + ancientEnergyAdjust);
       defPlayers[dIdx] = defenderState;
       // v2.260 Bug #4：若古舊能量這次有 -1，per-player flag 設為 true（之後不再 -1）
       const newAncientFlags: [boolean, boolean] = ancientEnergyJustUsed
@@ -3441,6 +3485,31 @@ function handlePlaying(
       newState = addPendingPrize(newState, aIdx, prizes);
       // v2.246 KO cause tracking — 招式 KO 對手戰鬥位
       newState = recordOppKO(newState, dIdx, defenderCard, 'attack');
+      // v2.992 PASSIVE_KO_RETALIATION（沙鈴仙人掌 炸裂針）— KO 時對攻擊者放 N 個指示物
+      if (defenderCard.abilities) {
+        for (const ab of defenderCard.abilities) {
+          const ret = PASSIVE_KO_RETALIATION.get(ab.name);
+          if (!ret) continue;
+          const refPlayers = [...newState.players] as [PlayerState, PlayerState];
+          if (refPlayers[aIdx].active) {
+            const dmg = ret.counters * 10;
+            refPlayers[aIdx] = {
+              ...refPlayers[aIdx],
+              active: { ...refPlayers[aIdx].active!, damage: refPlayers[aIdx].active!.damage + dmg },
+            };
+            const attName2 = pool.get(refPlayers[aIdx].active!.cardId)?.name ?? '?';
+            newState = addLog({ ...newState, players: refPlayers },
+              `「${ab.name}」啟動：${attName2} 身上放置 ${ret.counters} 個傷害指示物（+${dmg}）`, dIdx);
+          }
+        }
+      }
+      // v2.992 PASSIVE_ON_KO（桃歹郎 最後鎖鏈 / 願增猿ex 鬆口氣）
+      if (defenderCard.abilities) {
+        for (const ab of defenderCard.abilities) {
+          const fnKO = PASSIVE_ON_KO.get(ab.name);
+          if (fnKO) newState = fnKO(newState, dIdx, aIdx, pool, defenderCard);
+        }
+      }
       if (deferredBonus > 0) {
         newState = addLog(newState, `${defenderCard.name} 因「多餘花粉」遺留效果，+${deferredBonus} 張獎勵牌`, null);
       }
@@ -3702,6 +3771,14 @@ function handlePlaying(
       newState = addLog(newState,
         `光之翼：${attackerCard?.name ?? '?'} 不受對手特性效果影響（${defenderCard.abilities.map(a => a.name).join('、')} 無效）`,
         aIdx);
+    }
+
+    // v2.992 PASSIVE_ON_DAMAGED（火箭隊的瓦斯彈 警備濁霧）— 受傷觸發 deck search
+    if (baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
+      for (const ab of defenderCard.abilities) {
+        const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
+        if (fnOD) newState = fnOD(newState, dIdx, aIdx, pool, defenderCard);
+      }
     }
 
     // v2.382：殼捲風旋轉 retaliation — defender 有 retaliateCountersOnNextHit flag

@@ -264,6 +264,25 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.992</span> Group 1 — 22 張 H/I 被動特性實裝（16 張完整 + 6 張 deferred）</summary>
+        <ul>
+          <li>受傷減 N（A 類）：多麗米亞｜毛皮大衣（-20）/ 爆炸頭水牛ex｜爆炸頭防守（-30）— 加入 PASSIVE_DAMAGE_REDUCE</li>
+          <li>免疫對手 ex 招式（A 類）：仙子伊布｜神秘守護 — 加入 PASSIVE_IMMUNITY</li>
+          <li>受傷反擊放指示物（A/C 類）：鐵脖頸｜自動用武（3 個）/ 赫普的啪嚓海膽ex｜反擊針（3 個）/ 拖拖蚓ex｜快掃拳返（鋼能量×2 個）— 加入 PASSIVE_RETALIATION</li>
+          <li>條件式受傷減免（B 類）：雷吉洛克｜岩石盔甲（附能量時 -30）— 新 hook PASSIVE_DAMAGE_REDUCE_COND</li>
+          <li>擲幣 KO 留 10 HP（B 類）：超級摔角鷹人ex｜堅忍之軀 — 加入 PASSIVE_PREVENT_KO（無滿血條件，與勤奮之心/結實不同）</li>
+          <li>擲幣免傷（B 類）：變隱龍｜躲藏高手 / 吉雉雞｜腎上腺費洛蒙（限附惡能量時）— 新 hook PASSIVE_COIN_AVOID</li>
+          <li>KO 時放指示物（C 類）：沙鈴仙人掌｜炸裂針（6 個）— 新 hook PASSIVE_KO_RETALIATION</li>
+          <li>狀態免疫（D 類）：咕咕｜不眠（不會睡眠）— 新 helper isSleepImmune，statusPost / coinStatusPost 同步檢查</li>
+          <li>KO 時觸發（I 類）：桃歹郎｜最後鎖鏈（搜 1 張到手）/ 願增猿ex｜鬆口氣（場上有桃歹郎ex 則對手獎賞 -1）/ 脫殼忍者｜脆弱蛻殼（對手 ex 招式 KO 時不得獎賞）— 新 hook PASSIVE_ON_KO + PASSIVE_PREVENT_PRIZE</li>
+          <li>受傷時觸發 deck search（I 類）：火箭隊的瓦斯彈｜警備濁霧（搜 ≤2 張瓦斯彈放備戰）— 新 hook PASSIVE_ON_DAMAGED</li>
+          <li>攻擊端 buff（H 類）：波盪水ex｜藏青浪濤（自身招式皆 skipDefEffects）— 新 hook PASSIVE_ATTACKER_BUFF（卡面要求所有招式都生效，不只宣洩吼嘯）</li>
+          <li>Deferred 6 張（需更廣 hook）：斯魔茶｜藏隱 / 小霞的鯉魚王｜深度下潛（備戰免疫，需改 hitBenchPickPost / multiSnipePost helper）/ 斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪（對手物品支援者效果免疫，影響 &gt;100 卡）/ 肋骨海龜｜全能硬殼（對手附特殊能量寶可夢免疫，需新 hook）</li>
+          <li>新增 7 個被動 hook map：PASSIVE_DAMAGE_REDUCE_COND / PASSIVE_COIN_AVOID / PASSIVE_KO_RETALIATION / PASSIVE_ON_KO / PASSIVE_ON_DAMAGED / PASSIVE_PREVENT_PRIZE / PASSIVE_ATTACKER_BUFF</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.991</span> 33 對 wave-vs-effects 重複註冊全檢 — 修剩餘 active bug + dead-code 清理</summary>
         <ul>
           <li>v2.99 操陷蛛修完後做完整 audit：33 對 wave 檔 vs effects.ts 的重複註冊全檢</li>
