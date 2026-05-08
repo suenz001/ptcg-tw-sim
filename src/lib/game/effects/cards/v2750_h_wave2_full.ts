@@ -298,6 +298,75 @@ regR('h-wave2-pickup-energy-to-hand', (state, aIdx, iids, _params, _pool) => {
   });
 });
 
+// v3.09 從棄牌區挑 ≤N 基本能量 → 附到 1 隻備戰寶可夢身上（雙階段 pending）
+//   花舞鳥｜能量支援（MC 133/742）等卡使用此 pattern
+function discardSearchAttachToBenchPost(max: number, label: string, type?: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (p.bench.length === 0) return addLog(state, `${label}：備戰區沒有寶可夢`, aIdx);
+    if (p.discard.length === 0) return addLog(state, `${label}：棄牌區為空`, aIdx);
+    const validIids = p.discard.filter(c => {
+      const card = pool.get(c.cardId);
+      if (!(card?.supertype === 'Energy' && card.subtype === 'Basic')) return false;
+      if (type && card.pokemonType !== type) return false;
+      return true;
+    }).map(c => c.iid);
+    if (validIids.length === 0) return addLog(state, `${label}：棄牌區無對應基本能量`, aIdx);
+    return withPending(addLog(state, `${label}：從棄牌區挑 0~${Math.min(max, validIids.length)} 張基本能量`, aIdx), {
+      type: 'discard-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'BasicEnergy',
+      minCount: 0, maxCount: Math.min(max, validIids.length),
+      effectKey: 'h-wave2-pickup-energy-to-bench-stage1',
+      params: { validIids, label },
+    });
+  };
+}
+
+regR('h-wave2-pickup-energy-to-bench-stage1', (state, aIdx, iids, params, _pool) => {
+  if (iids.length === 0) {
+    return addLog(state, `${(params?.label as string) ?? ''}：未選擇能量，效果結束`, aIdx);
+  }
+  const label = (params?.label as string) ?? '能量支援';
+  const p = state.players[aIdx];
+  if (p.bench.length === 0) {
+    return addLog(state, `${label}：備戰區沒有寶可夢，能量留在棄牌區`, aIdx);
+  }
+  return withPending(addLog(state, `${label}：選擇 1 隻備戰寶可夢接收能量（已挑 ${iids.length} 張）`, aIdx), {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'h-wave2-pickup-energy-to-bench-stage2',
+    params: { energyIids: iids, label },
+  });
+});
+
+regR('h-wave2-pickup-energy-to-bench-stage2', (state, aIdx, picked, params, pool) => {
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const label = (params?.label as string) ?? '能量支援';
+  if (picked.length === 0 || energyIids.length === 0) return state;
+  const targetIid = picked[0];
+  const energySet = new Set(energyIids);
+  const p = state.players[aIdx];
+  const energies = p.discard.filter(c => energySet.has(c.iid));
+  const restDiscard = p.discard.filter(c => !energySet.has(c.iid));
+  const target = p.bench.find(b => b.iid === targetIid);
+  const targetName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const newBench = p.bench.map(b =>
+    b.iid === targetIid
+      ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+      : b
+  );
+  const energyNames = energies.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  const newPlayers = [...state.players] as [import('../../types').PlayerState, import('../../types').PlayerState];
+  newPlayers[aIdx] = { ...p, discard: restDiscard, bench: newBench };
+  return addLog(
+    { ...state, players: newPlayers },
+    `${label}：${energyNames}（${energies.length} 張）附到 ${targetName} 身上`,
+    aIdx,
+  );
+});
+
 // 自身互換戰鬥/備戰
 function selfSwapPostInline(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
@@ -581,7 +650,9 @@ regPost('鬃岩狼人|渦輪刀鋒', discardSearchBasicEnergiesPost(2, '渦輪�
 
 // 花舞鳥|能量支援 — 棄牌區挑最多 2 基本能量附 1 隻備戰
 regPre('花舞鳥|能量支援', (s) => ({ state: s, damage: 0 }));
-regPost('花舞鳥|能量支援', discardSearchBasicEnergiesPost(2, '能量支援'));
+// v3.09 修 bug：原本用 discardSearchBasicEnergiesPost（拿到手牌）違反卡面
+// 卡面（MC 133/742）：「從自己的棄牌區選擇最多 2 張『基本能量』卡，附於自己的 1 隻備戰寶可夢身上」
+regPost('花舞鳥|能量支援', discardSearchAttachToBenchPost(2, '能量支援'));
 
 // 烏波|打水 — 棄牌挑最多 3 基本水能量，給對手看後放回牌庫並重洗（純展示+混回）
 regPre('烏波|打水', (s) => ({ state: s, damage: 0 }));

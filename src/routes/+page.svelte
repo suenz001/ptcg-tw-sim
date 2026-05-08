@@ -263,6 +263,16 @@
     <summary><h2>📋 版本更新記錄</h2></summary>
     <div class="changelog-list">
 
+      <details>
+        <summary><span class="ver-badge">v3.09</span> hotfix — 花舞鳥｜能量支援 卡面行為錯誤（拿到手牌 → 附到備戰）</summary>
+        <ul>
+          <li>使用者回報：花舞鳥（MC 133/742）招式「能量支援」應該把選到的能量附到備戰寶可夢身上，但程式做成「加到手牌」</li>
+          <li>根因：v2750_h_wave2_full.ts 的 helper discardSearchBasicEnergiesPost 把選到的能量加到 hand，但花舞鳥卡面是「附於 1 隻備戰寶可夢身上」</li>
+          <li>修法：新增 helper discardSearchAttachToBenchPost — 雙階段 pending：階段 1 discard-search 挑 ≤2 基本能量、階段 2 bench-choose 選 1 隻備戰寶可夢接收能量</li>
+          <li>影響範圍：只改花舞鳥｜能量支援；鬃岩狼人｜渦輪刀鋒 沿用舊 helper（卡面行為待確認）</li>
+        </ul>
+      </details>
+
       <details open>
         <summary><span class="ver-badge">v3.08</span> Deferred Wave C — Group 3 剩餘 4 張最複雜 deferred passive（廣域堡壘 / 平穩境地 / 潛入記憶 / 多重轉接*）</summary>
         <ul>
