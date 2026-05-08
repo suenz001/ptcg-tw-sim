@@ -56,6 +56,15 @@ import {
   bronzongShelterReduce,
   gearCoatingReduce,
 } from './effects/cards/v2999_g3_wave1';
+// v3.0 Group 3 Wave 2 helpers
+import {
+  magmarFlowingBurnBonus,
+  isBasicWaterEnergy,
+  canRelicanthDiverCatchTrigger,
+  canTogekissMiracleKissTrigger,
+  hasMeloettaExDebut,
+  magearnaAutoHealAmount,
+} from './effects/cards/v3000_g3_wave2';
 
 // v2.341：鐵荊棘ex SV5a 033/066｜初始化
 // 「只要這隻寶可夢在戰鬥場上，雙方場上『擁有規則的寶可夢』（『未來』寶可夢除外）的特性全部消除。」
@@ -2622,13 +2631,38 @@ function handlePlaying(
       afterAttach = addLog({ ...afterAttach, players: newPlayers2 }, '[白日夢]對手附能量於受招式者 → 對手回合結束（一次性，flag 清除）', aIdx);
       return applyAction(afterAttach, { type: 'END_TURN' }, pool);
     }
+    // v3.0 瑪機雅娜｜自動治癒 — 戰鬥場上有此卡時，附能量到任何寶可夢 → 該寶可夢恢復 90 HP。
+    //   只看 attacher（aIdx）戰鬥位是否為持有者；若是，找到 target 寶可夢 inst 對 damage -90（不低於 0）。
+    {
+      const healAmt = magearnaAutoHealAmount(afterAttach, aIdx, pool);
+      if (healAmt > 0) {
+        const newPlayersHeal = [...afterAttach.players] as [PlayerState, PlayerState];
+        const updateHeal = (c: CardInstance): CardInstance => {
+          if (c.iid !== target!.iid) return c;
+          const newDmg = Math.max(0, (c.damage ?? 0) - healAmt);
+          return { ...c, damage: newDmg };
+        };
+        newPlayersHeal[aIdx] = {
+          ...newPlayersHeal[aIdx],
+          active: newPlayersHeal[aIdx].active && newPlayersHeal[aIdx].active!.iid === target.iid
+            ? updateHeal(newPlayersHeal[aIdx].active!) : newPlayersHeal[aIdx].active,
+          bench: newPlayersHeal[aIdx].bench.map(updateHeal),
+        };
+        const targetCardName = pool.get(target.cardId)?.name ?? '?';
+        afterAttach = addLog({ ...afterAttach, players: newPlayersHeal },
+          `「自動治癒」啟動：${targetCardName} 恢復 ${healAmt} HP`, aIdx);
+      }
+    }
     return clearFestivalVenueProtectedStatuses(afterAttach, pool);
   }
 
   // ── 宣告招式 ──────────────────────────────────────────────────────────────
   if (action.type === 'ATTACK') {
     if (state.turnPhase !== 'main') return state;
-    if (state.isFirstTurn && aIdx === state.firstPlayerIdx) return state; // 先手第 1 回合不能攻擊
+    // v3.0 美洛耶塔ex｜出道演出 — 此寶可夢可在先手第 1 回合使用招式（解除限制）
+    const meloettaBypassFirstTurn = state.isFirstTurn && aIdx === state.firstPlayerIdx
+      && hasMeloettaExDebut(attacker.active, pool);
+    if (state.isFirstTurn && aIdx === state.firstPlayerIdx && !meloettaBypassFirstTurn) return state; // 先手第 1 回合不能攻擊
     if (!attacker.active) return state;
     if (!defender.active) return state;
 
@@ -3461,9 +3495,17 @@ function handlePlaying(
       }
 
       const updatedActive = { ...defenderState.active, damage: newDamage };
+      // v3.0 獵斑魚｜潛者捕捉 — 自方場上有此卡 + 被 KO 的是【水】寶可夢 → 身上「基本【水】能量」回手。
+      //   注意：只攔基本水能量，特殊能量仍走棄牌堆。
+      let waterEnergyToHand: CardInstance[] = [];
+      let nonWaterEnergyAttached: CardInstance[] = updatedActive.energyAttached;
+      if (canRelicanthDiverCatchTrigger(newState, dIdx, defenderCard, pool)) {
+        waterEnergyToHand = updatedActive.energyAttached.filter(e => isBasicWaterEnergy(e.cardId, pool));
+        nonWaterEnergyAttached = updatedActive.energyAttached.filter(e => !isBasicWaterEnergy(e.cardId, pool));
+      }
       const koDiscard: CardInstance[] = [
         updatedActive,
-        ...updatedActive.energyAttached,
+        ...nonWaterEnergyAttached,
         ...(updatedActive.toolAttached ? [updatedActive.toolAttached] : []),
         ...(updatedActive.evolvedFromStack ?? []),
       ];
@@ -3491,6 +3533,12 @@ function handlePlaying(
         defenderState.hand = [...defenderState.hand, cleanInst];
       } else {
         defenderState.discard = [...defenderState.discard, ...koDiscard];
+      }
+      // v3.0 獵斑魚｜潛者捕捉 — 把過濾出的基本水能量放回 defender 手牌
+      if (waterEnergyToHand.length > 0) {
+        defenderState.hand = [...defenderState.hand, ...waterEnergyToHand];
+        newState = addLog(newState,
+          `「潛者捕捉」啟動：${defenderCard?.name ?? '?'} 身上的「基本【水】能量」${waterEnergyToHand.length} 張放回手牌`, dIdx);
       }
       defenderState.active = null;
       // Wave 39：蝶結萌虻｜多餘花粉 — 跨回合獎賞加成
@@ -3553,9 +3601,22 @@ function handlePlaying(
           }
         }
       }
+      // v3.0 波克基斯｜奇跡之吻 — 攻擊方場上有此卡 → 擲幣 1 次正面 +1 獎賞（不重複）。
+      //   只在「對手戰鬥位被 KO」時觸發；本路徑為招式 KO 對手 active，符合卡面條件。
+      let togekissBonus = 0;
+      if (canTogekissMiracleKissTrigger(newState, aIdx, pool)) {
+        const flipResultMK = flipCoinsWithLog(newState, 1, '波克基斯｜奇跡之吻', aIdx);
+        newState = flipResultMK.state;
+        if (flipResultMK.heads === 1) {
+          togekissBonus = 1;
+          newState = addLog(newState, `「奇跡之吻」啟動：硬幣正面 → 多獲得 1 張獎賞卡`, aIdx);
+        } else {
+          newState = addLog(newState, `「奇跡之吻」啟動：硬幣反面 → 不增加獎賞卡`, aIdx);
+        }
+      }
       // 獎賞牌下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
       const prizes = preventPrizeAll ? 0
-        : Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + ancientEnergyAdjust);
+        : Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + ancientEnergyAdjust + togekissBonus);
       defPlayers[dIdx] = defenderState;
       // v2.260 Bug #4：若古舊能量這次有 -1，per-player flag 設為 true（之後不再 -1）
       const newAncientFlags: [boolean, boolean] = ancientEnergyJustUsed
@@ -4128,8 +4189,13 @@ function handlePlaying(
         continue;
       }
       const burnedCard = pool.get(burnedPlayer.active.cardId);
-      const newBurnDmg = burnedPlayer.active.damage + 20;
+      // v3.0 鴨嘴炎獸｜熔岩波動 — 對手場上有此卡時，灼傷指示物 +3（=+30 傷害）。
+      const burnBonus = magmarFlowingBurnBonus(state, oIdx, pool);
+      const newBurnDmg = burnedPlayer.active.damage + 20 + burnBonus;
       const burnedHP = getEffectiveHP(burnedPlayer.active, pool, state);
+      if (burnBonus > 0) {
+        state = addLog(state, `「熔岩波動」啟動：灼傷傷害 +${burnBonus}`, oIdx);
+      }
       if (burnedHP > 0 && newBurnDmg >= burnedHP) {
         // 燒傷致死 → KO；獎賞給對手 oIdx
         const koDiscard3: CardInstance[] = [
@@ -5057,7 +5123,11 @@ export function getAvailableAttacks(
   pool: Map<string, Card>
 ): number[] {
   if (state.turnPhase !== 'main') return [];
-  if (state.isFirstTurn && state.activePlayerIndex === state.firstPlayerIdx) return [];
+  // v3.0 美洛耶塔ex｜出道演出 — 此寶可夢可在先手第 1 回合使用招式（解除 UI 限制）
+  if (state.isFirstTurn && state.activePlayerIndex === state.firstPlayerIdx) {
+    const player0 = state.players[state.activePlayerIndex];
+    if (!hasMeloettaExDebut(player0.active, pool)) return [];
+  }
   const player = state.players[state.activePlayerIndex];
   if (!player.active) return [];
   // 狀態/效果封鎖：睡眠、麻痺、上回合招式設下的「本回合無法使用招式」

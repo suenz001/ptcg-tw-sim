@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v3.0</span> Group 3 Wave 2 — 10 張對手互動 / 特殊機制 passive 特性（7 實裝 / 3 defer）</summary>
+        <ul>
+          <li><strong>蟲甲聖｜球形盾牌</strong>（A1 受傷免疫）— 場上有此卡 &rarr; 自方所有備戰寶可夢不受對手寶可夢招式的「傷害與效果」。實作於 effects.ts resolveBenchGuard，attack-damage 與 attack-effect 兩種 kind 皆攔截</li>
+          <li><strong>鴨嘴炎獸｜熔岩波動</strong>（B4 狀態強化）— 場上有此卡 &rarr; 對手的【灼傷】寶可夢因灼傷放置的指示物 +3（=+30 傷害）。每回合的灼傷檢查 newBurnDmg = damage + 20 + bonus，自動加 log</li>
+          <li><strong>獵斑魚｜潛者捕捉</strong>（C5 KO 觸發）— 自方場上有此卡 + 自方【水】寶可夢被招式 KO &rarr; 身上「基本【水】能量」放回手牌而非棄牌。在 KO koDiscard 組裝時過濾出基本水分流到 hand</li>
+          <li><strong>波克基斯｜奇跡之吻</strong>（C6 KO 觸發）— 自方場上有此卡 + 對手戰鬥位被招式 KO &rarr; 擲幣 1 次正面 +1 獎賞。卡面明文「不重複」&rarr; 場上多隻只擲 1 次</li>
+          <li><strong>美洛耶塔ex｜出道演出</strong>（D7 規則）— 此寶可夢可在先攻最初回合使用招式。引擎兩處 first-turn gate（ATTACK handler + getAvailableAttacks）皆加 bypass</li>
+          <li><strong>瑪機雅娜｜自動治癒</strong>（D10 規則）— 戰鬥場上有此卡 + 從手牌附能量到任何寶可夢 &rarr; 該寶可夢恢復 90 HP（damage -90，不低於 0）。hook 在 ATTACH_ENERGY handler 末端</li>
+          <li><strong>美洛耶塔ex 出道演出 UI</strong>：先攻第 1 回合戰鬥場為美洛耶塔ex 時，招式按鈕不再反白（getAvailableAttacks 動態判斷）</li>
+          <li><strong>defer 3 張（複雜度過高）</strong>：超甲狂犀｜廣域堡壘（需逐張支援者 resolver 加「對自方寶可夢的 effect」精細 gate）／美納斯｜平穩境地（影響面廣，需在所有「目標=對手寶可夢/附加卡 → 放回手牌」hook 全面加 gate）／古空棘魚｜潛入記憶（getEffectiveAttacks 招式合併 + UI 路徑大改）／洛托姆ex｜多重轉接（CardInstance.toolAttached 由單一物件改 array 是大型資料結構改動）</li>
+          <li>遵守 Iron Rule 11（Python pipeline 修 effects.ts / engine.ts / +page.svelte）+ Iron Rule 12（v3000_g3_wave2.ts 用 register pattern；本波無 .set() 仍保留模板）</li>
+          <li>tsc --noEmit 0 error</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.9994</span> 手機版能量數字字色修正</summary>
         <ul>
           <li>使用者回報：手機版（直式）戰鬥場顯示的「⚡N」中，⚡（lightning emoji）是亮黃色，但 N（張數）是深色（幾乎黑）幾乎看不見</li>

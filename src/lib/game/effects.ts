@@ -244,6 +244,16 @@ export function resolveBenchGuard(
       return { blocked: true, reason: '對戰圓形競技場效果' };
     }
   }
+  // v3.0 蟲甲聖｜球形盾牌 — 場上有此卡 → 自方所有備戰寶可夢不受對手寶可夢招式的「傷害與效果」。
+  //   範圍涵蓋 attack-damage（招式直傷至 bench）+ attack-effect（招式效果 → bench 放指示物 / 狀態 等）。
+  //   不擋 ability-effect（卡面明文「招式」），故 ability-effect 走原 isBenchProtected 路徑即可。
+  //   resolveBenchGuard caller 已保證 target 在 bench，故無需再判斷 bench-only。
+  if (kind === 'attack-damage' || kind === 'attack-effect') {
+    const defenderIdxBA = (1 - actorIdx) as 0 | 1;
+    if (hasBugAegislashShield(state, defenderIdxBA, pool)) {
+      return { blocked: true, reason: '蟲甲聖 球形盾牌 效果' };
+    }
+  }
   if (kind === 'attack-effect') {
     // v2.57：火箭隊的急凍鳥「抵抗之幕」— 我方基礎火箭隊寶可夢不受對手【招式的效果】影響。
     // 因 resolveBenchGuard 僅在 target 為 bench 時被呼叫，這裡檢查備戰區上的目標即可。
@@ -360,6 +370,8 @@ import './effects/cards/v2997_g4_wave3';
 import './effects/cards/v2998_g2';
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
+// v3.0 Group 3 Wave 2 helper — 用於 resolveBenchGuard 蟲甲聖球形盾牌
+import { hasBugAegislashShield } from './effects/cards/v3000_g3_wave2';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -13868,3 +13880,10 @@ regPre('堅果啞鈴|特殊鞭打', (state, aIdx, pool) => {
 import { registerV2999G3W1Passives } from './effects/cards/v2999_g3_wave1';
 // 在 effects.ts 自己 body 末端呼叫，確保 PASSIVE_ATTACK_BONUS 已初始化
 registerV2999G3W1Passives();
+
+// v3.0 Group 3 Wave 2 — 10 張對手互動 / 特殊機制 passive 特性
+// 同 v2.9992 lazy register pattern：register 函式內目前無 .set() 需要做，
+//   但保留模板以利未來擴充；幾個 helper 由 engine.ts 直接 import 使用。
+// hasBugAegislashShield 已在頂部 import 給 resolveBenchGuard 用。
+import { registerV3000G3W2Passives } from './effects/cards/v3000_g3_wave2';
+registerV3000G3W2Passives();
