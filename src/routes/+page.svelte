@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.22</span> 雷電獸ex｜閃光射線「下回合自己出招 -100」誤觸發 bug 修補 + 沙奈朵盈溢祈願 / 力之沙漏 noted</summary>
+        <ul>
+          <li><b>背景</b>：玩家回報 3 個 bug — (1) 超級沙奈朵ex｜盈溢祈願「附超能量時好像都會漏掉一個備戰寶可夢」、(2) 超級雷電獸ex「在場上有競技場時第一招跟第二招都會少 100 點傷害」、(3) 力之沙漏「會強迫把棄牌區的所有能量都填回來，第二招則是完全沒有傷害」。</li>
+          <li><b>Bug #2 雷電獸ex（真 bug，已修）</b>：根因為 <code>damageReduceNextHit</code> 旗標在 engine.ts 被兩端共用 — line 3229 attacker-side check「自己下次出招 -N」（用於黑魯加｜大聲咆哮 / 嘎啦嘎啦｜叫聲 / 超級火炎獅ex｜吠 等「對手下次招式 -N」）以及 line 3762 defender-side check「自己下次被打 -N」（用於樹林龜｜甲殼衝撞 / 巨鉗螳螂ex｜鋼翼 / 雷電獸ex｜閃光射線 等）。雷電獸閃光射線打完後在自己 active 設下旗標（語義為「自己下回合被打 -100」），若對手 T2 沒攻擊雷電獸，旗標未被消耗，T3 自己出招時被 attacker-side check 誤吃掉 → 自己招式 -100。用戶誤以為跟競技場相關，實際只要對手沒攻擊就會發生。</li>
+          <li><b>修法</b>：<code>CardInstance</code> 加 <code>nextOwnAttackPenalty</code> 獨立旗標。engine.ts line 3229 attacker-side check 改檢查新 field；effects.ts <code>defNextAtkReducePost</code> + v2580 / v2620 同名 helper 改設 <code>nextOwnAttackPenalty</code>。<code>damageReduceNextHit</code> 純化為 defender-side（自己下次被打 -N），不再被 attacker-side 誤消耗。受影響卡：黑魯加｜大聲咆哮（-100） / 嘎啦嘎啦｜叫聲（-40） / 超級火炎獅ex｜吠（-50） + v2580 / v2620 內列舉的 defNextAtkReducePost 用例。雷電獸 / 樹林龜 / 巨鉗螳螂ex / 噗隆隆 / 飄飄球 等 selfDmgReducePost 用例維持原狀（仍用 damageReduceNextHit），但不再有副作用。</li>
+          <li><b>Bug #1 沙奈朵 盈溢祈願（noted，邏輯已驗證正確 + 加診斷 log）</b>：v2402_mega_gardevoir.ts 的邏輯正確 — <code>need = Math.min(player.bench.length, psyEnergies.length)</code>，4 隻備戰 &#43; 牌庫 ≥ 4 張基本【超】能量時 4 隻全部會附；若牌庫不足會依序前 N 張。本波加詳細 log（每隻備戰是否實際附到、未附原因），方便用戶下次回報具體場景驗證。卡面語義「附給自己的所有備戰寶可夢」嚴格只指備戰，不含戰鬥場 active（這也是用戶預期被誤解的可能來源）。</li>
+          <li><b>Bug #3 力之沙漏（noted，邏輯已驗證正確）</b>：engine.ts END_TURN handler 開的 pendingSelection 是 <code>type: discard-search, filter: BasicEnergy, minCount: 0, maxCount: 1</code> — picker UI 給玩家「最多 1 張，可跳過（minCount=0 自動顯示『不選（跳過）』按鈕）」。RESOLVERS 的 <code>brailliant-attach</code> 處理 0 張就跳過，1 張就附上。「強迫填回所有能量」與實裝行為不符，無法重現。「第二招完全沒傷害」未指明哪隻寶可夢哪個招式，資訊不足，本波不修，等用戶澄清具體場景再 deferred 處理。</li>
+          <li><b>Iron Rule 遵守</b>：Rule 11 — types.ts / engine.ts / effects.ts / v2580 / v2620 / v2402_mega_gardevoir / version.ts / +page.svelte 一律走 Python pipeline（HEAD blob &#8594; in-memory replace &#8594; safe_write &#43; fsync），無 mount-truncate。Rule 12 — 本波無新 .set() 呼叫於子檔案 module top-level，所有現有 regPost / reg 都透過 helper（_shared.ts 中的 ATTACK_POST / TRAINER_EFFECTS / RESOLVERS Map），無循環依賴 / TDZ 風險。</li>
+          <li>tsc 0 error。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.21</span> 奧爾迪加（Supporter, G）新實裝 + 化石卡 audit 補漏（3 張）</summary>
         <ul>
           <li><b>新卡：奧爾迪加</b>（SV8a 189/187, G）— 「查看對手的手牌，從其中任意選擇 1 張卡，放回對手的牌庫下方。然後，對手若希望，從牌庫抽出 1 張卡。」</li>

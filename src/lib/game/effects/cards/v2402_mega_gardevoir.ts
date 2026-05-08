@@ -47,14 +47,33 @@ regPost('超級沙奈朵ex|盈溢祈願', (state, aIdx, pool) => {
     );
   }
   // 取前 min(bench.length, 可用能量數) 張，依序附給備戰
+  // v3.22 加 log：列出每隻備戰是否實際附到能量，方便用戶 debug「漏掉一隻」回報。
+  // 卡面：「附給自己的所有備戰寶可夢各 1 張」— 嚴格只指備戰，不含 active。
+  // 若 bench.length === 4 且 deck 有 ≥ 4 張基本【超】能量 → need=4 → 4 隻全部附。
   const need = Math.min(player.bench.length, psyEnergies.length);
   const toAttach = psyEnergies.slice(0, need);
   const toAttachIids = new Set(toAttach.map(c => c.iid));
+  // 預先組裝詳細 log（在 updatePlayer 前算好，以免 callback 內 ref 不一致）
+  const benchNames = player.bench.map((b) => {
+    const cardName = pool.get(b.cardId)?.name ?? '?';
+    return cardName;
+  });
+  const detailLines: string[] = [];
+  for (let i = 0; i < player.bench.length; i++) {
+    if (i < toAttach.length) {
+      detailLines.push(`  → 備戰[${i+1}] ${benchNames[i]} +1 基本【超】能量`);
+    } else {
+      detailLines.push(`  → 備戰[${i+1}] ${benchNames[i]} 未附（牌庫能量不足）`);
+    }
+  }
   let s2 = addLog(
     state,
-    `盈溢祈願：從牌庫挑 ${need} 張基本【超】能量分別附給 ${need} 隻備戰寶可夢；牌庫重洗`,
+    `盈溢祈願：備戰 ${player.bench.length} 隻 / 牌庫【超】能量 ${psyEnergies.length} 張 → 附 ${need} 張；牌庫重洗`,
     aIdx,
   );
+  for (const line of detailLines) {
+    s2 = addLog(s2, line, aIdx);
+  }
   s2 = updatePlayer(s2, aIdx, p => {
     const remainingDeck = p.deck.filter(c => !toAttachIids.has(c.iid));
     const newBench = p.bench.map((b, i) => {

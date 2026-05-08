@@ -2479,6 +2479,8 @@ regPost('噗隆隆|硬化', selfDmgReducePost(30));
 regPost('飄飄球|膨脹', selfDmgReducePost(10));
 
 // 對手受招後下回合使用招式傷害 -N
+// v3.22：改寫 nextOwnAttackPenalty（attacker-side debuff，由對手變 attacker 時消耗）
+//   原本寫 damageReduceNextHit 跟「自己下次被打 -N」共用 field 導致誤消耗 bug。
 function defNextAtkReducePost(n: number): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
@@ -2489,9 +2491,9 @@ function defNextAtkReducePost(n: number): AttackPostFn {
     const defCard = pool.get(def.active.cardId);
     const guard = canApplyAttackEffectToTarget(state, aIdx, def.active, defCard, pool);
     if (guard.blocked) {
-      return addLog(state, `${defCard?.name ?? '?'}｜${guard.reason}（不施加「下次受招式 -${n}」）`, aIdx);
+      return addLog(state, `${defCard?.name ?? '?'}｜${guard.reason}（不施加「下次出招 -${n}」）`, aIdx);
     }
-    def.active = { ...def.active, damageReduceNextHit: n };
+    def.active = { ...def.active, nextOwnAttackPenalty: n };
     players[dIdx] = def;
     return addLog({ ...state, players }, `對手下次使用招式傷害 -${n}`, aIdx);
   };

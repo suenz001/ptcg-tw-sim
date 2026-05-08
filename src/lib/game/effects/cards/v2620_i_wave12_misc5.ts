@@ -116,12 +116,13 @@ function oppActiveCounterCountPre(base: number, perCounter: number, label: strin
   };
 }
 
+// v3.22：改用 nextOwnAttackPenalty（attacker-side debuff）。
 function defNextAtkReducePost(n: number, label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, damageReduceNextHit: n };
+    if (def.active) def.active = { ...def.active, nextOwnAttackPenalty: n };
     players[dIdx] = def;
     return addLog({ ...state, players }, `${label}：對手下次招式傷害 -${n}`, aIdx);
   };

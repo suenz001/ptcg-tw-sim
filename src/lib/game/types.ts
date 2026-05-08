@@ -46,8 +46,22 @@ export interface CardInstance {
   extraTools?: CardInstance[];
   /** 進化來源的 iid（用來驗證是否可進化） */
   evolvedFromIid?: string;
-  /** 下一次被攻擊時傷害 -N（攻擊後自動清除），用於「下回合受傷減 N」效果 */
+  /** 下一次被攻擊時傷害 -N（攻擊後自動清除），用於「下回合受傷減 N」效果。
+   *
+   * v3.22 重要：此旗標僅由 **defender 端** 消耗（即「這隻寶可夢下次被打時 -N」）。
+   * 「對手下次出招 -N」（叫聲/吠/咆哮 系列卡）改用獨立旗標 `nextOwnAttackPenalty`
+   * 設給對手 active，避免兩端共用同一 field 導致：自己用招式設下「下次被打 -N」後，
+   * 若對手回合沒攻擊 → 自己下回合出招時被 attacker-side check 誤消耗 → 自己招式 -N。
+   * （bug 案例：超級雷電獸ex 閃光射線 -100 + 對手沒攻擊 → 下回合自己第一招也 -100）
+   */
   damageReduceNextHit?: number;
+  /** v3.22：自己下一次攻擊時招式傷害 -N（攻擊後自動清除）。
+   * 用於 attacker-side debuff（黑魯加｜大聲咆哮 -100 / 嘎啦嘎啦｜叫聲 -40 /
+   * 超級火炎獅ex｜吠 -50 等「對手下回合招式傷害 -N」效果）。
+   * 由 defNextAtkReducePost 等 helper 設給對手 active，當對手變成 attacker 時，
+   * engine.ts attack pipeline 會檢查 attacker.active.nextOwnAttackPenalty 並消耗。
+   */
+  nextOwnAttackPenalty?: number;
   /**
    * v2.382：超級呆殼獸ex｜殼捲風旋轉 — 下次受招式傷害時，對攻擊方放 N 個指示物（= N×10 damage）。
    * 一次性 flag，消費後清除。卡面語意「下個對手回合」 — 自己下回合無法被攻擊，

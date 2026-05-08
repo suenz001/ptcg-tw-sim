@@ -3225,12 +3225,17 @@ function handlePlaying(
     }
 
     // 攻擊方自身的招式傷害削減旗標（由上回合對手的「吠」/「大聲咆哮」/「叫聲」等效果設置）
-    // 這是攻擊方自己身上的 debuff，不受 skipDefEffects 影響，弱點計算前套用。
-    if (baseDamage > 0 && attacker.active.damageReduceNextHit) {
-      const penalty = attacker.active.damageReduceNextHit;
+    // v3.22 BUG FIX：原本檢查 damageReduceNextHit 與 defender 端共用同一 field，
+    //   會讓「自己用 selfDmgReducePost 設給自己下次被打 -N」的旗標被誤消耗 — 對手沒攻擊時，
+    //   自己下回合出招就被 attacker-side check 吃掉 → 自己招式 -N（雷電獸 閃光射線 bug）。
+    //   現分為兩個獨立 field：damageReduceNextHit (defender 端，自己被打 -N) /
+    //   nextOwnAttackPenalty (attacker 端，自己出招 -N，由「叫聲/吠/咆哮」設給對手 active)。
+    //   不受 skipDefEffects 影響，弱點計算前套用。
+    if (baseDamage > 0 && attacker.active.nextOwnAttackPenalty) {
+      const penalty = attacker.active.nextOwnAttackPenalty;
       baseDamage = Math.max(0, baseDamage - penalty);
       const newAtk = { ...attacker.active };
-      delete newAtk.damageReduceNextHit;
+      delete newAtk.nextOwnAttackPenalty;
       players[aIdx] = { ...players[aIdx], active: newAtk };
       workingState = { ...workingState, players };
       const atkName2 = pool.get(newAtk.cardId)?.name ?? '?';
