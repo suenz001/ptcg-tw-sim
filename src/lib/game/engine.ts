@@ -2140,7 +2140,19 @@ function handlePlaying(
       let newState: GameState = { ...state, players };
       const effectFn = TRAINER_EFFECTS.get(trainerCard.name);
       if (effectFn) return effectFn(newState, aIdx, pool, trainerInst);
-      return addLog(newState, `${trainerCard.name}（道具）效果尚未實裝`, aIdx);
+      // v3.04 hotfix: 道具卡 fallback — 沒註冊 effect 也至少把卡放回手牌（不要悶聲刪卡！）
+      //   原本邏輯：log「未實裝」→ 卡片消失（attacker.hand 已先移除 trainerInst）。
+      //   實際遇到的案例：璀璨結晶 / 反擊增幅器 等 inline-handled 道具，effect 寫在 engine.ts
+      //   inline 而非 TRAINER_EFFECTS Map → fallback 觸發 → 卡片直接從手牌消失！
+      //   現在的設計：即使沒效果註冊，也把卡放回手牌（玩家可重試或當試錯處理）。
+      const restoredAttacker = { ...attacker, hand: [...attacker.hand, trainerInst] };
+      const restored = [...newState.players] as [PlayerState, PlayerState];
+      restored[aIdx] = restoredAttacker;
+      return addLog(
+        { ...newState, players: restored },
+        `${trainerCard.name}（道具）：找不到 attach 效果註冊，已退回手牌（請通報開發者修補 ATTACH_TOOL_NAMES）`,
+        aIdx,
+      );
     }
 
     // 一般訓練家（物品 / 支援者）

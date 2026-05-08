@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v3.04</span> hotfix — ACE SPEC 道具消失 bug（璀璨結晶 / 反擊增幅器 / 力之沙漏）</summary>
+        <ul>
+          <li>使用者回報：附璀璨結晶到寶可夢上，log 顯示「璀璨結晶（道具）效果尚未實裝」，道具直接消失</li>
+          <li>根因：engine.ts PLAY_TRAINER 的 isTool 分支若 TRAINER_EFFECTS 沒對應 entry，就 fallback 到「未實裝」log 但**沒把卡放回手牌**，等同悶聲刪卡。璀璨結晶 / 反擊增幅器 / 力之沙漏 三張道具的效果是 inline 寫在 engine.ts hardcoded 檢查（toolCard?.name === '...'），沒在任何 TOOL_* Map 裡，所以 tools.ts 的 ATTACH_TOOL_NAMES auto-register loop 抓不到，TRAINER_EFFECTS 沒 entry → 進入 fallback → 卡消失</li>
+          <li>修法 1（hotfix 直接補）：把 璀璨結晶 / 反擊增幅器 / 力之沙漏 顯式加進 ATTACH_TOOL_NAMES Set，讓 auto-register loop 給它們註冊通用 attach 效果</li>
+          <li>修法 2（防未來再踩）：engine isTool 分支改寫 fallback — 即使沒 effect，也把卡退回手牌（不再悶聲刪卡），同時 log 提示開發者修補 ATTACH_TOOL_NAMES</li>
+          <li>璀璨結晶 cost 減免本來就沒問題（v2.149 已實裝），bug 在「使出此卡的 PLAY 動作」沒處理</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.03</span> 傷害公式加括號 + ATTACK_PRE breakdown 展開 + 補漏 modifier</summary>
         <ul>
           <li><strong>公式加括號</strong>：先前顯示「100(基礎) +30(極限腰帶) ×2(弱點) -30(屬性相剋) = 230」會讓玩家以算術優先級誤解（先乘後加 → 130）。新版改為「[100(基礎) +30(極限腰帶)] ×2(弱點) -30(屬性相剋) = 230」，明示「加成先加，再 ×弱點，最後 -抵抗」。</li>

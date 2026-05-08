@@ -563,6 +563,12 @@ regR('attach-tool', (st, idx, picked, params, pool) => {
 //   讓檔尾的 guard 自動登記也用同一份名單（含 氣球 / 龐克頭盔 / 等沒有 TOOL_* hook 的純機械道具）。
 export const ATTACH_TOOL_NAMES = new Set<string>([
   '氣球', '龐克頭盔',
+  // v3.04 hotfix: inline-handled tools（engine.ts hardcoded 名字檢查，沒在任何 TOOL_* Map 裡）
+  // 必須顯式加入此 Set，否則檔尾 auto-register loop 抓不到 → engine PLAY_TRAINER 走 isTool 分支
+  // 但 TRAINER_EFFECTS 沒 entry → 報「效果尚未實裝」並把卡刪除！v2.149 璀璨結晶 等入坑案例
+  '璀璨結晶',          // engine.ts: 太晶寶可夢使用招式 cost -1
+  '反擊增幅器',        // engine.ts: 自方獎賞 > 對手時 cost -1【無】
+  '力之沙漏',          // engine.ts: 持有方回合結束時觸發棄能量附加
   ...TOOL_HP_BONUS.keys(),
   ...TOOL_ATTACK_BONUS.keys(),
   ...TOOL_DEFENSE_REDUCE_BY_TYPE.keys(),
