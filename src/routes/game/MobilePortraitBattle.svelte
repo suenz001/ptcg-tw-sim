@@ -511,7 +511,7 @@
             </div>
             <div class="mp-meta">
               {#if inst.energyAttached.length > 0}<span>⚡{inst.energyAttached.length}</span>{/if}
-              {#if inst.toolAttached}<span>🔧</span>{/if}
+              {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
               {#if inst.status}<span class="mp-status">{inst.status}</span>{/if}
             </div>
           </div>
@@ -554,7 +554,7 @@
           </div>
           <div class="mp-meta">
             {#if inst.energyAttached.length > 0}<span>⚡{inst.energyAttached.length}</span>{/if}
-            {#if inst.toolAttached}<span>🔧</span>{/if}
+            {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
             {#if inst.status}<span class="mp-status">{inst.status}</span>{/if}
             {#if isPlaying && isMyTurn && isMainPhase}
               <span class="mp-tap-hint">👆 點開動作</span>

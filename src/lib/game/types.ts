@@ -37,6 +37,13 @@ export interface CardInstance {
   energyAttached: CardInstance[];
   /** 附加的道具牌（iid，M4 實裝） */
   toolAttached?: CardInstance;
+  /**
+   * v3.20：第 2 張以上的「寶可夢道具」卡（最多 1 張，使總道具數 = 2）。
+   * 由「洛托姆ex｜多重轉接」特性開啟 — 名字含「洛托姆」的自方寶可夢可附 2 張道具。
+   * 主道具放 toolAttached（保留 200+ 既有引用），溢出進此 array。
+   * 特性消除（離場/初始化/監視塔等）時，extraTools 全部丟到棄牌區。
+   */
+  extraTools?: CardInstance[];
   /** 進化來源的 iid（用來驗證是否可進化） */
   evolvedFromIid?: string;
   /** 下一次被攻擊時傷害 -N（攻擊後自動清除），用於「下回合受傷減 N」效果 */

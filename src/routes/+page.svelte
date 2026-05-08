@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.20</span> 洛托姆ex｜多重轉接 — toolAttached → extraTools array 重構（major refactor，跳號 v3.20）</summary>
+        <ul>
+          <li><b>卡面</b>：洛托姆ex（M2 029/080）特性「多重轉接」— 「只要這隻寶可夢在場上，名稱中有『洛托姆』的自己的所有寶可夢，各自身上最多可附有 2 張『寶可夢道具』卡。（這個特性消除時，將身上多附的『寶可夢道具』卡丟棄。）」</li>
+          <li><b>資料結構</b>：CardInstance 加 <code>extraTools?: CardInstance[]</code>（最多 1 張，加上既有 toolAttached 共 2 張道具）。保留 <code>toolAttached: CardInstance | null</code> 不改 → 既有 200+ 處引用點不需改 — 還是查第 1 張。</li>
+          <li><b>新 helpers（_shared.ts）</b>：<code>getAllAttachedTools(inst)</code> 回傳 <code>[toolAttached, ...extraTools].filter(Boolean)</code>；<code>hasMultiToolRelay(state, ownerIdx, pool)</code> 檢查場上是否有洛托姆ex 帶此特性活躍；<code>isLotomFamily(card)</code> 檢查名字含「洛托姆」；<code>reconcileMultiToolRelay(state, pool)</code> 在每次 applyAction 末尾檢查 — 若特性消除則丟棄 extraTools。</li>
+          <li><b>attach-tool resolver（tools.ts）</b>：toolAttached 已滿時，若 holder 為洛托姆家族 + 自方場上有多重轉接啟用 + extraTools 還沒滿 → push 到 extraTools；否則退回手牌（既有行為）。也檢查 TOOL_ATTACH_GATE（核心記憶碟 等限定 holder 仍會被擋）。</li>
+          <li><b>TOOL_xxx hook iterate（engine.ts / effects.ts）</b>：HP_BONUS、ATTACK_BONUS、DEFENSE_REDUCE_BY_TYPE、DEFENSE_REDUCE_BY_ATTACKER_ABILITY、PREVENT_KO、ON_KO、PRIZE_BONUS、ON_DAMAGED、RETREAT_MOD、BOTH_SIDES_RETREAT_PLUS、END_TURN_DISCARD、TOOL 招式注入（招式學習器螢石 / 核心記憶碟）、璀璨結晶、反擊增幅器、赫普的講究頭帶、垃圾洩氣、力之沙漏 等所有 TOOL hook 全部改 iterate <code>getAllAttachedTools(inst)</code>。</li>
+          <li><b>discard 路徑</b>：所有「KO 棄牌 / 退化棄牌 / 強制棄道具 / 進化保留」處（spread <code>...(X.toolAttached ? [X.toolAttached] : [])</code>）改為 <code>...getAllAttachedTools(X)</code>；toolAttached: undefined 重置處同步加 extraTools: []。共 47 處 spread + 13 處重置。</li>
+          <li><b>道具拆除器 picker</b>：選項 ID 從 <code>pIdx:instIid</code> 改為 <code>pIdx:instIid:toolIid</code>（3 段）以區分主道具與 extraTools；resolver 用 helper 從 inst 移除指定 iid 道具。</li>
+          <li><b>百萬噸吹風機</b>（丟對手所有道具）：stripOne 改 iterate 兩個來源；hasTool 檢查改用 <code>getAllAttachedTools</code>。</li>
+          <li><b>進擊鐳射 / 配件秀</b>：「身上附有道具」與「自方場上道具數」也計入 extraTools。</li>
+          <li><b>UI 顯示</b>：game/+page.svelte 與 MobilePortraitBattle.svelte 的「🔧」chip 改成顯示所有道具（每張一個 chip / 手機版顯示 🔧×N）。retreatCostOf（氣球 -2）改 iterate。drop-target 阻擋擴展為「洛托姆家族 + 場上有多重轉接 + 還能附」例外 → 允許第 2 張。</li>
+          <li><b>Reconcile 自動清理</b>：在 applyAction 末尾（<code>enforceBenchLimit</code> 之後）呼叫 <code>reconcileMultiToolRelay</code> — 若某方場上沒有洛托姆ex 多重轉接活躍，該方所有 extraTools 立即丟到棄牌堆並寫 log。涵蓋阻礙之塔／鐵荊棘ex 初始化／洛托姆ex 被 KO 等所有「特性消除」情境（這些場景下 hasMultiToolRelay 會回傳 false）。</li>
+          <li><b>Iron Rule 11 / 12 遵守</b>：所有既有檔（types.ts / version.ts / engine.ts / effects.ts / _shared.ts / tools.ts / v2610 / v3080_deferred_wave_c.ts / +page.svelte / MobilePortraitBattle.svelte / game +page.svelte）改動一律走 Python pipeline；無新增 module top-level <code>.set()</code> 呼叫，無 TDZ 風險。</li>
+          <li><b>影響範圍</b>：grep <code>toolAttached</code> 在 effects.ts / engine.ts / +page.svelte 等共 200+ 處；本波改動約 80 處核心 hook + 10+ 處 UI；剩餘為 destructure / 進化保留 / 重置內部 helper（不需改）。</li>
+          <li>tsc 0 error，svelte-check 0 error。</li>
+          <li>本 wave 結束 v3.x 系列所有 deferred；下一個目標：往 v3.21+ 細部 audit / 新卡實裝。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.14</span> Deep audit 13 個 bug 修補 — 對手 X 效果方向 / 玩家選擇 picker / Math.random 換 flipCoinsWithLog</summary>
         <ul>
           <li><b>背景</b>：v3.13 後做更深一層 audit，發現 13 個既有實裝違反 Iron Rules 的 bug：1 個 P0（picker 方向錯）、5 個 Rule 7（自動代玩家做選擇）、1 個 Rule 8（公開揭示）、4 個 Math.random 替代 flipCoinsWithLog（缺 coin 動畫＋對手驗證 cue）、2 個 missing addLog。</li>

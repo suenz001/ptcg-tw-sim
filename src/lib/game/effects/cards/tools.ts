@@ -31,6 +31,7 @@ import {
   TRAINER_EFFECTS,
   reg, regR, regG, regPost,
   addLog, updatePlayer, withPending, shuffle,
+  hasMultiToolRelay, isLotomFamily,
 } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -513,7 +514,40 @@ regR('attach-tool', (st, idx, picked, params, pool) => {
   const all = [...(p.active ? [p.active] : []), ...p.bench];
   const target = all.find(c => c.iid === targetIid);
   if (target?.toolAttached) {
-    // 把本道具放回手牌（避免使用者損失道具）
+    // v3.20 洛托姆ex｜多重轉接：名字含「洛托姆」的自方寶可夢，且自方場上有
+    //   洛托姆ex 帶「多重轉接」啟用 → 第 2 張道具進 extraTools（最多 +1 張）。
+    const targetCard = pool.get(target.cardId);
+    const lotomFamily = isLotomFamily(targetCard);
+    const relayActive = hasMultiToolRelay(st, idx, pool);
+    const currentExtraCount = (target.extraTools?.length ?? 0);
+    const toolName2 = pool.get(toolInst.cardId)?.name ?? '道具';
+    const targetName2 = targetCard?.name ?? '?';
+    if (lotomFamily && relayActive && currentExtraCount < 1) {
+      // gate 通過 → push 進 extraTools
+      // 注意：先檢查 TOOL_ATTACH_GATE（核心記憶碟 等限定 holder）
+      const gateFn = TOOL_ATTACH_GATE.get(toolName2);
+      if (gateFn && targetCard && !gateFn(targetCard)) {
+        return updatePlayer(
+          addLog(st, `${toolName2}：附加失敗（${targetName2} 不符合附加條件，道具回到手牌）`, idx),
+          idx,
+          pl => ({ ...pl, hand: [...pl.hand, toolInst] })
+        );
+      }
+      const next = addLog(st, `🔧 ${toolName2} 附加到 ${targetName2}（多重轉接：第 2 張道具）`, idx);
+      return updatePlayer(next, idx, p => {
+        const attach = (pk: CardInstance): CardInstance => {
+          if (pk.iid !== targetIid) return pk;
+          const cur = pk.extraTools ?? [];
+          return { ...pk, extraTools: [...cur, toolInst] };
+        };
+        return {
+          ...p,
+          active: p.active ? attach(p.active) : null,
+          bench: p.bench.map(attach),
+        };
+      });
+    }
+    // 否則退回手牌（既有行為）
     return updatePlayer(
       addLog(st, '附加失敗：目標寶可夢已有道具，道具回到手牌', idx),
       idx,

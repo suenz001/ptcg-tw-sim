@@ -404,8 +404,15 @@ function selfFieldToolCountPre(perTool: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
     const player = state.players[aIdx];
     let count = 0;
-    if (player.active?.toolAttached) count++;
-    for (const b of player.bench) if (b.toolAttached) count++;
+    // v3.20 多重轉接：iterate 所有道具（toolAttached + extraTools）
+    if (player.active) {
+      if (player.active.toolAttached) count++;
+      count += player.active.extraTools?.length ?? 0;
+    }
+    for (const b of player.bench) {
+      if (b.toolAttached) count++;
+      count += b.extraTools?.length ?? 0;
+    }
     const dmg = count * perTool;
     const s = addLog(state, `${label}：自方場上道具 ${count} 個 → ${count}×${perTool} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };

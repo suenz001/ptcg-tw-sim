@@ -41,7 +41,7 @@ import {
   discardActiveStadium,
   recordOppKO,
   healResolver,
-  sameEvoName,
+  sameEvoName, getAllAttachedTools,
   applyBenchPlaceSideEffects,
   getEnergyDiscardUnits,
   triggerOakeyeMillIfApplicable,
@@ -463,12 +463,12 @@ function effectiveHPInline(
   const card = pool.get(inst.cardId);
   if (!card) return 0;
   let hp = card.hp ?? 0;
-  if (inst.toolAttached) {
-    const tool = pool.get(inst.toolAttached.cardId);
-    if (tool) {
-      const bonusFn = TOOL_HP_BONUS.get(tool.name);
-      if (bonusFn) hp += bonusFn(card);
-    }
+  // v3.20 多重轉接：iterate 所有道具
+  for (const t of getAllAttachedTools(inst)) {
+    const tool = pool.get(t.cardId);
+    if (!tool) continue;
+    const bonusFn = TOOL_HP_BONUS.get(tool.name);
+    if (bonusFn) hp += bonusFn(card);
   }
   // v2.175 特殊能量 HP bonus（增強【草】等）— iterate energyAttached
   for (const e of inst.energyAttached) {
@@ -603,7 +603,8 @@ function hitBenchAll(
     if (hp > 0 && newDmg >= hp) {
       koDiscards.push({ ...c, damage: newDmg });
       for (const e of c.energyAttached) koDiscards.push(e);
-      if (c.toolAttached) koDiscards.push(c.toolAttached);
+      // v3.20 多重轉接：iterate 所有道具
+      for (const t of getAllAttachedTools(c)) koDiscards.push(t);
       for (const prev of c.evolvedFromStack ?? []) koDiscards.push(prev);
       if (card) morePrizes += koPrizeCount(card);
       koNames.push(card?.name ?? '?');
@@ -709,7 +710,8 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     if (hp > 0 && newDmg >= hp) {
       koDiscards.push({ ...c, damage: newDmg });
       for (const e of c.energyAttached) koDiscards.push(e);
-      if (c.toolAttached) koDiscards.push(c.toolAttached);
+      // v3.20 多重轉接：iterate 所有道具
+      for (const t of getAllAttachedTools(c)) koDiscards.push(t);
       for (const prev of c.evolvedFromStack ?? []) koDiscards.push(prev);
       if (card) morePrizes += koPrizeCount(card);
       koNames.push(card?.name ?? '?');
@@ -847,7 +849,7 @@ regPost('烏鴉頭頭|狙擊羽毛', (state, aIdx, _pool) => {
       const koDiscard: CardInstance[] = [
         { ...defender.active, damage: newDmg },
         ...defender.active.energyAttached,
-        ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+        ...getAllAttachedTools(defender.active),
         ...(defender.active.evolvedFromStack ?? []),
       ];
       const players = [...state.players] as [PlayerState, PlayerState];
@@ -904,7 +906,7 @@ regR('snipe-120', (st, actorIdx, selectedIids, _params, pool) => {
     const koDiscard: CardInstance[] = [
       { ...target, damage: newDmg },
       ...target.energyAttached,
-      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...getAllAttachedTools(target),
       ...(target.evolvedFromStack ?? []),
     ];
     const prizes = prizesForKOLocal(targetCard);
@@ -1222,7 +1224,7 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
       const baseBare: CardInstance = {
         ...pk,
         energyAttached: [],
-        toolAttached: undefined,
+        toolAttached: undefined, extraTools: [],
         evolvedFromStack: undefined,
       };
       return {
@@ -1230,6 +1232,7 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
         damage: pk.damage,
         energyAttached: pk.energyAttached,
         toolAttached: pk.toolAttached,
+        extraTools: pk.extraTools,
         status: pk.status,
         evolvedFromIid: pk.iid,
         // 神奇糖果跳過 Stage 1，進化鏈只含 Basic
@@ -2118,10 +2121,11 @@ regR('sage-evolve', (state, aIdx, iids, _params, pool) => {
       damage: target.damage,
       energyAttached: target.energyAttached,
       toolAttached: target.toolAttached,
+      extraTools: target.extraTools,
       status: target.status,
       evolvedFromStack: [...(target.evolvedFromStack ?? []), { ...target,
         iid: `${target.iid}_base_${target.cardId}_${Math.random().toString(36).slice(2, 8)}`,
-        toolAttached: undefined, energyAttached: [], evolvedFromStack: undefined }],
+        toolAttached: undefined, extraTools: [], energyAttached: [], evolvedFromStack: undefined }],
       evolvedThisTurn: true,
       // 賽吉特殊：覆寫 justPlaced（賽吉允許剛上場立刻進化）
       justPlaced: undefined, playedFromHand: undefined,
@@ -4539,7 +4543,8 @@ regPre('電螢蟲|聯合攻擊', selfBenchHasNamePre(20, 60, '甜甜螢', '聯�
 regPre('大朝北鼻|進擊鐳射', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
-  if (def?.toolAttached) {
+  // v3.20 多重轉接：iterate 所有道具
+  if (def && getAllAttachedTools(def).length > 0) {
     return { state: addLog(state, '進擊鐳射：對手附有道具 → +80', aIdx), damage: 160 };
   }
   return { state, damage: 80 };
@@ -4802,7 +4807,7 @@ regPost('皮卡丘|電磁電光', (state, aIdx, pool) => {
       const koDiscard: CardInstance[] = [
         { ...defender.active, damage: newDmg },
         ...defender.active.energyAttached,
-        ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+        ...getAllAttachedTools(defender.active),
         ...(defender.active.evolvedFromStack ?? []),
       ];
       const players = [...state.players] as [PlayerState, PlayerState];
@@ -4904,7 +4909,7 @@ regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
     const koDiscard: CardInstance[] = [
       { ...target, damage: newDmg },
       ...target.energyAttached,
-      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...getAllAttachedTools(target),
       ...(target.evolvedFromStack ?? []),
     ];
     const prizes = prizesForKOLocal(targetCard);
@@ -5059,7 +5064,7 @@ regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
     const koDiscard: CardInstance[] = [
       { ...target, damage: newDmg },
       ...target.energyAttached,
-      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...getAllAttachedTools(target),
       ...(target.evolvedFromStack ?? []),
     ];
     const prizes = prizesForKOLocal(targetCard);
@@ -5132,7 +5137,7 @@ function applyDamageToAllOpp(
       const koDiscard: CardInstance[] = [
         { ...defender.active, damage: newDmg },
         ...defender.active.energyAttached,
-        ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+        ...getAllAttachedTools(defender.active),
         ...(defender.active.evolvedFromStack ?? []),
       ];
       const p = prizesForKOLocal(defCard);
@@ -5159,7 +5164,7 @@ function applyDamageToAllOpp(
       const koDiscard: CardInstance[] = [
         { ...b, damage: newDmg },
         ...b.energyAttached,
-        ...(b.toolAttached ? [b.toolAttached] : []),
+        ...getAllAttachedTools(b),
         ...(b.evolvedFromStack ?? []),
       ];
       const p = prizesForKOLocal(card);
@@ -5227,7 +5232,7 @@ regPost('綿綿泡芙|悄聲加害', (state, aIdx, pool) => {
       const ko: CardInstance[] = [
         { ...defender.active, damage: newDmg },
         ...defender.active.energyAttached,
-        ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+        ...getAllAttachedTools(defender.active),
         ...(defender.active.evolvedFromStack ?? []),
       ];
       const p = prizesForKOLocal(defCard);
@@ -5272,7 +5277,7 @@ regR('snipe-20', (st, actorIdx, selectedIids, _params, pool) => {
     const ko: CardInstance[] = [
       { ...target, damage: newDmg },
       ...target.energyAttached,
-      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...getAllAttachedTools(target),
       ...(target.evolvedFromStack ?? []),
     ];
     const p = prizesForKOLocal(targetCard);
@@ -5518,7 +5523,7 @@ regPost('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
       const ko: CardInstance[] = [
         { ...defender.active, damage: newDmg },
         ...defender.active.energyAttached,
-        ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
+        ...getAllAttachedTools(defender.active),
         ...(defender.active.evolvedFromStack ?? []),
       ];
       const p = prizesForKOLocal(defCard);
@@ -5572,7 +5577,7 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
     const ko: CardInstance[] = [
       { ...target, damage: newDmg },
       ...target.energyAttached,
-      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...getAllAttachedTools(target),
       ...(target.evolvedFromStack ?? []),
     ];
     const p = prizesForKOLocal(targetCard);
@@ -6029,7 +6034,7 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
     const koList: CardInstance[] = [
       { ...newDefender.active, damage: newDmg },
       ...newDefender.active.energyAttached,
-      ...(newDefender.active.toolAttached ? [newDefender.active.toolAttached] : []),
+      ...getAllAttachedTools(newDefender.active),
       ...(newDefender.active.evolvedFromStack ?? []),
     ];
     const prizes = prizesForKOLocal(newActiveCard);
@@ -6163,7 +6168,7 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
       const ko: CardInstance[] = [
         { ...def.active, damage: (card?.hp ?? 0) },
         ...def.active.energyAttached,
-        ...(def.active.toolAttached ? [def.active.toolAttached] : []),
+        ...getAllAttachedTools(def.active),
         ...(def.active.evolvedFromStack ?? []),
       ];
       players[dIdx] = { ...def, active: null, discard: [...def.discard, ...ko] };
@@ -6180,7 +6185,7 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
     const ko: CardInstance[] = [
       { ...att.active, damage: (card?.hp ?? 0) },
       ...att.active.energyAttached,
-      ...(att.active.toolAttached ? [att.active.toolAttached] : []),
+      ...getAllAttachedTools(att.active),
       ...(att.active.evolvedFromStack ?? []),
     ];
     players[aIdx] = { ...att, active: null, discard: [...att.discard, ...ko] };
@@ -6231,7 +6236,7 @@ regPost('雙斧戰龍|斧擊在地', (state, aIdx, pool) => {
   const ko: CardInstance[] = [
     { ...def.active, damage: (card?.hp ?? 0) },
     ...def.active.energyAttached,
-    ...(def.active.toolAttached ? [def.active.toolAttached] : []),
+    ...getAllAttachedTools(def.active),
     ...(def.active.evolvedFromStack ?? []),
   ];
   const prizes = card ? (prizesForKOLocal(card)) : 1;
@@ -6351,7 +6356,7 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
       const koDiscard: CardInstance[] = [
         { ...target, damage: newDmg },
         ...target.energyAttached,
-        ...(target.toolAttached ? [target.toolAttached] : []),
+        ...getAllAttachedTools(target),
         ...(target.evolvedFromStack ?? []),
       ];
       const prizes = targetCard ? koPrizeCount(targetCard) : 1;
@@ -7358,7 +7363,7 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       const ko: CardInstance[] = [
         { ...target, damage: newDmg },
         ...target.energyAttached,
-        ...(target.toolAttached ? [target.toolAttached] : []),
+        ...getAllAttachedTools(target),
         ...(target.evolvedFromStack ?? []),
       ];
       const p = prizesForKOLocal(targetCard);
@@ -7910,7 +7915,7 @@ regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
       const ko: CardInstance[] = [
         { ...def.active, damage: defCard?.hp ?? 0 },
         ...def.active.energyAttached,
-        ...(def.active.toolAttached ? [def.active.toolAttached] : []),
+        ...getAllAttachedTools(def.active),
         ...(def.active.evolvedFromStack ?? []),
       ];
       const prizes = defCard ? koPrizeCount(defCard) : 1;
@@ -7936,7 +7941,7 @@ regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
       const ko: CardInstance[] = [
         { ...att.active, damage: newDmg },
         ...att.active.energyAttached,
-        ...(att.active.toolAttached ? [att.active.toolAttached] : []),
+        ...getAllAttachedTools(att.active),
         ...(att.active.evolvedFromStack ?? []),
       ];
       att.active = null;
@@ -8009,7 +8014,7 @@ function resolveLanzhushi(
   const ko: CardInstance[] = [
     { ...target, damage: (card?.hp ?? 0) },
     ...target.energyAttached,
-    ...(target.toolAttached ? [target.toolAttached] : []),
+    ...getAllAttachedTools(target),
     ...(target.evolvedFromStack ?? []),
   ];
   const prizes = card ? koPrizeCount(card) : 1;
@@ -8546,7 +8551,7 @@ function snipeAllOppExPost(dmg: number, filterType: 'ex' | 'ex-or-v', label: str
         const ko: CardInstance[] = [
           { ...cur, damage: newDmg },
           ...cur.energyAttached,
-          ...(cur.toolAttached ? [cur.toolAttached] : []),
+          ...getAllAttachedTools(cur),
           ...(cur.evolvedFromStack ?? []),
         ];
         const p = prizesForKOLocal(card);
@@ -8581,10 +8586,11 @@ function defToolDiscardPre(base: number, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
-    if (!def || !def.toolAttached) {
+    // v3.20 多重轉接：丟第 1 張可用的道具（無論在 toolAttached 還是 extraTools）
+    const allDefTools = def ? getAllAttachedTools(def) : [];
+    if (!def || allDefTools.length === 0) {
       return { state: addLog(state, `${label}：對手戰鬥寶可夢無道具`, aIdx), damage: base };
     }
-    // v2.91 招式效果免疫檢查（傷害仍然造成，只是不丟道具）
     const defCardForGuard = pool.get(def.cardId);
     const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCardForGuard, pool);
     if (guard.blocked) {
@@ -8594,14 +8600,19 @@ function defToolDiscardPre(base: number, label: string): AttackPreFn {
         damage: base,
       };
     }
-    const toolName = pool.get(def.toolAttached.cardId)?.name ?? '?';
-    const discarded = def.toolAttached;
+    const discarded = allDefTools[0];
+    const toolName = pool.get(discarded.cardId)?.name ?? '?';
     const defName = pool.get(def.cardId)?.name ?? '?';
     let s = addLog(state, `${label}：丟棄 ${defName} 的道具「${toolName}」`, aIdx);
     s = updatePlayer(s, dIdx, pl => {
       if (!pl.active) return pl;
-      const { toolAttached: _removed, ...rest } = pl.active;
-      return { ...pl, active: rest as CardInstance, discard: [...pl.discard, discarded] };
+      let newAct = pl.active;
+      if (newAct.toolAttached?.iid === discarded.iid) {
+        newAct = { ...newAct, toolAttached: undefined };
+      } else if (newAct.extraTools) {
+        newAct = { ...newAct, extraTools: newAct.extraTools.filter(x => x.iid !== discarded.iid) };
+      }
+      return { ...pl, active: newAct, discard: [...pl.discard, discarded] };
     });
     return { state: s, damage: base };
   };
@@ -9017,10 +9028,12 @@ regPre('切割洛托姆|割除衝刺', (state, aIdx, pool) => {
   const newDiscards: CardInstance[] = [];
   // 丟 tool
   let newActive = { ...def };
-  if (def.toolAttached) {
-    const tname = pool.get(def.toolAttached.cardId)?.name ?? '?';
-    newDiscards.push(def.toolAttached);
-    newActive = { ...newActive, toolAttached: undefined };
+  // v3.20 多重轉接：割除衝刺把對手 active 所有道具丟棄
+  const _glrAllTools = getAllAttachedTools(def);
+  if (_glrAllTools.length > 0) {
+    const tname = pool.get(_glrAllTools[0].cardId)?.name ?? '?'; void tname;
+    for (const t of _glrAllTools) newDiscards.push(t);
+    newActive = { ...newActive, toolAttached: undefined, extraTools: [] };
     s = addLog(s, `割除衝刺：丟棄 ${dname} 的道具 ${tname}`, aIdx);
   }
   // 丟所有特殊能量
@@ -9184,7 +9197,7 @@ function selfReturnToHandPost(label: string): AttackPostFn {
       // 整疊連附加一起送回手牌即可，但 evolvedFromStack 裡每張都是獨立的 CardInstance，
       // 逐一加入手牌才符合「附加的卡」語義。
       // 主體（含目前 cardId 與 iid）
-      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined,
+      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
         status: undefined, evolvedFromStack: undefined,
         evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
         damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
@@ -9192,7 +9205,7 @@ function selfReturnToHandPost(label: string): AttackPostFn {
         cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
         damageBonusPending: undefined },
       ...inst.energyAttached,
-      ...(inst.toolAttached ? [inst.toolAttached] : []),
+      ...getAllAttachedTools(inst),
       ...(inst.evolvedFromStack ?? []),
     ];
     const players = [...state.players] as [PlayerState, PlayerState];
@@ -9214,7 +9227,7 @@ function selfReturnToDeckPost(label: string): AttackPostFn {
     if (!p.active) return state;
     const inst = p.active;
     const returning: CardInstance[] = [
-      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined,
+      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
         status: undefined, evolvedFromStack: undefined,
         evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
         damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
@@ -9222,7 +9235,7 @@ function selfReturnToDeckPost(label: string): AttackPostFn {
         cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
         damageBonusPending: undefined },
       ...inst.energyAttached,
-      ...(inst.toolAttached ? [inst.toolAttached] : []),
+      ...getAllAttachedTools(inst),
       ...(inst.evolvedFromStack ?? []),
     ];
     const players = [...state.players] as [PlayerState, PlayerState];
@@ -9246,7 +9259,7 @@ function selfReturnToDeckThenSearchPost(maxSearch: number, label: string): Attac
     if (!p.active) return state;
     const inst = p.active;
     const returning: CardInstance[] = [
-      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined,
+      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
         status: undefined, evolvedFromStack: undefined,
         evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
         damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
@@ -9254,7 +9267,7 @@ function selfReturnToDeckThenSearchPost(maxSearch: number, label: string): Attac
         cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
         damageBonusPending: undefined },
       ...inst.energyAttached,
-      ...(inst.toolAttached ? [inst.toolAttached] : []),
+      ...getAllAttachedTools(inst),
       ...(inst.evolvedFromStack ?? []),
     ];
     const players = [...state.players] as [PlayerState, PlayerState];
@@ -9303,7 +9316,7 @@ regR('self-bench-return-to-deck', (st, actorIdx, selectedIids, params, _pool) =>
   const picked = p.bench.find(c => c.iid === iid);
   if (!picked) return st;
   const returning: CardInstance[] = [
-    { ...picked, damage: 0, energyAttached: [], toolAttached: undefined,
+    { ...picked, damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
       status: undefined, evolvedFromStack: undefined,
       evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
       damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
@@ -9311,7 +9324,7 @@ regR('self-bench-return-to-deck', (st, actorIdx, selectedIids, params, _pool) =>
       cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
       damageBonusPending: undefined },
     ...picked.energyAttached,
-    ...(picked.toolAttached ? [picked.toolAttached] : []),
+    ...getAllAttachedTools(picked),
     ...(picked.evolvedFromStack ?? []),
   ];
   const players = [...st.players] as [PlayerState, PlayerState];
@@ -9527,7 +9540,7 @@ regR('sylveon-skystone-bounce', (state, aIdx, iids, _params, pool) => {
       ...b,
       damage: 0,
       energyAttached: [],
-      toolAttached: undefined,
+      toolAttached: undefined, extraTools: [],
       status: undefined,
       secondaryStatus: undefined,
       evolvedFromStack: undefined,
@@ -9548,7 +9561,8 @@ regR('sylveon-skystone-bounce', (state, aIdx, iids, _params, pool) => {
       blockedAttackNamesNextTurn: undefined,
     });
     returning.push(...b.energyAttached);
-    if (b.toolAttached) returning.push(b.toolAttached);
+    // v3.20 多重轉接：iterate 所有道具
+    for (const t of getAllAttachedTools(b)) returning.push(t);
     if (b.evolvedFromStack) returning.push(...b.evolvedFromStack);
   }
   const names = bouncing.map(b => pool.get(b.cardId)?.name ?? '?').join('、');
@@ -9612,7 +9626,7 @@ function forceOppSwapThenDamagePost(dmg: number, label: string): AttackPostFn {
         const koPile: CardInstance[] = [
           { ...d.active, damage: newDmg },
           ...d.active.energyAttached,
-          ...(d.active.toolAttached ? [d.active.toolAttached] : []),
+          ...getAllAttachedTools(d.active),
           ...(d.active.evolvedFromStack ?? []),
         ];
         const cardDef = _pool.get(d.active.cardId);
@@ -9685,7 +9699,7 @@ regR('force-opp-swap-then-damage', (st, actorIdx, iids, params, pool) => {
     const koPile: CardInstance[] = [
       { ...swappingIn, damage: newDmg, movedToActiveThisTurn: true },
       ...swappingIn.energyAttached,
-      ...(swappingIn.toolAttached ? [swappingIn.toolAttached] : []),
+      ...getAllAttachedTools(swappingIn),
       ...(swappingIn.evolvedFromStack ?? []),
     ];
     const cardDef = pool.get(swappingIn.cardId);
@@ -9750,17 +9764,24 @@ regPost('長毛巨魔|挑釁抓擊', forceOppSwapThenDamagePost(160, '挑釁抓�
 function selfToolDiscardOrFailPre(base: number, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
-    if (!p.active || !p.active.toolAttached) {
+    // v3.20 多重轉接：丟自身第 1 張道具
+    const allMyTools = p.active ? getAllAttachedTools(p.active) : [];
+    if (!p.active || allMyTools.length === 0) {
       return { state: addLog(state, `${label}：自身無道具可丟棄 → 招式失敗`, aIdx), damage: 0 };
     }
     const attName = pool.get(p.active.cardId)?.name ?? '?';
-    const toolName = pool.get(p.active.toolAttached.cardId)?.name ?? '?';
-    const discarded = p.active.toolAttached;
+    const discarded = allMyTools[0];
+    const toolName = pool.get(discarded.cardId)?.name ?? '?';
     let s = addLog(state, `${label}：丟棄 ${attName} 的道具「${toolName}」`, aIdx);
     s = updatePlayer(s, aIdx, pl => {
       if (!pl.active) return pl;
-      const { toolAttached: _removed, ...rest } = pl.active;
-      return { ...pl, active: rest as CardInstance, discard: [...pl.discard, discarded] };
+      let newAct = pl.active;
+      if (newAct.toolAttached?.iid === discarded.iid) {
+        newAct = { ...newAct, toolAttached: undefined };
+      } else if (newAct.extraTools) {
+        newAct = { ...newAct, extraTools: newAct.extraTools.filter(x => x.iid !== discarded.iid) };
+      }
+      return { ...pl, active: newAct, discard: [...pl.discard, discarded] };
     });
     return { state: s, damage: base };
   };
@@ -9771,10 +9792,11 @@ function defToolDiscardParalyzePre(base: number, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
-    if (!def || !def.toolAttached) {
+    // v3.20 多重轉接：丟第 1 張可用道具
+    const allDefTools2 = def ? getAllAttachedTools(def) : [];
+    if (!def || allDefTools2.length === 0) {
       return { state: addLog(state, `${label}：對手戰鬥寶可夢無道具（不觸發麻痺）`, aIdx), damage: base };
     }
-    // v2.91 招式效果免疫檢查（傷害仍然造成，但不丟道具也不麻痺）
     const defCardForGuard = pool.get(def.cardId);
     const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCardForGuard, pool);
     if (guard.blocked) {
@@ -9785,15 +9807,20 @@ function defToolDiscardParalyzePre(base: number, label: string): AttackPreFn {
       };
     }
     const defName = pool.get(def.cardId)?.name ?? '?';
-    const toolName = pool.get(def.toolAttached.cardId)?.name ?? '?';
-    const discarded = def.toolAttached;
+    const discarded = allDefTools2[0];
+    const toolName = pool.get(discarded.cardId)?.name ?? '?';
     let s = addLog(state, `${label}：丟棄 ${defName} 的道具「${toolName}」`, aIdx);
     s = updatePlayer(s, dIdx, pl => {
       if (!pl.active) return pl;
-      const { toolAttached: _removed, ...rest } = pl.active;
+      let newAct = pl.active;
+      if (newAct.toolAttached?.iid === discarded.iid) {
+        newAct = { ...newAct, toolAttached: undefined };
+      } else if (newAct.extraTools) {
+        newAct = { ...newAct, extraTools: newAct.extraTools.filter(x => x.iid !== discarded.iid) };
+      }
       return {
         ...pl,
-        active: { ...(rest as CardInstance), status: 'paralyzed' },
+        active: { ...newAct, status: 'paralyzed' as const },
         discard: [...pl.discard, discarded],
       };
     });
@@ -9988,7 +10015,7 @@ export function selfKOInstance(
   const ko: CardInstance[] = [
     { ...target, damage: tCard?.hp ?? 999 },
     ...target.energyAttached,
-    ...(target.toolAttached ? [target.toolAttached] : []),
+    ...getAllAttachedTools(target),
     ...(target.evolvedFromStack ?? []),
   ];
   const prizes = tCard ? koPrizeCount(tCard) : 1;
@@ -10094,7 +10121,7 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
     const koDiscard: CardInstance[] = [
       { ...target, damage: newDmg },
       ...target.energyAttached,
-      ...(target.toolAttached ? [target.toolAttached] : []),
+      ...getAllAttachedTools(target),
       ...(target.evolvedFromStack ?? []),
     ];
     const prizes = targetCard ? koPrizeCount(targetCard) : 1;
@@ -10521,7 +10548,7 @@ regR('wind-vortex-return', (st, idx, iids, _params, pool) => {
     ...target,
     damage: 0,
     energyAttached: [],
-    toolAttached: undefined,
+    toolAttached: undefined, extraTools: [],
     status: undefined,
     evolvedFromStack: undefined,
     evolvedThisTurn: undefined,
@@ -10539,7 +10566,7 @@ regR('wind-vortex-return', (st, idx, iids, _params, pool) => {
   const returning: CardInstance[] = [
     mainBare,
     ...target.energyAttached,
-    ...(target.toolAttached ? [target.toolAttached] : []),
+    ...getAllAttachedTools(target),
     ...(target.evolvedFromStack ?? []),
   ];
   const s = addLog(st, `寶可夢旋風回收機：將 ${tName} 與附加的 ${returning.length - 1} 張卡放回手牌`, idx);
@@ -10615,7 +10642,8 @@ regR('akuroma-step2-energy', (st, idx, iids, _params, pool) => {
 regG('百萬噸吹風機', (st, idx, pool) => {
   const opp = st.players[(1 - idx) as 0 | 1];
   const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
-  const hasTool = allOpp.some(c => c.toolAttached);
+  // v3.20 多重轉接：iterate 所有道具
+  const hasTool = allOpp.some(c => getAllAttachedTools(c).length > 0);
   const hasSpecial = allOpp.some(c =>
     c.energyAttached.some(e => pool.get(e.cardId)?.subtype === 'Special')
   );
@@ -10633,9 +10661,10 @@ reg('百萬噸吹風機', (st, idx, pool) => {
   const specialNames: string[] = [];
   const stripOne = (c: CardInstance | null): CardInstance | null => {
     if (!c) return c;
-    if (c.toolAttached) {
-      removedTools.push(c.toolAttached);
-      toolNames.push(pool.get(c.toolAttached.cardId)?.name ?? '?');
+    // v3.20 多重轉接：把 toolAttached 與 extraTools 全部丟棄
+    for (const t of getAllAttachedTools(c)) {
+      removedTools.push(t);
+      toolNames.push(pool.get(t.cardId)?.name ?? '?');
     }
     const keptEnergies: CardInstance[] = [];
     for (const e of c.energyAttached) {
@@ -10646,7 +10675,7 @@ reg('百萬噸吹風機', (st, idx, pool) => {
         keptEnergies.push(e);
       }
     }
-    return { ...c, toolAttached: undefined, energyAttached: keptEnergies };
+    return { ...c, toolAttached: undefined, extraTools: [], energyAttached: keptEnergies };
   };
   const newOppActive = stripOne(opp.active);
   const newOppBench = opp.bench.map(b => stripOne(b)).filter((x): x is CardInstance => !!x);
@@ -11801,7 +11830,7 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
       const ko: CardInstance[] = [
         { ...target, damage: newDmg },
         ...target.energyAttached,
-        ...(target.toolAttached ? [target.toolAttached] : []),
+        ...getAllAttachedTools(target),
         ...(target.evolvedFromStack ?? []),
       ];
       const prizeCount = prizesForKOLocal(targetCard);
@@ -13046,8 +13075,9 @@ regG('道具拆除器', (st) => {
   const allTools: string[] = [];
   for (const idx of [0, 1] as const) {
     const p = st.players[idx];
-    if (p.active?.toolAttached) allTools.push(p.active.toolAttached.iid);
-    for (const b of p.bench) if (b.toolAttached) allTools.push(b.toolAttached.iid);
+    // v3.20 多重轉接：iterate 所有道具
+    for (const t of getAllAttachedTools(p.active)) allTools.push(t.iid);
+    for (const b of p.bench) for (const t of getAllAttachedTools(b)) allTools.push(t.iid);
   }
   return allTools.length > 0;
 });
@@ -13061,13 +13091,17 @@ function buildToolRemoverOptions(st: GameState, pool: Map<string, Card>) {
       ...p.bench.map(b => ({ inst: b, pos: '備戰' as const })),
     ];
     for (const { inst, pos } of all) {
-      if (!inst.toolAttached) continue;
+      // v3.20 多重轉接：iterate 所有道具
+      const tools = getAllAttachedTools(inst);
+      if (tools.length === 0) continue;
       const ownerName = pool.get(inst.cardId)?.name ?? '?';
-      const toolName = pool.get(inst.toolAttached.cardId)?.name ?? '?';
-      opts.push({
-        id: `${idx}:${inst.iid}`,
-        text: `🔧 ${sideLabel} ${pos} ${ownerName} 的「${toolName}」`,
-      });
+      for (const t of tools) {
+        const toolName = pool.get(t.cardId)?.name ?? '?';
+        opts.push({
+          id: `${idx}:${inst.iid}:${t.iid}`,
+          text: `🔧 ${sideLabel} ${pos} ${ownerName} 的「${toolName}」`,
+        });
+      }
     }
   }
   return opts;
@@ -13087,26 +13121,48 @@ reg('道具拆除器', (st, idx, pool) => {
 regR('tool-remover-pick', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const choice = iids[0];
-  const [pIdxStr, targetIid] = choice.split(':');
+  // v3.20 多重轉接：選項 ID 從 'pIdx:instIid' 改為 'pIdx:instIid:toolIid' 以區分主道具與 extraTools
+  const segs = choice.split(':');
+  const pIdxStr = segs[0];
+  const targetIid = segs[1];
+  const targetToolIid = segs[2];
   const pIdx = parseInt(pIdxStr) as 0 | 1;
   let s = state;
   const players = [...s.players] as [PlayerState, PlayerState];
   const pp = { ...players[pIdx] };
-  let removedTool: typeof pp.bench[0]['toolAttached'] = undefined;
+  // closure 內 mutation TS 不追蹤 → 用 any 規避 never 推論
+  let removedTool: any = undefined;
   let ownerName = '?';
+  const removeFromInst = (inst: import('./types').CardInstance) => {
+    if (targetToolIid) {
+      if (inst.toolAttached?.iid === targetToolIid) {
+        removedTool = inst.toolAttached;
+        return { ...inst, toolAttached: undefined };
+      }
+      if (inst.extraTools && inst.extraTools.length > 0) {
+        const found = inst.extraTools.find(x => x.iid === targetToolIid);
+        if (found) {
+          removedTool = found;
+          return { ...inst, extraTools: inst.extraTools.filter(x => x.iid !== targetToolIid) };
+        }
+      }
+      return inst;
+    }
+    if (inst.toolAttached) {
+      removedTool = inst.toolAttached;
+      return { ...inst, toolAttached: undefined };
+    }
+    return inst;
+  };
   if (pp.active?.iid === targetIid) {
-    removedTool = pp.active.toolAttached;
     ownerName = pool.get(pp.active.cardId)?.name ?? '?';
-    pp.active = { ...pp.active, toolAttached: undefined };
+    pp.active = removeFromInst(pp.active);
   } else {
     const bIdx = pp.bench.findIndex(b => b.iid === targetIid);
     if (bIdx >= 0) {
-      const b = { ...pp.bench[bIdx] };
-      removedTool = b.toolAttached;
-      ownerName = pool.get(b.cardId)?.name ?? '?';
-      b.toolAttached = undefined;
+      ownerName = pool.get(pp.bench[bIdx].cardId)?.name ?? '?';
       pp.bench = [...pp.bench];
-      pp.bench[bIdx] = b;
+      pp.bench[bIdx] = removeFromInst(pp.bench[bIdx]);
     }
   }
   if (!removedTool) return addLog(s, '道具拆除器：找不到目標道具', aIdx);
@@ -14008,7 +14064,7 @@ registerV3070DeferredWaveD();
 //   - 美納斯｜平穩境地：oppHasMenasureCalmGround helper，已在 effects.ts (returnOppActiveEnergyPost)
 //     / items_misc.ts (悠哉尾草棒) / v2354 (退化光線) / v2760 (奧密之眼) / v2996 (原始之翼/微風吹拂) inline gate
 //   - 古空棘魚｜潛入記憶：engine.ts getEffectiveAttacks 擴展加 evolvedFromStack 招式
-//   - [DEFERRED] 洛托姆ex｜多重轉接：toolAttached 改 array 重構工程量大，留待獨立 wave
+//   - [v3.20 IMPLEMENTED] 洛托姆ex｜多重轉接：CardInstance.extraTools array 重構（已實裝）
 // register 函式為空 body，僅維持 wave 模板一致；所有 hook 都是 helper 直接 import 使用，無 Map .set()。
 import { registerV3080DeferredWaveC } from './effects/cards/v3080_deferred_wave_c';
 registerV3080DeferredWaveC();

@@ -126,7 +126,7 @@ function isAceCancelActive(state: GameState, playerIdx: 0 | 1, pool: Map<string,
     if (c.name !== '蓋諾賽克特') return false;
     if (!c.abilities?.some(a => a.name === 'ACE消弭')) return false;
     // 必須附有寶可夢道具（且道具未被阻礙之塔無效化 → 阻礙之塔只無效道具效果，不影響特性判定）
-    return !!pk.toolAttached;
+    return !!pk.toolAttached || !!(pk.extraTools && pk.extraTools.length > 0);
   });
 }
 
@@ -194,7 +194,7 @@ RESOLVERS.set('enforce-bench-limit', (state, actorIdx, selectedIids, _params, po
     discardAdds.push(
       inst,
       ...inst.energyAttached,
-      ...(inst.toolAttached ? [inst.toolAttached] : []),
+      ...getAllAttachedTools(inst),
       ...(inst.evolvedFromStack ?? []),
     );
   }
@@ -446,7 +446,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
-import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye } from './effects/_shared';
+import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay } from './effects/_shared';
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize } from './effects/_shared';
 export { sameEvoName };
 // v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發
@@ -514,9 +514,11 @@ export function getEffectiveHP(
   let hp = card.hp ?? 0;
   // 阻礙之塔（Stadium）會讓道具 HP 加成失效；若未傳 state 則忽略此檢查
   const jammed = state ? isToolsJammed(state, pool) : false;
-  if (inst.toolAttached && !jammed) {
-    const tool = pool.get(inst.toolAttached.cardId);
-    if (tool) {
+  if (!jammed) {
+    // v3.20 多重轉接：iterate 所有道具（toolAttached + extraTools）
+    for (const t of getAllAttachedTools(inst)) {
+      const tool = pool.get(t.cardId);
+      if (!tool) continue;
       const bonusFn = TOOL_HP_BONUS.get(tool.name);
       if (bonusFn) hp += bonusFn(card);
     }
@@ -904,27 +906,31 @@ export function canAffordAttack(
     const pokeCardForTool = pool.get(pokemon.cardId);
     const isTera = pokeCardForTool?.tags?.includes('太晶');
     const toolsJammed = state ? isToolsJammed(state, pool) : false;
-    if (isTera && !toolsJammed && pokemon.toolAttached) {
-      const toolCard = pool.get(pokemon.toolAttached.cardId);
-      if (toolCard?.name === '璀璨結晶' && cost.length > 0) {
-        // 優先扣 Colorless（最沒選擇空間的成本元素）
+    if (isTera && !toolsJammed && cost.length > 0) {
+      // v3.20 多重轉接：iterate 所有道具
+      for (const t of getAllAttachedTools(pokemon)) {
+        const toolCard = pool.get(t.cardId);
+        if (toolCard?.name !== '璀璨結晶') continue;
         const colorlessIdx = cost.indexOf('Colorless');
         if (colorlessIdx >= 0) {
           cost = [...cost.slice(0, colorlessIdx), ...cost.slice(colorlessIdx + 1)];
         } else {
-          cost = cost.slice(0, -1);  // 扣最後 1 個
+          cost = cost.slice(0, -1);
         }
+        break;
       }
     }
   }
   // v2.176 反擊增幅器（PokemonTool）：若自己剩餘獎賞 > 對手，附有此 Tool 的寶可夢
   //   招式所需能量 -1 個【無】。需有 Colorless 才生效（不轉換為其他屬性）。
   //   阻礙之塔時道具失效。
-  if (state && pokemon.toolAttached && attackerIdx !== undefined) {
+  if (state && attackerIdx !== undefined) {
     const toolsJammed = isToolsJammed(state, pool);
     if (!toolsJammed) {
-      const toolCard = pool.get(pokemon.toolAttached.cardId);
-      if (toolCard?.name === '反擊增幅器') {
+      // v3.20 多重轉接：iterate 所有道具
+      for (const t of getAllAttachedTools(pokemon)) {
+        const toolCard = pool.get(t.cardId);
+        if (toolCard?.name !== '反擊增幅器') continue;
         const myPrizes = state.players[attackerIdx].prizes.length;
         const oppPrizes = state.players[(1 - attackerIdx) as 0 | 1].prizes.length;
         if (myPrizes > oppPrizes) {
@@ -933,6 +939,7 @@ export function canAffordAttack(
             cost = [...cost.slice(0, colorlessIdx), ...cost.slice(colorlessIdx + 1)];
           }
         }
+        break;
       }
     }
   }
@@ -941,9 +948,11 @@ export function canAffordAttack(
   //   阻礙之塔時道具失效。
   {
     const toolsJammed = state ? isToolsJammed(state, pool) : false;
-    if (!toolsJammed && pokemon.toolAttached) {
-      const toolCard = pool.get(pokemon.toolAttached.cardId);
-      if (toolCard?.name === '赫普的講究頭帶') {
+    if (!toolsJammed) {
+      // v3.20 多重轉接：iterate 所有道具
+      for (const t of getAllAttachedTools(pokemon)) {
+        const toolCard = pool.get(t.cardId);
+        if (toolCard?.name !== '赫普的講究頭帶') continue;
         const pokeCardForHeadband = pool.get(pokemon.cardId);
         if (pokeCardForHeadband?.name?.startsWith('赫普的')) {
           const colorlessIdx = cost.indexOf('Colorless');
@@ -951,6 +960,7 @@ export function canAffordAttack(
             cost = [...cost.slice(0, colorlessIdx), ...cost.slice(colorlessIdx + 1)];
           }
         }
+        break;
       }
     }
   }
@@ -1493,7 +1503,7 @@ function sanityKOSweep(
       const ko = inst;
       const koDiscard: CardInstance[] = [
         ko, ...ko.energyAttached,
-        ...(ko.toolAttached ? [ko.toolAttached] : []),
+        ...getAllAttachedTools(ko),
         ...(ko.evolvedFromStack ?? []),
       ];
       player.discard = [...player.discard, ...koDiscard];
@@ -1514,7 +1524,7 @@ function sanityKOSweep(
       anyKO = true;
       const koDiscard: CardInstance[] = [
         b, ...b.energyAttached,
-        ...(b.toolAttached ? [b.toolAttached] : []),
+        ...getAllAttachedTools(b),
         ...(b.evolvedFromStack ?? []),
       ];
       player.discard = [...player.discard, ...koDiscard];
@@ -1618,7 +1628,7 @@ function handlePlaying(
     // (正常流程不應有殘留，但若卡片曾透過擔架從棄牌取回，防禦性清除)
     const placed = { ...inst, justPlaced: true, playedFromHand: true,
       status: undefined, secondaryStatus: undefined,
-      damage: 0, energyAttached: [], toolAttached: undefined,
+      damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
       evolvedFromStack: undefined };
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
     attacker.bench = [...attacker.bench, placed];
@@ -1679,9 +1689,9 @@ function handlePlaying(
       // 把化石（含附加的能量、道具）整組丟棄
       const discardEntries: CardInstance[] = [
         { ...attacker.active, fossilOnField: undefined, status: undefined, secondaryStatus: undefined,
-          energyAttached: [], toolAttached: undefined },
+          energyAttached: [], toolAttached: undefined, extraTools: [] },
         ...attacker.active.energyAttached,
-        ...(attacker.active.toolAttached ? [attacker.active.toolAttached] : []),
+        ...getAllAttachedTools(attacker.active),
       ];
       attacker.discard = [...attacker.discard, ...discardEntries];
       attacker.active = null;
@@ -1698,9 +1708,9 @@ function handlePlaying(
     const fossilName = benchCard?.name ?? '化石';
     const discardEntries: CardInstance[] = [
       { ...benchInst, fossilOnField: undefined, status: undefined, secondaryStatus: undefined,
-        energyAttached: [], toolAttached: undefined },
+        energyAttached: [], toolAttached: undefined, extraTools: [] },
       ...benchInst.energyAttached,
-      ...(benchInst.toolAttached ? [benchInst.toolAttached] : []),
+      ...getAllAttachedTools(benchInst),
     ];
     attacker.discard = [...attacker.discard, ...discardEntries];
     attacker.bench = attacker.bench.filter((_, i) => i !== bIdx);
@@ -1787,7 +1797,7 @@ function handlePlaying(
       // 否則 KO/退化/回收後，手牌或牌庫會出現不同卡名但相同 iid，EVOLVE/USE_ABILITY 會錯抓。
       iid: `${basePoke.iid}_base_${basePoke.cardId}_${Math.random().toString(36).slice(2, 8)}`,
       energyAttached: [],
-      toolAttached: undefined,
+      toolAttached: undefined, extraTools: [],
       evolvedFromStack: undefined, // 避免遞迴巢狀
     };
     const evolved: CardInstance = {
@@ -1799,6 +1809,7 @@ function handlePlaying(
       damage: basePoke.damage,
       energyAttached: basePoke.energyAttached,
       toolAttached: basePoke.toolAttached,
+      extraTools: basePoke.extraTools,
       // v2.260 Bug #2：不再寫 `status: basePoke.status` — 進化後特殊狀態必須消除（PDF §I-A-05）
       evolvedFromIid: basePoke.iid,
       evolvedFromStack: [...prevStack, baseBare],
@@ -1884,14 +1895,21 @@ function handlePlaying(
     let retreatCost = activeCard?.retreatCost?.length ?? 0;
     // 道具撤退修正（氣球 / 緊急滑板 / 驅勁能量 未來）— 阻礙之塔時道具失效
     const toolsJammedR = isToolsJammed(state, pool);
-    const retreatTool = (!toolsJammedR && attacker.active.toolAttached) ? pool.get(attacker.active.toolAttached.cardId) : null;
-    if (retreatTool && activeCard) {
-      const mod = TOOL_RETREAT_MOD.get(retreatTool.name);
-      if (mod) {
+    // v3.20 多重轉接：iterate 所有道具找 retreat mod
+    if (!toolsJammedR && activeCard) {
+      let zeroSet = false;
+      let totalReduce = 0;
+      for (const t of getAllAttachedTools(attacker.active)) {
+        const retreatTool = pool.get(t.cardId);
+        if (!retreatTool) continue;
+        const mod = TOOL_RETREAT_MOD.get(retreatTool.name);
+        if (!mod) continue;
         const r = mod(activeCard, attacker.active);
-        if (r.zero) retreatCost = 0;
-        else if (r.reduceBy) retreatCost = Math.max(0, retreatCost - r.reduceBy);
+        if (r.zero) { zeroSet = true; break; }
+        if (r.reduceBy) totalReduce += r.reduceBy;
       }
+      if (zeroSet) retreatCost = 0;
+      else if (totalReduce > 0) retreatCost = Math.max(0, retreatCost - totalReduce);
     }
     // v2.175 特殊能量 撤退修正（磁鐵【鋼】等）— iterate energyAttached
     if (activeCard) {
@@ -1906,10 +1924,11 @@ function handlePlaying(
       }
     }
     // 重力之玉：雙方 active 任一帶此道具 → 雙方撤退 +1（阻礙之塔時失效）
-    const bothPlusFromSelf = !toolsJammedR && attacker.active.toolAttached
-      && TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(attacker.active.toolAttached.cardId)?.name ?? '');
-    const bothPlusFromOpp = !toolsJammedR && defender.active?.toolAttached
-      && TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(defender.active.toolAttached.cardId)?.name ?? '');
+    // v3.20 多重轉接：任一道具觸發即可
+    const bothPlusFromSelf = !toolsJammedR
+      && getAllAttachedTools(attacker.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
+    const bothPlusFromOpp = !toolsJammedR && defender.active
+      && getAllAttachedTools(defender.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
     if (bothPlusFromSelf || bothPlusFromOpp) retreatCost += 1;
     // 被動特性：天空徑線（拉帝亞斯ex）— 基礎寶可夢免費撤退
     const hasSkyPathR = [
@@ -2973,7 +2992,7 @@ function handlePlaying(
           const koDiscard: CardInstance[] = [
             { ...attacker.active, damage: selfDmg },
             ...attacker.active.energyAttached,
-            ...(attacker.active.toolAttached ? [attacker.active.toolAttached] : []),
+            ...getAllAttachedTools(attacker.active),
             ...(attacker.active.evolvedFromStack ?? []),
           ];
           const newAttacker: PlayerState = {
@@ -3234,19 +3253,20 @@ function handlePlaying(
     // v2.218 加 log — Leon 回報「極限腰帶 +50 沒生效」，加 log 讓未來能判斷
     //   是 fn 沒被呼叫、bonus=0、還是 weakness 順序問題。
     const toolsJammed = isToolsJammed(state, pool);
-    if (!toolsJammed && baseDamage > 0 && attacker.active.toolAttached) {
-      const atkTool = pool.get(attacker.active.toolAttached.cardId);
-      if (atkTool) {
+    if (!toolsJammed && baseDamage > 0) {
+      // v3.20 多重轉接：iterate 所有道具
+      for (const t of getAllAttachedTools(attacker.active)) {
+        const atkTool = pool.get(t.cardId);
+        if (!atkTool) continue;
         const fn = TOOL_ATTACK_BONUS.get(atkTool.name);
-        if (fn) {
-          const bonus = fn(attackerCard, attacker.active, defenderCard, defender.active);
-          if (bonus > 0) {
-            baseDamage += bonus;
-            workingState = addLog(workingState,
-              `🔧 ${atkTool.name}：${attackerCard.name} 招式傷害 +${bonus}（${baseDamage - bonus} → ${baseDamage}）`,
-              aIdx);
-            formula.push({ sign: '+', value: bonus, label: atkTool.name });
-          }
+        if (!fn) continue;
+        const bonus = fn(attackerCard, attacker.active, defenderCard, defender.active);
+        if (bonus > 0) {
+          baseDamage += bonus;
+          workingState = addLog(workingState,
+            `🔧 ${atkTool.name}：${attackerCard.name} 招式傷害 +${bonus}（${baseDamage - bonus} → ${baseDamage}）`,
+            aIdx);
+          formula.push({ sign: '+', value: bonus, label: atkTool.name });
         }
       }
     }
@@ -3569,8 +3589,10 @@ function handlePlaying(
         const card = pool.get(c.cardId);
         return card?.name === '灰塵山' && card?.abilities?.some(a => a.name === '垃圾洩氣');
       });
-      if (hasGarbageMountain && attacker.active?.toolAttached) {
-        const toolCard = pool.get(attacker.active.toolAttached.cardId);
+      if (hasGarbageMountain && attacker.active && getAllAttachedTools(attacker.active).length > 0) {
+        // v3.20 多重轉接：只要附了任一張寶可夢道具就觸發
+        const allTools = getAllAttachedTools(attacker.active);
+        const toolCard = pool.get(allTools[0].cardId);
         if (toolCard?.subtype === 'PokemonTool') {
           const before = baseDamage;
           baseDamage = Math.max(0, baseDamage - 20);
@@ -3636,23 +3658,22 @@ function handlePlaying(
     // v2.176：新增 holderTypes filter（渾厚鱗片需 holder 為【龍】）
     //          + TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY（神聖護符）
     let defenseReduceToolToDiscard: CardInstance | null = null;
-    if (!toolsJammed && !skipDefEffects && defender.active.toolAttached) {
-      const defTool = pool.get(defender.active.toolAttached.cardId);
+    if (!toolsJammed && !skipDefEffects) {
       const defenderCardForTool = pool.get(defender.active.cardId);
-      if (defTool) {
-        // 1. 屬性過濾型（福祿果系 + 渾厚鱗片）
+      // v3.20 多重轉接：iterate 所有道具（toolAttached + extraTools）
+      for (const t of getAllAttachedTools(defender.active)) {
+        const defTool = pool.get(t.cardId);
+        if (!defTool) continue;
         const defense = TOOL_DEFENSE_REDUCE_BY_TYPE.get(defTool.name);
         if (defense && attackerCard.pokemonType && defense.types.includes(attackerCard.pokemonType) && baseDamage > 0) {
-          // v2.176 holderTypes filter：若指定，holder 必須是其中一型
           const holderOk = !defense.holderTypes
             || (defenderCardForTool?.pokemonType
                 && defense.holderTypes.includes(defenderCardForTool.pokemonType));
           if (holderOk) {
             baseDamage = Math.max(0, baseDamage - defense.amount);
-            if (defense.discardOnTrigger) defenseReduceToolToDiscard = defender.active.toolAttached;
+            if (defense.discardOnTrigger) defenseReduceToolToDiscard = t;
           }
         }
-        // 2. v2.176 攻擊方有特性型（神聖護符）— 不丟棄
         const abilFn = TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.get(defTool.name);
         if (abilFn && baseDamage > 0) {
           const reduce = abilFn(attackerCard);
@@ -3722,7 +3743,17 @@ function handlePlaying(
     // 套用防禦道具丟棄（若有觸發）
     if (defenseReduceToolToDiscard) {
       const tool = defenseReduceToolToDiscard;
-      defenderState.active = { ...defenderState.active, toolAttached: undefined };
+      // v3.20 多重轉接：只移除被觸發的那張，保留其他附在身上的道具
+      const removeOne = (a: import('./types').CardInstance): import('./types').CardInstance => {
+        if (a.toolAttached?.iid === tool.iid) {
+          return { ...a, toolAttached: undefined };
+        }
+        if (a.extraTools && a.extraTools.length > 0) {
+          return { ...a, extraTools: a.extraTools.filter(x => x.iid !== tool.iid) };
+        }
+        return a;
+      };
+      defenderState.active = removeOne(defenderState.active);
       defenderState.discard = [...defenderState.discard, tool];
     }
 
@@ -3821,27 +3852,30 @@ function handlePlaying(
 
     // 道具防 KO（倖存鍛鍊器）— 滿血被 KO 時保留少量 HP，道具丟棄（阻礙之塔時失效）
     let preventedKO = false;
-    if (!toolsJammed && wouldBeKO && defenderState.active?.toolAttached) {
-      const preventTool = pool.get(defenderState.active.toolAttached.cardId);
-      if (preventTool) {
+    if (!toolsJammed && wouldBeKO && defenderState.active) {
+      // v3.20 多重轉接：iterate 所有道具找第一個觸發 PREVENT_KO 的
+      for (const t of getAllAttachedTools(defenderState.active)) {
+        const preventTool = pool.get(t.cardId);
+        if (!preventTool) continue;
         const fn = TOOL_PREVENT_KO.get(preventTool.name);
-        if (fn) {
-          const result = fn(defenderState.active, defenderCard, baseDamage);
-          if (result.prevent) {
-            const tool = defenderState.active.toolAttached;
-            const targetDamage = Math.max(0, defenderHP - result.leaveHP);
-            defenderState.active = {
-              ...defenderState.active,
-              damage: targetDamage,
-              toolAttached: undefined,
-            };
-            defenderState.discard = [...defenderState.discard, tool];
-            defPlayers[dIdx] = defenderState;
-            newState = addLog({ ...newState, players: defPlayers, turnPhase: 'end' },
-              `${preventTool.name}：${defenderCard.name} 避免昏厥，剩餘 HP ${result.leaveHP}！`, null);
-            preventedKO = true;
-          }
+        if (!fn) continue;
+        const result = fn(defenderState.active, defenderCard, baseDamage);
+        if (!result.prevent) continue;
+        const triggered = t;
+        const targetDamage = Math.max(0, defenderHP - result.leaveHP);
+        let newAct = { ...defenderState.active, damage: targetDamage };
+        if (newAct.toolAttached?.iid === triggered.iid) {
+          newAct = { ...newAct, toolAttached: undefined };
+        } else if (newAct.extraTools) {
+          newAct = { ...newAct, extraTools: newAct.extraTools.filter(x => x.iid !== triggered.iid) };
         }
+        defenderState.active = newAct;
+        defenderState.discard = [...defenderState.discard, triggered];
+        defPlayers[dIdx] = defenderState;
+        newState = addLog({ ...newState, players: defPlayers, turnPhase: 'end' },
+          `${preventTool.name}：${defenderCard.name} 避免昏厥，剩餘 HP ${result.leaveHP}！`, null);
+        preventedKO = true;
+        break;
       }
     }
     // v2.133 被動防 KO（皮卡丘ex 勤奮之心 等）— 條件由 PASSIVE_PREVENT_KO map 內 fn 決定
@@ -3874,11 +3908,13 @@ function handlePlaying(
     if (!preventedKO && wouldBeKO) {
       // 道具：被 KO 時獎賞加成（豪華斗篷 +1 / 莉莉艾的珍珠 -1 等）— 阻礙之塔時失效
       let prizeTool = 0;
-      if (!toolsJammed && defenderState.active?.toolAttached) {
-        const tool = pool.get(defenderState.active.toolAttached.cardId);
-        if (tool) {
+      if (!toolsJammed && defenderState.active) {
+        // v3.20 多重轉接：iterate 所有道具
+        for (const t of getAllAttachedTools(defenderState.active)) {
+          const tool = pool.get(t.cardId);
+          if (!tool) continue;
           const fn = TOOL_PRIZE_BONUS.get(tool.name);
-          if (fn) prizeTool = fn(defenderCard);
+          if (fn) prizeTool += fn(defenderCard);
         }
       }
 
@@ -3894,11 +3930,12 @@ function handlePlaying(
       const koDiscard: CardInstance[] = [
         updatedActive,
         ...nonWaterEnergyAttached,
-        ...(updatedActive.toolAttached ? [updatedActive.toolAttached] : []),
+        ...getAllAttachedTools(updatedActive),
         ...(updatedActive.evolvedFromStack ?? []),
       ];
       // 先記錄被 KO 的道具名以便觸發 ON_KO 後續效果
-      const onKOTool = updatedActive.toolAttached ? pool.get(updatedActive.toolAttached.cardId) : null;
+      // v3.20 多重轉接：所有道具都可能有 ON_KO
+      const onKOToolNames = getAllAttachedTools(updatedActive).map(t => pool.get(t.cardId)).filter((c): c is import('$lib/cards/types').Card => !!c);
 
       if (infiniteShadowReturnsToHand) {
         // 無限之影：本體回手牌（清除 damage/能量/道具/進化堆，類似全新一張卡）
@@ -3906,7 +3943,7 @@ function handlePlaying(
           ...updatedActive,
           damage: 0,
           energyAttached: [],
-          toolAttached: undefined,
+          toolAttached: undefined, extraTools: [],
           evolvedFromStack: undefined,
           status: undefined,
           secondaryStatus: undefined,
@@ -3914,7 +3951,7 @@ function handlePlaying(
         // 其餘附件（能量、道具、進化堆）丟到棄牌
         const ancillaryDiscard: CardInstance[] = [
           ...updatedActive.energyAttached,
-          ...(updatedActive.toolAttached ? [updatedActive.toolAttached] : []),
+          ...getAllAttachedTools(updatedActive),
           ...(updatedActive.evolvedFromStack ?? []),
         ];
         defenderState.discard = [...defenderState.discard, ...ancillaryDiscard];
@@ -4066,9 +4103,12 @@ function handlePlaying(
       }
 
       // 道具：被 KO 時觸發（希望護身符 / 沉重接力棒）— 阻礙之塔時失效
-      if (!toolsJammed && onKOTool) {
-        const fn = TOOL_ON_KO.get(onKOTool.name);
-        if (fn) newState = fn(newState, dIdx, aIdx, pool);
+      // v3.20 多重轉接：iterate 所有道具
+      if (!toolsJammed) {
+        for (const c of onKOToolNames) {
+          const fn = TOOL_ON_KO.get(c.name);
+          if (fn) newState = fn(newState, dIdx, aIdx, pool);
+        }
       }
 
       // 無備戰寶可夢 → 直接終局，不需送出新寶可夢
@@ -4092,9 +4132,11 @@ function handlePlaying(
       newState = { ...newState, players: defPlayers, turnPhase: 'end' };
 
       // 道具：被打到但未 KO 時觸發（幸運頭盔 / 奢華炸彈）— 阻礙之塔時失效
-      if (!toolsJammed && baseDamage > 0 && defenderState.active.toolAttached) {
-        const tool = pool.get(defenderState.active.toolAttached.cardId);
-        if (tool) {
+      if (!toolsJammed && baseDamage > 0 && defenderState.active) {
+        // v3.20 多重轉接：iterate 所有道具
+        for (const t of getAllAttachedTools(defenderState.active)) {
+          const tool = pool.get(t.cardId);
+          if (!tool) continue;
           const fn = TOOL_ON_DAMAGED.get(tool.name);
           if (fn) newState = fn(newState, dIdx, aIdx, baseDamage, pool);
         }
@@ -4121,7 +4163,7 @@ function handlePlaying(
             const retKoDiscard: CardInstance[] = [
               retaliatedAtk,
               ...retaliatedAtk.energyAttached,
-              ...(retaliatedAtk.toolAttached ? [retaliatedAtk.toolAttached] : []),
+              ...getAllAttachedTools(retaliatedAtk),
               ...(retaliatedAtk.evolvedFromStack ?? []),
             ];
             const retKOPrizes = prizesForKO(retAtkCard!);
@@ -4175,7 +4217,7 @@ function handlePlaying(
           const koDiscard: CardInstance[] = [
             deadAtk,
             ...deadAtk.energyAttached,
-            ...(deadAtk.toolAttached ? [deadAtk.toolAttached] : []),
+            ...getAllAttachedTools(deadAtk),
             ...(deadAtk.evolvedFromStack ?? []),
           ];
           const punkKOPrizes = prizesForKO(atkCardForKO!);
@@ -4535,7 +4577,7 @@ function handlePlaying(
         const koDiscard2: CardInstance[] = [
           { ...poisonPlayer.active, damage: newDmg },
           ...poisonPlayer.active.energyAttached,
-          ...(poisonPlayer.active.toolAttached ? [poisonPlayer.active.toolAttached] : []),
+          ...getAllAttachedTools(poisonPlayer.active),
           ...(poisonPlayer.active.evolvedFromStack ?? []),
         ];
         poisonPlayer.discard = [...poisonPlayer.discard, ...koDiscard2];
@@ -4589,7 +4631,7 @@ function handlePlaying(
         const koDiscard3: CardInstance[] = [
           { ...burnedPlayer.active, damage: newBurnDmg },
           ...burnedPlayer.active.energyAttached,
-          ...(burnedPlayer.active.toolAttached ? [burnedPlayer.active.toolAttached] : []),
+          ...getAllAttachedTools(burnedPlayer.active),
           ...(burnedPlayer.active.evolvedFromStack ?? []),
         ];
         burnedPlayer.discard = [...burnedPlayer.discard, ...koDiscard3];
@@ -4713,7 +4755,7 @@ function handlePlaying(
             const koDiscard: CardInstance[] = [
               { ...pl.active, damage: newDmg },
               ...pl.active.energyAttached,
-              ...(pl.active.toolAttached ? [pl.active.toolAttached] : []),
+              ...getAllAttachedTools(pl.active),
               ...(pl.active.evolvedFromStack ?? []),
             ];
             pl.discard = [...pl.discard, ...koDiscard];
@@ -4736,7 +4778,7 @@ function handlePlaying(
             const koDiscard: CardInstance[] = [
               { ...b, damage: newDmg },
               ...b.energyAttached,
-              ...(b.toolAttached ? [b.toolAttached] : []),
+              ...getAllAttachedTools(b),
               ...(b.evolvedFromStack ?? []),
             ];
             pl.discard = [...pl.discard, ...koDiscard];
@@ -4802,7 +4844,7 @@ function handlePlaying(
             const koDiscard: CardInstance[] = [
               { ...opp.active, damage: newDmg },
               ...opp.active.energyAttached,
-              ...(opp.active.toolAttached ? [opp.active.toolAttached] : []),
+              ...getAllAttachedTools(opp.active),
               ...(opp.active.evolvedFromStack ?? []),
             ];
             opp.discard = [...opp.discard, ...koDiscard];
@@ -4824,7 +4866,7 @@ function handlePlaying(
             const koDiscard: CardInstance[] = [
               { ...b, damage: newDmg },
               ...b.energyAttached,
-              ...(b.toolAttached ? [b.toolAttached] : []),
+              ...getAllAttachedTools(b),
               ...(b.evolvedFromStack ?? []),
             ];
             opp.discard = [...opp.discard, ...koDiscard];
@@ -4864,35 +4906,32 @@ function handlePlaying(
       const aPlayer = players[aIdx];
       const active = aPlayer.active;
       const toolsJammedET = isToolsJammed(state, pool);
-      if (active && !toolsJammedET && active.toolAttached) {
-        const toolCard = pool.get(active.toolAttached.cardId);
-        if (toolCard?.name === '力之沙漏') {
-          // 检查是否已有 pendingSelection（避免覆蓋）
-          const hasPending = (state as any).pendingSelection;
-          if (!hasPending) {
-            // 找棄牌區第一張基本能量（用於檢查是否存在）
-            const hasBasic = aPlayer.discard.some(c => {
-              const card = pool.get(c.cardId);
-              return card?.supertype === 'Energy' && card.subtype === 'Basic';
-            });
-            if (hasBasic) {
-              // 建立 pendingSelection 讓玩家選擇是否附能量（0~1張）
-              state = {
-                ...state,
-                players,
-                pendingSelection: {
-                  type: 'discard-search',
-                  actorIdx: aIdx,
-                  sourcePlayerIdx: aIdx,
-                  filter: 'BasicEnergy',
-                  minCount: 0,
-                  maxCount: 1,
-                  effectKey: 'brailliant-attach',
-                  params: { endTurnAfter: true },
-                },
-              };
-              return state; // 停止其餘 END_TURN 處理，等待玩家選擇
-            }
+      // v3.20 多重轉接：力之沙漏可在 toolAttached 或 extraTools
+      const _hasLouTool = active && !toolsJammedET
+        && getAllAttachedTools(active).some(t => pool.get(t.cardId)?.name === '力之沙漏');
+      if (_hasLouTool) {
+        const hasPending = (state as any).pendingSelection;
+        if (!hasPending) {
+          const hasBasic = aPlayer.discard.some(c => {
+            const card = pool.get(c.cardId);
+            return card?.supertype === 'Energy' && card.subtype === 'Basic';
+          });
+          if (hasBasic) {
+            state = {
+              ...state,
+              players,
+              pendingSelection: {
+                type: 'discard-search',
+                actorIdx: aIdx,
+                sourcePlayerIdx: aIdx,
+                filter: 'BasicEnergy',
+                minCount: 0,
+                maxCount: 1,
+                effectKey: 'brailliant-attach',
+                params: { endTurnAfter: true },
+              },
+            };
+            return state;
           }
         }
       }
@@ -4913,12 +4952,32 @@ function handlePlaying(
       let touched = false;
       const newDiscards: CardInstance[] = [];
       const stripIfDiscard = (c: CardInstance): CardInstance => {
-        if (!c.toolAttached) return c;
-        const tCard = pool.get(c.toolAttached.cardId);
-        if (!tCard || !TOOL_END_TURN_DISCARD.has(tCard.name)) return c;
-        newDiscards.push(c.toolAttached);
-        touched = true;
-        return { ...c, toolAttached: undefined };
+        // v3.20 多重轉接：處理 toolAttached 與 extraTools 兩種來源
+        let updated: CardInstance = c;
+        if (c.toolAttached) {
+          const tCard = pool.get(c.toolAttached.cardId);
+          if (tCard && TOOL_END_TURN_DISCARD.has(tCard.name)) {
+            newDiscards.push(c.toolAttached);
+            touched = true;
+            updated = { ...updated, toolAttached: undefined };
+          }
+        }
+        if (updated.extraTools && updated.extraTools.length > 0) {
+          const keep: CardInstance[] = [];
+          for (const t of updated.extraTools) {
+            const tCard = pool.get(t.cardId);
+            if (tCard && TOOL_END_TURN_DISCARD.has(tCard.name)) {
+              newDiscards.push(t);
+              touched = true;
+            } else {
+              keep.push(t);
+            }
+          }
+          if (keep.length !== updated.extraTools.length) {
+            updated = { ...updated, extraTools: keep };
+          }
+        }
+        return updated;
       };
       if (touched || aPlayer.active) {
         // intentionally always run map; touched 由內部判斷
@@ -5517,6 +5576,10 @@ export function applyAction(
   // v2.136 零之大空洞：每次 dispatch 完，重新計算備戰上限。若場地離場/失去太晶 → 自動丟備戰至 5
   next = enforceBenchLimit(next, pool);
 
+  // v3.20 多重轉接 reconcile：若某方場上沒有「洛托姆ex 多重轉接」啟用，
+  //   該方所有寶可夢的 extraTools 全部丟到棄牌堆（卡面「特性消除時，將身上多附的道具丟棄」）。
+  next = reconcileMultiToolRelay(next, pool);
+
   // v2.135 防禦層：若任一玩家在 'playing' 階段沒 active 也沒 bench → game-over
   // 漏網的 KO 路徑（self-return-to-hand / self-KO ability / 中毒/灼傷邊緣案例 等）若忘了
   // trigger game-over，sim 會 stuck loop。這裡做最後一道保險。
@@ -5574,11 +5637,14 @@ export function getEffectiveAttacks(
   }
   // tool 招式 — 阻礙之塔失效時不算
   const toolsJammed = isToolsJammed(state, pool);
-  if (!toolsJammed && inst.toolAttached) {
-    const toolCard = pool.get(inst.toolAttached.cardId);
-    if (toolCard?.subtype === 'PokemonTool' && toolCard.attacks?.length) {
-      for (const atk of toolCard.attacks) {
-        result.push({ atk, sourceCardName: toolCard.name, isFromTool: true });
+  if (!toolsJammed) {
+    // v3.20 多重轉接：iterate 所有道具
+    for (const t of getAllAttachedTools(inst)) {
+      const toolCard = pool.get(t.cardId);
+      if (toolCard?.subtype === 'PokemonTool' && toolCard.attacks?.length) {
+        for (const atk of toolCard.attacks) {
+          result.push({ atk, sourceCardName: toolCard.name, isFromTool: true });
+        }
       }
     }
   }
@@ -5831,21 +5897,29 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
   let cost = card?.retreatCost?.length ?? 0;
   // 道具撤退修正（氣球 / 緊急滑板 / 驅勁能量 未來）— 阻礙之塔時道具失效
   const toolsJammedCanR = isToolsJammed(state, pool);
-  const tool = (!toolsJammedCanR && player.active.toolAttached) ? pool.get(player.active.toolAttached.cardId) : null;
-  if (tool && card) {
-    const mod = TOOL_RETREAT_MOD.get(tool.name);
-    if (mod) {
+  // v3.20 多重轉接：iterate 所有道具找 retreat mod
+  if (!toolsJammedCanR && card) {
+    let zeroSet2 = false;
+    let totalReduce2 = 0;
+    for (const t of getAllAttachedTools(player.active)) {
+      const tool = pool.get(t.cardId);
+      if (!tool) continue;
+      const mod = TOOL_RETREAT_MOD.get(tool.name);
+      if (!mod) continue;
       const r = mod(card, player.active);
-      if (r.zero) cost = 0;
-      else if (r.reduceBy) cost = Math.max(0, cost - r.reduceBy);
+      if (r.zero) { zeroSet2 = true; break; }
+      if (r.reduceBy) totalReduce2 += r.reduceBy;
     }
+    if (zeroSet2) cost = 0;
+    else if (totalReduce2 > 0) cost = Math.max(0, cost - totalReduce2);
   }
   // 重力之玉：雙方 active 任一帶此道具 → 雙方撤退 +1（阻礙之塔時失效）
   const opp = state.players[(1 - state.activePlayerIndex) as 0 | 1];
-  const bothPlusFromSelf = !toolsJammedCanR && player.active.toolAttached
-    && TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(player.active.toolAttached.cardId)?.name ?? '');
-  const bothPlusFromOpp = !toolsJammedCanR && opp.active?.toolAttached
-    && TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(opp.active.toolAttached.cardId)?.name ?? '');
+  // v3.20 多重轉接：任一道具觸發即可
+  const bothPlusFromSelf = !toolsJammedCanR
+    && getAllAttachedTools(player.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
+  const bothPlusFromOpp = !toolsJammedCanR && opp.active
+    && getAllAttachedTools(opp.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
   if (bothPlusFromSelf || bothPlusFromOpp) cost += 1;
   // 被動特性：天空徑線（拉帝亞斯ex）— 所有基礎寶可夢免費撤退
   const hasSkyPath = [

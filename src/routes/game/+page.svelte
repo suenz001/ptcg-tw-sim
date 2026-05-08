@@ -727,8 +727,19 @@
       const allMy = [...(myPlayer?.active ? [myPlayer.active] : []), ...(myPlayer?.bench ?? [])];
       const target = allMy.find(p => p.iid === tIid);
       if (target?.toolAttached) {
-        alert(`「${getCard(target.cardId)?.name ?? '該寶可夢'}」已附有道具，無法再附加（一隻寶可夢只能附加一個道具）。`);
-        return;
+        // v3.20 多重轉接：洛托姆家族 + 自方場上有洛托姆ex 多重轉接 → 可附第 2 張
+        const targetCard = getCard(target.cardId);
+        const isLotomFam = (targetCard?.name ?? '').includes('洛托姆');
+        const myAll = [...(myPlayer?.active ? [myPlayer.active] : []), ...(myPlayer?.bench ?? [])];
+        const hasMultiRelay = myAll.some(p => {
+          const c = getCard(p.cardId);
+          return c?.name === '洛托姆ex' && c.abilities?.some(a => a.name === '多重轉接');
+        });
+        const extraCount = target.extraTools?.length ?? 0;
+        if (!(isLotomFam && hasMultiRelay && extraCount < 1)) {
+          alert(`「${targetCard?.name ?? '該寶可夢'}」已附有道具，無法再附加（一隻寶可夢只能附加一個道具）。`);
+          return;
+        }
       }
       // 打出道具 → 觸發 pendingSelection（attach-tool）→ 用 drop target 直接 resolve
       await dispatch(GameActions.playTrainer(d.iid));
@@ -1975,8 +1986,13 @@
   function retreatCostOf(inst: CardInstance): number {
     const card = getCard(inst.cardId);
     let cost = card?.retreatCost?.length ?? 0;
-    const tool = inst.toolAttached ? getCard(inst.toolAttached.cardId) : null;
-    if (tool?.name === '氣球') cost = Math.max(0, cost - 2);
+    // v3.20 多重轉接：iterate 所有道具
+    const allTools = [
+      ...(inst.toolAttached ? [inst.toolAttached] : []),
+      ...(inst.extraTools ?? []),
+    ];
+    const hasBalloon = allTools.some(t => getCard(t.cardId)?.name === '氣球');
+    if (hasBalloon) cost = Math.max(0, cost - 2);
     // v2.96：天空徑線（拉帝亞斯ex）— 自己場上有拉帝亞斯ex 時基礎寶可夢撤退 0
     // 鏡射 engine canRetreat 的 hook；UI 按鈕顯示「撤退（0⚡）」
     if (cost > 0 && card && !card.evolvesFrom && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && myPlayer) {
@@ -3356,7 +3372,7 @@
                   {/if}
                 </div>
                 <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
-                {#if b.toolAttached}{@const tc3=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc3?.name}</div>{/if}
+                {#if b.toolAttached}{@const tc3=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc3?.name}</div>{/if}{#each (b.extraTools ?? []) as et3}{@const tcE=getCard(et3.cardId)}<div class="tool-chip sm">🔧{tcE?.name}</div>{/each}
                 {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
                 {#if b.status}<div class="status-chip-sm status-{b.status}">{
                   b.status === 'poisoned' ? '☠️' :
@@ -3405,7 +3421,7 @@
               {/if}
               <div class="active-info">
                 <div class="active-name">{ac?.name}</div>
-                {#if oppPlayer.active.toolAttached}{@const tc=getCard(oppPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
+                {#if oppPlayer.active.toolAttached}{@const tc=getCard(oppPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}{#each (oppPlayer.active.extraTools ?? []) as etOA}{@const tcOA=getCard(etOA.cardId)}<div class="tool-chip">🔧{tcOA?.name}</div>{/each}
                 {#if oppPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
                 {#if oppPlayer.active.status}<div class="status-chip status-{oppPlayer.active.status}">{
                   oppPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
@@ -3628,7 +3644,7 @@
             {/if}
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
-              {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}
+              {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}{#each (myPlayer.active.extraTools ?? []) as etMA}{@const tcMA=getCard(etMA.cardId)}<div class="tool-chip">🔧{tcMA?.name}</div>{/each}
               {#if myPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
               {#if myPlayer.active.status}<div class="status-chip status-{myPlayer.active.status}">{
                 myPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
@@ -3704,7 +3720,7 @@
                 {/if}
               </div>
               <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
-              {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}
+              {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}{#each (b.extraTools ?? []) as et2}{@const tcE2=getCard(et2.cardId)}<div class="tool-chip sm">🔧{tcE2?.name}</div>{/each}
               {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
               <!-- v2.47：備戰區寶可夢依 PTCG 規則不會有異常狀態；engine scrubBenchStatus 亦會抹除，
                    這裡不再渲染 status chip（避免佔版面） -->
@@ -3931,7 +3947,7 @@
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
                     <div class="retreat-nrg">{energySummary(item)}</div>
-                    {#if item.toolAttached}{@const tc=getCard(item.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
+                    {#if item.toolAttached}{@const tc=getCard(item.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}{#each (item.extraTools ?? []) as etIT}{@const tcIT=getCard(etIT.cardId)}<div class="retreat-tool">🔧 {tcIT?.name ?? '?'}</div>{/each}
                     {#if item.status}<div class="retreat-status">
                       {item.status==='poisoned'?'☠️':item.status==='burned'?'🔥':item.status==='asleep'?'💤':item.status==='confused'?'😵':item.status==='paralyzed'?'⚡':''}
                       {item.status}

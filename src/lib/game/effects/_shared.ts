@@ -794,3 +794,114 @@ export function hasAnyPendingPrize(state: GameState): boolean {
   const pp = state.pendingPrizes ?? [0, 0];
   return pp[0] > 0 || pp[1] > 0;
 }
+
+
+// ── v3.20: 寶可夢道具多附支援（洛托姆ex｜多重轉接） ──────────────────────────
+//
+// 卡面：「只要這隻寶可夢在場上，名稱中有『洛托姆』的自己的所有寶可夢，
+//   各自身上最多可附有 2 張『寶可夢道具』卡。
+//   （這個特性消除時，將身上多附的『寶可夢道具』卡丟棄。）」
+//
+// 設計：
+//   - CardInstance.toolAttached（單一）保留 — 既有 200+ 引用點不必改
+//   - 新欄位 CardInstance.extraTools: CardInstance[] — 第 2 張及以上的道具
+//   - getAllAttachedTools(inst) 統一回傳 [toolAttached, ...extraTools].filter(Boolean)
+//     供 KO discard / TOOL hook iterate / UI 顯示使用
+//
+// 影響範圍：
+//   1. attach-tool resolver（tools.ts）— 已附第 1 張且 holder 是「洛托姆」家族
+//      且場上有「多重轉接」啟用時，溢出進 extraTools（最多 +1）
+//   2. KO / 退化 / 換手 等所有「道具一起進棄牌」處 — 改用 getAllAttachedTools
+//   3. TOOL_xxx hook（HP_BONUS / ATTACK_BONUS / DEFENSE 等）— iterate 全部道具
+//   4. 特性消除（場上沒有洛托姆ex 多重轉接）— reconcile 所有 extraTools 進棄牌
+//
+export function getAllAttachedTools(inst: CardInstance | null | undefined): CardInstance[] {
+  if (!inst) return [];
+  const out: CardInstance[] = [];
+  if (inst.toolAttached) out.push(inst.toolAttached);
+  if (inst.extraTools && inst.extraTools.length > 0) out.push(...inst.extraTools);
+  return out;
+}
+
+/**
+ * 自方場上是否有「洛托姆ex」（基本的洛托姆ex，14347）並擁有「多重轉接」特性活躍。
+ * 用途：
+ *   - attach-tool resolver gate（決定第 2 張道具能否附到「洛托姆」家族）
+ *   - reconcile（每次 applyAction 末尾檢查「特性消除」狀態）
+ *
+ * 特性活躍判定：暫只看「自方場上有洛托姆ex（含 active 與 bench）」。
+ * 「特性消除」走 PASSIVE 是否被阻擋的邏輯由 caller（reconcile）處理。
+ */
+export function hasMultiToolRelay(
+  state: GameState,
+  ownerIdx: 0 | 1,
+  pool: Map<string, Card>,
+): boolean {
+  const player = state.players[ownerIdx];
+  if (!player) return false;
+  const all: CardInstance[] = [
+    ...(player.active ? [player.active] : []),
+    ...player.bench,
+  ];
+  for (const inst of all) {
+    const c = pool.get(inst.cardId);
+    if (!c) continue;
+    if (c.name !== '洛托姆ex') continue;
+    if (!c.abilities?.some(a => a.name === '多重轉接')) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 是否為「洛托姆」家族卡（名字含「洛托姆」），可使用多重轉接的雙道具特權。
+ */
+export function isLotomFamily(card: Card | undefined): boolean {
+  if (!card) return false;
+  return (card.name ?? '').includes('洛托姆');
+}
+
+/**
+ * Reconcile：場上若無「洛托姆ex 多重轉接」啟用，自方所有寶可夢的 extraTools
+ * 全部丟進棄牌堆，並清空 extraTools。
+ *
+ * 呼叫時機：每次 applyAction 末尾（與 enforceBenchLimit 同層）
+ * — 確保任何時候「沒有特性活躍」時，多附的道具會被即時清掉。
+ */
+export function reconcileMultiToolRelay(
+  state: GameState,
+  pool: Map<string, Card>,
+): GameState {
+  if (state.phase !== 'playing') return state;
+  let changed = false;
+  const players = state.players.map((p, i) => {
+    const ownerIdx = i as 0 | 1;
+    if (hasMultiToolRelay(state, ownerIdx, pool)) return p;
+    // 此玩家的所有寶可夢 extraTools 全棄
+    const drained: CardInstance[] = [];
+    const drain = (pk: CardInstance | null): CardInstance | null => {
+      if (!pk) return pk;
+      if (!pk.extraTools || pk.extraTools.length === 0) return pk;
+      drained.push(...pk.extraTools);
+      changed = true;
+      return { ...pk, extraTools: [] };
+    };
+    const newActive = drain(p.active);
+    const newBench = p.bench.map(b => drain(b) as CardInstance);
+    if (drained.length === 0) return p;
+    return { ...p, active: newActive, bench: newBench, discard: [...p.discard, ...drained] };
+  }) as typeof state.players;
+  if (!changed) return state;
+  // 加 log 給玩家看
+  let s: GameState = { ...state, players };
+  for (const ownerIdx of [0, 1] as const) {
+    if (hasMultiToolRelay(state, ownerIdx, pool)) continue;
+    const before = state.players[ownerIdx];
+    const had = (before.active?.extraTools?.length ?? 0)
+      + before.bench.reduce((sum, b) => sum + (b.extraTools?.length ?? 0), 0);
+    if (had > 0) {
+      s = addLog(s, `多重轉接消除：丟棄多附的寶可夢道具 ${had} 張`, ownerIdx);
+    }
+  }
+  return s;
+}

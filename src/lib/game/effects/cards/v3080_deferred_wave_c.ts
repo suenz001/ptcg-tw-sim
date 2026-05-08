@@ -64,22 +64,24 @@
  *      此處只 export helper getAttacksFromEvolvedFromStack — 由 engine.ts 在
  *      getEffectiveAttacks 內呼叫合併到 result list。
  *
- *   Tier 3（最複雜，標 deferred）
+ *   Tier 3（最複雜，v3.20 已完整實裝）
  *
- *   4. 洛托姆ex｜多重轉接（I） — [DEFERRED v3.08]
+ *   4. 洛托姆ex｜多重轉接（I） — [v3.20 IMPLEMENTED]
  *      卡面：「只要這隻寶可夢在場上，名稱中有『洛托姆』的自己的所有寶可夢，
  *             各自身上最多可附有 2 張『寶可夢道具』卡。
  *             （這個特性消除時，將身上多附的『寶可夢道具』卡丟棄。）」
  *
- *      Defer 原因：
- *        - 資料結構：CardInstance.toolAttached 為單一 CardInstance，要支援 2 張
- *          需改為 array 或新增 secondaryToolAttached 欄位
- *        - 影響面廣（grep toolAttached ≈ 200+ 處引用）— 整個 ATTACH_TOOL /
- *          TOOL_ON_DAMAGED / TOOL_PRIZE_BONUS / 取獎賞時 tool 棄牌邏輯 等所有
- *          tool hook 都要改 loop 處理
- *        - 卡面括號內的清理規則「特性消除時棄掉多附的道具」也需新邏輯
- *
- *      留待獨立 wave（v3.09 或之後）做完整資料結構重構與全面 hook 適配。
+ *      v3.20 實作：
+ *        - CardInstance 加 extraTools?: CardInstance[]（最多 1 張，總共 2 張道具）
+ *        - tools.ts attach-tool resolver：toolAttached 已滿時，若 holder 為「洛托姆」
+ *          家族 + 自方場上有「洛托姆ex 多重轉接」啟用 → push 進 extraTools
+ *        - _shared.ts helper：getAllAttachedTools / hasMultiToolRelay /
+ *          isLotomFamily / reconcileMultiToolRelay
+ *        - engine.ts / effects.ts：所有 KO discard / TOOL_xxx hook iterate /
+ *          retreat / END_TURN_DISCARD / 道具拆除器 / 進化保留 等全面 iterate
+ *        - reconcile：在每次 applyAction 末尾（enforceBenchLimit 之後）檢查；
+ *          若場上沒有洛托姆ex 多重轉接，所有 extraTools 立即丟到棄牌堆
+ *          （卡面「特性消除時，將身上多附的道具丟棄」）。
  *
  * 設計：
  *   - Iron Rule 12：本檔不對 effects.ts 內 Map 做 .set()（純 helper / 不註冊
