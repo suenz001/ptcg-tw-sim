@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v3.03</span> 傷害公式加括號 + ATTACK_PRE breakdown 展開 + 補漏 modifier</summary>
+        <ul>
+          <li><strong>公式加括號</strong>：先前顯示「100(基礎) +30(極限腰帶) ×2(弱點) -30(屬性相剋) = 230」會讓玩家以算術優先級誤解（先乘後加 → 130）。新版改為「[100(基礎) +30(極限腰帶)] ×2(弱點) -30(屬性相剋) = 230」，明示「加成先加，再 ×弱點，最後 -抵抗」。</li>
+          <li>邏輯：偵測最後一個 × term 之前若有 ≥1 個 + term，整段用 [...] 包起；無 × 或 × 之前只有 base 一項則維持線性顯示。</li>
+          <li><strong>ATTACK_PRE 簽名擴展</strong>：AttackPreFn 回傳值新增 optional <code>breakdown: &#123; value, label &#125;[]</code>，讓內部複雜計算可拆成多個 + term 顯示。Backward compatible — 舊 regPre 不回傳 breakdown 維持原行為。</li>
+          <li><strong>9 張高頻招式啟用 breakdown</strong>：月月熊 赫月｜瘋狂啃咬（指示物 N×30 + 100）、太陽伊布｜精神傷害（指示物 N×10 + 30）、猛惡菇｜爆毆（指示物 N×50 + 50）、故勒頓｜原生亂打（古代 N×30）、夠讚狗ex｜瘋狂連鎖（130 + 130 中毒）、超級火炎獅ex｜大爆炸之火（290 - 自身指示物 N×10）、堅果啞鈴｜特殊鞭打（70 + 70 特殊能量）、倫琴貓｜猛力進攻（已取獎賞 N×70）、寶寶暴龍｜勃然大怒（自身指示物 N×20）。</li>
+          <li><strong>補漏 modifier label</strong>：爆炸頭水牛｜捲牆 -60、PASSIVE_IMMUNITY 完全免疫（順滑大衣 / 神秘石居 / 抵抗之幕 等）、PASSIVE_COIN_AVOID 擲幣免傷（躲藏高手 / 腎上腺費洛蒙）— 過去 baseDamage 直接歸零但 formula 沒記錄，現在統一加 label。</li>
+          <li>實作範例：赫月 ex 對 7 指示物 + 極限腰帶 + 弱點 → 從「310(基礎) +30(腰帶) ×2(弱點) = 680」升級為「[210(指示物 7×30) +100(基礎) +30(腰帶)] ×2(弱點) = 680」。</li>
+          <li><strong>Iron Rule 11 / 12 遵守</strong>：所有既有檔案（_shared.ts / engine.ts / effects.ts / +page.svelte）改動一律走 Python pipeline；無新 .set() 子檔註冊。tsc 0 error。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.02</span> log UX 升級 — 卡名可點查看 + 傷害公式展開</summary>
         <ul>
           <li><strong>卡名 → 可點連結</strong>：log 內偵測到卡片名稱（如「尖釘鎮道館」「火箭隊的搗蛋小妖」等）會自動 render 成可點按鈕，點擊立即開啟 zoom modal 看卡片詳情。</li>

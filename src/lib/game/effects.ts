@@ -3634,19 +3634,55 @@ regPre('麒麟奇|精神傷害', (state, aIdx, _pool) => {
 // 太陽伊布｜精神傷害 — 30 + 10× opp counter
 regPre('太陽伊布|精神傷害', (state, aIdx, _pool) => {
   const n = oppActiveCounters(state, aIdx);
-  return { state, damage: 30 + n * 10 };
+  const damage = 30 + n * 10;
+  // v3.03：breakdown 拆「指示物 N×10 + 30(基礎)」
+  if (n > 0) {
+    return {
+      state,
+      damage,
+      breakdown: [
+        { value: n * 10, label: `指示物 ${n}×10` },
+        { value: 30, label: '基礎' },
+      ],
+    };
+  }
+  return { state, damage };
 });
 
 // 月月熊 赫月｜瘋狂啃咬 — 100 + 30× opp counter
+// v3.03：拆 breakdown — 「30×N(指示物 ×30)」+「100(基礎)」，UI 看得出乘法分量
 regPre('月月熊 赫月|瘋狂啃咬', (state, aIdx, _pool) => {
   const n = oppActiveCounters(state, aIdx);
-  return { state, damage: 100 + n * 30 };
+  const damage = 100 + n * 30;
+  if (n > 0) {
+    return {
+      state,
+      damage,
+      breakdown: [
+        { value: n * 30, label: `指示物 ${n}×30` },
+        { value: 100, label: '基礎' },
+      ],
+    };
+  }
+  return { state, damage };
 });
 
 // 猛惡菇｜爆毆 — 50 + 50× opp counter
 regPre('猛惡菇|爆毆', (state, aIdx, _pool) => {
   const n = oppActiveCounters(state, aIdx);
-  return { state, damage: 50 + n * 50 };
+  const damage = 50 + n * 50;
+  // v3.03：breakdown 拆「指示物 N×50 + 50(基礎)」
+  if (n > 0) {
+    return {
+      state,
+      damage,
+      breakdown: [
+        { value: n * 50, label: `指示物 ${n}×50` },
+        { value: 50, label: '基礎' },
+      ],
+    };
+  }
+  return { state, damage };
 });
 
 // ── C. 自己場上寶可夢計數（3 張） ──────────────────────────────────────────
@@ -4674,6 +4710,14 @@ regPre('故勒頓|原生亂打', (state, aIdx, pool) => {
     `原生亂打：場上 ${count} 隻「古代」寶可夢 → ${damage} 傷害`,
     aIdx,
   );
+  // v3.03：breakdown 顯示「古代寶可夢 N×30」
+  if (count > 0) {
+    return {
+      state: s,
+      damage,
+      breakdown: [{ value: damage, label: `古代寶可夢 ${count}×30` }],
+    };
+  }
   return { state: s, damage };
 });
 
@@ -4681,7 +4725,15 @@ regPre('故勒頓|原生亂打', (state, aIdx, pool) => {
 regPre('夠讚狗ex|瘋狂連鎖', (state, aIdx, _pool) => {
   const att = state.players[aIdx].active;
   if (att && att.status === 'poisoned') {
-    return { state: addLog(state, '瘋狂連鎖：自身中毒 → +130', aIdx), damage: 260 };
+    // v3.03：breakdown 拆「130(基礎) + 130(自身中毒)」
+    return {
+      state: addLog(state, '瘋狂連鎖：自身中毒 → +130', aIdx),
+      damage: 260,
+      breakdown: [
+        { value: 130, label: '基礎' },
+        { value: 130, label: '自身中毒' },
+      ],
+    };
   }
   return { state, damage: 130 };
 });
@@ -13811,14 +13863,24 @@ regPre('波爾凱尼恩|強力蒸汽', (state, aIdx, pool) => {
 
 // 倫琴貓｜猛力進攻：自己已獲得獎賞卡張數 × 70。
 regPre('倫琴貓|猛力進攻', (state, aIdx, _pool) => {
-  const taken = 6 - state.players[aIdx].prizes.length;
-  return { state, damage: Math.max(0, taken) * 70 };
+  const taken = Math.max(0, 6 - state.players[aIdx].prizes.length);
+  const damage = taken * 70;
+  // v3.03：breakdown 顯示「已取獎賞 N×70」
+  if (taken > 0) {
+    return { state, damage, breakdown: [{ value: damage, label: `已取獎賞 ${taken}×70` }] };
+  }
+  return { state, damage };
 });
 
 // 寶寶暴龍｜勃然大怒：自身傷害指示物數量 × 20。
 regPre('寶寶暴龍|勃然大怒', (state, aIdx, _pool) => {
   const counters = Math.floor((state.players[aIdx].active?.damage ?? 0) / 10);
-  return { state, damage: counters * 20 };
+  const damage = counters * 20;
+  // v3.03：breakdown 顯示「自身指示物 N×20」
+  if (counters > 0) {
+    return { state, damage, breakdown: [{ value: damage, label: `自身指示物 ${counters}×20` }] };
+  }
+  return { state, damage };
 });
 
 // 摔角鷹人｜復仇踢：若自己的備戰寶可夢身上有傷害指示物，+60。
@@ -13858,19 +13920,42 @@ regPre('密勒頓ex|強子電光', (state, aIdx, pool) => {
 regPost('布里卡隆|圍困', defCantRetreatNextPost());
 
 // 超級火炎獅ex｜大爆炸之火：290 - 自身傷害指示物數量×10。
+// v3.03：breakdown 顯示「290(基礎) - 自身指示物 N×10」（如有自殘）
 regPre('超級火炎獅ex|大爆炸之火', (state, aIdx, _pool) => {
   const counters = Math.floor((state.players[aIdx].active?.damage ?? 0) / 10);
-  return { state, damage: Math.max(0, 290 - counters * 10) };
+  const damage = Math.max(0, 290 - counters * 10);
+  if (counters > 0) {
+    // 自損部分用負值 + 加法表達（注意：此處先在 breakdown 裡轉成「基礎」單一項已減過，
+    // 因 FormulaTerm 限定 base 為 = 號；採用簡化形式 — 顯示一個 base = damage、label
+    // 描述如「290 - 指示物 N×10」即可，避免大改 schema 引入 - sign breakdown）。
+    return {
+      state,
+      damage,
+      breakdown: [{ value: damage, label: `290 - 自身指示物 ${counters}×10` }],
+    };
+  }
+  return { state, damage };
 });
 
 // 天秤偶｜連續旋轉：擲硬幣直到反面，正面數×30。
 regPre('天秤偶|連續旋轉', coinUntilTailsMultiplyPre(30, 0, '連續旋轉'));
 
 // 堅果啞鈴｜特殊鞭打：70；若自身附有特殊能量，+70。
+// v3.03：breakdown 拆「70(基礎) + 70(特殊能量)」
 regPre('堅果啞鈴|特殊鞭打', (state, aIdx, pool) => {
   const active = state.players[aIdx].active;
   const hasSpecial = !!active?.energyAttached.some(e => pool.get(e.cardId)?.subtype === 'Special');
-  return { state, damage: 70 + (hasSpecial ? 70 : 0) };
+  if (hasSpecial) {
+    return {
+      state,
+      damage: 140,
+      breakdown: [
+        { value: 70, label: '基礎' },
+        { value: 70, label: '特殊能量' },
+      ],
+    };
+  }
+  return { state, damage: 70 };
 });
 
 // v2.9991 hotfix: 此檔案需在 PASSIVE_ATTACK_BONUS Map 宣告之後 import

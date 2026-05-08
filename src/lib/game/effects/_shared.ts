@@ -113,6 +113,15 @@ export type AttackPreFn = (
    * 包含被動減傷特性、防禦道具（福祿果等）、下次被攻擊 -N、條件式完全免疫。
    */
   skipDefEffects?: boolean;
+  /**
+   * v3.03 傷害公式拆解 — 若招式內部做了多步加法（如赫月 ex 瘋狂啃咬
+   * 7×30 + 100），可回傳 breakdown 讓 ATTACK handler 把 base 拆成多個 + term，
+   * UI 顯示「[210(指示物 ×30) +100(基礎) +30(腰帶)] ×2(弱點) = 680」更直覺。
+   *
+   * 規則：breakdown 各項 value 加總應等於 damage（否則以 damage 為主）；
+   *       第一項當基礎 = term，其餘為 + term。空陣列 / undefined 維持舊行為。
+   */
+  breakdown?: { value: number; label: string }[];
 };
 
 /**

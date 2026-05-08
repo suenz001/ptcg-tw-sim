@@ -2990,21 +2990,34 @@ function handlePlaying(
         if (buf?.skipDefEffects) skipDefEffects = true;
       }
     }
+    // v3.03：preFn 可額外回傳 breakdown，把內部多步加法（如赫月瘋狂啃咬 7×30+100）
+    //        展開為多個 term，UI 顯示更易懂。
+    let preBreakdown: { value: number; label: string }[] | undefined;
     if (preFn) {
       const preResult = preFn(workingState, aIdx, pool, action);
       workingState = preResult.state;
       baseDamage = preResult.damage;
       if (preResult.skipWeakRes) skipWeakRes = true;
       if (preResult.skipDefEffects) skipDefEffects = true;
+      if (preResult.breakdown && preResult.breakdown.length > 0) {
+        preBreakdown = preResult.breakdown;
+      }
     }
 
     // v3.02 傷害公式累積器 — 每個 modifier 點推一個 term，最後組合成可讀公式。
     //   sign: '=' 為基礎；'+' / '-' 為加減；'×' 為倍率（弱點 ×2 等）。
     //   value 為純數值（非倍率時）；倍率時 value 是倍數本身（×2 → value=2）。
-    //   note: regPre 內部複雜計算（如「7×30 + 100」）defer 到 v2，此處只記基礎值。
+    // v3.03：若 preFn 回傳 breakdown，第一項當 base，後續為 + term；否則沿用單一 base。
     type FormulaTerm = { sign: '=' | '+' | '-' | '×'; value: number; label: string };
     const formula: FormulaTerm[] = [];
-    formula.push({ sign: '=', value: baseDamage, label: '基礎' });
+    if (preBreakdown && preBreakdown.length > 0) {
+      formula.push({ sign: '=', value: preBreakdown[0].value, label: preBreakdown[0].label });
+      for (let i = 1; i < preBreakdown.length; i++) {
+        formula.push({ sign: '+', value: preBreakdown[i].value, label: preBreakdown[i].label });
+      }
+    } else {
+      formula.push({ sign: '=', value: baseDamage, label: '基礎' });
+    }
 
     // 下回合加傷旗標（巨金怪 彗星拳、大電海燕 風力充能 類）—
     // 由前一個自己回合設下，至本回合起生效 1 次於 base damage 上，weakness 前套用。
@@ -3363,7 +3376,11 @@ function handlePlaying(
         const isColorless = defenderCard.pokemonType === 'Colorless';
         const isBasic = !defenderCard.evolvesFrom && defenderCard.stage !== 'Stage1' && defenderCard.stage !== 'Stage2';
         if (isColorless && isBasic) {
+          const before = baseDamage;
           baseDamage = Math.max(0, baseDamage - 60);
+          if (before > baseDamage) {
+            formula.push({ sign: '-', value: before - baseDamage, label: '爆炸頭水牛 捲牆' });
+          }
         }
       }
     }
@@ -3485,12 +3502,22 @@ function handlePlaying(
         const immune = PASSIVE_IMMUNITY.get(ab.name);
         if (!immune) continue;
         const result = immune(attackerCard, baseDamage, workingState, aIdx, pool, defenderCard.name);
+        const before = baseDamage;
         if (typeof result === 'boolean') {
-          if (result) { baseDamage = 0; break; }
+          if (result) {
+            baseDamage = 0;
+            // v3.03：完全免疫（如 順滑大衣 擲幣正面 / 神秘石居 / 抵抗之幕）→ -before(免疫)
+            if (before > 0) formula.push({ sign: '-', value: before, label: `${ab.name}（免疫）` });
+            break;
+          }
         } else {
           // { immune, newState } — 統合 newState（含 log）
           workingState = result.newState;
-          if (result.immune) { baseDamage = 0; break; }
+          if (result.immune) {
+            baseDamage = 0;
+            if (before > 0) formula.push({ sign: '-', value: before, label: `${ab.name}（免疫）` });
+            break;
+          }
         }
       }
     }
@@ -3506,7 +3533,12 @@ function handlePlaying(
         workingState = addLog(r.state,
           `${defenderCard.name}｜${ab.name}：${r.heads ? '正面 → 免疫此招式傷害！' : '反面 → 受傷害'}`,
           dIdx);
-        if (r.heads) { baseDamage = 0; break; }
+        if (r.heads) {
+          // v3.03：擲幣免傷（變隱龍 躲藏高手 / 吉雉雞 腎上腺費洛蒙）→ -before(擲幣避免)
+          if (baseDamage > 0) formula.push({ sign: '-', value: baseDamage, label: `${ab.name}（擲幣避免）` });
+          baseDamage = 0;
+          break;
+        }
       }
     }
 
@@ -3557,21 +3589,37 @@ function handlePlaying(
     //        否則只是「100 點傷害」公式為「100(基礎)=100」沒意義
     const composeFormula = (terms: FormulaTerm[], finalValue: number): string => {
       if (terms.length <= 1) return '';  // 只有基礎，無公式可言
-      const parts: string[] = [];
+      // v3.03：在最後一個 × 之前的 base + 加法區用 [...] 包起，明示先算這段再 ×。
+      //   原因：算術優先級會讓讀者誤以為「100+30×2-30=130」，但 PTCG 是
+      //         (100+30)×2-30=230 — 加成先加，再 ×弱點，最後 -抵抗。
+      //   有 ≥1 個 + term 在 × 之前才加括號（單一 base 的純 ×N 不必要包覆）。
+      let lastMulIdx = -1;
       for (let i = 0; i < terms.length; i++) {
-        const t = terms[i];
-        if (i === 0) {
-          // 第一個 term 是 '=' base：直接寫 N(label)
-          parts.push(`${t.value}(${t.label})`);
-        } else if (t.sign === '×') {
-          parts.push(`×${t.value}(${t.label})`);
-        } else if (t.sign === '+') {
-          parts.push(`+${t.value}(${t.label})`);
-        } else if (t.sign === '-') {
-          parts.push(`-${t.value}(${t.label})`);
-        }
+        if (terms[i].sign === '×') lastMulIdx = i;
       }
-      return `${parts.join(' ')} = ${finalValue}`;
+      const renderTerm = (t: FormulaTerm, isFirst: boolean): string => {
+        if (isFirst) return `${t.value}(${t.label})`;
+        if (t.sign === '×') return `×${t.value}(${t.label})`;
+        if (t.sign === '+') return `+${t.value}(${t.label})`;
+        if (t.sign === '-') return `-${t.value}(${t.label})`;
+        return '';
+      };
+      // 沒有 × → 線性串接
+      if (lastMulIdx < 0) {
+        const parts = terms.map((t, i) => renderTerm(t, i === 0));
+        return `${parts.join(' ')} = ${finalValue}`;
+      }
+      // 有 × → 把 0..lastMulIdx-1 包進 [...]，後面照接
+      const beforeParts: string[] = [];
+      for (let i = 0; i < lastMulIdx; i++) beforeParts.push(renderTerm(terms[i], i === 0));
+      const afterParts: string[] = [];
+      for (let i = lastMulIdx; i < terms.length; i++) afterParts.push(renderTerm(terms[i], false));
+      // 若 × 之前只有 base 一項（純 100×2 弱點型），不必加括號
+      if (beforeParts.length <= 1) {
+        const parts = terms.map((t, i) => renderTerm(t, i === 0));
+        return `${parts.join(' ')} = ${finalValue}`;
+      }
+      return `[${beforeParts.join(' ')}] ${afterParts.join(' ')} = ${finalValue}`;
     };
     const _formulaStr = composeFormula(formula, baseDamage);
     let newState: GameState = addLog(
