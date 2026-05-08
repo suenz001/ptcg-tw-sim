@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.25</span> 超級沙奈朵ex｜盈溢祈願 改為 2-stage 玩家自選 picker</summary>
+        <ul>
+          <li><b>卡面</b>：「從牌庫選擇任意數量的『基本【超】能量』卡，以任意方式附於自己的備戰寶可夢身上。然後，重洗牌庫。」</li>
+          <li><b>v2.42 舊行為</b>：自動從牌庫挑前 N 張基本【超】能量、依 bench 順序附；玩家完全沒有選擇空間。違反卡面「以任意方式」字樣（玩家應自選哪張能量、附給哪隻備戰）。</li>
+          <li><b>v3.25 新行為（兩段 picker）</b>：
+            <ul>
+              <li><b>Stage 1</b>（deck-search, filter=&#39;Energy:Psychic&#39;）— 玩家從牌庫挑 0 ~ min(bench.length, 牌庫基本【超】能量數) 張。0 張表示「任意數量」含 0（合法），直接結束。</li>
+              <li><b>Stage 2</b>（bench-choose, minCount &#61; maxCount &#61; N）— 玩家依序挑同數量的備戰寶可夢；picker UI 內部以 Set 維護 selectedIids，自動保證 N 隻彼此不同（每隻最多 1 顆能量、不重複）。</li>
+              <li><b>配對</b>：stage1.picked&#91;i&#93; &#8594; stage2.picked&#91;i&#93;（依玩家點選順序）。</li>
+              <li><b>收尾</b>：移除牌庫對應 N 張能量、附給對應備戰、重洗牌庫；log 列出每對「能量名 &#8594; 寶可夢名」。</li>
+            </ul>
+          </li>
+          <li><b>邊界</b>：bench&#61;0 / 牌庫無基本【超】能量 / 玩家 Stage 1 選 0 張 — 三者皆只 log &#43; 重洗牌庫，不開後續 picker。</li>
+          <li><b>Iron Rule 遵守</b>：Rule 11 — v2402_mega_gardevoir.ts / version.ts / +page.svelte 一律走 Python pipeline（HEAD blob → in-memory replace → safe_write &#43; fsync），驗證 disk size &#61; mem bytes。Rule 12 — Stage 1 / Stage 2 resolver 透過 regR helper 註冊到 _shared.ts 的 RESOLVERS Map（leaf module，無循環依賴 / TDZ）。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v3.24</span> hotfix — 力之沙漏 重複觸發 prompt 無限循環</summary>
         <ul>
           <li>使用者回報：力之沙漏觸發 prompt 後玩家可以選了又再選，系統一直重複</li>
