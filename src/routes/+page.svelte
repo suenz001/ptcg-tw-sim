@@ -264,6 +264,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.11</span> Bug audit P1 — 7 張招式（特定目標限制 / peek 機制 / 未實裝）</summary>
+        <ul>
+          <li><b>Audit 背景</b>：承 v3.10，繼續處理 P1 共 7 張卡（缺 tag gate / peek vs search 機制錯 / 兩張未實裝）。同時新增 3 個 helper + 2 個 picker filter（<code>Energy:TOP_N</code> / <code>Basic:TOP_N</code>）。</li>
+          <li><b>缺 tag 目標 gate（2 張）</b>：</li>
+          <li>　・<b>太樂巴戈斯｜稜鏡充能</b>（牌庫 ≤3 各不同屬性基本能量 → 自方「太晶」寶可夢）：原 helper <code>deckSearchBasicEnergiesAnyPost</code> 加手 + 不限制目標；改用新 <code>deckSearchAttachToTaggedBenchPost(3, label, &#39;太晶&#39;, true)</code>，stage2 用 <code>heal-target</code> picker + <code>validIids</code> 限制只列「太晶」寶可夢</li>
+          <li>　・<b>密勒頓｜暴衝高點</b>（牌庫 ≤2 基本能量 → 自方「未來」寶可夢）：同 pattern，改用 <code>deckSearchAttachToTaggedBenchPost(2, label, &#39;未來&#39;)</code></li>
+          <li><b>peek vs search 機制錯誤（3 張）</b>：</li>
+          <li>　・<b>拉普拉斯ex｜海紋石之雨</b>（看牌庫頂 20 張，從中選任意能量附自方寶可夢，剩餘洗回）：原為 <b>三重錯</b> — peek 變 search、any 能量降為 basic、bench 變 hand；改用新 <code>deckTopPeekEnergyAttachToAnyPost(20, 20, label)</code>，picker 用新 filter <code>Energy:TOP_N</code>，stage2 用 <code>heal-target</code></li>
+          <li>　・<b>米立龍ex｜硃砂誘餌</b>（看牌庫頂 10 張，選任意數量寶可夢放備戰，剩餘洗回）：原 <code>deckSearchBasicToBenchPost(5)</code> 是 search 全牌庫；改用 <code>deckTopPeekPokemonToBenchPost(10, label)</code>，picker 用新 filter <code>Basic:TOP_N</code></li>
+          <li>　・<b>人造細胞卵｜傳喚之門</b>（看牌庫頂 8 張，選任意數量寶可夢放備戰，剩餘洗回）：同上 pattern，改用 <code>deckTopPeekPokemonToBenchPost(8, label)</code></li>
+          <li><b>未實裝補完（2 張）</b>：</li>
+          <li>　・<b>烈咬陸鯊ex｜水炮著陸</b>（cost 1 鬥，棄牌區 ≤3 基本【鬥】能量 → 備戰）：直接用既有 <code>discardSearchAttachToBenchPost(3, label, &#39;Fighting&#39;)</code></li>
+          <li>　・<b>怒鸚哥ex｜幹勁十足</b>（cost 1 無，棄牌區 ≤2 基本能量 → 1 隻備戰）：用 <code>discardSearchAttachToBenchPost(2, label)</code></li>
+          <li><b>新增 helpers / filter</b>：</li>
+          <li>　・<code>deckSearchAttachToTaggedBenchPost(max, label, tagName, sameTypes?)</code> — 含對應 stage1/stage2 resolver（單一目標自動派發；多目標用 heal-target + validIids）</li>
+          <li>　・<code>deckTopPeekEnergyAttachToAnyPost(peekN, maxAttach, label)</code> — peek N 看能量、附到自方任一寶可夢</li>
+          <li>　・<code>deckTopPeekPokemonToBenchPost(peekN, label)</code> — peek N 選基礎寶可夢放備戰</li>
+          <li>　・新 picker filter <code>Energy:TOP_N</code>（任意能量含特殊）/ <code>Basic:TOP_N</code>（peek 中的基礎寶可夢）</li>
+          <li><b>deferred</b>：B1-B3（艾姆利多｜滿載心田 / 椰蛋樹ex｜熱帶狂燒 / 莫魯貝可｜撿拾附上）— 卡面允許「以任意方式附於自己的寶可夢身上」即多張能量分配多隻寶可夢，引擎尚不支援多目標分配 picker；B5-B8 audit 細節（auto-pick / filter 寬鬆）— 影響不大，待下版專波處理；A8 海紋石之雨「以任意方式附」目前簡化為單目標接收</li>
+          <li><b>遵守 Iron Rules</b>：所有改動既有檔（version.ts / v2750_h_wave2_full.ts / +page.svelte / game/+page.svelte / ai.ts）走 Python pipeline；新 helper 只用 <code>regR</code>（_shared.ts 的 RESOLVERS Map），不違反 Rule 12；changelog 內 <code>&lt;</code> / <code>&#39;</code> 等特殊字符 HTML entity escape</li>
+          <li>tsc 0 error</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.10</span> Bug audit P0 — 7 張附能量招式（加手牌 → 附場上）+ 1 張弱抗計算錯誤</summary>
         <ul>
           <li><b>Audit 背景</b>：v3.09 修了花舞鳥｜能量支援後，全面掃描所有「搜能量」類招式。發現 7 張同類 bug（卡面要求附到場上，但實裝把能量加到手牌），與 1 張弱抗 / 抵抗力繞過 bug。本版優先修 P0 共 8 張。</li>

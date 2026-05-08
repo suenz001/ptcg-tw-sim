@@ -280,6 +280,15 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);
           return top7.has(c.iid) && card.subtype === 'Supporter';
         }
+        // v3.11 拉普拉斯ex / 米立龍ex / 人造細胞卵：peek N 限定 filter
+        if (f === 'Basic:TOP_N') {
+          const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
+          return topN.has(c.iid) && isBasicPokemonCard(card);
+        }
+        if (f === 'Energy:TOP_N') {
+          const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
+          return topN.has(c.iid) && card.supertype === 'Energy';
+        }
         // v2.209 配樂之笛：對手牌庫頂 5 張中的基礎寶可夢
         if (f === 'Basic:TOP5') {
           const top5 = new Set<string>((sel.params?.top5Iids as string[]) ?? []);

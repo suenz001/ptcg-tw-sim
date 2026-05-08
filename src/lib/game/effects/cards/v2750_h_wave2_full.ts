@@ -648,6 +648,248 @@ regR('v310-discard-pickup-energy-to-any-stage2', (state, aIdx, picked, params, p
   );
 });
 
+// v3.11 從牌庫挑 ≤N 基本能量 → 附到自方帶指定 tag（如「太晶」「未來」）的寶可夢
+//   太樂巴戈斯|稜鏡充能（太晶 + 各不同屬性）/ 密勒頓|暴衝高點（未來）使用
+//   階段 1 deck-search 挑能量；階段 2 用 heal-target picker（validIids 限制只含 tag 寶可夢）
+function deckSearchAttachToTaggedBenchPost(max: number, label: string, tagName: string, sameTypes: boolean = false): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    const allOwn = [...(p.active ? [p.active] : []), ...p.bench];
+    const taggedIids = allOwn.filter(c => pool.get(c.cardId)?.tags?.includes(tagName)).map(c => c.iid);
+    if (taggedIids.length === 0) return addLog(state, `${label}：自方場上無「${tagName}」寶可夢`, aIdx);
+    if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
+    const validCount = p.deck.filter(c => {
+      const card = pool.get(c.cardId);
+      return card?.supertype === 'Energy' && card.subtype === 'Basic';
+    }).length;
+    const realMax = Math.min(max, validCount);
+    if (realMax === 0) {
+      return updatePlayer(addLog(state, `${label}：牌庫無基本能量；重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    }
+    return withPending(addLog(state, `${label}：從牌庫挑 0~${realMax} 張基本能量（附到「${tagName}」寶可夢；重洗）`, aIdx), {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: sameTypes ? 'BasicEnergyDistinctTypes' : 'BasicEnergy',
+      minCount: 0, maxCount: realMax,
+      effectKey: 'v311-deck-energy-to-tagged-stage1',
+      params: { label, tagName, taggedIids },
+    });
+  };
+}
+
+regR('v311-deck-energy-to-tagged-stage1', (state, aIdx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '';
+  const tagName = (params?.tagName as string) ?? '';
+  const taggedIids = (params?.taggedIids as string[]) ?? [];
+  if (iids.length === 0) {
+    return updatePlayer(addLog(state, `${label}：未選擇能量；重洗`, aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
+  if (taggedIids.length === 1) {
+    // 單一目標自動派發
+    const targetIid = taggedIids[0];
+    const energySet = new Set(iids);
+    const p = state.players[aIdx];
+    const energies = p.deck.filter(c => energySet.has(c.iid));
+    const restDeck = p.deck.filter(c => !energySet.has(c.iid));
+    return updatePlayer(addLog(state, `${label}：${iids.length} 張能量附到場上唯一「${tagName}」寶可夢（重洗）`, aIdx), aIdx, pl => ({
+      ...pl,
+      deck: shuffle(restDeck),
+      active: pl.active && pl.active.iid === targetIid
+        ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] }
+        : pl.active,
+      bench: pl.bench.map(b => b.iid === targetIid
+        ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+        : b),
+    }));
+  }
+  // 多隻 → heal-target 選目標（限定 tag 寶可夢的 iid）
+  return withPending(addLog(state, `${label}：選 1 隻自方「${tagName}」寶可夢接收能量（已挑 ${iids.length} 張）`, aIdx), {
+    type: 'heal-target',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'v311-deck-energy-to-tagged-stage2',
+    params: { energyIids: iids, label, validIids: taggedIids },
+  });
+});
+
+regR('v311-deck-energy-to-tagged-stage2', (state, aIdx, picked, params, pool) => {
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const label = (params?.label as string) ?? '';
+  if (picked.length === 0 || energyIids.length === 0) return state;
+  const targetIid = picked[0];
+  const energySet = new Set(energyIids);
+  const p = state.players[aIdx];
+  const energies = p.deck.filter(c => energySet.has(c.iid));
+  const restDeck = p.deck.filter(c => !energySet.has(c.iid));
+  const isActive = p.active?.iid === targetIid;
+  const target = isActive ? p.active : p.bench.find(b => b.iid === targetIid);
+  const targetName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const energyNames = energies.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  const newPlayers = [...state.players] as [import('../../types').PlayerState, import('../../types').PlayerState];
+  newPlayers[aIdx] = {
+    ...p,
+    deck: shuffle(restDeck),
+    active: isActive && p.active
+      ? { ...p.active, energyAttached: [...p.active.energyAttached, ...energies] }
+      : p.active,
+    bench: isActive
+      ? p.bench
+      : p.bench.map(b => b.iid === targetIid
+          ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+          : b),
+  };
+  return addLog({ ...state, players: newPlayers }, `${label}：${energyNames}（${energies.length} 張）附到 ${targetName} 身上（重洗）`, aIdx);
+});
+
+// v3.11 看牌庫頂 N 張，從中選任意數量能量（含特殊能量）附到自方任一寶可夢
+//   拉普拉斯ex|海紋石之雨（peek 20 → 任意能量）使用
+//   階段 1: 用 deck-search 顯示 top N 全部供選；階段 2: heal-target 選接收者；最後剩餘洗回
+function deckTopPeekEnergyAttachToAnyPost(peekN: number, maxAttach: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
+    const hasAnyTarget = !!p.active || p.bench.length > 0;
+    if (!hasAnyTarget) return addLog(state, `${label}：自方場上無寶可夢`, aIdx);
+    const top = p.deck.slice(0, peekN);
+    const topIids = top.map(c => c.iid);
+    const energiesInTop = top.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+    if (energiesInTop.length === 0) {
+      return updatePlayer(addLog(state, `${label}：牌庫頂 ${top.length} 張內無能量；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    }
+    const realMax = Math.min(maxAttach, energiesInTop.length);
+    return withPending(addLog(state, `${label}：查看牌庫頂 ${top.length} 張，選 0~${realMax} 張能量（附到自方任一寶可夢，剩餘洗回）`, aIdx), {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Energy:TOP_N',
+      minCount: 0, maxCount: realMax,
+      effectKey: 'v311-deck-peek-energy-to-any-stage1',
+      params: { label, topIids, peekN: top.length },
+    });
+  };
+}
+
+regR('v311-deck-peek-energy-to-any-stage1', (state, aIdx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '';
+  const p = state.players[aIdx];
+  if (iids.length === 0) {
+    return updatePlayer(addLog(state, `${label}：未選擇能量；剩餘洗回`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+  }
+  if (!p.active && p.bench.length === 0) {
+    return updatePlayer(addLog(state, `${label}：場上無寶可夢，剩餘洗回`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+  }
+  const allOwn = [
+    ...(p.active ? [p.active.iid] : []),
+    ...p.bench.map(b => b.iid),
+  ];
+  if (allOwn.length === 1) {
+    const targetIid = allOwn[0];
+    const energySet = new Set(iids);
+    const energies = p.deck.filter(c => energySet.has(c.iid));
+    const restDeck = p.deck.filter(c => !energySet.has(c.iid));
+    return updatePlayer(addLog(state, `${label}：${iids.length} 張能量附到場上唯一寶可夢（剩餘洗回）`, aIdx), aIdx, pl => ({
+      ...pl,
+      deck: shuffle(restDeck),
+      active: pl.active && pl.active.iid === targetIid
+        ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] }
+        : pl.active,
+      bench: pl.bench.map(b => b.iid === targetIid
+        ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+        : b),
+    }));
+  }
+  // [deferred-detail] 簡化：所有能量都附給同一隻接收寶可夢；
+  // 卡面允許「以任意方式附於自己的寶可夢身上」即多能量分配多隻，下版改為 energy-distribute picker
+  return withPending(addLog(state, `${label}：選 1 隻自方寶可夢接收 ${iids.length} 張能量`, aIdx), {
+    type: 'heal-target',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'v311-deck-peek-energy-to-any-stage2',
+    params: { energyIids: iids, label },
+  });
+});
+
+regR('v311-deck-peek-energy-to-any-stage2', (state, aIdx, picked, params, pool) => {
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  const label = (params?.label as string) ?? '';
+  if (picked.length === 0 || energyIids.length === 0) {
+    return updatePlayer(state, aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+  }
+  const targetIid = picked[0];
+  const energySet = new Set(energyIids);
+  const p = state.players[aIdx];
+  const energies = p.deck.filter(c => energySet.has(c.iid));
+  const restDeck = p.deck.filter(c => !energySet.has(c.iid));
+  const isActive = p.active?.iid === targetIid;
+  const target = isActive ? p.active : p.bench.find(b => b.iid === targetIid);
+  const targetName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  const energyNames = energies.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  const newPlayers = [...state.players] as [import('../../types').PlayerState, import('../../types').PlayerState];
+  newPlayers[aIdx] = {
+    ...p,
+    deck: shuffle(restDeck),
+    active: isActive && p.active
+      ? { ...p.active, energyAttached: [...p.active.energyAttached, ...energies] }
+      : p.active,
+    bench: isActive
+      ? p.bench
+      : p.bench.map(b => b.iid === targetIid
+          ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+          : b),
+  };
+  return addLog({ ...state, players: newPlayers }, `${label}：${energyNames}（${energies.length} 張）附到 ${targetName} 身上（剩餘洗回）`, aIdx);
+});
+
+// v3.11 看牌庫頂 N 張，從中選任意數量基礎寶可夢卡放置於備戰區（剩餘洗回）
+//   米立龍ex|硃砂誘餌（peek 10）/ 人造細胞卵|傳喚之門（peek 8）使用
+//   注意：卡面寫「寶可夢卡」（不限 Basic）— 但放備戰只能放基礎；非基礎類無法直接 set
+//   採折衷：filter 用 Basic:TOP_N，只列基礎，非基礎自動洗回（與卡面意圖最一致）
+function deckTopPeekPokemonToBenchPost(peekN: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
+    const top = p.deck.slice(0, peekN);
+    const topIids = top.map(c => c.iid);
+    const basicsInTop = top.filter(c => {
+      const card = pool.get(c.cardId);
+      return card?.supertype === 'Pokemon' && !card.evolvesFrom;
+    });
+    if (basicsInTop.length === 0) {
+      return updatePlayer(addLog(state, `${label}：牌庫頂 ${top.length} 張內無基礎寶可夢；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    }
+    const benchLimit = 5;
+    const space = Math.max(0, benchLimit - p.bench.length);
+    const realMax = Math.min(space, basicsInTop.length);
+    if (realMax === 0) {
+      return updatePlayer(addLog(state, `${label}：備戰區已滿；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    }
+    return withPending(addLog(state, `${label}：查看牌庫頂 ${top.length} 張，選 0~${realMax} 隻基礎寶可夢放備戰（剩餘洗回）`, aIdx), {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Basic:TOP_N',
+      minCount: 0, maxCount: realMax,
+      effectKey: 'v311-deck-peek-basic-to-bench',
+      params: { label, topIids, peekN: top.length },
+    });
+  };
+}
+
+regR('v311-deck-peek-basic-to-bench', (state, aIdx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '';
+  const p = state.players[aIdx];
+  if (iids.length === 0) {
+    return updatePlayer(addLog(state, `${label}：未選擇任何寶可夢；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+  }
+  const chosenSet = new Set(iids);
+  const chosen = p.deck.filter(c => chosenSet.has(c.iid));
+  const restDeck = p.deck.filter(c => !chosenSet.has(c.iid));
+  const benchAdd = chosen.map(c => ({ ...c, justPlaced: true }));
+  return updatePlayer(addLog(state, `${label}：放 ${chosen.length} 隻基礎寶可夢到備戰（剩餘洗回）`, aIdx), aIdx, pl => ({
+    ...pl,
+    bench: [...pl.bench, ...benchAdd],
+    deck: shuffle(restDeck),
+  }));
+});
+
 // 同名 export：discardSearchAttachToBenchPost 已在上方定義，供其他檔（v2670）import 使用
 export { discardSearchAttachToBenchPost };
 
@@ -1011,11 +1253,11 @@ regPost('夠讚狗ex|猛毒筋力', (state, aIdx, pool) => {
 
 // 密勒頓|暴衝高點 40 + 牌庫挑最多 2 基本能量附「未來」寶可夢
 regPre('密勒頓|暴衝高點', (s) => ({ state: s, damage: 40 }));
-regPost('密勒頓|暴衝高點', deckSearchBasicEnergiesAnyPost(2, '暴衝高點'));
+regPost('密勒頓|暴衝高點', deckSearchAttachToTaggedBenchPost(2, '暴衝高點', '未來'));
 
 // 太樂巴戈斯|稜鏡充能 — 牌庫挑最多 3 各不同屬性基本能量附「太晶」寶可夢
 regPre('太樂巴戈斯|稜鏡充能', (s) => ({ state: s, damage: 0 }));
-regPost('太樂巴戈斯|稜鏡充能', deckSearchBasicEnergiesAnyPost(3, '稜鏡充能', true));
+regPost('太樂巴戈斯|稜鏡充能', deckSearchAttachToTaggedBenchPost(3, '稜鏡充能', '太晶', true));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // === Section 13: 條件 +N ===
@@ -2159,13 +2401,13 @@ regPost('大舌頭|舌引', (state, aIdx, pool) => {
 // 米立龍ex|硃砂誘餌 / 人造細胞卵|傳喚之門 / 拉普拉斯ex|海紋石之雨
 //   — 3 張都是 deck-search 但篩選複雜，採通用簡化
 regPre('米立龍ex|硃砂誘餌', (s) => ({ state: s, damage: 0 }));
-regPost('米立龍ex|硃砂誘餌', deckSearchBasicToBenchPost(5, '硃砂誘餌'));
+regPost('米立龍ex|硃砂誘餌', deckTopPeekPokemonToBenchPost(10, '硃砂誘餌'));
 
 regPre('人造細胞卵|傳喚之門', (s) => ({ state: s, damage: 0 }));
-regPost('人造細胞卵|傳喚之門', deckSearchBasicToBenchPost(5, '傳喚之門'));
+regPost('人造細胞卵|傳喚之門', deckTopPeekPokemonToBenchPost(8, '傳喚之門'));
 
 regPre('拉普拉斯ex|海紋石之雨', (s) => ({ state: s, damage: 0 }));
-regPost('拉普拉斯ex|海紋石之雨', deckSearchBasicEnergiesAnyPost(20, '海紋石之雨'));
+regPost('拉普拉斯ex|海紋石之雨', deckTopPeekEnergyAttachToAnyPost(20, 20, '海紋石之雨'));
 
 // 霜奶仙|彩色甜點 — 牌庫挑符合自身基本能量屬性的寶可夢卡（≤5）給對手看後加手
 regPre('霜奶仙|彩色甜點', (s) => ({ state: s, damage: 0 }));
@@ -2209,6 +2451,17 @@ regPre('烏賊王|勾結觸手', (state, aIdx, _pool) => {
 
 // 米立龍ex|硃砂誘餌 — 已實裝
 // 蓋歐卡ex|蜿蜒浪 — 已實裝
+
+
+// v3.11 — 烈咬陸鯊ex|水炮著陸（cost: 1 鬥）
+//   卡面：從棄牌區選擇最多 3 張基本【鬥】能量，以任意方式附於備戰寶可夢身上
+regPre('烈咬陸鯊ex|水炮著陸', (s) => ({ state: s, damage: 0 }));
+regPost('烈咬陸鯊ex|水炮著陸', discardSearchAttachToBenchPost(3, '水炮著陸', 'Fighting'));
+
+// v3.11 — 怒鸚哥ex|幹勁十足（cost: 1 無）
+//   卡面：從棄牌區選擇最多 2 張基本能量，附於 1 隻備戰寶可夢身上（同花舞鳥|能量支援 pattern）
+regPre('怒鸚哥ex|幹勁十足', (s) => ({ state: s, damage: 0 }));
+regPost('怒鸚哥ex|幹勁十足', discardSearchAttachToBenchPost(2, '幹勁十足'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Wave 2 統計：80+ 張

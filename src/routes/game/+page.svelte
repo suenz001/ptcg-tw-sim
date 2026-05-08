@@ -1326,6 +1326,24 @@
           const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
           return src.deck.filter(c => top7.has(c.iid) && pool.get(c.cardId)?.subtype === 'Supporter');
         }
+        // v3.11 米立龍ex|硃砂誘餌 / 人造細胞卵|傳喚之門：peek N 中的基礎寶可夢
+        if (f === 'Basic:TOP_N') {
+          const topN = new Set<string>((pendingSelection.params?.topIids as string[]) ?? []);
+          return src.deck.filter(c => {
+            if (!topN.has(c.iid)) return false;
+            const card = pool.get(c.cardId);
+            return !!card && card.supertype === 'Pokemon' && !card.evolvesFrom;
+          });
+        }
+        // v3.11 拉普拉斯ex|海紋石之雨：peek N 中的能量（含特殊能量）
+        if (f === 'Energy:TOP_N') {
+          const topN = new Set<string>((pendingSelection.params?.topIids as string[]) ?? []);
+          return src.deck.filter(c => {
+            if (!topN.has(c.iid)) return false;
+            const card = pool.get(c.cardId);
+            return !!card && card.supertype === 'Energy';
+          });
+        }
         // v2.209 配樂之笛：對手牌庫頂 5 張中的基礎寶可夢
         if (f === 'Basic:TOP5') {
           const top5 = new Set<string>((pendingSelection.params?.top5Iids as string[]) ?? []);
