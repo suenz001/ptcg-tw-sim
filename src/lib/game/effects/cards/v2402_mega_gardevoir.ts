@@ -90,20 +90,43 @@ regPost('超級沙奈朵ex|盈溢祈願', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 2. 超級交響樂 — 50 × 自己所有寶可夢身上附加的【超】能量數
 // ══════════════════════════════════════════════════════════════════════════════
-// 「【超】能量」採取廣義：energy card 的 pokemonType==='Psychic' 即視為【超】
-//   （含基本【超】、感應【超】等；若特殊能量 pokemonType 為其他色，
-//    本實作不視為【超】，符合多數 ruling）
+// v3.23 修 bug：原本用 pokemonType==='Psychic' 判定，但 JSON 內 *所有能量* pokemonType
+//   都是 'None'（基本能量從卡名解析、特殊能量看 SPECIAL_ENERGY_TYPES 表），所以該檢查
+//   永遠 false → psyCount=0 → 永遠 0 傷害！
+//
+// 卡面：「造成自己的所有寶可夢身上附加的【超】能量的數量×50 點傷害」— 廣義包含：
+//   - 基本【超】能量（名稱含【超】）
+//   - 感應【超】能量（特殊能量但提供【超】type）
+//   - 火箭隊能量（提供【超】+【惡】，計 1 unit）
+//   - 古舊能量（全屬性）
+//   - 稜鏡能量（附進化卡時全屬性，這裡簡化為 false 避免條件式複雜）
+//
+// 改用 cardName check（既能涵蓋基本【超】，也能涵蓋常見特殊能量；不到 SPECIAL_ENERGY_TYPES
+// 因為跨 effects.ts → engine.ts 循環 import 風險，採取 inline list 簡化）
 regPre('超級沙奈朵ex|超級交響樂', (state, aIdx, pool) => {
   const player = state.players[aIdx];
   const allOwn: CardInstance[] = [
     ...(player.active ? [player.active] : []),
     ...player.bench,
   ];
+  // 提供【超】type 的能量名稱集合（簡化版本）
+  const PSY_PROVIDERS = new Set([
+    '感應【超】能量',  // 特殊能量，提供 1【超】
+    '火箭隊能量',      // 特殊能量，提供 1【超】+1【惡】
+    '古舊能量',        // ACE SPEC，全屬性
+  ]);
   let psyCount = 0;
   for (const pk of allOwn) {
     for (const e of pk.energyAttached) {
       const ec = pool.get(e.cardId);
-      if (ec?.pokemonType === 'Psychic') psyCount++;
+      if (!ec) continue;
+      // 基本能量：卡名含【超】（最常見的「基本【超】能量」）
+      if (ec.supertype === 'Energy' && ec.subtype === 'Basic') {
+        if (/【超】/.test(ec.name)) psyCount++;
+        continue;
+      }
+      // 特殊能量：白名單檢查
+      if (ec.supertype === 'Energy' && PSY_PROVIDERS.has(ec.name)) psyCount++;
     }
   }
   return { state, damage: psyCount * 50 };

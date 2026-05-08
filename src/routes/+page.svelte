@@ -263,6 +263,16 @@
     <summary><h2>📋 版本更新記錄</h2></summary>
     <div class="changelog-list">
 
+      <details>
+        <summary><span class="ver-badge">v3.23</span> hotfix — 超級沙奈朵ex 超級交響樂 0 傷害 bug</summary>
+        <ul>
+          <li>使用者回報：超級沙奈朵ex 第二招「超級交響樂」實際對戰中無論場上有多少【超】能量都打 0 傷害</li>
+          <li>根因：v2.42 實作用 pokemonType==='Psychic' 判定能量是否【超】type，但 JSON 內所有能量的 pokemonType 都是 'None'（基本能量從卡名解析、特殊能量看 SPECIAL_ENERGY_TYPES 表），檢查永遠 false → psyCount=0 → 0 傷害</li>
+          <li>修法：改用「基本能量看卡名含【超】 + 特殊能量白名單（感應【超】能量 / 火箭隊能量 / 古舊能量）」雙重判斷</li>
+          <li>稜鏡能量 / 新衝天能量 條件式（附進化卡時提供全屬性）暫未納入，少見場景待後續補</li>
+        </ul>
+      </details>
+
       <details open>
         <summary><span class="ver-badge">v3.22</span> 雷電獸ex｜閃光射線「下回合自己出招 -100」誤觸發 bug 修補 + 沙奈朵盈溢祈願 / 力之沙漏 noted</summary>
         <ul>
