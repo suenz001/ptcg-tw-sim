@@ -5670,6 +5670,66 @@ export function getUsableAbilities(
         const abilityKO = state.oppAbilityKOdMeInLastOppTurn?.[myIdx] ?? 0;
         if (attackKO + abilityKO === 0) return;
       }
+      // ─── v2.995 Group 4 Wave 1 button gates ─────────────────────
+      // 凱西｜瞬間移動者 / 燈罩夜菇｜平靜之光 / 波爾凱尼恩ex｜燒灼蒸汽 / 雪絨蛾｜勸誘羽：必須在戰鬥場上
+      if (ab.name === '瞬間移動者' || ab.name === '平靜之光' || ab.name === '燒灼蒸汽' || ab.name === '勸誘羽') {
+        if (player.active?.iid !== pk.iid) return;
+      }
+      // 凱西｜瞬間移動者：需備戰至少 1 隻（移除後要能上備戰）
+      if (ab.name === '瞬間移動者' && player.bench.length === 0) return;
+      // 雪絨蛾｜勸誘羽：雙方牌庫需不空（雙方各抽 1）
+      if (ab.name === '勸誘羽') {
+        const dIdx = (1 - state.activePlayerIndex) as 0 | 1;
+        if (player.deck.length === 0 && state.players[dIdx].deck.length === 0) return;
+      }
+      // 魔幻假面喵｜表演時間：必須在備戰區 + 戰鬥場有寶可夢
+      if (ab.name === '表演時間') {
+        if (player.active?.iid === pk.iid) return; // 在戰鬥場不顯示
+        if (!player.active) return;
+      }
+      // 直衝熊｜激動衝刺：備戰區 + 戰鬥場有寶可夢 + 自方場有超級進化ex
+      if (ab.name === '激動衝刺') {
+        if (player.active?.iid === pk.iid) return;
+        if (!player.active) return;
+        const allFs = [player.active, ...player.bench];
+        const hasMegaEx = allFs.some(c => {
+          const cc = pool.get(c.cardId);
+          return !!cc && cc.name.startsWith('超級') && (cc.subtype === 'ex' || cc.name.endsWith('ex'));
+        });
+        if (!hasMegaEx) return;
+      }
+      // 壺壺｜發酵果汁：身上需有【草】能量
+      if (ab.name === '發酵果汁') {
+        const hasGrass = pk.energyAttached.some(e => {
+          const ec = pool.get(e.cardId);
+          return ec?.pokemonType === 'Grass' || (ec?.name?.includes('【草】') ?? false);
+        });
+        if (!hasGrass) return;
+      }
+      // 樂天河童｜激動治癒：自方場上需有【草】超級進化ex
+      if (ab.name === '激動治癒') {
+        const allFs = [...(player.active ? [player.active] : []), ...player.bench];
+        const hasGrassMega = allFs.some(c => {
+          const cc = pool.get(c.cardId);
+          return !!cc && cc.name.startsWith('超級') && (cc.subtype === 'ex' || cc.name.endsWith('ex')) && cc.pokemonType === 'Grass';
+        });
+        if (!hasGrassMega) return;
+      }
+      // 大劍鬼｜激流旋渦：自方備戰需有 1 隻可互換（對手互換部分不增設 gate）
+      if (ab.name === '激流旋渦') {
+        if (!player.active) return;
+        if (player.bench.length === 0) return;
+      }
+      // 寶包繭｜飛葉治癒：戰鬥場有者且受傷（避免按了沒效果）
+      if (ab.name === '飛葉治癒') {
+        if (!player.active) return;
+        if (player.active.damage === 0) return;
+      }
+      // 霜奶仙ex｜甜點之禮 / 壺壺｜發酵果汁 / 樂天河童｜激動治癒：需場上有受傷的寶可夢（沒受傷按了也沒效果）
+      if (ab.name === '甜點之禮' || ab.name === '發酵果汁' || ab.name === '激動治癒') {
+        const allFs = [...(player.active ? [player.active] : []), ...player.bench];
+        if (!allFs.some(c => c.damage > 0)) return;
+      }
       result.push({ iid: pk.iid, abilityIndex: abIdx, pokemonName: card.name, abilityName: ab.name });
     });
   }

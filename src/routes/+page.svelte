@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.995</span> Group 4 Wave 1 — 14 張簡單主動特性實裝</summary>
+        <ul>
+          <li>新建 v2995_g4_wave1.ts 集中實裝 14 張主動特性（regA），都是 ABILITY_AUDIT_V2_98.md Group 4 中規則最直觀的卡</li>
+          <li>治癒類（4）：霜奶仙ex｜甜點之禮 +30、壺壺｜發酵果汁 +30（需草能量）、寶包繭｜飛葉治癒 +20、樂天河童｜激動治癒 +60（需草超級進化ex）</li>
+          <li>狀態類（3）：燈罩夜菇｜平靜之光（睡眠）、波爾凱尼恩ex｜燒灼蒸汽（灼傷）、搖籃百合｜任選黏液（擲幣正面 → 三選一中毒/灼傷/混亂）</li>
+          <li>互換類（4）：花潔夫人｜媚惑引誘（擲幣 → 對手戰備互換 + 新上場混亂）、大劍鬼｜激流旋渦（自方戰備互換 + 對手戰備互換）、直衝熊｜激動衝刺（備戰 + 場上有超級進化ex 互換）、魔幻假面喵｜表演時間（備戰互換）</li>
+          <li>其他（3）：凱西｜瞬間移動者（自身與附加卡放回牌庫並重洗 + 上備戰）、大力鱷｜奔流之心（自身放 5 個指示物 + 本回合招式 +120）、雪絨蛾｜勸誘羽（雙方各抽 1）</li>
+          <li>engine.ts getUsableAbilities 加 8 個 button gate（Iron Rule 9）：在戰鬥場、在備戰、有草能量、場上有超級進化ex 等條件未滿足時按鈕直接不顯示</li>
+          <li>所有 effect 結果用 addLog（Iron Rule 8 公開揭示資訊）— 治癒/狀態/互換都是場上可見效果</li>
+          <li>tsc 全綠（0 error）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.994</span> 修 3 個遺留 tsc errors + 確認赫月/酋雷姆 cost helper 已實裝</summary>
         <ul>
           <li>修 mega_decks.ts:601 — olive-oil-distribute resolver 用 aIdx typo（應為 actorIdx）導致 KO 後 addPendingPrize 失敗（油之機關槍多隻 KO 時對手獎賞少給）</li>
