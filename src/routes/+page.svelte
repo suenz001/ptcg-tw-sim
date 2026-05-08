@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v2.996</span> Group 4 Wave 2 — 10 張牌庫/手牌/棄牌操作類主動特性實裝</summary>
+        <ul>
+          <li>新建 v2996_g4_wave2.ts 集中實裝 10 張主動特性（regA），都是 ABILITY_AUDIT_V2_98.md Group 4 中需要操作牌庫/手牌/棄牌或對手互動的卡</li>
+          <li>牌庫搜尋類（3）：豆豆鴿｜緊急進化（HP≤30 跳階進化高傲雉雞含 ex 並重洗）、保母曼波｜溫柔鰭（棄牌區挑 HP≤70 基礎寶可夢放備戰）、始祖大鳥｜原始之翼（對手 1 隻進化寶可夢退化 1 層放對手手牌）</li>
+          <li>手牌/棄牌操作類（3）：烈焰猴｜火焰蹈舞（手牌挑【火】+【鬥】基本能量各最多 1 張附給自方場上）、火箭隊的多邊獸Ｚ｜再構築（棄 2 張手牌抽 1）、小霞的可達鴨｜重步跳躍（牌庫底 1 張入棄牌+自身與附加全入棄牌+自身放回牌庫頂）</li>
+          <li>對手操控類（2）：哥德小姐｜曲扭未來（對手手牌洗回牌庫並重洗+抽 3）、禿鷹娜｜瞄準獵物（看對手手牌挑 HP≤70 基礎寶可夢放對手備戰）</li>
+          <li>能量附加類（2）：奇樹的電肚蛙ex｜電氣流（不限次數！手牌挑【雷】基本能量附給自方「奇樹的」寶可夢）、毒粉蛾｜微風吹拂（擲幣正面選 1 個對手戰鬥能量放回對手手牌）</li>
+          <li>engine.ts UNLIMITED_USE_ABILITY_NAMES 加「電氣流」（不消耗 1 次/回合）+ getUsableAbilities 加 10 個 button gate（Iron Rule 9）</li>
+          <li>揭示資訊（Iron Rule 8）：對手抽 3 與牌庫操作用 addPrivateLog（自己看到具體卡名、對手只看計數）；退化卡名 / 放對手備戰卡名 / 附加能量名都用 addLog 公開揭示</li>
+          <li>tsc 全綠（0 error）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v2.995</span> Group 4 Wave 1 — 14 張簡單主動特性實裝</summary>
         <ul>
           <li>新建 v2995_g4_wave1.ts 集中實裝 14 張主動特性（regA），都是 ABILITY_AUDIT_V2_98.md Group 4 中規則最直觀的卡</li>

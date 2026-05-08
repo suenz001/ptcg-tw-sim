@@ -355,6 +355,7 @@ import './effects/cards/v2750_h_wave2_full';
 import './effects/cards/v2760_h_wave3_complex';
 import './effects/cards/v2770_cross_mark_cleanup';
 import './effects/cards/v2995_g4_wave1';
+import './effects/cards/v2996_g4_wave2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════

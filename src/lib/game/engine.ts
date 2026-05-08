@@ -243,6 +243,7 @@ export const SHARED_ONCE_PER_TURN_ABILITY_NAMES = new Set<string>([
 export const UNLIMITED_USE_ABILITY_NAMES = new Set<string>([
   '烈火亂舞', // 炎武王 — 在自己的回合時，可不限次數使用：從手牌選拉1張「基本【火】能量」卡附於自己的寶可夢身上。
   '激動渦輪', // 花舞鳥ex — 場上有【火】超級進化ex 時，可不限次數使用：手牌基本【火】能量附於備戰【火】寶可夢。
+  '電氣流',   // v2.996 奇樹的電肚蛙ex — 在自己的回合時，可不限次數使用：手牌基本【雷】能量附於自己的「奇樹的」寶可夢。
 ]);
 
 // v2.94 的 isPassiveOnlyAttackEntry guard 於 v2.95 移除。
@@ -5729,6 +5730,91 @@ export function getUsableAbilities(
       if (ab.name === '甜點之禮' || ab.name === '發酵果汁' || ab.name === '激動治癒') {
         const allFs = [...(player.active ? [player.active] : []), ...player.bench];
         if (!allFs.some(c => c.damage > 0)) return;
+      }
+      // ─── v2.996 Group 4 Wave 2 button gates ─────────────────────
+      // 豆豆鴿｜緊急進化：剩餘 HP ≤ 30 + 牌庫不空（無對應卡時走「僅重洗」分支）
+      if (ab.name === '緊急進化') {
+        if (!card.hp) return;
+        const currentHP = card.hp - pk.damage;
+        if (currentHP > 30) return;
+        if (player.deck.length === 0) return;
+      }
+      // 保母曼波｜溫柔鰭：戰鬥場 + 備戰未滿 + 棄牌區有 HP≤70 基礎寶可夢
+      if (ab.name === '溫柔鰭') {
+        if (player.active?.iid !== pk.iid) return;
+        if (player.bench.length >= 5) return;
+        const hasCand = player.discard.some(c => {
+          const cc = pool.get(c.cardId);
+          if (!cc || cc.supertype !== 'Pokemon') return false;
+          const isBasic = cc.subtype === 'Basic' || cc.stage === 'Basic';
+          return isBasic && typeof cc.hp === 'number' && cc.hp <= 70;
+        });
+        if (!hasCand) return;
+      }
+      // 始祖大鳥｜原始之翼：戰鬥場 + 對手場上至少 1 隻進化寶可夢
+      if (ab.name === '原始之翼') {
+        if (player.active?.iid !== pk.iid) return;
+        const oppIdx = (1 - state.activePlayerIndex) as 0 | 1;
+        const opp = state.players[oppIdx];
+        const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
+        const hasEvo = allOpp.some(c => (c.evolvedFromStack?.length ?? 0) >= 1);
+        if (!hasEvo) return;
+      }
+      // 烈焰猴｜火焰蹈舞：手牌至少有【火】或【鬥】基本能量
+      if (ab.name === '火焰蹈舞') {
+        const hasFireOrFight = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          if (!cc || cc.supertype !== 'Energy' || cc.subtype !== 'Basic') return false;
+          if (cc.pokemonType === 'Fire' || /【火】/.test(cc.name)) return true;
+          if (cc.pokemonType === 'Fighting' || /【鬥】/.test(cc.name)) return true;
+          return false;
+        });
+        if (!hasFireOrFight) return;
+      }
+      // 火箭隊的多邊獸Ｚ｜再構築：手牌 ≥ 2（要丟 2 張）+ 牌庫 ≥ 1（要抽 1 張）
+      if (ab.name === '再構築') {
+        if (player.hand.length < 2) return;
+        if (player.deck.length < 1) return;
+      }
+      // 小霞的可達鴨｜重步跳躍：在備戰區（不在戰鬥場）
+      if (ab.name === '重步跳躍') {
+        if (player.active?.iid === pk.iid) return;
+      }
+      // 哥德小姐｜曲扭未來：戰鬥場
+      if (ab.name === '曲扭未來') {
+        if (player.active?.iid !== pk.iid) return;
+      }
+      // 禿鷹娜｜瞄準獵物：對手手牌有 HP≤70 基礎寶可夢 + 對手備戰未滿
+      if (ab.name === '瞄準獵物') {
+        const oppIdx = (1 - state.activePlayerIndex) as 0 | 1;
+        const opp = state.players[oppIdx];
+        if (opp.bench.length >= 5) return;
+        const hasCand = opp.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          if (!cc || cc.supertype !== 'Pokemon') return false;
+          const isBasic = cc.subtype === 'Basic' || cc.stage === 'Basic';
+          return isBasic && typeof cc.hp === 'number' && cc.hp <= 70;
+        });
+        if (!hasCand) return;
+      }
+      // 奇樹的電肚蛙ex｜電氣流：手牌有【雷】基本能量 + 場上有「奇樹的」寶可夢
+      if (ab.name === '電氣流') {
+        const hasLightningE = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+            && (cc.pokemonType === 'Lightning' || /【雷】/.test(cc.name));
+        });
+        if (!hasLightningE) return;
+        const allFs = [...(player.active ? [player.active] : []), ...player.bench];
+        const hasKitree = allFs.some(c => pool.get(c.cardId)?.name?.startsWith('奇樹的') ?? false);
+        if (!hasKitree) return;
+      }
+      // 毒粉蛾｜微風吹拂：對手戰鬥位有能量
+      if (ab.name === '微風吹拂') {
+        const oppIdx = (1 - state.activePlayerIndex) as 0 | 1;
+        const opp = state.players[oppIdx];
+        if (!opp.active) return;
+        if (opp.active.energyAttached.length === 0) return;
       }
       result.push({ iid: pk.iid, abilityIndex: abIdx, pokemonName: card.name, abilityName: ab.name });
     });
