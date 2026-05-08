@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.13</span> Bug audit P2 — B5-B8 細節修補（5 張卡：玩家選擇 / 目標限定 / filter 太寬）</summary>
+        <ul>
+          <li><b>背景</b>：承 v3.10/v3.11/v3.12（共 19 張 confirmed bug 已修），本版處理 audit 報告 Section B 的 P2/Suspect 區（B5-B8 + 額外 2 張同類）。修補方向：把「自動代玩家做選擇」改為「玩家選擇 picker」，並修正 filter 太寬。</li>
+          <li><b>B5 夠讚狗ex｜猛毒筋力</b>（牌庫 ≤2 張基本【惡】能量附自身 + 中毒）：原本自動取前 2 張，違反卡面「玩家選張數」。改用 deck-search picker（<code>filter: &#39;Energy:Darkness&#39;</code>，<code>minCount: 0, maxCount: 2</code>）→ 新 resolver <code>v313-mengdu-jinli-attach-self</code> 把選中的能量附給自身、若有附則中毒。玩家可選 0 張 = 不附 = 不中毒，符合卡面「附上卡的情況下」中毒語意。</li>
+          <li><b>B6 厄鬼椪 礎石面具｜石之神樂</b>（牌庫 1 張基本【鬥】能量附自方寶可夢）：原本自動附給戰鬥場，違反卡面「玩家選目標」。對齊同家族 v2630 草／火／水之神樂的做法，改用 heal-target picker → 新 resolver <code>v313-stone-kagura-attach</code> 把能量附給玩家挑的目標。</li>
+          <li><b>B7 霜奶仙｜彩色甜點</b>（牌庫挑「與身上附加基本能量同屬性」的寶可夢卡 ≤5 加手）：原本 <code>filter: &#39;Pokemon&#39;</code> 太寬，玩家可挑任意寶可夢。新做法：先讀自身 active 身上附加的基本能量屬性集合（&lt;empty&gt; 視為招式無效），組合成 <code>Pokemon:Types=Grass,Fire,...</code> filter；UI parser 加上對該 filter 形式的 OR 比對。</li>
+          <li><b>EXTRA-1 龍捲雲｜暴風</b>（自身 1 基本能量改附備戰寶可夢）：原本自動附給第 1 隻備戰，違反卡面「玩家選備戰目標」。改用 bench-choose picker（備戰只有 1 隻時 auto-pick 避免無意義 UI 步驟）→ 新 resolver <code>v313-storm-move-energy</code>。</li>
+          <li><b>EXTRA-2 波爾凱尼恩ex｜高溫旋風</b>（自身 1 能量改附備戰）：同 EXTRA-1，改用 bench-choose picker，共用 <code>v313-storm-move-energy</code> resolver（傳入 <code>basicIdx: lastIdx</code>）。</li>
+          <li><b>UI 擴充</b>：<code>game/+page.svelte</code> 兩處 deck-search filter 解析點皆加上 <code>Pokemon:Types=A,B,C,...</code> 形式，<code>Set</code> + <code>has(card.pokemonType)</code> 做 OR 比對；放在原 <code>Pokemon:&lt;Single&gt;</code> 分支前優先匹配（startsWith 較長前綴優先）。</li>
+          <li><b>Auto-pick 優化</b>：B6/EXTRA-1/EXTRA-2 在「目標只有 1 個」時直接 resolve 跳過 picker，避免玩家被卡在無意義的單選步驟。</li>
+          <li><b>遵守 Iron Rules</b>：所有改動既有檔（version.ts / v2750_h_wave2_full.ts / v2610_i_wave11_misc4.ts / v2630_i_wave13_misc6.ts / game/+page.svelte / +page.svelte）走 Python pipeline；新 resolver 用 <code>regR</code>（_shared.ts 的 RESOLVERS Map），不違反 Rule 12；changelog 內 <code>&lt;</code>/<code>&#39;</code>/<code>&amp;</code> 等特殊字符 HTML entity escape</li>
+          <li>tsc 0 error</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.12</span> 多目標能量分配 picker — B1-B3 完整實裝 + A8 海紋石之雨升級</summary>
         <ul>
           <li><b>背景</b>：v3.11 deferred 列表的 B1-B3 三張卡（艾姆利多｜滿載心田 / 阿羅拉椰蛋樹ex｜熱帶狂燒 / 莫魯貝可｜撿拾附上）卡面寫「以任意方式附於自己的寶可夢身上」即「多張能量分配給多隻寶可夢」。原 helper（<code>handAttachEnergyPost</code> / <code>discardEnergyAttachPost</code>）只能讓全部能量附到同一隻；同期 v3.11 的 A8 拉普拉斯ex｜海紋石之雨也是這個簡化點。</li>

@@ -1556,6 +1556,11 @@
           if (f.startsWith('Card:')) {
             return card.name === f.slice(5);
           }
+          if (f.startsWith('Pokemon:Types=')) {
+            // v3.13: 多屬性寶可夢 OR 比對（霜奶仙|彩色甜點 用），例 'Pokemon:Types=Grass,Fire'
+            const ts = new Set(f.slice('Pokemon:Types='.length).split(',').filter(Boolean));
+            return card.supertype === 'Pokemon' && card.pokemonType != null && ts.has(card.pokemonType);
+          }
           if (f.startsWith('Pokemon:')) {
             // 指定屬性的寶可夢，例 'Pokemon:Lightning'
             const t = f.slice(8);
@@ -1689,6 +1694,11 @@
           if (f === 'Pokemon')         return card.supertype === 'Pokemon';
           if (f === 'Trainer')         return card.supertype === 'Trainer';
           if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
+          // v3.13: 多屬性 OR 比對（霜奶仙|彩色甜點）
+          if (f.startsWith('Pokemon:Types=')) {
+            const ts = new Set(f.slice('Pokemon:Types='.length).split(',').filter(Boolean));
+            return card.supertype === 'Pokemon' && card.pokemonType != null && ts.has(card.pokemonType as string);
+          }
           // v2.186：'Pokemon:<EnergyType>' 通用 filter（豐收漁網用）
           if (f.startsWith('Pokemon:')) {
             const t = f.slice(8) as EnergyType;

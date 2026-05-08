@@ -24,7 +24,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { regPre, regPost, addLog, updatePlayer, withPending } from '../_shared';
+import { regPre, regPost, addLog, updatePlayer, withPending, regR } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -294,37 +294,74 @@ regPost('土地雲|地震', (state, aIdx, _pool) => {
 // H. 從牌庫挑 1 鬥能量附自方 (1 張)
 // 厄鬼椪 礎石面具|石之神樂 — 從牌庫挑 1 基本鬥能量附自方寶可夢
 // ══════════════════════════════════════════════════════════════════════════════
+// v3.13 修 B6：原本「自動附給自身」，違反卡面「附於自己的寶可夢身上（玩家選目標）」。
+//   參考 v2630 同家族 草/火/水之神樂 helper，改用 heal-target picker 讓玩家選目標。
+//   階段 1：找出 1 張基本【鬥】能量；階段 2：heal-target picker 選自方任一寶可夢；
+//   resolver 把該能量從牌庫移到目標身上並重洗。
 regPre('厄鬼椪 礎石面具|石之神樂', (s) => ({ state: s, damage: 0 }));
 regPost('厄鬼椪 礎石面具|石之神樂', (state, aIdx, pool) => {
   const player = state.players[aIdx];
-  const fightIdx = player.deck.findIndex(c => {
+  const fightCard = player.deck.find(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card.subtype === 'Basic'
       && (card.pokemonType === 'Fighting' || /【鬥】/.test(card.name));
   });
-  if (fightIdx < 0) {
+  if (!fightCard) {
     // 牌庫無 → 重洗
+    function _shuffle<T>(arr: T[]): T[] {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
     return updatePlayer(
       addLog(state, '石之神樂：牌庫中無基本【鬥】能量；重洗牌庫', aIdx),
-      aIdx, p => ({ ...p, deck: [...p.deck].sort(() => Math.random() - 0.5) }),
+      aIdx, p => ({ ...p, deck: _shuffle(p.deck) }),
     );
   }
-  // 簡化：自動附給自身
-  const energy = player.deck[fightIdx];
+  // 玩家選自方寶可夢目標（active + bench 都允許）
+  return withPending(
+    addLog(state, '石之神樂：從牌庫挑 1 基本【鬥】能量；選擇要附給哪一隻寶可夢', aIdx),
+    {
+      type: 'heal-target',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'v313-stone-kagura-attach',
+      params: { energyIid: fightCard.iid, label: '石之神樂' },
+    },
+  );
+});
+
+// v3.13 resolver: 把選中的能量附於玩家挑的目標寶可夢，並重洗牌庫
+regR('v313-stone-kagura-attach', (state, aIdx, iids, params, _pool) => {
+  if (iids.length === 0) return state;
+  const energyIid = params?.energyIid as string | undefined;
+  const label = (params?.label as string | undefined) ?? '石之神樂';
+  if (!energyIid) return state;
+  const targetIid = iids[0];
+  function _shuffle<T>(arr: T[]): T[] {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
   return updatePlayer(
-    addLog(state, '石之神樂：從牌庫挑 1 基本【鬥】能量附給自身（自動），重洗', aIdx),
+    addLog(state, `${label}：將能量附給選定的寶可夢；重洗牌庫`, aIdx),
     aIdx, p => {
-      const newDeck = [...p.deck.slice(0, fightIdx), ...p.deck.slice(fightIdx + 1)];
-      // shuffle
-      for (let i = newDeck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [newDeck[i], newDeck[j]] = [newDeck[j], newDeck[i]];
-      }
-      return {
-        ...p,
-        deck: newDeck,
-        active: p.active ? { ...p.active, energyAttached: [...p.active.energyAttached, energy] } : null,
-      };
+      const energy = p.deck.find(c => c.iid === energyIid);
+      if (!energy) return p;
+      const newDeck = _shuffle(p.deck.filter(c => c.iid !== energyIid));
+      const newActive = p.active && p.active.iid === targetIid
+        ? { ...p.active, energyAttached: [...p.active.energyAttached, energy] }
+        : p.active;
+      const newBench = p.bench.map(b => b.iid === targetIid
+        ? { ...b, energyAttached: [...b.energyAttached, energy] }
+        : b);
+      return { ...p, deck: newDeck, active: newActive, bench: newBench };
     },
   );
 });

@@ -1204,32 +1204,59 @@ regPost('帕奇利茲|啪滋啪滋充電', (state, aIdx, pool) => {
   return discardSearchAttachToBenchPost(r.heads, '啪滋啪滋充電', 'Lightning')(r.state, aIdx, pool);
 });
 
-// 夠讚狗ex|猛毒筋力 — 牌庫挑 ≤2 基本惡能量附自身 + 自身中毒
+// 夠讚狗ex|猛毒筋力 — 牌庫挑 ≤2 基本【惡】能量附自身 + 自身中毒
+//
+// v3.13 修 B5：原本自動取前 2 張，違反卡面「玩家選擇張數」語意。
+//   改成 deck-search picker（minCount: 0, maxCount: 2, filter: Energy:Darkness）→
+//   resolver 把選中的能量附給自身戰鬥場 → 自動中毒。
+//   牌庫只有 0 張則直接重洗；牌庫有 ≥1 張但玩家可選 0 → 不附能量也不中毒
+//   （卡面「附上卡的情況下」中毒，未附 = 不中毒）。
 regPre('夠讚狗ex|猛毒筋力', (s) => ({ state: s, damage: 0 }));
 regPost('夠讚狗ex|猛毒筋力', (state, aIdx, pool) => {
-  let s = state;
-  // 先附最多 2 張惡能量到自己
-  const findDarkness = (p: typeof s.players[0]) => p.deck.filter(c => {
+  const player = state.players[aIdx];
+  const cand = player.deck.filter(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Darkness';
   });
-  const darkEnergies = findDarkness(s.players[aIdx]).slice(0, 2);
-  if (darkEnergies.length > 0) {
-    const set = new Set(darkEnergies.map(c => c.iid));
-    s = updatePlayer(addLog(s, `猛毒筋力：從牌庫附 ${darkEnergies.length} 張基本惡能量到自身（重洗）`, aIdx), aIdx, p => ({
-      ...p,
-      deck: shuffle(p.deck.filter(c => !set.has(c.iid))),
-      active: p.active ? { ...p.active, energyAttached: [...p.active.energyAttached, ...darkEnergies] } : null,
-    }));
-    // 附上能量則自身中毒（卡面：「附上卡的情況下」）
-    s = updatePlayer(addLog(s, '猛毒筋力：附上能量 → 自身【中毒】', aIdx), aIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, status: 'poisoned' as const } : null,
-    }));
-  } else {
-    s = updatePlayer(addLog(s, '猛毒筋力：牌庫無基本惡能量；僅重洗', aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  if (cand.length === 0) {
+    return updatePlayer(
+      addLog(state, '猛毒筋力：牌庫無基本【惡】能量；僅重洗', aIdx),
+      aIdx, p => ({ ...p, deck: shuffle(p.deck) }),
+    );
   }
-  return s;
+  const realMax = Math.min(2, cand.length);
+  return withPending(
+    addLog(state, `猛毒筋力：從牌庫挑 0~${realMax} 張基本【惡】能量附於自身（重洗）`, aIdx),
+    {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Energy:Darkness',
+      minCount: 0, maxCount: realMax,
+      effectKey: 'v313-mengdu-jinli-attach-self',
+    },
+  );
+});
+
+// v3.13 resolver: 把選中的【惡】能量附於自身，並使自身【中毒】（若有附）
+regR('v313-mengdu-jinli-attach-self', (state, aIdx, iids, _params, _pool) => {
+  return updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    const picked = p.deck.filter(c => iids.includes(c.iid));
+    const rest = p.deck.filter(c => !iids.includes(c.iid));
+    if (picked.length === 0) {
+      // 玩家未選任何能量 → 僅重洗（不中毒）
+      return { ...p, deck: shuffle(rest) };
+    }
+    return {
+      ...p,
+      deck: shuffle(rest),
+      active: {
+        ...p.active,
+        energyAttached: [...p.active.energyAttached, ...picked],
+        status: 'poisoned' as const,  // 卡面「附上卡的情況下，自身陷入中毒」
+      },
+    };
+  });
 });
 
 // 密勒頓|暴衝高點 40 + 牌庫挑最多 2 基本能量附「未來」寶可夢
@@ -2391,16 +2418,48 @@ regPre('拉普拉斯ex|海紋石之雨', (s) => ({ state: s, damage: 0 }));
 regPost('拉普拉斯ex|海紋石之雨', deckTopPeekEnergyAttachToAnyPost(20, 20, '海紋石之雨'));
 
 // 霜奶仙|彩色甜點 — 牌庫挑符合自身基本能量屬性的寶可夢卡（≤5）給對手看後加手
+//
+// v3.13 修 B7：原本 filter='Pokemon' 太寬，未限定「與自身附加的基本能量同屬性」。
+//   改法：先讀取自身 active 身上附加的基本能量屬性集合，組成
+//         'Pokemon:Types=A,B,...' filter；若無基本能量則招式無效。
 regPre('霜奶仙|彩色甜點', (s) => ({ state: s, damage: 0 }));
-regPost('霜奶仙|彩色甜點', (state, aIdx, _pool) => {
-  if (state.players[aIdx].deck.length === 0) return state;
-  return withPending(addLog(state, '彩色甜點：從牌庫挑 0~5 張寶可夢加手（重洗）', aIdx), {
-    type: 'deck-search',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Pokemon',
-    minCount: 0, maxCount: 5,
-    effectKey: 'wave13-deck-take-any',
-  });
+regPost('霜奶仙|彩色甜點', (state, aIdx, pool) => {
+  const player = state.players[aIdx];
+  if (player.deck.length === 0) return addLog(state, '彩色甜點：牌庫已空', aIdx);
+  if (!player.active) return state;
+  // 收集自身身上附加的「基本能量」屬性集合
+  const types = new Set<string>();
+  for (const e of player.active.energyAttached) {
+    const ec = pool.get(e.cardId);
+    if (ec?.supertype === 'Energy' && ec.subtype === 'Basic') {
+      // pokemonType 優先，沒有就從卡名 【X】 解析
+      let t = ec.pokemonType as string | undefined;
+      if (!t) {
+        const m = ec.name.match(/【(.+?)】/);
+        const map: Record<string, string> = {
+          '草': 'Grass', '火': 'Fire', '水': 'Water', '雷': 'Lightning',
+          '超': 'Psychic', '鬥': 'Fighting', '惡': 'Darkness', '鋼': 'Metal',
+          '無': 'Colorless', '妖': 'Fairy', '龍': 'Dragon',
+        };
+        if (m) t = map[m[1]] ?? m[1];
+      }
+      if (t) types.add(t);
+    }
+  }
+  if (types.size === 0) {
+    return addLog(state, '彩色甜點：自身未附加基本能量 → 無對應屬性的寶可夢可挑', aIdx);
+  }
+  const typeList = [...types].join(',');
+  return withPending(
+    addLog(state, `彩色甜點：從牌庫挑 0~5 張【${typeList}】屬性寶可夢給對手看後加手（重洗）`, aIdx),
+    {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: `Pokemon:Types=${typeList}`,
+      minCount: 0, maxCount: 5,
+      effectKey: 'wave13-deck-take-any',
+    },
+  );
 });
 
 // 帕底亞 烏波|打滾 / 烈焰馬|燃燒狂奔 / 利歐路|電光一閃 - 已在 Wave 1
