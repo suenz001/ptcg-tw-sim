@@ -2998,6 +2998,14 @@ function handlePlaying(
       if (preResult.skipDefEffects) skipDefEffects = true;
     }
 
+    // v3.02 傷害公式累積器 — 每個 modifier 點推一個 term，最後組合成可讀公式。
+    //   sign: '=' 為基礎；'+' / '-' 為加減；'×' 為倍率（弱點 ×2 等）。
+    //   value 為純數值（非倍率時）；倍率時 value 是倍數本身（×2 → value=2）。
+    //   note: regPre 內部複雜計算（如「7×30 + 100」）defer 到 v2，此處只記基礎值。
+    type FormulaTerm = { sign: '=' | '+' | '-' | '×'; value: number; label: string };
+    const formula: FormulaTerm[] = [];
+    formula.push({ sign: '=', value: baseDamage, label: '基礎' });
+
     // 下回合加傷旗標（巨金怪 彗星拳、大電海燕 風力充能 類）—
     // 由前一個自己回合設下，至本回合起生效 1 次於 base damage 上，weakness 前套用。
     if (baseDamage > 0 && attacker.active.damageBonusThisTurn) {
@@ -3009,6 +3017,7 @@ function handlePlaying(
       workingState = { ...workingState, players };
       const atkName = pool.get(newAtk.cardId)?.name ?? '?';
       workingState = addLog(workingState, `${atkName} 招式傷害 +${dmgBonus}（下回合加傷效果）`, aIdx);
+      formula.push({ sign: '+', value: dmgBonus, label: '下回合加傷' });
     }
 
     // 攻擊方自身的招式傷害削減旗標（由上回合對手的「吠」/「大聲咆哮」/「叫聲」等效果設置）
@@ -3022,6 +3031,7 @@ function handlePlaying(
       workingState = { ...workingState, players };
       const atkName2 = pool.get(newAtk.cardId)?.name ?? '?';
       workingState = addLog(workingState, `${atkName2} 招式傷害 -${penalty}（受招致使傷害削減效果）`, aIdx);
+      formula.push({ sign: '-', value: penalty, label: '招致削傷' });
     }
 
     // ── v2.97：攻擊方 +N bonus 全部在 weakness 前套用（PTCG 規則） ───────────
@@ -3050,6 +3060,7 @@ function handlePlaying(
             workingState = addLog(workingState,
               `🔧 ${atkTool.name}：${attackerCard.name} 招式傷害 +${bonus}（${baseDamage - bonus} → ${baseDamage}）`,
               aIdx);
+            formula.push({ sign: '+', value: bonus, label: atkTool.name });
           }
         }
       }
@@ -3085,6 +3096,7 @@ function handlePlaying(
             if (PASSIVE_ATTACK_NO_STACK.has(ab.name)) processedNoStackNames.add(ab.name);
             baseDamage += bonus;
             workingState = addLog(workingState, `「${ab.name}」啟動：${attackerCard.name} 招式傷害 +${bonus}`, aIdx);
+            formula.push({ sign: '+', value: bonus, label: ab.name });
           }
         }
       }
@@ -3096,6 +3108,7 @@ function handlePlaying(
       const b = attacker.damageBoostFightingThisTurn;
       baseDamage += b;
       workingState = addLog(workingState, `「力量蛋白飲」啟動：${attackerCard.name} 招式傷害 +${b}`, aIdx);
+      formula.push({ sign: '+', value: b, label: '力量蛋白飲' });
     }
 
     // v2.113 夠讚狗｜腎上腺力量 — 若攻擊方自身（夠讚狗）附有【惡】能量，招式傷害 +100
@@ -3105,6 +3118,7 @@ function handlePlaying(
       if (hasDark) {
         baseDamage += 100;
         workingState = addLog(workingState, `「腎上腺力量」啟動：夠讚狗 招式傷害 +100`, aIdx);
+        formula.push({ sign: '+', value: 100, label: '腎上腺力量' });
       }
     }
 
@@ -3112,6 +3126,7 @@ function handlePlaying(
     if (baseDamage > 0 && attacker.karateKingBonusThisTurn && defenderCard?.subtype === 'ex') {
       baseDamage += 40;
       workingState = addLog(workingState, `「空手道王的演練」啟動：對 ${defenderCard.name}（ex）+40`, aIdx);
+      formula.push({ sign: '+', value: 40, label: '空手道王演練' });
     }
     // v2.139 烏栗效果 2 — 本回合自方寶可夢招式對對手戰鬥場 ex/V +30
     if (baseDamage > 0 && attacker.unrudaBonusThisTurn && defenderCard) {
@@ -3124,6 +3139,7 @@ function handlePlaying(
       if (isExV) {
         baseDamage += 30;
         workingState = addLog(workingState, `「烏栗」啟動：對 ${defenderCard.name}（ex/V）+30`, aIdx);
+        formula.push({ sign: '+', value: 30, label: '烏栗' });
       }
     }
 
@@ -3156,6 +3172,7 @@ function handlePlaying(
     if (!skipWeakRes && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType
         && attackerEffectiveTypes.includes(effectiveWeaknessType)) {
       baseDamage *= 2;
+      formula.push({ sign: '×', value: 2, label: '弱點' });
     }
     // v2.78 密勒頓｜防護代碼 — 若 defender 有 immuneToExAttackTagThisTurn，
     //   且 attacker 是 ex + 帶有對應 tag，傷害變 0
@@ -3181,6 +3198,7 @@ function handlePlaying(
       const resistDelta = parseInt(resistanceValue, 10);  // "-30" → -30
       if (!isNaN(resistDelta)) {
         baseDamage = Math.max(0, baseDamage + resistDelta);
+        formula.push({ sign: '-', value: Math.abs(resistDelta), label: '屬性相剋' });
       }
     }
     // v2.101：鋁鋼橋龍｜塗層攻擊 — 本回合此卡不受【基礎】寶可夢招式傷害
@@ -3233,6 +3251,7 @@ function handlePlaying(
       const reduced = Math.max(0, baseDamage - 30);
       workingState = addLog(workingState,
         `${defenderCard.name} 因鐵之防禦強化效果，受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
+      formula.push({ sign: '-', value: baseDamage - reduced, label: '鐵之防禦' });
       baseDamage = reduced;
     }
 
@@ -3244,6 +3263,7 @@ function handlePlaying(
       const reduced = Math.max(0, baseDamage - 30);
       workingState = addLog(workingState,
         `陳舊的顎之化石：受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
+      formula.push({ sign: '-', value: baseDamage - reduced, label: '陳舊顎化石' });
       baseDamage = reduced;
     }
 
@@ -3255,6 +3275,7 @@ function handlePlaying(
       const extra = defender.active.takeExtraDamageThisTurn;
       baseDamage += extra;
       workingState = addLog(workingState, `${defenderCard.name} 受到 +${extra} 傷害（上回合招式遺留效果）`, dIdx);
+      formula.push({ sign: '+', value: extra, label: '上回合遺留' });
     }
 
     // 被動特性：受傷減 N（Passive damage reduction）— skipDefEffects 跳過
@@ -3264,12 +3285,20 @@ function handlePlaying(
         && !isColorlessAbilityBlocked(state, defenderCard, pool)) {
       for (const ab of defenderCard.abilities) {
         const reduce = PASSIVE_DAMAGE_REDUCE.get(ab.name);
-        if (reduce) baseDamage = Math.max(0, baseDamage - reduce);
+        if (reduce) {
+          const before = baseDamage;
+          baseDamage = Math.max(0, baseDamage - reduce);
+          if (before > baseDamage) formula.push({ sign: '-', value: before - baseDamage, label: ab.name });
+        }
         // v2.992 條件式減免（雷吉洛克 岩石盔甲 等）
         const condFn = PASSIVE_DAMAGE_REDUCE_COND.get(ab.name);
         if (condFn && defender.active) {
           const reduceN = condFn(defender.active, defenderCard);
-          if (reduceN > 0) baseDamage = Math.max(0, baseDamage - reduceN);
+          if (reduceN > 0) {
+            const before = baseDamage;
+            baseDamage = Math.max(0, baseDamage - reduceN);
+            if (before > baseDamage) formula.push({ sign: '-', value: before - baseDamage, label: ab.name });
+          }
         }
       }
     }
@@ -3287,6 +3316,7 @@ function handlePlaying(
         baseDamage = Math.max(0, baseDamage - palaceReduce);
         workingState = addLog(workingState,
           `「岩石宮殿」：${defenderCard.name} 受傷害 -${palaceReduce}（${before} → ${baseDamage}）`, dIdx);
+        formula.push({ sign: '-', value: before - baseDamage, label: '岩石宮殿' });
       }
       // 青銅鐘｜守護之鐘 — 自方寶可夢受傷害 -10
       const bronzongReduce = bronzongShelterReduce(workingState, dIdx, pool);
@@ -3295,6 +3325,7 @@ function handlePlaying(
         baseDamage = Math.max(0, baseDamage - bronzongReduce);
         workingState = addLog(workingState,
           `「守護之鐘」：${defenderCard.name} 受傷害 -${bronzongReduce}（${before} → ${baseDamage}）`, dIdx);
+        formula.push({ sign: '-', value: before - baseDamage, label: '守護之鐘' });
       }
       // 齒輪怪｜齒輪塗層 — 自方附【鋼】能量寶可夢受傷害 -20
       const gearReduce = gearCoatingReduce(workingState, dIdx, defender.active, pool);
@@ -3303,6 +3334,7 @@ function handlePlaying(
         baseDamage = Math.max(0, baseDamage - gearReduce);
         workingState = addLog(workingState,
           `「齒輪塗層」：${defenderCard.name} 受傷害 -${gearReduce}（${before} → ${baseDamage}）`, dIdx);
+        formula.push({ sign: '-', value: before - baseDamage, label: '齒輪塗層' });
       }
     }
 
@@ -3351,9 +3383,11 @@ function handlePlaying(
       if (hasGarbageMountain && attacker.active?.toolAttached) {
         const toolCard = pool.get(attacker.active.toolAttached.cardId);
         if (toolCard?.subtype === 'PokemonTool') {
+          const before = baseDamage;
           baseDamage = Math.max(0, baseDamage - 20);
           workingState = addLog(workingState,
             `垃圾洩氣：${attackerCard.name} 附有寶可夢道具 → 招式傷害 -20`, dIdx);
+          formula.push({ sign: '-', value: before - baseDamage, label: '垃圾洩氣' });
         }
       }
     }
@@ -3387,6 +3421,7 @@ function handlePlaying(
           baseDamage = Math.max(0, baseDamage - 50);
           workingState = addLog(workingState,
             `凍原堡壘：${pool.get(defender.active.cardId)?.name ?? '?'} 附有【水】能量 → 招式傷害 -50`, dIdx);
+          formula.push({ sign: '-', value: 50, label: '凍原堡壘' });
         }
       }
     }
@@ -3402,6 +3437,7 @@ function handlePlaying(
         baseDamage += 80;
         workingState = addLog(workingState,
           `同步脈衝：雙方手牌均 ${myHand} 張 → ${attackerCard.name} 招式傷害 +80`, aIdx);
+        formula.push({ sign: '+', value: 80, label: '同步脈衝' });
       }
     }
 
@@ -3489,7 +3525,9 @@ function handlePlaying(
     // 「下次被攻擊傷害 -N」— 套用後清除旗標（Session 31 新機制）
     // skipDefEffects 跳過，但旗標保持不消耗（視為對方的附加效果，未被觸發）。
     if (!skipDefEffects && baseDamage > 0 && defenderState.active.damageReduceNextHit) {
+      const drBefore = baseDamage;
       baseDamage = Math.max(0, baseDamage - defenderState.active.damageReduceNextHit);
+      formula.push({ sign: '-', value: drBefore - baseDamage, label: '下次被擊減傷' });
       defenderState.active = { ...defenderState.active, damageReduceNextHit: undefined };
     }
     // v2.385 BUG FIX：移除 v2.384 加的重複「陳舊的顎之化石 -30」hook
@@ -3515,11 +3553,33 @@ function handlePlaying(
 
     // v2.160：把實際造成傷害寫入 state.lastDealtDamage，供 POST 讀取
     //   （朽木妖｜終極吸取 heal=實際傷害量 等招式依賴此值）
+    // v3.02：附傷害公式 — 至少 2 個 term（基礎 + 至少 1 個 modifier）才顯示，
+    //        否則只是「100 點傷害」公式為「100(基礎)=100」沒意義
+    const composeFormula = (terms: FormulaTerm[], finalValue: number): string => {
+      if (terms.length <= 1) return '';  // 只有基礎，無公式可言
+      const parts: string[] = [];
+      for (let i = 0; i < terms.length; i++) {
+        const t = terms[i];
+        if (i === 0) {
+          // 第一個 term 是 '=' base：直接寫 N(label)
+          parts.push(`${t.value}(${t.label})`);
+        } else if (t.sign === '×') {
+          parts.push(`×${t.value}(${t.label})`);
+        } else if (t.sign === '+') {
+          parts.push(`+${t.value}(${t.label})`);
+        } else if (t.sign === '-') {
+          parts.push(`-${t.value}(${t.label})`);
+        }
+      }
+      return `${parts.join(' ')} = ${finalValue}`;
+    };
+    const _formulaStr = composeFormula(formula, baseDamage);
     let newState: GameState = addLog(
       { ...workingState, lastDealtDamage: baseDamage },
       `${attacker.name} 的 ${attackerCard.name} 使出「${attack.name}」` +
         (isToolAttack ? `（工具：${sourceName}）` : '') +
-        (baseDamage > 0 ? `，造成 ${baseDamage} 傷害！` : '！'),
+        (baseDamage > 0 ? `，造成 ${baseDamage} 點傷害！` : '！') +
+        (baseDamage > 0 && _formulaStr ? `【${_formulaStr}】` : ''),
       aIdx
     );
 

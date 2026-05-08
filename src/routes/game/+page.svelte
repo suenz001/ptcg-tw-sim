@@ -813,6 +813,32 @@
     zoomCard = last.card;
     zoomInst = last.inst;
   }
+
+  // v3.02：log 內卡名 -> 可點按鈕
+  // - cardNamesSorted：從 pool.values() 取唯一卡名，由長到短排序，
+  //   讓「瑪俐的搗蛋小妖」優先匹配於「搗蛋小妖」（避免短名遮蔽長名）
+  // - openZoomByName：log 卡名按鈕點擊時，找 pool 中第一個同名 Card 後呼叫 openZoom
+  // - 同名多版本（不同 set 同名卡）取第一個即可，使用者可在 zoom 內看到實體
+  let cardNamesSorted = $derived.by(() => {
+    if (!poolReady) return [] as string[];
+    const seen = new Set<string>();
+    const arr: string[] = [];
+    for (const c of pool.values()) {
+      if (!c?.name) continue;
+      if (seen.has(c.name)) continue;
+      seen.add(c.name);
+      arr.push(c.name);
+    }
+    // 由長到短排序：longest-match-first 必須條件
+    arr.sort((a, b) => b.length - a.length);
+    return arr;
+  });
+  function openZoomByName(cardName: string) {
+    // 找第一個同名 Card；多版本同名只取第一個
+    for (const c of pool.values()) {
+      if (c?.name === cardName) { openZoom(c.id); return; }
+    }
+  }
   function openFloatingEvo(fromIid: string, evoOpts: CardInstance[], e: MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     floatingEvoMenu = { fromIid, evoOpts, x: rect.left + rect.width / 2, y: rect.top };
@@ -3365,10 +3391,10 @@
           {@const _isPrivate = !!(entry.privateMessage && entry.playerIndex === myIdx)}
           {@const _msgText = _isPrivate ? entry.privateMessage : entry.message}
           {@const _lineCls = logLineClass(_msgText ?? '')}
-          {@const _tokens = tokenizeLogMessage(_msgText ?? '')}
+          {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted)}
           <div class="log-line {_lineCls}" class:log-sys={entry.playerIndex===null} class:log-latest={i===0} class:log-private={_isPrivate}>
             {#if _isPrivate}<span class="log-private-icon" title="只有你看得到">🔒</span>{/if}
-            {#each _tokens as tok}<span class={tok.cls}>{tok.text}</span>{/each}
+            {#each _tokens as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" title="點擊查看 {tok.text} 卡片詳情" onclick={() => openZoomByName(tok.text)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
           </div>
         {/each}
       </div>
@@ -5517,6 +5543,21 @@
   .log-line .log-evolve    { color:#7fdc7f; font-weight:600; }       /* 進化成 */
   .log-line .log-coin      { color:#fff59d; font-weight:600; }       /* 擲硬幣/正面/反面 */
   .log-line .log-secondary { color:#7a8a7a; }                        /* 抽牌/重洗/搜尋牌庫（淡化）*/
+  /* v3.02 卡名可點連結 — 用 button 保留可鍵盤聚焦 / a11y */
+  .log-line .log-card-link {
+    display: inline;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: #80c0ff;
+    text-decoration: underline;
+    cursor: pointer;
+    line-height: inherit;
+  }
+  .log-line .log-card-link:hover { color: #a0d0ff; background: rgba(128,192,255,0.1); }
+  .log-line .log-card-link:focus { outline: 1px dotted #a0d0ff; outline-offset: 2px; }
   /* 整行類別 ──────────────────────────────────────────────────────── */
   .log-line.log-turn-marker {
     background:rgba(170,200,255,.08); border-top:1px solid rgba(170,200,255,.3);

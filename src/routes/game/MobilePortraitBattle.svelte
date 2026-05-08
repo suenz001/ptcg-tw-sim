@@ -43,6 +43,8 @@
     getEffectiveHP
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
+  // v3.02：log 著色 + 卡名可點連結
+  import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
 
   interface Props {
     game: GameState;
@@ -117,6 +119,26 @@
     return Math.max(0, getEffectiveHP(inst, pool, game) - inst.damage);
   }
   function hpMax(inst: CardInstance) { return getEffectiveHP(inst, pool, game); }
+
+  // v3.02：log 內卡名 -> 可點按鈕（行為與 +page.svelte 同步）
+  // 由長到短排序：longest-match-first 必須條件，避免短名遮蔽長名
+  let cardNamesSorted = $derived.by(() => {
+    const seen = new Set<string>();
+    const arr: string[] = [];
+    for (const c of pool.values()) {
+      if (!c?.name) continue;
+      if (seen.has(c.name)) continue;
+      seen.add(c.name);
+      arr.push(c.name);
+    }
+    arr.sort((a, b) => b.length - a.length);
+    return arr;
+  });
+  function openZoomByName(cardName: string) {
+    for (const c of pool.values()) {
+      if (c?.name === cardName) { onOpenZoom(c.id, null); return; }
+    }
+  }
   // v2.286 Phase 4：HP bar 顏色 — <30% 紅、<60% 黃、其他綠
   function hpClass(inst: CardInstance): string {
     const max = hpMax(inst);
@@ -438,10 +460,16 @@
   </div>
 
   <!-- ─── Log（撐空間） ─── -->
+  <!-- v3.02：套 +page.svelte 同款 tokenize + 卡名可點 -->
   <section class="mp-log">
     {#each [...(game.log ?? [])].reverse().slice(0, 30) as entry, i (i + (entry.message ?? ''))}
-      <div class="mp-log-line" class:latest={i === 0} class:sys={entry.playerIndex === null}>
-        {entry.privateMessage && entry.playerIndex === myIdx ? entry.privateMessage : entry.message}
+      {@const _isPrivate = !!(entry.privateMessage && entry.playerIndex === myIdx)}
+      {@const _msgText = _isPrivate ? entry.privateMessage : entry.message}
+      {@const _lineCls = logLineClass(_msgText ?? '')}
+      {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted)}
+      <div class="mp-log-line {_lineCls}" class:latest={i === 0} class:sys={entry.playerIndex === null} class:private={_isPrivate}>
+        {#if _isPrivate}<span class="log-private-icon" title="只有你看得到">🔒</span>{/if}
+        {#each _tokens as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" title="點擊查看 {tok.text} 卡片詳情" onclick={() => openZoomByName(tok.text)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
       </div>
     {/each}
   </section>
@@ -869,6 +897,32 @@
   }
   .mp-log-line.latest { color: #ffd44a; font-weight: 600; }
   .mp-log-line.sys { color: #8cf; font-style: italic; }
+  /* v3.02：log 內 token 著色（mobile 端對應 +page.svelte 主版色票，但縮小） */
+  .mp-log-line .log-bracket   { color:#ffd166; font-weight:700; }
+  .mp-log-line .log-ko        { color:#ff6b6b; font-weight:700; }
+  .mp-log-line .log-prize     { color:#ffc93c; font-weight:700; }
+  .mp-log-line .log-damage    { color:#ff8a65; font-weight:600; }
+  .mp-log-line .log-heal      { color:#7fdc7f; font-weight:600; }
+  .mp-log-line .log-status    { color:#ce93d8; font-weight:600; }
+  .mp-log-line .log-evolve    { color:#7fdc7f; font-weight:600; }
+  .mp-log-line .log-coin      { color:#fff59d; font-weight:600; }
+  .mp-log-line .log-secondary { color:#7a8a7a; }
+  /* v3.02 卡名可點連結 — button 形式 */
+  .mp-log-line .log-card-link {
+    display: inline;
+    background: transparent; border: none; padding: 0; margin: 0;
+    font: inherit;
+    color: #80c0ff;
+    text-decoration: underline;
+    cursor: pointer;
+    line-height: inherit;
+  }
+  .mp-log-line .log-card-link:hover { color: #a0d0ff; background: rgba(128,192,255,0.1); }
+  .mp-log-line .log-card-link:focus { outline: 1px dotted #a0d0ff; outline-offset: 1px; }
+  .mp-log-line.log-turn-marker { background: rgba(170,200,255,.08); color:#bcd4ff; font-weight:700; padding: 2px 4px; }
+  .mp-log-line.log-victory { background: rgba(255,200,80,.12); color:#ffe082; font-weight:700; padding: 2px 4px; }
+  .mp-log-line.private { color: #d0c0ff; }
+  .log-private-icon { margin-right:.2rem; opacity:.8; font-size:.85em; }
 
   /* ── 手牌底部橫向 scroll ─────────────────────────────────────── */
   .mp-hand {

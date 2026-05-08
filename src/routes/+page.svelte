@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details>
+        <summary><span class="ver-badge">v3.02</span> log UX 升級 — 卡名可點查看 + 傷害公式展開</summary>
+        <ul>
+          <li><strong>卡名 → 可點連結</strong>：log 內偵測到卡片名稱（如「尖釘鎮道館」「火箭隊的搗蛋小妖」等）會自動 render 成可點按鈕，點擊立即開啟 zoom modal 看卡片詳情。</li>
+          <li>實作於 <code>log_format.ts</code> — 在主 RULES tokenize 完後，對 cls=&#39;&#39; 純文字 token 跑卡名子掃描；卡名清單由 pool.values() 動態取得，由長到短排序避免「搗蛋小妖」遮蔽「火箭隊的搗蛋小妖」。</li>
+          <li>名稱長度 &lt; 2 字一律忽略（避免「水」「火」吃進普通文字）。</li>
+          <li>桌機版（+page.svelte）+ 手機直式版（MobilePortraitBattle.svelte）兩處同步更新；MobilePortraitBattle 一併補上 v2.88 著色 token CSS（之前手機版只有純文字 log，未套色）。</li>
+          <li><strong>傷害公式展開</strong>：攻擊 log 從「造成 310 傷害」升級為「造成 310 點傷害【100(基礎) +30(極限腰帶) +30(力量蛋白飲) ×2(弱點) -30(屬性相剋) = 310】」。</li>
+          <li>Phase 1 涵蓋 modifier：base、下回合加傷、招致削傷、tool（極限腰帶 / 鎖鏈糬 等）、PASSIVE_ATTACK_BONUS（輝煌聲援 等）、力量蛋白飲、腎上腺力量、空手道王、烏栗、同步脈衝、弱點 ×2、抵抗力 -30、上回合遺留、鐵之防禦、陳舊顎化石、岩石宮殿、守護之鐘、齒輪塗層、凍原堡壘、垃圾洩氣、下次被擊減傷、PASSIVE_DAMAGE_REDUCE / COND（柔軟羊毛 / 岩石盔甲 等）。</li>
+          <li>Phase 2 deferred：regPre 內部複雜計算（如赫月酋雷姆瘋狂啃咬 7×30+100、爆炸頭水牛 2 隻 -60、灰塵山 -20 已涵蓋但其他 stadium / passive deferred）。第一版只展開 base 後 modifier，base 仍以 regPre 回傳值為單一基礎項顯示。</li>
+          <li><strong>Iron Rule 12 遵守</strong>：本波只動 engine.ts / log_format.ts / +page.svelte / MobilePortraitBattle.svelte，無 .set() 子檔；無 effects.ts Map 改動。</li>
+          <li><strong>Iron Rule 11 遵守</strong>：所有既有檔案修改一律走 Python pipeline（git cat-file HEAD blob → in-memory replace → safe_write + fsync），無 Edit 工具截斷風險。</li>
+          <li>tsc 0 error；commit 但不 push（留給使用者 review）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.01</span> Group 3 Wave 3 — 14 張最複雜 passive 特性（11 實裝 / 3 部分覆蓋）</summary>
         <ul>
           <li><strong>大王銅象｜爆大身軀</strong>（A1 對手不能使出 X）— 戰鬥場上時，對手無法從手牌使出競技場卡。在 PLAY_TRAINER handler &#123;subtype=Stadium&#125; 加 gate</li>
