@@ -461,6 +461,19 @@ import {
 import { ON_RETREAT_TO_BENCH_ABILITIES } from './effects';
 import { askUseRetreatToBenchAbility } from './effects/cards/v3050_deferred_wave_a';
 
+// v3.07 Deferred Wave D — 3 張需要手牌 UI 元件層 hook 的特性
+//   ON_DISCARD_FROM_HAND_ABILITIES: trigger holder 卡名 → effect fn
+//   ON_HAND_ACTIVATE_ABILITIES: 手牌寶可夢自身 trigger → effect fn
+import {
+  ON_DISCARD_FROM_HAND_ABILITIES,
+  ON_HAND_ACTIVATE_ABILITIES,
+} from './effects';
+import {
+  hasFieldPokemonByName,
+  findFieldPokemonByName,
+  oppHasStage2,
+} from './effects/cards/v3070_deferred_wave_d';
+
 /**
  * 判斷一張寶可夢卡是否為「2 階進化」。
  * 同樣不能只看 subtype === 'Stage2'（Stage2 ex 的 subtype 是 'ex'）。
@@ -2667,6 +2680,114 @@ function handlePlaying(
     // 傳入觸發此特性的 CardInstance（以 iid 辨識），避免 ability 實作用
     // name 掃場而在「同回合多隻同名寶可夢發動」時誤中第一隻。
     return abilityFn(newState, aIdx, pool, targetPoke);
+  }
+
+  // ── v3.07 Deferred Wave D — 從手牌棄 1 張卡觸發場上特性 ────────────────────
+  //   - 超能妙喵｜誘導之尾：棄「悠哉尾草棒」→ 對手備戰 ↔ 戰鬥位互換
+  //   - 火神蛾｜熱浪鱗粉：棄「基本【火】能量」→ 對手戰鬥位灼傷
+  //   每回合限 1 次（用 abilityNamesUsedThisTurn 追蹤該特性名）。
+  if (action.type === 'USE_HAND_DISCARD_ABILITY') {
+    if (state.turnPhase !== 'main') return state;
+    if (state.pendingSelection) return state;
+
+    const triggerName = action.triggerCardName;
+    const fn = ON_DISCARD_FROM_HAND_ABILITIES.get(triggerName);
+    if (!fn) return state;
+
+    // gate: 自方場上有 trigger holder
+    if (!hasFieldPokemonByName(attacker, triggerName, pool)) return state;
+    const triggerInst = findFieldPokemonByName(attacker, triggerName, pool);
+    if (!triggerInst) return state;
+
+    // 取對應的 ability name（取首個有 effect 的特性）
+    const triggerCard = pool.get(triggerInst.cardId);
+    const triggeredAbilityName = triggerCard?.abilities?.[0]?.name;
+    if (!triggeredAbilityName) return state;
+
+    // gate: 該 ability 名稱本回合已用過 → 拒絕
+    const usedNames = attacker.abilityNamesUsedThisTurn ?? [];
+    if (usedNames.includes(triggeredAbilityName)) return state;
+
+    // gate: discardIid 在手牌
+    const handIdx = attacker.hand.findIndex(c => c.iid === action.discardIid);
+    if (handIdx < 0) return state;
+    const discardInst = attacker.hand[handIdx];
+    const discardCard = pool.get(discardInst.cardId);
+    if (!discardCard) return state;
+
+    // gate: 各 trigger 名稱對應該卡需符合的條件
+    if (triggerName === '超能妙喵') {
+      if (discardCard.name !== '悠哉尾草棒') return state;
+      if (!defender.active || defender.bench.length === 0) return state;
+    } else if (triggerName === '火神蛾') {
+      if (discardCard.supertype !== 'Energy' || discardCard.subtype !== 'Basic') return state;
+      if (!(discardCard.name?.includes('【火】') ?? false)) return state;
+      if (!defender.active) return state;
+      if (defender.active.status === 'burned') return state;
+    }
+
+    // 執行：先把該手牌移入棄牌區 → 標記 → log → call fn
+    const newHand = [...attacker.hand];
+    newHand.splice(handIdx, 1);
+    const newPlayers0: [PlayerState, PlayerState] = [...state.players] as [PlayerState, PlayerState];
+    const updatedAttacker: PlayerState = {
+      ...attacker,
+      hand: newHand,
+      discard: [...attacker.discard, discardInst],
+      abilityNamesUsedThisTurn: [...usedNames, triggeredAbilityName],
+    };
+    newPlayers0[aIdx] = updatedAttacker;
+
+    const triggerCardName = pool.get(triggerInst.cardId)?.name ?? triggerName;
+    const sLog = addLog(
+      { ...state, players: newPlayers0 },
+      `${attacker.name} 將「${discardCard.name}」從手牌丟棄，發動 ${triggerCardName} 的特性「${triggeredAbilityName}」！`,
+      aIdx
+    );
+    return fn(sLog, aIdx, pool, triggerInst);
+  }
+
+  // ── v3.07 Deferred Wave D — 手牌寶可夢自身為 trigger（USE_HAND_ABILITY） ─────
+  //   - 齒輪怪｜緊急迴轉：手牌的這張卡為條件 + 對手場上有 Stage 2 → 放這張卡到備戰
+  //   每回合限 1 次（用 abilityNamesUsedThisTurn 追蹤該特性名）。
+  if (action.type === 'USE_HAND_ABILITY') {
+    if (state.turnPhase !== 'main') return state;
+    if (state.pendingSelection) return state;
+
+    const handIdx = attacker.hand.findIndex(c => c.iid === action.cardIid);
+    if (handIdx < 0) return state;
+    const handInst = attacker.hand[handIdx];
+    const handCard = pool.get(handInst.cardId);
+    if (!handCard) return state;
+
+    const fn = ON_HAND_ACTIVATE_ABILITIES.get(handCard.name);
+    if (!fn) return state;
+
+    const abilityName = handCard.abilities?.[action.abilityIndex]?.name;
+    if (!abilityName) return state;
+
+    // gate: 該 ability 名稱本回合已用過 → 拒絕
+    const usedNames = attacker.abilityNamesUsedThisTurn ?? [];
+    if (usedNames.includes(abilityName)) return state;
+
+    // gate: 各卡名專屬條件
+    if (handCard.name === '齒輪怪') {
+      if (!oppHasStage2(defender, pool)) return state;
+      if (attacker.bench.length >= getBenchLimit(state, aIdx, pool)) return state;
+    }
+
+    // 標記 abilityNamesUsedThisTurn → fn 處理 hand → bench
+    const newPlayers1: [PlayerState, PlayerState] = [...state.players] as [PlayerState, PlayerState];
+    newPlayers1[aIdx] = {
+      ...attacker,
+      abilityNamesUsedThisTurn: [...usedNames, abilityName],
+    };
+    const sLog = addLog(
+      { ...state, players: newPlayers1 },
+      `${attacker.name} 從手牌發動 ${handCard.name} 的特性「${abilityName}」！`,
+      aIdx
+    );
+    return fn(sLog, aIdx, pool, handInst);
   }
 
   // ── 抽牌 ──────────────────────────────────────────────────────────────────

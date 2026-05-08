@@ -740,6 +740,13 @@ export type GameAction =
   | { type: 'SEND_NEW_ACTIVE'; iid: string; senderIdx?: 0 | 1 }
   | { type: 'USE_STADIUM' }
   | { type: 'USE_ABILITY'; iid: string; abilityIndex: number }
+  // v3.07 Deferred Wave D — 手牌 UI 元件層 hook（3 張）
+  // 玩家從手牌主動丟棄 1 張卡 → 觸發場上對應 trigger holder 的特性
+  // 例：丟悠哉尾草棒觸發超能妙喵｜誘導之尾；丟基本【火】能量觸發火神蛾｜熱浪鱗粉
+  | { type: 'USE_HAND_DISCARD_ABILITY'; triggerCardName: string; discardIid: string }
+  // 玩家從手牌主動把『此手牌寶可夢自身』作為 trigger 放上備戰
+  // 例：齒輪怪｜緊急迴轉 — 對手場上有 2 階進化時把齒輪怪從手牌放到備戰
+  | { type: 'USE_HAND_ABILITY'; cardIid: string; abilityIndex: number }
   | { type: 'END_TURN' };
 
 // ── 效果腳本插槽（M3/M4 填入） ─────────────────────────────────────────────

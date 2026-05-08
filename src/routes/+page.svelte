@@ -263,6 +263,20 @@
     <summary><h2>📋 版本更新記錄</h2></summary>
     <div class="changelog-list">
 
+      <details open>
+        <summary><span class="ver-badge">v3.07</span> Deferred Wave D — 3 張需要手牌 UI 元件層 hook 的特性（超能妙喵 / 火神蛾 / 齒輪怪）</summary>
+        <ul>
+          <li><b>新 hook ON_DISCARD_FROM_HAND</b> — 玩家從手牌主動棄 1 張指定卡，觸發場上對應 trigger holder 的特性。新增 <code>USE_HAND_DISCARD_ABILITY</code> action type、<code>ON_DISCARD_FROM_HAND_ABILITIES</code> Map（key=trigger holder 卡名 → effect fn），以及 +page.svelte / MobilePortraitBattle.svelte 的手牌渲染按鈕（紫色「棄此卡 → 觸發 X」）。每回合限 1 次（用 abilityNamesUsedThisTurn 追蹤該特性名）</li>
+          <li><b>新 hook ON_HAND_ACTIVATE</b> — 手牌寶可夢自身為 trigger，自己上場到備戰。新增 <code>USE_HAND_ABILITY</code> action type、<code>ON_HAND_ACTIVATE_ABILITIES</code> Map。與機制 A 不同：不是棄「另一張」手牌，而是『此手牌卡自身』就是 trigger</li>
+          <li><b>1. 超能妙喵｜誘導之尾（H）</b> — 「在自己的回合，若從自己的手牌將 1 張『悠哉尾草棒』丟棄，則可使用 1 次。選擇 1 隻對手的備戰寶可夢，與戰鬥寶可夢互換。」實作：場上有超能妙喵 + 手牌「悠哉尾草棒」+ 對手有 active &amp; bench ≥ 1 → 棄牌 + 開 opp-bench-choose（復用 'gust-opp' resolver）</li>
+          <li><b>2. 火神蛾｜熱浪鱗粉（I）</b> — 「在自己的回合，若從自己的手牌將 1 張『基本【火】能量』卡丟棄，則可使用 1 次。將對手的戰鬥寶可夢【灼傷】。」實作：場上有火神蛾 + 手牌基本【火】能量 + 對手戰鬥位非已灼傷 → 棄能量 + 對手戰鬥位 status='burned'</li>
+          <li><b>3. 齒輪怪｜緊急迴轉（H）</b> — 「在自己的回合，若手牌有這張卡，且對手的場上有【2 階進化】寶可夢，則可使用 1 次。將這張卡放置於備戰區。」實作：手牌有齒輪怪 + 對手場上有 Stage 2（subtype 含『Stage 2』/『2 階』或 evolvesFrom 鏈深度 = 2）+ 自方備戰 &lt; 5 → inst 從 hand 搬到 bench（清乾淨 attachments 旗標 + playedFromHand=true / justPlaced=true，與 PLAY_BASIC 對齊）</li>
+          <li><b>UI 渲染</b>：桌機 / 平板版（+page.svelte）在手牌的可觸發卡上加紫色按鈕，點擊直接 dispatch；手機直式（MobilePortraitBattle.svelte）走 hand-action sheet 加新項，符合既有 tap-action paradigm</li>
+          <li><b>Iron Rule 11 / 12 遵守</b>：所有既有檔（types.ts / actions.ts / effects.ts / engine.ts / +page.svelte / MobilePortraitBattle.svelte）改動一律走 Python pipeline；新檔 v3070_deferred_wave_d.ts 用 Write 工具；effect fn 由 effects.ts import 後寫入 Map literal（leaf 模組無 TDZ 風險）；register 函式留空保持模板一致</li>
+          <li>tsc 0 error</li>
+        </ul>
+      </details>
+
       <details>
         <summary><span class="ver-badge">v3.06</span> Deferred Wave B — 5 張免疫類 passive（藏隱 / 深度下潛 / 緊張感 / 融合為雪 / 全能硬殼）</summary>
         <ul>

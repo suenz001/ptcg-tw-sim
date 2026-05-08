@@ -13297,6 +13297,14 @@ regR('inferno-fandango-attach', (st, idx, iids, params, pool) => {
   });
 });
 
+// v3.07 Deferred Wave D — 手牌觸發特性 effect fn（給 ON_DISCARD_FROM_HAND_ABILITIES /
+// ON_HAND_ACTIVATE_ABILITIES Map literal 使用）
+import {
+  supercatExpAbility_LureTail,
+  volcaronaAbility_HeatScale,
+  klingerAbility_EmergencyRotate,
+} from './effects/cards/v3070_deferred_wave_d';
+
 // ══════════════════════════════════════════════════════════════════════════════
 // v2.320 — 「從手牌使出/進化時」特性自動提示機制
 // 將原本分散在 BENCH_PLACE_TRIGGERS / getUsableAbilities 的特性觸發，
@@ -13348,6 +13356,40 @@ export const ON_RETREAT_TO_BENCH_ABILITIES = new Set([
   '全能變身',     // 海豚俠 — 與牌庫的「海豚俠ex」互換並保留全部附加
   '返回重載',     // 鋼炮臂蝦 — 從手牌附最多 2 張基本【水】能量
 ]);
+
+/**
+ * v3.07 Deferred Wave D — 「從手牌將 1 張指定卡丟棄則觸發場上特性」的 trigger holder 名稱
+ * → effect fn 對應表。Key = trigger holder 卡名（場上有此卡才能用）。
+ *
+ * 觸發路徑：玩家從手牌按按鈕 → engine USE_HAND_DISCARD_ABILITY handler 驗證並棄牌 →
+ *   查此 Map 取得 fn → 執行效果（通常開 pendingSelection）。
+ *
+ * 卡片清單見 v3070_deferred_wave_d.ts。
+ */
+export const ON_DISCARD_FROM_HAND_ABILITIES = new Map<
+  string,
+  (state: GameState, idx: 0 | 1, pool: Map<string, Card>, triggerInst: CardInstance) => GameState
+>([
+  ['超能妙喵', supercatExpAbility_LureTail],   // 棄悠哉尾草棒 → 對手備戰 ↔ 戰鬥位互換
+  ['火神蛾',   volcaronaAbility_HeatScale],     // 棄基本【火】能量 → 對手戰鬥位灼傷
+]);
+
+/**
+ * v3.07 Deferred Wave D — 「手牌寶可夢自身為 trigger，自己上場」型特性。
+ * Key = 該手牌寶可夢卡名。
+ *
+ * 觸發路徑：玩家從手牌按按鈕 → engine USE_HAND_ABILITY handler 驗證 →
+ *   查此 Map 取得 fn → 執行效果（通常把 inst 從 hand 搬到 bench）。
+ *
+ * 與 ON_DISCARD_FROM_HAND 的差別：trigger 不是棄掉「另一張」手牌，而是『此手牌卡自身』。
+ */
+export const ON_HAND_ACTIVATE_ABILITIES = new Map<
+  string,
+  (state: GameState, idx: 0 | 1, pool: Map<string, Card>, handInst: CardInstance) => GameState
+>([
+  ['齒輪怪', klingerAbility_EmergencyRotate], // 對手有 Stage 2 時放此卡到備戰
+]);
+
 
 /**
  * 詢問玩家是否使用「從手牌放置/進化時」的特性。
@@ -14031,3 +14073,10 @@ registerV3050DeferredWaveA();
 //   - 全能硬殼：PASSIVE_IMMUNITY entry + ATTACK_EFFECT_IMMUNITY entry（special-case）
 import { registerV3060DeferredWaveBPassives } from './effects/cards/v3060_deferred_wave_b';
 registerV3060DeferredWaveBPassives();
+
+// v3.07 Deferred Wave D — 3 張需要手牌 UI 元件層 hook 的特性
+//   - 超能妙喵｜誘導之尾、火神蛾｜熱浪鱗粉 走 ON_DISCARD_FROM_HAND（玩家手牌主動丟卡觸發）
+//   - 齒輪怪｜緊急迴轉 走 ON_HAND_ACTIVATE（手牌寶可夢自身觸發放上備戰）
+// effect fn 由前文 import 後直接寫入 Map literal；register 函式留空（無 .set() 需要 lazy）。
+import { registerV3070DeferredWaveD } from './effects/cards/v3070_deferred_wave_d';
+registerV3070DeferredWaveD();

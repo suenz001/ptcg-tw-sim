@@ -260,6 +260,69 @@
     if (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection) {
       out.push({ label: '⚡ 附加能量到…', action: () => { sheet = { type: 'pick-energy-target', energyIid: iid }; }, primary: true });
     }
+    // v3.07 Deferred Wave D — 手牌觸發特性（誘導之尾 / 熱浪鱗粉 / 緊急迴轉）
+    // 機制 A: ON_DISCARD_FROM_HAND — 棄此卡觸發場上 trigger holder 特性
+    if (isPlaying && isMyTurn && isMainPhase && !pendingSelection && c) {
+      const me = myPlayer;
+      const opp = oppPlayer;
+      const usedNames = me.abilityNamesUsedThisTurn ?? [];
+      const hasOnField = (name: string): boolean => {
+        const all = [...(me.active ? [me.active] : []), ...me.bench];
+        return all.some(p => pool.get(p.cardId)?.name === name);
+      };
+      // 1) 棄『悠哉尾草棒』→ 觸發超能妙喵｜誘導之尾
+      if (c.name === '悠哉尾草棒'
+          && hasOnField('超能妙喵')
+          && !usedNames.includes('誘導之尾')
+          && opp.active && opp.bench.length > 0) {
+        out.push({
+          label: '🌀 棄此卡 → 觸發 超能妙喵｜誘導之尾',
+          action: () => { closeSheet(); onAction(GameActions.useHandDiscardAbility('超能妙喵', iid)); },
+          primary: true,
+        });
+      }
+      // 2) 棄『基本【火】能量』→ 觸發火神蛾｜熱浪鱗粉
+      if (c.supertype === 'Energy' && c.subtype === 'Basic'
+          && (c.name?.includes('【火】') ?? false)
+          && hasOnField('火神蛾')
+          && !usedNames.includes('熱浪鱗粉')
+          && opp.active && opp.active.status !== 'burned') {
+        out.push({
+          label: '🔥 棄此卡 → 觸發 火神蛾｜熱浪鱗粉',
+          action: () => { closeSheet(); onAction(GameActions.useHandDiscardAbility('火神蛾', iid)); },
+          primary: true,
+        });
+      }
+      // 機制 B: ON_HAND_ACTIVATE — 齒輪怪｜緊急迴轉
+      if (c.name === '齒輪怪'
+          && !usedNames.includes('緊急迴轉')
+          && me.bench.length < myBenchLimit) {
+        // 對手場上有 Stage 2
+        const oppHasStage2Local = (): boolean => {
+          const all = [...(opp.active ? [opp.active] : []), ...opp.bench];
+          for (const p of all) {
+            const card = pool.get(p.cardId);
+            if (!card || card.supertype !== 'Pokemon') continue;
+            const sub = (card.subtype ?? '') as string;
+            if (typeof sub === 'string' && (sub.includes('Stage 2') || sub.includes('Stage2')
+                || sub.includes('2 階') || sub.includes('二階') || sub === '2階進化')) return true;
+            if (card.evolvesFrom) {
+              for (const v of pool.values()) {
+                if (v.name === card.evolvesFrom && v.evolvesFrom) return true;
+              }
+            }
+          }
+          return false;
+        };
+        if (oppHasStage2Local()) {
+          out.push({
+            label: '⚡ 緊急迴轉 (放備戰)',
+            action: () => { closeSheet(); onAction(GameActions.useHandAbility(iid, 0)); },
+            primary: true,
+          });
+        }
+      }
+    }
     // 永遠可：查看詳情
     out.push({ label: '🔍 查看詳情', action: () => { closeSheet(); onOpenZoom(inst.cardId, inst); } });
     return out;

@@ -49,4 +49,9 @@ export const GameActions = {
   useStadium:        (): GameAction => ({ type: 'USE_STADIUM' }),
   useAbility:        (iid: string, abilityIndex: number): GameAction =>
                        ({ type: 'USE_ABILITY', iid, abilityIndex }),
+  // v3.07 Deferred Wave D — 手牌觸發特性 action creators
+  useHandDiscardAbility: (triggerCardName: string, discardIid: string): GameAction =>
+                       ({ type: 'USE_HAND_DISCARD_ABILITY', triggerCardName, discardIid }),
+  useHandAbility:    (cardIid: string, abilityIndex: number): GameAction =>
+                       ({ type: 'USE_HAND_ABILITY', cardIid, abilityIndex }),
 } as const;

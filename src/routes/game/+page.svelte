@@ -1088,6 +1088,130 @@
   const usableAbilities = $derived(game && poolReady ? getUsableAbilities(game, pool) : []);
   const stadiumCard = $derived(game?.activeStadium ? pool.get(game.activeStadium.cardId) : null);
 
+  // ─── v3.07 Deferred Wave D — 手牌觸發特性（3 張） ───────────────────────────
+  // 機制 A: ON_DISCARD_FROM_HAND（超能妙喵 / 火神蛾）— 棄 1 張指定手牌觸發
+  // 機制 B: ON_HAND_ACTIVATE（齒輪怪）— 手牌寶可夢自身觸發放上備戰
+  //
+  // 條件 gate（必須在 UI 渲染前 derived，避免按按鈕後被 engine 拒絕的壞 UX）：
+  //   - 自己回合 + main phase + 無 pendingSelection
+  //   - 該特性名本回合未用過（abilityNamesUsedThisTurn）
+  //   - 各卡專屬條件（場上有 trigger holder / 對手 active 非 burned / 對手有 Stage 2 / 自方備戰未滿）
+  //
+  // 回傳：手牌中可作為「discard cost」觸發某 trigger holder 特性的 cardIid 對應 trigger 卡名 Map
+  // key = handIid, value = { triggerName, abilityName }（若多 trigger 候選只取第一個）
+  const handDiscardAbilityTriggers = $derived.by<Map<string, { triggerName: string; abilityName: string; label: string }>>(() => {
+    const out = new Map<string, { triggerName: string; abilityName: string; label: string }>();
+    if (!game || !poolReady) return out;
+    if (game.phase !== 'playing' || game.turnPhase !== 'main') return out;
+    if (game.pendingSelection) return out;
+    if (!isMyTurn()) return out;
+    const me = game.players[myIdx];
+    const opp = game.players[1 - myIdx];
+    const usedNames = me.abilityNamesUsedThisTurn ?? [];
+    // 場上是否有指定 trigger holder（active or bench）
+    const hasOnField = (name: string): boolean => {
+      const all = [...(me.active ? [me.active] : []), ...me.bench];
+      return all.some(c => pool.get(c.cardId)?.name === name);
+    };
+
+    // 1) 超能妙喵｜誘導之尾 — 棄『悠哉尾草棒』+ 對手有備戰 + 戰鬥位有寶可夢
+    if (hasOnField('超能妙喵') && !usedNames.includes('誘導之尾')
+        && opp.active && opp.bench.length > 0) {
+      for (const inst of me.hand) {
+        const card = pool.get(inst.cardId);
+        if (card?.name === '悠哉尾草棒') {
+          out.set(inst.iid, {
+            triggerName: '超能妙喵',
+            abilityName: '誘導之尾',
+            label: '🌀 棄此卡 → 觸發 超能妙喵｜誘導之尾',
+          });
+        }
+      }
+    }
+
+    // 2) 火神蛾｜熱浪鱗粉 — 棄『基本【火】能量』+ 對手戰鬥位非已灼傷
+    if (hasOnField('火神蛾') && !usedNames.includes('熱浪鱗粉')
+        && opp.active && opp.active.status !== 'burned') {
+      for (const inst of me.hand) {
+        const card = pool.get(inst.cardId);
+        if (!card) continue;
+        if (card.supertype === 'Energy' && card.subtype === 'Basic'
+            && (card.name?.includes('【火】') ?? false)) {
+          // 若已被前一輪同卡型 set，仍允許（同 iid 只可能對應單一 trigger，因為超能妙喵不需基本能量）
+          if (!out.has(inst.iid)) {
+            out.set(inst.iid, {
+              triggerName: '火神蛾',
+              abilityName: '熱浪鱗粉',
+              label: '🔥 棄此卡 → 觸發 火神蛾｜熱浪鱗粉',
+            });
+          }
+        }
+      }
+    }
+    return out;
+  });
+
+  // 機制 B: 手牌寶可夢自身為 trigger（齒輪怪｜緊急迴轉）
+  // key = 手牌 iid, value = { abilityName, label }
+  const handActivateAbilities = $derived.by<Map<string, { abilityName: string; label: string }>>(() => {
+    const out = new Map<string, { abilityName: string; label: string }>();
+    if (!game || !poolReady) return out;
+    if (game.phase !== 'playing' || game.turnPhase !== 'main') return out;
+    if (game.pendingSelection) return out;
+    if (!isMyTurn()) return out;
+    const me = game.players[myIdx];
+    const opp = game.players[1 - myIdx];
+    const usedNames = me.abilityNamesUsedThisTurn ?? [];
+
+    // 對手場上是否有 Stage 2 寶可夢（齒輪怪 gate）— 用 evolvesFrom 二層偵測
+    const oppHasStage2Local = (): boolean => {
+      const all = [...(opp.active ? [opp.active] : []), ...opp.bench];
+      for (const inst of all) {
+        const card = pool.get(inst.cardId);
+        if (!card || card.supertype !== 'Pokemon') continue;
+        const sub = (card.subtype ?? '') as string;
+        if (typeof sub === 'string' && (sub.includes('Stage 2') || sub.includes('Stage2')
+            || sub.includes('2 階') || sub.includes('二階') || sub === '2階進化')) {
+          return true;
+        }
+        if (card.evolvesFrom) {
+          for (const v of pool.values()) {
+            if (v.name === card.evolvesFrom && v.evolvesFrom) return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    // 1) 齒輪怪｜緊急迴轉 — 對手有 Stage 2 + 自方備戰 < 5 + 名稱未用過
+    if (!usedNames.includes('緊急迴轉') && me.bench.length < 5 && oppHasStage2Local()) {
+      for (const inst of me.hand) {
+        const card = pool.get(inst.cardId);
+        if (card?.name === '齒輪怪') {
+          out.set(inst.iid, {
+            abilityName: '緊急迴轉',
+            label: '⚡ 緊急迴轉 (放備戰)',
+          });
+        }
+      }
+    }
+    return out;
+  });
+
+  // dispatch helpers — 用 onclick 呼叫
+  function triggerHandDiscardAbility(handIid: string): void {
+    const meta = handDiscardAbilityTriggers.get(handIid);
+    if (!meta) return;
+    dispatch(GameActions.useHandDiscardAbility(meta.triggerName, handIid));
+  }
+  function triggerHandActivateAbility(handIid: string): void {
+    const meta = handActivateAbilities.get(handIid);
+    if (!meta) return;
+    // abilityIndex=0（齒輪怪緊急迴轉是 abilities[0]）
+    dispatch(GameActions.useHandAbility(handIid, 0));
+  }
+
+
   // v2.276：觀戰者判定（線上模式且坐在 spectator 位）
   const isSpectator = $derived(mode === 'online' && mySeatIdx >= 2);
 
@@ -3661,6 +3785,21 @@
               title="放大查看 {c.name}">🔍</button>
             <img src={c.imageUrl} alt={c.name}/>
             <span class="hand-name">{c.name}</span>
+            <!-- v3.07 Deferred Wave D — 手牌觸發特性按鈕 -->
+            {#if handDiscardAbilityTriggers.has(inst.iid)}
+              {@const _trig = handDiscardAbilityTriggers.get(inst.iid)!}
+              <button class="hand-trigger-btn"
+                onpointerdown={(e)=>e.stopPropagation()}
+                onclick={(e)=>{e.stopPropagation(); triggerHandDiscardAbility(inst.iid);}}
+                title={_trig.label}>{_trig.label}</button>
+            {/if}
+            {#if handActivateAbilities.has(inst.iid)}
+              {@const _act = handActivateAbilities.get(inst.iid)!}
+              <button class="hand-trigger-btn"
+                onpointerdown={(e)=>e.stopPropagation()}
+                onclick={(e)=>{e.stopPropagation(); triggerHandActivateAbility(inst.iid);}}
+                title={_act.label}>{_act.label}</button>
+            {/if}
             {#if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
             {:else if canBasic}<span class="hand-hint hl">📥 拖到備戰</span>
             {:else if canFossil}<span class="hand-hint hl">🦴 化石放到備戰</span>
@@ -5720,7 +5859,24 @@
   .hand-hint.hl{ color:#ffd44a; font-weight:600; }
   .energy-hint{ color:#aaff44; }
   /* v1.02：統一黃框表示「當下可用」— 涵蓋能量/基礎/訓練家/進化 */
-  .hand-card.can-actionable{
+  /* v3.07 Deferred Wave D — 手牌觸發特性按鈕（誘導之尾 / 熱浪鱗粉 / 緊急迴轉） */
+  .hand-trigger-btn {
+    margin-top: 0.15rem;
+    padding: 0.18rem 0.3rem;
+    font-size: 0.6rem;
+    line-height: 1.1;
+    background: #5a3a8a;
+    color: #fff;
+    border: 1px solid #aa66ff;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+    box-shadow: 0 0 6px #aa66ff66;
+  }
+  .hand-trigger-btn:hover { background: #7050a0; }
+  .hand-trigger-btn:active { transform: scale(0.95); }
+
+    .hand-card.can-actionable{
     border-color:#e0b030;
     box-shadow: 0 0 8px rgba(224,176,48,.45), 0 3px 8px rgba(0,0,0,.35);
   }
