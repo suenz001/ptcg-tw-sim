@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.35</span> 清 7 個 pre-existing svelte-check type 警告（純 type-only 修補，無功能變動）</summary>
+        <ul>
+          <li>背景：累積至 v3.34 的 7 個 svelte-check type 警告長期殘留，本版做 type-only 全清。皆加正確 null guard &#47; type narrow，無 <code>@ts-ignore</code> 或 <code>as any</code> 偷懶。</li>
+          <li><b>routes&#47;decks&#47;+page.svelte:773</b> — <code>activeEntries</code> derived 內 <code>typeof active.entries[number]</code> 在 narrow 後的 type-position 仍被視為 active 可能 null（type expression 不走 control-flow narrowing）。修法：抽出 <code>type DeckEntry = &#123; cardId: string; count: number &#125;</code> alias。</li>
+          <li><b>routes&#47;game&#47;MobilePortraitBattle.svelte:345</b> — <code>activeActions()</code> return type 含 <code>zoomIid?: string</code> 但內部 <code>out</code> array 元素 type 沒寫 → push 撤退項時報 <code>'zoomIid' does not exist</code>。修法：補齊 array 元素 type 與 return type 一致。</li>
+          <li><b>routes&#47;game&#47;MobilePortraitBattle.svelte:695</b> — energy-target 按鈕的 onclick closure 內 <code>sheet!.type === '...' ? sheet.energyIid : ''</code> 第二個 <code>sheet</code> 沒加 <code>!</code>，被視為可能 null。修法：補 <code>sheet!.energyIid</code>（前面 <code>sheet!.type</code> 已 assert）。</li>
+          <li><b>routes&#47;game&#47;+page.svelte:1794</b> — <code>totalEnergyUnits(...,game,...)</code> 第 3 參要求 <code>GameState | undefined</code>，但 <code>game</code> 為 <code>GameState | null</code>。修法：傳 <code>game ?? undefined</code>。</li>
+          <li><b>routes&#47;game&#47;+page.svelte:2614</b> — <code>ZH_BY_TYPE: Record&lt;EnergyType, string&gt;</code> 漏 <code>Fairy</code> key（EnergyType 含 Fairy），補 <code>Fairy: '妖'</code>。</li>
+          <li><b>routes&#47;game&#47;+page.svelte:4498 &#47; 4504</b> — yes&#47;no overlay 的 onclick closure 內 <code>preAttackDiscard.attackIndex</code> 被視為可能 null（closure narrow 不穿外層 #if）。修法：closure 內加 <code>if (!preAttackDiscard) return;</code> null guard。</li>
+          <li>驗證：<code>tsc --noEmit</code> 0 errors、<code>svelte-check</code> 7 個 type errors → 0 errors（保留 EPERM 環境問題的 preprocessing notice，與型別無關）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.34</span> 連線對戰穩定性 audit — 4 處 P0 race &#47; 邊緣情境修補</summary>
         <ul>
           <li>背景：v2.82 _syncSeq race deadlock、v2.83 回滾改用「playing 期間停心跳」、v2.84 修 Firestore array-of-arrays — 過去 3 個版本累積了不少連線同步教訓；本版做完整 audit 找出殘留 race 並修補</li>

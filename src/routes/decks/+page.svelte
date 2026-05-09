@@ -769,9 +769,12 @@
   );
 
   // Entries paired with their Card for display. Filter out unresolved ids.
+  // v3.35：把 typeof active.entries[number] 抽出 type alias，避免在 narrow 後的 type-position
+  // 仍因「type expression 不走 control-flow narrowing」被 ts 警告 active 可能 null。
   const activeEntries = $derived.by(() => {
-    if (!active) return [] as { entry: typeof active.entries[number]; card: Card }[];
-    const result: { entry: typeof active.entries[number]; card: Card }[] = [];
+    type DeckEntry = { cardId: string; count: number };
+    if (!active) return [] as { entry: DeckEntry; card: Card }[];
+    const result: { entry: DeckEntry; card: Card }[] = [];
     for (const entry of active.entries) {
       const card = poolById.get(entry.cardId);
       if (card) result.push({ entry, card });

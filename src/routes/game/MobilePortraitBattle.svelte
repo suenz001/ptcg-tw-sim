@@ -342,7 +342,8 @@
   // 取「active 可選動作」list
   function activeActions(): Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean; zoomIid?: string }> {
     if (!myPlayer.active) return [];
-    const out: Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean }> = [];
+    // v3.35：out array 元素 type 加 zoomIid?，與 function return type 對齊（撤退項加 zoomIid 顯示 🔍 副按鈕）
+    const out: Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean; zoomIid?: string }> = [];
     const aId = myPlayer.active.iid;
     // 攻擊（若 main phase 且有可用招式）
     if (effectiveAttacks.length > 0) {
@@ -692,7 +693,7 @@
         <div class="mp-sheet-title">⚡ 選擇附加目標</div>
         {#each energyTargets() as tinst}
           {@const c = cardOf(tinst)}
-          <button class="mp-sheet-btn primary" onclick={() => attachEnergy(sheet!.type === 'pick-energy-target' ? sheet.energyIid : '', tinst.iid)}>
+          <button class="mp-sheet-btn primary" onclick={() => attachEnergy(sheet!.type === 'pick-energy-target' ? sheet!.energyIid : '', tinst.iid)}>
             {c?.name ?? '?'}（HP {hpRemaining(tinst)}/{hpMax(tinst)} · ⚡{tinst.energyAttached.length}）
           </button>
         {/each}

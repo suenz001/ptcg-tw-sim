@@ -1791,7 +1791,8 @@
       const retreatCost = (pendingSelection.params?.retreatCost as number | undefined) ?? 0;
       if (selectionPicked.size === 0) return false;
       const pickedInsts = selectionItems.filter(it => selectionPicked.has(it.iid));
-      return totalEnergyUnits(pickedInsts, pool, game, pendingSelection.actorIdx as 0 | 1) >= retreatCost;
+      // v3.35：totalEnergyUnits 接受 GameState | undefined；game ($state) 為 GameState | null，做 ?? undefined 轉換
+      return totalEnergyUnits(pickedInsts, pool, game ?? undefined, pendingSelection.actorIdx as 0 | 1) >= retreatCost;
     }
     return selectionPicked.size >= pendingSelection.minCount
         && selectionPicked.size <= pendingSelection.maxCount;
@@ -2611,10 +2612,11 @@
   // v2.121：判斷一張卡是否為指定屬性的基本能量。
   // 很多基本能量卡 JSON 的 pokemonType 欄位為 undefined（scraper 沒填），只能從卡名【X】解析。
   // 統一 helper 供所有 filter 'Energy:<Type>' 用。
+  // v3.35：EnergyType 包含 'Fairy'（妖精），補對應中文字 '妖'，避免 Record<EnergyType,string> 缺 key 警告
   const ZH_BY_TYPE: Record<EnergyType, string> = {
     Grass: '草', Fire: '火', Water: '水', Lightning: '雷',
     Psychic: '超', Fighting: '鬥', Darkness: '惡', Metal: '鋼',
-    Dragon: '龍', Colorless: '無',
+    Fairy: '妖', Dragon: '龍', Colorless: '無',
   };
   function isBasicEnergyOfType(card: Card | undefined, type: EnergyType): boolean {
     if (!card) return false;
@@ -4495,12 +4497,16 @@
           <button class="btn-primary" style="padding:12px 32px;font-size:16px"
             onclick={() => {
               // sentinel iid 'yes-token' — engine 端 regPre 看 length>=1 = yes
+              // v3.35：closure 內 ts narrowing 不會穿過外層 #if，需 null guard
+              if (!preAttackDiscard) return;
               const ai = preAttackDiscard.attackIndex;
               preAttackDiscard = null;
               dispatch(GameActions.attack(ai, ['yes-token']));
             }}>{yesLabel}</button>
           <button class="btn-ghost" style="padding:12px 32px;font-size:16px"
             onclick={() => {
+              // v3.35：closure 內 ts narrowing 不會穿過外層 #if，需 null guard
+              if (!preAttackDiscard) return;
               const ai = preAttackDiscard.attackIndex;
               preAttackDiscard = null;
               dispatch(GameActions.attack(ai, []));
