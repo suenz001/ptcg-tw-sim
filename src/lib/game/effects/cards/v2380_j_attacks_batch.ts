@@ -38,6 +38,7 @@ import type { CardInstance, PlayerState } from '../../types';
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
+  ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
 import { flipCoinsWithLog, canApplyAttackEffectToTarget } from '../../effects';
 
@@ -94,12 +95,26 @@ regPost('電龍|閃光伏特', (state, aIdx, _pool) => {
   }));
 });
 
-// ── 04. 超級皮可西ex｜射攻月亮 — 120 + 丟手牌 ≤4 能量 ×40 ─────────────────────
-// 同雙重食客模式：簡化為自動丟最多 4 張手牌能量。
-regPre('超級皮可西ex|射攻月亮', (state, aIdx, pool) => {
+// ── 04. 超級皮可西ex｜射攻月亮 — 卡面：「若希望，從自己的手牌將最多4張能量卡丟棄，增加其張數×40點傷害。」
+//   v3.26 修：原強制棄手牌前 4 張能量，違反卡面「若希望」+「最多」（玩家可選 0-4）。
+//   改用 hand-energy scope（v2.389 新加；UI 列出手牌能量讓玩家點選 0-4 張）。
+//   AI fallback：未指定 → 不丟（保守，等於 base 120）；UI 玩家會走 picker 路徑。
+ATTACK_PRE_DISCARD_CHOICE.set('超級皮可西ex|射攻月亮', {
+  min: 0, max: 4, scope: 'hand-energy',
+  baseDamage: 120, damagePerEnergy: 40,
+});
+regPre('超級皮可西ex|射攻月亮', (state, aIdx, pool, action) => {
   const player = state.players[aIdx];
+  const chosenIids = action?.discardedEnergyIids;
   const handEnergies = player.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
-  const toDiscard = handEnergies.slice(0, 4);
+  let toDiscard: typeof handEnergies = [];
+  if (chosenIids && chosenIids.length > 0) {
+    // 玩家自選：限定為手牌能量、capped 到 4
+    const allowed = new Set(handEnergies.map(e => e.iid));
+    const capped = chosenIids.filter(id => allowed.has(id)).slice(0, 4);
+    const setIds = new Set(capped);
+    toDiscard = handEnergies.filter(e => setIds.has(e.iid));
+  }
   let s = state;
   if (toDiscard.length > 0) {
     s = updatePlayer(s, aIdx, p => ({
@@ -107,7 +122,9 @@ regPre('超級皮可西ex|射攻月亮', (state, aIdx, pool) => {
       hand: p.hand.filter(c => !toDiscard.some(d => d.iid === c.iid)),
       discard: [...p.discard, ...toDiscard],
     }));
-    s = addLog(s, `射攻月亮：丟棄手牌 ${toDiscard.length} 張能量 → +${toDiscard.length * 40} 傷害`, aIdx);
+    s = addLog(s, `射攻月亮：丟棄手牌 ${toDiscard.length} 張能量 → 120+${toDiscard.length * 40} = ${120 + toDiscard.length * 40}`, aIdx);
+  } else {
+    s = addLog(s, '射攻月亮：未丟手牌能量 → 120', aIdx);
   }
   return { state: s, damage: 120 + toDiscard.length * 40 };
 });

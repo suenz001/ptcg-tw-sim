@@ -13,7 +13,7 @@
  *   - 雜 (1 張)
  */
 
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle } from '../_shared';
+import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -267,9 +267,23 @@ regPre('劈斬司令|致命刺擊', (state, aIdx, _pool) => {
 // 4. 棄能量 + 額外效果（3 張）
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 超級麻麻鰻魚王ex｜災難衝擊 190 — 棄 2 雷能量, 對手戰鬥麻痺
+// 超級麻麻鰻魚王ex｜災難衝擊 190 — 卡面：「若希望，將2個這隻寶可夢身上附加的【雷】能量丟棄，將對手的戰鬥寶可夢【麻痺】。」
+//   v3.26 修：原實裝強制棄 2 雷能量 + 強制麻痺，違反卡面「若希望」。
+//   借殼 binary-yes-no：玩家可選擇是否棄 2 雷+麻痺對手（雷能量不足 2 個時不開 picker）。
+ATTACK_PRE_DISCARD_CHOICE.set('超級麻麻鰻魚王ex|災難衝擊', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 190, damagePerEnergy: 0,
+  choicePrompt: '是否將 2 個這隻寶可夢身上附加的【雷】能量丟棄，將對手的戰鬥寶可夢【麻痺】？',
+  choiceYesLabel: '是（棄 2 雷能量 + 對手麻痺）',
+  choiceNoLabel: '否（保留能量；對手不麻痺）',
+});
 regPre('超級麻麻鰻魚王ex|災難衝擊', (s) => ({ state: s, damage: 190 }));
-regPost('超級麻麻鰻魚王ex|災難衝擊', (state, aIdx, pool) => {
+regPost('超級麻麻鰻魚王ex|災難衝擊', (state, aIdx, pool, action) => {
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) {
+    return addLog(state, '災難衝擊：選「否」 → 不棄能量、不麻痺對手', aIdx);
+  }
   // 1) 棄 2 個雷能量
   let s = state;
   const att = s.players[aIdx].active;
@@ -287,9 +301,10 @@ regPost('超級麻麻鰻魚王ex|災難衝擊', (state, aIdx, pool) => {
         const remaining = p.active.energyAttached.filter(e => !set.has(e.iid));
         return { ...p, active: { ...p.active, energyAttached: remaining }, discard: [...p.discard, ...discarded] };
       });
-      s = addLog(s, '災難衝擊：棄 2 個雷能量', aIdx);
+      s = addLog(s, '災難衝擊：選「是」 → 棄 2 個雷能量', aIdx);
     } else {
-      s = addLog(s, '災難衝擊：雷能量不足 2 個（無法棄）', aIdx);
+      // 雷能量不足 → 不執行棄能量也不麻痺（卡面「將...丟棄，將對手...麻痺」是條件性）
+      return addLog(s, '災難衝擊：雷能量不足 2 個（無法棄；不麻痺）', aIdx);
     }
   }
   // 2) 對手戰鬥場麻痺

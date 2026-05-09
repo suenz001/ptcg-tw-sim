@@ -295,8 +295,10 @@ regPost('雷吉斯奇魯ex|防護鋼鐵', (state, aIdx) =>
 // 大嘴娃｜雙重食客：0 + 自身丟棄最多 2 張能量 × 60
 registerDiscardMultiply('大嘴娃|雙重食客', '雙重食客', 0, 60, 2);
 
-// 超級皮可西ex｜射攻月亮：120 + 自身丟棄最多 4 張能量 × 40
-registerDiscardMultiply('超級皮可西ex|射攻月亮', '射攻月亮', 120, 40, 4);
+// 超級皮可西ex｜射攻月亮：120 + 自身丟棄最多 4 張手牌能量 × 40
+//   v3.26：原 registerDiscardMultiply 用 'attacker' scope 不對（卡面是「從手牌」棄能量），
+//   且 v2380 PRE 強制棄前 4 張手牌能量違反「若希望」。
+//   現在改由 v2380 自己用 'hand-energy' scope 註冊（玩家自選 0-4 張）；v2353 不再註冊。
 
 // 土地雲｜螺旋關節：120，選 1 個自身附加能量放回手牌
 regPre('土地雲|螺旋關節', (state) => ({ state, damage: 120 }));

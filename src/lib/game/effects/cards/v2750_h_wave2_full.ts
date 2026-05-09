@@ -10,7 +10,7 @@ import {
   regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
 } from '../_shared';
 import {
-  ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS,
+  ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
@@ -1423,18 +1423,63 @@ regPre('轟鳴月|雪恨箭羽', (state, aIdx, pool) => {
 // 纏紅鶴ex|恰好喙 30+ — 自身與對手戰鬥能量數同 +100
 regPre('纏紅鶴ex|恰好喙', sameEnergyCountPre(30, 100, '恰好喙'));
 
-// 大王銅象|鼻之金勾臂 130+ — 若希望 +100 + recharge
-//   簡化：自動 +100 + recharge
-regPre('大王銅象|鼻之金勾臂', (s) => ({ state: s, damage: 230 }));
-regPost('大王銅象|鼻之金勾臂', rechargePost('鼻之金勾臂'));
-
-// 輕身鱈ex|光芒強襲 120+ — 若希望棄全手牌 +120
-regPre('輕身鱈ex|光芒強襲', (state, aIdx, _pool) => {
-  if (state.players[aIdx].hand.length === 0) return { state, damage: 120 };
-  return { state: addLog(state, `光芒強襲：棄全手牌 ${state.players[aIdx].hand.length} 張 → 120+120 = 240`, aIdx), damage: 240 };
+// 大王銅象|鼻之金勾臂 130+ — 卡面：「若希望，增加100點傷害。這個情況下，在下個自己的回合，這隻寶可夢無法使用招式。」
+//   v3.26 修：原強制 +100 + recharge，違反卡面「若希望」。
+//   借殼 binary-yes-no：玩家可選擇是否 +100（代價：下回合無法使用招式）
+//   - 選「否」 → 130 傷害，可正常下回合行動
+//   - 選「是」 → 230 傷害 + recharge 鎖
+//   AI fallback：預設選「是」最大化攻擊。
+ATTACK_PRE_DISCARD_CHOICE.set('大王銅象|鼻之金勾臂', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 130, damagePerEnergy: 0,
+  choicePrompt: '是否增加 100 點傷害？（這個情況下，下個自己的回合這隻寶可夢無法使用招式）',
+  choiceYesLabel: '是（+100 傷害 + 下回合無法使用招式）',
+  choiceNoLabel: '否（130 傷害；下回合可正常行動）',
 });
-regPost('輕身鱈ex|光芒強襲', (state, aIdx, _pool) => {
+regPre('大王銅象|鼻之金勾臂', (state, aIdx, _pool, action) => {
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) {
+    return { state: addLog(state, '鼻之金勾臂：選「否」 → 130 傷害（不 recharge）', aIdx), damage: 130 };
+  }
+  return { state: addLog(state, '鼻之金勾臂：選「是」 → 130+100 = 230（下回合 recharge）', aIdx), damage: 230 };
+});
+regPost('大王銅象|鼻之金勾臂', (state, aIdx, pool, action) => {
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) return state;
+  return rechargePost('鼻之金勾臂')(state, aIdx, pool);
+});
+
+// 輕身鱈ex|光芒強襲 120+ — 卡面：「若希望，將自己的手牌全部丟棄。有丟棄的情況下，增加120點傷害。」
+//   v3.26 修：原強制棄全手牌 + 強制 +120，違反卡面「若希望」。
+//   借殼 binary-yes-no：玩家可選擇是否棄全手牌。
+//   - 選「否」 → 120 傷害，保留手牌
+//   - 選「是」 → 240 傷害 + 棄全手牌
+//   注意：手牌為 0 時不開 picker（沒得棄）。
+ATTACK_PRE_DISCARD_CHOICE.set('輕身鱈ex|光芒強襲', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 120, damagePerEnergy: 0,
+  choicePrompt: '是否將自己的手牌全部丟棄，增加 120 點傷害？',
+  choiceYesLabel: '是（+120 傷害 + 棄全手牌）',
+  choiceNoLabel: '否（保留手牌）',
+});
+regPre('輕身鱈ex|光芒強襲', (state, aIdx, _pool, action) => {
+  if (state.players[aIdx].hand.length === 0) {
+    return { state: addLog(state, '光芒強襲：手牌為 0 → 120 傷害', aIdx), damage: 120 };
+  }
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) {
+    return { state: addLog(state, '光芒強襲：選「否」 → 120 傷害（保留手牌）', aIdx), damage: 120 };
+  }
+  return { state: addLog(state, `光芒強襲：選「是」 → 棄全手牌 ${state.players[aIdx].hand.length} 張 → 120+120 = 240`, aIdx), damage: 240 };
+});
+regPost('輕身鱈ex|光芒強襲', (state, aIdx, _pool, action) => {
   if (state.players[aIdx].hand.length === 0) return state;
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) return state;
   return updatePlayer(state, aIdx, p => ({
     ...p,
     discard: [...p.discard, ...p.hand],

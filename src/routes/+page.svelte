@@ -264,6 +264,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.26</span> 「若希望」棄能量類招式 audit &#43; fix（11 張）</summary>
+        <ul>
+          <li><b>背景</b>：使用者點名超級雷電獸ex｜狂暴噴射 / 火箭隊的超夢ex｜擦除球。經 audit JSON 卡面文字含「若希望」&#43; 棄能量／棄競技場／回手 等 26 張，逐一比對實裝後找出 11 張 bug（卡面為玩家可選，但實裝強制執行）。火箭隊的超夢ex｜擦除球已正確（ATTACK_PRE_DISCARD_CHOICE own-bench picker），不在本波。</li>
+          <li><b>修補機制</b>：複用既有 binary-yes-no scope（v2.255 蚊香泳士｜跳躍衝天）— 玩家在開招式前 UI 跳出 yes/no overlay，PRE 與 POST 皆讀 action.discardedEnergyIids 長度（0&#61;否、&ge;1&#61;是）同步行為，AI fallback 預設「是」最大化攻擊。射攻月亮借殼 hand-energy scope（v2.389 大嘴娃｜雙重食客 pattern）。</li>
+          <li><b>修補清單（11 張）</b>：
+            <ul>
+              <li><b>超級雷電獸ex｜狂暴噴射</b>（v2770）：原強制棄全能量 &#43;130 &rarr; binary yes/no（200 vs 330）。</li>
+              <li><b>火箭隊的叉字蝠ex｜刺殺迴旋</b>（v2670）：原強制自身回手 &rarr; binary yes/no（120 留場 vs 120 回手）。</li>
+              <li><b>大王銅象｜鼻之金勾臂</b>（v2750）：原強制 &#43;100 &#43; recharge &rarr; binary yes/no（130 vs 230 &#43; 下回合鎖招式）。</li>
+              <li><b>輕身鱈ex｜光芒強襲</b>（v2750）：原強制棄全手牌 &#43;120 &rarr; binary yes/no（120 vs 240，手牌 0 時不開）。</li>
+              <li><b>薩戮德｜叢林鞭打</b>（effects.ts）：原「自身有能量則必收 &#43;80」AI 強吃 &rarr; binary yes/no（80 vs 160）。</li>
+              <li><b>浩大鯨ex｜粉碎重壓</b>（v2670）：原有競技場必棄 &#43;140 &rarr; binary yes/no（140 vs 280，無競技場時不開）。</li>
+              <li><b>轟鳴月ex｜災厄風暴</b>（effects.ts）：與粉碎重壓同 pattern &rarr; binary yes/no（100 vs 220）。</li>
+              <li><b>超級皮可西ex｜射攻月亮</b>（v2353&#43;v2380）：原 v2353 註冊 attacker scope（錯，卡面是手牌）&#43; v2380 強制棄手牌前 4 張 &rarr; 改用 hand-energy scope，玩家自選 0-4 張手牌能量。</li>
+              <li><b>超級麻麻鰻魚王ex｜災難衝擊</b>（v2650）：原強制棄 2 雷 &#43; 強制麻痺 &rarr; binary yes/no；雷能量不足 2 個時不執行。</li>
+              <li><b>燭光靈｜光照燃燒</b>（v2630）：原強制棄牌庫頂 &rarr; binary yes/no（保留 vs 棄牌庫頂）。</li>
+              <li><b>岩狗狗｜挖回</b>（v2630）：與光照燃燒同 pattern。</li>
+            </ul>
+          </li>
+          <li><b>Iron Rule 遵守</b>：Rule 11 — 10 個既有檔（version.ts / effects.ts / &#43;page.svelte / v2770 / v2670 / v2750 / v2650 / v2630 / v2353 / v2380）一律走 Python pipeline（HEAD blob &rarr; in-memory replace &rarr; safe_write &#43; fsync），驗證 disk size &#61; mem bytes。Rule 12 — 全部用 ATTACK_PRE_DISCARD_CHOICE.set / regPre / regPost helper 註冊（_shared.ts 是 leaf module，無 TDZ 風險）。</li>
+          <li><b>Deferred</b>：以下卡片屬「對手能量回手 / 對手選擇」類，雖也是「若希望」但需要更複雜的 picker（玩家挑哪些對手能量），本波不修：高傲雉雞｜反轉之風、章魚桶｜水流清洗、帕底亞 肯泰羅｜上搗角擊、呆呆王｜付諸東流、雷伊布ex｜閃光尖矛（已標 deferred）、毛辮羊／毛毛角羊／大比鳥ex｜搗碎／狂風呼嘯（卡面只是「棄競技場」無傷害加成，影響極小）。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v3.25</span> 超級沙奈朵ex｜盈溢祈願 改為 2-stage 玩家自選 picker</summary>
         <ul>
           <li><b>卡面</b>：「從牌庫選擇任意數量的『基本【超】能量』卡，以任意方式附於自己的備戰寶可夢身上。然後，重洗牌庫。」</li>

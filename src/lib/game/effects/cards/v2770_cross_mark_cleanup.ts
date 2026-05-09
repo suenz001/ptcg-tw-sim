@@ -7,6 +7,7 @@
 
 import {
   regPre, regPost, regR, addLog, updatePlayer, withPending,
+  ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
@@ -52,13 +53,35 @@ regPre('厄鬼椪 碧草面具ex|萬葉陣雨', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // === I 標殘餘 (4 張) ===
 // ══════════════════════════════════════════════════════════════════════════════
-// 超級雷電獸ex|狂暴噴射 200+ — 若希望棄全能量 +130
-regPre('超級雷電獸ex|狂暴噴射', (state, aIdx, _pool) => {
-  const a = state.players[aIdx].active;
-  if (!a || a.energyAttached.length === 0) return { state, damage: 200 };
-  return { state: addLog(state, '狂暴噴射：棄全能量 → 200+130 = 330', aIdx), damage: 330 };
+// 超級雷電獸ex|狂暴噴射 200+ — 卡面：「若希望，將這隻寶可夢身上附加的能量卡全部丟棄，增加130點傷害。」
+//   v3.26 修：原實裝強制棄全能量 + 強制 +130，違反卡面「若希望」。
+//   借殼 binary-yes-no scope（v2.255 蚊香泳士|跳躍衝天 pattern）：玩家開招前選 yes/no。
+//   - 選「否」 → 200 傷害，不棄能量
+//   - 選「是」 → 330 傷害 + POST 棄全能量
+//   AI fallback（chosenIids === undefined）→ 預設選「是」最大化攻擊。
+ATTACK_PRE_DISCARD_CHOICE.set('超級雷電獸ex|狂暴噴射', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 200, damagePerEnergy: 0,
+  choicePrompt: '是否將這隻寶可夢身上附加的能量全部丟棄，增加 130 點傷害？',
+  choiceYesLabel: '是（+130 傷害 + 棄全能量）',
+  choiceNoLabel: '否（保留能量）',
 });
-regPost('超級雷電獸ex|狂暴噴射', (state, aIdx, _pool) => {
+regPre('超級雷電獸ex|狂暴噴射', (state, aIdx, _pool, action) => {
+  const a = state.players[aIdx].active;
+  const chosenIids = action?.discardedEnergyIids;
+  // length>=1 = yes（玩家選了 +130）、length=0 = no
+  // AI fallback（chosenIids === undefined）→ 預設 yes 最大化攻擊
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes || !a || a.energyAttached.length === 0) {
+    return { state: addLog(state, '狂暴噴射：選「否」 → 200 傷害（不棄能量）', aIdx), damage: 200 };
+  }
+  return { state: addLog(state, '狂暴噴射：選「是」 → 200+130 = 330（POST 會棄全能量）', aIdx), damage: 330 };
+});
+regPost('超級雷電獸ex|狂暴噴射', (state, aIdx, _pool, action) => {
+  // 同步 PRE 的 yes/no 選擇：只有選「是」才棄全能量
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) return state;
   return selfDiscardAllEnergyPost('狂暴噴射')(state, aIdx, new Map());
 });
 

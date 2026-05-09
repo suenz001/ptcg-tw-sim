@@ -21,7 +21,7 @@
  *   - 雙方睡眠+下回合 +N（樹枕尾熊）
  */
 
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, discardActiveStadium } from '../_shared';
+import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
 // v3.10 import 修 bug 用的兩個 helper（原本 wave17 內自己 inline 寫成「加手」）
 import { deckSearchAttachToAnyPost, discardSearchAttachToBenchPost } from './v2750_h_wave2_full';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -83,28 +83,59 @@ regPost('藏瑪然特|強大猛擊', (state, aIdx, _pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 3. 浩大鯨ex｜粉碎重壓 140+ — 棄場上 stadium → +140
+// 3. 浩大鯨ex｜粉碎重壓 140+ — 卡面：「若希望，將場上的競技場卡丟棄。這個情況下，增加140點傷害。」
+//   v3.26 修：原實裝強制棄競技場 + 強制 +140，違反卡面「若希望」。
+//   借殼 binary-yes-no scope：玩家開招前選 yes/no（場上無競技場時直接 140 不開 picker）。
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('浩大鯨ex|粉碎重壓', (state, aIdx, _pool) => {
-  const hasStadium = !!state.activeStadium;
-  if (hasStadium) {
-    return { state: addLog(state, '粉碎重壓：場上有競技場 → 140+140 = 280（棄競技場）', aIdx), damage: 280 };
-  }
-  return { state: addLog(state, '粉碎重壓：場上無競技場 → 140', aIdx), damage: 140 };
+ATTACK_PRE_DISCARD_CHOICE.set('浩大鯨ex|粉碎重壓', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 140, damagePerEnergy: 0,
+  choicePrompt: '是否將場上的競技場卡丟棄，增加 140 點傷害？',
+  choiceYesLabel: '是（+140 傷害 + 棄競技場）',
+  choiceNoLabel: '否（保留競技場）',
 });
-regPost('浩大鯨ex|粉碎重壓', (state, aIdx, _pool) => {
+regPre('浩大鯨ex|粉碎重壓', (state, aIdx, _pool, action) => {
+  if (!state.activeStadium) {
+    return { state: addLog(state, '粉碎重壓：場上無競技場 → 140', aIdx), damage: 140 };
+  }
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) {
+    return { state: addLog(state, '粉碎重壓：選「否」 → 140 傷害（保留競技場）', aIdx), damage: 140 };
+  }
+  return { state: addLog(state, '粉碎重壓：選「是」 → 140+140 = 280（POST 棄競技場）', aIdx), damage: 280 };
+});
+regPost('浩大鯨ex|粉碎重壓', (state, aIdx, _pool, action) => {
   if (!state.activeStadium) return state;
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) return state;
   return addLog(discardActiveStadium(state, aIdx), '粉碎重壓：棄場上競技場', aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 4. 火箭隊的叉字蝠ex｜刺殺迴旋 120 — 自身放回手 (寶可夢以外卡丟棄)
+// 4. 火箭隊的叉字蝠ex｜刺殺迴旋 120 — 卡面：「若希望，將這隻寶可夢放回手牌。（寶可夢以外的卡全部丟棄。）」
+//   v3.26 修：原實裝強制自身回手，違反卡面「若希望」。
+//   借殼 binary-yes-no：玩家可選擇是否回手（保留戰鬥位）。
 // ══════════════════════════════════════════════════════════════════════════════
+ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的叉字蝠ex|刺殺迴旋', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 120, damagePerEnergy: 0,
+  choicePrompt: '是否將這隻寶可夢放回手牌？（寶可夢以外的卡全部丟棄）',
+  choiceYesLabel: '是（自身回手牌；附加能量/道具棄）',
+  choiceNoLabel: '否（保留戰鬥位）',
+});
 regPre('火箭隊的叉字蝠ex|刺殺迴旋', (s) => ({ state: s, damage: 120 }));
-regPost('火箭隊的叉字蝠ex|刺殺迴旋', (state, aIdx, _pool) => {
+regPost('火箭隊的叉字蝠ex|刺殺迴旋', (state, aIdx, _pool, action) => {
+  // 同步 PRE 的 yes/no 選擇
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) {
+    return addLog(state, '刺殺迴旋：選「否」 → 自身留場', aIdx);
+  }
   // 自身放回手；附加能量/道具棄
   return updatePlayer(
-    addLog(state, '刺殺迴旋：自身放回手牌（附加能量/道具棄）', aIdx),
+    addLog(state, '刺殺迴旋：選「是」 → 自身放回手牌（附加能量/道具棄）', aIdx),
     aIdx, p => {
       if (!p.active) return p;
       const mainCard = { iid: p.active.iid, cardId: p.active.cardId, damage: 0, energyAttached: [] };

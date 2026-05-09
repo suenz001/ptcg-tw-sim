@@ -4646,16 +4646,32 @@ regPost('古玉魚|大地熔化', (state, aIdx, _pool) => {
   return addLog(discardActiveStadium(state, aIdx), '大地熔化：丟棄競技場', aIdx);
 });
 
-// 若希望，將場上的競技場卡丟棄 → +120（只在有競技場時才生效）
-regPre('轟鳴月ex|災厄風暴', (state, aIdx, _pool) => {
-  if (state.activeStadium) {
-    return { state: addLog(state, '災厄風暴：丟棄競技場 → +120', aIdx), damage: 220 };
-  }
-  return { state, damage: 100 };
+// 轟鳴月ex|災厄風暴 — 卡面：「若希望，將場上的競技場卡丟棄。這個情況下，增加120點傷害。」
+//   v3.26 修：原有競技場時「強制棄 + 強制 +120」，違反卡面「若希望」。
+//   借殼 binary-yes-no：場上有競技場時開 yes/no picker。
+ATTACK_PRE_DISCARD_CHOICE.set('轟鳴月ex|災厄風暴', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 100, damagePerEnergy: 0,
+  choicePrompt: '是否將場上的競技場卡丟棄，增加 120 點傷害？',
+  choiceYesLabel: '是（+120 傷害 + 棄競技場）',
+  choiceNoLabel: '否（保留競技場）',
 });
-regPost('轟鳴月ex|災厄風暴', (state, aIdx, _pool) => {
-  // v2.244：用 discardActiveStadium helper 丟回擁有者棄牌堆
+regPre('轟鳴月ex|災厄風暴', (state, aIdx, _pool, action) => {
+  if (!state.activeStadium) {
+    return { state: addLog(state, '災厄風暴：場上無競技場 → 100', aIdx), damage: 100 };
+  }
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) {
+    return { state: addLog(state, '災厄風暴：選「否」 → 100 傷害（保留競技場）', aIdx), damage: 100 };
+  }
+  return { state: addLog(state, '災厄風暴：選「是」 → 100+120 = 220（POST 棄競技場）', aIdx), damage: 220 };
+});
+regPost('轟鳴月ex|災厄風暴', (state, aIdx, _pool, action) => {
   if (!state.activeStadium) return state;
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) return state;
   return discardActiveStadium(state, aIdx);
 });
 
@@ -5715,16 +5731,35 @@ regPost('熔岩蝸牛ex|大地灼燒', (state, aIdx, _pool) => {
   return addLog(s, '大地灼燒：雙方牌庫頂 1 張丟入棄牌區', aIdx);
 });
 
-// 薩戮德|叢林鞭打 — 基礎 80，若自身有能量則全部收回手牌 +80（AI 永遠吃加成）
-regPre('薩戮德|叢林鞭打', (state, aIdx, _pool) => {
+// 薩戮德|叢林鞭打 — 卡面：「若希望，將這隻寶可夢身上附加的能量卡全部放回手牌，增加80點傷害。」
+//   v3.26 修：原實裝「自身有能量 → 必收 + 必加 +80」(AI 永遠吃加成)，違反卡面「若希望」。
+//   借殼 binary-yes-no：玩家可選擇是否收回所有能量。
+ATTACK_PRE_DISCARD_CHOICE.set('薩戮德|叢林鞭打', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 80, damagePerEnergy: 0,
+  choicePrompt: '是否將這隻寶可夢身上附加的能量卡全部放回手牌，增加 80 點傷害？',
+  choiceYesLabel: '是（+80 傷害 + 全能量回手）',
+  choiceNoLabel: '否（保留能量）',
+});
+regPre('薩戮德|叢林鞭打', (state, aIdx, _pool, action) => {
   const att = state.players[aIdx].active;
   const hasEnergy = (att?.energyAttached.length ?? 0) > 0;
-  const dmg = 80 + (hasEnergy ? 80 : 0);
-  return { state: addLog(state, `叢林鞭打：${hasEnergy ? '收回自身能量 → +80，' : ''}${dmg}`, aIdx), damage: dmg };
+  if (!hasEnergy) {
+    return { state: addLog(state, '叢林鞭打：自身無能量 → 80', aIdx), damage: 80 };
+  }
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) {
+    return { state: addLog(state, '叢林鞭打：選「否」 → 80 傷害（保留能量）', aIdx), damage: 80 };
+  }
+  return { state: addLog(state, '叢林鞭打：選「是」 → 收回自身能量 → 80+80 = 160', aIdx), damage: 160 };
 });
-regPost('薩戮德|叢林鞭打', (state, aIdx, _pool) => {
+regPost('薩戮德|叢林鞭打', (state, aIdx, _pool, action) => {
   const att = state.players[aIdx].active;
   if (!att || att.energyAttached.length === 0) return state;
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) return state;
   return updatePlayer(state, aIdx, p => {
     if (!p.active) return p;
     const energies = p.active.energyAttached;

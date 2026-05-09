@@ -3,7 +3,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle } from '../_shared';
+import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -386,13 +386,28 @@ regPost('波爾凱尼恩ex|高溫旋風', (state, aIdx, _pool) => {
 // 3. 查看自己牌庫頂 1 可選棄 (2 張)
 // 簡化：自動 50% 機率棄掉
 // ══════════════════════════════════════════════════════════════════════════════
+// 燭光靈|光照燃燒 — 卡面：「查看自己的牌庫上方1張卡，回復原樣。若希望，將那張卡丟棄。」
+//   v3.26 修：原強制棄牌庫頂，違反卡面「若希望」。借殼 binary-yes-no。
+//   注意：簡化未實裝「先給玩家看牌庫頂再決定」（會洩漏牌庫頂），
+//   只做 yes/no 問答；玩家若選「否」則保留牌庫頂、選「是」則丟棄牌庫頂。
+ATTACK_PRE_DISCARD_CHOICE.set('燭光靈|光照燃燒', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 0, damagePerEnergy: 0,
+  choicePrompt: '是否將自己的牌庫上方 1 張卡丟棄？',
+  choiceYesLabel: '是（將牌庫頂丟棄）',
+  choiceNoLabel: '否（保留牌庫頂）',
+});
 regPre('燭光靈|光照燃燒', (s) => ({ state: s, damage: 0 }));
-regPost('燭光靈|光照燃燒', (state, aIdx, _pool) => {
+regPost('燭光靈|光照燃燒', (state, aIdx, _pool, action) => {
   const player = state.players[aIdx];
   if (player.deck.length === 0) return addLog(state, '光照燃燒：牌庫已空', aIdx);
-  // 簡化：自動棄
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) {
+    return addLog(state, '光照燃燒：選「否」 → 保留牌庫頂', aIdx);
+  }
   return updatePlayer(
-    addLog(state, '光照燃燒：查看自己牌庫頂 1 張卡（自動丟棄）', aIdx),
+    addLog(state, '光照燃燒：選「是」 → 丟棄牌庫頂 1 張', aIdx),
     aIdx, p => ({
       ...p,
       deck: p.deck.slice(1),
@@ -401,12 +416,26 @@ regPost('燭光靈|光照燃燒', (state, aIdx, _pool) => {
   );
 });
 
+// 岩狗狗|挖回 — 卡面：「查看自己的牌庫上方1張卡，回復原樣。若希望，將那張卡丟棄。」
+//   v3.26 修：與光照燃燒相同 pattern。借殼 binary-yes-no。
+ATTACK_PRE_DISCARD_CHOICE.set('岩狗狗|挖回', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 0, damagePerEnergy: 0,
+  choicePrompt: '是否將自己的牌庫上方 1 張卡丟棄？',
+  choiceYesLabel: '是（將牌庫頂丟棄）',
+  choiceNoLabel: '否（保留牌庫頂）',
+});
 regPre('岩狗狗|挖回', (s) => ({ state: s, damage: 0 }));
-regPost('岩狗狗|挖回', (state, aIdx, _pool) => {
+regPost('岩狗狗|挖回', (state, aIdx, _pool, action) => {
   const player = state.players[aIdx];
   if (player.deck.length === 0) return addLog(state, '挖回：牌庫已空', aIdx);
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) {
+    return addLog(state, '挖回：選「否」 → 保留牌庫頂', aIdx);
+  }
   return updatePlayer(
-    addLog(state, '挖回：查看自己牌庫頂 1 張卡（自動丟棄）', aIdx),
+    addLog(state, '挖回：選「是」 → 丟棄牌庫頂 1 張', aIdx),
     aIdx, p => ({
       ...p,
       deck: p.deck.slice(1),
