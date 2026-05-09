@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.34</span> 連線對戰穩定性 audit — 4 處 P0 race &#47; 邊緣情境修補</summary>
+        <ul>
+          <li>背景：v2.82 _syncSeq race deadlock、v2.83 回滾改用「playing 期間停心跳」、v2.84 修 Firestore array-of-arrays — 過去 3 個版本累積了不少連線同步教訓；本版做完整 audit 找出殘留 race 並修補</li>
+          <li><b>P0-1 dispatch 早 return 不 push（newState === game）</b>：action 被 engine 拒絕（state 沒變）時仍走 pushGameState 路徑，把同樣 state 推回 firestore、bump updatedAt — 在對手剛 push 後夾入，可能誤覆寫對手權威狀態。修法：if (newState !== prevState) 才走 push。</li>
+          <li><b>P0-2 dispatch 加 actor gate（線上模式）</b>：原本只要 mode==='online' 就 push，導致 (a) 觀戰位點到隱藏按鈕 (b) 對手回合 UI race 點到非法 action (c) pendingPrize 取走時非 owner 推送 — 都會把對方權威 state 覆蓋。修法：dispatch 結尾加 canIPush 計算（pending actor / activePlayerIndex / pendingPrize owner / 補場身分），不是合法 actor 就只更新 local 不推 firestore。</li>
+          <li><b>P0-3 leaveOnlineGame 順序修正</b>：原本 stopHeartbeat → await leaveRoom → 才 unsubRoom。await 期間 firestore onSnapshot 仍可 fire handleRoomUpdate，把剛清掉的 game 又重設或誤跳「房間不存在」錯誤。修法：先 unsubRoom + unsubMessages 阻斷 callback，再 stopHeartbeat，最後 await leaveRoom。</li>
+          <li><b>P0-4 handleRoomUpdate 拒收舊 snapshot</b>：playing 期間若 incoming.gameState.log.length &lt; local.log.length 視為舊 snapshot 拒收（最終防線）。只擋 strictly less，不擋等於，避免重蹈 v2.82 _syncSeq deadlock 覆轍（v2.82 的 deadlock 來自雙方各自 +1 互相拒收）。</li>
+          <li>P1-5 dismissZombieRoom 順序對齊：同樣先 unsub + stopHeartbeat 再 await deleteRoom。</li>
+          <li>遞延項：lobby 期間 self-heartbeat 觸發的 onSnapshot 仍會走 handleRoomUpdate 重設 roomData（純 metadata 變動，無功能影響）— 留待 v3.35+ 再優化。雙端 createGame 不同步問題：兩端各自 createGame 後 startGame transaction 只有一方 commit，loser 端 local game 短暫使用 random shuffle 不同的初始牌庫順序，但 onSnapshot 立刻回來覆蓋為 winner 版本（含舊 snapshot 拒收保護），暫態不一致時間 &lt; 1 秒、無玩家可見的功能影響。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.33</span> heal-target picker 標題改通用「選擇目標寶可夢」</summary>
         <ul>
           <li>使用者回報：picker 標題寫「選擇回復的寶可夢」但實際很多情境並不是回復（進化、附能量、互換目標等）</li>

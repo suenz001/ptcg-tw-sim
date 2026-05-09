@@ -2055,11 +2055,46 @@
       dispatchSfxForAction(action, prevState, newState);
     }
 
-    if (mode === 'online' && roomCode) {
-      isSyncing = true;
-      try { await pushGameState(roomCode, newState); }
-      catch (e) { console.error('[Online] push failed:', e); }
-      finally { isSyncing = false; }
+    // v3.34 Fix #1：action 被 engine 拒絕（state 完全沒變）→ 不需 push，
+    //   否則會把同樣 state 推回 firestore、bump updatedAt 又夾在對手剛 push 的中間。
+    // v3.34 Fix #2：線上模式下，僅當「我是此 action 的合法 actor」才 push；
+    //   actor 認定 = pendingSelection.actorIdx === myPlayerIndex
+    //   或無 pending 時 activePlayerIndex === myPlayerIndex
+    //   或我是被擊倒方需補場（dIdx + active===null）。
+    //   防止對手回合中 UI race / 觀戰位點到隱藏按鈕 / pendingPrize owner 寫入時
+    //   把對方權威 state 覆蓋。pendingPrize 由 owner 取（與 activePlayer 無關），
+    //   故額外允許 pendingPrizes[myPlayerIndex] > 0 時推送。
+    if (newState !== prevState && mode === 'online' && roomCode) {
+      const canIPush = (() => {
+        if (myPlayerIndex === null) return false; // 觀戰位永遠不推
+        if (newState.pendingSelection) {
+          // 既有 selection 由其 actor 推；我消化完 (newState 的 pending 變了/消失) 也算我推
+          return prevState.pendingSelection?.actorIdx === myPlayerIndex
+              || newState.pendingSelection.actorIdx === myPlayerIndex;
+        }
+        if (prevState.pendingSelection) {
+          // 剛消化完別人的 selection？理論上不會（actor gate），保險：只有自己才放行
+          return prevState.pendingSelection.actorIdx === myPlayerIndex;
+        }
+        // 取獎賞（pendingPrize owner）
+        if ((prevState.pendingPrizes?.[myPlayerIndex] ?? 0) > 0) return true;
+        // 防守方補場
+        if (prevState.players[myPlayerIndex].active === null
+            && prevState.phase === 'playing') return true;
+        // 一般情況：當前活動玩家
+        return prevState.activePlayerIndex === myPlayerIndex;
+      })();
+      if (canIPush) {
+        isSyncing = true;
+        try { await pushGameState(roomCode, newState); }
+        catch (e) { console.error('[Online] push failed:', e); }
+        finally { isSyncing = false; }
+      } else {
+        console.warn('[Online] dispatch suppressed push (not my turn / actor mismatch):',
+          action.type, { myPlayerIndex,
+                         active: prevState.activePlayerIndex,
+                         pendingActor: prevState.pendingSelection?.actorIdx });
+      }
     }
   }
 
@@ -2307,10 +2342,11 @@
     if (!confirm('確定要解散此房間嗎？\n\n偵測到對方已離線超過 5 分鐘，房間將被刪除，雙方都會回到大廳。')) return;
     onlineLoading = true;
     try {
-      await deleteRoom(roomCode);
-      stopHeartbeat();
+      // v3.34 Fix #5：先 unsub + stopHeartbeat，再 await deleteRoom；對齊 leaveOnlineGame 順序
       unsubRoom?.(); unsubRoom = null;
       unsubMessages?.(); unsubMessages = null;
+      stopHeartbeat();
+      await deleteRoom(roomCode);
       game = null; roomCode = ''; roomData = null;
       onlineStep = 'choose';
       mode = null;
@@ -2345,9 +2381,21 @@
     mySeatIdx = idx;
     myPlayerIndex = (idx === 0) ? 0 : (idx === 1) ? 1 : null;
 
-    // 兩邊收到 gameState → 更新畫面
+    // v3.34 Fix #4：playing 期間防舊 snapshot 倒退本地。
+    //   incoming.log.length < local.log.length 視為舊 snapshot（含「我自己 push 後
+    //   firestore echo 回來但對手剛好夾入更舊的寫」這種 race window）。
+    //   只擋 strictly less，不擋等於，避免 v2.82 _syncSeq deadlock 重演。
+    //   v2.83 已用「playing 期間停心跳」減少 race；本條為最終防線。
     if (room.gameState) {
-      game = room.gameState;
+      const incoming = room.gameState;
+      if (game && game.phase === 'playing'
+          && incoming.phase === 'playing'
+          && (incoming.log?.length ?? 0) < (game.log?.length ?? 0)) {
+        console.warn('[Online] reject stale snapshot:',
+          { incomingLen: incoming.log?.length, localLen: game.log?.length });
+        return;
+      }
+      game = incoming;
       return;
     }
 
@@ -2413,14 +2461,16 @@
   }
 
   async function leaveOnlineGame() {
-    // v2.274：先從 Firestore 移除自己的座位（不阻擋；失敗也繼續清 client state）
+    // v3.34 Fix #3：先 unsubRoom 阻斷 onSnapshot callback，再 stopHeartbeat，
+    //   最後 await leaveRoom；避免 await 期間 firestore snapshot 仍 fire
+    //   handleRoomUpdate → 把 game 重新填回（或誤判房間不存在跳到 onlineError）。
+    unsubRoom?.(); unsubRoom = null;
+    unsubMessages?.(); unsubMessages = null;
+    stopHeartbeat();
     if (roomCode) {
-      stopHeartbeat();
       try { await leaveRoom(roomCode); }
       catch (e) { console.warn('[leaveRoom] failed:', e); }
     }
-    unsubRoom?.(); unsubRoom = null;
-    unsubMessages?.(); unsubMessages = null;
     chatMessages = []; chatInput = '';
     game = null; roomCode = ''; roomData = null;
     onlineStep = 'choose'; onlineError = ''; myPlayerIndex = null; mySeatIdx = -1;
