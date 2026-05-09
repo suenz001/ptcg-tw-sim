@@ -187,12 +187,15 @@ export function hasRocketVeil(
   return false;
 }
 
-/** v2.57：判斷 targetCard 是「基礎」且名稱含「火箭隊的」— 抵抗之幕保護對象 */
+/** v2.57：判斷 targetCard 是「基礎」且名稱含「火箭隊的」— 抵抗之幕保護對象
+ * v3.46：原 subtype === 'Basic' 會誤排除 subtype='ex' 的基礎卡（如火箭隊的超夢ex）。
+ *        改用 PTCG 標準基礎判定（!evolvesFrom 且非 Stage1/Stage2）。 */
 export function isRocketBasicTarget(targetCard: Card | undefined): boolean {
   if (!targetCard) return false;
-  // 基礎寶可夢：subtype === 'Basic'（不含 Stage1/Stage2/Mega 等）
-  if (targetCard.subtype !== 'Basic') return false;
-  // 名稱含「火箭隊的」（火箭隊的急凍鳥、火箭隊的超夢ex、火箭隊的操陷蛛 等）
+  if (targetCard.supertype !== 'Pokemon') return false;
+  if (targetCard.subtype === 'Stage1' || targetCard.subtype === 'Stage2') return false;
+  if (targetCard.subtype === 'Other') return false;
+  if (targetCard.evolvesFrom) return false;
   return targetCard.name.includes('火箭隊的');
 }
 
@@ -1316,7 +1319,10 @@ regPost('謎擬Q|呼朋引伴', (state, aIdx, pool) => {
   // v2.993：卡面寫「選擇 1 張」mandatory；若牌庫無基礎寶可夢則允許 Pass
   const hasBasic = player.deck.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card?.subtype === 'Basic';
+    // v3.46：PTCG 基礎寶可夢判定（含 ex 等）
+    if (card?.supertype !== 'Pokemon') return false;
+    if (card.subtype === 'Stage1' || card.subtype === 'Stage2' || card.subtype === 'Other') return false;
+    return !card.evolvesFrom;
   });
   let s = addLog(state, '呼朋引伴：從牌庫選 1 隻基礎寶可夢放備戰', aIdx);
   return withPending(s, {
@@ -3752,7 +3758,11 @@ regPre('奇麒麟|中級轟鳴', (state, aIdx, pool) => {
 
 // 投擲猴｜聯合投擲 — 自己場上【基礎】寶可夢數 × 20
 regPre('投擲猴|聯合投擲', (state, aIdx, pool) => {
-  const n = countOwnPokemon(state, aIdx, pool, c => c.subtype === 'Basic');
+  // v3.46：PTCG 基礎寶可夢判定（含 ex 等）
+  const n = countOwnPokemon(state, aIdx, pool, c => {
+    if (c.subtype === 'Stage1' || c.subtype === 'Stage2' || c.subtype === 'Other') return false;
+    return !c.evolvesFrom;
+  });
   return { state, damage: n * 20 };
 });
 
@@ -7960,9 +7970,13 @@ function defCantAttackIfSubtypePost(
     if (!def) return state;
     const card = pool.get(def.cardId);
     if (!card) return state;
+    // v3.46：PTCG 基礎判定含 ex 等變體
+    const isPtcgBasic = card.supertype === 'Pokemon'
+      && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && card.subtype !== 'Other'
+      && !card.evolvesFrom;
     const matches =
       cond === 'basic'
-        ? card.subtype === 'Basic'
+        ? isPtcgBasic
         : (card.subtype === 'Stage1' || card.subtype === 'Stage2');
     if (!matches) {
       return addLog(state, `${label}：對手不符合條件（${cond === 'basic' ? '基礎' : '進化'}寶可夢），無附加效果`, aIdx);

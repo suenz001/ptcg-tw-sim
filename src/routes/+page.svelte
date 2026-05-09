@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.46</span> 🔥 hotfix：「基礎寶可夢」判定誤用 subtype 排除 ex（4 處全面修補）</summary>
+        <ul>
+          <li>玩家回報：火箭隊的超夢ex 是基礎寶可夢，應受火箭隊的急凍鳥「抵抗之幕」保護不受對手招式效果影響，但系統沒擋。</li>
+          <li>根因：PTCG「基礎寶可夢」= <code>stage='Basic'</code>（不論 subtype 是 Basic / ex / V / GX）。但 codebase 4 處用 <code>subtype === 'Basic'</code> 判定，會誤排除 subtype='ex' 的所有 ex 基礎（火箭隊的超夢ex / 雷吉艾斯ex / 厄鬼椪 碧草面具ex 等）。</li>
+          <li>修補 4 處（全部改用 PTCG 標準：supertype='Pokemon' 且非 Stage1&#47;Stage2&#47;Other 且 !evolvesFrom）：</li>
+          <li>① <code>isRocketBasicTarget</code>（effects.ts L194） — 火箭隊的急凍鳥「抵抗之幕」保護對象；原 bug 讓火箭隊的超夢ex 暴露在對手招式效果下。</li>
+          <li>② <b>謎擬Q｜呼朋引伴</b>（L1319） — 牌庫搜「基礎寶可夢」放備戰；原 bug 讓 ex 基礎搜不出來。</li>
+          <li>③ <b>投擲猴｜聯合投擲</b>（L3755） — 自己場上【基礎】寶可夢數 × 20 傷害；原 bug 讓 ex 基礎沒計入。</li>
+          <li>④ 招式 cond=&#39;basic&#39; 對手戰鬥場判定（L7965） — 原 bug 讓對手 ex 基礎被誤判為非基礎，招式效果不生效。</li>
+          <li>未動：能量 filter 用 <code>subtype === 'Basic'</code>（基本能量定義 vs Special 能量），這是正確用法。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.45</span> 🔥 hotfix：急進開關能量轉移實裝（卡面有效果但程式漏做）</summary>
         <ul>
           <li>玩家回報：急進開關沒做出 UI 選單讓玩家選擇能量轉移，這部分沒實裝。</li>
