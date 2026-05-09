@@ -992,7 +992,12 @@ export function canAffordAttack(
 
   // v2.113 稜鏡/新衝天能量的「任意屬性」types — 當附於對應 stage 時所有顏色可付
   const ALL_TYPES: EnergyType[] = ['Grass', 'Fire', 'Water', 'Lightning', 'Psychic', 'Fighting', 'Darkness', 'Metal', 'Dragon', 'Colorless'];
-  const isStage2 = pokeStage === 'Stage2';
+  // v3.30：超級進化寶可夢 ex（Mega ex）視為 Stage 2 — 卡片在 PTCG 規則上算 2 階進化
+  //   範例：超級寶石海星ex（JSON 的 stage 是 'Stage1' 但 evolvesFrom 海星星 直接 Mega 進化）
+  //   附 1 水 + 1 新衝天 應該等於 1【水】+ 2 任意屬性 = 3 units（夠付 3C 的星雲光束）
+  //   不加此判斷會把 Mega ex 當 Stage 1，新衝天只給 1 個 Colorless → 攻擊發動失敗
+  const isMegaEx = pokeCard?.name?.startsWith('超級') === true && pokeCard.name.endsWith('ex');
+  const isStage2 = pokeStage === 'Stage2' || isMegaEx;
 
   // 收集所有附加能量的「單位」
   const units: EnergyUnit[] = [];

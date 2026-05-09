@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.30</span> hotfix — Mega ex 視為 Stage 2（新衝天能量 / 稜鏡能量）</summary>
+        <ul>
+          <li>使用者回報：超級寶石海星ex 附 1 水能 + 1 新衝天能量無法發動星雲光束（3C 招式）</li>
+          <li>根因：超級寶石海星ex 在 JSON 中 stage 標為 'Stage1'（evolvesFrom 海星星 Basic），但 PTCG 規則 Mega 寶可夢視為 2 階進化。引擎用 pokeStage === 'Stage2' 判斷新衝天能量是否視為 2 個任意屬性 → Mega ex 被當 Stage 1 → 新衝天只給 1 個 Colorless → 1 水 + 1C = 2 units 不夠 3C cost</li>
+          <li>修法：engine.ts 第 995 行 isStage2 加 Mega 偵測（name 以「超級」開頭 + 'ex' 結尾），與既有 prizesForKO（line 1067-1071）的 Mega 判斷一致</li>
+          <li>影響範圍：所有附新衝天能量到「超級XXXex」的場景；超級寶石海星ex / 超級呆殼獸ex / 超級噴火駝ex / 超級路卡利歐ex / 超級暴雪王ex / 超級雷電獸ex（JSON 標 Stage1 的 6 張 Mega ex）受惠</li>
+          <li>稜鏡能量同理變更（pokeStage 判定路徑相同）— Mega ex 上稜鏡視為「非基礎」也能正確給 1 個任意屬性</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.29</span> 雷伊布ex 閃光尖矛 改 picker（最後 1 張 deferred 解除）</summary>
         <ul>
           <li>v3.10 起 deferred — 卡面「若希望，棄最多 2 張自方備戰基本能量」原為自動棄到上限</li>
