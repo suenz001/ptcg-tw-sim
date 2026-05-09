@@ -340,7 +340,7 @@
   }
 
   // 取「active 可選動作」list
-  function activeActions(): Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean }> {
+  function activeActions(): Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean; zoomIid?: string }> {
     if (!myPlayer.active) return [];
     const out: Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean }> = [];
     const aId = myPlayer.active.iid;
@@ -364,6 +364,8 @@
         out.push({
           label: `🔄 撤退${costLabel} → ${c?.name ?? '?'}`,
           action: () => retreatTo(b.iid),
+          // v3.32 撤退選項加 zoomIid，UI 顯示 🔍 副按鈕讓玩家先看備戰寶可夢狀態
+          zoomIid: b.iid,
         });
       });
     }
@@ -665,7 +667,19 @@
           <div class="mp-sheet-empty">本回合無可執行動作</div>
         {/if}
         {#each acts as a}
-          <button class="mp-sheet-btn" class:primary={a.primary} disabled={a.disabled} onclick={a.action}>{a.label}</button>
+          {#if a.zoomIid}
+            <!-- v3.32 撤退類項目：主按鈕 + 🔍 zoom 副按鈕 -->
+            <div class="mp-sheet-row">
+              <button class="mp-sheet-btn mp-sheet-btn-flex" class:primary={a.primary} disabled={a.disabled} onclick={a.action}>{a.label}</button>
+              <button class="mp-sheet-zoom" title="放大檢視" onclick={() => {
+                closeSheet();
+                const inst = [...(myPlayer.active ? [myPlayer.active] : []), ...myPlayer.bench].find(x => x.iid === a.zoomIid);
+                if (inst) onOpenZoom(inst.cardId, inst);
+              }}>🔍</button>
+            </div>
+          {:else}
+            <button class="mp-sheet-btn" class:primary={a.primary} disabled={a.disabled} onclick={a.action}>{a.label}</button>
+          {/if}
         {/each}
       {:else if sheet.type === 'bench'}
         {@const acts = benchActions(sheet.inst)}
@@ -1074,6 +1088,28 @@
     text-align: left;
     cursor: pointer;
   }
+
+  /* v3.32 sheet row（主按鈕 + 副 zoom 按鈕並排） */
+  .mp-sheet-row {
+    display: flex; gap: 6px; margin: 0 0 6px 0;
+  }
+  .mp-sheet-row .mp-sheet-btn {
+    flex: 1;
+    margin: 0;
+  }
+  .mp-sheet-zoom {
+    flex: 0 0 auto;
+    width: 44px;
+    background: rgba(80, 60, 100, 0.85);
+    color: #f0f0f0;
+    border: 1px solid #5a4a7a;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1.05rem;
+    padding: 0;
+  }
+  .mp-sheet-zoom:hover { background: rgba(100, 80, 130, 0.95); }
+  .mp-sheet-zoom:active { background: rgba(60, 40, 80, 0.95); }
   .mp-sheet-btn.primary {
     background: linear-gradient(180deg, #3a8a3a, #2a6a2a);
     border-color: #4a8a4a;

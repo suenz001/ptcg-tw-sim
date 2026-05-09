@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.32</span> 手機版撤退選項加 🔍 放大鏡按鈕</summary>
+        <ul>
+          <li>使用者回報：手機版戰鬥寶可夢動作底部 sheet 內，撤退選項只有純文字按鈕，無法先看備戰寶可夢身上能量/狀態</li>
+          <li>桌機版的浮動撤退選單早已有 🔍 副按鈕（line 4584-4586），用法是「點放大鏡查看 → 點本體確定撤退」</li>
+          <li>修法：手機版 sheet 內每個撤退選項擴展為「主按鈕（撤退）+ 🔍 副按鈕（放大檢視）」並排版面，副按鈕點擊呼叫 onOpenZoom</li>
+          <li>同時加 .mp-sheet-row / .mp-sheet-zoom CSS 配合新版面</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.31</span> revert — 還原 v3.30 Mega ex 視為 Stage 2 的誤修</summary>
         <ul>
           <li>用戶後續澄清：自己原本是把超級寶石海星ex 誤認成 2 階進化寶可夢，實際 JSON stage='Stage1' 是正確的</li>
