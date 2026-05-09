@@ -22,7 +22,12 @@ export const GameActions = {
                        ({
                          type: 'ATTACK',
                          attackIndex,
-                         ...(discardedEnergyIids && discardedEnergyIids.length > 0 && { discardedEnergyIids }),
+                         // v3.28 修 bug：原本寫 `&& discardedEnergyIids.length > 0` 會把空陣列丟掉
+                         //   結果 binary-yes-no 的「否」傳 [] 序列化後變 undefined → engine 端
+                         //   AI fallback 把它當 yes → 強制丟棄能量。改用「!== undefined」區分：
+                         //   - undefined（沒傳）→ engine 走 AI fallback
+                         //   - [] / [...] 都保留 → engine 用 length 區分 yes/no
+                         ...(discardedEnergyIids !== undefined && { discardedEnergyIids }),
                          ...(copyAttackChoice && { copyAttackChoice }),
                        }),
   takePrizes:        (count: number, playerIdx: 0 | 1, senderIdx?: 0 | 1): GameAction =>

@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.28</span> hotfix — binary-yes-no「否」被誤判為 yes（嚴重 bug 影響 v3.26 全部 11 張）</summary>
+        <ul>
+          <li>使用者回報：超級雷電獸ex 狂暴噴射「保留能量」按鈕 點下去能量還是被丟棄</li>
+          <li>根因：actions.ts attack action serializer 寫 <code>discardedEnergyIids &amp;&amp; discardedEnergyIids.length &gt; 0</code>，把長度 0 的空陣列當成「沒傳」吃掉。binary-yes-no 的「否」按鈕傳 <code>[]</code> 序列化後變 undefined → engine 端 AI fallback 把它當 yes → 強制丟棄能量</li>
+          <li>影響範圍：v3.26 全部 11 張用 binary-yes-no 的招式（狂暴噴射、刺殺迴旋、鼻之金勾臂、光芒強襲、叢林鞭打、粉碎重壓、災厄風暴、災難衝擊、光照燃燒、挖回 等）— 玩家「否」按鈕全部失效</li>
+          <li>修法：序列化條件改為 <code>discardedEnergyIids !== undefined</code> — 區分「沒傳」（AI fallback）vs「傳了空陣列」（明確選否）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.27</span> 閃光射線 修正 &#43; POST 預約招式 audit &#43; 4 張對手能量回手 picker 化</summary>
         <ul>
           <li><b>背景</b>：使用者點名超級雷電獸ex｜閃光射線 — v3.22 我把這張卡誤實裝為「下次被打 -100」（damageReduceNextHit），但卡面其實是「在下個對手的回合，這隻寶可夢不會受到【基礎】寶可夢招式的傷害」即<b>免疫</b>而非減傷。本波修正並順便 audit 同類「POST 預約招式效果」的實裝是否符合卡面語意。同步將 v3.26 標 deferred 的 4 張「對手能量回手」類招式做 picker 化。</li>
