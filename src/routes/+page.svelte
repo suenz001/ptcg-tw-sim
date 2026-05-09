@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.47</span> 🔥 hotfix：超級甲賀忍蛙ex「忍者飛旋」可放回特殊【水】能量（依 PTCG 官方 QA）</summary>
+        <ul>
+          <li>玩家提供 PTCG 官方網站 QA 兩則：忍者飛旋可以將附加在超級甲賀忍蛙ex身上的「新衝天能量」、「泡沫【水】能量」放回手牌。</li>
+          <li>確認卡面：超級甲賀忍蛙ex「忍者飛旋」120+「若希望，將 1 個這隻寶可夢身上附加的【水】能量放回手牌，增加 80 點傷害」。</li>
+          <li>根因：six_decks.ts L262 的 <code>isWater</code> 判定限定 <code>subtype === 'Basic'</code>，跳過所有特殊能量 → 泡沫【水】能量、新衝天能量都被誤判為「不是水能量」。</li>
+          <li>修法：改寫 <code>isWater</code> 判定，與 engine.ts <code>countEnergy</code> 的 host-aware 邏輯一致：<br/>① 基本【水】能量：yes <br/>② 特殊能量名稱含【水】（如泡沫【水】能量）：yes <br/>③ 新衝天能量 + host 是 Stage2（超級甲賀忍蛙ex 是 Stage2 進化）：yes（視為所有屬性含水）<br/>④ 稜鏡能量 + host 是 Evolution：no（只提供【無】）</li>
+          <li>影響：超級甲賀忍蛙ex 配新衝天能量 / 泡沫【水】能量現在能正確觸發忍者飛旋 +80 傷害（200 總傷）效果，符合官方 QA。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.46</span> 🔥 hotfix：「基礎寶可夢」判定誤用 subtype 排除 ex（4 處全面修補）</summary>
         <ul>
           <li>玩家回報：火箭隊的超夢ex 是基礎寶可夢，應受火箭隊的急凍鳥「抵抗之幕」保護不受對手招式效果影響，但系統沒擋。</li>

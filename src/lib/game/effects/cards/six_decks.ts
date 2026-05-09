@@ -259,11 +259,35 @@ regPre('超級甲賀忍蛙ex|忍者飛旋', (state, aIdx, pool, action) => {
     return { state: addLog(state, '忍者飛旋：選擇的能量不在攻擊方身上 → 120 傷害', aIdx), damage: 120 };
   }
   const ec = pool.get(chosenEnergy.cardId);
-  const isWater = ec?.supertype === 'Energy' && ec?.subtype === 'Basic'
-    && (ec.pokemonType === 'Water' || /【水】/.test(ec.name));
+  // v3.47：判定「該能量是否視為提供【水】能量」— 含 host-aware 特殊能量處理（官方 QA 確認可放回）。
+  //   - 基本【水】能量：直接 yes
+  //   - 泡沫【水】能量（特殊，提供 1【水】）：yes
+  //   - 新衝天能量（特殊）：on Stage2 視為所有屬性 → yes（超級甲賀忍蛙ex 是 Stage2）
+  //   - 稜鏡能量（特殊）：on Basic 視為所有屬性、on Evolution 只【無】 → 超級甲賀忍蛙ex 是 Evolution，不算【水】
+  //   邏輯與 engine.ts countEnergy 一致。
+  let isWater = false;
+  if (ec?.supertype === 'Energy') {
+    if (ec.subtype === 'Basic') {
+      isWater = ec.pokemonType === 'Water' || /【水】/.test(ec.name);
+    } else if (ec.subtype === 'Special') {
+      if (ec.name === '新衝天能量') {
+        const hostCard = pool.get(active.cardId);
+        const hostStage = hostCard?.stage ?? hostCard?.subtype;
+        isWater = hostStage === 'Stage2';
+      } else if (ec.name === '稜鏡能量') {
+        const hostCard = pool.get(active.cardId);
+        const hostStage = hostCard?.stage ?? hostCard?.subtype;
+        const hostIsEvolution = hostStage === 'Stage1' || hostStage === 'Stage2' || !!hostCard?.evolvesFrom;
+        isWater = !hostIsEvolution;
+      } else {
+        // 一般特殊能量：名稱含【水】或登記表提供 Water（泡沫【水】能量等）
+        isWater = /【水】/.test(ec.name);
+      }
+    }
+  }
   if (!isWater) {
     return {
-      state: addLog(state, `忍者飛旋：${ec?.name ?? '?'} 不是【水】能量（未觸發 +80）→ 120 傷害`, aIdx),
+      state: addLog(state, `忍者飛旋：${ec?.name ?? '?'} 不視為【水】能量（未觸發 +80）→ 120 傷害`, aIdx),
       damage: 120,
     };
   }
