@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.41</span> iPad 10.5 留白吃掉 — 放大場上卡片、手牌、加寬 log 區</summary>
+        <ul>
+          <li>玩家回報：v3.40 改完 bench 格數但視覺感覺不到改善，希望「利用空位縮小，把場上的牌或手牌變大一點，或是把戰鬥敘述 log 留多一點」。</li>
+          <li>根因：iPad 10.5 與 1366×768 走 <code>.battle-root.tablet-layout</code> 模式，這個模式為了避免在小螢幕「卡牌跑出視窗」刻意把 active-img / bench-slot / hand-card 的 max-height/width 限制得很保守，但這在 iPad 10.5（gameZoom 81%）上反而讓場景看起來空蕩。</li>
+          <li>修法：把 tablet-layout 的卡牌尺寸普遍放大 20-35%，把節省下來的橫向空間加給 log 區。</li>
+          <li>戰鬥場 active-img：max-height 110→150px、max-width 80→115px；active-card min-height 120→160px。</li>
+          <li>備戰 bench-slot：高度 135→175px、img max-height 80→115px。</li>
+          <li>手牌 hand-card：寬度 76→96px、img 72→92px、hand-scroll min-height 120→150px。</li>
+          <li>戰鬥 log：log-col 寬度 280→360px（多容納 ~30% 橫排訊息，省捲動）。</li>
+          <li>不動 layout 結構，不重排 zone 順序 — 玩家視覺記憶不受影響。</li>
+          <li>桌面 ≥1366px 大解析度走非 tablet 路徑，本版不影響。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.40</span> iPad 10.5 layout 保守優化 — bench 格 N+1 自適應 + active 上下置中</summary>
         <ul>
           <li>玩家回報：iPad 10.5 吋橫向 layout 中央留白過大，主因是 bench 永遠固定 5 格，即使對手只擺 1 隻也撐出 4 個空格。</li>

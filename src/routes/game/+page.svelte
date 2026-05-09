@@ -5972,41 +5972,42 @@
     min-height: 0; overflow: hidden; padding: 0.2rem 0.4rem;
   }
   
+  /* v3.41：放大場上卡填滿 iPad 10.5 / 1366×768 留白 */
   :global(.battle-root.tablet-layout .active-card) {
-    min-height: 120px; padding: 0.25rem 0.35rem; gap: 0.2rem;
+    min-height: 160px; padding: 0.3rem 0.4rem; gap: 0.3rem;
   }
   :global(.battle-root.tablet-layout .active-card.active-empty) {
-    min-height: 110px; padding: 0.5rem;
+    min-height: 150px; padding: 0.6rem;
   }
   :global(.battle-root.tablet-layout .active-img) {
-    max-height: 110px; max-width: 80px; object-fit: contain;
+    max-height: 150px; max-width: 115px; object-fit: contain;
   }
   
   :global(.battle-root.tablet-layout .bench-slot) {
-    height: 135px;
+    height: 175px;
   }
   :global(.battle-root.tablet-layout .bench-slot img) {
-    max-height: 80px;
+    max-height: 115px;
   }
   
   :global(.battle-root.tablet-layout .action-bar) {
     height: 125px; min-height: 0; max-height: none; padding: 0.2rem 0.4rem;
   }
   :global(.battle-root.tablet-layout .log-col) {
-    width: 280px;
+    width: 360px;
   }
   
   :global(.battle-root.tablet-layout .hand-strip) {
     padding: 0.15rem 0.4rem 0.2rem;
   }
   :global(.battle-root.tablet-layout .hand-scroll) {
-    padding: 8px 0.6rem 5px; min-height: 120px;
+    padding: 10px 0.7rem 7px; min-height: 150px;
   }
   :global(.battle-root.tablet-layout .hand-card) {
-    width: 76px; padding: 0.2rem; gap: 0.1rem;
+    width: 96px; padding: 0.25rem; gap: 0.15rem;
   }
   :global(.battle-root.tablet-layout .hand-card img) {
-    width: 72px;
+    width: 92px;
   }
   
   /* Stadium card needs to be shrunk so it doesn't overflow the 125px action bar */
