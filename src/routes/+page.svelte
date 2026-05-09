@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.42</span> 🔥 hotfix：連線對戰對手起手無基礎寶可夢時，補抽 modal 不顯示</summary>
+        <ul>
+          <li>玩家回報：連線對戰時，A 玩家起手無基礎寶可夢重抽多次後，B 玩家（應該收到補抽補償）畫面不會跳出「決定多抽 N 張」的 modal。</li>
+          <li>根因：兩個 bug 互相加乘。</li>
+          <li><b>Bug 1（v3.34 task #171 已知 P1）</b>：<code>checkAndStartOnlineGame</code> 雙端各自 <code>createGame()</code> 用不同 random seed → A 端洗牌 A 起手沒基礎需重抽 → A 端 <code>pendingMulliganDraw=[0, m1]</code>；B 端洗牌兩邊都正常 → B 端 <code>pendingMulliganDraw=[0, 0]</code>。Firestore transaction 只接受其中一方為 source of truth。</li>
+          <li><b>Bug 2（v3.39 引入）</b>：setup 階段 per-player merge 為了防雙方擺寶可夢互覆，保留本地 <code>pendingMulliganDraw[me]</code>。但本地是 race loser 時，這個保留就是錯的 — B 永遠保留自己的 0，看不到 modal。</li>
+          <li>修法：<code>handleRoomUpdate</code> 在所有 stale check &#47; setup merge 之前先比對 <code>game.id !== incoming.id</code>。雙端 createGame 產生不同 id，loser 端發現 id 不一致時直接全套用 incoming，採納 firestore winner 版本作為 server-authoritative state。同一 game.id 內後續才走 setup per-player merge。</li>
+          <li>影響：解決 mulligan modal 不出現、雙端 setup 從不同初始 state 開始等所有 createGame race 後遺症。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.41</span> iPad 10.5 留白吃掉 — 放大場上卡片、手牌、加寬 log 區</summary>
         <ul>
           <li>玩家回報：v3.40 改完 bench 格數但視覺感覺不到改善，希望「利用空位縮小，把場上的牌或手牌變大一點，或是把戰鬥敘述 log 留多一點」。</li>

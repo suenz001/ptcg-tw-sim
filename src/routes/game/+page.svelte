@@ -2410,6 +2410,20 @@
     //   v2.83 已用「playing 期間停心跳」減少 race；本條為最終防線。
     if (room.gameState) {
       const incoming = room.gameState;
+      // v3.42 Fix：雙端各自 createGame 產生不同 GameState.id（task #171 已知 race）。
+      //   firestore startGame transaction 只接受其中一方版本（commit winner），
+      //   另一方仍持有自己 createGame 的本地版本（loser）。
+      //   v3.39 引入的 setup per-player merge 在「本地與 incoming id 不同」時會錯誤保留
+      //   loser 自己那側的 pendingMulliganDraw / players / setupDone（永遠看不到對手的
+      //   重抽懲罰補抽 modal、雙端不一致）。
+      //   修法：先比對 game.id；不同就全套用 incoming（採用 firestore winner 版本），
+      //   讓本地完全接受 server-authoritative state，再讓後續操作走 setup merge。
+      if (game && game.id !== incoming.id) {
+        console.log('[Online] adopting firestore gameState (createGame race resolved):',
+          { localId: game.id, incomingId: incoming.id });
+        game = incoming;
+        return;
+      }
       if (game && game.phase === 'playing'
           && incoming.phase === 'playing'
           && (incoming.log?.length ?? 0) < (game.log?.length ?? 0)) {
