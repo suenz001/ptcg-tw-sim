@@ -418,7 +418,7 @@ regPre('巨炭山|瀝青加農炮', (state, aIdx, pool) => {
   let fightEnergyCount = 0;
   for (const c of p.discard) {
     const card = pool.get(c.cardId);
-    if (card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Fighting') fightEnergyCount++;
+    if (card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Fighting' || card.name.includes('【鬥】'))) fightEnergyCount++;
   }
   if (fightEnergyCount < 10) {
     return { state: addLog(state, `瀝青加農炮：棄牌區基本鬥能量僅 ${fightEnergyCount} 張 < 10 → 招式失敗`, aIdx), damage: 0 };
@@ -430,7 +430,7 @@ regPost('巨炭山|瀝青加農炮', (state, aIdx, pool) => {
   let fightEnergyCount = 0;
   for (const c of p.discard) {
     const card = pool.get(c.cardId);
-    if (card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Fighting') fightEnergyCount++;
+    if (card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Fighting' || card.name.includes('【鬥】'))) fightEnergyCount++;
   }
   if (fightEnergyCount < 10) return state;
   // 選對手 1 隻寶可夢（含戰鬥場）

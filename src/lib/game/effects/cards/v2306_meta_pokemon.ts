@@ -36,7 +36,7 @@ regA('厄鬼椪 碧草面具ex', 0, (state, aIdx, pool, inst) => {
   const p = state.players[aIdx];
   const hasGrass = p.hand.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && card.pokemonType === 'Grass';
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && (card.pokemonType === 'Grass' || card.name.includes('【草】'));
   });
   if (!hasGrass) return addLog(state, '碧綠之舞：手牌沒有基本【草】能量，無法使用', aIdx);
   let s = addLog(state, '厄鬼椪 碧草面具ex：使用特性「碧綠之舞」，選擇手牌的 1 張基本【草】能量', aIdx);
@@ -127,7 +127,7 @@ regA('妖火紅狐', 0, (state, aIdx, pool, inst) => {
   const p = state.players[aIdx];
   const hasFire = p.hand.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && card.pokemonType === 'Fire';
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && (card.pokemonType === 'Fire' || card.name.includes('【火】'));
   });
   if (!hasFire) return addLog(state, '閃焰魔法：手牌沒有基本【火】能量，無法使用', aIdx);
   const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);

@@ -555,7 +555,7 @@ regPost('赤面龍|龍之猛暴', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const fireBasics = p.discard.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Fire';
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Fire' || card.name.includes('【火】'));
   });
   if (fireBasics.length === 0) return addLog(state, '龍之猛暴：棄牌區無基本火能量', aIdx);
   // 簡化：自動附給戰鬥場（若戰鬥場是 Dragon 才行）
@@ -583,7 +583,7 @@ regPre('蜜集大蛇|大蛇吐息', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const grassBasics = p.hand.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Grass';
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Grass' || card.name.includes('【草】'));
   });
   if (grassBasics.length < 6) {
     return { state: addLog(state, `大蛇吐息：手牌基本草能量 ${grassBasics.length} 張 < 6 → 招式失敗`, aIdx), damage: 0 };

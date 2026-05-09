@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.44</span> 🔥 hotfix：基本能量 pokemonType=null 全面修補（雷吉充能等 13 處）</summary>
+        <ul>
+          <li>玩家回報：雷吉充能顯示「棄牌區無水能量」但棄牌區明明有 2 張基本水能量。</li>
+          <li>根因：基本能量卡 JSON 的 <code>pokemonType</code> 欄位是 <b>null</b>（不是 'Water'），屬性必須從卡名 <code>【水】</code> 等 parse。但 codebase 13 處只查 <code>card.pokemonType === 'Water'</code> 沒做 fallback → 永遠回空陣列。</li>
+          <li>修法：每處加 <code>|| card.name.includes('【X】')</code> fallback，與 engine.ts 既有 <code>isBasicEnergyOfType()</code> 同步。</li>
+          <li>受影響檔案：engine.ts L6355 (Lightning) &#47; effects.ts L7097, 7108, 7314, 7594, 10324, 10386 (Grass &#47; Metal &#47; Darkness &#47; Lightning) &#47; v2306_meta_pokemon.ts (Grass, Fire) &#47; v2353_j_mark_batch.ts (雷吉充能 typeFilter) &#47; v2380_j_attacks_batch.ts &#47; v2401_i_wave2 &#47; v2650_i_wave15 (Fighting) &#47; v2660_i_wave16 (Fire, Grass)。</li>
+          <li>影響範圍：所有「從棄牌區搜基本【XX】能量」類效果之前都失效。雷吉充能（水/鋼）、寶石海星類牌組、阿響的火爆獸 setup、火焰雞多龍等都受影響。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.43</span> AI 強化：魔靈多龍 preset 牌組策略特製（斷頭線思維）</summary>
         <ul>
           <li>玩家要求：優化 AI 對戰，先處理魔靈多龍 preset 牌組的策略。</li>

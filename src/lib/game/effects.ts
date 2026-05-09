@@ -7131,7 +7131,7 @@ regPre('狙射樹梟|強力射擊', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const hasGrassEnergy = p.hand.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Grass';
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Grass' || card.name.includes('【草】'));
   });
   if (!hasGrassEnergy) {
     return { state: addLog(state, '強力射擊：手牌無基本草能量，招式失敗', aIdx), damage: 0 };
@@ -7142,7 +7142,7 @@ regPost('狙射樹梟|強力射擊', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const gidx = p.hand.findIndex(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Grass';
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Grass' || card.name.includes('【草】'));
   });
   if (gidx < 0) return state;
   const energy = p.hand[gidx];
@@ -7348,7 +7348,7 @@ regPost('噗隆隆|金屬塗層', (state, aIdx, pool) => {
   if (!p.active) return addLog(state, '金屬塗層：場上無戰鬥寶可夢', aIdx);
   const idx = p.discard.findIndex(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Metal';
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Metal' || card.name.includes('【鋼】'));
   });
   if (idx < 0) return addLog(state, '金屬塗層：棄牌區沒有基本鋼能量', aIdx);
   const energy = p.discard[idx];
@@ -7628,7 +7628,7 @@ regPost('莫魯貝可|能量車輪', (state, aIdx, pool) => {
   const darkIids = p.active.energyAttached
     .filter(e => {
       const card = pool.get(e.cardId);
-      return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Darkness';
+      return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Darkness' || card.name.includes('【惡】'));
     })
     .map(e => e.iid);
   if (darkIids.length < 2) {
@@ -10358,7 +10358,7 @@ function overvoltAttackPost(label: string): AttackPostFn {
     // (2) 棄牌區基本雷能量候選
     const cand = s.players[aIdx].discard.filter(c => {
       const card = pool.get(c.cardId);
-      return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Lightning';
+      return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Lightning' || card.name.includes('【雷】'));
     });
     if (cand.length === 0) return addLog(s, `${label}：棄牌區無基本雷能量`, aIdx);
     // (3) 場上是否還有雷寶可夢
@@ -10420,7 +10420,7 @@ regA('三合一磁怪', 0, (st, aIdx, pool) => {
   // (2) 棄牌區基本【雷】能量候選
   const cand = s.players[aIdx].discard.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Lightning';
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Lightning' || card.name.includes('【雷】'));
   });
   if (cand.length === 0) return addLog(s, `${label}：棄牌區無基本雷能量`, aIdx);
   // (3) 場上是否還有雷寶可夢（self KO 後）

@@ -6352,7 +6352,7 @@ export function getUsableAbilities(
       if (ab.name === '過度放電') {
         const hasLightningE = player.discard.some(c => {
           const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && cc.pokemonType === 'Lightning';
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && (cc.pokemonType === 'Lightning' || cc.name.includes('【雷】'));
         });
         if (!hasLightningE) return;
         const field = [...(player.active ? [player.active] : []), ...player.bench];

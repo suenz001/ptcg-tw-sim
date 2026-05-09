@@ -158,7 +158,7 @@ function regiChargePost(
       return (
         card?.supertype === 'Energy' &&
         card.subtype === 'Basic' &&
-        card.pokemonType === typeFilter
+        (card.pokemonType === typeFilter || (typeText ? card.name.includes(typeText) : false))
       );
     });
     if (cand.length === 0) {
