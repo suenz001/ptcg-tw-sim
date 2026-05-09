@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.40</span> iPad 10.5 layout 保守優化 — bench 格 N+1 自適應 + active 上下置中</summary>
+        <ul>
+          <li>玩家回報：iPad 10.5 吋橫向 layout 中央留白過大，主因是 bench 永遠固定 5 格，即使對手只擺 1 隻也撐出 4 個空格。</li>
+          <li>修法 1（bench 自適應）：<code>Array(Math.max(5, ...))</code> → <code>Array(Math.max(Math.min(5, N+1), oppBenchLimit, 1))</code>。實擺 N 隻 + 1 個 drop placeholder（用於拖曳目標），上限 5（PTCG 規則），但保留 oppBenchLimit &gt; 5（零之大空洞 8 格）的擴展。對手只擺 1 隻 → 顯示 2 格，省下原本 3 格的留白。</li>
+          <li>修法 2（active 上下置中）：<code>.zone-active</code> 加 <code>align-self: center</code> 覆蓋 <code>.field-row</code> 的 <code>align-items: flex-end</code>，戰鬥寶可夢卡片從貼底改為上下置中對齊。</li>
+          <li>未動：active 左右位置 &#47; chip 位置 &#47; 獎勵位置 — 保留現有玩家熟悉的「獎勵在左、牌庫棄牌在右」配置，符合中文 PTCG 玩家既有習慣。</li>
+          <li>下個版本（v3.41 規劃）：參考實體賽事桌墊配置做大改 — 戰鬥場置中、備戰區水平置中、獎勵 2×3 縱向放角落、競技場固定中右。會先出 mock-up 草圖確認方向再動手。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.39</span> 🔥 hotfix：連線對戰 setup 階段無限重置 — 雙方擺寶可夢互覆 race</summary>
         <ul>
           <li><b>嚴重 bug</b>：玩家回報連線對戰卡在雙方擺寶可夢階段，無限重置，會一直把對方退回上一個擺放階段。</li>

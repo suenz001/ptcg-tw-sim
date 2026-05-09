@@ -3472,7 +3472,7 @@
         </div>
       </div>
       <div class="zone-bench" class:bench-extended={oppBenchLimit > 5}>
-        {#each Array(Math.max(5, oppBenchLimit, oppPlayer?.bench.length ?? 0)) as _, i}
+        {#each Array(Math.max(Math.min(5, (oppPlayer?.bench.length ?? 0) + 1), oppBenchLimit, 1)) as _, i}
           {#if oppPlayer?.bench[i]}
             {@const b=oppPlayer.bench[i]}{@const bc=getCard(b.cardId)}
             {#if oppHidden}
@@ -3824,7 +3824,7 @@
       </div>
 
       <div class="zone-bench" class:bench-extended={myBenchLimit > 5}>
-        {#each Array(Math.max(5, myBenchLimit, myPlayer?.bench.length ?? 0)) as _, i}
+        {#each Array(Math.max(Math.min(5, (myPlayer?.bench.length ?? 0) + 1), myBenchLimit, 1)) as _, i}
           {#if myPlayer?.bench[i]}
             {@const b=myPlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
             <div class="bench-slot"
@@ -5402,7 +5402,8 @@
     border-radius:4px; text-align:center; margin-bottom:.3rem;
   }
 
-  .zone-active{ flex-shrink:0; width:300px; display:flex; flex-direction:column; gap:0.2rem; }
+  /* v3.40：align-self: center 覆蓋 .field-row 的 align-items: flex-end，戰鬥場上下置中 */
+  .zone-active{ flex-shrink:0; width:300px; display:flex; flex-direction:column; gap:0.2rem; align-self:center; }
   .my-active-zone{ position:relative; }
   /* v2.45 Leon feedback：戰鬥場框大小固定，不因 tool/ability-used/status chip 出現而變長變短；
      min-height 170px 預留最壞情形（名字/HP bar/HP/能量/裝備/特性已用/狀態）。 */
