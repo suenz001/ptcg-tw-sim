@@ -264,6 +264,39 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.27</span> 閃光射線 修正 &#43; POST 預約招式 audit &#43; 4 張對手能量回手 picker 化</summary>
+        <ul>
+          <li><b>背景</b>：使用者點名超級雷電獸ex｜閃光射線 — v3.22 我把這張卡誤實裝為「下次被打 -100」（damageReduceNextHit），但卡面其實是「在下個對手的回合，這隻寶可夢不會受到【基礎】寶可夢招式的傷害」即<b>免疫</b>而非減傷。本波修正並順便 audit 同類「POST 預約招式效果」的實裝是否符合卡面語意。同步將 v3.26 標 deferred 的 4 張「對手能量回手」類招式做 picker 化。</li>
+          <li><b>1. 閃光射線 修正</b>（v2660_i_wave16_misc9.ts）：
+            <ul>
+              <li>原 v3.22 實裝：POST 設 <code>damageReduceNextHit&#61;100</code>（下回合被打 -100），語意錯誤（卡面是免疫而非減傷，且「-100」對 200&#43; 的招式仍會打中）。</li>
+              <li>v3.27 修正：改用既有 <code>immuneToBasicAttackNextTurn</code> flag（與 v2.101 鋁鋼橋龍｜塗層攻擊 同 pattern）。owner 的 END_TURN 自動 promote NextTurn &rarr; ThisTurn，對手回合攻擊時若 attacker.stage === 'Basic' 且 defender 持有此 flag &rarr; 傷害歸零（招式仍打出，其他 post 效果仍觸發，與卡面語意完全一致）。</li>
+              <li>nextOwnAttackPenalty 機制保留：仍服務黑魯加｜大聲咆哮 / 嘎啦嘎啦｜叫聲 / 超級火炎獅ex｜吠 / 仙子伊布ex｜魔法魅惑 / 菊草葉｜叫聲 / 捲捲耳｜撒嬌 / 布撥｜叫聲 / 象徵鳥｜反射壁 / 赫普的稚山雀｜恐怖視線（共 9 張卡面真為「-N 減傷」者）。</li>
+            </ul>
+          </li>
+          <li><b>2. POST 預約招式 audit</b>（掃描所有 regPost 內 NextTurn flag 設定）：
+            <ul>
+              <li>確認 9 張卡面為「-N 減傷」（damageReduceNextHit / nextOwnAttackPenalty）正確；</li>
+              <li>確認 7 張「coinHeadsSelfImmuneNextPost」用 <code>damageReduceNextHit&#61;9999</code> 等價於免疫（卡面只擋傷害不擋效果，目前實作符合）；</li>
+              <li>確認 4 張「免疫某類招式」（鋁鋼橋龍｜塗層攻擊、大嘴蝠｜隱密飛行、太樂巴戈斯ex｜皇冠蛋白石、裹蜜蟲｜塗層攻擊）已正確使用 <code>immuneToBasicAttackNextTurn</code>；</li>
+              <li>本波只改 1 張誤實裝（閃光射線），其餘 audit 結果為「實作與卡面一致」。</li>
+            </ul>
+          </li>
+          <li><b>3. 4 張對手能量回手 picker 化</b>（v3.26 deferred）：
+            <ul>
+              <li><b>高傲雉雞｜反轉之風</b>（effects.ts）：原 returnOppActiveEnergyPost(2) 自動取末端 2 張 &rarr; <code>active-energy-discard</code> picker（sourcePlayerIdx&#61;dIdx，minCount&#61;0，maxCount&#61;cap）&#43; 自訂 resolver 把選中能量放回對手手牌。</li>
+              <li><b>章魚桶｜水流清洗</b>（v2660）：原自動取末端 1 張 &rarr; picker（minCount&#61;0，maxCount&#61;1）。</li>
+              <li><b>帕底亞 肯泰羅｜上搗角擊</b>（v2760）：原自動取末端 2 張（gate：對手戰鬥場 &#61; Stage2）&rarr; picker（minCount&#61;0，maxCount&#61;cap）。</li>
+              <li><b>呆呆王｜付諸東流</b>（v2760）：原自動取末端 2 張 &rarr; picker（minCount&#61;0，maxCount&#61;cap）。</li>
+              <li>四張卡均加上 v3.08 美納斯｜平穩境地 阻擋 helper（_v3080OppHasMenasure / _v3080OppHasMenasureCG）— 對手場上有美納斯時 short-circuit 不開 picker、log 顯示「能量回手效果無效」。</li>
+              <li>minCount&#61;0 即實現「若希望」語意：玩家選 0 張即「不發動」。</li>
+            </ul>
+          </li>
+          <li><b>Iron Rule 遵守</b>：Rule 11 — 4 個既有檔（version.ts / effects.ts 711KB / v2660 / v2760）一律走 Python pipeline（HEAD blob &rarr; in-memory replace &rarr; safe_write &#43; fsync），驗證 disk size &#61; mem bytes &#43; 新增 marker count 正確。Rule 12 — 全部用 regPre / regPost / regR helper 註冊（_shared.ts 是 leaf module 無 TDZ 風險）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.26</span> 「若希望」棄能量類招式 audit &#43; fix（11 張）</summary>
         <ul>
           <li><b>背景</b>：使用者點名超級雷電獸ex｜狂暴噴射 / 火箭隊的超夢ex｜擦除球。經 audit JSON 卡面文字含「若希望」&#43; 棄能量／棄競技場／回手 等 26 張，逐一比對實裝後找出 11 張 bug（卡面為玩家可選，但實裝強制執行）。火箭隊的超夢ex｜擦除球已正確（ATTACK_PRE_DISCARD_CHOICE own-bench picker），不在本波。</li>

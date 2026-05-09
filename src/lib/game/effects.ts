@@ -6637,9 +6637,46 @@ regPost('鐵荊棘ex|伏特旋風', returnSelfActiveEnergyPost(1, false, '伏特
 regPre('鐵轍跡|路徑輪', (state, _aIdx, _pool) => ({ state, damage: 60 }));
 regPost('鐵轍跡|路徑輪', returnSelfActiveEnergyPost(1, false, '路徑輪'));
 
-// 7. 高傲雉雞|反轉之風 — 70 + 對手戰鬥寶可夢 2 張能量放回對手手牌
+// 7. 高傲雉雞|反轉之風 — 70 + 若希望，選擇 2 個對手戰鬥寶可夢身上的能量，放回對手手牌。
+// v3.27：原 returnOppActiveEnergyPost(2, ...) 為自動取末端 N 張（違反 Rule 7「若希望」必須玩家選）。
+//   改為 active-energy-discard picker（sourcePlayerIdx=dIdx + minCount=0 + 自訂 resolver 把能量放對手手）。
 regPre('高傲雉雞|反轉之風', (state, _aIdx, _pool) => ({ state, damage: 70 }));
-regPost('高傲雉雞|反轉之風', returnOppActiveEnergyPost(2, '反轉之風'));
+regPost('高傲雉雞|反轉之風', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const da = state.players[dIdx].active;
+  if (!da || da.energyAttached.length === 0) return addLog(state, '反轉之風：對手戰鬥無能量', aIdx);
+  // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋
+  if (_v3080OppHasMenasureCG(state, aIdx, pool)) {
+    return addLog(state, '反轉之風：對手場上有【平穩境地】，能量回手效果無效', aIdx);
+  }
+  const cap = Math.min(2, da.energyAttached.length);
+  const s = addLog(state, `反轉之風：選擇 0∼${cap} 個對手戰鬥位能量放回對手手牌`, aIdx);
+  return withPending(s, {
+    type: 'active-energy-discard',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 0, maxCount: cap,
+    effectKey: 'v327-unfezant-reverse-wind',
+    params: { titleOverride: `選擇要放回對手手牌的能量（0∼${cap} 張）` },
+  });
+});
+regR('v327-unfezant-reverse-wind', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(st, '反轉之風：玩家選擇不發動效果', idx);
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  if (!dp.active) return st;
+  const set = new Set(iids);
+  const moved = dp.active.energyAttached.filter(e => set.has(e.iid));
+  if (moved.length === 0) return st;
+  const names = moved.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  const s = addLog(st, `反轉之風：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
+  return updatePlayer(s, dIdx, pl => ({
+    ...pl,
+    active: pl.active
+      ? { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => !set.has(e.iid)) }
+      : pl.active,
+    hand: [...pl.hand, ...moved],
+  }));
+});
 
 // 8. 波士可多拉|發怒猛進 — 自己場上身上有傷害指示物的寶可夢數 × 50
 regPre('波士可多拉|發怒猛進', countDamagedSelfMultiplyPre(50, '發怒猛進'));

@@ -272,14 +272,18 @@ regPost('小嘴蝸|硬殼一擊', (state, aIdx, _pool) => {
 regPre('流氓熊貓|力量衝撞', (s) => ({ state: s, damage: 160 }));
 regPost('流氓熊貓|力量衝撞', rechargePost('力量衝撞'));
 
-// 超級雷電獸ex｜閃光射線 120 — 下回合不受【基礎】招式傷害（簡化為下回合 -100）
+// 超級雷電獸ex｜閃光射線 120 — 在下個對手的回合，這隻寶可夢不會受到【基礎】寶可夢招式的傷害
+// v3.27 修正：v3.22 誤實裝為「下次被打 -100」（damageReduceNextHit）——完全錯誤！
+// 卡面是對【基礎】寶可夢招式完全免疫（非減傷），更改為既有 immuneToBasicAttackNextTurn flag（
+// 同名機制已有：鋁鋼橋龍｜塗層攻擊 v2.101 已建）。engine.ts 會在 owner END_TURN promote NextTurn → ThisTurn，
+// 對手回合攻擊時： attacker.stage 等於 'Basic' 且 defender.immuneToBasicAttackThisTurn → 傷害歸零。
 regPre('超級雷電獸ex|閃光射線', (s) => ({ state: s, damage: 120 }));
 regPost('超級雷電獸ex|閃光射線', (state, aIdx, _pool) => {
   return updatePlayer(
-    addLog(state, '閃光射線：下回合受到招式傷害 -100（簡化「不受基礎招式傷害」）', aIdx),
+    addLog(state, '閃光射線：下個對手回合這隻寶可夢不會受到【基礎】寶可夢招式的傷害', aIdx),
     aIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, damageReduceNextHit: 100 } : null,
+      active: p.active ? { ...p.active, immuneToBasicAttackNextTurn: true } : null,
     }),
   );
 });
@@ -381,19 +385,43 @@ regR('wave16-bench-to-hand', (state, aIdx, iids, _params, pool) => {
 // 10. 對手能量操作（2 張）
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 章魚桶｜水流清洗 20 — 對手戰鬥場能量回手（簡化：移除 1 個尾端能量）
+// 章魚桶｜水流清洗 20 — 若希望，選擇 1 個對手戰鬥寶可夢身上附加的能量，放回對手的手牌。
+// v3.27：從自動取末端升級為玩家挑選（active-energy-discard picker / sourcePlayerIdx=dIdx，改 resolver：回對手手牌）。
+// minCount=0 → 玩家可直接選 0 張等於「否」；1 張傳給 resolver 放回對手手牌。
 regPre('章魚桶|水流清洗', (s) => ({ state: s, damage: 20 }));
 regPost('章魚桶|水流清洗', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(state, dIdx, p => {
-    if (!p.active || p.active.energyAttached.length === 0) {
-      return p;
-    }
-    const last = p.active.energyAttached[p.active.energyAttached.length - 1];
-    const remaining = p.active.energyAttached.slice(0, -1);
-    const lastInst = { iid: last.iid, cardId: last.cardId, damage: 0, energyAttached: [] };
-    return { ...p, active: { ...p.active, energyAttached: remaining }, hand: [...p.hand, lastInst] };
+  const dp = state.players[dIdx];
+  if (!dp.active || dp.active.energyAttached.length === 0) {
+    return addLog(state, '水流清洗：對手戰鬥位沒有能量', aIdx);
+  }
+  const s = addLog(state, '水流清洗：選擇 0∼1 個對手戰鬥位能量放回對手手牌', aIdx);
+  return withPending(s, {
+    type: 'active-energy-discard',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 0, maxCount: 1,
+    effectKey: 'v327-octopus-water-clean',
+    params: { titleOverride: '選擇要放回對手手牌的能量（0∼1 張）' },
   });
+});
+// resolver：將選中的對手戰鬥位能量移除 + 放入對手手牌（非棄牌！）。
+regR('v327-octopus-water-clean', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(st, '水流清洗：玩家選擇不發動效果', idx);
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  if (!dp.active) return st;
+  const targetIid = iids[0];
+  const energyInst = dp.active.energyAttached.find(e => e.iid === targetIid);
+  if (!energyInst) return st;
+  const eName = pool.get(energyInst.cardId)?.name ?? '?';
+  const s = addLog(st, `水流清洗：對手戰鬥位的 ${eName} 放回對手手牌`, idx);
+  return updatePlayer(s, dIdx, pl => ({
+    ...pl,
+    active: pl.active
+      ? { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => e.iid !== targetIid) }
+      : pl.active,
+    hand: [...pl.hand, energyInst],
+  }));
 });
 
 // 毛崖蟹｜喀嚓鉗 — 擲 2 次, 對手戰鬥場能量 ×N 棄

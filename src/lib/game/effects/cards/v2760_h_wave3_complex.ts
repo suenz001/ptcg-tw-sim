@@ -466,8 +466,9 @@ regR('h-wave3-devolve', (state, aIdx, iids, _params, pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 22. 帕底亞 肯泰羅|上搗角擊 30 — 若希望，選對手戰鬥 2 階進化 寶可的 2 個能量回對手手
-//    PRE only damage 30; POST 自動執行（取最末端 2 個能量回手）
+// 22. 帕底亞 肯泰羅|上搗角擊 30 — 若希望，選擇 2 個對手戰鬥的【2階進化】寶可夢身上的能量，放回對手手牌。
+// v3.27：從自動取末端改為 picker；minCount=0 對應「若希望」可選 0∼2 張。
+// gate：卡面限 2 階進化，非 2 階則 picker 不開。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('帕底亞 肯泰羅|上搗角擊', (s) => ({ state: s, damage: 30 }));
 regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool) => {
@@ -475,14 +476,38 @@ regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool) => {
   const da = state.players[dIdx].active;
   if (!da) return state;
   const card = pool.get(da.cardId);
-  if (card?.stage !== 'Stage2') return addLog(state, '上搗角擊：對手戰鬥場非 2 階進化', aIdx);
-  if (da.energyAttached.length === 0) return state;
-  const k = Math.min(2, da.energyAttached.length);
-  const taken = da.energyAttached.slice(da.energyAttached.length - k);
-  return updatePlayer(addLog(state, `上搗角擊：對手戰鬥 ${k} 個能量回對手手`, aIdx), dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.slice(0, p.active.energyAttached.length - k) } : null,
-    hand: [...p.hand, ...taken.map(e => ({ ...e, damage: 0, energyAttached: [] }))],
+  if (card?.stage !== 'Stage2') return addLog(state, '上搗角擊：對手戰鬥場非 2 階進化，沒有附加效果', aIdx);
+  if (da.energyAttached.length === 0) return addLog(state, '上搗角擊：對手戰鬥無能量', aIdx);
+  // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋
+  if (_v3080OppHasMenasure(state, aIdx, pool)) {
+    return addLog(state, '上搗角擊：對手場上有【平穩境地】，能量回手效果無效', aIdx);
+  }
+  const cap = Math.min(2, da.energyAttached.length);
+  const s = addLog(state, `上搗角擊：選擇 0∼${cap} 個對手戰鬥位能量放回對手手牌`, aIdx);
+  return withPending(s, {
+    type: 'active-energy-discard',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 0, maxCount: cap,
+    effectKey: 'v327-tauros-thrust',
+    params: { titleOverride: `選擇要放回對手手牌的能量（0∼${cap} 張）` },
+  });
+});
+regR('v327-tauros-thrust', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(st, '上搗角擊：玩家選擇不發動效果', idx);
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  if (!dp.active) return st;
+  const set = new Set(iids);
+  const moved = dp.active.energyAttached.filter(e => set.has(e.iid));
+  if (moved.length === 0) return st;
+  const names = moved.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  const s = addLog(st, `上搗角擊：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
+  return updatePlayer(s, dIdx, pl => ({
+    ...pl,
+    active: pl.active
+      ? { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => !set.has(e.iid)) }
+      : pl.active,
+    hand: [...pl.hand, ...moved],
   }));
 });
 
@@ -525,19 +550,44 @@ regPost('塗標客|惡作劇作畫', (state, aIdx, pool) => {
 // Wave 2 已註冊，此處 skip
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 26. 呆呆王|付諸東流 70 — 若希望，選對手戰鬥 2 個能量回對手手
+// 26. 呆呆王|付諸東流 70 — 若希望，選擇 2 個對手戰鬥寶可夢身上的能量，放回對手手牌。
+// v3.27：從自動取末端改為 picker；minCount=0 對應「若希望」可選 0∼2 張。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('呆呆王|付諸東流', (s) => ({ state: s, damage: 70 }));
-regPost('呆呆王|付諸東流', (state, aIdx, _pool) => {
+regPost('呆呆王|付諸東流', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = state.players[dIdx].active;
-  if (!da || da.energyAttached.length === 0) return state;
-  const k = Math.min(2, da.energyAttached.length);
-  const taken = da.energyAttached.slice(da.energyAttached.length - k);
-  return updatePlayer(addLog(state, `付諸東流：對手戰鬥 ${k} 個能量回對手手`, aIdx), dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.slice(0, p.active.energyAttached.length - k) } : null,
-    hand: [...p.hand, ...taken.map(e => ({ ...e, damage: 0, energyAttached: [] }))],
+  if (!da || da.energyAttached.length === 0) return addLog(state, '付諸東流：對手戰鬥無能量', aIdx);
+  // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋
+  if (_v3080OppHasMenasure(state, aIdx, pool)) {
+    return addLog(state, '付諸東流：對手場上有【平穩境地】，能量回手效果無效', aIdx);
+  }
+  const cap = Math.min(2, da.energyAttached.length);
+  const s = addLog(state, `付諸東流：選擇 0∼${cap} 個對手戰鬥位能量放回對手手牌`, aIdx);
+  return withPending(s, {
+    type: 'active-energy-discard',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 0, maxCount: cap,
+    effectKey: 'v327-slowking-flush',
+    params: { titleOverride: `選擇要放回對手手牌的能量（0∼${cap} 張）` },
+  });
+});
+regR('v327-slowking-flush', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(st, '付諸東流：玩家選擇不發動效果', idx);
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  if (!dp.active) return st;
+  const set = new Set(iids);
+  const moved = dp.active.energyAttached.filter(e => set.has(e.iid));
+  if (moved.length === 0) return st;
+  const names = moved.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  const s = addLog(st, `付諸東流：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
+  return updatePlayer(s, dIdx, pl => ({
+    ...pl,
+    active: pl.active
+      ? { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => !set.has(e.iid)) }
+      : pl.active,
+    hand: [...pl.hand, ...moved],
   }));
 });
 
