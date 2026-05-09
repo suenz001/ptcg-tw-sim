@@ -55,7 +55,8 @@ function switchEffect(label: string): EffectFn {
   };
 }
 reg('寶可夢交替', switchEffect('寶可夢交替'));
-reg('急進開關', switchEffect('急進開關'));
+// v3.45：急進開關有「能量轉移」效果，與寶可夢交替不同 — 改用 rushSwitchEffect
+reg('急進開關', rushSwitchEffect());
 // 切換類：備戰必須有寶可夢
 regG('寶可夢交替', (st, idx) => st.players[idx].bench.length > 0);
 regG('急進開關', (st, idx) => st.players[idx].bench.length > 0);
@@ -77,6 +78,100 @@ regR('do-switch', (st, idx, iids, _params, pool) => {
     return { ...p, active: newActive, bench: newBench };
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v3.45 急進開關 — 與寶可夢交替不同：交換後額外做「能量轉移」picker
+// 卡面：「將自己的戰鬥寶可夢與備戰寶可夢互換。然後，選擇換入備戰區的寶可夢
+//   身上附加的任意數量的能量卡，改附於新的戰鬥寶可夢身上。」
+// 流程：
+//   1. bench-choose：玩家選備戰中的目標
+//   2. rush-switch-pick-bench：執行 swap，若舊 active 身上有能量則開 picker
+//   3. rush-switch-energy-transfer：把選的能量從 bench(舊 active) 移到新 active
+// ══════════════════════════════════════════════════════════════════════════════
+function rushSwitchEffect(): EffectFn {
+  return (st, idx) => {
+    const player = st.players[idx];
+    if (!player.active || player.bench.length === 0) {
+      return addLog(st, '急進開關：備戰區沒有寶可夢，無法切換', idx);
+    }
+    st = addLog(st, '急進開關：選擇換入的備戰寶可夢', idx);
+    return withPending(st, {
+      type: 'bench-choose',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'rush-switch-pick-bench',
+    });
+  };
+}
+
+regR('rush-switch-pick-bench', (st, idx, iids, _params, pool) => {
+  const prevPlayer = st.players[idx];
+  if (!prevPlayer.active) return st;
+  const prevActiveIid = prevPlayer.active.iid;
+  const target = prevPlayer.bench.find(c => c.iid === iids[0]);
+  if (!target) return st;
+  const newName = pool.get(target.cardId)?.name ?? '?';
+  const oldName = pool.get(prevPlayer.active.cardId)?.name ?? '?';
+  let s = addLog(st, `急進開關：將 ${oldName} 換到備戰區，派出 ${newName} 到戰鬥場`, idx);
+  // swap（同 do-switch 邏輯）
+  s = updatePlayer(s, idx, (p) => {
+    if (!p.active) return p;
+    const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
+    if (bIdx < 0) return p;
+    const newActive = { ...p.bench[bIdx], justPlaced: false, playedFromHand: false };
+    const newBench = [...p.bench];
+    newBench[bIdx] = clearActiveEffects(p.active);
+    return { ...p, active: newActive, bench: newBench };
+  });
+  // 找原 active（現在在 bench），檢查能量數
+  const newP = s.players[idx];
+  const prevOnBench = newP.bench.find(c => c.iid === prevActiveIid);
+  if (!prevOnBench || prevOnBench.energyAttached.length === 0 || !newP.active) {
+    return addLog(s, '急進開關：原戰鬥寶可夢身上無能量可轉移', idx);
+  }
+  // 開 picker：選 0~N 張能量轉移
+  const eCount = prevOnBench.energyAttached.length;
+  s = addLog(s, `急進開關：選擇要從 ${oldName} 轉移到 ${newName} 的能量（0-${eCount} 張）`, idx);
+  return withPending(s, {
+    type: 'active-energy-discard',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 0, maxCount: eCount,
+    effectKey: 'rush-switch-energy-transfer',
+    params: {
+      targetIid: prevActiveIid,
+      newActiveIid: newP.active.iid,
+      titleOverride: '急進開關：選擇要轉移到新戰鬥寶可夢的能量',
+    },
+  });
+});
+
+regR('rush-switch-energy-transfer', (st, idx, iids, params, pool) => {
+  const fromIid = params?.targetIid as string | undefined;
+  const toIid = params?.newActiveIid as string | undefined;
+  if (!fromIid || !toIid) return st;
+  if (iids.length === 0) {
+    return addLog(st, '急進開關：未轉移任何能量', idx);
+  }
+  const p = st.players[idx];
+  const src = p.bench.find(c => c.iid === fromIid);
+  if (!src || !p.active || p.active.iid !== toIid) {
+    return addLog(st, '急進開關：來源/目標寶可夢已不在預期位置（中斷）', idx);
+  }
+  const energySet = new Set(iids);
+  const toMove = src.energyAttached.filter(e => energySet.has(e.iid));
+  if (toMove.length === 0) return st;
+  const fromName = pool.get(src.cardId)?.name ?? '?';
+  const toName = pool.get(p.active.cardId)?.name ?? '?';
+  const s = addLog(st, `急進開關：從 ${fromName} 轉移 ${toMove.length} 張能量到 ${toName}`, idx);
+  return updatePlayer(s, idx, pl => ({
+    ...pl,
+    active: pl.active ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...toMove] } : null,
+    bench: pl.bench.map(b => b.iid === fromIid
+      ? { ...b, energyAttached: b.energyAttached.filter(e => !energySet.has(e.iid)) }
+      : b),
+  }));
+});
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 物品卡 — 藥水 / 回復

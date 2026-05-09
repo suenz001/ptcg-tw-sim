@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.45</span> 🔥 hotfix：急進開關能量轉移實裝（卡面有效果但程式漏做）</summary>
+        <ul>
+          <li>玩家回報：急進開關沒做出 UI 選單讓玩家選擇能量轉移，這部分沒實裝。</li>
+          <li>確認卡面：「將自己的戰鬥寶可夢與備戰寶可夢互換。<b>然後，選擇換入備戰區的寶可夢身上附加的任意數量的能量卡，改附於新的戰鬥寶可夢身上</b>。」</li>
+          <li>根因：之前 <code>reg('急進開關', switchEffect('急進開關'))</code> 直接與寶可夢交替共用 switchEffect，只做 swap 沒做能量轉移。</li>
+          <li>修法：分離出獨立的 <code>rushSwitchEffect()</code>，新增兩個 resolver — <code>rush-switch-pick-bench</code>（執行 swap 後檢查舊 active 能量數）+ <code>rush-switch-energy-transfer</code>（把選的能量從 bench 移到新 active）。</li>
+          <li>UI：複用既有的 <code>active-energy-discard</code> picker（已支援 <code>targetIid</code> 從 bench 寶可夢讀能量），加 <code>titleOverride: &quot;急進開關：選擇要轉移到新戰鬥寶可夢的能量&quot;</code> 改標題避免顯示「撤退要丟棄的能量」誤導文字。minCount=0、maxCount=N（任意數量，含 0）。</li>
+          <li>未動：寶可夢交替（純 swap，無能量轉移）、頂尖捕捉器（對手 swap）、共用的 <code>do-switch</code> resolver。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.44</span> 🔥 hotfix：基本能量 pokemonType=null 全面修補（雷吉充能等 13 處）</summary>
         <ul>
           <li>玩家回報：雷吉充能顯示「棄牌區無水能量」但棄牌區明明有 2 張基本水能量。</li>
