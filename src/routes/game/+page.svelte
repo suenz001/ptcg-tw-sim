@@ -2077,6 +2077,11 @@
     if (newState !== prevState && mode === 'online' && roomCode) {
       const canIPush = (() => {
         if (myPlayerIndex === null) return false; // 觀戰位永遠不推
+        // v3.39 Fix：setup 階段雙方各自擺自己側，都需要 push（per-player merge 防互覆）。
+        //   原本 gate 只在 prevState.activePlayerIndex===myPlayerIndex 才放行 push，
+        //   但 setup 階段 activePlayerIndex 是固定 firstPlayerIdx → 後手 dispatch 全被擋，
+        //   導致先攻方收不到後手擺放、自己擺完後 push 又把後手擺放從 echo 倒退掉。
+        if (prevState.phase === 'setup') return true;
         if (newState.pendingSelection) {
           // 既有 selection 由其 actor 推；我消化完 (newState 的 pending 變了/消失) 也算我推
           return prevState.pendingSelection?.actorIdx === myPlayerIndex
@@ -2410,6 +2415,30 @@
           && (incoming.log?.length ?? 0) < (game.log?.length ?? 0)) {
         console.warn('[Online] reject stale snapshot:',
           { incomingLen: incoming.log?.length, localLen: game.log?.length });
+        return;
+      }
+      // v3.39 Fix：setup 階段 per-player merge 防互覆。
+      //   雙方各自擺自己側 active+bench，整顆 GameState push 會被後寫者覆蓋先寫者，
+      //   echo 回到先寫者就把先寫者的擺放洗掉 → 玩家又擺一次 → 無限重置 ping-pong。
+      //   修法：incoming 是對方剛 push 的，我自己側保留本地 game（最新），對方側取 incoming。
+      //   涵蓋三個 per-player 欄位：players / setupDone / pendingMulliganDraw。
+      //   進入 playing 的轉換在 engine.ts FINISH_SETUP / MULLIGAN_DRAW_DECISION handler 處理；
+      //   後 finish 者會看到自己 merge 後的 setupDone[op]=true，dispatch 後就會自動轉 playing。
+      if (game && game.phase === 'setup' && incoming.phase === 'setup' && myPlayerIndex !== null) {
+        const me = myPlayerIndex;
+        const merged: GameState = {
+          ...incoming,
+          players: (me === 0
+            ? [game.players[0], incoming.players[1]]
+            : [incoming.players[0], game.players[1]]) as [typeof incoming.players[0], typeof incoming.players[1]],
+          setupDone: (me === 0
+            ? [game.setupDone[0], incoming.setupDone[1]]
+            : [incoming.setupDone[0], game.setupDone[1]]) as [boolean, boolean],
+          pendingMulliganDraw: (me === 0
+            ? [game.pendingMulliganDraw?.[0] ?? 0, incoming.pendingMulliganDraw?.[1] ?? 0]
+            : [incoming.pendingMulliganDraw?.[0] ?? 0, game.pendingMulliganDraw?.[1] ?? 0]) as [number, number],
+        };
+        game = merged;
         return;
       }
       game = incoming;

@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.39</span> 🔥 hotfix：連線對戰 setup 階段無限重置 — 雙方擺寶可夢互覆 race</summary>
+        <ul>
+          <li><b>嚴重 bug</b>：玩家回報連線對戰卡在雙方擺寶可夢階段，無限重置，會一直把對方退回上一個擺放階段。</li>
+          <li><b>根因 1（write side）</b>：dispatch 的 <code>canIPush</code> gate 只在 <code>prevState.activePlayerIndex===myPlayerIndex</code> 時放行 push，但 setup 階段 <code>activePlayerIndex</code> 是固定的 firstPlayerIdx → <b>後手玩家 dispatch 完全不 push</b>，自己擺的只在本地。</li>
+          <li><b>根因 2（read side）</b>：<code>handleRoomUpdate</code> 收到 firestore snapshot 時直接 <code>game = incoming</code>，<b>整顆 GameState 覆蓋本地</b>。先攻方擺好 push → 後手 echo 收到 → 後手自己剛擺的被洗掉 → 玩家又擺 → ping-pong 互相覆蓋 → 無限重置。</li>
+          <li><b>修法 1（write）</b>：<code>canIPush</code> 在 <code>prevState.phase==='setup'</code> 時直接 return true（雙方都需要 push 自己擺放）。</li>
+          <li><b>修法 2（read）</b>：<code>handleRoomUpdate</code> 在 setup 階段做 <b>per-player merge</b> — 保留本地 <code>players[me]</code> &#47; <code>setupDone[me]</code> &#47; <code>pendingMulliganDraw[me]</code>，只取 incoming 的對方那側。雙方各自管自己側不互覆。</li>
+          <li><b>進入 playing 的轉換</b>：engine.ts <code>FINISH_SETUP</code> handler 在 <code>setupDone[0] && setupDone[1] && mul[0]===0 && mul[1]===0</code> 時自動轉 <code>phase=&#39;playing&#39;</code>。後 finish 者 dispatch 時會看到自己 merge 後的 <code>setupDone[op]=true</code>，自動觸發 transition + push 整套 playing state，先 finish 者收到後正常套用（已不在 setup 路徑）。</li>
+          <li>未動 v3.34 既有的 playing 期間 stale snapshot 防護（log.length 比對）— 保留向後相容。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.38</span> 牌組 60 張 gate — 本機&#47;AI 模式 + 連線 lobby UI 訊息明確化</summary>
         <ul>
           <li>使用者要求：對戰前加 gate，未滿 60 張或超過 60 張的牌組系統要顯示警告，連線對戰無法按準備完成、AI 對戰無法開始。</li>
