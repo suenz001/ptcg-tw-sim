@@ -1272,52 +1272,58 @@ regPost('太樂巴戈斯|稜鏡充能', deckSearchAttachToTaggedBenchPost(3, '�
 // ══════════════════════════════════════════════════════════════════════════════
 // 雷伊布ex|閃光尖矛 60+ — 若希望，棄最多 2 張自方備戰基本能量，N×90
 //
-// v3.10 修 bug：原本 POST 直接加 defender.active.damage，繞過了引擎的
-//   弱點/抵抗力計算（baseDamage 後 ×2 / -30 流程） → 對水弱寶可夢實際傷害不對。
-// 修法：把「棄能量 + bonus」整體移到 PRE，state 與 damage 一起回傳，
-//   engine 拿 baseDamage(60+bonus) 套標準弱抗流程。
-//
-// 簡化（待後續 P2 改進）：自動棄最多 2 張（即 +180 上限）。
-//   卡面「若希望」屬玩家選擇，目前 engine 不支援 PRE 階段的互動 picker，
-//   先以「自動棄到上限」對齊現有相同 pattern（恐怖獠牙等）。標記 [deferred]。
-regPre('雷伊布ex|閃光尖矛', (state, aIdx, pool) => {
-  // 收集自方備戰所有基本能量 iid（依 bench 順序、能量陣列順序）
-  type BenchEnergyRef = { benchIdx: number; iid: string };
-  const benchEnergyRefs: BenchEnergyRef[] = [];
-  state.players[aIdx].bench.forEach((b, bi) => {
+// v3.10 修 POST → PRE（讓弱抗 ×2/-30 正確套用）；
+// v3.29 改用 ATTACK_PRE_DISCARD_CHOICE picker（移除 v3.10 自動棄到上限的妥協）：
+//   玩家在攻擊前先選 0~2 張自方備戰基本能量，picker 顯示時可勾選。
+//   只計算「基本能量」(card.subtype==='Basic')；若玩家點到特殊能量，regPre 會過濾掉。
+ATTACK_PRE_DISCARD_CHOICE.set('雷伊布ex|閃光尖矛', {
+  min: 0, max: 2, scope: 'own-bench', baseDamage: 60, damagePerEnergy: 90,
+});
+regPre('雷伊布ex|閃光尖矛', (state, aIdx, pool, action) => {
+  const player = state.players[aIdx];
+  // 收集自方備戰所有「基本」能量（過濾 special）
+  type Loc = { benchIdx: number; energy: CardInstance };
+  const eligible: Loc[] = [];
+  player.bench.forEach((b, i) => {
     for (const e of b.energyAttached) {
       const card = pool.get(e.cardId);
       if (card?.supertype === 'Energy' && card.subtype === 'Basic') {
-        benchEnergyRefs.push({ benchIdx: bi, iid: e.iid });
+        eligible.push({ benchIdx: i, energy: e });
       }
     }
   });
-  // 上限 2 張（卡面）
-  const picked = benchEnergyRefs.slice(0, 2);
-  if (picked.length === 0) {
-    return { state: addLog(state, '閃光尖矛：自方備戰無基本能量 → 60', aIdx), damage: 60 };
+  // 玩家挑的 iids — 過濾只保留 eligible 內的（避免誤點特殊能量）+ 限上限 2
+  const chosenIids = action?.discardedEnergyIids;
+  let selected: Loc[];
+  if (chosenIids && chosenIids.length > 0) {
+    const idSet = new Set(chosenIids);
+    selected = eligible.filter(l => idSet.has(l.energy.iid)).slice(0, 2);
+  } else {
+    // AI fallback / 玩家選 0：不棄
+    selected = [];
   }
-  // 棄能量（從各備戰過濾掉所選 iids，丟進棄牌區）
-  const set = new Set(picked.map(x => x.iid));
-  const newState = updatePlayer(state, aIdx, p => {
-    const removed = p.bench.flatMap(b => b.energyAttached.filter(e => set.has(e.iid)));
-    return {
-      ...p,
-      bench: p.bench.map(b => ({
-        ...b,
-        energyAttached: b.energyAttached.filter(e => !set.has(e.iid)),
-      })),
-      discard: [...p.discard, ...removed],
-    };
-  });
-  const bonus = picked.length * 90;
+  if (selected.length === 0) {
+    return { state: addLog(state, '閃光尖矛：未棄備戰能量 → 60', aIdx), damage: 60 };
+  }
+  // 棄能量
+  const idSet = new Set(selected.map(s => s.energy.iid));
+  const removed = selected.map(s => s.energy);
+  const newState = updatePlayer(state, aIdx, p => ({
+    ...p,
+    bench: p.bench.map(b => ({
+      ...b,
+      energyAttached: b.energyAttached.filter(e => !idSet.has(e.iid)),
+    })),
+    discard: [...p.discard, ...removed],
+  }));
+  const bonus = selected.length * 90;
   const total = 60 + bonus;
   return {
-    state: addLog(newState, `閃光尖矛：棄 ${picked.length} 張備戰能量 → 60+${bonus} = ${total}（弱抗前）`, aIdx),
+    state: addLog(newState, `閃光尖矛：棄 ${selected.length} 張備戰能量 → 60+${bonus} = ${total}（弱抗前）`, aIdx),
     damage: total,
     breakdown: [
       { value: 60, label: '基礎' },
-      { value: bonus, label: `棄${picked.length}基本能量` },
+      { value: bonus, label: `棄${selected.length}基本能量` },
     ],
   };
 });

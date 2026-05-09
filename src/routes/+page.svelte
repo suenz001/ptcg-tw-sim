@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.29</span> 雷伊布ex 閃光尖矛 改 picker（最後 1 張 deferred 解除）</summary>
+        <ul>
+          <li>v3.10 起 deferred — 卡面「若希望，棄最多 2 張自方備戰基本能量」原為自動棄到上限</li>
+          <li>修法：改用 ATTACK_PRE_DISCARD_CHOICE picker（own-bench scope，min 0 max 2，baseDamage 60，damagePerEnergy 90），與 火箭隊的超夢ex 擦除球 同 pattern</li>
+          <li>regPre 過濾只計「基本能量」(card.subtype==='Basic')；玩家若誤點特殊能量會被自動過濾</li>
+          <li>邊界：玩家選 0 張 → 60 傷害；選 1 張 → 150；選 2 張 → 240（弱抗前）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.28</span> hotfix — binary-yes-no「否」被誤判為 yes（嚴重 bug 影響 v3.26 全部 11 張）</summary>
         <ul>
           <li>使用者回報：超級雷電獸ex 狂暴噴射「保留能量」按鈕 點下去能量還是被丟棄</li>
