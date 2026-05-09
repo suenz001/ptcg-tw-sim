@@ -11,7 +11,7 @@
  */
 
 import type { Card } from '$lib/cards/types';
-import type { GameState, GameAction, CardInstance, PendingSelection } from './types';
+import type { GameState, GameAction, CardInstance, PendingSelection, PlayerState } from './types';
 import {
   getAvailableAttacks, getEffectiveAttacks, getEvolvableTargets,
   getPlayableTrainers, getPlayableBasics,
@@ -115,7 +115,13 @@ export function getAIAction(
   // v2.357 修复：
   //   1. 只有在「当前没有任何招式可发」时才附能量，避免招式已够能时继续乱填。
   //   2. 选择能量时优先选「与宝可梦属性匹配」的能量，减少填错属性的问题。
+  // v3.43 魔靈多龍：火/超 → 多龍系（滿 1F+1P 為止），惡 → 願增猿（1 顆），其他不填。
   if (!player.energyAttachedThisTurn && player.active) {
+    if (isMarruneDragapult(player, pool)) {
+      const dragapultAct = dragapultEnergyAction(state, player, pool);
+      if (dragapultAct) return dragapultAct;
+      // 沒目標 → 跳過附能量（不亂填）
+    } else {
     const availableAttacks = getAvailableAttacks(state, pool);
     // 若已有招式可发，不附能量（能量应留给真正需要的宝可梦）
     if (availableAttacks.length > 0) {
@@ -138,6 +144,7 @@ export function getAIAction(
         return { type: 'ATTACH_ENERGY', energyIid: energyInHand.iid, targetIid: player.active.iid };
       }
     }
+    } // close non-dragapult else
   }
 
   // 打訓練家（支援者先，再物品）
@@ -174,6 +181,13 @@ export function getAIAction(
         if (player.hand.length >= 8) score = 0;
         // 牌庫 < 5：後期抽一張少一張，風險太高
         else if (player.deck.length < 5) score = 0;
+      }
+
+      // === v3.43 咒詛炸彈（魔靈多龍）— 黑夜魔靈 13 / 彷徨夜靈 5 counter ====
+      if (ab.abilityName === '咒詛炸彈') {
+        if (!shouldUseCursedBomb(state, myIdx, ab.abilityName, ab.pokemonName, pool)) {
+          score = 0; // 沒 KO 目標也沒斷頭目標 → 不亂自爆
+        }
       }
 
       return { ab, score };
@@ -240,6 +254,11 @@ function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): 
   if (!player.active) {
     const basics = player.hand.filter(c => isBasicPokemonCard(pool.get(c.cardId)));
     if (basics.length === 0) return null;
+    // v3.43 魔靈多龍：含羞苞優先擺戰鬥場（用癢癢花粉爭取多龍進化時間）
+    if (isMarruneDragapult(player, pool)) {
+      const sweetVeil = basics.find(c => pool.get(c.cardId)?.name === '含羞苞');
+      if (sweetVeil) return { type: 'PLACE_ACTIVE', iid: sweetVeil.iid, senderIdx: pIdx };
+    }
     const best = basics.reduce((a, b) =>
       (pool.get(a.cardId)?.hp ?? 0) >= (pool.get(b.cardId)?.hp ?? 0) ? a : b
     );
@@ -471,6 +490,15 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
     case 'opp-bench-choose': {
       const bench = srcPlayer.bench;
       if (bench.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      // v3.43 魔靈多龍 老大指令：抓 ex 且 remainingHP ≤ 200（讓多龍幻影奇襲 KO 取 2 獎賞）
+      // 60 內備戰不抓（保留給幻影奇襲分配 KO，省一張老大指令）
+      if (sel.effectKey === 'gust-opp') {
+        const me = state.players[sel.actorIdx];
+        if (isMarruneDragapult(me, pool)) {
+          const pick = dragapultGustPick(bench, pool);
+          if (pick) return { type: 'RESOLVE_SELECTION', selectedIids: [pick.iid] };
+        }
+      }
       // 選剩餘 HP 最少的（最容易擊倒）
       const best = bench.reduce((a, b) => {
         const aRem = (pool.get(a.cardId)?.hp ?? 0) - a.damage;
@@ -480,7 +508,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       return { type: 'RESOLVE_SELECTION', selectedIids: [best.iid] };
     }
 
-    // 對手任意寶可夢選擇（狙擊羽毛）
+    // 對手任意寶可夢選擇（狙擊羽毛、願增猿腎上腺腦力等）
     case 'opp-poke-choose': {
       const allOpp: CardInstance[] = [
         ...(srcPlayer.active ? [srcPlayer.active] : []),
@@ -489,6 +517,17 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       const validIidsOP = sel.params?.validIids as string[] | undefined;
       const oppPool = validIidsOP ? allOpp.filter(c => validIidsOP.includes(c.iid)) : allOpp;
       if (oppPool.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      // v3.43 魔靈多龍 願增猿腎上腺腦力 — 優先壓 KO 線
+      if (sel.effectKey === 'adrenal-brain-target') {
+        const me = state.players[sel.actorIdx];
+        if (isMarruneDragapult(me, pool)) {
+          const amount = (sel.params?.amount as number) ?? 30;
+          const tgt = dragapultAdrenalTarget(amount, srcPlayer.active, srcPlayer.bench, pool);
+          if (tgt && oppPool.some(p => p.iid === tgt.iid)) {
+            return { type: 'RESOLVE_SELECTION', selectedIids: [tgt.iid] };
+          }
+        }
+      }
       const best = oppPool.reduce((a, b) => {
         const aRem = (pool.get(a.cardId)?.hp ?? 0) - a.damage;
         const bRem = (pool.get(b.cardId)?.hp ?? 0) - b.damage;
@@ -660,6 +699,20 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       return { type: 'RESOLVE_SELECTION', selectedIids: [...candIids] };
     }
 
+    // v3.43 魔靈多龍 幻影奇襲 (200 + 6 個傷害指示物自由分配對手備戰)
+    case 'damage-distribute': {
+      const totalCounters = (sel.params?.totalCounters as number) ?? 6;
+      const placedBefore = (sel.params?.placedCounters as number) ?? 0;
+      const counterDamage = (sel.params?.counterDamage as number) ?? 10;
+      const remaining = totalCounters - placedBefore;
+      const benchPool = srcPlayer.bench;
+      if (benchPool.length === 0 || remaining <= 0) {
+        return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      }
+      const ids = dragapultDistribute6Counters(benchPool, remaining, counterDamage, pool);
+      return { type: 'RESOLVE_SELECTION', selectedIids: ids };
+    }
+
     default:
       return { type: 'RESOLVE_SELECTION', selectedIids: [] };
   }
@@ -707,3 +760,231 @@ function pickBestActive(bench: CardInstance[], pool: Map<string, Card>, state?: 
     getEffectiveHP(a, pool, state) >= getEffectiveHP(b, pool, state) ? a : b
   );
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v3.43 魔靈多龍 preset 牌組策略特製
+//
+// 戰術核心：「斷頭線」— 把對手主威脅推進「我方下次攻擊一發 KO」的距離。
+// 三條 KO 線：
+//   - 多龍巴魯托ex|幻影奇襲：戰鬥場 200 傷害；備戰 6 顆指示物（最多 60 傷害任意分配）
+//   - 黑夜魔靈|咒詛炸彈：對手任意 1 隻 +130 傷害（自爆換 KO 或斷頭線）
+//   - 彷徨夜靈|咒詛炸彈：對手任意 1 隻 +50 傷害（同上 縮小版）
+// 配合卡：
+//   - 老大指令：抓對手備戰已壓到 200 線內的 ex 到戰鬥場（讓多龍 KO 取 2 獎賞）
+//   - 願增猿|腎上腺腦力：把己方多龍承受的傷害挪到對手身上（壓 KO 線）
+//   - 含羞苞|癢癢花粉：前期戰鬥場用，封對手物品卡爭取進化時間
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 偵測玩家是否使用「魔靈多龍」preset 牌組。
+ *  指紋：同時擁有「多龍巴魯托ex」+「黑夜魔靈」+「含羞苞」。
+ *  火焰雞多龍 preset 沒有黑夜魔靈與含羞苞 → 不會誤判。 */
+function isMarruneDragapult(player: PlayerState, pool: Map<string, Card>): boolean {
+  const all = [
+    ...(player.active ? [player.active] : []),
+    ...player.bench, ...player.hand, ...player.deck, ...player.discard, ...player.prizes,
+  ];
+  let hasDragapult = false, hasNightmare = false, hasSweetVeil = false;
+  for (const c of all) {
+    const n = pool.get(c.cardId)?.name;
+    if (!n) continue;
+    if (n === '多龍巴魯托ex') hasDragapult = true;
+    else if (n === '黑夜魔靈') hasNightmare = true;
+    else if (n === '含羞苞') hasSweetVeil = true;
+    if (hasDragapult && hasNightmare && hasSweetVeil) return true;
+  }
+  return false;
+}
+
+function _remHP(inst: CardInstance, pool: Map<string, Card>): number {
+  const c = pool.get(inst.cardId);
+  return Math.max(0, (c?.hp ?? 0) - inst.damage);
+}
+
+function _isEx(inst: CardInstance, pool: Map<string, Card>): boolean {
+  const n = pool.get(inst.cardId)?.name ?? '';
+  return /ex|ＥＸ/i.test(n);
+}
+
+/** 魔靈多龍 — 能量分配特化：
+ *  火/超能量只填多龍奇 / 多龍巴魯托ex（滿 1 火 + 1 超 後不再填）
+ *  惡能量只填願增猿（已有 ≥1 顆惡能量則不再填）
+ *  其他寶可夢一律不填能量
+ *  回傳要 attach 的 action，沒目標 → null（不附能量）
+ */
+function dragapultEnergyAction(
+  state: GameState, player: PlayerState, pool: Map<string, Card>,
+): GameAction | null {
+  const energies = player.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+  if (energies.length === 0) return null;
+  const allMine = [...(player.active ? [player.active] : []), ...player.bench];
+
+  const countOn = (inst: CardInstance, kind: 'Fire'|'Psychic'|'Darkness'): number => {
+    let n = 0;
+    for (const e of inst.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (!ec) continue;
+      if (kind === 'Fire' && (ec.pokemonType === 'Fire' || ec.name.includes('【火】'))) n++;
+      else if (kind === 'Psychic' && (ec.pokemonType === 'Psychic' || ec.name.includes('【超】'))) n++;
+      else if (kind === 'Darkness' && (ec.pokemonType === 'Darkness' || ec.name.includes('【惡】'))) n++;
+    }
+    return n;
+  };
+
+  for (const eInst of energies) {
+    const eCard = pool.get(eInst.cardId);
+    if (!eCard) continue;
+    const isFire = eCard.pokemonType === 'Fire' || eCard.name.includes('【火】');
+    const isPsy  = eCard.pokemonType === 'Psychic' || eCard.name.includes('【超】');
+    const isDark = eCard.pokemonType === 'Darkness' || eCard.name.includes('【惡】');
+
+    if (isFire || isPsy) {
+      // 火/超 → 多龍系（多龍奇 / 多龍巴魯托ex），1 火 + 1 超 為止
+      // 優先填戰鬥場上的多龍系（即將攻擊），次之備戰
+      const dragons = [
+        ...allMine.filter(p => pool.get(p.cardId)?.name === '多龍巴魯托ex'),
+        ...allMine.filter(p => pool.get(p.cardId)?.name === '多龍奇'),
+      ];
+      for (const t of dragons) {
+        const f = countOn(t, 'Fire'), p = countOn(t, 'Psychic');
+        if (f >= 1 && p >= 1) continue; // 已滿 1F+1P
+        if (isFire && f < 1) return { type: 'ATTACH_ENERGY', energyIid: eInst.iid, targetIid: t.iid };
+        if (isPsy  && p < 1) return { type: 'ATTACH_ENERGY', energyIid: eInst.iid, targetIid: t.iid };
+      }
+    } else if (isDark) {
+      // 惡 → 願增猿（1 顆即可，腎上腺腦力觸發條件）
+      for (const t of allMine) {
+        if (pool.get(t.cardId)?.name !== '願增猿') continue;
+        if (countOn(t, 'Darkness') >= 1) continue;
+        return { type: 'ATTACH_ENERGY', energyIid: eInst.iid, targetIid: t.iid };
+      }
+    }
+  }
+  return null; // 沒目標：不附能量（不亂填到非多龍/非願增猿的卡）
+}
+
+/** 魔靈多龍 — 咒詛炸彈 gate：
+ *  彷徨夜靈 5 counter（50 傷害） / 黑夜魔靈 13 counter（130 傷害）
+ *  允許條件：
+ *    1. 直接 KO（對手任意 HP-damage ≤ 自身 dmg）
+ *    2. 壓 KO 線（炸完剩餘可被多龍幻影奇襲 200 KO 戰鬥場、或 60 內 KO 備戰）
+ *  回傳 true 表示有目標可炸，值得用。
+ */
+function shouldUseCursedBomb(
+  state: GameState, myIdx: 0 | 1, abilityName: string, pokemonName: string,
+  pool: Map<string, Card>,
+): boolean {
+  const counters = pokemonName === '黑夜魔靈' ? 13 : 5;
+  const dmg = counters * 10;
+  const oppIdx = (1 - myIdx) as 0 | 1;
+  const opp = state.players[oppIdx];
+  const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
+  for (const t of allOpp) {
+    const rem = _remHP(t, pool);
+    if (rem <= 0) continue;
+    // 直接 KO
+    if (rem <= dmg) return true;
+    // 壓 KO 線：黑夜魔靈炸完 ≤ 200（拉戰鬥場讓多龍 200 KO）
+    if (counters === 13 && rem - dmg <= 200) return true;
+    // 彷徨夜靈炸完 ≤ 60（備戰可被幻影奇襲 6 顆分配 KO）
+    if (counters === 5 && rem - dmg <= 60) return true;
+  }
+  return false;
+}
+
+/** 魔靈多龍 — 6 顆指示物分配演算法（damage-distribute auto-resolve）。
+ *  對手備戰每隻按「能用最少 counter KO」優先送 KO；剩餘 counter 砸 ex 壓到 200；
+ *  最後殘餘平均砸最大威脅。
+ *  回傳 selectedIids 陣列（同 iid 出現 N 次 = 該寶可夢吃 N 個 counter）。
+ */
+function dragapultDistribute6Counters(
+  bench: CardInstance[], totalCounters: number, counterDamage: number,
+  pool: Map<string, Card>,
+): string[] {
+  const tracker = bench.map(b => ({
+    iid: b.iid,
+    rem: _remHP(b, pool),
+    isEx: _isEx(b, pool),
+    hp: pool.get(b.cardId)?.hp ?? 0,
+  }));
+  const result: string[] = [];
+  let counters = totalCounters;
+
+  // 第 1 階：能用最少 counter KO 的優先（KO 線最近）
+  while (counters > 0) {
+    const cands = tracker.filter(t => t.rem > 0 && t.rem <= counters * counterDamage);
+    if (cands.length === 0) break;
+    const target = cands.reduce((a, b) => a.rem <= b.rem ? a : b);
+    const need = Math.ceil(target.rem / counterDamage);
+    for (let i = 0; i < need && counters > 0; i++) { result.push(target.iid); counters--; }
+    target.rem = 0;
+  }
+
+  // 第 2 階：剩餘 counter 找 ex 壓到 200（為老大指令鋪路）
+  while (counters > 0) {
+    const exCands = tracker.filter(t => t.rem > 200 && t.isEx);
+    if (exCands.length === 0) break;
+    const target = exCands.reduce((a, b) => a.rem >= b.rem ? a : b);
+    const need = Math.ceil((target.rem - 200) / counterDamage);
+    const use = Math.min(need, counters);
+    for (let i = 0; i < use; i++) { result.push(target.iid); counters--; }
+    target.rem -= use * counterDamage;
+  }
+
+  // 第 3 階：殘餘 counter 砸 HP 最高的（最大威脅）
+  while (counters > 0) {
+    const cands = tracker.filter(t => t.rem > 0);
+    if (cands.length === 0) break;
+    const target = cands.reduce((a, b) => a.hp >= b.hp ? a : b);
+    result.push(target.iid);
+    target.rem = Math.max(0, target.rem - counterDamage);
+    counters--;
+  }
+  return result;
+}
+
+/** 魔靈多龍 — 老大指令 picker：抓對手備戰 ex 且 remainingHP ≤ 200（可被幻影奇襲 KO）。
+ *  60 內備戰不要抓（保留給幻影奇襲分配 KO，省一張老大指令）。 */
+function dragapultGustPick(bench: CardInstance[], pool: Map<string, Card>): CardInstance | null {
+  const exTargets = bench.filter(b => {
+    const rem = _remHP(b, pool);
+    return rem > 0 && rem <= 200 && _isEx(b, pool);
+  });
+  if (exTargets.length === 0) return null;
+  // 選剩餘 HP 最低的（最近 KO 線）
+  return exTargets.reduce((a, b) => _remHP(a, pool) <= _remHP(b, pool) ? a : b);
+}
+
+/** 魔靈多龍 — 願增猿腎上腺腦力選對手目標：優先壓 KO 線。 */
+function dragapultAdrenalTarget(
+  amount: number, oppActive: CardInstance | null, oppBench: CardInstance[],
+  pool: Map<string, Card>,
+): CardInstance | null {
+  const allOpp = [...(oppActive ? [oppActive] : []), ...oppBench];
+  if (allOpp.length === 0) return null;
+
+  // 優先：直接 KO（rem ≤ amount）
+  const koTargets = allOpp.filter(p => _remHP(p, pool) > 0 && _remHP(p, pool) <= amount);
+  if (koTargets.length > 0) {
+    return koTargets.reduce((a, b) => _remHP(a, pool) >= _remHP(b, pool) ? a : b);
+  }
+
+  // 其次：壓 KO 線
+  //  - active：加上 amount 後 ≤ 200（多龍幻影奇襲 KO 戰鬥場）
+  //  - bench：加上 amount 後 ≤ 60（幻影奇襲分配 KO 備戰）
+  for (const p of allOpp) {
+    const rem = _remHP(p, pool);
+    if (rem <= 0) continue;
+    const isActiveTgt = oppActive && p.iid === oppActive.iid;
+    const newRem = rem - amount;
+    if (isActiveTgt && newRem <= 200 && newRem > 0) return p;
+    if (!isActiveTgt && newRem <= 60 && newRem > 0) return p;
+  }
+
+  // 最後：HP 最高（最大威脅）
+  return allOpp.reduce((a, b) => {
+    const ah = pool.get(a.cardId)?.hp ?? 0;
+    const bh = pool.get(b.cardId)?.hp ?? 0;
+    return ah >= bh ? a : b;
+  });
+}
+
