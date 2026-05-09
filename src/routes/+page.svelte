@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.33</span> heal-target picker 標題改通用「選擇目標寶可夢」</summary>
+        <ul>
+          <li>使用者回報：picker 標題寫「選擇回復的寶可夢」但實際很多情境並不是回復（進化、附能量、互換目標等）</li>
+          <li>修法：routes/game/+page.svelte 第 2591 行 heal-target picker 預設標題從「選擇回復的寶可夢」改成「選擇目標寶可夢」</li>
+          <li>原本就有 params.titleOverride 機制，可被個別招式/特性指定更精確的標題（如「選擇進化目標」），預設改通用後不影響原有 override 行為</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.32</span> 手機版撤退選項加 🔍 放大鏡按鈕</summary>
         <ul>
           <li>使用者回報：手機版戰鬥寶可夢動作底部 sheet 內，撤退選項只有純文字按鈕，無法先看備戰寶可夢身上能量/狀態</li>

@@ -2588,7 +2588,9 @@
     if (type === 'heal-target') {
       const override2 = pendingSelection?.params?.titleOverride;
       if (typeof override2 === 'string' && override2.length > 0) return override2;
-      return '選擇回復的寶可夢';
+      // v3.33 改通用標題：heal-target picker 同時用於回復、進化、附能量、退化、互換目標等情境
+      //   先前「選擇回復的寶可夢」字面只描述其中一種用途，造成 UI 文字與實際情境不符
+      return '選擇目標寶可夢';
     }
     if (type === 'discard-search')  return '從棄牌區選擇';
     if (type === 'damage-distribute') {
