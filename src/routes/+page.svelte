@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.31</span> revert — 還原 v3.30 Mega ex 視為 Stage 2 的誤修</summary>
+        <ul>
+          <li>用戶後續澄清：自己原本是把超級寶石海星ex 誤認成 2 階進化寶可夢，實際 JSON stage='Stage1' 是正確的</li>
+          <li>新衝天能量規則確實是「附於 2 階進化寶可夢 → 2 個任意屬性能量；否則 1 個無色」— 嚴格依 JSON stage 判定</li>
+          <li>Mega ex 在 PTCG 中 stage 由卡面決定：超級噴火龍ex 等 JSON 標 Stage 2 的就是 2 階；超級寶石海星ex 等 JSON 標 Stage 1 的就是 1 階</li>
+          <li>修法：還原 engine.ts 第 995 行 isStage2 為純 pokeStage === 'Stage2' 判斷，移除 v3.30 加的 isMegaEx fallback</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.30</span> hotfix — Mega ex 視為 Stage 2（新衝天能量 / 稜鏡能量）</summary>
         <ul>
           <li>使用者回報：超級寶石海星ex 附 1 水能 + 1 新衝天能量無法發動星雲光束（3C 招式）</li>
