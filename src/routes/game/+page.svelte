@@ -4370,7 +4370,7 @@
 
   <!-- Floating Drag Preview -->
   {#if dragging && dragging.moved}
-    <div class="drag-preview" style="left:{dragging.x}px;top:{dragging.y}px;" aria-hidden="true">
+    <div class="drag-preview" style="left:{dragging.x / gameZoom}px;top:{dragging.y / gameZoom}px;" aria-hidden="true">
       <img src={dragging.imageUrl} alt=""/>
       <div class="drag-hint">
         {#if dragging.kind==='energy'}⚡ 拖到寶可夢附加

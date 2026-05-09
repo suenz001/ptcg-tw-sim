@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.36</span> 修拖曳預覽偏移（iPad &#47; 低解析度視窗 zoom 模式下手指與卡片視覺不貼合）</summary>
+        <ul>
+          <li>使用者回報：iPad 10.5 吋與 Windows 低解析度模式下，手指拖出手牌時卡片視覺會出現在手指上方一點，導致看似拖到目標但實際 dropZone 判定點偏離。</li>
+          <li>根因：<code>.battle-root.zoomed</code> 套用 CSS <code>zoom: var(--game-zoom)</code>（例 0.7）。drag-preview 為其子元素，雖用 <code>position:fixed</code>，但 CSS <code>zoom</code> 與 <code>transform: scale</code> 行為不同 — <code>zoom</code> 會影響子元素 fixed 座標解讀，<code>left:500px</code> 實際渲染在 350px 處。</li>
+          <li>而 <code>PointerEvent.clientX&#47;clientY</code> 為未縮放的 viewport 像素（500），所以視覺定位 500×0.7=350 與手指 500 形成 150px 偏移。</li>
+          <li>修法：drag-preview inline style 改為 <code>left:&#123;dragging.x &#47; gameZoom&#125;px;top:&#123;dragging.y &#47; gameZoom&#125;px;</code> — 預先除回 zoom，被 zoom 乘上後恰好還原成 clientX&#47;Y。</li>
+          <li>未動 elementFromPoint 偵測（仍用 <code>e.clientX&#47;Y</code>，符合 viewport 座標規格），只修視覺貼合。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.35</span> 清 7 個 pre-existing svelte-check type 警告（純 type-only 修補，無功能變動）</summary>
         <ul>
           <li>背景：累積至 v3.34 的 7 個 svelte-check type 警告長期殘留，本版做 type-only 全清。皆加正確 null guard &#47; type narrow，無 <code>@ts-ignore</code> 或 <code>as any</code> 偷懶。</li>
