@@ -5901,6 +5901,10 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
   if (player.retreatedThisTurn || !player.active || player.bench.length === 0) return null;
   // 睡眠和麻痺時無法撤退
   if (player.active.status === 'asleep' || player.active.status === 'paralyzed') return null;
+  // v3.37：「下個對手回合無法撤退」(cantRetreatNextTurn) — 鏡射 RETREAT handler L1870 的擋鎖。
+  // 設此旗標的招式（懶人獺 悠哉、束縛纏繞、鬼盜衝撞 等）會讓擁有者下回合開始時無法撤退；
+  // 之前只在 RETREAT handler 擋，UI 仍顯示按鈕但點下去無反應，造成玩家以為 bug。
+  if (player.active.cantRetreatNextTurn) return null;
   // v2.174 霍米加的演奏：自己的中毒寶可夢本回合無法撤退
   if (player.cantRetreatIfPoisonedThisTurn
       && (player.active.status === 'poisoned' || player.active.secondaryStatus === 'poisoned')) {
@@ -5958,6 +5962,35 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
   // v2.69：以能量單位計算（火箭隊能量 1 張 = 2 units）。
   // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
   return totalEnergyUnits(player.active!.energyAttached, pool, state, state.activePlayerIndex) >= cost;
+}
+
+/**
+ * v3.37：診斷用 — 回傳「為何當前無法撤退」的中文短描述。
+ * 回 null 表示可撤退。UI 在 disabled 撤退按鈕的 title 顯示，幫玩家看出 bug 還是規則限制。
+ *
+ * 規則優先順序與 getRetreatCost / canRetreat 完全鏡射，
+ * 改動其中一個務必同步調整這個函式（否則 UI tooltip 與實際行為不一致）。
+ */
+export function getRetreatBlockReason(state: GameState, pool: Map<string, Card>): string | null {
+  if (state.phase !== 'playing') return '對戰未進行中';
+  if (state.turnPhase !== 'main') return '當前不在主階段（無法撤退）';
+  const player = state.players[state.activePlayerIndex];
+  if (!player.active) return '尚未派出戰鬥場寶可夢';
+  if (player.bench.length === 0) return '備戰區無寶可夢可換上';
+  if (player.retreatedThisTurn) return '本回合已撤退過（PTCG 規則：每回合僅一次撤退）';
+  if (player.active.status === 'asleep') return '戰鬥場寶可夢睡眠中（PTCG 規則：無法撤退）';
+  if (player.active.status === 'paralyzed') return '戰鬥場寶可夢麻痺中（PTCG 規則：無法撤退）';
+  if (player.active.cantRetreatNextTurn) return '對手招式效果鎖定撤退（懶人獺 悠哉 / 束縛 / 鬼盜衝撞 等）';
+  if (player.cantRetreatIfPoisonedThisTurn
+      && (player.active.status === 'poisoned' || player.active.secondaryStatus === 'poisoned')) {
+    return '霍米加的演奏：本回合中毒的戰鬥場寶可夢無法撤退';
+  }
+  // 計算能量是否足夠（重用 getRetreatCost 的 cost 與 canRetreat 的能量比對）
+  const cost = getRetreatCost(state, pool);
+  if (cost === null) return '無法計算撤退費（未知原因 — 請回報）';
+  const have = totalEnergyUnits(player.active.energyAttached, pool, state, state.activePlayerIndex);
+  if (have < cost) return `能量不足（撤退需 ${cost} 顆，現有 ${have} 顆）`;
+  return null;
 }
 
 /**

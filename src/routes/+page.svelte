@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.37</span> 修撤退按鈕消失 bug + 補 cantRetreatNextTurn 鏡射 + 新增無法撤退診斷 tooltip</summary>
+        <ul>
+          <li>玩家回報：吉雉雞ex 身上有火+超能量、無 status chip、turn-res 撤退 chip 顯示「可用」、log 無擋撤退訊息，但撤退按鈕未出現。</li>
+          <li>根因：<code>getRetreatCost()</code> 漏了 <code>cantRetreatNextTurn</code> flag 的鏡射。RETREAT handler 內擋（engine.ts L1870），但 UI 用的 <code>canRetreat()</code> 走 <code>getRetreatCost()</code>、未檢查此 flag → 過去版本 UI 撤退按鈕顯示但點下去無反應。</li>
+          <li>而本次玩家描述「按鈕完全消失」屬於另一條路徑（仍待現場驗證）。為了下次能立即診斷，本版加 <code>getRetreatBlockReason()</code> 診斷函式並把 UI 撤退按鈕改成「條件齊備時永遠顯示，不能撤退時 disabled + tooltip 顯示原因」。</li>
+          <li>修法 1：engine.ts <code>getRetreatCost()</code> 加 <code>if (player.active.cantRetreatNextTurn) return null;</code>，與 RETREAT handler 同步。涵蓋懶人獺 悠哉 / 束縛 / 鬼盜衝撞 等招式效果。</li>
+          <li>修法 2：engine.ts 新增 <code>getRetreatBlockReason()</code> export — 回傳中文短描述（「本回合已撤退過」「能量不足（需 2 現 1）」「霍米加的演奏」等），規則優先順序與 <code>getRetreatCost</code>＋<code>canRetreat</code> 完全鏡射。</li>
+          <li>修法 3：routes&#47;game&#47;+page.svelte L3654 撤退按鈕邏輯改寫 — 條件齊備時（active 存在 &#47; bench 不為空 &#47; isMyTurn &#47; main phase &#47; 非化石 &#47; 非 pendingSelection）永遠顯示按鈕；不能撤退時改用 <code>.btn-retreat-blocked</code> 紅暗色 disabled 樣式 + 🚫 圖示 + <code>title</code> 顯示原因。</li>
+          <li>影響：下次再遇到「撤退按鈕應該出現但沒出現」回報，玩家把游標 hover 到按鈕就能直接看到原因，省掉排查時間。</li>
+          <li>未動：手機版 MobilePortraitBattle.svelte 撤退選項邏輯維持原樣（手機 sheet UI 結構不適合 disabled state），但底層 engine 修補同樣套用。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.36</span> 修拖曳預覽偏移（iPad &#47; 低解析度視窗 zoom 模式下手指與卡片視覺不貼合）</summary>
         <ul>
           <li>使用者回報：iPad 10.5 吋與 Windows 低解析度模式下，手指拖出手牌時卡片視覺會出現在手指上方一點，導致看似拖到目標但實際 dropZone 判定點偏離。</li>

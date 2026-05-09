@@ -13,7 +13,7 @@
     createGame, applyAction,
     getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
     countEnergy, getEvolvableTargets,
-    canRetreat, getPlayableTrainers, getPlayableBasics, getPlayableFossils,
+    canRetreat, getRetreatBlockReason, getPlayableTrainers, getPlayableBasics, getPlayableFossils,
     getUsableAbilities, isBasicPokemonCard, isFossilItemCard, getEffectiveHP,
     totalEnergyUnits, getBenchLimit, canBeInitialActiveCard,
   } from '$lib/game/engine';
@@ -3651,10 +3651,19 @@
       <div class="zone-active my-active-zone">
         <div class="zone-label-sm">
           我的出場
-          {#if canRetreatNow&&!pendingSelection&&isMyTurn()&&!myPlayer?.active?.fossilOnField}
-            <button class="btn-retreat" onclick={(e)=>openFloatingRetreat(e)}>
-              撤退（{retreatCostOf(myPlayer!.active!)}⚡）
-            </button>
+          {#if !pendingSelection&&isMyTurn()&&!myPlayer?.active?.fossilOnField&&myPlayer?.active&&(myPlayer?.bench?.length??0)>0&&game?.phase==='playing'&&game?.turnPhase==='main'}
+            {#if canRetreatNow}
+              <button class="btn-retreat" onclick={(e)=>openFloatingRetreat(e)}>
+                撤退（{retreatCostOf(myPlayer!.active!)}⚡）
+              </button>
+            {:else}
+              <!-- v3.37：不能撤退時顯示 disabled 按鈕 + tooltip 說明原因，
+                   讓玩家分得清是「規則限制」還是「我方系統 bug」 -->
+              <button class="btn-retreat btn-retreat-blocked" disabled
+                title={getRetreatBlockReason(game!, pool) ?? '無法撤退（未知原因）'}>
+                🚫 撤退（{retreatCostOf(myPlayer!.active!)}⚡）
+              </button>
+            {/if}
           {/if}
           <!-- v2.189 化石卡【丟棄】按鈕：戰鬥場版本（自己回合 main phase 才出現） -->
           {#if myPlayer?.active?.fossilOnField && isMyTurn() && game?.phase==='playing' && game?.turnPhase==='main' && !pendingSelection}
@@ -5825,6 +5834,9 @@
 
   .btn-retreat{ padding:.1rem .3rem; font-size:.62rem; background:#3a3a6a; border:1px solid #6a6aaa; border-radius:4px; color:#ccf; cursor:pointer; }
   .btn-retreat:hover{ background:#4a4a8a; }
+  /* v3.37：不能撤退時的 disabled 樣式（紅暗色，hover 不變） */
+  .btn-retreat-blocked{ opacity:.55; cursor:not-allowed; background:#5a3a3a; border-color:#aa6a6a; color:#fcc; }
+  .btn-retreat-blocked:hover{ background:#5a3a3a; }
   /* v2.189 化石丟棄按鈕 — 棕色系與撤退按鈕區分 */
   .btn-fossil-discard{ background:#5a3a2a; border-color:#aa6a4a; color:#fc8; margin-left:.3rem; }
   .btn-fossil-discard:hover{ background:#7a4a3a; }
