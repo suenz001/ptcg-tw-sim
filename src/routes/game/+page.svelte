@@ -66,6 +66,15 @@
   let aiThinking = $state(false);
   let aiTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // v3.38：本機/AI lobby 牌組 60 張驗證 — UI gate（防止使用者選擇張數錯誤的牌組開戰）
+  // 連線 lobby 已在 seat-area 內 derive hasValidDeck（L3078），此處補本機/AI 模式
+  const p1DeckObj = $derived(allDecks.find(d => d.id === p1DeckId));
+  const p2DeckObj = $derived(allDecks.find(d => d.id === p2DeckId));
+  const p1DeckCount = $derived(p1DeckObj ? countDeckCards(p1DeckObj.entries) : 0);
+  const p2DeckCount = $derived(p2DeckObj ? countDeckCards(p2DeckObj.entries) : 0);
+  const p1DeckValid = $derived(!!p1DeckId && p1DeckCount === 60);
+  const p2DeckValid = $derived(!!p2DeckId && p2DeckCount === 60);
+
   // ── 線上模式狀態（v2.269 座位制重構） ──────────────────────────────────
   let myUid       = $state<string | null>(null);
   let myName      = $state('');
@@ -2267,6 +2276,13 @@
     const d1 = allDecks.find(d => d.id === p1DeckId);
     const d2 = allDecks.find(d => d.id === p2DeckId);
     if (!d1 || !d2) return;
+    // v3.38：60 張規則最終 gate（雙重保險，UI button 已 disabled）
+    const c1 = countDeckCards(d1.entries);
+    const c2 = countDeckCards(d2.entries);
+    if (c1 !== 60 || c2 !== 60) {
+      alert(`牌組必須恰好 60 張才能開始對戰。\n玩家 1：${c1} 張\n玩家 2：${c2} 張`);
+      return;
+    }
     aiThinking = false;
     if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; }
     game = createGame(
@@ -2927,6 +2943,15 @@
             <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
         </select>
+        {#if p1DeckId}
+          {#if p1DeckCount === 60}
+            <div class="deck-count-info ok">✓ 60 張</div>
+          {:else if p1DeckCount < 60}
+            <div class="deck-count-info bad">⚠ 不足 60 張（目前 {p1DeckCount} 張）</div>
+          {:else}
+            <div class="deck-count-info bad">⚠ 超過 60 張（目前 {p1DeckCount} 張）</div>
+          {/if}
+        {/if}
       </div>
       <div class="vs-badge">VS</div>
       <div class="setup-card" class:ai-card={aiPlayerIndex===1}>
@@ -2950,9 +2975,18 @@
             <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
         </select>
+        {#if p2DeckId}
+          {#if p2DeckCount === 60}
+            <div class="deck-count-info ok">✓ 60 張</div>
+          {:else if p2DeckCount < 60}
+            <div class="deck-count-info bad">⚠ 不足 60 張（目前 {p2DeckCount} 張）</div>
+          {:else}
+            <div class="deck-count-info bad">⚠ 超過 60 張（目前 {p2DeckCount} 張）</div>
+          {/if}
+        {/if}
       </div>
     </div>
-    <button class="btn-primary" disabled={!p1DeckId || !p2DeckId} onclick={startLocalGame}>
+    <button class="btn-primary" disabled={!p1DeckValid || !p2DeckValid} onclick={startLocalGame}>
       {aiPlayerIndex !== null ? '🤖 開始 vs AI' : '🎮 開始遊戲'}
     </button>
     <!-- v2.70：移除「雙人請選不同牌組」警告；本機/線上對戰皆允許兩位玩家使用同一牌組 -->
@@ -3096,8 +3130,12 @@
                       </select>
                       {#if hasValidDeck}
                         <div class="seat-deck-info">✓ 牌組已套用（60 張）</div>
-                      {:else if myDeckId}
+                      {:else if myDeckId && myDeckCount === 0}
                         <div class="seat-deck-info" style="color:#ffcc66;">套用中⋯</div>
+                      {:else if myDeckId && myDeckCount < 60}
+                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 不足 60 張（目前 {myDeckCount} 張）</div>
+                      {:else if myDeckId && myDeckCount > 60}
+                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 超過 60 張（目前 {myDeckCount} 張）</div>
                       {:else}
                         <div class="seat-deck-info muted">請選牌組</div>
                       {/if}
@@ -3107,9 +3145,13 @@
                         {s.ready ? '取消準備' : '準備完成'}
                       </button>
                     {:else}
-                      <!-- 別人坐：只顯示狀態 -->
+                      <!-- 別人坐：只顯示狀態（v3.38：補張數警告） -->
                       {#if hasValidDeck}
                         <div class="seat-deck-info">✓ 已選牌組（60 張）</div>
+                      {:else if myDeckCount > 0 && myDeckCount < 60}
+                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 牌組不足 60 張（{myDeckCount} 張）</div>
+                      {:else if myDeckCount > 60}
+                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 牌組超過 60 張（{myDeckCount} 張）</div>
                       {:else}
                         <div class="seat-deck-info muted">尚未選擇牌組</div>
                       {/if}
@@ -5837,6 +5879,11 @@
   /* v3.37：不能撤退時的 disabled 樣式（紅暗色，hover 不變） */
   .btn-retreat-blocked{ opacity:.55; cursor:not-allowed; background:#5a3a3a; border-color:#aa6a6a; color:#fcc; }
   .btn-retreat-blocked:hover{ background:#5a3a3a; }
+
+  /* v3.38：本機/AI lobby 牌組張數提示 */
+  .deck-count-info { font-size:.78rem; margin-top:.4rem; padding:.25rem .5rem; border-radius:4px; display:inline-block; font-weight:500; }
+  .deck-count-info.ok { color:#9f9; background:rgba(60,140,60,.15); border:1px solid rgba(80,180,80,.3); }
+  .deck-count-info.bad { color:#fc8; background:rgba(170,80,80,.18); border:1px solid rgba(210,110,110,.4); }
   /* v2.189 化石丟棄按鈕 — 棕色系與撤退按鈕區分 */
   .btn-fossil-discard{ background:#5a3a2a; border-color:#aa6a4a; color:#fc8; margin-left:.3rem; }
   .btn-fossil-discard:hover{ background:#7a4a3a; }

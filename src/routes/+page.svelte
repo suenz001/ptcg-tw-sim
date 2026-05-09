@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.38</span> 牌組 60 張 gate — 本機&#47;AI 模式 + 連線 lobby UI 訊息明確化</summary>
+        <ul>
+          <li>使用者要求：對戰前加 gate，未滿 60 張或超過 60 張的牌組系統要顯示警告，連線對戰無法按準備完成、AI 對戰無法開始。</li>
+          <li>連線 lobby（先前已存在 gate）：「準備完成」按鈕已透過 <code>hasValidDeck = myDeckCount === 60</code> disable，server-side <code>setSeatReady</code> 也擋（room.ts L298 第二層保險）。但 UI 提示僅顯示「套用中⋯」誤導玩家以為系統還在處理。</li>
+          <li>修法 1（連線）：seat-deck-info 訊息細分四種狀態 — ✓ 牌組已套用（60 張）&#47; 套用中⋯ &#47; ⚠ 不足 60 張（目前 N 張）&#47; ⚠ 超過 60 張（目前 N 張）&#47; 請選牌組。別人座位也補張數提示。</li>
+          <li>修法 2（本機&#47;AI）：先前 startLocalGame button 只檢查 <code>!p1DeckId &#124;&#124; !p2DeckId</code>，沒擋 60 張規則。新增 derived <code>p1DeckCount</code> &#47; <code>p2DeckCount</code> &#47; <code>p1DeckValid</code> &#47; <code>p2DeckValid</code>，按鈕 disabled 改用 <code>!p1DeckValid &#124;&#124; !p2DeckValid</code>。</li>
+          <li>修法 3（本機 UI）：每個 setup-card 的 select 後加綠&#47;紅樣式提示框 — ✓ 60 張 &#47; ⚠ 不足 60 張（目前 N 張）&#47; ⚠ 超過 60 張（目前 N 張）。</li>
+          <li>修法 4（保險）：startLocalGame 函式末端再加一道張數檢查，若繞過 UI 直接呼叫會 alert + return。</li>
+          <li>新增 CSS class <code>.deck-count-info.ok</code> &#47; <code>.deck-count-info.bad</code>。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.37</span> 修撤退按鈕消失 bug + 補 cantRetreatNextTurn 鏡射 + 新增無法撤退診斷 tooltip</summary>
         <ul>
           <li>玩家回報：吉雉雞ex 身上有火+超能量、無 status chip、turn-res 撤退 chip 顯示「可用」、log 無擋撤退訊息，但撤退按鈕未出現。</li>
