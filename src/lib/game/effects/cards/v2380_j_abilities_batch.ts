@@ -321,9 +321,11 @@ regA('小碎鑽', 0, (st, idx) => {
 regA('狙射樹梟ex', 0, (st, idx) => addLog(st,
   '狙擊手之眼：對手手牌 4 張時無能量 cost 消除（v2.38 stub — 需 engine cost calc hook）', idx));
 
-// 勒克貓｜鬥志戰吼 — 對手 ex 時剛使出可進化（需 engine evolve gate hook）
-regA('勒克貓', 0, (st, idx) => addLog(st,
-  '鬥志戰吼：對手戰鬥場為 ex 時剛使出/最初回合可進化（v2.38 stub — 需 engine evolve gate）', idx));
+// 勒克貓｜鬥志戰吼 — 純被動特性（passive）：對手戰鬥場是【ex】寶可夢時，
+//   勒克貓 bypass isFirstTurn / justPlaced / evolvedThisTurn 進化成倫琴貓。
+//   實裝在 engine.ts EVOLVE handler (L1769/L1784) + getEvolvableTargets UI helper (L5795/L5802/L5815)。
+//   v3.56：之前這裡有錯誤的 regA 註冊（v2.38 stub），會讓 UI 顯示「使用特性」按鈕、玩家按下去
+//          變「已用特性」但沒有任何進化發生 — 已移除。鬥志戰吼不需要任何主動 regA。
 
 // 耿鬼｜無限之影 — 招式 KO 時不丟棄回手牌（需 engine KO replacement hook）
 regA('耿鬼', 0, (st, idx) => addLog(st,

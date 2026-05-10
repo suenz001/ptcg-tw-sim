@@ -5811,8 +5811,11 @@ export function getEvolvableTargets(
         sameEvoName(ec.evolvesFrom, '伊布') &&
         ec.subtype === 'ex';
       if (!stdMatch && !dnaMatch) return false;
-      // 若 base 被擋但進到這裡 → 代表 forest / 提升進化 / 刺激進化 bypass 成立
-      if (baseBlocked && !hasPushEvolveAbility && !hasShellinkBypassUI && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
+      // 若 base 被擋但進到這裡 → 代表 forest / 提升進化 / 刺激進化 / 鬥志戰吼 bypass 成立
+      // v3.56：補 !hasFightingHowlBypass — 之前外層 5802 有鬥志戰吼 bypass，但內層 filter
+      //        重新檢查 baseBlocked 時漏掉這個例外，導致勒克貓（evolvedThisTurn=true）外層
+      //        通過、內層卻把倫琴貓 evo 全濾掉，UI 不顯示進化選項。
+      if (baseBlocked && !hasPushEvolveAbility && !hasShellinkBypassUI && !hasFightingHowlBypass && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
       return true;
     });
     if (validEvos.length > 0) {

@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.56</span> 🐉 hotfix：勒克貓鬥志戰吼真正修好（v2.384 / v3.51 都只修一半）</summary>
+        <ul>
+          <li>玩家實機回報：小貓怪 → 勒克貓 進化後，雖然對手戰鬥場是超級袋獸ex，UI 卻沒提示倫琴貓ex 可進化；勒克貓上反而出現「使用特性」按鈕、按了之後變「已用特性」但什麼都沒發生。</li>
+          <li>追到兩個 bug：</li>
+          <li><b>Bug A（致命）</b>：<code>engine.ts:5815</code> 的 <code>getEvolvableTargets</code> UI helper inner filter gate 漏 <code>!hasFightingHowlBypass</code>。外層 5802 有鬥志戰吼 bypass，所以勒克貓（<code>evolvedThisTurn=true</code>）會通過外層；但 inner filter 重新檢查 <code>baseBlocked</code> 時只考慮 forest / 提升進化 / 刺激進化 三個 bypass，沒看鬥志戰吼，於是把倫琴貓 evo 全濾掉，UI 不顯示進化選項。</li>
+          <li><b>Bug B（誤導）</b>：<code>v2380_j_abilities_batch.ts:324-326</code> 把鬥志戰吼錯註冊成主動 <code>regA</code> stub（v2.38 留下的「需 engine evolve gate」flag），這讓 UI 多出「使用特性」按鈕、按了還會被記入 <code>abilityNamesUsedThisTurn</code> 變「已用特性」，但 stub 只印 log 不做任何事。鬥志戰吼是<b>純被動</b>，不該有 regA。</li>
+          <li>修法：① engine.ts 5815 inner gate 補 <code>!hasFightingHowlBypass</code>；② 移除 v2380_j_abilities_batch.ts 的錯誤 regA、改成純註解說明被動實裝點。</li>
+          <li>檢討：v2.384 加 EVOLVE bypass 時沒同步補 UI helper 的 inner filter；v3.49/v3.51 來回 revert 也都只動到外層 / EVOLVE handler，從沒抓到 5815 這條 inner gate。多數 bypass 改動都需要兩處同步：外層 baseBlocked gate + inner filter validEvos check。</li>
+          <li>tsc 0 errors + svelte/compiler parse 兩道驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.55</span> 🚨 hotfix：v3.54 changelog 文字內出現裸 <code>&#123;@const&#125;</code> 觸發 Svelte parser，繼續炸 build</summary>
         <ul>
           <li>v3.54 雖然已修對「<code>&#123;@const&#125;</code> 在 <code>&lt;div&gt;</code> 內」這個真正的根因（picker UI），但我寫 v3.54 changelog 時，<b>summary 文字裡直接打了字面 <code>&#123;@const&#125;</code></b>（沒做 HTML entity escape），於是 Svelte 又把它當成 expression，在 parse 階段炸：<code>Expected whitespace at line 267 col 97</code>。</li>
