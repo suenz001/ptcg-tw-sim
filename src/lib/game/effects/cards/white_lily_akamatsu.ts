@@ -98,22 +98,14 @@ regR('akamatsu-split', (st, idx, iids, _params, pool) => {
     return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, ...picked] }));
   }
 
-  // 1 張 → 直接附加（不需二階段手牌選擇）
+  // v3.53 修：依官方 QA「使用赤松僅選 1 張基本能量時，不可附加給寶可夢，須加入手牌」。
+  //   原邏輯（v2.13~v3.52）誤把 1 張直接走 heal-target picker 附給寶可夢，違反卡面語意：
+  //   「其中 1 張加入手牌、剩餘附於寶可夢」— 1 張時「剩餘 = 0 張」沒得附加，只能入手。
   if (picked.length === 1) {
     const energy = picked[0];
     const eName = pool.get(energy.cardId)?.name ?? '?';
-    st = addLog(st, `赤松：選 1 隻己方寶可夢附加 ${eName}`, idx);
-    return withPending(st, {
-      type: 'heal-target', // 複用 heal-target UI（自己場上寶可夢），標題由 titleOverride 客製
-      actorIdx: idx, sourcePlayerIdx: idx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'akamatsu-attach',
-      params: {
-        energyInstance: energy,
-        validIids: pokes.map(c => c.iid),
-        titleOverride: `赤松：選擇要附加 ${eName} 的寶可夢`,
-      },
-    });
+    st = addLog(st, `赤松：將 ${eName} 加入手牌（官方規則：選 1 張時不可附加給寶可夢）`, idx);
+    return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, energy] }));
   }
 
   // 2 張 → 兩張先進手牌，讓玩家用 hand-choose 挑 1 張附加；未挑的那張自然留手牌

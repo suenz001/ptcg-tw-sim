@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.53</span> 🔥 hotfix：赤松選 1 張基本能量時應加入手牌（依官方 QA），不能附加</summary>
+        <ul>
+          <li>玩家提供官方 QA：「使用支援者卡赤松時，若從牌庫僅選擇了 1 張基本能量卡，那麼可以將這張能量卡附加給自己的寶可夢嗎？」答：「<b>不可以</b>。這個情況下，要將選擇的能量卡加入手牌中。」</li>
+          <li>卡面：「從自己的牌庫選擇<b>最多 2 張</b>各不同屬性的基本能量卡，在給對手看過後，<b>其中 1 張加入手牌</b>，<b>剩餘</b>的能量卡附於自己的寶可夢身上。」<br/>邏輯：選 1 張 → 「剩餘 = 0 張」沒得附加，只能入手。</li>
+          <li>修法：<code>white_lily_akamatsu.ts akamatsu-split</code> resolver 的 1 張 case，從原本的「heal-target picker 選寶可夢附加」改為「直接加入手牌」。2 張 case 流程不變（淨效果與卡面一致 — 1 張入手、1 張附加）。</li>
+          <li>tsc 驗證 0 errors 才 push（避免 v3.49 順序失誤）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.52</span> 清理 v2.384 / v3.49 留下的鬥志戰吼錯誤註解（純 docs，邏輯不動）</summary>
         <ul>
           <li>v2.384 留下的「evoCard 是貓鼬刀」註解誤導我 v3.49 改錯方向；v3.51 revert 後留下「v3.49 我誤改」的歷史檢討註解。</li>
