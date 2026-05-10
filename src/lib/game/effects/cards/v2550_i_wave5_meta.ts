@@ -171,7 +171,8 @@ regR('wave5-add-pokemon-to-hand', (state, aIdx, iids, _params, _pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 7. 閃焰王牌|閃焰渦輪 — 50 + 從牌庫挑 ≤3 基本能量附給備戰
+// 7. 閃焰王牌|閃焰渦輪 — 50 + 從牌庫挑 ≤3 基本能量「以任意方式附給備戰」
+// v3.49：原 max 限為 min(3, basicE, bench)；卡面是 ≤3（不限備戰數）+ 任意分配
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('閃焰王牌|閃焰渦輪', (s) => ({ state: s, damage: 50 }));
 regPost('閃焰王牌|閃焰渦輪', (state, aIdx, pool) => {
@@ -183,8 +184,9 @@ regPost('閃焰王牌|閃焰渦輪', (state, aIdx, pool) => {
   if (basicEnergies.length === 0 || player.bench.length === 0) {
     return addLog(state, '閃焰渦輪：牌庫無基本能量或備戰無寶可夢；重洗牌庫', aIdx);
   }
-  const max = Math.min(3, basicEnergies.length, player.bench.length);
-  const s = addLog(state, `閃焰渦輪：從牌庫挑 0~${max} 張基本能量任意附給備戰寶可夢`, aIdx);
+  // v3.49：上限 3（卡面），不再限制 ≤ bench.length
+  const max = Math.min(3, basicEnergies.length);
+  const s = addLog(state, `閃焰渦輪：從牌庫挑 0~${max} 張基本能量（將以任意方式分配給備戰寶可夢）`, aIdx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -194,29 +196,76 @@ regPost('閃焰王牌|閃焰渦輪', (state, aIdx, pool) => {
   });
 });
 
-regR('wave5-flame-turbo-attach', (state, aIdx, iids, _params, pool) => {
+regR('wave5-flame-turbo-attach', (state, aIdx, iids, _params, _pool) => {
   if (iids.length === 0) {
     return updatePlayer(
       addLog(state, '閃焰渦輪：未選擇能量；重洗牌庫', aIdx),
       aIdx, p => ({ ...p, deck: shuffle(p.deck) }),
     );
   }
-  // 簡化：依序附給備戰前 N 個寶可夢；要求玩家自選分配對 UI 影響大，先 auto-distribute
-  return updatePlayer(
-    addLog(state, `閃焰渦輪：將 ${iids.length} 張基本能量依序附給備戰寶可夢；重洗牌庫`, aIdx),
-    aIdx, p => {
-      const picked = p.deck.filter(c => iids.includes(c.iid));
-      const rest = p.deck.filter(c => !iids.includes(c.iid));
-      // 依序附給備戰
-      const newBench = p.bench.map((b, i) => {
-        if (i < picked.length) {
-          return { ...b, energyAttached: [...b.energyAttached, picked[i]] };
-        }
-        return b;
-      });
-      return { ...p, deck: shuffle(rest), bench: newBench };
+  // v3.49：選了能量 → 開 step2 energy-distribute 讓玩家任意分配給備戰寶可夢
+  const player = state.players[aIdx];
+  const validIids = player.bench.map(b => b.iid);
+  if (validIids.length === 0) {
+    // 防護：原本 step1 guard 已擋備戰=0，但跨回合可能變動
+    return addLog(state, '閃焰渦輪：備戰已無寶可夢，能量留在牌庫；重洗', aIdx);
+  }
+  const s = addLog(state,
+    `閃焰渦輪：選擇要將 ${iids.length} 張基本能量分別附到哪隻備戰寶可夢（可全部給同一隻）`, aIdx);
+  return withPending(s, {
+    type: 'energy-distribute',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: iids.length, maxCount: iids.length,
+    effectKey: 'wave5-flame-turbo-distribute',
+    params: {
+      label: '閃焰渦輪',
+      energyIids: iids,
+      validIids,
+      totalCount: iids.length,
+      placedCount: 0,
+      energyTypeName: '',
     },
-  );
+  });
+});
+
+// v3.49：step2 resolver — 把選好的能量從牌庫移到指定備戰寶可夢身上，最後重洗剩餘牌庫
+regR('wave5-flame-turbo-distribute', (state, aIdx, selectedIids, params, pool) => {
+  const energyIids = ((params?.energyIids as string[] | undefined) ?? []);
+  if (selectedIids.length === 0 || energyIids.length === 0) {
+    return updatePlayer(
+      addLog(state, '閃焰渦輪：未分配；能量留在牌庫並重洗', aIdx),
+      aIdx, p => ({ ...p, deck: shuffle(p.deck) }),
+    );
+  }
+  const useCount = Math.min(selectedIids.length, energyIids.length);
+  let s: GameState = state;
+  const tally = new Map<string, number>();
+  for (let i = 0; i < useCount; i++) {
+    const targetIid = selectedIids[i];
+    const energyIid = energyIids[i];
+    const p = s.players[aIdx];
+    const energyInst = p.deck.find(c => c.iid === energyIid);
+    if (!energyInst) continue;
+    const target = p.bench.find(b => b.iid === targetIid);
+    if (!target) continue;
+    s = updatePlayer(s, aIdx, pl => ({
+      ...pl,
+      deck: pl.deck.filter(c => c.iid !== energyIid),
+      bench: pl.bench.map(b => b.iid === targetIid
+        ? { ...b, energyAttached: [...b.energyAttached, energyInst] }
+        : b),
+    }));
+    tally.set(targetIid, (tally.get(targetIid) ?? 0) + 1);
+  }
+  // 最後重洗牌庫（卡面：「並且重洗牌庫」）
+  s = updatePlayer(s, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  const parts: string[] = [];
+  for (const [iid, n] of tally) {
+    const tInst = s.players[aIdx].bench.find(c => c.iid === iid);
+    const name = tInst ? (pool.get(tInst.cardId)?.name ?? '?') : '?';
+    parts.push(`${name}×${n}`);
+  }
+  return addLog(s, `閃焰渦輪：${parts.join('、')}（共 ${useCount} 張）；重洗牌庫`, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

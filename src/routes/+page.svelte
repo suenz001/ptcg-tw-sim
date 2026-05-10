@@ -264,6 +264,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.49</span> 🔥 hotfix：閃焰渦輪不能任意分配 + 鬥志戰吼 evoCard 條件反向</summary>
+        <ul>
+          <li><b>Bug 1 — 閃焰王牌｜閃焰渦輪</b>：玩家回報「不能任意分配能量，只能依備戰寶可夢數平均分配」。卡面：「從自己的牌庫選擇<b>最多 3 張</b>基本能量卡，<b>以任意方式附於備戰寶可夢身上</b>」。<br/>根因 1：v2550 L186 上限誤限為 <code>Math.min(3, basicE, bench.length)</code> — 限制能量數 ≤ 備戰寶可夢數。<br/>根因 2：resolver L211-216「依序附給備戰前 N 個」— 強制每隻 1 顆，無法集中。<br/>修法：① 上限改 <code>Math.min(3, basicEnergies.length)</code>（卡面 ≤3，不限備戰數）② step1 deck-search 後 chain 新 step2 <code>energy-distribute</code> picker，玩家可任意分配（含全部給同一隻）。新增 resolver <code>wave5-flame-turbo-distribute</code>。</li>
+          <li><b>Bug 2 — 勒克貓｜鬥志戰吼</b>：玩家回報「先攻一下擺小貓怪、先攻二要進化勒克貓但鬥志戰吼沒發動」。卡面：「若對手戰鬥場為 ex，<b>這隻寶可夢</b>（勒克貓）就算在自己的最初回合或剛使出的回合也可進化」。<br/>根因：engine.ts L1777 寫 <code>baseCard.name === '勒克貓'</code> 條件<b>完全反了</b> — baseCard 是場上的小貓怪（進化前），evoCard 才是勒克貓。原邏輯永遠 false，鬥志戰吼從未生效。<br/>修法：① L1777 改為 <code>evoCard.name === '勒克貓'</code> ② L1762 isFirstTurn gate 補上 hasFightingHowl bypass（卡面寫「最初回合或剛使出的回合」雙鎖都應 bypass）③ getEvolvableTargets UI helper L5790 同步加 bypass（手牌有勒克貓 + 場上是小貓怪 + 對手 active 是 ex 時，UI 才會亮可進化）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.48</span> 🔧 picker UI 文字修正：4 張「放回」類招式不再誤顯示「丟棄」</summary>
         <ul>
           <li>玩家回報：忍者飛旋 picker 顯示「選擇要丟棄的能量」、「確定使用招式（丟 1 張）」、「不丟」— 但卡面實際是「放回手牌」，UI 文字與卡面語意不符。</li>
