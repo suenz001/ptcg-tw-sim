@@ -266,11 +266,21 @@ export const SHARED_ONCE_PER_TURN_ABILITY_NAMES = new Set<string>([
  * v2.295 「不限次數」主動特性白名單。
  * 卡面明寫「可不限次數使用」的特性列於此，
  * 引擎將跳過每回合 1 次的 abilityUsedThisTurn gate 與標記。
+ *
+ * ⚠️ 鐵律：新增「不限次數」regA 卡時，務必同步加入此 set，否則：
+ *   - getUsableAbilities (engine.ts:~6104) 第二次按時 pk.abilityUsedThisTurn=true 會被擋
+ *   - USE_ABILITY (engine.ts:~2687) markUsed 會把 abilityUsedThisTurn 設成 true
+ *   雙重 gate 導致卡面「不限次數」變成「一次」。effects 端註解寫「不限次數」是不夠的。
+ *   v3.65 補上 4 個漏加的（日光轉移 / 火箭腦力 / 沖刷 / 收集泡泡）。
  */
 export const UNLIMITED_USE_ABILITY_NAMES = new Set<string>([
   '烈火亂舞', // 炎武王 — 在自己的回合時，可不限次數使用：從手牌選拉1張「基本【火】能量」卡附於自己的寶可夢身上。
   '激動渦輪', // 花舞鳥ex — 場上有【火】超級進化ex 時，可不限次數使用：手牌基本【火】能量附於備戰【火】寶可夢。
   '電氣流',   // v2.996 奇樹的電肚蛙ex — 在自己的回合時，可不限次數使用：手牌基本【雷】能量附於自己的「奇樹的」寶可夢。
+  '日光轉移', // v3.65 超級妙蛙花ex — 在自己的回合時，可不限次數使用：移場上某寶可夢的基本【草】能量到另一隻。
+  '火箭腦力', // v3.65 火箭隊的以歐路普 — 在自己的回合時，可不限次數使用：移自己「火箭隊的」寶可夢身上的傷害指示物。
+  '沖刷',     // v3.65 白海獅 — 在自己的回合時，可不限次數使用：將備戰【水】能量改附戰鬥場。
+  '收集泡泡', // v3.65 瑪力露麗ex — 在自己的回合時，可不限次數使用：將場上其他寶可夢身上的能量改附自身。
 ]);
 
 // v2.94 的 isPassiveOnlyAttackEntry guard 於 v2.95 移除。

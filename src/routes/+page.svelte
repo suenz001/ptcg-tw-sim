@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.65</span> ✨ hotfix：4 個「不限次數」特性漏加 UNLIMITED_USE_ABILITY_NAMES（變成只能用 1 次）</summary>
+        <ul>
+          <li>玩家回報：超級妙蛙花ex 的特性「日光轉移」官方寫「在自己的回合時可不限次數使用」，但實作只能用 1 次。請 audit 同類 bug。</li>
+          <li>追根因：v2.295 加 <code>UNLIMITED_USE_ABILITY_NAMES</code> 白名單時只列了當時的 3 張（烈火亂舞 / 激動渦輪 / 電氣流），<b>後續加的「不限次數」regA 在 effects 端註解寫了「不限次數」但忘記同步更新 engine 的白名單</b>，導致：</li>
+          <li>　・<code>getUsableAbilities</code> (engine.ts:6104)：第二次按按鈕時 <code>pk.abilityUsedThisTurn=true</code>，hasUnlimited 查白名單沒這名字 → 直接 continue 不列出</li>
+          <li>　・<code>USE_ABILITY</code> (engine.ts:2687)：<code>markUsed</code> 沒被白名單跳過 → <code>abilityUsedThisTurn</code> 設成 true</li>
+          <li>　雙重 gate → 卡面「不限次數」變成「一次」。</li>
+          <li>Audit 全部 effects/cards 註解寫「不限次數」/「不限次」的 regA，找出 4 張漏加：</li>
+          <li>　① <b>日光轉移</b> — 超級妙蛙花ex（v154_decks.ts，玩家回報）</li>
+          <li>　② <b>火箭腦力</b> — 火箭隊的以歐路普（v2374_rocket_brain.ts，註解明寫「不限次數使用 → 不需要 abilityNamesUsedThisTurn check」）</li>
+          <li>　③ <b>沖刷</b> — 白海獅（v2380_j_abilities_batch.ts，註解寫「不限次數，備戰【水】能量改附戰鬥場」）</li>
+          <li>　④ <b>收集泡泡</b> — 瑪力露麗ex（v2380_j_abilities_batch.ts，註解寫「不限次數，場上能量改附自身」）</li>
+          <li>修法：4 個名字補進 <code>UNLIMITED_USE_ABILITY_NAMES</code>，並在 set 上方加鐵律提醒：「新增不限次數 regA 卡時必須同步更新此 set，effects 端註解寫不限次數是不夠的」。</li>
+          <li>tsc 0 errors + svelte parse 兩道驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.64</span> 📱 hotfix：手機版零之大空洞延伸格 (bench 6/7/8) 放不上的 bug</summary>
         <ul>
           <li>玩家回報：場上有零之大空洞 + 備戰也有太晶寶可夢時，UI 確實畫出了延伸格子（共 8 格），但拖手機上點手牌的 action sheet 卻沒出現「📥 放到備戰區」按鈕，無法把寶可夢放上 6/7/8 格。</li>
