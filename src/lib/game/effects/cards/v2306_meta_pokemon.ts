@@ -268,7 +268,7 @@ regA('鐵面忍者', 0, (state, aIdx, pool, inst) => {
   let s = addLog(state, '鐵面忍者：使用特性「脫殼」，從牌庫選擇 1 張「脫殼忍者」放置於備戰區', aIdx);
   return withPending(s, {
     type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    filter: 'Pokemon:脫殼忍者', effectKey: 'ninjask-shed-skin',
+    filter: 'Pokemon:Name=脫殼忍者', effectKey: 'ninjask-shed-skin',
   });
 });
 regR('ninjask-shed-skin', (state, actorIdx, selectedIids, params, pool) => {
@@ -506,7 +506,7 @@ const silcoonCascoonAbility = (state: GameState, aIdx: 0|1, pool: Map<string, Ca
   let s = addLog(state, '增長繭：從牌庫選擇 1 張「甲殼繭」或者「盾甲繭」放置於備戰區', aIdx);
   return withPending(s, {
     type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    filter: 'Pokemon:甲殼繭,盾甲繭', effectKey: 'silcoon-growth-cocoon',
+    filter: 'Pokemon:Names=甲殼繭,盾甲繭', effectKey: 'silcoon-growth-cocoon',
     params: { titleOverride: '選擇 1 張「甲殼繭」或者「盾甲繭」' }
   });
 };

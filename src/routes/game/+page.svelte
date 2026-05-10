@@ -1581,6 +1581,70 @@
             const ts = new Set(f.slice('Pokemon:Types='.length).split(',').filter(Boolean));
             return card.supertype === 'Pokemon' && card.pokemonType != null && ts.has(card.pokemonType);
           }
+          // v3.58 新增：寶可夢 OR 比對「卡名」（不是屬性！）
+          //   - 'Pokemon:Name=脫殼忍者' → 卡名完全等於「脫殼忍者」
+          //   - 'Pokemon:Names=甲殼繭,盾甲繭' → 卡名為其中之一
+          //   bug 根因：原本 v2306 兩張卡用 'Pokemon:脫殼忍者' / 'Pokemon:甲殼繭,盾甲繭' 寫，
+          //   會被下面 generic Pokemon:<Type> handler 抓到 → 比對 pokemonType === '脫殼忍者' 永遠 false
+          //   → 玩家看不到任何候選卡，無法觸發。改用 Pokemon:Name= / Pokemon:Names= 明確語意。
+          if (f.startsWith('Pokemon:Name=')) {
+            const n = f.slice('Pokemon:Name='.length);
+            return card.supertype === 'Pokemon' && card.name === n;
+          }
+          if (f.startsWith('Pokemon:Names=')) {
+            const ns = new Set(f.slice('Pokemon:Names='.length).split(',').filter(Boolean));
+            return card.supertype === 'Pokemon' && ns.has(card.name);
+          }
+          // v3.58 新增：Stage1+Stage2 進化寶可夢 + 屬性 filter
+          //   - 'Stage1Or2:Metal' → pokemonType=Metal 且 stage 是 Stage1 / Stage2
+          //   bug 根因：蓋諾賽克特ex 金屬信號用此 filter，但原本 UI helper 完全沒這個 case，
+          //   fallthrough 到 line 1605 的 `return true;` → 整副牌庫都顯示為候選 → 玩家可任選 2 張。
+          if (f.startsWith('Stage1Or2:')) {
+            const t = f.slice('Stage1Or2:'.length);
+            if (card.supertype !== 'Pokemon') return false;
+            if (card.pokemonType !== t) return false;
+            const stage = card.stage ?? card.subtype;
+            return stage === 'Stage1' || stage === 'Stage2';
+          }
+          // v3.58 新增：基本能量 + 屬性 filter（generic 版本，避免每加一個屬性都要寫 if-else）
+          //   - 'BasicEnergy:Fire' / 'BasicEnergy:Psychic' / 'BasicEnergy:Water' / 'BasicEnergy:Metal' / 'BasicEnergy:Darkness'
+          //   bug 根因：v2306 妖火紅狐 / v155 樂呵呵之吻等用此 filter，UI 沒對應 case → fallthrough → 任意卡。
+          //   注意：放在 'BasicEnergy:Grass+Lightning' / 'BasicEnergy:Grass' / 'BasicEnergy:Lightning'
+          //   等具名 case 之後，所以這裡是 fallback 處理其他屬性。
+          if (f.startsWith('BasicEnergy:')) {
+            const t = f.slice('BasicEnergy:'.length) as EnergyType;
+            return isBasicEnergyOfType(card, t);
+          }
+          // v3.58 新增：別名 + 漏寫的 case
+          //   - 'BasicPokemon' = 'Basic'（呼朋引伴 / 巨翅飛魚 用）
+          //   - 'EvolutionPokemon' = 'Evolution'（哈克龍 進化指引 用）
+          //   - 'PokemonTool' = Trainer + subtype=PokemonTool（白貝木 / Earl 的鋸鋸鯊 / 道具搜尋類用）
+          //   - 'BasicPsychicEnergy' = 基本【超】能量（樂呵呵之吻 用，hand-discard 已有但 deck-search 沒）
+          //   - 'BasicFightingEnergy' = 基本【鬥】能量
+          //   - 'GrassPokemonOrStadium' = 【草】寶可夢 OR Stadium 卡（時拉比 時間輪轉 用）
+          //   - 'FirePokemonOrBasicFireEnergy' = 【火】寶可夢 OR 基本【火】能量
+          if (f === 'BasicPokemon') return isBasicPokemonCard(card);
+          if (f === 'EvolutionPokemon') return card.supertype === 'Pokemon' && !!card.evolvesFrom;
+          if (f === 'PokemonTool') return card.supertype === 'Trainer' && card.subtype === 'PokemonTool';
+          if (f === 'BasicPsychicEnergy') {
+            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
+          }
+          if (f === 'BasicFightingEnergy') {
+            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
+          }
+          if (f === 'GrassPokemonOrStadium') {
+            if (card.supertype === 'Pokemon' && card.pokemonType === 'Grass') return true;
+            if (card.supertype === 'Trainer' && card.subtype === 'Stadium') return true;
+            return false;
+          }
+          if (f === 'FirePokemonOrBasicFireEnergy') {
+            if (card.supertype === 'Pokemon' && card.pokemonType === 'Fire') return true;
+            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+              if (card.pokemonType === 'Fire') return true;
+              if (card.name.includes('【火】')) return true;
+            }
+            return false;
+          }
           if (f.startsWith('Pokemon:')) {
             // 指定屬性的寶可夢，例 'Pokemon:Lightning'
             const t = f.slice(8);
@@ -1652,6 +1716,14 @@
           const card = pool.get(c.cardId);
           return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
         });
+        // v3.58：generic 基本能量 + 屬性 filter（妖火紅狐｜閃焰魔法 用 BasicEnergy:Fire）
+        //   原本 UI 只認 BasicEnergy:Grass / Lightning（v2.305 加的兩個具名 case），
+        //   fallthrough 到 `return pool0;` 讓玩家可棄任何手牌 — 這是 bug。
+        //   放在最後讓上面具名 case 優先（如 BasicPsychicEnergy / BasicFightingEnergy）。
+        if (f2.startsWith('BasicEnergy:')) {
+          const t = f2.slice('BasicEnergy:'.length) as EnergyType;
+          return pool0.filter(c => isBasicEnergyOfType(pool.get(c.cardId), t));
+        }
         if (f2.startsWith('Energy:')) {
           // v2.121：加 name fallback
           const t = f2.slice(7) as EnergyType;

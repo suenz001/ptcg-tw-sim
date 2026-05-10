@@ -264,6 +264,35 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.58</span> 🚨 hotfix：deck-search filter 13 處 orphan（金屬信號 bug 根因 — 大規模影響 11+ 張卡）</summary>
+        <ul>
+          <li>玩家回報：蓋諾賽克特ex｜金屬信號（卡面：選最多 2 張<b>【鋼】屬性的進化寶可夢卡</b>）實際變成「任意抓 1 張」。</li>
+          <li>追根因：effects code 設了 <code>filter: &#39;Stage1Or2:Metal&#39;</code> 看似正確，但 <code>game/+page.svelte</code> 的 deck-search filter switch <b>完全沒這個 case</b>，fallthrough 到 line 1605 的 <code>return true;</code> → 整副牌庫都被當合法候選 → 玩家可任選 2 張任何卡。</li>
+          <li>Audit：grep 全部 effects/cards/*.ts 的 filter 字串 + 對照 UI helper 的 case 表，找出 <b>13 個 orphan filter（設了但 UI 沒實作）</b>，分布於 deck-search / hand-discard：</li>
+          <li>① <code>Stage1Or2:Metal</code> — <b>蓋諾賽克特ex｜金屬信號</b>（user-reported）</li>
+          <li>② <code>BasicEnergy:Psychic</code> — <b>迷唇娃｜樂呵呵之吻</b></li>
+          <li>③ <code>BasicEnergy:Fire</code> — <b>妖火紅狐｜閃焰魔法</b>（hand-discard 棄能量）</li>
+          <li>④ <code>BasicPokemon</code> — <b>巨翅飛魚｜呼朋引伴</b>（應限基礎寶可夢；之前任意卡）</li>
+          <li>⑤ <code>EvolutionPokemon</code> — <b>哈克龍｜進化指引</b>（應限進化寶可夢；之前任意卡）</li>
+          <li>⑥ <code>PokemonTool</code> — items_misc 多張道具搜尋類 + v168 supporters（應限寶可夢道具；之前任意卡）</li>
+          <li>⑦ <code>BasicPsychicEnergy</code>（deck-search 用，hand-discard 之前已有）</li>
+          <li>⑧ <code>BasicFightingEnergy</code>（deck-search 用）</li>
+          <li>⑨ <code>GrassPokemonOrStadium</code> — <b>時拉比｜時間輪轉</b>（卡面：≤3 張【草】寶可夢/競技場）</li>
+          <li>⑩ <code>FirePokemonOrBasicFireEnergy</code> — v2670 i-wave17（火屬性）</li>
+          <li>⑪ <code>Pokemon:甲殼繭,盾甲繭</code> — <b>v2306 增長繭</b>（被 generic <code>Pokemon:&lt;Type&gt;</code> handler 抓到 → 比對 pokemonType=&#39;甲殼繭,盾甲繭&#39; 永遠 false → 玩家看不到候選卡無法觸發）</li>
+          <li>⑫ <code>Pokemon:脫殼忍者</code> — <b>v2306 鐵面忍者</b>（同上 bug）</li>
+          <li>⑬ 雜項：另有幾個別名（BasicPokemon / EvolutionPokemon = 已有 Basic / Evolution 的別寫法）也順便加 alias 處理。</li>
+          <li><b>修法</b>：</li>
+          <li>① 在 <code>game/+page.svelte</code> deck-search switch 加 <b>generic prefix handler</b>：<code>Stage1Or2:&lt;Type&gt;</code>、<code>BasicEnergy:&lt;Type&gt;</code>、<code>Pokemon:Name=&lt;name&gt;</code>、<code>Pokemon:Names=&lt;a,b&gt;</code> — 未來新增同類 filter 不需改 UI。</li>
+          <li>② 加 <code>BasicPokemon / EvolutionPokemon / PokemonTool / BasicPsychicEnergy / BasicFightingEnergy / GrassPokemonOrStadium / FirePokemonOrBasicFireEnergy</code> 等具名 case。</li>
+          <li>③ hand-discard switch 加 <code>BasicEnergy:&lt;Type&gt;</code> generic prefix。</li>
+          <li>④ <code>v2306_meta_pokemon.ts</code> 的兩個 ambiguous filter 改用 <code>Pokemon:Names=甲殼繭,盾甲繭</code> / <code>Pokemon:Name=脫殼忍者</code>（語意明確，不會被當屬性 match）。</li>
+          <li><b>檢討</b>：filter 字串是 untyped string，effects 端與 UI 端各寫各的，沒有編譯期保證。下次新增 filter 必須同時 grep UI helper 確認對應 case 存在。長期解：把 filter 做成 enum + UI 端 exhaustive switch，編譯期 catch 漏處理。</li>
+          <li>tsc 0 errors + svelte/compiler parse 兩道驗證後 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.57</span> 🔥 改進：能量分配 picker 改成「按屬性分波」（多屬性更直觀）</summary>
         <ul>
           <li>玩家回報：閃焰王牌｜閃焰渦輪 從牌庫挑 ≤3 張基本能量分配給備戰寶可夢時，若選了<b>不同屬性</b>能量（例：水 1 + 鬥 2），UI 不應把所有能量混成一個 +/- counter 讓玩家瞎選，而應該<b>按屬性分波</b>：先問水能量分配給哪隻、再問鬥能量分配給哪些（同屬性 +/- counter）。</li>
