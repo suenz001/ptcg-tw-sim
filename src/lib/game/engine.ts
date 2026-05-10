@@ -1759,12 +1759,14 @@ function handlePlaying(
     const hasPushEvolveAbility = isActive && baseCard.abilities?.some(a => a.name === '提升進化');
     // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化也 bypass isFirstTurn gate（卡面：「最初回合或剛使出的回合也可進化」）
     const hasShellinkBypassFirst = hasShellinkEvolveBypass(baseCard, state, aIdx, pool);
-    // v3.49 鬥志戰吼（勒克貓）：若對手戰鬥場是 ex，evoCard 是「勒克貓」 → bypass isFirstTurn / justPlaced
-    //   原 v2.384 寫 baseCard.name === '勒克貓' 是錯的（baseCard 是進化前的小貓怪、evoCard 才是勒克貓）。
+    // v2.384 / v3.51 鬥志戰吼（勒克貓 Stage1 特性）：若對手戰鬥場是 ex，
+    //   「這隻寶可夢」（已上場的勒克貓）就算在最初回合或剛使出的回合也可進化（成倫琴貓）。
+    //   判定條件：baseCard.name === '勒克貓'（場上要進化的勒克貓本身）。
+    //   v3.49 誤把它改成 evoCard.name 是錯的 — 那會 cover「進化成勒克貓」而非真正的「勒克貓→倫琴貓」。
     const _oppActiveEarly = state.players[1 - aIdx as 0 | 1]?.active;
     const _oppActiveCardEarly = _oppActiveEarly ? pool.get(_oppActiveEarly.cardId) : undefined;
     const _oppIsExEarly = _oppActiveCardEarly?.subtype === 'ex' || (_oppActiveCardEarly?.name?.endsWith('ex') ?? false);
-    const hasFightingHowlEarly = evoCard.name === '勒克貓' && _oppIsExEarly;
+    const hasFightingHowlEarly = baseCard.name === '勒克貓' && _oppIsExEarly;
     if (state.isFirstTurn && !hasPushEvolveAbility && !hasShellinkBypassFirst && !hasFightingHowlEarly) return state; // 第一回合不能進化
     // v2.102 活力森林（Stadium）— 雙方的所有【草】寶可夢就算在剛使出的回合也可進化成【草】寶可夢。
     //   自己最初回合例外（line 775 `state.isFirstTurn` gate 照舊擋）。
@@ -1773,9 +1775,8 @@ function handlePlaying(
     const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
     const vigorousForestException = stadiumName === '活力森林' &&
       baseCard.pokemonType === 'Grass' && evoCard.pokemonType === 'Grass';
-    // v3.49 修：鬥志戰吼是「勒克貓」這張卡的特性（evoCard）。當對手戰鬥場是 ex 時，
-    //   勒克貓即使「自己最初回合或剛使出的回合」也可從手牌進化基礎（小貓怪）。
-    //   原 v2.384 寫 baseCard.name === '勒克貓' 條件反了（baseCard 是場上的小貓怪 / 進化前）。
+    // v3.51：鬥志戰吼語意 = 場上的勒克貓（base）剛使出當回合可再進化成倫琴貓（evoCard）。
+    //   v2.384 原 baseCard.name === '勒克貓' 是對的；v3.49 我誤改 evoCard 反而毀了原邏輯，已 revert。
     const hasFightingHowl = hasFightingHowlEarly;
     // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化 — 自方場上有 partner 時 bypass isFirstTurn + justPlaced + evolvedThisTurn
     const hasShellinkBypass = hasShellinkEvolveBypass(baseCard, state, aIdx, pool);
@@ -5780,7 +5781,8 @@ export function getEvolvableTargets(
   const isForest = stadiumName === '活力森林';
 
   const result: Array<{ fromIid: string; toIids: string[] }> = [];
-  // v3.49 鬥志戰吼 UI 鏡射：對手 active 是 ex 時，evoCard='勒克貓' bypass isFirstTurn / justPlaced
+  // v3.51 鬥志戰吼 UI 鏡射：base 是「勒克貓」+ 對手 active 是 ex → bypass isFirstTurn / justPlaced / evolvedThisTurn
+  //   情境：場上的勒克貓（剛從小貓怪進化、evolvedThisTurn=true）想再進化成倫琴貓。
   const oppActiveUI = state.players[1 - state.activePlayerIndex as 0 | 1]?.active;
   const oppActiveCardUI = oppActiveUI ? pool.get(oppActiveUI.cardId) : undefined;
   const oppIsExUI = oppActiveCardUI?.subtype === 'ex' || (oppActiveCardUI?.name?.endsWith('ex') ?? false);
@@ -5792,10 +5794,8 @@ export function getEvolvableTargets(
     const hasPushEvolveAbility = isFpActive && fpCard.abilities?.some(a => a.name === '提升進化');
     // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化 — bypass isFirstTurn + justPlaced + evolvedThisTurn
     const hasShellinkBypassUI = hasShellinkEvolveBypass(fpCard, state, state.activePlayerIndex, pool);
-    // v3.49 鬥志戰吼：若 base 是小貓怪 + 手牌有勒克貓 + 對手 active 是 ex → bypass
-    const fpIsTinkatonBase = fpCard.name === '小貓怪';
-    const handHasLuxray = handEvos.some(h => pool.get(h.cardId)?.name === '勒克貓');
-    const hasFightingHowlBypass = fpIsTinkatonBase && handHasLuxray && oppIsExUI;
+    // v3.51 鬥志戰吼：base 是「勒克貓」+ 對手 active 是 ex → bypass
+    const hasFightingHowlBypass = fpCard.name === '勒克貓' && oppIsExUI;
     // isFirstTurn gate（除了提升進化 / 刺激進化 / 鬥志戰吼 bypass）
     if (state.isFirstTurn && !hasPushEvolveAbility && !hasShellinkBypassUI && !hasFightingHowlBypass) continue;
     // 活力森林 bypass 對 base 的要求：base 是草寶可夢

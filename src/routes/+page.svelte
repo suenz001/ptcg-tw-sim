@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.51</span> 🔥 hotfix：revert v3.49 鬥志戰吼方向錯誤（base 才對、不是 evoCard）</summary>
+        <ul>
+          <li>玩家提問「對手是 ex 寶可夢的話 勒克貓就可以在剛下的那回合進化成倫琴貓嗎」— 戳中 v3.49 修錯方向。</li>
+          <li>實際從 static/cards verify 完整進化鏈：小貓怪 (Basic) → <b>勒克貓 (Stage1，鬥志戰吼)</b> → 倫琴貓 (Stage2)。</li>
+          <li>卡面「這隻寶可夢就算在最初回合或剛使出的回合也可進化」— 「這隻寶可夢」= 持有特性的勒克貓本身。情境：場上的勒克貓（剛從小貓怪進化，<code>evolvedThisTurn=true</code>）在對手 active 是 ex 時可立刻再進化成倫琴貓。</li>
+          <li>正確判定：<code>baseCard.name === '勒克貓'</code>（場上要進化的勒克貓）。<b>v2.384 原邏輯是對的</b>，我 v3.49 誤改成 <code>evoCard.name === '勒克貓'</code> 反而 cover 了「進化成勒克貓」這個錯誤情境，原本的「勒克貓→倫琴貓」失效。</li>
+          <li>修法（revert v3.49 鬥志戰吼部分，保留閃焰渦輪 fix）：① engine.ts L1777 改回 baseCard.name === '勒克貓'；② L1762 保留 isFirstTurn gate bypass（v3.49 對的部分，補了 v2.384 漏的）；③ UI helper getEvolvableTargets L5790 同步改為 base 是勒克貓 + oppIsEx 的條件。</li>
+          <li>檢討：這次 hallucination 源自誤讀卡面「這隻寶可夢」的指涉對象。下次遇到 base/evoCard 條件判斷必須先實際追完整進化鏈再下手。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.50</span> hotfix：修 v3.49 v2550 tsc 4 errors（GameState 沒 import + 3 處 filter callback type 推斷失敗）</summary>
         <ul>
           <li>v3.49 推 push 後跑 tsc 才發現 4 個 type error（之前先跑 push 後驗證的順序錯誤）：<code>v2550_i_wave5_meta.ts:241</code> 用 <code>GameState</code> 但檔案 import 只有 <code>CardInstance, PlayerState</code>；L247/249/264 三個 <code>filter/find</code> callback 的 <code>c, b</code> 參數推不出型別。</li>
