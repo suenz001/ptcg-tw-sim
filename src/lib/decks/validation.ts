@@ -37,6 +37,7 @@ const STANDARD_REPRINT_LEGAL_NAMES = new Set<string>([
   '老大的指令',     // Boss's Orders
   '裁判',           // Judge
   '神奇糖果',       // v3.62 Rare Candy — I 標 M1S 082/063 + MC 655/742 重印，舊版含 G 標仍合法
+  '能量回收',       // v3.63 Energy Recycler — I 標 M4 104/083 + MC 636/742 + SV11W 079/086 重印
 ]);
 
 export function isStandardReprintLegal(card: Card): boolean {

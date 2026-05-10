@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.63</span> 🃏 能量回收加入 reprint exception</summary>
+        <ul>
+          <li>玩家補充：能量回收（Energy Recycler）也在 I 標有多版重印（M4 104/083、MC 636/742、SV11W 079/086），舊 G 標版本（SVM 125/175、SVQL 012/022）也合法。</li>
+          <li>修法：<code>STANDARD_REPRINT_LEGAL_NAMES</code> 加入「能量回收」，現共 <b>10 張</b>舊版（含 G 標）仍合法的卡。</li>
+          <li>tsc 0 errors + svelte parse 兩道驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.62</span> 🃏 補神奇糖果到 reprint 例外 + picker UI 動詞修正（hand-discard 誤用全 audit）</summary>
         <ul>
           <li>玩家補充：① 神奇糖果也有 I 標重印（M1S 082/063 + MC 655/742），G 標舊版仍合法。② 花舞鳥ex｜激動渦輪 picker 顯示「丟棄」但其實是「附加」— 請 audit 同類 bug。③ 漏修兩張 metadata。</li>
