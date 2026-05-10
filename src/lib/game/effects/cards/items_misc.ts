@@ -1098,7 +1098,8 @@ reg('能量撢子', (st, idx, pool) => {
     minCount: 0, maxCount: 1,
     filter: 'Energy',
     effectKey: 'energy-duster-pick',
-    params: { validIids: energyIids },
+    // v3.62 titleOverride：是「放回對手牌庫下方」不是丟棄
+    params: { validIids: energyIids, titleOverride: '能量撢子：選 1 張對手手牌能量放回對手牌庫下方' },
   });
 });
 regR('energy-duster-pick', (st, idx, iids, _params, pool) => {

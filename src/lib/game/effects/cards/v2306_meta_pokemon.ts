@@ -46,7 +46,9 @@ regA('厄鬼椪 碧草面具ex', 0, (state, aIdx, pool, inst) => {
   if (instInPlay) instInPlay.abilityUsedThisTurn = true;
   return withPending(s, {
     type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    filter: 'BasicEnergy:Grass', effectKey: 'teal-dance-attach', params: { targetIid: inst.iid }
+    filter: 'BasicEnergy:Grass', effectKey: 'teal-dance-attach',
+    // v3.62 titleOverride：是「附於碧草面具ex」不是丟棄
+    params: { targetIid: inst.iid, titleOverride: '碧綠之舞：選 1 張手牌基本【草】能量附於碧草面具ex' }
   });
 });
 regR('teal-dance-attach', (state, actorIdx, selectedIids, params) => {

@@ -154,7 +154,13 @@ regA('花舞鳥ex', 0, (st, idx, pool) => {
     type: 'hand-discard', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Energy:Fire', minCount: 1, maxCount: 1,
     effectKey: 'exciting-turbo-pick-target',
-    params: { validIids: energies.map(e => e.iid), validTargetIids: targets.map(t => t.iid) },
+    // v3.62 titleOverride：picker 預設 title 是「選擇手牌」中性語，
+    //   這裡改成講清楚動詞「選 1 張手牌基本【火】能量（接著選備戰目標附於該位）」。
+    params: {
+      validIids: energies.map(e => e.iid),
+      validTargetIids: targets.map(t => t.iid),
+      titleOverride: '激動渦輪：選 1 張手牌基本【火】能量（接著選備戰目標附於該位）',
+    },
   });
 });
 

@@ -264,6 +264,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.62</span> 🃏 補神奇糖果到 reprint 例外 + picker UI 動詞修正（hand-discard 誤用全 audit）</summary>
+        <ul>
+          <li>玩家補充：① 神奇糖果也有 I 標重印（M1S 082/063 + MC 655/742），G 標舊版仍合法。② 花舞鳥ex｜激動渦輪 picker 顯示「丟棄」但其實是「附加」— 請 audit 同類 bug。③ 漏修兩張 metadata。</li>
+          <li><b>① 神奇糖果加入 reprint exception</b>：<code>STANDARD_REPRINT_LEGAL_NAMES</code> 多加 1 張，現共 9 張舊版（含 G 標）仍合法的卡。</li>
+          <li><b>② 補修 2 張 JSON regulationMark</b>：</li>
+          <li>　・神奇糖果 MBG 013/022：H → <b>I</b></li>
+          <li>　・寶可夢捕捉器 SVM 137/175：J → <b>G</b></li>
+          <li><b>③ hand-discard picker UI verb audit + 修正</b>：grep 全部 effects/cards/*.ts 用 <code>type: &#39;hand-discard&#39;</code> 的 ~25 處，找出 7 處<b>誤用為非丟棄場景</b>但 picker 預設 title 顯示「選擇丟棄的手牌」造成玩家誤會：</li>
+          <li>　・<b>激動渦輪</b>（花舞鳥ex）— 是「選火能量附於備戰」</li>
+          <li>　・<b>沙儷</b>（支援者）— 是「選寶可夢放回牌庫」</li>
+          <li>　・<b>碧綠之舞</b>（厄鬼椪 碧草面具ex）— 是「選草能量附於碧草面具ex」</li>
+          <li>　・<b>無力充能</b>（青木的考拉哥）— 是「選能量附於戰鬥寶可夢」</li>
+          <li>　・<b>幸福禮物</b>（×2 個 stage）— 是「選基本能量附於對手 / 自己寶可夢」</li>
+          <li>　・<b>金色火焰</b>（阿響系列）— 是「選火能量附於阿響的寶可夢」</li>
+          <li>　・<b>能量撢子</b>（物品）— 是「選對手手牌能量放回對手牌庫下方」</li>
+          <li><b>修法：</b>① picker 預設 title 從「選擇丟棄的手牌」改為中性「選擇手牌」（真正丟棄的卡如 高級球/交易/再構築 的 addLog 已說「丟棄」，picker 中立 OK）。② 上述 7 處在 effects 端 <code>params</code> 補上 <code>titleOverride</code> 寫清楚動詞。</li>
+          <li><b>檢討</b>：picker type 名稱（<code>hand-discard</code>）強烈暗示動詞但實際是泛用 picker，導致誤用。長期解：要嘛 rename 為 <code>hand-pick</code>（breaking change，所以不做），要嘛靠 <code>titleOverride</code> 補語意 — 本版採後者並建立鐵律：日後新增 <code>hand-discard</code> 但不是「丟棄」用途的場景，<b>必須在 params 加 titleOverride</b>。</li>
+          <li>tsc 0 errors + svelte/compiler parse 兩道驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.61</span> 🃏 構築 gate 升級 + 8 張卡 metadata 修正</summary>
         <ul>
           <li>玩家提需求：三件事一起做。</li>

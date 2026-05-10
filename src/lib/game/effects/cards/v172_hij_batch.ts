@@ -147,7 +147,8 @@ reg('沙儷', (st, idx, pool) => {
     minCount: 0, maxCount: Math.min(2, handPokeIids.length),
     filter: 'Pokemon',
     effectKey: 'sari-return-then-search',
-    params: { validIids: handPokeIids },
+    // v3.62 titleOverride：說明「放回牌庫」而非預設的中性 title
+    params: { validIids: handPokeIids, titleOverride: '沙儷：選最多 2 張寶可夢放回牌庫' },
   });
 });
 regR('sari-return-then-search', (st, idx, iids, _params, pool) => {

@@ -507,7 +507,8 @@ regPost('信使鳥|幸福禮物', (state, aIdx, pool) => {
       minCount: 0, maxCount: 3,
       filter: 'BasicEnergy',
       effectKey: 'lucky-gift-opp',
-      params: { attackerIdx: aIdx },
+      // v3.62 titleOverride：是「附於寶可夢」不是丟棄
+      params: { attackerIdx: aIdx, titleOverride: '幸福禮物：選 ≤3 張基本能量附於對手寶可夢（接著選目標）' },
     });
   }
   // 對手無基本能量 → 直接到我方
@@ -519,7 +520,8 @@ regPost('信使鳥|幸福禮物', (state, aIdx, pool) => {
       minCount: 0, maxCount: 3,
       filter: 'BasicEnergy',
       effectKey: 'lucky-gift-self',
-      params: {},
+      // v3.62 titleOverride：是「附於自己寶可夢」不是丟棄
+      params: { titleOverride: '幸福禮物：選 ≤3 張基本能量附於自己寶可夢（接著選目標）' },
     });
   }
   return state;
@@ -559,7 +561,8 @@ regR('lucky-gift-opp', (state, dIdx, iids, params, pool) => {
     minCount: 0, maxCount: 3,
     filter: 'BasicEnergy',
     effectKey: 'lucky-gift-self',
-    params: {},
+    // v3.62 titleOverride：是「附於自己寶可夢」不是丟棄
+    params: { titleOverride: '幸福禮物：選 ≤3 張基本能量附於自己寶可夢（接著選目標）' },
   });
 });
 

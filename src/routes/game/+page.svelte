@@ -2765,7 +2765,12 @@
     if (type === 'bench-choose')    return '選擇備戰寶可夢';
     if (type === 'opp-bench-choose') return '選擇對手的備戰寶可夢';
     if (type === 'opp-poke-choose') return '選擇對手的寶可夢';
-    if (type === 'hand-discard')    return '選擇丟棄的手牌';
+    // v3.62：default 改為中性「選擇手牌」。
+    //   原本「選擇丟棄的手牌」對誤用 hand-discard 為「附加 / 放回牌庫 / 互換」的卡會誤導玩家。
+    //   真正丟棄的卡（高級球 / 交易 / 再構築 / 松葉的信心 等）addLog 已說「丟棄」，picker title 中立 OK。
+    //   非丟棄的卡（激動渦輪 / 沙儷 / 碧綠之舞 / 無力充能 / 幸福禮物 / 金色火焰 / 能量撢子）
+    //   都已在 effects 端傳 params.titleOverride 蓋過此 default。
+    if (type === 'hand-discard')    return '選擇手牌';
     if (type === 'hand-choose')     return '從手牌選擇';
     if (type === 'active-energy-discard') return '選擇撤退要丟棄的能量';
     if (type === 'heal-target') {

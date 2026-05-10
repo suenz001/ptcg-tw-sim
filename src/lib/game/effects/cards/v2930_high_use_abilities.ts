@@ -133,7 +133,11 @@ regA('阿響的鳳王ex', 0, (st, idx, pool, _cardInst) => {
     filter: 'Energy:Fire',
     minCount: 0, maxCount: max,
     effectKey: 'gold-flame-pick-energy',
-    params: { validIids: fireEnergies.map(c => c.iid) },
+    // v3.62 titleOverride：是「附於阿響的寶可夢」不是丟棄
+    params: {
+      validIids: fireEnergies.map(c => c.iid),
+      titleOverride: `金色火焰：選 0~${max} 張手牌基本【火】能量（接著選「阿響的」寶可夢附於）`,
+    },
   });
 });
 

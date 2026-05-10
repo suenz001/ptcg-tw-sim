@@ -264,7 +264,8 @@ regA('青木的樹枕尾熊', 0, (st, idx, pool, inst) => {
     filter: 'Energy',
     minCount: 1, maxCount: 1,
     effectKey: 'koala-feeble-charge',
-    params: {},
+    // v3.62 titleOverride：是「附於戰鬥寶可夢」不是丟棄
+    params: { titleOverride: '無力充能：選 1 張手牌能量附於戰鬥寶可夢' },
   });
 });
 regR('koala-feeble-charge', (state, aIdx, iids, _params, _pool) => {
