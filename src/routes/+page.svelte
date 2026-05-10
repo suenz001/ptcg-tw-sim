@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.64</span> 📱 hotfix：手機版零之大空洞延伸格 (bench 6/7/8) 放不上的 bug</summary>
+        <ul>
+          <li>玩家回報：場上有零之大空洞 + 備戰也有太晶寶可夢時，UI 確實畫出了延伸格子（共 8 格），但拖手機上點手牌的 action sheet 卻沒出現「📥 放到備戰區」按鈕，無法把寶可夢放上 6/7/8 格。</li>
+          <li>追根因：<code>MobilePortraitBattle.svelte:229,233</code> 的 <code>handActions</code> hardcode <code>myPlayer.bench.length &lt; 5</code> 作為「放到備戰區」按鈕的 gate。零之大空洞下實際上限是 8（有 myBenchLimit 變數已 derive 自 <code>getBenchLimit()</code>），但這裡卡在 5 不放行。</li>
+          <li>注意：<code>playableBasicIids</code>（由 engine <code>getPlayableBasics()</code> 計算）playing 階段已正確套用 <code>getBenchLimit()</code>，所以實際上 playing 階段的 bug 影響有限；這裡主要是 setup 階段以及 fallback condition。為徹底起見兩處都改。</li>
+          <li>修法：兩處 <code>bench.length &lt; 5</code> 改為 <code>bench.length &lt; myBenchLimit</code>。</li>
+          <li>tsc 0 errors + svelte parse 兩道驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.63</span> 🃏 能量回收加入 reprint exception</summary>
         <ul>
           <li>玩家補充：能量回收（Energy Recycler）也在 I 標有多版重印（M4 104/083、MC 636/742、SV11W 079/086），舊 G 標版本（SVM 125/175、SVQL 012/022）也合法。</li>

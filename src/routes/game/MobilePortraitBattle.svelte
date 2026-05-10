@@ -226,11 +226,16 @@
     // 基礎寶可夢
     if (isBasicMon(c)) {
       const canPlayBasic = playableBasicIids.has(iid) || (isSetup && !myPlayer.active);
-      const canPlayBench = (isSetup && myPlayer.bench.length < 5) || playableBasicIids.has(iid);
+      // v3.64：用 myBenchLimit（已 derive 自 getBenchLimit）取代 hardcoded 5
+      //   零之大空洞 + 太晶寶可夢時上限 8；舊邏輯卡在 5，導致延伸位置（6/7/8）
+      //   雖然有畫出格子但 hand action sheet 不顯示「放到備戰區」按鈕。
+      //   playableBasicIids 由 engine getPlayableBasics 計算（已正確套用 getBenchLimit），
+      //   playing 階段走那條 path 沒問題；setup 階段這裡 hardcode 5 是 bug。
+      const canPlayBench = (isSetup && myPlayer.bench.length < myBenchLimit) || playableBasicIids.has(iid);
       if (canPlayBasic && !myPlayer.active) {
         out.push({ label: '🃏 放到戰鬥場', action: () => playBasicToActive(iid), primary: true });
       }
-      if (canPlayBench && myPlayer.bench.length < 5) {
+      if (canPlayBench && myPlayer.bench.length < myBenchLimit) {
         out.push({ label: '📥 放到備戰區', action: () => playBasicToBench(iid) });
       }
     }
