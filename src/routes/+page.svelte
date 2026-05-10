@@ -264,7 +264,17 @@
     <div class="changelog-list">
 
       <details open>
-        <summary><span class="ver-badge">v3.54</span> 🚨 hotfix：修 v3.48 起連續 6 次 deploy 失敗（{@const} 在 &lt;div&gt; 內違反 Svelte 規則）</summary>
+        <summary><span class="ver-badge">v3.55</span> 🚨 hotfix：v3.54 changelog 文字內出現裸 <code>&#123;@const&#125;</code> 觸發 Svelte parser，繼續炸 build</summary>
+        <ul>
+          <li>v3.54 雖然已修對「<code>&#123;@const&#125;</code> 在 <code>&lt;div&gt;</code> 內」這個真正的根因（picker UI），但我寫 v3.54 changelog 時，<b>summary 文字裡直接打了字面 <code>&#123;@const&#125;</code></b>（沒做 HTML entity escape），於是 Svelte 又把它當成 expression，在 parse 階段炸：<code>Expected whitespace at line 267 col 97</code>。</li>
+          <li>修法：把 v3.54 changelog summary 那行的 <code>&#123;@const&#125;</code> 全部換成 <code>&amp;#123;@const&amp;#125;</code>（鐵律 1：Svelte template 內的 <code>&#123;</code>/<code>&#125;</code>/<code>&lt;</code>/<code>&gt;</code> 必須 entity escape）。</li>
+          <li>檢討：寫 changelog 自己卻沒遵守鐵律 1，連續炸 7 次 build（v3.48 ~ v3.54）。鐵律不只 src code 要遵守，<b>連 docs/changelog 寫到 Svelte/JSX 語法符號都要 escape</b>。</li>
+          <li>tsc 0 errors + 直接呼叫 svelte/compiler 試 parse 兩道驗證後才 push。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v3.54</span> 🚨 hotfix：修 v3.48 起連續 6 次 deploy 失敗（&#123;@const&#125; 在 &lt;div&gt; 內違反 Svelte 規則）</summary>
         <ul>
           <li>玩家發現 GitHub Actions deploy 從 v3.48 連 6 次失敗（v3.48 ~ v3.53）— 雖然 tsc 過、但 vite-plugin-svelte build 階段炸。</li>
           <li>根因：v3.48 我加 picker UI verb 時用 <code>&#123;@const verbWord = ...&#125;</code> 在 <code>&lt;div class=&quot;sel-header&quot;&gt;</code> 跟 <code>&lt;div class=&quot;sel-footer&quot;&gt;</code> 內。但 Svelte 規定 <code>&#123;@const&#125;</code> 只能是 <code>&#123;#if&#125;</code> &#47; <code>&#123;#each&#125;</code> &#47; <code>&#123;#await&#125;</code> &#47; <code>&#123;#snippet&#125;</code> 等 block 的「直接 child」，<b>不能在普通 HTML element 內</b>。</li>
