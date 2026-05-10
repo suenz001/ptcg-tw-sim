@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.57</span> 🔥 改進：能量分配 picker 改成「按屬性分波」（多屬性更直觀）</summary>
+        <ul>
+          <li>玩家回報：閃焰王牌｜閃焰渦輪 從牌庫挑 ≤3 張基本能量分配給備戰寶可夢時，若選了<b>不同屬性</b>能量（例：水 1 + 鬥 2），UI 不應把所有能量混成一個 +/- counter 讓玩家瞎選，而應該<b>按屬性分波</b>：先問水能量分配給哪隻、再問鬥能量分配給哪些（同屬性 +/- counter）。</li>
+          <li>修法 1（通用化）：移除 <code>wave5-flame-turbo-*</code> 自製 resolver；閃焰渦輪改用通用 <code>v158-energy-chain-start</code> helper（source=&#39;deck&#39; / scope=&#39;bench-only&#39; / filterType=&#39;Any&#39;）。</li>
+          <li>修法 2（核心改動）：升級 <code>startEnergyChain</code> 的「混屬性」分支 — 原本走逐張 chain（每張能量發一次 heal-target picker，3 張要按 3 次），改成新的「按屬性分波」流程：</li>
+          <li>　・先把 energyIids 按屬性分組（同屬性視為一波）；</li>
+          <li>　・第 1 波發 <code>energy-distribute</code> picker（+/- counter UI、標題顯示「分配【X】能量」）；</li>
+          <li>　・resolver 處理該波 attach 後，若還有其他屬性 → 開下一波 picker；</li>
+          <li>　・選了「全部水」或「全部鬥」這類同屬性場景，仍走 line 282 的 sameType fast-path 一次解決（行為不變）。</li>
+          <li>新增 <code>v357-multi-type-distribute-wave</code> resolver + <code>groupEnergyIidsByType</code> + <code>dispatchByTypeWaveDistribute</code> helper（皆在 v158_energy_chain.ts）。</li>
+          <li>影響範圍：所有用 <code>v158-energy-chain-start</code> 的卡（B1-B3、A8 海紋石之雨、handAttachEnergyPost / discardEnergyAttachPost helper 系列）— 全自動受惠，不需改 caller。</li>
+          <li>Audit：另外 3 處 <code>energy-distribute</code> 用法（過度放電 / 龐克練肌 / 合金建造）filterType 都 hardcoded 成單一屬性（雷 / 惡 / 鋼），不會混屬性，無需修補。</li>
+          <li>tsc 0 errors + svelte/compiler parse 兩道驗證後 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.56</span> 🐉 hotfix：勒克貓鬥志戰吼真正修好（v2.384 / v3.51 都只修一半）</summary>
         <ul>
           <li>玩家實機回報：小貓怪 → 勒克貓 進化後，雖然對手戰鬥場是超級袋獸ex，UI 卻沒提示倫琴貓ex 可進化；勒克貓上反而出現「使用特性」按鈕、按了之後變「已用特性」但什麼都沒發生。</li>

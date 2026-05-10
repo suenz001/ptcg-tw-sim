@@ -301,25 +301,187 @@ export function startEnergyChain(
     });
   }
 
-  // 多個合法目標 + 混合屬性 → 維持原本逐張 chain
-  const firstEnergy = energyIids[0];
-  const remainingEnergies = energyIids.slice(1);
-  const firstEnergyInDiscard = st.players[aIdx].discard.find(c => c.iid === firstEnergy);
-  const firstEnergyCardName = firstEnergyInDiscard ? (pool.get(firstEnergyInDiscard.cardId)?.name ?? '能量') : '能量';
-  st = addLog(st, `${label}：選擇要附第 1 張能量的目標寶可夢（共 ${energyIids.length} 張待附）`, aIdx);
+  // 多個合法目標 + 混合屬性
+  // v3.57：原「逐張 chain」(heal-target picker 一張一張附）→ 改成「按屬性分波」。
+  //        例如玩家選了「水1+鬥2」共 3 張，UI 不再彈 3 次 picker，而是：
+  //          第 1 波：水能量（共 1 張）→ +/- counter 分配到目標
+  //          第 2 波：鬥能量（共 2 張）→ +/- counter 分配到目標
+  //        若所有能量同屬性，已在 line 282 的 sameType fast-path 一次解決。
+  return dispatchByTypeWaveDistribute(
+    st, aIdx,
+    energyIids,
+    validTargets.map(c => c.iid),
+    { label, scope, filterType },
+    pool,
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v3.57：按屬性分波 distribute helper（混屬性多目標的玩家友善 UI）
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// 流程：
+//   1. 把 energyIids 按屬性分組 → waves: Array<{typeName, energyIids[]}>
+//   2. 開第一波 energy-distribute picker（+/- counter UI 顯示「分配【X】能量」）
+//   3. resolver 處理該波 attach；若 waves 還有剩餘 → 開下一波 picker
+//
+function groupEnergyIidsByType(
+  energyIids: string[],
+  energiesInDiscard: CardInstance[],
+  pool: Map<string, Card>,
+): Array<{ typeName: string; energyIids: string[] }> {
+  // 卡名對中文屬性的查表（pokemonType 不可靠，scraper 部分基本能量沒填）
+  const nameToZh = (name: string): string => {
+    if (name.includes('【草】')) return '草';
+    if (name.includes('【火】')) return '火';
+    if (name.includes('【水】')) return '水';
+    if (name.includes('【雷】')) return '雷';
+    if (name.includes('【超】')) return '超';
+    if (name.includes('【鬥】')) return '鬥';
+    if (name.includes('【惡】')) return '惡';
+    if (name.includes('【鋼】')) return '鋼';
+    if (name.includes('【龍】')) return '龍';
+    if (name.includes('【無】')) return '無';
+    if (name.includes('【妖】')) return '妖';
+    return '?';
+  };
+  const groups = new Map<string, string[]>();
+  for (const iid of energyIids) {
+    const inst = energiesInDiscard.find(c => c.iid === iid);
+    if (!inst) continue;
+    const card = pool.get(inst.cardId);
+    if (!card) continue;
+    const enType = (card.pokemonType as SingleType | undefined);
+    const zh = enType ? (ZH_BY_TYPE[enType] ?? nameToZh(card.name)) : nameToZh(card.name);
+    if (!groups.has(zh)) groups.set(zh, []);
+    groups.get(zh)!.push(iid);
+  }
+  // 維持 [水, 鬥, ...] 的插入順序（玩家在 deck-search 點擊順序）
+  return Array.from(groups, ([typeName, ids]) => ({ typeName, energyIids: ids }));
+}
+
+function dispatchByTypeWaveDistribute(
+  st: GameState,
+  aIdx: 0 | 1,
+  energyIids: string[],
+  validIids: string[],
+  opts: { label: string; scope: 'bench-only' | 'any-own'; filterType: EnergyTypeFilter },
+  pool: Map<string, Card>,
+): GameState {
+  const energyInsts = st.players[aIdx].discard.filter(c => energyIids.includes(c.iid));
+  const waves = groupEnergyIidsByType(energyIids, energyInsts, pool);
+  if (waves.length === 0) {
+    return addLog(st, `${opts.label}：能量分組失敗，能量留在棄牌區`, aIdx);
+  }
+  const [first, ...rest] = waves;
+  const tail = first.energyIids.length > 1 ? `（共 ${first.energyIids.length} 張）` : '';
+  st = addLog(st,
+    `${opts.label}：請以「+/-」分配【${first.typeName}】能量到 ${validIids.length} 個合法目標${tail}` +
+    (rest.length > 0 ? `（之後還有 ${rest.length} 種屬性待分配）` : ''),
+    aIdx);
   return withPending(st, {
-    type: scope === 'bench-only' ? 'bench-choose' : 'heal-target',
+    type: 'energy-distribute',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'v158-energy-chain-attach',
+    minCount: first.energyIids.length, maxCount: first.energyIids.length,
+    effectKey: 'v357-multi-type-distribute-wave',
     params: {
-      label, scope, filterType,
-      currentEnergy: firstEnergy,
-      remainingEnergies,
-      titleOverride: `${label}：將「${firstEnergyCardName}」附到哪一隻寶可夢？`,
+      label: opts.label,
+      scope: opts.scope,
+      filterType: opts.filterType,
+      energyIids: first.energyIids,
+      currentTypeName: first.typeName,
+      remainingWaves: rest,
+      validIids,
+      totalCount: first.energyIids.length,
+      placedCount: 0,
+      energyTypeName: first.typeName,
     },
   });
 }
+
+// resolver：處理當前波的 attach；若還有 remainingWaves → 開下一波
+regR('v357-multi-type-distribute-wave', (st, aIdx, selectedIids, params, pool) => {
+  const label = String(params?.label ?? '能量分配');
+  const scope = (params?.scope as 'bench-only' | 'any-own') ?? 'any-own';
+  const filterType = (params?.filterType as EnergyTypeFilter | undefined) ?? 'Any';
+  const currentEnergyIids = ((params?.energyIids as string[] | undefined) ?? []).slice();
+  const currentTypeName = String(params?.currentTypeName ?? '');
+  const remainingWaves = ((params?.remainingWaves as Array<{ typeName: string; energyIids: string[] }> | undefined) ?? []).slice();
+
+  if (selectedIids.length === 0 || currentEnergyIids.length === 0) {
+    st = addLog(st, `${label}：未分配【${currentTypeName}】能量；剩餘留在棄牌區`, aIdx);
+  } else {
+    const useCount = Math.min(selectedIids.length, currentEnergyIids.length);
+    const tally = new Map<string, number>();
+    for (let i = 0; i < useCount; i++) {
+      const targetIid = selectedIids[i];
+      const energyIid = currentEnergyIids[i];
+      const p = st.players[aIdx];
+      const energyInst = p.discard.find(c => c.iid === energyIid);
+      if (!energyInst) continue;
+      const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
+      if (!target) continue;
+      st = updatePlayer(st, aIdx, pl => {
+        const restDiscard = pl.discard.filter(c => c.iid !== energyIid);
+        const attach = (poke: CardInstance) => poke.iid === targetIid
+          ? { ...poke, energyAttached: [...poke.energyAttached, energyInst] } : poke;
+        return {
+          ...pl, discard: restDiscard,
+          active: pl.active ? attach(pl.active) : pl.active,
+          bench: pl.bench.map(attach),
+        };
+      });
+      tally.set(targetIid, (tally.get(targetIid) ?? 0) + 1);
+    }
+    const parts: string[] = [];
+    for (const [iid, n] of tally) {
+      const player = st.players[aIdx];
+      const tInst = player.active?.iid === iid ? player.active : player.bench.find(c => c.iid === iid);
+      const name = tInst ? (pool.get(tInst.cardId)?.name ?? '?') : '?';
+      parts.push(`${name}×${n}`);
+    }
+    if (parts.length > 0) {
+      st = addLog(st, `${label}：${parts.join('、')}（【${currentTypeName}】能量 ${useCount} 張）`, aIdx);
+    }
+  }
+
+  // 還有下一波 → 重算合法目標、發下一波 picker
+  if (remainingWaves.length === 0) return st;
+  const candidates: CardInstance[] = [];
+  if (scope === 'any-own') {
+    if (st.players[aIdx].active) candidates.push(st.players[aIdx].active!);
+  }
+  for (const b of st.players[aIdx].bench) candidates.push(b);
+  const nextValid = candidates
+    .filter(c => pokemonMatchesType(pool.get(c.cardId), filterType))
+    .map(c => c.iid);
+  if (nextValid.length === 0) {
+    const totalLeft = remainingWaves.reduce((n, w) => n + w.energyIids.length, 0);
+    return addLog(st, `${label}：場上已無合法目標，剩 ${totalLeft} 張能量留在棄牌區`, aIdx);
+  }
+  const [next, ...rest] = remainingWaves;
+  const tailMsg = next.energyIids.length > 1 ? `（共 ${next.energyIids.length} 張）` : '';
+  st = addLog(st,
+    `${label}：接著分配【${next.typeName}】能量到 ${nextValid.length} 個合法目標${tailMsg}` +
+    (rest.length > 0 ? `（之後還有 ${rest.length} 種屬性待分配）` : ''),
+    aIdx);
+  return withPending(st, {
+    type: 'energy-distribute',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: next.energyIids.length, maxCount: next.energyIids.length,
+    effectKey: 'v357-multi-type-distribute-wave',
+    params: {
+      label, scope, filterType,
+      energyIids: next.energyIids,
+      currentTypeName: next.typeName,
+      remainingWaves: rest,
+      validIids: nextValid,
+      totalCount: next.energyIids.length,
+      placedCount: 0,
+      energyTypeName: next.typeName,
+    },
+  });
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Entry：玩家完成能量挑選後 picker resolve → 啟動 chain（薄殼，呼叫 helper）
