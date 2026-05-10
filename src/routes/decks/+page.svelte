@@ -12,7 +12,7 @@
   } from '$lib/decks/storage';
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import type { Deck } from '$lib/decks/types';
-  import { validateDeck, maxCopies, isBasicEnergy, isAceSpec, aceSpecCount } from '$lib/decks/validation';
+  import { validateDeck, maxCopies, isBasicEnergy, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity } from '$lib/decks/validation';
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
   import { VERSION } from '$lib/version';
   import { auth } from '$lib/firebase';
@@ -463,16 +463,22 @@
 
   function addCard(card: Card) {
     if (!active || isPresetActive) return;
+    // v3.61：改用 remainingCapacity 統一處理 4 張同名 / ACE SPEC 1 張 / 基本能量無上限 三規則。
+    //   key 點：同名 4 張上限是「跨版本累計」— 4 張呱呱泡蛙 SV5a 後再點 呱呱泡蛙 M4 也擋。
+    //   ex / 非 ex / 超級進化 ex 因卡名不同（甲賀忍蛙 / 甲賀忍蛙ex / 超級甲賀忍蛙ex），各自獨立計 4 張。
+    const remaining = remainingCapacity(active, card, poolById);
+    if (remaining <= 0) {
+      if (isAceSpec(card)) {
+        alert('一副牌最多只能放 1 張 ACE SPEC 卡。');
+      } else if (!isBasicEnergy(card)) {
+        const total = sameNameTotal(active, card.name, poolById);
+        alert(`同名卡片「${card.name}」已達 4 張上限（目前 ${total} 張，跨版本/招式累計）`);
+      }
+      return;
+    }
     const entries = [...active.entries];
     const i = entries.findIndex((e) => e.cardId === card.id);
     const currentCount = i >= 0 ? entries[i].count : 0;
-    const max = maxCopies(card);
-    if (currentCount >= max) return;
-    // ACE SPEC：整副牌只能 1 張（不管同名還是異名），擋在這裡。
-    if (isAceSpec(card) && aceSpecCount(active, poolById) >= 1) {
-      alert('一副牌最多只能放 1 張 ACE SPEC 卡。');
-      return;
-    }
     if (i >= 0) entries[i] = { ...entries[i], count: currentCount + 1 };
     else entries.push({ cardId: card.id, count: 1 });
     const updated = { ...active, entries };
@@ -1086,7 +1092,9 @@
 {#if pickerPreview}
   {@const pv = pickerPreview}
   {@const pvCount = previewCount}
-  {@const pvMax = maxCopies(pv)}
+  {@const pvSameName = active && !isBasicEnergy(pv) && !isAceSpec(pv) ? sameNameTotal(active, pv.name, poolById) : 0}
+  {@const pvRemaining = active ? remainingCapacity(active, pv, poolById) : maxCopies(pv)}
+  {@const pvMax = pvCount + (pvRemaining === Infinity ? 0 : pvRemaining)}
   <div class="pv-overlay" role="dialog" aria-modal="true" aria-label="卡片詳情"
     onclick={closePreview}>
     <div class="pv-inner" onclick={(e) => e.stopPropagation()}>

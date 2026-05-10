@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.61</span> 🃏 構築 gate 升級 + 8 張卡 metadata 修正</summary>
+        <ul>
+          <li>玩家提需求：三件事一起做。</li>
+          <li><b>① 同名 4 張橫跨版本擋</b>：原 + 按鈕只看 per-card.id 的 maxCopies(card)=4，導致玩家先放 4 張呱呱泡蛙 SV5a 後再點 呱呱泡蛙 M4（不同 card.id、相同 name）也能 +。改為 <code>remainingCapacity()</code>：同名累計 ≥ 4 直接擋並 alert「同名卡片『X』已達 4 張上限（跨版本/招式累計）」。<b>ex / 非 ex / 超級進化 ex 因 JSON name 不同（甲賀忍蛙 / 甲賀忍蛙ex / 超級甲賀忍蛙ex），各自獨立計 4 張，<u>不變</u></b>。</li>
+          <li><b>② G 標基本能量在標準賽不受構築限制</b>：<code>validateDeck</code> 的 regulationMark 檢查跳過 <code>isBasicEnergy(card)</code>。實體賽事規則明文「基本能量不受任何構築限制」— 含所有屬性（草/火/水/雷/超/鬥/惡/鋼/妖/龍/無），任何標記都合法。</li>
+          <li><b>③ Reprint exception 名單</b>：因 H/I/J 標有重印過、舊版本（含 G 標）依然合法的 8 張卡：寶可夢交替 / 寶可裝置3.0 / 寶可夢捕捉器 / 高級球 / 粉碎之錘 / 能量轉移 / 老大的指令 / 裁判。<code>validateDeck</code> 這 8 張卡名都跳過 regulationMark 檢查。日後若有新增重印類型，加進 <code>STANDARD_REPRINT_LEGAL_NAMES</code> set 即可。</li>
+          <li><b>修正 8 張卡 JSON regulationMark（玩家回報資料庫標記錯誤）</b>：</li>
+          <li>　・寶可夢交替 SV5a 056/066：I → <b>G</b></li>
+          <li>　・寶可夢捕捉器 SV5a 057/066：J → <b>G</b></li>
+          <li>　・粉碎之錘 SVM 131/175：J → <b>G</b></li>
+          <li>　・高級球 MBD 014/022：H → <b>I</b></li>
+          <li>　・高級球 MBG 012/022：H → <b>I</b></li>
+          <li>　・寶可夢交替 MBG 015/022：H → <b>I</b></li>
+          <li>　・寶可夢交替 SV9a 058/063：I → <b>G</b></li>
+          <li>　・寶可夢交替 SVK 022/042：I → <b>G</b></li>
+          <li>新增 helper：<code>sameNameTotal(deck, name, cardsById)</code> / <code>remainingCapacity(deck, card, cardsById)</code> / <code>isStandardReprintLegal(card)</code> / <code>STANDARD_REPRINT_LEGAL_NAMES</code> set，皆在 <code>validation.ts</code>；UI <code>addCard</code> 與 modal preview 的 pvMax 改用 remaining-aware 計算。</li>
+          <li>tsc 0 errors + svelte/compiler parse 兩道驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.59</span> 🤖 hotfix：AI setup 在手牌只有閃焰王牌時卡死（瞬間爆發力沒同步給 AI）</summary>
         <ul>
           <li>玩家回報：與 AI 對戰開局，AI 設置寶可夢階段卡住。懷疑 AI 手上有閃焰王牌（瞬間爆發力）但不知道怎麼處理。</li>
