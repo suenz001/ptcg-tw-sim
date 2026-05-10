@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.54</span> 🚨 hotfix：修 v3.48 起連續 6 次 deploy 失敗（{@const} 在 &lt;div&gt; 內違反 Svelte 規則）</summary>
+        <ul>
+          <li>玩家發現 GitHub Actions deploy 從 v3.48 連 6 次失敗（v3.48 ~ v3.53）— 雖然 tsc 過、但 vite-plugin-svelte build 階段炸。</li>
+          <li>根因：v3.48 我加 picker UI verb 時用 <code>&#123;@const verbWord = ...&#125;</code> 在 <code>&lt;div class=&quot;sel-header&quot;&gt;</code> 跟 <code>&lt;div class=&quot;sel-footer&quot;&gt;</code> 內。但 Svelte 規定 <code>&#123;@const&#125;</code> 只能是 <code>&#123;#if&#125;</code> &#47; <code>&#123;#each&#125;</code> &#47; <code>&#123;#await&#125;</code> &#47; <code>&#123;#snippet&#125;</code> 等 block 的「直接 child」，<b>不能在普通 HTML element 內</b>。</li>
+          <li>修法：把 3 處 <code>&#123;@const&#125;</code>（verbWord、verbBtn、skipLabel）全部 inline 化（直接寫 ternary 在 h3 &#47; button 內），語意完全等價。</li>
+          <li>後續 5 個 hotfix（v3.49 閃焰渦輪 / 鬥志戰吼、v3.50 tsc errors、v3.51 revert、v3.52 註解清理、v3.53 赤松）的邏輯都是對的，只是被這 6 次 build 失敗連帶卡住沒部署。修完 v3.54 build 通過後，全部累積的修補一次生效。</li>
+          <li>檢討：之前 sandbox 的 EPERM 阻止跑 vite build，<b>tsc 通過 ≠ vite build 通過</b>。未來推 picker UI 改動務必先過 build verify，或避開「<code>&#123;@const&#125;</code> 在 element 內」這個 anti-pattern。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.53</span> 🔥 hotfix：赤松選 1 張基本能量時應加入手牌（依官方 QA），不能附加</summary>
         <ul>
           <li>玩家提供官方 QA：「使用支援者卡赤松時，若從牌庫僅選擇了 1 張基本能量卡，那麼可以將這張能量卡附加給自己的寶可夢嗎？」答：「<b>不可以</b>。這個情況下，要將選擇的能量卡加入手牌中。」</li>
