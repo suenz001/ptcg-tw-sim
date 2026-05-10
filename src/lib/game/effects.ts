@@ -5750,6 +5750,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('薩戮德|叢林鞭打', {
   choicePrompt: '是否將這隻寶可夢身上附加的能量卡全部放回手牌，增加 80 點傷害？',
   choiceYesLabel: '是（+80 傷害 + 全能量回手）',
   choiceNoLabel: '否（保留能量）',
+  verb: 'return-to-hand', // 卡面：「將能量卡全部放回手牌」
 });
 regPre('薩戮德|叢林鞭打', (state, aIdx, _pool, action) => {
   const att = state.players[aIdx].active;

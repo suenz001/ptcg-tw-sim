@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.48</span> 🔧 picker UI 文字修正：4 張「放回」類招式不再誤顯示「丟棄」</summary>
+        <ul>
+          <li>玩家回報：忍者飛旋 picker 顯示「選擇要丟棄的能量」、「確定使用招式（丟 1 張）」、「不丟」— 但卡面實際是「放回手牌」，UI 文字與卡面語意不符。</li>
+          <li>實際從 static/cards 比對所有 ATTACK_PRE_DISCARD_CHOICE 註冊的招式，找出 4 張同類 bug：</li>
+          <li>① <b>超級甲賀忍蛙ex｜忍者飛旋</b> — 「放回手牌」</li>
+          <li>② <b>薩戮德｜叢林鞭打</b> — 「放回手牌」</li>
+          <li>③ <b>帝牙盧卡｜時間爆炸</b> — 「放回牌庫並重洗」</li>
+          <li>④ <b>厄鬼椪 水井面具ex｜激流水泵</b> — 「放回牌庫並重洗」</li>
+          <li>修法：PreDiscardSpec 加 <code>verb?: &#39;discard&#39; | &#39;return-to-hand&#39; | &#39;return-to-deck&#39;</code> 欄位，預設 &#39;discard&#39; 保留其他 21 張「丟棄」卡的明確語意。上述 4 張 spec 設對應 verb，UI 動態切換顯示文字（「選擇要放回手牌&#47;牌庫的能量」、「確定使用招式（放回 N 張）」、「不放回（0 傷害）」）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.47</span> 🔥 hotfix：超級甲賀忍蛙ex「忍者飛旋」可放回特殊【水】能量（依 PTCG 官方 QA）</summary>
         <ul>
           <li>玩家提供 PTCG 官方網站 QA 兩則：忍者飛旋可以將附加在超級甲賀忍蛙ex身上的「新衝天能量」、「泡沫【水】能量」放回手牌。</li>

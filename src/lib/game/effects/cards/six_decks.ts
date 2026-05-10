@@ -244,6 +244,7 @@ regR('ambush-snipe-by-counters', (state, aIdx, selectedIids, _params, pool) => {
 //   舊版（v2.132~v2.250）自動找最後一張水能量回手 — 玩家無選擇權，違反卡面「若希望」。
 ATTACK_PRE_DISCARD_CHOICE.set('超級甲賀忍蛙ex|忍者飛旋', {
   min: 0, max: 1, scope: 'attacker', baseDamage: 120, damagePerEnergy: 80,
+  verb: 'return-to-hand', // 卡面：「將 1 個【水】能量放回手牌」
 });
 regPre('超級甲賀忍蛙ex|忍者飛旋', (state, aIdx, pool, action) => {
   const chosenIids = action?.discardedEnergyIids ?? [];

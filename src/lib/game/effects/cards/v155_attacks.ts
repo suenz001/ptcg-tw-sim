@@ -461,6 +461,7 @@ regR('v155-tianxianstone-return', (st, aIdx, iids, _params, pool) => {
 // 卡面要求棄「全部」能量，所以實裝為 binary（不允許半棄）。
 ATTACK_PRE_DISCARD_CHOICE.set('帝牙盧卡|時間爆炸', {
   min: 0, max: null, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+  verb: 'return-to-deck', // 卡面：「將能量卡全部放回牌庫並重洗」
 });
 regPre('帝牙盧卡|時間爆炸', (state, aIdx, _pool, action) => {
   const att = state.players[aIdx].active;
@@ -519,6 +520,7 @@ regPost('洛奇亞ex|破壞潮旋', (state, aIdx) => {
 // PRE 階段棄能量；POST 階段讀同一 action 觸發 hitBenchPickPost。
 ATTACK_PRE_DISCARD_CHOICE.set('厄鬼椪 水井面具ex|激流水泵', {
   min: 0, max: 3, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+  verb: 'return-to-deck', // 卡面：「將 3 個能量放回牌庫並重洗」
 });
 regPre('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, _pool, action) => {
   const att = state.players[aIdx].active;

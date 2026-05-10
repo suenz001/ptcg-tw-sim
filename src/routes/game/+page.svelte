@@ -4626,7 +4626,8 @@
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
-          <h3>{isHandDiscard ? '🪶' : '⚡'} {preAttackDiscard.attackName}：選擇要丟棄的{
+          {@const verbWord = spec.verb === 'return-to-hand' ? '放回手牌的' : spec.verb === 'return-to-deck' ? '放回牌庫的' : '丟棄的'}
+          <h3>{isHandDiscard ? '🪶' : '⚡'} {preAttackDiscard.attackName}：選擇要{verbWord}{
             spec.scope === 'hand-rocket-supporter' ? '火箭隊支援者' :
             spec.scope === 'hand-energy' ? '能量卡' :
             isHandTool ? '寶可夢道具' :
@@ -4665,11 +4666,13 @@
           {/if}
         </div>
         <div class="sel-footer">
+          {@const verbBtn = spec.verb === 'return-to-hand' || spec.verb === 'return-to-deck' ? '放回' : '丟'}
           <button class="btn-act primary" disabled={!minOk || !maxOk} onclick={confirmPreAttackDiscard}>
-            確定使用招式（丟 {pickedCount} 張{isUnits ? `／${pickedAmount} 個能量` : ''}）
+            確定使用招式（{verbBtn} {pickedCount} 張{isUnits ? `／${pickedAmount} 個能量` : ''}）
           </button>
           {#if spec.min === 0}
-            <button class="btn-act secondary" onclick={() => { if (preAttackDiscard) { preAttackDiscard.picked = new Set(); confirmPreAttackDiscard(); } }}>不丟（0 傷害）</button>
+            {@const skipLabel = spec.verb === 'return-to-hand' || spec.verb === 'return-to-deck' ? '不放回' : '不丟'}
+            <button class="btn-act secondary" onclick={() => { if (preAttackDiscard) { preAttackDiscard.picked = new Set(); confirmPreAttackDiscard(); } }}>{skipLabel}（0 傷害）</button>
           {/if}
           <button class="btn-act secondary" onclick={cancelPreAttackDiscard}>取消</button>
         </div>

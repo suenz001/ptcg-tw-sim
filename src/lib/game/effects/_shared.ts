@@ -187,6 +187,12 @@ export interface PreDiscardSpec {
    * 仍照「卡張數」傳，需要 unit 倍率時自行解讀。
    */
   countMode?: 'cards' | 'units';
+  /**
+   * v3.48：picker UI 顯示用動詞。預設 'discard'（保留多數招式的「丟棄」語意）。
+   * 對少數「放回手牌 / 放回牌庫」類招式（忍者飛旋 / 叢林鞭打 / 時間爆炸 / 激流水泵）
+   * 設為對應 verb，UI 標題與按鈕會顯示「放回手牌」/「放回牌庫」而非誤導的「丟棄」。
+   */
+  verb?: 'discard' | 'return-to-hand' | 'return-to-deck';
 }
 
 export const ATTACK_PRE_DISCARD_CHOICE = new Map<string, PreDiscardSpec>();
