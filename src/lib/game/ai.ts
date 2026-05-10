@@ -16,6 +16,7 @@ import {
   getAvailableAttacks, getEffectiveAttacks, getEvolvableTargets,
   getPlayableTrainers, getPlayableBasics,
   getUsableAbilities, canRetreat, isBasicPokemonCard,
+  canBeInitialActiveCard,
   getEffectiveHP, canAffordAttack,
 } from './engine';
 
@@ -253,16 +254,30 @@ function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): 
   // 先選出場（選 HP 最高的基礎；含 ex 基礎）
   if (!player.active) {
     const basics = player.hand.filter(c => isBasicPokemonCard(pool.get(c.cardId)));
-    if (basics.length === 0) return null;
     // v3.43 魔靈多龍：含羞苞優先擺戰鬥場（用癢癢花粉爭取多龍進化時間）
-    if (isMarruneDragapult(player, pool)) {
+    if (basics.length > 0 && isMarruneDragapult(player, pool)) {
       const sweetVeil = basics.find(c => pool.get(c.cardId)?.name === '含羞苞');
       if (sweetVeil) return { type: 'PLACE_ACTIVE', iid: sweetVeil.iid, senderIdx: pIdx };
     }
-    const best = basics.reduce((a, b) =>
-      (pool.get(a.cardId)?.hp ?? 0) >= (pool.get(b.cardId)?.hp ?? 0) ? a : b
-    );
-    return { type: 'PLACE_ACTIVE', iid: best.iid, senderIdx: pIdx };
+    if (basics.length > 0) {
+      const best = basics.reduce((a, b) =>
+        (pool.get(a.cardId)?.hp ?? 0) >= (pool.get(b.cardId)?.hp ?? 0) ? a : b
+      );
+      return { type: 'PLACE_ACTIVE', iid: best.iid, senderIdx: pIdx };
+    }
+    // v3.59：沒有基礎寶可夢時，fallback 用「可作為起始戰鬥寶可夢」的卡（閃焰王牌瞬間爆發力）
+    //   官方 QA：「最初抽出的 7 張手牌中沒有【基礎】寶可夢，僅有閃焰王牌，可以因特性
+    //   『瞬間爆發力』的效果，將閃焰王牌放置於戰鬥場上並開始對戰」。
+    //   之前 AI 卡在這裡 — basics 空 → return null → AI setup 進不下去。
+    const initialActives = player.hand.filter(c => canBeInitialActiveCard(pool.get(c.cardId)));
+    if (initialActives.length > 0) {
+      const best = initialActives.reduce((a, b) =>
+        (pool.get(a.cardId)?.hp ?? 0) >= (pool.get(b.cardId)?.hp ?? 0) ? a : b
+      );
+      return { type: 'PLACE_ACTIVE', iid: best.iid, senderIdx: pIdx };
+    }
+    // 真的沒有任何能上戰鬥場的卡 — 放棄此回合 setup（理論上 mulligan 階段已 reshuffle 排除此 case）
+    return null;
   }
 
   // 再放備戰 — Setup 放滿手牌中的基礎寶可夢（最多 3 隻），避免 active 被秒殺就輸

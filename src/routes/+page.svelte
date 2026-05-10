@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.59</span> 🤖 hotfix：AI setup 在手牌只有閃焰王牌時卡死（瞬間爆發力沒同步給 AI）</summary>
+        <ul>
+          <li>玩家回報：與 AI 對戰開局，AI 設置寶可夢階段卡住。懷疑 AI 手上有閃焰王牌（瞬間爆發力）但不知道怎麼處理。</li>
+          <li>玩家提供官方 QA：「在對戰準備時，若最初抽出的 7 張手牌中沒有【基礎】寶可夢，僅有閃焰王牌，可以因特性『瞬間爆發力』的效果，將閃焰王牌放置於戰鬥場上並開始對戰嗎？答：可以。」</li>
+          <li>追根因：v2.42 已加 <code>canBeInitialActiveCard</code> helper，engine 端 PLACE_ACTIVE / mulligan 都對；UI 也有 <code>canSetupActiveSpecial</code> flag。<b>但 AI 沒同步</b> — <code>ai.ts:255</code> 仍用 <code>isBasicPokemonCard</code> 判斷可放戰鬥場的卡。AI 手牌只有閃焰王牌時 <code>basics.length === 0</code> → <code>return null</code> → AI 永遠交不出 setup action → 整局卡死。</li>
+          <li>修法：<code>handleSetupAI</code> 改成「先試 Basic、其次 fallback 用 canBeInitialActiveCard」：</li>
+          <li>　・有 Basic → 走原本邏輯（HP 最高優先 / 魔靈多龍含羞苞優先）</li>
+          <li>　・沒 Basic 但有閃焰王牌 → fallback 用 <code>canBeInitialActiveCard</code> filter 找出可起手戰鬥場的卡（閃焰王牌瞬間爆發力涵蓋）</li>
+          <li>　・備戰位仍維持 isBasicPokemonCard（卡面：「備戰位只能放基礎寶可夢」這條規則沒變）</li>
+          <li><b>檢討（要寫進新鐵律）</b>：每次新增「特殊規則 helper」（如本次的 <code>canBeInitialActiveCard</code>），務必同步更新 <b>3 個地方</b>：① engine handler（規則層）② UI helper（玩家視角）③ AI（AI 視角）。v2.42 加這個 helper 時改了 ① ②，漏了 ③ 拖到 4 年後玩家踩坑才發現。</li>
+          <li>tsc 0 errors + svelte/compiler parse 兩道驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.58</span> 🚨 hotfix：deck-search filter 13 處 orphan（金屬信號 bug 根因 — 大規模影響 11+ 張卡）</summary>
         <ul>
           <li>玩家回報：蓋諾賽克特ex｜金屬信號（卡面：選最多 2 張<b>【鋼】屬性的進化寶可夢卡</b>）實際變成「任意抓 1 張」。</li>
