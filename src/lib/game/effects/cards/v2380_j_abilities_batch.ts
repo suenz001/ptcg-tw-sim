@@ -26,7 +26,7 @@
  *
  * 已陸續真實裝（截至 v2.388，皆在 engine.ts / 其他模組 hook）：
  *   - 狙射樹梟ex｜狙擊手之眼（v2.385 effects.ts getDecidueyeSnipeEffectiveCost）
- *   - 勒克貓｜鬥志戰吼（v2.384 engine.ts EVOLVE gate hasFightingHowl）
+ *   - 勒克貓｜鬥志戰吼（在 engine.ts EVOLVE gate hasFightingHowl 處理）
  *   - 耿鬼｜無限之影（v2.385 engine.ts KO 替代回手牌 hook）
  *   - 堅果啞鈴｜整人擊落（v2.388 _shared.ts triggerOakeyeMillIfApplicable）
  *   - 勾帕路翁ex｜金屬之路（v2.384 本檔 regA + movedToActiveThisTurn）

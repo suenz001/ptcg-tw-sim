@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.52</span> 清理 v2.384 / v3.49 留下的鬥志戰吼錯誤註解（純 docs，邏輯不動）</summary>
+        <ul>
+          <li>v2.384 留下的「evoCard 是貓鼬刀」註解誤導我 v3.49 改錯方向；v3.51 revert 後留下「v3.49 我誤改」的歷史檢討註解。</li>
+          <li>本版清理 engine.ts EVOLVE handler / getEvolvableTargets UI helper 的鬥志戰吼相關註解，留下乾淨正確的說明：「鬥志戰吼（勒克貓 Stage1 特性）：對手戰鬥場是 ex 時，場上的勒克貓 bypass isFirstTurn / justPlaced / evolvedThisTurn 進化成倫琴貓」+ 完整進化鏈說明。</li>
+          <li>同步清理 v2380_j_abilities_batch.ts 標頭註解的 v2.384 reference。</li>
+          <li>純註解 cleanup，邏輯完全不動 — tsc verify 過再 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.51</span> 🔥 hotfix：revert v3.49 鬥志戰吼方向錯誤（base 才對、不是 evoCard）</summary>
         <ul>
           <li>玩家提問「對手是 ex 寶可夢的話 勒克貓就可以在剛下的那回合進化成倫琴貓嗎」— 戳中 v3.49 修錯方向。</li>
