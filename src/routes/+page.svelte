@@ -264,6 +264,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.50</span> hotfix：修 v3.49 v2550 tsc 4 errors（GameState 沒 import + 3 處 filter callback type 推斷失敗）</summary>
+        <ul>
+          <li>v3.49 推 push 後跑 tsc 才發現 4 個 type error（之前先跑 push 後驗證的順序錯誤）：<code>v2550_i_wave5_meta.ts:241</code> 用 <code>GameState</code> 但檔案 import 只有 <code>CardInstance, PlayerState</code>；L247/249/264 三個 <code>filter/find</code> callback 的 <code>c, b</code> 參數推不出型別。</li>
+          <li>修法：① import 補 <code>GameState</code> ② 三處 callback 加 <code>(c: CardInstance)</code> / <code>(b: CardInstance)</code> 顯式型別。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.49</span> 🔥 hotfix：閃焰渦輪不能任意分配 + 鬥志戰吼 evoCard 條件反向</summary>
         <ul>
           <li><b>Bug 1 — 閃焰王牌｜閃焰渦輪</b>：玩家回報「不能任意分配能量，只能依備戰寶可夢數平均分配」。卡面：「從自己的牌庫選擇<b>最多 3 張</b>基本能量卡，<b>以任意方式附於備戰寶可夢身上</b>」。<br/>根因 1：v2550 L186 上限誤限為 <code>Math.min(3, basicE, bench.length)</code> — 限制能量數 ≤ 備戰寶可夢數。<br/>根因 2：resolver L211-216「依序附給備戰前 N 個」— 強制每隻 1 顆，無法集中。<br/>修法：① 上限改 <code>Math.min(3, basicEnergies.length)</code>（卡面 ≤3，不限備戰數）② step1 deck-search 後 chain 新 step2 <code>energy-distribute</code> picker，玩家可任意分配（含全部給同一隻）。新增 resolver <code>wave5-flame-turbo-distribute</code>。</li>

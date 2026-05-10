@@ -14,7 +14,7 @@
  * 共 9 張 I 標寶可夢招式 effect 實裝
  */
 
-import type { CardInstance, PlayerState } from '../../types';
+import type { CardInstance, PlayerState, GameState } from '../../types';
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
@@ -243,15 +243,15 @@ regR('wave5-flame-turbo-distribute', (state, aIdx, selectedIids, params, pool) =
   for (let i = 0; i < useCount; i++) {
     const targetIid = selectedIids[i];
     const energyIid = energyIids[i];
-    const p = s.players[aIdx];
-    const energyInst = p.deck.find(c => c.iid === energyIid);
+    const p: PlayerState = s.players[aIdx];
+    const energyInst = p.deck.find((c: CardInstance) => c.iid === energyIid);
     if (!energyInst) continue;
-    const target = p.bench.find(b => b.iid === targetIid);
+    const target = p.bench.find((b: CardInstance) => b.iid === targetIid);
     if (!target) continue;
     s = updatePlayer(s, aIdx, pl => ({
       ...pl,
-      deck: pl.deck.filter(c => c.iid !== energyIid),
-      bench: pl.bench.map(b => b.iid === targetIid
+      deck: pl.deck.filter((c: CardInstance) => c.iid !== energyIid),
+      bench: pl.bench.map((b: CardInstance) => b.iid === targetIid
         ? { ...b, energyAttached: [...b.energyAttached, energyInst] }
         : b),
     }));
@@ -261,7 +261,7 @@ regR('wave5-flame-turbo-distribute', (state, aIdx, selectedIids, params, pool) =
   s = updatePlayer(s, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   const parts: string[] = [];
   for (const [iid, n] of tally) {
-    const tInst = s.players[aIdx].bench.find(c => c.iid === iid);
+    const tInst = s.players[aIdx].bench.find((c: CardInstance) => c.iid === iid);
     const name = tInst ? (pool.get(tInst.cardId)?.name ?? '?') : '?';
     parts.push(`${name}×${n}`);
   }
