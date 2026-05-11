@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.69</span> 🐻 hotfix：月月熊 赫月ex SV5a 變體的「老練招式」失效（卡名空格不一致）</summary>
+        <ul>
+          <li>玩家催全卡片實裝 audit，跑了 265 個標準環境 Pokemon 特性的嚴格 cross-check（regA / passive sets / inline name 三層交叉比對）：</li>
+          <li>　・原本 122 個疑似 orphan → 加上 PASSIVE_X / SELF_KO / SHIELD_HOOK 等 set 涵蓋 → 16 個候選 → 全是 false positive（script bug：應該看 cardName-idx 而非 ability name 字面）</li>
+          <li>　・265 個 Pokemon 特性 → 真正 unimplemented = <b>0 張</b>（全部都有 implement path）</li>
+          <li>　・但 audit 過程意外發現 1 個真 bug：</li>
+          <li><b>真 bug</b>：月月熊 赫月ex 的「老練招式」（cost-reduction passive）只認無空格卡名 <code>&#39;月月熊 赫月ex&#39;</code>。JSON 內 SV5a 共 5 張變體寫法是 <code>&#39;月月熊 赫月 ex&#39;</code>（中間有空格 — scraper 不一致），不會 match → 老練招式對 SV5a 失效。SV8a 2 張無空格寫法 OK。</li>
+          <li>　・現象：玩家用 SV5a 月月熊 赫月ex，對手取走 N 張獎賞，血月攻擊的 5 個【無】能量 cost 不會減少 N 個（應該減）</li>
+          <li>　・歷史：line 4242-4243 血月 attack post 已用 <code>regPost(&#39;月月熊 赫月 ex|血月&#39;)</code> + <code>regPost(&#39;月月熊 赫月ex|血月&#39;)</code> 雙寫法處理過，但 v2.133 寫 <code>getUrsalunaBloodMoonEffectiveCost()</code> 時漏 normalize</li>
+          <li>　・修法：line 12170 改用 <code>attackerName.replace(/\s+/g, &#39;&#39;)</code> normalize 去空格比對，兩變體都涵蓋</li>
+          <li><b>Audit 鐵律補充</b>：以後寫卡名 string match 必須意識到「同張卡 JSON 內可能有不一致寫法」（空格 / ZWJ / 區分 ex 大小寫等），用 normalize / regex 而非精確字串比對</li>
+          <li>tsc 0 errors + svelte parse 兩道驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.68</span> ✨ 補完寶可夢中心的姐姐 stub（v2.199 半實裝拖 N 個月）+ JSON U+200C 卡名修正 + PASSIVE_STADIUMS audit 鐵律</summary>
         <ul>
           <li>玩家催促全面 audit「中立中心是 ACE SPEC 居然 stub」→ 我跑完 31 Stadium + 28 ACE SPEC + 全 Trainer 比對：</li>

@@ -12167,7 +12167,11 @@ export function getUrsalunaBloodMoonEffectiveCost(
   pool: Map<string, Card>,
   originalCost: import('$lib/cards/types').EnergyType[],
 ): import('$lib/cards/types').EnergyType[] {
-  if (attackerName !== '月月熊 赫月ex') return originalCost;
+  // v3.69：JSON 內「月月熊 赫月ex」有兩種寫法 — 有空格（SV5a 5 張）vs 無空格（SV8a 2 張）。
+  //   normalize 去空格比對才能涵蓋兩變體；之前只認無空格寫法，SV5a 老練招式失效。
+  //   line 4242-4243 的 血月 attack post 已有處理雙寫法，這裡是 v3.69 補上 cost-modifier 漏網。
+  const normalizedName = attackerName.replace(/\s+/g, '');
+  if (normalizedName !== '月月熊 赫月ex'.replace(/\s+/g, '')) return originalCost;
   if (attackName !== '血月') return originalCost;
   const aIdx = state.activePlayerIndex;
   // 對手已獲得獎賞 = 6 - 對手剩餘獎賞
