@@ -264,6 +264,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.73</span> 🐛 hotfix：亂暴閃電 / 燃燒旋踢「下回合無法攻擊」誤鎖整個玩家而非單一寶可夢</summary>
+        <ul>
+          <li>玩家回報：N的索羅亞克ex 用「暗黑底牌」借 N的捷克羅姆「亂暴閃電」(250 dmg) 後，下回合撤退換上備戰另一隻 N的索羅亞克ex，<b>新換上的也不能用招式</b>。違反卡面「這隻寶可夢無法使用招式」(個體 level)。</li>
+          <li>根因（依鐵律 7c 查 JSON 確認）：six_decks.ts line 22-26 + 32-36 兩個 regPost 用 <code>players[aIdx].noAttacksNextTurn = true</code> — 這個 flag 是 player level（電擊魔獸「雷電在地」用的「自己的所有寶可夢無法使用招式」），<b>不該套在卡面寫「這隻寶可夢」的招式上</b>。原註解寫 "Wave 36 的 player-level noAttacksNextTurn 旗標：ATTACK_POST 設旗標即可" 是當初誤判機制 level。</li>
+          <li>查 JSON 確認卡面文字：
+            <ul>
+              <li>✅ 電擊魔獸|雷電在地：「在下個自己的回合，<b>自己的所有寶可夢</b>無法使用招式」(player level) — 原邏輯正確</li>
+              <li>❌ N的捷克羅姆|亂暴閃電：「在下個自己的回合，<b>這隻寶可夢</b>無法使用招式」(個體 level) — 誤用 player level</li>
+              <li>❌ 火焰雞ex|燃燒旋踢：「在下個自己的回合，<b>這隻寶可夢</b>無法使用招式」(個體 level) — 誤用 player level</li>
+            </ul>
+          </li>
+          <li>修法：兩個 regPost 改為設 <code>active.cantAttackPending = true</code>（CardInstance 個體 flag），與 effects.ts:2491 selfCantAttackNextPost 同款。撤退時 clearActiveEffects 會清掉此 flag — 換上備戰另一隻不受影響。</li>
+          <li><b>實質影響</b>（N的索羅亞克ex 暗黑底牌借這兩招的場景）：
+            <ul>
+              <li>原 bug：借亂暴閃電後撤退換上另一隻，新的也卡死 1 回合</li>
+              <li>修後：原 active 進 bench 後該個體的 cantAttackPending 被 clearActiveEffects 清；新 active 從 bench 出來沒此 flag → 可正常攻擊 ✓</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors + svelte parse 3/3 OK + NUL byte check 通過才 push（Rule 11b）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.722</span> 📱 手機版進化目標 picker 加 🔍 zoom 副按鈕 + 顯示 HP/能量狀態</summary>
         <ul>
           <li>玩家回報：手機版進化卡有多個目標可選時（例：手上有 2 隻多龍奇都可進化成多龍巴魯托ex），picker 只顯示寶可夢名字，看不到 HP 殘量 / 已附能量狀態，難以決定要進化哪一隻。</li>

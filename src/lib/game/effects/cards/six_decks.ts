@@ -17,21 +17,28 @@ import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre } from '.
 // ─── 撕裂 70（skipDefEffects）───────────────────────────────────────────────
 regPre('N的捷克羅姆|撕裂', skipDefEffectsPre(70, '撕裂'));
 
-// ─── 亂暴閃電 250 + 自己下回合無法攻擊 ──────────────────────────────────────
-// Wave 36 的 player-level noAttacksNextTurn 旗標：ATTACK_POST 設旗標即可。
+// ─── 亂暴閃電 250 + 「這隻寶可夢」下回合無法攻擊（個體 level）─────────────
+// v3.73 bug fix：原本誤用 player-level noAttacksNextTurn → 撤退換上備戰另一隻
+// N的索羅亞克ex 也會被卡（暗黑底牌借這招的場景）。卡面「這隻寶可夢」是個體 level，
+// 應設 active.cantAttackPending（綁 CardInstance），撤退時 clearActiveEffects 會清。
 regPost('N的捷克羅姆|亂暴閃電', (state, aIdx) => {
   const players = [...state.players] as [PlayerState, PlayerState];
-  players[aIdx] = { ...players[aIdx], noAttacksNextTurn: true };
+  const att = { ...players[aIdx] };
+  if (att.active) att.active = { ...att.active, cantAttackPending: true };
+  players[aIdx] = att;
   return addLog({ ...state, players }, '亂暴閃電：下個自己的回合，這隻寶可夢無法使用招式', aIdx);
 });
 
 // ─── 二連踢 40×（coin heads multiply）───────────────────────────────────────
 regPre('力壯雞|二連踢', coinHeadsMultiplyPre(2, 40, '二連踢'));
 
-// ─── 燃燒旋踢 200 + 自己下回合無法攻擊 ──────────────────────────────────────
+// ─── 燃燒旋踢 200 + 「這隻寶可夢」下回合無法攻擊（個體 level）─────────────
+// v3.73 bug fix（同亂暴閃電根因）：卡面「這隻寶可夢」應綁 CardInstance 而非 player。
 regPost('火焰雞ex|燃燒旋踢', (state, aIdx) => {
   const players = [...state.players] as [PlayerState, PlayerState];
-  players[aIdx] = { ...players[aIdx], noAttacksNextTurn: true };
+  const att = { ...players[aIdx] };
+  if (att.active) att.active = { ...att.active, cantAttackPending: true };
+  players[aIdx] = att;
   return addLog({ ...state, players }, '燃燒旋踢：下個自己的回合，這隻寶可夢無法使用招式', aIdx);
 });
 
