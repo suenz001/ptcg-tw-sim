@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.78</span> 🔧 零之大空洞 bench=8 時，多張 Item/Stadium 卡無法使用</summary>
+        <ul>
+          <li>玩家回報：零之大空洞 在場 + 自方有【太晶】寶可夢時，bench 上限應為 8，但好友寶芬 等卡片仍判定 bench 滿（5/5）→ 點按只有「查看詳情/取消」，無法使用。</li>
+          <li><b>根因</b>：多張卡片的 gate / slot 計算 / resolver 上限<b>硬編碼 5</b>，沒套 <code>getBenchLimit</code> helper。零之大空洞 5→8 規則只有 engine.ts 主流程處理，子檔案 cards/*.ts 沒同步。</li>
+          <li><b>修法</b>：</li>
+          <li>　・在 <code>_shared.ts</code> 新增 <code>getOwnBenchLimit(state, idx, pool)</code> helper（內聯實作，避免 effects → engine 循環 import）。邏輯與 engine.ts getBenchLimit 同步。</li>
+          <li>　・修補 7 張卡片，全改用 helper：</li>
+          <li>　　1. <b>好友寶芬</b>（pokemon_search.ts）— 玩家回報這張</li>
+          <li>　　2. <b>赫普的包包</b>（pokemon_search.ts）— 同類型</li>
+          <li>　　3. <b>bench-basic-from-deck</b> resolver（共用）— slice(0, 5) 上限</li>
+          <li>　　4. <b>bench-named-basic-from-deck</b> resolver — 同上</li>
+          <li>　　5. <b>巢穴球</b>（items_misc.ts）</li>
+          <li>　　6. <b>越橘的一步棋</b>（v169_supporters.ts）</li>
+          <li>　　7. <b>密阿雷市 / 深缽鎮</b>（stadiums.ts 兩張）</li>
+          <li>　　8. <b>毒電嬰｜呼朋引伴</b>（six_decks.ts）</li>
+          <li><b>剩餘 audit todo</b>：grep 還找到 wave 檔案（v2306/v2353/v2355/v2580/v2620/v2630/v2660/v2750/v2760/v2996/v2998）有 30+ 處硬編碼 5。這些是個別寶可夢的招式/特性，使用頻率較低，留待後續逐張審查（避免一次改太多引入回歸 bug）。</li>
+          <li>tsc 0 errors + Svelte parse OK。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.77</span> 🏗️ 4 張 stub Stadium 全實裝 + 古舊能量 log 加強</summary>
         <ul>
           <li>承接 v3.76 化朗鎮，續清剩餘 4 張只有名字在 set 但沒對應 hook 的 stadium（違反 v3.68 鐵律「名字在 set 不等於實裝」）：</li>

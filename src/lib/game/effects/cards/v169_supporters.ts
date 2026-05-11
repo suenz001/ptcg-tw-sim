@@ -16,6 +16,7 @@
 import {
   reg, regR, regG,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
+  getOwnBenchLimit,
 } from '../_shared';
 import type { CardInstance, PlayerState } from '../../types';
 
@@ -262,9 +263,10 @@ regR('firebreather-pick', (st, idx, iids, _params, pool) => {
 });
 
 // ── 越橘的一步棋 — top7 → 1 惡寶可夢放備戰，剩餘洗回（不可第 1 回合）──────
-regG('越橘的一步棋', (st, idx) => {
+regG('越橘的一步棋', (st, idx, pool) => {
   if (st.isFirstTurn) return false;
-  if (st.players[idx].bench.length >= 5) return false;
+  // v3.78：支援零之大空洞
+  if (st.players[idx].bench.length >= getOwnBenchLimit(st, idx, pool)) return false;
   return st.players[idx].deck.length > 0;
 });
 reg('越橘的一步棋', (st, idx) => {
@@ -313,7 +315,8 @@ regR('lingonberry-pick', (st, idx, iids, params, pool) => {
   const name = pool.get(inst.cardId)?.name ?? '?';
   st = addLog(st, `越橘的一步棋：${name} 放置到備戰區，剩餘洗回牌庫`, idx);
   return updatePlayer(st, idx, p => {
-    if (p.bench.length >= 5) return p;
+    // v3.78：支援零之大空洞
+    if (p.bench.length >= getOwnBenchLimit(st, idx, pool)) return p;
     const topSet = new Set(topIids);
     const rest = p.deck.filter(c => !topSet.has(c.iid));
     const remaining = p.deck.filter(c => topSet.has(c.iid) && c.iid !== targetIid);

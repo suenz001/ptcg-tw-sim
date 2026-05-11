@@ -18,6 +18,7 @@ import {
   reg, regR, regG,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   applyBenchPlaceSideEffects,
+  getOwnBenchLimit,
 } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -27,11 +28,13 @@ import {
 // 好友寶芬 — 從牌庫選最多 2 隻 HP≤70 基礎寶可夢放備戰
 regG('好友寶芬', (st, idx, pool) => {
   // 備戰要有空位，且牌庫要有 HP≤70 的基礎寶可夢
-  if (st.players[idx].bench.length >= 5) return false;
+  // v3.78：用 getOwnBenchLimit 支援零之大空洞（5→8 格）
+  if (st.players[idx].bench.length >= getOwnBenchLimit(st, idx, pool)) return false;
   return st.players[idx].deck.length > 0;
 });
-reg('好友寶芬', (st, idx) => {
-  const slots = 5 - st.players[idx].bench.length;
+reg('好友寶芬', (st, idx, pool) => {
+  // v3.78：slots 改用 getOwnBenchLimit（零之大空洞時可放 8）
+  const slots = getOwnBenchLimit(st, idx, pool) - st.players[idx].bench.length;
   const takeMax = Math.min(2, slots);
   st = addLog(st, `好友寶芬：從牌庫選至多 ${takeMax} 隻 HP≤70 基礎寶可夢到備戰區`, idx);
   return withPending(st, {
@@ -48,12 +51,14 @@ reg('好友寶芬', (st, idx) => {
 //   - gate 至少 1 隻「赫普的」基礎在牌庫
 //   - filter 用新 'Basic:NamePrefix=赫普的'（UI 端 filter parser 同步擴展）
 //   - resolver 端驗證選的卡符合 prefix（防呆 / AI sim 模式 fallback）
-regG('赫普的包包', (st, idx) => {
-  if (st.players[idx].bench.length >= 5) return false;
+regG('赫普的包包', (st, idx, pool) => {
+  // v3.78
+  if (st.players[idx].bench.length >= getOwnBenchLimit(st, idx, pool)) return false;
   return st.players[idx].deck.length > 0;
 });
-reg('赫普的包包', (st, idx) => {
-  const slots = 5 - st.players[idx].bench.length;
+reg('赫普的包包', (st, idx, pool) => {
+  // v3.78
+  const slots = getOwnBenchLimit(st, idx, pool) - st.players[idx].bench.length;
   const takeMax = Math.min(2, slots);
   st = addLog(st, `赫普的包包：從牌庫選至多 ${takeMax} 隻「赫普的」基礎寶可夢到備戰區`, idx);
   return withPending(st, {
@@ -88,7 +93,8 @@ regR('bench-named-basic-from-deck', (st, idx, iids, params, pool) => {
       .filter(c => validIids.includes(c.iid))
       .map(c => ({ ...c, justPlaced: true }));
     const remaining = p.deck.filter(c => !validIids.includes(c.iid));
-    const bench = [...p.bench, ...selected].slice(0, 5);
+    // v3.78：用 getOwnBenchLimit
+    const bench = [...p.bench, ...selected].slice(0, getOwnBenchLimit(st, idx, pool));
     return { ...p, deck: shuffle(remaining), bench };
   });
   return applyBenchPlaceSideEffects(st, idx, validIids, pool);
@@ -109,7 +115,8 @@ regR('bench-basic-from-deck', (st, idx, iids, _params, pool) => {
       .filter(c => iids.includes(c.iid))
       .map(c => ({ ...c, justPlaced: true }));
     const remaining = p.deck.filter(c => !iids.includes(c.iid));
-    const bench = [...p.bench, ...selected].slice(0, 5);
+    // v3.78：用 getOwnBenchLimit 支援零之大空洞（5→8 格）
+    const bench = [...p.bench, ...selected].slice(0, getOwnBenchLimit(st, idx, pool));
     return { ...p, deck: shuffle(remaining), bench };
   });
   // v2.119：觸發「放到備戰」的被動場地卡效果（險惡廢墟等）

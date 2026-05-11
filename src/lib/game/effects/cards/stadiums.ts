@@ -16,7 +16,8 @@
  * stadiumUsedThisTurn 旗標等引擎層狀態）。
  */
 
-import { regR, updatePlayer, shuffle, addLog, clearActiveEffects } from '../_shared';
+import { regR, updatePlayer, shuffle, addLog, clearActiveEffects, getOwnBenchLimit,
+} from '../_shared';
 
 // ── 神秘花園（Stadium）──────────────────────────────────────────────────────
 // 丟 1 張超能量 → 抽到手牌數 = 己方場上超屬寶可夢數量
@@ -114,7 +115,7 @@ regR('miarey-city-place', (st, idx, iids, _params, pool) => {
   const name = pool.get(inst.cardId)?.name ?? '?';
   st = addLog(st, `密阿雷市：${name} 放置到備戰區，重洗牌庫 — 此回合結束`, idx);
   st = updatePlayer(st, idx, p => {
-    if (p.bench.length >= 5) return { ...p, deck: shuffle(p.deck) };
+    if (p.bench.length >= getOwnBenchLimit(st, idx, pool)) return { ...p, deck: shuffle(p.deck) };
     const placed = { ...inst, justPlaced: true };
     const rest = p.deck.filter(c => c.iid !== targetIid);
     return { ...p, deck: shuffle(rest), bench: [...p.bench, placed] };
@@ -133,10 +134,10 @@ regR('town-department-tool', (st, idx, iids) => {
 });
 
 // ── v2.171 深缽鎮（Stadium）── 牌庫搜 1 基礎非規則寶可夢放備戰 ────────────
-regR('deepbasin-place', (st, idx, iids) => {
+regR('deepbasin-place', (st, idx, iids, _params, pool) => {
   return updatePlayer(st, idx, p => {
     if (iids.length === 0) return { ...p, deck: shuffle(p.deck) };
-    if (p.bench.length >= 5) return { ...p, deck: shuffle(p.deck) };
+    if (p.bench.length >= getOwnBenchLimit(st, idx, pool)) return { ...p, deck: shuffle(p.deck) };
     const targetIid = iids[0];
     const inst = p.deck.find(c => c.iid === targetIid);
     if (!inst) return { ...p, deck: shuffle(p.deck) };

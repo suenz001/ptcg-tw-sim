@@ -26,6 +26,7 @@ import {
   drawCards, returnHandToDeck,
   clearActiveEffects,
   healResolver,
+  getOwnBenchLimit,
 } from '../_shared';
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
@@ -759,7 +760,8 @@ regR('master-ball-pick', (st, idx, iids, _params, pool) => {
 // ── 巢穴球（Item / MC）─────────────────────────────────────────────────────
 // 卡面：從自己的牌庫選 1 張【基礎】寶可夢卡，放置於備戰區。並重洗牌庫。
 regG('巢穴球', (st, idx, pool) => {
-  if (st.players[idx].bench.length >= 5) return false;
+  // v3.78：支援零之大空洞
+  if (st.players[idx].bench.length >= getOwnBenchLimit(st, idx, pool)) return false;
   return st.players[idx].deck.length > 0;
 });
 reg('巢穴球', (st, idx, pool) => {
@@ -785,7 +787,8 @@ regR('nest-ball-place', (st, idx, iids, _params, pool) => {
   const name = pool.get(inst.cardId)?.name ?? '?';
   st = addLog(st, `巢穴球：${name} 放置到備戰區`, idx);
   return updatePlayer(st, idx, p => {
-    if (p.bench.length >= 5) return p;
+    // v3.78：支援零之大空洞
+    if (p.bench.length >= getOwnBenchLimit(st, idx, pool)) return p;
     const placed = { ...inst, justPlaced: true };
     const rest = p.deck.filter(c => c.iid !== iid);
     return { ...p, deck: shuffle(rest), bench: [...p.bench, placed] };

@@ -11,7 +11,8 @@
  */
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { regPre, regPost, regA, reg, regR, regG, addLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle } from '../_shared';
+import { regPre, regPost, regA, reg, regR, regG, addLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
+} from '../_shared';
 import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre } from '../../effects';
 
 // ─── 撕裂 70（skipDefEffects）───────────────────────────────────────────────
@@ -154,9 +155,11 @@ regR('lie-cheat-to-deck-bottom', (state, aIdx, selectedIids, _params, pool) => {
 });
 
 // 毒電嬰｜呼朋引伴 — 牌庫搜 ≤2【基礎】寶可夢放備戰
-regPost('毒電嬰|呼朋引伴', (state, aIdx) => {
-  if (state.players[aIdx].bench.length >= 5) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
-  const maxN = Math.min(2, 5 - state.players[aIdx].bench.length);
+regPost('毒電嬰|呼朋引伴', (state, aIdx, pool) => {
+  // v3.78：支援零之大空洞
+  const limit = getOwnBenchLimit(state, aIdx, pool);
+  if (state.players[aIdx].bench.length >= limit) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
+  const maxN = Math.min(2, limit - state.players[aIdx].bench.length);
   return withPending(addLog(state, `呼朋引伴：從牌庫選 ≤${maxN} 張基礎寶可夢放備戰`, aIdx), {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -171,8 +174,10 @@ regR('recruit-to-bench', (state, aIdx, selectedIids, _params, pool) => {
   const picks = p.deck.filter(c => selectedIids.includes(c.iid));
   p.deck = p.deck.filter(c => !selectedIids.includes(c.iid));
   const actuallyPlacedIids: string[] = [];
+  // v3.78：用 getOwnBenchLimit
+  const benchLimit = getOwnBenchLimit(state, aIdx, pool);
   for (const pk of picks) {
-    if (p.bench.length < 5) {
+    if (p.bench.length < benchLimit) {
       p.bench = [...p.bench, { ...pk, justPlaced: true }];
       actuallyPlacedIids.push(pk.iid);
     }

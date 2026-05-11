@@ -452,6 +452,27 @@ export function canPlayTrainer(
  * 注意：這不是「容錯」而是「正確的進化規則」。scraper 資料若爬錯仍要修；
  * helper 只處理真正的 ex/非 ex 互通情境。
  */
+/**
+ * v3.78：取得 idx 玩家的 own bench 上限。
+ * 預設 5；場上有「零之大空洞」 + 自己場上有「太晶」寶可夢時 → 8。
+ * 內聯實作，不依賴 engine.ts（避免 effects → engine 循環 import）。
+ * 與 engine.ts:getBenchLimit 保持邏輯同步。
+ */
+export function getOwnBenchLimit(
+  state: GameState,
+  idx: 0 | 1,
+  pool: Map<string, Card>,
+): number {
+  const s = state.activeStadium;
+  if (!s) return 5;
+  const stadiumCard = pool.get(s.cardId);
+  if (stadiumCard?.name !== '零之大空洞') return 5;
+  const player = state.players[idx];
+  const all = [player.active, ...player.bench].filter((c): c is CardInstance => !!c);
+  const hasTera = all.some(c => pool.get(c.cardId)?.tags?.includes('太晶'));
+  return hasTera ? 8 : 5;
+}
+
 export function sameEvoName(a: string | undefined, b: string | undefined): boolean {
   if (!a || !b) return false;
   if (a === b) return true;
