@@ -18,6 +18,8 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
+import type { Card } from '$lib/cards/types';
+import { isRulePokemon } from '../../engine';
 import {
   regPre, regPost,
   addLog, updatePlayer,
@@ -157,9 +159,9 @@ function drawToFull6Post(label: string): AttackPostFn {
 // ══════════════════════════════════════════════════════════════════════════════
 // A. 對手戰鬥場 ex 條件 +N (5 張)
 // ══════════════════════════════════════════════════════════════════════════════
-const isExCard = (c: { subtype?: string; name?: string } | undefined): boolean => {
-  if (!c) return false;
-  return c.subtype === 'ex' || /ex$/i.test(c.name ?? '');
+// v3.67：改用 isRulePokemon helper（涵蓋未來新規則寶可夢類型）
+const isExCard = (c: { subtype?: string; name?: string; supertype?: string; tags?: string[]; rulesText?: string } | undefined): boolean => {
+  return isRulePokemon(c as Card | undefined);
 };
 regPre('魔幻假面喵|上升綻放', defConditionPre(90, 90, isExCard, 'ex 寶可夢', '上升綻放'));
 regPre('瑪俐的扒手貓|鋒利爪', defConditionPre(20, 40, isExCard, 'ex 寶可夢', '鋒利爪'));

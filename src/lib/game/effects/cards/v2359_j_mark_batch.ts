@@ -33,6 +33,7 @@
  */
 
 import type { GameState, PlayerState } from '../../types';
+import { isRulePokemon } from '../../engine';
 import {
   addLog,
   regPost,
@@ -357,7 +358,8 @@ regPre('古劍豹|上升利刃', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defActive = state.players[dIdx].active;
   const defCard = defActive ? pool.get(defActive.cardId) : null;
-  const isEx = !!(defCard && (defCard.subtype === 'ex' || defCard.name?.endsWith('ex')));
+  // v3.67：改用 isRulePokemon helper
+  const isEx = isRulePokemon(defCard ?? undefined);
   const dmg = 80 + (isEx ? 80 : 0);
   return {
     state: addLog(
@@ -375,7 +377,8 @@ regPre('密勒頓ex|強子電光', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defActive = state.players[dIdx].active;
   const defCard = defActive ? pool.get(defActive.cardId) : null;
-  const isEx = !!(defCard && (defCard.subtype === 'ex' || defCard.name?.endsWith('ex')));
+  // v3.67：改用 isRulePokemon helper
+  const isEx = isRulePokemon(defCard ?? undefined);
   const dmg = 120 + (isEx ? 120 : 0);
   return {
     state: addLog(

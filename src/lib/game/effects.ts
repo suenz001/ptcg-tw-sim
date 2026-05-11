@@ -10,6 +10,7 @@
 
 import type { Card, EnergyType } from '$lib/cards/types';
 import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition } from './types';
+import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirror 需要
 
 // ── 基礎設施 → 從 effects/_shared.ts 匯入 ──────────────────────────────────
 //
@@ -92,6 +93,56 @@ export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_ST
  * 所有 snipe-*、cursed-bomb、bench-hit-N、damage-distribute、全體指示物 resolver
  * 在處理備戰目標前先呼叫這個 helper；true → 跳過放置並記 log。
  */
+/**
+ * v3.67 本地 isRulePokemon mirror — effects.ts 不能 import engine.ts（circular），
+ *   但兩處讀同一個 source of truth（types.ts 的 RULE_BOX_SUBTYPES set），
+ *   所以行為跟 engine.ts 的 isRulePokemon 等價。
+ *   新規則寶可夢類型上線時，只需更新 types.ts 的 set，兩處自動同步。
+ */
+export function isRulePokemon(card: Card | undefined): boolean {
+  if (!card) return false;
+  if (card.supertype !== 'Pokemon') return false;
+  const tags = card.tags ?? [];
+  if (tags.includes('規則盒')) return true;
+  for (const t of tags) if (RULE_BOX_SUBTYPES.has(t)) return true;
+  if (card.subtype && RULE_BOX_SUBTYPES.has(card.subtype)) return true;
+  if (card.rulesText?.includes('擁有規則')) return true;
+  if (card.name.endsWith('ex') || card.name.endsWith('EX')) return true;
+  return false;
+}
+
+/**
+ * v3.67 中立中心（Neutral Center）stadium set。
+ * 卡面：「雙方的所有寶可夢（『擁有規則的寶可夢』除外），不會受到對手的
+ *        『寶可夢【ex】・【V】』招式的傷害。」
+ * 實裝點：① engine.ts 戰鬥場傷害計算（line ~3500 area）② resolveBenchGuard（本檔）
+ */
+export const NEUTRAL_CENTER_STADIUMS = new Set<string>(['中立中心']);
+
+export function isNeutralCenterActive(state: GameState, pool: Map<string, Card>): boolean {
+  const s = state.activeStadium;
+  if (!s) return false;
+  const card = pool.get(s.cardId);
+  return !!card && NEUTRAL_CENTER_STADIUMS.has(card.name);
+}
+
+/**
+ * v3.67 中立中心判定 helper：當前場上中立中心啟動 + attacker 為規則寶可夢 + defender 為非規則寶可夢
+ * → 招式傷害變 0。
+ */
+export function wouldNeutralCenterBlock(
+  state: GameState,
+  pool: Map<string, Card>,
+  attackerCard: Card | undefined,
+  defenderCard: Card | undefined,
+): boolean {
+  if (!isNeutralCenterActive(state, pool)) return false;
+  if (!attackerCard || !defenderCard) return false;
+  if (!isRulePokemon(attackerCard)) return false;  // attacker 必須是規則寶可夢（ex/V）
+  if (isRulePokemon(defenderCard)) return false;   // defender 必須是非規則
+  return true;
+}
+
 export function isBenchProtected(state: GameState, pool: Map<string, Card>): boolean {
   const s = state.activeStadium;
   if (!s) return false;
@@ -282,6 +333,14 @@ export function resolveBenchGuard(
     }
     if (targetCard?.tags?.includes('太晶')) {
       return { blocked: true, reason: '太晶寶可夢 防禦效果' };
+    }
+    // v3.67 中立中心 stadium：非規則 defender 不受對手 ex/V 招式傷害（attacker 是規則寶可夢時生效）
+    // 這裡 caller 已 supply attackerCard via state.players[actorIdx].active（在 engine attack pipeline 內呼叫）。
+    // resolveBenchGuard 內目前只接 targetCard，attackerCard 從 state 查。
+    const attackerInst = state.players[actorIdx].active;
+    const attackerCard = attackerInst ? pool.get(attackerInst.cardId) : undefined;
+    if (wouldNeutralCenterBlock(state, pool, attackerCard, targetCard)) {
+      return { blocked: true, reason: '中立中心競技場 效果' };
     }
   }
   // v3.21 陳舊的羽毛化石（I）備戰免疫：卡面明寫「傷害與效果」皆免——
@@ -2747,7 +2806,8 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   // 暴噬龜 鐵壁硬殼 — 免疫 ≥200 傷害
   ['鐵壁硬殼', (_att, baseDamage) => baseDamage >= 200],
   // 堅盾劍怪 神秘之盾 — 免疫 ex/V 招式
-  ['神秘之盾', (att) => att.subtype === 'ex' || att.name.endsWith('V') || att.name.endsWith('VMAX')],
+  // v3.67：改用 isRulePokemon helper（涵蓋 ex/V/VMAX/VSTAR/GX 與未來新規則類型）
+  ['神秘之盾', (att) => isRulePokemon(att)],
   // v2.250 奇諾栗鼠ex 順滑大衣 — 受招式傷害時擲硬幣，正面則不受該傷害
   // v2.253 改用 flipCoinsWithLog（log 含「— 正面/反面」明確格式 → UI queue 觸發動畫）
   ['順滑大衣', (_att, _baseDmg, state, aIdx, _pool, defenderName) => {
@@ -2769,7 +2829,8 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   //   暫不處理；如未來發現 bug 再加 PASSIVE_FULL_PROTECTION 類 set。
   ['璀璨鱗片', (att) => (att.tags ?? []).includes('太晶')],
   // v2.992 仙子伊布(H) | 神秘守護 — 不受對手 ex 招式的傷害
-  ['神秘守護', (att) => att.subtype === 'ex' || att.name.endsWith('ex') || att.name.endsWith('EX')],
+  // v3.67：改用 isRulePokemon helper
+  ['神秘守護', (att) => isRulePokemon(att)],
 ]);
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -4423,11 +4484,11 @@ regPost('葉伊布ex|苔紋瑪瑙', healAllOwnPost(100, true, '苔紋瑪瑙'));
 
 // v2.238 釐清（不再簡化）：name 結尾比對加 subtype 雙重判定。
 //   - 普通 ex / 超級 ex：subtype === 'ex'（資料庫 621 張）
-//   - 6 張資料缺 subtype 但 name 結尾 ex（太晶慶典ex、超級耿鬜ex 等）→ 用 name 兜底
+//   - V/VMAX/VSTAR/GX（標準環境已淘汰；未來新規則類型也涵蓋）
 // 注意：「是不是 ex」用本函式（boolean）；「KO 取幾張獎賞」應用 prizesForKOLocal（含 Mega ex = 3 張）。
+// v3.67：改用 isRulePokemon helper（同步未來新規則寶可夢類型）
 function isExCard(c: Card | undefined): boolean {
-  if (!c) return false;
-  return c.subtype === 'ex' || c.name.endsWith('ex') || c.name.endsWith('EX');
+  return isRulePokemon(c);
 }
 /** 與 engine.prizesForKO 同邏輯（避開 import cycle），統一給 effects.ts 內 KO 流程用。 */
 function prizesForKOLocal(c: Card | undefined): number {
@@ -12486,7 +12547,8 @@ export const PASSIVE_PREVENT_PRIZE = new Map<string, (
   attackerCard: Card,
 ) => boolean>([
   // 脫殼忍者(I) | 脆弱蛻殼 — 被 ex 攻擊者 KO 時對手 0 獎賞
-  ['脆弱蛻殼', (att) => att.subtype === 'ex' || att.name.endsWith('ex') || att.name.endsWith('EX')],
+  // v3.67：改用 isRulePokemon helper
+  ['脆弱蛻殼', (att) => isRulePokemon(att)],
 ]);
 
 /** 攻擊方持有此特性 → 攻擊時自動帶這些 buff */

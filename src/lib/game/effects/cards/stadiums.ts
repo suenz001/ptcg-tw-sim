@@ -215,7 +215,7 @@ export const STATIC_PASSIVE_STADIUMS = new Set<string>([
   '危險密林',       // 中毒指示物 +2
   '全金屬實驗室',   // 鋼寶可夢受傷 -30
   '祭典會場',       // 附能量寶可夢免疫狀態
-  '中立中心',       // 非規則盒不受 ex/V 招式傷害
+  '中立中心',       // v3.67 已實裝 — 非規則寶可夢不受對手 ex/V 招式傷害（NEUTRAL_CENTER_STADIUMS in effects.ts）
   '石之洞窟',       // 大吾寶可夢受傷 -30
   '樂園度假地',     // v2.177：可達鴨撤退 -1
   // 註：本 set 未實裝效果的 stadium 仍會放下成為場地（engine 預設行為），

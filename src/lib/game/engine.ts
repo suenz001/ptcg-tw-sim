@@ -49,6 +49,7 @@ import {
   promptPlayAbilities,
   ON_PLAY_FROM_HAND_ABILITIES,
   ON_EVOLVE_FROM_HAND_ABILITIES,
+  wouldNeutralCenterBlock,  // v3.67 中立中心 stadium damage block
 } from './effects';
 import {
   hasIronTracksDualCore,
@@ -3439,9 +3440,10 @@ function handlePlaying(
     }
     // v2.78 密勒頓｜防護代碼 — 若 defender 有 immuneToExAttackTagThisTurn，
     //   且 attacker 是 ex + 帶有對應 tag，傷害變 0
+    // v3.67：改用 isRulePokemon helper（涵蓋未來新規則寶可夢類型）
     if (baseDamage > 0 && defender.active.immuneToExAttackTagThisTurn) {
       const targetTag = defender.active.immuneToExAttackTagThisTurn;
-      const attackerIsEx = attackerCard.subtype?.includes('ex') || attackerCard.name?.endsWith('ex');
+      const attackerIsEx = isRulePokemon(attackerCard);
       const attackerHasTag = attackerCard.tags?.includes(targetTag);
       if (attackerIsEx && attackerHasTag) {
         workingState = addLog(workingState, `${defenderCard.name}：[防護代碼]免疫帶「${targetTag}」tag 的 ex 招式傷害（${baseDamage} → 0）`, dIdx);
@@ -3478,8 +3480,8 @@ function handlePlaying(
     // 卡面同時涵蓋 PDF §C-16「不會受到招式的傷害」+ §C-17「不會受到招式的效果的影響」兩者。
     // 故下方同時把 baseDamage 清 0（C-16）並設 skipDefEffects（C-17）— 是故意的耦合，不是 bug。
     // 若未來新加只擋傷害不擋效果（純 C-16）或反之的卡，請拆成兩個獨立旗標。
-    const attackerIsEx = attackerCard.subtype === 'ex'
-      || attackerCard.name.endsWith('ex') || attackerCard.name.endsWith('EX');
+    // v3.67：改用 isRulePokemon helper（涵蓋未來新規則寶可夢類型）
+    const attackerIsEx = isRulePokemon(attackerCard);
     if (baseDamage > 0
         && defender.active.immuneToExAttackThisTurn
         && attackerIsEx) {
@@ -3487,6 +3489,16 @@ function handlePlaying(
         `${defenderCard.name} 因阿塞蘿拉的惡作劇效果，不受【ex】招式的傷害與效果`, dIdx);
       baseDamage = 0;        // C-16 部分（傷害變 0）
       skipDefEffects = true; // C-17 部分（跳過步驟 5 受擊方效果）
+    }
+
+    // v3.67 中立中心（Stadium）— 非規則 defender 不受對手 ex/V 招式傷害
+    //   卡面：「雙方的所有寶可夢（『擁有規則的寶可夢』除外），
+    //         不會受到對手的『寶可夢【ex】・【V】』招式的傷害。」
+    //   active target 在此處檢查；bench target 在 resolveBenchGuard 內檢查。
+    if (baseDamage > 0 && wouldNeutralCenterBlock(workingState, pool, attackerCard, defenderCard)) {
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因中立中心競技場效果，不受規則寶可夢招式傷害`, dIdx);
+      baseDamage = 0;
     }
 
     // v2.174 鐵之防禦強化 — 自己【鋼】寶可夢本回合受招式 -30

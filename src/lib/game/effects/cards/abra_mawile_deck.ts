@@ -33,7 +33,7 @@ import {
   selfSwapPost, skipDefEffectsPre, countOppPokemon, koPrizeCount,
   canApplyAttackEffectToTarget,
 } from '../../effects';
-import { isBasicEnergyOfType } from '../../engine';
+import { isBasicEnergyOfType, isRulePokemon } from '../../engine';
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
 import { addPendingPrize } from '../_shared';
 
@@ -115,9 +115,8 @@ regPost('土龍弟弟|交替', selfSwapPost('交替'));
 
 // ── 土龍節節ex｜逆境之尾 — 對手場上每隻寶可夢ex × 60 ────────────────────────
 regPre('土龍節節ex|逆境之尾', (state, aIdx, pool) => {
-  const n = countOppPokemon(state, aIdx, pool, c =>
-    c.supertype === 'Pokemon' && (c.subtype === 'ex' || c.name.endsWith('ex') || c.name.endsWith('EX'))
-  );
+  // v3.67：改用 isRulePokemon helper
+  const n = countOppPokemon(state, aIdx, pool, c => isRulePokemon(c));
   return {
     state: addLog(state, `逆境之尾：對手寶可夢ex ${n} 隻 → ${n * 60} 傷害`, aIdx),
     damage: n * 60,

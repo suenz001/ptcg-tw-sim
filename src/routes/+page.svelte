@@ -264,6 +264,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.67</span> 🔧 全面 audit + 實裝：12 處 inline 全 refactor + 中立中心 stadium 從 stub 變實作</summary>
+        <ul>
+          <li>玩家驗收 v3.66 時抓出 audit 不徹底：列了 7 個 ex 相關卡（初始化 / 水蓮的照顧 / 中立中心 / 耀閃挑戰 / 花之帷幔 / 猛攻手鐲 / 寶可平板）只有 2 個真的走 helper。重新全面 audit。</li>
+          <li><b>12 處 inline 散落點全 refactor 改用 isRulePokemon</b>：</li>
+          <li>　・<code>effects.ts</code>：神秘之盾（堅盾劍怪 — 原來檢查 V/VMAX 也對）/ 神秘守護（仙子伊布）/ 脆弱蛻殼（脫殼忍者）/ isExCard 內部 helper（多卡共用）</li>
+          <li>　・<code>tools.ts</code>：極限腰帶（對 ex +50）/ 電氣球（皮卡丘ex 對 ex +50）/ 猛攻手鐲（對 ex +30）</li>
+          <li>　・<code>engine.ts</code>：防護代碼（密勒頓）/ 阿塞蘿拉的惡作劇（不受 ex 招式）</li>
+          <li>　・<code>abra_mawile_deck.ts</code>：逆境之尾（土龍節節ex — 對手 ex 數 × 60）</li>
+          <li>　・<code>v2359_j_mark_batch.ts</code>：上升利刃（古劍豹 +80）/ 強子電光（密勒頓ex +120）</li>
+          <li>　・<code>v2590_i_wave9_misc3.ts</code>：isExCard 內部 helper（多卡共用）</li>
+          <li>因 <code>effects.ts</code> 不能 import <code>engine.ts</code>（circular），在 <code>effects.ts</code> 加本地 <code>isRulePokemon</code> mirror，兩處讀同一個 <code>RULE_BOX_SUBTYPES</code> set source of truth，新類型上線時兩處自動同步。</li>
+          <li><b>中立中心 stadium 從 stub 變實作</b>：</li>
+          <li>　・卡面：「雙方的所有寶可夢（『擁有規則的寶可夢』除外），不會受到對手的『寶可夢【ex】・【V】』招式的傷害。」</li>
+          <li>　・新增 <code>NEUTRAL_CENTER_STADIUMS</code> set + <code>isNeutralCenterActive()</code> + <code>wouldNeutralCenterBlock()</code> helper（在 effects.ts）</li>
+          <li>　・active target 在 <code>engine.ts</code> 戰鬥場傷害計算 hook 處檢查；bench target 在 <code>resolveBenchGuard</code> 內檢查</li>
+          <li>　・log 訊息：「X 因中立中心競技場效果，不受規則寶可夢招式傷害」</li>
+          <li>跳過不該 refactor 的 site：<code>engine.ts</code> Mega ex 判定（需 name.startsWith(&#39;超級&#39;)）/ <code>effects.ts</code> 尾甲（限 basic ex）— 都加註解標記原因</li>
+          <li>tsc 0 errors + svelte parse 兩道驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.66</span> 🔧 refactor：抽 isRulePokemon helper 為下月新規則寶可夢預作準備</summary>
         <ul>
           <li>玩家提醒：一個月後 PTCG 新擴充包要出新「擁有規則的寶可夢」類型。先預做準備避免新類型上線時要追 5 處散落點。</li>

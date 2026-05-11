@@ -103,21 +103,21 @@ TOOL_HP_BONUS.set('竹蘭的力量負重', (card) => card.name.includes('竹蘭�
 
 // ── 攻擊加成（我方帶此道具 → 打出時 +N）────────────────────────────────────
 TOOL_ATTACK_BONUS.set('極限腰帶', (_a, _ai, defCard) => {
-  const isEx = defCard.subtype === 'ex' || defCard.name.endsWith('ex') || defCard.name.endsWith('EX');
-  return isEx ? 50 : 0;
+  // v3.67：改用 isRulePokemon helper（涵蓋 V/VMAX/VSTAR 與未來新規則類型）
+  return isRulePokemon(defCard) ? 50 : 0;
 });
 TOOL_ATTACK_BONUS.set('鎖鏈糬', (_a, atkInst) => atkInst.status === 'poisoned' ? 40 : 0);
 TOOL_ATTACK_BONUS.set('驅勁能量 未來', () => 20);
 // v2.133 電氣球：附有的「皮卡丘ex」對對手戰鬥場的「寶可夢ex」+50
 TOOL_ATTACK_BONUS.set('電氣球', (attCard, _ai, defCard) => {
   if (attCard.name !== '皮卡丘ex') return 0;
-  const isDefEx = defCard.subtype === 'ex' || defCard.name.endsWith('ex') || defCard.name.endsWith('EX');
-  return isDefEx ? 50 : 0;
+  // v3.67：改用 isRulePokemon helper
+  return isRulePokemon(defCard) ? 50 : 0;
 });
 // ── 猛攻手鐲（Tool）— 對對手戰鬥場 ex +30 ───────────────────────────────────
 TOOL_ATTACK_BONUS.set('猛攻手鐲', (_a, _ai, defCard) => {
-  const isEx = defCard.subtype === 'ex' || defCard.name.endsWith('ex') || defCard.name.endsWith('EX');
-  return isEx ? 30 : 0;
+  // v3.67：改用 isRulePokemon helper
+  return isRulePokemon(defCard) ? 30 : 0;
 });
 // v2.170 活力頭帶：使用招式 +10 傷害
 TOOL_ATTACK_BONUS.set('活力頭帶', () => 10);
