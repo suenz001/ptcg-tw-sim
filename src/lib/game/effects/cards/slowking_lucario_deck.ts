@@ -6,12 +6,12 @@
  *   相同 precedent — AttackPreFn 同步限制）。
  */
 
-import type { CardInstance } from '../../types';
+import type { CardInstance, GameAction } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { RULE_BOX_SUBTYPES } from '../../types';
 import {
   reg, regR, regG, regPre, regPost, regA,
-  ATTACK_PRE, ATTACK_POST,
+  ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE,
   shuffle, updatePlayer, addLog, drawCards, withPending,
 } from '../_shared';
 
@@ -91,9 +91,21 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
   s = addLog(s, `耀閃挑戰：選擇「${topName}」的「${picked.name}」作為這個招式使用（自動挑印刷最高傷害）`, aIdx);
   s = { ...s, pendingCopyAttackKey: copiedKey };
   // Step 6: 遞迴該招式的 regPre
+  //   v3.72 QA fix：若 borrowed 招式有 binary-yes-no PRE_DISCARD_CHOICE（「若希望」類），
+  //     borrowed attack 的 picker 不會跳（attack key 是耀閃挑戰不是 borrowed），
+  //     player 沒機會選 yes/no。預設視為「希望」(注入 sentinel iid)，
+  //     讓借者能拿到 +N 加成（如金屬之錘 +150，QA 規定即使 0 鋼能量也應 +150）。
+  const copiedSpec = ATTACK_PRE_DISCARD_CHOICE.get(copiedKey);
+  let dispatchAction = action;
+  if (copiedSpec?.scope === 'binary-yes-no') {
+    dispatchAction = {
+      ...(action ?? { type: 'ATTACK', attackIndex: 0 } as Extract<GameAction, { type: 'ATTACK' }>),
+      discardedEnergyIids: ['__yaoshan_borrowed_yes__'],
+    };
+  }
   const copiedPre = ATTACK_PRE.get(copiedKey);
   if (copiedPre) {
-    const sub = copiedPre(s, aIdx, pool, action);
+    const sub = copiedPre(s, aIdx, pool, dispatchAction);
     // Bug fix (#18): 複製招式時，弱點/抗性必須以使用者（呆呆王＝超屬性）的屬性計算
     // 不繼承被複製招式的 skipWeakRes — 否則若複製到「不計算弱點」招式會錯誤跳過弱點
     return {
@@ -498,4 +510,4 @@ regPost('超級路卡利歐ex|超級勇氣', (state, aIdx, pool) => {
 // 卡面：「雙方場上所有【2階進化】寶可夢的最大 HP 各『-30』。」
 // 實裝：engine.ts 的 getEffectiveHP + effects.ts 的 effectiveHPInline 已加
 //   gravity-mountain hook（v2.92）— 當 activeStadium.name === '引力山岳'
-//   且 card.stage === 'Stage2' → hp -= 30。本模組不需註冊 reg*。
+//   且 card.stage === 'Stage2' → hp

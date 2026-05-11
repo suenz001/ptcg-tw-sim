@@ -264,6 +264,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.72</span> 🔨 修金屬之錘「最多 3 個」cap 語意 + 耀閃挑戰借此招的官方 QA</summary>
+        <ul>
+          <li>玩家提供官方 QA：「沒有附加鋼屬性的呆呆王使用招式『耀閃挑戰』的效果，選擇巨金怪的招式『金屬之錘』使用，希望處理招式效果的情況，會增加 150 點傷害嗎？」官方回覆「是」+「只要附有 1 個鋼能量則必須丟棄」。</li>
+          <li>查 JSON 後找到兩個 bug：</li>
+          <li><b>Bug A（巨金怪本體）</b>：原 v3.71-pre 實作 <code>ATTACK_PRE_DISCARD_CHOICE</code> 設定為 picker 模式（玩家自選棄 0~3 個能量），且邏輯寫成「恰好棄 3 個才 +150」。卡面「將 3 個鋼能量丟棄」是 <b>cap 語意</b>（IRON_RULES Rule 7c 語意陷阱表）— 應該是「自身鋼能量數量, cap 3，全丟」+「+150 觸發」是一個「若希望」binary。</li>
+          <li><b>Bug B（呆呆王借此招 — 本 QA 場景）</b>：耀閃挑戰宣告攻擊時，engine 查 <code>ATTACK_PRE_DISCARD_CHOICE</code> 是用 <code>呆呆王&#124;耀閃挑戰</code> 當 key 不會跳出 picker，遞迴 dispatch 到 borrowed PRE 時 <code>action.discardedEnergyIids</code> 是空 → 永遠走 fallback 150 傷害分支，<b>永遠拿不到 +150</b>，不論呆呆王有沒有鋼能量。</li>
+          <li><b>修法</b>：</li>
+          <li>　1. <code>巨金怪&#124;金屬之錘</code> 改用 <code>binary-yes-no</code> scope，玩家選「希望/不希望」（modal 兩按鈕）；regPre 內若 yes → 自動找自身鋼能量丟最多 3 個（cap=3）+ damage 300；no → damage 150 無加成。</li>
+          <li>　2. <code>呆呆王&#124;耀閃挑戰</code> 在遞迴 dispatch borrowed PRE 之前先看 spec — 若 borrowed 招式有 <code>binary-yes-no</code> PRE_DISCARD_CHOICE，<b>自動注入 yes sentinel iid</b>（player 在 borrowed attack 沒互動機會，預設「希望」是最有利選項，幾乎都是 +damage 加成）。</li>
+          <li><b>實質影響</b>（呆呆王借金屬之錘）：</li>
+          <li>　・0 鋼能量 → 不丟 + +150（白嫖加成）✓</li>
+          <li>　・1 鋼能量 → 自動丟那 1 個 + +150 ✓</li>
+          <li>　・3+ 鋼能量 → 丟 3 個 + +150 ✓</li>
+          <li><b>歷史教訓</b>：這是 IRON_RULES Rule 7c「最多 N」陷阱第 2 次踩中（前次：v3.711 願增猿腎上腺腦力）。同樣是把「至多 N 的 cap」誤譯為「玩家選 1~N」。每次踩中都更新 IRON_RULES 災難案例表 → 下次寫 audit 時更容易撞見鐵律。</li>
+          <li>tsc 0 errors + svelte parse 3/3 OK + 兩份檔案 TS parser 額外驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.712</span> 📜 Iron Rule 7c：規則解讀前必須查 static/cards 原文，禁止憑記憶</summary>
         <ul>
           <li>把連 4 次幻覺的教訓寫成新鐵律（IRON_RULES.md Rule 7c）：「實作 / audit / 規則解讀 / AI 決策邏輯前必須查 static/cards JSON 原文」。</li>
