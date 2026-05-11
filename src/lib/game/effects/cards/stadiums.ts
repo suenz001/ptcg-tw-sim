@@ -207,16 +207,16 @@ export const STATIC_PASSIVE_STADIUMS = new Set<string>([
   '昂主花葉蒂',     // 超級花葉蒂ex HP +150
   '險惡廢墟',       // 上備戰放 2 指示物（惡除外）
   '活力森林',       // 草可剛出場進化
-  '暈眩山谷',       // 混亂不因進化恢復
+  '暈眩山谷',       // v3.77 已實裝 — 進化時混亂保留（engine.ts EVOLVE handler）
   'N的城堡',         // N 寶可夢撤退 0
   '零之大空洞',     // 太晶備戰 8 隻
-  '化朗鎮',         // 赫普寶可夢傷害 +30
-  '夜間礦山',       // 太晶能量 +1 無
+  '化朗鎮',         // v3.76 已實裝 — 赫普寶可夢招式傷害 +30（engine.ts attack pipeline）
+  '夜間礦山',       // v3.77 已實裝 — 太晶寶可夢 attack cost +1 無（engine.ts canAffordAttack）
   '危險密林',       // 中毒指示物 +2
-  '全金屬實驗室',   // 鋼寶可夢受傷 -30
+  '全金屬實驗室',   // v3.77 已實裝 — 鋼寶可夢受傷 -30（engine.ts attack pipeline）
   '祭典會場',       // 附能量寶可夢免疫狀態
   '中立中心',       // v3.67 已實裝 — 非規則寶可夢不受對手 ex/V 招式傷害（NEUTRAL_CENTER_STADIUMS in effects.ts）
-  '石之洞窟',       // 大吾寶可夢受傷 -30
+  '石之洞窟',       // v3.77 已實裝 — 「大吾的」寶可夢受傷 -30（engine.ts attack pipeline）
   '樂園度假地',     // v2.177：可達鴨撤退 -1
   // 註：本 set 未實裝效果的 stadium 仍會放下成為場地（engine 預設行為），
   // 但不會冒「使用」按鈕。個別被動效果需個別實裝到 engine/effects 層。

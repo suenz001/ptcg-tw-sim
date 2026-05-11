@@ -918,6 +918,16 @@ export function canAffordAttack(
   if (pokemon.attackCostIncreaseColorlessThisTurn && pokemon.attackCostIncreaseColorlessThisTurn > 0) {
     cost = [...cost, ...Array(pokemon.attackCostIncreaseColorlessThisTurn).fill('Colorless' as EnergyType)];
   }
+  // v3.77 夜間礦山（Stadium）— 雙方場上所有「太晶」寶可夢使用招式所需的能量 +1【無】
+  //   卡面：「雙方場上所有『太晶』寶可夢使用招式所需的能量，各增加 1 個【無】能量。」
+  //   條件：state.activeStadium === '夜間礦山' + attacker.tags 含「太晶」
+  if (state && state.activeStadium) {
+    const stadiumCardForNightMine = pool.get(state.activeStadium.cardId);
+    const atkCardForNightMine = pool.get(pokemon.cardId);
+    if (stadiumCardForNightMine?.name === '夜間礦山' && atkCardForNightMine?.tags?.includes('太晶')) {
+      cost = [...cost, 'Colorless' as EnergyType];
+    }
+  }
   // v2.127 酋雷姆｜反等離子 — 對手棄牌區若有「阿克羅瑪」相關卡，三重冰霜成本改為 1 顆【無】
   if (state && attackName) {
     const attackerCard = pool.get(pokemon.cardId);
@@ -1923,6 +1933,11 @@ function handlePlaying(
       toolAttached: undefined, extraTools: [],
       evolvedFromStack: undefined, // 避免遞迴巢狀
     };
+    // v3.77 暈眩山谷（Stadium）— 進化/退化時，【混亂】狀態不會恢復
+    //   卡面：「雙方的【混亂】的寶可夢，就算進化・退化，【混亂】也不會恢復。」
+    //   只保留 'confused'，其他狀態（睡眠/麻痺/中毒/灼傷）依 PTCG 規則進化即消除。
+    const stadiumNameDaze = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+    const preserveConfusion = stadiumNameDaze === '暈眩山谷' && basePoke.status === 'confused';
     const evolved: CardInstance = {
       ...evoInst,
       // 保留場上寶可夢的 iid 作為「這隻寶可夢」的穩定身份。
@@ -1934,6 +1949,8 @@ function handlePlaying(
       toolAttached: basePoke.toolAttached,
       extraTools: basePoke.extraTools,
       // v2.260 Bug #2：不再寫 `status: basePoke.status` — 進化後特殊狀態必須消除（PDF §I-A-05）
+      // v3.77：暈眩山谷例外 — 若 base 為【混亂】且場上有此 stadium，保留混亂狀態
+      ...(preserveConfusion ? { status: 'confused' as const } : {}),
       evolvedFromIid: basePoke.iid,
       evolvedFromStack: [...prevStack, baseBare],
       evolvedThisTurn: true,
@@ -3695,6 +3712,27 @@ function handlePlaying(
           `「齒輪塗層」：${defenderCard.name} 受傷害 -${gearReduce}（${before} → ${baseDamage}）`, dIdx);
         formula.push({ sign: '-', value: before - baseDamage, label: '齒輪塗層' });
       }
+      // v3.77 全金屬實驗室（Stadium）— 雙方【鋼】寶可夢，受到對手寶可夢招式的傷害 -30
+      //   卡面：「雙方的【鋼】寶可夢，受到對手的寶可夢招式的傷害「-30」點。」
+      //   條件：場上 stadium === '全金屬實驗室' + defender 的 pokemonType === 'Metal'
+      const stadiumNameMetal = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+      if (stadiumNameMetal === '全金屬實驗室' && defenderCard.pokemonType === 'Metal') {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - 30);
+        workingState = addLog(workingState,
+          `「全金屬實驗室」：${defenderCard.name}（鋼）受傷害 -30（${before} → ${baseDamage}）`, dIdx);
+        formula.push({ sign: '-', value: before - baseDamage, label: '全金屬實驗室' });
+      }
+      // v3.77 石之洞窟（Stadium）— 雙方「大吾的」寶可夢，受到對手寶可夢招式的傷害 -30
+      //   卡面：「雙方的所有『大吾的寶可夢』受到對手的寶可夢招式的傷害「-30」點。」
+      const stadiumNameSteven = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+      if (stadiumNameSteven === '石之洞窟' && defenderCard.name.startsWith('大吾的')) {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - 30);
+        workingState = addLog(workingState,
+          `「石之洞窟」：${defenderCard.name}（大吾的）受傷害 -30（${before} → ${baseDamage}）`, dIdx);
+        formula.push({ sign: '-', value: before - baseDamage, label: '石之洞窟' });
+      }
     }
 
 
@@ -4206,7 +4244,10 @@ function handlePlaying(
         newState = addLog(newState, `🔧 道具調整獎勵牌：${prizeTool >= 0 ? '+' : ''}${prizeTool}（如莉莉艾的珍珠 -1 / 豪華斗篷 +1）`, null);
       }
       if (!preventPrizeAll && ancientEnergyAdjust !== 0) {
-        newState = addLog(newState, `⚡ 古舊能量效果：對手獎勵牌 ${ancientEnergyAdjust >= 0 ? '+' : ''}${ancientEnergyAdjust}`, null);
+        // v3.77：明確 log 古舊能量 ACE SPEC 效果，附 KO 寶可夢名 + 計算式
+        newState = addLog(newState,
+          `⚡ 古舊能量（ACE SPEC）：${defenderCard.name} 附有「古舊能量」 → 對手獎勵牌 ${ancientEnergyAdjust >= 0 ? '+' : ''}${ancientEnergyAdjust} 張（${basePrizes} ${ancientEnergyAdjust < 0 ? '-' : '+'} ${Math.abs(ancientEnergyAdjust)} = ${prizes}）`,
+          null);
       }
       defPlayers[dIdx] = defenderState;
       // v2.260 Bug #4：若古舊能量這次有 -1，per-player flag 設為 true（之後不再 -1）

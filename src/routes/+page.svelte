@@ -264,6 +264,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.77</span> 🏗️ 4 張 stub Stadium 全實裝 + 古舊能量 log 加強</summary>
+        <ul>
+          <li>承接 v3.76 化朗鎮，續清剩餘 4 張只有名字在 set 但沒對應 hook 的 stadium（違反 v3.68 鐵律「名字在 set 不等於實裝」）：</li>
+          <li><b>1. 全金屬實驗室（H）</b> — 卡面：「雙方的【鋼】寶可夢受到對手寶可夢招式的傷害『-30』點。」</li>
+          <li>　・實裝位置：engine.ts attack damage pipeline（Group 3 Wave 1 受傷減免區塊內）</li>
+          <li>　・條件：場上 stadium === '全金屬實驗室' + defender pokemonType === 'Metal'</li>
+          <li>　・log：「全金屬實驗室：X（鋼）受傷害 -30（before → after）」+ 公式項</li>
+          <li><b>2. 石之洞窟（I）</b> — 卡面：「雙方的所有『大吾的寶可夢』受到對手寶可夢招式的傷害『-30』點。」</li>
+          <li>　・實裝位置：同上</li>
+          <li>　・條件：stadium === '石之洞窟' + defender name 以「大吾的」開頭</li>
+          <li><b>3. 夜間礦山（I）</b> — 卡面：「雙方場上所有『太晶』寶可夢使用招式所需的能量，各增加 1 個【無】能量。」</li>
+          <li>　・實裝位置：engine.ts canAffordAttack（鼓擊 cost +N 後）</li>
+          <li>　・條件：stadium === '夜間礦山' + attacker.tags 含「太晶」→ cost 加 1 個 Colorless</li>
+          <li><b>4. 暈眩山谷（I）</b> — 卡面：「雙方的【混亂】的寶可夢，就算進化・退化，【混亂】也不會恢復。」</li>
+          <li>　・實裝位置：engine.ts EVOLVE handler（進化後 status 通常被清除，加例外）</li>
+          <li>　・條件：stadium === '暈眩山谷' + base.status === 'confused' → evolved 保留 confused</li>
+          <li>　・其他狀態（睡眠/麻痺/中毒/灼傷）依 PTCG 規則進化即消除，不受影響</li>
+          <li><b>5. 古舊能量 ACE SPEC log 加強</b> — v3.76 已加基本 log，v3.77 補強：明確標示 KO 寶可夢卡名 + 公式（「⚡ 古舊能量（ACE SPEC）：超級寶石海星ex 附有『古舊能量』 → 對手獎勵牌 -1 張（3 - 1 = 2）」）。</li>
+          <li>iron rules 遵守：Rule 7c 查 JSON 原文 / Rule 11 Python pipeline 不用 Edit。tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.76</span> 🎯 3 bug 修正：火箭隊監視塔 / 化朗鎮 / 獎賞調整 log</summary>
         <ul>
           <li>玩家回報三個 bug，本版一併處理：</li>
