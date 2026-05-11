@@ -1766,7 +1766,10 @@ function handlePlaying(
     // v2.119 險惡廢墟：改走統一 helper（同時被 pokemon_search / six_decks 等 resolver 呼叫）
     afterPlace = applyBenchPlaceSideEffects(afterPlace, aIdx, [placed.iid], pool);
     // v2.320：自動提示「從手牌放置於備戰區時」的特性（如殺手鐧捕捉、狂挖等）
-    afterPlace = promptPlayAbilities(afterPlace, aIdx, card, placed, pool, false);
+    // v3.76：火箭隊的監視塔在場時，【無】寶可夢的 on-play 特性也要被消除（喵喵ex 殺手鐧捕捉等）
+    if (!isColorlessAbilityBlocked(afterPlace, card, pool)) {
+      afterPlace = promptPlayAbilities(afterPlace, aIdx, card, placed, pool, false);
+    }
     return afterPlace;
   }
 
@@ -1950,7 +1953,10 @@ function handlePlaying(
       aIdx
     );
     // v2.320：自動提示「從手牌進化時」的特性（如龐克練肌、精神抽出等）
-    afterEvolve = promptPlayAbilities(afterEvolve, aIdx, evoCard, evolved, pool, true);
+    // v3.76：火箭隊的監視塔在場時，【無】寶可夢的 on-evolve 特性也要被消除
+    if (!isColorlessAbilityBlocked(afterEvolve, evoCard, pool)) {
+      afterEvolve = promptPlayAbilities(afterEvolve, aIdx, evoCard, evolved, pool, true);
+    }
 
     // v3.01 Wave 3 — 火箭隊的電龍｜黑暗脈衝：對手場上有 → 該進化卡 +4 指示物
     //   卡面明文「不重複」 → 多隻只 +4 一次（per-evolution）
@@ -3452,6 +3458,18 @@ function handlePlaying(
       }
     }
 
+    // v3.76 化朗鎮（Stadium）— 雙方的「赫普的寶可夢」招式對對手戰鬥場 +30
+    //   卡面：「雙方的『赫普的寶可夢』使用的招式，對對手的戰鬥寶可夢造成的傷害『+30』點」
+    //   只在場上有此競技場 + 攻擊方名稱以「赫普的」開頭 + 有基礎傷害時觸發。
+    if (baseDamage > 0 && attackerCard.name.startsWith('赫普的')) {
+      const stadiumNameHelo = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+      if (stadiumNameHelo === '化朗鎮') {
+        baseDamage += 30;
+        workingState = addLog(workingState, `「化朗鎮」啟動：${attackerCard.name} 招式傷害 +30`, aIdx);
+        formula.push({ sign: '+', value: 30, label: '化朗鎮' });
+      }
+    }
+
     // v2.113 空手道王的演練 — 本回合自己寶可夢招式對對手戰鬥場 ex +40
     if (baseDamage > 0 && attacker.karateKingBonusThisTurn && defenderCard?.subtype === 'ex') {
       baseDamage += 40;
@@ -4176,8 +4194,20 @@ function handlePlaying(
         }
       }
       // 獎賞牌下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
+      const basePrizes = prizesForKO(defenderCard);
       const prizes = preventPrizeAll ? 0
-        : Math.max(0, prizesForKO(defenderCard) + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + ancientEnergyAdjust + togekissBonus);
+        : Math.max(0, basePrizes + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + ancientEnergyAdjust + togekissBonus);
+      // v3.76：揭示 prize 調整來源（讓玩家了解為何獎賞數與預期不同）
+      // - prizeTool: 莉莉艾的珍珠 -1 / 豪華斗篷 +1
+      // - prizeAdjust: 影藏（惡寶可夢被 ex KO 時 -1）
+      // - ancientEnergyAdjust: 古舊能量 -1
+      // - deferredBonus / whiteLilyBonus / bagonElenaBonus / greedyGourmetBonus / togekissBonus 已各自有 log
+      if (!preventPrizeAll && prizeTool !== 0) {
+        newState = addLog(newState, `🔧 道具調整獎勵牌：${prizeTool >= 0 ? '+' : ''}${prizeTool}（如莉莉艾的珍珠 -1 / 豪華斗篷 +1）`, null);
+      }
+      if (!preventPrizeAll && ancientEnergyAdjust !== 0) {
+        newState = addLog(newState, `⚡ 古舊能量效果：對手獎勵牌 ${ancientEnergyAdjust >= 0 ? '+' : ''}${ancientEnergyAdjust}`, null);
+      }
       defPlayers[dIdx] = defenderState;
       // v2.260 Bug #4：若古舊能量這次有 -1，per-player flag 設為 true（之後不再 -1）
       const newAncientFlags: [boolean, boolean] = ancientEnergyJustUsed

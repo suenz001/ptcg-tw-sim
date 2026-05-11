@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.76</span> 🎯 3 bug 修正：火箭隊監視塔 / 化朗鎮 / 獎賞調整 log</summary>
+        <ul>
+          <li>玩家回報三個 bug，本版一併處理：</li>
+          <li><b>Bug 1：場上有「火箭隊的監視塔」時，喵喵ex 進場仍能發動「殺手鐧捕捉」</b></li>
+          <li>　・根因：v2.320 加的 <code>promptPlayAbilities</code>（on-play/on-evolve 互動提示）<b>未經過 isColorlessAbilityBlocked gate</b>。原本 BENCH_PLACE_TRIGGERS path 有 gate，但 promptPlayAbilities 三條 caller（BENCH_PLACE / EVOLVE / 神奇糖果）都漏了。</li>
+          <li>　・修法：把 gate 加在 <code>promptPlayAbilities</code> 入口（單點集中），<b>三個 caller 都受惠</b>，未來新 caller 也不會漏網。同時在 engine.ts 兩個 caller 加 defense in depth gate。</li>
+          <li><b>Bug 2：化朗鎮 競技場效果未實裝</b></li>
+          <li>　・卡面：「雙方的『赫普的寶可夢』使用的招式，對對手的戰鬥寶可夢造成的傷害『+30』點」</li>
+          <li>　・根因：化朗鎮 在 STATIC_PASSIVE_STADIUMS set 內但<b>沒有對應 hook</b>（違反 v3.68 鐵律「名字在 set 不等於實裝」）。</li>
+          <li>　・修法：engine.ts attack damage pipeline 加 hook — 場上有化朗鎮 + 攻擊方名稱以「赫普的」開頭 → <code>baseDamage += 30</code> + log + 公式項。</li>
+          <li><b>Bug 3：超級寶石海星ex 被擊倒時對手只獲得 2 獎</b></li>
+          <li>　・調查：<code>prizesForKO</code> 邏輯正確（超級開頭 ex → 3）— v1.5 起就在了。最可能原因：<b>莉莉艾的珍珠</b>（Pokemon Tool）附在 ex 上時減 1 獎，魔靈寶石海星 deck preset 內就有此卡。</li>
+          <li>　・改善：在 KO 取獎賞時 add log 揭示 prize 調整來源（莉莉艾的珍珠 / 古舊能量 / 影藏 / 各類 +N 加成），方便玩家確認獎賞數的算法。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.751</span> 🚨 hotfix：夠讚狗 攻擊後被誤判「反彈傷害擊倒」（既存 v2.301 bug）</summary>
         <ul>
           <li>玩家回報：場上沒有反彈傷害道具，但 AI 的夠讚狗 攻擊後馬上顯示「夠讚狗 被反彈傷害擊倒！」自己直接掛掉。</li>

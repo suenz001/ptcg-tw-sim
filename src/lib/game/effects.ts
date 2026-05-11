@@ -13697,6 +13697,15 @@ export function promptPlayAbilities(
   if (!card.abilities) return state;
   // 如果已經有 pendingSelection（例如 BENCH_PLACE_TRIGGERS 已觸發），不要覆蓋
   if (state.pendingSelection) return state;
+  // v3.76：火箭隊的監視塔在場時，【無】寶可夢的所有特性（含 on-play / on-evolve）消除
+  //   gate 在函式入口集中處理 — engine.ts 三個 caller (BENCH_PLACE / EVOLVE / 神奇糖果)
+  //   都會經此 gate，避免每個 caller 各自加 check 漏網。
+  if (card.pokemonType === 'Colorless' && state.activeStadium) {
+    const stadiumCard = pool.get(state.activeStadium.cardId);
+    if (stadiumCard && ROCKET_WATCHTOWER_STADIUMS.has(stadiumCard.name)) {
+      return state;
+    }
+  }
 
   for (let i = 0; i < card.abilities.length; i++) {
     const ab = card.abilities[i];
