@@ -264,6 +264,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.70</span> 🔍 招式層 audit — G 標新版本 22 張招式實裝 + 3 張卡名字串變體修復</summary>
+        <ul>
+          <li>承 v3.69 的 audit 動能，繼續做「招式層」掃描（與「特性層」結構相同）：對所有 G/H/I/J 標 Pokemon 的 attacks 計算 key = <code>cardName|attackName</code>，比對 <code>regPre</code>/<code>regPost</code> 註冊表 + inline 比對表。</li>
+          <li>掃描 <b>1622 個去重後招式</b>（3131 個 print 變體扣除 vanilla 純傷害）：</li>
+          <li>　・1592 個有 implementation path（reg / passive / inline 三類）</li>
+          <li>　・<b>30 個 orphan</b>（全部是 G 標新版本：SVM / SVQL / SVQP / SVK / SV8a 起點組 + Mega 系列）</li>
+          <li><b>本批 v3.70 實裝 22 張</b>（全部用既有 helper / 簡單 inline）：</li>
+          <li>　・SELF_HIT 自殘 7 張（火箭雀&#124;高溫奇襲、直衝熊&#124;突擊、小箭雀&#124;急降、摩托蜥&#124;突擊、小火龍&#124;熱力衝撞、加熱洛托姆&#124;熱力衝撞、自爆磁怪&#124;打雷）</li>
+          <li>　・狀態類 3 張（不良蛙&#124;毒針 / 毒骷蛙&#124;拳頭刺 中毒；愛管侍&#124;催眠波動 睡眠）</li>
+          <li>　・自身回血 2 張（瑪力露 / 瑪力露麗 ｜ 泡沫吸取）</li>
+          <li>　・條件 +N 2 張（新 helper <code>selfHasDamagePre</code>：烈箭鷹&#124;烈火之風 70+90、噴火龍ex&#124;無畏之翼 60+100）</li>
+          <li>　・擲幣傷害 2 張（瑪力露麗&#124;摔打 2&times;100、卡蒂狗&#124;連續火焰 til-tails&times;30）</li>
+          <li>　・棄能量大招（噴火龍ex&#124;爆焰旋渦 330+棄3能量）+ 搜尋備戰（波波&#124;呼朋引伴）+ 對手不撤退（烈箭鷹&#124;緊抓）+ 狙擊備戰（電肚蛙&#124;電氣子彈 70+30）+ 反面全棄能量（皮卡丘ex&#124;極限伏特）+ 對手指示物&times;10（小拉達&#124;咬傷口）</li>
+          <li><b>3 張 print 變體 JSON cleanup</b>（與 v3.69 月月熊 同類 bug — scraper 不一致導致字串比對失效）：</li>
+          <li>　・M-P-H / SVM 的「‌喵喵」（卡名前面有 ZWNJ U+200C）→ 「喵喵」(2 prints) — 已 reg <code>喵喵&#124;亂抓</code> 三幣&times;20 倍率但字串不 match 永遠失效</li>
+          <li>　・SV8a 的「厄鬼椪 碧草面具ex」（中間 NBSP U+00A0）→ 正常空格 (3 prints) — 已 reg 萬葉陣雨</li>
+          <li><b>剩 8 張 orphan 延後到 v3.71+</b>（需要新 picker resolver / 引擎 hook）：古簡蝸&#124;貪欲制約 (對手 cost +2 debuff)、鐵脖頸&#124;重子光束 (cost 條件減免)、夢幻ex&#124;基因駭入 (招式 mimic)、大比鳥ex&#124;狂風呼嘯 (binary 丟棄競技場)、愛管侍&#124;育兒高手 (搜尋進化卡)、自爆磁怪&#124;磁力抵制 (binary 對手互換)、咚咚鼠&#124;咬能量、風速狗&#124;咬碎 (擲幣丟對手能量)。</li>
+          <li>tsc 0 errors + svelte parse OK 才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.69</span> 🐻 hotfix：月月熊 赫月ex SV5a 變體的「老練招式」失效（卡名空格不一致）</summary>
         <ul>
           <li>玩家催全卡片實裝 audit，跑了 265 個標準環境 Pokemon 特性的嚴格 cross-check（regA / passive sets / inline name 三層交叉比對）：</li>

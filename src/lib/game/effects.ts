@@ -442,6 +442,7 @@ import './effects/cards/v2995_g4_wave1';
 import './effects/cards/v2996_g4_wave2';
 import './effects/cards/v2997_g4_wave3';
 import './effects/cards/v2998_g2';
+import './effects/cards/v3700_audit_orphans';
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v3.0 Group 3 Wave 2 helper — 用於 resolveBenchGuard 蟲甲聖球形盾牌
