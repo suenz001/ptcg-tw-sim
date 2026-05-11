@@ -344,6 +344,39 @@ for p in files:
 **例外**：版本字串改變（如 `2.996` → `2.997`）byte 數一樣時 disk size = HEAD size 是
 正常的，不是截斷。truncated 判斷需配合「應該新增的 marker 是否存在」。
 
+### Rule 11b: Edit 工具縮短字串時可能留 NUL byte padding（v3.721 災難）
+
+不僅 mount-truncate 那種大檔截斷問題（Rule 11）— 連把短字串改成更短的字串時也可能踩。v3.72 把 `VERSION = '3.712'` 改成 `VERSION = '3.72'`（少 1 byte），Edit 工具沒做正確 file size shrink，檔尾留下 1 個 `\x00` NUL byte。
+
+**症狀**：
+- `tsc --noEmit` 通過（lexer 把 NUL 當 EOF）
+- `svelte/compiler.compile` 通過（同上）
+- `vite build` → `svelte-check` → svelte preprocessor 走 TS lexer 時報 `Invalid character`，build 失敗
+- GitHub Actions 顯示 `Process completed with exit code 1`
+
+**修法**：Python `content.rstrip(b'\x00').rstrip(b'\n') + b'\n'` + safe_write。
+
+**Pre-push 驗證必加項**：
+
+```bash
+# 對所有改過的 .ts / .svelte / .js 確認無 NUL byte
+for f in $(git diff --name-only HEAD); do
+  if grep -q $'\x00' "$f"; then
+    echo "X $f contains NUL byte!"
+  fi
+done
+```
+
+或 Python:
+
+```python
+for path in changed_files:
+    with open(path, 'rb') as f:
+        assert b'\x00' not in f.read(), f"{path} has NUL byte"
+```
+
+**為什麼這條值得獨立成鐵律**：tsc / svelte-parse 都不抓，過了所有「本地驗證」但 GitHub Actions 必炸。這個 silent 漏網是最危險的失敗模式 — 改一行小字串應該萬無一失，卻能把整個 deploy 炸掉。
+
 ### Rule 12: Wave/cards 子檔案禁止 module top-level 對 effects.ts 內 Map 做 .set()
 
 **症狀**: 瀏覽器 console 報 `ReferenceError: Cannot access 'go' before initialization`

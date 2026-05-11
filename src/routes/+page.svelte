@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.721</span> 🚨 hotfix：v3.72 push 失敗 — version.ts 末尾 NUL byte 觸發 svelte-check 報 Invalid character</summary>
+        <ul>
+          <li>v3.72 push 上 GitHub Actions 後 build job 失敗（exit 1）。依鐵律 Rule 4「不要猜，去看實際 build error」，呼叫 GitHub Actions check-runs annotation API + sandbox 跑 svelte-check 抓到根因。</li>
+          <li><b>真因</b>：Edit 工具改 <code>VERSION = '3.712'</code> → <code>VERSION = '3.72'</code> 時，新內容比舊少 1 byte，但 Edit 沒做檔案截斷 → 檔尾留 1 個 <code>\x00</code> NUL byte。tsc + svelte parse 不會嚴格抓這個（兩者都當作 EOF 處理）；但 vite build → svelte-check → svelte preprocessor 走 TS lexer 時報「Invalid character」直接失敗。</li>
+          <li>修法：Python <code>rstrip(b'\x00').rstrip(b'\n') + b'\n'</code> 清掉檔尾 NUL，並 bump 到 v3.721 強制 hash 更新避免 CDN 快取。</li>
+          <li><b>IRON_RULES 補充（Rule 11b）</b>：Edit 工具不只會 truncate 大檔，<b>連改小字串也可能留 NUL padding</b>。所有 .ts/.svelte 改完都應 byte-level verify 檔尾不含 <code>\x00</code>。tsc / svelte parse 不會抓這種；只有 vite build / svelte-check 會。Pre-push 驗證流程加 NUL check。</li>
+          <li><b>Pre-push 驗證升級</b>：未來 push 前一律跑：(1) tsc --noEmit (2) svelte/compiler.compile (3) 對所有改過的 .ts/.svelte 跑 <code>grep -l $'\x00'</code> 確認無 NUL byte。第 (3) 點是這次新增的步驟。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.72</span> 🔨 修金屬之錘「最多 3 個」cap 語意 + 耀閃挑戰借此招的官方 QA</summary>
         <ul>
           <li>玩家提供官方 QA：「沒有附加鋼屬性的呆呆王使用招式『耀閃挑戰』的效果，選擇巨金怪的招式『金屬之錘』使用，希望處理招式效果的情況，會增加 150 點傷害嗎？」官方回覆「是」+「只要附有 1 個鋼能量則必須丟棄」。</li>
