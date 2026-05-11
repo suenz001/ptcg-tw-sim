@@ -1273,9 +1273,15 @@ export function createGame(
   p1.deck = shuffle(deckToInstances(spec1.entries));
   p2.deck = shuffle(deckToInstances(spec2.entries));
 
-  // 各抽 7 張（記錄 mulligan 次數）
-  const m1 = dealOpeningHand(p1, pool);
-  const m2 = dealOpeningHand(p2, pool);
+  // 各抽 7 張（記錄 mulligan 次數 + v3.74 揭示手牌）
+  const opening1 = dealOpeningHand(p1, pool);
+  const opening2 = dealOpeningHand(p2, pool);
+  const m1 = opening1.mulligans;
+  const m2 = opening2.mulligans;
+  // v3.74：mulligan 揭示 — 每方記下每次失敗的 7 張 cardIds 給對方確認
+  const mulliganRevealedHands: [string[][], string[][]] = [opening1.revealedHands, opening2.revealedHands];
+  // 對方沒 mulligan 則自動視為 confirmed（無需確認）
+  const mulliganRevealConfirmed: [boolean, boolean] = [m2 === 0, m1 === 0];
 
   // Mulligan 補抽採「NET 抵銷」：只有次數多的一方的對手可以補抽差額。
   // 例：雙方各 1 次 → 互相抵銷，兩邊都 0；對方 2 次我方 1 次 → 我方補 1、對方 0。
@@ -1299,6 +1305,8 @@ export function createGame(
     setupDone: [false, false],
     mulliganCounts: [m1, m2],
     pendingMulliganDraw: [extraForP1, extraForP2],
+    mulliganRevealedHands,
+    mulliganRevealConfirmed,
     log: [],
     pendingPrizes: [0, 0],
     oppPrizesAtMyLastTurnEnd: [6, 6],
@@ -1340,9 +1348,14 @@ export function createGame(
  * 抽 7 張起始手牌。若無基礎寶可夢則重新洗牌並再抽（mulligan）。
  * 回傳 mulligan 次數（第一次未成功抽到基礎的重抽次數）。
  */
-function dealOpeningHand(player: PlayerState, pool: Map<string, Card>): number {
+// v3.74 改回傳 {mulligans, revealedHands}：每次 mulligan 失敗前的 7 張 cardIds 給對手確認
+function dealOpeningHand(
+  player: PlayerState,
+  pool: Map<string, Card>,
+): { mulligans: number; revealedHands: string[][] } {
   let attempts = 0;
   let mulligans = 0;
+  const revealedHands: string[][] = [];
   do {
     // 把手牌放回牌組重洗
     player.deck = shuffle([...player.deck, ...player.hand]);
@@ -1355,12 +1368,35 @@ function dealOpeningHand(player: PlayerState, pool: Map<string, Card>): number {
     attempts++;
     // v2.42：閃焰王牌「瞬間爆發力」可作為起始戰鬥寶可夢 → 視同基礎，避免被誤判 mulligan
     if (player.hand.some((c) => canBeInitialActive(c.cardId, pool))) break;
+    // v3.74：mulligan 失敗 — 把這 7 張 cardIds 記下來給對方看
+    revealedHands.push(player.hand.map(c => c.cardId));
     mulligans++;
   } while (attempts < 10);
-  return mulligans;
+  return { mulligans, revealedHands };
 }
 
 // ── Setup 階段處理 ───────────────────────────────────────────────────────────
+
+// v3.74：setup → playing 推進條件 helper
+//   雙方都 setupDone + 雙方都 pendingMulliganDraw=0 + 雙方都 mulliganRevealConfirmed=true
+//   滿足才能進 playing phase。在多個 handler 結尾呼叫（FINISH_SETUP / MULLIGAN_DRAW_DECISION /
+//   CONFIRM_MULLIGAN_REVEAL）以避免重複條件 check 邏輯。
+function tryAdvanceToPlaying(state: GameState): GameState {
+  if (state.phase !== 'setup') return state;
+  if (!state.setupDone[0] || !state.setupDone[1]) return state;
+  if (state.pendingMulliganDraw[0] !== 0 || state.pendingMulliganDraw[1] !== 0) return state;
+  if (!state.mulliganRevealConfirmed[0] || !state.mulliganRevealConfirmed[1]) return state;
+  let next: GameState = {
+    ...state,
+    phase: 'playing',
+    turnPhase: 'draw',
+    activePlayerIndex: state.firstPlayerIdx,
+    isFirstTurn: true,
+  };
+  next = addLog(next, `Setup 完成！${next.players[next.firstPlayerIdx].name} 先手行動中。`, null);
+  next = applyAutoDraw(next);
+  return next;
+}
 
 function handleSetup(
   state: GameState,
@@ -1372,7 +1408,8 @@ function handleSetup(
     action.type !== 'PLACE_ACTIVE' &&
     action.type !== 'BENCH_POKEMON' &&
     action.type !== 'FINISH_SETUP' &&
-    action.type !== 'MULLIGAN_DRAW_DECISION'
+    action.type !== 'MULLIGAN_DRAW_DECISION' &&
+    action.type !== 'CONFIRM_MULLIGAN_REVEAL'
   ) {
     return state;
   }
@@ -1402,22 +1439,20 @@ function handleSetup(
     };
     next = addLog(next, msg, pIdx);
 
-    // 若雙方 setupDone 都已完成、且雙方 mulligan 決定也已完成 → 進入 playing
-    if (next.setupDone[0] && next.setupDone[1]
-        && next.pendingMulliganDraw[0] === 0 && next.pendingMulliganDraw[1] === 0
-        && next.phase === 'setup') {
-      next = {
-        ...next,
-        phase: 'playing',
-        turnPhase: 'draw',  // v2.183：改 'draw'，再由 applyAutoDraw 抽牌後設成 'main'
-        activePlayerIndex: next.firstPlayerIdx,
-        isFirstTurn: true,
-      };
-      next = addLog(next, `Setup 完成！${next.players[next.firstPlayerIdx].name} 先手行動中。`, null);
-      // v2.183 修：PTCG 現行規則先攻方第 1 回合也要抽牌（只是不能攻擊）。
-      //   舊版直接 turnPhase='main' 跳過抽牌 — 違反規則。
-      next = applyAutoDraw(next);
-    }
+    // v3.74：抽 helper — 雙方都完成 setup + mulligan 補抽決定 + 揭示確認 → 進入 playing
+    next = tryAdvanceToPlaying(next);
+    return next;
+  }
+
+  // v3.74：玩家確認對方的 mulligan 揭示（看完 modal 按確認）
+  if (action.type === 'CONFIRM_MULLIGAN_REVEAL') {
+    const senderIdx = action.senderIdx;
+    if (state.mulliganRevealConfirmed[senderIdx]) return state; // 已確認過，no-op
+    const newConfirmed = [...state.mulliganRevealConfirmed] as [boolean, boolean];
+    newConfirmed[senderIdx] = true;
+    let next: GameState = { ...state, mulliganRevealConfirmed: newConfirmed };
+    next = addLog(next, `${state.players[senderIdx].name} 已確認對方的 mulligan 揭示`, senderIdx);
+    next = tryAdvanceToPlaying(next);
     return next;
   }
 
@@ -1479,20 +1514,8 @@ function handleSetup(
     let newState: GameState = { ...state, players, setupDone: newDone };
     newState = addLog(newState, `${player.name} 完成準備。`, null);
 
-    // 雙方都完成 setup + 雙方都已決定 mulligan 補抽 → 進入 playing
-    const mul = newState.pendingMulliganDraw ?? [0, 0];
-    if (newDone[0] && newDone[1] && mul[0] === 0 && mul[1] === 0) {
-      newState = {
-        ...newState,
-        phase: 'playing',
-        turnPhase: 'draw',  // v2.183：改 'draw'，再由 applyAutoDraw 抽牌後設成 'main'
-        activePlayerIndex: state.firstPlayerIdx,
-        isFirstTurn: true,
-      };
-      newState = addLog(newState, `Setup 完成！${state.players[state.firstPlayerIdx].name} 先手行動中。`, null);
-      // v2.183 修：先攻第 1 回合也要抽牌（PTCG 現行規則）。
-      newState = applyAutoDraw(newState);
-    }
+    // v3.74：改用 tryAdvanceToPlaying helper，會自動 check mulliganRevealConfirmed
+    newState = tryAdvanceToPlaying(newState);
     return newState;
   }
 

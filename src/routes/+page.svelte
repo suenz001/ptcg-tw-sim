@@ -264,6 +264,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.74</span> 👀 PTCG 官方規則：對手 mulligan 揭示翻頁式 modal</summary>
+        <ul>
+          <li>依 PTCG 官方規則，當對手起手無基礎寶可夢需要重抽（mulligan）時，必須將每次重抽前的 7 張手牌揭示給對方確認，再放回牌組重洗。</li>
+          <li>之前實裝只有 mulligan counts + 補抽決定 modal，<b>沒有揭示</b>，違反官方流程。本版補上。</li>
+          <li><b>引擎層</b>：</li>
+          <li>　・<code>dealOpeningHand()</code> 改回傳 <code>&#123;mulligans, revealedHands&#125;</code>，每次重抽前快照 7 張 cardIds。</li>
+          <li>　・<code>GameState</code> 加 <code>mulliganRevealedHands</code> 與 <code>mulliganRevealConfirmed</code> 兩個 per-player 欄位。</li>
+          <li>　・新增 <code>CONFIRM_MULLIGAN_REVEAL</code> action + 玩家動作 helper。</li>
+          <li>　・抽出 <code>tryAdvanceToPlaying()</code> helper — setup 進入 playing 需雙方 setupDone + pendingMulliganDraw=0 + mulliganRevealConfirmed=true。</li>
+          <li>　・AI 自動確認（<code>handleSetupAI</code> 開頭 gate）。</li>
+          <li><b>UI 層</b>：</li>
+          <li>　・新增「對手起手揭示」modal，<b>翻頁式</b>顯示每次重抽的 7 張手牌（&larr; 上一手 / 下一手 &rarr;）。</li>
+          <li>　・每張卡可點擊放大（zoom），桌機 7 欄、手機 4 欄自適應。</li>
+          <li>　・「我看完了，繼續」按鈕 → dispatch CONFIRM_MULLIGAN_REVEAL → 後續再顯示既有「補抽 N 張」決定 modal。</li>
+          <li>　・既有 pendingMulliganDraw modal 加 gate：<code>mulliganRevealConfirmed</code> 為 true 才顯示，避免兩 modal 同時出現。</li>
+          <li>tsc 0 errors。連線/AI/本機雙人皆支援。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.732</span> 🤖 AI 修兩個邏輯 bug — 日光轉移無限循環 + 波動突刺 picker 智能選</summary>
         <ul>
           <li>玩家回報兩個 AI 邏輯問題：</li>

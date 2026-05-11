@@ -263,6 +263,10 @@ export function getAIAction(
 // ── Setup 階段 AI ─────────────────────────────────────────────────────────────
 
 function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): GameAction | null {
+  // v3.74：AI 自動確認對方的 mulligan 揭示（無需互動）
+  if (!state.mulliganRevealConfirmed[pIdx]) {
+    return { type: 'CONFIRM_MULLIGAN_REVEAL', senderIdx: pIdx };
+  }
   // Mulligan 補抽決定：AI 一律接受（有的拿沒理由不拿）
   if ((state.pendingMulliganDraw?.[pIdx] ?? 0) > 0) {
     return { type: 'MULLIGAN_DRAW_DECISION', accept: true, senderIdx: pIdx };

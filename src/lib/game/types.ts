@@ -531,6 +531,19 @@ export interface GameState {
    * 無 mulligan 則一開始就是 [0, 0]。
    */
   pendingMulliganDraw: [number, number];
+  /**
+   * v3.74：每方每次 mulligan 揭示的 7 張手牌 cardIds（給對手確認用，符合 PTCG 規則）。
+   * - mulliganRevealedHands[0] = P1 每次重抽失敗前的 7 張 cardIds
+   * - mulliganRevealedHands[1] = P2 同上
+   * createGame 時一次性決定；UI setup 期間顯示翻頁式 modal 給對手確認。
+   * 沒 mulligan 的方對應 sub-array 為空 []。
+   */
+  mulliganRevealedHands: [string[][], string[][]];
+  /**
+   * v3.74：每方是否已確認對方的 mulligan 揭示（看完 modal 按確認）。
+   * 對方沒 mulligan 則自動為 true（無需確認）；雙方都 true 才能進 playing phase。
+   */
+  mulliganRevealConfirmed: [boolean, boolean];
   /** 行動紀錄（給 UI 顯示用） */
   log: LogEntry[];
   /** 勝者（game-over 時填入） */
@@ -738,6 +751,8 @@ export type GameAction =
   | { type: 'FINISH_SETUP'; senderIdx: 0 | 1 }
   /** 對手 mulligan 補抽：accept=true 抽齊 pendingMulliganDraw[senderIdx] 張；false 放棄 */
   | { type: 'MULLIGAN_DRAW_DECISION'; accept: boolean; senderIdx: 0 | 1 }
+  /** v3.74：玩家確認對方的 mulligan 揭示（看完 modal 後按確認）。設 mulliganRevealConfirmed[senderIdx]=true */
+  | { type: 'CONFIRM_MULLIGAN_REVEAL'; senderIdx: 0 | 1 }
 
   // 正式對戰
   | { type: 'DRAW_CARD' }

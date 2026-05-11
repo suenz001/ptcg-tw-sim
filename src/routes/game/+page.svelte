@@ -243,6 +243,8 @@
   //   - 切換新 modal 時 $effect 自動重置 offset（pendingSelection 物件變更就 trigger）
   let modalOffset = $state<{ x: number; y: number }>({ x: 0, y: 0 });
   let modalDragged = $state(false);
+  // v3.74：mulligan 揭示 modal 的當前頁碼（每頁顯示一手起手 = 7 張卡）
+  let revealPage = $state(0);
   let modalDragStart: { sx: number; sy: number; ox: number; oy: number } | null = null;
   function onModalHeaderPointerDown(e: PointerEvent) {
     const t = e.target as HTMLElement | null;
@@ -4549,8 +4551,76 @@
     </div>
   {/if}
 
+  <!-- v3.74 Mulligan 揭示：對手起手無基礎重抽時，揭示每次重抽的 7 張手牌給玩家確認（PTCG 官方規則）-->
+  {#if game && game.phase==='setup'
+       && (game.mulliganRevealedHands?.[oppIdx]?.length ?? 0) > 0
+       && !game.mulliganRevealConfirmed?.[myIdx]
+       && (
+            (mode==='online' && myPlayerIndex===myIdx) ||
+            (mode!=='online' && aiPlayerIndex === null) ||
+            (aiPlayerIndex !== null && aiPlayerIndex !== myIdx)
+          )}
+    {@const oppHands = game.mulliganRevealedHands[oppIdx]}
+    {@const totalPages = oppHands.length}
+    {@const pageIdx = Math.min(Math.max(revealPage, 0), totalPages - 1)}
+    {@const curHand = oppHands[pageIdx]}
+    {@const oppName2 = game.players[oppIdx].name}
+    <div class="selection-overlay" class:dragged={modalDragged}>
+      <div class="selection-modal mulligan-modal mulligan-reveal-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>👀 對手起手揭示</h3>
+          <p class="sel-hint">
+            <strong>{oppName2}</strong> 起手無基礎寶可夢，重抽 {totalPages} 次。依 PTCG 官方規則，每次重抽前的 7 張手牌需向你揭示確認。
+          </p>
+        </div>
+        <div class="mulligan-reveal-body">
+          <!-- 翻頁工具列 -->
+          <div class="mulligan-reveal-pager">
+            <button class="btn-act small"
+              disabled={pageIdx <= 0}
+              onclick={() => revealPage = Math.max(0, pageIdx - 1)}>← 上一手</button>
+            <span class="page-indicator">第 {pageIdx + 1} 次重抽 / 共 {totalPages} 次</span>
+            <button class="btn-act small"
+              disabled={pageIdx >= totalPages - 1}
+              onclick={() => revealPage = Math.min(totalPages - 1, pageIdx + 1)}>下一手 →</button>
+          </div>
+          <!-- 7 張卡 grid -->
+          <div class="mulligan-reveal-grid">
+            {#each curHand as cid, ci (pageIdx + '_' + ci)}
+              {@const cc = pool.get(cid)}
+              <div class="mulligan-reveal-card">
+                {#if cc?.imageUrl}
+                  <img src={cc.imageUrl} alt={cc.name} onclick={() => openZoom(cid, null)} class="zoomable" />
+                {:else}
+                  <div class="card-placeholder">{cc?.name ?? cid}</div>
+                {/if}
+                <div class="card-name-label">{cc?.name ?? '?'}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+        <div class="sel-footer mulligan-footer">
+          <span class="sel-hint" style="flex:1; font-size:.8rem;">
+            {#if pageIdx < totalPages - 1}
+              （請看完所有重抽手牌再按確認）
+            {:else}
+              ✅ 已看完全部重抽手牌
+            {/if}
+          </span>
+          <button class="btn-act primary"
+            onclick={() => {
+              dispatch(GameActions.confirmMulliganReveal(myIdx));
+              revealPage = 0;
+            }}>
+            ✅ 我看完了，繼續
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- 重抽懲罰補抽決定：對手起手無基礎寶可夢重抽時，玩家選擇抽/不抽補償 -->
-  {#if game && game.phase==='setup' && (game.pendingMulliganDraw?.[myIdx] ?? 0) > 0 && (
+  {#if game && game.phase==='setup' && (game.pendingMulliganDraw?.[myIdx] ?? 0) > 0 && (game.mulliganRevealConfirmed?.[myIdx] ?? true) && (
       (mode==='online' && myPlayerIndex===myIdx) ||
       (mode!=='online' && aiPlayerIndex === null) ||
       (aiPlayerIndex !== null && aiPlayerIndex !== myIdx)
@@ -6228,6 +6298,47 @@
 
   /* Mulligan 補抽模態 */
   .mulligan-modal{ max-width:440px; }
+  /* v3.74 Mulligan 揭示翻頁 modal */
+  .mulligan-reveal-modal{ max-width:760px; }
+  .mulligan-reveal-body{ padding:.5rem 0; display:flex; flex-direction:column; gap:.8rem; }
+  .mulligan-reveal-pager{ display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+  .mulligan-reveal-pager .page-indicator{ color:#ffd070; font-weight:600; font-size:.92rem; }
+  .mulligan-reveal-pager .btn-act.small{ padding:.3rem .65rem; font-size:.82rem; }
+  .mulligan-reveal-pager .btn-act:disabled{ opacity:.35; cursor:not-allowed; }
+  .mulligan-reveal-grid{
+    display:grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap:.4rem;
+    background:rgba(0,0,0,.25);
+    padding:.5rem;
+    border-radius:8px;
+  }
+  .mulligan-reveal-card{
+    display:flex; flex-direction:column; align-items:center; gap:.2rem;
+  }
+  .mulligan-reveal-card img{
+    width:100%; height:auto; aspect-ratio:2.5/3.5; object-fit:cover;
+    border-radius:4px; cursor:zoom-in;
+    box-shadow:0 1px 3px rgba(0,0,0,.5);
+  }
+  .mulligan-reveal-card .card-name-label{
+    font-size:.65rem; color:#ddd; text-align:center; line-height:1.1;
+    max-width:100%; word-break:break-all; overflow:hidden;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  }
+  .mulligan-reveal-card .card-placeholder{
+    width:100%; aspect-ratio:2.5/3.5; background:#333; border-radius:4px;
+    display:flex; align-items:center; justify-content:center;
+    color:#aaa; font-size:.7rem; text-align:center; padding:.3rem;
+  }
+  /* 手機 / 窄螢幕：改 4 欄並縮小字 */
+  @media (max-width: 640px) {
+    .mulligan-reveal-modal{ max-width:96vw; }
+    .mulligan-reveal-grid{ grid-template-columns: repeat(4, 1fr); }
+    .mulligan-reveal-card .card-name-label{ font-size:.6rem; }
+    .mulligan-reveal-pager .page-indicator{ font-size:.78rem; }
+  }
+
   .mulligan-body{ padding:.4rem 0; }
   .mulligan-info{ background:rgba(255,220,120,.08); border:1px solid rgba(255,200,100,.35); border-radius:8px; padding:.6rem .75rem; display:flex; flex-direction:column; gap:.25rem; color:#ffe0a0; font-size:.85rem; }
   .mulligan-footer{ justify-content:space-between; }

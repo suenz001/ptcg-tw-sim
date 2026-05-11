@@ -11,6 +11,9 @@ export const GameActions = {
   finishSetup:       (senderIdx: 0 | 1): GameAction => ({ type: 'FINISH_SETUP', senderIdx }),
   mulliganDrawDecision: (accept: boolean, senderIdx: 0 | 1): GameAction =>
                        ({ type: 'MULLIGAN_DRAW_DECISION', accept, senderIdx }),
+  // v3.74：玩家確認對方的 mulligan 揭示
+  confirmMulliganReveal: (senderIdx: 0 | 1): GameAction =>
+                       ({ type: 'CONFIRM_MULLIGAN_REVEAL', senderIdx }),
   drawCard:          (): GameAction => ({ type: 'DRAW_CARD' }),
   attachEnergy:      (energyIid: string, targetIid: string): GameAction =>
                        ({ type: 'ATTACH_ENERGY', energyIid, targetIid }),
