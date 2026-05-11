@@ -191,6 +191,25 @@ export function getAIAction(
         }
       }
 
+      // === v3.732 日光轉移（超級妙蛙花ex）— 不限次數特性，AI 容易無限循環 ===
+      // Stop condition：(a) active 已 ≥4 顆基本草（叢林拋擲 cost 4 顆草，足以攻擊）
+      //                 (b) 場上其他寶可夢身上沒有可移的基本草能量了
+      if (ab.abilityName === '日光轉移') {
+        const isBasicGrass = (eInst: { cardId: string }) => {
+          const ec = pool.get(eInst.cardId);
+          if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return false;
+          return ec.pokemonType === 'Grass' || /【草】/.test(ec.name);
+        };
+        const countGrass = (p: { energyAttached: { cardId: string }[] } | null) =>
+          p ? p.energyAttached.filter(isBasicGrass).length : 0;
+        const activeGrass = countGrass(player.active);
+        const benchGrass = player.bench.reduce((sum, b) => sum + countGrass(b), 0);
+        // (a) active 已夠攻擊 → 不再轉
+        if (activeGrass >= 4) score = 0;
+        // (b) 其他寶可夢沒草能可搬 → 不能再轉，停
+        else if (benchGrass === 0) score = 0;
+      }
+
       return { ab, score };
     });
 
@@ -493,6 +512,37 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           return (ca?.hp ?? 0) - (cb?.hp ?? 0);
         });
         return { type: 'RESOLVE_SELECTION', selectedIids: sorted.slice(0, need).map(c => c.iid) };
+      }
+      // v3.732 波動突刺 bench picker：
+      //   優先順序：① 超級進化 ex (Mega ex) ② ex 寶可夢 ③ 「主攻擊招式 cost 還缺鬥能量」
+      if (sel.effectKey === 'pulse-thrust-attach-one') {
+        const scoreFightTarget = (inst: import('./types').CardInstance): number => {
+          const card = pool.get(inst.cardId);
+          if (!card) return 0;
+          let s = 0;
+          // 超級進化 ex (Mega ex) — 卡名通常含「超級」開頭 + 'ex' 結尾
+          const isMegaEx = (card.name?.startsWith('超級') ?? false) && /ex|ＥＸ/i.test(card.name ?? '');
+          if (isMegaEx) s += 1000;
+          else if (/ex|ＥＸ/i.test(card.name ?? '')) s += 500; // 一般 ex
+          // 「主攻擊招式 cost 還缺鬥能量」— 算現有鬥能量 vs 招式 cost 內鬥需求
+          const fightCount = inst.energyAttached.filter(e => {
+            const ec = pool.get(e.cardId);
+            if (!ec || ec.supertype !== 'Energy') return false;
+            return ec.pokemonType === 'Fighting' || /【鬥】/.test(ec.name ?? '');
+          }).length;
+          // 印刷傷害最高的招式
+          let maxFightNeed = 0;
+          for (const atk of card.attacks ?? []) {
+            const fightInCost = (atk.cost ?? []).filter(c => c === 'Fighting').length;
+            if (fightInCost > maxFightNeed) maxFightNeed = fightInCost;
+          }
+          const fightShort = Math.max(0, maxFightNeed - fightCount);
+          if (fightShort > 0) s += 100 * fightShort; // 越缺越優先
+          return s;
+        };
+        const sortedByNeed = [...bench].sort((a, b) => scoreFightTarget(b) - scoreFightTarget(a));
+        const pick = sortedByNeed[0];
+        return { type: 'RESOLVE_SELECTION', selectedIids: [pick.iid] };
       }
       // 單選：選 HP 剩最少（最危險的）給支援
       const pick = bench[0];

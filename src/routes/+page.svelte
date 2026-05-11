@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.732</span> 🤖 AI 修兩個邏輯 bug — 日光轉移無限循環 + 波動突刺 picker 智能選</summary>
+        <ul>
+          <li>玩家回報兩個 AI 邏輯問題：</li>
+          <li><b>Bug 1：超級妙蛙花ex｜日光轉移 無限循環</b></li>
+          <li>　・原因：日光轉移是「不限次數」特性（v3.65 task #205 加 UNLIMITED_USE_ABILITY_NAMES 標記過），但 AI ability evaluation 沒 gate，每次都看到「能用」就用 → 無限呼叫 stack overflow / hang。</li>
+          <li>　・修法：ai.ts 加 日光轉移 stop condition — (a) active 已 ≥4 顆基本草 (叢林拋擲 cost 滿足) → 停 (b) 其他寶可夢身上沒草能可搬 → 停。score=0 阻止使用。</li>
+          <li><b>Bug 2：超級路卡利歐ex｜波動突刺 picker 固定挑備戰第一隻</b></li>
+          <li>　・原因：ai.ts bench-choose 單選分支固定 <code>bench[0]</code>，沒看 pulse-thrust-attach-one effectKey 智能挑。</li>
+          <li>　・修法：加 effectKey 攔截 + 評分排序 — ① 超級進化 ex (Mega ex) +1000 ② 一般 ex +500 ③ 主攻擊招式還缺鬥能量 +100/缺一顆。最高分優先附。</li>
+          <li>　・例：另一隻超級路卡利歐ex (340 HP / 鬥屬性 / 主招 270 dmg 需 2 鬥) 在備戰 → 優先附鬥能量過去（讓它成為下一個主力攻擊）。</li>
+          <li>tsc 0 errors + svelte parse 3/3 OK + NUL byte 通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.731</span> 🍯 hotfix：蜜糖風暴傷害幾乎永遠只打 30 — 兩個雙重 bug</summary>
         <ul>
           <li>玩家回報：蜜集大蛇ex 用「蜜糖風暴」，場上有大竺葵 + 自己所有寶可夢身上 8 顆草能，預期 30 + 8×2×30 = 510 點傷害，<b>實際只打 30</b>。</li>
