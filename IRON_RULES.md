@@ -111,6 +111,24 @@ grep -rn "// .*\(簡化\|stub\|TODO\|未實裝\)" src/lib/game/effects/
 ```
 找到的每一筆都需逐一審查；若是真正簡化、需重新實裝為完整版，並從註解移除「簡化」字樣。
 
+### Rule 7b: G 標卡一律跳過，不實裝（audit script 預設排除）
+
+`docs/AI_GENERIC_HANDOFF.md` §2 已記載，但 v3.70 audit 沒搜到 docs/ 子目錄、誤把 G 納入而花一整批工實裝 22 張 G 卡（壞處：浪費版本；好處：對 H/I/J 標環境玩家無實質影響、不會 break 任何東西）。
+
+**規則**：
+- 凡 `card.regulationMark === 'G'` → audit / 實裝 / 牌組驗證一律當「不在合法範圍」。
+- 牌組構築 gate 已有處理（`STANDARD_REPRINT_LEGAL_NAMES` 例外清單 + 同名跨版本檢查）。
+- 例外：G 標基本能量 + 神奇糖果等 `STANDARD_REPRINT_LEGAL_NAMES` 內的卡（v3.61–v3.63 處理過）。
+
+**Audit script 模板**：
+
+```python
+# 標準環境 = H + I + J（G 已輪出）
+STD_MARKS = {"H", "I", "J"}  # ← 不要把 G 加進來
+```
+
+v3.70 已用同個 script 順手清掉幾個 print-variant string-match bug，那部分保留有效。
+
 ### Rule 8: 揭示資訊（addLog vs addPrivateLog）必須嚴格按卡面文字
 
 PTCG 規則：實體桌上「給對手看過」是防作弊驗證機制——對手要確認搜出來的卡符合 filter 限制（『寶可夢』『支援者』『基本能量』『進化寶可夢』等）。線上對戰用 log 取代這個機制，所以**揭示資訊規則直接決定 log 該用 addLog 還是 addPrivateLog**。
