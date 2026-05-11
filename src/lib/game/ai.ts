@@ -508,7 +508,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       if (sel.effectKey === 'gust-opp') {
         const me = state.players[sel.actorIdx];
         if (isMarruneDragapult(me, pool)) {
-          const pick = dragapultGustPick(bench, pool);
+          const pick = dragapultGustPick(bench, pool, state);
           if (pick) return { type: 'RESOLVE_SELECTION', selectedIids: [pick.iid] };
         }
       }
@@ -535,7 +535,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         const me = state.players[sel.actorIdx];
         if (isMarruneDragapult(me, pool)) {
           const amount = (sel.params?.amount as number) ?? 30;
-          const tgt = dragapultAdrenalTarget(amount, srcPlayer.active, srcPlayer.bench, pool);
+          const tgt = dragapultAdrenalTarget(amount, srcPlayer.active, srcPlayer.bench, pool, state);
           if (tgt && oppPool.some(p => p.iid === tgt.iid)) {
             return { type: 'RESOLVE_SELECTION', selectedIids: [tgt.iid] };
           }
@@ -700,6 +700,25 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         return { type: 'RESOLVE_SELECTION', selectedIids: pick ? [pick.id] : [] };
       }
 
+      // v3.71 魔靈多龍 願增猿｜腎上腺腦力 count picker
+      //   options: [{id:'1',text:'1個(10傷害)'}, {id:'2',...}, {id:'3',...}]
+      //   動態決定 N（直 KO > 壓 KO 線 > 最大 N 回血）
+      if (sel.effectKey === 'adrenal-brain-count') {
+        const me2 = state.players[sel.actorIdx];
+        if (isMarruneDragapult(me2, pool)) {
+          const dIdx2 = (1 - sel.actorIdx) as 0 | 1;
+          const opp2 = state.players[dIdx2];
+          const maxN = Math.max(0, ...opts
+            .filter(o => !o.disabled)
+            .map(o => parseInt(o.id, 10) || 0));
+          const pickN = dragapultAdrenalCount(opp2.active, opp2.bench, pool, maxN, state);
+          const chosen = opts.find(o => o.id === String(pickN) && !o.disabled);
+          if (chosen) {
+            return { type: 'RESOLVE_SELECTION', selectedIids: [chosen.id] };
+          }
+        }
+      }
+
       // 預設：選第一個非 disabled 選項
       const first = opts.find(o => !o.disabled) ?? opts[0];
       return { type: 'RESOLVE_SELECTION', selectedIids: first ? [first.id] : [] };
@@ -722,7 +741,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       if (benchPool.length === 0 || remaining <= 0) {
         return { type: 'RESOLVE_SELECTION', selectedIids: [] };
       }
-      const ids = dragapultDistribute6Counters(benchPool, remaining, counterDamage, pool);
+      const ids = dragapultDistribute6Counters(benchPool, remaining, counterDamage, pool, state);
       return { type: 'RESOLVE_SELECTION', selectedIids: ids };
     }
 
@@ -808,14 +827,59 @@ function isMarruneDragapult(player: PlayerState, pool: Map<string, Card>): boole
   return false;
 }
 
-function _remHP(inst: CardInstance, pool: Map<string, Card>): number {
-  const c = pool.get(inst.cardId);
-  return Math.max(0, (c?.hp ?? 0) - inst.damage);
+// v3.71：用 getEffectiveHP 含 Tool/Stadium/passive 加成
+//   原本只取 card.hp - damage 會在對手裝英雄斗篷(+100)/激動競技場(+30)等場景算錯 KO 線。
+//   減傷類效果（莓榴果 -60 對龍、damageReduceNextHit -N 等）不在 HP 計算內。
+function _remHP(inst: CardInstance, pool: Map<string, Card>, state?: GameState): number {
+  return Math.max(0, getEffectiveHP(inst, pool, state) - inst.damage);
 }
 
 function _isEx(inst: CardInstance, pool: Map<string, Card>): boolean {
   const n = pool.get(inst.cardId)?.name ?? '';
   return /ex|ＥＸ/i.test(n);
+}
+
+// v3.71：對手側「不會被放置傷害指示物」的免疫檢查
+//   對戰圓形競技場 (Stadium, M2 I) - bench-only immunity
+//   探探鼠｜監視之眼 (ability, M4 J) - 全場 immunity
+function _hasOppCounterImmunity(
+  state: GameState, myIdx: 0 | 1, pool: Map<string, Card>,
+  scope: 'bench' | 'active' | 'all',
+): boolean {
+  if (scope !== 'active') {
+    const stName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
+    if (stName === '對戰圓形競技場') return true;
+  }
+  const dIdx = (1 - myIdx) as 0 | 1;
+  const opp = state.players[dIdx];
+  const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
+  for (const c of allOpp) {
+    const card = pool.get(c.cardId);
+    if (card?.abilities?.some(a => a.name === '監視之眼')) return true;
+  }
+  return false;
+}
+
+// v3.71：多龍巴魯托ex 是否在場且能量 1F+1P 滿足幻影奇襲 200
+function _canDragapultPhantomStrike(state: GameState, myIdx: 0 | 1, pool: Map<string, Card>): boolean {
+  const me = state.players[myIdx];
+  const allMine = [...(me.active ? [me.active] : []), ...me.bench];
+  return allMine.some(c => {
+    if (pool.get(c.cardId)?.name !== '多龍巴魯托ex') return false;
+    let fire = 0, psy = 0;
+    for (const e of c.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (!ec) continue;
+      if (ec.pokemonType === 'Fire' || ec.name.includes('【火】')) fire++;
+      if (ec.pokemonType === 'Psychic' || ec.name.includes('【超】')) psy++;
+    }
+    return fire >= 1 && psy >= 1;
+  });
+}
+
+// v3.71：手上是否有「老大的指令」
+function _hasGustInHand(player: PlayerState, pool: Map<string, Card>): boolean {
+  return player.hand.some(c => pool.get(c.cardId)?.name === '老大的指令');
 }
 
 /** 魔靈多龍 — 能量分配特化：
@@ -872,34 +936,67 @@ function dragapultEnergyAction(
       }
     }
   }
-  return null; // 沒目標：不附能量（不亂填到非多龍/非願增猿的卡）
+
+  // v3.71 P2b fallback：多龍巴魯托ex 在 active 且能量 0 → 附任意能量打噴射頭擊 (1C, 70)
+  //   情境：剛上場 active；手上只有 C 能量。不附 = 空在 active；附 1 顆 = 至少 70 點輸出。
+  if (player.active && pool.get(player.active.cardId)?.name === '多龍巴魯托ex'
+      && player.active.energyAttached.length === 0
+      && energies.length > 0) {
+    return { type: 'ATTACH_ENERGY', energyIid: energies[0].iid, targetIid: player.active.iid };
+  }
+  return null;
 }
 
-/** 魔靈多龍 — 咒詛炸彈 gate：
- *  彷徨夜靈 5 counter（50 傷害） / 黑夜魔靈 13 counter（130 傷害）
- *  允許條件：
- *    1. 直接 KO（對手任意 HP-damage ≤ 自身 dmg）
- *    2. 壓 KO 線（炸完剩餘可被多龍幻影奇襲 200 KO 戰鬥場、或 60 內 KO 備戰）
- *  回傳 true 表示有目標可炸，值得用。
- */
+// v3.71 強化：咒詛炸彈 gate
+//   1. 直接 KO（對手任意 effectiveHP-damage <= 自身 dmg）
+//   2. 壓 KO 線（炸完後要能被「下一個動作」KO）：
+//      - 黑夜魔靈 13: 炸完 <=200 + 必須有可發幻影奇襲的多龍 + (active 或 bench+老大指令在手)
+//      - 彷徨夜靈 5:  炸完 <=60  + 必須有可發幻影奇襲的多龍 + bench 不被 immune
+//   P1a 阻擋：對手 active immune (監視之眼) → 整個失效
+//   P1b 阻擋：bench immune (對戰圓形) → 炸 bench 目標全部 skip
 function shouldUseCursedBomb(
-  state: GameState, myIdx: 0 | 1, abilityName: string, pokemonName: string,
+  state: GameState, myIdx: 0 | 1, _abilityName: string, pokemonName: string,
   pool: Map<string, Card>,
 ): boolean {
   const counters = pokemonName === '黑夜魔靈' ? 13 : 5;
   const dmg = counters * 10;
   const oppIdx = (1 - myIdx) as 0 | 1;
   const opp = state.players[oppIdx];
-  const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
+  const oppActive = opp.active;
+  const allOpp = [...(oppActive ? [oppActive] : []), ...opp.bench];
+
+  if (_hasOppCounterImmunity(state, myIdx, pool, 'active')) return false;
+  const benchImmune = _hasOppCounterImmunity(state, myIdx, pool, 'bench');
+
+  // 1. 直接 KO
   for (const t of allOpp) {
-    const rem = _remHP(t, pool);
+    const rem = _remHP(t, pool, state);
     if (rem <= 0) continue;
-    // 直接 KO
+    const isActiveTgt = oppActive && t.iid === oppActive.iid;
+    if (benchImmune && !isActiveTgt) continue;
     if (rem <= dmg) return true;
-    // 壓 KO 線：黑夜魔靈炸完 ≤ 200（拉戰鬥場讓多龍 200 KO）
-    if (counters === 13 && rem - dmg <= 200) return true;
-    // 彷徨夜靈炸完 ≤ 60（備戰可被幻影奇襲 6 顆分配 KO）
-    if (counters === 5 && rem - dmg <= 60) return true;
+  }
+
+  // 2. 壓 KO 線：先 check 多龍可攻擊
+  if (!_canDragapultPhantomStrike(state, myIdx, pool)) return false;
+  const me = state.players[myIdx];
+  const hasGust = _hasGustInHand(me, pool);
+
+  for (const t of allOpp) {
+    const rem = _remHP(t, pool, state);
+    if (rem <= 0) continue;
+    const isActiveTgt = oppActive && t.iid === oppActive.iid;
+    if (benchImmune && !isActiveTgt) continue;
+    const newRem = rem - dmg;
+    if (newRem <= 0) continue;
+
+    // 黑夜魔靈 13 → 壓到 200 線
+    if (counters === 13 && newRem <= 200) {
+      if (isActiveTgt) return true;
+      if (hasGust) return true;
+    }
+    // 彷徨夜靈 5 → 壓到 60 線（只在 bench）
+    if (counters === 5 && newRem <= 60 && !isActiveTgt) return true;
   }
   return false;
 }
@@ -911,13 +1008,13 @@ function shouldUseCursedBomb(
  */
 function dragapultDistribute6Counters(
   bench: CardInstance[], totalCounters: number, counterDamage: number,
-  pool: Map<string, Card>,
+  pool: Map<string, Card>, state?: GameState,
 ): string[] {
   const tracker = bench.map(b => ({
     iid: b.iid,
-    rem: _remHP(b, pool),
+    rem: _remHP(b, pool, state),
     isEx: _isEx(b, pool),
-    hp: pool.get(b.cardId)?.hp ?? 0,
+    hp: getEffectiveHP(b, pool, state),
   }));
   const result: string[] = [];
   let counters = totalCounters;
@@ -955,37 +1052,33 @@ function dragapultDistribute6Counters(
   return result;
 }
 
-/** 魔靈多龍 — 老大指令 picker：抓對手備戰 ex 且 remainingHP ≤ 200（可被幻影奇襲 KO）。
- *  60 內備戰不要抓（保留給幻影奇襲分配 KO，省一張老大指令）。 */
-function dragapultGustPick(bench: CardInstance[], pool: Map<string, Card>): CardInstance | null {
+// v3.71：老大指令 picker — 用 effectiveHP（含對手 ex 戴英雄斗篷等）
+function dragapultGustPick(
+  bench: CardInstance[], pool: Map<string, Card>, state?: GameState,
+): CardInstance | null {
   const exTargets = bench.filter(b => {
-    const rem = _remHP(b, pool);
+    const rem = _remHP(b, pool, state);
     return rem > 0 && rem <= 200 && _isEx(b, pool);
   });
   if (exTargets.length === 0) return null;
-  // 選剩餘 HP 最低的（最近 KO 線）
-  return exTargets.reduce((a, b) => _remHP(a, pool) <= _remHP(b, pool) ? a : b);
+  return exTargets.reduce((a, b) => _remHP(a, pool, state) <= _remHP(b, pool, state) ? a : b);
 }
 
-/** 魔靈多龍 — 願增猿腎上腺腦力選對手目標：優先壓 KO 線。 */
+// v3.71：腎上腺腦力選對手目標（amount 由 adrenal-brain-count picker 預先決定）
 function dragapultAdrenalTarget(
   amount: number, oppActive: CardInstance | null, oppBench: CardInstance[],
-  pool: Map<string, Card>,
+  pool: Map<string, Card>, state?: GameState,
 ): CardInstance | null {
   const allOpp = [...(oppActive ? [oppActive] : []), ...oppBench];
   if (allOpp.length === 0) return null;
 
-  // 優先：直接 KO（rem ≤ amount）
-  const koTargets = allOpp.filter(p => _remHP(p, pool) > 0 && _remHP(p, pool) <= amount);
+  const koTargets = allOpp.filter(p => _remHP(p, pool, state) > 0 && _remHP(p, pool, state) <= amount);
   if (koTargets.length > 0) {
-    return koTargets.reduce((a, b) => _remHP(a, pool) >= _remHP(b, pool) ? a : b);
+    return koTargets.reduce((a, b) => _remHP(a, pool, state) >= _remHP(b, pool, state) ? a : b);
   }
 
-  // 其次：壓 KO 線
-  //  - active：加上 amount 後 ≤ 200（多龍幻影奇襲 KO 戰鬥場）
-  //  - bench：加上 amount 後 ≤ 60（幻影奇襲分配 KO 備戰）
   for (const p of allOpp) {
-    const rem = _remHP(p, pool);
+    const rem = _remHP(p, pool, state);
     if (rem <= 0) continue;
     const isActiveTgt = oppActive && p.iid === oppActive.iid;
     const newRem = rem - amount;
@@ -993,11 +1086,44 @@ function dragapultAdrenalTarget(
     if (!isActiveTgt && newRem <= 60 && newRem > 0) return p;
   }
 
-  // 最後：HP 最高（最大威脅）
   return allOpp.reduce((a, b) => {
-    const ah = pool.get(a.cardId)?.hp ?? 0;
-    const bh = pool.get(b.cardId)?.hp ?? 0;
+    const ah = getEffectiveHP(a, pool, state);
+    const bh = getEffectiveHP(b, pool, state);
     return ah >= bh ? a : b;
   });
+}
+
+// v3.71：腎上腺腦力 count picker
+//   maxCount=1~3，動態決定搬幾個 counter:
+//     1. 找最小 N 達直 KO
+//     2. 找最小 N 達壓 KO 線（active->200 / bench->60）
+//     3. 否則用 maxCount（兼最大化自方來源回血）
+function dragapultAdrenalCount(
+  oppActive: CardInstance | null, oppBench: CardInstance[],
+  pool: Map<string, Card>, maxCount: number, state?: GameState,
+): number {
+  if (maxCount <= 0) return 1;
+  const allOpp = [...(oppActive ? [oppActive] : []), ...oppBench];
+  for (let n = 1; n <= maxCount; n++) {
+    const amt = n * 10;
+    if (allOpp.some(t => {
+      const rem = _remHP(t, pool, state);
+      return rem > 0 && rem <= amt;
+    })) return n;
+  }
+  for (let n = 1; n <= maxCount; n++) {
+    const amt = n * 10;
+    if (allOpp.some(t => {
+      const rem = _remHP(t, pool, state);
+      if (rem <= 0) return false;
+      const isActiveTgt = oppActive && t.iid === oppActive.iid;
+      const newRem = rem - amt;
+      if (newRem <= 0) return false;
+      if (isActiveTgt && newRem <= 200) return true;
+      if (!isActiveTgt && newRem <= 60) return true;
+      return false;
+    })) return n;
+  }
+  return maxCount;
 }
 

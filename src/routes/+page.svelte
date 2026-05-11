@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.71</span> 🐉 魔靈多龍 AI 完全強化 — P0+P1+P2 一次到位</summary>
+        <ul>
+          <li>v3.43 魔靈多龍 AI 啟用後 audit 出 6 個邏輯漏洞 + 1 個 hallucination：先前以為「極限腰帶/豪華斗篷加 HP」，實際極限腰帶是攻擊 +50、豪華斗篷是 G 標卡（鐵律 7b 跳過）。修正後重新審視，留下 P0/P1/P2 三層共 6 個真實改進點。</li>
+          <li><b>P0 effectiveHP 計算</b>：<code>_remHP</code> 改用引擎的 <code>getEffectiveHP(inst, pool, state)</code>，自動含 Tool HP(英雄斗篷 +100/竹蘭力量負重 +70)、Stadium HP(激動競技場 基礎 +30 / 引力山岳 Stage2 -30 / 昂主花葉蒂 +150)、Pokemon passive HP(生機森巴/雜草魂/腎上腺力量 等)。所有 4 個下游 (shouldUseCursedBomb / dragapultDistribute6Counters / dragapultGustPick / dragapultAdrenalTarget) 全部正確化。</li>
+          <li><b>P1a 對手免疫指示物放置檢查</b>（新 helper <code>_hasOppCounterImmunity</code>）：對戰圓形競技場 (Stadium M2I, 雙方備戰免疫) + 探探鼠｜監視之眼 (ability M4J, 全場免疫)。咒詛炸彈在 active immune 時整個 gate 失效；bench immune 時只跳過 bench 目標。</li>
+          <li><b>P1b 咒詛炸彈壓 KO 線前置條件</b>（新 helper <code>_canDragapultPhantomStrike</code> + <code>_hasGustInHand</code>）：自爆換 130 傷壓對手到 200 HP 線之前，AI 先確認「多龍巴魯托ex 在場 + 能量 1F+1P 滿足」；若想壓 bench 還要確認手上有老大指令 (能拉上 active 被多龍 200 KO)。否則就是純虧 1 獎賞自爆。</li>
+          <li><b>P2a 願增猿｜腎上腺腦力動態 count picker</b>（新 helper <code>dragapultAdrenalCount</code>，攔截 <code>adrenal-brain-count</code> modal）：原本永遠選 maxCount=3 (移轉 30 傷害)。現在按優先序：① 找最小 N 達直 KO ② 找最小 N 達壓 KO 線 ③ fallback 用 maxCount (兼最大化自方來源回血)。對手 active 剩 20 HP 時搬 2 個 (20 傷) 而不是 3 個 (30 傷)，省下 1 個指示物未來用。</li>
+          <li><b>P2b 多龍巴魯托ex 噴射頭擊 fallback</b>：<code>dragapultEnergyAction</code> 加 fallback — active 多龍巴魯托ex 能量 = 0 且手上只有【無】能量時，附 1 顆讓多龍至少能用噴射頭擊 (1C cost, 70 dmg)。原本「滿 1F+1P 才打 200，沒滿就空著」會浪費出場回合。</li>
+          <li><b>Bug 找完了但修法不完美的地方</b>：對手側「招式傷害 -N」減傷類效果 (莓榴果 -60 對龍 / 仙子伊布ex -100 / 阿蜜的目光 -30 等) 不在 effectiveHP 內，引擎是在傷害計算階段動態套用的。AI 沒重做引擎邏輯 (兩處同步太脆弱)，這部分會有少數 case AI 估錯 KO 線。若實機看到 AI 該 KO 沒 KO 再 case-by-case 加 patch。</li>
+          <li><b>恢復事故</b>：Edit 工具在 ai.ts (49KB, 遠低於 500KB 警戒) 上仍把後半段 truncate；Iron Rule 11 確認「ANY 既有檔案改用 Edit 都可能被 mount-truncated」。本版改全部用 Python pipeline + safe_write + TS parser 雙重驗證 (parse diagnostics: 0)。</li>
+          <li>tsc 0 errors + svelte parse 3/3 OK 才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.70</span> 🔍 招式層 audit — G 標新版本 22 張招式實裝 + 3 張卡名字串變體修復</summary>
         <ul>
           <li>承 v3.69 的 audit 動能，繼續做「招式層」掃描（與「特性層」結構相同）：對所有 G/H/I/J 標 Pokemon 的 attacks 計算 key = <code>cardName|attackName</code>，比對 <code>regPre</code>/<code>regPost</code> 註冊表 + inline 比對表。</li>
