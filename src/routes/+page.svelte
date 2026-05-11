@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.711</span> 🚨 hotfix：腎上腺腦力 picker 是錯誤實裝（卡面「最多3個」=上限非選擇）</summary>
+        <ul>
+          <li>玩家指正：v3.14 引入的「選擇要搬移的指示物張數（1~3）」modal-choice picker 整個是錯誤實裝。</li>
+          <li>卡面正解：「選擇最多3個自己的1隻場上寶可夢身上放置的傷害指示物，改放於對手的1隻場上寶可夢身上」 — 「最多3個」是上限（cap），不是玩家選擇（picker）。實際機制是 amount = min(source.damage, 30) 全搬，每回合限用 1 次。</li>
+          <li>v3.14 註解誤寫「應由玩家選張數 1~3」，把 PTCG 規則中常見的 cap 語意誤判為 player choice。</li>
+          <li>修法 1（<code>maroon_dragon_deck.ts</code>）：<code>adrenal-brain-src</code> resolver 拿掉 modal-choice 分支，直接用 maxCounters = min(damage/10, 3) 全搬。<code>adrenal-brain-count</code> resolver 保留（舊存檔向後相容用），新流程繞過。</li>
+          <li>修法 2（<code>ai.ts</code>）：v3.71 為了配合錯誤 picker 加的 <code>dragapultAdrenalCount</code> + modal-choice handler 整段移除（dead code）。</li>
+          <li>實質影響：對手 active 剩 20 HP 時，AI 還是「搬全部」（若自方 source 受傷 30 就 30 全搬，雖然「浪費」10 但 PTCG 規則就是這樣）。v3.71 P0+P1a+P1b+P2b 其他改進保留。</li>
+          <li>tsc 0 errors + svelte parse 3/3 OK。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.71</span> 🐉 魔靈多龍 AI 完全強化 — P0+P1+P2 一次到位</summary>
         <ul>
           <li>v3.43 魔靈多龍 AI 啟用後 audit 出 6 個邏輯漏洞 + 1 個 hallucination：先前以為「極限腰帶/豪華斗篷加 HP」，實際極限腰帶是攻擊 +50、豪華斗篷是 G 標卡（鐵律 7b 跳過）。修正後重新審視，留下 P0/P1/P2 三層共 6 個真實改進點。</li>

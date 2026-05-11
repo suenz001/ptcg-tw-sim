@@ -173,29 +173,15 @@ regR('adrenal-brain-src', (st, idx, iids, params, pool) => {
   const p = st.players[idx];
   const source = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
   if (!source) return st;
-  // v3.14 修 Rule 7：卡面「選擇最多 3 個傷害指示物」應由玩家選張數 1~3
-  //   （受來源實際 counter 上限）。原 min(damage, 30) 強制全搬違反「最多」語義。
-  //   maxCounters = min(damage/10, 3)；= 1 則 auto-pick 跳過 modal。
+  // v3.711 hotfix：卡面「選擇最多 3 個傷害指示物」是「全搬，上限 3」的機制，
+  //   NOT 玩家選擇張數 1~3。amount = min(source.damage, 30) 直接全搬，無 picker。
+  //   v3.14 誤解「最多」語義加了 modal-choice picker → v3.711 revert。
   const maxCounters = Math.min(Math.floor(source.damage / 10), 3);
   if (maxCounters <= 0) {
     return addLog(st, '腎上腺腦力：來源傷害不足（無 counter 可搬）', idx);
   }
   const sourceName = pool.get(source.cardId)?.name ?? '?';
-  if (maxCounters === 1) {
-    return _adrenalCountChosen(st, idx, targetIid, sourceName, 1, pool);
-  }
-  st = addLog(st, `腎上腺腦力：選擇要搬移的指示物張數（1~${maxCounters}）`, idx);
-  const options: { id: string; text: string }[] = [];
-  for (let n = 1; n <= maxCounters; n++) {
-    options.push({ id: String(n), text: `${n} 個（${n * 10} 傷害）` });
-  }
-  return withPending(st, {
-    type: 'modal-choice',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'adrenal-brain-count',
-    params: { label: '腎上腺腦力', sourceIid: targetIid, sourceName, options },
-  });
+  return _adrenalCountChosen(st, idx, targetIid, sourceName, maxCounters, pool);
 });
 
 regR('adrenal-brain-count', (st, idx, iids, params, pool) => {

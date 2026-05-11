@@ -700,24 +700,9 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         return { type: 'RESOLVE_SELECTION', selectedIids: pick ? [pick.id] : [] };
       }
 
-      // v3.71 魔靈多龍 願增猿｜腎上腺腦力 count picker
-      //   options: [{id:'1',text:'1個(10傷害)'}, {id:'2',...}, {id:'3',...}]
-      //   動態決定 N（直 KO > 壓 KO 線 > 最大 N 回血）
-      if (sel.effectKey === 'adrenal-brain-count') {
-        const me2 = state.players[sel.actorIdx];
-        if (isMarruneDragapult(me2, pool)) {
-          const dIdx2 = (1 - sel.actorIdx) as 0 | 1;
-          const opp2 = state.players[dIdx2];
-          const maxN = Math.max(0, ...opts
-            .filter(o => !o.disabled)
-            .map(o => parseInt(o.id, 10) || 0));
-          const pickN = dragapultAdrenalCount(opp2.active, opp2.bench, pool, maxN, state);
-          const chosen = opts.find(o => o.id === String(pickN) && !o.disabled);
-          if (chosen) {
-            return { type: 'RESOLVE_SELECTION', selectedIids: [chosen.id] };
-          }
-        }
-      }
+      // v3.711 hotfix: 腎上腺腦力 modal-choice picker 被砍 (見 maroon_dragon_deck.ts)，
+      //   原 v3.71 在這裡的 dragapultAdrenalCount handler 已 dead code 移除。
+      //   若舊存檔仍有 pending → fallback 走下方「第一個非 disabled」自然解決。
 
       // 預設：選第一個非 disabled 選項
       const first = opts.find(o => !o.disabled) ?? opts[0];
@@ -1093,37 +1078,6 @@ function dragapultAdrenalTarget(
   });
 }
 
-// v3.71：腎上腺腦力 count picker
-//   maxCount=1~3，動態決定搬幾個 counter:
-//     1. 找最小 N 達直 KO
-//     2. 找最小 N 達壓 KO 線（active->200 / bench->60）
-//     3. 否則用 maxCount（兼最大化自方來源回血）
-function dragapultAdrenalCount(
-  oppActive: CardInstance | null, oppBench: CardInstance[],
-  pool: Map<string, Card>, maxCount: number, state?: GameState,
-): number {
-  if (maxCount <= 0) return 1;
-  const allOpp = [...(oppActive ? [oppActive] : []), ...oppBench];
-  for (let n = 1; n <= maxCount; n++) {
-    const amt = n * 10;
-    if (allOpp.some(t => {
-      const rem = _remHP(t, pool, state);
-      return rem > 0 && rem <= amt;
-    })) return n;
-  }
-  for (let n = 1; n <= maxCount; n++) {
-    const amt = n * 10;
-    if (allOpp.some(t => {
-      const rem = _remHP(t, pool, state);
-      if (rem <= 0) return false;
-      const isActiveTgt = oppActive && t.iid === oppActive.iid;
-      const newRem = rem - amt;
-      if (newRem <= 0) return false;
-      if (isActiveTgt && newRem <= 200) return true;
-      if (!isActiveTgt && newRem <= 60) return true;
-      return false;
-    })) return n;
-  }
-  return maxCount;
-}
+// v3.711 hotfix：腎上腺腦力卡面「最多3個」是上限不是玩家選擇 — 全搬機制無 picker。
+//   v3.71 加的 dragapultAdrenalCount 已 dead code 刪除。
 
