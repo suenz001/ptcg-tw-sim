@@ -1279,7 +1279,11 @@ export function createGame(
   const m1 = opening1.mulligans;
   const m2 = opening2.mulligans;
   // v3.74：mulligan 揭示 — 每方記下每次失敗的 7 張 cardIds 給對方確認
-  const mulliganRevealedHands: [string[][], string[][]] = [opening1.revealedHands, opening2.revealedHands];
+  // v3.741：encode 成 { p1, p2 } object + 每手 '|' join — Firestore 禁止 nested array（同 v2.84）。
+  const mulliganRevealedHands = {
+    p1: opening1.revealedHands.map(h => h.join('|')),
+    p2: opening2.revealedHands.map(h => h.join('|')),
+  };
   // 對方沒 mulligan 則自動視為 confirmed（無需確認）
   const mulliganRevealConfirmed: [boolean, boolean] = [m2 === 0, m1 === 0];
 

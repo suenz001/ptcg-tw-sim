@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.741</span> 🚨 hotfix：mulligan 揭示資料 Firestore 推送失敗導致連線對戰卡住</summary>
+        <ul>
+          <li>玩家回報：v3.74 對戰時起手 mulligan 後出現「等待對手重抽」畫面，接著遊戲重新丟硬幣，無限循環。</li>
+          <li><b>根因（Firestore nested array 禁忌）</b>：</li>
+          <li>　・<code>mulliganRevealedHands</code> 設計成 <code>[string[][], string[][]]</code> — 外層 tuple、中層每方陣列、內層每手 cardId 陣列 → <b>三層 array nesting</b>。</li>
+          <li>　・Firestore 規則：陣列元素不能是陣列（v2.84 task #94 已踩過一次，<code>supporterTagsUsedThisTurn</code> 改 <code>&#123;p1, p2&#125;</code> object）。</li>
+          <li>　・v3.74 createGame race 雙端各自洗牌 → mulliganRevealedHands 不同 → push 因 nested array 失敗 → 觸發 game.id mismatch → 雙端互相覆蓋本地 state → 看起來像「coin toss redo」+「等待對手重抽」交替的無限循環。</li>
+          <li><b>修法</b>：</li>
+          <li>　・types.ts：<code>mulliganRevealedHands</code> 改 <code>&#123; p1: string[]; p2: string[] &#125;</code>，每張手牌的 cardIds 用 '|' join 成單一字串（flat string array，Firestore OK）。</li>
+          <li>　・engine.ts createGame：encode 成 <code>&#123; p1: hands.map(h =&gt; h.join('|')), p2: ... &#125;</code>。</li>
+          <li>　・UI modal：parse <code>oppHandsRaw.map(s =&gt; s.split('|'))</code> 還原成 cardIds 陣列再 render。</li>
+          <li>修法借鏡 v2.84 supporterTagsUsedThisTurn 的歷史教訓 — 同類型問題第二次出現。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.74</span> 👀 PTCG 官方規則：對手 mulligan 揭示翻頁式 modal</summary>
         <ul>
           <li>依 PTCG 官方規則，當對手起手無基礎寶可夢需要重抽（mulligan）時，必須將每次重抽前的 7 張手牌揭示給對方確認，再放回牌組重洗。</li>

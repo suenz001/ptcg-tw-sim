@@ -4553,17 +4553,18 @@
 
   <!-- v3.74 Mulligan 揭示：對手起手無基礎重抽時，揭示每次重抽的 7 張手牌給玩家確認（PTCG 官方規則）-->
   {#if game && game.phase==='setup'
-       && (game.mulliganRevealedHands?.[oppIdx]?.length ?? 0) > 0
+       && (((oppIdx === 0 ? game.mulliganRevealedHands?.p1 : game.mulliganRevealedHands?.p2)?.length ?? 0) > 0)
        && !game.mulliganRevealConfirmed?.[myIdx]
        && (
             (mode==='online' && myPlayerIndex===myIdx) ||
             (mode!=='online' && aiPlayerIndex === null) ||
             (aiPlayerIndex !== null && aiPlayerIndex !== myIdx)
           )}
-    {@const oppHands = game.mulliganRevealedHands[oppIdx]}
+    {@const oppHandsRaw = (oppIdx === 0 ? game.mulliganRevealedHands?.p1 : game.mulliganRevealedHands?.p2) ?? []}
+    {@const oppHands = oppHandsRaw.map(s => s.split('|'))}
     {@const totalPages = oppHands.length}
     {@const pageIdx = Math.min(Math.max(revealPage, 0), totalPages - 1)}
-    {@const curHand = oppHands[pageIdx]}
+    {@const curHand = oppHands[pageIdx] ?? []}
     {@const oppName2 = game.players[oppIdx].name}
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal mulligan-modal mulligan-reveal-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
