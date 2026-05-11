@@ -4267,6 +4267,9 @@ function handlePlaying(
       defPlayers[dIdx] = defenderState;
       newState = { ...newState, players: defPlayers, turnPhase: 'end' };
 
+      // v3.751：抓取攻擊方在 ON_DAMAGED hooks 觸發前的傷害值 — 用於判斷反傷有實際生效
+      const atkDamageBeforeRetaliation = newState.players[aIdx].active?.damage ?? 0;
+
       // 道具：被打到但未 KO 時觸發（幸運頭盔 / 奢華炸彈）— 阻礙之塔時失效
       if (!toolsJammed && baseDamage > 0 && defenderState.active) {
         // v3.20 多重轉接：iterate 所有道具
@@ -4290,12 +4293,16 @@ function handlePlaying(
       // v2.301 Bug fix：TOOL_ON_DAMAGED（凸凸頭盔 +20、奢華炸彈 +120）或 SPECIAL_ENERGY
       // 可能把反傷加到攻擊方身上，若此時攻擊方 HP 歸零，sanityKOSweep 只掃 dIdx 不掃 aIdx，
       // 導致攻擊方留在場上「zombie」。在這裡立即偵測並處理攻擊方 KO。
+      // v3.751 Bug fix：
+      //   1. 改用 getEffectiveHP（夠讚狗｜腎上腺力量 等特性把 HP 推高，原本用 card.hp 會誤判）
+      //   2. 加 gate：只在 ON_DAMAGED hooks 實際把傷害推到攻擊方身上時才觸發
+      //      （否則之前的「攻擊方進攻時自己被 KO」會誤掛上「反彈傷害」標籤）
       {
         const retaliatedAtk = newState.players[aIdx].active;
-        if (retaliatedAtk) {
+        if (retaliatedAtk && retaliatedAtk.damage > atkDamageBeforeRetaliation) {
           const retAtkCard = pool.get(retaliatedAtk.cardId);
-          const retAtkHP = retAtkCard?.hp ?? 0;
-          if (retAtkHP > 0 && retaliatedAtk.damage >= retAtkHP) {
+          const retAtkEffHP = getEffectiveHP(retaliatedAtk, pool, newState);
+          if (retAtkEffHP > 0 && retaliatedAtk.damage >= retAtkEffHP) {
             const retKoDiscard: CardInstance[] = [
               retaliatedAtk,
               ...retaliatedAtk.energyAttached,
@@ -4339,8 +4346,8 @@ function handlePlaying(
       if (atkP.active) {
         const atkNewDmg = atkP.active.damage + punkReflectDamage;
         const atkCardForKO = pool.get(atkP.active.cardId);
-        const atkHP = atkCardForKO?.hp ?? 0;
-        atkP.active = { ...atkP.active, damage: atkNewDmg };
+        const updatedAtk = { ...atkP.active, damage: atkNewDmg };
+        atkP.active = updatedAtk;
         refPlayers[aIdx] = atkP;
         newState = addLog(
           { ...newState, players: refPlayers },
@@ -4348,7 +4355,9 @@ function handlePlaying(
           null,
         );
         // v2.300 Bug fix：反彈傷害打死攻擊方時，需立即 KO 處理（sanityKOSweep 只掃 dIdx，不掃 aIdx）
-        if (atkHP > 0 && atkNewDmg >= atkHP) {
+        // v3.751：改用 getEffectiveHP（同 line 4297 修法）
+        const atkEffHP = getEffectiveHP(updatedAtk, pool, newState);
+        if (atkEffHP > 0 && atkNewDmg >= atkEffHP) {
           const deadAtk = atkP.active;
           const koDiscard: CardInstance[] = [
             deadAtk,

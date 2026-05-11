@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.751</span> 🚨 hotfix：夠讚狗 攻擊後被誤判「反彈傷害擊倒」（既存 v2.301 bug）</summary>
+        <ul>
+          <li>玩家回報：場上沒有反彈傷害道具，但 AI 的夠讚狗 攻擊後馬上顯示「夠讚狗 被反彈傷害擊倒！」自己直接掛掉。</li>
+          <li><b>根因（v2.301 既存 bug，v3.75 才被回報）</b>：</li>
+          <li>　・夠讚狗｜腎上腺力量 特性：身上有【惡】能量時，最大 HP +100（130 → 230）+ 招式 +100 傷害。</li>
+          <li>　・engine.ts line 4297 的「攻擊方反傷 sanity KO」檢查用了 <code>card.hp</code>（基礎 130）而非 <code>getEffectiveHP</code>（有效 230）。</li>
+          <li>　・夠讚狗 場上累積 130~229 傷害時（例如願增猿 腎上腺腦力 移傷過來），效用 HP 仍 alive，但這條 check 用基礎 HP → 攻擊後立刻誤判 KO。</li>
+          <li>　・另外 gate 也不嚴謹：只要 attacker.damage &gt;= 基礎 HP 就觸發，<b>連反傷是否實際發生都沒判定</b>。</li>
+          <li><b>修法</b>：</li>
+          <li>　・在 TOOL_ON_DAMAGED / SPECIAL_ENERGY_ON_DAMAGED hooks 前，先抓 <code>atkDamageBeforeRetaliation</code> snapshot。</li>
+          <li>　・KO 觸發條件改為：<code>damage &gt; atkDamageBeforeRetaliation</code>（反傷真的生效）<b>且</b> <code>damage &gt;= getEffectiveHP(retaliatedAtk)</code>（用有效 HP）。</li>
+          <li>　・龐克頭盔反彈 (line 4341) 同樣 bug — 也改用 getEffectiveHP。</li>
+          <li>同類風險：未來任何「HP boost ability + retaliation」組合都會踩到此 bug，這次一併治本。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.75</span> 🎯 PTCG 官方規則：擲幣贏家選先後攻（lobby 預設偏好）</summary>
         <ul>
           <li>實裝 PTCG 官方規則第二項（接續 v3.74 mulligan 揭示）：擲硬幣贏家有權選擇先攻或後攻。</li>
