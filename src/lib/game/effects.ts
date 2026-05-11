@@ -3134,6 +3134,27 @@ reg('寶可生機劑A', (st, idx) => {
 });
 regR('heal-150', healResolver);
 
+// v3.68 寶可夢中心的姐姐 — 1 隻寶可夢回 60 HP + 解除所有特殊狀態（支援者）
+// 卡面：「將自己的 1 隻寶可夢恢復『60』HP，特殊狀態也全部恢復。」
+// 歷史：v2.199 已經把 healResolver 升級支援 clearStatus 參數（line 739），
+//   但忘了寫 reg() 註冊 → 整張卡停在 stub 狀態到 v3.68 才補完。
+// JSON 修正：原 SV-P-I.json name 開頭有 U+200C zero-width joiner 字元
+//   （scraper artifact），v3.68 同步清掉，卡名 search / reg() 才能對齊。
+regG('寶可夢中心的姐姐', (st, idx) => {
+  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  return all.some(c => c.damage > 0 || c.status || c.secondaryStatus);
+});
+reg('寶可夢中心的姐姐', (st, idx) => {
+  st = addLog(st, '寶可夢中心的姐姐：選 1 隻寶可夢回 60 HP + 解除所有特殊狀態', idx);
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, effectKey: 'pokemon-center-lady-heal',
+    params: { healAmount: 60, discardEnergy: 0, clearStatus: true,
+              titleOverride: '寶可夢中心的姐姐：選 1 隻寶可夢回 60 HP + 解狀態' },
+  });
+});
+regR('pokemon-center-lady-heal', healResolver);
+
 // 危險光線 — 對手戰鬥寶可夢同時陷入【灼傷】+【混亂】（v2.163 完整實裝）
 // 約定：行動類狀態（混亂）放 status 主格；傷害類狀態（灼傷）放 secondaryStatus。
 // 引擎 checkup 會掃兩格做毒/灼判定；攻擊前的混亂擲幣只看 status 主格。

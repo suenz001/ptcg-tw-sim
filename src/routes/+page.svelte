@@ -264,6 +264,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.68</span> ✨ 補完寶可夢中心的姐姐 stub（v2.199 半實裝拖 N 個月）+ JSON U+200C 卡名修正 + PASSIVE_STADIUMS audit 鐵律</summary>
+        <ul>
+          <li>玩家催促全面 audit「中立中心是 ACE SPEC 居然 stub」→ 我跑完 31 Stadium + 28 ACE SPEC + 全 Trainer 比對：</li>
+          <li>　・31 張 Stadium 全部實裝（11 張 active 走 engine inline、16 張 passive 在 PASSIVE_STADIUMS set、3 張 special、1 張中立中心 v3.67 補完）</li>
+          <li>　・28 張 ACE SPEC 全部有 functional refs（每張都有 reg/effect/hook）</li>
+          <li>　・<b>真正未實裝只有 1 張</b>：寶可夢中心的姐姐（SV-P-I 214）</li>
+          <li><b>寶可夢中心的姐姐 stub 修法</b>（半實裝）：</li>
+          <li>　・原狀：<code>healResolver</code> (in <code>_shared.ts:736</code>) 註解明寫「v2.199 寶可夢中心的姐姐」+ 已支援 <code>clearStatus</code> 參數，但<b>實際 reg() 註冊從沒寫</b>，整張卡停在 stub 狀態到 v3.68 才補。</li>
+          <li>　・修法：加 <code>reg(&#39;寶可夢中心的姐姐&#39;, ...)</code> + <code>regG()</code>（has-damage-or-status gate）+ <code>regR(&#39;pokemon-center-lady-heal&#39;, healResolver)</code>。卡面：選 1 隻寶可夢回 60 HP + 解除所有特殊狀態。</li>
+          <li><b>JSON U+200C 卡名修正</b>：</li>
+          <li>　・<code>SV-P-I.json</code> id=12573 卡名開頭有 <code>U+200C</code>（zero-width non-joiner）— scraper artifact，看不見但實際存在</li>
+          <li>　・玩家在牌組編輯器搜尋「寶可夢中心」會搜不到（因為實際卡名前綴看不見的 ZWNJ）</li>
+          <li>　・<code>reg(&#39;寶可夢中心的姐姐&#39;, ...)</code> 與 JSON 名也對不上 — engine 找不到 trainer effect</li>
+          <li>　・修正：JSON 卡名 strip 開頭 U+200C/U+200D/U+FEFF（同時 strip ZWNJ/ZWJ/BOM 保險）</li>
+          <li><b>新鐵律寫進 stadiums.ts：</b></li>
+          <li>　・<code>PASSIVE_STADIUMS</code> 上方加 ⚠️ 鐵律註解 — 「名字在 set 內 ≠ 效果已實裝」</li>
+          <li>　・成員必須附「實裝於 [檔案:行] / hook X」comment 才不算 stub</li>
+          <li>　・反例就是中立中心：v3.67 之前名字在 set 但沒對應 hook，放下無效果</li>
+          <li>tsc 0 errors + svelte parse 兩道驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.67</span> 🔧 全面 audit + 實裝：12 處 inline 全 refactor + 中立中心 stadium 從 stub 變實作</summary>
         <ul>
           <li>玩家驗收 v3.66 時抓出 audit 不徹底：列了 7 個 ex 相關卡（初始化 / 水蓮的照顧 / 中立中心 / 耀閃挑戰 / 花之帷幔 / 猛攻手鐲 / 寶可平板）只有 2 個真的走 helper。重新全面 audit。</li>

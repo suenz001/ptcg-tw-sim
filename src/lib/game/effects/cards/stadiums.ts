@@ -230,6 +230,18 @@ export const STATIC_PASSIVE_STADIUMS = new Set<string>([
 //   - STATIC_PASSIVE_STADIUMS：其他「只要場上即生效」類 stadium（引力山岳等，v2.96 加）
 // /routes/game/+page.svelte 的 `canUseStadium` 會透過 helper 過濾這組成員。
 // 新增純被動場地卡時記得加到上方 STATIC_PASSIVE_STADIUMS。
+/**
+ * v3.68 ⚠️ 新鐵律：加入 PASSIVE_STADIUMS 的成員「名字在 set 內」≠「效果已實裝」。
+ *   必須在註冊 stadium 同時，於下列 hook 點 至少一處 加對應邏輯：
+ *     - engine.ts attack damage pipeline（受傷 +/- N 類）
+ *     - engine.ts checkup（中毒/灼傷 加成類）
+ *     - effects.ts attack pipeline 內條件（特定屬性 +N 傷害）
+ *     - effects.ts retreat cost / evolve gate / energy attach 等其他 hook
+ *   每條成員後面 comment 必須註明「實裝於 [檔案:行] / hook X」，避免變成 stub。
+ *
+ *   反例：v3.67 之前的中立中心 — 名字在 set 但沒對應 hook，玩家放下後完全無效果。
+ *   下次新增 passive stadium：先寫 hook、跑測試，再把名字 commit 進 set。
+ */
 export const PASSIVE_STADIUMS = new Set<string>([
   ...BENCH_PROTECTION_STADIUMS,
   ...JAMMING_TOWER_STADIUMS,
