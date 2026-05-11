@@ -451,6 +451,80 @@ module 沒循環依賴，TDZ 不會發生。
 
 ---
 
+### Rule 13: GameState 欄位禁用 nested array — Firestore 序列化會失敗
+
+**症狀**: 連線對戰開局後出現「等待對手重抽」畫面 → 又重新丟一次硬幣 → 無限循環，
+雙端無法進入 playing 階段。Console 可能看到 `FirebaseError: Function setDoc() called
+with invalid data. Nested arrays are not supported`。
+
+**根因**: Firestore 規則「array 元素不能是 array」。任何要寫進 `roomData.gameState`
+（即整顆 GameState）的欄位都受此限。常見違規類型：
+
+| 違規 type | 例 | 為什麼炸 |
+|---|---|---|
+| `[T[], T[]]` | `mulliganRevealedHands: [string[][], string[][]]` | 外層 tuple 是 array，內層 `string[][]` 也是 array → array of array |
+| `T[][]` | `damageHistory: number[][]` | array of array，最直接的違規 |
+| `[[K, V], ...]` | `Map.entries()` 直接 push | 內層 `[K, V]` 是 array |
+
+**v3.741 / v2.84 兩次踩坑紀錄**:
+- v2.84：`supporterTagsUsedThisTurn: [string[], string[]]` → push 失敗 → 修成
+  `{ p1: string[]; p2: string[] }` 解決
+- v3.741：`mulliganRevealedHands: [string[][], string[][]]` → 完全相同的錯
+  **同類問題第二次出現**，修法相同（object 包 flat array）
+
+**禁止寫法**:
+```ts
+// ❌ tuple of array
+mulliganRevealedHands: [string[][], string[][]];
+
+// ❌ direct array of array
+boardHistory: CardInstance[][];
+
+// ❌ Map entries
+auraEffects: [string, number][];
+```
+
+**正確寫法（pattern A：per-player object）**:
+```ts
+// ✅ object 包兩個 flat array
+supporterTagsUsedThisTurn?: { p1: string[]; p2: string[] };
+```
+
+**正確寫法（pattern B：joined string + parse 時 split）**:
+```ts
+// ✅ 內層 array 用 delimiter join 成單一 string
+mulliganRevealedHands?: { p1: string[]; p2: string[] };
+//   每元素例：'cardA|cardB|cardC|cardD|cardE|cardF|cardG'
+//   parse 時：hands.map(s => s.split('|'))
+```
+
+**正確寫法（pattern C：indexed object）**:
+```ts
+// ✅ 多層用 object 取代陣列
+playerHistory: { p1: Record<string, string[]>; p2: Record<string, string[]> };
+```
+
+**Audit 方法 — 新增 GameState 欄位前自我檢查**:
+
+```bash
+# 1. 看 types.ts 是否有可疑類型
+grep -nE ':\s*\[.*\[\]|:\s*\w+\[\]\[\]' src/lib/game/types.ts
+
+# 2. 任何 [X[], Y[]] / X[][] / [[K,V]] 都是高風險，需要包成 object 結構
+```
+
+**為什麼這條容易被忘**:
+- 本地測試（無 Firestore）完全沒事 → tsc / svelte-check / npm run build 都過 → 看不出問題
+- 只有實際連線對戰時才會炸 → 容易在開發階段漏掉
+- 錯誤訊息只在 console / Firestore SDK 內部，玩家看到的是「卡住、無限循環」這種模糊症狀
+
+**檢查清單 — 任何 GameState type 改動都跑一遍**:
+- [ ] 新增的欄位 type 是否含 `[][]` 或 tuple 內含 array？→ 改 object pattern
+- [ ] 是否 push 到 Firestore（`pushGameState` / `setDoc(rooms/...)` 路徑會碰到）？
+- [ ] 連線對戰實測（兩個瀏覽器分頁）跑一次 setup → main turn，無「卡住」現象？
+
+---
+
 ## 完整版
 
 完整 SKILL.md（含 Python git plumbing pipeline 範本、pre-flight checklist、
