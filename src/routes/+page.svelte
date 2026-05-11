@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.731</span> 🍯 hotfix：蜜糖風暴傷害幾乎永遠只打 30 — 兩個雙重 bug</summary>
+        <ul>
+          <li>玩家回報：蜜集大蛇ex 用「蜜糖風暴」，場上有大竺葵 + 自己所有寶可夢身上 8 顆草能，預期 30 + 8×2×30 = 510 點傷害，<b>實際只打 30</b>。</li>
+          <li><b>根因（雙重 bug）</b>：</li>
+          <li>　1. <code>countOneEnergy()</code> 用 <code>card.pokemonType === filter</code> 判定能量屬性，但基本【草】能量 JSON 的 <code>pokemonType=null</code>（v3.44 task #184 已知問題，當時修了大部分地方但這個 helper 漏網）。所以 8 顆基本草能 → count=0 → 傷害 = 30+0×30 = 30。</li>
+          <li>　2. <code>selfAllEnergyMultiplyPre()</code> （蜜糖風暴用的）沒套大竺葵繁茂倍率，跟 <code>bothActiveEnergyMultiplyPre()</code>（萬葉陣雨用的）不對稱 — 萬葉陣雨的 helper 有 inline countWithBloom，蜜糖風暴的沒有。</li>
+          <li><b>修法</b>：</li>
+          <li>　1. 新增 <code>ENERGY_NAME_TO_TYPE</code> 對照表 + <code>energyMatchesType()</code> helper：判定能量屬性先看 pokemonType，沒設則 fallback 用 name【X】解析（兼容 pokemonType=null 的基本能量）。<code>countOneEnergy</code> 套用此 helper。</li>
+          <li>　2. <code>selfAllEnergyMultiplyPre</code> 加 inline 繁茂偵測 + 倍率邏輯（effects.ts 不能 import engine.ts 因 circular，故 inline 寫，跟 bothActiveEnergyMultiplyPre 同 pattern）。</li>
+          <li><b>影響範圍</b>：</li>
+          <li>　・<code>countOneEnergy</code> 是所有 *EnergyMultiplyPre 系列的 base helper — 此修法<b>順手修了所有靠數能量計算傷害的招式</b>對「pokemonType=null 基本能量」的計算（之前可能也都低估）。</li>
+          <li>　・<code>selfAllEnergyMultiplyPre</code> 加繁茂支援 — 影響的招式：目前只有蜜糖風暴一張用此 helper。</li>
+          <li><b>實測效果</b>：8 顆基本草 + 繁茂在場 → 30 + 8×2×30 = 510 ✓</li>
+          <li>tsc 0 errors + svelte parse 3/3 OK + NUL byte 通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.73</span> 🐛 hotfix：亂暴閃電 / 燃燒旋踢「下回合無法攻擊」誤鎖整個玩家而非單一寶可夢</summary>
         <ul>
           <li>玩家回報：N的索羅亞克ex 用「暗黑底牌」借 N的捷克羅姆「亂暴閃電」(250 dmg) 後，下回合撤退換上備戰另一隻 N的索羅亞克ex，<b>新換上的也不能用招式</b>。違反卡面「這隻寶可夢無法使用招式」(個體 level)。</li>

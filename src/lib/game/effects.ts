@@ -5500,6 +5500,19 @@ export function getOctopusTentacleEffectiveCost(
 
 type EnergyFilter = 'all' | 'basic' | 'special' | EnergyType;
 
+// v3.731：能量名稱中文 type 對照（fallback when pokemonType is null）
+const ENERGY_NAME_TO_TYPE: Record<string, EnergyType> = {
+  '草': 'Grass', '火': 'Fire', '水': 'Water', '雷': 'Lightning',
+  '超': 'Psychic', '鬥': 'Fighting', '惡': 'Darkness', '鋼': 'Metal',
+  '妖': 'Fairy', '龍': 'Dragon', '無': 'Colorless',
+};
+// v3.731：判定能量卡是否屬於某屬性 — 先看 pokemonType，沒設則 fallback 看 name【X】
+function energyMatchesType(card: Card, filter: EnergyType): boolean {
+  if (card.pokemonType === filter) return true;
+  const m = card.name.match(/【(.+?)】/);
+  return !!m && ENERGY_NAME_TO_TYPE[m[1]] === filter;
+}
+
 function countOneEnergy(inst: CardInstance, filter: EnergyFilter, pool: Map<string, Card>): number {
   let count = 0;
   for (const e of inst.energyAttached) {
@@ -5508,7 +5521,8 @@ function countOneEnergy(inst: CardInstance, filter: EnergyFilter, pool: Map<stri
     if (filter === 'all') count++;
     else if (filter === 'basic' && card.subtype === 'Basic') count++;
     else if (filter === 'special' && card.subtype === 'Special') count++;
-    else if (typeof filter === 'string' && card.pokemonType === filter) count++;
+    // v3.731：pokemonType=null 的 fallback — 看 card.name 的【X】
+    else if (typeof filter === 'string' && energyMatchesType(card, filter as EnergyType)) count++;
   }
   return count;
 }
@@ -5549,12 +5563,34 @@ function oppAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter
 function selfAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const a = state.players[aIdx];
+    // v3.731：filter='Grass' + 自方有大竺葵繁茂 → 基本【草】能量算 2 個
+    //   原邏輯只用 countOneEnergy 不套繁茂倍率，跟 bothActiveEnergyMultiplyPre 不對稱
+    //   ( bothActiveEnergyMultiplyPre 用 countWithBloom inline helper)
+    // v3.731: inline bloom check (effects.ts 不能 import engine.ts — circular)
+    let bloom = false;
+    if (filter === 'Grass') {
+      const allOwn = [...(a.active ? [a.active] : []), ...a.bench];
+      bloom = allOwn.some(c => pool.get(c.cardId)?.abilities?.some(ab => ab.name === '繁茂'));
+    }
     let count = 0;
     for (const p of [a.active, ...a.bench]) {
-      if (p) count += countOneEnergy(p, filter, pool);
+      if (!p) continue;
+      if (!bloom) {
+        count += countOneEnergy(p, filter, pool);
+        continue;
+      }
+      // 繁茂啟用：iterate 每個 energy，基本【草】 +2、其他依 filter 規則 +1
+      for (const e of p.energyAttached) {
+        const ec = pool.get(e.cardId);
+        if (!ec || ec.supertype !== 'Energy') continue;
+        const isBasicGrass = ec.subtype === 'Basic' && energyMatchesType(ec, 'Grass');
+        if (isBasicGrass) count += 2;
+        else if (energyMatchesType(ec, 'Grass')) count += 1;
+      }
     }
+    const bloomLog = bloom ? '（繁茂×2 套用基本【草】）' : '';
     const dmg = base + per * count;
-    return { state: addLog(state, `${label}：自己全場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
+    return { state: addLog(state, `${label}：自己全場${filter}能量 ${count}${bloomLog} → ${dmg}`, aIdx), damage: dmg };
   };
 }
 
