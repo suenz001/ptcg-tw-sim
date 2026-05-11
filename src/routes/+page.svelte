@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.712</span> 📜 Iron Rule 7c：規則解讀前必須查 static/cards 原文，禁止憑記憶</summary>
+        <ul>
+          <li>把連 4 次幻覺的教訓寫成新鐵律（IRON_RULES.md Rule 7c）：「實作 / audit / 規則解讀 / AI 決策邏輯前必須查 static/cards JSON 原文」。</li>
+          <li>整理 4 次具體災難 → 表格：極限腰帶 HP/攻擊誤讀、豪華斗篷 G 標誤用、龍屬性弱抗誤算、「最多 3 個」上限/選擇語意誤譯。</li>
+          <li>列 8 個 PTCG 規則文字「常見誤譯關鍵詞」對照表，下次踩到「最多 / 若希望 / 直到 / 不會 / 附加效果」等語意陷阱時可直接查。</li>
+          <li>只動 IRON_RULES.md，無程式碼異動（version 純粹保持單調遞增）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.711</span> 🚨 hotfix：腎上腺腦力 picker 是錯誤實裝（卡面「最多3個」=上限非選擇）</summary>
         <ul>
           <li>玩家指正：v3.14 引入的「選擇要搬移的指示物張數（1~3）」modal-choice picker 整個是錯誤實裝。</li>

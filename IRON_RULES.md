@@ -129,6 +129,60 @@ STD_MARKS = {"H", "I", "J"}  # ← 不要把 G 加進來
 
 v3.70 已用同個 script 順手清掉幾個 print-variant string-match bug，那部分保留有效。
 
+### Rule 7c: 規則解讀 / 卡面討論前必須查 static/cards 原文，禁止憑記憶或腦補
+
+每張卡的原文文字（rulesText / abilities.text / attacks.effect）都在 `static/cards/*.json`。**任何「這張卡是怎麼運作的」「這個機制應該怎麼修」「這條規則該怎麼解讀」的判斷之前，必須先 grep / read JSON 拿到完整原文**，再做判斷。
+
+`docs/AI_GENERIC_HANDOFF.md` §1 已寫過「實作卡片前必須查 JSON」，但歷史上多次失誤集中在「audit / 規則解讀 / AI 決策邏輯」場景 — 那些情境沒新增卡片，只是改邏輯，agent 容易跳過查證步驟憑記憶說話。
+
+**現實災難案例**：
+
+| 版本 | 幻覺 | 真相（卡面） | 後果 |
+|---|---|---|---|
+| v3.71 audit | 「極限腰帶 = HP +50（如同 ex 戴護身符）」 | 極限腰帶 = 攻擊 +50 點傷害 對對手戰鬥場 ex（**進攻** buff） | 整個 P0 修法方向誤判 |
+| v3.71 audit | 「豪華斗篷 = HP +90 對非 rule-box」 | 豪華斗篷是 **G 標**（已輪出，依 Rule 7b 跳過） | 拿輪出卡當佐證 |
+| v3.71 audit | 「龍屬性有弱抗倍率」 | 龍屬性無弱點也無抵抗力 | 多算了一條不存在的邏輯路徑 |
+| v3.14 → v3.711 | 「願增猿｜腎上腺腦力 卡面『最多 3 個』= 玩家選 1~3」 | 「最多 3 個」是上限（cap），實際 amount = min(source.damage, 30) 全搬，無 picker | 加了錯的 modal-choice picker；v3.71 又在錯的 picker 上做最佳化；v3.711 兩個都 revert |
+
+**強制流程**：
+
+凡是要動以下任一類程式碼**之前**，先 grep / Read `static/cards/*.json`：
+- 卡片實裝 / regA / regPre / regPost / reg / regR
+- AI 決策邏輯（要參考某張卡的招式 / 特性 / cost / damage）
+- audit script（要過濾或對比某類卡面文字語意）
+- 規則解讀討論（用戶問「這張卡這樣做對嗎」）
+- 修 bug 時要確認「卡面到底寫什麼」
+
+**特別注意語意關鍵詞**（PTCG 規則文字常見誤譯）：
+
+| 文字 | 常見錯讀 | 正確語意 |
+|---|---|---|
+| **最多 N 個** | 玩家選 1~N | 上限 N，全搬 min(實際, N) |
+| **若希望** | 一律觸發 | yes/no binary，由 actor 決定要不要做 |
+| **直到出現反面** | 固定擲幣 N 次 | 反覆擲到反面為止（可能擲 0~∞ 次） |
+| **選擇 1 張** | 自動隨機 1 張 | actor 必須選擇（picker） |
+| **將 X 改放於 Y** | 玩家可以選量 | 一次性整批轉移 |
+| **每 1 個 +N** | 直接加 N | 依數量乘倍率（damage += count × N） |
+| **不會放置傷害指示物** | 不會受招式傷害 | 招式傷害正常 +0，但傷害指示物 placement 機制（如 咒詛炸彈）被擋 |
+| **附加效果** | 任何效果 | 特定指 defender 身上由特性 / 道具 / 上回合招式留下的減傷 / 反傷 flag |
+
+**Audit 工具**：
+
+```bash
+# 查單張卡的所有 prints + 完整原文
+grep -A 60 '"name": "願增猿"' static/cards/*.json
+# 或用 Python helper（讀 JSON 結構化輸出）
+python3 -c "
+import json, glob
+for f in sorted(glob.glob('static/cards/*.json')):
+    for c in json.load(open(f, encoding='utf-8')):
+        if c.get('name') == '願增猿':
+            print(c.get('setCode'), c.get('regulationMark'), c.get('abilities'))
+"
+```
+
+凡是違反此規則的失誤都應該回過頭來把這條 audit 個案補成新的「現實災難案例」。
+
 ### Rule 8: 揭示資訊（addLog vs addPrivateLog）必須嚴格按卡面文字
 
 PTCG 規則：實體桌上「給對手看過」是防作弊驗證機制——對手要確認搜出來的卡符合 filter 限制（『寶可夢』『支援者』『基本能量』『進化寶可夢』等）。線上對戰用 log 取代這個機制，所以**揭示資訊規則直接決定 log 該用 addLog 還是 addPrivateLog**。
