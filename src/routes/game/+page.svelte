@@ -14,7 +14,7 @@
     getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
     countEnergy, getEvolvableTargets,
     canRetreat, getRetreatBlockReason, getPlayableTrainers, getPlayableBasics, getPlayableFossils,
-    getUsableAbilities, isBasicPokemonCard, isFossilItemCard, getEffectiveHP,
+    getUsableAbilities, isBasicPokemonCard, isFossilItemCard, isRulePokemon, getEffectiveHP,
     totalEnergyUnits, getBenchLimit, canBeInitialActiveCard,
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
@@ -1438,10 +1438,8 @@
           if (f === 'Basic:HP70') return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
           // v2.171 深缽鎮：基礎寶可夢且非「擁有規則」（排除 ex / V 等）
           if (f === 'BasicNonRule') {
-            if (!isBasicPokemonCard(card)) return false;
-            const isRule = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX')
-              || !!card.rulesText?.includes('擁有規則');
-            return !isRule;
+            // v3.66：改用 isRulePokemon helper 統一管理規則盒判定
+            return isBasicPokemonCard(card) && !isRulePokemon(card);
           }
           // v2.159：基礎寶可夢且名字以指定 prefix 開頭（如「赫普的」）
           if (f.startsWith('Basic:NamePrefix=')) {
@@ -1512,9 +1510,8 @@
             return false;
           }
           if (f === 'PokemonNonRule') {
-            if (card.supertype !== 'Pokemon') return false;
-            const isRule = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX');
-            return !isRule;
+            // v3.66：改用 isRulePokemon helper 統一管理規則盒判定
+            return card.supertype === 'Pokemon' && !isRulePokemon(card);
           }
           // v2.35：火箭隊新增 filter
           if (f === 'RocketSupporter') {

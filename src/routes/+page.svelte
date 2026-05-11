@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.66</span> 🔧 refactor：抽 isRulePokemon helper 為下月新規則寶可夢預作準備</summary>
+        <ul>
+          <li>玩家提醒：一個月後 PTCG 新擴充包要出新「擁有規則的寶可夢」類型。先預做準備避免新類型上線時要追 5 處散落點。</li>
+          <li>Audit 現況：「非規則寶可夢」判定原本 inline 散落 5 處（routes/game/+page.svelte BasicNonRule/PokemonNonRule、ai.ts BasicNonRule/PokemonNonRule、tools.ts 豪華斗篷×2 + 莉莉艾的珍珠），每處重複寫 <code>subtype === &#39;ex&#39; || name.endsWith(&#39;ex&#39;) || ...</code>。</li>
+          <li>新增統一 helper：<code>isRulePokemon(card)</code> 在 <code>engine.ts</code>。判定優先序：</li>
+          <li>　① <code>tags</code> 含 &#39;規則盒&#39; 或 <code>RULE_BOX_SUBTYPES</code> 任一字串（最 future-proof — scraper 給新卡 tag 即可）</li>
+          <li>　② <code>subtype</code> 在 <code>RULE_BOX_SUBTYPES</code> set（&#39;ex&#39; / &#39;V&#39; / &#39;VMAX&#39; / &#39;VSTAR&#39; / &#39;GX&#39; / &#39;EX&#39; / &#39;MegaEvolution&#39;）</li>
+          <li>　③ <code>rulesText</code> 含「擁有規則」（fallback）</li>
+          <li>　④ 卡名結尾 ex/EX（最後保險）</li>
+          <li>5 處 inline 全 refactor 改用 helper，行為等價但維護成本歸零。</li>
+          <li><b>未來新規則寶可夢類型上線 SOP</b>：把新 subtype 字串（如未來可能的 &#39;Mega2&#39; / &#39;Z&#39; 等）加進 <code>types.ts</code> 的 <code>RULE_BOX_SUBTYPES</code> set，<b>1 行</b>就完成全引擎更新。或讓 scraper 給新卡標 <code>tags: [&#39;規則盒&#39;]</code> 也可以。</li>
+          <li>已寫進鐵律註解：日後新寫 ex/非 ex 區分邏輯<b>必須用 helper</b>，不要 inline 寫 <code>subtype === &#39;ex&#39; || name.endsWith(&#39;ex&#39;)</code>。</li>
+          <li>tsc 0 errors + svelte parse 兩道驗證才 push。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.65</span> ✨ hotfix：4 個「不限次數」特性漏加 UNLIMITED_USE_ABILITY_NAMES（變成只能用 1 次）</summary>
         <ul>
           <li>玩家回報：超級妙蛙花ex 的特性「日光轉移」官方寫「在自己的回合時可不限次數使用」，但實作只能用 1 次。請 audit 同類 bug。</li>

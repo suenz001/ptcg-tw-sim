@@ -33,6 +33,8 @@ import {
   addLog, updatePlayer, withPending, shuffle,
   hasMultiToolRelay, isLotomFamily,
 } from '../_shared';
+// v3.66：規則寶可夢統一判定 helper
+import { isRulePokemon } from '../../engine';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 33 — 寶可夢道具（Tool）效果登錄表
@@ -88,9 +90,8 @@ export const TOOL_RETREAT_MOD = new Map<string, (
 TOOL_HP_BONUS.set('英雄斗篷', () => 100);
 TOOL_HP_BONUS.set('勇氣護符', (card) => !card.evolvesFrom ? 50 : 0);
 TOOL_HP_BONUS.set('豪華斗篷', (card) => {
-  const isRulePoke = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX')
-    || !!card.rulesText?.includes('擁有規則');
-  return isRulePoke ? 0 : 100;
+  // v3.66：改用 isRulePokemon helper
+  return isRulePokemon(card) ? 0 : 100;
 });
 // 驅勁能量 古代/未來：v2.222 加 gate — 必須附在「古代/未來」寶可夢身上才生效
 //   卡面：「附有這張卡的『古代』寶可夢的最大HP +60」
@@ -280,9 +281,8 @@ regR('heavy-baton-distribute', (st, idx, iids, params, pool) => {
 
 // ── 被擊倒時對手多獲 1 張獎賞 ─────────────────────────────────────────────
 TOOL_PRIZE_BONUS.set('豪華斗篷', (card) => {
-  const isRulePoke = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX')
-    || !!card.rulesText?.includes('擁有規則');
-  return isRulePoke ? 0 : 1;
+  // v3.66：改用 isRulePokemon helper
+  return isRulePokemon(card) ? 0 : 1;
 });
 
 // ── 莉莉艾的珍珠（Pokemon Tool） ────────────────────────────────────────────
@@ -292,9 +292,8 @@ TOOL_PRIZE_BONUS.set('豪華斗篷', (card) => {
 // v2.09：從 effects.ts 底部搬到這，統一讓自動登記區塊處理 attach effect，
 // 不需原先的 if (!TRAINER_EFFECTS.has(...)) guard。
 TOOL_PRIZE_BONUS.set('莉莉艾的珍珠', (card) => {
-  const isRulePoke = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX')
-    || !!card.rulesText?.includes('擁有規則');
-  return isRulePoke ? -1 : 0;
+  // v3.66：改用 isRulePokemon helper
+  return isRulePokemon(card) ? -1 : 0;
 });
 
 // ── 受傷（未 KO）觸發 ──────────────────────────────────────────────────────

@@ -16,7 +16,7 @@ import {
   getAvailableAttacks, getEffectiveAttacks, getEvolvableTargets,
   getPlayableTrainers, getPlayableBasics,
   getUsableAbilities, canRetreat, isBasicPokemonCard,
-  canBeInitialActiveCard,
+  canBeInitialActiveCard, isRulePokemon,
   getEffectiveHP, canAffordAttack,
 } from './engine';
 
@@ -394,9 +394,8 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           return false;
         }
         if (f === 'PokemonNonRule') {
-          if (card.supertype !== 'Pokemon') return false;
-          const isRule = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX');
-          return !isRule;
+          // v3.66：改用 isRulePokemon helper
+          return card.supertype === 'Pokemon' && !isRulePokemon(card);
         }
         // v2.35：火箭隊新增 filter
         if (f === 'RocketSupporter') {
@@ -458,9 +457,8 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         }
         if (f === 'MarniePokemon') return card.supertype === 'Pokemon' && card.name.startsWith('瑪俐的');
         if (f === 'BasicNonRule') {
-          if (!isBasicPokemonCard(card)) return false;
-          const isRule = card.subtype === 'ex' || card.name.endsWith('ex') || card.name.endsWith('EX');
-          return !isRule;
+          // v3.66：改用 isRulePokemon helper
+          return isBasicPokemonCard(card) && !isRulePokemon(card);
         }
         if (f === 'ColorlessPokeHP100') {
           return card.supertype === 'Pokemon' && card.pokemonType === 'Colorless' && (card.hp ?? 999) <= 100;

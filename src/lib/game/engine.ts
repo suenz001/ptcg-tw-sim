@@ -409,6 +409,44 @@ export function canBeInitialActiveCard(card: Card | undefined): boolean {
   return false;
 }
 
+/**
+ * v3.66 統一的「擁有規則的寶可夢」判定（規則盒寶可夢 / Rule Box Pokemon）。
+ *
+ * PTCG 規則：規則盒寶可夢 = ex / V / VMAX / VSTAR / GX / EX / Mega ex / Tag Team GX 等。
+ *   被擊倒時對手獲得 2 張獎賞（部分卡 3 張）— 跟一般寶可夢不同。
+ *   下個月（2026 年中）PTCG 預計推出新規則盒寶可夢類型，本 helper 預先把判定統一管理。
+ *
+ * 判定優先序：
+ *   1. tags 含 '規則盒' / RULE_BOX_SUBTYPES 中任一字串 — scraper 未來可在新卡標 tag
+ *   2. subtype 在 RULE_BOX_SUBTYPES set 中（'ex' / 'V' / 'VMAX' / 'VSTAR' / 'GX' / 'EX' / 'MegaEvolution'）
+ *   3. rulesText 含「擁有規則」字串 — fallback，scraper 未來如撈到該字串就會生效
+ *   4. 卡名結尾 ex/EX — 防漏網（理論上 subtype 應覆蓋，這是最後保險）
+ *
+ * 新規則寶可夢類型上線時，只需把新 subtype 字串加進 types.ts 的 RULE_BOX_SUBTYPES set。
+ * 不必再追 5 處 inline 判定（v3.66 前的散落 anti-pattern）。
+ *
+ * ⚠️ 鐵律：日後新寫「ex / 非 ex 區分」邏輯時，務必用本 helper，不要 inline 寫
+ *           `subtype === 'ex' || name.endsWith('ex')` — 那會錯過 V/VMAX/VSTAR/GX
+ *           以及未來新規則盒類型。grep `card.subtype === 'ex'` 確認沒有新增散落點。
+ */
+export function isRulePokemon(card: Card | undefined): boolean {
+  if (!card) return false;
+  if (card.supertype !== 'Pokemon') return false;
+  // 1. tags 路徑（最 future-proof — scraper 給新卡 tag 即可）
+  const tags = card.tags ?? [];
+  if (tags.includes('規則盒')) return true;
+  for (const t of tags) {
+    if (RULE_BOX_SUBTYPES.has(t)) return true;
+  }
+  // 2. subtype 路徑（目前主力 — 標準環境 621 張 ex 卡走這條）
+  if (card.subtype && RULE_BOX_SUBTYPES.has(card.subtype)) return true;
+  // 3. rulesText 路徑（scraper 目前沒撈到，但 import 機制未來可能補上）
+  if (card.rulesText?.includes('擁有規則')) return true;
+  // 4. 卡名結尾兜底（防漏網；正常情況 subtype 已覆蓋）
+  if (card.name.endsWith('ex') || card.name.endsWith('EX')) return true;
+  return false;
+}
+
 /** 從 pool 判斷一張牌是否「可作為起始戰鬥寶可夢」（基礎 OR 瞬間爆發力） */
 function canBeInitialActive(cardId: string, pool: Map<string, Card>): boolean {
   return canBeInitialActiveCard(pool.get(cardId));
