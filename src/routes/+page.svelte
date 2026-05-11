@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.722</span> 📱 手機版進化目標 picker 加 🔍 zoom 副按鈕 + 顯示 HP/能量狀態</summary>
+        <ul>
+          <li>玩家回報：手機版進化卡有多個目標可選時（例：手上有 2 隻多龍奇都可進化成多龍巴魯托ex），picker 只顯示寶可夢名字，看不到 HP 殘量 / 已附能量狀態，難以決定要進化哪一隻。</li>
+          <li>修法（與 v3.32 撤退 picker 同模式）：手機進化 picker 每個目標 button 改為「主按鈕 + 🔍 副按鈕」橫排，主按鈕標籤加上 <code>（HP X/Y · ⚡N）</code> 即時顯示狀態，🔍 點下打開 zoom modal 看完整卡面。</li>
+          <li>實作：<code>MobilePortraitBattle.svelte</code> line 705-711 改為使用 <code>mp-sheet-row + mp-sheet-zoom</code> 結構，與既有的撤退 picker UI 完全對稱。</li>
+          <li><b>另發現的 Iron Rule 11 再次觸發</b>：Edit 工具改 <code>MobilePortraitBattle.svelte</code>（52KB 中等檔，遠低於 500KB 警戒）時把 file size 雖然對但 truncate 掉檔尾 CSS 整段，svelte parser 報 <code>Unexpected end of input</code>。改用 head_blob + Python safe_write 才搞定。<b>結論</b>：Iron Rule 11「ANY 既有檔案改用 Edit 都不安全」實證再加 1 次（v3.71 ai.ts 49KB → v3.722 MobilePortraitBattle.svelte 47KB），「中等檔」其實也常踩。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.721</span> 🚨 hotfix：v3.72 push 失敗 — version.ts 末尾 NUL byte 觸發 svelte-check 報 Invalid character</summary>
         <ul>
           <li>v3.72 push 上 GitHub Actions 後 build job 失敗（exit 1）。依鐵律 Rule 4「不要猜，去看實際 build error」，呼叫 GitHub Actions check-runs annotation API + sandbox 跑 svelte-check 抓到根因。</li>

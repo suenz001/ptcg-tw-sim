@@ -705,9 +705,19 @@
       {:else if sheet.type === 'pick-evolve-target'}
         <div class="mp-sheet-title">🔺 選擇進化目標</div>
         {#each (sheet.type === 'pick-evolve-target' ? sheet.candidates : []) as fromIid}
-          <button class="mp-sheet-btn primary" onclick={() => evolveTo(fromIid, (sheet as { evoIid: string }).evoIid)}>
-            {nameOfIid(fromIid)}
-          </button>
+          {@const inst = [...(myPlayer.active ? [myPlayer.active] : []), ...myPlayer.bench].find(x => x.iid === fromIid)}
+          <!-- v3.722 進化目標加 🔍 zoom 副按鈕（與撤退 picker 同模式），玩家可先看寶可夢狀態再決定 -->
+          <div class="mp-sheet-row">
+            <button class="mp-sheet-btn mp-sheet-btn-flex primary" onclick={() => evolveTo(fromIid, (sheet as { evoIid: string }).evoIid)}>
+              {nameOfIid(fromIid)}{inst ? `（HP ${hpRemaining(inst)}/${hpMax(inst)} · ⚡${inst.energyAttached.length}）` : ''}
+            </button>
+            {#if inst}
+              <button class="mp-sheet-zoom" title="放大檢視" onclick={() => {
+                closeSheet();
+                onOpenZoom(inst.cardId, inst);
+              }}>🔍</button>
+            {/if}
+          </div>
         {/each}
       {:else if sheet.type === 'discard'}
         <div class="mp-sheet-title">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
