@@ -1261,10 +1261,19 @@ export interface DeckSpec {
  * 建立一場新遊戲。
  * 洗牌 → 各抽 7 張 → 若無基礎寶可夢則自動補牌（mulligans）→ 進入 setup 階段（雙方同時）。
  */
+/** v3.75：擲幣先後攻 — 贏家依其 lobby 偏好決定先攻或後攻；本機/AI 模式可用
+ *  options.firstPlayerOverride 直接指定（跳過擲幣動畫）。
+ */
 export function createGame(
   spec1: DeckSpec,
   spec2: DeckSpec,
-  pool: Map<string, Card>
+  pool: Map<string, Card>,
+  options?: {
+    /** 直接指定先手方（AI / 本機雙人模式：玩家偏好已可直接換算為先手 idx） */
+    firstPlayerOverride?: 0 | 1;
+    /** 線上模式雙方偏好；coinWinner 套用自己那邊的偏好決定先攻方 */
+    firstChoicePreferences?: ['random' | 'first' | 'second', 'random' | 'first' | 'second'];
+  }
 ): GameState {
   const p1 = emptyPlayer(spec1.name);
   const p2 = emptyPlayer(spec2.name);
@@ -1294,8 +1303,27 @@ export function createGame(
   const extraForP1 = Math.max(0, m2 - m1);
   const extraForP2 = Math.max(0, m1 - m2);
 
-  // 擲硬幣決定先手
-  const firstPlayerIdx: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
+  // v3.75：先手決定 — override 直給 / 偏好套用 / 純擲幣 三條路徑
+  let firstPlayerIdx: 0 | 1;
+  let coinWinnerIdx: 0 | 1 | null = null;
+  let appliedPref: 'first' | 'second' | null = null;
+  if (options?.firstPlayerOverride !== undefined) {
+    // 本機 / AI：玩家偏好已換算
+    firstPlayerIdx = options.firstPlayerOverride;
+  } else {
+    // 線上 / 預設：擲幣
+    coinWinnerIdx = Math.random() < 0.5 ? 0 : 1;
+    const winnerPref = options?.firstChoicePreferences?.[coinWinnerIdx] ?? 'random';
+    if (winnerPref === 'second') {
+      firstPlayerIdx = (1 - coinWinnerIdx) as 0 | 1;
+      appliedPref = 'second';
+    } else if (winnerPref === 'first') {
+      firstPlayerIdx = coinWinnerIdx;
+      appliedPref = 'first';
+    } else {
+      firstPlayerIdx = coinWinnerIdx;
+    }
+  }
 
   const state: GameState = {
     id: uid(),
@@ -1330,7 +1358,18 @@ export function createGame(
   };
 
   let st = addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
-  st = addLog(st, `🪙 擲硬幣：${state.players[firstPlayerIdx].name} 先手`, null);
+  // v3.75：擲幣 + 偏好揭示（只揭示贏家偏好，輸家保密）
+  if (coinWinnerIdx === null) {
+    // 直接指定先手（AI/本機）— 沒擲幣，但仍要 log 先手方
+    st = addLog(st, `🎯 ${state.players[firstPlayerIdx].name} 先手`, null);
+  } else if (appliedPref === null) {
+    // 擲幣 + 贏家偏好為 random
+    st = addLog(st, `🪙 擲硬幣：${state.players[coinWinnerIdx].name} 勝（偏好隨機）→ ${state.players[firstPlayerIdx].name} 先手`, null);
+  } else {
+    // 擲幣 + 贏家有偏好
+    const prefLabel = appliedPref === 'first' ? '先攻' : '後攻';
+    st = addLog(st, `🪙 擲硬幣：${state.players[coinWinnerIdx].name} 勝 → 選擇「${prefLabel}」→ ${state.players[firstPlayerIdx].name} 先手`, null);
+  }
   // Mulligan log：依 NET 抵銷結果寫
   if (m1 > 0 && m2 > 0 && m1 === m2) {
     st = addLog(st, `雙方皆起手無基礎寶可夢（各重抽 ${m1} 次），重抽懲罰互相抵銷，雙方皆不可多抽牌`, null);

@@ -42,6 +42,9 @@ export interface Seat {
   name: string | null;
   deckEntries: DeckEntry[] | null;
   ready: boolean;
+  /** v3.75：本玩家在贏擲幣時希望先攻 / 後攻 / 隨機（對手看不到自己選什麼）。
+   *  預設 'random' — 等同舊版行為。 */
+  firstChoicePreference?: 'random' | 'first' | 'second';
 }
 
 export interface RoomData {
@@ -89,11 +92,11 @@ export function generateRoomCode(): string {
 
 function emptySeats(): Seat[] {
   const seats: Seat[] = [
-    { role: 'p1', uid: null, name: null, deckEntries: null, ready: false },
-    { role: 'p2', uid: null, name: null, deckEntries: null, ready: false },
+    { role: 'p1', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const },
+    { role: 'p2', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const },
   ];
   for (let i = 0; i < SPECTATOR_SEATS; i++) {
-    seats.push({ role: 'spectator', uid: null, name: null, deckEntries: null, ready: false });
+    seats.push({ role: 'spectator', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const });
   }
   return seats;
 }
@@ -146,7 +149,7 @@ export async function createRoom(
   const code = generateRoomCode();
   const seats = emptySeats();
   // host 預設坐 P1
-  seats[0] = { role: 'p1', uid, name: hostName, deckEntries: null, ready: false };
+  seats[0] = { role: 'p1', uid, name: hostName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
 
   const data: RoomData = {
     roomName: roomName.trim() || `${hostName} 的房間`,
@@ -209,7 +212,7 @@ export async function joinRoom(
 
   const newSeats = seats.map((s, i) => {
     if (i !== targetIdx) return s;
-    return { ...s, uid, name: guestName, deckEntries: null, ready: false };
+    return { ...s, uid, name: guestName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
   });
 
   await updateDoc(ref, {
@@ -244,10 +247,10 @@ export async function takeSeat(
   const newSeats = seats.map((s, i) => {
     if (i === myIdx) {
       // 清空原座位
-      return { ...s, uid: null, name: null, deckEntries: null, ready: false };
+      return { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
     }
     if (i === targetIdx) {
-      return { ...s, uid, name: myName, deckEntries: null, ready: false };
+      return { ...s, uid, name: myName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
     }
     return s;
   });
@@ -303,6 +306,29 @@ export async function setSeatReady(
   await updateDoc(ref, { seats: newSeats, memberUids: computeMemberUids(newSeats), updatedAt: serverTimestamp() });
 }
 
+/** v3.75：設定我的先後攻偏好（贏擲幣時生效；對手看不到） */
+export async function setSeatFirstChoice(
+  roomCode: string,
+  choice: 'random' | 'first' | 'second',
+): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('尚未登入');
+
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('房間不存在');
+  const data = snap.data() as RoomData;
+
+  const myIdx = findMySeatIdx(data.seats, uid);
+  if (myIdx < 0) throw new Error('你不在此房間');
+  if (data.seats[myIdx].role === 'spectator') throw new Error('觀戰位不能設先後攻偏好');
+
+  const newSeats = data.seats.map((s, i) =>
+    i === myIdx ? { ...s, firstChoicePreference: choice } : s
+  );
+  await updateDoc(ref, { seats: newSeats, memberUids: computeMemberUids(newSeats), updatedAt: serverTimestamp() });
+}
+
 /**
  * v2.274：離開房間 — 從 seats 清空自己的座位。
  * v2.275：清空後若整個房間沒人（所有 seats[].uid 都 null），自動刪除房間 doc。
@@ -321,7 +347,7 @@ export async function leaveRoom(roomCode: string): Promise<void> {
   const myIdx = findMySeatIdx(data.seats, uid);
   if (myIdx < 0) return;
   const newSeats = data.seats.map((s, i) =>
-    i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false } : s
+    i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const } : s
   );
   // v2.275：檢查清完我之後是否全空
   const allEmpty = newSeats.every(s => s.uid === null);

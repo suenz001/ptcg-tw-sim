@@ -26,7 +26,7 @@
   import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
-    takeSeat, setSeatDeck, setSeatReady, startGame, leaveRoom,
+    takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom,
     findMySeatIdx, bothPlayersReady, countDeckCards,
     sendMessage, subscribeMessages,
     heartbeat, isSeatStale, HEARTBEAT_STALE_MS, deleteRoom,
@@ -60,6 +60,9 @@
   let p2DeckId = $state('');
   let p1Name = $state('玩家 1');
   let p2Name = $state('AI 對手');
+  // v3.75：本機/AI 模式先後攻偏好（贏擲幣時生效；AI 模式直接生效）
+  let p1FirstPref = $state<'random' | 'first' | 'second'>('random');
+  let p2FirstPref = $state<'random' | 'first' | 'second'>('random');
   /** AI 控制哪個玩家（null = 無 AI） */
   let aiPlayerIndex = $state<0 | 1 | null>(1);
   /** AI 是否正在思考（防止連擊） */
@@ -2361,10 +2364,29 @@
     }
     aiThinking = false;
     if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; }
+    // v3.75：先後攻偏好處理
+    // - AI 模式：人類玩家偏好直接決定先手（不擲幣）
+    //   先攻 → 人類先手；後攻 → AI 先手；隨機 → 擲幣決定
+    // - 本機雙人：擲幣 + 套贏家偏好（與線上同邏輯）
+    let createOpts: Parameters<typeof createGame>[3] = undefined;
+    if (aiPlayerIndex !== null) {
+      const humanIdx = (1 - aiPlayerIndex) as 0 | 1;
+      const humanPref = humanIdx === 0 ? p1FirstPref : p2FirstPref;
+      if (humanPref === 'first') {
+        createOpts = { firstPlayerOverride: humanIdx };
+      } else if (humanPref === 'second') {
+        createOpts = { firstPlayerOverride: (1 - humanIdx) as 0 | 1 };
+      }
+      // random → 不傳 override → 走擲幣 random
+    } else {
+      // 本機雙人：擲幣 + 雙方偏好
+      createOpts = { firstChoicePreferences: [p1FirstPref, p2FirstPref] };
+    }
     game = createGame(
       { name: p1Name || d1.name, entries: d1.entries },
       { name: aiPlayerIndex === 1 ? '🤖 ' + (p2Name || d2.name) : (p2Name || d2.name), entries: d2.entries },
-      pool
+      pool,
+      createOpts,
     );
   }
 
@@ -2545,10 +2567,16 @@
     if (!p1.uid || !p2.uid || !p1.deckEntries || !p2.deckEntries) return;
     if (!p1.ready || !p2.ready) return;
 
+    // v3.75：讀雙方 seat 上的先後攻偏好（贏擲幣的一方套用自己的偏好）
+    const prefs: ['random'|'first'|'second', 'random'|'first'|'second'] = [
+      p1.firstChoicePreference ?? 'random',
+      p2.firstChoicePreference ?? 'random',
+    ];
     const newGame = createGame(
       { name: p1.name ?? 'P1', entries: p1.deckEntries },
       { name: p2.name ?? 'P2', entries: p2.deckEntries },
-      pool
+      pool,
+      { firstChoicePreferences: prefs },
     );
     game = newGame;
     startGame(roomCode, newGame).catch(console.error);
@@ -3071,6 +3099,13 @@
             <div class="deck-count-info bad">⚠ 超過 60 張（目前 {p1DeckCount} 張）</div>
           {/if}
         {/if}
+        <!-- v3.75：先後攻偏好 -->
+        <div class="first-pref-group">
+          <div class="first-pref-label">{aiPlayerIndex === 1 ? '先後攻偏好' : '贏擲幣時'}</div>
+          <label class="first-pref-radio"><input type="radio" value="random" bind:group={p1FirstPref} /><span>🎲 隨機</span></label>
+          <label class="first-pref-radio"><input type="radio" value="first" bind:group={p1FirstPref} /><span>⚡ 先攻</span></label>
+          <label class="first-pref-radio"><input type="radio" value="second" bind:group={p1FirstPref} /><span>🛡️ 後攻</span></label>
+        </div>
       </div>
       <div class="vs-badge">VS</div>
       <div class="setup-card" class:ai-card={aiPlayerIndex===1}>
@@ -3102,6 +3137,15 @@
           {:else}
             <div class="deck-count-info bad">⚠ 超過 60 張（目前 {p2DeckCount} 張）</div>
           {/if}
+        {/if}
+        <!-- v3.75：P2 先後攻偏好（AI 模式不顯示，因為由 P1 的偏好直接決定） -->
+        {#if aiPlayerIndex !== 1}
+          <div class="first-pref-group">
+            <div class="first-pref-label">贏擲幣時</div>
+            <label class="first-pref-radio"><input type="radio" value="random" bind:group={p2FirstPref} /><span>🎲 隨機</span></label>
+            <label class="first-pref-radio"><input type="radio" value="first" bind:group={p2FirstPref} /><span>⚡ 先攻</span></label>
+            <label class="first-pref-radio"><input type="radio" value="second" bind:group={p2FirstPref} /><span>🛡️ 後攻</span></label>
+          </div>
         {/if}
       </div>
     </div>
@@ -3263,6 +3307,13 @@
                         disabled={!hasValidDeck}>
                         {s.ready ? '取消準備' : '準備完成'}
                       </button>
+                      <!-- v3.75：先後攻偏好（只有自己看得到自己的，對手看不到） -->
+                      <div class="first-pref-group lobby">
+                        <div class="first-pref-label">贏擲幣時</div>
+                        <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="random" checked={(s.firstChoicePreference ?? 'random') === 'random'} disabled={s.ready} onchange={() => roomCode && setSeatFirstChoice(roomCode, 'random').catch(console.error)} /><span>🎲 隨機</span></label>
+                        <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="first" checked={s.firstChoicePreference === 'first'} disabled={s.ready} onchange={() => roomCode && setSeatFirstChoice(roomCode, 'first').catch(console.error)} /><span>⚡ 先攻</span></label>
+                        <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="second" checked={s.firstChoicePreference === 'second'} disabled={s.ready} onchange={() => roomCode && setSeatFirstChoice(roomCode, 'second').catch(console.error)} /><span>🛡️ 後攻</span></label>
+                      </div>
                     {:else}
                       <!-- 別人坐：只顯示狀態（v3.38：補張數警告） -->
                       {#if hasValidDeck}
@@ -6296,6 +6347,53 @@
   .sel-check{ position:absolute; top:2px; right:4px; font-size:.9rem; color:#aaff44; font-weight:700; }
   .sel-empty{ color:#666; font-size:.85rem; grid-column:1/-1; text-align:center; padding:1rem; }
   .sel-footer{ display:flex; gap:.75rem; justify-content:flex-end; flex-wrap:wrap; }
+
+  /* v3.75 先後攻偏好 radio group */
+  .first-pref-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background: rgba(255, 200, 100, 0.06);
+    border: 1px solid rgba(255, 200, 100, 0.25);
+    border-radius: 6px;
+  }
+  .first-pref-group .first-pref-label {
+    font-size: 0.75rem;
+    color: #ffd070;
+    font-weight: 600;
+    margin-right: 0.3rem;
+  }
+  .first-pref-group .first-pref-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    color: #eee;
+  }
+  .first-pref-group .first-pref-radio:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .first-pref-group .first-pref-radio input { margin: 0; }
+  .first-pref-group .first-pref-radio:has(input:checked) {
+    background: rgba(255, 200, 100, 0.15);
+    color: #ffeaa0;
+  }
+  .first-pref-group .first-pref-radio:has(input:disabled) {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  /* lobby variant — slightly more compact */
+  .first-pref-group.lobby {
+    margin-top: 0.3rem;
+    padding: 0.3rem 0.45rem;
+  }
+  .first-pref-group.lobby .first-pref-radio { font-size: 0.72rem; padding: 0.15rem 0.3rem; }
 
   /* Mulligan 補抽模態 */
   .mulligan-modal{ max-width:440px; }

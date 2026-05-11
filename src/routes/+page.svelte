@@ -264,6 +264,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.75</span> 🎯 PTCG 官方規則：擲幣贏家選先後攻（lobby 預設偏好）</summary>
+        <ul>
+          <li>實裝 PTCG 官方規則第二項（接續 v3.74 mulligan 揭示）：擲硬幣贏家有權選擇先攻或後攻。</li>
+          <li><b>設計：lobby 預設偏好</b>（比場內 modal 簡單 3 倍）</li>
+          <li>　・每個玩家在 lobby 預先選自己的偏好：🎲 隨機 / ⚡ 先攻 / 🛡️ 後攻（對手看不到自己選什麼）。</li>
+          <li>　・進入對戰時擲幣決定贏家，套用贏家的偏好決定誰先手。</li>
+          <li>　・log 只揭示贏家的偏好（輸家保密）：「🪙 擲硬幣：X 勝 → 選擇『先攻/後攻』→ X 先手」。</li>
+          <li><b>各模式行為</b>：</li>
+          <li>　・<b>線上對戰</b>：lobby seat 內嵌 radio，存到 Firestore seat data；start 時讀雙方偏好。</li>
+          <li>　・<b>AI 模式</b>：玩家偏好<b>直接</b>決定先後攻（不擲幣）— 先攻 → 玩家先手 / 後攻 → AI 先手 / 隨機 → 擲幣。</li>
+          <li>　・<b>本機雙人</b>：兩個 radio 同時顯示（共用畫面），擲幣套贏家偏好。</li>
+          <li><b>實作</b>：</li>
+          <li>　・<code>Seat</code> 加 <code>firstChoicePreference?: 'random'|'first'|'second'</code> + <code>setSeatFirstChoice()</code> setter。</li>
+          <li>　・<code>createGame</code> 加 <code>options.firstPlayerOverride</code> / <code>options.firstChoicePreferences</code>。</li>
+          <li>　・UI 在 AI/本機 setup 卡 + 線上 lobby 內嵌 radio 三件套。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.741</span> 🚨 hotfix：mulligan 揭示資料 Firestore 推送失敗導致連線對戰卡住</summary>
         <ul>
           <li>玩家回報：v3.74 對戰時起手 mulligan 後出現「等待對手重抽」畫面，接著遊戲重新丟硬幣，無限循環。</li>
