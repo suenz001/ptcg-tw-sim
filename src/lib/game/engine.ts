@@ -1368,17 +1368,16 @@ export function createGame(
   };
 
   let st = addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
-  // v3.75：擲幣 + 偏好揭示（只揭示贏家偏好，輸家保密）
+  // v3.824：簡化 log — 直接呈現「贏家 + 結果」，不再揭示「偏好」中間步驟。
+  //   - 直接指定（AI / 本機）：「🎯 XX 先手」（沒擲幣，本來就簡短）
+  //   - 擲幣：無論贏家偏好是 random 還是 first/second，最終 firstPlayerIdx 都已決定，
+  //     直接用「贏家 = firstPlayerIdx ? 選擇先攻 : 選擇後攻」呈現即可。
+  //     random 場景由系統隨機決定 firstPlayerIdx，呈現上等同贏家「選擇」對應結果。
   if (coinWinnerIdx === null) {
-    // 直接指定先手（AI/本機）— 沒擲幣，但仍要 log 先手方
     st = addLog(st, `🎯 ${state.players[firstPlayerIdx].name} 先手`, null);
-  } else if (appliedPref === null) {
-    // 擲幣 + 贏家偏好為 random
-    st = addLog(st, `🪙 擲硬幣：${state.players[coinWinnerIdx].name} 勝（偏好隨機）→ ${state.players[firstPlayerIdx].name} 先手`, null);
   } else {
-    // 擲幣 + 贏家有偏好
-    const prefLabel = appliedPref === 'first' ? '先攻' : '後攻';
-    st = addLog(st, `🪙 擲硬幣：${state.players[coinWinnerIdx].name} 勝 → 選擇「${prefLabel}」→ ${state.players[firstPlayerIdx].name} 先手`, null);
+    const choseFirst = coinWinnerIdx === firstPlayerIdx;
+    st = addLog(st, `🪙 擲硬幣：${state.players[coinWinnerIdx].name} 獲勝，選擇${choseFirst ? '先攻' : '後攻'}`, null);
   }
   // Mulligan log：依 NET 抵銷結果寫
   if (m1 > 0 && m2 > 0 && m1 === m2) {

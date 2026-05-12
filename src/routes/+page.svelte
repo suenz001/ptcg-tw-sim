@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.824</span> ✂️ UX：簡化擲幣 log 訊息（去掉冗餘的「偏好→選擇→先手」三段式）</summary>
+        <ul>
+          <li>玩家建議：擲幣動畫前出現「玩家1偏好先攻→選擇先攻→玩家1先手」這種三段式敘述太冗長，希望直接呈現「玩家1獲勝，選擇先攻/後攻」即可。</li>
+          <li><b>修法</b>：把 createGame 內擲幣 log 從三條分流（直接指定 / random / 有偏好）的冗長訊息統一成兩格式：
+            <ul>
+              <li>直接指定（AI / 本機模式無擲幣）：「🎯 XX 先手」</li>
+              <li>擲幣（無論偏好為 random 還是 first/second）：「🪙 擲硬幣：XX 獲勝，選擇先攻」或「XX 獲勝，選擇後攻」</li>
+            </ul>
+          </li>
+          <li><b>random 偏好處理</b>：玩家選隨機時，系統幫她隨機決定 firstPlayerIdx，log 自然呈現「選擇先攻」或「選擇後攻」（贏家視角的最終結果），不再特別寫出「（偏好隨機）」這種中間步驟。</li>
+          <li>邏輯：<code>winnerIdx === firstPlayerIdx ? '選擇先攻' : '選擇後攻'</code>。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.823</span> 🪙 雙 bug：撤退能量丟過量 + 神奇糖果可選 1 階做進化目標</summary>
         <ul>
           <li><b>Bug 1：撤退能量丟過量</b>。玩家身上有 2 顆不同屬性能量、撤退費 1，picker 允許勾選兩張全丟 → 違規（PTCG 規則：丟剛好等於撤退費的能量單位）。
