@@ -1717,8 +1717,11 @@
         });
       }
       case 'bench-choose': {
+        // v3.813: 加 includeActive 支援（壯偉碩木 disambiguator 需可選 active）
         const validIids4 = pendingSelection.params?.validIids as string[] | undefined;
-        return validIids4 ? src.bench.filter(c => validIids4.includes(c.iid)) : src.bench;
+        const includeActiveBC = pendingSelection.params?.includeActive === true;
+        const baseBC = includeActiveBC && src.active ? [src.active, ...src.bench] : src.bench;
+        return validIids4 ? baseBC.filter(c => validIids4.includes(c.iid)) : baseBC;
       }
       case 'opp-poke-choose': {
         const items: CardInstance[] = [...src.bench];

@@ -264,6 +264,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.813</span> 🌳 hotfix：壯偉碩木場上多隻同名基礎可以選擇要進化哪一隻</summary>
+        <ul>
+          <li>玩家回報：場上有 2 隻同名【基礎】寶可夢（例如 2 隻呱呱泡蛙）想用壯偉碩木進化時，目前實作直接從牌庫翻卡進化第一隻，沒給玩家選擇要進化哪一隻的機會。</li>
+          <li><b>卡面原文</b>：「可從自己的牌庫選擇1張從自己的場上的1隻【基礎】寶可夢進化而來的【1階進化】寶可夢卡，放置於那隻寶可夢身上完成進化」— 玩家必須能選哪一隻。</li>
+          <li><b>根因</b>：<code>sturdy-might-tree-step1</code> resolver 用 <code>fieldPokemon.find()</code> 取第一個 name match 的 base → 多隻同名時其餘隻永遠被忽略。</li>
+          <li><b>修法</b>：step1 改成找場上所有 match base：
+            <ul>
+              <li>0 隻：原訊息「場上無對應的基礎寶可夢可進化」。</li>
+              <li>1 隻：直接進化（UX 不變，常見情境 0 額外點擊）。</li>
+              <li>≥2 隻：開新 disambiguator picker（<code>sturdy-might-tree-pick-base</code>），玩家在場上點選要進化的那一隻基礎，picker 限定到 match 的 iids，並用 titleOverride 顯示「請選擇要使用 XX 進化的基礎寶可夢」。</li>
+            </ul>
+          </li>
+          <li><b>順帶修法</b>：<code>bench-choose</code> picker 加 <code>params.includeActive</code> 支援（之前只有 opp-bench-choose / damage-distribute 有），讓 disambiguator 也能選戰鬥場上的基礎寶可夢，不限定備戰區。</li>
+          <li>不影響 step2（Stage2）流程，因 step2 已用 <code>stage1Iid</code> 鎖定剛進化好的那一隻，本就無歧義。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.812</span> 🔒 hotfix：bench→active 純位置交換不該清掉「本回合打出」標記（解進化禁令繞過）</summary>
         <ul>
           <li>玩家回報：呱呱泡蛙從手牌放到備戰區 → 衝浪海灘把它換到戰鬥場 → 居然可以進化（違規）。</li>

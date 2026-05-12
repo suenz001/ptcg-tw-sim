@@ -24,6 +24,7 @@ import {
 } from '../_shared';
 import { getBenchLimit, isBasicPokemonCard } from '../../engine';
 import type { CardInstance, PlayerState } from '../../types';
+import type { Card } from '$lib/cards/types';
 
 // ── 釀光市（Stadium / I）─ 雙方每回合 1 次：棄牌搜 ≤2 基本【雷】能量加手
 // 注意：Stadium 由 engine USE_STADIUM 處理。這裡只放 resolver。
@@ -860,35 +861,17 @@ regR('melody-flute-place', (st, idx, iids, _params, pool) => {
 //
 // gate 已在 engine 處理（先攻第 1 回合不能進化、justPlaced/evolvedThisTurn 排除）
 // 兩段都 minCount:0（玩家可中途放棄）
-regR('sturdy-might-tree-step1', (st, idx, iids, _params, pool) => {
+// v3.813: 把 step1 進化邏輯抽出 helper（disambiguator 路徑共用）
+function __sturdyDoEvolveStep1(
+  st: import('../../types').GameState,
+  idx: 0 | 1,
+  pool: Map<string, Card>,
+  base: CardInstance,
+  evoInst: CardInstance,
+  evoCard: Card,
+): import('../../types').GameState {
   const p = st.players[idx];
-  const pickedIid = iids[0];
-  if (!pickedIid) {
-    // 沒選 → 重洗 + 結束
-    return updatePlayer(addLog(st, '壯偉碩木：未選擇 → 重洗牌庫', idx),
-      idx, x => ({ ...x, deck: shuffle(x.deck) }));
-  }
-  const evoInst = p.deck.find(c => c.iid === pickedIid);
-  if (!evoInst) return st;
-  const evoCard = pool.get(evoInst.cardId);
-  if (!evoCard || !evoCard.evolvesFrom) {
-    return addLog(st, '壯偉碩木：選擇無效（非進化卡）', idx);
-  }
-  // 找場上匹配 base — 取第一個非 justPlaced/evolvedThisTurn 的 match
-  const fieldPokemon: CardInstance[] = [
-    ...(p.active ? [p.active] : []),
-    ...p.bench,
-  ];
-  const base = fieldPokemon.find(fp => {
-    if (fp.justPlaced || fp.evolvedThisTurn) return false;
-    const fpCard = pool.get(fp.cardId);
-    return fpCard && sameEvoName(evoCard.evolvesFrom, fpCard.name);
-  });
-  if (!base) {
-    return addLog(st, '壯偉碩木：場上無對應的基礎寶可夢可進化', idx);
-  }
   const baseCard = pool.get(base.cardId)!;
-  // 進化（仿 engine EVOLVE 流程）
   const isActive = p.active?.iid === base.iid;
   const prevStack = base.evolvedFromStack ?? [];
   const baseBare: CardInstance = { ...base, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined };
@@ -905,15 +888,13 @@ regR('sturdy-might-tree-step1', (st, idx, iids, _params, pool) => {
   };
   st = updatePlayer(st, idx, x => ({
     ...x,
-    deck: x.deck.filter(c => c.iid !== pickedIid),  // 暫不洗牌庫，等 step2 結束
+    deck: x.deck.filter(c => c.iid !== evoInst.iid),
     active: isActive ? evolved : x.active,
     bench: isActive ? x.bench : x.bench.map(c => c.iid === base.iid ? evolved : c),
   }));
   st = addLog(st, `壯偉碩木：${baseCard.name} 進化為 ${evoCard.name}`, idx);
-  // 開 step2 — 找 Stage2 evolves from evoCard.name
   const hasStage2 = st.players[idx].deck.length > 0;
   if (!hasStage2) {
-    // 牌庫沒卡 → 直接洗牌庫結束
     return updatePlayer(addLog(st, '壯偉碩木：牌庫為空', idx),
       idx, x => ({ ...x, deck: shuffle(x.deck) }));
   }
@@ -922,10 +903,82 @@ regR('sturdy-might-tree-step1', (st, idx, iids, _params, pool) => {
     minCount: 0, maxCount: 1, filter: 'SturdyMightTree:Stage2',
     effectKey: 'sturdy-might-tree-step2',
     params: {
-      stage1Iid: evolved.iid,         // 場上剛進化好的 iid
-      stage1Name: evoCard.name,       // 用於 filter / log
+      stage1Iid: evolved.iid,
+      stage1Name: evoCard.name,
     },
   });
+}
+
+regR('sturdy-might-tree-step1', (st, idx, iids, _params, pool) => {
+  const p = st.players[idx];
+  const pickedIid = iids[0];
+  if (!pickedIid) {
+    return updatePlayer(addLog(st, '壯偉碩木：未選擇 → 重洗牌庫', idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const evoInst = p.deck.find(c => c.iid === pickedIid);
+  if (!evoInst) return st;
+  const evoCard = pool.get(evoInst.cardId);
+  if (!evoCard || !evoCard.evolvesFrom) {
+    return addLog(st, '壯偉碩木：選擇無效（非進化卡）', idx);
+  }
+  // v3.813: 找場上所有 match base；0/1 沿用原流程，≥2 隻開 disambiguator picker
+  const fieldPokemon: CardInstance[] = [
+    ...(p.active ? [p.active] : []),
+    ...p.bench,
+  ];
+  const evolvesFromName = evoCard.evolvesFrom;
+  const matchedBases = fieldPokemon.filter(fp => {
+    if (fp.justPlaced || fp.evolvedThisTurn) return false;
+    const fpCard = pool.get(fp.cardId);
+    return !!(fpCard && sameEvoName(evolvesFromName, fpCard.name));
+  });
+  if (matchedBases.length === 0) {
+    return addLog(st, '壯偉碩木：場上無對應的基礎寶可夢可進化', idx);
+  }
+  if (matchedBases.length >= 2) {
+    return withPending(st, {
+      type: 'bench-choose',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'sturdy-might-tree-pick-base',
+      params: {
+        includeActive: true,
+        validIids: matchedBases.map(b => b.iid),
+        evoIid: pickedIid,
+        titleOverride: `壯偉碩木：選擇要使用 ${evoCard.name} 進化的基礎寶可夢`,
+      },
+    });
+  }
+  return __sturdyDoEvolveStep1(st, idx, pool, matchedBases[0], evoInst, evoCard);
+});
+
+// v3.813: 新 disambiguator resolver
+regR('sturdy-might-tree-pick-base', (st, idx, iids, params, pool) => {
+  const baseIid = iids[0];
+  const evoIid = params?.evoIid as string | undefined;
+  if (!baseIid || !evoIid) {
+    return updatePlayer(addLog(st, '壯偉碩木：步驟異常 → 重洗牌庫', idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const p = st.players[idx];
+  const base = p.active?.iid === baseIid ? p.active
+             : (p.bench.find(c => c.iid === baseIid) ?? null);
+  if (!base) {
+    return updatePlayer(addLog(st, '壯偉碩木：找不到所選的基礎 → 重洗牌庫', idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const evoInst = p.deck.find(c => c.iid === evoIid);
+  if (!evoInst) {
+    return updatePlayer(addLog(st, '壯偉碩木：找不到所選的進化卡 → 重洗牌庫', idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const evoCard = pool.get(evoInst.cardId);
+  if (!evoCard || !evoCard.evolvesFrom) {
+    return updatePlayer(addLog(st, '壯偉碩木：進化卡資料異常 → 重洗牌庫', idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  return __sturdyDoEvolveStep1(st, idx, pool, base, evoInst, evoCard);
 });
 
 regR('sturdy-might-tree-step2', (st, idx, iids, params, pool) => {
