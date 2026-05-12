@@ -866,7 +866,28 @@
     return arr;
   });
   function openZoomByName(cardName: string) {
-    // 找第一個同名 Card；多版本同名只取第一個
+    // v3.890：優先用場上實際 inst 對應的 cardId（同名多版本問題 — 例如 謝米 70HP/80HP 變體）
+    //   原版只 `for (const c of pool.values())` 抓第一個同名 → 永遠抓到 set 加載順序最早的版本。
+    //   謝米：M-P-J/M3/MC/SVM/SV5K 都是 70HP 無 ability，M2a 14672 / SV9a 12664/12724 才是 80HP 花之帷幔。
+    //   先掃雙方 active/bench/hand/discard 找同名 inst，用該 inst.cardId（精確版本 + 場上狀態）。
+    if (game && poolReady) {
+      for (const p of game.players) {
+        const allInsts: CardInstance[] = [
+          ...(p.active ? [p.active] : []),
+          ...p.bench,
+          ...p.hand,
+          ...p.discard,
+        ];
+        for (const inst of allInsts) {
+          const c = pool.get(inst.cardId);
+          if (c?.name === cardName) {
+            openZoom(c.id, inst);
+            return;
+          }
+        }
+      }
+    }
+    // fallback：場上找不到（log 提到的卡可能在牌庫或已離場）→ 抓第一個同名 Card
     for (const c of pool.values()) {
       if (c?.name === cardName) { openZoom(c.id); return; }
     }

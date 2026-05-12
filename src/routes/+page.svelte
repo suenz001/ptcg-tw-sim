@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.890</span> 🔗 log 卡名點擊優先用「場上實際 inst」對應版本（解決同名多版本誤抓）</summary>
+        <ul>
+          <li>玩家回報：對戰 log 點「謝米」連結開到 70HP 版本（無花之帷幔），但場上實際是 80HP 14672 版本。</li>
+          <li><b>根因</b>：<code>openZoomByName</code> 用 <code>for (const c of pool.values())</code> 抓「第一個同名 Card」，pool iteration order ≈ set 加載順序。謝米 70HP 版本（M-P-J / M3 / MC / SVM / SV5K）都比 80HP 版本（M2a 14672 / SV9a 12664/12724）早加載，所以永遠抓到 70HP 版本。</li>
+          <li><b>修法</b>：<code>openZoomByName</code> 先掃雙方 active / bench / hand / discard 找同名 inst，用該 inst.cardId（精確版本 + 帶 inst 顯示場上狀態）。場上找不到才 fallback 全 pool 第一個同名。</li>
+          <li><b>受惠範圍</b>：所有同名多版本卡片 — 謝米 / 妙蛙種子 / 各種基本能量 / 重印卡（赤松 / 神奇糖果 / 莉莉艾等）。Log 點擊現在會匹配場上實際版本而非 set 順序最早版本。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.889</span> 📝 糾正 v3.888 changelog 列「抵抗之幕」腦補錯誤</summary>
         <ul>
           <li>玩家指出 v3.888 changelog 寫「抵抗之幕」會擋精神尖槍是錯的。</li>
