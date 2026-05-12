@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.852</span> 🌸 hotfix：永生綻放真正「任意方式」分配（+/- counter 取代「全部一隻」）</summary>
+        <ul>
+          <li>玩家指出：v3.85 修了 picker 開不開的 bug，但分配機制仍違反卡面 — picker 只允許選 1 隻備戰寶可夢，能量全堆給她。卡面要求「以<b>任意方式</b>附於備戰寶可夢身上」，應允許 N 張能量分配到 M 隻備戰。</li>
+          <li><b>修法</b>：
+            <ul>
+              <li>step2 resolver 改用 <code>energy-distribute</code> picker（v2.87 既有的 +/- counter UI），minCount = maxCount = N（必須全分配）。</li>
+              <li>新 commit resolver <code>j-2353-florges-distribute</code>：依玩家 +/- 配置從 deck 抽出能量 → 分配到各 bench → 重洗牌庫。</li>
+              <li>卡面明文「附於『備戰』寶可夢」— validIids 只列 bench（排除 active）。</li>
+              <li>0 隻備戰：能量留 deck + 重洗（fail-safe）。</li>
+            </ul>
+          </li>
+          <li><b>舊 simplify 註解全清除</b>：v2.353 行 488-489 註解承認違反 Rule 7 簡化實裝。本次徹底重寫符合卡面語意。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.851</span> 🌷 hotfix：昂主花葉蒂 — 同回合先打稜鏡塔再打昂主花葉蒂被擋下</summary>
         <ul>
           <li>玩家回報：v3.85 修了 prismTower flag 後，同回合先打稜鏡塔、再打昂主花葉蒂仍打不出來。</li>

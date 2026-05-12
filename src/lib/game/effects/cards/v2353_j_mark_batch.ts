@@ -522,17 +522,20 @@ regPost('超級花葉蒂ex|永生綻放', (state, aIdx, pool) => {
 });
 
 /**
- * deck-search 選完後：
- * - 能量仍在牌庫中（未移除）
- * - 若備戰只有 1 隻 → 一次完成（移除+重洗+附加）
- * - 若備戰多隻 → bench-choose 選目標（能量暫留牌庫，待 commit 步驟處理）
+ * v3.852: 永生綻放真正「以任意方式」分配實裝 — 替代舊「全部附到同一隻」簡化版。
+ *
+ * 流程：
+ *   deck-search 選完 → 此 resolver 開 energy-distribute picker（+/- counter UI）
+ *   → 玩家用 +/- 把 N 張能量分配到任意數量的備戰寶可夢
+ *   → j-2353-florges-distribute commit：從 deck 移除能量 + 分配 + 重洗
+ *
+ * 卡面：「以任意方式附於『備戰』寶可夢身上」— 只能附備戰，不附戰鬥場（validIids 排除 active）。
  */
 regR('j-2353-florges-bench-energy', (state, aIdx, iids, params, _pool) => {
   const label = (params?.label as string) ?? '永生綻放';
   const p = state.players[aIdx];
 
   if (iids.length === 0) {
-    // 未選擇任何能量：僅重洗牌庫
     return updatePlayer(
       addLog(state, `${label}：未選擇，重洗牌庫`, aIdx),
       aIdx,
@@ -540,78 +543,91 @@ regR('j-2353-florges-bench-energy', (state, aIdx, iids, params, _pool) => {
     );
   }
 
-  // 此時能量仍在 p.deck，透過 iids 找到
-  const pickedSet = new Set(iids);
-  const picked = p.deck.filter(c => pickedSet.has(c.iid));
-
-  if (p.bench.length === 1) {
-    // 自動附加到唯一的備戰寶可夢
-    const target = p.bench[0];
-    const tname = _pool.get(target.cardId)?.name ?? '?';
-    let s = updatePlayer(state, aIdx, pl => ({
-      ...pl,
-      deck: shuffle(pl.deck.filter(c => !pickedSet.has(c.iid))),
-      bench: pl.bench.map(b =>
-        b.iid === target.iid
-          ? { ...b, energyAttached: [...b.energyAttached, ...picked] }
-          : b,
-      ),
-    }));
-    return addLog(
-      s,
-      `${label}：將 ${picked.length} 張基本【超】能量附加到 ${tname}（重洗牌庫）`,
+  // 卡面：只附「備戰」寶可夢（不含戰鬥場）
+  const validIids = p.bench.map(b => b.iid);
+  if (validIids.length === 0) {
+    // 沒備戰：能量無處可附 → 仍重洗
+    return updatePlayer(
+      addLog(state, `${label}：備戰區沒有寶可夢可附能量，重洗牌庫`, aIdx),
       aIdx,
+      pl => ({ ...pl, deck: shuffle(pl.deck) }),
     );
   }
 
-  // 多隻備戰：進入 bench-choose（能量保留在牌庫，iids 傳遞到下一步）
-  const s = addLog(
-    state,
-    `${label}：選擇要附加 ${picked.length} 張基本【超】能量的備戰寶可夢`,
-    aIdx,
+  // 開 energy-distribute picker — 玩家用 +/- 分配
+  return withPending(
+    addLog(state, `${label}：選擇將 ${iids.length} 張基本【超】能量以任意方式分配到備戰寶可夢`, aIdx),
+    {
+      type: 'energy-distribute',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: iids.length, maxCount: iids.length,
+      effectKey: 'j-2353-florges-distribute',
+      params: {
+        label,
+        energyIids: iids,            // 能量 iid（仍在 deck，由 commit resolver 移除）
+        validIids,                   // 備戰候選 iid
+        totalCount: iids.length,
+        placedCount: 0,
+        energyTypeName: '超',
+      },
+    },
   );
-  return withPending(s, {
-    type: 'bench-choose',
-    actorIdx: aIdx,
-    sourcePlayerIdx: aIdx,
-    minCount: 1,
-    maxCount: 1,
-    effectKey: 'j-2353-florges-bench-energy-commit',
-    params: { energyIids: iids, label },
-  });
 });
 
 /**
- * bench-choose 選完目標後：
- * - 從牌庫移除選中能量（仍在牌庫），重洗，附加到選定備戰寶可夢
+ * v3.852 commit resolver：依玩家分配把能量從 deck 搬到各 bench 寶可夢身上。
+ *   selectedIids: 長度 = totalCount，每個元素 = 該張能量的目標寶可夢 iid。
+ *   （UI 的 +/- counter 操作後展開為 flat 陣列。）
  */
-regR('j-2353-florges-bench-energy-commit', (state, aIdx, iids, params, pool) => {
+regR('j-2353-florges-distribute', (state, aIdx, selectedIids, params, pool) => {
   const label = (params?.label as string) ?? '永生綻放';
-  const energyIids = (params?.energyIids as string[]) ?? [];
-  const targetIid = iids[0];
+  const energyIids = ((params?.energyIids as string[] | undefined) ?? []).slice();
 
-  if (!targetIid || energyIids.length === 0) return state;
+  if (selectedIids.length === 0 || energyIids.length === 0) {
+    return updatePlayer(
+      addLog(state, `${label}：未分配，重洗牌庫`, aIdx),
+      aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }),
+    );
+  }
 
-  const p = state.players[aIdx];
-  const pickedSet = new Set(energyIids);
-  // 能量此時仍在 p.deck（bench-choose 中間步驟未動牌庫）
-  const picked = p.deck.filter(c => pickedSet.has(c.iid));
-  const target = p.bench.find(b => b.iid === targetIid);
-  if (!target) return state;
+  const useCount = Math.min(selectedIids.length, energyIids.length);
+  const tally = new Map<string, number>();
+  let s: GameState = state;
 
-  const tname = cardName(pool, target);
-  let s = updatePlayer(state, aIdx, pl => ({
-    ...pl,
-    deck: shuffle(pl.deck.filter(c => !pickedSet.has(c.iid))),
-    bench: pl.bench.map(b =>
-      b.iid === targetIid
-        ? { ...b, energyAttached: [...b.energyAttached, ...picked] }
-        : b,
-    ),
-  }));
+  for (let i = 0; i < useCount; i++) {
+    const targetIid = selectedIids[i];
+    const energyIid = energyIids[i];
+    const p = s.players[aIdx];
+    // 能量此時仍在 deck（commit 階段才搬）
+    const energyInst = p.deck.find(c => c.iid === energyIid);
+    if (!energyInst) continue;
+    s = updatePlayer(s, aIdx, pl => {
+      const restDeck = pl.deck.filter(c => c.iid !== energyIid);
+      const attachToBench = (b: CardInstance) => b.iid === targetIid
+        ? { ...b, energyAttached: [...b.energyAttached, energyInst] }
+        : b;
+      return {
+        ...pl,
+        deck: restDeck,
+        bench: pl.bench.map(attachToBench),
+      };
+    });
+    tally.set(targetIid, (tally.get(targetIid) ?? 0) + 1);
+  }
+
+  // 全部分配完成 → 重洗牌庫（卡面明文要求）
+  s = updatePlayer(s, aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+
+  const parts: string[] = [];
+  for (const [iid, n] of tally) {
+    const player = s.players[aIdx];
+    const tInst = player.bench.find(b => b.iid === iid);
+    const name = tInst ? (pool.get(tInst.cardId)?.name ?? '?') : '?';
+    parts.push(`${name}×${n}`);
+  }
   return addLog(
     s,
-    `${label}：將 ${picked.length} 張基本【超】能量附加到 ${tname}（重洗牌庫）`,
+    `${label}：${parts.join('、')} 共 ${useCount} 張基本【超】能量（重洗牌庫）`,
     aIdx,
   );
 });
