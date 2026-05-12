@@ -1794,6 +1794,12 @@ function handlePlaying(
     const inst = attacker.hand[hIdx];
     const card = pool.get(inst.cardId);
     if (!isFossilItemCard(card)) return state;
+    // v3.821：化石卡是 Item 屬性 — 對手戰鬥場有海之詛咒時，化石也不可使出
+    //   卡面：「對手無法從手牌使出『物品』卡」— 化石 Item 屬於物品卡
+    if (isOppItemPlayBlocked(state, aIdx, pool)) {
+      return addLog(state,
+        `${attacker.name} 因對手「海之詛咒」效果，無法從手牌使出化石（物品卡）`, aIdx);
+    }
 
     const placed: CardInstance = { ...inst, justPlaced: true, fossilOnField: true, playedFromHand: true };
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
@@ -6036,6 +6042,9 @@ export function getEvolvableTargets(
       //        重新檢查 baseBlocked 時漏掉這個例外，導致勒克貓（evolvedThisTurn=true）外層
       //        通過、內層卻把倫琴貓 evo 全濾掉，UI 不顯示進化選項。
       if (baseBlocked && !hasPushEvolveAbility && !hasShellinkBypassUI && !hasFightingHowlBypass && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
+      // v3.821：對手戰鬥場有瞪眼效用 → 有特性且非「火箭隊的」的進化卡不可放置
+      //   與 engine EVOLVE handler line 1869 同條件 — 不擋 filter 會導致 AI 死迴圈
+      if (isOppEvilEyeBlocking(state, state.activePlayerIndex, ec, pool)) return false;
       return true;
     });
     if (validEvos.length > 0) {
@@ -6293,7 +6302,14 @@ export function getPlayableBasics(state: GameState, pool: Map<string, Card>): st
   // v2.136 零之大空洞：場上有太晶寶可夢時上限可達 8
   if (player.bench.length >= getBenchLimit(state, state.activePlayerIndex, pool)) return [];
   return player.hand
-    .filter(inst => isBasicPokemonCard(pool.get(inst.cardId)))
+    .filter(inst => {
+      const c = pool.get(inst.cardId);
+      if (!isBasicPokemonCard(c)) return false;
+      // v3.821：對手戰鬥場有瞪眼效用 → 有特性且非「火箭隊的」的基礎不可放置
+      //   與 engine PLAY_BASIC handler line 1751 同條件 — 不擋 filter 會導致 AI 死迴圈
+      if (isOppEvilEyeBlocking(state, state.activePlayerIndex, c, pool)) return false;
+      return true;
+    })
     .map(inst => inst.iid);
 }
 
@@ -6306,6 +6322,9 @@ export function getPlayableFossils(state: GameState, pool: Map<string, Card>): s
   if (state.pendingSelection) return [];
   const player = state.players[state.activePlayerIndex];
   if (player.bench.length >= getBenchLimit(state, state.activePlayerIndex, pool)) return [];
+  // v3.821：化石卡是 Item — 海之詛咒（胖嘟嘟ex）鎖物品時 UI/AI filter 也要擋
+  //   （與 PLAY_FOSSIL handler 同條件，避免 AI 一直選化石被退回 → 死迴圈）
+  if (isOppItemPlayBlocked(state, state.activePlayerIndex, pool)) return [];
   return player.hand
     .filter(inst => isFossilItemCard(pool.get(inst.cardId)))
     .map(inst => inst.iid);

@@ -264,6 +264,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.821</span> 🛡️ audit：對手場特性 AI/UI filter 三層一致性修補（4 處漏網）</summary>
+        <ul>
+          <li>玩家提出：「含羞苞鎖對方物品時 AI 不會死迴圈，為何海之詛咒會死？是不是邏輯不一致？黃色框框不該亮、AI 也該遵守同樣規則。」— 觀察完全正確。</li>
+          <li><b>背景</b>：可打出 trainer / 基礎 / 進化 / 化石 的「filter 清單」是 AI 決策、UI 黃框、拖曳 gate 三層共用的。只要 filter 漏一條 gate，三層就一起錯（UI 亮黃框 → 玩家拖也能拖 → AI 一直挑被退回的卡 → 死迴圈）。v3.82 已修海之詛咒/爆大身軀，本版補完剩餘 4 處漏網：</li>
+          <li><b>1. 化石放置 + 海之詛咒</b>：化石卡是 Item 屬性，但走 <code>PLAY_FOSSIL</code> 不走 <code>PLAY_TRAINER</code>，整條路徑沒有 gate。
+            <ul>
+              <li>engine <code>PLAY_FOSSIL</code> handler 加 <code>isOppItemPlayBlocked</code> gate。</li>
+              <li><code>getPlayableFossils()</code> filter 同步加。</li>
+            </ul>
+          </li>
+          <li><b>2. 基礎放置 + 瞪眼效用</b>：火箭隊的阿柏怪鎖對方放置有特性的寶可夢。engine <code>PLAY_BASIC</code> handler line 1751 有擋，但 <code>getPlayableBasics()</code> filter 沒擋 → AI 一直選有特性的基礎被退 → 死迴圈。
+            <ul>
+              <li><code>getPlayableBasics()</code> 對每張 candidate 逐張檢查 <code>isOppEvilEyeBlocking</code>。</li>
+            </ul>
+          </li>
+          <li><b>3. 進化 + 瞪眼效用</b>：同樣機制 — engine <code>EVOLVE</code> handler line 1869 有擋，但 <code>getEvolvableTargets()</code> filter 沒擋。
+            <ul>
+              <li><code>getEvolvableTargets()</code> 對每張 evo candidate 加 <code>isOppEvilEyeBlocking</code> filter。</li>
+            </ul>
+          </li>
+          <li><b>4. 一致性審視</b>：完整掃過玩家提的 13 個（陳舊的根狀化石 / 陳舊的顎之化石 / 廣域堡壘 / 初始化 / 劇毒支配 / 暗夜羽擊 / 威嚇之牙 / 漩渦言靈 / 自動治癒 / 揚沙 / 瞪眼效用 / 威迫目光 / 提升進化），其餘 9 個都已正確實裝（被動修飾 / engine handler gate 都齊全），列為「audit-pass」。</li>
+          <li><b>邏輯統一性原則</b>：對手場特性鎖 = filter + engine handler 兩層都要寫，缺 filter → AI 死迴圈。本次補完所有同 pattern 的漏網點。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.82</span> 🌊 雙 bug：海之詛咒 AI 死迴圈 + 大地風暴能量沒算</summary>
         <ul>
           <li><b>Bug 1（AI 死迴圈）</b>：和 AI 對戰時我方下了胖嘟嘟ex（特性「海之詛咒」），AI 一直選擇使用物品，系統一直顯示「無法使出」，遊戲卡死。</li>
