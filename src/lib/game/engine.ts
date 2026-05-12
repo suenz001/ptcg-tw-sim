@@ -1167,9 +1167,16 @@ function addLog(
   message: string,
   playerIndex: 0 | 1 | null = null
 ): GameState {
+  // v3.891：自動從 actor active 取 iid 當 sourceIid（log 卡名點擊精準追溯用）
+  const sourceIid = playerIndex !== null ? state.players[playerIndex]?.active?.iid : undefined;
   return {
     ...state,
-    log: [...state.log, { turn: state.turn, playerIndex, message }]
+    log: [...state.log, {
+      turn: state.turn,
+      playerIndex,
+      message,
+      ...(sourceIid && { sourceIid }),
+    }]
   };
 }
 

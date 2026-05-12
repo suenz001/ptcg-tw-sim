@@ -744,6 +744,12 @@ export interface LogEntry {
    * 若未設則所有人都看 message。null/undefined 表示沒有 private 版本。
    */
   privateMessage?: string;
+  /**
+   * v3.891：產生此 log 的 source inst iid（通常 = state.players[playerIndex].active.iid）。
+   * 點擊 log 卡名連結時，UI 端先用此 iid 對應 inst 找 cardId，
+   * 解決同名多版本卡（謝米 70HP/80HP 等）誤匹配問題。
+   */
+  sourceIid?: string;
 }
 
 // ── 動作 ────────────────────────────────────────────────────────────────────

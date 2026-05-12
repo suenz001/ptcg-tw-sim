@@ -865,13 +865,31 @@
     arr.sort((a, b) => b.length - a.length);
     return arr;
   });
-  function openZoomByName(cardName: string) {
-    // v3.890：優先用場上實際 inst 對應的 cardId（同名多版本問題 — 例如 謝米 70HP/80HP 變體）
-    //   原版只 `for (const c of pool.values())` 抓第一個同名 → 永遠抓到 set 加載順序最早的版本。
-    //   謝米：M-P-J/M3/MC/SVM/SV5K 都是 70HP 無 ability，M2a 14672 / SV9a 12664/12724 才是 80HP 花之帷幔。
-    //   先掃雙方 active/bench/hand/discard 找同名 inst，用該 inst.cardId（精確版本 + 場上狀態）。
+  function openZoomByName(cardName: string, hintSourceIid?: string, hintPlayerIdx?: 0 | 1 | null) {
+    // v3.891：log 卡名點擊精準追溯 — 三層 fallback
+    //   1. hintSourceIid 對應 inst（如果名字符合）— 例如「代歐奇希 使用精神尖槍」點代歐奇希
+    //   2. hintPlayerIdx 玩家場上 active/bench/hand/discard 找同名（actor side）
+    //   3. 對手玩家場上找同名（target side — 例如「謝米 受到 120」點謝米）
+    //   4. fallback：全 pool 第一個同名
     if (game && poolReady) {
-      for (const p of game.players) {
+      // 1. 直接 hint inst
+      if (hintSourceIid) {
+        for (const p of game.players) {
+          const find = (lst: CardInstance[]) => lst.find(i => i.iid === hintSourceIid);
+          const inst = find(p.active ? [p.active, ...p.bench, ...p.hand, ...p.discard] : [...p.bench, ...p.hand, ...p.discard]);
+          if (inst) {
+            const c = pool.get(inst.cardId);
+            if (c?.name === cardName) {
+              openZoom(c.id, inst);
+              return;
+            }
+          }
+        }
+      }
+      // 2/3. 按 hintPlayerIdx 順序掃描（actor 先 → opp 後）
+      const ordering: (0 | 1)[] = hintPlayerIdx === 0 ? [0, 1] : hintPlayerIdx === 1 ? [1, 0] : [0, 1];
+      for (const pIdx of ordering) {
+        const p = game.players[pIdx];
         const allInsts: CardInstance[] = [
           ...(p.active ? [p.active] : []),
           ...p.bench,
@@ -887,7 +905,7 @@
         }
       }
     }
-    // fallback：場上找不到（log 提到的卡可能在牌庫或已離場）→ 抓第一個同名 Card
+    // 4. fallback：場上完全找不到 → 第一個同名 Card
     for (const c of pool.values()) {
       if (c?.name === cardName) { openZoom(c.id); return; }
     }
@@ -4042,7 +4060,7 @@
           {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted)}
           <div class="log-line {_lineCls}" class:log-sys={entry.playerIndex===null} class:log-latest={i===0} class:log-private={_isPrivate}>
             {#if _isPrivate}<span class="log-private-icon" title="只有你看得到">🔒</span>{/if}
-            {#each _tokens as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" title="點擊查看 {tok.text} 卡片詳情" onclick={() => openZoomByName(tok.text)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
+            {#each _tokens as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" title="點擊查看 {tok.text} 卡片詳情" onclick={() => openZoomByName(tok.text, entry.sourceIid, entry.playerIndex)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
           </div>
         {/each}
       </div>

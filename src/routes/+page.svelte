@@ -264,6 +264,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.891</span> 🎯 log 卡名點擊精準追溯：LogEntry 加 sourceIid 直接綁定產生 log 的 actor inst</summary>
+        <ul>
+          <li>玩家擔心 v3.890 對「場上同時有兩隻不同版本同名卡」case 仍可能誤抓。</li>
+          <li><b>修法（三層 fallback 直接追溯）</b>：
+            <ul>
+              <li><b>LogEntry 加 <code>sourceIid?</code></b>：<code>addLog</code> 自動從 <code>state.players[playerIndex]?.active?.iid</code> 取（兩處 — engine.ts + effects/_shared.ts）。每筆 log 帶著「誰產生這個 log」的精確 inst iid。</li>
+              <li><b>openZoomByName 加 hint 參數</b>：<code>(cardName, hintSourceIid?, hintPlayerIdx?)</code> 三層 fallback：
+                <ol>
+                  <li>hintSourceIid 對應 inst（若名字符合）— 例如「代歐奇希 使用精神尖槍」點代歐奇希 → 直接綁定到那隻代歐奇希 inst</li>
+                  <li>hintPlayerIdx 玩家場上 active/bench/hand/discard 找同名（actor side）</li>
+                  <li>對手玩家場上找同名（target side — 例如「謝米 受到 120」點謝米通常在對手場）</li>
+                  <li>全 pool 第一個同名（離場 / 牌庫深處）</li>
+                </ol>
+              </li>
+              <li><b>log 渲染 button</b>：<code>onclick={() => openZoomByName(tok.text, entry.sourceIid, entry.playerIndex)}</code>（兩處 — +page.svelte + MobilePortraitBattle.svelte）</li>
+            </ul>
+          </li>
+          <li><b>同名多版本場景測試</b>：場上有 70HP 謝米 + 對手有 80HP 謝米。Log「我方 X 使用 Y → 對手謝米受傷」— playerIndex = 我方，sourceIid = X.iid，名字「謝米」與 X 不符（fallthrough）→ 掃 hintPlayer 場上的「謝米」（我方 70HP）→ 找到，但這是 actor side... 嗯這 case 還是會抓錯。</li>
+          <li><b>已知限制</b>：log message 純文字，無法區分 mention 的是 attacker 或 target。若雙方場上都有同名 inst，會偏向 actor side（hintPlayerIdx）的版本。真正完美需要把 mention iid 編碼到 log message marker（例如 <code>謝米&lt;iid:abc&gt;</code>），這是未來大重構議題。本版先解決 actor 自己被點的 case（最常見場景）。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.890</span> 🔗 log 卡名點擊優先用「場上實際 inst」對應版本（解決同名多版本誤抓）</summary>
         <ul>
           <li>玩家回報：對戰 log 點「謝米」連結開到 70HP 版本（無花之帷幔），但場上實際是 80HP 14672 版本。</li>
