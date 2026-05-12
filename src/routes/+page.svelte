@@ -264,10 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.881</span> 🔧 hotfix：v3.880 changelog 內 raw &#123; &#125; 違反 Iron Rule #1，build 失敗</summary>
+        <ul>
+          <li>v3.880 push 後 GitHub Actions build 失敗 — <code>Build SvelteKit app</code> step error: <code>Expected token &#125;</code> at line 270:101。</li>
+          <li>根因：v3.880 changelog 寫 <code>&lt;code&gt;:global(body.mp-locked) &#123; touch-action: none &#125;&lt;/code&gt;</code> 直接放 raw <code>&#123;</code> <code>&#125;</code>，Svelte template 把它當 JS expression 解析失敗（同 v3.832 / v3.55 重複踩過的雷）。</li>
+          <li>修法：raw <code>&#123;</code> <code>&#125;</code> 改 HTML entity <code>&amp;#123;</code> <code>&amp;#125;</code>。版本順 bump 到 v3.881 重新觸發 deploy。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.880</span> 📱 真正修好 zoom-modal 滾動：拿掉 body.mp-locked 的 touch-action: none</summary>
         <ul>
           <li>玩家回報：v3.879 在 .zoom-modal 加 <code>touch-action: pan-y</code> 仍無法滾動。</li>
-          <li><b>真正根因</b>：<code>line 6960-6968</code> 的 <code>:global(body.mp-locked) { touch-action: none }</code>（v2.288 為了擋 iOS pull-to-refresh 加的）。iOS Safari 對 body 級 <code>touch-action: none</code> 解讀很強硬 — 會壓制所有 nested scrollable 元素的 pan gesture，即使該元素本身宣告 <code>touch-action: pan-y</code> 也敗給 body level。zoom-modal 真的有 overflow-y:auto，但 iOS 不啟動 scroll。</li>
+          <li><b>真正根因</b>：<code>line 6960-6968</code> 的 <code>:global(body.mp-locked) &#123; touch-action: none &#125;</code>（v2.288 為了擋 iOS pull-to-refresh 加的）。iOS Safari 對 body 級 <code>touch-action: none</code> 解讀很強硬 — 會壓制所有 nested scrollable 元素的 pan gesture，即使該元素本身宣告 <code>touch-action: pan-y</code> 也敗給 body level。zoom-modal 真的有 overflow-y:auto，但 iOS 不啟動 scroll。</li>
           <li><b>修法</b>：拿掉 body.mp-locked 的 <code>touch-action: none</code>。靠：
             <ul>
               <li>JS <code>preventScroll</code>（MobilePortraitBattle.svelte，v3.871 加的）— 擋 touchmove outside whitelist，仍擋 pull-to-refresh</li>
