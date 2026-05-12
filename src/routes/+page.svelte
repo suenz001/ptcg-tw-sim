@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.887</span> 📱 zoom-modal 加可收折區塊（場上狀態 / 特性 / 招式）— 採用使用者建議</summary>
+        <ul>
+          <li>玩家建議：放棄修 scroll，改加可收折區塊解決「文字敘述版面過長」問題。</li>
+          <li><b>實作</b>：用 native HTML <code>&lt;details&gt;</code> 元素包裹三類區塊，每個都有 <code>&lt;summary&gt;</code> 標題列可點開/收合：
+            <ul>
+              <li><b>📍 場上狀態</b>：HP / 附能 / 道具 / 異常 / 進化鏈 / 各種旗標</li>
+              <li><b>✨ 特性 - 名稱</b>：每個特性各自一個 details</li>
+              <li><b>⚔️ 招式名稱 + 能量 + 傷害</b>：每個招式各自一個 details，summary 已含 cost pip + 名稱 + 傷害</li>
+            </ul>
+          </li>
+          <li><b>預設狀態</b>：<code>open=&#123;!isPortraitMobile&#125;</code> — 桌機展開（空間充足），手機直式預設收折。手機點 summary 才展開要看的內容；不展開的就只佔 1 行 summary。</li>
+          <li><b>CSS</b>：<code>.zoom-section</code> 加 border + 背景 + hover；<code>.zoom-section-summary::before</code> ▸ 三角形旋轉動畫（open 時轉 90°）。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.886</span> 📱 真正讓手機 zoom 圖片縮小 — !important 覆寫桌機 width:312px + flex-shrink:0</summary>
         <ul>
           <li>玩家回報：v3.885 沒生效，吉雉雞ex 圖片仍佔大半畫面，下面內容被截掉。</li>

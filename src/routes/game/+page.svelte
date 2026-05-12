@@ -5424,8 +5424,9 @@
               {@const effMax = hpTotal(zoomInst)}
               {@const instHp = Math.max(0, effMax - zoomInst.damage)}
               {@const toolC = zoomInst.toolAttached ? getCard(zoomInst.toolAttached.cardId) : null}
+              <details class="zoom-section" open={!isPortraitMobile}>
+                <summary class="zoom-section-summary">📍 場上狀態</summary>
               <div class="zoom-state">
-                <div class="state-title">📍 場上狀態</div>
                 {#if effMax > 0}
                   <div class="state-row">
                     <span class="state-k">HP</span>
@@ -5474,19 +5475,25 @@
                   <div class="state-row"><span class="state-k">🚫</span><span class="state-v">下一回合無法攻擊</span></div>
                 {/if}
               </div>
+              </details>
             {/if}
             {#each zoomCard.abilities??[] as ab}
-              <div class="zoom-ability"><span class="ability-label">特性</span><strong>{ab.name}</strong><p class="effect-text">{ab.effect ?? (ab as any).text}</p></div>
+              <details class="zoom-section" open={!isPortraitMobile}>
+                <summary class="zoom-section-summary"><span class="ability-label">特性</span> <strong>{ab.name}</strong></summary>
+                <div class="zoom-ability"><p class="effect-text">{ab.effect ?? (ab as any).text}</p></div>
+              </details>
             {/each}
             {#each zoomCard.attacks??[] as atk}
               {@const atkEffect = atk.effect ?? (atk as any).text ?? ''}
-              <div class="zoom-attack">
-                <div class="atk-header">
+              <details class="zoom-section" open={!isPortraitMobile}>
+                <summary class="zoom-section-summary">
                   <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if atk.cost.length===0}<span class="no-cost">無消耗</span>{/if}</span>
-                  <span class="atk-nm">{atk.name}</span><span class="atk-dp">{atk.damage||'—'}</span>
+                  <span class="atk-nm">⚔️ {atk.name}</span><span class="atk-dp">{atk.damage||'—'}</span>
+                </summary>
+                <div class="zoom-attack">
+                  {#if atkEffect.trim()}<p class="effect-text">{atkEffect}</p>{:else}<p class="effect-text" style="color:#888;font-style:italic;">（無額外效果）</p>{/if}
                 </div>
-                {#if atkEffect.trim()}<p class="effect-text">{atkEffect}</p>{/if}
-              </div>
+              </details>
             {/each}
             {#if zoomCard.rulesText}<div class="zoom-rules">{zoomCard.rulesText}</div>{/if}
             <div class="zoom-footer">
@@ -6807,6 +6814,35 @@
   .zoom-ability{ background:#1e1e0e; border:1px solid #6a5a1a; border-radius:6px; padding:.5rem .6rem; }
   .ability-label{ display:inline-block; background:#8a1a1a; color:#fcc; font-size:.68rem; font-weight:700; padding:.1rem .35rem; border-radius:3px; margin-right:.4rem; }
   .zoom-attack{ background:#0e1e2e; border:1px solid #2a4a6a; border-radius:6px; padding:.45rem .6rem; }
+  /* v3.887：可收折區塊（場上狀態 / 特性 / 招式）— 採用 native <details> */
+  .zoom-section{ border:1px solid #3a5a3a; border-radius:8px; background:#1e2e1e; overflow:hidden; }
+  .zoom-section[open]{ background:#0e1e0e; }
+  .zoom-section-summary{
+    cursor:pointer; padding:.5rem .7rem;
+    background:#1a2a1a;
+    list-style:none;
+    display:flex; align-items:center; gap:.4rem; flex-wrap:wrap;
+    font-size:.92rem; color:#cce0cc;
+    user-select:none;
+    transition:background .12s;
+  }
+  .zoom-section-summary::-webkit-details-marker{ display:none; }
+  .zoom-section-summary::before{
+    content:'▸';
+    display:inline-block;
+    color:#8fa;
+    font-size:.85rem;
+    transition:transform .18s;
+    transform-origin:center;
+  }
+  .zoom-section[open] > .zoom-section-summary::before{ transform:rotate(90deg); }
+  .zoom-section-summary:hover{ background:#243424; }
+  .zoom-section[open] > .zoom-section-summary{ border-bottom:1px solid #3a5a3a; }
+  /* .zoom-section 內的 .zoom-state / .zoom-ability / .zoom-attack 不再加 border（外層 .zoom-section 已有） */
+  .zoom-section > .zoom-state,
+  .zoom-section > .zoom-ability,
+  .zoom-section > .zoom-attack{ border:none; border-radius:0; background:transparent; padding:.5rem .7rem; }
+
   .atk-header{ display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; }
   .atk-nm{ flex:1; font-weight:600; font-size:.9rem; }
   .atk-dp{ font-weight:700; color:#f88; font-size:1rem; }
