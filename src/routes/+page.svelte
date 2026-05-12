@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.862</span> ↩️ revert：恢復 modal 拖曳功能（玩家：手機版仍要拖曳 modal 看場上）</summary>
+        <ul>
+          <li>玩家回報：v3.86 把手機 portrait 模式 modal 拖曳功能禁用是過度反應 — 玩家需要拖曳 modal 後看場上其他寶可夢狀況。</li>
+          <li><b>修法</b>：revert v3.86 對 <code>onModalHeaderPointerDown</code> 加的 <code>if (isPortraitMobile) return;</code> gate + CSS 的 <code>body.mp-locked .sel-header cursor:default</code>。modal 拖曳功能恢復可用（手機 + 桌面）。</li>
+          <li>v3.861 對 <code>.mp</code> 主容器的 <code>position:fixed</code> 修法**保留** — 那是真正解決「整個主畫面被位移」的修法，與 modal 拖曳無關。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.861</span> 📱 hotfix：手機版主畫面被位移（v3.86 修錯了，這次才是真正的根因）</summary>
         <ul>
           <li>玩家附截圖回報：v3.86 修完手機版仍可拖曳 — 我之前誤判修了 modal 拖曳。實際是整個 <code>.mp</code>（MobilePortraitBattle 主容器）被位移。</li>

@@ -253,9 +253,6 @@
   let revealPage = $state(0);
   let modalDragStart: { sx: number; sy: number; ox: number; oy: number } | null = null;
   function onModalHeaderPointerDown(e: PointerEvent) {
-    // v3.86: 手機 portrait 禁用 modal 拖曳 — 手指容易誤觸 header 把 modal 拖出畫面
-    //   桌面仍保留拖曳功能（可避開被遮卡）
-    if (isPortraitMobile) return;
     const t = e.target as HTMLElement | null;
     if (!t) return;
     // 按到 header 裡面的按鈕/輸入框時不觸發拖曳
@@ -6827,11 +6824,6 @@
     position: fixed;
     width: 100%;
     height: 100dvh;
-  }
-  /* v3.86: 手機 portrait 模式禁用 modal 拖曳 cursor 提示 — 避免玩家以為可拖 */
-  :global(body.mp-locked) .sel-header,
-  :global(body.mp-locked) .sel-header[title*="拖曳"] {
-    cursor: default !important;
   }
   :global(html:has(body.mp-locked)) { overflow: hidden; overscroll-behavior: none; }
 
