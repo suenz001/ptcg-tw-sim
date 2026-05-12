@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.861</span> 📱 hotfix：手機版主畫面被位移（v3.86 修錯了，這次才是真正的根因）</summary>
+        <ul>
+          <li>玩家附截圖回報：v3.86 修完手機版仍可拖曳 — 我之前誤判修了 modal 拖曳。實際是整個 <code>.mp</code>（MobilePortraitBattle 主容器）被位移。</li>
+          <li><b>真正根因</b>：<code>.mp</code> 之前用 <code>height:100vh; display:flex</code> 走 normal flow，iOS Safari 上動態 viewport（URL bar 顯示/隱藏）+ overscroll bounce + pull-to-refresh 等行為仍會讓內容上下位移，即使 body 設了 <code>position:fixed</code>。</li>
+          <li><b>修法</b>：<code>.mp</code> 直接設 <code>position: fixed; inset: 0; touch-action: none; overscroll-behavior: none;</code> — 強制鎖到 viewport，主容器完全不能被任何手勢位移。</li>
+          <li>內部可滾動區（<code>.mp-row</code> 橫滑備戰 / <code>.mp-hand</code> 橫滑手牌 / <code>.mp-log</code> 直滑戰鬥紀錄 / <code>.mp-chips</code> 橫滑 chips）各自設對應 <code>touch-action: pan-x</code> 或 <code>pan-y</code> — 不冒泡到 <code>.mp</code>，但各自方向手勢仍能用。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.86</span> 📱 UX：手機版禁用 modal 拖曳（避免誤觸主畫面跑掉）</summary>
         <ul>
           <li>玩家回報：手機版常不小心拖曳 modal 視窗，造成「視窗可以拖來拖去」影響體驗。</li>

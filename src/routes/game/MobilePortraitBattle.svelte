@@ -742,6 +742,11 @@
      v2.286：手機直式完整 layout — 一頁不滑、手牌橫滑、tap-action 互動
      ════════════════════════════════════════════════════════════════════ */
   .mp {
+    /* v3.861: 強制 fixed 定位到 viewport，避免 iOS Safari 整頁因 dynamic viewport
+       / pull-to-refresh / overscroll bounce 等行為讓內容上下位移。
+       body.mp-locked 已加 position:fixed，但 .mp 自己也設 fixed 才能徹底鎖死。 */
+    position: fixed;
+    inset: 0;
     height: 100vh; height: 100dvh;
     display: flex; flex-direction: column;
     background: #1a2e1a;
@@ -749,6 +754,9 @@
     font-family: system-ui, 'Microsoft JhengHei', sans-serif;
     overflow: hidden;
     user-select: none;
+    /* v3.861: 整個 .mp 禁用觸控手勢（但內部 .mp-row / .mp-hand / .mp-log / .mp-chips 各自開放） */
+    touch-action: none;
+    overscroll-behavior: none;
     /* v2.287：iPhone 動態島 / 瀏海 / home indicator 安全區
        padding 算進 100dvh 內（border-box 預設）；safe-area 兩端各退一些避免被遮 */
     box-sizing: border-box;
@@ -757,6 +765,11 @@
     padding-left: env(safe-area-inset-left, 0);
     padding-right: env(safe-area-inset-right, 0);
   }
+  /* v3.861: 內部可滾動區允許各自方向手勢（不會冒泡到 .mp） */
+  .mp-row { touch-action: pan-x; }
+  .mp-hand { touch-action: pan-x; }
+  .mp-log { touch-action: pan-y; }
+  .mp-chips { touch-action: pan-x; }
 
   /* ── Top bar ────────────────────────────────────────────────────── */
   .mp-top {
