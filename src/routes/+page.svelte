@@ -277,7 +277,7 @@
           <li><b>修法</b>：兩端各補一條 <code>'Basic'</code> case：<br/>
             <code>supertype === 'Pokemon' &amp;&amp; !evolvesFrom &amp;&amp; subtype !== 'Stage1' &amp;&amp; subtype !== 'Stage2'</code>
           </li>
-          <li>這條 fix 同時受惠所有用 <code>filter: 'Basic'</code> 的卡（變化之書 / 寶寶球 / 其他 8 處 discard-search 用「基礎寶可夢」過濾的卡）。</li>
+          <li><b>實際受影響範圍</b>：經 audit 全 codebase 12 處 <code>filter: 'Basic'</code>，僅變化之書 1 處走 <code>discard-search</code>（其他 11 處全走 <code>deck-search</code> / <code>opp-bench-choose</code>，那邊 line 1487 早有正確的 <code>'Basic'</code> case 處理）。所以本 fix 只影響變化之書這張卡，先前版本說「9 處受惠」是錯誤的腦補。</li>
           <li>tsc 0 errors。</li>
         </ul>
       </details>
