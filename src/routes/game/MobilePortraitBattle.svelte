@@ -412,17 +412,34 @@
     return out;
   }
 
-  // ── v2.289：iOS Safari 整頁滑動鎖 ─────────────────────────────────
-  // touchmove 以 {passive:false} 掛在組件 root；對 .mp-row / .mp-hand /
-  // .mp-log / .mp-chips / .mp-sheet 內部觸控放行（允許捲動），其餘 preventDefault。
+  // ── v2.289 / v3.871：iOS Safari 整頁滑動鎖 ────────────────────────
+  // 1. touchmove 以 {passive:false} 掛在組件 root；對 .mp-row / .mp-hand /
+  //    .mp-log / .mp-chips / .mp-sheet 內部觸控放行（允許捲動），其餘 preventDefault。
+  // 2. v3.871: 額外掛 document 層的 touchmove — 因為 iOS Safari pull-to-refresh
+  //    可能在 .mp 外（status bar 下、URL bar 上的瀏覽器 chrome 區）觸發，必須擋全頁。
+  // 3. v3.871: 也擋 touchstart 在頁面頂端的事件，proactive 防止 Safari 啟動下拉刷新動畫。
   function preventScroll(node: HTMLElement) {
-    const handler = (e: TouchEvent) => {
+    const moveHandler = (e: TouchEvent) => {
       const t = e.target as Element | null;
       if (t?.closest('.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet')) return;
       e.preventDefault();
     };
-    node.addEventListener('touchmove', handler, { passive: false });
-    return { destroy() { node.removeEventListener('touchmove', handler); } };
+    // v3.871: document 層也擋 — 處理 .mp 外的 pull-to-refresh
+    const docMoveHandler = (e: TouchEvent) => {
+      const t = e.target as Element | null;
+      // 落在 .mp 外（瀏覽器邊界區）或非 scrollable 內部 → 擋
+      if (!t || !t.closest('.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet, .selection-overlay, .lightbox-overlay, .zoom-modal-overlay')) {
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+    node.addEventListener('touchmove', moveHandler, { passive: false });
+    document.addEventListener('touchmove', docMoveHandler, { passive: false });
+    return {
+      destroy() {
+        node.removeEventListener('touchmove', moveHandler);
+        document.removeEventListener('touchmove', docMoveHandler);
+      },
+    };
   }
 </script>
 

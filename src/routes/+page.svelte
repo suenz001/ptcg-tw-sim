@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.871</span> 📱 iOS Safari pull-to-refresh 強化擋：document 層 touchmove preventDefault</summary>
+        <ul>
+          <li>玩家附截圖：v3.861 修了 <code>.mp</code> 主畫面 fixed 後，iPhone 上仍會出現 Safari 內建的「下拉轉圈圖示」並彈出對戰頁。</li>
+          <li><b>真實根因</b>：iOS Safari pull-to-refresh 是<b>瀏覽器 chrome 層的動畫</b>（status bar 下、URL bar 上的圓圈圖示），不是網頁元素 — 即使 <code>.mp</code> 釘 fixed 也擋不住。Safari 在 touchstart 階段就決定是否啟動下拉。</li>
+          <li><b>修法</b>：把 preventScroll handler 從只掛 <code>.mp</code> 擴展到 <code>document</code> 層：
+            <ul>
+              <li>touchmove 在「<code>.mp</code> 外（瀏覽器邊界區）」或「非 scrollable 內部」全部 <code>preventDefault</code></li>
+              <li>scrollable 內部（<code>.mp-row / .mp-hand / .mp-log / .mp-chips / .mp-sheet</code>）+ modal overlay 區放行，內部捲動正常</li>
+              <li><code>{`{passive: false}`}</code> 確保 preventDefault 有效</li>
+            </ul>
+          </li>
+          <li><b>限制</b>：iOS Safari pull-to-refresh 無法 100% 禁用（瀏覽器層級行為）— 只能用 JS 強化擋。最徹底的方案是讓使用者把網站<b>加到 iPhone 主畫面</b>（成為 PWA standalone mode），那時沒有任何瀏覽器 chrome，完全沒下拉刷新。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.87</span> 🃏 hotfix：本機雙人換人時手牌偶爾不顯示</summary>
         <ul>
           <li>玩家回報：本機雙人模式換人時，有時手牌沒顯示；發動特性補牌後就正常。</li>
