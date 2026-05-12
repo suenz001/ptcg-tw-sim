@@ -4154,7 +4154,9 @@
     <div class="hand-scroll" class:is-dragging={!!dragging?.moved}
       style="--hand-overlap:{(myPlayer?.hand.length??0)<=9 ? 0 : Math.min(58, ((myPlayer?.hand.length??0)-9)*7)}px;">
       <!-- v2.43: setup 階段要等硬幣動畫結束才開始發牌（感覺上是硬幣→發 7 張） -->
+      <!-- v3.87: 本機雙人換人時用 {#key myIdx} 強制重 mount 手牌 — 修「換人後手牌不顯示」race -->
       {#if !game || game.phase !== 'setup' || coinFlipStage === 'done'}
+      {#key myIdx}
       {#each myPlayer?.hand??[] as inst, i (inst.iid)}
         {@const c=getCard(inst.cardId)}
         {@const n=(myPlayer?.hand.length??0)}
@@ -4236,6 +4238,7 @@
           </div>
         {/if}
       {/each}
+      {/key}
       {/if}
     </div>
   </div>

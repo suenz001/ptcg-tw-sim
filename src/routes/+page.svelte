@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.87</span> 🃏 hotfix：本機雙人換人時手牌偶爾不顯示</summary>
+        <ul>
+          <li>玩家回報：本機雙人模式換人時，有時手牌沒顯示；發動特性補牌後就正常。</li>
+          <li><b>推測根因</b>：myIdx 在本機雙人 playing 階段隨 <code>activePlayerIndex</code> 切換。END_TURN dispatch 後 game state + myIdx 同時變化，Svelte 5 的 <code>$derived(game.players[myIdx])</code> 在某些 race 場景沒立即觸發 hand 元素重 render。特性補牌觸發新 dispatch → hand.length 變化 → reactive 再觸發 → 顯示正常。</li>
+          <li><b>修法</b>：desktop <code>hand-scroll</code> + mobile <code>mp-hand</code> 兩處用 <code>{`{#key myIdx}`}</code> 包整段 each 區塊。<code>key</code> 變化時 Svelte 強制 destroy + recreate 內部所有元素 — 完全繞過 reactive race。</li>
+          <li>代價：每次換人會 destroy + recreate 全部手牌卡 DOM（一次性，無持續性能影響）。換來「保證一定顯示」的可靠性。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.862</span> ↩️ revert：恢復 modal 拖曳功能（玩家：手機版仍要拖曳 modal 看場上）</summary>
         <ul>
           <li>玩家回報：v3.86 把手機 portrait 模式 modal 拖曳功能禁用是過度反應 — 玩家需要拖曳 modal 後看場上其他寶可夢狀況。</li>

@@ -623,6 +623,8 @@
 
   <!-- ─── 手牌橫向 scroll（底部固定） ─── -->
   <footer class="mp-hand">
+    <!-- v3.87: 本機雙人換人時用 {#key myIdx} 強制重 mount 手牌 — 修「換人後手牌不顯示」race -->
+    {#key myIdx}
     {#if myPlayer.hand.length === 0}
       <div class="mp-hand-empty">（手牌空）</div>
     {:else}
@@ -644,6 +646,7 @@
         </button>
       {/each}
     {/if}
+    {/key}
   </footer>
 </div>
 
