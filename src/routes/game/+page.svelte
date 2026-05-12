@@ -1857,6 +1857,11 @@
             return false;
           }
           if (f === 'Pokemon')         return card.supertype === 'Pokemon';
+          // v3.829 fix：變化之書 / 寶寶球 等卡用 filter='Basic'，原本落入 fallback return true
+          //   → picker 顯示棄牌區所有卡（包含支援者、物品等）違反卡面「【基礎】寶可夢」。
+          //   補：基礎寶可夢 = supertype='Pokemon' 且 evolvesFrom=undefined 且非 Stage1/Stage2 subtype。
+          if (f === 'Basic')           return card.supertype === 'Pokemon' && !card.evolvesFrom
+                                              && card.subtype !== 'Stage1' && card.subtype !== 'Stage2';
           if (f === 'Trainer')         return card.supertype === 'Trainer';
           if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
           // v3.13: 多屬性 OR 比對（霜奶仙|彩色甜點）

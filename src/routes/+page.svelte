@@ -264,6 +264,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.829</span> 📕 hotfix：變化之書 picker 漏 filter 'Basic'（誤選支援者）</summary>
+        <ul>
+          <li>玩家回報：AI 用變化之書時可以選棄牌區的「莉莉艾的決意」（支援者）當成基礎寶可夢交換到場上。</li>
+          <li><b>卡面原文</b>：「從自己的棄牌區選擇 1 張<b>【基礎】寶可夢卡</b>，與自己的場上的 1 隻【基礎】寶可夢互換」— 只能基礎寶可夢。</li>
+          <li><b>根因</b>：<code>discard-search</code> picker 的 filter 處理中，UI 與 AI 兩端都沒有 <code>'Basic'</code> case 對應 — 落入 fallback <code>return true</code>，列出棄牌區<b>所有卡</b>。
+            <ul>
+              <li><code>game/+page.svelte</code> line 1858 附近 — UI picker filter</li>
+              <li><code>ai.ts</code> line 682 附近 — AI 自動選擇邏輯</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：兩端各補一條 <code>'Basic'</code> case：<br/>
+            <code>supertype === 'Pokemon' &amp;&amp; !evolvesFrom &amp;&amp; subtype !== 'Stage1' &amp;&amp; subtype !== 'Stage2'</code>
+          </li>
+          <li>這條 fix 同時受惠所有用 <code>filter: 'Basic'</code> 的卡（變化之書 / 寶寶球 / 其他 8 處 discard-search 用「基礎寶可夢」過濾的卡）。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.828</span> 🔍 UX：能量 picker 來源標籤加放大鏡（點 📍 直接看寶可夢）</summary>
         <ul>
           <li>玩家建議：v3.827 的 📍 來源標籤如果可以點開放大看那隻寶可夢就更方便，省得跨欄找。</li>

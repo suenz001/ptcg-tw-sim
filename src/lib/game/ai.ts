@@ -696,6 +696,9 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
           return false;
         }
+        // v3.829 fix：變化之書 / 寶寶球 用 filter='Basic'，原本 fallback return true 讓 AI 抓到莉莉艾的決意。
+        if (f === 'Basic')           return card.supertype === 'Pokemon' && !card.evolvesFrom
+                                            && card.subtype !== 'Stage1' && card.subtype !== 'Stage2';
         // v2.40 修正：原本 supertype === 'Energy' 是 bug（= 所有能量，會選到 Special Energy）
         if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';
         if (f === 'BasicPsychicEnergy') {
