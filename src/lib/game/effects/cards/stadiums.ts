@@ -97,7 +97,10 @@ regR('surf-beach-swap', (st, idx, iids, _params, pool) => {
   return updatePlayer(st, idx, pl => {
     if (!pl.active) return pl;
     const newBench = [...pl.bench];
-    const newActive = { ...pl.bench[benchIdx], justPlaced: false, playedFromHand: false, movedToActiveThisTurn: true };
+    // v3.812 Bug fix：bench → active 純位置交換，preserve justPlaced + playedFromHand
+    //   PTCG 規則：這回合打出的寶可夢，不論在備戰還是戰鬥位都不能進化（v3.811 範例：呱呱泡蛙
+    //   剛被放到備戰 → 衝浪海灘 swap 到戰鬥場 → 居然能進化）。原本 hard-set false 是 bug。
+    const newActive = { ...pl.bench[benchIdx], movedToActiveThisTurn: true };
     newBench[benchIdx] = clearActiveEffects(pl.active);
     return { ...pl, active: newActive, bench: newBench };
   });

@@ -72,7 +72,8 @@ regR('do-switch', (st, idx, iids, _params, pool) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
-    const newActive = { ...p.bench[bIdx], justPlaced: false, playedFromHand: false };
+    // v3.812：preserve justPlaced + playedFromHand（位置交換不該清除剛打出 flag）
+    const newActive = { ...p.bench[bIdx] };
     const newBench = [...p.bench];
     // v2.08：離開戰鬥場清狀態旗標
     newBench[bIdx] = clearActiveEffects(p.active);
@@ -119,7 +120,8 @@ regR('rush-switch-pick-bench', (st, idx, iids, _params, pool) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
-    const newActive = { ...p.bench[bIdx], justPlaced: false, playedFromHand: false };
+    // v3.812：preserve justPlaced + playedFromHand（位置交換不該清除剛打出 flag）
+    const newActive = { ...p.bench[bIdx] };
     const newBench = [...p.bench];
     newBench[bIdx] = clearActiveEffects(p.active);
     return { ...p, active: newActive, bench: newBench };
@@ -434,7 +436,8 @@ regR('top-catcher-opp', (st, idx, iids, _params, pool) => {
     const newBench = [...p.bench];
     // v2.08：離開戰鬥場清狀態旗標
     newBench[bIdx] = clearActiveEffects(p.active);
-    return { ...p, active: { ...p.bench[bIdx], justPlaced: false, playedFromHand: false }, bench: newBench };
+    // v3.812：preserve justPlaced + playedFromHand（位置交換不該清除剛打出 flag）
+    return { ...p, active: { ...p.bench[bIdx] }, bench: newBench };
   });
   // 若自己也有備戰，選擇自己要換入的寶可夢
   if (st.players[idx].bench.length === 0) return st;

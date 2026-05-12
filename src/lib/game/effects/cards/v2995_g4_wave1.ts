@@ -281,7 +281,8 @@ regR('flowery-lure', (st, idx, iids, _params, pool) => {
     newBench[bIdx] = clearActiveEffects(p.active);
     return {
       ...p,
-      active: { ...target, justPlaced: false, playedFromHand: false, status: 'confused' },
+      // v3.812：preserve justPlaced + playedFromHand
+      active: { ...target, status: 'confused' as const },
       bench: newBench,
     };
   });

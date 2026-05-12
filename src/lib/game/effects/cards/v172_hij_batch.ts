@@ -243,7 +243,8 @@ regR('lucia-show', (st, idx, iids, _params, pool) => {
     newBench[bIdx] = clearActiveEffects(p.active);
     return {
       ...p,
-      active: { ...target, justPlaced: false, playedFromHand: false, status: 'confused' },
+      // v3.812：preserve justPlaced + playedFromHand（被強制換到戰鬥場不該重置剛打出 flag）
+      active: { ...target, status: 'confused' as const },
       bench: newBench,
     };
   });

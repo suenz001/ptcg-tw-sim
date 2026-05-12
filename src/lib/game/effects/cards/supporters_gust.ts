@@ -76,6 +76,7 @@ regR('gust-opp', (st, idx, iids, _params, pool) => {
     const newBench = [...p.bench];
     // v2.08：離開戰鬥場清狀態旗標
     newBench[bIdx] = clearActiveEffects(p.active);
-    return { ...p, active: { ...p.bench[bIdx], justPlaced: false, playedFromHand: false }, bench: newBench };
+    // v3.812：preserve justPlaced + playedFromHand
+    return { ...p, active: { ...p.bench[bIdx] }, bench: newBench };
   });
 });

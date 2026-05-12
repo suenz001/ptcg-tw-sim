@@ -1476,7 +1476,8 @@ regR('dominance-chain', (st, idx, iids, params, pool) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === targetIid);
     if (bIdx < 0) return p;
-    const newActive = { ...p.bench[bIdx], status: 'poisoned' as const, justPlaced: false };
+    // v3.812：preserve justPlaced（位置交換不該清除剛打出 flag）；status='poisoned' 由招式效果加上
+    const newActive = { ...p.bench[bIdx], status: 'poisoned' as const };
     const newBench = [...p.bench];
     // v2.08：離開戰鬥場清狀態旗標（新上場 active 的中毒已在 newActive 設定）
     newBench[bIdx] = clearActiveEffects(p.active);
@@ -1625,7 +1626,8 @@ regR('surfer-switch', (st, idx, iids, _params, pool) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
-    const newActive = { ...p.bench[bIdx], justPlaced: false };
+    // v3.812：preserve justPlaced
+    const newActive = { ...p.bench[bIdx] };
     const newBench = [...p.bench];
     // v2.08：離開戰鬥場清狀態旗標
     newBench[bIdx] = clearActiveEffects(p.active);
@@ -6199,7 +6201,8 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
   // swap first — v2.08：離開戰鬥場清狀態旗標
   const newBench = [...defender.bench];
   newBench[benchIdx] = clearActiveEffects(oldActive);
-  let newDefender = { ...defender, active: { ...newActiveOrig, justPlaced: false, playedFromHand: false }, bench: newBench };
+  // v3.812：preserve justPlaced + playedFromHand（位置交換不該清除剛打出 flag）
+  let newDefender = { ...defender, active: { ...newActiveOrig }, bench: newBench };
   let s: GameState = { ...st };
   let players = [...s.players] as [PlayerState, PlayerState];
   players[dIdx] = newDefender;

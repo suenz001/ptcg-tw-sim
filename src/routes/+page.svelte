@@ -264,6 +264,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.812</span> 🔒 hotfix：bench→active 純位置交換不該清掉「本回合打出」標記（解進化禁令繞過）</summary>
+        <ul>
+          <li>玩家回報：呱呱泡蛙從手牌放到備戰區 → 衝浪海灘把它換到戰鬥場 → 居然可以進化（違規）。</li>
+          <li><b>PTCG 規則</b>：當回合從手牌打出的寶可夢，無論在備戰區或戰鬥場都不能進化（活力森林等特殊條件除外）。</li>
+          <li><b>根因</b>：多處「純位置交換」程式碼用 <code>{`{...bench[idx], justPlaced:false, playedFromHand:false}`}</code> 硬清旗標，等同把「本回合進場」狀態洗掉，繞過進化 gate。</li>
+          <li><b>系統性修法</b>：審視全 codebase，找出 9 處同樣 pattern bug，全部改為保留原始旗標（純位置交換不該動 justPlaced / playedFromHand）：
+            <ul>
+              <li><code>stadiums.ts</code>：衝浪海灘 surf-beach-swap</li>
+              <li><code>items_misc.ts</code>：寶可夢交替、急進開關、頂尖捕捉器</li>
+              <li><code>supporters_gust.ts</code>：老大的指令 gust-opp</li>
+              <li><code>effects.ts</code>：dominance-chain、surfer-switch、opp-swap-dmg</li>
+              <li><code>v172_hij_batch.ts</code>：露西亞秀（混亂後交換）</li>
+              <li><code>v2995_g4_wave1.ts</code>：flowery-lure</li>
+            </ul>
+          </li>
+          <li><b>原則區分</b>：fresh placements（搜尋牌堆 → 直接放上場）保持 <code>justPlaced:false</code> 不變（那不是從手牌打出，不適用進化禁令）。本次只修「同一隻、純位置變化」的場景。</li>
+          <li><b>後續 audit</b>：v169_supporters / v2360 / v2996 / v2998 / v172 後段仍有 justPlaced:false 標註為「fresh placement」者，本版未動；如後續有玩家回報類似情境會逐一複查。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.811</span> 🏟 hotfix：自己蓋掉場地後，新競技場效果無法使用</summary>
         <ul>
           <li>玩家回報：先用壯偉碩木進化寶可夢 → 打出衝浪海灘覆蓋舊場地 → 衝浪海灘的水寶可夢交換功能用不了。</li>
