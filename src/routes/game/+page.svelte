@@ -7000,7 +7000,7 @@
       max-height: 50vh;
     }
 
-    /* zoom-modal（卡牌詳細 / 放大） */
+    /* zoom-modal（卡牌詳細 / 放大）— v3.885 重新啟用 lightbox 點圖 */
     .zoom-modal {
       width: 96vw; max-width: 96vw;
       padding: 0.7rem; gap: 0.55rem;
@@ -7008,8 +7008,8 @@
       border-radius: 10px;
     }
     .zoom-img { width: 56vw; max-width: 56vw; }
-    .zoom-img-btn { cursor: default; pointer-events: none; }
-    .zoom-img-hint { display: none; }
+    .zoom-img-btn { cursor: zoom-in; pointer-events: auto; }
+    .zoom-img-hint { display: block; }
 
     /* settings-modal */
     .settings-modal {
@@ -7115,17 +7115,28 @@
     .stepper-btn{ width:2.4rem; height:2.4rem; font-size:1.2rem; }
     .stepper-value{ min-width:4rem; font-size:1.3rem; line-height:2.2rem; }
 
-    /* ── v2.206 zoom-modal 縮小到不用滾動 ── */
-    /* 卡圖縮小：桌機 312px → 手機 160px。zoom-modal width 96vw / max-height 88vh */
-    .zoom-modal{ max-width:560px; width:96vw; max-height:88vh; padding:0.7rem; gap:0.5rem; }
-    .zoom-img{ width:160px; max-width:42vw; }
+    /* ── v3.885 zoom-modal 改 fullscreen 策略（放棄 scroll 修法，6 個 hotfix 都失敗） ──
+       - 手機 .zoom-modal 鋪滿整個 viewport（同 .battle-root 大小）
+       - 內部 block 排版（避 iOS flex+overflow bug），圖片 max-height: 36vh 自適應
+       - .zoom-img-btn 重新啟用 pointer-events — 點圖開 lightbox 看全圖
+       - .zoom-scroll 仍保留 overflow-y:auto 兜底 — 非 flex 容器 iOS 應該 OK */
+    .zoom-modal{
+      max-width:100vw; width:100vw;
+      max-height:100vh; max-height:100dvh; height:100dvh;
+      padding:0.6rem; gap:0.5rem;
+      border-radius:0;
+      margin:0;
+    }
+    .zoom-img{ max-height:36vh; max-width:90vw; width:auto; height:auto; object-fit:contain; }
+    .zoom-img-btn{ display:flex; justify-content:center; align-items:center; width:100%; }
+    .zoom-img-btn .zoom-img{ display:block; }
     .zoom-name{ font-size:1rem; }
     .zoom-badges{ gap:0.25rem; }
     .zoom-badges .badge{ font-size:0.66rem; padding:0.1rem 0.4rem; }
     .zoom-meta, .zoom-state, .state-row{ font-size:0.74rem; }
-    /* zoom-img-btn 在手機上停用 lightbox 二段（直接顯示 zoom-modal 詳細資料即可） */
-    .zoom-img-btn{ cursor:default; pointer-events:none; }
-    .zoom-img-hint{ display:none; }
+    /* v3.885：手機重新啟用 lightbox 點圖看全圖（之前 v2.206 註解說省略不需要，但使用者要求加回） */
+    .zoom-img-btn{ cursor:zoom-in; pointer-events:auto; }
+    .zoom-img-hint{ display:block; font-size:0.7rem; }
   }
 
   /* v2.73 殭屍房警示 banner */

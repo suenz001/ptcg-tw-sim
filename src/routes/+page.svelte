@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.885</span> 📱 zoom-modal 改 fullscreen 策略：放棄 scroll 修法，圖片自適應 + lightbox 點圖看全圖</summary>
+        <ul>
+          <li>v3.879~v3.884 連續 6 個 hotfix 都修不好手機 zoom-modal scroll。改採用使用者建議的新策略：fullscreen 鋪版避開 scroll。</li>
+          <li><b>新方案</b>：
+            <ul>
+              <li>手機 <code>.zoom-modal</code> 鋪滿整個 viewport（<code>100vw × 100dvh</code>，無 border-radius）— 等同對戰背景大小</li>
+              <li>卡牌圖片 <code>max-height: 36vh</code> + <code>object-fit: contain</code> 自適應縮小（最大不超過自然大小）</li>
+              <li>重新啟用 <code>.zoom-img-btn</code> 的 <code>pointer-events</code>（之前 v2.206 註解說手機不需要 lightbox 二段，但使用者要求加回）</li>
+              <li>點圖即開 lightbox（同卡牌資料庫 <code>/cards</code> 的全螢幕看圖機制）— 仍可 pinch zoom 看細節</li>
+              <li><code>.zoom-scroll</code> 仍保留 <code>overflow-y:auto</code> 兜底 — 真的還是溢出時非 flex 容器 iOS 應該能滑（雖然主要靠 fullscreen 讓內容塞下）</li>
+            </ul>
+          </li>
+          <li><b>備註</b>：v3.884 的 <code>.zoom-scroll</code> wrapper 保留 — 跟新 fullscreen 策略相容（fullscreen 給更多空間，scroll wrapper 兜底）。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.884</span> 📱 真正修好 zoom-modal 滾動：iOS Safari flex + overflow-y bug（拆 .zoom-scroll 內層）</summary>
         <ul>
           <li>玩家連續回報：v3.879/v3.880/v3.882 改 CSS 都沒用，零閘垂直拖曳就是不動。對照 <code>.selection-modal</code>（手機可滑）找出 root cause。</li>
