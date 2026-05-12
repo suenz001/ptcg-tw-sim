@@ -264,13 +264,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.889</span> 📝 糾正 v3.888 changelog 列「抵抗之幕」腦補錯誤</summary>
+        <ul>
+          <li>玩家指出 v3.888 changelog 寫「抵抗之幕」會擋精神尖槍是錯的。</li>
+          <li><b>正解</b>：抵抗之幕（火箭隊的急凍鳥）只擋「招式的<b>效果</b>」(attack-effect)，<b>不擋</b>「招式的<b>傷害</b>」(attack-damage)。精神尖槍對備戰 120 點是「招式傷害」不是「招式效果」（卡面寫「也受到 120 點傷害」是 damage、非 counter），所以本來就不該被抵抗之幕擋。</li>
+          <li><b>程式碼實際正確</b>：v3.888 在 <code>bench-hit-N</code> 內用 <code>kind='attack-damage'</code> 呼叫 <code>resolveBenchGuard</code>。<code>resolveBenchGuard</code> 內部分流 — 抵抗之幕只在 <code>kind === 'attack-effect'</code> 分支檢查，所以精神尖槍走 attack-damage path 完全不會碰到抵抗之幕。修法本身正確，受惠特性實際只有 <b>花之帷幔 / 太晶備戰 / 陳舊羽毛化石 / 中立中心 / 球形盾牌 / 藏隱 / 深度下潛</b> 等 attack-damage 類擋下。</li>
+          <li><b>本版動作</b>：只修 v3.888 changelog 拿掉錯誤的「抵抗之幕」條目，程式碼不動。</li>
+          <li><b>規則記憶</b>：<b>招式傷害</b>（attack-damage，含戰鬥位 base damage + 對備戰 N 傷害）vs <b>招式效果</b>（attack-effect，放指示物 / debuff / status）是兩個完全不同的判定群組，blocker 名單也不同：
+            <ul>
+              <li><b>attack-damage 擋頭</b>：花之帷幔 / 太晶備戰 / 中立中心 / 陳舊羽毛化石 / 藏隱 / 深度下潛 / 球形盾牌</li>
+              <li><b>attack-effect 擋頭</b>：對戰圓形 / 抵抗之幕 / 陳舊羽毛化石 / 藏隱 / 深度下潛 / 球形盾牌</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.888</span> 🐛 修花之帷幔等 6 種備戰免疫特性對 精神尖槍 / 激流水泵 等備戰打擊招式失效</summary>
         <ul>
           <li>玩家回報：代歐奇希 精神尖槍 攻擊有「花之帷幔」謝米備戰，特性沒擋住。</li>
           <li><b>根因</b>：<code>regR('bench-hit-N', ...)</code> resolver（所有走 picker 對備戰打傷害的招式共用 — 精神尖槍 / 激流水泵 / 鐵之震動 / 火焰旋風 等）只檢查對戰圓形 (<code>isBenchProtected</code>) 和太晶 (per-target <code>tags</code>)，**漏了 <code>resolveBenchGuard</code> 整套** — 包括：
             <ul>
               <li>謝米｜花之帷幔（M2a/SV9a 80HP）— 自己備戰非規則寶可夢不受招式傷害</li>
-              <li>火箭隊的急凍鳥｜抵抗之幕 — 自己備戰火箭隊基礎寶可夢不受招式效果</li>
               <li>斯魔茶｜藏隱 — 自己在備戰時不受招式傷害與效果</li>
               <li>小霞的鯉魚王｜深度下潛 — 同上</li>
               <li>蟲甲聖｜球形盾牌（A1）— 自己備戰不受招式傷害與效果</li>
