@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.851</span> 🌷 hotfix：昂主花葉蒂 — 同回合先打稜鏡塔再打昂主花葉蒂被擋下</summary>
+        <ul>
+          <li>玩家回報：v3.85 修了 prismTower flag 後，同回合先打稜鏡塔、再打昂主花葉蒂仍打不出來。</li>
+          <li><b>根因</b>：v3.85 雖然加了卡面 gate，但漏改「每回合只能打 1 張 Stadium」通則檢查（<code>stadiumPlayedThisTurn[aIdx]</code>）— 打完稜鏡塔後 flag 已 true，第二張昂主花葉蒂被通則擋下。</li>
+          <li><b>卡面語意辨析</b>：「使出了『稜鏡塔』的回合也可放置於場上」這句話本身就是<b>「每回合 1 張 Stadium」通則的特例</b>。否則卡面這條規則根本沒有任何用武之地。</li>
+          <li><b>修法</b>：engine.ts PLAY_TRAINER + getPlayableTrainers 兩處都加 exception：
+            <ul>
+              <li>打過 Stadium 後通常擋第二張，但「卡是昂主花葉蒂 + 本回合用過稜鏡塔」時 bypass</li>
+              <li>打完昂主花葉蒂後 stadiumPlayedThisTurn 仍會 set true → 第三張仍擋（不會無限打）</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.85</span> 🌷 三修：昂主花葉蒂放置 gate + 永生綻放 picker + 撤退 UX 改善</summary>
         <ul>
           <li><b>Bug 1：昂主花葉蒂沒擋放置條件</b>。卡面：「這張卡必須將場上的『稜鏡塔』丟棄才可放置於場上，使出了『稜鏡塔』的回合也可放置於場上」— 但場上沒稜鏡塔也能直接放置。

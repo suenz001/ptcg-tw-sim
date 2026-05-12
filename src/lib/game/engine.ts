@@ -2315,7 +2315,13 @@ function handlePlaying(
     if (trainerCard.subtype === 'Stadium') {
       // 一回合只能打出一張競技場卡（不論目前場上有無 stadium）
       const played = state.stadiumPlayedThisTurn ?? [false, false];
-      if (played[aIdx]) return state;
+      // v3.851: 昂主花葉蒂卡面明文「使出了『稜鏡塔』的回合也可放置於場上」
+      //   → 繞過「每回合 1 張 Stadium」通則的特例。當本回合已打過稜鏡塔（prismFlag=true）
+      //   時，允許再打出昂主花葉蒂（同回合第 2 張 Stadium）。打完後 newPlayed[aIdx]=true 仍生效，
+      //   所以玩家不會繼續打第 3 張。
+      const prismFlag = state.prismTowerPlayedThisTurn ?? [false, false];
+      const isAonzhuExempt = trainerCard.name === '昂主花葉蒂' && prismFlag[aIdx];
+      if (played[aIdx] && !isAonzhuExempt) return state;
       // v2.41：PTCG 規則 — 同名競技場不能覆蓋自己
       // 場上已有同名競技場（例：對戰圓形競技場）時，禁止再從手牌打出同名的競技場。
       // 回傳到原 state 之前把已移出手牌的卡放回（線上 Stadium branch 在 `attacker.hand = ...` 之後執行）。
@@ -6267,7 +6273,12 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
         !canPlaySupporterOnFirstTurn(c)
       ) return false;
       // 競技場：一回合每位玩家只能打出一張
-      if (c.subtype === 'Stadium' && (state.stadiumPlayedThisTurn?.[state.activePlayerIndex] ?? false)) return false;
+      //   v3.851 exception: 昂主花葉蒂卡面允許「使出了稜鏡塔的回合也可放置」→ 同回合第 2 張 Stadium
+      if (c.subtype === 'Stadium' && (state.stadiumPlayedThisTurn?.[state.activePlayerIndex] ?? false)) {
+        const prism = state.prismTowerPlayedThisTurn ?? [false, false];
+        const aonzhuOk = c.name === '昂主花葉蒂' && prism[state.activePlayerIndex];
+        if (!aonzhuOk) return false;
+      }
       // v2.43：PTCG 規則 — 同名競技場不能覆蓋自己。
       // engine play path 也會 block，但 UI 需要在「可打出」清單就濾掉，
       // 否則手牌卡會亮黃框讓使用者誤以為可以拖曳（實際上拖下去會被 engine 擋）。
