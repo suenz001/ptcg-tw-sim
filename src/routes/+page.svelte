@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.874</span> 🐛 雙 bug：願增猿腎上腺腦力可選張數 + 旋轉洛托姆風扇呼喚 turn gate 修正</summary>
+        <ul>
+          <li><b>Bug 1：願增猿｜腎上腺腦力 應該可選搬幾個傷害指示物</b></li>
+          <li>v3.711 誤判卡面「選擇最多 3 個」為「全搬，上限 3」（cap 語意），玩家回報實際應由玩家自選 1~3。本版恢復 v3.14 設計：開 <code>modal-choice + stepper</code> picker（+/- 按鈕），玩家自選 1 到 maxCounters（受來源傷害上限）。流程：① 選來源寶可夢（≥10 傷害的 1 隻） → ② +/- 選搬幾個指示物（1~3，受來源上限）→ ③ 選對手寶可夢轉傷。指示物只能從同 1 隻來源搬，無法跨多隻分配。</li>
+          <li><b>Bug 2：旋轉洛托姆｜風扇呼喚 第二回合仍可使用</b></li>
+          <li>玩家回報「第二回合仍然可以使用」。Audit 發現：<code>engine.ts:5737</code> 的 <code>newTurn = aIdx !== state.firstPlayerIdx ? state.turn + 1 : state.turn</code> — <code>state.turn</code> 只在「後攻方 END_TURN」才 +1，所以 <code>state.turn=1</code> 涵蓋雙方的第 1 個動作回合、<code>state.turn=2</code> 涵蓋雙方的第 2 個動作回合。v2.224 原 gate <code>turn > 2</code> 是基於誤解（以為 turn 1=先攻1st / turn 2=後攻1st），實際 turn 2 已是雙方的第 2 個動作回合（不是最初）。</li>
+          <li><b>修法</b>：<code>mega_decks.ts</code> regA gate + <code>engine.ts:6611</code> button gate 兩處都改 <code>state.turn > 1</code>。雙方都只能在 <code>state.turn === 1</code>（個別第 1 動作回合）使用。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.8731</span> 🔄 redeploy：v3.873 build 成功但 GitHub Pages deploy step 失敗（infra 抖動），no-op patch 重新觸發 workflow</summary>
         <ul>
           <li>v3.873 GitHub Actions run #838：build job 全部 success（npm ci / Build SvelteKit app / upload-pages-artifact 都 ✓），但 deploy job 的 <code>actions/deploy-pages@v4</code> step failure。</li>

@@ -468,10 +468,12 @@ regR('alloy-forge-commit', (st, _idx, _iids, _params, _pool) => st);
 // ══════════════════════════════════════════════════════════════════════════════
 // 卡面：「只有在自己的最初回合可使用 1 次。從自己的牌庫選擇最多 3 張 HP 為『100』以下的
 //   【無】寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。」
-// Gate：state.turn <= 2（兩個最初回合內都可觸發；自己回合由 activePlayerIndex 強制）
+// v3.874：state.turn 在「後攻方 END_TURN」才 +1（engine.ts:5737），所以
+//   state.turn=1 涵蓋雙方第 1 個動作回合（先攻 1st + 後攻 1st）
+//   state.turn=2 涵蓋雙方第 2 個動作回合（先攻 2nd + 後攻 2nd）
+//   原 gate `turn > 2` 誤把第 2 動作回合放行 → 改 `turn > 1` 才正確限「最初回合」。
 regA('旋轉洛托姆', 0, (st, idx) => {
-  // 「最初回合」= 先攻第 1 回合（turn=1）+ 後攻第 1 回合（turn=2）之一
-  if (st.turn > 2) {
+  if (st.turn > 1) {
     return addLog(st, '風扇呼喚：只能在自己的最初回合使用', idx);
   }
   if (st.players[idx].deck.length === 0) {

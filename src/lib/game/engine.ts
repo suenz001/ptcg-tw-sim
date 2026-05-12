@@ -6603,13 +6603,15 @@ export function getUsableAbilities(
         });
         if (!hasFightEnergy) return;
       }
-      // v2.224 風扇呼喚（旋轉洛托姆）：「只有在自己的最初回合可使用 1 次」
-      //   先攻最初回合 = turn 1；後攻最初回合 = turn 2。turn > 2 時不論先/後攻
-      //   都已過了最初回合，按鈕直接隱藏。
-      //   （USE_ABILITY 必然 active player == 持卡方，所以不需另判 firstPlayerIdx）
+      // v2.224 / v3.874 風扇呼喚（旋轉洛托姆）：「只有在自己的最初回合可使用 1 次」
+      //   v3.874：state.turn 在「後攻方 END_TURN」才 +1（engine.ts:5737），所以
+      //   state.turn=1 涵蓋雙方第 1 個動作回合（雙方最初回合）
+      //   state.turn=2 涵蓋雙方第 2 個動作回合（已不是最初回合）
+      //   原 v2.224 gate 寫 turn > 2 是基於誤解（以為 turn 1=先攻第1回合 turn 2=後攻第1回合），
+      //   實際每 turn 整數涵蓋雙方各一次，必須改 turn > 1。
       //   v2.229 補：牌庫不空（搜空 deck 沒意義）
       if (ab.name === '風扇呼喚') {
-        if (state.turn > 2) return;
+        if (state.turn > 1) return;
         if (player.deck.length === 0) return;
       }
       // ─── v2.229 大批主動特性 gate 補完（之前 audit 漏掉，按下才跳 log 的災難） ─────

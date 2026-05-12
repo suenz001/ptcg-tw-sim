@@ -173,15 +173,28 @@ regR('adrenal-brain-src', (st, idx, iids, params, pool) => {
   const p = st.players[idx];
   const source = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
   if (!source) return st;
-  // v3.711 hotfix：卡面「選擇最多 3 個傷害指示物」是「全搬，上限 3」的機制，
-  //   NOT 玩家選擇張數 1~3。amount = min(source.damage, 30) 直接全搬，無 picker。
-  //   v3.14 誤解「最多」語義加了 modal-choice picker → v3.711 revert。
   const maxCounters = Math.min(Math.floor(source.damage / 10), 3);
   if (maxCounters <= 0) {
     return addLog(st, '腎上腺腦力：來源傷害不足（無 counter 可搬）', idx);
   }
   const sourceName = pool.get(source.cardId)?.name ?? '?';
-  return _adrenalCountChosen(st, idx, targetIid, sourceName, maxCounters, pool);
+  // v3.874：玩家自選要搬 1~maxCounters 個指示物（恢復 v3.14 設計、replacing v3.711 全搬）
+  //   卡面「選擇最多 3 個傷害指示物」— 「最多」是玩家可選的上限，不是強制全搬。
+  //   開 modal-choice + stepper picker → resolver 'adrenal-brain-count' 讀 iids[0] 為 count
+  //   數字並接力開「對手寶可夢目標」picker。範圍只在來源 1 隻寶可夢（無法跨多隻）。
+  let s = addLog(st, `腎上腺腦力：${sourceName} 身上有 ${source.damage} 傷害，請選擇搬幾個指示物（1~${maxCounters}）`, idx);
+  return withPending(s, {
+    type: 'modal-choice',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'adrenal-brain-count',
+    params: {
+      label: `腎上腺腦力：要從 ${sourceName} 身上搬幾個傷害指示物到對手？（1~${maxCounters}，每個 = 10 傷害）`,
+      stepper: { min: 1, max: maxCounters, step: 1, init: maxCounters },
+      sourceIid: targetIid,
+      sourceName,
+    },
+  });
 });
 
 regR('adrenal-brain-count', (st, idx, iids, params, pool) => {
