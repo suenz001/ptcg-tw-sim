@@ -12660,11 +12660,11 @@ regA('古劍豹', 0, (st, idx, pool, cardInst) => {
 });
 
 // ── 鐵斑葉ex｜迅速游標 ─────────────────────────────────────────────────────
-// 卡面：上備戰時可使用 1 次 → 將這隻寶可夢與戰鬥寶可夢互換 + 任意能量改附給這隻。
-// v2.138：完整實裝 — 互換後自動把舊戰鬥場（現備戰）所有能量改附給新戰鬥場（鐵斑葉ex）。
-//   卡面寫「任意能量」，玩家理論上可選張數，但實戰絕大多數選「全轉」（多選對自己有利），
-//   sim/AI 端用全轉版；UI 玩家若需要更精細控制可以後續加 modal。
-//   gate：pk.justPlaced（同 狂挖 / 經驗法則）
+// 卡面：「在自己的回合，從手牌將這張卡放置於備戰區時，可使用1次。將這隻寶可夢與戰鬥寶可夢互換。
+//        互換的情況下，選擇自己的場上寶可夢身上附加的任意數量的能量卡，改附於這隻寶可夢身上。」
+// v3.826：picker 化（修 v2.138 違規簡化）— 玩家可從自方所有寶可夢身上的能量挑「任意數量」改附過來。
+//   step 1: 互換（active ↔ 此 cardInst）+ 開 picker（active-energy-discard + scope='all-own'）
+//   step 2: resolver 把 picked 能量從各來源移除 + 改附到新戰鬥場（鐵斑葉ex）
 regA('鐵斑葉ex', 0, (st, idx, pool, cardInst) => {
   if (!cardInst) return st;
   const player = st.players[idx];
@@ -12675,19 +12675,13 @@ regA('鐵斑葉ex', 0, (st, idx, pool, cardInst) => {
   if (benchIdx < 0) return st;
   const oldActiveCard = pool.get(player.active.cardId);
   const newActiveCard = pool.get(cardInst.cardId);
+  // 互換 active ↔ bench[benchIdx]，能量先保留各自寶可夢身上（不直接搬）
   const players = [...st.players] as [PlayerState, PlayerState];
   const newBench = [...player.bench];
-  // 從舊戰鬥場拔出所有能量
-  const transferredEnergies = [...player.active.energyAttached];
-  const oldActiveCleared = {
-    ...clearActiveEffects(player.active),
-    energyAttached: [],
-  };
-  newBench[benchIdx] = oldActiveCleared;
-  // 新戰鬥場 = 鐵斑葉ex（從備戰移出），合併原有能量 + 轉移過來的能量
+  const oldActiveAsBench = clearActiveEffects(player.active);
+  newBench[benchIdx] = oldActiveAsBench;
   const newActive: CardInstance = {
     ...player.bench[benchIdx],
-    energyAttached: [...player.bench[benchIdx].energyAttached, ...transferredEnergies],
     movedToActiveThisTurn: true,
   };
   players[idx] = { ...player, active: newActive, bench: newBench };
@@ -12696,10 +12690,85 @@ regA('鐵斑葉ex', 0, (st, idx, pool, cardInst) => {
     `迅速游標：${oldActiveCard?.name ?? '?'} 退回備戰區，${newActiveCard?.name ?? '?'} 上場`,
     idx,
   );
-  if (transferredEnergies.length > 0) {
-    const energyNames = transferredEnergies.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
-    s = addLog(s, `迅速游標：將 ${transferredEnergies.length} 張能量（${energyNames}）改附於 ${newActiveCard?.name ?? '?'}`, idx);
+  // 收集自方所有寶可夢身上的能量（active 是新鐵斑葉ex；bench 含舊戰鬥場 + 原備戰）
+  const sourcePokes: CardInstance[] = [
+    ...(players[idx].active ? [players[idx].active!] : []),
+    ...players[idx].bench,
+  ];
+  const allEnergyIids: string[] = [];
+  for (const pk of sourcePokes) {
+    for (const e of pk.energyAttached) allEnergyIids.push(e.iid);
   }
+  if (allEnergyIids.length === 0) {
+    // 場上沒能量可挑 → 直接結束
+    return s;
+  }
+  return withPending(s, {
+    type: 'active-energy-discard',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 0,
+    maxCount: allEnergyIids.length,
+    effectKey: 'swiftcursor-energy-pick',
+    params: {
+      scope: 'all-own',       // v3.826 新增：UI 端讀此 flag 改列「自方所有寶可夢身上能量」
+      validIids: allEnergyIids,
+      targetIid: newActive.iid,
+      titleOverride: `迅速游標：選擇任意數量的能量改附於 ${newActiveCard?.name ?? '鐵斑葉ex'}（可以不選）`,
+    },
+  });
+});
+
+// v3.826: 迅速游標 resolver — 把 picked 能量從各來源移除，改附到 target 寶可夢
+regR('swiftcursor-energy-pick', (st, idx, pickedIids, params, pool) => {
+  const targetIid = params?.targetIid as string | undefined;
+  if (!targetIid) return st;
+  if (pickedIids.length === 0) {
+    return addLog(st, '迅速游標：未選擇能量轉移', idx);
+  }
+  const pickedSet = new Set(pickedIids);
+  let s = st;
+  const moved: CardInstance[] = [];
+  // 從自方所有寶可夢（active + bench）抽出 picked 能量
+  s = updatePlayer(s, idx, p => {
+    const stripFrom = (pk: CardInstance | null): CardInstance | null => {
+      if (!pk) return pk;
+      const keep: CardInstance[] = [];
+      for (const e of pk.energyAttached) {
+        if (pickedSet.has(e.iid) && pk.iid !== targetIid) {
+          // 從非 target 寶可夢身上抽出（不從 target 自己抽 → 自轉沒意義）
+          moved.push(e);
+        } else {
+          keep.push(e);
+        }
+      }
+      return { ...pk, energyAttached: keep };
+    };
+    return {
+      ...p,
+      active: stripFrom(p.active),
+      bench: p.bench.map(b => stripFrom(b)!) as CardInstance[],
+    };
+  });
+  if (moved.length === 0) {
+    return addLog(s, '迅速游標：所選能量無有效轉移目標', idx);
+  }
+  // 把抽出的能量附到 target
+  s = updatePlayer(s, idx, p => {
+    const attachTo = (pk: CardInstance | null): CardInstance | null => {
+      if (!pk || pk.iid !== targetIid) return pk;
+      return { ...pk, energyAttached: [...pk.energyAttached, ...moved] };
+    };
+    return {
+      ...p,
+      active: attachTo(p.active),
+      bench: p.bench.map(b => attachTo(b)!) as CardInstance[],
+    };
+  });
+  const targetCard = s.players[idx].active?.iid === targetIid
+    ? pool.get(s.players[idx].active!.cardId)
+    : pool.get(s.players[idx].bench.find(b => b.iid === targetIid)?.cardId ?? '');
+  const energyNames = moved.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  s = addLog(s, `迅速游標：將 ${moved.length} 張能量（${energyNames}）改附於 ${targetCard?.name ?? '?'}`, idx);
   return s;
 });
 

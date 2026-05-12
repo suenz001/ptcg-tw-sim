@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.826</span> 🎯 hotfix：鐵斑葉ex 迅速游標 picker 化（卡面「任意數量」應由玩家選）</summary>
+        <ul>
+          <li>玩家回報：鐵斑葉ex 上場觸發迅速游標時，無法選擇要吸哪些能量，預設自動把舊戰鬥場 3 顆能量全搬。</li>
+          <li><b>卡面原文</b>：「⋯選擇自己的場上寶可夢身上附加的<b>任意數量</b>的能量卡，改附於這隻寶可夢身上」。任意數量含 0，且來源是自方所有場上寶可夢（不只舊戰鬥場）。</li>
+          <li><b>根因</b>：v2.138 實裝註解明寫「玩家可選張數但實戰選『全轉』，sim/AI 用全轉版」 — 違反鐵律 Rule 7（嚴禁簡化實裝）。</li>
+          <li><b>修法</b>：拆兩階段
+            <ul>
+              <li>step 1：互換 active ↔ 鐵斑葉ex（不馬上搬能量）→ 開 picker，列自方所有寶可夢身上能量讓玩家勾選任意數量（minCount=0 含「不選」）。</li>
+              <li>step 2：resolver 把 picked 能量從各來源移除，改附到鐵斑葉ex。</li>
+            </ul>
+          </li>
+          <li>實作層面：擴展 <code>active-energy-discard</code> picker 支援 <code>params.scope='all-own'</code>，UI 列自方 active + bench 所有寶可夢身上能量（排除 target 自己以免自轉）。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.825</span> 💣 hotfix：咒詛炸彈不該被抵抗之幕擋（招式效果免疫誤套特性）</summary>
         <ul>
           <li>玩家回報：火箭隊的急凍鳥（抵抗之幕）保護下的火箭隊基礎寶可夢，被黑夜魔靈/徬徨夜靈的「咒詛炸彈」打 → 系統居然擋掉了，不放傷害指示物。</li>

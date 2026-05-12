@@ -1788,7 +1788,22 @@
       // v2.63 撤退選擇要丟棄的附加能量（戰鬥寶可夢身上有多屬性時才彈出）
       // v3.14 擴充：支援 params.targetIid（粉碎之錘 / 悠哉尾草棒）— 從 src 玩家
       //   「指定 iid」的寶可夢身上挑能量；可以是 active 或 bench；找不到則 fallback active。
+      // v3.826 擴充：支援 params.scope='all-own'（鐵斑葉ex 迅速游標）— 列自方所有寶可夢身上能量
       case 'active-energy-discard': {
+        const scope = pendingSelection.params?.scope as string | undefined;
+        if (scope === 'all-own') {
+          const allPokes = [...(src.active ? [src.active] : []), ...src.bench];
+          const validIidsSet = new Set(pendingSelection.params?.validIids as string[] | undefined);
+          const targetIidS = pendingSelection.params?.targetIid as string | undefined;
+          const out: CardInstance[] = [];
+          for (const pk of allPokes) {
+            if (pk.iid === targetIidS) continue;  // 不列 target 自己的能量（自轉無意義）
+            for (const e of pk.energyAttached) {
+              if (validIidsSet.size === 0 || validIidsSet.has(e.iid)) out.push(e);
+            }
+          }
+          return out;
+        }
         const targetIid = pendingSelection.params?.targetIid as string | undefined;
         if (targetIid) {
           const tgt = src.active?.iid === targetIid ? src.active
