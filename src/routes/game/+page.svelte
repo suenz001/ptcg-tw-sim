@@ -6766,7 +6766,7 @@
 
   .zoom-overlay{ position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.88); display:flex; align-items:flex-start; justify-content:center; padding:1rem; padding-top:calc(env(safe-area-inset-top, 2rem) + 1rem); font-family:system-ui,'Microsoft JhengHei',sans-serif; }
   /* v2.69：卡牌詳細 modal 整體等比放大 20%（Leon 反饋） */
-  .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.44rem; max-width:864px; width:96vw; max-height:calc(100vh - env(safe-area-inset-top, 2rem) - 3rem); margin:auto; display:flex; flex-direction:column; gap:.9rem; color:#f0f0f0; overflow-y:auto; position:relative; }
+  .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.44rem; max-width:864px; width:96vw; max-height:calc(100vh - env(safe-area-inset-top, 2rem) - 3rem); margin:auto; display:flex; flex-direction:column; gap:.9rem; color:#f0f0f0; overflow-y:auto; position:relative; touch-action:pan-y; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
   .zoom-close{ position:absolute; top:1rem; right:1rem; width:2.2rem; height:2.2rem; background:rgba(0,0,0,0.6); border-radius:50%; border:none; color:#eee; font-size:1.44rem; display:flex; align-items:center; justify-content:center; cursor:pointer; line-height:1; z-index:10; box-shadow:0 2px 6px rgba(0,0,0,0.4); }
   .zoom-close:hover{ background:#fff; color:#000; }
   /* v2.32：放到 × 左邊（top-right），避免擋到卡牌圖。.zoom-close 大約 2.2rem 寬，所以 back 從 right:4rem 開始留一些間距。 */
@@ -6998,6 +6998,9 @@
       padding: 0.7rem; gap: 0.55rem;
       max-height: 92vh;
       border-radius: 10px;
+      touch-action: pan-y;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
     .zoom-img { width: 56vw; max-width: 56vw; }
     .zoom-img-btn { cursor: default; pointer-events: none; }
@@ -7109,7 +7112,7 @@
 
     /* ── v2.206 zoom-modal 縮小到不用滾動 ── */
     /* 卡圖縮小：桌機 312px → 手機 160px。zoom-modal width 96vw / max-height 88vh */
-    .zoom-modal{ max-width:560px; width:96vw; max-height:88vh; padding:0.7rem; gap:0.5rem; }
+    .zoom-modal{ max-width:560px; width:96vw; max-height:88vh; padding:0.7rem; gap:0.5rem; touch-action:pan-y; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
     .zoom-img{ width:160px; max-width:42vw; }
     .zoom-name{ font-size:1rem; }
     .zoom-badges{ gap:0.25rem; }

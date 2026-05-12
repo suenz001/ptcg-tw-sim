@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.879</span> 📱 hotfix：iOS Safari 查看詳情 zoom-modal 無法垂直滾動（v3.872 whitelist 不夠）</summary>
+        <ul>
+          <li>玩家回報：v3.872 加 docMoveHandler whitelist 後 iPhone 仍無法滾動 zoom-modal，喵喵ex / 吉雉雞ex 等長文卡片下半被切掉看不到。</li>
+          <li><b>根因</b>：whitelist 只解決 touchmove preventDefault 層，但 iOS Safari 對 fixed-positioned 容器內的巢狀 scroll 有額外要求 — 必須在 scrollable 容器上顯式宣告 <code>touch-action: pan-y</code>（明確告訴 iOS「這裡可以垂直 pan」），否則 iOS 會把觸控當成 gesture 一律忽略。.mp 容器的 <code>touch-action: none</code>（v3.861 鎖主畫面拖曳用）在 iOS 會「全域感染」式影響觸控解讀，必須在 modal 層顯式覆寫。</li>
+          <li><b>修法</b>：<code>.zoom-modal</code> 桌機 + 手機 + portrait mobile 三處 CSS override 都加：
+            <ul>
+              <li><code>touch-action: pan-y</code> — 明確允許垂直 pan（iOS Safari 必要）</li>
+              <li><code>overscroll-behavior: contain</code> — 滾動到底/頂時不觸發外部捲動 / pull-to-refresh</li>
+              <li><code>-webkit-overflow-scrolling: touch</code> — 啟用 iOS native 慣性滾動（legacy 但仍對某些版本有用）</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.878</span> 🐛 活力森林 第 1 動作回合 UI 黃框誤導補修（v3.877 只改 engine handler 不夠）</summary>
         <ul>
           <li>玩家回報：v3.877 第 1 動作回合場上有活力森林時，engine 確實擋下進化（正確），但手牌的進化卡仍顯示黃框、場上寶可夢仍有「進化」標示 — 視覺誤導玩家以為可進化。</li>
