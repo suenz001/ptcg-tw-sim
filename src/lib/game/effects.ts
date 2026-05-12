@@ -761,6 +761,10 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   const teraImmunNames: string[] = [];        // v2.260 Bug #3 太晶備戰免疫名單
   const hitSet = new Set(selectedIids);
 
+  // v3.888：每隻 hit target 各別 check resolveBenchGuard（花之帷幔 / 抵抗之幕 / 藏隱 / 深度下潛 / 球形盾牌 / 羽毛化石 等）
+  //   原 v2.22 只擋對戰圓形（整體 sweep）和太晶（per-target），漏了 resolveBenchGuard 整套。
+  //   玩家回報 精神尖槍 攻擊 謝米花之帷幔備戰 沒擋住 — 因為 bench-hit-N resolver 沒呼叫 resolveBenchGuard。
+  const guardBlockedLog: string[] = [];
   for (const c of target.bench) {
     if (!hitSet.has(c.iid)) { newBench.push(c); continue; }
     const card = pool.get(c.cardId);
@@ -769,6 +773,16 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
       teraImmunNames.push(card.name ?? '?');
       newBench.push(c);
       continue;
+    }
+    // v3.888：resolveBenchGuard 檢查 — 花之帷幔 / 抵抗之幕 / 藏隱 / 球形盾牌 等
+    //   targetIdx !== actorIdx 才檢查（自己自殘類不擋）
+    if (targetIdx !== actorIdx) {
+      const g = resolveBenchGuard(st, pool, actorIdx, card, 'attack-damage');
+      if (g.blocked) {
+        guardBlockedLog.push(`${card?.name ?? '?'}：${g.reason}`);
+        newBench.push(c);
+        continue;
+      }
     }
     const newDmg = c.damage + amount;
     const hp = effectiveHPInline(c, pool, st);
@@ -791,6 +805,10 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   players[targetIdx] = { ...target, bench: newBench, discard: [...target.discard, ...koDiscards] };
 
   let s: GameState = { ...st, players };
+  // v3.888：log 被 resolveBenchGuard 擋下的目標（花之帷幔 / 抵抗之幕 等）
+  if (guardBlockedLog.length > 0) {
+    s = addLog(s, `${label}：以下備戰寶可夢免疫此招式傷害 — ${guardBlockedLog.join('；')}`, actorIdx);
+  }
   if (hitNames.length > 0) {
     s = addLog(s, `${label}：對 ${hitNames.join('、')} 造成 ${amount} 傷害`, actorIdx);
   }

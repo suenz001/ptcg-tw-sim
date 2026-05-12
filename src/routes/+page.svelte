@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.888</span> 🐛 修花之帷幔等 6 種備戰免疫特性對 精神尖槍 / 激流水泵 等備戰打擊招式失效</summary>
+        <ul>
+          <li>玩家回報：代歐奇希 精神尖槍 攻擊有「花之帷幔」謝米備戰，特性沒擋住。</li>
+          <li><b>根因</b>：<code>regR('bench-hit-N', ...)</code> resolver（所有走 picker 對備戰打傷害的招式共用 — 精神尖槍 / 激流水泵 / 鐵之震動 / 火焰旋風 等）只檢查對戰圓形 (<code>isBenchProtected</code>) 和太晶 (per-target <code>tags</code>)，**漏了 <code>resolveBenchGuard</code> 整套** — 包括：
+            <ul>
+              <li>謝米｜花之帷幔（M2a/SV9a 80HP）— 自己備戰非規則寶可夢不受招式傷害</li>
+              <li>火箭隊的急凍鳥｜抵抗之幕 — 自己備戰火箭隊基礎寶可夢不受招式效果</li>
+              <li>斯魔茶｜藏隱 — 自己在備戰時不受招式傷害與效果</li>
+              <li>小霞的鯉魚王｜深度下潛 — 同上</li>
+              <li>蟲甲聖｜球形盾牌（A1）— 自己備戰不受招式傷害與效果</li>
+              <li>陳舊的羽毛化石（I）— 備戰時不受招式傷害與效果</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：<code>bench-hit-N</code> for loop 內，對每隻 hit target 呼叫 <code>resolveBenchGuard(st, pool, actorIdx, card, 'attack-damage')</code>。如果 blocked，該隻 newBench 不變、+ log 「免疫此招式傷害 — X：原因」。<code>targetIdx !== actorIdx</code> 才檢查（自殘類不擋）。</li>
+          <li><b>受惠範圍</b>：所有走 hitBenchPickPost / hitBenchAll 等 helper 的招式都自動修好（精神尖槍 / 激流水泵 / 鐵之震動 / 火焰旋風 / 油之機關槍 / 等等）。</li>
+          <li><b>關於「點擊變成 70HP 謝米」</b>：謝米有 8 個 cardId 變體（M-P-J/M2a/M3/MC/SV5K/SV9a×2/SVM），其中只有 <code>14672</code> (M2a) / <code>12664</code>+<code>12724</code> (SV9a) 是 80HP 帶花之帷幔。若對手 deck 收的是 70HP 版本，點擊看到的就是 70HP 版本（正常）。但 bench-hit-N 不擋花之帷幔本來就是 bug，已修。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.887</span> 📱 zoom-modal 加可收折區塊（場上狀態 / 特性 / 招式）— 採用使用者建議</summary>
         <ul>
           <li>玩家建議：放棄修 scroll，改加可收折區塊解決「文字敘述版面過長」問題。</li>
