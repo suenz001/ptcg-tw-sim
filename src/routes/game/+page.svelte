@@ -6968,9 +6968,6 @@
   :global(body.mp-locked) {
     overflow: hidden !important;
     overscroll-behavior: none;
-    position: fixed;
-    width: 100%;
-    height: 100dvh;
   }
   :global(html:has(body.mp-locked)) { overflow: hidden; overscroll-behavior: none; }
 

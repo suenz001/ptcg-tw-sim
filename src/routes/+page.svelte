@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.882</span> 📱 真的真的修好 zoom-modal 滾動：拿掉 body.mp-locked 的 position:fixed</summary>
+        <ul>
+          <li>玩家回報：v3.881 拿掉 body 的 touch-action: none 後仍無法滾動。</li>
+          <li><b>真正根因（這次真的找對了）</b>：<code>body.mp-locked</code> 還有 <code>position: fixed</code>（v2.288 加的雙保險）— iOS Safari 對 <code>body[position:fixed]</code> 內的 nested scrollable 元素有 known issue，<code>overflow-y:auto</code> 不會啟動 momentum scroll，整個 viewport 被當「不可滾動的快照」處理。</li>
+          <li><b>修法</b>：拿掉 body.mp-locked 的 <code>position: fixed</code> / <code>width: 100%</code> / <code>height: 100dvh</code>。靠：
+            <ul>
+              <li><code>.mp</code> 本身已 <code>position: fixed; inset: 0</code> cover 視窗 — body 不需重複設</li>
+              <li>body <code>overflow: hidden</code> + <code>overscroll-behavior: none</code> 擋 body 滾動 + pull-to-refresh</li>
+              <li>JS <code>preventScroll</code>（MobilePortraitBattle.svelte）雙保險擋 touchmove outside whitelist</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.881</span> 🔧 hotfix：v3.880 changelog 內 raw &#123; &#125; 違反 Iron Rule #1，build 失敗</summary>
         <ul>
           <li>v3.880 push 後 GitHub Actions build 失敗 — <code>Build SvelteKit app</code> step error: <code>Expected token &#125;</code> at line 270:101。</li>
