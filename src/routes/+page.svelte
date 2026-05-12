@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.880</span> 📱 真正修好 zoom-modal 滾動：拿掉 body.mp-locked 的 touch-action: none</summary>
+        <ul>
+          <li>玩家回報：v3.879 在 .zoom-modal 加 <code>touch-action: pan-y</code> 仍無法滾動。</li>
+          <li><b>真正根因</b>：<code>line 6960-6968</code> 的 <code>:global(body.mp-locked) { touch-action: none }</code>（v2.288 為了擋 iOS pull-to-refresh 加的）。iOS Safari 對 body 級 <code>touch-action: none</code> 解讀很強硬 — 會壓制所有 nested scrollable 元素的 pan gesture，即使該元素本身宣告 <code>touch-action: pan-y</code> 也敗給 body level。zoom-modal 真的有 overflow-y:auto，但 iOS 不啟動 scroll。</li>
+          <li><b>修法</b>：拿掉 body.mp-locked 的 <code>touch-action: none</code>。靠：
+            <ul>
+              <li>JS <code>preventScroll</code>（MobilePortraitBattle.svelte，v3.871 加的）— 擋 touchmove outside whitelist，仍擋 pull-to-refresh</li>
+              <li><code>overscroll-behavior: none</code> — 保留，擋 overscroll bouncing</li>
+              <li><code>position: fixed + width:100% + height:100dvh</code> — 保留，防止整頁位移</li>
+            </ul>
+            這樣 body level 不強制 touch-action: none，巢狀 modal 可正常 pan scroll；同時 JS 層仍擋 pull-to-refresh 觸發。
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.879</span> 📱 hotfix：iOS Safari 查看詳情 zoom-modal 無法垂直滾動（v3.872 whitelist 不夠）</summary>
         <ul>
           <li>玩家回報：v3.872 加 docMoveHandler whitelist 後 iPhone 仍無法滾動 zoom-modal，喵喵ex / 吉雉雞ex 等長文卡片下半被切掉看不到。</li>

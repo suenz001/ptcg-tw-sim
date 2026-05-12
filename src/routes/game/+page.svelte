@@ -6957,11 +6957,17 @@
     }
   }
 
-  /* v2.288：手機直式 + 戰鬥中鎖 body 滑動（禁止 iOS Safari pull-to-refresh / bounce） */
+  /* v2.288：手機直式 + 戰鬥中鎖 body 滑動（禁止 iOS Safari pull-to-refresh / bounce）
+     v3.880：拿掉 `touch-action: none` — iOS Safari 對 body 級此屬性解讀過強硬，
+     會壓制 nested scrollable 元素（zoom-modal / selection-modal）的 pan-y，
+     導致查看詳情長文無法滾動。改靠：
+     - JS preventScroll (MobilePortraitBattle.svelte) — 擋 touchmove outside whitelist
+     - overscroll-behavior: none — 擋 overscroll bouncing
+     - position: fixed + width:100% + height:100dvh — 防止整頁位移
+     這樣 body level 不強制 touch-action: none，巢狀 modal 內可正常 pan scroll。 */
   :global(body.mp-locked) {
     overflow: hidden !important;
     overscroll-behavior: none;
-    touch-action: none;
     position: fixed;
     width: 100%;
     height: 100dvh;
