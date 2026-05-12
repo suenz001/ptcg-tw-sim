@@ -11617,19 +11617,27 @@ regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool, action) => {
   if (atks.length === 0) {
     return { state: addLog(state, `扮晶晶酒：${oppCard.name} 沒有可以扮演的招式`, aIdx), damage: 0 };
   }
-  // 解析每招印刷傷害的前導整數（空字串 / 全非數字 → 0）
+  // v3.873：先試 action.copyAttackChoice（玩家透過 UI 自選的招式 index）— 解決：
+  //   1) 啜泣（20）一直被自動挑最高 logic 蓋掉，永遠用不到
+  //   2) 借 激流水泵 時 picker 不開（key 不匹配） → option 永遠不觸發
+  // 無 copyAttackChoice（AI / 舊 state）→ fallback 自動挑印刷最高（v2.57 行為）。
+  const choice = action?.copyAttackChoice;
+  let picked: typeof atks[number];
+  let pickedDmg = 0;
   const parseDmg = (s: string): number => {
     const m = s.match(/^(\d+)/);
     return m ? parseInt(m[1], 10) : 0;
   };
-  // 挑「印刷傷害最高」那招；全為 0 則退回第一招
-  let picked = atks[0];
-  let pickedDmg = parseDmg(picked.damage);
-  for (let i = 1; i < atks.length; i++) {
-    const d = parseDmg(atks[i].damage);
-    if (d > pickedDmg) {
-      picked = atks[i];
-      pickedDmg = d;
+  if (choice && choice.attackIndex >= 0 && choice.attackIndex < atks.length) {
+    picked = atks[choice.attackIndex];
+    pickedDmg = parseDmg(picked.damage);
+  } else {
+    // fallback：挑印刷最高那招（全 0 退回第一招）
+    picked = atks[0];
+    pickedDmg = parseDmg(picked.damage);
+    for (let i = 1; i < atks.length; i++) {
+      const d = parseDmg(atks[i].damage);
+      if (d > pickedDmg) { picked = atks[i]; pickedDmg = d; }
     }
   }
   // 被複製招式的 effectKey（與 engine.ts 的 effectKey 組法一致）
@@ -11640,7 +11648,7 @@ regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool, action) => {
   const copiedPre = ATTACK_PRE.get(copiedKey);
   if (copiedPre) {
     // 遞迴呼叫被複製招式 PRE — 傷害以 PRE 回傳為準（涵蓋 ×能量 / +條件 等動態計算）。
-    // 傳 action，好讓某些 PRE 使用 action.targetIid 等資訊（即使 UI 本身不會開新選單）。
+    // 傳 action（含 discardedEnergyIids），好讓 PRE_DISCARD_CHOICE 類招式（激流水泵 等）拿到玩家挑的能量 iid。
     const sub = copiedPre(s, aIdx, pool, action);
     return {
       state: sub.state,
@@ -11655,13 +11663,14 @@ regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool, action) => {
 
 // POST 轉接：engine 走完傷害施加後，查本招式的 POST → 這邊將 state.pendingCopyAttackKey
 // 轉去呼叫被複製招式的 POST（例如 pendingSelection 類附加效果），完成後清除旗標。
-regPost('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool) => {
+// v3.873：接收 action 並轉接 — 激流水泵 等 option-style POST 需要 action.discardedEnergyIids 判斷是否觸發。
+regPost('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool, action) => {
   const key = state.pendingCopyAttackKey;
   const cleared: GameState = { ...state, pendingCopyAttackKey: undefined };
   if (!key) return cleared;
   const copiedPost = ATTACK_POST.get(key);
   if (!copiedPost) return cleared;
-  return copiedPost(cleared, aIdx, pool);
+  return copiedPost(cleared, aIdx, pool, action);
 });
 
 // ---- Known gap 特性 stubs（log only）--------------------------------------

@@ -277,11 +277,13 @@
 
   // ── 招式前置丟能量選擇（v1.57） ────────────────────────────────────────────
   // 玩家宣告招式、ATTACK_PRE_DISCARD_CHOICE 命中時彈出的能量挑選 modal 狀態
+  // v3.873：optional copyAttackChoice — 扮晶晶酒先選對手太晶招式，再開能量 picker 時帶著 choice 一起 dispatch
   let preAttackDiscard = $state<{
     attackIndex: number;
     spec: PreDiscardSpec;
     attackName: string;
     picked: Set<string>;
+    copyAttackChoice?: { pokeIid: string; attackIndex: number };
   } | null>(null);
 
   // ── 手牌 hover 預覽（Session 31 修正） ─────────────────────────────────────
@@ -2303,6 +2305,24 @@
       copyAttackPicker = { sourceAttackIndex: attackIndex, candidates };
       return;
     }
+    // v3.873 扮晶晶酒 intercept：對手戰鬥場若為太晶寶可夢，讓玩家挑要扮演哪個招式
+    //   解決：之前自動挑最高傷害 → 啜泣（20）永遠用不到 + 激流水泵 picker 不開
+    if (atk.name === '扮晶晶酒') {
+      if (!game) return;
+      const opp = game.players[1 - myIdx];
+      const oppActive = opp.active;
+      const oppCard = oppActive ? getCard(oppActive.cardId) : undefined;
+      // 目標必為對手戰鬥場「太晶」寶可夢；無目標 / 非太晶 → 讓 engine 出 log
+      if (!oppActive || !oppCard || !(oppCard.tags ?? []).includes('太晶') || (oppCard.attacks?.length ?? 0) === 0) {
+        dispatch(GameActions.attack(attackIndex));
+        return;
+      }
+      personateAttackPicker = {
+        sourceAttackIndex: attackIndex,
+        oppPoke: { inst: oppActive, card: oppCard },
+      };
+      return;
+    }
     const key = `${sourceCardName}|${atk.name}`;
     const spec = ATTACK_PRE_DISCARD_CHOICE.get(key);
     if (!spec) {
@@ -2329,6 +2349,40 @@
     dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
   }
   function cancelCopyAttack() { copyAttackPicker = null; }
+
+  // v3.873 扮晶晶酒 picker：玩家挑對手戰鬥場太晶寶可夢的招式
+  //   - 啜泣 → 直接 dispatch（無 PRE_DISCARD_CHOICE）
+  //   - 激流水泵 → 接 preAttackDiscard 開能量 picker（min=0/max=3，可選 0 = 不希望使用 option / 選 3 = 希望使用 option）
+  let personateAttackPicker = $state<{
+    sourceAttackIndex: number;
+    oppPoke: { inst: CardInstance; card: Card };
+  } | null>(null);
+  function resolvePersonateAttack(pokeIid: string, attackIndex: number) {
+    if (!personateAttackPicker) return;
+    const src = personateAttackPicker.sourceAttackIndex;
+    const oppPoke = personateAttackPicker.oppPoke;
+    personateAttackPicker = null;
+    // 檢查 borrowed 招式是否有 PRE_DISCARD_CHOICE — 若有，先開能量 picker（讓玩家決定是否使用 option / 是否希望）
+    const pickedAtk = oppPoke.card.attacks?.[attackIndex];
+    if (!pickedAtk) {
+      dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
+      return;
+    }
+    const borrowedKey = `${oppPoke.card.name}|${pickedAtk.name}`;
+    const spec = ATTACK_PRE_DISCARD_CHOICE.get(borrowedKey);
+    if (spec) {
+      preAttackDiscard = {
+        attackIndex: src,
+        spec,
+        attackName: pickedAtk.name,
+        picked: new Set<string>(),
+        copyAttackChoice: { pokeIid, attackIndex },
+      };
+      return;
+    }
+    dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
+  }
+  function cancelPersonateAttack() { personateAttackPicker = null; }
 
   // 取得「可被挑選丟棄」的卡片清單（依 scope 決定範圍）
   // v2.143 擴展：scope='hand-rocket-supporter' 時返回手牌中「火箭隊」支援者
@@ -2430,14 +2484,15 @@
 
   function confirmPreAttackDiscard() {
     if (!preAttackDiscard) return;
-    const { attackIndex, spec, picked } = preAttackDiscard;
+    // v3.873：解構 copyAttackChoice — 若為 扮晶晶酒 borrowed picker 流程，需一併 dispatch
+    const { attackIndex, spec, picked, copyAttackChoice } = preAttackDiscard;
     const energies = getDiscardableEnergies(spec);
     const amount = computePickedAmount(spec, picked, energies);
     if (amount < spec.min) return;
     if (spec.max !== null && amount > spec.max) return;
     const iids = [...picked];
     preAttackDiscard = null;
-    dispatch(GameActions.attack(attackIndex, iids));
+    dispatch(GameActions.attack(attackIndex, iids, copyAttackChoice));
   }
 
   function cancelPreAttackDiscard() {
@@ -5042,6 +5097,45 @@
         </div>
         <div class="sel-footer">
           <button class="btn-act secondary" onclick={cancelCopyAttack}>取消</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- v3.873 火箭隊的謎擬Ｑ｜扮晶晶酒 — 挑對手戰鬥場太晶寶可夢的招式 ─────────── -->
+  {#if personateAttackPicker}
+    {@const op = personateAttackPicker.oppPoke}
+    <div class="selection-overlay">
+      <div class="selection-modal copy-attack-modal">
+        <div class="sel-header">
+          <h3>🎭 扮晶晶酒：選擇要扮演的招式</h3>
+          <p class="sel-hint">從對手戰鬥場的「太晶」寶可夢中選 1 個招式，作為這個招式使用。<br/>若選到有「若希望」效果的招式（如激流水泵），下一步會詢問是否啟用追加效果。</p>
+        </div>
+        <div class="copy-attack-list">
+          <div class="copy-attack-poke">
+            <img src={op.card.imageUrl} alt={op.card.name} class="copy-attack-img"/>
+            <div class="copy-attack-col">
+              <div class="copy-attack-name">{op.card.name}（對手戰鬥場）</div>
+              <div class="copy-attack-atks">
+                {#each op.card.attacks ?? [] as atk, aIdx}
+                  <button
+                    class="copy-attack-btn"
+                    onclick={() => resolvePersonateAttack(op.inst.iid, aIdx)}
+                    title={atk.effect ?? ''}
+                  >
+                    <span class="copy-atk-cost">
+                      {#each atk.cost as e}<span class="copy-atk-pip" style:background={ENERGY_COLOR[e]} title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                    </span>
+                    <span class="copy-atk-name">{atk.name}</span>
+                    {#if atk.damage}<span class="copy-atk-dmg">{atk.damage}</span>{/if}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sel-footer">
+          <button class="btn-act secondary" onclick={cancelPersonateAttack}>取消</button>
         </div>
       </div>
     </div>

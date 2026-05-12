@@ -264,6 +264,34 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.873</span> 🎭 hotfix：火箭隊的謎擬Ｑ｜扮晶晶酒 改為玩家自選對手太晶招式（含激流水泵 picker 修補）</summary>
+        <ul>
+          <li>玩家回報：火箭隊的謎擬Ｑ｜扮晶晶酒 無法學習厄鬼椪 水井面具ex 的招式「激流水泵」與「啜泣」。</li>
+          <li><b>根因 1（啜泣永遠用不到）</b>：扮晶晶酒 自 v2.57 起採「自動挑印刷傷害最高那招」精簡策略 — 激流水泵 100 永遠蓋過啜泣 20，後者完全沒機會被扮演。</li>
+          <li><b>根因 2（激流水泵 option 永遠不觸發）</b>：engine 看當前招式 effectKey 找 <code>ATTACK_PRE_DISCARD_CHOICE</code>（key=「火箭隊的謎擬Ｑ|扮晶晶酒」）找不到 → picker 不開 → <code>action.discardedEnergyIids</code> undefined → 借調的 激流水泵 regPre 永遠走「未棄滿 3 個能量 → 100」分支，對手備戰 120 永遠不觸發。</li>
+          <li><b>根因 3（POST 階段沒傳 action）</b>：扮晶晶酒 regPost 轉接給 borrowed POST 時沒把 action 傳下去，激流水泵 POST <code>action?.discardedEnergyIids ?? []</code> 永遠空 → 對手備戰 picker 一樣不會開（即使 PRE 有跳）。</li>
+          <li><b>修法</b>：
+            <ul>
+              <li>① <code>+page.svelte initiateAttack</code> 加 扮晶晶酒 intercept（仿 N的索羅亞克ex｜暗黑底牌 pattern）— 偵測對手戰鬥場為「太晶」寶可夢且有招式 → 跳 personateAttackPicker UI 列出該寶可夢的所有招式讓玩家挑。</li>
+              <li>② 玩家挑完招式後：若 borrowed 招式有 <code>ATTACK_PRE_DISCARD_CHOICE</code>（如激流水泵）→ 直接接 <code>preAttackDiscard</code> 能量 picker（並 piggyback <code>copyAttackChoice</code>），玩家確認時一併 dispatch；無 spec（如啜泣）→ 直接 dispatch。</li>
+              <li>③ <code>preAttackDiscard</code> state 加 <code>copyAttackChoice?</code> 欄位，<code>confirmPreAttackDiscard</code> 解構並透傳給 <code>GameActions.attack</code> 第 3 參數。</li>
+              <li>④ <code>effects.ts</code> 扮晶晶酒 regPre 讀 <code>action.copyAttackChoice.attackIndex</code> 決定要扮演的招式；無 choice（AI / 舊 state）fallback 維持 v2.57 自動挑最高邏輯。</li>
+              <li>⑤ 扮晶晶酒 regPost 簽章補 <code>action</code> 參數並一併轉接給 borrowed POST（修復根因 3）— 激流水泵的「對手備戰 1 隻受 120」picker 才會跳出。</li>
+            </ul>
+          </li>
+          <li><b>受惠範圍</b>：
+            <ul>
+              <li>啜泣（20 傷害 + 對手戰鬥位下回合不能撤退）— 現在可被選擇</li>
+              <li>激流水泵（100 + 若希望棄 3 能量回牌庫並重洗 → 對手備戰 120）— 完整流程可運作</li>
+              <li>未來所有對手太晶寶可夢的招式皆可被選擇（不再被自動最高傷邏輯蓋掉）</li>
+            </ul>
+          </li>
+          <li><b>「若希望」UX</b>：能量 picker 為 min=0 / max=3 — 確認按鈕顯示「放回 N 張」（spec.verb='return-to-deck'），同時 spec.min=0 → 顯示「不放回（0 傷害）」快速 skip 按鈕，符合卡面「若希望」二選一語意。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.872</span> 🔍 hotfix：v3.871 whitelist 寫錯 class — 查看詳情 modal 無法垂直 scroll</summary>
         <ul>
           <li>玩家附截圖：v3.871 鎖主畫面後，「查看詳情」彈窗（喵喵ex 等卡的特性描述）長文無法垂直拖曳查看。</li>
