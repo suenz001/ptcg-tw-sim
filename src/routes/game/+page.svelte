@@ -5200,9 +5200,7 @@
             <label for="bgm-select">選擇曲目：</label>
             <select id="bgm-select" value={bgmTrack} onchange={(e) => onBgmTrackChange(e.currentTarget.value)}>
               <option value="none">無 (關閉)</option>
-              <option value="Aim to Be a Pokemon Master">Aim to Be a Pokémon Master</option>
-              <option value="Pokemon XYZ Opening">Pokémon XYZ Opening</option>
-              <option value="We Go">We Go</option>
+              <!-- v3.84: 為避免版權風險，移除 3 首官方 BGM。功能容器保留，之後補新音樂直接在這加 option + 在 static/music/ 放 .mp3 即可。 -->
             </select>
           </div>
           {#if bgmTrack !== 'none'}

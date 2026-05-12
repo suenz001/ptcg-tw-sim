@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.84</span> 🎵 版權安全：移除 3 首內建 BGM（功能保留，等後續補免費音樂）</summary>
+        <ul>
+          <li>玩家通知：使用官方 mp3 有版權風險，先把內建 3 首移除：
+            <ul>
+              <li>Aim to Be a Pokémon Master</li>
+              <li>Pokémon XYZ Opening</li>
+              <li>We Go</li>
+            </ul>
+          </li>
+          <li><b>功能容器保留</b>：設定 → 🎵 背景音樂 (BGM) 區塊仍在，下拉選單目前只剩「無 (關閉)」。後續補新音樂時：
+            <ol>
+              <li>把新 mp3 放到 <code>static/music/</code></li>
+              <li>在 <code>game/+page.svelte</code> 的 BGM select 加新 option 即可</li>
+            </ol>
+          </li>
+          <li>localStorage 殘留：若舊用戶之前選過 3 首之一，瀏覽器嘗試 load 會 404 但不影響其他功能。重新選「無 (關閉)」即可。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.832</span> 📝 hotfix：匯入文字漏「張數」格式 + error message 改善</summary>
         <ul>
           <li>玩家回報：v3.831 修完後仍匯入失敗。看截圖 — 輸入是「呱呱泡蛙 M-P-J 089/M-P」「基本【水】能量 M-P-J 098/M-P」<b>每行開頭沒張數</b>。</li>
