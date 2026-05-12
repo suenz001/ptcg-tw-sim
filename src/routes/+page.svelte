@@ -272,7 +272,7 @@
             <ul>
               <li><b>新增 Format D</b>「{`{name} {setCode} {collectorNumber}`}」regex，<b>允許無張數</b>。匹配後預設 count=1 + 加入 ambiguities 警示「自動補 1 張，匯入後請手動調整數量」</li>
               <li>order：mId → mFull → mSimple → mNoCount（最後 fallback，避免吃到正常含張數的格式）</li>
-              <li>error message 改成具體提示：<code>無法解析：「{line}」 → 每行需以「張數」開頭，例如：4 呱呱泡蛙 M-P-J 089/M-P</code></li>
+              <li>error message 改成具體提示：<code>無法解析：「&#123;line&#125;」 → 每行需以「張數」開頭，例如：4 呱呱泡蛙 M-P-J 089/M-P</code></li>
             </ul>
           </li>
           <li>tsc 0 errors。</li>
