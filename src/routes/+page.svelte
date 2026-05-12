@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.8731</span> 🔄 redeploy：v3.873 build 成功但 GitHub Pages deploy step 失敗（infra 抖動），no-op patch 重新觸發 workflow</summary>
+        <ul>
+          <li>v3.873 GitHub Actions run #838：build job 全部 success（npm ci / Build SvelteKit app / upload-pages-artifact 都 ✓），但 deploy job 的 <code>actions/deploy-pages@v4</code> step failure。</li>
+          <li>非程式碼問題 — 純 GitHub Pages 部署基礎建設層失敗（常見：concurrent deployment lock、rate-limit、API 暫時 5xx）。</li>
+          <li>依鐵律 #5：失敗 push 不 force-push，用新 patch 版號重新觸發 workflow。本版只 bump 版本字串 + 補此 changelog，程式碼與 v3.873 完全相同。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.873</span> 🎭 hotfix：火箭隊的謎擬Ｑ｜扮晶晶酒 改為玩家自選對手太晶招式（含激流水泵 picker 修補）</summary>
         <ul>
           <li>玩家回報：火箭隊的謎擬Ｑ｜扮晶晶酒 無法學習厄鬼椪 水井面具ex 的招式「激流水泵」與「啜泣」。</li>
