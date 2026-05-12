@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.83</span> 🔖 UX：牌組頁主畫面加「從官方匯入」顯眼按鈕</summary>
+        <ul>
+          <li>玩家反映：原本「從官方訓練家網站匯入」的書籤工具藏在「匯入文字」modal 內的摺疊區裡，太深、玩家根本找不到 — 主畫面只看到「匯入文字」按鈕、沒有任何「也支援官方」的提示。</li>
+          <li><b>修法</b>：
+            <ul>
+              <li>主畫面「匯入文字」按鈕旁加新藍色按鈕「🔖 從官方匯入」</li>
+              <li>新按鈕點下去 → 打開「匯入文字」modal + <b>自動展開</b>底下「📦 從官方訓練家網站匯入」摺疊區（書籤拖曳教學）</li>
+              <li><code>bind:open</code> 雙向綁定 — 玩家可自己手動 toggle 摺疊區</li>
+              <li>「匯入文字」按鈕也加上 tooltip：「貼上 PTCG 文字格式（包含官方訓練家網站可透過下方書籤工具一鍵匯入）」</li>
+            </ul>
+          </li>
+          <li>實際後端機制沒變 — 依然走「玩家在官方頁面點書籤 → 自動複製 60 張卡的文字 → 貼回我們的 modal」這條最穩、最沒 CORS / ToS 風險的路徑。只是入口從藏起來變成顯眼。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.829</span> 📕 hotfix：變化之書 picker 漏 filter 'Basic'（誤選支援者）</summary>
         <ul>
           <li>玩家回報：AI 用變化之書時可以選棄牌區的「莉莉艾的決意」（支援者）當成基礎寶可夢交換到場上。</li>

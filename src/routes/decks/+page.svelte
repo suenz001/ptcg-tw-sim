@@ -566,10 +566,20 @@
     showTextModal = true;
   }
 
-  function openTextImport() {
+  // v3.83: 控制 modal 內「📦 從官方訓練家網站匯入」摺疊區預設展開狀態
+  //   讓主畫面「🔖 從官方匯入」按鈕能直接跳到那段，不要每次都要手動展開。
+  let officialHelpOpen = $state(false);
+
+  function openTextImport(opts?: { autoOpenOfficial?: boolean }) {
     importTextInput = '';
     textModalMode = 'import';
+    officialHelpOpen = opts?.autoOpenOfficial ?? false;
     showTextModal = true;
+  }
+
+  // v3.83: 直接從主畫面開官方匯入 — 同 openTextImport 但自動展開書籤教學區
+  function openOfficialImport() {
+    openTextImport({ autoOpenOfficial: true });
   }
 
   async function copyToClipboard() {
@@ -899,7 +909,9 @@
               <button class="small" onclick={exportJson}>匯出 JSON</button>
             {:else}
               <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字</button>
-              <button class="small" onclick={openTextImport} disabled={!poolReady}>匯入文字</button>
+              <button class="small" onclick={openTextImport} disabled={!poolReady} title="貼上 PTCG 文字格式（包含官方訓練家網站可透過下方書籤工具一鍵匯入）">匯入文字</button>
+              <!-- v3.83: 提供顯眼的官方匯入入口，避免玩家找不到（書籤教學原本藏在「匯入文字」modal 摺疊區內） -->
+              <button class="small primary" onclick={openOfficialImport} disabled={!poolReady} title="從官方訓練家網站一鍵匯入牌組（首次需設定書籤）">🔖 從官方匯入</button>
               <button class="small" onclick={exportJson}>匯出 JSON</button>
               <label class="small file">
                 匯入 JSON
@@ -1297,7 +1309,8 @@
           首行可選：<code>// 牌組名稱</code>
         </p>
 
-        <details class="official-import-help">
+        <!-- v3.83: bind:open 讓主畫面「🔖 從官方匯入」按鈕能直接自動展開 -->
+        <details class="official-import-help" bind:open={officialHelpOpen}>
           <summary>📦 從官方訓練家網站匯入（一次設定永久可用）</summary>
           <div class="help-body">
             <p><strong>✨ 一次性設定</strong>（之後每次都只要點書籤）：</p>
