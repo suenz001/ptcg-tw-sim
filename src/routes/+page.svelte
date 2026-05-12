@@ -264,6 +264,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.822</span> 🌐 hotfix：連線對戰 — A 蓋掉 B 的零之大空洞後 B 端收不到棄備戰 picker 死鎖</summary>
+        <ul>
+          <li>玩家回報：連線對戰時 A 蓋掉 B 的零之大空洞，按 PTCG 規則 B 要從備戰丟到剩 5 隻，但 B 端沒收到任何 picker，整局卡死。</li>
+          <li><b>根因（精確）</b>：A 端 <code>canIPush</code> 邏輯只認「pending 的 actor 是不是我」。A 的動作（蓋場地）觸發了 <code>enforceBenchLimit</code> 設給 B 的 pending，A 端 check：
+            <ul>
+              <li><code>prevState.pendingSelection</code> = undefined（沒舊 pending）</li>
+              <li><code>newState.pendingSelection.actorIdx</code> = B（即 1）</li>
+              <li>「prev actor === A？」 false（沒 prev）+「new actor === A？」 false（actor 是 B）</li>
+              <li>→ return false → A 不 push 到 Firestore → B 永遠收不到 pending → 雙方卡死</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：補三條 fallback 給 prev 沒 pending 的情況，「我是發動者就推」：
+            <ul>
+              <li>我是 active player（normal action 觸發 side-effect pending）</li>
+              <li>我是被擊倒方補場中（補場過程觸發 pending）</li>
+              <li>我有待領獎賞（取獎觸發 side-effect pending）</li>
+            </ul>
+            原則：以 prevState 為「能否發動 action」基準，能發就能推（無論 newState pending 指向誰）。
+          </li>
+          <li><b>影響面</b>：不只零之大空洞 — 任何「A 動作觸發給 B pending」場景都受惠（例：A 打卡讓 B 棄能量 / B 選送新 active 等）。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.821</span> 🛡️ audit：對手場特性 AI/UI filter 三層一致性修補（4 處漏網）</summary>
         <ul>
           <li>玩家提出：「含羞苞鎖對方物品時 AI 不會死迴圈，為何海之詛咒會死？是不是邏輯不一致？黃色框框不該亮、AI 也該遵守同樣規則。」— 觀察完全正確。</li>

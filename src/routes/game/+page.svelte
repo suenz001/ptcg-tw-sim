@@ -2206,8 +2206,21 @@
         if (prevState.phase === 'setup') return true;
         if (newState.pendingSelection) {
           // 既有 selection 由其 actor 推；我消化完 (newState 的 pending 變了/消失) 也算我推
-          return prevState.pendingSelection?.actorIdx === myPlayerIndex
-              || newState.pendingSelection.actorIdx === myPlayerIndex;
+          if (prevState.pendingSelection?.actorIdx === myPlayerIndex) return true;
+          if (newState.pendingSelection.actorIdx === myPlayerIndex) return true;
+          // v3.822 fix：A 動作觸發給 B 的 pending（例：A 蓋掉 B 的零之大空洞 → enforceBenchLimit
+          //   設 pending 給 B 棄備戰）— 原邏輯只看 actor === me 會讓 A 不 push → B 永遠收不到
+          //   → 雙方卡死。修法：prevState 沒 pending 時，我是發動者（active player）就該推，
+          //   把這個對手向 pending 同步出去。
+          if (!prevState.pendingSelection && prevState.activePlayerIndex === myPlayerIndex) return true;
+          // 防守方補場觸發的 pending（自己被擊倒後送新 active，過程中可能觸發給對手的 pending）
+          if (!prevState.pendingSelection
+              && prevState.players[myPlayerIndex].active === null
+              && prevState.phase === 'playing') return true;
+          // 取獎賞觸發的 pending（自身獎賞 + side effect 給對手的 pending）
+          if (!prevState.pendingSelection
+              && (prevState.pendingPrizes?.[myPlayerIndex] ?? 0) > 0) return true;
+          return false;
         }
         if (prevState.pendingSelection) {
           // 剛消化完別人的 selection？理論上不會（actor gate），保險：只有自己才放行
