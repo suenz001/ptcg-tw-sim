@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.827</span> 📍 UX：能量 picker 每張卡加「來源寶可夢」標籤</summary>
+        <ul>
+          <li>玩家回報：迅速游標 picker 上看不出哪顆能量在哪隻寶可夢身上，怕誤丟想保留的能量。</li>
+          <li><b>修法</b>：fallback <code>sel-grid</code> 偵測 <code>type === 'active-energy-discard'</code> 時，從 sourcePlayerIdx 的 active + bench 建一張 <code>energyIid → 寶可夢卡名</code> 對照表，每張能量卡下加 <code>📍 來源寶可夢名</code> 小標籤。</li>
+          <li><b>受惠範圍</b>：
+            <ul>
+              <li>鐵斑葉ex 迅速游標（scope=all-own，多來源 — 最需要區分）</li>
+              <li>急進開關（targetIid 單來源，仍顯示讓玩家確認）</li>
+              <li>粉碎之錘 / 悠哉尾草棒 等丟能量道具</li>
+              <li>未來任何用 <code>active-energy-discard</code> picker 的卡</li>
+            </ul>
+          </li>
+          <li>加配套 CSS <code>.sel-energy-source</code> 樣式 — 綠框透明背景，與其他 sel- 元素一致。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.826</span> 🎯 hotfix：鐵斑葉ex 迅速游標 picker 化（卡面「任意數量」應由玩家選）</summary>
         <ul>
           <li>玩家回報：鐵斑葉ex 上場觸發迅速游標時，無法選擇要吸哪些能量，預設自動把舊戰鬥場 3 顆能量全搬。</li>

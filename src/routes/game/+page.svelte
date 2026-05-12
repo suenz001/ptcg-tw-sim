@@ -4407,6 +4407,21 @@
             {#if selectionItems.length===0}<p class="sel-empty">（場上沒有可附加的寶可夢）</p>{/if}
           </div>
         {:else}
+          {@const isEnergyPicker = pendingSelection.type === 'active-energy-discard'}
+          <!-- v3.827: 能量 picker 在每張能量卡下方顯示來源寶可夢
+               場景：鐵斑葉ex 迅速游標（scope=all-own，多來源）+ 急進開關（targetIid 單來源）
+               +未來能量轉移類道具。即使單一來源也顯示，讓玩家明確知道對象。 -->
+          {@const energyOwnerMap = (() => {
+            if (!isEnergyPicker || !game) return new Map<string, string>();
+            const src = game.players[pendingSelection.sourcePlayerIdx];
+            const allPokes = [...(src.active ? [src.active] : []), ...src.bench];
+            const m = new Map<string, string>();
+            for (const pk of allPokes) {
+              const pkName = pool.get(pk.cardId)?.name ?? '?';
+              for (const e of pk.energyAttached) m.set(e.iid, pkName);
+            }
+            return m;
+          })()}
           <div class="sel-grid">
             {#each selectionItems as item}{@const c=getCard(item.cardId)}
               {#if c}
@@ -4416,6 +4431,9 @@
                   <button class="sel-card" onclick={()=>toggleSelection(item.iid)}>
                     <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
                     {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+                    {#if isEnergyPicker && energyOwnerMap.has(item.iid)}
+                      <span class="sel-energy-source" title="這顆能量來自：{energyOwnerMap.get(item.iid)}">📍 {energyOwnerMap.get(item.iid)}</span>
+                    {/if}
                     {#if selectionPicked.has(item.iid)}<span class="sel-check">✓</span>{/if}
                   </button>
                 </div>
@@ -6437,6 +6455,8 @@
   .sel-zoom:hover{ background:rgba(74,138,74,.9); color:#fff; }
   .sel-card img{ width:64px; border-radius:3px; }
   .sel-name{ text-align:center; font-size:.6rem; }
+  /* v3.827: 能量 picker 來源寶可夢標籤 */
+  .sel-energy-source{ display:inline-block; font-size:.6rem; color:#9cd49c; background:rgba(0,0,0,.55); border:1px solid rgba(156,212,156,.4); border-radius:4px; padding:.05rem .3rem; margin-top:.15rem; max-width:95%; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; }
   .sel-hp{ font-size:.58rem; color:#888; }
   .sel-check{ position:absolute; top:2px; right:4px; font-size:.9rem; color:#aaff44; font-weight:700; }
   .sel-empty{ color:#666; font-size:.85rem; grid-column:1/-1; text-align:center; padding:1rem; }
