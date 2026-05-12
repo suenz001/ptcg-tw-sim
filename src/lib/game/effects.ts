@@ -10309,18 +10309,13 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
     }
     return s;
   }
-  // v2.89 招式效果免疫（薄霧/硬岩/皇帝之勢/抵抗之幕）— 雖然 cursed-bomb 多為「[特性]招式」
-  // 嚴格說也屬「特性效果」（被光之翼擋的概念），但對 defender 而言放傷害指示物的免疫機制
-  // 應與招式效果一致處理。
-  const guardCB = canApplyAttackEffectToTarget(st, actorIdx, target, targetCardForImmunity, pool);
-  if (guardCB.blocked) {
-    let s = addLog(st,
-      `${label}：${targetCardForImmunity?.name ?? '?'} ${guardCB.reason}（不放指示物）`, actorIdx);
-    if (userIid) {
-      s = selfKOInstance(s, actorIdx, userIid, pool, label);
-    }
-    return s;
-  }
+  // v3.825 fix：移除「招式效果免疫」誤套。
+  //   原 v2.89 註解承認「咒詛炸彈嚴格說屬特性效果，但為了一致性套用招式免疫」— 違反卡面。
+  //   - 抵抗之幕（火箭隊的急凍鳥）：卡面明文「對手的寶可夢使用招式的效果」— 只擋招式效果
+  //   - 薄霧能量 / 硬岩能量 / 皇帝之勢：同樣只擋招式效果類
+  //   咒詛炸彈是「特性」，這些免疫**全部不該套**。
+  //   - 光之翼（超級皮可西ex）：卡面明文「不受對手特性效果影響」→ 應該擋（上一段已處理）
+  //   - 對戰圓形競技場：PTCG 規則「特性類對備戰傷害指示物無效」→ 應該擋（line 10293 已處理）
   const targetCard = pool.get(target.cardId);
   const tHp = targetCard?.hp ?? 0;
   const newDmg = target.damage + addDmg;
