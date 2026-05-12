@@ -253,7 +253,28 @@ export function getAIAction(
     const best = atkIdxs.reduce((prev, cur) => {
       return estimateDamage(cur) > estimateDamage(prev) ? cur : prev;
     });
-    return { type: 'ATTACK', attackIndex: best };
+    // v3.883：AI 對 PRE_DISCARD_CHOICE 招式自動填 discardedEnergyIids
+    //   目前只 special-case 激流水泵（厄鬼椪 水井面具ex）— 對手有 bench + 自身能量 ≥ required
+    //   時自動啟用 option（多 120 bench 傷害很值得）。
+    //   required: 璀璨結晶 attached → 2 否則 3。
+    let aiDiscardedEnergyIids: string[] | undefined;
+    const bestAtk = eff[best]?.atk;
+    if (bestAtk?.name === '激流水泵' && player.active) {
+      const oppBench = state.players[(1 - myIdx) as 0 | 1].bench.length;
+      if (oppBench > 0) {
+        const atkCard = pool.get(player.active.cardId);
+        const isTera = atkCard?.tags?.includes('太晶') ?? false;
+        const allTools = [player.active.toolAttached, ...(player.active.extraTools ?? [])].filter(Boolean) as Array<{ cardId: string }>;
+        const hasShiny = allTools.some(t => pool.get(t.cardId)?.name === '璀璨結晶');
+        const required = (isTera && hasShiny) ? 2 : 3;
+        if (player.active.energyAttached.length >= required) {
+          aiDiscardedEnergyIids = player.active.energyAttached.slice(0, required).map(e => e.iid);
+        }
+      }
+    }
+    return aiDiscardedEnergyIids
+      ? { type: 'ATTACK', attackIndex: best, discardedEnergyIids: aiDiscardedEnergyIids }
+      : { type: 'ATTACK', attackIndex: best };
   }
 
   // 結束回合

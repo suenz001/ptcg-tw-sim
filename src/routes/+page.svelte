@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.883</span> 🤖 修 AI 用激流水泵不觸發備戰 120（沒帶 discardedEnergyIids）</summary>
+        <ul>
+          <li>玩家回報：厄鬼椪 水井面具ex 使用激流水泵時「能量回牌庫」但對手備戰沒受 120 傷害。</li>
+          <li><b>根因</b>：<code>ai.ts</code> line 256 dispatch <code>ATTACK</code> 只帶 <code>attackIndex</code>，沒帶 <code>discardedEnergyIids</code>。激流水泵 PRE 讀 <code>action.discardedEnergyIids ?? []</code> = <code>[]</code>，length 0 &lt; required 3 → 走「未棄滿能量」分支只 100 dmg，不觸發備戰 120。</li>
+          <li><b>修法</b>：AI 對 <code>激流水泵</code> 自動填 <code>discardedEnergyIids</code> = 攻擊方前 required 顆能量。條件：
+            <ul>
+              <li>對手有 bench（有 120 傷害目標）</li>
+              <li>攻擊方能量數 ≥ required（值得啟用 option）</li>
+              <li>required：璀璨結晶 attached → 2 否則 3（同 PRE/POST 邏輯）</li>
+            </ul>
+          </li>
+          <li>玩家透過 UI picker 使用：v3.875 已正常觸發（picker 強制選 0 或 required，選 required 時 dispatch 帶 iids）。本次只修 AI dispatch 缺漏。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.882</span> 📱 真的真的修好 zoom-modal 滾動：拿掉 body.mp-locked 的 position:fixed</summary>
         <ul>
           <li>玩家回報：v3.881 拿掉 body 的 touch-action: none 後仍無法滾動。</li>
