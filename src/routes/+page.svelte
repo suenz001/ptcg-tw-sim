@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.828</span> 🔍 UX：能量 picker 來源標籤加放大鏡（點 📍 直接看寶可夢）</summary>
+        <ul>
+          <li>玩家建議：v3.827 的 📍 來源標籤如果可以點開放大看那隻寶可夢就更方便，省得跨欄找。</li>
+          <li><b>修法</b>：<code>energyOwnerMap</code> 改存整個 <code>CardInstance</code>（不只 name），<code>sel-energy-source</code> 標籤從 <code>&lt;span&gt;</code> 改成 <code>&lt;div role="button"&gt;</code>（避免巢狀 button），加 onclick 觸發 <code>openZoom(cardId, instance)</code>。同時也支援鍵盤 Enter / Space。</li>
+          <li>UI 細節：標籤加 🔍 icon 暗示可點擊，hover 時背景變綠+邊框變亮、滑鼠變 pointer。</li>
+          <li>事件冒泡：用 <code>e.stopPropagation()</code> 防止點 📍 時觸發外層的「toggle 選擇」。</li>
+          <li>受惠範圍同 v3.827（迅速游標 / 急進開關 / 粉碎之錘 / 悠哉尾草棒 等）。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.827</span> 📍 UX：能量 picker 每張卡加「來源寶可夢」標籤</summary>
         <ul>
           <li>玩家回報：迅速游標 picker 上看不出哪顆能量在哪隻寶可夢身上，怕誤丟想保留的能量。</li>

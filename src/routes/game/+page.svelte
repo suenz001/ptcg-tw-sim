@@ -4412,13 +4412,14 @@
                場景：鐵斑葉ex 迅速游標（scope=all-own，多來源）+ 急進開關（targetIid 單來源）
                +未來能量轉移類道具。即使單一來源也顯示，讓玩家明確知道對象。 -->
           {@const energyOwnerMap = (() => {
-            if (!isEnergyPicker || !game) return new Map<string, string>();
+            // v3.828: 存整個 CardInstance（不只 name）讓標籤能觸發 openZoom 放大寶可夢
+            if (!isEnergyPicker || !game) return new Map<string, { name: string; inst: CardInstance }>();
             const src = game.players[pendingSelection.sourcePlayerIdx];
             const allPokes = [...(src.active ? [src.active] : []), ...src.bench];
-            const m = new Map<string, string>();
+            const m = new Map<string, { name: string; inst: CardInstance }>();
             for (const pk of allPokes) {
               const pkName = pool.get(pk.cardId)?.name ?? '?';
-              for (const e of pk.energyAttached) m.set(e.iid, pkName);
+              for (const e of pk.energyAttached) m.set(e.iid, { name: pkName, inst: pk });
             }
             return m;
           })()}
@@ -4432,7 +4433,14 @@
                     <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
                     {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
                     {#if isEnergyPicker && energyOwnerMap.has(item.iid)}
-                      <span class="sel-energy-source" title="這顆能量來自：{energyOwnerMap.get(item.iid)}">📍 {energyOwnerMap.get(item.iid)}</span>
+                      {@const owner = energyOwnerMap.get(item.iid)!}
+                      <!-- v3.828: 點 📍 標籤放大來源寶可夢 — 用 div + role=button 避免 button-in-button nesting -->
+                      <div class="sel-energy-source" role="button" tabindex="0"
+                        title="點擊放大來源寶可夢：{owner.name}"
+                        onclick={(e) => {e.stopPropagation(); openZoom(owner.inst.cardId, owner.inst);}}
+                        onkeydown={(e) => {if (e.key==='Enter' || e.key===' ') {e.preventDefault(); e.stopPropagation(); openZoom(owner.inst.cardId, owner.inst);}}}>
+                        📍 {owner.name} 🔍
+                      </div>
                     {/if}
                     {#if selectionPicked.has(item.iid)}<span class="sel-check">✓</span>{/if}
                   </button>
@@ -6456,7 +6464,9 @@
   .sel-card img{ width:64px; border-radius:3px; }
   .sel-name{ text-align:center; font-size:.6rem; }
   /* v3.827: 能量 picker 來源寶可夢標籤 */
-  .sel-energy-source{ display:inline-block; font-size:.6rem; color:#9cd49c; background:rgba(0,0,0,.55); border:1px solid rgba(156,212,156,.4); border-radius:4px; padding:.05rem .3rem; margin-top:.15rem; max-width:95%; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; }
+  .sel-energy-source{ display:inline-block; font-size:.6rem; color:#9cd49c; background:rgba(0,0,0,.55); border:1px solid rgba(156,212,156,.4); border-radius:4px; padding:.05rem .3rem; margin-top:.15rem; max-width:95%; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; cursor:pointer; transition:background .15s, border-color .15s; }
+  .sel-energy-source:hover{ background:rgba(20,60,20,.85); border-color:#9cd49c; color:#cfe9cf; }
+  .sel-energy-source:focus-visible{ outline:2px solid #9cd49c; outline-offset:1px; }
   .sel-hp{ font-size:.58rem; color:#888; }
   .sel-check{ position:absolute; top:2px; right:4px; font-size:.9rem; color:#aaff44; font-weight:700; }
   .sel-empty{ color:#666; font-size:.85rem; grid-column:1/-1; text-align:center; padding:1rem; }
