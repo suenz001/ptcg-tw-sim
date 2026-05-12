@@ -7115,28 +7115,55 @@
     .stepper-btn{ width:2.4rem; height:2.4rem; font-size:1.2rem; }
     .stepper-value{ min-width:4rem; font-size:1.3rem; line-height:2.2rem; }
 
-    /* ── v3.885 zoom-modal 改 fullscreen 策略（放棄 scroll 修法，6 個 hotfix 都失敗） ──
-       - 手機 .zoom-modal 鋪滿整個 viewport（同 .battle-root 大小）
-       - 內部 block 排版（避 iOS flex+overflow bug），圖片 max-height: 36vh 自適應
-       - .zoom-img-btn 重新啟用 pointer-events — 點圖開 lightbox 看全圖
-       - .zoom-scroll 仍保留 overflow-y:auto 兜底 — 非 flex 容器 iOS 應該 OK */
+    /* ── v3.886 zoom 全螢幕 + 圖片強制縮小（!important 覆寫桌機 width:312px + flex-shrink:0） ──
+       v3.885 寫了 .zoom-img max-height:36vh 但沒生效 — 桌機 CSS 仍套用。
+       本版用 !important 強制覆寫，並改 .zoom-body 為 column stack。 */
     .zoom-modal{
-      max-width:100vw; width:100vw;
-      max-height:100vh; max-height:100dvh; height:100dvh;
-      padding:0.6rem; gap:0.5rem;
-      border-radius:0;
-      margin:0;
+      max-width:100vw !important; width:100vw !important;
+      max-height:100vh !important; max-height:100dvh !important; height:100dvh !important;
+      padding:0.5rem !important; gap:0.4rem !important;
+      border-radius:0 !important;
+      margin:0 !important;
     }
-    .zoom-img{ max-height:36vh; max-width:90vw; width:auto; height:auto; object-fit:contain; }
-    .zoom-img-btn{ display:flex; justify-content:center; align-items:center; width:100%; }
+    /* v3.886：image + info 上下排（column stack），避免 flex row wrap 造成圖片不縮 */
+    .zoom-body{
+      display:flex !important;
+      flex-direction:column !important;
+      gap:0.4rem !important;
+      align-items:center !important;
+      flex-wrap:nowrap !important;
+    }
+    /* v3.886：圖片強制縮小到 max-height:34vh — 用 !important 蓋桌機 width:312px */
+    .zoom-img{
+      max-height:34vh !important;
+      max-width:88vw !important;
+      width:auto !important;
+      height:auto !important;
+      object-fit:contain !important;
+      flex-shrink:1 !important;
+      box-shadow:0 4px 16px rgba(0,0,0,0.5);
+    }
+    /* v3.886：.zoom-img-btn 中央對齊 + 重啟 lightbox 點擊 */
+    .zoom-img-btn{
+      display:flex !important;
+      justify-content:center !important;
+      align-items:center !important;
+      width:auto !important;
+      flex-shrink:1 !important;
+      cursor:zoom-in !important;
+      pointer-events:auto !important;
+      padding:0 !important;
+    }
     .zoom-img-btn .zoom-img{ display:block; }
+    .zoom-info{
+      width:100% !important;
+      min-width:0 !important;
+    }
     .zoom-name{ font-size:1rem; }
     .zoom-badges{ gap:0.25rem; }
     .zoom-badges .badge{ font-size:0.66rem; padding:0.1rem 0.4rem; }
     .zoom-meta, .zoom-state, .state-row{ font-size:0.74rem; }
-    /* v3.885：手機重新啟用 lightbox 點圖看全圖（之前 v2.206 註解說省略不需要，但使用者要求加回） */
-    .zoom-img-btn{ cursor:zoom-in; pointer-events:auto; }
-    .zoom-img-hint{ display:block; font-size:0.7rem; }
+    .zoom-img-hint{ display:block !important; font-size:0.7rem; }
   }
 
   /* v2.73 殭屍房警示 banner */

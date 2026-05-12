@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.886</span> 📱 真正讓手機 zoom 圖片縮小 — !important 覆寫桌機 width:312px + flex-shrink:0</summary>
+        <ul>
+          <li>玩家回報：v3.885 沒生效，吉雉雞ex 圖片仍佔大半畫面，下面內容被截掉。</li>
+          <li><b>根因</b>：v3.885 寫了 <code>.zoom-img max-height: 36vh</code> 但桌機 <code>.zoom-img &#123; width:312px; flex-shrink:0 &#125;</code> 仍套用，加上 <code>.zoom-body display:flex row wrap</code> 結構讓圖片維持自然尺寸不縮。</li>
+          <li><b>修法</b>：用 <code>!important</code> 強制覆寫桌機規則 + 改 <code>.zoom-body</code> 為 column stack：
+            <ul>
+              <li><code>.zoom-modal</code> 全 fullscreen 屬性加 !important（避免桌機 max-width:864px 漏網）</li>
+              <li><code>.zoom-body</code>：<code>flex-direction:column !important; flex-wrap:nowrap !important; align-items:center</code> — 圖片在上、info 在下垂直排</li>
+              <li><code>.zoom-img</code>：<code>max-height:34vh !important; max-width:88vw !important; width:auto !important; flex-shrink:1 !important</code></li>
+              <li><code>.zoom-img-btn</code>：<code>pointer-events:auto !important; cursor:zoom-in !important</code> — 重啟 lightbox 點圖功能</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.885</span> 📱 zoom-modal 改 fullscreen 策略：放棄 scroll 修法，圖片自適應 + lightbox 點圖看全圖</summary>
         <ul>
           <li>v3.879~v3.884 連續 6 個 hotfix 都修不好手機 zoom-modal scroll。改採用使用者建議的新策略：fullscreen 鋪版避開 scroll。</li>
