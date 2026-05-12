@@ -525,6 +525,59 @@ grep -nE ':\s*\[.*\[\]|:\s*\w+\[\]\[\]' src/lib/game/types.ts
 
 ---
 
+### Rule 14: 牌庫搜尋類必須開 picker — 即使「無候選符合 filter」也不能 short-circuit
+
+PTCG 規則 + 玩家明確要求：
+
+> 「就算牌庫內沒有超能量也一樣，不能省略這個步驟。因為玩家可以藉此檢索牌庫剩餘的卡牌內容，這是很重要的資訊。」
+
+**禁止寫法**：
+```ts
+const cand = p.deck.filter(c => /* 條件 */);
+if (cand.length === 0) {
+  return addLog(state, '某卡：牌庫沒有符合的卡', aIdx);  // ← 違規！
+}
+// 開 picker...
+```
+
+**正確寫法**：
+```ts
+const cand = p.deck.filter(c => /* 條件 */);
+// 即使 cand=0 也直接開 picker，玩家可在 UI「📖 查看牌庫剩餘全部」摺疊區查看
+// （resolver 端要處理 iids.length === 0 → reshuffle + 結束）
+const realMax = Math.min(N, cand.length);  // cand=0 時 maxCount=0，picker 開但無可選
+return withPending(state, {
+  type: 'deck-search',
+  filter: '...',
+  minCount: 0, maxCount: realMax,
+  effectKey: '...',
+  // ...
+});
+```
+
+**為什麼**：PTCG 規則允許玩家「搜尋牌庫」時看牌庫全部 — 線上版透過 picker 模擬此機制。
+玩家可藉此推測對手獎賞卡、規劃下回合策略。Short-circuit 移除此資訊揭露機會，違反 PTCG
+資訊揭露精神（同 Rule 8 揭示資訊規則的延伸）。
+
+**例外**：「棄牌區搜尋」類玩家本來就能看到棄牌堆（公開資訊），short-circuit return OK；
+但建議保持一致性，棄牌類也走 picker。「對手場上 / 對手能量」搜尋類則不適用（資訊封閉）。
+
+**v3.853 修補的 5 處**：
+- 永生綻放（v2353:503）
+- abra_mawile_deck helper（line 189）
+- 進化指引/哈克龍（m2:124）
+- 考驗之旅/樹才怪（v2354:256）
+- 大地之門/哲爾尼亞斯（v2355:71）
+- 猛毒筋力/夠讚狗ex（v2750:1223）
+
+**Audit 工具**：
+```bash
+grep -rn "p\.deck\.filter\|player\.deck\.filter\|attacker\.deck\.filter" src/lib/game/effects/cards/ -A 5 | grep -B 1 "cand\.length === 0"
+```
+若有 match，逐個審視是否該移除 short-circuit。
+
+---
+
 ## 完整版
 
 完整 SKILL.md（含 Python git plumbing pipeline 範本、pre-flight checklist、

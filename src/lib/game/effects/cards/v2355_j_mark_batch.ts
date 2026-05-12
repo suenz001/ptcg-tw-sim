@@ -68,9 +68,7 @@ regPost('哲爾尼亞斯|大地之門', (state, aIdx, pool) => {
       card.pokemonType === 'Psychic'
     );
   });
-  if (cand.length === 0) {
-    return addLog(state, '大地之門：牌庫沒有【超】基礎寶可夢', aIdx);
-  }
+  // v3.853: 即使 cand=0 也仍開 picker — 讓玩家查看牌庫剩餘卡（Iron Rule 14）
 
   const realMax = Math.min(3, slots, cand.length);
   const s = addLog(state, `大地之門：從牌庫選最多 ${realMax} 張【超】基礎寶可夢放備戰`, aIdx);

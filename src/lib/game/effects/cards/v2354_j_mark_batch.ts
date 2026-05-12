@@ -253,9 +253,7 @@ regPre('樹才怪|考驗之旅', (state) => ({ state, damage: 0 }));
 regPost('樹才怪|考驗之旅', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const cand = p.deck.filter(c => pool.get(c.cardId)?.name === '變化之書');
-  if (cand.length === 0) {
-    return addLog(state, '考驗之旅：牌庫中無「變化之書」', aIdx);
-  }
+  // v3.853: 即使 cand=0 也仍開 picker — 讓玩家查看牌庫剩餘卡（Iron Rule 14）
   const realMax = Math.min(2, cand.length);
   const s = addLog(state, `考驗之旅：從牌庫選最多 ${realMax} 張「變化之書」加手牌（重洗）`, aIdx);
   return withPending(s, {

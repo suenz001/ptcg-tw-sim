@@ -1220,12 +1220,8 @@ regPost('夠讚狗ex|猛毒筋力', (state, aIdx, pool) => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Darkness';
   });
-  if (cand.length === 0) {
-    return updatePlayer(
-      addLog(state, '猛毒筋力：牌庫無基本【惡】能量；僅重洗', aIdx),
-      aIdx, p => ({ ...p, deck: shuffle(p.deck) }),
-    );
-  }
+  // v3.853: 即使 cand=0 也仍開 picker — 讓玩家查看牌庫剩餘卡（Iron Rule 14）
+  //   reshuffle 在 resolver 內處理（無論玩家選或沒選都會 reshuffle）
   const realMax = Math.min(2, cand.length);
   return withPending(
     addLog(state, `猛毒筋力：從牌庫挑 0~${realMax} 張基本【惡】能量附於自身（重洗）`, aIdx),

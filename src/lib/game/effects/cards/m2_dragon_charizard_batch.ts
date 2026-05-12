@@ -121,7 +121,7 @@ regA('哈克龍', 0, (st, idx, pool, cardInst) => {
   if (!src) return st;
   if (src.energyAttached.length === 0) return addLog(st, '進化指引：這隻哈克龍身上沒有附加能量', idx);
   const cand = p.deck.filter(c => isEvolutionPokemon(pool.get(c.cardId)));
-  if (cand.length === 0) return addLog(st, '進化指引：牌庫沒有進化寶可夢', idx);
+  // v3.853: 即使 cand=0 也仍開 picker — 讓玩家查看牌庫剩餘卡（Iron Rule 14）
   return withPending(addLog(st, '進化指引：從牌庫選擇 1 張進化寶可夢加入手牌', idx), {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'EvolutionPokemon', minCount: 0, maxCount: 1,

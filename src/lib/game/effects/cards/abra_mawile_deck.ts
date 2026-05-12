@@ -186,7 +186,7 @@ function deckEnergyAttachBenchPost(typeFilter: EnergyType | null, label: string)
       if (typeFilter && card.pokemonType !== typeFilter) return false;
       return true;
     });
-    if (cand.length === 0) return addLog(state, `${label}：牌庫沒有符合的基本能量`, aIdx);
+    // v3.853: 即使 cand=0 也仍開 picker — 讓玩家查看牌庫剩餘卡（Iron Rule 14）
     const filterStr = typeFilter ? `Energy:${typeFilter}` : 'BasicEnergy';
     const s = addLog(state, `${label}：從牌庫選 1 張基本能量附於備戰`, aIdx);
     return withPending(s, {

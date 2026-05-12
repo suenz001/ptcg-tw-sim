@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.853</span> 📖 通用 bug：6 處牌庫搜尋類「無候選 short-circuit」（Iron Rule 14 新增）</summary>
+        <ul>
+          <li>玩家規則確認：「就算牌庫內沒有超能量也一樣，不能省略開 picker — 因為玩家可以藉此檢索牌庫剩餘的卡牌內容」。是 PTCG 搜尋規則的核心。</li>
+          <li><b>共通 bug pattern</b>：<code>p.deck.filter(...)</code> 後 <code>if (cand.length === 0) return addLog(...)</code> short-circuit → picker 沒開，玩家失去查看牌庫機會。</li>
+          <li><b>Audit 完整掃出 6 處 + 一波修</b>：
+            <ul>
+              <li>v2353_j_mark_batch.ts:503 — 超級花葉蒂ex｜永生綻放（玩家回報的）</li>
+              <li>abra_mawile_deck.ts:189 — helper（影響某些 deck 卡）</li>
+              <li>m2_dragon_charizard_batch.ts:124 — 哈克龍｜進化指引</li>
+              <li>v2354_j_mark_batch.ts:256 — 樹才怪｜考驗之旅</li>
+              <li>v2355_j_mark_batch.ts:71 — 哲爾尼亞斯｜大地之門</li>
+              <li>v2750_h_wave2_full.ts:1223 — 夠讚狗ex｜猛毒筋力</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：移除 short-circuit return，picker 永遠開（cand=0 時 maxCount=0，picker 開但無可選 — 玩家可在「📖 查看牌庫剩餘全部」摺疊區查看 + 按確認結束）。</li>
+          <li><b>IRON_RULES.md 新增 Iron Rule 14</b>：明文禁止「牌庫搜尋 short-circuit」，附 audit 工具 grep pattern，避免日後再寫進去。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.852</span> 🌸 hotfix：永生綻放真正「任意方式」分配（+/- counter 取代「全部一隻」）</summary>
         <ul>
           <li>玩家指出：v3.85 修了 picker 開不開的 bug，但分配機制仍違反卡面 — picker 只允許選 1 隻備戰寶可夢，能量全堆給她。卡面要求「以<b>任意方式</b>附於備戰寶可夢身上」，應允許 N 張能量分配到 M 隻備戰。</li>
