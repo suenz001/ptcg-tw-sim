@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.792</span> 🎯 統一獎賞卡取得流程：3 處自動派發改用「取得」按鈕</summary>
+        <ul>
+          <li>玩家回報：對手「黑夜魔靈/彷徨夜靈」發動 咒詛炸彈 自爆時，系統自動幫玩家取走獎賞卡，沒有「取得」按鈕。希望取獎流程一致都用按鈕。</li>
+          <li><b>違反 Iron Rule 10</b>：<code>pendingPrizes</code> 必須走 <code>addPendingPrize()</code> helper，禁止直接 <code>prizes.slice + hand.push</code> 派發。Audit 找到 3 處違規：</li>
+          <li>　<b>1. selfKOInstance</b>（effects.ts ~10254）— 咒詛炸彈、爆裂針、過度放電 等自身 KO 特性的對手取獎路徑。原註解誤判「自身 KO 對手獎賞無法經 pendingPrizes」是 v2.98 前舊邏輯。</li>
+          <li>　<b>2. 棄世猴｜同命戰鬥</b>（effects.ts ~6378）— 招式自爆使雙方寶可夢都 KO，對手獎賞同樣直接派發。</li>
+          <li>　<b>3. 月亮伊布ex｜縞瑪瑙</b>（effects.ts ~7338）— 招式 1 張獎賞額外給自己，原本也是直接派發。</li>
+          <li><b>修法</b>：全部改用 <code>addPendingPrize(state, ownerIdx, prizes)</code>。勝負條件改由 TAKE_PRIZES handler 在玩家點按鈕後檢查（既有機制，無需新邏輯）。</li>
+          <li>　・「自身無後繼（bench empty）」game-over 檢查保留（與獎賞無關）。</li>
+          <li>　・log 訊息從「對手取走 N 張」改為「對手待取 N 張獎勵牌」更精確。</li>
+          <li><b>遺漏 / 未改</b>：</li>
+          <li>　・馬志士的交易（v172_hij_batch.ts:668）— 支援者卡互換獎賞，非 KO 路徑、雙方同時，留待未來統一審查。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 7c 查卡面 + Rule 10 pendingPrizes helper + Rule 11 Python pipeline 修大檔 + Rule 4 tsc audit。tsc 0 errors + Svelte parse OK。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.791</span> 🚨 hotfix：本機雙人模式 KO 對方寶可夢後卡死（取獎賞 UI 不出現）</summary>
         <ul>
           <li>玩家回報：單機雙人模式 KO 對方寶可夢後無法繼續，整個畫面卡在「請先取獎勵牌再繼續行動」但沒有取得按鈕。</li>

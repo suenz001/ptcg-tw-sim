@@ -6371,20 +6371,9 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
     ];
     players[aIdx] = { ...att, active: null, discard: [...att.discard, ...ko] };
     const oppPrizes = card ? (prizesForKOLocal(card)) : 1;
-    s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也被擊倒，對手取得 ${oppPrizes} 張獎勵牌`, null);
-    // 對手取獎：直接從對手 prizes 移到 hand
-    const opponent = players[dIdx];
-    const take = Math.min(oppPrizes, opponent.prizes.length);
-    if (take > 0) {
-      const taken = opponent.prizes.slice(0, take);
-      players[dIdx] = { ...opponent, prizes: opponent.prizes.slice(take), hand: [...opponent.hand, ...taken] };
-      s = { ...s, players };
-      s = addLog(s, `對手取走 ${take} 張獎勵牌`, null);
-      // 檢查對手勝利
-      if (players[dIdx].prizes.length === 0) {
-        return { ...s, phase: 'game-over', winner: dIdx, winReason: '取得所有獎勵牌' };
-      }
-    }
+    s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也被擊倒，對手待取 ${oppPrizes} 張獎勵牌`, null);
+    // v3.792 Rule 10：改用 addPendingPrize（移除直接 prize→hand），讓玩家點「取得」按鈕。
+    s = addPendingPrize({ ...s, players }, dIdx, oppPrizes);
     if (players[aIdx].bench.length === 0) {
       return { ...s, phase: 'game-over', winner: dIdx, winReason: `${att.name} 沒有可上場的寶可夢` };
     }
@@ -7334,12 +7323,9 @@ regPost('月亮伊布ex|縞瑪瑙', (state, aIdx, _pool) => {
   if (s.players[aIdx].prizes.length === 0) {
     return addLog(s, '縞瑪瑙：獎賞區已空，無法獲得獎賞', aIdx);
   }
-  s = addLog(s, '縞瑪瑙：額外獲得 1 張獎賞', aIdx);
-  s = updatePlayer(s, aIdx, pl => {
-    const prize = pl.prizes[0];
-    return { ...pl, prizes: pl.prizes.slice(1), hand: [...pl.hand, prize] };
-  });
-  // 若剛好這樣取完 6 張，由 engine 的 prize 檢查勝利條件
+  s = addLog(s, '縞瑪瑙：額外待取 1 張獎賞（按「取得」按鈕領取）', aIdx);
+  // v3.792 Rule 10：改用 addPendingPrize（移除直接 prize→hand），讓玩家點「取得」按鈕。
+  s = addPendingPrize(s, aIdx, 1);
   return s;
 });
 
@@ -10249,20 +10235,14 @@ export function selfKOInstance(
     bench: isActive ? p.bench : p.bench.filter(c => c.iid !== iid),
   };
   players[aIdx] = newP;
-  let s: GameState = addLog({ ...state, players }, `${label}：${tName} 昏厥！對手取得 ${prizes} 張獎勵牌`, null);
-  // 對手即時取獎賞
-  const opp = s.players[dIdx];
-  const take = Math.min(prizes, opp.prizes.length);
-  if (take > 0) {
-    const taken = opp.prizes.slice(0, take);
-    const finalPlayers = [...s.players] as [PlayerState, PlayerState];
-    finalPlayers[dIdx] = { ...opp, prizes: opp.prizes.slice(take), hand: [...opp.hand, ...taken] };
-    s = addLog({ ...s, players: finalPlayers }, `${opp.name} 取走 ${take} 張獎勵牌`, null);
-    if (finalPlayers[dIdx].prizes.length === 0) {
-      return { ...s, phase: 'game-over', winner: dIdx, winReason: '取得所有獎勵牌' };
-    }
-  }
-  // 自身是否無後繼
+  let s: GameState = addLog({ ...state, players }, `${label}：${tName} 昏厥！對手待取 ${prizes} 張獎勵牌`, null);
+  // v3.792 Rule 10 修法：改用 addPendingPrize（移除直接派發 prizes→hand）
+  //   舊版邏輯（v2.98 之前）認為「自身 KO 時對手獎賞無法經 pendingPrizes，因攻擊方不能取
+  //   自己 KO 的獎賞」。但 v2.98 起 pendingPrizes 是 per-player tuple，dIdx 那邊 pending > 0
+  //   就會顯示「取得」按鈕給對手點，與「攻擊方點」是兩件事 — Rule 10 已釐清。
+  //   勝負條件（取得所有獎勵牌）改由 TAKE_PRIZES handler 在玩家點按鈕後檢查。
+  s = addPendingPrize(s, dIdx, prizes);
+  // 自身是否無後繼（這條與獎賞無關，保留）
   if (isActive && newP.bench.length === 0) {
     return { ...s, phase: 'game-over', winner: dIdx, winReason: `${p.name} 沒有可上場的寶可夢` };
   }
