@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.876</span> 🔥 hotfix：modal-choice + stepper picker 卡死（selectionValid 漏 stepper 判定）</summary>
+        <ul>
+          <li>玩家回報：v3.874 願增猿｜腎上腺腦力 picker（+/- 計數器選 1~3）按確認沒反應，卡在 picker 動不了。</li>
+          <li><b>根因</b>：<code>selectionValid</code> derived 對所有特殊 picker type 都有特例（damage-distribute / energy-distribute / reorder-deck-top / active-energy-discard），但<b>沒對 modal-choice + stepper 做特例</b>。fall-through 到尾端「<code>selectionPicked.size &gt;= minCount</code>」 — stepper UI 只更新 <code>selectionStepperValue</code> 不會 add 到 <code>selectionPicked</code>，所以 size 永遠 0，minCount=1 不滿足 → <code>selectionValid=false</code> → <code>confirmSelection()</code> 早退（<code>if (!selectionValid) return;</code>）→ 確認鍵點下去無反應。</li>
+          <li><b>影響範圍</b>：所有用 modal-choice + stepper 的卡 — 願增猿腎上腺腦力（新加）/ 潔淨支援（v2.93b）/ 泰姆猜 HP（v2.201）— 理論上都有此 bug，但平時很少觸發到所以沒被發現。本版一併修復。</li>
+          <li><b>修法</b>：<code>selectionValid</code> 加 modal-choice + stepper 特例 — 改用 <code>selectionStepperValue</code> 跟 <code>stepper.min</code> / <code>stepper.max</code> 對比。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.875</span> 🎯 激流水泵 picker 精修：「全有或全無」+ 璀璨結晶 -1 規則</summary>
         <ul>
           <li>玩家回報：扮晶晶酒 借 激流水泵 picker 可以選 1 顆或 2 顆但發動不了效果，UX 多此一舉，應該只能選 3 顆或不選。</li>

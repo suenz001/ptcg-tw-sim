@@ -1938,6 +1938,13 @@
       const n = selectionReorderKeep.length;
       return n >= pendingSelection.minCount && n <= pendingSelection.maxCount;
     }
+    // v3.876：modal-choice + stepper（願增猿腎上腺腦力 / 潔淨支援 / 泰姆猜HP 等）
+    //   stepper UI 不會 add 任何東西到 selectionPicked，valid 應檢查 selectionStepperValue 是否在 stepper.min/max 範圍內。
+    //   fall-through 到下方「selectionPicked.size >= minCount」分支會永遠 false → confirmSelection 早退卡死。
+    if (pendingSelection.type === 'modal-choice' && pendingSelection.params?.stepper) {
+      const stepper = pendingSelection.params.stepper as { min: number; max: number; step: number; init: number };
+      return selectionStepperValue >= stepper.min && selectionStepperValue <= stepper.max;
+    }
     // v2.69：撤退能量選擇用「能量單位」判定（火箭隊能量 1 張 = 2 units）
     // 而非張數；要求選中能量單位總和 ≥ retreatCost。
     // v2.108：傳 state+actorIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
