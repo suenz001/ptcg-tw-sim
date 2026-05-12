@@ -627,6 +627,10 @@
       const mFull = !mId ? line.match(/^(\d+)\s+(.+?)\s+([A-Za-z0-9-]+)\s+(\S+)$/) : null;
       // Format B（簡易）：{count} {name}  / {count}x{name}  / {count} × {name}
       const mSimple = (!mId && !mFull) ? line.match(/^(\d+)\s*[x×]?\s+(.+?)$/) : null;
+      // v3.832 Format D（無張數的完整格式）：{name} {setCode} {collectorNumber}
+      //   玩家從官方頁面或別處複製可能漏掉開頭張數。預設補 1 張並警示「請手動調整數量」。
+      //   ※ 注意 order — mFull / mSimple 都失敗才走這條，避免吃到正常含張數的格式。
+      const mNoCount = (!mId && !mFull && !mSimple) ? line.match(/^(.+?)\s+([A-Za-z0-9-]+)\s+(\S+)$/) : null;
 
       let card: Card | undefined;
       let countStr = '';
@@ -675,8 +679,23 @@
             alternatives: exact.slice(1).map(c => `${c.setCode} · ${c.collectorNumber}`),
           });
         }
+      } else if (mNoCount) {
+        // v3.832: 無張數格式 — 預設 1 張 + 加 ambiguities 警示
+        countStr = '1';
+        const name = mNoCount[1].trim();
+        const setCode = mNoCount[2];
+        const collectorNumber = mNoCount[3];
+        card = poolBySetNum.get(`${setCode}-${collectorNumber}`);
+        label = `${setCode} ${collectorNumber}`;
+        if (card) {
+          ambiguities.push({
+            name,
+            used: `${card.setCode} · ${card.collectorNumber}（自動補 1 張）`,
+            alternatives: [`原始輸入未指定張數 — 匯入後請手動調整數量`],
+          });
+        }
       } else {
-        errors.push(`無法解析：${line}`);
+        errors.push(`無法解析：「${line}」\n  → 每行需以「張數」開頭，例如：4 呱呱泡蛙 M-P-J 089/M-P`);
         continue;
       }
 

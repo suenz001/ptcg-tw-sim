@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.832</span> 📝 hotfix：匯入文字漏「張數」格式 + error message 改善</summary>
+        <ul>
+          <li>玩家回報：v3.831 修完後仍匯入失敗。看截圖 — 輸入是「呱呱泡蛙 M-P-J 089/M-P」「基本【水】能量 M-P-J 098/M-P」<b>每行開頭沒張數</b>。</li>
+          <li><b>根因</b>：原本 3 個格式 regex（mId / mFull / mSimple）全都要求 <code>^(\d+)\s+...</code> 開頭數字。漏「張數」的行三個都不匹配 → 落到 <code>errors.push('無法解析：...')</code>。</li>
+          <li><b>修法</b>：
+            <ul>
+              <li><b>新增 Format D</b>「{`{name} {setCode} {collectorNumber}`}」regex，<b>允許無張數</b>。匹配後預設 count=1 + 加入 ambiguities 警示「自動補 1 張，匯入後請手動調整數量」</li>
+              <li>order：mId → mFull → mSimple → mNoCount（最後 fallback，避免吃到正常含張數的格式）</li>
+              <li>error message 改成具體提示：<code>無法解析：「{line}」 → 每行需以「張數」開頭，例如：4 呱呱泡蛙 M-P-J 089/M-P</code></li>
+            </ul>
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.831</span> 📝 hotfix：匯入文字 regex 不支援 setCode 含 `-`（M-P-J / SV-P-I 等 promo 卡）</summary>
         <ul>
           <li>玩家回報：「呱呱泡蛙 M-P-J 089/M-P」「基本【水】能量 M-P-J 098/M-P」無法匯入。</li>
