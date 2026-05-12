@@ -6257,6 +6257,14 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       // Wave 43 fix：玩家級物品/支援者鎖也要在可用清單裡濾掉（否則 AI 會挑到被鎖的卡、engine 靜默 no-op → AI 當機）
       if (c.subtype === 'Item' && player.cantPlayItemThisTurn) return false;
       if (c.subtype === 'Supporter' && player.cantPlaySupporterThisTurn) return false;
+      // v3.82 fix：對手戰鬥場特性鎖也要在 filter 階段擋下（同樣 AI 死迴圈問題）
+      //   - 胖嘟嘟ex｜海之詛咒：對手物品 + 寶可夢道具 鎖
+      //   - 大王銅象｜爆大身軀：對手競技場鎖
+      //   原本只有 engine.ts PLAY_TRAINER handler 在 line 2292-2301 擋 → 不夠
+      //   AI 看不到濾過的清單會反覆挑到被鎖的卡 → engine 退回 → 死迴圈
+      if ((c.subtype === 'Item' || c.subtype === 'PokemonTool')
+          && isOppItemPlayBlocked(state, state.activePlayerIndex, pool)) return false;
+      if (c.subtype === 'Stadium' && isOppStadiumPlayBlocked(state, state.activePlayerIndex, pool)) return false;
       // v2.362 班基拉斯｜威迫目光 — 對手戰鬥場有此特性時，物品卡不可打出
       if (c.subtype === 'Item') {
         const oppIdxUI = (1 - state.activePlayerIndex) as 0 | 1;

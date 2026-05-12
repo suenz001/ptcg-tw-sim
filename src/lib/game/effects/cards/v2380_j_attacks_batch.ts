@@ -40,6 +40,7 @@ import {
   addLog, updatePlayer, withPending, shuffle,
   ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
+import { isBasicEnergyOfType } from '../../engine';
 import { flipCoinsWithLog, canApplyAttackEffectToTarget } from '../../effects';
 
 // ── 01. 大嘴娃｜雙重食客 — 60× 丟棄手牌能量張數 ─────────────────────────────
@@ -313,6 +314,9 @@ regR('small-messenger-search', (state, aIdx, iids, _params, _pool) => {
 });
 
 // ── 14. 哲爾尼亞斯｜大地風暴 — 30× 自己所有寶可夢身上超能量數 ─────────────────
+//   v3.82 fix：基本【超】能量的 pokemonType 常為 null（scraper 留空），原本只看
+//   pokemonType === 'Psychic' 會全部漏算 → damage = 0。改用 isBasicEnergyOfType
+//   helper（含 name '【超】' fallback）。同 v3.731 蜜糖風暴修法。
 regPre('哲爾尼亞斯|大地風暴', (state, aIdx, pool) => {
   const player = state.players[aIdx];
   const all: CardInstance[] = [...(player.active ? [player.active] : []), ...player.bench];
@@ -320,7 +324,11 @@ regPre('哲爾尼亞斯|大地風暴', (state, aIdx, pool) => {
   for (const pk of all) {
     for (const e of pk.energyAttached) {
       const ec = pool.get(e.cardId);
-      if (ec?.pokemonType === 'Psychic') psyCount++;
+      if (!ec) continue;
+      // 特殊能量已標好屬性（光之翼能量 / 太陽能量 等）
+      if (ec.pokemonType === 'Psychic') { psyCount++; continue; }
+      // 基本能量 fallback — pokemonType=null 時看卡名「【超】」
+      if (isBasicEnergyOfType(ec, 'Psychic')) { psyCount++; continue; }
     }
   }
   return { state, damage: psyCount * 30 };

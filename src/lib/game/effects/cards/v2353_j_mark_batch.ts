@@ -28,7 +28,20 @@ function cardName(pool: Map<string, any>, inst?: CardInstance | null): string {
   return inst ? (pool.get(inst.cardId)?.name ?? '?') : '?';
 }
 
-/** 判斷能量卡是否符合 typeFilter（'all' = 任意；或 EnergyType 字串如 'Psychic'）*/
+/**
+ * 判斷能量卡是否符合 typeFilter（'all' = 任意；或 EnergyType 字串如 'Psychic'）。
+ *
+ * v3.82 fix：基本能量 pokemonType 常為 null（scraper 對基本能量留空），
+ *   需 fallback 從卡名的「【X】」標記 parse 屬性。
+ *   bug 場景：哲爾尼亞斯|大地風暴 30×【超】能量數 → 基本【超】能量全部漏算 → damage = 0。
+ *   同 v3.731 蜜糖風暴 bug、v3.44 基本能量 pokemonType=null 全面修補。
+ */
+const __MATCH_ZH_TO_TYPE: Record<string, string> = {
+  '草': 'Grass', '火': 'Fire', '水': 'Water', '雷': 'Lightning',
+  '超': 'Psychic', '格': 'Fighting', '鬥': 'Fighting',
+  '惡': 'Darkness', '鋼': 'Metal',
+  '妖': 'Fairy', '龍': 'Dragon', '無': 'Colorless',
+};
 function matchesEnergyType(
   e: CardInstance,
   typeFilter: string,
@@ -36,7 +49,15 @@ function matchesEnergyType(
 ): boolean {
   if (typeFilter === 'all') return true;
   const card = pool.get(e.cardId);
-  return card?.pokemonType === typeFilter;
+  if (!card) return false;
+  // 已標好屬性（特殊能量大多直接 set pokemonType；少數基本也有設）
+  if (card.pokemonType === typeFilter) return true;
+  // v3.82：基本能量 pokemonType 常為 null → 從卡名「【X】」parse
+  if (card.supertype === 'Energy' && card.subtype === 'Basic') {
+    const m = (card.name ?? '').match(/【(.+?)】/);
+    if (m && __MATCH_ZH_TO_TYPE[m[1]] === typeFilter) return true;
+  }
+  return false;
 }
 
 // ── Helper A：能量倍乘 regPre ─────────────────────────────────────────────────

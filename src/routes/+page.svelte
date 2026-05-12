@@ -264,6 +264,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.82</span> 🌊 雙 bug：海之詛咒 AI 死迴圈 + 大地風暴能量沒算</summary>
+        <ul>
+          <li><b>Bug 1（AI 死迴圈）</b>：和 AI 對戰時我方下了胖嘟嘟ex（特性「海之詛咒」），AI 一直選擇使用物品，系統一直顯示「無法使出」，遊戲卡死。</li>
+          <li><b>根因</b>：<code>getPlayableTrainers()</code> filter 沒擋掉對手胖嘟嘟ex 海之詛咒（鎖物品/道具）和大王銅象 爆大身軀（鎖競技場）兩條對手戰鬥場特性。AI 看到物品卡仍當「可打出」→ <code>PLAY_TRAINER</code> 被 engine 退回但 state 不變 → AI 一直挑同一張 → 死迴圈。</li>
+          <li><b>修法</b>：在 <code>getPlayableTrainers()</code> 加兩條 gate（與 engine PLAY_TRAINER handler 同樣的條件）：
+            <ul>
+              <li>物品 / 寶可夢道具 + 對手戰鬥場有海之詛咒 → 濾掉。</li>
+              <li>競技場 + 對手戰鬥場有爆大身軀 → 濾掉。</li>
+            </ul>
+            UI 和 AI 都會看到正確的「可打出 trainer 清單」，不再死迴圈。
+          </li>
+          <li><b>Bug 2（大地風暴傷害錯）</b>：哲爾尼亞斯的「大地風暴」應該按自己所有寶可夢身上附加的【超】能量數 × 30，但實際傷害總是 0。</li>
+          <li><b>根因</b>：兩個地方都只看 <code>pokemonType === 'Psychic'</code>，但 scraper 對基本能量的 <code>pokemonType</code> 欄位常留空（null）→ 基本【超】能量全部漏算 → damage = 0。
+            <ul>
+              <li><code>v2380_j_attacks_batch.ts</code> 直接寫的 <code>regPre</code>（這個實際生效）。</li>
+              <li><code>v2353_j_mark_batch.ts</code> 的 <code>matchesEnergyType()</code> helper（被 v2380 覆蓋，但其他 3 張卡 — 瑪力露麗ex 能量氣球 / 超級差不多娃娃ex 耳之力 / 優雅貓 能量粉碎 — 也用）。</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：兩處都加基本能量 fallback — 先看 <code>pokemonType === 'Psychic'</code>（已標好屬性的特殊能量），再看 <code>isBasicEnergyOfType(ec, 'Psychic')</code>（基本能量按卡名「【超】」parse）。同 v3.731 蜜糖風暴 / v3.44 基本能量 pokemonType=null 全面修補的修法。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.813</span> 🌳 hotfix：壯偉碩木場上多隻同名基礎可以選擇要進化哪一隻</summary>
         <ul>
           <li>玩家回報：場上有 2 隻同名【基礎】寶可夢（例如 2 隻呱呱泡蛙）想用壯偉碩木進化時，目前實作直接從牌庫翻卡進化第一隻，沒給玩家選擇要進化哪一隻的機會。</li>
