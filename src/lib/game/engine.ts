@@ -2335,11 +2335,20 @@ function handlePlaying(
       players[aIdx] = attacker;
       const newPlayed: [boolean, boolean] = [played[0], played[1]];
       newPlayed[aIdx] = true;
+      // v3.811 Bug fix：新競技場剛打出 → 重置「本回合競技場效果已使用」flag。
+      //   PTCG 規則：競技場主動效果是「每回合 1 次」per stadium（非 per player）。
+      //   舊邏輯只在 END_TURN reset，導致「先用舊競技場 → 覆蓋新競技場」時新場無法使用。
+      //   範例（玩家回報）：先用壯偉碩木進化 → 打出衝浪海灘 → 無法用衝浪海灘交換水寶。
+      //   只 reset aIdx 那側（打出競技場的玩家），對手側不變。
+      const usedNow = state.stadiumUsedThisTurn ?? [false, false];
+      const newUsedReset: [boolean, boolean] = [usedNow[0], usedNow[1]];
+      newUsedReset[aIdx] = false;
       let newState: GameState = {
         ...state, players,
         activeStadium: trainerInst,
         activeStadiumOwnerIdx: aIdx, // v2.244 標記擁有者
         stadiumPlayedThisTurn: newPlayed,
+        stadiumUsedThisTurn: newUsedReset,
       };
       newState = addLog(newState, `${attacker.name} 打出競技場：${trainerCard.name}！`, aIdx);
       newState = clearFestivalVenueProtectedStatuses(newState, pool);

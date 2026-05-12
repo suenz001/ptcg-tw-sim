@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.811</span> 🏟 hotfix：自己蓋掉場地後，新競技場效果無法使用</summary>
+        <ul>
+          <li>玩家回報：先用壯偉碩木進化寶可夢 → 打出衝浪海灘覆蓋舊場地 → 衝浪海灘的水寶可夢交換功能用不了。</li>
+          <li><b>根因</b>：<code>stadiumUsedThisTurn[aIdx]</code> flag 在 PLAY_TRAINER 打出新競技場時沒 reset。</li>
+          <li>　・流程：壯偉碩木 效果 used[A]=true。同一回合（或之後輪到 A 時）打出 衝浪海灘 → 場地切換但 used[A] 仍 true → USE_STADIUM gate (line 2419) <code>if (used[aIdx]) return state</code> → 用不了。</li>
+          <li><b>PTCG 規則</b>：競技場主動效果是「每回合 1 次」per stadium（非 per player）。覆蓋成新場地後，新場地是全新「未使用」狀態。</li>
+          <li><b>修法</b>：PLAY_TRAINER 處理 Stadium 那段加 <code>stadiumUsedThisTurn[aIdx] = false</code> 重置。只 reset aIdx 那側（打出競技場的玩家），對手側不變。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.81</span> ⏱️ 修本機雙人 KO 卡死：myIdx 視角 switch + 10s 倒數自動取獎</summary>
         <ul>
           <li>玩家回報：本機雙人模式下，咒詛炸彈觸發昏厥自身寶可夢時，pending 在對手側、UI 看不到取得按鈕，整局卡死。</li>
