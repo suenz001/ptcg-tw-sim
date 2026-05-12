@@ -246,6 +246,9 @@
   //   - 切換新 modal 時 $effect 自動重置 offset（pendingSelection 物件變更就 trigger）
   let modalOffset = $state<{ x: number; y: number }>({ x: 0, y: 0 });
   let modalDragged = $state(false);
+  // v3.81：取得獎賞 10 秒倒數 — 防本機雙人模式對手不點 take 卡死
+  let takePrizeCountdown = $state<number>(0);
+  let takePrizeTimerId = $state<ReturnType<typeof setInterval> | null>(null);
   // v3.74：mulligan 揭示 modal 的當前頁碼（每頁顯示一手起手 = 7 張卡）
   let revealPage = $state(0);
   let modalDragStart: { sx: number; sy: number; ox: number; oy: number } | null = null;
@@ -949,6 +952,38 @@
     scheduleAI();
   }
 
+  // v3.81：監聽 myPendingPrizes — 出現時啟動 10s 倒數，timeout 後自動取
+  //   修本機雙人模式 take-prize 卡死（自身 KO 後 pendingPrizes 在對手側，玩家若沒點就無限等）
+  $effect(() => {
+    if (!game) return;
+    const pending = myPendingPrizes;
+    if (pending > 0) {
+      if (takePrizeTimerId === null) {
+        takePrizeCountdown = 10;
+        takePrizeTimerId = setInterval(() => {
+          takePrizeCountdown -= 1;
+          if (takePrizeCountdown <= 0) {
+            // 自動取
+            if (takePrizeTimerId !== null) {
+              clearInterval(takePrizeTimerId);
+              takePrizeTimerId = null;
+            }
+            if (game && myPendingPrizes > 0) {
+              dispatch(GameActions.takePrizes(myPendingPrizes, myIdx, myIdx));
+            }
+          }
+        }, 1000);
+      }
+    } else {
+      // pending 變 0 → 清計時器
+      if (takePrizeTimerId !== null) {
+        clearInterval(takePrizeTimerId);
+        takePrizeTimerId = null;
+      }
+      takePrizeCountdown = 0;
+    }
+  });
+
   // 監聽 game 變化：若 AI 需要行動則排程
   $effect(() => {
     if (!game || aiPlayerIndex === null || mode === 'online') return;
@@ -1263,7 +1298,14 @@
           : (game.pendingMulliganDraw?.[1] ?? 0) > 0
             ? 1
             : (game.setupDone[0] ? 1 : 0)) as 0 | 1)
-      : (myPlayerIndex !== null ? myPlayerIndex : aIdx))
+      // v3.81：本機雙人 playing — pendingPrizes 在哪邊就 switch 到那邊（讓對手能點「取得」按鈕）
+      //   修咒詛炸彈自身 KO 後對手卡死的問題（pendingPrizes 在非 activePlayer 那邊，UI 看不到 button）。
+      //   只在 myPlayerIndex===null 的本機雙人才適用；線上 / AI 模式 myPlayerIndex 永遠有值，走另一條路徑。
+      : (myPlayerIndex !== null
+          ? myPlayerIndex
+          : (game?.phase === 'playing' && (game.pendingPrizes?.[1 - aIdx] ?? 0) > 0
+              ? ((1 - aIdx) as 0 | 1)
+              : aIdx)))
   );
   const oppIdx  = $derived<0 | 1>((1 - myIdx) as 0 | 1);
   const myPlayer  = $derived(game ? game.players[myIdx]  : null);
@@ -3746,6 +3788,9 @@
         {#if myPendingPrizes > 0}
           <div class="alert prize-alert">
             🏆 取 {myPendingPrizes} 張獎勵牌
+            {#if takePrizeCountdown > 0}
+              <span class="prize-countdown">⏱️ {takePrizeCountdown}s 後自動取得</span>
+            {/if}
             <!-- v3.791：takePrizes 也改用 myIdx，本機雙人模式 myPlayerIndex=null 時才不會誤抓 P1 -->
             <button class="btn-xs primary" onclick={()=>dispatch(GameActions.takePrizes(myPendingPrizes, myIdx, myIdx))}>取得</button>
           </div>
@@ -6399,6 +6444,18 @@
   }
   .first-pref-group.lobby .first-pref-radio { font-size: 0.72rem; padding: 0.15rem 0.3rem; }
 
+  /* v3.81：取得獎賞 10s 倒數計時器顯示 */
+  .prize-countdown {
+    display: inline-block;
+    margin: 0 0.5rem;
+    padding: 0.15rem 0.5rem;
+    background: rgba(255, 200, 100, 0.15);
+    border: 1px solid rgba(255, 200, 100, 0.4);
+    border-radius: 6px;
+    color: #ffd070;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
   /* Mulligan 補抽模態 */
   .mulligan-modal{ max-width:440px; }
   /* v3.74 Mulligan 揭示翻頁 modal */

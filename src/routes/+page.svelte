@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.81</span> ⏱️ 修本機雙人 KO 卡死：myIdx 視角 switch + 10s 倒數自動取獎</summary>
+        <ul>
+          <li>玩家回報：本機雙人模式下，咒詛炸彈觸發昏厥自身寶可夢時，pending 在對手側、UI 看不到取得按鈕，整局卡死。</li>
+          <li><b>兩道防護一起加</b>：</li>
+          <li><b>1. myIdx 視角自動 switch（主修法）</b>：本機雙人 playing 階段，<code>pendingPrizes[1-aIdx] &gt; 0</code> 時 myIdx 自動跳到對手側，「取得」按鈕立刻顯示給該取的玩家。修咒詛炸彈/同命戰鬥/反彈傷害 等所有「自己回合中對手取獎」的場景。</li>
+          <li><b>2. 10 秒倒數自動取獎（安全網）</b>：監聽 <code>myPendingPrizes</code>，出現時啟動 10s 倒數，超時自動 dispatch <code>TAKE_PRIZES</code>。即使視角 switch 失敗或玩家未發現也不會卡死。倒數顯示在按鈕旁的⏱️標籤。</li>
+          <li>線上 / AI 模式 myPlayerIndex 有值，走另一條路徑，<b>不受此修法影響</b>。</li>
+          <li>tsc 0 errors + Svelte parse OK。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.80</span> 🧹 零之大空洞 wave audit + 馬志士的交易 統一獎賞 button</summary>
         <ul>
           <li>清剩餘 todo：wave 檔案 30+ 處硬編碼 bench=5 + 馬志士的交易 supporter card 也使用 addPendingPrize。</li>
