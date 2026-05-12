@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.79</span> 🎲 修回合計數 — 先攻為 idx=1 時 turn 計數錯位（v3.75 衍生 bug）</summary>
+        <ul>
+          <li>玩家回報：回合計數呈現「Turn 1 只有先攻動作 / Turn 2 起為 後攻→先攻」的不對稱結構，應該是「Turn N = 先攻→後攻」。</li>
+          <li><b>根因</b>：engine.ts END_TURN 內 <code>newTurn = aIdx === 1 ? state.turn + 1 : state.turn</code> 寫死「idx=1 結束時 turn +1」，假設先攻方一定是 idx=0。</li>
+          <li>　・v3.75 加了先後攻偏好後，先攻可能是 idx=1（玩家選「先攻」或擲幣贏家偏好「先攻」），此時硬編碼判定會在先攻方剛結束時就增加 turn，造成「Turn 1 只有先攻動作 → Turn 2 才開始包含後攻」。</li>
+          <li><b>修法</b>：改為 <code>aIdx !== state.firstPlayerIdx ? state.turn + 1 : state.turn</code> — 「後攻方（= 非 firstPlayerIdx 那邊）結束回合時才增加 turn」，與先攻是哪一邊無關。</li>
+          <li>結果：Turn N = 先攻 → 後攻，每回合對稱，符合 PTCG 官方規則。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.78</span> 🔧 零之大空洞 bench=8 時，多張 Item/Stadium 卡無法使用</summary>
         <ul>
           <li>玩家回報：零之大空洞 在場 + 自方有【太晶】寶可夢時，bench 上限應為 8，但好友寶芬 等卡片仍判定 bench 滿（5/5）→ 點按只有「查看詳情/取消」，無法使用。</li>

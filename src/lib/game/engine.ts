@@ -5697,7 +5697,12 @@ function handlePlaying(
     const newRocketTurnStart: [number, number] = [prevRocketTurnStart[0], prevRocketTurnStart[1]];
     newRocketTurnStart[nextIdx] = countRocketPokeInDiscard(players[nextIdx]);
 
-    const newTurn = aIdx === 1 ? state.turn + 1 : state.turn;
+    // v3.79 Bug fix：原本寫死 `aIdx === 1`，假設先攻方一定是 idx=0 → 後攻方（idx=1）
+    //   結束時才增加 turn。但 v3.75 加了先後攻偏好後，先攻可能是 idx=1，
+    //   會導致「Turn 1 只有先攻動作 / Turn 2 起包含後攻+先攻」的奇怪 turn 計數。
+    //   正確邏輯：後攻方（= 非 firstPlayerIdx 那邊）結束回合時才增加 turn，
+    //   讓「Turn N = 先攻 → 後攻」的對稱結構與先攻 idx 無關。
+    const newTurn = aIdx !== state.firstPlayerIdx ? state.turn + 1 : state.turn;
     const afterSwitch = addLog(
       {
         ...state,
