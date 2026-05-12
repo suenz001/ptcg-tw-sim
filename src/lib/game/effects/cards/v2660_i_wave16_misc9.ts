@@ -20,7 +20,9 @@
  *   - 雜 (1 張)
  */
 
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle } from '../_shared';
+import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
+  getOwnBenchLimit,
+} from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -504,9 +506,10 @@ regPost('火箭隊的火焰鳥ex|邪惡灼燒', (state, aIdx, pool) => {
 // 13. 牌庫挑（1 張）— 小山豬｜呼朋引伴 — 從牌庫挑 ≤2 張基礎寶可夢放備戰
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('小山豬|呼朋引伴', (s) => ({ state: s, damage: 0 }));
-regPost('小山豬|呼朋引伴', (state, aIdx, _pool) => {
+regPost('小山豬|呼朋引伴', (state, aIdx, pool) => {
   const p = state.players[aIdx];
-  const benchSpace = Math.max(0, 5 - p.bench.length);
+  // v3.80：支援零之大空洞
+  const benchSpace = Math.max(0, getOwnBenchLimit(state, aIdx, pool) - p.bench.length);
   if (benchSpace === 0 || p.deck.length === 0) return state;
   const realMax = Math.min(2, benchSpace);
   const s = addLog(state, `呼朋引伴：從牌庫挑 0~${realMax} 張基礎寶可夢放備戰（重洗）`, aIdx);

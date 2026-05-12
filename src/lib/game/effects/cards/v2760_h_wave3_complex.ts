@@ -7,6 +7,7 @@
 import {
   regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS,
+  getOwnBenchLimit,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
@@ -375,9 +376,10 @@ regPost('轟擂金剛猩|鼓擊', (state, aIdx, _pool) => {
 //    簡化：先 deck-search，玩家手動移能量
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('迷唇姐|邀請之吻', (s) => ({ state: s, damage: 0 }));
-regPost('迷唇姐|邀請之吻', (state, aIdx, _pool) => {
+regPost('迷唇姐|邀請之吻', (state, aIdx, pool) => {
   const p = state.players[aIdx];
-  const space = Math.max(0, 5 - p.bench.length);
+  // v3.80：支援零之大空洞
+  const space = Math.max(0, getOwnBenchLimit(state, aIdx, pool) - p.bench.length);
   if (space === 0 || p.deck.length === 0) return state;
   return withPending(addLog(state, '邀請之吻：從牌庫挑 1 基礎放備戰（重洗）；之後請手動移自身 1 能量到新上場', aIdx), {
     type: 'deck-search',

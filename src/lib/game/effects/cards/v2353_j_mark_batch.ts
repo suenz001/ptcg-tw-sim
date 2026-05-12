@@ -20,8 +20,8 @@ import {
   shuffle,
   updatePlayer,
   withPending,
+  getOwnBenchLimit,
 } from '../_shared';
-
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
 function cardName(pool: Map<string, any>, inst?: CardInstance | null): string {
@@ -437,13 +437,15 @@ regPost('電飛鼠|天空迴旋', (state, aIdx) => {
 regPre('鳳王|復生火焰', (state) => ({ state, damage: 0 }));
 regPost('鳳王|復生火焰', (state, aIdx, pool) => {
   const p = state.players[aIdx];
-  if (p.bench.length >= 5) return addLog(state, '復生火焰：備戰區已滿', aIdx);
+  // v3.80：getOwnBenchLimit 支援零之大空洞
+  const benchLimit = getOwnBenchLimit(state, aIdx, pool);
+  if (p.bench.length >= benchLimit) return addLog(state, '復生火焰：備戰區已滿', aIdx);
   const cand = p.discard.filter(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Pokemon' && card.stage === 'Basic';
   });
   if (cand.length === 0) return addLog(state, '復生火焰：棄牌區沒有基礎寶可夢', aIdx);
-  const slots = Math.min(3, 5 - p.bench.length, cand.length);
+  const slots = Math.min(3, benchLimit - p.bench.length, cand.length);
   const s = addLog(state, `復生火焰：從棄牌區選最多 ${slots} 張基礎寶可夢放備戰`, aIdx);
   return withPending(s, {
     type: 'discard-search',

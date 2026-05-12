@@ -20,6 +20,7 @@ import {
   reg, regR, regG, regA,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, clearActiveEffects, drawCards,
   healResolver, sameEvoName,
+  addPendingPrize,
 } from '../_shared';
 import { getBenchLimit, isBasicPokemonCard } from '../../engine';
 import type { CardInstance, PlayerState } from '../../types';
@@ -658,23 +659,16 @@ regR('masters-trade-decide', (st, oppIdx, iids, _params, _pool) => {
   const proposerName = st.players[proposerIdx].name;
   const oppName = st.players[oppIdx].name;
   if (choice === 'yes') {
-    // 雙方各取 1 張獎賞 — 同時取，先 log 再操作
-    st = addLog(st, `馬志士的交易：${oppName} 接受 — 雙方各取 1 張獎勵牌`, oppIdx);
-    const players = [...st.players] as [PlayerState, PlayerState];
-    for (const i of [0, 1] as const) {
-      const p = { ...players[i] };
-      if (p.prizes.length > 0) {
-        const taken = p.prizes[0];
-        p.prizes = p.prizes.slice(1);
-        p.hand = [...p.hand, taken];
-      }
-      players[i] = p;
+    // v3.80 Rule 10：雙方各取 1 張獎賞 — 改用 addPendingPrize 讓兩位玩家都按「取得」
+    st = addLog(st, `馬志士的交易：${oppName} 接受 — 雙方各待取 1 張獎勵牌`, oppIdx);
+    if (st.players[proposerIdx].prizes.length > 0) {
+      st = addPendingPrize(st, proposerIdx, 1);
     }
-    st = { ...st, players };
-    st = addLog(st, `→ ${proposerName} 取得 1 張獎勵牌`, proposerIdx);
-    st = addLog(st, `→ ${oppName} 取得 1 張獎勵牌`, oppIdx);
-    // win check：先檢查提案方（出卡回合就是提案方），再對手
-    if (st.players[proposerIdx].prizes.length === 0) {
+    if (st.players[oppIdx].prizes.length > 0) {
+      st = addPendingPrize(st, oppIdx, 1);
+    }
+    // 勝負條件由 TAKE_PRIZES handler 在玩家點按鈕後檢查（既有機制）
+    if (false) {
       return { ...st, phase: 'game-over' as const, winner: proposerIdx,
         winReason: `${proposerName} 取得所有獎勵牌` };
     }

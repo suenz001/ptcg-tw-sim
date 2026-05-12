@@ -8,6 +8,7 @@
 
 import {
   regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
+  getOwnBenchLimit,
 } from '../_shared';
 import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
@@ -253,9 +254,10 @@ function deckSearchBasicEnergiesAnyPost(max: number, label: string, sameTypes: b
 
 // 牌庫挑 1 張基礎寶可夢放備戰
 function deckSearchBasicToBenchPost(max: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const p = state.players[aIdx];
-    const space = Math.max(0, 5 - p.bench.length);
+    // v3.80：支援零之大空洞
+    const space = Math.max(0, getOwnBenchLimit(state, aIdx, pool) - p.bench.length);
     if (space === 0 || p.deck.length === 0) return state;
     const realMax = Math.min(max, space);
     return withPending(addLog(state, `${label}：從牌庫挑 0~${realMax} 張基礎寶可夢放備戰（重洗）`, aIdx), {
@@ -2467,7 +2469,8 @@ regPre('大舌頭|舌引', (s) => ({ state: s, damage: 0 }));
 regPost('大舌頭|舌引', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
-  const benchSpace = Math.max(0, 5 - opp.bench.length);
+  // v3.80：對手 bench 上限同樣考慮零之大空洞（dIdx 視角）
+  const benchSpace = Math.max(0, getOwnBenchLimit(state, dIdx, pool) - opp.bench.length);
   if (benchSpace === 0) return state;
   // 自動：對手手牌中前 2 個基礎寶可夢自動放備戰
   const candidates = opp.hand.filter(c => {

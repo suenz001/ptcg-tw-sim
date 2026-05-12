@@ -5,7 +5,9 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle } from '../_shared';
+import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
+  getOwnBenchLimit,
+} from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -495,9 +497,10 @@ regPost('赫普的沙包蛇|築窩', deckSearchTrainerSubtypePost('Stadium', 'wa
 // 復用 v2.55 的 wave5-place-basic-bench resolver
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('N的迷你冰|呼朋引伴', (s) => ({ state: s, damage: 0 }));
-regPost('N的迷你冰|呼朋引伴', (state, aIdx, _pool) => {
+regPost('N的迷你冰|呼朋引伴', (state, aIdx, pool) => {
   const player = state.players[aIdx];
-  const benchSpace = Math.max(0, 5 - player.bench.length);
+  // v3.80：支援零之大空洞
+  const benchSpace = Math.max(0, getOwnBenchLimit(state, aIdx, pool) - player.bench.length);
   if (benchSpace === 0) return addLog(state, '呼朋引伴：備戰已滿', aIdx);
   if (player.deck.length === 0) return addLog(state, '呼朋引伴：牌庫已空', aIdx);
   const max = Math.min(2, benchSpace);

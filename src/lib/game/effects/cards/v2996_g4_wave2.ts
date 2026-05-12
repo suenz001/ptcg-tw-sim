@@ -40,6 +40,7 @@ import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
   regA, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, drawCards,
+  getOwnBenchLimit,
 } from '../_shared';
 import { flipCoinsWithLog } from '../../effects';
 import type { Card } from '$lib/cards/types';
@@ -214,7 +215,8 @@ regA('保母曼波', 0, (st, idx, pool, cardInst) => {
   if (!cardInst || p.active?.iid !== cardInst.iid) {
     return addLog(st, '溫柔鰭：保母曼波不在戰鬥場', idx);
   }
-  if (p.bench.length >= 5) return addLog(st, '溫柔鰭：備戰區已滿', idx);
+  // v3.80：getOwnBenchLimit 支援零之大空洞
+  if (p.bench.length >= getOwnBenchLimit(st, idx, pool)) return addLog(st, '溫柔鰭：備戰區已滿', idx);
   const validIids = p.discard
     .filter(c => isBasicPokemonHPLE70(pool.get(c.cardId)))
     .map(c => c.iid);
@@ -662,7 +664,8 @@ regA('哥德小姐', 0, (st, idx, pool, cardInst) => {
 regA('禿鷹娜', 0, (st, idx, pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
-  if (dp.bench.length >= 5) return addLog(st, '瞄準獵物：對手備戰區已滿', idx);
+  // v3.80：對手 bench 上限同樣考慮零之大空洞（dIdx 視角）
+  if (dp.bench.length >= getOwnBenchLimit(st, dIdx, pool)) return addLog(st, '瞄準獵物：對手備戰區已滿', idx);
   if (dp.hand.length === 0) return addLog(st, '瞄準獵物：對手手牌為空', idx);
 
   // 揭示對手手牌（公開 log — 卡面寫「查看對手手牌」雙方都看得到）
@@ -700,7 +703,8 @@ regR('mandibuzz-targeting', (st, idx, iids, _params, pool) => {
   if (!isBasicPokemonHPLE70(card)) {
     return addLog(st, '瞄準獵物：所選不符條件', idx);
   }
-  if (dp.bench.length >= 5) {
+  // v3.80：對手 bench 上限同樣考慮零之大空洞
+  if (dp.bench.length >= getOwnBenchLimit(st, dIdx, pool)) {
     return addLog(st, '瞄準獵物：對手備戰區已滿', idx);
   }
   // 從對手手牌搬到對手備戰

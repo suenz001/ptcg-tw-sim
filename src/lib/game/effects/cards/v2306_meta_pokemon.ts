@@ -1,7 +1,8 @@
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { ABILITY_EFFECTS, addLog, drawCards, updatePlayer, withPending, RESOLVERS, regR, regA } from '../_shared';
-
+import { ABILITY_EFFECTS, addLog, drawCards, updatePlayer, withPending, RESOLVERS, regR, regA,
+  getOwnBenchLimit,
+} from '../_shared';
 /**
  * v2.306 Meta Pokemon (H, I, J)
  */
@@ -259,7 +260,8 @@ regPre('噗噗豬|念動彈', (state, aIdx, pool) => ({ state, damage: 60 }));
 regA('鐵面忍者', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
-  if (p.bench.length >= 5) return addLog(state, '脫殼：備戰區已滿，無法放置寶可夢', aIdx);
+  // v3.80：getOwnBenchLimit 支援零之大空洞（5→8）
+  if (p.bench.length >= getOwnBenchLimit(state, aIdx, pool)) return addLog(state, '脫殼：備戰區已滿，無法放置寶可夢', aIdx);
   const hasShedinja = p.deck.length > 0;
   if (!hasShedinja) {
     let s = addLog(state, '脫殼：牌庫為空', aIdx);
@@ -502,7 +504,8 @@ regR('yanmega-jet-tornado-move-energy', (state, actorIdx, selectedIids, params, 
 const silcoonCascoonAbility = (state: GameState, aIdx: 0|1, pool: Map<string, Card>, inst: CardInstance | undefined) => {
   if (!inst) return state;
   const p = state.players[aIdx];
-  if (p.bench.length >= 5) return addLog(state, '增長繭：備戰區已滿，無法放置寶可夢', aIdx);
+  // v3.80：getOwnBenchLimit
+  if (p.bench.length >= getOwnBenchLimit(state, aIdx, pool)) return addLog(state, '增長繭：備戰區已滿，無法放置寶可夢', aIdx);
   const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
   if (instInPlay) instInPlay.abilityUsedThisTurn = true;
   let s = addLog(state, '增長繭：從牌庫選擇 1 張「甲殼繭」或者「盾甲繭」放置於備戰區', aIdx);

@@ -23,6 +23,7 @@ import type { CardInstance, PlayerState } from '../../types';
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
+  getOwnBenchLimit,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 
@@ -372,8 +373,8 @@ regPost('托戈德瑪爾|尋找朋友', (state, aIdx, _pool) => {
 regPre('洛托姆|洛托呼喚', (s) => ({ state: s, damage: 0 }));
 regPost('洛托姆|洛托呼喚', (state, aIdx, pool) => {
   const player = state.players[aIdx];
-  // 計算備戰可放空位
-  const benchSpace = Math.max(0, 5 - player.bench.length);
+  // 計算備戰可放空位（v3.80：支援零之大空洞）
+  const benchSpace = Math.max(0, getOwnBenchLimit(state, aIdx, pool) - player.bench.length);
   if (benchSpace === 0) {
     return addLog(state, '洛托呼喚：備戰區已滿', aIdx);
   }

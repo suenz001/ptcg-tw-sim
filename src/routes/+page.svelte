@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.80</span> 🧹 零之大空洞 wave audit + 馬志士的交易 統一獎賞 button</summary>
+        <ul>
+          <li>清剩餘 todo：wave 檔案 30+ 處硬編碼 bench=5 + 馬志士的交易 supporter card 也使用 addPendingPrize。</li>
+          <li><b>wave 檔案 bench audit + 修補（14 處）</b>：</li>
+          <li>　・<code>v2306_meta_pokemon.ts</code>：脫殼 + 增長繭</li>
+          <li>　・<code>v2353_j_mark_batch.ts</code>：復生火焰</li>
+          <li>　・<code>v2580_i_wave8_misc2.ts</code>：洛托呼喚</li>
+          <li>　・<code>v2620_i_wave12_misc5.ts</code>：N的迷你冰呼朋引伴</li>
+          <li>　・<code>v2630_i_wave13_misc6.ts</code>：deckSearchPokemonToBenchPost helper（複用此 helper 的多張卡一併受惠）</li>
+          <li>　・<code>v2660_i_wave16_misc9.ts</code>：小山豬呼朋引伴</li>
+          <li>　・<code>v2750_h_wave2_full.ts</code>：deckSearchBasicToBenchPost helper（複用）+ 大舌頭舌引（對手 bench）</li>
+          <li>　・<code>v2760_h_wave3_complex.ts</code>：迷唇姐 邀請之吻</li>
+          <li>　・<code>v2996_g4_wave2.ts</code>：溫柔鰭 + 瞄準獵物 ×2（對手 bench）</li>
+          <li>　・<code>v2998_g2.ts</code>：莉莉艾的蝶結萌虻 邀請眨眼（對手 bench）</li>
+          <li>　・全改用 <code>getOwnBenchLimit(state, idx, pool)</code> helper（自方 idx 或對方 dIdx 視角都正確）。</li>
+          <li><b>馬志士的交易（v172_hij_batch.ts）</b>：雙方各取 1 張獎賞改用 <code>addPendingPrize</code>，兩位玩家都可點「取得」按鈕（Rule 10 統一）。</li>
+          <li><b>遵守鐵律</b>：Rule 10（addPendingPrize）+ Rule 11（Python pipeline 不用 Edit）+ Rule 4（tsc audit）。tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.792</span> 🎯 統一獎賞卡取得流程：3 處自動派發改用「取得」按鈕</summary>
         <ul>
           <li>玩家回報：對手「黑夜魔靈/彷徨夜靈」發動 咒詛炸彈 自爆時，系統自動幫玩家取走獎賞卡，沒有「取得」按鈕。希望取獎流程一致都用按鈕。</li>

@@ -33,6 +33,7 @@ import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
   regA, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
+  getOwnBenchLimit,
 } from '../_shared';
 import { flipCoinsWithLog } from '../../effects';
 import type { Card } from '$lib/cards/types';
@@ -466,7 +467,8 @@ regA('火箭隊的大嘴蝠', 0, (st, idx, _pool, _cardInst) => {
 regA('莉莉艾的蝶結萌虻', 0, (st, idx, pool, _cardInst) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
-  if (opp.bench.length >= 5) return addLog(st, '邀請眨眼：對手備戰區已滿', idx);
+  // v3.80：對手 bench 上限同樣考慮零之大空洞（oppIdx 視角）
+  if (opp.bench.length >= getOwnBenchLimit(st, oppIdx, pool)) return addLog(st, '邀請眨眼：對手備戰區已滿', idx);
   if (opp.hand.length === 0) return addLog(st, '邀請眨眼：對手手牌為空', idx);
   // 揭示對手手牌（公開）
   const handNames = opp.hand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');

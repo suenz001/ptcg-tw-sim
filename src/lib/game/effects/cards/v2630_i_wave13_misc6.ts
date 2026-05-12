@@ -3,7 +3,9 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE,
+  getOwnBenchLimit,
+} from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -114,9 +116,10 @@ regR('wave13-deck-take-any', (state, aIdx, iids, _params, _pool) => {
 function deckSearchPokemonToBenchPost(
   filterStr: string, max: number, effectKeyName: string, label: string,
 ): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const player = state.players[aIdx];
-    const benchSpace = Math.max(0, 5 - player.bench.length);
+    // v3.80：支援零之大空洞
+    const benchSpace = Math.max(0, getOwnBenchLimit(state, aIdx, pool) - player.bench.length);
     if (benchSpace === 0) return addLog(state, `${label}：備戰已滿`, aIdx);
     if (player.deck.length === 0) return addLog(state, `${label}：牌庫已空`, aIdx);
     const realMax = Math.min(max, benchSpace);
