@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.884</span> 📱 真正修好 zoom-modal 滾動：iOS Safari flex + overflow-y bug（拆 .zoom-scroll 內層）</summary>
+        <ul>
+          <li>玩家連續回報：v3.879/v3.880/v3.882 改 CSS 都沒用，零閘垂直拖曳就是不動。對照 <code>.selection-modal</code>（手機可滑）找出 root cause。</li>
+          <li><b>真正根因（這次對照其他可滑 modal 找到的）</b>：<code>.zoom-modal</code> 同時是 (1) <code>display:flex</code> 容器（讓 image + info 排版）+ (2) <code>overflow-y:auto</code> scroll 容器。iOS Safari 對「flex container 同時是 scroll container」有 known bug — momentum scroll 完全不啟動，即使加再多 <code>touch-action: pan-y</code> / <code>-webkit-overflow-scrolling</code> 都沒用。對照組：<code>.selection-modal</code> 是 flex 但 NO overflow（scroll 由內層 <code>.sel-grid</code> 處理），手機 <code>.mp-hand</code> 是 block 配 overflow-x，兩者都能滑。</li>
+          <li><b>修法（拆兩層）</b>：
+            <ul>
+              <li>新增 <code>.zoom-scroll</code> 非 flex 內層 wrapper 包住 <code>.zoom-body</code>（含 image + info）</li>
+              <li><code>.zoom-modal</code> 變純 flex column 排版容器（<code>overflow:hidden</code>、不 scroll）</li>
+              <li><code>.zoom-scroll</code> 是真正 scroll 容器：<code>flex:1 1 auto + min-height:0 + overflow-y:auto + touch-action:pan-y + -webkit-overflow-scrolling:touch + overscroll-behavior:contain</code></li>
+              <li><code>min-height:0</code> 是 flex child + overflow 的關鍵 — 無此屬性 flex child 默認 min-content 不收縮 → 內容永遠不溢出 → 不 scroll</li>
+            </ul>
+          </li>
+          <li>HTML 結構改動：加 <code>&lt;div class="zoom-scroll"&gt;</code> 包 <code>.zoom-body</code>，相對應 close button 與 back button 仍 absolute 定位在 <code>.zoom-modal</code> 不受影響。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.883</span> 🤖 修 AI 用激流水泵不觸發備戰 120（沒帶 discardedEnergyIids）</summary>
         <ul>
           <li>玩家回報：厄鬼椪 水井面具ex 使用激流水泵時「能量回牌庫」但對手備戰沒受 120 傷害。</li>
