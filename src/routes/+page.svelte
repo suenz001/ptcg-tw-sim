@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.831</span> 📝 hotfix：匯入文字 regex 不支援 setCode 含 `-`（M-P-J / SV-P-I 等 promo 卡）</summary>
+        <ul>
+          <li>玩家回報：「呱呱泡蛙 M-P-J 089/M-P」「基本【水】能量 M-P-J 098/M-P」無法匯入。</li>
+          <li><b>根因</b>：<code>importFromText</code> 的 Format A regex（line 624）：<br/>
+            <code>/^(\d+)\s+(.+?)\s+([A-Za-z0-9]+)\s+(\S+)$/</code><br/>
+            setCode group <code>[A-Za-z0-9]+</code> 不含 <code>-</code> → <code>M-P-J</code> 不匹配 → 落到簡易格式 → name 變成「呱呱泡蛙 M-P-J 089/M-P」整串 → 找不到 → errors。
+          </li>
+          <li><b>修法</b>：setCode group 改成 <code>[A-Za-z0-9-]+</code> 允許 <code>-</code>。<br/>
+            影響範圍：所有含 <code>-</code> 的 promo set — M-P-J / M-P-H / M-P-I / SV-P-I / SV-P-H 等。
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.83</span> 🔖 UX：牌組頁主畫面加「從官方匯入」顯眼按鈕</summary>
         <ul>
           <li>玩家反映：原本「從官方訓練家網站匯入」的書籤工具藏在「匯入文字」modal 內的摺疊區裡，太深、玩家根本找不到 — 主畫面只看到「匯入文字」按鈕、沒有任何「也支援官方」的提示。</li>

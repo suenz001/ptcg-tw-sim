@@ -621,7 +621,10 @@
       // Format C（最精確，bookmarklet 輸出）：{count} {name} #{cardId}
       const mId = line.match(/^(\d+)\s+(.+?)\s+#(\d+)$/);
       // Format A（完整）：{count} {name} {setCode} {collectorNumber}
-      const mFull = !mId ? line.match(/^(\d+)\s+(.+?)\s+([A-Za-z0-9]+)\s+(\S+)$/) : null;
+      // v3.831: setCode 允許含 `-` — 修玩家回報「呱呱泡蛙 M-P-J 089/M-P」與
+      //   「基本【水】能量 M-P-J 098/M-P」無法匯入。原 regex 是 [A-Za-z0-9]+ 不含 `-`，
+      //   M-P-J / SV-P-I / SV-P-H 等 promo setCode 全 fall through 到簡易格式而失敗。
+      const mFull = !mId ? line.match(/^(\d+)\s+(.+?)\s+([A-Za-z0-9-]+)\s+(\S+)$/) : null;
       // Format B（簡易）：{count} {name}  / {count}x{name}  / {count} × {name}
       const mSimple = (!mId && !mFull) ? line.match(/^(\d+)\s*[x×]?\s+(.+?)$/) : null;
 
