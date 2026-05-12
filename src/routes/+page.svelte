@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.875</span> 🎯 激流水泵 picker 精修：「全有或全無」+ 璀璨結晶 -1 規則</summary>
+        <ul>
+          <li>玩家回報：扮晶晶酒 借 激流水泵 picker 可以選 1 顆或 2 顆但發動不了效果，UX 多此一舉，應該只能選 3 顆或不選。</li>
+          <li>同時補實裝官方 QA：使用附 2 個能量 + 璀璨結晶 的厄鬼椪 水井面具ex 的招式 激流水泵，若放回 2 個能量，仍可對對手備戰造成 120 傷害。</li>
+          <li><b>修法 1（UI 精修）</b>：<code>preAttackDiscard</code> state 加 <code>exactRequired?: number</code> 欄位。confirm 按鈕只在 <code>picked === 0</code> 或 <code>picked === exactRequired</code> 時 enable（中間數量 disable）。confirm 按鈕文字改成「啟用追加效果（需放回 N 個，目前 X/N）」；skip 按鈕改成「不啟用追加效果」。</li>
+          <li><b>修法 2（璀璨結晶 -1 規則）</b>：<code>_computeExactRequired</code> helper — 偵測 attacker 為「太晶」且有附「璀璨結晶」道具 → <code>exactRequired = 2</code>；否則 3。同步在 <code>v155_attacks.ts</code> 加 <code>_hydroPumpRequired</code> helper，regPre / regPost 雙端讀同邏輯。</li>
+          <li><b>扮晶晶酒 借此招</b>：借者是火箭隊的謎擬Ｑ（非太晶），即使有附道具也不啟用 -1 規則 → 固定 required = 3。</li>
+          <li><b>受惠範圍</b>：激流水泵（單機 + 扮晶晶酒 借此招 + 璀璨結晶 attach 場景）。UX 從「可選 0~3 但只有 0/3 有意義」收緊為「只能 0 或 required」。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.874</span> 🐛 雙 bug：願增猿腎上腺腦力可選張數 + 旋轉洛托姆風扇呼喚 turn gate 修正</summary>
         <ul>
           <li><b>Bug 1：願增猿｜腎上腺腦力 應該可選搬幾個傷害指示物</b></li>

@@ -278,12 +278,14 @@
   // ── 招式前置丟能量選擇（v1.57） ────────────────────────────────────────────
   // 玩家宣告招式、ATTACK_PRE_DISCARD_CHOICE 命中時彈出的能量挑選 modal 狀態
   // v3.873：optional copyAttackChoice — 扮晶晶酒先選對手太晶招式，再開能量 picker 時帶著 choice 一起 dispatch
+  // v3.875：optional exactRequired — 激流水泵類「全有或全無」picker，confirm 只在 picked === 0 或 picked === exactRequired 時 enable
   let preAttackDiscard = $state<{
     attackIndex: number;
     spec: PreDiscardSpec;
     attackName: string;
     picked: Set<string>;
     copyAttackChoice?: { pokeIid: string; attackIndex: number };
+    exactRequired?: number;
   } | null>(null);
 
   // ── 手牌 hover 預覽（Session 31 修正） ─────────────────────────────────────
@@ -2329,12 +2331,28 @@
       dispatch(GameActions.attack(attackIndex));
       return;
     }
+    // v3.875：激流水泵 picker 用「全有或全無」UX — 偵測 璀璨結晶 → required = 2，否則 3
+    const exactRequired = _computeExactRequired(atk.name, activePlayer.active);
     preAttackDiscard = {
       attackIndex,
       spec,
       attackName: atk.name,
       picked: new Set<string>(),
+      exactRequired,
     };
+  }
+
+  // v3.875：計算「啟用 option 所需精確放回數」— 目前只 激流水泵 用
+  //   厄鬼椪 水井面具ex（太晶）+ 璀璨結晶 → 2；否則 3
+  //   非 激流水泵 → undefined（picker 走原邏輯）
+  function _computeExactRequired(attackName: string, att: CardInstance | null): number | undefined {
+    if (attackName !== '激流水泵' || !att) return undefined;
+    const card = getCard(att.cardId);
+    const isTera = card?.tags?.includes('太晶') ?? false;
+    if (!isTera) return 3;
+    const allTools = [att.toolAttached, ...(att.extraTools ?? [])].filter(Boolean) as CardInstance[];
+    const hasShinyCrystal = allTools.some(t => getCard(t.cardId)?.name === '璀璨結晶');
+    return hasShinyCrystal ? 2 : 3;
   }
 
   // v2.119 copy-attack picker（目前僅用於 N的索羅亞克ex｜暗黑底牌）
@@ -2371,12 +2389,16 @@
     const borrowedKey = `${oppPoke.card.name}|${pickedAtk.name}`;
     const spec = ATTACK_PRE_DISCARD_CHOICE.get(borrowedKey);
     if (spec) {
+      // v3.875：借此招時，借者 active 才是「自身」（謎擬Q 非太晶，所以激流水泵 required = 3 固定）
+      const borrowerActive = game?.players[myIdx].active ?? null;
+      const exactRequired = _computeExactRequired(pickedAtk.name, borrowerActive);
       preAttackDiscard = {
         attackIndex: src,
         spec,
         attackName: pickedAtk.name,
         picked: new Set<string>(),
         copyAttackChoice: { pokeIid, attackIndex },
+        exactRequired,
       };
       return;
     }
@@ -2485,11 +2507,13 @@
   function confirmPreAttackDiscard() {
     if (!preAttackDiscard) return;
     // v3.873：解構 copyAttackChoice — 若為 扮晶晶酒 borrowed picker 流程，需一併 dispatch
-    const { attackIndex, spec, picked, copyAttackChoice } = preAttackDiscard;
+    // v3.875：exactRequired 設值時，picked 必須是 0 (skip) 或 exactRequired (啟用 option)，中間數量 reject
+    const { attackIndex, spec, picked, copyAttackChoice, exactRequired } = preAttackDiscard;
     const energies = getDiscardableEnergies(spec);
     const amount = computePickedAmount(spec, picked, energies);
     if (amount < spec.min) return;
     if (spec.max !== null && amount > spec.max) return;
+    if (exactRequired !== undefined && amount !== 0 && amount !== exactRequired) return;
     const iids = [...picked];
     preAttackDiscard = null;
     dispatch(GameActions.attack(attackIndex, iids, copyAttackChoice));
@@ -5002,6 +5026,9 @@
     {@const minOk = pickedAmount >= spec.min}
     {@const maxOk = spec.max === null || pickedAmount <= spec.max}
     {@const estDmg = spec.baseDamage + pickedAmount * spec.damagePerEnergy}
+    {@const req = preAttackDiscard.exactRequired}
+    {@const exactOk = req === undefined ? true : (pickedAmount === 0 || pickedAmount === req)}
+    {@const confirmEnabled = minOk && maxOk && exactOk && (req === undefined || pickedAmount === req)}
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
@@ -5048,11 +5075,21 @@
           {/if}
         </div>
         <div class="sel-footer">
-          <button class="btn-act primary" disabled={!minOk || !maxOk} onclick={confirmPreAttackDiscard}>
-            確定使用招式（{spec.verb === 'return-to-hand' || spec.verb === 'return-to-deck' ? '放回' : '丟'} {pickedCount} 張{isUnits ? `／${pickedAmount} 個能量` : ''}）
+          <button class="btn-act primary" disabled={!confirmEnabled} onclick={confirmPreAttackDiscard}>
+            {#if req !== undefined}
+              啟用追加效果（需放回 {req} 個能量，目前 {pickedCount}/{req}）
+            {:else}
+              確定使用招式（{spec.verb === 'return-to-hand' || spec.verb === 'return-to-deck' ? '放回' : '丟'} {pickedCount} 張{isUnits ? `／${pickedAmount} 個能量` : ''}）
+            {/if}
           </button>
           {#if spec.min === 0}
-            <button class="btn-act secondary" onclick={() => { if (preAttackDiscard) { preAttackDiscard.picked = new Set(); confirmPreAttackDiscard(); } }}>{spec.verb === 'return-to-hand' || spec.verb === 'return-to-deck' ? '不放回' : '不丟'}（0 傷害）</button>
+            <button class="btn-act secondary" onclick={() => { if (preAttackDiscard) { preAttackDiscard.picked = new Set(); confirmPreAttackDiscard(); } }}>
+              {#if req !== undefined}
+                不啟用追加效果（不放回任何能量）
+              {:else}
+                {spec.verb === 'return-to-hand' || spec.verb === 'return-to-deck' ? '不放回' : '不丟'}（0 傷害）
+              {/if}
+            </button>
           {/if}
           <button class="btn-act secondary" onclick={cancelPreAttackDiscard}>取消</button>
         </div>
