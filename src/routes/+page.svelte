@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.872</span> 🔍 hotfix：v3.871 whitelist 寫錯 class — 查看詳情 modal 無法垂直 scroll</summary>
+        <ul>
+          <li>玩家附截圖：v3.871 鎖主畫面後，「查看詳情」彈窗（喵喵ex 等卡的特性描述）長文無法垂直拖曳查看。</li>
+          <li><b>根因</b>：v3.871 我自己腦補 whitelist 寫 <code>.zoom-modal-overlay</code> — 這名稱不存在。實際是 <code>.zoom-overlay</code> + <code>.zoom-modal</code>。docMoveHandler 一律 preventDefault 把 zoom modal 內的 scroll 也擋了。</li>
+          <li><b>修法</b>：糾正 whitelist class 名稱，並擴展涵蓋所有可滾動的 overlay：
+            <ul>
+              <li><code>.zoom-overlay</code> + <code>.zoom-modal</code> — 查看詳情卡片彈窗（喵喵ex 等長特性）</li>
+              <li><code>.selection-modal</code> — pendingSelection picker UI（含查看牌庫剩餘）</li>
+              <li><code>.full-deck-view</code> + <code>.full-deck-list</code> — 「📖 查看牌庫剩餘全部」摺疊內容</li>
+            </ul>
+          </li>
+          <li>道歉：我這次又是「沒查實證就腦補名稱」— 跟之前「寶寶球」幻覺同類錯誤。以後寫 selector 一定先 grep 確認。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.871</span> 📱 iOS Safari pull-to-refresh 強化擋：document 層 touchmove preventDefault</summary>
         <ul>
           <li>玩家附截圖：v3.861 修了 <code>.mp</code> 主畫面 fixed 後，iPhone 上仍會出現 Safari 內建的「下拉轉圈圖示」並彈出對戰頁。</li>

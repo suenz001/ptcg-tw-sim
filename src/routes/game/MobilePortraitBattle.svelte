@@ -424,11 +424,20 @@
       if (t?.closest('.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet')) return;
       e.preventDefault();
     };
-    // v3.871: document 層也擋 — 處理 .mp 外的 pull-to-refresh
+    // v3.871 / v3.872: document 層也擋 — 處理 .mp 外的 pull-to-refresh
+    //   v3.872 修正 whitelist：原 .zoom-modal-overlay 是腦補名稱，實際是 .zoom-overlay + .zoom-modal。
+    //   v3.872 加 .selection-modal — pendingSelection picker UI（含「📖 查看牌庫剩餘全部」摺疊區）。
+    //   v3.872 加 .full-deck-view / .full-deck-list — 牌庫剩餘清單可垂直 scroll。
     const docMoveHandler = (e: TouchEvent) => {
       const t = e.target as Element | null;
       // 落在 .mp 外（瀏覽器邊界區）或非 scrollable 內部 → 擋
-      if (!t || !t.closest('.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet, .selection-overlay, .lightbox-overlay, .zoom-modal-overlay')) {
+      if (!t || !t.closest(
+        '.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet, ' +
+        '.selection-overlay, .selection-modal, ' +
+        '.lightbox-overlay, ' +
+        '.zoom-overlay, .zoom-modal, ' +
+        '.full-deck-view, .full-deck-list',
+      )) {
         if (e.cancelable) e.preventDefault();
       }
     };
