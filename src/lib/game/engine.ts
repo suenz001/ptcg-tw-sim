@@ -1365,6 +1365,8 @@ export function createGame(
     oppAttackKOdMyRocketInLastOppTurn: [0, 0],
     oppAbilityKOdMyRocketInLastOppTurn: [0, 0],
     stadiumPlayedThisTurn: [false, false],
+    // v3.85: 本回合打過「稜鏡塔」flag（給昂主花葉蒂 gate 用）
+    prismTowerPlayedThisTurn: [false, false],
   };
 
   let st = addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
@@ -2348,12 +2350,17 @@ function handlePlaying(
       const usedNow = state.stadiumUsedThisTurn ?? [false, false];
       const newUsedReset: [boolean, boolean] = [usedNow[0], usedNow[1]];
       newUsedReset[aIdx] = false;
+      // v3.85: 打出稜鏡塔時 set flag，給昂主花葉蒂 gate 用（即使後續被覆蓋本回合仍生效）
+      const prevPrismFlag = state.prismTowerPlayedThisTurn ?? [false, false];
+      const newPrismFlag: [boolean, boolean] = [prevPrismFlag[0], prevPrismFlag[1]];
+      if (trainerCard.name === '稜鏡塔') newPrismFlag[aIdx] = true;
       let newState: GameState = {
         ...state, players,
         activeStadium: trainerInst,
         activeStadiumOwnerIdx: aIdx, // v2.244 標記擁有者
         stadiumPlayedThisTurn: newPlayed,
         stadiumUsedThisTurn: newUsedReset,
+        prismTowerPlayedThisTurn: newPrismFlag,
       };
       newState = addLog(newState, `${attacker.name} 打出競技場：${trainerCard.name}！`, aIdx);
       newState = clearFestivalVenueProtectedStatuses(newState, pool);
@@ -5679,6 +5686,11 @@ function handlePlaying(
     const newStadiumPlayed: [boolean, boolean] = [stadiumPlayedThisTurn[0], stadiumPlayedThisTurn[1]];
     newStadiumPlayed[nextIdx] = false;
 
+    // v3.85: 重置「本回合打過稜鏡塔」flag（剛結束回合的 aIdx 清零，下次他回合從 0 開始）
+    const prismPlayedPrev = state.prismTowerPlayedThisTurn ?? [false, false] as [boolean, boolean];
+    const newPrismPlayed: [boolean, boolean] = [prismPlayedPrev[0], prismPlayedPrev[1]];
+    newPrismPlayed[aIdx] = false;
+
     // 快照對手目前獎賞張數（作為「下次我開始回合時」的基準值）—
     // 下回合開始時用此快照 vs 屆時對手獎賞數差，判斷「對手在他們剛結束的回合是否取過獎賞」
     // 用於不公印章等 gate 條件。
@@ -5727,6 +5739,7 @@ function handlePlaying(
         turnPhase: 'draw',
         stadiumUsedThisTurn: newStadiumUsed,
         stadiumPlayedThisTurn: newStadiumPlayed,
+        prismTowerPlayedThisTurn: newPrismPlayed,  // v3.85
         oppPrizesAtMyLastTurnEnd: newOppSnap,
         oppPrizesAtMyTurnStart: newTurnStart,
         rocketInMyDiscardAtMyLastTurnEnd: newRocketLastEnd,

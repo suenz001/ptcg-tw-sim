@@ -508,6 +508,8 @@ export interface GameState {
   turnPhase: TurnPhase;
   /** 目前行動玩家（0 = P1, 1 = P2） */
   activePlayerIndex: 0 | 1;
+  /** v3.85: 本回合是否打過「稜鏡塔」(per-player)，給昂主花葉蒂放置 gate 用。每回合結束時 reset。 */
+  prismTowerPlayedThisTurn?: [boolean, boolean];
   /** 由 createGame 擲硬幣決定的先手方 */
   firstPlayerIdx: 0 | 1;
   players: [PlayerState, PlayerState];

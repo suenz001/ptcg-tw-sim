@@ -264,6 +264,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.85</span> 🌷 三修：昂主花葉蒂放置 gate + 永生綻放 picker + 撤退 UX 改善</summary>
+        <ul>
+          <li><b>Bug 1：昂主花葉蒂沒擋放置條件</b>。卡面：「這張卡必須將場上的『稜鏡塔』丟棄才可放置於場上，使出了『稜鏡塔』的回合也可放置於場上」— 但場上沒稜鏡塔也能直接放置。
+            <ul>
+              <li>修法：加 GameState.prismTowerPlayedThisTurn per-player flag，PLAY_TRAINER 稜鏡塔 set true，END_TURN reset。</li>
+              <li>透過 regG 同時 plug 進 engine + UI filter + AI（一處實裝三層自動同步，沿用 v3.82 海之詛咒教訓）。</li>
+            </ul>
+          </li>
+          <li><b>Bug 2：永生綻放 picker 沒開</b>。超級花葉蒂ex 第二招本應從牌庫挑最多 4 張基本【超】能量，卻直接跳「牌庫沒基本【超】能量」訊息結束。
+            <ul>
+              <li>根因：<code>card.pokemonType === 'Psychic'</code> 漏抓 pokemonType=null 的基本能量（同 v3.731 / v3.82 bug）。</li>
+              <li>修法：改用 <code>isBasicEnergyOfType</code> helper（含 name 「【超】」fallback）。</li>
+            </ul>
+          </li>
+          <li><b>UX 3：撤退 picker 加明確 label</b>。撤退 / 送新戰鬥寶可夢時：
+            <ul>
+              <li>能量：「⚡ 火×2 水×1」（加閃電 icon）</li>
+              <li>道具：「🔧 道具：英雄斗篷」（加「道具：」label），並列 extraTools（多重轉接的額外道具）</li>
+              <li>狀態：「⚠️ 狀態：☠️ 中毒 / 🔥 灼傷 / 💤 睡眠 / 😵 混亂 / ⚡ 麻痺」（加中文翻譯）</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.84</span> 🎵 版權安全：移除 3 首內建 BGM（功能保留，等後續補免費音樂）</summary>
         <ul>
           <li>玩家通知：使用官方 mp3 有版權風險，先把內建 3 首移除：

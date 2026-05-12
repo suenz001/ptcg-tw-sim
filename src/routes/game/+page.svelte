@@ -5064,11 +5064,11 @@
                   <img src={bc.imageUrl} alt={bc.name}/>
                   <div class="retreat-name">{bc.name}</div>
                   <div class="retreat-hp">HP {rem}/{eff}</div>
-                  <div class="retreat-nrg">{energySummary(b)}</div>
-                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
-                  {#if b.status}<div class="retreat-status">
-                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
-                    {b.status}
+                  <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool" title="附加道具">🔧 道具：{tc?.name ?? '?'}</div>{/if}
+                  {#each (b.extraTools ?? []) as etRM}{@const tcRM=getCard(etRM.cardId)}<div class="retreat-tool" title="附加道具（多重轉接）">🔧 道具：{tcRM?.name ?? '?'}</div>{/each}
+                  {#if b.status}<div class="retreat-status" title="特殊狀態">
+                    ⚠️ 狀態：{b.status==='poisoned'?'☠️ 中毒':b.status==='burned'?'🔥 灼傷':b.status==='asleep'?'💤 睡眠':b.status==='confused'?'😵 混亂':b.status==='paralyzed'?'⚡ 麻痺':b.status}
                   </div>{/if}
                 </button>
               </div>
@@ -5110,11 +5110,11 @@
                   <img src={bc.imageUrl} alt={bc.name}/>
                   <div class="retreat-name">{bc.name}</div>
                   <div class="retreat-hp">HP {rem}/{eff}</div>
-                  <div class="retreat-nrg">{energySummary(b)}</div>
-                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
-                  {#if b.status}<div class="retreat-status">
-                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
-                    {b.status}
+                  <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool" title="附加道具">🔧 道具：{tc?.name ?? '?'}</div>{/if}
+                  {#each (b.extraTools ?? []) as etSN}{@const tcSN=getCard(etSN.cardId)}<div class="retreat-tool" title="附加道具（多重轉接）">🔧 道具：{tcSN?.name ?? '?'}</div>{/each}
+                  {#if b.status}<div class="retreat-status" title="特殊狀態">
+                    ⚠️ 狀態：{b.status==='poisoned'?'☠️ 中毒':b.status==='burned'?'🔥 灼傷':b.status==='asleep'?'💤 睡眠':b.status==='confused'?'😵 混亂':b.status==='paralyzed'?'⚡ 麻痺':b.status}
                   </div>{/if}
                 </button>
               </div>
@@ -5150,11 +5150,11 @@
                   <img src={bc.imageUrl} alt={bc.name}/>
                   <div class="retreat-name">{bc.name}</div>
                   <div class="retreat-hp">HP {rem}/{eff}</div>
-                  <div class="retreat-nrg">{energySummary(b)}</div>
-                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}
-                  {#if b.status}<div class="retreat-status">
-                    {b.status==='poisoned'?'☠️':b.status==='burned'?'🔥':b.status==='asleep'?'💤':b.status==='confused'?'😵':b.status==='paralyzed'?'⚡':''}
-                    {b.status}
+                  <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
+                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool" title="附加道具">🔧 道具：{tc?.name ?? '?'}</div>{/if}
+                  {#each (b.extraTools ?? []) as etSN2}{@const tcSN2=getCard(etSN2.cardId)}<div class="retreat-tool" title="附加道具（多重轉接）">🔧 道具：{tcSN2?.name ?? '?'}</div>{/each}
+                  {#if b.status}<div class="retreat-status" title="特殊狀態">
+                    ⚠️ 狀態：{b.status==='poisoned'?'☠️ 中毒':b.status==='burned'?'🔥 灼傷':b.status==='asleep'?'💤 睡眠':b.status==='confused'?'😵 混亂':b.status==='paralyzed'?'⚡ 麻痺':b.status}
                   </div>{/if}
                 </button>
               </div>

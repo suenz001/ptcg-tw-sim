@@ -31,6 +31,18 @@
  */
 
 import type { PlayerState } from '../../types';
+import { regG } from '../_shared';
+
+// v3.85: 昂主花葉蒂放置條件 — 卡面：「這張卡必須將場上的『稜鏡塔』丟棄才可放置於場上，
+//   使出了『稜鏡塔』的回合也可放置於場上」。
+//   → 場上 stadium 是稜鏡塔（可被昂主花葉蒂覆蓋丟棄）OR 本回合 prismTowerPlayedThisTurn[idx] = true
+//   regG 同時 plug 進 PLAY_TRAINER handler (canPlayTrainer) + getPlayableTrainers filter（AI / UI 黃框）
+regG('昂主花葉蒂', (st, idx, pool) => {
+  const stadium = st.activeStadium ? pool.get(st.activeStadium.cardId) : null;
+  if (stadium?.name === '稜鏡塔') return true;
+  const played = st.prismTowerPlayedThisTurn ?? [false, false];
+  return played[idx];
+});
 
 // 輔助：避免 unused import 警告（純註解檔需此 sentinel）
 export type _v2390Sentinel = PlayerState;

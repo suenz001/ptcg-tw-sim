@@ -22,6 +22,7 @@ import {
   withPending,
   getOwnBenchLimit,
 } from '../_shared';
+import { isBasicEnergyOfType } from '../../engine';
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
 function cardName(pool: Map<string, any>, inst?: CardInstance | null): string {
@@ -493,13 +494,11 @@ regPost('超級花葉蒂ex|永生綻放', (state, aIdx, pool) => {
   if (p.bench.length === 0) {
     return addLog(state, '永生綻放：備戰區沒有寶可夢可附能量', aIdx);
   }
+  // v3.85 fix：永生綻放 picker 沒開根因 — 基本【超】能量 pokemonType 常 null。
+  //   改用 isBasicEnergyOfType helper（含 name '【超】' fallback）。同 v3.731/v3.82 pattern。
   const cand = p.deck.filter(c => {
     const card = pool.get(c.cardId);
-    return (
-      card?.supertype === 'Energy' &&
-      card.subtype === 'Basic' &&
-      card.pokemonType === 'Psychic'
-    );
+    return !!card && isBasicEnergyOfType(card, 'Psychic');
   });
   if (cand.length === 0) {
     return addLog(state, '永生綻放：牌庫沒有基本【超】能量', aIdx);
