@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.877</span> 🐛 三張卡「最初回合除外」gate 一致性修正（同 v3.874 風扇呼喚 turn 語意誤解）</summary>
+        <ul>
+          <li>背景：<code>state.turn</code> 只在「後攻方 END_TURN」才 +1（<code>engine.ts:5737</code>），所以 <code>state.turn===1</code> 同時涵蓋雙方各自的第 1 動作回合。v3.874 風扇呼喚已修；本版補修同類 3 張卡。</li>
+          <li><b>① 活力森林（Stadium）</b>：bypass 條件原本只靠 <code>state.isFirstTurn</code> gate（line 1905）擋第 1 動作回合 — 但 <code>isFirstTurn</code> 只在先攻方第 1 動作回合 true，後攻方第 1 動作回合已 false → 後攻可以剛上場的草寶可夢直接進化（卡面：「自己的最初回合除外」應擋）。修法：<code>vigorousForestException</code> 加 <code>state.turn &gt; 1</code> 條件。</li>
+          <li><b>② 壯偉碩木（Stadium）</b>：gate 從 <code>state.isFirstTurn &amp;&amp; aIdx === state.firstPlayerIdx</code>（只擋先攻方第 1 動作回合）改為 <code>state.turn === 1</code>（雙方都擋）。雖然 setup 寶可夢都是 justPlaced 通常會被 filter 擋掉效果，仍顯式擋以求與其他「最初回合除外」一致 + 阻止 <code>stadiumUsedThisTurn</code> flag 浪費。</li>
+          <li><b>③ 聯盟擊（太樂巴戈斯ex）</b>：原本 <code>state.turn === 1 + state.firstPlayerIdx</code> 算出 turn=1（先攻為 0 時）或 turn=2（先攻為 1 時）— 第二種情況把後攻方第 2 動作回合誤判成「後攻第一回合」而擋下。正解：<code>aIdx !== firstPlayerIdx &amp;&amp; state.turn === 1</code>。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.876</span> 🔥 hotfix：modal-choice + stepper picker 卡死（selectionValid 漏 stepper 判定）</summary>
         <ul>
           <li>玩家回報：v3.874 願增猿｜腎上腺腦力 picker（+/- 計數器選 1~3）按確認沒反應，卡在 picker 動不了。</li>

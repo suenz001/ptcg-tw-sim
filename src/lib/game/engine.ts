@@ -1904,12 +1904,16 @@ function handlePlaying(
     const hasFightingHowlEarly = baseCard.name === '勒克貓' && _oppIsExEarly;
     if (state.isFirstTurn && !hasPushEvolveAbility && !hasShellinkBypassFirst && !hasFightingHowlEarly) return state; // 第一回合不能進化
     // v2.102 活力森林（Stadium）— 雙方的所有【草】寶可夢就算在剛使出的回合也可進化成【草】寶可夢。
-    //   自己最初回合例外（line 775 `state.isFirstTurn` gate 照舊擋）。
+    //   自己最初回合例外。
     // v2.110：bypass 不只 justPlaced，也 bypass evolvedThisTurn — 允許同回合連鎖進化
     //   整條草進化鏈（例：菊草葉→月桂葉→大竺葵 一回合打完）。只要草→草、活力森林在場。
+    // v3.877：state.turn 只在後攻方 END_TURN 才 +1，所以 state.turn===1 同時涵蓋雙方第 1 動作回合。
+    //   原本只依賴 state.isFirstTurn gate（只擋先攻方第 1 動作回合）— 後攻方第 1 動作回合 isFirstTurn=false，
+    //   bypass 仍會啟動。改加 state.turn > 1 才正確實現「雙方各自最初回合除外」。
     const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
     const vigorousForestException = stadiumName === '活力森林' &&
-      baseCard.pokemonType === 'Grass' && evoCard.pokemonType === 'Grass';
+      baseCard.pokemonType === 'Grass' && evoCard.pokemonType === 'Grass' &&
+      state.turn > 1;
     const hasFightingHowl = hasFightingHowlEarly;
     // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化 — 自方場上有 partner 時 bypass isFirstTurn + justPlaced + evolvedThisTurn
     const hasShellinkBypass = hasShellinkEvolveBypass(baseCard, state, aIdx, pool);
@@ -2634,9 +2638,11 @@ function handlePlaying(
     //   放到對應的場上【基礎】身上完成進化；若進化了，可繼續選 1 張【2階】放上去
     //   完成第二段進化。並重洗牌庫。
     if (stadiumCard.name === '壯偉碩木') {
-      if (state.isFirstTurn && aIdx === state.firstPlayerIdx) {
+      // v3.877：state.turn===1 涵蓋雙方各自第 1 動作回合 — 都擋（與活力森林、風扇呼喚一致）
+      //   雖然 setup 寶可夢都是 justPlaced 會被 filter 擋掉效果，仍顯式擋以求一致 + 阻止 stadiumUsedThisTurn 浪費。
+      if (state.turn === 1) {
         const revert: [boolean, boolean] = [used[0], used[1]];
-        return addLog({ ...state, stadiumUsedThisTurn: revert }, '壯偉碩木：先攻第 1 回合無法進化', aIdx);
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '壯偉碩木：自己的最初回合無法進化', aIdx);
       }
       // 場上有效 base（非 justPlaced / evolvedThisTurn）
       const ap = newState.players[aIdx];

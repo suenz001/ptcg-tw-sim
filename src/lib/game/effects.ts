@@ -5823,10 +5823,12 @@ regPre('捷拉奧拉|鬥戰雷電', oppBenchMultiplyPre(20, 20, '鬥戰雷電'))
 regPre('骨紋巨聲鱷|閃焰獨唱會', bothBenchMultiplyPre(60, 20, '閃焰獨唱會'));
 
 // 太樂巴戈斯ex|聯盟擊 — 後攻第一回合不可使用；否則 自己備戰數 × 30
-// 「後攻第一回合」判定：active !== firstPlayerIdx 且 turn === 1 + firstPlayerIdx
+// v3.877：state.turn 只在後攻方 END_TURN 才 +1（engine.ts:5737），state.turn===1 涵蓋雙方第 1 動作回合。
+//   後攻方第 1 動作回合 = aIdx !== firstPlayerIdx && state.turn === 1
+//   原 `state.turn === 1 + state.firstPlayerIdx` 算出 turn=1 或 2 — firstPlayerIdx=1 時誤把 turn=2 當後攻 1st。
 regPre('太樂巴戈斯ex|聯盟擊', (state, aIdx, _pool) => {
   const isSecondPlayerFirstTurn =
-    aIdx !== state.firstPlayerIdx && state.turn === 1 + state.firstPlayerIdx;
+    aIdx !== state.firstPlayerIdx && state.turn === 1;
   if (isSecondPlayerFirstTurn) {
     return { state: addLog(state, '聯盟擊：後攻第一回合無法使用，招式失敗', aIdx), damage: 0 };
   }
