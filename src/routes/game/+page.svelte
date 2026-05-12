@@ -1053,9 +1053,12 @@
   const defenderPlayer = $derived(game ? game.players[dIdx] : null);
   const availableAttacks = $derived(game && poolReady ? getAvailableAttacks(game, pool) : []);
   // v2.98：pendingPrizes 改為 [P1 owed, P2 owed]
+  // v3.791 Bug fix：原本用 `myPlayerIndex ?? 0` — 但在本機雙人模式下 myPlayerIndex 永遠 null，
+  //   會強制讀 pendingPrizes[0]（P1 視角）。P2 攻擊 KO P1 時 P2 的 pendingPrizes 不會被認，
+  //   導致 take-prize 按鈕不出現、整個流程卡住。改用 myIdx（perspective-aware derived 索引）。
   const pendingPrizesArr = $derived<[number, number]>(game?.pendingPrizes ?? [0, 0]);
-  const myPendingPrizes  = $derived(pendingPrizesArr[myPlayerIndex ?? 0] ?? 0);
-  const oppPendingPrizes = $derived(pendingPrizesArr[(1 - (myPlayerIndex ?? 0)) as 0 | 1] ?? 0);
+  const myPendingPrizes  = $derived(pendingPrizesArr[myIdx] ?? 0);
+  const oppPendingPrizes = $derived(pendingPrizesArr[oppIdx] ?? 0);
   const pendingSelection = $derived(game?.pendingSelection ?? null);
 
   // v2.44：切換新 modal 時重置拖曳偏移量
@@ -3743,7 +3746,8 @@
         {#if myPendingPrizes > 0}
           <div class="alert prize-alert">
             🏆 取 {myPendingPrizes} 張獎勵牌
-            <button class="btn-xs primary" onclick={()=>dispatch(GameActions.takePrizes(myPendingPrizes, (myPlayerIndex ?? 0) as 0 | 1, (myPlayerIndex ?? 0) as 0 | 1))}>取得</button>
+            <!-- v3.791：takePrizes 也改用 myIdx，本機雙人模式 myPlayerIndex=null 時才不會誤抓 P1 -->
+            <button class="btn-xs primary" onclick={()=>dispatch(GameActions.takePrizes(myPendingPrizes, myIdx, myIdx))}>取得</button>
           </div>
         {/if}
         <!-- v2.123：send-new-active alert 去掉 turnPhase==='end' 限制

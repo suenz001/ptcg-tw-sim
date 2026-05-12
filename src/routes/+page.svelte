@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.791</span> 🚨 hotfix：本機雙人模式 KO 對方寶可夢後卡死（取獎賞 UI 不出現）</summary>
+        <ul>
+          <li>玩家回報：單機雙人模式 KO 對方寶可夢後無法繼續，整個畫面卡在「請先取獎勵牌再繼續行動」但沒有取得按鈕。</li>
+          <li><b>根因</b>：<code>myPendingPrizes</code> 用 <code>pendingPrizesArr[myPlayerIndex ?? 0]</code> 取值。本機雙人模式下 <code>myPlayerIndex === null</code>，<code>?? 0</code> 強制讀 <code>pendingPrizes[0]</code>（P1 視角）。</li>
+          <li>　・場景：P2 攻擊 KO P1 的寶可夢 → engine 設 <code>pendingPrizes[1] = N</code>（P2 該取的獎賞）。</li>
+          <li>　・UI 讀 <code>pendingPrizes[0] = 0</code> → take-prize 按鈕不出現 → 卡死。</li>
+          <li>　・KO 訊息 + 「請先取獎勵牌」alert 都正確顯示（因為 anyPendingPrize 是檢查兩格的 OR），但取按鈕用的索引錯誤。</li>
+          <li><b>修法</b>：<code>myPendingPrizes</code> + <code>oppPendingPrizes</code> + takePrizes 按鈕的 <code>senderIdx</code> 全改用 <code>myIdx</code>（perspective-aware derived 索引，本機雙人模式會跟著 active player flip）。</li>
+          <li>線上 / AI 模式不受影響（myPlayerIndex 有值 + myIdx == myPlayerIndex），只有本機雙人模式才會踩到這個 bug。</li>
+          <li>tsc 0 errors + Svelte parse OK。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.79</span> 🎲 修回合計數 — 先攻為 idx=1 時 turn 計數錯位（v3.75 衍生 bug）</summary>
         <ul>
           <li>玩家回報：回合計數呈現「Turn 1 只有先攻動作 / Turn 2 起為 後攻→先攻」的不對稱結構，應該是「Turn N = 先攻→後攻」。</li>
