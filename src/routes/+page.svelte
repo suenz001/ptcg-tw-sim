@@ -264,6 +264,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.823</span> 🪙 雙 bug：撤退能量丟過量 + 神奇糖果可選 1 階做進化目標</summary>
+        <ul>
+          <li><b>Bug 1：撤退能量丟過量</b>。玩家身上有 2 顆不同屬性能量、撤退費 1，picker 允許勾選兩張全丟 → 違規（PTCG 規則：丟剛好等於撤退費的能量單位）。
+            <ul>
+              <li><b>根因</b>：<code>selectionValid</code> 只檢查「總單位 ≥ retreatCost」，沒檢查「沒多丟」。</li>
+              <li><b>修法</b>：加 essential 上限 — 拿掉任一張 picked 卡後 &lt; retreatCost（即每張都必要）。範例：picked = [雙倍渦輪(2)] + 撤退費 1 → 拿掉變 0&lt;1，essential ✓ 合法；picked = [草(1), 火(1)] + 撤退費 1 → 拿掉草仍 1≥1，非 essential ✗ 不合法。</li>
+            </ul>
+          </li>
+          <li><b>Bug 2：神奇糖果可選 1 階做進化目標</b>。場上有多龍梅西亞（基礎）+ 多龍奇（1 階），選多龍巴魯托ex 後，UI 居然允許把神奇糖果套在多龍奇上 → 違規。
+            <ul>
+              <li><b>卡面原文</b>：「從自己的手牌選擇 1 張【2 階進化】寶可夢卡，放置於自己的場上的可進化成那隻寶可夢的【基礎】寶可夢身上，跳過【1 階進化】完成進化。」 — 只能在「基礎」身上。</li>
+              <li><b>根因</b>：<code>rare-candy-choose-target</code> resolver line 1255 filter 是 <code>basicName || stage1Name</code> — 允許 1 階。</li>
+              <li><b>修法</b>：移除 <code>|| stage1Name</code> 條件，只保留 basicName match。</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.822</span> 🌐 hotfix：連線對戰 — A 蓋掉 B 的零之大空洞後 B 端收不到棄備戰 picker 死鎖</summary>
         <ul>
           <li>玩家回報：連線對戰時 A 蓋掉 B 的零之大空洞，按 PTCG 規則 B 要從備戰丟到剩 5 隻，但 B 端沒收到任何 picker，整局卡死。</li>

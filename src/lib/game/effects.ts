@@ -1248,11 +1248,15 @@ regR('rare-candy-choose-target', (st, idx, picked, _params, pool) => {
   if (!basicName) basicName = stage1Name;
 
   const fieldPokes = [...(p.active ? [p.active] : []), ...p.bench];
+  // v3.823 fix：卡面明文「放置於可進化成那隻寶可夢的【基礎】寶可夢身上」— 只能選基礎，不能選 1 階。
+  //   原 filter 用 `sameEvoName(c.name, basicName) || sameEvoName(c.name, stage1Name)` 是違規：
+  //   stage1 進到場上即不可再用神奇糖果（神奇糖果 skip stage1 的設計就是給「基礎」直接跳到 stage2）。
+  //   範例：場上 多龍梅西亞（基礎）+ 多龍奇（1階） → 選多龍巴魯托ex 後，只允許多龍梅西亞當 target。
   const validIids = fieldPokes
     .filter(pk => {
       if (pk.justPlaced || pk.evolvedThisTurn) return false;
       const c = pool.get(pk.cardId);
-      return !!c && (sameEvoName(c.name, basicName) || sameEvoName(c.name, stage1Name));
+      return !!c && sameEvoName(c.name, basicName);
     })
     .map(pk => pk.iid);
 

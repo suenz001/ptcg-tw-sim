@@ -1917,13 +1917,27 @@
     // v2.69：撤退能量選擇用「能量單位」判定（火箭隊能量 1 張 = 2 units）
     // 而非張數；要求選中能量單位總和 ≥ retreatCost。
     // v2.108：傳 state+actorIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
+    // v3.823：加 essential 上限 — 拿掉任一張就 < retreatCost（即每張都必要）。
+    //   原邏輯只看 ≥ retreatCost，玩家身上 1 草 + 1 火、撤退費 1 時兩張都選也通過 → 多丟一張。
+    //   修法：嚴格 PTCG 規則 — 撤退時丟剛好足夠的能量，不能多丟。
     if (pendingSelection.type === 'active-energy-discard'
         && pendingSelection.effectKey === 'retreat-energy-discard') {
       const retreatCost = (pendingSelection.params?.retreatCost as number | undefined) ?? 0;
       if (selectionPicked.size === 0) return false;
       const pickedInsts = selectionItems.filter(it => selectionPicked.has(it.iid));
+      const actorIdxR = pendingSelection.actorIdx as 0 | 1;
       // v3.35：totalEnergyUnits 接受 GameState | undefined；game ($state) 為 GameState | null，做 ?? undefined 轉換
-      return totalEnergyUnits(pickedInsts, pool, game ?? undefined, pendingSelection.actorIdx as 0 | 1) >= retreatCost;
+      const total = totalEnergyUnits(pickedInsts, pool, game ?? undefined, actorIdxR);
+      if (total < retreatCost) return false;
+      // v3.823：essential 檢查 — 每張 picked 卡都必要（拿掉它就不足）
+      //   範例：picked = [雙倍渦輪(2)] + retreatCost=1 → 拿掉雙倍渦輪 0<1 → essential ✓ 合法
+      //         picked = [草(1), 火(1)] + retreatCost=1 → 拿掉草 1≥1 → 草非 essential ✗ 不合法
+      for (const inst of pickedInsts) {
+        const remaining = pickedInsts.filter(x => x.iid !== inst.iid);
+        const remainingUnits = totalEnergyUnits(remaining, pool, game ?? undefined, actorIdxR);
+        if (remainingUnits >= retreatCost) return false;  // 多丟了
+      }
+      return true;
     }
     return selectionPicked.size >= pendingSelection.minCount
         && selectionPicked.size <= pendingSelection.maxCount;
