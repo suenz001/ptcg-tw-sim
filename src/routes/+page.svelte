@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.878</span> 🐛 活力森林 第 1 動作回合 UI 黃框誤導補修（v3.877 只改 engine handler 不夠）</summary>
+        <ul>
+          <li>玩家回報：v3.877 第 1 動作回合場上有活力森林時，engine 確實擋下進化（正確），但手牌的進化卡仍顯示黃框、場上寶可夢仍有「進化」標示 — 視覺誤導玩家以為可進化。</li>
+          <li><b>根因</b>：v3.877 只改了 <code>engine.ts</code> 的 EVOLVE handler 內 <code>vigorousForestException</code> 加 <code>state.turn &gt; 1</code>，但 UI 端的 <code>getEvolvableTargets</code> helper（<code>engine.ts:6029</code>）的 <code>isForest</code> 變數沒同步加。<code>getEvolvableTargets</code> 是手牌進化卡黃框 + 場上「進化」標的 UI 來源。</li>
+          <li><b>修法</b>：<code>getEvolvableTargets</code> 的 <code>isForest = stadiumName === '活力森林'</code> 加 <code>&amp;&amp; state.turn &gt; 1</code>，與 EVOLVE handler 完全一致。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.877</span> 🐛 三張卡「最初回合除外」gate 一致性修正（同 v3.874 風扇呼喚 turn 語意誤解）</summary>
         <ul>
           <li>背景：<code>state.turn</code> 只在「後攻方 END_TURN」才 +1（<code>engine.ts:5737</code>），所以 <code>state.turn===1</code> 同時涵蓋雙方各自的第 1 動作回合。v3.874 風扇呼喚已修；本版補修同類 3 張卡。</li>

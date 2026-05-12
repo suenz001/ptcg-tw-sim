@@ -6025,8 +6025,10 @@ export function getEvolvableTargets(
   // v2.109/v2.110：活力森林（Stadium）— 雙方的所有【草】寶可夢就算在剛使出的回合也可進化成【草】寶可夢。
   //   v2.110：bypass 不只 justPlaced 也 bypass evolvedThisTurn，允許同回合連鎖進化整條草鏈
   //   （菊草葉→月桂葉→大竺葵 一回合打完）。只要 base/evo 都是草，活力森林 exception 放行。
+  // v3.878：UI 端鏡射 EVOLVE handler 的 state.turn > 1 條件，避免第 1 動作回合 UI 黃框誤導玩家。
+  //   原 v3.877 只改 engine handler 不夠 — getEvolvableTargets 是手牌黃框 + 場上「進化」標的 UI 來源。
   const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
-  const isForest = stadiumName === '活力森林';
+  const isForest = stadiumName === '活力森林' && state.turn > 1;
 
   const result: Array<{ fromIid: string; toIids: string[] }> = [];
   // 鬥志戰吼 UI 鏡射（同 EVOLVE handler 邏輯）：base 是勒克貓 + 對手戰鬥場是 ex → bypass
