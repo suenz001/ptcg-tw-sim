@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.86</span> 📱 UX：手機版禁用 modal 拖曳（避免誤觸主畫面跑掉）</summary>
+        <ul>
+          <li>玩家回報：手機版常不小心拖曳 modal 視窗，造成「視窗可以拖來拖去」影響體驗。</li>
+          <li><b>根因</b>：桌面版設計的 modal 拖曳功能（拖 modal header 可避開被遮卡）— 在手機上手指容易誤觸 header → 整個 modal 被拖到位置不對。</li>
+          <li><b>修法</b>：<code>onModalHeaderPointerDown</code> 開頭加 <code>if (isPortraitMobile) return;</code> gate，手機 portrait 模式直接禁用拖曳。桌面仍保留功能。</li>
+          <li>順帶 CSS 補：<code>body.mp-locked .sel-header</code> cursor 改成 default，視覺上也不誘導玩家拖曳。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.853</span> 📖 通用 bug：6 處牌庫搜尋類「無候選 short-circuit」（Iron Rule 14 新增）</summary>
         <ul>
           <li>玩家規則確認：「就算牌庫內沒有超能量也一樣，不能省略開 picker — 因為玩家可以藉此檢索牌庫剩餘的卡牌內容」。是 PTCG 搜尋規則的核心。</li>
