@@ -102,6 +102,50 @@
       ? !!(roomData.rematchReady?.[1 - mySeatIdx])
       : false
   );
+
+  // v3.97 對戰中聊天室（floating panel）— 沿用既有 chatMessages / sendMessage
+  //   chatPanelOpen: 是否展開
+  //   chatPanelPos: 拖曳偏移（桌機）— mobile portrait 走 CSS 全螢幕 modal 樣式忽略此值
+  //   lastSeenChatCount: 已看到的訊息數，差額即為未讀
+  let chatPanelOpen = $state(false);
+  let chatPanelPos = $state({ x: 0, y: 0 });
+  let chatPanelDragStart: { mx: number; my: number; ox: number; oy: number } | null = null;
+  let lastSeenChatCount = $state(0);
+  const unreadChatCount = $derived(Math.max(0, chatMessages.length - lastSeenChatCount));
+  let chatPanelScrollEl: HTMLDivElement | null = null;
+
+  function toggleChatPanel() {
+    chatPanelOpen = !chatPanelOpen;
+    if (chatPanelOpen) {
+      lastSeenChatCount = chatMessages.length;
+      // 開啟時等 DOM 更新後 scroll to bottom
+      setTimeout(() => {
+        if (chatPanelScrollEl) chatPanelScrollEl.scrollTop = chatPanelScrollEl.scrollHeight;
+      }, 50);
+    }
+  }
+  function onChatHeaderDown(e: PointerEvent) {
+    chatPanelDragStart = { mx: e.clientX, my: e.clientY, ox: chatPanelPos.x, oy: chatPanelPos.y };
+    (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
+  }
+  function onChatHeaderMove(e: PointerEvent) {
+    if (!chatPanelDragStart) return;
+    const dx = e.clientX - chatPanelDragStart.mx;
+    const dy = e.clientY - chatPanelDragStart.my;
+    chatPanelPos = { x: chatPanelDragStart.ox + dx, y: chatPanelDragStart.oy + dy };
+  }
+  function onChatHeaderUp(_e: PointerEvent) {
+    chatPanelDragStart = null;
+  }
+  // 新訊息進來時若 panel 已開 → markChatSeen + 自動 scroll
+  $effect(() => {
+    if (chatPanelOpen && chatMessages.length > lastSeenChatCount) {
+      lastSeenChatCount = chatMessages.length;
+      setTimeout(() => {
+        if (chatPanelScrollEl) chatPanelScrollEl.scrollTop = chatPanelScrollEl.scrollHeight;
+      }, 50);
+    }
+  });
   let roomCode    = $state('');          // 建立或加入後得到的房號
   let joinInput   = $state('');          // 輸入框裡打的房號
   let amIHost     = $state(false);       // 是否為房主（用來顯示「關房」等按鈕）
@@ -5421,6 +5465,59 @@
     </div>
   {/if}
 
+  <!-- v3.97 對戰中聊天室（floating panel + 手機 modal）─────────────────────── -->
+  <!-- 只在連線模式 + 已進入 game（避開 lobby — lobby 已有 chat-area） -->
+  {#if mode === 'online' && game && roomCode}
+    {#if !chatPanelOpen}
+      <!-- 收合：右下角圓形按鈕 + unread badge -->
+      <button class="chat-fab" onclick={toggleChatPanel} title="開啟聊天室">
+        💬
+        {#if unreadChatCount > 0}<span class="chat-fab-badge">{unreadChatCount}</span>{/if}
+      </button>
+    {:else}
+      <!-- 展開：floating panel（桌機）/ 全螢幕 modal（手機 portrait CSS @media） -->
+      <div class="chat-panel" style:transform={`translate(${chatPanelPos.x}px, ${chatPanelPos.y}px)`}>
+        <div class="chat-panel-header"
+          onpointerdown={onChatHeaderDown}
+          onpointermove={onChatHeaderMove}
+          onpointerup={onChatHeaderUp}
+          title="拖曳此處移動聊天視窗（手機版固定全螢幕）">
+          <span>💬 聊天室</span>
+          <button class="chat-panel-close" onclick={toggleChatPanel} title="最小化">×</button>
+        </div>
+        <div class="chat-panel-messages" bind:this={chatPanelScrollEl}>
+          {#if chatMessages.length === 0}
+            <p class="muted small chat-empty">尚無訊息，先說聲哈囉吧！</p>
+          {:else}
+            {#each chatMessages as m (m.id)}
+              <div class="chat-msg {m.uid === myUid ? 'mine' : ''}">
+                <span class="chat-name">{m.name}</span>
+                <span class="chat-time">{fmtChatTime(m.createdAt)}</span>
+                <div class="chat-text">{m.text}</div>
+              </div>
+            {/each}
+          {/if}
+        </div>
+        <div class="chat-input-row">
+          <input
+            class="chat-input"
+            type="text"
+            placeholder="輸入訊息（Enter 送出，最多 200 字）"
+            maxlength="200"
+            bind:value={chatInput}
+            onkeydown={handleChatKey}
+            disabled={mySeatIdx < 0}
+          />
+          <button class="btn-primary chat-send"
+            onclick={handleSendMessage}
+            disabled={!chatInput.trim() || mySeatIdx < 0}>
+            送出
+          </button>
+        </div>
+      </div>
+    {/if}
+  {/if}
+
   <!-- Retreat Menu（置中橫向 grid，支援放大鏡，避免撞到畫面頂部） -->
   {#if floatingRetreatMenu && myPlayer?.active}
     <div class="selection-overlay" class:dragged={modalDragged} onclick={() => floatingRetreatMenu = null}>
@@ -5992,6 +6089,68 @@
   .rematch-hint { font-size:.95rem; margin-top:.8rem; text-align:center; color:#aacccc; }
   .back-home-link { display:inline-block; margin-top:.6rem; color:#88aacc; font-size:.85rem; text-decoration:underline; }
   .back-home-link:hover { color:#bbccdd; }
+
+  /* v3.97 對戰中聊天室 ─────────────────────────────────────────────────── */
+  .chat-fab {
+    position: fixed; right: 18px; bottom: 18px; z-index: 9000;
+    width: 54px; height: 54px; border-radius: 50%; border: 2px solid #d97a2a;
+    background: #2a3a5a; color: #ffdd88; font-size: 1.6rem; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .15s, background .15s;
+  }
+  .chat-fab:hover { background: #3a4a7a; transform: scale(1.06); }
+  .chat-fab-badge {
+    position: absolute; top: -4px; right: -4px;
+    min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px;
+    background: #d94a3a; color: #fff; font-size: .8rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,.3);
+  }
+  .chat-panel {
+    position: fixed; right: 18px; bottom: 18px; z-index: 9000;
+    width: 350px; height: 450px;
+    background: #1a1a24; border: 2px solid #4a4a6a; border-radius: 10px;
+    display: flex; flex-direction: column;
+    box-shadow: 0 6px 24px rgba(0,0,0,.5);
+    overflow: hidden;
+  }
+  .chat-panel-header {
+    background: #252535; padding: .55rem .85rem;
+    font-size: .9rem; font-weight: 600; color: #ccddee;
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: move; user-select: none; touch-action: none;
+    border-bottom: 1px solid #3a3a4a;
+  }
+  .chat-panel-close {
+    background: none; border: none; color: #aabbcc; font-size: 1.4rem;
+    cursor: pointer; padding: 0 .3rem; line-height: 1;
+  }
+  .chat-panel-close:hover { color: #fff; }
+  .chat-panel-messages {
+    flex: 1; overflow-y: auto; padding: .5rem .8rem;
+    display: flex; flex-direction: column; gap: .4rem;
+    background: #15151f;
+  }
+  .chat-panel .chat-input-row {
+    display: flex; gap: .4rem; padding: .5rem;
+    border-top: 1px solid #3a3a4a; background: #1e1e28;
+  }
+  /* 手機 portrait：全螢幕 modal */
+  @media (max-width: 600px) and (orientation: portrait) {
+    .chat-panel {
+      right: 0; bottom: 0; left: 0; top: 0;
+      width: 100vw; height: 100vh;
+      border-radius: 0; border: none;
+      /* 取消拖曳偏移：手機固定全螢幕 */
+      transform: none !important;
+    }
+    .chat-panel-header { cursor: default; }
+    .chat-fab {
+      right: 12px; bottom: 12px;
+      width: 50px; height: 50px;
+    }
+  }
 
   /* ── 勝負畫面（Session 27） ── */
   .gameover-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:2rem; background:radial-gradient(circle at 50% 40%, #1a2e3a 0%, #000 80%); font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; position:relative; overflow:hidden; }

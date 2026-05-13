@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.97</span> 💬 對戰中聊天室（桌機 floating panel 可拖曳 + 手機 modal）</summary>
+        <ul>
+          <li>玩家需求：對戰時保留聊天室功能（連線模式 lobby 已有聊天室，現在 playing / setup / game-over 階段也能用）。</li>
+          <li><b>桌機版</b>：右下角圓形浮動按鈕 💬（含未讀訊息數 badge），點開展開 350×450 panel。Header 可拖曳到任意位置。再按一次 × 收合回按鈕。</li>
+          <li><b>手機 portrait（≤600px）</b>：同樣按鈕，但點開後 CSS @media 自動變全螢幕 modal，不需要拖曳。</li>
+          <li><b>訊息訂閱</b>：沿用既有 <code>subscribeMessages</code>（在 <code>startRoomSubscription</code> 內），lobby → playing 切換時不中斷。聊天歷史保留。</li>
+          <li><b>未讀通知</b>：按鈕上的紅色 badge 顯示未讀數，開啟 panel 時自動標記為已讀 + 自動 scroll 到底。</li>
+          <li><b>條件</b>：只在 <code>mode === 'online' &amp;&amp; game &amp;&amp; roomCode</code> 顯示（避開 lobby 因為已有 inline chat-area）。</li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.96</span> 🔁 再來一局改為對稱設計（雙方各自點，都點了自動進房間）</summary>
         <ul>
           <li>玩家更新需求：v3.95 / v3.951 的「A 發起 / B 接受/拒絕」太複雜，改為<b>雙方各自獨立點按鈕</b>，都點了直接進入對戰房間（類似多數遊戲的 rematch UX）。</li>
