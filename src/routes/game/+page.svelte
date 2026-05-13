@@ -5483,7 +5483,10 @@
           onpointerup={onChatHeaderUp}
           title="拖曳此處移動聊天視窗（手機版固定全螢幕）">
           <span>💬 聊天室</span>
-          <button class="chat-panel-close" onclick={toggleChatPanel} title="最小化">×</button>
+          <button class="chat-panel-close"
+            onpointerdown={(e) => e.stopPropagation()}
+            onclick={toggleChatPanel}
+            title="最小化">×</button>
         </div>
         <div class="chat-panel-messages" bind:this={chatPanelScrollEl}>
           {#if chatMessages.length === 0}
@@ -6136,16 +6139,33 @@
     display: flex; gap: .4rem; padding: .5rem;
     border-top: 1px solid #3a3a4a; background: #1e1e28;
   }
-  /* 手機 portrait：全螢幕 modal */
+  /* v3.971 手機 portrait：縮小 modal 範圍（避免頂到 iOS 動態島 / Home indicator）
+     - 95% 寬 + 高度限制（min(85vh, 600px) 避免大螢幕拉太長）
+     - 置中於螢幕（top/left 用 auto + transform 抵消）
+     - 加 safe-area-inset 邊距處理瀏海 / 動態島 / 底部 home indicator */
   @media (max-width: 600px) and (orientation: portrait) {
     .chat-panel {
-      right: 0; bottom: 0; left: 0; top: 0;
-      width: 100vw; height: 100vh;
-      border-radius: 0; border: none;
-      /* 取消拖曳偏移：手機固定全螢幕 */
+      right: 2.5vw; left: 2.5vw;
+      top: max(env(safe-area-inset-top, 20px), 40px);
+      bottom: max(env(safe-area-inset-bottom, 12px), 12px);
+      width: auto; height: auto;
+      max-height: 80vh;
+      border-radius: 12px;
+      border: 2px solid #4a4a6a;
+      /* 取消拖曳偏移：手機固定置中 */
       transform: none !important;
     }
-    .chat-panel-header { cursor: default; }
+    .chat-panel-header {
+      cursor: default;
+      padding: .7rem 1rem;
+      font-size: 1rem;
+    }
+    .chat-panel-close {
+      font-size: 1.8rem;
+      padding: 0 .5rem;
+      min-width: 44px;  /* touch target 至少 44×44 (Apple HIG) */
+      min-height: 44px;
+    }
     .chat-fab {
       right: 12px; bottom: 12px;
       width: 50px; height: 50px;

@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.971</span> hotfix：修 v3.97 聊天室 × 按鈕無反應 + 手機 modal 頂到動態島</summary>
+        <ul>
+          <li>玩家回報 1：桌機版 × 按鈕沒反應，無法縮小回原本的聊天按鈕。<b>根因</b>：chat-panel-header 用 <code>setPointerCapture</code> 把 pointer 釘在 header 上做拖曳，後續 pointerup 在 header 觸發，button 的 onclick 永遠收不到 click event。<b>修法</b>：button 加 <code>onpointerdown=&#123;(e) =&gt; e.stopPropagation()&#125;</code> 阻止 header 接管 pointer，讓 button 自己處理事件。</li>
+          <li>玩家回報 2：手機版 modal 全螢幕頂到 iOS 動態島，× 按鈕被遮住按不到。<b>修法</b>：手機 @media 改為：
+            <ul>
+              <li>不再 100vw × 100vh — 改為 95% 寬 + max-height 80vh</li>
+              <li>top 用 <code>max(env(safe-area-inset-top, 20px), 40px)</code> 避開瀏海 / 動態島</li>
+              <li>bottom 用 <code>max(env(safe-area-inset-bottom, 12px), 12px)</code> 避開 Home indicator</li>
+              <li>border-radius 12px + border 2px，視覺上是浮動 modal（不是全螢幕）</li>
+              <li>× 按鈕最小 44×44px 觸控目標（符合 Apple HIG）</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.97</span> 💬 對戰中聊天室（桌機 floating panel 可拖曳 + 手機 modal）</summary>
         <ul>
           <li>玩家需求：對戰時保留聊天室功能（連線模式 lobby 已有聊天室，現在 playing / setup / game-over 階段也能用）。</li>
