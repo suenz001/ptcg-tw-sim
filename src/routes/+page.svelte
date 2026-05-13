@@ -264,6 +264,37 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.92</span> 帳號功能：更改密碼 + 忘記密碼（Email 寄送重設信）</summary>
+        <ul>
+          <li>玩家需求：忘記密碼時可以用 Email 收信重設、已登入時可以更改密碼。</li>
+          <li><b>忘記密碼</b>（牌組頁登入 modal 內）：
+            <ul>
+              <li>登入分頁底部加「忘記密碼？寄送重設信」連結</li>
+              <li>點擊切換成「輸入 Email → 寄送重設信」form（用 Firebase <code>sendPasswordResetEmail</code>）</li>
+              <li>送出後顯示「重設信已寄出！請查收信箱（含垃圾郵件夾）」綠底成功訊息</li>
+              <li>連結會自動帶到 Firebase 官方重設密碼頁，使用者輸入新密碼即可</li>
+            </ul>
+          </li>
+          <li><b>更改密碼</b>（牌組頁已登入用戶 banner）：
+            <ul>
+              <li>登入後 banner 加「🔑 更改密碼」按鈕</li>
+              <li>新 modal：舊密碼 + 新密碼（至少 6 碼）+ 確認新密碼</li>
+              <li>流程：先用舊密碼 <code>reauthenticateWithCredential</code>（Firebase 對敏感操作要求最近一次登入認證），通過後 <code>updatePassword</code></li>
+              <li>本機驗證：新舊密碼相同 / 兩次新密碼不一致 / 新密碼過短 都會擋下</li>
+            </ul>
+          </li>
+          <li><b>錯誤訊息</b> friendlyAuthError 補：
+            <ul>
+              <li><code>auth/requires-recent-login</code> → 「此操作需要最近一次登入認證，請重新登入後再試」</li>
+              <li><code>auth/missing-email</code> → 「請輸入 Email」</li>
+              <li><code>auth/network-request-failed</code> → 「網路連線失敗，請檢查網路後重試」</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.911</span> 幻影奇襲類「以任意方式放置 N 個指示物」必須全部放完</summary>
         <ul>
           <li>玩家補充規則：幻影奇襲只要對手備戰區有寶可夢，必須把 6 顆 counter 全放完（不能不放、不能只放 3 顆）。同類措辭「以任意方式放置 N 個傷害指示物」的招式都套用此規則。</li>

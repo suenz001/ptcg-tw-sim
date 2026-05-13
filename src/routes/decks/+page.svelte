@@ -24,6 +24,9 @@
     EmailAuthProvider,
     signOut,
     onAuthStateChanged,
+    sendPasswordResetEmail,
+    updatePassword,
+    reauthenticateWithCredential,
     type User
   } from 'firebase/auth';
 
@@ -48,6 +51,19 @@
   let authPassword = $state('');
   let authError = $state<string | null>(null);
   let authLoading = $state(false);
+
+  // v3.92 忘記密碼（login tab 內 toggle 切換）
+  let forgotMode = $state(false);
+  let resetEmailSent = $state(false);
+
+  // v3.92 更改密碼 modal（已登入用戶）
+  let showChangePasswordModal = $state(false);
+  let cpOldPassword = $state('');
+  let cpNewPassword = $state('');
+  let cpNewPasswordConfirm = $state('');
+  let cpError = $state<string | null>(null);
+  let cpSuccess = $state(false);
+  let cpLoading = $state(false);
 
   const isAnonymous = $derived(firebaseUser?.isAnonymous ?? true);
 
@@ -775,6 +791,54 @@
     // onAuthStateChanged 會觸發並以匿名重新登入
   }
 
+  // v3.92 忘記密碼：寄送 Firebase 重設信
+  async function sendResetEmail() {
+    if (!authEmail) { authError = '請輸入 Email'; return; }
+    authLoading = true; authError = null; resetEmailSent = false;
+    try {
+      await sendPasswordResetEmail(auth, authEmail);
+      resetEmailSent = true;
+    } catch (e: unknown) {
+      const code = (e as { code?: string })?.code ?? '';
+      authError = friendlyAuthError(code);
+    } finally { authLoading = false; }
+  }
+
+  // v3.92 開啟更改密碼 modal（已登入且非匿名用戶）
+  function openChangePasswordModal() {
+    cpOldPassword = '';
+    cpNewPassword = '';
+    cpNewPasswordConfirm = '';
+    cpError = null;
+    cpSuccess = false;
+    showChangePasswordModal = true;
+  }
+
+  // v3.92 送出更改密碼：reauthenticate 舊密碼 → updatePassword 新密碼
+  async function submitChangePassword() {
+    if (!cpOldPassword || !cpNewPassword) { cpError = '請輸入舊密碼與新密碼'; return; }
+    if (cpNewPassword.length < 6) { cpError = '新密碼至少需要 6 個字元'; return; }
+    if (cpNewPassword !== cpNewPasswordConfirm) { cpError = '兩次輸入的新密碼不一致'; return; }
+    const user = auth.currentUser;
+    if (!user || !user.email) { cpError = '未登入或非 Email 帳號'; return; }
+    if (cpNewPassword === cpOldPassword) { cpError = '新密碼不能與舊密碼相同'; return; }
+    cpLoading = true; cpError = null;
+    try {
+      // 先用舊密碼 reauthenticate（Firebase 對敏感操作要求最近一次登入認證）
+      const cred = EmailAuthProvider.credential(user.email, cpOldPassword);
+      await reauthenticateWithCredential(user, cred);
+      // 通過後 updatePassword
+      await updatePassword(user, cpNewPassword);
+      cpSuccess = true;
+      cpOldPassword = '';
+      cpNewPassword = '';
+      cpNewPasswordConfirm = '';
+    } catch (e: unknown) {
+      const code = (e as { code?: string })?.code ?? '';
+      cpError = friendlyAuthError(code);
+    } finally { cpLoading = false; }
+  }
+
   function friendlyAuthError(code: string): string {
     const map: Record<string, string> = {
       'auth/email-already-in-use': '此 Email 已被其他帳號使用',
@@ -785,8 +849,11 @@
       'auth/too-many-requests': '嘗試次數過多，請稍後再試',
       'auth/credential-already-in-use': '此帳號已存在，請直接登入',
       'auth/invalid-credential': '帳號或密碼錯誤',
+      'auth/requires-recent-login': '此操作需要最近一次登入認證，請重新登入後再試',
+      'auth/missing-email': '請輸入 Email',
+      'auth/network-request-failed': '網路連線失敗，請檢查網路後重試',
     };
-    return map[code] ?? `登入失敗（${code}）`;
+    return map[code] ?? `操作失敗（${code}）`;
   }
 
   // ── Card preview ───────────────────────────────────────────────────────
@@ -848,6 +915,7 @@
       {:else}
         <div class="auth-user">
           <span class="auth-email">✉️ {firebaseUser.email}</span>
+          <button class="small" onclick={openChangePasswordModal} title="更改密碼">🔑 更改密碼</button>
           <button class="small danger" onclick={handleSignOut}>登出</button>
         </div>
       {/if}
@@ -1294,13 +1362,59 @@
           </button>
         </div>
       {:else}
-        <p class="auth-desc">登入後將從雲端載入該帳號的牌組。</p>
+        <!-- v3.92：login tab 內 toggle 切換「正常登入」⇄「忘記密碼寄重設信」 -->
+        {#if !forgotMode}
+          <p class="auth-desc">登入後將從雲端載入該帳號的牌組。</p>
+          <div class="auth-form">
+            <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+            <input type="password" placeholder="密碼" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
+            {#if authError}<p class="auth-error">{authError}</p>{/if}
+            <button class="small primary" onclick={loginWithEmail} disabled={authLoading}>
+              {authLoading ? '登入中…' : '登入'}
+            </button>
+            <button class="auth-link" onclick={() => { forgotMode = true; authError = null; resetEmailSent = false; }}>
+              忘記密碼？寄送重設信
+            </button>
+          </div>
+        {:else}
+          <p class="auth-desc">輸入註冊時的 Email，我們會寄送密碼重設信到該信箱。</p>
+          <div class="auth-form">
+            <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && sendResetEmail()} />
+            {#if authError}<p class="auth-error">{authError}</p>{/if}
+            {#if resetEmailSent}<p class="auth-success">重設信已寄出！請查收信箱（含垃圾郵件夾），點擊信中連結重設密碼。</p>{/if}
+            <button class="small primary" onclick={sendResetEmail} disabled={authLoading}>
+              {authLoading ? '寄送中…' : '寄送重設信'}
+            </button>
+            <button class="auth-link" onclick={() => { forgotMode = false; authError = null; resetEmailSent = false; }}>
+              ← 返回登入
+            </button>
+          </div>
+        {/if}
+      {/if}
+    </div>
+  </div>
+{/if}
+
+<!-- ── v3.92 Change Password modal ───────────────────────────────────────── -->
+{#if showChangePasswordModal}
+  <div class="pv-overlay" onclick={() => { showChangePasswordModal = false; }}>
+    <div class="pv-inner auth-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={() => { showChangePasswordModal = false; }} aria-label="關閉">×</button>
+      <h3 class="modal-title">🔑 更改密碼</h3>
+      {#if cpSuccess}
+        <p class="auth-success">密碼已成功更改！下次登入請使用新密碼。</p>
         <div class="auth-form">
-          <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
-          <input type="password" placeholder="密碼" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
-          {#if authError}<p class="auth-error">{authError}</p>{/if}
-          <button class="small primary" onclick={loginWithEmail} disabled={authLoading}>
-            {authLoading ? '登入中…' : '登入'}
+          <button class="small primary" onclick={() => { showChangePasswordModal = false; }}>關閉</button>
+        </div>
+      {:else}
+        <p class="auth-desc">更改密碼需要先輸入舊密碼確認身分。</p>
+        <div class="auth-form">
+          <input type="password" placeholder="舊密碼" bind:value={cpOldPassword} autocomplete="current-password" />
+          <input type="password" placeholder="新密碼（至少 6 碼）" bind:value={cpNewPassword} autocomplete="new-password" />
+          <input type="password" placeholder="再次輸入新密碼" bind:value={cpNewPasswordConfirm} autocomplete="new-password" onkeydown={(e) => e.key === 'Enter' && submitChangePassword()} />
+          {#if cpError}<p class="auth-error">{cpError}</p>{/if}
+          <button class="small primary" onclick={submitChangePassword} disabled={cpLoading}>
+            {cpLoading ? '處理中…' : '確認更改密碼'}
           </button>
         </div>
       {/if}
@@ -2222,6 +2336,29 @@
     font-size: 0.95rem;
   }
   .auth-form input:focus { outline: 2px solid #4a7fd4; border-color: transparent; }
+  /* v3.92 忘記密碼 link button 樣式 + 成功訊息綠色 */
+  .auth-link {
+    background: none;
+    border: none;
+    color: #4a90e2;
+    text-decoration: underline;
+    font-size: 0.9em;
+    padding: 4px 0;
+    cursor: pointer;
+    text-align: center;
+  }
+  .auth-link:hover {
+    color: #2d6cc0;
+  }
+  .auth-success {
+    color: #2d8d3e;
+    background: #e8f5ea;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #b8e0c0;
+    font-size: 0.9em;
+    margin: 4px 0;
+  }
   .auth-error {
     margin: 0;
     color: #c00;
