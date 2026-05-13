@@ -264,6 +264,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.895</span> 呆呆王｜耀閃挑戰：牌庫頂寶可夢有 2+ 招時開選招 picker</summary>
+        <ul>
+          <li>玩家回報：呆呆王 耀閃挑戰 從牌庫抽出的寶可夢若擁有 2 個以上招式，目前系統自動挑印刷最高傷害，玩家不能自己選。</li>
+          <li>卡面（SV7 10934）：「將自己的牌庫上方 1 張卡丟棄，若那張卡為寶可夢卡（『擁有規則的寶可夢』除外），則<b>選擇 1 個</b>那隻寶可夢持有的招式，作為這個招式使用。」— 卡面明文「選擇」，自動挑違反規則。</li>
+          <li><b>實裝</b>（複用 v3.873 扮晶晶酒 pattern）：
+            <ul>
+              <li>UI 攔截：onAttackClick 偵測「耀閃挑戰」→ peek 自己牌庫頂 → 不符條件直接 dispatch 讓 engine 失敗 log；1 招自動帶 copyAttackChoice 直接 dispatch；<b>2+ 招開 brightChallengePicker</b> 列出該卡所有招式</li>
+              <li>玩家挑招後：dispatch ATTACK 時把 copyAttackChoice { pokeIid: deckTop.iid, attackIndex } 塞進 action</li>
+              <li>regPre 讀 action.copyAttackChoice — pokeIid 驗證 === deck[0].iid（防 race，理論上 attack handler 跑時 deck 未變）→ 用 choice.attackIndex；mismatch / 越界 / 無 choice（AI / 舊 state）→ fallback 自動挑印刷最高（v2.57 行為）</li>
+            </ul>
+          </li>
+          <li><b>UX 細節</b>：
+            <ul>
+              <li>牌庫空 / 非寶可夢 / 規則寶可夢（ex/V 等）/ 0 招 → 不開 picker，直接 dispatch（engine 自會 log「招式效果失敗」+ 丟棄那張卡）</li>
+              <li>1 招卡（如「皮卡丘 雷電」單招）→ 不開 picker，自動帶 attackIndex=0（避免單一選項浪費 UX 步驟）</li>
+              <li>2+ 招 → 開 modal 列出卡圖 + 所有招式，每招顯示 cost / 印刷傷害 / 效果（hover tooltip），玩家點按即執行</li>
+            </ul>
+          </li>
+          <li><b>邊界考慮</b>：UI peek 自己牌庫頂屬於「使用招式必經之路」— 連線對戰時對手看不到我端 deck 順序（Firestore 同步 server 不會 leak 對手 deck 排序），無資訊洩漏問題。借者是呆呆王（非太晶），借到的招式若有 PRE_DISCARD_CHOICE（如金屬之錘）走 v3.72 邏輯 sentinel 注入。</li>
+          <li>tsc 0 errors。鐵律：Rule 1（無 svelte 特殊字元，brightChallengePicker UI 全部用 &#123;#each&#125; / &#123;#if&#125; 正規 Svelte 語法）/ Rule 11（Python pipeline + safe_write 改 +page.svelte 412KB 大檔）/ Rule 4（tsc 驗證）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.894</span> ⚠ 修 bench-hit-N resolver 誤套對戰圓形（招式傷害 vs 招式效果混淆）</summary>
         <ul>
           <li>玩家回報：用激流水泵（卡面：「對手 1 隻備戰受到 120 傷害」）對備戰造成傷害時，log 顯示「對戰圓形競技場效果 — 對手備戰不受此效果傷害」誤擋。</li>

@@ -76,19 +76,34 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
       damage: 0,
     };
   }
-  // Step 5: 挑印刷傷害最高的招式（同扮晶晶酒 precedent — 自動挑選）
-  const parseDmg = (dmgStr: string): number => {
-    const m = dmgStr.match(/^(\d+)/);
-    return m ? parseInt(m[1], 10) : 0;
-  };
-  let picked = atks[0];
-  let pickedDmg = parseDmg(picked.damage);
-  for (let i = 1; i < atks.length; i++) {
-    const d = parseDmg(atks[i].damage);
-    if (d > pickedDmg) { picked = atks[i]; pickedDmg = d; }
+  // Step 5（v3.895 重寫）：選擇 borrowed 招式
+  //   - 優先讀 action.copyAttackChoice（玩家在 UI brightChallengePicker 選的招式）
+  //     · pokeIid 必須等於牌庫頂 top.iid（防 race — 若玩家從開 picker 到 confirm 之間 deck top 變了，fallback 自動挑）
+  //     · attackIndex 為玩家選的招式 index（0 ≤ idx < atks.length）
+  //   - fallback（AI / 舊 state / pokeIid mismatch / index 越界）：自動挑印刷傷害最高那招
+  const choice = action?.copyAttackChoice;
+  let pickedIdx = -1;
+  let useChoice = false;
+  if (choice && choice.pokeIid === top.iid && choice.attackIndex >= 0 && choice.attackIndex < atks.length) {
+    pickedIdx = choice.attackIndex;
+    useChoice = true;
+  } else {
+    // 自動挑印刷傷害最高（同扮晶晶酒 v2.57 fallback precedent）
+    const parseDmg = (dmgStr: string): number => {
+      const m = dmgStr.match(/^(\d+)/);
+      return m ? parseInt(m[1], 10) : 0;
+    };
+    let bestDmg = parseDmg(atks[0].damage);
+    pickedIdx = 0;
+    for (let i = 1; i < atks.length; i++) {
+      const d = parseDmg(atks[i].damage);
+      if (d > bestDmg) { pickedIdx = i; bestDmg = d; }
+    }
   }
+  const picked = atks[pickedIdx];
   const copiedKey = `${topCard.name}|${picked.name}`;
-  s = addLog(s, `耀閃挑戰：選擇「${topName}」的「${picked.name}」作為這個招式使用（自動挑印刷最高傷害）`, aIdx);
+  const pickMode = useChoice ? '玩家選擇' : '自動挑印刷最高傷害';
+  s = addLog(s, `耀閃挑戰：選擇「${topName}」的「${picked.name}」作為這個招式使用（${pickMode}）`, aIdx);
   s = { ...s, pendingCopyAttackKey: copiedKey };
   // Step 6: 遞迴該招式的 regPre
   //   v3.72 QA fix：若 borrowed 招式有 binary-yes-no PRE_DISCARD_CHOICE（「若希望」類），

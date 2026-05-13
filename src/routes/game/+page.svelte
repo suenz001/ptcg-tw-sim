@@ -2371,6 +2371,38 @@
       };
       return;
     }
+    // v3.895 耀閃挑戰 intercept：peek 自己牌庫頂，若該卡為寶可夢（非規則）且有 2+ 招式 → 開 picker 讓玩家選
+    //   - 1 招 → 自動填 copyAttackChoice (attackIndex=0)，不彈 picker（避免單一選項浪費 UX）
+    //   - 牌庫空 / 非寶可夢 / 規則寶可夢 / 0 招 → 直接 dispatch（engine 自己會 fail log）
+    //   - 2+ 招 → 開 brightChallengePicker（卡面：「選擇 1 個那隻寶可夢持有的招式，作為這個招式使用」）
+    if (atk.name === '耀閃挑戰') {
+      if (!game) return;
+      const myDeck = game.players[myIdx].deck;
+      const topInst = myDeck[0];
+      if (!topInst) {
+        dispatch(GameActions.attack(attackIndex));
+        return;
+      }
+      const topCard = getCard(topInst.cardId);
+      const isPokemon = topCard?.supertype === 'Pokemon';
+      const isRule = topCard ? (RULE_BOX_SUBTYPES.has(topCard.subtype ?? '')) : false;
+      const atks = topCard?.attacks ?? [];
+      if (!isPokemon || isRule || atks.length === 0) {
+        dispatch(GameActions.attack(attackIndex));
+        return;
+      }
+      if (atks.length === 1) {
+        // 單招直接自動帶 copyAttackChoice
+        dispatch(GameActions.attack(attackIndex, undefined, { pokeIid: topInst.iid, attackIndex: 0 }));
+        return;
+      }
+      // 2+ 招 → 開 picker
+      brightChallengePicker = {
+        sourceAttackIndex: attackIndex,
+        topPoke: { inst: topInst, card: topCard! },
+      };
+      return;
+    }
     const key = `${sourceCardName}|${atk.name}`;
     const spec = ATTACK_PRE_DISCARD_CHOICE.get(key);
     if (!spec) {
@@ -2451,6 +2483,22 @@
     dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
   }
   function cancelPersonateAttack() { personateAttackPicker = null; }
+
+  // v3.895 耀閃挑戰 picker：peek 自己牌庫頂的寶可夢，列出該卡的所有招式讓玩家挑
+  //   topPoke.inst 是 myDeck[0]（尚未丟棄；UI 為了開 picker 必須提前知道 — 連線對戰時對手看不到 deck 順序，無資訊洩漏問題）
+  //   玩家選定後 dispatch GameActions.attack 帶 copyAttackChoice { pokeIid, attackIndex } —
+  //     regPre 內驗證 pokeIid === deck[0].iid，mismatch 時 fallback 自動挑印刷最高
+  let brightChallengePicker = $state<{
+    sourceAttackIndex: number;
+    topPoke: { inst: CardInstance; card: Card };
+  } | null>(null);
+  function resolveBrightChallenge(pokeIid: string, attackIndex: number) {
+    if (!brightChallengePicker) return;
+    const src = brightChallengePicker.sourceAttackIndex;
+    brightChallengePicker = null;
+    dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
+  }
+  function cancelBrightChallenge() { brightChallengePicker = null; }
 
   // 取得「可被挑選丟棄」的卡片清單（依 scope 決定範圍）
   // v2.143 擴展：scope='hand-rocket-supporter' 時返回手牌中「火箭隊」支援者
@@ -5211,6 +5259,46 @@
                     </span>
                     <span class="copy-atk-name">{atk.name}</span>
                     {#if atk.damage}<span class="copy-atk-dmg">{atk.damage}</span>{/if}
+
+  <!-- v3.895 呆呆王｜耀閃挑戰 — 牌庫頂寶可夢的招式選擇 picker ─────────── -->
+  {#if brightChallengePicker}
+    {@const tp = brightChallengePicker.topPoke}
+    <div class="selection-overlay">
+      <div class="selection-modal copy-attack-modal">
+        <div class="sel-header">
+          <h3>耀閃挑戰：選擇要使用的招式</h3>
+          <p class="sel-hint">自己的牌庫上方 1 張卡為「{tp.card.name}」（將被丟棄）。請選擇 1 個它持有的招式作為這個招式使用。</p>
+        </div>
+        <div class="copy-attack-list">
+          <div class="copy-attack-poke">
+            <img src={tp.card.imageUrl} alt={tp.card.name} class="copy-attack-img"/>
+            <div class="copy-attack-col">
+              <div class="copy-attack-name">{tp.card.name}（牌庫頂）</div>
+              <div class="copy-attack-atks">
+                {#each tp.card.attacks ?? [] as atk, aIdx}
+                  <button
+                    class="copy-attack-btn"
+                    onclick={() => resolveBrightChallenge(tp.inst.iid, aIdx)}
+                    title={atk.effect ?? ''}
+                  >
+                    <span class="copy-atk-cost">
+                      {#each atk.cost as e}<span class="copy-atk-pip" style:background={ENERGY_COLOR[e]} title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                    </span>
+                    <span class="copy-atk-name">{atk.name}</span>
+                    {#if atk.damage}<span class="copy-atk-dmg">{atk.damage}</span>{/if}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sel-footer">
+          <button class="btn-act secondary" onclick={cancelBrightChallenge}>取消</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
                   </button>
                 {/each}
               </div>
