@@ -756,10 +756,13 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   const label = String(params?.attackLabel ?? '招式');
   const targetIdx = ((params?.targetIdx ?? (1 - actorIdx)) as 0 | 1);
   if (amount <= 0 || selectedIids.length === 0) return st;
-  // v2.22 對戰圓形競技場：針對「對手備戰」的招式效果全部跳過
-  if (targetIdx !== actorIdx && isBenchProtected(st, pool)) {
-    return addLog(st, `${label}：對戰圓形競技場效果 — 對手備戰不受此效果傷害`, actorIdx);
-  }
+  // v3.894：移除 v2.22 在此處加的 isBenchProtected check（語意錯誤）。
+  //   bench-hit-N 是 hitBenchPickPost 用的 resolver，處理「對備戰造成 N 點傷害」
+  //   — 屬於【招式傷害 attack-damage】(卡面：「受到 N 點傷害」)，不是「招式效果 attack-effect」。
+  //   對戰圓形競技場只擋【招式效果】/【特性效果】（放指示物 / 異常狀態），不擋招式傷害。
+  //   下方 v3.888 加的 per-target resolveBenchGuard(kind='attack-damage') 會按規則正確擋
+  //   花之帷幔 / 太晶 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石（這些才擋招式傷害）。
+  //   玩家回報：激流水泵對備戰 120（attack-damage）被誤判為對戰圓形擋住。
   const target = st.players[targetIdx];
 
   let morePrizes = 0;

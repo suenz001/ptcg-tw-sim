@@ -264,6 +264,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.894</span> ⚠ 修 bench-hit-N resolver 誤套對戰圓形（招式傷害 vs 招式效果混淆）</summary>
+        <ul>
+          <li>玩家回報：用激流水泵（卡面：「對手 1 隻備戰受到 120 傷害」）對備戰造成傷害時，log 顯示「對戰圓形競技場效果 — 對手備戰不受此效果傷害」誤擋。</li>
+          <li><b>規則回顧</b>（PTCG 三類「掉血」概念）：
+            <ul>
+              <li><b>招式傷害 attack-damage</b>：卡面「對 X 造成 N 點傷害」。擋頭：花之帷幔 / 太晶備戰 / 中立中心 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石。<b>不擋</b>：對戰圓形 / 抵抗之幕。</li>
+              <li><b>招式效果 attack-effect</b>：卡面「放置傷害指示物」/ 異常狀態 / 回收能量等。擋頭：對戰圓形 / 抵抗之幕（基礎火箭隊） / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石。<b>不擋</b>：花之帷幔（只擋傷害）。</li>
+              <li><b>特性效果 ability-effect</b>：特性「放傷害指示物」（如咒詛炸彈）。擋頭：對戰圓形。<b>不擋</b>：花之帷幔 / 抵抗之幕（兩者明文「只擋招式」）。</li>
+            </ul>
+          </li>
+          <li><b>根因</b>：<code>bench-hit-N</code> resolver（effects.ts:759-761）v2.22 加的 <code>isBenchProtected</code> check 註解寫「招式效果跳過」，但實際 resolver 處理的是 <code>hitBenchPickPost</code>（對備戰造成 N 點【傷害】）— 屬於 attack-damage。把對戰圓形錯套到 attack-damage 分支。</li>
+          <li><b>修法</b>：移除 <code>bench-hit-N</code> resolver 內的 <code>isBenchProtected</code> check。下方 v3.888 加的 per-target <code>resolveBenchGuard(kind='attack-damage')</code> 會按規則正確處理（不擋對戰圓形 / 不擋抵抗之幕，但擋花之帷幔 / 太晶 / 球形盾牌 / 藏隱 / 深度下潛）。</li>
+          <li><b>受惠招式</b>（所有走 hitBenchPickPost 的招式傷害類，對戰圓形不再誤擋）：
+            <ul>
+              <li>精神尖槍（代歐奇希斯 M4）— 對手 1 隻備戰 120</li>
+              <li>激流水泵（厄鬼椪 水井面具ex MC）— 對手 1 隻備戰 120</li>
+              <li>狙擊類：暗影子彈 / 雙生鐳射 / 三重冰霜 / 噴射打擊 等</li>
+            </ul>
+          </li>
+          <li><b>對戰圓形 / 抵抗之幕 audit 結果</b>（其他 5 個 isBenchProtected 使用點全部正確，本次不動）：<code>resolveBenchGuard</code>（只在 effect/ability-effect kind 套） / <code>applyDamageToAllOpp</code>（痛楚記憶 / 侵蝕之風，卡面「放指示物」） / 悄聲加害（卡面「放 2 個指示物」） / 幻影奇襲（卡面「放 6 個指示物」） / 咒詛炸彈（特性「放指示物」）。</li>
+          <li>tsc 0 errors。鐵律：Rule 1（無特殊字元） / Rule 7c（已查卡面原文：「受到 X 點傷害」是 damage、「放置傷害指示物」是 effect）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.893</span> 🔧 hotfix：補 v3.892 engine.ts 漏掉的 hasFlowerVeil import</summary>
         <ul>
           <li>v3.892 push 腳本 import-guard 順序 bug：先 replace 插入 <code>hasFlowerVeil(state, dIdx, pool)</code> snapshot 呼叫，後才 <code>if 'hasFlowerVeil' not in eng</code> 判斷是否補 import。但 replace 後 eng 已含函式呼叫，guard 永遠 false → import 從未補上。</li>
