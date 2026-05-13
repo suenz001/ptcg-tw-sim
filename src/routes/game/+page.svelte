@@ -2510,6 +2510,19 @@
   }
   function cancelBrightChallenge() { brightChallengePicker = null; }
 
+  // v3.951 進入 game-over phase 時主動 reset rematchUiState 為 idle
+  //   （除非 firestore room 已有 rematchRequest — handleRoomUpdate 會立即修正為 'incoming'）
+  let _prevGamePhase = '';
+  $effect(() => {
+    const curPhase = game?.phase ?? '';
+    if (curPhase === 'game-over' && _prevGamePhase !== 'game-over') {
+      // 剛進入 game-over：reset（避免殘留前次 'waiting' / 'rejected'）
+      // 若 room.rematchRequest 存在且非自己發起 → handleRoomUpdate 會把 state 設回 'incoming'
+      rematchUiState = 'idle';
+    }
+    _prevGamePhase = curPhase;
+  });
+
   // v3.900 回合切換 banner：每次 game.activePlayerIndex 變化時，全螢幕中央彈 1.5s 大字
   //   - text='你的回合' if new active === myIdx else '對手回合'
   //   - 本機 2P 下 myIdx 跟著 activePlayerIndex 切 → 永遠「你的回合」（從新操作者視角，直覺正確）
@@ -3815,11 +3828,15 @@
           🧾 匯出 log（.json）
         </button>
       </div>
-      <!-- v3.95 連線模式：加「再來一局」按鈕 + waiting / rejected 狀態提示 -->
-      {#if mode === 'online'}
-        {#if rematchUiState === 'idle'}
+      <!-- v3.951 連線模式判斷：mode === 'online' 或 roomCode 任一 truthy（防 mode race 變 null）-->
+      {#if mode === 'online' || roomCode}
+        <!-- v3.951：incoming state 也顯示按鈕（同 idle）— 玩家不會看到空白 game-over 畫面。
+             incoming modal 仍會疊在 game-over screen 之上由玩家選擇接受/拒絕。 -->
+        {#if rematchUiState === 'idle' || rematchUiState === 'incoming'}
           <div class="lobby-btns" in:fade={{ duration: 400, delay: 900 }}>
-            <button class="btn-primary" onclick={clickRematchRequest}>🔁 再來一局</button>
+            <button class="btn-primary" onclick={clickRematchRequest} disabled={rematchUiState === 'incoming'} title={rematchUiState === 'incoming' ? '請先回應對手的再來一局請求' : '邀請對手再來一局（雙方同意才會重置房間）'}>
+              🔁 再來一局
+            </button>
             <button class="btn-secondary" onclick={() => { game = null; leaveOnlineGame(); }}>離開房間</button>
           </div>
         {:else if rematchUiState === 'waiting'}
@@ -3831,23 +3848,22 @@
         {:else if rematchUiState === 'rejected'}
           <div class="lobby-btns rematch-rejected" in:fade={{ duration: 200 }}>
             <p class="muted">😢 對方拒絕了再來一局的請求</p>
+            <button class="btn-primary" onclick={clickRematchRequest}>🔁 再次嘗試</button>
             <button class="btn-secondary" onclick={() => { game = null; leaveOnlineGame(); }}>離開房間</button>
           </div>
         {/if}
+        <a href="{base}/" class="back-home-link" in:fade={{ duration: 400, delay: 1000 }}>回首頁</a>
       {:else}
         <div class="lobby-btns" in:fade={{ duration: 400, delay: 900 }}>
           <button class="btn-primary" onclick={() => { game = null; }}>再來一局</button>
           <a href="{base}/" class="btn-secondary">回首頁</a>
         </div>
       {/if}
-      {#if mode === 'online'}
-        <a href="{base}/" class="back-home-link" in:fade={{ duration: 400, delay: 1000 }}>回首頁</a>
-      {/if}
     </div>
   </main>
 
   <!-- v3.95 incoming rematch request modal（對手發起，等我回應） -->
-  {#if rematchUiState === 'incoming' && mode === 'online'}
+  {#if rematchUiState === 'incoming' && (mode === 'online' || roomCode)}
     <div class="pv-overlay" in:fade={{ duration: 200 }}>
       <div class="pv-inner rematch-modal">
         <h3 class="modal-title">🔁 對手要求再來一局</h3>

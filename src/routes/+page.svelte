@@ -264,6 +264,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.951</span> hotfix：修 v3.95 game-over 只有一方看到「再來一局」按鈕</summary>
+        <ul>
+          <li>玩家回報：v3.95 連線對戰結束後，只有勝利方/加入房間者看到「再來一局」按鈕，敗方/開房者沒看到。</li>
+          <li><b>根因</b>：
+            <ul>
+              <li>game-over UI 漏處理 <code>rematchUiState === 'incoming'</code> case → 該狀態下 game-over screen 內完全沒按鈕（只剩外層 modal）</li>
+              <li>進入 game-over phase 時沒主動重置 <code>rematchUiState</code>，可能殘留前次 waiting / rejected 狀態</li>
+              <li>判斷用 <code>mode === 'online'</code>，但某些 race 情況可能 mode 變 null</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：
+            <ul>
+              <li>game-over UI 條件改為 <code>mode === 'online' || roomCode</code>，雙保險判斷連線模式</li>
+              <li>incoming state 也顯示「再來一局」按鈕（disabled 含 tooltip「請先回應對手的再來一局請求」），加上外層 modal 雙重視覺提示</li>
+              <li>rejected state 加「🔁 再次嘗試」按鈕，玩家可再次發起</li>
+              <li>加 $effect：game.phase 從非 game-over → game-over 時主動 reset <code>rematchUiState = 'idle'</code>（避免殘留）；若 firestore 已有 rematchRequest，handleRoomUpdate 會立即修正為 'incoming'</li>
+              <li>incoming modal 渲染條件同步改 <code>mode === 'online' || roomCode</code></li>
+            </ul>
+          </li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.95</span> 🔁 連線對戰結算後「再來一局」（雙方同意 + 保留牌組）</summary>
         <ul>
           <li>玩家建議：連線對戰結束後 game-over screen 加「再來一局」按鈕，雙方同意後直接重新開始，省去重新建房 / 加房的麻煩。</li>
