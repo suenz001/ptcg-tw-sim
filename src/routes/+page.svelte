@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.95</span> 🔁 連線對戰結算後「再來一局」（雙方同意 + 保留牌組）</summary>
+        <ul>
+          <li>玩家建議：連線對戰結束後 game-over screen 加「再來一局」按鈕，雙方同意後直接重新開始，省去重新建房 / 加房的麻煩。</li>
+          <li><b>UX 流程</b>：
+            <ul>
+              <li>A 端 game-over 點「🔁 再來一局」→ A 顯示「⏳ 等待對手回應」+ 取消按鈕</li>
+              <li>B 端 onSnapshot 收到 → 跳出 modal「<strong>OOO</strong> 想要再對戰一局：✓ 接受 / ✗ 拒絕」</li>
+              <li>B 接受 → 雙方自動跳回 setup（onlineStep='room'），保留上局選的牌組 + seat，重按 ready 即可開戰</li>
+              <li>B 拒絕 → A 顯示「對方拒絕了再來一局」3 秒後復原 idle</li>
+              <li>A 取消 → 立即清掉 rematchRequest，B 端的 incoming modal 自動消失</li>
+            </ul>
+          </li>
+          <li><b>Firestore schema</b>：<code>RoomData</code> 加 <code>rematchRequest?: &#123; fromSeatIdx, fromName, requestedAt &#125;</code> 欄位。用 <code>deleteField()</code> 真正移除（避免 undefined 寫入錯）。</li>
+          <li><b>room.ts 新 functions</b>：<code>requestRematch / cancelRematch / acceptRematch / rejectRematch</code>。接受時 firestore transaction：清 gameState、status='lobby'、seats[*].ready=false、保留 deckEntries 與 firstChoicePreference、清 rematchRequest。</li>
+          <li><b>+page.svelte UI</b>：game-over 連線模式按鈕 3 種狀態（idle / waiting / rejected）+ incoming modal。handleRoomUpdate 內依 rematchRequest 變化 + room.status 變化自動更新 UI。</li>
+          <li><b>注意</b>：本機 2P / AI 模式的「再來一局」維持原本行為（單純 <code>game = null</code> 跳回 setup），不需協調。</li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.94</span> 花之帷幔修正：picker 仍需開啟，per-target 才擋（修 v3.892 整段 skip 過頭）</summary>
         <ul>
           <li>玩家回報：用激流水泵打對手戰鬥場花之帷幔謝米時，picker 直接被 skip + log「對手備戰非規則寶可夢免疫」— 不合理。應該還是要開讓玩家選備戰目標。</li>
