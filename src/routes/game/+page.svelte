@@ -5259,6 +5259,18 @@
                     </span>
                     <span class="copy-atk-name">{atk.name}</span>
                     {#if atk.damage}<span class="copy-atk-dmg">{atk.damage}</span>{/if}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sel-footer">
+          <button class="btn-act secondary" onclick={cancelPersonateAttack}>取消</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <!-- v3.895 呆呆王｜耀閃挑戰 — 牌庫頂寶可夢的招式選擇 picker ─────────── -->
   {#if brightChallengePicker}
@@ -5294,19 +5306,6 @@
         </div>
         <div class="sel-footer">
           <button class="btn-act secondary" onclick={cancelBrightChallenge}>取消</button>
-        </div>
-      </div>
-    </div>
-  {/if}
-
-                  </button>
-                {/each}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="sel-footer">
-          <button class="btn-act secondary" onclick={cancelPersonateAttack}>取消</button>
         </div>
       </div>
     </div>

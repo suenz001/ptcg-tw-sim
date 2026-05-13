@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.897</span> hotfix：修 v3.895 brightChallengePicker UI 插入位置錯誤導致 deploy 失敗</summary>
+        <ul>
+          <li>v3.895 / v3.896 GitHub Pages deploy 失敗（紅色 X）。根因：v3.895 push 腳本用 <code>page.find('&#123;/if&#125;', pp_start)</code> 找 personateAttackPicker UI 的結束點，但 personate UI 內部有 <code>&#123;#if atk.damage&#125;&lt;span&gt;...&lt;/span&gt;&#123;/if&#125;</code> — 這個內部 <code>&#123;/if&#125;</code> 比外層先出現 → find 抓到內部 <code>&#123;/if&#125;</code>，導致 brightChallengePicker UI 被誤插到 personate 內部的 <code>&lt;div class="copy-attack-atks"&gt;</code> 內 → Svelte template 結構斷裂 → vite build 失敗。</li>
+          <li><b>修法</b>：把錯位的 brightChallengePicker UI block 整段 cut + 在 personate UI 真正結束的 <code>&#123;/if&#125;</code>（緊接 Retreat Menu 註解之前）後正確插入。</li>
+          <li><b>教訓</b>（補進 SKILL.md / IRON_RULES.md 相關段）：用 Python pipeline 改大 Svelte 檔案找插入點時，用「下一個 <code>&#123;/if&#125;</code>」這種 naive search 不可靠，因為 Svelte template 內各層巢狀有多個 <code>&#123;/if&#125;</code>。應該用具備獨特性的 anchor（如「下一個 &lt;!-- v3.xx 註解」或「下一個 named 結構特徵」）。本次用「下一個 Retreat Menu 註解」就絕對精準。</li>
+          <li>tsc 0 errors。v3.895 + v3.896 + v3.897 一起構成完整修法（耀閃挑戰選招 picker + scope hotfix + UI 位置修正）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.896</span> hotfix：修 v3.895 耀閃挑戰 pickedDmg 變數 out-of-scope 編譯錯誤</summary>
         <ul>
           <li>v3.895 重寫 regPre 時把 <code>pickedDmg</code> 從外層 let 改為 local-scope（藏在 fallback 分支裡）。但「無註冊 regPre → 退回印刷傷害」分支 (line 134) 仍引用 <code>pickedDmg</code> → tsc TS2552。</li>
