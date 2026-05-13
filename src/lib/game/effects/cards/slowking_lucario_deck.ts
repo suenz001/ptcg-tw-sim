@@ -130,8 +130,12 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
       skipDefEffects: sub.skipDefEffects,
     };
   }
-  // 無註冊 regPre → 退回印刷傷害
-  return { state: s, damage: pickedDmg };
+  // 無註冊 regPre → 退回印刷傷害（解析 picked.damage 數字）
+  const parseDmgFallback = (dmgStr: string): number => {
+    const m = dmgStr.match(/^(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+  };
+  return { state: s, damage: parseDmgFallback(picked.damage) };
 });
 // regPost 轉接到被複製招式的 ATTACK_POST（與扮晶晶酒對稱）
 regPost('呆呆王|耀閃挑戰', (state, aIdx, pool) => {

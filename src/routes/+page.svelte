@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.896</span> hotfix：修 v3.895 耀閃挑戰 pickedDmg 變數 out-of-scope 編譯錯誤</summary>
+        <ul>
+          <li>v3.895 重寫 regPre 時把 <code>pickedDmg</code> 從外層 let 改為 local-scope（藏在 fallback 分支裡）。但「無註冊 regPre → 退回印刷傷害」分支 (line 134) 仍引用 <code>pickedDmg</code> → tsc TS2552。</li>
+          <li>修法：fallback 路徑改用 <code>parseDmgFallback(picked.damage)</code> 直接解析數字，不依賴外層變數。</li>
+          <li>無功能變化，只是補上 v3.895 編譯錯誤。tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.895</span> 呆呆王｜耀閃挑戰：牌庫頂寶可夢有 2+ 招時開選招 picker</summary>
         <ul>
           <li>玩家回報：呆呆王 耀閃挑戰 從牌庫抽出的寶可夢若擁有 2 個以上招式，目前系統自動挑印刷最高傷害，玩家不能自己選。</li>
