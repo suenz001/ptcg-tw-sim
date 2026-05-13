@@ -264,6 +264,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.900</span> 回合切換時中央彈出「你的回合 / 對手回合」大字 banner</summary>
+        <ul>
+          <li>玩家建議：對戰中一方回合結束時彈出明顯文字提示，學其他 PTCG 網站「換人」全螢幕大字 UX。</li>
+          <li><b>UX 規格</b>：
+            <ul>
+              <li>文字：中性「你的回合」/「對手回合」— 從目前操作者視角看，不需抓玩家名字（本機 2P / AI / 連線全通用）</li>
+              <li>時機：每次回合切換都顯示（含自己 END_TURN）</li>
+              <li>時長：1.5 秒（fade in 200ms + 顯示 1.1s + fade out 200ms）</li>
+              <li>樣式：中央 pokeball（純 CSS 畫的紅白球）+ 粉紅大字配紅描邊 + scale pop 動畫</li>
+              <li>pointer-events: none — 不擋玩家點擊互動</li>
+            </ul>
+          </li>
+          <li><b>實作</b>：
+            <ul>
+              <li>game/+page.svelte 加 <code>turnBanner</code> $state + 監聽 <code>game.activePlayerIndex</code> 的 $effect</li>
+              <li>用普通 let 變數 <code>_prevTurnPlayerIdx</code> 當 prev tracker（不在 $state，不會 trigger reactivity 循環）</li>
+              <li>本機 2P 模式下 myIdx 跟著 activePlayerIndex 切 → 永遠顯示「你的回合」（從新操作者視角，符合直覺）</li>
+              <li>連線 / AI 模式下 myIdx 固定 → 對手 END_TURN 顯示「你的回合」、自己 END_TURN 顯示「對手回合」</li>
+              <li>setTimeout 1.5s 後用 timestamp 比對清掉（防 race：中途又切回合，新 banner 蓋舊的）</li>
+            </ul>
+          </li>
+          <li><b>純 CSS pokeball</b>：用 linear-gradient 紅白漸層 + ::after 中央按鈕，免圖檔依賴。</li>
+          <li>鐵律檢查：Rule 1（changelog 內 <code>$state</code> / <code>$effect</code> 用 code 標籤包，無 raw 大括號）；Rule 11（Python pipeline 改 +page.svelte 412KB 大檔）；Rule 4（本地用 svelte/compiler 直接 parse 驗證 .svelte，繞過 sandbox EPERM）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.899</span> hotfix：修 v3.895 changelog 違反 Iron Rule #1（未 escape 大括號）— 真正阻塞 deploy 的最終根因</summary>
         <ul>
           <li>v3.895 / v3.896 / v3.897 / v3.898 連續 4 次 deploy 紅 X。前 3 個 hotfix 都修錯方向：v3.896 修 pickedDmg scope、v3.897 修 UI 位置、v3.898 補 RULE_BOX_SUBTYPES import — 都是真實 bug 也補上了，但**真正的 build blocker 不是這些**。</li>

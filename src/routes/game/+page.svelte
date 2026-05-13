@@ -2501,6 +2501,30 @@
   }
   function cancelBrightChallenge() { brightChallengePicker = null; }
 
+  // v3.900 回合切換 banner：每次 game.activePlayerIndex 變化時，全螢幕中央彈 1.5s 大字
+  //   - text='你的回合' if new active === myIdx else '對手回合'
+  //   - 本機 2P 下 myIdx 跟著 activePlayerIndex 切 → 永遠「你的回合」（從新操作者視角，直覺正確）
+  //   - 連線 / AI 下 myIdx 固定 → 對手 END_TURN 時顯示「你的回合」、自己 END_TURN 時顯示「對手回合」
+  //   - 用普通 let 變數 _prevTurnPlayerIdx 當 prev tracker（不在 $state，不 trigger reactivity）
+  let turnBanner = $state<{ text: string; timestamp: number } | null>(null);
+  let _prevTurnPlayerIdx = -1;
+  $effect(() => {
+    if (!game) { _prevTurnPlayerIdx = -1; return; }
+    const newIdx = game.activePlayerIndex;
+    if (_prevTurnPlayerIdx !== -1 && _prevTurnPlayerIdx !== newIdx) {
+      // 真正的回合切換
+      const isMine = newIdx === myIdx;
+      const text = isMine ? '你的回合' : '對手回合';
+      const ts = Date.now();
+      turnBanner = { text, timestamp: ts };
+      setTimeout(() => {
+        // 1.5s 後若仍是同一次顯示 → 清掉（避免 race：若中途又切回合，新 banner 蓋掉舊的）
+        if (turnBanner?.timestamp === ts) turnBanner = null;
+      }, 1500);
+    }
+    _prevTurnPlayerIdx = newIdx;
+  });
+
   // 取得「可被挑選丟棄」的卡片清單（依 scope 決定範圍）
   // v2.143 擴展：scope='hand-rocket-supporter' 時返回手牌中「火箭隊」支援者
   //   返回項目仍用 hostInst 結構但 hostInst = activePlayer.active（佔位，UI 不會顯示來源）
@@ -5312,6 +5336,16 @@
     </div>
   {/if}
 
+  <!-- v3.900 回合切換 banner — 全螢幕中央彈「你的回合 / 對手回合」大字 1.5s ─────── -->
+  {#if turnBanner}
+    <div class="turn-banner-overlay" transition:fade={{ duration: 200 }}>
+      <div class="turn-banner-content">
+        <div class="turn-banner-pokeball">⚪</div>
+        <div class="turn-banner-text">{turnBanner.text}</div>
+      </div>
+    </div>
+  {/if}
+
   <!-- Retreat Menu（置中橫向 grid，支援放大鏡，避免撞到畫面頂部） -->
   {#if floatingRetreatMenu && myPlayer?.active}
     <div class="selection-overlay" class:dragged={modalDragged} onclick={() => floatingRetreatMenu = null}>
@@ -6700,6 +6734,64 @@
   .basic-btn:hover{ background:#3a7a3a; }
   .trainer-btn{ background:#2a3a6a; color:#ccf; }
   .trainer-btn:hover{ background:#3a5a9a; }
+
+  /* v3.900 回合切換 banner — 中央 pokeball + 粉紅大字，pointer-events none 不擋互動 */
+  .turn-banner-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 9998;
+    background: rgba(0, 0, 0, 0.08);
+  }
+  .turn-banner-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    animation: turnBannerPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .turn-banner-pokeball {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    background:
+      linear-gradient(to bottom, #ff3838 0%, #ff3838 49%, #222 49%, #222 53%, #fafafa 53%, #fafafa 100%);
+    border: 6px solid #222;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    position: relative;
+  }
+  .turn-banner-pokeball::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 28px;
+    height: 28px;
+    margin: -14px 0 0 -14px;
+    border-radius: 50%;
+    background: #fafafa;
+    border: 6px solid #222;
+    box-sizing: border-box;
+  }
+  .turn-banner-text {
+    font-size: clamp(56px, 11vw, 140px);
+    font-weight: 900;
+    color: #ff5b8a;
+    -webkit-text-stroke: 4px #c41a4a;
+    text-stroke: 4px #c41a4a;
+    text-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.5);
+    letter-spacing: 0.12em;
+    line-height: 1;
+    font-family: 'PingFang TC', 'Microsoft JhengHei', 'Heiti TC', sans-serif;
+  }
+  @keyframes turnBannerPop {
+    0% { transform: scale(0.4); opacity: 0; }
+    55% { transform: scale(1.12); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
 
   .selection-overlay{ position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.82); display:flex; align-items:center; justify-content:center; font-family:system-ui,'Microsoft JhengHei',sans-serif; transition:background .15s ease; }
   /* v2.44：modal 被拖曳後背景變透明且不擋互動（讓玩家看見、甚至操作場上），modal 本體仍可互動 */
