@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.893</span> 🔧 hotfix：補 v3.892 engine.ts 漏掉的 hasFlowerVeil import</summary>
+        <ul>
+          <li>v3.892 push 腳本 import-guard 順序 bug：先 replace 插入 <code>hasFlowerVeil(state, dIdx, pool)</code> snapshot 呼叫，後才 <code>if 'hasFlowerVeil' not in eng</code> 判斷是否補 import。但 replace 後 eng 已含函式呼叫，guard 永遠 false → import 從未補上。</li>
+          <li>結果：v3.892 deploy 編譯失敗（<code>tsc error TS2304: Cannot find name 'hasFlowerVeil'</code>），花之帷幔 attack-time snapshot fix 沒生效。</li>
+          <li><b>修法</b>：補 engine.ts import block 加 <code>hasFlowerVeil</code>（從 <code>./effects</code>）。</li>
+          <li>無功能變化，只是補上 v3.892 應有的 import。tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.892</span> 🛡 修花之帷幔 attack-time snapshot — spread 招式 KO 謝米後備戰仍應免疫</summary>
         <ul>
           <li>玩家回報 + 官方 QA（虛無歸零案例）：對手戰鬥場有花之帷幔謝米時，招式同時對 active + 備戰造成傷害的情況下，即使戰鬥場謝米被招式 KO，花之帷幔仍對備戰生效。</li>
