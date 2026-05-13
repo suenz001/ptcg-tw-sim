@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.899</span> hotfix：修 v3.895 changelog 違反 Iron Rule #1（未 escape 大括號）— 真正阻塞 deploy 的最終根因</summary>
+        <ul>
+          <li>v3.895 / v3.896 / v3.897 / v3.898 連續 4 次 deploy 紅 X。前 3 個 hotfix 都修錯方向：v3.896 修 pickedDmg scope、v3.897 修 UI 位置、v3.898 補 RULE_BOX_SUBTYPES import — 都是真實 bug 也補上了，但**真正的 build blocker 不是這些**。</li>
+          <li><b>真因</b>：src/routes/+page.svelte:305 的 v3.895 changelog 內容有：<code>copyAttackChoice &#123; pokeIid: deckTop.iid, attackIndex &#125;</code> — 我寫描述時用了 raw <code>&#123;</code> 和 <code>&#125;</code>（沒 escape）。Svelte template 把它當成 expression block → parser error「Expected token &#125;」→ vite build fail。</li>
+          <li><b>違反鐵律 #1</b>（Svelte 特殊字元 <code>&#123; &#125; &lt; &gt;</code> 在 template content 內必須 escape）。v2.733 / v3.55 已經踩過同樣的坑，這次又重蹈覆轍。</li>
+          <li><b>修法</b>：把 line 305 的 <code>&#123;</code> 改 <code>&amp;&#35;123;</code>、<code>&#125;</code> 改 <code>&amp;&#35;125;</code>。</li>
+          <li><b>為什麼我前面查不到</b>：tsc 不檢查 .svelte / svelte-check 在 sandbox EPERM unlink 把真實錯誤埋在很多 noise 後面 — 直到我把 repo 複製到 /tmp（可寫 dir）跑 svelte-check 才看到「Expected token &#125; at line 305」這個明確的根因。教訓：以後 deploy 失敗時 first thing 必須跑 svelte-check 完整 output（必要時 copy 到 /tmp）找真正的 build blocker，不要憑直覺猜。</li>
+          <li>tsc 0 errors（一直都是 0 — tsc 看不到 .svelte template）；svelte-check 在 /tmp/build-test 環境跑通過 = vite build 可成功。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.898</span> hotfix：補 +page.svelte 漏掉的 RULE_BOX_SUBTYPES import（v3.895 起 deploy 連續失敗的真正根因）</summary>
         <ul>
           <li>v3.895 / v3.896 / v3.897 GitHub Pages deploy 全部紅 X。先以為是 v3.897 修的 UI 位置問題，實際上還有第二個錯誤：v3.895 在 onAttackClick 用了 <code>RULE_BOX_SUBTYPES.has(...)</code>（runtime const）但 +page.svelte line 21 只有 <code>import type &#123; GameState, CardInstance &#125;</code>（type-only），runtime constants 沒 import → svelte-check 報「Cannot find name 'RULE_BOX_SUBTYPES'」→ vite build fail。</li>
@@ -302,7 +314,7 @@
           <li><b>實裝</b>（複用 v3.873 扮晶晶酒 pattern）：
             <ul>
               <li>UI 攔截：onAttackClick 偵測「耀閃挑戰」→ peek 自己牌庫頂 → 不符條件直接 dispatch 讓 engine 失敗 log；1 招自動帶 copyAttackChoice 直接 dispatch；<b>2+ 招開 brightChallengePicker</b> 列出該卡所有招式</li>
-              <li>玩家挑招後：dispatch ATTACK 時把 copyAttackChoice { pokeIid: deckTop.iid, attackIndex } 塞進 action</li>
+              <li>玩家挑招後：dispatch ATTACK 時把 copyAttackChoice &#123; pokeIid: deckTop.iid, attackIndex &#125; 塞進 action</li>
               <li>regPre 讀 action.copyAttackChoice — pokeIid 驗證 === deck[0].iid（防 race，理論上 attack handler 跑時 deck 未變）→ 用 choice.attackIndex；mismatch / 越界 / 無 choice（AI / 舊 state）→ fallback 自動挑印刷最高（v2.57 行為）</li>
             </ul>
           </li>
