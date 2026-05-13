@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.898</span> hotfix：補 +page.svelte 漏掉的 RULE_BOX_SUBTYPES import（v3.895 起 deploy 連續失敗的真正根因）</summary>
+        <ul>
+          <li>v3.895 / v3.896 / v3.897 GitHub Pages deploy 全部紅 X。先以為是 v3.897 修的 UI 位置問題，實際上還有第二個錯誤：v3.895 在 onAttackClick 用了 <code>RULE_BOX_SUBTYPES.has(...)</code>（runtime const）但 +page.svelte line 21 只有 <code>import type &#123; GameState, CardInstance &#125;</code>（type-only），runtime constants 沒 import → svelte-check 報「Cannot find name 'RULE_BOX_SUBTYPES'」→ vite build fail。</li>
+          <li><b>為什麼 tsc 沒抓到</b>：tsc --noEmit 不檢查 .svelte 檔案內的 script，只看 .ts。改 .svelte 必須跑 svelte-check / vite build 才能驗證 — 之前 v3.893 hasFlowerVeil 也是同類失誤，這次又重蹈覆轍。</li>
+          <li><b>為什麼 push 腳本沒補上</b>：v3.895 push_v3895.py 有 fallback import injection 邏輯，但 guard 用 <code>if 'RULE_BOX_SUBTYPES' not in page</code>。問題是該段在 replace 之後執行 — 但 replace 已注入 <code>RULE_BOX_SUBTYPES.has(...)</code> 函式呼叫，guard 變永遠 false → import 從未補上。同 v3.892 hasFlowerVeil import-guard 順序 bug。</li>
+          <li><b>修法</b>：在 +page.svelte line 21（GameState/CardInstance type import）之後加 <code>import &#123; RULE_BOX_SUBTYPES &#125; from '$lib/game/types';</code>。</li>
+          <li><b>教訓</b>（補進 SKILL.md / IRON_RULES.md）：① import-guard check 必須在 replace <b>之前</b>做（針對原始 page），不能在 replace 之後（page 已被污染）。② 改 .svelte 檔案的本地驗證不能只看 tsc — 必須 svelte-check（即使 sandbox 上 EPERM unlink 那段，後續 error 列表仍可信）。</li>
+          <li>tsc 0 errors（本來就 0 — 因為 tsc 看不到 .svelte 內的這行）；svelte-check 真實阻塞錯誤已消除。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.897</span> hotfix：修 v3.895 brightChallengePicker UI 插入位置錯誤導致 deploy 失敗</summary>
         <ul>
           <li>v3.895 / v3.896 GitHub Pages deploy 失敗（紅色 X）。根因：v3.895 push 腳本用 <code>page.find('&#123;/if&#125;', pp_start)</code> 找 personateAttackPicker UI 的結束點，但 personate UI 內部有 <code>&#123;#if atk.damage&#125;&lt;span&gt;...&lt;/span&gt;&#123;/if&#125;</code> — 這個內部 <code>&#123;/if&#125;</code> 比外層先出現 → find 抓到內部 <code>&#123;/if&#125;</code>，導致 brightChallengePicker UI 被誤插到 personate 內部的 <code>&lt;div class="copy-attack-atks"&gt;</code> 內 → Svelte template 結構斷裂 → vite build 失敗。</li>
