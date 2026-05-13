@@ -3364,6 +3364,13 @@ function handlePlaying(
         if (buf?.skipDefEffects) skipDefEffects = true;
       }
     }
+    // v3.892：attack-time snapshot — 紀錄宣告當時對手場上是否有花之帷幔（謝米）。
+    //   PTCG 規則「招式效果同時 resolve」— 即使謝米被招式 KO，攻擊宣告當時
+    //   花之帷幔有效，備戰仍應免疫此招式傷害。POST 階段 defender.active 可能 KO=null，
+    //   故需 snapshot 一個 transient flag 給 hitBenchPickPost / hitBenchAll 讀。
+    const attackTimeOppFlowerVeil = hasFlowerVeil(state, dIdx, pool);
+    workingState = { ...workingState, _attackTimeOppFlowerVeil: attackTimeOppFlowerVeil };
+
     // v3.03：preFn 可額外回傳 breakdown，把內部多步加法（如赫月瘋狂啃咬 7×30+100）
     //        展開為多個 term，UI 顯示更易懂。
     let preBreakdown: { value: number; label: string }[] | undefined;
@@ -4530,6 +4537,12 @@ function handlePlaying(
       // v2.156：把 action 也傳給 POST，讓「PRE/POST 共享 chosenIids」的 option 招式
       // （如 激流水泵）能在 POST 階段判斷玩家是否棄了能量
       newState = postFn(newState, aIdx, pool, action);
+    }
+    // v3.892：清掉 attack-time snapshot transient flag（attack flow 結束）
+    if (newState._attackTimeOppFlowerVeil !== undefined) {
+      const cleared = { ...newState };
+      delete cleared._attackTimeOppFlowerVeil;
+      newState = cleared;
     }
 
     // v2.69 瘋狂炸彈追蹤 — 招式結算後寫入攻擊方 active.attackUsedThisTurn

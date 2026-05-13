@@ -731,6 +731,18 @@ export interface GameState {
    * 在第一次 END_TURN 跑過了，不可重複觸發傷害。
    */
   endTurnSkipCheckup?: boolean;
+  /**
+   * v3.892：attack-time snapshot — 攻擊宣告時對手場上是否有花之帷幔（謝米）。
+   * 由 engine.ts ATTACK handler 在 PRE 之前 set，POST 後清掉。
+   * hitBenchPickPost / hitBenchAll 入口 check 此 flag — true 時對對手備戰整段 skip。
+   *
+   * 理由：PTCG 規則「招式效果同時 resolve」— 即使謝米被招式 KO，
+   * 攻擊宣告當時花之帷幔有效，備戰寶可夢仍應免疫此招式傷害。
+   * POST 階段 defender.active 可能已 KO=null，無法事後判定，故需 snapshot。
+   *
+   * Transient：每次 attack flow 後 clear，不持久化（連線對戰 / 存檔不需考慮）。
+   */
+  _attackTimeOppFlowerVeil?: boolean;
 }
 
 export interface LogEntry {

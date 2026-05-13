@@ -637,6 +637,11 @@ function hitBenchAll(
 ): GameState {
   const target = state.players[targetIdx];
   if (target.bench.length === 0 || amount <= 0) return state;
+  // v3.892：attack-time 對手有花之帷幔 → 對手備戰整段 skip（PTCG 規則「同時 resolve」，
+  //   即使戰鬥場謝米被 KO，攻擊宣告當時花之帷幔生效，備戰仍免疫）
+  if (attackerIdx !== targetIdx && state._attackTimeOppFlowerVeil) {
+    return addLog(state, `${attackLabel}：花之帷幔（攻擊宣告時對手場上有謝米）— 對手備戰非規則寶可夢免疫此招式傷害`, attackerIdx);
+  }
 
   let morePrizes = 0;
   const newBench: CardInstance[] = [];
@@ -722,6 +727,11 @@ export function hitBenchPickPost(
   const targetIdx = (targetSide === 'opp' ? (1 - attackerIdx) : attackerIdx) as 0 | 1;
   const target = state.players[targetIdx];
   if (target.bench.length === 0 || amount <= 0 || count <= 0) return state;
+  // v3.892：attack-time 對手有花之帷幔 → 不開 picker，整段 skip（PTCG 規則「同時 resolve」，
+  //   即使戰鬥場謝米被招式 KO，攻擊宣告當時花之帷幔生效，備戰仍免疫此招式傷害）
+  if (targetSide === 'opp' && state._attackTimeOppFlowerVeil) {
+    return addLog(state, `${attackLabel}：花之帷幔（攻擊宣告時對手場上有謝米）— 對手備戰非規則寶可夢免疫此招式傷害`, attackerIdx);
+  }
   const pickCount = Math.min(count, target.bench.length);
   const pendingType: PendingSelection['type'] = targetSide === 'opp' ? 'opp-bench-choose' : 'bench-choose';
   let s = addLog(state, `${attackLabel}：選擇 ${pickCount} 隻${targetSide === 'opp' ? '對手' : '自己'}備戰寶可夢，各造成 ${amount} 傷害`, attackerIdx);

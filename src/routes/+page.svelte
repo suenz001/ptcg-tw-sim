@@ -264,6 +264,34 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.892</span> 🛡 修花之帷幔 attack-time snapshot — spread 招式 KO 謝米後備戰仍應免疫</summary>
+        <ul>
+          <li>玩家回報 + 官方 QA（虛無歸零案例）：對手戰鬥場有花之帷幔謝米時，招式同時對 active + 備戰造成傷害的情況下，即使戰鬥場謝米被招式 KO，花之帷幔仍對備戰生效。</li>
+          <li>原文：「招式效果會對所有寶可夢同時造成傷害，因此花之帷幔效果會生效，無法對備戰非規則寶可夢造成傷害，只會在對謝米造成傷害後即結束招式處理。」</li>
+          <li><b>根因</b>：POST handler 拿到的 state 是 damage-applied + KO-resolved 後的 state。defender.active 已 null（戰鬥場謝米被 KO 了）→ <code>hasFlowerVeil</code> 看不到謝米 → 認為沒花之帷幔 → 備戰受傷。實際 PTCG 規則要用攻擊宣告當時的場上狀態判定。</li>
+          <li><b>修法</b>：用 <b>attack-time snapshot</b> 機制：
+            <ul>
+              <li><code>GameState</code> 加 transient field <code>_attackTimeOppFlowerVeil?: boolean</code></li>
+              <li>engine.ts ATTACK handler 在 PRE 之前 set: <code>state._attackTimeOppFlowerVeil = hasFlowerVeil(state, dIdx, pool)</code></li>
+              <li>engine.ts ATTACK handler 末尾（POST 後）清掉 flag</li>
+              <li><code>hitBenchPickPost</code> 入口 check：<code>targetSide === 'opp' && _attackTimeOppFlowerVeil</code> → 整段 skip + log（picker 不開）</li>
+              <li><code>hitBenchAll</code> 入口同樣 check：<code>attackerIdx !== targetIdx && _attackTimeOppFlowerVeil</code> → skip + log</li>
+            </ul>
+          </li>
+          <li><b>受惠招式</b>（所有走 hitBenchPickPost / hitBenchAll 的對手備戰類）：
+            <ul>
+              <li>精神尖槍（代歐奇希斯）— 對手備戰 1 隻 120</li>
+              <li>激流水泵（厄鬼椪 水井面具ex）— 對手備戰 1 隻 120</li>
+              <li>地震 / 燃燒熱浪 / 雙生鐳射 / 突圍 / 冰霜子彈 等 spread 類</li>
+              <li>惡劣光束 / 雙向頭擊 / 火人加農炮 / 冰之射擊 / 剎那斬 / 暗影子彈 / 業火連踢 / 貫通鑽 / 電氣子彈 / 穿通 / 噴射打擊 / 羽毛強襲 / 飛馳 / 火焰聖靈 / 三重冰霜 等所有走 helper 的「對戰鬥+備戰同時傷害」招式</li>
+            </ul>
+          </li>
+          <li><b>不影響</b>：純戰鬥場攻擊（戰鬥場套花之帷幔 active-self gate 不適用、active 直接受傷）；對手戰鬥場無謝米時無變化。</li>
+          <li>tsc 0 errors。鐵律檢查：Rule 1（無 svelte 特殊字元）/ Rule 11（Python pipeline + safe_write）/ Rule 4（tsc 驗證）/ Rule 7c（已查官方 QA 卡面原文）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.891</span> 🎯 log 卡名點擊精準追溯：LogEntry 加 sourceIid 直接綁定產生 log 的 actor inst</summary>
         <ul>
           <li>玩家擔心 v3.890 對「場上同時有兩隻不同版本同名卡」case 仍可能誤抓。</li>
