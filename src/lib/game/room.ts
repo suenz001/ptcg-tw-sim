@@ -71,23 +71,14 @@ export interface RoomData {
    */
   heartbeats?: { [seatIdx: number]: unknown };
   /**
-   * v3.95 再來一局請求：對戰結束後 A 端點「再來一局」會寫入此欄位，B 端 onSnapshot
-   * 收到後彈出接受/拒絕 modal。
-   *   - fromSeatIdx: 發起者座位 idx (0 = P1, 1 = P2)
-   *   - fromName: 發起者顯示名（避免 B 端還要去 seats 查）
-   *   - requestedAt: serverTimestamp，可用於超時失效（client 端判定）
-   * 流程：
-   *   1. A: writeDoc rematchRequest = { fromSeatIdx, fromName, requestedAt }
-   *   2. B 接受: acceptRematch → 清 gameState、status='lobby'、ready=false（保留 deckEntries）、清 rematchRequest
-   *   3. B 拒絕: rejectRematch → 只清 rematchRequest（A 端依此判定「被拒絕」）
-   *   4. A 取消: cancelRematch → 同上，只清 rematchRequest
-   * Firestore field 用 deleteField() 真正移除（避免 undefined 寫入錯）
+   * v3.96 再來一局對稱設計：對戰結束後雙方各自獨立點按鈕，都點了自動重置房間。
+   *   - rematchReady[0]: P1 是否已按下「再來一局」
+   *   - rematchReady[1]: P2 是否已按下「再來一局」
+   * 任一方 client 在 handleRoomUpdate 偵測到雙方都 true → 觸發 checkAndAcceptRematch
+   *   （firestore transaction 確保只執行一次）→ 重置房間到 lobby 狀態。
+   * （v3.95 的 rematchRequest 已廢棄改用此 schema — v3.96 取代）
    */
-  rematchRequest?: {
-    fromSeatIdx: 0 | 1;
-    fromName: string;
-    requestedAt: unknown;
-  } | null;
+  rematchReady?: { [seatIdx: number]: boolean };
 }
 
 export interface Room extends RoomData {
@@ -387,12 +378,12 @@ export async function leaveRoom(roomCode: string): Promise<void> {
  * 若回傳 false 代表 transaction abort（通常是對方已先寫入 gameState），
  * 呼叫端不必再做事，onSnapshot 會帶來最終狀態。
  */
-// ── v3.95 再來一局 ──────────────────────────────────────────────────────
+// ── v3.96 再來一局（對稱設計） ──────────────────────────────────────────
 /**
- * v3.95 發起再來一局請求：A 端在 game-over screen 點按鈕後呼叫。
- * 寫入 room.rematchRequest 讓 B 端 onSnapshot 顯示接受/拒絕 modal。
+ * v3.96 設定我自己的再來一局 ready 狀態。
+ *   雙方各自獨立 toggle；雙方都 true 時 client 端會偵測並 trigger checkAndAcceptRematch。
  */
-export async function requestRematch(roomCode: string): Promise<void> {
+export async function setRematchReady(roomCode: string, ready: boolean): Promise<void> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('尚未登入');
 
@@ -401,66 +392,48 @@ export async function requestRematch(roomCode: string): Promise<void> {
   if (!snap.exists()) throw new Error('房間不存在');
   const data = snap.data() as RoomData;
   const myIdx = findMySeatIdx(data.seats, uid);
-  if (myIdx < 0 || myIdx > 1) throw new Error('只有 P1/P2 可發起再來一局');
-  const seat = data.seats[myIdx];
-  const fromName = seat.name ?? '玩家';
+  if (myIdx < 0 || myIdx > 1) throw new Error('只有 P1/P2 可使用再來一局');
 
+  const cur = data.rematchReady ?? {};
+  const newReady = { ...cur, [myIdx]: ready };
   await updateDoc(ref, {
-    rematchRequest: {
-      fromSeatIdx: myIdx as 0 | 1,
-      fromName,
-      requestedAt: serverTimestamp(),
-    },
-    updatedAt: serverTimestamp(),
-  });
-}
-
-/** v3.95 取消自己發起的再來一局（A 端反悔 / 超時）。 */
-export async function cancelRematch(roomCode: string): Promise<void> {
-  const ref = doc(db, 'rooms', roomCode.toUpperCase());
-  await updateDoc(ref, {
-    rematchRequest: deleteField(),
-    updatedAt: serverTimestamp(),
-  });
-}
-
-/** v3.95 拒絕對方發起的再來一局（B 端不想再玩）。 */
-export async function rejectRematch(roomCode: string): Promise<void> {
-  const ref = doc(db, 'rooms', roomCode.toUpperCase());
-  await updateDoc(ref, {
-    rematchRequest: deleteField(),
+    rematchReady: newReady,
     updatedAt: serverTimestamp(),
   });
 }
 
 /**
- * v3.95 接受對方發起的再來一局：
- *   - 清 gameState（清掉上局完整遊戲狀態）
- *   - status: 'ended' / 'playing' → 'lobby'
- *   - seats[*].ready = false（雙方需重按 ready 才會 startGame）
- *   - 保留 seats[*].deckEntries（玩家不需重選牌組）
- *   - 保留 seats[*].firstChoicePreference（玩家可保持上局選的偏好）
- *   - 清 rematchRequest
- *
- * 接受後雙方 client 在 handleRoomUpdate 內偵測 status 從 'playing'/'ended' → 'lobby'
- * 即會自動 reset onlineStep='room' 並清 local game。
+ * v3.96 檢查雙方是否都 ready，若是則重置房間到 lobby。
+ *   - 用 firestore transaction 確保只執行一次（任一方 client 看到雙方 ready 後都會 trigger，
+ *     transaction 內讀-比-寫的原子性保證後到的 transaction 看到 rematchReady 已清空就 abort）
+ *   - 重置內容：清 gameState、status='lobby'、ready=false、保留 deckEntries、清 rematchReady
  */
-export async function acceptRematch(roomCode: string): Promise<void> {
+export async function checkAndAcceptRematch(roomCode: string): Promise<boolean> {
   const ref = doc(db, 'rooms', roomCode.toUpperCase());
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error('房間不存在');
-  const data = snap.data() as RoomData;
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return false;
+      const data = snap.data() as RoomData;
+      const ready = data.rematchReady ?? {};
+      // 雙方都 true 才執行 — 確保只有一邊 transaction 真正執行 reset
+      if (!ready[0] || !ready[1]) return false;
 
-  const newSeats = data.seats.map(s => ({ ...s, ready: false }));
-
-  await updateDoc(ref, {
-    gameState: null,
-    status: 'lobby',
-    seats: newSeats,
-    memberUids: computeMemberUids(newSeats),
-    rematchRequest: deleteField(),
-    updatedAt: serverTimestamp(),
-  });
+      const newSeats = data.seats.map(s => ({ ...s, ready: false }));
+      tx.update(ref, {
+        gameState: null,
+        status: 'lobby',
+        seats: newSeats,
+        memberUids: computeMemberUids(newSeats),
+        rematchReady: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+      return true;
+    });
+  } catch (err) {
+    console.error('[checkAndAcceptRematch] transaction failed:', err);
+    return false;
+  }
 }
 
 export async function startGame(

@@ -28,7 +28,7 @@
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom,
-    requestRematch, cancelRematch, acceptRematch, rejectRematch,
+    setRematchReady, checkAndAcceptRematch,
     findMySeatIdx, bothPlayersReady, countDeckCards,
     sendMessage, subscribeMessages,
     heartbeat, isSeatStale, HEARTBEAT_STALE_MS, deleteRoom,
@@ -88,13 +88,20 @@
   /** 'choose' → 選建立/加入；'create' → 填資料建房間；'join' → 輸入房號；'room' → 房間等待中 */
   let onlineStep  = $state<'choose' | 'create' | 'join' | 'room'>('choose');
 
-  // v3.95 再來一局 UI state（連線模式 game-over 後使用）
-  //   'idle': 預設（顯示「再來一局」按鈕）
-  //   'waiting': 我發起，等對手回應（顯示等待 UI + 取消按鈕）
-  //   'incoming': 對手發起，等我回應（顯示接受/拒絕 modal）
-  //   'rejected': 對手拒絕了我的請求（短暫顯示，3 秒後復原 idle）
-  let rematchUiState = $state<'idle' | 'waiting' | 'incoming' | 'rejected'>('idle');
-  let rematchFromName = $state<string>('');  // incoming 時顯示「OOO 要求再來一局」
+  // v3.96 再來一局（對稱設計）— 雙方各自獨立按按鈕，從 roomData 取得雙方 ready 狀態
+  //   myRematchReady: 我端已按下「再來一局」
+  //   oppRematchReady: 對手已按下「再來一局」
+  //   雙方都 true → 任一方 client 自動 trigger checkAndAcceptRematch
+  const myRematchReady = $derived(
+    roomData && mySeatIdx >= 0 && mySeatIdx <= 1
+      ? !!(roomData.rematchReady?.[mySeatIdx])
+      : false
+  );
+  const oppRematchReady = $derived(
+    roomData && mySeatIdx >= 0 && mySeatIdx <= 1
+      ? !!(roomData.rematchReady?.[1 - mySeatIdx])
+      : false
+  );
   let roomCode    = $state('');          // 建立或加入後得到的房號
   let joinInput   = $state('');          // 輸入框裡打的房號
   let amIHost     = $state(false);       // 是否為房主（用來顯示「關房」等按鈕）
@@ -2510,19 +2517,6 @@
   }
   function cancelBrightChallenge() { brightChallengePicker = null; }
 
-  // v3.951 進入 game-over phase 時主動 reset rematchUiState 為 idle
-  //   （除非 firestore room 已有 rematchRequest — handleRoomUpdate 會立即修正為 'incoming'）
-  let _prevGamePhase = '';
-  $effect(() => {
-    const curPhase = game?.phase ?? '';
-    if (curPhase === 'game-over' && _prevGamePhase !== 'game-over') {
-      // 剛進入 game-over：reset（避免殘留前次 'waiting' / 'rejected'）
-      // 若 room.rematchRequest 存在且非自己發起 → handleRoomUpdate 會把 state 設回 'incoming'
-      rematchUiState = 'idle';
-    }
-    _prevGamePhase = curPhase;
-  });
-
   // v3.900 回合切換 banner：每次 game.activePlayerIndex 變化時，全螢幕中央彈 1.5s 大字
   //   - text='你的回合' if new active === myIdx else '對手回合'
   //   - 本機 2P 下 myIdx 跟著 activePlayerIndex 切 → 永遠「你的回合」（從新操作者視角，直覺正確）
@@ -2813,42 +2807,17 @@
     mySeatIdx = idx;
     myPlayerIndex = (idx === 0) ? 0 : (idx === 1) ? 1 : null;
 
-    // v3.95 處理 rematchRequest 變化（連線模式 game-over 後）
-    const rr = room.rematchRequest;
-    if (rr) {
-      if (rr.fromSeatIdx === mySeatIdx) {
-        // 我自己發起的（waiting 中，已是 waiting state）— 不動 state
-      } else if (mySeatIdx === 0 || mySeatIdx === 1) {
-        // 對手發起 → 我端顯示接受/拒絕 modal
-        rematchUiState = 'incoming';
-        rematchFromName = rr.fromName ?? '對手';
-      }
-    } else {
-      // rematchRequest 被清掉 — 兩種情況：
-      //   1. 對手接受了我的（room.status='lobby' + game=null）→ 雙方自動跳回 setup
-      //   2. 對手拒絕了我的（room.status 仍 'playing'/'ended'）→ 顯示「被拒絕」訊息
-      //   3. 我自己取消（rematchUiState 已被本地手動設回 idle，不會走這分支）
-      if (rematchUiState === 'waiting') {
-        // 從 waiting 變沒 rematchRequest → 判斷是接受 (room reset 回 lobby) 還是拒絕
-        if (room.status === 'lobby' && !room.gameState) {
-          // 接受 — 雙方都跳回 setup（下面 lobby 分支會處理）
-          rematchUiState = 'idle';
-        } else {
-          // 拒絕 — 顯示「被拒絕」3 秒
-          rematchUiState = 'rejected';
-          setTimeout(() => { if (rematchUiState === 'rejected') rematchUiState = 'idle'; }, 3000);
-        }
-      } else if (rematchUiState === 'incoming') {
-        // 對手取消了 incoming 請求（B 端還沒按之前 A 取消）
-        rematchUiState = 'idle';
-      }
+    // v3.96 再來一局（對稱）：雙方都 ready → 任一方 trigger checkAndAcceptRematch
+    //   transaction 內讀-比-寫保證只執行一次，後到的 transaction 看到 rematchReady 已清就 abort
+    const rr = room.rematchReady ?? {};
+    if (rr[0] && rr[1] && roomCode) {
+      checkAndAcceptRematch(roomCode).catch((e: unknown) => console.warn('[checkAndAcceptRematch] failed:', e));
     }
 
-    // v3.95 房間 status 從 'playing'/'ended' → 'lobby' + game=null：接受 rematch 後的雙方同步點
+    // v3.96 房間 status 從 'playing'/'ended' → 'lobby' + game=null：雙方都 ready 後 reset 的同步點
     if (room.status === 'lobby' && !room.gameState && game) {
       // 清 local game 跳回 setup（onlineStep 保持 'room'，UI 顯示 lobby/setup 畫面）
       game = null;
-      rematchUiState = 'idle';
     }
 
     // v3.34 Fix #4：playing 期間防舊 snapshot 倒退本地。
@@ -2974,38 +2943,16 @@
     catch (e: any) { onlineError = e.message ?? '切換準備狀態失敗'; }
   }
 
-  // v3.95 再來一局 handlers
-  async function clickRematchRequest() {
+  // v3.96 再來一局：toggle 自己的 ready 狀態（雙方對稱設計）
+  async function toggleMyRematchReady() {
     if (!roomCode) return;
-    rematchUiState = 'waiting';
+    const next = !myRematchReady;
     try {
-      await requestRematch(roomCode);
+      await setRematchReady(roomCode, next);
+      // 雙方都 ready 時 handleRoomUpdate 會自動 trigger checkAndAcceptRematch
     } catch (e) {
-      console.warn('[requestRematch] failed:', e);
-      rematchUiState = 'idle';
+      console.warn('[setRematchReady] failed:', e);
     }
-  }
-  async function clickRematchCancel() {
-    if (!roomCode) return;
-    rematchUiState = 'idle';
-    try { await cancelRematch(roomCode); }
-    catch (e) { console.warn('[cancelRematch] failed:', e); }
-  }
-  async function clickRematchAccept() {
-    if (!roomCode) return;
-    try {
-      await acceptRematch(roomCode);
-      // onSnapshot 收到 status='lobby' + game=null 後 handleRoomUpdate 會自動清 local game
-      rematchUiState = 'idle';
-    } catch (e) {
-      console.warn('[acceptRematch] failed:', e);
-    }
-  }
-  async function clickRematchReject() {
-    if (!roomCode) return;
-    rematchUiState = 'idle';
-    try { await rejectRematch(roomCode); }
-    catch (e) { console.warn('[rejectRematch] failed:', e); }
   }
 
   async function leaveOnlineGame() {
@@ -3828,29 +3775,30 @@
           🧾 匯出 log（.json）
         </button>
       </div>
-      <!-- v3.951 連線模式判斷：mode === 'online' 或 roomCode 任一 truthy（防 mode race 變 null）-->
+      <!-- v3.96 連線模式：雙方各自 toggle「再來一局」（對稱設計），都按下後自動進房間 -->
       {#if mode === 'online' || roomCode}
-        <!-- v3.951：incoming state 也顯示按鈕（同 idle）— 玩家不會看到空白 game-over 畫面。
-             incoming modal 仍會疊在 game-over screen 之上由玩家選擇接受/拒絕。 -->
-        {#if rematchUiState === 'idle' || rematchUiState === 'incoming'}
-          <div class="lobby-btns" in:fade={{ duration: 400, delay: 900 }}>
-            <button class="btn-primary" onclick={clickRematchRequest} disabled={rematchUiState === 'incoming'} title={rematchUiState === 'incoming' ? '請先回應對手的再來一局請求' : '邀請對手再來一局（雙方同意才會重置房間）'}>
+        <div class="lobby-btns" in:fade={{ duration: 400, delay: 900 }}>
+          <button
+            class="btn-primary"
+            class:rematch-ready={myRematchReady}
+            onclick={toggleMyRematchReady}
+            title={myRematchReady ? '點擊取消，回到「再來一局」狀態' : '點擊後等對手也按，雙方都按就重置房間'}
+          >
+            {#if myRematchReady}
+              ✓ 已準備（取消）
+            {:else}
               🔁 再來一局
-            </button>
-            <button class="btn-secondary" onclick={() => { game = null; leaveOnlineGame(); }}>離開房間</button>
-          </div>
-        {:else if rematchUiState === 'waiting'}
-          <div class="lobby-btns rematch-waiting" in:fade={{ duration: 200 }}>
-            <p class="muted">⏳ 等待對手回應再來一局...</p>
-            <button class="btn-secondary" onclick={clickRematchCancel}>取消</button>
-            <button class="btn-secondary" onclick={() => { game = null; leaveOnlineGame(); }}>離開房間</button>
-          </div>
-        {:else if rematchUiState === 'rejected'}
-          <div class="lobby-btns rematch-rejected" in:fade={{ duration: 200 }}>
-            <p class="muted">😢 對方拒絕了再來一局的請求</p>
-            <button class="btn-primary" onclick={clickRematchRequest}>🔁 再次嘗試</button>
-            <button class="btn-secondary" onclick={() => { game = null; leaveOnlineGame(); }}>離開房間</button>
-          </div>
+            {/if}
+          </button>
+          <button class="btn-secondary" onclick={() => { game = null; leaveOnlineGame(); }}>離開房間</button>
+        </div>
+        <!-- 對手狀態 hint -->
+        {#if oppRematchReady && !myRematchReady}
+          <p class="muted rematch-hint" in:fade={{ duration: 200 }}>💡 對手已準備再來一局，點選按鈕雙方都準備好就直接重啟對戰！</p>
+        {:else if myRematchReady && !oppRematchReady}
+          <p class="muted rematch-hint" in:fade={{ duration: 200 }}>⏳ 等待對手也按下「再來一局」...</p>
+        {:else if myRematchReady && oppRematchReady}
+          <p class="muted rematch-hint" in:fade={{ duration: 200 }}>🎉 雙方都已準備，房間即將重置...</p>
         {/if}
         <a href="{base}/" class="back-home-link" in:fade={{ duration: 400, delay: 1000 }}>回首頁</a>
       {:else}
@@ -3861,21 +3809,6 @@
       {/if}
     </div>
   </main>
-
-  <!-- v3.95 incoming rematch request modal（對手發起，等我回應） -->
-  {#if rematchUiState === 'incoming' && (mode === 'online' || roomCode)}
-    <div class="pv-overlay" in:fade={{ duration: 200 }}>
-      <div class="pv-inner rematch-modal">
-        <h3 class="modal-title">🔁 對手要求再來一局</h3>
-        <p class="rematch-desc"><strong>{rematchFromName}</strong> 想要再對戰一局，要接受嗎？</p>
-        <p class="muted rematch-hint">接受後雙方回到牌組選擇畫面，可保留上局牌組或重新選擇。</p>
-        <div class="lobby-btns">
-          <button class="btn-primary" onclick={clickRematchAccept}>✓ 接受</button>
-          <button class="btn-secondary" onclick={clickRematchReject}>✗ 拒絕</button>
-        </div>
-      </div>
-    </div>
-  {/if}
 
 <!-- ══════════════════════════════════════════════════════════════════════
      正式對戰（Play Mat 佈局） — setup 和 playing 共用此畫面
@@ -6053,13 +5986,10 @@
   .export-btns{ margin-top:1rem; }
   .export-btns .btn-secondary{ font-size:.9rem; padding:.5rem .9rem; }
   .winner-text{ font-size:1.4rem; font-weight:700; color:#ffdd55; }
-  /* v3.95 再來一局 UI 樣式 */
-  .rematch-waiting p, .rematch-rejected p { font-size:1rem; margin:0 0 .8rem 0; }
-  .rematch-modal { max-width:480px; padding:1.5rem 1.8rem; text-align:center; background:#1a2030; border:2px solid #4a6a8a; border-radius:10px; }
-  .rematch-modal .modal-title { font-size:1.4rem; margin:0 0 1rem 0; color:#ffdd55; }
-  .rematch-modal .rematch-desc { font-size:1.05rem; margin:0 0 .5rem 0; color:#eee; }
-  .rematch-modal .rematch-hint { font-size:.85rem; margin:0 0 1.2rem 0; }
-  .rematch-modal .lobby-btns { display:flex; gap:.8rem; justify-content:center; }
+  /* v3.96 再來一局（對稱設計）UI 樣式 */
+  .btn-primary.rematch-ready { background:#2a8a3a; border-color:#3aaa4a; }
+  .btn-primary.rematch-ready:hover { background:#3a9a4a; }
+  .rematch-hint { font-size:.95rem; margin-top:.8rem; text-align:center; color:#aacccc; }
   .back-home-link { display:inline-block; margin-top:.6rem; color:#88aacc; font-size:.85rem; text-decoration:underline; }
   .back-home-link:hover { color:#bbccdd; }
 

@@ -264,6 +264,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.96</span> 🔁 再來一局改為對稱設計（雙方各自點，都點了自動進房間）</summary>
+        <ul>
+          <li>玩家更新需求：v3.95 / v3.951 的「A 發起 / B 接受/拒絕」太複雜，改為<b>雙方各自獨立點按鈕</b>，都點了直接進入對戰房間（類似多數遊戲的 rematch UX）。</li>
+          <li><b>新流程</b>：
+            <ul>
+              <li>game-over screen 雙方都看到「🔁 再來一局」按鈕 + 「離開房間」</li>
+              <li>A 按下 → 按鈕變綠色「✓ 已準備（取消）」+ hint「⏳ 等待對手也按下...」</li>
+              <li>B 端看到 hint「💡 對手已準備再來一局，按按鈕雙方都準備好就直接重啟」</li>
+              <li>B 也按下 → 雙方都 ready → 任一方 client 自動 trigger reset → 雙方跳回 setup（room）階段</li>
+              <li>任一方取消（再按一次）→ 自己 ready 變 false</li>
+            </ul>
+          </li>
+          <li><b>Schema 改</b>：<code>room.rematchRequest</code> 廢棄 → <code>room.rematchReady: &#123; 0?, 1? &#125;</code>（per-seat boolean）</li>
+          <li><b>新 functions</b>：<code>setRematchReady(roomCode, ready)</code> + <code>checkAndAcceptRematch(roomCode)</code>（firestore transaction 確保 reset 只執行一次）</li>
+          <li><b>移除</b>：v3.95 的 4 個 functions（<code>requestRematch / cancelRematch / acceptRematch / rejectRematch</code>） + incoming modal + 'waiting'/'incoming'/'rejected' UI 狀態。</li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.951</span> hotfix：修 v3.95 game-over 只有一方看到「再來一局」按鈕</summary>
         <ul>
           <li>玩家回報：v3.95 連線對戰結束後，只有勝利方/加入房間者看到「再來一局」按鈕，敗方/開房者沒看到。</li>
