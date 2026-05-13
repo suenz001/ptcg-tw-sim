@@ -6472,11 +6472,11 @@ regPre('振翼髮|飛來橫禍', (state, _aIdx, _pool) => ({ state, damage: 90 }
 regPost('振翼髮|飛來橫禍', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) return state;
-  let s = addLog(state, '飛來橫禍：將 2 個傷害指示物自由分配到對手備戰寶可夢', aIdx);
+  let s = addLog(state, '飛來橫禍：將 2 個傷害指示物自由分配到對手備戰寶可夢（必須全部放完）', aIdx);
   return withPending(s, {
     type: 'damage-distribute',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 2,
+    minCount: 2, maxCount: 2,  // v3.911：必須全部放完（「以任意方式放置 N 個」官方規則）
     effectKey: 'dragapult-snipe',
     params: {
       totalCounters: 2, placedCounters: 0, counterDamage: 10,
@@ -6498,11 +6498,11 @@ regPre('多龍巴魯托ex|幻影奇襲', (state, _aIdx, _pool) => ({ state, dama
 regPost('多龍巴魯托ex|幻影奇襲', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) return state;
-  const s = addLog(state, '幻影奇襲：將 6 個傷害指示物自由分配到對手備戰寶可夢（可一次多選）', aIdx);
+  const s = addLog(state, '幻影奇襲：將 6 個傷害指示物自由分配到對手備戰寶可夢（必須全部放完，KO 後溢出指示物消耗）', aIdx);
   return withPending(s, {
     type: 'damage-distribute',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 6,
+    minCount: 6, maxCount: 6,  // v3.911：必須全部放完（玩家補充規則：對手備戰有寶可夢時必須放完 6 顆）
     effectKey: 'dragapult-snipe',
     params: {
       totalCounters: 6,
@@ -6627,12 +6627,16 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
   }
 
   // 還有 counter 要放 + 對手仍有備戰 → 再開 pending
+  // v3.911：minCount = nextRemaining（必須全部放完，同 v3.911 規則修正）。
+  //   實務上 v3.91 KO 溢出計入 placedThisBatch 後，這個分支幾乎不會觸發 —
+  //   玩家在第一個 picker 就必須放滿 maxCount，且溢出已被消耗，nextRemaining 通常為 0。
+  //   但保險起見仍把 minCount 改成跟 maxCount 相同，避免任何邊界 case 玩家少放。
   const nextRemaining = totalCounters - placedAfter;
   if (nextRemaining > 0 && s.players[dIdx].bench.length > 0) {
     return withPending(s, {
       type: 'damage-distribute',
       actorIdx, sourcePlayerIdx: dIdx,
-      minCount: 1, maxCount: nextRemaining,
+      minCount: nextRemaining, maxCount: nextRemaining,
       effectKey: 'dragapult-snipe',
       params: {
         totalCounters,

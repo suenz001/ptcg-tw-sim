@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.911</span> 幻影奇襲類「以任意方式放置 N 個指示物」必須全部放完</summary>
+        <ul>
+          <li>玩家補充規則：幻影奇襲只要對手備戰區有寶可夢，必須把 6 顆 counter 全放完（不能不放、不能只放 3 顆）。同類措辭「以任意方式放置 N 個傷害指示物」的招式都套用此規則。</li>
+          <li><b>修法</b>：把 damage-distribute pending 的 <code>minCount</code> 從 1 改成跟 <code>maxCount</code> 相同 → selectionValid 強制 batchSum === maxCount 才能 confirm，confirm 按鈕不到 N 個會 disabled。</li>
+          <li><b>受影響招式</b>：
+            <ul>
+              <li>多龍巴魯托ex｜幻影奇襲（6 個自由分配對手備戰）— 修為必放滿 6 個</li>
+              <li>振翼髮｜飛來橫禍（2 個自由分配對手備戰）— 修為必放滿 2 個</li>
+              <li>幻影奇襲 next picker re-spawn — 同步修為必放滿 nextRemaining 個（實務上 v3.91 KO 溢出計入後幾乎不觸發）</li>
+              <li>來悲粗茶｜詛咒水滴（4 個分配對手任意寶可夢）— 已是 minCount=4, maxCount=4（既有版本正確）</li>
+            </ul>
+          </li>
+          <li><b>暫不動</b>：奧利瓦ex｜油之機關槍（卡面措辭「為其選擇次數×20 傷害」與「N 個指示物以任意方式」不同，玩家可能 0~6 次選擇，先保留 minCount=1）。若該卡規則同樣強制放完，再另開 hotfix。</li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.91</span> 幻影奇襲允許溢傷 + 回合切換音效</summary>
         <ul>
           <li><b>幻影奇襲溢傷規則修正</b>：玩家規則更正 — 30HP 含羞包上面可以放 6 顆傷害指示物（PTCG 規則允許溢傷）。卡面：「將 6 個傷害指示物以任意方式放置於對手的備戰寶可夢身上」沒禁止溢放。</li>
