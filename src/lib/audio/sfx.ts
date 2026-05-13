@@ -31,6 +31,7 @@ import type { EnergyType } from '$lib/cards/types';
 export type SfxName =
   | 'coin' | 'deal' | 'draw' | 'shuffle' | 'click' | 'ko'
   | 'poison' | 'burn' | 'sleep' | 'confuse'
+  | 'turn-start'  // v3.91：回合切換音效（清亮上行三音）
   | `attack-${EnergyType}`;
 
 // ─── AudioContext（單例、lazy-init）────────────────────────────────────────
@@ -106,6 +107,8 @@ export function playSfx(name: SfxName, opts?: { volume?: number }): void {
       playSleep(c, gain, now);
     } else if (name === 'confuse') {
       playConfuse(c, gain, now);
+    } else if (name === 'turn-start') {
+      playTurnStart(c, gain, now);
     } else if (name.startsWith('attack-')) {
       const etype = name.slice(7) as EnergyType;
       playAttack(c, gain, now, etype);
@@ -386,3 +389,13 @@ function playAttack(c: AudioContext, out: GainNode, t: number, etype: EnergyType
     src.start(t); src.stop(t + pat.durationSec + 0.05);
   }
 }
+
+// ─ Turn-start (v3.91)：回合切換音效 — 清亮上行三音 C5→E5→G5 ──────────────
+// 設計：3 個 sine wave 短音，每個 0.08s，間隔 0.06s。
+// 音調 C5 (523Hz) → E5 (659Hz) → G5 (784Hz) — 大三和弦琶音，給人「換人/新回合」儀式感。
+function playTurnStart(c: AudioContext, out: GainNode, t: number): void {
+  beep(c, out, t,         523.25, 0.10, 'sine', 0.22); // C5
+  beep(c, out, t + 0.07,  659.25, 0.10, 'sine', 0.22); // E5
+  beep(c, out, t + 0.14,  783.99, 0.14, 'sine', 0.25); // G5
+}
+

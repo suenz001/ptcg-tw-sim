@@ -6539,10 +6539,21 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
   // 依序施加，每放 1 個 counter 即檢查 KO（因為 KO 後不能再放到已離場的寶可夢）
   // v2.89：每個 target 都要單獨檢查招式效果免疫（薄霧/硬岩/皇帝之勢/抵抗之幕）
   const blockedTargets = new Set<string>();
+  // v3.91：追蹤每隻 target 的溢出 counter 數（已 KO 後玩家本批次仍宣告要放的 counter）
+  //   PTCG 規則：「以任意方式放置」允許溢傷（30HP 含羞包可放 6 個），
+  //   KO 後剩餘 counter 不能挪到其他寶可夢 → 計入 placedThisBatch 視為消耗。
+  const overflowByIid = new Map<string, number>();
   for (const iid of selectedIids) {
     const defender = s.players[dIdx];
     const target = defender.bench.find(c => c.iid === iid);
-    if (!target) continue; // 若該寶可夢已被此批次稍早的 counter 擊倒，後續 counter 作廢
+    if (!target) {
+      // v3.91：target 已被本批次稍早的 counter 擊倒 → 後續對它的 counter 視為「溢出消耗」
+      //   原本 continue 不計 placedThisBatch → 會 spawn next picker 強迫挪走，違反規則。
+      //   現在 placedThisBatch++ 計入消耗，不 spawn next picker。
+      placedThisBatch++;
+      overflowByIid.set(iid, (overflowByIid.get(iid) ?? 0) + 1);
+      continue;
+    }
 
     const targetCard = pool.get(target.cardId);
 
@@ -6604,6 +6615,15 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
   if (summaryParts.length > 0) {
     s = addLog(s,
       `${label}：本批次放置 ${summaryParts.join('、')} → 累計 ${placedAfter}/${totalCounters}`, actorIdx);
+  }
+  // v3.91：溢出 counter log（KO 後剩餘指示物消耗訊息）
+  if (overflowByIid.size > 0) {
+    const overflowParts: string[] = [];
+    for (const [_iid, cnt] of overflowByIid) {
+      overflowParts.push(`${cnt} 個`);
+    }
+    s = addLog(s,
+      `${label}：溢出 ${overflowParts.join('、')} 指示物（KO 後消耗，不挪到其他寶可夢）`, actorIdx);
   }
 
   // 還有 counter 要放 + 對手仍有備戰 → 再開 pending

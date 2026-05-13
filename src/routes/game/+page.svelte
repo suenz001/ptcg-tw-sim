@@ -2517,6 +2517,8 @@
       const text = isMine ? '你的回合' : '對手回合';
       const ts = Date.now();
       turnBanner = { text, timestamp: ts };
+      // v3.91：播放回合切換音效（清亮上行三音 C5→E5→G5）
+      playSfx('turn-start');
       setTimeout(() => {
         // 1.5s 後若仍是同一次顯示 → 清掉（避免 race：若中途又切回合，新 banner 蓋掉舊的）
         if (turnBanner?.timestamp === ts) turnBanner = null;

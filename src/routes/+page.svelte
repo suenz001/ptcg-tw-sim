@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.91</span> 幻影奇襲允許溢傷 + 回合切換音效</summary>
+        <ul>
+          <li><b>幻影奇襲溢傷規則修正</b>：玩家規則更正 — 30HP 含羞包上面可以放 6 顆傷害指示物（PTCG 規則允許溢傷）。卡面：「將 6 個傷害指示物以任意方式放置於對手的備戰寶可夢身上」沒禁止溢放。</li>
+          <li><b>原 bug</b>：玩家選 6 個全放含羞包後，resolver 內 target 被本批次第 3 個 counter KO 後，後續 counter 因 <code>if (!target) continue;</code> 跳過不計入 placedThisBatch → spawn next picker 強迫玩家把剩 3 個 counter 放到其他備戰 → 違反「KO 後剩餘 counter 不能挪走」的官方規則。</li>
+          <li><b>修法</b>：dragapult-snipe resolver 內把 <code>continue</code> 改為 <code>&#123; placedThisBatch++; overflowByIid.set(iid, ...); continue; &#125;</code>，溢出 counter 視為消耗、不 spawn next picker，並加 log「溢出 N 個指示物（KO 後消耗）」。</li>
+          <li><b>回合切換音效</b>（v3.900 banner 加聲音）：sfx.ts 加 <code>'turn-start'</code> 音效 — 清亮上行三音 C5→E5→G5 大三和弦琶音，每音 sine 0.10s，間隔 0.07s，總 0.24s。+page.svelte turnBanner $effect 內 <code>playSfx('turn-start')</code> 同步播放。</li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.900</span> 回合切換時中央彈出「你的回合 / 對手回合」大字 banner</summary>
         <ul>
           <li>玩家建議：對戰中一方回合結束時彈出明顯文字提示，學其他 PTCG 網站「換人」全螢幕大字 UX。</li>
