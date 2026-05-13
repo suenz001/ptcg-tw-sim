@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.93</span> 能量圖示放大 + 撤退按鈕配色與位置雙重改善（UI 可讀性）</summary>
+        <ul>
+          <li>玩家反映 1：網頁版能量圖示太小不易辨識。<b>修法</b>：全域放大 <code>.nrg-pip</code>：
+            <ul>
+              <li>備戰 / 手牌 / 一般顯示：14×14 → <b>18×18 px</b>，字級 .58 → .72rem</li>
+              <li>戰鬥場（更需要清晰）：18×16 → <b>24×22 px</b>，字級 .66 → .86rem，padding/圓角同步調整</li>
+              <li>加深 box-shadow 內外陰影提升立體感</li>
+            </ul>
+          </li>
+          <li>玩家反映 2：不同解析度下找不到撤退按鈕。<b>雙重改善</b>：
+            <ul>
+              <li>原位置（「我的出場」標籤旁）<code>.btn-retreat</code>：字級 .62 → <b>.78rem</b>、加 padding、配色從深藍灰 (#3a3a6a) 改為<b>橘黃 (#d97a2a)</b> 顯眼，加 hover translateY 微互動回饋</li>
+              <li>新增「mirror 撤退按鈕」在 action-bar 內（與「⏭ 結束回合」並列）— 玩家視線常駐區、永遠看得到。同樣的 gate（自己回合 + main phase + active 在場 + 備戰 ≥ 1 + canRetreat），點擊行為等同原按鈕（開放浮動撤退選單）</li>
+            </ul>
+          </li>
+          <li><b>不影響</b>：手機 portrait（MobilePortraitBattle.svelte 不用 <code>.nrg-pip</code> 樣式）、tablet-layout（按鈕配色變化不影響 layout grid）。</li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.92</span> 帳號功能：更改密碼 + 忘記密碼（Email 寄送重設信）</summary>
         <ul>
           <li>玩家需求：忘記密碼時可以用 Email 收信重設、已登入時可以更改密碼。</li>

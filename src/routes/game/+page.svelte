@@ -4104,6 +4104,12 @@
               🏟 {stadiumCard?.name}
             </button>
           {/if}
+          <!-- v3.93：action-bar 內加 mirror 撤退按鈕（玩家視線常駐區，避免在不同解析度找不到）-->
+          {#if !pendingSelection && isMyTurn() && myPlayer?.active && !myPlayer.active.fossilOnField && (myPlayer.bench?.length??0) > 0 && game.phase==='playing' && game.turnPhase==='main' && canRetreatNow}
+            <button class="btn-act btn-retreat-mirror" onclick={(e)=>openFloatingRetreat(e)} title="撤退戰鬥場寶可夢到備戰，換另一隻上場">
+              🔄 撤退（{retreatCostOf(myPlayer.active)}⚡）
+            </button>
+          {/if}
           {#if canEndTurn}
             <button class="btn-act primary" onclick={()=>dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
           {/if}
@@ -6089,7 +6095,8 @@
   /* v2.52：戰鬥場能量 pip 改為垂直排列在卡圖右側（與備戰的 .bench-nrg 一致）。
      pip 比 bench 版本略大以符合戰鬥場比例（寬≈18px、高=16px）。 */
   .active-nrg-col{ display:flex; flex-direction:column; align-items:center; gap:3px; flex-shrink:0; padding-top:.2rem; line-height:1; }
-  .active-nrg-col .nrg-pip{ min-width:18px; height:16px; font-size:.66rem; }
+  /* v3.93：戰鬥場能量 pip 更大 — 從 18×16/.66rem 提升到 24×22/.86rem */
+  .active-nrg-col .nrg-pip{ min-width:24px; height:22px; font-size:.86rem; padding:0 5px; border-radius:11px; }
   .attach-hint{ font-size:.75rem; color:#aaff44; font-weight:700; margin-top:.2rem; }
   @keyframes glow{ from{box-shadow:0 0 4px #aaff44}to{box-shadow:0 0 14px #aaff44} }
 
@@ -6390,11 +6397,12 @@
   .bench-stat{ font-size:.66rem; color:#aaa; }
   /* v2.51：能量 pip 改為垂直排列在圖片右側（解決能量多時撐高問題） */
   .bench-nrg{ font-size:.62rem; color:#888; display:flex; flex-direction:column; align-items:center; gap:2px; line-height:1; flex-shrink:0; }
+  /* v3.93：能量 pip 放大 — 從 14×14/.58rem 提升到 18×18/.72rem 改善可讀性 */
   .nrg-pip{
     display:inline-flex; align-items:center; justify-content:center;
-    min-width:14px; height:14px; padding:0 3px; border-radius:7px;
-    font-size:.58rem; font-weight:700; color:#fff; line-height:1;
-    box-shadow:0 0 0 1px rgba(0,0,0,.35) inset;
+    min-width:18px; height:18px; padding:0 4px; border-radius:9px;
+    font-size:.72rem; font-weight:700; color:#fff; line-height:1;
+    box-shadow:0 0 0 1px rgba(0,0,0,.4) inset, 0 1px 2px rgba(0,0,0,.2);
   }
   /* v2.120 Rainbow pip：全屬性特殊能量（古舊/夜光/稜鏡 on Basic/新衝天 on Stage2） */
   .nrg-pip.nrg-pip-rainbow{
@@ -6554,11 +6562,17 @@
   }
   .log-private-icon { margin-right:.2rem; opacity:.8; font-size:.85em; }
 
-  .btn-retreat{ padding:.1rem .3rem; font-size:.62rem; background:#3a3a6a; border:1px solid #6a6aaa; border-radius:4px; color:#ccf; cursor:pointer; }
-  .btn-retreat:hover{ background:#4a4a8a; }
+  /* v3.93：撤退按鈕放大 + 配色改顯眼橘黃（玩家反映找不到按鈕）*/
+  .btn-retreat{ padding:.25rem .55rem; font-size:.78rem; font-weight:600; background:#d97a2a; border:1px solid #f4a040; border-radius:5px; color:#fff; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.3); transition:background .15s, transform .1s; }
+  .btn-retreat:hover{ background:#e89432; transform:translateY(-1px); }
+  .btn-retreat:active{ transform:translateY(0); }
   /* v3.37：不能撤退時的 disabled 樣式（紅暗色，hover 不變） */
   .btn-retreat-blocked{ opacity:.55; cursor:not-allowed; background:#5a3a3a; border-color:#aa6a6a; color:#fcc; }
   .btn-retreat-blocked:hover{ background:#5a3a3a; }
+  /* v3.93：action-bar 內 mirror 撤退按鈕 — 沿用 btn-act 基底但配色一致為橘黃顯眼 */
+  .btn-act.btn-retreat-mirror{ background:#d97a2a; color:#fff; border:1px solid #f4a040; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+  .btn-act.btn-retreat-mirror:hover{ background:#e89432; transform:translateY(-1px); }
+  .btn-act.btn-retreat-mirror:active{ transform:translateY(0); }
 
   /* v3.38：本機/AI lobby 牌組張數提示 */
   .deck-count-info { font-size:.78rem; margin-top:.4rem; padding:.25rem .5rem; border-radius:4px; display:inline-block; font-weight:500; }
