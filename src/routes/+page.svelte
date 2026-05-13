@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.98</span> 💬 聊天 fab 圖示可拖曳到任意位置（桌機 + 手機）</summary>
+        <ul>
+          <li>玩家需求：聊天 icon 按鈕可能擋住卡牌，讓玩家自己決定放哪裡。</li>
+          <li><b>實作</b>：fab button 改用 pointer events（pointerdown / move / up）：
+            <ul>
+              <li>移動 ≤ 4px → 視為點擊 → 開啟聊天室 panel</li>
+              <li>移動 &gt; 4px → 視為拖曳 → 跟隨手指 / 滑鼠移動，pointerup 不觸發開啟</li>
+              <li>桌機 cursor 顯示 <code>grab</code> / 拖曳中 <code>grabbing</code> 提示</li>
+              <li>手機加 <code>touch-action: none</code> 防拖曳時誤觸頁面滾動</li>
+            </ul>
+          </li>
+          <li><b>位置記憶</b>：拖曳結束後位置存 <code>localStorage</code>（key: <code>ptcg_chat_fab_pos</code>），重整 / 重新進入對戰位置保留。</li>
+          <li><b>不影響</b>：聊天 panel header 既有的拖曳功能；未讀數 badge 跟著按鈕移動。</li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.971</span> hotfix：修 v3.97 聊天室 × 按鈕無反應 + 手機 modal 頂到動態島</summary>
         <ul>
           <li>玩家回報 1：桌機版 × 按鈕沒反應，無法縮小回原本的聊天按鈕。<b>根因</b>：chat-panel-header 用 <code>setPointerCapture</code> 把 pointer 釘在 header 上做拖曳，後續 pointerup 在 header 觸發，button 的 onclick 永遠收不到 click event。<b>修法</b>：button 加 <code>onpointerdown=&#123;(e) =&gt; e.stopPropagation()&#125;</code> 阻止 header 接管 pointer，讓 button 自己處理事件。</li>

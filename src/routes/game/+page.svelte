@@ -137,6 +137,55 @@
   function onChatHeaderUp(_e: PointerEvent) {
     chatPanelDragStart = null;
   }
+
+  // v3.98 聊天 fab 圖示拖曳 — 玩家可移動到不擋牌的位置
+  //   位置存 localStorage 重整保留；session 內也持續
+  let chatFabPos = $state<{ x: number; y: number }>({ x: 0, y: 0 });
+  let chatFabDragStart: { mx: number; my: number; ox: number; oy: number } | null = null;
+  let chatFabDragged = false;  // 區分 click vs drag（drag 後不觸發 toggle）
+
+  // 載入 localStorage 保存的位置
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('ptcg_chat_fab_pos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+          chatFabPos = parsed;
+        }
+      }
+    } catch { /* ignore parse errors */ }
+  }
+
+  function onFabPointerDown(e: PointerEvent) {
+    chatFabDragStart = { mx: e.clientX, my: e.clientY, ox: chatFabPos.x, oy: chatFabPos.y };
+    chatFabDragged = false;
+    (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
+  }
+  function onFabPointerMove(e: PointerEvent) {
+    if (!chatFabDragStart) return;
+    const dx = e.clientX - chatFabDragStart.mx;
+    const dy = e.clientY - chatFabDragStart.my;
+    if (!chatFabDragged && Math.abs(dx) + Math.abs(dy) > 4) {
+      chatFabDragged = true;  // 移動超過 4px 視為拖曳，後續 pointerup 不 toggle
+    }
+    if (chatFabDragged) {
+      chatFabPos = { x: chatFabDragStart.ox + dx, y: chatFabDragStart.oy + dy };
+    }
+  }
+  function onFabPointerUp(_e: PointerEvent) {
+    if (!chatFabDragStart) return;
+    if (!chatFabDragged) {
+      // 沒拖曳 → 視為 click，開 panel
+      toggleChatPanel();
+    } else {
+      // 拖曳結束 → 存 localStorage 保留位置
+      try {
+        localStorage.setItem('ptcg_chat_fab_pos', JSON.stringify(chatFabPos));
+      } catch { /* ignore quota errors */ }
+    }
+    chatFabDragStart = null;
+  }
   // 新訊息進來時若 panel 已開 → markChatSeen + 自動 scroll
   $effect(() => {
     if (chatPanelOpen && chatMessages.length > lastSeenChatCount) {
@@ -5469,8 +5518,13 @@
   <!-- 只在連線模式 + 已進入 game（避開 lobby — lobby 已有 chat-area） -->
   {#if mode === 'online' && game && roomCode}
     {#if !chatPanelOpen}
-      <!-- 收合：右下角圓形按鈕 + unread badge -->
-      <button class="chat-fab" onclick={toggleChatPanel} title="開啟聊天室">
+      <!-- v3.98 收合：圓形按鈕可拖曳（pointer events 區分 click vs drag）-->
+      <button class="chat-fab"
+        style:transform={`translate(${chatFabPos.x}px, ${chatFabPos.y}px)`}
+        onpointerdown={onFabPointerDown}
+        onpointermove={onFabPointerMove}
+        onpointerup={onFabPointerUp}
+        title="點擊開啟聊天室；長按拖曳可移動位置">
         💬
         {#if unreadChatCount > 0}<span class="chat-fab-badge">{unreadChatCount}</span>{/if}
       </button>
@@ -6097,11 +6151,15 @@
   .chat-fab {
     position: fixed; right: 18px; bottom: 18px; z-index: 9000;
     width: 54px; height: 54px; border-radius: 50%; border: 2px solid #d97a2a;
-    background: #2a3a5a; color: #ffdd88; font-size: 1.6rem; cursor: pointer;
+    background: #2a3a5a; color: #ffdd88; font-size: 1.6rem; cursor: grab;
     box-shadow: 0 4px 12px rgba(0,0,0,.4);
     display: flex; align-items: center; justify-content: center;
-    transition: transform .15s, background .15s;
+    transition: background .15s;
+    /* v3.98 拖曳支援：touch-action none 防手機拖曳觸發 scroll；transform 由 inline style 控制 */
+    touch-action: none;
+    user-select: none;
   }
+  .chat-fab:active { cursor: grabbing; }
   .chat-fab:hover { background: #3a4a7a; transform: scale(1.06); }
   .chat-fab-badge {
     position: absolute; top: -4px; right: -4px;
