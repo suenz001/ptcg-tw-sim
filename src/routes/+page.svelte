@@ -264,6 +264,36 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.94</span> 花之帷幔修正：picker 仍需開啟，per-target 才擋（修 v3.892 整段 skip 過頭）</summary>
+        <ul>
+          <li>玩家回報：用激流水泵打對手戰鬥場花之帷幔謝米時，picker 直接被 skip + log「對手備戰非規則寶可夢免疫」— 不合理。應該還是要開讓玩家選備戰目標。</li>
+          <li><b>理由</b>：
+            <ul>
+              <li>對手備戰若有規則寶可夢（ex / V / VSTAR / Mega 等）→ <b>花之帷幔擋不到</b>，玩家有權選那些目標造成傷害</li>
+              <li>即使對手備戰全是非規則寶可夢，「選目標」這個步驟也是合法動作流程，不應省略</li>
+            </ul>
+          </li>
+          <li><b>v3.892 問題</b>：在 <code>hitBenchPickPost</code> / <code>hitBenchAll</code> 入口直接整段 skip + log，導致 picker 不開。</li>
+          <li><b>v3.94 修法</b>：
+            <ul>
+              <li>移除 <code>hitBenchPickPost</code> 入口整段 skip → picker 正常開</li>
+              <li>移除 <code>hitBenchAll</code> 入口整段 skip → 改為 loop 內 per-target check（規則寶可夢仍受傷害）</li>
+              <li><code>resolveBenchGuard</code> attack-damage 分支：把 <code>hasFlowerVeil(state, ...)</code> 改為 <code>hasFlowerVeil(state, ...) || state._attackTimeOppFlowerVeil</code> — bench-hit-N resolver 內 per-target 走此 helper 仍擋（解 v3.892 原本要解的「謝米被 KO 後 snapshot 仍生效」需求）</li>
+            </ul>
+          </li>
+          <li><b>最終行為</b>（以激流水泵對手場上花之帷幔謝米為例）：
+            <ul>
+              <li>戰鬥場 100 傷害 → 謝米 KO（取 1 獎賞）</li>
+              <li>option 觸發：picker 開讓玩家選備戰目標</li>
+              <li>玩家選非規則寶可夢 → 「花之帷幔效果，該寶可夢免疫」log，傷害不施加</li>
+              <li>玩家選規則寶可夢 → 受 120 傷害（花之帷幔擋不到 ex/V）</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.93</span> 能量圖示放大 + 撤退按鈕配色與位置雙重改善（UI 可讀性）</summary>
         <ul>
           <li>玩家反映 1：網頁版能量圖示太小不易辨識。<b>修法</b>：全域放大 <code>.nrg-pip</code>：

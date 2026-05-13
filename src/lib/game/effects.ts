@@ -328,7 +328,9 @@ export function resolveBenchGuard(
   }
   if (kind === 'attack-damage') {
     const defenderIdx = (1 - actorIdx) as 0 | 1;
-    if (hasFlowerVeil(state, defenderIdx, pool) && !isExCard(targetCard)) {
+    // v3.94：加 attack-time snapshot fallback — 戰鬥場謝米被同招式 KO 後，
+    //   state 已沒謝米但 _attackTimeOppFlowerVeil snapshot 仍記得宣告當時有，per-target 仍擋。
+    if ((hasFlowerVeil(state, defenderIdx, pool) || state._attackTimeOppFlowerVeil) && !isExCard(targetCard)) {
       return { blocked: true, reason: '謝米 花之帷幔 效果' };
     }
     if (targetCard?.tags?.includes('太晶')) {
@@ -637,11 +639,9 @@ function hitBenchAll(
 ): GameState {
   const target = state.players[targetIdx];
   if (target.bench.length === 0 || amount <= 0) return state;
-  // v3.892：attack-time 對手有花之帷幔 → 對手備戰整段 skip（PTCG 規則「同時 resolve」，
-  //   即使戰鬥場謝米被 KO，攻擊宣告當時花之帷幔生效，備戰仍免疫）
-  if (attackerIdx !== targetIdx && state._attackTimeOppFlowerVeil) {
-    return addLog(state, `${attackLabel}：花之帷幔（攻擊宣告時對手場上有謝米）— 對手備戰非規則寶可夢免疫此招式傷害`, attackerIdx);
-  }
+  // v3.94：移除 v3.892 入口整段 skip — 改為 loop 內 per-target check（規則寶可夢仍受傷害）。
+  //   原本 v3.892 過頭：對手全是非規則寶可夢時直接 skip 整個 picker，玩家連選都選不了。
+  //   修法：保留 _attackTimeOppFlowerVeil snapshot 用於「KO 後仍擋」，但只 per-target 擋非規則。
 
   let morePrizes = 0;
   const newBench: CardInstance[] = [];
@@ -665,6 +665,19 @@ function hitBenchAll(
     //   傷害不擋。
     if (attackerIdx !== targetIdx && _v3060BenchImmAbil(card)) {
       teraImmunNames.push(`${card?.name ?? '?'}（${_v3060GetBenchImmName(card) ?? '備戰免疫'}）`);
+      newBench.push(c);
+      continue;
+    }
+    // v3.94 per-target 花之帷幔 check（取代 v3.892 入口整段 skip）：
+    //   - 條件：對手對我施招 + 場上目前有花之帷幔謝米 OR attack-time snapshot 為 true
+    //   - 目標限制：只擋非規則寶可夢（卡面：「擁有規則的寶可夢除外」）
+    //   - snapshot 機制：戰鬥場謝米被同招式 KO 後，state 已沒謝米但 snapshot 仍記得宣告當時有 → 仍擋
+    if (
+      attackerIdx !== targetIdx
+      && (hasFlowerVeil(state, targetIdx, pool) || state._attackTimeOppFlowerVeil)
+      && !isExCard(card)
+    ) {
+      teraImmunNames.push(`${card?.name ?? '?'}（謝米 花之帷幔）`);
       newBench.push(c);
       continue;
     }
@@ -727,11 +740,9 @@ export function hitBenchPickPost(
   const targetIdx = (targetSide === 'opp' ? (1 - attackerIdx) : attackerIdx) as 0 | 1;
   const target = state.players[targetIdx];
   if (target.bench.length === 0 || amount <= 0 || count <= 0) return state;
-  // v3.892：attack-time 對手有花之帷幔 → 不開 picker，整段 skip（PTCG 規則「同時 resolve」，
-  //   即使戰鬥場謝米被招式 KO，攻擊宣告當時花之帷幔生效，備戰仍免疫此招式傷害）
-  if (targetSide === 'opp' && state._attackTimeOppFlowerVeil) {
-    return addLog(state, `${attackLabel}：花之帷幔（攻擊宣告時對手場上有謝米）— 對手備戰非規則寶可夢免疫此招式傷害`, attackerIdx);
-  }
+  // v3.94：移除 v3.892 入口整段 skip — picker 仍正常開，玩家可選任何備戰目標
+  //   - 玩家選非規則寶可夢：bench-hit-N resolver 內 per-target resolveBenchGuard 擋（v3.888 + v3.94 snapshot fallback）
+  //   - 玩家選 ex/V 等規則寶可夢：花之帷幔擋不到 → 造成傷害（玩家應有此選擇權）
   const pickCount = Math.min(count, target.bench.length);
   const pendingType: PendingSelection['type'] = targetSide === 'opp' ? 'opp-bench-choose' : 'bench-choose';
   let s = addLog(state, `${attackLabel}：選擇 ${pickCount} 隻${targetSide === 'opp' ? '對手' : '自己'}備戰寶可夢，各造成 ${amount} 傷害`, attackerIdx);
