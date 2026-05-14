@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.999</span> 🃏 修庫瑟洛斯奇的企圖簡化實裝（讓對手自選棄牌）</summary>
+        <ul>
+          <li>玩家回報：對手使用「庫瑟洛斯奇的企圖」時，我方無法選擇要丟的手牌 — 系統自動丟。</li>
+          <li>卡面（H 標 / SV6a / MC）：「對手將對手自己的手牌丟棄直到變為 3 張為止」。PTCG 規則：自己手牌要丟由自己選擇，不能被對手指定。</li>
+          <li><b>原 bug</b>：effects.ts 用 <code>p.hand.slice(-discardN)</code> 自動取手牌最後 N 張，玩家完全沒得選。違反 Iron Rule 7「嚴禁簡化實裝」。</li>
+          <li><b>修法</b>：改用 <code>hand-discard</code> pending picker，<code>actorIdx=oppIdx</code> 讓被作用的對手自己選 <code>discardN = hand.length - 3</code> 張要丟棄。effectKey 用功能名 <code>opp-hand-discard-to-3</code>（不腦補卡名英文）。</li>
+          <li>同類 audit 其他「對手棄牌類」卡片若有同樣問題會逐步修補。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.998</span> 🦴 修冰雪龍進化鏈（fossilOnField 卡住）+ 手機版補化石丟棄按鈕</summary>
         <ul>
           <li><b>玩家回報 1：冰雪龍無法進化成冰雪巨龍（手機版）</b></li>

@@ -3438,14 +3438,41 @@ reg('仙后', (st, idx) => {
 });
 
 // 庫瑟洛斯奇的企圖 — 對手手牌丟至 3 張
+// v3.999：改為 hand-discard picker，actorIdx=oppIdx 讓被作用的對手自己選要丟哪些
+//   原 v2 簡化實裝用 p.hand.slice(-discardN) 自動取最後 N 張，違反 Rule 7「嚴禁簡化實裝」+
+//   PTCG 規則：自己手牌要丟的卡永遠由持有手牌的玩家自己選擇（卡面：「對手將對手自己的手牌丟棄」）
 reg('庫瑟洛斯奇的企圖', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
-  st = addLog(st, '庫瑟洛斯奇的企圖：對手手牌丟至 3 張', idx);
-  return updatePlayer(st, oppIdx, p => {
-    if (p.hand.length <= 3) return p;
-    const discardN = p.hand.length - 3;
-    const discarded = p.hand.slice(-discardN);
-    return { ...p, hand: p.hand.slice(0, 3), discard: [...p.discard, ...discarded] };
+  const opp = st.players[oppIdx];
+  if (opp.hand.length <= 3) {
+    return addLog(st, '庫瑟洛斯奇的企圖：對手手牌已 ≤ 3 張，無需丟棄', idx);
+  }
+  const discardN = opp.hand.length - 3;
+  st = addLog(st, `庫瑟洛斯奇的企圖：對手將自己的手牌丟棄 ${discardN} 張至 3 張`, idx);
+  return withPending(st, {
+    type: 'hand-discard',
+    actorIdx: oppIdx,         // ← 對手自己選
+    sourcePlayerIdx: oppIdx,
+    minCount: discardN,
+    maxCount: discardN,
+    effectKey: 'opp-hand-discard-to-3',
+    params: { titleOverride: `庫瑟洛斯奇的企圖：選擇要丟棄的 ${discardN} 張手牌（丟到剩 3 張）` },
+  });
+});
+regR('opp-hand-discard-to-3', (st, idx, iids) => {
+  // idx 是 actor = 被作用的對手；丟掉 iids 對應的手牌
+  return updatePlayer(addPrivateLog(
+    st,
+    `庫瑟洛斯奇的企圖：丟棄手牌 ${iids.length} 張`,
+    `庫瑟洛斯奇的企圖：對手丟棄手牌 ${iids.length} 張`,
+    idx,
+  ), idx, p => {
+    const discarded = p.hand.filter(c => iids.includes(c.iid));
+    return {
+      ...p,
+      hand: p.hand.filter(c => !iids.includes(c.iid)),
+      discard: [...p.discard, ...discarded],
+    };
   });
 });
 
