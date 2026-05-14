@@ -7,7 +7,7 @@
  */
 
 import {
-  regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
+  regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit,
 } from '../_shared';
 import {
@@ -2038,7 +2038,11 @@ regPost('蜻蜻蜓|靜默之翼', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppHand = state.players[dIdx].hand;
   const names = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  return addLog(state, `靜默之翼：對手手牌 (${oppHand.length} 張) — ${names || '空'}`, aIdx);
+  // v3.9992：揭示對手手牌改 addPrivateLog
+  return addPrivateLog(state,
+    `靜默之翼：對手手牌 (${oppHand.length} 張) — ${names || '空'}`,
+    `靜默之翼：對手手牌 (${oppHand.length} 張)`,
+    aIdx);
 });
 
 // 焰后蜥|突然炙烤 — 對手選棄 1 張，若這隻寶可夢從「夜盜火蜥」進化則再棄 2 張

@@ -11,9 +11,9 @@
  */
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { regPre, regPost, regA, reg, regR, regG, addLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
+import { regPre, regPost, regA, reg, regR, regG, addLog, addPrivateLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
 } from '../_shared';
-import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre } from '../../effects';
+import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget } from '../../effects';
 
 // ─── 撕裂 70（skipDefEffects）───────────────────────────────────────────────
 regPre('N的捷克羅姆|撕裂', skipDefEffectsPre(70, '撕裂'));
@@ -46,17 +46,38 @@ regPost('火焰雞ex|燃燒旋踢', (state, aIdx) => {
 // ─── 滿月輪舞 20 + 雙方備戰 × 20 ────────────────────────────────────────────
 regPre('莉莉艾的皮皮ex|滿月輪舞', bothBenchMultiplyPre(20, 20, '滿月輪舞'));
 
-// ─── 死亡終局：若對手戰鬥位傷害指示物 ≥6 → 昏厥（造成 9999 傷害 = 必 KO）
-// rulesText：「若對手的戰鬥寶可夢身上放置的傷害指示物為 6 個，則將那隻寶可夢【昏厥】。」
-// 卡面字面是「6 個」→ 放寬為 ≥6（等同 60 傷以上）— 符合一般 PTCG ruling 「至少 6 個」。
-regPre('超級阿勃梭魯ex|死亡終局', (state, aIdx) => {
+// ─── 死亡終局：若對手戰鬥位傷害指示物 ≥6 → 直接昏厥（招式效果，不走 damage pipeline）
+// 卡面：「若對手的戰鬥寶可夢身上放置的傷害指示物為 6 個，則將那隻寶可夢【昏厥】。」
+// PTCG 規則：「將那隻寶可夢【昏厥】」是「招式效果」（直接昏厥），不是「招式傷害」。
+//   不應被 damageReduceNextHit（整人擊落 / 順滑大衣）、PASSIVE_DAMAGE_IMMUNE（花之帷幔
+//   / 抵抗之幕）或弱抗倍率干擾。
+// v3.9992 修法：原 v2 用 damage = 9999 走 damage pipeline 是簡化實裝（違反 Iron Rule 7），
+//   會被以上 damage modifier 誤擋。改為：
+//   1. regPre：damage = 0（招式本身不造成傷害）
+//   2. regPost：條件達成 → canApplyAttackEffectToTarget 檢查招式效果免疫 →
+//      直接寫 damage = 99999 到 active 上，繞過所有 damage modifier，
+//      由 ATTACK pipeline 末尾的 sanityKOSweep 處理 KO 與獎勵牌計算。
+// 卡面「6 個」依官方 ruling 解讀為「≥ 6 個」（含 7、8 個...）。
+regPre('超級阿勃梭魯ex|死亡終局', (s) => ({ state: s, damage: 0 }));
+regPost('超級阿勃梭魯ex|死亡終局', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
-  const dmg = def?.damage ?? 0;
-  if (dmg >= 60) {
-    return { state: addLog(state, '死亡終局：對手戰鬥寶可夢傷害指示物 ≥6 個 → KO', aIdx), damage: 9999 };
+  if (!def) return state;
+  if (def.damage < 60) {
+    return addLog(state, '死亡終局：對手戰鬥寶可夢傷害指示物不足 6 個，效果未觸發', aIdx);
   }
-  return { state: addLog(state, '死亡終局：對手戰鬥寶可夢傷害不足 6 個，造成 0 傷害', aIdx), damage: 0 };
+  // 招式效果免疫檢查（昏厥屬招式效果）— 仿 雙斧戰龍|斧擊在地 範本
+  const defCard = pool.get(def.cardId);
+  const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCard, pool);
+  if (guard.blocked) {
+    return addLog(state, `死亡終局：${defCard?.name ?? '?'}｜${guard.reason}（不昏厥）`, aIdx);
+  }
+  // 直接 KO：寫 damage = 99999 觸發 sanityKOSweep（繞過 damage pipeline 的所有 modifier）
+  return updatePlayer(
+    addLog(state, '死亡終局：對手戰鬥寶可夢傷害指示物 ≥ 6 個 → 直接昏厥（招式效果）', aIdx),
+    dIdx,
+    p => ({ ...p, active: p.active ? { ...p.active, damage: 99999 } : null }),
+  );
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -129,7 +150,11 @@ regPost('N的扒手貓|暗槓', (state, aIdx, pool) => {
   const oppHand = state.players[dIdx].hand;
   if (oppHand.length === 0) return addLog(state, '暗槓：對手手牌為空', aIdx);
   const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  state = addLog(state, `暗槓：查看對手手牌 — ${handNames}`, aIdx);
+  // v3.9992：揭示對手手牌改 addPrivateLog — 對手知道自己手牌（無感），但觀戰者不該揭示
+  state = addPrivateLog(state,
+    `暗槓：查看對手手牌 — ${handNames}`,
+    `暗槓：查看對手手牌（${oppHand.length} 張）`,
+    aIdx);
   return withPending(state, {
     type: 'hand-discard',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
@@ -199,7 +224,11 @@ regPost('超級阿勃梭魯ex|惡之鉤爪', (state, aIdx, pool) => {
   const oppHand = state.players[dIdx].hand;
   if (oppHand.length === 0) return addLog(state, '惡之鉤爪：對手手牌為空', aIdx);
   const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  state = addLog(state, `惡之鉤爪：查看對手手牌 — ${handNames}`, aIdx);
+  // v3.9992：揭示對手手牌改 addPrivateLog — 對手知道自己手牌（無感），但觀戰者不該揭示
+  state = addPrivateLog(state,
+    `惡之鉤爪：查看對手手牌 — ${handNames}`,
+    `惡之鉤爪：查看對手手牌（${oppHand.length} 張）`,
+    aIdx);
   return withPending(state, {
     type: 'hand-discard',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,

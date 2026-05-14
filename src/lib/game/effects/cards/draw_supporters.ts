@@ -14,7 +14,7 @@
 
 import {
   reg, regR, regG,
-  addLog, updatePlayer, withPending,
+  addLog, addPrivateLog, updatePlayer, withPending,
   drawCards, discardHand, returnHandToDeck,
   sameEvoName, shuffle,
 } from '../_shared';
@@ -170,7 +170,11 @@ reg('枇琶', (st, idx, pool) => {
     return addLog(st, '枇琶：對手手牌為空，無效果', idx);
   }
   const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  let s = addLog(st, `枇琶：查看對手手牌（${oppHand.length} 張）— ${handNames}`, idx);
+  // v3.9992：揭示對手手牌改 addPrivateLog
+  let s = addPrivateLog(st,
+    `枇琶：查看對手手牌（${oppHand.length} 張）— ${handNames}`,
+    `枇琶：查看對手手牌（${oppHand.length} 張）`,
+    idx);
   const itemIids = oppHand
     .filter(c => {
       const card = pool.get(c.cardId);

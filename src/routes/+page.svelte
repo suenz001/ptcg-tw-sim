@@ -264,6 +264,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.9992</span> 🃏 修死亡終局簡化 + 7 張「查看對手手牌」揭示 bug</summary>
+        <ul>
+          <li><b>死亡終局（超級阿勃梭魯ex）</b>：原 v2 用 <code>damage = 9999</code> 走 damage pipeline 是簡化實裝（違反 Iron Rule 7）— 會被
+            <code>damageReduceNextHit</code>（整人擊落 / 順滑大衣）、<code>PASSIVE_DAMAGE_IMMUNE</code>（花之帷幔 / 抵抗之幕）誤擋。
+            卡面「將那隻寶可夢【昏厥】」是「招式效果」不是「招式傷害」。改為 <code>regPre damage:0</code> + <code>regPost</code> 直接寫
+            <code>damage = 99999</code> 到 active（由 <code>sanityKOSweep</code> 處理 KO + 獎勵牌），繞過所有 damage modifier；
+            加 <code>canApplyAttackEffectToTarget</code> 檢查招式效果免疫（仿 雙斧戰龍｜斧擊在地 範本）。</li>
+          <li><b>「查看對手手牌」揭示 audit</b>：7 張卡用 <code>addLog</code> 公開揭示對手所有手牌名 — 對手知道自己手牌（無感），
+            但<b>觀戰者</b>會被揭示，違反 PTCG「只有使用者能看具體卡名」規則。全改 <code>addPrivateLog</code>：
+            <ul>
+              <li>惡之鉤爪（超級阿勃梭魯ex）</li>
+              <li>暗槓（N 的扒手貓）</li>
+              <li>枇琶（支援者）</li>
+              <li>能量撢子（物品）</li>
+              <li>瑪琪艾兒（支援者）</li>
+              <li>靜默之翼（蜻蜻蜓）</li>
+              <li>瞄準獵物（管獏鳥）— 同步糾正錯誤註解「雙方都看得到」</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.9991</span> 🃏 修手部修剪器簡化實裝（雙方 picker，對手先丟）</summary>
         <ul>
           <li>玩家指出同 v3.999 庫瑟洛斯奇的企圖類問題：手部修剪器也是 <code>p.hand.slice(-N)</code> 自動取最後 N 張，違反 Iron Rule 7。</li>

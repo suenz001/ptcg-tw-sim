@@ -394,7 +394,11 @@ reg('瑪琪艾兒', (st, idx, pool) => {
   const oppHand = st.players[dIdx].hand;
   const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   const pokeCount = oppHand.filter(c => pool.get(c.cardId)?.supertype === 'Pokemon').length;
-  st = addLog(st, `瑪琪艾兒：查看對手手牌（${oppHand.length} 張）— ${handNames}`, idx);
+  // v3.9992：揭示對手手牌改 addPrivateLog
+  st = addPrivateLog(st,
+    `瑪琪艾兒：查看對手手牌（${oppHand.length} 張）— ${handNames}`,
+    `瑪琪艾兒：查看對手手牌（${oppHand.length} 張）`,
+    idx);
   st = addLog(st, `瑪琪艾兒：對手手牌寶可夢 ${pokeCount} 張 → 抽 ${pokeCount} 張`, idx);
   // v2.360：設旗標供 妙喵｜拍檔攻擊 判斷本回合是否出過瑪琪艾兒
   st = updatePlayer(st, idx, p => ({ ...p, magearnaPlayedThisTurn: true }));

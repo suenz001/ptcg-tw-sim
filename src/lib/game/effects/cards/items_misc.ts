@@ -1082,7 +1082,11 @@ reg('能量撢子', (st, idx, pool) => {
   const oppHand = st.players[dIdx].hand;
   if (oppHand.length === 0) return addLog(st, '能量撢子：對手手牌為空', idx);
   const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  let s = addLog(st, `能量撢子：查看對手手牌（${oppHand.length} 張）— ${handNames}`, idx);
+  // v3.9992：揭示對手手牌改 addPrivateLog
+  let s = addPrivateLog(st,
+    `能量撢子：查看對手手牌（${oppHand.length} 張）— ${handNames}`,
+    `能量撢子：查看對手手牌（${oppHand.length} 張）`,
+    idx);
   const energyIids = oppHand
     .filter(c => pool.get(c.cardId)?.supertype === 'Energy')
     .map(c => c.iid);

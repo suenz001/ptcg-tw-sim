@@ -668,9 +668,13 @@ regA('禿鷹娜', 0, (st, idx, pool, _cardInst) => {
   if (dp.bench.length >= getOwnBenchLimit(st, dIdx, pool)) return addLog(st, '瞄準獵物：對手備戰區已滿', idx);
   if (dp.hand.length === 0) return addLog(st, '瞄準獵物：對手手牌為空', idx);
 
-  // 揭示對手手牌（公開 log — 卡面寫「查看對手手牌」雙方都看得到）
+  // v3.9992：糾正錯誤註解 — 「查看對手手牌」只有「使用招式的玩家」能看到具體卡名；
+  //   對手知道自己手牌（無感），但觀戰者不該被揭示。改用 addPrivateLog。
   const handNames = dp.hand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  let s = addLog(st, `瞄準獵物：查看對手手牌（${dp.hand.length} 張）— ${handNames}`, idx);
+  let s = addPrivateLog(st,
+    `瞄準獵物：查看對手手牌（${dp.hand.length} 張）— ${handNames}`,
+    `瞄準獵物：查看對手手牌（${dp.hand.length} 張）`,
+    idx);
 
   // 候選：HP≤70【基礎】寶可夢
   const candidates = dp.hand.filter(c => isBasicPokemonHPLE70(pool.get(c.cardId)));
