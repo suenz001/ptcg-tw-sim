@@ -1971,7 +1971,8 @@
       // v3.826 擴充：支援 params.scope='all-own'（鐵斑葉ex 迅速游標）— 列自方所有寶可夢身上能量
       case 'active-energy-discard': {
         const scope = pendingSelection.params?.scope as string | undefined;
-        if (scope === 'all-own') {
+        if (scope === 'all-own' || scope === 'all-opp') {
+          // v4.01：'all-opp' 列對手場上所有寶可夢能量（小灰怪挪動一下用）— src 已是 sourcePlayerIdx
           const allPokes = [...(src.active ? [src.active] : []), ...src.bench];
           const validIidsSet = new Set(pendingSelection.params?.validIids as string[] | undefined);
           const targetIidS = pendingSelection.params?.targetIid as string | undefined;
@@ -4877,13 +4878,15 @@
                +未來能量轉移類道具。即使單一來源也顯示，讓玩家明確知道對象。 -->
           {@const energyOwnerMap = (() => {
             // v3.828: 存整個 CardInstance（不只 name）讓標籤能觸發 openZoom 放大寶可夢
-            if (!isEnergyPicker || !game) return new Map<string, { name: string; inst: CardInstance }>();
+            // v4.01: 加 isActive flag 用於 UI 標示 [戰鬥場]/[備戰]
+            if (!isEnergyPicker || !game) return new Map<string, { name: string; inst: CardInstance; isActive: boolean }>();
             const src = game.players[pendingSelection.sourcePlayerIdx];
             const allPokes = [...(src.active ? [src.active] : []), ...src.bench];
-            const m = new Map<string, { name: string; inst: CardInstance }>();
+            const m = new Map<string, { name: string; inst: CardInstance; isActive: boolean }>();
             for (const pk of allPokes) {
               const pkName = pool.get(pk.cardId)?.name ?? '?';
-              for (const e of pk.energyAttached) m.set(e.iid, { name: pkName, inst: pk });
+              const isActive = pk.iid === src.active?.iid;
+              for (const e of pk.energyAttached) m.set(e.iid, { name: pkName, inst: pk, isActive });
             }
             return m;
           })()}
@@ -4908,11 +4911,12 @@
                     {#if isEnergyPicker && energyOwnerMap.has(item.iid)}
                       {@const owner = energyOwnerMap.get(item.iid)!}
                       <!-- v3.828: 點 📍 標籤放大來源寶可夢 — 用 div + role=button 避免 button-in-button nesting -->
+                      <!-- v4.01: prefix [戰鬥場]/[備戰] 讓玩家明確知道來源位置 -->
                       <div class="sel-energy-source" role="button" tabindex="0"
-                        title="點擊放大來源寶可夢：{owner.name}"
+                        title="點擊放大來源寶可夢：[{owner.isActive ? '戰鬥場' : '備戰'}] {owner.name}"
                         onclick={(e) => {e.stopPropagation(); openZoom(owner.inst.cardId, owner.inst);}}
                         onkeydown={(e) => {if (e.key==='Enter' || e.key===' ') {e.preventDefault(); e.stopPropagation(); openZoom(owner.inst.cardId, owner.inst);}}}>
-                        📍 {owner.name} 🔍
+                        📍 <span class="sel-source-slot">[{owner.isActive ? '戰鬥場' : '備戰'}]</span> {owner.name} 🔍
                       </div>
                     {/if}
                     {#if selectionPicked.has(item.iid)}<span class="sel-check">✓</span>{/if}
@@ -6660,6 +6664,18 @@
     color:#eee; font-size:.88rem; text-align:left; }
   .copy-attack-btn:hover{ background:#3a5a3a; border-color:#6aaa6a; }
   .copy-atk-cost{ display:inline-flex; gap:.15rem; }
+  /* v4.01：能量 picker 來源寶可夢位置標籤（[戰鬥場] / [備戰]）— 醒目顏色區分 */
+  .sel-source-slot{
+    display:inline-block;
+    padding:0 .25rem;
+    margin-right:.15rem;
+    font-size:.85em;
+    font-weight:700;
+    color:#ffd56a;
+    background:rgba(0,0,0,.4);
+    border-radius:3px;
+  }
+
   /* v3.9998：concealed picker（精神出局）— 卡背 placeholder */
   .sel-card-back{
     display:flex; flex-direction:column; align-items:center; justify-content:center;

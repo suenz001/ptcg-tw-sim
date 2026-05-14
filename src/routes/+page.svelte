@@ -264,6 +264,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.01</span> 🎨 改挪動一下 picker UI 為卡片版（完整視覺）</summary>
+        <ul>
+          <li>玩家回報 v3.9999 用 modal-choice 太陽春：沒卡片圖、沒放大鏡、沒能量狀況顯示。應改用其他類似功能 picker 的視覺一致設計。</li>
+          <li><b>修法</b>：改用 standard picker pattern：
+            <ul>
+              <li><b>Stage 1</b>：<code>active-energy-discard scope='all-opp'</code> → 列出對手 active+bench 所有能量卡片，每張下方有「📍 [戰鬥場/備戰] 寶可夢名 🔍」標籤（可點放大）</li>
+              <li><b>Stage 2</b>：<code>opp-bench-choose includeActive=true + validIids 排除 source</code> → 列出對手寶可夢卡片（含 active + bench，排除來源），完整 HP/能量/放大鏡資訊</li>
+            </ul>
+          </li>
+          <li><b>UI 共用補強</b>：
+            <ul>
+              <li>selectionItems case <code>active-energy-discard</code> 加 <code>scope='all-opp'</code> 支援（對稱 <code>all-own</code>）</li>
+              <li><code>energyOwnerMap</code> 加 <code>isActive: boolean</code> flag</li>
+              <li>來源寶可夢標籤加 <code>[戰鬥場]</code> / <code>[備戰]</code> 金色 prefix，讓玩家明確知道位置</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.0</span> 🦊 修伊布覺醒簡化實裝（應直接進化非加手）</summary>
         <ul>
           <li>玩家回報：伊布招式「覺醒」應使用完直接在自身進化，目前卻把進化卡加到玩家手上。</li>
