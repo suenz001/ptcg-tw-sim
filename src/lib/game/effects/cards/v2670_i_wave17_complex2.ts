@@ -299,52 +299,117 @@ regR('v3140-zapdos-jamming-attach', (state, aIdx, iids, params, pool) => {
   );
 });
 
-// 小灰怪｜挪動一下 0 — 對手戰鬥能量改附對手備戰（玩家選來源 + 目標）
-// v3.9998 修 Rule 7：原 v2.67 簡化「取末尾 + 隨機備戰」違反卡面「選擇 1 個能量 + 改附其他寶可夢」。
-//   改成 chain（仿阻礙之翼 v3.14）：active-energy-discard → bench-choose（雙方 sourcePlayerIdx=dIdx）
+// 小灰怪｜挪動一下 0 — 對手「場上」寶可夢能量改附對手「其他」寶可夢
+// v3.9999 修 Rule 7：卡面「對手場上寶可夢身上附加的能量」=「場上」含 active+bench；
+//   「改附於對手的其他寶可夢」= source 之外的任一隻（其他 active 或 bench）。
+//   v3.9998 用 active-energy-discard 限制只能取 active 能量是錯的。改用 modal-choice 2 階段：
+//   Stage 1: 列出對手 active+bench 所有能量 (id=ownerIid|energyIid)
+//   Stage 2: 列出對手「其他」寶可夢 (排除 source ownerIid)
 regPre('小灰怪|挪動一下', (s) => ({ state: s, damage: 0 }));
-regPost('小灰怪|挪動一下', (state, aIdx, _pool) => {
+regPost('小灰怪|挪動一下', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
-  if (!opp.active || opp.active.energyAttached.length === 0 || opp.bench.length === 0) {
-    return addLog(state, '挪動一下：條件不足（對手戰鬥場無能量或備戰無寶可夢）', aIdx);
+  // 蒐集對手場上所有能量
+  const allPokes: CardInstance[] = [];
+  if (opp.active) allPokes.push(opp.active);
+  for (const b of opp.bench) allPokes.push(b);
+  const energyOptions: { id: string; text: string }[] = [];
+  for (const pk of allPokes) {
+    const pkName = pool.get(pk.cardId)?.name ?? '?';
+    const isActive = pk.iid === opp.active?.iid;
+    const slotLabel = isActive ? '戰鬥場' : '備戰';
+    for (const e of pk.energyAttached) {
+      const eName = pool.get(e.cardId)?.name ?? '能量';
+      energyOptions.push({
+        id: `${pk.iid}|${e.iid}`,
+        text: `[${slotLabel}] ${pkName} - ${eName}`,
+      });
+    }
   }
-  return withPending(addLog(state, '挪動一下：選擇對手戰鬥場 1 張能量（將改附對手備戰）', aIdx), {
-    type: 'active-energy-discard',
+  // 至少 1 顆能量 + 至少 2 隻場上寶可夢（source + target）才能挪
+  if (energyOptions.length === 0 || allPokes.length < 2) {
+    return addLog(state, '挪動一下：條件不足（對手場上無能量或場上不足 2 隻）', aIdx);
+  }
+  return withPending(addLog(state, '挪動一下：選擇要改附的對手能量（場上任一隻寶可夢）', aIdx), {
+    type: 'modal-choice',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
-    effectKey: 'minccino-shuffle-pick-energy',
-    params: { titleOverride: '挪動一下：選擇要改附的對手能量' },
+    effectKey: 'minccino-shuffle-pick-energy-anywhere',
+    params: {
+      label: '挪動一下',
+      options: energyOptions,
+      titleOverride: '挪動一下：選擇要改附的對手能量',
+    },
   });
 });
-regR('minccino-shuffle-pick-energy', (state, aIdx, iids) => {
-  const energyIid = iids[0];
-  if (!energyIid) return state;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return withPending(addLog(state, '挪動一下：選擇要改附能量的對手備戰寶可夢', aIdx), {
-    type: 'bench-choose',
-    actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'minccino-shuffle-attach',
-    params: { energyIid, titleOverride: '挪動一下：選擇要改附能量的對手備戰' },
-  });
-});
-regR('minccino-shuffle-attach', (state, aIdx, iids, params, pool) => {
-  const targetIid = iids[0];
-  const energyIid = params?.energyIid as string | undefined;
-  if (!targetIid || !energyIid) return state;
+regR('minccino-shuffle-pick-energy-anywhere', (state, aIdx, iids, _params, pool) => {
+  const choice = iids[0];
+  if (!choice) return state;
+  const [ownerIid, energyIid] = choice.split('|');
+  if (!ownerIid || !energyIid) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
-  const energyInst = opp.active?.energyAttached.find(e => e.iid === energyIid);
+  // Stage 2：選對手「其他」寶可夢（排除 source）
+  const allPokes: CardInstance[] = [];
+  if (opp.active) allPokes.push(opp.active);
+  for (const b of opp.bench) allPokes.push(b);
+  const targetOptions = allPokes
+    .filter(pk => pk.iid !== ownerIid)
+    .map(pk => {
+      const pkName = pool.get(pk.cardId)?.name ?? '?';
+      const isActive = pk.iid === opp.active?.iid;
+      const slotLabel = isActive ? '戰鬥場' : '備戰';
+      return { id: pk.iid, text: `[${slotLabel}] ${pkName}` };
+    });
+  if (targetOptions.length === 0) {
+    return addLog(state, '挪動一下：對手場上無其他可附加目標，效果結束', aIdx);
+  }
+  return withPending(addLog(state, '挪動一下：選擇要附加能量的對手寶可夢（不可為來源寶可夢）', aIdx), {
+    type: 'modal-choice',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'minccino-shuffle-attach-anywhere',
+    params: {
+      label: '挪動一下',
+      options: targetOptions,
+      ownerIid, energyIid,
+      titleOverride: '挪動一下：選擇要附加能量的對手寶可夢',
+    },
+  });
+});
+regR('minccino-shuffle-attach-anywhere', (state, aIdx, iids, params, pool) => {
+  const targetIid = iids[0];
+  const ownerIid = params?.ownerIid as string | undefined;
+  const energyIid = params?.energyIid as string | undefined;
+  if (!targetIid || !ownerIid || !energyIid) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const opp = state.players[dIdx];
+  // 從 ownerIid 那隻寶可夢身上找該能量
+  const owner = opp.active?.iid === ownerIid ? opp.active : opp.bench.find(b => b.iid === ownerIid);
+  if (!owner) return state;
+  const energyInst = owner.energyAttached.find(e => e.iid === energyIid);
   if (!energyInst) return state;
   const eName = pool.get(energyInst.cardId)?.name ?? '?';
+  const ownerName = pool.get(owner.cardId)?.name ?? '?';
+  const targetPoke = opp.active?.iid === targetIid ? opp.active : opp.bench.find(b => b.iid === targetIid);
+  const targetName = targetPoke ? (pool.get(targetPoke.cardId)?.name ?? '?') : '?';
   return updatePlayer(
-    addLog(state, `挪動一下：將對手戰鬥位 ${eName} 改附對手備戰`, aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== energyIid) } : null,
-      bench: p.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, energyInst] } : b),
-    }),
+    addLog(state, `挪動一下：將 ${ownerName} 身上 ${eName} 改附 ${targetName}`, aIdx),
+    dIdx, p => {
+      // 移除 source 能量 + 加到 target
+      const stripSource = (poke: CardInstance) => poke.iid === ownerIid
+        ? { ...poke, energyAttached: poke.energyAttached.filter(e => e.iid !== energyIid) }
+        : poke;
+      const attachTarget = (poke: CardInstance) => poke.iid === targetIid
+        ? { ...poke, energyAttached: [...poke.energyAttached, energyInst] }
+        : poke;
+      const apply = (poke: CardInstance) => attachTarget(stripSource(poke));
+      return {
+        ...p,
+        active: p.active ? apply(p.active) : null,
+        bench: p.bench.map(apply),
+      };
+    },
   );
 });
 

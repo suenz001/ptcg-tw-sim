@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.9999</span> 🐛 修小灰怪挪動一下（場上含備戰）+ 樂呵呵之吻（附 1 隻）</summary>
+        <ul>
+          <li><b>Bug 1：小灰怪 挪動一下</b> — 卡面「對手場上寶可夢」應含 active + bench，v3.9998 的 active-energy-discard 只能取 active 能量。改用 modal-choice 2 階段：
+            <ul>
+              <li>Stage 1：列出對手 active+bench 所有能量讓玩家選（id=ownerIid|energyIid）</li>
+              <li>Stage 2：列出對手「其他」寶可夢（排除 source）讓玩家選目標</li>
+              <li>Resolver 從 source 寶可夢移除能量 + 加到 target</li>
+            </ul>
+          </li>
+          <li><b>Bug 2：迷唇娃 樂呵呵之吻</b> — 卡面「附於 1 隻備戰寶可夢身上」(明文「1 隻」單數)，原 v2.158 用 v158 chain 逐張選 target 允許分散到不同寶可夢。改為新 chain：
+            <ul>
+              <li>Step 1：deck-search 選 ≤2 張基本【超】能量</li>
+              <li>Step 2：bench-choose 選「1 隻」備戰</li>
+              <li>Resolver 把所有選到的能量全部附到那 1 隻</li>
+              <li>未選任何能量也重洗牌庫（卡面「並且重洗牌庫」）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.9998</span> 🐛 4 bug 修補（太陽伊布ex 兩招 + 小灰怪 + 同命戰鬥獎勵）</summary>
         <ul>
           <li><b>Bug 1：太陽伊布ex 精神出局</b> — 卡面「在不看正面的情況下，從對手的手牌選擇 1 張，將其丟棄」。原實裝用隨機選（<code>oppDiscardRandomHand</code>），改用 hand-discard picker + <code>params.concealed=true</code>。UI 端讀此 flag → 卡背 placeholder（深藍漸層 + 🎴 + ?），玩家僅看到「對手有幾張」選 1 張丟棄，不揭示卡圖/卡名。</li>

@@ -41,7 +41,7 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
   regPre, regPost, regR,
-  shuffle, addLog, withPending,
+  shuffle, addLog, withPending, updatePlayer,
   ATTACK_PRE_DISCARD_CHOICE,
   getAllAttachedTools,
 } from '../_shared';
@@ -264,26 +264,81 @@ regPost('波加曼|朋友呼喚', (state, aIdx) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// (12) 樂呵呵之吻（迷唇娃）— 0 傷 + 從牌庫搜≤2 基本超能量，玩家選備戰目標附寶
+// (12) 樂呵呵之吻（迷唇娃）— 0 傷 + 從牌庫搜≤2 基本超能量，附於「同 1 隻」備戰
 // ══════════════════════════════════════════════════════════════════════════════
-// v2.158：升級為玩家自選分配（之前簡化為固定附第 1 隻備戰）
-// 卡面：「附於 1 隻備戰寶可夢身上」— 字面是 1 隻，但 PTCG 通常解讀為「玩家選的 1 隻」+
-//   每張能量可選相同或不同備戰。這裡用 chain pattern 讓玩家逐張分配（保留彈性）。
+// v3.9999 修 Rule 7：原 v2.158 用 v158 chain 逐張選 target → 玩家可分散到不同寶可夢
+//   違反卡面「附於 1 隻備戰寶可夢身上」(明文「1 隻」單數)。
+//   改用新 chain：deck-search → bench-choose（1 隻）→ 全部能量附到那 1 隻。
 regPre('迷唇娃|樂呵呵之吻', (state) => ({ state, damage: 0 }));
 regPost('迷唇娃|樂呵呵之吻', (state, aIdx) => {
   const player = state.players[aIdx];
   if (player.bench.length === 0) return addLog(state, '樂呵呵之吻：備戰區無寶可夢', aIdx);
   if (player.deck.length === 0) return addLog(state, '樂呵呵之吻：牌庫為空', aIdx);
   const max = Math.min(2, player.deck.length);
-  const s = addLog(state, `樂呵呵之吻：從牌庫選 ≤${max} 張基本【超】能量（接著逐張選備戰目標）`, aIdx);
+  const s = addLog(state, `樂呵呵之吻：從牌庫選 ≤${max} 張基本【超】能量（將附於 1 隻備戰）`, aIdx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'BasicEnergy:Psychic',
     minCount: 0, maxCount: max,
-    effectKey: 'v158-energy-chain-start',
-    params: { label: '樂呵呵之吻', source: 'deck', scope: 'bench-only', filterType: 'Any' },
+    effectKey: 'kissy-deck-pick-then-target',
+    params: { titleOverride: '樂呵呵之吻：從牌庫選最多 2 張基本【超】能量（接著選 1 隻備戰）' },
   });
+});
+// v3.9999 chain step 1：deck 選完 → 把能量搬到 attacker.discard，開 bench-choose
+regR('kissy-deck-pick-then-target', (st, aIdx, energyIids, _params, _pool) => {
+  if (energyIids.length === 0) {
+    // 玩家未選 → 重洗牌庫結束
+    return updatePlayer(addLog(st, '樂呵呵之吻：未選擇能量，重洗牌庫', aIdx), aIdx, p => ({
+      ...p, deck: shuffle(p.deck),
+    }));
+  }
+  // 把能量從 deck 搬到 discard 暫存，重洗剩餘 deck
+  st = updatePlayer(st, aIdx, p => {
+    const picked: CardInstance[] = [];
+    let remDeck = p.deck;
+    for (const iid of energyIids) {
+      const e = remDeck.find(c => c.iid === iid);
+      if (e) {
+        picked.push(e);
+        remDeck = remDeck.filter(c => c.iid !== iid);
+      }
+    }
+    return { ...p, deck: shuffle(remDeck), discard: [...p.discard, ...picked] };
+  });
+  // 開 bench-choose picker（只選 1 隻備戰）
+  return withPending(addLog(st, `樂呵呵之吻：選 1 隻備戰寶可夢將 ${energyIids.length} 張能量全部附上`, aIdx), {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'kissy-attach-all-to-target',
+    params: {
+      energyIids,
+      titleOverride: '樂呵呵之吻：選 1 隻備戰寶可夢（將附上所有選到的能量）',
+    },
+  });
+});
+regR('kissy-attach-all-to-target', (st, aIdx, iids, params, pool) => {
+  const targetIid = iids[0];
+  const energyIids = (params?.energyIids as string[]) ?? [];
+  if (!targetIid || energyIids.length === 0) return st;
+  const player = st.players[aIdx];
+  const targetPoke = player.active?.iid === targetIid ? player.active : player.bench.find(b => b.iid === targetIid);
+  const targetName = targetPoke ? (pool.get(targetPoke.cardId)?.name ?? '?') : '?';
+  st = updatePlayer(st, aIdx, p => {
+    const energies = p.discard.filter(c => energyIids.includes(c.iid));
+    const remDiscard = p.discard.filter(c => !energyIids.includes(c.iid));
+    const attach = (poke: CardInstance) => poke.iid === targetIid
+      ? { ...poke, energyAttached: [...poke.energyAttached, ...energies] }
+      : poke;
+    return {
+      ...p,
+      discard: remDiscard,
+      active: p.active ? attach(p.active) : null,
+      bench: p.bench.map(attach),
+    };
+  });
+  return addLog(st, `樂呵呵之吻：${energyIids.length} 張基本【超】能量全附到 ${targetName}`, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
