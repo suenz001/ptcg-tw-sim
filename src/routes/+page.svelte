@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.02</span> 🖥️ 修桌面小視窗誤判為手機橫置提示</summary>
+        <ul>
+          <li>玩家回報：網頁版對戰時，視窗沒放到最大會持續顯示「請手機旋轉至橫向」提示，導致桌面用戶無法操作。</li>
+          <li><b>Root cause</b>：<code>.rotate-prompt</code> media query 只看 <code>(min-width: 601px) and (max-width: 950px) and (orientation: portrait)</code>，桌面瀏覽器縮小視窗到 601-950px 寬時 portrait=true（因高 &gt; 寬），誤觸發。</li>
+          <li><b>修法</b>：加 <code>(hover: none) and (pointer: coarse)</code> 雙條件 — 區分「真觸控設備」與「桌面（含縮小視窗）」。桌面有滑鼠 hover + 細指標永遠不觸發；真手機/平板才觸發。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.01</span> 🎨 改挪動一下 picker UI 為卡片版（完整視覺）</summary>
         <ul>
           <li>玩家回報 v3.9999 用 modal-choice 太陽春：沒卡片圖、沒放大鏡、沒能量狀況顯示。應改用其他類似功能 picker 的視覺一致設計。</li>

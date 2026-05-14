@@ -7708,11 +7708,14 @@
     }
   }
   /* v2.206 手機直屏 fallback overlay（在 mobile 直屏時提示旋轉到橫向）
-     v2.285：加 min-width:601 — 手機（≤600）直式走 MobilePortraitBattle 元件（v2.284 起），
-     不再強制轉橫；只剩「平板直屏 / 大手機直屏（601-950）」走桌機 layout 看起來擠，
-     繼續顯示轉橫提示引導用戶。 */
+     v2.285：加 min-width:601 — 手機（≤600）直式走 MobilePortraitBattle 元件
+     v4.02：加 (hover: none) + (pointer: coarse) 區分「真手機/平板」vs「桌面小視窗」。
+       玩家回報桌面瀏覽器縮窄視窗時誤觸發此 overlay 導致無法操作。
+       桌面（含縮小視窗）有滑鼠 hover + 細指標 → 不觸發。
+       真觸控設備（手機/平板）→ 觸發。 */
   .rotate-prompt{ display:none; }
-  @media (min-width: 601px) and (max-width: 950px) and (orientation: portrait) {
+  @media (min-width: 601px) and (max-width: 950px) and (orientation: portrait)
+         and (hover: none) and (pointer: coarse) {
     .rotate-prompt{
       display:flex; position:fixed; inset:0; z-index:99999;
       background:rgba(0,0,0,0.92); color:#fff;
