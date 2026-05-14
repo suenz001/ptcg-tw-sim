@@ -264,6 +264,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.994</span> 🔧 油之機關槍套用 attacker 道具/特性加成（極限腰帶 +50 等）</summary>
+        <ul>
+          <li>玩家提供官方 QA：奧利瓦ex 附極限腰帶用油之機關槍選 6 次對手寶可夢ex → 170 點傷害（6×20 + 50 極限腰帶）。確認此招式 attacker 端的道具加成會生效。</li>
+          <li><b>v3.993 仍漏</b>：<code>olive-oil-distribute</code> resolver 內 <code>counterDamage</code> 寫死 20，沒套 TOOL_ATTACK_BONUS 與 PASSIVE_ATTACK_BONUS。</li>
+          <li><b>修法</b>：mega_decks.ts 加 helper <code>computeOliveOilBuff()</code>，比照 engine.ts ATTACK pipeline 同邏輯：
+            <ul>
+              <li><b>TOOL_ATTACK_BONUS</b>（7 個道具）：極限腰帶 / 鎖鏈糬 / 驅勁能量 未來 / 電氣球 / 猛攻手鐲 / 活力頭帶 / 赫普的講究頭帶；阻礙之塔（JAMMING_TOWER_STADIUMS）gate 失效全部</li>
+              <li><b>PASSIVE_ATTACK_BONUS</b>（4 個特性）：憤怒穴 / 原始心得 / 大晴天 / 勝利聲援；監視塔（ROCKET_WATCHTOWER_STADIUMS）擋【無】寶可夢被動特性；PASSIVE_ATTACK_NO_STACK 集合 dedup 卡面明文「不重複」的特性</li>
+            </ul>
+          </li>
+          <li><b>resolver 改寫</b>：原本 per-counter loop → 改為 per-target batch（aggregate counts）。
+            PTCG 規則：buff 對每個目標寶可夢一次性套用（不是每個 counter 都加）。
+            範例：對 ex 連選 6 次 = base 120 + 極限腰帶 50 = 170（與 QA 一致）。
+          </li>
+          <li><b>內部教訓記錄</b>：v3.994 前我內部腦補了「雙倍渦輪」道具（實際不存在），用戶提醒違反鐵律。本次嚴格只用 <code>grep TOOL_ATTACK_BONUS.set</code> + <code>grep PASSIVE_ATTACK_BONUS.set</code> 確認過的真實卡名（7 + 4 = 11 個 buff 來源）。</li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.993</span> 🛡 修油之機關槍漏 attack-damage 檢查（花之帷幔不擋 bug）</summary>
         <ul>
           <li>玩家回報：奧利瓦ex 油之機關槍對備戰有花之帷幔謝米的對手攻擊時，備戰非規則寶可夢仍受傷害（應該被花之帷幔擋）。</li>

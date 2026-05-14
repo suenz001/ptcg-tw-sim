@@ -9,12 +9,17 @@
  */
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
+import type { Card } from '$lib/cards/types';
 import {
   reg, regR, regG, regA, regPre, regPost,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardHand,
-  healResolver, recordOppKO,
+  healResolver, recordOppKO, getAllAttachedTools,
 } from '../_shared';
-import { hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard } from '../../effects';
+import {
+  hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard,
+  TOOL_ATTACK_BONUS, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
+  JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
+} from '../../effects';
 import { isBasicEnergyOfType } from '../../engine';
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
 import { addPendingPrize } from '../_shared';
@@ -527,7 +532,69 @@ regPost('奧利瓦ex|油之機關槍', (state, aIdx) => {
     },
   });
 });
-// resolver 類似 dragapult-snipe，但 target 含 active（根據 params.includeActive）
+// v3.994 計算 attacker 對某 target 的傷害加成（道具 + 場上 passive 特性）
+//   嚴格只套已 audit 確認的 buff（7 個 TOOL_ATTACK_BONUS + 4 個 PASSIVE_ATTACK_BONUS）。
+//   阻礙之塔 gate（道具失效）、監視塔【無】寶可夢特性擋、PASSIVE_ATTACK_NO_STACK dedup
+//   都比照 engine.ts ATTACK pipeline 同邏輯（line 3447~3500）。
+function computeOliveOilBuff(
+  st: GameState,
+  actorIdx: 0 | 1,
+  defenderInst: CardInstance,
+  defenderCard: Card | undefined,
+  pool: Map<string, Card>,
+): number {
+  const attacker = st.players[actorIdx];
+  if (!attacker.active) return 0;
+  const attackerCard = pool.get(attacker.active.cardId);
+  if (!attackerCard) return 0;
+  // v3.994：TOOL/PASSIVE_ATTACK_BONUS 簽名要求 defCard 為 Card（非 undefined）；
+  // defenderCard undefined 表示 pool lookup 失敗 — 罕見邊界，返回 0。
+  if (!defenderCard) return 0;
+  let bonus = 0;
+  // 阻礙之塔 / 監視塔 gate
+  const stadium = st.activeStadium;
+  const stadiumCard = stadium ? pool.get(stadium.cardId) : undefined;
+  const toolsJammed = !!stadiumCard && JAMMING_TOWER_STADIUMS.has(stadiumCard.name);
+  const watchtowerActive = !!stadiumCard && ROCKET_WATCHTOWER_STADIUMS.has(stadiumCard.name);
+  // 1. TOOL_ATTACK_BONUS — iterate attacker 道具
+  if (!toolsJammed) {
+    for (const t of getAllAttachedTools(attacker.active)) {
+      const atkTool = pool.get(t.cardId);
+      if (!atkTool) continue;
+      const fn = TOOL_ATTACK_BONUS.get(atkTool.name);
+      if (!fn) continue;
+      const b = fn(attackerCard, attacker.active, defenderCard, defenderInst);
+      if (b > 0) bonus += b;
+    }
+  }
+  // 2. PASSIVE_ATTACK_BONUS — iterate attacker 場上所有寶可夢的 abilities
+  const processedNoStack = new Set<string>();
+  const attAll: CardInstance[] = [
+    ...(attacker.active ? [attacker.active] : []),
+    ...attacker.bench,
+  ];
+  for (const inst of attAll) {
+    const c = pool.get(inst.cardId);
+    if (!c?.abilities) continue;
+    // 監視塔擋【無】寶可夢被動特性
+    if (watchtowerActive && c.pokemonType === 'Colorless') continue;
+    for (const ab of c.abilities) {
+      const fn = PASSIVE_ATTACK_BONUS.get(ab.name);
+      if (!fn) continue;
+      if (PASSIVE_ATTACK_NO_STACK.has(ab.name) && processedNoStack.has(ab.name)) continue;
+      const b = fn(attackerCard, defenderCard, st, actorIdx, pool);
+      if (b > 0) {
+        if (PASSIVE_ATTACK_NO_STACK.has(ab.name)) processedNoStack.add(ab.name);
+        bonus += b;
+      }
+    }
+  }
+  return bonus;
+}
+
+// resolver：v3.994 改為 per-target batch（aggregate counts），buff 對每個 target 一次性套
+//   PTCG 規則：極限腰帶 +50 是「對該目標寶可夢的整批傷害一次套用」，不是每個 counter 都加。
+//   範例：選 6 次同隻 ex → 6×20 (=120) + 50 (極限腰帶) = 170 傷害（與官方 QA 一致）
 regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
   const totalCounters = (params?.totalCounters as number) ?? 6;
   const placedBefore = (params?.placedCounters as number) ?? 0;
@@ -536,32 +603,34 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
   const dIdx = (1 - actorIdx) as 0 | 1;
   if (selectedIids.length === 0) return st;
 
+  // aggregate 每個 iid 被選擇的次數（一隻可多次選 — 卡面允許）
+  const counts = new Map<string, number>();
+  for (const iid of selectedIids) counts.set(iid, (counts.get(iid) ?? 0) + 1);
+  const placedThisBatch = selectedIids.length;  // 全部 counter 計入消耗（含被擋的，比照 dragapult 溢出邏輯）
+
   let s: GameState = st;
-  let placedThisBatch = 0;
   const koNames: string[] = [];
   let morePrizes = 0;
-
-  // v2.89 招式效果免疫 per-target 檢查
   const blockedTargetsOO = new Set<string>();
-  for (const iid of selectedIids) {
+
+  for (const [iid, count] of counts) {
     const defender = s.players[dIdx];
     const target = defender.active?.iid === iid ? defender.active
       : defender.bench.find(c => c.iid === iid);
     if (!target) continue;
     const targetCard = pool.get(target.cardId);
-    // v2.89 招式效果免疫（attack-effect — 對戰圓形 / 抵抗之幕 / 薄霧 / 硬岩 等）
+
+    // v2.89 招式效果免疫（attack-effect）
     const guardOO = canApplyAttackEffectToTarget(s, actorIdx, target, targetCard, pool);
     if (guardOO.blocked) {
       if (!blockedTargetsOO.has(iid)) {
         blockedTargetsOO.add(iid);
         s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${guardOO.reason}（該指示物無效）`, actorIdx);
       }
-      placedThisBatch++;
       continue;
     }
-    // v3.993 招式傷害免疫（attack-damage — 花之帷幔 / 太晶備戰 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 中立中心）
-    //   卡面：「造成其選擇次數×20 點傷害」明確是 attack-damage，玩家回報花之帷幔沒擋住
-    //   注意：只擋 bench target（花之帷幔只保護備戰，不擋 active）
+
+    // v3.993 招式傷害免疫（attack-damage — only bench；active 不受花之帷幔保護）
     if (defender.active?.iid !== iid) {
       const guardOOdmg = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-damage');
       if (guardOOdmg.blocked) {
@@ -569,15 +638,23 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
           blockedTargetsOO.add(iid);
           s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${guardOOdmg.reason}（免疫此招式傷害）`, actorIdx);
         }
-        placedThisBatch++;
         continue;
       }
     }
+
+    // v3.994 計算最終傷害：base × count + attacker buff（per-target 一次套用）
+    const baseAmt = counterDamage * count;
+    const buff = computeOliveOilBuff(s, actorIdx, target, targetCard, pool);
+    const finalDmg = baseAmt + buff;
+
+    const buffLog = buff > 0 ? `+${buff}=${finalDmg}` : '';
+    s = addLog(s, `${label}：${targetCard?.name ?? '?'} 受 ${count}×${counterDamage}=${baseAmt}${buffLog} 傷害`, actorIdx);
+
+    const newDmg = target.damage + finalDmg;
     const tHp = targetCard?.hp ?? 0;
-    const newDmg = target.damage + counterDamage;
-    placedThisBatch++;
 
     if (tHp > 0 && newDmg >= tHp) {
+      // KO
       const ko: CardInstance[] = [
         { ...target, damage: newDmg }, ...target.energyAttached,
         ...(target.toolAttached ? [target.toolAttached] : []),
@@ -614,7 +691,6 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
 
   if (koNames.length > 0) {
     s = addLog(s, `${label}：${koNames.join('、')} 被擊倒！+${morePrizes} 張獎勵牌`, null);
-    // v2.994 修 tsc error：原本 aIdx 是 typo，應為 actorIdx（resolver 簽名）
     s = addPendingPrize(s, actorIdx, morePrizes);
   }
 
@@ -631,5 +707,5 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
       params: { totalCounters, placedCounters: placedAfter, counterDamage, label, includeActive: true },
     });
   }
-  return addLog(s, `${label}：總計放置 ${placedAfter} 個 20 傷`, actorIdx);
+  return addLog(s, `${label}：總計放置 ${placedAfter} 個 ${counterDamage} 傷`, actorIdx);
 });
