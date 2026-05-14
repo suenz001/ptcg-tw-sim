@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.9996</span> 🔧 修自方道具標示可見性 + 加璀璨結晶 cost 規則說明</summary>
+        <ul>
+          <li>玩家實機回報後續：
+            <ul>
+              <li><b>Bug 1：自己戰鬥場道具標示看不清楚</b> — v3.9995 已加 fallback，但 zoom modal 顯示完整「璀璨結晶」表示 getCard 沒返 undefined。真因是 tool-chip 字體太小（.6rem ≈ 9.6px）+ 對比度低（#f0d080 on #2a2a0a），玩家看不清楚以為「沒文字」。修法：字體放大 .6rem → .78rem，顏色提亮 #f0d080 → #ffd700，加 font-weight 700 + 文字陰影。</li>
+              <li><b>「Bug 2」實為規則認知</b>：龍之頭擊 cost=[Fire, Psychic]，1 顆草能不能發動。璀璨減 1 → cost 剩 1 個（任一），但「剩下的 cost」仍需正確屬性能量付（Fire 或 Psychic），草能無法付這兩種屬性。<b>PTCG 規則：璀璨免除 1 個能量「需求」，不是讓所有能量「變任意」。</b>修法：button title + 徽章 title 加詳細規則說明，避免再誤解。</li>
+            </ul>
+          </li>
+          <li><b>對面 AI 多龍巴魯托ex 幻影奇襲</b>：cost=[Psychic, Psychic, Psychic]，AI 有 3 顆超能就能用（有沒有璀璨對備齊 3 顆超能的結果不影響），玩家觀察 AI 成功攻擊誤判「對面正確套用璀璨」— 實際上是 AI 能量已足。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.9995</span> 🔮 璀璨結晶簡化實裝重修 + UI 道具標示 fallback + 其他 cost reducer audit</summary>
         <ul>
           <li>玩家實機驗證 v3.9994 後回報：

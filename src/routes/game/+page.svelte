@@ -4339,9 +4339,9 @@
               {@const _shinyOn = isShinyCrystalActive(activePlayer.active, atk.cost)}
               <button class="btn-act atk" class:atk-ready={availableAttacks.includes(i)} class:atk-from-tool={isFromTool}
                 disabled={!availableAttacks.includes(i)||!!pendingSelection}
-                title={isFromTool ? `來自工具：${sourceCardName}` : ''}
+                title={(_shinyOn ? '璀璨結晶：可免除任一能量需求；剩餘 cost 仍需對應屬性能量（例如 1 顆草能無法付【火】或【超】）\n\n' : '') + (isFromTool ? `來自工具：${sourceCardName}` : '')}
                 onclick={()=>initiateAttack(i)}>
-                <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if _shinyOn}<span class="shiny-crystal-badge" title="璀璨結晶：能量需求 -1（任意屬性皆可）">🔮-1</span>{/if}</span>
+                <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if _shinyOn}<span class="shiny-crystal-badge" title="璀璨結晶：免除其中 1 顆能量需求（任意屬性）；其餘 cost 仍需對應屬性能量">🔮-1</span>{/if}</span>
                 <span class="atk-name">{atk.name}{isFromTool ? ' 🔧' : ''}</span>
                 <span class="atk-dmg">{atk.damage||'—'}</span>
               </button>
@@ -7540,8 +7540,10 @@
   .discard-modal .sel-hp{ font-size:.68rem; }
 
   /* ── Tool + Stadium ── */
-  .tool-chip{ font-size:.6rem; color:#f0d080; background:#2a2a0a; border:1px solid #6a5a20; border-radius:3px; padding:.06rem .2rem; margin-top:.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width: max-content; max-width: 100%; display: inline-block; }
-  .tool-chip.sm{ font-size:.52rem; }
+  /* v3.9996：玩家回報自己戰鬥場道具標示看不清楚 — 字太小 + 對比低 */
+  /*   放大 font-size .6rem → .78rem，顏色提亮 #f0d080 → #ffd700，加 font-weight 700 */
+  .tool-chip{ font-size:.78rem; color:#ffd700; background:#2a2208; border:1px solid #8a6a10; border-radius:4px; padding:.08rem .35rem; margin-top:.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width: max-content; max-width: 100%; display: inline-block; font-weight:700; text-shadow:0 1px 1px rgba(0,0,0,.7); }
+  .tool-chip.sm{ font-size:.62rem; }
   .ab-used-chip{ font-size:.58rem; color:#c8c0f0; background:#2a1a3a; border:1px solid #4a3a6a; border-radius:3px; padding:.06rem .25rem; margin-top:.1rem; display:inline-block; }
   .ab-used-chip.sm{ font-size:.7rem; padding:0 .15rem; border:none; background:transparent; color:#d0a0ff; }
   .tool-btn{ background:#4a3a10; color:#f0d080; }
