@@ -365,7 +365,7 @@ regPost('信使鳥|急速之禮', (state, aIdx, _pool) => {
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 1, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'wave4-deck-pick-any',
   });
 });

@@ -264,6 +264,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.995</span> 🎴 deck-search picker 補「不選（跳過）」按鈕（10 處 minCount: 1 → 0）</summary>
+        <ul>
+          <li>玩家規則更正：「對手不知道牌庫內容，選不選由玩家決定」— PTCG 線下對戰玩家可 fake「找不到」，simulator 應比照寬鬆規則。範例：高級球缺少「不選（跳過）」按鈕。</li>
+          <li><b>UI 條件</b>：picker 內「不選（跳過）」按鈕的渲染條件是 <code>pendingSelection.minCount === 0</code>。修正方向：把 deck-search caller 的 <code>minCount</code> 從 1 改為 0。</li>
+          <li><b>修正清單</b>（10 處 minCount: 1 → 0）：
+            <ul>
+              <li><b>高級球</b> — pokemon_search.ts，移除 v2.993 hardcode <code>hasPoke ? 1 : 0</code></li>
+              <li>通用 helper：effects.ts <code>deck-energy-attach-self</code></li>
+              <li>通用 helper：abra_mawile_deck.ts <code>deck-energy-attach-bench</code></li>
+              <li>親送無人機 <code>drone-deliver-pick</code></li>
+              <li>叉字蝠｜夜間工作 <code>crobat-night-work</code></li>
+              <li>莉佳的蔓藤怪｜百花齊放 <code>erikas-tangela-hundred-flowers</code></li>
+              <li>鐵面忍者｜脫殼 <code>ninjask-shed-skin</code></li>
+              <li>增長繭 <code>silcoon-growth-cocoon</code></li>
+              <li>信使鳥｜急速之禮 <code>wave4-deck-pick-any</code></li>
+              <li>托戈德瑪爾｜尋找朋友 <code>wave5-add-pokemon-to-hand</code></li>
+            </ul>
+          </li>
+          <li><b>保留 minCount=1</b>（屬「已揭示牌堆」或「任意順序放回」必選類）：多龍奇 偵查指令、暗碼迷的解讀 step 1/2。</li>
+          <li><b>剩餘 deferred</b>：啪咚猴 衝衝鼓、喵喵ex 殺手鐧捕捉、generic v2620 helper — 這些 effectKey 沒在 anchor pattern 唯一範圍內，下一輪 audit 再做。玩家若實機遇到再回報。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.994</span> 🔧 油之機關槍套用 attacker 道具/特性加成（極限腰帶 +50 等）</summary>
         <ul>
           <li>玩家提供官方 QA：奧利瓦ex 附極限腰帶用油之機關槍選 6 次對手寶可夢ex → 170 點傷害（6×20 + 50 極限腰帶）。確認此招式 attacker 端的道具加成會生效。</li>

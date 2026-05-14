@@ -276,13 +276,12 @@ regR('ultra-ball-discard', (st, idx, iids, _params, pool) => {
     const toDiscard = p.hand.filter(c => iids.includes(c.iid));
     return { ...p, hand: p.hand.filter(c => !iids.includes(c.iid)), discard: [...p.discard, ...toDiscard] };
   });
-  // v2.993：卡面寫「選 1 張」mandatory；牌庫無寶可夢時允許 Pass
-  const hasPoke = st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
+  // v3.995：minCount=0 — 對手不知道牌庫內容，選不選由玩家決定（即使有也可不找）
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon',
-    minCount: hasPoke ? 1 : 0, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
   });
 });

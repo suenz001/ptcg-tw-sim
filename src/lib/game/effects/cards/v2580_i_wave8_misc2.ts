@@ -364,7 +364,7 @@ regPost('托戈德瑪爾|尋找朋友', (state, aIdx, _pool) => {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'Pokemon',
-    minCount: 1, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'wave5-add-pokemon-to-hand',  // 復用 v2.55 resolver
   });
 });

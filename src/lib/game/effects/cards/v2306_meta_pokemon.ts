@@ -271,8 +271,8 @@ regA('鐵面忍者', 0, (state, aIdx, pool, inst) => {
   if (instInPlay) instInPlay.abilityUsedThisTurn = true;
   let s = addLog(state, '鐵面忍者：使用特性「脫殼」，從牌庫選擇 1 張「脫殼忍者」放置於備戰區', aIdx);
   return withPending(s, {
-    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    filter: 'Pokemon:Name=脫殼忍者', effectKey: 'ninjask-shed-skin',
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: 1,
+    filter: 'Pokemon:Name=脫殼忍者', effectKey: 'ninjask-shed-skin', // v3.995：minCount → 0 在下方
   });
 });
 regR('ninjask-shed-skin', (state, actorIdx, selectedIids, params, pool) => {
@@ -510,8 +510,8 @@ const silcoonCascoonAbility = (state: GameState, aIdx: 0|1, pool: Map<string, Ca
   if (instInPlay) instInPlay.abilityUsedThisTurn = true;
   let s = addLog(state, '增長繭：從牌庫選擇 1 張「甲殼繭」或者「盾甲繭」放置於備戰區', aIdx);
   return withPending(s, {
-    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    filter: 'Pokemon:Names=甲殼繭,盾甲繭', effectKey: 'silcoon-growth-cocoon',
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: 1,
+    filter: 'Pokemon:Names=甲殼繭,盾甲繭', effectKey: 'silcoon-growth-cocoon', // v3.995：minCount → 0 在下方
     params: { titleOverride: '選擇 1 張「甲殼繭」或者「盾甲繭」' }
   });
 };
