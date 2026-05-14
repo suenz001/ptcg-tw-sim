@@ -264,6 +264,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.9993</span> 🎲 對戰加「隨機牌組」+ 網頁版血量字體加大</summary>
+        <ul>
+          <li><b>對戰選牌組加「🎲 隨機牌組」按鈕</b>（玩家反饋）：
+            <ul>
+              <li>位置：select 下拉中「— 選擇牌組 —」option 正下方（最頂端）</li>
+              <li>抽選範圍：玩家自己的「我的牌組」（不含內建預組）— 滿足玩家「用自己的牌組隨機」的需求</li>
+              <li>適用 3 處 select：本機 P1 / 本機 P2 / 連線對戰座位</li>
+              <li>「我的牌組」為空時：option 自動 disabled 並顯示「— 尚無我的牌組」</li>
+              <li>實作：helper function <code>resolveDeckSelection(val)</code> 偵測 <code>__random__</code> value → 從 decks 抽一張，bind:value 自動同步</li>
+            </ul>
+          </li>
+          <li><b>網頁版血量字體加大</b>（玩家反饋字太小）：
+            <ul>
+              <li>備戰區（<code>.bench-stat</code>）：font-size <code>.66rem → .85rem</code>（+29%），顏色由灰 <code>#aaa</code> 提升到亮綠 <code>#cfe</code>，加 font-weight 700 + 陰影</li>
+              <li>戰鬥場（<code>.active-hp-text</code>）：font-size <code>.72rem → .95rem</code>（+32%），font-weight <code>600 → 700</code></li>
+              <li>戰鬥場血條：高度 <code>9px → 11px</code>（細微加高配合字放大）</li>
+              <li>不影響 UI 佈局（卡片內可用空間充足，沒有溢出風險）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.9992</span> 🃏 修死亡終局簡化 + 7 張「查看對手手牌」揭示 bug</summary>
         <ul>
           <li><b>死亡終局（超級阿勃梭魯ex）</b>：原 v2 用 <code>damage = 9999</code> 走 damage pipeline 是簡化實裝（違反 Iron Rule 7）— 會被

@@ -3024,10 +3024,28 @@
     try { await setSeatDeck(roomCode, deck.entries); }
     catch (e: any) { onlineError = e.message ?? '設定牌組失敗'; }
   }
+  // v3.9993：偵測「🎲 隨機牌組」option（value="__random__"）並回傳隨機抽選的 deck id。
+  //   - 抽選範圍：玩家自己的「我的牌組」(decks)，不含內建預組(PRESET_DECKS)。
+  //   - 若 decks 是空的 → alert 提示 + 回傳空字串（重置 select）。
+  //   - 非 '__random__' 值原樣回傳，無副作用。
+  function resolveDeckSelection(val: string): string {
+    if (val !== '__random__') return val;
+    if (decks.length === 0) {
+      alert('「我的牌組」是空的，請先到牌組頁建立至少一個牌組，或從內建預組挑選。');
+      return '';
+    }
+    const pick = decks[Math.floor(Math.random() * decks.length)];
+    return pick.id;
+  }
+
   // v2.270：select onchange 自動套用，省去「套用牌組」按鈕
+  // v3.9993：handler 內加 resolveDeckSelection — 偵測 __random__ 並改為實際 deck id
   async function handleDeckChange(e: Event) {
     const t = e.target as HTMLSelectElement;
-    myDeckId = t.value;
+    const resolved = resolveDeckSelection(t.value);
+    // 若回傳值與 select 不同（剛剛抽 random），同步 DOM 顯示對應 option
+    if (resolved !== t.value) t.value = resolved;
+    myDeckId = resolved;
     if (myDeckId) await handleSetDeck();
   }
 
@@ -3514,8 +3532,9 @@
       <div class="setup-card">
         <h2>玩家 1</h2>
         <input class="name-input" placeholder="玩家名稱" bind:value={p1Name} />
-        <select bind:value={p1DeckId}>
+        <select bind:value={p1DeckId} onchange={() => { p1DeckId = resolveDeckSelection(p1DeckId); }}>
           <option value="">— 選擇牌組 —</option>
+          <option value="__random__" disabled={decks.length === 0}>🎲 隨機牌組（從「我的牌組」抽選）{decks.length === 0 ? '— 尚無我的牌組' : ''}</option>
           {#if decks.length > 0}
             <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
@@ -3553,8 +3572,9 @@
         {#if aiPlayerIndex !== 1}
           <input class="name-input" placeholder="玩家名稱" bind:value={p2Name} />
         {/if}
-        <select bind:value={p2DeckId}>
+        <select bind:value={p2DeckId} onchange={() => { p2DeckId = resolveDeckSelection(p2DeckId); }}>
           <option value="">— 選擇牌組 —</option>
+          <option value="__random__" disabled={decks.length === 0}>🎲 隨機牌組（從「我的牌組」抽選）{decks.length === 0 ? '— 尚無我的牌組' : ''}</option>
           {#if decks.length > 0}
             <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
@@ -3758,6 +3778,7 @@
                         onchange={handleDeckChange}
                         disabled={s.ready}>
                         <option value="">— 選擇牌組 —</option>
+                        <option value="__random__" disabled={decks.length === 0}>🎲 隨機牌組（從「我的牌組」抽選）{decks.length === 0 ? '— 尚無我的牌組' : ''}</option>
                         {#if decks.length > 0}
                           <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
                         {/if}
@@ -6773,7 +6794,8 @@
   /* 拖曳中的 bench-empty 提升可見度（粗框 + 偏亮底） */
   .bench-empty.drop-zone{ opacity:.95; border-width:3px; }
   .bench-name{ font-size:.7rem; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
-  .bench-stat{ font-size:.66rem; color:#aaa; }
+  /* v3.9993：備戰區血量字加大（玩家反饋字太小）.66rem → .85rem + 顏色加亮 + 粗體 */
+  .bench-stat{ font-size:.85rem; color:#cfe; font-weight:700; text-shadow:0 1px 1px rgba(0,0,0,.6); }
   /* v2.51：能量 pip 改為垂直排列在圖片右側（解決能量多時撐高問題） */
   .bench-nrg{ font-size:.62rem; color:#888; display:flex; flex-direction:column; align-items:center; gap:2px; line-height:1; flex-shrink:0; }
   /* v3.93：能量 pip 放大 — 從 14×14/.58rem 提升到 18×18/.72rem 改善可讀性 */
@@ -7531,8 +7553,9 @@
     z-index:3;  /* 高於 .active-info(z=2)，確保不被覆蓋 */
     pointer-events:none;
   }
-  .active-hpbar-bottom .hp-bar-wrap{ flex:1; height:9px; margin:0; background:#1a2a1a; border:1px solid #2a4a2a; border-radius:4px; }
-  .active-hpbar-bottom .active-hp-text{ font-size:.72rem; color:#cfe; white-space:nowrap; font-weight:600; text-shadow:0 1px 2px rgba(0,0,0,.7); }
+  /* v3.9993：戰鬥場血量字加大（玩家反饋字太小）9px → 11px / .72rem → .95rem / 600 → 700 */
+  .active-hpbar-bottom .hp-bar-wrap{ flex:1; height:11px; margin:0; background:#1a2a1a; border:1px solid #2a4a2a; border-radius:4px; }
+  .active-hpbar-bottom .active-hp-text{ font-size:.95rem; color:#cfe; white-space:nowrap; font-weight:700; text-shadow:0 1px 2px rgba(0,0,0,.7); }
   /* 把進化按鈕往上挪，避免壓到底部血條 */
   .active-card{ padding-bottom:1.95rem !important; }
   .evo-wrap{ bottom:1.85rem !important; }
