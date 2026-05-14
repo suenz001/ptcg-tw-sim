@@ -378,6 +378,16 @@
     // v3.35：out array 元素 type 加 zoomIid?，與 function return type 對齊（撤退項加 zoomIid 顯示 🔍 副按鈕）
     const out: Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean; zoomIid?: string }> = [];
     const aId = myPlayer.active.iid;
+    // v3.998 化石卡在戰鬥場：自己回合 main phase 才能丟棄（卡面：「若在自己的回合中，則可將場上的這張卡丟棄」）
+    //   桌機 v2.189 已有此按鈕（+page.svelte line 4391+），手機版漏這個 UX。
+    //   丟棄與昏厥不同：對手不抽獎賞牌；戰鬥場丟棄需從備戰補 1 隻（engine 處理）。
+    if (myPlayer.active.fossilOnField && isPlaying && isMyTurn && isMainPhase && !pendingSelection) {
+      out.push({
+        label: '🦴 丟棄化石',
+        action: () => { closeSheet(); onAction(GameActions.discardFossil(aId)); },
+        primary: true,
+      });
+    }
     // 攻擊（若 main phase 且有可用招式）
     if (effectiveAttacks.length > 0) {
       effectiveAttacks.forEach((eff, i) => {
@@ -419,6 +429,14 @@
   // 取「bench 可選動作」list
   function benchActions(inst: CardInstance): Array<{ label: string; action: () => void; primary?: boolean }> {
     const out: Array<{ label: string; action: () => void; primary?: boolean }> = [];
+    // v3.998 化石卡在備戰：自己回合 main phase 才能丟棄
+    if (inst.fossilOnField && isPlaying && isMyTurn && isMainPhase && !pendingSelection) {
+      out.push({
+        label: '🦴 丟棄化石',
+        action: () => { closeSheet(); onAction(GameActions.discardFossil(inst.iid)); },
+        primary: true,
+      });
+    }
     // 該 bench 上的特性
     const benchAbil = usableAbilities.filter(u => u.iid === inst.iid);
     benchAbil.forEach(u => {

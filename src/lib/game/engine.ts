@@ -1974,6 +1974,10 @@ function handlePlaying(
       evolvedFromStack: [...prevStack, baseBare],
       evolvedThisTurn: true,
       justPlaced: false,
+      // v3.998：清掉 fossilOnField 標籤 — 化石進化成 Stage1 寶可夢後（如陳舊的鰭之化石 → 冰雪龍），
+      //   該 inst 已是真寶可夢，不再是化石。否則 UI 把進化後的寶可夢仍當化石處理，
+      //   會影響進化判定（冰雪龍 → 冰雪巨龍 無法進化）+ 顯示「🦴 丟棄化石」按鈕（誤丟）。
+      fossilOnField: false,
     };
 
     attacker.hand = attacker.hand.filter((_, i) => i !== evoHIdx);

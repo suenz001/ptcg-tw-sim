@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.998</span> 🦴 修冰雪龍進化鏈（fossilOnField 卡住）+ 手機版補化石丟棄按鈕</summary>
+        <ul>
+          <li><b>玩家回報 1：冰雪龍無法進化成冰雪巨龍（手機版）</b></li>
+          <li>進化鏈：陳舊的鰭之化石（Item）→ 冰雪龍（Stage1）→ 冰雪巨龍（Stage2）</li>
+          <li><b>根因</b>：EVOLVE handler 創建 evolved CardInstance 時 <code>spread ...basePoke</code> 繼承所有欄位，但沒明確 override <code>fossilOnField</code>。化石進化成冰雪龍後 inst.fossilOnField 仍 <code>true</code> → UI 把冰雪龍當化石處理 → 進化選項判定 + 顯示「🦴 丟棄化石」按鈕 都會誤動作。</li>
+          <li><b>修法 1</b>：engine.ts EVOLVE handler 在 evolved inst 加 <code>fossilOnField: false</code> 明確 override（化石進化成 Stage1 後該 inst 已是真寶可夢，不再是化石）。</li>
+          <li><b>玩家回報 2：化石無法從場上直接丟棄（手機版）</b></li>
+          <li>桌機 v2.189 已有「🦴 丟棄化石」按鈕（active + bench 兩處），但 <code>MobilePortraitBattle.svelte</code> 的 <code>activeActions</code> / <code>benchActions</code> 漏這個 UX。卡面明寫「若在自己的回合中，則可將場上的這張卡丟棄」— 丟棄與昏厥不同：對手不抽獎賞牌、戰鬥場丟棄需從備戰補 1 隻。</li>
+          <li><b>修法 2</b>：手機版 activeActions / benchActions 內加 fossilOnField 條件 → 在自己回合 main phase 顯示「🦴 丟棄化石」按鈕，dispatch <code>GameActions.discardFossil(iid)</code>。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.997</span> 🎴 補完 deck-search minCount audit 最後 3 處</summary>
         <ul>
           <li>v3.995 用錯 effectKey anchor 導致 3 處沒實際套用，本波直接 read 源碼後精準補齊：
