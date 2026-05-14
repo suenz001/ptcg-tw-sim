@@ -1246,30 +1246,26 @@
   const availableAttacks = $derived(game && poolReady ? getAvailableAttacks(game, pool) : []);
 
   /**
-   * v3.9994 UX 補強：偵測太晶寶可夢 + 璀璨結晶 → 計算「哪一顆 cost pip 應該劃線」
-   *   邏輯鏡射 engine.ts canAffordAttack 內 璀璨結晶 cost reduction（優先扣 Colorless，否則扣最後 1 個）
-   *   回傳 -1 表示無減免；否則回傳該 index 用於劃線顯示
-   *   阻礙之塔啟用時道具失效不顯示劃線
+   * v3.9994/v3.9995 UX 補強：偵測太晶寶可夢 + 璀璨結晶 → 返回是否啟用 cost reduction
+   *   v3.9994 原版返 index 用於劃線單一 pip，但因卡面「任意屬性皆可」應由玩家選擇，
+   *   單一 pip 劃線會誤導（讓玩家以為只能減特定位置）。改為 boolean + cost row 末尾總徽章。
+   *   阻礙之塔啟用時道具失效。
    */
-  function getShinyCrystalReducedIdx(
+  function isShinyCrystalActive(
     attacker: import('$lib/game/types').CardInstance | null | undefined,
     attackCost: import('$lib/game/types').EnergyType[],
-  ): number {
-    if (!attacker || attackCost.length === 0 || !game) return -1;
+  ): boolean {
+    if (!attacker || attackCost.length === 0 || !game) return false;
     const attackerCard = pool.get(attacker.cardId);
-    if (!attackerCard?.tags?.includes('太晶')) return -1;
+    if (!attackerCard?.tags?.includes('太晶')) return false;
     if (game.activeStadium) {
       const stadiumCard = pool.get(game.activeStadium.cardId);
-      if (stadiumCard?.name === '阻礙之塔') return -1;
+      if (stadiumCard?.name === '阻礙之塔') return false;
     }
     const tools: import('$lib/game/types').CardInstance[] = [];
     if (attacker.toolAttached) tools.push(attacker.toolAttached);
     if (attacker.extraTools) tools.push(...attacker.extraTools);
-    const hasShiny = tools.some(t => pool.get(t.cardId)?.name === '璀璨結晶');
-    if (!hasShiny) return -1;
-    const colorlessIdx = attackCost.indexOf('Colorless');
-    if (colorlessIdx >= 0) return colorlessIdx;
-    return attackCost.length - 1;
+    return tools.some(t => pool.get(t.cardId)?.name === '璀璨結晶');
   }
   // v2.98：pendingPrizes 改為 [P1 owed, P2 owed]
   // v3.791 Bug fix：原本用 `myPlayerIndex ?? 0` — 但在本機雙人模式下 myPlayerIndex 永遠 null，
@@ -4186,7 +4182,7 @@
                   {/if}
                 </div>
                 <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
-                {#if b.toolAttached}{@const tc3=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc3?.name}</div>{/if}{#each (b.extraTools ?? []) as et3}{@const tcE=getCard(et3.cardId)}<div class="tool-chip sm">🔧{tcE?.name}</div>{/each}
+                {#if b.toolAttached}{@const tc3=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc3?.name ?? '道具'}</div>{/if}{#each (b.extraTools ?? []) as et3}{@const tcE=getCard(et3.cardId)}<div class="tool-chip sm">🔧{tcE?.name ?? '道具'}</div>{/each}
                 {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
                 {#if b.status}<div class="status-chip-sm status-{b.status}">{
                   b.status === 'poisoned' ? '☠️' :
@@ -4235,7 +4231,7 @@
               {/if}
               <div class="active-info">
                 <div class="active-name">{ac?.name}</div>
-                {#if oppPlayer.active.toolAttached}{@const tc=getCard(oppPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}{#each (oppPlayer.active.extraTools ?? []) as etOA}{@const tcOA=getCard(etOA.cardId)}<div class="tool-chip">🔧{tcOA?.name}</div>{/each}
+                {#if oppPlayer.active.toolAttached}{@const tc=getCard(oppPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name ?? '道具（未載入）'}</div>{/if}{#each (oppPlayer.active.extraTools ?? []) as etOA}{@const tcOA=getCard(etOA.cardId)}<div class="tool-chip">🔧{tcOA?.name ?? '道具（未載入）'}</div>{/each}
                 {#if oppPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
                 {#if oppPlayer.active.status}<div class="status-chip status-{oppPlayer.active.status}">{
                   oppPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
@@ -4340,12 +4336,12 @@
           {#if game.turnPhase==='main' && activePlayer?.active}
             {@const eff=getEffectiveAttacks(game, activePlayer.active, pool)}
             {#each eff as { atk, sourceCardName, isFromTool }, i}
-              {@const _redIdx = getShinyCrystalReducedIdx(activePlayer.active, atk.cost)}
+              {@const _shinyOn = isShinyCrystalActive(activePlayer.active, atk.cost)}
               <button class="btn-act atk" class:atk-ready={availableAttacks.includes(i)} class:atk-from-tool={isFromTool}
                 disabled={!availableAttacks.includes(i)||!!pendingSelection}
                 title={isFromTool ? `來自工具：${sourceCardName}` : ''}
                 onclick={()=>initiateAttack(i)}>
-                <span class="cost-row">{#each atk.cost as e, ei}<span class="epip {ei === _redIdx ? 'cost-reduced' : ''}" style="background:{ENERGY_COLOR[e]}" title={ei === _redIdx ? '璀璨結晶：此能量需求 -1' : ''}>{ENERGY_LABEL[e]}</span>{/each}</span>
+                <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if _shinyOn}<span class="shiny-crystal-badge" title="璀璨結晶：能量需求 -1（任意屬性皆可）">🔮-1</span>{/if}</span>
                 <span class="atk-name">{atk.name}{isFromTool ? ' 🔧' : ''}</span>
                 <span class="atk-dmg">{atk.damage||'—'}</span>
               </button>
@@ -4478,7 +4474,7 @@
             {/if}
             <div class="active-info">
               <div class="active-name">{ac?.name}</div>
-              {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name}</div>{/if}{#each (myPlayer.active.extraTools ?? []) as etMA}{@const tcMA=getCard(etMA.cardId)}<div class="tool-chip">🔧{tcMA?.name}</div>{/each}
+              {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name ?? '道具（未載入）'}</div>{/if}{#each (myPlayer.active.extraTools ?? []) as etMA}{@const tcMA=getCard(etMA.cardId)}<div class="tool-chip">🔧{tcMA?.name ?? '道具（未載入）'}</div>{/each}
               {#if myPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
               {#if myPlayer.active.status}<div class="status-chip status-{myPlayer.active.status}">{
                 myPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
@@ -4554,7 +4550,7 @@
                 {/if}
               </div>
               <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
-              {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name}</div>{/if}{#each (b.extraTools ?? []) as et2}{@const tcE2=getCard(et2.cardId)}<div class="tool-chip sm">🔧{tcE2?.name}</div>{/each}
+              {#if b.toolAttached}{@const tc2=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc2?.name ?? '道具'}</div>{/if}{#each (b.extraTools ?? []) as et2}{@const tcE2=getCard(et2.cardId)}<div class="tool-chip sm">🔧{tcE2?.name ?? '道具'}</div>{/each}
               {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
               <!-- v2.47：備戰區寶可夢依 PTCG 規則不會有異常狀態；engine scrubBenchStatus 亦會抹除，
                    這裡不再渲染 status chip（避免佔版面） -->
@@ -6653,16 +6649,16 @@
     color:#eee; font-size:.88rem; text-align:left; }
   .copy-attack-btn:hover{ background:#3a5a3a; border-color:#6aaa6a; }
   .copy-atk-cost{ display:inline-flex; gap:.15rem; }
-  /* v3.9994：璀璨結晶 cost reduction 視覺標示 — 被減的 pip 劃線 + 半透明 */
-  .epip.cost-reduced{
-    position:relative; opacity:.55; text-decoration:line-through; text-decoration-thickness:2px;
-    box-shadow:0 0 0 1px #ffd700 inset;
-  }
-  .epip.cost-reduced::after{
-    content:'-1'; position:absolute; top:-8px; right:-6px;
-    font-size:.55rem; color:#ffd700; background:rgba(0,0,0,.75);
-    padding:0 3px; border-radius:6px; font-weight:700;
-    pointer-events:none;
+  /* v3.9995：璀璨結晶啟用時，cost row 末尾加總徽章 */
+  /*   （v3.9994 加的單顆 .cost-reduced 劃線移除 — 因「任意屬性皆可」應由玩家彈性選） */
+  .shiny-crystal-badge{
+    display:inline-flex; align-items:center;
+    margin-left:.15rem; padding:0 .25rem;
+    font-size:.55rem; font-weight:700; color:#1a1a0a;
+    background:linear-gradient(135deg, #ffd700, #ffb300);
+    border:1px solid #cc8800; border-radius:6px;
+    box-shadow:0 0 4px rgba(255,215,0,.5);
+    white-space:nowrap;
   }
   .copy-atk-pip{ display:inline-flex; width:1.2em; height:1.2em; border-radius:50%;
     align-items:center; justify-content:center; color:#fff; font-size:.7rem; font-weight:700;

@@ -960,8 +960,13 @@ export function canAffordAttack(
     if (overridden8 !== cost) cost = overridden8;
   }
   // v2.149 璀璨結晶（Tool ACE SPEC）：附有此 Tool 的「太晶」寶可夢使用招式時，
-  //   能量需求 -1 個（任意屬性）。優先扣 Colorless，否則扣最後 1 個。
+  //   能量需求 -1 個。卡面：「（減少的能量任何屬性皆可。）」
+  //   v3.9995 修：原 v2 固定「優先扣 Colorless 否則扣最後 1 個」是簡化實裝（違反 Iron Rule 7）。
+  //   例：龍之頭擊 cost=[Fire, Psychic]：原版扣最後 → [Fire]，玩家只有 Psychic 時不能用，
+  //     但卡面明寫「任意屬性皆可」應由玩家彈性選擇。
+  //   正確邏輯：設旗標，主匹配時嘗試所有 N 種扣法（skipIdx 0..N-1），任一成功即可。
   //   阻礙之塔時道具失效。
+  let hasShinyCrystalReduction = false;
   {
     const pokeCardForTool = pool.get(pokemon.cardId);
     const isTera = pokeCardForTool?.tags?.includes('太晶');
@@ -970,14 +975,10 @@ export function canAffordAttack(
       // v3.20 多重轉接：iterate 所有道具
       for (const t of getAllAttachedTools(pokemon)) {
         const toolCard = pool.get(t.cardId);
-        if (toolCard?.name !== '璀璨結晶') continue;
-        const colorlessIdx = cost.indexOf('Colorless');
-        if (colorlessIdx >= 0) {
-          cost = [...cost.slice(0, colorlessIdx), ...cost.slice(colorlessIdx + 1)];
-        } else {
-          cost = cost.slice(0, -1);
+        if (toolCard?.name === '璀璨結晶') {
+          hasShinyCrystalReduction = true;
+          break;
         }
-        break;
       }
     }
   }
@@ -1095,36 +1096,54 @@ export function canAffordAttack(
     units.push(...getEnergyUnits(e.cardId, pool));
   }
 
-  const colorlessCost = cost.filter((t) => t === 'Colorless').length;
-  const typedCost = cost.filter((t) => t !== 'Colorless');
+  // v3.9995：把主匹配包進 inner helper，讓璀璨結晶可外層 loop 嘗試 N 種扣法
+  const tryAffordWithCost = (curCost: EnergyType[]): boolean => {
+    const colorlessCost = curCost.filter((t) => t === 'Colorless').length;
+    const typedCost = curCost.filter((t) => t !== 'Colorless');
 
-  // 單位數量不夠直接失敗
-  if (units.length < typedCost.length + colorlessCost) return false;
+    // 單位數量不夠直接失敗
+    if (units.length < typedCost.length + colorlessCost) return false;
 
-  // 回溯：依序把每個有色需求配給一個 types 包含該色的 unit；最後檢查剩餘 unit 數 ≥ colorless 需求
-  const used = new Array(units.length).fill(false);
-  const tryMatch = (i: number): boolean => {
-    if (i >= typedCost.length) {
-      // 最後檢查剩餘 unit 數量是否足以支付【無】費用。
-      // PTCG 規則中【無】費用可由任意屬性的能量支付；
-      // 有色需求已在前面的 typedCost 回溯中先行保留並匹配。
-      let remaining = 0;
-      for (let k = 0; k < units.length; k++) {
-        if (!used[k]) remaining++;
+    // 回溯：依序把每個有色需求配給一個 types 包含該色的 unit；最後檢查剩餘 unit 數 ≥ colorless 需求
+    const used = new Array(units.length).fill(false);
+    const tryMatch = (i: number): boolean => {
+      if (i >= typedCost.length) {
+        // 最後檢查剩餘 unit 數量是否足以支付【無】費用。
+        // PTCG 規則中【無】費用可由任意屬性的能量支付；
+        // 有色需求已在前面的 typedCost 回溯中先行保留並匹配。
+        let remaining = 0;
+        for (let k = 0; k < units.length; k++) {
+          if (!used[k]) remaining++;
+        }
+        return remaining >= colorlessCost;
       }
-      return remaining >= colorlessCost;
-    }
-    const need = typedCost[i];
-    for (let j = 0; j < units.length; j++) {
-      if (used[j]) continue;
-      if (!units[j].types.includes(need)) continue;
-      used[j] = true;
-      if (tryMatch(i + 1)) return true;
-      used[j] = false;
+      const need = typedCost[i];
+      for (let j = 0; j < units.length; j++) {
+        if (used[j]) continue;
+        if (!units[j].types.includes(need)) continue;
+        used[j] = true;
+        if (tryMatch(i + 1)) return true;
+        used[j] = false;
+      }
+      return false;
+    };
+    return tryMatch(0);
+  };
+
+  // v3.9995 璀璨結晶：玩家可選擇扣任一 cost slot（任意屬性皆可）
+  //   實作：嘗試所有 N 種扣法（skipIdx 0..N-1），任一成功即返 true
+  //   例：cost=[Fire, Psychic]，玩家只有 1 Psychic：
+  //     - skipIdx=0 → 扣 Fire，剩 [Psychic] vs 1 Psychic → 成功
+  //     - skipIdx=1 → 扣 Psychic，剩 [Fire] vs 1 Psychic → 失敗
+  //     至少有 1 種成功 → 返 true
+  if (hasShinyCrystalReduction && cost.length > 0) {
+    for (let skipIdx = 0; skipIdx < cost.length; skipIdx++) {
+      const reduced = [...cost.slice(0, skipIdx), ...cost.slice(skipIdx + 1)];
+      if (tryAffordWithCost(reduced)) return true;
     }
     return false;
-  };
-  return tryMatch(0);
+  }
+  return tryAffordWithCost(cost);
 }
 
 /** 判斷一張 ex 卡（name 含 'ex' 後綴）對應獎勵牌數 */
@@ -3334,10 +3353,8 @@ function handlePlaying(
     const effectKey = `${sourceName}|${attack.name}`;
     const preFn = ATTACK_PRE.get(effectKey);
     let workingState: GameState = { ...state, players };
-    // v3.9994：UX 補強 — 璀璨結晶 cost -1 效果觸發時明確 addLog 告知玩家
-    //   玩家回報「璀璨結晶沒有效果」，但 canAffordAttack 內 cost reduction 邏輯已完整實裝。
-    //   實際 root cause 是 cost 減完後沒任何視覺/log 反饋 → 玩家看不到效果觸發。
-    //   此處在 canAffordAttack 通過後檢測同條件 → addLog。
+    // v3.9994/v3.9995：UX 補強 — 璀璨結晶 cost -1 效果觸發時明確 addLog
+    //   v3.9995 措辭調整：說明「玩家可選任意屬性」配對成功
     {
       const attackerCardForLog = pool.get(attacker.active.cardId);
       const isTeraForLog = attackerCardForLog?.tags?.includes('太晶');
@@ -3346,7 +3363,7 @@ function handlePlaying(
         for (const t of getAllAttachedTools(attacker.active)) {
           const tc = pool.get(t.cardId);
           if (tc?.name === '璀璨結晶') {
-            workingState = addLog(workingState, '璀璨結晶：本招式所需能量 -1 個（任意屬性）', aIdx);
+            workingState = addLog(workingState, '璀璨結晶：本招式所需能量 -1 個（任意屬性皆可，可彈性選擇免除哪一顆）', aIdx);
             break;
           }
         }

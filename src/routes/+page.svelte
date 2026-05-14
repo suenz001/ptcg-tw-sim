@@ -264,6 +264,41 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.9995</span> 🔮 璀璨結晶簡化實裝重修 + UI 道具標示 fallback + 其他 cost reducer audit</summary>
+        <ul>
+          <li>玩家實機驗證 v3.9994 後回報：
+            <ul>
+              <li><b>Bug 1（核心邏輯）</b>：多龍奇 cost=[Fire, Psychic] + 1 顆火能 → 系統不給用招式。應該只要 1 顆火 <b>或</b> 1 顆超能任一即可，但實裝固定扣最後 → cost=[Fire]，玩家若只有 Psychic 也應可發動但會被擋。</li>
+              <li><b>Bug 2（UI）</b>：自己戰鬥場 toolAttached 顯示空白小框框（getCard 返 undefined 時只剩 🔧 emoji）。</li>
+            </ul>
+          </li>
+          <li><b>修法 A — engine.ts canAffordAttack 重寫</b>：
+            <ul>
+              <li>璀璨結晶區塊改為設旗標 <code>hasShinyCrystalReduction</code>（不立即扣 cost）</li>
+              <li>主匹配邏輯（colorlessCost / typedCost / units / tryMatch）包進 inner helper <code>tryAffordWithCost(curCost)</code></li>
+              <li>外層 loop 嘗試所有 N 種扣法（skipIdx 0..N-1），任一成功即返 true — 鏡射卡面「任意屬性皆可」</li>
+              <li>例：cost=[Fire, Psychic] + 玩家 1 Psychic → skipIdx=0 扣 Fire → [Psychic] vs 1 Psychic 成功</li>
+            </ul>
+          </li>
+          <li><b>修法 B — UI 視覺修正</b>：
+            <ul>
+              <li>v3.9994 的單顆 pip 劃線（<code>.cost-reduced</code>）會誤導玩家「只能減特定位置」，改為 cost row 末尾總徽章 <code>🔮-1</code> 金色標示</li>
+              <li>helper <code>getShinyCrystalReducedIdx</code> 簡化為 <code>isShinyCrystalActive</code>（返 boolean）</li>
+              <li>tool-chip UI 4 處（雙方 active + bench）加 fallback：<code>tc?.name ?? '道具'</code>，避免 getCard 返 undefined 時只剩空 🔧 emoji</li>
+            </ul>
+          </li>
+          <li><b>Audit 其他 cost reducer（依鐵律核對）</b>：經卡面比對，<b>只有璀璨結晶</b>用「任意屬性皆可」字眼。其他 cost reducer 皆明寫【無】或特定屬性或全消除，固定扣法正確：
+            <ul>
+              <li>反擊增幅器 / 赫普的講究頭帶 → 「-1【無】」固定扣 Colorless ✓</li>
+              <li>激流水泵 -3 → 玩家自選棄能量 picker ✓</li>
+              <li>酋雷姆 反等離子 / 月月熊 老練招式 / 八爪武師 觸手激怒 / 狙射樹梟ex 狙擊手之眼 / 好勝毛蟹 事先準備 / 熾焰咆哮虎ex 喧鬧競技 / 瑪力露麗 亮亮泡 / 音波龍 調諧迴響 → 皆條件式覆寫/減 N【無】，無「任意屬性」字眼 ✓</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.9994</span> 🔮 璀璨結晶 UX 補強（加 log + UI 劃線顯示能量 -1）</summary>
         <ul>
           <li>玩家回報：寶可夢道具「璀璨結晶」沒有效果。卡面：「附有這張卡的『太晶』寶可夢使用招式時，使用那個招式所需的能量減少 1 個。」</li>
