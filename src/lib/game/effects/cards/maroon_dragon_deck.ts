@@ -53,7 +53,7 @@ regA('喵喵ex', 0, (st, aIdx, pool, inst) => {
   }));
   s = addLog(s, '喵喵ex：使用特性「殺手鐧捕捉」，從牌庫選擇 1 張支援者加入手牌', aIdx);
   return withPending(s, {
-    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: 1,  // v3.996：玩家可不選
     filter: 'Trainer:Supporter', effectKey: 'meowth-ex-trump-catch',
   });
 });

@@ -463,7 +463,7 @@ function deckSearchTrainerSubtypePost(
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
       filter: filterStr,
-      minCount: 1, maxCount: 1,
+      minCount: 0, maxCount: 1,  // v3.996：玩家可不選
       effectKey: effectKeyName,
     });
   };

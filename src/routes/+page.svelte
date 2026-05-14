@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.996</span> 🎴 補完 deck-search minCount audit（v3.995 deferred 3 處）</summary>
+        <ul>
+          <li>玩家要求補完上波 deferred 的 3 個 deck-search caller，理由同 v3.995：PTCG 規則「對手不知道牌庫內容，選不選由玩家決定」。</li>
+          <li><b>本波修正 3 處 minCount: 1 → 0</b>：
+            <ul>
+              <li>啪咚猴｜衝衝鼓 <code>search-generic-to-hand-private</code></li>
+              <li>喵喵ex｜殺手鐧捕捉 <code>meowth-ex-trump-catch</code>（從牌庫選 1 張支援者）</li>
+              <li>v2620 generic helper（影響多個使用此 helper 的 caller）</li>
+            </ul>
+          </li>
+          <li><b>v3.995 + v3.996 累計</b>：13 個 deck-search caller minCount: 1 → 0；3 個保留 minCount=1（多龍奇 偵查指令、暗碼迷的解讀 step 1/2 — 屬「揭示牌堆 + 任意排序放回」必選類）。</li>
+          <li><b>剩餘 v3.995 anchor 不一致沒修的 3 個</b>：effects.ts <code>deck-energy-attach-self</code>、abra <code>deck-energy-attach-bench</code>、items_misc.ts <code>drone-deliver-pick</code>、v2306 <code>crobat-night-work</code>（夜間工作）— 這些 anchor pattern 跟程式碼實際格式不一致導致 skipping，下一輪用更精準 line-by-line anchor 再修。玩家若實機遇到請告知卡名。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.995</span> 🎴 deck-search picker 補「不選（跳過）」按鈕（10 處 minCount: 1 → 0）</summary>
         <ul>
           <li>玩家規則更正：「對手不知道牌庫內容，選不選由玩家決定」— PTCG 線下對戰玩家可 fake「找不到」，simulator 應比照寬鬆規則。範例：高級球缺少「不選（跳過）」按鈕。</li>
