@@ -14,7 +14,7 @@ import {
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardHand,
   healResolver, recordOppKO,
 } from '../_shared';
-import { hitBenchPickPost, canApplyAttackEffectToTarget } from '../../effects';
+import { hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard } from '../../effects';
 import { isBasicEnergyOfType } from '../../engine';
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
 import { addPendingPrize } from '../_shared';
@@ -549,7 +549,7 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
       : defender.bench.find(c => c.iid === iid);
     if (!target) continue;
     const targetCard = pool.get(target.cardId);
-    // v2.89 招式效果免疫
+    // v2.89 招式效果免疫（attack-effect — 對戰圓形 / 抵抗之幕 / 薄霧 / 硬岩 等）
     const guardOO = canApplyAttackEffectToTarget(s, actorIdx, target, targetCard, pool);
     if (guardOO.blocked) {
       if (!blockedTargetsOO.has(iid)) {
@@ -558,6 +558,20 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
       }
       placedThisBatch++;
       continue;
+    }
+    // v3.993 招式傷害免疫（attack-damage — 花之帷幔 / 太晶備戰 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 中立中心）
+    //   卡面：「造成其選擇次數×20 點傷害」明確是 attack-damage，玩家回報花之帷幔沒擋住
+    //   注意：只擋 bench target（花之帷幔只保護備戰，不擋 active）
+    if (defender.active?.iid !== iid) {
+      const guardOOdmg = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-damage');
+      if (guardOOdmg.blocked) {
+        if (!blockedTargetsOO.has(iid)) {
+          blockedTargetsOO.add(iid);
+          s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${guardOOdmg.reason}（免疫此招式傷害）`, actorIdx);
+        }
+        placedThisBatch++;
+        continue;
+      }
     }
     const tHp = targetCard?.hp ?? 0;
     const newDmg = target.damage + counterDamage;

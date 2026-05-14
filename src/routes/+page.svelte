@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.993</span> 🛡 修油之機關槍漏 attack-damage 檢查（花之帷幔不擋 bug）</summary>
+        <ul>
+          <li>玩家回報：奧利瓦ex 油之機關槍對備戰有花之帷幔謝米的對手攻擊時，備戰非規則寶可夢仍受傷害（應該被花之帷幔擋）。</li>
+          <li><b>卡面確認</b>（玩家正確）：「選擇 6 次對手的寶可夢，對所選的所有寶可夢不計算弱點・抵抗力，<b>造成其選擇次數×20 點傷害</b>」— 明確是「造成傷害」(attack-damage)，不是「放置指示物」(attack-effect)。</li>
+          <li><b>根因</b>：<code>olive-oil-distribute</code> resolver (mega_decks.ts:553) 只用 <code>canApplyAttackEffectToTarget</code> 檢查（attack-effect 免疫如對戰圓形 / 抵抗之幕 / 薄霧 / 硬岩），<b>漏了 attack-damage 的免疫檢查</b>（花之帷幔 / 太晶備戰 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 中立中心）。</li>
+          <li><b>修法</b>：在既有 attack-effect check 之後加 <code>resolveBenchGuard(kind='attack-damage')</code> per-target 檢查：
+            <ul>
+              <li>只對 bench target 檢查（花之帷幔只保護備戰，不擋 active）</li>
+              <li>自動配合 v3.94 的 <code>_attackTimeOppFlowerVeil</code> snapshot fallback — 即使戰鬥場謝米被同招式 KO，備戰仍受花之帷幔保護</li>
+              <li>被擋下時加 log「OOO（免疫此招式傷害）」</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.992</span> 👁 觀戰功能：列出進行中房間 + 允許觀戰 toggle</summary>
         <ul>
           <li>玩家需求：加入房間頁顯示進行中的比賽供觀戰；線上對戰房間可設定「是否開放觀戰」（預設開）。</li>
