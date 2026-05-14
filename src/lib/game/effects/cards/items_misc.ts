@@ -902,8 +902,8 @@ reg('親送無人機', (st, idx) => {
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    // v2.993：擲幣 gate 已通過，且牌庫至少有 1 張（regG 確認 deck.length > 0）→ minCount: 1
-    minCount: 1, maxCount: 1,
+    // v3.997：minCount=0 — 對手不知道牌庫內容，玩家可選擇不找（fake fail to find）
+    minCount: 0, maxCount: 1,
     effectKey: 'gift-drone-pick',
   });
 });

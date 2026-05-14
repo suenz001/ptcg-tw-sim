@@ -191,7 +191,7 @@ function deckEnergyAttachBenchPost(typeFilter: EnergyType | null, label: string)
     const s = addLog(state, `${label}：從牌庫選 1 張基本能量附於備戰`, aIdx);
     return withPending(s, {
       type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: filterStr, minCount: 1, maxCount: 1,
+      filter: filterStr, minCount: 0, maxCount: 1,  // v3.997：玩家可不選
       effectKey: 'deck-energy-attach-bench-pick-energy',
       params: { label, validIids: cand.map(c => c.iid) },
     });

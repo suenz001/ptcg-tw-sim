@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.997</span> 🎴 補完 deck-search minCount audit 最後 3 處</summary>
+        <ul>
+          <li>v3.995 用錯 effectKey anchor 導致 3 處沒實際套用，本波直接 read 源碼後精準補齊：
+            <ul>
+              <li>abra_mawile_deck.ts 通用 helper：effectKey 是 <code>deck-energy-attach-bench-pick-energy</code>（不是我以為的 <code>deck-energy-attach-bench</code>）— 這個 helper 被多張卡用</li>
+              <li>親送無人機：effectKey 是 <code>gift-drone-pick</code>（不是我以為的 <code>drone-deliver-pick</code>）</li>
+              <li>叉字蝠｜夜間工作 <code>crobat-night-work</code>：minCount/maxCount 在 inline 同行，anchor 寫法不同</li>
+            </ul>
+          </li>
+          <li>注：v3.995 的 effects.ts <code>deck-energy-attach-self</code> 已成功改為 minCount: 0（audit 確認，本波不需重做）。</li>
+          <li><b>v3.995 ~ v3.997 累計</b>：deck-search caller 從 15 個 minCount=1 改為 12 個 minCount=0，3 個保留必選類（多龍奇 偵查指令、暗碼迷的解讀 step 1/2）。所有「從牌庫搜尋」類卡片現在都有「不選（跳過）」按鈕。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.996</span> 🎴 補完 deck-search minCount audit（v3.995 deferred 3 處）</summary>
         <ul>
           <li>玩家要求補完上波 deferred 的 3 個 deck-search caller，理由同 v3.995：PTCG 規則「對手不知道牌庫內容，選不選由玩家決定」。</li>

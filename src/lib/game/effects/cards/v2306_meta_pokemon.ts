@@ -99,7 +99,7 @@ regA('叉字蝠', 0, (state, aIdx, pool, inst) => {
   if (p.active) p.active.abilityUsedThisTurn = true;
   let s = addLog(state, '叉字蝠：使用特性「夜間工作」，從牌庫選擇 1 張卡', aIdx);
   return withPending(s, {
-    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: 1,  // v3.997：玩家可不選
     effectKey: 'crobat-night-work', params: { titleOverride: '夜間工作：從牌庫任意選擇 1 張卡放回牌庫頂' }
   });
 });
