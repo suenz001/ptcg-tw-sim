@@ -191,9 +191,14 @@ export function getAIAction(
         }
       }
 
-      // === v3.732 日光轉移（超級妙蛙花ex）— 不限次數特性，AI 容易無限循環 ===
-      // Stop condition：(a) active 已 ≥4 顆基本草（叢林拋擲 cost 4 顆草，足以攻擊）
-      //                 (b) 場上其他寶可夢身上沒有可移的基本草能量了
+      // === v3.99 日光轉移（超級妙蛙花ex）— 妙蛙花優先策略，徹底修無限循環 ===
+      // 玩家回報 v3.732 修法不夠：AI 還是會在「active（非草系）⇄ bench 厄鬼椪」之間
+      // 來回搬草。根因：heal-target picker 選 damage 最多 = 0 damage 都一樣 = 第一個
+      // = active → AI 把草搬到 active，下輪又從 active 搬回 bench。
+      //
+      // 修法：找超級妙蛙花ex inst，計算其有效草能（× 繁茂倍率），≥ 4 就停。
+      // 因為妙蛙花ex 是目標（target），AI 不會把它身上的能量搬走（picker 改為優先
+      // 選妙蛙花ex 當 target、避開它當 source），所以「妙蛙花ex grass ≥ 4」是穩定條件。
       if (ab.abilityName === '日光轉移') {
         const isBasicGrass = (eInst: { cardId: string }) => {
           const ec = pool.get(eInst.cardId);
@@ -202,12 +207,32 @@ export function getAIAction(
         };
         const countGrass = (p: { energyAttached: { cardId: string }[] } | null) =>
           p ? p.energyAttached.filter(isBasicGrass).length : 0;
-        const activeGrass = countGrass(player.active);
-        const benchGrass = player.bench.reduce((sum, b) => sum + countGrass(b), 0);
-        // (a) active 已夠攻擊 → 不再轉
-        if (activeGrass >= 4) score = 0;
-        // (b) 其他寶可夢沒草能可搬 → 不能再轉，停
-        else if (benchGrass === 0) score = 0;
+        const allMy = [player.active, ...player.bench].filter((c): c is CardInstance => !!c);
+        const meAttacker = allMy.find(c => pool.get(c.cardId)?.name === '超級妙蛙花ex');
+        const hasBloom = allMy.some(c =>
+          pool.get(c.cardId)?.abilities?.some((a: { name: string }) => a.name === '繁茂')
+        );
+        const multiplier = hasBloom ? 2 : 1;
+        const REQUIRED_GRASS = 4;  // 叢林拋擲 cost: GGGG (4 基本草)
+        if (meAttacker) {
+          const meGrass = countGrass(meAttacker) * multiplier;
+          if (meGrass >= REQUIRED_GRASS) {
+            // 妙蛙花ex 已滿足招式需求 → 停（picker 邏輯保證草能會搬到妙蛙花ex 而非 active）
+            score = 0;
+          } else {
+            // 還沒滿足 — 檢查其他寶可夢（非妙蛙花）身上有沒有可搬的草能
+            const otherGrass = allMy
+              .filter(c => c.iid !== meAttacker.iid)
+              .reduce((sum, c) => sum + countGrass(c), 0);
+            if (otherGrass === 0) score = 0;  // 沒草可搬，再用也只是內耗
+          }
+        } else {
+          // 場上沒妙蛙花ex（罕見場景 — 妙蛙花ex 在場才有此 ability）→ 走 v3.732 原邏輯
+          const activeGrass = countGrass(player.active);
+          const benchGrass = player.bench.reduce((sum, b) => sum + countGrass(b), 0);
+          if (activeGrass >= REQUIRED_GRASS) score = 0;
+          else if (benchGrass === 0) score = 0;
+        }
       }
 
       return { ab, score };
@@ -694,7 +719,35 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       ];
       let targets = validIids ? allPokes.filter(c => validIids.includes(c.iid)) : allPokes;
       if (targets.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
-      // 選傷害最多的（最需要治療的）
+      // v3.99 日光轉移特例 — 妙蛙花優先策略避免無限循環
+      if (sel.effectKey === 'sunlight-transfer-source' || sel.effectKey === 'sunlight-transfer-target') {
+        const isBasicGrass2 = (eInst: { cardId: string }) => {
+          const ec = pool.get(eInst.cardId);
+          if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return false;
+          return ec.pokemonType === 'Grass' || /【草】/.test(ec.name);
+        };
+        const meAttacker = targets.find(c => pool.get(c.cardId)?.name === '超級妙蛙花ex');
+        if (sel.effectKey === 'sunlight-transfer-source') {
+          // source 端：避免從妙蛙花ex 抽走能量，選非妙蛙花且有最多草能的（一次抽最多）
+          const nonMe = targets.filter(c => !meAttacker || c.iid !== meAttacker.iid);
+          if (nonMe.length > 0) {
+            const best = nonMe.reduce((a, b) => {
+              const aGrass = a.energyAttached.filter(isBasicGrass2).length;
+              const bGrass = b.energyAttached.filter(isBasicGrass2).length;
+              return aGrass >= bGrass ? a : b;
+            });
+            return { type: 'RESOLVE_SELECTION', selectedIids: [best.iid] };
+          }
+          // fallback：只剩妙蛙花ex 有草能（罕見）→ 走原邏輯
+        } else {
+          // target 端：優先選妙蛙花ex 當接收方（草能集中到主力）
+          if (meAttacker) {
+            return { type: 'RESOLVE_SELECTION', selectedIids: [meAttacker.iid] };
+          }
+          // 場上沒妙蛙花ex 但 picker 仍開（理論上不會 — USE_ABILITY 在 ability owner 不在場時無法觸發）
+        }
+      }
+      // 預設：選傷害最多的（最需要治療的）
       const best = targets.reduce((a, b) => a.damage >= b.damage ? a : b);
       return { type: 'RESOLVE_SELECTION', selectedIids: [best.iid] };
     }

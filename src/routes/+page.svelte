@@ -264,6 +264,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.99</span> 🤖 AI 日光轉移無限循環徹底修正（妙蛙花優先策略）</summary>
+        <ul>
+          <li>玩家回報：AI 用超級妙蛙花ex 日光轉移時，會在「戰鬥場吉雉雞ex（0 能 0 damage）⇄ 第 1 隻厄鬼椪（3 草）」之間無限來回搬草。</li>
+          <li><b>根因</b>：
+            <ul>
+              <li>v3.732 stop condition 只看 active grass ≥ 4。但 active 是非草系（吉雉雞ex）時 AI 持續往 active 搬。</li>
+              <li>heal-target picker AI 邏輯 <code>reduce((a, b) =&gt; a.damage &gt;= b.damage ? a : b)</code> 對 0 damage 全部相同時返回第一個 = active → AI 把草搬到 active，下輪 source picker 又選到 active（active 有草），又搬回 bench → 來回。</li>
+            </ul>
+          </li>
+          <li><b>修法</b>（採用玩家建議的「妙蛙花優先策略」）：
+            <ul>
+              <li><b>USE_ABILITY decision</b>：找超級妙蛙花ex inst，計算其草能 ×（場上有大竺葵繁茂 ? 2 : 1），若 ≥ 4（叢林拋擲 cost <code>GGGG</code>）→ score = 0 停止。場上無妙蛙花ex 時 fallback 走 v3.732 原邏輯。</li>
+              <li><b>heal-target picker 特例</b>（effectKey 為 sunlight-transfer-source / sunlight-transfer-target）：
+                <ul>
+                  <li>source 端：避免從妙蛙花ex 抽走能量，選非妙蛙花且有最多草能的寶可夢</li>
+                  <li>target 端：優先選妙蛙花ex 自己（草能集中到主力）</li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+          <li><b>效果</b>：草能會被穩定搬到妙蛙花ex 身上，不會回流到 active 或其他 bench；妙蛙花ex 拿夠 4 顆草後 score = 0 立刻停。徹底解決無限循環。</li>
+          <li><b>下次改版重點記錄</b>：玩家建議的「主打手 / 副打手 / 功能角色」AI 角色分類機制已記為 deferred task，下次改版時會做。</li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.98</span> 💬 聊天 fab 圖示可拖曳到任意位置（桌機 + 手機）</summary>
         <ul>
           <li>玩家需求：聊天 icon 按鈕可能擋住卡牌，讓玩家自己決定放哪裡。</li>
