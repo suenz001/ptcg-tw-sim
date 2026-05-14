@@ -2150,20 +2150,87 @@ regPre('晶光花|毒液衝擊', defStatusBonus(30, 'poisoned', 100));
 // Session 31 H4 — 簡單訓練家（抽牌、搜尋、回血等）
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 手部修剪器 — 雙方手牌丟至 5 張（對手先丟）
+// 手部修剪器 — 雙方手牌丟至 5 張（對手先丟，玩家自選要丟哪些）
+// v3.9991：原 v2 簡化用 p.hand.slice(-discardN) 自動取最後 N 張，違反 Iron Rule 7。
+//   卡面：「雙方玩家各將自己的手牌丟棄直到變為 5 張為止。（對手先丟棄。手牌為 5 張以下的玩家不丟棄。）」
+//   修法：chained picker — 先 actorIdx=oppIdx，resolver 完成後若 myNeed>0 再開 actorIdx=userIdx 自己 picker。
 reg('手部修剪器', (st, idx) => {
-  st = addLog(st, '手部修剪器：雙方手牌丟至 5 張', idx);
-  const players = [...st.players] as [PlayerState, PlayerState];
-  for (const i of [((1 - idx) as 0 | 1), idx]) {
-    const p = { ...players[i] };
-    if (p.hand.length <= 5) { players[i] = p; continue; }
-    const discardN = p.hand.length - 5;
-    const discarded = p.hand.slice(-discardN);
-    p.hand = p.hand.slice(0, 5);
-    p.discard = [...p.discard, ...discarded];
-    players[i] = p;
+  const oppIdx = (1 - idx) as 0 | 1;
+  const opp = st.players[oppIdx];
+  const me = st.players[idx];
+  const oppNeed = Math.max(0, opp.hand.length - 5);
+  const myNeed = Math.max(0, me.hand.length - 5);
+  if (oppNeed === 0 && myNeed === 0) {
+    return addLog(st, '手部修剪器：雙方手牌皆 ≤ 5 張，無人需丟棄', idx);
   }
-  return { ...st, players };
+  st = addLog(st, `手部修剪器：雙方手牌丟至 5 張（對手先丟 ${oppNeed} 張、自己 ${myNeed} 張）`, idx);
+  if (oppNeed > 0) {
+    // Step 1：對手先丟（卡面明文順序）
+    return withPending(st, {
+      type: 'hand-discard',
+      actorIdx: oppIdx, sourcePlayerIdx: oppIdx,
+      minCount: oppNeed, maxCount: oppNeed,
+      effectKey: 'hand-clipper-opp-discard',
+      params: {
+        userIdx: idx,   // 記住用卡者，resolver 內接力開自己 picker
+        myNeed,
+        titleOverride: `手部修剪器：選擇要丟棄的 ${oppNeed} 張手牌（丟到剩 5 張）`,
+      },
+    });
+  }
+  // 對手不用丟（手牌已 ≤ 5），直接跳到自己 picker
+  return withPending(st, {
+    type: 'hand-discard',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: myNeed, maxCount: myNeed,
+    effectKey: 'hand-clipper-self-discard',
+    params: { titleOverride: `手部修剪器：選擇要丟棄的 ${myNeed} 張手牌（丟到剩 5 張）` },
+  });
+});
+
+regR('hand-clipper-opp-discard', (st, idx, iids, params) => {
+  // idx 是 actor = oppIdx（被作用的對手）
+  st = updatePlayer(st, idx, p => {
+    const discarded = p.hand.filter(c => iids.includes(c.iid));
+    return {
+      ...p,
+      hand: p.hand.filter(c => !iids.includes(c.iid)),
+      discard: [...p.discard, ...discarded],
+    };
+  });
+  st = addPrivateLog(st,
+    `手部修剪器：你丟棄了 ${iids.length} 張手牌`,
+    `手部修剪器：對手丟棄了 ${iids.length} 張手牌`,
+    idx);
+  // 對手丟完 → 換用卡者丟（若 myNeed > 0）
+  const userIdx = params?.userIdx as 0 | 1 | undefined;
+  const myNeed = (params?.myNeed as number | undefined) ?? 0;
+  if (userIdx !== undefined && myNeed > 0) {
+    return withPending(st, {
+      type: 'hand-discard',
+      actorIdx: userIdx, sourcePlayerIdx: userIdx,
+      minCount: myNeed, maxCount: myNeed,
+      effectKey: 'hand-clipper-self-discard',
+      params: { titleOverride: `手部修剪器：選擇要丟棄的 ${myNeed} 張手牌（丟到剩 5 張）` },
+    });
+  }
+  return st;
+});
+
+regR('hand-clipper-self-discard', (st, idx, iids) => {
+  // idx 是 actor = 用卡者
+  st = updatePlayer(st, idx, p => {
+    const discarded = p.hand.filter(c => iids.includes(c.iid));
+    return {
+      ...p,
+      hand: p.hand.filter(c => !iids.includes(c.iid)),
+      discard: [...p.discard, ...discarded],
+    };
+  });
+  return addPrivateLog(st,
+    `手部修剪器：你丟棄了 ${iids.length} 張手牌`,
+    `手部修剪器：對手丟棄了 ${iids.length} 張手牌`,
+    idx);
 });
 
 // 高級香氛 — 從牌庫選最多 3 張 Stage1 寶可夢加手牌

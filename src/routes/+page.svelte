@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.9991</span> 🃏 修手部修剪器簡化實裝（雙方 picker，對手先丟）</summary>
+        <ul>
+          <li>玩家指出同 v3.999 庫瑟洛斯奇的企圖類問題：手部修剪器也是 <code>p.hand.slice(-N)</code> 自動取最後 N 張，違反 Iron Rule 7。</li>
+          <li>卡面（H 標 / SV5M / MC）：「雙方玩家各將自己的手牌丟棄直到變為 5 張為止。（對手先丟棄。手牌為 5 張以下的玩家不丟棄。）」</li>
+          <li>比庫瑟洛斯奇複雜：① 雙方都丟（不只對手）② 對手先丟（順序明文）③ 5 張以下不丟</li>
+          <li><b>修法</b>：chained picker
+            <ul>
+              <li>Step 1：actorIdx=oppIdx 對手 picker（<code>hand-clipper-opp-discard</code>）— 對手選 oppNeed 張</li>
+              <li>Step 2：resolver 收到後若 <code>myNeed &gt; 0</code> → 接力開 actorIdx=userIdx 自己 picker（<code>hand-clipper-self-discard</code>）</li>
+              <li>Edge case：對手 hand ≤ 5 但自己 &gt; 5 → reg 直接跳到自己 picker</li>
+              <li>雙方皆 ≤ 5 → log「無人需丟棄」結束</li>
+            </ul>
+          </li>
+          <li>tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.999</span> 🃏 修庫瑟洛斯奇的企圖簡化實裝（讓對手自選棄牌）</summary>
         <ul>
           <li>玩家回報：對手使用「庫瑟洛斯奇的企圖」時，我方無法選擇要丟的手牌 — 系統自動丟。</li>
