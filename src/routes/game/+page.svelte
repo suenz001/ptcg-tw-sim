@@ -29,6 +29,7 @@
     createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom,
     setRematchReady, checkAndAcceptRematch,
+    setSpectatorsAllowed,
     findMySeatIdx, bothPlayersReady, countDeckCards,
     sendMessage, subscribeMessages,
     heartbeat, isSeatStale, HEARTBEAT_STALE_MS, deleteRoom,
@@ -212,6 +213,9 @@
   // 可加入的開放房間列表（onlineStep='join' 時即時訂閱）
   let openRooms = $state<Room[]>([]);
   let openRoomsErr = $state('');
+  // v3.992：把 openRooms 依 status 分組（lobby = 等待中可加入；playing = 對戰中可觀戰）
+  const lobbyRooms = $derived(openRooms.filter(r => r.status === 'lobby'));
+  const playingRooms = $derived(openRooms.filter(r => r.status === 'playing'));
   let unsubOpenRooms: (() => void) | null = null;
   // v2.272 Phase 2：聊天室
   let chatMessages = $state<ChatMessage[]>([]);
@@ -3629,23 +3633,46 @@
         <h2>加入房間</h2>
         <label>玩家名稱<input class="name-input" placeholder="輸入你的名稱" bind:value={myName} /></label>
 
-        <!-- 公開房間列表 -->
+        <!-- v3.992 公開房間列表：分兩區（等待中可加入 + 對戰中可觀戰）-->
         <div class="open-rooms-section">
-          <h3>🌐 目前開放的房間（{openRooms.length}）</h3>
+          <h3>🌐 等待中的房間（{lobbyRooms.length}）</h3>
           {#if openRoomsErr}
             <p class="warn small">⚠️ {openRoomsErr}</p>
           {/if}
-          {#if openRooms.length === 0 && !openRoomsErr}
-            <p class="muted small">尚無其他玩家建立房間。可等待、或請對方建立後再刷新，或改用下方手動房號輸入。</p>
-          {:else if openRooms.length > 0}
+          {#if lobbyRooms.length === 0 && !openRoomsErr}
+            <p class="muted small">目前無等待中的房間。可請對方建立後再刷新，或改用下方手動房號輸入。</p>
+          {:else if lobbyRooms.length > 0}
             <ul class="open-room-list">
-              {#each openRooms as r (r.roomId)}
+              {#each lobbyRooms as r (r.roomId)}
                 <li class="open-room-row">
                   <span class="or-host">🎮 {r.roomName ?? r.hostName}</span>
                   <span class="or-host-name">房主：{r.hostName}</span>
                   <span class="or-code">房號 {r.roomId}</span>
                   <button class="btn-sm primary" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim()}>
                     加入
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+
+        <!-- v3.992 對戰中可觀戰房間 -->
+        <div class="open-rooms-section">
+          <h3>👁 對戰中的房間（{playingRooms.length}）</h3>
+          {#if playingRooms.length === 0}
+            <p class="muted small">目前無進行中且開放觀戰的房間。</p>
+          {:else}
+            <ul class="open-room-list playing-list">
+              {#each playingRooms as r (r.roomId)}
+                <li class="open-room-row playing-row">
+                  <span class="or-host">⚔️ {r.roomName ?? r.hostName}</span>
+                  <span class="or-host-name">
+                    {r.seats?.[0]?.name ?? '?'} vs {r.seats?.[1]?.name ?? '?'}
+                  </span>
+                  <span class="or-code">房號 {r.roomId}</span>
+                  <button class="btn-sm spectator-btn" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim()}>
+                    👁 觀戰
                   </button>
                 </li>
               {/each}
@@ -3678,6 +3705,24 @@
           </div>
           <button class="btn-secondary" onclick={leaveOnlineGame}>離開房間</button>
         </div>
+
+        <!-- v3.992 觀戰開關（P1/P2 可改）-->
+        {#if mySeatIdx === 0 || mySeatIdx === 1}
+          <div class="spectator-toggle-row">
+            <label class="spectator-toggle">
+              <input
+                type="checkbox"
+                checked={roomData?.spectatorsAllowed !== false}
+                onchange={(e) => {
+                  if (!roomCode) return;
+                  const target = e.currentTarget as HTMLInputElement;
+                  setSpectatorsAllowed(roomCode, target.checked).catch(console.error);
+                }}
+              />
+              <span>✅ 允許觀戰（讓其他玩家在大廳的「對戰中房間」看到此房）</span>
+            </label>
+          </div>
+        {/if}
 
         <!-- v2.73 殭屍房警示 + 解散按鈕 -->
         {#if oppStale}
@@ -6146,6 +6191,30 @@
   .rematch-hint { font-size:.95rem; margin-top:.8rem; text-align:center; color:#aacccc; }
   .back-home-link { display:inline-block; margin-top:.6rem; color:#88aacc; font-size:.85rem; text-decoration:underline; }
   .back-home-link:hover { color:#bbccdd; }
+
+  /* v3.992 觀戰功能 UI */
+  .open-room-row.playing-row { border-left: 3px solid #c4a84a; background: rgba(196, 168, 74, 0.05); }
+  .btn-sm.spectator-btn {
+    background: #6a4aaa; color: #fff; border: 1px solid #8a6acc;
+  }
+  .btn-sm.spectator-btn:hover:not(:disabled) {
+    background: #7a5abb;
+  }
+  .btn-sm.spectator-btn:disabled {
+    opacity: .5; cursor: not-allowed;
+  }
+  .spectator-toggle-row {
+    margin: .6rem 0; padding: .5rem .8rem;
+    background: rgba(106, 74, 170, 0.1); border: 1px solid rgba(106, 74, 170, 0.3);
+    border-radius: 6px;
+  }
+  .spectator-toggle {
+    display: flex; align-items: center; gap: .5rem; cursor: pointer;
+    font-size: .9rem; color: #ccddee;
+  }
+  .spectator-toggle input[type="checkbox"] {
+    width: 18px; height: 18px; cursor: pointer;
+  }
 
   /* v3.97 對戰中聊天室 ─────────────────────────────────────────────────── */
   .chat-fab {

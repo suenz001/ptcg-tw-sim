@@ -264,6 +264,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.992</span> 👁 觀戰功能：列出進行中房間 + 允許觀戰 toggle</summary>
+        <ul>
+          <li>玩家需求：加入房間頁顯示進行中的比賽供觀戰；線上對戰房間可設定「是否開放觀戰」（預設開）。</li>
+          <li><b>UX 流程</b>：
+            <ul>
+              <li>加入房間頁分兩區：「🌐 等待中的房間（X）」可加入對戰、「👁 對戰中的房間（Y）」可觀戰</li>
+              <li>對戰中房間顯示 <code>P1名 vs P2名</code>，紫色「👁 觀戰」按鈕（與藍色「加入」區分）</li>
+              <li>P1/P2 在房間 lobby 看到「✅ 允許觀戰」勾選 toggle，預設勾選，可取消（取消後此房不顯示在大廳「對戰中」列表，spectator 也不能新加入）</li>
+              <li>觀戰者進入 game 走 v2.276 既有機制：isSpectator 自動偵測、所有 dispatch 被擋、可切換 P1/P2/auto 視角看雙方手牌（直播 mode）</li>
+            </ul>
+          </li>
+          <li><b>Firebase schema 改動</b>：<code>RoomData</code> 加 <code>spectatorsAllowed?: boolean</code>（預設視為 true）。rules 無需大改（既有 P1/P2 寫入權限涵蓋）。</li>
+          <li><b>room.ts 改動</b>：
+            <ul>
+              <li><code>subscribeOpenRooms</code>：query 從 <code>where('status', '==', 'lobby')</code> 改為 <code>where('status', 'in', ['lobby', 'playing'])</code>，client 端依 status 分組 + filter playing 房的 <code>spectatorsAllowed !== false</code></li>
+              <li>新 function <code>setSpectatorsAllowed(roomCode, allowed)</code>：P1/P2 可改</li>
+              <li><code>joinRoom</code>：放寬 status check 允許 playing 房加入（坐觀戰位），ended 房仍拒絕；spectatorsAllowed===false 時 playing 房也拒絕</li>
+              <li>playing 階段強制只能坐觀戰位（不可佔玩家位）</li>
+              <li>playing 房 stale 用 5 min（heartbeat 閾值），lobby 仍用 10 min</li>
+            </ul>
+          </li>
+          <li><b>未實裝（之後考慮）</b>：觀戰人數上限自訂、隱私 mode（手牌隱藏）、踢出觀戰者、觀戰者上限通知。</li>
+          <li>tsc 0 errors；svelte/compiler 本地 parse 驗證通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.99</span> 🤖 AI 日光轉移無限循環徹底修正（妙蛙花優先策略）</summary>
         <ul>
           <li>玩家回報：AI 用超級妙蛙花ex 日光轉移時，會在「戰鬥場吉雉雞ex（0 能 0 damage）⇄ 第 1 隻厄鬼椪（3 草）」之間無限來回搬草。</li>

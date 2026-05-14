@@ -79,6 +79,12 @@ export interface RoomData {
    * （v3.95 的 rematchRequest 已廢棄改用此 schema — v3.96 取代）
    */
   rematchReady?: { [seatIdx: number]: boolean };
+  /**
+   * v3.992 觀戰開關（P1/P2 可改）：true / undefined → 對戰進行中時允許觀戰加入；
+   * false → 此房對戰中不對外顯示在「對戰中房間」列表，spectator 也不能新加入。
+   * 注意：lobby 階段不受此欄位影響（lobby 永遠公開供 P1/P2 加入；spectator 也可在 lobby 入坐）。
+   */
+  spectatorsAllowed?: boolean;
 }
 
 export interface Room extends RoomData {
@@ -194,7 +200,11 @@ export async function joinRoom(
   if ((data.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) {
     throw new Error('此房間是舊版本，請對方建立新房間');
   }
-  if (data.status !== 'lobby') throw new Error('房間已開始或已結束');
+  // v3.992：允許 status='playing' 房間加入觀戰（前提：spectatorsAllowed !== false）
+  if (data.status === 'ended') throw new Error('此房對戰已結束');
+  if (data.status === 'playing' && data.spectatorsAllowed === false) {
+    throw new Error('此房對戰中未開放觀戰');
+  }
   const seats = (data.seats ?? []) as Seat[];
 
   // v2.274：若我殘留在房內（前次沒清掉座位），更新名字後 return
@@ -211,13 +221,16 @@ export async function joinRoom(
   for (let i = 2; i < seats.length; i++) {
     if (seats[i].uid === null) { targetIdx = i; break; }
   }
-  // 觀戰位都滿 → 試 P1/P2 空位
+  // v3.992：lobby 階段觀戰位都滿 → 試 P1/P2 空位（觀戰者可升級為玩家）
+  //   playing 階段強制只能坐觀戰位（不可佔玩家位），且觀戰位滿則拒絕
   if (targetIdx === -1) {
-    for (let i = 0; i < 2; i++) {
-      if (seats[i].uid === null) { targetIdx = i; break; }
+    if (data.status === 'lobby') {
+      for (let i = 0; i < 2; i++) {
+        if (seats[i].uid === null) { targetIdx = i; break; }
+      }
     }
   }
-  if (targetIdx === -1) throw new Error('房間已滿');
+  if (targetIdx === -1) throw new Error(data.status === 'playing' ? '觀戰位已滿' : '房間已滿');
 
   const newSeats = seats.map((s, i) => {
     if (i !== targetIdx) return s;
@@ -336,6 +349,26 @@ export async function setSeatFirstChoice(
     i === myIdx ? { ...s, firstChoicePreference: choice } : s
   );
   await updateDoc(ref, { seats: newSeats, memberUids: computeMemberUids(newSeats), updatedAt: serverTimestamp() });
+}
+
+/**
+ * v3.992 設定本房是否允許觀戰（P1/P2 可改；spectator 不行）。
+ *   - lobby 階段：true 對 spectator join 無影響（永遠允許）
+ *   - playing 階段：true 才會出現在「對戰中房間」列表 + 允許 spectator 新加入
+ */
+export async function setSpectatorsAllowed(roomCode: string, allowed: boolean): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('尚未登入');
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('房間不存在');
+  const data = snap.data() as RoomData;
+  const myIdx = findMySeatIdx(data.seats, uid);
+  if (myIdx < 0 || myIdx > 1) throw new Error('只有 P1/P2 可改觀戰開關');
+  await updateDoc(ref, {
+    spectatorsAllowed: allowed,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 /**
@@ -520,10 +553,12 @@ export function subscribeOpenRooms(
   callback: (rooms: Room[]) => void,
   onError?: (err: Error) => void,
 ): () => void {
+  // v3.992：同時返回 lobby + playing 房間（playing 房需 spectatorsAllowed !== false）
+  //   client 端依 status 分組顯示；spectatorsAllowed 用 client filter（避免 composite index）
   const q = query(
     collection(db, 'rooms'),
-    where('status', '==', 'lobby'),
-    limit(50),
+    where('status', 'in', ['lobby', 'playing']),
+    limit(80),
   );
   return onSnapshot(
     q,
@@ -535,13 +570,16 @@ export function subscribeOpenRooms(
         const data = d.data() as RoomData;
         // 過濾舊版本房間
         if ((data.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) return;
-        // v2.52：判定是否為 stale lobby 房間
+        // v3.992：playing 房需 spectatorsAllowed !== false 才公開（undefined 視為 true）
+        if (data.status === 'playing' && data.spectatorsAllowed === false) return;
+        // stale 過濾：lobby 用 10 min（v2.52），playing 用 heartbeat 閾值 5 min（v2.73）
         const updatedAtSec = (data.updatedAt as { seconds?: number } | null | undefined)?.seconds;
         if (typeof updatedAtSec === 'number') {
           const ageMs = now - updatedAtSec * 1000;
-          if (ageMs > ROOM_STALE_THRESHOLD_MS) {
-            staleRoomIds.push(d.id);
-            return;  // 不顯示，加入待清理清單
+          const staleMs = data.status === 'lobby' ? ROOM_STALE_THRESHOLD_MS : HEARTBEAT_STALE_MS;
+          if (ageMs > staleMs) {
+            if (data.status === 'lobby') staleRoomIds.push(d.id);  // 只主動清 lobby 殭屍
+            return;  // 不顯示
           }
         }
         rooms.push({ ...data, roomId: d.id });
