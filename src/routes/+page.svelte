@@ -264,6 +264,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.03</span> 📱 手機版查看詳情「場上狀態」預設展開</summary>
+        <ul>
+          <li>玩家要手機版查看詳情中「📍 場上狀態」折疊區預設打開，不需每次手動展開。</li>
+          <li>修法：原 <code>open={!isPortraitMobile}</code>（桌面開、手機關）→ 改為 <code>open</code>（無條件展開）。「特性」「招式」兩個 details 保持原邏輯（手機預設收起）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.02</span> 🖥️ 修桌面小視窗誤判為手機橫置提示</summary>
         <ul>
           <li>玩家回報：網頁版對戰時，視窗沒放到最大會持續顯示「請手機旋轉至橫向」提示，導致桌面用戶無法操作。</li>

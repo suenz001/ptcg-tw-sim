@@ -5919,7 +5919,8 @@
               {@const effMax = hpTotal(zoomInst)}
               {@const instHp = Math.max(0, effMax - zoomInst.damage)}
               {@const toolC = zoomInst.toolAttached ? getCard(zoomInst.toolAttached.cardId) : null}
-              <details class="zoom-section" open={!isPortraitMobile}>
+              <!-- v4.03：場上狀態預設無條件展開（玩家要求手機版也預設打開） -->
+              <details class="zoom-section" open>
                 <summary class="zoom-section-summary">📍 場上狀態</summary>
               <div class="zoom-state">
                 {#if effMax > 0}
