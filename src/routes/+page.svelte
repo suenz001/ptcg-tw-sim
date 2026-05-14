@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.9997</span> 🔧 修非太晶寶可夢 attach 璀璨結晶 tool-chip 顯示空白</summary>
+        <ul>
+          <li>玩家關鍵新發現：多龍奇（非太晶）attach 璀璨結晶 → tool-chip 空白小框；進化成多龍巴魯托ex（太晶）→ 顯示正常「🔧璀璨結晶」。</li>
+          <li><b>Root cause</b>：非太晶寶可夢通常有特性按鈕（如多龍奇「✨偵查指令」），<code>ability-btn</code> 為 flex item + <code>width:100%</code> 在 flex row 中擠壓 <code>active-info</code> 可用寬度。tool-chip CSS 用 <code>overflow:hidden + text-overflow:ellipsis + max-width:100%</code> → 寬度被擠到 ~0 → 整個 chip 截斷成空白。</li>
+          <li><b>修法</b>：移除截斷邏輯 — <code>overflow:hidden</code>、<code>text-overflow:ellipsis</code>、<code>max-width:100%</code> 拿掉，改用 <code>width:max-content</code>（自然寬度）+ <code>z-index:5</code> + <code>flex-shrink:0</code>，確保 tool-chip 不被擠壓也不被覆蓋。</li>
+          <li>進化後寶可夢沒這個 bug 是因為它沒 ability-btn → active-info 寬度正常。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.9996</span> 🔧 修自方道具標示可見性 + 加璀璨結晶 cost 規則說明</summary>
         <ul>
           <li>玩家實機回報後續：

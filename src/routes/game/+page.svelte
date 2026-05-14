@@ -7542,8 +7542,27 @@
   /* ── Tool + Stadium ── */
   /* v3.9996：玩家回報自己戰鬥場道具標示看不清楚 — 字太小 + 對比低 */
   /*   放大 font-size .6rem → .78rem，顏色提亮 #f0d080 → #ffd700，加 font-weight 700 */
-  .tool-chip{ font-size:.78rem; color:#ffd700; background:#2a2208; border:1px solid #8a6a10; border-radius:4px; padding:.08rem .35rem; margin-top:.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width: max-content; max-width: 100%; display: inline-block; font-weight:700; text-shadow:0 1px 1px rgba(0,0,0,.7); }
-  .tool-chip.sm{ font-size:.62rem; }
+  /* v3.9997：移除截斷邏輯 — 玩家回報非太晶寶可夢（有 ability-btn 擠寬 active-info） */
+  /*   原 overflow:hidden + text-overflow:ellipsis + max-width:100% 會把整個 chip 截成空白 */
+  /*   改用 width:max-content（自然寬度）+ 取消 max-width 限制 + z-index 提高避免被覆蓋 */
+  .tool-chip{
+    font-size:.78rem;
+    color:#ffd700;
+    background:#2a2208;
+    border:1px solid #8a6a10;
+    border-radius:4px;
+    padding:.08rem .35rem;
+    margin-top:.15rem;
+    white-space:nowrap;
+    width: max-content;
+    display: inline-block;
+    font-weight:700;
+    text-shadow:0 1px 1px rgba(0,0,0,.7);
+    position:relative;
+    z-index:5;
+    flex-shrink:0;
+  }
+  .tool-chip.sm{ font-size:.62rem; padding:.04rem .25rem; }
   .ab-used-chip{ font-size:.58rem; color:#c8c0f0; background:#2a1a3a; border:1px solid #4a3a6a; border-radius:3px; padding:.06rem .25rem; margin-top:.1rem; display:inline-block; }
   .ab-used-chip.sm{ font-size:.7rem; padding:0 .15rem; border:none; background:transparent; color:#d0a0ff; }
   .tool-btn{ background:#4a3a10; color:#f0d080; }
