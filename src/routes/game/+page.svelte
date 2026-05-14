@@ -1244,6 +1244,33 @@
   const activePlayer   = $derived(game ? game.players[aIdx] : null);
   const defenderPlayer = $derived(game ? game.players[dIdx] : null);
   const availableAttacks = $derived(game && poolReady ? getAvailableAttacks(game, pool) : []);
+
+  /**
+   * v3.9994 UX 補強：偵測太晶寶可夢 + 璀璨結晶 → 計算「哪一顆 cost pip 應該劃線」
+   *   邏輯鏡射 engine.ts canAffordAttack 內 璀璨結晶 cost reduction（優先扣 Colorless，否則扣最後 1 個）
+   *   回傳 -1 表示無減免；否則回傳該 index 用於劃線顯示
+   *   阻礙之塔啟用時道具失效不顯示劃線
+   */
+  function getShinyCrystalReducedIdx(
+    attacker: import('$lib/game/types').CardInstance | null | undefined,
+    attackCost: import('$lib/game/types').EnergyType[],
+  ): number {
+    if (!attacker || attackCost.length === 0 || !game) return -1;
+    const attackerCard = pool.get(attacker.cardId);
+    if (!attackerCard?.tags?.includes('太晶')) return -1;
+    if (game.activeStadium) {
+      const stadiumCard = pool.get(game.activeStadium.cardId);
+      if (stadiumCard?.name === '阻礙之塔') return -1;
+    }
+    const tools: import('$lib/game/types').CardInstance[] = [];
+    if (attacker.toolAttached) tools.push(attacker.toolAttached);
+    if (attacker.extraTools) tools.push(...attacker.extraTools);
+    const hasShiny = tools.some(t => pool.get(t.cardId)?.name === '璀璨結晶');
+    if (!hasShiny) return -1;
+    const colorlessIdx = attackCost.indexOf('Colorless');
+    if (colorlessIdx >= 0) return colorlessIdx;
+    return attackCost.length - 1;
+  }
   // v2.98：pendingPrizes 改為 [P1 owed, P2 owed]
   // v3.791 Bug fix：原本用 `myPlayerIndex ?? 0` — 但在本機雙人模式下 myPlayerIndex 永遠 null，
   //   會強制讀 pendingPrizes[0]（P1 視角）。P2 攻擊 KO P1 時 P2 的 pendingPrizes 不會被認，
@@ -4313,11 +4340,12 @@
           {#if game.turnPhase==='main' && activePlayer?.active}
             {@const eff=getEffectiveAttacks(game, activePlayer.active, pool)}
             {#each eff as { atk, sourceCardName, isFromTool }, i}
+              {@const _redIdx = getShinyCrystalReducedIdx(activePlayer.active, atk.cost)}
               <button class="btn-act atk" class:atk-ready={availableAttacks.includes(i)} class:atk-from-tool={isFromTool}
                 disabled={!availableAttacks.includes(i)||!!pendingSelection}
                 title={isFromTool ? `來自工具：${sourceCardName}` : ''}
                 onclick={()=>initiateAttack(i)}>
-                <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}</span>
+                <span class="cost-row">{#each atk.cost as e, ei}<span class="epip {ei === _redIdx ? 'cost-reduced' : ''}" style="background:{ENERGY_COLOR[e]}" title={ei === _redIdx ? '璀璨結晶：此能量需求 -1' : ''}>{ENERGY_LABEL[e]}</span>{/each}</span>
                 <span class="atk-name">{atk.name}{isFromTool ? ' 🔧' : ''}</span>
                 <span class="atk-dmg">{atk.damage||'—'}</span>
               </button>
@@ -6625,6 +6653,17 @@
     color:#eee; font-size:.88rem; text-align:left; }
   .copy-attack-btn:hover{ background:#3a5a3a; border-color:#6aaa6a; }
   .copy-atk-cost{ display:inline-flex; gap:.15rem; }
+  /* v3.9994：璀璨結晶 cost reduction 視覺標示 — 被減的 pip 劃線 + 半透明 */
+  .epip.cost-reduced{
+    position:relative; opacity:.55; text-decoration:line-through; text-decoration-thickness:2px;
+    box-shadow:0 0 0 1px #ffd700 inset;
+  }
+  .epip.cost-reduced::after{
+    content:'-1'; position:absolute; top:-8px; right:-6px;
+    font-size:.55rem; color:#ffd700; background:rgba(0,0,0,.75);
+    padding:0 3px; border-radius:6px; font-weight:700;
+    pointer-events:none;
+  }
   .copy-atk-pip{ display:inline-flex; width:1.2em; height:1.2em; border-radius:50%;
     align-items:center; justify-content:center; color:#fff; font-size:.7rem; font-weight:700;
     text-shadow:0 1px 1px rgba(0,0,0,.4); }

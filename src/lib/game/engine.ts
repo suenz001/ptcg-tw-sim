@@ -3334,6 +3334,24 @@ function handlePlaying(
     const effectKey = `${sourceName}|${attack.name}`;
     const preFn = ATTACK_PRE.get(effectKey);
     let workingState: GameState = { ...state, players };
+    // v3.9994：UX 補強 — 璀璨結晶 cost -1 效果觸發時明確 addLog 告知玩家
+    //   玩家回報「璀璨結晶沒有效果」，但 canAffordAttack 內 cost reduction 邏輯已完整實裝。
+    //   實際 root cause 是 cost 減完後沒任何視覺/log 反饋 → 玩家看不到效果觸發。
+    //   此處在 canAffordAttack 通過後檢測同條件 → addLog。
+    {
+      const attackerCardForLog = pool.get(attacker.active.cardId);
+      const isTeraForLog = attackerCardForLog?.tags?.includes('太晶');
+      const toolsJammedForLog = isToolsJammed(state, pool);
+      if (isTeraForLog && !toolsJammedForLog && attack.cost.length > 0) {
+        for (const t of getAllAttachedTools(attacker.active)) {
+          const tc = pool.get(t.cardId);
+          if (tc?.name === '璀璨結晶') {
+            workingState = addLog(workingState, '璀璨結晶：本招式所需能量 -1 個（任意屬性）', aIdx);
+            break;
+          }
+        }
+      }
+    }
     let baseDamage = parseInt(attack.damage ?? '0', 10) || 0;
     // v2.92：回力鏢能量 revive 快照 — 用於招式效果後把被丟棄的回力鏢能量重附回原本寶可夢。
     // 卡面：「若因附有這張卡的寶可夢使用的招式的效果使這張卡被丟棄，

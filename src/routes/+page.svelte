@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.9994</span> 🔮 璀璨結晶 UX 補強（加 log + UI 劃線顯示能量 -1）</summary>
+        <ul>
+          <li>玩家回報：寶可夢道具「璀璨結晶」沒有效果。卡面：「附有這張卡的『太晶』寶可夢使用招式時，使用那個招式所需的能量減少 1 個。」</li>
+          <li><b>Audit 結論（依鐵律）</b>：邏輯實裝完整 — engine.ts <code>canAffordAttack</code> 內已有 cost reduction（太晶 + 璀璨結晶 + 未被阻礙之塔封）+ <code>ATTACH_TOOL_NAMES</code> 已含此卡（v3.04 hotfix）。<b>真正的 bug 是 UX 反饋缺失</b>：cost 減完後完全沒 log/視覺提示，玩家以「看不到」當「沒效果」。</li>
+          <li><b>修法 A — engine.ts ATTACK log</b>：<code>canAffordAttack</code> 通過後檢測同條件 → <code>addLog('璀璨結晶：本招式所需能量 -1 個（任意屬性）')</code>，玩家戰鬥 log 明確看到效果觸發。</li>
+          <li><b>修法 B — UI cost-row 視覺標示</b>：加 helper <code>getShinyCrystalReducedIdx</code> 鏡射 engine 邏輯（優先扣 Colorless，否則扣最後 1 個）→ 被減掉的 cost pip 劃線 + 半透明 + 右上角 <code>-1</code> 金色徽章。玩家直觀看到「卡面 2 顆能量但實際只需 1 顆」。</li>
+          <li><b>範圍</b>：本波只處理璀璨結晶；其他 cost reduction 道具（反擊增幅器 / 赫普頭帶）下一波 audit + 同模式補 UX。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.9993</span> 🎲 對戰加「隨機牌組」+ 網頁版血量字體加大</summary>
         <ul>
           <li><b>對戰選牌組加「🎲 隨機牌組」按鈕</b>（玩家反饋）：
