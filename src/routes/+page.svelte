@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.0</span> 🦊 修伊布覺醒簡化實裝（應直接進化非加手）</summary>
+        <ul>
+          <li>玩家回報：伊布招式「覺醒」應使用完直接在自身進化，目前卻把進化卡加到玩家手上。</li>
+          <li><b>Audit</b>：v2.75 簡化實裝註解明寫「<code>簡化：加手</code>」— 違反 Iron Rule 7 + 卡面「放置於這隻寶可夢身上完成進化」明文「直接進化」。</li>
+          <li><b>修法</b>：仿石居蟹｜覺醒（v2.37）的「直接進化」模式 — filter validIids=deck 中 <code>evolvesFrom='伊布'</code> 的進化卡（樹葉/火/水/雷/仙/冰/太陽/月亮伊布 等），resolver 把該卡放戰鬥場上完成進化（保留 damage/energy/tool + 推進 <code>evolvedFromStack</code>）並重洗牌庫。</li>
+          <li>備註：蛋蛋｜早熟進化 同類 bug 但有「先攻最初回合限定」gate，下波再修。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.9999</span> 🐛 修小灰怪挪動一下（場上含備戰）+ 樂呵呵之吻（附 1 隻）</summary>
         <ul>
           <li><b>Bug 1：小灰怪 挪動一下</b> — 卡面「對手場上寶可夢」應含 active + bench，v3.9998 的 active-energy-discard 只能取 active 能量。改用 modal-choice 2 階段：
