@@ -299,20 +299,51 @@ regR('v3140-zapdos-jamming-attach', (state, aIdx, iids, params, pool) => {
   );
 });
 
-// 小灰怪｜挪動一下 0 — 同 7 但無傷害
+// 小灰怪｜挪動一下 0 — 對手戰鬥能量改附對手備戰（玩家選來源 + 目標）
+// v3.9998 修 Rule 7：原 v2.67 簡化「取末尾 + 隨機備戰」違反卡面「選擇 1 個能量 + 改附其他寶可夢」。
+//   改成 chain（仿阻礙之翼 v3.14）：active-energy-discard → bench-choose（雙方 sourcePlayerIdx=dIdx）
 regPre('小灰怪|挪動一下', (s) => ({ state: s, damage: 0 }));
 regPost('小灰怪|挪動一下', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
-  if (!opp.active || opp.active.energyAttached.length === 0 || opp.bench.length === 0) return state;
-  const last = opp.active.energyAttached[opp.active.energyAttached.length - 1];
-  const benchIdx = Math.floor(Math.random() * opp.bench.length);
+  if (!opp.active || opp.active.energyAttached.length === 0 || opp.bench.length === 0) {
+    return addLog(state, '挪動一下：條件不足（對手戰鬥場無能量或備戰無寶可夢）', aIdx);
+  }
+  return withPending(addLog(state, '挪動一下：選擇對手戰鬥場 1 張能量（將改附對手備戰）', aIdx), {
+    type: 'active-energy-discard',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'minccino-shuffle-pick-energy',
+    params: { titleOverride: '挪動一下：選擇要改附的對手能量' },
+  });
+});
+regR('minccino-shuffle-pick-energy', (state, aIdx, iids) => {
+  const energyIid = iids[0];
+  if (!energyIid) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  return withPending(addLog(state, '挪動一下：選擇要改附能量的對手備戰寶可夢', aIdx), {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'minccino-shuffle-attach',
+    params: { energyIid, titleOverride: '挪動一下：選擇要改附能量的對手備戰' },
+  });
+});
+regR('minccino-shuffle-attach', (state, aIdx, iids, params, pool) => {
+  const targetIid = iids[0];
+  const energyIid = params?.energyIid as string | undefined;
+  if (!targetIid || !energyIid) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const opp = state.players[dIdx];
+  const energyInst = opp.active?.energyAttached.find(e => e.iid === energyIid);
+  if (!energyInst) return state;
+  const eName = pool.get(energyInst.cardId)?.name ?? '?';
   return updatePlayer(
-    addLog(state, '挪動一下：對手戰鬥場 1 個能量改附對手備戰（隨機選）', aIdx),
+    addLog(state, `挪動一下：將對手戰鬥位 ${eName} 改附對手備戰`, aIdx),
     dIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.slice(0, -1) } : null,
-      bench: p.bench.map((b, i) => i === benchIdx ? { ...b, energyAttached: [...b.energyAttached, last] } : b),
+      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== energyIid) } : null,
+      bench: p.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, energyInst] } : b),
     }),
   );
 });

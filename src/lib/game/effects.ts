@@ -4293,7 +4293,46 @@ function oppDiscardRandomHand(n: number, attackName: string): AttackPostFn {
   };
 }
 regPost('功夫鼬|拍落', oppDiscardRandomHand(1, '拍落'));
-regPost('太陽伊布ex|精神出局', oppDiscardRandomHand(1, '精神出局'));
+// v3.9998 修 Rule 7：原 v2 用 oppDiscardRandomHand 隨機，違反卡面
+//   「在不看正面的情況下，從對手的手牌選擇 1 張，將其丟棄」
+//   改用 hand-discard picker + concealed=true：UI 端顯示卡背，玩家僅看到「幾張」
+//   選 1 張，resolver 端丟棄到對手棄牌區。
+regPost('太陽伊布ex|精神出局', (state, aIdx, _pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const oppHand = state.players[dIdx].hand;
+  if (oppHand.length === 0) return addLog(state, '精神出局：對手手牌為空', aIdx);
+  const st = addLog(state, `精神出局：在不看正面的情況下，從對手手牌（${oppHand.length} 張）選 1 張丟棄`, aIdx);
+  return withPending(st, {
+    type: 'hand-discard',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'sunny-eevee-mental-out',
+    params: {
+      validIids: oppHand.map(c => c.iid),
+      concealed: true,  // v3.9998：UI 端讀此 flag → 卡背顯示，不揭示卡名/圖
+      titleOverride: '精神出局：選擇要丟棄的對手手牌（不看正面）',
+    },
+  });
+});
+regR('sunny-eevee-mental-out', (state, aIdx, iids, _params, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const targetIid = iids[0];
+  if (!targetIid) return state;
+  return updatePlayer(state, dIdx, p => {
+    const picked = p.hand.find(c => c.iid === targetIid);
+    if (!picked) return p;
+    const pickedName = pool.get(picked.cardId)?.name ?? '?';
+    // 揭示丟棄的卡（卡丟到棄牌區後本就公開）
+    return {
+      ...p,
+      hand: p.hand.filter(c => c.iid !== targetIid),
+      discard: [...p.discard, picked],
+      // log message 在 outer 處理
+    };
+  });
+});
+// v3.9998：拍落仍用隨機（卡面寫「隨機」），維持舊邏輯
+
 
 // 巨牙鯊｜咬棄 — 擲 3 次硬幣，丟對手正面數量的手牌（不看正面）
 regPost('巨牙鯊|咬棄', (state, aIdx, _pool) => {
@@ -6523,9 +6562,11 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
       return { ...s, phase: 'game-over', winner: dIdx, winReason: `${att.name} 沒有可上場的寶可夢` };
     }
   }
-  // v2.98：攻擊方自 KO → 防守方 (dIdx) 取獎
+  // v3.9998 修：原 v2.98 註解錯誤 + 用錯 idx。selfPrizes 變數名誤導 — 實際是
+  //   「攻擊方擊倒對手取得的獎勵」（上方累加在 KO 對手出場時）→ 應給攻擊方 (aIdx)。
+  //   line 6521 已處理「對手取攻擊方自 KO 的獎賞」(dIdx, oppPrizes)，這裡是另一邊。
   if (selfPrizes > 0) {
-    s = addPendingPrize(s, dIdx, selfPrizes);
+    s = addPendingPrize(s, aIdx, selfPrizes);
   }
   return s;
 });

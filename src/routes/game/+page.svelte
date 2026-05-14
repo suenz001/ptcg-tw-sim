@@ -4887,15 +4887,24 @@
             }
             return m;
           })()}
+          {@const concealed = pendingSelection.params?.concealed === true}
           <div class="sel-grid">
             {#each selectionItems as item}{@const c=getCard(item.cardId)}
               {#if c}
-                <div class="sel-card-wrap" class:sel-picked={selectionPicked.has(item.iid)}>
-                  <button class="sel-zoom" title="放大檢視：{c.name}"
-                    onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
+                <div class="sel-card-wrap" class:sel-picked={selectionPicked.has(item.iid)} class:sel-concealed={concealed}>
+                  {#if !concealed}
+                    <button class="sel-zoom" title="放大檢視：{c.name}"
+                      onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
+                  {/if}
                   <button class="sel-card" onclick={()=>toggleSelection(item.iid)}>
-                    <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
-                    {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+                    {#if concealed}
+                      <!-- v3.9998：concealed 模式（精神出局等「不看正面」）— 卡背 + 卡名隱藏 -->
+                      <div class="sel-card-back"><div class="sel-card-back-icon">🎴</div><div class="sel-card-back-q">?</div></div>
+                      <span class="sel-name">???</span>
+                    {:else}
+                      <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
+                      {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+                    {/if}
                     {#if isEnergyPicker && energyOwnerMap.has(item.iid)}
                       {@const owner = energyOwnerMap.get(item.iid)!}
                       <!-- v3.828: 點 📍 標籤放大來源寶可夢 — 用 div + role=button 避免 button-in-button nesting -->
@@ -4981,8 +4990,10 @@
         {/if}
 
         <!-- v2.38 枇琶：對手手牌 hand-discard（sourcePlayerIdx != actorIdx）— 揭露「非可選」其餘手牌 -->
+        <!-- v3.9998：concealed 模式（精神出局）不揭露其餘手牌 -->
         {#if pendingSelection.type==='hand-discard' && game
-          && pendingSelection.sourcePlayerIdx !== pendingSelection.actorIdx}
+          && pendingSelection.sourcePlayerIdx !== pendingSelection.actorIdx
+          && pendingSelection.params?.concealed !== true}
           {@const srcHand = game.players[pendingSelection.sourcePlayerIdx].hand}
           {@const pickableIidsHD = new Set(selectionItems.map(c => c.iid))}
           {@const otherHand = srcHand.filter(c => !pickableIidsHD.has(c.iid))}
@@ -6649,6 +6660,18 @@
     color:#eee; font-size:.88rem; text-align:left; }
   .copy-attack-btn:hover{ background:#3a5a3a; border-color:#6aaa6a; }
   .copy-atk-cost{ display:inline-flex; gap:.15rem; }
+  /* v3.9998：concealed picker（精神出局）— 卡背 placeholder */
+  .sel-card-back{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    width:100%; aspect-ratio: 245/342;
+    background:linear-gradient(135deg, #1a1a3a 0%, #2a2a5a 50%, #1a1a3a 100%);
+    border:2px solid #4a4a8a; border-radius:6px;
+    color:#aabbff;
+  }
+  .sel-card-back-icon{ font-size:2.5rem; line-height:1; }
+  .sel-card-back-q{ font-size:2rem; font-weight:900; margin-top:.3rem; color:#ffcc44; text-shadow:0 2px 4px rgba(0,0,0,.5); }
+  .sel-concealed .sel-name{ color:#aabbff; font-style:italic; }
+
   /* v3.9995：璀璨結晶啟用時，cost row 末尾加總徽章 */
   /*   （v3.9994 加的單顆 .cost-reduced 劃線移除 — 因「任意屬性皆可」應由玩家彈性選） */
   .shiny-crystal-badge{

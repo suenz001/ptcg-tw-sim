@@ -335,14 +335,19 @@ regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
       returnedCount++;
       // 退化為 prev：cardId 變回前一階
       // v2.261 Bug C-13：退化規則 — 保留 damage / energy / tool（PDF §II-C-13），
-      //   但清除特殊狀態與附加效果，且設 evolvedThisTurn 防本回合再進化。
+      //   但清除特殊狀態與附加效果。
+      // v3.9998 修：原 v2.261 設 evolvedThisTurn:true 防「本回合再進化」，
+      //   但這 flag 只在「當前玩家」END_TURN 清（clearTurnFlags 只跑 aIdx）。
+      //   阿賽斯特萊石作用對象是「對手」寶可夢 → 對手 START_TURN 時 flag 仍 true
+      //   → 對手回合不能進化，違反 PTCG 規則（跨回合應失效）。
+      //   修法：不設此 flag。本回合對方寶可夢沒有「進化動作」（不是他回合），
+      //   所以即使移除 flag 也不會發生「本回合自我連續進化」問題。
       return {
         ...poke,
         cardId: prev.cardId,
         evolvedFromStack: stack.length > 0 ? stack : undefined,
         evolvedFromIid: stack.length > 0 ? stack[stack.length - 1].iid : undefined,
-        evolvedThisTurn: true,  // v2.261：退化後視為新上場，當回合不可進化
-        // v2.261 清狀態 + 跨回合 flag（PDF §II-C-13 消除物）
+        // v3.9998 清狀態 + 跨回合 flag（PDF §II-C-13 消除物）
         status: undefined,
         secondaryStatus: undefined,
         cantAttackThisTurn: undefined,

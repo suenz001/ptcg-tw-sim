@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v3.9998</span> 🐛 4 bug 修補（太陽伊布ex 兩招 + 小灰怪 + 同命戰鬥獎勵）</summary>
+        <ul>
+          <li><b>Bug 1：太陽伊布ex 精神出局</b> — 卡面「在不看正面的情況下，從對手的手牌選擇 1 張，將其丟棄」。原實裝用隨機選（<code>oppDiscardRandomHand</code>），改用 hand-discard picker + <code>params.concealed=true</code>。UI 端讀此 flag → 卡背 placeholder（深藍漸層 + 🎴 + ?），玩家僅看到「對手有幾張」選 1 張丟棄，不揭示卡圖/卡名。</li>
+          <li><b>Bug 2：太陽伊布ex 阿賽斯特萊石</b> — 對手退化後應在對手回合可重進化。原 v2.261 設 <code>evolvedThisTurn:true</code>，但 <code>clearTurnFlags</code> 只清「當前玩家」flags，對手 START_TURN 時 flag 仍 true → 不能進化。修法：退化邏輯不設 <code>evolvedThisTurn</code>（被退化的寶可夢非「剛進化」，且當前玩家回合內對方無進化動作，安全移除）。</li>
+          <li><b>Bug 3：小灰怪 挪動一下</b> — 卡面「選擇 1 個對手場上寶可夢身上附加的能量，改附於對手的其他寶可夢身上」。原 v2.67 簡化「取末尾能量 + 隨機備戰」違反 Rule 7。改成 2 階段 picker（仿阻礙之翼 v3.14）：<code>active-energy-discard</code> → <code>bench-choose</code>，兩階段 <code>sourcePlayerIdx=dIdx</code>，玩家自選來源能量 + 目標寶可夢。</li>
+          <li><b>Bug 4：呆呆王耀閃挑戰借同命戰鬥雙 KO 我方沒拿獎</b> — effects.ts line 6528 <code>addPendingPrize(s, dIdx, selfPrizes)</code> 給「對手」是錯的。<code>selfPrizes</code> 變數名誤導 — 實際在 line 6501 累加，是「攻擊方擊倒對手取得的獎勵」應給攻擊方 (<code>aIdx</code>)。line 6521 已處理「對手取攻擊方自KO 的獎」。修法：<code>dIdx → aIdx</code>。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v3.9997</span> 🔧 修非太晶寶可夢 attach 璀璨結晶 tool-chip 顯示空白</summary>
         <ul>
           <li>玩家關鍵新發現：多龍奇（非太晶）attach 璀璨結晶 → tool-chip 空白小框；進化成多龍巴魯托ex（太晶）→ 顯示正常「🔧璀璨結晶」。</li>
