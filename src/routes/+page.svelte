@@ -264,10 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.04</span> 🚨 hotfix — v4.03 changelog 違反 Iron Rule 1 導致空白頁</summary>
+        <ul>
+          <li>玩家回報網頁完全空白，console 顯示 <code>ReferenceError: isPortraitMobile is not defined</code>。</li>
+          <li><b>Root cause（Iron Rule 1 違反）</b>：v4.03 changelog 在 <code>&lt;code&gt;</code> 內寫 <code>&#123;!isPortraitMobile&#125;</code> 未 escape，Svelte 5 把這個 mustache 當作 reactive expression 嘗試 evaluate — 但首頁 component 沒這個變數宣告 → 整頁 runtime ReferenceError → 空白。</li>
+          <li><b>修法</b>：把 changelog 中的 <code>&#123;</code> <code>&#125;</code> 改寫為 HTML entity。</li>
+          <li>同類 bug 過去發生過多次（v3.898 / v3.899 / v3.55 等），是 Iron Rule 1 明文禁止項。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.03</span> 📱 手機版查看詳情「場上狀態」預設展開</summary>
         <ul>
           <li>玩家要手機版查看詳情中「📍 場上狀態」折疊區預設打開，不需每次手動展開。</li>
-          <li>修法：原 <code>open={!isPortraitMobile}</code>（桌面開、手機關）→ 改為 <code>open</code>（無條件展開）。「特性」「招式」兩個 details 保持原邏輯（手機預設收起）。</li>
+          <li>修法：原 <code>open=&#123;!isPortraitMobile&#125;</code>（桌面開、手機關）→ 改為 <code>open</code>（無條件展開）。「特性」「招式」兩個 details 保持原邏輯（手機預設收起）。</li>
         </ul>
       </details>
 
