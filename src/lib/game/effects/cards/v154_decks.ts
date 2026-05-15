@@ -140,16 +140,12 @@ regR('sunlight-transfer-target', (st, idx, iids, params, pool) => {
 regG('金屬怪', (st, idx) => {
   return st.players[idx].deck.length > 0;
 });
-regA('金屬怪', 0, (st, idx, pool) => {
+regA('金屬怪', 0, (st, idx, _pool) => {
   const p = st.players[idx];
   if (p.deck.length === 0) return addLog(st, '金屬製造者：牌庫為空', idx);
-  // 場上必須有【鋼】寶可夢可附
-  const metalPokes = [p.active, ...p.bench].filter((c): c is CardInstance => {
-    if (!c) return false;
-    const card = pool.get(c.cardId);
-    return card?.pokemonType === 'Metal';
-  });
-  if (metalPokes.length === 0) return addLog(st, '金屬製造者：場上無【鋼】寶可夢', idx);
+  // v4.29：移除「場上必須有【鋼】寶可夢」誤限制 — 卡面：「以任意方式附於自己的
+  //   寶可夢身上」沒屬性限制，玩家可附給任何自己場上的寶可夢（含【無】等）。
+  //   gate 只需 deck>0 即可；active 一定存在所以場上必有目標。
   const top4 = p.deck.slice(0, 4);
   const top4Iids = top4.map(c => c.iid);
   let s = addLog(st, `金屬製造者：查看牌庫上方 ${top4.length} 張，選任意數量基本【鋼】能量`, idx);
@@ -187,12 +183,13 @@ regR('metal-maker-attach', (st, idx, energyIids, params, pool) => {
   if (energyIids.length === 0) {
     return addLog(s, '金屬製造者：未選擇能量（4 張全洗回牌庫底）', idx);
   }
-  // 啟動 chain — source='discard'（已搬好），scope='any-own'，filter='Metal'
+  // 啟動 chain — source='discard'（已搬好），scope='any-own'
+  // v4.29：filterType 'Metal' → 'Any'（卡面無限制屬性，可附給任何自己寶可夢，含【無】）
   return startEnergyChain(s, idx, energyIids, {
     label: '金屬製造者',
     source: 'discard',
     scope: 'any-own',
-    filterType: 'Metal',
+    filterType: 'Any',
   }, pool);
 });
 

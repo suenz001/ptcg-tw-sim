@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.29</span> 🛠️ 修金屬怪｜金屬製造者無法附鋼能量給【無】等非鋼寶可夢</summary>
+        <ul>
+          <li>玩家回報：金屬怪用金屬製造者無法附鋼能量給場上的【無】屬性寶可夢。</li>
+          <li><b>卡面對照</b>：「從其中選擇任意數量的『基本【鋼】能量』卡，以任意方式附於<b>自己的寶可夢身上</b>。」— 卡面無屬性限制，可附給任何自己場上的寶可夢。</li>
+          <li><b>修法</b>：
+            <ul>
+              <li>移除 <code>regA</code> 內「場上必須有【鋼】寶可夢」誤 gate（卡面未限制）。</li>
+              <li><code>startEnergyChain</code> filterType 從 <code>'Metal'</code> 改 <code>'Any'</code>（不過濾屬性）。</li>
+            </ul>
+          </li>
+          <li><b>影響</b>：金屬怪打鋼能量給【無】火箭隊的卡圖坡 / 樂天河童 / 任何其他屬性寶可夢都可以了。能量本身仍限定「基本【鋼】能量」（卡面要求）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.28</span> 🛠️ 修挪動一下 picker 放大鏡指向（改為放大擁有能量的寶可夢）</summary>
         <ul>
           <li>玩家回報：小灰怪挪動一下 picker 內每張能量卡的 🔍 按鈕目前放大「基本能量本身」（玩家不需要看），應該放大「擁有該能量的寶可夢」。</li>
