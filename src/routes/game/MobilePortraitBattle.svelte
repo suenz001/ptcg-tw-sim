@@ -464,6 +464,39 @@
   // 2. v3.871: 額外掛 document 層的 touchmove — 因為 iOS Safari pull-to-refresh
   //    可能在 .mp 外（status bar 下、URL bar 上的瀏覽器 chrome 區）觸發，必須擋全頁。
   // 3. v3.871: 也擋 touchstart 在頁面頂端的事件，proactive 防止 Safari 啟動下拉刷新動畫。
+  // v4.24 對戰計時器 — tickTime 每秒更新
+  let tickTime = $state(Date.now());
+  $effect(() => {
+    const id = setInterval(() => { tickTime = Date.now(); }, 1000);
+    return () => clearInterval(id);
+  });
+  function fmtTimerMs(ms: number): string {
+    if (!Number.isFinite(ms) || ms < 0) ms = 0;
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const ss = s % 60;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
+  }
+  const liveTurnTimeMs = $derived(
+    game.phase === 'playing' && game.currentTurnStartTime !== undefined
+      ? Math.max(0, tickTime - game.currentTurnStartTime)
+      : 0
+  );
+  function _playerTotal(idx: 0 | 1): number {
+    const stored = game.playerTurnTimeMs?.[idx] ?? 0;
+    const live = (game.phase === 'playing' && game.activePlayerIndex === idx) ? liveTurnTimeMs : 0;
+    return stored + live;
+  }
+  const p0TotalMs = $derived(_playerTotal(0));
+  const p1TotalMs = $derived(_playerTotal(1));
+  const gameTotalMs = $derived(
+    game.gameStartTime !== undefined
+      ? Math.max(0, (game.phase === 'game-over' ? (game.currentTurnStartTime ?? tickTime) + liveTurnTimeMs : tickTime) - game.gameStartTime)
+      : 0
+  );
+
   function preventScroll(node: HTMLElement) {
     const moveHandler = (e: TouchEvent) => {
       const t = e.target as Element | null;
@@ -529,6 +562,17 @@
     {/if}
     <button class="mp-icon-btn" onclick={onOpenSettings} title="設定">⚙</button>
   </header>
+
+  <!-- v4.24 對戰計時器 — 細條 timer-strip，4 欄資訊一直可見 -->
+  {#if game.gameStartTime !== undefined}
+    <div class="mp-timer-strip">
+      <span class="mp-t-cell mp-t-total">⏱ {fmtTimerMs(gameTotalMs)}</span>
+      <span class="mp-t-cell" class:mp-t-active={game.activePlayerIndex === 0 && game.phase === 'playing'}>P1 {fmtTimerMs(p0TotalMs)}</span>
+      <span class="mp-t-sep">|</span>
+      <span class="mp-t-cell" class:mp-t-active={game.activePlayerIndex === 1 && game.phase === 'playing'}>P2 {fmtTimerMs(p1TotalMs)}</span>
+      <span class="mp-t-cell mp-t-turn">▶ {fmtTimerMs(liveTurnTimeMs)}</span>
+    </div>
+  {/if}
 
   <!-- ─── 對手 bench ─── -->
   <div class="mp-row mp-opp-bench">
@@ -845,6 +889,27 @@
     padding-left: env(safe-area-inset-left, 0);
     padding-right: env(safe-area-inset-right, 0);
   }
+  /* v4.24 對戰計時器細條 — mp-top 下方 ~20px，4 欄資訊 */
+  .mp-timer-strip {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 8px;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #afdbff;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .mp-t-cell { white-space: nowrap; }
+  .mp-t-total { opacity: 0.92; }
+  .mp-t-sep { color: rgba(255,255,255,0.18); }
+  .mp-t-active { color: #c8f0a0; font-weight: 600; }
+  .mp-t-turn { color: #ffd494; font-weight: 600; }
+
   /* v3.861: 內部可滾動區允許各自方向手勢（不會冒泡到 .mp） */
   .mp-row { touch-action: pan-x; }
   .mp-hand { touch-action: pan-x; }

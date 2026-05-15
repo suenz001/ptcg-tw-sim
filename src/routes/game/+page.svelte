@@ -139,6 +139,43 @@
     chatPanelDragStart = null;
   }
 
+  // v4.24 對戰計時器 — tickTime 每秒更新驅動 derived 顯示時間
+  let tickTime = $state(Date.now());
+  $effect(() => {
+    const id = setInterval(() => { tickTime = Date.now(); }, 1000);
+    return () => clearInterval(id);
+  });
+  // 將毫秒格式化為 mm:ss 或 h:mm:ss
+  function fmtTimerMs(ms: number): string {
+    if (!Number.isFinite(ms) || ms < 0) ms = 0;
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const ss = s % 60;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
+  }
+  // 當前回合計時（active player 的本回合時間）— phase==='playing' 才 live
+  const liveTurnTimeMs = $derived(
+    game && game.phase === 'playing' && game.currentTurnStartTime !== undefined
+      ? Math.max(0, tickTime - game.currentTurnStartTime)
+      : 0
+  );
+  // 玩家累計時間 = 已記錄 playerTurnTimeMs + 當前回合 live time（僅 active player）
+  function _playerTotal(idx: 0 | 1): number {
+    if (!game) return 0;
+    const stored = game.playerTurnTimeMs?.[idx] ?? 0;
+    const live = (game.phase === 'playing' && game.activePlayerIndex === idx) ? liveTurnTimeMs : 0;
+    return stored + live;
+  }
+  const p0TotalMs = $derived(_playerTotal(0));
+  const p1TotalMs = $derived(_playerTotal(1));
+  const gameTotalMs = $derived(
+    game && game.gameStartTime !== undefined
+      ? Math.max(0, (game.phase === 'game-over' ? (game.currentTurnStartTime ?? tickTime) + liveTurnTimeMs : tickTime) - game.gameStartTime)
+      : 0
+  );
+
   // v4.21 勝負視窗（可拖曳）— 對局結束時 overlay 戰鬥盤面，保留場上狀況檢視
   //   gameoverPanelPos：拖曳偏移（初始 0,0；CSS center 定位 + transform translate）
   //   gameoverPanelDragStart：drag origin（null = 非拖曳中）
@@ -4127,6 +4164,12 @@
         {@const sId = game.activeStadium.cardId}
         <button class="chip stadium-chip clickable-chip" title="點擊查看卡片詳情" onclick={()=>openZoom(sId, null)}>🏟 {stadiumCard.name} 🔍</button>
       {/if}
+      {#if game.gameStartTime !== undefined}
+        <span class="chip timer-chip timer-total" title="對戰總時間"><span class="t-ic">⏱</span><span class="t-val">{fmtTimerMs(gameTotalMs)}</span></span>
+        <span class="chip timer-chip timer-p1" class:active={game.activePlayerIndex === 0 && game.phase === 'playing'} title="{game.players[0].name} 累計時間"><span class="t-lb">P1</span><span class="t-val">{fmtTimerMs(p0TotalMs)}</span></span>
+        <span class="chip timer-chip timer-p2" class:active={game.activePlayerIndex === 1 && game.phase === 'playing'} title="{game.players[1].name} 累計時間"><span class="t-lb">P2</span><span class="t-val">{fmtTimerMs(p1TotalMs)}</span></span>
+        <span class="chip timer-chip timer-turn" title="本回合時間"><span class="t-ic">▶</span><span class="t-val">{fmtTimerMs(liveTurnTimeMs)}</span></span>
+      {/if}
       <span class="chip version-chip" title="應用程式版本 — 檢查是否同步到最新">v{VERSION}</span>
       <!-- 音效與音樂設定（⚙️） -->
       <button class="chip settings-chip" onclick={() => showSettingsModal = true} title="設定（音效與音樂）">
@@ -6386,6 +6429,25 @@
   .spectator-toggle input[type="checkbox"] {
     width: 18px; height: 18px; cursor: pointer;
   }
+
+  /* v4.24 對戰計時器 chip — battle-header 內 4 個小 chip */
+  .timer-chip {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.72rem;
+    padding: 0.18rem 0.45rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: rgba(60, 90, 140, 0.32);
+    color: #afdbff;
+    border: 1px solid rgba(110, 160, 220, 0.18);
+    letter-spacing: 0.02em;
+  }
+  .timer-chip .t-ic { opacity: 0.85; font-size: 0.78rem; }
+  .timer-chip .t-lb { font-size: 0.62rem; opacity: 0.7; }
+  .timer-chip .t-val { font-weight: 600; }
+  .timer-chip.timer-turn { background: rgba(120, 80, 30, 0.4); color: #ffd494; border-color: rgba(255, 212, 148, 0.25); }
+  .timer-chip.active { background: rgba(80, 120, 60, 0.4); color: #c8f0a0; border-color: rgba(180, 220, 120, 0.3); }
 
   /* v3.97 對戰中聊天室 ─────────────────────────────────────────────────── */
   .chat-fab {

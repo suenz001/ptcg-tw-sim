@@ -510,6 +510,16 @@ export interface GameState {
   activePlayerIndex: 0 | 1;
   /** v3.85: 本回合是否打過「稜鏡塔」(per-player)，給昂主花葉蒂放置 gate 用。每回合結束時 reset。 */
   prismTowerPlayedThisTurn?: [boolean, boolean];
+  /**
+   * v4.24 對戰計時器（賽事用）— 由 engine.ts 在 setup→playing transition 設、END_TURN 累計。
+   *   gameStartTime: 對戰起算時間戳（Date.now()，第 1 回合 DRAW 階段開始時設）
+   *   currentTurnStartTime: 當前回合起算時間戳（每次 END_TURN 切換到下一玩家時重置）
+   *   playerTurnTimeMs: 每位玩家累計回合時間（毫秒）[P1, P2]
+   * 全為 primitive 或 tuple-of-primitive，Firestore-safe（per Iron Rule 13）。
+   */
+  gameStartTime?: number;
+  currentTurnStartTime?: number;
+  playerTurnTimeMs?: [number, number];
   /** 由 createGame 擲硬幣決定的先手方 */
   firstPlayerIdx: 0 | 1;
   players: [PlayerState, PlayerState];

@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.24</span> ⏱️ 對戰計時器（賽事用，三段時間：對戰總/玩家累計/本回合）</summary>
+        <ul>
+          <li>玩家建議：增加類似比賽的計時器功能，方便檢視花費時間。</li>
+          <li><b>三段時間</b>：對戰總時間（從第 1 回合開始算）、各玩家累計（P1/P2 各自的所有回合總和）、本回合時間（active player 的當前回合）。</li>
+          <li><b>桌機</b>：battle-header 加 4 個 timer chip（⏱對戰 / P1 / P2 / ▶本回合），mono 字體 + 顏色區分（active 玩家綠色強調、本回合琥珀色）。</li>
+          <li><b>手機直式</b>：mp-top 頂列下方加 ~20px 細條 timer-strip，4 欄資訊一直可見。</li>
+          <li><b>計時起點</b>：Setup 完成 + 第 1 回合開始時起算（跳過起手、mulligan、setup 安置）。對局結束時自動暫停。</li>
+          <li><b>線上模式</b>：計時欄位走 GameState 同步（gameStartTime / currentTurnStartTime / playerTurnTimeMs 全為 primitive，符合 Firestore array-of-array 禁忌）。雙端有微小時鐘漂移（&lt; 1 秒）為正常。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.23</span> 🛠️ 場地背景手機只顯示上半 + 圖太淡 + 忍者飛旋新衝天 confirm 鎖死</summary>
         <ul>
           <li><b>場地背景修正</b>：

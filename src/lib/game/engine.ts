@@ -1467,12 +1467,17 @@ function tryAdvanceToPlaying(state: GameState): GameState {
   if (!state.setupDone[0] || !state.setupDone[1]) return state;
   if (state.pendingMulliganDraw[0] !== 0 || state.pendingMulliganDraw[1] !== 0) return state;
   if (!state.mulliganRevealConfirmed[0] || !state.mulliganRevealConfirmed[1]) return state;
+  // v4.24 對戰計時器 — setup→playing 時起算
+  const timerStart = Date.now();
   let next: GameState = {
     ...state,
     phase: 'playing',
     turnPhase: 'draw',
     activePlayerIndex: state.firstPlayerIdx,
     isFirstTurn: true,
+    gameStartTime: timerStart,
+    currentTurnStartTime: timerStart,
+    playerTurnTimeMs: [0, 0],
   };
   next = addLog(next, `Setup 完成！${next.players[next.firstPlayerIdx].name} 先手行動中。`, null);
   next = applyAutoDraw(next);
@@ -5845,6 +5850,13 @@ function handlePlaying(
     //   正確邏輯：後攻方（= 非 firstPlayerIdx 那邊）結束回合時才增加 turn，
     //   讓「Turn N = 先攻 → 後攻」的對稱結構與先攻 idx 無關。
     const newTurn = aIdx !== state.firstPlayerIdx ? state.turn + 1 : state.turn;
+    // v4.24 對戰計時器 — END_TURN 切換玩家前，累計剛結束回合的時間到 playerTurnTimeMs[aIdx]
+    const _timerNowMs = Date.now();
+    const _timerPrevStart: number = state.currentTurnStartTime ?? _timerNowMs;
+    const _timerElapsed = Math.max(0, _timerNowMs - _timerPrevStart);
+    const _timerPrevTimes: [number, number] = state.playerTurnTimeMs ?? [0, 0];
+    const _timerNewTimes: [number, number] = [_timerPrevTimes[0], _timerPrevTimes[1]];
+    _timerNewTimes[aIdx] += _timerElapsed;
     const afterSwitch = addLog(
       {
         ...state,
@@ -5862,6 +5874,9 @@ function handlePlaying(
         rocketInMyDiscardAtMyTurnStart: newRocketTurnStart,
         // v2.124：finalize 結束時清掉 endTurnSkipCheckup（避免下次 endTurn 也跳過 checkup）
         endTurnSkipCheckup: undefined,
+        // v4.24 對戰計時器
+        playerTurnTimeMs: _timerNewTimes,
+        currentTurnStartTime: _timerNowMs,
       },
       `回合結束，換 ${players[nextIdx].name} 行動。`,
       null
