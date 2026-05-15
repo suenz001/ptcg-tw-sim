@@ -211,6 +211,7 @@ regPre('超級噴火駝ex|炙燒', (state, aIdx) => {
 // 丟棄自己場上任意數量的【火】能量卡，造成張數 ×90。
 ATTACK_PRE_DISCARD_CHOICE.set('超級噴火龍Xex|烈獄狂火X', {
   min: 0, max: null, scope: 'any-own', baseDamage: 0, damagePerEnergy: 90,
+  energyTypeFilter: 'Fire',  // v4.17：picker 只顯示視為【火】的能量
 });
 regPre('超級噴火龍Xex|烈獄狂火X', (state, aIdx, pool, action) => {
   const p = state.players[aIdx];

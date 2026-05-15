@@ -2591,6 +2591,8 @@
     }
     // v4.14：忍者飛旋（甲賀忍蛙ex / 超級甲賀忍蛙ex）— 卡面「將 1 個【水】能量放回手牌」
     if (attackName === '忍者飛旋') return 1;
+    // v4.17：災難衝擊 卡面「將 2 個【雷】能量丟棄」+ 麻痺對手（exact 2 units）
+    if (attackName === '災難衝擊') return 2;
     return undefined;
   }
 

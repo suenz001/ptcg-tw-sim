@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.17</span> 🛠️ 限定屬性 picker 全面套 energyTypeFilter（金屬之錘 + 災難衝擊 + 烈獄狂火X）</summary>
+        <ul>
+          <li>玩家要求：審計所有「限定屬性能量」picker，用 v4.16 同樣作法（<code>energyTypeFilter</code> + <code>countMode: 'units'</code>）。</li>
+          <li><b>巨金怪｜金屬之錘</b>：v3.72 的 binary-yes-no 改為 attacker picker。卡面「將 3 個【鋼】能量丟棄 + 150 傷害」— 用 max=3 + filter='Metal' + units。玩家可選 0 或 1~3 units → 0 為 150 base，&gt;= 1 unit 為 300。新衝天 (Stage2) 視為【鋼】可選；非鋼能量 picker 不顯示。</li>
+          <li><b>超級麻麻鰻魚王ex｜災難衝擊</b>：v3.26 的 binary-yes-no 改為 attacker picker + exactRequired=2。卡面「將 2 個【雷】能量丟棄 → 麻痺對手」— 玩家選 0（190 不麻痺）或恰好 2 units（190 + 麻痺）。</li>
+          <li><b>超級噴火龍Xex｜烈獄狂火X</b>：加 <code>energyTypeFilter: 'Fire'</code>，picker 只顯示視為【火】的能量。countMode 仍為 cards mode（&times;90 per card 卡面語意不變）。</li>
+          <li><b>邊際說明</b>：金屬之錘身上 0 鋼能量時，picker 開但空 → 只能 0 → 150 base。v3.72 的「0 鋼也可選擇 +150」QA 邊際在 v4.17 不再支援（picker UX 一致性優先；實戰罕見）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.16</span> 🛠️ 修忍者飛旋 picker 應 filter 非水能量</summary>
         <ul>
           <li>玩家要求 picker 不該讓玩家選不符合條件的能量。忍者飛旋卡面「將 1 個【水】能量放回手牌」— picker 應該不顯示「非水」能量（如燃火能量，視為【無】，不符條件）。</li>

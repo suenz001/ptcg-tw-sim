@@ -12376,51 +12376,42 @@ regPost('巨金怪|彈回', (state, aIdx, _pool) => {
   });
 });
 
-// ── 8) 巨金怪 (M4)｜金屬之錘 150+ — v3.72: 「將 3 個鋼能量丟棄」是 cap 語意（IRON_RULES 7c）
+// ── 8) 巨金怪 (M4)｜金屬之錘 150+ — v4.17: picker 重構（取代 v3.72 binary-yes-no）
 //   卡面：「若希望，將 3 個這隻寶可夢身上附加的【鋼】能量丟棄，增加 150 點傷害。」
-//   官方 QA（呆呆王借此招場景）：即使身上 0 個鋼能量，玩家「希望」仍可 +150；
-//     若有 1 個鋼能量，「必須丟」那 1 個；2 個則丟 2 個；3+ 則丟 3 個。
-//   改用 binary-yes-no picker（玩家選「希望/不希望」），regPre 內自動丟自身鋼能量。
-//   原 v3.71-pre 實作要求恰好棄 3 個 → 0/1/2 個都拿不到 bonus（誤譯為「必須」3 個）。
+//   v4.17 改用 attacker picker + energyTypeFilter='Metal' + countMode='units'：
+//     - picker 只顯示視為【鋼】的能量（含新衝天 on Stage2 / 稜鏡 on Basic-host 條件式）
+//     - max=3（cap 語意，up to 3 metal units）
+//     - 玩家選 0 → 150 base；選 1+ unit → +150（300）
+//   注意：身上 0 鋼能量時，picker 開但無選項 → 只能 0 → 150 base（v3.72 的 0-metal QA
+//     邊際 +150 case 在 v4.17 不再支援；實戰罕見且 picker UX 一致性優先）。
 ATTACK_PRE_DISCARD_CHOICE.set('巨金怪|金屬之錘', {
-  min: 0, max: null, scope: 'binary-yes-no',
+  min: 0, max: 3, scope: 'attacker',
   baseDamage: 150, damagePerEnergy: 0,
-  choicePrompt: '是否丟棄身上鋼能量（最多 3 個）並增加 150 點傷害？',
-  choiceYesLabel: '丟（+150 傷害）',
-  choiceNoLabel: '不丟',
+  countMode: 'units',
+  energyTypeFilter: 'Metal',
 });
 regPre('巨金怪|金屬之錘', (state, aIdx, pool, action) => {
-  const yes = (action?.discardedEnergyIids?.length ?? 0) >= 1;  // sentinel iid 表 yes
-  if (!yes) {
-    return { state: addLog(state, '金屬之錘：選擇不丟鋼能量', aIdx), damage: 150 };
+  const chosenIids = action?.discardedEnergyIids ?? [];
+  if (chosenIids.length === 0) {
+    return { state: addLog(state, '金屬之錘：未丟鋼能量 → 150 傷害', aIdx), damage: 150 };
   }
-  // yes → 自動找自身鋼能量丟最多 3 個（cap=3）
+  // 玩家選了 >= 1 張：丟那幾張，給 +150
   const attacker = state.players[aIdx].active;
   if (!attacker) return { state, damage: 150 };
-  const metalIids: string[] = [];
-  for (const e of attacker.energyAttached) {
-    const ec = pool.get(e.cardId);
-    const isMetal = ec?.pokemonType === 'Metal' || (ec?.name?.includes('【鋼】') ?? false);
-    if (isMetal) {
-      metalIids.push(e.iid);
-      if (metalIids.length >= 3) break;
-    }
+  const idSet = new Set(chosenIids);
+  const drop = attacker.energyAttached.filter(e => idSet.has(e.iid));
+  if (drop.length === 0) {
+    return { state: addLog(state, '金屬之錘：所選能量不在身上 → 150 傷害', aIdx), damage: 150 };
   }
-  let s = state;
-  if (metalIids.length > 0) {
-    s = updatePlayer(state, aIdx, p => {
-      if (!p.active) return p;
-      const keep = p.active.energyAttached.filter(e => !metalIids.includes(e.iid));
-      const drop = p.active.energyAttached.filter(e => metalIids.includes(e.iid));
-      return {
-        ...p,
-        active: { ...p.active, energyAttached: keep },
-        discard: [...p.discard, ...drop],
-      };
-    });
-  }
-  s = addLog(s, `金屬之錘：丟 ${metalIids.length} 個鋼能量 → +150 傷害`, aIdx);
-  return { state: s, damage: 300 };
+  const s = updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    return {
+      ...p,
+      active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => !idSet.has(e.iid)) },
+      discard: [...p.discard, ...drop],
+    };
+  });
+  return { state: addLog(s, `金屬之錘：丟 ${drop.length} 張視為【鋼】的能量 → +150 傷害`, aIdx), damage: 300 };
 });
 
 // v2.133 月月熊 赫月ex｜老練招式（被動）— 「血月」所需【無】能量減少對手已獲得獎賞牌數
