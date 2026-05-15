@@ -87,8 +87,12 @@ regR('sky-carry-switch', (st, idx, iids, _params, pool) => {
 
 // ── 超級快龍ex｜龍之滑翔 ─────────────────────────────────────────────────────
 // 330；選擇2個這隻寶可夢身上附加的能量，將其丟棄。
+// v4.13：卡面「選擇 2 個...能量」用「個」字眼 → 套 units mode（同分身連打），
+//   讓 1 張新衝天能量(Stage2=2 units) / 1 張燃火能量(Evo=3 units) 等特殊能量可滿足。
+//   UI 自動套用 v4.11/v4.12 邏輯（最小組合 gate + maxOk=true）。
 ATTACK_PRE_DISCARD_CHOICE.set('超級快龍ex|龍之滑翔', {
   min: 2, max: 2, scope: 'attacker', baseDamage: 330, damagePerEnergy: 0,
+  countMode: 'units',
 });
 regPre('超級快龍ex|龍之滑翔', (state, aIdx, _pool, action) => {
   let s = state;

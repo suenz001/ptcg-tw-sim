@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.13</span> 🔍 audit 丟能量招式 + 龍之滑翔套 units mode</summary>
+        <ul>
+          <li><b>Audit 26 個 ATTACK_PRE_DISCARD_CHOICE</b> 依鐵律 Rule 7c 查 JSON 卡面：
+            <ul>
+              <li><b>「N 個能量」（5 張，應 units）</b>：龍之滑翔 / 激流水泵 / 忍者飛旋 / 金屬之錘 / 災難衝擊</li>
+              <li><b>「N 張能量卡」（4 張，cards 正確）</b>：擦除球 / 閃光尖矛 / 射攻月亮 / 烈獄狂火X ✓</li>
+              <li><b>「全部能量」（3 張，無關 units/cards）</b>：時間爆炸 / 叢林鞭打 / 狂暴噴射 ✓</li>
+            </ul>
+          </li>
+          <li><b>本次修補</b>：超級快龍ex｜龍之滑翔（與分身連打結構完全相同 min=2/max=2/attacker scope）加 <code>countMode: 'units'</code>，UI v4.11/v4.12 邏輯（最小組合 + maxOk 寬鬆）自動生效。</li>
+          <li><b>待議</b>：激流水泵（min=0/max=3）、忍者飛旋（min=0/max=1）— min=0 邏輯與 v4.11 「cur &gt;= min 不能加」衝突，需重新設計才能套 units。金屬之錘、災難衝擊是 binary-yes-no scope 無 picker，要改需重構。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.12</span> 🛠️ 修確認按鈕 maxOk 太嚴擋住合法的燃火單張</summary>
         <ul>
           <li>玩家回報：勾單張燃火能量（3 units）已達 min=2 但「確定使用招式」按鈕 disable。</li>
