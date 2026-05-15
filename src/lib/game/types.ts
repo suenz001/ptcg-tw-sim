@@ -118,6 +118,14 @@ export interface CardInstance {
    */
   evolvedThisTurn?: boolean;
   /**
+   * v4.43：本回合這個 CardInstance（依 iid）的 damage 是否曾減少（= 回血過）。
+   * 由 engine markHealsByDamageDecrease 在 applyAction 結尾偵測：對每個 iid 相同的
+   * 寶可夢，若 prev.damage > next.damage → 設此 flag = true（只設不清）。
+   * 在擁有者 END_TURN 時統一 reset（透過 clearTurnFlags）。
+   * 用途：霸王花|活潑鮮花、沙鈴仙人掌|活潑針 等「若這隻寶可夢恢復了 HP +N」類條件。
+   */
+  healedThisTurn?: boolean;
+  /**
    * 本回合無法使用招式（UI 反白禁按）。
    * 由 cantAttackPending 在「擁有者下個回合開始」時自動 promote 而來，
    * 並在該回合 END_TURN 時清除。

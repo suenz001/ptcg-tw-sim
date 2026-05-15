@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.43</span> 🛠️ Wave 4c — 活潑鮮花/活潑針 healedThisTurn 旗標實裝（引擎級回血偵測）</summary>
+        <ul>
+          <li><b>霸王花｜活潑鮮花（I）60+</b> / <b>沙鈴仙人掌｜活潑針（I）20+</b>：JSON「在這個回合，若這隻寶可夢<b>恢復了 HP</b>，則增加 N 點傷害。」舊實裝用 Math.random() 50% 啟發式（既不查實際回血、也不確定性），完全違反卡面。</li>
+          <li><b>引擎級回血偵測</b>：新增 <code>CardInstance.healedThisTurn</code> 欄位 + engine 的 <code>markHealsByDamageDecrease</code> helper。在每次 <code>applyAction</code> 結尾比對 prev/next state，任何 iid 相同且 damage 減少的寶可夢自動標記 <code>healedThisTurn=true</code>。設計優點：自動覆蓋所有回血路徑（招式 helper / trainer / item / 特性 / stadium），不用 instrument 每個檔案。</li>
+          <li><b>END_TURN 重置</b>：擁有者 END_TURN 時透過既有 <code>clearTurnFlags</code> helper 統一清除（與 justPlaced / evolvedThisTurn 同等級）。</li>
+          <li><b>邊際情況</b>：寶可夢進化 / KO 換場時 iid 改變 → 新 iid 不在 prev → 不視為 heal（正確）。先傷後回的最終 damage 仍低於 prev → 視為 heal（正確）。</li>
+          <li><b>Wave 4 完成 3/3</b>：4a/4b/4c 全部修補。剩餘 audit 簡化項是 engine hook gap 類（化石卡 passive / 雙重屬性 / 狙擊手之眼等），需擴 engine 級機制，工程量大，先 deferred。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.42</span> 🛠️ Wave 4b 簡化修補：怒鸚哥 推倒 + 破破舵輪 大地能量</summary>
         <ul>
           <li><b>怒鸚哥｜推倒（I）</b>：JSON「<b>若希望</b>，將對手的戰鬥寶可夢與備戰寶可夢互換。」舊實裝跟同名的其他「推倒」共用強制換場陣列，違反「若希望」字眼。修法：從 FORCE_OPP_SWAP_ATTACKS 移除，套 <code>ATTACK_PRE_DISCARD_CHOICE</code> binary-yes-no（仿 v3.26 浩大鯨ex 粉碎重壓 pattern），玩家選「是」才觸發換場。其他「推倒」（駒刀小兵/蓋蓋蟲/萌芽鹿）+ 哈約克 吼叫 都無「若希望」，仍維持強制。</li>

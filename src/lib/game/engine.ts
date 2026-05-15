@@ -1172,13 +1172,70 @@ function emptyPlayer(name: string): PlayerState {
 
 /** 清除 CardInstance 上的回合旗標（於擁有者 END_TURN 執行） */
 function clearTurnFlags(c: CardInstance): CardInstance {
-  if (!c.justPlaced && !c.evolvedThisTurn && !c.movedToActiveThisTurn && !c.playedFromHand) return c;
+  if (!c.justPlaced && !c.evolvedThisTurn && !c.movedToActiveThisTurn && !c.playedFromHand && !c.healedThisTurn) return c;
   const n = { ...c };
   delete n.justPlaced;
   delete n.evolvedThisTurn;
   delete n.movedToActiveThisTurn;
   delete n.playedFromHand;
+  delete n.healedThisTurn;  // v4.43：擁有者 END_TURN 時清除「本回合回過血」旗標
   return n;
+}
+
+/**
+ * v4.43：偵測 prev → next 之間，任何 iid 相同的寶可夢 damage 是否減少。
+ * 若是 → 標記 healedThisTurn=true（不清除既有 flag，只增加）。
+ *
+ * 設計：覆蓋所有回血路徑（招式 / trainer / item / 特性 / stadium 不需個別 instrument）。
+ *   邊際：寶可夢進化、KO 重置、換場等情況下 iid 改變 → 不視為 heal（正確）。
+ *   邊際：先傷後回最終 damage < prev → 視為 heal（正確）。
+ *   邊際：先回後傷最終 damage >= prev → flag 已設過不清，下次擁有者 END_TURN reset（正確）。
+ */
+function markHealsByDamageDecrease(prev: GameState, next: GameState): GameState {
+  // 建 prev 的 iid → damage 對照表（含雙方 active + bench）
+  const prevDamage = new Map<string, number>();
+  for (const idx of [0, 1] as const) {
+    const pp = prev.players[idx];
+    if (pp.active) prevDamage.set(pp.active.iid, pp.active.damage ?? 0);
+    for (const b of pp.bench) prevDamage.set(b.iid, b.damage ?? 0);
+  }
+  // 沒任何 prev 資料 → 跳過（早期初始化階段）
+  if (prevDamage.size === 0) return next;
+
+  let changed = false;
+  const players = [...next.players] as [PlayerState, PlayerState];
+
+  for (const idx of [0, 1] as const) {
+    const np = { ...players[idx] };
+    let pChanged = false;
+
+    const checkOne = (c: CardInstance): CardInstance => {
+      const prevDmg = prevDamage.get(c.iid);
+      if (prevDmg === undefined) return c;  // 新進場（換場/進化新 iid）→ 不算 heal
+      const newDmg = c.damage ?? 0;
+      if (newDmg < prevDmg && !c.healedThisTurn) {
+        pChanged = true;
+        return { ...c, healedThisTurn: true };
+      }
+      return c;
+    };
+
+    if (np.active) {
+      const newActive = checkOne(np.active);
+      if (newActive !== np.active) { np.active = newActive; }
+    }
+    const newBench = np.bench.map(checkOne);
+    if (newBench.some((b, i) => b !== np.bench[i])) {
+      np.bench = newBench;
+      pChanged = true;
+    }
+    if (pChanged) {
+      players[idx] = np;
+      changed = true;
+    }
+  }
+
+  return changed ? { ...next, players } : next;
 }
 
 /** 加一筆 log */
@@ -5962,6 +6019,9 @@ export function applyAction(
   } else {
     next = state;
   }
+
+  // v4.43：偵測寶可夢 damage 減少 → 標記 healedThisTurn（用於活潑鮮花 / 活潑針等條件）
+  next = markHealsByDamageDecrease(state, next);
 
   // v2.47 防禦層：備戰寶可夢不應持有異常狀態
   next = scrubBenchStatus(next);

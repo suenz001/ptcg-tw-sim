@@ -235,33 +235,24 @@ function coinHeadsImmunePost(label: string): AttackPostFn {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 本回合回血條件 +N (2 張)
+// JSON：「在這個回合，若這隻寶可夢恢復了HP，則增加 N 點傷害。」
+// v4.43：舊版 Math.random() 50% 啟發式 → 改為查 active.healedThisTurn 旗標
+// 該旗標由 engine markHealsByDamageDecrease 在 applyAction 結尾自動偵測（damage 減少 → 設旗標）
+// 自動覆蓋所有回血路徑：招式 helper / trainer / item / 特性 / stadium
 // ══════════════════════════════════════════════════════════════════════════════
-// 用 player-level 旗標 healedThisTurn (簡化：用 active 上的 _healedThisTurn 旗標)
-// 既有 selfHealPost 不會設此旗標，所以這裡需特別 instrumented
-// 簡化策略：檢查自身有 damage 但 < maxHP（即「有空間回血」）— 太粗略
-// 改用：每招呼叫 pre 時，回看上一招（本回合）是否設過此旗標。本實作直接設一個
-// healedThisTurn 旗標於 active，由其他回血類招式同時設置（這裡僅 stub，不嚴謹）。
-//
-// 為了至少能玩，採取 conservative：若自身有「damage > 0」就視為「已能/將能回血」
-// 但這不正確。更嚴謹做法是改 selfHealPost 設 healedThisTurn。
-// 這裡暫用簡化：檢查 active.damage 較 max 少（即傷害較少，hint 已回過血）— 不可靠
-//
-// 折衷：直接「若使用本招前自身 damage = 0 視為回血過了」是錯的。
-// 最簡可玩：永遠不增傷（保守），讓玩家手動回血先才打 — 這太弱。
-// 反過來：永遠增傷 — 太強。
-// 折衷選 50% 機率（隨機），跟「擲 1 次硬幣若正面 +N」效果類似。
 regPre('霸王花|活潑鮮花', (state, aIdx, _pool) => {
-  // 簡化：50% 機率觸發（玩家未必每回合都回血）
-  const heuristicTriggered = Math.random() < 0.5;
-  const dmg = 60 + (heuristicTriggered ? 120 : 0);
-  const s = addLog(state, `活潑鮮花（簡化版）：${heuristicTriggered ? '判定本回合有回血 → +120' : '判定本回合無回血'} = ${dmg}`, aIdx);
+  const active = state.players[aIdx].active;
+  const healed = !!active?.healedThisTurn;
+  const dmg = 60 + (healed ? 120 : 0);
+  const s = addLog(state, `活潑鮮花：${healed ? '本回合曾恢復 HP → +120' : '本回合未恢復 HP'} = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
 
 regPre('沙鈴仙人掌|活潑針', (state, aIdx, _pool) => {
-  const heuristicTriggered = Math.random() < 0.5;
-  const dmg = 20 + (heuristicTriggered ? 100 : 0);
-  const s = addLog(state, `活潑針（簡化版）：${heuristicTriggered ? '判定本回合有回血 → +100' : '判定本回合無回血'} = ${dmg}`, aIdx);
+  const active = state.players[aIdx].active;
+  const healed = !!active?.healedThisTurn;
+  const dmg = 20 + (healed ? 100 : 0);
+  const s = addLog(state, `活潑針：${healed ? '本回合曾恢復 HP → +100' : '本回合未恢復 HP'} = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
 
