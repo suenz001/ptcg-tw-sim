@@ -21,7 +21,7 @@
  *   - 雙方睡眠+下回合 +N（樹枕尾熊）
  */
 
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
 // v3.10 import 修 bug 用的兩個 helper（原本 wave17 內自己 inline 寫成「加手」）
 import { deckSearchAttachToAnyPost, discardSearchAttachToBenchPost } from './v2750_h_wave2_full';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -492,10 +492,14 @@ regPre('火箭隊的引夢貘人|備戰區操縱', (state, aIdx, _pool) => {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 12. 墓揚犬｜恐怖啃咬 30 — 擲到反, 對手選正面數張手牌正面查看後回對手牌庫並重洗
-//   簡化：隨機挑 N 張對手手牌回對手牌庫並重洗
+// JSON：「擲硬幣直到出現反面，在不看手牌正面的情況下，從對手的手牌選擇與正面
+//        出現的次數相同數量的卡，查看那些卡的正面後放回對手的牌庫並重洗。」
+// v4.37：模擬器手牌無位置語意 → 「盲選」本質 = 隨機（保留現況）。
+//         補上「查看那些卡的正面後」reveal — addPrivateLog 讓攻擊方私訊看見
+//         返還的卡名，對手與觀戰者只見張數（資訊不對稱符合 PTCG 設計）。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('墓揚犬|恐怖啃咬', (s) => ({ state: s, damage: 30 }));
-regPost('墓揚犬|恐怖啃咬', (state, aIdx, _pool) => {
+regPost('墓揚犬|恐怖啃咬', (state, aIdx, pool) => {
   let heads = 0;
   let s = state;
   while (true) {
@@ -514,14 +518,19 @@ regPost('墓揚犬|恐怖啃咬', (state, aIdx, _pool) => {
   const indices = Array.from({ length: opp.hand.length }, (_, i) => i);
   shuffle(indices);
   const pickIdx = new Set(indices.slice(0, k));
-  return updatePlayer(
-    addLog(s, `恐怖啃咬：對手隨機 ${k} 張手牌回牌庫並重洗`, aIdx),
-    dIdx, p => {
-      const picked = p.hand.filter((_, i) => pickIdx.has(i));
-      const rest = p.hand.filter((_, i) => !pickIdx.has(i));
-      return { ...p, hand: rest, deck: shuffle([...p.deck, ...picked]) };
-    },
-  );
+  // 取出被選中的卡（攻擊方私訊揭示用）
+  const pickedCards = opp.hand.filter((_, i) => pickIdx.has(i));
+  const pickedNames = pickedCards.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  // 攻擊方私訊：揭示牌名；對手與觀戰者公開：只見張數
+  s = addPrivateLog(s,
+    `恐怖啃咬：揭示放回對手牌庫的卡 — ${pickedNames}（${k} 張）`,
+    `恐怖啃咬：將對手 ${k} 張手牌放回牌庫並重洗（攻擊方可看見牌名）`,
+    aIdx);
+  return updatePlayer(s, dIdx, p => {
+    const picked = p.hand.filter((_, i) => pickIdx.has(i));
+    const rest = p.hand.filter((_, i) => !pickIdx.has(i));
+    return { ...p, hand: rest, deck: shuffle([...p.deck, ...picked]) };
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

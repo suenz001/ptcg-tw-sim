@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.37</span> 🛠️ Wave 3a 簡化修補：墓揚犬 恐怖啃咬（補揭示放回牌庫的卡）</summary>
+        <ul>
+          <li><b>墓揚犬｜恐怖啃咬（I）</b>：JSON「擲硬幣直到出現反面，在不看手牌正面的情況下，從對手的手牌選擇與正面出現的次數相同數量的卡，<b>查看那些卡的正面後</b>放回對手的牌庫並重洗。」舊實裝隨機選 + 直接返還重洗，缺「查看那些卡的正面後」reveal。</li>
+          <li><b>模擬器設計</b>：手牌無位置語意（不像實體牌可指「最左/最右」），所以「盲選」本質 = 隨機，現況隨機選擇符合語意。但 reveal 步驟漏實作 — 本招的資訊價值核心就是讓攻擊方知道返還哪幾張。</li>
+          <li><b>修法</b>：<code>addPrivateLog</code> 揭示 — 攻擊方私訊看見返還卡名，對手與觀戰者只見張數（資訊不對稱符合 PTCG 設計）。</li>
+          <li><b>Wave 3 進度</b>：3a 完成 1/3。3b 火箭隊的尼多娜 惡之覺醒（2-stage 進化 picker）、3c 火箭隊的貓老大ex 高傲指令（top10 attack copy UI picker，工程量較大）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.36</span> 🛠️ Wave 2 簡化修補：信使鳥 幸福禮物（per-energy 雙方目標分配）</summary>
         <ul>
           <li><b>信使鳥｜幸福禮物（J）</b>：JSON「雙方玩家若希望，各自從自己的手牌選擇最多3張基本能量卡，<b>以任意方式附於自己的寶可夢身上</b>。（對手先選擇。）」舊實裝雙方 hand-discard picker 已實裝（對手先選 ✓）但選完直接附到 active，違反「以任意方式」（卡面允許備戰）。</li>
