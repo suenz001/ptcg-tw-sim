@@ -6655,6 +6655,10 @@
   .res-st{ font-size:.62rem; opacity:.85; padding-left:.15rem; border-left:1px solid rgba(255,255,255,.15); margin-left:.15rem; }
 
   .playmat{ flex:1; display:grid; grid-template-rows:minmax(230px,1fr) auto minmax(230px,1fr); overflow:visible; position:relative;
+    /* v4.25：isolation: isolate 形成 stacking context — 讓 .stadium-bg-layer (z-index:-1)
+       畫在 .playmat 綠色 gradient 之上、field-row 之下（v4.22 失誤原因：沒這條時 z-index:-1
+       逃出本地 stacking、被自己的 gradient 蓋住）。 */
+    isolation: isolate;
     background:
       radial-gradient(circle at 50% 50%, rgba(80,130,90,.12), transparent 72%),
       repeating-linear-gradient(45deg, rgba(0,0,0,.05) 0 2px, transparent 2px 8px),

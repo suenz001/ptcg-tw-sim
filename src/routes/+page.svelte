@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.25</span> 🛠️ hotfix 桌機場地背景沒出現（CSS stacking context bug）</summary>
+        <ul>
+          <li>玩家回報：v4.22 加的桌機場地卡背景效果完全沒出現（手機版正常）。</li>
+          <li><b>Root cause</b>：.playmat 只設 position: relative 沒 z-index/isolation → 不形成 stacking context；.stadium-bg-layer 用 z-index: -1 反而「逃出」.playmat 的本地 stacking、被 .playmat 自己畫的綠色 gradient 完全蓋住。</li>
+          <li><b>對比手機版為何正常</b>：.mp 有 position: fixed，本身形成 stacking context，z-index 排版正確。</li>
+          <li><b>修法</b>：.playmat 加 <code>isolation: isolate</code>，明確形成 stacking context。畫圖順序：playmat 綠 gradient → stadium-bg-layer（蓋掉綠）→ field-row 子元素（在 bg 之上）→ ::before 虛線框最頂層。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.24</span> ⏱️ 對戰計時器（賽事用，三段時間：對戰總/玩家累計/本回合）</summary>
         <ul>
           <li>玩家建議：增加類似比賽的計時器功能，方便檢視花費時間。</li>
