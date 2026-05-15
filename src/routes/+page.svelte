@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.34</span> 🛠️ Wave 2 簡化修補：塗標客 奇跡作畫</summary>
+        <ul>
+          <li><b>塗標客｜奇跡作畫（I）</b>：JSON「擲1次硬幣若為正面，<b>則從特殊狀態中選擇1種</b>，將對手的戰鬥寶可夢處於那個狀態。」舊實裝固定附加【睡眠】，違反卡面「5 種任選」。改為擲幣正面後開啟 modal-choice，玩家從中毒 / 灼傷 / 睡眠 / 混亂 / 麻痺中選 1。</li>
+          <li><b>免疫檢查</b>：選定後走 <code>statusPost</code> 共用 guard — 薄霧能量 / 抵抗之幕 / 皇帝之勢 / 憨憨臉（免疫混亂） / 不眠（免疫睡眠） / 祭典會場 / 泡沫水能量 全自動套用。</li>
+          <li><b>Wave 進度</b>：Wave 2 收尾 1/3 卡。下一步處理 火箭隊的貓老大ex 高傲指令（multi-stage UI picker） / 敏捷蟲 褪殼猛毒（self/bench swap） / 信使鳥 幸福禮物（雙方能量分配）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.33</span> 🛠️ Wave 1 簡化修補：擺尾發電 + 燒灼大地</summary>
         <ul>
           <li><b>咚咚鼠｜擺尾發電（J）</b>：

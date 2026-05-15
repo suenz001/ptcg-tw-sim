@@ -348,9 +348,37 @@ regPost('裙兒小姐|幻惑芳香', (state, aIdx, pool) => {
   return statusPost('confused')(r.state, aIdx, pool);
 });
 
-// 塗標客｜奇跡作畫 90 — 擲幣正面從特殊狀態選 1 施加（簡化：固定 'asleep'）
+// 塗標客｜奇跡作畫 90 — 擲幣正面從特殊狀態選 1 施加
+// JSON：「擲1次硬幣若為正面，則從特殊狀態中選擇1種，將對手的戰鬥寶可夢處於那個狀態。」
+// v4.34：固定 asleep → modal-choice 5 狀態任選（rule 7 嚴禁簡化）
 regPre('塗標客|奇跡作畫', (s) => ({ state: s, damage: 90 }));
-regPost('塗標客|奇跡作畫', coinStatusPost('asleep'));
+regPost('塗標客|奇跡作畫', (state, aIdx, _pool) => {
+  const r = flipCoinsWithLog(state, 1, '奇跡作畫', aIdx);
+  if (!r.heads) return addLog(r.state, '→ 反面，無附加狀態', aIdx);
+  // 正面：開 modal-choice 讓玩家從 5 種特殊狀態選 1
+  return withPending(r.state, {
+    type: 'modal-choice',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'miracle-painting-status',
+    params: {
+      label: '選擇特殊狀態',
+      titleOverride: '奇跡作畫：正面！從特殊狀態中選 1 種施加給對手戰鬥寶可夢',
+      options: [
+        { id: 'poisoned', text: '中毒' },
+        { id: 'burned', text: '灼傷' },
+        { id: 'asleep', text: '睡眠' },
+        { id: 'confused', text: '混亂' },
+        { id: 'paralyzed', text: '麻痺' },
+      ],
+    },
+  });
+});
+// resolver：讀取選擇 → 套 statusPost（內含薄霧/抵抗之幕/憨憨臉/不眠/祭典會場 guard）
+regR('miracle-painting-status', (st, idx, iids, _params, pool) => {
+  const choice = iids[0] as 'poisoned'|'burned'|'asleep'|'confused'|'paralyzed';
+  return statusPost(choice)(st, idx, pool);
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 9. 自身互換（1 張）— 心蝙蝠｜幸福迴旋 — 選 1 隻自方備戰寶可夢與其附加卡放回手牌
