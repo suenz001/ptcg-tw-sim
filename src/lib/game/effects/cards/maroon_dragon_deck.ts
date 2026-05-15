@@ -22,7 +22,7 @@ import type { GameState, PlayerState, CardInstance } from '../../types';
 import {
   reg, regR, regG, regA,
   BENCH_PLACE_TRIGGERS,
-  addLog, addPrivateLog, drawCards, updatePlayer, returnHandToDeck, withPending,
+  addLog, addPrivateLog, drawCards, updatePlayer, returnHandToDeck, withPending, shuffle,
   recordOppKO,
   isAbilityBlockedByOakEye,
 } from '../_shared';
@@ -298,8 +298,15 @@ reg('特殊紅牌', (st, idx) => {
   if (st.players[dIdx].prizes.length > 3) {
     return addLog(st, '特殊紅牌：對手剩餘獎勵牌超過 3 張，無法使用', idx);
   }
-  st = addLog(st, '特殊紅牌：對手手牌洗回牌庫，抽 3 張', idx);
-  st = returnHandToDeck(st, dIdx);
+  // v4.08 修：卡面「對手將對手自己的手牌全部翻回反面並重洗，放回牌庫下方」
+  //   原用 returnHandToDeck 會把 hand+deck 一起 shuffle（手牌混進牌庫各處），
+  //   違反卡面「放回牌庫下方」。改用 inline：hand 內部 shuffle 後 append 到 deck 末端。
+  st = addLog(st, '特殊紅牌：對手手牌重洗後放回牌庫下方，並抽 3 張', idx);
+  st = updatePlayer(st, dIdx, p => ({
+    ...p,
+    deck: [...p.deck, ...shuffle(p.hand)],
+    hand: [],
+  }));
   return drawCards(st, dIdx, 3);
 });
 

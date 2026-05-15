@@ -25,7 +25,7 @@ import {
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_END_TURN_DISCARD,
   ABILITY_RETREAT_MOD,
-  BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
+  BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS,
   SPECIAL_ENERGY_ATTACH,
   SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD,
   SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED,
@@ -5026,9 +5026,19 @@ function handlePlaying(
       n += pl.bench.filter(c => pool.get(c.cardId)?.name === '雪妖女').length;
       return n;
     };
-    const frosmothN = countFrosmoth(players[0]) + countFrosmoth(players[1]);
+    // v4.08：對戰圓形擋對手特性放置備戰指示物 — 改 per-side 計算
+    //   - 戰鬥場：own + opp frosmoth 都生效（戰鬥場無 BENCH_PROTECTION）
+    //   - 備戰：對戰圓形啟動 → 對手 frosmoth 對自方備戰的指示物被擋（「對手特性」）；
+    //           自家 frosmoth 對自方備戰不擋（「自己特性」）
+    const frosmothByOwner: [number, number] = [countFrosmoth(players[0]), countFrosmoth(players[1])];
+    const frosmothN = frosmothByOwner[0] + frosmothByOwner[1];
+    const benchProtected = (() => {
+      if (!state.activeStadium) return false;
+      const c = pool.get(state.activeStadium.cardId);
+      return !!c && BENCH_PROTECTION_STADIUMS.has(c.name);
+    })();
     if (frosmothN > 0) {
-      const addCounters = frosmothN; // 每隻雪妖女放 1 個 → 共 N 個指示物 = N*10 傷害
+      // addCounters 不再是常數 — active/bench 用不同 counters，移到 loop 內計算
       // v2.125：嚴格排除「雪妖女」本體 — Leon 提醒「冰冷之帳不對雪妖女自己作用」
       // 用 trim 防 scraper 字串前後空白；同時以 startsWith 排除「雪妖女ex」（若未來有的話）
       // 但「超級雪妖女ex」是不同實體（不擁有冰冷之帳，直接被 abilities.length===0 擋）
@@ -5054,12 +5064,19 @@ function handlePlaying(
       const activeDiedByOwner: [boolean, boolean] = [false, false];
       for (const i of [0, 1] as const) {
         const pl = { ...players[i] };
+        const ownFrosmoth = frosmothByOwner[i];
+        const oppFrosmoth = frosmothByOwner[(1 - i) as 0 | 1];
+        // 戰鬥場：雙方 frosmoth 都生效（卡面註：戰鬥場仍會受到招式的傷害；
+        //   特性效果也照常 — 戰鬥場不受對戰圓形保護）
+        const activeCounters = ownFrosmoth + oppFrosmoth;
+        // 備戰：對戰圓形啟動 → 對手 frosmoth 被擋，只剩自家 frosmoth
+        const benchCounters = benchProtected ? ownFrosmoth : (ownFrosmoth + oppFrosmoth);
         // 戰鬥區
-        if (pl.active && isFrosmothCheckupTarget(pl.active)) {
-          const newDmg = pl.active.damage + addCounters * 10;
+        if (pl.active && isFrosmothCheckupTarget(pl.active) && activeCounters > 0) {
+          const newDmg = pl.active.damage + activeCounters * 10;
           const card = pool.get(pl.active.cardId);
           const hp = getEffectiveHP(pl.active, pool, state);
-          affectedNames.push(`${card?.name ?? '?'}(-${addCounters * 10})`);
+          affectedNames.push(`${card?.name ?? '?'}(-${activeCounters * 10})`);
           if (hp > 0 && newDmg >= hp) {
             const koDiscard: CardInstance[] = [
               { ...pl.active, damage: newDmg },
@@ -5075,14 +5092,15 @@ function handlePlaying(
             pl.active = { ...pl.active, damage: newDmg };
           }
         }
-        // 備戰區
+        // 備戰區 — 對戰圓形啟動時 benchCounters 可能 = ownFrosmoth 或 0
         const newBench: CardInstance[] = [];
         for (const b of pl.bench) {
           if (!isFrosmothCheckupTarget(b)) { newBench.push(b); continue; }
-          const newDmg = b.damage + addCounters * 10;
+          if (benchCounters === 0) { newBench.push(b); continue; }  // 對戰圓形擋光 → 不放指示物
+          const newDmg = b.damage + benchCounters * 10;
           const card = pool.get(b.cardId);
           const hp = getEffectiveHP(b, pool, state);
-          affectedNames.push(`${card?.name ?? '?'}(-${addCounters * 10})`);
+          affectedNames.push(`${card?.name ?? '?'}(-${benchCounters * 10})`);
           if (hp > 0 && newDmg >= hp) {
             const koDiscard: CardInstance[] = [
               { ...b, damage: newDmg },

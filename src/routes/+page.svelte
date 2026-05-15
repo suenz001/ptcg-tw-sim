@@ -264,6 +264,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.08</span> 🛡️ 對戰圓形擋雪妖女冰冷之帳 + 特殊紅牌放回牌庫下方</summary>
+        <ul>
+          <li><b>Bug 1：對戰圓形未擋雪妖女冰冷之帳對備戰放指示物</b>
+            <ul>
+              <li>卡面：對戰圓形「不會因對手的招式與<b>特性</b>的效果而被放置傷害指示物」；冰冷之帳是特性效果，應在保護範圍內</li>
+              <li>原 <code>engine.ts L5014</code> 把雙方雪妖女加總 <code>frosmothN</code>，所有目標統一吃 N 個指示物，沒檢查 BENCH_PROTECTION</li>
+              <li><b>修法</b>：per-side 計算
+                <ul>
+                  <li>戰鬥場：own + opp frosmoth 都生效（戰鬥場不受對戰圓形擋）</li>
+                  <li>備戰：對戰圓形啟動 → 對手 frosmoth 對我方備戰被擋（「對手特性」），只算自家 frosmoth（「自己特性」）</li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+          <li><b>Bug 2：特殊紅牌沒執行「放回牌庫下方」</b>
+            <ul>
+              <li>卡面：「對手將對手自己的手牌全部翻回反面並重洗，<b>放回牌庫下方</b>。然後，對手從牌庫抽出 3 張卡」</li>
+              <li>原 <code>maroon_dragon_deck.ts</code> 用 <code>returnHandToDeck</code> 把整副 hand+deck 一起 shuffle，違反「放回下方」語意</li>
+              <li><b>修法</b>：inline — <code>deck = [...deck, ...shuffle(hand)]</code>，hand 內部 shuffle 後 append 到 deck 末端</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.07</span> 🛠️ 修分身連打不認新衝天 + 血量數字被道具標籤蓋住</summary>
         <ul>
           <li><b>Bug 1：甲賀忍蛙ex 分身連打不認新衝天能量</b>
