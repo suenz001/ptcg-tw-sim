@@ -264,6 +264,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.26</span> 📱 完整 PWA 支援（manifest + Service Worker 離線 + icons）</summary>
+        <ul>
+          <li>玩家回報 iPad 測試還是有網址列。<b>Safari 直接訪問永遠看得到網址列</b>，這是 iOS 限制；要全螢幕必須「分享 → 加入主畫面 → 從主畫面圖示開」。</li>
+          <li><b>本版補完</b>：
+            <ul>
+              <li>5 個 PNG icons（32/180/192/512/512-maskable，文字 PTCG 風格 logo）</li>
+              <li>manifest.json — Android Chrome 安裝橫幅 + iOS 16.4+ PWA 識別</li>
+              <li>Service Worker — 第一次安裝預快取整站資源（build + prerendered + cards JSON + icons 等 ~21MB），之後完全離線可玩牌組構築 / 看卡（連線對戰、Firebase 仍需網路）</li>
+              <li>app.html 補 manifest link / apple-touch-icon / theme-color meta tags</li>
+            </ul>
+          </li>
+          <li><b>使用方法</b>：
+            <ul>
+              <li>iPad / iPhone：Safari 開站 → 分享 → 加入主畫面 → 從主畫面點圖示啟動，全螢幕無網址列。</li>
+              <li>Android：Chrome 開站會自動跳「安裝」橫幅，或選單 → 加入主畫面。</li>
+              <li>桌機 Chrome / Edge：網址列右側出現「⊕ 安裝」按鈕。</li>
+            </ul>
+          </li>
+          <li><b>離線範圍</b>：本機 vs AI 對戰、牌組構築、卡片查看全部可用。連線對戰 / 意見回饋 / 觀戰 等需要 Firebase 的功能仍需網路。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.25</span> 🛠️ hotfix 桌機場地背景沒出現（CSS stacking context bug）</summary>
         <ul>
           <li>玩家回報：v4.22 加的桌機場地卡背景效果完全沒出現（手機版正常）。</li>

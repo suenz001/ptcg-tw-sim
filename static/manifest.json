@@ -1,0 +1,33 @@
+{
+  "name": "PTCG 實體賽事演練引擎",
+  "short_name": "PTCG 演練",
+  "description": "台灣 PTCG 玩家專屬的免費網頁版對戰演練平台 — H/I/J 標環境、繁中卡牌資料庫、牌組構築 + 實戰模擬。",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1a2e1a",
+  "theme_color": "#1e3a20",
+  "lang": "zh-Hant",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
