@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.30</span> 🛠️ hotfix 桌機場地背景仍截到文字區（cover → 100% auto 精準切藝術區）</summary>
+        <ul>
+          <li>玩家回報 v4.25 後場地背景在某些視窗比例下仍會把卡牌底部「文字效果區」截進來，不符 v4.22 設計初衷（只要藝術區）。</li>
+          <li><b>Root cause</b>：原用 <code>background-size: cover</code>，cover 為了「兩邊都 ≥ 容器」會在 W:H 接近 1:1 的視窗放大整張卡，把底部文字也填入容器。</li>
+          <li><b>修法</b>：改 <code>background-size: 100% auto</code> — 圖寬 100% 填滿、高按 5:7 等比延伸（圖實際高度 ≈ 容器寬 × 1.4）。圖超出容器的部分被 <code>overflow:hidden</code> 切掉，visible 永遠 = 圖頂部 = 卡藝術區。視窗越寬越聚焦在藝術區頂端。</li>
+          <li><b>保險 mask</b>：mask gradient 微調，底端漸層淡出，防接近 1:1 視窗時藝術區邊緣的文字殘留。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.29</span> 🛠️ 修金屬怪｜金屬製造者無法附鋼能量給【無】等非鋼寶可夢</summary>
         <ul>
           <li>玩家回報：金屬怪用金屬製造者無法附鋼能量給場上的【無】屬性寶可夢。</li>
