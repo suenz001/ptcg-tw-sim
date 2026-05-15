@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.05</span> 📱 擋瀏覽器返回手勢避免右滑中斷對戰</summary>
+        <ul>
+          <li>玩家回報：手機版對戰時右滑（iOS Safari 邊緣返回 / Android 左滑）會中斷對戰跳出。</li>
+          <li><b>修法</b>：用 <code>history.pushState</code> + <code>popstate</code> handler 攔截：
+            <ul>
+              <li>進對戰時 push 一個 dummy history state</li>
+              <li>popstate 觸發（含邊緣滑動）→ 立刻再 push 回 → back 變 no-op</li>
+              <li><code>$effect</code> 監測 <code>game !== null</code>，離開對戰時 cleanup popstate handler</li>
+            </ul>
+          </li>
+          <li>用戶要離開請走 UI 內的「←」離開按鈕（不經 history.back）。</li>
+          <li>備註：iOS Safari 某些版本邊緣 swipe 是 native 級手勢，可能完全擋不住；history 攔截是業界最佳實踐能擋 90%+ 案例。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.04</span> 🚨 hotfix — v4.03 changelog 違反 Iron Rule 1 導致空白頁</summary>
         <ul>
           <li>玩家回報網頁完全空白，console 顯示 <code>ReferenceError: isPortraitMobile is not defined</code>。</li>

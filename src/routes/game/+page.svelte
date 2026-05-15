@@ -272,6 +272,24 @@
     };
   });
 
+  // v4.05：擋瀏覽器返回手勢避免右滑中斷對戰
+  //   玩家回報手機版右滑（iOS Safari 邊緣返回 / Android 左滑）會跳出對戰。
+  //   修法：進對戰時 history.pushState dummy state；popstate 觸發時再 push 回。
+  //   用戶要離開請走 UI 內的「←」離開按鈕（不經 history.back）。
+  $effect(() => {
+    if (!game || typeof window === 'undefined') return;
+    // 進對戰：push dummy state（marker 用 timestamp 確保唯一）
+    try { history.pushState({ ptcgGameLock: Date.now() }, ''); } catch { /* ignore */ }
+    const onPop = (_e: PopStateEvent) => {
+      // 對戰中 popstate（含右滑觸發）→ 立刻再 push 回攔截 back
+      if (game) {
+        try { history.pushState({ ptcgGameLock: Date.now() }, ''); } catch { /* ignore */ }
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => { window.removeEventListener('popstate', onPop); };
+  });
+
   // ── v2.284 手機直式偵測 & 平板/1366x768 橫屏縮小版偵測 ──────────────────────
   // ≤600px 寬 + portrait 方向 → 切換到 MobilePortraitBattle 元件（雙軌並行）。
   // 桌機 / 大螢幕 走原 .battle-root 橫式 layout。
