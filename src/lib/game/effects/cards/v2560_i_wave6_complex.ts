@@ -249,7 +249,8 @@ regPost('雪絨蛾|冰凍羽擊', (state, aIdx, pool) => {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 10. 千面避役|擊斃 — 從雙方場上（除自身外）選 1 隻 HP 最低，將其昏厥
-// 簡化：自動選 HP 最低的（玩家不選），符合「最少剩餘 HP」卡面語意
+// JSON：「從雙方的場上寶可夢（這隻寶可夢除外）中選擇1隻剩餘HP最少的寶可夢，將其【昏厥】。」
+// v4.41：auto-pick → 過濾出所有並列最低 HP 候選，1 隻自動執行，2+ 隻開 modal-choice 讓玩家選
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('千面避役|擊斃', (s) => ({ state: s, damage: 0 }));
 regPost('千面避役|擊斃', (state, aIdx, pool) => {
@@ -272,23 +273,65 @@ regPost('千面避役|擊斃', (state, aIdx, pool) => {
   if (cands.length === 0) {
     return addLog(state, '擊斃：場上無可選寶可夢（除自身）', aIdx);
   }
-  // 找 HP 最低
-  cands.sort((a, b) => a.remaining - b.remaining);
-  const target = cands[0];
-  let s = addLog(
-    state,
-    `擊斃：選定剩餘 HP 最少的 ${target.name}（${target.ownerIdx === aIdx ? '自方' : '對手'}，剩 ${target.remaining}）→ 直接昏厥`,
-    aIdx,
-  );
-  // 直接 KO：把 damage 加到 9999 觸發引擎 sanityKOSweep
-  return updatePlayer(s, target.ownerIdx, p => {
-    const newActive = p.active && p.active.iid === target.iid
-      ? { ...p.active, damage: 99999 }
-      : p.active;
-    const newBench = p.bench.map(b => b.iid === target.iid
+  // v4.41：找最低 HP，filter 出所有並列最低的候選
+  const minRemaining = Math.min(...cands.map(c => c.remaining));
+  const tied = cands.filter(c => c.remaining === minRemaining);
+  // 1 隻 → 直接昏厥（與原行為相同）
+  if (tied.length === 1) {
+    const target = tied[0];
+    const s = addLog(
+      state,
+      `擊斃：唯一剩餘 HP 最少的 ${target.name}（${target.ownerIdx === aIdx ? '自方' : '對手'}，剩 ${target.remaining}）→ 直接昏厥`,
+      aIdx,
+    );
+    return updatePlayer(s, target.ownerIdx, p => {
+      const newActive = p.active && p.active.iid === target.iid
+        ? { ...p.active, damage: 99999 }
+        : p.active;
+      const newBench = p.bench.map(b => b.iid === target.iid
+        ? { ...b, damage: 99999 }
+        : b);
+      return { ...p, active: newActive, bench: newBench };
+    });
+  }
+  // 2+ 隻並列 → modal-choice picker 讓玩家選
+  const s = addLog(state,
+    `擊斃：${tied.length} 隻並列剩餘 HP 最少（${minRemaining}）— 玩家選 1 隻昏厥`, aIdx);
+  return withPending(s, {
+    type: 'modal-choice',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'striking-down-pick',
+    params: {
+      label: '擊斃',
+      titleOverride: `擊斃：${tied.length} 隻並列剩餘 HP 最少（${minRemaining}），選 1 隻昏厥`,
+      options: tied.map(c => ({
+        id: `${c.ownerIdx}|${c.iid}`,
+        text: `${c.ownerIdx === aIdx ? '自方' : '對手'}：${c.name}（剩 ${c.remaining} HP）`,
+      })),
+    },
+  });
+});
+
+// resolver：讀玩家選擇 → KO 該目標
+regR('striking-down-pick', (st, aIdx, iids, _params, pool) => {
+  const choice = iids[0];
+  if (!choice) return addLog(st, '擊斃：未選擇目標', aIdx);
+  const [ownerStr, targetIid] = choice.split('|');
+  const ownerIdx = (Number(ownerStr) === 0 ? 0 : 1) as 0 | 1;
+  const p = st.players[ownerIdx];
+  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
+  if (!target) return addLog(st, '擊斃：目標已不存在', aIdx);
+  const tname = pool.get(target.cardId)?.name ?? '?';
+  let s = addLog(st, `擊斃：選定 ${tname}（${ownerIdx === aIdx ? '自方' : '對手'}）→ 直接昏厥`, aIdx);
+  return updatePlayer(s, ownerIdx, pl => {
+    const newActive = pl.active && pl.active.iid === targetIid
+      ? { ...pl.active, damage: 99999 }
+      : pl.active;
+    const newBench = pl.bench.map(b => b.iid === targetIid
       ? { ...b, damage: 99999 }
       : b);
-    return { ...p, active: newActive, bench: newBench };
+    return { ...pl, active: newActive, bench: newBench };
   });
 });
 

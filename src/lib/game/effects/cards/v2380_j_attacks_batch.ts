@@ -45,19 +45,24 @@ import { isBasicEnergyOfType } from '../../engine';
 import { flipCoinsWithLog, canApplyAttackEffectToTarget } from '../../effects';
 
 // ── 01. 大嘴娃｜雙重食客 — 60× 丟棄手牌能量張數 ─────────────────────────────
-// 玩家在 PRE 階段選 0..2 張手牌能量丟棄；damage = 60 × 丟棄張數。
-// 為避免擴 PendingSelection schema，採簡化路徑：
-//   POST 階段觸發 hand-discard（filter: Energy）讓玩家選 0..2 張，
-//   resolver 改回 active.damageBonusPending 之類的補傷害…
-//   但既有 attack 流程是 PRE 算 damage、POST 處理副作用，無法回頭改 damage。
-// 因此本檔對「雙重食客」採 fallback：直接以「自動找最多 2 張手牌能量丟棄」結算。
-//   後續若要互動式選擇，需擴 ATTACK_PRE_DISCARD_CHOICE schema。
-regPre('大嘴娃|雙重食客', (state, aIdx, pool) => {
+// JSON：「從自己的手牌將最多2張能量卡丟棄，造成其張數×60點傷害。」
+// v4.41：auto-discard 2 → ATTACK_PRE_DISCARD_CHOICE 玩家選 0-2（仿 v3.26 射攻月亮）
+ATTACK_PRE_DISCARD_CHOICE.set('大嘴娃|雙重食客', {
+  min: 0, max: 2, scope: 'hand-energy',
+  baseDamage: 0, damagePerEnergy: 60,
+});
+regPre('大嘴娃|雙重食客', (state, aIdx, pool, action) => {
   const player = state.players[aIdx];
-  // 找手牌中所有能量卡
+  const chosenIids = action?.discardedEnergyIids;
   const handEnergies = player.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
-  // 簡化：自動丟最多 2 張
-  const toDiscard = handEnergies.slice(0, 2);
+  let toDiscard: typeof handEnergies = [];
+  if (chosenIids && chosenIids.length > 0) {
+    // 玩家自選：限定為手牌能量、capped 到 2
+    const allowed = new Set(handEnergies.map(e => e.iid));
+    const capped = chosenIids.filter(id => allowed.has(id)).slice(0, 2);
+    const setIds = new Set(capped);
+    toDiscard = handEnergies.filter(e => setIds.has(e.iid));
+  }
   let s = state;
   if (toDiscard.length > 0) {
     s = updatePlayer(s, aIdx, p => ({
@@ -67,7 +72,7 @@ regPre('大嘴娃|雙重食客', (state, aIdx, pool) => {
     }));
     s = addLog(s, `雙重食客：丟棄手牌 ${toDiscard.length} 張能量 → ${toDiscard.length * 60} 傷害`, aIdx);
   } else {
-    s = addLog(s, '雙重食客：手牌無能量可丟棄 → 0 傷害', aIdx);
+    s = addLog(s, '雙重食客：未丟手牌能量 → 0 傷害', aIdx);
   }
   return { state: s, damage: toDiscard.length * 60 };
 });

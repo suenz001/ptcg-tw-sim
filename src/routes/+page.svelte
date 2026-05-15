@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.41</span> 🛠️ Wave 4a 簡化修補：千面避役 擊斃 + 大嘴娃 雙重食客</summary>
+        <ul>
+          <li><b>千面避役｜擊斃（I）</b>：JSON「從雙方的場上寶可夢（這隻寶可夢除外）中<b>選擇 1 隻</b>剩餘 HP 最少的寶可夢，將其【昏厥】。」舊實裝 auto-pick HP 最低，違反「選擇」字眼（多隻並列最低時應由玩家選）。修法：計算最低 HP，filter 出所有並列候選，1 隻直接昏厥（保留原行為）、2+ 隻開 modal-choice picker。</li>
+          <li><b>大嘴娃｜雙重食客（J）</b>：JSON「從自己的手牌將<b>最多 2 張</b>能量卡丟棄，造成其張數×60點傷害。」舊實裝 auto 丟 2 張，違反「最多」（玩家應可選 0/1/2）。修法：套 <code>ATTACK_PRE_DISCARD_CHOICE</code>（仿 v3.26 射攻月亮），scope='hand-energy' min=0 max=2 baseDamage=0 damagePerEnergy=60。</li>
+          <li><b>Wave 4 進度</b>：4a 完成 2/2。下個 Wave 4b 預計修：怒鸚哥 推倒（強制 → 若希望）、破破舵輪 大地能量（任何競技場 → 自己的）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.40</span> 🛠️ Firebase 用量小幅優化（對玩家零感知）</summary>
         <ul>
           <li><b>背景</b>：Firestore 讀寫用量超出免費額度（90K reads/天、30K writes/天）。完整 audit 後找出 9 個浪費點，但其中 6 項涉及對戰同步機制或 lobby UX 變更，為保護核心連線對戰體驗（卡牌遊戲需即時看到對手每一步動作）全部跳過。本版只做 2 項零感知修補。</li>
