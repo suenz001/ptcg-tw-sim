@@ -2286,6 +2286,8 @@
     stopHeartbeat();
     unsubRoom?.();
     unsubOpenRooms?.();
+    // v4.40：補 chat messages listener leak（玩家硬改網址不走 leaveOnlineGame 時殘留）
+    unsubMessages?.(); unsubMessages = null;
     if (aiTimer !== null) clearTimeout(aiTimer);
   });
 
@@ -3060,7 +3062,8 @@
       heartbeat(roomCode, idx).catch(() => { /* silent */ });
     };
     tick();
-    heartbeatTimer = window.setInterval(tick, 15000);
+    // v4.40：15s → 60s。殭屍判定門檻 5min，60s 仍有 5x 安全餘裕；對方 echo 也減少。
+    heartbeatTimer = window.setInterval(tick, 60000);
   }
   function stopHeartbeat() {
     if (heartbeatTimer !== null) {

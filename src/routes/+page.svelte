@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.40</span> 🛠️ Firebase 用量小幅優化（對玩家零感知）</summary>
+        <ul>
+          <li><b>背景</b>：Firestore 讀寫用量超出免費額度（90K reads/天、30K writes/天）。完整 audit 後找出 9 個浪費點，但其中 6 項涉及對戰同步機制或 lobby UX 變更，為保護核心連線對戰體驗（卡牌遊戲需即時看到對手每一步動作）全部跳過。本版只做 2 項零感知修補。</li>
+          <li><b>1. heartbeat 15s → 60s</b>：lobby 等待時的心跳寫入頻率拉長。殭屍房判定門檻 5 分鐘 → 60s 仍有 5x 安全餘裕。對戰進行中本來就不寫心跳（v2.83 修過），所以核心體驗零影響。預估省 ~3K writes/天 + ~3K reads/天（對方 echo 也減）。</li>
+          <li><b>2. onDestroy 補 unsubMessages leak</b>：玩家硬改網址列離開對戰房（不走 leaveOnlineGame）時，聊天訊息 listener 殘留持續扣 read quota 直到分頁關閉。本版補上清理。預估省 ~0.5-2K reads/天。</li>
+          <li><b>玩家影響</b>：完全零感知 — 對戰邏輯不動、同步時機不動、看不到任何 UI 變化。純粹後台優化。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.39</span> 🛠️ Wave 3c 簡化修補：火箭隊的貓老大ex 高傲指令（top10 attack copy picker）</summary>
         <ul>
           <li><b>火箭隊的貓老大ex｜高傲指令（I）</b>：JSON「將對手的牌庫上方10張卡翻到正面。<b>若希望，選擇1個其中的寶可夢持有的招式</b>，作為這個招式使用。將翻到正面的卡放回牌庫並重洗。」舊實裝自動挑印刷最高傷害的招式 — 違反「若希望，選擇1個」（不讓玩家選）。</li>
