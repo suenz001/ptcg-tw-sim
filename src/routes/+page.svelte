@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.39</span> 🛠️ Wave 3c 簡化修補：火箭隊的貓老大ex 高傲指令（top10 attack copy picker）</summary>
+        <ul>
+          <li><b>火箭隊的貓老大ex｜高傲指令（I）</b>：JSON「將對手的牌庫上方10張卡翻到正面。<b>若希望，選擇1個其中的寶可夢持有的招式</b>，作為這個招式使用。將翻到正面的卡放回牌庫並重洗。」舊實裝自動挑印刷最高傷害的招式 — 違反「若希望，選擇1個」（不讓玩家選）。</li>
+          <li><b>修法</b>：仿 v3.895 耀閃挑戰 UI picker pattern，新加 <code>rocketCommandPicker</code>。UI initiateAttack 攔截 → peek 對手牌庫頂 10 張、filter 含招式的寶可夢 → 開 picker 讓玩家選 (pokeIid, attackIndex)。Picker 含「不複製（傷害 0）」按鈕對應「若希望」= 不希望，含「取消（改用其他招式）」關 picker 不 dispatch。</li>
+          <li><b>fallback / race 保護</b>：PRE 收到 action.copyAttackChoice 後驗證 pokeIid 是否仍在 top10（防 deck 變動）；無效時 fallback 自動挑印刷最高。</li>
+          <li><b>borrowed binary-yes-no</b>：若被複製招式有「若希望」型 PRE_DISCARD_CHOICE（如金屬之錘 +150），注入 sentinel `__rocket_command_borrowed_yes__` 視為「希望」（仿耀閃挑戰）。</li>
+          <li><b>Wave 3 全部完成 3/3</b>：恐怖啃咬 + 惡之覺醒 + 高傲指令 全部修補。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.38</span> 🛠️ Wave 3b 簡化修補：火箭隊的尼多娜 惡之覺醒（2-base × evolve multi-stage picker）</summary>
         <ul>
           <li><b>火箭隊的尼多娜｜惡之覺醒（I）</b>：JSON「選擇最多2隻自己的【惡】寶可夢，從自己的牌庫選擇從那些寶可夢進化而來的卡各1張，<b>放置於各自身上完成進化</b>。並且重洗牌庫。」舊實裝套用 EVOLVE_SEARCH 簡化版「從牌庫挑 1 張寶可夢加手牌」— 違反 3 點：（1）應選自方【惡】base 而非牌庫挑加手；（2）牌庫應限「base 的進化卡」；（3）應 evolve in place。</li>

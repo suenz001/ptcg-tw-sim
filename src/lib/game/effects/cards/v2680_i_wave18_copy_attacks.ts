@@ -15,10 +15,10 @@
  *   - 不繼承被複製招式的 skipWeakRes（弱抗計算用本招式自身屬性）
  */
 
-import { regPre, regPost, addLog, updatePlayer, withPending, shuffle } from '../_shared';
+import { regPre, regPost, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
 import { ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
-import type { GameState, CardInstance } from '../../types';
+import type { GameState, GameAction, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { flipCoinsWithLog } from '../../effects';
 
@@ -158,7 +158,13 @@ regPost('九尾|靈怪變化', (state, aIdx, pool) => {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 5. 火箭隊的貓老大ex｜高傲指令 — 翻對手牌庫頂 10 張, 從中選寶可夢 1 招使用
-//   簡化：自動挑「印刷傷害最高」的（不繼承 PRE 旗標）；翻完放回對手牌庫並重洗
+// JSON：「將對手的牌庫上方10張卡翻到正面。若希望，選擇1個其中的寶可夢持有的招式，
+//        作為這個招式使用。將翻到正面的卡放回牌庫並重洗。」
+// v4.39：UI initiateAttack 攔截 → rocketCommandPicker 讓玩家選 (pokeIid, attackIndex)
+//   - skip sentinel '__rocket_command_skip__' → 0 damage（不複製，符合「若希望」）
+//   - 有效 choice 且 pokeIid 在 top10 → 用該招式（race 保護 — 若 deck 變動 fallback 自動）
+//   - mismatch / 缺失 → fallback 自動挑印刷最高
+//   - borrowed 招式有 binary-yes-no PRE_DISCARD_CHOICE → 注入 sentinel 視為「希望」
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
@@ -168,10 +174,44 @@ regPre('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
   if (pokemonCards.length === 0) {
     return { state: addLog(state, '高傲指令：對手牌庫頂 10 張無寶可夢', aIdx), damage: 0 };
   }
-  const best = pickHighestAttack(pokemonCards, pool, '火箭隊的貓老大ex|高傲指令');
-  if (!best) return { state: addLog(state, '高傲指令：對手牌庫頂無可複製招式', aIdx), damage: 0 };
-  const copiedKey = `${best.cardName}|${best.attackName}`;
-  return copyAttackPre(state, aIdx, pool, copiedKey, '高傲指令', best.damage, action);
+  // v4.39：讀玩家選擇
+  const choice = (action as Extract<GameAction, { type: 'ATTACK' }> | undefined)?.copyAttackChoice;
+  // skip sentinel：玩家明確選擇不複製（「若希望」= 不希望）
+  if (choice?.pokeIid === '__rocket_command_skip__') {
+    return { state: addLog(state, '高傲指令：玩家選擇不複製招式（傷害 0）', aIdx), damage: 0 };
+  }
+  let picked: { cardName: string; attackName: string; damage: number } | null = null;
+  let useChoice = false;
+  if (choice && choice.pokeIid && choice.attackIndex >= 0) {
+    const inst = pokemonCards.find(c => c.iid === choice.pokeIid);
+    if (inst) {
+      const card = pool.get(inst.cardId);
+      const atk = card?.attacks?.[choice.attackIndex];
+      if (card && atk && card.name && atk.name && `${card.name}|${atk.name}` !== '火箭隊的貓老大ex|高傲指令') {
+        const m = (atk.damage ?? '').match(/^(\d+)/);
+        const dmg = m ? parseInt(m[1], 10) : 0;
+        picked = { cardName: card.name, attackName: atk.name, damage: dmg };
+        useChoice = true;
+      }
+    }
+  }
+  if (!picked) {
+    picked = pickHighestAttack(pokemonCards, pool, '火箭隊的貓老大ex|高傲指令');
+  }
+  if (!picked) return { state: addLog(state, '高傲指令：對手牌庫頂無可複製招式', aIdx), damage: 0 };
+  const copiedKey = `${picked.cardName}|${picked.attackName}`;
+  const pickMode = useChoice ? '玩家選擇' : '自動挑印刷最高';
+  const s = addLog(state, `高傲指令：${pickMode}「${picked.cardName}」的「${picked.attackName}」`, aIdx);
+  // borrowed 招式 binary-yes-no PRE_DISCARD_CHOICE → 注入 sentinel 視為「希望」（仿耀閃挑戰）
+  const copiedSpec = ATTACK_PRE_DISCARD_CHOICE.get(copiedKey);
+  let dispatchAction: typeof action = action;
+  if (copiedSpec?.scope === 'binary-yes-no') {
+    dispatchAction = {
+      ...(action ?? { type: 'ATTACK', attackIndex: 0 } as Extract<GameAction, { type: 'ATTACK' }>),
+      discardedEnergyIids: ['__rocket_command_borrowed_yes__'],
+    };
+  }
+  return copyAttackPre(s, aIdx, pool, copiedKey, '高傲指令', picked.damage, dispatchAction);
 });
 regPost('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool) => {
   // 重洗對手牌庫（卡面要求「翻到正面的卡放回牌庫並重洗」）

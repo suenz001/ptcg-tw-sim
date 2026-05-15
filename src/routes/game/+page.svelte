@@ -2627,6 +2627,32 @@
       };
       return;
     }
+    // v4.39 火箭隊的貓老大ex|高傲指令 intercept：peek 對手牌庫頂 10 張 → 列寶可夢的招式讓玩家選
+    //   - 0 寶可夢 → 直接 dispatch（engine PRE 出 fail log）
+    //   - 1 寶可夢 1 招 → 自動帶 copyAttackChoice（避免單一選項浪費 UX）
+    //   - 多選項 → 開 rocketCommandPicker（含「不複製」skip 按鈕，符合「若希望」）
+    if (atk.name === '高傲指令' && sourceCardName === '火箭隊的貓老大ex') {
+      if (!game) return;
+      const oppDeck = game.players[1 - myIdx].deck;
+      const top10 = oppDeck.slice(0, 10);
+      const pokeList = top10
+        .map(inst => ({ inst, card: getCard(inst.cardId) }))
+        .filter(x => x.card?.supertype === 'Pokemon' && (x.card?.attacks?.length ?? 0) > 0) as Array<{ inst: CardInstance; card: Card }>;
+      if (pokeList.length === 0) {
+        dispatch(GameActions.attack(attackIndex));
+        return;
+      }
+      // 單一寶可夢 + 單招 → 自動填，跳過 picker
+      if (pokeList.length === 1 && (pokeList[0].card.attacks?.length ?? 0) === 1) {
+        dispatch(GameActions.attack(attackIndex, undefined, { pokeIid: pokeList[0].inst.iid, attackIndex: 0 }));
+        return;
+      }
+      rocketCommandPicker = {
+        sourceAttackIndex: attackIndex,
+        pokeList,
+      };
+      return;
+    }
     const key = `${sourceCardName}|${atk.name}`;
     const spec = ATTACK_PRE_DISCARD_CHOICE.get(key);
     if (!spec) {
@@ -2730,6 +2756,29 @@
     dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
   }
   function cancelBrightChallenge() { brightChallengePicker = null; }
+
+  // v4.39 火箭隊的貓老大ex|高傲指令 picker：對手牌庫頂 10 張寶可夢的招式
+  //   pokeList = top10 中有招式的寶可夢清單（攻擊方可看見 — 卡面「翻到正面」）
+  //   resolveRocketCommand → dispatch ATTACK 帶 copyAttackChoice {pokeIid, attackIndex}
+  //   skipRocketCommand → dispatch 帶 skip sentinel（不複製，傷害 0，符合「若希望」）
+  //   cancelRocketCommand → 關 picker 不 dispatch（玩家可改用其他招式）
+  let rocketCommandPicker = $state<{
+    sourceAttackIndex: number;
+    pokeList: Array<{ inst: CardInstance; card: Card }>;
+  } | null>(null);
+  function resolveRocketCommand(pokeIid: string, attackIndex: number) {
+    if (!rocketCommandPicker) return;
+    const src = rocketCommandPicker.sourceAttackIndex;
+    rocketCommandPicker = null;
+    dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
+  }
+  function skipRocketCommand() {
+    if (!rocketCommandPicker) return;
+    const src = rocketCommandPicker.sourceAttackIndex;
+    rocketCommandPicker = null;
+    dispatch(GameActions.attack(src, undefined, { pokeIid: '__rocket_command_skip__', attackIndex: -1 }));
+  }
+  function cancelRocketCommand() { rocketCommandPicker = null; }
 
   // v3.900 回合切換 banner：每次 game.activePlayerIndex 變化時，全螢幕中央彈 1.5s 大字
   //   - text='你的回合' if new active === myIdx else '對手回合'
@@ -5720,6 +5769,47 @@
     </div>
   {/if}
 
+  <!-- v4.39 火箭隊的貓老大ex｜高傲指令 — 對手牌庫頂 10 張寶可夢的招式選擇 picker ─── -->
+  {#if rocketCommandPicker}
+    <div class="selection-overlay">
+      <div class="selection-modal copy-attack-modal">
+        <div class="sel-header">
+          <h3>高傲指令：選擇要使用的招式</h3>
+          <p class="sel-hint">對手牌庫上方 10 張卡翻到正面，下列為其中持有招式的寶可夢。請選擇 1 個招式作為這個招式使用（若不希望可按「不複製」）。翻到正面的卡將放回牌庫並重洗。</p>
+        </div>
+        <div class="copy-attack-list rocket-command-scroll">
+          {#each rocketCommandPicker.pokeList as p (p.inst.iid)}
+            <div class="copy-attack-poke">
+              <img src={p.card.imageUrl} alt={p.card.name} class="copy-attack-img"/>
+              <div class="copy-attack-col">
+                <div class="copy-attack-name">{p.card.name}</div>
+                <div class="copy-attack-atks">
+                  {#each p.card.attacks ?? [] as atk, aIdx}
+                    <button
+                      class="copy-attack-btn"
+                      onclick={() => resolveRocketCommand(p.inst.iid, aIdx)}
+                      title={atk.effect ?? ''}
+                    >
+                      <span class="copy-atk-cost">
+                        {#each atk.cost as e}<span class="copy-atk-pip" style:background={ENERGY_COLOR[e]} title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                      </span>
+                      <span class="copy-atk-name">{atk.name}</span>
+                      {#if atk.damage}<span class="copy-atk-dmg">{atk.damage}</span>{/if}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            </div>
+          {/each}
+        </div>
+        <div class="sel-footer">
+          <button class="btn-act" onclick={skipRocketCommand}>不複製（傷害 0）</button>
+          <button class="btn-act secondary" onclick={cancelRocketCommand}>取消（改用其他招式）</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- v3.900 回合切換 banner — 全螢幕中央彈「你的回合 / 對手回合」大字 1.5s ─────── -->
   {#if turnBanner}
     <div class="turn-banner-overlay" transition:fade={{ duration: 200 }}>
@@ -7597,6 +7687,13 @@
   .sel-card{ display:flex; flex-direction:column; align-items:center; gap:.2rem; background:#0e1e0e; border:2px solid #2a4a2a; border-radius:6px; padding:.3rem; cursor:pointer; color:#ccc; font-size:.65rem; position:relative; width:100%; }
   .sel-card:hover{ border-color:#4a8a4a; }
   .sel-card.sel-picked{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }
+  /* v4.39 高傲指令 picker — 長列表（多 Pokemon × 多 attack）需可滾動 */
+  .rocket-command-scroll {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
   /* deck-search / generic selection：放大鏡 + 挑選按鈕的 wrapper */
   .sel-card-wrap{ position:relative; display:flex; flex-direction:column; }
   .sel-card-wrap.sel-picked .sel-card{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }
