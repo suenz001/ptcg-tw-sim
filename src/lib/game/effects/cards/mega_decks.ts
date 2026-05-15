@@ -620,16 +620,10 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
     if (!target) continue;
     const targetCard = pool.get(target.cardId);
 
-    // v2.89 招式效果免疫（attack-effect）
-    const guardOO = canApplyAttackEffectToTarget(s, actorIdx, target, targetCard, pool);
-    if (guardOO.blocked) {
-      if (!blockedTargetsOO.has(iid)) {
-        blockedTargetsOO.add(iid);
-        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${guardOO.reason}（該指示物無效）`, actorIdx);
-      }
-      continue;
-    }
-
+    // v4.18：移除 v2.89 在此加的 canApplyAttackEffectToTarget check（語意錯誤，比照 v3.894 bench-hit-N 修法）。
+    //   油之機關槍卡面：「不計算弱點・抵抗力，造成其選擇次數×20 點傷害」— 屬於【招式傷害 attack-damage】，
+    //   不是【招式效果 attack-effect】。薄霧能量 / 對戰圓形 / 皇帝之勢 / 硬岩能量 / 抵抗之幕 等只擋招式效果，不擋傷害。
+    //   玩家回報：奧利瓦 vs 附【薄霧能量】寶可夢 → 油之機關槍對其無效（誤判）。
     // v3.993 招式傷害免疫（attack-damage — only bench；active 不受花之帷幔保護）
     if (defender.active?.iid !== iid) {
       const guardOOdmg = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-damage');

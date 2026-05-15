@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.18</span> 🛠️ 修油之機關槍誤套招式效果免疫（薄霧能量擋傷害 bug）</summary>
+        <ul>
+          <li>玩家回報：奧利瓦的招式「油之機關槍」攻擊附有【薄霧能量】的寶可夢時未造成傷害。</li>
+          <li><b>卡面 vs 實裝對照</b>：
+            <ul>
+              <li>油之機關槍：「造成其選擇次數×20 點傷害」 → 屬於【招式傷害 attack-damage】</li>
+              <li>薄霧能量：「不會受到對手的寶可夢使用招式的效果的影響」 → 只擋【招式效果 attack-effect】</li>
+              <li>結論：油之機關槍應該照常造成傷害，不該被薄霧能量擋住。</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：移除 olive-oil-distribute resolver 內 v2.89 加的 <code>canApplyAttackEffectToTarget</code> check（語意誤套）。比照 v3.894 bench-hit-N 同型修法（「招式傷害 vs 招式效果」分類）。保留 v3.993 加的 <code>resolveBenchGuard('attack-damage')</code>（花之帷幔 / 太晶 / 球形盾牌 等對備戰仍正確擋）。</li>
+          <li><b>連帶修好</b>：對戰圓形 / 皇帝之勢 / 硬岩【鬥】能量 / 抵抗之幕 等「招式效果」免疫類，過去都會錯擋油之機關槍 — 一併修正。</li>
+          <li><b>對比說明</b>：多龍巴魯托ex「幻影奇襲」卡面是「將 6 個傷害指示物以任意方式放置」（放指示物 = 招式效果），對戰圓形 / 薄霧能量正確擋下，這邊保留不變。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.17</span> 🛠️ 限定屬性 picker 全面套 energyTypeFilter（金屬之錘 + 災難衝擊 + 烈獄狂火X）</summary>
         <ul>
           <li>玩家要求：審計所有「限定屬性能量」picker，用 v4.16 同樣作法（<code>energyTypeFilter</code> + <code>countMode: 'units'</code>）。</li>
