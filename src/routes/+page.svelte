@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.31</span> 🛠️ hotfix 桌機場地背景切掉卡頂標題（競技場/訓練家/夜間學院 字樣）</summary>
+        <ul>
+          <li>玩家澄清 v4.30 沒處理 — 截到的是卡片<b>上方</b>的標題文字（競技場/訓練家/夜間學院），不是底部說明文字。需要把上方標題區也切掉，只露出中段藝術區（紅框內）。</li>
+          <li><b>修法</b>：換 background-image → 實際 <code>&lt;img&gt;</code> 元素 + <code>transform: translateY(-18%)</code>，把卡頂部標題區移出容器，圖頂端對齊容器頂時，原圖 18% 位置切齊容器 0%。</li>
+          <li><b>幾何</b>：PTCG 卡版面 = 頂 18% labels + 中 46% 藝術區 + 底 36% 文字。圖寬 100% 填滿、高 auto 等比 5:7（圖高 ≈ 容器寬 × 1.4）。翻譯後 visible 落在卡藝術區內。</li>
+          <li><b>保險 mask</b>：mask 漸層底端淡出，防接近 1:1 視窗時 visible 延伸過長碰到文字。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.30</span> 🛠️ hotfix 桌機場地背景仍截到文字區（cover → 100% auto 精準切藝術區）</summary>
         <ul>
           <li>玩家回報 v4.25 後場地背景在某些視窗比例下仍會把卡牌底部「文字效果區」截進來，不符 v4.22 設計初衷（只要藝術區）。</li>

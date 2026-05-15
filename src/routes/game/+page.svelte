@@ -4212,7 +4212,9 @@
 
     <!-- v4.22 場地卡在場時的背景圖層（只抓上半藝術圖區 + 低調透明度） -->
     {#if stadiumCard}
-      <div class="stadium-bg-layer" style:background-image="url({stadiumCard.imageUrl})" aria-hidden="true"></div>
+      <div class="stadium-bg-layer" aria-hidden="true">
+        <img src={stadiumCard.imageUrl} alt="" />
+      </div>
     {/if}
 
     <!-- 對手場地（永遠在上方） -->
@@ -6685,23 +6687,29 @@
   }
 
   /* v4.22 場地卡在場時的背景圖層 — absolute + z-index:-1 → 蓋 playmat gradient 底色但在 field-row 之下 */
-  /* v4.30：cover → 100% auto 精準切藝術區
-       - 寬 100% 填滿容器，高 auto 按 5:7 等比延伸
-       - 圖比容器高的部分被 overflow:hidden 切掉，visible = 圖頂部 = 卡藝術區
-       - 視窗越寬，可見比例越小、越聚焦藝術區，永遠不會看到底部文字
-     mask 微調：保險再淡出底端，防接近 1:1 視窗時藝術區邊緣文字殘留 */
+  /* v4.31：換 background-image → <img> 元素 + transform translateY，精準只截藝術區
+       PTCG 卡版面：頂 ~18% labels（競技場/訓練家/卡名），中 ~46% 藝術區，底 ~36% 文字
+       width 100% + height auto → 圖高 = 容器寬 × 1.4
+       translateY(-18%) → 上移圖自身 18%，藝術區頂端對齊容器頂
+       overflow:hidden 切掉底端（含文字區），mask 漸層處理 narrow viewport 文字殘留 */
   .stadium-bg-layer {
     position: absolute;
     inset: 0;
     z-index: -1;
-    background-size: 100% auto;
-    background-position: center top;
-    background-repeat: no-repeat;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .stadium-bg-layer img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    transform: translateY(-18%);
     opacity: 0.55;
     filter: blur(1.2px);
-    pointer-events: none;
-    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 60%, rgba(0,0,0,0.5) 75%, rgba(0,0,0,0.2) 88%, transparent 100%);
-    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 60%, rgba(0,0,0,0.5) 75%, rgba(0,0,0,0.2) 88%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 50%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.15) 88%, transparent 100%);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 50%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.15) 88%, transparent 100%);
   }
 
   .field-row{ display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.7rem; overflow:visible; min-height:0; }
