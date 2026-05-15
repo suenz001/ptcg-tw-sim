@@ -2762,18 +2762,18 @@
     if (picked.has(iid)) {
       picked.delete(iid);
     } else {
-      const { max, countMode } = preAttackDiscard.spec;
-      if (max !== null) {
-        if (countMode === 'units') {
-          // 預估若加入這張會否超過 max units
-          const energies = getDiscardableEnergies(preAttackDiscard.spec);
-          const target = energies.find(e => e.iid === iid);
-          const addUnits = target ? getEnergyDiscardUnits(target.cardId, target.hostInst, pool) : 1;
-          const cur = computePickedAmount(preAttackDiscard.spec, picked, energies);
-          if (cur + addUnits > max) return;
-        } else if (picked.size >= max) {
-          return;
-        }
+      const { min, max, countMode } = preAttackDiscard.spec;
+      // v4.10：units mode 用 min 為 gate（不是 max）— PTCG 規則「卡 atomic」：
+      //   單張卡提供超過 min units 是允許的（例：1 張燃火能量 = 3 units 滿足「丟 2 個」）。
+      //   修法：cur < min 可加任何卡；cur >= min 不能再加（達標即停，避免亂丟）。
+      if (countMode === 'units') {
+        const energies = getDiscardableEnergies(preAttackDiscard.spec);
+        const cur = computePickedAmount(preAttackDiscard.spec, picked, energies);
+        if (cur >= min) return;  // 已達標 → 不能再加
+        // cur < min → 不論 addUnits 多少都允許（包括單張超過的情況）
+      } else if (max !== null && picked.size >= max) {
+        // cards mode 沿用原行為（最多 N 張）
+        return;
       }
       picked.add(iid);
     }

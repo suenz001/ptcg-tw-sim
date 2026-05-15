@@ -264,6 +264,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.10</span> 🛠️ 修分身連打 max gate 太嚴格（單張超過 PTCG 規則應允許）</summary>
+        <ul>
+          <li>玩家糾正：PTCG 規則「丟 N 個能量」中，<b>單張卡提供超過 N 是允許的</b>（卡 atomic 不能拆半）。v4.09 改 <code>max: 2</code> + 用 <code>cur + addUnits &gt; max</code> 為 gate 太嚴格 — 拒絕了本來合法的「1 張燃火能量（=3 units）整張丟」case。</li>
+          <li><b>修法</b>：UI <code>togglePreAttackEnergy</code> 對 units mode 改用 <code>min</code> 為 gate：
+            <ul>
+              <li><code>cur &lt; min</code> → 可加任何卡（即使 addUnits 讓 cur 超過 min 也允許 — 卡是 atomic）</li>
+              <li><code>cur &gt;= min</code> → 達標，不能再加（防玩家亂丟不需要的卡）</li>
+              <li>cards mode 沿用原 max 行為（最多 N 張不變）</li>
+            </ul>
+          </li>
+          <li><b>實際效果</b>（分身連打 <code>min: 2</code>）：
+            <ul>
+              <li>1 張新衝天（2 units）→ 達標停 ✓</li>
+              <li>1 張燃火能量（3 units）→ 達標停 ✓（單張超過允許）</li>
+              <li>2 張水能 → 第 2 張達標停 ✓</li>
+              <li>1 張水能 + 1 張新衝天 → 新衝天加完 cur=3 達標停 ✓</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.09</span> 🛠️ 修分身連打缺 max gate 可丟超過 2 units</summary>
         <ul>
           <li>玩家回報 v4.07 加新衝天能量 = 2 units 後，分身連打可以一次丟光全部能量（甲賀忍蛙ex 身上 1 顆新衝天 + 3 顆水能可全丟）。</li>
