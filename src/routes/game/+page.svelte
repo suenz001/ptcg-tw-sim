@@ -2580,13 +2580,18 @@
   //   厄鬼椪 水井面具ex（太晶）+ 璀璨結晶 → 2；否則 3
   //   非 激流水泵 → undefined（picker 走原邏輯）
   function _computeExactRequired(attackName: string, att: CardInstance | null): number | undefined {
-    if (attackName !== '激流水泵' || !att) return undefined;
-    const card = getCard(att.cardId);
-    const isTera = card?.tags?.includes('太晶') ?? false;
-    if (!isTera) return 3;
-    const allTools = [att.toolAttached, ...(att.extraTools ?? [])].filter(Boolean) as CardInstance[];
-    const hasShinyCrystal = allTools.some(t => getCard(t.cardId)?.name === '璀璨結晶');
-    return hasShinyCrystal ? 2 : 3;
+    if (!att) return undefined;
+    if (attackName === '激流水泵') {
+      const card = getCard(att.cardId);
+      const isTera = card?.tags?.includes('太晶') ?? false;
+      if (!isTera) return 3;
+      const allTools = [att.toolAttached, ...(att.extraTools ?? [])].filter(Boolean) as CardInstance[];
+      const hasShinyCrystal = allTools.some(t => getCard(t.cardId)?.name === '璀璨結晶');
+      return hasShinyCrystal ? 2 : 3;
+    }
+    // v4.14：忍者飛旋（甲賀忍蛙ex / 超級甲賀忍蛙ex）— 卡面「將 1 個【水】能量放回手牌」
+    if (attackName === '忍者飛旋') return 1;
+    return undefined;
   }
 
   // v2.119 copy-attack picker（目前僅用於 N的索羅亞克ex｜暗黑底牌）
@@ -2771,14 +2776,19 @@
         const target = energies.find(e => e.iid === iid);
         const addUnits = target ? getEnergyDiscardUnits(target.cardId, target.hostInst, pool) : 1;
         const cur = computePickedAmount(preAttackDiscard.spec, picked, energies);
-        if (cur >= min) return;  // 已達標 → 不能再加
-        // v4.11：最小組合檢查 — 加新卡後若已選任一卡移除後仍 >= min，該卡多餘 → 拒
+        // v4.14：gate threshold 用 exactRequired 優先（min=0 場景如激流水泵/忍者飛旋）
+        //   否則用 min（min>0 場景如分身連打/龍之滑翔）
+        const gate = (preAttackDiscard.exactRequired !== undefined && preAttackDiscard.exactRequired > 0)
+          ? preAttackDiscard.exactRequired
+          : min;
+        if (gate > 0 && cur >= gate) return;  // 已達標 → 不能再加
+        // 最小組合檢查：加新卡後若已選任一卡移除後仍 >= gate，該卡多餘 → 拒
         const newSum = cur + addUnits;
-        if (newSum >= min) {
+        if (gate > 0 && newSum >= gate) {
           for (const pickedIid of picked) {
             const pe = energies.find(e => e.iid === pickedIid);
             const pu = pe ? getEnergyDiscardUnits(pe.cardId, pe.hostInst, pool) : 1;
-            if (newSum - pu >= min) return;  // 此已選卡多餘 → 拒
+            if (newSum - pu >= gate) return;  // 此已選卡多餘 → 拒
           }
         }
       } else if (max !== null && picked.size >= max) {
@@ -2799,7 +2809,8 @@
     const amount = computePickedAmount(spec, picked, energies);
     if (amount < spec.min) return;
     if (spec.max !== null && amount > spec.max) return;
-    if (exactRequired !== undefined && amount !== 0 && amount !== exactRequired) return;
+    // v4.14：units mode 允許單張超過 → 改 < 嚴擋 (0 skip 或 >= exactRequired 才送)
+    if (exactRequired !== undefined && amount !== 0 && amount < exactRequired) return;
     const iids = [...picked];
     preAttackDiscard = null;
     dispatch(GameActions.attack(attackIndex, iids, copyAttackChoice));
@@ -5447,7 +5458,7 @@
     {@const maxOk = isUnits ? true : (spec.max === null || pickedAmount <= spec.max)}
     {@const estDmg = spec.baseDamage + pickedAmount * spec.damagePerEnergy}
     {@const req = preAttackDiscard.exactRequired}
-    {@const exactOk = req === undefined ? true : (pickedAmount === 0 || pickedAmount === req)}
+    {@const exactOk = req === undefined ? true : (pickedAmount === 0 || pickedAmount >= req)}
     {@const confirmEnabled = minOk && maxOk && exactOk && (req === undefined || pickedAmount === req)}
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>

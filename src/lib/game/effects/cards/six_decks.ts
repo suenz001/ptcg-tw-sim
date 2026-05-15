@@ -286,6 +286,7 @@ regR('ambush-snipe-by-counters', (state, aIdx, selectedIids, _params, pool) => {
 ATTACK_PRE_DISCARD_CHOICE.set('超級甲賀忍蛙ex|忍者飛旋', {
   min: 0, max: 1, scope: 'attacker', baseDamage: 120, damagePerEnergy: 80,
   verb: 'return-to-hand', // 卡面：「將 1 個【水】能量放回手牌」
+  countMode: 'units',  // v4.14：卡面「1 個」用 units 解讀；exactRequired=1 由 UI 計算
 });
 regPre('超級甲賀忍蛙ex|忍者飛旋', (state, aIdx, pool, action) => {
   const chosenIids = action?.discardedEnergyIids ?? [];

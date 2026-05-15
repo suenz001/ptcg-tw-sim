@@ -43,7 +43,7 @@ import {
   regPre, regPost, regR,
   shuffle, addLog, withPending, updatePlayer,
   ATTACK_PRE_DISCARD_CHOICE,
-  getAllAttachedTools,
+  getAllAttachedTools, getEnergyDiscardUnits,
 } from '../_shared';
 import {
   coinHeadsMultiplyPre,
@@ -582,6 +582,7 @@ regPost('洛奇亞ex|破壞潮旋', (state, aIdx) => {
 ATTACK_PRE_DISCARD_CHOICE.set('厄鬼椪 水井面具ex|激流水泵', {
   min: 0, max: 3, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
   verb: 'return-to-deck', // 卡面：「將 3 個能量放回牌庫並重洗」
+  countMode: 'units',  // v4.14：卡面「3 個」用 units 解讀，1 張燃火/新衝天等特殊能量可達標
 });
 // v3.875 helper：計算「啟用 option 所需放回的能量數」
 //   - 預設 3（卡面「選擇3個」）
@@ -601,18 +602,24 @@ regPre('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => {
   const att = state.players[aIdx].active;
   const chosenIids = action?.discardedEnergyIids ?? [];
   const required = _hydroPumpRequired(att, pool);
-  // < required → 不執行（卡面要求棄 required 個，璀璨結晶 -1）
-  if (!att || chosenIids.length < required) {
-    return { state: addLog(state, `激流水泵：未棄滿 ${required} 個能量（不執行 option）→ 100`, aIdx), damage: 100 };
+  if (!att) {
+    return { state: addLog(state, '激流水泵：戰鬥場無寶可夢 → 100', aIdx), damage: 100 };
+  }
+  // v4.14：units mode — 累計 units 而非張數
+  const chosenInsts = att.energyAttached.filter(e => chosenIids.includes(e.iid));
+  const chosenUnits = chosenInsts.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool), 0);
+  if (chosenUnits < required) {
+    return { state: addLog(state, `激流水泵：未棄滿 ${required} 個能量單位（目前 ${chosenUnits}）→ 100`, aIdx), damage: 100 };
   }
   // 棄玩家選的 required 個（取前 required 個 — UI 已限制 max）
   const allowed = new Set(att.energyAttached.map(e => e.iid));
-  const capped = chosenIids.filter(id => allowed.has(id)).slice(0, required);
-  const chosenSet = new Set(capped);
+  // v4.14：units mode — 不再 slice(0, required) 而是接受玩家選的全部（玩家已自己限最小組合）
+  const chosenSet = new Set(chosenIids.filter(id => allowed.has(id)));
   const discarded = att.energyAttached.filter(e => chosenSet.has(e.iid));
   const remaining = att.energyAttached.filter(e => !chosenSet.has(e.iid));
-  if (discarded.length < required) {
-    // 防呆：玩家送的 iid 對不上 active 能量 → 視為不執行
+  // 累計 units 判斷是否達標
+  const totalUnits = discarded.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool), 0);
+  if (totalUnits < required) {
     return { state: addLog(state, '激流水泵：能量挑選異常 → 100', aIdx), damage: 100 };
   }
   const s2 = updatePlayerInline(state, aIdx, p => ({
@@ -631,7 +638,11 @@ regPost('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => 
   const att = state.players[aIdx].active;
   const required = _hydroPumpRequired(att, pool);
   const chosenIids = action?.discardedEnergyIids ?? [];
-  if (chosenIids.length < required) return state;
+  if (!att) return state;
+  // v4.14：units mode — 累計 units 判斷
+  const chosenInsts = att.energyAttached.filter(e => chosenIids.includes(e.iid));
+  const chosenUnits = chosenInsts.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool), 0);
+  if (chosenUnits < required) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) {
     return addLog(state, '激流水泵：對手備戰無寶可夢（已棄能量但無 bench 目標）', aIdx);

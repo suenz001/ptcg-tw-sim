@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.14</span> 🛠️ 激流水泵 + 忍者飛旋 + 災難衝擊套 units mode</summary>
+        <ul>
+          <li>玩家要求優先處理 3 張常用卡（卡面用「個」字眼）：</li>
+          <li><b>激流水泵</b>（厄鬼椪 水井面具ex）：「選擇 3 個能量」+ exactRequired=3。<code>spec.countMode='units'</code>；<code>regPre/regPost</code> 改用 units 累計判斷。1 張燃火能量 (=3 units) 整張即可達標。</li>
+          <li><b>忍者飛旋</b>（超級甲賀忍蛙ex）：「將 1 個【水】能量放回手牌」+ exactRequired=1。<code>spec.countMode='units'</code>；<code>_computeExactRequired</code> 加新分支。1 張新衝天能量 (Stage2=2 units) atomic 整張即可滿足。</li>
+          <li><b>災難衝擊</b>（超級麻麻鰻魚王ex）：「將 2 個【雷】能量丟棄」— binary-yes-no scope 不重構，<code>regPost</code> yes 後內部計算改 units（含新衝天 Stage2 = 2 units 視為雷）。</li>
+          <li><b>UI 共用升級</b>：
+            <ul>
+              <li><code>confirmEnabled exactOk</code>：<code>=== req</code> 改為 <code>&gt;= req</code>（允許單張 atomic 超過）</li>
+              <li><code>confirmPreAttackDiscard</code>：amount check <code>!== req</code> 改為 <code>&lt; req</code></li>
+              <li><code>togglePreAttackEnergy</code> units mode gate：用 <code>exactRequired</code> 優先（min=0 場景），否則 min。配合最小組合檢查（移除任一已選卡後仍 &gt;= gate 則多餘 → 拒）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.13</span> 🔍 audit 丟能量招式 + 龍之滑翔套 units mode</summary>
         <ul>
           <li><b>Audit 26 個 ATTACK_PRE_DISCARD_CHOICE</b> 依鐵律 Rule 7c 查 JSON 卡面：

@@ -285,15 +285,28 @@ regPost('超級麻麻鰻魚王ex|災難衝擊', (state, aIdx, pool, action) => {
     return addLog(state, '災難衝擊：選「否」 → 不棄能量、不麻痺對手', aIdx);
   }
   // 1) 棄 2 個雷能量
+  // v4.14：units mode — 卡面「2 個【雷】能量」用 units 計算。
+  //   新衝天能量 attach Stage2 host 視為「所有屬性 2 units」含雷 → 1 張可滿足。
+  //   收集視為雷能量的 source：basic Lightning + 新衝天能量 (Stage2 host)
   let s = state;
   const att = s.players[aIdx].active;
   if (att) {
     const lightningIids: string[] = [];
-    for (let i = att.energyAttached.length - 1; i >= 0 && lightningIids.length < 2; i--) {
+    const stage = pool.get(att.cardId)?.stage ?? pool.get(att.cardId)?.subtype;
+    let unitsAcc = 0;
+    for (let i = att.energyAttached.length - 1; i >= 0 && unitsAcc < 2; i--) {
       const e = att.energyAttached[i];
-      if (pool.get(e.cardId)?.pokemonType === 'Lightning') lightningIids.push(e.iid);
+      const ec = pool.get(e.cardId);
+      if (ec?.pokemonType === 'Lightning') {
+        lightningIids.push(e.iid);
+        unitsAcc += 1;
+      } else if (ec?.name === '新衝天能量' && stage === 'Stage2') {
+        // 新衝天 Stage2 = 2 units 所有屬性含雷
+        lightningIids.push(e.iid);
+        unitsAcc += 2;
+      }
     }
-    if (lightningIids.length >= 2) {
+    if (unitsAcc >= 2) {
       const set = new Set(lightningIids);
       s = updatePlayer(s, aIdx, p => {
         if (!p.active) return p;
@@ -301,10 +314,10 @@ regPost('超級麻麻鰻魚王ex|災難衝擊', (state, aIdx, pool, action) => {
         const remaining = p.active.energyAttached.filter(e => !set.has(e.iid));
         return { ...p, active: { ...p.active, energyAttached: remaining }, discard: [...p.discard, ...discarded] };
       });
-      s = addLog(s, '災難衝擊：選「是」 → 棄 2 個雷能量', aIdx);
+      s = addLog(s, `災難衝擊：選「是」 → 棄 ${lightningIids.length} 張視為雷能量的卡（共 ${unitsAcc} units）`, aIdx);
     } else {
-      // 雷能量不足 → 不執行棄能量也不麻痺（卡面「將...丟棄，將對手...麻痺」是條件性）
-      return addLog(s, '災難衝擊：雷能量不足 2 個（無法棄；不麻痺）', aIdx);
+      // 雷能量 units 不足 2 → 不執行
+      return addLog(s, `災難衝擊：雷能量單位不足 2 個（目前 ${unitsAcc}；無法棄；不麻痺）`, aIdx);
     }
   }
   // 2) 對手戰鬥場麻痺
