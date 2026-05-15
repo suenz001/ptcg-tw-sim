@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.20</span> 🛠️ 修進化鏈卡片放大鏡殘留「本回合才打出」標籤</summary>
+        <ul>
+          <li>玩家回報：伊布使用招式「覺醒」完成進化後，點進化鏈的卡片放大鏡看到殘留「🆕 本回合才打出（無法進化）」字樣。</li>
+          <li><b>根因</b>：建立進化鏈 baseBare 時用 <code>...basePoke</code> spread → 把 base 寶可夢的 transient turn flags（justPlaced / evolvedThisTurn / playedFromHand / movedToActiveThisTurn / cantAttackThisTurn / abilityUsedThisTurn / status / ...）一併帶到歷史記錄項。UI 顯示時誤把 chain entry 當「當前場上實體」處理。</li>
+          <li><b>修法</b>：建立 baseBare / 覺醒進化的 chain entry 時，explicit 只設必要欄位（iid / cardId / damage=0 / energyAttached / toolAttached / extraTools / evolvedFromStack），不帶任何 transient flag。同步修 engine.ts normal EVOLVE handler + v2750 覺醒 resolver 兩處。</li>
+          <li><b>遊戲機制無影響</b>：實際的「能否再進化」由 active inst 上的 evolvedThisTurn flag 控制，END_TURN 早就清乾淨，下回合即可進化。本修純為 UI 顯示正確。對手把你退化後，下個回合輪到你時，base 寶可夢可正常再進化（卡面「那個回合無法進化」由退化 resolver 自己設 evolvedThisTurn 處理，END_TURN 後也清）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.19</span> 🛠️ 全面修「特性放置傷害指示物到對手」漏 對戰圓形 check（6 個特性）</summary>
         <ul>
           <li>玩家要求 audit：咒詛炸彈類已修，但其他可能還有。掃描結果 6 個特性漏 <code>isBenchProtected</code>。</li>

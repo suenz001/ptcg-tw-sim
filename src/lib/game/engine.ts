@@ -1962,14 +1962,22 @@ function handlePlaying(
     //   damageReduceNextHit / cantAttackThisTurn 等）皆從 evoInst（新進化卡）繼承 default
     //   undefined，等同於「特殊狀態與招式效果全部消除」。
     const prevStack = basePoke.evolvedFromStack ?? [];
+    // v4.20：baseBare 是 evolvedFromStack 的歷史記錄項，**不應帶 transient turn flags**。
+    //   原 `...basePoke` spread 會把 justPlaced / evolvedThisTurn / playedFromHand /
+    //   movedToActiveThisTurn / cantAttackThisTurn / abilityUsedThisTurn / status 等
+    //   帶到 chain entry → UI 點放大鏡看 chain link 時錯誤顯示「🆕 本回合才打出」等標籤。
+    //   chain entry 只需基本識別欄位（iid / cardId / damage=0 / 清空附加）。
     const baseBare: CardInstance = {
-      ...basePoke,
       // evolvedFromStack 裡保存的是「下層卡片實體」，不能與場上的頂層寶可夢共用 iid。
       // 否則 KO/退化/回收後，手牌或牌庫會出現不同卡名但相同 iid，EVOLVE/USE_ABILITY 會錯抓。
       iid: `${basePoke.iid}_base_${basePoke.cardId}_${Math.random().toString(36).slice(2, 8)}`,
+      cardId: basePoke.cardId,
+      damage: 0,                              // 進化鏈 entry 不保留 damage（保留在頂層 evolved）
       energyAttached: [],
       toolAttached: undefined, extraTools: [],
-      evolvedFromStack: undefined, // 避免遞迴巢狀
+      evolvedFromStack: undefined,            // 避免遞迴巢狀
+      // 注意：所有 transient turn flags（justPlaced/evolvedThisTurn/playedFromHand/
+      //   movedToActiveThisTurn/cantAttackThisTurn/abilityUsedThisTurn/status/...）皆不帶
     };
     // v3.77 暈眩山谷（Stadium）— 進化/退化時，【混亂】狀態不會恢復
     //   卡面：「雙方的【混亂】的寶可夢，就算進化・退化，【混亂】也不會恢復。」

@@ -1803,11 +1803,14 @@ regR('eevee-awaken-evolve', (state, aIdx, iids, _params, pool) => {
     status: base.status,
     evolvedFromStack: [
       ...(base.evolvedFromStack ?? []),
+      // v4.20：chain entry 不帶 base 的 transient turn flags（同 engine.ts baseBare 修法）
       {
-        ...base,
         iid: `${base.iid}_base_${base.cardId}_${Math.random().toString(36).slice(2, 8)}`,
-        toolAttached: undefined,
+        cardId: base.cardId,
+        damage: 0,
         energyAttached: [],
+        toolAttached: undefined,
+        extraTools: [],
         evolvedFromStack: undefined,
       },
     ],
