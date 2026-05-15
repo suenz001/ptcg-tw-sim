@@ -413,6 +413,14 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const fromName = (sel.params?.stage1Name as string | undefined) ?? '';
           return card.evolvesFrom === fromName || card.evolvesFrom.replace(/<|>/g, '') === fromName;
         }
+        // v4.38 火箭隊的尼多娜｜惡之覺醒：evolvesFrom 對得上所選 base
+        if (f === 'EvilAwakening:EvolveFrom') {
+          if (card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
+          const baseName = (sel.params?.baseName as string | undefined) ?? '';
+          if (card.evolvesFrom === baseName) return true;
+          const stripEx = (s: string) => (s.endsWith('ex') ? s.slice(0, -2) : s);
+          return stripEx(card.evolvesFrom) === stripEx(baseName);
+        }
         // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
         if (f === 'GrassBasicOrGrassEnergy:TOP7') {
           const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);

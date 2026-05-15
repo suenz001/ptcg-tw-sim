@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.38</span> 🛠️ Wave 3b 簡化修補：火箭隊的尼多娜 惡之覺醒（2-base × evolve multi-stage picker）</summary>
+        <ul>
+          <li><b>火箭隊的尼多娜｜惡之覺醒（I）</b>：JSON「選擇最多2隻自己的【惡】寶可夢，從自己的牌庫選擇從那些寶可夢進化而來的卡各1張，<b>放置於各自身上完成進化</b>。並且重洗牌庫。」舊實裝套用 EVOLVE_SEARCH 簡化版「從牌庫挑 1 張寶可夢加手牌」— 違反 3 點：（1）應選自方【惡】base 而非牌庫挑加手；（2）牌庫應限「base 的進化卡」；（3）應 evolve in place。</li>
+          <li><b>修法</b>：4-stage multi-stage chain — Phase A1 選自方【惡】base 1（bench-choose includeActive validIids 過濾）→ Phase B1 deck-search filter <code>EvilAwakening:EvolveFrom</code> 限「base 1 的進化」→ Phase A2 選 base 2（可跳過）→ Phase B2 同。收尾重洗牌庫。每階段都 <code>minCount:0</code> 玩家可中途放棄。</li>
+          <li><b>進化邏輯</b>：仿 v2.211 壯偉碩木 — 繼承 base 的 damage / energyAttached / toolAttached / status；推入 evolvedFromStack；設 evolvedThisTurn=true, justPlaced=false。</li>
+          <li><b>新 filter</b>：<code>EvilAwakening:EvolveFrom</code> 同步加在 game +page.svelte（UI）與 ai.ts（AI 同樣邏輯）— 用 sameEvoName 等價匹配（ex / 非 ex 互通）。</li>
+          <li><b>Wave 3 進度</b>：3b 完成 2/3。剩 3c 火箭隊的貓老大ex 高傲指令（top10 attack copy UI picker — 大工程量需新 UI picker）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.37</span> 🛠️ Wave 3a 簡化修補：墓揚犬 恐怖啃咬（補揭示放回牌庫的卡）</summary>
         <ul>
           <li><b>墓揚犬｜恐怖啃咬（I）</b>：JSON「擲硬幣直到出現反面，在不看手牌正面的情況下，從對手的手牌選擇與正面出現的次數相同數量的卡，<b>查看那些卡的正面後</b>放回對手的牌庫並重洗。」舊實裝隨機選 + 直接返還重洗，缺「查看那些卡的正面後」reveal。</li>

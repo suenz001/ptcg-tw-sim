@@ -1719,6 +1719,18 @@
             return card.evolvesFrom === fromName || card.evolvesFrom.replace(/<|>/g, '') === fromName;
           });
         }
+        // v4.38 火箭隊的尼多娜｜惡之覺醒：牌庫中 evolvesFrom = 所選 base name 的進化卡
+        if (f === 'EvilAwakening:EvolveFrom') {
+          const baseName = (pendingSelection.params?.baseName as string | undefined) ?? '';
+          return src.deck.filter(c => {
+            const card = pool.get(c.cardId);
+            if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
+            // sameEvoName 等價匹配（ex 與非 ex 通用）
+            if (card.evolvesFrom === baseName) return true;
+            const stripEx = (s: string) => (s.endsWith('ex') ? s.slice(0, -2) : s);
+            return stripEx(card.evolvesFrom) === stripEx(baseName);
+          });
+        }
         // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
         if (f === 'GrassBasicOrGrassEnergy:TOP7') {
           const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);

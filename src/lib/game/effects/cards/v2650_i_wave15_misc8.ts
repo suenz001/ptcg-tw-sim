@@ -13,7 +13,7 @@
  *   - 雜 (1 張)
  */
 
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, sameEvoName, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -175,7 +175,7 @@ const EVOLVE_SEARCH: Array<[string, number]> = [
   ['夢妖|覺醒', 0],
   ['火箭隊的沙基拉斯|爆裂覺醒', 30],
   ['雙卵細胞球|細胞進化', 0],
-  ['火箭隊的尼多娜|惡之覺醒', 0],
+  // 火箭隊的尼多娜|惡之覺醒 — v4.38 提升為 2-stage chain（自方【惡】base × deck evolve）
   ['人造細胞卵|細胞覺醒', 0],
 ];
 for (const [key, dmg] of EVOLVE_SEARCH) {
@@ -183,6 +183,162 @@ for (const [key, dmg] of EVOLVE_SEARCH) {
   regPre(key, (s) => ({ state: s, damage: dmg }));
   regPost(key, deckPickOnePokemonToHandPost(atkName));
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 1b. 火箭隊的尼多娜｜惡之覺醒（v4.38 完整實裝 — 2-stage × 2-base chain）
+// JSON：「選擇最多2隻自己的【惡】寶可夢，從自己的牌庫選擇從那些寶可夢進化而來的卡
+//        各1張，放置於各自身上完成進化。並且重洗牌庫。」
+// ══════════════════════════════════════════════════════════════════════════════
+
+// helper: 開 Phase A picker（選自方【惡】base，可選 active/bench）
+function evilAwakeningPickBase(
+  s: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
+  baseIdx: 1 | 2, prevBaseIid: string | undefined,
+): GameState {
+  const p = s.players[aIdx];
+  const fieldPokemon: CardInstance[] = [
+    ...(p.active ? [p.active] : []),
+    ...p.bench,
+  ];
+  // 過濾【惡】寶可夢 + 排除已選的第 1 隻
+  const validIids = fieldPokemon
+    .filter(c => {
+      if (c.iid === prevBaseIid) return false;
+      const card = pool.get(c.cardId);
+      return card?.pokemonType === 'Darkness';
+    })
+    .map(c => c.iid);
+  if (validIids.length === 0) {
+    const msg = baseIdx === 1 ? '惡之覺醒：場上無自方【惡】寶可夢；重洗牌庫'
+                              : '惡之覺醒：無更多自方【惡】可選；重洗牌庫';
+    return updatePlayer(addLog(s, msg, aIdx), aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  s = addLog(s, `惡之覺醒：選擇第 ${baseIdx} 隻自方【惡】寶可夢進化（可跳過）`, aIdx);
+  return withPending(s, {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 0, maxCount: 1,
+    effectKey: 'evil-awakening-pick-base',
+    params: {
+      includeActive: true,
+      validIids,
+      baseIdx,
+      prevBaseIid,
+      titleOverride: `惡之覺醒：選擇第 ${baseIdx} 隻自方【惡】寶可夢進化（可跳過）`,
+    },
+  });
+}
+
+// Phase A resolver — 玩家選完 base → 開 Phase B 搜 evolution
+regR('evil-awakening-pick-base', (st, aIdx, iids, params, pool) => {
+  const baseIdx = (params?.baseIdx as 1 | 2) ?? 1;
+  const prevBaseIid = params?.prevBaseIid as string | undefined;
+  if (iids.length === 0) {
+    // 跳過此 base
+    if (baseIdx === 1) {
+      return updatePlayer(addLog(st, '惡之覺醒：玩家不選擇任何寶可夢進化；重洗牌庫', aIdx),
+        aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+    }
+    return updatePlayer(addLog(st, '惡之覺醒：第 2 隻跳過；重洗牌庫', aIdx),
+      aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
+  const baseIid = iids[0];
+  const p = st.players[aIdx];
+  const base = p.active?.iid === baseIid ? p.active : p.bench.find(c => c.iid === baseIid);
+  if (!base) {
+    return updatePlayer(addLog(st, '惡之覺醒：找不到所選的基礎；重洗牌庫', aIdx),
+      aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const baseCard = pool.get(base.cardId);
+  if (!baseCard) {
+    return updatePlayer(addLog(st, '惡之覺醒：基礎卡資料異常；重洗牌庫', aIdx),
+      aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  // 檢查牌庫是否有可搜的進化卡
+  const validEvoIids = p.deck.filter(c => {
+    const card = pool.get(c.cardId);
+    if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
+    return sameEvoName(card.evolvesFrom, baseCard.name);
+  }).map(c => c.iid);
+  if (validEvoIids.length === 0) {
+    let s = addLog(st, `惡之覺醒：牌庫中無「${baseCard.name}」的進化卡`, aIdx);
+    if (baseIdx === 1) {
+      return evilAwakeningPickBase(s, aIdx, pool, 2, baseIid);
+    }
+    return updatePlayer(addLog(s, '惡之覺醒：重洗牌庫', aIdx),
+      aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const s = addLog(st, `惡之覺醒：從牌庫選「${baseCard.name}」的進化卡（可跳過）`, aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'EvilAwakening:EvolveFrom',
+    minCount: 0, maxCount: 1,
+    effectKey: 'evil-awakening-evolve',
+    params: {
+      baseIid, baseName: baseCard.name,
+      baseIdx, prevBaseIid,
+      titleOverride: `惡之覺醒：從牌庫選「${baseCard.name}」的進化卡（可跳過）`,
+    },
+  });
+});
+
+// Phase B resolver — 牌庫挑完 evolution → 做進化（仿壯偉碩木）→ 進下一階段或收尾
+regR('evil-awakening-evolve', (st, aIdx, iids, params, pool) => {
+  const baseIid = params?.baseIid as string | undefined;
+  const baseName = (params?.baseName as string | undefined) ?? '?';
+  const baseIdx = (params?.baseIdx as 1 | 2) ?? 1;
+  let s = st;
+  if (iids.length > 0 && baseIid) {
+    const evoIid = iids[0];
+    const p = s.players[aIdx];
+    const evoInst = p.deck.find(c => c.iid === evoIid);
+    const base = p.active?.iid === baseIid ? p.active : p.bench.find(c => c.iid === baseIid);
+    if (evoInst && base) {
+      const evoCard = pool.get(evoInst.cardId);
+      if (evoCard) {
+        // 進化邏輯（仿 v172 __sturdyDoEvolveStep1）
+        const isActive = p.active?.iid === baseIid;
+        const prevStack = base.evolvedFromStack ?? [];
+        const baseBare: CardInstance = {
+          ...base, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined,
+        };
+        const evolved: CardInstance = {
+          ...evoInst,
+          damage: base.damage,
+          energyAttached: base.energyAttached,
+          toolAttached: base.toolAttached,
+          status: base.status,
+          evolvedFromIid: base.iid,
+          evolvedFromStack: [...prevStack, baseBare],
+          evolvedThisTurn: true,
+          justPlaced: false, playedFromHand: false,
+        };
+        s = updatePlayer(s, aIdx, x => ({
+          ...x,
+          deck: x.deck.filter(c => c.iid !== evoIid),
+          active: isActive ? evolved : x.active,
+          bench: isActive ? x.bench : x.bench.map(c => c.iid === baseIid ? evolved : c),
+        }));
+        s = addLog(s, `惡之覺醒：「${baseName}」進化為「${evoCard.name}」`, aIdx);
+      }
+    }
+  } else {
+    s = addLog(s, `惡之覺醒：玩家不選擇「${baseName}」的進化卡`, aIdx);
+  }
+  // 進下一階段（base 2）或收尾
+  if (baseIdx === 1) {
+    return evilAwakeningPickBase(s, aIdx, pool, 2, baseIid);
+  }
+  return updatePlayer(addLog(s, '惡之覺醒：重洗牌庫', aIdx),
+    aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+});
+
+// Entry：取代簡化版註冊
+regPre('火箭隊的尼多娜|惡之覺醒', (s) => ({ state: s, damage: 0 }));
+regPost('火箭隊的尼多娜|惡之覺醒', (state, aIdx, pool) => {
+  return evilAwakeningPickBase(state, aIdx, pool, 1, undefined);
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 2. 對手棄手牌（3 張）— 黑眼鱷/混混鱷/流氓鱷｜勒緊
