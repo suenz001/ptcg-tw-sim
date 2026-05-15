@@ -639,12 +639,17 @@ regR('wave17-bounce-opp', (state, aIdx, iids, _params, _pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 18. 古玉魚｜燒灼大地 40 — 棄場上對手競技場（簡化：不做下回合禁出）
+// 18. 古玉魚｜燒灼大地 40 — 棄場上對手競技場 + 下回合對手禁出競技場
+// v4.33：補完「有丟棄的情況下，在下個對手的回合，對手無法從手牌使出競技場卡」flag。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('古玉魚|燒灼大地', (s) => ({ state: s, damage: 40 }));
 regPost('古玉魚|燒灼大地', (state, aIdx, _pool) => {
   if (!state.activeStadium) return state;
-  return addLog(discardActiveStadium(state, aIdx), '燒灼大地：棄場上競技場', aIdx);
+  // 卡面：「有丟棄的情況下」→ 確實有 stadium 才設 flag（無 stadium 時不觸發 flag）
+  const dIdx = (1 - aIdx) as 0 | 1;
+  let s = discardActiveStadium(state, aIdx);
+  s = updatePlayer(s, dIdx, p => ({ ...p, cantPlayStadiumNextTurn: true }));
+  return addLog(s, '燒灼大地：棄場上競技場 + 對手下個回合無法使出競技場卡', aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

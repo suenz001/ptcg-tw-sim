@@ -11,6 +11,7 @@
  */
 
 import type { CardInstance, GameState } from '../../types';
+import { startEnergyChain } from './v158_energy_chain';
 import {
   addLog,
   drawCards,
@@ -290,7 +291,7 @@ regR('j-2354-morphbk-search', (state, aIdx, iids, params, pool) => {
 //        「基本【雷】能量」卡，以任意方式附於自己的【雷】寶可夢身上。
 // 實裝：N = 對手全場能量總數；discard-search(基本雷, 0~N)；
 //        若自己只有1隻雷寶可夢 → 直接附加；多隻 → heal-target 選目標
-// ⚠️ 簡化：多隻【雷】寶可夢時，全部附到同一隻選擇的目標寶可夢
+// v4.33：升級為「以任意方式分配」（不再簡化）— 用 startEnergyChain 逐張選目標
 regPre('咚咚鼠|擺尾發電', (state) => ({ state, damage: 0 }));
 regPost('咚咚鼠|擺尾發電', (state, aIdx, pool) => {
   const p = state.players[aIdx];
@@ -343,57 +344,23 @@ regPost('咚咚鼠|擺尾發電', (state, aIdx, pool) => {
 
 /**
  * 選完棄牌區基本【雷】能量後：
- * - 若只有 1 隻【雷】寶可夢 → 直接附加
- * - 若有多隻 → heal-target 選目標（全部附到同一隻）
+ * v4.33：升級為「以任意方式分配」— 用 startEnergyChain 逐張選【雷】寶可夢目標。
+ *   source='discard'（能量已在棄牌）、scope='any-own'、filterType='Lightning'。
+ *   chain 內若只 1 目標會自動全附；多目標逐張開 picker（玩家自由分配）。
  */
 regR('j-2354-raichu-charge-pick', (state, aIdx, iids, params, pool) => {
   const label = (params?.label as string) ?? '擺尾發電';
   if (iids.length === 0) return addLog(state, `${label}：未選擇`, aIdx);
-
-  const lightningPokeIids = (params?.lightningPokeIids as string[]) ?? [];
-  const p = state.players[aIdx];
-
-  // 實際選中的能量（留在 discard 中）
-  const picked = p.discard.filter(c => iids.includes(c.iid));
-  if (picked.length === 0) return addLog(state, `${label}：能量不存在`, aIdx);
-
-  // 只剩 1 隻【雷】寶可夢 → 自動附加
-  if (lightningPokeIids.length === 1) {
-    const targetIid = lightningPokeIids[0];
-    const all = [...(p.active ? [p.active] : []), ...p.bench];
-    const target = all.find(c => c.iid === targetIid);
-    if (!target) return addLog(state, `${label}：目標不存在`, aIdx);
-    const tname = cardName(pool, target);
-    const pickedSet = new Set(picked.map(c => c.iid));
-    let s = addLog(state, `${label}：將 ${picked.length} 張基本【雷】能量附加到 ${tname}`, aIdx);
-    return updatePlayer(s, aIdx, pl => {
-      const attach = (inst: CardInstance): CardInstance =>
-        inst.iid === targetIid
-          ? { ...inst, energyAttached: [...inst.energyAttached, ...picked] }
-          : inst;
-      return {
-        ...pl,
-        discard: pl.discard.filter(c => !pickedSet.has(c.iid)),
-        active: pl.active ? attach(pl.active) : null,
-        bench: pl.bench.map(attach),
-      };
-    });
-  }
-
-  // 多隻【雷】寶可夢 → heal-target 選目標
-  const s = addLog(state, `${label}：選擇要附加 ${picked.length} 張基本【雷】能量的【雷】寶可夢`, aIdx);
-  return withPending(s, {
-    type: 'heal-target',
-    actorIdx: aIdx,
-    sourcePlayerIdx: aIdx,
-    minCount: 1,
-    maxCount: 1,
-    effectKey: 'j-2354-raichu-charge-commit',
-    params: { energyIids: iids, label, validIids: lightningPokeIids },
-  });
+  return startEnergyChain(state, aIdx, iids, {
+    label,
+    source: 'discard',
+    scope: 'any-own',
+    filterType: 'Lightning',
+  }, pool);
 });
 
-/** heal-target 選完後：從棄牌區取出能量，附加到選定【雷】寶可夢 */
+// v4.33：j-2354-raichu-charge-commit 已被 startEnergyChain 取代，移除（chain 內部處理目標選擇 + 附加）
+/* DEPRECATED — replaced by startEnergyChain in pick resolver
 regR('j-2354-raichu-charge-commit', (state, aIdx, iids, params, pool) => {
   const label = (params?.label as string) ?? '擺尾發電';
   const energyIids = (params?.energyIids as string[]) ?? [];
@@ -424,6 +391,7 @@ regR('j-2354-raichu-charge-commit', (state, aIdx, iids, params, pool) => {
     };
   });
 });
+*/
 
 // ── Group G：主動特性 ────────────────────────────────────────────────────────
 

@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.33</span> 🛠️ Wave 1 簡化修補：擺尾發電 + 燒灼大地</summary>
+        <ul>
+          <li><b>咚咚鼠｜擺尾發電（J）</b>：
+            <ul>
+              <li>卡面：「以任意方式附於自己的【雷】寶可夢身上。」</li>
+              <li>簡化現狀：多隻【雷】寶可夢時，所有選的能量強制附到「同一隻」。</li>
+              <li>修法：用 <code>startEnergyChain</code> 改任意分配（沿用 v3.852 永生綻放 / v4.29 金屬製造者 pattern）。玩家可逐張選不同的【雷】寶可夢目標。</li>
+            </ul>
+          </li>
+          <li><b>古玉魚｜燒灼大地（I）</b>：
+            <ul>
+              <li>卡面：「將場上的對手的競技場卡丟棄。有丟棄的情況下，在下個對手的回合，對手無法從手牌使出競技場卡。」</li>
+              <li>簡化現狀：只實作「棄場上競技場」，缺第二段「下回合對手禁出」flag。</li>
+              <li>修法：新增 PlayerState <code>cantPlayStadiumThisTurn/NextTurn</code>，沿用 v2.78/v3.27 player-level NextTurn → ThisTurn promote pattern。燒灼大地觸發時設對手 NextTurn flag，engine PLAY_TRAINER + UI gate 都加 check。</li>
+            </ul>
+          </li>
+          <li><b>Wave 2 預告</b>：火箭隊的貓老大ex｜高傲指令、敏捷蟲｜褪殼猛毒、信使鳥｜幸福禮物 等需 UI 多階 picker，下波再做。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.32</span> 🛠️ 修忍者飛旋傷害預估錯誤（新衝天 2 units 顯示 +160）</summary>
         <ul>
           <li>玩家回報：忍者飛旋 picker 內勾 1 張新衝天能量（Stage2 視為 2 units【水】）時，UI 預估傷害顯示 280（120+2×80=280）。卡面「增加 80 點傷害」是一次性 fixed bonus，不論能量提供幾 units，上限就是 +80。</li>

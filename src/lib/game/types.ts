@@ -416,6 +416,12 @@ export interface PlayerState {
    * Wave 39：玩家級「下個自己回合無法從手牌使出寶可夢並完成進化」預約旗標（例：青銅鐘｜進化妨礙者）。
    */
   cantEvolveNextTurn?: boolean;
+  /**
+   * v4.33：燒灼大地（古玉魚）— 下回合對手禁出競技場。
+   * 設定於對手用 燒灼大地 + 實際丟棄了競技場時；對手 END_TURN 才清除。
+   */
+  cantPlayStadiumThisTurn?: boolean;
+  cantPlayStadiumNextTurn?: boolean;
   cantEvolveThisTurn?: boolean;
   /**
    * Wave 42：玩家級「本回合自己的【鬥】寶可夢招式傷害 +N」累積值（例：力量蛋白飲）。

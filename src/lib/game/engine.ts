@@ -2359,6 +2359,9 @@ function handlePlaying(
     // 義務性前置檢查：夜間擔架棄牌為空、寶可夢交替備戰為空等情況禁止打出
     // v3.01 Wave 3 — 對手戰鬥場特性禁止本方打出 trainer
     // ① 大王銅象｜爆大身軀 — 對手戰鬥場有 → 我方無法使出『競技場』卡
+    if (trainerCard.subtype === 'Stadium' && state.players[aIdx].cantPlayStadiumThisTurn) {
+      return addLog(state, `${trainerCard.name}：本回合被「燒灼大地」效果禁止使出競技場`, aIdx);
+    }
     if (trainerCard.subtype === 'Stadium' && isOppStadiumPlayBlocked(state, aIdx, pool)) {
       return addLog(state,
         `${attacker.name} 因對手「爆大身軀」效果，無法從手牌使出競技場卡`, aIdx);
@@ -5736,7 +5739,8 @@ function handlePlaying(
       currentPlayer.unrudaBonusThisTurn ||
       currentPlayer.metalShieldThisTurn ||
       currentPlayer.cantRetreatIfPoisonedThisTurn ||
-      currentPlayer.bagonElenaThisTurn
+      currentPlayer.bagonElenaThisTurn ||
+      currentPlayer.cantPlayStadiumThisTurn
     ) {
       const cp = { ...currentPlayer };
       delete cp.noAttacksThisTurn;
@@ -5750,6 +5754,7 @@ function handlePlaying(
       delete cp.metalShieldThisTurn;
       delete cp.cantRetreatIfPoisonedThisTurn;
       delete cp.bagonElenaThisTurn;
+      delete cp.cantPlayStadiumThisTurn;  // v4.33 燒灼大地 flag 自己回合結束時清除
       players[aIdx] = cp;
     } else {
       players[aIdx] = currentPlayer;
@@ -5783,6 +5788,11 @@ function handlePlaying(
     if (nextP.cantRetreatIfPoisonedNextTurn) {
       nextP.cantRetreatIfPoisonedThisTurn = true;
       delete nextP.cantRetreatIfPoisonedNextTurn;
+    }
+    // v4.33：promote nextIdx 的 cantPlayStadiumNextTurn → ThisTurn（燒灼大地）
+    if (nextP.cantPlayStadiumNextTurn) {
+      nextP.cantPlayStadiumThisTurn = true;
+      delete nextP.cantPlayStadiumNextTurn;
     }
     players[nextIdx] = {
       ...nextP,
@@ -6423,6 +6433,7 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       //   AI 看不到濾過的清單會反覆挑到被鎖的卡 → engine 退回 → 死迴圈
       if ((c.subtype === 'Item' || c.subtype === 'PokemonTool')
           && isOppItemPlayBlocked(state, state.activePlayerIndex, pool)) return false;
+      if (c.subtype === 'Stadium' && state.players[state.activePlayerIndex].cantPlayStadiumThisTurn) return false;
       if (c.subtype === 'Stadium' && isOppStadiumPlayBlocked(state, state.activePlayerIndex, pool)) return false;
       // v2.362 班基拉斯｜威迫目光 — 對手戰鬥場有此特性時，物品卡不可打出
       if (c.subtype === 'Item') {
