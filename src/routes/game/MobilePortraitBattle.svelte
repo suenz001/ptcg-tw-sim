@@ -500,6 +500,11 @@
 
 <div class="mp" use:preventScroll>
 
+  <!-- v4.22 場地卡在場時的背景圖層（手機版同樣只抓上半藝術圖區） -->
+  {#if stadiumCard}
+    <div class="mp-stadium-bg-layer" style:background-image="url({stadiumCard.imageUrl})" aria-hidden="true"></div>
+  {/if}
+
   <!-- ─── Top bar：1 行 ─── -->
   <header class="mp-top">
     <button class="mp-icon-btn" onclick={onLeave} title="離開">←</button>
@@ -845,6 +850,23 @@
   .mp-hand { touch-action: pan-x; }
   .mp-log { touch-action: pan-y; }
   .mp-chips { touch-action: pan-x; }
+
+  /* v4.22 手機版場地卡背景圖層 — fixed 覆蓋 .mp 區域，z-index:0 在 #1a2e1a 純色底之上但所有 UI 元素之下 */
+  .mp-stadium-bg-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+    opacity: 0.32;
+    filter: blur(1.5px);
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 32%, rgba(0,0,0,0.35) 48%, transparent 60%);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 32%, rgba(0,0,0,0.35) 48%, transparent 60%);
+  }
+  /* 確保 .mp 內所有後續 child 元素疊在背景圖之上 */
+  .mp > :not(.mp-stadium-bg-layer) { position: relative; z-index: 1; }
 
   /* ── Top bar ────────────────────────────────────────────────────── */
   .mp-top {

@@ -4165,7 +4165,12 @@
   </header>
 
   <!-- ── Play Mat ── -->
-  <div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'}>
+  <div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'} class:has-stadium-bg={!!stadiumCard}>
+
+    <!-- v4.22 場地卡在場時的背景圖層（只抓上半藝術圖區 + 低調透明度） -->
+    {#if stadiumCard}
+      <div class="stadium-bg-layer" style:background-image="url({stadiumCard.imageUrl})" aria-hidden="true"></div>
+    {/if}
 
     <!-- 對手場地（永遠在上方） -->
     <div class="field-row opponent-row">
@@ -6596,6 +6601,22 @@
     border-color: rgba(100,255,130,.7);
     border-style: solid;
     box-shadow: 0 0 30px rgba(100,255,130,.35), inset 0 0 30px rgba(100,255,130,.15);
+  }
+
+  /* v4.22 場地卡在場時的背景圖層 — absolute + z-index:-1 → 蓋 playmat gradient 底色但在 field-row 之下 */
+  .stadium-bg-layer {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+    opacity: 0.35;
+    filter: blur(1.5px);
+    pointer-events: none;
+    /* 用 mask-image gradient 由上往下 35% 全顯示 → 50% 漸隱，過濾掉文字部分 */
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 35%, rgba(0,0,0,0.4) 50%, transparent 62%);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 35%, rgba(0,0,0,0.4) 50%, transparent 62%);
   }
 
   .field-row{ display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.7rem; overflow:visible; min-height:0; }

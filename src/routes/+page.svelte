@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.22</span> 🎨 場上有場地卡時 playmat 背景顯示場地卡圖（戰場氣氛）</summary>
+        <ul>
+          <li>玩家建議：當場上有場地卡時，把中間的綠色底圖換成那張場地卡的圖（只用上半藝術圖區），做為背景增加戰場氣氛。</li>
+          <li><b>實裝</b>：
+            <ul>
+              <li>桌機 .playmat 加 stadium-bg-layer 子元素，CSS position: absolute + z-index: -1 → 蓋掉 playmat 綠色 gradient 底色，但在 field-row 之下（不擋牌）。</li>
+              <li>手機 .mp 同樣加 mp-stadium-bg-layer，全屏覆蓋。</li>
+              <li>視覺強度：低調背景（35% opacity + 輕微模糊 1.5px），玩家視覺重心仍在卡上。</li>
+              <li>裁切：用 CSS mask-image linear-gradient 由上往下 35% 全顯示 → 50% 漸隱 → 62% 完全淡出，過濾掉卡片下半的文字部分。</li>
+            </ul>
+          </li>
+          <li><b>動態切換</b>：場地卡換出 / 移除時背景自動更新；無場地卡時恢復原綠色 playmat。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.21</span> ✨ 對局結束保留盤面 + 勝負視窗改為可拖曳浮動視窗</summary>
         <ul>
           <li>玩家要求：對局結束時不要切到單獨勝負畫面，改為保留戰鬥場最後盤面 + 勝負視窗 overlay 在上方（可拖曳）讓玩家可以一邊看視窗一邊回顧場上狀況。</li>
