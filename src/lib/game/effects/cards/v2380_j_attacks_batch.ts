@@ -34,7 +34,8 @@
  * 鐵律：純傷害招式（無 effect 文）不在此檔；恢復／互換／搜尋等流程由 pendingSelection 處理。
  */
 
-import type { CardInstance, PlayerState } from '../../types';
+import type { CardInstance, GameState, PlayerState } from '../../types';
+import type { Card } from '$lib/cards/types';
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
@@ -477,19 +478,101 @@ regPost('青木的勇士雄鷹|勇鳥猛攻', (state, aIdx, _pool) => {
   }));
 });
 
-// ── 12. 信使鳥｜幸福禮物 — 雙方各選 ≤3 基本能量附加（v2.389 完整互動） ────────
+// ── 12. 信使鳥｜幸福禮物 — 雙方各選 ≤3 基本能量附加（v4.36 真正逐張選目標） ──
 // 卡面：「雙方玩家若希望，各自從自己的手牌選擇最多 3 張基本能量卡，
 //        以任意方式附於自己的寶可夢身上。（對手先選擇。）」
 //
 // 跨 player pending chain（actorIdx 動態切換）：
-//   Stage A: hand-discard actorIdx=dIdx，對手選 0-3 基本能量（卡面「對手先」）
-//   Stage A resolver: 把對手選的能量分配到對手 active（簡化：不互動選目標，預設 active）
-//                     完成後觸發 Stage B
-//   Stage B: hand-discard actorIdx=aIdx，自己選 0-3 基本能量
-//   Stage B resolver: 把自己選的能量分配到自己 active
+//   Phase 1 (opp hand-discard): 對手選 0-3 基本能量 → resolver lucky-gift-opp
+//   Phase 2 (opp distribute): 對手逐張選 heal-target（active + bench 任選）→ resolver lucky-gift-attach
+//   Phase 3 (self hand-discard): 自己選 0-3 基本能量 → resolver lucky-gift-self
+//   Phase 4 (self distribute): 自己逐張選 heal-target → resolver lucky-gift-attach
 //
-// 互動精細度：本波分配目標固定為 active（卡面允許任意寶可夢，但 chain 過深 — 多選張數
-// 時要 N+1 階段 picker）。下次擴張：每張能量加 bench-choose 選目標。
+// v4.36 升級：原本 Phase 2/4 簡化為「全附到 active」，違反「以任意方式」。
+//   現改為 chain：場上單一目標 → 自動全附；多目標 → 逐張開 picker（heal-target）。
+// phase 切換：phase='opp' chain 結束時自動觸發 Phase 3；phase='self' chain 結束時招式結束。
+
+// helper: 觸發 Phase 3（自方 hand-discard picker）
+function luckyGiftSelfPickPhase(s: GameState, attackerIdx: 0 | 1, pool: Map<string, Card>): GameState {
+  const ownHandHasBasic = s.players[attackerIdx].hand.some(c => {
+    const cc = pool.get(c.cardId);
+    return cc?.supertype === 'Energy' && cc.subtype === 'Basic';
+  });
+  if (!ownHandHasBasic) {
+    return addLog(s, '幸福禮物：自己手牌無基本能量，效果結束', attackerIdx);
+  }
+  s = addLog(s, '幸福禮物：自己選 ≤3 張基本能量', attackerIdx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: attackerIdx, sourcePlayerIdx: attackerIdx,
+    minCount: 0, maxCount: 3,
+    filter: 'BasicEnergy',
+    effectKey: 'lucky-gift-self',
+    params: { titleOverride: '幸福禮物：選 ≤3 張基本能量附於自己寶可夢（接著逐張選目標）' },
+  });
+}
+
+// helper: phase-aware distribute chain 入口（找候選目標、單一自動 / 多選 picker）
+function luckyGiftDistribute(
+  s: GameState, actorIdx: 0 | 1, remainingIids: string[],
+  phase: 'opp' | 'self', attackerIdx: 0 | 1, pool: Map<string, Card>,
+): GameState {
+  if (remainingIids.length === 0) {
+    if (phase === 'opp') return luckyGiftSelfPickPhase(s, attackerIdx, pool);
+    return s;
+  }
+  // 候選目標：actorIdx 的 active + bench（任意寶可夢，無 type filter）
+  const player = s.players[actorIdx];
+  const candidates: CardInstance[] = [];
+  if (player.active) candidates.push(player.active);
+  for (const b of player.bench) candidates.push(b);
+  if (candidates.length === 0) {
+    s = addLog(s, `幸福禮物：場上無寶可夢可附加，剩 ${remainingIids.length} 張能量留在棄牌區`, actorIdx);
+    if (phase === 'opp') return luckyGiftSelfPickPhase(s, attackerIdx, pool);
+    return s;
+  }
+  // 場上唯一目標 → 全自動附（避免反覆彈 UI）
+  if (candidates.length === 1) {
+    const target = candidates[0];
+    const allIids = remainingIids;
+    s = updatePlayer(s, actorIdx, p => {
+      const energies = p.discard.filter(c => allIids.includes(c.iid));
+      const newDiscard = p.discard.filter(c => !allIids.includes(c.iid));
+      const attach = (poke: CardInstance) => poke.iid === target.iid
+        ? { ...poke, energyAttached: [...poke.energyAttached, ...energies] }
+        : poke;
+      return {
+        ...p,
+        discard: newDiscard,
+        active: p.active ? attach(p.active) : null,
+        bench: p.bench.map(attach),
+      };
+    });
+    const tname = pool.get(target.cardId)?.name ?? '?';
+    s = addLog(s, `幸福禮物：場上唯一目標 → ${allIids.length} 張能量全附到 ${tname}`, actorIdx);
+    if (phase === 'opp') return luckyGiftSelfPickPhase(s, attackerIdx, pool);
+    return s;
+  }
+  // 多目標 → 對下一張能量開 heal-target picker（chain）
+  const [currentIid, ...restIids] = remainingIids;
+  const currentEnergyInDiscard = s.players[actorIdx].discard.find(c => c.iid === currentIid);
+  const currentEnergyName = currentEnergyInDiscard
+    ? (pool.get(currentEnergyInDiscard.cardId)?.name ?? '基本能量')
+    : '基本能量';
+  s = addLog(s, `幸福禮物：選擇能量附加目標（剩 ${remainingIids.length} 張待附）`, actorIdx);
+  return withPending(s, {
+    type: 'heal-target',
+    actorIdx, sourcePlayerIdx: actorIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'lucky-gift-attach',
+    params: {
+      phase, attackerIdx,
+      currentIid, remainingIids: restIids,
+      titleOverride: `幸福禮物：將「${currentEnergyName}」附到哪一隻寶可夢？`,
+    },
+  });
+}
+
 regPre('信使鳥|幸福禮物', (s, _a, _p) => ({ state: s, damage: 0 }));
 regPost('信使鳥|幸福禮物', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
@@ -515,81 +598,81 @@ regPost('信使鳥|幸福禮物', (state, aIdx, pool) => {
       minCount: 0, maxCount: 3,
       filter: 'BasicEnergy',
       effectKey: 'lucky-gift-opp',
-      // v3.62 titleOverride：是「附於寶可夢」不是丟棄
-      params: { attackerIdx: aIdx, titleOverride: '幸福禮物：選 ≤3 張基本能量附於對手寶可夢（接著選目標）' },
+      params: { attackerIdx: aIdx, titleOverride: '幸福禮物：選 ≤3 張基本能量附於對手寶可夢（接著逐張選目標）' },
     });
   }
   // 對手無基本能量 → 直接到我方
-  if (ownHandHasBasic) {
-    const s = addLog(state, '幸福禮物：對手無基本能量，自己選 ≤3 張基本能量', aIdx);
-    return withPending(s, {
-      type: 'hand-discard',
-      actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      minCount: 0, maxCount: 3,
-      filter: 'BasicEnergy',
-      effectKey: 'lucky-gift-self',
-      // v3.62 titleOverride：是「附於自己寶可夢」不是丟棄
-      params: { titleOverride: '幸福禮物：選 ≤3 張基本能量附於自己寶可夢（接著選目標）' },
-    });
-  }
-  return state;
+  return luckyGiftSelfPickPhase(state, aIdx, pool);
 });
 
-// Stage A resolver — 對手選完，附加到對手 active；接著觸發 Stage B 自己側
+// Phase 1 resolver — 對手 hand-discard 完成 → 移能量到 opp.discard 暫存 → 進 Phase 2 distribute
 regR('lucky-gift-opp', (state, dIdx, iids, params, pool) => {
   const attackerIdx = (params?.attackerIdx as 0 | 1) ?? ((1 - dIdx) as 0 | 1);
-  let s = state;
-  if (iids.length > 0) {
-    s = updatePlayer(s, dIdx, p => {
-      if (!p.active) return p;
-      const chosen = p.hand.filter(c => iids.includes(c.iid));
-      const newHand = p.hand.filter(c => !iids.includes(c.iid));
-      return {
-        ...p,
-        hand: newHand,
-        active: { ...p.active, energyAttached: [...p.active.energyAttached, ...chosen] },
-      };
-    });
-    s = addLog(s, `幸福禮物：對手附加 ${iids.length} 張基本能量到戰鬥場`, dIdx);
-  } else {
-    s = addLog(s, '幸福禮物：對手選擇不分配能量', dIdx);
+  if (iids.length === 0) {
+    let s = addLog(state, '幸福禮物：對手選擇不分配能量', dIdx);
+    return luckyGiftSelfPickPhase(s, attackerIdx, pool);
   }
-  // 觸發 Stage B：我方選
-  const ownHandHasBasic = s.players[attackerIdx].hand.some(c => {
-    const cc = pool.get(c.cardId);
-    return cc?.supertype === 'Energy' && cc.subtype === 'Basic';
+  // 移能量到 opp.discard 暫存（之後 distribute chain 從 discard 取出附到目標）
+  let s = updatePlayer(state, dIdx, p => {
+    const chosen = p.hand.filter(c => iids.includes(c.iid));
+    const newHand = p.hand.filter(c => !iids.includes(c.iid));
+    return { ...p, hand: newHand, discard: [...p.discard, ...chosen] };
   });
-  if (!ownHandHasBasic) {
-    return addLog(s, '幸福禮物：自己手牌無基本能量，效果結束', attackerIdx);
-  }
-  s = addLog(s, '幸福禮物：自己選 ≤3 張基本能量', attackerIdx);
-  return withPending(s, {
-    type: 'hand-discard',
-    actorIdx: attackerIdx, sourcePlayerIdx: attackerIdx,
-    minCount: 0, maxCount: 3,
-    filter: 'BasicEnergy',
-    effectKey: 'lucky-gift-self',
-    // v3.62 titleOverride：是「附於自己寶可夢」不是丟棄
-    params: { titleOverride: '幸福禮物：選 ≤3 張基本能量附於自己寶可夢（接著選目標）' },
-  });
+  s = addLog(s, `幸福禮物：對手選 ${iids.length} 張基本能量，接著逐張選目標`, dIdx);
+  return luckyGiftDistribute(s, dIdx, iids, 'opp', attackerIdx, pool);
 });
 
-// Stage B resolver — 自己側分配
-regR('lucky-gift-self', (state, aIdx, iids, _params, _pool) => {
+// Phase 3 resolver — 自己 hand-discard 完成 → 移能量到 self.discard 暫存 → 進 Phase 4 distribute
+regR('lucky-gift-self', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) {
     return addLog(state, '幸福禮物：自己選擇不分配能量', aIdx);
   }
   let s = updatePlayer(state, aIdx, p => {
-    if (!p.active) return p;
     const chosen = p.hand.filter(c => iids.includes(c.iid));
     const newHand = p.hand.filter(c => !iids.includes(c.iid));
-    return {
-      ...p,
-      hand: newHand,
-      active: { ...p.active, energyAttached: [...p.active.energyAttached, ...chosen] },
-    };
+    return { ...p, hand: newHand, discard: [...p.discard, ...chosen] };
   });
-  return addLog(s, `幸福禮物：自己附加 ${iids.length} 張基本能量到戰鬥場`, aIdx);
+  s = addLog(s, `幸福禮物：自己選 ${iids.length} 張基本能量，接著逐張選目標`, aIdx);
+  return luckyGiftDistribute(s, aIdx, iids, 'self', aIdx, pool);
+});
+
+// Phase 2/4 resolver — 單張能量目標附加；遞迴下一張或結束 phase
+regR('lucky-gift-attach', (state, actorIdx, targetIids, params, pool) => {
+  const phase = (params?.phase as 'opp' | 'self') ?? 'self';
+  const attackerIdx = (params?.attackerIdx as 0 | 1) ?? actorIdx;
+  const currentIid = String(params?.currentIid ?? '');
+  const restIids = (params?.remainingIids as string[] | undefined) ?? [];
+  const targetIid = targetIids[0];
+
+  let s = state;
+  const player = s.players[actorIdx];
+  const target = player.active?.iid === targetIid
+    ? player.active
+    : player.bench.find(c => c.iid === targetIid);
+  const energyInst = player.discard.find(c => c.iid === currentIid);
+
+  if (!target || !energyInst) {
+    s = addLog(s, '幸福禮物：目標或能量遺失，略過此張', actorIdx);
+  } else {
+    s = updatePlayer(s, actorIdx, p => {
+      const newDiscard = p.discard.filter(c => c.iid !== currentIid);
+      const attach = (poke: CardInstance) => poke.iid === targetIid
+        ? { ...poke, energyAttached: [...poke.energyAttached, energyInst] }
+        : poke;
+      return {
+        ...p,
+        discard: newDiscard,
+        active: p.active ? attach(p.active) : null,
+        bench: p.bench.map(attach),
+      };
+    });
+    const tname = pool.get(target.cardId)?.name ?? '?';
+    const ename = pool.get(energyInst.cardId)?.name ?? '基本能量';
+    s = addLog(s, `幸福禮物：「${ename}」附到 ${tname}`, actorIdx);
+  }
+
+  // 遞迴下一張（chain 自帶 phase 切換邏輯）
+  return luckyGiftDistribute(s, actorIdx, restIids, phase, attackerIdx, pool);
 });
 
 // 輔助：避免 unused import

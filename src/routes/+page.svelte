@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.36</span> 🛠️ Wave 2 簡化修補：信使鳥 幸福禮物（per-energy 雙方目標分配）</summary>
+        <ul>
+          <li><b>信使鳥｜幸福禮物（J）</b>：JSON「雙方玩家若希望，各自從自己的手牌選擇最多3張基本能量卡，<b>以任意方式附於自己的寶可夢身上</b>。（對手先選擇。）」舊實裝雙方 hand-discard picker 已實裝（對手先選 ✓）但選完直接附到 active，違反「以任意方式」（卡面允許備戰）。</li>
+          <li><b>修法</b>：實裝 4-phase chain — Phase 1 對手 hand-discard → Phase 2 對手逐張 <code>heal-target</code> picker（active+bench 任選）→ Phase 3 自己 hand-discard → Phase 4 自己逐張 picker。chain 自帶 phase 切換邏輯。</li>
+          <li><b>UX 優化</b>：場上單一目標 → 全自動附；多目標 → 逐張 picker（chain pattern）。</li>
+          <li><b>Wave 2 完成 3/3</b>：塗標客 奇跡作畫 + 敏捷蟲 褪殼猛毒 + 信使鳥 幸福禮物 全部修補。下一波 Wave 3 預定：火箭隊的貓老大ex 高傲指令、火箭隊的尼多娜 惡之覺醒、墓揚犬 恐怖啃咬 等。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.35</span> 🛠️ Wave 2 簡化修補：敏捷蟲 褪殼猛毒（補自身與備戰互換）</summary>
         <ul>
           <li><b>敏捷蟲｜褪殼猛毒（I）</b>：JSON「將對手的戰鬥寶可夢【中毒】與【混亂】。<b>將這隻寶可夢與備戰寶可夢互換。</b>」舊實裝只施加中毒+混亂，後半段「自身與備戰互換」未實裝。本版補上 bench-choose picker，復用既有 <code>self-swap-active-bench</code> resolver。</li>
