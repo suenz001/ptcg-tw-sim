@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.21</span> ✨ 對局結束保留盤面 + 勝負視窗改為可拖曳浮動視窗</summary>
+        <ul>
+          <li>玩家要求：對局結束時不要切到單獨勝負畫面，改為保留戰鬥場最後盤面 + 勝負視窗 overlay 在上方（可拖曳）讓玩家可以一邊看視窗一邊回顧場上狀況。</li>
+          <li><b>修法</b>：
+            <ul>
+              <li>移除原 <code>game.phase === 'game-over'</code> 的全螢幕勝負分支 → 戰鬥盤面在對局結束時仍 render（板子凍結；所有 action button 因 isPlaying = false 而自動隱藏）。</li>
+              <li>新增可拖曳浮動視窗（沿用 chat panel 拖曳 pattern：pointer events + setPointerCapture），標題列拖曳，視窗內含 Victory/Defeat 圖示、勝者名、敗因、log 匯出、再來一局按鈕、回首頁/離開房間連結。</li>
+              <li>桌機初始置中 + 可全螢幕拖曳；手機 portrait 自適應 92vw / 92vh。</li>
+            </ul>
+          </li>
+          <li><b>遊戲安全</b>：對局結束後所有 player action 已透過既有 dispatch 內 phase check 擋下，UI 只是把 modal 改為 overlay 而非全螢幕。連線模式雙方都看得到視窗，可各自再來一局或離開。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.20</span> 🛠️ 修進化鏈卡片放大鏡殘留「本回合才打出」標籤</summary>
         <ul>
           <li>玩家回報：伊布使用招式「覺醒」完成進化後，點進化鏈的卡片放大鏡看到殘留「🆕 本回合才打出（無法進化）」字樣。</li>

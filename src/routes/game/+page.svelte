@@ -139,6 +139,25 @@
     chatPanelDragStart = null;
   }
 
+  // v4.21 勝負視窗（可拖曳）— 對局結束時 overlay 戰鬥盤面，保留場上狀況檢視
+  //   gameoverPanelPos：拖曳偏移（初始 0,0；CSS center 定位 + transform translate）
+  //   gameoverPanelDragStart：drag origin（null = 非拖曳中）
+  let gameoverPanelPos = $state({ x: 0, y: 0 });
+  let gameoverPanelDragStart: { mx: number; my: number; ox: number; oy: number } | null = null;
+  function onGameoverHeaderDown(e: PointerEvent) {
+    gameoverPanelDragStart = { mx: e.clientX, my: e.clientY, ox: gameoverPanelPos.x, oy: gameoverPanelPos.y };
+    (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
+  }
+  function onGameoverHeaderMove(e: PointerEvent) {
+    if (!gameoverPanelDragStart) return;
+    const dx = e.clientX - gameoverPanelDragStart.mx;
+    const dy = e.clientY - gameoverPanelDragStart.my;
+    gameoverPanelPos = { x: gameoverPanelDragStart.ox + dx, y: gameoverPanelDragStart.oy + dy };
+  }
+  function onGameoverHeaderUp(_e: PointerEvent) {
+    gameoverPanelDragStart = null;
+  }
+
   // v3.98 聊天 fab 圖示拖曳 — 玩家可移動到不擋牌的位置
   //   位置存 localStorage 重整保留；session 內也持續
   let chatFabPos = $state<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -4008,70 +4027,6 @@
   {/if}
 
 <!-- ══════════════════════════════════════════════════════════════════════
-     遊戲結束
-  ══════════════════════════════════════════════════════════════════════ -->
-{:else if game.phase === 'game-over'}
-  {@const isWin = (
-    mode === 'online' ? (myPlayerIndex === game.winner) :
-    aiPlayerIndex !== null ? (game.winner === (1 - aiPlayerIndex)) :
-    true  /* 本機雙人無勝負個人視角，統一顯示 Victory */
-  )}
-  <main class="gameover-screen">
-    <div class="gameover-card" in:scale={{ duration: 600, start: 0.3, easing: cubicOut }}>
-      <div class="gameover-icon {isWin ? 'win' : 'lose'}">
-        {isWin ? '🏆' : '💔'}
-      </div>
-      <h1 class="gameover-title {isWin ? 'win' : 'lose'}">
-        {isWin ? 'Victory!' : 'Defeat'}
-      </h1>
-      <p class="winner-text" in:fly={{ y: 30, duration: 500, delay: 300 }}>
-        {game.players[game.winner!].name} 獲勝！
-      </p>
-      <p class="muted" in:fade={{ duration: 400, delay: 600 }}>{game.winReason}</p>
-      <div class="lobby-btns export-btns" in:fade={{ duration: 400, delay: 800 }}>
-        <button class="btn-secondary" onclick={()=>exportLogAs('txt')} title="匯出純文字 log 供復盤">
-          📄 匯出 log（.txt）
-        </button>
-        <button class="btn-secondary" onclick={()=>exportLogAs('json')} title="匯出結構化 log 供外部工具分析">
-          🧾 匯出 log（.json）
-        </button>
-      </div>
-      <!-- v3.96 連線模式：雙方各自 toggle「再來一局」（對稱設計），都按下後自動進房間 -->
-      {#if mode === 'online' || roomCode}
-        <div class="lobby-btns" in:fade={{ duration: 400, delay: 900 }}>
-          <button
-            class="btn-primary"
-            class:rematch-ready={myRematchReady}
-            onclick={toggleMyRematchReady}
-            title={myRematchReady ? '點擊取消，回到「再來一局」狀態' : '點擊後等對手也按，雙方都按就重置房間'}
-          >
-            {#if myRematchReady}
-              ✓ 已準備（取消）
-            {:else}
-              🔁 再來一局
-            {/if}
-          </button>
-          <button class="btn-secondary" onclick={() => { game = null; leaveOnlineGame(); }}>離開房間</button>
-        </div>
-        <!-- 對手狀態 hint -->
-        {#if oppRematchReady && !myRematchReady}
-          <p class="muted rematch-hint" in:fade={{ duration: 200 }}>💡 對手已準備再來一局，點選按鈕雙方都準備好就直接重啟對戰！</p>
-        {:else if myRematchReady && !oppRematchReady}
-          <p class="muted rematch-hint" in:fade={{ duration: 200 }}>⏳ 等待對手也按下「再來一局」...</p>
-        {:else if myRematchReady && oppRematchReady}
-          <p class="muted rematch-hint" in:fade={{ duration: 200 }}>🎉 雙方都已準備，房間即將重置...</p>
-        {/if}
-        <a href="{base}/" class="back-home-link" in:fade={{ duration: 400, delay: 1000 }}>回首頁</a>
-      {:else}
-        <div class="lobby-btns" in:fade={{ duration: 400, delay: 900 }}>
-          <button class="btn-primary" onclick={() => { game = null; }}>再來一局</button>
-          <a href="{base}/" class="btn-secondary">回首頁</a>
-        </div>
-      {/if}
-    </div>
-  </main>
-
-<!-- ══════════════════════════════════════════════════════════════════════
      正式對戰（Play Mat 佈局） — setup 和 playing 共用此畫面
   ══════════════════════════════════════════════════════════════════════ -->
 {:else}
@@ -6140,6 +6095,75 @@
     </div>
   {/if}
 
+  <!-- v4.21 對局結束可拖曳勝負視窗 — overlay 在戰鬥盤面上方 -->
+  {#if game.phase === 'game-over' && game.winner !== null && game.winner !== undefined}
+    {@const isWin = (
+      mode === 'online' ? (myPlayerIndex === game.winner) :
+      aiPlayerIndex !== null ? (game.winner === (1 - aiPlayerIndex)) :
+      true
+    )}
+    <div class="gameover-modal"
+      style:transform={`translate(calc(-50% + ${gameoverPanelPos.x}px), calc(-50% + ${gameoverPanelPos.y}px))`}>
+      <div class="gameover-modal-header"
+        onpointerdown={onGameoverHeaderDown}
+        onpointermove={onGameoverHeaderMove}
+        onpointerup={onGameoverHeaderUp}
+        title="拖曳此處移動勝負視窗 — 可看到背後戰鬥盤最終狀態">
+        <span class="gameover-modal-drag-hint">☰ 拖曳移動</span>
+      </div>
+      <div class="gameover-modal-body">
+        <div class="gameover-icon {isWin ? 'win' : 'lose'}">
+          {isWin ? '🏆' : '💔'}
+        </div>
+        <h1 class="gameover-title {isWin ? 'win' : 'lose'}">
+          {isWin ? 'Victory!' : 'Defeat'}
+        </h1>
+        <p class="winner-text">
+          {game.players[game.winner!].name} 獲勝！
+        </p>
+        <p class="muted">{game.winReason}</p>
+        <div class="lobby-btns export-btns">
+          <button class="btn-secondary" onclick={()=>exportLogAs('txt')} title="匯出純文字 log 供復盤">
+            📄 匯出 log（.txt）
+          </button>
+          <button class="btn-secondary" onclick={()=>exportLogAs('json')} title="匯出結構化 log 供外部工具分析">
+            🧾 匯出 log（.json）
+          </button>
+        </div>
+        {#if mode === 'online' || roomCode}
+          <div class="lobby-btns">
+            <button
+              class="btn-primary"
+              class:rematch-ready={myRematchReady}
+              onclick={toggleMyRematchReady}
+              title={myRematchReady ? '點擊取消，回到「再來一局」狀態' : '點擊後等對手也按，雙方都按就重置房間'}
+            >
+              {#if myRematchReady}
+                ✓ 已準備（取消）
+              {:else}
+                🔁 再來一局
+              {/if}
+            </button>
+            <button class="btn-secondary" onclick={() => { game = null; leaveOnlineGame(); }}>離開房間</button>
+          </div>
+          {#if oppRematchReady && !myRematchReady}
+            <p class="muted rematch-hint">💡 對手已準備再來一局，點選按鈕雙方都準備好就直接重啟對戰！</p>
+          {:else if myRematchReady && !oppRematchReady}
+            <p class="muted rematch-hint">⏳ 等待對手也按下「再來一局」...</p>
+          {:else if myRematchReady && oppRematchReady}
+            <p class="muted rematch-hint">🎉 雙方都已準備，房間即將重置...</p>
+          {/if}
+          <a href="{base}/" class="back-home-link">回首頁</a>
+        {:else}
+          <div class="lobby-btns">
+            <button class="btn-primary" onclick={() => { game = null; }}>再來一局</button>
+            <a href="{base}/" class="btn-secondary">回首頁</a>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
 </div>
 {/if}
 
@@ -6450,6 +6474,54 @@
   .gameover-title{ font-size:3rem; font-weight:800; margin:.2rem 0 1rem; letter-spacing:.08em; }
   .gameover-title.win{ color:#ffd44a; text-shadow:0 0 20px rgba(255,212,74,.7), 0 0 40px rgba(255,212,74,.3); }
   .gameover-title.lose{ color:#cc6666; text-shadow:0 0 18px rgba(200,80,80,.5); }
+
+  /* v4.21 勝負浮動視窗 — overlay 在戰鬥盤上，可拖曳 */
+  .gameover-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: min(440px, 90vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    background: linear-gradient(160deg, #1a2a3a, #0a1a2a);
+    border: 2px solid #3a5a8a;
+    border-radius: 14px;
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255,212,74,.2);
+    z-index: 9999;
+    pointer-events: auto;
+  }
+  .gameover-modal-header {
+    background: linear-gradient(90deg, #2a3a5a, #1a2a4a);
+    border-radius: 12px 12px 0 0;
+    padding: 0.5rem 0.8rem;
+    cursor: grab;
+    user-select: none;
+    color: #ffd44a;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    text-align: center;
+    border-bottom: 1px solid #3a5a8a;
+  }
+  .gameover-modal-header:active { cursor: grabbing; }
+  .gameover-modal-drag-hint { opacity: 0.8; }
+  .gameover-modal-body {
+    padding: 1.5rem 2rem 1.8rem;
+    text-align: center;
+    color: #f0f0f0;
+  }
+  .gameover-modal-body .gameover-icon { font-size: 3.6rem; margin-bottom: 0.2rem; }
+  .gameover-modal-body .gameover-title { font-size: 2.2rem; margin: 0.1rem 0 0.6rem; }
+  .gameover-modal-body .winner-text { font-size: 1.05rem; color: #ffe89e; font-weight: 600; margin: 0.4rem 0 0.2rem; }
+  .gameover-modal-body .muted { font-size: 0.85rem; margin: 0.3rem 0 0.8rem; }
+  .gameover-modal-body .lobby-btns { display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; margin-top: 0.6rem; }
+  .gameover-modal-body .rematch-hint { font-size: 0.78rem; margin-top: 0.4rem; }
+  .gameover-modal-body .back-home-link { display: inline-block; margin-top: 0.6rem; font-size: 0.8rem; color: #88aacc; }
+  @media (max-width: 600px) and (orientation: portrait) {
+    .gameover-modal { width: 92vw; max-height: 92vh; }
+    .gameover-modal-body { padding: 1rem 1.2rem 1.4rem; }
+    .gameover-modal-body .gameover-icon { font-size: 2.8rem; }
+    .gameover-modal-body .gameover-title { font-size: 1.7rem; }
+  }
 
   /* Setup */
   .setup-screen{ background:#1a2a1a; border-radius:10px; }
