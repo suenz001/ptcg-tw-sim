@@ -30,6 +30,7 @@ import {
   findAbilityUserIid,
   selfKOInstance,
   koPrizeCount,
+  isBenchProtected,
 } from '../../effects';
 import { addPendingPrize } from '../_shared';
 
@@ -245,6 +246,12 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
   const targetCard = pool.get(target.cardId);
+  // v4.19：對戰圓形競技場 — 特性效果放指示物對備戰目標無效
+  if (!isActive && isBenchProtected(st, pool)) {
+    return addLog(st,
+      `腎上腺腦力：${targetCard?.name ?? '?'} 因對戰圓形競技場效果不受傷害指示物（已回復來源傷害）`,
+      actorIdx);
+  }
   const tHp = targetCard?.hp ?? 0;
   const amount = (params?.amount as number) ?? 30;
   const newDmg = target.damage + amount;

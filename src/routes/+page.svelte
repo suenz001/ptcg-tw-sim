@@ -264,6 +264,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.19</span> 🛠️ 全面修「特性放置傷害指示物到對手」漏 對戰圓形 check（6 個特性）</summary>
+        <ul>
+          <li>玩家要求 audit：咒詛炸彈類已修，但其他可能還有。掃描結果 6 個特性漏 <code>isBenchProtected</code>。</li>
+          <li><b>卡面對照</b>：對戰圓形競技場「雙方的所有備戰寶可夢，不會因對手的招式與特性的效果而被放置傷害指示物」— 對手「特性效果」放指示物到備戰目標應該擋。</li>
+          <li><b>修補列表</b>：
+            <ul>
+              <li>願增猿｜腎上腺腦力（H）— adrenal-brain-target 加 isBenchProtected check</li>
+              <li>火箭隊的大嘴蝠｜暗中咬住（I）+ 火箭隊的叉字蝠ex｜亂咬（I）— rocket-crobat-mass-bite resolver per-target check</li>
+              <li>火箭隊的三地鼠｜凹洞（I）— engine.ts 撤退觸發 hook 加 check（凹洞 always 對 bench）</li>
+              <li>火箭隊的電龍｜黑暗脈衝（I）— engine.ts EVOLVE handler 加 check（進化卡若在 bench 才擋）</li>
+              <li>火箭隊的班基拉斯｜揚沙（I）— engine.ts 寶可夢檢查階段 — 只擋 bench，active 仍照常受 20 傷害</li>
+              <li>耿鬼ex｜侵蝕詛咒（H）— OPP_ENERGY_ATTACH_PASSIVE hook 加 check</li>
+            </ul>
+          </li>
+          <li><b>對照已修</b>：彷徨夜靈/黑夜魔靈｜咒詛炸彈（v3.825 修）+ 超級甲賀忍蛙ex｜必殺手裡劍（v4.06 修）格式不變。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.18</span> 🛠️ 修油之機關槍誤套招式效果免疫（薄霧能量擋傷害 bug）</summary>
         <ul>
           <li>玩家回報：奧利瓦的招式「油之機關槍」攻擊附有【薄霧能量】的寶可夢時未造成傷害。</li>

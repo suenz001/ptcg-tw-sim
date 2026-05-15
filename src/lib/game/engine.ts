@@ -513,7 +513,7 @@ import {
 // v3.05 Deferred Wave A — 自身寶可夢從戰鬥場回備戰時觸發類（ON_RETREAT_TO_BENCH）
 //   ON_RETREAT_TO_BENCH_ABILITIES：白名單 Set，列出有此觸發機制的特性名（卡面文義「從戰鬥場回到備戰區時，可使用 1 次」）
 //   askUseRetreatToBenchAbility：開 modal-choice 詢問玩家是否使用該特性（仿 askUsePlayAbility）
-import { ON_RETREAT_TO_BENCH_ABILITIES } from './effects';
+import { ON_RETREAT_TO_BENCH_ABILITIES, isBenchProtected } from './effects';
 import { askUseRetreatToBenchAbility } from './effects/cards/v3050_deferred_wave_a';
 
 // v3.07 Deferred Wave D — 3 張需要手牌 UI 元件層 hook 的特性
@@ -2020,19 +2020,27 @@ function handlePlaying(
     // v3.01 Wave 3 — 火箭隊的電龍｜黑暗脈衝：對手場上有 → 該進化卡 +4 指示物
     //   卡面明文「不重複」 → 多隻只 +4 一次（per-evolution）
     if (hasRocketAmpharosDarkPulse(afterEvolve, aIdx, pool)) {
-      const updateInst = (inst: CardInstance) => inst.iid === evolved.iid
-        ? { ...inst, damage: (inst.damage ?? 0) + 40 } : inst;
+      // v4.19：對戰圓形 — 進化卡若在 bench → 對手特性效果放指示物無效
       const updPlayer = afterEvolve.players[aIdx];
-      const newPl: PlayerState = {
-        ...updPlayer,
-        active: updPlayer.active ? updateInst(updPlayer.active) : null,
-        bench: updPlayer.bench.map(updateInst),
-      };
-      const newPlayers: [PlayerState, PlayerState] = [...afterEvolve.players] as [PlayerState, PlayerState];
-      newPlayers[aIdx] = newPl;
-      afterEvolve = addLog({ ...afterEvolve, players: newPlayers },
-        `黑暗脈衝：${evoCard.name} 身上放置 4 個傷害指示物`,
-        (1 - aIdx) as 0 | 1);
+      const evolvedOnBench = updPlayer.active?.iid !== evolved.iid;
+      if (evolvedOnBench && isBenchProtected(afterEvolve, pool)) {
+        afterEvolve = addLog(afterEvolve,
+          `黑暗脈衝：${evoCard.name} 在備戰，因對戰圓形競技場效果不受傷害指示物`,
+          (1 - aIdx) as 0 | 1);
+      } else {
+        const updateInst = (inst: CardInstance) => inst.iid === evolved.iid
+          ? { ...inst, damage: (inst.damage ?? 0) + 40 } : inst;
+        const newPl: PlayerState = {
+          ...updPlayer,
+          active: updPlayer.active ? updateInst(updPlayer.active) : null,
+          bench: updPlayer.bench.map(updateInst),
+        };
+        const newPlayers: [PlayerState, PlayerState] = [...afterEvolve.players] as [PlayerState, PlayerState];
+        newPlayers[aIdx] = newPl;
+        afterEvolve = addLog({ ...afterEvolve, players: newPlayers },
+          `黑暗脈衝：${evoCard.name} 身上放置 4 個傷害指示物`,
+          (1 - aIdx) as 0 | 1);
+      }
     }
 
     return afterEvolve;
@@ -2248,14 +2256,21 @@ function handlePlaying(
           }
         }
         if (trig.countersOnRetreater > 0) {
-          const upd = retreatState.players[aIdx];
-          const benchUpd = upd.bench.map(b => b.iid === retreatingPoke.iid
-            ? { ...b, damage: (b.damage ?? 0) + trig.countersOnRetreater } : b);
-          const newPlayers4: [PlayerState, PlayerState] = [...retreatState.players] as [PlayerState, PlayerState];
-          newPlayers4[aIdx] = { ...upd, bench: benchUpd };
-          retreatState = addLog({ ...retreatState, players: newPlayers4 },
-            `凹洞：${pool.get(retreatingPoke.cardId)?.name ?? '?'} 身上放置 ${trig.countersOnRetreater} 個傷害指示物`,
-            ownerIdx);
+          // v4.19：對戰圓形 — 對手特性效果放指示物對備戰目標無效（凹洞 always 對 bench）
+          if (isBenchProtected(retreatState, pool)) {
+            retreatState = addLog(retreatState,
+              `凹洞：${pool.get(retreatingPoke.cardId)?.name ?? '?'} 因對戰圓形競技場效果不受傷害指示物`,
+              ownerIdx);
+          } else {
+            const upd = retreatState.players[aIdx];
+            const benchUpd = upd.bench.map(b => b.iid === retreatingPoke.iid
+              ? { ...b, damage: (b.damage ?? 0) + trig.countersOnRetreater } : b);
+            const newPlayers4: [PlayerState, PlayerState] = [...retreatState.players] as [PlayerState, PlayerState];
+            newPlayers4[aIdx] = { ...upd, bench: benchUpd };
+            retreatState = addLog({ ...retreatState, players: newPlayers4 },
+              `凹洞：${pool.get(retreatingPoke.cardId)?.name ?? '?'} 身上放置 ${trig.countersOnRetreater} 個傷害指示物`,
+              ownerIdx);
+          }
         }
       }
     }
@@ -5182,9 +5197,12 @@ function handlePlaying(
             opp.active = { ...opp.active, damage: newDmg };
           }
         }
+        // v4.19：對戰圓形 — 特性效果放指示物對備戰目標無效（揚沙影響 active + bench，只擋 bench）
+        const benchProtected = isBenchProtected(state, pool);
         const newOppBench: CardInstance[] = [];
         for (const b of opp.bench) {
           if (!isBasicPokemonInst(b)) { newOppBench.push(b); continue; }
+          if (benchProtected) { newOppBench.push(b); continue; }  // v4.19 bench 跳過
           const newDmg = b.damage + 20;
           const card = pool.get(b.cardId);
           const hp = getEffectiveHP(b, pool, state);

@@ -14044,6 +14044,15 @@ OPP_ENERGY_ATTACH_PASSIVE.set('侵蝕詛咒', (state, gIdx, _oppIdx, targetIid, 
   const isActive = player.active?.iid === targetIid;
   const benchIdx = player.bench.findIndex(c => c.iid === targetIid);
 
+  // v4.19：對戰圓形競技場 — 對手特性效果放指示物對備戰目標無效
+  //   侵蝕詛咒是耿鬼ex 的對手 hook：自方附能時觸發。target 若在備戰 → 擋。
+  if (!isActive && benchIdx >= 0 && isBenchProtected(state, pool)) {
+    const targetCard = pool.get(player.bench[benchIdx].cardId);
+    return addLog(state,
+      `侵蝕詛咒：${targetCard?.name ?? '?'} 因對戰圓形競技場效果不受傷害指示物`,
+      gIdx);
+  }
+
   let updatedActive = player.active;
   let updatedBench = player.bench;
 

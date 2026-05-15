@@ -35,7 +35,7 @@ import {
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit,
 } from '../_shared';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, isBenchProtected } from '../../effects';
 import type { Card } from '$lib/cards/types';
 
 // 導出 sentinel 防止 unused import warnings
@@ -418,6 +418,11 @@ regR('rocket-crobat-mass-bite', (st, idx, iids, params, pool) => {
     const target = isActive ? opp.active! : opp.bench.find(c => c.iid === targetIid);
     if (!target) continue;
     const tName = pool.get(target.cardId)?.name ?? '?';
+    // v4.19：對戰圓形 — 特性效果放指示物對備戰目標無效
+    if (!isActive && isBenchProtected(s, pool)) {
+      s = addLog(s, `${label}：${tName} 因對戰圓形競技場效果不受傷害指示物`, idx);
+      continue;
+    }
     s = updatePlayer(s, oppIdx, pl => ({
       ...pl,
       active: isActive && pl.active
