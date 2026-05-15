@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.42</span> 🛠️ Wave 4b 簡化修補：怒鸚哥 推倒 + 破破舵輪 大地能量</summary>
+        <ul>
+          <li><b>怒鸚哥｜推倒（I）</b>：JSON「<b>若希望</b>，將對手的戰鬥寶可夢與備戰寶可夢互換。」舊實裝跟同名的其他「推倒」共用強制換場陣列，違反「若希望」字眼。修法：從 FORCE_OPP_SWAP_ATTACKS 移除，套 <code>ATTACK_PRE_DISCARD_CHOICE</code> binary-yes-no（仿 v3.26 浩大鯨ex 粉碎重壓 pattern），玩家選「是」才觸發換場。其他「推倒」（駒刀小兵/蓋蓋蟲/萌芽鹿）+ 哈約克 吼叫 都無「若希望」，仍維持強制。</li>
+          <li><b>破破舵輪｜大地能量（I）</b>：JSON「若場上有<b>自己的</b>競技場卡，則增加 50 點傷害。」舊 <code>selfStadiumConditionPre</code> helper 不分擁有者，違反「自己的」字眼。修法：helper 加 <code>activeStadiumOwnerIdx === aIdx</code> gate（既有 GameState 欄位）。此 helper 只有 1 個 user，可直接改不影響他卡。</li>
+          <li><b>Wave 4 進度</b>：4b 完成 2/2。下個 Wave 4c 預計修：活潑鮮花/活潑針（healedThisTurn flag 從 random 50% 改為真實旗標）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.41</span> 🛠️ Wave 4a 簡化修補：千面避役 擊斃 + 大嘴娃 雙重食客</summary>
         <ul>
           <li><b>千面避役｜擊斃（I）</b>：JSON「從雙方的場上寶可夢（這隻寶可夢除外）中<b>選擇 1 隻</b>剩餘 HP 最少的寶可夢，將其【昏厥】。」舊實裝 auto-pick HP 最低，違反「選擇」字眼（多隻並列最低時應由玩家選）。修法：計算最低 HP，filter 出所有並列候選，1 隻直接昏厥（保留原行為）、2+ 隻開 modal-choice picker。</li>

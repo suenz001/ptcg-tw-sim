@@ -247,9 +247,13 @@ function selfFieldEnergyConditionPre(
 
 function selfStadiumConditionPre(base: number, bonus: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    const cond = !!state.activeStadium;
+    // v4.42：限定「自己的」競技場（卡面「自己的競技場卡」）
+    // 既有 GameState.activeStadiumOwnerIdx 同步維護自 v2.x 的 stadium 機制
+    const cond = !!state.activeStadium && state.activeStadiumOwnerIdx === aIdx;
     const dmg = cond ? base + bonus : base;
-    const s = addLog(state, `${label}：場上${cond ? '有' : '無'}競技場 → ${cond ? `+${bonus}` : '不增傷'} = ${dmg}`, aIdx);
+    const condDesc = !state.activeStadium ? '場上無競技場'
+      : (state.activeStadiumOwnerIdx === aIdx ? '場上有自己的競技場' : '場上競技場是對手的');
+    const s = addLog(state, `${label}：${condDesc} → ${cond ? `+${bonus}` : '不增傷'} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };
   };
 }
@@ -380,7 +384,8 @@ regPre('穿著熊|必殺金勾臂', coinAllHeadsPlusPre(100, 2, 100, '必殺金�
 // ══════════════════════════════════════════════════════════════════════════════
 // 雷公|電氣墜落 30 + 自方場上【雷】能量 ≥4 → +90
 regPre('雷公|電氣墜落', selfFieldEnergyConditionPre(30, 90, 'Lightning', 4, '電氣墜落'));
-// 破破舵輪|大地能量 30 + 自方有競技場 +50（卡面只說「自己的競技場卡」，簡化為任何競技場）
+// 破破舵輪|大地能量 30 + 自己的競技場 +50
+// v4.42：簡化版（任何競技場）→ 修正為僅限自己的競技場（JSON 原文「自己的競技場卡」）
 regPre('破破舵輪|大地能量', selfStadiumConditionPre(30, 50, '大地能量'));
 
 // ══════════════════════════════════════════════════════════════════════════════
