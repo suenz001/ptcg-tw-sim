@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.11</span> 🛠️ units mode 改用「最小組合」gate 禁丟多餘能量</summary>
+        <ul>
+          <li>玩家糾正：1 張水能 + 1 張新衝天 不應允許 — 新衝天 1 張就達標，水能多餘。原話：「不能丟棄多餘的能量，避免玩家利用一些有棄牌區效果的卡片」。</li>
+          <li><b>修法</b>：加新卡後若任一已選卡「移除後仍 &gt;= min」表示多餘 → 拒新增。</li>
+          <li>實際效果（min=2）：✓ 1 張新衝天 / ✓ 1 張燃火 / ✓ 2 張水能；✗ 水能 + 新衝天 / ✗ 水能 + 燃火（水能多餘）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.10</span> 🛠️ 修分身連打 max gate 太嚴格（單張超過 PTCG 規則應允許）</summary>
         <ul>
           <li>玩家糾正：PTCG 規則「丟 N 個能量」中，<b>單張卡提供超過 N 是允許的</b>（卡 atomic 不能拆半）。v4.09 改 <code>max: 2</code> + 用 <code>cur + addUnits &gt; max</code> 為 gate 太嚴格 — 拒絕了本來合法的「1 張燃火能量（=3 units）整張丟」case。</li>

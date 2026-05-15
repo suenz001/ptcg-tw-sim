@@ -2768,9 +2768,19 @@
       //   修法：cur < min 可加任何卡；cur >= min 不能再加（達標即停，避免亂丟）。
       if (countMode === 'units') {
         const energies = getDiscardableEnergies(preAttackDiscard.spec);
+        const target = energies.find(e => e.iid === iid);
+        const addUnits = target ? getEnergyDiscardUnits(target.cardId, target.hostInst, pool) : 1;
         const cur = computePickedAmount(preAttackDiscard.spec, picked, energies);
         if (cur >= min) return;  // 已達標 → 不能再加
-        // cur < min → 不論 addUnits 多少都允許（包括單張超過的情況）
+        // v4.11：最小組合檢查 — 加新卡後若已選任一卡移除後仍 >= min，該卡多餘 → 拒
+        const newSum = cur + addUnits;
+        if (newSum >= min) {
+          for (const pickedIid of picked) {
+            const pe = energies.find(e => e.iid === pickedIid);
+            const pu = pe ? getEnergyDiscardUnits(pe.cardId, pe.hostInst, pool) : 1;
+            if (newSum - pu >= min) return;  // 此已選卡多餘 → 拒
+          }
+        }
       } else if (max !== null && picked.size >= max) {
         // cards mode 沿用原行為（最多 N 張）
         return;
