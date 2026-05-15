@@ -4981,8 +4981,16 @@
               {#if c}
                 <div class="sel-card-wrap" class:sel-picked={selectionPicked.has(item.iid)} class:sel-concealed={concealed}>
                   {#if !concealed}
-                    <button class="sel-zoom" title="放大檢視：{c.name}"
-                      onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
+                    {#if isEnergyPicker && energyOwnerMap.has(item.iid)}
+                      {@const _zOwner = energyOwnerMap.get(item.iid)!}
+                      <!-- v4.28：能量 picker 上的 🔍 改為放大擁有該能量的寶可夢
+                           （玩家不需要看基本能量的詳細說明，看寶可夢卡比較有戰術意義） -->
+                      <button class="sel-zoom" title="放大檢視擁有此能量的寶可夢：{_zOwner.name}"
+                        onclick={(e)=>{e.stopPropagation();openZoom(_zOwner.inst.cardId, _zOwner.inst);}}>🔍</button>
+                    {:else}
+                      <button class="sel-zoom" title="放大檢視：{c.name}"
+                        onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
+                    {/if}
                   {/if}
                   <button class="sel-card" onclick={()=>toggleSelection(item.iid)}>
                     {#if concealed}

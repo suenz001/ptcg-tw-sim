@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.28</span> 🛠️ 修挪動一下 picker 放大鏡指向（改為放大擁有能量的寶可夢）</summary>
+        <ul>
+          <li>玩家回報：小灰怪挪動一下 picker 內每張能量卡的 🔍 按鈕目前放大「基本能量本身」（玩家不需要看），應該放大「擁有該能量的寶可夢」。</li>
+          <li><b>修法</b>：sel-zoom 按鈕在 <code>isEnergyPicker</code> 且能量有 owner mapping 時，改 <code>openZoom(owner.inst.cardId, owner.inst)</code>。下方 📍 標籤保留為輔助位置資訊（兩者一致都放大寶可夢）。</li>
+          <li><b>影響範圍</b>：所有 <code>active-energy-discard</code> 類 picker，包含挪動一下（all-opp）、迅速游標（all-own）、急進開關（單來源）等能量挪移 / 棄能類招式。</li>
+          <li><b>非能量 picker</b>（如手牌棄牌 / 牌庫搜尋）— 維持原行為（放大選中的卡片）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.27</span> 🛠️ hotfix iPad 手牌放大鏡按下去重複觸發 hover-peek + modal</summary>
         <ul>
           <li>玩家 iPad 回報：tap 手牌 🔍 放大鏡時先出現大圖預覽（hover-peek），放開又彈出詳細說明 modal — 兩種視覺都出現很多餘。</li>
