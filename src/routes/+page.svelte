@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.32</span> 🛠️ 修忍者飛旋傷害預估錯誤（新衝天 2 units 顯示 +160）</summary>
+        <ul>
+          <li>玩家回報：忍者飛旋 picker 內勾 1 張新衝天能量（Stage2 視為 2 units【水】）時，UI 預估傷害顯示 280（120+2×80=280）。卡面「增加 80 點傷害」是一次性 fixed bonus，不論能量提供幾 units，上限就是 +80。</li>
+          <li><b>實際遊戲</b>：regPre 返回 damage: 200 = 120+80 fixed，傷害<b>正確</b>。只有 picker UI 預估顯示誤算。</li>
+          <li><b>Root cause</b>：UI estDmg 公式用 <code>baseDamage + pickedAmount × damagePerEnergy</code>，units mode 下 pickedAmount = units (2)，乘進去就變 +160。</li>
+          <li><b>修法</b>：units mode + spec.max 不為 null 時，estDmg 用 <code>min(pickedAmount, spec.max)</code> 為計算基礎，atomic 單張超 cap 視為 cap 計算 bonus。忍者飛旋 max=1，所以最多按 1 個 unit 算 → 顯示 200 ✓。</li>
+          <li><b>影響範圍</b>：僅修 UI 預估顯示。其他 units mode pickers（分身連打 / 激流水泵 / 災難衝擊 / 金屬之錘）damagePerEnergy=0 不渲染預估，不受影響。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.31</span> 🛠️ hotfix 桌機場地背景切掉卡頂標題（競技場/訓練家/夜間學院 字樣）</summary>
         <ul>
           <li>玩家澄清 v4.30 沒處理 — 截到的是卡片<b>上方</b>的標題文字（競技場/訓練家/夜間學院），不是底部說明文字。需要把上方標題區也切掉，只露出中段藝術區（紅框內）。</li>

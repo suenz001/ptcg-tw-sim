@@ -5512,7 +5512,8 @@
     {@const unit = isUnits ? '個' : '張'}
     {@const minOk = pickedAmount >= spec.min}
     {@const maxOk = isUnits ? true : (spec.max === null || pickedAmount <= spec.max)}
-    {@const estDmg = spec.baseDamage + pickedAmount * spec.damagePerEnergy}
+    {@const dmgPicked = isUnits && spec.max !== null ? Math.min(pickedAmount, spec.max) : pickedAmount}
+    {@const estDmg = spec.baseDamage + dmgPicked * spec.damagePerEnergy}
     {@const req = preAttackDiscard.exactRequired}
     {@const exactOk = req === undefined ? true : (pickedAmount === 0 || pickedAmount >= req)}
     {@const confirmEnabled = minOk && maxOk && exactOk}
