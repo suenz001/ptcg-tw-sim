@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.27</span> 🛠️ hotfix iPad 手牌放大鏡按下去重複觸發 hover-peek + modal</summary>
+        <ul>
+          <li>玩家 iPad 回報：tap 手牌 🔍 放大鏡時先出現大圖預覽（hover-peek），放開又彈出詳細說明 modal — 兩種視覺都出現很多餘。</li>
+          <li><b>Root cause</b>：觸控 tap = pointerdown + pointerup + click。pointerdown 階段 parent <code>.hand-card</code> 的 <code>onpointerenter</code> 觸發 hover-peek；click 階段 magnifier 鈕的 <code>onclick</code> 又呼叫 openZoom 開 modal。</li>
+          <li><b>修法</b>：移除 <code>.hand-zoom-btn</code> onclick 內的 openZoom 呼叫。觸控時 parent 的 pointerenter/leave 自動管 hover-peek，按住手指 → 預覽顯示、放開 → 消失，永遠不開 modal。行為與桌機滑鼠 hover 一致。</li>
+          <li><b>桌機影響</b>：無。<code>.hand-zoom-btn</code> 桌機本來就 <code>display:none</code>，桌機沿用 hover-peek。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.26</span> 📱 完整 PWA 支援（manifest + Service Worker 離線 + icons）</summary>
         <ul>
           <li>玩家回報 iPad 測試還是有網址列。<b>Safari 直接訪問永遠看得到網址列</b>，這是 iOS 限制；要全螢幕必須「分享 → 加入主畫面 → 從主畫面圖示開」。</li>

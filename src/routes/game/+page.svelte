@@ -4742,13 +4742,17 @@
             onpointerdown={(e)=>{leaveHandCard(); if(dragKind)startDrag(e, inst, dragKind, c);}}
             onclick={()=>{if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
             title={dragKind?`拖曳使用 · ${c.name}`:c.name}>
-            <!-- v2.205 手機專屬放大按鈕：手機沒 hover preview，所以加 🔍 鈕 tap → openZoom。
-                 stopPropagation 防止觸發外層 onpointerdown(startDrag) / onclick(selectedEnergyIid)。
-                 桌機（>950px）display:none 隱藏，桌機沿用 hover-peek。 -->
+            <!-- v4.27 修：iPad / 觸控裝置 tap 此鈕本來會「同時」觸發 parent 的 hover-peek 大圖
+                 預覽 + 自己的 openZoom modal（兩種視覺都出現很多餘）。玩家要求只保留 hover-peek。
+                 改法：onclick 不再呼叫 openZoom，僅 stopPropagation 防觸發外層 startDrag/click。
+                 觸控時 parent .hand-card 的 onpointerenter/leave 自動管 hover-peek：
+                   - 按下手指 → 進入 .hand-card → pointerenter → 大圖預覽顯示
+                   - 放開手指 → 離開 .hand-card → pointerleave → 預覽消失
+                 桌機（>950px）此鈕 display:none，沿用 hover-peek，本來就不受影響。 -->
             <button class="hand-zoom-btn"
               onpointerdown={(e)=>e.stopPropagation()}
-              onclick={(e)=>{e.stopPropagation(); openZoom(inst.cardId, inst);}}
-              title="放大查看 {c.name}">🔍</button>
+              onclick={(e)=>e.stopPropagation()}
+              title="長按查看 {c.name}">🔍</button>
             <img src={c.imageUrl} alt={c.name}/>
             <span class="hand-name">{c.name}</span>
             <!-- v3.07 Deferred Wave D — 手牌觸發特性按鈕 -->
