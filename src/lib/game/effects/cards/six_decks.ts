@@ -13,7 +13,7 @@ import type { PlayerState, GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { regPre, regPost, regA, reg, regR, regG, addLog, addPrivateLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
 } from '../_shared';
-import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget } from '../../effects';
+import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget, isBenchProtected } from '../../effects';
 
 // ─── 撕裂 70（skipDefEffects）───────────────────────────────────────────────
 regPre('N的捷克羅姆|撕裂', skipDefEffectsPre(70, '撕裂'));
@@ -587,9 +587,18 @@ regR('greninja-shuriken-6', (state, aIdx, selectedIids, _params, pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const def = { ...players[dIdx] };
   let name = '?';
+  // v4.06：對戰圓形 BENCH_PROTECTION — 必殺手裡劍是「特性效果」，卡面：
+  //   「不會因對手的招式與特性的效果而被放置傷害指示物」 → 備戰目標被擋
+  //   active 目標照常吃 60（卡面註：戰鬥場仍受傷害）
   if (def.active && selectedIids.includes(def.active.iid)) {
     def.active = { ...def.active, damage: def.active.damage + 60 };
     name = pool.get(def.active.cardId)?.name ?? '?';
+  } else if (isBenchProtected(state, pool)) {
+    // 目標在備戰 + 對戰圓形啟動 → 跳過放置
+    const target = def.bench.find(b => selectedIids.includes(b.iid));
+    name = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+    players[dIdx] = def;
+    return addLog({ ...state, players }, `必殺手裡劍：${name} 在備戰受對戰圓形保護，未放置傷害指示物`, aIdx);
   } else {
     def.bench = def.bench.map(b => {
       if (selectedIids.includes(b.iid)) {

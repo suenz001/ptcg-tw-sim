@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.06</span> 🛡️ 修對戰圓形未擋必殺手裡劍特性傷害</summary>
+        <ul>
+          <li>玩家回報：場上有對戰圓形時，超級甲賀忍蛙ex 特性「必殺手裡劍」仍對備戰寶可夢放置傷害指示物（應被擋）。</li>
+          <li><b>卡面</b>：對戰圓形「雙方的所有備戰寶可夢，不會因對手的招式與特性的效果而被放置傷害指示物」。必殺手裡劍是<b>特性效果</b>，應在保護範圍內。</li>
+          <li><b>修法</b>：six_decks.ts <code>greninja-shuriken-6</code> resolver 加 <code>isBenchProtected(state, pool)</code> 判定：bench 目標 + 對戰圓形啟動 → 跳過放置 + log「在備戰受對戰圓形保護，未放置傷害指示物」。active 目標照常 +60（卡面註明戰鬥場仍受傷害）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.05</span> 📱 擋瀏覽器返回手勢避免右滑中斷對戰</summary>
         <ul>
           <li>玩家回報：手機版對戰時右滑（iOS Safari 邊緣返回 / Android 左滑）會中斷對戰跳出。</li>
