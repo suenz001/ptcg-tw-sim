@@ -852,6 +852,9 @@
   .mp-chips { touch-action: pan-x; }
 
   /* v4.22 手機版場地卡背景圖層 — fixed 覆蓋 .mp 區域，z-index:0 在 #1a2e1a 純色底之上但所有 UI 元素之下 */
+  /* v4.23 修：移除 mask-image（下半透明導致自己這邊不顯示）+ opacity 0.32 → 0.55 增加存在感
+     手機 portrait 容器很高，背景圖 cover 模式會把整張卡（含文字）以接近原比例填滿，
+     但 0.55 opacity + 2px blur 之下文字部分視覺上只是模糊雜訊，不會影響 UI 可讀性 */
   .mp-stadium-bg-layer {
     position: absolute;
     inset: 0;
@@ -859,11 +862,9 @@
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
-    opacity: 0.32;
-    filter: blur(1.5px);
+    opacity: 0.55;
+    filter: blur(2px);
     pointer-events: none;
-    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 32%, rgba(0,0,0,0.35) 48%, transparent 60%);
-    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 32%, rgba(0,0,0,0.35) 48%, transparent 60%);
   }
   /* 確保 .mp 內所有後續 child 元素疊在背景圖之上 */
   .mp > :not(.mp-stadium-bg-layer) { position: relative; z-index: 1; }

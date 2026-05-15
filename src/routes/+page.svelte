@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.23</span> 🛠️ 場地背景手機只顯示上半 + 圖太淡 + 忍者飛旋新衝天 confirm 鎖死</summary>
+        <ul>
+          <li><b>場地背景修正</b>：
+            <ul>
+              <li>手機版背景圖只顯示上半部 — 移除 mask-image gradient（原 60% 處透明導致自己這邊不顯示）。</li>
+              <li>整體透明度提升：桌機 0.35 → 0.55，手機 0.32 → 0.55，場地存在感更明顯。</li>
+              <li>桌機 mask 也調整為較輕，藝術區更完整、不過早淡化。</li>
+            </ul>
+          </li>
+          <li><b>忍者飛旋勾新衝天能量 confirm 鎖死</b>：
+            <ul>
+              <li>玩家回報：1 張新衝天能量（Stage2 視為 2 units 包含【水】）勾選後「確定使用招式」按鈕無法按。</li>
+              <li><b>Root cause</b>：confirmEnabled 內額外的 <code>pickedAmount === req</code> 冗餘 clause 強制單位數恰好等於 exactRequired=1，新衝天 2 units 不等於 1 → 鎖死。</li>
+              <li><b>修法</b>：移除這個冗餘 clause。exactOk 已正確判斷 <code>0 OR &gt;= req</code>，toggle gate 也已 enforce 最小組合，這條額外 check 是 dead weight。</li>
+              <li>同類型修補也修好了災難衝擊用 1 張新衝天（2 units 視為雷）的場景。</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.22</span> 🎨 場上有場地卡時 playmat 背景顯示場地卡圖（戰場氣氛）</summary>
         <ul>
           <li>玩家建議：當場上有場地卡時，把中間的綠色底圖換成那張場地卡的圖（只用上半藝術圖區），做為背景增加戰場氣氛。</li>

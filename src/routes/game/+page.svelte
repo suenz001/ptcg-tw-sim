@@ -5458,7 +5458,10 @@
     {@const estDmg = spec.baseDamage + pickedAmount * spec.damagePerEnergy}
     {@const req = preAttackDiscard.exactRequired}
     {@const exactOk = req === undefined ? true : (pickedAmount === 0 || pickedAmount >= req)}
-    {@const confirmEnabled = minOk && maxOk && exactOk && (req === undefined || pickedAmount === req)}
+    {@const confirmEnabled = minOk && maxOk && exactOk}
+    <!-- v4.23：移除 `=== req` 冗餘 clause。exactOk 已含 `0 || >= req` 邏輯，再加 === req 會
+         擋住 atomic 超過（新衝天 2 units > req=1）。toggle gate 已 enforce 最小組合，max
+         也已限制卡數上限，這個額外 clause 是 dead weight 反而擋住合法操作。 -->
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
@@ -6604,6 +6607,7 @@
   }
 
   /* v4.22 場地卡在場時的背景圖層 — absolute + z-index:-1 → 蓋 playmat gradient 底色但在 field-row 之下 */
+  /* v4.23 提升 opacity 0.35 → 0.55 增加場地存在感；mask 改為較輕（55% 全顯 → 80% 半透）讓藝術區更完整 */
   .stadium-bg-layer {
     position: absolute;
     inset: 0;
@@ -6611,12 +6615,12 @@
     background-size: cover;
     background-position: center top;
     background-repeat: no-repeat;
-    opacity: 0.35;
-    filter: blur(1.5px);
+    opacity: 0.55;
+    filter: blur(1.2px);
     pointer-events: none;
-    /* 用 mask-image gradient 由上往下 35% 全顯示 → 50% 漸隱，過濾掉文字部分 */
-    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 35%, rgba(0,0,0,0.4) 50%, transparent 62%);
-    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 35%, rgba(0,0,0,0.4) 50%, transparent 62%);
+    /* v4.23：mask 較輕，讓背景圖跨越整個 playmat 而不只上半 */
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.6) 75%, rgba(0,0,0,0.3) 90%, rgba(0,0,0,0.15) 100%);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.6) 75%, rgba(0,0,0,0.3) 90%, rgba(0,0,0,0.15) 100%);
   }
 
   .field-row{ display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.7rem; overflow:visible; min-height:0; }
