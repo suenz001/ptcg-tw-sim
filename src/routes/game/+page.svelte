@@ -7664,7 +7664,7 @@
     padding:.15rem .35rem;
     background:rgba(0,0,0,.6);
     border-radius:6px;
-    z-index:3;  /* 高於 .active-info(z=2)，確保不被覆蓋 */
+    z-index:10;  /* v4.07：高於 tool-chip(z=5) 避免道具標籤蓋住血量數字 */
     pointer-events:none;
   }
   /* v3.9993：戰鬥場血量字加大（玩家反饋字太小）9px → 11px / .72rem → .95rem / 600 → 700 */

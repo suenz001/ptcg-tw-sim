@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.07</span> 🛠️ 修分身連打不認新衝天 + 血量數字被道具標籤蓋住</summary>
+        <ul>
+          <li><b>Bug 1：甲賀忍蛙ex 分身連打不認新衝天能量</b>
+            <ul>
+              <li>卡面：「將 2 個這隻寶可夢身上附加的能量丟棄」+ 新衝天能量「若附於 2 階進化寶可夢身上，視為提供 2 個所有屬性的能量」</li>
+              <li>甲賀忍蛙ex stage=Stage2 → 1 張新衝天能量 = 2 units，應可滿足「2 個」需求</li>
+              <li>原 <code>getEnergyDiscardUnits</code>（<code>_shared.ts</code>）只處理燃火 + 火箭隊能量，新衝天 fallthrough 回傳 1</li>
+              <li><b>修法</b>：加新衝天 case — host stage=Stage2 → 2，否則 1</li>
+            </ul>
+          </li>
+          <li><b>Bug 2：卡片資訊多時血量數字被道具標籤蓋住</b>
+            <ul>
+              <li>v3.9997 把 <code>.tool-chip</code> 設 <code>z-index:5</code> 修非太晶寶可夢顯示問題</li>
+              <li>但 <code>.active-hpbar-bottom</code> 原 <code>z-index:3</code> &lt; tool-chip → 被蓋住</li>
+              <li><b>修法</b>：<code>.active-hpbar-bottom</code> <code>z-index:3 → 10</code>，永遠在最上層顯示</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.06</span> 🛡️ 修對戰圓形未擋必殺手裡劍特性傷害</summary>
         <ul>
           <li>玩家回報：場上有對戰圓形時，超級甲賀忍蛙ex 特性「必殺手裡劍」仍對備戰寶可夢放置傷害指示物（應被擋）。</li>

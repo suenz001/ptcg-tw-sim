@@ -224,6 +224,15 @@ export function getEnergyDiscardUnits(
     return (stage === 'Stage1' || stage === 'Stage2') ? 3 : 1;
   }
   if (ec.name === '火箭隊能量') return 2;
+  // v4.07：新衝天能量 — 卡面「若附於 2 階進化寶可夢身上，視為提供 2 個能量」
+  //   玩家回報甲賀忍蛙ex（Stage2）分身連打需丟 2 能量時無法用 1 張新衝天能量。
+  //   依卡面「個」= units 解讀，Stage2 host → 2 units，否則 1 unit。
+  if (ec.name === '新衝天能量') {
+    if (!hostInst) return 1;
+    const hc = pool.get(hostInst.cardId);
+    const stage = hc?.stage ?? hc?.subtype;
+    return stage === 'Stage2' ? 2 : 1;
+  }
   return 1;
 }
 
