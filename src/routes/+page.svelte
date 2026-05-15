@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.12</span> 🛠️ 修確認按鈕 maxOk 太嚴擋住合法的燃火單張</summary>
+        <ul>
+          <li>玩家回報：勾單張燃火能量（3 units）已達 min=2 但「確定使用招式」按鈕 disable。</li>
+          <li><b>Root cause</b>：<code>maxOk = pickedAmount &lt;= spec.max</code>，燃火 cur=3 &gt; max=2 → 按鈕鎖死。但 v4.11 toggle 已用「最小組合」gate 保證合法，units mode 不需要再用 max 嚴擋（卡 atomic 超過 max 允許）。</li>
+          <li><b>修法</b>：<code>maxOk = isUnits ? true : (spec.max === null || pickedAmount &lt;= spec.max)</code>。cards mode 沿用原行為。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.11</span> 🛠️ units mode 改用「最小組合」gate 禁丟多餘能量</summary>
         <ul>
           <li>玩家糾正：1 張水能 + 1 張新衝天 不應允許 — 新衝天 1 張就達標，水能多餘。原話：「不能丟棄多餘的能量，避免玩家利用一些有棄牌區效果的卡片」。</li>

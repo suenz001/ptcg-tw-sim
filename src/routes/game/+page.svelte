@@ -5444,7 +5444,7 @@
     {@const isHandTool = spec.scope === 'hand-tool'}
     {@const unit = isUnits ? '個' : '張'}
     {@const minOk = pickedAmount >= spec.min}
-    {@const maxOk = spec.max === null || pickedAmount <= spec.max}
+    {@const maxOk = isUnits ? true : (spec.max === null || pickedAmount <= spec.max)}
     {@const estDmg = spec.baseDamage + pickedAmount * spec.damagePerEnergy}
     {@const req = preAttackDiscard.exactRequired}
     {@const exactOk = req === undefined ? true : (pickedAmount === 0 || pickedAmount === req)}
