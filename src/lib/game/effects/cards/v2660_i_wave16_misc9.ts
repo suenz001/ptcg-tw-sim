@@ -329,12 +329,27 @@ regPost('魔牆人偶|模仿', (state, aIdx, _pool) => {
 // 8. 雙狀態 / 自選狀態（3 張）
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 敏捷蟲｜褪殼猛毒 70 — 中毒+混亂+自身與備戰互換（簡化：只施加中毒+混亂）
+// 敏捷蟲｜褪殼猛毒 70 — 中毒+混亂+自身與備戰互換
+// JSON：「將對手的戰鬥寶可夢【中毒】與【混亂】。將這隻寶可夢與備戰寶可夢互換。」
+// v4.35：補自身與備戰互換（rule 7 嚴禁簡化）。卡面無「若希望」→ 強制互換
 regPre('敏捷蟲|褪殼猛毒', (s) => ({ state: s, damage: 70 }));
 regPost('敏捷蟲|褪殼猛毒', (state, aIdx, pool) => {
   let s = statusPost('poisoned')(state, aIdx, pool);
   s = statusPost('confused')(s, aIdx, pool);
-  return s;
+  // 備戰區空 → 無法互換，addLog 帶過（招式仍正常結束）
+  const p = s.players[aIdx];
+  if (p.bench.length === 0) {
+    return addLog(s, '褪殼猛毒：備戰區無寶可夢可互換', aIdx);
+  }
+  // 卡面無「若希望」→ minCount:1 強制互換（復用 self-swap-active-bench resolver）
+  s = addLog(s, '褪殼猛毒：選 1 隻備戰寶可夢與戰鬥場互換', aIdx);
+  return withPending(s, {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'self-swap-active-bench',
+    params: { label: '褪殼猛毒' },
+  });
 });
 
 // 裙兒小姐｜幻惑芳香 30 — 擲幣正面 中毒+麻痺，反面 混亂

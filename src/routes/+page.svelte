@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.35</span> 🛠️ Wave 2 簡化修補：敏捷蟲 褪殼猛毒（補自身與備戰互換）</summary>
+        <ul>
+          <li><b>敏捷蟲｜褪殼猛毒（I）</b>：JSON「將對手的戰鬥寶可夢【中毒】與【混亂】。<b>將這隻寶可夢與備戰寶可夢互換。</b>」舊實裝只施加中毒+混亂，後半段「自身與備戰互換」未實裝。本版補上 bench-choose picker，復用既有 <code>self-swap-active-bench</code> resolver。</li>
+          <li><b>強制 vs 若希望</b>：卡面無「若希望」字樣，與超級拉帝亞斯ex 狡兔三窟（「若希望」→ 可選）不同 → 採 <code>minCount:1</code> 強制互換（備戰區空時 addLog 帶過）。</li>
+          <li><b>Wave 進度</b>：Wave 2 收尾 2/3 卡。下一步處理 信使鳥 幸福禮物（單方→雙方對手先選）的真正雙方分配。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.34</span> 🛠️ Wave 2 簡化修補：塗標客 奇跡作畫</summary>
         <ul>
           <li><b>塗標客｜奇跡作畫（I）</b>：JSON「擲1次硬幣若為正面，<b>則從特殊狀態中選擇1種</b>，將對手的戰鬥寶可夢處於那個狀態。」舊實裝固定附加【睡眠】，違反卡面「5 種任選」。改為擲幣正面後開啟 modal-choice，玩家從中毒 / 灼傷 / 睡眠 / 混亂 / 麻痺中選 1。</li>
