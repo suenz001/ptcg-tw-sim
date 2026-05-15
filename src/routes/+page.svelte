@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.09</span> 🛠️ 修分身連打缺 max gate 可丟超過 2 units</summary>
+        <ul>
+          <li>玩家回報 v4.07 加新衝天能量 = 2 units 後，分身連打可以一次丟光全部能量（甲賀忍蛙ex 身上 1 顆新衝天 + 3 顆水能可全丟）。</li>
+          <li><b>Root cause</b>：<code>ATTACK_PRE_DISCARD_CHOICE</code> 設 <code>max: null</code> → UI toggle gate 不啟動。卡面「將 2 個能量丟棄」是<b>恰好 2 units</b>（不是 ≥2）。</li>
+          <li><b>修法</b>：<code>max: null → max: 2</code>。實際結果：
+            <ul>
+              <li>1 張新衝天能量（Stage2=2 units）→ 達 max，不能再加 ✓</li>
+              <li>2 張水能（各 1 unit）→ 達 max，第 3 張被拒 ✓</li>
+              <li>1 張燃火能量（Stage2=3 units）→ 3 &gt; 2 直接被拒（嚴格 ruling，不能多丟） ✓</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.08</span> 🛡️ 對戰圓形擋雪妖女冰冷之帳 + 特殊紅牌放回牌庫下方</summary>
         <ul>
           <li><b>Bug 1：對戰圓形未擋雪妖女冰冷之帳對備戰放指示物</b>

@@ -12183,8 +12183,10 @@ regR('greninja-ninja-blade-search', (state, aIdx, selectedIids, _params, pool) =
 //   卡面：「對手的 2 隻寶可夢各受到 120 點傷害。[在備戰區不計算弱點・抵抗力。]」
 //   ＝ 戰鬥場那隻仍計算弱抗；備戰位才不計。
 //   v2.129：能量丟棄改用 'units' — 1 張燃火能量（附於進化）= 3 個無能量單位 → 1 張就達標。
+// v4.09 修：原 max:null 無上限導致玩家可丟超過 2 units 把能量丟光光。
+//   卡面「將 2 個能量丟棄」是恰好 2 units（非 ≥2），改 max: 2 鎖住上限。
 ATTACK_PRE_DISCARD_CHOICE.set('甲賀忍蛙ex|分身連打', {
-  min: 2, max: null, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+  min: 2, max: 2, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
   countMode: 'units',
 });
 regPre('甲賀忍蛙ex|分身連打', (state, _aIdx, _pool) => ({ state, damage: 0 }));
