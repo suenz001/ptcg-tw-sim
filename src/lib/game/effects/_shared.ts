@@ -193,6 +193,16 @@ export interface PreDiscardSpec {
    * 設為對應 verb，UI 標題與按鈕會顯示「放回手牌」/「放回牌庫」而非誤導的「丟棄」。
    */
   verb?: 'discard' | 'return-to-hand' | 'return-to-deck';
+  /**
+   * v4.16：picker UI 限定的能量屬性（如忍者飛旋限【水】）。
+   * 設此值後，picker 只顯示「視為該屬性」的能量：
+   *   - 基本該屬性能量（pokemonType 或名稱含屬性）
+   *   - 特殊該屬性能量（含名稱屬性）
+   *   - 新衝天能量 (Stage2 host = 視為所有屬性)
+   *   - 稜鏡能量 (Basic host = 視為所有屬性；Evolution host 不視為)
+   * 不符的能量在 picker 內隱藏，避免玩家點選後被 regPre 退回。
+   */
+  energyTypeFilter?: 'Grass' | 'Fire' | 'Water' | 'Lightning' | 'Psychic' | 'Fighting' | 'Darkness' | 'Metal' | 'Dragon' | 'Colorless';
 }
 
 export const ATTACK_PRE_DISCARD_CHOICE = new Map<string, PreDiscardSpec>();

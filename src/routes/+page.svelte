@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.16</span> 🛠️ 修忍者飛旋 picker 應 filter 非水能量</summary>
+        <ul>
+          <li>玩家要求 picker 不該讓玩家選不符合條件的能量。忍者飛旋卡面「將 1 個【水】能量放回手牌」— picker 應該不顯示「非水」能量（如燃火能量，視為【無】，不符條件）。</li>
+          <li><b>修法</b>：
+            <ul>
+              <li><code>PreDiscardSpec</code> 加 <code>energyTypeFilter?: EnergyType</code> field</li>
+              <li>忍者飛旋 spec 設 <code>energyTypeFilter: 'Water'</code></li>
+              <li><code>getDiscardableEnergies</code> 套用 filter — 只顯示「視為該屬性」的能量：基本水 / 泡沫水 / 新衝天 (Stage2 host) / 稜鏡 (Basic host) / 其他特殊水</li>
+            </ul>
+          </li>
+          <li>對超級甲賀忍蛙ex (Stage2) 上的燃火能量、稜鏡能量、其他非水能量 → picker 不顯示，避免誤點。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.15</span> 🚨 hotfix — confirmPreAttackDiscard 漏修 max 嚴擋擋住燃火 atomic</summary>
         <ul>
           <li>玩家回報 v4.14 後分身連打勾燃火能量 (3 units)：UI 確認按鈕亮起但按下去無反應。</li>

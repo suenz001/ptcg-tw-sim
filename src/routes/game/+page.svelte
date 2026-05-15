@@ -2745,6 +2745,42 @@
       addFrom(activePlayer.active);
       for (const b of activePlayer.bench) addFrom(b);
     }
+    // v4.16：spec.energyTypeFilter 設定時，filter 出「視為該屬性」的能量
+    //   覆蓋基本/特殊能量規則；新衝天 (Stage2) 視為所有屬性；稜鏡 (Basic) 視為所有屬性
+    if (spec.energyTypeFilter) {
+      const filterType = spec.energyTypeFilter;
+      const zhMark: Record<string, string> = {
+        Grass: '【草】', Fire: '【火】', Water: '【水】', Lightning: '【雷】',
+        Psychic: '【超】', Fighting: '【鬥】', Darkness: '【惡】', Metal: '【鋼】',
+        Dragon: '【龍】', Colorless: '【無】',
+      };
+      const mark = zhMark[filterType];
+      return out.filter(item => {
+        const ec = getCard(item.cardId);
+        if (!ec || ec.supertype !== 'Energy') return false;
+        const hc = getCard(item.hostInst.cardId);
+        const hostStage = hc?.stage ?? hc?.subtype;
+        if (ec.subtype === 'Basic') {
+          if (ec.pokemonType === filterType) return true;
+          if (mark && ec.name.includes(mark)) return true;
+          return false;
+        }
+        if (ec.subtype === 'Special') {
+          // 新衝天能量：on Stage2 視為所有屬性
+          if (ec.name === '新衝天能量') return hostStage === 'Stage2';
+          // 稜鏡能量：on Basic 視為所有屬性
+          if (ec.name === '稜鏡能量') {
+            const isEvo = hostStage === 'Stage1' || hostStage === 'Stage2';
+            return !isEvo;
+          }
+          // 一般特殊能量：名稱含屬性或 pokemonType 對應
+          if (ec.pokemonType === filterType) return true;
+          if (mark && ec.name.includes(mark)) return true;
+          return false;
+        }
+        return false;
+      });
+    }
     return out;
   }
 
