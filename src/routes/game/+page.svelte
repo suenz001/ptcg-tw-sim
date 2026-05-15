@@ -2808,7 +2808,8 @@
     const energies = getDiscardableEnergies(spec);
     const amount = computePickedAmount(spec, picked, energies);
     if (amount < spec.min) return;
-    if (spec.max !== null && amount > spec.max) return;
+    // v4.15：units mode 允許單張 atomic 超過 max（同 v4.12 UI maxOk 修法）
+    if (spec.countMode !== 'units' && spec.max !== null && amount > spec.max) return;
     // v4.14：units mode 允許單張超過 → 改 < 嚴擋 (0 skip 或 >= exactRequired 才送)
     if (exactRequired !== undefined && amount !== 0 && amount < exactRequired) return;
     const iids = [...picked];

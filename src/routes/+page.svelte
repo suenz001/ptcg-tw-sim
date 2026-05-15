@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.15</span> 🚨 hotfix — confirmPreAttackDiscard 漏修 max 嚴擋擋住燃火 atomic</summary>
+        <ul>
+          <li>玩家回報 v4.14 後分身連打勾燃火能量 (3 units)：UI 確認按鈕亮起但按下去無反應。</li>
+          <li><b>Root cause</b>：v4.12 只修 UI <code>confirmEnabled</code> 的 <code>maxOk</code>（顯示層），但 <code>confirmPreAttackDiscard</code> handler 內 line 2811 還有 <code>if (spec.max !== null &amp;&amp; amount &gt; spec.max) return;</code>，燃火 3 &gt; max=2 → return → 沒 dispatch。</li>
+          <li><b>修法</b>：加 <code>spec.countMode !== 'units'</code> 條件跳過 max 嚴擋（對齊 v4.12 maxOk 邏輯）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.14</span> 🛠️ 激流水泵 + 忍者飛旋 + 災難衝擊套 units mode</summary>
         <ul>
           <li>玩家要求優先處理 3 張常用卡（卡面用「個」字眼）：</li>
