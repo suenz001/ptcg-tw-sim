@@ -16,6 +16,7 @@
     canRetreat, getRetreatBlockReason, getPlayableTrainers, getPlayableBasics, getPlayableFossils,
     getUsableAbilities, isBasicPokemonCard, isFossilItemCard, isRulePokemon, getEffectiveHP,
     totalEnergyUnits, getBenchLimit, canBeInitialActiveCard,
+    tryAdvanceToPlaying,
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
@@ -3207,12 +3208,18 @@
       //   雙方各自擺自己側 active+bench，整顆 GameState push 會被後寫者覆蓋先寫者，
       //   echo 回到先寫者就把先寫者的擺放洗掉 → 玩家又擺一次 → 無限重置 ping-pong。
       //   修法：incoming 是對方剛 push 的，我自己側保留本地 game（最新），對方側取 incoming。
-      //   涵蓋三個 per-player 欄位：players / setupDone / pendingMulliganDraw。
-      //   進入 playing 的轉換在 engine.ts FINISH_SETUP / MULLIGAN_DRAW_DECISION handler 處理；
-      //   後 finish 者會看到自己 merge 後的 setupDone[op]=true，dispatch 後就會自動轉 playing。
+      //   涵蓋四個 per-player 欄位：players / setupDone / pendingMulliganDraw / mulliganRevealConfirmed。
+      // v4.494 Fix：補兩個遺漏項：
+      //   (1) mulliganRevealConfirmed 也要 per-player merge（v3.39 漏，雙方都 mulligan 各自 confirm
+      //       會被 incoming 整顆覆蓋洗掉本地 confirmed，永遠湊不到 [T,T]）。
+      //   (2) merge 完後呼叫 tryAdvanceToPlaying — 雙方近似同時 FINISH_SETUP 時，兩端各自 dispatch
+      //       後 setupDone 都是 [me=T, op=F]，tryAdvance fail；收到 incoming 後 merge=[T,T] 但 phase
+      //       仍 setup，原本 v3.39 註解假設「後 finish 者 dispatch 自動轉 playing」不成立（兩端都已 dispatch
+      //       過），且 engine.ts:1603 擋掉重複 FINISH_SETUP，導致兩端永遠卡死。
+      //       修法：merge 後呼 tryAdvanceToPlaying，若轉 playing 就 push 同步（兩端都會做，idempotent）。
       if (game && game.phase === 'setup' && incoming.phase === 'setup' && myPlayerIndex !== null) {
         const me = myPlayerIndex;
-        const merged: GameState = {
+        let merged: GameState = {
           ...incoming,
           players: (me === 0
             ? [game.players[0], incoming.players[1]]
@@ -3223,7 +3230,21 @@
           pendingMulliganDraw: (me === 0
             ? [game.pendingMulliganDraw?.[0] ?? 0, incoming.pendingMulliganDraw?.[1] ?? 0]
             : [incoming.pendingMulliganDraw?.[0] ?? 0, game.pendingMulliganDraw?.[1] ?? 0]) as [number, number],
+          // v4.494：mulliganRevealConfirmed 也 per-player merge
+          mulliganRevealConfirmed: (me === 0
+            ? [game.mulliganRevealConfirmed[0], incoming.mulliganRevealConfirmed[1]]
+            : [incoming.mulliganRevealConfirmed[0], game.mulliganRevealConfirmed[1]]) as [boolean, boolean],
         };
+        // v4.494：merge 完評估能否進 playing（雙方都 setupDone+confirmed+mulliganDraw=0）
+        const advanced = tryAdvanceToPlaying(merged);
+        if (advanced.phase === 'playing') {
+          console.log('[Online] v4.494 setup merge triggered phase advance');
+          merged = advanced;
+          // push 給對方同步（兩端都會做；後寫覆蓋無傷，最終 phase='playing' 收斂）
+          if (roomCode) {
+            pushGameState(roomCode, merged).catch((e: unknown) => console.warn('[pushGameState advance] failed:', e));
+          }
+        }
         game = merged;
         return;
       }

@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.494</span> 🛠️ 修連線對戰雙方準備完成卡死 bug</summary>
+        <ul>
+          <li><b>玩家回報</b>：線上對戰雙方都擺好基礎寶可夢、按「完成準備」後對戰無法開始（卡在 setup 畫面）。</li>
+          <li><b>Root cause</b>：<code>+page.svelte:3213</code> 的 v3.39 setup merge 有 2 個漏洞：</li>
+          <li>　(1) merge 後沒重新評估 phase 推進。雙方近似同時按完成準備時，兩端各自 dispatch FINISH_SETUP 後 setupDone 是 (me=T, op=F)，tryAdvance fail；收到對方 incoming 後 merge 成 (T,T) 但 phase 仍 setup。原本 v3.39 註解假設「後 finish 者 dispatch 自動轉 playing」—— 但兩端都已 dispatch 過，且 engine.ts 擋掉重複 FINISH_SETUP → 兩端永遠卡死。</li>
+          <li>　(2) <code>mulliganRevealConfirmed</code> 沒做 per-player merge。雙方都有重抽懲罰時，各自 confirm 對方揭示會被 incoming 整顆 confirmed 陣列覆蓋洗掉，永遠湊不到雙方都 confirmed。</li>
+          <li><b>修法</b>：<code>engine.ts</code> 把 <code>tryAdvanceToPlaying</code> 從 internal 改 export；<code>+page.svelte</code> setup merge 補 <code>mulliganRevealConfirmed</code> per-player merge，merge 完後呼叫 <code>tryAdvanceToPlaying</code>，若轉 playing 就 push 同步給對方（兩端都會做，Firestore 後寫覆蓋無傷）。</li>
+          <li><b>影響</b>：單方先 finish 場景 flow 不變（merged setupDone 仍 fail tryAdvance，無 push）；雙方同時 finish 場景修好；雙方 mulligan 各自 confirm 不再互覆。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.493</span> 📱 手機版牌組編輯器頁面橫向滑動修補</summary>
         <ul>
           <li><b>玩家反映</b>：手機版牌組編輯器功能頁面進去後，整頁可以左右滑動，希望比照卡牌資料庫主頁固定不能左右滑。</li>

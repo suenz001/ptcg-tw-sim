@@ -1519,7 +1519,8 @@ function dealOpeningHand(
 //   雙方都 setupDone + 雙方都 pendingMulliganDraw=0 + 雙方都 mulliganRevealConfirmed=true
 //   滿足才能進 playing phase。在多個 handler 結尾呼叫（FINISH_SETUP / MULLIGAN_DRAW_DECISION /
 //   CONFIRM_MULLIGAN_REVEAL）以避免重複條件 check 邏輯。
-function tryAdvanceToPlaying(state: GameState): GameState {
+// v4.494：export 給 +page.svelte 在線上 setup merge 後重新評估（修兩端同時 finish 卡死 bug）
+export function tryAdvanceToPlaying(state: GameState): GameState {
   if (state.phase !== 'setup') return state;
   if (!state.setupDone[0] || !state.setupDone[1]) return state;
   if (state.pendingMulliganDraw[0] !== 0 || state.pendingMulliganDraw[1] !== 0) return state;
