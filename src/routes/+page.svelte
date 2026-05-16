@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.496</span> 🛠️ 修 bench 寶可夢 HP 顯示被卡蓋住</summary>
+        <ul>
+          <li><b>玩家回報</b>：iPad 觀戰時，土龍節節 HP 140/140、超級甲賀忍蛙ex HP 350/350 等 bench 寶可夢的 HP 文字被卡片蓋住看不清楚。之前嘗試「把 HP 放到最上層」但沒成功。</li>
+          <li><b>Root cause</b>：v4.07 只修了戰鬥場 active card 的 HP 顯示（用 absolute 浮起來 + z-index:10 避開 tool-chip）。<code>.bench-stat</code> 仍是 column flex 的純文字，無背景、無 z-index — 與卡片插圖頂部「卡片本身印製的 HP 區塊」視覺重疊，特別是高 HP 卡（140/350 等）多 1 位數時更擠。</li>
+          <li><b>修法</b>：比照 <code>.active-hpbar-bottom</code> 設計，給 <code>.bench-stat</code> 和 <code>.bench-name</code> 加 <code>background:rgba(0,0,0,.7)</code> + <code>padding</code> + <code>border-radius:3px</code> + <code>z-index:12</code>（高過 <code>tool-chip(5)</code> 與 <code>hp-bar-wrap(2)</code>）。HP 數字和寶可夢名字以「暗背景 chip」形式浮在卡片圖上方，永遠清楚可讀。</li>
+          <li><b>影響</b>：桌機 + tablet-layout 的 bench 寶可夢 HP / 名字 UI 風格與戰鬥場統一。手機直立模式（MobilePortraitBattle）有獨立 UI，不受此 patch 影響。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.495</span> 🛠️ 修岩石投擲類招式錯算抵抗力（連弱點也忽略 bug）</summary>
         <ul>
           <li><b>玩家回報</b>：竹蘭的圓陸鯊「岩石投擲」卡面寫「不計算抵抗力」（並沒說不計算弱點），攻擊喵喵ex 應該還是有雙倍傷害（喵喵ex 弱點為鬥）。</li>

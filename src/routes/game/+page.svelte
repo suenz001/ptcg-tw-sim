@@ -7326,9 +7326,33 @@
   .bench-empty{ border-style:dashed; border-color:#2a5a2a; opacity:.55; overflow:visible; flex:1 1 90px; min-width:90px; max-width:128px; height:185px; }
   /* 拖曳中的 bench-empty 提升可見度（粗框 + 偏亮底） */
   .bench-empty.drop-zone{ opacity:.95; border-width:3px; }
-  .bench-name{ font-size:.7rem; color:#ccc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
-  /* v3.9993：備戰區血量字加大（玩家反饋字太小）.66rem → .85rem + 顏色加亮 + 粗體 */
-  .bench-stat{ font-size:.85rem; color:#cfe; font-weight:700; text-shadow:0 1px 1px rgba(0,0,0,.6); }
+  /* v4.496：寶可夢名字加暗背景 chip + z-index:12 浮在卡片上方（避免與卡片印製內容視覺衝突） */
+  .bench-name{
+    font-size:.7rem; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    background:rgba(0,0,0,.6);
+    padding:.05rem .35rem;
+    border-radius:3px;
+    margin:0 .15rem;
+    position:relative;
+    z-index:12;  /* 高過 tool-chip(5)，確保浮在卡片圖最上層 */
+    text-shadow:0 1px 1px rgba(0,0,0,.8);
+    font-weight:600;
+    flex-shrink:0;
+  }
+  /* v3.9993：備戰區血量字加大（玩家反饋字太小）.66rem → .85rem + 顏色加亮 + 粗體
+     v4.496：加暗背景 chip + z-index:12 — 玩家回報土龍節節/超級甲賀忍蛙ex 等高 HP 卡
+     HP 文字與卡片印製的 HP 區塊重疊看不清楚，比照 active-hpbar-bottom 風格修補 */
+  .bench-stat{
+    font-size:.85rem; color:#cfe; font-weight:700; text-shadow:0 1px 2px rgba(0,0,0,.9);
+    background:rgba(0,0,0,.7);
+    padding:.05rem .35rem;
+    border-radius:3px;
+    margin:0 .15rem;
+    position:relative;
+    z-index:12;  /* 高過 tool-chip(5) + hp-bar-wrap(2) */
+    display:inline-block;
+    flex-shrink:0;
+  }
   /* v2.51：能量 pip 改為垂直排列在圖片右側（解決能量多時撐高問題） */
   .bench-nrg{ font-size:.62rem; color:#888; display:flex; flex-direction:column; align-items:center; gap:2px; line-height:1; flex-shrink:0; }
   /* v3.93：能量 pip 放大 — 從 14×14/.58rem 提升到 18×18/.72rem 改善可讀性 */
