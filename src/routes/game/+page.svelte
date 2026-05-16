@@ -1731,6 +1731,14 @@
             return stripEx(card.evolvesFrom) === stripEx(baseName);
           });
         }
+        // v4.45 小箭雀｜鳥笛：牌庫中抵抗力為【鬥】屬性的寶可夢
+        if (f === 'Resistance:Fighting') {
+          return src.deck.filter(c => {
+            const card = pool.get(c.cardId);
+            if (!card || card.supertype !== 'Pokemon') return false;
+            return card.resistance?.type === 'Fighting';
+          });
+        }
         // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
         if (f === 'GrassBasicOrGrassEnergy:TOP7') {
           const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);

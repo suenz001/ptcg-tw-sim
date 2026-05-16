@@ -8,10 +8,11 @@
  *      已實裝於 effects/cards/items_misc.ts（FOSSIL_NAMES_LOCAL）
  *      + engine.ts FOSSIL_ITEM_NAMES set + PLAY_FOSSIL / DISCARD_FOSSIL action。
  *      用 regG=false 阻擋一般 Item 路徑，走獨立化石 action 把 Item 視為 HP60 寶可夢放備戰。
- *      被動效果（戰鬥場時對手招式 -30）仍未實裝（v2.4+ 補 PASSIVE_FOSSIL_DAMAGE_REDUCE）。
+ *      被動效果（戰鬥場時對手招式 -30）已實裝於 engine.ts:3809-3819（v2.190）。
  *
  *   2. 陳舊的鰭之化石（Item, M3 18046）— 同上 items_misc.ts FOSSIL_NAMES_LOCAL。
- *      被動效果（不受對手支援者影響）仍未實裝。
+ *      被動效果（不受對手支援者影響）已實裝於 engine.ts:482-494 isImmuneToOppSupporter
+ *      + v3080_deferred_wave_c.ts isImmuneToOppSupporter check（v2.191 / v3.21）。
  *
  *   3. 密阿雷市（Stadium, M3 18054）—
  *      已實裝於 engine.ts:2235 USE_STADIUM case + stadiums.ts:106 resolver

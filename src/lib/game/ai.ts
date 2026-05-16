@@ -421,6 +421,10 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const stripEx = (s: string) => (s.endsWith('ex') ? s.slice(0, -2) : s);
           return stripEx(card.evolvesFrom) === stripEx(baseName);
         }
+        // v4.45 小箭雀｜鳥笛：抵抗力為【鬥】屬性的寶可夢
+        if (f === 'Resistance:Fighting') {
+          return card.supertype === 'Pokemon' && card.resistance?.type === 'Fighting';
+        }
         // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
         if (f === 'GrassBasicOrGrassEnergy:TOP7') {
           const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);

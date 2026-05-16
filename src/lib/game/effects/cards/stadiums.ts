@@ -203,27 +203,25 @@ export const BENCH_PROTECTION_STADIUMS = new Set<string>(['對戰圓形競技場
 // 新增規則：加入新 Stadium 時若 rulesText 不含「可使用 1 次」語意，一律 passive。
 // 反之有「在自己的回合時，可使用 1 次」才屬主動 stadium（如衝浪海灘 / 釀光市 / 月光丘陵）。
 //
-// 注意：列在這裡的 stadium 不保證效果已實裝（例：險惡廢墟 / 活力森林
-// 等被動效果目前未實裝），但至少 UI 不會誤顯示「使用」按鈕。
+// v4.45：以下每張 stadium 都已實裝（comment 註明版本與 hook 點），不再有「stub」項目。
+// 新增 passive stadium 時，必須先寫 hook、跑測試，再把名字 commit 進此 set。
 export const STATIC_PASSIVE_STADIUMS = new Set<string>([
-  '引力山岳',       // 2 階進化 HP -30（v2.92 實裝）
-  '激動競技場',     // 基礎 HP +30（v2.265 實裝）
-  '昂主花葉蒂',     // 超級花葉蒂ex HP +150
-  '險惡廢墟',       // 上備戰放 2 指示物（惡除外）
-  '活力森林',       // 草可剛出場進化
+  '引力山岳',       // v2.92 已實裝 — 2 階進化 HP -30（engine.ts getEffectiveHP）
+  '激動競技場',     // v2.265 已實裝 — 基礎 HP +30（engine.ts getEffectiveHP）
+  '昂主花葉蒂',     // v2.382 已實裝 — 超級花葉蒂ex HP +150（engine.ts getEffectiveHP 鏡射 effects.ts）
+  '險惡廢墟',       // v2.119 已實裝 — 上備戰放 2 指示物（_shared.ts:736-769 helper, engine.ts:1866 + 各 search resolver 呼叫）
+  '活力森林',       // v2.102 已實裝 — 草可剛出場進化（engine.ts:1995-2012 EVOLVE bypass + 6214-6220 UI helper）
   '暈眩山谷',       // v3.77 已實裝 — 進化時混亂保留（engine.ts EVOLVE handler）
-  'N的城堡',         // N 寶可夢撤退 0
-  '零之大空洞',     // 太晶備戰 8 隻
+  'N的城堡',         // 已實裝 — N 寶可夢撤退 0
+  '零之大空洞',     // 已實裝 — 太晶備戰 8 隻
   '化朗鎮',         // v3.76 已實裝 — 赫普寶可夢招式傷害 +30（engine.ts attack pipeline）
   '夜間礦山',       // v3.77 已實裝 — 太晶寶可夢 attack cost +1 無（engine.ts canAffordAttack）
-  '危險密林',       // 中毒指示物 +2
+  '危險密林',       // 已實裝 — 中毒指示物 +20 傷害 / turn（engine.ts:4964 checkup）
   '全金屬實驗室',   // v3.77 已實裝 — 鋼寶可夢受傷 -30（engine.ts attack pipeline）
-  '祭典會場',       // 附能量寶可夢免疫狀態
+  '祭典會場',       // 已實裝 — 附能量寶可夢免疫狀態（statusPost guard）
   '中立中心',       // v3.67 已實裝 — 非規則寶可夢不受對手 ex/V 招式傷害（NEUTRAL_CENTER_STADIUMS in effects.ts）
   '石之洞窟',       // v3.77 已實裝 — 「大吾的」寶可夢受傷 -30（engine.ts attack pipeline）
-  '樂園度假地',     // v2.177：可達鴨撤退 -1
-  // 註：本 set 未實裝效果的 stadium 仍會放下成為場地（engine 預設行為），
-  // 但不會冒「使用」按鈕。個別被動效果需個別實裝到 engine/effects 層。
+  '樂園度假地',     // v2.177 已實裝 — 可達鴨撤退 -1
 ]);
 
 // ── 被動競技場（UI 用）── v2.31 ───────────────────────────────────────────────

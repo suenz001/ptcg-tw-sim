@@ -275,21 +275,19 @@ regPost('戰舞郎|旋轉抽出', (state, aIdx) => {
 });
 
 // 小箭雀｜鳥笛（0 傷害）：從牌庫選最多 2 張抵抗力為【鬥】的寶可夢加手牌，重洗
-// ⚠️ 簡化：引擎未實裝抵抗力，以 'Pokemon' filter 代替（選任意寶可夢）
+// JSON：「從自己的牌庫選擇最多2張抵抗力為【鬥】屬性的寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。」
+// v4.45：簡化版（任意寶可夢）→ 真實裝 'Resistance:Fighting' filter
+// 對應 deck-search filter 已加在 game/+page.svelte 與 ai.ts（card.resistance?.type === 'Fighting'）
 regPre('小箭雀|鳥笛', (state) => ({ state, damage: 0 }));
 regPost('小箭雀|鳥笛', (state, aIdx) => {
   const p = state.players[aIdx];
   if (p.deck.length === 0) return addLog(state, '鳥笛：牌庫為空', aIdx);
-  const s = addLog(
-    state,
-    '鳥笛：從牌庫選最多 2 張寶可夢加手牌（簡化：任意寶可夢，原文需抵抗力【鬥】）',
-    aIdx,
-  );
+  const s = addLog(state, '鳥笛：從牌庫選最多 2 張抵抗力為【鬥】的寶可夢加手牌', aIdx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx,
     sourcePlayerIdx: aIdx,
-    filter: 'Pokemon',
+    filter: 'Resistance:Fighting',
     minCount: 0,
     maxCount: 2,
     effectKey: 'search-to-hand-reshuffle',

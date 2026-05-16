@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.45</span> 🧹 清過時 comment + 小箭雀 鳥笛真實裝（Resistance:Fighting filter）</summary>
+        <ul>
+          <li><b>背景</b>：玩家提醒「audit 列為未實裝的 engine hook gap，可能有些是過時 comment」。重新驗證確認 — 化石 4 種被動 / 險惡廢墟 / 活力森林 / 危險密林 全部都早已實裝（v2.102 / v2.119 / v2.190 / v2.191 / v3.21），只有 v2390 與 stadiums.ts 留下 stale comment 誤導 audit。</li>
+          <li><b>清理 stale comment</b>：v2390:11 改為「化石 -30 已實裝於 engine.ts:3809 (v2.190)」；stadiums.ts STATIC_PASSIVE_STADIUMS 集合每筆都補上實裝版本號 + hook 路徑指引；移除「險惡廢墟 / 活力森林 等被動效果目前未實裝」誤導字樣。</li>
+          <li><b>真實裝：小箭雀｜鳥笛（J）</b>：JSON「從自己的牌庫選擇最多 2 張<b>抵抗力為【鬥】屬性</b>的寶可夢卡加手牌。並且重洗牌庫。」舊實裝簡化為「任意寶可夢」filter — 違反卡面。修法：新增 <code>Resistance:Fighting</code> deck-search filter（仿 v4.38 EvilAwakening:EvolveFrom pattern），同步加在 game/+page.svelte (UI) 與 ai.ts (AI)，filter 條件 <code>card.resistance?.type === 'Fighting'</code>（card schema 既有欄位）。鳥笛改用此 filter。</li>
+          <li><b>剩餘 audit 項目</b>：到此為止 audit 列出的所有「engine hook gap」/「簡化」全部處理完畢（要嘛是過時 comment 誤判、要嘛已實裝）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.44</span> 🧹 清理 v2380 過時 stub 註解（4 個被動特性 log 訊息修正）</summary>
         <ul>
           <li><b>非邏輯變更</b>：純註解 / log 訊息整理，遊戲行為零變化。但對 audit 工具與玩家體驗很重要。</li>
