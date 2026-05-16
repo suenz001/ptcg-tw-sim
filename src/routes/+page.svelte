@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.493</span> 📱 手機版牌組編輯器頁面橫向滑動修補</summary>
+        <ul>
+          <li><b>玩家反映</b>：手機版牌組編輯器功能頁面進去後，整頁可以左右滑動，希望比照卡牌資料庫主頁固定不能左右滑。</li>
+          <li><b>Root cause</b>：<code>decks/+page.svelte:1510</code> 的 <code>.page-head</code> 用 <code>display:flex</code> 漏 <code>flex-wrap:wrap</code>，內含 7 個元素（← 首頁、h1 標題、Standard 提示、同步狀態、auth-email、🔑 更改密碼、登出）總寬約 770px 遠超手機 viewport（~360px），預設 nowrap 造成橫向溢出。</li>
+          <li><b>修法 A</b>：<code>.page-head</code> 加 <code>flex-wrap: wrap</code>，讓元素自動換行。</li>
+          <li><b>修法 B</b>：加 <code>@media (max-width: 600px)</code> 縮小 h1 font-size（1.4rem→1.15rem）、hint font-size（0.85rem→0.78rem）、調整 gap，讓多個元素在小螢幕上更緊湊（保持內容完整性 vs 顯示效率的權衡）。</li>
+          <li>桌面版不受影響（@media query gated）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.492</span> 📱 手機版卡牌資料庫篩選 row 橫向溢出修補</summary>
         <ul>
           <li><b>玩家反映</b>：手機版卡牌資料庫詳細頁、牌組頁面進去後，filter button row 會橫向滑動，希望比照卡牌資料庫主頁固定不滑、保持內容完整性。</li>

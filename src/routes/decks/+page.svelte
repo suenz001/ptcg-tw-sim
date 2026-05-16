@@ -1509,6 +1509,7 @@
   }
   .page-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 1rem;
     margin-bottom: 1rem;
@@ -1516,6 +1517,19 @@
   .page-head h1 {
     margin: 0;
     font-size: 1.4rem;
+  }
+  /* v4.493 手機 RWD：縮小 h1 與元素間距，配合 .page-head flex-wrap，
+     讓多個元素在小螢幕上更緊湊、避免橫向溢出。 */
+  @media (max-width: 600px) {
+    .page-head {
+      gap: 0.5rem 0.6rem;
+    }
+    .page-head h1 {
+      font-size: 1.15rem;
+    }
+    .page-head .hint {
+      font-size: 0.78rem;
+    }
   }
   .back {
     color: #0066cc;
