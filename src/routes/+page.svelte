@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.498</span> 🛠️ Stadium 移除全路徑 KO + 海豚俠特性按鈕 gate</summary>
+        <ul>
+          <li><b>P1 玩家提問</b>：激動競技場被移除時也可能造成寶可夢 HP 小於 0 會觸發 KO 嗎？</li>
+          <li><b>P1 Root cause</b>：v4.497 只修了 PLAY_TRAINER Stadium branch（場地進場時 KO check）；ability/招式 <code>discardActiveStadium</code>（敲壞、大地斷裂 等）移除場地沒同步 KO check。</li>
+          <li><b>P1 修法</b>：<code>applyAction</code> wrapper 統一偵測 <code>activeStadium.iid</code> 變化，自動雙邊 <code>sanityKOSweep</code>。涵蓋所有 path（不需 audit 每個呼叫點）。v4.497 內部 explicit call 保留作為前線；wrapper 是後備—雙重 sweep idempotent 無害。</li>
+          <li><b>P2 玩家回報</b>：海豚俠 全能變身（SV6/SV8a/MC）卡面「在自己的回合，這隻寶可夢從戰鬥場回到備戰區時，可使用 1 次」— 海豚俠在戰鬥場時不符使用條件，但 UI 仍顯示「使用特性」按鈕，可能誤點。</li>
+          <li><b>P2 Root cause</b>：<code>engine.ts:6624</code> 已 gate <code>ON_PLAY_FROM_HAND_ABILITIES</code> / <code>ON_EVOLVE_FROM_HAND_ABILITIES</code>，但<b>沒 gate</b> <code>ON_RETREAT_TO_BENCH_ABILITIES</code>。這類特性（全能變身 / 鋼炮臂蝦 返回重載）只能透過撤退觸發 modal 使用（v3.05 ask… hook），不該出現在手動「使用特性」清單中。</li>
+          <li><b>P2 修法</b>：<code>getUsableAbilities</code> 加 1 行 <code>ON_RETREAT_TO_BENCH_ABILITIES</code> gate — 這類特性手動清單不顯示。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.497</span> 🛠️ 修引力山岳進場應立即 KO 超 HP 寶可夢</summary>
         <ul>
           <li><b>玩家回報</b>：竹蘭的烈咬陸鯊ex（2 階 370HP）剩 20HP，下引力山岳（雙方 2 階 -30HP）後應立即昏厥（effective HP 340 ≤ damage 350），但實際沒昏厥，要等下一個動作（特性）才觸發系統擊倒檢查。</li>

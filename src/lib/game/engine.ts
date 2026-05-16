@@ -6064,6 +6064,24 @@ export function applyAction(
   //   該方所有寶可夢的 extraTools 全部丟到棄牌堆（卡面「特性消除時，將身上多附的道具丟棄」）。
   next = reconcileMultiToolRelay(next, pool);
 
+  // v4.498：activeStadium 變化 → 雙邊 sanityKOSweep
+  //   涵蓋所有 path：PLAY_TRAINER Stadium、ability/招式 discardActiveStadium（敲壞 / 大地斷裂等）。
+  //   getEffectiveHP 動態套 stadium HP 修飾（line 583）；場地變化（新進、移除、覆蓋）後
+  //   場上可能立即有 zombie 寶可夢（damage ≥ effectiveHP），需主動 KO check。
+  //   v4.497 PLAY_TRAINER 內已 explicit call（idempotent，此處第二次 sweep 已無 zombie → no-op）。
+  //   比對 .iid（CardInstance 唯一 ID）— 進場 / 移除 / 換場 都會 detect 到。
+  if (next.phase === 'playing' && !next.pendingSelection) {
+    const oldStadiumIid = state.activeStadium?.iid;
+    const newStadiumIid = next.activeStadium?.iid;
+    if (oldStadiumIid !== newStadiumIid) {
+      const aIdxForKO = next.activePlayerIndex;
+      next = sanityKOSweep(next, aIdxForKO, pool);
+      if (next.phase !== 'game-over') {
+        next = sanityKOSweep(next, (1 - aIdxForKO) as 0 | 1, pool);
+      }
+    }
+  }
+
   // v2.135 防禦層：若任一玩家在 'playing' 階段沒 active 也沒 bench → game-over
   // 漏網的 KO 路徑（self-return-to-hand / self-KO ability / 中毒/灼傷邊緣案例 等）若忘了
   // trigger game-over，sim 會 stuck loop。這裡做最後一道保險。
@@ -6622,6 +6640,10 @@ export function getUsableAbilities(
       if (!ABILITY_EFFECTS.has(`${card.name}|${abIdx}`)) return;
       // v2.320：已改為自動提示的特性，不在手動清單中顯示
       if (ON_PLAY_FROM_HAND_ABILITIES.has(ab.name) || ON_EVOLVE_FROM_HAND_ABILITIES.has(ab.name)) return;
+      // v4.498：ON_RETREAT_TO_BENCH 類特性（海豚俠 全能變身 / 鋼炮臂蝦 返回重載）
+      //   卡面：「從戰鬥場回到備戰區時，可使用 1 次」— 只能透過撤退觸發 modal（v3.05 ask… hook）
+      //   不該出現在手動「使用特性」清單中，避免玩家在 active 位誤點。
+      if (ON_RETREAT_TO_BENCH_ABILITIES.has(ab.name)) return;
       // 集客：只有出場才能用 + 牌庫不空（v2.229 補資源 gate）
       if (ab.name === '集客') {
         if (player.active?.iid !== pk.iid) return;
