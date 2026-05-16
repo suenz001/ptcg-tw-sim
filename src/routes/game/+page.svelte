@@ -6422,7 +6422,9 @@
   .reorder-empty { color:#888; font-style:italic; padding:0.4rem 0.5rem; }
 
   /* ════ Lobby / Setup ════ */
-  .lobby,.setup-screen{ max-width:700px; margin:2rem auto; padding:1.5rem; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; }
+  /* v4.491：margin top 改為 calc(1rem + env(safe-area-inset-top, 0)) 比照 cards 標準，避開 iOS 動態島／瀏海。
+     Desktop 上 env() = 0 不影響；iOS 上自動補上動態島高度（~47px）。 */
+  .lobby,.setup-screen{ max-width:700px; margin: calc(1rem + env(safe-area-inset-top, 0)) auto 2rem; padding:1.5rem; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; }
   .lobby h1{ font-size:1.8rem; margin-bottom:1rem; }
   .lobby-subtitle{ color:#9aa; font-size:0.85rem; margin:-0.5rem 0 0.8rem; text-align:center; }
   .back{ color:#88ccff; font-size:0.9rem; text-decoration:none; display:inline-block; margin-bottom:1rem; }

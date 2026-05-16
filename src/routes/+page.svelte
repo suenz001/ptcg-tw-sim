@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.491</span> 🛠️ hotfix 手機版對戰演練首頁按鈕避開動態島</summary>
+        <ul>
+          <li><b>玩家反映</b>：手機版對戰演練頁面的「← 首頁」按鈕位置太高、太接近動態島；卡牌資料庫頁面的位置剛好，希望比照設置。</li>
+          <li><b>Root cause</b>：<code>game/+page.svelte:6425</code> 的 <code>.lobby/.setup-screen</code> margin 用固定 <code>2rem auto</code>，沒考慮 iOS 動態島／瀏海。對比 <code>cards/+page.svelte:688</code>（用 <code>calc(1rem + env(safe-area-inset-top, 0))</code>）跟 <code>decks/+page.svelte:1505</code>（同樣有處理）都已避開，只有 game lobby 漏掉。</li>
+          <li><b>修法</b>：比照 cards 標準，game <code>.lobby/.setup-screen</code> margin top 改為 <code>calc(1rem + env(safe-area-inset-top, 0))</code>。Desktop 上 <code>env() = 0</code> 等效於 1rem（原本 2rem，略上移）；iOS 上自動補上動態島高度（~47px），總 margin top ~63px，完全避開動態島。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.49</span> 📱 手機版能量顯示加屬性 + 撤退 picker 顯示能量狀況</summary>
         <ul>
           <li><b>玩家反映 1</b>：手機版場上能量只顯示「⚡N」沒分屬性，希望像網頁版一樣顯示屬性顏色 chip。</li>
