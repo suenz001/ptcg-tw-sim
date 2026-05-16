@@ -10,6 +10,9 @@ Thumbs.db
 .env.*
 !.env.example
 
+# v4.481：Firebase → Oracle 搬遷計畫書（含明文密碼）— 純本機文件，不 push
+FIREBASE_TO_ORACLE_MIGRATION_PLAN.md
+
 .vscode/
 .idea/
 *.swp

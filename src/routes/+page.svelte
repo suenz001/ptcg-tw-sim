@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.481</span> 🔐 安全：將 FIREBASE_TO_ORACLE_MIGRATION_PLAN.md 加入 .gitignore</summary>
+        <ul>
+          <li><b>非邏輯變更</b>：純 .gitignore + version bump，遊戲行為零變化。</li>
+          <li><b>背景</b>：該 md 檔含明文 MongoDB 密碼。目前只在本機 E 槽未 push，但建議加入 .gitignore 防止將來不小心 <code>git add .</code> 帶進 commit。</li>
+          <li><b>修法</b>：<code>.gitignore</code> 加 1 行 <code>FIREBASE_TO_ORACLE_MIGRATION_PLAN.md</code>。</li>
+          <li>將來動工 Oracle 搬遷時，密碼搬到 .env（已 gitignore），md 內留位置佔位。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.48</span> 🛠️ 修甲賀忍蛙ex 分身連打 — PRE 漏實作能量丟棄</summary>
         <ul>
           <li><b>玩家回報</b>：甲賀忍蛙ex 用分身連打時，身上有 2 顆水能量、picker 可以選，但回合結束後能量<b>不會被丟掉</b>。</li>
