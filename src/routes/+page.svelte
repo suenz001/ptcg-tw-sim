@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.49</span> 📱 手機版能量顯示加屬性 + 撤退 picker 顯示能量狀況</summary>
+        <ul>
+          <li><b>玩家反映 1</b>：手機版場上能量只顯示「⚡N」沒分屬性，希望像網頁版一樣顯示屬性顏色 chip。</li>
+          <li><b>玩家反映 2</b>：手機版撤退按鈕已有 🔍 放大鏡看細節，但希望在備戰寶可夢名稱旁直接顯示能量狀況。</li>
+          <li><b>修法 1</b>：MobilePortraitBattle.svelte 加 <code>energyPips()</code> 函式（複製 +page.svelte 既有邏輯，含新衝天 / 稜鏡 / 火箭隊 / 燃火等特例處理）；5 處顯示 <code>⚡N</code> 全改為 typed pip chips（彩色背景 + 屬性字 + 數字）。對手 bench / 對手 active / 自方 active / 自方 bench 全套。</li>
+          <li><b>修法 2</b>：activeActions 撤退 label 加文字版能量摘要。範例：<code>🔄 撤退(-1) → 皮卡丘 [雷雷水]</code>。新增 <code>energyLabelText()</code> helper 把 energyPips 結果轉成 <code>草水水</code> / <code>雷2鬥</code> 文字格式。</li>
+          <li>排版考量：bench slot 用 <code>.mp-pip-sm</code>（11px 高小尺寸）防止溢出；active meta 用 <code>.mp-pip</code> 標準尺寸 + flex-wrap 允許多屬性換行。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.481</span> 🔐 安全：將 FIREBASE_TO_ORACLE_MIGRATION_PLAN.md 加入 .gitignore</summary>
         <ul>
           <li><b>非邏輯變更</b>：純 .gitignore + version bump，遊戲行為零變化。</li>

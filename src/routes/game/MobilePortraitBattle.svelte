@@ -45,6 +45,9 @@
   import { GameActions } from '$lib/game/actions';
   // v3.02：log 著色 + 卡名可點連結
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
+  // v4.49：能量屬性顯示（彩色 chip + 文字摘要）
+  import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
+  import type { EnergyType } from '$lib/cards/types';
 
   interface Props {
     game: GameState;
@@ -80,6 +83,82 @@
   let oppPlayer = $derived(game.players[oppIdx]);
   let myBenchLimit = $derived(getBenchLimit(game, myIdx, pool));
   let oppBenchLimit = $derived(getBenchLimit(game, oppIdx, pool));
+
+  // v4.49：能量屬性解析（mirror +page.svelte:2356 energyPips 邏輯，let mobile 顯示彩色 chip）
+  //   處理基本/特殊能量、新衝天 / 稜鏡 / 火箭隊 / 燃火等特例。
+  function energyPips(inst: CardInstance): Array<{ type: string; count: number; label?: string }> {
+    const host = pool.get(inst.cardId);
+    const hostIsEvolution = !!host?.evolvesFrom || host?.stage === 'Stage1' || host?.stage === 'Stage2';
+    const hostIsStage2 = host?.stage === 'Stage2';
+    const hostNeedsType = (t: EnergyType): boolean =>
+      !!host?.attacks?.some(a => a.cost?.includes(t));
+    const counts = new Map<string, number>();
+    const bump = (type: string, n = 1) => counts.set(type, (counts.get(type) ?? 0) + n);
+    for (const e of inst.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (!ec) continue;
+      if (ec.subtype === 'Basic') {
+        let t: string = 'Colorless';
+        if (ec.pokemonType) t = ec.pokemonType;
+        else {
+          const m = ec.name.match(/【(.+?)】/);
+          const zhMap: Record<string, EnergyType> = {
+            草: 'Grass', 火: 'Fire', 水: 'Water', 雷: 'Lightning',
+            超: 'Psychic', 鬥: 'Fighting', 惡: 'Darkness', 鋼: 'Metal',
+            龍: 'Dragon', 無: 'Colorless',
+          };
+          if (m && zhMap[m[1]]) t = zhMap[m[1]];
+        }
+        bump(t);
+        continue;
+      }
+      const name = ec.name;
+      if (name === '古舊能量' || name === '夜光能量') { bump('Rainbow'); continue; }
+      if (name === '稜鏡能量') { bump(hostIsEvolution ? 'Colorless' : 'Rainbow'); continue; }
+      if (name === '新衝天能量') {
+        if (hostIsStage2) { bump('Rainbow', 2); }
+        else { bump('Colorless'); }
+        continue;
+      }
+      if (name === '火箭隊能量') {
+        const needsDark = hostNeedsType('Darkness');
+        const needsPsychic = hostNeedsType('Psychic');
+        if (needsDark && !needsPsychic)      { bump('Darkness', 2); }
+        else if (needsPsychic && !needsDark) { bump('Psychic', 2); }
+        else                                  { bump('Psychic'); bump('Darkness'); }
+        continue;
+      }
+      if (name === '燃火能量') {
+        if (hostIsEvolution) bump('Colorless', 3);
+        else bump('Colorless');
+        continue;
+      }
+      const m2 = name.match(/【(.+?)】/);
+      if (m2) {
+        const zhMap: Record<string, EnergyType> = {
+          草: 'Grass', 火: 'Fire', 水: 'Water', 雷: 'Lightning',
+          超: 'Psychic', 鬥: 'Fighting', 惡: 'Darkness', 鋼: 'Metal',
+          龍: 'Dragon', 無: 'Colorless',
+        };
+        if (zhMap[m2[1]]) { bump(zhMap[m2[1]]); continue; }
+      }
+      bump('Colorless');
+    }
+    return [...counts.entries()].map(([type, count]) => ({
+      type, count,
+      ...(type === 'Rainbow' ? { label: '彩' } : {}),
+    }));
+  }
+
+  // v4.49：文字版能量摘要（撤退 picker label 等 string context 用）
+  //   範例：[草水水] / [雷2鬥] / [彩2無]
+  function energyLabelText(inst: CardInstance): string {
+    if (inst.energyAttached.length === 0) return '';
+    return energyPips(inst).map(p => {
+      const lbl = p.label ?? ENERGY_LABEL[p.type as EnergyType] ?? '?';
+      return p.count > 1 ? `${lbl}${p.count}` : lbl;
+    }).join('');
+  }
   let isMyTurn = $derived(game.activePlayerIndex === myIdx);
   let isMainPhase = $derived(game.turnPhase === 'main');
   let isSetup = $derived(game.phase === 'setup');
@@ -405,8 +484,11 @@
       myPlayer.bench.forEach(b => {
         const c = cardOf(b);
         const costLabel = currentRetreatCost !== null ? ` (-${currentRetreatCost})` : '';
+        // v4.49：撤退 picker label 加能量摘要（玩家反映已有放大鏡仍希望直接看到）
+        const eText = energyLabelText(b);
+        const ePart = eText ? ` [${eText}]` : '';
         out.push({
-          label: `🔄 撤退${costLabel} → ${c?.name ?? '?'}`,
+          label: `🔄 撤退${costLabel} → ${c?.name ?? '?'}${ePart}`,
           action: () => retreatTo(b.iid),
           // v3.32 撤退選項加 zoomIid，UI 顯示 🔍 副按鈕讓玩家先看備戰寶可夢狀態
           zoomIid: b.iid,
@@ -589,7 +671,11 @@
             {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
             <span class="mp-slot-hp">{hpRemaining(inst)}</span>
             {#if inst.energyAttached.length > 0}
-              <span class="mp-slot-eg">⚡{inst.energyAttached.length}</span>
+              <span class="mp-slot-eg">
+                {#each energyPips(inst) as pip}
+                  <span class="mp-pip mp-pip-sm" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`}>{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
+                {/each}
+              </span>
             {/if}
           </button>
         {/if}
@@ -639,7 +725,13 @@
               <span>HP {hpRemaining(inst)}/{hpMax(inst)}</span>
             </div>
             <div class="mp-meta">
-              {#if inst.energyAttached.length > 0}<span>⚡{inst.energyAttached.length}</span>{/if}
+              {#if inst.energyAttached.length > 0}
+                <span class="mp-meta-pips">
+                  {#each energyPips(inst) as pip}
+                    <span class="mp-pip" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
+                  {/each}
+                </span>
+              {/if}
               {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
               {#if inst.status}<span class="mp-status">{inst.status}</span>{/if}
             </div>
@@ -682,7 +774,13 @@
             <span>HP {hpRemaining(inst)}/{hpMax(inst)}</span>
           </div>
           <div class="mp-meta">
-            {#if inst.energyAttached.length > 0}<span>⚡{inst.energyAttached.length}</span>{/if}
+            {#if inst.energyAttached.length > 0}
+              <span class="mp-meta-pips">
+                {#each energyPips(inst) as pip}
+                  <span class="mp-pip" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
+                {/each}
+              </span>
+            {/if}
             {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
             {#if inst.status}<span class="mp-status">{inst.status}</span>{/if}
             {#if isPlaying && isMyTurn && isMainPhase}
@@ -732,7 +830,11 @@
           {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
           <span class="mp-slot-hp">{hpRemaining(inst)}</span>
           {#if inst.energyAttached.length > 0}
-            <span class="mp-slot-eg">⚡{inst.energyAttached.length}</span>
+            <span class="mp-slot-eg">
+              {#each energyPips(inst) as pip}
+                <span class="mp-pip mp-pip-sm" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`}>{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
+              {/each}
+            </span>
           {/if}
           {#if hasUsableAbility}<span class="mp-slot-ab">✨</span>{/if}
         </button>
@@ -1130,6 +1232,41 @@
     display: flex; gap: 6px; flex-wrap: wrap;
     font-size: 0.66rem;
   }
+  /* v4.49 能量屬性 pip — 仿 +page.svelte .nrg-pip 但縮小給手機 */
+  .mp-pip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 14px;
+    padding: 0 3px;
+    margin-right: 2px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #fff;
+    border-radius: 7px;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .mp-pip.mp-pip-sm {
+    min-width: 12px;
+    height: 11px;
+    padding: 0 2px;
+    font-size: 0.5rem;
+    border-radius: 5px;
+    margin-right: 1px;
+  }
+  .mp-pip.mp-pip-rainbow {
+    background: linear-gradient(45deg, #f00 0%, #ff8 25%, #0f0 50%, #08f 75%, #f0f 100%);
+  }
+  .mp-meta-pips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 1px;
+    align-items: center;
+  }
+
   /* v2.9994: 明確設定能量/道具/狀態指示器文字為亮黃，與 ⚡ emoji 顏色一致；
      避免在某些 device 上 button 預設文字色覆蓋導致數字深色難讀。 */
   .mp-meta span { background: rgba(0,0,0,0.4); padding: 0 5px; border-radius: 3px; color: #ffd44a; }
