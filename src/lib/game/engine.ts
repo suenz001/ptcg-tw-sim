@@ -2495,7 +2495,17 @@ function handlePlaying(
       newState = addLog(newState, `${attacker.name} 打出競技場：${trainerCard.name}！`, aIdx);
       newState = clearFestivalVenueProtectedStatuses(newState, pool);
       const effectFn = TRAINER_EFFECTS.get(trainerCard.name);
-      if (effectFn) return effectFn(newState, aIdx, pool, trainerInst);
+      if (effectFn) newState = effectFn(newState, aIdx, pool, trainerInst);
+      // v4.497：Stadium 進場改變 getEffectiveHP（例：引力山岳 Stage 2 -30、阻礙之塔取消道具 HP 加成）
+      //   PTCG 規則：場地卡進場立即生效，超 HP 寶可夢應同時昏厥。
+      //   原本要等下一個 action（attack/ability）才 sanityKOSweep — 玩家回報引力山岳沒立刻 KO。
+      //   雙邊各掃一次（stadium 影響雙方場上，prize 各自歸屬）：
+      //   - 掃對手 (dIdx)，prize 歸我 aIdx
+      //   - 掃我方 (aIdx)，prize 歸對手 1-aIdx（若我自己 Stage 2 也超 HP）
+      newState = sanityKOSweep(newState, aIdx, pool);
+      if (newState.phase !== 'game-over') {
+        newState = sanityKOSweep(newState, (1 - aIdx) as 0 | 1, pool);
+      }
       return newState;
     }
 

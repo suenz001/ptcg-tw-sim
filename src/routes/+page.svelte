@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.497</span> 🛠️ 修引力山岳進場應立即 KO 超 HP 寶可夢</summary>
+        <ul>
+          <li><b>玩家回報</b>：竹蘭的烈咬陸鯊ex（2 階 370HP）剩 20HP，下引力山岳（雙方 2 階 -30HP）後應立即昏厥（effective HP 340 ≤ damage 350），但實際沒昏厥，要等下一個動作（特性）才觸發系統擊倒檢查。</li>
+          <li><b>Root cause</b>：<code>engine.ts:2487</code> PLAY_TRAINER Stadium branch 設 <code>activeStadium</code> 後直接 return，<b>沒呼叫 KO check</b>。<code>getEffectiveHP</code> 動態套 Stadium HP 修飾（line 583-596）是對的，但 zombie 寶可夢必須等 <code>sanityKOSweep</code> 主動掃才會 KO，<code>sanityKOSweep</code> 目前只在 attack 後呼叫。</li>
+          <li><b>修法</b>：Stadium 進場後雙邊各呼叫一次 <code>sanityKOSweep</code> — 場地影響雙方場上，prize 各自歸屬：</li>
+          <li>　1. 掃對手 (dIdx)，prize 歸我 aIdx</li>
+          <li>　2. 若未 game-over，再掃我方 (aIdx)，prize 歸對手 1-aIdx（我方自己 2 階若也超 HP 同步昏厥）</li>
+          <li><b>涵蓋</b>：引力山岳 / 激動競技場 / 昂主花葉蒂 / 阻礙之塔 等所有 HP 修飾類 Stadium，不論加 HP 還是減 HP（加 HP 類不會誤觸 KO）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.496</span> 🛠️ 修 bench 寶可夢 HP 顯示被卡蓋住</summary>
         <ul>
           <li><b>玩家回報</b>：iPad 觀戰時，土龍節節 HP 140/140、超級甲賀忍蛙ex HP 350/350 等 bench 寶可夢的 HP 文字被卡片蓋住看不清楚。之前嘗試「把 HP 放到最上層」但沒成功。</li>
