@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.44</span> 🧹 清理 v2380 過時 stub 註解（4 個被動特性 log 訊息修正）</summary>
+        <ul>
+          <li><b>非邏輯變更</b>：純註解 / log 訊息整理，遊戲行為零變化。但對 audit 工具與玩家體驗很重要。</li>
+          <li><b>背景</b>：v2380_j_abilities_batch.ts 留有 4 個 v2.38 時代的「stub」regA 註解（狙擊手之眼 / 無限之影 / 整人擊落 / 雙重屬性），但這些特性其實在 v2.385 / v2.388 都已完整實裝在 engine.ts / effects.ts / _shared.ts。過時註解導致 audit 工具一直把它們列為「未實裝」，玩家按 UI 也看到誤導訊息。</li>
+          <li><b>修補對應</b>：狙擊手之眼 → effects.ts:12479（v2.385）；無限之影 → engine.ts KO 流程（v2.385）；整人擊落 → _shared.ts triggerOakeyeMillIfApplicable（v2.388）；雙重屬性 → engine.ts 弱抗計算（v2.388）。本版 log 訊息全部從「stub」改為「已實裝於 X — 自動套用」指向真實實作位置。</li>
+          <li><b>意義</b>：rule 7 hygiene — 防止未來 audit 又再卡這 4 個假 stub，浪費工時重複實裝。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.43</span> 🛠️ Wave 4c — 活潑鮮花/活潑針 healedThisTurn 旗標實裝（引擎級回血偵測）</summary>
         <ul>
           <li><b>霸王花｜活潑鮮花（I）60+</b> / <b>沙鈴仙人掌｜活潑針（I）20+</b>：JSON「在這個回合，若這隻寶可夢<b>恢復了 HP</b>，則增加 N 點傷害。」舊實裝用 Math.random() 50% 啟發式（既不查實際回血、也不確定性），完全違反卡面。</li>

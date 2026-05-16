@@ -310,17 +310,20 @@ regA('超級皮可西ex', 0, (st, idx) => {
 // 對 holder.pokemonType 查詢處用同 helper 加 short-circuit。
 // ══════════════════════════════════════════════════════════════════════════════
 regA('小碎鑽', 0, (st, idx) => {
-  return addLog(st, '雙重屬性：場上時改為【鬥】+【超】2 種屬性（v2.38 stub — 需 engine 級擴張）', idx);
+  return addLog(st, '雙重屬性：被動效果（場上時改為【鬥】+【超】2 種屬性）— 已實裝於 engine.ts 弱點/抵抗計算（v2.388）', idx);
 });
 
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 以下 5 個 stub 註冊 — 需 engine 級擴張，本波只標 reg() + log 讓 audit 命中
+// 以下 3 個 noop regA — 被動特性（無 UI 互動），實作均在 engine.ts / effects.ts hook
+//   保留 regA 註冊讓特性顯示在 UI 卡面詳細頁 + 命中 audit map
+//   v4.44：清理 v2.38 時代留下的「stub」誤導 log 訊息，改指向真實實作位置
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 狙射樹梟ex｜狙擊手之眼 — 對手手牌 4 張時，無能量 cost 消除（需 engine cost calc hook）
+// 狙射樹梟ex｜狙擊手之眼 — 對手手牌 4 張時，無【無】能量 cost
+//   實裝：effects.ts:12479 getDecidueyeSnipeEffectiveCost + engine.ts:946 canAffordAttack 鉤住（v2.385）
 regA('狙射樹梟ex', 0, (st, idx) => addLog(st,
-  '狙擊手之眼：對手手牌 4 張時無能量 cost 消除（v2.38 stub — 需 engine cost calc hook）', idx));
+  '狙擊手之眼：被動效果（對手手牌 4 張時消【無】cost）— 已實裝於 engine.ts canAffordAttack（v2.385）', idx));
 
 // 勒克貓｜鬥志戰吼 — 純被動特性（passive）：對手戰鬥場是【ex】寶可夢時，
 //   勒克貓 bypass isFirstTurn / justPlaced / evolvedThisTurn 進化成倫琴貓。
@@ -328,13 +331,15 @@ regA('狙射樹梟ex', 0, (st, idx) => addLog(st,
 //   v3.56：之前這裡有錯誤的 regA 註冊（v2.38 stub），會讓 UI 顯示「使用特性」按鈕、玩家按下去
 //          變「已用特性」但沒有任何進化發生 — 已移除。鬥志戰吼不需要任何主動 regA。
 
-// 耿鬼｜無限之影 — 招式 KO 時不丟棄回手牌（需 engine KO replacement hook）
+// 耿鬼｜無限之影 — 招式 KO 時不丟棄，本體回手牌
+//   實裝：engine.ts:4266-4308 KO 流程（能量/道具/進化堆仍丟棄，本體 +damage=0 + 清旗標回手）（v2.385）
 regA('耿鬼', 0, (st, idx) => addLog(st,
-  '無限之影：招式 KO 時放回手牌而非棄牌區（v2.38 stub — 需 engine KO replacement hook）', idx));
+  '無限之影：被動效果（招式 KO 時本體回手牌）— 已實裝於 engine.ts KO 流程（v2.385）', idx));
 
-// 堅果啞鈴｜整人擊落 — 牌庫被丟棄時觸發（需 engine deck-mill trigger hook）
+// 堅果啞鈴｜整人擊落 — 對手效果使此卡從牌庫丟棄時，對手牌庫頂 8 張丟棄
+//   實裝：_shared.ts:382 triggerOakeyeMillIfApplicable + v2360 mill trigger 點呼叫（v2.388）
 regA('堅果啞鈴', 0, (st, idx) => addLog(st,
-  '整人擊落：牌庫被對手效果丟棄時，丟棄對手牌庫頂 8 張（v2.38 stub — 需 engine deck-mill hook）', idx));
+  '整人擊落：被動效果（對手 mill 此卡時，對手牌庫頂 8 張丟棄）— 已實裝於 _shared.ts triggerOakeyeMillIfApplicable（v2.388）', idx));
 
 // v2.384 真實裝 — 勾帕路翁ex｜金屬之路：本回合從備戰上戰鬥場時，可使用 1 次。
 // 選擇場上自己其他寶可夢身上的任意數量【鋼】能量卡，改附於這隻寶可夢身上。
