@@ -3481,10 +3481,14 @@ function handlePlaying(
           .map(e => e.iid)
       : [];
     // Session 33 引擎旗標：招式可聲明
-    //   skipWeakRes    ：傷害不計算弱點 / 抵抗力
+    //   skipWeakRes    ：傷害不計算弱點 / 抵抗力（同時跳兩個 — 卡面「不計算弱點・抵抗力」）
+    //   skipResistance ：(v4.495) 只跳抵抗力（卡面「不計算抵抗力」— 岩石投擲類）
+    //   skipWeakness   ：(v4.495) 只跳弱點（卡面「不計算弱點」— 激怒咒詛類）
     //   skipDefEffects ：傷害不計算對手戰鬥寶可夢身上的「附加效果」
     //                    （含被動減傷特性、防禦道具、下次被攻擊 -N、條件式完全免疫）
     let skipWeakRes = false;
+    let skipResistance = false;
+    let skipWeakness = false;
     let skipDefEffects = false;
     // v2.992 PASSIVE_ATTACKER_BUFF（波盪水ex 藏青浪濤）— 攻擊者持有特性 → 自動 skipDefEffects
     if (attackerCard?.abilities) {
@@ -3508,6 +3512,8 @@ function handlePlaying(
       workingState = preResult.state;
       baseDamage = preResult.damage;
       if (preResult.skipWeakRes) skipWeakRes = true;
+      if (preResult.skipResistance) skipResistance = true;  // v4.495
+      if (preResult.skipWeakness) skipWeakness = true;      // v4.495
       if (preResult.skipDefEffects) skipDefEffects = true;
       if (preResult.breakdown && preResult.breakdown.length > 0) {
         preBreakdown = preResult.breakdown;
@@ -3710,7 +3716,8 @@ function handlePlaying(
       : attackerHasIronTracksDual
         ? ['Fighting', 'Metal']
         : (attackerCard.pokemonType ? [attackerCard.pokemonType] : []);
-    if (!skipWeakRes && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType
+    // v4.495：弱點 gate 同時 check skipWeakRes (跳兩個) 與 skipWeakness (只跳弱點)
+    if (!skipWeakRes && !skipWeakness && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType
         && attackerEffectiveTypes.includes(effectiveWeaknessType)) {
       baseDamage *= 2;
       formula.push({ sign: '×', value: 2, label: '弱點' });
@@ -3735,7 +3742,8 @@ function handlePlaying(
     const resistanceValue = defenderCard.resistance?.value;  // 形如 "-30"
     const resistanceType = defenderCard.resistance?.type;
     // v2.388 小碎鑽｜雙重屬性 — 抵抗力同步用 attackerEffectiveTypes
-    if (!skipWeakRes && baseDamage > 0 && resistanceType && resistanceValue
+    // v4.495：抵抗力 gate 同時 check skipWeakRes (跳兩個) 與 skipResistance (只跳抵抗力)
+    if (!skipWeakRes && !skipResistance && baseDamage > 0 && resistanceType && resistanceValue
         && attackerEffectiveTypes.includes(resistanceType)) {
       const resistDelta = parseInt(resistanceValue, 10);  // "-30" → -30
       if (!isNaN(resistDelta)) {

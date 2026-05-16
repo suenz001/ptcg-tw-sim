@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.495</span> 🛠️ 修岩石投擲類招式錯算抵抗力（連弱點也忽略 bug）</summary>
+        <ul>
+          <li><b>玩家回報</b>：竹蘭的圓陸鯊「岩石投擲」卡面寫「不計算抵抗力」（並沒說不計算弱點），攻擊喵喵ex 應該還是有雙倍傷害（喵喵ex 弱點為鬥）。</li>
+          <li><b>Root cause</b>：引擎只有 1 個 <code>skipWeakRes</code> flag（同時跳弱點+抵抗力），對應「卡面不計算弱點・抵抗力」（恰雷姆瑜伽踢類）。但有 9 張卡面只說「不計算抵抗力」，被誤套 skipWeakRes 連弱點也忽略。另有 1 張（激怒咒詛）卡面只說「不計算弱點」，反向誤套。</li>
+          <li><b>修法</b>：</li>
+          <li>　1. 引擎新增 <code>skipResistance</code> + <code>skipWeakness</code> 兩個獨立 flag。</li>
+          <li>　2. <code>engine.ts</code> 弱點 gate 改 <code>!skipWeakRes && !skipWeakness</code>；抵抗力 gate 改 <code>!skipWeakRes && !skipResistance</code>。</li>
+          <li>　3. 修正 9 張誤套（晶光芽、土地雲粗暴橫掃、土地雲巨岩墜落、樹才怪、鹽石壘、竹蘭的圓陸鯊、雷吉洛克毀壞者金勾臂、龍頭地鼠ex巨岩墜落、師父鼬衝天粉碎）改用 <code>skipResistance</code>。</li>
+          <li>　4. 激怒咒詛從 skipWeakRes 改 <code>skipWeakness</code>（卡面只說不計算弱點）。</li>
+          <li><b>影響</b>：原本「不計算弱抗」雙跳的招式（恰雷姆瑜伽踢、厄鬼椪打爆、安瓢蟲高速星星）仍用 <code>skipWeakRes</code> 不變。喵喵ex 受岩石投擲改為正確的 40（20×2）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.494</span> 🛠️ 修連線對戰雙方準備完成卡死 bug</summary>
         <ul>
           <li><b>玩家回報</b>：線上對戰雙方都擺好基礎寶可夢、按「完成準備」後對戰無法開始（卡在 setup 畫面）。</li>

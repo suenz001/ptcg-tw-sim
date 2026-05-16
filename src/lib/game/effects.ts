@@ -9525,6 +9525,17 @@ function skipBothPre(baseDmg: number, _label: string): AttackPreFn {
   return (state, _aIdx, _pool) => ({ state, damage: baseDmg, skipWeakRes: true, skipDefEffects: true });
 }
 
+/** v4.495 固定傷害 + 只跳過抵抗力（不影響弱點計算）。卡面「這個招式的傷害不計算抵抗力。」 */
+function skipResistancePre(baseDmg: number, _label: string): AttackPreFn {
+  return (state, _aIdx, _pool) => ({ state, damage: baseDmg, skipResistance: true });
+}
+
+/** v4.495 固定傷害 + 只跳過弱點（不影響抵抗力計算）。卡面「這個招式的傷害不計算弱點。」 */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function skipWeaknessPre(baseDmg: number, _label: string): AttackPreFn {
+  return (state, _aIdx, _pool) => ({ state, damage: baseDmg, skipWeakness: true });
+}
+
 // ── Wave 33 招式登記 ───────────────────────────────────────────────────────
 // 恰雷姆ex｜瑜伽踢 — 190，傷害不計算弱點・抵抗力
 regPre('恰雷姆ex|瑜伽踢', skipWeakResPre(190, '瑜伽踢'));
@@ -9547,11 +9558,11 @@ regPre('頓甲|打垮', skipDefEffectsPre(40, '打垮'));
 // 堅盾劍怪｜堅硬猛擊 — 120，不計算對手戰鬥寶可夢身上的附加效果
 regPre('堅盾劍怪|堅硬猛擊', skipDefEffectsPre(120, '堅硬猛擊'));
 
-// 晶光芽｜岩石投擲 — 10，不計算抵抗力（引擎未實作抵抗力，此處僅註記；以 skipWeakRes 避免日後接入時反悔）
-regPre('晶光芽|岩石投擲', skipWeakResPre(10, '岩石投擲'));
+// 晶光芽｜岩石投擲 — 10，不計算抵抗力（v4.495 改 skipResistancePre — 弱點仍套用）
+regPre('晶光芽|岩石投擲', skipResistancePre(10, '岩石投擲'));
 
-// 土地雲｜粗暴橫掃 — 130，不計算抵抗力（同上理由）
-regPre('土地雲|粗暴橫掃', skipWeakResPre(130, '粗暴橫掃'));
+// 土地雲｜粗暴橫掃 — 130，不計算抵抗力（v4.495 改 skipResistancePre — 弱點仍套用）
+regPre('土地雲|粗暴橫掃', skipResistancePre(130, '粗暴橫掃'));
 
 // 鐵頭殼ex｜雙刃劍 — 已於 Wave 31 以 multiSnipePost 實作；snipe-multi 本身即繞過弱點/附加效果，
 // Session 33 不需額外旗標改寫。保留此註記以避免未來重複登記。
@@ -11119,9 +11130,9 @@ reg('百萬噸吹風機', (st, idx, pool) => {
 //   1. 竹蘭的烈咬陸鯊ex｜螺旋俯衝  — 100 + 抽到滿 6
 //   2. 竹蘭的烈咬陸鯊ex｜龍之爆發  — 260 + 自己全丟能量
 //   3. 竹蘭的尖牙陸鯊｜王者呼聲    — 特性，搜 1 張「竹蘭的」寶可夢到手牌
-//   4. 竹蘭的圓陸鯊｜岩石投擲      — 20 不計算弱點/抵抗力
+//   4. 竹蘭的圓陸鯊｜岩石投擲      — 20 不計算抵抗力（v4.495 修正：弱點仍算）
 //   5. 竹蘭的羅絲雷朵｜輝煌聲援    — 被動特性，場上時「竹蘭的」寶可夢招式 +30
-//   6. 竹蘭的花岩怪｜激怒咒詛      — 備戰「竹蘭的」×10，skipWeakRes
+//   6. 竹蘭的花岩怪｜激怒咒詛      — 備戰「竹蘭的」×10，不計算弱點（v4.495 修正：抵抗力仍算）
 //   7. 力量蛋白飲（Item）            — 本回合 [鬥] 寶可夢招式 +30（player flag）
 //   8. 戰鬥鑼（Item）                 — 搜 1 張 [鬥] 基礎寶可夢 或 基本【鬥】能量到手牌
 //   9. 寶可平板（Item）              — 搜 1 張「非擁有規則」寶可夢到手牌
@@ -11153,15 +11164,17 @@ regA('竹蘭的尖牙陸鯊', 0, (st, idx, pool) => {
   });
 });
 
-// ── 4. 竹蘭的圓陸鯊｜岩石投擲 — 20 傷害 skipWeakRes ─────────────────────────
-regPre('竹蘭的圓陸鯊|岩石投擲', skipWeakResPre(20, '岩石投擲'));
+// ── 4. 竹蘭的圓陸鯊｜岩石投擲 — 20 傷害（v4.495 改 skipResistancePre — 不計算抵抗力，弱點仍算）
+//   玩家回報修補：原本誤套 skipWeakRes 連弱點也忽略，攻擊喵喵ex 沒套 ×2。卡面只說「不計算抵抗力」。
+regPre('竹蘭的圓陸鯊|岩石投擲', skipResistancePre(20, '岩石投擲'));
 
 // ── 5. 輝煌聲援（被動）— 上面 PASSIVE_ATTACK_BONUS 已登記，不需 regA ────────
 // 被動特性在 engine 傷害計算時自動掃場觸發，不透過 ABILITY_EFFECTS。
 
 // ── 6. 竹蘭的花岩怪｜激怒咒詛 —————————————————————————————————————
-// 基礎傷害 0，對方戰鬥寶可夢每張自己備戰「竹蘭的」寶可夢的傷害指示物 +10；不計算弱點/抵抗力。
+// 基礎傷害 0，對方戰鬥寶可夢每張自己備戰「竹蘭的」寶可夢的傷害指示物 +10；卡面「這個招式的傷害不計算弱點。」
 // v2.22：卡名統一（pool.ts loadSet strip <>），只登錄純名稱即可
+// v4.495：卡面只說「不計算弱點」（抵抗力仍計算）— 從 skipWeakRes 改為 skipWeakness
 regPre('竹蘭的花岩怪|激怒咒詛', (state, aIdx, pool, _action) => {
   const p = state.players[aIdx];
   let totalMarkers = 0;
@@ -11173,8 +11186,8 @@ regPre('竹蘭的花岩怪|激怒咒詛', (state, aIdx, pool, _action) => {
     }
   }
   const damage = totalMarkers * 10;
-  const s = addLog(state, `激怒咒詛：備戰「竹蘭的」寶可夢傷害指示物合計 ${totalMarkers} 顆 → ${damage} 傷害（不計算弱點/抵抗力）`, aIdx);
-  return { state: s, damage, skipWeakRes: true };
+  const s = addLog(state, `激怒咒詛：備戰「竹蘭的」寶可夢傷害指示物合計 ${totalMarkers} 顆 → ${damage} 傷害（不計算弱點）`, aIdx);
+  return { state: s, damage, skipWeakness: true };
 });
 
 // ── 7. 力量蛋白飲（Item）— 本回合自己 [鬥] 寶可夢招式傷害 +30 ──────────────

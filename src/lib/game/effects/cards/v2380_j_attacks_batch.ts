@@ -137,9 +137,8 @@ regPre('超級皮可西ex|射攻月亮', (state, aIdx, pool, action) => {
 });
 
 // ── 05. 土地雲｜巨岩墜落 — 50, 不計抵抗力 ─────────────────────────────────
-regPre('土地雲|巨岩墜落', (s, _a, _p) => ({ state: s, damage: 50, skipWeakRes: true }));
-// 注意：規則上「不計算抵抗力」嚴格只跳過 resistance 計算，但 PTCG 引擎多半 skipWeakRes 同時跳過弱點；
-//   實務影響極小（巨岩墜落無弱抗目標族群罕見），本波接受此簡化。
+// v4.495：原誤套 skipWeakRes（跳兩個），改 skipResistance（只跳抵抗力）— 弱點仍應計算
+regPre('土地雲|巨岩墜落', (s, _a, _p) => ({ state: s, damage: 50, skipResistance: true }));
 
 // ── 06. 超級基格爾德ex｜蓋亞波 — 200 + 下回合受招式 -30 ──────────────────────
 regPre('超級基格爾德ex|蓋亞波', (s, _a, _p) => ({ state: s, damage: 200 }));
@@ -341,7 +340,8 @@ regPre('哲爾尼亞斯|大地風暴', (state, aIdx, pool) => {
 });
 
 // ── 15. 樹才怪｜岩石投擲 — 30, 不計抵抗力 ───────────────────────────────────
-regPre('樹才怪|岩石投擲', (s, _a, _p) => ({ state: s, damage: 30, skipWeakRes: true }));
+// v4.495：原誤套 skipWeakRes，改 skipResistance（弱點仍應計算）
+regPre('樹才怪|岩石投擲', (s, _a, _p) => ({ state: s, damage: 30, skipResistance: true }));
 
 // ── 16. 千針魚｜毒液衝擊 — 30+，對手中毒 → +50 ──────────────────────────────
 regPre('千針魚|毒液衝擊', (state, aIdx, _pool) => {

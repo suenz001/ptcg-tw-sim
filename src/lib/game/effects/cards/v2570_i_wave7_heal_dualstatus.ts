@@ -87,6 +87,8 @@ regPost('盔甲鳥|羽棲', (state, aIdx, pool) => {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 2. B 不計算抵抗力（3 張）
+// v4.495：原誤套 skipWeakRes（跳兩個），改 skipResistance（只跳抵抗力）
+//   卡面：「這個招式的傷害不計算抵抗力。」— 沒說不計算弱點，弱點仍應 ×2
 // ══════════════════════════════════════════════════════════════════════════════
 const SKIP_RES: Array<[string, number]> = [
   ['雷吉洛克|毀壞者金勾臂', 120],
@@ -94,7 +96,7 @@ const SKIP_RES: Array<[string, number]> = [
   ['師父鼬|衝天粉碎', 80],
 ];
 for (const [key, dmg] of SKIP_RES) {
-  regPre(key, (s) => ({ state: s, damage: dmg, skipWeakRes: true }));
+  regPre(key, (s) => ({ state: s, damage: dmg, skipResistance: true }));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
