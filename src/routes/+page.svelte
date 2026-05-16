@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.492</span> 📱 手機版卡牌資料庫篩選 row 橫向溢出修補</summary>
+        <ul>
+          <li><b>玩家反映</b>：手機版卡牌資料庫詳細頁、牌組頁面進去後，filter button row 會橫向滑動，希望比照卡牌資料庫主頁固定不滑、保持內容完整性。</li>
+          <li><b>Root cause</b>：<code>cards/+page.svelte:889</code> 的 <code>.filters</code> 用 <code>display:flex</code> 漏 <code>flex-wrap:wrap</code>，多個 button 橫向溢出造成滑動。decks 頁面 <code>.pk-chip-row</code> 已有 flex-wrap（line 1773）所以沒問題。</li>
+          <li><b>修法 A</b>：<code>.filters</code> 加 <code>flex-wrap: wrap</code>，讓 button 自動換行不溢出。</li>
+          <li><b>修法 B</b>：手機 @media (max-width:600px) 縮小 <code>.filter</code> button padding 與 font-size，讓更多 chip 能在一行內容納，減少換行佔用垂直空間（保持內容完整性 vs 顯示效率的權衡）。</li>
+          <li>桌面版不受影響（@media query gated）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.491</span> 🛠️ hotfix 手機版對戰演練首頁按鈕避開動態島</summary>
         <ul>
           <li><b>玩家反映</b>：手機版對戰演練頁面的「← 首頁」按鈕位置太高、太接近動態島；卡牌資料庫頁面的位置剛好，希望比照設置。</li>

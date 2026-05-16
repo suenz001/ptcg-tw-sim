@@ -888,6 +888,7 @@
   }
   .filters {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.3rem;
   }
   .filter {
@@ -1295,5 +1296,12 @@
     font-size: 1.1rem;
     color: #555;
     font-weight: 500;
+  }
+  /* v4.492 手機 RWD：縮小 filter button 尺寸，配合 .filters flex-wrap，
+     讓更多 chip 能在一行內容納，減少換行佔用垂直空間。 */
+  @media (max-width: 600px) {
+    .filter { padding: 0.35rem 0.55rem; font-size: 0.78rem; }
+    .filter-tag, .filter-type, .filter-stage, .filter-mark { padding: 0.28rem 0.5rem; font-size: 0.74rem; }
+    .typeChip { padding: 0.05rem 0.3rem; font-size: 0.74rem; }
   }
 </style>
