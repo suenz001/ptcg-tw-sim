@@ -12189,7 +12189,31 @@ ATTACK_PRE_DISCARD_CHOICE.set('甲賀忍蛙ex|分身連打', {
   min: 2, max: 2, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
   countMode: 'units',
 });
-regPre('甲賀忍蛙ex|分身連打', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+// v4.48 修：原 PRE 沒讀 action.discardedEnergyIids 也沒丟能量 — 玩家在 picker 選的能量
+// 永遠不會被丟（玩家回報 bug）。仿龍之滑翔 v4.13 pattern 補上能量丟棄邏輯。
+regPre('甲賀忍蛙ex|分身連打', (state, aIdx, _pool, action) => {
+  let s = state;
+  const p = state.players[aIdx];
+  const all = p.active?.energyAttached ?? [];
+  // 玩家所選 / AI fallback（取後 2 個自身能量）
+  const selected = action?.discardedEnergyIids && action.discardedEnergyIids.length > 0
+    ? action.discardedEnergyIids.slice(0, 2)
+    : all.slice(-2).map(e => e.iid);
+  if (selected.length > 0) {
+    const chosenSet = new Set(selected);
+    s = updatePlayer(state, aIdx, pl => {
+      if (!pl.active) return pl;
+      const discarded = pl.active.energyAttached.filter(e => chosenSet.has(e.iid));
+      return {
+        ...pl,
+        active: { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => !chosenSet.has(e.iid)) },
+        discard: [...pl.discard, ...discarded],
+      };
+    });
+    s = addLog(s, `分身連打：丟棄 ${selected.length} 個自身能量`, aIdx);
+  }
+  return { state: s, damage: 0 };
+});
 regPost('甲賀忍蛙ex|分身連打', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const d = state.players[dIdx];

@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.48</span> 🛠️ 修甲賀忍蛙ex 分身連打 — PRE 漏實作能量丟棄</summary>
+        <ul>
+          <li><b>玩家回報</b>：甲賀忍蛙ex 用分身連打時，身上有 2 顆水能量、picker 可以選，但回合結束後能量<b>不會被丟掉</b>。</li>
+          <li><b>JSON 原文</b>：「<b>將 2 個這隻寶可夢身上附加的能量丟棄</b>，對手的 2 隻寶可夢各受到 120 點傷害。[在備戰區不計算弱點・抵抗力。]」</li>
+          <li><b>根因</b>：effects.ts:12192 PRE 函式只是 <code>return &#123; state, damage: 0 &#125;</code> — 完全沒讀 <code>action.discardedEnergyIids</code> 也沒實作能量丟棄。ATTACK_PRE_DISCARD_CHOICE 設了正確 spec 讓 UI 開 picker，但玩家所選永遠不會被處理。</li>
+          <li><b>對比</b>：超級快龍ex 龍之滑翔（v4.13 同 pattern）正確讀 action.discardedEnergyIids 並執行能量丟棄 — 分身連打漏抄這段。</li>
+          <li><b>修法</b>：PRE 仿龍之滑翔 pattern 補上能量丟棄邏輯（讀 iids → updatePlayer 移到 discard → addLog）。AI fallback 取後 2 個自身能量。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.47</span> 🛠️ 耀閃挑戰借者 PRE_DISCARD_CHOICE 接力 + 花之帷幔 snapshot 跨 deferred picker</summary>
         <ul>
           <li><b>P1 耀閃挑戰借者 picker UI 接力</b>：v3.895 漏實作。呆呆王借非 binary-yes-no scope 招式時，UI 完全跳過 picker → 借來招式的 PRE 收到 <code>discardedEnergyIids=undefined</code> → 借者拿不到 +N bonus 或直接 0 damage。修法：<code>resolveBrightChallenge</code> 仿 <code>resolvePersonateAttack</code>（v3.873 扮晶晶酒 pattern）— 選完招式後檢 borrowed PRE_DISCARD_CHOICE，若存在 → 開 <code>preAttackDiscard</code> 帶 <code>copyAttackChoice</code> 讓玩家選能量。<b>注意</b>：呆呆王不能借規則寶可夢招式（RULE_BOX_SUBTYPES filter 守住），所以實際影響的非規則 picker 招式有限；但保留 general-purpose fix 以防將來新增。</li>
