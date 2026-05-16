@@ -12376,32 +12376,55 @@ regPost('巨金怪|彈回', (state, aIdx, _pool) => {
   });
 });
 
-// ── 8) 巨金怪 (M4)｜金屬之錘 150+ — v4.17: picker 重構（取代 v3.72 binary-yes-no）
+// ── 8) 巨金怪 (M4)｜金屬之錘 150+ — v4.46: 2-stage picker（依官方 QA 修正）
 //   卡面：「若希望，將 3 個這隻寶可夢身上附加的【鋼】能量丟棄，增加 150 點傷害。」
-//   v4.17 改用 attacker picker + energyTypeFilter='Metal' + countMode='units'：
-//     - picker 只顯示視為【鋼】的能量（含新衝天 on Stage2 / 稜鏡 on Basic-host 條件式）
-//     - max=3（cap 語意，up to 3 metal units）
-//     - 玩家選 0 → 150 base；選 1+ unit → +150（300）
-//   注意：身上 0 鋼能量時，picker 開但無選項 → 只能 0 → 150 base（v3.72 的 0-metal QA
-//     邊際 +150 case 在 v4.17 不再支援；實戰罕見且 picker UX 一致性優先）。
+//   官方 QA：「丟鋼能」與「+150 傷害」是**獨立事件**，即使身上 0 鋼能也能拿 +150。
+//
+//   v4.46 改為 binary-yes-no scope，2-stage 流程：
+//     Stage 1（spec 提供）: yes/no 選「是否希望 +150」
+//     Stage 2（UI 處理）:
+//       0 鋼能 → sentinel '__metal_hammer_no_metal__' → +150 不丟
+//       1-3 鋼能 → 自動全丟（min=max=count）→ +150
+//       4+ 鋼能 → 玩家選 3 顆（picker min=max=3）→ +150
+//     Stage 2 在 game/+page.svelte 的 binary-yes-no Yes 按鈕特殊處理。
+//
+//   耀閃挑戰借此招的處理（slowking_lucario_deck.ts）：
+//     - copiedSpec.scope === 'binary-yes-no' → 自動注入 '__yaoshan_borrowed_yes__' sentinel
+//     - 此 PRE 偵測 sentinel → +150 不丟（依 QA「不用丟鋼能也能 +150」）
+//
+//   v4.17 → v4.46 變更原因：v4.17 改成 attacker picker 後破壞兩個 case：
+//     1. 自己 巨金怪 用、0 鋼能 → picker 空、玩家只能選 0 → 沒 +150（v4.17 comment 自承）
+//     2. 耀閃挑戰借 → sentinel injection 不再觸發 → 借者也 +0（更慘）
+//   v4.46 revert 為 binary-yes-no + UI Stage 2，兩個 case 都修好。
 ATTACK_PRE_DISCARD_CHOICE.set('巨金怪|金屬之錘', {
-  min: 0, max: 3, scope: 'attacker',
+  min: 0, max: null, scope: 'binary-yes-no',
   baseDamage: 150, damagePerEnergy: 0,
-  countMode: 'units',
-  energyTypeFilter: 'Metal',
+  choicePrompt: '是否將最多 3 個【鋼】能量丟棄並增加 150 點傷害？（若身上無鋼能，仍 +150）',
+  choiceYesLabel: '是（+150 傷害）',
+  choiceNoLabel: '否（僅 150 傷害）',
 });
 regPre('巨金怪|金屬之錘', (state, aIdx, pool, action) => {
   const chosenIids = action?.discardedEnergyIids ?? [];
-  if (chosenIids.length === 0) {
-    return { state: addLog(state, '金屬之錘：未丟鋼能量 → 150 傷害', aIdx), damage: 150 };
+  // case 1: 借者（耀閃挑戰） → 依 QA「不用丟鋼能也能 +150」
+  if (chosenIids.length === 1 && chosenIids[0] === '__yaoshan_borrowed_yes__') {
+    return { state: addLog(state, '金屬之錘（借者）：依 QA 不丟鋼能也 +150 → 300', aIdx), damage: 300 };
   }
-  // 玩家選了 >= 1 張：丟那幾張，給 +150
+  // case 2: 自己 Yes 但 0 鋼能（UI Stage 2 sentinel）
+  if (chosenIids.length === 1 && chosenIids[0] === '__metal_hammer_no_metal__') {
+    return { state: addLog(state, '金屬之錘：希望 +150 但身上無鋼能 → 不丟 +150 → 300', aIdx), damage: 300 };
+  }
+  // case 3: 不希望（No）→ 150 base
+  if (chosenIids.length === 0) {
+    return { state: addLog(state, '金屬之錘：不希望 → 150 base', aIdx), damage: 150 };
+  }
+  // case 4: 自己 Yes + 有鋼能丟（UI Stage 2 已決定 iids）→ 丟那幾張 + +150
   const attacker = state.players[aIdx].active;
   if (!attacker) return { state, damage: 150 };
   const idSet = new Set(chosenIids);
   const drop = attacker.energyAttached.filter(e => idSet.has(e.iid));
   if (drop.length === 0) {
-    return { state: addLog(state, '金屬之錘：所選能量不在身上 → 150 傷害', aIdx), damage: 150 };
+    // 防呆：所選 iids 都不在身上（race），仍給 +150（語意：玩家已選 Yes）
+    return { state: addLog(state, '金屬之錘：所選能量已不在身上 → 不丟 +150 → 300', aIdx), damage: 300 };
   }
   const s = updatePlayer(state, aIdx, p => {
     if (!p.active) return p;
@@ -12411,7 +12434,7 @@ regPre('巨金怪|金屬之錘', (state, aIdx, pool, action) => {
       discard: [...p.discard, ...drop],
     };
   });
-  return { state: addLog(s, `金屬之錘：丟 ${drop.length} 張視為【鋼】的能量 → +150 傷害`, aIdx), damage: 300 };
+  return { state: addLog(s, `金屬之錘：丟 ${drop.length} 張鋼能 → +150 = 300`, aIdx), damage: 300 };
 });
 
 // v2.133 月月熊 赫月ex｜老練招式（被動）— 「血月」所需【無】能量減少對手已獲得獎賞牌數

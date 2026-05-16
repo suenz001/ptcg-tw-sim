@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.46</span> 🛠️ 金屬之錘 2-stage picker 真實裝（依官方 QA：丟鋼能 + +150 是獨立事件）</summary>
+        <ul>
+          <li><b>官方 QA</b>：呆呆王耀閃挑戰借巨金怪金屬之錘時，<b>不用丟鋼能也能 +150</b>。「丟鋼能」與「+150」是兩個獨立事件 — 沒鋼能就不丟、但 +150 還是生效。</li>
+          <li><b>v4.17 重構造成的 bug</b>：金屬之錘從 binary-yes-no 改成 attacker picker，破壞了：(1) 巨金怪自己用、身上 0 鋼能 → picker 空、只能選 0 → 沒 +150（違反 QA）；(2) 耀閃挑戰借 → slowking 的 sentinel injection 只認 binary-yes-no scope → 借者也拿不到 +150（更慘）。</li>
+          <li><b>v4.46 修法</b>：spec revert 為 binary-yes-no scope（Stage 1 yes/no 模態），UI 在 Yes 按鈕特殊處理 Stage 2：
+            <ul>
+              <li>0 鋼能 → 自動 sentinel <code>__metal_hammer_no_metal__</code> → +150 不丟</li>
+              <li>1-3 鋼能 → 自動全選（無需玩家操作）→ +150</li>
+              <li>4+ 鋼能 → 切換 picker min=max=3 玩家選哪 3 顆 → +150</li>
+              <li>No → 僅 150 base、不丟</li>
+            </ul>
+          </li>
+          <li><b>借者場景</b>：slowking 既有的 <code>__yaoshan_borrowed_yes__</code> sentinel injection 因 spec 改回 binary-yes-no 而自動恢復，PRE 偵測該 sentinel → +150 不丟（依 QA）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.45</span> 🧹 清過時 comment + 小箭雀 鳥笛真實裝（Resistance:Fighting filter）</summary>
         <ul>
           <li><b>背景</b>：玩家提醒「audit 列為未實裝的 engine hook gap，可能有些是過時 comment」。重新驗證確認 — 化石 4 種被動 / 險惡廢墟 / 活力森林 / 危險密林 全部都早已實裝（v2.102 / v2.119 / v2.190 / v2.191 / v3.21），只有 v2390 與 stadiums.ts 留下 stale comment 誤導 audit。</li>

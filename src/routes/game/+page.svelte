@@ -5556,6 +5556,35 @@
               // v3.35：closure 內 ts narrowing 不會穿過外層 #if，需 null guard
               if (!preAttackDiscard) return;
               const ai = preAttackDiscard.attackIndex;
+              // v4.46 金屬之錘 Stage 2：自動偵測 metal 能量數，決定下一步
+              //   - 0 顆：sentinel '__metal_hammer_no_metal__' → +150 不丟
+              //   - 1-3 顆：自動全選（玩家無需操作）→ +150
+              //   - 4+ 顆：切換 picker（min=max=3）讓玩家選 3 顆
+              if (preAttackDiscard.attackName === '金屬之錘') {
+                const stage2Spec: PreDiscardSpec = {
+                  min: 0, max: 3, scope: 'attacker',
+                  baseDamage: 150, damagePerEnergy: 0,
+                  energyTypeFilter: 'Metal',
+                };
+                const eligible = getDiscardableEnergies(stage2Spec);
+                if (eligible.length === 0) {
+                  preAttackDiscard = null;
+                  dispatch(GameActions.attack(ai, ['__metal_hammer_no_metal__']));
+                } else if (eligible.length <= 3) {
+                  preAttackDiscard = null;
+                  dispatch(GameActions.attack(ai, eligible.map(e => e.iid)));
+                } else {
+                  // 4+ 顆：切換到 picker spec（min=max=3 強制玩家選 3）
+                  preAttackDiscard = {
+                    attackIndex: ai,
+                    spec: { ...stage2Spec, min: 3, max: 3 },
+                    attackName: '金屬之錘',
+                    picked: new Set<string>(),
+                    exactRequired: 3,
+                  };
+                }
+                return;
+              }
               preAttackDiscard = null;
               dispatch(GameActions.attack(ai, ['yes-token']));
             }}>{yesLabel}</button>
