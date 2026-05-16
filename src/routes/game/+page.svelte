@@ -2762,7 +2762,35 @@
   function resolveBrightChallenge(pokeIid: string, attackIndex: number) {
     if (!brightChallengePicker) return;
     const src = brightChallengePicker.sourceAttackIndex;
+    const topPoke = brightChallengePicker.topPoke;
     brightChallengePicker = null;
+    // v4.47 P1：仿 resolvePersonateAttack — 借來的招式若有 PRE_DISCARD_CHOICE，
+    //   先開 preAttackDiscard（傳 copyAttackChoice）讓玩家選能量。
+    //   呆呆王不能借規則寶可夢的招式（RULE_BOX_SUBTYPES filter 已守住），
+    //   所以實際影響的招式有限（多數 picker 招式都在 ex/規則 上）。
+    //   但保留 general-purpose fix 以防將來新增非規則寶可夢的 picker 招式。
+    const pickedAtk = topPoke.card.attacks?.[attackIndex];
+    if (!pickedAtk) {
+      dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
+      return;
+    }
+    const borrowedKey = `${topPoke.card.name}|${pickedAtk.name}`;
+    const spec = ATTACK_PRE_DISCARD_CHOICE.get(borrowedKey);
+    if (spec) {
+      // 借者 active 才是「自身」（_computeExactRequired 也用此邏輯）
+      const borrowerActive = game?.players[myIdx].active ?? null;
+      const exactRequired = _computeExactRequired(pickedAtk.name, borrowerActive);
+      preAttackDiscard = {
+        attackIndex: src,
+        spec,
+        attackName: pickedAtk.name,
+        picked: new Set<string>(),
+        copyAttackChoice: { pokeIid, attackIndex },
+        exactRequired,
+      };
+      return;
+    }
+    // 無 PRE_DISCARD_CHOICE → 直接 dispatch
     dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
   }
   function cancelBrightChallenge() { brightChallengePicker = null; }

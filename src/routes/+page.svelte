@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.47</span> 🛠️ 耀閃挑戰借者 PRE_DISCARD_CHOICE 接力 + 花之帷幔 snapshot 跨 deferred picker</summary>
+        <ul>
+          <li><b>P1 耀閃挑戰借者 picker UI 接力</b>：v3.895 漏實作。呆呆王借非 binary-yes-no scope 招式時，UI 完全跳過 picker → 借來招式的 PRE 收到 <code>discardedEnergyIids=undefined</code> → 借者拿不到 +N bonus 或直接 0 damage。修法：<code>resolveBrightChallenge</code> 仿 <code>resolvePersonateAttack</code>（v3.873 扮晶晶酒 pattern）— 選完招式後檢 borrowed PRE_DISCARD_CHOICE，若存在 → 開 <code>preAttackDiscard</code> 帶 <code>copyAttackChoice</code> 讓玩家選能量。<b>注意</b>：呆呆王不能借規則寶可夢招式（RULE_BOX_SUBTYPES filter 守住），所以實際影響的非規則 picker 招式有限；但保留 general-purpose fix 以防將來新增。</li>
+          <li><b>P2 花之帷幔 snapshot 跨 deferred picker</b>：v3.892 設計初衷「戰鬥場花之帷幔謝米被同招 KO 後備戰仍受保護」在油之機關槍 / hitBenchPickPost 等 deferred picker 場景失效。<code>engine.ts:4670</code> POST return 後立即清 snapshot，但 deferred resolver 是隔 dispatch 才跑（withPending → 玩家挑目標 → resolver），讀 snapshot 時已 undefined。修法：snapshot 清除加 gate <code>!pendingSelection</code> — 保留到 resolver 跑完；resolver 結束後（pending 消）由 <code>applyAction</code> wrapper 統一清。</li>
+          <li><b>P3 確認非 bug</b>：audit 列「AI 借金屬之錘走 fallback 不注入 sentinel」— 經查 slowking_lucario_deck.ts:113-120 sentinel injection 是無條件對 binary-yes-no scope 觸發（不分 AI / human / fallback / choice path），AI 拿 +150 沒問題，agent 誤判。</li>
+          <li>tsc 0 errors。pending tasks #245 / #248 從「待實機驗證」改為「code-level audit 通過 + P1/P2 修補」。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.46</span> 🛠️ 金屬之錘 2-stage picker 真實裝（依官方 QA：丟鋼能 + +150 是獨立事件）</summary>
         <ul>
           <li><b>官方 QA</b>：呆呆王耀閃挑戰借巨金怪金屬之錘時，<b>不用丟鋼能也能 +150</b>。「丟鋼能」與「+150」是兩個獨立事件 — 沒鋼能就不丟、但 +150 還是生效。</li>

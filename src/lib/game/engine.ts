@@ -4667,7 +4667,11 @@ function handlePlaying(
       newState = postFn(newState, aIdx, pool, action);
     }
     // v3.892：清掉 attack-time snapshot transient flag（attack flow 結束）
-    if (newState._attackTimeOppFlowerVeil !== undefined) {
+    // v4.47 P2：若 POST 開了 pendingSelection（油之機關槍 / hitBenchPickPost），
+    //   snapshot 必須跨 dispatch 保留到 resolver 跑完（resolver 內 resolveBenchGuard 仍要讀）。
+    //   pendingSelection 為空時才清；resolver 結束後若 pending 已消，由 applyAction wrapper
+    //   統一清（line 5970 附近，markHealsByDamageDecrease 之後）。
+    if (newState._attackTimeOppFlowerVeil !== undefined && !newState.pendingSelection) {
       const cleared = { ...newState };
       delete cleared._attackTimeOppFlowerVeil;
       newState = cleared;
@@ -6022,6 +6026,14 @@ export function applyAction(
 
   // v4.43：偵測寶可夢 damage 減少 → 標記 healedThisTurn（用於活潑鮮花 / 活潑針等條件）
   next = markHealsByDamageDecrease(state, next);
+
+  // v4.47 P2：花之帷幔 attack-time snapshot 跨 deferred picker 後的最終清理
+  //   若 RESOLVE_SELECTION 完成且 pending 已消，但 snapshot 仍殘留（attack 結束邏輯沒進）→ wrapper 統一清
+  if (next._attackTimeOppFlowerVeil !== undefined && !next.pendingSelection) {
+    const cleared = { ...next };
+    delete cleared._attackTimeOppFlowerVeil;
+    next = cleared;
+  }
 
   // v2.47 防禦層：備戰寶可夢不應持有異常狀態
   next = scrubBenchStatus(next);
