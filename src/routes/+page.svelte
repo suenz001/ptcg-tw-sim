@@ -264,6 +264,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.54</span> 🐛 修 4 招式攻擊傷害誤套 effect immunity（薄霧/抵抗之幕/皇帝之勢 不該擋直接傷害）</summary>
+        <ul>
+          <li><b>規則釐清</b>：PTCG 卡面區分「傷害」(damage) vs「效果」(effect)：</li>
+          <li>　- <b>薄霧能量</b>「不會受到對手的寶可夢使用招式的<u>效果</u>的影響」— 只擋 effect 不擋 damage</li>
+          <li>　- <b>抵抗之幕</b>（火箭隊的急凍鳥）— 同上</li>
+          <li>　- <b>皇帝之勢</b>（帝王拿波ex）— 同上</li>
+          <li>　- <b>全能硬殼</b>（肋骨海龜）— 卡面寫「傷害與效果」，<b>有</b>擋 damage（保留）</li>
+          <li><b>誤套 bug（v2.92 起）</b>：4 個招式卡面是「N 點傷害」(attack-damage)，但實作套了 effect immunity helper → 連薄霧/抵抗之幕/皇帝之勢都擋 → 違反卡面。</li>
+          <li><b>修正</b>：</li>
+          <li>　1. 雷丘｜<b>捲入伏特</b>（50 點傷害）— bench 改走球形盾牌等 attack-damage defense，active 直接受擊</li>
+          <li>　2. 肯泰羅｜<b>群起瞄準</b>（N×50 點傷害）— 同上</li>
+          <li>　3. 下石鳥｜<b>墜擊射</b>（120 點傷害）— 同上</li>
+          <li>　4. 雪絨蛾｜<b>冰凍羽擊</b>（20 點傷害 + 睡眠）— 20 點傷害分離（不擋 effect immunity），睡眠仍走 statusPost 正確 check</li>
+          <li><b>仍會擋的</b>：球形盾牌（蟲甲聖）、藏隱（斯魔茶）、深度下潛（小霞的鯉魚王）、羽毛化石、花之帷幔（謝米）、太晶寶可夢、中立中心 — 這些卡面寫「傷害」都擋</li>
+          <li><b>不再誤擋的</b>：薄霧能量、硬岩【鬥】能量、抵抗之幕、皇帝之勢、全能硬殼（後者只在對手有特殊能量時觸發，仍依條件擋 effect — 但 effect 不在這 4 招式範疇）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.53</span> 🏗️ Phase 3 第二波：3 個 attack-effect bench-loop source 補球形盾牌/藏隱等</summary>
         <ul>
           <li><b>背景</b>：v2.92 加入 canApplyAttackEffectToTarget 時只擋 ATTACK_EFFECT_IMMUNITY 類（薄霧/抵抗之幕/皇帝之勢/全能硬殼），漏球形盾牌、藏隱、深度下潛、羽毛化石、光之翼、對戰圓形 等 bench-only defense。</li>

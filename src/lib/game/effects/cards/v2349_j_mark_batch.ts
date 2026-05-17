@@ -135,15 +135,18 @@ regR('j-taurus-group-aim', (state, aIdx, iids, _params, pool) => {
   const dmg = r.heads * 50;
   const target = iids[0];
   if (!target || dmg <= 0) return addLog(r.state, `群起瞄準：${r.heads}/${count} 次正面，未造成傷害`, aIdx);
-  // v2.92 招式效果免疫檢查（指示物放置屬招式效果）
-  const tInst = state.players[dIdx].active?.iid === target
+  // v4.54：卡面是「N×50 點傷害」(attack-damage)，不是「招式效果」。
+  //   原 v2.92 誤套 canApplyAttackEffectToTarget 連薄霧/抵抗之幕等 effect immunity 都擋 → 違反卡面。
+  //   改用 unified('attack-damage', isBench:?) → bench 才走 resolveBenchGuard 擋球形盾牌等，active 不擋。
+  const _groupIsActive = state.players[dIdx].active?.iid === target;
+  const tInst = _groupIsActive
     ? state.players[dIdx].active!
     : state.players[dIdx].bench.find(b => b.iid === target);
   if (tInst) {
     const tCard = pool.get(tInst.cardId);
-    const guard = canApplyAttackEffectToTarget(r.state, aIdx, tInst, tCard, pool);
+    const guard = canApplyEffectToTarget(r.state, aIdx, tInst, tCard, 'attack-damage', pool, { isBench: !_groupIsActive });
     if (guard.blocked) {
-      return addLog(r.state, `群起瞄準：${tCard?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
+      return addLog(r.state, `群起瞄準：${tCard?.name ?? '?'}｜${guard.reason}（不受傷害）`, aIdx);
     }
   }
   return addLog(damageOneNoKo(r.state, dIdx, target, dmg), `群起瞄準：${r.heads}/${count} 次正面 → ${dmg} 傷害`, aIdx);

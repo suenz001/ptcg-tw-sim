@@ -10,6 +10,7 @@ import {
   getOwnBenchLimit,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
+import { canApplyEffectToTarget } from '../../defense';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, statusPost, flipCoinsWithLog, canApplyAttackEffectToTarget } from '../../effects';
@@ -613,14 +614,17 @@ regR('h-wave3-hit-any-120', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const tIid = iids[0];
-  // v2.92 招式效果免疫檢查（卡面雖標 skipWeakRes 但 120 視為「對任意 1 隻放指示物」屬招式效果）
+  // v4.54：卡面是「120 點傷害」(attack-damage)，不是「招式效果」。
+  //   原 v2.92 誤套 canApplyAttackEffectToTarget 連薄霧/抵抗之幕等 effect immunity 都擋 → 違反卡面。
+  //   改用 unified('attack-damage', isBench:?) → bench 走 resolveBenchGuard 擋球形盾牌等，active 不擋。
   const opp = state.players[dIdx];
-  const tInst = opp.active?.iid === tIid ? opp.active : opp.bench.find(b => b.iid === tIid);
+  const _diveIsActive = opp.active?.iid === tIid;
+  const tInst = _diveIsActive ? opp.active : opp.bench.find(b => b.iid === tIid);
   if (tInst) {
     const tCard = pool.get(tInst.cardId);
-    const guard = canApplyAttackEffectToTarget(state, aIdx, tInst, tCard, pool);
+    const guard = canApplyEffectToTarget(state, aIdx, tInst, tCard, 'attack-damage', pool, { isBench: !_diveIsActive });
     if (guard.blocked) {
-      return addLog(state, `墜擊射：${tCard?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
+      return addLog(state, `墜擊射：${tCard?.name ?? '?'}｜${guard.reason}（不受傷害）`, aIdx);
     }
   }
   return updatePlayer(state, dIdx, p => ({

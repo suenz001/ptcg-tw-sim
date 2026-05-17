@@ -2207,12 +2207,16 @@ regPost('雷丘|捲入伏特', (state, aIdx, pool) => {
       if (!c) return c;
       if (c.iid === myActiveIid) return c;  // 排除自身
       if ((c.damage ?? 0) === 0) return c;  // 排除無指示物
-      // v2.92 招式效果免疫檢查（僅對手側；指示物放置屬招式效果）
+      // v4.54：卡面是「N 點傷害」(attack-damage)，不是「招式效果」。
+      //   不該套薄霧/抵抗之幕/皇帝之勢/全能硬殼/硬岩 (這些只擋 effect 不擋 damage)。
+      //   對 bench 走 resolveBenchGuard('attack-damage') → 擋球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔/太晶 等
+      //   對 active 完全不擋 (傷害計算由 caller 直接寫 damage)
       if (idx === dIdx) {
         const card = pool.get(c.cardId);
-        const guard = canApplyAttackEffectToTarget(s, aIdx, c, card, pool);
+        const _voltIsBench = c.iid !== s.players[dIdx].active?.iid;
+        const guard = canApplyEffectToTarget(s, aIdx, c, card, 'attack-damage', pool, { isBench: _voltIsBench });
         if (guard.blocked) {
-          s = addLog(s, `捲入伏特：${card?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
+          s = addLog(s, `捲入伏特：${card?.name ?? '?'}｜${guard.reason}（不受傷害）`, aIdx);
           return c;
         }
       }
