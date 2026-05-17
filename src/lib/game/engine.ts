@@ -6673,10 +6673,14 @@ export function getUsableAbilities(
           b.energyAttached.some(e => pool.get(e.cardId)?.pokemonType === 'Water'));
         if (!hasWaterOnBench) return;
       }
-      // P0：瑪力露麗ex | 收集泡泡 — active 是「瑪力露麗ex」+ 備戰有能量
+      // P0：瑪力露麗ex | 收集泡泡 — v4.4998 修正：卡面沒要求 active 是瑪力露麗ex
+      //   持有者不限位置（active 或 bench），場上其他寶可夢身上有能量即可
       if (ab.name === '收集泡泡') {
-        if (!player.active || pool.get(player.active.cardId)?.name !== '瑪力露麗ex') return;
-        if (!player.bench.some(b => b.energyAttached.length > 0)) return;
+        const others = [
+          ...(player.active && player.active.iid !== pk.iid ? [player.active] : []),
+          ...player.bench.filter(b => b.iid !== pk.iid),
+        ];
+        if (!others.some(c => c.energyAttached.length > 0)) return;
       }
       // P0：青木的樹枕尾熊 | 無力充能 — 持有者在備戰 + 戰鬥場是「青木的」+ 手牌有能量
       if (ab.name === '無力充能') {

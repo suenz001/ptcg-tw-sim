@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.4998</span> 🛠️ 修瑪力露麗ex 收集泡泡 規則違反（玩家指正）</summary>
+        <ul>
+          <li><b>玩家指正</b>：v4.4997 加 gate 時腦補了「active 必須是瑪力露麗ex」條件 — 卡面實際沒這要求。</li>
+          <li><b>JSON 卡面</b>：「在自己的回合時，可不限次數使用。選擇 1 個自己的場上寶可夢身上附加的能量，改附於這隻寶可夢身上。」— 持有者不限位置（active 或 bench）、來源是場上任何其他寶可夢、目標是「這隻寶可夢」（持有者本身）。</li>
+          <li><b>現況 4 處 bug</b>：(1) regA fn 強制 active 是瑪力露麗ex；(2) regA fn 只找 bench 能量（漏 active）；(3) <code>azumarillBubbleAttach</code> 能量固定改附 <code>p.active</code>；(4) v4.4997 我加的 gate 跟 fn 一樣錯。</li>
+          <li><b>修法</b>：regA fn 改用 <code>inst</code>（持有者）+ 場上其他寶可夢能量；resolver 用 <code>params.hostIid</code> 拿持有者位置；<code>azumarillBubbleAttach</code> 改用 hostIid 找目標（active 或 bench 都可）；getUsableAbilities gate 改為「場上其他寶可夢有能量」。</li>
+          <li><b>反省</b>：違反鐵律 7c — 先信任 audit agent 的腦補沒去看實際 JSON 卡面，第 2 次又信現有 regA fn 的錯邏輯。實際 JSON 才是 source of truth。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.4997</span> 🛠️ 補 11 個特性按鈕 gate（條件不符不亮）</summary>
         <ul>
           <li><b>背景</b>：玩家規則「未滿足特性條件時，特性按鈕不能亮起，避免玩家誤按」— 全面 audit 找到 11 個 regA 註冊的特性 fn 有 early-return fail-log，但 getUsableAbilities 沒對應 gate（玩家點下才跳訊息，違反規則）。</li>

@@ -144,34 +144,41 @@ function walreinRinseAttach(
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 瑪力露麗ex｜收集泡泡 — 不限次數，場上能量改附自身
+// v4.4998：卡面「選擇 1 個自己的場上寶可夢身上附加的能量，改附於這隻寶可夢身上」
+//   - 持有者不限位置（active 或 bench）
+//   - 來源：場上任何其他寶可夢（active+bench，排除自己 = 改附沒意義）
+//   - 目標：這隻持有者（用 inst.iid 找）
 // ══════════════════════════════════════════════════════════════════════════════
-regA('瑪力露麗ex', 0, (st, idx, pool) => {
+regA('瑪力露麗ex', 0, (st, idx, pool, inst) => {
+  if (!inst) return st;
   const player = st.players[idx];
-  if (!player.active || pool.get(player.active.cardId)?.name !== '瑪力露麗ex') {
-    return addLog(st, '收集泡泡：戰鬥場不是瑪力露麗ex', idx);
-  }
-  // 找場上其他寶可夢身上有能量
-  const sources: string[] = [];
-  for (const b of player.bench) {
-    if (b.energyAttached.length > 0) sources.push(b.iid);
-  }
+  // 來源：場上其他寶可夢（不含這隻自己）身上有能量
+  const others = [
+    ...(player.active && player.active.iid !== inst.iid ? [player.active] : []),
+    ...player.bench.filter(b => b.iid !== inst.iid),
+  ];
+  const sources = others.filter(c => c.energyAttached.length > 0).map(c => c.iid);
   if (sources.length === 0) {
-    return addLog(st, '收集泡泡：備戰區無能量可改附', idx);
+    return addLog(st, '收集泡泡：場上其他寶可夢身上無能量可改附', idx);
   }
-  const s = addLog(st, '收集泡泡：選 1 隻備戰寶可夢，將其 1 個能量改附自身', idx);
+  const s = addLog(st, '收集泡泡：選 1 隻其他寶可夢，將其 1 個能量改附瑪力露麗ex', idx);
   return withPending(s, {
     type: 'heal-target',
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'azumarill-bubble',
-    params: { validIids: sources },
+    params: { validIids: sources, hostIid: inst.iid },
   });
 });
-regR('azumarill-bubble', (state, aIdx, iids, _params, pool) => {
+// v4.4998：resolver 全面修 — sourceIid 可在 active 或 bench；目標用 hostIid 找
+regR('azumarill-bubble', (state, aIdx, iids, params, pool) => {
   const sourceIid = iids[0];
-  if (!sourceIid) return state;
+  const hostIid = (params?.hostIid as string | undefined) ?? '';
+  if (!sourceIid || !hostIid) return state;
   const player = state.players[aIdx];
-  const src = player.bench.find(b => b.iid === sourceIid);
+  // 來源可在 active 或 bench
+  const src = player.active?.iid === sourceIid ? player.active
+            : player.bench.find(b => b.iid === sourceIid);
   if (!src || src.energyAttached.length === 0) return state;
   // v2.389 多張能量 → modal-choice；1 張 fast path
   if (src.energyAttached.length > 1) {
@@ -186,6 +193,7 @@ regR('azumarill-bubble', (state, aIdx, iids, _params, pool) => {
         params: {
           label: '收集泡泡',
           sourceIid,
+          hostIid,
           energyIids: src.energyAttached.map(e => e.iid),
           options: src.energyAttached.map((e, i) => ({
             id: `${i}`,
@@ -195,42 +203,57 @@ regR('azumarill-bubble', (state, aIdx, iids, _params, pool) => {
       },
     );
   }
-  return azumarillBubbleAttach(state, aIdx, sourceIid, src.energyAttached[0].iid);
+  return azumarillBubbleAttach(state, aIdx, sourceIid, src.energyAttached[0].iid, hostIid);
 });
 
 regR('azumarill-bubble-pick-energy', (state, aIdx, iids, params, _pool) => {
   const choiceIdx = parseInt(iids[0] ?? '0', 10);
   const energyIids = (params?.energyIids as string[] | undefined) ?? [];
   const sourceIid = (params?.sourceIid as string | undefined) ?? '';
+  const hostIid = (params?.hostIid as string | undefined) ?? '';
   const energyIid = energyIids[choiceIdx];
-  if (!sourceIid || !energyIid) return state;
-  return azumarillBubbleAttach(state, aIdx, sourceIid, energyIid);
+  if (!sourceIid || !energyIid || !hostIid) return state;
+  return azumarillBubbleAttach(state, aIdx, sourceIid, energyIid, hostIid);
 });
 
+// v4.4998：sourceIid 可在 active 或 bench；hostIid 同樣可在 active 或 bench
 function azumarillBubbleAttach(
   state: GameState,
   aIdx: 0 | 1,
   sourceIid: string,
   energyIid: string,
+  hostIid: string,
 ): GameState {
   return updatePlayer(
-    addLog(state, '收集泡泡：將 1 個能量從備戰改附瑪力露麗ex', aIdx),
+    addLog(state, '收集泡泡：將 1 個能量改附瑪力露麗ex', aIdx),
     aIdx, p => {
-      const src = p.bench.find(b => b.iid === sourceIid);
+      // 找來源（active 或 bench）
+      const srcInActive = p.active?.iid === sourceIid;
+      const src = srcInActive ? p.active! : p.bench.find(b => b.iid === sourceIid);
       if (!src) return p;
       const energy = src.energyAttached.find(e => e.iid === energyIid);
       if (!energy) return p;
-      return {
-        ...p,
-        active: p.active ? {
-          ...p.active,
-          energyAttached: [...p.active.energyAttached, energy],
-        } : null,
-        bench: p.bench.map(b => b.iid === sourceIid ? {
-          ...b,
-          energyAttached: b.energyAttached.filter(e => e.iid !== energyIid),
-        } : b),
-      };
+      // 找目標（active 或 bench）
+      const tgtInActive = p.active?.iid === hostIid;
+      // 從來源移除 energy
+      const newActive = srcInActive && p.active
+        ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== energyIid) }
+        : p.active;
+      const newBench1 = !srcInActive
+        ? p.bench.map(b => b.iid === sourceIid
+            ? { ...b, energyAttached: b.energyAttached.filter(e => e.iid !== energyIid) }
+            : b)
+        : p.bench;
+      // 附到目標
+      const finalActive = tgtInActive && newActive
+        ? { ...newActive, energyAttached: [...newActive.energyAttached, energy] }
+        : newActive;
+      const finalBench = !tgtInActive
+        ? newBench1.map(b => b.iid === hostIid
+            ? { ...b, energyAttached: [...b.energyAttached, energy] }
+            : b)
+        : newBench1;
+      return { ...p, active: finalActive, bench: finalBench };
     },
   );
 }
