@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.4999</span> 🛠️ 修幻影奇襲沒擋蟲甲聖球形盾牌 + 補鐵律 Rule 15 / 16</summary>
+        <ul>
+          <li><b>玩家回報</b>：蟲甲聖｜球形盾牌無法防禦多龍巴魯托ex 幻影奇襲放置 6 個傷害指示物的招式效果。</li>
+          <li><b>JSON 卡面</b>：蟲甲聖 球形盾牌「自己所有備戰寶可夢不受對手寶可夢招式的傷害與效果影響」、多龍巴魯托ex 幻影奇襲是「將 6 個傷害指示物放置於對手備戰」(招式效果)。理論上應被擋。</li>
+          <li><b>Root cause</b>：<code>effects.ts dragapult-snipe</code> resolver per-target check 用 <code>canApplyAttackEffectToTarget</code>（只查 ATTACK_EFFECT_IMMUNITY map = 薄霧能量類 attacker-side 免疫），缺 <code>resolveBenchGuard</code>（球形盾牌、藏隱、深度下潛、羽毛化石、太晶 等 bench 防護在此）。對比 <code>bench-hit-N</code> resolver 已正確使用兩個 helper，dragapult-snipe 漏了。</li>
+          <li><b>修法</b>：dragapult-snipe resolver 加 <code>resolveBenchGuard(... 'attack-effect')</code> per-target check。同時涵蓋幻影奇襲、飛來橫禍 等所有使用此 resolver 的招式。</li>
+          <li><b>補鐵律 Rule 15</b>：「JSON 卡面是 source of truth — 不信任 audit agent 結論 / 現有 fn 內邏輯 / comment 註解」（v4.4998 教訓延伸）。</li>
+          <li><b>補鐵律 Rule 16</b>：「bench 目標處理一律呼叫 resolveBenchGuard」+ 適用範圍清單。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.4998</span> 🛠️ 修瑪力露麗ex 收集泡泡 規則違反（玩家指正）</summary>
         <ul>
           <li><b>玩家指正</b>：v4.4997 加 gate 時腦補了「active 必須是瑪力露麗ex」條件 — 卡面實際沒這要求。</li>

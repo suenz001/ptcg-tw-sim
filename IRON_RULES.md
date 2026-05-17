@@ -578,6 +578,79 @@ grep -rn "p\.deck\.filter\|player\.deck\.filter\|attacker\.deck\.filter" src/lib
 
 ---
 
+### Rule 15: JSON 卡面是 source of truth — 不要信任 audit agent 結論或現有 fn 內邏輯
+
+**背景**：v4.4997~v4.4998 教訓（瑪力露麗ex 收集泡泡 case）：
+
+1. **audit agent 可能腦補**：spawn 的 subagent 報告「卡面要求 active 是瑪力露麗ex」— 實際 JSON 卡面沒這條件
+2. **現有 regA fn 本身可能寫錯**：v2380 line 150 強制 `player.active.name === '瑪力露麗ex'` — 違反卡面
+3. **連鎖 bug**：JSON 真相 → 早期實作者抄錯 → audit agent 看 fn body 推「卡面條件」 → 我 gate 抄錯
+4. 一個錯誤源頭傳到 3 個地方，全都偏離 JSON 真相
+
+**鐵律**：
+
+> 修任何「特性條件 / 招式效果 / picker filter / immunity gate」之前，**必須直接查 `static/cards/*.json`** 的 `abilities[i].effect` 或 `attacks[i].effect`，不能：
+> - 信任 audit agent 報告的卡面摘要
+> - 信任現有 regA / regPost fn body 內的邏輯
+> - 信任 comment 註解內描述的卡面（註解可能過時或錯誤）
+
+**正確流程**（即使只是「在 gate 加 1 行 check」）：
+
+```
+1. grep JSON 找 abilities[].effect / attacks[].effect 原文
+2. 對照現況 fn body — 兩者有差就是 bug
+3. 寫 gate / 補實作時，按 JSON 寫，不是按 fn 寫
+4. fn 內如果有錯，順手修（regA fn 本身也是 bug）
+```
+
+**範例（v4.4998）**：
+- 卡面：「在自己的回合時，可不限次數使用。選擇 1 個自己的場上寶可夢身上附加的能量，改附於這隻寶可夢身上。」
+- 錯實作：強制 active 是瑪力露麗ex + 只看 bench 能量 + 固定附給 active
+- 正確：持有者不限位置、來源是場上任何其他寶可夢、目標是「這隻寶可夢」(inst)
+
+**例外**：純 UI / CSS / Svelte template 修補不用查 JSON（那些不涉及卡片邏輯）。
+
+---
+
+### Rule 16: bench 目標處理一律呼叫 resolveBenchGuard
+
+**背景**：v4.4999 教訓（蟲甲聖 球形盾牌 沒擋多龍巴魯托ex 幻影奇襲）：
+
+`resolveBenchGuard` 是統一 helper 處理 bench 目標的招式效果免疫：
+- 對戰圓形競技場（attack-effect / ability-effect）
+- 蟲甲聖 球形盾牌（attack-damage / attack-effect）
+- 藏隱（斯魔茶）、深度下潛（小霞的鯉魚王）（attack-damage / attack-effect）
+- 羽毛化石、太晶寶可夢（attack-damage only）
+
+而 `canApplyAttackEffectToTarget` 只查 `ATTACK_EFFECT_IMMUNITY` map（薄霧能量 / 皇帝之勢類 attacker-side 自身免疫）— 不涵蓋上述 bench 防護。
+
+**禁止寫法**：
+
+```ts
+// dragapult-snipe / 任何指示物放置 resolver
+const guard = canApplyAttackEffectToTarget(...);
+if (guard.blocked) { /* ... */ }
+// ❌ 缺 resolveBenchGuard check — 球形盾牌等漏擋
+```
+
+**正確寫法**：
+
+```ts
+const guard = canApplyAttackEffectToTarget(s, actorIdx, target, targetCard, pool);
+if (guard.blocked) { /* ... */ }
+// 加 bench 保護 helper（球形盾牌等）
+const benchGuard = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-effect');
+if (benchGuard.blocked) { /* ... */ }
+```
+
+**適用範圍**：所有「bench 目標」類 resolver：
+- dragapult-snipe（幻影奇襲 / 飛來橫禍 等）
+- bench-hit-N（已正確使用）
+- cursed-bomb（咒詛炸彈）
+- 任何 picker.type === 'opp-bench-choose' / 'damage-distribute' / 'snipe-*' 的 resolver
+
+---
+
 ## 完整版
 
 完整 SKILL.md（含 Python git plumbing pipeline 範本、pre-flight checklist、

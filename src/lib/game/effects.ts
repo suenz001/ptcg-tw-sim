@@ -6719,6 +6719,19 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
       placedThisBatch++; // 仍計數本批次（消耗 counter，但不放置）
       continue;
     }
+    // v4.4999：bench 保護 helper — 球形盾牌、藏隱、深度下潛、羽毛化石、太晶 等
+    //   玩家回報「球形盾牌沒擋多龍巴魯托ex 幻影奇襲」— root cause: canApplyAttackEffectToTarget
+    //   只查 ATTACK_EFFECT_IMMUNITY map（不含球形盾牌），同類 bench-hit-N resolver 已用 resolveBenchGuard，
+    //   dragapult-snipe 漏了。kind='attack-effect' 涵蓋指示物放置類效果。
+    const benchGuard = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-effect');
+    if (benchGuard.blocked) {
+      if (!blockedTargets.has(iid)) {
+        blockedTargets.add(iid);
+        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${benchGuard.reason}（該指示物無效）`, actorIdx);
+      }
+      placedThisBatch++;
+      continue;
+    }
 
     const tHp = effectiveHPInline(target, pool, s);
     const newDmg = target.damage + counterDamage;
