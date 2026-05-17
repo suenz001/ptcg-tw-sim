@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.58</span> 🏗️ B Phase 3 第三波：cards/*.ts 散裝 helper 統一遷移 + 順帶修 2 個漏網 bug</summary>
+        <ul>
+          <li><b>Bug 修補</b>：</li>
+          <li>　1. 河馬獸｜<b>大沙風暴</b>（雙方備戰 +40 點傷害，不計弱抗）— 卡面是 attack-damage 卻被誤套 effect immunity 雙重 helper，薄霧/抵抗之幕/皇帝之勢/全能硬殼/硬岩 過度擋。改 unified('attack-damage', isBench:true) → 只擋球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔/太晶 等真擋傷害的卡。</li>
+          <li>　2. 謎擬Ｑex｜<b>惡作劇之手</b>（對手 2 隻寶可夢各放 3 個指示物）— bench target 漏球形盾牌/藏隱/深度下潛/羽毛化石/光之翼。改 per-target unified。</li>
+          <li><b>純 API rename（行為等價，純架構統一）</b>：5 處 active-only attack-effect caller：</li>
+          <li>　- 胡地｜手之力量、超級阿勃梭魯ex｜死亡終局、鬼斯通｜纏擾、九尾狐搬指示物、薄暮之毒、惡之火種</li>
+          <li><b>架構成果</b>：cards/*.ts 內絕大多數 caller 已改用統一 <code>canApplyEffectToTarget</code>。剩餘 effects.ts 內 callers 留 v4.59+ 分批遷移。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.57</span> 🐛 A1 audit：修虛無歸零誤套 effect immunity（attack-damage 被擋薄霧）</summary>
         <ul>
           <li><b>背景</b>：v4.54 修了 4 個招式攻擊傷害誤套 effect immunity (薄霧/抵抗之幕/皇帝之勢)，A1 audit 找剩餘同類漏網。</li>

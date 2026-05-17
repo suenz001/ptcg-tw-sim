@@ -33,6 +33,7 @@
  */
 
 import type { GameState, PlayerState } from '../../types';
+import { canApplyEffectToTarget } from '../../defense';
 import { isRulePokemon } from '../../engine';
 import {
   addLog,
@@ -536,9 +537,9 @@ regPost('鬼斯通|纏擾', (state, aIdx, pool) => {
   const def = state.players[dIdx].active;
   if (!def) return state;
   const defName = pool.get(def.cardId)?.name ?? '?';
-  // v2.92 招式效果免疫檢查（指示物放置屬招式效果）
+  // v4.58：改 unified('attack-effect', isBench:false) — 行為等價
   const defCard = pool.get(def.cardId);
-  const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCard, pool);
+  const guard = canApplyEffectToTarget(state, aIdx, def, defCard, 'attack-effect', pool, { isBench: false });
   if (guard.blocked) {
     return addLog(state, `纏擾：${defName}｜${guard.reason}（不放指示物）`, aIdx);
   }

@@ -2244,16 +2244,12 @@ regPost('河馬獸|大沙風暴', (state, aIdx, pool) => {
         // v2.92 對手側 per-target check
         if (idx === dIdx) {
           const bCard = pool.get(b.cardId);
-          // resolveBenchGuard 涵蓋對戰圓形 / 太晶 / 花之帷幔 / 抵抗之幕（針對 bench）
-          const bench = resolveBenchGuard(s, pool, aIdx, bCard, 'attack-effect');
-          if (bench.blocked) {
-            s = addLog(s, `大沙風暴：${bCard?.name ?? '?'}｜${bench.reason}（不放指示物）`, aIdx);
-            return b;
-          }
-          // 再走 canApplyAttackEffectToTarget 涵蓋薄霧/硬岩/皇帝之勢
-          const eff = canApplyAttackEffectToTarget(s, aIdx, b, bCard, pool);
-          if (eff.blocked) {
-            s = addLog(s, `大沙風暴：${bCard?.name ?? '?'}｜${eff.reason}（不放指示物）`, aIdx);
+          // v4.58：卡面是「40 點傷害」(attack-damage)，不是「指示物放置」(attack-effect)。
+          //   原 v2.92 用 effect immunity 雙重 helper 過度擋（薄霧/抵抗之幕/皇帝之勢/全能硬殼/硬岩 只擋 effect 不擋 damage）。
+          //   改 unified('attack-damage', isBench:true) → 只擋球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔/太晶 等真擋傷害的卡
+          const guard = canApplyEffectToTarget(s, aIdx, b, bCard, 'attack-damage', pool, { isBench: true });
+          if (guard.blocked) {
+            s = addLog(s, `大沙風暴：${bCard?.name ?? '?'}｜${guard.reason}（不受傷害）`, aIdx);
             return b;
           }
         }
@@ -2511,13 +2507,15 @@ regR('h-wave2-place-3-counters', (state, aIdx, iids, _params, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const set = new Set(iids);
   let s = state;
-  // v2.92 先走 per-target check，把被擋的 iid 從 set 移除
+  // v4.58：改 unified per-target — bench target 補球形盾牌/藏隱/深度下潛/羽毛化石/光之翼 等
   const opp = s.players[dIdx];
   const allOpp: CardInstance[] = [...(opp.active ? [opp.active] : []), ...opp.bench];
+  const _trickActiveIid = opp.active?.iid;
   for (const c of allOpp) {
     if (!set.has(c.iid)) continue;
     const card = pool.get(c.cardId);
-    const guard = canApplyAttackEffectToTarget(s, aIdx, c, card, pool);
+    const _trickIsBench = c.iid !== _trickActiveIid;
+    const guard = canApplyEffectToTarget(s, aIdx, c, card, 'attack-effect', pool, { isBench: _trickIsBench });
     if (guard.blocked) {
       s = addLog(s, `惡作劇之手：${card?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
       set.delete(c.iid);

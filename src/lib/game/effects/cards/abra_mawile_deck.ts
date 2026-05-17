@@ -22,6 +22,7 @@
  */
 
 import type { EnergyType } from '$lib/cards/types';
+import { canApplyEffectToTarget } from '../../defense';
 import type { CardInstance, PlayerState } from '../../types';
 import {
   reg, regR, regG, regPre, regPost, regA,
@@ -66,8 +67,8 @@ regPost('胡地|手之力量', (state, aIdx, pool) => {
   const counters = handCount * 2;
   const addDmg = counters * 10;
   const defCard = pool.get(defender.active.cardId);
-  // v2.89 招式效果免疫檢查（薄霧能量 / 硬岩【鬥】能量 / 帝王拿波ex 皇帝之勢 / 火箭隊的急凍鳥 抵抗之幕）
-  const guardHF = canApplyAttackEffectToTarget(state, aIdx, defender.active, defCard, pool);
+  // v4.58：改 unified('attack-effect', isBench:false) — 行為等價（active 走 ATTACK_EFFECT_IMMUNITY 同樣 path）
+  const guardHF = canApplyEffectToTarget(state, aIdx, defender.active, defCard, 'attack-effect', pool, { isBench: false });
   if (guardHF.blocked) {
     return addLog(state,
       `手之力量：${defCard?.name ?? '?'} ${guardHF.reason}（不放傷害指示物）`, aIdx);

@@ -67,9 +67,9 @@ regPost('超級阿勃梭魯ex|死亡終局', (state, aIdx, pool) => {
   if (def.damage < 60) {
     return addLog(state, '死亡終局：對手戰鬥寶可夢傷害指示物不足 6 個，效果未觸發', aIdx);
   }
-  // 招式效果免疫檢查（昏厥屬招式效果）— 仿 雙斧戰龍|斧擊在地 範本
+  // v4.58：改 unified('attack-effect', isBench:false) — 行為等價
   const defCard = pool.get(def.cardId);
-  const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCard, pool);
+  const guard = canApplyEffectToTarget(state, aIdx, def, defCard, 'attack-effect', pool, { isBench: false });
   if (guard.blocked) {
     return addLog(state, `死亡終局：${defCard?.name ?? '?'}｜${guard.reason}（不昏厥）`, aIdx);
   }

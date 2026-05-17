@@ -267,9 +267,9 @@ regR('kitsune-move-counters', (state, aIdx, iids, _params, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppActive = state.players[dIdx].active;
   if (!oppActive) return state;
-  // v2.92 招式效果免疫檢查（搬指示物到對手 = 對對手放指示物，屬招式效果）
+  // v4.58：改 unified('attack-effect', isBench:false) — 行為等價
   const oppCard = pool.get(oppActive.cardId);
-  const guard = canApplyAttackEffectToTarget(state, aIdx, oppActive, oppCard, pool);
+  const guard = canApplyEffectToTarget(state, aIdx, oppActive, oppCard, 'attack-effect', pool, { isBench: false });
   if (guard.blocked) {
     return addLog(state, `九尾狐搬動：${oppCard?.name ?? '?'}｜${guard.reason}（不搬指示物）`, aIdx);
   }

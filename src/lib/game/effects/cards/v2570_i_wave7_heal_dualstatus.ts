@@ -9,6 +9,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
+import { canApplyEffectToTarget } from '../../defense';
 import {
   regPre, regPost,
   addLog, updatePlayer,
@@ -114,9 +115,9 @@ regPost('毒粉蛾|薄暮之毒', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
   if (!def) return state;
-  // v2.92 招式效果免疫檢查（雙重狀態整體屬招式效果，被擋則皆不施加）
+  // v4.58：改 unified('attack-effect', isBench:false) — 行為等價
   const defCard = pool.get(def.cardId);
-  const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCard, pool);
+  const guard = canApplyEffectToTarget(state, aIdx, def, defCard, 'attack-effect', pool, { isBench: false });
   if (guard.blocked) {
     return addLog(state, `薄暮之毒：${defCard?.name ?? '?'}｜${guard.reason}（不施加雙重狀態）`, aIdx);
   }
@@ -139,9 +140,9 @@ regPost('火箭隊的黑魯加|惡之火種', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
   if (!def) return state;
-  // v2.92 招式效果免疫檢查（雙重狀態整體屬招式效果）
+  // v4.58：改 unified('attack-effect', isBench:false) — 行為等價
   const defCard = pool.get(def.cardId);
-  const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCard, pool);
+  const guard = canApplyEffectToTarget(state, aIdx, def, defCard, 'attack-effect', pool, { isBench: false });
   if (guard.blocked) {
     return addLog(state, `惡之火種：${defCard?.name ?? '?'}｜${guard.reason}（不施加雙重狀態）`, aIdx);
   }
