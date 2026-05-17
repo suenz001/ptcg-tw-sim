@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.5</span> 🏗️ Phase 1: Defense 統一架構檔（零行為變更）</summary>
+        <ul>
+          <li><b>背景</b>：玩家提出 defense helper 寫得太亂的疑慮，audit 確認 — 每個 source resolver 都必須自己決定哪些 helper 呼叫，容易漏（v3.9 / v4.06 / v4.19 / v4.4999 都是「漏 helper」hotfix 連鎖）。光之翼散在 5+ 處 inline 沒統一管理。</li>
+          <li><b>本波 (Phase 1)</b>：新增 <code>src/lib/game/defense.ts</code> — 統一 defense 入口 <code>canApplyEffectToTarget(state, actorIdx, target, targetCard, kind, pool)</code>。內部分派到既有 3 個 helper（resolveBenchGuard / canApplyAttackEffectToTarget / 光之翼 inline）。</li>
+          <li><b>22 條 defense 規則 documentation table</b>：<code>DEFENSE_RULES_DOC</code> 標註每張 defense 卡屬於哪個 helper 管理 + 規則範圍 + Phase 2/3 todo。</li>
+          <li><b>零行為變更</b>：純新增檔，沒任何現有 source 呼叫新 helper。所有 source 仍走原 helper（行為等價）。</li>
+          <li><b>後續</b>：Phase 2 (v4.51) 遷移 8 個 P0 source 用新 helper（修 audit 找到的漏網，含重晶石之獄 / 5 處光之翼漏 / 飛來橫禍 / 悄聲加害）。Phase 3 漸進遷移其他 source。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.4999</span> 🛠️ 修幻影奇襲沒擋蟲甲聖球形盾牌 + 補鐵律 Rule 15 / 16</summary>
         <ul>
           <li><b>玩家回報</b>：蟲甲聖｜球形盾牌無法防禦多龍巴魯托ex 幻影奇襲放置 6 個傷害指示物的招式效果。</li>
