@@ -6656,6 +6656,14 @@ export function getUsableAbilities(
         if (player.deck.length === 0) return;
         if (!player.akyoSecretPlayedThisTurn) return;  // 本回合需打過阿杏的秘招
       }
+      // v4.4996：4 組撞 key 卡的另一個 ability — 都是 passive HP 修飾或未實裝，不該顯示「使用特性」按鈕
+      //   - 生機森巴 (樂天河童 SV9/MC) — passive +40 HP，自動套用 getEffectiveHP
+      //   - 雜草魂 (怖納噬草 SV8a) — passive 對手獎賞×50 HP，自動套用
+      //   - 厚脂肪 (白海獅 M2) — passive 抗火/冰減傷，未實裝
+      //   - 飢餓衝刺 (莫魯貝可 SV8a) — 未實裝
+      //   regAByName 用 ability name 分流後，這些 ability 走 by-name 沒命中也不會 fallback 跑錯邏輯
+      //   （另一個 ability name 的 regA 已遷移到 regAByName，by-index fallback 已不再有衝突 fn）
+      if (ab.name === '生機森巴' || ab.name === '雜草魂' || ab.name === '厚脂肪' || ab.name === '飢餓衝刺') return;
       // 集客：只有出場才能用 + 牌庫不空（v2.229 補資源 gate）
       if (ab.name === '集客') {
         if (player.active?.iid !== pk.iid) return;

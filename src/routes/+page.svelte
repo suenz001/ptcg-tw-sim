@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.4996</span> 🛠️ 完成剩餘 4 組撞 key 卡遷移（樂天河童/怖納噬草/白海獅/莫魯貝可）</summary>
+        <ul>
+          <li><b>背景</b>：v4.4995 雙 map 重構後，叉字蝠完整修。但其他 4 組撞 key 卡（樂天河童 激動治癒 vs 生機森巴 / 怖納噬草 恐慌牢籠 vs 雜草魂 / 白海獅 沖刷 vs 厚脂肪 / 莫魯貝可 搜尋點心 vs 飢餓衝刺）仍用 by-index 註冊，dispatch fallback 仍會撞 key — 本波完成遷移。</li>
+          <li><b>修法</b>：4 個卡片檔加 <code>regAByName</code> import + 把 <code>regA('XX', 0, fn)</code> 改 <code>regAByName('XX', '已實裝 ability', fn)</code>。</li>
+          <li><b>getUsableAbilities 加 skip</b>：另一個 ability（生機森巴 / 雜草魂 / 厚脂肪 / 飢餓衝刺）全部是 passive HP 修飾或未實裝，不該顯示「使用特性」按鈕 — 加 hard-code skip 避免誤點。</li>
+          <li><b>效果</b>：所有 9 組同名卡撞 key 案例全部解決。<code>ABILITY_REFACTOR_PLAN.md</code> Phase 1 完成。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.4995</span> 🏗️ ABILITY_EFFECTS key 重構 + 實裝叉字蝠 SV6a 怨影使者</summary>
         <ul>
           <li><b>背景</b>：audit 找到 9 組同名卡但不同 abilities[0] — <code>ABILITY_EFFECTS</code> map 用 <code>cardName|abIdx</code> 當 key 撞 key（叉字蝠夜間工作 vs 怨影使者、樂天河童激動治癒 vs 生機森巴 等）。</li>

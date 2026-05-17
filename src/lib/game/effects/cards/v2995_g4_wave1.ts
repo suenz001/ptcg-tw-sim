@@ -34,7 +34,7 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
-  regA, regR,
+  regA, regAByName, regR,
   addLog, updatePlayer, withPending, shuffle, drawCards,
   clearActiveEffects,
   healResolver,
@@ -135,7 +135,7 @@ regA('寶包繭', 0, (st, idx, pool, _cardInst) => {
 // 卡面：「若自己的場上有【草】屬性的『超級進化寶可夢【ex】』，則在自己的回合時
 //        可使用 1 次。將自己的 1 隻寶可夢恢復『60』HP。」
 // gate：場上有【草】超級進化ex（engine button gate 同步檢查）+ 每回合 1 次
-regA('樂天河童', 0, (st, idx, pool, _cardInst) => {
+regAByName('樂天河童', '激動治癒', (st, idx, pool, _cardInst) => {
   const p = st.players[idx];
   if (!hasMegaExOfType(p, pool, 'Grass')) {
     return addLog(st, '激動治癒：場上沒有【草】屬性的超級進化【ex】', idx);

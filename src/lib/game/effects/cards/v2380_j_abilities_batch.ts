@@ -36,14 +36,14 @@
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
 import {
-  regA, regR,
+  regA, regAByName, regR,
   addLog, updatePlayer, withPending,
 } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 白海獅｜沖刷 — 不限次數，備戰【水】能量改附戰鬥場
 // ══════════════════════════════════════════════════════════════════════════════
-regA('白海獅', 0, (st, idx, pool) => {
+regAByName('白海獅', '沖刷', (st, idx, pool) => {
   const player = st.players[idx];
   if (!player.active) return addLog(st, '沖刷：戰鬥場無寶可夢', idx);
   // 找備戰寶可夢身上的【水】能量

@@ -13,7 +13,7 @@
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
 import {
-  regA, regR,
+  regA, regAByName, regR,
   addLog, updatePlayer, withPending,
   drawCards,
 } from '../_shared';
@@ -431,7 +431,7 @@ regR('quaquaval-fast-tempo', (st, idx, iids, _params, pool) => {
 //   - 「回復原樣」= 不丟棄則卡片留在 deck[0]（不動）；
 //     「丟棄」=  deck.shift → discard
 // ══════════════════════════════════════════════════════════════════════════════
-regA('莫魯貝可', 0, (st, idx, pool, _cardInst) => {
+regAByName('莫魯貝可', '搜尋點心', (st, idx, pool, _cardInst) => {
   const p = st.players[idx];
   if (p.deck.length === 0) {
     return addLog(st, '搜尋點心：牌庫為空，無法使用', idx);

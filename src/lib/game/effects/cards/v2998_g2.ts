@@ -31,7 +31,7 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
-  regA, regR,
+  regA, regAByName, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit,
 } from '../_shared';
@@ -321,7 +321,7 @@ regR('farfetchd-tcl-hammer-discard', (st, idx, iids, _params, pool) => {
 //   特性自身負責 — 此處沿用 statusPost 的免疫策略（簡化版）。卡面是「特性效果」
 //   而非「招式效果」，不走完整 attack-effect-shield；一律施加，僅檢查憨憨臉。
 // ══════════════════════════════════════════════════════════════════════════════
-regA('怖納噬草', 0, (st, idx, pool, _cardInst) => {
+regAByName('怖納噬草', '恐慌牢籠', (st, idx, pool, _cardInst) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
   if (!opp.active) return addLog(st, '恐慌牢籠：對手戰鬥場無寶可夢', idx);
