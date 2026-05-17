@@ -519,8 +519,8 @@ export async function proposeRestart(roomCode: string): Promise<void> {
     const myIdx = findMySeatIdx(data.seats, uid);
     if (myIdx < 0 || myIdx > 1) throw new Error('only P1/P2 can propose restart');
     if (data.status !== 'playing' || !data.gameState) throw new Error('game not in progress');
+    // v4.601: per-game cap removed at user request — no upper limit
     const count = data.restartProposalCount ?? 0;
-    if (count >= 3) throw new Error('restart proposal limit reached (3/game)');
     const cur = data.restartProposed ?? {};
     if (cur[myIdx] || cur[1 - myIdx]) throw new Error('proposal already in progress');
     const newProposed = { ...cur, [myIdx]: true };

@@ -123,7 +123,7 @@
   let lastSeenRejectedAt = $state<number | null>(null);
   const canProposeRestart = $derived(
     mode === 'online'
-      ? !myRestartProposed && !oppRestartProposed && restartProposalCount < 3
+      ? !myRestartProposed && !oppRestartProposed
       : true
   );
   let restartCountdownTimer: ReturnType<typeof setInterval> | null = null;
@@ -3078,9 +3078,7 @@
     if (mode === 'online') {
       if (!roomCode) return;
       if (!canProposeRestart) return;
-      const remaining = 3 - restartProposalCount;
-      const msg = '向對手提議重新開局？本局還可提議 ' + remaining + ' 次。\n對方收到後會被詢問是否同意（30 秒回應時間）。';
-      if (!confirm(msg)) return;
+      if (!confirm('向對手提議重新開局？\n對方收到後會被詢問是否同意（30 秒回應時間）。')) return;
       proposeRestart(roomCode).catch((e: any) => {
         alert('提議重新開局失敗：' + (e?.message ?? e));
       });
@@ -6301,10 +6299,8 @@
                 ⏳ 等待對方同意中... 倒數 {restartCountdown}s
               {:else if oppRestartProposed}
                 ⚠️ 對方已提議重新開局，請於彈出視窗回應
-              {:else if restartProposalCount >= 3}
-                本局已達提議上限（3/3 次）
               {:else}
-                連線對戰：需對手同意。本局可提議 {3 - restartProposalCount}/3 次
+                連線對戰：需對手同意。可多次提議
               {/if}
             {:else}
               將清空目前盤面，從擲幣決定先攻重新開始

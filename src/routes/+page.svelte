@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.601</span> 🔧 取消提議重新開局的「一場 3 次上限」</summary>
+        <ul>
+          <li>玩家回饋：3 次上限太嚴格。連線模式提議重新開局改為<b>無次數限制</b>。</li>
+          <li>仍保留：30 秒倒數 timeout + 「同時只能有一個提議在進行中」gate（防雙方互相 spam）</li>
+          <li>後端 restartProposalCount 仍會累加（純統計用，不擋）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.60</span> 🔄 對局中「提議重新開局」功能（本機 / AI / 連線三模式）</summary>
         <ul>
           <li><b>使用情境</b>：對戰中遇到極度卡手（mulligan 過多、起手沒進化路徑等），不必玩完整場可提議重新開局，雙方同意即從擲幣決定先攻重新開始。</li>
