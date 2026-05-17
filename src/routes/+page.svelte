@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.4991</span> 🛠️ 鎖鏈糬 +40 沒套用 + 秋明/瘋狂連鎖 同類漏判修補</summary>
+        <ul>
+          <li><b>玩家回報</b>：超級巨牙鯊ex 中毒、附鎖鏈糬，「貪心之牙」70 傷害沒套 +40 增傷。</li>
+          <li><b>Root cause</b>：PTCG 雙狀態系統 — <code>status</code>（asleep/confused/paralyzed 行動類）vs <code>secondaryStatus</code>（poisoned/burned 傷害類）。「中毒」實際存在 <code>secondaryStatus</code>，<code>status === 'poisoned'</code> 只在「純中毒、未疊行動狀態」才成立。<code>tools.ts:109</code> 鎖鏈糬只判 <code>status</code>，常見中毒+麻痺 / 中毒+睡眠 完全沒套 +40。</li>
+          <li><b>全面 audit</b>：grep <code>.status === 'poisoned'</code> 全掃，找到 3 處同類漏判：</li>
+          <li>　1. <code>tools.ts:109</code> 鎖鏈糬 +40（玩家回報）</li>
+          <li>　2. <code>effects.ts:3569</code> 秋明 supporter gate（對手中毒可用）</li>
+          <li>　3. <code>effects.ts:5069</code> 夠讚狗ex 瘋狂連鎖 +130（自身中毒）</li>
+          <li><b>修法</b>：3 處統一補 OR 檢查 — <code>inst.status === 'poisoned' || inst.secondaryStatus === 'poisoned'</code>。其他出現點（engine.ts 2134/4981/6413/6488、v2380/v2600 等）已正確使用此 pattern。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.499</span> 🛠️ 連線對戰強化 + 洛托姆驚嚇揭示資訊（audit 第 1 批）</summary>
         <ul>
           <li><b>背景</b>：完成代碼健康度 audit（3 個並行 subagent 掃 race condition / 卡面 vs 實作 / stub），本波先修風險低的 3 項。</li>

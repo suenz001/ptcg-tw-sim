@@ -3566,7 +3566,11 @@ reg('寇沙', (st, idx) => {
 });
 
 // 秋明 — 對手中毒時，手牌洗回，抽 7
-regG('秋明', (st, idx) => st.players[(1-idx) as 0|1].active?.status === 'poisoned');
+// v4.4991 fix：對手中毒實際存 secondaryStatus，補 OR 檢查
+regG('秋明', (st, idx) => {
+  const opp = st.players[(1-idx) as 0|1].active;
+  return opp?.status === 'poisoned' || opp?.secondaryStatus === 'poisoned';
+});
 reg('秋明', (st, idx) => {
   st = addLog(st, '秋明：手牌洗回，抽 7 張', idx);
   return updatePlayer(st, idx, p => {
@@ -5066,7 +5070,9 @@ regPre('故勒頓|原生亂打', (state, aIdx, pool) => {
 // 夠讚狗ex|瘋狂連鎖 — 130 + 若自身中毒則 +130
 regPre('夠讚狗ex|瘋狂連鎖', (state, aIdx, _pool) => {
   const att = state.players[aIdx].active;
-  if (att && att.status === 'poisoned') {
+  // v4.4991 fix：中毒實際存 secondaryStatus，補 OR 檢查
+  const isSelfPoisoned = !!att && (att.status === 'poisoned' || att.secondaryStatus === 'poisoned');
+  if (isSelfPoisoned) {
     // v3.03：breakdown 拆「130(基礎) + 130(自身中毒)」
     return {
       state: addLog(state, '瘋狂連鎖：自身中毒 → +130', aIdx),
