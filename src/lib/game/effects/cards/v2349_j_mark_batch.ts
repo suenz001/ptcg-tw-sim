@@ -57,13 +57,15 @@ function damageAllOppByCoin(
     const isHeads = Math.random() < 0.5;
     s = addLog(s, `${label}：對 ${t.iid} 擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
     if (!isHeads) continue;
-    // v4.53 Phase 3：unified('attack-effect') per-target — bench target 補球形盾牌/藏隱等
+    // v4.57 A1 修：caller 虛無歸零卡面是「150 點傷害」(attack-damage)，非 attack-effect。
+    //   原 v4.53 用 attack-effect 會誤套薄霧/抵抗之幕/皇帝之勢/全能硬殼/硬岩 (這些只擋 effect)。
+    //   改 'attack-damage' → active 不擋（直接受擊），bench 走球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔/太晶/中立中心
     if (pool) {
       const tCard = pool.get(t.cardId);
       const _coinIsBench = t.iid !== s.players[dIdx].active?.iid;
-      const guard = canApplyEffectToTarget(s, aIdx, t, tCard, 'attack-effect', pool, { isBench: _coinIsBench });
+      const guard = canApplyEffectToTarget(s, aIdx, t, tCard, 'attack-damage', pool, { isBench: _coinIsBench });
       if (guard.blocked) {
-        s = addLog(s, `${label}：${tCard?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
+        s = addLog(s, `${label}：${tCard?.name ?? '?'}｜${guard.reason}（不受傷害）`, aIdx);
         continue;
       }
     }

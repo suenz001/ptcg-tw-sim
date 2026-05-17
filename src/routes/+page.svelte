@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.57</span> 🐛 A1 audit：修虛無歸零誤套 effect immunity（attack-damage 被擋薄霧）</summary>
+        <ul>
+          <li><b>背景</b>：v4.54 修了 4 個招式攻擊傷害誤套 effect immunity (薄霧/抵抗之幕/皇帝之勢)，A1 audit 找剩餘同類漏網。</li>
+          <li><b>修補</b>：</li>
+          <li>　- 超級基格爾德ex｜<b>虛無歸零</b>（damageAllOppByCoin generic helper）— 卡面「150 點傷害」(attack-damage 非 attack-effect)，v4.53 改 unified 時放錯類別。改 kind='attack-damage' → active 不擋，bench 走球形盾牌等真擋傷害的卡。</li>
+          <li><b>已查無漏網（卡面 vs 實作對齊）</b>：</li>
+          <li>　- 薄暮之毒、惡之火種（雙重狀態 → attack-effect）✓</li>
+          <li>　- 九尾狐搬指示物、鬼斯通纏擾、胡地手之力量（放指示物 → attack-effect）✓</li>
+          <li>　- 超級阿勃梭魯ex 死亡終局（昏厥 → attack-effect）✓</li>
+          <li>　- 死神棺 冥府之律、伊裴爾塔爾ex 死亡靈魂（attack-effect）✓</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.56</span> 🛡️ 系統性 audit — 修 3 個 ability-effect source 漏 defense check</summary>
         <ul>
           <li><b>背景</b>：依鐵律 7c+15 系統性 audit「對對手寶可夢放置傷害指示物 / 造成傷害」的特性與招式 source，找出沒走 defense helper 或漏 case 的 source。</li>
