@@ -30,6 +30,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { canApplyEffectToTarget } from '../../defense';
 import {
   regA, regAByName, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
@@ -417,10 +418,12 @@ regR('rocket-crobat-mass-bite', (st, idx, iids, params, pool) => {
     const isActive = opp.active?.iid === targetIid;
     const target = isActive ? opp.active! : opp.bench.find(c => c.iid === targetIid);
     if (!target) continue;
-    const tName = pool.get(target.cardId)?.name ?? '?';
-    // v4.19：對戰圓形 — 特性效果放指示物對備戰目標無效
-    if (!isActive && isBenchProtected(s, pool)) {
-      s = addLog(s, `${label}：${tName} 因對戰圓形競技場效果不受傷害指示物`, idx);
+    const tCard = pool.get(target.cardId);
+    const tName = tCard?.name ?? '?';
+    // v4.51 Phase 2：改用統一 canApplyEffectToTarget（kind='ability-effect'）— 涵蓋光之翼 + 對戰圓形
+    const _biteGuard = canApplyEffectToTarget(s, idx, target, tCard, 'ability-effect', pool, { isBench: !isActive });
+    if (_biteGuard.blocked) {
+      s = addLog(s, `${label}：${tName} ${_biteGuard.reason}`, idx);
       continue;
     }
     s = updatePlayer(s, oppIdx, pl => ({

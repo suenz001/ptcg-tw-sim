@@ -185,6 +185,9 @@ export function countAncientOnField(
  * 對戰圓形只擋「放置指示物」的效果，不擋招式本身的傷害。因此分離傷害 vs 效果兩個判定。
  * 類似於基本能量 vs 特殊能量當初的拆分原則。
  */
+// v4.51 Phase 2：統一 defense helper
+import { canApplyEffectToTarget } from './defense';
+
 export type DamageKind = 'attack-damage' | 'attack-effect' | 'ability-effect';
 
 /**
@@ -5577,10 +5580,12 @@ regR('snipe-20', (st, actorIdx, selectedIids, _params, pool) => {
   const isActive = defender.active?.iid === targetIid;
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
-  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物
-  if (!isActive && isBenchProtected(st, pool)) {
-    const name = pool.get(target.cardId)?.name ?? '?';
-    return addLog(st, `悄聲加害：${name} 因對戰圓形競技場效果不受傷害指示物`, actorIdx);
+  // v4.51 Phase 2：改用統一 canApplyEffectToTarget（kind='attack-effect'）
+  //   涵蓋對戰圓形 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 薄霧 / 皇帝之勢 等
+  const _silentTgtCard = pool.get(target.cardId);
+  const _silentGuard = canApplyEffectToTarget(st, actorIdx, target, _silentTgtCard, 'attack-effect', pool, { isBench: !isActive });
+  if (_silentGuard.blocked) {
+    return addLog(st, `悄聲加害：${_silentTgtCard?.name ?? '?'} ${_silentGuard.reason}，未放置傷害指示物`, actorIdx);
   }
   const targetCard = pool.get(target.cardId);
   const newDmg = target.damage + 20;
@@ -7070,18 +7075,32 @@ regPost('噬沙堡爺ex|重晶石之獄', (state, aIdx, pool) => {
   if (defender.bench.length === 0) {
     return addLog(state, '重晶石之獄：對手無備戰寶可夢', aIdx);
   }
+  // v4.51 Phase 2：per-target 加 canApplyEffectToTarget（attack-effect）— 原版完全沒檢查
+  //   涵蓋對戰圓形 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 抵抗之幕 / 薄霧 / 全能硬殼 等
+  const blockedNames: string[] = [];
+  let s = state;
   const newBench = defender.bench.map(c => {
     const card = pool.get(c.cardId);
     const hp = card?.hp ?? 0;
-    if (hp <= 100) return c; // HP 上限即為 100 或以下，不影響
+    if (hp <= 100) return c;
     const targetDamage = hp - 100;
-    if (c.damage >= targetDamage) return c; // 已超過上限、不再補
+    if (c.damage >= targetDamage) return c;
+    // defense check
+    const guard = canApplyEffectToTarget(s, aIdx, c, card, 'attack-effect', pool, { isBench: true });
+    if (guard.blocked) {
+      blockedNames.push(`${card?.name ?? '?'}(${guard.reason})`);
+      return c;
+    }
     return { ...c, damage: targetDamage };
   });
   const affected = newBench.filter((c, i) => c.damage !== defender.bench[i].damage).length;
-  const players = [...state.players] as [PlayerState, PlayerState];
+  const players = [...s.players] as [PlayerState, PlayerState];
   players[dIdx] = { ...defender, bench: newBench };
-  return addLog({ ...state, players }, `重晶石之獄：對手備戰 ${affected} 隻被放置傷害指示物至剩 HP 100`, aIdx);
+  s = addLog({ ...s, players }, `重晶石之獄：對手備戰 ${affected} 隻被放置傷害指示物至剩 HP 100`, aIdx);
+  if (blockedNames.length > 0) {
+    s = addLog(s, `重晶石之獄：${blockedNames.join('、')} 未受影響`, aIdx);
+  }
+  return s;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -14123,13 +14142,17 @@ OPP_ENERGY_ATTACH_PASSIVE.set('侵蝕詛咒', (state, gIdx, _oppIdx, targetIid, 
   const isActive = player.active?.iid === targetIid;
   const benchIdx = player.bench.findIndex(c => c.iid === targetIid);
 
-  // v4.19：對戰圓形競技場 — 對手特性效果放指示物對備戰目標無效
-  //   侵蝕詛咒是耿鬼ex 的對手 hook：自方附能時觸發。target 若在備戰 → 擋。
-  if (!isActive && benchIdx >= 0 && isBenchProtected(state, pool)) {
-    const targetCard = pool.get(player.bench[benchIdx].cardId);
-    return addLog(state,
-      `侵蝕詛咒：${targetCard?.name ?? '?'} 因對戰圓形競技場效果不受傷害指示物`,
-      gIdx);
+  // v4.51 Phase 2：改用統一 canApplyEffectToTarget（kind='ability-effect'）
+  //   涵蓋光之翼 + 對戰圓形（其他 bench-defense 卡面是「招式」不擋特性，N/A）
+  const _erosionTgt = isActive ? player.active! : (benchIdx >= 0 ? player.bench[benchIdx] : null);
+  if (_erosionTgt) {
+    const _erosionTgtCard = pool.get(_erosionTgt.cardId);
+    const _erosionGuard = canApplyEffectToTarget(state, gIdx, _erosionTgt, _erosionTgtCard, 'ability-effect', pool, { isBench: !isActive });
+    if (_erosionGuard.blocked) {
+      return addLog(state,
+        `侵蝕詛咒：${_erosionTgtCard?.name ?? '?'} ${_erosionGuard.reason}`,
+        gIdx);
+    }
   }
 
   let updatedActive = player.active;

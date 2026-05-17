@@ -10,6 +10,7 @@
  *   - 特殊能量（engine canAffordAttack inline）：稜鏡能量 / 新衝天能量
  */
 import type { PlayerState, GameState, CardInstance } from '../../types';
+import { canApplyEffectToTarget } from '../../defense';
 import type { Card } from '$lib/cards/types';
 import { regPre, regPost, regA, reg, regR, regG, addLog, addPrivateLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
 } from '../_shared';
@@ -589,21 +590,26 @@ regR('greninja-shuriken-6', (state, aIdx, selectedIids, _params, pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const def = { ...players[dIdx] };
   let name = '?';
-  // v4.06：對戰圓形 BENCH_PROTECTION — 必殺手裡劍是「特性效果」，卡面：
-  //   「不會因對手的招式與特性的效果而被放置傷害指示物」 → 備戰目標被擋
-  //   active 目標照常吃 60（卡面註：戰鬥場仍受傷害）
-  if (def.active && selectedIids.includes(def.active.iid)) {
-    def.active = { ...def.active, damage: def.active.damage + 60 };
-    name = pool.get(def.active.cardId)?.name ?? '?';
-  } else if (isBenchProtected(state, pool)) {
-    // 目標在備戰 + 對戰圓形啟動 → 跳過放置
-    const target = def.bench.find(b => selectedIids.includes(b.iid));
-    name = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
+  // v4.51 Phase 2：改用統一 canApplyEffectToTarget helper（kind='ability-effect'）
+  //   - 涵蓋光之翼（self-only 擋特性效果，active + bench 都擋）
+  //   - 涵蓋對戰圓形（bench-only 擋招式/特性的效果）
+  //   - 球形盾牌 / 藏隱 等卡面寫「招式」不擋特性，N/A
+  const targetIid = selectedIids[0];
+  const isActive = def.active?.iid === targetIid;
+  const target = isActive ? def.active : def.bench.find(b => b.iid === targetIid);
+  if (!target) return state;
+  const targetCard = pool.get(target.cardId);
+  const guard = canApplyEffectToTarget(state, aIdx, target, targetCard, 'ability-effect', pool, { isBench: !isActive });
+  if (guard.blocked) {
     players[dIdx] = def;
-    return addLog({ ...state, players }, `必殺手裡劍：${name} 在備戰受對戰圓形保護，未放置傷害指示物`, aIdx);
+    return addLog({ ...state, players }, `必殺手裡劍：${targetCard?.name ?? '?'} ${guard.reason}，未放置傷害指示物`, aIdx);
+  }
+  if (isActive && def.active) {
+    def.active = { ...def.active, damage: def.active.damage + 60 };
+    name = targetCard?.name ?? '?';
   } else {
     def.bench = def.bench.map(b => {
-      if (selectedIids.includes(b.iid)) {
+      if (b.iid === targetIid) {
         name = pool.get(b.cardId)?.name ?? '?';
         return { ...b, damage: b.damage + 60 };
       }

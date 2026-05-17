@@ -498,6 +498,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
 import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay } from './effects/_shared';
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn } from './effects/_shared';
+import { canApplyEffectToTarget } from './defense';
 export { sameEvoName };
 // v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發
 import {
@@ -5277,6 +5278,11 @@ function handlePlaying(
         };
 
         if (opp.active && isBasicPokemonInst(opp.active)) {
+          // v4.51 Phase 2：active 也加 canApplyEffectToTarget（光之翼會擋 active）
+          const _sandActGuard = canApplyEffectToTarget(state, ownerIdx, opp.active, pool.get(opp.active.cardId), 'ability-effect', pool, { isBench: false });
+          if (_sandActGuard.blocked) {
+            sandstormAffected.push(`${pool.get(opp.active.cardId)?.name ?? '?'}(${_sandActGuard.reason})`);
+          } else {
           const newDmg = opp.active.damage + 20;
           const card = pool.get(opp.active.cardId);
           const hp = getEffectiveHP(opp.active, pool, state);
@@ -5295,13 +5301,20 @@ function handlePlaying(
           } else {
             opp.active = { ...opp.active, damage: newDmg };
           }
+          }
         }
-        // v4.19：對戰圓形 — 特性效果放指示物對備戰目標無效（揚沙影響 active + bench，只擋 bench）
-        const benchProtected = isBenchProtected(state, pool);
+        // v4.51 Phase 2：改用統一 canApplyEffectToTarget（kind='ability-effect'）— 涵蓋光之翼 + 對戰圓形
         const newOppBench: CardInstance[] = [];
         for (const b of opp.bench) {
           if (!isBasicPokemonInst(b)) { newOppBench.push(b); continue; }
-          if (benchProtected) { newOppBench.push(b); continue; }  // v4.19 bench 跳過
+          // defense check per-target
+          const _sandTgtCard = pool.get(b.cardId);
+          const _sandGuard = canApplyEffectToTarget(state, ownerIdx, b, _sandTgtCard, 'ability-effect', pool, { isBench: true });
+          if (_sandGuard.blocked) {
+            sandstormAffected.push(`${_sandTgtCard?.name ?? '?'}(${_sandGuard.reason})`);
+            newOppBench.push(b);
+            continue;
+          }
           const newDmg = b.damage + 20;
           const card = pool.get(b.cardId);
           const hp = getEffectiveHP(b, pool, state);

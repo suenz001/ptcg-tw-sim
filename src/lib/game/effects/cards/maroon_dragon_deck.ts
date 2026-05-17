@@ -19,6 +19,7 @@
  */
 
 import type { GameState, PlayerState, CardInstance } from '../../types';
+import { canApplyEffectToTarget } from '../../defense';
 import {
   reg, regR, regG, regA,
   BENCH_PLACE_TRIGGERS,
@@ -246,10 +247,11 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
   const targetCard = pool.get(target.cardId);
-  // v4.19：對戰圓形競技場 — 特性效果放指示物對備戰目標無效
-  if (!isActive && isBenchProtected(st, pool)) {
+  // v4.51 Phase 2：改用統一 canApplyEffectToTarget（kind='ability-effect'）— 涵蓋光之翼 + 對戰圓形
+  const _adrenalGuard = canApplyEffectToTarget(st, actorIdx, target, targetCard, 'ability-effect', pool, { isBench: !isActive });
+  if (_adrenalGuard.blocked) {
     return addLog(st,
-      `腎上腺腦力：${targetCard?.name ?? '?'} 因對戰圓形競技場效果不受傷害指示物（已回復來源傷害）`,
+      `腎上腺腦力：${targetCard?.name ?? '?'} ${_adrenalGuard.reason}（已回復來源傷害）`,
       actorIdx);
   }
   const tHp = targetCard?.hp ?? 0;

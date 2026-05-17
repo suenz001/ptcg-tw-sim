@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.51</span> 🏗️ Phase 2: 7 個 P0 source 遷移到統一 defense helper</summary>
+        <ul>
+          <li><b>背景</b>：v4.5 建立的 <code>canApplyEffectToTarget</code> 統一 helper 開始派上用場。本波遷移 audit 找到的 P0 漏網 source 到新 helper。</li>
+          <li><b>遷移清單</b>：</li>
+          <li>　1. 必殺手裡劍（超級甲賀忍蛙ex）— ability-effect，原只 isBenchProtected → 補光之翼 等</li>
+          <li>　2. <b>重晶石之獄（噬沙堡爺ex）</b>— attack-effect，原<b>完全沒檢查</b> → 補對戰圓形/球形盾牌/藏隱/深度下潛/羽毛化石 等</li>
+          <li>　3. 侵蝕詛咒（耿鬼ex）— ability-effect → 補光之翼</li>
+          <li>　4. 揚沙（火箭隊的班基拉斯）— ability-effect → 補光之翼（active+bench 都加）</li>
+          <li>　5. 腎上腺腦力（願增猿）— ability-effect → 補光之翼</li>
+          <li>　6. 亂咬/暗中咬住（火箭隊的叉字蝠ex/大嘴蝠）— ability-effect → 補光之翼</li>
+          <li>　7. 悄聲加害（綿綿泡芙）— attack-effect → 補球形盾牌/藏隱/深度下潛/羽毛化石 等</li>
+          <li><b>飛來橫禍</b>（振翼髮）共用 dragapult-snipe resolver，v4.4999 已修，本波不動。</li>
+          <li><b>架構成果</b>：所有 source 統一呼叫 <code>canApplyEffectToTarget(state, actorIdx, target, targetCard, kind, pool)</code>，未來新增 defense 卡只要加進 helper 內部 dispatch 即可，不再會散到各個 source。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.5</span> 🏗️ Phase 1: Defense 統一架構檔（零行為變更）</summary>
         <ul>
           <li><b>背景</b>：玩家提出 defense helper 寫得太亂的疑慮，audit 確認 — 每個 source resolver 都必須自己決定哪些 helper 呼叫，容易漏（v3.9 / v4.06 / v4.19 / v4.4999 都是「漏 helper」hotfix 連鎖）。光之翼散在 5+ 處 inline 沒統一管理。</li>
