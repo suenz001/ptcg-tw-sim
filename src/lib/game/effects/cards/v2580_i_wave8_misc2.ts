@@ -20,6 +20,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
+import { countOneEnergy } from '../../effects';
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
@@ -96,10 +97,8 @@ regPre('炎帝|閃焰墜落', fieldEnergyCountConditionPre(30, 90, 'Fire', 4, '�
 regPre('哥達鴨|水炮', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return { state, damage: 60 };
-  let count = 0;
-  for (const e of a.energyAttached) {
-    if (pool.get(e.cardId)?.pokemonType === 'Water') count++;
-  }
+  // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量
+  const count = countOneEnergy(a, 'Water', pool);
   const dmg = 60 + count * 20;
   const s = addLog(state, `水炮：自身水能量 ${count} 個 → 60 + ${count}×20 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
@@ -407,11 +406,8 @@ regPost('洛托姆|洛托呼喚', (state, aIdx, pool) => {
 regPre('阿響的熔岩蝸牛|熔岩爆炸', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return { state, damage: 0 };
-  // 算自身火能量
-  let fireCount = 0;
-  for (const e of a.energyAttached) {
-    if (pool.get(e.cardId)?.pokemonType === 'Fire') fireCount++;
-  }
+  // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量
+  const fireCount = countOneEnergy(a, 'Fire', pool);
   const discardCount = Math.min(5, fireCount);
   const dmg = discardCount * 70;
   const s = addLog(state, `熔岩爆炸：自身火能量 ${fireCount} 個（最多棄 5 → ${discardCount}），${discardCount}×70 = ${dmg}`, aIdx);

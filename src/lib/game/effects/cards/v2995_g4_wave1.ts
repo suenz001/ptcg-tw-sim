@@ -480,7 +480,8 @@ regR('teleporter-promote', (st, idx, iids, _params, pool) => {
   const p = st.players[idx];
   const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
   if (bIdx < 0) return st;
-  const newActive = p.bench[bIdx];
+  // v4.55：設 movedToActiveThisTurn — 觸發疾風直撞/暴衝閃光/進擊破壞 等「本回合備戰→戰鬥場」條件
+  const newActive: CardInstance = { ...p.bench[bIdx], movedToActiveThisTurn: true };
   const newBench = [...p.bench];
   newBench.splice(bIdx, 1);
   const name = pool.get(newActive.cardId)?.name ?? '?';

@@ -43,7 +43,7 @@ import {
   ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
 import { isBasicEnergyOfType } from '../../engine';
-import { flipCoinsWithLog, canApplyAttackEffectToTarget } from '../../effects';
+import { flipCoinsWithLog, canApplyAttackEffectToTarget, countOneEnergy} from '../../effects';
 
 // ── 01. 大嘴娃｜雙重食客 — 60× 丟棄手牌能量張數 ─────────────────────────────
 // JSON：「從自己的手牌將最多2張能量卡丟棄，造成其張數×60點傷害。」
@@ -439,11 +439,8 @@ regR('regi-charge', (state, aIdx, iids, _params, _pool) => {
 regPre('瑪力露麗ex|能量氣球', (state, aIdx, pool) => {
   const active = state.players[aIdx].active;
   if (!active) return { state, damage: 60 };
-  let psyCount = 0;
-  for (const e of active.energyAttached) {
-    const ec = pool.get(e.cardId);
-    if (ec?.pokemonType === 'Psychic') psyCount++;
-  }
+  // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量
+  const psyCount = countOneEnergy(active, 'Psychic', pool);
   return { state, damage: 60 + psyCount * 40 };
 });
 

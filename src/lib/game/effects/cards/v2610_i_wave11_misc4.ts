@@ -24,6 +24,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
+import { countOneEnergy } from '../../effects';
 import { regPre, regPost, addLog, updatePlayer, withPending, regR } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
@@ -466,10 +467,8 @@ regPre('火箭隊的臭臭泥|毒液危害', (state, aIdx, _pool) => {
 regPre('櫻花魚|漸強波', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return { state, damage: 0 };
-  let count = 0;
-  for (const e of a.energyAttached) {
-    if (pool.get(e.cardId)?.pokemonType === 'Water') count++;
-  }
+  // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量
+  const count = countOneEnergy(a, 'Water', pool);
   const dmg = count * 30;
   const s = addLog(state, `漸強波：自身水能量 ${count} 個 → ${count}×30 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };

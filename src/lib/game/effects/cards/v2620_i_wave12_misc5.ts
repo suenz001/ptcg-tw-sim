@@ -5,6 +5,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
+import { countOneEnergy } from '../../effects';
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit,
 } from '../_shared';
@@ -86,10 +87,8 @@ function selfTypeEnergyPre(
   return (state, aIdx, pool) => {
     const a = state.players[aIdx].active;
     if (!a) return { state, damage: base };
-    let count = 0;
-    for (const e of a.energyAttached) {
-      if (pool.get(e.cardId)?.pokemonType === type) count++;
-    }
+    // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量 (看卡名【X】fallback)
+    const count = countOneEnergy(a, type, pool);
     const dmg = base + count * perEnergy;
     const s = addLog(state, `${label}：自身 ${type} 能量 ${count} 個 → ${base} + ${count}×${perEnergy} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };
@@ -522,10 +521,11 @@ regPost('鴨寶寶|消火', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
   if (!def) return state;
-  // 從尾端找 1 張火能量
+  // v4.55：改用 countOneEnergy fallback 邏輯 (匹配 pokemonType 或 卡名【火】) — 涵蓋基本能量
   let fireIdx = -1;
   for (let i = def.energyAttached.length - 1; i >= 0; i--) {
-    if (pool.get(def.energyAttached[i].cardId)?.pokemonType === 'Fire') {
+    const c = pool.get(def.energyAttached[i].cardId);
+    if (c && (c.pokemonType === 'Fire' || /【火】/.test(c.name))) {
       fireIdx = i;
       break;
     }

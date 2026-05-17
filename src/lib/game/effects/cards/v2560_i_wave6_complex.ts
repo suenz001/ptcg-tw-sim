@@ -22,7 +22,7 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, statusPost } from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost, countOneEnergy} from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 瑪夏多|暗影側踢 60 + 若 KO 對手 → 下回合免疫招式
@@ -165,10 +165,8 @@ regPre('蓋諾賽克特|昆蟲加農炮', (s) => ({ state: s, damage: 0 }));
 regPost('蓋諾賽克特|昆蟲加農炮', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return state;
-  let grassCount = 0;
-  for (const e of a.energyAttached) {
-    if (pool.get(e.cardId)?.pokemonType === 'Grass') grassCount++;
-  }
+  // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量
+  const grassCount = countOneEnergy(a, 'Grass', pool);
   const dmg = grassCount * 20;
   if (dmg === 0) {
     return addLog(state, '昆蟲加農炮：自身無草能量，無傷害', aIdx);

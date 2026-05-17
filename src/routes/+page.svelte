@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.55</span> 🐛 修 2 bug + 同類 audit（瞬間移動者 promote + 8 個自身能量×N 漏 fallback）</summary>
+        <ul>
+          <li><b>Bug 1：凱西｜瞬間移動者 promote 沒設「本回合備戰→戰鬥場」flag</b></li>
+          <li>　- 影響：凱西回牌庫後備戰寶可夢上場，使用<b>疾風直撞</b>（超級長耳兔ex、凱路迪歐ex）/ <b>進擊破壞</b>（烈空坐）/ <b>暴衝閃光</b>（普隆隆姆ex）— 都不會觸發 +N 條件</li>
+          <li>　- 修：teleporter-promote resolver 加 <code>movedToActiveThisTurn: true</code></li>
+          <li><b>Bug 2：自身屬性能量×N 公式漏 pokemonType=null 基本能量 fallback</b>（同 v3.731 蜜糖風暴 bug 類型）</li>
+          <li>　- 8 處招式修補：吼鯨王水炮 / 瑪俐的莫魯貝可扣殺輪 / 哥達鴨水炮 / 拉普拉斯ex水炮迴旋 / 蓋諾賽克特昆蟲加農炮 / 阿響的熔岩蝸牛熔岩爆炸 / 櫻花魚漸強波 / 瑪力露麗ex能量氣球</li>
+          <li>　- Bonus：鴨寶寶消火（棄對手 1 火能量）也有同類 fallback bug，一併修</li>
+          <li>　- 修法：export effects.ts <code>countOneEnergy</code> helper（內含 v3.731 卡名【X】fallback），9 處 caller 改用統一 helper</li>
+          <li><b>架構收益</b>：以後新增「自身能量×N」類招式直接用 countOneEnergy，不會再有人寫成 <code>pokemonType === 'Water'</code> 漏抓基本能量。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.54</span> 🐛 修 4 招式攻擊傷害誤套 effect immunity（薄霧/抵抗之幕/皇帝之勢 不該擋直接傷害）</summary>
         <ul>
           <li><b>規則釐清</b>：PTCG 卡面區分「傷害」(damage) vs「效果」(effect)：</li>

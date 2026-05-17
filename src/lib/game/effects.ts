@@ -5700,7 +5700,8 @@ export function getOctopusTentacleEffectiveCost(
 //   bothActiveEnergyMultiplyPre(base, per, label) — 雙方出場能量之和 × per
 // ══════════════════════════════════════════════════════════════════════════════
 
-type EnergyFilter = 'all' | 'basic' | 'special' | EnergyType;
+// v4.55：export 供 cards/*.ts callers 共用（修 9 處自寫 pokemonType === type pattern 漏 fallback）
+export type EnergyFilter = 'all' | 'basic' | 'special' | EnergyType;
 
 // v3.731：能量名稱中文 type 對照（fallback when pokemonType is null）
 const ENERGY_NAME_TO_TYPE: Record<string, EnergyType> = {
@@ -5715,7 +5716,7 @@ function energyMatchesType(card: Card, filter: EnergyType): boolean {
   return !!m && ENERGY_NAME_TO_TYPE[m[1]] === filter;
 }
 
-function countOneEnergy(inst: CardInstance, filter: EnergyFilter, pool: Map<string, Card>): number {
+export function countOneEnergy(inst: CardInstance, filter: EnergyFilter, pool: Map<string, Card>): number {
   let count = 0;
   for (const e of inst.energyAttached) {
     const card = pool.get(e.cardId);
