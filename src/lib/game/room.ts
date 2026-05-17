@@ -385,9 +385,38 @@ export async function leaveRoom(roomCode: string): Promise<void> {
   const snap = await getDoc(ref);
   if (!snap.exists()) return;
   const data = snap.data() as RoomData;
-  if (data.status !== 'lobby') return;
   const myIdx = findMySeatIdx(data.seats, uid);
   if (myIdx < 0) return;
+
+  // v4.499 Fix #3: playing 期間棄賽 — 設 gameState.phase='game-over' + winner=對手 + status='ended'
+  //   原本 `if (data.status !== 'lobby') return;` 在 playing 期間直接 return，
+  //   對手 onSnapshot 收不到 seat / gameState 變化 → 對手永遠卡在「等待 X 行動...」。
+  //   修法：playing 期間（且我是 P1/P2）→ 強制給對手勝利。
+  //   - 用單一 updateDoc，無 transaction (race 風險低 — 雙方同時離場兩個 update 都會收斂到 ended)
+  //   - 不刪 seat（保留 deckEntries 供 rematch 與 history）
+  if (data.status === 'playing' && data.gameState && (myIdx === 0 || myIdx === 1)) {
+    const myGs = data.gameState;
+    const winnerIdx = (1 - myIdx) as 0 | 1;
+    const myName = myGs.players?.[myIdx]?.name ?? `P${myIdx + 1}`;
+    const forfeitGame = {
+      ...myGs,
+      phase: 'game-over' as const,
+      winner: winnerIdx,
+      winReason: `${myName} 中途離開`,
+      log: [
+        ...(myGs.log ?? []),
+        { turn: myGs.turn, playerIndex: null, message: `${myName} 中途離開遊戲，對手獲勝` },
+      ],
+    };
+    await updateDoc(ref, {
+      gameState: JSON.parse(JSON.stringify(forfeitGame)),
+      status: 'ended',
+      updatedAt: serverTimestamp(),
+    });
+    return;
+  }
+
+  if (data.status !== 'lobby') return;
   const newSeats = data.seats.map((s, i) =>
     i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const } : s
   );

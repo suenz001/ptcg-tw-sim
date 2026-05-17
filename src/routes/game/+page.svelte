@@ -3204,6 +3204,17 @@
           { incomingLen: incoming.log?.length, localLen: game.log?.length });
         return;
       }
+      // v4.499 Fix #7: local phase='playing' 收到 incoming.phase='setup' → 拒絕（防 phase 倒退）
+      //   v3.42 createGame race 已用 game.id 比對處理跨局；本 guard 是同 id 但 phase 倒退的罕見 race
+      //   （e.g. stale snapshot 重發 / 雙端寫 race 期間舊狀態被覆蓋）。
+      //   rematch 流程清 gameState=null（走另一條 path），不會撞此 guard。
+      //   game-over 是合法終態，不該倒退到 setup/playing — 同樣保護。
+      if (game && (game.phase === 'playing' || game.phase === 'game-over')
+          && incoming.phase === 'setup') {
+        console.warn('[Online] reject phase rollback:',
+          { localPhase: game.phase, incomingPhase: incoming.phase });
+        return;
+      }
       // v3.39 Fix：setup 階段 per-player merge 防互覆。
       //   雙方各自擺自己側 active+bench，整顆 GameState push 會被後寫者覆蓋先寫者，
       //   echo 回到先寫者就把先寫者的擺放洗掉 → 玩家又擺一次 → 無限重置 ping-pong。

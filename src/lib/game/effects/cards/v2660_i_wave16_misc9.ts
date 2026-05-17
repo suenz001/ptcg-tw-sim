@@ -20,7 +20,7 @@
  *   - 雜 (1 張)
  */
 
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
+import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -295,20 +295,28 @@ regPost('超級雷電獸ex|閃光射線', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 洛托姆｜驚嚇 20 — 對手隨機 1 張手牌回對手牌庫並重洗（隨機簡化）
+// v4.499 Fix C2 #3: 卡面「在不看正面的情況下，從對手的手牌選擇 1 張，查看那張卡的正面後放回對手的牌庫並重洗。」
+//   攻方應該看到那張卡是什麼（揭示）。原實作只 addLog 公開 log 沒 addPrivateLog 揭示給攻方。
+//   修法：addPrivateLog — public log「對手手牌隨機 1 張回牌庫」+ private（只攻方看到）「那張卡是 XX」
 regPre('洛托姆|驚嚇', (s) => ({ state: s, damage: 20 }));
-regPost('洛托姆|驚嚇', (state, aIdx, _pool) => {
+regPost('洛托姆|驚嚇', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
   if (opp.hand.length === 0) return addLog(state, '驚嚇：對手手牌已空', aIdx);
   const idx = Math.floor(Math.random() * opp.hand.length);
   const picked = opp.hand[idx];
-  return updatePlayer(
-    addLog(state, '驚嚇：對手手牌隨機 1 張回牌庫並重洗', aIdx),
-    dIdx, p => {
-      const newHand = [...p.hand.slice(0, idx), ...p.hand.slice(idx + 1)];
-      return { ...p, hand: newHand, deck: shuffle([...p.deck, picked]) };
-    },
+  const pickedName = pool.get(picked.cardId)?.name ?? '?';
+  // 攻方 private log 揭示那張卡是什麼；對手側只看到「隨機 1 張回牌庫」
+  let s = addPrivateLog(
+    state,
+    `驚嚇：對手手牌隨機 1 張（${pickedName}）回牌庫並重洗`,  // private（給攻方 aIdx）
+    '驚嚇：對手手牌隨機 1 張回牌庫並重洗',                       // public（對手看到）
+    aIdx,
   );
+  return updatePlayer(s, dIdx, p => {
+    const newHand = [...p.hand.slice(0, idx), ...p.hand.slice(idx + 1)];
+    return { ...p, hand: newHand, deck: shuffle([...p.deck, picked]) };
+  });
 });
 
 // 魔牆人偶｜模仿 — 自手牌洗回, 抽 = 對手手牌數

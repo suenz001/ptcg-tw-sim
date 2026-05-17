@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.499</span> 🛠️ 連線對戰強化 + 洛托姆驚嚇揭示資訊（audit 第 1 批）</summary>
+        <ul>
+          <li><b>背景</b>：完成代碼健康度 audit（3 個並行 subagent 掃 race condition / 卡面 vs 實作 / stub），本波先修風險低的 3 項。</li>
+          <li><b>C1 #3 — 中途棄賽對手沒結局</b>：playing 期間玩家關 tab / 點離開 → <code>leaveRoom</code> 在 <code>data.status !== 'lobby'</code> 直接 return → 對手永遠卡在「等待 X 行動...」。修法：playing 期間棄賽 → 設 <code>gameState.phase='game-over'</code> + <code>winner=對手</code> + <code>winReason='X 中途離開'</code> + 房間 <code>status='ended'</code>。對手 onSnapshot 收到後直接顯示結算。</li>
+          <li><b>C1 #7 — phase 倒退 guard</b>：<code>+page.svelte handleRoomUpdate</code> 原本只擋 playing→playing log 倒退；加 guard 防 local <code>phase='playing'</code> 或 <code>'game-over'</code> 收到 <code>incoming.phase='setup'</code> 的罕見 race（stale snapshot / 雙端寫 race）覆蓋本地進度。rematch 流程走 <code>gameState=null</code> path 不撞此 guard。</li>
+          <li><b>C2 #3 — 洛托姆 驚嚇 揭示資訊</b>：卡面「在不看正面的情況下，從對手的手牌選擇 1 張，<b>查看那張卡的正面後</b>放回對手的牌庫並重洗。」攻方應該揭示看到那張卡是什麼，原實作只 <code>addLog</code> 公開 log 沒揭示。修法：用 <code>addPrivateLog</code> — 攻方 private log 看到「那張卡是 XX」、對手只看到「隨機 1 張回牌庫」。</li>
+          <li><b>留下波 v4.4991</b>：C2 #1 詛咒娃娃 詛咒言語、C2 #2 焰后蜥 突然炙烤（需新增雙端 picker + resolver，工程量較大）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.498</span> 🛠️ Stadium 移除全路徑 KO + 海豚俠特性按鈕 gate</summary>
         <ul>
           <li><b>P1 玩家提問</b>：激動競技場被移除時也可能造成寶可夢 HP 小於 0 會觸發 KO 嗎？</li>
