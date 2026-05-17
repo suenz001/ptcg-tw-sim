@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.4994</span> 🛠️ 修叉字蝠 SV6a 怨影使者誤跑「夜間工作」邏輯</summary>
+        <ul>
+          <li><b>玩家回報</b>：叉字蝠 SV6a · 029/064 的特性點下後跑「夜間工作」邏輯（從牌庫挑 1 張放牌庫頂）。經查 JSON 卡面：SV6a 叉字蝠是「<b>怨影使者</b>」(若手牌出了「阿杏的秘招」則可用 1 次抽到滿 8 張)、M4 / M-P-J 才是「<b>夜間工作</b>」— 同名卡兩種完全不同 ability，確實是 bug 不是誤報。</li>
+          <li><b>Root cause</b>：<code>ABILITY_EFFECTS</code> map 用 <code>cardName|abilityIndex</code> 當 key 註冊特性實作（架構假設「同名卡共享 ability」）。叉字蝠是違反此假設的特例 — <code>叉字蝠|0</code> 一個 key 對映了兩個不同 ability。UI 顯示「怨影使者」(從 JSON 對) 但點下跑「夜間工作」邏輯。</li>
+          <li><b>修法 A</b>：<code>v2306_meta_pokemon.ts</code> regA fn 內 defensive check — 若 <code>ability.name !== '夜間工作'</code> 就 silent return（log 提示「該版本特性未實裝」）。避免 SV6a 叉字蝠跑錯邏輯。</li>
+          <li><b>修法 B</b>：<code>engine.ts getUsableAbilities</code> 加 hard-code skip — <code>「怨影使者」</code>未實裝 → 不顯示「使用特性」按鈕。玩家不會誤點。</li>
+          <li><b>長期</b>：理想方案是把 ABILITY_EFFECTS key 重構為 <code>cardName|abilityName</code>（避免同名卡撞 key），但涉及 100+ 個 regA 註冊處 → 大工程留下波處理。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.4993</span> 🛠️ 修激流水泵選 3 能量後 picker 不開 + log 字眼「棄」改「放」</summary>
         <ul>
           <li><b>玩家回報</b>：手機版測試厄鬼椪 水井面具ex 激流水泵，選 3 顆能量後沒出現選傷害後排的介面。log 寫「棄 3 個能量回自身牌庫並重洗」— 卡面是「放回牌庫」，「棄」字誤導（像丟棄牌區）。</li>

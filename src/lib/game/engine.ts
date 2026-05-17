@@ -6643,6 +6643,9 @@ export function getUsableAbilities(
       //   卡面：「從戰鬥場回到備戰區時，可使用 1 次」— 只能透過撤退觸發 modal（v3.05 ask… hook）
       //   不該出現在手動「使用特性」清單中，避免玩家在 active 位誤點。
       if (ON_RETREAT_TO_BENCH_ABILITIES.has(ab.name)) return;
+      // v4.4994：未實裝 ability — ABILITY_EFFECTS 用 cardName|abIdx 當 key，同名卡（叉字蝠 SV6a 怨影使者 vs M4 夜間工作）撞 key 但邏輯不同。
+      //   「怨影使者」需 ON_PLAY_FROM_HAND「阿杏的秘招」condition tracking，未實裝 → 不顯示按鈕避免誤觸發「夜間工作」邏輯。
+      if (ab.name === '怨影使者') return;
       // 集客：只有出場才能用 + 牌庫不空（v2.229 補資源 gate）
       if (ab.name === '集客') {
         if (player.active?.iid !== pk.iid) return;
