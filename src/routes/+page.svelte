@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.4995</span> 🏗️ ABILITY_EFFECTS key 重構 + 實裝叉字蝠 SV6a 怨影使者</summary>
+        <ul>
+          <li><b>背景</b>：audit 找到 9 組同名卡但不同 abilities[0] — <code>ABILITY_EFFECTS</code> map 用 <code>cardName|abIdx</code> 當 key 撞 key（叉字蝠夜間工作 vs 怨影使者、樂天河童激動治癒 vs 生機森巴 等）。</li>
+          <li><b>重構策略</b>：雙 map backward-compat — 保留 <code>ABILITY_EFFECTS</code> (舊) + 新增 <code>ABILITY_EFFECTS_BY_NAME</code> (key 用 abilityName)。dispatch 點（USE_ABILITY / getUsableAbilities / retreat hook）統一用 helper <code>getAbilityFn</code> / <code>hasAbilityFn</code>：先 by-name fallback by-index。現有 125 個 regA 註冊不動，避免一次性 rewrite 風險。</li>
+          <li><b>實裝叉字蝠 怨影使者</b>：卡面「在這個回合，若從手牌使出了『阿杏的秘招』，則在自己的回合時可使用 1 次。從牌庫抽卡直到自己的手牌滿 8 張為止。」加 <code>akyoSecretPlayedThisTurn</code> player flag（打阿杏的秘招 set / END_TURN 清）。</li>
+          <li><b>同步處理</b>：v4.4994 在 v2306 的 defensive check + getUsableAbilities 對「怨影使者」硬擋 — 全部移除（雙 map 自然分流）。改用正規 gate（在戰鬥場 + 牌庫不空 + flag=true）。</li>
+          <li><b>未來</b>：寫 <code>ABILITY_REFACTOR_PLAN.md</code> 記錄漸進遷移路徑（其他 4 組撞 key 卡：樂天河童 / 莫魯貝可 / 白海獅 / 怖納噬草 等下波處理）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.4994</span> 🛠️ 修叉字蝠 SV6a 怨影使者誤跑「夜間工作」邏輯</summary>
         <ul>
           <li><b>玩家回報</b>：叉字蝠 SV6a · 029/064 的特性點下後跑「夜間工作」邏輯（從牌庫挑 1 張放牌庫頂）。經查 JSON 卡面：SV6a 叉字蝠是「<b>怨影使者</b>」(若手牌出了「阿杏的秘招」則可用 1 次抽到滿 8 張)、M4 / M-P-J 才是「<b>夜間工作</b>」— 同名卡兩種完全不同 ability，確實是 bug 不是誤報。</li>

@@ -1,6 +1,6 @@
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { ABILITY_EFFECTS, addLog, drawCards, updatePlayer, withPending, RESOLVERS, regR, regA,
+import { ABILITY_EFFECTS, addLog, drawCards, updatePlayer, withPending, RESOLVERS, regR, regA, regAByName,
   getOwnBenchLimit,
 } from '../_shared';
 /**
@@ -92,17 +92,12 @@ regPre('厄鬼椪 碧草面具ex|萬葉陣雨', (state, aIdx, pool) => {
 });
 
 // ── 叉字蝠 (Crobat) ──────────────────────────────────────────────────────────────
-// v4.4994 fix: 同名「叉字蝠」在不同 set 有不同 abilities[0]：
-//   - SV6a 029 → 「怨影使者」（需 ON_PLAY_FROM_HAND + 「阿杏的秘招」condition tracking，未實裝）
-//   - M4 050/091 + M-P-J → 「夜間工作」（本 regA 實裝的邏輯）
-// ABILITY_EFFECTS 用 cardName|abIdx 當 key 撞 key — defensive check ability.name 防誤觸發。
-regA('叉字蝠', 0, (state, aIdx, pool, inst) => {
+// v4.4995 重構：用 regAByName 註冊（key = cardName|abilityName）— 解決同名卡撞 key。
+//   - 叉字蝠|夜間工作 (M4 050/091 + M-P-J)：從牌庫挑 1 張放牌庫頂
+//   - 叉字蝠|怨影使者 (SV6a 029)：本回合打過阿杏的秘招 → 抽到滿 8 張（同檔下方新增）
+// 兩個 ability 用 abilityName 自然分流，不再撞 key。v4.4994 的 defensive check 移除。
+regAByName('叉字蝠', '夜間工作', (state, aIdx, pool, inst) => {
   if (!inst) return state;
-  // v4.4994：ABILITY_EFFECTS key collision — 若實際 ability 不是「夜間工作」(SV6a 怨影使者) → silent return
-  const myCard = pool.get(inst.cardId);
-  if (myCard?.abilities?.[0]?.name !== '夜間工作') {
-    return addLog(state, `此版本叉字蝠的特性「${myCard?.abilities?.[0]?.name ?? '?'}」尚未實裝`, aIdx);
-  }
   const p = state.players[aIdx];
   if (p.active?.iid !== inst.iid) return addLog(state, '夜間工作：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
   if (p.active) p.active.abilityUsedThisTurn = true;
@@ -112,6 +107,30 @@ regA('叉字蝠', 0, (state, aIdx, pool, inst) => {
     effectKey: 'crobat-night-work', params: { titleOverride: '夜間工作：從牌庫任意選擇 1 張卡放回牌庫頂' }
   });
 });
+// ── 叉字蝠｜怨影使者（SV6a 029 / id 10611）─────────────────────────────────
+// v4.4995：實裝。卡面「在這個回合，若從手牌使出了『阿杏的秘招』，則在自己的回合時可使用 1 次。
+//          從牌庫抽卡直到自己的手牌滿 8 張為止。」
+//   gate: akyoSecretPlayedThisTurn + 戰鬥場 + 牌庫不空 + 該寶可夢未用過特性（getUsableAbilities 已 gate）
+//   effect: 抽到手牌 ≥ 8 張為止（或牌庫抽光）
+regAByName('叉字蝠', '怨影使者', (state, aIdx, pool, inst) => {
+  if (!inst) return state;
+  const p = state.players[aIdx];
+  if (p.active?.iid !== inst.iid) return addLog(state, '怨影使者：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
+  if (!p.akyoSecretPlayedThisTurn) return addLog(state, '怨影使者：本回合尚未從手牌打出『阿杏的秘招』', aIdx);
+  if (p.active) p.active.abilityUsedThisTurn = true;
+  // 抽到手牌滿 8 張為止
+  const targetHandSize = 8;
+  const toDraw = Math.max(0, targetHandSize - p.hand.length);
+  const actualDraw = Math.min(toDraw, p.deck.length);
+  if (actualDraw === 0) return addLog(state, `怨影使者：手牌已 ≥ ${targetHandSize} 張或牌庫為空，無需抽牌`, aIdx);
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    hand: [...p.hand, ...p.deck.slice(0, actualDraw)],
+    deck: p.deck.slice(actualDraw),
+  }));
+  return addLog(s, `怨影使者：從牌庫抽 ${actualDraw} 張（手牌補到 ${p.hand.length + actualDraw} 張）`, aIdx);
+});
+
 regR('crobat-night-work', (state, actorIdx, selectedIids, params, pool) => {
   if (selectedIids.length === 0) {
     let s = updatePlayer(state, actorIdx, p => ({ ...p, deck: shuffle(p.deck) }));

@@ -259,9 +259,37 @@ export function getEnergyDiscardUnits(
 
 /** pokémonName|abilityIndex → 效果函式 */
 export const ABILITY_EFFECTS = new Map<string, EffectFn>();
+/**
+ * v4.4995：ABILITY_EFFECTS_BY_NAME — 新註冊 map (key = `${cardName}|${abilityName}`)
+ *   解決同名卡同 abilityIndex 但不同 abilityName 撞 key 的問題（叉字蝠 SV6a 怨影使者 vs M4 夜間工作 等 9 組）。
+ *   現有 125 個 regA 註冊仍使用舊 ABILITY_EFFECTS (cardName|abIdx)，dispatch 點先查 by-name 再 fallback by-index。
+ */
+export const ABILITY_EFFECTS_BY_NAME = new Map<string, EffectFn>();
 
 export function regA(pokemonName: string, abilityIndex: number, fn: EffectFn) {
   ABILITY_EFFECTS.set(`${pokemonName}|${abilityIndex}`, fn);
+}
+
+/**
+ * v4.4995：依「卡名 + ability 名字」註冊特性實作（避免同名卡撞 key）。
+ *   推薦新註冊都用此 helper；舊 regA 漸進遷移。
+ */
+export function regAByName(pokemonName: string, abilityName: string, fn: EffectFn) {
+  ABILITY_EFFECTS_BY_NAME.set(`${pokemonName}|${abilityName}`, fn);
+}
+
+/**
+ * v4.4995 統一查詢：先 by-name (新)，找不到 fallback by-index (舊)。
+ *   - cardName / abilityName / abIdx 都要傳，by-name 失敗時 fallback by-index
+ */
+export function getAbilityFn(cardName: string, abilityName: string, abIdx: number): EffectFn | undefined {
+  return ABILITY_EFFECTS_BY_NAME.get(`${cardName}|${abilityName}`)
+      ?? ABILITY_EFFECTS.get(`${cardName}|${abIdx}`);
+}
+
+export function hasAbilityFn(cardName: string, abilityName: string, abIdx: number): boolean {
+  return ABILITY_EFFECTS_BY_NAME.has(`${cardName}|${abilityName}`)
+      || ABILITY_EFFECTS.has(`${cardName}|${abIdx}`);
 }
 
 /**

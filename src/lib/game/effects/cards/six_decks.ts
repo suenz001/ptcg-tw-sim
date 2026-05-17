@@ -696,6 +696,8 @@ regG('阿杏的秘招', (st, idx, pool) => {
   return allMy.some(pk => pool.get(pk.cardId)?.pokemonType === 'Darkness');
 });
 reg('阿杏的秘招', (st, idx, pool) => {
+  // v4.4995：set flag — 叉字蝠 SV6a 怨影使者 gate 用（卡面條件：本回合手牌使出了阿杏的秘招）
+  st = updatePlayer(st, idx, p => ({ ...p, akyoSecretPlayedThisTurn: true }));
   const p = st.players[idx];
   const allMy = [...(p.active ? [p.active] : []), ...p.bench];
   const darkPokeIids = allMy.filter(c => pool.get(c.cardId)?.pokemonType === 'Darkness').map(c => c.iid);

@@ -497,7 +497,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
 import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay } from './effects/_shared';
-import { addPendingPrize, getPendingPrize, hasAnyPendingPrize } from './effects/_shared';
+import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn } from './effects/_shared';
 export { sameEvoName };
 // v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發
 import {
@@ -1164,6 +1164,7 @@ function emptyPlayer(name: string): PlayerState {
     bench: [], discard: [], prizes: [],
     energyAttachedThisTurn: false,
     supporterPlayedThisTurn: false,
+    akyoSecretPlayedThisTurn: false,
     rocketSupporterPlayedThisTurn: false,
     ancientSupporterPlayedThisTurn: false,
     retreatedThisTurn: false,
@@ -2363,7 +2364,8 @@ function handlePlaying(
             if (!ON_RETREAT_TO_BENCH_ABILITIES.has(ab.name)) continue;
             const abilityKey = `${benchCard.name}|${i}`;
             // 確認 ABILITY_EFFECTS 有註冊（避免無對應 fn 也彈 modal）
-            if (!ABILITY_EFFECTS.has(abilityKey)) continue;
+            // v4.4995：用 helper（by-name 優先 fallback by-index）
+            if (!hasAbilityFn(benchCard.name, ab.name, i)) continue;
             // 詢問玩家使用 → 回傳含 pendingSelection 的 state，玩家選 yes 後走 resolver
             retreatState = askUseRetreatToBenchAbility(
               retreatState, aIdx, benchInst, ab.name, abilityKey, benchCard.name);
@@ -2967,7 +2969,8 @@ function handlePlaying(
     }
 
     // 查找 ABILITY_EFFECTS
-    const abilityFn = ABILITY_EFFECTS.get(`${pokeCard!.name}|${action.abilityIndex}`);
+    // v4.4995：先查 by-name (新)，fallback by-index (舊)
+    const abilityFn = getAbilityFn(pokeCard!.name, ability.name, action.abilityIndex);
     if (!abilityFn) return state;
 
     // v2.362 振翼髮｜暗夜羽擊 — 若特性被消除，無法使用
@@ -5878,6 +5881,7 @@ function handlePlaying(
       ...nextP,
       energyAttachedThisTurn: false,
       supporterPlayedThisTurn: false,
+      akyoSecretPlayedThisTurn: false,
       rocketSupporterPlayedThisTurn: false,
       ancientSupporterPlayedThisTurn: false,
       carnelliPlayedThisTurn: false,
@@ -6620,7 +6624,7 @@ export function getUsableAbilities(
     if (pk.abilityUsedThisTurn) {
       const card = pool.get(pk.cardId);
       const hasUnlimited = card?.abilities?.some((ab, i) =>
-        UNLIMITED_USE_ABILITY_NAMES.has(ab.name) && ABILITY_EFFECTS.has(`${card.name}|${i}`)
+        UNLIMITED_USE_ABILITY_NAMES.has(ab.name) && hasAbilityFn(card.name, ab.name, i)
       );
       if (!hasUnlimited) continue;
     }
@@ -6636,16 +6640,22 @@ export function getUsableAbilities(
       // v3.01 Wave 3 — 暗夜羽擊（passive）/ 黏著束縛 特性消除：被消除的特性不列入清單
       if (isAbilityNullifiedByPassive(state, state.activePlayerIndex, pk, card, ab.name, pkLocation, pool)) return;
       // 只列出在 ABILITY_EFFECTS 中有登錄的主動特性
-      if (!ABILITY_EFFECTS.has(`${card.name}|${abIdx}`)) return;
+      // v4.4995：用 helper（by-name 優先 fallback by-index）
+      if (!hasAbilityFn(card.name, ab.name, abIdx)) return;
       // v2.320：已改為自動提示的特性，不在手動清單中顯示
       if (ON_PLAY_FROM_HAND_ABILITIES.has(ab.name) || ON_EVOLVE_FROM_HAND_ABILITIES.has(ab.name)) return;
       // v4.498：ON_RETREAT_TO_BENCH 類特性（海豚俠 全能變身 / 鋼炮臂蝦 返回重載）
       //   卡面：「從戰鬥場回到備戰區時，可使用 1 次」— 只能透過撤退觸發 modal（v3.05 ask… hook）
       //   不該出現在手動「使用特性」清單中，避免玩家在 active 位誤點。
       if (ON_RETREAT_TO_BENCH_ABILITIES.has(ab.name)) return;
-      // v4.4994：未實裝 ability — ABILITY_EFFECTS 用 cardName|abIdx 當 key，同名卡（叉字蝠 SV6a 怨影使者 vs M4 夜間工作）撞 key 但邏輯不同。
-      //   「怨影使者」需 ON_PLAY_FROM_HAND「阿杏的秘招」condition tracking，未實裝 → 不顯示按鈕避免誤觸發「夜間工作」邏輯。
-      if (ab.name === '怨影使者') return;
+      // v4.4995：怨影使者已實裝（regAByName）+ 用 by-name dispatch — 不再撞 key，原 v4.4994 硬擋移除
+      // v4.4995：怨影使者 gate — 卡面「在這個回合，若從手牌使出了『阿杏的秘招』，則在自己的回合時可使用 1 次」
+      //   - 戰鬥場 + 牌庫不空 + akyoSecretPlayedThisTurn flag = true
+      if (ab.name === '怨影使者') {
+        if (player.active?.iid !== pk.iid) return;  // 卡面：在自己的回合（戰鬥場）— 通常此類抽牌類在戰鬥場
+        if (player.deck.length === 0) return;
+        if (!player.akyoSecretPlayedThisTurn) return;  // 本回合需打過阿杏的秘招
+      }
       // 集客：只有出場才能用 + 牌庫不空（v2.229 補資源 gate）
       if (ab.name === '集客') {
         if (player.active?.iid !== pk.iid) return;

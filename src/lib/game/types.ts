@@ -344,6 +344,8 @@ export interface PlayerState {
   energyAttachedThisTurn: boolean;
   /** 本回合是否已打出支援者 */
   supporterPlayedThisTurn: boolean;
+  /** v4.4995：本回合是否已打出「阿杏的秘招」支援者 — 叉字蝠 SV6a 怨影使者 gate 用 */
+  akyoSecretPlayedThisTurn?: boolean;
   /** v2.57：本回合是否已打出「名稱含『火箭隊』的支援者」— 火箭隊的工廠 gate 用 */
   rocketSupporterPlayedThisTurn?: boolean;
   /** v2.160：本回合是否已打出「古代」標籤的支援者 — 雄偉牙｜地盤崩壞 條件用 */
