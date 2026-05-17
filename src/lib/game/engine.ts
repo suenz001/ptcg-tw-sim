@@ -6664,6 +6664,95 @@ export function getUsableAbilities(
       //   regAByName 用 ability name 分流後，這些 ability 走 by-name 沒命中也不會 fallback 跑錯邏輯
       //   （另一個 ability name 的 regA 已遷移到 regAByName，by-index fallback 已不再有衝突 fn）
       if (ab.name === '生機森巴' || ab.name === '雜草魂' || ab.name === '厚脂肪' || ab.name === '飢餓衝刺') return;
+      // v4.4997：audit 補 11 個缺 gate 的特性 — 條件不符時不顯示「使用特性」按鈕（玩家規則）
+      // ──────────────────────────────────────────────────────────────────────
+      // P0：白海獅 | 沖刷 — 戰鬥場 + 備戰有【水】能量
+      if (ab.name === '沖刷') {
+        if (!player.active) return;
+        const hasWaterOnBench = player.bench.some(b =>
+          b.energyAttached.some(e => pool.get(e.cardId)?.pokemonType === 'Water'));
+        if (!hasWaterOnBench) return;
+      }
+      // P0：瑪力露麗ex | 收集泡泡 — active 是「瑪力露麗ex」+ 備戰有能量
+      if (ab.name === '收集泡泡') {
+        if (!player.active || pool.get(player.active.cardId)?.name !== '瑪力露麗ex') return;
+        if (!player.bench.some(b => b.energyAttached.length > 0)) return;
+      }
+      // P0：青木的樹枕尾熊 | 無力充能 — 持有者在備戰 + 戰鬥場是「青木的」+ 手牌有能量
+      if (ab.name === '無力充能') {
+        if (player.active?.iid === pk.iid) return;  // 必須在備戰
+        if (!player.active) return;
+        const activeName = pool.get(player.active.cardId)?.name ?? '';
+        if (!activeName.startsWith('青木的')) return;
+        if (!player.hand.some(c => pool.get(c.cardId)?.supertype === 'Energy')) return;
+      }
+      // P0：勾帕路翁ex | 金屬之路 — 戰鬥場 + movedToActiveThisTurn + 備戰有【鋼】能量
+      if (ab.name === '金屬之路') {
+        if (player.active?.iid !== pk.iid) return;
+        if (!player.active.movedToActiveThisTurn) return;
+        const hasMetalOnBench = player.bench.some(b =>
+          b.energyAttached.some(e => pool.get(e.cardId)?.pokemonType === 'Metal'));
+        if (!hasMetalOnBench) return;
+      }
+      // P0：麻麻鰻 | 電氣發電機 — 棄牌區有基本【雷】+ 備戰非空
+      if (ab.name === '電氣發電機') {
+        const hasBasicLight = player.discard.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+            && (cc.pokemonType === 'Lightning' || cc.name.includes('【雷】'));
+        });
+        if (!hasBasicLight) return;
+        if (player.bench.length === 0) return;
+      }
+      // P0：阿響的鳳王ex | 金色火焰 — 手牌有基本【火】+ 備戰有「阿響的」
+      if (ab.name === '金色火焰') {
+        const hasFireE = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+            && (cc.pokemonType === 'Fire' || cc.name.includes('【火】'));
+        });
+        if (!hasFireE) return;
+        const hasAyanoBench = player.bench.some(c => (pool.get(c.cardId)?.name ?? '').startsWith('阿響的'));
+        if (!hasAyanoBench) return;
+      }
+      // P1：妖火紅狐 | 閃焰魔法 — 手牌有基本【火】
+      if (ab.name === '閃焰魔法') {
+        const hasFireE = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+            && (cc.pokemonType === 'Fire' || cc.name.includes('【火】'));
+        });
+        if (!hasFireE) return;
+      }
+      // P1：光電傘蜥 | 頸傘發電 — carnelliPlayedThisTurn
+      if (ab.name === '頸傘發電') {
+        if (!player.carnelliPlayedThisTurn) return;
+      }
+      // P1：小木靈 | 怨恨進化 — 手牌有對應進化卡
+      if (ab.name === '怨恨進化') {
+        const thisCard = pool.get(pk.cardId);
+        if (!thisCard) return;
+        const hasEvo = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Pokemon' && cc.evolvesFrom != null
+            && cc.evolvesFrom === thisCard.name;
+        });
+        if (!hasEvo) return;
+      }
+      // P1：狂歡浪舞鴨 | 快節奏 — 手牌非空
+      if (ab.name === '快節奏') {
+        if (player.hand.length === 0) return;
+      }
+      // P1：奇樹的大電海燕 | 閃光抽出 — 自身有基本【雷】能量
+      if (ab.name === '閃光抽出') {
+        const hasLightOnSelf = pk.energyAttached.some(e => {
+          const ec = pool.get(e.cardId);
+          return ec?.supertype === 'Energy' && ec.subtype === 'Basic'
+            && (ec.pokemonType === 'Lightning' || (ec?.name?.includes('【雷】') ?? false));
+        });
+        if (!hasLightOnSelf) return;
+      }
+      // ──────────────────────────────────────────────────────────────────────
       // 集客：只有出場才能用 + 牌庫不空（v2.229 補資源 gate）
       if (ab.name === '集客') {
         if (player.active?.iid !== pk.iid) return;

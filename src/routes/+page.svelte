@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.4997</span> 🛠️ 補 11 個特性按鈕 gate（條件不符不亮）</summary>
+        <ul>
+          <li><b>背景</b>：玩家規則「未滿足特性條件時，特性按鈕不能亮起，避免玩家誤按」— 全面 audit 找到 11 個 regA 註冊的特性 fn 有 early-return fail-log，但 getUsableAbilities 沒對應 gate（玩家點下才跳訊息，違反規則）。</li>
+          <li><b>P0 (6 個高頻)</b>：白海獅 沖刷、瑪力露麗ex 收集泡泡、青木的樹枕尾熊 無力充能、勾帕路翁ex 金屬之路、麻麻鰻 電氣發電機、阿響的鳳王ex 金色火焰。</li>
+          <li><b>P1 (5 個)</b>：妖火紅狐 閃焰魔法、光電傘蜥 頸傘發電、小木靈 怨恨進化、狂歡浪舞鴨 快節奏、奇樹的大電海燕 閃光抽出。</li>
+          <li><b>修法</b>：全部在 <code>engine.ts getUsableAbilities</code> 內加 <code>if (ab.name === 'XX')</code> short-circuit gate。不改 regA fn body（safe fallback：萬一漏 gate 點下按鈕仍走原邏輯）。</li>
+          <li><b>zero-risk</b>：純加 UI 按鈕擋條件，不影響其他卡 / 其他 ability 邏輯。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.4996</span> 🛠️ 完成剩餘 4 組撞 key 卡遷移（樂天河童/怖納噬草/白海獅/莫魯貝可）</summary>
         <ul>
           <li><b>背景</b>：v4.4995 雙 map 重構後，叉字蝠完整修。但其他 4 組撞 key 卡（樂天河童 激動治癒 vs 生機森巴 / 怖納噬草 恐慌牢籠 vs 雜草魂 / 白海獅 沖刷 vs 厚脂肪 / 莫魯貝可 搜尋點心 vs 飢餓衝刺）仍用 by-index 註冊，dispatch fallback 仍會撞 key — 本波完成遷移。</li>
