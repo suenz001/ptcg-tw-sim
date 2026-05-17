@@ -264,6 +264,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.59</span> 🛡️ 三層防護機制 — 防未來新卡再犯 kind 弄錯 bug（零行為變更）</summary>
+        <ul>
+          <li><b>背景</b>：v4.54/v4.57/v4.58 連續修了 6 張卡「kind 弄錯」bug（attack-damage 卡誤用 effect immunity helper 過度擋）。為避免未來新卡再犯，加 3 層防護。</li>
+          <li><b>第 1 層 — IDE 視覺提醒</b>：3 個舊 helper 加 <code>@deprecated</code> JSDoc：</li>
+          <li>　- <code>isBenchProtected</code>、<code>resolveBenchGuard</code>、<code>canApplyAttackEffectToTarget</code></li>
+          <li>　- 保留 export（不破壞舊 callers），但 VSCode 等 IDE 會劃刪除線 + hover 顯示遷移指引</li>
+          <li><b>第 2 層 — IRON_RULES.md Rule 17</b>：強制所有新 source 用 <code>canApplyEffectToTarget</code> 統一 helper</li>
+          <li>　- 加「kind 對齊 JSON 卡面 cheat sheet」表（傷害 / 指示物 / 狀態 / 昏厥 / 棄能量 / 特性效果）</li>
+          <li>　- 列出禁止寫法 + 正確寫法 + isBench 判定指引</li>
+          <li><b>第 3 層 — defense.ts 頂部補完文件</b>：</li>
+          <li>　- 新 source resolver 使用指引（含 import / call 範例）</li>
+          <li>　- kind cheat sheet（同 IRON_RULES）</li>
+          <li>　- 內部 dispatch 順序圖（光之翼 → ATTACK_EFFECT_IMMUNITY → resolveBenchGuard）</li>
+          <li>　- 22 條 defense 規則完整列表</li>
+          <li><b>零行為變更</b>：純 JSDoc + .md 文件改動，沒動任何 source resolver 邏輯。tsc 0 errors / svelte 0 warnings。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.58</span> 🏗️ B Phase 3 第三波：cards/*.ts 散裝 helper 統一遷移 + 順帶修 2 個漏網 bug</summary>
         <ul>
           <li><b>Bug 修補</b>：</li>

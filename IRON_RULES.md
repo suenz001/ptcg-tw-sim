@@ -651,6 +651,71 @@ if (benchGuard.blocked) { /* ... */ }
 
 ---
 
+### Rule 17: 所有 defense check 必須走 `canApplyEffectToTarget` 統一 helper
+
+**背景**：v4.5 Phase 1 引入 `canApplyEffectToTarget` 統一 helper（defense.ts）後，
+v4.54、v4.57、v4.58 反覆踩到「舊 caller 用錯 helper 導致 kind 弄錯」的雷：
+
+- v4.54：4 個招式（捲入伏特/群起瞄準/墜擊射/冰凍羽擊）卡面是「N 點傷害」(attack-damage)，
+  但用 `canApplyAttackEffectToTarget` 過度擋（薄霧/抵抗之幕/皇帝之勢這些只擋 effect 不擋 damage）
+- v4.57：虛無歸零（150 點傷害）同類 bug
+- v4.58：大沙風暴（雙方備戰 +40 點傷害）同類 bug
+
+**禁止寫法（新 caller 不可使用）**：
+
+```ts
+// ❌ canApplyAttackEffectToTarget — bench 漏球形盾牌等
+const guard = canApplyAttackEffectToTarget(state, aIdx, target, card, pool);
+
+// ❌ resolveBenchGuard — 漏薄霧 / 光之翼
+const guard = resolveBenchGuard(state, pool, aIdx, card, 'attack-effect');
+
+// ❌ isBenchProtected — 只擋對戰圓形，漏其他 21 條
+if (isBenchProtected(state, pool)) { ... }
+```
+
+舊 3 個 helper 已加 `@deprecated` JSDoc，IDE 會劃刪除線提醒。
+
+**正確寫法**：
+
+```ts
+import { canApplyEffectToTarget } from './defense';
+
+const guard = canApplyEffectToTarget(state, aIdx, target, card, kind, pool, { isBench });
+if (guard.blocked) {
+  state = addLog(state, `XX：${targetCard?.name ?? '?'} ${guard.reason}`, aIdx);
+  return state;
+}
+```
+
+**`kind` 對齊 JSON 卡面 cheat sheet**：
+
+| JSON 卡面寫法 | kind |
+|---|---|
+| 「N 點傷害」+「不計弱抗」 | `'attack-damage'` |
+| 「放置 N 個傷害指示物」 | `'attack-effect'` |
+| 招式內「將寶可夢【睡眠/中毒/灼傷/麻痺/混亂】」 | `'attack-effect'` |
+| 招式內「將寶可夢【昏厥】」 | `'attack-effect'` |
+| 招式內「將能量卡丟棄/回手」 | `'attack-effect'` |
+| **特性**內任何效果（必殺手裡劍/咒詛炸彈/揚沙/侵蝕詛咒/凹洞/黑暗脈衝 等） | `'ability-effect'` |
+
+**`isBench` 判定**：caller 已知 target 是 bench 寶可夢時傳 `true`，是 active 時傳 `false`。
+不確定時可省略，helper 內部會 fallback 判斷（但 caller 自己判斷比較準）。
+
+**已有 defense（不用 caller 額外 check，unified 內部自動處理）**：
+- ATTACK_EFFECT_IMMUNITY 類：薄霧能量 / 抵抗之幕 / 皇帝之勢 / 全能硬殼 / 硬岩能量 / 化石類
+- bench-only defense：對戰圓形 / 球形盾牌 / 花之帷幔 / 藏隱 / 深度下潛 / 羽毛化石 / 太晶 / 中立中心
+- ability-effect immunity：光之翼（超級皮可西ex）
+
+**例外（仍可直接呼叫舊 helper）**：
+- defense.ts 內部 dispatch（by design）
+- 既有 ~30 處舊 callers（v4.58 audit 確認都用法正確，留著不動以避免 regression）
+
+新增任何「對對手寶可夢造成傷害 / 放置指示物 / 改狀態 / KO」的 source resolver
+**必須**用 `canApplyEffectToTarget`。Rule 16 已併入本規則。
+
+---
+
 ## 完整版
 
 完整 SKILL.md（含 Python git plumbing pipeline 範本、pre-flight checklist、

@@ -1,17 +1,78 @@
 /**
- * v4.5 Phase 1：統一 defense check 架構檔
+ * Defense 統一架構檔（v4.5 Phase 1 引入，v4.59 補完文件）
  *
+ * ════════════════════════════════════════════════════════════════════════════
+ * 【為什麼需要這個檔案】
+ * ════════════════════════════════════════════════════════════════════════════
  * Defense × Effect-source 矩陣 audit (v4.4999) 發現：
  *   - 既有 4 個 helper 各管一塊（resolveBenchGuard / canApplyAttackEffectToTarget /
  *     isBenchProtected / 各種 inline check）
  *   - 每個 source resolver 都必須自己決定哪些 helper 呼叫 → 容易漏（v3.9 / v4.06 /
  *     v4.19 / v4.4999 全部都是「漏 helper」hotfix 連鎖）
  *   - 光之翼散在 5+ 處 inline，沒統一管理
+ *   - v4.54 / v4.57 / v4.58 反覆踩「kind 弄錯」雷（attack-damage 卡誤用 attack-effect helper）
  *
- * 本檔提供統一入口 `canApplyEffectToTarget()` — 後續所有 source resolver 應呼叫此 helper，
- * 內部分派到對應的既有 helper。Phase 1 純 wrapper（零行為變更）。
+ * 本檔提供統一入口 `canApplyEffectToTarget()` — 所有新 source resolver 必須呼叫此 helper
+ * （IRON_RULES.md Rule 17 強制），內部分派到對應的 helper。
  *
- * 詳細規劃見 docs / IRON_RULES.md Rule 16。
+ * ════════════════════════════════════════════════════════════════════════════
+ * 【新 source resolver 怎麼用】
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ *   import { canApplyEffectToTarget } from '../../defense';
+ *
+ *   const guard = canApplyEffectToTarget(state, aIdx, target, targetCard, kind, pool, { isBench });
+ *   if (guard.blocked) {
+ *     return addLog(state, `${label}：${targetCard?.name ?? '?'} ${guard.reason}`, aIdx);
+ *   }
+ *   // 此處才可以 += damage / 放指示物 / 改狀態 / KO
+ *
+ * 【kind 對齊 JSON 卡面 cheat sheet】
+ *
+ *   JSON 卡面寫法                            kind
+ *   ─────────────────────────────────────   ────────────────
+ *   「N 點傷害」+「備戰不計弱抗」           'attack-damage'
+ *   「放置 N 個傷害指示物」                  'attack-effect'
+ *   「【睡眠/中毒/灼傷/麻痺/混亂】」         'attack-effect'
+ *   「【昏厥】」(招式內)                     'attack-effect'
+ *   「將能量卡丟棄/回手」(招式內)            'attack-effect'
+ *   特性內任何效果（必殺手裡劍/咒詛炸彈 等） 'ability-effect'
+ *
+ * 【isBench 判定】
+ *   - 已知 target 是 bench 寶可夢 → true
+ *   - 已知 target 是 active → false
+ *   - 不確定 → 省略（helper 內部 fallback 判斷）
+ *
+ * ════════════════════════════════════════════════════════════════════════════
+ * 【內部 dispatch 順序】 — caller 不用管，這是 defense.ts 內部知識
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ *   1. ability-effect → 光之翼（超級皮可西ex 特性，self-only，active+bench 都擋）
+ *   2. attack-effect → ATTACK_EFFECT_IMMUNITY map
+ *      - 薄霧能量（energy-on-target）
+ *      - 硬岩【鬥】能量（energy-on-target, requireType=Fighting）
+ *      - 皇帝之勢（self-ability，帝王拿波ex）
+ *      - 抵抗之幕（field-ability，targetFilter=BasicRocket）
+ *      - 全能硬殼（self-ability + attacker 有特殊能量）
+ *      - 陳舊的背蓋化石（fossilOnField short-circuit）
+ *   3. bench target (isBench=true) → resolveBenchGuard
+ *      - 對戰圓形競技場（Stadium, attack-effect + ability-effect）
+ *      - 球形盾牌（蟲甲聖, attack-damage + attack-effect）
+ *      - 花之帷幔（謝米, attack-damage, target 非規則寶可夢）
+ *      - 藏隱（斯魔茶, attack-damage + attack-effect）
+ *      - 深度下潛（小霞的鯉魚王, attack-damage + attack-effect）
+ *      - 羽毛化石（fossilOnField bench, attack-damage + attack-effect）
+ *      - 太晶寶可夢（attack-damage only, 不擋 effect）
+ *      - 中立中心競技場（attack-damage, attacker rule）
+ *
+ * ════════════════════════════════════════════════════════════════════════════
+ * 【舊 callers (~30 處) 為什麼不一起遷移】
+ * ════════════════════════════════════════════════════════════════════════════
+ * v4.58 audit 確認舊 callers 用法都正確（沒 kind 弄錯）。
+ * 動 effects.ts (74 萬 byte 大檔案) 30+ 處 anchor patch 風險不低，純架構統一沒 user-visible 效益。
+ * → 留著不動，但舊 helper 已加 @deprecated JSDoc，新 caller 寫到 import 會看到刪除線提醒。
+ *
+ * 詳細規則見 IRON_RULES.md Rule 17。
  */
 
 import type { GameState, CardInstance } from './types';

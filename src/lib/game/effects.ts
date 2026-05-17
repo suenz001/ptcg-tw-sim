@@ -143,6 +143,14 @@ export function wouldNeutralCenterBlock(
   return true;
 }
 
+/**
+ * @deprecated v4.5+ 起新 caller 請改用 `canApplyEffectToTarget(state, idx, target, card, kind, pool, {isBench: true})`。
+ *
+ * 此 helper 只擋「對戰圓形競技場」一個 defense（bench-only）。
+ * Unified helper 涵蓋 22 條 defense 規則自動 dispatch，避免 v4.54/v4.57/v4.58 反覆踩的「漏 helper」雷。
+ *
+ * defense.ts 內部 dispatch 仍可使用本 helper（by design）；其他外部 caller 應遷移。
+ */
 export function isBenchProtected(state: GameState, pool: Map<string, Card>): boolean {
   const s = state.activeStadium;
   if (!s) return false;
@@ -288,6 +296,14 @@ export function hasFairyZoneField(
  *        但招式內的「指示物放置」效果（e.g. 幻影奇襲 的 6 counter）不受太晶保護，
  *        所以只在 kind === 'attack-damage' 分支檢查 tags。
  *        Active 的太晶寶可夢不受此保護 — caller 應只在目標為 bench 時呼叫本函式。
+ *
+ * @deprecated v4.5+ 起新 caller 請改用 `canApplyEffectToTarget(state, idx, target, card, kind, pool, {isBench: true})`。
+ *
+ * 此 helper 只涵蓋 bench-only defense bundle（對戰圓形 / 球形盾牌 / 花之帷幔 / 藏隱 /
+ * 深度下潛 / 羽毛化石 / 太晶 / 中立中心）。不擋 attack-effect immunity（薄霧 / 抵抗之幕 等）
+ * 也不擋光之翼。Unified helper 自動分派全部 22 條 defense 規則。
+ *
+ * defense.ts 內部 dispatch 仍可使用本 helper（by design）；其他外部 caller 應遷移。
  */
 export function resolveBenchGuard(
   state: GameState,
@@ -1843,6 +1859,17 @@ export const ATTACK_DAMAGE_PLUS_EFFECT = new Set<string>([
  *   - 多龍巴魯托ex｜幻影奇襲（6 個指示物 → 對手備戰自由分配；200 傷害不受此影響）
  *   - 奧利瓦ex｜油之機關槍（6×20 → 對手任意自由分配）
  *   - cursed-bomb（彷徨夜靈/黑夜魔靈 等：N 個指示物 → 任選對手）
+ *
+ * @deprecated v4.5+ 起新 caller 請改用 `canApplyEffectToTarget(state, idx, target, card, kind, pool, {isBench})`。
+ *
+ * 此 helper 只擋 ATTACK_EFFECT_IMMUNITY map（薄霧能量 / 抵抗之幕 / 皇帝之勢 / 全能硬殼 /
+ * 硬岩能量 / 化石類）— 卡面寫「招式的效果」類 immunity。
+ *
+ * ⚠️ 若 source 卡面是「N 點傷害」(attack-damage) 而誤用此 helper，會過度擋（v4.54 修了 4 個招式
+ * 因此 bug 過度擋；v4.57 修虛無歸零；v4.58 修大沙風暴）。
+ *
+ * Unified helper 強制 caller 指定 kind ('attack-damage' / 'attack-effect' / 'ability-effect')，
+ * 杜絕此類 kind 弄錯 bug。defense.ts 內部 dispatch 仍可使用本 helper（by design）。
  */
 export function canApplyAttackEffectToTarget(
   state: GameState,
