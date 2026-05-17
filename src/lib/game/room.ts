@@ -31,6 +31,9 @@ import {
   runTransaction,
 } from 'firebase/firestore';
 import type { GameState } from './types';
+import type { Card } from '$lib/cards/types';
+// v4.60 checkAndAcceptRestart transaction calls createGame internally
+import { createGame } from './engine';
 
 export type DeckEntry = { cardId: string; count: number };
 
@@ -85,6 +88,11 @@ export interface RoomData {
    * 注意：lobby 階段不受此欄位影響（lobby 永遠公開供 P1/P2 加入；spectator 也可在 lobby 入坐）。
    */
   spectatorsAllowed?: boolean;
+  // v4.60 propose-restart symmetric flow
+  restartProposed?: { [seatIdx: number]: boolean };
+  restartProposedAt?: number;
+  restartProposalCount?: number;
+  restartRejectedAt?: number;
 }
 
 export interface Room extends RoomData {
@@ -494,6 +502,113 @@ export async function checkAndAcceptRematch(roomCode: string): Promise<boolean> 
     });
   } catch (err) {
     console.error('[checkAndAcceptRematch] transaction failed:', err);
+    return false;
+  }
+}
+
+
+// v4.60 propose restart during a game (symmetric, like v3.96 rematch)
+export async function proposeRestart(roomCode: string): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('not logged in');
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  return await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('room missing');
+    const data = snap.data() as RoomData;
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('only P1/P2 can propose restart');
+    if (data.status !== 'playing' || !data.gameState) throw new Error('game not in progress');
+    const count = data.restartProposalCount ?? 0;
+    if (count >= 3) throw new Error('restart proposal limit reached (3/game)');
+    const cur = data.restartProposed ?? {};
+    if (cur[myIdx] || cur[1 - myIdx]) throw new Error('proposal already in progress');
+    const newProposed = { ...cur, [myIdx]: true };
+    tx.update(ref, {
+      restartProposed: newProposed,
+      restartProposedAt: Date.now(),
+      restartProposalCount: count + 1,
+      restartRejectedAt: deleteField(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function respondRestart(roomCode: string, accept: boolean): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('not logged in');
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  return await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('room missing');
+    const data = snap.data() as RoomData;
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('only P1/P2 can respond');
+    const cur = data.restartProposed ?? {};
+    if (!cur[1 - myIdx]) throw new Error('opponent did not propose');
+    if (accept) {
+      tx.update(ref, {
+        restartProposed: { ...cur, [myIdx]: true },
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      tx.update(ref, {
+        restartProposed: deleteField(),
+        restartProposedAt: deleteField(),
+        restartRejectedAt: Date.now(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  });
+}
+
+export async function cancelRestart(roomCode: string): Promise<void> {
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  return await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+    const data = snap.data() as RoomData;
+    if (!data.restartProposed) return;
+    tx.update(ref, {
+      restartProposed: deleteField(),
+      restartProposedAt: deleteField(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function checkAndAcceptRestart(roomCode: string, pool: Map<string, Card>): Promise<boolean> {
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return false;
+      const data = snap.data() as RoomData;
+      const p = data.restartProposed ?? {};
+      if (!p[0] || !p[1]) return false;
+      const p1 = data.seats[0];
+      const p2 = data.seats[1];
+      if (!p1.deckEntries || !p2.deckEntries) return false;
+      const prefs: ['random'|'first'|'second', 'random'|'first'|'second'] = [
+        p1.firstChoicePreference ?? 'random',
+        p2.firstChoicePreference ?? 'random',
+      ];
+      const newGame = createGame(
+        { name: p1.name ?? 'P1', entries: p1.deckEntries },
+        { name: p2.name ?? 'P2', entries: p2.deckEntries },
+        pool,
+        { firstChoicePreferences: prefs },
+      );
+      tx.update(ref, {
+        gameState: JSON.parse(JSON.stringify(newGame)),
+        restartProposed: deleteField(),
+        restartProposedAt: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+      return true;
+    });
+  } catch (err) {
+    console.error('[checkAndAcceptRestart] failed:', err);
     return false;
   }
 }

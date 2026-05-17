@@ -30,6 +30,7 @@
     createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom,
     setRematchReady, checkAndAcceptRematch,
+    proposeRestart, respondRestart, cancelRestart, checkAndAcceptRestart,
     setSpectatorsAllowed,
     findMySeatIdx, bothPlayersReady, countDeckCards,
     sendMessage, subscribeMessages,
@@ -104,6 +105,61 @@
       ? !!(roomData.rematchReady?.[1 - mySeatIdx])
       : false
   );
+
+  // v4.60 propose-restart state
+  const myRestartProposed = $derived(
+    roomData && mySeatIdx >= 0 && mySeatIdx <= 1
+      ? !!(roomData.restartProposed?.[mySeatIdx])
+      : false
+  );
+  const oppRestartProposed = $derived(
+    roomData && mySeatIdx >= 0 && mySeatIdx <= 1
+      ? !!(roomData.restartProposed?.[1 - mySeatIdx]) && !myRestartProposed
+      : false
+  );
+  const restartProposalCount = $derived(roomData?.restartProposalCount ?? 0);
+  let restartCountdown = $state(30);
+  let restartRejectedToast = $state(false);
+  let lastSeenRejectedAt = $state<number | null>(null);
+  const canProposeRestart = $derived(
+    mode === 'online'
+      ? !myRestartProposed && !oppRestartProposed && restartProposalCount < 3
+      : true
+  );
+  let restartCountdownTimer: ReturnType<typeof setInterval> | null = null;
+
+  $effect(() => {
+    const proposedAt = roomData?.restartProposedAt;
+    if (proposedAt && (myRestartProposed || oppRestartProposed)) {
+      if (restartCountdownTimer) clearInterval(restartCountdownTimer);
+      const tick = () => {
+        const elapsed = Math.floor((Date.now() - proposedAt) / 1000);
+        restartCountdown = Math.max(0, 30 - elapsed);
+        if (restartCountdown === 0) {
+          if (restartCountdownTimer) { clearInterval(restartCountdownTimer); restartCountdownTimer = null; }
+          if (myRestartProposed && roomCode) {
+            cancelRestart(roomCode).catch((e: unknown) => console.warn('[cancelRestart timeout]', e));
+          } else if (oppRestartProposed && roomCode) {
+            respondRestart(roomCode, false).catch((e: unknown) => console.warn('[respondRestart timeout]', e));
+          }
+        }
+      };
+      tick();
+      restartCountdownTimer = setInterval(tick, 500);
+    } else {
+      if (restartCountdownTimer) { clearInterval(restartCountdownTimer); restartCountdownTimer = null; }
+      restartCountdown = 30;
+    }
+  });
+
+  $effect(() => {
+    const rejectedAt = roomData?.restartRejectedAt;
+    if (rejectedAt && rejectedAt !== lastSeenRejectedAt) {
+      lastSeenRejectedAt = rejectedAt;
+      restartRejectedToast = true;
+      setTimeout(() => { restartRejectedToast = false; }, 4000);
+    }
+  });
 
   // v3.97 對戰中聊天室（floating panel）— 沿用既有 chatMessages / sendMessage
   //   chatPanelOpen: 是否展開
@@ -3015,6 +3071,39 @@
     preAttackDiscard = null;
   }
 
+  // v4.60 propose-restart handlers
+  function handleProposeRestartButton() {
+    showSettingsModal = false;
+    if (!game) return;
+    if (mode === 'online') {
+      if (!roomCode) return;
+      if (!canProposeRestart) return;
+      const remaining = 3 - restartProposalCount;
+      const msg = '向對手提議重新開局？本局還可提議 ' + remaining + ' 次。\n對方收到後會被詢問是否同意（30 秒回應時間）。';
+      if (!confirm(msg)) return;
+      proposeRestart(roomCode).catch((e: any) => {
+        alert('提議重新開局失敗：' + (e?.message ?? e));
+      });
+    } else {
+      if (!confirm('確定要重新開局嗎？目前盤面將清空，從擲幣決定先攻重新開始。')) return;
+      aiThinking = false;
+      if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; }
+      startLocalGame();
+    }
+  }
+  function handleAcceptOppRestart() {
+    if (!roomCode) return;
+    respondRestart(roomCode, true).catch((e: any) => alert('接受失敗：' + (e?.message ?? e)));
+  }
+  function handleRejectOppRestart() {
+    if (!roomCode) return;
+    respondRestart(roomCode, false).catch((e: any) => alert('拒絕失敗：' + (e?.message ?? e)));
+  }
+  function handleCancelMyRestart() {
+    if (!roomCode) return;
+    cancelRestart(roomCode).catch((e: unknown) => console.warn('[cancelRestart] failed:', e));
+  }
+
   // ── 本機 Lobby ───────────────────────────────────────────────────────────────
   function startLocalGame() {
     if (!p1DeckId || !p2DeckId) return;
@@ -3162,6 +3251,12 @@
     const idx = findMySeatIdx(room.seats, myUid);
     mySeatIdx = idx;
     myPlayerIndex = (idx === 0) ? 0 : (idx === 1) ? 1 : null;
+
+    // v4.60 propose-restart trigger (both sides true)
+    const rp = room.restartProposed ?? {};
+    if (rp[0] && rp[1] && roomCode) {
+      checkAndAcceptRestart(roomCode, pool).catch((e: unknown) => console.warn('[checkAndAcceptRestart] failed:', e));
+    }
 
     // v3.96 再來一局（對稱）：雙方都 ready → 任一方 trigger checkAndAcceptRematch
     //   transaction 內讀-比-寫保證只執行一次，後到的 transaction 看到 rematchReady 已清就 abort
@@ -6188,7 +6283,66 @@
             <br/>・若還是看到卡牌被切，可手動往下調 70% / 65% / 60%
           </div>
         </div>
+
+        <!-- v4.60 對局控制 -->
+        {#if game && game.phase !== 'game-over'}
+        <div class="settings-section">
+          <h4>🎮 對局控制</h4>
+          <div class="setting-row">
+            <button class="toggle-btn restart-game-btn"
+                    onclick={handleProposeRestartButton}
+                    disabled={mode === 'online' && !canProposeRestart}>
+              🔄 提議重新開局
+            </button>
+          </div>
+          <div class="setting-hint">
+            {#if mode === 'online'}
+              {#if myRestartProposed}
+                ⏳ 等待對方同意中... 倒數 {restartCountdown}s
+              {:else if oppRestartProposed}
+                ⚠️ 對方已提議重新開局，請於彈出視窗回應
+              {:else if restartProposalCount >= 3}
+                本局已達提議上限（3/3 次）
+              {:else}
+                連線對戰：需對手同意。本局可提議 {3 - restartProposalCount}/3 次
+              {/if}
+            {:else}
+              將清空目前盤面，從擲幣決定先攻重新開始
+            {/if}
+          </div>
+        </div>
+        {/if}
       </div>
+    </div>
+  {/if}
+
+  <!-- v4.60 對方提議 modal -->
+  {#if oppRestartProposed && mode === 'online'}
+    <div class="zoom-overlay restart-proposal-overlay">
+      <div class="restart-proposal-modal" onclick={(e)=>e.stopPropagation()}>
+        <h3>🔄 對手提議重新開局</h3>
+        <p>對方希望從擲幣重新開始這場對戰。是否同意？</p>
+        <p class="restart-countdown-text">倒數 {restartCountdown}s 後自動拒絕</p>
+        <div class="restart-proposal-actions">
+          <button class="restart-btn-accept" onclick={handleAcceptOppRestart}>✅ 同意</button>
+          <button class="restart-btn-reject" onclick={handleRejectOppRestart}>❌ 拒絕</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- v4.60 我方等待 strip -->
+  {#if myRestartProposed && mode === 'online'}
+    <div class="restart-waiting-strip">
+      <span>⏳ 等待對方同意重新開局... ({restartCountdown}s)</span>
+      <button class="restart-cancel-btn" onclick={handleCancelMyRestart}>取消</button>
+    </div>
+  {/if}
+
+  <!-- v4.60 拒絕 toast -->
+  {#if restartRejectedToast}
+    <div class="restart-rejected-toast">
+      ❌ 對方拒絕了重新開局的提議
     </div>
   {/if}
 
@@ -7262,6 +7416,27 @@
   .vol-text { flex: 0 0 45px; text-align: right; color: #aaa; font-variant-numeric: tabular-nums; }
   .toggle-btn { flex: 1; background: #2a3a2a; color: #fff; border: 1px solid #4a7a4a; padding: 0.5rem; border-radius: 4px; cursor: pointer; text-align: center; }
   .toggle-btn:hover { background: #3a4a3a; }
+  /* v4.60 restart button + overlays */
+  .restart-game-btn { background:#f59e0b !important; color:#000; font-weight:600; border-color:#d97706 !important; }
+  .restart-game-btn:hover { background:#fbbf24 !important; }
+  .restart-game-btn:disabled { background:#444 !important; color:#888; cursor:not-allowed; border-color:#444 !important; }
+  .restart-proposal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:9999; display:flex; align-items:center; justify-content:center; }
+  .restart-proposal-modal { background:linear-gradient(135deg,#1a2540 0%, #2a3550 100%); border:2px solid #f59e0b; border-radius:12px; padding:24px 32px; min-width:300px; max-width:90vw; color:#fff; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,.6); }
+  .restart-proposal-modal h3 { margin:0 0 12px; color:#fbbf24; font-size:1.3em; }
+  .restart-proposal-modal p { margin:8px 0; }
+  .restart-countdown-text { color:#fbbf24; font-weight:600; font-size:.95em; }
+  .restart-proposal-actions { margin-top:16px; display:flex; gap:12px; justify-content:center; }
+  .restart-btn-accept, .restart-btn-reject { padding:10px 24px; border:none; border-radius:6px; font-size:1em; font-weight:600; cursor:pointer; }
+  .restart-btn-accept { background:#10b981; color:#fff; }
+  .restart-btn-accept:hover { background:#34d399; }
+  .restart-btn-reject { background:#ef4444; color:#fff; }
+  .restart-btn-reject:hover { background:#f87171; }
+  .restart-waiting-strip { position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:9998; background:rgba(245,158,11,.95); color:#000; padding:8px 18px; border-radius:20px; display:flex; align-items:center; gap:12px; box-shadow:0 4px 12px rgba(0,0,0,.4); font-weight:600; font-size:.92em; }
+  .restart-cancel-btn { background:#000; color:#fbbf24; border:none; padding:4px 12px; border-radius:12px; font-size:.85em; cursor:pointer; font-weight:600; }
+  .restart-cancel-btn:hover { background:#222; }
+  .restart-rejected-toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); z-index:9998; background:rgba(239,68,68,.95); color:#fff; padding:12px 24px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.4); font-weight:600; animation:rejectedToastFade 4s ease; }
+  @keyframes rejectedToastFade { 0% { opacity:0; transform:translate(-50%, 20px); } 10% { opacity:1; transform:translate(-50%, 0); } 85% { opacity:1; transform:translate(-50%, 0); } 100% { opacity:0; transform:translate(-50%, -10px); } }
+  @media (max-width: 768px) { .restart-proposal-modal { padding:18px 20px; min-width:260px; } .restart-waiting-strip { top:50px; font-size:.85em; padding:6px 14px; } .restart-rejected-toast { font-size:.9em; padding:10px 18px; } }
   .settings-chip { background: #2a3a2a; border-color: #5a5a5a; cursor: pointer; }
   .settings-chip:hover { background: #3a4a3a; }
 

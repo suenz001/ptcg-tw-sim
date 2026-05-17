@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.60</span> 🔄 對局中「提議重新開局」功能（本機 / AI / 連線三模式）</summary>
+        <ul>
+          <li><b>使用情境</b>：對戰中遇到極度卡手（mulligan 過多、起手沒進化路徑等），不必玩完整場可提議重新開局，雙方同意即從擲幣決定先攻重新開始。</li>
+          <li><b>觸發位置</b>：點 ⚙️ 設定齒輪，modal 內最下方新增「🎮 對局控制」區塊 → 「🔄 提議重新開局」按鈕（藏在二級 menu 防誤觸）</li>
+          <li><b>三模式行為</b>：</li>
+          <li>　- 本機 / AI 模式：confirm 後直接重置（呼叫 startLocalGame 新擲幣）</li>
+          <li>　- 連線模式：對稱機制（仿 v3.96 再來一局）— 我方點按鈕 → 對方收到中央 modal「同意 / 拒絕」<br/>　　雙方同意 → transaction reset + 新 createGame 寫回 firestore<br/>　　拒絕 / 取消 → toast 提示<br/>　　30 秒倒數 timeout（提議方視為取消，接收方視為拒絕）<br/>　　一場上限 3 次（防騷擾）</li>
+          <li><b>UI</b>：對方提議中央 modal / 我方等待浮動 strip / 拒絕 toast — 桌機 + 手機適配</li>
+          <li><b>schema</b>：room.ts 新增 restartProposed / restartProposedAt / restartProposalCount / restartRejectedAt</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.59</span> 🛡️ 三層防護機制 — 防未來新卡再犯 kind 弄錯 bug（零行為變更）</summary>
         <ul>
           <li><b>背景</b>：v4.54/v4.57/v4.58 連續修了 6 張卡「kind 弄錯」bug（attack-damage 卡誤用 effect immunity helper 過度擋）。為避免未來新卡再犯，加 3 層防護。</li>
