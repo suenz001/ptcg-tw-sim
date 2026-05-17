@@ -6066,19 +6066,18 @@ export function applyAction(
 
   // v4.498：activeStadium 變化 → 雙邊 sanityKOSweep
   //   涵蓋所有 path：PLAY_TRAINER Stadium、ability/招式 discardActiveStadium（敲壞 / 大地斷裂等）。
-  //   getEffectiveHP 動態套 stadium HP 修飾（line 583）；場地變化（新進、移除、覆蓋）後
-  //   場上可能立即有 zombie 寶可夢（damage ≥ effectiveHP），需主動 KO check。
-  //   v4.497 PLAY_TRAINER 內已 explicit call（idempotent，此處第二次 sweep 已無 zombie → no-op）。
-  //   比對 .iid（CardInstance 唯一 ID）— 進場 / 移除 / 換場 都會 detect 到。
+  // v4.4992：擴大為「每個 action 結束無條件雙邊 sweep」— 涵蓋 tool 移除 / 特性消除等
+  //   也會改 effective HP 的 path（v4.498 只 detect stadium iid 不夠廣）。
+  //   - sanityKOSweep 內 `if (!anyKO) return state` early return → 沒 zombie 就 no-op
+  //   - 雙邊 sweep idempotent — 第二次掃同個 zombie 看到 active=null no-op
+  //   - v4.497 PLAY_TRAINER 內 explicit call 保留作為前線；wrapper 是後備
+  //   - 不影響 normal attack KO（sanityKOSweep 只處理「damage ≥ effHP 但 active 仍在」zombie）
+  //   性能：每個 dispatch 多 2 次 sweep（各 ~6 個寶可夢 HP 比較），可忽略
   if (next.phase === 'playing' && !next.pendingSelection) {
-    const oldStadiumIid = state.activeStadium?.iid;
-    const newStadiumIid = next.activeStadium?.iid;
-    if (oldStadiumIid !== newStadiumIid) {
-      const aIdxForKO = next.activePlayerIndex;
-      next = sanityKOSweep(next, aIdxForKO, pool);
-      if (next.phase !== 'game-over') {
-        next = sanityKOSweep(next, (1 - aIdxForKO) as 0 | 1, pool);
-      }
+    const aIdxForKO = next.activePlayerIndex;
+    next = sanityKOSweep(next, aIdxForKO, pool);
+    if (next.phase !== 'game-over') {
+      next = sanityKOSweep(next, (1 - aIdxForKO) as 0 | 1, pool);
     }
   }
 

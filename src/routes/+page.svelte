@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.4992</span> 🛡️ 加固 KO 檢查全路徑覆蓋（涵蓋 tool 移除/特性消除等）</summary>
+        <ul>
+          <li><b>背景</b>：v4.497/v4.498 修補了 stadium 進場/移除的 KO 檢查。此波加固 audit 找到 2 個漏網：</li>
+          <li>　1. <b>Tool 移除後 effective HP 下降</b>：例如對手 active 附「英雄斗篷」(HP+100) 累積 damage 接近上限 → 對手用「碎裂之鎚」/「割除衝刺」等移除 tool → effective HP 下降 → 應立即 KO，但 v4.498 wrapper 只 detect <code>activeStadium.iid</code> 變化，沒察覺 tool 變化。</li>
+          <li>　2. <b>特性消除後 HP 加成失效</b>：例如「樂天河童 生機森巴」+40 自方全寶可夢 HP，被「暗夜羽擊」消除 → 同樣漏網。</li>
+          <li><b>修法</b>：把 <code>applyAction</code> wrapper 從「stadium iid 變化才 sweep」改為「<b>每個 action 結束無條件雙邊 sweep</b>」。</li>
+          <li><b>安全性</b>：<code>sanityKOSweep</code> 內 <code>if (!anyKO) return state</code> early return → 沒 zombie 就 no-op；雙邊 idempotent；不影響 normal attack KO（只處理 damage ≥ effective HP 但 active 仍在的 zombie）。</li>
+          <li><b>效能</b>：每個 dispatch 多 2 次 sweep（各約 6 個寶可夢 HP 比較），可忽略。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.4991</span> 🛠️ 鎖鏈糬 +40 沒套用 + 秋明/瘋狂連鎖 同類漏判修補</summary>
         <ul>
           <li><b>玩家回報</b>：超級巨牙鯊ex 中毒、附鎖鏈糬，「貪心之牙」70 傷害沒套 +40 增傷。</li>
