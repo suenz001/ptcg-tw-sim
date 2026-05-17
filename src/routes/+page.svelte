@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.56</span> 🛡️ 系統性 audit — 修 3 個 ability-effect source 漏 defense check</summary>
+        <ul>
+          <li><b>背景</b>：依鐵律 7c+15 系統性 audit「對對手寶可夢放置傷害指示物 / 造成傷害」的特性與招式 source，找出沒走 defense helper 或漏 case 的 source。</li>
+          <li><b>已有 defense（不用改）</b>：</li>
+          <li>　- PASSIVE_RETALIATION 9 個（反擊/尖刺盔甲/怨恨旋渦/反擊雞冠/自動用武/反擊針/快掃拳返/甲殼刺）— engine dispatch 已 check 光之翼 ✓</li>
+          <li><b>漏網修補</b>：</li>
+          <li>　1. <b>炸裂針</b>（沙鈴仙人掌）— PASSIVE_KO_RETALIATION dispatch 沒 check 光之翼（對齊 PASSIVE_RETALIATION）</li>
+          <li>　2. <b>凹洞</b>（火箭隊的三地鼠）— 只擋對戰圓形，補球形盾牌/藏隱/深度下潛/羽毛化石/光之翼/花之帷幔/太晶</li>
+          <li>　3. <b>黑暗脈衝</b>（火箭隊的電龍）— 同上補完整 defense（target 可能在 active 或 bench）</li>
+          <li><b>架構成果</b>：3 處改用 unified <code>canApplyEffectToTarget('ability-effect')</code>，未來新增 defense 卡只要加進 unified helper 內部即可。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.55</span> 🐛 修 2 bug + 同類 audit（瞬間移動者 promote + 8 個自身能量×N 漏 fallback）</summary>
         <ul>
           <li><b>Bug 1：凱西｜瞬間移動者 promote 沒設「本回合備戰→戰鬥場」flag</b></li>

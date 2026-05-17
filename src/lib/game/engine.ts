@@ -2093,13 +2093,15 @@ function handlePlaying(
     // v3.01 Wave 3 — 火箭隊的電龍｜黑暗脈衝：對手場上有 → 該進化卡 +4 指示物
     //   卡面明文「不重複」 → 多隻只 +4 一次（per-evolution）
     if (hasRocketAmpharosDarkPulse(afterEvolve, aIdx, pool)) {
-      // v4.19：對戰圓形 — 進化卡若在 bench → 對手特性效果放指示物無效
+      // v4.56：改用 unified('ability-effect', isBench:?) — 涵蓋對戰圓形/球形盾牌/藏隱/深度下潛/羽毛化石/光之翼
       const updPlayer = afterEvolve.players[aIdx];
       const evolvedOnBench = updPlayer.active?.iid !== evolved.iid;
-      if (evolvedOnBench && isBenchProtected(afterEvolve, pool)) {
+      const _darkOwnerIdx = (1 - aIdx) as 0 | 1;
+      const _darkGuard = canApplyEffectToTarget(afterEvolve, _darkOwnerIdx, evolved, evoCard, 'ability-effect', pool, { isBench: evolvedOnBench });
+      if (_darkGuard.blocked) {
         afterEvolve = addLog(afterEvolve,
-          `黑暗脈衝：${evoCard.name} 在備戰，因對戰圓形競技場效果不受傷害指示物`,
-          (1 - aIdx) as 0 | 1);
+          `黑暗脈衝：${evoCard.name} ${_darkGuard.reason}（不放指示物）`,
+          _darkOwnerIdx);
       } else {
         const updateInst = (inst: CardInstance) => inst.iid === evolved.iid
           ? { ...inst, damage: (inst.damage ?? 0) + 40 } : inst;
@@ -2329,10 +2331,13 @@ function handlePlaying(
           }
         }
         if (trig.countersOnRetreater > 0) {
-          // v4.19：對戰圓形 — 對手特性效果放指示物對備戰目標無效（凹洞 always 對 bench）
-          if (isBenchProtected(retreatState, pool)) {
+          // v4.56：改用 unified('ability-effect', isBench:true) — 涵蓋對戰圓形/球形盾牌/藏隱/深度下潛/羽毛化石/光之翼
+          //   凹洞 always 對 bench（剛從 active 回到備戰）
+          const _pitTgtCard = pool.get(retreatingPoke.cardId);
+          const _pitGuard = canApplyEffectToTarget(retreatState, ownerIdx, retreatingPoke, _pitTgtCard, 'ability-effect', pool, { isBench: true });
+          if (_pitGuard.blocked) {
             retreatState = addLog(retreatState,
-              `凹洞：${pool.get(retreatingPoke.cardId)?.name ?? '?'} 因對戰圓形競技場效果不受傷害指示物`,
+              `凹洞：${_pitTgtCard?.name ?? '?'} ${_pitGuard.reason}（不放指示物）`,
               ownerIdx);
           } else {
             const upd = retreatState.players[aIdx];
@@ -2341,7 +2346,7 @@ function handlePlaying(
             const newPlayers4: [PlayerState, PlayerState] = [...retreatState.players] as [PlayerState, PlayerState];
             newPlayers4[aIdx] = { ...upd, bench: benchUpd };
             retreatState = addLog({ ...retreatState, players: newPlayers4 },
-              `凹洞：${pool.get(retreatingPoke.cardId)?.name ?? '?'} 身上放置 ${trig.countersOnRetreater} 個傷害指示物`,
+              `凹洞：${_pitTgtCard?.name ?? '?'} 身上放置 ${trig.countersOnRetreater} 個傷害指示物`,
               ownerIdx);
           }
         }
@@ -4465,7 +4470,9 @@ function handlePlaying(
       // v2.246 KO cause tracking — 招式 KO 對手戰鬥位
       newState = recordOppKO(newState, dIdx, defenderCard, 'attack');
       // v2.992 PASSIVE_KO_RETALIATION（沙鈴仙人掌 炸裂針）— KO 時對攻擊者放 N 個指示物
-      if (defenderCard.abilities) {
+      // v4.56：補光之翼 check — attackerCard 是當前 attacker
+      const _v456KoMagicalShine = attackerCard?.abilities?.some(a => a.name === '光之翼') ?? false;
+      if (defenderCard.abilities && !_v456KoMagicalShine) {
         for (const ab of defenderCard.abilities) {
           const ret = PASSIVE_KO_RETALIATION.get(ab.name);
           if (!ret) continue;
@@ -4480,6 +4487,15 @@ function handlePlaying(
             newState = addLog({ ...newState, players: refPlayers },
               `「${ab.name}」啟動：${attName2} 身上放置 ${ret.counters} 個傷害指示物（+${dmg}）`, dIdx);
           }
+        }
+      } else if (defenderCard.abilities && _v456KoMagicalShine) {
+        const koRetalNames = defenderCard.abilities
+          .filter(a => PASSIVE_KO_RETALIATION.has(a.name))
+          .map(a => a.name);
+        if (koRetalNames.length > 0) {
+          newState = addLog(newState,
+            `光之翼：${attackerCard?.name ?? '?'} 不受對手特性效果影響（${koRetalNames.join('、')} 無效）`,
+            aIdx);
         }
       }
       // v2.992 PASSIVE_ON_KO（桃歹郎 最後鎖鏈 / 願增猿ex 鬆口氣）
