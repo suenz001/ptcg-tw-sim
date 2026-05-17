@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.4993</span> 🛠️ 修激流水泵選 3 能量後 picker 不開 + log 字眼「棄」改「放」</summary>
+        <ul>
+          <li><b>玩家回報</b>：手機版測試厄鬼椪 水井面具ex 激流水泵，選 3 顆能量後沒出現選傷害後排的介面。log 寫「棄 3 個能量回自身牌庫並重洗」— 卡面是「放回牌庫」，「棄」字誤導（像丟棄牌區）。</li>
+          <li><b>Root cause</b>：<code>v155_attacks.ts:625-629</code> PRE 階段已把選的能量從 <code>active.energyAttached</code> 移到 <code>deck</code> 並 shuffle。但 POST 階段（line 643-645）仍從 <code>active.energyAttached</code> 找 <code>chosenIids</code> — 找不到 → <code>chosenUnits = 0 &lt; required</code> → return state、picker 不開。</li>
+          <li><b>修法 A</b>：POST 改在 <code>deck</code> 內找 <code>chosenIids</code>（iid 不變、inst 仍在，只是位置從 attached 變 deck，units 計算等價）。</li>
+          <li><b>修法 B</b>：PRE log「棄 N 個能量」改「放 N 個能量」（卡面是「放回牌庫」非丟棄；符合 v3.48 verb='return-to-deck' 設定）。「未棄滿」改「未選滿」一致用「放」/「選」字眼。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.4992</span> 🛡️ 加固 KO 檢查全路徑覆蓋（涵蓋 tool 移除/特性消除等）</summary>
         <ul>
           <li><b>背景</b>：v4.497/v4.498 修補了 stadium 進場/移除的 KO 檢查。此波加固 audit 找到 2 個漏網：</li>

@@ -609,7 +609,7 @@ regPre('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => {
   const chosenInsts = att.energyAttached.filter(e => chosenIids.includes(e.iid));
   const chosenUnits = chosenInsts.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool), 0);
   if (chosenUnits < required) {
-    return { state: addLog(state, `激流水泵：未棄滿 ${required} 個能量單位（目前 ${chosenUnits}）→ 100`, aIdx), damage: 100 };
+    return { state: addLog(state, `激流水泵：未選滿 ${required} 個能量單位（目前 ${chosenUnits}）→ 100`, aIdx), damage: 100 };
   }
   // 棄玩家選的 required 個（取前 required 個 — UI 已限制 max）
   const allowed = new Set(att.energyAttached.map(e => e.iid));
@@ -628,19 +628,25 @@ regPre('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => {
     deck: shuffle([...p.deck, ...discarded]),
   }));
   return {
-    state: addLog(s2, `激流水泵：棄 ${required} 個能量回自身牌庫並重洗 → 戰鬥位 100 + 對手備戰 1 隻受 120`, aIdx),
+    // v4.4993：卡面是「放回牌庫」非「丟棄」，log 字眼「棄」改「放」避免誤導
+    state: addLog(s2, `激流水泵：放 ${required} 個能量回自身牌庫並重洗 → 戰鬥位 100 + 對手備戰 1 隻受 120`, aIdx),
     damage: 100,
   };
 });
 regPost('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => {
-  // v2.156：POST 也讀 action — 玩家有棄滿 required 個才觸發備戰打擊
+  // v2.156：POST 也讀 action — 玩家有放滿 required 個才觸發備戰打擊
   // v3.875：required 依 璀璨結晶 動態判斷
+  // v4.4993 Fix：PRE 已把選的能量從 active.energyAttached 移到 deck（line 625-629），
+  //   POST 改在 deck 內找 chosenIids 對應 inst — 若在 active 找會 0 → fail → picker 不開。
+  //   iid 不變、inst 仍在（只是位置從 attached 變 deck），units 計算結果等價。
   const att = state.players[aIdx].active;
   const required = _hydroPumpRequired(att, pool);
   const chosenIids = action?.discardedEnergyIids ?? [];
   if (!att) return state;
   // v4.14：units mode — 累計 units 判斷
-  const chosenInsts = att.energyAttached.filter(e => chosenIids.includes(e.iid));
+  // v4.4993：改在 deck 內找（PRE 已把能量 shuffle 進 deck）
+  const p = state.players[aIdx];
+  const chosenInsts = p.deck.filter(e => chosenIids.includes(e.iid));
   const chosenUnits = chosenInsts.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool), 0);
   if (chosenUnits < required) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
