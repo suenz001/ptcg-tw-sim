@@ -35,6 +35,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { canApplyEffectToTarget } from '../../defense';
 import type { Card } from '$lib/cards/types';
 import {
   regPre, regPost, regR,
@@ -161,13 +162,15 @@ regPost('伊裴爾塔爾ex|死亡靈魂', (state, aIdx, pool) => {
   // 篩出剩餘 HP ≤50（即 effectiveHP - damage ≤ 50）的寶可夢
   const targets: { iid: string; name: string }[] = [];
   const blocked: string[] = [];
+  const _oppActiveIid = state.players[dIdx].active?.iid;
   for (const pk of allOpp) {
     const card = pool.get(pk.cardId);
     if (!card) continue;
     const remainingHP = (card.hp ?? 0) - pk.damage;  // 簡化：用 card.hp 而非 getEffectiveHP
     if (remainingHP > 0 && remainingHP <= 50) {
-      // v2.92 招式效果免疫檢查（OHKO 屬招式效果，per-target）
-      const guard = canApplyAttackEffectToTarget(state, aIdx, pk, card, pool);
+      // v4.53 Phase 3：unified('attack-effect') per-target — bench target 補球形盾牌/藏隱等
+      const _deathIsBench = pk.iid !== _oppActiveIid;
+      const guard = canApplyEffectToTarget(state, aIdx, pk, card, 'attack-effect', pool, { isBench: _deathIsBench });
       if (guard.blocked) {
         blocked.push(`${card.name}｜${guard.reason}`);
         continue;

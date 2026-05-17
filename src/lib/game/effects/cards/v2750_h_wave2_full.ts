@@ -14,6 +14,7 @@ import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
+import { canApplyEffectToTarget } from '../../defense';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import {
@@ -2174,9 +2175,11 @@ regPost('死神棺|冥府之律', (state, aIdx, pool) => {
       if (!c) return c;
       const card = pool.get(c.cardId);
       if (!card?.abilities || card.abilities.length === 0) return c;
-      // v2.92 招式效果免疫檢查（僅對手側；自方側不需要 — 是攻擊者自己場上）
+      // v4.53 Phase 3：僅對手側檢查（自方招式作用自方寶可夢不擋）；用 unified('attack-effect')
+      //   涵蓋對戰圓形 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 光之翼 / 薄霧 / 抵抗之幕 / 全能硬殼 等
       if (idx === dIdx) {
-        const guard = canApplyAttackEffectToTarget(s, aIdx, c, card, pool);
+        const _riverIsBench = c.iid !== p.active?.iid;
+        const guard = canApplyEffectToTarget(s, aIdx, c, card, 'attack-effect', pool, { isBench: _riverIsBench });
         if (guard.blocked) {
           s = addLog(s, `冥府之律：${card.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
           return c;

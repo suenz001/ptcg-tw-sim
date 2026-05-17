@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.53</span> 🏗️ Phase 3 第二波：3 個 attack-effect bench-loop source 補球形盾牌/藏隱等</summary>
+        <ul>
+          <li><b>背景</b>：v2.92 加入 canApplyAttackEffectToTarget 時只擋 ATTACK_EFFECT_IMMUNITY 類（薄霧/抵抗之幕/皇帝之勢/全能硬殼），漏球形盾牌、藏隱、深度下潛、羽毛化石、光之翼、對戰圓形 等 bench-only defense。</li>
+          <li><b>修補（淨增加擋範圍，無減少 immune）</b>：</li>
+          <li>　1. 死神棺｜<b>冥府之律</b>（雙方擁有特性的寶可夢各放 6 個指示物）— bench target 補擋</li>
+          <li>　2. 伊裴爾塔爾ex｜<b>死亡靈魂</b>（對手 HP≤50 → 昏厥）— bench target 補擋</li>
+          <li>　3. <b>damageAllOppByCoin</b> generic helper（呆呆王、鬼斯通等多張 J 標卡共用）— bench target 補擋</li>
+          <li><b>說明</b>：attack-damage on bench 類 source（冰凍羽擊/捲入伏特/群起瞄準/墜擊射）— 雖然 v2.92 過度擋（薄霧能量按卡面只擋效果不擋直傷），但修正會減少 immune 範圍，保守延後到下次 audit 確認影響後再處理。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.52</span> 🏗️ Phase 3 第一波：咒詛炸彈 + 痛楚記憶/侵蝕之風 走統一 defense helper</summary>
         <ul>
           <li><b>遷移</b>：</li>

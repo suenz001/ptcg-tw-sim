@@ -1,4 +1,5 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { canApplyEffectToTarget } from '../../defense';
 import { addLog, regPost, regPre, regR, shuffle, updatePlayer, withPending } from '../_shared';
 import { canApplyAttackEffectToTarget } from '../../effects';
 
@@ -56,10 +57,11 @@ function damageAllOppByCoin(
     const isHeads = Math.random() < 0.5;
     s = addLog(s, `${label}：對 ${t.iid} 擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
     if (!isHeads) continue;
-    // v2.92 招式效果免疫檢查（per-target；無 pool 時跳過 — 向後相容）
+    // v4.53 Phase 3：unified('attack-effect') per-target — bench target 補球形盾牌/藏隱等
     if (pool) {
       const tCard = pool.get(t.cardId);
-      const guard = canApplyAttackEffectToTarget(s, aIdx, t, tCard, pool);
+      const _coinIsBench = t.iid !== s.players[dIdx].active?.iid;
+      const guard = canApplyEffectToTarget(s, aIdx, t, tCard, 'attack-effect', pool, { isBench: _coinIsBench });
       if (guard.blocked) {
         s = addLog(s, `${label}：${tCard?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
         continue;
