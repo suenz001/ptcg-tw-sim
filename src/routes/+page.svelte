@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.52</span> 🏗️ Phase 3 第一波：咒詛炸彈 + 痛楚記憶/侵蝕之風 走統一 defense helper</summary>
+        <ul>
+          <li><b>遷移</b>：</li>
+          <li>　1. 咒詛炸彈（彷徨夜靈 / 黑夜魔靈）— 把原本「isBenchProtected + 光之翼 inline」兩段重複 check 合併為單一 <code>canApplyEffectToTarget('ability-effect')</code>。行為等價，可讀性↑。</li>
+          <li>　2. 痛楚記憶（由克希）/ 侵蝕之風（伊裴爾塔爾）— 原本整批 isBenchProtected 跳過 bench，改為 per-target <code>canApplyEffectToTarget('attack-effect')</code>，<b>補上球形盾牌/藏隱/深度下潛/羽毛化石/薄霧/抵抗之幕/全能硬殼</b> 等之前漏的 defense。</li>
+          <li><b>說明</b>：active 仍走 attack-damage 路徑（弱抗修飾），不屬於 attack-effect 範疇，不動。</li>
+          <li><b>架構收益</b>：又少 2 個 isBenchProtected 直接調用點 — defense.ts unified helper 覆蓋面再增。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.51</span> 🏗️ Phase 2: 7 個 P0 source 遷移到統一 defense helper</summary>
         <ul>
           <li><b>背景</b>：v4.5 建立的 <code>canApplyEffectToTarget</code> 統一 helper 開始派上用場。本波遷移 audit 找到的 P0 漏網 source 到新 helper。</li>

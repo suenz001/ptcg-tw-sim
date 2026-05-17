@@ -5466,13 +5466,19 @@ function applyDamageToAllOpp(
   }
 
   // 處理 bench（篩選條件後再累積指示物；KO 的收到 discard）
-  // v2.22 對戰圓形競技場：備戰不受對手招式/特性傷害指示物，整體跳過
-  const benchBlocked = isBenchProtected(s, pool);
+  // v4.52 Phase 3：改 per-target unified('attack-effect') — 補球形盾牌/藏隱/深度下潛/羽毛化石/薄霧/抵抗之幕/全能硬殼 等
+  const blockedBenchNames: string[] = [];
   const newBench: CardInstance[] = [];
   for (const b of defender.bench) {
-    if (benchBlocked) { newBench.push(b); continue; }
     if (onlyDamaged && b.damage === 0) { newBench.push(b); continue; }
     const card = pool.get(b.cardId);
+    // defense check：'attack-effect' on bench → unified dispatch
+    const _aaoppGuard = canApplyEffectToTarget(s, aIdx, b, card, 'attack-effect', pool, { isBench: true });
+    if (_aaoppGuard.blocked) {
+      blockedBenchNames.push(`${card?.name ?? '?'}(${_aaoppGuard.reason})`);
+      newBench.push(b);
+      continue;
+    }
     const newDmg = b.damage + amount;
     const hp = card?.hp ?? 0;
     if (hp > 0 && newDmg >= hp) {
@@ -5495,6 +5501,10 @@ function applyDamageToAllOpp(
   defender = { ...defender, bench: newBench };
   players[dIdx] = defender;
   s = { ...s, players };
+  // v4.52 Phase 3：擋下的 bench targets 補一條 log
+  if (blockedBenchNames.length > 0) {
+    s = addLog(s, `${label}：${blockedBenchNames.join('、')} 未受影響`, aIdx);
+  }
 
   if (prizesTotal > 0) {
     // 若 active 被擊倒且備戰空 → 勝利
@@ -10541,34 +10551,21 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
   const isActive = defender.active?.iid === targetIid;
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
-  // v2.22 對戰圓形競技場：特性類對備戰的傷害指示物放置無效（仍自 KO 自己）
-  if (!isActive && isBenchProtected(st, pool)) {
-    const name = pool.get(target.cardId)?.name ?? '?';
-    let s = addLog(st, `${label}：${name} 因對戰圓形競技場效果不受傷害指示物`, actorIdx);
-    if (userIid) {
-      s = selfKOInstance(s, actorIdx, userIid, pool, label);
-    }
-    return s;
-  }
-  // v2.388 超級皮可西ex｜光之翼免疫對手特性效果（咒詛炸彈）
-  const targetCardForImmunity = pool.get(target.cardId);
-  if (targetCardForImmunity?.abilities?.some(a => a.name === '光之翼')) {
-    let s = addLog(st,
-      `${label}：${targetCardForImmunity.name} 因「光之翼」不受對手特性效果影響（不放指示物）`,
-      actorIdx);
-    if (userIid) {
-      s = selfKOInstance(s, actorIdx, userIid, pool, label);
-    }
-    return s;
-  }
-  // v3.825 fix：移除「招式效果免疫」誤套。
-  //   原 v2.89 註解承認「咒詛炸彈嚴格說屬特性效果，但為了一致性套用招式免疫」— 違反卡面。
-  //   - 抵抗之幕（火箭隊的急凍鳥）：卡面明文「對手的寶可夢使用招式的效果」— 只擋招式效果
-  //   - 薄霧能量 / 硬岩能量 / 皇帝之勢：同樣只擋招式效果類
-  //   咒詛炸彈是「特性」，這些免疫**全部不該套**。
-  //   - 光之翼（超級皮可西ex）：卡面明文「不受對手特性效果影響」→ 應該擋（上一段已處理）
-  //   - 對戰圓形競技場：PTCG 規則「特性類對備戰傷害指示物無效」→ 應該擋（line 10293 已處理）
+  // v4.52 Phase 3：合併 isBenchProtected + 光之翼 inline 為 unified helper
+  //   kind='ability-effect'：unified 內部會 dispatch
+  //     - 光之翼（self-only，active + bench 都擋特性效果）
+  //     - 對戰圓形（bench-only，擋招式/特性的效果）
+  //   不擋（依 v3.825 fix）：抵抗之幕 / 薄霧能量 / 硬岩能量 / 皇帝之勢（這些只擋招式效果，不擋特性）
+  //   行為等價：unified('ability-effect') 對 active+bench 走 light wing，對 bench 加走 resolveBenchGuard。
   const targetCard = pool.get(target.cardId);
+  const _cursedGuard = canApplyEffectToTarget(st, actorIdx, target, targetCard, 'ability-effect', pool, { isBench: !isActive });
+  if (_cursedGuard.blocked) {
+    let s = addLog(st, `${label}：${targetCard?.name ?? '?'} ${_cursedGuard.reason}（不放指示物）`, actorIdx);
+    if (userIid) {
+      s = selfKOInstance(s, actorIdx, userIid, pool, label);
+    }
+    return s;
+  }
   const tHp = targetCard?.hp ?? 0;
   const newDmg = target.damage + addDmg;
   let s: GameState = st;
