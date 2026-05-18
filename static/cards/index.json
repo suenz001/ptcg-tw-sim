@@ -574,5 +574,20 @@
     "scrapedAt": "2026-04-25T17:32:23.798013Z",
     "releaseDate": null,
     "count": 23
+  },
+  {
+    "code": "M5",
+    "name": "深淵之瞳（日版搶先・自譯）",
+    "regulationMark": "M5",
+    "cardCount": 81,
+    "supertypeCounts": {
+      "Pokemon": 69,
+      "Trainer": 10,
+      "Energy": 2
+    },
+    "coverImageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050245_P_MZERAORAEX.jpg",
+    "scrapedAt": "2026-05-18T12:39:00.000Z",
+    "releaseDate": "2026-05",
+    "count": 81
   }
 ]

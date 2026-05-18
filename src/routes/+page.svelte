@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.77</span> ✨ 卡牌資料庫加日版搶先卡包：M5 深淵之瞳（自譯）</summary>
+        <ul>
+          <li><b>內容</b>：日版 M5「深淵之瞳」81 張卡，玩家自譯中文版本。位於卡牌資料庫頁面「★ 全部」旁邊（紅橘漸層 badge 提醒這是搶先版）。</li>
+          <li><b>定位</b>：M5 不屬於台灣標準環境（H/I/J），因此「★ 全部 · 合併 H/I/J」按鈕<b>不包含</b> M5 — 兩塊資料分開不混淆。</li>
+          <li><b>包含</b>：8 張 ex（含超級水晶燈火靈ex、超級捷拉奧拉ex、戰槌龍ex 等）、69 隻寶可夢、10 張訓練家、2 張能量。卡圖直接接日本官方 CDN。</li>
+          <li><b>備註</b>：搶先版翻譯由玩家自製，正式中文版上市後會以官方版本取代。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.76</span> 🐛 修叉字蝠 SV6a 怨影使者 — 在備戰位時按鈕沒出現</summary>
         <ul>
           <li><b>玩家回報</b>：使出阿杏的秘招後，叉字蝠的怨影使者按鈕沒出現。</li>

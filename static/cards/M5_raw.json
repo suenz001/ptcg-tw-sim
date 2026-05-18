@@ -1,0 +1,3212 @@
+[
+  {
+    "id": "50220",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "トロピウス",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050220_P_TOROPIUSU.jpg",
+    "collectorNumber": "001/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 357,
+    "species_jp": "フルーツポケモン",
+    "illustrator": "Akino Fukuji",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 110,
+    "pokemonType": "Grass",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "かじつのかおり",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect_jp": "自分の山札を上から6枚見て、その中からポケモンを好きなだけ選び、相手に見せて、手札に加える。残りのカードは山札にもどして切る。"
+      },
+      {
+        "name_jp": "ソーラービーム",
+        "cost": [
+          "Grass",
+          "Colorless"
+        ],
+        "damage": "60",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50220/regu/all",
+    "scrapedAt": "2026-05-18T11:51:13.000Z"
+  },
+  {
+    "id": "50221",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "アゴジムシ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050221_P_AGOJIMUSHI.jpg",
+    "collectorNumber": "002/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 736,
+    "species_jp": "ようちゅうポケモン",
+    "illustrator": "Mina Nakai",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Grass",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "いとをはく",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "10",
+        "effect_jp": "コインを1回投げオモテなら、相手のバトルポケモンをマヒにする。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50221/regu/all",
+    "scrapedAt": "2026-05-18T11:51:14.000Z"
+  },
+  {
+    "id": "50222",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "カリキリ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050222_P_KARIKIRI.jpg",
+    "collectorNumber": "003/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 753,
+    "species_jp": "かまくさポケモン",
+    "illustrator": "nisimono",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Grass",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "とつげき",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "30",
+        "effect_jp": "このポケモンにも10ダメージ。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50222/regu/all",
+    "scrapedAt": "2026-05-18T11:51:14.000Z"
+  },
+  {
+    "id": "50223",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ラランテスex",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050223_P_RARANTESUEX.jpg",
+    "collectorNumber": "004/081",
+    "rarity_code": "rr",
+    "illustrator": "5ban Graphics",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 260,
+    "pokemonType": "Grass",
+    "subtype": "ex",
+    "attacks_jp": [
+      {
+        "name_jp": "はつらつカッター",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "60＋",
+        "effect_jp": "この番に、このポケモンのHPを回復していたなら、200ダメージ追加。"
+      },
+      {
+        "name_jp": "リーフガード",
+        "cost": [
+          "Grass",
+          "Colorless"
+        ],
+        "damage": "140",
+        "effect_jp": "次の相手の番、このポケモンが受けるワザのダメージは「-50」される。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "ラランテス",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50223/regu/all",
+    "scrapedAt": "2026-05-18T11:51:15.000Z"
+  },
+  {
+    "id": "50224",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "チャデス",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050224_P_CHIXYADESU.jpg",
+    "collectorNumber": "005/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 1012,
+    "species_jp": "まっちゃポケモン",
+    "illustrator": "Mousho",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 30,
+    "pokemonType": "Grass",
+    "subtype": "Basic",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "ばけがくれ",
+        "effect_jp": "このポケモンは、相手のワザや特性の効果を受けない。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "ひっそりのせる",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect_jp": "相手のバトルポケモンに、ダメカンを1個のせる。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50224/regu/all",
+    "scrapedAt": "2026-05-18T11:51:16.000Z"
+  },
+  {
+    "id": "50225",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ヤバソチャ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050225_P_YABASOCHIXYA.jpg",
+    "collectorNumber": "006/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 1013,
+    "species_jp": "まっちゃポケモン",
+    "illustrator": "mingo",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 60,
+    "pokemonType": "Grass",
+    "subtype": "Stage1",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "ばけがくれ",
+        "effect_jp": "このポケモンは、相手のワザや特性の効果を受けない。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "まっちゃスピン",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect_jp": "自分のトラッシュに、特性「ばけがくれ」を持つポケモンが6枚以上あるなら、相手のポケモン全員に、それぞれダメカンを4個のせる。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "ヤバソチャex",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50225/regu/all",
+    "scrapedAt": "2026-05-18T11:51:16.000Z"
+  },
+  {
+    "id": "50226",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ヒードラン",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050226_P_HIDORAN.jpg",
+    "collectorNumber": "007/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 485,
+    "species_jp": "かこうポケモン",
+    "illustrator": "Takeshi Nakamura",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 140,
+    "pokemonType": "Fire",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "こがす",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "",
+        "effect_jp": "相手のバトルポケモンをやけどにする。"
+      },
+      {
+        "name_jp": "ようがんウォール",
+        "cost": [
+          "Fire",
+          "Fire",
+          "Colorless"
+        ],
+        "damage": "120",
+        "effect_jp": "次の相手の番、このポケモンはやけどのポケモンからワザのダメージを受けない。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50226/regu/all",
+    "scrapedAt": "2026-05-18T11:51:17.000Z"
+  },
+  {
+    "id": "50227",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ヤクデ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050227_P_YAKUDE.jpg",
+    "collectorNumber": "008/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 850,
+    "species_jp": "はつねつポケモン",
+    "illustrator": "Yuya Oka",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 80,
+    "pokemonType": "Fire",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "のやき",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "",
+        "effect_jp": "相手の山札を上から1枚トラッシュする。"
+      },
+      {
+        "name_jp": "バグパニック",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "50×",
+        "effect_jp": "自分の山札を下から7枚オモテにして、その中にある、ワザ「バグパニック」を持つポケモンの枚数×50ダメージ。オモテにしたポケモンは山札にもどして切る。残りのカードはトラッシュする。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50227/regu/all",
+    "scrapedAt": "2026-05-18T11:51:17.000Z"
+  },
+  {
+    "id": "50228",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "マルヤクデ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050228_P_MARUYAKUDE.jpg",
+    "collectorNumber": "009/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 851,
+    "species_jp": "はつねつポケモン",
+    "illustrator": "Kouki Saitou",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 140,
+    "pokemonType": "Fire",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "のやき",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "",
+        "effect_jp": "相手の山札を上から2枚トラッシュする。"
+      },
+      {
+        "name_jp": "ヒートタックル",
+        "cost": [
+          "Fire",
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "160",
+        "effect_jp": "このポケモンにも30ダメージ。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50228/regu/all",
+    "scrapedAt": "2026-05-18T11:51:18.000Z"
+  },
+  {
+    "id": "50229",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "カルボウ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050229_P_KARUBOU.jpg",
+    "collectorNumber": "010/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 935,
+    "species_jp": "ひのこポケモン",
+    "illustrator": "Ryuta Fuse",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 80,
+    "pokemonType": "Fire",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "ぜんりょくパンチ",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "40",
+        "effect_jp": "コインを1回投げウラなら、このワザは失敗。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50229/regu/all",
+    "scrapedAt": "2026-05-18T11:51:19.000Z"
+  },
+  {
+    "id": "50230",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "グレンアルマ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050230_P_GURENARUMA.jpg",
+    "collectorNumber": "011/081",
+    "rarity_code": "r_c",
+    "pokedexNumber": 936,
+    "species_jp": "ひのせんしポケモン",
+    "illustrator": "Jiro Sasumo",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 140,
+    "pokemonType": "Fire",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "フレイムレギオン",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "40＋",
+        "effect_jp": "エネルギーがついている自分のベンチポケモンの数×40ダメージ追加。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50230/regu/all",
+    "scrapedAt": "2026-05-18T11:51:19.000Z"
+  },
+  {
+    "id": "50231",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "トサキント",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050231_P_TOSAKINTO.jpg",
+    "collectorNumber": "012/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 118,
+    "species_jp": "きんぎょポケモン",
+    "illustrator": "Shibuzoh.",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Water",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "つきさす",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50231/regu/all",
+    "scrapedAt": "2026-05-18T11:51:20.000Z"
+  },
+  {
+    "id": "50232",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "アズマオウ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050232_P_AZUMAOU.jpg",
+    "collectorNumber": "013/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 119,
+    "species_jp": "きんぎょポケモン",
+    "illustrator": "OKUBO",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 110,
+    "pokemonType": "Water",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "ハイドロショット",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "",
+        "effect_jp": "相手のポケモン1匹に、このポケモンについているエネルギーの数×30ダメージ。［ベンチは弱点・抵抗力を計算しない。］"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50232/regu/all",
+    "scrapedAt": "2026-05-18T11:51:20.000Z"
+  },
+  {
+    "id": "50233",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ホエルコ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050233_P_HOERUKO.jpg",
+    "collectorNumber": "014/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 320,
+    "species_jp": "たまくじらポケモン",
+    "illustrator": "Asako Ito",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 130,
+    "pokemonType": "Water",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "みずでっぽう",
+        "cost": [
+          "Water",
+          "Water"
+        ],
+        "damage": "40",
+        "effect_jp": ""
+      },
+      {
+        "name_jp": "スプラッシュ",
+        "cost": [
+          "Water",
+          "Water",
+          "Water"
+        ],
+        "damage": "80",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50233/regu/all",
+    "scrapedAt": "2026-05-18T11:51:21.000Z"
+  },
+  {
+    "id": "50234",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ホエルオーex",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050234_P_HOERUOEX.jpg",
+    "collectorNumber": "015/081",
+    "rarity_code": "rr",
+    "illustrator": "5ban Graphics",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 380,
+    "pokemonType": "Water",
+    "subtype": "ex",
+    "attacks_jp": [
+      {
+        "name_jp": "なみのり",
+        "cost": [
+          "Water",
+          "Water",
+          "Water"
+        ],
+        "damage": "120",
+        "effect_jp": ""
+      },
+      {
+        "name_jp": "フォーリングダウン",
+        "cost": [
+          "Water",
+          "Water",
+          "Water",
+          "Water",
+          "Water"
+        ],
+        "damage": "270",
+        "effect_jp": "このポケモンをねむりにする。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "ホエルオー",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50234/regu/all",
+    "scrapedAt": "2026-05-18T11:51:22.000Z"
+  },
+  {
+    "id": "50235",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ジーランス",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050235_P_JIRANSU.jpg",
+    "collectorNumber": "016/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 369,
+    "species_jp": "ちょうじゅポケモン",
+    "illustrator": "Naoyo Kimura",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 100,
+    "pokemonType": "Water",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "フォッシルビート",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "10＋",
+        "effect_jp": "名前に「古びた」とつく自分のベンチポケモンの数×30ダメージ追加。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50235/regu/all",
+    "scrapedAt": "2026-05-18T11:51:22.000Z"
+  },
+  {
+    "id": "50236",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "アシマリ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050236_P_ASHIMARI.jpg",
+    "collectorNumber": "017/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 728,
+    "species_jp": "あしかポケモン",
+    "illustrator": "Oswaldo KATO",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Water",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "はたく",
+        "cost": [
+          "Water"
+        ],
+        "damage": "20",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50236/regu/all",
+    "scrapedAt": "2026-05-18T11:51:23.000Z"
+  },
+  {
+    "id": "50237",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "オシャマリ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050237_P_OSHIXYAMARI.jpg",
+    "collectorNumber": "018/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 729,
+    "species_jp": "アイドルポケモン",
+    "illustrator": "MINAMINAMI Take",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 90,
+    "pokemonType": "Water",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "ハイパーボイス",
+        "cost": [
+          "Water"
+        ],
+        "damage": "40",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "アシレーヌ",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50237/regu/all",
+    "scrapedAt": "2026-05-18T11:51:23.000Z"
+  },
+  {
+    "id": "50238",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "アシレーヌ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050238_P_ASHIRENU.jpg",
+    "collectorNumber": "019/081",
+    "rarity_code": "r_c",
+    "pokedexNumber": 730,
+    "species_jp": "ソリストポケモン",
+    "illustrator": "Taira Akitsu",
+    "supertype": "Pokemon",
+    "stage": "Stage2",
+    "hp": 150,
+    "pokemonType": "Water",
+    "subtype": "Stage2",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "まんたんメロディ",
+        "effect_jp": "自分の番に、このカードを手札から出して進化させたとき、1回使える。自分のポケモン1匹のHPを、すべて回復する。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "アクアリターン",
+        "cost": [
+          "Water",
+          "Colorless"
+        ],
+        "damage": "120",
+        "effect_jp": "このポケモンと、ついているすべてのカードを、山札にもどして切る。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "アシレーヌGX",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50238/regu/all",
+    "scrapedAt": "2026-05-18T11:51:24.000Z"
+  },
+  {
+    "id": "50239",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ナミイルカ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050239_P_NAMIIRUKA.jpg",
+    "collectorNumber": "020/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 963,
+    "species_jp": "イルカポケモン",
+    "illustrator": "Yukiko Baba",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 80,
+    "pokemonType": "Water",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "ドレインフィン",
+        "cost": [
+          "Water",
+          "Water"
+        ],
+        "damage": "20",
+        "effect_jp": "このポケモンのHPを「20」回復する。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50239/regu/all",
+    "scrapedAt": "2026-05-18T11:51:25.000Z"
+  },
+  {
+    "id": "50240",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "イルカマン",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050240_P_IRUKAMAN.jpg",
+    "collectorNumber": "021/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 964,
+    "species_jp": "ヒーローポケモン",
+    "illustrator": "satoma",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 150,
+    "pokemonType": "Water",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "ジャスティスナックル",
+        "cost": [
+          "Water",
+          "Water"
+        ],
+        "damage": "80＋",
+        "effect_jp": "相手のサイドの残り枚数が1枚なら、200ダメージ追加。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50240/regu/all",
+    "scrapedAt": "2026-05-18T11:51:25.000Z"
+  },
+  {
+    "id": "50241",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ラクライ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050241_P_RAKURAI.jpg",
+    "collectorNumber": "022/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 309,
+    "species_jp": "いなずまポケモン",
+    "illustrator": "Dsuke",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Lightning",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "もってくる",
+        "cost": [
+          "Lightning"
+        ],
+        "damage": "",
+        "effect_jp": "自分の山札を1枚引く。"
+      },
+      {
+        "name_jp": "たいあたり",
+        "cost": [
+          "Lightning",
+          "Lightning"
+        ],
+        "damage": "30",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50241/regu/all",
+    "scrapedAt": "2026-05-18T11:51:26.000Z"
+  },
+  {
+    "id": "50242",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ライボルト",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050242_P_RAIBORUTO.jpg",
+    "collectorNumber": "023/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 310,
+    "species_jp": "ほうでんポケモン",
+    "illustrator": "Uninori",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 120,
+    "pokemonType": "Lightning",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "フラッシュバリア",
+        "cost": [
+          "Lightning",
+          "Lightning"
+        ],
+        "damage": "50",
+        "effect_jp": "次の相手の番、このポケモンは進化ポケモンからワザのダメージを受けない。"
+      },
+      {
+        "name_jp": "ソニックエッジ",
+        "cost": [
+          "Lightning",
+          "Lightning",
+          "Lightning"
+        ],
+        "damage": "110",
+        "effect_jp": "このワザのダメージは、相手のバトルポケモンにかかっている効果を計算しない。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50242/regu/all",
+    "scrapedAt": "2026-05-18T11:51:26.000Z"
+  },
+  {
+    "id": "50243",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "デンヂムシ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050243_P_DENJIMUSHI.jpg",
+    "collectorNumber": "024/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 737,
+    "species_jp": "バッテリーポケモン",
+    "illustrator": "Kazuhisa Uragami",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 100,
+    "pokemonType": "Lightning",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "はさむ",
+        "cost": [
+          "Lightning"
+        ],
+        "damage": "30",
+        "effect_jp": ""
+      },
+      {
+        "name_jp": "ぶつかる",
+        "cost": [
+          "Lightning",
+          "Lightning"
+        ],
+        "damage": "50",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "クワガノンGX",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50243/regu/all",
+    "scrapedAt": "2026-05-18T11:51:27.000Z"
+  },
+  {
+    "id": "50244",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "クワガノン",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050244_P_KUWAGANON.jpg",
+    "collectorNumber": "025/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 738,
+    "species_jp": "くわがたポケモン",
+    "illustrator": "KEIICHIRO ITO",
+    "supertype": "Pokemon",
+    "stage": "Stage2",
+    "hp": 160,
+    "pokemonType": "Lightning",
+    "subtype": "Stage2",
+    "attacks_jp": [
+      {
+        "name_jp": "クイックダイブ",
+        "cost": [
+          "Lightning"
+        ],
+        "damage": "",
+        "effect_jp": "相手のポケモン1匹に、50ダメージ。［ベンチは弱点・抵抗力を計算しない。］"
+      },
+      {
+        "name_jp": "ギガレールガン",
+        "cost": [
+          "Lightning",
+          "Lightning"
+        ],
+        "damage": "260",
+        "effect_jp": "このポケモンに「ボルトエネルギー」がついていないなら、このワザは失敗。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50244/regu/all",
+    "scrapedAt": "2026-05-18T11:51:28.000Z"
+  },
+  {
+    "id": "50245",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "メガゼラオラex",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050245_P_MZERAORAEX.jpg",
+    "collectorNumber": "026/081",
+    "rarity_code": "rr",
+    "illustrator": "5ban Graphics",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 270,
+    "pokemonType": "Lightning",
+    "subtype": "ex",
+    "attacks_jp": [
+      {
+        "name_jp": "サンダーフィスト",
+        "cost": [
+          "Lightning"
+        ],
+        "damage": "60×",
+        "effect_jp": "このポケモンについているエネルギーの数×60ダメージ。"
+      },
+      {
+        "name_jp": "ゼプトターン",
+        "cost": [
+          "Lightning",
+          "Lightning",
+          "Lightning"
+        ],
+        "damage": "150",
+        "effect_jp": "このポケモンをベンチポケモンと入れ替える。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50245/regu/all",
+    "scrapedAt": "2026-05-18T11:51:28.000Z"
+  },
+  {
+    "id": "50246",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ミライドン",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050246_P_MIRAIDON.jpg",
+    "collectorNumber": "027/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 1008,
+    "species_jp": "パラドックスポケモン",
+    "illustrator": "mashu",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 120,
+    "pokemonType": "Lightning",
+    "subtype": "Basic",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "フォトンコード",
+        "effect_jp": "このポケモンが、バトル場で相手のポケモンからワザのダメージを受けてきぜつしたとき、このポケモンについている「基本エネルギー」を2枚まで選び、ベンチポケモン1匹につけ替える。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "かみなり",
+        "cost": [
+          "Lightning",
+          "Lightning"
+        ],
+        "damage": "90",
+        "effect_jp": "このポケモンにも30ダメージ。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50246/regu/all",
+    "scrapedAt": "2026-05-18T11:51:29.000Z"
+  },
+  {
+    "id": "50247",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ヤドン",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050247_P_YADON.jpg",
+    "collectorNumber": "028/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 79,
+    "species_jp": "まぬけポケモン",
+    "illustrator": "Nelnal",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Psychic",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "すてほうだい",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "",
+        "effect_jp": "自分の手札を好きなだけ選び、トラッシュする。"
+      },
+      {
+        "name_jp": "ずつき",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50247/regu/all",
+    "scrapedAt": "2026-05-18T11:51:29.000Z"
+  },
+  {
+    "id": "50248",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ヤドラン",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050248_P_YADORAN.jpg",
+    "collectorNumber": "029/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 80,
+    "species_jp": "やどかりポケモン",
+    "illustrator": "CHORISO",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 130,
+    "pokemonType": "Psychic",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "スッカラカン",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "50＋",
+        "effect_jp": "自分の手札が1枚もないなら、160ダメージ追加。"
+      },
+      {
+        "name_jp": "しねんのずつき",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "110",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50248/regu/all",
+    "scrapedAt": "2026-05-18T11:51:30.000Z"
+  },
+  {
+    "id": "50249",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ルージュラ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050249_P_RUJIXYURA.jpg",
+    "collectorNumber": "030/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 124,
+    "species_jp": "ひとがたポケモン",
+    "illustrator": "Yoshimoto Yoshimon",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 100,
+    "pokemonType": "Psychic",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "きょうれつキッス",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "",
+        "effect_jp": "次の相手の番の終わりに、このワザを受けたポケモンと、ついているすべてのカードを、トラッシュする。"
+      },
+      {
+        "name_jp": "ねんりき",
+        "cost": [
+          "Psychic",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect_jp": "コインを1回投げオモテなら、相手のバトルポケモンをマヒにする。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50249/regu/all",
+    "scrapedAt": "2026-05-18T11:51:31.000Z"
+  },
+  {
+    "id": "50250",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "カゲボウズ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050250_P_KAGEBOUZU.jpg",
+    "collectorNumber": "031/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 353,
+    "species_jp": "にんぎょうポケモン",
+    "illustrator": "Bun Toujo",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 50,
+    "pokemonType": "Psychic",
+    "subtype": "Basic",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "ばけがくれ",
+        "effect_jp": "このポケモンは、相手のワザや特性の効果を受けない。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "ぶらさがる",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "10",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50250/regu/all",
+    "scrapedAt": "2026-05-18T11:51:31.000Z"
+  },
+  {
+    "id": "50251",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ジュペッタ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050251_P_JIXYUPETTA.jpg",
+    "collectorNumber": "032/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 354,
+    "species_jp": "ぬいぐるみポケモン",
+    "illustrator": "Mugi Hamada",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 80,
+    "pokemonType": "Psychic",
+    "subtype": "Stage1",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "ばけがくれ",
+        "effect_jp": "このポケモンは、相手のワザや特性の効果を受けない。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "にんぎょうキャッチ",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "80",
+        "effect_jp": "のぞむなら、自分の山札から好きなカードを1枚選び、手札に加える。そして山札を切る。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50251/regu/all",
+    "scrapedAt": "2026-05-18T11:51:32.000Z"
+  },
+  {
+    "id": "50252",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ミカルゲ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050252_P_MIKARUGE.jpg",
+    "collectorNumber": "033/081",
+    "rarity_code": "r_c",
+    "pokedexNumber": 442,
+    "species_jp": "ふういんポケモン",
+    "illustrator": "danciao",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 60,
+    "pokemonType": "Psychic",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "たましいエンド",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "",
+        "effect_jp": "自分のトラッシュに、特性「ばけがくれ」を持つポケモンが13枚以上あるなら、相手のポケモンを2匹選び、それぞれのっているダメカンの数が4倍になるように、ダメカンをのせる。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50252/regu/all",
+    "scrapedAt": "2026-05-18T11:51:32.000Z"
+  },
+  {
+    "id": "50253",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ヒトモシ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050253_P_HITOMOSHI.jpg",
+    "collectorNumber": "034/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 607,
+    "species_jp": "ろうそくポケモン",
+    "illustrator": "HYOGONOSUKE",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Psychic",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "おにび",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "20",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50253/regu/all",
+    "scrapedAt": "2026-05-18T11:51:33.000Z"
+  },
+  {
+    "id": "50254",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ランプラー",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050254_P_RANPURA.jpg",
+    "collectorNumber": "035/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 608,
+    "species_jp": "ランプポケモン",
+    "illustrator": "sowsow",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 90,
+    "pokemonType": "Psychic",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "ふえるあかり",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "",
+        "effect_jp": "自分の山札から「ランプラー」を3枚まで選び、ベンチに出す。そして山札を切る。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "メガシャンデラex",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50254/regu/all",
+    "scrapedAt": "2026-05-18T11:51:34.000Z"
+  },
+  {
+    "id": "50255",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "メガシャンデラex",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050255_P_MSHIXYANDERAEX.jpg",
+    "collectorNumber": "036/081",
+    "rarity_code": "rr",
+    "illustrator": "5ban Graphics",
+    "supertype": "Pokemon",
+    "stage": "Stage2",
+    "hp": 350,
+    "pokemonType": "Psychic",
+    "subtype": "ex",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "じゅばくのほのお",
+        "effect_jp": "このポケモンがいるかぎり、相手のバトルポケモンは、にげるためのエネルギーが1個ぶん多くなる。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "ファントムメイズ",
+        "cost": [
+          "Psychic",
+          "Psychic"
+        ],
+        "damage": "130＋",
+        "effect_jp": "相手のバトルポケモンのにげるためのエネルギーの数×50ダメージ追加。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "シャンデラ",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50255/regu/all",
+    "scrapedAt": "2026-05-18T11:51:34.000Z"
+  },
+  {
+    "id": "50256",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ダダリン",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050256_P_DADARIN.jpg",
+    "collectorNumber": "037/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 781,
+    "species_jp": "もくずポケモン",
+    "illustrator": "Oku",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 140,
+    "pokemonType": "Psychic",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "むねんのイカリ",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "30＋",
+        "effect_jp": "自分のトラッシュに、特性「ばけがくれ」を持つポケモンが4枚以上あるなら、140ダメージ追加。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50256/regu/all",
+    "scrapedAt": "2026-05-18T11:51:35.000Z"
+  },
+  {
+    "id": "50257",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "マーシャドー",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050257_P_MASHIXYADO.jpg",
+    "collectorNumber": "038/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 802,
+    "species_jp": "かげすみポケモン",
+    "illustrator": "Nakamura Ippan",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 90,
+    "pokemonType": "Psychic",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "かげむすび",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "30×",
+        "effect_jp": "相手のバトルポケモンのにげるためのエネルギーの数×30ダメージ。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50257/regu/all",
+    "scrapedAt": "2026-05-18T11:51:35.000Z"
+  },
+  {
+    "id": "50258",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "コノヨザル",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050258_P_KONOYOZARU.jpg",
+    "collectorNumber": "039/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 979,
+    "species_jp": "ふんどざるポケモン",
+    "illustrator": "Haru Akasaka",
+    "supertype": "Pokemon",
+    "stage": "Stage2",
+    "hp": 150,
+    "pokemonType": "Psychic",
+    "subtype": "Stage2",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "くちないからだ",
+        "effect_jp": "このポケモンが、ワザのダメージを受けてきぜつするとき、自分はコインを1回投げる。オモテなら、このポケモンはきぜつせず、残りHPが「10」の状態で場に残る。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "ゴーストブロー",
+        "cost": [
+          "Psychic",
+          "Psychic"
+        ],
+        "damage": "100",
+        "effect_jp": "相手のベンチポケモン1匹に、ダメカンを5個のせる。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50258/regu/all",
+    "scrapedAt": "2026-05-18T11:51:36.000Z"
+  },
+  {
+    "id": "50259",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "マンキー",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050259_P_MANKI.jpg",
+    "collectorNumber": "040/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 56,
+    "species_jp": "ぶたざるポケモン",
+    "illustrator": "Yuka Morii",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 50,
+    "pokemonType": "Fighting",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "けたぐり",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Psychic",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50259/regu/all",
+    "scrapedAt": "2026-05-18T11:51:37.000Z"
+  },
+  {
+    "id": "50260",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "オコリザル",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050260_P_OKORIZARU.jpg",
+    "collectorNumber": "041/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 57,
+    "species_jp": "ぶたざるポケモン",
+    "illustrator": "GOSSAN",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 110,
+    "pokemonType": "Fighting",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "どつく",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Psychic",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "コノヨザルex",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50260/regu/all",
+    "scrapedAt": "2026-05-18T11:51:37.000Z"
+  },
+  {
+    "id": "50261",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ズガイドス",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050261_P_ZUGAIDOSU.jpg",
+    "collectorNumber": "042/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 408,
+    "species_jp": "ずつきポケモン",
+    "illustrator": "Hideki Ishikawa",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 100,
+    "pokemonType": "Fighting",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "つきとばす",
+        "cost": [
+          "Fighting",
+          "Fighting"
+        ],
+        "damage": "70",
+        "effect_jp": "相手のバトルポケモンをベンチポケモンと入れ替える。［バトル場に出すポケモンは相手が選ぶ。］"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "ラムパルドex",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50261/regu/all",
+    "scrapedAt": "2026-05-18T11:51:38.000Z"
+  },
+  {
+    "id": "50262",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ラムパルドex",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050262_P_RAMUPARUDOEX.jpg",
+    "collectorNumber": "043/081",
+    "rarity_code": "rr",
+    "illustrator": "hncl",
+    "supertype": "Pokemon",
+    "stage": "Stage2",
+    "hp": 330,
+    "pokemonType": "Fighting",
+    "subtype": "ex",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "はかいのずつき",
+        "effect_jp": "このポケモンがバトル場にいるなら、自分の番に1回使える。コインを1回投げオモテなら、相手のバトルポケモンについているエネルギーを1個選び、トラッシュする。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "ランページハンマー",
+        "cost": [
+          "Fighting",
+          "Fighting"
+        ],
+        "damage": "150",
+        "effect_jp": "次の自分の番、このポケモンが使うワザの、相手のバトルポケモンへのダメージは「+150」される。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "ラムパルド",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50262/regu/all",
+    "scrapedAt": "2026-05-18T11:51:38.000Z"
+  },
+  {
+    "id": "50263",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "モグリュー",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050263_P_MOGURIXYU.jpg",
+    "collectorNumber": "044/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 529,
+    "species_jp": "もぐらポケモン",
+    "illustrator": "Atsushi Furusawa",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Fighting",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "なかまをよぶ",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect_jp": "自分の山札からたねポケモンを2枚まで選び、ベンチに出す。そして山札を切る。"
+      },
+      {
+        "name_jp": "ツメをたてる",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50263/regu/all",
+    "scrapedAt": "2026-05-18T11:51:39.000Z"
+  },
+  {
+    "id": "50264",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "コライドン",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050264_P_KORAIDON.jpg",
+    "collectorNumber": "045/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 1007,
+    "species_jp": "パラドックスポケモン",
+    "illustrator": "kodama",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 130,
+    "pokemonType": "Fighting",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "バトルクロー",
+        "cost": [
+          "Fighting"
+        ],
+        "damage": "30＋",
+        "effect_jp": "相手のバトルポケモンが進化ポケモンなら、30ダメージ追加。"
+      },
+      {
+        "name_jp": "ガイアインパクト",
+        "cost": [
+          "Fighting",
+          "Fighting",
+          "Colorless"
+        ],
+        "damage": "190",
+        "effect_jp": "このポケモンについているエネルギーを、すべてトラッシュする。"
+      }
+    ],
+    "weakness": {
+      "type": "Psychic",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50264/regu/all",
+    "scrapedAt": "2026-05-18T11:51:40.000Z"
+  },
+  {
+    "id": "50265",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "メガダークライex",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050265_P_MDAKURAIEX.jpg",
+    "collectorNumber": "046/081",
+    "rarity_code": "rr",
+    "illustrator": "5ban Graphics",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 280,
+    "pokemonType": "Darkness",
+    "subtype": "ex",
+    "attacks_jp": [
+      {
+        "name_jp": "ナイトレイド",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "110＋",
+        "effect_jp": "自分のベンチポケモンにダメカンがのっているなら、110ダメージ追加。"
+      },
+      {
+        "name_jp": "アビスアイ",
+        "cost": [
+          "Darkness",
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "",
+        "effect_jp": "相手のバトルポケモンが特殊状態なら、そのポケモンをきぜつさせる。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50265/regu/all",
+    "scrapedAt": "2026-05-18T11:51:40.000Z"
+  },
+  {
+    "id": "50266",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "バルチャイ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050266_P_BARUCHIXYAI.jpg",
+    "collectorNumber": "047/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 629,
+    "species_jp": "おむつポケモン",
+    "illustrator": "Shiburingaru",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Darkness",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "はばたく",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "10",
+        "effect_jp": ""
+      },
+      {
+        "name_jp": "かぜおこし",
+        "cost": [
+          "Darkness",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50266/regu/all",
+    "scrapedAt": "2026-05-18T11:51:41.000Z"
+  },
+  {
+    "id": "50267",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "バルジーナ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050267_P_BARUJINA.jpg",
+    "collectorNumber": "048/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 630,
+    "species_jp": "ほねわしポケモン",
+    "illustrator": "Nisota Niso",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 120,
+    "pokemonType": "Darkness",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "ボーンスナイプ",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "",
+        "effect_jp": "特殊エネルギーがついている相手のポケモン1匹に、70ダメージ。［ベンチは弱点・抵抗力を計算しない。］"
+      },
+      {
+        "name_jp": "ブラストウインド",
+        "cost": [
+          "Darkness",
+          "Darkness",
+          "Colorless"
+        ],
+        "damage": "120",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50267/regu/all",
+    "scrapedAt": "2026-05-18T11:51:41.000Z"
+  },
+  {
+    "id": "50268",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "マーイーカ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050268_P_MAIKA.jpg",
+    "collectorNumber": "049/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 686,
+    "species_jp": "かいてんポケモン",
+    "illustrator": "Yuriko Akase",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 60,
+    "pokemonType": "Darkness",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "ちょうたつ",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "",
+        "effect_jp": "自分の山札からグッズを1枚選び、相手に見せて、手札に加える。そして山札を切る。"
+      },
+      {
+        "name_jp": "かいてんアタック",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "30",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50268/regu/all",
+    "scrapedAt": "2026-05-18T11:51:42.000Z"
+  },
+  {
+    "id": "50269",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "カラマネロ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050269_P_KARAMANERO.jpg",
+    "collectorNumber": "050/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 687,
+    "species_jp": "ぎゃくてんポケモン",
+    "illustrator": "Naoki Saito",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 120,
+    "pokemonType": "Darkness",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "まどわす",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "",
+        "effect_jp": "相手のバトルポケモンをこんらんにする。"
+      },
+      {
+        "name_jp": "ブレインクラッシュ",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "130",
+        "effect_jp": "相手のバトルポケモンがこんらんでないなら、このワザは失敗。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50269/regu/all",
+    "scrapedAt": "2026-05-18T11:51:43.000Z"
+  },
+  {
+    "id": "50270",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "クスネ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050270_P_KUSUNE.jpg",
+    "collectorNumber": "051/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 827,
+    "species_jp": "きつねポケモン",
+    "illustrator": "Krgc",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Darkness",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "かじる",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "10",
+        "effect_jp": ""
+      },
+      {
+        "name_jp": "うしろげり",
+        "cost": [
+          "Darkness",
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50270/regu/all",
+    "scrapedAt": "2026-05-18T11:51:43.000Z"
+  },
+  {
+    "id": "50271",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "フォクスライ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050271_P_FUOKUSURAI.jpg",
+    "collectorNumber": "052/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 828,
+    "species_jp": "きつねポケモン",
+    "illustrator": "GOTO minori",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 100,
+    "pokemonType": "Darkness",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "スキルシーフ",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "",
+        "effect_jp": "自分の手札が1枚もないなら、相手の場のポケモンが持つワザを1つ選び、このワザとして使う。"
+      },
+      {
+        "name_jp": "するどいキバ",
+        "cost": [
+          "Darkness",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "80",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50271/regu/all",
+    "scrapedAt": "2026-05-18T11:51:44.000Z"
+  },
+  {
+    "id": "50272",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "モルペコex",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050272_P_MORUPEKOEX.jpg",
+    "collectorNumber": "053/081",
+    "rarity_code": "rr",
+    "illustrator": "aky CG Works",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 180,
+    "pokemonType": "Darkness",
+    "subtype": "ex",
+    "attacks_jp": [
+      {
+        "name_jp": "ホイールドロー",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "",
+        "effect_jp": "自分の手札をすべて山札にもどして切る。その後、山札を6枚引く。"
+      },
+      {
+        "name_jp": "はらぺこボンバー",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "40＋",
+        "effect_jp": "このポケモンにのっているダメカンの数×40ダメージ追加。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50272/regu/all",
+    "scrapedAt": "2026-05-18T11:51:44.000Z"
+  },
+  {
+    "id": "50273",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ザルード",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050273_P_ZARUDO.jpg",
+    "collectorNumber": "054/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 893,
+    "species_jp": "わるざるポケモン",
+    "illustrator": "matazo",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 130,
+    "pokemonType": "Darkness",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "うしろなげ",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "30",
+        "effect_jp": "自分のベンチポケモン1匹にも、30ダメージ。［ベンチは弱点・抵抗力を計算しない。］"
+      },
+      {
+        "name_jp": "シャドーウィップ",
+        "cost": [
+          "Darkness",
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "100＋",
+        "effect_jp": "自分のベンチポケモンに「シャドーエネルギー」がついているなら、70ダメージ追加。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50273/regu/all",
+    "scrapedAt": "2026-05-18T11:51:45.000Z"
+  },
+  {
+    "id": "50274",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "オラチフ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050274_P_ORACHIFU.jpg",
+    "collectorNumber": "055/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 942,
+    "species_jp": "わかぞうポケモン",
+    "illustrator": "ryoma uratsuka",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Darkness",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "かみつく",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "40",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50274/regu/all",
+    "scrapedAt": "2026-05-18T11:51:46.000Z"
+  },
+  {
+    "id": "50275",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "マフィティフ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050275_P_MAFUITEIFU.jpg",
+    "collectorNumber": "056/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 943,
+    "species_jp": "おやぶんポケモン",
+    "illustrator": "kawayoo",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 140,
+    "pokemonType": "Darkness",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "かみつく",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "60",
+        "effect_jp": ""
+      },
+      {
+        "name_jp": "とびこみヘッド",
+        "cost": [
+          "Darkness",
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "210",
+        "effect_jp": "次の相手の番、このポケモンが受けるワザのダメージは「+100」される。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50275/regu/all",
+    "scrapedAt": "2026-05-18T11:51:46.000Z"
+  },
+  {
+    "id": "50276",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "イーユイ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050276_P_IYUI.jpg",
+    "collectorNumber": "057/081",
+    "rarity_code": "r_c",
+    "pokedexNumber": 1004,
+    "species_jp": "さいやくポケモン",
+    "illustrator": "IKEDA Saki",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 90,
+    "pokemonType": "Darkness",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "うずまくねたみ",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "20＋",
+        "effect_jp": "このポケモンにダメカンが2個以上のっているなら、90ダメージ追加。このワザのダメージは弱点を計算しない。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50276/regu/all",
+    "scrapedAt": "2026-05-18T11:51:47.000Z"
+  },
+  {
+    "id": "50277",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "エアームド",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050277_P_EAMUDO.jpg",
+    "collectorNumber": "058/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 227,
+    "species_jp": "よろいどりポケモン",
+    "illustrator": "Anesaki Dynamic",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 120,
+    "pokemonType": "Metal",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "スチールカッター",
+        "cost": [
+          "Metal"
+        ],
+        "damage": "40×",
+        "effect_jp": "自分の手札から「基本エネルギー」を2枚までトラッシュし、その枚数×40ダメージ。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50277/regu/all",
+    "scrapedAt": "2026-05-18T11:51:47.000Z"
+  },
+  {
+    "id": "50278",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "タテトプス",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050278_P_TATETOPUSU.jpg",
+    "collectorNumber": "059/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 410,
+    "species_jp": "シールドポケモン",
+    "illustrator": "Kurata So",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 100,
+    "pokemonType": "Metal",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "くだく",
+        "cost": [
+          "Metal",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect_jp": "相手のバトルポケモンについているエネルギーを1個選び、トラッシュする。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50278/regu/all",
+    "scrapedAt": "2026-05-18T11:51:48.000Z"
+  },
+  {
+    "id": "50279",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "トリデプス",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050279_P_TORIDEPUSU.jpg",
+    "collectorNumber": "060/081",
+    "rarity_code": "r_c",
+    "pokedexNumber": 411,
+    "species_jp": "シールドポケモン",
+    "illustrator": "Kinu Nishimura",
+    "supertype": "Pokemon",
+    "stage": "Stage2",
+    "hp": 160,
+    "pokemonType": "Metal",
+    "subtype": "Stage2",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "たいこのぼうへき",
+        "effect_jp": "このポケモンがベンチにいるかぎり、自分のポケモン全員は、ついているエネルギーが2個以下の相手のポケモンからワザのダメージを受けない。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "ぶちかます",
+        "cost": [
+          "Metal",
+          "Metal",
+          "Colorless"
+        ],
+        "damage": "160",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50279/regu/all",
+    "scrapedAt": "2026-05-18T11:51:49.000Z"
+  },
+  {
+    "id": "50280",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ドーミラー",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050280_P_DOMIRA.jpg",
+    "collectorNumber": "061/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 436,
+    "species_jp": "せいどうポケモン",
+    "illustrator": "Saboteri",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 80,
+    "pokemonType": "Metal",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "ミラーアタック",
+        "cost": [
+          "Metal"
+        ],
+        "damage": "10＋",
+        "effect_jp": "相手のバトルポケモンがポケモンなら、30ダメージ追加。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50280/regu/all",
+    "scrapedAt": "2026-05-18T11:51:49.000Z"
+  },
+  {
+    "id": "50281",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ドータクン",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050281_P_DOTAKUN.jpg",
+    "collectorNumber": "062/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 437,
+    "species_jp": "どうたくポケモン",
+    "illustrator": "Uta",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 130,
+    "pokemonType": "Metal",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "ひっぱたく",
+        "cost": [
+          "Metal"
+        ],
+        "damage": "40",
+        "effect_jp": ""
+      },
+      {
+        "name_jp": "メタルブロック",
+        "cost": [
+          "Metal",
+          "Metal",
+          "Colorless"
+        ],
+        "damage": "120",
+        "effect_jp": "次の相手の番、このポケモンが進化ポケモンから受けるワザのダメージは「-100」される。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50281/regu/all",
+    "scrapedAt": "2026-05-18T11:51:50.000Z"
+  },
+  {
+    "id": "50282",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "メガドリュウズex",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050282_P_MDORIXYUUZUEX.jpg",
+    "collectorNumber": "063/081",
+    "rarity_code": "rr",
+    "illustrator": "Keisuke Azuma",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 340,
+    "pokemonType": "Metal",
+    "subtype": "ex",
+    "attacks_jp": [
+      {
+        "name_jp": "ほりくずす",
+        "cost": [
+          "Metal",
+          "Metal"
+        ],
+        "damage": "90",
+        "effect_jp": "相手の山札を上から2枚トラッシュする。"
+      },
+      {
+        "name_jp": "マキシマムドリル",
+        "cost": [
+          "Metal",
+          "Metal",
+          "Metal"
+        ],
+        "damage": "200＋",
+        "effect_jp": "このワザを使うためのエネルギーより、2個多くエネルギーがついているなら、130ダメージ追加。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Grass",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless",
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "ドリュウズex",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50282/regu/all",
+    "scrapedAt": "2026-05-18T11:51:51.000Z"
+  },
+  {
+    "id": "50283",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ツツケラ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050283_P_TSUTSUKERA.jpg",
+    "collectorNumber": "064/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 731,
+    "species_jp": "きつつきポケモン",
+    "illustrator": "Koji Nakata",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Colorless",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "にどづき",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "10×",
+        "effect_jp": "コインを2回投げ、オモテの数×10ダメージ。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50283/regu/all",
+    "scrapedAt": "2026-05-18T11:51:52.000Z"
+  },
+  {
+    "id": "50284",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ケララッパ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050284_P_KERARAPPA.jpg",
+    "collectorNumber": "065/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 732,
+    "species_jp": "ラッパぐちポケモン",
+    "illustrator": "miki kudo",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 90,
+    "pokemonType": "Colorless",
+    "subtype": "Stage1",
+    "attacks_jp": [
+      {
+        "name_jp": "そらをとぶ",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect_jp": "コインを1回投げウラなら、このワザは失敗。オモテなら、次の相手の番、このポケモンはワザのダメージや効果を受けない。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50284/regu/all",
+    "scrapedAt": "2026-05-18T11:51:52.000Z"
+  },
+  {
+    "id": "50285",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ドデカバシ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050285_P_DODEKABASHI.jpg",
+    "collectorNumber": "066/081",
+    "rarity_code": "u_c",
+    "pokedexNumber": 733,
+    "species_jp": "おおづつポケモン",
+    "illustrator": "Masako Tomii",
+    "supertype": "Pokemon",
+    "stage": "Stage2",
+    "hp": 150,
+    "pokemonType": "Colorless",
+    "subtype": "Stage2",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "スカイドロー",
+        "effect_jp": "自分の番に1回使える。自分の山札を1枚引く。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "フェザーロンド",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "60＋",
+        "effect_jp": "おたがいのベンチポケモンの数×20ダメージ追加。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50285/regu/all",
+    "scrapedAt": "2026-05-18T11:51:53.000Z"
+  },
+  {
+    "id": "50286",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "タイプ：ヌル",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050286_P_TAIPUNURU.jpg",
+    "collectorNumber": "067/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 772,
+    "species_jp": "じんこうポケモン",
+    "illustrator": "Ligton",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 110,
+    "pokemonType": "Colorless",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "パワーエッジ",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "40",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50286/regu/all",
+    "scrapedAt": "2026-05-18T11:51:54.000Z"
+  },
+  {
+    "id": "50287",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "シルヴァディ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050287_P_SHIRUVUADEI.jpg",
+    "collectorNumber": "068/081",
+    "rarity_code": "r_c",
+    "pokedexNumber": 773,
+    "species_jp": "じんこうポケモン",
+    "illustrator": "Takumi Wada",
+    "supertype": "Pokemon",
+    "stage": "Stage1",
+    "hp": 140,
+    "pokemonType": "Colorless",
+    "subtype": "Stage1",
+    "abilities_jp": [
+      {
+        "label": "特性",
+        "name_jp": "バディコール",
+        "effect_jp": "自分の手札が1枚もないなら、自分の番に1回使える。自分の山札からサポートを1枚選び、相手に見せて、手札に加える。そして山札を切る。"
+      }
+    ],
+    "attacks_jp": [
+      {
+        "name_jp": "エアスラッシュ",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "130",
+        "effect_jp": "このポケモンについているエネルギーを1個選び、トラッシュする。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom_jp": "シルヴァディGX",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50287/regu/all",
+    "scrapedAt": "2026-05-18T11:51:54.000Z"
+  },
+  {
+    "id": "50288",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "オトシドリ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050288_P_OTOSHIDORI.jpg",
+    "collectorNumber": "069/081",
+    "rarity_code": "c_c",
+    "pokedexNumber": 962,
+    "species_jp": "おとしものポケモン",
+    "illustrator": "Wintr Wandr",
+    "supertype": "Pokemon",
+    "stage": "Basic",
+    "hp": 100,
+    "pokemonType": "Colorless",
+    "subtype": "Basic",
+    "attacks_jp": [
+      {
+        "name_jp": "おとどけチャレンジ",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "",
+        "effect_jp": "コインを2回投げ、すべてオモテなら、自分の山札からポケモンを1枚選び、ベンチに出す。そして山札を切る。"
+      },
+      {
+        "name_jp": "スピードウイング",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "100",
+        "effect_jp": ""
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50288/regu/all",
+    "scrapedAt": "2026-05-18T11:51:55.000Z"
+  },
+  {
+    "id": "50289",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ダークベル",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050289_T_DAKUBERU.jpg",
+    "collectorNumber": "070/081",
+    "rarity_code": "u_c",
+    "illustrator": "Toyste Beach",
+    "supertype": "Trainer",
+    "subtype": "",
+    "rulesText_jp": "おたがいのバトルポケモン（ポケモンをのぞく）を、それぞれこんらんにする。 グッズは、自分の番に何枚でも使える。",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50289/regu/all",
+    "scrapedAt": "2026-05-18T11:51:55.000Z"
+  },
+  {
+    "id": "50290",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "古びたずがいの化石",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050290_T_KOBITAZUGAINOKASEKI.jpg",
+    "collectorNumber": "071/081",
+    "rarity_code": "c_c",
+    "illustrator": "AYUMI ODASHIMA",
+    "supertype": "Pokemon",
+    "hp": 60,
+    "subtype": "Basic",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50290/regu/all",
+    "scrapedAt": "2026-05-18T11:51:56.000Z"
+  },
+  {
+    "id": "50291",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "古びたたての化石",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050291_T_FURUBITATATENOKASEKI.jpg",
+    "collectorNumber": "072/081",
+    "rarity_code": "c_c",
+    "illustrator": "AYUMI ODASHIMA",
+    "supertype": "Pokemon",
+    "hp": 60,
+    "subtype": "Basic",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50291/regu/all",
+    "scrapedAt": "2026-05-18T11:51:57.000Z"
+  },
+  {
+    "id": "50292",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ごうかいボム",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050292_T_GOUKAIBOMU.jpg",
+    "collectorNumber": "073/081",
+    "rarity_code": "u_c",
+    "illustrator": "inose yukie",
+    "supertype": "Trainer",
+    "subtype": "",
+    "rulesText_jp": "このカードをつけているポケモン（「メガシンカex」をのぞく）が、バトル場で相手の「メガシンカex」から「240」以上のワザのダメージを受けたとき、ワザを使ったポケモンにダメカンを12個のせる。その後、このカードをトラッシュする。 ポケモンのどうぐは、自分の番に何枚でも、自分のポケモンにつけられる。ポケモン1匹につき1枚だけつけられ、つけたままにする。",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50292/regu/all",
+    "scrapedAt": "2026-05-18T11:51:57.000Z"
+  },
+  {
+    "id": "50293",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "リトライバッジ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050293_T_RITORAIBAJJI.jpg",
+    "collectorNumber": "074/081",
+    "rarity_code": "u_c",
+    "illustrator": "Toyste Beach",
+    "supertype": "Trainer",
+    "subtype": "",
+    "rulesText_jp": "自分の番ごとに1回、このカードをつけているポケモンのワザで自分がコインを投げたとき、そのコインの結果をすべてなくし、はじめからコインを投げなおしてよい。 ポケモンのどうぐは、自分の番に何枚でも、自分のポケモンにつけられる。ポケモン1匹につき1枚だけつけられ、つけたままにする。",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50293/regu/all",
+    "scrapedAt": "2026-05-18T11:51:58.000Z"
+  },
+  {
+    "id": "50294",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "カスミの元気",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050294_T_KASUMINOGENKI.jpg",
+    "collectorNumber": "075/081",
+    "rarity_code": "u_c",
+    "illustrator": "En Morikura",
+    "supertype": "Trainer",
+    "subtype": "",
+    "rulesText_jp": "このカードを使ったなら、自分の番は終わる。\n\n自分の山札から「基本エネルギー」を4枚まで選び、自分のポケモン1匹につける。そして山札を切る。 サポートは、自分の番に1枚しか使えない。",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50294/regu/all",
+    "scrapedAt": "2026-05-18T11:51:58.000Z"
+  },
+  {
+    "id": "50295",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "グラジオの決戦",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050295_T_GURAJIONOKESSEN.jpg",
+    "collectorNumber": "076/081",
+    "rarity_code": "u_c",
+    "illustrator": "akagi",
+    "supertype": "Trainer",
+    "subtype": "",
+    "rulesText_jp": "このカードは、自分の手札がこのカード1枚だけのときにしか使えない。\n\nこの番、自分のポケモン（「ルールを持つポケモン」をのぞく）が使うワザの、相手のバトルポケモンへのダメージは「+80」される。 サポートは、自分の番に1枚しか使えない。",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50295/regu/all",
+    "scrapedAt": "2026-05-18T11:51:59.000Z"
+  },
+  {
+    "id": "50296",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "サビ組のしたっぱ",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050296_T_SABIGUMINOSHITAPPA.jpg",
+    "collectorNumber": "077/081",
+    "rarity_code": "u_c",
+    "illustrator": "Teeziro",
+    "supertype": "Trainer",
+    "subtype": "",
+    "rulesText_jp": "このカードは、前の相手の番に、自分のポケモンがきぜつしていなければ使えない。\n\n相手の場のポケモンについているエネルギーを1個選び、トラッシュする。 サポートは、自分の番に1枚しか使えない。",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50296/regu/all",
+    "scrapedAt": "2026-05-18T11:52:00.000Z"
+  },
+  {
+    "id": "50297",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ムク",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050297_T_MUKU.jpg",
+    "collectorNumber": "078/081",
+    "rarity_code": "u_c",
+    "illustrator": "nagimiso",
+    "supertype": "Trainer",
+    "subtype": "",
+    "rulesText_jp": "自分の手札からポケモン（「ルールを持つポケモン」をのぞく）を2枚までトラッシュし、その枚数×3枚ぶん、山札を引く。 サポートは、自分の番に1枚しか使えない。",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50297/regu/all",
+    "scrapedAt": "2026-05-18T11:52:01.000Z"
+  },
+  {
+    "id": "50298",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "化石採掘場",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050298_T_KASEKISAIKUTSUJIXYOU.jpg",
+    "collectorNumber": "079/081",
+    "rarity_code": "u_c",
+    "illustrator": "Oswaldo KATO",
+    "supertype": "Trainer",
+    "subtype": "",
+    "rulesText_jp": "おたがいのプレイヤーは、自分の番ごとに1回、自分の山札から、名前に「古びた」とつくグッズを2枚まで選び、ベンチに出してよい。そして山札を切る。 スタジアムは、自分の番に1枚、バトル場の横に出せる。別のスタジアムが場に出たなら、このカードをトラッシュする。同じ名前のスタジアムは場に出せない。",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50298/regu/all",
+    "scrapedAt": "2026-05-18T11:52:02.000Z"
+  },
+  {
+    "id": "50299",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "ボルト雷エネルギー",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050299_E_BORUTOKAMINARIENERUGI.jpg",
+    "collectorNumber": "080/081",
+    "rarity_code": "r_c",
+    "supertype": "Energy",
+    "subtype": "Special",
+    "rulesText_jp": "このカードは、ポケモンについているかぎり、エネルギー1個ぶんとしてはたらく。\n\nこのカードをつけているポケモンが使うワザの、相手のバトルポケモンへのダメージは「+20」される。",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50299/regu/all",
+    "scrapedAt": "2026-05-18T11:52:02.000Z"
+  },
+  {
+    "id": "50300",
+    "setCode": "M5",
+    "regulationMark": "M5",
+    "name_jp": "シャドー悪エネルギー",
+    "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050300_E_SHIXYADOAKUENERUGI.jpg",
+    "collectorNumber": "081/081",
+    "rarity_code": "r_c",
+    "supertype": "Energy",
+    "subtype": "Special",
+    "rulesText_jp": "このカードは、ポケモンについているかぎり、エネルギー1個ぶんとしてはたらく。\n\nこのカードをつけているポケモンは、ベンチにいるかぎり、相手のワザのダメージを受けない。",
+    "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50300/regu/all",
+    "scrapedAt": "2026-05-18T11:52:03.000Z"
+  }
+]

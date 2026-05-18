@@ -30,8 +30,10 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
 
     // Fetch every set's cards in parallel. Individual set failures are
     // tolerated — one broken file shouldn't bomb the whole ALL view.
+    // v4.77：ALL = 標準環境合併（H/I/J），排除日版搶先卡包 M5 等 non-standard mark
+    const standardSets = sets.filter((s) => s.regulationMark === 'H' || s.regulationMark === 'I' || s.regulationMark === 'J');
     const results = await Promise.all(
-      sets.map(async (s) => {
+      standardSets.map(async (s) => {
         try {
           const r = await fetch(`${base}/cards/${s.code}.json`);
           if (!r.ok) return [] as Card[];
