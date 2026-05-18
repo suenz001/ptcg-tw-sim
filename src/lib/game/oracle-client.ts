@@ -38,7 +38,10 @@ export async function oracleAuth(): Promise<{ uid: string; token: string }> {
 
   // 沒 cache → 跟 server 拿
   if (!API_URL) throw new Error('VITE_ORACLE_API_URL not set');
-  const res = await fetch(`${API_URL}/api/auth/anonymous`, { method: 'POST' });
+  const res = await fetch(`${API_URL}/api/auth/anonymous`, {
+    method: 'POST',
+    cache: 'no-store',
+  });
   if (!res.ok) throw new Error(`oracleAuth failed: ${res.status} ${await res.text()}`);
   const { uid, token } = await res.json();
   _token = token; _uid = uid;
@@ -78,8 +81,10 @@ export async function oracleApi<T = any>(
 ): Promise<T> {
   if (!API_URL) throw new Error('VITE_ORACLE_API_URL not set');
   const { token } = await oracleAuth();
+  // v4.68: 加 Cache-Control 阻止 Chrome 自動發 If-None-Match → server 回 304 → body 空
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${token}`,
+    'Cache-Control': 'no-cache',
     ...(options.headers ?? {}),
   };
   let body: string | undefined;
@@ -91,7 +96,14 @@ export async function oracleApi<T = any>(
     method: options.method ?? 'GET',
     headers,
     body,
+    // v4.68: cache:'no-store' 不讓 fetch 介入瀏覽器 HTTP cache（不會 If-None-Match）
+    cache: 'no-store',
   });
+  // v4.68: 即便 no-store 失效，server 仍可能回 304（理論上不該）—safety net
+  if (res.status === 304) {
+    // 沒 body，當作 caller 自己重試；但其實 caller 走 polling 自動會再試
+    throw new Error('oracleApi 304 (unexpected with cache:no-store)');
+  }
   if (!res.ok) {
     // 409 conflict 也算 ok response, caller 要處理
     if (res.status === 409) {

@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.68</span> 🔧 Hotfix：oracle-client polling 全部 304 → 加 cache:'no-store' 阻止 Chrome 條件式 GET</summary>
+        <ul>
+          <li><b>症狀</b>：Oracle 站建房後 Network 看到 polling 請求都是 304 Not Modified，page UI 永遠停留在「尚未選擇牌組」。</li>
+          <li><b>根因</b>：Express 預設啟用 ETag。Chrome HTTP cache 自動在後續 GET 加 <code>If-None-Match</code>。server 比對 ETag 相同 → 回 304 + 空 body。<code>oracleApi</code> 的 <code>if (!res.ok) throw</code> 把 304 當錯誤拋 → polling 靜默 catch → roomData 永遠不更新。</li>
+          <li><b>修法</b>：<code>oracle-client.ts</code> 所有 fetch 加：</li>
+          <li>　- <code>cache: 'no-store'</code>（Request init，阻止 Chrome cache 介入）</li>
+          <li>　- <code>Cache-Control: no-cache</code> request header（雙保險）</li>
+          <li>　- 304 safety net：即便上述失效仍回 304，明確 throw with message。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.67</span> 🔧 Hotfix：vite alias 失效（被 SvelteKit $lib 先解掉），改用 resolveId plugin 攔截</summary>
         <ul>
           <li><b>Network tab 證實</b>：trycloudflare 站建房後請求打 <code>firestore.googleapis.com/channel?VER=8&database=...</code>，沒打 <code>trycloudflare.com/api/rooms</code>。所以 firebase room.ts 還在跑。</li>
