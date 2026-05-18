@@ -1,0 +1,529 @@
+/**
+ * v4.62 Phase 3b — Oracle backend equivalent of room.ts.
+ *
+ * 同樣 export 介面（22 個 function + types + constants），但內部用 oracle-client.ts
+ * 走 fetch 取代 Firestore。Phase 3c 設 vite alias 在 build 時切換。
+ *
+ * 跟 room.ts 差異：
+ *   - auth: oracleAuth() 而非 firebase auth.currentUser
+ *   - onSnapshot → oraclePollRoom (800ms polling)
+ *   - runTransaction → oracleTransaction helper (optimistic lock retry)
+ *   - serverTimestamp() → Date.now() (server 端會自動 set updatedAt)
+ *   - deleteField() → 設為 null (前端 readers 用 ?? 處理)
+ *   - subcollection messages → top-level messages collection
+ */
+import {
+  oracleAuth, oracleApi, oracleGetRoom, oracleUpsertRoom, oracleDeleteRoom,
+  oracleListRooms, oraclePollRoom, oracleListMessages, oracleCurrentUid,
+  type OracleRoom,
+} from './oracle-client';
+import type { GameState } from './types';
+import type { Card } from '$lib/cards/types';
+import { createGame } from './engine';
+
+// ── re-export types & const from room.ts ────────────────────────────────────
+export type { Room, RoomData, Seat, SeatRole, DeckEntry, ChatMessage } from './room';
+export {
+  SEAT_LAYOUT_VERSION, TOTAL_SEATS, SPECTATOR_SEATS, HEARTBEAT_STALE_MS,
+  generateRoomCode, findMySeatIdx, countDeckCards, bothPlayersReady, isSeatStale,
+} from './room';
+
+import type { Room, RoomData, Seat, DeckEntry, ChatMessage } from './room';
+import {
+  findMySeatIdx, generateRoomCode, countDeckCards,
+  SEAT_LAYOUT_VERSION, SPECTATOR_SEATS,
+} from './room';
+
+// ── private helpers ─────────────────────────────────────────────────────────
+
+/** v2.46：從 seats 推導 memberUids（去重 + 過濾 null）。 */
+function computeMemberUids(seats: Seat[]): string[] {
+  const set = new Set<string>();
+  for (const s of seats) {
+    if (s.uid) set.add(s.uid);
+  }
+  return Array.from(set);
+}
+
+function emptySeats(): Seat[] {
+  const seats: Seat[] = [
+    { role: 'p1', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const },
+    { role: 'p2', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const },
+  ];
+  for (let i = 0; i < SPECTATOR_SEATS; i++) {
+    seats.push({ role: 'spectator', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const });
+  }
+  return seats;
+}
+
+/** Optimistic lock retry — 取代 firestore runTransaction */
+async function oracleTx(roomCode: string, fn: (data: RoomData) => RoomData | Promise<RoomData>): Promise<RoomData> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const room = await oracleGetRoom(roomCode);
+    if (!room) throw new Error('room not found');
+    const data = room as unknown as RoomData;
+    const ver = (room as OracleRoom)._version;
+    const newData = await fn(data);
+    const result = await oracleUpsertRoom(roomCode, newData as unknown as Record<string, unknown>, ver);
+    if ('ok' in result) return result.room as unknown as RoomData;
+    // conflict → retry after small backoff
+    await new Promise(r => setTimeout(r, 50 * (attempt + 1)));
+  }
+  throw new Error('oracleTx: max retries exhausted');
+}
+
+async function getMyUid(): Promise<string> {
+  const { uid } = await oracleAuth();
+  return uid;
+}
+
+// ── CRUD ────────────────────────────────────────────────────────────────────
+
+export async function createRoom(roomName: string, hostName: string): Promise<string> {
+  const uid = await getMyUid();
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = generateRoomCode();
+    const seats = emptySeats();
+    seats[0] = { role: 'p1', uid, name: hostName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+    const data: Record<string, unknown> = {
+      roomName: roomName.trim() || (hostName + ' 的房間'),
+      hostUid: uid,
+      hostName,
+      status: 'lobby',
+      seats,
+      memberUids: computeMemberUids(seats),
+      gameState: null,
+      schemaVersion: SEAT_LAYOUT_VERSION,
+    };
+    // upsert with no expectedVersion → creates if missing
+    const result = await oracleUpsertRoom(code, data);
+    if ('ok' in result && result.room._version === 1) return code;
+    // hit existing room code → retry with new code
+  }
+  throw new Error('無法產生唯一房號');
+}
+
+export async function joinRoom(roomCode: string, guestName: string): Promise<Room> {
+  const uid = await getMyUid();
+  const code = roomCode.toUpperCase().trim();
+  const room = await oracleGetRoom(code);
+  if (!room) throw new Error('找不到房間，請確認房號');
+  const data = room as unknown as RoomData;
+  if ((data.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) {
+    throw new Error('此房間是舊版本，請對方建立新房間');
+  }
+  if (data.status === 'ended') throw new Error('此房對戰已結束');
+  if (data.status === 'playing' && data.spectatorsAllowed === false) {
+    throw new Error('此房對戰中未開放觀戰');
+  }
+
+  return await oracleTx(code, (cur) => {
+    const seats = cur.seats ?? [];
+    const existingIdx = findMySeatIdx(seats, uid);
+    if (existingIdx >= 0) {
+      // 殘留座位 → 更新名字
+      const newSeats = seats.map((s, i) => i === existingIdx ? { ...s, name: guestName } : s);
+      return { ...cur, seats: newSeats, memberUids: computeMemberUids(newSeats) };
+    }
+    // 找第一個空 spectator 位
+    let targetIdx = -1;
+    for (let i = 2; i < seats.length; i++) {
+      if (seats[i].uid === null) { targetIdx = i; break; }
+    }
+    if (targetIdx === -1 && cur.status === 'lobby') {
+      for (let i = 0; i < 2; i++) {
+        if (seats[i].uid === null) { targetIdx = i; break; }
+      }
+    }
+    if (targetIdx === -1) throw new Error(cur.status === 'playing' ? '觀戰位已滿' : '房間已滿');
+    const newSeats = seats.map((s, i) => {
+      if (i !== targetIdx) return s;
+      return { ...s, uid, name: guestName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+    });
+    return { ...cur, seats: newSeats, memberUids: computeMemberUids(newSeats) };
+  }).then(updated => ({ ...updated, roomId: code }));
+}
+
+export async function takeSeat(roomCode: string, targetIdx: number): Promise<void> {
+  const uid = await getMyUid();
+  if (targetIdx < 0 || targetIdx >= 10) throw new Error('座位編號錯誤');
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    if (data.status !== 'lobby') throw new Error('房間已開始，無法移動座位');
+    const seats = data.seats;
+    const myIdx = findMySeatIdx(seats, uid);
+    if (myIdx === targetIdx) return data;
+    if (seats[targetIdx].uid !== null) throw new Error('該座位已被占用');
+    const myName = myIdx >= 0 ? seats[myIdx].name : null;
+    const newSeats = seats.map((s, i) => {
+      if (i === myIdx) {
+        return { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+      }
+      if (i === targetIdx) {
+        return { ...s, uid, name: myName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+      }
+      return s;
+    });
+    return { ...data, seats: newSeats, memberUids: computeMemberUids(newSeats) };
+  });
+}
+
+export async function setSeatDeck(roomCode: string, deckEntries: DeckEntry[]): Promise<void> {
+  const uid = await getMyUid();
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0) throw new Error('你不在此房間');
+    if (data.seats[myIdx].role === 'spectator') throw new Error('觀戰位不能設牌組');
+    const newSeats = data.seats.map((s, i) =>
+      i === myIdx ? { ...s, deckEntries, ready: false } : s
+    );
+    return { ...data, seats: newSeats, memberUids: computeMemberUids(newSeats) };
+  });
+}
+
+export async function setSeatReady(roomCode: string, ready: boolean): Promise<void> {
+  const uid = await getMyUid();
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0) throw new Error('你不在此房間');
+    if (data.seats[myIdx].role === 'spectator') throw new Error('觀戰位不能準備');
+    const seat = data.seats[myIdx];
+    if (ready && countDeckCards(seat.deckEntries) !== 60) {
+      throw new Error('請先選擇 60 張牌組');
+    }
+    const newSeats = data.seats.map((s, i) => i === myIdx ? { ...s, ready } : s);
+    return { ...data, seats: newSeats, memberUids: computeMemberUids(newSeats) };
+  });
+}
+
+export async function setSeatFirstChoice(roomCode: string, choice: 'random' | 'first' | 'second'): Promise<void> {
+  const uid = await getMyUid();
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0) throw new Error('你不在此房間');
+    if (data.seats[myIdx].role === 'spectator') throw new Error('觀戰位不能設先後攻偏好');
+    const newSeats = data.seats.map((s, i) =>
+      i === myIdx ? { ...s, firstChoicePreference: choice } : s
+    );
+    return { ...data, seats: newSeats, memberUids: computeMemberUids(newSeats) };
+  });
+}
+
+export async function setSpectatorsAllowed(roomCode: string, allowed: boolean): Promise<void> {
+  const uid = await getMyUid();
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('只有 P1/P2 可改觀戰開關');
+    return { ...data, spectatorsAllowed: allowed };
+  });
+}
+
+export async function leaveRoom(roomCode: string): Promise<void> {
+  const uid = oracleCurrentUid();
+  if (!uid) return;
+  const code = roomCode.toUpperCase();
+  try {
+    const room = await oracleGetRoom(code);
+    if (!room) return;
+    const data = room as unknown as RoomData;
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0) return;
+    // v4.499 playing 期間棄賽 — 設 gameState.phase='game-over' + winner=對手 + status='ended'
+    if (data.status === 'playing' && data.gameState && (myIdx === 0 || myIdx === 1)) {
+      await oracleTx(code, (cur) => {
+        if (cur.status !== 'playing' || !cur.gameState) return cur;
+        const myGs = cur.gameState;
+        const winnerIdx = (1 - myIdx) as 0 | 1;
+        const myName = myGs.players?.[myIdx]?.name ?? ('P' + (myIdx + 1));
+        const forfeitGame = {
+          ...myGs,
+          phase: 'game-over' as const,
+          winner: winnerIdx,
+          winReason: myName + ' 中途離開',
+          log: [
+            ...(myGs.log ?? []),
+            { turn: myGs.turn, playerIndex: null, message: myName + ' 中途離開遊戲，對手獲勝' },
+          ],
+        };
+        return { ...cur, gameState: JSON.parse(JSON.stringify(forfeitGame)), status: 'ended' };
+      });
+      return;
+    }
+    if (data.status !== 'lobby') return;
+    const newSeats = data.seats.map((s, i) =>
+      i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const } : s
+    );
+    const allEmpty = newSeats.every(s => s.uid === null);
+    if (allEmpty) {
+      await oracleDeleteRoom(code);
+    } else {
+      await oracleTx(code, (cur) => ({ ...cur, seats: newSeats, memberUids: computeMemberUids(newSeats) }));
+    }
+  } catch (err) {
+    console.warn('[oracle leaveRoom]', err);
+  }
+}
+
+// ── Rematch (v3.96 對稱設計) ─────────────────────────────────────────
+
+export async function setRematchReady(roomCode: string, ready: boolean): Promise<void> {
+  const uid = await getMyUid();
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('只有 P1/P2 可使用再來一局');
+    const cur = data.rematchReady ?? {};
+    const newReady = { ...cur, [myIdx]: ready };
+    return { ...data, rematchReady: newReady };
+  });
+}
+
+export async function checkAndAcceptRematch(roomCode: string): Promise<boolean> {
+  try {
+    let didReset = false;
+    await oracleTx(roomCode.toUpperCase(), (data) => {
+      const ready = data.rematchReady ?? {};
+      if (!ready[0] || !ready[1]) return data;
+      const newSeats = data.seats.map(s => ({ ...s, ready: false }));
+      didReset = true;
+      // delete field via null (前端 ?? 處理)
+      return {
+        ...data,
+        gameState: null,
+        status: 'lobby',
+        seats: newSeats,
+        memberUids: computeMemberUids(newSeats),
+        rematchReady: null,
+      } as unknown as RoomData;
+    });
+    return didReset;
+  } catch (err) {
+    console.error('[checkAndAcceptRematch] failed:', err);
+    return false;
+  }
+}
+
+// ── Restart (v4.60 對局中重新開局) ────────────────────────────────────
+
+export async function proposeRestart(roomCode: string): Promise<void> {
+  const uid = await getMyUid();
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('only P1/P2 can propose restart');
+    if (data.status !== 'playing' || !data.gameState) throw new Error('game not in progress');
+    const count = data.restartProposalCount ?? 0;
+    const cur = data.restartProposed ?? {};
+    if (cur[myIdx] || cur[1 - myIdx]) throw new Error('proposal already in progress');
+    const newProposed = { ...cur, [myIdx]: true };
+    return {
+      ...data,
+      restartProposed: newProposed,
+      restartProposedAt: Date.now(),
+      restartProposalCount: count + 1,
+      restartRejectedAt: null,
+    } as unknown as RoomData;
+  });
+}
+
+export async function respondRestart(roomCode: string, accept: boolean): Promise<void> {
+  const uid = await getMyUid();
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('only P1/P2 can respond');
+    const cur = data.restartProposed ?? {};
+    if (!cur[1 - myIdx]) throw new Error('opponent did not propose');
+    if (accept) {
+      return { ...data, restartProposed: { ...cur, [myIdx]: true } } as unknown as RoomData;
+    }
+    return {
+      ...data,
+      restartProposed: null,
+      restartProposedAt: null,
+      restartRejectedAt: Date.now(),
+    } as unknown as RoomData;
+  });
+}
+
+export async function cancelRestart(roomCode: string): Promise<void> {
+  try {
+    await oracleTx(roomCode.toUpperCase(), (data) => {
+      if (!data.restartProposed) return data;
+      return { ...data, restartProposed: null, restartProposedAt: null } as unknown as RoomData;
+    });
+  } catch (err) {
+    console.warn('[cancelRestart]', err);
+  }
+}
+
+export async function checkAndAcceptRestart(roomCode: string, pool: Map<string, Card>): Promise<boolean> {
+  try {
+    let didReset = false;
+    await oracleTx(roomCode.toUpperCase(), (data) => {
+      const p = data.restartProposed ?? {};
+      if (!p[0] || !p[1]) return data;
+      const p1 = data.seats[0];
+      const p2 = data.seats[1];
+      if (!p1.deckEntries || !p2.deckEntries) return data;
+      const prefs: ['random'|'first'|'second', 'random'|'first'|'second'] = [
+        p1.firstChoicePreference ?? 'random',
+        p2.firstChoicePreference ?? 'random',
+      ];
+      const newGame = createGame(
+        { name: p1.name ?? 'P1', entries: p1.deckEntries },
+        { name: p2.name ?? 'P2', entries: p2.deckEntries },
+        pool,
+        { firstChoicePreferences: prefs },
+      );
+      didReset = true;
+      return {
+        ...data,
+        gameState: JSON.parse(JSON.stringify(newGame)),
+        restartProposed: null,
+        restartProposedAt: null,
+      } as unknown as RoomData;
+    });
+    return didReset;
+  } catch (err) {
+    console.error('[checkAndAcceptRestart] failed:', err);
+    return false;
+  }
+}
+
+// ── Game flow ───────────────────────────────────────────────────────────────
+
+export async function startGame(roomCode: string, gameState: GameState): Promise<boolean> {
+  try {
+    let started = false;
+    await oracleTx(roomCode.toUpperCase(), (data) => {
+      if (data.status !== 'lobby') return data;
+      if (data.gameState) return data;
+      started = true;
+      return {
+        ...data,
+        gameState: JSON.parse(JSON.stringify(gameState)),
+        status: 'playing',
+      };
+    });
+    return started;
+  } catch (err) {
+    console.error('[oracle startGame]', err);
+    return false;
+  }
+}
+
+export async function pushGameState(roomCode: string, gameState: GameState): Promise<void> {
+  await oracleTx(roomCode.toUpperCase(), (data) => ({
+    ...data,
+    gameState: JSON.parse(JSON.stringify(gameState)),
+    status: gameState.phase === 'game-over' ? 'ended' : 'playing',
+  }));
+}
+
+// ── Subscribe (polling) ─────────────────────────────────────────────────────
+
+export function subscribeRoom(roomCode: string, callback: (room: Room | null) => void): () => void {
+  const code = roomCode.toUpperCase();
+  return oraclePollRoom(code, (room) => {
+    if (!room) { callback(null); return; }
+    callback({ ...(room as unknown as RoomData), roomId: code });
+  }, 800);
+}
+
+export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: (err: Error) => void): () => void {
+  let alive = true;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const tick = async () => {
+    if (!alive) return;
+    try {
+      const [lobby, playing] = await Promise.all([
+        oracleListRooms('lobby').catch(() => []),
+        oracleListRooms('playing').catch(() => []),
+      ]);
+      const rooms = ([...lobby, ...playing] as OracleRoom[])
+        .filter(r => {
+          if ((r.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) return false;
+          if (r.status === 'playing' && r.spectatorsAllowed === false) return false;
+          return true;
+        })
+        .map(r => ({ ...(r as unknown as RoomData), roomId: r._id }) as Room);
+      rooms.sort((a, b) => {
+        const ta = (a.createdAt as number) ?? 0;
+        const tb = (b.createdAt as number) ?? 0;
+        return tb - ta;
+      });
+      callback(rooms);
+    } catch (err) {
+      console.warn('[subscribeOpenRooms]', err);
+      onError?.(err as Error);
+    }
+    if (alive) timer = setTimeout(tick, 2000);
+  };
+  tick();
+  return () => {
+    alive = false;
+    if (timer) clearTimeout(timer);
+  };
+}
+
+// ── Heartbeat ───────────────────────────────────────────────────────────────
+
+export async function heartbeat(roomCode: string, seatIdx: number): Promise<void> {
+  try {
+    await oracleTx(roomCode.toUpperCase(), (data) => {
+      const hbs: Record<number, number> = { ...(data.heartbeats as Record<number, number> ?? {}) };
+      hbs[seatIdx] = Date.now();
+      return { ...data, heartbeats: hbs as unknown as RoomData['heartbeats'] };
+    });
+  } catch (err) {
+    console.warn('[oracle heartbeat]', err);
+  }
+}
+
+export async function deleteRoom(roomCode: string): Promise<void> {
+  await oracleDeleteRoom(roomCode.toUpperCase());
+}
+
+// ── Messages ────────────────────────────────────────────────────────────────
+
+const MAX_MESSAGE_LENGTH = 200;
+const MESSAGES_LIMIT = 100;
+
+export async function sendMessage(roomCode: string, senderName: string, text: string): Promise<void> {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  if (trimmed.length > MAX_MESSAGE_LENGTH) {
+    throw new Error('訊息超過 ' + MAX_MESSAGE_LENGTH + ' 字');
+  }
+  // server.js 目前不收 name 欄位，先把 senderName 塞進 kind 欄位（簡化做法）
+  // Phase 3c polish 時擴 server API 增加 name field
+  await oracleApi('/api/rooms/' + roomCode.toUpperCase() + '/messages', {
+    method: 'POST',
+    body: { text: trimmed, kind: 'chat:' + senderName },
+  });
+}
+
+export function subscribeMessages(roomCode: string, callback: (msgs: ChatMessage[]) => void): () => void {
+  const code = roomCode.toUpperCase();
+  let alive = true;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const tick = async () => {
+    if (!alive) return;
+    try {
+      const messages = await oracleListMessages(code, MESSAGES_LIMIT);
+      const msgs: ChatMessage[] = messages.map((m) => ({
+        id: m._id ?? (m.createdAt + '-' + m.uid),
+        uid: m.uid,
+        name: (m.kind?.startsWith('chat:') ? m.kind.slice(5) : null) ?? m.uid.slice(0, 8),
+        text: m.text,
+        createdAt: { seconds: Math.floor(m.createdAt / 1000) },
+      }));
+      callback(msgs);
+    } catch (err) {
+      console.warn('[subscribeMessages]', err);
+    }
+    if (alive) timer = setTimeout(tick, 1500);
+  };
+  tick();
+  return () => {
+    alive = false;
+    if (timer) clearTimeout(timer);
+  };
+}

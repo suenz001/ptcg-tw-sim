@@ -264,6 +264,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.62</span> 🏗️ Phase 3b：寫 room-oracle.ts（Firestore room.ts 的 Oracle 對應版，dormant）</summary>
+        <ul>
+          <li><b>本次內容</b>：新增 <code>src/lib/game/room-oracle.ts</code>（~440 行），對應 room.ts 22 個 firebase-bound function：</li>
+          <li>　- CRUD：createRoom / joinRoom / takeSeat / setSeatDeck / setSeatReady / setSeatFirstChoice / setSpectatorsAllowed / leaveRoom / deleteRoom</li>
+          <li>　- Game：startGame / pushGameState</li>
+          <li>　- Rematch (v3.96): setRematchReady / checkAndAcceptRematch</li>
+          <li>　- Restart (v4.60): proposeRestart / respondRestart / cancelRestart / checkAndAcceptRestart</li>
+          <li>　- Subscribe (polling 取代 onSnapshot): subscribeRoom (800ms) / subscribeOpenRooms (2s)</li>
+          <li>　- Heartbeat / Messages: heartbeat / sendMessage / subscribeMessages (1.5s polling)</li>
+          <li><b>共用 helper</b>：<code>oracleTx()</code> 取代 firestore <code>runTransaction</code>（optimistic lock retry 模式）</li>
+          <li><b>差異</b>：</li>
+          <li>　- <code>deleteField()</code> → 改用 <code>null</code>（前端 reader 用 <code>??</code> 處理）</li>
+          <li>　- <code>serverTimestamp()</code> → <code>Date.now()</code>（server 端自動 set <code>updatedAt</code>）</li>
+          <li>　- subcollection messages → top-level messages collection</li>
+          <li><b>狀態</b>：dormant — 仍未啟用，main 走 room.ts。Phase 3c 設 vite alias 才會 active。</li>
+          <li>不影響既有功能，build 路徑跟之前完全相同。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.61</span> 🏗️ Phase 3a：Oracle backend client 基礎建設（不影響主力，僅準備測試版用）</summary>
         <ul>
           <li><b>背景</b>：Firebase 額度即將吃緊，預先準備 Oracle MongoDB 備援。雙網站策略（主力 GitHub Pages + Firebase 不動，另開測試版用 Oracle）。</li>
