@@ -74,6 +74,15 @@
   let aiPlayerIndex = $state<0 | 1 | null>(1);
   /** AI 是否正在思考（防止連擊） */
   let aiThinking = $state(false);
+
+  // v4.74 練習模式 — 悔棋 1 步（AI 對戰專用）
+  // 在玩家「主要 action」前 snapshot 上一手 state；END_TURN 時清空（不能跨手）。
+  // AI 自己的 action 不 snapshot（fromAI flag 跳過）。連線對戰 v4.75 再做。
+  let undoSnapshot = $state<GameState | null>(null);
+  const UNDOABLE_ACTIONS = new Set<string>([
+    'ATTACK', 'EVOLVE', 'PLAY_TRAINER', 'PLAY_BASIC', 'PLAY_FOSSIL',
+    'ATTACH_ENERGY', 'RETREAT', 'USE_ABILITY',
+  ]);
   let aiTimer: ReturnType<typeof setTimeout> | null = null;
 
   // v3.38：本機/AI lobby 牌組 60 張驗證 — UI gate（防止使用者選擇張數錯誤的牌組開戰）
@@ -1230,14 +1239,14 @@
           && (g.pendingPrizes?.[1] ?? 0) === 0) {
         console.warn('[AI fallback] getAIAction returned null in main phase → forcing END_TURN');
         aiThinking = true;
-        dispatch({ type: 'END_TURN' } as any);
+        dispatch({ type: 'END_TURN' } as any, { fromAI: true });
         scheduleAI();
       }
       return;
     }
 
     aiThinking = true;
-    dispatch(action as any);
+    dispatch(action as any, { fromAI: true });
     // 繼續排程下一步（直到 AI 不再需要行動）
     scheduleAI();
   }
@@ -1330,6 +1339,9 @@
     // AI 模式：AI 是當前活動玩家時讓 AI 迴圈處理。
     // v2.333 fix：線上模式也保留 aiPlayerIndex 預設值 1（UI 用），不能用它阻擋 P2 自動結束。
     if (mode !== 'online' && aiPlayerIndex !== null && g.activePlayerIndex === aiPlayerIndex) return;
+    // v4.74 練習模式：若有 undoSnapshot 可悔棋，暫停自動結束回合 — 玩家應主動決定要悔或繼續。
+    //   清掉 snapshot（按悔棋或主動結束）後此 $effect 重新 evaluate，autoEnd 才會接手。
+    if (mode !== 'online' && aiPlayerIndex !== null && undoSnapshot !== null) return;
 
     // 延遲後若條件仍成立（沒被新 pending / KO / 取獎賞中斷）就 dispatch
     autoEndTimer = setTimeout(() => {
@@ -2540,7 +2552,10 @@
   }
 
   // ── 動作分派（本機 + 線上共用） ─────────────────────────────────────────────
-  async function dispatch(action: ReturnType<typeof GameActions[keyof typeof GameActions]>) {
+  async function dispatch(
+    action: ReturnType<typeof GameActions[keyof typeof GameActions]>,
+    opts: { fromAI?: boolean } = {}
+  ) {
     if (!game || !poolReady) return;
     // v2.276 Phase 3：觀戰者所有 action 都被擋（read-only）
     if (isSpectator) {
@@ -2561,6 +2576,17 @@
         myPlayerIndex,
         isFirstTurn: game.isFirstTurn,
       });
+    }
+    // v4.74 練習模式：在「人類玩家主要 action」前 snapshot 1 步（AI 對戰 only）
+    //   - opts.fromAI=true 跳過（AI 自己的 action 不存 snapshot）
+    //   - END_TURN 清空（不能跨手悔棋）
+    //   - 連線對戰、本機 2P 跳過（v4.75 再做連線版）
+    if (mode !== 'online' && aiPlayerIndex !== null && !opts.fromAI && newState !== prevState) {
+      if (action.type === 'END_TURN') {
+        undoSnapshot = null;
+      } else if (UNDOABLE_ACTIONS.has(action.type)) {
+        undoSnapshot = prevState;
+      }
     }
     game = newState;
     floatingEvoMenu = null; floatingRetreatMenu = null; selectedEnergyIid = null;
@@ -3759,6 +3785,18 @@
   }
 
   /** action dispatch 後觸發對應音效 / 動畫（v2.118） */
+  // v4.74 練習模式 — 悔棋（用 snapshot 取代當前 state）
+  function performUndo() {
+    if (!undoSnapshot) return;
+    if (mode === 'online') return;  // 連線對戰不走此函式（v4.75 另做）
+    game = undoSnapshot;
+    undoSnapshot = null;
+    floatingEvoMenu = null;
+    floatingRetreatMenu = null;
+    selectedEnergyIid = null;
+    console.log('[undo] 已悔棋一步');
+  }
+
   function dispatchSfxForAction(
     action: ReturnType<typeof GameActions[keyof typeof GameActions]>,
     prev: GameState,
@@ -4682,6 +4720,13 @@
           {/if}
           {#if canEndTurn}
             <button class="btn-act primary" onclick={()=>dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
+          {/if}
+          <!-- v4.74 練習模式 — 悔棋按鈕（AI 對戰專用，snapshot 存在時顯示）-->
+          {#if undoSnapshot && mode !== 'online' && aiPlayerIndex !== null && !pendingSelection && game.phase === 'playing'}
+            <button class="btn-act btn-undo" onclick={performUndo}
+              title="悔棋：回到上一手前（練習模式 / AI 對戰）。換手後就不能再悔。">
+              ↩ 悔棋
+            </button>
           {/if}
         {:else if isMyTurn() && anyPendingPrize}
           <span class="waiting-msg">🏆 請先取獎勵牌再繼續行動</span>
@@ -8682,4 +8727,12 @@
   .selection-overlay.dragged .selection-modal::after {
     color: rgba(255, 255, 255, 0.4);
   }
+  /* v4.74 練習模式悔棋按鈕（仿 btn-act 但用警示色提醒玩家「這是練習模式專用」）*/
+  .btn-undo {
+    background: linear-gradient(180deg, #f59e0b, #d97706);
+    color: #fff;
+    border: 1px solid #b45309;
+  }
+  .btn-undo:hover { background: linear-gradient(180deg, #fbbf24, #ea8a0a); }
+
 </style>

@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.74</span> ✨ 新增「練習模式 — 悔棋」（AI 對戰專用）</summary>
+        <ul>
+          <li><b>玩家建議</b>：想要練習牌組策略時，可以悔棋回上一手重試。</li>
+          <li><b>實裝範圍</b>：本次只做 AI 對戰；連線對戰（雙方同意制）下一版 v4.75 再做。</li>
+          <li><b>用法</b>：與 AI 對戰中，做完招式 / 進化 / 出基礎 / 附能量 / 撤退 / 出訓練家 / 使用特性 後，左側「⏭ 結束回合」旁會出現「↩ 悔棋」按鈕，按下回到上一手前的盤面。</li>
+          <li><b>限制</b>：(1) 只能悔 1 步（snapshot stack=1，新動作會蓋掉舊 snapshot）；(2) 不能跨「換手」— 一旦按下「結束回合」、snapshot 就清空，無法回到對手回合或更早；(3) 連線對戰、本機 2P 不顯示按鈕。</li>
+          <li><b>自動結束回合暫停</b>：原本招式打完 600ms 會自動結束回合 — 此功能在 AI 對戰且有 snapshot 時暫停，玩家可慢慢決定要「↩ 悔棋」還是「⏭ 結束回合」。</li>
+          <li><b>技術細節</b>：snapshot 存在 GameState 之外（Svelte component 層級 state），所以不會違反「GameState 禁套 nested array」鐵律、也不會增加 Firestore 寫入量。</li>
+          <li><b>注意</b>：悔棋後再攻擊會重新擲幣 — 結果可能不同（這正是練習模式的目的：試試看不同 outcome）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.73</span> 🐛 修「對方戰鬥場唯一寶可夢昏厥後沒有結束比賽」bug（AI 對戰常見）</summary>
         <ul>
           <li><b>玩家回報</b>：與 AI 對戰時，對方戰鬥場的唯一寶可夢昏厥後遊戲沒有結束（active=null + bench=0 卻仍 phase=playing）。卡在那邊無法繼續。</li>
