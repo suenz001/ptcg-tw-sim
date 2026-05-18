@@ -227,26 +227,57 @@ regPre('超級噴火龍Xex|烈獄狂火X', (state, aIdx, pool, action) => {
       ? chosen.filter(id => eligibleIds.has(id))
       : Array.from(eligibleIds) // AI/headless fallback: discard all eligible Fire energies
   );
+
+  // v4.69: 燃料【火】能量回手判斷 (M4 081/083, JSON: 「若因附有這張卡的【火】寶可夢
+  // 使用的招式的效果使這張卡被丟棄，則在招式的傷害與效果的影響之後，這張卡放回手牌」)
+  // 回手 3 條件：
+  //   1. 是燃料【火】能量（card.name 比對）
+  //   2. 該能量原附在攻擊者身上（pk.iid === active.iid）
+  //   3. 攻擊者 types 含 'Fire'
+  // 傷害計算用「總丟棄張數（含回手）」— 卡面寫「在傷害與效果之後放回」表示
+  // 先當被丟計入傷害，事後再放回。
+  const attackerIid = p.active?.iid ?? null;
+  const attackerCard = p.active ? pool.get(p.active.cardId) : null;
+  const attackerIsFire = attackerCard?.pokemonType === 'Fire';
+
   let discardedCount = 0;
+  let reboundCount = 0;
   let s = updatePlayer(state, aIdx, pl => {
-    const discard: CardInstance[] = [];
+    const toDiscard: CardInstance[] = [];
+    const toHand: CardInstance[] = [];
     const strip = (pk: CardInstance): CardInstance => {
       const gone = pk.energyAttached.filter(e => toDiscardIds.has(e.iid));
-      discard.push(...gone);
+      const isAttackerSelf = attackerIid !== null && pk.iid === attackerIid;
+      for (const e of gone) {
+        const eCard = pool.get(e.cardId);
+        const isFuelFire = eCard?.name === '燃料【火】能量';
+        if (isFuelFire && attackerIsFire && isAttackerSelf) {
+          toHand.push(e); // 回手
+        } else {
+          toDiscard.push(e); // 進棄牌堆
+        }
+      }
       return { ...pk, energyAttached: pk.energyAttached.filter(e => !toDiscardIds.has(e.iid)) };
     };
     const active = pl.active ? strip(pl.active) : null;
     const bench = pl.bench.map(strip);
-    discardedCount = discard.length;
+    discardedCount = toDiscard.length + toHand.length; // 總丟棄張數（傷害基數）
+    reboundCount = toHand.length;
     return {
       ...pl,
       active,
       bench,
-      discard: [...pl.discard, ...discard],
+      discard: [...pl.discard, ...toDiscard],
+      hand: [...pl.hand, ...toHand],
     };
   });
+
   const damage = discardedCount * 90;
-  s = addLog(s, `烈獄狂火X：丟棄 ${discardedCount} 張【火】能量 → ${damage} 傷害`, aIdx);
+  let logMsg = `烈獄狂火X：丟棄 ${discardedCount} 張【火】能量 → ${damage} 傷害`;
+  if (reboundCount > 0) {
+    logMsg += `（其中 ${reboundCount} 張燃料【火】能量放回手牌）`;
+  }
+  s = addLog(s, logMsg, aIdx);
   return { state: s, damage };
 });
 

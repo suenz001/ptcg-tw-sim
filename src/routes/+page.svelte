@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.69</span> 🐛 修烈獄狂火X 丟掉燃料【火】能量沒回手 bug（依 M4 081/083 卡面規則）</summary>
+        <ul>
+          <li><b>玩家回報</b>：超級噴火龍Xex｜烈獄狂火X 丟掉自己身上的燃料【火】能量後，能量直接進棄牌堆，沒按卡面回手。</li>
+          <li><b>JSON 卡面（M4 081/083）</b>：「若因附有這張卡的【火】寶可夢使用的招式的效果使這張卡被丟棄，則在招式的傷害與效果的影響之後，這張卡放回手牌。」</li>
+          <li><b>回手 3 條件</b>：(1) 是燃料【火】能量、(2) 該能量原附在攻擊者身上、(3) 攻擊者 types 含【火】。</li>
+          <li><b>傷害計算</b>：用「總丟棄張數（含回手）」— 卡面寫「在傷害與效果之後放回」表示先當被丟計入傷害，事後再放回手牌，不影響傷害數字。</li>
+          <li><b>修法</b>：<code>m2_dragon_charizard_batch.ts</code> 烈獄狂火X regPre 內 inline 加判斷，把符合條件的能量放手牌、其他進棄牌堆。</li>
+          <li><b>後續</b>：其他「招式效果丟自己場上能量」的招式（約 20-30 張）之後會 audit 套同樣邏輯，但烈獄狂火X 是最常見場景。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.68</span> 🔧 Hotfix：oracle-client polling 全部 304 → 加 cache:'no-store' 阻止 Chrome 條件式 GET</summary>
         <ul>
           <li><b>症狀</b>：Oracle 站建房後 Network 看到 polling 請求都是 304 Not Modified，page UI 永遠停留在「尚未選擇牌組」。</li>
