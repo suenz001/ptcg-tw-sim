@@ -48,9 +48,8 @@ import {
 import {
   coinHeadsMultiplyPre,
   hitBenchPickPost,
-  countOneEnergy,
 } from '../../effects';
-import { getEnergyUnits } from '../../engine';
+import { getEnergyUnits, countEnergy } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -70,17 +69,21 @@ regPre('超級長耳兔ex|跳躍扣殺', (state) => ({
 // ══════════════════════════════════════════════════════════════════════════════
 // (3) 巨型花束（超級大竺葵ex）— 70 + 自身草能量×50
 // ══════════════════════════════════════════════════════════════════════════════
-// v4.791：改用 countOneEnergy helper — 涵蓋 pokemonType=null 的基本草能量
-//   舊 bug：JSON 中基本【草】能量的 pokemonType 是 null（不是 'Grass'），
-//   嚴格 === 'Grass' 比對永遠 false，導致 grassCount=0、8 顆能量只算 70 點。
-//   countOneEnergy 內部會 fallback 到 name 中的【X】判斷（與 v3.731 蜜糖風暴同修法）。
+// v4.796：改用 countEnergy（host-aware）— 正確處理新衝天能量
+//   背景：JSON 中基本【草】能量的 pokemonType 是 null。v4.791 用 countOneEnergy 解決
+//   pokemonType=null fallback；但該 helper 不認特殊能量的「2 任意屬性」效果。
+//   改用 engine 的 countEnergy(host-aware)：
+//     - 新衝天能量 on Stage2 寶可夢 → 提供「各屬性 ×2」（含【草】×2）
+//     - 1 基本【草】能量 → 【草】×1
+//     - 結果：1 草 + 1 新衝天 on 超級大竺葵 ex (Stage2) → 草 count = 3 → 70 + 3×50 = 220
+//   也已內建處理稜鏡能量 / 燃火能量等。
 regPre('超級大竺葵ex|巨型花束', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 70 };
-  const grassCount = countOneEnergy(att, 'Grass', pool);
+  const grassCount = countEnergy(att, pool).get('Grass') ?? 0;
   const bonus = grassCount * 50;
   const dmg = 70 + bonus;
-  const s = addLog(state, `巨型花束：自身【草】能量 ${grassCount} 個 → 70 + ${bonus} = ${dmg}`, aIdx);
+  const s = addLog(state, `巨型花束：自身【草】能量 ${grassCount} 個（含特殊能量提供的草單位）→ 70 + ${bonus} = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
 

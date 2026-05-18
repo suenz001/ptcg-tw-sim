@@ -264,6 +264,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.796</span> 🌿 巨型花束改用 host-aware countEnergy — 正確認新衝天能量為草</summary>
+        <ul>
+          <li><b>玩家指出</b>：新衝天能量附在 Stage2 寶可夢上時提供「各屬性 ×2」，所以 1 新衝天 + 1 草能量 on 超級大竺葵 ex 應算 3 草，傷害為 70 + 3×50 = 220 點。</li>
+          <li><b>原 v4.795 實作</b>：用 <code>countOneEnergy</code>，只看每張能量卡的 pokemonType / name【X】，<b>不認</b>特殊能量的「2 任意屬性」效果，所以新衝天能量被忽略 → grassCount = 1 → 120 點傷害（錯）。</li>
+          <li><b>修法</b>：改用 engine 的 <code>countEnergy(host-aware)</code>，內建處理：
+            <ul>
+              <li>新衝天能量 on Stage2 → 各屬性 ×2</li>
+              <li>稜鏡能量 on Basic → 各屬性 ×1（on Evolution → Colorless）</li>
+              <li>燃火能量 on Evolution → 【無】×3</li>
+              <li>其他特殊能量 / 基本能量 → 依登記</li>
+            </ul>
+          </li>
+          <li><b>新行為</b>：
+            <ul>
+              <li>1 草 + 1 新衝天 on 超級大竺葵 ex（Stage2）→ 草 count = 1 + 2 = 3 → 70 + 3×50 = <b>220 點</b>（符合玩家預期）</li>
+              <li>8 草 on 超級大竺葵 ex → 70 + 8×50 = <b>470 點</b></li>
+              <li>1 草 on 大竺葵（Stage1，非 Stage2）+ 新衝天 → 新衝天 = 1【無】，草 count = 1 → 120 點</li>
+            </ul>
+          </li>
+          <li><b>log 加說明</b>：「（含特殊能量提供的草單位）」— 讓玩家知道公式有把新衝天算進去。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.795</span> 🚨 critical hotfix — 巨型花束 ATTACK_PRE 拋 ReferenceError（countOneEnergy 沒 import）</summary>
         <ul>
           <li><b>玩家回報</b>：v4.794 部署成功後，超級大竺葵ex 的「巨型花束」攻擊按鈕<b>按了沒反應</b>。</li>
