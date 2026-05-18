@@ -48,6 +48,7 @@ import {
 import {
   coinHeadsMultiplyPre,
   hitBenchPickPost,
+  countOneEnergy,
 } from '../../effects';
 import { getEnergyUnits } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';

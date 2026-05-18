@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.795</span> 🚨 critical hotfix — 巨型花束 ATTACK_PRE 拋 ReferenceError（countOneEnergy 沒 import）</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.794 部署成功後，超級大竺葵ex 的「巨型花束」攻擊按鈕<b>按了沒反應</b>。</li>
+          <li><b>真因</b>：v4.791 寫 push 腳本時，detection logic <code>if &#39;countOneEnergy&#39; in v155_new</code> 判斷字串是否存在文件全篇 — 但 countOneEnergy 字串確實存在（在我新加的註解 + 函式 body），導致 script 誤判為「已 import」<b>跳過加入 import block 的步驟</b>。結果 production 上 v155_attacks.ts 用了 countOneEnergy 但沒 import → 執行 ATTACK_PRE 時 throw <code>ReferenceError: countOneEnergy is not defined</code> → engine ATTACK handler 沒 try/catch → dispatch 整個中斷 → UI 完全沒反應。</li>
+          <li><b>為何 build 沒 fail</b>：esbuild 在 bundle 階段把所有 cards/*.ts 合在一起，看到 effects.ts 已 export countOneEnergy，符號可解析成功，build 通過。執行時才在 v155_attacks.ts 的 scope 找不到該 binding → runtime error。TypeScript noImplicitAny 也沒擋到（可能 unknown global fallback）。</li>
+          <li><b>修法</b>：在 v155_attacks.ts 的 effects.ts import block 加 <code>countOneEnergy</code>。</li>
+          <li><b>檢討</b>：push 腳本的 detection logic 太粗糙（grep 整個文件）。下次 audit import 必須<b>用 regex 只比對 import statement 區域</b>，而不是全文搜尋。</li>
+          <li><b>連鎖 fail 完整時間線</b>：v4.79 (export 漏) → v4.791 (引入巨型花束 fix 但 import 沒加) → v4.792 (改 game/+page.svelte) → v4.793 (修了 export, Rule 1 還在) → v4.794 (修了 Rule 1, 但 import 漏的 runtime bug 還在) → v4.795 (終於補了 import).</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.794</span> 🚨 hotfix — v4.791 changelog 內 raw &#123; &#125; 違反 Iron Rule 1（連環 build fail 第二因）</summary>
         <ul>
           <li><b>背景</b>：v4.79 deploy fail 後修 v4.791 / v4.792 / v4.793 都失敗，網頁版號一直停在 v4.78。</li>
