@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.76</span> 🐛 修叉字蝠 SV6a 怨影使者 — 在備戰位時按鈕沒出現</summary>
+        <ul>
+          <li><b>玩家回報</b>：使出阿杏的秘招後，叉字蝠的怨影使者按鈕沒出現。</li>
+          <li><b>根因</b>：v4.4995 實裝時違反 Rule 15（JSON 是 source of truth），憑腦補加了「戰鬥場限制」gate。但 JSON 卡面只寫「在自己的回合時可使用 1 次」<b>沒寫</b>「在戰鬥場時」。叉字蝠在備戰位時被誤擋。</li>
+          <li><b>PTCG 規則</b>：寶可夢的特性可在 active 或 bench 使用，除非卡面明確限定。</li>
+          <li><b>修法</b>：移除 engine.ts:6691 和 v2306_meta_pokemon.ts:118 的 active gate。同時把 abilityUsedThisTurn 標記改成不論 inst 在 active 或 bench 都能正確標。</li>
+          <li><b>抽牌邏輯</b>：抽到手牌滿 8 張為止（或牌庫抽光），不變。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.75</span> ✨ 連線對戰練習模式 — 悔棋（雙方同意制）</summary>
         <ul>
           <li><b>承接 v4.74</b>：上版做了 AI 對戰的悔棋，這版做連線對戰的雙方同意制。</li>

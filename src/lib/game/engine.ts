@@ -6684,11 +6684,12 @@ export function getUsableAbilities(
       //   卡面：「從戰鬥場回到備戰區時，可使用 1 次」— 只能透過撤退觸發 modal（v3.05 ask… hook）
       //   不該出現在手動「使用特性」清單中，避免玩家在 active 位誤點。
       if (ON_RETREAT_TO_BENCH_ABILITIES.has(ab.name)) return;
-      // v4.4995：怨影使者已實裝（regAByName）+ 用 by-name dispatch — 不再撞 key，原 v4.4994 硬擋移除
-      // v4.4995：怨影使者 gate — 卡面「在這個回合，若從手牌使出了『阿杏的秘招』，則在自己的回合時可使用 1 次」
-      //   - 戰鬥場 + 牌庫不空 + akyoSecretPlayedThisTurn flag = true
+      // v4.4995：怨影使者已實裝（regAByName）+ 用 by-name dispatch — 不再撞 key
+      // v4.76 修正（Rule 15 違反）：卡面「在這個回合，若從手牌使出了『阿杏的秘招』，則在自己的回合時可使用 1 次」
+      //   **沒寫戰鬥場限制**。原 v4.4995 腦補加了 active gate，導致叉字蝠在備戰位時按鈕消失。
+      //   PTCG 規則：特性可在 active 或 bench 使用，除非卡面明確限定。
+      //   gate: 牌庫不空 + akyoSecretPlayedThisTurn flag = true（不限位置）
       if (ab.name === '怨影使者') {
-        if (player.active?.iid !== pk.iid) return;  // 卡面：在自己的回合（戰鬥場）— 通常此類抽牌類在戰鬥場
         if (player.deck.length === 0) return;
         if (!player.akyoSecretPlayedThisTurn) return;  // 本回合需打過阿杏的秘招
       }

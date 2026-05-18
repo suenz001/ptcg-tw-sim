@@ -110,25 +110,32 @@ regAByName('叉字蝠', '夜間工作', (state, aIdx, pool, inst) => {
 // ── 叉字蝠｜怨影使者（SV6a 029 / id 10611）─────────────────────────────────
 // v4.4995：實裝。卡面「在這個回合，若從手牌使出了『阿杏的秘招』，則在自己的回合時可使用 1 次。
 //          從牌庫抽卡直到自己的手牌滿 8 張為止。」
-//   gate: akyoSecretPlayedThisTurn + 戰鬥場 + 牌庫不空 + 該寶可夢未用過特性（getUsableAbilities 已 gate）
+// v4.76 修正：原 gate 多加了「戰鬥場」限制（v4.4995 違反 Rule 15 腦補），
+//   但卡面**沒寫**戰鬥場限制。叉字蝠在備戰位也能用。
+//   gate: akyoSecretPlayedThisTurn + 牌庫不空 + 該寶可夢未用過特性（getUsableAbilities 已 gate）
 //   effect: 抽到手牌 ≥ 8 張為止（或牌庫抽光）
 regAByName('叉字蝠', '怨影使者', (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
-  if (p.active?.iid !== inst.iid) return addLog(state, '怨影使者：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
   if (!p.akyoSecretPlayedThisTurn) return addLog(state, '怨影使者：本回合尚未從手牌打出『阿杏的秘招』', aIdx);
-  if (p.active) p.active.abilityUsedThisTurn = true;
-  // 抽到手牌滿 8 張為止
-  const targetHandSize = 8;
-  const toDraw = Math.max(0, targetHandSize - p.hand.length);
-  const actualDraw = Math.min(toDraw, p.deck.length);
-  if (actualDraw === 0) return addLog(state, `怨影使者：手牌已 ≥ ${targetHandSize} 張或牌庫為空，無需抽牌`, aIdx);
-  let s = updatePlayer(state, aIdx, p => ({
-    ...p,
-    hand: [...p.hand, ...p.deck.slice(0, actualDraw)],
-    deck: p.deck.slice(actualDraw),
+  // v4.76：標記「此 inst 本回合用過特性」— 不論 inst 在 active 或 bench
+  state = updatePlayer(state, aIdx, pl => ({
+    ...pl,
+    active: pl.active?.iid === inst.iid ? { ...pl.active, abilityUsedThisTurn: true } : pl.active,
+    bench: pl.bench.map(b => b.iid === inst.iid ? { ...b, abilityUsedThisTurn: true } : b),
   }));
-  return addLog(s, `怨影使者：從牌庫抽 ${actualDraw} 張（手牌補到 ${p.hand.length + actualDraw} 張）`, aIdx);
+  // 抽到手牌滿 8 張為止（取最新 state）
+  const p2 = state.players[aIdx];
+  const targetHandSize = 8;
+  const toDraw = Math.max(0, targetHandSize - p2.hand.length);
+  const actualDraw = Math.min(toDraw, p2.deck.length);
+  if (actualDraw === 0) return addLog(state, `怨影使者：手牌已 ≥ ${targetHandSize} 張或牌庫為空，無需抽牌`, aIdx);
+  let s = updatePlayer(state, aIdx, pl => ({
+    ...pl,
+    hand: [...pl.hand, ...pl.deck.slice(0, actualDraw)],
+    deck: pl.deck.slice(actualDraw),
+  }));
+  return addLog(s, `怨影使者：從牌庫抽 ${actualDraw} 張（手牌補到 ${p2.hand.length + actualDraw} 張）`, aIdx);
 });
 
 regR('crobat-night-work', (state, actorIdx, selectedIids, params, pool) => {
