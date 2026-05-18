@@ -207,12 +207,19 @@ regR('wave16-hit-any-opp', (state, aIdx, iids, params, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 電蜘蛛｜放電 — 棄全雷能量, ×50
+// v4.72: 基本【雷】能量 JSON 沒 pokemonType 欄位（同 v4.71 issue），改用 name fallback
+//   isLightning = pokemonType === 'Lightning' OR card.name 含「【雷】」
+function _isLightningEnergy(card: { pokemonType?: string; name?: string } | undefined): boolean {
+  if (!card) return false;
+  if (card.pokemonType === 'Lightning') return true;
+  return !!(card.name && card.name.includes('【雷】'));
+}
 regPre('電蜘蛛|放電', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return { state, damage: 0 };
   let lightning = 0;
   for (const e of a.energyAttached) {
-    if (pool.get(e.cardId)?.pokemonType === 'Lightning') lightning++;
+    if (_isLightningEnergy(pool.get(e.cardId))) lightning++;
   }
   const dmg = lightning * 50;
   return { state: addLog(state, `放電：自身雷能量 ${lightning} 個 → ×50 = ${dmg}`, aIdx), damage: dmg };
@@ -221,8 +228,8 @@ regPost('電蜘蛛|放電', (state, aIdx, pool) => {
   // 棄全雷能量
   return updatePlayer(state, aIdx, p => {
     if (!p.active) return p;
-    const lightning = p.active.energyAttached.filter(e => pool.get(e.cardId)?.pokemonType === 'Lightning');
-    const remaining = p.active.energyAttached.filter(e => pool.get(e.cardId)?.pokemonType !== 'Lightning');
+    const lightning = p.active.energyAttached.filter(e => _isLightningEnergy(pool.get(e.cardId)));
+    const remaining = p.active.energyAttached.filter(e => !_isLightningEnergy(pool.get(e.cardId)));
     return { ...p, active: { ...p.active, energyAttached: remaining }, discard: [...p.discard, ...lightning] };
   });
 });

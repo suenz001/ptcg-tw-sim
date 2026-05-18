@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.72</span> 🐛 修「全部丟棄」型招式不該開 picker（席多藍恩 鋼鐵爆炸 / 電蜘蛛 放電）</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.71 修了鋼鐵爆炸傷害 0 的 bug，但仍開 picker 讓玩家選丟幾顆 — 卡面明確寫「全部丟棄」是<b>強制執行</b>，玩家沒得選。</li>
+          <li><b>JSON 卡面</b>：「將這隻寶可夢身上附加的【鋼】能量卡<b>全部</b>丟棄，造成其張數×50 點傷害」（電蜘蛛|放電同樣 wording）。</li>
+          <li><b>區分原則</b>：「全部丟棄」=強制；「最多 N 張」「任意數量」=玩家可選。</li>
+          <li><b>修法</b>：<code>registerSelfDiscardMultiply</code> helper 加 <code>forceAll</code> 旗標。<code>true</code> 時跳過 picker 註冊，<code>regPre</code> 直接丟全部 eligible 能量。</li>
+          <li><b>影響卡</b>：席多藍恩｜鋼鐵爆炸、電蜘蛛｜放電（兩張都改 forceAll=true）。</li>
+          <li><b>保持原狀</b>：巨鉗螳螂ex 十字破壞、固拉多 熔岩光芒、頓甲、千面避役、噴火駝ex、鋼炮臂蝦、雷吉艾斯ex — 都是「最多 N 張」型，picker 行為正確。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.71</span> 🐛 修席多藍恩鋼鐵爆炸 + 巨鉗螳螂ex 十字破壞 — 基本能量 pokemonType 漏網</summary>
         <ul>
           <li><b>玩家回報</b>：席多藍恩｜鋼鐵爆炸 把所有鋼能量都丟了，傷害仍是 0。</li>

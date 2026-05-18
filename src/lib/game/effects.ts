@@ -6519,20 +6519,25 @@ function registerSelfDiscardMultiply(
   per: number,
   max: number,
   typeFilter: DiscardMultiplyFilter = 'all',
+  // v4.72: forceAll=true 時跳過 picker，regPre 直接丟全部 eligible 能量。
+  //   用於卡面寫「全部丟棄」的招式（席多藍恩 鋼鐵爆炸 / 電蜘蛛 放電）。
+  //   forceAll=false（預設）保持 picker 行為，用於「最多 N 張」型。
+  forceAll: boolean = false,
 ) {
-  ATTACK_PRE_DISCARD_CHOICE.set(key, {
-    min: 0,
-    max,
-    scope: 'attacker',
-    baseDamage,
-    damagePerEnergy: per,
-    // v4.71: picker 也限定屬性（玩家不會選到非該屬性能量造成 UX 混淆）
-    // Cast 避開 ATTACK_PRE_DISCARD_CHOICE config 不接受 'Fairy' 的型別限制
-    // 實際呼叫端的 typeFilter 不會是 'Fairy'（席多藍恩=Metal、十字破壞=Metal、烈獄狂火X=Fire）
-    energyTypeFilter: (typeFilter === 'all' || typeFilter === 'basic' || typeFilter === 'Fairy')
-      ? undefined
-      : (typeFilter as Exclude<EnergyType, 'Fairy'>),
-  });
+  if (!forceAll) {
+    ATTACK_PRE_DISCARD_CHOICE.set(key, {
+      min: 0,
+      max,
+      scope: 'attacker',
+      baseDamage,
+      damagePerEnergy: per,
+      // v4.71: picker 也限定屬性（玩家不會選到非該屬性能量造成 UX 混淆）
+      // Cast 避開 ATTACK_PRE_DISCARD_CHOICE config 不接受 'Fairy' 的型別限制
+      energyTypeFilter: (typeFilter === 'all' || typeFilter === 'basic' || typeFilter === 'Fairy')
+        ? undefined
+        : (typeFilter as Exclude<EnergyType, 'Fairy'>),
+    });
+  }
   regPre(key, (state, aIdx, pool, action) => {
     const player = state.players[aIdx];
     if (!player.active) return { state, damage: baseDamage };
@@ -6550,7 +6555,12 @@ function registerSelfDiscardMultiply(
     const chosenIids = action?.discardedEnergyIids;
     let discarded: CardInstance[];
     let remaining: CardInstance[];
-    if (chosenIids && chosenIids.length > 0) {
+    if (forceAll) {
+      // v4.72: 強制全丟（不看玩家 picker 選擇），直接 discard 所有 eligible
+      const setIds = new Set(eligible.map(e => e.iid));
+      discarded = all.filter(e => setIds.has(e.iid));
+      remaining = all.filter(e => !setIds.has(e.iid));
+    } else if (chosenIids && chosenIids.length > 0) {
       const allowed = new Set(eligible.map(e => e.iid));
       const capped = chosenIids.filter(id => allowed.has(id)).slice(0, max);
       const setIds = new Set(capped);
@@ -6577,8 +6587,9 @@ function registerSelfDiscardMultiply(
 registerSelfDiscardMultiply('巨鉗螳螂ex|十字破壞', '十字破壞', 0, 120, 2, 'Metal');
 registerSelfDiscardMultiply('固拉多|熔岩光芒', '熔岩光芒', 0, 60, 4, 'all');
 
-// 席多藍恩|鋼鐵爆炸 — 丟棄所有自身 Metal 能量 × 50（用大 max 近似 all）
-registerSelfDiscardMultiply('席多藍恩|鋼鐵爆炸', '鋼鐵爆炸', 0, 50, 10, 'Metal');
+// 席多藍恩|鋼鐵爆炸 — 丟棄所有自身 Metal 能量 × 50（卡面「全部丟棄」= 強制）
+// v4.72: forceAll=true，不開 picker，regPre 直接全丟
+registerSelfDiscardMultiply('席多藍恩|鋼鐵爆炸', '鋼鐵爆炸', 0, 50, 99, 'Metal', true);
 
 // ── KO 類（2 張） ──────────────────────────────────────────────────────────
 
