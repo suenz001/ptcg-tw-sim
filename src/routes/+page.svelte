@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.65</span> 🏗️ Phase 3d：game/+page.svelte 加 ORACLE_MODE 分流（最後一塊 oracle build 拼圖）</summary>
+        <ul>
+          <li><b>改動</b>：<code>game/+page.svelte</code> 的 onMount 內加 ORACLE_MODE 分流：</li>
+          <li>　- 預設模式：照舊 <code>onAuthStateChanged(auth, ...) + signInAnonymously(auth)</code> 走 firebase</li>
+          <li>　- ORACLE_MODE：呼叫 <code>oracleAuth()</code> 拿匿名 JWT uid 設 myUid</li>
+          <li><b>Oracle build 完整鏈路就緒</b>（4 個 phases 累積）：</li>
+          <li>　1. <code>oracle-client.ts</code> (3a)：fetch wrapper + polling</li>
+          <li>　2. <code>room-oracle.ts</code> (3b)：22 個 function 對應 room.ts</li>
+          <li>　3. <code>vite.config.js</code> alias (3c)：build-time 切換</li>
+          <li>　4. <code>+page.svelte</code> ORACLE_MODE 分流 (3d)：auth 雙模式</li>
+          <li><b>下次 Phase 3e</b>：實機部署到 Oracle nginx，用 trycloudflare URL 測試。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.64</span> 🏗️ Phase 3c：vite alias for Oracle build + auth-facade.ts</summary>
         <ul>
           <li><b>本次內容</b>（不影響 main build 路徑）：</li>

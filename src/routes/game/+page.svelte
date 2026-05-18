@@ -26,6 +26,8 @@
   import type { EnergyType } from '$lib/cards/types';
   import { auth } from '$lib/firebase';
   import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+  // v4.65 Phase 3d: Oracle backend mode 支援（VITE_BACKEND_MODE=oracle 時用）
+  import { ORACLE_MODE, oracleAuth } from '$lib/game/oracle-client';
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom,
@@ -2335,9 +2337,18 @@
     audioMuted = isAudioMuted();
     bgmTrack = getBgmTrack();
     bgmVolume = getBgmVolume();
-    // 匿名登入（線上對戰需要）
-    onAuthStateChanged(auth, u => { myUid = u?.uid ?? null; });
-    if (!auth.currentUser) await signInAnonymously(auth);
+    // 匿名登入（線上對戰需要）— v4.65 加 ORACLE_MODE 分流
+    if (ORACLE_MODE) {
+      try {
+        const { uid } = await oracleAuth();
+        myUid = uid;
+      } catch (err) {
+        console.error('[oracle auth]', err);
+      }
+    } else {
+      onAuthStateChanged(auth, u => { myUid = u?.uid ?? null; });
+      if (!auth.currentUser) await signInAnonymously(auth);
+    }
 
     const allCards = await loadAllSets();
     pool = buildCardIndex(allCards);
