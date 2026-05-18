@@ -1349,12 +1349,12 @@
     // AI 模式：AI 是當前活動玩家時讓 AI 迴圈處理。
     // v2.333 fix：線上模式也保留 aiPlayerIndex 預設值 1（UI 用），不能用它阻擋 P2 自動結束。
     if (mode !== 'online' && aiPlayerIndex !== null && g.activePlayerIndex === aiPlayerIndex) return;
-    // v4.74 練習模式：若有 undoSnapshot 可悔棋，暫停自動結束回合 — 玩家應主動決定要悔或繼續。
-    //   清掉 snapshot（按悔棋或主動結束）後此 $effect 重新 evaluate，autoEnd 才會接手。
-    if (mode !== 'online' && aiPlayerIndex !== null && undoSnapshot !== null) return;
-    // v4.75 連線練習模式：有 snapshot 時也暫停 auto-end，等玩家決定要請求悔棋還是繼續。
-    //   被拒絕後（undoDeniedThisSnapshot=true）就讓 auto-end 接手不再卡住。
-    if (mode === 'online' && roomData?.allowUndo === true && undoSnapshot !== null && !undoDeniedThisSnapshot) return;
+    // v4.792：練習模式不再暫停 auto-end（v4.74 / v4.75 的舊行為已 revert）。
+    //   舊行為：練習模式有 undoSnapshot 時暫停自動結束回合，等玩家決定悔棋 or 繼續。
+    //   玩家回饋：暫停讓遊戲節奏卡卡，希望恢復順暢。
+    //   新行為：練習模式也照樣 600ms 後自動結束回合。要悔棋的話：(a) 在 600ms 內按悔棋
+    //   按鈕；(b) 或先把結束回合的 600ms timer 想成最後機會。auto-end 觸發 END_TURN 後
+    //   snapshot 會被清掉（見 dispatch() 的 if action.type==='END_TURN' 分支）。
 
     // 延遲後若條件仍成立（沒被新 pending / KO / 取獎賞中斷）就 dispatch
     autoEndTimer = setTimeout(() => {

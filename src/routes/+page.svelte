@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.792</span> ✨ 練習模式也恢復「攻擊後自動結束回合」</summary>
+        <ul>
+          <li><b>玩家回饋</b>：v4.74 / v4.75 起，練習模式（允許悔棋的房間）攻擊後不自動結束回合，需要手動按結束回合，遊戲節奏卡卡。</li>
+          <li><b>原設計</b>：暫停 auto-end 是為了讓玩家有時間決定要「悔棋」還是「繼續」，避免一恍神就被自動切回合錯失悔棋機會。</li>
+          <li><b>修法</b>：拿掉 game/+page.svelte 內 v4.74 / v4.75 兩道阻擋 auto-end 的 gate。練習模式現在也跟一般模式一樣，攻擊後 600ms 自動結束回合。</li>
+          <li><b>悔棋怎麼用？</b>
+            <ul>
+              <li>方法 A：攻擊後在 600ms 內按悔棋按鈕（節奏快但可行）。</li>
+              <li>方法 B：對其他 action（撤退、打支援者、打能量 等）按悔棋 — 這些 action 不會觸發 auto-end，悔棋按鈕會一直顯示到下個 action。</li>
+            </ul>
+          </li>
+          <li><b>不影響</b>：snapshot 在 END_TURN dispatch 時自動清空（dispatch 內早有處理），auto-end 觸發後悔棋按鈕自然消失，邏輯一致。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.791</span> 🐛 hotfix — 月桂葉推倒 + 巨型花束 兩個傷害計算 bug</summary>
         <ul>
           <li><b>玩家回報 #1：月桂葉｜推倒</b>只造成 10 點傷害。
