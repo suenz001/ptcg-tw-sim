@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.64</span> 🏗️ Phase 3c：vite alias for Oracle build + auth-facade.ts</summary>
+        <ul>
+          <li><b>本次內容</b>（不影響 main build 路徑）：</li>
+          <li>　1. <code>vite.config.js</code> 加 conditional alias — <code>VITE_BACKEND_MODE=oracle</code> 時把所有 <code>import from '$lib/game/room'</code> 透明替換為 <code>room-oracle.ts</code>。</li>
+          <li>　2. 新增 <code>src/lib/game/auth-facade.ts</code> — 統一 auth API（ensureSignedIn / onUidChange / getCurrentUidSync），自動依 ORACLE_MODE 切 firebase 或 oracle。</li>
+          <li><b>build 路徑</b>：</li>
+          <li>　- 預設（無 env var）→ 走 main code path（firebase + room.ts），GitHub Pages 部署不變</li>
+          <li>　- <code>VITE_BACKEND_MODE=oracle VITE_ORACLE_API_URL=https://...trycloudflare.com npm run build</code> → 走 oracle code path (room-oracle.ts + polling)</li>
+          <li><b>Phase 3d 待辦</b>：把 <code>game/+page.svelte</code> 內 <code>onAuthStateChanged(auth, ...)</code> + <code>signInAnonymously(auth)</code> 改用 auth-facade，才能在 oracle build 完整支援連線對戰。</li>
+          <li><b>Phase 3e 待辦</b>：在 Oracle 主機部署 svelte build 到 nginx /opt/ptcg/web，實機測試。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.63</span> 🐛 修火狐狸｜呼朋引伴 1 張→應為「最多 2 張」(audit 17 張同名招式全對齊)</summary>
         <ul>
           <li>玩家回報：火狐狸 M4 · 011/083 的「呼朋引伴」應從牌庫選最多 2 張基礎寶可夢，實作只放 1 張。</li>
