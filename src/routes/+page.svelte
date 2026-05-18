@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.71</span> 🐛 修席多藍恩鋼鐵爆炸 + 巨鉗螳螂ex 十字破壞 — 基本能量 pokemonType 漏網</summary>
+        <ul>
+          <li><b>玩家回報</b>：席多藍恩｜鋼鐵爆炸 把所有鋼能量都丟了，傷害仍是 0。</li>
+          <li><b>根因</b>：基本【鋼】能量 JSON <b>沒 pokemonType 欄位</b>（只有 supertype=Energy、subtype=Basic、name=「基本【鋼】能量」）。<code>registerSelfDiscardMultiply</code> helper 的 eligible filter 只認 <code>c.pokemonType === 'Metal'</code> → 基本鋼能量永遠不被視為 eligible → discarded.length=0 → 傷害=0×50=0。</li>
+          <li><b>影響</b>：用此 helper + <code>typeFilter</code> 不是 'all' 的招式 — <b>席多藍恩｜鋼鐵爆炸</b>、<b>巨鉗螳螂ex｜十字破壞</b>。固拉多｜熔岩光芒 用 'all' filter 不受影響。烈獄狂火X 不用此 helper（已用 name 判定）不受影響。</li>
+          <li><b>修法</b>：加 TYPE_TO_TAG map（EnergyType → 「【火】」「【鋼】」等中文 tag）。filter 改成 <code>c.pokemonType === typeFilter || c.name.includes(TYPE_TO_TAG[typeFilter])</code>。picker 那邊也補 <code>energyTypeFilter</code> 設定（避免玩家選到非該屬性能量造成混淆）。</li>
+          <li><b>同類 bug 起源</b>：v3.44 task #184「基本能量 pokemonType=null bug 全面修補」已 audit 過，但這個 helper 是 v3.44 後才加的，漏網。本版補完。</li>
+          <li><b>未來 audit</b>：所有 <code>c.pokemonType === '<type>'</code> 的 filter 都該補 name fallback，TYPE_TO_TAG map 可重用。後續會繼續找。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.70</span> 🔄 Revert v4.69 烈獄狂火X inline 處理 — engine 早已有 v2.195 通用機制（適用所有火屬性招式）</summary>
         <ul>
           <li><b>玩家質疑</b>：「只針對烈獄狂火X 寫，那火山流星、業火連踢這些不是也漏？沒辦法公式化處理嗎？」— 完全正確。</li>

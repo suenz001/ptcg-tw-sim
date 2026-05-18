@@ -6502,6 +6502,16 @@ regPost('勇士雄鷹|拖出', oppSwapDmgPost(40, '拖出'));
 // ── self-discard-multiply (3 張) ─────────────────────────────────────────────
 type DiscardMultiplyFilter = 'all' | 'basic' | EnergyType;
 
+// v4.71: EnergyType → 中文 tag map，給基本能量 name fallback 判斷用
+//   原因：基本能量 JSON 沒有 pokemonType 欄位（只有 supertype/subtype/name），
+//   單看 c.pokemonType === typeFilter 永遠 false。
+//   solution: 基本能量靠 name 含「【鋼】」「【火】」等 tag 判定。
+const TYPE_TO_TAG: Record<string, string> = {
+  Fire: '【火】', Water: '【水】', Grass: '【草】', Lightning: '【雷】',
+  Psychic: '【超】', Fighting: '【鬥】', Darkness: '【惡】', Metal: '【鋼】',
+  Fairy: '【妖】', Dragon: '【龍】', Colorless: '【無】',
+};
+
 function registerSelfDiscardMultiply(
   key: string,
   label: string,
@@ -6516,6 +6526,12 @@ function registerSelfDiscardMultiply(
     scope: 'attacker',
     baseDamage,
     damagePerEnergy: per,
+    // v4.71: picker 也限定屬性（玩家不會選到非該屬性能量造成 UX 混淆）
+    // Cast 避開 ATTACK_PRE_DISCARD_CHOICE config 不接受 'Fairy' 的型別限制
+    // 實際呼叫端的 typeFilter 不會是 'Fairy'（席多藍恩=Metal、十字破壞=Metal、烈獄狂火X=Fire）
+    energyTypeFilter: (typeFilter === 'all' || typeFilter === 'basic' || typeFilter === 'Fairy')
+      ? undefined
+      : (typeFilter as Exclude<EnergyType, 'Fairy'>),
   });
   regPre(key, (state, aIdx, pool, action) => {
     const player = state.players[aIdx];
@@ -6526,7 +6542,10 @@ function registerSelfDiscardMultiply(
       const c = pool.get(e.cardId);
       if (!c) return false;
       if (typeFilter === 'basic') return c.subtype === 'Basic';
-      return c.pokemonType === typeFilter;
+      // v4.71: pokemonType match OR name 含對應 type tag（基本能量 fallback）
+      if (c.pokemonType === typeFilter) return true;
+      const tag = TYPE_TO_TAG[typeFilter];
+      return tag ? c.name.includes(tag) : false;
     });
     const chosenIids = action?.discardedEnergyIids;
     let discarded: CardInstance[];
