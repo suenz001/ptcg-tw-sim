@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.793</span> 🚨 hotfix — v4.79 / v4.791 deploy 失敗真因（三個 helper 漏 export）</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.79 和 v4.791 兩版 GitHub Actions deploy 都失敗，網頁版號還停在 v4.78。</li>
+          <li><b>真因（違反 Rule 4 — 沒做 build 驗證就 push）</b>：v4.79 新增的 <code>m5_preview.ts</code> 從 effects.ts 引入了三個 helper（<code>drawNPost</code> / <code>millOppDeckTopPost</code> / <code>selfStatusPost</code>），但這三個在 effects.ts 內<b>都沒加 export</b>（只是 module-private function），vite build 階段 import 失敗。</li>
+          <li><b>為何沒被 svelte-check 抓到</b>：開發機沙箱 svelte-check 失敗於 rolldown 原生 binding 不相容，無法執行完整型別檢查；應該額外跑 <code>npm run build</code> 才能模擬 GitHub Actions 環境抓到 missing export。</li>
+          <li><b>修法</b>：在 effects.ts 內三個 helper 前加 <code>export</code>：
+            <ul>
+              <li><code>export function drawNPost(...)</code></li>
+              <li><code>export function millOppDeckTopPost(...)</code></li>
+              <li><code>export function selfStatusPost(...)</code></li>
+            </ul>
+          </li>
+          <li><b>影響範圍</b>：純加 export keyword，無行為變更。三個 helper 原本就被 effects.ts 內部多處 regPost 使用（drawNPost 用 5 處、millOppDeckTopPost / selfStatusPost 各 1 處），加 export 完全相容。</li>
+          <li><b>檢討</b>：以後加新 cards/*.ts 引入 effects.ts 內部 helper 前，必須先 grep 確認對方有 <code>export</code> keyword（或自己加上）。本次失誤連續炸 3 個版本（v4.79 / v4.791 / v4.792 — 因為 m5_preview.ts 一直存在）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.792</span> ✨ 練習模式也恢復「攻擊後自動結束回合」</summary>
         <ul>
           <li><b>玩家回饋</b>：v4.74 / v4.75 起，練習模式（允許悔棋的房間）攻擊後不自動結束回合，需要手動按結束回合，遊戲節奏卡卡。</li>

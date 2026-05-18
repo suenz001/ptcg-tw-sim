@@ -4248,7 +4248,7 @@ regPost('流氓熊貓|暴走', selfConfusePost());
 regPost('棄世猴|暴走', selfConfusePost());
 
 // ── D. 抽卡類 7 張 ─────────────────────────────────────────────────────────
-function drawNPost(n: number, attackName: string): AttackPostFn {
+export function drawNPost(n: number, attackName: string): AttackPostFn {
   return (state, aIdx) => {
     let s = addLog(state, `${attackName}：從牌庫抽 ${n} 張`, aIdx);
     return updatePlayer(s, aIdx, p => {
@@ -7325,7 +7325,7 @@ function millSelfDeckTopPost(n: number, label: string): AttackPostFn {
   };
 }
 
-function millOppDeckTopPost(n: number, label: string): AttackPostFn {
+export function millOppDeckTopPost(n: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const p = state.players[dIdx];
@@ -8615,7 +8615,7 @@ regPost('蔓藤怪|毒粉', statusPost('poisoned'));
 regPost('火炎獅|灼燒', statusPost('burned'));
 
 // ── (3) 自己狀態（攻擊者自身）────────────────────────────────────────────────
-function selfStatusPost(status: SpecialCondition): AttackPostFn {
+export function selfStatusPost(status: SpecialCondition): AttackPostFn {
   return (state, aIdx, pool) => {
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
