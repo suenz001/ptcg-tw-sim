@@ -264,6 +264,45 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.80</span> ⚔ M5 對戰邏輯 Phase 2 — 17 個招式（條件 +N / 回血 / 對手場操作 / picker）</summary>
+        <ul>
+          <li><b>背景</b>：M5 深淵之瞳卡包對戰邏輯 Phase 2，依鐵律完整實裝（禁止簡化）。Phase 1 (v4.79) 14 個 + Phase 2 17 個 = 31 個招式已實裝。</li>
+          <li><b>Group A — 條件 +N PRE（8 個）</b>：
+            <ul>
+              <li>紅蓮鎧騎｜烈焰軍團（40 + 自方備戰附能寶可夢數 × 40）</li>
+              <li>古空棘魚｜化石節拍（10 + 名含「古老的」備戰數 × 30）</li>
+              <li>海豚俠｜正義之拳（80 + 對手剩 1 獎賞時 +200）</li>
+              <li>呆殼獸｜空空如也（50 + 手牌 = 0 時 +160）</li>
+              <li>故勒頓｜戰鬥利爪（30 + 對手戰鬥位為進化時 +30）</li>
+              <li>莫魯貝可ex｜飢餓轟炸（40 + 自身傷害指示物數 × 40）</li>
+              <li>古玉魚｜嫉妒漩渦（20 + 自身指示物 ≥ 2 時 +90，且 skipWeakness）</li>
+              <li>巨嘴鳥｜羽毛迴旋（60 + 雙方備戰合計 × 20）</li>
+            </ul>
+          </li>
+          <li><b>Group B — 自身回血（1 個）</b>：海豚寶寶｜吸取鰭（自身回 20 HP，用既有 selfHealPost helper）</li>
+          <li><b>Group C — defender 減傷（1 個）</b>：蘭螳花ex｜葉片防護（140 + 下回合受傷 -50，用既有 damageReduceNextHit flag）</li>
+          <li><b>Group D — 對手場操作（5 個）</b>：
+            <ul>
+              <li>斯魔茶｜悄悄放上（對手戰鬥位 +1 傷害指示物）</li>
+              <li>棄世猴｜幽靈拳（100 + 對手備戰 1 隻 +5 指示物，用 hitBenchPickPost helper）</li>
+              <li>頭蓋龍｜撞飛（70 + 強制對手戰鬥位與備戰位互換，由對手選新戰鬥位）</li>
+              <li>鑽嘴鳥｜二連啄（擲 2 次硬幣 × 10，用 coinHeadsMultiplyPre helper）</li>
+              <li>銀伴戰獸｜空氣斬（130 + 自身丟 1 能量 picker + resolver）</li>
+            </ul>
+          </li>
+          <li><b>Group E — 牌庫搜尋 picker（2 個）</b>：
+            <ul>
+              <li>螺釘地鼠｜呼喚同伴（牌庫選 ≤ 2 張【基礎】寶可夢到備戰 + 重洗）</li>
+              <li>燈火幽靈｜增光（牌庫選 ≤ 3 張「燈火幽靈」到備戰 + 重洗）</li>
+            </ul>
+          </li>
+          <li><b>支援基礎建設</b>：effects.ts 把 <code>selfHealPost</code>、<code>forceOppSwapPost</code> 從 module-private 改為 export（避免 m5_preview.ts 重複實作）。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 7c（每招以 M5.json effect 文字為 source）/ Rule 11（m5_preview.ts 走 Python pipeline）/ Rule 13（picker 用 effectKey 字串，無 nested array）/ Rule 17（傷害走 unified defense path，透過 hitBenchPickPost）。esbuild 已在 sandbox 驗證。</li>
+          <li><b>下一波規劃</b>：Phase 3 — 「化隱」特性 6 張（須新獨立 immunity flag，引擎改動）；Phase 4 — 超進化 ex 大招 8 張（深淵之瞳 / 暴走之槌+150 等）；Phase 5 — 訓練家 + 能量規則。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.798</span> 🚨 hotfix — 修 v4.797 push 腳本的 import 插入位置 bug</summary>
         <ul>
           <li><b>玩家回報</b>：v4.797 deploy 失敗，網頁版號還停在 v4.796。</li>

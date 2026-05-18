@@ -4655,7 +4655,7 @@ regPre('索財靈|連續擲幣', coinUntilTailsMultiplyPre(20, 0, '連續擲幣'
 // 招式造成傷害後，將自己（戰鬥寶可夢）恢復 N HP。
 // ══════════════════════════════════════════════════════════════════════════════
 
-function selfHealPost(amount: number, attackName: string): AttackPostFn {
+export function selfHealPost(amount: number, attackName: string): AttackPostFn {
   return (state, aIdx) => {
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
@@ -10190,7 +10190,7 @@ regR('sylveon-skystone-bounce', (state, aIdx, iids, _params, pool) => {
  * ATTACK_POST：強制對手將戰鬥寶可夢與備戰寶可夢互換（由對手選）。
  * 若對手備戰為空 → 無效果（本來 damage 已在 pre 結算）。
  */
-function forceOppSwapPost(label: string): AttackPostFn {
+export function forceOppSwapPost(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
