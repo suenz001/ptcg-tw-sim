@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.61</span> 🏗️ Phase 3a：Oracle backend client 基礎建設（不影響主力，僅準備測試版用）</summary>
+        <ul>
+          <li><b>背景</b>：Firebase 額度即將吃緊，預先準備 Oracle MongoDB 備援。雙網站策略（主力 GitHub Pages + Firebase 不動，另開測試版用 Oracle）。</li>
+          <li><b>本次內容（純基礎建設，無 user-visible 變動）</b>：</li>
+          <li>　- 新增 <code>src/lib/game/oracle-client.ts</code> — 純 fetch wrapper（auth / room CRUD / messages / polling）</li>
+          <li>　- 新增 <code>.env.example</code> 提示測試版環境變數（VITE_BACKEND_MODE / VITE_ORACLE_API_URL）</li>
+          <li><b>已建好的 Oracle 後端</b>（Phase 0-2 完成）：</li>
+          <li>　- Ubuntu 24.04 ARM64 + Node.js 22 + nginx + Docker MongoDB</li>
+          <li>　- Express API server v0.3.0（JWT auth + Rooms/Messages CRUD + optimistic locking）</li>
+          <li>　- Cloudflared HTTP/2 tunnel + PM2 auto-restart</li>
+          <li><b>下次 Phase 3b</b>：寫 room-oracle.ts 對應 room.ts 30 個 export，並設定 vite resolve.alias 在 build 時切換 backend。</li>
+          <li><b>SSE 暫不啟用</b>：cloudflared quick tunnel buffer 問題，改用 polling fallback（~800ms 延遲，遊戲體驗 OK）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.601</span> 🔧 取消提議重新開局的「一場 3 次上限」</summary>
         <ul>
           <li>玩家回饋：3 次上限太嚴格。連線模式提議重新開局改為<b>無次數限制</b>。</li>
