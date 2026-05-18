@@ -264,6 +264,36 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.82</span> ⚔ M5 對戰邏輯 Phase 4 — 8 個複雜招式（Mega ex 大招 / 自身回牌庫 / 狀態KO）</summary>
+        <ul>
+          <li><b>累計實裝</b>：14 (P1) + 17 (P2) + 19 (P3) + 8 (P4) = <b>58 個招式</b> / 81 張卡。約 72% 招式 coverage。</li>
+          <li><b>Group A — 簡單條件 +N / self buff（2 個）</b>：
+            <ul>
+              <li>超級水晶燈火靈ex｜幻影迷宮（130 + 對手撤退能量 × 50，直讀 retreatCost.length）</li>
+              <li>戰槌龍ex｜暴走之槌（150 + 下個自己回合自身招式 +150，用既有 damageBonusPending → ThisTurn 機制）</li>
+            </ul>
+          </li>
+          <li><b>Group B — 擲幣 + immune / picker（2 個）</b>：
+            <ul>
+              <li>喇叭啄鳥｜飛翔（30 + 擲 1 幣：反面失敗 / 正面 → 下回合不受招式傷害和效果，用既有 immuneToAllAttackNextTurn flag）</li>
+              <li>拋鳥｜配送挑戰（2 次擲幣全正面 → 牌庫選 1 寶可夢到備戰 + 重洗）</li>
+            </ul>
+          </li>
+          <li><b>Group C — picker 牌庫搜尋（2 個）</b>：
+            <ul>
+              <li>熱帶龍｜果實香氣（牌庫頂 6 張中選任意數量寶可夢加手牌，給對手看過 + validIids 限定）</li>
+              <li>詛咒娃娃｜人偶捕捉（80 + 若希望從牌庫選 1 張任意卡加手牌，filter=Any）</li>
+            </ul>
+          </li>
+          <li><b>Group D — 自身回牌庫（1 個）</b>：西獅海壬｜水流回歸（120 + 自身連同附加能量 / 道具 / 進化堆疊全部回牌庫並重洗；用 getAllAttachedTools helper 處理主+副道具雙槽位；<b>不算 KO 不給對手獎賞</b>，玩家須送新戰鬥位）</li>
+          <li><b>Group E — 特殊狀態 → 直接 KO（1 個）</b>：超級達克萊伊ex｜深淵之瞳（對手戰鬥位處於任一特殊狀態 [睡眠/灼傷/混亂/麻痺/中毒] 則使該寶可夢昏厥，設 defender.active.damage = HP 讓 sanityKOSweep 處理正常 KO 流程 + 對手取得獎賞）</li>
+          <li><b>支援基礎建設</b>：m5_preview.ts 新加 flipCoinsWithLog / getAllAttachedTools imports。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 7c（JSON effect 為唯一 source）/ Rule 11（m5_preview.ts 走 Python pipeline 注入 8K 內容）/ Rule 13（picker 用 effectKey 字串 + params 用 primitive object）/ Rule 17（傷害走 active.damage + sanityKOSweep）。本次<b>嚴格遵守 tsc --noEmit 驗證</b>（記取 v4.81 教訓：esbuild 不做型別檢查、push 前必須跑 tsc）。tsc 已 clean。</li>
+          <li><b>剩餘待實裝（~6 招式 + 12 特性 + 12 訓練家/能量）</b>：迷唇姐強烈之吻（delayed-KO，需新引擎機制）/ 狐大盜招式竊賊（copy attack）/ 燒火蚣蟲蟲恐慌（牌庫底 7 翻面，需新 picker UI）/ 雷電獸閃光屏障（vs evolved conditional immunity）/ 席多藍恩熔岩之壁（vs burned conditional immunity）/「化隱」特性 6 張及其依賴的 3 個招式 — 全部留待 Phase 5+ 連同訓練家/能量一併處理。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.811</span> 🚨 critical hotfix — 對戰演練頁進不去 / v2360 強力蒸汽 ReferenceError</summary>
         <ul>
           <li><b>玩家回報</b>：v4.81 部署後對戰演練頁進不去（白屏 / runtime error）。</li>

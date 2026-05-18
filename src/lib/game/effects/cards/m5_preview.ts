@@ -52,6 +52,7 @@ import {
   addLog,
   updatePlayer,
   withPending,
+  getAllAttachedTools,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import {
@@ -64,6 +65,7 @@ import {
   forceOppSwapPost,
   coinHeadsMultiplyPre,
   hitBenchPickPost,
+  flipCoinsWithLog,
 } from '../../effects';
 import { getEnergyUnits } from '../../engine';
 
@@ -959,10 +961,290 @@ regR('m5-inkay-procurement', (state, aIdx, iids) => {
 
 // ════════════════════════════════════════════════════════════════════════════
 // Phase 3 結束。已實裝 14 (P1) + 17 (P2) + 19 (P3) = 50 個招式 / 81 張卡。
-// 累計達 ~62% 招式 coverage。
-// 剩餘待實裝：~5 個招式（複雜：迷唇姐強烈之吻 / 狐大盜招式竊賊 / 燒火蚣蟲蟲恐慌 等）
-//            + 12 個特性（含「化隱」6 張，需新引擎 immunity flag）
-//            + 12 個訓練家 / 能量。
-// Phase 4 將處理：化隱特性 + 訓練家 + 能量規則。
 // ════════════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 4 (v4.82) — 8 個招式（複雜招式批次）
+//
+// A. 簡單條件 +N / self buff（2）：
+//    超級水晶燈火靈ex|幻影迷宮（130 + 對手撤退能量×50）
+//    戰槌龍ex|暴走之槌（150 + 下個自己回合自身 +150，用 damageBonusPending）
+// B. 擲幣 + immune / picker（2）：
+//    喇叭啄鳥|飛翔（30 + 反面失敗；正面 → 下回合不受招式傷害和效果）
+//    拋鳥|配送挑戰（2 次擲幣全正面 → 牌庫選 1 寶可夢到備戰）
+// C. picker 牌庫搜尋（2）：
+//    熱帶龍|果實香氣（牌庫頂 6 張選任意數量寶可夢加手牌，給對手看過後）
+//    詛咒娃娃|人偶捕捉（80 + 若希望牌庫選 1 任意卡加手牌）
+// D. 自身回牌庫（1）：
+//    西獅海壬|水流回歸（120 + 自身連同附加卡回牌庫並重洗，不算 KO 不給獎賞）
+// E. 特殊狀態 → KO（1）：
+//    超級達克萊伊ex|深淵之瞳（對手戰鬥位處於特殊狀態則使該寶可夢昏厥）
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── A1. 超級水晶燈火靈ex|幻影迷宮 — 130 + 對手撤退能量×50 ──
+//   卡面：「對手的戰鬥寶可夢撤退所需的能量數 × 50 點，追加傷害。」
+regPre('超級水晶燈火靈ex|幻影迷宮', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defActive = state.players[dIdx].active;
+  const defCard = defActive ? pool.get(defActive.cardId) : null;
+  const retreatCount = defCard?.retreatCost?.length ?? 0;
+  const bonus = retreatCount * 50;
+  const dmg = 130 + bonus;
+  return {
+    state: addLog(state,
+      `幻影迷宮：對手戰鬥位撤退所需 ${retreatCount} 個能量 → 130 + ${retreatCount}×50 = ${dmg}`, aIdx),
+    damage: dmg,
+  };
+});
+
+// ── A2. 戰槌龍ex|暴走之槌 — 150 + 下個自己回合自身招式 +150 ──
+//   卡面：「下個自己的回合，這隻寶可夢使用招式對對手戰鬥寶可夢造成的傷害「+150」。」
+//   實裝：在 attacker.active 上設 damageBonusPending=150，
+//   engine 在自己 END_TURN 時 promote 給 damageBonusThisTurn（下個自己回合生效）。
+regPost('戰槌龍ex|暴走之槌', (state, aIdx) => {
+  return updatePlayer(addLog(state, '暴走之槌：下個自己回合自身招式 +150', aIdx), aIdx, p => {
+    if (!p.active) return p;
+    return {
+      ...p,
+      active: {
+        ...p.active,
+        damageBonusPending: (p.active.damageBonusPending ?? 0) + 150,
+      },
+    };
+  });
+});
+
+// ── B1. 喇叭啄鳥|飛翔 — 30 + 擲幣（反失敗，正面 → 下回合不受招式傷害和效果） ─
+//   卡面：「擲 1 次硬幣，若為反面，此招式失敗。若為正面，下個對手的回合，
+//          這隻寶可夢不會受到招式的傷害和效果。」
+regPre('喇叭啄鳥|飛翔', (state, aIdx) => {
+  const r = flipCoinsWithLog(state, 1, '飛翔', aIdx);
+  if (r.heads === 0) {
+    return { state: addLog(r.state, '飛翔：擲幣反面 → 招式失敗', aIdx), damage: 0 };
+  }
+  return { state: addLog(r.state, '飛翔：擲幣正面 → 30（POST 設下回合免疫）', aIdx), damage: 30 };
+});
+regPost('喇叭啄鳥|飛翔', (state, aIdx) => {
+  // 只在 PRE 已擲出正面時設 immune（PRE 反面時 damage=0，POST 仍會跑，需 gate）
+  // 但 PRE 已 log「招式失敗」— POST 不知道 PRE 結果。最保險：檢查最近 log，
+  // 或讓 POST 無條件設 immune（簡化但 PRE 反面也設就違反卡面）。
+  // 採用：POST 自身傷害 > 0 才設 (PRE 反面 damage=0 → POST 來時 damage 沒加)
+  // 但這個 attacker.active.damage 不會被自己攻擊改 — 改檢查「招式有沒有命中」需要 attack-time snapshot。
+  // 折衷：POST 階段重新擲一次幣 → 不行 (PRE 已擲)。
+  // 採取最簡可靠做法：在 PRE 反面時用 customField 'm5_brave_bird_fail' 寫入 state，
+  // POST 讀此 field 決定是否設 immune。但 state 不能加新欄位（Rule 13）。
+  //
+  // 改用更乾淨做法：拆成 PRE-only 設 immune（只在正面時透過 PRE 返回 state 變更）。
+  // 但 PRE 不應該寫 player flags。
+  //
+  // 最終方案：在 PRE 寫 immune flag 直接到 attacker.active（避開 POST）—
+  // PRE 已 return state 包含修改，OK 用。重寫 PRE：
+
+  // POST 無條件設 immune — PRE 已 handle 反面失敗的 damage=0
+  // 但卡面說「若為正面，下個對手的回合不受招式傷害和效果」— 必須只在正面時設。
+  // 由於 PRE/POST split 困難，採取一個替代：把 immune 設邏輯搬到 PRE。
+  // → 註冊兩個版本不可能，故 POST 改為「不做事」，PRE 改寫處理 immune
+  return state;  // POST 不做事，immune 已在 PRE 處理
+});
+// 重新註冊 PRE：在 PRE 內處理 immune（覆蓋上面那次 regPre — TypeScript Map.set 後者勝）
+regPre('喇叭啄鳥|飛翔', (state, aIdx) => {
+  const r = flipCoinsWithLog(state, 1, '飛翔', aIdx);
+  if (r.heads === 0) {
+    return { state: addLog(r.state, '飛翔：擲幣反面 → 招式失敗', aIdx), damage: 0 };
+  }
+  // 正面：30 點傷害 + 設下回合不受招式（用既有 immuneToAllAttackNextTurn flag）
+  const s = updatePlayer(
+    addLog(r.state, '飛翔：擲幣正面 → 30，下個對手回合不受招式傷害和效果', aIdx),
+    aIdx,
+    p => {
+      if (!p.active) return p;
+      return { ...p, active: { ...p.active, immuneToAllAttackNextTurn: true } };
+    },
+  );
+  return { state: s, damage: 30 };
+});
+
+// ── B2. 拋鳥|配送挑戰 — 2 次擲幣全正面 → 牌庫選 1 寶可夢到備戰 ─
+//   卡面：「擲 2 次硬幣，若全部為正面，從自己的牌庫選擇 1 張寶可夢，放置於備戰區。
+//          然後重洗牌庫。」
+regPre('拋鳥|配送挑戰', (state) => ({ state, damage: 0 }));
+regPost('拋鳥|配送挑戰', (state, aIdx) => {
+  const r = flipCoinsWithLog(state, 2, '配送挑戰', aIdx);
+  if (r.heads < 2) {
+    return addLog(r.state, `配送挑戰：${r.heads}/2 次正面，效果失敗`, aIdx);
+  }
+  const p = state.players[aIdx];
+  if (p.deck.length === 0) return addLog(r.state, '配送挑戰：2 正面但牌庫為空', aIdx);
+  return withPending(
+    addLog(r.state, '配送挑戰：2 次全正面 → 從牌庫選 1 張寶可夢放備戰（可選 0 張）', aIdx),
+    {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Pokemon',
+      minCount: 0, maxCount: 1,
+      effectKey: 'm5-flamigo-delivery',
+    },
+  );
+});
+regR('m5-flamigo-delivery', (state, aIdx, iids) => {
+  if (iids.length === 0) {
+    return updatePlayer(addLog(state, '配送挑戰：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
+      ...p,
+      deck: [...p.deck].sort(() => Math.random() - 0.5),
+    }));
+  }
+  return updatePlayer(addLog(state, '配送挑戰：放置 1 張寶可夢到備戰並重洗牌庫', aIdx), aIdx, p => {
+    const picked = p.deck.filter(c => iids.includes(c.iid));
+    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+    const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+    return { ...p, deck: shuffled, bench: [...p.bench, ...picked] };
+  });
+});
+
+// ── C1. 熱帶龍|果實香氣 — 牌庫頂 6 張選任意數量寶可夢加手牌（給對手看過後）─
+//   卡面：「查看自己的牌庫上方 6 張卡，從其中選擇任意數量的寶可夢，
+//          給對手看過後加入手牌。剩餘的卡放回牌庫並重洗。」
+//   實裝：用 deck-search filter='Pokemon' minCount=0 — 但範圍只限牌庫頂 6 張。
+//   既有 picker 無 top-N 限制，改用 reorder-deck-top picker (v2.164) 但 reorder
+//   不適合「選任意拿走」場景。最務實做法：先 peek 6 張，把 6 張視為候選清單，
+//   開 deck-search picker 但 params 限定候選 iids。
+regPre('熱帶龍|果實香氣', (state) => ({ state, damage: 0 }));
+regPost('熱帶龍|果實香氣', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  if (p.deck.length === 0) return addLog(state, '果實香氣：牌庫為空', aIdx);
+  const peekN = Math.min(6, p.deck.length);
+  const top6 = p.deck.slice(0, peekN);
+  const pokeIids = top6.filter(c => pool.get(c.cardId)?.supertype === 'Pokemon').map(c => c.iid);
+  if (pokeIids.length === 0) {
+    // 沒有寶可夢候選 — 仍重洗剩餘（卡面：剩餘放回牌庫並重洗）
+    return updatePlayer(
+      addLog(state, `果實香氣：牌庫頂 ${peekN} 張中無寶可夢，重洗牌庫`, aIdx),
+      aIdx,
+      p => ({ ...p, deck: [...p.deck].sort(() => Math.random() - 0.5) }),
+    );
+  }
+  return withPending(
+    addLog(state, `果實香氣：牌庫頂 ${peekN} 張中含 ${pokeIids.length} 隻寶可夢，選任意數量加手牌`, aIdx),
+    {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Pokemon',
+      minCount: 0, maxCount: pokeIids.length,
+      effectKey: 'm5-tropius-fruit-aroma',
+      params: { validIids: pokeIids, titleOverride: '果實香氣：選任意數量寶可夢加手牌' },
+    },
+  );
+});
+regR('m5-tropius-fruit-aroma', (state, aIdx, iids) => {
+  return updatePlayer(
+    addLog(state, `果實香氣：取 ${iids.length} 張寶可夢加入手牌（已給對手看過）+ 重洗牌庫`, aIdx),
+    aIdx,
+    p => {
+      const picked = p.deck.filter(c => iids.includes(c.iid));
+      const remaining = p.deck.filter(c => !iids.includes(c.iid));
+      const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+      return { ...p, deck: shuffled, hand: [...p.hand, ...picked] };
+    },
+  );
+});
+
+// ── C2. 詛咒娃娃|人偶捕捉 — 80 + 若希望牌庫選 1 任意卡加手牌 ────
+//   卡面：「若希望，從自己的牌庫選擇 1 張任意卡，加入手牌。然後重洗牌庫。」
+regPost('詛咒娃娃|人偶捕捉', (state, aIdx) => {
+  const p = state.players[aIdx];
+  if (p.deck.length === 0) return addLog(state, '人偶捕捉：牌庫為空，效果略過', aIdx);
+  return withPending(
+    addLog(state, '人偶捕捉：若希望，從牌庫選 1 張任意卡加手牌（可選 0 張跳過）', aIdx),
+    {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Any',
+      minCount: 0, maxCount: 1,
+      effectKey: 'm5-shuppet-doll-capture',
+    },
+  );
+});
+regR('m5-shuppet-doll-capture', (state, aIdx, iids) => {
+  if (iids.length === 0) {
+    return updatePlayer(addLog(state, '人偶捕捉：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
+      ...p,
+      deck: [...p.deck].sort(() => Math.random() - 0.5),
+    }));
+  }
+  return updatePlayer(addLog(state, '人偶捕捉：取 1 張任意卡加手牌 + 重洗牌庫', aIdx), aIdx, p => {
+    const picked = p.deck.filter(c => iids.includes(c.iid));
+    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+    return { ...p, deck: [...remaining].sort(() => Math.random() - 0.5), hand: [...p.hand, ...picked] };
+  });
+});
+
+// ── D1. 西獅海壬|水流回歸 — 120 + 自身連同附加卡回牌庫並重洗 ──
+//   卡面：「將這隻寶可夢及其身上附加的所有卡放回牌庫並重洗。」
+//   注意：「回牌庫」不算被擊倒（KO），對手不應拿獎賞。
+//   實作：直接把 active 連同 energyAttached/toolAttached/evolvedFromStack 加進 deck，
+//        然後設 active=null。玩家須送新戰鬥位（engine 自動觸發 SEND_NEW_ACTIVE flow）。
+//   POST 而非 PRE — 確保 120 傷害先結算。
+regPost('西獅海壬|水流回歸', (state, aIdx) => {
+  const p = state.players[aIdx];
+  if (!p.active) return addLog(state, '水流回歸：自身已不在戰鬥位', aIdx);
+  const att = p.active;
+  // 收集要回牌庫的所有卡：active 自身、附加能量、附加道具（用 getAllAttachedTools
+  // helper 處理 toolAttached + toolAttachedSecondary 雙槽位）、進化堆疊
+  const toReturn: import('../../types').CardInstance[] = [
+    att,
+    ...att.energyAttached,
+    ...getAllAttachedTools(att),
+    ...(att.evolvedFromStack ?? []),
+  ];
+  // 清除進化堆疊與附加 (避免重複)，重置為基礎狀態回牌庫
+  const cleanedActive: import('../../types').CardInstance = { ...att };
+  cleanedActive.damage = 0;
+  cleanedActive.energyAttached = [];
+  delete cleanedActive.toolAttached;
+  delete (cleanedActive as { toolAttachedSecondary?: unknown }).toolAttachedSecondary;
+  delete cleanedActive.evolvedFromStack;
+  delete cleanedActive.status;
+  // 但 toReturn 內第 1 張 (att) 應該是 cleaned 版（不帶 damage / energy / tool / stack）
+  toReturn[0] = cleanedActive;
+  return updatePlayer(
+    addLog(state, '水流回歸：自身與附加卡放回牌庫並重洗（不算 KO，無獎賞）', aIdx),
+    aIdx,
+    pl => ({
+      ...pl,
+      active: null,
+      deck: [...pl.deck, ...toReturn].sort(() => Math.random() - 0.5),
+    }),
+  );
+});
+
+// ── E1. 超級達克萊伊ex|深淵之瞳 — 對手戰鬥位處於特殊狀態 → 該寶可夢昏厥 ─
+//   卡面：「若對手的戰鬥寶可夢處於特殊狀態，則使該寶可夢【昏厥】。」
+//   特殊狀態 = asleep / burned / confused / paralyzed / poisoned。
+//   實作：設 defender.active.damage = effective HP（讓 sanityKOSweep 處理 KO 流程，
+//   對手取得獎賞，符合「使昏厥」官方語意 — 昏厥 = 一般 KO）。
+regPre('超級達克萊伊ex|深淵之瞳', (state) => ({ state, damage: 0 }));
+regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx].active;
+  if (!def) return addLog(state, '深淵之瞳：對手無戰鬥位', aIdx);
+  if (!def.status) {
+    return addLog(state, '深淵之瞳：對手戰鬥位不處於特殊狀態 → 效果失敗', aIdx);
+  }
+  const defCard = pool.get(def.cardId);
+  const hp = defCard?.hp ?? 0;
+  if (hp <= 0) return addLog(state, '深淵之瞳：對手戰鬥位無 HP 資訊', aIdx);
+  // 設 damage = HP，sanityKOSweep 會處理擊倒 + 獎賞
+  return updatePlayer(addLog(state, `深淵之瞳：對手戰鬥位處於【${def.status}】 → 直接昏厥`, aIdx), dIdx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, damage: hp } };
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 4 結束。已實裝 14 (P1) + 17 (P2) + 19 (P3) + 8 (P4) = 58 個招式 / 81 張卡。
+// 累計達 ~72% 招式 coverage。
+// 剩餘 ~6 個招式須新引擎機制（化隱依賴 / delayed-KO / conditional immunity / copy attack）—
+// 留待 Phase 5+ 連同 12 特性（含「化隱」）+ 12 訓練家/能量一併處理。
+// ════════════════════════════════════════════════════════════════════════════
+
 
