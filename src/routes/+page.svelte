@@ -264,6 +264,37 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.797</span> 🔍 audit 修補：5 個 +N per type 招式同類 bug（host-aware energy count）</summary>
+        <ul>
+          <li><b>背景</b>：v4.796 修了巨型花束後，全面 audit 其他「+N per 某類型能量」招式有沒有相同 bug — 即 (a) pokemonType=null 漏算基本能量；(b) Stage2 漏算新衝天能量。</li>
+          <li><b>本版修補</b>：4 個招式
+            <ul>
+              <li><b>巨炭山｜機槍瀝青</b>（Stage2，+80×火）</li>
+              <li><b>刺龍王ex｜水炮</b>（Stage2 ex，+50×水）</li>
+              <li><b>蜜集大蛇ex｜蜜糖風暴</b>（Stage2 ex，+30×草，繁茂×2 仍有效）</li>
+              <li><b>超級沙奈朵ex｜超級交響樂</b>（Stage2 超級進化，×50×超）</li>
+              <li><b>波爾凱尼恩｜強力蒸汽</b>（Basic，+90 per coin per 水能量；只是 pokemonType=null fix，無 Stage2 影響）</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：
+            <ul>
+              <li>effects.ts 加 inline <code>countEnergyTypeHostAware(host, type, pool)</code> helper — 同步 engine.countEnergy 的特殊能量處理（新衝天 / 稜鏡 / 燃火 / 古舊 / 火箭隊）。</li>
+              <li>升級 4 個 helper：<code>selfAttachedEnergyMultiplyPre</code> / <code>selfAllEnergyMultiplyPre</code> / <code>defActiveEnergyMultiplyPre</code> / <code>oppAllEnergyMultiplyPre</code> — 對 type filter (Grass/Fire/...) 走 host-aware，對 all/basic/special filter 維持原邏輯。</li>
+              <li>v2402_mega_gardevoir.ts 超級交響樂、v2360_j_mark_batch.ts 強力蒸汽 — 改用 engine.countEnergy 直接呼叫。</li>
+            </ul>
+          </li>
+          <li><b>不需修補的同類招式</b>：
+            <ul>
+              <li>超級噴火龍Xex｜烈獄狂火X — discard energy 模式（玩家自選棄能量），跟 attached count 模式不同。</li>
+              <li>奇諾栗鼠｜特殊滾滾 / 能量巴掌 / 能量羽毛 / 力量飛濺 / 空間粉碎 — filter 是 all/basic/special，不需 type-aware。</li>
+              <li>defActiveEnergyMultiplyPre 系列（精神強念 / 能量壓制 等）— filter 都是 all，不需 type-aware。</li>
+            </ul>
+          </li>
+          <li><b>檢討</b>：以後新加 type-filter 攻擊招式，<b>必須</b>用 host-aware helper（包含新衝天 / 稜鏡 / 燃火）。已透過修補 helper 集中保護未來新招式自動受益。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.796</span> 🌿 巨型花束改用 host-aware countEnergy — 正確認新衝天能量為草</summary>
         <ul>
           <li><b>玩家指出</b>：新衝天能量附在 Stage2 寶可夢上時提供「各屬性 ×2」，所以 1 新衝天 + 1 草能量 on 超級大竺葵 ex 應算 3 草，傷害為 70 + 3×50 = 220 點。</li>

@@ -5758,11 +5758,62 @@ export function countOneEnergy(inst: CardInstance, filter: EnergyFilter, pool: M
   return count;
 }
 
+// v4.797：host-aware 屬性能量計數 — 涵蓋特殊能量的 stage-dependent 行為
+//   - 新衝天能量 on Stage2 → 任意屬性 ×2（同 engine.countEnergy）
+//   - 稜鏡能量 on Basic → 任意屬性 ×1（on Evolution → Colorless ×1）
+//   - 燃火能量 on Evolution → Colorless ×3（on Basic → ×1）
+//   - 古舊能量 → 任意屬性 ×1（ACE SPEC 全屬性）
+//   - 火箭隊能量 → Psychic ×1 + Darkness ×1（依 SPECIAL_ENERGY_TYPES）
+//   - 其他特殊能量 / 基本能量：依 energyMatchesType（pokemonType + name【X】 fallback）
+// 不從 engine import（avoid circular），inline 處理。若 engine.ts 的 SPECIAL_ENERGY_TYPES
+// 改動需同步本檔。
+export function countEnergyTypeHostAware(host: CardInstance, type: EnergyType, pool: Map<string, Card>): number {
+  const hostCard = pool.get(host.cardId);
+  const hostStage = hostCard?.stage ?? hostCard?.subtype;
+  const hostIsEvolution = hostStage === 'Stage1' || hostStage === 'Stage2' || !!hostCard?.evolvesFrom;
+  const hostIsStage2 = hostStage === 'Stage2';
+  let count = 0;
+  for (const e of host.energyAttached) {
+    const ec = pool.get(e.cardId);
+    if (!ec || ec.supertype !== 'Energy') continue;
+    // host-aware 特殊能量（與 engine.countEnergy 同步）
+    if (ec.name === '新衝天能量') {
+      if (hostIsStage2) count += 2;            // Stage2 → 任意屬性 ×2
+      else if (type === 'Colorless') count += 1; // 其他 → Colorless ×1
+      continue;
+    }
+    if (ec.name === '稜鏡能量') {
+      if (!hostIsEvolution) count += 1;        // Basic → 任意屬性 ×1
+      else if (type === 'Colorless') count += 1; // 進化 → Colorless ×1
+      continue;
+    }
+    if (ec.name === '燃火能量') {
+      if (type === 'Colorless') count += hostIsEvolution ? 3 : 1;
+      continue;
+    }
+    if (ec.name === '古舊能量') {
+      count += 1;  // 全屬性 ACE SPEC，計入任何 type
+      continue;
+    }
+    if (ec.name === '火箭隊能量') {
+      if (type === 'Psychic' || type === 'Darkness') count += 1;
+      continue;
+    }
+    // 一般情況：依 energyMatchesType（含 pokemonType=null 的 name fallback）
+    if (energyMatchesType(ec, type)) count += 1;
+  }
+  return count;
+}
+
 function selfAttachedEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const att = state.players[aIdx].active;
     if (!att) return { state, damage: base };
-    const count = countOneEnergy(att, filter, pool);
+    // v4.797：type filter 改走 host-aware（認新衝天能量等特殊能量的 stage-dependent unit）
+    const isTypeFilter = filter !== 'all' && filter !== 'basic' && filter !== 'special';
+    const count = isTypeFilter
+      ? countEnergyTypeHostAware(att, filter as EnergyType, pool)
+      : countOneEnergy(att, filter, pool);
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：自身能量 ${count} → ${dmg}`, aIdx), damage: dmg };
   };
@@ -5772,7 +5823,13 @@ function defActiveEnergyMultiplyPre(base: number, per: number, filter: EnergyFil
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
-    const count = def ? countOneEnergy(def, filter, pool) : 0;
+    // v4.797：type filter 走 host-aware
+    const isTypeFilter = filter !== 'all' && filter !== 'basic' && filter !== 'special';
+    const count = def
+      ? (isTypeFilter
+          ? countEnergyTypeHostAware(def, filter as EnergyType, pool)
+          : countOneEnergy(def, filter, pool))
+      : 0;
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：對手出場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
   };
@@ -5782,9 +5839,14 @@ function oppAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
+    // v4.797：type filter 走 host-aware
+    const isTypeFilter = filter !== 'all' && filter !== 'basic' && filter !== 'special';
     let count = 0;
     for (const p of [d.active, ...d.bench]) {
-      if (p) count += countOneEnergy(p, filter, pool);
+      if (!p) continue;
+      count += isTypeFilter
+        ? countEnergyTypeHostAware(p, filter as EnergyType, pool)
+        : countOneEnergy(p, filter, pool);
     }
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：對手全場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
@@ -5804,10 +5866,14 @@ function selfAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilte
       bloom = allOwn.some(c => pool.get(c.cardId)?.abilities?.some(ab => ab.name === '繁茂'));
     }
     let count = 0;
+    // v4.797：type filter 走 host-aware（無繁茂時）；繁茂仍用原 inline 邏輯（基本草 +2）
+    const isTypeFilter = filter !== 'all' && filter !== 'basic' && filter !== 'special';
     for (const p of [a.active, ...a.bench]) {
       if (!p) continue;
       if (!bloom) {
-        count += countOneEnergy(p, filter, pool);
+        count += isTypeFilter
+          ? countEnergyTypeHostAware(p, filter as EnergyType, pool)
+          : countOneEnergy(p, filter, pool);
         continue;
       }
       // 繁茂啟用：iterate 每個 energy，基本【草】 +2、其他依 filter 規則 +1

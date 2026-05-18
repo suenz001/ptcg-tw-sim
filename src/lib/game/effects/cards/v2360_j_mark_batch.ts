@@ -58,10 +58,9 @@ regPre('波爾凱尼恩|強力蒸汽', (state, aIdx, pool) => {
   const attacker = state.players[aIdx].active;
   if (!attacker) return { state: addLog(state, '強力蒸汽：無戰鬥場寶可夢', aIdx), damage: 0 };
 
-  // 計算附加的【水】能量數量
-  const waterCount = attacker.energyAttached.filter(
-    e => pool.get(e.cardId)?.pokemonType === 'Water',
-  ).length;
+  // v4.797：改用 countEnergy（host-aware）— 認 pokemonType=null 基本【水】能量 + 特殊能量
+  //   修舊 bug：strict ec.pokemonType === 'Water' 抓不到 pokemonType=null 的基本水能量。
+  const waterCount = countEnergy(attacker, pool).get('Water') ?? 0;
 
   if (waterCount === 0) {
     return {

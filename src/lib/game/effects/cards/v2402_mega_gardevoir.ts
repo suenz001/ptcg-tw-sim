@@ -24,6 +24,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import {
+import { countEnergy } from '../../engine';
   regPre, regPost, regR,
   addLog, updatePlayer, shuffle, withPending,
 } from '../_shared';
@@ -208,46 +209,25 @@ regR('mega-gardevoir-overflow-prayer-stage2', (state, idx, benchIids, params, po
 // ══════════════════════════════════════════════════════════════════════════════
 // 2. 超級交響樂 — 50 × 自己所有寶可夢身上附加的【超】能量數
 // ══════════════════════════════════════════════════════════════════════════════
-// v3.23 修 bug：原本用 pokemonType==='Psychic' 判定，但 JSON 內 *所有能量* pokemonType
-//   都是 'None'（基本能量從卡名解析、特殊能量看 SPECIAL_ENERGY_TYPES 表），所以該檢查
-//   永遠 false → psyCount=0 → 永遠 0 傷害！
-//
-// 卡面：「造成自己的所有寶可夢身上附加的【超】能量的數量×50 點傷害」— 廣義包含：
-//   - 基本【超】能量（名稱含【超】）
-//   - 感應【超】能量（特殊能量但提供【超】type）
-//   - 火箭隊能量（提供【超】+【惡】，計 1 unit）
-//   - 古舊能量（全屬性）
-//   - 稜鏡能量（附進化卡時全屬性，這裡簡化為 false 避免條件式複雜）
-//
-// 改用 cardName check（既能涵蓋基本【超】，也能涵蓋常見特殊能量；不到 SPECIAL_ENERGY_TYPES
-// 因為跨 effects.ts → engine.ts 循環 import 風險，採取 inline list 簡化）
+// v4.797：改用 engine.countEnergy（host-aware）— 涵蓋新衝天能量等特殊能量
+//   背景：超級沙奈朵 ex 是 Stage2 ex (超級進化)，可附新衝天能量（提供任意屬性 ×2）。
+//   v3.23 inline whitelist 沒認新衝天 → 漏算 2【超】。
+//   countEnergy 內建 host-aware 處理（同 v4.796 巨型花束修法）。
 regPre('超級沙奈朵ex|超級交響樂', (state, aIdx, pool) => {
   const player = state.players[aIdx];
   const allOwn: CardInstance[] = [
     ...(player.active ? [player.active] : []),
     ...player.bench,
   ];
-  // 提供【超】type 的能量名稱集合（簡化版本）
-  const PSY_PROVIDERS = new Set([
-    '感應【超】能量',  // 特殊能量，提供 1【超】
-    '火箭隊能量',      // 特殊能量，提供 1【超】+1【惡】
-    '古舊能量',        // ACE SPEC，全屬性
-  ]);
   let psyCount = 0;
   for (const pk of allOwn) {
-    for (const e of pk.energyAttached) {
-      const ec = pool.get(e.cardId);
-      if (!ec) continue;
-      // 基本能量：卡名含【超】（最常見的「基本【超】能量」）
-      if (ec.supertype === 'Energy' && ec.subtype === 'Basic') {
-        if (/【超】/.test(ec.name)) psyCount++;
-        continue;
-      }
-      // 特殊能量：白名單檢查
-      if (ec.supertype === 'Energy' && PSY_PROVIDERS.has(ec.name)) psyCount++;
-    }
+    psyCount += countEnergy(pk, pool).get('Psychic') ?? 0;
   }
-  return { state, damage: psyCount * 50 };
+  const dmg = psyCount * 50;
+  return {
+    state: addLog(state, `超級交響樂：自方全場【超】能量 ${psyCount} 個（含特殊能量提供的超單位）→ ${dmg}`, aIdx),
+    damage: dmg,
+  };
 });
 
 // 輔助：unused import 防護
