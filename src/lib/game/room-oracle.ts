@@ -79,7 +79,11 @@ async function getMyUid(): Promise<string> {
 
 // ── CRUD ────────────────────────────────────────────────────────────────────
 
-export async function createRoom(roomName: string, hostName: string): Promise<string> {
+export async function createRoom(
+  roomName: string,
+  hostName: string,
+  allowUndo: boolean = false,  // v4.75 練習模式
+): Promise<string> {
   const uid = await getMyUid();
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = generateRoomCode();
@@ -94,6 +98,7 @@ export async function createRoom(roomName: string, hostName: string): Promise<st
       memberUids: computeMemberUids(seats),
       gameState: null,
       schemaVersion: SEAT_LAYOUT_VERSION,
+      ...(allowUndo ? { allowUndo: true } : {}),
     };
     // upsert with no expectedVersion → creates if missing
     const result = await oracleUpsertRoom(code, data);
@@ -479,6 +484,45 @@ export async function heartbeat(roomCode: string, seatIdx: number): Promise<void
 
 export async function deleteRoom(roomCode: string): Promise<void> {
   await oracleDeleteRoom(roomCode.toUpperCase());
+}
+
+// ── v4.75 練習模式悔棋 API（連線對戰）─────────────────────────────────
+export async function requestUndo(
+  roomCode: string,
+  fromSeatIdx: number,
+  actionDesc: string,
+): Promise<void> {
+  await oracleTx(roomCode.toUpperCase(), (data) => ({
+    ...data,
+    undoRequest: { fromSeatIdx, actionDesc, status: 'pending' } as unknown as RoomData['undoRequest'],
+  }));
+}
+
+export async function agreeUndo(roomCode: string): Promise<void> {
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    if (!data.undoRequest || data.undoRequest.status !== 'pending') return data;
+    return {
+      ...data,
+      undoRequest: { ...data.undoRequest, status: 'agreed' } as RoomData['undoRequest'],
+    };
+  });
+}
+
+export async function rejectUndo(roomCode: string): Promise<void> {
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    if (!data.undoRequest || data.undoRequest.status !== 'pending') return data;
+    return {
+      ...data,
+      undoRequest: { ...data.undoRequest, status: 'rejected' } as RoomData['undoRequest'],
+    };
+  });
+}
+
+export async function clearUndoRequest(roomCode: string): Promise<void> {
+  await oracleTx(roomCode.toUpperCase(), (data) => ({
+    ...data,
+    undoRequest: undefined,
+  }));
 }
 
 // ── Messages ────────────────────────────────────────────────────────────────

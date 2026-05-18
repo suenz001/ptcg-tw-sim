@@ -37,6 +37,11 @@
     findMySeatIdx, bothPlayersReady, countDeckCards,
     sendMessage, subscribeMessages,
     heartbeat, isSeatStale, HEARTBEAT_STALE_MS, deleteRoom,
+    // v4.75 連線練習模式悔棋 API
+    requestUndo as requestUndoApi,
+    agreeUndo as agreeUndoApi,
+    rejectUndo as rejectUndoApi,
+    clearUndoRequest as clearUndoRequestApi,
     type Room, type Seat, type ChatMessage,
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
@@ -83,6 +88,11 @@
     'ATTACK', 'EVOLVE', 'PLAY_TRAINER', 'PLAY_BASIC', 'PLAY_FOSSIL',
     'ATTACH_ENERGY', 'RETREAT', 'USE_ABILITY',
   ]);
+  // v4.75 連線練習模式悔棋 — 4 個額外 state
+  let undoActionDesc = $state<string | null>(null);        // 描述上一手做什麼（給對手 modal 看）
+  let undoDeniedThisSnapshot = $state(false);              // 對手拒絕後，這個 snapshot 的按鈕消失（直到下個 action）
+  let undoAwaitingResponse = $state(false);                // 發起方等待對手回應中
+  let roomAllowUndoInput = $state(false);                  // 開房表單 checkbox 狀態
   let aiTimer: ReturnType<typeof setTimeout> | null = null;
 
   // v3.38：本機/AI lobby 牌組 60 張驗證 — UI gate（防止使用者選擇張數錯誤的牌組開戰）
@@ -1342,6 +1352,9 @@
     // v4.74 練習模式：若有 undoSnapshot 可悔棋，暫停自動結束回合 — 玩家應主動決定要悔或繼續。
     //   清掉 snapshot（按悔棋或主動結束）後此 $effect 重新 evaluate，autoEnd 才會接手。
     if (mode !== 'online' && aiPlayerIndex !== null && undoSnapshot !== null) return;
+    // v4.75 連線練習模式：有 snapshot 時也暫停 auto-end，等玩家決定要請求悔棋還是繼續。
+    //   被拒絕後（undoDeniedThisSnapshot=true）就讓 auto-end 接手不再卡住。
+    if (mode === 'online' && roomData?.allowUndo === true && undoSnapshot !== null && !undoDeniedThisSnapshot) return;
 
     // 延遲後若條件仍成立（沒被新 pending / KO / 取獎賞中斷）就 dispatch
     autoEndTimer = setTimeout(() => {
@@ -2577,15 +2590,25 @@
         isFirstTurn: game.isFirstTurn,
       });
     }
-    // v4.74 練習模式：在「人類玩家主要 action」前 snapshot 1 步（AI 對戰 only）
+    // v4.74 + v4.75 練習模式：在「人類玩家主要 action」前 snapshot 1 步
     //   - opts.fromAI=true 跳過（AI 自己的 action 不存 snapshot）
     //   - END_TURN 清空（不能跨手悔棋）
-    //   - 連線對戰、本機 2P 跳過（v4.75 再做連線版）
-    if (mode !== 'online' && aiPlayerIndex !== null && !opts.fromAI && newState !== prevState) {
-      if (action.type === 'END_TURN') {
-        undoSnapshot = null;
-      } else if (UNDOABLE_ACTIONS.has(action.type)) {
-        undoSnapshot = prevState;
+    //   - AI 對戰（v4.74）：mode !== 'online' && aiPlayerIndex !== null
+    //   - 連線練習房（v4.75）：mode === 'online' && roomData?.allowUndo === true && 我是 P1/P2
+    //   - 本機 2P 不支援
+    if (!opts.fromAI && newState !== prevState) {
+      const undoModeOn = (mode !== 'online' && aiPlayerIndex !== null)
+        || (mode === 'online' && roomData?.allowUndo === true && mySeatIdx >= 0 && mySeatIdx <= 1);
+      if (undoModeOn) {
+        if (action.type === 'END_TURN') {
+          undoSnapshot = null;
+          undoActionDesc = null;
+          undoDeniedThisSnapshot = false;
+        } else if (UNDOABLE_ACTIONS.has(action.type)) {
+          undoSnapshot = prevState;
+          undoActionDesc = describeUndoAction(action, prevState, pool);
+          undoDeniedThisSnapshot = false;  // 新 snapshot 重置 denied flag
+        }
       }
     }
     game = newState;
@@ -3186,7 +3209,8 @@
     if (!roomNameInput.trim()) { onlineError = '請輸入房間名稱'; return; }
     onlineLoading = true; onlineError = '';
     try {
-      roomCode = await createRoom(roomNameInput.trim(), myName.trim());
+      // v4.75：傳 allowUndo 旗標決定是否為練習房
+      roomCode = await createRoom(roomNameInput.trim(), myName.trim(), roomAllowUndoInput);
       amIHost = true;
       onlineStep = 'room';
       startRoomSubscription();
@@ -3785,17 +3809,157 @@
   }
 
   /** action dispatch 後觸發對應音效 / 動畫（v2.118） */
-  // v4.74 練習模式 — 悔棋（用 snapshot 取代當前 state）
-  function performUndo() {
+  // v4.75 helper: 在 prevState 找指定 iid 的卡名（找遍 active/bench/hand/energy）
+  function findCardNameByIid(state: GameState, iid: string, pool: Map<string, Card>): string {
+    for (const p of state.players) {
+      if (p.active?.iid === iid) return pool.get(p.active.cardId)?.name ?? '?';
+      for (const b of p.bench) if (b.iid === iid) return pool.get(b.cardId)?.name ?? '?';
+      for (const h of p.hand) if (h.iid === iid) return pool.get(h.cardId)?.name ?? '?';
+      if (p.active) {
+        for (const e of p.active.energyAttached) if (e.iid === iid) return pool.get(e.cardId)?.name ?? '?';
+      }
+      for (const b of p.bench) for (const e of b.energyAttached) if (e.iid === iid) return pool.get(e.cardId)?.name ?? '?';
+    }
+    return '?';
+  }
+
+  // v4.75 helper: 描述 action 給對手看（modal「對方上一手：XX」用）
+  function describeUndoAction(action: any, prevState: GameState, pool: Map<string, Card>): string {
+    const type = action.type;
+    const nm = (iid: string) => findCardNameByIid(prevState, iid, pool);
+    switch (type) {
+      case 'ATTACK': {
+        const idx = prevState.activePlayerIndex;
+        const ac = prevState.players[idx].active;
+        if (!ac) return '使用招式';
+        const card = pool.get(ac.cardId);
+        const atk = card?.attacks?.[action.attackIndex];
+        return '使用招式「' + (atk?.name ?? '?') + '」';
+      }
+      case 'EVOLVE':
+        return '進化：' + nm(action.fromIid) + ' → ' + nm(action.toIid);
+      case 'PLAY_TRAINER':
+        return '使用「' + nm(action.iid) + '」';
+      case 'PLAY_BASIC':
+        return '出基礎寶可夢「' + nm(action.iid) + '」到備戰';
+      case 'PLAY_FOSSIL':
+        return '出化石「' + nm(action.iid) + '」到備戰';
+      case 'ATTACH_ENERGY':
+        return '附加能量到「' + nm(action.targetIid) + '」';
+      case 'RETREAT':
+        return '撤退戰鬥場寶可夢';
+      case 'USE_ABILITY': {
+        const cardName = nm(action.iid);
+        for (const p of prevState.players) {
+          const all = [...(p.active ? [p.active] : []), ...p.bench];
+          for (const inst of all) {
+            if (inst.iid === action.iid) {
+              const c = pool.get(inst.cardId);
+              const ab = c?.abilities?.[action.abilityIndex];
+              return '使用特性「' + (ab?.name ?? '?') + '」(' + cardName + ')';
+            }
+          }
+        }
+        return '使用特性 (' + cardName + ')';
+      }
+      default:
+        return type;
+    }
+  }
+
+  // v4.74 / v4.75 練習模式 — 悔棋按鈕點擊
+  //   AI / 本機：直接回到 snapshot
+  //   連線：發起 request 等對手同意
+  async function performUndo() {
     if (!undoSnapshot) return;
-    if (mode === 'online') return;  // 連線對戰不走此函式（v4.75 另做）
+    if (undoAwaitingResponse) return;
+    if (undoDeniedThisSnapshot) return;
+
+    if (mode === 'online') {
+      // v4.75 連線練習模式：發起悔棋請求
+      if (!roomCode || mySeatIdx < 0 || mySeatIdx > 1) return;
+      if (!roomData?.allowUndo) return;
+      undoAwaitingResponse = true;
+      try {
+        await requestUndoApi(roomCode, mySeatIdx, undoActionDesc ?? '上一手');
+      } catch (e) {
+        undoAwaitingResponse = false;
+        console.warn('[undo] requestUndo failed:', e);
+      }
+      return;
+    }
+
+    // AI / 本機模式（v4.74）：直接回到 snapshot
     game = undoSnapshot;
     undoSnapshot = null;
+    undoActionDesc = null;
+    undoDeniedThisSnapshot = false;
     floatingEvoMenu = null;
     floatingRetreatMenu = null;
     selectedEnergyIid = null;
-    console.log('[undo] 已悔棋一步');
+    console.log('[undo] 已悔棋一步（本機）');
   }
+
+  // v4.75 連線：發起方取消請求（對手還沒回應前）
+  async function cancelUndoRequest() {
+    if (mode !== 'online' || !roomCode) return;
+    try { await clearUndoRequestApi(roomCode); } catch (e) { console.warn('cancelUndo:', e); }
+    undoAwaitingResponse = false;
+  }
+
+  // v4.75 連線：對手同意悔棋
+  async function handleAgreeUndo() {
+    if (mode !== 'online' || !roomCode) return;
+    try { await agreeUndoApi(roomCode); } catch (e) { console.warn('agreeUndo:', e); }
+  }
+
+  // v4.75 連線：對手拒絕悔棋
+  async function handleRejectUndo() {
+    if (mode !== 'online' || !roomCode) return;
+    try { await rejectUndoApi(roomCode); } catch (e) { console.warn('rejectUndo:', e); }
+  }
+
+  // v4.75 連線：監聽 roomData.undoRequest 變化（發起方 only）
+  //   status='agreed' → push 自己的 snapshot 到 Firestore 並清掉 request
+  //   status='rejected' → 設 denied flag，這個 snapshot 的悔棋按鈕消失（直到下個 action）
+  //   注意：對手側看 status='pending' 顯示 modal，agree/reject 由 modal 按鈕觸發，不在此 effect 處理
+  $effect(() => {
+    if (mode !== 'online' || !roomData || !roomCode) return;
+    if (mySeatIdx < 0 || mySeatIdx > 1) return;
+    const req = roomData.undoRequest;
+    if (!req || req.fromSeatIdx !== mySeatIdx) return;
+    if (!undoAwaitingResponse) return;
+    if (req.status === 'agreed' && undoSnapshot) {
+      // 對手同意 → 把 snapshot 設成新的 game state 並 push
+      const snap = undoSnapshot;
+      (async () => {
+        try {
+          game = snap;
+          await pushGameState(roomCode, snap);
+          await clearUndoRequestApi(roomCode);
+          console.log('[undo] 對手同意，已 sync 上一手 state');
+        } catch (e) {
+          console.warn('[undo agreed] push failed:', e);
+        }
+        undoSnapshot = null;
+        undoActionDesc = null;
+        undoDeniedThisSnapshot = false;
+        undoAwaitingResponse = false;
+        floatingEvoMenu = null;
+        floatingRetreatMenu = null;
+        selectedEnergyIid = null;
+      })();
+    } else if (req.status === 'rejected') {
+      // 對手拒絕 → 這個 snapshot 的按鈕消失（直到下個 action 產生新 snapshot）
+      (async () => {
+        try { await clearUndoRequestApi(roomCode); } catch (e) { /* ignore */ }
+        undoDeniedThisSnapshot = true;
+        undoAwaitingResponse = false;
+        console.log('[undo] 對手拒絕，這個 snapshot 不能再悔棋');
+      })();
+    }
+  });
+
 
   function dispatchSfxForAction(
     action: ReturnType<typeof GameActions[keyof typeof GameActions]>,
@@ -4071,6 +4235,11 @@
         <h2>建立房間</h2>
         <label>玩家名稱<input class="name-input" placeholder="輸入你的名稱" bind:value={myName} /></label>
         <label>房間名稱<input class="name-input" placeholder="輸入房間名稱" bind:value={roomNameInput} /></label>
+        <!-- v4.75 練習模式：勾選後此房雙方可請求悔棋（對手同意制）。預設不勾。 -->
+        <label class="check-row">
+          <input type="checkbox" bind:checked={roomAllowUndoInput} />
+          <span>🎯 練習模式（允許悔棋）— 對戰中雙方可請求悔棋，需對手同意才會生效</span>
+        </label>
         {#if onlineError}<p class="warn">{onlineError}</p>{/if}
         <div class="form-btns">
           <button class="btn-primary" onclick={handleCreateRoom} disabled={onlineLoading}>
@@ -4096,8 +4265,9 @@
           {:else if lobbyRooms.length > 0}
             <ul class="open-room-list">
               {#each lobbyRooms as r (r.roomId)}
-                <li class="open-room-row">
+                <li class="open-room-row" class:practice-room={r.allowUndo}>
                   <span class="or-host">🎮 {r.roomName ?? r.hostName}</span>
+                  {#if r.allowUndo}<span class="or-practice-tag" title="此房為練習模式 — 雙方同意可悔棋">🎯 練習</span>{/if}
                   <span class="or-host-name">房主：{r.hostName}</span>
                   <span class="or-code">房號 {r.roomId}</span>
                   <button class="btn-sm primary" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim()}>
@@ -4117,8 +4287,9 @@
           {:else}
             <ul class="open-room-list playing-list">
               {#each playingRooms as r (r.roomId)}
-                <li class="open-room-row playing-row">
+                <li class="open-room-row playing-row" class:practice-room={r.allowUndo}>
                   <span class="or-host">⚔️ {r.roomName ?? r.hostName}</span>
+                  {#if r.allowUndo}<span class="or-practice-tag" title="此房為練習模式">🎯 練習</span>{/if}
                   <span class="or-host-name">
                     {r.seats?.[0]?.name ?? '?'} vs {r.seats?.[1]?.name ?? '?'}
                   </span>
@@ -4721,11 +4892,26 @@
           {#if canEndTurn}
             <button class="btn-act primary" onclick={()=>dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
           {/if}
-          <!-- v4.74 練習模式 — 悔棋按鈕（AI 對戰專用，snapshot 存在時顯示）-->
+          <!-- v4.74 練習模式 — AI 對戰悔棋（直接回到上一手）-->
           {#if undoSnapshot && mode !== 'online' && aiPlayerIndex !== null && !pendingSelection && game.phase === 'playing'}
             <button class="btn-act btn-undo" onclick={performUndo}
-              title="悔棋：回到上一手前（練習模式 / AI 對戰）。換手後就不能再悔。">
+              title="悔棋：回到上一手前（AI 對戰練習模式）。換手後就不能再悔。">
               ↩ 悔棋
+            </button>
+          {/if}
+          <!-- v4.75 連線練習模式 — 請求悔棋（需對手同意）-->
+          {#if undoSnapshot && mode === 'online' && roomData?.allowUndo && !undoDeniedThisSnapshot && !undoAwaitingResponse && !pendingSelection && game.phase === 'playing' && mySeatIdx >= 0 && mySeatIdx <= 1 && isMyTurn()}
+            <button class="btn-act btn-undo" onclick={performUndo}
+              title="向對手請求悔棋（雙方同意制）。換手或被拒絕後就不能再悔。">
+              ↩ 請求悔棋
+            </button>
+          {/if}
+          {#if undoAwaitingResponse && mode === 'online' && game.phase === 'playing'}
+            <button class="btn-act btn-undo-waiting" disabled title="等待對手回應">
+              ⏳ 等待對手同意…
+            </button>
+            <button class="btn-act btn-undo-cancel" onclick={cancelUndoRequest} title="取消悔棋請求">
+              ✗ 取消
             </button>
           {/if}
         {:else if isMyTurn() && anyPendingPrize}
@@ -6566,6 +6752,21 @@
       onclick={closeLightboxImg}>
       <img class="lightbox-img" src={lightboxUrl} alt="放大圖片" onclick={closeLightboxImg}/>
       <button class="lightbox-close" onclick={closeLightboxImg} aria-label="關閉">×</button>
+    </div>
+  {/if}
+
+  <!-- v4.75 連線練習模式 — 對手請求悔棋 modal（顯示在被請求方的畫面）-->
+  {#if mode === 'online' && game && roomData?.undoRequest && roomData.undoRequest.status === 'pending' && mySeatIdx >= 0 && mySeatIdx <= 1 && roomData.undoRequest.fromSeatIdx !== mySeatIdx}
+    <div class="modal-overlay undo-modal-overlay" role="dialog" aria-modal="true" aria-label="對手請求悔棋">
+      <div class="undo-request-modal">
+        <h3>↩ 對手請求悔棋</h3>
+        <p class="undo-action-desc">對方上一手：<b>{roomData.undoRequest.actionDesc}</b></p>
+        <p class="muted">同意後雙方回到對方做這個動作之前的狀態。<br>不同意則此手悔棋按鈕消失，對方需做新動作才能再次請求。</p>
+        <div class="undo-modal-btns">
+          <button class="btn-primary undo-agree-btn" onclick={handleAgreeUndo}>✓ 同意悔棋</button>
+          <button class="btn-secondary undo-reject-btn" onclick={handleRejectUndo}>✗ 拒絕</button>
+        </div>
+      </div>
     </div>
   {/if}
 
@@ -8734,5 +8935,113 @@
     border: 1px solid #b45309;
   }
   .btn-undo:hover { background: linear-gradient(180deg, #fbbf24, #ea8a0a); }
+
+  /* v4.75 連線練習模式 — 等待對手回應 / 取消請求 按鈕 */
+  .btn-undo-waiting {
+    background: linear-gradient(180deg, #6b7280, #4b5563);
+    color: #fff;
+    border: 1px solid #374151;
+    cursor: wait;
+    opacity: 0.85;
+  }
+  .btn-undo-cancel {
+    background: linear-gradient(180deg, #dc2626, #991b1b);
+    color: #fff;
+    border: 1px solid #7f1d1d;
+  }
+  .btn-undo-cancel:hover { background: linear-gradient(180deg, #ef4444, #b91c1c); }
+
+  /* v4.75 對手請求悔棋 modal */
+  .undo-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 10000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .undo-request-modal {
+    background: #1a1a2e;
+    border: 2px solid #f59e0b;
+    border-radius: 12px;
+    padding: 24px 28px;
+    max-width: 460px;
+    width: 90vw;
+    color: #e0e0e0;
+    box-shadow: 0 8px 32px rgba(245, 158, 11, 0.3);
+  }
+  .undo-request-modal h3 {
+    margin: 0 0 12px 0;
+    color: #fbbf24;
+    font-size: 20px;
+  }
+  .undo-action-desc {
+    font-size: 16px;
+    margin: 8px 0 16px 0;
+    padding: 10px 14px;
+    background: rgba(245, 158, 11, 0.1);
+    border-left: 3px solid #f59e0b;
+    border-radius: 4px;
+  }
+  .undo-action-desc b { color: #fbbf24; }
+  .undo-request-modal .muted {
+    color: #999;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0 0 18px 0;
+  }
+  .undo-modal-btns {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+  .undo-agree-btn {
+    background: linear-gradient(180deg, #10b981, #059669);
+    color: #fff;
+    border: 1px solid #047857;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .undo-agree-btn:hover { background: linear-gradient(180deg, #34d399, #10b981); }
+  .undo-reject-btn {
+    background: linear-gradient(180deg, #6b7280, #4b5563);
+    color: #fff;
+    border: 1px solid #374151;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .undo-reject-btn:hover { background: linear-gradient(180deg, #9ca3af, #6b7280); }
+
+  /* v4.75 lobby 練習房 badge + checkbox 樣式 */
+  .or-practice-tag {
+    background: linear-gradient(180deg, #f59e0b, #d97706);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 6px;
+  }
+  .open-room-row.practice-room {
+    border-left: 3px solid #f59e0b;
+  }
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 6px;
+    margin: 8px 0;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .check-row input[type="checkbox"] {
+    accent-color: #f59e0b;
+    transform: scale(1.2);
+  }
 
 </style>

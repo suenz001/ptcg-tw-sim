@@ -93,6 +93,24 @@ export interface RoomData {
   restartProposedAt?: number;
   restartProposalCount?: number;
   restartRejectedAt?: number;
+  /**
+   * v4.75 練習模式：host 開房時可勾選「允許悔棋」(預設 false)。
+   * 雙方都在此房 = 雙方都同意此房為練習房。對戰中可請求悔棋（對手同意制）。
+   * Immutable — 開房後不能改（避免戰鬥中切換造成 state 混亂）。
+   */
+  allowUndo?: boolean;
+  /**
+   * v4.75 悔棋請求（runtime negotiation state）。
+   * - fromSeatIdx: 發起方座位 (0=P1, 1=P2)
+   * - actionDesc: 對方上一手描述（給被請求方 modal 看「對方要悔什麼動作」）
+   * - status: 'pending'=等待中、'agreed'=同意、'rejected'=拒絕
+   * 流程：requester 設 pending → opponent 設 agreed/rejected → requester 處理後 clear
+   */
+  undoRequest?: {
+    fromSeatIdx: number;
+    actionDesc: string;
+    status: 'pending' | 'agreed' | 'rejected';
+  };
 }
 
 export interface Room extends RoomData {
@@ -165,6 +183,7 @@ export function bothPlayersReady(seats: Seat[]): boolean {
 export async function createRoom(
   roomName: string,
   hostName: string,
+  allowUndo: boolean = false,  // v4.75 練習模式：host 開房時可勾選
 ): Promise<string> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('尚未登入');
@@ -183,6 +202,8 @@ export async function createRoom(
     memberUids: computeMemberUids(seats), // v2.46
     gameState: null,
     schemaVersion: SEAT_LAYOUT_VERSION,
+    // v4.75：練習房旗標（預設 false = 標準房，不可悔棋）
+    ...(allowUndo ? { allowUndo: true } : {}),
   };
   await setDoc(doc(db, 'rooms', code), {
     ...data,
@@ -375,6 +396,70 @@ export async function setSpectatorsAllowed(roomCode: string, allowed: boolean): 
   if (myIdx < 0 || myIdx > 1) throw new Error('只有 P1/P2 可改觀戰開關');
   await updateDoc(ref, {
     spectatorsAllowed: allowed,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+// ── v4.75 練習模式悔棋 API（連線對戰）─────────────────────────────────
+/**
+ * 發起悔棋請求 — 只有對手能看到並選擇同意/拒絕。
+ * @param actionDesc 對方上一手描述（給對手 modal 顯示）
+ */
+export async function requestUndo(
+  roomCode: string,
+  fromSeatIdx: number,
+  actionDesc: string,
+): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('尚未登入');
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  await updateDoc(ref, {
+    undoRequest: {
+      fromSeatIdx,
+      actionDesc,
+      status: 'pending',
+    },
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** 對手同意悔棋 — 發起方收到 status='agreed' 後會 pushGameState(snapshot) */
+export async function agreeUndo(roomCode: string): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('尚未登入');
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('房間不存在');
+  const data = snap.data() as RoomData;
+  if (!data.undoRequest || data.undoRequest.status !== 'pending') return;
+  await updateDoc(ref, {
+    'undoRequest.status': 'agreed',
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** 對手拒絕悔棋 — 發起方收到 status='rejected' 後該 snapshot 的按鈕消失 */
+export async function rejectUndo(roomCode: string): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('尚未登入');
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('房間不存在');
+  const data = snap.data() as RoomData;
+  if (!data.undoRequest || data.undoRequest.status !== 'pending') return;
+  await updateDoc(ref, {
+    'undoRequest.status': 'rejected',
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** 清掉悔棋請求 — 發起方在收到 agreed/rejected 處理完後呼叫 */
+export async function clearUndoRequest(roomCode: string): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('尚未登入');
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  await updateDoc(ref, {
+    undoRequest: null,
     updatedAt: serverTimestamp(),
   });
 }

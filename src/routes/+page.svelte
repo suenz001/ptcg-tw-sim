@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.75</span> ✨ 連線對戰練習模式 — 悔棋（雙方同意制）</summary>
+        <ul>
+          <li><b>承接 v4.74</b>：上版做了 AI 對戰的悔棋，這版做連線對戰的雙方同意制。</li>
+          <li><b>開房設定</b>：建立房間表單加「🎯 練習模式（允許悔棋）」checkbox，<b>預設不勾</b>。Host 一人決定，guest 加入後不能改。</li>
+          <li><b>大廳房間列表</b>：練習房在列表上有「🎯 練習」橘色標籤 + 橘色左邊框，guest 進房前就知道。</li>
+          <li><b>戰鬥流程</b>：
+            <ul>
+              <li>做完主要 action（攻擊/進化/出寶可夢/附能量/撤退/出訓練家/使用特性）後，左下角出現「↩ 請求悔棋」按鈕。</li>
+              <li>按下 → 按鈕變「⏳ 等待對手同意…」+ 可「✗ 取消」。對手收到 modal：「對手請求悔棋（對方上一手：XX）」+ 同意/拒絕按鈕。</li>
+              <li>對手同意 → 雙端 sync 到上一手前的 state；對手拒絕 → 此手悔棋按鈕消失，等下一個 action 才會再出現（防騷擾）。</li>
+            </ul>
+          </li>
+          <li><b>限制</b>：(1) 換手後 snapshot 清空、不能跨手悔棋（同 v4.74）；(2) host 沒勾「允許悔棋」的房，按鈕永遠不出現；(3) 觀戰位看不到按鈕也看不到 modal。</li>
+          <li><b>同步機制</b>：snapshot 存在 client 本地不寫 Firestore；對手同意後發起方直接 pushGameState(snapshot)，對手 onSnapshot 收到後 sync。Firebase + Oracle 兩 backend 都同時實裝。</li>
+          <li><b>Schema 改動</b>：<code>RoomData</code> 加 <code>allowUndo?: boolean</code>（開房 immutable）+ <code>undoRequest?: &#123; fromSeatIdx, actionDesc, status &#125;</code>（runtime negotiation）。後者是 object 非 nested array，符合 Rule 13。</li>
+          <li><b>API 新增</b>：<code>requestUndo / agreeUndo / rejectUndo / clearUndoRequest</code> 4 個，room.ts 和 room-oracle.ts 同步加。</li>
+          <li><b>auto-end-turn 暫停</b>：和 v4.74 一樣，有 snapshot 時暫停 600ms 自動結束回合，玩家可慢慢決定。被拒絕後解除暫停。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.74</span> ✨ 新增「練習模式 — 悔棋」（AI 對戰專用）</summary>
         <ul>
           <li><b>玩家建議</b>：想要練習牌組策略時，可以悔棋回上一手重試。</li>
