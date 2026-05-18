@@ -264,6 +264,47 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.81</span> ⚔ M5 對戰邏輯 Phase 3 — 19 個招式（複雜條件 / Mega ex 大招 / 狙擊 picker）</summary>
+        <ul>
+          <li><b>累計實裝</b>：14 (P1) + 17 (P2) + 19 (P3) = <b>50 個招式</b> / 81 張卡。約 62% 招式 coverage。</li>
+          <li><b>Group A — 條件 +N PRE（7 個）</b>：
+            <ul>
+              <li>銅鏡怪｜鏡像攻擊（10 + 對手戰鬥位為寶可夢 +30）</li>
+              <li>薩戮德｜暗影鞭打（100 + 自方備戰有「暗影惡能量」+70）</li>
+              <li>超級龍頭地鼠ex｜最大鑽頭（200 + 自身能量單位 ≥ cost+2 時 +130；用 engine.getEnergyUnits 計算 units，新衝天能量正確認 2 units）</li>
+              <li>超級捷拉奧拉ex｜雷電拳（自身能量張數 × 60）</li>
+              <li>超級達克萊伊ex｜暗夜突襲（110 + 自方備戰有受傷寶可夢 +110）</li>
+              <li>蘭螳花ex｜活力切割器（60 + 本回合曾回過 HP +200，用既有 healedThisTurn flag）</li>
+              <li>雷電獸｜音速之刃（110 + skipDefEffects — 不計對方招式效果削減）</li>
+            </ul>
+          </li>
+          <li><b>Group B — 對手狀態條件（1 個）</b>：烏賊王｜腦核粉碎（對手戰鬥位處於【混亂】才有 130 傷害，否則失敗）</li>
+          <li><b>Group C — 擲幣失敗（1 個）</b>：炭小侍｜全力拳擊（擲 1 幣反面則失敗，用 coinHeadsMultiplyPre）</li>
+          <li><b>Group D — 對手場 / 自身能量操作（5 個）</b>：
+            <ul>
+              <li>盾甲龍｜碎裂（50 + 對手戰鬥位丟 1 能量 picker，用 active-energy-discard）</li>
+              <li>故勒頓｜大地衝擊（190 + 自身全能量丟棄）</li>
+              <li>大狗頭｜飛撲頭錘（210 + 下個對手回合自身受傷 +100，用既有 takeExtraDamageNextTurn flag）</li>
+              <li>鍬農炮蟲｜巨型軌道砲（260 — 未附「閃電能量」則招式失敗 gate）</li>
+              <li>超級捷拉奧拉ex｜瞬間移轉（150 + 自身與備戰互換 bench-choose picker，含 turn-flags 清除）</li>
+            </ul>
+          </li>
+          <li><b>Group E — 狙擊 picker（4 個）</b>：
+            <ul>
+              <li>金魚王｜水流射擊（對對手 1 隻 × 自身能量數 × 30，備戰不計弱抗）</li>
+              <li>鍬農炮蟲｜急速潛行（對對手 1 隻 50，備戰不計弱抗）</li>
+              <li>禿鷹娜｜骨頭狙擊（對對手附特殊能量寶可夢 1 隻 70，picker validIids 限定）</li>
+              <li>瑪夏多｜影結（對手戰鬥位撤退所需能量數 × 30，直接讀 retreatCost.length）</li>
+            </ul>
+          </li>
+          <li><b>Group F — 牌庫搜尋（1 個）</b>：烏賊仔｜調達（牌庫選 1 張物品給對手看後加手牌 + 重洗）</li>
+          <li><b>支援基礎建設</b>：m5_preview.ts 新增 inline <code>m5ClearTurnFlags</code> helper（清除自身互換時的 transient turn flags，仿 v155 雀躍）+ 新 import engine.getEnergyUnits（用於最大鑽頭 units 計算）。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 7c（每招以 JSON effect 文字為 source）/ Rule 11（m5_preview.ts 走 Python pipeline 注入 17K 內容）/ Rule 13（picker 用 effectKey 字串，params 用 primitive object，無 nested array）/ Rule 17（傷害走 active.damage 直加 — engine 內 sanityKOSweep 統一處理 KO sweep）。esbuild sandbox 已驗證 bundle OK。</li>
+          <li><b>下一波（Phase 4 / v4.82）</b>：剩 ~5 招式（複雜實作）+ 12 特性（含「化隱」6 張）+ 12 訓練家/能量。「化隱」需新引擎 immunity flag，預計動 engine.ts / types.ts。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.80</span> ⚔ M5 對戰邏輯 Phase 2 — 17 個招式（條件 +N / 回血 / 對手場操作 / picker）</summary>
         <ul>
           <li><b>背景</b>：M5 深淵之瞳卡包對戰邏輯 Phase 2，依鐵律完整實裝（禁止簡化）。Phase 1 (v4.79) 14 個 + Phase 2 17 個 = 31 個招式已實裝。</li>
