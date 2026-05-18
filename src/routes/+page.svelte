@@ -264,6 +264,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.70</span> 🔄 Revert v4.69 烈獄狂火X inline 處理 — engine 早已有 v2.195 通用機制（適用所有火屬性招式）</summary>
+        <ul>
+          <li><b>玩家質疑</b>：「只針對烈獄狂火X 寫，那火山流星、業火連踢這些不是也漏？沒辦法公式化處理嗎？」— 完全正確。</li>
+          <li><b>實情</b>：<code>engine.ts</code> 在 v2.195 早就實裝通用 snapshot + rebound 機制：</li>
+          <li>　- <code>line 3497-3501</code>：每次 attack 開始時，若 attacker.pokemonType==="Fire"，snapshot active 上所有燃料【火】能量的 iids</li>
+          <li>　- <code>line 4765-4779</code>：PRE+POST 結束後，從 attacker.discard 撈回 hand（addLog「燃料【火】能量：N 張因招式效果被丟棄，放回手牌」）</li>
+          <li><b>覆蓋範圍</b>：火山流星、業火連踢、激流水泵、災難衝擊、烈獄狂火X、未來任何火寶可夢招式 — 全部自動套用，<b>不需要任何招式 code 知道燃料火能量的存在</b>（pattern 跟回力鏢能量一樣）。</li>
+          <li><b>v4.69 為何多此一舉</b>：我看到「烈獄狂火X 沒寫處理燃料火」就誤判，沒注意 engine 早有全域 hook。inline 處理雖然不會 bug（v2.195 撈不到 iid 在 discard 就跳過），但邏輯重複且 log 不一致。</li>
+          <li><b>本版修法</b>：revert <code>m2_dragon_charizard_batch.ts</code> 烈獄狂火X regPre 回 v4.68 原版（無 inline 燃料火處理），讓 engine 通用機制接手。</li>
+          <li><b>實機驗證</b>：玩家可繼續測試烈獄狂火X 丟燃料【火】能量，應該看到 log「燃料【火】能量：N 張因招式效果被丟棄，放回手牌」。若仍未回手，回報 — 可能 v2.195 通用機制有 edge case bug，但目前看程式碼邏輯正確。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.69</span> 🐛 修烈獄狂火X 丟掉燃料【火】能量沒回手 bug（依 M4 081/083 卡面規則）</summary>
         <ul>
           <li><b>玩家回報</b>：超級噴火龍Xex｜烈獄狂火X 丟掉自己身上的燃料【火】能量後，能量直接進棄牌堆，沒按卡面回手。</li>
