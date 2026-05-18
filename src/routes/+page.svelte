@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.73</span> 🐛 修「對方戰鬥場唯一寶可夢昏厥後沒有結束比賽」bug（AI 對戰常見）</summary>
+        <ul>
+          <li><b>玩家回報</b>：與 AI 對戰時，對方戰鬥場的唯一寶可夢昏厥後遊戲沒有結束（active=null + bench=0 卻仍 phase=playing）。卡在那邊無法繼續。</li>
+          <li><b>根因 trace</b>：engine.ts <code>applyAction</code> wrapper 末尾有一道「active=null + bench=0 → game-over」保險網（v2.135 加入），但被 <code>!next.pendingSelection</code> gate 鎖住。若某條 KO 路徑在 KO 同時殘留 pendingSelection（multi-stage attack 開 picker / resolver 鏈未結束等），這道保險網就失效、game-over 永遠 fire 不了。</li>
+          <li><b>修法</b>：移除 <code>!pendingSelection</code> gate — active=null + bench=0 是無可挽回的終局狀態，無論 pending 是否存在都該強制 game-over。觸發時順手清 <code>pendingSelection: undefined</code> 確保 UI 的 game-over modal 不被 picker 擋住。</li>
+          <li><b>不影響</b>：sanityKOSweep 那層（line 6109）仍保留 pendingSelection gate — sweep 處理 zombie 寶可夢需謹慎避免影響進行中的 picker；但 game-over 終局判定獨立、不該被同個 gate 綁住。</li>
+          <li><b>實機驗證</b>：所有 10 條既有 KO 路徑（主招式 KO/中毒/灼傷/雪妖女/揚沙/反彈/龐克頭盔/applyDamageToAllOpp/sanityKOSweep/wrapper fallback）內含的 bench=0→game-over 檢查不變，這次只放寬 wrapper fallback gate。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.72</span> 🐛 修「全部丟棄」型招式不該開 picker（席多藍恩 鋼鐵爆炸 / 電蜘蛛 放電）</summary>
         <ul>
           <li><b>玩家回報</b>：v4.71 修了鋼鐵爆炸傷害 0 的 bug，但仍開 picker 讓玩家選丟幾顆 — 卡面明確寫「全部丟棄」是<b>強制執行</b>，玩家沒得選。</li>

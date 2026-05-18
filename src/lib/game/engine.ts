@@ -6117,7 +6117,12 @@ export function applyAction(
   // v2.135 防禦層：若任一玩家在 'playing' 階段沒 active 也沒 bench → game-over
   // 漏網的 KO 路徑（self-return-to-hand / self-KO ability / 中毒/灼傷邊緣案例 等）若忘了
   // trigger game-over，sim 會 stuck loop。這裡做最後一道保險。
-  if (next.phase === 'playing' && !next.pendingSelection) {
+  // v4.73：移除 !pendingSelection gate — 玩家回報「AI 對方戰鬥場唯一寶可夢昏厥後沒有結束比賽」。
+  //   原因：若某條 KO 路徑在 KO 時殘留 pendingSelection（picker 還沒解），此 fallback 被
+  //   gate 鎖死、game-over 永遠 fire 不了，遊戲卡住。
+  //   修正：active=null + bench=0 是無可挽回的 game-over 狀態，無論 pendingSelection 是否存在
+  //   都該強制終局；觸發時順手清 pendingSelection 確保 UI modal 不被擋住。
+  if (next.phase === 'playing') {
     for (const idx of [0, 1] as const) {
       const p = next.players[idx];
       if (p.active === null && p.bench.length === 0) {
@@ -6127,6 +6132,8 @@ export function applyAction(
           phase: 'game-over',
           winner,
           winReason: `${p.name} 沒有可上場的寶可夢`,
+          // v4.73 清掉殘留 pending 避免 UI 卡 picker
+          pendingSelection: undefined,
           log: [
             ...next.log,
             { turn: next.turn, playerIndex: null as null,
