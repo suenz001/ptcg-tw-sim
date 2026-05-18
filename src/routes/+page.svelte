@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.66</span> 🔧 Hotfix：vite.config.js 改用 loadEnv() 才能讀 .env.local（修 Oracle build 一直走 firebase 路徑的 bug）</summary>
+        <ul>
+          <li><b>症狀</b>：玩家設了 <code>.env.local</code> 含 <code>VITE_BACKEND_MODE=oracle</code>，但 build 出來 chunks 還是 firebase code path，沒有 trycloudflare 字串。</li>
+          <li><b>根因</b>：v4.64 在 <code>vite.config.js</code> 用 <code>process.env.VITE_BACKEND_MODE</code>，但 vite 的 dotenv 只 inject 到 <code>import.meta.env</code>（client），不會填 Node 端的 <code>process.env</code>，所以永遠 undefined → isOracleMode 永遠 false。</li>
+          <li><b>修法</b>：改用 <code>defineConfig((&#123; mode &#125;) =&gt; &#123; ... &#125;)</code> callback form + <code>loadEnv(mode, cwd, '')</code> helper，依序載入 <code>.env / .env.local / .env.[mode]</code> 後合併。</li>
+          <li><b>驗證</b>：build 時 console 會印 <code>[vite.config] mode=... VITE_BACKEND_MODE=oracle isOracleMode=true</code>。grep build/_app 應有 trycloudflare 字串。</li>
+          <li><b>主 GitHub Pages</b>：不受影響（沒設 .env.local）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.65</span> 🏗️ Phase 3d：game/+page.svelte 加 ORACLE_MODE 分流（最後一塊 oracle build 拼圖）</summary>
         <ul>
           <li><b>改動</b>：<code>game/+page.svelte</code> 的 onMount 內加 ORACLE_MODE 分流：</li>
