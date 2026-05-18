@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.67</span> 🔧 Hotfix：vite alias 失效（被 SvelteKit $lib 先解掉），改用 resolveId plugin 攔截</summary>
+        <ul>
+          <li><b>Network tab 證實</b>：trycloudflare 站建房後請求打 <code>firestore.googleapis.com/channel?VER=8&database=...</code>，沒打 <code>trycloudflare.com/api/rooms</code>。所以 firebase room.ts 還在跑。</li>
+          <li><b>v4.64 alias 失效</b>：<code>find: /^\$lib\/game\/room$/</code> regex 永遠匹配不到 — SvelteKit 的 <code>$lib</code> alias plugin 把 <code>$lib/...</code> 先解成絕對路徑 (<code>/path/src/lib/game/room.ts</code>)，再丟到我的 regex 已經沒有 <code>$lib</code> 前綴。</li>
+          <li><b>修法</b>：在 <code>vite.config.js</code> 加 <code>oracleSwapPlugin</code> 用 <code>resolveId</code> hook + <code>enforce: 'pre'</code> 攔截。比 SvelteKit alias 更早 run，含 3 種匹配（<code>$lib/game/room</code> / <code>./room</code> / 絕對路徑），且 <code>room-oracle.ts</code> 自己 import <code>./room</code> 拿 types 不被攔。</li>
+          <li><b>驗證</b>：build 時看到 <code>[oracle-room-swap] $lib/game/room → room-oracle.ts</code> log，rebuild + redeploy 後 Network 應該都是 trycloudflare 請求。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.66</span> 🔧 Hotfix：vite.config.js 改用 loadEnv() 才能讀 .env.local（修 Oracle build 一直走 firebase 路徑的 bug）</summary>
         <ul>
           <li><b>症狀</b>：玩家設了 <code>.env.local</code> 含 <code>VITE_BACKEND_MODE=oracle</code>，但 build 出來 chunks 還是 firebase code path，沒有 trycloudflare 字串。</li>
