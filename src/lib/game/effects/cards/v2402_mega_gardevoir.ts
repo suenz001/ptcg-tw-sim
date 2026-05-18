@@ -24,10 +24,10 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import {
-import { countEnergy } from '../../engine';
   regPre, regPost, regR,
   addLog, updatePlayer, shuffle, withPending,
 } from '../_shared';
+import { countEnergy } from '../../engine';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 盈溢祈願 — 0 傷害；玩家自選 N 張基本【超】能量 → 自選 N 隻備戰附加（順序配對）

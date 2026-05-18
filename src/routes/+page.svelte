@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.798</span> 🚨 hotfix — 修 v4.797 push 腳本的 import 插入位置 bug</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.797 deploy 失敗，網頁版號還停在 v4.796。</li>
+          <li><b>真因</b>：v4.797 push 腳本的 import 注入 regex 用 <code>(?:^import [^\n]+\n)+</code>，誤把 v2402_mega_gardevoir.ts 的 multiline import 從中間切開 — 新 <code>import &#123; countEnergy &#125;</code> 插在 <code>import &#123;</code>（行首）和 <code>regPre, ...</code>（後續行）之間，產生 syntax error「Expected &quot;as&quot; but found &quot;&#123;&quot;」。</li>
+          <li><b>修法</b>：手動把斷掉的 import 重新合併，再把 countEnergy import 放到 import block 結束之後（單獨一行）。</li>
+          <li><b>檢討（同 v4.795 教訓）</b>：push 腳本對 multiline import 的 regex 不夠嚴謹。以後 import 注入應該偵測「是否在 multiline import 內部」才決定插入位置。已透過 esbuild 在 sandbox 中加入驗證 — 這次抓到了，但是在 push 後才驗證。應該 push 前就跑 esbuild。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.797</span> 🔍 audit 修補：5 個 +N per type 招式同類 bug（host-aware energy count）</summary>
         <ul>
           <li><b>背景</b>：v4.796 修了巨型花束後，全面 audit 其他「+N per 某類型能量」招式有沒有相同 bug — 即 (a) pokemonType=null 漏算基本能量；(b) Stage2 漏算新衝天能量。</li>
