@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.811</span> 🚨 critical hotfix — 對戰演練頁進不去 / v2360 強力蒸汽 ReferenceError</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.81 部署後對戰演練頁進不去（白屏 / runtime error）。</li>
+          <li><b>真因 1（m5_preview.ts 棄世猴幽靈拳）</b>：我把 <code>hitBenchPickPost</code> 當作 factory 用 <code>hitBenchPickPost(50, &#39;幽靈拳&#39;)</code>，但它實際簽名是 <code>(state, aIdx, targetSide, count, amount, label) → GameState</code>（直接處理 state，不是 factory）。TypeScript 報 TS2554 + TS2345，runtime 則是注入 effects 模組時 throw → 全模組載入失敗 → 對戰頁載入失敗。</li>
+          <li><b>真因 2（v2360_j_mark_batch.ts 強力蒸汽 ReferenceError）</b>：v4.797 修補強力蒸汽 pokemonType=null 時改用 <code>countEnergy</code>，但 push 腳本的 import 注入 regex 沒匹配 v2360（該檔本來就沒 effects/engine import）→ countEnergy 變 undefined → 強力蒸汽 ATTACK_PRE 觸發時拋 ReferenceError。</li>
+          <li><b>修法</b>：
+            <ul>
+              <li>棄世猴幽靈拳改 <code>regPost(..., (state, aIdx) =&gt; hitBenchPickPost(state, aIdx, &#39;opp&#39;, 1, 50, &#39;幽靈拳&#39;))</code> — 用 inline AttackPostFn 包正確簽名。</li>
+              <li>v2360_j_mark_batch.ts 加 <code>import &#123; countEnergy &#125; from &#39;../../engine&#39;;</code>。</li>
+            </ul>
+          </li>
+          <li><b>檢討</b>：v4.81 push 前我跑了 esbuild 但<b>沒跑 tsc --noEmit</b>。esbuild 不做型別檢查，TS 型別錯誤都漏過。「禁止簡易安裝」必須包含「push 前跑 tsc」這條鐵律。已將 tsc 加入下一波驗證流程。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.81</span> ⚔ M5 對戰邏輯 Phase 3 — 19 個招式（複雜條件 / Mega ex 大招 / 狙擊 picker）</summary>
         <ul>
           <li><b>累計實裝</b>：14 (P1) + 17 (P2) + 19 (P3) = <b>50 個招式</b> / 81 張卡。約 62% 招式 coverage。</li>

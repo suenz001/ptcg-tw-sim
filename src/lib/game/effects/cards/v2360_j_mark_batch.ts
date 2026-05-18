@@ -31,6 +31,7 @@ import {
   withPending,
   triggerOakeyeMillIfApplicable,
 } from '../_shared';
+import { countEnergy } from '../../engine';
 
 // ── 私有工具函式 ──────────────────────────────────────────────────────────────
 

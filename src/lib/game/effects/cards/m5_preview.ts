@@ -381,8 +381,9 @@ regPost('斯魔茶|悄悄放上', (state, aIdx) => {
 
 // ── 棄世猴|幽靈拳 — 100+對手備戰 1 隻放 5 個傷害指示物
 //   卡面：「在對手 1 隻備戰寶可夢身上，放置 5 個傷害指示物。」
-//   實裝：hitBenchPickPost(50, ...) — 50 點即 5 個指示物
-regPost('棄世猴|幽靈拳', hitBenchPickPost(50, '幽靈拳'));
+//   實裝：hitBenchPickPost 的簽名是 (state, aIdx, targetSide, count, amount, label) → state
+//   用 inline AttackPostFn 包裝
+regPost('棄世猴|幽靈拳', (state, aIdx) => hitBenchPickPost(state, aIdx, 'opp', 1, 50, '幽靈拳'));
 
 // ── 頭蓋龍|撞飛 — 70+強制對手戰鬥位與備戰位互換（對手選新戰鬥位）
 //   卡面：「將對手的戰鬥寶可夢與備戰寶可夢互換。（送上戰鬥場的寶可夢由對手選擇。）」
