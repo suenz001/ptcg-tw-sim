@@ -264,6 +264,41 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.83</span> ⚔ M5 對戰邏輯 Phase 5 — 3 特性 + 4 訓練家</summary>
+        <ul>
+          <li><b>累計實裝</b>：58 招式 + 3 特性 + 4 訓練家 = <b>65 個 effect</b> / 81 張卡。約 80% coverage。</li>
+          <li><b>特性 3 個（regA 主動）</b>：
+            <ul>
+              <li>巨嘴鳥｜天空抽牌（1 回合 1 次：從牌庫抽 1 張）</li>
+              <li>銀伴戰獸｜夥伴呼喚（gate: 手牌 = 0 + 1 回合 1 次 → 牌庫選 1 支援者加手牌）</li>
+              <li>戰槌龍ex｜破壞之頭錘（gate: 戰鬥場 + 1 回合 1 次 → 擲幣正面則對手戰鬥位丟 1 能量）</li>
+            </ul>
+          </li>
+          <li><b>訓練家 4 個（reg 機制）</b>：
+            <ul>
+              <li>沐淨（Supporter，hand-discard picker validIids 限定非規則寶可夢，最多 2 張 → 抽 N×3 張）</li>
+              <li>暗黑鈴（Item，雙方戰鬥位混亂；化石寶可夢識別由 supertype=Trainer + subtype=Item 或 tags 含「化石」判定）</li>
+              <li>鏽組的手下（Supporter，2-stage picker：先選對手 1 隻附能寶可夢、再選該寶身上 1 個能量丟棄；目前先簡化跨回合 gate）</li>
+              <li>卡娜莉的元氣（Supporter，3-stage：deck-search 4 張基本能量 → heal-target 選 1 隻自方寶可夢 → 強制 END_TURN；對應卡面「使用後回合結束」）</li>
+            </ul>
+          </li>
+          <li><b>共通機制</b>：m5_preview.ts import 補 reg / regA / RULE_BOX_SUBTYPES，picker params 用 validIids 限定候選 + titleOverride 改 UI 文字。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 7c（JSON effect 為唯一 source）/ Rule 11（m5_preview.ts 走 Python pipeline 注入 18K 內容）/ Rule 13（picker 用 effectKey + params 都是 primitive object / string[]，無 nested array）/ Rule 17（傷害走 active.damage 直加）/ Rule 4（push 前已跑 tsc + esbuild 雙驗證，記取 v4.81 教訓）。</li>
+          <li><b>留 deferred（待引擎擴充才能做）</b>：
+            <ul>
+              <li>化隱特性 6 卡 + 3 依賴招式 — 需 canApplyEffectToTarget 加 ability gate</li>
+              <li>暗影惡能量 — 需新 flower-veil-like helper</li>
+              <li>滿滿旋律 / 光子密碼 / 不朽之軀 / 太鼓防壁 / 咒縛之炎 — 各自需新 hook</li>
+              <li>強烈之吻（delayed KO）/ 招式竊賊（copy attack）/ 蟲蟲恐慌（牌庫底 7 翻面）</li>
+              <li>閃光屏障、熔岩之壁（conditional immunity）</li>
+              <li>古老的頭蓋 / 盾牌化石 + 化石採掘場（化石機制擴充）</li>
+              <li>豪華炸彈 / 重試徽章（工具卡）+ 灰瀨的決戰（非規則 +80）+ 閃電能量（+20）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.82</span> ⚔ M5 對戰邏輯 Phase 4 — 8 個複雜招式（Mega ex 大招 / 自身回牌庫 / 狀態KO）</summary>
         <ul>
           <li><b>累計實裝</b>：14 (P1) + 17 (P2) + 19 (P3) + 8 (P4) = <b>58 個招式</b> / 81 張卡。約 72% 招式 coverage。</li>

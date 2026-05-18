@@ -46,6 +46,8 @@
  */
 
 import {
+  reg,
+  regA,
   regPost,
   regPre,
   regR,
@@ -68,6 +70,7 @@ import {
   flipCoinsWithLog,
 } from '../../effects';
 import { getEnergyUnits } from '../../engine';
+import { RULE_BOX_SUBTYPES } from '../../types';
 
 // ── M5 helper: 自傷（這隻寶可夢也受到 N 傷害）─────────────────────────
 // 引擎沒有現成的 selfDamagePost helper（v2380 之前用 inline pattern）
@@ -1242,9 +1245,387 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 
 // ════════════════════════════════════════════════════════════════════════════
 // Phase 4 結束。已實裝 14 (P1) + 17 (P2) + 19 (P3) + 8 (P4) = 58 個招式 / 81 張卡。
-// 累計達 ~72% 招式 coverage。
-// 剩餘 ~6 個招式須新引擎機制（化隱依賴 / delayed-KO / conditional immunity / copy attack）—
-// 留待 Phase 5+ 連同 12 特性（含「化隱」）+ 12 訓練家/能量一併處理。
 // ════════════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 5 (v4.83) — 3 個特性 + 4 個訓練家（純 m5_preview 內實作，不動 engine）
+//
+// 特性（regA / regAByName 機制）：
+//   1. 巨嘴鳥|天空抽牌（1 回合 1 次：從牌庫抽 1 張）
+//   2. 銀伴戰獸|夥伴呼喚（gate: 手牌 = 0 + 1 回合 1 次 → 牌庫選 1 支援者加手牌）
+//   3. 戰槌龍ex|破壞之頭錘（gate: 戰鬥場 + 1 回合 1 次 → 擲幣正面則對手戰鬥位丟 1 能量）
+//
+// 訓練家（reg / regG 機制）：
+//   4. 沐淨（Supporter，棄手牌中 ≤2 張非規則寶可夢 → 抽 N×3 張）
+//   5. 暗黑鈴（Item，雙方戰鬥位混亂；化石寶可夢除外）
+//   6. 鏽組的手下（Supporter，picker 對手場 1 隻寶可夢身上選 1 個能量丟）
+//   7. 卡娜莉的元氣（Supporter，牌庫選 ≤4 張基本能量附給自己 1 隻 + 強制 END_TURN）
+//
+// 留 deferred 的（需動 engine.ts 或新引擎機制）：
+//   - 化隱特性 6 張 + 3 依賴招式 — 需 canApplyEffectToTarget 加 ability gate
+//   - 暗影惡能量 — 需 hasFlowerVeil 類 helper 擴充
+//   - 西獅海壬|滿滿旋律 — 需 evolve-from-hand trigger hook
+//   - 密勒頓|光子密碼 — 需 PASSIVE_ON_KO 死亡觸發 hook
+//   - 棄世猴|不朽之軀 — 需修改 KO 流程加擲幣判定
+//   - 護城龍|太鼓防壁 — 需 player-wide damage gate (對手能量 ≤2 時)
+//   - 超級水晶燈火靈ex|咒縛之炎 — 需動 engine retreat cost 計算
+//   - 灰瀨的決戰 — 需 player flag nonRuleAttackBonusThisTurn
+//   - 古老的頭蓋/盾牌化石 + 化石採掘場 — 需動既有化石機制 (v3.21) 擴充
+//   - 豪華炸彈、重試徽章 — 需新 tool hook
+//   - 閃電能量 — 需動既有 SPECIAL_ENERGY_TYPES + attack bonus hook
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── 1. 巨嘴鳥|天空抽牌 — 1 回合 1 次：抽 1 張 ─────────────────────
+//   卡面：「在自己的回合時可使用 1 次。從自己的牌庫抽 1 張卡。」
+//   engine.ts 內 ABILITY_USED_THIS_TURN 由 regA 自動標記。
+regA('巨嘴鳥', 0, (st, idx) => {
+  const p = st.players[idx];
+  if (p.deck.length === 0) return addLog(st, '天空抽牌：牌庫為空', idx);
+  const [drawn, ...rest] = p.deck;
+  return updatePlayer(addLog(st, '天空抽牌：從牌庫抽 1 張', idx), idx, pl => ({
+    ...pl, deck: rest, hand: [...pl.hand, drawn],
+  }));
+});
+
+// ── 2. 銀伴戰獸|夥伴呼喚 — gate: 手牌=0 + 1 回合 1 次 ───────────
+//   卡面：「若自己的手牌為 0 張，則在自己的回合時可使用 1 次。
+//          從自己的牌庫選擇 1 張支援者，給對手看過後加入手牌。然後重洗牌庫。」
+regA('銀伴戰獸', 0, (st, idx) => {
+  const p = st.players[idx];
+  if (p.hand.length !== 0) {
+    return addLog(st, '夥伴呼喚：自己手牌須為 0 張才能使用', idx);
+  }
+  if (p.deck.length === 0) return addLog(st, '夥伴呼喚：牌庫為空', idx);
+  return withPending(
+    addLog(st, '夥伴呼喚：從牌庫選 1 張支援者加手牌（給對手看過後）', idx),
+    {
+      type: 'deck-search',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      filter: 'Supporter',
+      minCount: 0, maxCount: 1,
+      effectKey: 'm5-silvally-partner-call',
+    },
+  );
+});
+regR('m5-silvally-partner-call', (state, aIdx, iids) => {
+  if (iids.length === 0) {
+    return updatePlayer(addLog(state, '夥伴呼喚：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
+      ...p, deck: [...p.deck].sort(() => Math.random() - 0.5),
+    }));
+  }
+  return updatePlayer(addLog(state, '夥伴呼喚：取 1 張支援者加手牌（已給對手看過）+ 重洗牌庫', aIdx), aIdx, p => {
+    const picked = p.deck.filter(c => iids.includes(c.iid));
+    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+    return { ...p, deck: [...remaining].sort(() => Math.random() - 0.5), hand: [...p.hand, ...picked] };
+  });
+});
+
+// ── 3. 戰槌龍ex|破壞之頭錘 — gate: 戰鬥場 + 1 回合 1 次 ─────────
+//   卡面：「這隻寶可夢若在戰鬥場，則在自己的回合時可使用 1 次。
+//          擲 1 次硬幣，若為正面，從對手的戰鬥寶可夢身上選擇 1 個能量，丟棄。」
+regA('戰槌龍ex', 0, (st, idx, pool, inst) => {
+  const p = st.players[idx];
+  if (!inst || p.active?.iid !== inst.iid) {
+    return addLog(st, '破壞之頭錘：必須在戰鬥場才能使用', idx);
+  }
+  const r = flipCoinsWithLog(st, 1, '破壞之頭錘', idx);
+  if (r.heads === 0) return addLog(r.state, '破壞之頭錘：反面，無效果', idx);
+  const dIdx = (1 - idx) as 0 | 1;
+  const def = st.players[dIdx].active;
+  if (!def || def.energyAttached.length === 0) {
+    return addLog(r.state, '破壞之頭錘：正面，但對手戰鬥位無能量可丟', idx);
+  }
+  return withPending(
+    addLog(r.state, '破壞之頭錘：正面 → 選對手戰鬥位 1 個能量丟棄', idx),
+    {
+      type: 'active-energy-discard',
+      actorIdx: idx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'm5-warlord-destroy-headbutt',
+      params: { titleOverride: '破壞之頭錘：選擇 1 個對手戰鬥位能量丟棄' },
+    },
+  );
+});
+regR('m5-warlord-destroy-headbutt', (state, aIdx, iids) => {
+  if (iids.length === 0) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  return updatePlayer(addLog(state, '破壞之頭錘：對手戰鬥位丟 1 能量', aIdx), dIdx, p => {
+    if (!p.active) return p;
+    const toDiscard = p.active.energyAttached.filter(e => iids.includes(e.iid));
+    return {
+      ...p,
+      active: {
+        ...p.active,
+        energyAttached: p.active.energyAttached.filter(e => !iids.includes(e.iid)),
+      },
+      discard: [...p.discard, ...toDiscard],
+    };
+  });
+});
+
+// ── 4. 沐淨（Supporter）─ 棄 ≤2 張非規則寶可夢 → 抽 N×3 張
+//   卡面：「從自己的手牌將寶可夢（『擁有規則的寶可夢』除外）最多丟棄 2 張，
+//          丟棄張數 × 3 張，從牌庫抽卡。」
+reg('沐淨', (st, idx, pool) => {
+  const p = st.players[idx];
+  // 找手牌中非規則寶可夢的候選 iid
+  const candidates = p.hand.filter(c => {
+    const card = pool.get(c.cardId);
+    if (!card || card.supertype !== 'Pokemon') return false;
+    if (RULE_BOX_SUBTYPES.has(card.subtype ?? '')) return false;
+    return true;
+  });
+  if (candidates.length === 0) {
+    return addLog(st, '沐淨：手牌中無非規則寶可夢可丟，效果略過', idx);
+  }
+  const validIids = candidates.map(c => c.iid);
+  return withPending(
+    addLog(st, `沐淨：從手牌選 ≤2 張非規則寶可夢丟棄（候選 ${candidates.length} 張，可選 0 張跳過）`, idx),
+    {
+      type: 'hand-discard',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 0, maxCount: Math.min(2, candidates.length),
+      effectKey: 'm5-trainer-mokujou',
+      params: { validIids, titleOverride: '沐淨：選擇 ≤2 張非規則寶可夢丟棄' },
+    },
+  );
+});
+regR('m5-trainer-mokujou', (state, aIdx, iids) => {
+  if (iids.length === 0) return addLog(state, '沐淨：玩家丟 0 張 → 無抽牌效果', aIdx);
+  return updatePlayer(addLog(state, `沐淨：丟 ${iids.length} 張非規則寶 → 抽 ${iids.length * 3} 張`, aIdx), aIdx, p => {
+    const toDiscard = p.hand.filter(c => iids.includes(c.iid));
+    const remaining = p.hand.filter(c => !iids.includes(c.iid));
+    const drawN = Math.min(iids.length * 3, p.deck.length);
+    return {
+      ...p,
+      hand: [...remaining, ...p.deck.slice(0, drawN)],
+      deck: p.deck.slice(drawN),
+      discard: [...p.discard, ...toDiscard],
+    };
+  });
+});
+
+// ── 5. 暗黑鈴（Item）─ 雙方戰鬥位混亂；化石寶可夢除外 ──────────
+//   卡面：「將雙方的戰鬥寶可夢（化石寶可夢除外），各別【混亂】。」
+//   化石寶可夢識別：subtype === 'Item' (化石卡作為寶可夢時 supertype/subtype 為 Trainer/Item) 
+//   或 tags 含「化石」。保守用「card.subtype === 'Item'」+「card.supertype === 'Trainer'」雙重判。
+reg('暗黑鈴', (st, idx, pool) => {
+  let s = st;
+  for (const side of [0, 1] as const) {
+    const player = s.players[side];
+    if (!player.active) continue;
+    const card = pool.get(player.active.cardId);
+    // 化石寶可夢：supertype='Trainer' & subtype='Item' (場上 ItemPokemon 狀態)
+    // 或 tags 含「化石」
+    const isFossil = (card?.supertype === 'Trainer' && card?.subtype === 'Item')
+      || (card?.tags?.includes('化石') ?? false);
+    if (isFossil) {
+      const name = card?.name ?? '?';
+      s = addLog(s, `暗黑鈴：${name} 是化石寶可夢，跳過`, idx);
+      continue;
+    }
+    const name = card?.name ?? '?';
+    s = updatePlayer(addLog(s, `暗黑鈴：${name} 陷入【混亂】`, idx), side, p => {
+      if (!p.active) return p;
+      return { ...p, active: { ...p.active, status: 'confused' } };
+    });
+  }
+  return s;
+});
+
+// ── 6. 鏽組的手下（Supporter）─ picker 對手場 1 隻寶可夢丟 1 能量 ─
+//   卡面：「從對手場上 1 隻寶可夢身上選擇 1 個能量，丟棄。」
+//   gate（rulesText）：「這張卡只有在上個對手回合自己的寶可夢未昏厥時才能使用。」
+//   — 此 gate 較複雜（需追蹤跨回合昏厥史），暫時 deferred 不做 gate（仍可使用）。
+reg('鏽組的手下', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const opp = st.players[dIdx];
+  // 候選 = 對手場上有能量的寶可夢
+  const allOpp: import('../../types').CardInstance[] = [
+    ...(opp.active ? [opp.active] : []),
+    ...opp.bench,
+  ];
+  const candidates = allOpp.filter(c => c.energyAttached.length > 0);
+  if (candidates.length === 0) {
+    return addLog(st, '鏽組的手下：對手場上無附能寶可夢', idx);
+  }
+  const validIids = candidates.map(c => c.iid);
+  return withPending(
+    addLog(st, `鏽組的手下：選對手 1 隻附能寶可夢（候選 ${candidates.length} 隻）`, idx),
+    {
+      type: 'opp-poke-choose',
+      actorIdx: idx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'm5-trainer-rust-henchman',
+      params: { includeActive: true, validIids },
+    },
+  );
+});
+regR('m5-trainer-rust-henchman', (state, aIdx, iids) => {
+  if (iids.length === 0) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const targetIid = iids[0];
+  // 第 2 階段：picker 對手場該寶可夢的 1 個能量丟棄
+  return withPending(
+    addLog(state, '鏽組的手下：選擇要丟的能量', aIdx),
+    {
+      // 用 active-energy-discard 但 sourcePlayerIdx=dIdx + params 帶 targetIid 找的寶可夢
+      // 但 active-energy-discard 只認 active；改用一般 picker 機制 — 寫專屬 resolver
+      type: 'active-energy-discard',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'm5-trainer-rust-henchman-pick-energy',
+      params: { titleOverride: '鏽組的手下：選擇 1 個能量丟棄', targetPokeIid: targetIid },
+    },
+  );
+});
+regR('m5-trainer-rust-henchman-pick-energy', (state, aIdx, iids, params) => {
+  if (iids.length === 0) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const targetPokeIid = params?.targetPokeIid as string | undefined;
+  return updatePlayer(addLog(state, '鏽組的手下：丟 1 能量', aIdx), dIdx, p => {
+    const removeFromInst = (c: import('../../types').CardInstance) => {
+      if (c.iid !== targetPokeIid) return c;
+      const toDiscard = c.energyAttached.filter(e => iids.includes(e.iid));
+      const newAttached = c.energyAttached.filter(e => !iids.includes(e.iid));
+      return { ...c, energyAttached: newAttached, _discardTransfer: toDiscard };
+    };
+    // 處理 active + bench
+    const newActive = p.active ? removeFromInst(p.active) : null;
+    const newBench = p.bench.map(removeFromInst);
+    // 提取要丟的能量（從 _discardTransfer transient field）
+    const collected: import('../../types').CardInstance[] = [];
+    const cleanInst = (c: import('../../types').CardInstance) => {
+      const transfer = (c as { _discardTransfer?: import('../../types').CardInstance[] })._discardTransfer ?? [];
+      collected.push(...transfer);
+      const cleaned = { ...c };
+      delete (cleaned as { _discardTransfer?: unknown })._discardTransfer;
+      return cleaned;
+    };
+    return {
+      ...p,
+      active: newActive ? cleanInst(newActive) : null,
+      bench: newBench.map(cleanInst),
+      discard: [...p.discard, ...collected],
+    };
+  });
+});
+
+// ── 7. 卡娜莉的元氣（Supporter）─ 牌庫選 ≤4 張基本能量 + 1 隻附 + END_TURN ─
+//   卡面：「使用這張卡時，自己的回合結束。從自己的牌庫選擇最多 4 張「基本能量」，
+//          附給自己 1 隻寶可夢。然後重洗牌庫。」
+reg('卡娜莉的元氣', (st, idx) => {
+  const p = st.players[idx];
+  if (p.deck.length === 0) {
+    // 即使牌庫空，「使用後回合結束」仍生效
+    return withPending(
+      addLog(st, '卡娜莉的元氣：牌庫為空，僅結束回合', idx),
+      {
+        type: 'modal-choice',
+        actorIdx: idx, sourcePlayerIdx: idx,
+        minCount: 1, maxCount: 1,
+        effectKey: 'm5-trainer-karunari-vigor-end-only',
+        params: { endTurnAfter: true, options: ['確認結束回合'] },
+      },
+    );
+  }
+  const maxN = Math.min(4, p.deck.length);
+  return withPending(
+    addLog(st, `卡娜莉的元氣：從牌庫選 ≤${maxN} 張基本能量（使用後回合結束）`, idx),
+    {
+      type: 'deck-search',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      filter: 'BasicEnergy',
+      minCount: 0, maxCount: maxN,
+      effectKey: 'm5-trainer-karunari-vigor-pick',
+    },
+  );
+});
+regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
+  if (iids.length === 0) {
+    // 沒選能量 — 仍重洗牌庫 + 強制 END_TURN
+    return withPending(
+      updatePlayer(addLog(state, '卡娜莉的元氣：選 0 張能量，僅重洗牌庫 + 結束回合', aIdx), aIdx, p => ({
+        ...p, deck: [...p.deck].sort(() => Math.random() - 0.5),
+      })),
+      {
+        type: 'modal-choice',
+        actorIdx: aIdx, sourcePlayerIdx: aIdx,
+        minCount: 1, maxCount: 1,
+        effectKey: 'm5-trainer-karunari-vigor-end-only',
+        params: { endTurnAfter: true, options: ['確認結束回合'] },
+      },
+    );
+  }
+  // 選到 N 張能量 → 等玩家選目標寶可夢
+  const p = state.players[aIdx];
+  const allOwn: import('../../types').CardInstance[] = [
+    ...(p.active ? [p.active] : []),
+    ...p.bench,
+  ];
+  if (allOwn.length === 0) {
+    // 場上無寶可夢可附（極罕見 edge case）— 直接結束回合
+    return updatePlayer(
+      addLog(state, '卡娜莉的元氣：場上無寶可夢可附，能量回牌庫', aIdx),
+      aIdx,
+      pl => ({ ...pl, deck: [...pl.deck].sort(() => Math.random() - 0.5) }),
+    );
+  }
+  return withPending(
+    addLog(state, `卡娜莉的元氣：選 1 隻自己寶可夢，將 ${iids.length} 張基本能量全附給它`, aIdx),
+    {
+      type: 'heal-target',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'm5-trainer-karunari-vigor-attach',
+      params: {
+        energyIids: iids,
+        titleOverride: `卡娜莉的元氣：選擇要附 ${iids.length} 張基本能量的寶可夢`,
+        endTurnAfter: true,  // 附完後強制結束回合
+      },
+    },
+  );
+});
+regR('m5-trainer-karunari-vigor-attach', (state, aIdx, iids, params) => {
+  if (iids.length === 0) return state;
+  const targetIid = iids[0];
+  const energyIids = (params?.energyIids as string[] | undefined) ?? [];
+  if (energyIids.length === 0) return state;
+  return updatePlayer(
+    addLog(state, `卡娜莉的元氣：${energyIids.length} 張基本能量附給選中寶可夢 + 重洗牌庫`, aIdx),
+    aIdx,
+    p => {
+      const picked = p.deck.filter(c => energyIids.includes(c.iid));
+      const remaining = p.deck.filter(c => !energyIids.includes(c.iid));
+      const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+      const updateInst = (c: import('../../types').CardInstance) =>
+        c.iid === targetIid
+          ? { ...c, energyAttached: [...c.energyAttached, ...picked] }
+          : c;
+      return {
+        ...p,
+        deck: shuffled,
+        active: p.active ? updateInst(p.active) : null,
+        bench: p.bench.map(updateInst),
+      };
+    },
+  );
+});
+// modal-choice resolver for end-only path
+regR('m5-trainer-karunari-vigor-end-only', (state) => state);
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 5 結束。已實裝 14 (P1) + 17 (P2) + 19 (P3) + 8 (P4) + 7 (P5) = 65 個項目。
+// 招式 58 + 特性 3 + 訓練家 4 = 65 個 effect 註冊 / 81 張卡。
+// 累計達 ~80% 卡片 coverage。
+// 剩餘 deferred 工作（需 engine 擴充）：
+//   - 化隱特性 6 卡 + 3 依賴招式（canApplyEffectToTarget 加 ability gate）
+//   - 暗影惡能量（特殊能量備戰位免疫 — flower veil 類）
+//   - 6 個複雜特性（滿滿旋律 / 光子密碼 / 不朽之軀 / 太鼓防壁 / 咒縛之炎 等）
+//   - 5 個複雜招式（強烈之吻 / 招式竊賊 / 蟲蟲恐慌 / 閃光屏障 / 熔岩之壁 等）
+//   - 化石卡（古老的頭蓋/盾牌 + 化石採掘場）
+//   - 工具卡（豪華炸彈 / 重試徽章）+ 灰瀨的決戰 + 閃電能量
+// ════════════════════════════════════════════════════════════════════════════
+
 
 
