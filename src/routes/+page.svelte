@@ -264,6 +264,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.794</span> 🚨 hotfix — v4.791 changelog 內 raw &#123; &#125; 違反 Iron Rule 1（連環 build fail 第二因）</summary>
+        <ul>
+          <li><b>背景</b>：v4.79 deploy fail 後修 v4.791 / v4.792 / v4.793 都失敗，網頁版號一直停在 v4.78。</li>
+          <li><b>真因（Iron Rule 1 違反，連自己都沒注意到）</b>：v4.791 changelog 最後一行寫「Rule 1（changelog &amp;lt; &amp;gt; <code>&#123;</code> <code>&#125;</code> 等用 entity escape）」描述規則時，<b>raw 字元的 <code>&#123;</code> 跟 <code>&#125;</code> 直接打進 Svelte template</b>，Svelte parser 把它當成 JS expression block → vite build 階段炸「Unexpected token」→ GitHub Actions deploy fail。</li>
+          <li><b>諷刺度</b>：在「描述違反 Iron Rule 1 的條目」自己違反 Iron Rule 1。這種「meta-violation」在 v3.55 / v3.832 / v3.881 / v3.899 / v4.04 / v2.733 / v2.97-hotfix 各踩過，鐵律明明寫得清楚，但只要寫 changelog 時不夠機械化就會中招。</li>
+          <li><b>修法</b>：把 raw <code>&#123;</code> <code>&#125;</code> 改成 HTML entity <code>&amp;#123;</code> 和 <code>&amp;#125;</code>。</li>
+          <li><b>驗證流程升級</b>：本次先用 <code>svelte/compiler</code> 的 <code>parse()</code> 直接掃 +page.svelte，定位到 line 320 col 137 的 raw <code>&#123;</code>。以後 push 前 push pipeline 應該強制跑 svelte parse（已驗證可用）。</li>
+          <li><b>連環 fail 真因鏈</b>：
+            <ul>
+              <li>v4.79：m5_preview.ts 引入了三個 effects.ts 的 helper，但對方沒 export → 第一個 build fail</li>
+              <li>v4.791：上面 export 沒修，加了新 changelog 又違反 Iron Rule 1 → 兩個 fail 疊加</li>
+              <li>v4.792：只改 +page.svelte/game/+page.svelte，前述 export bug 和 changelog bug 還在</li>
+              <li>v4.793：補了 export 修了 helper 引用，但 changelog Rule 1 違反還在 → 仍 fail</li>
+              <li>v4.794：本版終於把 raw <code>&#123;</code> <code>&#125;</code> escape，build 應該恢復</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.793</span> 🚨 hotfix — v4.79 / v4.791 deploy 失敗真因（三個 helper 漏 export）</summary>
         <ul>
           <li><b>玩家回報</b>：v4.79 和 v4.791 兩版 GitHub Actions deploy 都失敗，網頁版號還停在 v4.78。</li>
@@ -317,7 +337,7 @@
               <li>不是 bug — 是設計：v4.74 / v4.75 起若開啟「練習模式」（允許悔棋），出招後會暫停自動結束回合，讓玩家有機會決定「悔棋」或「結束回合」。請手動按結束回合或關閉練習模式即可恢復自動結束。</li>
             </ul>
           </li>
-          <li><b>遵守 Iron Rules</b>：Rule 11（大檔 effects.ts 走 Python pipeline）/ Rule 15（JSON source of truth）/ Rule 1（changelog &lt; &gt; { } 等用 entity escape）。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 11（大檔 effects.ts 走 Python pipeline）/ Rule 15（JSON source of truth）/ Rule 1（changelog &lt; &gt; &#123; &#125; 等用 entity escape）。</li>
         </ul>
       </details>
 
