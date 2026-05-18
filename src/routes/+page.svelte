@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.63</span> 🐛 修火狐狸｜呼朋引伴 1 張→應為「最多 2 張」(audit 17 張同名招式全對齊)</summary>
+        <ul>
+          <li>玩家回報：火狐狸 M4 · 011/083 的「呼朋引伴」應從牌庫選最多 2 張基礎寶可夢，實作只放 1 張。</li>
+          <li>Audit 全部 17 張同名「呼朋引伴」招式 JSON 卡面（依鐵律 7c+15）：</li>
+          <li>　- <b>最多 2 張版本（10 張，含 G 標波波）</b>：毒電嬰 / 火狐狸 / 呆火駝 / 巨翅飛魚 / N的迷你冰 / 電飛鼠 / 花舞鳥 / 小山豬 / 大嘴娃 / 大顎蟻 / 波波(G)</li>
+          <li>　- <b>1 張版本（6 張）</b>：伊布 / 謎擬Q / 向尾喵 / 燭光靈 / 粉蝶蟲 / 袋獸</li>
+          <li>其餘 16 張實作數量都對齊卡面，<b>唯一錯誤的是火狐狸</b>（誤寫成 1 張）— 本版修正為 2 張。</li>
+          <li>修補：<code>v2359_j_mark_batch.ts</code> 火狐狸 <code>benchBasicFn(1, ...)</code> → <code>benchBasicFn(2, ...)</code></li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.62</span> 🏗️ Phase 3b：寫 room-oracle.ts（Firestore room.ts 的 Oracle 對應版，dormant）</summary>
         <ul>
           <li><b>本次內容</b>：新增 <code>src/lib/game/room-oracle.ts</code>（~440 行），對應 room.ts 22 個 firebase-bound function：</li>
