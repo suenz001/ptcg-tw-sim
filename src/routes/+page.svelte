@@ -264,6 +264,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.791</span> 🐛 hotfix — 月桂葉推倒 + 巨型花束 兩個傷害計算 bug</summary>
+        <ul>
+          <li><b>玩家回報 #1：月桂葉｜推倒</b>只造成 10 點傷害。
+            <ul>
+              <li>根因：實裝寫死 <code>damage: 10</code>，但 JSON 卡面 <code>damage = 50</code>。違反 Rule 15（JSON 是 source of truth）。</li>
+              <li>修法：<code>effects.ts</code> 內 <code>regPre(&#39;月桂葉|推倒&#39;)</code> 改回 50。POST 強制對手互換不變。</li>
+            </ul>
+          </li>
+          <li><b>玩家回報 #2：超級大竺葵ex｜巨型花束</b>身上 8 顆能量卻只造成 70 點傷害（草能量 bonus 沒套）。
+            <ul>
+              <li>根因：實裝用嚴格 <code>ec.pokemonType === &#39;Grass&#39; &amp;&amp; ec.subtype === &#39;Basic&#39;</code> 比對，但基本【草】能量的 JSON 中 <code>pokemonType = null</code>（非 &#39;Grass&#39;），8 顆全被漏算 → grassCount = 0 → 70 + 0 × 50 = 70。同 v3.731 蜜糖風暴 bug、v3.44 基本能量 pokemonType=null 全面修補的延伸漏網。</li>
+              <li>修法：<code>v155_attacks.ts</code> 改用 <code>countOneEnergy(att, &#39;Grass&#39;, pool)</code> helper — 內部會 fallback 看 name 中的【X】判定，pokemonType=null 也能正確算到。8 顆草能量現在會正確 70 + 8×50 = 470 傷害。</li>
+            </ul>
+          </li>
+          <li><b>玩家回報 #3：</b>巨型花束發招完不會自動結束回合（手機版）。
+            <ul>
+              <li>不是 bug — 是設計：v4.74 / v4.75 起若開啟「練習模式」（允許悔棋），出招後會暫停自動結束回合，讓玩家有機會決定「悔棋」或「結束回合」。請手動按結束回合或關閉練習模式即可恢復自動結束。</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 11（大檔 effects.ts 走 Python pipeline）/ Rule 15（JSON source of truth）/ Rule 1（changelog &lt; &gt; { } 等用 entity escape）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.79</span> ⚔ M5 對戰邏輯 Phase 1 — 14 張簡單效果卡實裝</summary>
         <ul>
           <li><b>背景</b>：v4.78 完成 M5 卡牌資料庫翻譯後，玩家現在可以在卡牌頁面瀏覽，但對戰時 M5 卡只會走純傷害 fallback（招式效果完全沒生效）。本版開始分階段實裝對戰邏輯。</li>

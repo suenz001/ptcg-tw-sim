@@ -69,16 +69,14 @@ regPre('超級長耳兔ex|跳躍扣殺', (state) => ({
 // ══════════════════════════════════════════════════════════════════════════════
 // (3) 巨型花束（超級大竺葵ex）— 70 + 自身草能量×50
 // ══════════════════════════════════════════════════════════════════════════════
+// v4.791：改用 countOneEnergy helper — 涵蓋 pokemonType=null 的基本草能量
+//   舊 bug：JSON 中基本【草】能量的 pokemonType 是 null（不是 'Grass'），
+//   嚴格 === 'Grass' 比對永遠 false，導致 grassCount=0、8 顆能量只算 70 點。
+//   countOneEnergy 內部會 fallback 到 name 中的【X】判斷（與 v3.731 蜜糖風暴同修法）。
 regPre('超級大竺葵ex|巨型花束', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 70 };
-  const grassCount = att.energyAttached.reduce((sum, e) => {
-    const ec = pool.get(e.cardId);
-    if (!ec) return sum;
-    if (ec.pokemonType === 'Grass' && ec.subtype === 'Basic') return sum + 1;
-    if (ec.name === '燃火能量') return sum;
-    return sum;
-  }, 0);
+  const grassCount = countOneEnergy(att, 'Grass', pool);
   const bonus = grassCount * 50;
   const dmg = 70 + bonus;
   const s = addLog(state, `巨型花束：自身【草】能量 ${grassCount} 個 → 70 + ${bonus} = ${dmg}`, aIdx);

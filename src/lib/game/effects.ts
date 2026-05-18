@@ -10264,8 +10264,9 @@ regR('force-opp-swap-then-damage', (st, actorIdx, iids, params, pool) => {
 regPre('大狼犬|踹開', (state, _a, _p) => ({ state, damage: 50 }));
 regPost('大狼犬|踹開', forceOppSwapPost('踹開'));
 
-// 月桂葉｜推倒 — 10 + 強制對手互換
-regPre('月桂葉|推倒', (state, _a, _p) => ({ state, damage: 10 }));
+// v4.791：月桂葉｜推倒 — 卡面 damage 50（不是 10）+ 強制對手互換
+//   舊 bug：寫死 damage 10。卡面實際是 50。
+regPre('月桂葉|推倒', (state, _a, _p) => ({ state, damage: 50 }));
 regPost('月桂葉|推倒', forceOppSwapPost('推倒'));
 
 // 小箭雀｜送回 — 10 + 強制對手互換
