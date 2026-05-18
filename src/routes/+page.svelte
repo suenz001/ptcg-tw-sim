@@ -264,6 +264,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.79</span> ⚔ M5 對戰邏輯 Phase 1 — 14 張簡單效果卡實裝</summary>
+        <ul>
+          <li><b>背景</b>：v4.78 完成 M5 卡牌資料庫翻譯後，玩家現在可以在卡牌頁面瀏覽，但對戰時 M5 卡只會走純傷害 fallback（招式效果完全沒生效）。本版開始分階段實裝對戰邏輯。</li>
+          <li><b>Phase 1 範圍（簡單效果卡，14 個招式 / 13 張卡）</b>：
+            <ul>
+              <li>狀態異常類：002 顎針蟲（吐絲 — 擲幣麻痺）/ 007 席多藍恩（燒灼 — 灼傷）/ 030 迷唇姐（精神力 — 擲幣麻痺）/ 050 烏賊王（蠱惑 — 混亂）</li>
+              <li>自傷類：003 螳花蟲（突擊 — 自傷 10）/ 009 焚焰蚣（熱情衝撞 — 自傷 30）/ 027 密勒頓（打雷 — 自傷 30）</li>
+              <li>mill 對手牌庫類：008 燒火蚣（野火 — 1 張）/ 009 焚焰蚣（野火 — 2 張）/ 063 超級龍頭地鼠ex（挖掘崩塌 — 2 張）</li>
+              <li>自身狀態類：015 吼鯨王ex（摔落 — 自身睡眠）</li>
+              <li>簡單抽牌：022 落雷獸（拿來 — 抽 1）</li>
+              <li>棄手牌類：028 呆呆獸（徹底丟棄 — picker 選任意數量手牌丟棄）</li>
+              <li>全洗 + 抽 6：053 莫魯貝可ex（輪盤抽牌 — 手牌洗回牌庫 + 抽 6）</li>
+            </ul>
+          </li>
+          <li><b>下架彈性設計（搶先卡核心需求）</b>：所有實裝集中在新檔 <code>src/lib/game/effects/cards/m5_preview.ts</code>，未動 engine.ts / types.ts / GameState 欄位。正式中文版上市後（預計 2026/6/5）僅需 4 步乾淨下架：(1) 刪 <code>static/cards/M5.json</code>；(2) 從 <code>index.json</code> 移除 M5 entry；(3) 從 <code>effects.ts</code> 移除一行 import；(4)（可選）刪 m5_preview.ts。</li>
+          <li><b>使用既有 helper</b>：<code>statusPost</code> / <code>coinStatusPost</code> / <code>selfStatusPost</code> / <code>millOppDeckTopPost</code> / <code>drawNPost</code>。新增本檔內 <code>m5SelfDamagePost</code> 自傷 helper（不污染 effects.ts，下架時隨檔一起刪）。</li>
+          <li><b>未實裝部分</b>：M5 共 81 張卡，本版只涵蓋簡單效果卡 ~13 張，剩餘 67 張仍走純傷害 fallback。下波規劃：Phase 2 條件 +N / 自身回血 / picker 類（~25 張）；Phase 3 「化隱」特性新機制（6 張）；Phase 4 超進化 ex 大招（8 張）；Phase 5 訓練家 + 能量規則。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 7c（JSON 招式名為 source）/ Rule 11（大檔 effects.ts 走 Python pipeline 插一行 import）/ Rule 13（不動 GameState 欄位）/ Rule 17（自傷類不經過防禦層，直接寫 damage）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.78</span> 🌐 M5 深淵之瞳全卡重翻譯（從日文原文重寫，修日文殘留）</summary>
         <ul>
           <li><b>玩家回報</b>：v4.77 上的 M5 翻譯版本有大量日文假名殘留（48/81 張卡含日文），閱讀體驗很差。</li>
