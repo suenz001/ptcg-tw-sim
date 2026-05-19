@@ -1977,6 +1977,53 @@ regPost('燒火蚣|蟲蟲恐慌', (state, aIdx, pool) => {
 //   化石卡 (古老的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈/重試徽章)。
 // ════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 8e (v4.892) — 強烈之吻（迷唇姐，delayed discard at end of opp's next turn）
+//
+// 卡面：「下個回合結束時，將承受此招式的寶可夢及其身上附加的所有卡，全部丟棄。」
+//
+// ★ 重要概念：丟棄 ≠ 昏厥（KO）
+//   - 丟棄（discard）：寶可夢與附加卡全部進入棄牌堆，**對手不獲得獎賞卡**
+//   - 昏厥（KO）：寶可夢被擊倒，**對手獲得獎賞卡**
+//   本招式為「丟棄」，故不走 addPendingPrize / 不觸發 PASSIVE_ON_KO / KO_RETALIATION。
+//
+// 實裝：POST 在 defender 側設 player flag strongKissTargetIid = defender.active.iid。
+// 觸發：engine.ts END_TURN 中 currentPlayer 端檢查（= defender 結束他的回合時）。
+//       若 active 仍為原 iid → 丟棄整套；否則（已撤退/被 KO/變動）→ 無事，清 marker。
+//
+// 時序：
+//   Turn N (attacker)：POST 設 defender.strongKissTargetIid = X
+//   END_TURN N (attacker)：currentPlayer = attacker，attacker.strongKissTargetIid 不存在 → 略過
+//   Turn N+1 (defender)：defender 正常玩
+//   END_TURN N+1 (defender)：currentPlayer = defender，檢查 → 若 active.iid === X → 丟棄
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── 迷唇姐|強烈之吻 POST：在 defender 側設 strongKissTargetIid marker ────
+regPost('迷唇姐|強烈之吻', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx];
+  if (!def.active) {
+    return addLog(state, '強烈之吻：對手戰鬥場已無寶可夢，效果無對象', aIdx);
+  }
+  const targetIid = def.active.iid;
+  const targetName = pool.get(def.active.cardId)?.name ?? '?';
+  return updatePlayer(
+    addLog(state,
+      `強烈之吻：標記 ${targetName}，下個對手回合結束時若仍在戰鬥場 → 全部丟棄（非昏厥）`,
+      aIdx),
+    dIdx,
+    p => ({ ...p, strongKissTargetIid: targetIid }),
+  );
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 8e 結束。
+// 累計：78 (P1-8c) + 1 (Phase 8d 太鼓防壁) + 1 (Phase 8e 強烈之吻)
+//      = 80 個項目 / 81 張卡（~99% coverage）。
+// 剩餘 deferred (Phase 8f+)：光子密碼 / 招式竊賊 / 化石卡 + 化石採掘場 /
+//   工具卡 (豪華炸彈 / 重試徽章)。
+// ════════════════════════════════════════════════════════════════════════════
+
 
 
 

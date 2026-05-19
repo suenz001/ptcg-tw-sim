@@ -264,6 +264,42 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.892</span> 💋 M5 Phase 8e — 強烈之吻（迷唇姐 delayed discard）</summary>
+        <ul>
+          <li><b>實裝 1 張 deferred attack effect</b>：迷唇姐 <code>強烈之吻</code>。累計 79 → <b>80</b> 個 effect / 81 張卡（~99% coverage）。</li>
+          <li><b>強烈之吻</b>（delayed discard at end of opp&apos;s next turn）：
+            <ul>
+              <li>卡面（校正翻譯）：「下個回合結束時，將承受此招式的寶可夢及其身上附加的所有卡，全部丟棄。」（原譯「下個對手回合的最後」改為 PTCG 慣用語「下個回合結束時」）</li>
+              <li><b>★ 關鍵概念 — 丟棄 ≠ 昏厥（KO）</b>：
+                <ul>
+                  <li><b>丟棄</b>（discard）：寶可夢 + 附加卡全部進棄牌堆，<b>對手不獲得獎賞卡</b></li>
+                  <li><b>昏厥</b>（KO）：寶可夢被擊倒，<b>對手獲得獎賞卡</b></li>
+                  <li>本招式為「丟棄」，故 <b>不</b> 走 <code>addPendingPrize</code> / <b>不</b> 觸發 <code>PASSIVE_ON_KO</code> / <code>PASSIVE_KO_RETALIATION</code></li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+          <li><b>實裝細節</b>：
+            <ul>
+              <li><code>types.ts PlayerState</code> 加 <code>strongKissTargetIid?: string</code> — 單一 marker（同側同時只能掛一個強烈之吻；多次施加會覆蓋）。</li>
+              <li><code>m5_preview.ts regPost(&apos;迷唇姐|強烈之吻&apos;)</code>：在 defender 側設 <code>player.strongKissTargetIid = defender.active.iid</code>。</li>
+              <li><code>engine.ts END_TURN</code>：currentPlayer 端檢查 marker — 若 <code>active.iid === marker</code> → 丟棄整套（active + energyAttached + tools + evolvedFromStack）。否則（撤退 / 換位 / 已 KO）→ 不發動。無論觸發與否，清 marker。</li>
+            </ul>
+          </li>
+          <li><b>時序</b>：
+            <ul>
+              <li>Turn N (attacker)：POST 設 defender.strongKissTargetIid = X</li>
+              <li>END_TURN N (attacker)：currentPlayer = attacker，無 marker → 略過</li>
+              <li>Turn N+1 (defender)：defender 正常玩（可撤退/換位來解除標記）</li>
+              <li>END_TURN N+1 (defender)：currentPlayer = defender，檢查 → 觸發或無事</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 7（嚴禁簡化實裝 — 區分丟棄 vs 昏厥的核心 PTCG 規則）/ Rule 10（無 pendingPrizes 寫入，不違反 addPendingPrize helper 鐵律）/ Rule 11（types.ts + engine.ts + m5_preview.ts + M5.json + version.ts + +page.svelte 全走 Python pipeline）/ Rule 13（strongKissTargetIid 是純 string，不是 nested array）/ Rule 4（tsc 驗證）。</li>
+          <li><b>剩餘 deferred</b>：光子密碼（on-KO move energy，需擴 PassiveOnKoFn 簽名 + 2-stage picker）/ 招式竊賊（attack copy，需 UI picker）/ 化石卡 + 化石採掘場 / 工具卡（豪華炸彈 / 重試徽章）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.891</span> 🥁 M5 Phase 8d — 太鼓防壁（護城龍 bench-aura）</summary>
         <ul>
           <li><b>實裝 1 張 deferred passive ability</b>：護城龍 <code>太鼓防壁</code>。累計 78 → <b>79</b> 個 effect / 81 張卡（~98% coverage）。</li>

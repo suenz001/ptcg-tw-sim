@@ -5545,6 +5545,36 @@ function handlePlaying(
 
     // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn / abilityUsedThisTurn）
     const currentPlayer = { ...players[aIdx] };
+
+    // v4.892 強烈之吻（M5 迷唇姐）— delayed discard at end of opp's next turn
+    //   POST 在 attacker 端設了 defender.strongKissTargetIid = X
+    //   此處 (defender's END_TURN) 觸發：若 active 仍為 X → 丟棄整套
+    //   ★ 重要：丟棄 ≠ 昏厥。不給對手獎賞卡，不觸發 PASSIVE_ON_KO / PASSIVE_KO_RETALIATION。
+    if (currentPlayer.strongKissTargetIid) {
+      const targetIid = currentPlayer.strongKissTargetIid;
+      if (currentPlayer.active && currentPlayer.active.iid === targetIid) {
+        const koInst = currentPlayer.active;
+        const cardName = pool.get(koInst.cardId)?.name ?? '?';
+        // 收集所有附加卡：能量 + 道具（toolAttached + extraTools）+ 進化堆
+        const discards: CardInstance[] = [
+          koInst,
+          ...koInst.energyAttached,
+          ...getAllAttachedTools(koInst),
+          ...(koInst.evolvedFromStack ?? []),
+        ];
+        currentPlayer.active = null;
+        currentPlayer.discard = [...currentPlayer.discard, ...discards];
+        state = addLog(state,
+          `強烈之吻：${cardName} 與身上 ${discards.length - 1} 張附加卡全部丟棄（非昏厥，對手不獲得獎賞卡）`,
+          aIdx);
+      } else {
+        state = addLog(state,
+          '強烈之吻：原目標已離開戰鬥場（撤退 / 換位 / 已 KO），效果不發動',
+          aIdx);
+      }
+      delete currentPlayer.strongKissTargetIid;
+    }
+
     currentPlayer.active = currentPlayer.active ? clearTurnFlags(currentPlayer.active) : null;
     currentPlayer.bench = currentPlayer.bench.map(clearTurnFlags);
     // 清除特性使用旗標

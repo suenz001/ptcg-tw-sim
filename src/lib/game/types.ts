@@ -418,6 +418,20 @@ export interface PlayerState {
    */
   gladionDuelBonusThisTurn?: boolean;
   /**
+   * v4.892 迷唇姐｜強烈之吻（招式效果 / M5）— delayed discard 標記。
+   * 卡面：「下個回合結束時，將承受此招式的寶可夢及其身上附加的所有卡，全部丟棄。」
+   *
+   * Setter：迷唇姐 用 強烈之吻 後，POST 設 defender player.strongKissTargetIid = defender.active.iid。
+   * Reader：engine END_TURN at defender's turn end —
+   *   若 currentPlayer.active && currentPlayer.active.iid === strongKissTargetIid → 丟棄整套。
+   *   否則（已撤退/被 KO/變動）→ 不發動。
+   *   無論觸發與否，清除 marker。
+   *
+   * **重要**：丟棄 ≠ 昏厥。不給對手獎賞卡，不觸發 PASSIVE_ON_KO / PASSIVE_KO_RETALIATION。
+   * 單一 marker（同一玩家側同時只能掛一個強烈之吻效果；多次施加會覆蓋）。
+   */
+  strongKissTargetIid?: string;
+  /**
    * v2.139 烏栗效果 2 — 本回合自己的寶可夢招式對對手戰鬥場的 ex/V +30 傷害。
    * 打出 Supporter 當下設 true，回合結束時清除。
    */
