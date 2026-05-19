@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.913</span> 🔐 對戰演練頁加登入狀態 dashboard</summary>
+        <ul>
+          <li>把牌組編輯器的「登入狀態 dashboard」完整 port 到對戰演練頁的「開始對戰」模式選擇畫面</li>
+          <li>顯示 sync 狀態 chip（已同步 / 同步中 / 離線 / 本機）</li>
+          <li>匿名用戶：顯示「👤 匿名　建立帳號」按鈕</li>
+          <li>已登入用戶：顯示 email + 🔑 更改密碼 + 登出 按鈕</li>
+          <li>內含完整的建立帳號 / 登入 / 忘記密碼 / 更改密碼 modal</li>
+          <li>Oracle build 自動隱藏（用 ORACLE_MODE 分流）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.912</span> 📥 牌組匯入支援 admin 對戰紀錄格式</summary>
         <ul>
           <li>新增 Format E parser：<code>卡名 卡包代號 · 卡號 · 賽季 × 張數</code></li>
