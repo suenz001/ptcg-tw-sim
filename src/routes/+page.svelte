@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.899</span> 🔧 修 v4.898 retry-badge check 位置錯誤</summary>
+        <ul>
+          <li><b>Bug</b>：v4.898 push 腳本 anchor 不夠精確，retry-badge 末端 check 誤插到 <code>TAKE_PRIZES</code> handler 內，導致 <code>preAttackStateForRetry</code> 出 scope → <code>tsc error TS2304: Cannot find name &apos;preAttackStateForRetry&apos;</code>。</li>
+          <li><b>修正</b>：
+            <ul>
+              <li>移除 TAKE_PRIZES handler 內的錯誤 retry-badge check（誤插在 line 5018-5057）</li>
+              <li>正確插入到 ATTACK handler 末端（在 <code>startFestivalDanceSecondAttackWindow</code> 後、<code>return newState</code> 前）— 此處 <code>preAttackStateForRetry</code> 仍在同一 block scope</li>
+            </ul>
+          </li>
+          <li><b>學到的教訓</b>：Python pipeline 多錨點 patch 必須精確驗證 anchor 落點。原本以 <code>return maybeResumeFestivalDanceSecondAttack(newState, pool); }</code> + 註解作 anchor，這個 pattern 在 ATTACK / TAKE_PRIZES 都有用到，誤匹配第 2 處（TAKE_PRIZES）。改用「<code>startFestivalDanceSecondAttackWindow</code> + 註解 + <code>return newState</code>」三段組合 anchor 才能唯一識別 ATTACK 末端。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 11（hotfix 走 Python pipeline）/ Rule 4（push 前其實應該先跑 tsc — v4.898 push 後 tsc 才報錯，記取教訓）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.898</span> 🎲 重試徽章完整實裝（M5 deferred 全部清零）</summary>
         <ul>
           <li><b>翻譯校正</b>：<code>M5.json</code> 重試徽章 rulesText「在自己每回合中，附有這張卡的無屬性寶可夢...」→「<b>在自己的回合可使用1次</b>，附有這張卡的無屬性寶可夢...」（補上「1 次」明確化）。</li>

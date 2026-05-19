@@ -4979,43 +4979,7 @@ function handlePlaying(
     // 第 2 次招式權；待獎勵牌與對手新戰鬥寶可夢處理完成後，再回到 main 使用第 2 次招式。
     newState = startFestivalDanceSecondAttackWindow(newState, aIdx, pool);
 
-    return newState;
-  }
-
-  // ── 取獎勵牌 ──────────────────────────────────────────────────────────────
-  if (action.type === 'TAKE_PRIZES') {
-    // v2.98：playerIdx 指明哪一側取獎；不再依賴 activePlayerIndex（對手回合也可取）
-    const ownerIdx = action.playerIdx;
-    const owed = getPendingPrize(state, ownerIdx);
-    if (owed <= 0) return state;
-    const taker = { ...state.players[ownerIdx] };
-    const count = Math.min(action.count, taker.prizes.length, owed);
-    const taken = taker.prizes.slice(0, count);
-    taker.prizes = taker.prizes.slice(count);
-    taker.hand = [...taker.hand, ...taken];
-    const newPlayers2 = [...state.players] as [PlayerState, PlayerState];
-    newPlayers2[ownerIdx] = taker;
-    const newPP: [number, number] = [...(state.pendingPrizes ?? [0, 0])] as [number, number];
-    newPP[ownerIdx] = Math.max(0, owed - count);
-
-    let newState: GameState = addLog(
-      { ...state, players: newPlayers2, pendingPrizes: newPP },
-      `${taker.name} 取得了 ${count} 張獎勵牌（剩餘 ${taker.prizes.length} 張）`,
-      ownerIdx
-    );
-
-    // 勝利條件：獎勵牌全取完
-    if (taker.prizes.length <= 0) {
-      return {
-        ...newState,
-        phase: 'game-over',
-        winner: ownerIdx,
-        winReason: `${taker.name} 取得所有獎勵牌`,
-        log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${taker.name} 取得所有獎勵牌，獲勝！` }]
-      };
-    }
-
-    // v4.898 重試徽章 — ATTACK 末端條件 check
+    // v4.898/v4.899 重試徽章 — ATTACK 末端條件 check（位置已修為 ATTACK handler 內）
     //   - state.coinFlippedThisAttack === true（本次 ATTACK 有擲幣）
     //   - attacker active 還存在
     //   - attacker pokemonType === 'Colorless'（卡面「無屬性寶可夢」）
@@ -5052,8 +5016,43 @@ function handlePlaying(
             },
           },
         };
-        return newState;
       }
+    }
+
+    return newState;
+  }
+
+  // ── 取獎勵牌 ──────────────────────────────────────────────────────────────
+  if (action.type === 'TAKE_PRIZES') {
+    // v2.98：playerIdx 指明哪一側取獎；不再依賴 activePlayerIndex（對手回合也可取）
+    const ownerIdx = action.playerIdx;
+    const owed = getPendingPrize(state, ownerIdx);
+    if (owed <= 0) return state;
+    const taker = { ...state.players[ownerIdx] };
+    const count = Math.min(action.count, taker.prizes.length, owed);
+    const taken = taker.prizes.slice(0, count);
+    taker.prizes = taker.prizes.slice(count);
+    taker.hand = [...taker.hand, ...taken];
+    const newPlayers2 = [...state.players] as [PlayerState, PlayerState];
+    newPlayers2[ownerIdx] = taker;
+    const newPP: [number, number] = [...(state.pendingPrizes ?? [0, 0])] as [number, number];
+    newPP[ownerIdx] = Math.max(0, owed - count);
+
+    let newState: GameState = addLog(
+      { ...state, players: newPlayers2, pendingPrizes: newPP },
+      `${taker.name} 取得了 ${count} 張獎勵牌（剩餘 ${taker.prizes.length} 張）`,
+      ownerIdx
+    );
+
+    // 勝利條件：獎勵牌全取完
+    if (taker.prizes.length <= 0) {
+      return {
+        ...newState,
+        phase: 'game-over',
+        winner: ownerIdx,
+        winReason: `${taker.name} 取得所有獎勵牌`,
+        log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${taker.name} 取得所有獎勵牌，獲勝！` }]
+      };
     }
 
     return maybeResumeFestivalDanceSecondAttack(newState, pool);
