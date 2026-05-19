@@ -152,7 +152,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "蘭螳花",
+    "evolvesFrom": "螳花蟲",
     "stage": "Stage1",
     "illustrator": "5ban Graphics",
     "regulationMark": "M5"
@@ -380,7 +380,8 @@
     "species": "發熱寶可夢",
     "stage": "Stage1",
     "illustrator": "Kouki Saitou",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "燒火蚣"
   },
   {
     "id": "50229",
@@ -452,7 +453,8 @@
     "species": "火戰士寶可夢",
     "stage": "Stage1",
     "illustrator": "Jiro Sasumo",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "炭小侍"
   },
   {
     "id": "50231",
@@ -525,7 +527,8 @@
     "species": "金魚寶可夢",
     "stage": "Stage1",
     "illustrator": "OKUBO",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "角金魚"
   },
   {
     "id": "50233",
@@ -622,7 +625,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "吼鯨王",
+    "evolvesFrom": "吼吼鯨",
     "stage": "Stage1",
     "illustrator": "5ban Graphics",
     "regulationMark": "M5"
@@ -729,7 +732,7 @@
     ],
     "pokedexNumber": 729,
     "species": "偶像寶可夢",
-    "evolvesFrom": "西獅海壬",
+    "evolvesFrom": "球球海獅",
     "stage": "Stage1",
     "illustrator": "MINAMINAMI Take",
     "regulationMark": "M5"
@@ -781,7 +784,7 @@
   },
   {
     "id": "50239",
-    "name": "海豚寶寶",
+    "name": "波普海豚",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M5",
@@ -851,7 +854,8 @@
     "species": "英雄寶可夢",
     "stage": "Stage1",
     "illustrator": "satoma",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "波普海豚"
   },
   {
     "id": "50241",
@@ -941,7 +945,8 @@
     "species": "放電寶可夢",
     "stage": "Stage1",
     "illustrator": "Uninori",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "落雷獸"
   },
   {
     "id": "50243",
@@ -984,7 +989,7 @@
     ],
     "pokedexNumber": 737,
     "species": "電池寶可夢",
-    "evolvesFrom": "クワガノンGX",
+    "evolvesFrom": "蟲電寶",
     "stage": "Stage1",
     "illustrator": "Kazuhisa Uragami",
     "regulationMark": "M5"
@@ -1032,7 +1037,8 @@
     "species": "鍬形寶可夢",
     "stage": "Stage2",
     "illustrator": "KEIICHIRO ITO",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "電電蟲"
   },
   {
     "id": "50245",
@@ -1218,7 +1224,8 @@
     "species": "寄居寶可夢",
     "stage": "Stage1",
     "illustrator": "CHORISO",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "呆呆獸"
   },
   {
     "id": "50249",
@@ -1358,7 +1365,8 @@
     "species": "玩偶寶可夢",
     "stage": "Stage1",
     "illustrator": "Mugi Hamada",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "怨影娃娃"
   },
   {
     "id": "50252",
@@ -1473,7 +1481,7 @@
     ],
     "pokedexNumber": 608,
     "species": "燭燈寶可夢",
-    "evolvesFrom": "超級水晶燈火靈ex",
+    "evolvesFrom": "燭光靈",
     "stage": "Stage1",
     "illustrator": "sowsow",
     "regulationMark": "M5"
@@ -1520,7 +1528,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "水晶燈火靈",
+    "evolvesFrom": "水晶燈火靈ex",
     "stage": "Stage2",
     "illustrator": "5ban Graphics",
     "regulationMark": "M5"
@@ -1651,7 +1659,8 @@
     "species": "憤戰寶可夢",
     "stage": "Stage2",
     "illustrator": "Haru Akasaka",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "火爆猴"
   },
   {
     "id": "50259",
@@ -1721,7 +1730,7 @@
     ],
     "pokedexNumber": 57,
     "species": "豬猴寶可夢",
-    "evolvesFrom": "コノヨザルex",
+    "evolvesFrom": "猴怪",
     "stage": "Stage1",
     "illustrator": "GOSSAN",
     "regulationMark": "M5"
@@ -1802,7 +1811,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "戰槌龍",
+    "evolvesFrom": "頭蓋龍",
     "stage": "Stage2",
     "illustrator": "hncl",
     "regulationMark": "M5"
@@ -2558,7 +2567,8 @@
     "species": "盾牌寶可夢",
     "stage": "Stage2",
     "illustrator": "Kinu Nishimura",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "盾甲龍"
   },
   {
     "id": "50280",
@@ -2650,7 +2660,8 @@
     "species": "銅鐘寶可夢",
     "stage": "Stage1",
     "illustrator": "Uta",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "銅鏡怪"
   },
   {
     "id": "50282",
@@ -2699,7 +2710,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "ドリュウズex",
+    "evolvesFrom": "龍頭地鼠ex",
     "stage": "Stage1",
     "illustrator": "Keisuke Azuma",
     "regulationMark": "M5"
@@ -2780,7 +2791,8 @@
     "species": "喇叭口寶可夢",
     "stage": "Stage1",
     "illustrator": "miki kudo",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "鑽嘴鳥"
   },
   {
     "id": "50285",
@@ -2827,7 +2839,8 @@
     "species": "巨筒寶可夢",
     "stage": "Stage2",
     "illustrator": "Masako Tomii",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "喇叭啄鳥"
   },
   {
     "id": "50286",
@@ -2907,7 +2920,7 @@
     ],
     "pokedexNumber": 773,
     "species": "人造寶可夢",
-    "evolvesFrom": "屬性：空",
+    "evolvesFrom": "屬性：零",
     "stage": "Stage1",
     "illustrator": "Takumi Wada",
     "regulationMark": "M5"

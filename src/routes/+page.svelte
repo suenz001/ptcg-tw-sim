@@ -264,6 +264,37 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.873</span> 🐬 M5 進化鏈補齊 + 海豚寶寶 → 波普海豚</summary>
+        <ul>
+          <li><b>卡名校正</b>：<code>海豚寶寶</code> → <code>波普海豚</code>（Finizen 台版正譯）。同步更新 M5.json + m5_preview.ts 的 <code>regPost(&apos;波普海豚|吸取鰭&apos;)</code> 註冊 key。</li>
+          <li><b>M5 進化鏈補齊（之前多為空字串）</b>：13 張 Stage1/Stage2 寶可夢補上 evolvesFrom：
+            <ul>
+              <li>焚焰蚣 ← 燒火蚣 / 紅蓮鎧騎 ← 炭小侍 / 金魚王 ← 角金魚 / 海豚俠 ← 波普海豚 / 雷電獸 ← 落雷獸 / 鍬農炮蟲 ← 電電蟲 / 呆殼獸 ← 呆呆獸 / 詛咒娃娃 ← 怨影娃娃 / 棄世猴 ← 火爆猴 / 護城龍 ← 盾甲龍 / 青銅鐘 ← 銅鏡怪 / 喇叭啄鳥 ← 鑽嘴鳥 / 巨嘴鳥 ← 喇叭啄鳥</li>
+            </ul>
+          </li>
+          <li><b>ex 規則修正</b>：依官方規則「ex 寶可夢的進化位階等同於不帶 ex 的同名版本」（吼鯨王ex 和 吼鯨王 都是從 吼吼鯨 進化，不是 ex 從非 ex 進化）：
+            <ul>
+              <li>蘭螳花ex（Stage1）：蘭螳花 → <b>螳花蟲</b></li>
+              <li>吼鯨王ex（Stage1）：吼鯨王 → <b>吼吼鯨</b></li>
+              <li>戰槌龍ex（Stage2）：戰槌龍 → <b>頭蓋龍</b></li>
+            </ul>
+          </li>
+          <li><b>誤譯 / 錯誤 evolvesFrom 修正</b>：
+            <ul>
+              <li>花漾海獅：西獅海壬 → <b>球球海獅</b>（方向顛倒）</li>
+              <li>燈火幽靈：超級水晶燈火靈ex → <b>燭光靈</b>（方向顛倒）</li>
+              <li>火爆猴：コノヨザルex（日譯）→ <b>猴怪</b></li>
+              <li>電電蟲：クワガノンGX（日譯）→ <b>蟲電寶</b></li>
+              <li>銀伴戰獸：屬性：空（typo）→ <b>屬性：零</b></li>
+            </ul>
+          </li>
+          <li><b>Mega super-ex 校正</b>：超級龍頭地鼠ex 的 evolvesFrom 由日譯 <code>ドリュウズex</code> 改為 <code>龍頭地鼠ex</code>；超級水晶燈火靈ex 由 <code>水晶燈火靈</code> 改為 <code>水晶燈火靈ex</code>（Mega 機制：從同名 regular ex 進化）。</li>
+          <li><b>影響</b>：M5 牌組構築 / 進化判定現在能正確識別 M5 寶可夢的進化關係。之前空字串導致 Stage1/Stage2 寶可夢無法被當作進化目標（只能靠 builder 手動 Basic 直放規則勉強通過）。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 7c（依用戶提供的官方卡面 + 進化規則校對；發現多張卡 JSON 都漏譯 / 錯譯 / 寫反）/ Rule 11（M5.json + m5_preview.ts 全走 Python pipeline；JSON 用 <code>json.loads</code>+<code>json.dumps</code> 結構化編輯，避免 string replace 漏抓 trailing space 等雷）/ Rule 4（tsc 驗證）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.872</span> 🔧 修暗黑鈴：化石 → 惡屬性 filter 校正</summary>
         <ul>
           <li><b>卡面校正</b>：M5.json 內 <code>暗黑鈴</code> rulesText「將雙方的戰鬥寶可夢（<b>化石寶可夢</b>除外）」→「將雙方的戰鬥寶可夢（<b>惡屬性寶可夢</b>除外）」。之前 v4.82 OCR / 翻譯出錯把「惡屬性」誤譯為「化石」。</li>
