@@ -313,9 +313,10 @@ function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): 
   if (!state.mulliganRevealConfirmed[pIdx]) {
     return { type: 'CONFIRM_MULLIGAN_REVEAL', senderIdx: pIdx };
   }
-  // Mulligan 補抽決定：AI 一律接受（有的拿沒理由不拿）
-  if ((state.pendingMulliganDraw?.[pIdx] ?? 0) > 0) {
-    return { type: 'MULLIGAN_DRAW_DECISION', accept: true, senderIdx: pIdx };
+  // Mulligan 補抽決定（v4.923）：AI 一律拿滿（補抽零風險，有的拿沒理由不拿）
+  const aiPendingMulli = state.pendingMulliganDraw?.[pIdx] ?? 0;
+  if (aiPendingMulli > 0) {
+    return { type: 'MULLIGAN_DRAW_DECISION', count: aiPendingMulli, senderIdx: pIdx };
   }
   if (state.setupDone[pIdx]) return null;
   const player = state.players[pIdx];

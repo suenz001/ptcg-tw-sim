@@ -1574,20 +1574,29 @@ function handleSetup(
   if (action.type === 'MULLIGAN_DRAW_DECISION') {
     const cur = state.pendingMulliganDraw?.[pIdx] ?? 0;
     if (cur <= 0) return state; // 沒有待決定
+    // v4.923：玩家可選擇補抽張數（0 ~ cur），不再是 boolean 全抽/不抽。
+    //   防呆：Math.floor + Math.max/min clamp，舊客戶端送 undefined → 0（保守不抽）。
+    const requested = Math.max(0, Math.min(cur, Math.floor(Number(action.count) || 0)));
     const players = [...state.players] as [PlayerState, PlayerState];
     const player = { ...players[pIdx] };
-    if (action.accept) {
-      // 補抽 cur 張
-      const draws = player.deck.slice(0, cur);
-      player.deck = player.deck.slice(cur);
+    if (requested > 0) {
+      // 從牌庫頂補抽 requested 張
+      const draws = player.deck.slice(0, requested);
+      player.deck = player.deck.slice(requested);
       player.hand = [...player.hand, ...draws];
     }
     players[pIdx] = player;
     const newPending = [...state.pendingMulliganDraw] as [number, number];
     newPending[pIdx] = 0;
-    const msg = action.accept
-      ? `${player.name} 選擇補抽 ${cur} 張（對手重抽懲罰補償）`
-      : `${player.name} 放棄 ${cur} 張重抽懲罰補抽`;
+    // v4.923：細分三種 log 訊息（全抽 / 部分抽 / 不抽）
+    let msg: string;
+    if (requested === 0) {
+      msg = `${player.name} 放棄 ${cur} 張重抽懲罰補抽`;
+    } else if (requested === cur) {
+      msg = `${player.name} 選擇補抽 ${cur} 張（對手重抽懲罰補償）`;
+    } else {
+      msg = `${player.name} 選擇補抽 ${requested} 張（可選 ${cur} 張，剩餘 ${cur - requested} 張放棄）`;
+    }
     let next: GameState = {
       ...state, players, pendingMulliganDraw: newPending,
     };

@@ -9,8 +9,8 @@ export const GameActions = {
   placeActive:       (iid: string, senderIdx: 0 | 1): GameAction => ({ type: 'PLACE_ACTIVE', iid, senderIdx }),
   benchPokemon:      (iid: string, senderIdx: 0 | 1): GameAction => ({ type: 'BENCH_POKEMON', iid, senderIdx }),
   finishSetup:       (senderIdx: 0 | 1): GameAction => ({ type: 'FINISH_SETUP', senderIdx }),
-  mulliganDrawDecision: (accept: boolean, senderIdx: 0 | 1): GameAction =>
-                       ({ type: 'MULLIGAN_DRAW_DECISION', accept, senderIdx }),
+  mulliganDrawDecision: (count: number, senderIdx: 0 | 1): GameAction =>
+                       ({ type: 'MULLIGAN_DRAW_DECISION', count, senderIdx }),
   // v3.74：玩家確認對方的 mulligan 揭示
   confirmMulliganReveal: (senderIdx: 0 | 1): GameAction =>
                        ({ type: 'CONFIRM_MULLIGAN_REVEAL', senderIdx }),

@@ -850,8 +850,8 @@ export type GameAction =
   | { type: 'PLACE_ACTIVE'; iid: string; senderIdx: 0 | 1 }
   | { type: 'BENCH_POKEMON'; iid: string; senderIdx: 0 | 1 }
   | { type: 'FINISH_SETUP'; senderIdx: 0 | 1 }
-  /** 對手 mulligan 補抽：accept=true 抽齊 pendingMulliganDraw[senderIdx] 張；false 放棄 */
-  | { type: 'MULLIGAN_DRAW_DECISION'; accept: boolean; senderIdx: 0 | 1 }
+  /** 對手 mulligan 補抽（v4.923）：count = 補抽張數（0 ~ pendingMulliganDraw[senderIdx]），engine 端會 clamp */
+  | { type: 'MULLIGAN_DRAW_DECISION'; count: number; senderIdx: 0 | 1 }
   /** v3.74：玩家確認對方的 mulligan 揭示（看完 modal 後按確認）。設 mulliganRevealConfirmed[senderIdx]=true */
   | { type: 'CONFIRM_MULLIGAN_REVEAL'; senderIdx: 0 | 1 }
 

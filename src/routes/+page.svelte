@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.923</span> 🎴 重抽 Mulligan 補抽改 +/- 計數器（可選 0~N 張，預設最大）</summary>
+        <ul>
+          <li><b>玩家建議</b>：對戰開始時的重抽 Mulligan 補抽原為「全抽 / 全不抽」二選一，希望能精細控制（例：對手重抽 3 次時，可只多抽 1 張或 2 張）。</li>
+          <li><b>新 UI</b>：補抽 modal 改為 +/- 計數器（與 v2.87 同類能量批次附加 picker 一致樣式）— 預設為最大值，可往下調至 0；確認按鈕一次送出實際選擇張數。</li>
+          <li><b>Engine 修法</b>：<code>MULLIGAN_DRAW_DECISION</code> 由 <code>accept: boolean</code> 改為 <code>count: number</code>；engine 端 clamp 到 0 ~ <code>pendingMulliganDraw[idx]</code> 範圍，log 訊息細分「全抽 / 部分抽 / 不抽」三種狀況。</li>
+          <li><b>AI 行為</b>：<code>handleSetupAI()</code> 一律送 <code>count = pendingMulliganDraw[pIdx]</code>（拿滿） — 補抽無風險，沒理由不拿。</li>
+          <li><b>Risk 評估</b>：action schema 變動但 setup 階段時間極短，線上對戰跨版本撞期機率低；engine 端對 <code>action.count ?? 0</code> 做防呆 floor + clamp，舊客戶端送 undefined 會被視為 0（保守不抽） — 不會壞遊戲。</li>
+          <li><b>Iron Rules</b>：Rule 1（changelog escape）/ Rule 4（tsc clean）/ Rule 11（Python pipeline）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.922</span> 🔧 修請假王ex 懶怠個性 沒被火箭隊的監視塔擋（v4.921 audit 連帶發現）</summary>
         <ul>
           <li><b>v4.921 後續 audit 結果</b>：交叉比對 Colorless 寶可夢清單（34 種特性）vs 引擎內 direct-scan ability 點（22 處），找出另一個漏網：請假王ex 的「懶怠個性」(Colorless)。</li>

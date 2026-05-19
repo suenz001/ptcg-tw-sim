@@ -546,6 +546,8 @@
   //   - 切換新 modal 時 $effect 自動重置 offset（pendingSelection 物件變更就 trigger）
   let modalOffset = $state<{ x: number; y: number }>({ x: 0, y: 0 });
   let modalDragged = $state(false);
+  // v4.923：mulligan 補抽 stepper 計數覆寫值 — null 代表使用預設最大值
+  let mulliganPickOverride = $state<number | null>(null);
   // v3.81：取得獎賞 10 秒倒數 — 防本機雙人模式對手不點 take 卡死
   let takePrizeCountdown = $state<number>(0);
   let takePrizeTimerId = $state<ReturnType<typeof setInterval> | null>(null);
@@ -4210,7 +4212,8 @@
           playSfx('draw');
           break;
         case 'MULLIGAN_DRAW_DECISION':
-          if ((action as any).accept) playSfx('draw');
+          // v4.923：accept→count，只要實際補抽 >0 張就播放音效
+          if (((action as any).count ?? 0) > 0) playSfx('draw');
           break;
         case 'FINISH_SETUP':
           // 雙方 setup 都完成 → 進 playing，放擲硬幣音（開局象徵先攻）
@@ -6127,13 +6130,14 @@
     </div>
   {/if}
 
-  <!-- 重抽懲罰補抽決定：對手起手無基礎寶可夢重抽時，玩家選擇抽/不抽補償 -->
+  <!-- v4.923 重抽懲罰補抽決定：+/- 計數器 UI（0 ~ nDraw 張，預設最大值） -->
   {#if game && game.phase==='setup' && (game.pendingMulliganDraw?.[myIdx] ?? 0) > 0 && (game.mulliganRevealConfirmed?.[myIdx] ?? true) && (
       (mode==='online' && myPlayerIndex===myIdx) ||
       (mode!=='online' && aiPlayerIndex === null) ||
       (aiPlayerIndex !== null && aiPlayerIndex !== myIdx)
     )}
     {@const nDraw = game.pendingMulliganDraw[myIdx]}
+    {@const pickCount = mulliganPickOverride === null ? nDraw : Math.min(Math.max(0, mulliganPickOverride), nDraw)}
     {@const oppName = game.players[oppIdx].name}
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal mulligan-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
@@ -6141,24 +6145,29 @@
           <h3>🔄 對手的重抽懲罰</h3>
           <p class="sel-hint">
             <strong>{oppName}</strong> 起手沒有基礎寶可夢，重新洗牌 {nDraw} 次。
-            <br/>作為補償，你可多抽 <strong>{nDraw}</strong> 張牌。
+            <br/>作為補償，你可選擇多抽 <strong>0 ~ {nDraw}</strong> 張牌（預設為最大值）。
           </p>
         </div>
         <div class="mulligan-body">
           <div class="mulligan-info">
             <div>📦 牌組剩餘：{myPlayer?.deck.length ?? 0} 張</div>
             <div>🖐 目前手牌：{myPlayer?.hand.length ?? 0} 張</div>
-            <div>👉 接受後手牌變為：{(myPlayer?.hand.length ?? 0) + nDraw} 張</div>
+            <div>👉 確認後手牌變為：{(myPlayer?.hand.length ?? 0) + pickCount} 張</div>
+          </div>
+          <div class="mulligan-stepper">
+            <button class="btn-ghost stepper-btn"
+              disabled={pickCount <= 0}
+              onclick={() => { mulliganPickOverride = Math.max(0, pickCount - 1); }}>−</button>
+            <div class="stepper-value">{pickCount}</div>
+            <button class="btn-ghost stepper-btn"
+              disabled={pickCount >= nDraw}
+              onclick={() => { mulliganPickOverride = Math.min(nDraw, pickCount + 1); }}>＋</button>
           </div>
         </div>
         <div class="sel-footer mulligan-footer">
-          <button class="btn-act secondary"
-            onclick={() => dispatch(GameActions.mulliganDrawDecision(false, myIdx))}>
-            🚫 不抽（放棄 {nDraw} 張）
-          </button>
           <button class="btn-act primary"
-            onclick={() => dispatch(GameActions.mulliganDrawDecision(true, myIdx))}>
-            ✅ 抽 {nDraw} 張
+            onclick={() => { dispatch(GameActions.mulliganDrawDecision(pickCount, myIdx)); mulliganPickOverride = null; }}>
+            ✅ 確認補抽 {pickCount} 張
           </button>
         </div>
       </div>
@@ -8752,9 +8761,13 @@
     .mulligan-reveal-pager .page-indicator{ font-size:.78rem; }
   }
 
-  .mulligan-body{ padding:.4rem 0; }
+  .mulligan-body{ padding:.4rem 0; display:flex; flex-direction:column; gap:.6rem; }
   .mulligan-info{ background:rgba(255,220,120,.08); border:1px solid rgba(255,200,100,.35); border-radius:8px; padding:.6rem .75rem; display:flex; flex-direction:column; gap:.25rem; color:#ffe0a0; font-size:.85rem; }
-  .mulligan-footer{ justify-content:space-between; }
+  .mulligan-footer{ justify-content:center; }
+  /* v4.923：mulligan stepper — +/- 計數器 UI */
+  .mulligan-stepper{ display:flex; align-items:center; justify-content:center; gap:18px; padding:6px 0 2px; }
+  .mulligan-stepper .stepper-btn{ padding:8px 22px; font-size:22px; font-weight:bold; min-width:64px; border-radius:8px; }
+  .mulligan-stepper .stepper-value{ font-size:42px; font-weight:bold; min-width:80px; text-align:center; color:#ffd070; line-height:1; }
 
   /* 撤退選單（置中橫向 grid） */
   .retreat-modal{ max-width:760px; }
