@@ -71,6 +71,7 @@ import {
 } from '../../effects';
 import { getEnergyUnits } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
+import { canApplyEffectToTarget } from '../../defense';
 
 // ── M5 helper: 自傷（這隻寶可夢也受到 N 傷害）─────────────────────────
 // 引擎沒有現成的 selfDamagePost helper（v2380 之前用 inline pattern）
@@ -1615,17 +1616,154 @@ regR('m5-trainer-karunari-vigor-attach', (state, aIdx, iids, params) => {
 regR('m5-trainer-karunari-vigor-end-only', (state) => state);
 
 // ════════════════════════════════════════════════════════════════════════════
-// Phase 5 結束。已實裝 14 (P1) + 17 (P2) + 19 (P3) + 8 (P4) + 7 (P5) = 65 個項目。
-// 招式 58 + 特性 3 + 訓練家 4 = 65 個 effect 註冊 / 81 張卡。
-// 累計達 ~80% 卡片 coverage。
-// 剩餘 deferred 工作（需 engine 擴充）：
-//   - 化隱特性 6 卡 + 3 依賴招式（canApplyEffectToTarget 加 ability gate）
-//   - 暗影惡能量（特殊能量備戰位免疫 — flower veil 類）
-//   - 6 個複雜特性（滿滿旋律 / 光子密碼 / 不朽之軀 / 太鼓防壁 / 咒縛之炎 等）
-//   - 5 個複雜招式（強烈之吻 / 招式竊賊 / 蟲蟲恐慌 / 閃光屏障 / 熔岩之壁 等）
-//   - 化石卡（古老的頭蓋/盾牌 + 化石採掘場）
-//   - 工具卡（豪華炸彈 / 重試徽章）+ 灰瀨的決戰 + 閃電能量
+// Phase 5 結束。已實裝 65 個 effect（招式 58 + 特性 3 + 訓練家 4）/ 81 張卡。
 // ════════════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 6 (v4.84) — 化隱特性 + 3 依賴招式
+//
+// 化隱（M5 — 斯魔茶 / 來悲粗茶 / 怨影娃娃 / 詛咒娃娃）
+//   卡面：「這隻寶可夢不會受到對手的招式或特性的效果。」
+//   範圍：active + bench 全場；擋 attack-effect 與 ability-effect；不擋 attack-damage。
+//   注意：跟舊 v3.06「藏隱」名稱相近但機制不同（藏隱是 bench-only + 含招式傷害）。
+//   實作位置：defense.ts canApplyEffectToTarget 開頭 — 已新增 check（v4.84）。
+//   本檔不註冊 regA — 化隱是 passive 特性，由 unified defense pipeline 在
+//   每次 attack-effect / ability-effect 套用前 check defender ability。
+//
+// 3 個依賴招式（讀「自方棄牌區擁有化隱特性的寶可夢數」N）：
+//   來悲粗茶|抹茶旋轉（N ≥ 6 → 對手全場各 +4 指示物）
+//   花岩怪|靈魂終結（N ≥ 13 → opp-poke-choose 2 隻 → damage × 4 倍）
+//   破破舵輪|怨恨之怒（30 + N ≥ 4 → +140）
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── helper：count 自方棄牌區中擁有「化隱」特性的寶可夢數 ─────────
+function countHuayinInOwnDiscard(
+  state: import('../../types').GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, import('$lib/cards/types').Card>,
+): number {
+  return state.players[aIdx].discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.abilities?.some(a => a.name === '化隱') ?? false;
+  }).length;
+}
+
+// ── 來悲粗茶|抹茶旋轉 — 棄牌區化隱 ≥ 6 → 對手全場各 +4 指示物 ─
+//   卡面：「自己的棄牌區中，若擁有特性『化隱』的寶可夢有 6 張以上，
+//          則在對手場上所有寶可夢身上，各放置 4 個傷害指示物。」
+//   damage = 0；效果為「放置傷害指示物」屬 attack-effect。
+//   per-target 走 canApplyEffectToTarget('attack-effect') — 對手場上若有化隱
+//   寶可夢應被自身免疫（雖然這場景罕見：對手也用化隱牌組）。
+regPre('來悲粗茶|抹茶旋轉', (state) => ({ state, damage: 0 }));
+regPost('來悲粗茶|抹茶旋轉', (state, aIdx, pool) => {
+  const n = countHuayinInOwnDiscard(state, aIdx, pool);
+  if (n < 6) {
+    return addLog(state, `抹茶旋轉：棄牌區化隱寶可夢 ${n} 張（需 ≥ 6 觸發），效果略過`, aIdx);
+  }
+  const dIdx = (1 - aIdx) as 0 | 1;
+  let s = addLog(state, `抹茶旋轉：棄牌區化隱寶可夢 ${n} 張 → 對手全場各 +4 指示物`, aIdx);
+  // 對手 active
+  const def = s.players[dIdx];
+  const targets = [def.active, ...def.bench].filter((x): x is import('../../types').CardInstance => x !== null);
+  for (const t of targets) {
+    const tCard = pool.get(t.cardId);
+    const r = canApplyEffectToTarget(s, aIdx, t, tCard, 'attack-effect', pool);
+    if (r.blocked) {
+      s = addLog(s, `抹茶旋轉：${tCard?.name ?? '?'} 被 ${r.reason} 擋下，跳過`, aIdx);
+      continue;
+    }
+    s = updatePlayer(s, dIdx, p => ({
+      ...p,
+      active: p.active && p.active.iid === t.iid
+        ? { ...p.active, damage: (p.active.damage ?? 0) + 40 }
+        : p.active,
+      bench: p.bench.map(b => b.iid === t.iid ? { ...b, damage: (b.damage ?? 0) + 40 } : b),
+    }));
+  }
+  return s;
+});
+
+// ── 花岩怪|靈魂終結 — 棄牌區化隱 ≥ 13 → opp-poke-choose 2 隻 → damage × 4 ─
+//   卡面：「自己的棄牌區中，若擁有特性『化隱』的寶可夢有 13 張以上，
+//          則選擇對手 2 隻寶可夢，將其身上的傷害指示物以 4 倍的方式放置
+//         （即原數量 × 4）。」
+//   damage = 0；倍化既有指示物（不是新放置）— 視為 attack-effect。
+regPre('花岩怪|靈魂終結', (state) => ({ state, damage: 0 }));
+regPost('花岩怪|靈魂終結', (state, aIdx, pool) => {
+  const n = countHuayinInOwnDiscard(state, aIdx, pool);
+  if (n < 13) {
+    return addLog(state, `靈魂終結：棄牌區化隱寶可夢 ${n} 張（需 ≥ 13 觸發），效果略過`, aIdx);
+  }
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const def = state.players[dIdx];
+  const allOpp = [def.active, ...def.bench].filter((x): x is import('../../types').CardInstance => x !== null);
+  if (allOpp.length === 0) {
+    return addLog(state, '靈魂終結：對手場上無寶可夢', aIdx);
+  }
+  const pickCount = Math.min(2, allOpp.length);
+  return withPending(
+    addLog(state, `靈魂終結：棄牌區化隱 ${n} 張 → 選對手 ${pickCount} 隻寶可夢將其指示物 × 4 倍`, aIdx),
+    {
+      type: 'opp-poke-choose',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: pickCount, maxCount: pickCount,
+      effectKey: 'm5-runerigus-soul-end',
+      params: { includeActive: true },
+    },
+  );
+});
+regR('m5-runerigus-soul-end', (state, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  let s = state;
+  for (const targetIid of iids) {
+    const dPlayer = s.players[dIdx];
+    const allOpp = [dPlayer.active, ...dPlayer.bench].filter((x): x is import('../../types').CardInstance => x !== null);
+    const target = allOpp.find(c => c.iid === targetIid);
+    if (!target) continue;
+    const tCard = pool.get(target.cardId);
+    // 化隱 / 球形盾牌 等 effect 免疫 per-target check
+    const r = canApplyEffectToTarget(s, aIdx, target, tCard, 'attack-effect', pool);
+    if (r.blocked) {
+      s = addLog(s, `靈魂終結：${tCard?.name ?? '?'} 被 ${r.reason} 擋下，跳過`, aIdx);
+      continue;
+    }
+    const newDamage = (target.damage ?? 0) * 4;
+    const delta = newDamage - (target.damage ?? 0);
+    s = updatePlayer(
+      addLog(s, `靈魂終結：${tCard?.name ?? '?'} 指示物 ${(target.damage ?? 0) / 10} → ${newDamage / 10}（+${delta / 10}）`, aIdx),
+      dIdx,
+      p => ({
+        ...p,
+        active: p.active && p.active.iid === targetIid ? { ...p.active, damage: newDamage } : p.active,
+        bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: newDamage } : b),
+      }),
+    );
+  }
+  return s;
+});
+
+// ── 破破舵輪|怨恨之怒 — 30 + 棄牌區化隱 ≥ 4 → +140 ───────────
+//   卡面：「自己的棄牌區中，若擁有特性『化隱』的寶可夢有 4 張以上，
+//          則此招式傷害 +140。」
+regPre('破破舵輪|怨恨之怒', (state, aIdx, pool) => {
+  const n = countHuayinInOwnDiscard(state, aIdx, pool);
+  const bonus = n >= 4 ? 140 : 0;
+  const dmg = 30 + bonus;
+  return {
+    state: addLog(state,
+      `怨恨之怒：棄牌區化隱寶可夢 ${n} 張${n >= 4 ? '（≥ 4 觸發 +140）' : ''} → 30${bonus > 0 ? ` + ${bonus}` : ''} = ${dmg}`, aIdx),
+    damage: dmg,
+  };
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 6 結束。化隱特性 + 3 依賴招式完整實裝。
+// 累計實裝：65 (P1-P5) + 1 (化隱特性) + 3 (依賴招式) = 69 個 effect / 81 張卡。
+// 化隱在 4 隻寶可夢（斯魔茶/來悲粗茶/怨影娃娃/詛咒娃娃）上自動生效，
+// 無需逐隻 regA — passive ability check 在 defense.ts canApplyEffectToTarget 處理。
+// ════════════════════════════════════════════════════════════════════════════
+
 
 
 

@@ -264,6 +264,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.84</span> 👁 M5 化隱特性 + 3 依賴招式</summary>
+        <ul>
+          <li><b>累計實裝</b>：65 (P1-P5) + 1 (化隱機制) + 3 (依賴招式) = <b>69 個 effect</b> / 81 張卡（~85% coverage）。</li>
+          <li><b>化隱（M5 新特性，4 隻寶可夢共用）</b>：斯魔茶 / 來悲粗茶 / 怨影娃娃 / 詛咒娃娃。
+            <ul>
+              <li><b>卡面</b>：「這隻寶可夢不會受到對手的招式或特性的效果。」</li>
+              <li><b>實作位置</b>：defense.ts <code>canApplyEffectToTarget</code> 開頭加 inline check（緊接光之翼 check）。</li>
+              <li><b>範圍</b>：active + bench 全場；擋 attack-effect + ability-effect；<b>不擋 attack-damage</b>。</li>
+              <li><b>passive design</b>：不需 regA 註冊；每次對手招式 / 特性套效果到 target 時，unified defense pipeline 自動 check target ability。</li>
+              <li><b>命名注意</b>：跟舊 v3.06「藏隱」名稱相近但機制不同（藏隱是 bench-only + 含招式傷害；化隱是全場 + 不含招式傷害）。</li>
+            </ul>
+          </li>
+          <li><b>3 個依賴招式（讀「自方棄牌區擁有化隱特性的寶可夢數」N）</b>：
+            <ul>
+              <li><b>來悲粗茶｜抹茶旋轉</b>（N ≥ 6 → 對手場上所有寶可夢各 +4 指示物；per-target 走 canApplyEffectToTarget 檢查，化隱寶可夢自身被自身免疫不放）</li>
+              <li><b>花岩怪｜靈魂終結</b>（N ≥ 13 → opp-poke-choose 2 隻 → 各自指示物 × 4 倍；per-target 走 canApplyEffectToTarget）</li>
+              <li><b>破破舵輪｜怨恨之怒</b>（30 + N ≥ 4 觸發 +140 = 170）</li>
+            </ul>
+          </li>
+          <li><b>共通機制 helper</b>：<code>countHuayinInOwnDiscard(state, aIdx, pool)</code> — 計算自方棄牌區中擁有化隱特性的寶可夢張數，3 個招式共用。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 4（push 前 tsc + esbuild 雙驗證 clean）/ Rule 7c（JSON effect 為唯一 source）/ Rule 11（m5_preview.ts 走 Python pipeline 注入 6K 內容）/ Rule 13（picker effectKey 字串 + primitive params，無 nested array）/ Rule 17（每個指示物放置都走 unified canApplyEffectToTarget 防化隱寶可夢被誤傷）。</li>
+          <li><b>剩餘 deferred</b>：暗影惡能量 / 6 個複雜特性（滿滿旋律 / 光子密碼 / 不朽之軀 / 太鼓防壁 / 咒縛之炎）/ 5 個複雜招式（強烈之吻 / 招式竊賊 / 蟲蟲恐慌 / 閃光屏障 / 熔岩之壁）/ 化石卡 / 工具卡 / 灰瀨的決戰 / 閃電能量。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.83</span> ⚔ M5 對戰邏輯 Phase 5 — 3 特性 + 4 訓練家</summary>
         <ul>
           <li><b>累計實裝</b>：58 招式 + 3 特性 + 4 訓練家 = <b>65 個 effect</b> / 81 張卡。約 80% coverage。</li>

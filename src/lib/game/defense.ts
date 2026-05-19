@@ -133,6 +133,16 @@ export function canApplyEffectToTarget(
     }
   }
 
+  // 1b. 化隱（v4.84 / M5 — 斯魔茶 / 來悲粗茶 / 怨影娃娃 / 詛咒娃娃）
+  //     卡面：「這隻寶可夢不會受到對手的招式或特性的效果。」
+  //     範圍：active + bench 全場；擋 attack-effect + ability-effect；不擋 attack-damage。
+  //     注意：跟舊 v3.06「藏隱」名稱相近但機制不同（藏隱是 bench-only + 含招式傷害）。
+  if (kind === 'attack-effect' || kind === 'ability-effect') {
+    if (targetCard?.abilities?.some(a => a.name === '化隱')) {
+      return { blocked: true, reason: '化隱 免疫對手招式效果與特性效果' };
+    }
+  }
+
   // 2. canApplyAttackEffectToTarget — ATTACK_EFFECT_IMMUNITY map：
   //    - 薄霧能量 (energy-on-target, attack-effect)
   //    - 硬岩【鬥】能量 (energy-on-target, requireType=Fighting)
