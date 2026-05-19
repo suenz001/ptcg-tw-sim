@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.924</span> 🔐 Oracle 站對戰演練頁顯示登入 dashboard（修 v4.65 漏網）</summary>
+        <ul>
+          <li><b>玩家回報</b>：Oracle 站（www.ptcg-tw-sim.com）的對戰演練頁沒顯示登入帳號 dashboard，跟 GitHub Pages 站不一致。但牌組編輯器頁是正常顯示的。</li>
+          <li><b>Root cause</b>：<code>game/+page.svelte:2419-2430</code> 在 v4.65 加了 <code>if (ORACLE_MODE) oracleAuth() else onAuthStateChanged(...)</code> 二擇一分流，把 Firebase auth 流程在 Oracle build 下整個繞掉 → <code>firebaseUser</code> 永遠是 <code>null</code> → dashboard 三處 <code>!ORACLE_MODE && firebaseUser</code> 條件不渲染。</li>
+          <li><b>關鍵發現</b>：vite oracleSwapPlugin 只 swap <code>$lib/game/room</code> → <code>room-oracle.ts</code>，<b>沒有 swap <code>$lib/firebase</code></b>。Firebase Auth SDK 在 Oracle build 下完全可用（牌組編輯器頁就是這樣跑的，可以正常登入顯示帳號）。v4.65 的二擇一是 over-reach。</li>
+          <li><b>修法</b>：拆掉二擇一分流，改成「Firebase auth 永遠初始化（給 dashboard 用）+ Oracle build 額外取 Oracle JWT（給房間 API 用）」。<code>myUid</code> 在 ORACLE_MODE 下仍走 Oracle JWT uid（保線上對戰房間 memberUid 對得上）；Firebase build 下 <code>myUid</code> 走 Firebase uid。並拆三處 <code>&#123;#if !ORACLE_MODE && firebaseUser&#125;</code> 改為 <code>&#123;#if firebaseUser&#125;</code>。</li>
+          <li><b>風險控管</b>：onAuthStateChanged callback 內加 <code>if (!ORACLE_MODE)</code> gate 防止 Firebase uid 在 Oracle build 下蓋掉 Oracle JWT 簽的 uid（避免線上對戰房間身份比對失敗）。</li>
+          <li><b>Iron Rules</b>：Rule 1（changelog escape）/ Rule 4（tsc clean）/ Rule 11（Python pipeline）/ Rule 17（unified pattern：跟 decks 頁 always-Firebase-auth 一致）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.923</span> 🎴 重抽 Mulligan 補抽改 +/- 計數器（可選 0~N 張，預設最大）</summary>
         <ul>
           <li><b>玩家建議</b>：對戰開始時的重抽 Mulligan 補抽原為「全抽 / 全不抽」二選一，希望能精細控制（例：對手重抽 3 次時，可只多抽 1 張或 2 張）。</li>

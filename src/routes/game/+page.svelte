@@ -2416,7 +2416,23 @@
     audioMuted = isAudioMuted();
     bgmTrack = getBgmTrack();
     bgmVolume = getBgmVolume();
-    // 匿名登入（線上對戰需要）— v4.65 加 ORACLE_MODE 分流
+    // 匿名登入（線上對戰需要）— v4.924 改用 Firebase + Oracle 並行：
+    //   v4.65 原本是 if/else 二擇一，但 vite 沒 swap $lib/firebase，Firebase
+    //   Auth SDK 在 Oracle build 下完全可用（牌組編輯器頁就是這樣跑的）。
+    //   分流導致 firebaseUser 在 Oracle build 永遠 null → dashboard 不顯示。
+    //   修法：Firebase auth 永遠初始化（給 dashboard 用 firebaseUser）；
+    //   Oracle build 額外取 Oracle JWT（給房間 API 用）。myUid 在 ORACLE_MODE
+    //   下仍走 Oracle JWT uid，避免房間 memberUid 比對失敗。
+    onAuthStateChanged(auth, u => {
+      firebaseUser = u;
+      // Oracle build 下 myUid 必須走 Oracle JWT uid（房間 API 簽 JWT 用），
+      // 不能被 Firebase uid 蓋掉 → 加 gate 阻擋 callback 覆寫 myUid。
+      if (!ORACLE_MODE) {
+        myUid = u?.uid ?? null;
+      }
+    });
+    if (!auth.currentUser) await signInAnonymously(auth);
+    // Oracle build 額外初始化 — 取 Oracle JWT 給房間 API
     if (ORACLE_MODE) {
       try {
         const { uid } = await oracleAuth();
@@ -2424,9 +2440,6 @@
       } catch (err) {
         console.error('[oracle auth]', err);
       }
-    } else {
-      onAuthStateChanged(auth, u => { myUid = u?.uid ?? null; firebaseUser = u; });
-      if (!auth.currentUser) await signInAnonymously(auth);
     }
 
     const allCards = await loadAllSets();
@@ -4342,8 +4355,8 @@
   <!-- ─── 模式選擇 ─── -->
   <main class="lobby">
     <a href="{base}/" class="back">← 首頁</a>
-    <!-- v4.913 登入狀態 dashboard（port 自牌組編輯器；Oracle build 不顯示） -->
-    {#if !ORACLE_MODE && firebaseUser}
+    <!-- v4.913 登入狀態 dashboard（port 自牌組編輯器；v4.924 開放 Oracle build） -->
+    {#if firebaseUser}
       <div class="auth-dashboard">
         <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
           {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
@@ -4382,8 +4395,8 @@
   <!-- ─── 本機 Lobby ─── -->
   <main class="lobby">
     <button class="back-btn" onclick={() => mode=null}>← 返回</button>
-    <!-- v4.918 登入狀態 dashboard（同 v4.913 模式選擇畫面；Oracle build 不顯示） -->
-    {#if !ORACLE_MODE && firebaseUser}
+    <!-- v4.918 登入狀態 dashboard（同 v4.913 模式選擇畫面；v4.924 開放 Oracle build） -->
+    {#if firebaseUser}
       <div class="auth-dashboard">
         <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
           {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
@@ -4492,8 +4505,8 @@
     {#if onlineStep !== 'room'}
       <button class="back-btn" onclick={() => { mode=null; onlineStep='choose'; onlineError=''; }}>← 返回</button>
     {/if}
-    <!-- v4.918 登入狀態 dashboard（同 v4.913 模式選擇畫面；Oracle build 不顯示） -->
-    {#if !ORACLE_MODE && firebaseUser}
+    <!-- v4.918 登入狀態 dashboard（同 v4.913 模式選擇畫面；v4.924 開放 Oracle build） -->
+    {#if firebaseUser}
       <div class="auth-dashboard">
         <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
           {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
