@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.919</span> 📺 觀戰者加入 / 離開時在對戰 log 顯示通知</summary>
+        <ul>
+          <li><b>新功能</b>：連線對戰中有人進入或離開觀戰位時，在 log 顯示「📺 xxx 加入觀戰」/「📺 xxx 離開觀戰」訊息。雙方玩家和其他觀戰者都看得到。</li>
+          <li><b>實作位置</b>：<code>game&#47;+page.svelte</code> 的 <code>handleRoomUpdate</code> 內，每次 room update 時 diff 上次快照得到觀戰者 join / leave deltas。</li>
+          <li><b>避免雙端重複寫入</b>：只有 P1 (<code>mySeatIdx === 0</code>) 才會 push log 到 Firestore — P2 / 其他觀戰者只更新本機快照不寫 log。雙方都會透過 gameState 同步收到新 log entries。</li>
+          <li><b>觸發條件</b>：<code>game.phase === 'playing'</code> 才寫入對戰 log。lobby / setup / game-over 階段不寫（lobby 沒 game.log 可寫；game-over 不重要）。</li>
+          <li><b>邏輯</b>：用 <code>lastSpectatorMap: Map&lt;uid, name&gt;</code> 跨 handleRoomUpdate 呼叫保留前次觀戰者快照，diff 出 joined（新 uid）/ left（已消失 uid），各自產生一條 <code>LogEntry</code>（<code>playerIndex: null</code> 表系統訊息）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.918</span> 🔐 補登入狀態 dashboard 到本機 / 連線 lobby（v4.913 漏網）</summary>
         <ul>
           <li><b>玩家回報</b>：v4.913 只在「⚔️ 開始對戰」模式選擇畫面顯示登入狀態 dashboard，但點進「🖥️ 本機雙人對戰」「🌐 線上連線對戰」兩個子頁面後 dashboard 就消失了。</li>

@@ -3502,9 +3502,48 @@
     });
   }
 
+  // v4.919 觀戰加入/離開 log — 只 P1 (mySeatIdx === 0) 寫 log 避免多端重複 push
+  // 跨 handleRoomUpdate 呼叫保留前次快照；初始為空 Map。
+  let lastSpectatorMap = new Map<string, string>();
+
   function handleRoomUpdate(room: Room | null) {
     if (!room) { onlineError = '房間不存在或連線中斷'; return; }
     roomData = room;
+
+    // ── v4.919 觀戰者加入/離開通知（對戰 log）─────────────────────────────
+    //   邏輯：每次 room update 計算當前 spectator 座位的 (uid -> name) map，
+    //   diff 上次快照得到 join/leave deltas。為避免雙方 client 同時偵測到
+    //   change 各自 push 重複 log，只有 mySeatIdx === 0 (host=P1) 寫 log。
+    //   只在 playing 階段觸發（lobby/setup/game-over 不寫對戰 log）。
+    {
+      const currentMap = new Map<string, string>();
+      for (const seat of room.seats) {
+        if (seat.role === 'spectator' && seat.uid) {
+          currentMap.set(seat.uid, seat.name ?? '觀戰者');
+        }
+      }
+      // 只 P1 + playing 階段 + game 存在才 push（避免重複 + lobby 沒 game.log）
+      if (game && game.phase === 'playing' && mySeatIdx === 0 && roomCode) {
+        const joined: { uid: string; name: string }[] = [];
+        const left: { uid: string; name: string }[] = [];
+        for (const [uid, name] of currentMap) {
+          if (!lastSpectatorMap.has(uid)) joined.push({ uid, name });
+        }
+        for (const [uid, name] of lastSpectatorMap) {
+          if (!currentMap.has(uid)) left.push({ uid, name });
+        }
+        if (joined.length > 0 || left.length > 0) {
+          const newEntries = [
+            ...joined.map(j => ({ turn: game!.turn, playerIndex: null as 0 | 1 | null, message: `📺 ${j.name} 加入觀戰` })),
+            ...left.map(l => ({ turn: game!.turn, playerIndex: null as 0 | 1 | null, message: `📺 ${l.name} 離開觀戰` })),
+          ];
+          const updated = { ...game, log: [...(game.log ?? []), ...newEntries] };
+          game = updated;
+          pushGameState(roomCode, updated).catch(e => console.warn('[spectator log] push failed:', e));
+        }
+      }
+      lastSpectatorMap = currentMap;
+    }
 
     // 從 seats 推導我的座位
     const idx = findMySeatIdx(room.seats, myUid);
