@@ -6862,27 +6862,20 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
 
     const targetCard = pool.get(target.cardId);
 
-    // v2.89 招式效果免疫檢查（per-target）
-    const guard = canApplyAttackEffectToTarget(s, actorIdx, target, targetCard, pool);
-    if (guard.blocked) {
+    // v4.917：統一 canApplyEffectToTarget（kind='attack-effect'）— 涵蓋 化隱 + 光之翼 +
+    //   ATTACK_EFFECT_IMMUNITY map（薄霧 / 硬岩 / 皇帝之勢 / 抵抗之幕 / 全能硬殼 / 陳舊背蓋化石）
+    //   + bench 保護（對戰圓形 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 太晶 / 中立中心）。
+    //   合併原 v2.89 canApplyAttackEffectToTarget + v4.4999 resolveBenchGuard 兩段為一個入口；
+    //   玩家回報 M5「化隱」（斯魔茶 / 來悲粗茶 / 怨影娃娃 / 詛咒娃娃）幻影奇襲 / 飛來橫禍 仍生效
+    //   — root cause: dragapult-snipe 還在用舊散裝 helper，沒走 unified 入口（漏 1b 化隱分支）。
+    //   target 永遠是 bench（dragapult-snipe 限制 sourcePlayerIdx 對手備戰）→ isBench: true。
+    const _snipeGuard = canApplyEffectToTarget(s, actorIdx, target, targetCard, 'attack-effect', pool, { isBench: true });
+    if (_snipeGuard.blocked) {
       if (!blockedTargets.has(iid)) {
         blockedTargets.add(iid);
-        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${guard.reason}（該指示物無效）`, actorIdx);
+        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${_snipeGuard.reason}（該指示物無效）`, actorIdx);
       }
       placedThisBatch++; // 仍計數本批次（消耗 counter，但不放置）
-      continue;
-    }
-    // v4.4999：bench 保護 helper — 球形盾牌、藏隱、深度下潛、羽毛化石、太晶 等
-    //   玩家回報「球形盾牌沒擋多龍巴魯托ex 幻影奇襲」— root cause: canApplyAttackEffectToTarget
-    //   只查 ATTACK_EFFECT_IMMUNITY map（不含球形盾牌），同類 bench-hit-N resolver 已用 resolveBenchGuard，
-    //   dragapult-snipe 漏了。kind='attack-effect' 涵蓋指示物放置類效果。
-    const benchGuard = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-effect');
-    if (benchGuard.blocked) {
-      if (!blockedTargets.has(iid)) {
-        blockedTargets.add(iid);
-        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${benchGuard.reason}（該指示物無效）`, actorIdx);
-      }
-      placedThisBatch++;
       continue;
     }
 

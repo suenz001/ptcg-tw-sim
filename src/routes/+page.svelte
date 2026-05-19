@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.917</span> 🛡️ 修化隱免疫被幻影奇襲穿透（dragapult-snipe 改用 unified canApplyEffectToTarget）</summary>
+        <ul>
+          <li><b>玩家回報</b>：詛咒娃娃／怨影娃娃 等具「化隱」特性的寶可夢，被多龍巴魯托ex 幻影奇襲 6 個傷害指示物還是會打到（UI log 沒顯示「免疫」訊息）。</li>
+          <li><b>Root cause</b>：<code>dragapult-snipe</code> resolver 還在用 v2.89 / v4.4999 時代的舊散裝 helper（<code>canApplyAttackEffectToTarget</code> + <code>resolveBenchGuard</code> 兩段分開查），不走 v4.5 系列建立的 unified <code>canApplyEffectToTarget</code> 入口。化隱特性註冊在 defense.ts line 140 的 1b 分支，只有 unified 入口才會檢查。</li>
+          <li><b>修法</b>：把 dragapult-snipe 內兩段散裝 helper 合併成一個 <code>canApplyEffectToTarget(s, actorIdx, target, targetCard, 'attack-effect', pool, &#123; isBench: true &#125;)</code> 呼叫，自動涵蓋：化隱 / 光之翼 / 薄霧 / 硬岩 / 皇帝之勢 / 抵抗之幕 / 全能硬殼 / 陳舊背蓋化石 / 對戰圓形 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 太晶 / 中立中心。</li>
+          <li><b>影響範圍</b>：dragapult-snipe 同時被多龍巴魯托ex 幻影奇襲、米立龍ex 飛來橫禍、其他 spread-counters 攻擊復用（all routed through 'dragapult-snipe' effectKey）。一次修補所有 6-counter 類攻擊。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 4（tsc clean）/ Rule 17（unified defense entry，禁止散裝 helper 重複）/ Rule 7（不簡化 — 完整鏡射 unified helper）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.916</span> 🔧 修 咒縛之炎 等撤退費特性 UI 顯示不對</summary>
         <ul>
           <li><b>玩家回報</b>：超級水晶燈火靈ex 特性「咒縛之炎」（對手戰鬥場撤退費 +1）沒生效。</li>
