@@ -761,6 +761,9 @@ const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   '泡沫【水】能量': ['Water'],
   // v2.330 磁鐵【鋼】能量 — 視為 1 個【鋼】能量；撤退為 0 由 SPECIAL_ENERGY_RETREAT_MOD hook 處理。
   '磁鐵【鋼】能量': ['Metal'],
+  // v4.87 閃電能量（M5）— 視為 1 個【雷】能量；附加者使用招式對對手戰鬥寶可夢 +20 傷害
+  //   (+20 buff 由 engine damage calc inline 套用，weakness 前)
+  '閃電能量': ['Lightning'],
 };
 
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {
@@ -3587,6 +3590,29 @@ function handlePlaying(
       formula.push({ sign: '-', value: penalty, label: '招致削傷' });
     }
 
+    // v4.87 格拉吉歐的決戰（Supporter / M5）— player-level 本回合 +80（非規則寶可夢）
+    //   gate: gladionDuelBonusThisTurn 由 reg() 設定，END_TURN 清除
+    //   本檢查：attacker 為非規則寶可夢 → +80
+    if (baseDamage > 0 && attacker.gladionDuelBonusThisTurn && !isRulePokemon(attackerCard)) {
+      baseDamage += 80;
+      workingState = addLog(workingState,
+        `${attackerCard.name} 招式傷害 +80（格拉吉歐的決戰，非規則寶可夢加成）`, aIdx);
+      formula.push({ sign: '+', value: 80, label: '格拉吉歐的決戰' });
+    }
+
+    // v4.87 閃電能量（M5 特殊能量）— 附加者使用招式對對手戰鬥寶可夢 +20
+    //   iterate attacker.active.energyAttached → pool 名稱 '閃電能量' → +20
+    //   多張附加只算 1 次（卡面無「每張」字樣）
+    if (baseDamage > 0) {
+      const hasLightningSE = attacker.active.energyAttached.some(e => pool.get(e.cardId)?.name === '閃電能量');
+      if (hasLightningSE) {
+        baseDamage += 20;
+        workingState = addLog(workingState,
+          `${attackerCard.name} 招式傷害 +20（閃電能量加成）`, aIdx);
+        formula.push({ sign: '+', value: 20, label: '閃電能量' });
+      }
+    }
+
     // ── v2.97：攻擊方 +N bonus 全部在 weakness 前套用（PTCG 規則） ───────────
     // 先前實作順序錯誤（bonus 於 weakness 後加）導致 Leon 實戰計算不符：
     //   270 × 2 + 60 = 600（錯）；正確 (270 + 60) × 2 = 660
@@ -3821,6 +3847,28 @@ function handlePlaying(
         `${defenderCard.name} 因要害斬效果，不受招式的傷害與效果影響`, dIdx);
       baseDamage = 0;
       skipDefEffects = true;
+    }
+
+    // v4.87 雷電獸｜閃光屏障（M5）— defender 不受「進化寶可夢」招式傷害
+    //   進化判定：stage Stage1/Stage2 或 evolvesFrom 有值
+    if (baseDamage > 0 && defender.active.immuneToEvolutionAttackThisTurn) {
+      const atkStage = attackerCard.stage ?? attackerCard.subtype;
+      const isEvolution = atkStage === 'Stage1' || atkStage === 'Stage2' || !!attackerCard.evolvesFrom;
+      if (isEvolution) {
+        workingState = addLog(workingState,
+          `${defenderCard.name} 因閃光屏障效果，不受進化寶可夢招式傷害`, dIdx);
+        baseDamage = 0;
+      }
+    }
+
+    // v4.87 席多藍恩｜熔岩之壁（M5）— defender 不受【灼傷】狀態 attacker 招式傷害
+    if (baseDamage > 0 && defender.active.immuneToBurnedAttackerThisTurn) {
+      const atkBurned = attacker.active.status === 'burned' || attacker.active.secondaryStatus === 'burned';
+      if (atkBurned) {
+        workingState = addLog(workingState,
+          `${defenderCard.name} 因熔岩之壁效果，不受【灼傷】狀態寶可夢招式傷害`, dIdx);
+        baseDamage = 0;
+      }
     }
 
     // defender 是【鋼】 + 防守方有 metalShieldThisTurn → 傷害 -30
@@ -5683,6 +5731,15 @@ function handlePlaying(
         n = { ...n };
         delete n.immuneToAllAttackThisTurn;
       }
+      // v4.87 閃光屏障 / 熔岩之壁 — clear ThisTurn at opponent's END_TURN (same pattern as immuneToBasicAttackThisTurn)
+      if (c.immuneToEvolutionAttackThisTurn) {
+        n = { ...n };
+        delete n.immuneToEvolutionAttackThisTurn;
+      }
+      if (c.immuneToBurnedAttackerThisTurn) {
+        n = { ...n };
+        delete n.immuneToBurnedAttackerThisTurn;
+      }
       // v2.362 振翼髮｜暗夜羽擊 — 清除上回合已消耗的 abilityNullifiedThisTurn；promote NextTurn → ThisTurn
       if (c.abilityNullifiedThisTurn) {
         n = { ...n };
@@ -5795,6 +5852,15 @@ function handlePlaying(
         n = { ...n, immuneToAllAttackThisTurn: true };
         delete n.immuneToAllAttackNextTurn;
       }
+      // v4.87 閃光屏障 / 熔岩之壁 — promote NextTurn → ThisTurn at owner's END_TURN
+      if (c.immuneToEvolutionAttackNextTurn) {
+        n = { ...n, immuneToEvolutionAttackThisTurn: true };
+        delete n.immuneToEvolutionAttackNextTurn;
+      }
+      if (c.immuneToBurnedAttackerNextTurn) {
+        n = { ...n, immuneToBurnedAttackerThisTurn: true };
+        delete n.immuneToBurnedAttackerNextTurn;
+      }
       return n;
     };
     if (currentPlayer.active) currentPlayer.active = promoteSelfNextToThis(clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(currentPlayer.active))));
@@ -5849,6 +5915,7 @@ function handlePlaying(
       currentPlayer.teraKoBonusPrizeThisTurn ||
       currentPlayer.karateKingBonusThisTurn ||
       currentPlayer.unrudaBonusThisTurn ||
+      currentPlayer.gladionDuelBonusThisTurn ||
       currentPlayer.metalShieldThisTurn ||
       currentPlayer.cantRetreatIfPoisonedThisTurn ||
       currentPlayer.bagonElenaThisTurn ||
@@ -5863,6 +5930,7 @@ function handlePlaying(
       delete cp.teraKoBonusPrizeThisTurn;
       delete cp.karateKingBonusThisTurn;
       delete cp.unrudaBonusThisTurn;
+      delete cp.gladionDuelBonusThisTurn;
       delete cp.metalShieldThisTurn;
       delete cp.cantRetreatIfPoisonedThisTurn;
       delete cp.bagonElenaThisTurn;

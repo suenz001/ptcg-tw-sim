@@ -302,6 +302,24 @@ export interface CardInstance {
   immuneToAllAttackNextTurn?: boolean;
   immuneToAllAttackThisTurn?: boolean;
   /**
+   * v4.87 雷電獸｜閃光屏障（M5）— 下個對手回合，這隻寶可夢不會受到「進化寶可夢」的招式傷害。
+   * Engine 攻擊 pipeline：attacker 為進化寶可夢（stage Stage1/Stage2 或 evolvesFrom 有值）
+   * + defender 有 immuneToEvolutionAttackThisTurn → baseDamage = 0（招式效果照常）。
+   * NextTurn 由 regPost 設於 self.active；END_TURN 於擁有者方 promote → ThisTurn；
+   * 於攻擊方 END_TURN 清除 ThisTurn（同 immuneToBasicAttack 模式）。
+   */
+  immuneToEvolutionAttackNextTurn?: boolean;
+  immuneToEvolutionAttackThisTurn?: boolean;
+  /**
+   * v4.87 席多藍恩｜熔岩之壁（M5）— 下個對手回合，這隻寶可夢不會受到處於【灼傷】狀態的
+   * 寶可夢的招式傷害。
+   * Engine 攻擊 pipeline：attacker.status === 'burned' （含 secondaryStatus）
+   * + defender 有 immuneToBurnedAttackerThisTurn → baseDamage = 0。
+   * NextTurn / ThisTurn 流轉同上。
+   */
+  immuneToBurnedAttackerNextTurn?: boolean;
+  immuneToBurnedAttackerThisTurn?: boolean;
+  /**
    * v2.187：化石上場旗標。標明此 instance 雖 cardId 對應 Item 卡（subtype=Item），
    * 但目前作為 HP60【無】屬性【基礎】寶可夢站在場上（戰鬥場或備戰）。
    *
@@ -392,6 +410,13 @@ export interface PlayerState {
    * 打出 Supporter 當下設 true，回合結束時清除。
    */
   karateKingBonusThisTurn?: boolean;
+  /**
+   * v4.87 格拉吉歐的決戰（Supporter / M5）— 這個回合，自己的寶可夢（「擁有規則的寶可夢」除外）
+   * 對對手戰鬥寶可夢造成的招式傷害 +80。
+   * gate：使用此卡時手牌只能有此 1 張。打出當下設 true（已通過 hand=1 gate）；END_TURN 清除。
+   * Engine 攻擊 pipeline：若 gladionDuelBonusThisTurn === true 且 attackerCard 非規則寶可夢 → +80。
+   */
+  gladionDuelBonusThisTurn?: boolean;
   /**
    * v2.139 烏栗效果 2 — 本回合自己的寶可夢招式對對手戰鬥場的 ex/V +30 傷害。
    * 打出 Supporter 當下設 true，回合結束時清除。

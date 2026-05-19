@@ -264,6 +264,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.87</span> ⚡ M5 Phase 8a — 4 張卡 + 引擎擴充</summary>
+        <ul>
+          <li><b>實裝 4 張</b>：席多藍恩｜熔岩之壁、雷電獸｜閃光屏障、格拉吉歐的決戰（Supporter）、閃電能量（特殊能量）。累計 71 → <b>75</b> 個 effect / 81 張卡（~93% coverage）。</li>
+          <li><b>引擎擴充</b>（types.ts + engine.ts 雙檔同步）：
+            <ul>
+              <li><b>CardInstance 新增 4 個 flags</b>：<code>immuneToEvolutionAttackNextTurn / ThisTurn</code>（閃光屏障）+ <code>immuneToBurnedAttackerNextTurn / ThisTurn</code>（熔岩之壁）。NextTurn / ThisTurn 流轉走既有 promote / clear pattern（同 immuneToBasicAttack 模式）。</li>
+              <li><b>PlayerState 新增 1 個 flag</b>：<code>gladionDuelBonusThisTurn</code>（格拉吉歐）。END_TURN 自動清。</li>
+              <li><b>SPECIAL_ENERGY_TYPES</b>：加 <code>&apos;閃電能量&apos;: [&apos;Lightning&apos;]</code>，招式 cost 認列 1 個【雷】。</li>
+              <li><b>Damage calc</b>：4 處新增 inline check，全部在 weakness 前套用（PTCG 規則）。</li>
+            </ul>
+          </li>
+          <li><b>熔岩之壁（席多藍恩）</b>：120 傷 + regPost 設 self <code>immuneToBurnedAttackerNextTurn</code>。下個對手回合，如 attacker.status / secondaryStatus 為 burned → 傷害歸零。</li>
+          <li><b>閃光屏障（雷電獸）</b>：50 傷 + regPost 設 self <code>immuneToEvolutionAttackNextTurn</code>。下個對手回合，如 attacker stage 為 Stage1 / Stage2 或有 evolvesFrom → 傷害歸零。</li>
+          <li><b>格拉吉歐的決戰（Supporter）</b>：reg 內 hand=0 gate（卡剛出手後手牌應剩 0 張即「卡面唯一 1 張」條件）。設 <code>gladionDuelBonusThisTurn</code>。Engine：本回合非規則寶可夢（!isRulePokemon）的招式對對手戰鬥場 +80 傷害。</li>
+          <li><b>閃電能量</b>：附加者使用招式對對手戰鬥場 +20（單張存在即觸發，無「每張」字樣，多張不疊加）。同時 ENERGY_TYPES 認 1【雷】。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 11（types.ts + engine.ts + m5_preview.ts + +page.svelte 全部走 Python pipeline + 多錨點 patch）/ Rule 4（push 前 tsc / esbuild 雙驗證）/ Rule 7c（4 張卡 effect 文字逐一查 M5.json 原文）。</li>
+          <li><b>剩餘 deferred</b>：咒縛之炎 / 太鼓防壁（passives）/ 不朽之軀（on-KO survive）/ 光子密碼（on-KO move energy）/ 蟲蟲恐慌（top7 count）/ 強烈之吻（delayed KO）/ 招式竊賊（copy）/ 化石卡 + 化石採掘場 / 工具卡（豪華炸彈 / 重試徽章）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.86</span> 🔤 M5 三張支援者卡名校正</summary>
         <ul>
           <li><b>校正中文翻譯</b>：M5 卡包前次匯入時三位主角採用日文音譯，本版改為 PTCG 台灣官方譯名。

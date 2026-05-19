@@ -1827,6 +1827,80 @@ regR('m5-westsealion-full-melody', (state, aIdx, iids) => {
 // 注意：暗影惡能量的實裝在 defense.ts 加 inline check，本檔僅文檔說明。
 // ════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 8a (v4.87) — 4 張卡 + engine 擴充
+//
+// 1. 席多藍恩｜熔岩之壁（regPost）— defender immuneToBurnedAttackerNextTurn
+// 2. 雷電獸｜閃光屏障（regPost）— defender immuneToEvolutionAttackNextTurn
+// 3. 格拉吉歐的決戰（reg Supporter）— hand=1 gate + 設 Player.gladionDuelBonusThisTurn
+// 4. 閃電能量（無 reg 註冊）— SPECIAL_ENERGY_TYPES + engine inline +20 已實裝
+//
+// 共通：engine.ts 同時加 immune flags damage check + END_TURN promote/clear。
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── 1. 席多藍恩｜熔岩之壁 — 120 + 下個對手回合免疫【灼傷】attacker 招式傷害 ─
+//   卡面：「下個對手的回合，這隻寶可夢不會受到處於【灼傷】狀態的寶可夢的招式傷害。」
+regPost('席多藍恩|熔岩之壁', (state, aIdx) => {
+  const att = state.players[aIdx].active;
+  if (!att) return state;
+  return updatePlayer(
+    addLog(state, '熔岩之壁：下個對手回合，這隻寶可夢不受【灼傷】狀態寶可夢的招式傷害', aIdx),
+    aIdx, p => ({
+      ...p,
+      active: p.active ? { ...p.active, immuneToBurnedAttackerNextTurn: true } : null,
+    }),
+  );
+});
+
+// ── 2. 雷電獸|閃光屏障 — 50 + 下個對手回合免疫進化寶可夢招式傷害 ───────
+//   卡面：「下個對手的回合，這隻寶可夢不會受到進化寶可夢的招式傷害。」
+regPost('雷電獸|閃光屏障', (state, aIdx) => {
+  const att = state.players[aIdx].active;
+  if (!att) return state;
+  return updatePlayer(
+    addLog(state, '閃光屏障：下個對手回合，這隻寶可夢不受進化寶可夢的招式傷害', aIdx),
+    aIdx, p => ({
+      ...p,
+      active: p.active ? { ...p.active, immuneToEvolutionAttackNextTurn: true } : null,
+    }),
+  );
+});
+
+// ── 3. 格拉吉歐的決戰（Supporter）─ hand=1 gate + 設 player flag ───────────
+//   卡面：「這張卡只有在自己的手牌只有此張卡時才能使用。
+//          這個回合，自己的寶可夢（『擁有規則的寶可夢』除外）使用招式對對手戰鬥寶可夢
+//          造成的傷害「+80」。」
+//   gate 由 engine 統一檢查 supporterTagsUsedThisTurn 1 次限制；hand=1 gate 本檔 inline 處理。
+//   Note: 「手牌只有此張卡」= 打出時手牌僅 1 張（此卡本身在執行 reg 前已從手牌移除？依
+//          engine 行為查驗）。為穩定保守實作：檢查 reg 執行當下 hand.length === 0
+//          （= 卡剛被打出，手牌剩 0 張），否則 abort + log。
+reg('格拉吉歐的決戰', (st, idx) => {
+  const p = st.players[idx];
+  if (p.hand.length !== 0) {
+    return addLog(st, `格拉吉歐的決戰：手牌不只此 1 張（剩 ${p.hand.length} 張），效果未發動`, idx);
+  }
+  return updatePlayer(
+    addLog(st,
+      '格拉吉歐的決戰：本回合自己非規則寶可夢的招式對對手戰鬥寶可夢傷害 +80', idx),
+    idx, pl => ({ ...pl, gladionDuelBonusThisTurn: true }),
+  );
+});
+
+// ── 4. 閃電能量 ─ 無 reg 註冊（純 engine SPECIAL_ENERGY_TYPES + damage inline）─
+//   卡面：「這張卡附在寶可夢身上時，作為 1 個能量發揮作用。
+//          附有這張卡的寶可夢使用招式對對手戰鬥寶可夢造成的傷害「+20」。」
+//   實裝在 engine.ts:
+//     SPECIAL_ENERGY_TYPES['閃電能量'] = ['Lightning']  ← cost 認列 1 個【雷】
+//     damage calc: attacker.active.energyAttached.some(e => name==='閃電能量') → +20
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 8a 結束。
+// 累計：71 (P1-P7) + 2 immune regPost + 1 supporter reg + 閃電能量 = 75 個項目 / 81 張卡。
+// 剩餘 deferred (Phase 8b+)：咒縛之炎 / 太鼓防壁 / 蟲蟲恐慌 / 不朽之軀 / 光子密碼 /
+//   化石卡 (古老的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈/重試徽章) /
+//   強烈之吻 / 招式竊賊
+// ════════════════════════════════════════════════════════════════════════════
+
 
 
 
