@@ -550,6 +550,9 @@
   let modalDragged = $state(false);
   // v4.923：mulligan 補抽 stepper 計數覆寫值 — null 代表使用預設最大值
   let mulliganPickOverride = $state<number | null>(null);
+  // v4.926 Admin 偷看模式：?spectate=ROOM&admin=1 + email 在白名單 → 純訂閱、不寫 seat、不寫 chat
+  const ADMIN_EMAILS = ['suenz001@yahoo.com.tw'] as const;
+  let isAdminMode = $state(false);
   // v3.81：取得獎賞 10 秒倒數 — 防本機雙人模式對手不點 take 卡死
   let takePrizeCountdown = $state<number>(0);
   let takePrizeTimerId = $state<ReturnType<typeof setInterval> | null>(null);
@@ -1652,7 +1655,7 @@
 
 
   // v2.276：觀戰者判定（線上模式且坐在 spectator 位）
-  const isSpectator = $derived(mode === 'online' && mySeatIdx >= 2);
+  const isSpectator = $derived(mode === 'online' && (mySeatIdx >= 2 || isAdminMode));  // v4.926 admin 偷看也走觀戰渲染路徑
 
   // ── 視角固定：AI模式/線上模式我方永遠在下方，本機雙人模式隨行動方翻轉 ──────
   // 注意：線上模式必須優先判斷，否則預設 aiPlayerIndex=1 會讓雙方都算成 myIdx=0
@@ -2458,6 +2461,30 @@
       } else if (u && u.isAnonymous) {
         // 匿名身份：純 localStorage
         decks = loadDecks();
+      }
+      // v4.926 Admin 偷看 trigger — URL 含 ?admin=1&spectate=ROOM + email 白名單 → 純訂閱房間
+      //   不走 joinRoom 寫 seat 流程，所以玩家側完全看不到 admin（透明觀察）。
+      if (u && !isAdminMode && typeof window !== 'undefined' && ADMIN_EMAILS.includes(u.email as any)) {
+        const params = new URLSearchParams(window.location.search);
+        const adminFlag = params.get('admin');
+        const spectateRoom = params.get('spectate');
+        if (adminFlag === '1' && spectateRoom) {
+          const rc = spectateRoom.trim().toUpperCase();
+          if (rc) {
+            try {
+              mode = 'online';
+              onlineStep = 'room';
+              roomCode = rc;
+              amIHost = false;
+              isAdminMode = true;
+              // 純訂閱房間 — 不調 joinRoom（不寫 seat），bypass allowSpectate gate
+              startRoomSubscription();
+              console.log('[admin spy] subscribed to room', rc);
+            } catch (e) {
+              console.error('[admin spy] failed to subscribe', e);
+            }
+          }
+        }
       }
     });
     if (!auth.currentUser) await signInAnonymously(auth);
@@ -4379,6 +4406,11 @@
      模式選擇 / Lobby
   ══════════════════════════════════════════════════════════════════════ -->
 {#if !game}
+
+  <!-- v4.926 Admin 隱身觀戰提示（只有 admin 自己看得到，玩家完全不會收到通知） -->
+  {#if isAdminMode}
+    <div class="admin-spy-banner">🔒 ADMIN 隱身觀戰中（房間 {roomCode}） · 玩家不會看到你</div>
+  {/if}
 
   {#if mode === null}
   <!-- ─── 模式選擇 ─── -->
@@ -8806,6 +8838,17 @@
   .mulligan-body{ padding:.4rem 0; display:flex; flex-direction:column; gap:.6rem; }
   .mulligan-info{ background:rgba(255,220,120,.08); border:1px solid rgba(255,200,100,.35); border-radius:8px; padding:.6rem .75rem; display:flex; flex-direction:column; gap:.25rem; color:#ffe0a0; font-size:.85rem; }
   .mulligan-footer{ justify-content:center; }
+  /* v4.926 Admin 隱身觀戰提示 banner */
+  .admin-spy-banner{
+    position:fixed; top:8px; left:50%; transform:translateX(-50%);
+    background:linear-gradient(90deg,#5a1818,#742222);
+    color:#ffcfa0; padding:6px 14px; border-radius:6px;
+    z-index:99999; font-weight:bold; font-size:0.85rem;
+    border:1px solid #c54;
+    box-shadow:0 2px 8px rgba(0,0,0,0.4);
+    pointer-events:none; user-select:none;
+  }
+
   /* v4.923：mulligan stepper — +/- 計數器 UI */
   .mulligan-stepper{ display:flex; align-items:center; justify-content:center; gap:18px; padding:6px 0 2px; }
   .mulligan-stepper .stepper-btn{ padding:8px 22px; font-size:22px; font-weight:bold; min-width:64px; border-radius:8px; }
