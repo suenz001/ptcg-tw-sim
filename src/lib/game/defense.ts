@@ -143,6 +143,21 @@ export function canApplyEffectToTarget(
     }
   }
 
+  // 1c. 暗影惡能量（v4.85 / M5 — 特殊能量，備戰位免疫對手招式傷害）
+  //     卡面：「附有這張卡的寶可夢只要在備戰區，就不會受到對手招式的傷害。」
+  //     範圍：bench-only + attack-damage only；不擋 attack-effect、不擋 ability-effect。
+  //     檢測：iterate target.energyAttached → pool 查名稱 === '暗影惡能量'
+  //     注意：caller 必須傳 options.isBench === true 才會觸發（active 時不觸發）。
+  if (kind === 'attack-damage' && options?.isBench === true) {
+    const hasShadowDark = target.energyAttached.some(e => {
+      const ec = pool.get(e.cardId);
+      return ec?.name === '暗影惡能量';
+    });
+    if (hasShadowDark) {
+      return { blocked: true, reason: '暗影惡能量 備戰免疫對手招式傷害' };
+    }
+  }
+
   // 2. canApplyAttackEffectToTarget — ATTACK_EFFECT_IMMUNITY map：
   //    - 薄霧能量 (energy-on-target, attack-effect)
   //    - 硬岩【鬥】能量 (energy-on-target, requireType=Fighting)

@@ -264,6 +264,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.85</span> 🌊 M5 Phase 7 — 滿滿旋律 + 暗影惡能量</summary>
+        <ul>
+          <li><b>累計實裝</b>：69 (P1-P6) + 1 (滿滿旋律 regA) + 1 (暗影惡能量 defense gate) = <b>71 個 effect</b> / 81 張卡（~88% coverage）。</li>
+          <li><b>西獅海壬｜滿滿旋律（M5 新特性，regA + evolvedThisTurn gate + heal-target picker）</b>：
+            <ul>
+              <li><b>卡面</b>：「自己的回合，從手牌使出這張卡完成進化時，可使用 1 次。將自己 1 隻寶可夢的 HP 全部恢復。」</li>
+              <li><b>實作</b>：<code>regA(&apos;西獅海壬&apos;, 0, ...)</code> — gate <code>inst.evolvedThisTurn === true</code>。引擎標準 <code>abilityUsedThisTurn</code> 自動處理「1 次/回合」限制。</li>
+              <li><b>UX</b>：開 <code>heal-target</code> picker（候選只顯示自方受傷寶可夢，標題覆寫為「滿滿旋律：選擇要恢復的寶可夢」）；自方全滿血時記 log 不開 picker（仍消耗本回合 1 次）。</li>
+              <li><b>resolver</b>：<code>m5-westsealion-full-melody</code> 將目標 <code>damage</code> 清 0。</li>
+            </ul>
+          </li>
+          <li><b>暗影惡能量（M5 新特殊能量，bench-only attack-damage immunity）</b>：
+            <ul>
+              <li><b>卡面</b>：「附有這張卡的寶可夢只要在備戰區，就不會受到對手招式的傷害。」</li>
+              <li><b>實作位置</b>：defense.ts <code>canApplyEffectToTarget</code> 加 1c inline check（緊接化隱 check）。</li>
+              <li><b>觸發條件</b>：<code>kind === &apos;attack-damage&apos;</code> AND <code>options.isBench === true</code> AND target 有任 1 個 attached energy 名稱 === &apos;暗影惡能量&apos;。</li>
+              <li><b>範圍</b>：bench-only + attack-damage only；<b>不擋 attack-effect、不擋 ability-effect</b>。</li>
+              <li><b>passive design</b>：所有 bench-hit attack（狙擊備戰、必殺手裡劍類）走 unified defense pipeline，自動 check 能量列表。</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 1（changelog 用 entity escape <code>&amp;apos;</code> 避開 Svelte parser）/ Rule 4（push 前 tsc + esbuild 雙驗證 clean）/ Rule 11（m5_preview.ts + defense.ts + +page.svelte 全走 Python pipeline，遇 mount-layer truncation 即從 <code>git show HEAD</code> 重建）/ Rule 17（暗影惡能量 check 進 unified canApplyEffectToTarget）。</li>
+          <li><b>剩餘 deferred</b>：6 個複雜特性（光子密碼 / 不朽之軀 / 太鼓防壁 / 咒縛之炎）/ 5 個複雜招式（強烈之吻 / 招式竊賊 / 蟲蟲恐慌 / 閃光屏障 / 熔岩之壁）/ 化石卡（古老的頭蓋/盾牌 + 化石採掘場）/ 工具卡（豪華炸彈/重試徽章）/ 灰瀨的決戰 / 閃電能量。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.84</span> 👁 M5 化隱特性 + 3 依賴招式</summary>
         <ul>
           <li><b>累計實裝</b>：65 (P1-P5) + 1 (化隱機制) + 3 (依賴招式) = <b>69 個 effect</b> / 81 張卡（~85% coverage）。</li>
