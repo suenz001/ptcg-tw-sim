@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.920</span> 💬 觀戰通知改寫到聊天室（不汙染對戰 log）</summary>
+        <ul>
+          <li><b>設計調整</b>：v4.919 把「📺 xxx 加入/離開觀戰」寫到 <code>game.log</code>，但對戰 log 應該只記錄招式/特性/抽牌等純對戰事件 — 觀戰者進出是 meta-game 社交訊息，放聊天室更合適。</li>
+          <li><b>實作改動</b>：把 <code>handleRoomUpdate</code> 內的 spectator diff 邏輯，從「push <code>game.log</code> + <code>pushGameState</code>」改為「<code>sendMessage(roomCode, '📺 系統', '${name} 加入/離開觀戰')</code>」。</li>
+          <li><b>觸發條件放寬</b>：v4.919 限 <code>game.phase === 'playing'</code>，現在 lobby 階段也會通知（聊天室沒這限制）。</li>
+          <li><b>單端寫入機制不變</b>：依然只有 P1 (<code>mySeatIdx === 0</code>) 觸發 <code>sendMessage</code>，雙方+其他觀戰者透過 <code>subscribeMessages</code> 同步收到。</li>
+          <li><b>不影響對戰回放</b>：對戰 log 維持純淨；export log 不會夾雜觀戰者紀錄。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.919</span> 📺 觀戰者加入 / 離開時在對戰 log 顯示通知</summary>
         <ul>
           <li><b>新功能</b>：連線對戰中有人進入或離開觀戰位時，在 log 顯示「📺 xxx 加入觀戰」/「📺 xxx 離開觀戰」訊息。雙方玩家和其他觀戰者都看得到。</li>
