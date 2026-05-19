@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.911</span> 🔧 修匯出圖片 CORS 失敗 + 按鈕改名「匯出文字/圖片」</summary>
+        <ul>
+          <li><b>修 100% 失敗的圖片載入</b>：原本直接 fetch <code>asia.pokemon-card.com</code> 拿卡圖，但官方不發 <code>Access-Control-Allow-Origin</code> header，<code>crossOrigin='anonymous'</code> 就一定失敗。</li>
+          <li>改走 <code>images.weserv.nl</code> 免費圖片代理（強制加 CORS header + 自動快取），canvas 才能 toBlob 不被擋。</li>
+          <li>按鈕文字 <code>匯出文字</code> → <code>匯出文字/圖片</code>（讓玩家知道對話框內有圖片匯出選項）。</li>
+          <li>同步更新對話框提示文字，標明卡圖經 weserv 代理載入。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.91</span> 🛠️ 對戰紀錄 M5 卡名修復 + 牌組編輯器加「匯出圖片」</summary>
         <ul>
           <li><b>修 oracle-admin 對戰紀錄 M5 卡顯示為 #50265 數字</b>：

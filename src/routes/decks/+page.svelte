@@ -627,12 +627,18 @@
   // 卡圖 CORS 失敗 → Promise.all reject → 中斷匯出 + 紅框錯誤訊息。
   // 卡片比例：PTCG 標準 63 × 88 mm → 245 × 342 px 維持 ≈ 63:88。
   function loadImageCORS(url: string): Promise<HTMLImageElement> {
+    // v4.911：走 images.weserv.nl 圖片代理服務，回應永遠帶 Access-Control-Allow-Origin
+    //   - asia.pokemon-card.com 不發 CORS header，直接 fetch 會被 canvas tainted
+    //   - weserv.nl 是免費 image proxy，會 cache + 強制加 CORS header
+    //   - URL 格式：images.weserv.nl/?url=<去掉 scheme 的目標 URL>
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
       img.onerror = () => reject(new Error(`圖片載入失敗：${url}`));
-      img.src = url;
+      // 把 https://asia.pokemon-card.com/... 轉成 weserv proxy URL
+      const stripped = url.replace(/^https?:\/\//, '');
+      img.src = `https://images.weserv.nl/?url=${encodeURIComponent(stripped)}`;
     });
   }
 
@@ -1110,10 +1116,10 @@
             {#if isPresetActive}
               <span class="preset-badge" title="內建預組，僅供檢視">🔒 預組（唯讀）</span>
               <button class="small" onclick={copyPresetToMine}>📋 複製到我的牌組</button>
-              <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字</button>
+              <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字/圖片</button>
               <button class="small" onclick={exportJson}>匯出 JSON</button>
             {:else}
-              <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字</button>
+              <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字/圖片</button>
               <button class="small" onclick={openTextImport} disabled={!poolReady} title="貼上 PTCG 文字格式（包含官方訓練家網站可透過下方書籤工具一鍵匯入）">匯入文字</button>
               <!-- v3.83: 提供顯眼的官方匯入入口，避免玩家找不到（書籤教學原本藏在「匯入文字」modal 摺疊區內） -->
               <button class="small primary" onclick={openOfficialImport} disabled={!poolReady} title="從官方訓練家網站一鍵匯入牌組（首次需設定書籤）">🔖 從官方匯入</button>
@@ -1557,7 +1563,7 @@
         {#if exportImageError}
           <div class="export-image-error">⚠ 匯出圖片失敗：{exportImageError}</div>
         {:else if !exportingImage}
-          <p class="muted small-note">📸 匯出圖片：純卡牌 grid（4:3 比例，方便手機分享）。若部分卡圖被 CORS 阻擋會自動中斷。</p>
+          <p class="muted small-note">📸 匯出圖片：純卡牌 grid（4:3 比例，方便手機分享）。卡圖透過 images.weserv.nl 代理載入。</p>
         {/if}
 
       {:else}
