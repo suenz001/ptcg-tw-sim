@@ -6961,7 +6961,7 @@
         <button class="zoom-close" onclick={() => showSettingsModal = false}>✕</button>
         <h3 class="settings-title">⚙️ 設定</h3>
         
-        <details class="settings-section" open>
+        <details class="settings-section">
           <summary>🎵 背景音樂 (BGM)</summary>
           <div class="setting-row">
             <label for="bgm-select">選擇曲目：</label>
@@ -6979,7 +6979,7 @@
           {/if}
         </details>
 
-        <details class="settings-section" open>
+        <details class="settings-section">
           <summary>🔊 遊戲音效 (SFX)</summary>
           <div class="setting-row">
             <label for="sfx-mute">音效開關：</label>

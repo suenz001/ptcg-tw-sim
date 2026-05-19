@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.931</span> 🎚️ BGM/SFX 設定區塊預設收折</summary>
+        <ul>
+          <li><b>調整</b>：設定面板的「背景音樂 BGM」「遊戲音效 SFX」改為預設收折（這兩個區塊內容多、平常不會頻繁調整）。</li>
+          <li><b>保持展開</b>：「畫面縮放」「對局控制」仍預設展開（玩家常用）。</li>
+          <li><b>實作</b>：兩個 <code>&lt;details&gt;</code> 拿掉 <code>open</code> 屬性即可。需要時點標題展開。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.930</span> 🪟 設定面板可滑動 + 區塊可摺疊</summary>
         <ul>
           <li><b>玩家回報</b>：設定面板放太多東西又無法滑動/拖曳，看不到底部選項。</li>
