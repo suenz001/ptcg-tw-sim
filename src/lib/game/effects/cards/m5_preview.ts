@@ -1258,7 +1258,7 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 //
 // 訓練家（reg / regG 機制）：
 //   4. 沐淨（Supporter，棄手牌中 ≤2 張非規則寶可夢 → 抽 N×3 張）
-//   5. 暗黑鈴（Item，雙方戰鬥位混亂；化石寶可夢除外）
+//   5. 暗黑鈴（Item，雙方戰鬥位混亂；惡屬性寶可夢除外）
 //   6. 鏽蝕組的手下（Supporter，picker 對手場 1 隻寶可夢身上選 1 個能量丟）
 //   7. 小霞的元氣（Supporter，牌庫選 ≤4 張基本能量附給自己 1 隻 + 強制 END_TURN）
 //
@@ -1406,26 +1406,22 @@ regR('m5-trainer-mokujou', (state, aIdx, iids) => {
   });
 });
 
-// ── 5. 暗黑鈴（Item）─ 雙方戰鬥位混亂；化石寶可夢除外 ──────────
-//   卡面：「將雙方的戰鬥寶可夢（化石寶可夢除外），各別【混亂】。」
-//   化石寶可夢識別：subtype === 'Item' (化石卡作為寶可夢時 supertype/subtype 為 Trainer/Item) 
-//   或 tags 含「化石」。保守用「card.subtype === 'Item'」+「card.supertype === 'Trainer'」雙重判。
+// ── 5. 暗黑鈴（Item）─ 雙方戰鬥位混亂；惡屬性寶可夢除外 ──────────
+//   卡面：「將雙方的戰鬥寶可夢（惡屬性寶可夢除外），各別【混亂】。物品在自己的回合可使用任意數量。」
+//   v4.872 修正：之前 v4.82 把「惡屬性寶可夢」誤譯為「化石寶可夢」，filter 寫錯。
+//                 改用 card.pokemonType === 'Darkness' 才正確。
 reg('暗黑鈴', (st, idx, pool) => {
   let s = st;
   for (const side of [0, 1] as const) {
     const player = s.players[side];
     if (!player.active) continue;
     const card = pool.get(player.active.cardId);
-    // 化石寶可夢：supertype='Trainer' & subtype='Item' (場上 ItemPokemon 狀態)
-    // 或 tags 含「化石」
-    const isFossil = (card?.supertype === 'Trainer' && card?.subtype === 'Item')
-      || (card?.tags?.includes('化石') ?? false);
-    if (isFossil) {
-      const name = card?.name ?? '?';
-      s = addLog(s, `暗黑鈴：${name} 是化石寶可夢，跳過`, idx);
+    const name = card?.name ?? '?';
+    // 卡面排除條件：惡屬性寶可夢
+    if (card?.pokemonType === 'Darkness') {
+      s = addLog(s, `暗黑鈴：${name} 是【惡】屬性寶可夢，免疫【混亂】效果`, idx);
       continue;
     }
-    const name = card?.name ?? '?';
     s = updatePlayer(addLog(s, `暗黑鈴：${name} 陷入【混亂】`, idx), side, p => {
       if (!p.active) return p;
       return { ...p, active: { ...p.active, status: 'confused' } };

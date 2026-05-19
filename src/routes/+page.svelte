@@ -264,6 +264,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.872</span> 🔧 修暗黑鈴：化石 → 惡屬性 filter 校正</summary>
+        <ul>
+          <li><b>卡面校正</b>：M5.json 內 <code>暗黑鈴</code> rulesText「將雙方的戰鬥寶可夢（<b>化石寶可夢</b>除外）」→「將雙方的戰鬥寶可夢（<b>惡屬性寶可夢</b>除外）」。之前 v4.82 OCR / 翻譯出錯把「惡屬性」誤譯為「化石」。</li>
+          <li><b>實裝校正</b>：m5_preview.ts <code>reg(&apos;暗黑鈴&apos;)</code> 排除條件由 <code>isFossil</code>（supertype=Trainer + subtype=Item 或 tags 含「化石」）改為 <code>card.pokemonType === &apos;Darkness&apos;</code>，符合卡面。</li>
+          <li><b>行為影響</b>：
+            <ul>
+              <li>之前：化石寶可夢（古老的頭蓋 / 盾牌等）在戰鬥場時不會被混亂；任何非化石戰鬥寶可夢（包括惡屬性）都會被混亂 — <b>規則錯誤</b>。</li>
+              <li>現在：所有惡屬性戰鬥寶可夢免疫；其他屬性（含化石、其他屬性寶可夢）都被混亂 — <b>符合卡面</b>。</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 7c（規則解讀前先查 JSON / 用戶提供卡面原文核對；發現 JSON 也漏譯 → 同步校正）/ Rule 11（M5.json + m5_preview.ts 全走 Python pipeline）/ Rule 4（tsc 驗證）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.871</span> 🔧 修閃電 / 暗影惡能量：屬性 filter 校正</summary>
         <ul>
           <li><b>卡面校正（中譯精準化）</b>：M5.json 兩張特殊能量 rulesText 補上漏譯的屬性 filter：
