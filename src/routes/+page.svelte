@@ -264,6 +264,37 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.897</span> 💣 M5 Phase 8h — 豪華炸彈（重試徽章 deferred）</summary>
+        <ul>
+          <li><b>實裝 1 張 deferred</b>：豪華炸彈（PokemonTool，on-damaged 反擊）。</li>
+          <li><b>豪華炸彈</b>：
+            <ul>
+              <li>卡面：「附有這張卡的寶可夢（『超級進化ex』除外），在戰鬥場受到對手『超級進化ex』的招式造成 240 點以上傷害時，在使用招式的寶可夢身上放置 12 個傷害指示物。之後將這張卡丟棄。」</li>
+              <li><b>實裝</b>：<code>TOOL_ON_DAMAGED</code> hook（同 奢華炸彈 / 凸凸頭盔 family），engine 在 attack pipeline 受傷後自動 dispatch。</li>
+              <li><b>3 道 gate</b>：
+                <ul>
+                  <li>傷害 ≥ 240（卡面「240 點以上」）</li>
+                  <li>攻擊方為 超級進化ex（<code>name.endsWith(&apos;ex&apos;) && name.startsWith(&apos;超級&apos;)</code>，同 <code>prizesForKO</code> Mega-ex 判定）</li>
+                  <li>防守方非 超級進化ex（卡面「『超級進化ex』除外」）</li>
+                </ul>
+              </li>
+              <li><b>效果</b>：把該豪華炸彈 instance 從 defender 移到棄牌堆 + 攻擊方 +120 傷害（12 指示物）。</li>
+              <li>支援 <code>extraTools</code> array（v3.20 多重轉接）— 找對應 iid 的豪華炸彈 instance 移除，不影響其他 tool。</li>
+            </ul>
+          </li>
+          <li><b>重試徽章 — deferred（需 engine 級新機制）</b>：
+            <ul>
+              <li>卡面：「在自己每回合中，附有這張卡的無屬性寶可夢使用招式時，若自己擲了硬幣，可全部消除該硬幣結果並從頭重擲。」</li>
+              <li><b>困難點</b>：當前 <code>flipCoinsWithLog</code> 是同步函式，在 ATTACK_PRE / regPre 內直接執行並返回結果。要支援 player choice 「重擲 yes/no」需 pause attack pipeline → 開 binary picker → resolver 替換結果 → 繼續 downstream。涉及全 engine 同步性質的招式 pipeline 重構，工程量過大。</li>
+              <li><b>留 deferred</b>：等未來有更系統性的擲幣機制改造（例如把所有 coin flips 改為 pre-flip both / lazy resolution）時一起處理。</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 7（豪華炸彈嚴格依卡面 3 gate；重試徽章雖然只剩這一張，仍依 Rule 7 標 deferred 不假裝實裝）/ Rule 11（tools.ts 走 Python pipeline）/ Rule 4（tsc 驗證）。</li>
+          <li><b>剩餘 deferred</b>：重試徽章（coin re-roll，需 engine 級機制）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.896</span> 🔤 修化石卡翻譯：古老的 → 陳舊的</summary>
         <ul>
           <li><b>翻譯校正</b>：M5 的 2 張新化石（古老的頭蓋化石 / 古老的盾牌化石）原本誤譯，本版校正為「陳舊的」prefix，與既有 5 張化石（<b>陳舊的</b>根狀 / 背蓋 / 羽毛 / 顎之 / 鰭之化石）命名一致。</li>

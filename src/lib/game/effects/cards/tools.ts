@@ -353,6 +353,56 @@ TOOL_ON_DAMAGED.set('奢華炸彈', (state, dIdx, aIdx) => {
   return addLog(state, '奢華炸彈：反彈 120 傷害！', null);
 });
 
+// v4.897 豪華炸彈（M5 PokemonTool）— 240+ 超級進化ex 招式傷害 → 反擊 12 指示物
+// 卡面：「附有這張卡的寶可夢（『超級進化ex』除外），在戰鬥場受到對手『超級進化ex』
+//        的招式造成 240 點以上傷害時，在使用招式的寶可夢身上放置 12 個傷害指示物。
+//        之後將這張卡丟棄。」
+// Gates（全部要符合才觸發）：
+//   1. baseDamage >= 240
+//   2. 攻擊方為 超級進化ex（name 以「超級」開頭且結尾 'ex'，同 engine.ts prizesForKO）
+//   3. 防守方非 超級進化ex（卡面「超級進化ex 除外」）
+// 注意：iterate getAllAttachedTools 找特定的「豪華炸彈」instance 並丟棄（單張 fire；多張不疊加）
+TOOL_ON_DAMAGED.set('豪華炸彈', (state, dIdx, aIdx, baseDamage, pool) => {
+  // Gate 1: 傷害門檻
+  if (baseDamage < 240) return state;
+  const dPlayer = state.players[dIdx];
+  const aPlayer = state.players[aIdx];
+  if (!dPlayer.active || !aPlayer.active) return state;
+  // Gate 2: 攻擊方為 超級進化ex
+  const aCard = pool.get(aPlayer.active.cardId);
+  const isAttackerMegaEx = !!aCard && aCard.name.endsWith('ex') && aCard.name.startsWith('超級');
+  if (!isAttackerMegaEx) return state;
+  // Gate 3: 防守方非 超級進化ex
+  const dCard = pool.get(dPlayer.active.cardId);
+  const isDefenderMegaEx = !!dCard && dCard.name.endsWith('ex') && dCard.name.startsWith('超級');
+  if (isDefenderMegaEx) return state;
+  // 找出 defender 身上對應的「豪華炸彈」instance（含 toolAttached + extraTools）
+  const allTools: CardInstance[] = [];
+  if (dPlayer.active.toolAttached) allTools.push(dPlayer.active.toolAttached);
+  if (dPlayer.active.extraTools) allTools.push(...dPlayer.active.extraTools);
+  const luxuryBombInst = allTools.find(t => pool.get(t.cardId)?.name === '豪華炸彈');
+  if (!luxuryBombInst) return state;
+  // 1. 把該 豪華炸彈 從 defender 移到棄牌堆
+  state = updatePlayer(state, dIdx, p => {
+    if (!p.active) return p;
+    let active = p.active;
+    if (active.toolAttached?.iid === luxuryBombInst.iid) {
+      active = { ...active, toolAttached: undefined };
+    } else if (active.extraTools) {
+      active = { ...active, extraTools: active.extraTools.filter(x => x.iid !== luxuryBombInst.iid) };
+    }
+    return { ...p, active, discard: [...p.discard, luxuryBombInst] };
+  });
+  // 2. 攻擊方 +120 傷害（12 個指示物）
+  state = updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    return { ...p, active: { ...p.active, damage: p.active.damage + 120 } };
+  });
+  return addLog(state,
+    `豪華炸彈：${aCard?.name ?? '?'} 受到 ${baseDamage} 點超級進化ex 招式傷害（≥240） → 放 12 個傷害指示物（+120）！道具丟棄`,
+    null);
+});
+
 // v2.210 手持循環扇：受傷未 KO 時，holder 從 attacker.active 選 1 個能量，
 //   改附到 attacker 的 1 隻備戰寶可夢。對攻擊方不利（抽走主力能量）。
 // 卡面：「附有這張卡的寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，選擇 1 個
