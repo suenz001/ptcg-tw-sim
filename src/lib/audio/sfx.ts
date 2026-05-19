@@ -1,28 +1,21 @@
 /**
- * PTCG 對戰音效系統 — Web Audio API 合成（v2.118 / Leon 要求）
+ * PTCG 對戰音效系統 — Web Audio API 合成
+ *
+ * v4.928 大改：紙牌質感升級 — 7 個新音 + panning + throttle + sub-bus + cleanup
+ *   - 新音：evolve / attach-energy / ability / prize-take / victory-fanfare /
+ *           game-win / game-lose
+ *   - click 改柔和 sine（不再電子刺感）/ shuffle 縮短 6 burst
+ *   - panning：playSfx({pan: -1..1}) 加左右空間感（P1 偏左、P2 偏右）
+ *   - throttle：同名音 100ms 內 skip 防堆疊
+ *   - 子 bus：ui / sfx / status 三條獨立音量
+ *   - 同時 osc 上限 32：滿了 dequeue 最舊避免 mobile 卡頓
+ *   - closeAudio() cleanup：頁面切換時 release resources
  *
  * 設計原則：
- *   1. 零外部 asset：所有音效由 Web Audio 的 OscillatorNode / GainNode / noise buffer
- *      合成，不需要 bundler 打包 mp3、也不會因 CDN / 版權壞掉。
- *   2. Lazy init：AudioContext 在首次 play 時建立；若 browser policy 要求
- *      user gesture 後才能 resume（Chrome / Safari 預設），會自動處理。
- *   3. 可全域靜音 / 調音量：master gain 統一控制。
- *   4. 音色風格「輕量 UI」而非寫實 — 目的是對戰 feedback 而非擬真。
- *
- * 音效清單（與 Leon 的要求 + ptcg 對戰事件 對應）：
- *   - coin          擲硬幣（兩個短音：叮、啷）
- *   - deal          發牌（短 noise burst）
- *   - draw          抽牌（比 deal 再短）
- *   - shuffle       洗牌（連續 noise bursts）
- *   - click         點選 UI（短 click）
- *   - attack-<Type> 戰鬥招式（按屬性不同 oscillator pattern）
- *                   Type ∈ Grass / Fire / Water / Lightning / Psychic /
- *                          Fighting / Darkness / Metal / Dragon / Colorless
- *   - ko            昏厥（低音墜落）
- *   - poison        中毒（低頻顫音 pattern）
- *   - burn          灼燒（crackle noise）
- *   - sleep         睡眠（低頻 sine + 呼吸感 LFO）
- *   - confuse       混亂（pitch wobble）
+ *   1. 零外部 asset：所有音效由 Web Audio 合成
+ *   2. Lazy init：AudioContext 在首次 play 時建立
+ *   3. 紙質感為主：noise + bandpass filter + 短脈衝，避免單純 oscillator beep
+ *   4. 音色「輕量 UI」不擬真 — 目的是對戰 feedback
  */
 
 import type { EnergyType } from '$lib/cards/types';
@@ -31,36 +24,95 @@ import type { EnergyType } from '$lib/cards/types';
 export type SfxName =
   | 'coin' | 'deal' | 'draw' | 'shuffle' | 'click' | 'ko'
   | 'poison' | 'burn' | 'sleep' | 'confuse'
-  | 'turn-start'  // v3.91：回合切換音效（清亮上行三音）
+  | 'turn-start'
+  // v4.928 新增：紙牌質感升級
+  | 'evolve'           // 進化儀式音（紙翻面 + 上升小琶音）
+  | 'attach-energy'    // 附能量（紙片落下 + soft pluck）
+  | 'ability'          // 特性發動（中頻 chime）
+  | 'prize-take'       // 拿獎賞牌 1-5 張（紙抽出 + 上升二音）
+  | 'victory-fanfare'  // 拿最後一張獎賞（即將勝利）
+  | 'game-win'         // 對局勝利
+  | 'game-lose'        // 對局失敗
   | `attack-${EnergyType}`;
 
-// ─── AudioContext（單例、lazy-init）────────────────────────────────────────
+// ─── Sub-bus 分類（決定走哪條音量控制） ──────────────────────────────────
+type BusName = 'ui' | 'sfx' | 'status';
+function classifyBus(name: SfxName): BusName {
+  if (name === 'click' || name === 'draw' || name === 'deal' || name === 'shuffle'
+      || name === 'coin' || name === 'turn-start' || name === 'evolve'
+      || name === 'attach-energy' || name === 'ability' || name === 'prize-take') {
+    return 'ui';
+  }
+  if (name === 'ko' || name === 'victory-fanfare' || name === 'game-win'
+      || name === 'game-lose' || name.startsWith('attack-')) {
+    return 'sfx';
+  }
+  // poison / burn / sleep / confuse
+  return 'status';
+}
+
+// ─── AudioContext + Gain bus 結構 ──────────────────────────────────────────
+//   destination ← masterGain ← (uiGain, sfxGain, statusGain) ← per-event gain
 let ctx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
-/** 使用者偏好音量 0..1（與 masterGain.gain 同步） */
+let uiGain: GainNode | null = null;
+let sfxGain: GainNode | null = null;
+let statusGain: GainNode | null = null;
+
 let userVolume = 0.5;
 let muted = false;
+let uiVolume = 1.0;
+let sfxVolume = 1.0;
+let statusVolume = 1.0;
 
-/** 取得（或建立）AudioContext。首次呼叫時會設好 master gain。 */
+// ─── Throttle + osc cap ──────────────────────────────────────────────────
+const recentSfx = new Map<SfxName, number>();
+const THROTTLE_MS = 100;
+
+const activeNodes = new Set<AudioScheduledSourceNode>();
+const MAX_ACTIVE = 32;
+
+function trackNode(node: AudioScheduledSourceNode): void {
+  activeNodes.add(node);
+  node.addEventListener('ended', () => activeNodes.delete(node));
+  // 超過上限 → dequeue 最舊（Set iteration order = insertion order）
+  if (activeNodes.size > MAX_ACTIVE) {
+    const oldest = activeNodes.values().next().value;
+    if (oldest) {
+      try { oldest.stop(); } catch { /* already stopped */ }
+      activeNodes.delete(oldest);
+    }
+  }
+}
+
+// ─── AudioContext init（lazy）─────────────────────────────────────────────
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!ctx) {
-    // Safari 舊版用 webkitAudioContext
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return null;
     ctx = new Ctor();
     masterGain = ctx.createGain();
     masterGain.gain.value = muted ? 0 : userVolume;
     masterGain.connect(ctx.destination);
+    // 建立三條 sub-bus
+    uiGain = ctx.createGain();
+    uiGain.gain.value = uiVolume;
+    uiGain.connect(masterGain);
+    sfxGain = ctx.createGain();
+    sfxGain.gain.value = sfxVolume;
+    sfxGain.connect(masterGain);
+    statusGain = ctx.createGain();
+    statusGain.gain.value = statusVolume;
+    statusGain.connect(masterGain);
   }
-  // Chrome/Safari 要求 resume 在 user gesture 後
   if (ctx.state === 'suspended') {
-    ctx.resume().catch(() => { /* 使用者未 gesture — 稍後重試 */ });
+    ctx.resume().catch(() => { /* user gesture pending */ });
   }
   return ctx;
 }
 
-// ─── 對外 API ────────────────────────────────────────────────────────────
+// ─── 對外音量 / mute API ─────────────────────────────────────────────────
 export function setMasterVolume(v: number): void {
   userVolume = Math.max(0, Math.min(1, v));
   if (masterGain && !muted) masterGain.gain.value = userVolume;
@@ -73,53 +125,107 @@ export function setMuted(m: boolean): void {
 }
 export function isMuted(): boolean { return muted; }
 
-/**
- * 播放音效。name 不認識時 no-op（不丟錯，避免 ability 寫錯 type 就整頁壞）。
- */
-export function playSfx(name: SfxName, opts?: { volume?: number }): void {
+// v4.928：子 bus 音量（UI / SFX / Status）
+export function setUiVolume(v: number): void {
+  uiVolume = Math.max(0, Math.min(1, v));
+  if (uiGain) uiGain.gain.value = uiVolume;
+}
+export function getUiVolume(): number { return uiVolume; }
+
+export function setSfxVolume(v: number): void {
+  sfxVolume = Math.max(0, Math.min(1, v));
+  if (sfxGain) sfxGain.gain.value = sfxVolume;
+}
+export function getSfxVolume(): number { return sfxVolume; }
+
+export function setStatusVolume(v: number): void {
+  statusVolume = Math.max(0, Math.min(1, v));
+  if (statusGain) statusGain.gain.value = statusVolume;
+}
+export function getStatusVolume(): number { return statusVolume; }
+
+// v4.928：cleanup — 頁面切換時釋放資源
+export function closeAudio(): void {
+  if (!ctx) return;
+  try {
+    for (const n of activeNodes) { try { n.stop(); } catch { /* */ } }
+    activeNodes.clear();
+    ctx.close().catch(() => { /* */ });
+  } catch { /* */ }
+  ctx = null; masterGain = null;
+  uiGain = null; sfxGain = null; statusGain = null;
+  recentSfx.clear();
+}
+
+// ─── 主入口 playSfx ──────────────────────────────────────────────────────
+export interface PlaySfxOpts {
+  volume?: number;
+  /** v4.928: stereo pan -1..1（-0.3 = 偏左, +0.3 = 偏右） */
+  pan?: number;
+}
+
+export function playSfx(name: SfxName, opts?: PlaySfxOpts): void {
   const c = getCtx();
   if (!c || !masterGain) return;
   if (muted) return;
 
+  // v4.928 throttle：同名音 100ms 內 skip
+  const now = c.currentTime * 1000;
+  const last = recentSfx.get(name) ?? -Infinity;
+  if (now - last < THROTTLE_MS) return;
+  recentSfx.set(name, now);
+
+  // 選 bus
+  const busName = classifyBus(name);
+  const bus = busName === 'ui' ? uiGain : busName === 'sfx' ? sfxGain : statusGain;
+  if (!bus) return;
+
+  // 建立 per-event gain → 接到 (optional pan →) bus
   const gain = c.createGain();
   gain.gain.value = opts?.volume ?? 1;
-  gain.connect(masterGain);
+  let out: AudioNode = gain;
+  if (opts?.pan !== undefined && opts.pan !== 0 && typeof c.createStereoPanner === 'function') {
+    const panner = c.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, opts.pan));
+    gain.connect(panner);
+    out = panner;
+  }
+  out.connect(bus);
 
-  const now = c.currentTime;
+  const t = c.currentTime;
   try {
-    if (name === 'coin') {
-      playCoin(c, gain, now);
-    } else if (name === 'deal') {
-      playDeal(c, gain, now);
-    } else if (name === 'draw') {
-      playDraw(c, gain, now);
-    } else if (name === 'shuffle') {
-      playShuffle(c, gain, now);
-    } else if (name === 'click') {
-      playClick(c, gain, now);
-    } else if (name === 'ko') {
-      playKO(c, gain, now);
-    } else if (name === 'poison') {
-      playPoison(c, gain, now);
-    } else if (name === 'burn') {
-      playBurn(c, gain, now);
-    } else if (name === 'sleep') {
-      playSleep(c, gain, now);
-    } else if (name === 'confuse') {
-      playConfuse(c, gain, now);
-    } else if (name === 'turn-start') {
-      playTurnStart(c, gain, now);
-    } else if (name.startsWith('attack-')) {
+    if (name === 'coin') playCoin(c, gain, t);
+    else if (name === 'deal') playDeal(c, gain, t);
+    else if (name === 'draw') playDraw(c, gain, t);
+    else if (name === 'shuffle') playShuffle(c, gain, t);
+    else if (name === 'click') playClick(c, gain, t);
+    else if (name === 'ko') playKO(c, gain, t);
+    else if (name === 'poison') playPoison(c, gain, t);
+    else if (name === 'burn') playBurn(c, gain, t);
+    else if (name === 'sleep') playSleep(c, gain, t);
+    else if (name === 'confuse') playConfuse(c, gain, t);
+    else if (name === 'turn-start') playTurnStart(c, gain, t);
+    else if (name === 'evolve') playEvolve(c, gain, t);
+    else if (name === 'attach-energy') playAttachEnergy(c, gain, t);
+    else if (name === 'ability') playAbility(c, gain, t);
+    else if (name === 'prize-take') playPrizeTake(c, gain, t);
+    else if (name === 'victory-fanfare') playVictoryFanfare(c, gain, t);
+    else if (name === 'game-win') playGameWin(c, gain, t);
+    else if (name === 'game-lose') playGameLose(c, gain, t);
+    else if (name.startsWith('attack-')) {
       const etype = name.slice(7) as EnergyType;
-      playAttack(c, gain, now, etype);
+      playAttack(c, gain, t, etype);
     }
   } catch {
-    // 音效合成失敗不應影響遊戲邏輯
+    /* 音效合成失敗不應影響遊戲 */
   }
 }
 
-// ─── 音效合成實作 ──────────────────────────────────────────────────────────
-// 通用：建立一段 white noise buffer
+// ═══════════════════════════════════════════════════════════════════════════
+// 音效合成實作
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 通用：white noise buffer
 function noiseBuffer(c: AudioContext, durationSec: number): AudioBuffer {
   const len = Math.max(1, Math.floor(c.sampleRate * durationSec));
   const buf = c.createBuffer(1, len, c.sampleRate);
@@ -141,22 +247,18 @@ function beep(
   g.gain.setValueAtTime(0, start);
   g.gain.linearRampToValueAtTime(peakGain, start + 0.005);
   g.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  osc.connect(g);
-  g.connect(out);
-  osc.start(start);
-  osc.stop(start + duration + 0.05);
+  osc.connect(g); g.connect(out);
+  osc.start(start); osc.stop(start + duration + 0.05);
+  trackNode(osc);
 }
 
-// ─ Coin flip（v2.120 Leon 要求改為金屬鏘鏘聲）────────
-// 金屬敲擊的聲學特徵：多個 inharmonic partial（1f、~2.3f、~3.7f）同時響起後
-// 快速 attack + 長 ring decay。用 3 個 sine + 1 個少量 square（帶少許刺痛感）
-// 疊加，每次 coin flip 產生 2 次敲擊（硬幣彈起落下的兩個接觸聲）。
+// ─ Coin flip：金屬敲擊 inharmonic partials ────────
 function metalClink(c: AudioContext, out: GainNode, t: number, base: number, peak: number): void {
   const partials = [
     { freq: base,        gain: peak,        type: 'sine' as OscillatorType,     dur: 0.45 },
     { freq: base * 2.31, gain: peak * 0.6,  type: 'sine' as OscillatorType,     dur: 0.35 },
     { freq: base * 3.75, gain: peak * 0.35, type: 'sine' as OscillatorType,     dur: 0.28 },
-    { freq: base * 1.5,  gain: peak * 0.15, type: 'square' as OscillatorType,   dur: 0.08 }, // 刺耳 attack transient
+    { freq: base * 1.5,  gain: peak * 0.15, type: 'square' as OscillatorType,   dur: 0.08 },
   ];
   for (const p of partials) {
     const osc = c.createOscillator();
@@ -168,28 +270,21 @@ function metalClink(c: AudioContext, out: GainNode, t: number, base: number, pea
     g.gain.exponentialRampToValueAtTime(0.001, t + p.dur);
     osc.connect(g); g.connect(out);
     osc.start(t); osc.stop(t + p.dur + 0.05);
+    trackNode(osc);
   }
 }
 function playCoin(c: AudioContext, out: GainNode, t: number): void {
-  // 兩次敲擊：第一次亮、第二次稍低（硬幣旋轉落地感）
   metalClink(c, out, t,         1400, 0.22);
   metalClink(c, out, t + 0.18,  1050, 0.18);
 }
 
-// ─ 紙牌「刷」通用 helper（v2.121 Leon 指定：白噪音 + 高頻濾波器 + 快速衰減包絡）────
-// v2.119 用 low-pass 結果仍被認為像嗶嗶 → v2.121 改成 Leon 明確指定的音色配方：
-//   - 白噪音短 burst（10~80ms）
-//   - high-pass filter 保留 ~2000~4000Hz 高頻「沙沙」刷動特徵，去掉低頻隆隆
-//   - envelope：快 attack（2~5ms）+ 快 exp decay（= duration）
-// 關鍵差別：保留高頻刷感、裁掉低頻，聽起來像紙張纖維摩擦而不是電子合成音。
+// ─ Paper swish helper（紙張纖維摩擦感）─────────
 interface PaperSwishOpts {
   bursts?: number;
   durationPerBurst?: number;
   gap?: number;
   peakGain?: number;
-  /** high-pass cutoff Hz — 越高越「沙」、越低越「紙悶」 */
   hpCenter?: number;
-  /** 每 burst 隨機 jitter 範圍，讓多 burst 不單調 */
   hpJitter?: number;
 }
 function paperSwish(c: AudioContext, out: GainNode, t: number, opts: PaperSwishOpts = {}): void {
@@ -213,34 +308,46 @@ function paperSwish(c: AudioContext, out: GainNode, t: number, opts: PaperSwishO
     g.gain.exponentialRampToValueAtTime(0.001, start + dur);
     src.connect(hp); hp.connect(g); g.connect(out);
     src.start(start); src.stop(start + dur + 0.05);
+    trackNode(src);
   }
 }
 
-// ─ Deal（發牌）— 短促 1 burst ────
+// ─ Deal / Draw / Shuffle ────
 function playDeal(c: AudioContext, out: GainNode, t: number): void {
   paperSwish(c, out, t, { bursts: 1, durationPerBurst: 0.07, peakGain: 0.3, hpCenter: 2800 });
 }
-
-// ─ Draw（抽牌）— 稍快一點 ────
 function playDraw(c: AudioContext, out: GainNode, t: number): void {
   paperSwish(c, out, t, { bursts: 1, durationPerBurst: 0.06, peakGain: 0.32, hpCenter: 3200 });
 }
-
-// ─ Shuffle — 多張紙互相摩擦（連續快速 burst）────
+// v4.928: shuffle 縮短 10→6 burst，更乾淨
 function playShuffle(c: AudioContext, out: GainNode, t: number): void {
   paperSwish(c, out, t, {
-    bursts: 10,
-    durationPerBurst: 0.05,
-    gap: 0.02,
+    bursts: 6,
+    durationPerBurst: 0.045,
+    gap: 0.025,
     peakGain: 0.22,
     hpCenter: 2600,
     hpJitter: 1200,
   });
 }
 
-// ─ Click — UI 短 click
+// ─ Click — v4.928: 改柔和紙質 tap（sine + 微 noise tick）────
+//   原 square 1600Hz 30ms 太電子刺感 → 改成低頻 sine + 短 high-pass noise tick，
+//   聽起來像「指尖輕拍卡牌」而非「PC click」。
 function playClick(c: AudioContext, out: GainNode, t: number): void {
-  beep(c, out, t, 1600, 0.03, 'square', 0.12);
+  // 主音：sine 1100Hz 短脈衝
+  beep(c, out, t, 1100, 0.04, 'sine', 0.18);
+  // 副音：短 noise tick（紙質感）
+  const src = c.createBufferSource();
+  src.buffer = noiseBuffer(c, 0.015);
+  const hp = c.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 3500;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.10, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.015);
+  src.connect(hp); hp.connect(g); g.connect(out);
+  src.start(t); src.stop(t + 0.02);
+  trackNode(src);
 }
 
 // ─ KO — 低音墜落
@@ -255,17 +362,18 @@ function playKO(c: AudioContext, out: GainNode, t: number): void {
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
   osc.connect(g); g.connect(out);
   osc.start(t); osc.stop(t + 0.65);
+  trackNode(osc);
 }
 
-// ─ Poison — 低頻顫音（毒的 creepy 感）
+// ─ Status — Poison / Burn / Sleep / Confuse ──────
 function playPoison(c: AudioContext, out: GainNode, t: number): void {
   const osc = c.createOscillator();
   const lfo = c.createOscillator();
   const lfoGain = c.createGain();
   const g = c.createGain();
   osc.type = 'sine'; osc.frequency.value = 220;
-  lfo.type = 'sine'; lfo.frequency.value = 8;      // 顫音速率
-  lfoGain.gain.value = 20;                          // 顫音深度
+  lfo.type = 'sine'; lfo.frequency.value = 8;
+  lfoGain.gain.value = 20;
   lfo.connect(lfoGain);
   lfoGain.connect(osc.frequency);
   g.gain.setValueAtTime(0, t);
@@ -274,9 +382,9 @@ function playPoison(c: AudioContext, out: GainNode, t: number): void {
   osc.connect(g); g.connect(out);
   osc.start(t); osc.stop(t + 0.55);
   lfo.start(t); lfo.stop(t + 0.55);
+  trackNode(osc); trackNode(lfo);
 }
 
-// ─ Burn — crackle noise + 高頻嘶嘶
 function playBurn(c: AudioContext, out: GainNode, t: number): void {
   const src = c.createBufferSource();
   src.buffer = noiseBuffer(c, 0.4);
@@ -288,9 +396,9 @@ function playBurn(c: AudioContext, out: GainNode, t: number): void {
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
   src.connect(hp); hp.connect(g); g.connect(out);
   src.start(t); src.stop(t + 0.45);
+  trackNode(src);
 }
 
-// ─ Sleep — 低頻 sine + 呼吸感（兩次淡入淡出）
 function playSleep(c: AudioContext, out: GainNode, t: number): void {
   const osc = c.createOscillator();
   const g = c.createGain();
@@ -302,9 +410,9 @@ function playSleep(c: AudioContext, out: GainNode, t: number): void {
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
   osc.connect(g); g.connect(out);
   osc.start(t); osc.stop(t + 0.95);
+  trackNode(osc);
 }
 
-// ─ Confuse — pitch wobble（幾個隨機快速上下）
 function playConfuse(c: AudioContext, out: GainNode, t: number): void {
   const osc = c.createOscillator();
   const g = c.createGain();
@@ -319,10 +427,10 @@ function playConfuse(c: AudioContext, out: GainNode, t: number): void {
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
   osc.connect(g); g.connect(out);
   osc.start(t); osc.stop(t + 0.55);
+  trackNode(osc);
 }
 
-// ─ Attack — 按屬性特性 ────────────────────────────────────────────────────
-// 每種屬性有自己的 oscillator / noise pattern，長度 ~0.35s
+// ─ Attack ────────────────────────────────────────
 interface AttackPattern {
   osc?: { type: OscillatorType; start: number; end: number; peakGain: number };
   noise?: { hp?: number; lp?: number; peakGain: number };
@@ -330,27 +438,16 @@ interface AttackPattern {
 }
 
 const ATTACK_PATTERNS: Record<EnergyType, AttackPattern> = {
-  // 草：柔和上升（類似風切葉片）
   Grass:     { osc: { type: 'triangle', start: 500, end: 800, peakGain: 0.25 }, noise: { hp: 1500, peakGain: 0.08 }, durationSec: 0.35 },
-  // 火：中頻嘶吼（sawtooth）
   Fire:      { osc: { type: 'sawtooth', start: 300, end: 140, peakGain: 0.3 }, noise: { hp: 800, peakGain: 0.12 }, durationSec: 0.4 },
-  // 水：低頻水滴下降
   Water:     { osc: { type: 'sine', start: 900, end: 300, peakGain: 0.3 }, durationSec: 0.4 },
-  // 雷：短促高頻 + 噪音 crackle
   Lightning: { osc: { type: 'square', start: 2000, end: 1200, peakGain: 0.25 }, noise: { hp: 3000, peakGain: 0.2 }, durationSec: 0.25 },
-  // 超：金屬共鳴 high sine
   Psychic:   { osc: { type: 'sine', start: 1500, end: 700, peakGain: 0.28 }, durationSec: 0.5 },
-  // 鬥：低沉 impact（低頻 + 短噪音）
   Fighting:  { osc: { type: 'sine', start: 150, end: 60, peakGain: 0.35 }, noise: { peakGain: 0.15 }, durationSec: 0.3 },
-  // 惡：低頻 dark growl（sawtooth 下降）
   Darkness:  { osc: { type: 'sawtooth', start: 200, end: 80, peakGain: 0.3 }, durationSec: 0.45 },
-  // 鋼：金屬敲擊（square + 高頻 ring）
   Metal:     { osc: { type: 'square', start: 800, end: 800, peakGain: 0.2 }, noise: { hp: 4000, peakGain: 0.15 }, durationSec: 0.3 },
-  // 龍：氣勢深厚（低頻 saw + 中頻 triangle）
   Dragon:    { osc: { type: 'sawtooth', start: 350, end: 120, peakGain: 0.35 }, noise: { hp: 500, lp: 3000, peakGain: 0.1 }, durationSec: 0.55 },
-  // 妖：高頻 sparkle（v2.371 補：EnergyType 包含 Fairy 但 PTCG 繁中版實務不使用，僅為型別完整性）
   Fairy:     { osc: { type: 'sine', start: 1800, end: 1200, peakGain: 0.22 }, noise: { hp: 4000, peakGain: 0.06 }, durationSec: 0.35 },
-  // 無：中性 sine
   Colorless: { osc: { type: 'sine', start: 600, end: 400, peakGain: 0.25 }, durationSec: 0.3 },
 };
 
@@ -367,6 +464,7 @@ function playAttack(c: AudioContext, out: GainNode, t: number, etype: EnergyType
     g.gain.exponentialRampToValueAtTime(0.001, t + pat.durationSec);
     osc.connect(g); g.connect(out);
     osc.start(t); osc.stop(t + pat.durationSec + 0.05);
+    trackNode(osc);
   }
   if (pat.noise) {
     const src = c.createBufferSource();
@@ -387,15 +485,111 @@ function playAttack(c: AudioContext, out: GainNode, t: number, etype: EnergyType
     g.gain.exponentialRampToValueAtTime(0.001, t + pat.durationSec);
     node.connect(g); g.connect(out);
     src.start(t); src.stop(t + pat.durationSec + 0.05);
+    trackNode(src);
   }
 }
 
-// ─ Turn-start (v3.91)：回合切換音效 — 清亮上行三音 C5→E5→G5 ──────────────
-// 設計：3 個 sine wave 短音，每個 0.08s，間隔 0.06s。
-// 音調 C5 (523Hz) → E5 (659Hz) → G5 (784Hz) — 大三和弦琶音，給人「換人/新回合」儀式感。
+// ─ Turn-start：清亮上行三音 C5→E5→G5 ────
 function playTurnStart(c: AudioContext, out: GainNode, t: number): void {
-  beep(c, out, t,         523.25, 0.10, 'sine', 0.22); // C5
-  beep(c, out, t + 0.07,  659.25, 0.10, 'sine', 0.22); // E5
-  beep(c, out, t + 0.14,  783.99, 0.14, 'sine', 0.25); // G5
+  beep(c, out, t,         523.25, 0.10, 'sine', 0.22);
+  beep(c, out, t + 0.07,  659.25, 0.10, 'sine', 0.22);
+  beep(c, out, t + 0.14,  783.99, 0.14, 'sine', 0.25);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// v4.928 新音效 — 紙牌質感
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─ Evolve（進化）— 紙翻面 + 上升小琶音 ────
+//   設計：先 paperSwish（卡片翻面）→ 緊接小三和弦上升（F5→A5→C6 = F major triad）
+//   ~0.45 秒，給人「進化升級」儀式感。
+function playEvolve(c: AudioContext, out: GainNode, t: number): void {
+  // 翻牌音
+  paperSwish(c, out, t, { bursts: 2, durationPerBurst: 0.05, gap: 0.015, peakGain: 0.22, hpCenter: 3000 });
+  // 上升琶音 F5→A5→C6
+  beep(c, out, t + 0.08, 698.46, 0.10, 'sine', 0.20);  // F5
+  beep(c, out, t + 0.16, 880.00, 0.10, 'sine', 0.22);  // A5
+  beep(c, out, t + 0.24, 1046.5, 0.16, 'sine', 0.26);  // C6
+}
+
+// ─ Attach Energy（附能量）— 紙片落下 + soft pluck ────
+//   設計：短 noise burst（卡片落下接觸聲）+ triangle pitch sweep 400→200Hz
+//   ~0.22 秒，給人「能量附加上去」的清脆感。
+function playAttachEnergy(c: AudioContext, out: GainNode, t: number): void {
+  // 落下 noise（極短）
+  const src = c.createBufferSource();
+  src.buffer = noiseBuffer(c, 0.04);
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 1.2;
+  const ng = c.createGain();
+  ng.gain.setValueAtTime(0.18, t);
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+  src.connect(bp); bp.connect(ng); ng.connect(out);
+  src.start(t); src.stop(t + 0.05);
+  trackNode(src);
+  // Soft pluck（triangle pitch sweep）
+  const osc = c.createOscillator();
+  const og = c.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(400, t + 0.02);
+  osc.frequency.exponentialRampToValueAtTime(180, t + 0.18);
+  og.gain.setValueAtTime(0, t + 0.02);
+  og.gain.linearRampToValueAtTime(0.22, t + 0.04);
+  og.gain.exponentialRampToValueAtTime(0.001, t + 0.20);
+  osc.connect(og); og.connect(out);
+  osc.start(t + 0.02); osc.stop(t + 0.22);
+  trackNode(osc);
+}
+
+// ─ Ability（特性發動）— 中頻 chime ────
+//   設計：兩個 sine 同時（perfect fifth 880Hz + 1320Hz），柔和 attack + 短 decay
+//   ~0.4 秒，給人「咒語/魔法」感但比攻擊溫和。
+function playAbility(c: AudioContext, out: GainNode, t: number): void {
+  beep(c, out, t,        880,  0.35, 'sine', 0.22); // A5
+  beep(c, out, t + 0.02, 1320, 0.30, 'sine', 0.18); // E6
+  // 高頻 sparkle 點綴
+  beep(c, out, t + 0.08, 2640, 0.18, 'sine', 0.10);
+}
+
+// ─ Prize Take（拿獎賞 1-5 張）— 紙抽出 + 上升二音 ────
+//   設計：紙張抽出 noise + 上升二音 D5→F#5（major 3rd 樂觀感）
+//   ~0.35 秒。
+function playPrizeTake(c: AudioContext, out: GainNode, t: number): void {
+  paperSwish(c, out, t, { bursts: 1, durationPerBurst: 0.08, peakGain: 0.28, hpCenter: 2400 });
+  beep(c, out, t + 0.06, 587.33, 0.12, 'sine', 0.22); // D5
+  beep(c, out, t + 0.16, 739.99, 0.18, 'sine', 0.26); // F#5
+}
+
+// ─ Victory Fanfare（拿最後一張獎賞）— 大調琶音 ────
+//   設計：C5→E5→G5→C6 完整大三和弦 + 末尾 sustain
+//   ~1.0 秒，慶祝即將獲勝。
+function playVictoryFanfare(c: AudioContext, out: GainNode, t: number): void {
+  beep(c, out, t,        523.25, 0.18, 'sine', 0.25); // C5
+  beep(c, out, t + 0.10, 659.25, 0.18, 'sine', 0.25); // E5
+  beep(c, out, t + 0.20, 783.99, 0.18, 'sine', 0.28); // G5
+  beep(c, out, t + 0.32, 1046.5, 0.45, 'sine', 0.32); // C6 sustain
+  // 一點高頻 shimmer
+  beep(c, out, t + 0.35, 2093, 0.30, 'sine', 0.12);   // C7
+}
+
+// ─ Game Win（對局結束 - 勝）— 完整勝利曲 ────
+//   設計：C5→E5→G5→C6→E6 + 長 sustain，2 秒。
+function playGameWin(c: AudioContext, out: GainNode, t: number): void {
+  beep(c, out, t,        523.25, 0.20, 'sine', 0.25); // C5
+  beep(c, out, t + 0.12, 659.25, 0.20, 'sine', 0.25); // E5
+  beep(c, out, t + 0.24, 783.99, 0.20, 'sine', 0.27); // G5
+  beep(c, out, t + 0.36, 1046.5, 0.20, 'sine', 0.30); // C6
+  beep(c, out, t + 0.48, 1318.5, 0.80, 'sine', 0.32); // E6 sustain
+  // sparkle 點綴
+  beep(c, out, t + 0.50, 2637, 0.50, 'sine', 0.10);
+  beep(c, out, t + 0.70, 3136, 0.30, 'sine', 0.08);
+}
+
+// ─ Game Lose（對局結束 - 敗）— 下行小調 ────
+//   設計：A4→F4→D4→C4 minor descent + low sustain，1.5 秒。
+function playGameLose(c: AudioContext, out: GainNode, t: number): void {
+  beep(c, out, t,        440.00, 0.22, 'sine', 0.22); // A4
+  beep(c, out, t + 0.18, 349.23, 0.22, 'sine', 0.22); // F4
+  beep(c, out, t + 0.36, 293.66, 0.22, 'sine', 0.22); // D4
+  beep(c, out, t + 0.54, 261.63, 0.70, 'sawtooth', 0.18); // C4 sustain（sawtooth 更悲）
+}

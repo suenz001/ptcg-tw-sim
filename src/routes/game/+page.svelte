@@ -60,10 +60,13 @@
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
   import { VERSION } from '$lib/version';
-  import { playSfx } from '$lib/audio/sfx';
+  import { playSfx, closeAudio } from '$lib/audio/sfx';
   import { parseCoinFlipAnimationEvents } from '$lib/game/coinAnimation';
   import {
     loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume,
+    // v4.928 sub-bus 音量
+    saveUiVolume, saveSfxVolume, saveStatusVolume,
+    getUiVolume, getSfxVolume, getStatusVolume,
     getBgmTrack, setBgmTrack, getBgmVolume, setBgmVolume
   } from '$lib/audio/settings';
   // v2.284 Phase 1：手機直式 layout 元件 — 用條件 render 切換
@@ -2403,6 +2406,10 @@
   let showSettingsModal = $state(false);
   let audioVolume = $state(0.5);
   let audioMuted = $state(false);
+  // v4.928 sub-bus 音量
+  let uiVolume = $state(1.0);
+  let sfxVolume = $state(1.0);
+  let statusVolume = $state(1.0);
   let bgmTrack = $state('none');
   let bgmVolume = $state(0.5);
   let bgmAudioEl: HTMLAudioElement | null = $state(null);
@@ -2430,6 +2437,10 @@
     loadAudioPrefs();
     audioVolume = getAudioVolume();
     audioMuted = isAudioMuted();
+    // v4.928 sub-bus 音量
+    uiVolume = getUiVolume();
+    sfxVolume = getSfxVolume();
+    statusVolume = getStatusVolume();
     bgmTrack = getBgmTrack();
     bgmVolume = getBgmVolume();
     // 匿名登入（線上對戰需要）— v4.924 改用 Firebase + Oracle 並行：
@@ -2531,6 +2542,7 @@
 
   onDestroy(() => {
     stopHeartbeat();
+    closeAudio();  // v4.928: 釋放 AudioContext + 停所有 in-flight oscillators
     unsubRoom?.();
     unsubOpenRooms?.();
     // v4.40：補 chat messages listener leak（玩家硬改網址不走 leaveOnlineGame 時殘留）
@@ -4293,90 +4305,121 @@
   });
 
 
+  // v4.928: 計算 actor 的 stereo pan（紙牌空間感）
+  //   線上：自己中央、對手偏右；AI：玩家中央、AI 偏右；本機 2P：P0 偏左、P1 偏右
+  function panForActor(actor: 0 | 1): number {
+    if (mode === 'online' && myPlayerIndex !== null) {
+      return actor === myPlayerIndex ? 0 : 0.3;
+    }
+    if (aiPlayerIndex !== null) {
+      return actor === aiPlayerIndex ? 0.3 : 0;
+    }
+    return actor === 0 ? -0.25 : 0.25;
+  }
+
   function dispatchSfxForAction(
     action: ReturnType<typeof GameActions[keyof typeof GameActions]>,
     prev: GameState,
     next: GameState,
   ): void {
     try {
+      const actorIdx = (prev.activePlayerIndex ?? 0) as 0 | 1;
+      const pan = panForActor(actorIdx);
       switch (action.type) {
         case 'DRAW_CARD':
-          playSfx('draw');
+          playSfx('draw', { pan });
           break;
         case 'MULLIGAN_DRAW_DECISION':
-          // v4.923：accept→count，只要實際補抽 >0 張就播放音效
-          if (((action as any).count ?? 0) > 0) playSfx('draw');
+          if (((action as any).count ?? 0) > 0) playSfx('draw', { pan });
           break;
         case 'FINISH_SETUP':
-          // 雙方 setup 都完成 → 進 playing，放擲硬幣音（開局象徵先攻）
           if (prev.phase === 'setup' && next.phase === 'playing') playSfx('coin');
-          else playSfx('click');
+          else playSfx('click', { pan });
+          break;
+        // v4.928: 紙牌質感拆音
+        case 'EVOLVE':
+          playSfx('evolve', { pan });
           break;
         case 'ATTACH_ENERGY':
+          playSfx('attach-energy', { pan });
+          break;
         case 'PLAY_BASIC':
         case 'BENCH_POKEMON':
-        case 'EVOLVE':
         case 'USE_STADIUM':
-          playSfx('click');
+          playSfx('click', { pan });
           break;
         case 'RETREAT':
-          playSfx('shuffle', { volume: 0.5 });
+          playSfx('shuffle', { volume: 0.5, pan });
           break;
         case 'END_TURN':
-          playSfx('click', { volume: 0.6 });
+          playSfx('click', { volume: 0.6, pan });
           break;
         case 'PLAY_TRAINER': {
-          playSfx('click');
-          // Trainer 常帶 draw/shuffle 效果 — 若手牌數上升 or deck 減少顯著，補 draw 音
+          playSfx('click', { pan });
           const myIdx = next.activePlayerIndex;
           const handDelta = next.players[myIdx].hand.length - prev.players[myIdx].hand.length;
-          if (handDelta > 0) setTimeout(() => playSfx('draw', { volume: 0.6 }), 100);
+          if (handDelta > 0) setTimeout(() => playSfx('draw', { volume: 0.6, pan }), 100);
           break;
         }
+        // v4.928: 特性發動專屬音（chime）
         case 'USE_ABILITY':
-          playSfx('click');
+          playSfx('ability', { pan });
           break;
         case 'RESOLVE_SELECTION':
-          playSfx('click', { volume: 0.6 });
-          // 若 state 的 deck 縮短明顯，通常是搜卡動作，附加 shuffle 聲
+          playSfx('click', { volume: 0.6, pan });
           {
             const myIdx = next.activePlayerIndex;
             const deckDelta = prev.players[myIdx].deck.length - next.players[myIdx].deck.length;
-            if (deckDelta >= 2) setTimeout(() => playSfx('shuffle', { volume: 0.4 }), 150);
+            if (deckDelta >= 2) setTimeout(() => playSfx('shuffle', { volume: 0.4, pan }), 150);
           }
           break;
         case 'ATTACK': {
-          // 攻擊音效 + 動畫 — 取 attacker 主屬性
           const aIdx = prev.activePlayerIndex;
           const attacker = prev.players[aIdx].active;
           if (!attacker) break;
           const atkCard = pool.get(attacker.cardId);
           const etype: EnergyType = atkCard?.pokemonType ?? 'Colorless';
-          // v2.224 — 沒有造成傷害的招式（如猛雷鼓ex｜濺射咆哮：棄手牌重抽）
-          //   不該觸發攻擊動畫（shake + flash 視覺效果只用在會造成傷害的招式）。
-          //   gate：依招式 attack.damage（'' / '0' / 0 → 視為無傷害）。
           const atkData = atkCard?.attacks?.[action.attackIndex];
           const rawDmg = (atkData?.damage ?? '').toString().trim();
           const isZeroDamage = rawDmg === '' || rawDmg === '0';
-          playSfx(`attack-${etype}` as `attack-${EnergyType}`);
+          playSfx(`attack-${etype}` as `attack-${EnergyType}`, { pan });
           if (!isZeroDamage) {
             const defender = next.players[1 - aIdx].active;
             triggerAttackFx(aIdx as 0 | 1, attacker.iid, defender?.iid ?? null, etype);
           }
           break;
         }
-        case 'TAKE_PRIZES':
-          playSfx('draw');
+        // v4.928: 拿獎賞分音 — 最後一張用 victory-fanfare
+        case 'TAKE_PRIZES': {
+          const acted = (action as any).playerIdx as 0 | 1 | undefined;
+          const oppIdx = acted !== undefined ? ((1 - acted) as 0 | 1) : ((1 - actorIdx) as 0 | 1);
+          const oppPrizesAfter = next.players[oppIdx]?.prizes?.length ?? 6;
+          const myPan = acted !== undefined ? panForActor(acted) : pan;
+          if (oppPrizesAfter === 0) {
+            playSfx('victory-fanfare', { pan: myPan });
+          } else {
+            playSfx('prize-take', { pan: myPan });
+          }
           break;
+        }
         case 'SEND_NEW_ACTIVE':
-          playSfx('click');
+          playSfx('click', { pan });
           break;
         default:
           break;
       }
 
-      // state-diff：status 轉移 / KO（獨立於 action type，checkup 等非 action 也會變）
       detectStatusAndKOSfx(prev, next);
+      // v4.928: 對局結束音（game-over 轉換時播 win/lose）
+      if (prev.phase !== 'game-over' && next.phase === 'game-over' && next.winner !== null && next.winner !== undefined) {
+        const winnerIdx = next.winner;
+        const isLocalWin = (() => {
+          if (mode === 'online' && myPlayerIndex !== null) return myPlayerIndex === winnerIdx;
+          if (aiPlayerIndex !== null) return aiPlayerIndex !== winnerIdx;
+          return true; // 本機 2P：誰贏都播 game-win
+        })();
+        setTimeout(() => playSfx(isLocalWin ? 'game-win' : 'game-lose'), 300);
+      }
     } catch {
       // 音效失敗不影響遊戲
     }
@@ -6895,9 +6938,25 @@
           </div>
           {#if !audioMuted}
             <div class="setting-row">
-              <label for="sfx-vol">音效音量：</label>
+              <label for="sfx-vol">總音量：</label>
               <input id="sfx-vol" type="range" min="0" max="1" step="0.05" value={audioVolume} oninput={(e) => onVolumeChange(parseFloat(e.currentTarget.value))} />
               <span class="vol-text">{Math.round(audioVolume * 100)}%</span>
+            </div>
+            <!-- v4.928 sub-bus 音量 -->
+            <div class="setting-row">
+              <label for="ui-vol">操作音（抽牌/進化/附能量）：</label>
+              <input id="ui-vol" type="range" min="0" max="1" step="0.05" value={uiVolume} oninput={(e) => { uiVolume = parseFloat(e.currentTarget.value); saveUiVolume(uiVolume); }} />
+              <span class="vol-text">{Math.round(uiVolume * 100)}%</span>
+            </div>
+            <div class="setting-row">
+              <label for="sfx-attack-vol">戰鬥音（攻擊/結算）：</label>
+              <input id="sfx-attack-vol" type="range" min="0" max="1" step="0.05" value={sfxVolume} oninput={(e) => { sfxVolume = parseFloat(e.currentTarget.value); saveSfxVolume(sfxVolume); }} />
+              <span class="vol-text">{Math.round(sfxVolume * 100)}%</span>
+            </div>
+            <div class="setting-row">
+              <label for="status-vol">狀態音（中毒/灼傷）：</label>
+              <input id="status-vol" type="range" min="0" max="1" step="0.05" value={statusVolume} oninput={(e) => { statusVolume = parseFloat(e.currentTarget.value); saveStatusVolume(statusVolume); }} />
+              <span class="vol-text">{Math.round(statusVolume * 100)}%</span>
             </div>
           {/if}
         </div>
