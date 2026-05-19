@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.918</span> 🔐 補登入狀態 dashboard 到本機 / 連線 lobby（v4.913 漏網）</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.913 只在「⚔️ 開始對戰」模式選擇畫面顯示登入狀態 dashboard，但點進「🖥️ 本機雙人對戰」「🌐 線上連線對戰」兩個子頁面後 dashboard 就消失了。</li>
+          <li><b>修法</b>：把同一段 dashboard svelte 區塊（<code>&#123;#if !ORACLE_MODE &amp;&amp; firebaseUser&#125;</code> 包住 sync-pill + 匿名／已登入分支）複製到本機 lobby 和線上 lobby 兩個 sub-page，插在「← 返回」按鈕和 h1 標題之間。</li>
+          <li><b>無新邏輯</b>：純 UI port，state / function / modal 都沿用 v4.913 已導入的（一份 state 三個畫面共用），不必再加 import 或新函式。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.917</span> 🛡️ 修化隱免疫被幻影奇襲穿透（dragapult-snipe 改用 unified canApplyEffectToTarget）</summary>
         <ul>
           <li><b>玩家回報</b>：詛咒娃娃／怨影娃娃 等具「化隱」特性的寶可夢，被多龍巴魯托ex 幻影奇襲 6 個傷害指示物還是會打到（UI log 沒顯示「免疫」訊息）。</li>

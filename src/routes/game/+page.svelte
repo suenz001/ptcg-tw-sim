@@ -4341,6 +4341,25 @@
   <!-- ─── 本機 Lobby ─── -->
   <main class="lobby">
     <button class="back-btn" onclick={() => mode=null}>← 返回</button>
+    <!-- v4.918 登入狀態 dashboard（同 v4.913 模式選擇畫面；Oracle build 不顯示） -->
+    {#if !ORACLE_MODE && firebaseUser}
+      <div class="auth-dashboard">
+        <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
+          {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
+        </span>
+        {#if isAnonymous}
+          <button class="auth-btn anon" onclick={openAuthModal} title="建立帳號以跨裝置保存牌組">
+            👤 匿名　<span class="auth-sub">建立帳號</span>
+          </button>
+        {:else}
+          <div class="auth-user">
+            <span class="auth-email">✉️ {firebaseUser.email}</span>
+            <button class="small" onclick={openChangePasswordModal} title="更改密碼">🔑 更改密碼</button>
+            <button class="small danger" onclick={handleSignOut}>登出</button>
+          </div>
+        {/if}
+      </div>
+    {/if}
     <h1>🖥️ 本機雙人對戰</h1>
     <p class="lobby-subtitle">遊戲開始時會擲硬幣決定先後手</p>
     <div class="player-setup">
@@ -4431,6 +4450,25 @@
          在房間內要走右上「離開房間」按鈕（onclick=leaveOnlineGame）才會清座位 -->
     {#if onlineStep !== 'room'}
       <button class="back-btn" onclick={() => { mode=null; onlineStep='choose'; onlineError=''; }}>← 返回</button>
+    {/if}
+    <!-- v4.918 登入狀態 dashboard（同 v4.913 模式選擇畫面；Oracle build 不顯示） -->
+    {#if !ORACLE_MODE && firebaseUser}
+      <div class="auth-dashboard">
+        <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
+          {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
+        </span>
+        {#if isAnonymous}
+          <button class="auth-btn anon" onclick={openAuthModal} title="建立帳號以跨裝置保存牌組">
+            👤 匿名　<span class="auth-sub">建立帳號</span>
+          </button>
+        {:else}
+          <div class="auth-user">
+            <span class="auth-email">✉️ {firebaseUser.email}</span>
+            <button class="small" onclick={openChangePasswordModal} title="更改密碼">🔑 更改密碼</button>
+            <button class="small danger" onclick={handleSignOut}>登出</button>
+          </div>
+        {/if}
+      </div>
     {/if}
     <h1>🌐 線上連線對戰</h1>
 
