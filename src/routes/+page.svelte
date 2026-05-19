@@ -264,6 +264,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.891</span> 🥁 M5 Phase 8d — 太鼓防壁（護城龍 bench-aura）</summary>
+        <ul>
+          <li><b>實裝 1 張 deferred passive ability</b>：護城龍 <code>太鼓防壁</code>。累計 78 → <b>79</b> 個 effect / 81 張卡（~98% coverage）。</li>
+          <li><b>太鼓防壁</b>（passive bench-aura defense）：
+            <ul>
+              <li>卡面：「只要這隻寶可夢在備戰區，自己場上所有寶可夢不會受到身上附加能量為 2 個以下的對手寶可夢的招式傷害。」</li>
+              <li><b>觸發條件</b>：defender 側 bench 有「護城龍」+ 攻擊方 active <code>energyAttached.length</code> ≤ 2。</li>
+              <li><b>實裝位置（雙處 inline check）</b>：
+                <ul>
+                  <li>engine.ts 主 damage calc — 涵蓋 active target case（最常見的攻擊路徑）</li>
+                  <li>defense.ts <code>canApplyEffectToTarget</code> 統一 helper — 涵蓋 bench-snipe target case（狙擊備戰類招式經此 helper 走）</li>
+                </ul>
+              </li>
+              <li><b>「能量 2 個以下」解讀</b>：依日文原文「ついているエネルギーが2個以下」為「能量<b>卡張數</b> ≤ 2」（非能量單位數），故用 <code>attacker.active.energyAttached.length</code> 判定。</li>
+              <li><b>注意</b>：護城龍本身必須在 bench（不在 active）；護城龍在 active 時不觸發。</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 11（engine.ts + defense.ts 全走 Python pipeline）/ Rule 17（unified helper canApplyEffectToTarget 內加 1d check，snipe path 走此 helper）/ Rule 4（tsc 驗證）/ Rule 7c（卡面「能量為 X 以下」解讀依日文原文）。</li>
+          <li><b>剩餘 deferred</b>：光子密碼（on-KO move energy，需擴 PassiveOnKoFn 簽名 + 2-stage picker）/ 強烈之吻（delayed KO，需 cross-turn flag + END_TURN hook）/ 招式竊賊（attack copy，需 UI picker）/ 化石卡 + 化石採掘場 / 工具卡（豪華炸彈 / 重試徽章 — 需 engine 級 coin re-roll hook）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.89</span> 🪲 M5 Phase 8c — 不朽之軀 + 蟲蟲恐慌</summary>
         <ul>
           <li><b>實裝 2 張 deferred</b>：累計 76 → <b>78</b> 個 effect / 81 張卡（~96% coverage）。</li>

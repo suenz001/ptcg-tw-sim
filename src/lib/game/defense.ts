@@ -160,6 +160,27 @@ export function canApplyEffectToTarget(
     }
   }
 
+  // 1d. 太鼓防壁（v4.891 / M5 — 護城龍 passive bench-aura defense）
+  //     卡面：「只要這隻寶可夢在備戰區，自己場上所有寶可夢不會受到身上附加能量為
+  //            2 個以下的對手寶可夢的招式傷害。」
+  //     範圍：attack-damage only；對 active 由 engine.ts 主路徑 inline check 處理；
+  //            對 bench (snipe) 由本處統一 helper check 處理。
+  //     gate：defender 側 bench 有 護城龍 + 攻擊方 active 能量卡張數 ≤ 2。
+  if (kind === 'attack-damage') {
+    const defIdx = (1 - actorIdx) as 0 | 1;
+    const defender = state.players[defIdx];
+    const hasTaikoBari = defender.bench.some(b => {
+      const c = pool.get(b.cardId);
+      return c?.abilities?.some(a => a.name === '太鼓防壁');
+    });
+    if (hasTaikoBari) {
+      const attacker = state.players[actorIdx];
+      if (attacker.active && attacker.active.energyAttached.length <= 2) {
+        return { blocked: true, reason: `太鼓防壁 免疫附加能量 ${attacker.active.energyAttached.length} 張（≤2）的對手招式傷害` };
+      }
+    }
+  }
+
   // 2. canApplyAttackEffectToTarget — ATTACK_EFFECT_IMMUNITY map：
   //    - 薄霧能量 (energy-on-target, attack-effect)
   //    - 硬岩【鬥】能量 (energy-on-target, requireType=Fighting)
