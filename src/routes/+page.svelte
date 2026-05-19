@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.88</span> 🔥 M5 Phase 8b — 咒縛之炎（超級水晶燈火靈ex 特性）</summary>
+        <ul>
+          <li><b>實裝 1 張 deferred passive ability</b>：超級水晶燈火靈ex 的 <code>咒縛之炎</code>。累計 75 → <b>76</b> 個 effect / 81 張卡（~94% coverage）。</li>
+          <li><b>咒縛之炎</b>：「只要這隻寶可夢在場上，對手的戰鬥寶可夢撤退所需的能量數增加 1 個。」
+            <ul>
+              <li><b>實作位置</b>：effects.ts 既有的 <code>ABILITY_RETREAT_MOD</code> map 新增條目（複用 大網/阿利多斯 既有 hook）。</li>
+              <li><b>觸發範圍</b>：持有者只要在自己場上（active 或 bench）即生效；撤退者必須是對手（無進化條件，比 大網 更寬鬆）。</li>
+              <li><b>引擎機制</b>：撤退時 engine.ts <code>applyAbilityRetreatMod()</code> 掃描雙方場上所有 abilities，對符合條件的 holder 累加 <code>addBy: 1</code>。</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 11（effects.ts ~680KB 大檔，Python pipeline + head_blob → replace → safe_write，避免 Edit 工具截斷）/ Rule 4（tsc 驗證）/ Rule 7c（依 M5.json 原文逐字核對；卡面無「進化寶可夢」filter，比 大網 更全面）。</li>
+          <li><b>剩餘 deferred</b>：太鼓防壁 / 不朽之軀 / 光子密碼 / 蟲蟲恐慌 / 強烈之吻 / 招式竊賊 / 化石卡（古老的頭蓋/盾牌 + 化石採掘場）/ 工具卡（豪華炸彈 / 重試徽章）。後續分階段續做。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.875</span> 🦴 M5 進化鏈補完 + Mega 規則統一</summary>
         <ul>
           <li><b>evolvesFrom 補齊（4 張）</b>：

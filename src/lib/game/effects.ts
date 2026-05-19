@@ -3072,6 +3072,15 @@ export const ABILITY_RETREAT_MOD = new Map<string, (
     if (!p.retreatingCard.evolvesFrom) return {};
     return { addBy: 1 };
   }],
+
+  // 超級水晶燈火靈ex｜咒縛之炎（v4.88 / M5）—
+  //   「只要這隻寶可夢在場上，對手的戰鬥寶可夢撤退所需的能量數增加 1 個。」
+  //   - 持有者只要在自己場上（active 或 bench）即生效。
+  //   - 撤退者必須是對手（無進化條件，所有對手戰鬥場撤退 +1）。
+  ['咒縛之炎', (p) => {
+    if (p.holderOwnerIdx === p.retreatingOwnerIdx) return {};
+    return { addBy: 1 };
+  }],
 ]);
 
 // ══════════════════════════════════════════════════════════════════════════════
