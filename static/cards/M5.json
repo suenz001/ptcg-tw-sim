@@ -45,7 +45,7 @@
   },
   {
     "id": "50221",
-    "name": "顎針蟲",
+    "name": "強顎雞母蟲",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M5",
@@ -81,7 +81,7 @@
   },
   {
     "id": "50222",
-    "name": "螳花蟲",
+    "name": "偽螳草",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M5",
@@ -152,7 +152,7 @@
     "retreatCost": [
       "Colorless"
     ],
-    "evolvesFrom": "螳花蟲",
+    "evolvesFrom": "偽螳草",
     "stage": "Stage1",
     "illustrator": "5ban Graphics",
     "regulationMark": "M5"
@@ -950,7 +950,7 @@
   },
   {
     "id": "50243",
-    "name": "電電蟲",
+    "name": "蟲電寶",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M5",
@@ -989,7 +989,7 @@
     ],
     "pokedexNumber": 737,
     "species": "電池寶可夢",
-    "evolvesFrom": "蟲電寶",
+    "evolvesFrom": "強顎雞母蟲",
     "stage": "Stage1",
     "illustrator": "Kazuhisa Uragami",
     "regulationMark": "M5"
@@ -1038,7 +1038,7 @@
     "stage": "Stage2",
     "illustrator": "KEIICHIRO ITO",
     "regulationMark": "M5",
-    "evolvesFrom": "電電蟲"
+    "evolvesFrom": "蟲電寶"
   },
   {
     "id": "50245",
@@ -2053,7 +2053,7 @@
   },
   {
     "id": "50268",
-    "name": "烏賊仔",
+    "name": "好啦魷",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M5",
@@ -2319,7 +2319,7 @@
   },
   {
     "id": "50274",
-    "name": "小心狗",
+    "name": "偶叫獒",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M5",
@@ -2356,7 +2356,7 @@
   },
   {
     "id": "50275",
-    "name": "大狗頭",
+    "name": "獒教父",
     "supertype": "Pokemon",
     "subtype": "Stage1",
     "setCode": "M5",
@@ -2400,7 +2400,8 @@
     "species": "老大寶可夢",
     "stage": "Stage1",
     "illustrator": "kawayoo",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "偶叫獒"
   },
   {
     "id": "50276",
@@ -2717,7 +2718,7 @@
   },
   {
     "id": "50283",
-    "name": "鑽嘴鳥",
+    "name": "小篤兒",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M5",
@@ -2792,11 +2793,11 @@
     "stage": "Stage1",
     "illustrator": "miki kudo",
     "regulationMark": "M5",
-    "evolvesFrom": "鑽嘴鳥"
+    "evolvesFrom": "小篤兒"
   },
   {
     "id": "50285",
-    "name": "巨嘴鳥",
+    "name": "銃嘴大鳥",
     "supertype": "Pokemon",
     "subtype": "Stage2",
     "setCode": "M5",
@@ -2844,7 +2845,7 @@
   },
   {
     "id": "50286",
-    "name": "屬性：零",
+    "name": "屬性：空",
     "supertype": "Pokemon",
     "subtype": "Basic",
     "setCode": "M5",
@@ -2920,7 +2921,7 @@
     ],
     "pokedexNumber": 773,
     "species": "人造寶可夢",
-    "evolvesFrom": "屬性：零",
+    "evolvesFrom": "屬性：空",
     "stage": "Stage1",
     "illustrator": "Takumi Wada",
     "regulationMark": "M5"
@@ -3043,7 +3044,7 @@
     "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050293_T_RITORAIBAJJI.jpg",
     "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50293/regu/all",
     "scrapedAt": "2026-05-18T11:51:58.000Z",
-    "rulesText": "在自己每回合中，附有這張卡的寶可夢使用招式時，若自己擲了硬幣，可全部消除該硬幣結果並從頭重擲。寶可夢道具可在自己的回合附加任意數量於自己的寶可夢身上，每隻寶可夢只能附 1 張，並保持附加狀態。",
+    "rulesText": "在自己每回合中，附有這張卡的無屬性寶可夢使用招式時，若自己擲了硬幣，可全部消除該硬幣結果並從頭重擲。寶可夢道具可在自己的回合附加任意數量於自己的寶可夢身上，每隻寶可夢只能附 1 張，並保持附加狀態。",
     "illustrator": "Toyste Beach",
     "regulationMark": "M5"
   },

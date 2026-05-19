@@ -264,6 +264,38 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.874</span> 🔤 M5 9 隻寶可夢翻譯校正 + 重試徽章卡面校正</summary>
+        <ul>
+          <li><b>9 隻寶可夢翻譯校正（台版正譯）</b>：
+            <ul>
+              <li>螳花蟲 → <b>偽螳草</b>（Fomantis #753）</li>
+              <li>顎針蟲 → <b>強顎雞母蟲</b>（Grubbin #736）</li>
+              <li>電電蟲 → <b>蟲電寶</b>（Charjabug #737）</li>
+              <li>烏賊仔 → <b>好啦魷</b>（Inkay #686）</li>
+              <li>小心狗 → <b>偶叫獒</b>（Maschiff #942）</li>
+              <li>大狗頭 → <b>獒教父</b>（Mabosstiff #943）</li>
+              <li>屬性：零 → <b>屬性：空</b>（Type: Null #772）— 還原 v4.873 的誤改</li>
+              <li>巨嘴鳥 → <b>銃嘴大鳥</b>（Toucannon #733）</li>
+              <li>鑽嘴鳥 → <b>小篤兒</b>（Pikipek #731）</li>
+            </ul>
+          </li>
+          <li><b>連帶 evolvesFrom 修正</b>：因卡名換了，引用舊名的 evolvesFrom 也得跟著更新（避免進化卡查不到 base）：
+            <ul>
+              <li>蘭螳花ex: 螳花蟲 → 偽螳草</li>
+              <li>蟲電寶 (新): 蟲電寶 (self-ref) → 強顎雞母蟲</li>
+              <li>鍬農炮蟲: 電電蟲 → 蟲電寶</li>
+              <li>獒教父 (新): 小心狗 → 偶叫獒</li>
+              <li>銀伴戰獸: 屬性：零 → 屬性：空（還原 v4.873 誤改）</li>
+              <li>喇叭啄鳥: 鑽嘴鳥 → 小篤兒</li>
+            </ul>
+          </li>
+          <li><b>m5_preview.ts code 同步</b>：所有 regPost / regPre / regA 註冊 key、log 字串、註解內舊卡名全替換為新名（共改十幾處），確保引擎查表能對到 effect。</li>
+          <li><b>重試徽章 rulesText 校正</b>：「附有這張卡的寶可夢」→「附有這張卡的<b>無屬性寶可夢</b>」（卡面只對【無】屬性寶可夢生效）。完整實裝（coin re-roll 機制）仍為 deferred — 需 engine 級 hook 改動。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 7c（依用戶提供官方譯名核對；用戶指出 v4.873 對 屬性：零 / 蟲電寶 / 強顎雞母蟲 的理解錯誤 → 同步修正）/ Rule 11（M5.json 結構化 json.dumps，m5_preview.ts 全 string replace 走 Python pipeline）/ Rule 4（tsc 驗證）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.873</span> 🐬 M5 進化鏈補齊 + 海豚寶寶 → 波普海豚</summary>
         <ul>
           <li><b>卡名校正</b>：<code>海豚寶寶</code> → <code>波普海豚</code>（Finizen 台版正譯）。同步更新 M5.json + m5_preview.ts 的 <code>regPost(&apos;波普海豚|吸取鰭&apos;)</code> 註冊 key。</li>
