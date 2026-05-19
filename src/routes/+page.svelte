@@ -264,6 +264,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.915</span> 🔧 真正修 杜若 簡化（picker 限制 top 7 範圍）</summary>
+        <ul>
+          <li><b>v4.914 走錯方向</b>：當時誤判簡化在「minCount=0 允許跳過」，但玩家確認「都不選是可以的」，所以 minCount=0 才是對的。<b>真正的簡化</b>是 picker UI 顯示整個牌庫的寶可夢 / 訓練家，等於牌庫任選 — 違反卡面「從這 7 張中選」。</li>
+          <li><b>真正修法</b>：filter 從 <code>'Pokemon'</code> / <code>'Trainer'</code> 改成 <code>'Pokemon:TOP_N'</code> / <code>'Trainer:TOP_N'</code>（仿 v3.11 拉普拉斯ex 的 <code>'Energy:TOP_N'</code> pattern），picker UI 真正只顯示 <code>params.topIids</code> 範圍內的卡。</li>
+          <li><b>修補位置</b>：
+            <ul>
+              <li><code>v169_supporters.ts</code>：杜若 filter 字串改 TOP_N + revert v4.914 的 minCount=1 強制邏輯，回到 minCount=0（可跳過）</li>
+              <li><code>game&#47;+page.svelte</code>（picker candidates derived，約 line 1788 後）：新增 <code>Pokemon:TOP_N</code> / <code>Trainer:TOP_N</code> 兩個 filter case</li>
+              <li><code>ai.ts</code>（AI filter switch，約 line 394 後）：同步加兩個 case，AI 對戰時也只挑 top 7 內</li>
+            </ul>
+          </li>
+          <li><b>教訓</b>：簡化的判斷必須要看 picker UI 實際顯示 vs 卡面範圍，不要只看 minCount。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.914</span> 🔧 修 杜若 簡化實裝（minCount 強制 1 張）</summary>
         <ul>
           <li><b>玩家回報</b>：支援者卡片「杜若」疑似簡化實裝。</li>

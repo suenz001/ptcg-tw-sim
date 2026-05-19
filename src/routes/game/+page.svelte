@@ -1786,6 +1786,24 @@
             return !!card && card.supertype === 'Energy';
           });
         }
+        // v4.915 杜若：peek N 中的寶可夢卡（任意階段）
+        if (f === 'Pokemon:TOP_N') {
+          const topN = new Set<string>((pendingSelection.params?.topIids as string[]) ?? []);
+          return src.deck.filter(c => {
+            if (!topN.has(c.iid)) return false;
+            const card = pool.get(c.cardId);
+            return !!card && card.supertype === 'Pokemon';
+          });
+        }
+        // v4.915 杜若：peek N 中的訓練家卡（含支援者/物品/競技場/道具）
+        if (f === 'Trainer:TOP_N') {
+          const topN = new Set<string>((pendingSelection.params?.topIids as string[]) ?? []);
+          return src.deck.filter(c => {
+            if (!topN.has(c.iid)) return false;
+            const card = pool.get(c.cardId);
+            return !!card && card.supertype === 'Trainer';
+          });
+        }
         // v2.209 配樂之笛：對手牌庫頂 5 張中的基礎寶可夢
         if (f === 'Basic:TOP5') {
           const top5 = new Set<string>((pendingSelection.params?.top5Iids as string[]) ?? []);

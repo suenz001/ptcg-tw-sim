@@ -392,6 +392,15 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
           return topN.has(c.iid) && card.supertype === 'Energy';
         }
+        // v4.915 杜若：peek N 中的寶可夢 / 訓練家
+        if (f === 'Pokemon:TOP_N') {
+          const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
+          return topN.has(c.iid) && card.supertype === 'Pokemon';
+        }
+        if (f === 'Trainer:TOP_N') {
+          const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
+          return topN.has(c.iid) && card.supertype === 'Trainer';
+        }
         // v2.209 配樂之笛：對手牌庫頂 5 張中的基礎寶可夢
         if (f === 'Basic:TOP5') {
           const top5 = new Set<string>((sel.params?.top5Iids as string[]) ?? []);
