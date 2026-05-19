@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.922</span> 🔧 修請假王ex 懶怠個性 沒被火箭隊的監視塔擋（v4.921 audit 連帶發現）</summary>
+        <ul>
+          <li><b>v4.921 後續 audit 結果</b>：交叉比對 Colorless 寶可夢清單（34 種特性）vs 引擎內 direct-scan ability 點（22 處），找出另一個漏網：請假王ex 的「懶怠個性」(Colorless)。</li>
+          <li><b>原實作問題</b>：<code>isLazyTraitBlockingAttack()</code>（effects.ts L12836，engine 在 USE_ATTACK + getAvailableAttacks 兩處呼叫）直接掃 attacker.abilities 是否含「懶怠個性」就 block 攻擊，未檢查 stadium。</li>
+          <li><b>修法</b>：函式內加 <code>state.activeStadium</code> 名稱比對，'火箭隊的監視塔' 在場 + 持有者 Colorless → 直接 return false（特性失效，正常攻擊）。</li>
+          <li><b>Audit 範圍</b>：22 處 direct-scan 已全部對到 pokemonType。除請假王ex + 探探鼠（v4.921 已修）外，其餘 20 處持有者皆非 Colorless（Psychic / Metal / Grass / Fighting / Lightning / Water / Dragon）— 不受監視塔影響，<b>不需修補</b>。</li>
+          <li><b>Iron Rules</b>：Rule 4（tsc）/ Rule 7（補完整 gate）/ Rule 17（unified defense — 字面值避循環依賴）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.921</span> 🔧 修探探鼠｜監視之眼 沒被火箭隊的監視塔擋</summary>
         <ul>
           <li><b>玩家回報</b>：探探鼠 (pokemonType=Colorless) 的「監視之眼」特性，在場上有 火箭隊的監視塔 時依然生效。但 PTCG 規則：火箭隊的監視塔 封鎖雙方所有 Colorless 寶可夢的特性（含主動/被動）。</li>
