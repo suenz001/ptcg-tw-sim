@@ -4440,7 +4440,12 @@
   }
 
   // v4.929：觀戰 + 線上對手 action 來時，state-diff 偵測核心事件並播音
+  // v4.932：加 phase setup → playing 偵測 — 修「先按準備那方聽不到 ready-go」
   function detectSpectatorStateDiffSfx(prev: GameState, next: GameState): void {
+    // v4.932: 對戰開始（雙方 setup 完成 → playing）— throttle 100ms 防雙端重播
+    if (prev.phase === 'setup' && next.phase === 'playing') {
+      playSfx('ready-go');
+    }
     // 換回合
     if (prev.activePlayerIndex !== next.activePlayerIndex && next.phase === 'playing') {
       playSfx('turn-start');

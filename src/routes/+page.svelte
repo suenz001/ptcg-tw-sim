@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.932</span> 🔔 修線上對戰先按準備方聽不到 ready-go</summary>
+        <ul>
+          <li><b>玩家回報</b>：線上對戰沒聽到 ready go.wav 開戰音。</li>
+          <li><b>Root cause</b>：v4.929 把 ready-go 觸發放在 <code>dispatchSfxForAction</code> 的 <code>FINISH_SETUP</code> setup→playing 分支，但這只在「玩家自己 dispatch」時觸發。先按準備那一方 dispatch 時 phase 還是 setup（對手未按）→ 走 else 分支播 click。後按那方 dispatch 時 phase 才 setup→playing → 觸發 ready-go（自己聽得到）。先按那方收到對手 sync 走 <code>handleRoomUpdate</code>，但 <code>detectSpectatorStateDiffSfx</code> 沒偵測 phase 轉換 → 聽不到。</li>
+          <li><b>修法</b>：<code>detectSpectatorStateDiffSfx</code> 加 phase setup → playing 偵測，播 ready-go。100ms throttle 已防雙端 (dispatch + handleRoomUpdate) 重播。</li>
+          <li><b>順帶好處</b>：觀戰者進入對戰中房間後若房間從 setup 進 playing 也會聽到開戰音。</li>
+          <li><b>Iron Rules</b>：Rule 4（tsc clean）/ Rule 11（Python pipeline）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.931</span> 🎚️ BGM/SFX 設定區塊預設收折</summary>
         <ul>
           <li><b>調整</b>：設定面板的「背景音樂 BGM」「遊戲音效 SFX」改為預設收折（這兩個區塊內容多、平常不會頻繁調整）。</li>
