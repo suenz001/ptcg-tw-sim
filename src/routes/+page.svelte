@@ -264,6 +264,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.916</span> 🔧 修 咒縛之炎 等撤退費特性 UI 顯示不對</summary>
+        <ul>
+          <li><b>玩家回報</b>：超級水晶燈火靈ex 特性「咒縛之炎」（對手戰鬥場撤退費 +1）沒生效。</li>
+          <li><b>Root cause</b>：engine.ts 的 <code>applyAbilityRetreatMod</code> 邏輯正確（撤退時會 +1），但 game/+page.svelte 的 UI helper <code>retreatCostOf()</code> 沒鏡射 ABILITY_RETREAT_MOD —— 按鈕上顯示 base cost（如「撤退 0⚡」），玩家點下去 engine 卻要求 1 能量被擋掉，誤以為特性沒生效。</li>
+          <li><b>影響範圍</b>：不只 咒縛之炎，所有 ABILITY_RETREAT_MOD 註冊的撤退費特性都有同樣 UI 顯示 bug：
+            <ul>
+              <li>一身輕 / 溶化流動（小火龍 / 阿響的熔岩蝸牛 — 無能量時撤退 0）</li>
+              <li>鋼之橋（鋁鋼橋龍 — 自方鋼能寶可夢撤退 0）</li>
+              <li>森林秘道（陸地水母 — 自方戰鬥場撤退 −2）</li>
+              <li>大網（阿利多斯 — 對手進化寶可夢撤退 +1）</li>
+              <li>咒縛之炎（超級水晶燈火靈ex — 對手戰鬥場撤退 +1）</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：在 <code>retreatCostOf()</code> 末尾加一段 ABILITY_RETREAT_MOD 鏡射邏輯（直接從 effects.ts import 同一個 Map），iterate 雙方場上所有寶可夢的 abilities，對每個 entry 呼叫對應 fn，累計 zero / reduceBy / addBy。包含火箭隊的監視塔擋【無】特性的 gate。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 4（tsc clean）/ Rule 7（鏡射 engine 完整邏輯非 hardcode）/ Rule 11（Python pipeline 處理 game/+page.svelte 大檔）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.915</span> 🔧 真正修 杜若 簡化（picker 限制 top 7 範圍）</summary>
         <ul>
           <li><b>v4.914 走錯方向</b>：當時誤判簡化在「minCount=0 允許跳過」，但玩家確認「都不選是可以的」，所以 minCount=0 才是對的。<b>真正的簡化</b>是 picker UI 顯示整個牌庫的寶可夢 / 訓練家，等於牌庫任選 — 違反卡面「從這 7 張中選」。</li>

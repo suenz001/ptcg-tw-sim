@@ -21,7 +21,7 @@
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits } from '$lib/game/effects';
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, ABILITY_RETREAT_MOD } from '$lib/game/effects';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
   import { auth } from '$lib/firebase';
@@ -2702,6 +2702,51 @@
     if (cost > 0 && card?.name?.startsWith('N的') && game?.activeStadium) {
       const stadiumName = getCard(game.activeStadium.cardId)?.name;
       if (stadiumName === 'N的城堡') cost = 0;
+    }
+    // ── v4.916：鏡射 engine.ts ABILITY_RETREAT_MOD（撤退費修飾特性）──────────────
+    // 修玩家回報「咒縛之炎」沒生效 — root cause 是這個 UI 顯示 helper 沒鏡射
+    // engine 的 ABILITY_RETREAT_MOD 邏輯：button 顯示舊 cost（如「撤退 0⚡」）但 engine
+    // 實際撤退時要求 +1 能量，玩家按按鈕沒反應 → 誤判「特性沒生效」。
+    // 鏡射項目：一身輕 / 溶化流動 / 鋼之橋 / 森林秘道 / 大網 / 咒縛之炎
+    // 鏡射來源：engine.ts applyAbilityRetreatMod (line 6608)
+    if (card && game) {
+      // 找撤退者擁有者 idx（通常是 myIdx 但保險起見從場上實體查）
+      let retreatingOwnerIdx: 0 | 1 = 0;
+      if (game.players[1].active?.iid === inst.iid) retreatingOwnerIdx = 1;
+      let zero = false;
+      let totalReduce = 0;
+      let totalAdd = 0;
+      const stadiumNameRetreat = game.activeStadium ? getCard(game.activeStadium.cardId)?.name : undefined;
+      const colorlessBlocked = stadiumNameRetreat === '火箭隊的監視塔';
+      for (const ownerIdx of [0, 1] as const) {
+        const player = game.players[ownerIdx];
+        const allInstances: Array<{ inst: CardInstance; position: 'active' | 'bench' }> = [];
+        if (player.active) allInstances.push({ inst: player.active, position: 'active' });
+        for (const b of player.bench) allInstances.push({ inst: b, position: 'bench' });
+        for (const { inst: holderInst, position } of allInstances) {
+          const holderCard = getCard(holderInst.cardId);
+          if (!holderCard?.abilities) continue;
+          // 火箭隊監視塔擋 Colorless 寶可夢特性
+          if (colorlessBlocked && holderCard.pokemonType === 'Colorless') continue;
+          for (const ab of holderCard.abilities) {
+            const fn = ABILITY_RETREAT_MOD.get(ab.name);
+            if (!fn) continue;
+            const r = fn({
+              holderInst, holderCard, holderPosition: position, holderOwnerIdx: ownerIdx,
+              retreatingInst: inst, retreatingCard: card,
+              retreatingOwnerIdx,
+              state: game, pool,
+              countEnergy: (i) => countEnergy(i, pool) as unknown as Map<string, number>,
+            });
+            if (r.zero) zero = true;
+            if (r.reduceBy) totalReduce += r.reduceBy;
+            if (r.addBy) totalAdd += r.addBy;
+          }
+        }
+      }
+      if (zero) cost = 0;
+      cost = Math.max(0, cost - totalReduce);
+      cost = cost + totalAdd;
     }
     return cost;
   }
