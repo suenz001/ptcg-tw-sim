@@ -264,6 +264,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.89</span> 🪲 M5 Phase 8c — 不朽之軀 + 蟲蟲恐慌</summary>
+        <ul>
+          <li><b>實裝 2 張 deferred</b>：累計 76 → <b>78</b> 個 effect / 81 張卡（~96% coverage）。</li>
+          <li><b>棄世猴｜不朽之軀</b>（passive ability，受招式 KO 時擲幣防昏厥）：
+            <ul>
+              <li>卡面：「這隻寶可夢因招式傷害而【昏厥】時，擲 1 次硬幣，若為正面，這隻寶可夢不會【昏厥】，並以剩餘 HP 為「10」的狀態留在場上。」</li>
+              <li>實裝位置：effects.ts <code>PASSIVE_PREVENT_KO</code> map（與 <code>堅忍之軀</code> / <code>結實</code> / <code>勤奮之心</code> 共用同一引擎 hook）。</li>
+              <li>邏輯：與「堅忍之軀」完全等價（50% 觸發，留 10 HP）。Engine wouldBeKO 路徑自動 dispatch，「因招式傷害」前提天然成立。</li>
+            </ul>
+          </li>
+          <li><b>燒火蚣｜蟲蟲恐慌</b>（attack，bottom-7 reveal × 50 dmg）：
+            <ul>
+              <li>卡面：「將自己的牌庫下方 7 張卡翻為正面，這些卡之中，擁有招式『蟲蟲恐慌』的寶可夢張數 × 50 點傷害。翻為正面的寶可夢卡放回牌庫並重洗。剩餘的卡丟棄。」</li>
+              <li><code>regPre</code>：peek 牌庫下方 7 張（pure，不動牌），計算擁有此招式的寶可夢張數 × 50 為傷害。</li>
+              <li><code>regPost</code>：揭示 7 張（log 全名，雙方可見，符合 PTCG「翻為正面」規則）→ 所有寶可夢卡洗回牌庫 → 其他卡進棄牌堆。</li>
+              <li>注意：「翻為正面的寶可夢卡放回牌庫」涵蓋<b>全部</b>寶可夢卡（不只擁有蟲蟲恐慌的那幾張）。計數 × 50 才限定有此招式者。</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 11（effects.ts ~680KB + m5_preview.ts 走 Python pipeline）/ Rule 4（tsc 雙驗證）/ Rule 7c（卡面原文核對；蟲蟲恐慌「翻為正面的寶可夢卡」涵蓋全部寶可夢，非只有擁有此招式的）。</li>
+          <li><b>剩餘 deferred</b>：太鼓防壁（passive bench-aura defense）/ 光子密碼（on-KO move energy）/ 強烈之吻（delayed KO）/ 招式竊賊（attack copy）/ 化石卡 + 化石採掘場 / 工具卡（豪華炸彈 / 重試徽章 — 需 engine 級 coin re-roll hook）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.88</span> 🔥 M5 Phase 8b — 咒縛之炎（超級水晶燈火靈ex 特性）</summary>
         <ul>
           <li><b>實裝 1 張 deferred passive ability</b>：超級水晶燈火靈ex 的 <code>咒縛之炎</code>。累計 75 → <b>76</b> 個 effect / 81 張卡（~94% coverage）。</li>

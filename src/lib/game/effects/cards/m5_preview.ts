@@ -55,6 +55,7 @@ import {
   updatePlayer,
   withPending,
   getAllAttachedTools,
+  shuffle,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import {
@@ -1895,6 +1896,85 @@ reg('格拉吉歐的決戰', (st, idx) => {
 // 剩餘 deferred (Phase 8b+)：咒縛之炎 / 太鼓防壁 / 蟲蟲恐慌 / 不朽之軀 / 光子密碼 /
 //   化石卡 (古老的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈/重試徽章) /
 //   強烈之吻 / 招式竊賊
+// ════════════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 8c (v4.89) — 蟲蟲恐慌（燒火蚣，bottom-7 reveal × 50 dmg）
+//
+// 卡面：「將自己的牌庫下方 7 張卡翻為正面，這些卡之中，擁有招式『蟲蟲恐慌』的
+//        寶可夢張數 × 50 點傷害。翻為正面的寶可夢卡放回牌庫並重洗。剩餘的卡丟棄。」
+//
+// 拆分：
+//   regPre  — 計算傷害（peek bottom 7，pure，不動牌）
+//   regPost — 實際移牌（所有翻面寶可夢卡洗回牌庫，其他卡進棄牌堆）
+//
+// 注意「翻為正面的寶可夢卡」涵蓋全部寶可夢卡（包括沒有蟲蟲恐慌招式的寶可夢），
+// 不只是「擁有蟲蟲恐慌」的那幾張。計數 × 50 才限定有此招式者。
+//
+// 同檔 effects.ts: PASSIVE_PREVENT_KO 加 '不朽之軀'（與堅忍之軀邏輯等價，
+// engine 既有 wouldBeKO + PASSIVE_PREVENT_KO 路徑自動處理）。
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── 蟲蟲恐慌 PRE：計算傷害（牌庫下方 7 張，計擁有此招式的寶可夢 × 50）─────
+regPre('燒火蚣|蟲蟲恐慌', (state, aIdx, pool) => {
+  const deck = state.players[aIdx].deck;
+  if (deck.length === 0) {
+    return { state: addLog(state, '蟲蟲恐慌：牌庫為空 → 0 傷害', aIdx), damage: 0 };
+  }
+  const bottomCount = Math.min(7, deck.length);
+  const bottom = deck.slice(deck.length - bottomCount);
+  let count = 0;
+  for (const inst of bottom) {
+    const c = pool.get(inst.cardId);
+    if (c?.supertype === 'Pokemon' && c.attacks?.some(a => a.name === '蟲蟲恐慌')) {
+      count++;
+    }
+  }
+  const dmg = count * 50;
+  return {
+    state: addLog(state,
+      `蟲蟲恐慌：牌庫下方 ${bottomCount} 張中，擁有「蟲蟲恐慌」招式的寶可夢 ${count} 張 → ${count} × 50 = ${dmg} 傷害`,
+      aIdx),
+    damage: dmg,
+  };
+});
+
+// ── 蟲蟲恐慌 POST：移牌（reveal + 寶可夢洗回 + 其他棄牌）────────────────
+regPost('燒火蚣|蟲蟲恐慌', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  if (p.deck.length === 0) return state;
+  const bottomCount = Math.min(7, p.deck.length);
+  const bottom = p.deck.slice(p.deck.length - bottomCount);
+  const remaining = p.deck.slice(0, p.deck.length - bottomCount);
+
+  // 揭示：log 列出翻面的卡（雙方可見，PTCG「翻為正面」規則）
+  const revealNames = bottom.map(b => pool.get(b.cardId)?.name ?? '?').join('、');
+  let s = addLog(state, `蟲蟲恐慌：翻為正面 ${bottom.length} 張 ─ ${revealNames}`, aIdx);
+
+  // 分流：寶可夢 → 洗回牌庫，其他 → 棄牌
+  const pokemon = bottom.filter(inst => pool.get(inst.cardId)?.supertype === 'Pokemon');
+  const nonPokemon = bottom.filter(inst => pool.get(inst.cardId)?.supertype !== 'Pokemon');
+
+  const newDeck = shuffle([...remaining, ...pokemon]);
+
+  s = updatePlayer(s, aIdx, pl => ({
+    ...pl,
+    deck: newDeck,
+    discard: [...pl.discard, ...nonPokemon],
+  }));
+
+  s = addLog(s,
+    `蟲蟲恐慌：${pokemon.length} 張寶可夢卡洗回牌庫，${nonPokemon.length} 張其他卡進棄牌堆`,
+    aIdx);
+  return s;
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 8c 結束。
+// 累計：75 (P1-Phase8a) + 1 (Phase 8b 咒縛之炎) + 1 (不朽之軀) + 1 (蟲蟲恐慌)
+//      = 78 個項目 / 81 張卡（~96% coverage）。
+// 剩餘 deferred (Phase 8d+)：太鼓防壁 / 光子密碼 / 強烈之吻 / 招式竊賊 /
+//   化石卡 (古老的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈/重試徽章)。
 // ════════════════════════════════════════════════════════════════════════════
 
 

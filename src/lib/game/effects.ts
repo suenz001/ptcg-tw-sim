@@ -12945,6 +12945,17 @@ PASSIVE_PREVENT_KO.set('堅忍之軀', (_inst, _card, _dmg) => {
   return { prevent: true, leaveHP: 10 };
 });
 
+// v4.89 棄世猴(M5) | 不朽之軀 — 與「堅忍之軀」邏輯完全等價
+// 卡面：「這隻寶可夢因招式傷害而【昏厥】時，擲 1 次硬幣，若為正面，這隻寶可夢
+//        不會【昏厥】，並以剩餘 HP 為「10」的狀態留在場上。」
+// engine 觸發點：wouldBeKO (baseDamage > 0 由招式傷害) → 走 PASSIVE_PREVENT_KO map，
+// 卡面「因招式傷害而昏厥」這個前提天然成立（engine 不會在特性 KO 或自殺 KO 時呼叫此 hook）。
+PASSIVE_PREVENT_KO.set('不朽之軀', (_inst, _card, _dmg) => {
+  const heads = Math.random() < 0.5;
+  if (!heads) return { prevent: false, leaveHP: 0 };
+  return { prevent: true, leaveHP: 10 };
+});
+
 // ============================================================================
 // v2.992 Group 1 — 7 new passive hook maps
 // ============================================================================
