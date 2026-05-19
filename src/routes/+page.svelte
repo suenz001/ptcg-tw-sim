@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.912</span> 📥 牌組匯入支援 admin 對戰紀錄格式</summary>
+        <ul>
+          <li>新增 Format E parser：<code>卡名 卡包代號 · 卡號 · 賽季 × 張數</code></li>
+          <li>例：<code>怨影娃娃 M5 · 031/081 · J × 2</code> 從 admin 對戰紀錄直接複製貼上即可匯入</li>
+          <li>用 (setCode, collectorNumber) 精準對到牌池；少數版本差異 fall back 到同名取代</li>
+          <li>regex 末尾的 <code>[GHIJ]</code> 限定賽季避免吃到其他單字母</li>
+          <li>匯入對話框文字說明同步從「兩種格式」→「三種格式」</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.911</span> 🔧 修匯出圖片 CORS 失敗 + 按鈕改名「匯出文字/圖片」</summary>
         <ul>
           <li><b>修 100% 失敗的圖片載入</b>：原本直接 fetch <code>asia.pokemon-card.com</code> 拿卡圖，但官方不發 <code>Access-Control-Allow-Origin</code> header，<code>crossOrigin='anonymous'</code> 就一定失敗。</li>

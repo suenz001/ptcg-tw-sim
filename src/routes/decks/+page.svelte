@@ -768,6 +768,13 @@
       //   玩家從官方頁面或別處複製可能漏掉開頭張數。預設補 1 張並警示「請手動調整數量」。
       //   ※ 注意 order — mFull / mSimple 都失敗才走這條，避免吃到正常含張數的格式。
       const mNoCount = (!mId && !mFull && !mSimple) ? line.match(/^(.+?)\s+([A-Za-z0-9-]+)\s+(\S+)$/) : null;
+      // v4.912 Format E（從 admin 對戰紀錄複製出來的格式）：
+      //   「卡名 卡包代號 · 卡號 · 賽季 × 張數」（卡名在前，數量在尾，· 與 × 為 unique markers）
+      //   例：「怨影娃娃 M5 · 031/081 · J × 2」「月月熊 赫月 ex SV5a · 052/066 · H × 1」
+      //   regex 末尾的 ([GHIJ]) 限定賽季標籤避免吃到其他單字母。
+      const mAdmin = (!mId && !mFull && !mSimple && !mNoCount)
+        ? line.match(/^(.+)\s+(\S+)\s+·\s+(\S+)\s+·\s+([GHIJ])\s+×\s+(\d+)$/)
+        : null;
 
       let card: Card | undefined;
       let countStr = '';
@@ -830,6 +837,27 @@
             used: `${card.setCode} · ${card.collectorNumber}（自動補 1 張）`,
             alternatives: [`原始輸入未指定張數 — 匯入後請手動調整數量`],
           });
+        }
+      } else if (mAdmin) {
+        // v4.912: admin 對戰紀錄格式 — 用 (setCode, collectorNumber) 精準對到牌池
+        // 找不到時 fall back 到名稱模糊匹配，避免少數版本差異卡到匯入流程
+        const name = mAdmin[1].trim();
+        const setCode = mAdmin[2];
+        const collectorNumber = mAdmin[3];
+        countStr = mAdmin[5];
+        card = poolBySetNum.get(`${setCode}-${collectorNumber}`);
+        label = `${setCode} ${collectorNumber}`;
+        if (!card) {
+          // fallback：同名取一張（與 Format B 行為一致）
+          const exact = pool.filter(c => c.name === name);
+          if (exact.length >= 1) {
+            card = exact[0];
+            ambiguities.push({
+              name,
+              used: `${card.setCode} · ${card.collectorNumber}（自動替代，原 ${setCode}-${collectorNumber} 不在牌池）`,
+              alternatives: exact.slice(1).map(c => `${c.setCode} · ${c.collectorNumber}`),
+            });
+          }
         }
       } else {
         errors.push(`無法解析：「${line}」\n  → 每行需以「張數」開頭，例如：4 呱呱泡蛙 M-P-J 089/M-P`);
@@ -1569,9 +1597,10 @@
       {:else}
         <h3 class="modal-title">匯入牌組（文字格式）</h3>
         <p class="muted">
-          支援兩種格式：<br>
+          支援三種格式：<br>
           ① 完整格式：<code>張數 卡名 卡包代號 卡號</code><br>
           ② 簡易格式：<code>張數 卡名</code>（同名取第一張）<br>
+          ③ 對戰紀錄格式：<code>卡名 卡包代號 · 卡號 · 賽季 × 張數</code>（從 admin 對戰紀錄複製貼上）<br>
           首行可選：<code>// 牌組名稱</code>
         </p>
 
