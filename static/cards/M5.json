@@ -41,7 +41,7 @@
     "species": "果實寶可夢",
     "stage": "Basic",
     "illustrator": "Akino Fukuji",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50221",
@@ -77,7 +77,7 @@
     "species": "幼蟲寶可夢",
     "stage": "Basic",
     "illustrator": "Mina Nakai",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50222",
@@ -112,7 +112,7 @@
     "species": "鐮草寶可夢",
     "stage": "Basic",
     "illustrator": "nisimono",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50223",
@@ -155,7 +155,7 @@
     "evolvesFrom": "偽螳草",
     "stage": "Stage1",
     "illustrator": "5ban Graphics",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50224",
@@ -195,7 +195,7 @@
     "species": "抹茶寶可夢",
     "stage": "Basic",
     "illustrator": "Mousho",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50225",
@@ -238,7 +238,7 @@
     "evolvesFrom": "斯魔茶",
     "stage": "Stage1",
     "illustrator": "mingo",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50226",
@@ -286,7 +286,7 @@
     "species": "火口寶可夢",
     "stage": "Basic",
     "illustrator": "Takeshi Nakamura",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50227",
@@ -332,7 +332,7 @@
     "species": "發熱寶可夢",
     "stage": "Basic",
     "illustrator": "Yuya Oka",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50228",
@@ -380,7 +380,7 @@
     "species": "發熱寶可夢",
     "stage": "Stage1",
     "illustrator": "Kouki Saitou",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "燒火蚣"
   },
   {
@@ -417,7 +417,7 @@
     "species": "火苗寶可夢",
     "stage": "Basic",
     "illustrator": "Ryuta Fuse",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50230",
@@ -453,7 +453,7 @@
     "species": "火戰士寶可夢",
     "stage": "Stage1",
     "illustrator": "Jiro Sasumo",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "炭小侍"
   },
   {
@@ -490,7 +490,7 @@
     "species": "金魚寶可夢",
     "stage": "Basic",
     "illustrator": "Shibuzoh.",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50232",
@@ -527,7 +527,7 @@
     "species": "金魚寶可夢",
     "stage": "Stage1",
     "illustrator": "OKUBO",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "角金魚"
   },
   {
@@ -577,7 +577,7 @@
     "species": "玉鯨寶可夢",
     "stage": "Basic",
     "illustrator": "Asako Ito",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50234",
@@ -628,7 +628,7 @@
     "evolvesFrom": "吼吼鯨",
     "stage": "Stage1",
     "illustrator": "5ban Graphics",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50235",
@@ -663,7 +663,7 @@
     "species": "長壽寶可夢",
     "stage": "Basic",
     "illustrator": "Naoyo Kimura",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50236",
@@ -698,7 +698,7 @@
     "species": "海獅寶可夢",
     "stage": "Basic",
     "illustrator": "Oswaldo KATO",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50237",
@@ -735,7 +735,7 @@
     "evolvesFrom": "球球海獅",
     "stage": "Stage1",
     "illustrator": "MINAMINAMI Take",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50238",
@@ -780,7 +780,7 @@
     "evolvesFrom": "花漾海獅",
     "stage": "Stage2",
     "illustrator": "Taira Akitsu",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50239",
@@ -817,7 +817,7 @@
     "species": "海豚寶可夢",
     "stage": "Basic",
     "illustrator": "Yukiko Baba",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50240",
@@ -854,7 +854,7 @@
     "species": "英雄寶可夢",
     "stage": "Stage1",
     "illustrator": "satoma",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "波普海豚"
   },
   {
@@ -899,7 +899,7 @@
     "species": "雷光寶可夢",
     "stage": "Basic",
     "illustrator": "Dsuke",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50242",
@@ -945,7 +945,7 @@
     "species": "放電寶可夢",
     "stage": "Stage1",
     "illustrator": "Uninori",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "落雷獸"
   },
   {
@@ -992,7 +992,7 @@
     "evolvesFrom": "強顎雞母蟲",
     "stage": "Stage1",
     "illustrator": "Kazuhisa Uragami",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50244",
@@ -1037,7 +1037,7 @@
     "species": "鍬形寶可夢",
     "stage": "Stage2",
     "illustrator": "KEIICHIRO ITO",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "蟲電寶"
   },
   {
@@ -1081,7 +1081,7 @@
     ],
     "stage": "Basic",
     "illustrator": "5ban Graphics",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50246",
@@ -1124,7 +1124,7 @@
     "species": "古代寶可夢",
     "stage": "Basic",
     "illustrator": "mashu",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50247",
@@ -1173,7 +1173,7 @@
     "species": "呆萌寶可夢",
     "stage": "Basic",
     "illustrator": "Nelnal",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50248",
@@ -1224,7 +1224,7 @@
     "species": "寄居寶可夢",
     "stage": "Stage1",
     "illustrator": "CHORISO",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "呆呆獸"
   },
   {
@@ -1273,7 +1273,7 @@
     "species": "人型寶可夢",
     "stage": "Basic",
     "illustrator": "Yoshimoto Yoshimon",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50250",
@@ -1319,7 +1319,7 @@
     "species": "人偶寶可夢",
     "stage": "Basic",
     "illustrator": "Bun Toujo",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50251",
@@ -1365,7 +1365,7 @@
     "species": "玩偶寶可夢",
     "stage": "Stage1",
     "illustrator": "Mugi Hamada",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "怨影娃娃"
   },
   {
@@ -1405,7 +1405,7 @@
     "species": "封印寶可夢",
     "stage": "Basic",
     "illustrator": "danciao",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50253",
@@ -1444,7 +1444,7 @@
     "species": "蠟燭寶可夢",
     "stage": "Basic",
     "illustrator": "HYOGONOSUKE",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50254",
@@ -1484,7 +1484,7 @@
     "evolvesFrom": "燭光靈",
     "stage": "Stage1",
     "illustrator": "sowsow",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50255",
@@ -1531,7 +1531,7 @@
     "evolvesFrom": "燈火幽靈",
     "stage": "Stage2",
     "illustrator": "5ban Graphics",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50256",
@@ -1572,7 +1572,7 @@
     "species": "海藻寶可夢",
     "stage": "Basic",
     "illustrator": "Oku",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50257",
@@ -1611,7 +1611,7 @@
     "species": "潛影寶可夢",
     "stage": "Basic",
     "illustrator": "Nakamura Ippan",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50258",
@@ -1659,7 +1659,7 @@
     "species": "憤戰寶可夢",
     "stage": "Stage2",
     "illustrator": "Haru Akasaka",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "火爆猴"
   },
   {
@@ -1695,7 +1695,7 @@
     "species": "豬猴寶可夢",
     "stage": "Basic",
     "illustrator": "Yuka Morii",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50260",
@@ -1733,7 +1733,7 @@
     "evolvesFrom": "猴怪",
     "stage": "Stage1",
     "illustrator": "GOSSAN",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50261",
@@ -1771,7 +1771,7 @@
     "evolvesFrom": "陳舊的頭蓋化石",
     "stage": "Stage1",
     "illustrator": "Hideki Ishikawa",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50262",
@@ -1814,7 +1814,7 @@
     "evolvesFrom": "頭蓋龍",
     "stage": "Stage2",
     "illustrator": "hncl",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50263",
@@ -1860,7 +1860,7 @@
     "species": "鼴鼠寶可夢",
     "stage": "Basic",
     "illustrator": "Atsushi Furusawa",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50264",
@@ -1906,7 +1906,7 @@
     "species": "古代寶可夢",
     "stage": "Basic",
     "illustrator": "kodama",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50265",
@@ -1951,7 +1951,7 @@
     ],
     "stage": "Basic",
     "illustrator": "5ban Graphics",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50266",
@@ -1999,7 +1999,7 @@
     "species": "尿布寶可夢",
     "stage": "Basic",
     "illustrator": "Shiburingaru",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50267",
@@ -2049,7 +2049,7 @@
     "species": "骨鷹寶可夢",
     "stage": "Stage1",
     "illustrator": "Nisota Niso",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "禿鷹丫頭"
   },
   {
@@ -2094,7 +2094,7 @@
     "species": "迴轉寶可夢",
     "stage": "Basic",
     "illustrator": "Yuriko Akase",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50269",
@@ -2138,7 +2138,7 @@
     "species": "逆轉寶可夢",
     "stage": "Stage1",
     "illustrator": "Naoki Saito",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "好啦魷"
   },
   {
@@ -2183,7 +2183,7 @@
     "species": "狐狸寶可夢",
     "stage": "Basic",
     "illustrator": "Krgc",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50271",
@@ -2229,7 +2229,7 @@
     "species": "狐狸寶可夢",
     "stage": "Stage1",
     "illustrator": "GOTO minori",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50272",
@@ -2271,7 +2271,7 @@
     ],
     "stage": "Basic",
     "illustrator": "aky CG Works",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50273",
@@ -2317,7 +2317,7 @@
     "species": "邪猴寶可夢",
     "stage": "Basic",
     "illustrator": "matazo",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50274",
@@ -2354,7 +2354,7 @@
     "species": "小子寶可夢",
     "stage": "Basic",
     "illustrator": "ryoma uratsuka",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50275",
@@ -2402,7 +2402,7 @@
     "species": "老大寶可夢",
     "stage": "Stage1",
     "illustrator": "kawayoo",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "偶叫獒"
   },
   {
@@ -2438,7 +2438,7 @@
     "species": "災難寶可夢",
     "stage": "Basic",
     "illustrator": "IKEDA Saki",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50277",
@@ -2477,7 +2477,7 @@
     "species": "鎧甲鳥寶可夢",
     "stage": "Basic",
     "illustrator": "Anesaki Dynamic",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50278",
@@ -2519,7 +2519,7 @@
     "species": "盾牌寶可夢",
     "stage": "Stage1",
     "illustrator": "Kurata So",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "陳舊的盾牌化石"
   },
   {
@@ -2571,7 +2571,7 @@
     "species": "盾牌寶可夢",
     "stage": "Stage2",
     "illustrator": "Kinu Nishimura",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "盾甲龍"
   },
   {
@@ -2613,7 +2613,7 @@
     "species": "青銅寶可夢",
     "stage": "Basic",
     "illustrator": "Saboteri",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50281",
@@ -2664,7 +2664,7 @@
     "species": "銅鐘寶可夢",
     "stage": "Stage1",
     "illustrator": "Uta",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "銅鏡怪"
   },
   {
@@ -2717,7 +2717,7 @@
     "evolvesFrom": "螺釘地鼠",
     "stage": "Stage1",
     "illustrator": "Keisuke Azuma",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50283",
@@ -2756,7 +2756,7 @@
     "species": "啄木寶可夢",
     "stage": "Basic",
     "illustrator": "Koji Nakata",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50284",
@@ -2795,7 +2795,7 @@
     "species": "喇叭口寶可夢",
     "stage": "Stage1",
     "illustrator": "miki kudo",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "小篤兒"
   },
   {
@@ -2843,7 +2843,7 @@
     "species": "巨筒寶可夢",
     "stage": "Stage2",
     "illustrator": "Masako Tomii",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "evolvesFrom": "喇叭啄鳥"
   },
   {
@@ -2881,7 +2881,7 @@
     "species": "人造寶可夢",
     "stage": "Basic",
     "illustrator": "Ligton",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50287",
@@ -2927,7 +2927,7 @@
     "evolvesFrom": "屬性：空",
     "stage": "Stage1",
     "illustrator": "Takumi Wada",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50288",
@@ -2977,7 +2977,7 @@
     "species": "失物寶可夢",
     "stage": "Basic",
     "illustrator": "Wintr Wandr",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50289",
@@ -2991,7 +2991,7 @@
     "scrapedAt": "2026-05-18T11:51:55.000Z",
     "rulesText": "將雙方的戰鬥寶可夢（惡屬性寶可夢除外），各別【混亂】。物品在自己的回合可使用任意數量。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50290",
@@ -3005,7 +3005,7 @@
     "scrapedAt": "2026-05-18T11:51:56.000Z",
     "hp": 60,
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "rulesText": "可作為HP60的【基礎】寶可夢放置於備戰區。此卡無法撤退、無法被附加能量，也不受弱點和抵抗力的影響。隨時可以丟棄此卡（不算作昏厥）。"
   },
   {
@@ -3020,7 +3020,7 @@
     "scrapedAt": "2026-05-18T11:51:57.000Z",
     "hp": 60,
     "illustrator": "AYUMI ODASHIMA",
-    "regulationMark": "M5",
+    "regulationMark": "J",
     "rulesText": "可作為HP60的【基礎】寶可夢放置於備戰區。此卡無法撤退、無法被附加能量，也不受弱點和抵抗力的影響。隨時可以丟棄此卡（不算作昏厥）。"
   },
   {
@@ -3035,7 +3035,7 @@
     "scrapedAt": "2026-05-18T11:51:57.000Z",
     "rulesText": "附有這張卡的寶可夢（「超級進化ex」除外），在戰鬥場受到對手「超級進化ex」的招式造成 240 點以上傷害時，在使用招式的寶可夢身上放置 12 個傷害指示物。之後將這張卡丟棄。寶可夢道具可在自己的回合附加任意數量於自己的寶可夢身上，每隻寶可夢只能附 1 張，並保持附加狀態。",
     "illustrator": "inose yukie",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50293",
@@ -3049,7 +3049,7 @@
     "scrapedAt": "2026-05-18T11:51:58.000Z",
     "rulesText": "在自己的回合可使用1次，附有這張卡的無屬性寶可夢使用招式時，若擲了硬幣，可全部消除該硬幣結果並從頭重擲。寶可夢道具可在自己的回合附加任意數量於自己的寶可夢身上，每隻寶可夢只能附 1 張，並保持附加狀態。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50294",
@@ -3063,7 +3063,7 @@
     "scrapedAt": "2026-05-18T11:51:58.000Z",
     "rulesText": "使用這張卡時，自己的回合結束。\n\n從自己的牌庫選擇最多 4 張「基本能量」，附給自己 1 隻寶可夢。然後重洗牌庫。支援者在自己的回合只能使用 1 張。",
     "illustrator": "En Morikura",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50295",
@@ -3077,7 +3077,7 @@
     "scrapedAt": "2026-05-18T11:51:59.000Z",
     "rulesText": "這張卡只有在自己的手牌只有此張卡時才能使用。\n\n這個回合，自己的寶可夢（「擁有規則的寶可夢」除外）使用招式對對手戰鬥寶可夢造成的傷害「+80」。支援者在自己的回合只能使用 1 張。",
     "illustrator": "akagi",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50296",
@@ -3091,7 +3091,7 @@
     "scrapedAt": "2026-05-18T11:52:00.000Z",
     "rulesText": "這張卡只有在上個對手回合自己的寶可夢未【昏厥】時才能使用。\n\n從對手場上 1 隻寶可夢身上選擇 1 個能量，丟棄。支援者在自己的回合只能使用 1 張。",
     "illustrator": "Teeziro",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50297",
@@ -3105,7 +3105,7 @@
     "scrapedAt": "2026-05-18T11:52:01.000Z",
     "rulesText": "從自己的手牌將寶可夢（「擁有規則的寶可夢」除外）最多丟棄 2 張，丟棄張數 × 3 張，從牌庫抽卡。支援者在自己的回合只能使用 1 張。",
     "illustrator": "nagimiso",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50298",
@@ -3119,7 +3119,7 @@
     "scrapedAt": "2026-05-18T11:52:02.000Z",
     "rulesText": "雙方玩家在每個自己的回合中可使用 1 次，從自己的牌庫選擇最多 2 張名稱含有「陳舊的」的物品卡，放置於備戰區。然後重洗牌庫。場地可在自己的回合放置 1 張於戰鬥場旁邊。當另一張場地進入場上時，將此卡丟棄。同名場地無法同時放置。",
     "illustrator": "Oswaldo KATO",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50299",
@@ -3132,7 +3132,7 @@
     "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50299/regu/all",
     "scrapedAt": "2026-05-18T11:52:02.000Z",
     "rulesText": "這張卡附在寶可夢身上時，作為 1 個雷能量使用。\n\n附有這張卡的雷屬性寶可夢使用招式對對手戰鬥寶可夢造成的傷害「+20」。",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   },
   {
     "id": "50300",
@@ -3145,6 +3145,6 @@
     "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50300/regu/all",
     "scrapedAt": "2026-05-18T11:52:03.000Z",
     "rulesText": "這張卡附在寶可夢身上時，作為 1 個惡能量使用。\n\n附有這張卡的惡屬性寶可夢只要在備戰區，就不會受到對手招式的傷害。",
-    "regulationMark": "M5"
+    "regulationMark": "J"
   }
 ]

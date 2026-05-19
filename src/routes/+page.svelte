@@ -264,6 +264,41 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.9</span> 🎴 M5 合併 J 標 + 牌組編輯器預設 H/I/J 全選</summary>
+        <ul>
+          <li><b>M5 卡包合併到 J 標</b>（搜尋 / 篩選一致化）：
+            <ul>
+              <li><code>static/cards/M5.json</code>：全部 81 張卡 <code>regulationMark</code> 由 <code>&apos;M5&apos;</code> 改為 <code>&apos;J&apos;</code></li>
+              <li><code>static/cards/index.json</code>：M5 set entry <code>regulationMark</code> 由 <code>&apos;M5&apos;</code> 改為 <code>&apos;J&apos;</code></li>
+            </ul>
+          </li>
+          <li><b>卡牌資料庫頁面</b>（<code>src/routes/cards/+page.svelte</code>）：
+            <ul>
+              <li>移除 <code>markGroups</code> 內 M5 特殊 section（不再排在 H/I/J 前面）</li>
+              <li>移除 <code>markLabel</code> 的「🔥 日版搶先 · 深淵之瞳（自譯）」label</li>
+              <li>meta 文字「（標準賽 H / I / J 標；另含日版搶先 M5）」→「（標準賽 H / I / J 標，繁體中文）」</li>
+              <li>「★全部」aggregator filter 自然納入 M5（regulationMark 已是 J）</li>
+            </ul>
+          </li>
+          <li><b>牌組編輯器</b>（<code>src/routes/decks/+page.svelte</code>）：
+            <ul>
+              <li><code>selectedRegMarks</code> 預設由 <code>new Set()</code> 改為 <code>new Set([&apos;H&apos;, &apos;I&apos;, &apos;J&apos;])</code> — 進入頁面即勾選全部三個賽季 chip（如截圖）</li>
+              <li>賽季 filter 邏輯不變：選的 mark 之卡才顯示</li>
+              <li>M5 卡（regulationMark = J）現可被搜尋 / 加入牌組</li>
+            </ul>
+          </li>
+          <li><b>影響</b>：
+            <ul>
+              <li>之前 M5 自成一個賽季分類，「全部」搜不到 → 現已修</li>
+              <li>M5 卡可正常加入 H/I/J 標準環境牌組（之前構築 gate 已通過 — 因 J 標）</li>
+              <li>歷史 changelog 內提到「日版搶先」字樣保留（不動 v4.77 等歷史紀錄）</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 11（M5.json + index.json 用結構化 json.dumps；2 個 +page 走 Python pipeline）/ Rule 4（tsc 驗證）/ Rule 1（changelog 用 entity escape 避開 Svelte parser）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.899</span> 🔧 修 v4.898 retry-badge check 位置錯誤</summary>
         <ul>
           <li><b>Bug</b>：v4.898 push 腳本 anchor 不夠精確，retry-badge 末端 check 誤插到 <code>TAKE_PRIZES</code> handler 內，導致 <code>preAttackStateForRetry</code> 出 scope → <code>tsc error TS2304: Cannot find name &apos;preAttackStateForRetry&apos;</code>。</li>

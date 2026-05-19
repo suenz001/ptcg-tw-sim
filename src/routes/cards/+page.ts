@@ -30,7 +30,7 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
 
     // Fetch every set's cards in parallel. Individual set failures are
     // tolerated — one broken file shouldn't bomb the whole ALL view.
-    // v4.77：ALL = 標準環境合併（H/I/J），排除日版搶先卡包 M5 等 non-standard mark
+    // v4.77/v4.9：ALL = 標準環境合併（H/I/J）；M5（深淵之瞳）已於 v4.9 改 regulationMark 為 J，自然納入此 filter
     const standardSets = sets.filter((s) => s.regulationMark === 'H' || s.regulationMark === 'I' || s.regulationMark === 'J');
     const results = await Promise.all(
       standardSets.map(async (s) => {

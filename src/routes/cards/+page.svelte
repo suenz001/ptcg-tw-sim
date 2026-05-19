@@ -326,17 +326,14 @@
     for (const [, sets] of groups) sets.sort(byDateAsc);
 
     // v2.115: Standard 賽制僅 H/I/J；G 標已輪替不顯示區塊（SVC/SVD/SVP1 已刪除）
-    // v4.77: 日版搶先卡包（M5 深淵之瞳）排最前面（在 H/I/J 之前），顯示在 ★全部 旁
+    // v4.9：M5（深淵之瞳）regulationMark 改為 J 與其他 J 標 set 合併，移除特殊 section
     const ordered = [];
-    for (const mark of ['M5']) {
-      if (groups.has(mark)) ordered.push([mark, groups.get(mark)]);
-    }
     for (const mark of ['H', 'I', 'J']) {
       if (groups.has(mark)) ordered.push([mark, groups.get(mark)]);
     }
     // Anything else (F/G/other) — 目前資料庫不應出現，保留防禦性落點
     for (const [mark, sets] of groups) {
-      if (!['M5', 'H', 'I', 'J'].includes(mark)) ordered.push([mark, sets]);
+      if (!['H', 'I', 'J'].includes(mark)) ordered.push([mark, sets]);
     }
     return ordered;
   })()}
@@ -348,8 +345,7 @@
     J: '2026-01-16',  // MC 超級進化初階牌組 100（主系列 J 標啟用）
   }}
   {@const markLabel = (m: string, count: number) => {
-    // v4.77 日版搶先 M5 特殊 label
-    if (m === 'M5') return `🔥 日版搶先 · 深淵之瞳（自譯）· ${count} 個卡包`;
+    // v4.9：M5（深淵之瞳）已併入 J 標，無需特殊 label
     const d = markStartDate[m];
     return d ? `${m} 標 · ${count} 個卡包 (自 ${d})` : `${m} 標 · ${count} 個卡包`;
   }}
@@ -359,7 +355,7 @@
     <h1>卡牌資料庫</h1>
     <p class="meta">
       {data.sets.filter(s => s.regulationMark === 'H' || s.regulationMark === 'I' || s.regulationMark === 'J').length} 個標準卡包 · 共 {data.sets.filter(s => s.regulationMark === 'H' || s.regulationMark === 'I' || s.regulationMark === 'J').reduce((n, s) => n + s.cardCount, 0)} 張卡
-      <span class="hint">（標準賽 H / I / J 標；另含日版搶先 M5）</span>
+      <span class="hint">（標準賽 H / I / J 標，繁體中文）</span>
     </p>
   </header>
 

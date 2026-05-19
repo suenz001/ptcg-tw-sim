@@ -174,7 +174,8 @@
   // ── Regulation mark filter ─────────────────────────────────────────────
   type RegMarkKey = 'H' | 'I' | 'J';
   const REG_MARK_ORDER: RegMarkKey[] = ['H', 'I', 'J'];
-  let selectedRegMarks = $state<Set<RegMarkKey>>(new Set());  
+  // v4.9：預設選 H/I/J 三個（標準賽全範圍），玩家可自行點選縮小範圍
+  let selectedRegMarks = $state<Set<RegMarkKey>>(new Set(['H', 'I', 'J']));
   function toggleRegMark(m: RegMarkKey) {
     const next = new Set(selectedRegMarks);
     if (next.has(m)) next.delete(m); else next.add(m);
