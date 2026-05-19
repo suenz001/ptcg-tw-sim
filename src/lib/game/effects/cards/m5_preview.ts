@@ -37,7 +37,7 @@
  *   Phase 2（v4.80）：條件 +N 傷害 / 自身回血 / picker 類（25 張）
  *   Phase 3（v4.81）：「化隱」特性 6 張（新獨立 immunity flag）
  *   Phase 4（v4.82）：超進化 ex 大招（深淵之瞳 / 咒縛之炎 / 暴走之槌+150 等 8 張）
- *   Phase 5（v4.83）：訓練家 + 能量規則（卡娜莉的元氣 / 沐淨 / 化石採掘場 等）
+ *   Phase 5（v4.83）：訓練家 + 能量規則（小霞的元氣 / 沐淨 / 化石採掘場 等）
  *
  * 鐵律遵守：
  *   - Rule 7c：所有效果以 JSON M5_raw.json 的日文 `effect_jp` 為 source
@@ -1259,8 +1259,8 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 // 訓練家（reg / regG 機制）：
 //   4. 沐淨（Supporter，棄手牌中 ≤2 張非規則寶可夢 → 抽 N×3 張）
 //   5. 暗黑鈴（Item，雙方戰鬥位混亂；化石寶可夢除外）
-//   6. 鏽組的手下（Supporter，picker 對手場 1 隻寶可夢身上選 1 個能量丟）
-//   7. 卡娜莉的元氣（Supporter，牌庫選 ≤4 張基本能量附給自己 1 隻 + 強制 END_TURN）
+//   6. 鏽蝕組的手下（Supporter，picker 對手場 1 隻寶可夢身上選 1 個能量丟）
+//   7. 小霞的元氣（Supporter，牌庫選 ≤4 張基本能量附給自己 1 隻 + 強制 END_TURN）
 //
 // 留 deferred 的（需動 engine.ts 或新引擎機制）：
 //   - 化隱特性 6 張 + 3 依賴招式 — 需 canApplyEffectToTarget 加 ability gate
@@ -1270,7 +1270,7 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 //   - 棄世猴|不朽之軀 — 需修改 KO 流程加擲幣判定
 //   - 護城龍|太鼓防壁 — 需 player-wide damage gate (對手能量 ≤2 時)
 //   - 超級水晶燈火靈ex|咒縛之炎 — 需動 engine retreat cost 計算
-//   - 灰瀨的決戰 — 需 player flag nonRuleAttackBonusThisTurn
+//   - 格拉吉歐的決戰 — 需 player flag nonRuleAttackBonusThisTurn
 //   - 古老的頭蓋/盾牌化石 + 化石採掘場 — 需動既有化石機制 (v3.21) 擴充
 //   - 豪華炸彈、重試徽章 — 需新 tool hook
 //   - 閃電能量 — 需動既有 SPECIAL_ENERGY_TYPES + attack bonus hook
@@ -1434,11 +1434,11 @@ reg('暗黑鈴', (st, idx, pool) => {
   return s;
 });
 
-// ── 6. 鏽組的手下（Supporter）─ picker 對手場 1 隻寶可夢丟 1 能量 ─
+// ── 6. 鏽蝕組的手下（Supporter）─ picker 對手場 1 隻寶可夢丟 1 能量 ─
 //   卡面：「從對手場上 1 隻寶可夢身上選擇 1 個能量，丟棄。」
 //   gate（rulesText）：「這張卡只有在上個對手回合自己的寶可夢未昏厥時才能使用。」
 //   — 此 gate 較複雜（需追蹤跨回合昏厥史），暫時 deferred 不做 gate（仍可使用）。
-reg('鏽組的手下', (st, idx, pool) => {
+reg('鏽蝕組的手下', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const opp = st.players[dIdx];
   // 候選 = 對手場上有能量的寶可夢
@@ -1448,11 +1448,11 @@ reg('鏽組的手下', (st, idx, pool) => {
   ];
   const candidates = allOpp.filter(c => c.energyAttached.length > 0);
   if (candidates.length === 0) {
-    return addLog(st, '鏽組的手下：對手場上無附能寶可夢', idx);
+    return addLog(st, '鏽蝕組的手下：對手場上無附能寶可夢', idx);
   }
   const validIids = candidates.map(c => c.iid);
   return withPending(
-    addLog(st, `鏽組的手下：選對手 1 隻附能寶可夢（候選 ${candidates.length} 隻）`, idx),
+    addLog(st, `鏽蝕組的手下：選對手 1 隻附能寶可夢（候選 ${candidates.length} 隻）`, idx),
     {
       type: 'opp-poke-choose',
       actorIdx: idx, sourcePlayerIdx: dIdx,
@@ -1468,7 +1468,7 @@ regR('m5-trainer-rust-henchman', (state, aIdx, iids) => {
   const targetIid = iids[0];
   // 第 2 階段：picker 對手場該寶可夢的 1 個能量丟棄
   return withPending(
-    addLog(state, '鏽組的手下：選擇要丟的能量', aIdx),
+    addLog(state, '鏽蝕組的手下：選擇要丟的能量', aIdx),
     {
       // 用 active-energy-discard 但 sourcePlayerIdx=dIdx + params 帶 targetIid 找的寶可夢
       // 但 active-energy-discard 只認 active；改用一般 picker 機制 — 寫專屬 resolver
@@ -1476,7 +1476,7 @@ regR('m5-trainer-rust-henchman', (state, aIdx, iids) => {
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 1, maxCount: 1,
       effectKey: 'm5-trainer-rust-henchman-pick-energy',
-      params: { titleOverride: '鏽組的手下：選擇 1 個能量丟棄', targetPokeIid: targetIid },
+      params: { titleOverride: '鏽蝕組的手下：選擇 1 個能量丟棄', targetPokeIid: targetIid },
     },
   );
 });
@@ -1484,7 +1484,7 @@ regR('m5-trainer-rust-henchman-pick-energy', (state, aIdx, iids, params) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const targetPokeIid = params?.targetPokeIid as string | undefined;
-  return updatePlayer(addLog(state, '鏽組的手下：丟 1 能量', aIdx), dIdx, p => {
+  return updatePlayer(addLog(state, '鏽蝕組的手下：丟 1 能量', aIdx), dIdx, p => {
     const removeFromInst = (c: import('../../types').CardInstance) => {
       if (c.iid !== targetPokeIid) return c;
       const toDiscard = c.energyAttached.filter(e => iids.includes(e.iid));
@@ -1512,15 +1512,15 @@ regR('m5-trainer-rust-henchman-pick-energy', (state, aIdx, iids, params) => {
   });
 });
 
-// ── 7. 卡娜莉的元氣（Supporter）─ 牌庫選 ≤4 張基本能量 + 1 隻附 + END_TURN ─
+// ── 7. 小霞的元氣（Supporter）─ 牌庫選 ≤4 張基本能量 + 1 隻附 + END_TURN ─
 //   卡面：「使用這張卡時，自己的回合結束。從自己的牌庫選擇最多 4 張「基本能量」，
 //          附給自己 1 隻寶可夢。然後重洗牌庫。」
-reg('卡娜莉的元氣', (st, idx) => {
+reg('小霞的元氣', (st, idx) => {
   const p = st.players[idx];
   if (p.deck.length === 0) {
     // 即使牌庫空，「使用後回合結束」仍生效
     return withPending(
-      addLog(st, '卡娜莉的元氣：牌庫為空，僅結束回合', idx),
+      addLog(st, '小霞的元氣：牌庫為空，僅結束回合', idx),
       {
         type: 'modal-choice',
         actorIdx: idx, sourcePlayerIdx: idx,
@@ -1532,7 +1532,7 @@ reg('卡娜莉的元氣', (st, idx) => {
   }
   const maxN = Math.min(4, p.deck.length);
   return withPending(
-    addLog(st, `卡娜莉的元氣：從牌庫選 ≤${maxN} 張基本能量（使用後回合結束）`, idx),
+    addLog(st, `小霞的元氣：從牌庫選 ≤${maxN} 張基本能量（使用後回合結束）`, idx),
     {
       type: 'deck-search',
       actorIdx: idx, sourcePlayerIdx: idx,
@@ -1546,7 +1546,7 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
   if (iids.length === 0) {
     // 沒選能量 — 仍重洗牌庫 + 強制 END_TURN
     return withPending(
-      updatePlayer(addLog(state, '卡娜莉的元氣：選 0 張能量，僅重洗牌庫 + 結束回合', aIdx), aIdx, p => ({
+      updatePlayer(addLog(state, '小霞的元氣：選 0 張能量，僅重洗牌庫 + 結束回合', aIdx), aIdx, p => ({
         ...p, deck: [...p.deck].sort(() => Math.random() - 0.5),
       })),
       {
@@ -1567,13 +1567,13 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
   if (allOwn.length === 0) {
     // 場上無寶可夢可附（極罕見 edge case）— 直接結束回合
     return updatePlayer(
-      addLog(state, '卡娜莉的元氣：場上無寶可夢可附，能量回牌庫', aIdx),
+      addLog(state, '小霞的元氣：場上無寶可夢可附，能量回牌庫', aIdx),
       aIdx,
       pl => ({ ...pl, deck: [...pl.deck].sort(() => Math.random() - 0.5) }),
     );
   }
   return withPending(
-    addLog(state, `卡娜莉的元氣：選 1 隻自己寶可夢，將 ${iids.length} 張基本能量全附給它`, aIdx),
+    addLog(state, `小霞的元氣：選 1 隻自己寶可夢，將 ${iids.length} 張基本能量全附給它`, aIdx),
     {
       type: 'heal-target',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -1581,7 +1581,7 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
       effectKey: 'm5-trainer-karunari-vigor-attach',
       params: {
         energyIids: iids,
-        titleOverride: `卡娜莉的元氣：選擇要附 ${iids.length} 張基本能量的寶可夢`,
+        titleOverride: `小霞的元氣：選擇要附 ${iids.length} 張基本能量的寶可夢`,
         endTurnAfter: true,  // 附完後強制結束回合
       },
     },
@@ -1593,7 +1593,7 @@ regR('m5-trainer-karunari-vigor-attach', (state, aIdx, iids, params) => {
   const energyIids = (params?.energyIids as string[] | undefined) ?? [];
   if (energyIids.length === 0) return state;
   return updatePlayer(
-    addLog(state, `卡娜莉的元氣：${energyIids.length} 張基本能量附給選中寶可夢 + 重洗牌庫`, aIdx),
+    addLog(state, `小霞的元氣：${energyIids.length} 張基本能量附給選中寶可夢 + 重洗牌庫`, aIdx),
     aIdx,
     p => {
       const picked = p.deck.filter(c => energyIids.includes(c.iid));

@@ -264,6 +264,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.86</span> 🔤 M5 三張支援者卡名校正</summary>
+        <ul>
+          <li><b>校正中文翻譯</b>：M5 卡包前次匯入時三位主角採用日文音譯，本版改為 PTCG 台灣官方譯名。
+            <ul>
+              <li>卡娜莉的元氣 → <b>小霞的元氣</b>（角色 = Misty，台版正式譯名為「小霞」）</li>
+              <li>灰瀨的決戰 → <b>格拉吉歐的決戰</b>（角色 = Gladion，「灰瀨」為日文音譯「ハイレ」誤譯）</li>
+              <li>鏽組的手下 → <b>鏽蝕組的手下</b>（敵對組織「Rust Team」台版譯名為「鏽蝕組」）</li>
+            </ul>
+          </li>
+          <li><b>影響檔案</b>：
+            <ul>
+              <li><code>static/cards/M5.json</code>：3 個 name 欄位</li>
+              <li><code>src/lib/game/effects/cards/m5_preview.ts</code>：reg() key（鏽蝕組的手下 / 小霞的元氣）+ 所有 log 字串 + 註解</li>
+              <li>歷史 changelog 內 v4.85 deferred list 的「灰瀨的決戰」字樣同步校正</li>
+            </ul>
+          </li>
+          <li><b>不變動項目</b>：rulesText / 卡片效果邏輯 / picker 候選計算 / resolver / 引擎機制。<b>純改名</b>，不動行為。</li>
+          <li><b>注意未動範圍</b>：M2a 內 3 張舊「卡娜莉」（id 14830 / 15967 / 15996）暫不校正 — 留待後續確認是否也要同步改成「小霞」（會牽動既有牌組構築 gate / preset / 玩家自存牌組）。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 11（M5.json + m5_preview.ts 均走 Python pipeline，head_blob → str.replace → safe_write）/ Rule 4（push 前 tsc 驗證）/ Rule 7c（rulesText 無 character-name 引用，純 name 欄位變更）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.85</span> 🌊 M5 Phase 7 — 滿滿旋律 + 暗影惡能量</summary>
         <ul>
           <li><b>累計實裝</b>：69 (P1-P6) + 1 (滿滿旋律 regA) + 1 (暗影惡能量 defense gate) = <b>71 個 effect</b> / 81 張卡（~88% coverage）。</li>
@@ -285,7 +308,7 @@
             </ul>
           </li>
           <li><b>遵守 Iron Rules</b>：Rule 1（changelog 用 entity escape <code>&amp;apos;</code> 避開 Svelte parser）/ Rule 4（push 前 tsc + esbuild 雙驗證 clean）/ Rule 11（m5_preview.ts + defense.ts + +page.svelte 全走 Python pipeline，遇 mount-layer truncation 即從 <code>git show HEAD</code> 重建）/ Rule 17（暗影惡能量 check 進 unified canApplyEffectToTarget）。</li>
-          <li><b>剩餘 deferred</b>：6 個複雜特性（光子密碼 / 不朽之軀 / 太鼓防壁 / 咒縛之炎）/ 5 個複雜招式（強烈之吻 / 招式竊賊 / 蟲蟲恐慌 / 閃光屏障 / 熔岩之壁）/ 化石卡（古老的頭蓋/盾牌 + 化石採掘場）/ 工具卡（豪華炸彈/重試徽章）/ 灰瀨的決戰 / 閃電能量。</li>
+          <li><b>剩餘 deferred</b>：6 個複雜特性（光子密碼 / 不朽之軀 / 太鼓防壁 / 咒縛之炎）/ 5 個複雜招式（強烈之吻 / 招式竊賊 / 蟲蟲恐慌 / 閃光屏障 / 熔岩之壁）/ 化石卡（古老的頭蓋/盾牌 + 化石採掘場）/ 工具卡（豪華炸彈/重試徽章）/ 格拉吉歐的決戰 / 閃電能量。</li>
         </ul>
       </details>
 

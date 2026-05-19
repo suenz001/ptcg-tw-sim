@@ -3036,7 +3036,7 @@
   },
   {
     "id": "50294",
-    "name": "卡娜莉的元氣",
+    "name": "小霞的元氣",
     "supertype": "Trainer",
     "subtype": "Supporter",
     "setCode": "M5",
@@ -3050,7 +3050,7 @@
   },
   {
     "id": "50295",
-    "name": "灰瀨的決戰",
+    "name": "格拉吉歐的決戰",
     "supertype": "Trainer",
     "subtype": "Supporter",
     "setCode": "M5",
@@ -3064,7 +3064,7 @@
   },
   {
     "id": "50296",
-    "name": "鏽組的手下",
+    "name": "鏽蝕組的手下",
     "supertype": "Trainer",
     "subtype": "Supporter",
     "setCode": "M5",
