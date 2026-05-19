@@ -716,6 +716,48 @@ if (guard.blocked) {
 
 ---
 
+## Rule 18: Colorless 寶可夢特性 direct-scan 必須加火箭隊的監視塔 gate
+
+來自 v4.921 / v4.922 audit 發現：
+
+**規則背景**：火箭隊的監視塔 stadium 在場時，雙方所有 Colorless 寶可夢的特性（含主動 + 被動）全部消除。引擎主路徑（USE_ABILITY / getUsableAbilities / on-play / on-evolve / passive maps）都已透過 `isColorlessAbilityBlocked()` 自動 gate。
+
+**漏洞模式**：當 helper / resolver 直接寫 `card.abilities?.some(a => a.name === 'XX')` 偵測特定特性時，會繞過引擎的 gate。如果該特性的持有者是 Colorless，就會在監視塔在場時誤判「特性仍生效」。
+
+**已知 case**：
+- v4.921：`hasOakEye()` 漏 gate → 探探鼠 (Colorless) 監視之眼在監視塔下仍阻擋指示物移放
+- v4.922：`isLazyTraitBlockingAttack()` 漏 gate → 請假王ex (Colorless) 懶怠個性在監視塔下仍阻擋攻擊
+
+### Audit 方法論（新增 Colorless 特性時必跑）
+
+1. 用 Python 從 `static/cards/*.json` 撈所有 `pokemonType === 'Colorless'` 寶可夢的 abilities
+2. `grep -rn "abilities?.some(a => a.name ===" src/lib/game/` 找所有 direct-scan
+3. 交叉比對：每個 direct-scan 的 ability name 是否在 Colorless 特性清單
+4. 若是 → 必須在 helper 內加 stadium gate
+
+### 標準 gate 寫法
+
+```ts
+// 用字面值 '火箭隊的監視塔' 比對 — 不從 effects/cards/stadiums.ts import
+// 因為 _shared.ts 是更底層的模組，反向 import 會循環依賴。
+const stadiumCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : undefined;
+const rocketWatchtower = stadiumCard?.name === '火箭隊的監視塔';
+
+// 在 iterate ability holders 時 short-circuit
+if (rocketWatchtower && card.pokemonType === 'Colorless') continue;
+
+// 或在 helper 開頭整個 short-circuit（如果只有一個持有者且為 Colorless）
+if (rocketWatchtower && atkCard.pokemonType === 'Colorless') return false;
+```
+
+### 新增 Colorless 特性時的 checklist
+
+- [ ] 該特性是否走「集中註冊表」（PASSIVE_* maps / ABILITY_EFFECTS / USE_ABILITY）？→ 已自動 gate ✓
+- [ ] 該特性是否新寫 helper 用 direct-scan？→ 必須加 inline stadium gate
+- [ ] 該特性是否新寫 AI preflight？→ ai.ts 對應點同步加 gate
+
+---
+
 ## 完整版
 
 完整 SKILL.md（含 Python git plumbing pipeline 範本、pre-flight checklist、
