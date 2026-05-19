@@ -1656,6 +1656,17 @@
 
   // v2.276：觀戰者判定（線上模式且坐在 spectator 位）
   const isSpectator = $derived(mode === 'online' && (mySeatIdx >= 2 || isAdminMode));  // v4.926 admin 偷看也走觀戰渲染路徑
+  // v4.927：admin spy 若在 poolReady 之前觸發，這個 $effect 會在 pool 載完後補訂閱
+  let _adminSpySubscribed = $state(false);
+  $effect(() => {
+    if (isAdminMode && poolReady && roomCode && !_adminSpySubscribed) {
+      _adminSpySubscribed = true;
+      try {
+        startRoomSubscription();
+        console.log('[admin spy] effect subscribed to room', roomCode);
+      } catch (e) { console.error('[admin spy] effect sub failed', e); }
+    }
+  });
 
   // ── 視角固定：AI模式/線上模式我方永遠在下方，本機雙人模式隨行動方翻轉 ──────
   // 注意：線上模式必須優先判斷，否則預設 aiPlayerIndex=1 會讓雙方都算成 myIdx=0
@@ -2462,26 +2473,38 @@
         // 匿名身份：純 localStorage
         decks = loadDecks();
       }
-      // v4.926 Admin 偷看 trigger — URL 含 ?admin=1&spectate=ROOM + email 白名單 → 純訂閱房間
-      //   不走 joinRoom 寫 seat 流程，所以玩家側完全看不到 admin（透明觀察）。
-      if (u && !isAdminMode && typeof window !== 'undefined' && ADMIN_EMAILS.includes(u.email as any)) {
+      // v4.927 Admin 偷看 trigger — URL `?admin=BASE64_TOKEN&spectate=ROOM`
+      //   token = base64(admin email)，decode 後比對 ADMIN_EMAILS。
+      //   不依賴 firebaseUser.email（game 頁不需登 admin 帳號）— 因為 admin
+      //   只在 admin.html 登入，game 頁 firebaseUser 通常是匿名或玩家自己。
+      if (!isAdminMode && typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
-        const adminFlag = params.get('admin');
+        const adminParam = params.get('admin');
         const spectateRoom = params.get('spectate');
-        if (adminFlag === '1' && spectateRoom) {
-          const rc = spectateRoom.trim().toUpperCase();
-          if (rc) {
-            try {
-              mode = 'online';
-              onlineStep = 'room';
-              roomCode = rc;
-              amIHost = false;
-              isAdminMode = true;
-              // 純訂閱房間 — 不調 joinRoom（不寫 seat），bypass allowSpectate gate
-              startRoomSubscription();
-              console.log('[admin spy] subscribed to room', rc);
-            } catch (e) {
-              console.error('[admin spy] failed to subscribe', e);
+        if (adminParam && spectateRoom && adminParam !== '1') {
+          // 解 base64 拿 email — atob() 失敗就 skip
+          let adminEmail: string | null = null;
+          try { adminEmail = atob(adminParam); } catch { /* invalid token */ }
+          if (adminEmail && ADMIN_EMAILS.includes(adminEmail as any)) {
+            const rc = spectateRoom.trim().toUpperCase();
+            if (rc) {
+              try {
+                mode = 'online';
+                onlineStep = 'room';
+                roomCode = rc;
+                amIHost = false;
+                isAdminMode = true;
+                // 等 poolReady 後才 startRoomSubscription — 避免 race
+                if (poolReady) {
+                  startRoomSubscription();
+                  console.log('[admin spy] subscribed to room', rc);
+                } else {
+                  console.log('[admin spy] queued, waiting for poolReady');
+                  // pool 載入是 onMount 內依序 await，靠下面 $effect 補觸發
+                }
+              } catch (e) {
+                console.error('[admin spy] failed to subscribe', e);
+              }
             }
           }
         }
