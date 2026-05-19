@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.921</span> 🔧 修探探鼠｜監視之眼 沒被火箭隊的監視塔擋</summary>
+        <ul>
+          <li><b>玩家回報</b>：探探鼠 (pokemonType=Colorless) 的「監視之眼」特性，在場上有 火箭隊的監視塔 時依然生效。但 PTCG 規則：火箭隊的監視塔 封鎖雙方所有 Colorless 寶可夢的特性（含主動/被動）。</li>
+          <li><b>Root cause</b>：<code>effects/_shared.ts</code> 的 <code>hasOakEye()</code> helper（v2.372 引入）掃描雙方場上找 監視之眼 ability holders，但沒檢查 stadium。<code>isAbilityBlockedByOakEye()</code> 都建在 <code>hasOakEye</code> 之上，所以同步漏了。</li>
+          <li><b>修法</b>：<code>hasOakEye()</code> 內查 <code>state.activeStadium</code>，名稱為 火箭隊的監視塔 時跳過所有 Colorless 持有者；其他屬性照常觸發。<code>ai.ts</code> preflight 同步加同樣 gate。</li>
+          <li><b>不從 stadiums.ts import 常數</b>：<code>effects/cards/stadiums.ts</code> 已 import 自 <code>_shared.ts</code>，反向 import 會循環。改用字面值 '火箭隊的監視塔' 比對 — 字串穩定，未來新增 Colorless ability blocker stadium 再擴充。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 4（tsc clean）/ Rule 7（補完整 gate 不簡化）/ Rule 11（Python pipeline）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.920</span> 💬 觀戰通知改寫到聊天室（不汙染對戰 log）</summary>
         <ul>
           <li><b>設計調整</b>：v4.919 把「📺 xxx 加入/離開觀戰」寫到 <code>game.log</code>，但對戰 log 應該只記錄招式/特性/抽牌等純對戰事件 — 觀戰者進出是 meta-game 社交訊息，放聊天室更合適。</li>

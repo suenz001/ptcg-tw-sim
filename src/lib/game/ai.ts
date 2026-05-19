@@ -992,7 +992,12 @@ function _hasOppCounterImmunity(
   const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
   for (const c of allOpp) {
     const card = pool.get(c.cardId);
-    if (card?.abilities?.some(a => a.name === '監視之眼')) return true;
+    // v4.921 火箭隊的監視塔 gate：探探鼠 Colorless 在此 stadium 下特性失效
+    if (card?.abilities?.some(a => a.name === '監視之眼')) {
+      const sCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : undefined;
+      const blocked = sCard?.name === '火箭隊的監視塔' && card.pokemonType === 'Colorless';
+      if (!blocked) return true;
+    }
   }
   return false;
 }

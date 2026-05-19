@@ -373,11 +373,22 @@ export const MOVE_DAMAGE_COUNTER_ABILITIES: ReadonlySet<string> = new Set([
  * 類特性的 gate / callback 入口共用。
  */
 export function hasOakEye(state: GameState, pool: Map<string, Card>): boolean {
+  // v4.921 火箭隊的監視塔 gate：探探鼠 pokemonType='Colorless'，
+  // 場上有此 stadium 時雙方所有 Colorless 寶可夢的特性（含被動的「監視之眼」）
+  // 全部消除 — 須在 helper 內檢查，否則 isAbilityBlockedByOakEye / regA 入口
+  // 全部都會誤判監視之眼仍生效。
+  // 用字面值 '火箭隊的監視塔' 比對避免從 effects/cards/stadiums.ts import
+  // 造成循環依賴（stadiums.ts 已 import 自 _shared.ts）。
+  const stadiumCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : undefined;
+  const rocketWatchtower = stadiumCard?.name === '火箭隊的監視塔';
   for (const p of state.players) {
     const all: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
     for (const pk of all) {
       const card = pool.get(pk.cardId);
-      if (card?.abilities?.some(a => a.name === '監視之眼')) return true;
+      if (!card?.abilities?.some(a => a.name === '監視之眼')) continue;
+      // 火箭隊的監視塔：Colorless 寶可夢特性失效，跳過此持有者
+      if (rocketWatchtower && card.pokemonType === 'Colorless') continue;
+      return true;
     }
   }
   return false;
