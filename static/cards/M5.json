@@ -3047,7 +3047,7 @@
     "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050293_T_RITORAIBAJJI.jpg",
     "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50293/regu/all",
     "scrapedAt": "2026-05-18T11:51:58.000Z",
-    "rulesText": "在自己每回合中，附有這張卡的無屬性寶可夢使用招式時，若自己擲了硬幣，可全部消除該硬幣結果並從頭重擲。寶可夢道具可在自己的回合附加任意數量於自己的寶可夢身上，每隻寶可夢只能附 1 張，並保持附加狀態。",
+    "rulesText": "在自己的回合可使用1次，附有這張卡的無屬性寶可夢使用招式時，若擲了硬幣，可全部消除該硬幣結果並從頭重擲。寶可夢道具可在自己的回合附加任意數量於自己的寶可夢身上，每隻寶可夢只能附 1 張，並保持附加狀態。",
     "illustrator": "Toyste Beach",
     "regulationMark": "M5"
   },

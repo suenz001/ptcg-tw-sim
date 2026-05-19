@@ -4193,6 +4193,10 @@ export function flipCoinsWithLog(
   aIdx: 0 | 1,
 ): { state: GameState; heads: number } {
   let s = state;
+  // v4.898 重試徽章：標記本次 ATTACK action 中已擲過幣（ATTACK 末端用此判定是否開 modal）。
+  // 注意：outside-of-ATTACK 擲幣（status checkup / 撤退黏滑失足 等）也會 set，但 ATTACK 不讀，
+  //       不影響邏輯。ATTACK 開頭會清此 flag。
+  if (count > 0) s = { ...s, coinFlippedThisAttack: true };
   let heads = 0;
   for (let i = 0; i < count; i++) {
     const isHeads = Math.random() < 0.5;

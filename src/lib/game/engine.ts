@@ -1820,6 +1820,33 @@ function handlePlaying(
     if (resolver) {
       newState = resolver(newState, actorIdx, action.selectedIids, params, pool);
     }
+    // v4.898 重試徽章 — inline handler（無 regR 註冊；直接在此特判）
+    //   選 'keep' → 不重擲，維持 newState（attack damage/POST 已套用）
+    //   選 'retry' → revert preAttackState + 設 retryBadgeUsedThisTurn=true
+    //                + 呼叫 handlePlaying 重跑原 ATTACK action（新擲幣 + 新 damage）
+    if (effectKey === 'm5-retry-badge-decide') {
+      const choice = action.selectedIids[0];
+      const preAttackState = params?.preAttackState as GameState | undefined;
+      const originalAction = params?.originalAction as GameAction | undefined;
+      if (choice === 'retry' && preAttackState && originalAction) {
+        const revPlayers = [...preAttackState.players] as [PlayerState, PlayerState];
+        revPlayers[actorIdx] = {
+          ...revPlayers[actorIdx],
+          retryBadgeUsedThisTurn: true,
+        };
+        const reverted: GameState = {
+          ...preAttackState,
+          players: revPlayers,
+          coinFlippedThisAttack: false,
+        };
+        // 在 log 加一條提示玩家正在重擲
+        const withLog = addLog(reverted, '🎲 重試徽章：消除上次擲幣結果，重新擲幣！', actorIdx);
+        return handlePlaying(withLog, originalAction, pool);
+      } else {
+        // 'keep' 或 fallback：維持 newState，attack damage 不變
+        newState = addLog(newState, '🎲 重試徽章：玩家選擇保留本次擲幣結果（未發動）', actorIdx);
+      }
+    }
     // 若為招式觸發的互動效果，解決後進入回合結束（不再有連鎖 pendingSelection 時才設）
     if (endTurnAfter && !newState.pendingSelection) {
       newState = { ...newState, turnPhase: 'end' };
@@ -3494,6 +3521,13 @@ function handlePlaying(
     }
     if (!canAffordAttack(attacker.active, attack.cost, pool, state, aIdx, attack.name)) return state;
 
+    // v4.898 重試徽章：snapshot pre-ATTACK 狀態（用於玩家選「重擲」時 revert）
+    // 並 clear coinFlippedThisAttack flag（flipCoinsWithLog 若被呼叫會設回 true）
+    const preAttackStateForRetry: GameState = state;
+    state = { ...state, coinFlippedThisAttack: false };
+    players[aIdx] = state.players[aIdx];
+    players[(1-aIdx) as 0|1] = state.players[(1-aIdx) as 0|1];
+
     // ── 招式前置效果（修改傷害 / 丟棄能量等）────────────────────────────────
     // v2.214：tool 招式用 tool 名做 key（例：'招式學習器 螢石|螢石'）
     const effectKey = `${sourceName}|${attack.name}`;
@@ -4981,6 +5015,47 @@ function handlePlaying(
       };
     }
 
+    // v4.898 重試徽章 — ATTACK 末端條件 check
+    //   - state.coinFlippedThisAttack === true（本次 ATTACK 有擲幣）
+    //   - attacker active 還存在
+    //   - attacker pokemonType === 'Colorless'（卡面「無屬性寶可夢」）
+    //   - attacker 身上有 重試徽章 工具
+    //   - 攻擊方未在本回合用過 重試徽章
+    //   - 無其他 pending selection 占用
+    // → 開 modal-choice picker（保留 preAttackStateForRetry 用於 revert）
+    if (
+      newState.coinFlippedThisAttack === true
+      && newState.players[aIdx].active
+      && !newState.players[aIdx].retryBadgeUsedThisTurn
+      && !newState.pendingSelection
+    ) {
+      const atkInst = newState.players[aIdx].active!;
+      const atkCard = pool.get(atkInst.cardId);
+      const isColorless = atkCard?.pokemonType === 'Colorless';
+      const hasRetryBadge = getAllAttachedTools(atkInst).some(t => pool.get(t.cardId)?.name === '重試徽章');
+      if (isColorless && hasRetryBadge) {
+        newState = {
+          ...newState,
+          pendingSelection: {
+            type: 'modal-choice',
+            actorIdx: aIdx, sourcePlayerIdx: aIdx,
+            minCount: 1, maxCount: 1,
+            effectKey: 'm5-retry-badge-decide',
+            params: {
+              label: '重試徽章',
+              preAttackState: preAttackStateForRetry,
+              originalAction: action,
+              options: [
+                { id: 'keep', text: '不重擲（使用此次結果）' },
+                { id: 'retry', text: '重擲（消除此次硬幣結果並從頭重擲）— 本回合 1 次' },
+              ],
+            },
+          },
+        };
+        return newState;
+      }
+    }
+
     return maybeResumeFestivalDanceSecondAttack(newState, pool);
   }
 
@@ -6004,6 +6079,7 @@ function handlePlaying(
       currentPlayer.karateKingBonusThisTurn ||
       currentPlayer.unrudaBonusThisTurn ||
       currentPlayer.gladionDuelBonusThisTurn ||
+      currentPlayer.retryBadgeUsedThisTurn ||
       currentPlayer.metalShieldThisTurn ||
       currentPlayer.cantRetreatIfPoisonedThisTurn ||
       currentPlayer.bagonElenaThisTurn ||
@@ -6019,6 +6095,7 @@ function handlePlaying(
       delete cp.karateKingBonusThisTurn;
       delete cp.unrudaBonusThisTurn;
       delete cp.gladionDuelBonusThisTurn;
+      delete cp.retryBadgeUsedThisTurn;
       delete cp.metalShieldThisTurn;
       delete cp.cantRetreatIfPoisonedThisTurn;
       delete cp.bagonElenaThisTurn;

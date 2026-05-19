@@ -418,6 +418,13 @@ export interface PlayerState {
    */
   gladionDuelBonusThisTurn?: boolean;
   /**
+   * v4.898 重試徽章（PokemonTool / M5）— 每回合 1 次的 coin re-flip 用過旗標。
+   * Setter: RESOLVE_SELECTION 處理 m5-retry-badge-decide 時，若玩家選「重擲」→ true。
+   * Reader: engine.ts ATTACK 末端的 retry-badge 條件檢查 — 若已 true 則不開 modal-choice。
+   * END_TURN: 自己回合結束時清。注意「不重擲」不算用過（卡面「可」= 可選擇不啟用）。
+   */
+  retryBadgeUsedThisTurn?: boolean;
+  /**
    * v4.892 迷唇姐｜強烈之吻（招式效果 / M5）— delayed discard 標記。
    * 卡面：「下個回合結束時，將承受此招式的寶可夢及其身上附加的所有卡，全部丟棄。」
    *
@@ -558,6 +565,13 @@ export interface PendingSelection {
 export interface GameState {
   /** 本局唯一 ID */
   id: string;
+  /**
+   * v4.898 重試徽章（M5）— 本次 ATTACK action 中是否呼叫過 flipCoinsWithLog。
+   * Setter: flipCoinsWithLog 自動設 true；Resetter: ATTACK 開頭設 false。
+   * 用於 ATTACK 末端決定是否開 retry-badge modal-choice picker。
+   * Outside-of-ATTACK 擲幣（sleep/burn checkup）也會 set，但 ATTACK 沒讀 → 無影響。
+   */
+  coinFlippedThisAttack?: boolean;
   phase: GamePhase;
   /** 正式對戰階段的回合小分段 */
   turnPhase: TurnPhase;

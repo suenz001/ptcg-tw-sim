@@ -264,6 +264,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.898</span> 🎲 重試徽章完整實裝（M5 deferred 全部清零）</summary>
+        <ul>
+          <li><b>翻譯校正</b>：<code>M5.json</code> 重試徽章 rulesText「在自己每回合中，附有這張卡的無屬性寶可夢...」→「<b>在自己的回合可使用1次</b>，附有這張卡的無屬性寶可夢...」（補上「1 次」明確化）。</li>
+          <li><b>實裝（engine 級 pause/resume 新機制）</b>：
+            <ul>
+              <li><b>策略</b>：在 ATTACK 完成後（damage + POST 全跑完）開 <code>modal-choice</code> picker；「不重擲」維持現狀；「重擲」revert 到 pre-ATTACK 狀態 + 設 <code>retryBadgeUsedThisTurn=true</code> + 呼叫 <code>handlePlaying</code> 重跑原 ATTACK action（新擲幣 + 新 damage）。</li>
+              <li><b>優點</b>：不破壞 engine 同步招式 pipeline；只在 ATTACK 末端加 inline check。重跑時 retryBadgeUsedThisTurn 已 true，modal 不會二次開啟（防無限迴圈）。</li>
+            </ul>
+          </li>
+          <li><b>各檔修改</b>：
+            <ul>
+              <li><code>types.ts</code>：PlayerState 加 <code>retryBadgeUsedThisTurn?</code>；GameState 加 <code>coinFlippedThisAttack?</code></li>
+              <li><code>effects.ts</code> <code>flipCoinsWithLog</code>：呼叫即自動設 <code>coinFlippedThisAttack=true</code>（任何 attack 擲幣都會 mark）</li>
+              <li><code>engine.ts</code> ATTACK 開頭：snapshot <code>preAttackStateForRetry</code> + clear <code>coinFlippedThisAttack</code></li>
+              <li><code>engine.ts</code> ATTACK 末端：retry-badge 6 道 gate（active 存在、Colorless、有 重試徽章 工具、本回合未用過、本 ATTACK 有擲幣、無其他 pending）→ 開 modal-choice picker</li>
+              <li><code>engine.ts</code> RESOLVE_SELECTION：inline handler — &apos;retry&apos; → revert + re-dispatch；&apos;keep&apos; → 維持</li>
+              <li><code>engine.ts</code> END_TURN：自己回合結束清 <code>retryBadgeUsedThisTurn</code></li>
+            </ul>
+          </li>
+          <li><b>關鍵設計</b>：「<b>不重擲</b>」不算用過（卡面「<b>可</b>」= 可選擇不啟用）— 玩家可保留下次擲幣再評估。「<b>重擲</b>」才算用過，本回合無法再次使用。</li>
+          <li><b>測試案例</b>（用戶指定）：<b>超級袋獸ex|機關槍合擊</b>（200 + 反面前正面數 × 50）— 擲到不滿意可 1 次重擲。同回合若再次擲幣（不太可能），重試徽章已用過，modal 不會再開。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 7（完整實裝 — 嚴格依卡面「1 次/回合」+ 「可」選擇性 + 「從頭重擲」revert 邏輯）/ Rule 11（types.ts + effects.ts + engine.ts 7300 行 + M5.json + version.ts + +page.svelte 全走 Python pipeline）/ Rule 13（preAttackState 雖然嵌套在 pendingSelection.params 內，但仍是 plain object，無 nested array）/ Rule 4（tsc 驗證）。</li>
+          <li><b>M5 Deferred 清零</b>：所有 81 張 M5 卡片完整實裝完成（部分卡有多 effect，總 effect 數 87+）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.897</span> 💣 M5 Phase 8h — 豪華炸彈（重試徽章 deferred）</summary>
         <ul>
           <li><b>實裝 1 張 deferred</b>：豪華炸彈（PokemonTool，on-damaged 反擊）。</li>
