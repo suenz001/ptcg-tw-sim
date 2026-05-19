@@ -644,6 +644,19 @@ export interface GameState {
    */
   pendingSelection?: PendingSelection;
   /**
+   * v4.933：pending 鏈式佇列。當 withPending 偵測到既有 pendingSelection 時，
+   *   新的 PendingSelection 會 push 至此 queue；RESOLVE_SELECTION resolver 結束後
+   *   若 pendingSelection 為空會自動從 queue pop 出下一筆設為新的 pendingSelection。
+   * 修「多龍巴魯托ex 幻影奇襲 vs 手持循環扇」bug — 同一 ATTACK 內：
+   *   1) TOOL_ON_DAMAGED(手持循環扇) 開 cycle-fan-step1 pending
+   *   2) ATTACK_POST(幻影奇襲) regPost 又 withPending(dragapult-snipe) → 覆蓋掉 (1)
+   *   → 玩家解完 dragapult-snipe 後 cycle-fan 永遠不出現。
+   * 加 queue 後兩者依序解（先 cycle-fan，後 dragapult-snipe）。
+   * Firestore-safe：PendingSelection[] 是 array of object，與既有 pendingSelection 內
+   *   params/CardInstance 嵌套深度同級（per Iron Rule 13 — 禁的是 array of array）。
+   */
+  pendingChainQueue?: PendingSelection[];
+  /**
    * v2.160：上一次招式套用後實際造成的傷害量（含弱抗 / 道具減傷後最終值）。
    * 由 engine ATTACK handler 在傷害套用點寫入；ATTACK_POST 可讀取。
    * 招式效果如「朽木妖｜終極吸取（heal=實際傷害量）」依賴此值。

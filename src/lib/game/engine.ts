@@ -1856,6 +1856,18 @@ function handlePlaying(
         newState = addLog(newState, '🎲 重試徽章：玩家選擇保留本次擲幣結果（未發動）', actorIdx);
       }
     }
+    // v4.933：resolver 跑完後若 pendingSelection 為空但 chain queue 仍有東西
+    //   → pop 一筆設為新 pendingSelection（continue 鏈式 resolve）。
+    //   觸發 case：同一 ATTACK 內 TOOL_ON_DAMAGED + ATTACK_POST 各自開 pending，
+    //   withPending 將後者排隊；玩家解完前者後接續處理後者。
+    if (!newState.pendingSelection && newState.pendingChainQueue && newState.pendingChainQueue.length > 0) {
+      const [nextSel, ...restQueue] = newState.pendingChainQueue;
+      newState = {
+        ...newState,
+        pendingSelection: nextSel,
+        pendingChainQueue: restQueue.length > 0 ? restQueue : undefined,
+      };
+    }
     // 若為招式觸發的互動效果，解決後進入回合結束（不再有連鎖 pendingSelection 時才設）
     if (endTurnAfter && !newState.pendingSelection) {
       newState = { ...newState, turnPhase: 'end' };

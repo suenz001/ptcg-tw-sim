@@ -706,6 +706,17 @@ export function returnHandToDeck(state: GameState, idx: 0 | 1): GameState {
 }
 
 export function withPending(state: GameState, sel: PendingSelection): GameState {
+  // v4.933：若已有 pending 待解（同一 engine action 內 TOOL_ON_DAMAGED + ATTACK_POST
+  //   都會 withPending 的 case，例：手持循環扇 + 幻影奇襲），新的 pending push 到
+  //   pendingChainQueue 排隊，避免直接覆蓋掉前者。
+  //   RESOLVE_SELECTION resolver 跑完後（engine.ts）若 pendingSelection 為空會自動
+  //   pop queue 設為新 pending，玩家依序解每一筆。
+  if (state.pendingSelection) {
+    return {
+      ...state,
+      pendingChainQueue: [...(state.pendingChainQueue ?? []), sel],
+    };
+  }
   return { ...state, pendingSelection: sel };
 }
 

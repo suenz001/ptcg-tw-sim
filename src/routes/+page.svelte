@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.933</span> 🐉 修「多龍巴魯托ex 幻影奇襲 vs 手持循環扇」pending 覆蓋 bug</summary>
+        <ul>
+          <li><b>玩家回報</b>：多龍巴魯托ex 用招式「幻影奇襲」攻擊裝備「手持循環扇」的寶可夢，分配完 6 個傷害指示物後，挪動能量的效果不會出現。</li>
+          <li><b>Root cause</b>：ATTACK handler 內順序為（1）套 200 點傷害 →（2）<code>TOOL_ON_DAMAGED</code>(手持循環扇) <code>withPending</code> 開「選 attacker 能量」modal →（3）<code>ATTACK_POST</code> regPost(幻影奇襲) 又 <code>withPending</code> 開「分配 6 個 counter」modal。但 <code>withPending</code> 只是 <code>&#123; ...state, pendingSelection: sel &#125;</code>——直接覆蓋掉 (2)！玩家解完 (3) 的 6-counter modal 後 <code>pendingSelection</code> 變 <code>undefined</code>，cycle-fan 從未出現。</li>
+          <li><b>修法</b>：加 <code>pendingChainQueue?: PendingSelection[]</code> 到 <code>GameState</code>。<code>withPending</code> 偵測既有 pending 時改 push 到 queue。<code>RESOLVE_SELECTION</code> resolver 跑完後若 <code>pendingSelection</code> 為空且 queue 有東西，自動 pop 一筆設為新 pending。玩家先看 cycle-fan modal → 解完後接 dragapult-snipe → 解完後正常結束。</li>
+          <li><b>順帶好處</b>：所有「同一 ATTACK 內 TOOL_ON_DAMAGED + ATTACK_POST 都觸發 pending」的組合都自動修好（不只 dragapult vs cycle-fan，其他將來新增的工具/招式組合也安全）。</li>
+          <li><b>Firestore 兼容</b>：<code>PendingSelection[]</code> 是 array of object，與既有 <code>pendingSelection.params</code> 內巢狀深度同級（per Iron Rule 13 — 禁的是 array of array，object 內的 array 沒事）。</li>
+          <li><b>Iron Rules</b>：Rule 1（changelog escape）/ Rule 3（parent blob）/ Rule 4（tsc verify）/ Rule 11（Python pipeline）/ Rule 13（GameState Firestore-safe）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.932</span> 🔔 修線上對戰先按準備方聽不到 ready-go</summary>
         <ul>
           <li><b>玩家回報</b>：線上對戰沒聽到 ready go.wav 開戰音。</li>
