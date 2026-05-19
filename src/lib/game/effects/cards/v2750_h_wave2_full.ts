@@ -1345,20 +1345,45 @@ regPre('嘎啦嘎啦|骨之復仇', (state, aIdx, pool) => {
 // 列陣兵|一併攻擊 30+ — 上回合用過「組成陣形」+90
 regPre('列陣兵|一併攻擊', lastSelfTurnUsedAttackPre(30, 90, '組成陣形', '一併攻擊'));
 
-// 故勒頓|輪番狂攻 30+ — 上回合此寶可夢以外古代寶可夢使用招式 +150
-//   實作限制：attackUsedLastSelfTurn 只記錄擁有者自己的最後一招，無法直接查「其他寶可夢」
-//   嚴格實作需在每次 ATTACK 結算時，於 player 上記錄「上回合是否有古代寶可夢用過招式」
-//   暫無此 state；此處改用較弱實作：用 oppAttackKOdMeInLastOppTurn? 不對。
-//   接受 — 用 player flag `ancientAttackedLastSelfTurn`：v2.75 加。
-//   先用簡化條件：若自方場上有「古代」寶可夢數 ≥ 2 → 視為條件成立（真實追蹤需 engine 改）
+// 故勒頓|輪番狂攻 30+ — v4.894 完整實裝（不再簡化）
+//   JSON 卡面：「在上個自己的回合，若這隻寶可夢以外的『古代』寶可夢使用了招式，
+//                則增加 150 點傷害。」
+//   實裝方法：iterate 自方場上 (active + bench) 非攻擊者 instance，檢查 per-instance
+//             attackUsedLastSelfTurn flag（types.ts line 168-169，engine.ts END_TURN
+//             promote attackUsedThisTurn → attackUsedLastSelfTurn 已實裝）。
+//   舊註解「attackUsedLastSelfTurn 只記錄擁有者自己的最後一招，無法查其他寶可夢」是
+//   誤判 — flag 本就是 per-instance，iterate 場上所有 instance 即可知道每隻的最後一招。
 regPre('故勒頓|輪番狂攻', (state, aIdx, pool) => {
   const p = state.players[aIdx];
-  const ancientCount = [p.active, ...p.bench].filter(Boolean).filter((c) => {
-    const card = pool.get((c as CardInstance).cardId);
-    return card?.tags?.includes('古代');
-  }).length;
-  if (ancientCount >= 2) return { state: addLog(state, `輪番狂攻：自方有 ${ancientCount} 隻古代寶可夢（簡化視為已用招式） → 30+150 = 180`, aIdx), damage: 180 };
-  return { state: addLog(state, '輪番狂攻：未觸發 → 30', aIdx), damage: 30 };
+  const attacker = p.active;
+  if (!attacker) {
+    return { state: addLog(state, '輪番狂攻：自方無 active（異常）', aIdx), damage: 30 };
+  }
+  // iterate 場上所有非攻擊者的 instance，找「古代 + 上回合用招」
+  const others: CardInstance[] = [
+    ...(p.active ? [p.active] : []),
+    ...p.bench,
+  ].filter(c => c.iid !== attacker.iid);
+  const triggered = others.find(inst => {
+    const card = pool.get(inst.cardId);
+    if (!card?.tags?.includes('古代')) return false;
+    return inst.attackUsedLastSelfTurn !== undefined;
+  });
+  if (triggered) {
+    const tCard = pool.get(triggered.cardId);
+    return {
+      state: addLog(state,
+        `輪番狂攻：上個自己的回合「${tCard?.name ?? '?'}」（古代）使用了「${triggered.attackUsedLastSelfTurn}」 → 30 + 150 = 180`,
+        aIdx),
+      damage: 180,
+    };
+  }
+  return {
+    state: addLog(state,
+      '輪番狂攻：上個自己的回合無其他古代寶可夢使用招式 → 30',
+      aIdx),
+    damage: 30,
+  };
 });
 
 // 阿羅拉 嘎啦嘎啦|報仇 30+ — 上對手回合若自己寶可夢因招式 KO +90

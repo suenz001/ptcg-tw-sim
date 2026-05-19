@@ -264,6 +264,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.894</span> 🔧 修 故勒頓｜輪番狂攻 簡化實裝（違反 Rule 7）</summary>
+        <ul>
+          <li><b>Bug 報告</b>：玩家發現 log「輪番狂攻：自方有 4 隻古代寶可夢（簡化視為已用招式） → 30+150 = 180」— 違反 Rule 7（嚴禁簡化實裝）。</li>
+          <li><b>JSON 卡面原文</b>：「在上個自己的回合，若這隻寶可夢以外的『古代』寶可夢使用了招式，則增加 150 點傷害。」</li>
+          <li><b>舊（錯）實裝</b>：「自方場上有 ≥2 隻古代寶可夢 → 視為已用招式 → +150」（v2750_h_wave2_full.ts:1354-1362）。原註解誤判「<code>attackUsedLastSelfTurn</code> 只記錄擁有者自己的最後一招，無法直接查『其他寶可夢』」— 但 flag 本就是 per-instance，可 iterate 場上所有 instance 檢查每隻的最後一招。</li>
+          <li><b>新（正確）實裝</b>：
+            <ul>
+              <li>iterate 自方場上 (active + bench) 所有 instance，排除 attacker (故勒頓) 自己 (用 iid 比對)</li>
+              <li>對每個其他 instance：檢查 <code>card.tags.includes(&apos;古代&apos;)</code> AND <code>attackUsedLastSelfTurn !== undefined</code></li>
+              <li>若有任一符合 → +150（log 顯示是哪隻寶可夢用了哪個招式觸發）</li>
+              <li>否則 → 30 基礎傷害</li>
+            </ul>
+          </li>
+          <li><b>引擎既有機制</b>：types.ts line 168-169 的 <code>attackUsedThisTurn</code> / <code>attackUsedLastSelfTurn</code> 是 per-instance 的（v2.69 為瘋狂炸彈引入）。engine.ts END_TURN promote 邏輯已完整 — 上回合用招的 attackUsedThisTurn 會 promote 為 attackUsedLastSelfTurn，存活到下個自己回合可讀。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 7（嚴禁簡化實裝 — 真實裝完成，移除「視為已用招式」）/ Rule 7c（依 SV8.json JSON 卡面原文逐字實裝）/ Rule 11（Python pipeline + str.replace）/ Rule 4（tsc 驗證）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.893</span> 🦊 M5 Phase 8f — 招式竊賊 + 光子密碼</summary>
         <ul>
           <li><b>實裝 2 張 deferred</b>：累計 80 → <b>82 effect / 81 張卡</b>（部分卡含多 effect，coverage 已完整覆蓋；僅化石卡與工具卡組為 deferred）。</li>
