@@ -52,16 +52,32 @@ regR('shinli-pick', (st, idx, iids, params, pool) => {
 });
 
 // ── 杜若 — top7 → 寶可夢 1 + 訓練家 1 加手 ─────────────────────────────────
+//   卡面：查看自己的牌庫上方7張卡，從其中選擇寶可夢卡與訓練家卡各1張，
+//        在給對手看過後加入手牌。將剩餘卡放回牌庫並重洗。
+//   v4.914：修簡化 — 原本兩階段都 minCount=0 允許跳過，但卡面「各1張」是強制。
+//          若 top7 內有對應類型卡，必須選 1 張；無對應類型才允許跳過。
+//          仿照 items_misc.ts 大師球 (L737) 的 hasPoke gate 模式。
 regG('杜若', (st, idx) => st.players[idx].deck.length > 0);
-reg('杜若', (st, idx) => {
+reg('杜若', (st, idx, pool) => {
   const top7 = st.players[idx].deck.slice(0, 7);
   if (top7.length === 0) return addLog(st, '杜若：牌庫為空', idx);
-  st = addLog(st, `杜若：查看牌庫頂 ${top7.length} 張，選 1 寶可夢加手`, idx);
+  // v4.914：根據 top7 實際內容決定寶可夢階段是否強制
+  const hasPokemon = top7.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
+  const hasTrainer = top7.some(c => pool.get(c.cardId)?.supertype === 'Trainer');
+  st = addLog(st,
+    `杜若：查看牌庫頂 ${top7.length} 張（寶可夢 ${top7.filter(c => pool.get(c.cardId)?.supertype === 'Pokemon').length} / 訓練家 ${top7.filter(c => pool.get(c.cardId)?.supertype === 'Trainer').length}）`,
+    idx);
+  if (!hasPokemon && !hasTrainer) {
+    // 兩種類型都沒有 → 直接重洗，不開 picker
+    st = addLog(st, '杜若：牌庫頂無寶可夢與訓練家，洗回牌庫', idx);
+    return updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
+  st = addLog(st, hasPokemon ? '杜若：請選 1 張寶可夢加入手牌' : '杜若：牌庫頂無寶可夢，跳過此階段', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon',
-    minCount: 0, maxCount: 1,
+    minCount: hasPokemon ? 1 : 0, maxCount: 1,
     effectKey: 'tora-pokemon',
     params: { topIids: top7.map(c => c.iid) },
   });
@@ -74,20 +90,35 @@ regR('tora-pokemon', (st, idx, iids, params, pool) => {
     const picked = st.players[idx].deck.filter(c => set.has(c.iid));
     // v2.96：卡面「給對手看過」→ 公開卡名
     st = addLog(st, `杜若：搜到寶可夢 ${picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、')}`, idx);
+  } else {
+    st = addLog(st, '杜若：寶可夢階段跳過', idx);
   }
   st = updatePlayer(st, idx, p => {
     const got = p.deck.filter(c => set.has(c.iid));
     const rest = p.deck.filter(c => !set.has(c.iid));
     return { ...p, deck: rest, hand: [...p.hand, ...got] };
   });
-  // 接：選 1 訓練家（同樣從原 top7 中剩下的）
+  // v4.914：訓練家階段一樣要 gate — 看 top7 剩餘張數中是否含訓練家
   const remainingTopIids = topIids.filter(id => !set.has(id));
-  st = addLog(st, '杜若：再選 1 張訓練家加手', idx);
+  const hasTrainer = st.players[idx].deck.some(c =>
+    remainingTopIids.includes(c.iid) && pool.get(c.cardId)?.supertype === 'Trainer'
+  );
+  if (!hasTrainer) {
+    // 訓練家階段無對應類型 → 跳過 picker，直接洗回剩餘
+    st = addLog(st, '杜若：剩餘牌中無訓練家，洗回牌庫', idx);
+    return updatePlayer(st, idx, p => {
+      const topSet = new Set(remainingTopIids);
+      const rest = p.deck.filter(c => !topSet.has(c.iid));
+      const remaining = p.deck.filter(c => topSet.has(c.iid));
+      return { ...p, deck: shuffle([...rest, ...remaining]) };
+    });
+  }
+  st = addLog(st, '杜若：請選 1 張訓練家加入手牌', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Trainer',
-    minCount: 0, maxCount: 1,
+    minCount: 1, maxCount: 1,
     effectKey: 'tora-trainer',
     params: { topIids: remainingTopIids },
   });

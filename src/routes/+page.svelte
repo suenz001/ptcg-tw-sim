@@ -264,6 +264,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.914</span> 🔧 修 杜若 簡化實裝（minCount 強制 1 張）</summary>
+        <ul>
+          <li><b>玩家回報</b>：支援者卡片「杜若」疑似簡化實裝。</li>
+          <li><b>卡面</b>：查看自己的牌庫上方 7 張卡，從其中選擇<b>寶可夢卡與訓練家卡各 1 張</b>，在給對手看過後加入手牌。將剩餘卡放回牌庫並重洗。</li>
+          <li><b>原實裝問題</b>（<code>v169_supporters.ts</code>）：兩階段 picker 都用 <code>minCount: 0</code>，玩家可以「跳過不選」 — 違反卡面「各 1 張」的強制語意。</li>
+          <li><b>修法</b>：仿照 <code>大師球</code> 的 <code>hasPoke</code> gate 模式：
+            <ul>
+              <li>寶可夢階段：若 top7 中有寶可夢 → <code>minCount=1</code>（強制）；無 → <code>minCount=0</code>（自動跳過）</li>
+              <li>訓練家階段：若 top7 剩餘中有訓練家 → <code>minCount=1</code>（強制）；無 → 直接洗回牌庫不開 picker</li>
+              <li>新增 log 公開揭示「寶可夢 X / 訓練家 Y」張數讓對手知情</li>
+              <li>reg() 簽名補上 <code>pool</code> 第 3 參數以取得卡片 supertype</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 4（tsc clean）/ Rule 7（不簡化）/ Rule 11（Python pipeline）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.913</span> 🔐 對戰演練頁加登入狀態 dashboard</summary>
         <ul>
           <li>把牌組編輯器的「登入狀態 dashboard」完整 port 到對戰演練頁的「開始對戰」模式選擇畫面</li>
