@@ -6,7 +6,9 @@
   import { base } from '$app/paths';
   import type { Card } from '$lib/cards/types';
   import { loadAllSets, buildCardIndex } from '$lib/cards/pool';
-  import { loadDecks } from '$lib/decks/storage';
+  import { loadDecks, saveDecks } from '$lib/decks/storage';
+  // v4.925：雲端 sync — 同帳號切換時 game 頁需重載牌組
+  import { loadDecksFromCloud } from '$lib/decks/cloud';
   import type { Deck } from '$lib/decks/types';
   import { PRESET_DECKS } from '$lib/decks/presets';
   import {
@@ -2423,12 +2425,39 @@
     //   修法：Firebase auth 永遠初始化（給 dashboard 用 firebaseUser）；
     //   Oracle build 額外取 Oracle JWT（給房間 API 用）。myUid 在 ORACLE_MODE
     //   下仍走 Oracle JWT uid，避免房間 memberUid 比對失敗。
-    onAuthStateChanged(auth, u => {
+    onAuthStateChanged(auth, async u => {
       firebaseUser = u;
       // Oracle build 下 myUid 必須走 Oracle JWT uid（房間 API 簽 JWT 用），
       // 不能被 Firebase uid 蓋掉 → 加 gate 阻擋 callback 覆寫 myUid。
       if (!ORACLE_MODE) {
         myUid = u?.uid ?? null;
+      }
+      // v4.925：跟著 user 變化同步雲端牌組（修「換帳號後仍顯示舊牌組」bug）。
+      //   邏輯跟 decks/+page.svelte:409+ 同套：cloud + local merge by updatedAt。
+      //   匿名 user 沒雲端帳號 → 只讀 localStorage。
+      if (u && !u.isAnonymous) {
+        try {
+          const local = loadDecks();
+          const cloud = await loadDecksFromCloud(u.uid);
+          if (cloud.length > 0) {
+            const merged = new Map<string, Deck>();
+            for (const d of [...local, ...cloud]) {
+              const existing = merged.get(d.id);
+              if (!existing || d.updatedAt > existing.updatedAt) merged.set(d.id, d);
+            }
+            decks = [...merged.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+            saveDecks(decks);
+          } else {
+            // cloud 空 → 用 local（保持原樣，不改動）
+            decks = local;
+          }
+        } catch {
+          // cloud 不可用 → fallback localStorage（不洗成空）
+          decks = loadDecks();
+        }
+      } else if (u && u.isAnonymous) {
+        // 匿名身份：純 localStorage
+        decks = loadDecks();
       }
     });
     if (!auth.currentUser) await signInAnonymously(auth);

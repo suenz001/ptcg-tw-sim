@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.925</span> 🔄 對戰演練頁跟帳號切換同步雲端牌組</summary>
+        <ul>
+          <li><b>玩家回報</b>：「⚔️ 開始對戰」頁面常常使用暫存區內容，沒讀到帳號最新狀態。例：A 帳號登入看到 A 牌組 → A 登出 + B 登入後仍顯示 A 牌組，必須跳回牌組編輯器才會更新。</li>
+          <li><b>Root cause</b>：<code>game/+page.svelte</code> 的 <code>onMount</code> 只跑一次 <code>decks = loadDecks()</code>（純讀 localStorage），沒有跟著 <code>onAuthStateChanged</code> 重載。對比 <code>decks/+page.svelte</code> 的 callback 內有完整的「<code>loadDecksFromCloud(uid)</code> 從 Firestore 拉 → 跟 localStorage merge by updatedAt → saveDecks 寫回」流程。</li>
+          <li><b>修法</b>：把 decks 頁那套雲端 sync 邏輯 port 到 game 頁的 <code>onAuthStateChanged</code> callback。每次 user 變化（登入 / 登出 / 切帳號）都會：(1) 從 Firestore 拉新 user 的牌組；(2) 跟本地 localStorage merge（newer wins by updatedAt）；(3) 更新 game 頁的 <code>decks</code> state + saveDecks 寫回 localStorage。</li>
+          <li><b>匿名 user 處理</b>：匿名身份沒有雲端牌組概念，只讀 localStorage。</li>
+          <li><b>Cloud fetch 失敗</b>：保持目前 localStorage 內容（不會洗成空白），跟 decks 頁的 fallback 一致。</li>
+          <li><b>Iron Rules</b>：Rule 1（changelog escape）/ Rule 4（tsc clean）/ Rule 11（Python pipeline）/ Rule 17（unified pattern — 跟 decks 頁同套 cloud-sync 邏輯）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.924</span> 🔐 Oracle 站對戰演練頁顯示登入 dashboard（修 v4.65 漏網）</summary>
         <ul>
           <li><b>玩家回報</b>：Oracle 站（www.ptcg-tw-sim.com）的對戰演練頁沒顯示登入帳號 dashboard，跟 GitHub Pages 站不一致。但牌組編輯器頁是正常顯示的。</li>
