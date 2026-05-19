@@ -192,6 +192,10 @@
   let textModalMode = $state<'export' | 'import'>('export');
   let importTextInput = $state('');
 
+  // v4.91：匯出圖片功能 state
+  let exportingImage = $state(false);
+  let exportImageError = $state('');
+
   // ── Derived ────────────────────────────────────────────────────────────
   // v2.13：支援檢視內建預組（唯讀）。activeId 先找使用者牌組，再退回預組。
   const active = $derived(
@@ -617,6 +621,116 @@
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  // ─── v4.91：匯出牌組為圖片 ───────────────────────────────────────────
+  // 規格：純卡牌 grid（無文字資訊）、4:3 自適應比例、卡圖右下角黑底白字數量 badge。
+  // 卡圖 CORS 失敗 → Promise.all reject → 中斷匯出 + 紅框錯誤訊息。
+  // 卡片比例：PTCG 標準 63 × 88 mm → 245 × 342 px 維持 ≈ 63:88。
+  function loadImageCORS(url: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`圖片載入失敗：${url}`));
+      img.src = url;
+    });
+  }
+
+  async function exportDeckAsImage() {
+    if (!active || activeEntries.length === 0) return;
+    exportingImage = true;
+    exportImageError = '';
+    try {
+      const cardW = 245;
+      const cardH = 342;
+      const gap = 8;
+      const targetAspect = 4 / 3;
+
+      // 找最佳 grid：枚舉 rows 1~10，cols = ceil(N / rows)，比較 aspect 偏差
+      const n = activeEntries.length;
+      let bestRows = 1;
+      let bestCols = n;
+      let bestDiff = Infinity;
+      for (let rows = 1; rows <= 10 && rows <= n; rows++) {
+        const cols = Math.ceil(n / rows);
+        const aspect = (cols * cardW) / (rows * cardH);
+        const diff = Math.abs(aspect - targetAspect);
+        if (diff < bestDiff) {
+          bestRows = rows;
+          bestCols = cols;
+          bestDiff = diff;
+        }
+      }
+
+      const canvasW = bestCols * cardW + gap * (bestCols + 1);
+      const canvasH = bestRows * cardH + gap * (bestRows + 1);
+
+      const images = await Promise.all(
+        activeEntries.map(({ card }) => loadImageCORS(card.imageUrl))
+      );
+
+      const canvas = document.createElement('canvas');
+      canvas.width = canvasW;
+      canvas.height = canvasH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas context 取得失敗');
+
+      ctx.fillStyle = '#e8e8e8';
+      ctx.fillRect(0, 0, canvasW, canvasH);
+
+      for (let i = 0; i < images.length; i++) {
+        const r = Math.floor(i / bestCols);
+        const c = i % bestCols;
+        const x = gap + c * (cardW + gap);
+        const y = gap + r * (cardH + gap);
+        ctx.drawImage(images[i], x, y, cardW, cardH);
+
+        const count = activeEntries[i].entry.count;
+        const badgeW = 56;
+        const badgeH = 56;
+        const bx = x + cardW - badgeW - 8;
+        const by = y + cardH - badgeH - 8;
+        const radius = 8;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.beginPath();
+        ctx.moveTo(bx + radius, by);
+        ctx.lineTo(bx + badgeW - radius, by);
+        ctx.quadraticCurveTo(bx + badgeW, by, bx + badgeW, by + radius);
+        ctx.lineTo(bx + badgeW, by + badgeH - radius);
+        ctx.quadraticCurveTo(bx + badgeW, by + badgeH, bx + badgeW - radius, by + badgeH);
+        ctx.lineTo(bx + radius, by + badgeH);
+        ctx.quadraticCurveTo(bx, by + badgeH, bx, by + badgeH - radius);
+        ctx.lineTo(bx, by + radius);
+        ctx.quadraticCurveTo(bx, by, bx + radius, by);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 36px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(count), bx + badgeW / 2, by + badgeH / 2 + 2);
+      }
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), 'image/png')
+      );
+      if (!blob) throw new Error('Canvas 轉 PNG 失敗（CORS 汙染 canvas）');
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${active.name || 'deck'}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      exportImageError = e instanceof Error ? e.message : String(e);
+    } finally {
+      exportingImage = false;
+    }
+  }
+
 
   function importFromText() {
     if (!importTextInput.trim()) return;
@@ -1436,7 +1550,16 @@
         <div class="text-actions">
           <button class="small" onclick={copyToClipboard}>📋 複製到剪貼簿</button>
           <button class="small" onclick={downloadTextFile}>⬇ 下載 .txt</button>
+          <button class="small" onclick={exportDeckAsImage} disabled={exportingImage}>
+            {exportingImage ? '⏳ 產生中...' : '📸 匯出圖片'}
+          </button>
         </div>
+        {#if exportImageError}
+          <div class="export-image-error">⚠ 匯出圖片失敗：{exportImageError}</div>
+        {:else if !exportingImage}
+          <p class="muted small-note">📸 匯出圖片：純卡牌 grid（4:3 比例，方便手機分享）。若部分卡圖被 CORS 阻擋會自動中斷。</p>
+        {/if}
+
       {:else}
         <h3 class="modal-title">匯入牌組（文字格式）</h3>
         <p class="muted">
@@ -2390,6 +2513,7 @@
   /* Text format modal */
   .text-modal { max-width: 560px; }
   .modal-title { margin: 0 0 0.5rem; font-size: 1.1rem; }
+  .export-image-error { margin-top:10px; padding:8px 12px; background:#fef0f0; border-left:3px solid #c53030; color:#742a2a; font-size:0.9rem; border-radius:4px; }
   .official-import-help { background:#f4f7fa; border:1px solid #d0dbe7; border-radius:6px; padding:0.5rem 0.8rem; margin:0.5rem 0; font-size:0.85rem; }
   .official-import-help summary { cursor:pointer; font-weight:600; color:#2a5aa0; }
   .official-import-help .help-body { margin-top:0.5rem; }

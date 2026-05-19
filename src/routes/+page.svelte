@@ -264,6 +264,36 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.91</span> 🛠️ 對戰紀錄 M5 卡名修復 + 牌組編輯器加「匯出圖片」</summary>
+        <ul>
+          <li><b>修 oracle-admin 對戰紀錄 M5 卡顯示為 #50265 數字</b>：
+            <ul>
+              <li>Root cause：admin.html 用相對路徑 fetch <code>&#47;cards&#47;index.json</code>，但 Oracle 機器的 <code>&#47;opt&#47;ptcg&#47;web&#47;cards&#47;</code> 同步落後於主站 push，導致 M5.json 抓不到</li>
+              <li>修法：改用 GitHub Pages 絕對 URL <code>https:&#47;&#47;suenz001.github.io&#47;ptcg-tw-sim&#47;cards&#47;</code> — 每次 git push 自動 deploy，永遠最新</li>
+              <li>影響：admin 對戰紀錄畫面所有 set 的卡名都會即時與主站同步</li>
+            </ul>
+          </li>
+          <li><b>牌組編輯器加「📸 匯出圖片」功能</b>（玩家建議）：
+            <ul>
+              <li>在「匯出牌組」對話框內，文字按鈕旁加圖片匯出按鈕</li>
+              <li>輸出格式：純卡圖 grid（無文字資訊，最像官方牌組構築頁的視覺風格）</li>
+              <li>排版演算法：自動計算最佳 (rows, cols) 使整體比例接近 4:3（方便手機分享）</li>
+              <li>每張卡右下角黑底白字圓角數量 badge（半透明黑底 + 36px 加粗白字）</li>
+              <li>檔名：牌組名稱.png</li>
+            </ul>
+          </li>
+          <li><b>錯誤處理</b>（CORS gate）：
+            <ul>
+              <li>用 <code>img.crossOrigin = 'anonymous'</code> 載入，伺服器若無 <code>Access-Control-Allow-Origin</code> 會觸發 onerror</li>
+              <li><code>Promise.all</code> 任一失敗 → 整個匯出中斷 + 紅框錯誤訊息（不會出殘缺圖）</li>
+              <li>避免 canvas tainted 導致 toBlob 被 SecurityError 擋下</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+
+      <details>
         <summary><span class="ver-badge">v4.9</span> 🎴 M5 合併 J 標 + 牌組編輯器預設 H/I/J 全選</summary>
         <ul>
           <li><b>M5 卡包合併到 J 標</b>（搜尋 / 篩選一致化）：
