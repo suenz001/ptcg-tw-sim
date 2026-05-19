@@ -25,6 +25,7 @@ export type SfxName =
   | 'coin' | 'deal' | 'draw' | 'shuffle' | 'click' | 'ko'
   | 'poison' | 'burn' | 'sleep' | 'confuse'
   | 'turn-start'
+  | 'ready-go'  // v4.929 對戰開始通知音（sample-based）
   // v4.928 新增：紙牌質感升級
   | 'evolve'           // 進化儀式音（紙翻面 + 上升小琶音）
   | 'attach-energy'    // 附能量（紙片落下 + soft pluck）
@@ -44,7 +45,7 @@ function classifyBus(name: SfxName): BusName {
     return 'ui';
   }
   if (name === 'ko' || name === 'victory-fanfare' || name === 'game-win'
-      || name === 'game-lose' || name.startsWith('attack-')) {
+      || name === 'game-lose' || name === 'ready-go' || name.startsWith('attack-')) {
     return 'sfx';
   }
   // poison / burn / sleep / confuse
@@ -64,6 +65,11 @@ let muted = false;
 let uiVolume = 1.0;
 let sfxVolume = 1.0;
 let statusVolume = 1.0;
+// v4.929 切到背景頁籤時是否仍播音（預設 true）
+let playWhenHidden = true;
+// v4.929 ready-go sample buffer cache
+let readyGoBuffer: AudioBuffer | null = null;
+let readyGoLoading: Promise<void> | null = null;
 
 // ─── Throttle + osc cap ──────────────────────────────────────────────────
 const recentSfx = new Map<SfxName, number>();
@@ -144,6 +150,31 @@ export function setStatusVolume(v: number): void {
 }
 export function getStatusVolume(): number { return statusVolume; }
 
+// v4.929：playWhenHidden — 切到背景頁籤時是否仍播音
+export function setPlayWhenHidden(v: boolean): void { playWhenHidden = v; }
+export function getPlayWhenHidden(): boolean { return playWhenHidden; }
+
+// v4.929：preload ready-go.wav — fetch + decodeAudioData，cache 進 buffer
+//   首次呼叫 onMount 階段觸發，第一次播放零延遲。
+export function preloadReadyGoSample(url: string): Promise<void> {
+  if (readyGoBuffer) return Promise.resolve();
+  if (readyGoLoading) return readyGoLoading;
+  const c = getCtx();
+  if (!c) return Promise.resolve();
+  readyGoLoading = (async () => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const arr = await res.arrayBuffer();
+      readyGoBuffer = await c.decodeAudioData(arr);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[sfx] preloadReadyGoSample failed', e);
+    }
+  })();
+  return readyGoLoading;
+}
+
 // v4.928：cleanup — 頁面切換時釋放資源
 export function closeAudio(): void {
   if (!ctx) return;
@@ -168,6 +199,8 @@ export function playSfx(name: SfxName, opts?: PlaySfxOpts): void {
   const c = getCtx();
   if (!c || !masterGain) return;
   if (muted) return;
+  // v4.929：切到背景頁籤時，依設定決定是否 mute（ready-go 也跟著走，給玩家統一控制）
+  if (!playWhenHidden && typeof document !== 'undefined' && document.hidden) return;
 
   // v4.928 throttle：同名音 100ms 內 skip
   const now = c.currentTime * 1000;
@@ -212,6 +245,7 @@ export function playSfx(name: SfxName, opts?: PlaySfxOpts): void {
     else if (name === 'victory-fanfare') playVictoryFanfare(c, gain, t);
     else if (name === 'game-win') playGameWin(c, gain, t);
     else if (name === 'game-lose') playGameLose(c, gain, t);
+    else if (name === 'ready-go') playReadyGo(c, gain, t);
     else if (name.startsWith('attack-')) {
       const etype = name.slice(7) as EnergyType;
       playAttack(c, gain, t, etype);
@@ -592,4 +626,22 @@ function playGameLose(c: AudioContext, out: GainNode, t: number): void {
   beep(c, out, t + 0.18, 349.23, 0.22, 'sine', 0.22); // F4
   beep(c, out, t + 0.36, 293.66, 0.22, 'sine', 0.22); // D4
   beep(c, out, t + 0.54, 261.63, 0.70, 'sawtooth', 0.18); // C4 sustain（sawtooth 更悲）
+}
+
+// ─ Ready Go（對戰開始通知，sample-based） ─────────────────────────
+//   v4.929：使用預錄音檔 static/sounds/ready-go.wav。
+//   onMount 階段 preloadReadyGoSample() 已 cache 進 readyGoBuffer，
+//   第一次播放零延遲。若 buffer 未載完（極快進入對戰），降級 fallback：
+//   播 turn-start 三音琶音當代替（玩家仍能聽到通知）。
+function playReadyGo(c: AudioContext, out: GainNode, t: number): void {
+  if (!readyGoBuffer) {
+    // fallback：用三音琶音當作 ready-go 提醒
+    playTurnStart(c, out, t);
+    return;
+  }
+  const src = c.createBufferSource();
+  src.buffer = readyGoBuffer;
+  src.connect(out);
+  src.start(t);
+  trackNode(src);
 }

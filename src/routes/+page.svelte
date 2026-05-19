@@ -264,6 +264,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.929</span> 🔊 觀戰音效 + Ready Go 開戰通知 + 後台播放選項</summary>
+        <ul>
+          <li><b>玩家回報</b>：觀戰時聽不到音效；掛網等對手時不知道對戰已開始。</li>
+          <li><b>觀戰音效修補</b>：handleRoomUpdate 內 game state 變化時，自動偵測「換回合 / KO / 拿獎賞 / 抽牌 / 狀態 / 對局結束」等事件 → 播對應音效。觀戰者跟線上對手 action 同步來也都有音效（之前線上對戰收到對手 action 也漏音）。</li>
+          <li><b>Ready Go 開戰通知</b>：雙方都 FINISH_SETUP 進入 playing 階段時播 <code>ready-go.wav</code>（取代原 coin 音）— 即使瀏覽器頁籤切到背景也聽得到，讓掛網等對手的玩家用聽覺判斷對戰開始。</li>
+          <li><b>新設定</b>：音效面板加「畫面不在對戰中也有音效」勾選（預設打勾）— 取消後切到背景頁籤就 mute。</li>
+          <li><b>實作</b>：sfx.ts 加 sample-based 音效（fetch + decodeAudioData）、playWhenHidden gate；preload 在 onMount 階段背景載入，第一次播放零延遲。</li>
+          <li><b>Iron Rules</b>：Rule 1（changelog escape）/ Rule 4（tsc clean）/ Rule 11（Python pipeline）。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v4.928</span> 🎵 音效系統大改 — 紙牌質感升級</summary>
+        <ul>
+          <li><b>七個新音效</b>：進化（紙翻面+上升小琶音）/ 附能量（紙片落下+pluck）/ 特性發動（中頻 chime）/ 拿獎賞（紙抽出+上升二音）/ 拿最後一張獎賞（fanfare）/ 對局勝利（大調 5 音上升）/ 對局失敗（小調 4 音下降）。</li>
+          <li><b>音色 polish</b>：click 從 square 改 sine + 紙質 tick（不再電子刺感）；shuffle 從 10 burst 縮為 6 burst（500ms → 300ms）。</li>
+          <li><b>Stereo panning</b>：依 actor 自動偏左/右 — 線上對戰自己中央、對手偏右；本機 2P P1 偏左、P2 偏右。</li>
+          <li><b>系統升級</b>：100ms 同名音 throttle 防堆疊；32 個 oscillator 上限防 mobile 卡頓；closeAudio() 清資源；UI/SFX/狀態三條子 bus 獨立音量。</li>
+          <li><b>設定面板</b>：新增 3 條子音量 slider（操作音 / 戰鬥音 / 狀態音）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.925</span> 🔄 對戰演練頁跟帳號切換同步雲端牌組</summary>
         <ul>
           <li><b>玩家回報</b>：「⚔️ 開始對戰」頁面常常使用暫存區內容，沒讀到帳號最新狀態。例：A 帳號登入看到 A 牌組 → A 登出 + B 登入後仍顯示 A 牌組，必須跳回牌組編輯器才會更新。</li>

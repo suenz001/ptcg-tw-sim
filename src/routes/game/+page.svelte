@@ -60,13 +60,15 @@
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
   import { VERSION } from '$lib/version';
-  import { playSfx, closeAudio } from '$lib/audio/sfx';
+  import { playSfx, closeAudio, preloadReadyGoSample } from '$lib/audio/sfx';
   import { parseCoinFlipAnimationEvents } from '$lib/game/coinAnimation';
   import {
     loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume,
     // v4.928 sub-bus 音量
     saveUiVolume, saveSfxVolume, saveStatusVolume,
     getUiVolume, getSfxVolume, getStatusVolume,
+    // v4.929 playWhenHidden
+    savePlayWhenHidden, getPlayWhenHidden,
     getBgmTrack, setBgmTrack, getBgmVolume, setBgmVolume
   } from '$lib/audio/settings';
   // v2.284 Phase 1：手機直式 layout 元件 — 用條件 render 切換
@@ -2410,6 +2412,8 @@
   let uiVolume = $state(1.0);
   let sfxVolume = $state(1.0);
   let statusVolume = $state(1.0);
+  // v4.929 切到背景頁籤時是否仍播音（讓玩家用聽覺判斷對戰開始）
+  let playWhenHidden = $state(true);
   let bgmTrack = $state('none');
   let bgmVolume = $state(0.5);
   let bgmAudioEl: HTMLAudioElement | null = $state(null);
@@ -2441,6 +2445,9 @@
     uiVolume = getUiVolume();
     sfxVolume = getSfxVolume();
     statusVolume = getStatusVolume();
+    // v4.929 playWhenHidden + preload ready-go.wav
+    playWhenHidden = getPlayWhenHidden();
+    preloadReadyGoSample(`${base}/sounds/ready-go.wav`);
     bgmTrack = getBgmTrack();
     bgmVolume = getBgmVolume();
     // 匿名登入（線上對戰需要）— v4.924 改用 Firebase + Oracle 並行：
@@ -3689,6 +3696,13 @@
       //   重抽懲罰補抽 modal、雙端不一致）。
       //   修法：先比對 game.id；不同就全套用 incoming（採用 firestore winner 版本），
       //   讓本地完全接受 server-authoritative state，再讓後續操作走 setup merge。
+      // v4.929 觀戰/線上對手 action 來時播 state-diff 音效
+      //   玩家自己 dispatch 已透過 dispatchSfxForAction 播；handleRoomUpdate 收到的 incoming
+      //   通常是「對手 action sync 回來」（或觀戰時所有人都收 sync）。state-diff 比對抓
+      //   核心事件：turn-start / KO / status / 拿獎賞 / 抽牌 / 對局結束。
+      if (game && incoming && game.id === incoming.id) {
+        try { detectSpectatorStateDiffSfx(game, incoming); } catch { /* sfx 不影響遊戲 */ }
+      }
       if (game && game.id !== incoming.id) {
         console.log('[Online] adopting firestore gameState (createGame race resolved):',
           { localId: game.id, incomingId: incoming.id });
@@ -4333,7 +4347,7 @@
           if (((action as any).count ?? 0) > 0) playSfx('draw', { pan });
           break;
         case 'FINISH_SETUP':
-          if (prev.phase === 'setup' && next.phase === 'playing') playSfx('coin');
+          if (prev.phase === 'setup' && next.phase === 'playing') playSfx('ready-go');  // v4.929 對戰開始通知
           else playSfx('click', { pan });
           break;
         // v4.928: 紙牌質感拆音
@@ -4422,6 +4436,43 @@
       }
     } catch {
       // 音效失敗不影響遊戲
+    }
+  }
+
+  // v4.929：觀戰 + 線上對手 action 來時，state-diff 偵測核心事件並播音
+  function detectSpectatorStateDiffSfx(prev: GameState, next: GameState): void {
+    // 換回合
+    if (prev.activePlayerIndex !== next.activePlayerIndex && next.phase === 'playing') {
+      playSfx('turn-start');
+    }
+    // KO + status（重用既有偵測）
+    detectStatusAndKOSfx(prev, next);
+    // 對局結束
+    if (prev.phase !== 'game-over' && next.phase === 'game-over'
+        && next.winner !== null && next.winner !== undefined) {
+      const winnerIdx = next.winner;
+      const isLocalWin = (() => {
+        if (mode === 'online' && myPlayerIndex !== null) return myPlayerIndex === winnerIdx;
+        if (aiPlayerIndex !== null) return aiPlayerIndex !== winnerIdx;
+        return true;
+      })();
+      setTimeout(() => playSfx(isLocalWin ? 'game-win' : 'game-lose'), 300);
+    }
+    // 拿獎賞（prizes 數量減少）+ 抽牌（hand 增加）
+    for (const idx of [0, 1] as const) {
+      const prevPrz = prev.players[idx]?.prizes?.length ?? 6;
+      const nextPrz = next.players[idx]?.prizes?.length ?? 6;
+      if (nextPrz < prevPrz) {
+        const opp = (1 - idx) as 0 | 1;
+        const pan = panForActor(opp);
+        if (nextPrz === 0) playSfx('victory-fanfare', { pan });
+        else playSfx('prize-take', { pan });
+      }
+      const prevHand = prev.players[idx]?.hand?.length ?? 0;
+      const nextHand = next.players[idx]?.hand?.length ?? 0;
+      if (nextHand > prevHand) {
+        playSfx('draw', { pan: panForActor(idx as 0 | 1) });
+      }
     }
   }
 
@@ -6957,6 +7008,12 @@
               <label for="status-vol">狀態音（中毒/灼傷）：</label>
               <input id="status-vol" type="range" min="0" max="1" step="0.05" value={statusVolume} oninput={(e) => { statusVolume = parseFloat(e.currentTarget.value); saveStatusVolume(statusVolume); }} />
               <span class="vol-text">{Math.round(statusVolume * 100)}%</span>
+            </div>
+            <!-- v4.929 切到背景頁籤時是否仍播音 -->
+            <div class="setting-row">
+              <label for="play-hidden">畫面不在對戰中也有音效：</label>
+              <input id="play-hidden" type="checkbox" checked={playWhenHidden} onchange={(e) => { playWhenHidden = e.currentTarget.checked; savePlayWhenHidden(playWhenHidden); }} />
+              <span class="small" style="color:#9aa3b0">（讓你聽 ready go 知道對戰開始）</span>
             </div>
           {/if}
         </div>

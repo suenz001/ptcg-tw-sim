@@ -7,6 +7,7 @@ import {
   setMasterVolume, setMuted, getMasterVolume, isMuted,
   setUiVolume, setSfxVolume, setStatusVolume,
   getUiVolume, getSfxVolume, getStatusVolume,
+  setPlayWhenHidden, getPlayWhenHidden,
 } from './sfx';
 
 const KEY_VOLUME = 'ptcg.audio.volume';
@@ -17,6 +18,8 @@ const KEY_BGM_VOLUME = 'ptcg.audio.bgm.volume';
 const KEY_UI_VOLUME = 'ptcg.audio.ui.volume';
 const KEY_SFX_VOLUME = 'ptcg.audio.sfx.volume';
 const KEY_STATUS_VOLUME = 'ptcg.audio.status.volume';
+// v4.929：切到背景頁籤時是否仍播音
+const KEY_PLAY_WHEN_HIDDEN = 'ptcg.audio.playWhenHidden';
 
 // Svelte store/state can't be easily shared here without Svelte 5 runes context,
 // so we'll just export plain getters/setters for BGM that localStorage reads.
@@ -38,6 +41,9 @@ export function loadAudioPrefs(): void {
     if (sfxRaw !== null) { const v = parseFloat(sfxRaw); if (!Number.isNaN(v)) setSfxVolume(v); }
     const stRaw = localStorage.getItem(KEY_STATUS_VOLUME);
     if (stRaw !== null) { const v = parseFloat(stRaw); if (!Number.isNaN(v)) setStatusVolume(v); }
+    // v4.929 載入 playWhenHidden
+    const hRaw = localStorage.getItem(KEY_PLAY_WHEN_HIDDEN);
+    if (hRaw !== null) setPlayWhenHidden(hRaw === '1');
   } catch { /* quota / privacy mode — ignore */ }
 }
 
@@ -94,4 +100,10 @@ export function saveStatusVolume(v: number): void {
   try { localStorage.setItem(KEY_STATUS_VOLUME, String(getStatusVolume())); } catch { /* */ }
 }
 
-export { isMuted, getMasterVolume, getUiVolume, getSfxVolume, getStatusVolume };
+// v4.929：playWhenHidden save
+export function savePlayWhenHidden(v: boolean): void {
+  setPlayWhenHidden(v);
+  try { localStorage.setItem(KEY_PLAY_WHEN_HIDDEN, v ? '1' : '0'); } catch { /* */ }
+}
+
+export { isMuted, getMasterVolume, getUiVolume, getSfxVolume, getStatusVolume, getPlayWhenHidden };
