@@ -2217,6 +2217,76 @@ regR('m5-mirieton-photon-code', (state, aIdx, iids, params, pool) => {
 // 剩餘 deferred：化石卡 (古老的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈 / 重試徽章)
 // ════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 8g (v4.895) — 化石卡組（古老的頭蓋/盾牌化石 + 化石採掘場 Stadium）
+//
+// 1. 古老的頭蓋化石（Item）— FOSSIL_ITEM_NAMES 加入；走既有 PLAY_FOSSIL 路徑
+//    （直接從手牌 → 備戰，視為 HP60【無】Basic 寶可夢）
+// 2. 古老的盾牌化石（Item）— 同上
+// 3. 化石採掘場（Stadium）— 每回合 1 次，從牌庫搜尋 ≤2 張「古老的」物品卡放備戰
+//    引擎：engine.ts USE_STADIUM 加 '化石採掘場' branch；本檔 regR 實際移動 + 設 fossil flag。
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── m5-fossil-excavation resolver — 化石採掘場 deck-search 確認後 ────────
+//   iids: 玩家選中的化石 Item iids（≤2）
+//   流程：
+//     1. 從 deck 找出對應 iids 的卡（已通過 'NameContains:古老的' filter）
+//     2. 再次驗證 supertype=Trainer && subtype=Item（保險）
+//     3. 為每張卡產生 fossil bench inst（fossilOnField=true）
+//     4. 從 deck 移除選中的，重洗 deck，加入 bench
+//   注意：bench 上限 check 已在 USE_STADIUM 階段過濾（slots = benchLimit - bench.length）
+//         所以這裡假設 iids.length ≤ slots（不再 double-check）
+regR('m5-fossil-excavation', (state, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) {
+    // Rule 14：玩家可跳過（minCount=0）。牌庫仍需重洗（卡面：「然後重洗牌庫」）
+    return updatePlayer(
+      addLog(state, '化石採掘場：玩家未選擇化石（跳過），仍重洗牌庫', aIdx),
+      aIdx,
+      p => ({ ...p, deck: shuffle(p.deck) }),
+    );
+  }
+  const p = state.players[aIdx];
+  const chosen = p.deck.filter(c => iids.includes(c.iid));
+  // double-check：必須為 Item 且名稱含「古老的」（防 picker filter 異常）
+  const validChosen = chosen.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Trainer'
+      && card?.subtype === 'Item'
+      && (card?.name?.includes('古老的') ?? false);
+  });
+  if (validChosen.length === 0) {
+    return updatePlayer(
+      addLog(state, '化石採掘場：選中的卡不符合條件（非「古老的」物品卡），重洗牌庫', aIdx),
+      aIdx,
+      pl => ({ ...pl, deck: shuffle(pl.deck) }),
+    );
+  }
+  const fossilNames = validChosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  // 轉成 fossil bench inst（fossilOnField=true，justPlaced 同 PLAY_FOSSIL handler）
+  const fossilInsts = validChosen.map(c => ({
+    ...c,
+    fossilOnField: true,
+    justPlaced: true,
+    playedFromHand: false,  // 從牌庫，非手牌出
+  }));
+  const remainingDeck = p.deck.filter(c => !iids.includes(c.iid));
+  let s = addLog(state,
+    `化石採掘場：從牌庫放置 ${validChosen.length} 張「${fossilNames}」到備戰區（HP60／【無】），然後重洗牌庫`,
+    aIdx);
+  return updatePlayer(s, aIdx, pl => ({
+    ...pl,
+    deck: shuffle(remainingDeck),
+    bench: [...pl.bench, ...fossilInsts],
+  }));
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 8g 結束。化石卡組 3 張完整實裝。
+// 累計：82 (P1-8f) + 2 fossil items + 1 stadium = 85 個項目
+// 剩餘 deferred：工具卡（豪華炸彈 on-damaged retaliation / 重試徽章 coin re-roll
+//   — 兩者皆需 engine 級新 hook）。
+// ════════════════════════════════════════════════════════════════════════════
+
 
 
 

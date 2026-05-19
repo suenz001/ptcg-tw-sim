@@ -264,6 +264,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.895</span> 🦴 M5 Phase 8g — 化石卡組（3 張）</summary>
+        <ul>
+          <li><b>實裝 3 張 deferred</b>：累計 82 → <b>85 effect / 81 張卡</b>。</li>
+          <li><b>古老的頭蓋化石 / 古老的盾牌化石</b>（Item）：
+            <ul>
+              <li>加入 <code>engine.ts FOSSIL_ITEM_NAMES</code> Set + <code>items_misc.ts FOSSIL_NAMES_LOCAL</code>。</li>
+              <li>從手牌走既有 <code>PLAY_FOSSIL</code> 路徑放備戰，視為 HP60／【無】／Basic 寶可夢。</li>
+              <li>規則：無法撤退、無法附能量、不受弱抗影響、可主動丟棄（不算昏厥）。</li>
+              <li>從化石進化：<b>頭蓋龍 ← 古老的頭蓋化石</b>，<b>盾甲龍 ← 古老的盾牌化石</b>（evolvesFrom 已於 v4.875 設妥）。</li>
+            </ul>
+          </li>
+          <li><b>化石採掘場</b>（Stadium，雙方每回合 1 次）：
+            <ul>
+              <li>卡面：「雙方玩家在每個自己的回合中可使用 1 次，從自己的牌庫選擇最多 2 張名稱含有『古老的』的物品卡，放置於備戰區。然後重洗牌庫。」</li>
+              <li><code>engine.ts USE_STADIUM</code> 加 &apos;化石採掘場&apos; branch — gate 備戰區未滿 + 牌庫非空，開 <code>deck-search</code> picker（filter <code>NameContains:古老的</code>，maxCount = min(2, slots)）。</li>
+              <li><code>m5_preview.ts regR(&apos;m5-fossil-excavation&apos;)</code> resolver — 選中的化石 Item 從牌庫移除，產生 <code>fossilOnField=true</code> 的 bench inst，重洗牌庫。</li>
+              <li>遵守 Rule 14：玩家可選 0 張跳過（minCount=0），但仍重洗牌庫（卡面明文「然後重洗牌庫」）。</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 7（嚴禁簡化 — 走完整 deck-search picker + resolver，無「自動挑」）/ Rule 11（engine.ts ~7300 行、items_misc.ts、m5_preview.ts、+page.svelte 全走 Python pipeline）/ Rule 14（牌庫無候選仍開 picker，玩家可揭示牌庫資訊）/ Rule 4（tsc 驗證）。</li>
+          <li><b>剩餘 deferred</b>：工具卡（<b>豪華炸彈</b> — 240+ Mega-ex 傷害反擊 12 指示物 / <b>重試徽章</b> — 無屬性寶可夢擲幣可重擲）。兩者皆需 engine 級新 hook（on-damaged retaliation + coin re-roll mechanism）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.894</span> 🔧 修 故勒頓｜輪番狂攻 簡化實裝（違反 Rule 7）</summary>
         <ul>
           <li><b>Bug 報告</b>：玩家發現 log「輪番狂攻：自方有 4 隻古代寶可夢（簡化視為已用招式） → 30+150 = 180」— 違反 Rule 7（嚴禁簡化實裝）。</li>
