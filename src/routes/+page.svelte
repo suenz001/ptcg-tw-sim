@@ -264,6 +264,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.871</span> 🔧 修閃電 / 暗影惡能量：屬性 filter 校正</summary>
+        <ul>
+          <li><b>卡面校正（中譯精準化）</b>：M5.json 兩張特殊能量 rulesText 補上漏譯的屬性 filter：
+            <ul>
+              <li><b>閃電能量</b>：「作為 1 個能量發揮作用」→「作為 <b>1 個雷能量</b>使用」；「附有這張卡的寶可夢」→「附有這張卡的<b>雷屬性寶可夢</b>」</li>
+              <li><b>暗影惡能量</b>：「作為 1 個能量發揮作用」→「作為 <b>1 個惡能量</b>使用」；「附有這張卡的寶可夢」→「附有這張卡的<b>惡屬性寶可夢</b>」</li>
+            </ul>
+          </li>
+          <li><b>行為修正</b>：
+            <ul>
+              <li><b>閃電能量 +20</b>：之前任何寶可夢附了都觸發；現只有 <code>attackerCard.pokemonType === &apos;Lightning&apos;</code> 才 +20。engine.ts inline check 加 gate。</li>
+              <li><b>暗影惡能量備戰免疫</b>：之前任何寶可夢附了在備戰位都擋傷害；現只有 <code>targetCard?.pokemonType === &apos;Darkness&apos;</code> 才擋。defense.ts canApplyEffectToTarget 1c 加 gate。</li>
+            </ul>
+          </li>
+          <li><b>影響</b>：非雷 / 非惡屬性寶可夢附這兩張特殊能量已不會誤觸發效果（規則正確）。對既有正確屬性主打牌組無變化。</li>
+          <li><b>遵守 Iron Rules</b>：Rule 11（M5.json + engine.ts + defense.ts 全走 Python pipeline）/ Rule 7c（依用戶提供的卡面原文校對，發現之前實裝漏譯屬性 filter，回頭核對 M5.json rulesText 也漏譯 → 同步校正）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.87</span> ⚡ M5 Phase 8a — 4 張卡 + 引擎擴充</summary>
         <ul>
           <li><b>實裝 4 張</b>：席多藍恩｜熔岩之壁、雷電獸｜閃光屏障、格拉吉歐的決戰（Supporter）、閃電能量（特殊能量）。累計 71 → <b>75</b> 個 effect / 81 張卡（~93% coverage）。</li>

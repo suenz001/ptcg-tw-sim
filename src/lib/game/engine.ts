@@ -3600,15 +3600,17 @@ function handlePlaying(
       formula.push({ sign: '+', value: 80, label: '格拉吉歐的決戰' });
     }
 
-    // v4.87 閃電能量（M5 特殊能量）— 附加者使用招式對對手戰鬥寶可夢 +20
+    // v4.87 閃電能量（M5 特殊能量）— 附加者為【雷】屬性寶可夢時 +20
+    //   卡面：「附有這張卡的雷屬性寶可夢使用招式對對手戰鬥寶可夢 +20」
+    //   v4.871 修正：加 attacker.pokemonType === 'Lightning' gate（非雷屬性附了不生效）
     //   iterate attacker.active.energyAttached → pool 名稱 '閃電能量' → +20
     //   多張附加只算 1 次（卡面無「每張」字樣）
-    if (baseDamage > 0) {
+    if (baseDamage > 0 && attackerCard.pokemonType === 'Lightning') {
       const hasLightningSE = attacker.active.energyAttached.some(e => pool.get(e.cardId)?.name === '閃電能量');
       if (hasLightningSE) {
         baseDamage += 20;
         workingState = addLog(workingState,
-          `${attackerCard.name} 招式傷害 +20（閃電能量加成）`, aIdx);
+          `${attackerCard.name} 招式傷害 +20（閃電能量加成，【雷】屬性）`, aIdx);
         formula.push({ sign: '+', value: 20, label: '閃電能量' });
       }
     }
