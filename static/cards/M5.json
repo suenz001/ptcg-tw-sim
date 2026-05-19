@@ -649,7 +649,7 @@
           "Colorless"
         ],
         "damage": "10＋",
-        "effect": "名稱含有「古老的」的自己備戰寶可夢張數 × 30 點，追加傷害。"
+        "effect": "名稱含有「陳舊的」的自己備戰寶可夢張數 × 30 點，追加傷害。"
       }
     ],
     "weakness": {
@@ -1768,7 +1768,7 @@
     ],
     "pokedexNumber": 408,
     "species": "頭錘寶可夢",
-    "evolvesFrom": "古老的頭蓋化石",
+    "evolvesFrom": "陳舊的頭蓋化石",
     "stage": "Stage1",
     "illustrator": "Hideki Ishikawa",
     "regulationMark": "M5"
@@ -2520,7 +2520,7 @@
     "stage": "Stage1",
     "illustrator": "Kurata So",
     "regulationMark": "M5",
-    "evolvesFrom": "古老的盾牌化石"
+    "evolvesFrom": "陳舊的盾牌化石"
   },
   {
     "id": "50279",
@@ -2995,7 +2995,7 @@
   },
   {
     "id": "50290",
-    "name": "古老的頭蓋化石",
+    "name": "陳舊的頭蓋化石",
     "supertype": "Trainer",
     "subtype": "Item",
     "setCode": "M5",
@@ -3010,7 +3010,7 @@
   },
   {
     "id": "50291",
-    "name": "古老的盾牌化石",
+    "name": "陳舊的盾牌化石",
     "supertype": "Trainer",
     "subtype": "Item",
     "setCode": "M5",
@@ -3117,7 +3117,7 @@
     "imageUrl": "https://www.pokemon-card.com/assets/images/card_images/large/M5/050298_T_KASEKISAIKUTSUJIXYOU.jpg",
     "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50298/regu/all",
     "scrapedAt": "2026-05-18T11:52:02.000Z",
-    "rulesText": "雙方玩家在每個自己的回合中可使用 1 次，從自己的牌庫選擇最多 2 張名稱含有「古老的」的物品卡，放置於備戰區。然後重洗牌庫。場地可在自己的回合放置 1 張於戰鬥場旁邊。當另一張場地進入場上時，將此卡丟棄。同名場地無法同時放置。",
+    "rulesText": "雙方玩家在每個自己的回合中可使用 1 次，從自己的牌庫選擇最多 2 張名稱含有「陳舊的」的物品卡，放置於備戰區。然後重洗牌庫。場地可在自己的回合放置 1 張於戰鬥場旁邊。當另一張場地進入場上時，將此卡丟棄。同名場地無法同時放置。",
     "illustrator": "Oswaldo KATO",
     "regulationMark": "M5"
   },

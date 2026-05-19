@@ -264,6 +264,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.896</span> 🔤 修化石卡翻譯：古老的 → 陳舊的</summary>
+        <ul>
+          <li><b>翻譯校正</b>：M5 的 2 張新化石（古老的頭蓋化石 / 古老的盾牌化石）原本誤譯，本版校正為「陳舊的」prefix，與既有 5 張化石（<b>陳舊的</b>根狀 / 背蓋 / 羽毛 / 顎之 / 鰭之化石）命名一致。</li>
+          <li><b>影響範圍</b>（全走 Python pipeline，多檔同步）：
+            <ul>
+              <li><code>M5.json</code>：2 張卡名 + 頭蓋龍 / 盾甲龍 evolvesFrom + 化石採掘場 rulesText + 古空棘魚 化石節拍 effect</li>
+              <li><code>engine.ts</code>：<code>FOSSIL_ITEM_NAMES</code> Set + <code>USE_STADIUM</code> 化石採掘場 branch（filter <code>NameContains:古老的</code> → <code>NameContains:陳舊的</code>）</li>
+              <li><code>items_misc.ts</code>：<code>FOSSIL_NAMES_LOCAL</code></li>
+              <li><code>m5_preview.ts</code>：化石節拍（<code>countSelfBenchByNameContains(&apos;古老的&apos;)</code> → <code>&apos;陳舊的&apos;</code>）+ regR resolver 內 double-check + log 字串</li>
+            </ul>
+          </li>
+          <li><b>一致性驗證</b>：
+            <ul>
+              <li>所有 <code>陳舊的</code> prefix 的卡皆為 Trainer/Item（無 Pokemon / Supporter 名稱含此 prefix），filter <code>NameContains:陳舊的</code> 不會誤抓。</li>
+              <li>化石採掘場 filter 改為 <code>陳舊的</code> 後，可以從牌庫搜尋全部 7 張化石（5 既有 + 2 新增），符合卡面「名稱含有『陳舊的』的物品卡」。</li>
+              <li>新 2 張化石走完全相同的 <code>PLAY_FOSSIL</code> / <code>fossilOnField</code> 路徑（HP60 / 【無】 / Basic，無撤退 / 不附能量 / 不弱抗 / 可主動丟棄）— 與既有 5 張機制完全一致。</li>
+              <li>化石節拍（古空棘魚）：原邏輯用 <code>countSelfBenchByNameContains</code> 計數備戰中名含「陳舊的」寶可夢 × 30 — 與所有 7 張化石都相容。</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 7c（依用戶提供的官方譯名校對；發現 JSON 原文也誤譯 → 同步校正 6 處：2 卡名、2 evolvesFrom、1 rulesText、1 attack effect）/ Rule 11（M5.json 用結構化 json.dumps；engine.ts ~7300 行、items_misc.ts、m5_preview.ts、+page.svelte 全走 Python pipeline）/ Rule 4（tsc 驗證）。</li>
+          <li><b>剩餘 deferred</b>：工具卡（豪華炸彈 / 重試徽章 — 需 engine 級新 hook）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.895</span> 🦴 M5 Phase 8g — 化石卡組（3 張）</summary>
         <ul>
           <li><b>實裝 3 張 deferred</b>：累計 82 → <b>85 effect / 81 張卡</b>。</li>

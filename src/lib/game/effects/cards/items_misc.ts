@@ -1785,10 +1785,11 @@ const FOSSIL_NAMES_LOCAL = [
   '陳舊的羽毛化石',
   '陳舊的顎之化石',
   '陳舊的鰭之化石',
-  // v4.895 / M5 — 古老的化石（透過 化石採掘場 從牌庫放到備戰；regG=false 阻擋
+  // v4.895 / M5 — 陳舊的頭蓋/盾牌化石（透過 化石採掘場 從牌庫放到備戰；regG=false 阻擋
   // PLAY_TRAINER 路徑使用，化石只能走 PLAY_FOSSIL 或 化石採掘場 resolver 路徑）
-  '古老的頭蓋化石',
-  '古老的盾牌化石',
+  // v4.896：原譯「古老的」校正為「陳舊的」與既有命名一致。
+  '陳舊的頭蓋化石',
+  '陳舊的盾牌化石',
 ];
 for (const name of FOSSIL_NAMES_LOCAL) {
   // 永遠 false：阻擋 Item 路徑（拖到 PLAY_TRAINER 不能用）

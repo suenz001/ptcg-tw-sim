@@ -197,7 +197,7 @@ regPost('超級龍頭地鼠ex|挖掘崩塌', millOppDeckTopPost(2, '挖掘崩塌
 // 完整對照（卡面 → 實裝細節）：
 //   A. 條件 +N PRE：
 //      紅蓮鎧騎|烈焰軍團（40+N×40，N=自方備戰有附能量數）
-//      古空棘魚|化石節拍（10+N×30，N=自方備戰名含「古老的」數）
+//      古空棘魚|化石節拍（10+N×30，N=自方備戰名含「陳舊的」數）
 //      海豚俠|正義之拳（80+200，當對手剩餘獎賞=1）
 //      呆殼獸|空空如也（50+160，當自方手牌=0）
 //      故勒頓|戰鬥利爪（30+30，當對手戰鬥位為進化）
@@ -256,13 +256,13 @@ regPre('紅蓮鎧騎|烈焰軍團', (state, aIdx) => {
   };
 });
 
-// ── 古空棘魚|化石節拍 — 10 + N×30（N=自方備戰中名含「古老的」數）
-//   卡面：「名稱含有『古老的』的自己備戰寶可夢張數 × 30 點，追加傷害。」
+// ── 古空棘魚|化石節拍 — 10 + N×30（N=自方備戰中名含「陳舊的」數）
+//   卡面：「名稱含有『陳舊的』的自己備戰寶可夢張數 × 30 點，追加傷害。」
 regPre('古空棘魚|化石節拍', (state, aIdx, pool) => {
-  const n = countSelfBenchByNameContains(state, aIdx, pool, '古老的');
+  const n = countSelfBenchByNameContains(state, aIdx, pool, '陳舊的');
   const dmg = 10 + n * 30;
   return {
-    state: addLog(state, `化石節拍：自方備戰「古老的」${n} 隻 → 10 + ${n}×30 = ${dmg}`, aIdx),
+    state: addLog(state, `化石節拍：自方備戰「陳舊的」${n} 隻 → 10 + ${n}×30 = ${dmg}`, aIdx),
     damage: dmg,
   };
 });
@@ -1274,7 +1274,7 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 //   - 護城龍|太鼓防壁 — 需 player-wide damage gate (對手能量 ≤2 時)
 //   - 超級水晶燈火靈ex|咒縛之炎 — 需動 engine retreat cost 計算
 //   - 格拉吉歐的決戰 — 需 player flag nonRuleAttackBonusThisTurn
-//   - 古老的頭蓋/盾牌化石 + 化石採掘場 — 需動既有化石機制 (v3.21) 擴充
+//   - 陳舊的頭蓋/盾牌化石 + 化石採掘場 — 需動既有化石機制 (v3.21) 擴充
 //   - 豪華炸彈、重試徽章 — 需新 tool hook
 //   - 閃電能量 — 需動既有 SPECIAL_ENERGY_TYPES + attack bonus hook
 // ════════════════════════════════════════════════════════════════════════════
@@ -1896,7 +1896,7 @@ reg('格拉吉歐的決戰', (st, idx) => {
 // Phase 8a 結束。
 // 累計：71 (P1-P7) + 2 immune regPost + 1 supporter reg + 閃電能量 = 75 個項目 / 81 張卡。
 // 剩餘 deferred (Phase 8b+)：咒縛之炎 / 太鼓防壁 / 蟲蟲恐慌 / 不朽之軀 / 光子密碼 /
-//   化石卡 (古老的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈/重試徽章) /
+//   化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈/重試徽章) /
 //   強烈之吻 / 招式竊賊
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -1976,7 +1976,7 @@ regPost('燒火蚣|蟲蟲恐慌', (state, aIdx, pool) => {
 // 累計：75 (P1-Phase8a) + 1 (Phase 8b 咒縛之炎) + 1 (不朽之軀) + 1 (蟲蟲恐慌)
 //      = 78 個項目 / 81 張卡（~96% coverage）。
 // 剩餘 deferred (Phase 8d+)：太鼓防壁 / 光子密碼 / 強烈之吻 / 招式竊賊 /
-//   化石卡 (古老的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈/重試徽章)。
+//   化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈/重試徽章)。
 // ════════════════════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2214,23 +2214,23 @@ regR('m5-mirieton-photon-code', (state, aIdx, iids, params, pool) => {
 // 累計：80 (P1-8e) + 1 (招式竊賊) + 1 (光子密碼) = 82 個項目（已超 81 張卡因部分卡有
 //   多 effect，例如 護城龍 既有招式 又有 太鼓防壁 特性都各算一個 effect 記）。
 // 81 張卡 effect coverage：80 → 81 → 完成（剩化石卡與工具卡兩組需要新引擎機制）。
-// 剩餘 deferred：化石卡 (古老的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈 / 重試徽章)
+// 剩餘 deferred：化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈 / 重試徽章)
 // ════════════════════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════════════════════════
-// Phase 8g (v4.895) — 化石卡組（古老的頭蓋/盾牌化石 + 化石採掘場 Stadium）
+// Phase 8g (v4.895) — 化石卡組（陳舊的頭蓋/盾牌化石 + 化石採掘場 Stadium）
 //
-// 1. 古老的頭蓋化石（Item）— FOSSIL_ITEM_NAMES 加入；走既有 PLAY_FOSSIL 路徑
+// 1. 陳舊的頭蓋化石（Item）— FOSSIL_ITEM_NAMES 加入；走既有 PLAY_FOSSIL 路徑
 //    （直接從手牌 → 備戰，視為 HP60【無】Basic 寶可夢）
-// 2. 古老的盾牌化石（Item）— 同上
-// 3. 化石採掘場（Stadium）— 每回合 1 次，從牌庫搜尋 ≤2 張「古老的」物品卡放備戰
+// 2. 陳舊的盾牌化石（Item）— 同上
+// 3. 化石採掘場（Stadium）— 每回合 1 次，從牌庫搜尋 ≤2 張「陳舊的」物品卡放備戰
 //    引擎：engine.ts USE_STADIUM 加 '化石採掘場' branch；本檔 regR 實際移動 + 設 fossil flag。
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── m5-fossil-excavation resolver — 化石採掘場 deck-search 確認後 ────────
 //   iids: 玩家選中的化石 Item iids（≤2）
 //   流程：
-//     1. 從 deck 找出對應 iids 的卡（已通過 'NameContains:古老的' filter）
+//     1. 從 deck 找出對應 iids 的卡（已通過 'NameContains:陳舊的' filter）
 //     2. 再次驗證 supertype=Trainer && subtype=Item（保險）
 //     3. 為每張卡產生 fossil bench inst（fossilOnField=true）
 //     4. 從 deck 移除選中的，重洗 deck，加入 bench
@@ -2247,16 +2247,16 @@ regR('m5-fossil-excavation', (state, aIdx, iids, _params, pool) => {
   }
   const p = state.players[aIdx];
   const chosen = p.deck.filter(c => iids.includes(c.iid));
-  // double-check：必須為 Item 且名稱含「古老的」（防 picker filter 異常）
+  // double-check：必須為 Item 且名稱含「陳舊的」（防 picker filter 異常）
   const validChosen = chosen.filter(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Trainer'
       && card?.subtype === 'Item'
-      && (card?.name?.includes('古老的') ?? false);
+      && (card?.name?.includes('陳舊的') ?? false);
   });
   if (validChosen.length === 0) {
     return updatePlayer(
-      addLog(state, '化石採掘場：選中的卡不符合條件（非「古老的」物品卡），重洗牌庫', aIdx),
+      addLog(state, '化石採掘場：選中的卡不符合條件（非「陳舊的」物品卡），重洗牌庫', aIdx),
       aIdx,
       pl => ({ ...pl, deck: shuffle(pl.deck) }),
     );

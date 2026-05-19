@@ -471,9 +471,11 @@ export const FOSSIL_ITEM_NAMES = new Set<string>([
   '陳舊的羽毛化石',
   '陳舊的顎之化石',
   '陳舊的鰭之化石',
-  // v4.895 / M5 — 古老的化石（透過 化石採掘場 Stadium 從牌庫放到備戰）
-  '古老的頭蓋化石',
-  '古老的盾牌化石',
+  // v4.895 / M5 — 陳舊的頭蓋/盾牌化石（透過 化石採掘場 Stadium 從牌庫放到備戰）
+  //   v4.896：原譯「古老的」校正為「陳舊的」與既有 5 張化石（陳舊的根狀/背蓋/羽毛/
+  //           顎之/鰭之化石）命名一致。
+  '陳舊的頭蓋化石',
+  '陳舊的盾牌化石',
 ]);
 
 export function isFossilItemCard(card: Card | undefined): boolean {
@@ -2684,7 +2686,8 @@ function handlePlaying(
       return addLog({ ...newState, players: updated }, `火箭隊的工廠：從牌庫抽 ${drawCount} 張`, aIdx);
     }
 
-    // v4.895 化石採掘場（M5）— 雙方每回合 1 次，從牌庫選 ≤2 張「古老的」物品卡放備戰，重洗
+    // v4.895 化石採掘場（M5）— 雙方每回合 1 次，從牌庫選 ≤2 張「陳舊的」物品卡放備戰，重洗
+    // v4.896：filter 由 '古老的' 校正為 '陳舊的'（與既有 5 張化石命名一致 — 7 張全找）
     if (stadiumCard.name === '化石採掘場') {
       const p = newState.players[aIdx];
       const benchLimit = getBenchLimit(newState, aIdx, pool);
@@ -2698,15 +2701,15 @@ function handlePlaying(
         return addLog({ ...state, stadiumUsedThisTurn: revert }, '化石採掘場：牌庫為空', aIdx);
       }
       const maxN = Math.min(2, slots);
-      // Rule 14：即使牌庫無「古老的」化石符合，仍開 picker（牌庫透露機制）
-      // resolver 端處理實際的「Item + name 含『古老的』」filter，並轉換為 fossil bench inst
+      // Rule 14：即使牌庫無「陳舊的」化石符合，仍開 picker（牌庫透露機制）
+      // resolver 端處理實際的「Item + name 含『陳舊的』」filter，並轉換為 fossil bench inst
       return {
         ...newState,
         pendingSelection: {
           type: 'deck-search',
           actorIdx: aIdx, sourcePlayerIdx: aIdx,
           minCount: 0, maxCount: maxN,
-          filter: 'NameContains:古老的',
+          filter: 'NameContains:陳舊的',
           effectKey: 'm5-fossil-excavation',
           params: {},
         },
