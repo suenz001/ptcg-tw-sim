@@ -264,6 +264,36 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.875</span> 🦴 M5 進化鏈補完 + Mega 規則統一</summary>
+        <ul>
+          <li><b>evolvesFrom 補齊（4 張）</b>：
+            <ul>
+              <li>烏賊王 ← 好啦魷（Inkay → Malamar）</li>
+              <li>禿鷹娜 ← 禿鷹丫頭（Vullaby → Mandibuzz）</li>
+              <li>頭蓋龍 ← <b>古老的頭蓋化石</b>（Cranidos 從化石進化）</li>
+              <li>盾甲龍 ← <b>古老的盾牌化石</b>（Shieldon 從化石進化）</li>
+            </ul>
+          </li>
+          <li><b>Mega 規則統一</b>：依用戶澄清「超級進化ex 位階等同同名非 Mega 寶可夢」（亦即和 regular ex 一樣 skip 同階非 Mega 直接從前階進化）：
+            <ul>
+              <li>超級龍頭地鼠ex（Stage1 Mega）: 龍頭地鼠ex → <b>螺釘地鼠</b>（與 龍頭地鼠 同階，從 Drilbur 進化）</li>
+              <li>超級水晶燈火靈ex（Stage2 Mega）: 水晶燈火靈ex → <b>燈火幽靈</b>（與 水晶燈火靈 同階，從 Lampent 進化）</li>
+            </ul>
+          </li>
+          <li><b>進化規則統一原則</b>（適用 ex / super-ex / Mega ex）：
+            <ul>
+              <li>ex 寶可夢的位階 ≡ 不帶 ex 同名寶可夢的位階</li>
+              <li>超級ex（Mega）寶可夢的位階 ≡ 不帶 ex 同名寶可夢的位階</li>
+              <li>進化來源 = 同階位寶可夢的相同前階</li>
+              <li>例：吼鯨王 / 吼鯨王ex 都從 吼吼鯨 進化（吼鯨王ex 不從 吼鯨王 進化）</li>
+              <li>例：龍頭地鼠 / 龍頭地鼠ex / 超級龍頭地鼠ex 都從 螺釘地鼠 進化</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 7c（用戶補充規則 → 同步修正之前 v4.873 對 Mega 的誤解：以為 Mega 從 regular ex 進化，正確應是從前階直接進化）/ Rule 11（M5.json 結構化 json.dumps）/ Rule 4（tsc 驗證）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.874</span> 🔤 M5 9 隻寶可夢翻譯校正 + 重試徽章卡面校正</summary>
         <ul>
           <li><b>9 隻寶可夢翻譯校正（台版正譯）</b>：

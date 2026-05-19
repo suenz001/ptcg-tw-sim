@@ -1528,7 +1528,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "水晶燈火靈ex",
+    "evolvesFrom": "燈火幽靈",
     "stage": "Stage2",
     "illustrator": "5ban Graphics",
     "regulationMark": "M5"
@@ -1768,7 +1768,7 @@
     ],
     "pokedexNumber": 408,
     "species": "頭錘寶可夢",
-    "evolvesFrom": "戰槌龍ex",
+    "evolvesFrom": "古老的頭蓋化石",
     "stage": "Stage1",
     "illustrator": "Hideki Ishikawa",
     "regulationMark": "M5"
@@ -2049,7 +2049,8 @@
     "species": "骨鷹寶可夢",
     "stage": "Stage1",
     "illustrator": "Nisota Niso",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "禿鷹丫頭"
   },
   {
     "id": "50268",
@@ -2137,7 +2138,8 @@
     "species": "逆轉寶可夢",
     "stage": "Stage1",
     "illustrator": "Naoki Saito",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "好啦魷"
   },
   {
     "id": "50270",
@@ -2517,7 +2519,8 @@
     "species": "盾牌寶可夢",
     "stage": "Stage1",
     "illustrator": "Kurata So",
-    "regulationMark": "M5"
+    "regulationMark": "M5",
+    "evolvesFrom": "古老的盾牌化石"
   },
   {
     "id": "50279",
@@ -2711,7 +2714,7 @@
       "Colorless",
       "Colorless"
     ],
-    "evolvesFrom": "龍頭地鼠ex",
+    "evolvesFrom": "螺釘地鼠",
     "stage": "Stage1",
     "illustrator": "Keisuke Azuma",
     "regulationMark": "M5"
