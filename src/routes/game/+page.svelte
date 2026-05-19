@@ -6961,8 +6961,8 @@
         <button class="zoom-close" onclick={() => showSettingsModal = false}>✕</button>
         <h3 class="settings-title">⚙️ 設定</h3>
         
-        <div class="settings-section">
-          <h4>🎵 背景音樂 (BGM)</h4>
+        <details class="settings-section" open>
+          <summary>🎵 背景音樂 (BGM)</summary>
           <div class="setting-row">
             <label for="bgm-select">選擇曲目：</label>
             <select id="bgm-select" value={bgmTrack} onchange={(e) => onBgmTrackChange(e.currentTarget.value)}>
@@ -6977,10 +6977,10 @@
               <span class="vol-text">{Math.round(bgmVolume * 100)}%</span>
             </div>
           {/if}
-        </div>
+        </details>
 
-        <div class="settings-section">
-          <h4>🔊 遊戲音效 (SFX)</h4>
+        <details class="settings-section" open>
+          <summary>🔊 遊戲音效 (SFX)</summary>
           <div class="setting-row">
             <label for="sfx-mute">音效開關：</label>
             <button id="sfx-mute" class="toggle-btn" onclick={onMuteToggle}>
@@ -7016,11 +7016,11 @@
               <span class="small" style="color:#9aa3b0">（讓你聽 ready go 知道對戰開始）</span>
             </div>
           {/if}
-        </div>
+        </details>
 
         <!-- v2.45 解析度模式 — 為 1024×576 等小螢幕玩家加 fit-to-window 縮放 -->
-        <div class="settings-section">
-          <h4>🖥️ 畫面縮放</h4>
+        <details class="settings-section" open>
+          <summary>🖥️ 畫面縮放</summary>
           <div class="setting-row">
             <label for="res-mode">解析度模式：</label>
             <select id="res-mode" value={resolutionMode} onchange={(e) => setResolutionMode(e.currentTarget.value as 'auto' | '100' | '90' | '80' | '75' | '70' | '65' | '60')}>
@@ -7039,12 +7039,12 @@
             <br/>・自動模式依視窗自動算（基準 1366×768）；1024×576 約落在 75%
             <br/>・若還是看到卡牌被切，可手動往下調 70% / 65% / 60%
           </div>
-        </div>
+        </details>
 
         <!-- v4.60 對局控制 -->
         {#if game && game.phase !== 'game-over'}
-        <div class="settings-section">
-          <h4>🎮 對局控制</h4>
+        <details class="settings-section" open>
+          <summary>🎮 對局控制</summary>
           <div class="setting-row">
             <button class="toggle-btn restart-game-btn"
                     onclick={handleProposeRestartButton}
@@ -7065,7 +7065,7 @@
               將清空目前盤面，從擲幣決定先攻重新開始
             {/if}
           </div>
-        </div>
+        </details>
         {/if}
       </div>
     </div>
@@ -8257,7 +8257,21 @@
 
   
   /* Settings Modal CSS */
-  .settings-modal { max-width: 500px; padding: 2rem; }
+  .settings-modal {
+    max-width: 500px;
+    max-height: 85vh;
+    padding: 2rem;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* v4.930 settings-section 改用 <details> 可摺疊 */
+  details.settings-section { margin-bottom: 1rem; background: rgba(0,0,0,0.2); padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid #2a4a2a; }
+  details.settings-section[open] { padding: 1rem; }
+  details.settings-section > summary { cursor: pointer; padding: 0.5rem 0; font-size: 1.05rem; font-weight: 600; color: #f0f0f0; list-style: none; user-select: none; display: flex; align-items: center; gap: 0.5rem; }
+  details.settings-section > summary::-webkit-details-marker { display: none; }
+  details.settings-section > summary::before { content: '▶'; font-size: 0.75rem; color: #aac; transition: transform 0.15s; display: inline-block; }
+  details.settings-section[open] > summary::before { transform: rotate(90deg); }
+  details.settings-section > summary:hover { color: #aaffaa; }
   .setting-hint { font-size: 0.78rem; color: #aac; margin-top: 0.4rem; padding-left: 0.5rem; }
 
   /* v2.45 解析度模式 — 用 CSS zoom 縮小整個 .battle-root */

@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.930</span> 🪟 設定面板可滑動 + 區塊可摺疊</summary>
+        <ul>
+          <li><b>玩家回報</b>：設定面板放太多東西又無法滑動/拖曳，看不到底部選項。</li>
+          <li><b>修法 1（滑動）</b>：<code>.settings-modal</code> 加 <code>max-height: 85vh</code> + <code>overflow-y: auto</code> + <code>-webkit-overflow-scrolling: touch</code>，桌機滑鼠滾輪、手機手指滑動都可。</li>
+          <li><b>修法 2（摺疊）</b>：4 個 settings 區塊改用 HTML <code>&lt;details&gt;</code> 元素，每個區塊預設展開、可點標題收起。瀏覽器原生支援，零 JS。</li>
+          <li><b>UX 細節</b>：摺疊箭頭 ▶ 用 CSS 旋轉表示開合，<code>summary:hover</code> 變綠色 highlight。</li>
+          <li><b>Iron Rules</b>：Rule 1（changelog escape）/ Rule 4（tsc clean — 純 CSS + HTML 標籤替換）/ Rule 11（Python pipeline）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.929</span> 🔊 觀戰音效 + Ready Go 開戰通知 + 後台播放選項</summary>
         <ul>
           <li><b>玩家回報</b>：觀戰時聽不到音效；掛網等對手時不知道對戰已開始。</li>
