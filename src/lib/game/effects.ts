@@ -12992,13 +12992,17 @@ export const PASSIVE_KO_RETALIATION = new Map<string, { counters: number }>([
   ['炸裂針', { counters: 6 }],
 ]);
 
-/** 受招式 KO 時的廣義 hook(不只放指示物) */
+/** 受招式 KO 時的廣義 hook(不只放指示物)
+ * v4.893：加 defenderInst?: CardInstance（KO 前的 instance 快照，含 energyAttached
+ *         / toolAttached / damage 等）。給需要讀取 KO 前狀態的特性（如 密勒頓 光子密碼）。
+ *         向後相容：舊 fn 簽名忽略此參數仍可運作。 */
 export type PassiveOnKoFn = (
   state: GameState,
   dIdx: 0 | 1,
   aIdx: 0 | 1,
   pool: Map<string, Card>,
   defenderCard: Card,
+  defenderInst?: CardInstance,
 ) => GameState;
 export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
   // 桃歹郎(I) | 最後鎖鏈 — 從牌庫任選 1 張加手 + 重洗
@@ -13036,6 +13040,45 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
   // 卡面：「進化時 + 被招式 KO 時，各可使用 1 次」— 此處為 KO 端，進化端走 regA。
   // PASSIVE_ON_KO 只在「被招式 KO」時觸發（engine 篩選），不會誤觸特性 KO。
   ['沙之羽擊', (state, dIdx, aIdx, pool, defCard) => desertDragonflyOnKo(state, dIdx, aIdx, pool, defCard)],
+
+  // v4.893 密勒頓(M5) | 光子密碼 — 在戰鬥場 KO 時，從身上基本能量最多 2 張改附給 1 隻備戰
+  // 卡面：「這隻寶可夢在戰鬥場受到對手寶可夢的招式傷害而【昏厥】時，從這隻寶可夢身上
+  //        附加的『基本能量』最多選擇 2 張，改附給 1 隻備戰寶可夢。」
+  // 注意：engine PASSIVE_ON_KO 呼叫時已在 KO sweep 後（active=null，能量已進 discard）。
+  //       透過 v4.893 擴充的 defenderInst 參數拿到 KO 前的快照，提取 basic 能量 iids。
+  //       資源（actual 移動）由 m5_preview.ts regR('m5-mirieton-photon-code') 完成。
+  // 限制（deferred enhancement）：當 N≥3 張 basic 能量時，目前 auto-pick 前 2 張；
+  //       玩家「選哪 2 張」之 UI picker 為 deferred。常見情況 N≤2 行為完全符合卡面。
+  ['光子密碼', (state, dIdx, _aIdx, pool, _defCard, defInst) => {
+    if (!defInst) return state;
+    const basicEnergyIids = defInst.energyAttached
+      .filter(e => {
+        const ec = pool.get(e.cardId);
+        return ec?.supertype === 'Energy' && ec?.subtype === 'Basic';
+      })
+      .map(e => e.iid);
+    if (basicEnergyIids.length === 0) {
+      return addLog(state, '光子密碼：身上無基本能量，效果不發動', dIdx);
+    }
+    const defPlayer = state.players[dIdx];
+    if (defPlayer.bench.length === 0) {
+      return addLog(state, '光子密碼：備戰區無寶可夢，效果不發動', dIdx);
+    }
+    const moveCount = Math.min(2, basicEnergyIids.length);
+    const willAutoPick = basicEnergyIids.length >= 3;
+    return withPending(
+      addLog(state,
+        `光子密碼：選 1 隻備戰寶可夢接收 ${moveCount} 張基本能量（或跳過）${willAutoPick ? '（注：≥3 張時自動取前 2 張，玩家選哪 2 張的 UI 為 deferred）' : ''}`,
+        dIdx),
+      {
+        type: 'bench-choose',
+        actorIdx: dIdx, sourcePlayerIdx: dIdx,
+        minCount: 0, maxCount: 1,
+        effectKey: 'm5-mirieton-photon-code',
+        params: { basicEnergyIids },
+      },
+    );
+  }],
 ]);
 
 /** 受招式傷害時的廣義 hook(造成 ≥1 傷害即觸發，不需 KO) */

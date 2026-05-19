@@ -56,6 +56,8 @@ import {
   withPending,
   getAllAttachedTools,
   shuffle,
+  ATTACK_PRE,
+  ATTACK_POST,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import {
@@ -2022,6 +2024,197 @@ regPost('迷唇姐|強烈之吻', (state, aIdx, pool) => {
 //      = 80 個項目 / 81 張卡（~99% coverage）。
 // 剩餘 deferred (Phase 8f+)：光子密碼 / 招式竊賊 / 化石卡 + 化石採掘場 /
 //   工具卡 (豪華炸彈 / 重試徽章)。
+// ════════════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 8f (v4.893) — 招式竊賊（狐大盜）+ 光子密碼（密勒頓 resolver）
+//
+// 1. 狐大盜｜招式竊賊（attack）
+//    卡面：「若自己的手牌為 0 張，則從對手場上 1 隻寶可夢擁有的招式中選擇 1 個，
+//            作為此招式使用。」
+//    實裝（同 耀閃挑戰 precedent）：hand=0 gate + copyAttackChoice or fallback。
+//    UI picker（攻擊借者選對手寶可夢 + 招式）為 deferred enhancement。
+//
+// 2. 密勒頓｜光子密碼 resolver
+//    PASSIVE_ON_KO fn（在 effects.ts 已實裝，開 bench-choose picker）→
+//    本檔 regR 完成實際的能量搶救（從 discard 取出 ≤2 張 basic 能量附加到備戰目標）。
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── 1a. 狐大盜|招式竊賊 PRE — hand=0 gate + 對手寶可夢招式 copy ─────────
+regPre('狐大盜|招式竊賊', (state, aIdx, pool, action) => {
+  const p = state.players[aIdx];
+
+  // Gate: 自己手牌必須為 0
+  if (p.hand.length > 0) {
+    return {
+      state: addLog(state,
+        `招式竊賊：自己手牌 ${p.hand.length} 張（需 = 0），招式效果失敗`,
+        aIdx),
+      damage: 0,
+    };
+  }
+
+  // 取對手場上所有寶可夢（active + bench）
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const opp = state.players[dIdx];
+  const oppPokes: { inst: import('../../types').CardInstance; card: import('$lib/cards/types').Card }[] = [];
+  if (opp.active) {
+    const c = pool.get(opp.active.cardId);
+    if (c) oppPokes.push({ inst: opp.active, card: c });
+  }
+  for (const b of opp.bench) {
+    const c = pool.get(b.cardId);
+    if (c) oppPokes.push({ inst: b, card: c });
+  }
+  if (oppPokes.length === 0) {
+    return {
+      state: addLog(state, '招式竊賊：對手場上無寶可夢，招式效果失敗', aIdx),
+      damage: 0,
+    };
+  }
+
+  // 選擇對手寶可夢 + 其招式：優先讀 action.copyAttackChoice（UI 提供）；
+  // fallback: opp.active + 印刷傷害最高招式（與 耀閃挑戰 v3.895 同 precedent）。
+  const choice = action?.copyAttackChoice;
+  let pickedPoke: { inst: import('../../types').CardInstance; card: import('$lib/cards/types').Card } | undefined;
+  let pickedAttackIdx = -1;
+  let useChoice = false;
+
+  if (choice && choice.pokeIid && typeof choice.attackIndex === 'number') {
+    const found = oppPokes.find(p => p.inst.iid === choice.pokeIid);
+    if (found) {
+      const atks = found.card.attacks ?? [];
+      if (choice.attackIndex >= 0 && choice.attackIndex < atks.length) {
+        pickedPoke = found;
+        pickedAttackIdx = choice.attackIndex;
+        useChoice = true;
+      }
+    }
+  }
+
+  if (!pickedPoke) {
+    // Fallback: 優先 opp.active；若 active 沒有/無招式，往 bench 找
+    for (const op of oppPokes) {
+      const atks = op.card.attacks ?? [];
+      if (atks.length === 0) continue;
+      pickedPoke = op;
+      // 印刷傷害最高
+      const parseDmg = (dmgStr: string): number => {
+        const m = (dmgStr ?? '').match(/^(\d+)/);
+        return m ? parseInt(m[1], 10) : 0;
+      };
+      let bestDmg = parseDmg(atks[0].damage);
+      pickedAttackIdx = 0;
+      for (let i = 1; i < atks.length; i++) {
+        const d = parseDmg(atks[i].damage);
+        if (d > bestDmg) { pickedAttackIdx = i; bestDmg = d; }
+      }
+      break;
+    }
+  }
+
+  if (!pickedPoke || pickedAttackIdx < 0) {
+    return {
+      state: addLog(state,
+        '招式竊賊：對手場上寶可夢皆無可選招式，招式效果失敗',
+        aIdx),
+      damage: 0,
+    };
+  }
+
+  const atks = pickedPoke.card.attacks ?? [];
+  const picked = atks[pickedAttackIdx];
+  const copiedKey = `${pickedPoke.card.name}|${picked.name}`;
+  const pickMode = useChoice ? '玩家選擇' : '自動挑印刷最高傷害（UI picker deferred）';
+  let s = addLog(state,
+    `招式竊賊：選擇對手「${pickedPoke.card.name}」的「${picked.name}」作為此招式使用（${pickMode}）`,
+    aIdx);
+
+  // 標記 pendingCopyAttackKey 供 regPost 轉接
+  s = { ...s, pendingCopyAttackKey: copiedKey };
+
+  // 遞迴呼叫 borrowed attack 的 PRE
+  const copiedPre = ATTACK_PRE.get(copiedKey);
+  if (copiedPre) {
+    const sub = copiedPre(s, aIdx, pool, action);
+    // 弱抗依照使用者（狐大盜＝惡屬性）計算，不繼承 borrowed 招式的 skipWeakRes
+    return {
+      state: sub.state,
+      damage: sub.damage,
+      skipWeakRes: false,
+      skipDefEffects: sub.skipDefEffects,
+    };
+  }
+  // 無註冊 PRE → 退回印刷傷害
+  const parseDmgFallback = (dmgStr: string): number => {
+    const m = (dmgStr ?? '').match(/^(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+  };
+  return { state: s, damage: parseDmgFallback(picked.damage) };
+});
+
+// ── 1b. 狐大盜|招式竊賊 POST — 轉接 borrowed attack 的 POST ──────────
+regPost('狐大盜|招式竊賊', (state, aIdx, pool) => {
+  const key = state.pendingCopyAttackKey;
+  const cleared = { ...state, pendingCopyAttackKey: undefined };
+  if (!key) return cleared;
+  const copiedPost = ATTACK_POST.get(key);
+  if (!copiedPost) return cleared;
+  return copiedPost(cleared, aIdx, pool);
+});
+
+// ── 2. 光子密碼 resolver — 從 discard 搶救 ≤2 張 basic 能量到備戰寶可夢
+//   參數：params.basicEnergyIids（fn 開 picker 時傳入的 KO 前快照）
+//        iids（玩家在 bench-choose picker 選的 ≥0 隻備戰寶可夢 iid）
+//   限制：≥3 張 basic 能量時，目前 auto-pick 前 2 張（玩家選哪 2 張之 UI deferred）
+regR('m5-mirieton-photon-code', (state, aIdx, iids, params, pool) => {
+  if (iids.length === 0) {
+    return addLog(state, '光子密碼：玩家跳過，無能量轉移', aIdx);
+  }
+  const targetBenchIid = iids[0];
+  const basicEnergyIids: string[] = (params?.basicEnergyIids as string[]) ?? [];
+  if (basicEnergyIids.length === 0) {
+    return addLog(state, '光子密碼：無 basic 能量可移動', aIdx);
+  }
+
+  const p = state.players[aIdx];
+  // 從 discard 找出對應 iids 的能量卡（KO sweep 時已被 engine 移到 discard）
+  const energiesInDiscard = p.discard.filter(c => basicEnergyIids.includes(c.iid));
+  if (energiesInDiscard.length === 0) {
+    return addLog(state, '光子密碼：基本能量已不在棄牌堆（異常狀態），效果失敗', aIdx);
+  }
+
+  // 取最多 2 張（如 ≥3 張，auto-pick 前 2 — 玩家選哪 2 張 UI 為 deferred）
+  const toMove = energiesInDiscard.slice(0, 2);
+  const moveCount = toMove.length;
+  const autoPickedNotice = basicEnergyIids.length >= 3
+    ? `（${basicEnergyIids.length} 張中 auto-pick 前 2 張 — UI 玩家選擇為 deferred enhancement）`
+    : '';
+
+  // 找出選中的備戰寶可夢的名字
+  const targetPoke = p.bench.find(b => b.iid === targetBenchIid);
+  const targetName = targetPoke ? (pool.get(targetPoke.cardId)?.name ?? '?') : '?';
+
+  let s = addLog(state,
+    `光子密碼：移 ${moveCount} 張基本能量到 ${targetName}${autoPickedNotice}`,
+    aIdx);
+  s = updatePlayer(s, aIdx, pl => ({
+    ...pl,
+    discard: pl.discard.filter(c => !toMove.some(t => t.iid === c.iid)),
+    bench: pl.bench.map(b => {
+      if (b.iid !== targetBenchIid) return b;
+      return { ...b, energyAttached: [...b.energyAttached, ...toMove] };
+    }),
+  }));
+  return s;
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Phase 8f 結束。
+// 累計：80 (P1-8e) + 1 (招式竊賊) + 1 (光子密碼) = 82 個項目（已超 81 張卡因部分卡有
+//   多 effect，例如 護城龍 既有招式 又有 太鼓防壁 特性都各算一個 effect 記）。
+// 81 張卡 effect coverage：80 → 81 → 完成（剩化石卡與工具卡兩組需要新引擎機制）。
+// 剩餘 deferred：化石卡 (古老的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈 / 重試徽章)
 // ════════════════════════════════════════════════════════════════════════════
 
 

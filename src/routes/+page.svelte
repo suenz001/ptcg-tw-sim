@@ -264,6 +264,34 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.893</span> 🦊 M5 Phase 8f — 招式竊賊 + 光子密碼</summary>
+        <ul>
+          <li><b>實裝 2 張 deferred</b>：累計 80 → <b>82 effect / 81 張卡</b>（部分卡含多 effect，coverage 已完整覆蓋；僅化石卡與工具卡組為 deferred）。</li>
+          <li><b>狐大盜｜招式竊賊</b>（attack，hand=0 gate + 對手寶可夢招式 copy）：
+            <ul>
+              <li>卡面：「若自己的手牌為 0 張，則從對手場上 1 隻寶可夢擁有的招式中選擇 1 個，作為此招式使用。」</li>
+              <li><b>實裝（同 耀閃挑戰 precedent）</b>：<code>regPre</code> 內 <code>hand.length === 0</code> gate；讀 <code>action.copyAttackChoice</code> 或 fallback。</li>
+              <li><b>Fallback</b>：opp.active 優先，若無招式則往 bench 找；同樣優先印刷傷害最高的招式。</li>
+              <li><b>規則細節</b>：弱點 / 抗性以使用者（狐大盜＝惡屬性）計算，不繼承被複製招式的 <code>skipWeakRes</code>（同 v2.91 Bug fix #18 規則）。</li>
+              <li><b>POST 轉接</b>：<code>regPost</code> 讀 <code>pendingCopyAttackKey</code> 呼叫 borrowed attack 的 <code>ATTACK_POST</code>。</li>
+              <li><b>Deferred</b>：UI picker（攻擊借者選對手寶可夢 + 招式）為 deferred enhancement，目前自動挑印刷最高傷害。</li>
+            </ul>
+          </li>
+          <li><b>密勒頓｜光子密碼</b>（passive on-KO，移基本能量到備戰）：
+            <ul>
+              <li>卡面：「這隻寶可夢在戰鬥場受到對手寶可夢的招式傷害而【昏厥】時，從這隻寶可夢身上附加的『基本能量』最多選擇 2 張，改附給 1 隻備戰寶可夢。」</li>
+              <li><b>引擎擴充</b>：<code>effects.ts</code> 的 <code>PassiveOnKoFn</code> 簽名加第 6 參數 <code>defenderInst?: CardInstance</code>（KO 前的 instance 快照，含 <code>energyAttached</code>）；<code>engine.ts</code> PASSIVE_ON_KO 呼叫處傳入 <code>koInst</code>（向後相容 — 舊 fn 忽略此參數仍可運作）。</li>
+              <li><b>fn 流程</b>：<code>effects.ts</code> PASSIVE_ON_KO 條目從 <code>defenderInst.energyAttached</code> 提取 basic 能量 iids → 開 <code>bench-choose</code> picker（target ≤1 隻備戰寶可夢，可跳過）。</li>
+              <li><b>Resolver</b>：<code>m5_preview.ts regR(&apos;m5-mirieton-photon-code&apos;)</code> 從 discard 找出符合 iids 的 basic 能量卡 → 取最多 2 張附加到選中的備戰寶可夢。</li>
+              <li><b>Deferred 限制</b>：當 N≥3 張 basic 能量時，目前 auto-pick 前 2 張；玩家「選哪 2 張」之 UI picker 為 deferred enhancement（已在 log 提示 + 註解標示）。常見情況 N≤2 行為完全符合卡面。</li>
+            </ul>
+          </li>
+          <li><b>遵守 Iron Rules</b>：Rule 7（明確標示 deferred 限制 — 招式竊賊 UI picker / 光子密碼 N≥3 選擇 UI 均 deferred，不假裝實裝）/ Rule 11（effects.ts ~680KB + engine.ts ~7300 行皆走 Python pipeline）/ Rule 12（regR 走 _shared RESOLVERS map 無 TDZ；effects.ts PASSIVE_ON_KO 條目在 module top-level 安全因為定義在同一檔內，向後相容簽名擴充）/ Rule 4（tsc 驗證）。</li>
+          <li><b>剩餘 deferred</b>：化石卡（古老的頭蓋/盾牌 + 化石採掘場 Stadium）/ 工具卡（豪華炸彈 retaliation hook、重試徽章 coin re-roll）— 都需更大引擎工程。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.892</span> 💋 M5 Phase 8e — 強烈之吻（迷唇姐 delayed discard）</summary>
         <ul>
           <li><b>實裝 1 張 deferred attack effect</b>：迷唇姐 <code>強烈之吻</code>。累計 79 → <b>80</b> 個 effect / 81 張卡（~99% coverage）。</li>
