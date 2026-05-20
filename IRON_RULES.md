@@ -559,6 +559,39 @@ return withPending(state, {
 玩家可藉此推測對手獎賞卡、規劃下回合策略。Short-circuit 移除此資訊揭露機會，違反 PTCG
 資訊揭露精神（同 Rule 8 揭示資訊規則的延伸）。
 
+**v4.942 強化 — `minCount: hasX ? 1 : 0` 是違規寫法**：
+
+```ts
+// ❌ 違規：牌庫有候選時 minCount=1 強迫玩家選 1 張
+const hasPoke = p.deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
+return withPending(state, {
+  type: 'deck-search', filter: 'Pokemon',
+  minCount: hasPoke ? 1 : 0,  // ← 違規！
+  maxCount: 1, ...
+});
+```
+
+玩家應**永遠**可以 Pass（minCount: 0）— 即使牌庫有符合 filter 的卡，玩家可能想：
+- 保留該卡在牌庫（避免被特定特性翻牌偷走）
+- 只是想看牌庫剩餘資訊推測對手獎賞
+- 戰術上不想此時拿那張卡
+
+**正確寫法**：
+```ts
+return withPending(state, {
+  type: 'deck-search', filter: 'Pokemon',
+  minCount: 0,  // ← 永遠 0
+  maxCount: 1, ...
+});
+```
+
+**Audit 工具**：
+```bash
+grep -rnE 'minCount:\s*has\w+\s*\?\s*1\s*:\s*0' src/lib/game/
+```
+應該零結果。若有 match，全部改 `minCount: 0`。
+
+
 **例外**：「棄牌區搜尋」類玩家本來就能看到棄牌堆（公開資訊），short-circuit return OK；
 但建議保持一致性，棄牌類也走 picker。「對手場上 / 對手能量」搜尋類則不適用（資訊封閉）。
 
@@ -779,6 +812,163 @@ grep -n "subtype === 'Item' &&" src/lib/game/engine.ts
 結果該列出 PLAY_TRAINER 的 `subtype === 'Item' && X` 條件。每條 X 都要對應一個 `if (X) return [];` 在 `getPlayableFossils()` 與一個 `if (X) return addLog(...)` 在 `PLAY_FOSSIL` handler。
 
 **為什麼這條獨立成鐵律**：v3.821 已修過一次（海之詛咒），但 audit 沒擴展到 cantPlayItemThisTurn / 威迫目光等其他 source — v4.936 再次踩坑。
+
+---
+
+## Rule 20: 「後攻玩家的最初回合」限定卡 gate 用 `state.turn === 1`，不要用 `!state.isFirstTurn`
+
+**背景**：v4.940 玩家回報 — 幫忙鈴（卡面「只可在後攻玩家的最初回合使用」）永遠不能用。
+
+**根因**：`state.isFirstTurn` 的語意 = **「先攻方第 1 動作回合」**，不是「對戰第 1 回合」。
+engine.ts:6260 在先攻方 `END_TURN` 時就把 `isFirstTurn` 設為 false。後攻方的第 1 動作回合
+開始時 `isFirstTurn` 已是 false → 用 `!state.isFirstTurn` gate 永遠 fail → 卡永遠不能用。
+
+**正確判定後攻方第 1 回合的方法**（同 engine.ts:2076-2078 註解）：
+
+```ts
+// state.turn 只在後攻方 END_TURN 才 +1，所以 turn === 1 同時涵蓋雙方第 1 動作回合
+regG('幫忙鈴', (st, idx, _pool) => {
+  if (st.turn !== 1) return false;  // 雙方第 1 動作回合
+  if (st.activePlayerIndex === st.firstPlayerIdx) return false;  // 排除先攻方
+  return st.players[idx].deck.length > 0;
+});
+```
+
+**禁止寫法**：
+```ts
+if (!st.isFirstTurn) return false;  // ❌ 後攻方第 1 動作回合 isFirstTurn 已是 false
+```
+
+**影響的卡（v4.940 已修）**：幫忙鈴、悠哉尾草棒。未來新增「後攻最初回合」限定卡務必用 `turn === 1`。
+
+**JSON 卡面關鍵字**：「**後攻玩家的最初回合**」/「**後攻方的最初回合**」/「**只可在後攻**」
+
+**Audit 工具**：
+```bash
+# JSON 找所有「後攻」+「最初回合」卡
+python3 -c "import json,glob
+for fp in glob.glob('static/cards/*.json'):
+    d=json.load(open(fp,encoding='utf-8'))
+    if not isinstance(d,list): continue
+    for c in d:
+        t=(c.get('rulesText') or '')
+        if '後攻' in t and '最初回合' in t:
+            print(c.get('name'),'|',c.get('setCode'))"
+
+# 找 src 內錯誤 gate
+grep -rn '!st.isFirstTurn\|!state.isFirstTurn' src/lib/game/effects/
+```
+結果每條都要對照卡面，若是「後攻最初回合」類就改 `state.turn !== 1`。
+
+---
+
+## Rule 21: peek-N-cards 機制必須用 `filter: 'X:TOP<digit>'` + `top<digit>Iids` 固定命名
+
+**背景**：v4.942 黑暗球（查看牌庫下方 7 張，從中選 1 張寶可夢）— 玩家回報 picker 沒列出 7 張中
+非寶可夢的卡。v4.940 我用 `filter: 'Pokemon:TOP_N'` + `params.topIids`（dynamic N） — 不符合既有
+UI 慣例導致功能失效。
+
+**根因**：picker UI 的「🔍 查看翻到的其他」collapsible block（`+page.svelte:6069`）用兩個固定慣例：
+
+1. **filter 正則** `/:TOP\d+$/` — 必須是 `:TOP` 後跟「**數字**」(`:TOP4` / `:TOP5` / `:TOP7` / `:TOP8`)，**不接受 `:TOP_N` / `:TOPN`**
+2. **params key** 必須是 `top4Iids` / `top6Iids` / `top7Iids` / `top8Iids` — 不接受 `topIids` / `peekIids` 等通用名稱
+
+**正確寫法（黑暗球範例）**：
+```ts
+// ✅ 用 spec'd N（即使可能 < 7，仍用 7 命名）+ top7Iids param key
+const bottom = st.players[idx].deck.slice(-Math.min(7, deckLen));
+return withPending(state, {
+  type: 'deck-search',
+  filter: 'Pokemon:TOP7',           // ← 固定 N，符合 :TOP<digit>$ 正則
+  minCount: 0, maxCount: 1,
+  effectKey: 'search-pokemon-to-hand',
+  params: {
+    top7Iids: bottom.map(c => c.iid),  // ← top7Iids 命名（即使內容是 bottom）
+    titleOverride: '...',
+  },
+});
+```
+
+**禁止寫法**：
+```ts
+filter: 'Pokemon:TOP_N',  // ❌ _N 不是數字，UI block 不觸發
+params: { topIids: ... }  // ❌ 通用 key，UI block 找不到
+```
+
+**例外**：杜若 / 拉普拉斯ex 的 `Pokemon:TOP_N` / `Energy:TOP_N` / `Trainer:TOP_N` / `Basic:TOP_N`
+  — 這些是 dynamic N 的「peek 後選擇」，刻意不顯示「翻到的其他」UI（卡面行為不同）。新卡若需要顯示
+  「翻到的其他」就用 spec'd N 命名；若刻意不顯示就保持 `:TOP_N`。
+
+**既有 spec'd N 範例可參考**：
+- 寶可裝置3.0: `Supporter:TOP7` + `top7Iids`
+- 配樂之笛: `Basic:TOP5` + `top5Iids`
+- 米立龍｜集客: `Supporter:TOP6` + `top6Iids`
+- 越橘的一步棋: `DarknessPokemon:TOP7` + `top7Iids`
+- 金屬怪: `BasicMetalEnergy:TOP4` + `top4Iids`
+- 捕蟲組合: `GrassBasicOrGrassEnergy:TOP7` + `top7Iids`
+- 黑暗球: `Pokemon:TOP7` + `top7Iids`（v4.942 加）
+
+---
+
+## Rule 22: 新增 deck-search filter 必須同步加 `+page.svelte:selectionItems` 對應 clause
+
+**背景**：v4.941 玩家回報 — 呱呱泡蛙「群聚」（從牌庫選最多 2 張「呱呱泡蛙」放備戰）picker 顯示
+**所有**基礎寶可夢，沒限定同名。
+
+**根因**：`deckSameNameBenchPost` helper 用 `filter: 'Basic'` + `params: { validIids, targetName }`，
+**期待** picker 端會用 `validIids` 過濾。但 `+page.svelte:1936` 的 `'Basic'` filter clause 只 check
+`isBasicPokemonCard(card)` — **沒讀 `params.validIids` 也沒讀 `params.targetName`** → 範圍限制完全失效。
+
+**規則**：新增（或客製化）任何 deck-search filter 時，**必須兩處同步**：
+
+1. `src/lib/game/effects/...` — `withPending({ type: 'deck-search', filter: '...', params: {...} })`
+2. `src/routes/game/+page.svelte:selectionItems` — `if (f === '...') { return src.deck.filter(...) }`
+
+**正確 pattern**：filter name 用獨特字串（如 `'Basic:SameName'`），picker 端讀 params 過濾。
+
+```ts
+// effects 端
+filter: 'Basic:SameName',
+params: { targetName: cardName, validIids: cand.map(c => c.iid) },
+
+// +page.svelte:selectionItems
+if (f === 'Basic:SameName') {
+  const targetName = pendingSelection.params?.targetName as string | undefined;
+  return src.deck.filter(c => {
+    const card = pool.get(c.cardId);
+    if (!card || !isBasicPokemonCard(card)) return false;
+    if (targetName && card.name !== targetName) return false;
+    return true;
+  });
+}
+```
+
+**禁止寫法**：
+```ts
+// ❌ 用通用 filter（'Basic' / 'Pokemon' / 'Energy' 等）+ 期待 params 過濾，但 picker 不讀
+filter: 'Basic',
+params: { validIids: ... }  // picker 'Basic' clause 沒讀這個！
+```
+
+**Resolver 端 defense-in-depth**：picker 雖然有過濾，但**惡意 client 可繞 UI 送任意 iid**
+（線上對戰安全考量）。Resolver 應再用 `params.targetName` / `validIids` 過濾一次：
+
+```ts
+regR('bench-basic-from-deck', (st, idx, iids, params, pool) => {
+  const targetName = params?.targetName as string | undefined;
+  let effIids = iids;
+  if (targetName) {
+    effIids = iids.filter(iid => {
+      const inst = st.players[idx].deck.find(c => c.iid === iid);
+      return inst && pool.get(inst.cardId)?.name === targetName;
+    });
+  }
+  // ... 使用 effIids 而非原始 iids
+});
+```
+
+**影響的卡（v4.941 已修）**：呱呱泡蛙｜群聚、強顎雞母蟲｜群聚、一家鼠｜家族行軍、蟲電寶｜並排 —
+  全用 `deckSameNameBenchPost` helper，改 filter 'Basic' → 'Basic:SameName' + picker clause。
 
 ---
 

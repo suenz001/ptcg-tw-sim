@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.943</span> 📖 把 v4.940-942 教訓寫進 IRON_RULES（Rule 20/21/22 + 強化 Rule 14）</summary>
+        <ul>
+          <li><b>目的</b>：把這三波 push 學到的踩坑經驗固化成內部鐵律，避免下次再犯。</li>
+          <li><b>Rule 20（新）</b>：「後攻最初回合」限定卡 gate 用 <code>state.turn === 1</code>，不要用 <code>!state.isFirstTurn</code>（後攻方第 1 動作回合 isFirstTurn 已被 engine 設成 false）。來源：v4.940 修幫忙鈴 / 悠哉尾草棒。</li>
+          <li><b>Rule 21（新）</b>：peek-N-cards 機制必須用 <code>filter: 'X:TOP&lt;digit&gt;'</code>（如 TOP7）+ <code>top&lt;digit&gt;Iids</code> 固定 param 名（如 top7Iids）—— UI 的「🔍 查看翻到的其他」collapsible block 用正則 <code>/:TOP\d+$/</code> 與固定 param key 名抓取。<code>TOP_N</code> / <code>topIids</code> 都不會被偵測。來源：v4.942 黑暗球。</li>
+          <li><b>Rule 22（新）</b>：新增 deck-search filter 必須**兩處同步**——effects 端塞 params + <code>+page.svelte:selectionItems</code> 加 picker clause 讀 params。否則 picker UI 不會用 params 過濾（顯示整個牌庫）。Resolver 端要加 defense-in-depth 防惡意 client。來源：v4.941 同名群聚。</li>
+          <li><b>Rule 14 強化</b>：明確列 <code>minCount: hasX ? 1 : 0</code> 為違規寫法 + audit 命令。玩家應永遠可以 Pass（minCount: 0），即使牌庫有候選。來源：v4.942 audit。</li>
+          <li><b>純內部文件更新</b>：不動任何遊戲邏輯，純粹寫教訓給未來自己 / 接手 AI 看。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 4（tsc clean — 純文件無需 tsc 但走流程）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.942</span> 🎯 全 audit 牌庫搜尋類允許「不選」(13 處) + 黑暗球顯示 7 張全部</summary>
         <ul>
           <li><b>玩家回報</b>：幫忙鈴 / 黑暗球 使用後玩家應可選擇不選（牌庫有候選時 picker 還是強制選 1 張）；黑暗球沒列出 7 張中非寶可夢的卡。</li>
