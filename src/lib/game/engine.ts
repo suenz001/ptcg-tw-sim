@@ -501,7 +501,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
-import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay } from './effects/_shared';
+import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink } from './effects/_shared';
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn } from './effects/_shared';
 import { canApplyEffectToTarget } from './defense';
 export { sameEvoName };
@@ -1748,7 +1748,7 @@ function sanityKOSweep(
       player.discard = [...player.discard, ...koDiscard];
       player.active = null;
       if (card) prizesAcc += prizesForKO(card);
-      s = addLog(s, `⚠️ 系統擊倒檢查：${card?.name ?? '?'} 被擊倒（戰鬥場，傷害 ${ko.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
+      s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(ko.iid, card?.name ?? '?')} 被擊倒（戰鬥場，傷害 ${ko.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack');
     }
@@ -1768,7 +1768,7 @@ function sanityKOSweep(
       ];
       player.discard = [...player.discard, ...koDiscard];
       if (card) prizesAcc += prizesForKO(card);
-      s = addLog(s, `⚠️ 系統擊倒檢查：${card?.name ?? '?'} 被擊倒（備戰位，傷害 ${b.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
+      s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(b.iid, card?.name ?? '?')} 被擊倒（備戰位，傷害 ${b.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack');
     } else {
@@ -2137,7 +2137,7 @@ function handlePlaying(
     players[aIdx] = attacker;
     let afterEvolve = addLog(
       { ...state, players },
-      `${attacker.name} 的 ${baseCard.name} 進化為 ${evoCard.name}！`,
+      `${attacker.name} 的 ${cardLink(evolved.iid, baseCard.name)} 進化為 ${cardLink(evolved.iid, evoCard.name)}！`,
       aIdx
     );
     // v2.320：自動提示「從手牌進化時」的特性（如龐克練肌、精神抽出等）
@@ -2350,7 +2350,7 @@ function handlePlaying(
     const newActiveCard = pool.get(newActive.cardId);
     let retreatState: GameState = addLog(
       { ...state, players },
-      `${attacker.name} 的 ${activeCard?.name ?? '?'} 撤退，${newActiveCard?.name ?? '?'} 上場！`,
+      `${attacker.name} 的 ${cardLink(retreatingPoke.iid, activeCard?.name ?? '?')} 撤退，${cardLink(newActive.iid, newActiveCard?.name ?? '?')} 上場！`,
       aIdx
     );
 
@@ -4679,9 +4679,9 @@ function handlePlaying(
         newState = addLog(newState, `「影藏」啟動：${attacker.name} 取得的獎勵牌減少 1 張`, null);
       }
       if (prizes > 0) {
-        newState = addLog(newState, `${defenderCard.name} 被擊倒！${attacker.name} 取得 ${prizes} 張獎勵牌。`, null);
+        newState = addLog(newState, `${cardLink(koInst?.iid, defenderCard.name)} 被擊倒！${attacker.name} 取得 ${prizes} 張獎勵牌。`, null);
       } else {
-        newState = addLog(newState, `${defenderCard.name} 被擊倒！但 ${attacker.name} 無法取得任何獎勵牌。`, null);
+        newState = addLog(newState, `${cardLink(koInst?.iid, defenderCard.name)} 被擊倒！但 ${attacker.name} 無法取得任何獎勵牌。`, null);
       }
 
       // 道具：被 KO 時觸發（希望護身符 / 沉重接力棒）— 阻礙之塔時失效

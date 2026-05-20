@@ -20,6 +20,13 @@
 export interface LogToken {
   cls: string;  // CSS class name；空字串 = 預設 .log-line 顏色；'log-card-link' = 可點按鈕
   text: string;
+  /**
+   * v4.934：marker-encoded instance id。若有值，UI 端 render log-card-link 按鈕時
+   * 用此 iid 直接定位 inst（取代/補強舊 sourceIid hint + 場上同名 fallback）。
+   * 產生方式：addLog 訊息內嵌 \uE100<iid>\uE101<displayName>\uE102 marker（PUA chars），
+   * tokenizer 第一輪掃描即將 marker 解出此欄；無 marker 的 log 此欄為 undefined。
+   */
+  iid?: string;
 }
 
 interface PatternRule {
@@ -71,7 +78,55 @@ interface Match {
  *        - 名稱長度 < 2 字一律忽略，避免吃到「水」「火」這類短匹配
  *        - 已是 bracket / damage / status 等 token 不再拆（卡名不會在【】內）
  */
+// v4.934：marker chars（PUA = Private Use Area，肉眼看不到、無 glyph、不撞既有字元）
+const MARKER_START = '\uE100';
+const MARKER_SEP   = '\uE101';
+const MARKER_END   = '\uE102';
+// 全域 regex：捕獲 iid（group 1）+ displayName（group 2）。iid/name 內不含 marker 字元。
+const MARKER_RE = /\uE100([^\uE100\uE101\uE102]+)\uE101([^\uE100\uE101\uE102]+)\uE102/g;
+
+/**
+ * v4.934：先把 marker 取出（高優先級），再對 marker 間純文字跑既有 RULES + cardNamesByLength 流程。
+ * marker 命中 → cls='log-card-link', iid=<marker iid>, text=<displayName>。
+ */
+function tokenizeWithMarkers(msg: string, cardNamesByLength?: string[]): LogToken[] {
+  // 找出所有 marker 位置
+  const markerHits: { start: number; end: number; iid: string; name: string }[] = [];
+  MARKER_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = MARKER_RE.exec(msg)) !== null) {
+    markerHits.push({ start: m.index, end: m.index + m[0].length, iid: m[1], name: m[2] });
+  }
+  if (markerHits.length === 0) {
+    // 無 marker → 純走舊路徑
+    return tokenizeRules(msg, cardNamesByLength);
+  }
+  // 有 marker → 切段：marker 前/後純文字走 RULES，marker 本身直接吐成 log-card-link token
+  const out: LogToken[] = [];
+  let cur = 0;
+  for (const h of markerHits) {
+    if (h.start > cur) {
+      out.push(...tokenizeRules(msg.slice(cur, h.start), cardNamesByLength));
+    }
+    out.push({ cls: 'log-card-link', text: h.name, iid: h.iid });
+    cur = h.end;
+  }
+  if (cur < msg.length) {
+    out.push(...tokenizeRules(msg.slice(cur), cardNamesByLength));
+  }
+  return out;
+}
+
+/**
+ * v4.934 重構：原 tokenizeLogMessage 主體拆出為 tokenizeRules（不處理 marker，只走 RULES + cardName scan）。
+ * tokenizeLogMessage 改 wrapper：先 marker 掃描，再 fallback 到此 fn 處理純文字段。
+ */
 export function tokenizeLogMessage(msg: string, cardNamesByLength?: string[]): LogToken[] {
+  if (!msg) return [];
+  return tokenizeWithMarkers(msg, cardNamesByLength);
+}
+
+function tokenizeRules(msg: string, cardNamesByLength?: string[]): LogToken[] {
   if (!msg) return [];
   const tokens: LogToken[] = [];
   let cursor = 0;

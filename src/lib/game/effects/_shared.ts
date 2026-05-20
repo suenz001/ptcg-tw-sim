@@ -638,6 +638,23 @@ export function updatePlayer(
   return { ...state, players };
 }
 
+/**
+ * v4.934：產生「卡名連結」marker 字串，用於 addLog 訊息內嵌精確 iid。
+ *   `${cardLink(inst.iid, card.name)} 被擊倒！` → 玩家點該卡名 button → 直接定位該 inst。
+ * 解決原本只用 string-match + sourceIid hint 在「同名多隻」場景對應錯誤的問題。
+ *
+ * 格式：\uE100<iid>\uE101<displayName>\uE102（PUA 字元，肉眼看不到）
+ * 由 log_format.ts MARKER_RE 解析。
+ *
+ * Edge cases：iid 或 displayName 缺則退回顯示 displayName（不產生 marker），確保
+ *   never break。
+ */
+export function cardLink(iid: string | undefined | null, displayName: string | undefined | null): string {
+  const name = displayName ?? '';
+  if (!iid || !name) return name;
+  return `\uE100${iid}\uE101${name}\uE102`;
+}
+
 export function addLog(
   state: GameState,
   msg: string,

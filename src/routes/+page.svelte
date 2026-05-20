@@ -264,6 +264,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.934</span> 🔍 Log 卡名點擊「同名多隻」精準對應（Phase 1 基礎設施）</summary>
+        <ul>
+          <li><b>現況</b>：戰鬥 log 卡名可點擊查看卡片詳情，但原本靠 string-match 加 sourceIid hint，場上同名多隻時（如雙方都有皮卡丘 / 備戰多隻同名）只能開「第一隻找到的」，不一定是 log 記載的那隻。</li>
+          <li><b>修法</b>：加 marker-based iid encoding 基礎設施 — addLog 訊息內可內嵌 <code>cardLink(iid, name)</code> helper 產生的 marker（U+E100/E101/E102 PUA 字元，肉眼看不到）。Log render 端的 tokenizer 優先解析 marker 取出精確 iid，點擊時直接定位該 instance。</li>
+          <li><b>本次遷移 6 個代表 call site</b>（全在 engine.ts）：
+            <ul>
+              <li>sanityKOSweep 戰鬥場 / 備戰被擊倒</li>
+              <li>EVOLVE 進化訊息</li>
+              <li>RETREAT 撚退訊息（撚退者 + 上場者兩個 iid）</li>
+              <li>ATTACK KO with prizes / no prizes 兩變體</li>
+            </ul>
+          </li>
+          <li><b>Backward-compat</b>：既有 log（未遷移的 ~3000+ call sites）仍走 string-match + cardNamesByLength + sourceIid hint 舊路徑，行為完全不變。Marker 解析失敗也 graceful degrade 為純文字 token。</li>
+          <li><b>下一階段</b>：後續版本遷移 T2 兩個 ATTACK damage log、USE_ABILITY 等；T3 effect resolver；T4 effects/cards/ 內随時伺機遷移。</li>
+          <li><b>Iron Rules</b>：Rule 1（escape）/ Rule 3（parent blob）/ Rule 4（tsc clean）/ Rule 11（Python pipeline）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.933</span> 🐉 修「多龍巴魯托ex 幻影奇襲 vs 手持循環扇」pending 覆蓋 bug</summary>
         <ul>
           <li><b>玩家回報</b>：多龍巴魯托ex 用招式「幻影奇襲」攻擊裝備「手持循環扇」的寶可夢，分配完 6 個傷害指示物後，挪動能量的效果不會出現。</li>
