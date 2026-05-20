@@ -24,6 +24,16 @@ import { coinStatusPost, flipCoinsWithLog, statusPost } from '../../effects';
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 從牌庫挑 ≤1 張寶可夢加手牌（簡化版進化搜尋）
+// v4.963: 基本能量 pokemonType=null fallback helper — 認屬性能量含 name【X】 fallback。
+function isEnergyOfType(ec: any, type: string): boolean {
+  if (!ec || ec.supertype !== 'Energy') return false;
+  if (ec.pokemonType === type) return true;
+  const m = (ec.name || '').match(/【(.+?)】/);
+  if (!m) return false;
+  const zh: Record<string, string> = { '草':'Grass','火':'Fire','水':'Water','雷':'Lightning','超':'Psychic','鬥':'Fighting','惡':'Darkness','鋼':'Metal','妖':'Fairy','龍':'Dragon','無':'Colorless' };
+  return zh[m[1]] === type;
+}
+
 function deckPickOnePokemonToHandPost(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const p = state.players[aIdx];
@@ -378,7 +388,7 @@ regPre('奇樹的霹靂電球|連鎖伏特', (state, aIdx, pool) => {
     const card = pool.get(c.cardId);
     if (!card?.name?.startsWith('奇樹的')) continue;
     for (const e of c.energyAttached) {
-      if (pool.get(e.cardId)?.pokemonType === 'Lightning') lightning++;
+      if (isEnergyOfType(pool.get(e.cardId), 'Lightning')) lightning++;
     }
   }
   const dmg = 20 + lightning * 20;

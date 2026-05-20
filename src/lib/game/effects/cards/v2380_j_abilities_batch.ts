@@ -41,15 +41,14 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 
-// v4.962：判斷一張能量卡是否「視為提供【水】能量」。
-//   scraper 對基本能量的 pokemonType 留 null（v3.731/v3.82 已知問題），
-//   strict `pokemonType==='Water'` 對基本【水】能量永遠 false → 白海獅沖刷誤判無法使用。
-//   加卡名【水】fallback：覆蓋基本【水】能量 + 泡沫【水】能量等。
-//   新衝天/稜鏡/古舊等「視為任意屬性」能量 name 不含【水】，保守不認（玩家回報再擴展）。
-function isWaterTypeEnergy(ec: Card | undefined): boolean {
+// v4.963: 基本能量 pokemonType=null fallback helper — 認屬性能量含 name【X】 fallback。
+function isEnergyOfType(ec: any, type: string): boolean {
   if (!ec || ec.supertype !== 'Energy') return false;
-  if (ec.pokemonType === 'Water') return true;
-  return /【水】/.test(ec.name || '');
+  if (ec.pokemonType === type) return true;
+  const m = (ec.name || '').match(/【(.+?)】/);
+  if (!m) return false;
+  const zh: Record<string, string> = { '草':'Grass','火':'Fire','水':'Water','雷':'Lightning','超':'Psychic','鬥':'Fighting','惡':'Darkness','鋼':'Metal','妖':'Fairy','龍':'Dragon','無':'Colorless' };
+  return zh[m[1]] === type;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -64,7 +63,7 @@ regAByName('白海獅', '沖刷', (st, idx, pool) => {
   for (const b of player.bench) {
     for (const e of b.energyAttached) {
       const ec = pool.get(e.cardId);
-      if (isWaterTypeEnergy(ec)) {
+      if (isEnergyOfType(ec, 'Water')) {
         sourcesWithWater.push({ iid: b.iid, energyIid: e.iid });
       }
     }
@@ -89,8 +88,8 @@ regR('walrein-rinse', (state, aIdx, iids, _params, pool) => {
   const src = player.bench.find(b => b.iid === sourceIid);
   if (!src) return state;
   // 取所有水能量
-  // v4.962：用 isWaterTypeEnergy helper（涵蓋基本【水】能量 pokemonType=null case）
-  const waterEnergies = src.energyAttached.filter(e => isWaterTypeEnergy(pool.get(e.cardId)));
+  // v4.963：用通用 isEnergyOfType helper
+  const waterEnergies = src.energyAttached.filter(e => isEnergyOfType(pool.get(e.cardId), 'Water'));
   if (waterEnergies.length === 0) return addLog(state, '沖刷：來源無【水】能量', aIdx);
   // v2.389 多張水能量 → modal-choice 讓玩家選 1 張；1 張 fast path
   if (waterEnergies.length > 1) {
@@ -397,7 +396,7 @@ regA('勾帕路翁ex', 0, (st, idx, pool, inst) => {
   // 找場上「自己其他寶可夢」身上的鋼能量
   const sources: string[] = [];
   for (const b of player.bench) {
-    if (b.energyAttached.some(e => pool.get(e.cardId)?.pokemonType === 'Metal')) {
+    if (b.energyAttached.some(e => isEnergyOfType(pool.get(e.cardId), 'Metal'))) {
       sources.push(b.iid);
     }
   }
@@ -421,7 +420,7 @@ regR('cobalion-metal-path', (state, aIdx, iids, _params, pool) => {
   const src = player.bench.find(b => b.iid === sourceIid);
   if (!src) return state;
   // 取 1 張鋼能量（簡化：每次搬 1 張，玩家可重複用直到限額）
-  const idx = src.energyAttached.findIndex(e => pool.get(e.cardId)?.pokemonType === 'Metal');
+  const idx = src.energyAttached.findIndex(e => isEnergyOfType(pool.get(e.cardId), 'Metal'));
   if (idx < 0) return state;
   const energy = src.energyAttached[idx];
   return updatePlayer(

@@ -710,6 +710,20 @@ export function isBasicEnergyOfType(ec: Card | undefined, type: EnergyType): boo
 }
 
 /**
+ * v4.963：通用版 — 不限 Basic 能量 + name【X】 fallback。
+ *   未來新代碼用此 helper 認「視為提供 X 屬性的能量卡」，避免 scraper pokemonType=null 誤判。
+ *   涵蓋：基本【X】能量 + 特殊【X】能量（卡名含【X】如「泡沫【水】能量」）。
+ *   不涵蓋：新衝天 / 稜鏡 / 古舊 / 夜光（卡名無【X】），caller 自加 special-case。
+ */
+export function isEnergyOfType(ec: Card | undefined, type: EnergyType): boolean {
+  if (!ec || ec.supertype !== 'Energy') return false;
+  if (ec.pokemonType === type) return true;
+  const m = ec.name.match(/【(.+?)】/);
+  if (!m) return false;
+  return ZH_ENERGY_TYPE[m[1]] === type;
+}
+
+/**
  * v2.108：場上是否有「大竺葵｜繁茂」在 ownerIdx 玩家側？
  * 繁茂：自己所有寶可夢身上的「基本【草】能量」視為各提供 2 個【草】能量
  * （這個特性的效果不會重複，多隻大竺葵也只算一次）。
@@ -7030,8 +7044,9 @@ export function getUsableAbilities(
       if (ab.name === '金屬之路') {
         if (player.active?.iid !== pk.iid) return;
         if (!player.active.movedToActiveThisTurn) return;
+        // v4.963：用 isEnergyOfType 認基本【鋼】能量（pokemonType=null fallback）
         const hasMetalOnBench = player.bench.some(b =>
-          b.energyAttached.some(e => pool.get(e.cardId)?.pokemonType === 'Metal'));
+          b.energyAttached.some(e => isEnergyOfType(pool.get(e.cardId), 'Metal')));
         if (!hasMetalOnBench) return;
       }
       // P0：麻麻鰻 | 電氣發電機 — 棄牌區有基本【雷】+ 備戰非空

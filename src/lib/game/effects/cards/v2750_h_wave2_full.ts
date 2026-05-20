@@ -28,6 +28,16 @@ import { startEnergyChain } from './v158_energy_chain';
 // 共用 helper
 // ══════════════════════════════════════════════════════════════════════════════
 
+// v4.963: 基本能量 pokemonType=null fallback helper — 認屬性能量含 name【X】 fallback。
+function isEnergyOfType(ec: any, type: string): boolean {
+  if (!ec || ec.supertype !== 'Energy') return false;
+  if (ec.pokemonType === type) return true;
+  const m = (ec.name || '').match(/【(.+?)】/);
+  if (!m) return false;
+  const zh: Record<string, string> = { '草':'Grass','火':'Fire','水':'Water','雷':'Lightning','超':'Psychic','鬥':'Fighting','惡':'Darkness','鋼':'Metal','妖':'Fairy','龍':'Dragon','無':'Colorless' };
+  return zh[m[1]] === type;
+}
+
 function rechargePost(attackName: string): AttackPostFn {
   return (state, aIdx, _pool) => updatePlayer(state, aIdx, p => ({
     ...p,
@@ -1136,7 +1146,7 @@ regPost('蒼響ex|鋼鐵武器', (state, aIdx, pool) => {
   const player = state.players[aIdx];
   const eIid = player.deck.find(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Metal';
+    return isEnergyOfType(card, 'Metal') && card?.subtype === 'Basic';
   })?.iid;
   if (!eIid) return updatePlayer(addLog(state, '鋼鐵武器：牌庫無基本鋼能量；重洗', aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   return updatePlayer(addLog(state, '鋼鐵武器：從牌庫挑 1 張基本鋼能量附自身（重洗）', aIdx), aIdx, p => {
@@ -1174,7 +1184,7 @@ regPost('烏波|打水', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const validIids = p.discard.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Water';
+    return isEnergyOfType(card, 'Water') && card?.subtype === 'Basic';
   }).map(c => c.iid);
   if (validIids.length === 0) return addLog(state, '打水：棄牌區無基本水能量', aIdx);
   return withPending(addLog(state, `打水：從棄牌區挑 0~${Math.min(3, validIids.length)} 張基本水能量回牌庫並重洗`, aIdx), {
@@ -1219,7 +1229,7 @@ regPost('夠讚狗ex|猛毒筋力', (state, aIdx, pool) => {
   const player = state.players[aIdx];
   const cand = player.deck.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Darkness';
+    return isEnergyOfType(card, 'Darkness') && card?.subtype === 'Basic';
   });
   // v3.853: 即使 cand=0 也仍開 picker — 讓玩家查看牌庫剩餘卡（Iron Rule 14）
   //   reshuffle 在 resolver 內處理（無論玩家選或沒選都會 reshuffle）
@@ -1569,7 +1579,7 @@ regPost('大電海燕ex|迴旋充能', (state, aIdx, pool) => {
   // 2) 提供 hand-choose 互動讓玩家挑 0~2 張基本雷能量
   const validIids = state.players[aIdx].hand.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Lightning';
+    return isEnergyOfType(card, 'Lightning') && card?.subtype === 'Basic';
   }).map(c => c.iid);
   s = selfSwapPostInline('迴旋充能')(s, aIdx, pool);
   if (validIids.length > 0) {

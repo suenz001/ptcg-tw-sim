@@ -17,6 +17,16 @@ import { flipCoinsWithLog } from '../../effects';
 // ══════════════════════════════════════════════════════════════════════════════
 // helper
 // ══════════════════════════════════════════════════════════════════════════════
+// v4.963: 基本能量 pokemonType=null fallback helper — 認屬性能量含 name【X】 fallback。
+function isEnergyOfType(ec: any, type: string): boolean {
+  if (!ec || ec.supertype !== 'Energy') return false;
+  if (ec.pokemonType === type) return true;
+  const m = (ec.name || '').match(/【(.+?)】/);
+  if (!m) return false;
+  const zh: Record<string, string> = { '草':'Grass','火':'Fire','水':'Water','雷':'Lightning','超':'Psychic','鬥':'Fighting','惡':'Darkness','鋼':'Metal','妖':'Fairy','龍':'Dragon','無':'Colorless' };
+  return zh[m[1]] === type;
+}
+
 function selfHitPost(amount: number, label: string): AttackPostFn {
   return (state, aIdx, _pool) => updatePlayer(addLog(state, `${label}：自身受 ${amount}`, aIdx), aIdx, p => ({
     ...p,
@@ -120,7 +130,7 @@ regPost('佛烈托斯|鐵之震動', (state, aIdx, pool) => {
   if (player.active) {
     for (const e of player.active.energyAttached) {
       const card = pool.get(e.cardId);
-      if (card?.pokemonType === 'Metal') {
+      if (isEnergyOfType(card, 'Metal')) {
         sourceEnergies.push({ energyIid: e.iid, sourceIid: player.active.iid });
       }
     }
@@ -128,7 +138,7 @@ regPost('佛烈托斯|鐵之震動', (state, aIdx, pool) => {
   for (const b of player.bench) {
     for (const e of b.energyAttached) {
       const card = pool.get(e.cardId);
-      if (card?.pokemonType === 'Metal') {
+      if (isEnergyOfType(card, 'Metal')) {
         sourceEnergies.push({ energyIid: e.iid, sourceIid: b.iid });
       }
     }

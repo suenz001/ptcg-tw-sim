@@ -32,6 +32,16 @@ import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSel
 // 共用 helper
 // ══════════════════════════════════════════════════════════════════════════════
 
+// v4.963: 基本能量 pokemonType=null fallback helper — 認屬性能量含 name【X】 fallback。
+function isEnergyOfType(ec: any, type: string): boolean {
+  if (!ec || ec.supertype !== 'Energy') return false;
+  if (ec.pokemonType === type) return true;
+  const m = (ec.name || '').match(/【(.+?)】/);
+  if (!m) return false;
+  const zh: Record<string, string> = { '草':'Grass','火':'Fire','水':'Water','雷':'Lightning','超':'Psychic','鬥':'Fighting','惡':'Darkness','鋼':'Metal','妖':'Fairy','龍':'Dragon','無':'Colorless' };
+  return zh[m[1]] === type;
+}
+
 function defCantRetreatNextPost(): AttackPostFn {
   return (state, aIdx, _pool) => {
     return updatePlayer(state, (1 - aIdx) as 0|1, p => ({
@@ -141,7 +151,7 @@ regPre('雙彈瓦斯|瘋狂炸彈', (s) => ({ state: s, damage: 50 }));
 regPre('泥巴魚|泥巴伏特', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return { state, damage: 20 };
-  const hasFighting = a.energyAttached.some(e => pool.get(e.cardId)?.pokemonType === 'Fighting');
+  const hasFighting = a.energyAttached.some(e => isEnergyOfType(pool.get(e.cardId), 'Fighting'));
   if (hasFighting) return { state: addLog(state, '泥巴伏特：有鬥能量 → 20+20 = 40', aIdx), damage: 40 };
   return { state: addLog(state, '泥巴伏特：無鬥能量 → 20', aIdx), damage: 20 };
 });
@@ -655,7 +665,7 @@ regPost('蜜集大蛇|大蛇吐息', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const grassBasics = p.hand.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.pokemonType === 'Grass';
+    return isEnergyOfType(card, 'Grass') && card?.subtype === 'Basic';
   });
   if (grassBasics.length < 6) return state;
   const six = grassBasics.slice(0, 6);

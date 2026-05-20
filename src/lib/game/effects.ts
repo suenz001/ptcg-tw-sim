@@ -4947,7 +4947,7 @@ regPre('阿勃梭魯|惡棍墜落', (state, aIdx, pool) => {
   for (const c of [p.active, ...p.bench]) {
     if (!c) continue;
     for (const e of c.energyAttached) {
-      if (pool.get(e.cardId)?.pokemonType === 'Darkness') count++;
+      if (isEnergyOfType(pool.get(e.cardId), 'Darkness')) count++;
     }
   }
   if (count >= 3) {
@@ -5819,6 +5819,16 @@ export function countEnergyTypeHostAware(host: CardInstance, type: EnergyType, p
   return count;
 }
 
+// v4.963: 基本能量 pokemonType=null fallback helper — 認屬性能量含 name【X】 fallback。
+function isEnergyOfType(ec: any, type: string): boolean {
+  if (!ec || ec.supertype !== 'Energy') return false;
+  if (ec.pokemonType === type) return true;
+  const m = (ec.name || '').match(/【(.+?)】/);
+  if (!m) return false;
+  const zh: Record<string, string> = { '草':'Grass','火':'Fire','水':'Water','雷':'Lightning','超':'Psychic','鬥':'Fighting','惡':'Darkness','鋼':'Metal','妖':'Fairy','龍':'Dragon','無':'Colorless' };
+  return zh[m[1]] === type;
+}
+
 // v4.959：計「能量數」(units, all types)，host-aware。
 //   一般 1 個；新衝天能量 on Stage2 = 2 個（卡面「視為提供 2 個所有屬性的能量」）。
 //   用於招式「依能量數計傷害 / 擲幣次數」場合。重複定義避免動巨大 import。
@@ -6467,7 +6477,7 @@ regPost('自爆磁怪|強勁磁場', (state, aIdx, pool) => {
 regPre('紅蓮鎧騎|紅蓮引爆', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 0 };
-  const fireCount = att.energyAttached.filter(e => pool.get(e.cardId)?.pokemonType === 'Fire').length;
+  const fireCount = att.energyAttached.filter(e => isEnergyOfType(pool.get(e.cardId), 'Fire')).length;
   if (fireCount === 0) {
     return { state: addLog(state, '紅蓮引爆：身上無火能量，招式失敗', aIdx), damage: 0 };
   }
@@ -6476,12 +6486,12 @@ regPre('紅蓮鎧騎|紅蓮引爆', (state, aIdx, pool) => {
 regPost('紅蓮鎧騎|紅蓮引爆', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return state;
-  const fireEnergies = att.energyAttached.filter(e => pool.get(e.cardId)?.pokemonType === 'Fire');
+  const fireEnergies = att.energyAttached.filter(e => isEnergyOfType(pool.get(e.cardId), 'Fire'));
   if (fireEnergies.length === 0) return state;
   // 先丟棄火能量
   let s = updatePlayer(state, aIdx, p => {
     if (!p.active) return p;
-    const kept = p.active.energyAttached.filter(e => pool.get(e.cardId)?.pokemonType !== 'Fire');
+    const kept = p.active.energyAttached.filter(e => !isEnergyOfType(pool.get(e.cardId), 'Fire'));
     return {
       ...p,
       active: { ...p.active, energyAttached: kept },

@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.963</span> 🔬 全 audit 修 18 處 pokemonType=null 基本能量誤判 + 加通用 isEnergyOfType helper</summary>
+        <ul>
+          <li><b>背景</b>：v3.731 / v3.82 / v4.962 已知 scraper 對基本能量 pokemonType 留空（type 從卡名【X】推斷），多次踩雷。本版做完整 audit + 一次性修復所有遺漏處。</li>
+          <li><b>Audit 結果</b>：全代碼庫 219 處 strict <code>pokemonType === 'X'</code> 比對，篩出 18 處屬於「能量篩選 + 無 fallback」是踩雷點。涵蓋 7 個檔案：effects.ts (4) / engine.ts (1) / v2354/v2380/v2580/v2650/v2660/v2750/v2770 共 13 處。</li>
+          <li><b>影響的卡 / 招式（推估）</b>：白海獅｜沖刷的姊妹特性（鋼系）、佛烈托斯｜鐵之震動、各 I/H 標的「丟基本能量」物品 / 招式等。所有涉及「找特定屬性的基本能量」的場景都修了。</li>
+          <li><b>修法</b>：① engine.ts 加 export <code>isEnergyOfType(ec, type)</code> 通用 helper（不限 Basic、含 name【X】 fallback） ② 8 個檔各加 file-local 同名 helper（避免動 import 結構，effects.ts 與 engine 是 circular）③ 18 處 strict check 全改用 helper。未來新代碼直接 import engine.isEnergyOfType 就好，避免再踩雷。</li>
+          <li><b>未涵蓋</b>：新衝天 / 稜鏡 / 古舊 / 夜光等「視為任意屬性」能量（卡名無【X】），caller 自行加 special-case。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — engine.ts 7634 行 + effects.ts 14909 行）/ Rule 4（tsc verify）/ Rule 14（mass refactor — 系統 audit + 集中 fix + helper 預防未來）/ Rule 7（用 helper，未來新代碼有明確 entry point）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.962</span> 🐛 修 白海獅｜沖刷 特性無法觸發（基本【水】能量誤判）</summary>
         <ul>
           <li><b>玩家回報</b>：白海獅特性「沖刷」看起來沒實裝（卡面：可不限次數使用，選 1 個自己備戰寶可夢身上附加的【水】能量，改附於戰鬥寶可夢身上）。實際上代碼已實裝，但邏輯誤判導致永遠 gate 失敗。</li>

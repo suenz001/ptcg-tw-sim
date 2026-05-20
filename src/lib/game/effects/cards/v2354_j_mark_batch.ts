@@ -33,13 +33,11 @@ function cardName(pool: Map<string, any>, inst?: CardInstance | null): string {
   return inst ? (pool.get(inst.cardId)?.name ?? '?') : '?';
 }
 
-/** 判斷是否為基本【雷】能量 */
+/** 判斷是否為基本【雷】能量 — v4.963 加 name【雷】fallback（scraper pokemonType=null） */
 function isBasicLightningEnergy(card: any): boolean {
-  return (
-    card?.supertype === 'Energy' &&
-    card?.subtype === 'Basic' &&
-    card?.pokemonType === 'Lightning'
-  );
+  if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+  if (card.pokemonType === 'Lightning') return true;
+  return /【雷】/.test(card.name || '');
 }
 
 /** 計算玩家場上所有寶可夢附加能量總數（active + bench） */

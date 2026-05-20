@@ -31,6 +31,16 @@ import type { AttackPreFn, AttackPostFn } from '../_shared';
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: 自方場上某屬性能量總數 ≥ N 條件 +K
 // ══════════════════════════════════════════════════════════════════════════════
+// v4.963: 基本能量 pokemonType=null fallback helper — 認屬性能量含 name【X】 fallback。
+function isEnergyOfType(ec: any, type: string): boolean {
+  if (!ec || ec.supertype !== 'Energy') return false;
+  if (ec.pokemonType === type) return true;
+  const m = (ec.name || '').match(/【(.+?)】/);
+  if (!m) return false;
+  const zh: Record<string, string> = { '草':'Grass','火':'Fire','水':'Water','雷':'Lightning','超':'Psychic','鬥':'Fighting','惡':'Darkness','鋼':'Metal','妖':'Fairy','龍':'Dragon','無':'Colorless' };
+  return zh[m[1]] === type;
+}
+
 function fieldEnergyCountConditionPre(
   base: number, bonus: number, energyType: 'Grass'|'Fire'|'Water'|'Lightning'|'Psychic'|'Fighting'|'Darkness'|'Metal',
   threshold: number, label: string,
@@ -423,7 +433,7 @@ regPost('阿響的熔岩蝸牛|熔岩爆炸', (state, aIdx, pool) => {
   const discarded: CardInstance[] = [];
   for (let i = a.energyAttached.length - 1; i >= 0; i--) {
     const e = a.energyAttached[i];
-    if (toDiscard > 0 && pool.get(e.cardId)?.pokemonType === 'Fire') {
+    if (toDiscard > 0 && isEnergyOfType(pool.get(e.cardId), 'Fire')) {
       discarded.unshift(e);
       toDiscard--;
     } else {
