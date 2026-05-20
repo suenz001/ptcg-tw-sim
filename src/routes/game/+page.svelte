@@ -3754,6 +3754,12 @@
     //   v2.83 已用「playing 期間停心跳」減少 race；本條為最終防線。
     if (room.gameState) {
       const incoming = room.gameState;
+      // v4.964：B 端（後 ready 那方 / 沒先觸發 startGame）— onSnapshot 第一次收到 game
+      //   出現 (local game===null && incoming.phase==='setup') → 播 ready-go。
+      //   雙端時機與 A 端 checkAndStartOnlineGame 內的 play 接近同時（差 1 個 firestore round-trip）。
+      if (!game && incoming.phase === 'setup') {
+        playSfx('ready-go');
+      }
       // v3.42 Fix：雙端各自 createGame 產生不同 GameState.id（task #171 已知 race）。
       //   firestore startGame transaction 只接受其中一方版本（commit winner），
       //   另一方仍持有自己 createGame 的本地版本（loser）。
@@ -3868,6 +3874,8 @@
       { firstChoicePreferences: prefs },
     );
     game = newGame;
+    // v4.964：A 端（先觸發 startGame）— lobby 雙方 ready，game 剛建出來那一刻播 ready-go
+    playSfx('ready-go');
     startGame(roomCode, newGame).catch(console.error);
   }
 
@@ -4413,8 +4421,8 @@
           if (((action as any).count ?? 0) > 0) playSfx('draw', { pan });
           break;
         case 'FINISH_SETUP':
-          if (prev.phase === 'setup' && next.phase === 'playing') playSfx('ready-go');  // v4.929 對戰開始通知
-          else playSfx('click', { pan });
+          // v4.964：ready-go 改到 lobby→setup 那一刻播（雙方按完準備），這裡不播；純 click
+          playSfx('click', { pan });
           break;
         // v4.928: 紙牌質感拆音
         case 'EVOLVE':
@@ -4506,12 +4514,8 @@
   }
 
   // v4.929：觀戰 + 線上對手 action 來時，state-diff 偵測核心事件並播音
-  // v4.932：加 phase setup → playing 偵測 — 修「先按準備那方聽不到 ready-go」
+  // v4.932：曾在此偵測 setup→playing 播 ready-go；v4.964 移除（時機改到 lobby→setup）
   function detectSpectatorStateDiffSfx(prev: GameState, next: GameState): void {
-    // v4.932: 對戰開始（雙方 setup 完成 → playing）— throttle 100ms 防雙端重播
-    if (prev.phase === 'setup' && next.phase === 'playing') {
-      playSfx('ready-go');
-    }
     // 換回合
     if (prev.activePlayerIndex !== next.activePlayerIndex && next.phase === 'playing') {
       playSfx('turn-start');

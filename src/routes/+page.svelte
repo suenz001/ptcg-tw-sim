@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.964</span> 🔊 「ready-go」音效時機調整 — 雙方準備完成那一刻播，不再等起手結束</summary>
+        <ul>
+          <li><b>玩家回報</b>：ready-go 音效播得太晚，雙方在房間按下「準備完成」後沒聲，要等起手放完 Active/Bench 才響，直覺像「回合開始時」才聽到。</li>
+          <li><b>修法</b>：時機從 <code>setup→playing</code> 改到 <code>lobby→setup</code>：① 觸發 startGame 那方 createGame 後立刻播 ② onSnapshot 第一次收到 game（對手先觸發那方）→ 播。雙端時機差約一個 firestore round-trip。</li>
+          <li><b>移除</b>：FINISH_SETUP dispatch / state-diff 偵測 setup→playing 不再播 ready-go（FINISH_SETUP 改回純 click 音）。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — game/+page.svelte 9956 行大檔）/ Rule 4（tsc verify）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.963</span> 🔬 全 audit 修 18 處 pokemonType=null 基本能量誤判 + 加通用 isEnergyOfType helper</summary>
         <ul>
           <li><b>背景</b>：v3.731 / v3.82 / v4.962 已知 scraper 對基本能量 pokemonType 留空（type 從卡名【X】推斷），多次踩雷。本版做完整 audit + 一次性修復所有遺漏處。</li>
