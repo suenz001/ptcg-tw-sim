@@ -954,8 +954,12 @@ regR('order-box-pick', (st, idx, iids, _params, pool) => {
 
 // ── 幫忙鈴（Item）──────────────────────────────────────────────────────────
 // 卡面：這張卡只可在後攻玩家的最初回合使用。從自己的牌庫選 1 張支援者卡加手牌並重洗。
-regG('幫忙鈴', (st, idx, pool) => {
-  if (!st.isFirstTurn) return false;
+// v4.940 修 gate bug：原 `!st.isFirstTurn` 永遠擋到後攻方第 1 回合（engine 端 isFirstTurn
+//   在後攻方行動段已是 false，僅涵蓋先攻方第 1 動作回合，見 engine.ts:2076-2078 註解）。
+//   改用 `st.turn !== 1`（state.turn 只在後攻方 END_TURN 才 +1，turn===1 涵蓋雙方第 1 動作回合）
+//   + `activePlayerIndex !== firstPlayerIdx` 排除先攻方 → 正確的「後攻方第 1 回合」gate。
+regG('幫忙鈴', (st, idx, _pool) => {
+  if (st.turn !== 1) return false;
   if (st.activePlayerIndex === st.firstPlayerIdx) return false;
   return st.players[idx].deck.length > 0;
 });
@@ -1167,11 +1171,13 @@ regR('tm-machine-pick', (st, idx, iids, _params, pool) => {
 // ── 悠哉尾草棒（Item / MC）─────────────────────────────────────────────────
 // 卡面：這張卡只可在後攻玩家的最初回合使用。
 //       選擇 1 個對手的場上寶可夢身上附加的能量，放回對手的手牌。
-// gate：必須是後攻方第 1 回合（state.isFirstTurn=true 且 activePlayerIndex !== firstPlayerIdx）
+// gate：必須是後攻方第 1 回合（state.turn === 1 且 activePlayerIndex !== firstPlayerIdx）
 //       + 對手場上至少 1 隻寶可夢有能量
+// v4.940：原寫 `!st.isFirstTurn` 是錯的（同 幫忙鈴 bug），改 `st.turn !== 1`。
 regG('悠哉尾草棒', (st, idx, pool) => {
-  // 後攻方第一回合：isFirstTurn 仍是 true，且當前 activePlayer 是後攻方（!== firstPlayerIdx）
-  if (!st.isFirstTurn) return false;
+  // 後攻方第 1 動作回合：state.turn 仍 === 1（turn 只在後攻方 END_TURN +1），
+  // 且當前 activePlayer 是後攻方（!== firstPlayerIdx）
+  if (st.turn !== 1) return false;
   if (st.activePlayerIndex === st.firstPlayerIdx) return false;
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋整個效果
   if (_v3080OppHasMenasure(st, idx, pool)) return false;

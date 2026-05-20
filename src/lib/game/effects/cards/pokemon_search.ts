@@ -170,18 +170,38 @@ reg('甜蜜球', (st, idx, pool) => {
   });
 });
 
-// 黑暗球 — 查看牌庫底 7 張，選 1 張寶可夢加手牌
+// 黑暗球 — 查看牌庫下方 7 張，選 1 張寶可夢加手牌；剩餘放回牌庫並重洗
+// v4.940 修：原實作 filter='Pokemon' 沒限定範圍 → 玩家可從整個牌庫挑寶可夢（規則違反）。
+//   改用既有 filter 'Pokemon:TOP_N' + params.topIids = bottom7 iids，
+//   限定 picker 候選只在牌庫下方 7 張寶可夢內。
+//   加 addPrivateLog 揭示 bottom 7 內容（自己看具體卡名 / 對手只看「查看 N 張」）。
+//   選到的卡用 addLog 公開卡名（卡面寫「給對手看過」）— search-pokemon-to-hand resolver 已處理。
 reg('黑暗球', (st, idx, pool) => {
-  st = addLog(st, '黑暗球：從牌庫選 1 張寶可夢加手牌', idx);
-  // v2.993：卡面寫「選 1 張」mandatory；牌庫底 7 張無寶可夢時允許 Pass
-  const bottom7 = st.players[idx].deck.slice(-7);
-  const hasPoke = bottom7.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
+  const deckLen = st.players[idx].deck.length;
+  if (deckLen === 0) {
+    return addLog(st, '黑暗球：牌庫為空，無法使用', idx);
+  }
+  const bottomN = Math.min(7, deckLen);
+  const bottom = st.players[idx].deck.slice(-bottomN);
+  const bottomIids = bottom.map(c => c.iid);
+  const bottomNames = bottom.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  const hasPoke = bottom.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
+  // 揭示 bottom N：自己看具體卡名，對手只看到查看了 N 張（Iron Rule 8）
+  st = addPrivateLog(st,
+    `黑暗球：牌庫下方 ${bottomN} 張 ─ ${bottomNames}`,
+    `黑暗球：查看牌庫下方 ${bottomN} 張`,
+    idx);
+  // v2.993 + Iron Rule 14：bottom N 無寶可夢時 minCount=0 允許 Pass（玩家仍可看到剩餘資訊）
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon',
+    filter: 'Pokemon:TOP_N',
     minCount: hasPoke ? 1 : 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
+    params: {
+      topIids: bottomIids,  // 重用 TOP_N filter 機制（filter 邏輯只看 iid 集合，不分 top/bottom）
+      titleOverride: `黑暗球：從牌庫下方 ${bottomN} 張中選 1 張寶可夢加手牌`,
+    },
   });
 });
 

@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.940</span> 🔔 修「幫忙鈴」永遠不能用 + 「黑暗球」範圍未限定 bottom 7</summary>
+        <ul>
+          <li><b>玩家回報</b>：幫忙鈴 / 黑暗球 未完整實裝。依鐵律 7c 查 JSON 卡面原文後確認兩條 bug。</li>
+          <li><b>Bug 1 (幫忙鈴 / 悠哉尾草棒)</b>：gate 用 <code>!state.isFirstTurn</code> 永遠擋到後攻方第 1 回合（engine 端 <code>isFirstTurn</code> 在後攻方行動段已是 false，僅涵蓋先攻方第 1 動作回合）。修法：改用 <code>state.turn !== 1</code>（turn 只在後攻方 END_TURN +1，turn===1 涵蓋雙方第 1 動作回合）+ <code>activePlayerIndex !== firstPlayerIdx</code> 排除先攻方。</li>
+          <li><b>Bug 2 (黑暗球)</b>：卡面寫「查看牌庫下方 7 張，從其中選 1 張寶可夢」但實作 <code>filter: 'Pokemon'</code> 沒限定範圍 → 玩家可從整個牌庫挑寶可夢（規則違反）。修法：改用既有 <code>'Pokemon:TOP_N'</code> filter + <code>params.topIids = bottom7 iids</code>，限定 picker 候選只在牌庫下方 7 張寶可夢內。加 <code>addPrivateLog</code> 揭示 bottom 7 內容（自己看具體卡名 / 對手只看「查看 N 張」）。</li>
+          <li><b>順帶</b>：「悠哉尾草棒」同樣「後攻最初回合」限定 + 同個 gate bug，一併修好。</li>
+          <li><b>Iron Rules</b>：Rule 7c（JSON 查證 — 先 grep 卡面原文）/ Rule 8（揭示資訊 addLog vs addPrivateLog）/ Rule 14（牌庫無候選仍開 picker，玩家可看剩餘資訊）/ Rule 11（Python pipeline）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.939</span> 🤖 修 robots.txt sitemap URL 到 .com（v4.938 漏網）</summary>
         <ul>
           <li><b>v4.938 漏改</b>：<code>static/robots.txt</code> 的 <code>Sitemap:</code> 行還指向舊 <code>suenz001.github.io/ptcg-tw-sim/sitemap.xml</code>，改為 <code>www.ptcg-tw-sim.com/sitemap.xml</code>。</li>
