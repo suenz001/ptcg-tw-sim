@@ -264,6 +264,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.935</span> 🔀 Firebase 額度分流：線上對戰自動跳轉 Oracle 站</summary>
+        <ul>
+          <li><b>目的</b>：把線上對戰的重度 Firestore 流量（房間 + heartbeat + gameState 同步）從 Firebase 分流到 Oracle 主機，省 Firebase 免費額度。</li>
+          <li><b>實作</b>：GitHub Pages 站（suenz001.github.io）點「🌐 線上連線對戰」按鈕時 → 自動 redirect 到 <code>www.ptcg-tw-sim.com/game?mode=online</code>。Oracle 站收到 <code>?mode=online</code> 自動進入線上模式（跳過模式選擇畫面），並清掉 URL query string。</li>
+          <li><b>保留在 GitHub Pages</b>：本機 2P 對戰 / AI 對戰 / 卡牌資料庫 / 牌組編輯器 / changelog 全部不分流（不耗 Firestore）。</li>
+          <li><b>Gate 邏輯</b>：只在 <code>!ORACLE_MODE</code> 且 hostname 包含 <code>github.io</code> 才 redirect。本機 dev（localhost）+ Oracle 站自己點都不會 self-redirect。</li>
+          <li><b>玩家無感</b>：點按鈕後 URL 自動換成 www.ptcg-tw-sim.com — 對話框 / 房間流程完全相同，只是 backend 變了。</li>
+          <li><b>下一步</b>：完成 Oracle 主機備援基礎設施（task #329）後可考慮 100% redirect game 入口進一步省額度。</li>
+          <li><b>Iron Rules</b>：Rule 1 / Rule 3 / Rule 11。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.934</span> 🔍 Log 卡名點擊「同名多隻」精準對應（Phase 1 基礎設施）</summary>
         <ul>
           <li><b>現況</b>：戰鬥 log 卡名可點擊查看卡片詳情，但原本靠 string-match 加 sourceIid hint，場上同名多隻時（如雙方都有皮卡丘 / 備戰多隻同名）只能開「第一隻找到的」，不一定是 log 記載的那隻。</li>

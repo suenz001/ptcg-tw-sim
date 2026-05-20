@@ -1177,6 +1177,22 @@
     arr.sort((a, b) => b.length - a.length);
     return arr;
   });
+  // v4.935 Firebase 額度分流 — 「線上連線對戰」按鈕點擊處理。
+  //   策略：GitHub Pages 站 (suenz001.github.io) → redirect 到 Oracle 站 (www.ptcg-tw-sim.com)。
+  //   理由：Firestore 重度路徑（房間 + heartbeat + gameState 同步）改走 Oracle backend，
+  //         省 Firebase 額度；本機 / AI 對戰 / 卡牌資料庫 / 牌組編輯器留在 GitHub Pages。
+  //   gate：
+  //     - ORACLE_MODE = true → 已在 Oracle 站，留地（避免 self-redirect）
+  //     - hostname 不含 'github.io' → 本機 dev 或自定義部署，留地
+  //     - 否則 → window.location.assign 跳轉，帶 ?mode=online 讓對方 auto-enter
+  function onClickOnlineMode() {
+    if (typeof window !== 'undefined' && !ORACLE_MODE && /github\.io/.test(window.location.hostname)) {
+      window.location.assign('https://www.ptcg-tw-sim.com/game?mode=online');
+      return;
+    }
+    mode = 'online';
+  }
+
   function openZoomByName(cardName: string, hintSourceIid?: string, hintPlayerIdx?: 0 | 1 | null) {
     // v3.891：log 卡名點擊精準追溯 — 三層 fallback
     //   1. hintSourceIid 對應 inst（如果名字符合）— 例如「代歐奇希 使用精神尖槍」點代歐奇希
@@ -2490,6 +2506,19 @@
       } else if (u && u.isAnonymous) {
         // 匿名身份：純 localStorage
         decks = loadDecks();
+      }
+      // v4.935 Firebase 額度分流 trigger — URL `?mode=online`
+      //   來源：GitHub Pages 站點擊「線上連線對戰」自動 redirect 到 Oracle 站時帶此參數。
+      //   行為：auto-set mode='online' + 清掉 query string（避免分享 URL 時帶 ?mode=online）。
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('mode') === 'online') {
+          mode = 'online';
+          // 清 URL query string（保留 pathname + hash）
+          const url = new URL(window.location.href);
+          url.searchParams.delete('mode');
+          window.history.replaceState({}, '', url.toString());
+        }
       }
       // v4.927 Admin 偷看 trigger — URL `?admin=BASE64_TOKEN&spectate=ROOM`
       //   token = base64(admin email)，decode 後比對 ADMIN_EMAILS。
@@ -4565,7 +4594,7 @@
         <div class="mode-title">本機雙人對戰</div>
         <div class="mode-desc">同一台裝置輪流操作</div>
       </button>
-      <button class="mode-card online" onclick={() => mode='online'} disabled={!poolReady}>
+      <button class="mode-card online" onclick={onClickOnlineMode} disabled={!poolReady}>
         <div class="mode-icon">🌐</div>
         <div class="mode-title">線上連線對戰</div>
         <div class="mode-desc">各自裝置，即時對戰</div>
