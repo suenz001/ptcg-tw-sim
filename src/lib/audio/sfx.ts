@@ -26,6 +26,7 @@ export type SfxName =
   | 'poison' | 'burn' | 'sleep' | 'confuse'
   | 'turn-start'
   | 'ready-go'  // v4.929 對戰開始通知音（sample-based）
+  | 'place-card'  // v4.967 紙牌落桌音（基本上場 / 備戰 / 換場通用）
   // v4.928 新增：紙牌質感升級
   | 'evolve'           // 進化儀式音（紙翻面 + 上升小琶音）
   | 'attach-energy'    // 附能量（紙片落下 + soft pluck）
@@ -41,7 +42,8 @@ type BusName = 'ui' | 'sfx' | 'status';
 function classifyBus(name: SfxName): BusName {
   if (name === 'click' || name === 'draw' || name === 'deal' || name === 'shuffle'
       || name === 'coin' || name === 'turn-start' || name === 'evolve'
-      || name === 'attach-energy' || name === 'ability' || name === 'prize-take') {
+      || name === 'attach-energy' || name === 'ability' || name === 'prize-take'
+      || name === 'place-card') {
     return 'ui';
   }
   if (name === 'ko' || name === 'victory-fanfare' || name === 'game-win'
@@ -193,6 +195,8 @@ export interface PlaySfxOpts {
   volume?: number;
   /** v4.928: stereo pan -1..1（-0.3 = 偏左, +0.3 = 偏右） */
   pan?: number;
+  /** v4.967: 跳過 100ms throttle（stagger 多張卡時用，例如抽 7 張）*/
+  force?: boolean;
 }
 
 export function playSfx(name: SfxName, opts?: PlaySfxOpts): void {
@@ -202,10 +206,10 @@ export function playSfx(name: SfxName, opts?: PlaySfxOpts): void {
   // v4.929：切到背景頁籤時，依設定決定是否 mute（ready-go 也跟著走，給玩家統一控制）
   if (!playWhenHidden && typeof document !== 'undefined' && document.hidden) return;
 
-  // v4.928 throttle：同名音 100ms 內 skip
+  // v4.928 throttle：同名音 100ms 內 skip；v4.967 force flag 可 bypass（stagger 用）
   const now = c.currentTime * 1000;
   const last = recentSfx.get(name) ?? -Infinity;
-  if (now - last < THROTTLE_MS) return;
+  if (!opts?.force && now - last < THROTTLE_MS) return;
   recentSfx.set(name, now);
 
   // 選 bus
@@ -246,6 +250,7 @@ export function playSfx(name: SfxName, opts?: PlaySfxOpts): void {
     else if (name === 'game-win') playGameWin(c, gain, t);
     else if (name === 'game-lose') playGameLose(c, gain, t);
     else if (name === 'ready-go') playReadyGo(c, gain, t);
+    else if (name === 'place-card') playPlaceCard(c, gain, t);
     else if (name.startsWith('attack-')) {
       const etype = name.slice(7) as EnergyType;
       playAttack(c, gain, t, etype);
@@ -573,6 +578,61 @@ function playAttachEnergy(c: AudioContext, out: GainNode, t: number): void {
   osc.connect(og); og.connect(out);
   osc.start(t + 0.02); osc.stop(t + 0.22);
   trackNode(osc);
+}
+
+// ─ Place Card（紙牌落桌）— v4.967 ────
+//   設計：短中頻 noise（紙摩擦）+ 低頻 thud（落桌敲擊），總 ~80ms
+//   給玩家「啪一聲放下」的明確 feedback，跟 click（UI 切 tab）有區別
+function playPlaceCard(c: AudioContext, out: GainNode, t: number): void {
+  // 紙摩擦 noise（中頻 bandpass）
+  const src = c.createBufferSource();
+  src.buffer = noiseBuffer(c, 0.045);
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = 2.0;
+  const ng = c.createGain();
+  ng.gain.setValueAtTime(0.22, t);
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
+  src.connect(bp); bp.connect(ng); ng.connect(out);
+  src.start(t); src.stop(t + 0.05);
+  trackNode(src);
+  // 低頻 thud（落桌敲擊感）
+  const osc = c.createOscillator();
+  const og = c.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(120, t);
+  osc.frequency.exponentialRampToValueAtTime(55, t + 0.07);
+  og.gain.setValueAtTime(0, t);
+  og.gain.linearRampToValueAtTime(0.28, t + 0.005);
+  og.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+  osc.connect(og); og.connect(out);
+  osc.start(t); osc.stop(t + 0.09);
+  trackNode(osc);
+}
+
+// ─ Stagger helper — v4.967 ────────────────────────────────────────────
+//   抽多張卡 / 起手發牌 stagger 播放：每張間隔 N ms，音量遞減營造「連續發牌」感。
+//   force=true 跳過 throttle 確保每張都響。max=10 上限避免極端 N 炸音。
+export function staggerSfx(
+  name: SfxName,
+  count: number,
+  opts: {
+    pan?: number;
+    baseVolume?: number;
+    delayMs?: number;
+    intervalMs?: number;
+    maxCount?: number;
+  } = {},
+): void {
+  if (count <= 0) return;
+  const max = Math.min(count, opts.maxCount ?? 10);
+  const baseVol = opts.baseVolume ?? 0.85;
+  const startDelay = opts.delayMs ?? 0;
+  const interval = opts.intervalMs ?? 90;
+  for (let i = 0; i < max; i++) {
+    // 音量遞減 0.85 → 0.40，營造前重後輕
+    const volume = Math.max(0.40, baseVol - (i / Math.max(1, max - 1)) * 0.45);
+    setTimeout(() => playSfx(name, { pan: opts.pan, volume, force: true }), startDelay + i * interval);
+  }
 }
 
 // ─ Ability（特性發動）— 中頻 chime ────

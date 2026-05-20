@@ -60,7 +60,7 @@
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
   import { VERSION } from '$lib/version';
-  import { playSfx, closeAudio, preloadReadyGoSample } from '$lib/audio/sfx';
+  import { playSfx, closeAudio, preloadReadyGoSample, staggerSfx } from '$lib/audio/sfx';
   import { parseCoinFlipAnimationEvents } from '$lib/game/coinAnimation';
   import {
     loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume,
@@ -3779,6 +3779,8 @@
       //   雙端時機與 A 端 checkAndStartOnlineGame 內的 play 接近同時（差 1 個 firestore round-trip）。
       if (!game && incoming.phase === 'setup') {
         playSfx('ready-go');
+        // v4.967: 起手發 7 張卡 stagger
+        staggerSfx('deal', 7, { delayMs: 350, intervalMs: 110, baseVolume: 0.7 });
       }
       // v3.42 Fix：雙端各自 createGame 產生不同 GameState.id（task #171 已知 race）。
       //   firestore startGame transaction 只接受其中一方版本（commit winner），
@@ -3896,6 +3898,8 @@
     game = newGame;
     // v4.964：A 端（先觸發 startGame）— lobby 雙方 ready，game 剛建出來那一刻播 ready-go
     playSfx('ready-go');
+    // v4.967: 起手發 7 張卡 stagger（與 ready-go 並進，營造「啟動 + 發牌」儀式感）
+    staggerSfx('deal', 7, { delayMs: 350, intervalMs: 110, baseVolume: 0.7 });
     startGame(roomCode, newGame).catch(console.error);
   }
 
@@ -4433,15 +4437,30 @@
     try {
       const actorIdx = (prev.activePlayerIndex ?? 0) as 0 | 1;
       const pan = panForActor(actorIdx);
+      // v4.967: helper — 從 prev/next state 算 handDelta（actor 視角）
+      const handDeltaForActor = (): number => {
+        const ai = next.activePlayerIndex;
+        return (next.players[ai]?.hand?.length ?? 0) - (prev.players[ai]?.hand?.length ?? 0);
+      };
       switch (action.type) {
-        case 'DRAW_CARD':
-          playSfx('draw', { pan });
+        case 'DRAW_CARD': {
+          // v4.967: 抽多張 stagger（莉莉艾決意 / 博士的研究等抽 6~8 張）
+          const n = Math.max(1, handDeltaForActor());
+          if (n === 1) playSfx('draw', { pan });
+          else staggerSfx('draw', n, { pan, intervalMs: 90 });
           break;
-        case 'MULLIGAN_DRAW_DECISION':
-          if (((action as any).count ?? 0) > 0) playSfx('draw', { pan });
+        }
+        case 'MULLIGAN_DRAW_DECISION': {
+          // v4.967: mulligan 補抽多張也 stagger
+          const count = ((action as any).count ?? 0) as number;
+          if (count > 0) {
+            if (count === 1) playSfx('draw', { pan });
+            else staggerSfx('draw', count, { pan, intervalMs: 90 });
+          }
           break;
+        }
         case 'FINISH_SETUP':
-          // v4.964：ready-go 改到 lobby→setup 那一刻播（雙方按完準備），這裡不播；純 click
+          // v4.964：ready-go 改到 lobby→setup 那一刻播；這裡不播；純 click
           playSfx('click', { pan });
           break;
         // v4.928: 紙牌質感拆音
@@ -4451,8 +4470,11 @@
         case 'ATTACH_ENERGY':
           playSfx('attach-energy', { pan });
           break;
+        // v4.967: 改用 place-card（紙牌落桌音）取代 click，明確區隔 UI 切 tab 音
         case 'PLAY_BASIC':
         case 'BENCH_POKEMON':
+          playSfx('place-card', { pan });
+          break;
         case 'USE_STADIUM':
           playSfx('click', { pan });
           break;
@@ -4464,23 +4486,35 @@
           break;
         case 'PLAY_TRAINER': {
           playSfx('click', { pan });
-          const myIdx = next.activePlayerIndex;
-          const handDelta = next.players[myIdx].hand.length - prev.players[myIdx].hand.length;
-          if (handDelta > 0) setTimeout(() => playSfx('draw', { volume: 0.6, pan }), 100);
+          // v4.967: 物品 / supporter 抽多張時 stagger
+          const n = handDeltaForActor();
+          if (n > 0) {
+            setTimeout(() => {
+              if (n === 1) playSfx('draw', { volume: 0.6, pan });
+              else staggerSfx('draw', n, { pan, intervalMs: 90, baseVolume: 0.75 });
+            }, 100);
+          }
           break;
         }
         // v4.928: 特性發動專屬音（chime）
         case 'USE_ABILITY':
           playSfx('ability', { pan });
           break;
-        case 'RESOLVE_SELECTION':
+        case 'RESOLVE_SELECTION': {
           playSfx('click', { volume: 0.6, pan });
-          {
-            const myIdx = next.activePlayerIndex;
-            const deckDelta = prev.players[myIdx].deck.length - next.players[myIdx].deck.length;
-            if (deckDelta >= 2) setTimeout(() => playSfx('shuffle', { volume: 0.4, pan }), 150);
+          // v4.967: resolver 抽多張也 stagger（多支 supporter / item 走 RESOLVE_SELECTION）
+          const n = handDeltaForActor();
+          if (n > 0) {
+            setTimeout(() => {
+              if (n === 1) playSfx('draw', { volume: 0.6, pan });
+              else staggerSfx('draw', n, { pan, intervalMs: 90, baseVolume: 0.75 });
+            }, 150);
           }
+          const myIdx = next.activePlayerIndex;
+          const deckDelta = prev.players[myIdx].deck.length - next.players[myIdx].deck.length;
+          if (deckDelta >= 2) setTimeout(() => playSfx('shuffle', { volume: 0.4, pan }), 150);
           break;
+        }
         case 'ATTACK': {
           const aIdx = prev.activePlayerIndex;
           const attacker = prev.players[aIdx].active;
@@ -4511,7 +4545,8 @@
           break;
         }
         case 'SEND_NEW_ACTIVE':
-          playSfx('click', { pan });
+          // v4.967: 換新戰鬥位用 place-card 音
+          playSfx('place-card', { pan });
           break;
         default:
           break;

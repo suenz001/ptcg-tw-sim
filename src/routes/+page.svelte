@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.967</span> 🔊 音效 A 級升級 — 抽多張卡 stagger + 紙牌落桌 place-card 音</summary>
+        <ul>
+          <li><b>玩家回報</b>：莉莉艾決意抽 6~8 張 / 起手發 7 張只響一聲太單薄；放卡到備戰只有 UI click 沒「啪」一聲落桌感。</li>
+          <li><b>抽多張 stagger</b>：DRAW_CARD / MULLIGAN_DRAW_DECISION / PLAY_TRAINER / RESOLVE_SELECTION 改用 handDelta 算抽張數，stagger N 次（每張間隔 90ms，音量遞減 0.85→0.40 營造「前重後輕」連續發牌感）。涵蓋莉莉艾決意 / 博士的研究 / 月見的呼喚 / 抽 7 張 supporter / 各種 item 抽卡等。</li>
+          <li><b>起手發牌 stagger</b>：lobby→setup 觸發 ready-go 後（v4.964）350ms 起 stagger 播 7 張 deal 音（間隔 110ms，總 660ms）— 與 ready-go 並進營造「啟動 + 發牌」儀式感。</li>
+          <li><b>place-card 新音</b>：PLAY_BASIC / BENCH_POKEMON / SEND_NEW_ACTIVE 改用 place-card（中頻 noise burst + 低頻 thud，~80ms），跟 click（UI 切 tab）有明確區別 — 紙牌「啪」一聲落桌感。</li>
+          <li><b>實作</b>：sfx.ts 加 place-card 音 + PlaySfxOpts.force 跳過 throttle + export staggerSfx helper。observers / spectators 端同步（detectSpectatorStateDiffSfx 抽多張也 stagger）。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — sfx.ts 647 行 + game/+page.svelte 9980 行）/ Rule 4（tsc verify）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.965</span> 🐛 修暗黑鈴覆蓋原中毒狀態 + 加 applyStatusToActive helper（連帶修 statusPost / coinStatusPost）</summary>
         <ul>
           <li><b>玩家回報</b>：使用暗黑鈴造成寶可夢混亂時，會把寶可夢原本的中毒狀態蓋掉。</li>
