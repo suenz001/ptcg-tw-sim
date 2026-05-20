@@ -1825,6 +1825,15 @@
             return !!card && card.supertype === 'Energy';
           });
         }
+        // v4.952 超級妖火紅狐ex 戲法傳送門：牌庫頂 9 張中的寶可夢卡（任意階段）
+        if (f === 'Pokemon:TOP9') {
+          const top9 = new Set<string>((pendingSelection.params?.top9Iids as string[]) ?? []);
+          return src.deck.filter(c => {
+            if (!top9.has(c.iid)) return false;
+            const card = pool.get(c.cardId);
+            return !!card && card.supertype === 'Pokemon';
+          });
+        }
         // v4.942 黑暗球：bottom 7（用 top7Iids 名義 reuse 既有 spec'd TOP-N 機制）中的寶可夢卡
         if (f === 'Pokemon:TOP7') {
           const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
@@ -6082,6 +6091,7 @@
             ?? (pendingSelection.params?.top6Iids as string[] | undefined)
             ?? (pendingSelection.params?.top7Iids as string[] | undefined)
             ?? (pendingSelection.params?.top8Iids as string[] | undefined)
+            ?? (pendingSelection.params?.top9Iids as string[] | undefined)
             ?? []
           )}
           {@const pickableIids = new Set(selectionItems.map(c => c.iid))}

@@ -426,6 +426,7 @@ import './effects/cards/v2354_j_mark_batch';
 import './effects/cards/v2355_j_mark_batch';
 import './effects/cards/v2359_j_mark_batch';
 import './effects/cards/v2360_j_mark_batch';
+import './effects/cards/v2370_mp_promo';  // v4.952 M-P-J 特典卡（古歷 + 超級妖火紅狐ex）
 import './effects/cards/v2362_new_decks_batch';
 import './effects/cards/v2370_new_decks_batch';
 import './effects/cards/v2374_rocket_brain';

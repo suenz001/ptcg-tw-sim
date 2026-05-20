@@ -264,6 +264,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.952</span> 🦊 新增 M-P-J 特典卡：古歷（支援者）+ 超級妖火紅狐ex（爬 HK 官網）</summary>
+        <ul>
+          <li><b>玩家回報</b>：2 張 M-P 特典卡（J 標）未在牌組資料庫也未實裝。爬 HK 官網拿原文（TW 官網未發布）— <code>asia.pokemon-card.com/hk/card-search/detail/18969</code>（古歷）+ <code>/18965</code>（超級妖火紅狐ex）。</li>
+          <li><b>新加 2 張卡到 M-P-J.json + index.json 同步統計</b>：35 → 37 張，Pokemon 31 → 32 / Trainer 1 → 2。</li>
+          <li><b>古歷</b>（Supporter）：「將雙方的所有寶可夢各恢復「50」HP」。實裝走全場 heal 邏輯，雙方 active + bench 都扣 50 damage 下限 0。</li>
+          <li><b>超級妖火紅狐ex</b>（Stage2 Mega ex / HP 350 / Fire，evo from 妖火紅狐）兩個招式：
+            <ul>
+              <li><b>戲法傳送門</b>（cost Fire）：查看牌庫頂 9 張，選任意數量寶可夢放備戰，剩餘洗回。新增 picker filter <code>Pokemon:TOP9</code>（per Rule 21 spec'd N 慣例 + 觸發「翻到的其他」UI）。</li>
+              <li><b>奇異燈火</b>（cost FCC, 200 dmg）：對手戰鬥寶可夢【灼傷】+【混亂】。</li>
+            </ul>
+          </li>
+          <li><b>圖片來源</b>：暫用 HK 官網 imageUrl（<code>hk00018965.png</code> 等）。TW 官網之後發布時可再 batch 替換為 TW URL。</li>
+          <li><b>Iron Rules</b>：Rule 7c（JSON 卡面 source — 爬 HK 拿原文）/ Rule 11（Python pipeline 全程）/ Rule 14（minCount: 0）/ Rule 21（spec'd TOP-N + top9Iids 命名）/ Rule 22（新 filter 同步加 picker clause）/ Rule 4（tsc verify）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.951</span> 🏷️ 改網站標題：去掉「引擎」+ 補「寶可夢集換式卡牌」SEO 關鍵字</summary>
         <ul>
           <li><b>新標題</b>：「PTCG 實體賽事演練 — 寶可夢集換式卡牌模擬器」</li>

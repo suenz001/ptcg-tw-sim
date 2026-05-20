@@ -370,16 +370,16 @@
     "code": "M-P-J",
     "name": "M-P特典卡(J)",
     "regulationMark": "J",
-    "cardCount": 35,
+    "cardCount": 37,
     "supertypeCounts": {
-      "Pokemon": 31,
-      "Trainer": 1,
+      "Pokemon": 32,
+      "Trainer": 2,
       "Energy": 3
     },
     "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018077.png",
     "scrapedAt": "2026-04-25T00:00:00.000Z",
     "releaseDate": null,
-    "count": 35
+    "count": 37
   },
   {
     "code": "M3",
