@@ -2480,6 +2480,15 @@
       if (!ORACLE_MODE) {
         myUid = u?.uid ?? null;
       }
+      // v4.937：u=null（第一次造訪 / 登出後）→ 立即匿名重登。
+      //   修「登出後 dashboard 完全消失（沒退到匿名狀態）」bug。
+      //   pattern 同 decks/+page.svelte:409-414（牌組編輯器既有正確實作）。
+      //   signInAnonymously 會再次觸發 callback 帶 anonymous user → firebaseUser 設定 →
+      //   dashboard 顯示「👤 匿名 / 建立帳號」按鈕。
+      if (!u) {
+        try { await signInAnonymously(auth); } catch { /* retry on next visit */ }
+        return;
+      }
       // v4.925：跟著 user 變化同步雲端牌組（修「換帳號後仍顯示舊牌組」bug）。
       //   邏輯跟 decks/+page.svelte:409+ 同套：cloud + local merge by updatedAt。
       //   匿名 user 沒雲端帳號 → 只讀 localStorage。

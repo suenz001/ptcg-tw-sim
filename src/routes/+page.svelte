@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.937</span> 🔁 修登出後 dashboard 完全消失（沒退到匿名狀態）</summary>
+        <ul>
+          <li><b>玩家回報</b>：在對戰演練頁登入帳號時 dashboard 正常顯示，點「登出」後 dashboard 完全消失（不顯示匿名狀態，也沒「建立帳號」按鈕）。</li>
+          <li><b>Root cause</b>：<code>game/+page.svelte</code> 的 <code>onAuthStateChanged</code> callback 漏「<code>if (!u) signInAnonymously()</code>」分支。Firebase 登出後 callback 觸發帶 <code>u=null</code> → <code>firebaseUser=null</code> → 3 處 <code>&#123;#if firebaseUser&#125;</code> 都不渲染 → dashboard 整個消失。<code>handleSignOut</code> 的 confirm 文字寫「登出後將以匿名模式繼續使用」但實作從未真正以匿名重登 — 文字與行為不符。</li>
+          <li><b>對比</b>：牌組編輯器 <code>decks/+page.svelte:411-414</code> 已有正確的「<code>if (!user) signInAnonymously</code>」分支 — 牌組編輯器登出後會正常顯示匿名狀態。對戰演練頁漏抄這段。</li>
+          <li><b>修法</b>：對戰演練頁 callback 開頭加入：u=null 時呼叫 <code>signInAnonymously(auth)</code>。signInAnonymously 觸發 callback 二次帶 anonymous user → firebaseUser 設定 → dashboard 顯示「👤 匿名 / 建立帳號」按鈕。</li>
+          <li><b>順帶好處</b>：第一次造訪對戰演練頁的玩家（沒任何 Firebase 快取）也會立刻自動匿名登入並看到 dashboard，UX 一致。</li>
+          <li><b>Iron Rules</b>：Rule 1 / Rule 3 / Rule 4 / Rule 11。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.936</span> 🦴 修「含羞苞 癢癢花粉」未擋化石類物品卡</summary>
         <ul>
           <li><b>玩家回報</b>：含羞苞 使用「癢癢花粉」（讓對手下回合無法從手牌使出物品卡）後，對手仍能使出化石類卡（陳舊的甲蓋化石 / 鰭之化石 / 羽毛化石 / 背蓋化石 / 顎之化石 / 琥珀化石 / 根狀化石）。</li>
