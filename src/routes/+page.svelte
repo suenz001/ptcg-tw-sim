@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.957</span> 🦊 修 超級妖火紅狐ex 進化鏈 — 同位階 Stage2（從長尾火狐進化），非 Stage3</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.952 加新卡時把 超級妖火紅狐ex 的 evolvesFrom 設成「妖火紅狐」(Stage2)，變成不存在的 Stage3 進化階段。實際上 超級妖火紅狐ex 應和 妖火紅狐 / 妖火紅狐ex 同屬 Stage2，從 Stage1 「長尾火狐」進化。</li>
+          <li><b>規則背景</b>：PTCG 規則中所有 Mega ex（超級...ex）都是 Stage2，且從 Stage1 中間階段進化（非從 Stage2 同名 ex 進化）。例如：超級噴火龍Yex → 火恐龍、超級耿鬼ex → 鬼斯通、超級快龍ex → 哈克龍、超級沙奈朵ex → 奇魯莉安。超級妖火紅狐ex 是這次 audit 唯一寫錯的。</li>
+          <li><b>進化線</b>（妖火紅狐線）：火狐狸（Basic）→ 長尾火狐（Stage1）→ 妖火紅狐 / 妖火紅狐ex / 超級妖火紅狐ex（皆 Stage2，皆 evo from 長尾火狐）。</li>
+          <li><b>影響</b>：修前玩家會被牌組驗證引導去備「妖火紅狐」當墊腳石（實際上場用不上）。修後從 長尾火狐 即可直接進化超級妖火紅狐ex，符合 PTCG 卡面實際規則。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — JSON 改動）/ Rule 7（用獨特 anchor「species 狐狸寶可夢」確保只改 id=18965 那筆，不誤動 18515 妖火紅狐）/ Rule 14（資料正確性，改前先 audit 所有 Mega ex pattern 確認方向）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.956</span> 🔧 修 Cloudflare cache 卡舊版 — fetch URL 加 ?v=&#123;VERSION&#125; 自動 invalidate</summary>
         <ul>
           <li><b>玩家回報</b>：v4.952 新增的兩張 M-P-J 特典卡（古歷 + 超級妖火紅狐ex）在 卡牌資料庫 / 牌組編輯器 都看不到。</li>
