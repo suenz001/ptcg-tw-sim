@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.972</span> 🔧 修官網代碼匯入「saveDecks is not defined」+ 隱藏舊「🔖 從官方匯入」按鈕</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.971 修了 pool/poolById bug 後可成功匯入 60 張牌，但仍跳訊息「匯入失敗：saveDecks is not defined」。</li>
+          <li><b>根因</b>：我 v4.970 內呼叫 <code>saveDecks(decks)</code> 但 module top 沒 import 此 helper（同檔內其他地方都走 dynamic import）。</li>
+          <li><b>修</b>：改用 dynamic import + <code>pushDeck(updated)</code>（仿 line 374 pattern），同步存 localStorage + cloud。</li>
+          <li><b>順帶整理</b>：新「🎫 官網代碼匯入」更直覺、不需要設定書籤，所以隱藏舊「🔖 從官方匯入」按鈕（書籤工具版）。code 保留作備用，未來如官網爬蟲被擋還能 fall back。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.971</span> 🔧 hotfix — v4.970 官網代碼匯入用錯變數導致「.get is not a function」</summary>
         <ul>
           <li><b>玩家回報</b>：v4.970 剛上線就遇「匯入失敗：e(...).get is not a function」。</li>

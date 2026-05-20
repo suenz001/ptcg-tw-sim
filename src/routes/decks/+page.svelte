@@ -810,9 +810,12 @@
         `成功對應 ${matched.length} 種，但有 ${unmatched.length} 種未對應：\n\n${unmatched.slice(0, 8).join('\n')}${unmatched.length > 8 ? `\n…（共 ${unmatched.length} 種）` : ''}\n\n是否繼續匯入已對應的部分？`
       );
       if (!proceed) return;
-      // 更新 active deck — 同 importFromText pattern
-      decks = decks.map(d => d.id === active!.id ? { ...d, entries: matched, updatedAt: Date.now() } : d);
-      saveDecks(decks);
+      // 更新 active deck — v4.972 hotfix: saveDecks 沒 module top-level import
+      //   仿 line 374 pattern：dynamic import storage.saveDecks + pushDeck() cloud sync
+      const updated = { ...active!, entries: matched, updatedAt: Date.now() };
+      decks = decks.map(d => d.id === active!.id ? updated : d);
+      import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
+      pushDeck(updated);
       const totalCards = matched.reduce((s, e) => s + e.count, 0);
       const cachedNote = data.cached ? '（cache hit）' : '';
       alert(`✅ 從官網代碼 ${code} 匯入 ${matched.length} 種卡 / 共 ${totalCards} 張 ${cachedNote}`);
@@ -1235,7 +1238,8 @@
               <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字/圖片</button>
               <button class="small" onclick={openTextImport} disabled={!poolReady} title="貼上 PTCG 文字格式（包含官方訓練家網站可透過下方書籤工具一鍵匯入）">匯入文字</button>
               <!-- v3.83: 提供顯眼的官方匯入入口，避免玩家找不到（書籤教學原本藏在「匯入文字」modal 摺疊區內） -->
-              <button class="small primary" onclick={openOfficialImport} disabled={!poolReady} title="從官方訓練家網站一鍵匯入牌組（首次需設定書籤）">🔖 從官方匯入</button>
+              <!-- v4.972：官網代碼匯入(🎫)取代了書籤工具流程，舊按鈕隱藏但保留 code -->
+              <button class="small primary" hidden onclick={openOfficialImport} disabled={!poolReady} title="從官方訓練家網站一鍵匯入牌組（首次需設定書籤）">🔖 從官方匯入</button>
               <!-- v4.970：直接貼官網代碼匯入（XXXXXX-XXXXXX-XXXXXX 格式），透過 Oracle backend 爬解 -->
               <button class="small primary" onclick={importFromTwOfficialCode} disabled={!poolReady || twCodeImportLoading} title="貼上台灣官網牌組代碼（如 BYkvfk-zjikXf-SGtfpc）自動匯入">
                 {twCodeImportLoading ? '⏳ 解析中…' : '🎫 官網代碼匯入'}
