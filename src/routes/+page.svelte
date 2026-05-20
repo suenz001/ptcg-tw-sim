@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.958</span> 🐛 修 妖火紅狐｜能量風暴 沒認新衝天能量 on Stage2 = 2 個</summary>
+        <ul>
+          <li><b>玩家回報</b>：能量風暴（雙方全場能量 × 30）沒把附於 Stage2 寶可夢的新衝天能量算 2 個 — 妖火紅狐自己就是 Stage2，附 1 張新衝天能量本應算 2 個能量（+60 傷害），但實際只算 1 個（+30 傷害）。</li>
+          <li><b>規則</b>：新衝天能量卡面明文「若附於 2 階進化寶可夢身上，視為提供 2 個所有屬性的能量」— 是計數 override（非屬性 splitting），所以計算「能量數」時算 2 個。</li>
+          <li><b>修法</b>：在 <code>v2306_meta_pokemon.ts</code> 的 妖火紅狐｜能量風暴 regPre 內 inline 處理 — 一般能量算 1 個，新衝天能量 on Stage2 host 算 2 個。log 也顯示「（含 N 張新衝天能量 on Stage2 × 2）」標示，方便玩家確認。</li>
+          <li><b>規則邊界</b>：火箭隊能量 / 燃火能量 雖然卡面也寫「視為提供 N 個」，但分別是「屬性 splitting」與「attach cost 規則」，PTCG 官方裁定計「能量數」時仍算 1 張 — 不在此 override 範圍。</li>
+          <li><b>類似招式</b> audit：猛雷鼓｜落雷風暴 等同類招式 host 為 Basic，新衝天能量在 Basic 上只算 1 個（不適用），不需修。未來若有 Stage2 寶可夢用類似算式再 extract helper。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 4（tsc verify）/ Rule 14（特殊能量規則細節 — audit 三類特殊能量規則差異後才動手）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.957</span> 🦊 修 超級妖火紅狐ex 進化鏈 — 同位階 Stage2（從長尾火狐進化），非 Stage3</summary>
         <ul>
           <li><b>玩家回報</b>：v4.952 加新卡時把 超級妖火紅狐ex 的 evolvesFrom 設成「妖火紅狐」(Stage2)，變成不存在的 Stage3 進化階段。實際上 超級妖火紅狐ex 應和 妖火紅狐 / 妖火紅狐ex 同屬 Stage2，從 Stage1 「長尾火狐」進化。</li>

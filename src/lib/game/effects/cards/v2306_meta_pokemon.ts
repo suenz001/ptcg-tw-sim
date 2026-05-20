@@ -194,14 +194,39 @@ regR('delphox-flare-magic', (state, actorIdx, selectedIids, params, pool) => {
   s = addLog(s, `閃焰魔法：已丟棄能量，從牌庫抽 ${drawCount} 張卡（直到滿 7 張）`, actorIdx);
   return drawCards(s, actorIdx, drawCount);
 });
+// v4.958：能量風暴 — 雙方全場「能量數」× 30。
+//   一般能量卡（基本能量 / 大部分特殊能量）算 1 個。
+//   新衝天能量卡面明文「若附於 2 階進化寶可夢身上，視為提供 2 個能量」—
+//   是計數 override（非屬性 splitting），所以附於 Stage2 host 時算 2 個。
+//   火箭隊能量 / 燃火能量等「視為提供 X 屬性」是屬性規則或 attach cost 規則，
+//   PTCG 官方裁定計「能量數」時仍算 1 張 → 不在此 override 範圍。
 regPre('妖火紅狐|能量風暴', (state, aIdx, pool) => {
   let energyCount = 0;
+  let rebootBonusCount = 0;
   for (const p of state.players) {
-    if (p.active) energyCount += p.active.energyAttached.length;
-    for (const b of p.bench) energyCount += b.energyAttached.length;
+    for (const poke of [p.active, ...p.bench]) {
+      if (!poke) continue;
+      // 判斷 host 是否為 2 階進化（同 _shared.ts/getEnergyDiscardUnits 判斷）
+      const hostCard = pool.get(poke.cardId);
+      const hostStage = hostCard?.stage ?? hostCard?.subtype;
+      const hostIsStage2 = hostStage === 'Stage2';
+      for (const e of poke.energyAttached) {
+        const ec = pool.get(e.cardId);
+        if (!ec || ec.supertype !== 'Energy') continue;
+        if (ec.name === '新衝天能量' && hostIsStage2) {
+          // 卡面「視為提供 2 個能量」— 計數 +2
+          energyCount += 2;
+          rebootBonusCount += 1;
+        } else {
+          // 一般情況：1 張卡 = 1 個能量
+          energyCount += 1;
+        }
+      }
+    }
   }
   const dmg = energyCount * 30;
-  return { state: addLog(state, `能量風暴：雙方全場共有 ${energyCount} 個能量 → ${dmg} 傷害`, aIdx), damage: dmg };
+  const note = rebootBonusCount > 0 ? `（含 ${rebootBonusCount} 張新衝天能量 on Stage2 × 2）` : '';
+  return { state: addLog(state, `能量風暴：雙方全場共有 ${energyCount} 個能量${note} → ${dmg} 傷害`, aIdx), damage: dmg };
 });
 
 // ── 噗噗豬 (Grumpig) ─────────────────────────────────────────────────────────────
