@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.946</span> 📱 修遷移 banner 在 iPhone 動態島 / 瀏海下被擋</summary>
+        <ul>
+          <li><b>玩家回報</b>：手機版（iPhone 動態島機種）GitHub Pages 站打開時，v4.938 加的遷移 banner 跟動態島疊在一起，「立即切換」按鈕被遮住。</li>
+          <li><b>修法</b>：CSS <code>padding-top</code> 加 <code>env(safe-area-inset-top, 0px)</code> 動態 inset — 一般裝置 inset=0 維持原樣，iPhone 動態島自動加 ~50px 推 banner 內容下移避開。viewport-fit=cover 已在 app.html 設好（v4.491 手機版適配時加的），env() 才有值。</li>
+          <li><b>影響</b>：純 CSS 一行改動，桌機 / Android / 一般 iPhone 都不受影響。</li>
+          <li><b>Iron Rules</b>：Rule 11 / Rule 4。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.945</span> 🔧 hotfix v4.944 audit script Rule 11b NUL byte 100% 誤觸</summary>
         <ul>
           <li><b>Bug</b>：v4.944 的 audit 用 <code>grep -q $&apos;\x00&apos; file</code> 檢查 NUL byte — bash 變數展開時 <code>$&apos;\x00&apos;</code> 被截斷成空字串 → grep pattern 空 → 任何非空檔案都「匹配」→ 100% 誤觸（所有文字檔都被報告為含 NUL byte）。</li>

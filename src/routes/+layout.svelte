@@ -71,13 +71,16 @@
   }
 
   /* v4.938：遷移 banner — 黏在頁面頂端，所有頁面共用 */
+  /* v4.946：padding-top 加 env(safe-area-inset-top) — 避開 iPhone 動態島 / 瀏海
+     一般裝置 inset=0 → padding 維持 10px；iPhone 動態島 ~50px 自動加。
+     viewport-fit=cover 已在 app.html，env() 才有值。 */
   .migration-banner {
     position: sticky;
     top: 0;
     z-index: 9999;
     background: linear-gradient(90deg, #1e3a20, #2d5a32);
     color: white;
-    padding: 10px 14px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px 14px;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
     font-size: 14px;
   }
