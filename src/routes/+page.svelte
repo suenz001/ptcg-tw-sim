@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.948</span> 🔧 hotfix v4.947 ai-roles.ts JSDoc nested */ + Edit 工具截斷</summary>
+        <ul>
+          <li><b>連環兩 bug</b>：(1) v4.947 ai-roles.ts:162 JSDoc 內寫 <code>if (...) &#123; /* 優先附能量 */ &#125;</code>，內層 <code>*/</code> 提早關閉外層 JSDoc → 下方所有 code 被解析為非 comment → 38 tsc errors。(2) 我用 Edit 工具修，違反 Iron Rule 11（任何既有檔案禁用 Edit），檔案被 mount-truncate 少最後一個 <code>&#125;</code>。</li>
+          <li><b>修法</b>：嚴格走 Python pipeline 從 PARENT_SHA blob 重建 → 安全替換 inline <code>/* ... */</code> 為描述文字 → tsc verify clean。</li>
+          <li><b>教訓</b>：Rule 11 不只是「大檔案才會截斷」— 小檔案（9.8KB）也被截。下次絕對不用 Edit 工具改既有檔案。</li>
+          <li><b>Iron Rules</b>：Rule 11 違規檢討 / Rule 4（tsc verify 抓出問題）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.947</span> 🤖 AI Role 分類基礎設施（Phase 1，不動現有 AI 邏輯）</summary>
         <ul>
           <li><b>長期計畫</b>：AI 對複雜牌組（魔靈多龍 / 妙蛙花ex / N 的索羅亞克ex 等）反應不佳，現在靠 hard-code special-case 撐。引入 Role 分類後可一次取代多個 special-case，並讓玩家自訂 deck 也享受到 AI 優化。</li>

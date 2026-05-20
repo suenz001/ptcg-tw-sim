@@ -159,7 +159,7 @@ export function classifyRole(card: Card | undefined | null): PokemonRole {
  *
  * **用法**（Phase 2 之後）：
  *   const role = getCardRole(inst.cardId, currentDeck, pool);
- *   if (role === 'main-attacker') { /* 優先附能量 */ }
+ *   if (role === 'main-attacker') { ... 優先附能量 ... }
  *
  * @param cardId  Card.id (零之大空洞、N的索羅亞克ex 等 metadata 看 pool.get(cardId))
  * @param deck    當前牌組（含 entries 內的 role 標註）— null 代表沒 deck 上下文（純 heuristic）
