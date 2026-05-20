@@ -175,7 +175,7 @@ reg('甜蜜球', (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon:MatchOppName',
-    minCount: hasMatch ? 1 : 0, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
     params: { matchOppNames: [...oppNames] },
   });
@@ -206,11 +206,15 @@ reg('黑暗球', (st, idx, pool) => {
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon:TOP_N',
-    minCount: hasPoke ? 1 : 0, maxCount: 1,
+    // v4.942：filter 'Pokemon:TOP_N' → 'Pokemon:TOP7' + param top7Iids（vs topIids）
+    //   原因：picker UI 「🔍 查看翻到的其他」block 用正則 `/:TOP\d+$/` 偵測 + 抓 top<N>Iids，
+    //         Pokemon:TOP_N 不符合（_N 不是數字），所以不會顯示 7 張中非寶可夢的卡。
+    //   改用 'Pokemon:TOP7' + top7Iids 兩個既有慣例，自動觸發 UI block 顯示全部 7 張。
+    filter: 'Pokemon:TOP7',
+    minCount: 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
     params: {
-      topIids: bottomIids,  // 重用 TOP_N filter 機制（filter 邏輯只看 iid 集合，不分 top/bottom）
+      top7Iids: bottomIids,  // 即使叫 top7Iids 內容仍是 bottom7（UI block 抓此 key）
       titleOverride: `黑暗球：從牌庫下方 ${bottomN} 張中選 1 張寶可夢加手牌`,
     },
   });
@@ -333,7 +337,7 @@ reg('超級信號', (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'MegaEx',
-    minCount: hasMegaEx ? 1 : 0, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
   });
 });

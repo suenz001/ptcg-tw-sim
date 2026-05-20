@@ -1825,6 +1825,15 @@
             return !!card && card.supertype === 'Energy';
           });
         }
+        // v4.942 黑暗球：bottom 7（用 top7Iids 名義 reuse 既有 spec'd TOP-N 機制）中的寶可夢卡
+        if (f === 'Pokemon:TOP7') {
+          const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
+          return src.deck.filter(c => {
+            if (!top7.has(c.iid)) return false;
+            const card = pool.get(c.cardId);
+            return !!card && card.supertype === 'Pokemon';
+          });
+        }
         // v4.915 杜若：peek N 中的寶可夢卡（任意階段）
         if (f === 'Pokemon:TOP_N') {
           const topN = new Set<string>((pendingSelection.params?.topIids as string[]) ?? []);

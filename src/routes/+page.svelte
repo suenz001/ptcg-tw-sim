@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.942</span> 🎯 全 audit 牌庫搜尋類允許「不選」(13 處) + 黑暗球顯示 7 張全部</summary>
+        <ul>
+          <li><b>玩家回報</b>：幫忙鈴 / 黑暗球 使用後玩家應可選擇不選（牌庫有候選時 picker 還是強制選 1 張）；黑暗球沒列出 7 張中非寶可夢的卡。</li>
+          <li><b>Bug 1（13 處 minCount audit）</b>：deck-search 用 <code>minCount: hasX ? 1 : 0</code> — 牌庫有候選時 minCount=1 強制選。違反 Iron Rule 14（玩家應永遠可看牌庫剩餘 + 跳過）。全部改 <code>minCount: 0</code>。</li>
+          <li><b>影響的卡</b>：好友寶芬類、大師球、巢穴球、幫忙鈴、勝利之證、甜蜜球、超級球類、黑暗球、阿克羅瑪 step1/2、能量轉移搜尋、通用 search-pokemon-to-hand × 2 — 共 13 處全部允許不選。</li>
+          <li><b>Bug 2（黑暗球不顯示 7 張全部）</b>：v4.940 用 filter <code>'Pokemon:TOP_N'</code>，但 picker UI 的「🔍 查看翻到的其他」block 用正則 <code>/:TOP\d+$/</code> 偵測（要 :TOP 後跟「數字」），<code>TOP_N</code> 的 <code>_N</code> 不是數字 → block 不觸發。修法：filter 改 <code>'Pokemon:TOP7'</code> + param <code>top7Iids</code>（UI block 抓此 key）— 符合既有 spec'd TOP-N 慣例（如寶可裝置3.0 的 Supporter:TOP7 / 配樂之笛的 Basic:TOP5）。加新 picker clause <code>'Pokemon:TOP7'</code>。</li>
+          <li><b>Iron Rules</b>：Rule 14（牌庫搜尋永遠 minCount=0）/ Rule 7c（JSON 查證 — 卡面「選 1 張」是非強制，玩家可棄權） / Rule 4 / Rule 11。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.941</span> 🐸 修「同名群聚」類招式 picker 沒限定同名（呱呱泡蛙 群聚 等 4 張卡）</summary>
         <ul>
           <li><b>玩家回報</b>：呱呱泡蛙 SV5a 招式「群聚」（從牌庫選最多 2 張「呱呱泡蛙」放備戰），實際 picker 顯示**所有**基礎寶可夢，玩家可選任意基礎寶可夢上場（規則違反）。</li>

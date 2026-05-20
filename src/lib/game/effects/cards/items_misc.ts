@@ -742,7 +742,7 @@ reg('大師球', (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon',
-    minCount: hasPoke ? 1 : 0, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'master-ball-pick',
   });
 });
@@ -778,7 +778,7 @@ reg('巢穴球', (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Basic',
-    minCount: hasBasic ? 1 : 0, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'nest-ball-place',
   });
 });
@@ -971,7 +971,7 @@ reg('幫忙鈴', (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Supporter',
-    minCount: hasSupporter ? 1 : 0, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'help-bell-pick',
   });
 });
@@ -1057,7 +1057,7 @@ reg('勝利之證', (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon',
-    minCount: hasPoke ? 1 : 0, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'victory-proof-pick',
   });
 });

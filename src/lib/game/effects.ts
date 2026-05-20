@@ -1455,7 +1455,7 @@ regPost('謎擬Q|呼朋引伴', (state, aIdx, pool) => {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'Basic',
-    minCount: hasBasic ? 1 : 0, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'bench-basic-from-deck', // 複用好友寶芬的 resolver
   });
 });
@@ -1715,7 +1715,7 @@ reg('精靈球', (st, idx, pool) => {
   const hasPoke = st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
   return withPending(st, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon', minCount: hasPoke ? 1 : 0, maxCount: 1,
+    filter: 'Pokemon', minCount: 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
   });
 });
@@ -3509,7 +3509,7 @@ reg('超級球', (st, idx, pool) => {
   const hasPoke = st.players[idx].deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
   return withPending(st, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon', minCount: hasPoke ? 1 : 0, maxCount: 1,
+    filter: 'Pokemon', minCount: 0, maxCount: 1,
     effectKey: 'search-pokemon-to-hand',
   });
 });
@@ -11017,7 +11017,7 @@ reg('能量輸送', (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'BasicEnergy',
-    minCount: hasBE ? 1 : 0, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'energy-transfer-search',
   });
 });
@@ -11179,7 +11179,7 @@ reg('阿克羅瑪的執著', (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Stadium',
-    minCount: hasStadium ? 1 : 0, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'akuroma-step1-stadium',
   });
 });
@@ -11206,7 +11206,7 @@ regR('akuroma-step1-stadium', (st, idx, iids, _params, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Energy',
-    minCount: hasEnergy ? 1 : 0, maxCount: 1,
+    minCount: 0, maxCount: 1,
     effectKey: 'akuroma-step2-energy',
   });
 });
