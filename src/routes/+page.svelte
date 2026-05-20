@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.974</span> 📋 「匯出為官網代碼」改成 modal — 可直接複製代碼</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.973 匯出成功用 native <code>alert()</code> 顯示代碼，但 alert 內容不能選取/複製，等於是看得到拿不到。</li>
+          <li><b>改</b>：成功後彈出專屬 modal，大字 monospace 顯示代碼（可直接選取），下方「📋 複製代碼」按鈕 + 「🔗 在官網查看」連結。複製成功 button 文字切「✓ 已複製」，2 秒後恢復可再次複製。</li>
+          <li><b>自動複製</b>：modal 開啟時仍會嘗試在 user-gesture context 內自動寫剪貼簿；如失敗（HTTPS 受限 / iframe），玩家可點 modal 內按鈕（必為 user-click）— 多一條後備路徑用 <code>document.execCommand('copy')</code>。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.973</span> 📤 牌組編輯器新增「匯出為官網代碼」</summary>
         <ul>
           <li><b>玩家建議</b>：既然 v4.970 開放了「貼官網代碼匯入」，那反過來「把我們站台組的牌匯出為官網代碼」也應該做，方便分享給其他玩家。</li>

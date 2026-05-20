@@ -203,6 +203,14 @@
   // v4.973：官網代碼匯出 loading flag + 上次匯出代碼（顯示在 button 旁方便玩家複製）
   let twCodeExportLoading = $state(false);
 
+  // v4.974：匯出結果 modal — 取代 alert，玩家可方便複製代碼 / 開官網連結
+  let showExportCodeModal = $state(false);
+  let exportedDeckCode = $state('');
+  let exportedTotalKinds = $state(0);
+  let exportedTotalCards = $state(0);
+  // copy flag 三態：'idle'(尚未複製) / 'copied'(成功) / 'failed'(瀏覽器拒絕)
+  let exportCopyFlag = $state<'idle' | 'copied' | 'failed'>('idle');
+
   // v4.91：匯出圖片功能 state
   let exportingImage = $state(false);
   let exportImageError = $state('');
@@ -868,22 +876,54 @@
         return;
       }
       const data = await r.json() as { deckCode: string; totalKinds: number; totalCards: number };
-      // 嘗試自動複製到剪貼簿（瀏覽器可能在無 user-gesture / iframe 環境拒絕）
-      let copied = false;
+      // v4.974: state 賽好後開 modal — modal 內可方便複製 / 開官網
+      exportedDeckCode = data.deckCode;
+      exportedTotalKinds = data.totalKinds;
+      exportedTotalCards = data.totalCards;
+      exportCopyFlag = 'idle';
+      // 嘗試在 user-gesture 還有效的 callback 內自動複製（成功的話 modal 內按鈕就會顯示 ✓ 已複製）
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(data.deckCode);
-          copied = true;
+          exportCopyFlag = 'copied';
         }
-      } catch { /* ignore — 用 alert 提供代碼讓玩家手動複製 */ }
-      const officialUrl = `https://asia.pokemon-card.com/tw/deck-build/code/?deckCode=${data.deckCode}`;
-      const copyNote = copied ? '\n\n（代碼已自動複製到剪貼簿）' : '\n\n（自動複製失敗，請手動 Ctrl+C 複製）';
-      alert(`✅ 匯出成功！\n\n官網代碼：${data.deckCode}\n張數：${data.totalKinds} 種 / ${data.totalCards} 張${copyNote}\n\n可於官網查看：${officialUrl}`);
+      } catch { /* ignore — 玩家可手動點 modal 內「複製」按鈕 */ }
+      showExportCodeModal = true;
     } catch (e) {
       alert(`匯出失敗：${e instanceof Error ? e.message : String(e)}`);
     } finally {
       twCodeExportLoading = false;
     }
+  }
+
+  // v4.974: modal 內「複製」按鈕 — 玩家點下時必定在 user-gesture context，clipboard API 成功率高
+  async function copyExportedCode() {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(exportedDeckCode);
+        exportCopyFlag = 'copied';
+        // 2 秒後恢復 idle，讓玩家可重複複製（例如想分享多次）
+        setTimeout(() => { if (exportCopyFlag === 'copied') exportCopyFlag = 'idle'; }, 2000);
+        return;
+      }
+    } catch { /* fall through */ }
+    // fallback: 用 textarea + execCommand('copy')（老瀏覽器 / 不安全 context）
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = exportedDeckCode;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      exportCopyFlag = ok ? 'copied' : 'failed';
+      if (ok) setTimeout(() => { if (exportCopyFlag === 'copied') exportCopyFlag = 'idle'; }, 2000);
+    } catch {
+      exportCopyFlag = 'failed';
+    }
+  }
+
+  function closeExportCodeModal() {
+    showExportCodeModal = false;
   }
 
   function importFromText() {
@@ -1743,6 +1783,27 @@
           </button>
         </div>
       {/if}
+    </div>
+  </div>
+{/if}
+
+<!-- ── v4.974：匯出官網代碼成功 modal ───────────────────────────────────── -->
+<!-- 取代 v4.973 的 alert，提供大字代碼顯示 + 複製按鈕 + 官網連結 -->
+{#if showExportCodeModal}
+  <div class="pv-overlay" onclick={closeExportCodeModal}>
+    <div class="pv-inner export-code-modal" onclick={(e) => e.stopPropagation()}>
+      <button class="pv-close" onclick={closeExportCodeModal} aria-label="關閉">×</button>
+      <h3 class="modal-title">✅ 匯出成功 — 官網代碼</h3>
+      <p class="muted">已永久發行到台灣官網。把代碼貼給朋友，他們在「🎫 官網代碼匯入」按鈕貼上即可載入相同牌組。</p>
+      <div class="exported-code-display">{exportedDeckCode}</div>
+      <div class="exported-totals muted">共 {exportedTotalKinds} 種卡 / {exportedTotalCards} 張</div>
+      <div class="exported-actions">
+        <button class="small primary" onclick={copyExportedCode}>
+          {exportCopyFlag === 'copied' ? '✓ 已複製' : exportCopyFlag === 'failed' ? '⚠ 複製失敗，請手動選取' : '📋 複製代碼'}
+        </button>
+        <a class="small button-like" href={`https://asia.pokemon-card.com/tw/deck-build/code/?deckCode=${exportedDeckCode}`} target="_blank" rel="noopener">🔗 在官網查看</a>
+        <button class="small" onclick={closeExportCodeModal}>關閉</button>
+      </div>
     </div>
   </div>
 {/if}
@@ -2746,6 +2807,44 @@
   .text-modal { max-width: 560px; }
   .modal-title { margin: 0 0 0.5rem; font-size: 1.1rem; }
   .export-image-error { margin-top:10px; padding:8px 12px; background:#fef0f0; border-left:3px solid #c53030; color:#742a2a; font-size:0.9rem; border-radius:4px; }
+  /* v4.974：匯出官網代碼 modal */
+  .export-code-modal { max-width: 480px; padding: 1.2rem 1.5rem; }
+  .exported-code-display {
+    margin: 0.8rem 0 0.4rem;
+    padding: 0.7rem 0.9rem;
+    background: #f5f7fa;
+    border: 2px dashed #4a7ab5;
+    border-radius: 6px;
+    font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+    font-size: 1.3rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: #1e3a5f;
+    text-align: center;
+    user-select: all;
+    word-break: break-all;
+  }
+  .exported-totals { margin: 0 0 0.8rem; font-size: 0.85rem; text-align: center; }
+  .exported-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; align-items: center; margin-top: 0.6rem; }
+  .exported-actions .button-like {
+    display: inline-block;
+    padding: 0.32rem 0.7rem;
+    background: #eef2f8;
+    border: 1px solid #c9d2e0;
+    border-radius: 5px;
+    color: #2a5aa0;
+    text-decoration: none;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .exported-actions .button-like:hover { background: #dfe7f3; }
+  @media (max-width: 600px) {
+    .export-code-modal { max-width: 92vw; padding: 1rem 1rem; }
+    .exported-code-display { font-size: 1.05rem; padding: 0.6rem 0.5rem; }
+    .exported-actions { flex-direction: column; align-items: stretch; }
+    .exported-actions > * { width: 100%; text-align: center; }
+  }
   .official-import-help { background:#f4f7fa; border:1px solid #d0dbe7; border-radius:6px; padding:0.5rem 0.8rem; margin:0.5rem 0; font-size:0.85rem; }
   .official-import-help summary { cursor:pointer; font-weight:600; color:#2a5aa0; }
   .official-import-help .help-body { margin-top:0.5rem; }
