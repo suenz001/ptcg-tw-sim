@@ -100,9 +100,20 @@ regR('bench-named-basic-from-deck', (st, idx, iids, params, pool) => {
   return applyBenchPlaceSideEffects(st, idx, validIids, pool);
 });
 
-regR('bench-basic-from-deck', (st, idx, iids, _params, pool) => {
+regR('bench-basic-from-deck', (st, idx, iids, params, pool) => {
+  // v4.941 defense-in-depth：若 params 有 targetName，過濾 iids 只保留同名卡
+  //   防 picker UI bug 或惡意 client 繞 picker 送任意基礎寶可夢 iid。
+  //   picker 端 'Basic:SameName' filter 已做第一層攔截，這裡是第二層 server-side 驗證。
+  const targetName = params?.targetName as string | undefined;
+  let effIids = iids;
+  if (targetName) {
+    effIids = iids.filter(iid => {
+      const inst = st.players[idx].deck.find(c => c.iid === iid);
+      return inst && pool.get(inst.cardId)?.name === targetName;
+    });
+  }
   // 公開資訊：放到備戰區本來就對對手可見，順便記到 log 方便追蹤
-  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const chosen = st.players[idx].deck.filter(c => effIids.includes(c.iid));
   if (chosen.length > 0) {
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
     st = addLog(st, `放到備戰區：${names}`, idx);
@@ -112,15 +123,15 @@ regR('bench-basic-from-deck', (st, idx, iids, _params, pool) => {
   // 把 bench 增加 + deck remove + 重洗
   st = updatePlayer(st, idx, (p) => {
     const selected = p.deck
-      .filter(c => iids.includes(c.iid))
+      .filter(c => effIids.includes(c.iid))
       .map(c => ({ ...c, justPlaced: true }));
-    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+    const remaining = p.deck.filter(c => !effIids.includes(c.iid));
     // v3.78：用 getOwnBenchLimit 支援零之大空洞（5→8 格）
     const bench = [...p.bench, ...selected].slice(0, getOwnBenchLimit(st, idx, pool));
     return { ...p, deck: shuffle(remaining), bench };
   });
   // v2.119：觸發「放到備戰」的被動場地卡效果（險惡廢墟等）
-  return applyBenchPlaceSideEffects(st, idx, iids, pool);
+  return applyBenchPlaceSideEffects(st, idx, effIids, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

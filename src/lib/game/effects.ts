@@ -9067,6 +9067,8 @@ function handAttachEnergyPost(
 }
 
 // ── Helper: deckSameNameBenchPost — 從牌庫選最多 N 張「同名卡」放備戰 ─────
+// v4.941：filter 'Basic' → 'Basic:SameName' — 原 'Basic' picker UI 沒讀 params.validIids，
+//   顯示所有基礎寶可夢（規則違反）；新 filter 用 params.targetName 限定只顯示同名卡。
 function deckSameNameBenchPost(max: number, cardName: string, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
@@ -9078,9 +9080,13 @@ function deckSameNameBenchPost(max: number, cardName: string, label: string): At
     const s = addLog(state, `${label}：從牌庫選最多 ${slots} 張「${cardName}」放備戰`, aIdx);
     return withPending(s, {
       type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: 'Basic', minCount: 0, maxCount: slots,
+      filter: 'Basic:SameName', minCount: 0, maxCount: slots,
       effectKey: 'bench-basic-from-deck',
-      params: { validIids: cand.map(c => c.iid), targetName: cardName },
+      params: {
+        validIids: cand.map(c => c.iid),
+        targetName: cardName,
+        titleOverride: `${label}：從牌庫選最多 ${slots} 張「${cardName}」放備戰`,
+      },
     });
   };
 }

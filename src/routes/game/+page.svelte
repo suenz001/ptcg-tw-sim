@@ -1843,6 +1843,16 @@
             return !!card && card.supertype === 'Trainer';
           });
         }
+        // v4.941 同名群聚（呱呱泡蛙 / 強顎雞母蟲 / 一家鼠 / 蟲電寶 等）：限定同名基礎寶可夢
+        if (f === 'Basic:SameName') {
+          const targetName = pendingSelection.params?.targetName as string | undefined;
+          return src.deck.filter(c => {
+            const card = pool.get(c.cardId);
+            if (!card || !isBasicPokemonCard(card)) return false;
+            if (targetName && card.name !== targetName) return false;
+            return true;
+          });
+        }
         // v2.209 配樂之笛：對手牌庫頂 5 張中的基礎寶可夢
         if (f === 'Basic:TOP5') {
           const top5 = new Set<string>((pendingSelection.params?.top5Iids as string[]) ?? []);

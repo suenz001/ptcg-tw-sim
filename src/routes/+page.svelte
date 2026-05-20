@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.941</span> 🐸 修「同名群聚」類招式 picker 沒限定同名（呱呱泡蛙 群聚 等 4 張卡）</summary>
+        <ul>
+          <li><b>玩家回報</b>：呱呱泡蛙 SV5a 招式「群聚」（從牌庫選最多 2 張「呱呱泡蛙」放備戰），實際 picker 顯示**所有**基礎寶可夢，玩家可選任意基礎寶可夢上場（規則違反）。</li>
+          <li><b>Root cause</b>：<code>deckSameNameBenchPost</code> helper 用 <code>filter: 'Basic'</code>，但 game/+page.svelte 的 picker 'Basic' filter 只 check <code>isBasicPokemonCard</code>，沒讀 helper 已塞進去的 <code>params.validIids</code> 或 <code>params.targetName</code> → 同名限制完全失效。</li>
+          <li><b>修法</b>：加新 picker filter <code>'Basic:SameName'</code>，用 <code>params.targetName</code> 過濾只顯示同名卡。<code>deckSameNameBenchPost</code> 改用此新 filter。Resolver 加 defense-in-depth — 用 <code>targetName</code> 對 <code>iids</code> 再過濾一次，防惡意 client 繞 picker UI。</li>
+          <li><b>影響範圍（4 張卡同步修好）</b>：呱呱泡蛙｜群聚（max=2）、強顎雞母蟲｜群聚（max=2）、一家鼠｜家族行軍（max=2）、蟲電寶｜並排（max=3）— 全部用同個 helper，這次一次修好。</li>
+          <li><b>Iron Rules</b>：Rule 7c（JSON 查證 — 卡面「最多 2 張『呱呱泡蛙』」明確同名限制）/ Rule 4（tsc clean）/ Rule 11（Python pipeline）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.940</span> 🔔 修「幫忙鈴」永遠不能用 + 「黑暗球」範圍未限定 bottom 7</summary>
         <ul>
           <li><b>玩家回報</b>：幫忙鈴 / 黑暗球 未完整實裝。依鐵律 7c 查 JSON 卡面原文後確認兩條 bug。</li>
