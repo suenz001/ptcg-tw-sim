@@ -19,6 +19,8 @@ import {
   canBeInitialActiveCard, isRulePokemon,
   getEffectiveHP, canAffordAttack,
 } from './engine';
+// v4.949 Phase 2a：能量分配 role-aware
+import { findMainAttackers } from './ai-roles';
 
 // ── 主要入口 ──────────────────────────────────────────────────────────────────
 
@@ -128,21 +130,47 @@ export function getAIAction(
     if (availableAttacks.length > 0) {
       // 有招式可用，跳过填能量
     } else {
-      // 还不能发招式，找一张能量附上
-      const activeCard = pool.get(player.active.cardId);
-      const activeType = activeCard?.pokemonType;
+      // v4.949 Phase 2a: role-aware 能量分配（保守版）
+      //   舊版：在 active 沒招可發時，把能量附給 active。
+      //   新版：在 active 沒招可發時，優先找 bench 上有 main-attacker（heuristic
+      //         分類為「主打手」的寶可夢，HP≥210 + dmg≥150 + rule-box）→ 附給它；
+      //         沒主打手或主打手能量已滿（≥ maxAttackCost）→ 附 active（同舊版）。
+      //
+      //   效果：bench 上養主打手時不再被忽略；典型情境是 utility active（如 N 的
+      //   索羅亞克ex 抽牌位）+ bench 主打手（多龍巴魯托ex），讓能量正確流向打手。
+      //
+      //   保守設計：findMainAttackers 找不到時 100% fallback 舊行為（附 active）。
+      //   heuristic 沒覆蓋的牌組行為完全一致，避免退化風險。
+      const allMyPokemon: CardInstance[] = [
+        ...(player.active ? [player.active] : []),
+        ...player.bench,
+      ];
+      const mainAttackers = findMainAttackers(allMyPokemon, null, pool);
+      // 過濾「能量已滿」的主打手（避免無謂堆能量）
+      const needyMains = mainAttackers.filter(inst => {
+        const card = pool.get(inst.cardId);
+        if (!card?.attacks?.length) return false;
+        const maxCost = Math.max(...card.attacks.map(a => a.cost?.length ?? 0));
+        return inst.energyAttached.length < maxCost;
+      });
+      // 目標：能量最少的主打手 / fallback active
+      const target: CardInstance = needyMains.length > 0
+        ? needyMains.reduce((min, c) =>
+            c.energyAttached.length < min.energyAttached.length ? c : min)
+        : player.active;
+      const targetCard = pool.get(target.cardId);
+      const targetType = targetCard?.pokemonType;
       // 从手牌中找能量：有匹配属性优先，否则随便拿一张
       const energyCandidates = player.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
       const energyInHand = energyCandidates.find(c => {
         const ec = pool.get(c.cardId);
         if (!ec) return false;
-        // 优先选属性匹配的
-        // pokemonType 匹配（如 Darkness = Darkness）；卡名匹配（如「基本【惡】能量」含【惡】）
-        return ec.pokemonType === activeType ||
-          ec.name.includes(`【${activeType}】`);
+        // 优先选属性匹配的（target 屬性）
+        return ec.pokemonType === targetType ||
+          ec.name.includes(`【${targetType}】`);
       }) ?? energyCandidates[0]; // 没有匹配的就用第一张
       if (energyInHand) {
-        return { type: 'ATTACH_ENERGY', energyIid: energyInHand.iid, targetIid: player.active.iid };
+        return { type: 'ATTACH_ENERGY', energyIid: energyInHand.iid, targetIid: target.iid };
       }
     }
     } // close non-dragapult else

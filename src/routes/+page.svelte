@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.949</span> 🎯 AI 能量分配 role-aware（Phase 2a — 保守接入點）</summary>
+        <ul>
+          <li><b>第一個 role 分類接入點上線</b>：AI 在「<code>active</code> 沒招可發」時，原本一律把能量附給 active；新版優先找 bench 上的 <code>main-attacker</code>（heuristic 分類：HP≥210 + dmg≥150 + rule-box）附給它，bench 主打手能量已滿時 fallback 附 active。</li>
+          <li><b>修哪個典型情境</b>：utility 寶可夢在 active（如 N 的索羅亞克ex 抽牌位）+ bench 養著主打手（如多龍巴魯托ex / 厄鬼椪）— 舊 AI 會把能量都附給 utility active 浪費，新 AI 會優先養 bench 主打手。</li>
+          <li><b>保守設計</b>：<code>findMainAttackers()</code> 找不到主打手時 100% fallback 舊行為（附 active）— heuristic 沒覆蓋的牌組（dragapult special-case 仍走 dragapultEnergyAction）行為完全一致，零退化風險。</li>
+          <li><b>Sandbox 無 sim verification</b>：sandbox 不允許 esbuild 寫入暫存檔（EPERM），無法跑 AI 內戰模擬。改用「最小改動 + fallback 保 100% 一致」確保不退化；Push 後實戰觀察。</li>
+          <li><b>沒動的部分</b>：魔靈多龍 special-case（dragapultEnergyAction）/ 妙蛙花ex 日光轉移 special-case / N 的索羅亞克ex 交易評分 — 後續 phase 評估是否能再用 role 取代。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 4（tsc verify 必跑）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.948</span> 🔧 hotfix v4.947 ai-roles.ts JSDoc nested */ + Edit 工具截斷</summary>
         <ul>
           <li><b>連環兩 bug</b>：(1) v4.947 ai-roles.ts:162 JSDoc 內寫 <code>if (...) &#123; /* 優先附能量 */ &#125;</code>，內層 <code>*/</code> 提早關閉外層 JSDoc → 下方所有 code 被解析為非 comment → 38 tsc errors。(2) 我用 Edit 工具修，違反 Iron Rule 11（任何既有檔案禁用 Edit），檔案被 mount-truncate 少最後一個 <code>&#125;</code>。</li>
