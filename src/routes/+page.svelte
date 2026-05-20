@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.968</span> 🎙️ 換 ready-go 開戰音 — 用戶提供新語音「Start the game already」</summary>
+        <ul>
+          <li><b>改動</b>：preload sample 從 <code>ready-go.wav</code> 換成 <code>start-the-game-already.mp3</code>（16KB）。</li>
+          <li><b>觸發時機</b>：跟 v4.964 一致 — lobby 雙方按完準備那一刻播。</li>
+          <li><b>舊檔保留</b>：原 <code>ready-go.wav</code> 保留在 static/sounds 不刪（萬一新檔有問題可快速回退 URL）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.967</span> 🔊 音效 A 級升級 — 抽多張卡 stagger + 紙牌落桌 place-card 音</summary>
         <ul>
           <li><b>玩家回報</b>：莉莉艾決意抽 6~8 張 / 起手發 7 張只響一聲太單薄；放卡到備戰只有 UI click 沒「啪」一聲落桌感。</li>

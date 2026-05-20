@@ -2489,9 +2489,10 @@
     uiVolume = getUiVolume();
     sfxVolume = getSfxVolume();
     statusVolume = getStatusVolume();
-    // v4.929 playWhenHidden + preload ready-go.wav
+    // v4.929 playWhenHidden + preload ready-go sample
+    // v4.968: 換成「Start the game already.mp3」(用戶提供的開戰語音)
     playWhenHidden = getPlayWhenHidden();
-    preloadReadyGoSample(`${base}/sounds/ready-go.wav`);
+    preloadReadyGoSample(`${base}/sounds/start-the-game-already.mp3`);
     bgmTrack = getBgmTrack();
     bgmVolume = getBgmVolume();
     // 匿名登入（線上對戰需要）— v4.924 改用 Firebase + Oracle 並行：
