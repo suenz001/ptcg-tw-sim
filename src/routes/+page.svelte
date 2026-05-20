@@ -206,7 +206,8 @@
 </script>
 
 <main>
-  <h1>PTCG 實體賽事演練 — 寶可夢集換式卡牌模擬器 <span class="version">v{VERSION}</span></h1>
+  <h1>PTCG 實體賽事演練 <span class="version">v{VERSION}</span></h1>
+  <p class="subtitle">寶可夢集換式卡牌模擬器</p>
   <p class="tagline">Deck building testing and card database 牌組構築測試與卡牌資料庫</p>
 
   <section>
@@ -264,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.953</span> 🎨 首頁標題排版分段（主標 + 副標 + tagline 三層）</summary>
+        <ul>
+          <li><b>玩家回饋</b>：v4.951 完整標題「PTCG 實體賽事演練 — 寶可夢集換式卡牌模擬器」太長，桌面 680px 主容器寬度下會換行，最後「模擬器」3 字單獨一行視覺很醜。</li>
+          <li><b>方案 B 分段</b>：保留品牌核心「PTCG 實體賽事演練」為大字 h1 主標；新增「寶可夢集換式卡牌模擬器」為中字副標（<code>p.subtitle</code> 1.05rem / weight 600）。三層視覺層次更專業（同雜誌封面、企業官網慣例）。</li>
+          <li><b>SEO 不受影響</b>：完整關鍵字仍在 <code>&lt;title&gt;</code> / og:title / description / keywords meta（v4.951 已設）— Google 主要看 meta 不是 h1 字面。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — +page.svelte 220KB）/ Rule 1（v&#123;VERSION&#125; 是合法 Svelte 表達式保留）/ Rule 4（tsc verify）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.952</span> 🦊 新增 M-P-J 特典卡：古歷（支援者）+ 超級妖火紅狐ex（爬 HK 官網）</summary>
         <ul>
           <li><b>玩家回報</b>：2 張 M-P 特典卡（J 標）未在牌組資料庫也未實裝。爬 HK 官網拿原文（TW 官網未發布）— <code>asia.pokemon-card.com/hk/card-search/detail/18969</code>（古歷）+ <code>/18965</code>（超級妖火紅狐ex）。</li>
@@ -7250,7 +7261,15 @@
     color: #1a1a1a;
   }
   h1 {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.1rem;
+  }
+  /* v4.953：主標下方副標 — 補長尾關鍵字「寶可夢集換式卡牌模擬器」+ 視覺層次 */
+  .subtitle {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #444;
+    margin: 0 0 0.35rem;
+    letter-spacing: 0.5px;
   }
   .tagline {
     color: #666;
