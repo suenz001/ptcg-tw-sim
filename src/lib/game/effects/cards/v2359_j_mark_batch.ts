@@ -41,6 +41,7 @@ import {
   regPre,
   updatePlayer,
   withPending,
+  countAttachedEnergyAsUnits,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import { canApplyAttackEffectToTarget, statusPost } from '../../effects';
@@ -318,10 +319,11 @@ regPost('坦克臭鼬|粉碎迴轉', (state, aIdx) => {
 // 超能妙喵（M3 Stage1 Psychic 100HP）｜精神強念：30 + 對手 active 能量數×20
 // 卡面：「30+ 增加對手的戰鬥寶可夢身上附加的能量的數量×20 點傷害。」
 // 注意：代歐奇希斯 精神強念 = 80+20×；本條目基礎為 30。
-regPre('超能妙喵|精神強念', (state, aIdx) => {
+// v4.959：用 countAttachedEnergyAsUnits — 認新衝天能量 on Stage2 = 2 個。
+regPre('超能妙喵|精神強念', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defActive = state.players[dIdx].active;
-  const count = defActive ? defActive.energyAttached.length : 0;
+  const count = defActive ? countAttachedEnergyAsUnits(defActive, pool) : 0;
   const dmg = 30 + count * 20;
   return {
     state: addLog(state, `精神強念：對手 ${count} 個能量 → ${dmg}`, aIdx),

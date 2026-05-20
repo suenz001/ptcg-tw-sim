@@ -5819,6 +5819,24 @@ export function countEnergyTypeHostAware(host: CardInstance, type: EnergyType, p
   return count;
 }
 
+// v4.959：計「能量數」(units, all types)，host-aware。
+//   一般 1 個；新衝天能量 on Stage2 = 2 個（卡面「視為提供 2 個所有屬性的能量」）。
+//   用於招式「依能量數計傷害 / 擲幣次數」場合。重複定義避免動巨大 import。
+//   邏輯與 _shared.countAttachedEnergyAsUnits 一致。
+function countAttachedEnergyAsUnits(host: CardInstance, pool: Map<string, Card>): number {
+  const hostCard = pool.get(host.cardId);
+  const hostStage = hostCard?.stage ?? hostCard?.subtype;
+  const hostIsStage2 = hostStage === 'Stage2';
+  let count = 0;
+  for (const e of host.energyAttached) {
+    const ec = pool.get(e.cardId);
+    if (!ec || ec.supertype !== 'Energy') continue;
+    if (ec.name === '新衝天能量' && hostIsStage2) count += 2;
+    else count += 1;
+  }
+  return count;
+}
+
 function selfAttachedEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const att = state.players[aIdx].active;
@@ -8368,11 +8386,12 @@ regPre('怖納噬草|強力尖刺', (state, aIdx, pool) => {
 });
 
 // ── 椰蛋樹｜投球時刻 — 擲與雙方出場能量和同次硬幣，正面 × 60 ────────────
+// v4.959：「能量和」按 unit 計（host-aware 新衝天能量 on Stage2 = 2）
 regPre('椰蛋樹|投球時刻', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const att = state.players[aIdx].active;
   const def = state.players[dIdx].active;
-  const n = (att ? countOneEnergy(att, 'all', pool) : 0) + (def ? countOneEnergy(def, 'all', pool) : 0);
+  const n = (att ? countAttachedEnergyAsUnits(att, pool) : 0) + (def ? countAttachedEnergyAsUnits(def, pool) : 0);
   if (n === 0) return { state: addLog(state, '投球時刻：雙方出場皆無能量', aIdx), damage: 0 };
   const r = flipCoinsWithLog(state, n, '投球時刻', aIdx);
   const dmg = r.heads * 60;
@@ -8974,10 +8993,11 @@ regPre('N的萊希拉姆|強力激怒', (state, aIdx, _pool) => {
 });
 
 // 迷唇姐｜精神強念 — 對手戰鬥寶可夢能量數 × 30
-regPre('迷唇姐|精神強念', (state, aIdx, _pool) => {
+// v4.959：用 host-aware unit count（新衝天能量 on Stage2 = 2）
+regPre('迷唇姐|精神強念', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
-  const energyCount = def ? def.energyAttached.length : 0;
+  const energyCount = def ? countAttachedEnergyAsUnits(def, pool) : 0;
   const dmg = 30 + energyCount * 30;
   const s = addLog(state, `精神強念：對手能量 ${energyCount} × 30 → ${dmg}`, aIdx);
   return { state: s, damage: dmg };

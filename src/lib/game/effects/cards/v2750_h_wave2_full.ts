@@ -8,7 +8,7 @@
 
 import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
-  getOwnBenchLimit,
+  getOwnBenchLimit, countAttachedEnergyAsUnits,
 } from '../_shared';
 import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
@@ -1414,8 +1414,10 @@ regPre('阿羅拉 三地鼠|三賓果', exactHandSizePre(120, 3, '三賓果'));
 regPre('厄鬼椪 碧草面具ex|萬葉陣雨', bothBenchEnergyCountPre(30, 30, '萬葉陣雨'));
 
 // 蟲甲聖ex|精神強念 20+ — 對手戰鬥能量數 ×90
-regPre('蟲甲聖ex|精神強念', (state, aIdx, _pool) => {
-  const dE = state.players[(1-aIdx) as 0|1].active?.energyAttached.length ?? 0;
+// v4.959：用 countAttachedEnergyAsUnits — 認新衝天能量 on Stage2 = 2 個。
+regPre('蟲甲聖ex|精神強念', (state, aIdx, pool) => {
+  const def = state.players[(1-aIdx) as 0|1].active;
+  const dE = def ? countAttachedEnergyAsUnits(def, pool) : 0;
   return { state: addLog(state, `精神強念：對手戰鬥能量 ${dE} → 20+${dE}×90 = ${20 + dE*90}`, aIdx), damage: 20 + dE * 90 };
 });
 
@@ -1533,8 +1535,10 @@ regPost('路卡利歐ex|龍捲風猛攻', (state, aIdx, _pool) => {
 // === Section 14: 班基拉斯ex 系列 ===
 // ══════════════════════════════════════════════════════════════════════════════
 // 班基拉斯ex|壓碎 — 自身能量數 ×50
-regPre('班基拉斯ex|壓碎', (state, aIdx, _pool) => {
-  const n = state.players[aIdx].active?.energyAttached.length ?? 0;
+// v4.959：班基拉斯ex 是 Stage2 — 用 host-aware unit count（新衝天能量 on Stage2 = 2 個）。
+regPre('班基拉斯ex|壓碎', (state, aIdx, pool) => {
+  const att = state.players[aIdx].active;
+  const n = att ? countAttachedEnergyAsUnits(att, pool) : 0;
   return { state: addLog(state, `壓碎：自身能量 ${n} → ${n}×50 = ${n*50}`, aIdx), damage: n * 50 };
 });
 // 班基拉斯ex|暴君粉碎 50× — 從對手手牌（不看正面）隨機選 1 張棄

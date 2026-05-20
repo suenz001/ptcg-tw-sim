@@ -79,13 +79,14 @@ regR('teal-dance-attach', (state, actorIdx, selectedIids, params) => {
   s = addLog(s, '碧綠之舞：將基本【草】能量附於厄鬼椪 碧草面具ex身上，然後從牌庫抽 1 張卡', actorIdx);
   return drawCards(s, actorIdx, 1);
 });
-import { regPre, regPost, shuffle } from '../_shared';
+import { regPre, regPost, shuffle, countAttachedEnergyAsUnits } from '../_shared';
 const flipCoin = () => Math.random() < 0.5;
+// v4.959：用 countAttachedEnergyAsUnits — 認新衝天能量 on Stage2 = 2 個。
 regPre('厄鬼椪 碧草面具ex|萬葉陣雨', (state, aIdx, pool) => {
   const p1 = state.players[0];
   const p2 = state.players[1];
-  const e1 = p1.active ? p1.active.energyAttached.length : 0;
-  const e2 = p2.active ? p2.active.energyAttached.length : 0;
+  const e1 = p1.active ? countAttachedEnergyAsUnits(p1.active, pool) : 0;
+  const e2 = p2.active ? countAttachedEnergyAsUnits(p2.active, pool) : 0;
   const bonus = (e1 + e2) * 30;
   const total = 30 + bonus;
   return { state: addLog(state, `萬葉陣雨：雙方戰鬥寶可夢身上共有 ${e1 + e2} 個能量，+${bonus} 傷害 → ${total} 傷害`, aIdx), damage: total };
@@ -194,39 +195,18 @@ regR('delphox-flare-magic', (state, actorIdx, selectedIids, params, pool) => {
   s = addLog(s, `閃焰魔法：已丟棄能量，從牌庫抽 ${drawCount} 張卡（直到滿 7 張）`, actorIdx);
   return drawCards(s, actorIdx, drawCount);
 });
-// v4.958：能量風暴 — 雙方全場「能量數」× 30。
-//   一般能量卡（基本能量 / 大部分特殊能量）算 1 個。
-//   新衝天能量卡面明文「若附於 2 階進化寶可夢身上，視為提供 2 個能量」—
-//   是計數 override（非屬性 splitting），所以附於 Stage2 host 時算 2 個。
-//   火箭隊能量 / 燃火能量等「視為提供 X 屬性」是屬性規則或 attach cost 規則，
-//   PTCG 官方裁定計「能量數」時仍算 1 張 → 不在此 override 範圍。
+// v4.958+v4.959：能量風暴 — 雙方全場「能量數」(units) × 30。
+// v4.959 refactor：用 _shared.countAttachedEnergyAsUnits helper（取代 v4.958 inline）。
 regPre('妖火紅狐|能量風暴', (state, aIdx, pool) => {
   let energyCount = 0;
-  let rebootBonusCount = 0;
   for (const p of state.players) {
     for (const poke of [p.active, ...p.bench]) {
       if (!poke) continue;
-      // 判斷 host 是否為 2 階進化（同 _shared.ts/getEnergyDiscardUnits 判斷）
-      const hostCard = pool.get(poke.cardId);
-      const hostStage = hostCard?.stage ?? hostCard?.subtype;
-      const hostIsStage2 = hostStage === 'Stage2';
-      for (const e of poke.energyAttached) {
-        const ec = pool.get(e.cardId);
-        if (!ec || ec.supertype !== 'Energy') continue;
-        if (ec.name === '新衝天能量' && hostIsStage2) {
-          // 卡面「視為提供 2 個能量」— 計數 +2
-          energyCount += 2;
-          rebootBonusCount += 1;
-        } else {
-          // 一般情況：1 張卡 = 1 個能量
-          energyCount += 1;
-        }
-      }
+      energyCount += countAttachedEnergyAsUnits(poke, pool);
     }
   }
   const dmg = energyCount * 30;
-  const note = rebootBonusCount > 0 ? `（含 ${rebootBonusCount} 張新衝天能量 on Stage2 × 2）` : '';
-  return { state: addLog(state, `能量風暴：雙方全場共有 ${energyCount} 個能量${note} → ${dmg} 傷害`, aIdx), damage: dmg };
+  return { state: addLog(state, `能量風暴：雙方全場共有 ${energyCount} 個能量 → ${dmg} 傷害`, aIdx), damage: dmg };
 });
 
 // ── 噗噗豬 (Grumpig) ─────────────────────────────────────────────────────────────

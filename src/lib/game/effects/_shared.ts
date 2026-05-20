@@ -257,6 +257,35 @@ export function getEnergyDiscardUnits(
   return 1;
 }
 
+/**
+ * v4.959：計「能量數」(units)，host-aware。
+ *
+ * 規則：
+ *   - 一般能量卡：1 個
+ *   - 新衝天能量 on Stage2 host：2 個（卡面「視為提供 2 個所有屬性的能量」）
+ *   - 新衝天能量 on 非 Stage2 host：1 個
+ *
+ * 使用場合：招式 / 特性的「依能量數計傷害 / 擲幣次數 / 倍率效果」場合
+ *   （中文卡面寫「能量」/「個」/「顆」按 unit 計）。
+ *
+ * 不適用：card-count 場合（如丟棄 N 張能量、撤退費用、條件 'energyAttached.length > 0'）。
+ *
+ * 火箭隊能量 / 燃火能量：暫時當 1 個算（屬性 / cost 規則，非 count override）。
+ */
+export function countAttachedEnergyAsUnits(host: CardInstance, pool: Map<string, Card>): number {
+  const hostCard = pool.get(host.cardId);
+  const hostStage = hostCard?.stage ?? hostCard?.subtype;
+  const hostIsStage2 = hostStage === 'Stage2';
+  let count = 0;
+  for (const e of host.energyAttached) {
+    const ec = pool.get(e.cardId);
+    if (!ec || ec.supertype !== 'Energy') continue;
+    if (ec.name === '新衝天能量' && hostIsStage2) count += 2;
+    else count += 1;
+  }
+  return count;
+}
+
 /** pokémonName|abilityIndex → 效果函式 */
 export const ABILITY_EFFECTS = new Map<string, EffectFn>();
 /**

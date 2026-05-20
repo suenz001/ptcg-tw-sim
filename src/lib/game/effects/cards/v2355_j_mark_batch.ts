@@ -19,6 +19,7 @@ import {
   regR,
   updatePlayer,
   withPending,
+  countAttachedEnergyAsUnits,
 } from '../_shared';
 
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
@@ -35,10 +36,11 @@ function cardName(pool: Map<string, any>, inst?: CardInstance | null): string {
 // 代歐奇希斯｜精神強念：80 + 對手戰鬥寶可夢身上附加的能量數量×20
 // 卡面：「80+ 增加對手的戰鬥寶可夢身上附加的能量的數量×20點傷害。」
 // 注意：蟲甲聖/勇基拉/胡地 有各自的精神強念（不同公式），本條目只針對代歐奇希斯。
-regPre('代歐奇希斯|精神強念', (state, aIdx, _pool) => {
+// v4.959：用 countAttachedEnergyAsUnits — 認新衝天能量 on Stage2 = 2 個。
+regPre('代歐奇希斯|精神強念', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defActive = state.players[dIdx].active;
-  const count = defActive ? defActive.energyAttached.length : 0;
+  const count = defActive ? countAttachedEnergyAsUnits(defActive, pool) : 0;
   const dmg = 80 + count * 20;
   return {
     state: addLog(state, `精神強念：對手戰鬥位附加 ${count} 個能量 → ${dmg}`, aIdx),

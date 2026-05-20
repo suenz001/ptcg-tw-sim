@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.959</span> 🔍 全 audit 修「依能量數計傷害」招式漏算新衝天能量 on Stage2（7 支招式）</summary>
+        <ul>
+          <li><b>玩家規則釐清</b>：以「個 / 顆」計能量時，新衝天能量 on Stage2 寶可夢算 2 顆；以「能量卡 / 張」計則永遠 1 張。v4.958 只修了妖火紅狐｜能量風暴；本版全 audit 修同類遺漏。</li>
+          <li><b>新增 helper</b>：<code>_shared.ts</code> 加 <code>countAttachedEnergyAsUnits(host, pool)</code> — 計能量數 (unit)，host-aware（新衝天能量 on Stage2 = 2，其他 = 1）。effects.ts 同步加 file-local 副本避免動龐大 import。</li>
+          <li><b>修正 7 支招式</b>：① 班基拉斯ex｜壓碎（自身×50）② 迷唇姐｜精神強念（30+def×30）③ 代歐奇希斯｜精神強念（80+def×20）④ 超能妙喵｜精神強念（30+def×20）⑤ 蟲甲聖ex｜精神強念（20+def×90）⑥ 椰蛋樹｜投球時刻（雙方出場能量和 × coin × 60）⑦ 厄鬼椪 碧草面具ex｜萬葉陣雨（30+雙方戰鬥場×30）。同時 refactor v4.958 妖火紅狐｜能量風暴 inline → helper。</li>
+          <li><b>規則邊界</b>：火箭隊能量 / 燃火能量「視為提供 X 個」是屬性 splitting / attach-cost 規則，PTCG 官方裁定計能量數時仍算 1 張 — 不在此 override 範圍。</li>
+          <li><b>未修</b>：v2353 內部 helper <code>energyMultiplyPre</code>（影響 4 張卡，含 type-filter 處理）複雜度較高，留 v4.960 處理。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 4（tsc verify）/ Rule 14（特殊規則細節 — 全 audit 後分批處理）/ Rule 7（helper 集中放 _shared）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.958</span> 🐛 修 妖火紅狐｜能量風暴 沒認新衝天能量 on Stage2 = 2 個</summary>
         <ul>
           <li><b>玩家回報</b>：能量風暴（雙方全場能量 × 30）沒把附於 Stage2 寶可夢的新衝天能量算 2 個 — 妖火紅狐自己就是 Stage2，附 1 張新衝天能量本應算 2 個能量（+60 傷害），但實際只算 1 個（+30 傷害）。</li>
