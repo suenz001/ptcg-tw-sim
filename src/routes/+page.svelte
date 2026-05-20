@@ -264,6 +264,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.945</span> 🔧 hotfix v4.944 audit script Rule 11b NUL byte 100% 誤觸</summary>
+        <ul>
+          <li><b>Bug</b>：v4.944 的 audit 用 <code>grep -q $&apos;\x00&apos; file</code> 檢查 NUL byte — bash 變數展開時 <code>$&apos;\x00&apos;</code> 被截斷成空字串 → grep pattern 空 → 任何非空檔案都「匹配」→ 100% 誤觸（所有文字檔都被報告為含 NUL byte）。</li>
+          <li><b>修法</b>：改用 <code>grep -Pq &apos;\x00&apos;</code> Perl regex 模式直接讀 \x00 字面，正確檢測 NUL byte。</li>
+          <li><b>Rule 1 歷史違規 6 處</b>（暫不修）：v4.944 audit 也抓到 6 個歷史 changelog 用 <code>&lt;code&gt;&#123;() =&gt; ...&#125;&lt;/code&gt;</code> 之類「正好是合法 Svelte expression」的寫法 — 技術上違反 Rule 1 escape 規則但意外沒讓 build crash。先當已知 tech debt，未來專門批次清理（changelog 改動風險評估後再做）。</li>
+          <li><b>Iron Rules</b>：Meta Rule（修 audit script 同步反映鐵律執行）/ Rule 11。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.944</span> 🤖 建 GitHub Actions 自動跑鐵律 audit（Phase A 試運行）</summary>
         <ul>
           <li><b>目的</b>：把 22 條鐵律的 grep audit 自動化，每次 push 自動跑，違規會在 GitHub Actions 頁面標紅。減少「AI 寫程式忘了某條鐵律 → bug 上線 → 玩家踩到」的失誤。</li>

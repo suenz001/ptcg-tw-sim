@@ -69,10 +69,12 @@ echo ""
 
 # ── Rule 11b: 文字檔含 NUL byte ────────────────────────────────────────────
 # v3.721 災難：Edit 工具縮短字串時留下 \x00
+# v4.945 修：原 `grep -q $'\x00'` 因 bash 變數展開 NUL 截斷導致 pattern 空 → 100% 誤觸。
+#   改用 `grep -Pq '\x00'`（Perl regex 模式直接讀 \x00 字面）。
 echo "── Rule 11b: 文字檔（.ts / .svelte / .md / .json）不該含 NUL byte"
 nul_files=""
 for f in $(git ls-files | grep -E '\.(ts|svelte|md|json|js|mjs|css|html|sh|yml|yaml)$' 2>/dev/null); do
-  if [ -f "$f" ] && grep -q $'\x00' "$f" 2>/dev/null; then
+  if [ -f "$f" ] && grep -Pq '\x00' "$f" 2>/dev/null; then
     nul_files="$nul_files
 $f"
   fi
