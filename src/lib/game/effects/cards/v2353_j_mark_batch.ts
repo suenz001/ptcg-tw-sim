@@ -68,6 +68,12 @@ function matchesEnergyType(
  *   'def-active'    — 對手戰鬥寶可夢附加的任意能量數量 × per
  *   'opp-all'       — 對手所有寶可夢附加的能量總數 × per
  *   'self-all'      — 自己所有寶可夢附加的指定屬性能量總數 × per
+ *
+ * v4.960：countOf 認新衝天能量 host-aware 規則：
+ *   - Stage2 host：算 2 個任意屬性能量（卡面「視為提供 2 個所有屬性的能量」）
+ *     → 任何 typeFilter 都 match
+ *   - 非 Stage2 host：算 1 個【無】能量（卡面「視為提供 1 個【無】能量」）
+ *     → typeFilter='all' 或 typeFilter='Colorless' 時算 1，其他屬性 filter 不 match
  */
 function energyMultiplyPre(
   key: string,
@@ -82,8 +88,34 @@ function energyMultiplyPre(
     const self = state.players[aIdx];
     const opp  = state.players[dIdx];
 
-    const countOf = (c: CardInstance): number =>
-      c.energyAttached.filter(e => matchesEnergyType(e, typeFilter, pool)).length;
+    // v4.960：unit + type-aware count — 新衝天能量規則 host-aware
+    const countOf = (c: CardInstance): number => {
+      const hostCard = pool.get(c.cardId);
+      const hostStage = hostCard?.stage ?? hostCard?.subtype;
+      const hostIsStage2 = hostStage === 'Stage2';
+      let n = 0;
+      for (const e of c.energyAttached) {
+        const ec = pool.get(e.cardId);
+        if (!ec || ec.supertype !== 'Energy') continue;
+        // 新衝天能量單獨處理：host-aware unit count
+        if (ec.name === '新衝天能量') {
+          if (hostIsStage2) {
+            // 「視為提供 2 個所有屬性的能量」— 任何 typeFilter 都 match
+            n += 2;
+          } else if (typeFilter === 'all' || typeFilter === 'Colorless') {
+            // 「視為提供 1 個【無】能量」— 只在 all 或 Colorless filter 時算
+            n += 1;
+          }
+          continue;
+        }
+        // 一般能量卡：沿用 matchesEnergyType（已含 typeFilter='all' 全 match + 基本能量
+        // pokemonType=null 時從卡名【X】fallback）
+        if (matchesEnergyType(e, typeFilter, pool)) {
+          n += 1;
+        }
+      }
+      return n;
+    };
 
     let count = 0;
     if (mode === 'self-attached') {

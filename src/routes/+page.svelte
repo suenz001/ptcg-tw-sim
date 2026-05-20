@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.960</span> 🔧 修 v2353 energyMultiplyPre — 4 張卡的 unit/type-aware 新衝天能量</summary>
+        <ul>
+          <li><b>延續 v4.959</b>：v2353_j_mark_batch.ts 的內部 helper <code>energyMultiplyPre</code> 之前未修（複雜 type-filter）；本版完成。</li>
+          <li><b>關鍵規則細節</b>（玩家提醒）：新衝天能量在「<b>非 Stage2</b>」host 上只是「1 個【無】能量」，不算 Psychic / Fire 等其他屬性。typeFilter='Psychic' 時不 match → count +0。</li>
+          <li><b>修法</b>：改 <code>countOf</code> 為 host-aware：① Stage2 host + 新衝天能量 → +2（任何 typeFilter 都 match，因卡面寫「2 個所有屬性的能量」）② 非 Stage2 host + 新衝天能量 → +1（僅當 typeFilter='all' 或 'Colorless'，否則 +0）③ 一般能量沿用 matchesEnergyType。</li>
+          <li><b>影響 4 張卡</b>：① <b>瑪力露麗ex｜能量氣球</b>（Stage1 self, typeFilter='Psychic' — 自身新衝天能量算 1 Colorless，不算 Psychic → 不踩雷，但 helper 邏輯需正確）② <b>超級差不多娃娃ex｜耳之力</b>（def-active, 'all' — 對手 Stage2 + 新衝天能量 → +2 ×80=+160）③ <b>優雅貓｜能量粉碎</b>（opp-all, 'all' — 對手場上任一 Stage2 + 新衝天 → +2 ×40=+80）④ <b>哲爾尼亞斯｜大地風暴</b>（self-all, 'Psychic' — 自己備戰若有 Stage2 + 新衝天能量算 2 個 Psychic → +2 ×30=+60，例如備戰有噴火龍ex 附新衝天）。</li>
+          <li><b>v4.959/v4.960 完整 audit 完成</b>：共 12 支招式 + 1 helper，全部「依能量數計傷害」場合都認新衝天能量 host-aware 規則。Card-count 場合（丟能量、撤退費、'有能量' gate）不動。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 4（tsc verify）/ Rule 14（type-filter + unit-count 並存的複雜邏輯 — 先 audit 4 張卡的 stage 與 typeFilter 組合再動手）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.959</span> 🔍 全 audit 修「依能量數計傷害」招式漏算新衝天能量 on Stage2（7 支招式）</summary>
         <ul>
           <li><b>玩家規則釐清</b>：以「個 / 顆」計能量時，新衝天能量 on Stage2 寶可夢算 2 顆；以「能量卡 / 張」計則永遠 1 張。v4.958 只修了妖火紅狐｜能量風暴；本版全 audit 修同類遺漏。</li>
