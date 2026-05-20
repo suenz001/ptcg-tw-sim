@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.956</span> 🔧 修 Cloudflare cache 卡舊版 — fetch URL 加 ?v=&#123;VERSION&#125; 自動 invalidate</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.952 新增的兩張 M-P-J 特典卡（古歷 + 超級妖火紅狐ex）在 卡牌資料庫 / 牌組編輯器 都看不到。</li>
+          <li><b>根本原因</b>：Cloudflare 邊緣 cache rule <code>/cards/*</code> 設了 7 天 Edge TTL（v4.939）。v4.953/4.954/4.955 都沒動 cards JSON，邊緣節點不知道 origin 有更新（v4.952 加的新卡），繼續服務舊版。</li>
+          <li><b>診斷證據</b>：cf-cache-status: HIT, age: 26830s, M-P-J.json content-length 35016（35 張）；直連 GitHub Pages 則是 36791（37 張，含新卡）。</li>
+          <li><b>修法</b>：在 <code>pool.ts</code> 與 <code>cards/+page.ts</code> 所有 fetch cards JSON 加 <code>?v=&#123;VERSION&#125;</code> query string。每次版本 bump，URL 自動改變 → Cloudflare 認為是不同資源 → cache miss → 從 origin 抓最新。</li>
+          <li><b>影響</b>：未來任何 cards JSON 更新（加新卡 / 改翻譯 / 修數據）只要 bump 版本就會自動 invalidate，不再需要手動 purge cache。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 4（tsc verify）/ Rule 7（不 hack：import VERSION 而非硬寫）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.955</span> 🐛 修 力之沙漏 + 招式 KO 對手後 — 扭轉乾坤 / 不公印章 等 gate 失效</summary>
         <ul>
           <li><b>玩家回報</b>：A 用 猛雷鼓ex 帶力之沙漏，極降駕 KO 對手寶可夢 → 力之沙漏結算填能量 → 換 B 上場 → B 想用扭轉乾坤 / 不公印章 等「上回合自己寶可夢被昏厥」gate 的特性 / 道具發現觸發不了。</li>

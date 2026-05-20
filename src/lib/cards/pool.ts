@@ -8,6 +8,8 @@
 
 import { base } from '$app/paths';
 import type { Card, SetSummary } from './types';
+// v4.956：fetch URL 帶版本參數，繞過 Cloudflare 邊緣 cache（每次版本 bump 觸發 cache miss）
+import { VERSION } from '$lib/version';
 
 const setCache = new Map<string, Card[]>();
 let indexCache: SetSummary[] | null = null;
@@ -17,7 +19,7 @@ export async function loadIndex(
   fetchFn: typeof fetch = fetch
 ): Promise<SetSummary[]> {
   if (indexCache) return indexCache;
-  const res = await fetchFn(`${base}/cards/index.json`);
+  const res = await fetchFn(`${base}/cards/index.json?v=${VERSION}`);
   if (!res.ok) throw new Error(`Failed to load index.json: HTTP ${res.status}`);
   indexCache = (await res.json()) as SetSummary[];
   return indexCache;
@@ -33,7 +35,7 @@ export async function loadSet(
   if (pending) return pending;
 
   const p = (async () => {
-    const res = await fetchFn(`${base}/cards/${setCode}.json`);
+    const res = await fetchFn(`${base}/cards/${setCode}.json?v=${VERSION}`);
     if (!res.ok) throw new Error(`Set ${setCode} not found (HTTP ${res.status})`);
     const raw = (await res.json()) as Card[];
     // v2.22：統一訓練家寶可夢命名 — 部分 set（SV9a/MC/SVOM/SVOD）原始卡名帶有

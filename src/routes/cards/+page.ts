@@ -1,5 +1,7 @@
 import { base } from '$app/paths';
 import type { Card, SetSummary } from '$lib/cards/types';
+// v4.956：fetch URL 帶版本參數，繞過 Cloudflare 邊緣 cache
+import { VERSION } from '$lib/version';
 
 /**
  * Loads either:
@@ -14,7 +16,7 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
   const setCode = url.searchParams.get('set');
 
   if (!setCode) {
-    const res = await fetch(`${base}/cards/index.json`);
+    const res = await fetch(`${base}/cards/index.json?v=${VERSION}`);
     if (!res.ok) throw new Error(`Failed to load sets index: HTTP ${res.status}`);
     const sets: SetSummary[] = await res.json();
     return { mode: 'index' as const, sets };
@@ -24,7 +26,7 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
   // This is heavy (~4k+ cards), but card images are always lazy-loaded and
   // the filter/search is O(n) which is still fine at that size.
   if (setCode === 'ALL') {
-    const indexRes = await fetch(`${base}/cards/index.json`);
+    const indexRes = await fetch(`${base}/cards/index.json?v=${VERSION}`);
     if (!indexRes.ok) throw new Error(`Failed to load sets index: HTTP ${indexRes.status}`);
     const sets: SetSummary[] = await indexRes.json();
 
@@ -35,7 +37,7 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
     const results = await Promise.all(
       standardSets.map(async (s) => {
         try {
-          const r = await fetch(`${base}/cards/${s.code}.json`);
+          const r = await fetch(`${base}/cards/${s.code}.json?v=${VERSION}`);
           if (!r.ok) return [] as Card[];
           return (await r.json()) as Card[];
         } catch {
@@ -63,8 +65,8 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
   // Fetch the cards AND the index in parallel — we need the Chinese set name
   // (e.g. "超級交響樂" for M1S) for the header display.
   const [cardsRes, indexRes] = await Promise.all([
-    fetch(`${base}/cards/${setCode}.json`),
-    fetch(`${base}/cards/index.json`)
+    fetch(`${base}/cards/${setCode}.json?v=${VERSION}`),
+    fetch(`${base}/cards/index.json?v=${VERSION}`)
   ]);
   if (!cardsRes.ok) throw new Error(`Set ${setCode} not found (HTTP ${cardsRes.status})`);
   const cards: Card[] = await cardsRes.json();
