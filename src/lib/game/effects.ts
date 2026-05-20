@@ -1742,7 +1742,7 @@ reg('寶可夢捕捉器', (st, idx) => {
  * v2.91：檢查指定 CardInstance 是否對「混亂」免疫。
  * 目前只有 呆呆獸｜憨憨臉（卡面：「這隻寶可夢不會【混亂】」）。
  */
-function isConfusionImmune(inst: CardInstance | null, pool: Map<string, Card>): boolean {
+export function isConfusionImmune(inst: CardInstance | null, pool: Map<string, Card>): boolean {
   if (!inst) return false;
   const card = pool.get(inst.cardId);
   return !!card?.abilities?.some(a => a.name === '憨憨臉');
@@ -1990,6 +1990,41 @@ export function clearFestivalVenueProtectedStatuses(
 }
 
 /** 讓對手戰鬥寶可夢陷入指定狀態的 POST effect */
+/**
+ * v4.965：套用新狀態到 active 寶可夢，正確處理 status / secondaryStatus 兩格。
+ *
+ * PTCG 規則（與 types.ts:90-103 約定一致）：
+ *   - 行動類狀態（asleep/confused/paralyzed）三者互斥，永遠放 status 主格
+ *   - 傷害類狀態（poisoned/burned）兩者互斥
+ *   - 1 行動類 + 1 傷害類**可共存**（中毒+混亂、灼傷+睡眠等）
+ *
+ * 之前多處直接 `{ ...active, status: newStatus }` 蓋掉原狀態 — 違反規則。
+ * 例：寶可夢中毒（status='poisoned'）被暗黑鈴混亂 → 應該變 (confused, poisoned)
+ * 而不是把中毒蓋掉。
+ *
+ * 用法：`active = applyStatusToActive(active, 'confused');`
+ */
+export function applyStatusToActive(active: CardInstance, newStatus: SpecialCondition): CardInstance {
+  const isNewAction = newStatus === 'asleep' || newStatus === 'confused' || newStatus === 'paralyzed';
+  const prev = active.status;
+  const prevSec = active.secondaryStatus;
+  const isPrevAction = prev === 'asleep' || prev === 'confused' || prev === 'paralyzed';
+  const isPrevDamage = prev === 'poisoned' || prev === 'burned';
+
+  if (isNewAction) {
+    // 新狀態行動類 — 放 status 主格；原 status 若是傷害類搬到 secondaryStatus 保留
+    const newSecondary = isPrevDamage ? prev : prevSec;
+    return { ...active, status: newStatus, secondaryStatus: newSecondary };
+  } else {
+    // 新狀態傷害類 — 優先 status；若 status 被行動類佔則放 secondaryStatus 保留行動類
+    if (isPrevAction) {
+      return { ...active, secondaryStatus: newStatus };
+    } else {
+      return { ...active, status: newStatus, secondaryStatus: prevSec };
+    }
+  }
+}
+
 export function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'paralyzed'): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
@@ -2029,7 +2064,8 @@ export function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused'
     if (isFestivalVenueStatusProtected(state, def.active, pool)) {
       return addLog(state, `${defName}｜祭典會場：免疫【${statusLabelMap[status]}】`, aIdx);
     }
-    def.active = { ...def.active, status };
+    // v4.965: 用 applyStatusToActive 正確處理 status / secondaryStatus 兩格（保留共存狀態）
+    def.active = applyStatusToActive(def.active, status);
     players[dIdx] = def;
     return addLog({ ...state, players }, `${defName} 陷入【${statusLabelMap[status]}】`, aIdx);
   };
@@ -2563,7 +2599,8 @@ export function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'
         return addLog(state, `正面！但 ${defCoinName}｜${guardCSP.reason}`, aIdx);
       }
     }
-    def.active = { ...def.active, status };
+    // v4.965: 用 applyStatusToActive 正確處理狀態共存（不蓋掉原中毒/灼傷）
+    def.active = applyStatusToActive(def.active, status);
     players[dIdx] = def;
     return addLog({ ...state, players }, `正面！對手${
       status === 'poisoned' ? '中毒' : status === 'burned' ? '燒傷' :

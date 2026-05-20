@@ -71,6 +71,9 @@ import {
   coinHeadsMultiplyPre,
   hitBenchPickPost,
   flipCoinsWithLog,
+  applyStatusToActive,
+  isConfusionImmune,
+  checkSpecialEnergyStatusImmune,
 } from '../../effects';
 import { getEnergyUnits } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
@@ -1439,9 +1442,20 @@ reg('暗黑鈴', (st, idx, pool) => {
       s = addLog(s, `暗黑鈴：${name} 是【惡】屬性寶可夢，免疫【混亂】效果`, idx);
       continue;
     }
+    // v4.965: 對齊 statusPost 的混亂 immune checks
+    if (isConfusionImmune(player.active, pool)) {
+      s = addLog(s, `暗黑鈴：${name}｜憨憨臉：免疫【混亂】`, idx);
+      continue;
+    }
+    const immune = checkSpecialEnergyStatusImmune(player.active, 'confused', pool);
+    if (immune.immune) {
+      s = addLog(s, `暗黑鈴：${name}｜${immune.energyName}：免疫【混亂】`, idx);
+      continue;
+    }
+    // v4.965: 用 applyStatusToActive 正確處理狀態共存（不蓋掉原中毒/灼傷）
     s = updatePlayer(addLog(s, `暗黑鈴：${name} 陷入【混亂】`, idx), side, p => {
       if (!p.active) return p;
-      return { ...p, active: { ...p.active, status: 'confused' } };
+      return { ...p, active: applyStatusToActive(p.active, 'confused') };
     });
   }
   return s;

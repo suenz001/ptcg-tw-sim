@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.965</span> 🐛 修暗黑鈴覆蓋原中毒狀態 + 加 applyStatusToActive helper（連帶修 statusPost / coinStatusPost）</summary>
+        <ul>
+          <li><b>玩家回報</b>：使用暗黑鈴造成寶可夢混亂時，會把寶可夢原本的中毒狀態蓋掉。</li>
+          <li><b>規則</b>：PTCG 規則 + 引擎約定（types.ts:90-103）：行動類狀態（睡眠/混亂/麻痺）三者互斥放 status 主格；傷害類（中毒/灼傷）兩者互斥；1 行動 + 1 傷害**可共存**（中毒+混亂、灼傷+睡眠等）。</li>
+          <li><b>根因</b>：m5_preview.ts 暗黑鈴 reg 內直接 <code>status: 'confused'</code> 覆蓋原狀態，沒處理「行動 + 傷害並存」規則。Audit 連帶發現 effects.ts statusPost (L2032) 與 coinStatusPost (L2566) 同類 bug — 6+ 個招式（人造細胞卵腦力震動 / 魔牆人偶不祥波動 / 優雅貓擺尾蠱惑 / 願增猿精神歪曲 / 火斑喵擊掌奇襲 等）都會誤把對手的中毒蓋掉。</li>
+          <li><b>修法</b>：① effects.ts 加 export <code>applyStatusToActive(active, newStatus)</code> helper — 統一封裝狀態共存規則 ② statusPost / coinStatusPost 改用 helper ③ 暗黑鈴 reg 用 helper + 加憨憨臉 / 薄霧能量等 immune checks（對齊 statusPost）。一個 helper 同時修了 7+ 個 effect 的同類 bug。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — effects.ts 14939 行）/ Rule 3（effects.ts defensive）/ Rule 4（tsc verify）/ Rule 7c（先查 JSON 卡面確認「【混亂】」是混亂） / Rule 14（status 邏輯 audit + helper 抽離預防同類 bug）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.964</span> 🔊 「ready-go」音效時機調整 — 雙方準備完成那一刻播，不再等起手結束</summary>
         <ul>
           <li><b>玩家回報</b>：ready-go 音效播得太晚，雙方在房間按下「準備完成」後沒聲，要等起手放完 Active/Bench 才響，直覺像「回合開始時」才聽到。</li>
