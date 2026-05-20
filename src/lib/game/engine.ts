@@ -5615,6 +5615,15 @@ function handlePlaying(
             state = {
               ...state,
               players: newPlayers,
+              // v4.955 BUG FIX：力之沙漏暫停 END_TURN 時必須設 endTurnSkipCheckup=true。
+              //   理由：本 hook 之前的 snapshot 區塊已 rotate `thisTurn → InLastOppTurn`
+              //   並 reset thisTurn=[0,0]；若 re-dispatch END_TURN 時沒設 skipCheckup，
+              //   snapshot 區塊會再跑一次 → 用「現在已歸零的 thisTurn」覆蓋掉 InLastOppTurn，
+              //   導致對手用扭轉乾坤 / 不公印章 / 八朔 / 寶寶暴龍 勃然大怒 等讀 InLastOppTurn
+              //   的 gate / 招式時看到 0 → gate 拒絕觸發。
+              //   設 skipCheckup=true 跳過 snapshot rotation AND checkup 重跑（中毒/灼傷扣血
+              //   不會重複放）；finalize 區塊會清掉旗標，不影響後續 turn。
+              endTurnSkipCheckup: true,
               pendingSelection: {
                 type: 'discard-search',
                 actorIdx: aIdx,

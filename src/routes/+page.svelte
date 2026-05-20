@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.955</span> 🐛 修 力之沙漏 + 招式 KO 對手後 — 扭轉乾坤 / 不公印章 等 gate 失效</summary>
+        <ul>
+          <li><b>玩家回報</b>：A 用 猛雷鼓ex 帶力之沙漏，極降駕 KO 對手寶可夢 → 力之沙漏結算填能量 → 換 B 上場 → B 想用扭轉乾坤 / 不公印章 等「上回合自己寶可夢被昏厥」gate 的特性 / 道具發現觸發不了。</li>
+          <li><b>根本原因</b>：END_TURN 流程在 力之沙漏 hook 暫停前，snapshot 區塊已 rotate 「oppAttackKOdMeThisTurn → InLastOppTurn」（記為 1）並 reset thisTurn=0。玩家選完能量後 END_TURN 被 re-dispatch，因為 endTurnSkipCheckup 沒設，snapshot 區塊又跑一次 → 用「已歸零的 thisTurn」覆蓋了正確的 InLastOppTurn → 對手 gate 看到 0 → 拒絕觸發。</li>
+          <li><b>修法</b>：在 engine.ts 力之沙漏 hook 設 pendingSelection 時同步設 <code>endTurnSkipCheckup: true</code>。re-dispatch END_TURN 時就會跳過 snapshot rotation 和 checkup 重跑（中毒 / 灼傷扣血也不會重複觸發）。finalize 區塊會清掉旗標，後續正常 turn 不受影響。</li>
+          <li><b>受影響的卡</b>：不公印章、吉雉雞ex 扭轉乾坤、八朔ex、阿波羅、寶寶暴龍 勃然大怒（透過古空棘魚 潛入記憶 路徑也算）等 — 所有依賴 oppAttackKOdMeInLastOppTurn / oppAbilityKOdMeInLastOppTurn 的 14+ 處 gate 都會被治好。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — engine.ts 7624 行）/ Rule 4（tsc verify）/ Rule 14（gate 邏輯改動 — 高風險，先確認 KO counter rotation 全流程才動手）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.954</span> 🔍 卡牌搜尋：關鍵字模式新增下拉選單可限定搜尋範圍</summary>
         <ul>
           <li><b>玩家需求</b>：找有特定關鍵字招式 / 特性的卡時，舊版 [關鍵字] 全文搜尋會混入卡名、卡號、rules 文字命中的卡，雜訊太多。</li>
