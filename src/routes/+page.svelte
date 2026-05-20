@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.969</span> 📱 修手機直屏 modal 蓋住手牌橫向滑動</summary>
+        <ul>
+          <li><b>玩家回報</b>：手機板手牌過多時可橫向滑動瀏覽，但寶可夢被昏厥跳出「選備戰寶可夢」modal 時，遮罩擋住手牌，無法同時瀏覽 + 操作 modal。</li>
+          <li><b>根因</b>：<code>.selection-overlay</code> 全螢幕遮罩 <code>pointer-events: auto</code> 攔截所有 touchmove，背景 <code>.mp-hand</code> 的 pan-x（橫向滑動手牌）touch 被擋。桌機已有 v2.44 拖曳邏輯讓 overlay 變透明，但手機板用戶不知道也不直覺。</li>
+          <li><b>修法</b>：手機直屏 (<code>≤600px portrait</code>) media query 內讓 selection-overlay 半透明 (alpha 0.4) + <code>pointer-events: none</code> + 靠上對齊；modal 本體 <code>pointer-events: auto</code> 互動照常。純 CSS 不動 svelte template。</li>
+          <li><b>涵蓋場景</b>：自 KO 後選備戰（玩家報告核心）/ pendingSelection picker / mulligan reveal / 起手選 active — 所有 selection-overlay 共用 modal 都會獲益。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — game/+page.svelte 9980 行大檔）/ Rule 4（tsc verify）/ Rule 1（CSS 在 &lt;style&gt; 區塊，不涉 Svelte template 特殊字元）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.968</span> 🎙️ 換 ready-go 開戰音 — 用戶提供新語音「Start the game already」</summary>
         <ul>
           <li><b>改動</b>：preload sample 從 <code>ready-go.wav</code> 換成 <code>start-the-game-already.mp3</code>（16KB）。</li>

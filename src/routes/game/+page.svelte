@@ -9454,6 +9454,20 @@
      modal 在手機直屏也能舒適閱讀 + 操作。
      ════════════════════════════════════════════════════════════════════ */
   @media (max-width: 600px) and (orientation: portrait) {
+    /* v4.969: 手機直屏 selection-overlay 不擋背景 touch — 玩家可同時看 modal
+       並橫向滑動手牌瀏覽。半透明背景仍有視覺區隔；modal 本體 pointer-events:auto
+       維持正常互動。靠上對齊讓下方手牌區 free。
+       此規則同時嘉惠 send-new-active modal（被昏厥後選備戰）+ pendingSelection picker。 */
+    .selection-overlay {
+      background: rgba(0, 0, 0, 0.4);
+      pointer-events: none;
+      align-items: flex-start;
+      padding-top: 0.4rem;
+    }
+    .selection-overlay .selection-modal {
+      pointer-events: auto;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+    }
     /* selection-modal（pendingSelection 通用 modal） */
     .selection-modal {
       width: 96vw; max-width: 96vw;
