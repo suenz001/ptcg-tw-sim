@@ -4,4 +4,4 @@ Allow: /
 # Disallow internal SvelteKit chunks (no SEO value)
 Disallow: /_app/
 
-Sitemap: https://suenz001.github.io/ptcg-tw-sim/sitemap.xml
+Sitemap: https://www.ptcg-tw-sim.com/sitemap.xml

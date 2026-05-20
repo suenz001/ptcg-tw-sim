@@ -264,6 +264,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.939</span> 🤖 修 robots.txt sitemap URL 到 .com（v4.938 漏網）</summary>
+        <ul>
+          <li><b>v4.938 漏改</b>：<code>static/robots.txt</code> 的 <code>Sitemap:</code> 行還指向舊 <code>suenz001.github.io/ptcg-tw-sim/sitemap.xml</code>，改為 <code>www.ptcg-tw-sim.com/sitemap.xml</code>。</li>
+          <li><b>影響</b>：搜尋引擎爬 robots.txt 時找到 sitemap 路徑現在指向新主站，跟 v4.938 SEO canonical 翻轉方向一致。手動到 Google Search Console / Bing Webmaster Tools 提交 sitemap 時也方便。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.938</span> 🌐 SEO canonical 翻轉到 .com + GitHub Pages 加遷移 banner</summary>
         <ul>
           <li><b>長期計畫</b>：把 <code>www.ptcg-tw-sim.com</code>（站長自有網域）養成永久主站。github.io 逐步退場 — 但**保留至少 6 個月**作為 fallback / 緊急備援。</li>
