@@ -17,6 +17,9 @@ import {
   oracleListRooms, oraclePollRoom, oracleListMessages, oracleCurrentUid,
   type OracleRoom,
 } from './oracle-client';
+// v4.961：oracle mode 也有 firebase auth（signInAnonymously / sign-in upgrade），
+// 拿 email 寫進 seat 給 admin 追蹤玩家身份。
+import { auth } from '$lib/firebase';
 import type { GameState } from './types';
 import type { Card } from '$lib/cards/types';
 import { createGame } from './engine';
@@ -88,7 +91,9 @@ export async function createRoom(
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = generateRoomCode();
     const seats = emptySeats();
-    seats[0] = { role: 'p1', uid, name: hostName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+    // v4.961：寫入 sign-in email（若有）— 從 firebase auth 拿（即使是 oracle mode）
+    const myEmail = auth.currentUser?.email ?? null;
+    seats[0] = { role: 'p1', uid, email: myEmail, name: hostName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
     const data: Record<string, unknown> = {
       roomName: roomName.trim() || (hostName + ' 的房間'),
       hostUid: uid,
@@ -141,9 +146,11 @@ export async function joinRoom(roomCode: string, guestName: string): Promise<Roo
       }
     }
     if (targetIdx === -1) throw new Error(cur.status === 'playing' ? '觀戰位已滿' : '房間已滿');
+    // v4.961：寫入 sign-in email
+    const myEmail = auth.currentUser?.email ?? null;
     const newSeats = seats.map((s, i) => {
       if (i !== targetIdx) return s;
-      return { ...s, uid, name: guestName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+      return { ...s, uid, email: myEmail, name: guestName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
     });
     return { ...cur, seats: newSeats, memberUids: computeMemberUids(newSeats) };
   }).then(updated => ({ ...updated, roomId: code }));
@@ -159,12 +166,14 @@ export async function takeSeat(roomCode: string, targetIdx: number): Promise<voi
     if (myIdx === targetIdx) return data;
     if (seats[targetIdx].uid !== null) throw new Error('該座位已被占用');
     const myName = myIdx >= 0 ? seats[myIdx].name : null;
+    // v4.961：移位也帶上 sign-in email
+    const myEmail = auth.currentUser?.email ?? null;
     const newSeats = seats.map((s, i) => {
       if (i === myIdx) {
-        return { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+        return { ...s, uid: null, email: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
       }
       if (i === targetIdx) {
-        return { ...s, uid, name: myName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+        return { ...s, uid, email: myEmail, name: myName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
       }
       return s;
     });

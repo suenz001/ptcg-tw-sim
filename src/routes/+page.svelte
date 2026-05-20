@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.961</span> 🆔 房間紀錄寫入玩家 sign-in email（用於系統內部對戰紀錄追蹤）</summary>
+        <ul>
+          <li><b>改了什麼</b>：建房 / 加入房間 / 換位時，若玩家已用 email 帳號 sign-in（或 upgrade 過匿名帳號），就把 email 一起寫進 seat。匿名玩家不受影響（seat email 為 null）。</li>
+          <li><b>玩家可見性</b>：完全無感 — UI 上不顯示 seat email，純粹給系統內部對戰紀錄追蹤用。歷史房間不受影響（只對 v4.961 後新建立 / 加入的房間生效）。</li>
+          <li><b>隱私</b>：email 只寫進房間 seat data，照舊 firestore rules 規範，只有房間成員可讀；admin 後台才能完整檢視。匿名玩家完全不寫 email（保持完全匿名）。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — room.ts + room-oracle.ts）/ Rule 4（tsc verify）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.960</span> 🔧 修 v2353 energyMultiplyPre — 4 張卡的 unit/type-aware 新衝天能量</summary>
         <ul>
           <li><b>延續 v4.959</b>：v2353_j_mark_batch.ts 的內部 helper <code>energyMultiplyPre</code> 之前未修（複雜 type-filter）；本版完成。</li>

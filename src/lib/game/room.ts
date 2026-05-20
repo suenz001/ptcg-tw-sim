@@ -42,6 +42,12 @@ export type SeatRole = 'p1' | 'p2' | 'spectator';
 export interface Seat {
   role: SeatRole;
   uid: string | null;
+  /**
+   * v4.961：玩家 sign-in email（若 firebase auth.currentUser.email 有值）。
+   *   - null = anonymous user 或舊版房間（v4.961 前建立的）
+   *   - 用於 admin 追蹤玩家身份；client UI 不直接顯示此欄位
+   */
+  email?: string | null;
   name: string | null;
   deckEntries: DeckEntry[] | null;
   ready: boolean;
@@ -191,7 +197,9 @@ export async function createRoom(
   const code = generateRoomCode();
   const seats = emptySeats();
   // host 預設坐 P1
-  seats[0] = { role: 'p1', uid, name: hostName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+  // v4.961：寫入 sign-in email（若有），admin 用此欄位追蹤玩家
+  const myEmail = auth.currentUser?.email ?? null;
+  seats[0] = { role: 'p1', uid, email: myEmail, name: hostName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
 
   const data: RoomData = {
     roomName: roomName.trim() || `${hostName} 的房間`,
@@ -261,9 +269,11 @@ export async function joinRoom(
   }
   if (targetIdx === -1) throw new Error(data.status === 'playing' ? '觀戰位已滿' : '房間已滿');
 
+  // v4.961：寫入 sign-in email
+  const myEmail = auth.currentUser?.email ?? null;
   const newSeats = seats.map((s, i) => {
     if (i !== targetIdx) return s;
-    return { ...s, uid, name: guestName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+    return { ...s, uid, email: myEmail, name: guestName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
   });
 
   await updateDoc(ref, {
@@ -295,13 +305,15 @@ export async function takeSeat(
   if (seats[targetIdx].uid !== null) throw new Error('該座位已被占用');
 
   const myName = myIdx >= 0 ? seats[myIdx].name : null;
+  // v4.961：移位也帶上 sign-in email
+  const myEmail = auth.currentUser?.email ?? null;
   const newSeats = seats.map((s, i) => {
     if (i === myIdx) {
       // 清空原座位
-      return { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+      return { ...s, uid: null, email: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
     }
     if (i === targetIdx) {
-      return { ...s, uid, name: myName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+      return { ...s, uid, email: myEmail, name: myName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
     }
     return s;
   });
