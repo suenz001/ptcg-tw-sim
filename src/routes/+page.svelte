@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.947</span> 🤖 AI Role 分類基礎設施（Phase 1，不動現有 AI 邏輯）</summary>
+        <ul>
+          <li><b>長期計畫</b>：AI 對複雜牌組（魔靈多龍 / 妙蛙花ex / N 的索羅亞克ex 等）反應不佳，現在靠 hard-code special-case 撐。引入 Role 分類後可一次取代多個 special-case，並讓玩家自訂 deck 也享受到 AI 優化。</li>
+          <li><b>Phase 1 範圍（嚴格）</b>：只新增基礎設施，不動 ai.ts 任何決策邏輯 — 零行為變更、零風險。</li>
+          <li><b>新檔 <code>src/lib/game/ai-roles.ts</code></b>：定義 5 個 PokemonRole 值（main-attacker / sub-attacker / utility / tech / unknown）+ classifyRole() heuristic（依 HP / 招式 dmg / rule-box / utility 特性 keyword 推斷）+ getCardRole() hybrid combiner（手工標優先、heuristic fallback）+ findMainAttackers / findSubAttackers / findUtilities helpers。</li>
+          <li><b>DeckEntry 加 optional role field</b>：preset / 玩家自訂 deck 可手工標 role 取得精確分類；不標的卡走 heuristic。</li>
+          <li><b>Phase 2 預定接入點</b>（依優先序）：(1) 能量分配 — 改「附主打手」(2) 進化順序 — 主打手優先 (3) SEND_NEW_ACTIVE — 不送 utility 上戰鬥場送死。每個接入點上線前都要跑 AI 內戰模擬（task #183）驗證勝率不退化。</li>
+          <li><b>Iron Rules</b>：Rule 4（tsc clean）/ Rule 11（Python pipeline）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.946</span> 📱 修遷移 banner 在 iPhone 動態島 / 瀏海下被擋</summary>
         <ul>
           <li><b>玩家回報</b>：手機版（iPhone 動態島機種）GitHub Pages 站打開時，v4.938 加的遷移 banner 跟動態島疊在一起，「立即切換」按鈕被遮住。</li>
