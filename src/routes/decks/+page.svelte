@@ -197,6 +197,9 @@
   let textModalMode = $state<'export' | 'import'>('export');
   let importTextInput = $state('');
 
+  // v4.970：官網代碼匯入 loading flag
+  let twCodeImportLoading = $state(false);
+
   // v4.91：匯出圖片功能 state
   let exportingImage = $state(false);
   let exportImageError = $state('');
@@ -752,6 +755,73 @@
   }
 
 
+  // v4.970：從台灣官網牌組代碼匯入（XXXXXX-XXXXXX-XXXXXX 格式）
+  //   流程：prompt 輸入代碼 → fetch Oracle backend /api/decode-tw-deck/:code
+  //   → backend 爬官網 deck-build/recipe/{code}/ HTML → 解析 60 張牌
+  //   → client 用 cardId 對應，fallback setCode+collectorNumber
+  async function importFromTwOfficialCode(): Promise<void> {
+    if (twCodeImportLoading) return;
+    if (!active) { alert('請先建立或選擇一個牌組'); return; }
+    if (active.preset) { alert('內建牌組不可覆寫，請先複製到我的牌組再匯入'); return; }
+    const code = (window.prompt('貼上台灣官網牌組代碼\n（格式：XXXXXX-XXXXXX-XXXXXX，例如 BYkvfk-zjikXf-SGtfpc）') ?? '').trim();
+    if (!code) return;
+    if (!/^[A-Za-z0-9]{6}-[A-Za-z0-9]{6}-[A-Za-z0-9]{6}$/.test(code)) {
+      alert('代碼格式錯誤！正確格式：XXXXXX-XXXXXX-XXXXXX（3 段，每段 6 個英數字）');
+      return;
+    }
+    const apiUrl = (((import.meta as unknown) as { env?: { VITE_ORACLE_API_URL?: string } }).env?.VITE_ORACLE_API_URL) || '';
+    if (!apiUrl) {
+      alert('Oracle API 未設定 — 此功能僅在 Oracle 站台 (www.ptcg-tw-sim.com) 可用');
+      return;
+    }
+    twCodeImportLoading = true;
+    try {
+      const r = await fetch(`${apiUrl}/api/decode-tw-deck/${code}`);
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ error: r.statusText }));
+        alert(`匯入失敗：${err.error || r.statusText}`);
+        return;
+      }
+      const data = await r.json() as { code: string; entries: Array<{ cardId: string; name: string; setCode: string | null; collectorNumber: string | null; count: number }>; cached?: boolean };
+      if (!data.entries || data.entries.length === 0) {
+        alert('官網回傳空牌組，代碼可能無效');
+        return;
+      }
+      // 對應到本地 pool — 先 cardId direct match，再 setCode+collectorNumber fallback
+      const matched: DeckEntry[] = [];
+      const unmatched: string[] = [];
+      for (const e of data.entries) {
+        let card = pool.get(e.cardId);
+        if (!card && e.setCode && e.collectorNumber) {
+          card = poolBySetNum.get(`${e.setCode}-${e.collectorNumber}`);
+        }
+        if (card) {
+          matched.push({ cardId: card.id, count: e.count });
+        } else {
+          unmatched.push(`${e.name} (${e.setCode ?? '?'} ${e.collectorNumber ?? '?'} × ${e.count})`);
+        }
+      }
+      if (matched.length === 0) {
+        alert('全部卡片都無法對應到本站資料庫，可能官網收錄但我們未爬到的版本');
+        return;
+      }
+      const proceed = unmatched.length === 0 || window.confirm(
+        `成功對應 ${matched.length} 種，但有 ${unmatched.length} 種未對應：\n\n${unmatched.slice(0, 8).join('\n')}${unmatched.length > 8 ? `\n…（共 ${unmatched.length} 種）` : ''}\n\n是否繼續匯入已對應的部分？`
+      );
+      if (!proceed) return;
+      // 更新 active deck — 同 importFromText pattern
+      decks = decks.map(d => d.id === active!.id ? { ...d, entries: matched, updatedAt: Date.now() } : d);
+      saveDecks(decks);
+      const totalCards = matched.reduce((s, e) => s + e.count, 0);
+      const cachedNote = data.cached ? '（cache hit）' : '';
+      alert(`✅ 從官網代碼 ${code} 匯入 ${matched.length} 種卡 / 共 ${totalCards} 張 ${cachedNote}`);
+    } catch (e) {
+      alert(`匯入失敗：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      twCodeImportLoading = false;
+    }
+  }
+
   function importFromText() {
     if (!importTextInput.trim()) return;
 
@@ -1165,6 +1235,10 @@
               <button class="small" onclick={openTextImport} disabled={!poolReady} title="貼上 PTCG 文字格式（包含官方訓練家網站可透過下方書籤工具一鍵匯入）">匯入文字</button>
               <!-- v3.83: 提供顯眼的官方匯入入口，避免玩家找不到（書籤教學原本藏在「匯入文字」modal 摺疊區內） -->
               <button class="small primary" onclick={openOfficialImport} disabled={!poolReady} title="從官方訓練家網站一鍵匯入牌組（首次需設定書籤）">🔖 從官方匯入</button>
+              <!-- v4.970：直接貼官網代碼匯入（XXXXXX-XXXXXX-XXXXXX 格式），透過 Oracle backend 爬解 -->
+              <button class="small primary" onclick={importFromTwOfficialCode} disabled={!poolReady || twCodeImportLoading} title="貼上台灣官網牌組代碼（如 BYkvfk-zjikXf-SGtfpc）自動匯入">
+                {twCodeImportLoading ? '⏳ 解析中…' : '🎫 官網代碼匯入'}
+              </button>
               <button class="small" onclick={exportJson}>匯出 JSON</button>
               <label class="small file">
                 匯入 JSON

@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.970</span> 🎫 牌組編輯器新增「官網代碼匯入」— 直接貼台灣官網 deck code 自動轉換</summary>
+        <ul>
+          <li><b>玩家建議</b>：分享牌組時需手動把 60 張卡 list 出來太麻煩；既然台灣官網有 deck code 系統（如 <code>BYkvfk-zjikXf-SGtfpc</code> 3 段 18 字元代碼），希望能直接貼代碼匯入。</li>
+          <li><b>實作</b>：牌組編輯器加「🎫 官網代碼匯入」按鈕 → 輸入代碼 → 透過 Oracle backend 爬 <code>asia.pokemon-card.com/tw/deck-build/recipe/&#123;code&#125;/</code> 解析 SSR HTML → 對應到本站卡牌資料庫（先 cardId direct match，fallback setCode+collectorNumber）→ 套用到 active 牌組。</li>
+          <li><b>對應策略</b>：若有卡片在官網有但本站未收錄（例如新 set 還沒爬到），會列出 unmatched 清單請玩家確認是否繼續匯入已對應部分。</li>
+          <li><b>後端 cache + rate-limit</b>：同代碼 5 分鐘 cache（不重複爬官網），每 IP 每分鐘最多 5 次（防被官網封 IP）。</li>
+          <li><b>適用範圍</b>：僅 Oracle 站台 (www.ptcg-tw-sim.com) 可用 — 因為 GitHub Pages 純靜態無 server 可做 fetch proxy。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — decks/+page.svelte 2708 行）/ Rule 4（tsc verify）/ Rule 7c（先 fetch 官網確認 URL pattern 與 HTML 結構）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.969</span> 📱 修手機直屏 modal 蓋住手牌橫向滑動</summary>
         <ul>
           <li><b>玩家回報</b>：手機板手牌過多時可橫向滑動瀏覽，但寶可夢被昏厥跳出「選備戰寶可夢」modal 時，遮罩擋住手牌，無法同時瀏覽 + 操作 modal。</li>
