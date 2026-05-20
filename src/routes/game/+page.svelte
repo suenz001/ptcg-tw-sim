@@ -2513,7 +2513,17 @@
       //   pattern 同 decks/+page.svelte:409-414（牌組編輯器既有正確實作）。
       //   signInAnonymously 會再次觸發 callback 帶 anonymous user → firebaseUser 設定 →
       //   dashboard 顯示「👤 匿名 / 建立帳號」按鈕。
+      // [admin fix]：admin 偷看觀戰 URL (?spectate=&admin=) 進 game 頁時跳過匿名重登，
+      //   避免 cross-tab 蓋掉 admin.html 分頁的 password user → admin polling 全 403。
       if (!u) {
+        const isAdminSpyURL = typeof window !== 'undefined' && (() => {
+          const params = new URLSearchParams(window.location.search);
+          return !!(params.get('admin') && params.get('spectate'));
+        })();
+        if (isAdminSpyURL) {
+          // 不 sign-in，等 SDK 從 IndexedDB load admin user 後 callback 會再 fire
+          return;
+        }
         try { await signInAnonymously(auth); } catch { /* retry on next visit */ }
         return;
       }
@@ -2594,7 +2604,17 @@
         }
       }
     });
-    if (!auth.currentUser) await signInAnonymously(auth);
+    // [admin fix]：admin 偷看觀戰 URL (?spectate=&admin=) 進 game 頁時跳過 anonymous sign-in，
+    //   避免 cross-tab 蓋掉 admin.html 分頁的 password user。
+    {
+      const isAdminSpyURL = typeof window !== 'undefined' && (() => {
+        const params = new URLSearchParams(window.location.search);
+        return !!(params.get('admin') && params.get('spectate'));
+      })();
+      if (!auth.currentUser && !isAdminSpyURL) {
+        await signInAnonymously(auth);
+      }
+    }
     // Oracle build 額外初始化 — 取 Oracle JWT 給房間 API
     if (ORACLE_MODE) {
       try {
