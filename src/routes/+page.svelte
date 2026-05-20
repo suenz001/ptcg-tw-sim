@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.938</span> 🌐 SEO canonical 翻轉到 .com + GitHub Pages 加遷移 banner</summary>
+        <ul>
+          <li><b>長期計畫</b>：把 <code>www.ptcg-tw-sim.com</code>（站長自有網域）養成永久主站。github.io 逐步退場 — 但**保留至少 6 個月**作為 fallback / 緊急備援。</li>
+          <li><b>Phase 1 — SEO canonical 翻轉</b>：<code>sitemap.xml</code>（4 條 URL）+ <code>app.html</code> 的 <code>&lt;link rel=&quot;canonical&quot;&gt;</code> + <code>&lt;meta property=&quot;og:url&quot;&gt;</code> 全部從 <code>suenz001.github.io</code> 改成 <code>www.ptcg-tw-sim.com</code>。Google / 搜尋引擎開始把 .com 當主索引，累積 SEO 權重到自有網域。</li>
+          <li><b>Phase 2 — 遷移 banner</b>：<code>+layout.svelte</code> 加置頂橫幅。只在 github.io hostname 顯示（.com / localhost 都不顯示）。「立即切換」按鈕保留當前 path 跳到 .com 對應路徑；「暫時不要」/ ✕ 按鈕記 localStorage（7 天內不再顯示）。</li>
+          <li><b>玩家不流失的措施</b>：(1) github.io 保留至少 6 個月當 fallback；(2) banner 不強制，玩家自由決定；(3) 已登入帳號的牌組在 Firebase，跨 origin 同步；(4) 匿名玩家本機牌組會跟 origin 綁死 — banner 已透過引導切換到 .com 提示。</li>
+          <li><b>下一步（Phase 3）</b>：Cloudflare 邊緣快取調校（縮小 Oracle 站跟 GitHub Pages 的速度差距）— 站長自行於 Cloudflare 控制台設定，不需動程式碼。</li>
+          <li><b>Iron Rules</b>：Rule 1 / Rule 3 / Rule 4 / Rule 11。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.937</span> 🔁 修登出後 dashboard 完全消失（沒退到匿名狀態）</summary>
         <ul>
           <li><b>玩家回報</b>：在對戰演練頁登入帳號時 dashboard 正常顯示，點「登出」後 dashboard 完全消失（不顯示匿名狀態，也沒「建立帳號」按鈕）。</li>
