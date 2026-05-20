@@ -1943,8 +1943,26 @@ function handlePlaying(
     const inst = attacker.hand[hIdx];
     const card = pool.get(inst.cardId);
     if (!isFossilItemCard(card)) return state;
-    // v3.821：化石卡是 Item 屬性 — 對手戰鬥場有海之詛咒時，化石也不可使出
-    //   卡面：「對手無法從手牌使出『物品』卡」— 化石 Item 屬於物品卡
+    // v4.936：化石卡是 Item — 必須通過所有 Item 鎖 check（與 PLAY_TRAINER Item 分支同條件）
+    //   a. attacker.cantPlayItemThisTurn — 含羞苞癢癢花粉 / 吼叫尾ex 絕叫 / 電蜘蛛ex 雷擊石
+    if (attacker.cantPlayItemThisTurn) {
+      return addLog(state,
+        `${attacker.name} 本回合無法從手牌使出物品卡（化石不可使出）`, aIdx);
+    }
+    //   b. 對手戰鬥場 威迫目光（班基拉斯特性）— 未被消除時擋 Item
+    {
+      const oppIdxFI = (1 - aIdx) as 0 | 1;
+      const oppActFI = state.players[oppIdxFI].active;
+      if (oppActFI && !oppActFI.abilityNullifiedThisTurn) {
+        const oppActCardFI = pool.get(oppActFI.cardId);
+        if (oppActCardFI?.abilities?.some(a => a.name === '威迫目光')) {
+          return addLog(state,
+            `${attacker.name} 因對手「威迫目光」效果，無法從手牌使出化石（物品卡）`, aIdx);
+        }
+      }
+    }
+    //   c. v3.821：對手戰鬥場 海之詛咒（胖嘟嘟ex特性）— 鎖物品
+    //      卡面：「對手無法從手牌使出『物品』卡」— 化石 Item 屬於物品卡
     if (isOppItemPlayBlocked(state, aIdx, pool)) {
       return addLog(state,
         `${attacker.name} 因對手「海之詛咒」效果，無法從手牌使出化石（物品卡）`, aIdx);
@@ -6882,11 +6900,23 @@ export function getPlayableBasics(state: GameState, pool: Map<string, Card>): st
 export function getPlayableFossils(state: GameState, pool: Map<string, Card>): string[] {
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
   if (state.pendingSelection) return [];
-  const player = state.players[state.activePlayerIndex];
-  if (player.bench.length >= getBenchLimit(state, state.activePlayerIndex, pool)) return [];
-  // v3.821：化石卡是 Item — 海之詛咒（胖嘟嘟ex）鎖物品時 UI/AI filter 也要擋
-  //   （與 PLAY_FOSSIL handler 同條件，避免 AI 一直選化石被退回 → 死迴圈）
-  if (isOppItemPlayBlocked(state, state.activePlayerIndex, pool)) return [];
+  const aIdx = state.activePlayerIndex;
+  const player = state.players[aIdx];
+  if (player.bench.length >= getBenchLimit(state, aIdx, pool)) return [];
+  // v4.936：化石卡是 Item — UI/AI filter 必須與 PLAY_FOSSIL handler 同 gate
+  //   （否則 AI 一直選化石被退回 → 死迴圈；UI 也會顯示無效拖拽提示）
+  //   a. attacker.cantPlayItemThisTurn — 含羞苞癢癢花粉 / 吼叫尾ex / 電蜘蛛ex 等鎖
+  if (player.cantPlayItemThisTurn) return [];
+  //   b. 對手戰鬥場 威迫目光（班基拉斯特性）— 未被消除時擋 Item
+  {
+    const oppActF = state.players[(1 - aIdx) as 0 | 1].active;
+    if (oppActF && !oppActF.abilityNullifiedThisTurn) {
+      const oppActCardF = pool.get(oppActF.cardId);
+      if (oppActCardF?.abilities?.some(a => a.name === '威迫目光')) return [];
+    }
+  }
+  //   c. v3.821：對手戰鬥場 海之詛咒（胖嘟嘟ex特性）— 鎖物品
+  if (isOppItemPlayBlocked(state, aIdx, pool)) return [];
   return player.hand
     .filter(inst => isFossilItemCard(pool.get(inst.cardId)))
     .map(inst => inst.iid);

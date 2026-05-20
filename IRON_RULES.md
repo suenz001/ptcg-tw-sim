@@ -758,6 +758,30 @@ if (rocketWatchtower && atkCard.pokemonType === 'Colorless') return false;
 
 ---
 
+## Rule 19: Item 鎖 source 新增時必須同步加到 PLAY_FOSSIL handler + getPlayableFossils
+
+**背景**：v4.936 玩家回報 — 含羞苞 使用「癢癢花粉」（在下個對手回合，對手無法從手牌使出物品卡）後，對手仍可使出化石類卡（陳舊的甲蓋化石 / 鰭之化石 等）。
+
+**根因**：化石卡走 `PLAY_FOSSIL` action（不走 `PLAY_TRAINER`，因為化石上場後變成 Pokémon），engine handler 只有 `isOppItemPlayBlocked`（海之詛咒）的 gate，沒有同步 `cantPlayItemThisTurn`（含羞苞癢癢花粉 / 吼叫尾ex 絕叫 / 電蜘蛛ex 雷擊石）+ 威迫目光（班基拉斯特性）的 gate。`getPlayableFossils` UI filter 同 bug。
+
+**規則**：新增任何「對手無法從手牌使出物品卡」類效果時（不論是招式 effect → `cantPlayItemThisTurn` flag、特性 → opp active ability check、還是其他機制），必須同步加 gate 到：
+
+1. `src/lib/game/engine.ts` `PLAY_TRAINER` action 的 `subtype === 'Item'` 分支（既有 anchor）
+2. `src/lib/game/engine.ts` `PLAY_FOSSIL` action handler（化石走獨立 action，需獨立加）
+3. `src/lib/game/engine.ts` `getPlayableFossils()` UI filter（AI / 拖拽 hover 都用此 helper）
+
+**Audit 工具**：
+```bash
+# 找所有 Item 鎖 source（用 subtype === 'Item' + 變數名稱關鍵字）
+grep -n "subtype === 'Item' &&" src/lib/game/engine.ts
+```
+
+結果該列出 PLAY_TRAINER 的 `subtype === 'Item' && X` 條件。每條 X 都要對應一個 `if (X) return [];` 在 `getPlayableFossils()` 與一個 `if (X) return addLog(...)` 在 `PLAY_FOSSIL` handler。
+
+**為什麼這條獨立成鐵律**：v3.821 已修過一次（海之詛咒），但 audit 沒擴展到 cantPlayItemThisTurn / 威迫目光等其他 source — v4.936 再次踩坑。
+
+---
+
 ## 完整版
 
 完整 SKILL.md（含 Python git plumbing pipeline 範本、pre-flight checklist、

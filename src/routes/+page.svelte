@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.936</span> 🦴 修「含羞苞 癢癢花粉」未擋化石類物品卡</summary>
+        <ul>
+          <li><b>玩家回報</b>：含羞苞 使用「癢癢花粉」（讓對手下回合無法從手牌使出物品卡）後，對手仍能使出化石類卡（陳舊的甲蓋化石 / 鰭之化石 / 羽毛化石 / 背蓋化石 / 顎之化石 / 琥珀化石 / 根狀化石）。</li>
+          <li><b>Root cause</b>：化石卡走 <code>PLAY_FOSSIL</code> action（不走 <code>PLAY_TRAINER</code>，因為化石上場後變成 Pokémon），handler 只有「海之詛咒」一個 Item 鎖 gate，沒同步 <code>cantPlayItemThisTurn</code>（癢癢花粉 / 吼叫尾ex 絕叫 / 電蜘蛛ex 雷擊石）+ 威迫目光（班基拉斯特性）。<code>getPlayableFossils</code> UI filter 同 bug — AI 也會傻傻一直選。</li>
+          <li><b>修法</b>：<code>PLAY_FOSSIL</code> handler + <code>getPlayableFossils</code> 補上 3 個 Item 鎖 gate（與 <code>PLAY_TRAINER</code> Item 分支同條件）：<code>cantPlayItemThisTurn</code> / 威迫目光 / 海之詛咒。</li>
+          <li><b>同類修補</b>：吼叫尾ex 絕叫、電蜘蛛ex 雷擊石（用同個 <code>cantPlayItemThisTurn</code> flag）— 之後對手出化石也都會被擋。</li>
+          <li><b>IRON_RULES Rule 19</b>：新增此鐵律 — 任何「對手無法使出物品卡」類 source 必須同步加到 <code>PLAY_TRAINER</code> + <code>PLAY_FOSSIL</code> + <code>getPlayableFossils</code> 三處。</li>
+          <li><b>Iron Rules</b>：Rule 1 / Rule 3 / Rule 4 / Rule 7c（JSON 查證）/ Rule 11 / 新 Rule 19。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.935</span> 🔀 Firebase 額度分流：線上對戰自動跳轉 Oracle 站</summary>
         <ul>
           <li><b>目的</b>：把線上對戰的重度 Firestore 流量（房間 + heartbeat + gameState 同步）從 Firebase 分流到 Oracle 主機，省 Firebase 免費額度。</li>
