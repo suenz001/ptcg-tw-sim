@@ -206,7 +206,7 @@
 </script>
 
 <main>
-  <h1>PTCG 實體賽事演練引擎 <span class="version">v{VERSION}</span></h1>
+  <h1>PTCG 實體賽事演練 — 寶可夢集換式卡牌模擬器 <span class="version">v{VERSION}</span></h1>
   <p class="tagline">Deck building testing and card database 牌組構築測試與卡牌資料庫</p>
 
   <section>
@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.951</span> 🏷️ 改網站標題：去掉「引擎」+ 補「寶可夢集換式卡牌」SEO 關鍵字</summary>
+        <ul>
+          <li><b>新標題</b>：「PTCG 實體賽事演練 — 寶可夢集換式卡牌模擬器」</li>
+          <li><b>為什麼改</b>：(1)「引擎」是技術術語、玩家不熟；改為「模擬器」更貼近卡牌領域常見用法。 (2) 補「寶可夢集換式卡牌」進主標題大幅提升 SEO 長尾關鍵字命中率（玩家實際搜尋詞）。</li>
+          <li><b>修了 7 處</b>：app.html 的 <code>&lt;title&gt;</code> / og:site_name / og:title / twitter:title / description；manifest.json 的 PWA name（短版 PWA 主畫面顯示）；首頁 H1。</li>
+          <li><b>SEO 影響</b>：Google 重新爬約 1-2 週後生效。配合 v4.938 的 canonical .com 翻轉，這次 SEO 主索引重塑會更完整。</li>
+          <li><b>Iron Rules</b>：Rule 1（changelog 內 <code>&#123;VERSION&#125;</code> 是 Svelte expression 保留不 escape）/ Rule 11（Python pipeline 全程）/ Rule 4（tsc verify）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.950</span> 🔥 修紅蓮鎧騎 M5 烈焰軍團 JSON 翻譯誤譯 + 實裝改限定火能量</summary>
         <ul>
           <li><b>玩家回報</b>：紅蓮鎧騎 M5 烈焰軍團 — 原 JSON 翻譯「身上附有能量的自己備戰寶可夢數」是日文誤譯，應為「附有火能量」（限定火屬性）。</li>
