@@ -12,6 +12,37 @@ push 失敗的 incident。違反任何一條都會讓推上去的版本崩潰、
 
 ---
 
+## Meta Rule: 新增鐵律時必須同步加 audit grep 到 `scripts/iron-rules-audit.sh`
+
+**背景**：v4.944 建了 GitHub Actions CI 自動跑鐵律 audit grep — 每次 push 自動 check 違規。
+如果鐵律加了但沒同步加 audit grep，**自動防護網等於不存在** — 跟沒加一樣。
+
+**規則**：每次新增 / 強化 / 修改本檔內任一條鐵律時，必須：
+
+1. **能 grep 的鐵律** → 在 `scripts/iron-rules-audit.sh` 加對應 check（用該鐵律附的 grep 指令）
+2. **不能 grep 的鐵律**（如 Rule 7c「先查 JSON」這種行為規範）→ 在本檔的鐵律本身註明 `[audit:N/A 行為規範]`
+3. **誤觸風險高的鐵律** → 用 warn-only（print_warning）而非 print_violation，列出供人工 review
+
+**為什麼這條獨立成 meta rule**：人類 / AI 都會忘 — 加新鐵律時很容易只更新本檔，忘了同步更新 audit script。
+把這條放最開頭，每次讀 IRON_RULES 就會看到提醒。
+
+**Audit script 結構**：
+```bash
+# scripts/iron-rules-audit.sh
+echo "── Rule N: <一行描述>"
+matches=$(grep -rn '<grep pattern>' <scope> 2>/dev/null || true)
+if [ -n "$matches" ]; then
+  print_violation "N" "<違規說明>" "$matches"
+else
+  echo -e "${GREEN}✓ Rule N clean${NC}"
+fi
+```
+
+**Phase A → B 升級時機**：建 audit 後先 `continue-on-error: true` 跑 1-2 週，觀察哪些是真誤觸；校準後移除
+`continue-on-error` 進入 Phase B（違規真正擋 deploy）。
+
+---
+
 ## CRITICAL iron rules — these have ALL been violated in past pushes
 
 ### Rule 1: Svelte template special characters MUST be HTML-entity escaped

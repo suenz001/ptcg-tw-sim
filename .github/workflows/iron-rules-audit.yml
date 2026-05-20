@@ -1,0 +1,27 @@
+name: Iron Rules Audit
+
+# Phase A 試運行：跑 audit 但不擋 deploy。觀察 1-2 週後改 Phase B（移除 continue-on-error）。
+# 詳細鐵律見 IRON_RULES.md，audit 邏輯見 scripts/iron-rules-audit.sh
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    # Phase A: 失敗時 workflow 整體仍標 ✅（不擋 GitHub Pages deploy）
+    # Phase B（v4.945+）：移除這條後 audit 失敗會把 deploy 卡掉
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # 讓 audit script 可看到 HEAD~1 對比
+      - name: Run iron rules audit
+        run: bash scripts/iron-rules-audit.sh

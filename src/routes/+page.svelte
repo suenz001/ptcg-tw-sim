@@ -264,6 +264,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.944</span> 🤖 建 GitHub Actions 自動跑鐵律 audit（Phase A 試運行）</summary>
+        <ul>
+          <li><b>目的</b>：把 22 條鐵律的 grep audit 自動化，每次 push 自動跑，違規會在 GitHub Actions 頁面標紅。減少「AI 寫程式忘了某條鐵律 → bug 上線 → 玩家踩到」的失誤。</li>
+          <li><b>新檔 1</b>：<code>scripts/iron-rules-audit.sh</code> — bash 跑各條鐵律的 grep check，違規列出 file:line。Starter set 含 Rule 1（changelog escape）/ Rule 6（ABILITY_EFFECTS key）/ Rule 11b（NUL byte）/ Rule 14（minCount）/ Rule 20（!isFirstTurn warn）。</li>
+          <li><b>新檔 2</b>：<code>.github/workflows/iron-rules-audit.yml</code> — GitHub Actions 自動跑 audit。Phase A 用 <code>continue-on-error: true</code> 試運行 1-2 週（不擋 deploy，僅觀察誤觸）。校準後切 Phase B 真正當守門員。</li>
+          <li><b>IRON_RULES.md meta-rule</b>：新增鐵律時必須同步加 audit grep（否則自動防護網等於不存在）。寫在文件最開頭提醒未來 AI / 自己。</li>
+          <li><b>後續</b>：未列入的鐵律（Rule 7 簡化 / Rule 8 揭示資訊 / Rule 17 deprecated helper）等校準後再分批加入。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Meta Rule（首次套用 — 加新鐵律就加 audit grep）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.943</span> 📖 把 v4.940-942 教訓寫進 IRON_RULES（Rule 20/21/22 + 強化 Rule 14）</summary>
         <ul>
           <li><b>目的</b>：把這三波 push 學到的踩坑經驗固化成內部鐵律，避免下次再犯。</li>
