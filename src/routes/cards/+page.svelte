@@ -53,7 +53,12 @@
   // v2.184：搜尋模式切換
   //   normal  — 只搜卡名 / 招式名 / 特性名 / 卡號（原行為）
   //   keyword — 全文搜尋，含 rulesText、招式 effect、特性 effect、特性 label
+  // v4.954：新增 keywordScope — 在關鍵字模式下細分搜尋範圍
+  //   all       — 全文（卡名、招式、特性、rules，原 keyword 行為）
+  //   attacks   — 只搜招式（attacks[].name + attacks[].effect）
+  //   abilities — 只搜特性（abilities[].label + abilities[].name + abilities[].effect）
   let searchMode = $state<'normal' | 'keyword'>('normal');
+  let keywordScope = $state<'all' | 'attacks' | 'abilities'>('all');
   // 多選：空 Set = 全部；非空 = 只顯示這些分類
   // 點一次加入、點兩次移除；按「全部」清空 Set。
   let selectedCategories = $state<Set<CategoryKey>>(new Set());
@@ -267,17 +272,27 @@
         if (!c.regulationMark || !marks.has(c.regulationMark as RegMarkKey)) return false;
       }
       if (!q) return true;
-      // v2.184：兩種搜尋模式
+      // v2.184：兩種搜尋模式；v4.954：keyword 模式再細分 scope
       if (searchMode === 'keyword') {
-        // 全文搜尋：卡名 / 卡號 / 招式名+effect / 特性 label+name+effect / rulesText / evolvesFrom
-        const haystack: string[] = [
-          c.name,
-          c.collectorNumber,
-          c.evolvesFrom ?? '',
-          c.rulesText ?? '',
-          ...(c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']),
-          ...(c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']),
-        ];
+        // v4.954：依 keywordScope 限定搜尋範圍
+        let haystack: string[];
+        if (keywordScope === 'attacks') {
+          // 只搜招式名 + 招式效果敘述
+          haystack = (c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']);
+        } else if (keywordScope === 'abilities') {
+          // 只搜特性 label（種類）+ 特性名 + 特性效果敘述
+          haystack = (c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']);
+        } else {
+          // 'all' — 全文搜尋：卡名 / 卡號 / 招式 / 特性 / rulesText / evolvesFrom（原行為）
+          haystack = [
+            c.name,
+            c.collectorNumber,
+            c.evolvesFrom ?? '',
+            c.rulesText ?? '',
+            ...(c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']),
+            ...(c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']),
+          ];
+        }
         return haystack.some(s => s && s.toLowerCase().includes(q));
       }
       // normal 模式（原行為）：只搜卡名 / 卡號 / 招式名 / 特性名
@@ -416,24 +431,35 @@
       <input
         type="search"
         bind:value={query}
-        placeholder={searchMode === 'keyword'
-          ? '關鍵字搜尋（包含招式 / 特性敘述、效果文字、卡面 rules）...'
-          : '搜尋卡名、招式名、特性名、卡號...'}
+        placeholder={searchMode === 'normal'
+          ? '搜尋卡名、招式名、特性名、卡號...'
+          : keywordScope === 'attacks'
+          ? '關鍵字搜尋招式名 / 招式效果敘述...'
+          : keywordScope === 'abilities'
+          ? '關鍵字搜尋特性名 / 特性效果敘述...'
+          : '關鍵字搜尋（招式 + 特性敘述 + 效果文字 + 卡面 rules）...'}
         aria-label="搜尋" />
-      <div class="searchModeToggle" role="group" aria-label="搜尋模式切換">
-        <button
-          class="modeBtn"
-          class:active={searchMode === 'normal'}
-          onclick={() => (searchMode = 'normal')}
-          title="只搜尋卡名 / 招式名 / 特性名 / 卡號"
-        >一般</button>
-        <button
-          class="modeBtn"
-          class:active={searchMode === 'keyword'}
-          onclick={() => (searchMode = 'keyword')}
-          title="關鍵字全文搜尋（含招式效果敘述、特性敘述、卡面 rules）"
-        >關鍵字</button>
-      </div>
+      <!-- v4.954：單一 <select> 取代雙按鈕；4 選項涵蓋 一般 / 關鍵字-不限/招式/特性 -->
+      <select
+        class="modeSelect"
+        class:keyword={searchMode === 'keyword'}
+        value={searchMode === 'normal' ? 'normal' : `keyword:${keywordScope}`}
+        onchange={(e) => {
+          const v = (e.currentTarget as HTMLSelectElement).value;
+          if (v === 'normal') {
+            searchMode = 'normal';
+          } else {
+            searchMode = 'keyword';
+            keywordScope = v.slice('keyword:'.length) as 'all' | 'attacks' | 'abilities';
+          }
+        }}
+        aria-label="搜尋模式"
+      >
+        <option value="normal">一般搜尋</option>
+        <option value="keyword:all">關鍵字（不限）</option>
+        <option value="keyword:attacks">關鍵字（搜尋招式）</option>
+        <option value="keyword:abilities">關鍵字（搜尋特性）</option>
+      </select>
     </div>
     <div class="filters" role="group" aria-label="卡片分類篩選（可複選，再點一次取消）">
       <button
@@ -868,6 +894,8 @@
     align-items: center;
     min-width: 320px;
   }
+  /* v4.954：原 .searchModeToggle / .modeBtn 雙按鈕已被單一 <select> 取代 — */
+  /* 樣式保留作為防禦（若日後有 a/b test 還原），目前 DOM 不會掛這些 class 上 */
   .searchModeToggle {
     display: flex;
     gap: 0;
@@ -892,6 +920,25 @@
     color: #fff;
   }
   .modeBtn:hover:not(.active) {
+    background: #f0f0f0;
+  }
+  /* v4.954：搜尋模式 dropdown — 一般狀態白底，keyword 狀態深色背景 */
+  .modeSelect {
+    padding: 0.5rem 0.8rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #333;
+    font-family: inherit;
+  }
+  .modeSelect.keyword {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+  .modeSelect:hover:not(.keyword) {
     background: #f0f0f0;
   }
   .filters {

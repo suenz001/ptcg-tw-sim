@@ -70,6 +70,11 @@
   // ── UI state ───────────────────────────────────────────────────────────
   let search = $state('');
   let searchMode = $state<'normal' | 'keyword'>('normal');
+  // v4.954：keyword 模式下進一步限定搜尋範圍
+  //   all       — 全文（同舊 keyword 行為）
+  //   attacks   — 只搜招式（name + effect）
+  //   abilities — 只搜特性（label + name + effect）
+  let keywordScope = $state<'all' | 'attacks' | 'abilities'>('all');
   let setFilter = $state<string>('');
   let pickerPreview = $state<Card | null>(null);
 
@@ -293,12 +298,21 @@
       if (setFilter && c.setCode !== setFilter) return false;
       // Search
       if (!q) return true;
+      // v4.954：keyword 模式下依 keywordScope 細分搜尋範圍
       if (searchMode === 'keyword') {
-        const haystack: string[] = [
-          c.name, c.collectorNumber, c.evolvesFrom ?? '', c.rulesText ?? '',
-          ...(c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']),
-          ...(c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']),
-        ];
+        let haystack: string[];
+        if (keywordScope === 'attacks') {
+          haystack = (c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']);
+        } else if (keywordScope === 'abilities') {
+          haystack = (c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']);
+        } else {
+          // 'all' — 原 keyword 全文搜尋行為
+          haystack = [
+            c.name, c.collectorNumber, c.evolvesFrom ?? '', c.rulesText ?? '',
+            ...(c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']),
+            ...(c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']),
+          ];
+        }
         return haystack.some(s => s && s.toLowerCase().includes(q));
       }
       return (
@@ -1233,17 +1247,36 @@
         <div class="pk-search-row">
           <input
             class="pk-search"
-            placeholder={searchMode === 'keyword'
-              ? '關鍵字搜尋（含招式 / 特性敘述、效果）...'
-              : '搜尋卡名、招式名、特性名、卡號...'}
+            placeholder={searchMode === 'normal'
+              ? '搜尋卡名、招式名、特性名、卡號...'
+              : keywordScope === 'attacks'
+              ? '關鍵字搜尋招式名 / 招式效果敘述...'
+              : keywordScope === 'abilities'
+              ? '關鍵字搜尋特性名 / 特性效果敘述...'
+              : '關鍵字搜尋（招式 + 特性 + 效果文字 + rules）...'}
             bind:value={search}
           />
-          <div class="pk-mode-toggle" role="group" aria-label="搜尋模式">
-            <button class="pk-mode-btn" class:active={searchMode === 'normal'}
-              onclick={() => (searchMode = 'normal')} title="只搜名稱 / 卡號">一般</button>
-            <button class="pk-mode-btn" class:active={searchMode === 'keyword'}
-              onclick={() => (searchMode = 'keyword')} title="全文關鍵字搜尋">關鍵字</button>
-          </div>
+          <!-- v4.954：單一 <select> 取代雙按鈕；4 選項涵蓋 一般 / 關鍵字-不限/招式/特性 -->
+          <select
+            class="pk-mode-select"
+            class:keyword={searchMode === 'keyword'}
+            value={searchMode === 'normal' ? 'normal' : `keyword:${keywordScope}`}
+            onchange={(e) => {
+              const v = (e.currentTarget as HTMLSelectElement).value;
+              if (v === 'normal') {
+                searchMode = 'normal';
+              } else {
+                searchMode = 'keyword';
+                keywordScope = v.slice('keyword:'.length) as 'all' | 'attacks' | 'abilities';
+              }
+            }}
+            aria-label="搜尋模式"
+          >
+            <option value="normal">一般搜尋</option>
+            <option value="keyword:all">關鍵字（不限）</option>
+            <option value="keyword:attacks">關鍵字（搜尋招式）</option>
+            <option value="keyword:abilities">關鍵字（搜尋特性）</option>
+          </select>
         </div>
         <div class="pk-chip-row" role="group" aria-label="分類">
           <button class="pk-chip" class:active={selectedCategories.size === 0}
@@ -1919,6 +1952,7 @@
     font: inherit;
     font-size: 0.88rem;
   }
+  /* v4.954：原 .pk-mode-toggle / .pk-mode-btn 已被單一 <select> 取代，樣式保留作防禦 */
   .pk-mode-toggle {
     display: flex;
     gap: 0;
@@ -1939,6 +1973,26 @@
   .pk-mode-btn + .pk-mode-btn { border-left: 1px solid #e0e0e0; }
   .pk-mode-btn.active { background: #1a1a1a; color: #fff; }
   .pk-mode-btn:hover:not(.active) { background: #f0f0f0; }
+  /* v4.954：搜尋模式 dropdown */
+  .pk-mode-select {
+    padding: 0.4rem 0.55rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: #333;
+    font-family: inherit;
+    flex-shrink: 0;
+  }
+  .pk-mode-select.keyword {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+  .pk-mode-select:hover:not(.keyword) {
+    background: #f0f0f0;
+  }
 
   .pk-chip-row {
     display: flex;

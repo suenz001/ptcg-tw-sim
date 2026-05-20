@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.954</span> 🔍 卡牌搜尋：關鍵字模式新增下拉選單可限定搜尋範圍</summary>
+        <ul>
+          <li><b>玩家需求</b>：找有特定關鍵字招式 / 特性的卡時，舊版 [關鍵字] 全文搜尋會混入卡名、卡號、rules 文字命中的卡，雜訊太多。</li>
+          <li><b>新增 3 個搜尋範圍選項</b>：在 <b>卡牌資料庫</b> 與 <b>牌組編輯器</b> 把 [一般] [關鍵字] 雙按鈕換成單一下拉選單：<br>① 一般搜尋（卡名／卡號／招式名／特性名 — 預設） ② 關鍵字（不限）— 全文（同舊行為） ③ 關鍵字（搜尋招式）— 只搜 attacks ④ 關鍵字（搜尋特性）— 只搜 abilities。</li>
+          <li><b>例</b>：選「搜尋招式」+ 輸入「燃燒」→ 只列出招式名或招式效果含「燃燒」的卡，不會混入特性含「燃燒」的卡。選「搜尋特性」+ 輸入「治癒」→ 只列出特性含「治癒」的卡。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — cards/+page.svelte ~1315 行、decks/+page.svelte ~2654 行）/ Rule 4（tsc verify）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.953</span> 🎨 首頁標題排版分段（主標 + 副標 + tagline 三層）</summary>
         <ul>
           <li><b>玩家回饋</b>：v4.951 完整標題「PTCG 實體賽事演練 — 寶可夢集換式卡牌模擬器」太長，桌面 680px 主容器寬度下會換行，最後「模擬器」3 字單獨一行視覺很醜。</li>
