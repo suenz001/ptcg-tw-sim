@@ -200,6 +200,9 @@
   // v4.970：官網代碼匯入 loading flag
   let twCodeImportLoading = $state(false);
 
+  // v4.973：官網代碼匯出 loading flag + 上次匯出代碼（顯示在 button 旁方便玩家複製）
+  let twCodeExportLoading = $state(false);
+
   // v4.91：匯出圖片功能 state
   let exportingImage = $state(false);
   let exportImageError = $state('');
@@ -826,6 +829,63 @@
     }
   }
 
+  // v4.973：把 active deck 匯出為官網牌組代碼
+  //   流程：confirm 警告 → POST /api/encode-tw-deck → server 端跑 3-step
+  //   GET token → POST beforecheck/ → POST register/ → 拿到 deckCode
+  //   注意：register/ 真正寫入官網 DB，因此 server 端 rate-limit 嚴 (3/min + 12/hr per IP)
+  //   且 client 端先 confirm 警告玩家「會在官網永久留下這份牌組紀錄」。
+  async function exportToTwOfficialCode(): Promise<void> {
+    if (twCodeExportLoading) return;
+    if (!active) { alert('請先選擇要匯出的牌組'); return; }
+    if (activeEntries.length === 0) { alert('牌組空白，無法匯出'); return; }
+    const totalCards = activeEntries.reduce((s, x) => s + x.entry.count, 0);
+    // 構造 entries — cardId 用我們系統的 id（= 官網 cardId，v4.970 已驗證），cardName 用繁中卡名
+    const entries = activeEntries.map(({ entry, card }) => ({
+      cardId: card.id,
+      cardName: card.name,
+      count: entry.count,
+    }));
+    // 警告 — 牌組會在官網 DB 永久留下紀錄
+    const warnMsg = totalCards < 60
+      ? `牌組目前 ${totalCards} 張（未滿 60），官網實測仍可發行但屬「非正規」狀態。\n\n按確定後會把此牌組永久發行到台灣官網，並回傳代碼。確定繼續嗎？`
+      : `按確定後會把此牌組（${totalCards} 張）永久發行到台灣官網（每次匯出會產生新代碼），並回傳給你。\n\n確定繼續嗎？`;
+    if (!window.confirm(warnMsg)) return;
+    const apiUrl = (((import.meta as unknown) as { env?: { VITE_ORACLE_API_URL?: string } }).env?.VITE_ORACLE_API_URL) || '';
+    if (!apiUrl) {
+      alert('Oracle API 未設定 — 此功能僅在 Oracle 站台 (www.ptcg-tw-sim.com) 可用');
+      return;
+    }
+    twCodeExportLoading = true;
+    try {
+      const r = await fetch(`${apiUrl}/api/encode-tw-deck`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ error: r.statusText }));
+        alert(`匯出失敗：${err.error || r.statusText}`);
+        return;
+      }
+      const data = await r.json() as { deckCode: string; totalKinds: number; totalCards: number };
+      // 嘗試自動複製到剪貼簿（瀏覽器可能在無 user-gesture / iframe 環境拒絕）
+      let copied = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(data.deckCode);
+          copied = true;
+        }
+      } catch { /* ignore — 用 alert 提供代碼讓玩家手動複製 */ }
+      const officialUrl = `https://asia.pokemon-card.com/tw/deck-build/code/?deckCode=${data.deckCode}`;
+      const copyNote = copied ? '\n\n（代碼已自動複製到剪貼簿）' : '\n\n（自動複製失敗，請手動 Ctrl+C 複製）';
+      alert(`✅ 匯出成功！\n\n官網代碼：${data.deckCode}\n張數：${data.totalKinds} 種 / ${data.totalCards} 張${copyNote}\n\n可於官網查看：${officialUrl}`);
+    } catch (e) {
+      alert(`匯出失敗：${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      twCodeExportLoading = false;
+    }
+  }
+
   function importFromText() {
     if (!importTextInput.trim()) return;
 
@@ -1243,6 +1303,10 @@
               <!-- v4.970：直接貼官網代碼匯入（XXXXXX-XXXXXX-XXXXXX 格式），透過 Oracle backend 爬解 -->
               <button class="small primary" onclick={importFromTwOfficialCode} disabled={!poolReady || twCodeImportLoading} title="貼上台灣官網牌組代碼（如 BYkvfk-zjikXf-SGtfpc）自動匯入">
                 {twCodeImportLoading ? '⏳ 解析中…' : '🎫 官網代碼匯入'}
+              </button>
+              <!-- v4.973：匯出此牌組成官網代碼（會寫入官網 DB，client 端先 confirm 警告） -->
+              <button class="small primary" onclick={exportToTwOfficialCode} disabled={!active || activeEntries.length === 0 || twCodeExportLoading} title="把此牌組發行到官方訓練家網站並取得分享代碼（會在官網永久留下紀錄）">
+                {twCodeExportLoading ? '⏳ 發行中…' : '📤 匯出為官網代碼'}
               </button>
               <button class="small" onclick={exportJson}>匯出 JSON</button>
               <label class="small file">

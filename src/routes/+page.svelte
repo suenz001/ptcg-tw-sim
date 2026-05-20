@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.973</span> 📤 牌組編輯器新增「匯出為官網代碼」</summary>
+        <ul>
+          <li><b>玩家建議</b>：既然 v4.970 開放了「貼官網代碼匯入」，那反過來「把我們站台組的牌匯出為官網代碼」也應該做，方便分享給其他玩家。</li>
+          <li><b>實作</b>：Oracle 後端反推官網 3-step 流程（GET token → POST beforecheck/ 驗證 → POST register/ 拿 302 redirect 的 deckCode）。新增 <code>POST /api/encode-tw-deck</code> endpoint。前端在 🎫 官網代碼匯入旁邊加「📤 匯出為官網代碼」按鈕。</li>
+          <li><b>使用方式</b>：選好牌組 → 按「📤 匯出為官網代碼」→ 確認警告 → 拿到代碼（自動複製到剪貼簿）→ 把代碼分享給朋友。</li>
+          <li><b>注意</b>：每次匯出都會在官網 DB 留下新紀錄並產生新代碼（同一副牌每次匯出 code 不同），server 端 rate-limit 3 次/分 + 12 次/小時 避免濫用。</li>
+          <li><b>同步</b>：未滿 60 張的牌組仍可匯出（官網實測接受，但會標為非正規）；牌組為空時按鈕 disable。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.972</span> 🔧 修官網代碼匯入「saveDecks is not defined」+ 隱藏舊「🔖 從官方匯入」按鈕</summary>
         <ul>
           <li><b>玩家回報</b>：v4.971 修了 pool/poolById bug 後可成功匯入 60 張牌，但仍跳訊息「匯入失敗：saveDecks is not defined」。</li>
