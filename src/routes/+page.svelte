@@ -264,6 +264,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.950</span> 🔥 修紅蓮鎧騎 M5 烈焰軍團 JSON 翻譯誤譯 + 實裝改限定火能量</summary>
+        <ul>
+          <li><b>玩家回報</b>：紅蓮鎧騎 M5 烈焰軍團 — 原 JSON 翻譯「身上附有能量的自己備戰寶可夢數」是日文誤譯，應為「附有火能量」（限定火屬性）。</li>
+          <li><b>修 JSON</b>：<code>static/cards/M5.json</code> effect 改為「增加附有火能量的自己的備戰寶可夢的數量 × 40 點傷害。」</li>
+          <li><b>修實裝</b>：<code>m5_preview.ts</code> 加 <code>providesFireEnergy()</code> helper（基本【火】OR 名稱含「【火】」的特殊能量，pattern 同 m2_dragon_charizard_batch.ts 既有寫法）+ 改 <code>countSelfBenchWithEnergy</code> → <code>countSelfBenchWithFireEnergy</code>，filter 只算備戰中附有「火能量」的寶可夢。</li>
+          <li><b>傷害公式（修正後）</b>：base 40 + N × 40，N = 備戰中附有<b>火能量</b>的寶可夢數。例：備戰 5 隻其中 2 隻附火能量 → 40 + 2×40 = 120 點。其他屬性能量不算。</li>
+          <li><b>Iron Rules</b>：Rule 7c（JSON 卡面 source of truth — 翻譯錯就改 JSON 同步修實裝）/ Rule 15（JSON 是真相，不信任既有 fn 邏輯）/ Rule 11（Python pipeline）/ Rule 4（tsc clean）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.949</span> 🎯 AI 能量分配 role-aware（Phase 2a — 保守接入點）</summary>
         <ul>
           <li><b>第一個 role 分類接入點上線</b>：AI 在「<code>active</code> 沒招可發」時，原本一律把能量附給 active；新版優先找 bench 上的 <code>main-attacker</code>（heuristic 分類：HP≥210 + dmg≥150 + rule-box）附給它，bench 主打手能量已滿時 fallback 附 active。</li>

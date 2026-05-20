@@ -196,7 +196,7 @@ regPost('超級龍頭地鼠ex|挖掘崩塌', millOppDeckTopPost(2, '挖掘崩塌
 //
 // 完整對照（卡面 → 實裝細節）：
 //   A. 條件 +N PRE：
-//      紅蓮鎧騎|烈焰軍團（40+N×40，N=自方備戰有附能量數）
+//      紅蓮鎧騎|烈焰軍團（40+N×40，N=自方備戰附「火能量」數，v4.950 修譯）
 //      古空棘魚|化石節拍（10+N×30，N=自方備戰名含「陳舊的」數）
 //      海豚俠|正義之拳（80+200，當對手剩餘獎賞=1）
 //      呆殼獸|空空如也（50+160，當自方手牌=0）
@@ -225,9 +225,22 @@ regPost('超級龍頭地鼠ex|挖掘崩塌', millOppDeckTopPost(2, '挖掘崩塌
 //   - Rule 17：傷害效果走 canApplyEffectToTarget unified path（透過 hitBenchPickPost 等 helper）
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── helper：自方備戰中「附有能量的寶可夢數」──────────────────────────
-function countSelfBenchWithEnergy(state: import('../../types').GameState, aIdx: 0 | 1): number {
-  return state.players[aIdx].bench.filter(b => b.energyAttached.length > 0).length;
+// ── helper：自方備戰中「附有火能量的寶可夢數」────────────────────────
+// v4.950：原 helper 算「附任何能量」是早期 JSON 翻譯誤譯 — 正確應限定火能量。
+//   providesFireEnergy 判定：基本【火】能量 OR 名稱含「【火】」的特殊能量
+//   （pattern 同 m2_dragon_charizard_batch.ts:36）。
+function providesFireEnergy(card: import('$lib/cards/types').Card | undefined): boolean {
+  return !!card && card.supertype === 'Energy'
+    && (card.pokemonType === 'Fire' || card.name.includes('【火】'));
+}
+function countSelfBenchWithFireEnergy(
+  state: import('../../types').GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, import('$lib/cards/types').Card>,
+): number {
+  return state.players[aIdx].bench.filter(b =>
+    b.energyAttached.some(e => providesFireEnergy(pool.get(e.cardId)))
+  ).length;
 }
 
 // ── helper：自方備戰中卡名含某子字串的寶可夢數 ───────────────────────
@@ -245,13 +258,14 @@ function countSelfBenchByNameContains(
 // Group A — 條件 +N PRE
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ── 紅蓮鎧騎|烈焰軍團 — 40 + N×40（N=自方備戰附能寶可夢數）
-//   卡面：「身上附有能量的自己備戰寶可夢數 × 40 點，追加傷害。」
-regPre('紅蓮鎧騎|烈焰軍團', (state, aIdx) => {
-  const n = countSelfBenchWithEnergy(state, aIdx);
+// ── 紅蓮鎧騎|烈焰軍團 — 40 + N×40（N=自方備戰附「火能量」寶可夢數）
+//   卡面（v4.950 修譯）：「增加附有火能量的自己的備戰寶可夢的數量 × 40 點傷害。」
+//   注意：限定火能量（基本【火】或名稱含「【火】」的特殊能量），不算其他屬性。
+regPre('紅蓮鎧騎|烈焰軍團', (state, aIdx, pool) => {
+  const n = countSelfBenchWithFireEnergy(state, aIdx, pool);
   const dmg = 40 + n * 40;
   return {
-    state: addLog(state, `烈焰軍團：自方備戰附能寶可夢 ${n} 隻 → 40 + ${n}×40 = ${dmg}`, aIdx),
+    state: addLog(state, `烈焰軍團：自方備戰附火能量寶可夢 ${n} 隻 → 40 + ${n}×40 = ${dmg}`, aIdx),
     damage: dmg,
   };
 });
