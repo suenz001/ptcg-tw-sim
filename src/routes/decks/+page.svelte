@@ -791,7 +791,8 @@
       const matched: DeckEntry[] = [];
       const unmatched: string[] = [];
       for (const e of data.entries) {
-        let card = pool.get(e.cardId);
+        // v4.971 hotfix: pool 是 Card[] 沒 .get；用 poolById Map
+        let card = poolById.get(e.cardId);
         if (!card && e.setCode && e.collectorNumber) {
           card = poolBySetNum.get(`${e.setCode}-${e.collectorNumber}`);
         }

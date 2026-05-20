@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.971</span> 🔧 hotfix — v4.970 官網代碼匯入用錯變數導致「.get is not a function」</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.970 剛上線就遇「匯入失敗：e(...).get is not a function」。</li>
+          <li><b>根因</b>：decks/+page.svelte 內 <code>pool</code> 是 Card[] array（沒 .get），<code>poolById</code> 才是 Map。我 v4.970 誤寫 <code>pool.get(cardId)</code>。</li>
+          <li><b>修</b>：改用 <code>poolById.get(cardId)</code>。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v4.970</span> 🎫 牌組編輯器新增「官網代碼匯入」— 直接貼台灣官網 deck code 自動轉換</summary>
         <ul>
           <li><b>玩家建議</b>：分享牌組時需手動把 60 張卡 list 出來太麻煩；既然台灣官網有 deck code 系統（如 <code>BYkvfk-zjikXf-SGtfpc</code> 3 段 18 字元代碼），希望能直接貼代碼匯入。</li>
