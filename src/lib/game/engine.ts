@@ -6996,10 +6996,17 @@ export function getUsableAbilities(
       // v4.4997：audit 補 11 個缺 gate 的特性 — 條件不符時不顯示「使用特性」按鈕（玩家規則）
       // ──────────────────────────────────────────────────────────────────────
       // P0：白海獅 | 沖刷 — 戰鬥場 + 備戰有【水】能量
+      // v4.962：name 含【水】fallback — 基本【水】能量的 pokemonType 為 null
+      //   (scraper 留空，type 從卡名推斷)，strict pokemonType==='Water' 會誤判。
       if (ab.name === '沖刷') {
         if (!player.active) return;
         const hasWaterOnBench = player.bench.some(b =>
-          b.energyAttached.some(e => pool.get(e.cardId)?.pokemonType === 'Water'));
+          b.energyAttached.some(e => {
+            const ec = pool.get(e.cardId);
+            if (!ec || ec.supertype !== 'Energy') return false;
+            if (ec.pokemonType === 'Water') return true;
+            return /【水】/.test(ec.name || '');
+          }));
         if (!hasWaterOnBench) return;
       }
       // P0：瑪力露麗ex | 收集泡泡 — v4.4998 修正：卡面沒要求 active 是瑪力露麗ex

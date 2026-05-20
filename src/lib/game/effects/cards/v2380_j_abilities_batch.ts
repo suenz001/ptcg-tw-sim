@@ -35,10 +35,22 @@
  */
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
+import type { Card } from '$lib/cards/types';
 import {
   regA, regAByName, regR,
   addLog, updatePlayer, withPending,
 } from '../_shared';
+
+// v4.962：判斷一張能量卡是否「視為提供【水】能量」。
+//   scraper 對基本能量的 pokemonType 留 null（v3.731/v3.82 已知問題），
+//   strict `pokemonType==='Water'` 對基本【水】能量永遠 false → 白海獅沖刷誤判無法使用。
+//   加卡名【水】fallback：覆蓋基本【水】能量 + 泡沫【水】能量等。
+//   新衝天/稜鏡/古舊等「視為任意屬性」能量 name 不含【水】，保守不認（玩家回報再擴展）。
+function isWaterTypeEnergy(ec: Card | undefined): boolean {
+  if (!ec || ec.supertype !== 'Energy') return false;
+  if (ec.pokemonType === 'Water') return true;
+  return /【水】/.test(ec.name || '');
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 白海獅｜沖刷 — 不限次數，備戰【水】能量改附戰鬥場
@@ -47,11 +59,12 @@ regAByName('白海獅', '沖刷', (st, idx, pool) => {
   const player = st.players[idx];
   if (!player.active) return addLog(st, '沖刷：戰鬥場無寶可夢', idx);
   // 找備戰寶可夢身上的【水】能量
+  // v4.962：用 isWaterTypeEnergy helper 認基本【水】能量（pokemonType=null fallback）
   const sourcesWithWater: { iid: string; energyIid: string }[] = [];
   for (const b of player.bench) {
     for (const e of b.energyAttached) {
       const ec = pool.get(e.cardId);
-      if (ec?.pokemonType === 'Water') {
+      if (isWaterTypeEnergy(ec)) {
         sourcesWithWater.push({ iid: b.iid, energyIid: e.iid });
       }
     }
@@ -76,7 +89,8 @@ regR('walrein-rinse', (state, aIdx, iids, _params, pool) => {
   const src = player.bench.find(b => b.iid === sourceIid);
   if (!src) return state;
   // 取所有水能量
-  const waterEnergies = src.energyAttached.filter(e => pool.get(e.cardId)?.pokemonType === 'Water');
+  // v4.962：用 isWaterTypeEnergy helper（涵蓋基本【水】能量 pokemonType=null case）
+  const waterEnergies = src.energyAttached.filter(e => isWaterTypeEnergy(pool.get(e.cardId)));
   if (waterEnergies.length === 0) return addLog(state, '沖刷：來源無【水】能量', aIdx);
   // v2.389 多張水能量 → modal-choice 讓玩家選 1 張；1 張 fast path
   if (waterEnergies.length > 1) {

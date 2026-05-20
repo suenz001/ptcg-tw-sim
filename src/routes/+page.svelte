@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.962</span> 🐛 修 白海獅｜沖刷 特性無法觸發（基本【水】能量誤判）</summary>
+        <ul>
+          <li><b>玩家回報</b>：白海獅特性「沖刷」看起來沒實裝（卡面：可不限次數使用，選 1 個自己備戰寶可夢身上附加的【水】能量，改附於戰鬥寶可夢身上）。實際上代碼已實裝，但邏輯誤判導致永遠 gate 失敗。</li>
+          <li><b>根本原因</b>：「找備戰水能量」用嚴格的 <code>pokemonType==='Water'</code> 判斷，但基本【水】能量的 <code>pokemonType</code> 在 JSON 內為 <code>null</code>（scraper 對基本能量留空，type 從卡名【水】推斷）— 永遠 false → 「備戰區無【水】能量可改附」誤判。</li>
+          <li><b>修法</b>：3 處 strict pokemonType check 加 <code>/【水】/.test(name)</code> fallback：① v2380 找備戰水能量 ② v2380 picker 多張水能量篩選 ③ engine.ts 特性 gate hasWaterOnBench。涵蓋率：基本【水】+ 泡沫【水】等卡名含【水】的能量。</li>
+          <li><b>已知限制</b>：新衝天 / 稜鏡 / 古舊 / 夜光等「視為任意屬性」能量 name 不含【水】，本版保守不認（PTCG ruling 嚴格上應認；玩家若有實際需求再擴展）。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — engine.ts 7633 行大檔）/ Rule 4（tsc verify）/ Rule 14（特性實裝 + 能量類型判斷 — 同 v3.731/v3.82 pattern）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.960</span> 🔧 修 v2353 energyMultiplyPre — 4 張卡的 unit/type-aware 新衝天能量</summary>
         <ul>
           <li><b>延續 v4.959</b>：v2353_j_mark_batch.ts 的內部 helper <code>energyMultiplyPre</code> 之前未修（複雜 type-filter）；本版完成。</li>
