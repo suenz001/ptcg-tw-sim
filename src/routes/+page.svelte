@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.988</span> 🌳 卡牌詳細資料 modal 顯示進化鏈</summary>
+        <ul>
+          <li><b>需求</b>：點開任何寶可夢卡的詳細資料時，下方顯示整條進化鏈視覺化。</li>
+          <li><b>呈現</b>：用箭頭 → 分隔不同階段，同階多個變體用 ／ 並列。範例：呱呱泡蛙 → 呱頭蛙 → 甲賀忍蛙ex／超級甲賀忍蛙ex。</li>
+          <li><b>互動</b>：每個卡名是可點按鈕，點下立刻切換 modal 預覽到該卡，當前卡用反白標記。在卡牌資料庫頁，跨卡包的進化鏈卡若不在當前卡包則 click 無效（建議切「全部卡包」獲得完整鏈）。</li>
+          <li><b>實作</b>：擴展 v4.987 evolutionChain helper 加 <code>getEvolutionChainGrouped</code> 按 stage 分組；兩處 modal（牌組編輯器 + 卡牌資料庫）都加進化鏈區塊。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.987</span> 🌱 搜尋下拉新增「進化鏈搜尋」</summary>
         <ul>
           <li><b>需求</b>：玩家輸入寶可夢名字 → 顯示整條進化鏈所有卡。範例：輸入「甲賀忍蛙」→ 列出 呱呱泡蛙（Basic）、呱頭蛙（Stage1）、甲賀忍蛙ex、超級甲賀忍蛙ex。</li>

@@ -69,3 +69,48 @@ export function getEvolutionChainNames(query: string, pool: Card[]): Set<string>
 
   return names;
 }
+
+/**
+ * v4.988: 進化鏈分階版本 — 給 modal 視覺化用。
+ * 回傳按 stage (Basic / Stage1 / Stage2) 排序的陣列，同階多名字並列。
+ *
+ * 範例輸出（query='甲賀忍蛙'）：
+ *   [
+ *     { stage: 'Basic',  names: ['呱呱泡蛙'] },
+ *     { stage: 'Stage1', names: ['呱頭蛙'] },
+ *     { stage: 'Stage2', names: ['甲賀忍蛙ex', '超級甲賀忍蛙ex'] },
+ *   ]
+ */
+export interface EvolutionStageGroup {
+  stage: 'Basic' | 'Stage1' | 'Stage2';
+  names: string[];
+}
+
+export function getEvolutionChainGrouped(query: string, pool: Card[]): EvolutionStageGroup[] {
+  const allNames = getEvolutionChainNames(query, pool);
+  if (allNames.size === 0) return [];
+
+  // 對每個 name 取第一張卡決定 stage（同名同階）
+  const stageOrder: ('Basic' | 'Stage1' | 'Stage2')[] = ['Basic', 'Stage1', 'Stage2'];
+  const grouped = new Map<'Basic' | 'Stage1' | 'Stage2', string[]>();
+  for (const name of allNames) {
+    const card = pool.find(c => c.name === name);
+    // 優先 stage 欄位，fallback subtype，再 fallback by evolvesFrom 判斷
+    let stage: 'Basic' | 'Stage1' | 'Stage2';
+    if (card?.stage && stageOrder.includes(card.stage)) {
+      stage = card.stage;
+    } else if (card?.subtype === 'Stage1' || card?.subtype === 'Stage2' || card?.subtype === 'Basic') {
+      stage = card.subtype;
+    } else {
+      // card 缺失或 subtype 非標準（如 'ex'）→ 由 evolvesFrom 判斷
+      stage = card?.evolvesFrom ? 'Stage1' : 'Basic';
+    }
+    const arr = grouped.get(stage) ?? [];
+    arr.push(name);
+    grouped.set(stage, arr);
+  }
+
+  return stageOrder
+    .filter(s => grouped.has(s))
+    .map(s => ({ stage: s, names: grouped.get(s)! }));
+}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import type { Card, SetSummary, EnergyType } from '$lib/cards/types';
-  import { getEvolutionChainNames } from '$lib/cards/evolutionChain';
+  import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
 
   /** Resolve a coverImageUrl that is either an absolute https:// URL (external
@@ -249,6 +249,16 @@
     if (!q) return new Set<string>();
     return getEvolutionChainNames(q, setCards);
   });
+  // v4.988: 目前 modal 卡的進化鏈分階（用 setCards 為 pool；跨 set 鏈需切「全部卡包」）
+  const selectedChain = $derived.by(() => {
+    if (!selected || selected.supertype !== 'Pokemon') return [];
+    return getEvolutionChainGrouped(selected.name, setCards);
+  });
+  // v4.988: modal 內進化鏈 click 切換到該名字第一張卡（限 setCards 範圍）
+  function switchSelectedToName(name: string) {
+    const card = setCards.find(c => c.name === name);
+    if (card) selected = card;
+  }
   const filtered = $derived.by(() => {
     if (data.mode !== 'set') return [];
     const q = query.trim().toLowerCase();
@@ -610,6 +620,24 @@
             </p>
             {#if selected.evolvesFrom}
               <p class="evo">從「{selected.evolvesFrom}」進化</p>
+            {/if}
+            <!-- v4.988: 進化鏈視覺化 — 點任一名字切換到該卡（限當前卡包） -->
+            {#if selectedChain.length > 1}
+              <div class="pv-evo-chain">
+                <span class="pv-evo-chain-label">🌱 進化鏈</span>
+                <div class="pv-evo-chain-row">
+                  {#each selectedChain as group, gi (group.stage)}
+                    {#if gi > 0}<span class="evo-arrow">→</span>{/if}
+                    <div class="evo-stage-group">
+                      {#each group.names as nm, ni (nm)}
+                        {#if ni > 0}<span class="evo-or">／</span>{/if}
+                        <button class="evo-card-link" class:current={nm === selected.name}
+                          onclick={() => switchSelectedToName(nm)} title="點擊切換到該卡">{nm}</button>
+                      {/each}
+                    </div>
+                  {/each}
+                </div>
+              </div>
             {/if}
 
             {#if (selected.tags && selected.tags.length) || isMegaEx(selected)}
@@ -1256,6 +1284,27 @@
     font-size: 1.15rem;
     margin: 0.25rem 0 0.75rem;
   }
+  /* v4.988: 進化鏈視覺化 */
+  .pv-evo-chain { margin: 0.6rem 0 0.4rem; padding: 0.55rem 0.7rem; background: rgba(74, 122, 181, 0.08); border-left: 3px solid #4a7ab5; border-radius: 4px; }
+  .pv-evo-chain-label { display: inline-block; font-size: 0.78rem; font-weight: 700; color: #aaccee; margin-bottom: 0.3rem; }
+  .pv-evo-chain-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+  .evo-stage-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.2rem; }
+  .evo-arrow { color: #99aacc; font-weight: 600; }
+  .evo-or { color: #99aacc; }
+  .evo-card-link {
+    border: 1px solid #5a7aaa;
+    background: rgba(255, 255, 255, 0.05);
+    color: #cce0ff;
+    border-radius: 4px;
+    padding: 0.18rem 0.55rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font: inherit;
+    transition: background 0.12s;
+  }
+  .evo-card-link:hover { background: rgba(255, 255, 255, 0.15); }
+  .evo-card-link.current { background: #4a7ab5; color: #fff; border-color: #4a7ab5; cursor: default; }
+
   .tagChips {
     display: flex;
     flex-wrap: wrap;

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
   import type { Card, EnergyType } from '$lib/cards/types';
-  import { getEvolutionChainNames } from '$lib/cards/evolutionChain';
+  import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import { loadAllSets, loadIndex, buildCardIndex } from '$lib/cards/pool';
   import {
@@ -1214,6 +1214,16 @@
   // ── Card preview ───────────────────────────────────────────────────────
   function openPreview(card: Card) { pickerPreview = card; }
   function closePreview() { pickerPreview = null; }
+  // v4.988: modal 內進化鏈 click 切換 preview 到該名字第一張卡
+  function switchPreviewToName(name: string) {
+    const card = pool.find(c => c.name === name);
+    if (card) pickerPreview = card;
+  }
+  // v4.988: 目前預覽卡的進化鏈分階
+  const previewChain = $derived.by(() => {
+    if (!pickerPreview || pickerPreview.supertype !== 'Pokemon') return [];
+    return getEvolutionChainGrouped(pickerPreview.name, pool);
+  });
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
@@ -1618,6 +1628,24 @@
 
           {#if pv.evolvesFrom}
             <p class="pv-evolve">進化自：{pv.evolvesFrom}</p>
+          {/if}
+          <!-- v4.988: 進化鏈視覺化 — 點任一名字切換預覽 -->
+          {#if previewChain.length > 1}
+            <div class="pv-evo-chain">
+              <span class="pv-evo-chain-label">🌱 進化鏈</span>
+              <div class="pv-evo-chain-row">
+                {#each previewChain as group, gi (group.stage)}
+                  {#if gi > 0}<span class="evo-arrow">→</span>{/if}
+                  <div class="evo-stage-group">
+                    {#each group.names as nm, ni (nm)}
+                      {#if ni > 0}<span class="evo-or">／</span>{/if}
+                      <button class="evo-card-link" class:current={nm === pv.name}
+                        onclick={() => switchPreviewToName(nm)} title="點擊切換預覽">{nm}</button>
+                    {/each}
+                  </div>
+                {/each}
+              </div>
+            </div>
           {/if}
 
           <!-- Abilities -->
@@ -2700,6 +2728,27 @@
     font-size: 1.1rem;
     color: #666;
   }
+  /* v4.988: 進化鏈視覺化 */
+  .pv-evo-chain { margin: 0.6rem 0 0.4rem; padding: 0.55rem 0.7rem; background: #f4f6fa; border-left: 3px solid #4a7ab5; border-radius: 4px; }
+  .pv-evo-chain-label { display: inline-block; font-size: 0.78rem; font-weight: 700; color: #2a4a78; margin-bottom: 0.3rem; }
+  .pv-evo-chain-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+  .evo-stage-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.2rem; }
+  .evo-arrow { color: #6b7280; font-weight: 600; }
+  .evo-or { color: #888; }
+  .evo-card-link {
+    border: 1px solid #c9d2e0;
+    background: #fff;
+    color: #2a4a78;
+    border-radius: 4px;
+    padding: 0.18rem 0.55rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font: inherit;
+    transition: background 0.12s;
+  }
+  .evo-card-link:hover { background: #e7eef8; }
+  .evo-card-link.current { background: #2a4a78; color: #fff; border-color: #2a4a78; cursor: default; }
+
   .pv-setinfo {
     margin: 0.5rem 0 0;
     font-size: 1.05rem;
