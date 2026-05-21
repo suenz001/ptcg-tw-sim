@@ -2690,6 +2690,7 @@
     max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem);
     margin: auto;
     overflow-y: auto;
+    overflow-x: hidden; /* v4.999: 同 cards modalInner — 強制阻擋水平 scrollbar */
     position: relative;
     padding: 1.5rem;
     cursor: default;

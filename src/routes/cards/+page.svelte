@@ -1180,6 +1180,7 @@
     max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem);
     margin: auto;
     overflow-y: auto;
+    overflow-x: hidden; /* v4.999: 明確阻擋水平 scrollbar — modal-nav transform 在某些瀏覽器仍算進 overflow extent */
     position: relative;
     padding: 1.5rem;
     font-family: system-ui, 'Microsoft JhengHei', sans-serif;

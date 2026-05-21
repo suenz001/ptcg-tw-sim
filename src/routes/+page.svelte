@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.999</span> 🔧 hotfix — modal 水平 scrollbar 強制阻擋</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.998 用 transform 改寫 nav button position 後 reload 仍看到水平 scrollbar。</li>
+          <li><b>修法</b>：直接在 modalInner / pv-inner 明確設 <code>overflow-x: hidden</code>，強制阻擋水平 scrollbar 出現。即使 transform 在某些瀏覽器仍被算進 overflow extent，也會被 hidden 攔下不顯示。雙保險策略。</li>
+          <li><b>視覺影響</b>：若 nav button 真的超出 modal 邊界，外側被切掉，內側半圓仍顯示在 modal 邊緣（跟 v4.998 設計初衷一致）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.998</span> 🧹 修桌機版 modal 多餘水平 scrollbar</summary>
         <ul>
           <li><b>玩家回報</b>：桌機網頁版卡牌詳細資料 modal 下方出現水平 scrollbar，但內容沒寬到需要 scroll。</li>
