@@ -42,6 +42,8 @@ import {
   getSkeledirgeRowdyContestEffectiveCost,
   getAzumarillSparkleSplashEffectiveCost,
   getSonidoTuningResonanceEffectiveCost,
+  // v4.976: 鐵螯龍蝦|反撲剪 cost reduction helper
+  getIronCrabCounterClipEffectiveCost,
   isLazyTraitBlockingAttack,
   hasShellinkEvolveBypass,
   isAllPowerSoulBlocked,
@@ -981,6 +983,9 @@ export function canAffordAttack(
     // v2.997 音波龍｜調諧迴響 — 雙方手牌張數相同時，「恐慌嚎鳴」cost 全部消除
     const overridden8 = getSonidoTuningResonanceEffectiveCost(attackerName, attackName, state, pool, cost);
     if (overridden8 !== cost) cost = overridden8;
+    // v4.976 鐵螯龍蝦｜反撲剪 — 身上有傷害指示物則只需 1 個【惡】
+    const overridden9 = getIronCrabCounterClipEffectiveCost(pokemon, attackerName, attackName, cost);
+    if (overridden9 !== cost) cost = overridden9;
   }
   // v2.149 璀璨結晶（Tool ACE SPEC）：附有此 Tool 的「太晶」寶可夢使用招式時，
   //   能量需求 -1 個。卡面：「（減少的能量任何屬性皆可。）」

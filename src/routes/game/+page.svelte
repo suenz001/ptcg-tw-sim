@@ -1987,7 +1987,13 @@
           // v2.132：用 stage 欄位（含 ex 進化），不靠 subtype — ex 寶可夢 subtype='ex' 會被排除
           if (f === 'Stage1')     return card.supertype === 'Pokemon' && (card.stage ?? card.subtype) === 'Stage1';
           if (f === 'Stage2')     return card.supertype === 'Pokemon' && (card.stage ?? card.subtype) === 'Stage2';
-          if (f === 'Evolution')  return card.supertype === 'Pokemon' && !!card.evolvesFrom;
+          // v4.976: 賽吉「擁有特性的寶可夢除外」需 picker UI 也跟著 narrow — 支援 params.validIids intersect
+          if (f === 'Evolution') {
+            if (!(card.supertype === 'Pokemon' && !!card.evolvesFrom)) return false;
+            const validIidsEvo = pendingSelection?.params?.validIids as string[] | undefined;
+            if (validIidsEvo && !validIidsEvo.includes(c.iid)) return false;
+            return true;
+          }
           if (f === 'PsychicBasic') return card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Psychic';
           if (f === 'Pokemon')    return card.supertype === 'Pokemon';
           if (f === 'Energy')     return card.supertype === 'Energy';

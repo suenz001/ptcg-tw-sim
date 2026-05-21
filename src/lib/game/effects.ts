@@ -2331,16 +2331,25 @@ reg('覺醒戰鼓', (st, idx, pool) => {
 //   sim/AI 端 fallback：若候選有多個（對手場上 active+bench 同時可進化），挑 active 為主。
 regG('賽吉', (st, idx, pool) => {
   if (st.players[idx].deck.length === 0) return false;
-  // 場上至少要有 1 隻能進化的寶可夢（active+bench）
+  // 場上至少要有 1 隻「無特性」可被進化的寶可夢（active+bench）
+  // v4.976: 卡面寫「擁有特性的寶可夢除外」— gate 必須濾掉有特性的目標
   const all = [st.players[idx].active, ...st.players[idx].bench].filter((c): c is CardInstance => !!c);
-  return all.length > 0;
+  return all.some(c => {
+    const card = pool.get(c.cardId);
+    return !(card?.abilities && card.abilities.length > 0);
+  });
 });
 reg('賽吉', (st, idx, pool) => {
   const player = st.players[idx];
   const all = [player.active, ...player.bench].filter((c): c is CardInstance => !!c);
-  const ownNames = new Set(all.map(c => pool.get(c.cardId)?.name ?? ''));
-  // filter 用 'Evolution'（已支援）— 但要再 narrow 為「前階在場上」
-  // 實作：只列出可實際進化的候選 iid
+  // v4.976: 「擁有特性的寶可夢除外」— 先過濾掉有特性的目標，再算 ownNames
+  const evolvableTargets = all.filter(c => {
+    const card = pool.get(c.cardId);
+    return !(card?.abilities && card.abilities.length > 0);
+  });
+  const ownNames = new Set(evolvableTargets.map(c => pool.get(c.cardId)?.name ?? ''));
+  // filter 用 'Evolution'（已支援）— 但要再 narrow 為「前階在場上（且該前階無特性）」
+  // 實作：只列出可實際進化的候選 iid；params.validIids 也餵給 picker UI（v4.976 後）
   const validIids = player.deck.filter(c => {
     const card = pool.get(c.cardId);
     return !!card?.evolvesFrom && ownNames.has(card.evolvesFrom);
@@ -5765,6 +5774,23 @@ export function getOctopusTentacleEffectiveCost(
   if (attackerInst.damage <= 0) return originalCost;
   // 身上有傷害指示物 → 改為 1 個【鬥】
   return ['Fighting'];
+}
+
+// v4.976 鐵螯龍蝦｜反撲剪 — 仿 v2.161 八爪武師|觸手激怒 pattern
+// 卡面：「若這隻寶可夢身上放置有傷害指示物，則這個招式只需要 1 個【惡】能量即可使用。」
+// 標準 cost = [Darkness, Darkness, Colorless]（3 顆，130 damage），
+// 身上有 damage 時 → [Darkness]（1 顆惡）。
+export function getIronCrabCounterClipEffectiveCost(
+  attackerInst: CardInstance,
+  attackerName: string,
+  attackName: string,
+  originalCost: import('$lib/cards/types').EnergyType[],
+): import('$lib/cards/types').EnergyType[] {
+  if (attackerName !== '鐵螯龍蝦') return originalCost;
+  if (attackName !== '反撲剪') return originalCost;
+  if (attackerInst.damage <= 0) return originalCost;
+  // 身上有傷害指示物 → 改為 1 個【惡】
+  return ['Darkness'];
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

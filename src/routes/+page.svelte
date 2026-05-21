@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.976</span> 🛠️ 修 鐵螯龍蝦｜反撲剪 cost reduction + 賽吉 兩個 bugs</summary>
+        <ul>
+          <li><b>鐵螯龍蝦｜反撲剪</b>：卡面「若這隻寶可夢身上放置有傷害指示物，則這個招式只需要 1 個【惡】能量即可使用」沒實裝（原本只實作 130 傷害）。仿 v2.161 八爪武師｜觸手激怒 pattern 加 cost reduction helper，掛進 canAffordAttack chain。</li>
+          <li><b>賽吉 bug #1</b>：卡面「擁有特性的寶可夢除外」filter 沒實作 — 之前可選有特性的場上寶可夢進化。修法：regG + reg 都先過濾掉 abilities 非空的目標，再算可進化的牌庫候選。</li>
+          <li><b>賽吉 bug #2</b>：picker UI 沒讀 <code>params.validIids</code>，導致玩家看到牌庫所有進化卡（包含不能對應任何場上目標的）→ 選錯後 resolver 報「場上無 X 可進化」。修法：deck-search filter='Evolution' 加 validIids intersect。</li>
+          <li><b>影響</b>：3 個 helper 都遵守鐵律（Rule 14 最小 patch — 仿既有 pattern 不重構）。tsc 0 errors。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.975</span> 🛡️ 修飛翔 vs 分身連打 + 統一 active 招式傷害 gate</summary>
         <ul>
           <li><b>玩家回報</b>：喇叭啄鳥｜飛翔擲幣正面後（應免疫所有招式傷害），下回合仍會受到甲賀忍蛙ex｜分身連打的傷害。</li>
