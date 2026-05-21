@@ -2611,17 +2611,10 @@
         }
       }
     });
-    // [admin fix]：admin 偷看觀戰 URL (?spectate=&admin=) 進 game 頁時跳過 anonymous sign-in，
-    //   避免 cross-tab 蓋掉 admin.html 分頁的 password user。
-    {
-      const isAdminSpyURL = typeof window !== 'undefined' && (() => {
-        const params = new URLSearchParams(window.location.search);
-        return !!(params.get('admin') && params.get('spectate'));
-      })();
-      if (!auth.currentUser && !isAdminSpyURL) {
-        await signInAnonymously(auth);
-      }
-    }
+    // v4.984: 刪掉冗餘 sign-in block — 此處與 onAuthStateChanged callback 內
+    //   line 2534 並行觸發兩個 signInAnonymously，產生兩個不同 anonymous user
+    //   互相覆蓋 → firebaseUser 反覆 toggle → 「匿名 建立帳號」auth pill 閃爍循環。
+    //   callback 內 sign-in 已 cover 所有情境（first visit / 登出後 / admin spy gate）。
     // Oracle build 額外初始化 — 取 Oracle JWT 給房間 API
     if (ORACLE_MODE) {
       try {

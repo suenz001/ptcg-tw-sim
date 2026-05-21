@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.984</span> 🔧 修對戰頁「匿名 建立帳號」auth pill 閃爍循環</summary>
+        <ul>
+          <li><b>玩家回報</b>：本機雙人對戰 lobby 上方 auth 狀態 pill「匿名 建立帳號」會「出現 消失 出現 消失」反覆循環。</li>
+          <li><b>Root cause</b>：game 頁 onMount 內有兩處冗餘的匿名 sign-in — 一處在 onAuthStateChanged callback（v4.937 加，登出後重登），一處在主流程（admin fix 加）。兩者並行觸發產生兩個不同 anonymous user 互相覆蓋 → firebaseUser 反覆 toggle → dashboard 閃爍。</li>
+          <li><b>修</b>：刪掉 onMount 主流程冗餘 sign-in block，只留 callback 內單一 source-of-truth（含 isAdminSpyURL 保護邏輯已備齊）。Oracle build / 卡池載入 不依賴 firebase user ready，所以拿掉 await 不影響後續流程。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.983</span> 🧹 對戰 lobby 高度對齊 + 內建預組預設摺疊</summary>
         <ul>
           <li><b>本機雙人對戰 lobby</b>：「☐ 由 AI 控制」之前獨佔一行使玩家 2 卡片比玩家 1 高。改成 h2 + 開關並排，兩卡片高度一致。</li>
