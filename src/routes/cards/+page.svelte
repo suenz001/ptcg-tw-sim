@@ -1208,8 +1208,9 @@
     line-height: 1;
   }
   .modal-nav:hover { background: rgba(255, 255, 255, 0.18); }
-  .modal-nav-prev { left: 0; transform: translate(-50%, -50%); }
-  .modal-nav-next { right: 0; transform: translate(50%, -50%); }
+  /* v5.000: button 完整放 modal 內側 16px，避免被 overflow-x: hidden 切掉 */
+  .modal-nav-prev { left: 16px; transform: translateY(-50%); }
+  .modal-nav-next { right: 16px; transform: translateY(-50%); }
   .modal-variant-counter {
     position: absolute;
     top: 0.6rem;

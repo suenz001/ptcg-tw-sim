@@ -2925,8 +2925,9 @@
     line-height: 1;
   }
   .pv-nav:hover { background: #e7eef8; }
-  .pv-nav-prev { left: 0; transform: translate(-50%, -50%); }
-  .pv-nav-next { right: 0; transform: translate(50%, -50%); }
+  /* v5.000: button 完整放 modal 內側 16px，避免被 overflow-x: hidden 切掉 */
+  .pv-nav-prev { left: 16px; transform: translateY(-50%); }
+  .pv-nav-next { right: 16px; transform: translateY(-50%); }
   .pv-variant-counter {
     position: absolute;
     top: 0.6rem;

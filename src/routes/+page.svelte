@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.000</span> 🎉 邁入 5.0 — nav 按鈕完整放 modal 內側</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.999 加 overflow-x: hidden 後，左右翻 nav 按鈕用 transform 偏移到 modal 邊緣造成外側半圓被切掉。</li>
+          <li><b>修法</b>：button position 改成完全放在 modal 內側 16px，移除 transform 偏移只保留 <code>translateY(-50%)</code> 垂直置中。按鈕整顆完整顯示。</li>
+          <li><b>代價</b>：button 壓到 modal content 左/右邊緣約 32-58px 範圍（卡圖左邊緣 / info 右邊緣），但按鈕本身有陰影 + hover 變色，視覺辨識仍清楚。</li>
+          <li><b>版本</b>：累計 60+ 次 push 後正式進入 v5.x 系列，紀念里程碑。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.999</span> 🔧 hotfix — modal 水平 scrollbar 強制阻擋</summary>
         <ul>
           <li><b>玩家回報</b>：v4.998 用 transform 改寫 nav button position 後 reload 仍看到水平 scrollbar。</li>
