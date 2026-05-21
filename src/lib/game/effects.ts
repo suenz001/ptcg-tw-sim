@@ -1017,13 +1017,13 @@ regR('snipe-120', (st, actorIdx, selectedIids, _params, pool) => {
   if (!target) return st;
 
   const targetCard = pool.get(target.cardId);
-  // v2.46 狙擊羽毛 = 招式【傷害】→ 不受對戰圓形影響；只受花之帷幔（備戰 + 非 ex）擋
-  if (!isActive) {
-    const g = resolveBenchGuard(st, pool, actorIdx, targetCard, 'attack-damage');
-    if (g.blocked) {
-      const name = targetCard?.name ?? '?';
-      return addLog(st, `狙擊羽毛：${name} 因${g.reason}不受傷害`, actorIdx);
-    }
+  // v4.979: 統一 — active + bench 都過 canApplyEffectToTarget
+  //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等（同 v2.46 原行為）
+  //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 / 防護代碼 / 塗層攻擊（v4.975 框架 step 4 新加）
+  const guard = canApplyEffectToTarget(st, actorIdx, target, targetCard, 'attack-damage', pool, { isBench: !isActive });
+  if (guard.blocked) {
+    const name = targetCard?.name ?? '?';
+    return addLog(st, `狙擊羽毛：${name} 因${guard.reason}不受傷害`, actorIdx);
   }
 
   const newDmg = target.damage + 120;
@@ -5459,13 +5459,13 @@ regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
   if (!target) return st;
 
   const targetCard = pool.get(target.cardId);
-  // v2.46 電磁電光 = 招式【傷害】→ 不受對戰圓形影響；只受花之帷幔（備戰 + 非 ex）擋
-  if (!isActive) {
-    const g = resolveBenchGuard(st, pool, actorIdx, targetCard, 'attack-damage');
-    if (g.blocked) {
-      const name = targetCard?.name ?? '?';
-      return addLog(st, `電磁電光：${name} 因${g.reason}不受傷害`, actorIdx);
-    }
+  // v4.979: 統一 — active + bench 都過 canApplyEffectToTarget
+  //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等（同 v2.46 原行為）
+  //   active: 飛翔 / 要害斬 / 阿塞蘿拉 等 8 個 active-side immune flag（v4.975 框架 step 4 新加）
+  const guard = canApplyEffectToTarget(st, actorIdx, target, targetCard, 'attack-damage', pool, { isBench: !isActive });
+  if (guard.blocked) {
+    const name = targetCard?.name ?? '?';
+    return addLog(st, `電磁電光：${name} 因${guard.reason}不受傷害`, actorIdx);
   }
 
   const newDmg = target.damage + 10;
@@ -6134,13 +6134,14 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
   const targetCard = pool.get(target.cardId);
-  // v2.46 統一判定：對戰圓形只擋效果；花之帷幔只擋招式傷害到備戰（且非 ex）
-  if (!isActive) {
-    const g = resolveBenchGuard(st, pool, actorIdx, targetCard, kind);
-    if (g.blocked) {
-      const name = targetCard?.name ?? '?';
-      return addLog(st, `${label}：${name} 因${g.reason}不受傷害`, actorIdx);
-    }
+  // v4.979: 統一 — active + bench 都過 canApplyEffectToTarget
+  //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等
+  //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 / 防護代碼 / 塗層攻擊
+  //   注意：kind 透傳（snipe-variable 同時用於 attack-damage 跟 attack-effect — 飛來橫禍等放指示物）
+  const guard = canApplyEffectToTarget(st, actorIdx, target, targetCard, kind, pool, { isBench: !isActive });
+  if (guard.blocked) {
+    const name = targetCard?.name ?? '?';
+    return addLog(st, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
   }
   const newDmg = target.damage + dmg;
   const hp = effectiveHPInline(target, pool, st);
@@ -8041,14 +8042,15 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     const target = isActive ? defender.active! : defender.bench.find(c => c.iid === iid);
     if (!target) continue;
     const targetCard = pool.get(target.cardId);
-    // v2.46 對戰圓形只擋效果；花之帷幔只擋招式傷害到備戰（且非 ex）
-    if (!isActive) {
-      const g = resolveBenchGuard(s, pool, actorIdx, targetCard, kind);
-      if (g.blocked) {
-        const name = targetCard?.name ?? '?';
-        s = addLog(s, `${label}：${name} 因${g.reason}不受傷害`, actorIdx);
-        continue;
-      }
+    // v4.979: 統一 — active + bench 都過 canApplyEffectToTarget
+    //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等
+    //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 / 防護代碼 / 塗層攻擊
+    //   注意：kind 透傳（多目標 resolver 同時用於 attack-damage 跟 attack-effect）
+    const guard = canApplyEffectToTarget(s, actorIdx, target, targetCard, kind, pool, { isBench: !isActive });
+    if (guard.blocked) {
+      const name = targetCard?.name ?? '?';
+      s = addLog(s, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
+      continue;
     }
     const newDmg = target.damage + dmg;
     const hp = targetCard?.hp ?? 0;
