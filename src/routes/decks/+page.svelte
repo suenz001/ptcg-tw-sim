@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
   import type { Card, EnergyType } from '$lib/cards/types';
+  import { getEvolutionChainNames } from '$lib/cards/evolutionChain';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import { loadAllSets, loadIndex, buildCardIndex } from '$lib/cards/pool';
   import {
@@ -69,7 +70,7 @@
 
   // ── UI state ───────────────────────────────────────────────────────────
   let search = $state('');
-  let searchMode = $state<'normal' | 'keyword'>('normal');
+  let searchMode = $state<'normal' | 'keyword' | 'evolution'>('normal');
   // v4.954：keyword 模式下進一步限定搜尋範圍
   //   all       — 全文（同舊 keyword 行為）
   //   attacks   — 只搜招式（name + effect）
@@ -277,6 +278,13 @@
     return { Pokemon: p, Trainer: t, Energy: e };
   });
 
+  // v4.987: 進化鏈名字 cache — 在搜尋字串 / mode / pool 變動時重算，filter 內 O(1) lookup
+  const chainNames = $derived.by(() => {
+    if (searchMode !== 'evolution') return new Set<string>();
+    const q = search.trim();
+    if (!q) return new Set<string>();
+    return getEvolutionChainNames(q, pool);
+  });
   const filteredPool = $derived.by(() => {
     if (!poolReady) return [] as Card[];
     const q = search.trim().toLowerCase();
@@ -312,6 +320,10 @@
       if (setFilter && c.setCode !== setFilter) return false;
       // Search
       if (!q) return true;
+      // v4.987: 進化鏈搜尋模式 — 輸入名字顯示整條進化鏈
+      if (searchMode === 'evolution') {
+        return chainNames.has(c.name);
+      }
       // v4.954：keyword 模式下依 keywordScope 細分搜尋範圍
       if (searchMode === 'keyword') {
         let haystack: string[];
@@ -1449,11 +1461,14 @@
           <select
             class="pk-mode-select"
             class:keyword={searchMode === 'keyword'}
-            value={searchMode === 'normal' ? 'normal' : `keyword:${keywordScope}`}
+            class:evolution={searchMode === 'evolution'}
+            value={searchMode === 'normal' ? 'normal' : searchMode === 'evolution' ? 'evolution' : `keyword:${keywordScope}`}
             onchange={(e) => {
               const v = (e.currentTarget as HTMLSelectElement).value;
               if (v === 'normal') {
                 searchMode = 'normal';
+              } else if (v === 'evolution') {
+                searchMode = 'evolution';
               } else {
                 searchMode = 'keyword';
                 keywordScope = v.slice('keyword:'.length) as 'all' | 'attacks' | 'abilities';
@@ -1465,6 +1480,7 @@
             <option value="keyword:all">關鍵字（不限）</option>
             <option value="keyword:attacks">關鍵字（搜尋招式）</option>
             <option value="keyword:abilities">關鍵字（搜尋特性）</option>
+            <option value="evolution">🌱 進化鏈搜尋</option>
           </select>
         </div>
         <div class="pk-chip-row" role="group" aria-label="分類">

@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.987</span> 🌱 搜尋下拉新增「進化鏈搜尋」</summary>
+        <ul>
+          <li><b>需求</b>：玩家輸入寶可夢名字 → 顯示整條進化鏈所有卡。範例：輸入「甲賀忍蛙」→ 列出 呱呱泡蛙（Basic）、呱頭蛙（Stage1）、甲賀忍蛙ex、超級甲賀忍蛙ex。</li>
+          <li><b>實作位置</b>：兩處都加 — 牌組編輯器（左側 rail 搜尋）+ 卡牌資料庫頁。新建 <code>src/lib/cards/evolutionChain.ts</code> helper，logic 是從 query 名字的 seed 卡往上爬 evolvesFrom 到 root，再從 root BFS 收集所有後代名字。</li>
+          <li><b>使用方式</b>：搜尋框旁的下拉選單選「🌱 進化鏈搜尋」，輸入任一寶可夢名字（可以是進化鏈中間任一階）→ 整條鏈所有卡（含各種 ex / 超級 ex 變體）都會出現。</li>
+          <li><b>跨卡包搜尋</b>：牌組編輯器 pool 是全標準環境卡庫，自然涵蓋整條鏈。卡牌資料庫頁是 per-set 範圍，玩家若想看跨卡包進化鏈，請先切「全部卡包」再用此搜尋。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.986</span> 🧹 對戰下拉直接拿掉內建預組（取代 v4.985 toggle 方案）</summary>
         <ul>
           <li><b>玩家回饋</b>：v4.985 用 toggle 控制顯示內建預組「有點多此一舉」，且線上對戰 seat select 沒套到 toggle UI。HTML 原生 select 不支援 optgroup 收折，乾脆直接從下拉拿掉預組。</li>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { base } from '$app/paths';
   import type { Card, SetSummary, EnergyType } from '$lib/cards/types';
+  import { getEvolutionChainNames } from '$lib/cards/evolutionChain';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
 
   /** Resolve a coverImageUrl that is either an absolute https:// URL (external
@@ -57,7 +58,7 @@
   //   all       — 全文（卡名、招式、特性、rules，原 keyword 行為）
   //   attacks   — 只搜招式（attacks[].name + attacks[].effect）
   //   abilities — 只搜特性（abilities[].label + abilities[].name + abilities[].effect）
-  let searchMode = $state<'normal' | 'keyword'>('normal');
+  let searchMode = $state<'normal' | 'keyword' | 'evolution'>('normal');
   let keywordScope = $state<'all' | 'attacks' | 'abilities'>('all');
   // 多選：空 Set = 全部；非空 = 只顯示這些分類
   // 點一次加入、點兩次移除；按「全部」清空 Set。
@@ -241,6 +242,13 @@
     return map;
   });
 
+  // v4.987: 進化鏈名字 cache — pool 用 setCards（玩家想跨 set 可切「全部卡包」）
+  const chainNames = $derived.by(() => {
+    if (searchMode !== 'evolution') return new Set<string>();
+    const q = query.trim();
+    if (!q) return new Set<string>();
+    return getEvolutionChainNames(q, setCards);
+  });
   const filtered = $derived.by(() => {
     if (data.mode !== 'set') return [];
     const q = query.trim().toLowerCase();
@@ -272,6 +280,10 @@
         if (!c.regulationMark || !marks.has(c.regulationMark as RegMarkKey)) return false;
       }
       if (!q) return true;
+      // v4.987: 進化鏈搜尋模式 — 輸入名字顯示整條進化鏈
+      if (searchMode === 'evolution') {
+        return chainNames.has(c.name);
+      }
       // v2.184：兩種搜尋模式；v4.954：keyword 模式再細分 scope
       if (searchMode === 'keyword') {
         // v4.954：依 keywordScope 限定搜尋範圍
@@ -443,11 +455,14 @@
       <select
         class="modeSelect"
         class:keyword={searchMode === 'keyword'}
-        value={searchMode === 'normal' ? 'normal' : `keyword:${keywordScope}`}
+        class:evolution={searchMode === 'evolution'}
+        value={searchMode === 'normal' ? 'normal' : searchMode === 'evolution' ? 'evolution' : `keyword:${keywordScope}`}
         onchange={(e) => {
           const v = (e.currentTarget as HTMLSelectElement).value;
           if (v === 'normal') {
             searchMode = 'normal';
+          } else if (v === 'evolution') {
+            searchMode = 'evolution';
           } else {
             searchMode = 'keyword';
             keywordScope = v.slice('keyword:'.length) as 'all' | 'attacks' | 'abilities';
@@ -459,6 +474,7 @@
         <option value="keyword:all">關鍵字（不限）</option>
         <option value="keyword:attacks">關鍵字（搜尋招式）</option>
         <option value="keyword:abilities">關鍵字（搜尋特性）</option>
+        <option value="evolution">🌱 進化鏈搜尋</option>
       </select>
     </div>
     <div class="filters" role="group" aria-label="卡片分類篩選（可複選，再點一次取消）">
