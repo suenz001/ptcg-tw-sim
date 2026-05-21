@@ -1224,12 +1224,32 @@
     if (!pickerPreview || pickerPreview.supertype !== 'Pokemon') return [];
     return getEvolutionChainGrouped(pickerPreview.name, pool);
   });
+  // v4.989: 目前預覽卡的所有同名變體（不同 setCode/collectorNumber 的版本）
+  const sameNameVariants = $derived.by(() => {
+    if (!pickerPreview) return [] as Card[];
+    return pool.filter(c => c.name === pickerPreview!.name);
+  });
+  // v4.989: 在同名變體之間 cycle（左右導航按鈕 + 鍵盤 ←/→ 共用）
+  function cycleVariant(dir: 1 | -1) {
+    if (!pickerPreview) return;
+    if (sameNameVariants.length <= 1) return;
+    const idx = sameNameVariants.findIndex(c => c.id === pickerPreview!.id);
+    if (idx < 0) return;
+    const newIdx = (idx + dir + sameNameVariants.length) % sameNameVariants.length;
+    pickerPreview = sameNameVariants[newIdx];
+  }
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       // v2.129：先關 lightbox，再關 preview（疊加狀態）
       if (lightboxUrl) { closeLightbox(); return; }
       closePreview();
+      return;
+    }
+    // v4.989: modal 開且 lightbox 未開時，←/→ cycle 同名變體
+    if (pickerPreview && !lightboxUrl) {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); cycleVariant(-1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); cycleVariant(1); }
     }
   }
 
@@ -1599,6 +1619,14 @@
     onclick={closePreview}>
     <div class="pv-inner" onclick={(e) => e.stopPropagation()}>
       <button class="pv-close" onclick={closePreview} aria-label="關閉">×</button>
+      <!-- v4.989: 左右導航按鈕（同名變體 cycle）— 鍵盤 ←/→ 也可用 -->
+      {#if sameNameVariants.length > 1}
+        <button class="pv-nav pv-nav-prev" onclick={() => cycleVariant(-1)}
+          aria-label="上一個版本" title="上一個版本（←）">‹</button>
+        <button class="pv-nav pv-nav-next" onclick={() => cycleVariant(1)}
+          aria-label="下一個版本" title="下一個版本（→）">›</button>
+        <span class="pv-variant-counter">{sameNameVariants.findIndex(c => c.id === pv.id) + 1} / {sameNameVariants.length} 版本</span>
+      {/if}
 
       <!-- Top: image + quick info -->
       <div class="pv-top">
@@ -1609,6 +1637,16 @@
 
         <div class="pv-info">
           <h2 class="pv-name">{pv.name}</h2>
+          <!-- v4.989: 頂部 +/- 數量按鈕 — 玩家不用 scroll 到底部就能加減牌組 -->
+          {#if active && !isPresetActive && !isBasicEnergy(pv)}
+            <div class="pv-top-counter">
+              <button class="icon" onclick={() => removeCard(pv.id)} disabled={pvCount <= 0} aria-label="減少">−</button>
+              <span class="pv-top-count-label">牌組中：<strong>{pvCount} / {pvMax}</strong></span>
+              <button class="icon" onclick={() => addCard(pv)}
+                title={aceSpecBlocked(pv) ? '一副牌最多 1 張 ACE SPEC' : '加入牌組'}
+                disabled={(!isBasicEnergy(pv) && pvCount >= pvMax) || aceSpecBlocked(pv)} aria-label="增加">+</button>
+            </div>
+          {/if}
 
           <!-- badges row -->
           <div class="pv-badges">
@@ -2863,6 +2901,64 @@
     align-items: center;
     gap: 0.6rem;
   }
+  /* v4.989: 左右導航 + 同名變體 counter */
+  .pv-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1px solid #c9d2e0;
+    background: #fff;
+    color: #2a4a78;
+    font-size: 1.6rem;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 5;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+  }
+  .pv-nav:hover { background: #e7eef8; }
+  .pv-nav-prev { left: -22px; }
+  .pv-nav-next { right: -22px; }
+  .pv-variant-counter {
+    position: absolute;
+    top: 0.6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.78rem;
+    color: #666;
+    background: #f4f6fa;
+    border: 1px solid #d6dce6;
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    z-index: 4;
+    white-space: nowrap;
+  }
+  .pv-top-counter {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.4rem 0 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background: #f5f9ff;
+    border: 1px solid #cfdcee;
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  .pv-top-count-label { flex: 1; color: #2a4a78; }
+  /* 手機板：左右 nav 改放 modal 內部邊緣 */
+  @media (max-width: 600px) {
+    .pv-nav-prev { left: 0.3rem; }
+    .pv-nav-next { right: 0.3rem; }
+    .pv-nav { width: 36px; height: 36px; font-size: 1.4rem; }
+  }
+
   .pv-count-label {
     font-size: 1.15rem;
     margin-right: auto;

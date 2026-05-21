@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.989</span> ◀▶ 卡牌 modal 左右翻同名變體 + 牌組編輯器頂部 +/- 按鈕</summary>
+        <ul>
+          <li><b>左右翻同名變體</b>：卡牌詳細資料 modal 兩側出現 ‹ › 圓形按鈕，鍵盤 ←/→ 也可用，點下 cycle 到同名的下個版本卡。範例：呱頭蛙 SV5a → M-P-J → M4 → 083 → MC → 回 SV5a。modal 頂部小徽章顯示「3 / 5 版本」當前位置。</li>
+          <li><b>牌組編輯器頂部 +/-</b>：modal 在卡名下方多一組 +/- 數量按鈕（顯示「牌組中：N / M」），玩家不用 scroll 到底部就能加減牌組張數。預組唯讀模式 + 基本能量不顯示（基本能量無上限）。</li>
+          <li><b>支援範圍</b>：牌組編輯器 + 卡牌資料庫兩處 modal 都加左右翻；牌組頂部 +/- 僅牌組編輯器（卡牌資料庫沒「加入牌組」概念）。卡牌資料庫頁 modal 是 set-scoped，跨卡包變體需切「全部卡包」才能完整 cycle。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.988</span> 🌳 卡牌詳細資料 modal 顯示進化鏈</summary>
         <ul>
           <li><b>需求</b>：點開任何寶可夢卡的詳細資料時，下方顯示整條進化鏈視覺化。</li>

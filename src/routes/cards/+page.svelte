@@ -229,7 +229,12 @@
   function closeLightbox() { lightbox = null; }
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') { closeLightbox(); if (!lightbox) selected = null; }
+    if (e.key === 'Escape') { closeLightbox(); if (!lightbox) selected = null; return; }
+    // v4.989: modal 開且 lightbox 未開時，←/→ cycle 同名變體
+    if (selected && !lightbox) {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); cycleVariant(-1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); cycleVariant(1); }
+    }
   }
 
   const setCards = $derived(data.mode === 'set' ? data.cards : []);
@@ -254,6 +259,19 @@
     if (!selected || selected.supertype !== 'Pokemon') return [];
     return getEvolutionChainGrouped(selected.name, setCards);
   });
+  // v4.989: 目前 modal 卡的同名變體（pool = setCards；跨 set 變體需切「全部卡包」）
+  const sameNameVariants = $derived.by(() => {
+    if (!selected) return [] as Card[];
+    return setCards.filter(c => c.name === selected!.name);
+  });
+  function cycleVariant(dir: 1 | -1) {
+    if (!selected) return;
+    if (sameNameVariants.length <= 1) return;
+    const idx = sameNameVariants.findIndex(c => c.id === selected!.id);
+    if (idx < 0) return;
+    const newIdx = (idx + dir + sameNameVariants.length) % sameNameVariants.length;
+    selected = sameNameVariants[newIdx];
+  }
   // v4.988: modal 內進化鏈 click 切換到該名字第一張卡（限 setCards 範圍）
   function switchSelectedToName(name: string) {
     const card = setCards.find(c => c.name === name);
@@ -594,6 +612,14 @@
     <div class="modal" role="dialog" aria-modal="true" onclick={closeModal}>
       <div class="modalInner" onclick={(e) => e.stopPropagation()} role="document">
         <button class="close" onclick={closeModal} aria-label="關閉">×</button>
+        <!-- v4.989: 左右導航按鈕（同名變體 cycle）— 鍵盤 ←/→ 也可用 -->
+        {#if sameNameVariants.length > 1}
+          <button class="modal-nav modal-nav-prev" onclick={() => cycleVariant(-1)}
+            aria-label="上一個版本" title="上一個版本（←）">‹</button>
+          <button class="modal-nav modal-nav-next" onclick={() => cycleVariant(1)}
+            aria-label="下一個版本" title="下一個版本（→）">›</button>
+          <span class="modal-variant-counter">{sameNameVariants.findIndex(c => c.id === selected.id) + 1} / {sameNameVariants.length} 版本</span>
+        {/if}
         <div class="detailGrid">
           <button
             class="detailImgBtn"
@@ -1158,6 +1184,51 @@
     padding: 1.5rem;
     font-family: system-ui, 'Microsoft JhengHei', sans-serif;
   }
+  /* v4.989: 卡牌資料庫 modal 左右導航 + 同名變體 counter */
+  .modal-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1px solid #5a7aaa;
+    background: rgba(255, 255, 255, 0.08);
+    color: #cce0ff;
+    font-size: 1.6rem;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 5;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+  }
+  .modal-nav:hover { background: rgba(255, 255, 255, 0.18); }
+  .modal-nav-prev { left: -22px; }
+  .modal-nav-next { right: -22px; }
+  .modal-variant-counter {
+    position: absolute;
+    top: 0.6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.78rem;
+    color: #aaccee;
+    background: rgba(74, 122, 181, 0.18);
+    border: 1px solid #5a7aaa;
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    z-index: 4;
+    white-space: nowrap;
+  }
+  @media (max-width: 600px) {
+    .modal-nav-prev { left: 0.3rem; }
+    .modal-nav-next { right: 0.3rem; }
+    .modal-nav { width: 36px; height: 36px; font-size: 1.4rem; }
+  }
+
   .close {
     position: absolute;
     top: 1rem;
