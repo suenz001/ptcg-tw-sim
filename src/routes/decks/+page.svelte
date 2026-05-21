@@ -437,6 +437,12 @@
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       firebaseUser = user;
       if (!user) {
+        // v4.985: 若 admin tab 已登入（localStorage 'ptcg_admin_active' flag），
+        //   跳過匿名 sign-in — 等 IndexedDB 從 admin tab cross-tab sync 過來。
+        //   避免覆蓋 admin user 導致 admin polling 拿到 anonymous token → 403。
+        const isAdminActive = typeof window !== 'undefined'
+          && !!localStorage.getItem('ptcg_admin_active');
+        if (isAdminActive) return;
         // Not signed in yet — start anonymous sign-in
         try { await signInAnonymously(auth); } catch { /* will retry on next visit */ }
         return;

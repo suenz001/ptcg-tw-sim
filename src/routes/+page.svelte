@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.985</span> 🎚️ 對戰 lobby 下拉預組 toggle + 修 admin user 被匿名 sign-in 蓋掉</summary>
+        <ul>
+          <li><b>對戰 lobby 下拉預組</b>：v4.983 只處理了牌組編輯器的預組區（用 details 摺疊），對戰 lobby 用的是 HTML 原生 select 下拉，無法摺疊 optgroup。新增「📂 在下拉選單顯示內建預組」勾選框，預設關閉，需要時打勾才在下拉內顯示預組。本機雙人 + 線上對戰 3 處下拉同步適用。</li>
+          <li><b>admin 不在白名單假警報</b>：玩家確實登入 admin password user，但因為 cross-tab race — 同時開的 game/decks 分頁在 callback 收到 u=null（例如 admin token silent refresh 失敗 transient state）時，會自動觸發匿名 sign-in，把 IndexedDB 內 admin user 覆蓋掉，cross-tab sync 把 admin 分頁的 currentUser 也換成 anonymous → polling 用 anonymous token → server 403。</li>
+          <li><b>修法</b>：admin.html 登入時設 localStorage flag 'ptcg_admin_active'，game/decks 分頁在匿名 sign-in 前先檢查此 flag，有就跳過（保留 admin user）。admin 登出時清掉 flag。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.984</span> 🔧 修對戰頁「匿名 建立帳號」auth pill 閃爍循環</summary>
         <ul>
           <li><b>玩家回報</b>：本機雙人對戰 lobby 上方 auth 狀態 pill「匿名 建立帳號」會「出現 消失 出現 消失」反覆循環。</li>
