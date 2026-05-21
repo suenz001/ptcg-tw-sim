@@ -908,7 +908,8 @@ regR('h-wave2-self-swap', (state, aIdx, iids, _params, _pool) => {
     const idx = p.bench.findIndex(b => b.iid === targetIid);
     if (idx < 0) return p;
     const oldActive = p.active;
-    const newActive = p.bench[idx];
+    // v4.978：set movedToActiveThisTurn — 振翅高飛/潔淨支援/金屬之路 等特性 gate 需要
+    const newActive = { ...p.bench[idx], movedToActiveThisTurn: true };
     const newBench = p.bench.map((b, i) => i === idx ? oldActive : b);
     return { ...p, active: newActive, bench: newBench };
   });

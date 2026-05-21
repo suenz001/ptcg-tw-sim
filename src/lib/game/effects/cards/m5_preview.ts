@@ -800,7 +800,8 @@ regR('m5-zeraora-teleport', (state, aIdx, iids) => {
       const benchIdx = p.bench.findIndex(b => b.iid === targetIid);
       if (benchIdx < 0 || !p.active) return p;
       const oldActive = p.active;
-      const newActive = p.bench[benchIdx];
+      // v4.978：set movedToActiveThisTurn — 振翅高飛/潔淨支援/金屬之路 等特性 gate 需要
+      const newActive = { ...p.bench[benchIdx], movedToActiveThisTurn: true };
       const newBench = [...p.bench];
       newBench[benchIdx] = m5ClearTurnFlags(oldActive);
       return { ...p, active: newActive, bench: newBench };

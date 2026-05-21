@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.978</span> 🪶 修自主換場後特性「振翅高飛/潔淨支援/金屬之路」沒亮 — 統一補 6 處 movedToActiveThisTurn flag</summary>
+        <ul>
+          <li><b>玩家回報</b>：寶可夢旋風回收機回收 active 後從備戰上場、或凱西的瞬間移動 等自主換場後，遠古巨蜓ex 特性「振翅高飛」（gate：在自己的回合，從備戰區放置於戰鬥場）沒亮。</li>
+          <li><b>Audit</b>：6 處自主換場 resolver 都漏 set <code>movedToActiveThisTurn</code> flag — 引擎主路徑（手動撤退/被昏厥補位/衝浪海灘/迅速游標 等）有正確 set，但「自主 swap」類全漏。</li>
+          <li><b>影響範圍</b>：<code>do-switch</code>（寶可夢交替 + 共用 selfSwapPost 的 10+ 招式）/ <code>rush-switch-pick-bench</code>（急進開關）/ <code>v155-self-swap-active</code>（捲捲耳｜雀躍）/ <code>h-wave2-self-swap</code>（h 標 wave2 swap）/ <code>m5-zeraora-teleport</code>（超級捷拉奧拉ex｜瞬間移轉）/ <code>sakaki-self-swap</code>（火箭隊的坂木）。</li>
+          <li><b>修</b>：每處 <code>newActive</code> 統一加 <code>movedToActiveThisTurn: true</code>。一次補完，振翅高飛 / 超級拉帝亞斯ex 潔淨支援 / 勾帕路衛 金屬之路 等所有「在自己的回合從備戰上場」特性都會正確觸發。</li>
+          <li><b>架構提醒</b>：類似「離開戰鬥場 sanitize」雖然 set 過位置但未必所有 path 都統一；旋風回收機透過 SEND_NEW_ACTIVE handler 走 isOwnTurn 條件已有 set，不需動。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.977</span> 🔧 hotfix — v4.976 賽吉 ability filter 套錯方向</summary>
         <ul>
           <li><b>玩家糾正</b>：卡面「擁有特性的寶可夢除外」是指<b>從牌庫拿的進化卡本身不能有特性</b>，不是場上要被進化的目標。</li>

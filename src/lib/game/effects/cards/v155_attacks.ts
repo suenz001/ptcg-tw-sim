@@ -451,7 +451,8 @@ regR('v155-self-swap-active', (st, aIdx, iids, _params, pool) => {
     const benchIdx = p.bench.findIndex(b => b.iid === targetIid);
     if (benchIdx < 0 || !p.active) return p;
     const oldActive = p.active;
-    const newActive = p.bench[benchIdx];
+    // v4.978：set movedToActiveThisTurn — 振翅高飛/潔淨支援/金屬之路 等特性 gate 需要
+    const newActive = { ...p.bench[benchIdx], movedToActiveThisTurn: true };
     const newBench = [...p.bench];
     newBench[benchIdx] = clearActiveEffectsInline(oldActive);
     return { ...p, active: newActive, bench: newBench };

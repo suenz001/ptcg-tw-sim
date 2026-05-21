@@ -11853,7 +11853,8 @@ regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
   st = addLog(st, `火箭隊的坂木：${aName}（戰鬥）↔ ${bName}（備戰）互換`, idx);
   st = updatePlayer(st, idx, pl => {
     if (!pl.active) return pl;
-    const newActive = benchPick;
+    // v4.978：set movedToActiveThisTurn — 振翅高飛/潔淨支援/金屬之路 等特性 gate 需要
+    const newActive = { ...benchPick, movedToActiveThisTurn: true };
     // v2.49：離開戰鬥場清狀態旗標（修 sakaki-self-swap 的 bench status leak）
     const cleared = clearActiveEffects(pl.active);
     const newBench = pl.bench.map(c => c.iid === pickIid ? cleared : c);

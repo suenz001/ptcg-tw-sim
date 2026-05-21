@@ -73,7 +73,8 @@ regR('do-switch', (st, idx, iids, _params, pool) => {
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
     // v3.812：preserve justPlaced + playedFromHand（位置交換不該清除剛打出 flag）
-    const newActive = { ...p.bench[bIdx] };
+    // v4.978：set movedToActiveThisTurn — 振翅高飛/潔淨支援/金屬之路 等特性 gate 需要
+    const newActive = { ...p.bench[bIdx], movedToActiveThisTurn: true };
     const newBench = [...p.bench];
     // v2.08：離開戰鬥場清狀態旗標
     newBench[bIdx] = clearActiveEffects(p.active);
@@ -121,7 +122,8 @@ regR('rush-switch-pick-bench', (st, idx, iids, _params, pool) => {
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
     // v3.812：preserve justPlaced + playedFromHand（位置交換不該清除剛打出 flag）
-    const newActive = { ...p.bench[bIdx] };
+    // v4.978：set movedToActiveThisTurn — 振翅高飛/潔淨支援/金屬之路 等特性 gate 需要
+    const newActive = { ...p.bench[bIdx], movedToActiveThisTurn: true };
     const newBench = [...p.bench];
     newBench[bIdx] = clearActiveEffects(p.active);
     return { ...p, active: newActive, bench: newBench };
