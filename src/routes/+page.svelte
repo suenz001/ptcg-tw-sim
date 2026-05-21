@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.986</span> 🧹 對戰下拉直接拿掉內建預組（取代 v4.985 toggle 方案）</summary>
+        <ul>
+          <li><b>玩家回饋</b>：v4.985 用 toggle 控制顯示內建預組「有點多此一舉」，且線上對戰 seat select 沒套到 toggle UI。HTML 原生 select 不支援 optgroup 收折，乾脆直接從下拉拿掉預組。</li>
+          <li><b>修法</b>：3 處下拉（P1/P2 本機雙人 + 線上對戰 seat select）完全移除「🎴 內建預組」optgroup，下拉只剩「我的牌組」。順手清掉 v4.985 引入的 toggle state、checkbox UI、CSS。</li>
+          <li><b>玩家想用預組對戰的流程</b>：到 decks 編輯器 → 展開「內建預組（5 套）」摺疊區 → 選預組 → 上方「📋 複製到我的牌組」按鈕一鍵複製 → 回對戰下拉就有副本可選。複製過一次後永久存在「我的牌組」內，下次直接用。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.985</span> 🎚️ 對戰 lobby 下拉預組 toggle + 修 admin user 被匿名 sign-in 蓋掉</summary>
         <ul>
           <li><b>對戰 lobby 下拉預組</b>：v4.983 只處理了牌組編輯器的預組區（用 details 摺疊），對戰 lobby 用的是 HTML 原生 select 下拉，無法摺疊 optgroup。新增「📂 在下拉選單顯示內建預組」勾選框，預設關閉，需要時打勾才在下拉內顯示預組。本機雙人 + 線上對戰 3 處下拉同步適用。</li>
