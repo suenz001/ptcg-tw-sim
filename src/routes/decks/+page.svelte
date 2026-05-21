@@ -1293,11 +1293,10 @@
         {/each}
       </ul>
 
-      <!-- v2.13：內建預組（唯讀檢視） -->
+      <!-- v2.13：內建預組（唯讀檢視）；v4.983 改 <details> 預設摺疊 -->
       {#if PRESET_DECKS.length > 0}
-        <div class="rail-head preset-head">
-          <strong>🎴 內建預組（唯讀）</strong>
-        </div>
+        <details class="preset-section">
+          <summary class="preset-summary">🎴 內建預組（唯讀）<span class="preset-count">{PRESET_DECKS.length} 套</span></summary>
         <ul class="deck-list preset-list">
           {#each PRESET_DECKS as d (d.id)}
             <li class:active={d.id === activeId}>
@@ -1310,6 +1309,7 @@
             </li>
           {/each}
         </ul>
+        </details>
       {/if}
     </aside>
 
@@ -2018,6 +2018,40 @@
   }
   /* 預組區塊 — 淡橙底讓人知道是唯讀 */
   .rail-head.preset-head { margin-top: 1rem; }
+  /* v4.983: 內建預組改 <details> 預設摺疊 — 玩家點開才展開 */
+  .preset-section { margin-top: 1rem; border-top: 1px dashed #d8d8d8; padding-top: 0.7rem; }
+  .preset-section > .preset-summary {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #374151;
+    cursor: pointer;
+    padding: 0.25rem 0;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .preset-section > .preset-summary::-webkit-details-marker { display: none; }
+  .preset-section > .preset-summary::before {
+    content: '▶';
+    font-size: 0.7rem;
+    color: #888;
+    transition: transform 0.15s ease;
+    display: inline-block;
+  }
+  .preset-section[open] > .preset-summary::before { transform: rotate(90deg); }
+  .preset-section > .preset-summary:hover { color: #0066cc; }
+  .preset-count {
+    margin-left: auto;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #888;
+    background: #f4f6fa;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+  }
+  .preset-section > .deck-list { margin-top: 0.4rem; }
   .preset-list li { background: #fff5e6; }
   .preset-list li.active { background: #ffe6c4; box-shadow: inset 0 0 0 1px #d9aa4a; }
   .preset-badge { background:#d9aa4a; color:#fff; font-size:.72rem; font-weight:700; padding:.18rem .45rem; border-radius:4px; white-space:nowrap; }

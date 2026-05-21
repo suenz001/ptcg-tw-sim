@@ -265,6 +265,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.983</span> 🧹 對戰 lobby 高度對齊 + 內建預組預設摺疊</summary>
+        <ul>
+          <li><b>本機雙人對戰 lobby</b>：「☐ 由 AI 控制」之前獨佔一行使玩家 2 卡片比玩家 1 高。改成 h2 + 開關並排，兩卡片高度一致。</li>
+          <li><b>牌組編輯器 — 內建預組</b>：之前預設展開讓玩家看到長長一串預組牌組，改用可摺疊 details 元素預設收合（summary 顯示「🎴 內建預組（唯讀） 5 套」徽章），點開才展開。視覺更清爽，需要查預組的玩家點一下就好。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.982</span> 🎨 牌組編輯器 — 左側 rail + 右側搜尋 panel 對齊整理</summary>
         <ul>
           <li><b>玩家回報</b>：左側「我的牌組」三個按鈕高度不一致；右側搜尋 panel 各 chip row label 起點不齊。</li>

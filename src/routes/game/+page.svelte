@@ -4764,14 +4764,17 @@
       </div>
       <div class="vs-badge">VS</div>
       <div class="setup-card" class:ai-card={aiPlayerIndex===1}>
-        <h2>玩家 2{#if aiPlayerIndex===1}<span class="ai-tag">🤖 AI</span>{/if}</h2>
-        <label class="ai-toggle">
-          <input type="checkbox" checked={aiPlayerIndex===1} onchange={(e)=>{
-            aiPlayerIndex = (e.currentTarget as HTMLInputElement).checked ? 1 : null;
-            if (aiPlayerIndex === 1) p2Name = 'AI 對手';
-          }} />
-          由 AI 控制
-        </label>
+        <!-- v4.983: h2 + ai-toggle 並排，與玩家 1 卡片高度對齊 -->
+        <div class="setup-card-header">
+          <h2>玩家 2{#if aiPlayerIndex===1}<span class="ai-tag">🤖 AI</span>{/if}</h2>
+          <label class="ai-toggle">
+            <input type="checkbox" checked={aiPlayerIndex===1} onchange={(e)=>{
+              aiPlayerIndex = (e.currentTarget as HTMLInputElement).checked ? 1 : null;
+              if (aiPlayerIndex === 1) p2Name = 'AI 對手';
+            }} />
+            由 AI 控制
+          </label>
+        </div>
         {#if aiPlayerIndex !== 1}
           <input class="name-input" placeholder="玩家名稱" bind:value={p2Name} />
         {/if}
@@ -7641,6 +7644,9 @@
   .player-setup{ display:grid; grid-template-columns:1fr auto 1fr; gap:1rem; align-items:center; margin:1.5rem 0; }
   .setup-card{ background:#2a3a2a; border:1px solid #3a5a3a; border-radius:10px; padding:1rem; display:flex; flex-direction:column; gap:0.6rem; }
   .setup-card h2{ margin:0; font-size:1rem; color:#aaffaa; }
+  /* v4.983: 玩家 2 header — h2 與 AI toggle 並排，使兩卡片高度一致 */
+  .setup-card-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .setup-card-header h2 { margin: 0; }
   .name-input,.setup-card select{ padding:0.45rem 0.6rem; border:1px solid #4a6a4a; border-radius:6px; background:#1a2a1a; color:#f0f0f0; font:inherit; }
   .vs-badge{ font-size:1.5rem; font-weight:700; color:#f0b040; text-align:center; }
 
