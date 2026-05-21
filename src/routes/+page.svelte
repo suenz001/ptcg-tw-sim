@@ -265,11 +265,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.980</span> 🔧 hotfix — v4.979 changelog 內 raw 大括號違反 Iron Rule 1 導致部署失敗</summary>
+        <ul>
+          <li><b>狀況</b>：v4.979 git push OK 但 GitHub Pages workflow build 失敗 — 站台版本卡在 v4.978。</li>
+          <li><b>根因</b>：v4.979 changelog 內寫了一段 code 範例（資料物件字面量），含 raw <code>&#123;</code> <code>&#125;</code> 字元；vite-plugin-svelte 把它當 Svelte expression 解析，發現變數沒定義 → build 失敗。</li>
+          <li><b>修</b>：raw 大括號改 HTML entity（<code>&amp;#123;</code> / <code>&amp;#125;</code>），渲染後玩家看到的 HTML 跟原本一樣，但 Svelte 編譯時不再誤解析為 expression。</li>
+          <li><b>教訓</b>：tsc verify 只檢查 .ts 型別，抓不到 .svelte template 此類錯誤；以後 changelog 含 code snippet 時必須先 audit raw 大括號。已寫進心得。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v4.979</span> 🛡️ Phase 2 — 統一 4 處 snipe resolver 過 active-side guard</summary>
         <ul>
           <li><b>背景</b>：v4.975 Phase 1 建立統一框架（飛翔/要害斬/阿塞蘿拉等 8 個 active-side 招式傷害免疫 flag 集中到 <code>resolveActiveAttackGuard</code> + <code>canApplyEffectToTarget</code> step 4），但只 migrate 了 clone-strike-multi-hit。Phase 2 audit 出其他 4 處 snipe resolver 仍走 bench-only guard、active 路徑裸跑。</li>
           <li><b>Migrate 範圍</b>：<code>snipe-120</code>（狙擊羽毛）、<code>snipe-10</code>（電磁電光）、<code>snipe-variable</code>（落雷風暴 / 殘酷箭 / 暗影子彈 / 痛苦狂歡 / 掃射 等多招式共用）、<code>snipe-multi</code>（多目標 N 隻寶可夢攻擊類）。</li>
-          <li><b>修法</b>：每處把 <code>if (!isActive) resolveBenchGuard(...)</code> 統一改成 <code>canApplyEffectToTarget(..., { isBench: !isActive })</code>，內部 dispatch 到對應 helper（bench 路徑同 v2.46 原行為；active 路徑新增 8 flag check）。kind 透傳維持原語意（attack-damage / attack-effect）。</li>
+          <li><b>修法</b>：每處把 <code>if (!isActive) resolveBenchGuard(...)</code> 統一改成 <code>canApplyEffectToTarget(..., &#123; isBench: !isActive &#125;)</code>，內部 dispatch 到對應 helper（bench 路徑同 v2.46 原行為；active 路徑新增 8 flag check）。kind 透傳維持原語意（attack-damage / attack-effect）。</li>
           <li><b>影響卡片數</b>：snipe-variable 共用 ≥5 招式 + snipe-multi ≥1 招式 + 狙擊羽毛 + 電磁電光 — 飛翔正面後 7+ 個招式都會自動 honor active 免疫 flag，不只 v4.975 修的分身連打 / 大吼大叫 / 三色炮。</li>
           <li><b>風險</b>：純 add-only guard（多擋 case，不會把原本擋的變不擋）；bench 路徑邏輯維持不動。tsc 0 errors。</li>
         </ul>
