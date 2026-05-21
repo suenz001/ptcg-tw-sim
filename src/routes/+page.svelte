@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.981</span> 🎨 牌組編輯器表頭整理 — grid 佈局 + 手機板 2 欄滿寬</summary>
+        <ul>
+          <li><b>玩家回報</b>：表頭凌亂 — 「9/60」垂直大字佔位、按鈕高度不一致、寬度不夠時中文字被擠成垂直堆，視覺混亂。</li>
+          <li><b>桌機改善</b>：deck-header 改 grid 佈局 — 牌組名稱 + 數量 badge 第一列、操作按鈕第二列 wrap；數量改淡藍 pill badge 樣式（超過 60 紅）；按鈕加 nowrap 防中文垂直堆。</li>
+          <li><b>手機板改善</b>：≤600px viewport 按鈕區改 grid 2 欄滿寬，每顆按鈕撐滿欄位置中；「清空」獨佔一整行作危險動作視覺強調。</li>
+          <li><b>視覺分組</b>：給沒 emoji 的 5 個按鈕加 prefix 易辨識 — 🖼️ 匯出文字/圖片、📝 匯入文字、💾 匯出 JSON、📂 匯入 JSON、🗑️ 清空。配合既有 🎫 / 📤 / 🔒 形成完整視覺。</li>
+          <li><b>不動</b>：按鈕順序 / 功能 / 鎖牌邏輯，純佈局與樣式改動。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.980</span> 🔧 hotfix — v4.979 changelog 內 raw 大括號違反 Iron Rule 1 導致部署失敗</summary>
         <ul>
           <li><b>狀況</b>：v4.979 git push OK 但 GitHub Pages workflow build 失敗 — 站台版本卡在 v4.978。</li>

@@ -1327,16 +1327,16 @@
             readonly={isPresetActive}
             title={isPresetActive ? '內建預組不可改名；請先複製一份' : ''}
           />
+          <span class="count" class:bad={totalCount !== 60}>{totalCount} / 60</span>
           <div class="deck-actions">
-            <span class="count" class:bad={totalCount !== 60}>{totalCount} / 60</span>
             {#if isPresetActive}
               <span class="preset-badge" title="內建預組，僅供檢視">🔒 預組（唯讀）</span>
               <button class="small" onclick={copyPresetToMine}>📋 複製到我的牌組</button>
-              <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字/圖片</button>
-              <button class="small" onclick={exportJson}>匯出 JSON</button>
+              <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>🖼️ 匯出文字/圖片</button>
+              <button class="small" onclick={exportJson}>💾 匯出 JSON</button>
             {:else}
-              <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>匯出文字/圖片</button>
-              <button class="small" onclick={openTextImport} disabled={!poolReady} title="貼上 PTCG 文字格式（包含官方訓練家網站可透過下方書籤工具一鍵匯入）">匯入文字</button>
+              <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>🖼️ 匯出文字/圖片</button>
+              <button class="small" onclick={openTextImport} disabled={!poolReady} title="貼上 PTCG 文字格式（包含官方訓練家網站可透過下方書籤工具一鍵匯入）">📝 匯入文字</button>
               <!-- v3.83: 提供顯眼的官方匯入入口，避免玩家找不到（書籤教學原本藏在「匯入文字」modal 摺疊區內） -->
               <!-- v4.972：官網代碼匯入(🎫)取代了書籤工具流程，舊按鈕隱藏但保留 code -->
               <button class="small primary" hidden onclick={openOfficialImport} disabled={!poolReady} title="從官方訓練家網站一鍵匯入牌組（首次需設定書籤）">🔖 從官方匯入</button>
@@ -1348,12 +1348,12 @@
               <button class="small primary" onclick={exportToTwOfficialCode} disabled={!active || activeEntries.length === 0 || twCodeExportLoading} title="把此牌組發行到官方訓練家網站並取得分享代碼（會在官網永久留下紀錄）">
                 {twCodeExportLoading ? '⏳ 發行中…' : '📤 匯出為官網代碼'}
               </button>
-              <button class="small" onclick={exportJson}>匯出 JSON</button>
+              <button class="small" onclick={exportJson}>💾 匯出 JSON</button>
               <label class="small file">
-                匯入 JSON
+                📂 匯入 JSON
                 <input type="file" accept="application/json" onchange={onFileChosen} />
               </label>
-              <button class="small danger" onclick={clearDeck}>清空</button>
+              <button class="small danger" onclick={clearDeck}>🗑️ 清空</button>
             {/if}
           </div>
         </div>
@@ -2031,33 +2031,82 @@
     border-radius: 8px;
     padding: 1rem;
   }
+  /* v4.981: 牌組編輯器 header grid 佈局 — title + count 第一列，actions 第二列 wrap */
   .deck-header {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "title count"
+      "actions actions";
+    column-gap: 0.6rem;
+    row-gap: 0.55rem;
     align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
   }
   .deck-title {
-    flex: 1;
+    grid-area: title;
     font-size: 1.1rem;
     font-weight: 600;
     padding: 0.4rem 0.5rem;
     border: 1px solid #ddd;
     border-radius: 4px;
-    min-width: 10rem;
+    min-width: 8rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  /* v4.981: count 改 pill badge — 視覺更整潔 */
+  .count {
+    grid-area: count;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.3rem 0.7rem;
+    background: #eef2f8;
+    border: 1px solid #d6dce6;
+    border-radius: 999px;
+    color: #2a4a78;
+    white-space: nowrap;
+  }
+  .count.bad {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #c00;
   }
   .deck-actions {
+    grid-area: actions;
     display: flex;
+    flex-wrap: wrap;
     gap: 0.4rem;
     align-items: center;
   }
-  .count {
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
+  /* v4.981: button 加 nowrap — 防中文字在窄欄被擠成垂直堆 */
+  .deck-actions button.small,
+  .deck-actions label.file {
+    white-space: nowrap;
   }
-  .count.bad {
-    color: #c00;
+  /* v4.981: 手機板 (≤600px) — actions 改 grid 2 cols 滿寬，清空獨佔一行 */
+  @media (max-width: 600px) {
+    .deck-header { column-gap: 0.4rem; }
+    .deck-title { font-size: 1rem; padding: 0.35rem 0.45rem; min-width: 6rem; }
+    .count { font-size: 0.88rem; padding: 0.25rem 0.55rem; }
+    .deck-actions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.35rem;
+    }
+    .deck-actions > button.small,
+    .deck-actions > label.file,
+    .deck-actions > .preset-badge {
+      width: 100%;
+      text-align: center;
+      justify-content: center;
+      padding: 0.45rem 0.4rem;
+      font-size: 0.85rem;
+      box-sizing: border-box;
+    }
+    /* 清空 button 獨佔一整行 — 危險動作視覺強調 */
+    .deck-actions > button.small.danger {
+      grid-column: 1 / -1;
+    }
   }
   .validation {
     margin: 0.75rem 0;
