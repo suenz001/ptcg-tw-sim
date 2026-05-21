@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.992</span> 🔴⚪ PWA icon 改精靈球紅白配色</summary>
+        <ul>
+          <li><b>需求</b>：app 圖示從原本墨綠底 + 金字 PTCG TW SIM 改成寶可夢經典精靈球紅白配色。</li>
+          <li><b>新設計</b>：圓角方形外框、上半紅 (#DC2626) + 中黑橫帶 + 下半白、中央精靈球按鈕（黑邊白底圓）、PTCG 大字白色疊紅色區、TW SIM 小字深紅疊白色區。共 5 個尺寸（32/180/192/512/512-maskable）。</li>
+          <li><b>注意</b>：要看新 icon 需要在手機重新安裝 PWA（移除原本 home screen icon 再加回），或 reload + clear cache 後重新「加入主畫面」。瀏覽器 favicon 一般 reload 後即更新。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.991</span> 🔧 修攻擊 KO 對手後對戰卡死 bug — 結束按鈕無效</summary>
         <ul>
           <li><b>玩家回報</b>：用招式 KO 對手戰鬥位後（特別是幻影奇襲類連帶 POST picker 的招式），取完獎勵 + 對手補位後點「結束」按鈕無效，對戰卡死雙方都無法操作。</li>
