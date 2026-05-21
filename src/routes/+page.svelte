@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.991</span> 🔧 修攻擊 KO 對手後對戰卡死 bug — 結束按鈕無效</summary>
+        <ul>
+          <li><b>玩家回報</b>：用招式 KO 對手戰鬥位後（特別是幻影奇襲類連帶 POST picker 的招式），取完獎勵 + 對手補位後點「結束」按鈕無效，對戰卡死雙方都無法操作。</li>
+          <li><b>Root cause</b>：engine 的 ATTACK 處理流程內，只有「沒 KO」分支設定回合進入 end 階段，KO 分支跳過了此設定。當招式 KO 對手 active 時，turnPhase 維持 main 階段；玩家點「結束」按鈕觸發 END_TURN，但 handler 內部 check turnPhase==='end' 失敗直接 return → 無動作 → 卡死。</li>
+          <li><b>修法</b>：ATTACK 流程 POST 跑完後無條件 set turnPhase='end'，所有路徑（KO / 沒 KO / preventedKO）統一進入 end 階段。已 game-over 的 case 早已 return 不受影響。</li>
+          <li><b>影響範圍</b>：所有「攻擊招式 KO 對手 + POST 開 picker」的場景都自動受益 — 含幻影奇襲、油之機關槍、各種 KO 後觸發效果的招式。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.990</span> 🔧 修多龍巴魯托ex 幻影奇襲 對化隱寶可夢卡 picker bug</summary>
         <ul>
           <li><b>玩家回報</b>：幻影奇襲攻擊有「化隱」特性的寶可夢後卡住不能動。</li>

@@ -4903,6 +4903,14 @@ function handlePlaying(
       // （如 激流水泵）能在 POST 階段判斷玩家是否棄了能量
       newState = postFn(newState, aIdx, pool, action);
     }
+    // v4.991: ATTACK 流程結尾統一 set turnPhase='end' — 修玩家 case 1 卡死。
+    //   之前 KO 分支跳過 turnPhase 設定（line 4751 只有「沒 KO」分支 set），
+    //   導致 END_TURN handler (line 1330 check turnPhase==='end') 拒絕處理，
+    //   玩家取完獎勵 + 對手補位後點「結束」按鈕無效 → 卡死。
+    //   game-over case 已在 line 4660 區 return 不會跑到這。
+    if (newState.phase === 'playing') {
+      newState = { ...newState, turnPhase: 'end' as const };
+    }
     // v3.892：清掉 attack-time snapshot transient flag（attack flow 結束）
     // v4.47 P2：若 POST 開了 pendingSelection（油之機關槍 / hitBenchPickPost），
     //   snapshot 必須跨 dispatch 保留到 resolver 跑完（resolver 內 resolveBenchGuard 仍要讀）。
