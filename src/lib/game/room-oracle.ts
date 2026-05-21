@@ -86,6 +86,7 @@ export async function createRoom(
   roomName: string,
   hostName: string,
   allowUndo: boolean = false,  // v4.75 練習模式
+  visible: boolean = true,     // v5.003 私密房旗標（false = 不在大廳顯示）
 ): Promise<string> {
   const uid = await getMyUid();
   for (let attempt = 0; attempt < 10; attempt++) {
@@ -104,6 +105,8 @@ export async function createRoom(
       gameState: null,
       schemaVersion: SEAT_LAYOUT_VERSION,
       ...(allowUndo ? { allowUndo: true } : {}),
+      // v5.003：私密房旗標（預設 true = 公開，只在 false 時寫入省 doc 大小）
+      ...(visible === false ? { visible: false } : {}),
     };
     // upsert with no expectedVersion → creates if missing
     const result = await oracleUpsertRoom(code, data);

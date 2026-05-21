@@ -114,6 +114,7 @@
   let undoDeniedThisSnapshot = $state(false);              // 對手拒絕後，這個 snapshot 的按鈕消失（直到下個 action）
   let undoAwaitingResponse = $state(false);                // 發起方等待對手回應中
   let roomAllowUndoInput = $state(false);                  // 開房表單 checkbox 狀態
+  let roomPrivateInput = $state(false);                    // v5.003 私密房 checkbox 狀態（預設公開）
   let aiTimer: ReturnType<typeof setTimeout> | null = null;
 
   // v3.38：本機/AI lobby 牌組 60 張驗證 — UI gate（防止使用者選擇張數錯誤的牌組開戰）
@@ -3618,7 +3619,8 @@
     onlineLoading = true; onlineError = '';
     try {
       // v4.75：傳 allowUndo 旗標決定是否為練習房
-      roomCode = await createRoom(roomNameInput.trim(), myName.trim(), roomAllowUndoInput);
+      // v5.003：第 4 個參數是 visible — !private 即「公開房 = true」「私密房 = false」
+      roomCode = await createRoom(roomNameInput.trim(), myName.trim(), roomAllowUndoInput, !roomPrivateInput);
       amIHost = true;
       onlineStep = 'room';
       startRoomSubscription();
@@ -4877,6 +4879,11 @@
         <label class="check-row">
           <input type="checkbox" bind:checked={roomAllowUndoInput} />
           <span>🎯 練習模式（允許悔棋）— 對戰中雙方可請求悔棋，需對手同意才會生效</span>
+        </label>
+        <!-- v5.003 私密房：勾選後不會出現在大廳列表，朋友需透過房號加入 -->
+        <label class="check-row">
+          <input type="checkbox" bind:checked={roomPrivateInput} />
+          <span>🔒 私密房 — 不在大廳列表公開顯示，朋友需透過分享房號才能加入</span>
         </label>
         {#if onlineError}<p class="warn">{onlineError}</p>{/if}
         <div class="form-btns">

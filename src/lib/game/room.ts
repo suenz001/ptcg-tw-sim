@@ -105,6 +105,9 @@ export interface RoomData {
    * Immutable — 開房後不能改（避免戰鬥中切換造成 state 混亂）。
    */
   allowUndo?: boolean;
+  /** v5.003：私密房旗標 — undefined 或 true = 公開（顯示在大廳列表）；
+   *  false = 私密（不出現在 subscribeOpenRooms 結果，只能透過房號加入）。 */
+  visible?: boolean;
   /**
    * v4.75 悔棋請求（runtime negotiation state）。
    * - fromSeatIdx: 發起方座位 (0=P1, 1=P2)
@@ -185,11 +188,13 @@ export function bothPlayersReady(seats: Seat[]): boolean {
 
 // ── CRUD ─────────────────────────────────────────────────────────────────────
 
-/** 建立新房間（host 預設坐 P1，無牌組、未準備）；回傳房號 */
+/** 建立新房間（host 預設坐 P1，無牌組、未準備）；回傳房號
+ *  v5.003: visible 預設 true（公開房，出現在大廳列表）；false = 私密房 */
 export async function createRoom(
   roomName: string,
   hostName: string,
   allowUndo: boolean = false,  // v4.75 練習模式：host 開房時可勾選
+  visible: boolean = true,     // v5.003 私密房旗標（false = 不在大廳顯示）
 ): Promise<string> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('尚未登入');
@@ -212,6 +217,8 @@ export async function createRoom(
     schemaVersion: SEAT_LAYOUT_VERSION,
     // v4.75：練習房旗標（預設 false = 標準房，不可悔棋）
     ...(allowUndo ? { allowUndo: true } : {}),
+    // v5.003：私密房旗標（預設 true = 公開，只在 false 時寫入省 doc 大小）
+    ...(visible === false ? { visible: false } : {}),
   };
   await setDoc(doc(db, 'rooms', code), {
     ...data,
@@ -813,6 +820,8 @@ export function subscribeOpenRooms(
         if ((data.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) return;
         // v3.992：playing 房需 spectatorsAllowed !== false 才公開（undefined 視為 true）
         if (data.status === 'playing' && data.spectatorsAllowed === false) return;
+        // v5.003：私密房 (visible === false) 不出現在大廳列表，只能透過房號加入
+        if (data.visible === false) return;
         // stale 過濾：lobby 用 10 min（v2.52），playing 用 heartbeat 閾值 5 min（v2.73）
         const updatedAtSec = (data.updatedAt as { seconds?: number } | null | undefined)?.seconds;
         if (typeof updatedAtSec === 'number') {
