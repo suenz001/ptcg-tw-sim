@@ -2219,9 +2219,12 @@
         return validIidsOppB ? base.filter(c => validIidsOppB.includes(c.iid)) : base;
       }
       case 'damage-distribute': {
+        // v4.990: 支援 params.validIids 過濾免疫目標（化隱 / 球形盾牌 / 對戰圓形 等），
+        //   配合幻影奇襲 POST dry-run，picker UI 不再顯示永遠 block 的 bench → 不會卡 picker。
         const includeActiveDD = pendingSelection.params?.includeActive === true;
-        if (includeActiveDD && src.active) return [src.active, ...src.bench];
-        return src.bench;
+        const validIidsDD = pendingSelection.params?.validIids as string[] | undefined;
+        const baseDD = includeActiveDD && src.active ? [src.active, ...src.bench] : src.bench;
+        return validIidsDD ? baseDD.filter(c => validIidsDD.includes(c.iid)) : baseDD;
       }
       case 'energy-distribute': {
         // v2.87 同類能量自由分配：自方寶可夢，依 validIids 過濾

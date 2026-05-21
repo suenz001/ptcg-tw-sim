@@ -6901,9 +6901,21 @@ regPost('振翼髮|飛來橫禍', (state, aIdx, _pool) => {
 //
 // 舊版問題：每放 1 個 counter 就強制彈 1 次 modal，放 6 個要按 6 次確認。
 regPre('多龍巴魯托ex|幻影奇襲', (state, _aIdx, _pool) => ({ state, damage: 200 }));
-regPost('多龍巴魯托ex|幻影奇襲', (state, aIdx, _pool) => {
+regPost('多龍巴魯托ex|幻影奇襲', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) return state;
+  // v4.990: 先 dry-run 過濾 immune bench iids（化隱 / 球形盾牌 / 對戰圓形 / 太晶 等）
+  //   避免 minCount=6 但全部 blocked → picker 永遠湊不到 advance → 卡死。
+  const defender = state.players[dIdx];
+  const validIids: string[] = [];
+  for (const b of defender.bench) {
+    const bCard = pool.get(b.cardId);
+    const g = canApplyEffectToTarget(state, aIdx, b, bCard, 'attack-effect', pool, { isBench: true });
+    if (!g.blocked) validIids.push(b.iid);
+  }
+  if (validIids.length === 0) {
+    return addLog(state, '幻影奇襲：對手備戰全部免疫指示物放置，6 個指示物作廢', aIdx);
+  }
   const s = addLog(state, '幻影奇襲：將 6 個傷害指示物自由分配到對手備戰寶可夢（必須全部放完，KO 後溢出指示物消耗）', aIdx);
   return withPending(s, {
     type: 'damage-distribute',
@@ -6915,6 +6927,7 @@ regPost('多龍巴魯托ex|幻影奇襲', (state, aIdx, _pool) => {
       placedCounters: 0,
       counterDamage: 10,
       label: '幻影奇襲',
+      validIids,  // v4.990: picker UI 只顯示這些 bench iid
     },
   });
 });
@@ -7045,6 +7058,16 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
   //   但保險起見仍把 minCount 改成跟 maxCount 相同，避免任何邊界 case 玩家少放。
   const nextRemaining = totalCounters - placedAfter;
   if (nextRemaining > 0 && s.players[dIdx].bench.length > 0) {
+    // v4.990: 重開 picker 前重新 dry-run filter（KO 後 bench 可能變動）
+    const reValidIids: string[] = [];
+    for (const b of s.players[dIdx].bench) {
+      const bCard = pool.get(b.cardId);
+      const g = canApplyEffectToTarget(s, actorIdx, b, bCard, 'attack-effect', pool, { isBench: true });
+      if (!g.blocked) reValidIids.push(b.iid);
+    }
+    if (reValidIids.length === 0) {
+      return addLog(s, `${label}：剩 ${nextRemaining} 個指示物無合法目標（全部免疫），作廢`, actorIdx);
+    }
     return withPending(s, {
       type: 'damage-distribute',
       actorIdx, sourcePlayerIdx: dIdx,
@@ -7055,6 +7078,7 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
         placedCounters: placedAfter,
         counterDamage,
         label,
+        validIids: reValidIids,  // v4.990
       },
     });
   }

@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.990</span> 🔧 修多龍巴魯托ex 幻影奇襲 對化隱寶可夢卡 picker bug</summary>
+        <ul>
+          <li><b>玩家回報</b>：幻影奇襲攻擊有「化隱」特性的寶可夢後卡住不能動。</li>
+          <li><b>Root cause</b>：v4.917 dragapult-snipe migrate 到統一 helper 新增了化隱 gate，但 (1) POST 開 picker 沒 dry-run 過濾免疫目標 (2) damage-distribute picker UI 沒讀 validIids。如果全 bench 都化隱／球形盾牌／對戰圓形保護，玩家點哪都被擋，picker minCount=6 永遠湊不到 advance → 卡死。</li>
+          <li><b>修法</b>：(A) POST 先 dry-run 過濾免疫目標，全 blocked 直接 log 作廢、部分 blocked 傳 validIids；(B) resolver 第二輪 picker 也重新 dry-run（KO 後 bench 可能變動）；(C) game/+page.svelte damage-distribute case 加 validIids filter，picker UI 自動過濾 immune 目標。</li>
+          <li><b>影響卡片</b>：幻影奇襲（多龍巴魯托ex）+ 共用 dragapult-snipe 的招式都會自動受益。</li>
+          <li><b>玩家 case 1（無化隱情境卡死）</b>：從 code 看不出明確 root cause，可能是 prize flow / send-new-active 順序問題或 race condition。若還會發生請提供當時對戰 log（admin 對戰紀錄）讓我進一步分析。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.989</span> ◀▶ 卡牌 modal 左右翻同名變體 + 牌組編輯器頂部 +/- 按鈕</summary>
         <ul>
           <li><b>左右翻同名變體</b>：卡牌詳細資料 modal 兩側出現 ‹ › 圓形按鈕，鍵盤 ←/→ 也可用，點下 cycle 到同名的下個版本卡。範例：呱頭蛙 SV5a → M-P-J → M4 → 083 → MC → 回 SV5a。modal 頂部小徽章顯示「3 / 5 版本」當前位置。</li>
