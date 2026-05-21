@@ -458,6 +458,8 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
         .filter(r => {
           if ((r.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) return false;
           if (r.status === 'playing' && r.spectatorsAllowed === false) return false;
+          // v5.004：私密房 (visible === false) 不出現在大廳列表，只能透過房號加入
+          if (r.visible === false) return false;
           return true;
         })
         .map(r => ({ ...(r as unknown as RoomData), roomId: r._id }) as Room);
