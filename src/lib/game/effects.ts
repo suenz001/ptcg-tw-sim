@@ -2331,28 +2331,36 @@ reg('覺醒戰鼓', (st, idx, pool) => {
 //   sim/AI 端 fallback：若候選有多個（對手場上 active+bench 同時可進化），挑 active 為主。
 regG('賽吉', (st, idx, pool) => {
   if (st.players[idx].deck.length === 0) return false;
-  // 場上至少要有 1 隻「無特性」可被進化的寶可夢（active+bench）
-  // v4.976: 卡面寫「擁有特性的寶可夢除外」— gate 必須濾掉有特性的目標
-  const all = [st.players[idx].active, ...st.players[idx].bench].filter((c): c is CardInstance => !!c);
-  return all.some(c => {
+  // v4.977 修正方向：「擁有特性的寶可夢除外」是指**進化卡（牌庫拿的那張）**不能有特性，
+  //   非場上要被進化的目標。Gate：場上至少 1 隻寶可夢 + 牌庫至少 1 張「對應前階在場上
+  //   + 自身無特性」的進化卡。
+  const player = st.players[idx];
+  const all = [player.active, ...player.bench].filter((c): c is CardInstance => !!c);
+  if (all.length === 0) return false;
+  const ownNames = new Set(all.map(c => pool.get(c.cardId)?.name ?? ''));
+  return player.deck.some(c => {
     const card = pool.get(c.cardId);
-    return !(card?.abilities && card.abilities.length > 0);
+    if (!card?.evolvesFrom) return false;
+    if (!ownNames.has(card.evolvesFrom)) return false;
+    // 進化卡本身不能有特性
+    if (card.abilities && card.abilities.length > 0) return false;
+    return true;
   });
 });
 reg('賽吉', (st, idx, pool) => {
   const player = st.players[idx];
   const all = [player.active, ...player.bench].filter((c): c is CardInstance => !!c);
-  // v4.976: 「擁有特性的寶可夢除外」— 先過濾掉有特性的目標，再算 ownNames
-  const evolvableTargets = all.filter(c => {
-    const card = pool.get(c.cardId);
-    return !(card?.abilities && card.abilities.length > 0);
-  });
-  const ownNames = new Set(evolvableTargets.map(c => pool.get(c.cardId)?.name ?? ''));
-  // filter 用 'Evolution'（已支援）— 但要再 narrow 為「前階在場上（且該前階無特性）」
-  // 實作：只列出可實際進化的候選 iid；params.validIids 也餵給 picker UI（v4.976 後）
+  // v4.977 修正：場上目標可有特性（卡面限制的是**進化卡本身**，不是場上目標）
+  const ownNames = new Set(all.map(c => pool.get(c.cardId)?.name ?? ''));
+  // filter 用 'Evolution'（已支援）+ params.validIids 餵給 picker UI 做 intersect。
+  // validIids 算法：「進化卡 evolvesFrom 在 ownNames + 進化卡自身 abilities 為空」
   const validIids = player.deck.filter(c => {
     const card = pool.get(c.cardId);
-    return !!card?.evolvesFrom && ownNames.has(card.evolvesFrom);
+    if (!card?.evolvesFrom) return false;
+    if (!ownNames.has(card.evolvesFrom)) return false;
+    // v4.977: 卡面「擁有特性的寶可夢除外」— 進化卡自身不能有特性
+    if (card.abilities && card.abilities.length > 0) return false;
+    return true;
   }).map(c => c.iid);
   
   if (validIids.length === 0) {

@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.977</span> 🔧 hotfix — v4.976 賽吉 ability filter 套錯方向</summary>
+        <ul>
+          <li><b>玩家糾正</b>：卡面「擁有特性的寶可夢除外」是指<b>從牌庫拿的進化卡本身不能有特性</b>，不是場上要被進化的目標。</li>
+          <li><b>v4.976 錯在哪</b>：把 filter 套在場上目標（active+bench）上 → 場上有特性的寶可夢（多數 ex）變得無法被進化（錯誤）；牌庫中有特性的進化卡仍可被選（錯誤）。</li>
+          <li><b>修</b>：reg 計算 validIids 時，加 <code>card.abilities</code> 為空的 filter（針對進化卡本身）；ownNames 不再過濾場上目標。regG 同步：場上有寶可夢 + 牌庫有「對應前階在場上 + 自身無特性」的進化卡 才允許 play。</li>
+          <li><b>picker UI</b>：v4.976 已正確 wire validIids，validIids 計算修正後 picker 會自動只顯示「場上可進化 + 自身無特性」的進化卡。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.976</span> 🛠️ 修 鐵螯龍蝦｜反撲剪 cost reduction + 賽吉 兩個 bugs</summary>
         <ul>
           <li><b>鐵螯龍蝦｜反撲剪</b>：卡面「若這隻寶可夢身上放置有傷害指示物，則這個招式只需要 1 個【惡】能量即可使用」沒實裝（原本只實作 130 傷害）。仿 v2.161 八爪武師｜觸手激怒 pattern 加 cost reduction helper，掛進 canAffordAttack chain。</li>
