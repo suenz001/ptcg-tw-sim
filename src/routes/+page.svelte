@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.995</span> 🫧 修泡沫【水】能量免疫範圍 — 全 5 種特殊狀態（不只灼傷+中毒）</summary>
+        <ul>
+          <li><b>玩家回報</b>：泡沫【水】能量附在【水】寶可夢身上仍會陷入特殊狀態。</li>
+          <li><b>Root cause</b>：實裝的 SPECIAL_ENERGY_STATUS_IMMUNE 註冊只回傳「灼傷+中毒」兩種狀態的 set，但卡面實際是「不會陷入特殊狀態」(全 5 種免疫)。玩家附泡沫後仍被睡眠/混亂/麻痺擊中。</li>
+          <li><b>修</b>：set 改成 5 種全擋（poisoned, burned, asleep, confused, paralyzed）。statusPost / coinStatusPost / 多數招式 path 自動受益。</li>
+          <li><b>後續工作</b>：卡面後半「將受到的特殊狀態全部恢復」(on-attach 全清) 暫未實裝；另約 20 處直接 set status 沒過 immunity gate 的散落位置 (主要是熔岩地域 / 漩渦言靈 / 一些攻擊招式) 也留 v4.996+ audit。本 push 已 cover statusPost path 主流 case。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.994</span> 📂 恢復預組下拉選項 — 本機 + 線上對戰都加</summary>
         <ul>
           <li><b>玩家回饋</b>：v4.986 完全移除預組下拉太激進，仍有玩家想直接用預組對戰。</li>

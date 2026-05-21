@@ -124,12 +124,15 @@ SPECIAL_ENERGY_ON_DAMAGED.set('扣殺能量', (state, dIdx, aIdx, _damage, _pool
 });
 
 // ── 泡沫【水】能量（Special Energy） ──────────────────────────────────────────
-// 卡面：提供 1 個【水】能量。只要這張卡附於【水】寶可夢身上，
-//   該寶可夢不會受到「灼傷」「中毒」的影響。
+// 卡面（M4.json + 官網 https://asia.pokemon-card.com/tw/card-search/detail/18502/）：
+//   「附有這張卡的【水】寶可夢不會陷入特殊狀態，並將受到的特殊狀態全部恢復。」
 // Hook：SPECIAL_ENERGY_STATUS_IMMUNE（engine 在施加狀態時若 holder 命中則略過）。
-// 註：engine 目前已在 SPECIAL_CONDITION 施加路徑檢查此 map（v2.175）。
+// v4.995 修：之前只回 {poisoned, burned} 兩種，違背卡面（應全 5 種特殊狀態都免疫）。
+//   玩家回報「附泡沫後仍被睡眠 / 混亂 / 麻痺」是這個 bug 的直接結果。
+// 註：卡面後半「將受到的特殊狀態全部恢復」(on-attach 全清) 仍待實裝，
+//   要在 ATTACH_ENERGY handler 後加 clearSpecialEnergyProtectedStatuses helper（v4.996+）。
 SPECIAL_ENERGY_STATUS_IMMUNE.set('泡沫【水】能量', (holder) => {
   if (holder.pokemonType !== 'Water') return new Set<SpecialCondition>();
-  return new Set<SpecialCondition>(['poisoned', 'burned']);
+  return new Set<SpecialCondition>(['poisoned', 'burned', 'asleep', 'confused', 'paralyzed']);
 });
 
