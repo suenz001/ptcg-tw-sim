@@ -1989,6 +1989,53 @@ export function clearFestivalVenueProtectedStatuses(
   return changed ? { ...state, players } : state;
 }
 
+/** v4.996: 附特殊能量後若 holder 被 SPECIAL_ENERGY_STATUS_IMMUNE 命中，
+ *  清掉身上已有的 status / secondaryStatus（卡面後半句「全部恢復」）。
+ *  類似 clearFestivalVenueProtectedStatuses 但 holder-scoped（per-Pokemon 的能量決定）。
+ *  Usage: 在 ATTACH_ENERGY handler 跑完所有 hook 後呼叫一次 sweep 自方場面。
+ */
+export function clearSpecialEnergyProtectedStatuses(
+  state: GameState,
+  idx: 0 | 1,
+  pool: Map<string, Card>,
+): GameState {
+  const player = state.players[idx];
+  let changed = false;
+
+  function cleanInst(inst: CardInstance | null): CardInstance | null {
+    if (!inst) return inst;
+    const holderCard = pool.get(inst.cardId);
+    if (!holderCard) return inst;
+    const immuneSet = new Set<SpecialCondition>();
+    for (const e of inst.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (!ec) continue;
+      const fn = SPECIAL_ENERGY_STATUS_IMMUNE.get(ec.name);
+      if (!fn) continue;
+      for (const s of fn(holderCard)) immuneSet.add(s);
+    }
+    if (immuneSet.size === 0) return inst;
+    let result = inst;
+    if (inst.status && immuneSet.has(inst.status as SpecialCondition)) {
+      result = { ...result, status: undefined };
+      changed = true;
+    }
+    if (inst.secondaryStatus && immuneSet.has(inst.secondaryStatus as SpecialCondition)) {
+      result = { ...result, secondaryStatus: undefined };
+      changed = true;
+    }
+    return result;
+  }
+
+  const newActive = cleanInst(player.active);
+  const newBench = player.bench.map(cleanInst).filter((c): c is CardInstance => !!c);
+
+  if (!changed) return state;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[idx] = { ...player, active: newActive, bench: newBench };
+  return { ...state, players };
+}
+
 /** 讓對手戰鬥寶可夢陷入指定狀態的 POST effect */
 /**
  * v4.965：套用新狀態到 active 寶可夢，正確處理 status / secondaryStatus 兩格。

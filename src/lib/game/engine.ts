@@ -32,6 +32,7 @@ import {
   OPP_ENERGY_ATTACH_PASSIVE,
   clearActiveEffects,
   clearFestivalVenueProtectedStatuses,
+  clearSpecialEnergyProtectedStatuses,
   hasFairyZoneField,
   applyBenchPlaceSideEffects,
   getKyuremElectroplasmaEffectiveCost,
@@ -3390,6 +3391,8 @@ function handlePlaying(
           `「自動治癒」啟動：${targetCardName} 恢復 ${healAmt} HP`, aIdx);
       }
     }
+    // v4.996: 先 sweep 自方場面清除「附泡沫【水】能量後身上既有特殊狀態」（卡面後半句）
+    afterAttach = clearSpecialEnergyProtectedStatuses(afterAttach, aIdx, pool);
     return clearFestivalVenueProtectedStatuses(afterAttach, pool);
   }
 

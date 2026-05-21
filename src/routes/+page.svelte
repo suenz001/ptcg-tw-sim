@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.996</span> 🫧 泡沫【水】能量完整實裝 — on-attach 全清既有狀態</summary>
+        <ul>
+          <li><b>承接 v4.995</b>：上次只 cover「附泡沫後不會再陷入特殊狀態」，本次補上卡面後半句「將受到的特殊狀態全部恢復」— 附泡沫當下立刻清掉身上已有的狀態。</li>
+          <li><b>實作</b>：effects.ts 新增 <code>clearSpecialEnergyProtectedStatuses(state, idx, pool)</code> helper（仿祭典會場 stadium-scoped 模式，但改 holder-scoped）— 對自方 active + bench 每隻 sweep，依身上能量決定的 immuneSet 清掉 status / secondaryStatus。engine.ts ATTACH_ENERGY handler 結尾呼叫此 helper。</li>
+          <li><b>玩家體驗</b>：寶可夢已被附特殊狀態（睡眠 / 中毒 / 灼傷 / 混亂 / 麻痺），打出泡沫【水】能量並附給該寶可夢 → 狀態立刻清空。配 v4.995 全 5 種免疫，達成卡面完整語意。</li>
+          <li><b>仍未動的部分</b>：約 15 處招式 / Stadium 進場效果直接 set status 沒過 immunity gate（熔岩地域 / 漩渦言靈 / 一些攻擊招式）— 數量多風險高，留 v4.997+ audit。本次主流情境已 cover。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.995</span> 🫧 修泡沫【水】能量免疫範圍 — 全 5 種特殊狀態（不只灼傷+中毒）</summary>
         <ul>
           <li><b>玩家回報</b>：泡沫【水】能量附在【水】寶可夢身上仍會陷入特殊狀態。</li>
