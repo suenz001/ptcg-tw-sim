@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.997</span> 🐛 修感應【超】能量 / 好友寶芬 等從牌庫拉寶可夢一上場被 KO bug</summary>
+        <ul>
+          <li><b>玩家回報</b>：感應【超】能量觸發後從牌庫選破破舵輪到備戰區，剛放上就被「系統擊倒檢查」判定昏厥（傷害 200/240 ≥ HP 140），對手白賺 2 張獎勵牌。</li>
+          <li><b>Root cause</b>：bench-basic-from-deck 跟 bench-named-basic-from-deck 兩個 resolver（好友寶芬 / 赫普的包包 / 感應【超】能量 / 赫普 prefix 系列共用）把 deck 內 inst 拉到 bench 時只 set <code>justPlaced: true</code>，<b>沒重置</b> damage / status / 能量 / 道具 / 進化棧。如果 deck 內某 inst 因某 path 殘留 damage（罕見但顯然會發生），新放上 bench 直接被 sanityKOSweep 判 KO。</li>
+          <li><b>修法</b>：兩個 resolver 內 spread 時強制 reset 所有 fresh-state fields（仿寶可夢旋風回收機 mainBare 模式）— damage=0、status/secondaryStatus/toolAttached/evolvedFromStack 全清。新從 deck 拉出來的寶可夢一律是乾淨狀態。</li>
+          <li><b>影響卡片</b>：好友寶芬 / 赫普的包包 / 感應【超】能量 / 赫普 prefix 訓練家系列 — 都用同一個 resolver，本次一起修。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.996</span> 🫧 泡沫【水】能量完整實裝 — on-attach 全清既有狀態</summary>
         <ul>
           <li><b>承接 v4.995</b>：上次只 cover「附泡沫後不會再陷入特殊狀態」，本次補上卡面後半句「將受到的特殊狀態全部恢復」— 附泡沫當下立刻清掉身上已有的狀態。</li>

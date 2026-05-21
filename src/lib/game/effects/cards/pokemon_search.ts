@@ -91,7 +91,21 @@ regR('bench-named-basic-from-deck', (st, idx, iids, params, pool) => {
   st = updatePlayer(st, idx, (p) => {
     const selected = p.deck
       .filter(c => validIids.includes(c.iid))
-      .map(c => ({ ...c, justPlaced: true }));
+      // v4.997: 防禦性 fresh-state reset — 從 deck 拿出來放 bench 的 inst 應該是
+      //   乾淨狀態，避免某 path 殘留 damage / status / 能量導致新寶可夢上場立即被 KO
+      //   （玩家回報感應【超】能量 拉破破舵輪 被 sanityKOSweep 判 damage 200 ≥ HP 140）
+      .map(c => ({
+        ...c,
+        justPlaced: true,
+        damage: 0,
+        status: undefined,
+        secondaryStatus: undefined,
+        energyAttached: [],
+        toolAttached: undefined,
+        extraTools: [],
+        evolvedFromStack: undefined,
+        evolvedThisTurn: undefined,
+      }));
     const remaining = p.deck.filter(c => !validIids.includes(c.iid));
     // v3.78：用 getOwnBenchLimit
     const bench = [...p.bench, ...selected].slice(0, getOwnBenchLimit(st, idx, pool));
@@ -124,7 +138,21 @@ regR('bench-basic-from-deck', (st, idx, iids, params, pool) => {
   st = updatePlayer(st, idx, (p) => {
     const selected = p.deck
       .filter(c => effIids.includes(c.iid))
-      .map(c => ({ ...c, justPlaced: true }));
+      // v4.997: 防禦性 fresh-state reset — 從 deck 拿出來放 bench 的 inst 應該是
+      //   乾淨狀態，避免某 path 殘留 damage / status / 能量導致新寶可夢上場立即被 KO
+      //   （玩家回報感應【超】能量 拉破破舵輪 被 sanityKOSweep 判 damage 200 ≥ HP 140）
+      .map(c => ({
+        ...c,
+        justPlaced: true,
+        damage: 0,
+        status: undefined,
+        secondaryStatus: undefined,
+        energyAttached: [],
+        toolAttached: undefined,
+        extraTools: [],
+        evolvedFromStack: undefined,
+        evolvedThisTurn: undefined,
+      }));
     const remaining = p.deck.filter(c => !effIids.includes(c.iid));
     // v3.78：用 getOwnBenchLimit 支援零之大空洞（5→8 格）
     const bench = [...p.bench, ...selected].slice(0, getOwnBenchLimit(st, idx, pool));
