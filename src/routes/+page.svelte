@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.001</span> 🔀 修進化鏈搜尋把訓練家冠名與一般寶可夢混一起</summary>
+        <ul>
+          <li><b>玩家回報</b>：點開「鐵啞鈴」卡牌詳細資料看進化鏈，「大吾的鐵啞鈴 → 大吾的金屬怪 → 大吾的巨金怪ex」也被列在「鐵啞鈴 → 金屬怪 → 巨金怪」同一條鏈裡。</li>
+          <li><b>規則</b>：PTCG 把「訓練家冠名」（大吾的XX / 火箭隊的XX / 莉莉艾的XX 等）視為獨立卡名 + 獨立進化鏈，跟普通版完全無關。</li>
+          <li><b>Root cause</b>：evolutionChain helper 用 <code>name.includes(query)</code> 找 seeds，「鐵啞鈴」query 同時 match「鐵啞鈴」+「大吾的鐵啞鈴」兩個 seed → 兩條鏈各自 BFS 後合併到同一個結果。</li>
+          <li><b>修法</b>：seed search 改用 <code>startsWith</code> — 「鐵啞鈴」只 match 自己開頭的卡（不含「大吾的」前綴），「大吾的鐵啞鈴」只 match「大吾的」開頭的。兩條鏈天然完全隔離。</li>
+          <li><b>不影響</b>：「甲賀忍蛙」query 仍能 match「甲賀忍蛙ex」（startsWith 成立）；「超級甲賀忍蛙ex」雖不直接 match，但 BFS 從「呱頭蛙」root 走 evolvesFrom 仍會找到它，整條鏈完整列出。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.000</span> 🎉 邁入 5.0 — nav 按鈕完整放 modal 內側</summary>
         <ul>
           <li><b>玩家回報</b>：v4.999 加 overflow-x: hidden 後，左右翻 nav 按鈕用 transform 偏移到 modal 邊緣造成外側半圓被切掉。</li>

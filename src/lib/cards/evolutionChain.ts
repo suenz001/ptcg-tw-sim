@@ -18,8 +18,14 @@ export function getEvolutionChainNames(query: string, pool: Card[]): Set<string>
   const q = query.trim().toLowerCase();
   if (!q || pool.length === 0) return new Set<string>();
 
-  // Step 1: seeds — 名字含 query 的卡
-  const seeds = pool.filter(c => c.supertype === 'Pokemon' && c.name.toLowerCase().includes(q));
+  // Step 1: seeds — 名字以 query 開頭的卡
+  // v5.001 修：之前用 includes 會把「大吾的鐵啞鈴」也納入「鐵啞鈴」query 的 seed，
+  //   導致 訓練家冠名鏈 跟 一般鏈 混在一起。PTCG 規則上兩者是獨立卡名 + 獨立鏈。
+  //   改 startsWith 後：「鐵啞鈴」只 match 自己（不含「大吾的」prefix），
+  //   「大吾的鐵啞鈴」只 match「大吾的」prefix 的，兩條鏈天然隔離。
+  //   「甲賀忍蛙」query 仍能 match「甲賀忍蛙ex」(startsWith)；「超級甲賀忍蛙ex」雖不直接 match，
+  //   但 BFS 從「呱頭蛙」root 仍會找到它（它 evolvesFrom 呱頭蛙 = 普通鏈的 Stage1）。
+  const seeds = pool.filter(c => c.supertype === 'Pokemon' && c.name.toLowerCase().startsWith(q));
   if (seeds.length === 0) return new Set<string>();
 
   // name → Card[] 索引（多印刷 / ex 版本同名）
