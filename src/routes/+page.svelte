@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.993</span> 🔄 修 v4.992 新 icon iOS 主畫面看不到（cache 卡舊版）</summary>
+        <ul>
+          <li><b>玩家回報</b>：v4.992 換了新精靈球 icon，但 iOS 加入主畫面仍看到舊墨綠版。</li>
+          <li><b>Root cause</b>：iOS Safari 對 apple-touch-icon URL 有極頑固的 cache。binary 換了但 URL 沒變 → iOS 直接用 cached 舊版。</li>
+          <li><b>修法</b>：app.html 內 5 個 icon link tag URL + manifest.json icons.src 都加 <code>?v=4.993</code> query 強制 cache invalidation，URL 不同迫使 iOS / browser 重新 fetch。</li>
+          <li><b>使用方式</b>：iOS 主畫面舊 icon 先移除，再 Safari 開站 → 分享 → 加入主畫面，這次會看到新精靈球 icon。瀏覽器 favicon 也會在 reload 後更新。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.992</span> 🔴⚪ PWA icon 改精靈球紅白配色</summary>
         <ul>
           <li><b>需求</b>：app 圖示從原本墨綠底 + 金字 PTCG TW SIM 改成寶可夢經典精靈球紅白配色。</li>

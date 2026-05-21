@@ -31,11 +31,13 @@
     <meta name="apple-mobile-web-app-title" content="PTCG 演練" />
 
     <!-- v4.26 PWA — manifest + icons + theme color -->
-    <link rel="manifest" href="%sveltekit.assets%/manifest.json" />
-    <link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/icons/icon-180.png" />
-    <link rel="icon" type="image/png" sizes="32x32" href="%sveltekit.assets%/icons/icon-32.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="%sveltekit.assets%/icons/icon-192.png" />
-    <link rel="icon" type="image/png" sizes="512x512" href="%sveltekit.assets%/icons/icon-512.png" />
+    <!-- v4.993: icon URL 加 ?v= 強制 cache-busting — iOS Safari 對 apple-touch-icon URL
+         有極頑固的 cache，binary 換了但 URL 沒換會用 cached 舊版。換 icon 時要 bump 數字。 -->
+    <link rel="manifest" href="%sveltekit.assets%/manifest.json?v=4.993" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/icons/icon-180.png?v=4.993" />
+    <link rel="icon" type="image/png" sizes="32x32" href="%sveltekit.assets%/icons/icon-32.png?v=4.993" />
+    <link rel="icon" type="image/png" sizes="192x192" href="%sveltekit.assets%/icons/icon-192.png?v=4.993" />
+    <link rel="icon" type="image/png" sizes="512x512" href="%sveltekit.assets%/icons/icon-512.png?v=4.993" />
     <meta name="theme-color" content="#1e3a20" />
 
     %sveltekit.head%
