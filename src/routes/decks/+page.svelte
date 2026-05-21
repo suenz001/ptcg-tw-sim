@@ -2902,10 +2902,10 @@
     gap: 0.6rem;
   }
   /* v4.989: 左右導航 + 同名變體 counter */
+  /* v4.998: 改用 transform 偏移 — 不影響 parent overflow extent，消除水平 scrollbar */
   .pv-nav {
     position: absolute;
     top: 50%;
-    transform: translateY(-50%);
     width: 42px;
     height: 42px;
     border-radius: 50%;
@@ -2924,8 +2924,8 @@
     line-height: 1;
   }
   .pv-nav:hover { background: #e7eef8; }
-  .pv-nav-prev { left: -22px; }
-  .pv-nav-next { right: -22px; }
+  .pv-nav-prev { left: 0; transform: translate(-50%, -50%); }
+  .pv-nav-next { right: 0; transform: translate(50%, -50%); }
   .pv-variant-counter {
     position: absolute;
     top: 0.6rem;
@@ -2954,8 +2954,9 @@
   .pv-top-count-label { flex: 1; color: #2a4a78; }
   /* 手機板：左右 nav 改放 modal 內部邊緣 */
   @media (max-width: 600px) {
-    .pv-nav-prev { left: 0.3rem; }
-    .pv-nav-next { right: 0.3rem; }
+    /* v4.998: 手機板維持 modal 內側放置 */
+    .pv-nav-prev { left: 0.3rem; transform: translateY(-50%); }
+    .pv-nav-next { right: 0.3rem; transform: translateY(-50%); }
     .pv-nav { width: 36px; height: 36px; font-size: 1.4rem; }
   }
 

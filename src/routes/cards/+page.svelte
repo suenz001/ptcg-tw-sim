@@ -1185,10 +1185,10 @@
     font-family: system-ui, 'Microsoft JhengHei', sans-serif;
   }
   /* v4.989: 卡牌資料庫 modal 左右導航 + 同名變體 counter */
+  /* v4.998: 改用 transform 偏移 — 不影響 parent overflow extent，消除水平 scrollbar */
   .modal-nav {
     position: absolute;
     top: 50%;
-    transform: translateY(-50%);
     width: 42px;
     height: 42px;
     border-radius: 50%;
@@ -1207,8 +1207,8 @@
     line-height: 1;
   }
   .modal-nav:hover { background: rgba(255, 255, 255, 0.18); }
-  .modal-nav-prev { left: -22px; }
-  .modal-nav-next { right: -22px; }
+  .modal-nav-prev { left: 0; transform: translate(-50%, -50%); }
+  .modal-nav-next { right: 0; transform: translate(50%, -50%); }
   .modal-variant-counter {
     position: absolute;
     top: 0.6rem;
@@ -1224,8 +1224,9 @@
     white-space: nowrap;
   }
   @media (max-width: 600px) {
-    .modal-nav-prev { left: 0.3rem; }
-    .modal-nav-next { right: 0.3rem; }
+    /* v4.998: 手機板維持 modal 內側放置（按鈕完整顯示在 modal 內）*/
+    .modal-nav-prev { left: 0.3rem; transform: translateY(-50%); }
+    .modal-nav-next { right: 0.3rem; transform: translateY(-50%); }
     .modal-nav { width: 36px; height: 36px; font-size: 1.4rem; }
   }
 

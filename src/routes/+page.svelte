@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.998</span> 🧹 修桌機版 modal 多餘水平 scrollbar</summary>
+        <ul>
+          <li><b>玩家回報</b>：桌機網頁版卡牌詳細資料 modal 下方出現水平 scrollbar，但內容沒寬到需要 scroll。</li>
+          <li><b>Root cause</b>：v4.989 加左右翻按鈕用 <code>left: -22px / right: -22px</code> negative offset 把 absolute child 推到 modal 邊界外，瀏覽器自動把 modal 的 overflow-x 從 visible 升 auto → 產生 scrollbar。</li>
+          <li><b>修法</b>：改用 <code>transform: translate(±50%, -50%)</code> 把按鈕中心對齊 modal 邊緣 — transform 是 GPU 合成階段，不影響 parent 的 layout extent，scrollbar 消失但視覺完全一樣（按鈕仍是一半 in 一半 out）。</li>
+          <li><b>範圍</b>：cards 資料庫 .modal-nav + decks 編輯器 .pv-nav 兩處都修；手機板既有「按鈕完整放 modal 內側」邏輯維持不變。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.997</span> 🐛 修感應【超】能量 / 好友寶芬 等從牌庫拉寶可夢一上場被 KO bug</summary>
         <ul>
           <li><b>玩家回報</b>：感應【超】能量觸發後從牌庫選破破舵輪到備戰區，剛放上就被「系統擊倒檢查」判定昏厥（傷害 200/240 ≥ HP 140），對手白賺 2 張獎勵牌。</li>
