@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.975</span> 🛡️ 修飛翔 vs 分身連打 + 統一 active 招式傷害 gate</summary>
+        <ul>
+          <li><b>玩家回報</b>：喇叭啄鳥｜飛翔擲幣正面後（應免疫所有招式傷害），下回合仍會受到甲賀忍蛙ex｜分身連打的傷害。</li>
+          <li><b>根因</b>：分身連打走的是「多目標 resolver」(clone-strike-multi-hit，同 resolver 也被大吼大叫 / 三色炮共用)，這條 path 只 check 備戰守護，<b>完全沒檢 active 8 個免疫 flag</b>（飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 / 防護代碼 / 塗層攻擊）。</li>
+          <li><b>修法</b>：defense.ts 加 <code>resolveActiveAttackGuard</code> helper 集中這 8 個 flag check；統一入口 <code>canApplyEffectToTarget</code> 接通 — 任何招式傷害打 active 都會自動 check。clone-strike-multi-hit resolver 改用統一入口。</li>
+          <li><b>影響範圍</b>：同步修飛翔 vs（分身連打 / 大吼大叫 / 三色炮）3 個共用 resolver 招式。其他可能也漏 check 的多目標 resolver 留下次 audit migrate（Phase 2）。</li>
+          <li><b>架構決定</b>：engine.ts 主路徑（v2.x 累積長期 stable）暫不重構，本 helper 邏輯與主路徑一致即可。未來可考慮主路徑也呼叫此 helper（Phase 3）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.974</span> 📋 「匯出為官網代碼」改成 modal — 可直接複製代碼</summary>
         <ul>
           <li><b>玩家回報</b>：v4.973 匯出成功用 native <code>alert()</code> 顯示代碼，但 alert 內容不能選取/複製，等於是看得到拿不到。</li>

@@ -81,6 +81,9 @@ import type { DamageKind } from './effects';
 import {
   resolveBenchGuard,
   canApplyAttackEffectToTarget,
+  // v4.975: resolveActiveAttackGuard 內部需要這兩個 helper
+  wouldNeutralCenterBlock,
+  isRulePokemon,
 } from './effects';
 
 /** v4.5 統一 defense 入口的回傳型別 */
@@ -209,6 +212,114 @@ export function canApplyEffectToTarget(
     if (r.blocked) return r;
   }
 
+  // 4. v4.975：active target 招式傷害 — 統一 8 個 active-side immune flag
+  //    （飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 / 防護代碼 / 塗層攻擊）
+  //    僅在 isBench === false 時觸發（caller 明確指明 target 在 active）。
+  //    engine.ts 主路徑已 inline 跑這些 check（zero-behavior change 在那邊）；
+  //    本 step 是給多目標 resolver（如 clone-strike-multi-hit）統一用。
+  if (kind === 'attack-damage' && options?.isBench === false) {
+    const defenderSide = state.players[(1 - actorIdx) as 0 | 1];
+    // 防呆：caller 傳 isBench=false 但 target 已不在 active（例如 loop 中 active 被 KO）
+    if (defenderSide.active && defenderSide.active.iid === target.iid) {
+      const attackerInst = state.players[actorIdx].active;
+      const attackerCard = attackerInst ? pool.get(attackerInst.cardId) : undefined;
+      const r = resolveActiveAttackGuard(state, actorIdx, attackerCard, target, targetCard, pool);
+      if (r.blocked) return r;
+    }
+  }
+
+  return { blocked: false };
+}
+
+
+/**
+ * v4.975: 統一 active target 招式傷害守護 helper。
+ * 
+ * **為什麼需要**：engine.ts 主路徑（約 line 3870-4000）已 inline check 11 個 active-side
+ * immune flag（飛翔/要害斬/阿塞蘿拉/中立中心/精神防護/閃光屏障/熔岩之壁/防護代碼/
+ * 塗層攻擊/太鼓防壁/弱點失效），但**多目標 / snipe resolver**（如 clone-strike-multi-hit
+ * = 分身連打 / 大吼大叫 / 三色炮）完全繞過這段，導致玩家回報「飛翔正面後仍受分身連打傷害」bug。
+ * 
+ * 此 helper 集中這些 flag check，給多目標 resolver 用：
+ *   - 透過 canApplyEffectToTarget（kind='attack-damage' + isBench=false）自動呼叫
+ *   - 或直接呼叫（如果 caller 需要拆細 control flow）
+ * 
+ * **不取代 engine 主路徑** — engine 主路徑 v2.x 累積長期 stable，本 helper 邏輯一致即可
+ * （短期接受 code duplication 換取穩定性，未來 Phase 3 可重構主路徑也用此 helper）。
+ * 
+ * **太鼓防壁** 已在 canApplyEffectToTarget step 1d（attack-damage 全範圍）統一處理，
+ * 此 helper 不重複 check（避免 double-block）。
+ * 
+ * @param state 目前狀態（用於讀 attacker.status 判定灼傷）
+ * @param actorIdx 攻擊方 player index
+ * @param attackerCard 攻擊方寶可夢卡面 — 缺失時不擋（保守，e.g. 場地扣血類非招式來源）
+ * @param defender 受擊方 CardInstance（含 flag fields）
+ * @param defenderCard 受擊方卡面（用於中立中心 isRulePokemon 判定）
+ * @param pool 卡片 pool（用於中立中心 + 太鼓防壁查詢場地/特性）
+ */
+export function resolveActiveAttackGuard(
+  state: GameState,
+  actorIdx: 0 | 1,
+  attackerCard: Card | undefined,
+  defender: CardInstance,
+  defenderCard: Card | undefined,
+  pool: Map<string, Card>,
+): DefenseCheckResult {
+  // attackerCard 缺失（非招式來源 damage，如 場地扣血 / 中毒 tick）→ 不擋
+  if (!attackerCard) return { blocked: false };
+
+  // 1. 防護代碼（密勒頓）— defender 有 immuneToExAttackTag + attacker 是 ex + 有對應 tag
+  const exTag = defender.immuneToExAttackTagThisTurn;
+  if (exTag && isRulePokemon(attackerCard) && attackerCard.tags?.includes(exTag)) {
+    return { blocked: true, reason: `防護代碼免疫帶「${exTag}」tag 的 ex 招式傷害` };
+  }
+
+  // 2. 塗層攻擊（鋁鋼橋龍）— 不受【基礎】寶可夢招式
+  if (defender.immuneToBasicAttackThisTurn) {
+    const stage = attackerCard.stage ?? attackerCard.subtype;
+    if (stage === 'Basic') {
+      return { blocked: true, reason: '塗層攻擊免疫【基礎】寶可夢招式傷害' };
+    }
+  }
+
+  // 3. 阿塞蘿拉的惡作劇 — 不受 ex 招式（卡面同時涵蓋傷害+效果；本 helper 只負責傷害部分）
+  if (defender.immuneToExAttackThisTurn && isRulePokemon(attackerCard)) {
+    return { blocked: true, reason: '阿塞蘿拉的惡作劇免疫 ex 招式傷害' };
+  }
+
+  // 4. 中立中心競技場 — 非規則 defender 不受對手 ex/V 招式
+  if (wouldNeutralCenterBlock(state, pool, attackerCard, defenderCard)) {
+    return { blocked: true, reason: '中立中心競技場免疫規則寶可夢招式傷害' };
+  }
+
+  // 5. 精神防護（代歐奇希斯）— 不受擁有特性的寶可夢招式（attacker 有 abilities 陣列非空）
+  if (defender.immuneToAbilityPokemonThisTurn && attackerCard.abilities && attackerCard.abilities.length > 0) {
+    return { blocked: true, reason: '精神防護免疫擁有特性的寶可夢招式傷害' };
+  }
+
+  // 6. 要害斬（具甲武者）/ 飛翔（喇叭啄鳥）等 — 完全免疫（傷害+效果）
+  if (defender.immuneToAllAttackThisTurn) {
+    return { blocked: true, reason: '完全免疫招式（要害斬 / 飛翔 等效果）' };
+  }
+
+  // 7. 閃光屏障（雷電獸 M5）— 不受進化寶可夢招式
+  if (defender.immuneToEvolutionAttackThisTurn) {
+    const stage = attackerCard.stage ?? attackerCard.subtype;
+    const isEvo = stage === 'Stage1' || stage === 'Stage2' || !!attackerCard.evolvesFrom;
+    if (isEvo) {
+      return { blocked: true, reason: '閃光屏障免疫進化寶可夢招式傷害' };
+    }
+  }
+
+  // 8. 熔岩之壁（席多藍恩 M5）— 不受【灼傷】attacker 招式
+  if (defender.immuneToBurnedAttackerThisTurn) {
+    const attacker = state.players[actorIdx].active;
+    if (attacker && (attacker.status === 'burned' || attacker.secondaryStatus === 'burned')) {
+      return { blocked: true, reason: '熔岩之壁免疫【灼傷】寶可夢招式傷害' };
+    }
+  }
+
+  // 注意：太鼓防壁（active path）由 canApplyEffectToTarget step 1d 統一處理（全 attack-damage 範圍）
   return { blocked: false };
 }
 

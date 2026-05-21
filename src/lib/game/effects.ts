@@ -12502,13 +12502,14 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
     const target = isActive ? defender.active! : defender.bench.find(c => c.iid === iid);
     if (!target) continue;
     const targetCard = pool.get(target.cardId);
-    // 備戰區守護：對戰圓形 / 花之帷幔 等
-    if (!isActive) {
-      const g = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-damage');
-      if (g.blocked) {
-        s = addLog(s, `${label}：${targetCard?.name ?? '?'} 因${g.reason}不受傷害`, actorIdx);
-        continue;
-      }
+    // v4.975: 統一守護 — active + bench 都過 canApplyEffectToTarget
+    //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等（同 v2.129 原行為）
+    //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 等
+    //   （v4.975 新增；之前只查 bench 路徑導致 ex.g. 飛翔擋不住分身連打 bug）
+    const guard = canApplyEffectToTarget(s, actorIdx, target, targetCard, 'attack-damage', pool, { isBench: !isActive });
+    if (guard.blocked) {
+      s = addLog(s, `${label}：${targetCard?.name ?? '?'} 因${guard.reason}不受傷害`, actorIdx);
+      continue;
     }
     // 戰鬥場：套用弱點 ×2；備戰位：不計弱抗（卡面明示）
     let dmg = baseDmg;
