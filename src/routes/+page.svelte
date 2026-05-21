@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.994</span> 📂 恢復預組下拉選項 — 本機 + 線上對戰都加</summary>
+        <ul>
+          <li><b>玩家回饋</b>：v4.986 完全移除預組下拉太激進，仍有玩家想直接用預組對戰。</li>
+          <li><b>修法</b>：恢復 v4.985 toggle 方式 — 對戰 lobby 加「📂 在下拉選單顯示內建預組」checkbox，預設關閉（保持下拉乾淨），玩家想用預組時打勾即可顯示。</li>
+          <li><b>本機 + 線上都有</b>：本機雙人對戰 lobby 頂部 + 線上對戰房間（spectator toggle 旁）都加上 — v4.985 漏網的線上對戰這次補上，無論玩家在哪種對戰模式都能切換。</li>
+          <li><b>說明</b>：toggle 是該頁面 session 一次性設定，不會持久化；reload 後恢復預設關閉。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.993</span> 🔄 修 v4.992 新 icon iOS 主畫面看不到（cache 卡舊版）</summary>
         <ul>
           <li><b>玩家回報</b>：v4.992 換了新精靈球 icon，但 iOS 加入主畫面仍看到舊墨綠版。</li>

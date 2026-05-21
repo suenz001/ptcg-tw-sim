@@ -90,6 +90,8 @@
   let p1DeckId = $state('');
   let p2DeckId = $state('');
   let p1Name = $state('玩家 1');
+  // v4.994: 下拉內是否顯示內建預組 optgroup — 預設關閉，玩家需要時打勾顯示
+  let showPresetDecksInDropdown = $state(false);
   let p2Name = $state('AI 對手');
   // v3.75：本機/AI 模式先後攻偏好（贏擲幣時生效；AI 模式直接生效）
   let p1FirstPref = $state<'random' | 'first' | 'second'>('random');
@@ -4731,6 +4733,11 @@
     {/if}
     <h1>🖥️ 本機雙人對戰</h1>
     <p class="lobby-subtitle">遊戲開始時會擲硬幣決定先後手</p>
+    <!-- v4.994: 預組 toggle — 預設關閉，玩家需要時打勾顯示 -->
+    <label class="preset-toggle-row">
+      <input type="checkbox" bind:checked={showPresetDecksInDropdown} />
+      <span>📂 在下拉選單顯示內建預組</span>
+    </label>
     <div class="player-setup">
       <div class="setup-card">
         <h2>玩家 1</h2>
@@ -4740,6 +4747,10 @@
           <option value="__random__" disabled={decks.length === 0}>🎲 隨機牌組（從「我的牌組」抽選）{decks.length === 0 ? '— 尚無我的牌組' : ''}</option>
           {#if decks.length > 0}
             <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+          {/if}
+          <!-- v4.994: 預組 optgroup（toggle 控制） -->
+          {#if PRESET_DECKS.length > 0 && showPresetDecksInDropdown}
+            <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
         </select>
         {#if p1DeckId}
@@ -4780,6 +4791,10 @@
           <option value="__random__" disabled={decks.length === 0}>🎲 隨機牌組（從「我的牌組」抽選）{decks.length === 0 ? '— 尚無我的牌組' : ''}</option>
           {#if decks.length > 0}
             <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+          {/if}
+          <!-- v4.994: 預組 optgroup（toggle 控制） -->
+          {#if PRESET_DECKS.length > 0 && showPresetDecksInDropdown}
+            <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
         </select>
         {#if p2DeckId}
@@ -4968,6 +4983,11 @@
               <span>✅ 允許觀戰（讓其他玩家在大廳的「對戰中房間」看到此房）</span>
             </label>
           </div>
+          <!-- v4.994: 線上對戰也加預組 toggle（同本機 lobby）-->
+          <label class="preset-toggle-row">
+            <input type="checkbox" bind:checked={showPresetDecksInDropdown} />
+            <span>📂 在下拉選單顯示內建預組</span>
+          </label>
         {/if}
 
         <!-- v2.73 殭屍房警示 + 解散按鈕 -->
@@ -5007,6 +5027,10 @@
                         <option value="__random__" disabled={decks.length === 0}>🎲 隨機牌組（從「我的牌組」抽選）{decks.length === 0 ? '— 尚無我的牌組' : ''}</option>
                         {#if decks.length > 0}
                           <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                        {/if}
+                        <!-- v4.994: 預組 optgroup（toggle 控制） -->
+                        {#if PRESET_DECKS.length > 0 && showPresetDecksInDropdown}
+                          <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
                         {/if}
                       </select>
                       {#if hasValidDeck}
@@ -7632,6 +7656,22 @@
   .mode-badge{ position:absolute; top:0.6rem; right:0.6rem; background:#2a5aaa; color:#adf; font-size:0.65rem; font-weight:700; padding:0.15rem 0.4rem; border-radius:10px; }
 
   /* 本機 Lobby */
+  /* v4.994: 預組 toggle 樣式（本機 + 線上對戰共用） */
+  .preset-toggle-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.5rem 0 0;
+    padding: 0.4rem 0.7rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid #3a5a3a;
+    border-radius: 6px;
+    color: #aaccaa;
+    font-size: 0.85rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  .preset-toggle-row input { accent-color: #8a4aee; cursor: pointer; }
   .player-setup{ display:grid; grid-template-columns:1fr auto 1fr; gap:1rem; align-items:center; margin:1.5rem 0; }
   .setup-card{ background:#2a3a2a; border:1px solid #3a5a3a; border-radius:10px; padding:1rem; display:flex; flex-direction:column; gap:0.6rem; }
   .setup-card h2{ margin:0; font-size:1rem; color:#aaffaa; }
