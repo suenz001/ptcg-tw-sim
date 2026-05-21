@@ -1462,6 +1462,7 @@
           </select>
         </div>
         <div class="pk-chip-row" role="group" aria-label="分類">
+          <span class="pk-label">分類：</span>
           <button class="pk-chip" class:active={selectedCategories.size === 0}
             onclick={clearCategories}>全部</button>
           {#each CATEGORY_ORDER as cat (cat)}
@@ -1964,23 +1965,39 @@
     border-radius: 8px;
     padding: 0.75rem;
   }
+  /* v4.982: rail-head 改 column — label 一行 + 按鈕區一行；按鈕用 grid 3 cols 滿寬等高 */
   .rail-head {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+    margin-bottom: 0.55rem;
+  }
+  .rail-head > strong {
+    font-size: 0.95rem;
+    color: #374151;
   }
   .rail-actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 0.3rem;
-    flex-wrap: wrap;
+  }
+  .rail-actions > button {
+    width: 100%;
+    text-align: center;
+    padding: 0.4rem 0.3rem;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    box-sizing: border-box;
   }
   .cloud-btn {
     background: #0066cc !important;
     color: #fff !important;
+    border-color: #0066cc !important;
   }
   .cloud-btn:hover {
     background: #0052a3 !important;
+    border-color: #0052a3 !important;
   }
   .deck-list {
     list-style: none;
@@ -2006,9 +2023,12 @@
   .preset-badge { background:#d9aa4a; color:#fff; font-size:.72rem; font-weight:700; padding:.18rem .45rem; border-radius:4px; white-space:nowrap; }
   .deck-pick {
     flex: 1;
+    min-width: 0;  /* v4.982: 允許子元素 shrink → deck-name 才能 truncate */
     text-align: left;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
     background: transparent;
     border: none;
     padding: 0.4rem 0.5rem;
@@ -2018,10 +2038,18 @@
   }
   .deck-name {
     font-weight: 500;
+    /* v4.982: 長卡名（含預組「超級耿鬼ex（預組）」）truncate 防 wrap 兩行 */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
   }
   .deck-size {
     color: #888;
     font-size: 0.8rem;
+    flex-shrink: 0;  /* v4.982: 數字 60/60 不被 shrink */
+    white-space: nowrap;
   }
 
   /* Centre: deck detail */
@@ -2253,10 +2281,13 @@
     flex-wrap: wrap;
     align-items: center;
   }
+  /* v4.982: pk-label 固定寬度 + 右對齊 — 所有 chip row 的 label 起點對齊（分類/標籤/屬性/階段/賽季/卡包）*/
   .pk-label {
     color: #6b7280;
     font-size: 0.78rem;
-    margin-right: 0.1rem;
+    width: 3.2em;
+    text-align: right;
+    margin-right: 0.15rem;
     flex-shrink: 0;
   }
   .pk-chip {

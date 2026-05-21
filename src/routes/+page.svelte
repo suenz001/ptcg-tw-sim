@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v4.982</span> 🎨 牌組編輯器 — 左側 rail + 右側搜尋 panel 對齊整理</summary>
+        <ul>
+          <li><b>玩家回報</b>：左側「我的牌組」三個按鈕高度不一致；右側搜尋 panel 各 chip row label 起點不齊。</li>
+          <li><b>左側 rail</b>：rail-head 改 column 排列 — label 第一行、按鈕第二行 grid 3 欄等寬等高；長卡名（含預組）自動 truncate 加 ellipsis 不再 wrap 成兩行。</li>
+          <li><b>右側搜尋</b>：pk-label 固定寬 3.2em + 右對齊，「標籤」「屬性」「階段」「賽季」「卡包」所有 label 起點對齊；補上之前漏的「分類：」label，所有 chip row 視覺整齊。</li>
+          <li><b>不動</b>：搜尋邏輯 / chip 行為 / 牌組功能，純佈局與對齊改動。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v4.981</span> 🎨 牌組編輯器表頭整理 — grid 佈局 + 手機板 2 欄滿寬</summary>
         <ul>
           <li><b>玩家回報</b>：表頭凌亂 — 「9/60」垂直大字佔位、按鈕高度不一致、寬度不夠時中文字被擠成垂直堆，視覺混亂。</li>
