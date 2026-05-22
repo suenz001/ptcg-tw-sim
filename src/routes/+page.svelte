@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.020</span> 🎨 桌墊版 — 附加卡片改用小卡圖重疊呈現（仿實體桌面）</summary>
+        <ul>
+          <li><b>玩家要求</b>：把附加在寶可夢身上的能量 / 道具 / 進化堆改用實體 TCG 桌面的「微微重疊小卡圖」呈現，取代原本的彩色 pip + 🔧 文字 chip。</li>
+          <li><b>實作</b>：(1) 加 <code>attachedCardsOf(inst)</code> helper 扁平化能量 + 道具 + extraTools + evolvedFromStack；(2) 4 處（雙方 active + bench）conditional render <code>.att-card-stack</code>；(3) CSS absolute 定位於卡片底部，flex 橫排 + <code>margin-left:-20px</code> 達 70% 重疊；(4) 不同 border 色區分能量 / 道具（金色） / 進化（藍色）。</li>
+          <li><b>scope</b>：純 <code>.playmat.layout-tabletop</code> scope + HTML 條件 <code>battleLayout==='tabletop'</code> 雙重 gate。桌機 classic 與手機 portrait 完全不受影響。</li>
+          <li><b>取代既有 UI</b>：桌墊版下舊 <code>.active-nrg-col</code> / <code>.bench-nrg</code> / <code>.tool-chip</code> 統一 <code>display:none</code>；狀態 chip / 特性已用 chip 保留。</li>
+          <li><b>互動性</b>：附加卡圖目前純展示（pointer-events:none），不影響既有 zoom-modal / 拖曳 / 特性按鈕 / 進化按鈕等操作。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline — +page.svelte 575KB 大檔，4 處 HTML 插入）／Rule 14（最小 patch — 純 HTML insert + helper + CSS，無 logic 改動）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.018</span> 🔧 修 超級快龍ex｜天空搬運 漏設 movedToActiveThisTurn — 疾風直撞 / 暴衝閃光 / 進擊破壞 換場後無法 +N</summary>
         <ul>
           <li><b>玩家回饋</b>：超級長耳兔ex 在戰鬥場、備戰區 2 隻 超級快龍ex，連續發動兩次「天空搬運」（互換 → 換回）後使用「疾風直撞」，結果只有 60 點（應為 60+170=230）。</li>

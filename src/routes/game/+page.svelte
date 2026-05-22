@@ -3110,6 +3110,17 @@
     }
     return cost;
   }
+  // v5.020 桌墊版 — 列出 inst 身上所有 attached cards（能量 / 道具 / 進化堆）扁平陣列。
+  // 用於 .att-card-stack 重疊呈現；kind 影響 border 顏色區分種類。
+  function attachedCardsOf(inst: CardInstance | null | undefined): Array<{ cardId: string; iid: string; kind: 'energy' | 'tool' | 'evo' }> {
+    if (!inst) return [];
+    const out: Array<{ cardId: string; iid: string; kind: 'energy' | 'tool' | 'evo' }> = [];
+    for (const e of inst.energyAttached) out.push({ cardId: e.cardId, iid: e.iid, kind: 'energy' });
+    if (inst.toolAttached) out.push({ cardId: inst.toolAttached.cardId, iid: inst.toolAttached.iid, kind: 'tool' });
+    for (const et of inst.extraTools ?? []) out.push({ cardId: et.cardId, iid: et.iid, kind: 'tool' });
+    for (const ev of inst.evolvedFromStack ?? []) out.push({ cardId: ev.cardId, iid: ev.iid, kind: 'evo' });
+    return out;
+  }
   function evoOptionsFor(fromIid: string): CardInstance[] {
     const entry = evolvableTargets.find(e => e.fromIid === fromIid);
     if (!entry || !myPlayer) return [];
@@ -5517,6 +5528,15 @@
                 <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
                 <div class="bench-middle">
                   <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>
+                  <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
+                  {#if battleLayout === 'tabletop'}
+                    {@const _attOB = attachedCardsOf(b)}
+                    {#if _attOB.length > 0}
+                      <div class="att-card-stack">
+                        {#each _attOB as itm (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                      </div>
+                    {/if}
+                  {/if}
                   {#if energyPips(b).length > 0}
                     <div class="bench-nrg">
                       {#each energyPips(b) as pip}
@@ -5564,6 +5584,15 @@
               out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
             >
               <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>
+              <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
+              {#if battleLayout === 'tabletop'}
+                {@const _attOA = attachedCardsOf(oppPlayer.active)}
+                {#if _attOA.length > 0}
+                  <div class="att-card-stack">
+                    {#each _attOA as itm (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                  </div>
+                {/if}
+              {/if}
               <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）
                    v2.53：無能量時不渲染（避免空欄佔寬度） -->
               {#if energyPips(oppPlayer.active).length > 0}
@@ -5829,6 +5858,15 @@
             <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
               onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}/>
+            <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
+            {#if battleLayout === 'tabletop'}
+              {@const _attMA = attachedCardsOf(myPlayer.active)}
+              {#if _attMA.length > 0}
+                <div class="att-card-stack">
+                  {#each _attMA as itm (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                </div>
+              {/if}
+            {/if}
             <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）
                  v2.53：無能量時不渲染（避免空欄佔寬度） -->
             {#if energyPips(myPlayer.active).length > 0}
@@ -5907,6 +5945,15 @@
                 <img src={bc?.imageUrl} alt={bc?.name}
                   class:zoomable={!selectedEnergyIid}
                   onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>
+                <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
+                {#if battleLayout === 'tabletop'}
+                  {@const _attMB = attachedCardsOf(b)}
+                  {#if _attMB.length > 0}
+                    <div class="att-card-stack">
+                      {#each _attMB as itm (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                    </div>
+                  {/if}
+                {/if}
                 {#if energyPips(b).length > 0}
                   <div class="bench-nrg">
                     {#each energyPips(b) as pip}
@@ -7974,6 +8021,33 @@
   /* v5.016：transform:scale 不影響 layout 框 → 浪費 72px 垂直空間（玩家回饋）。
      改用 zoom:0.65 — 同步縮 layout + 視覺 → grid row auto 直接縮到 ~133px，省去多餘空間。 */
   .playmat.layout-tabletop .zone-bench{ zoom:0.65; }
+
+  /* v5.020 桌墊版：附加卡片用小卡圖重疊呈現（能量 / 道具 / 進化堆）。
+     仿實體桌面 — 同類卡片靠 margin-left 負值微疊（70% 重疊率）。
+     僅 .playmat.layout-tabletop scope；桌機 classic + 手機 portrait 不受影響。 */
+  .playmat.layout-tabletop .active-card,
+  .playmat.layout-tabletop .bench-slot{ position:relative; }
+  .playmat.layout-tabletop .att-card-stack{
+    position:absolute; bottom:4px; left:50%; transform:translateX(-50%);
+    display:flex; align-items:flex-end; z-index:6;
+    pointer-events:none; max-width:92%; overflow:visible;
+  }
+  .playmat.layout-tabletop .att-card{
+    width:28px; height:40px; object-fit:cover;
+    margin-left:-20px; flex-shrink:0;
+    border:1px solid rgba(255,255,255,0.45);
+    border-radius:2px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.65);
+    background:#0a160a;
+  }
+  .playmat.layout-tabletop .att-card:first-child{ margin-left:0; }
+  .playmat.layout-tabletop .att-card.att-tool{ border-color:#d4a000; }
+  .playmat.layout-tabletop .att-card.att-evo{ border-color:#88aaff; opacity:0.88; }
+  /* 重疊呈現已取代舊 pip / chip — 在桌墊版隱藏原本 active-nrg-col / bench-nrg / tool-chip */
+  .playmat.layout-tabletop .active-card .active-nrg-col,
+  .playmat.layout-tabletop .bench-slot .bench-nrg,
+  .playmat.layout-tabletop .active-card .tool-chip,
+  .playmat.layout-tabletop .bench-slot .tool-chip{ display:none; }
 
   /* v5.016：隱藏戰鬥位上方的「撤退」按鈕 — 統一由左側 action-bar 的 .btn-retreat-mirror 操作，
      讓雙方 active 距離更近。:not(.btn-fossil-discard) 避免誤隱藏化石丟棄按鈕（共用 class）。 */
