@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.026</span> 🎨 桌墊版 — bench 改往上扇開 + 附加卡 hover 放大預覽</summary>
+        <ul>
+          <li><b>bench 方向改為往上</b>：之前往下扇開玩家覺得「沒疊到 + 方向錯」，改成往上扇開（負 top 值）— 附加卡 TOP 從寶可夢圖上緣往上一張一張露出。</li>
+          <li><b>offset 加大對抗 zoom:0.65</b>：bench offset 從 20px 加到 32px（後 zoom 視覺約 21px），與 active 同步。</li>
+          <li><b>附加卡 hover 放大預覽</b>：滑鼠移到任一張附加卡（能量/道具/進化堆），上方浮層顯示原寸卡圖 — 與手牌 hand-preview-float 共用同一個 overlay 元件 + 觸發樣式。</li>
+          <li><b>pointer-events</b>：stack container 保持 <code>none</code>（讓寶可夢圖能點），但個別 <code>.att-card</code> 重啟 <code>auto</code> 接 hover 事件 + <code>cursor:zoom-in</code> 提示。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c/11d（Python pipeline）／Rule 14（純 CSS + 少量 state/handler / 1 個 overlay 區塊）。桌機 classic 與手機 portrait 完全不影響。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.025</span> 🎨 桌墊版 — 修正附加卡方向：active 横向扇開、bench 縱向扇開，解除 overflow 限制</summary>
         <ul>
           <li><b>active 橫向疊牌</b>：附加卡從原本「縱向下方疊」改成「橫向右側扇開」（仿玩家提供的實體桌面圖 1），每張右移 32px、z-index 由近到遠遞減，寶可夢圖 z-index:99 蓋在最上層左側。</li>

@@ -639,6 +639,9 @@
   // 不改原卡 transform — 避免邊界抖動、z-index 爭奪、擋住 drop target
   let hoverHandIid = $state<string | null>(null);
   let hoverHandAnchor = $state<{ x: number; y: number } | null>(null);
+  // v5.026 桌墊版：附加卡 hover 放大預覽（與手牌 hover-peek 同款，但用 cardId 不用 iid 找）
+  let hoverAttCardId = $state<string | null>(null);
+  let hoverAttAnchor = $state<{ x: number; y: number } | null>(null);
 
   // ── 擲硬幣動畫（Session 34） ────────────────────────────────────────────────
   // 新遊戲開始時播放 2 秒硬幣旋轉 + 1.5 秒結果揭曉
@@ -687,6 +690,17 @@
   function leaveHandCard() {
     hoverHandIid = null;
     hoverHandAnchor = null;
+  }
+  // v5.026 桌墊版：附加卡 hover 放大預覽 — 與 hand 共用同套 float overlay
+  function enterAttCard(e: PointerEvent, cardId: string) {
+    if (dragging) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    hoverAttCardId = cardId;
+    hoverAttAnchor = { x: rect.left + rect.width / 2, y: rect.top };
+  }
+  function leaveAttCard() {
+    hoverAttCardId = null;
+    hoverAttAnchor = null;
   }
 
   // ── 傷害數字彈出 + 能量附加 pulse（Session 29 D2） ──────────────────────────
@@ -5551,7 +5565,7 @@
                     {@const _attOB = attachedCardsOf(b)}
                     {#if _attOB.length > 0}
                       <div class="att-card-stack">
-                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*20}px;z-index:{50-i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                       </div>
                     {/if}
                   {/if}
@@ -5607,7 +5621,7 @@
                 {@const _attOA = attachedCardsOf(oppPlayer.active)}
                 {#if _attOA.length > 0}
                   <div class="att-card-stack">
-                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                   </div>
                 {/if}
               {/if}
@@ -5881,7 +5895,7 @@
               {@const _attMA = attachedCardsOf(myPlayer.active)}
               {#if _attMA.length > 0}
                 <div class="att-card-stack">
-                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                 </div>
               {/if}
             {/if}
@@ -5968,7 +5982,7 @@
                   {@const _attMB = attachedCardsOf(b)}
                   {#if _attMB.length > 0}
                     <div class="att-card-stack">
-                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*20}px;z-index:{50-i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                     </div>
                   {/if}
                 {/if}
@@ -6604,6 +6618,18 @@
           <img src={pc.imageUrl} alt={pc.name}/>
         </div>
       {/if}
+    {/if}
+  {/if}
+
+  <!-- v5.026 桌墊版：附加卡 hover 放大預覽（attached energy/tool/evo 都用同個浮層）-->
+  {#if hoverAttCardId && hoverAttAnchor && !dragging && battleLayout === 'tabletop'}
+    {@const ac = getCard(hoverAttCardId)}
+    {#if ac}
+      <div class="hand-preview-float att-preview-float"
+        style="left:{hoverAttAnchor.x}px; top:{hoverAttAnchor.y - 8}px;"
+        in:fade={{ duration: 120 }} aria-hidden="true">
+        <img src={ac.imageUrl} alt={ac.name}/>
+      </div>
     {/if}
   {/if}
 
@@ -8046,7 +8072,7 @@
   .playmat.layout-tabletop .active-card,
   .playmat.layout-tabletop .bench-slot{ position:relative; }
 
-  /* === 附加卡疊放：absolute 與寶可夢圖同寬同位置，每張往下偏移 N×offset，z-index 從 1 開始 === */
+  /* === 附加卡疊放：absolute 與寶可夢圖同寬同位置，active 往右扇開、bench 往上扇開 === */
   .playmat.layout-tabletop .att-card-stack{
     position:absolute; pointer-events:none; overflow:visible;
     /* width/top/left 由 active vs bench 分別設定（見下） */
@@ -8057,6 +8083,9 @@
     border:1px solid rgba(255,255,255,0.35);
     border-radius:3px;
     box-shadow:0 2px 4px rgba(0,0,0,0.65);
+    /* v5.026：個別卡片重新開啟 pointer-events 以接 hover 預覽（stack container 自身仍 none，
+       避免擋到下方寶可夢圖點擊；但卡片本體要能 hover 觸發 enterAttCard） */
+    pointer-events:auto; cursor:zoom-in;
   }
   .playmat.layout-tabletop .att-card.att-tool{ border-color:#d4a000; }
   .playmat.layout-tabletop .att-card.att-evo{ border-color:#88aaff; }
