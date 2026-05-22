@@ -6469,6 +6469,14 @@ export function applyAction(
     }
   }
 
+  // v5.013：祭典會場 sweep — 任何 path 套到「附能量寶可夢」的 status 都會被清掉
+  //   20+ 個卡片檔直接寫 status: 'xxx' 繞過 statusPost helper 的 isFestivalVenueStatusProtected
+  //   check（玩家回報）。在中央 dispatcher 末端 sweep 一次解決所有路徑（含未來新卡）。
+  //   clearFestivalVenueProtectedStatuses 是 idempotent — 無祭典會場時 return state unchanged。
+  if (next.phase === 'playing') {
+    next = clearFestivalVenueProtectedStatuses(next, pool);
+  }
+
   return next;
 }
 

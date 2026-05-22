@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.013</span> 🔧 修「祭典會場」保護漏洞 — 附能量寶可夢仍會陷入特殊狀態</summary>
+        <ul>
+          <li><b>玩家回報</b>：場上有「祭典會場」競技場時，附能量的寶可夢仍會陷入特殊狀態（卡面：「雙方所有身上附有能量卡的寶可夢不會陷入特殊狀態，並將受到的特殊狀態全部恢復」）。</li>
+          <li><b>Root cause</b>：statusPost helper 正確 check 了祭典會場 immunity，但 20+ 個卡片檔案直接寫 <code>status: 'xxx'</code> 繞過 helper（six_decks / tools / v172_hij_batch / v2346 / v2348 / v2370 / v2570 / v2670 / v2750 / v2995 / v2998 / v3070 / m5_preview 等）。<code>clearFestivalVenueProtectedStatuses</code> 過去只在 stadium-play / energy-attach 兩處呼叫，沒涵蓋每次 dispatch。</li>
+          <li><b>修法</b>：在 engine.ts 中央 dispatcher <code>applyAction</code> 末端加一行 <code>next = clearFestivalVenueProtectedStatuses(next, pool);</code> sweep。任何 action（攻擊、特性、物品、撤退等）結束時都會自動清掉違反規則的 status。一勞永逸 — 含未來新卡。</li>
+          <li><b>為什麼用中央 sweep 而非個別修每個卡片</b>：(1) 個別改 20+ 檔 patch 太大、audit 困難；(2) 未來新卡若直接寫 status: 'xxx' 又會漏網；(3) sweep 函式已是 idempotent — 無祭典會場時 return state unchanged，效能 cost 極低。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline — engine.ts 7000+ 行）／Rule 4（tsc verify）／Rule 14（最小 patch — 一行新增 + 註解）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.012</span> 🎴 桌墊版 v2 — 1366×768 緊湊布局重寫</summary>
         <ul>
           <li><b>v5.009 桌墊版 v1 回顧</b>：板面置中但仍佔太多垂直空間，且左上單獨齒輪 popup 體驗破碎。本次大幅重寫成 v2。</li>
