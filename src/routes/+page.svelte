@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.018</span> 🔧 修 超級快龍ex｜天空搬運 漏設 movedToActiveThisTurn — 疾風直撞 / 暴衝閃光 / 進擊破壞 換場後無法 +N</summary>
+        <ul>
+          <li><b>玩家回饋</b>：超級長耳兔ex 在戰鬥場、備戰區 2 隻 超級快龍ex，連續發動兩次「天空搬運」（互換 → 換回）後使用「疾風直撞」，結果只有 60 點（應為 60+170=230）。</li>
+          <li><b>根因</b>：天空搬運的 <code>sky-carry-switch</code> resolver 漏設 <code>movedToActiveThisTurn: true</code>。其他換場 path（撤退 / 交替之風 / 急進開關 / 各種招式互換）都正確設旗標（v4.978 補丁），唯獨 m2_dragon_charizard_batch.ts:81 漏改。</li>
+          <li><b>影響招式</b>：所有依「本回合從備戰區放置於戰鬥場 +N」條件 — 超級長耳兔ex｜疾風直撞、凱路迪歐ex｜疾風直撞、普隆隆姆ex｜暴衝閃光、烈空坐｜進擊破壞 用天空搬運互換上場時 +N 都失效。</li>
+          <li><b>修正</b>：m2_dragon_charizard_batch.ts:81 改 <code>const newActive = &#123; ...p.bench[bIdx], movedToActiveThisTurn: true &#125;;</code></li>
+          <li><b>規則對照</b>：M2 14390 卡面「在這個回合，若從備戰區將這隻寶可夢放置於戰鬥場，則增加 170 點傷害。」— 天空搬運互換 = 從備戰區放置於戰鬥場 → 應觸發。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／最小 patch（改 1 行）／Rule 15（JSON M2 14390 source of truth）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.017</span> 🔧 修 泡沫【水】能量 漏擋自身睡眠（吼鯨王ex|摔落）+ 雙邊中央 sweep 兜底</summary>
         <ul>
           <li><b>玩家回饋</b>：吼鯨王ex 身上附 泡沫【水】能量 後使用「摔落」(自身睡眠)，仍進入睡眠狀態。卡面：「附有這張卡的【水】寶可夢不會陷入特殊狀態」— 應免疫。</li>

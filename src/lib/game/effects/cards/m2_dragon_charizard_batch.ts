@@ -78,7 +78,11 @@ regR('sky-carry-switch', (st, idx, iids, _params, pool) => {
   const bIdx = p.bench.findIndex(b => b.iid === targetIid);
   if (bIdx < 0) return st;
   const oldActive = clearActiveEffects(p.active);
-  const newActive = p.bench[bIdx];
+  // v5.018：補 movedToActiveThisTurn — 之前漏設 → 疾風直撞 / 暴衝閃光 / 進擊破壞 等
+  //   依「本回合從備戰區放置於戰鬥場 +N 傷害」條件招式無法觸發 bonus（玩家回報：
+  //   超級長耳兔ex 連續換場後 疾風直撞 只 60 點，應為 230）。其他換場 path（撤退 /
+  //   交替之風 / 急進開關 / 各種招式互換）都已正確設 flag，唯獨此 resolver 漏改。
+  const newActive = { ...p.bench[bIdx], movedToActiveThisTurn: true };
   const newBench = [...p.bench];
   newBench[bIdx] = oldActive;
   const s = addLog(st, `天空搬運：${cardName(pool, newActive)} 與 ${cardName(pool, oldActive)} 互換`, idx);
