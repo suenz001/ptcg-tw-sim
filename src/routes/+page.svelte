@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.027</span> 🎨 桌墊版多項優化 — 疊牌順序/HP bar 加長/bench grid 對齊/hover 防溢/獎賞按鈕避免位移</summary>
+        <ul>
+          <li><b>疊牌順序</b>：attachedCardsOf 重排為 能量 → 進化堆 → 道具（玩家要求「能量永遠在最上面，進化鏈永遠在最上面」），index 越小 z-index 越高（越靠近寶可夢）。</li>
+          <li><b>HP bar 延長</b>：column 寬度從 56px → 88px、padding-left 從 64px → 96px，HP bar 視覺更長，往左方使用空間。</li>
+          <li><b>bench 疊牌穩定</b>：根因找到 — 原本 bench-middle flex column 高度可能 > img 高度，img 被 align-items:center 垂直置中、但 stack top:0 錨在 bench-middle 頂 → 兩者沒對齊。改 <code>display:grid; place-items:center</code> 讓 img + stack 在同 cell 自動對齊，>2 張不再亂疊。</li>
+          <li><b>hover 預覽不溢出</b>：偵測卡 rect.top &lt; 480px（預覽高）時 → 預覽改顯示在卡下方（CSS class <code>att-preview-below</code> 翻轉 transform）。</li>
+          <li><b>獎賞按鈕避免位移</b>：grid actions column 從 <code>auto</code> 改 <code>160px</code> 固定 — alerts-col 內任何 alert 出現都不再撐寬 column 進而推擠 active-card 右移。「像真桌游一樣不該抖動」。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c/11d（Python pipeline）／Rule 14（純樣式 + 1 個函式重排 + 1 個 helper 加 viewport check）。桌機 classic 與手機 portrait 完全不影響。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.026</span> 🎨 桌墊版 — bench 改往上扇開 + 附加卡 hover 放大預覽</summary>
         <ul>
           <li><b>bench 方向改為往上</b>：之前往下扇開玩家覺得「沒疊到 + 方向錯」，改成往上扇開（負 top 值）— 附加卡 TOP 從寶可夢圖上緣往上一張一張露出。</li>

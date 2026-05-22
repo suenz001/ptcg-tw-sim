@@ -640,8 +640,10 @@
   let hoverHandIid = $state<string | null>(null);
   let hoverHandAnchor = $state<{ x: number; y: number } | null>(null);
   // v5.026 桌墊版：附加卡 hover 放大預覽（與手牌 hover-peek 同款，但用 cardId 不用 iid 找）
+  // v5.027 加 hoverAttBelow — 卡靠近 viewport 頂端時預覽改顯示在卡下方
   let hoverAttCardId = $state<string | null>(null);
   let hoverAttAnchor = $state<{ x: number; y: number } | null>(null);
+  let hoverAttBelow = $state<boolean>(false);
 
   // ── 擲硬幣動畫（Session 34） ────────────────────────────────────────────────
   // 新遊戲開始時播放 2 秒硬幣旋轉 + 1.5 秒結果揭曉
@@ -695,12 +697,20 @@
   function enterAttCard(e: PointerEvent, cardId: string) {
     if (dragging) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    // v5.027：偵測 viewport 頂端空間 — 預覽大圖約 480px 高，<480 時改顯示在卡下方避免飛出畫面
+    const PREVIEW_HEIGHT = 480;
+    const showBelow = rect.top < PREVIEW_HEIGHT;
     hoverAttCardId = cardId;
-    hoverAttAnchor = { x: rect.left + rect.width / 2, y: rect.top };
+    hoverAttBelow = showBelow;
+    hoverAttAnchor = {
+      x: rect.left + rect.width / 2,
+      y: showBelow ? rect.bottom + 8 : rect.top,
+    };
   }
   function leaveAttCard() {
     hoverAttCardId = null;
     hoverAttAnchor = null;
+    hoverAttBelow = false;
   }
 
   // ── 傷害數字彈出 + 能量附加 pulse（Session 29 D2） ──────────────────────────
@@ -3147,10 +3157,13 @@
   function attachedCardsOf(inst: CardInstance | null | undefined): Array<{ cardId: string; iid: string; kind: 'energy' | 'tool' | 'evo' }> {
     if (!inst) return [];
     const out: Array<{ cardId: string; iid: string; kind: 'energy' | 'tool' | 'evo' }> = [];
+    // v5.027 排序：能量 → 進化堆 → 道具（玩家要求「能量永遠在最上面，進化鏈永遠在最上面」）
+    //   index 越小 = z-index 越高（蓋住後面的）= 露出的部分越靠近寶可夢
+    //   寶可夢本體 z=99 永遠最上層；attached 由近到遠依序是 energy / evo / tool
     for (const e of inst.energyAttached) out.push({ cardId: e.cardId, iid: e.iid, kind: 'energy' });
+    for (const ev of inst.evolvedFromStack ?? []) out.push({ cardId: ev.cardId, iid: ev.iid, kind: 'evo' });
     if (inst.toolAttached) out.push({ cardId: inst.toolAttached.cardId, iid: inst.toolAttached.iid, kind: 'tool' });
     for (const et of inst.extraTools ?? []) out.push({ cardId: et.cardId, iid: et.iid, kind: 'tool' });
-    for (const ev of inst.evolvedFromStack ?? []) out.push({ cardId: ev.cardId, iid: ev.iid, kind: 'evo' });
     return out;
   }
   function evoOptionsFor(fromIid: string): CardInstance[] {
@@ -6621,12 +6634,13 @@
     {/if}
   {/if}
 
-  <!-- v5.026 桌墊版：附加卡 hover 放大預覽（attached energy/tool/evo 都用同個浮層）-->
+  <!-- v5.026 桌墊版：附加卡 hover 放大預覽（attached energy/tool/evo 都用同個浮層）
+       v5.027：頂部卡 hoverAttBelow=true 時預覽改顯示在卡下方 -->
   {#if hoverAttCardId && hoverAttAnchor && !dragging && battleLayout === 'tabletop'}
     {@const ac = getCard(hoverAttCardId)}
     {#if ac}
-      <div class="hand-preview-float att-preview-float"
-        style="left:{hoverAttAnchor.x}px; top:{hoverAttAnchor.y - 8}px;"
+      <div class="hand-preview-float att-preview-float" class:att-preview-below={hoverAttBelow}
+        style="left:{hoverAttAnchor.x}px; top:{hoverAttAnchor.y - (hoverAttBelow ? 0 : 8)}px;"
         in:fade={{ duration: 120 }} aria-hidden="true">
         <img src={ac.imageUrl} alt={ac.name}/>
       </div>
@@ -8001,8 +8015,10 @@
      ═══════════════════════════════════════════════════════════════════ */
   .playmat.layout-tabletop{
     display:grid !important;
-    /* 6 cols：chip | piles-or-prize-side | stadium | actions | center(active+bench) | prize-or-piles-side */
-    grid-template-columns:32px auto auto auto 1fr auto;
+    /* 6 cols：chip | piles-or-prize-side | stadium | actions | center(active+bench) | prize-or-piles-side
+       v5.027：actions column 從 auto → 固定 160px，避免 alerts-col 內 prize-alert 出現時撐寬 column
+       把整個戰鬥場往右擠 — 玩家反映「就像真的桌游一樣不該抖動桌子」 */
+    grid-template-columns:32px auto auto 160px 1fr auto;
     /* 4 rows: opp-bench / opp-active / self-active / self-bench */
     grid-template-rows:auto auto auto auto;
     grid-template-areas:
@@ -8090,38 +8106,47 @@
   .playmat.layout-tabletop .att-card.att-tool{ border-color:#d4a000; }
   .playmat.layout-tabletop .att-card.att-evo{ border-color:#88aaff; }
 
-  /* === active：stack 對齊 active-img — 橫向往右扇開（v5.025 仿實體桌面：玩家圖 1） === */
-  /* active-img 升 z-index:99 蓋住 stack 左側；stack 寬度只佔 1 張卡（105px），
-     裡面 .att-card 用 inline left:N×32px 往右疊出，可超出 stack 寬度 */
+  /* === active：stack 對齊 active-img — 橫向往右扇開 === */
   .playmat.layout-tabletop .active-card .active-img{ position:relative; z-index:99; }
   .playmat.layout-tabletop .active-card > .att-card-stack{
-    /* active-card 是 flex row：左 padding .5rem + HP 欄 56px + gap .45rem = active-img left */
-    top:.45rem; left:calc(.5rem + 56px + .45rem); width:105px; height:140px;
+    /* v5.027 HP bar 加長：padding-left 64→96，HP 欄 56→88px，stack 跟著右移對齊 img */
+    top:.45rem; left:calc(.5rem + 88px + .45rem); width:105px; height:140px;
     overflow:visible !important;
   }
 
-  /* === bench：縱向往下扇開（v5.025 仿玩家圖 2） === */
-  /* bench-slot 原本 overflow:hidden（line ~9048）— tabletop 要打開讓 stack 能超出 slot 底邊 */
+  /* === bench：縱向往上扇開 — v5.027 改 grid 對齊解決 >2 張亂疊 === */
+  /* 根因：原本 bench-middle 是 flex column，flex 高度可能 > img 高（被 bench-slot 撐開），
+     img 被 align-items:center 垂直置中，但 stack top:0 是錨在 bench-middle 頂，
+     導致兩者沒對齊。改 grid 讓 img + stack 在同一 grid cell place-items:center，自動對齊。 */
   .playmat.layout-tabletop .bench-slot{ overflow:visible !important; }
-  .playmat.layout-tabletop .bench-slot .bench-middle{ position:relative; overflow:visible; }
-  .playmat.layout-tabletop .bench-slot .bench-middle img{ position:relative; z-index:99; }
+  .playmat.layout-tabletop .bench-slot .bench-middle{
+    display:grid; place-items:center;
+    position:relative; overflow:visible;
+  }
+  .playmat.layout-tabletop .bench-slot .bench-middle > img,
+  .playmat.layout-tabletop .bench-slot .bench-middle > .att-card-stack{
+    grid-column:1; grid-row:1;  /* 同 cell 重疊 */
+  }
+  .playmat.layout-tabletop .bench-slot .bench-middle img{ z-index:99; }
   .playmat.layout-tabletop .bench-slot .att-card-stack{
-    /* 與 bench img 對齊 — img 預設 width:100% max-width:108px 置中 */
-    top:0; left:50%; transform:translateX(-50%); width:100%; max-width:108px; height:128px;
+    position:relative;
+    width:100%; max-width:108px; height:128px;
     overflow:visible !important;
   }
-  /* zone-bench 也放鬆 overflow（外層 grid 容器） */
   .playmat.layout-tabletop .zone-bench{ overflow:visible !important; }
 
-  /* === HP bar 從卡底移到左側細長欄 === */
+  /* === v5.027 att-preview 在 viewport 頂部 → 改顯示在卡下方（transform 翻轉） === */
+  .hand-preview-float.att-preview-below{ transform:translate(-50%, 0); }
+
+  /* === HP bar 從卡底移到左側 — v5.027 延長：column 56→88px（玩家要求往左延長） === */
   .playmat.layout-tabletop .active-card{
-    padding-left:64px !important;   /* 給左欄 HP 60px + 4px gap */
-    padding-bottom:.45rem !important; /* 取消 9836 line 1.95rem 底部預留 */
+    padding-left:96px !important;   /* 88px HP 欄 + 4 gap + 4 padding */
+    padding-bottom:.45rem !important;
     min-height:140px !important;
   }
   .playmat.layout-tabletop .active-card .active-hpbar-bottom{
     left:.4rem; top:.5rem; right:auto; bottom:auto;
-    width:56px;
+    width:88px;
     flex-direction:column; align-items:center; justify-content:flex-start;
     gap:5px; padding:5px 4px;
     background:rgba(0,0,0,0.78);
