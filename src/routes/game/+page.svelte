@@ -102,6 +102,12 @@
     battleLayout = v;
     try { localStorage.setItem('ptcg_battle_layout', v); } catch { /* quota ignore */ }
   }
+  // v5.012：桌墊版 battle log side panel toggle（可關閉），localStorage 記憶
+  let battleLogOpen = $state<boolean>(true);
+  function toggleBattleLog(): void {
+    battleLogOpen = !battleLogOpen;
+    try { localStorage.setItem('ptcg_battle_log_open', battleLogOpen ? '1' : '0'); } catch { /* ignore */ }
+  }
   // v4.994: 下拉內是否顯示內建預組 optgroup — 預設關閉，玩家需要時打勾顯示
   let showPresetDecksInDropdown = $state(false);
   let p2Name = $state('AI 對手');
@@ -536,6 +542,11 @@
       const savedLayout = localStorage.getItem('ptcg_battle_layout');
       if (savedLayout === 'tabletop' || savedLayout === 'classic') battleLayout = savedLayout;
     } catch { /* SSR / quota / private mode：保持預設 classic */ }
+    // v5.012：battle log side panel 開關狀態（桌墊版用）
+    try {
+      const savedLogOpen = localStorage.getItem('ptcg_battle_log_open');
+      if (savedLogOpen === '0' || savedLogOpen === '1') battleLogOpen = savedLogOpen === '1';
+    } catch { /* ignore */ }
 
     const onResize = () => {
       const w = window.innerWidth;
@@ -5407,7 +5418,16 @@
   </header>
 
   <!-- ── Play Mat ── -->
-  <div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'}>
+  <div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'} class:log-collapsed={battleLayout === 'tabletop' && !battleLogOpen}>
+    <!-- v5.012：桌墊版專用 battle log toggle 按鈕（漂在右邊） -->
+    {#if battleLayout === 'tabletop'}
+      <button class="log-toggle-btn" onclick={toggleBattleLog}
+        title={battleLogOpen ? '收合對戰紀錄面板' : '展開對戰紀錄面板'}
+        aria-label={battleLogOpen ? '收合對戰紀錄' : '展開對戰紀錄'}>
+        <span class="log-toggle-icon">📜</span>
+        <span class="log-toggle-arrow">{battleLogOpen ? '⟶' : '⟵'}</span>
+      </button>
+    {/if}
 
     <!-- v4.22 場地卡在場時的背景圖層（只抓上半藝術圖區 + 低調透明度） -->
     {#if stadiumCard}
@@ -7839,58 +7859,119 @@
      v5.009 桌墊版 layout — 仿實體 TCG 對戰布局（opt-in）
      啟用：battleLayout === 'tabletop' → .playmat.layout-tabletop
      ═══════════════════════════════════════════════════════════════════ */
-  /* ─── 桌墊版 主要 layout override ─────────────────────────────────── */
-  /* field-row 改成 4-col × 2-row grid：
-       col 1 = turn-order-chip (跨 row)
-       col 2 = zone-pile 牌庫/棄牌 (跨 row)
-       col 3 = bench + active 中間欄（上下分）
-       col 4 = zone-prizes 獎賞卡 (跨 row) */
-  .playmat.layout-tabletop .field-row{
+  /* ═══════════════════════════════════════════════════════════════════
+     v5.012 桌墊版 v2 — 1366×768 緊湊布局重寫
+     用 display:contents 把 .field-row / .action-bar 變透明，子孫成為
+     .playmat 直接 grid items，再用 grid-template-areas 精準定位。
+     ═══════════════════════════════════════════════════════════════════ */
+  .playmat.layout-tabletop{
     display:grid !important;
-    grid-template-columns:auto auto 1fr auto;
-    grid-template-rows:auto auto;
-    gap:0.4rem 0.6rem;
+    /* 6 cols：chip | piles-or-prize-side | stadium | actions | center(active+bench) | prize-or-piles-side */
+    grid-template-columns:32px auto auto auto 1fr auto;
+    /* 4 rows: opp-bench / opp-active / self-active / self-bench */
+    grid-template-rows:auto auto auto auto;
+    grid-template-areas:
+      ".       .         .         .         benchO    ."
+      "chipO   pilesO    stadium   .         activeO   prizesO"
+      "chipMe  prizesMe  stadium   actions   activeMe  pilesMe"
+      ".       .         .         .         benchMe   .";
+    gap:2px 8px;
+    padding:4px 8px;
     align-items:center;
-    justify-items:center;
+    /* 預留右側 log panel 空間（log 開啟時） */
+    margin-right:0;
+    transition:margin-right .2s;
   }
-  .playmat.layout-tabletop .field-row .turn-order-chip{
-    grid-column:1; grid-row:1 / span 2; align-self:center;
+  .playmat.layout-tabletop:not(.log-collapsed){ margin-right:296px; }
+
+  /* field-row / action-bar 變 display:contents — 子孫直接被 .playmat grid 接管 */
+  .playmat.layout-tabletop > .field-row,
+  .playmat.layout-tabletop > .action-bar{ display:contents !important; }
+
+  /* === 對手 row === */
+  .playmat.layout-tabletop .opponent-row > .turn-order-chip{ grid-area:chipO; align-self:center; }
+  .playmat.layout-tabletop .opponent-row > .zone-pile{
+    grid-area:pilesO; display:flex; flex-direction:column; gap:3px;
   }
-  .playmat.layout-tabletop .field-row .zone-pile{
-    grid-column:2; grid-row:1 / span 2;
-    display:flex; flex-direction:column; gap:0.3rem;
+  .playmat.layout-tabletop .opponent-row > .zone-bench{
+    grid-area:benchO; display:flex; justify-content:center; flex-wrap:nowrap; gap:2px;
   }
-  .playmat.layout-tabletop .field-row .zone-prizes{
-    grid-column:4; grid-row:1 / span 2;
+  .playmat.layout-tabletop .opponent-row > .zone-active{ grid-area:activeO; justify-self:center; align-self:end; }
+  .playmat.layout-tabletop .opponent-row > .zone-prizes{ grid-area:prizesO; }
+
+  /* === 我方 row（注意：prize / piles 左右互換）=== */
+  .playmat.layout-tabletop .my-row > .turn-order-chip{ grid-area:chipMe; align-self:center; }
+  .playmat.layout-tabletop .my-row > .zone-prizes{ grid-area:prizesMe; }  /* 互換：prize 在左 */
+  .playmat.layout-tabletop .my-row > .zone-bench{
+    grid-area:benchMe; display:flex; justify-content:center; flex-wrap:nowrap; gap:2px;
   }
-  .playmat.layout-tabletop .field-row .zone-bench{
-    grid-column:3;
-    display:flex; justify-content:center; flex-wrap:nowrap;
-    gap:0.4rem;
+  .playmat.layout-tabletop .my-row > .zone-active{ grid-area:activeMe; justify-self:center; align-self:start; }
+  .playmat.layout-tabletop .my-row > .zone-pile{
+    grid-area:pilesMe; display:flex; flex-direction:column; gap:3px;  /* 互換：piles 在右 */
   }
-  .playmat.layout-tabletop .field-row .zone-active{
-    grid-column:3; justify-self:center;
+
+  /* === action-bar children — Stadium 跨兩 row（centerline align）=== */
+  .playmat.layout-tabletop .action-bar > .stadium-display{
+    grid-area:stadium; grid-row:2 / span 2; align-self:center; justify-self:center;
+    max-width:120px;
   }
-  /* 對手 row: bench top, active bottom（中線往上 = active 靠中央） */
-  .playmat.layout-tabletop .opponent-row .zone-bench{ grid-row:1; }
-  .playmat.layout-tabletop .opponent-row .zone-active{ grid-row:2; }
-  /* 自己 row: active top, bench bottom（中線往下 = active 靠中央） */
-  .playmat.layout-tabletop .my-row .zone-active{ grid-row:1; }
-  .playmat.layout-tabletop .my-row .zone-bench{ grid-row:2; }
-  /* bench 容器允許超出 5 隻（特性如「拖動」、「召喚」用） */
-  .playmat.layout-tabletop .field-row .zone-bench.bench-extended{
-    flex-wrap:wrap; max-width:780px;
+  .playmat.layout-tabletop .action-bar > .action-btns{
+    grid-area:actions; align-self:center; justify-self:center;
+    display:flex; flex-direction:column; gap:3px; max-width:140px;
   }
-  /* 窄螢幕（<1200px）退回 classic flex — 因 grid 在窄螢幕會擠壓變形 */
+  .playmat.layout-tabletop .action-bar > .alerts-col{
+    /* 跟 actions 同欄但上方堆疊 */
+    grid-area:actions; align-self:start;
+    z-index:5; pointer-events:none;  /* alerts 內部按鈕需 re-enable */
+  }
+  .playmat.layout-tabletop .action-bar > .alerts-col > *{ pointer-events:auto; }
+
+  /* === Bench 縮小 65%（讓 1366×768 不滾動）=== */
+  .playmat.layout-tabletop .zone-bench{ transform:scale(0.65); transform-origin:top center; }
+  .playmat.layout-tabletop .opponent-row > .zone-bench{ transform-origin:bottom center; }
+
+  /* === Battle log side panel（漂浮在右邊） === */
+  .playmat.layout-tabletop .action-bar > .log-col{
+    position:fixed; right:8px; top:88px; bottom:200px;
+    width:280px;
+    background:rgba(10, 26, 10, 0.92); border:1px solid #3a5a3a;
+    border-radius:8px; padding:8px 6px;
+    overflow-y:auto; z-index:50;
+    box-shadow:0 4px 12px rgba(0,0,0,.4);
+  }
+  .playmat.layout-tabletop.log-collapsed .action-bar > .log-col{ display:none; }
+
+  /* === Log toggle 按鈕（邊緣浮動）=== */
+  .playmat.layout-tabletop .log-toggle-btn{
+    position:fixed; top:120px; right:296px;
+    background:#1a2a1a; border:1px solid #5a8a5a; color:#aaffaa;
+    padding:10px 8px; border-radius:4px 0 0 4px;
+    cursor:pointer; z-index:60;
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    font-size:11px; font-weight:600;
+    transition:right .2s, background .15s;
+  }
+  .playmat.layout-tabletop.log-collapsed .log-toggle-btn{ right:8px; }
+  .playmat.layout-tabletop .log-toggle-btn:hover{ background:#2a4a2a; }
+  .playmat.layout-tabletop .log-toggle-icon{ font-size:18px; line-height:1; }
+  .playmat.layout-tabletop .log-toggle-arrow{ font-size:14px; color:#88ddaa; }
+
+  /* === 1366×768 窄螢幕：fallback 回 classic 避免變形 === */
   @media (max-width: 1199px){
-    .playmat.layout-tabletop .field-row{
-      display:flex !important;
-      grid-template-columns:none;
-      grid-template-rows:none;
+    .playmat.layout-tabletop{
+      display:grid !important;
+      grid-template-columns:none; grid-template-rows:none; grid-template-areas:none;
+      margin-right:0 !important;
     }
-    .playmat.layout-tabletop .field-row > *{
-      grid-column:auto !important; grid-row:auto !important;
+    .playmat.layout-tabletop > .field-row,
+    .playmat.layout-tabletop > .action-bar{ display:flex !important; }
+    .playmat.layout-tabletop > .field-row > *,
+    .playmat.layout-tabletop > .action-bar > *{
+      grid-area:unset !important; grid-row:auto !important; grid-column:auto !important;
     }
+    .playmat.layout-tabletop .zone-bench{ transform:none; }
+    .playmat.layout-tabletop .action-bar > .log-col{ position:static; width:auto; }
+    .playmat.layout-tabletop .log-toggle-btn{ display:none; }
   }
 
   /* v5.008 統一大廳 — 名稱欄 + 建立房間 CTA + inline 表單 */

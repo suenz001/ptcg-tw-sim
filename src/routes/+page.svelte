@@ -265,6 +265,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.012</span> 🎴 桌墊版 v2 — 1366×768 緊湊布局重寫</summary>
+        <ul>
+          <li><b>v5.009 桌墊版 v1 回顧</b>：板面置中但仍佔太多垂直空間，且左上單獨齒輪 popup 體驗破碎。本次大幅重寫成 v2。</li>
+          <li><b>v2 布局重點</b>：(1) 雙方 active 緊鄰中線、無空隙，視覺如實體 TCG 桌墊；(2) 場地卡 Stadium 跨兩 row 垂直置中於中線；(3) 動作按鈕（攻擊/撤退/結束等）移到我方 active 左側；(4) 我方 deck/discard ↔ prize 左右互換；(5) Bench 縮小到 65% scale；(6) 對戰紀錄 log 改為可關閉的右側 side panel，邊緣浮 📜 按鈕可重開。</li>
+          <li><b>1366×768 硬目標</b>：所有布局元素一頁裝滿不滾動。Stadium / Actions / 兩 active / 兩 bench / 兩 piles / 兩 prizes / 手牌 全部塞進螢幕。</li>
+          <li><b>實作</b>：用 <code>display:contents</code> 把 .field-row / .action-bar 變透明，子孫直接成為 .playmat 的 grid items；再用 grid-template-areas 精準定位 7 個區域（chipO / pilesO / stadium / actions / activeO / benchO / prizesO 對手側，+ 互換版我方側）。Battle log 改 position:fixed side panel。</li>
+          <li><b>窄螢幕 fallback</b>：&lt; 1200px 自動退回 classic flex layout 避免擠壓變形。</li>
+          <li><b>啟用</b>：右上角 ⚙️ 設定 → 「🎴 對戰版面（測試）」→ 選「桌墊版」。預設仍是經典版。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline — 550KB 大檔必走）／Rule 4（tsc verify）／Rule 14（最小 patch — CSS 重寫 + 小 HTML toggle 按鈕 + 1 state）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.011</span> 🔧 hotfix — 對戰版面切換整合到既有設定面板（移除左上獨立齒輪）</summary>
         <ul>
           <li><b>玩家回報</b>：v5.009 加的左上角獨立齒輪按鈕點不開（破掉），且應該整合到既有右上角「⚙️ 設定」面板（裡面有背景音樂、音效、畫面縮放）。</li>
