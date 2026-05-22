@@ -265,6 +265,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.009</span> 🎴 桌墊版對戰布局（齒輪切換，opt-in 測試）</summary>
+        <ul>
+          <li><b>玩家回饋</b>：實體 PTCG 對戰時 Active 寶可夢放正中央，但本站對戰版面 Active 放在最左、Bench 往右延伸，跟實體不一樣，新手第一眼會搞錯位置。</li>
+          <li><b>新增「桌墊版」布局</b>：仿實體 TCG 桌墊 — Active 寶可夢水平置中、Bench 5 格對稱列、雙方板面以中線對稱（對手 bench 在上 / 自己 bench 在下）、牌庫棄牌獎勵牌分列兩側。</li>
+          <li><b>切換方式</b>：對戰畫面左上方 ⚙️ 齒輪按鈕 → 選「桌墊版」或「經典版」。設定存 localStorage，跨 session 記憶。</li>
+          <li><b>預設保持經典版</b>：所有玩家預設仍使用原有左對齊 layout，老玩家完全不變。桌墊版需主動勾選才會生效，方便先小範圍測試。</li>
+          <li><b>限制</b>：(1) 本期只動桌機版面，手機版（豎屏）不變。(2) 窄螢幕（&lt; 1200px）會自動 fallback 回 classic 排版，避免擠壓。(3) 本期只動布局位置，卡片上附加能量/道具仍是現有的 pip/chip 顯示（Phase 2 會做卡片微重疊真實感）。</li>
+          <li><b>實作</b>：CSS-only override — HTML 結構完全不動，所有 action handler / game logic 不受影響。風險集中在 layout 視覺。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline — game/+page.svelte 是 550KB 最大檔，v5.008 已踩過 Edit 截斷災難）／Rule 4（tsc verify）／Rule 14（最小 patch — UI 改動）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.008</span> ✨ 線上對戰大廳統一頁面（建立 / 加入 / 列表 合併）</summary>
         <ul>
           <li><b>玩家回饋</b>：原本「線上連線對戰」要先選「建立房間」或「加入房間」才看得到大廳列表，常常玩家點「加入」進去發現大廳空空、又要返回重選「建立」，動線繁瑣。</li>

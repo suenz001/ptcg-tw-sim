@@ -92,6 +92,16 @@
   let p1Name = $state('玩家 1');
   // v5.005 admin matchRecords — 防同場多次 fire POST /api/match-result
   let recordedMatchId = $state<string | null>(null);
+
+  // v5.009 桌墊版 layout 切換（opt-in，預設 classic）— 仿實體 TCG 對戰版面
+  //   classic = 現有左對齊 active；tabletop = active 置中 + bench 對稱列
+  //   localStorage 'ptcg_battle_layout' 跨 session 記憶；只動桌機
+  let battleLayout = $state<'classic' | 'tabletop'>('classic');
+  let showLayoutMenu = $state(false);
+  function setBattleLayout(v: 'classic' | 'tabletop'): void {
+    battleLayout = v;
+    try { localStorage.setItem('ptcg_battle_layout', v); } catch { /* quota ignore */ }
+  }
   // v4.994: 下拉內是否顯示內建預組 optgroup — 預設關閉，玩家需要時打勾顯示
   let showPresetDecksInDropdown = $state(false);
   let p2Name = $state('AI 對手');
@@ -521,6 +531,11 @@
         resolutionMode = saved as 'auto' | '100' | '90' | '80' | '75' | '70' | '65' | '60';
       }
     } catch {}
+    // v5.009 桌墊版 layout — 初始化讀 localStorage（跟其他 settings 一起 init）
+    try {
+      const savedLayout = localStorage.getItem('ptcg_battle_layout');
+      if (savedLayout === 'tabletop' || savedLayout === 'classic') battleLayout = savedLayout;
+    } catch { /* SSR / quota / private mode：保持預設 classic */ }
 
     const onResize = () => {
       const w = window.innerWidth;
@@ -5302,6 +5317,31 @@
     {:else}
       <a href="{base}/" class="small-back">← 首頁</a>
     {/if}
+    <!-- v5.009 對戰版面齒輪 — opt-in 切換桌墊版 -->
+    <span class="layout-gear-wrap">
+      <button class="layout-gear-btn" onclick={() => showLayoutMenu = !showLayoutMenu}
+        title="對戰版面設定" aria-label="對戰版面設定">⚙️</button>
+      {#if showLayoutMenu}
+        <div class="layout-menu-popup" role="dialog" aria-label="對戰版面選擇">
+          <div class="layout-menu-title">🎴 對戰版面</div>
+          <label class="layout-menu-opt" class:active={battleLayout === 'classic'}>
+            <input type="radio" name="battleLayout" checked={battleLayout === 'classic'}
+              onchange={() => setBattleLayout('classic')} />
+            <span class="opt-title">經典版</span>
+            <span class="opt-desc">Active 左對齊，bench 右側橫排</span>
+          </label>
+          <label class="layout-menu-opt" class:active={battleLayout === 'tabletop'}>
+            <input type="radio" name="battleLayout" checked={battleLayout === 'tabletop'}
+              onchange={() => setBattleLayout('tabletop')} />
+            <span class="opt-title">🆕 桌墊版（測試）</span>
+            <span class="opt-desc">仿實體 — Active 置中、bench 對稱列（窄螢幕可能變形）</span>
+          </label>
+          <div class="layout-menu-footer">
+            <button class="small ghost" onclick={() => showLayoutMenu = false}>關閉</button>
+          </div>
+        </div>
+      {/if}
+    </span>
     <span class="turn-info">
       回合 {game.turn}　<strong>{activePlayer?.name}</strong> 行動中
       {#if game.isFirstTurn && aIdx === game.firstPlayerIdx}<span class="hint">（先手第1回合不能攻擊 / 進化 / 用支援者）</span>{/if}
@@ -5392,7 +5432,7 @@
   </header>
 
   <!-- ── Play Mat ── -->
-  <div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'} class:has-stadium-bg={!!stadiumCard}>
+  <div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'}>
 
     <!-- v4.22 場地卡在場時的背景圖層（只抓上半藝術圖區 + 低調透明度） -->
     {#if stadiumCard}
@@ -7800,6 +7840,92 @@
   .manual-code summary{ cursor:pointer; color:#ccc; font-size:.88rem; }
   .manual-code label{ margin-top:.5rem; }
   .manual-code button{ margin-top:.5rem; }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     v5.009 桌墊版 layout — 仿實體 TCG 對戰布局（opt-in）
+     啟用：battleLayout === 'tabletop' → .playmat.layout-tabletop
+     ═══════════════════════════════════════════════════════════════════ */
+  .layout-gear-wrap{ position:relative; display:inline-block; }
+  .layout-gear-btn{
+    background:rgba(0,0,0,.3); border:1px solid #3a5a3a; color:#aaffaa;
+    width:30px; height:30px; border-radius:6px; cursor:pointer;
+    font-size:14px; padding:0; display:inline-flex; align-items:center; justify-content:center;
+  }
+  .layout-gear-btn:hover{ background:rgba(60,120,60,.3); border-color:#5a8a5a; }
+  .layout-menu-popup{
+    position:absolute; top:36px; left:0; z-index:200;
+    background:#1a2a1a; border:1px solid #5a8a5a; border-radius:8px;
+    box-shadow:0 6px 20px rgba(0,0,0,.5);
+    padding:12px; min-width:340px; max-width:420px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .layout-menu-title{ font-weight:700; color:#aaffaa; font-size:0.95rem; margin-bottom:2px; }
+  .layout-menu-opt{
+    display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto auto;
+    gap:2px 8px; padding:8px 10px; border-radius:6px;
+    border:1px solid #2a4a2a; background:rgba(0,0,0,.2); cursor:pointer;
+    transition:background .15s, border-color .15s;
+  }
+  .layout-menu-opt:hover{ background:rgba(60,120,60,.15); border-color:#3a6a3a; }
+  .layout-menu-opt.active{ background:rgba(80,160,80,.2); border-color:#5a8a5a; }
+  .layout-menu-opt input{ grid-row:1 / span 2; margin-top:3px; }
+  .layout-menu-opt .opt-title{ font-weight:600; color:#f0f0f0; font-size:0.88rem; }
+  .layout-menu-opt .opt-desc{ font-size:0.75rem; color:#9aa3b0; }
+  .layout-menu-footer{ display:flex; justify-content:flex-end; margin-top:4px; }
+
+  /* ─── 桌墊版 主要 layout override ─────────────────────────────────── */
+  /* field-row 改成 4-col × 2-row grid：
+       col 1 = turn-order-chip (跨 row)
+       col 2 = zone-pile 牌庫/棄牌 (跨 row)
+       col 3 = bench + active 中間欄（上下分）
+       col 4 = zone-prizes 獎賞卡 (跨 row) */
+  .playmat.layout-tabletop .field-row{
+    display:grid !important;
+    grid-template-columns:auto auto 1fr auto;
+    grid-template-rows:auto auto;
+    gap:0.4rem 0.6rem;
+    align-items:center;
+    justify-items:center;
+  }
+  .playmat.layout-tabletop .field-row .turn-order-chip{
+    grid-column:1; grid-row:1 / span 2; align-self:center;
+  }
+  .playmat.layout-tabletop .field-row .zone-pile{
+    grid-column:2; grid-row:1 / span 2;
+    display:flex; flex-direction:column; gap:0.3rem;
+  }
+  .playmat.layout-tabletop .field-row .zone-prizes{
+    grid-column:4; grid-row:1 / span 2;
+  }
+  .playmat.layout-tabletop .field-row .zone-bench{
+    grid-column:3;
+    display:flex; justify-content:center; flex-wrap:nowrap;
+    gap:0.4rem;
+  }
+  .playmat.layout-tabletop .field-row .zone-active{
+    grid-column:3; justify-self:center;
+  }
+  /* 對手 row: bench top, active bottom（中線往上 = active 靠中央） */
+  .playmat.layout-tabletop .opponent-row .zone-bench{ grid-row:1; }
+  .playmat.layout-tabletop .opponent-row .zone-active{ grid-row:2; }
+  /* 自己 row: active top, bench bottom（中線往下 = active 靠中央） */
+  .playmat.layout-tabletop .my-row .zone-active{ grid-row:1; }
+  .playmat.layout-tabletop .my-row .zone-bench{ grid-row:2; }
+  /* bench 容器允許超出 5 隻（特性如「拖動」、「召喚」用） */
+  .playmat.layout-tabletop .field-row .zone-bench.bench-extended{
+    flex-wrap:wrap; max-width:780px;
+  }
+  /* 窄螢幕（<1200px）退回 classic flex — 因 grid 在窄螢幕會擠壓變形 */
+  @media (max-width: 1199px){
+    .playmat.layout-tabletop .field-row{
+      display:flex !important;
+      grid-template-columns:none;
+      grid-template-rows:none;
+    }
+    .playmat.layout-tabletop .field-row > *{
+      grid-column:auto !important; grid-row:auto !important;
+    }
+  }
 
   /* v5.008 統一大廳 — 名稱欄 + 建立房間 CTA + inline 表單 */
   .online-form.lobby-unified{ max-width:560px; }
