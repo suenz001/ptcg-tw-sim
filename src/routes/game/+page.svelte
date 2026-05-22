@@ -96,8 +96,8 @@
   // v5.009 桌墊版 layout 切換（opt-in，預設 classic）— 仿實體 TCG 對戰版面
   //   classic = 現有左對齊 active；tabletop = active 置中 + bench 對稱列
   //   localStorage 'ptcg_battle_layout' 跨 session 記憶；只動桌機
+  //   v5.011：選項整合到既有 showSettingsModal 面板，移除獨立 popup
   let battleLayout = $state<'classic' | 'tabletop'>('classic');
-  let showLayoutMenu = $state(false);
   function setBattleLayout(v: 'classic' | 'tabletop'): void {
     battleLayout = v;
     try { localStorage.setItem('ptcg_battle_layout', v); } catch { /* quota ignore */ }
@@ -5317,31 +5317,6 @@
     {:else}
       <a href="{base}/" class="small-back">← 首頁</a>
     {/if}
-    <!-- v5.009 對戰版面齒輪 — opt-in 切換桌墊版 -->
-    <span class="layout-gear-wrap">
-      <button class="layout-gear-btn" onclick={() => showLayoutMenu = !showLayoutMenu}
-        title="對戰版面設定" aria-label="對戰版面設定">⚙️</button>
-      {#if showLayoutMenu}
-        <div class="layout-menu-popup" role="dialog" aria-label="對戰版面選擇">
-          <div class="layout-menu-title">🎴 對戰版面</div>
-          <label class="layout-menu-opt" class:active={battleLayout === 'classic'}>
-            <input type="radio" name="battleLayout" checked={battleLayout === 'classic'}
-              onchange={() => setBattleLayout('classic')} />
-            <span class="opt-title">經典版</span>
-            <span class="opt-desc">Active 左對齊，bench 右側橫排</span>
-          </label>
-          <label class="layout-menu-opt" class:active={battleLayout === 'tabletop'}>
-            <input type="radio" name="battleLayout" checked={battleLayout === 'tabletop'}
-              onchange={() => setBattleLayout('tabletop')} />
-            <span class="opt-title">🆕 桌墊版（測試）</span>
-            <span class="opt-desc">仿實體 — Active 置中、bench 對稱列（窄螢幕可能變形）</span>
-          </label>
-          <div class="layout-menu-footer">
-            <button class="small ghost" onclick={() => showLayoutMenu = false}>關閉</button>
-          </div>
-        </div>
-      {/if}
-    </span>
     <span class="turn-info">
       回合 {game.turn}　<strong>{activePlayer?.name}</strong> 行動中
       {#if game.isFirstTurn && aIdx === game.firstPlayerIdx}<span class="hint">（先手第1回合不能攻擊 / 進化 / 用支援者）</span>{/if}
@@ -7332,6 +7307,25 @@
           </div>
         </details>
 
+        <!-- v5.009 / v5.011：對戰版面切換（仿實體 TCG 桌墊版，opt-in 測試）-->
+        <details class="settings-section">
+          <summary>🎴 對戰版面（測試）</summary>
+          <div class="setting-row">
+            <label for="battle-layout">板面布局：</label>
+            <select id="battle-layout" value={battleLayout}
+              onchange={(e) => setBattleLayout(e.currentTarget.value as 'classic' | 'tabletop')}>
+              <option value="classic">經典版（Active 左對齊）</option>
+              <option value="tabletop">🆕 桌墊版（仿實體 — Active 置中、bench 對稱列）</option>
+            </select>
+          </div>
+          <div class="setting-hint">
+            ・經典版 = 目前預設，所有玩家原本看到的版面
+            <br/>・桌墊版 = 仿實體 TCG — 戰鬥位置中、Bench 5 格對稱列、競技場置中央
+            <br/>・桌墊版仍在測試，窄螢幕（&lt; 1200px）可能變形，會自動退回經典版
+            <br/>・只動桌機 — 手機版直立 layout 不受影響
+          </div>
+        </details>
+
         <!-- v4.60 對局控制 -->
         {#if game && game.phase !== 'game-over'}
         <details class="settings-section" open>
@@ -7845,34 +7839,6 @@
      v5.009 桌墊版 layout — 仿實體 TCG 對戰布局（opt-in）
      啟用：battleLayout === 'tabletop' → .playmat.layout-tabletop
      ═══════════════════════════════════════════════════════════════════ */
-  .layout-gear-wrap{ position:relative; display:inline-block; }
-  .layout-gear-btn{
-    background:rgba(0,0,0,.3); border:1px solid #3a5a3a; color:#aaffaa;
-    width:30px; height:30px; border-radius:6px; cursor:pointer;
-    font-size:14px; padding:0; display:inline-flex; align-items:center; justify-content:center;
-  }
-  .layout-gear-btn:hover{ background:rgba(60,120,60,.3); border-color:#5a8a5a; }
-  .layout-menu-popup{
-    position:absolute; top:36px; left:0; z-index:200;
-    background:#1a2a1a; border:1px solid #5a8a5a; border-radius:8px;
-    box-shadow:0 6px 20px rgba(0,0,0,.5);
-    padding:12px; min-width:340px; max-width:420px;
-    display:flex; flex-direction:column; gap:8px;
-  }
-  .layout-menu-title{ font-weight:700; color:#aaffaa; font-size:0.95rem; margin-bottom:2px; }
-  .layout-menu-opt{
-    display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto auto;
-    gap:2px 8px; padding:8px 10px; border-radius:6px;
-    border:1px solid #2a4a2a; background:rgba(0,0,0,.2); cursor:pointer;
-    transition:background .15s, border-color .15s;
-  }
-  .layout-menu-opt:hover{ background:rgba(60,120,60,.15); border-color:#3a6a3a; }
-  .layout-menu-opt.active{ background:rgba(80,160,80,.2); border-color:#5a8a5a; }
-  .layout-menu-opt input{ grid-row:1 / span 2; margin-top:3px; }
-  .layout-menu-opt .opt-title{ font-weight:600; color:#f0f0f0; font-size:0.88rem; }
-  .layout-menu-opt .opt-desc{ font-size:0.75rem; color:#9aa3b0; }
-  .layout-menu-footer{ display:flex; justify-content:flex-end; margin-top:4px; }
-
   /* ─── 桌墊版 主要 layout override ─────────────────────────────────── */
   /* field-row 改成 4-col × 2-row grid：
        col 1 = turn-order-chip (跨 row)

@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.011</span> 🔧 hotfix — 對戰版面切換整合到既有設定面板（移除左上獨立齒輪）</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.009 加的左上角獨立齒輪按鈕點不開（破掉），且應該整合到既有右上角「⚙️ 設定」面板（裡面有背景音樂、音效、畫面縮放）。</li>
+          <li><b>修法</b>：(1) 移除左上 layout-gear-wrap 按鈕 + popup + 相關 CSS；(2) 在既有 showSettingsModal 內加新 section「🎴 對戰版面（測試）」， select 選 經典版 / 桌墊版。整合後位置一致：所有設定都在同一個齒輪面板。</li>
+          <li><b>不變</b>：localStorage 記憶 / 預設經典版 / 窄螢幕 fallback / 桌墊版實作邏輯 — 全部保留。只是把 UI 入口換位置。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 4（tsc verify）／Rule 14（最小 patch — 純 UI 重組）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.010</span> 🔧 修「呼朋引伴」備戰滿仍可使用、找到的寶可夢被丟失</summary>
         <ul>
           <li><b>玩家回報</b>：「呼朋引伴」招式（從牌庫挑【基礎】寶可夢放備戰）在備戰滿時仍能宣告使用，找到的寶可夢進備戰前被丟掉。</li>
