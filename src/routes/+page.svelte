@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.016</span> 🎨 桌墊版 4 項 UX 微調 — log 反向 / bench 真縮 / 撤退鈕整合 / 手牌貼近</summary>
+        <ul>
+          <li><b>遊戲 log 反向</b>：聊天室慣例 — 新訊息在底、舊訊息在頂。CSS flex-direction:column-reverse 達成，捲軸自動 anchor 在最新訊息。</li>
+          <li><b>對手備戰區與上方空間縮小</b>：原本 transform:scale(0.65) 只縮視覺、layout 框仍 205px 浪費 72px 垂直空間。改用 zoom:0.65 → 框直接縮到 ~133px，grid row 跟著縮，畫面更緊湊。</li>
+          <li><b>移除戰鬥位上方撤退按鈕</b>：統一由左側 action-bar 的「🔄 撤退」按鈕操作，讓雙方戰鬥寶可夢距離更近。化石丟棄按鈕保留（共用 btn-retreat class，用 :not() 排除）。</li>
+          <li><b>手牌列上移</b>：padding 從 0.2rem/0.25rem 縮到 0/0.1rem、min-height 150→130px、hand-label margin-bottom 0，整體往備戰區貼近。</li>
+          <li><b>變更範圍</b>：純 CSS 改動，全 scoped 到 .playmat.layout-tabletop（與 :has()）。桌機 classic 版面、行動裝置 portrait 版面完全不受影響。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline — +page.svelte 575KB 大檔必走）／Rule 4（tsc verify）／Rule 14（最小 patch — 不動 template，只改 CSS）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.015</span> 🔧 修手機版 攻擊 KO 對手後 結束按鈕點不動 — 按鈕鎖 + 等待提示</summary>
         <ul>
           <li><b>玩家回饋</b>：手機版攻擊 KO 對手戰鬥場、取完獎賞後，UI 顯示「對手戰鬥場空」但結束回合按鈕點下去沒反應，誤以為遊戲卡住。</li>

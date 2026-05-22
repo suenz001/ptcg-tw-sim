@@ -7971,8 +7971,19 @@
   .playmat.layout-tabletop .action-bar > .alerts-col > *{ pointer-events:auto; }
 
   /* === Bench 縮小 65%（讓 1366×768 不滾動）=== */
-  .playmat.layout-tabletop .zone-bench{ transform:scale(0.65); transform-origin:top center; }
-  .playmat.layout-tabletop .opponent-row > .zone-bench{ transform-origin:bottom center; }
+  /* v5.016：transform:scale 不影響 layout 框 → 浪費 72px 垂直空間（玩家回饋）。
+     改用 zoom:0.65 — 同步縮 layout + 視覺 → grid row auto 直接縮到 ~133px，省去多餘空間。 */
+  .playmat.layout-tabletop .zone-bench{ zoom:0.65; }
+
+  /* v5.016：隱藏戰鬥位上方的「撤退」按鈕 — 統一由左側 action-bar 的 .btn-retreat-mirror 操作，
+     讓雙方 active 距離更近。:not(.btn-fossil-discard) 避免誤隱藏化石丟棄按鈕（共用 class）。 */
+  .playmat.layout-tabletop .my-active-zone .btn-retreat:not(.btn-fossil-discard){ display:none; }
+
+  /* v5.016：手牌列拉近備戰區（桌墊版專屬） — :has() 從 .battle-root 反向選 hand-strip
+     原 padding/min-height 為 1024×600 等中型 viewport 設計；桌墊版可更緊湊。 */
+  .battle-root:has(.playmat.layout-tabletop) .hand-strip{ padding:0 .7rem .1rem; }
+  .battle-root:has(.playmat.layout-tabletop) .hand-strip .hand-label{ margin-bottom:0; }
+  .battle-root:has(.playmat.layout-tabletop) .hand-strip .hand-scroll{ padding:4px 1rem 2px; min-height:130px; }
 
   /* === Battle log side panel（漂浮在右邊） === */
   .playmat.layout-tabletop .action-bar > .log-col{
@@ -7982,6 +7993,10 @@
     border-radius:8px; padding:8px 6px;
     overflow-y:auto; z-index:50;
     box-shadow:0 4px 12px rgba(0,0,0,.4);
+    /* v5.016：聊天室慣例 — 新訊息在底、舊訊息在頂。
+       data 仍 .reverse()（newest first），column-reverse 把首項翻到視覺底部，
+       overflow-y:auto 配合自動 anchor 在底部最新訊息。 */
+    display:flex; flex-direction:column-reverse;
   }
   .playmat.layout-tabletop.log-collapsed .action-bar > .log-col{ display:none; }
 
