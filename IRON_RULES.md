@@ -446,6 +446,99 @@ for path, anchor in TAIL_ANCHORS.items():
 - Rule 11c: 「Edit 後 disk size 接近正常」但**中段內容遺失** → 不靠 size 抓，要靠標籤對稱 / tail anchor
 
 
+### Rule 11d: JSON 檔（含 static/cards/*.json）改中文字串也會中段截斷（v5.022 災難）
+
+**症狀**：玩家點「開始演練」→ 卡在「載入卡池中...」永遠轉圈，網頁 console 看不到明顯錯誤，伺服器 log 完全正常（PM2 online、mongo connected、match-record 持續寫入）。**這個錯誤模式最危險，因為「伺服器看起來健康，但所有玩家都用不了客戶端」**。
+
+**v5.022 事故全紀錄**（2026-05-22 13:35 部署 → 玩家 1 小時後爆量回報「卡住」）：
+
+1. 用 Edit 工具改 `static/cards/M5.json` 的兩個小字串：
+   - 卡片 effect 文字內把「閃電能量」改成「閃電【雷】能量」（line 1025）
+   - 另一張卡 effect 文字內把「暗影惡能量」改成「暗影【惡】能量」（line 2305）
+2. 兩個 Edit 都報告「success」、Read 回去看內容也正確
+3. `python3 -c "import json; json.load(open('M5.json'))"` 此時跑會通過（檔案 size 還未 truncated）
+4. 後續再跑一段 Python pipeline + 一段 finish_v5022.py：
+   - `safe_write` → 不關 Edit 的事
+   - `git hash-object -w static/cards/M5.json` → 把當下 disk 內容算 hash 寫進 git object store
+5. **但中間某個時間點**（很可能是 Edit 工具最後的 sync 步驟落後 / mount layer 觸發 truncate），disk 上的 M5.json 在 `"regulationMa` 後面就被切掉了 — JSON 解析失敗
+6. 後續 finish_v5022.py 的 `git hash-object` 把**已破損的 disk 檔**算 hash → commit 進去 → **git 端也記載破損版本**（rollback 拿回來的也是壞的）
+7. CI build 完 → CDN 收到壞 JSON → 任何玩家點開始演練都卡死
+
+**為什麼這條值得獨立成鐵律**：
+- Rule 11c 講的是 `.svelte` `.ts` `.html` 大檔的中段截斷，預設用「tail anchor + `<style>` 對稱」抓。
+- JSON 沒有 `</style>` 或 `</html>` 這種 obvious tail anchor，但有 `]` 或 `}` 結尾。
+- Rule 11/11c 的「優先用 Python pipeline」是針對「大檔」的建議，玩家很容易誤判「JSON 改個小字串應該安全」就用 Edit — 結果還是炸了。
+- **截斷的破壞範圍是 100% 玩家** — JSON parse 失敗，整個卡池載入失敗，全站停擺。Server 完全沒事讓 ops debug 走錯方向。
+- **git 也會被污染** — 壞檔被 commit 進 history，看起來像「我推上去的版本」實際是壞檔。
+
+**強制流程**：
+
+任何對 `static/cards/*.json` 的改動（含中文字串、英文字串、欄位增減、卡片新增），**一律走 Python pipeline**，不再用 Edit 工具：
+
+```python
+# 從 git HEAD blob 取乾淨原始檔（避免 mount stale）
+import subprocess, json, os
+orig = subprocess.run(['git', 'show', 'HEAD:static/cards/M5.json'],
+                     capture_output=True, check=True).stdout
+text = orig.decode('utf-8')
+
+# 純 str.replace 套修改
+text = text.replace('"name": "閃電能量",', '"name": "閃電【雷】能量",', 1)
+text = text.replace('附有「閃電能量」', '附有「閃電【雷】能量」', 1)
+
+# parse 驗 JSON 合法（在記憶體內！別寫到 disk 再讀）
+data = json.loads(text)
+assert isinstance(data, list) and len(data) > 0, 'M5.json shape broken'
+
+# safe_write
+new_bytes = text.encode('utf-8')
+fd = os.open('static/cards/M5.json', os.O_WRONLY | os.O_TRUNC | os.O_CREAT, 0o644)
+os.write(fd, new_bytes); os.fsync(fd); os.close(fd)
+
+# 再從 disk 驗一次（確認沒被 mount layer 截斷）
+with open('static/cards/M5.json', 'rb') as f:
+    disk = f.read()
+disk_data = json.loads(disk.decode('utf-8'))
+assert len(disk_data) == len(data), f'disk truncated: orig {len(data)} vs disk {len(disk_data)}'
+```
+
+**Pre-push 必跑 audit**（pre-push-audit.py 標準項目）：
+
+```python
+import json, glob, sys
+fails = []
+for fp in glob.glob('static/cards/*.json'):
+    try:
+        with open(fp, 'rb') as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            fails.append(f'{fp}: not a list')
+        elif len(data) == 0:
+            fails.append(f'{fp}: empty list')
+    except json.JSONDecodeError as e:
+        fails.append(f'{fp}: parse error at {e.lineno}:{e.colno}: {e.msg}')
+if fails:
+    print('\n'.join(fails)); sys.exit(1)
+print(f'All {len(glob.glob("static/cards/*.json"))} JSON files OK')
+```
+
+這個 check 5 秒內可跑完，**任何 push 前必跑**。M5.json 改完跑這段就會立刻 catch 截斷，不會推上去。
+
+**Rule 11 / 11c / 11d 差別整理**：
+
+| Rule | 檔案類型 | 截斷模式 | 偵測方式 |
+|---|---|---|---|
+| 11 | 大檔（>100KB） | 全尾截斷至 HEAD size | size 比對 + 新 marker 缺失 |
+| 11b | 任何檔（縮短字串） | 檔尾 NUL byte padding | `b'\x00' in content` 檢查 |
+| 11c | `.svelte` / `.ts` / `.html` | 中段截斷（標籤遺失） | tail anchor + `<style>` 對稱 |
+| 11d | `.json`（特別是 static/cards/） | 中段截斷（檔尾 cut off） | `json.load()` parse |
+
+**關鍵教訓**：
+
+> Edit 工具改任何「資料檔」（JSON、YAML、CSV、SQL dump 等）都當作「可能截斷」處理。Python pipeline 是唯一安全路徑。改完 disk 後 **必須再 `json.load()` 從 disk 讀回來驗一次** — 不能信「Edit 報告 success」、不能信「剛在記憶體 parse 過的 text」。
+
+---
+
 ### Rule 12: Wave/cards 子檔案禁止 module top-level 對 effects.ts 內 Map 做 .set()
 
 **症狀**: 瀏覽器 console 報 `ReferenceError: Cannot access 'go' before initialization`
@@ -668,125 +761,4 @@ grep -rn "p\.deck\.filter\|player\.deck\.filter\|attacker\.deck\.filter" src/lib
 ```
 1. grep JSON 找 abilities[].effect / attacks[].effect 原文
 2. 對照現況 fn body — 兩者有差就是 bug
-3. 寫 gate / 補實作時，按 JSON 寫，不是按 fn 寫
-4. fn 內如果有錯，順手修（regA fn 本身也是 bug）
-```
-
-**範例（v4.4998）**：
-- 卡面：「在自己的回合時，可不限次數使用。選擇 1 個自己的場上寶可夢身上附加的能量，改附於這隻寶可夢身上。」
-- 錯實作：強制 active 是瑪力露麗ex + 只看 bench 能量 + 固定附給 active
-- 正確：持有者不限位置、來源是場上任何其他寶可夢、目標是「這隻寶可夢」(inst)
-
-**例外**：純 UI / CSS / Svelte template 修補不用查 JSON（那些不涉及卡片邏輯）。
-
----
-
-### Rule 16: bench 目標處理一律呼叫 resolveBenchGuard
-
-**背景**：v4.4999 教訓（蟲甲聖 球形盾牌 沒擋多龍巴魯托ex 幻影奇襲）：
-
-`resolveBenchGuard` 是統一 helper 處理 bench 目標的招式效果免疫：
-- 對戰圓形競技場（attack-effect / ability-effect）
-- 蟲甲聖 球形盾牌（attack-damage / attack-effect）
-- 藏隱（斯魔茶）、深度下潛（小霞的鯉魚王）（attack-damage / attack-effect）
-- 羽毛化石、太晶寶可夢（attack-damage only）
-
-而 `canApplyAttackEffectToTarget` 只查 `ATTACK_EFFECT_IMMUNITY` map（薄霧能量 / 皇帝之勢類 attacker-side 自身免疫）— 不涵蓋上述 bench 防護。
-
-**禁止寫法**：
-
-```ts
-// dragapult-snipe / 任何指示物放置 resolver
-const guard = canApplyAttackEffectToTarget(...);
-if (guard.blocked) { /* ... */ }
-// ❌ 缺 resolveBenchGuard check — 球形盾牌等漏擋
-```
-
-**正確寫法**：
-
-```ts
-const guard = canApplyAttackEffectToTarget(s, actorIdx, target, targetCard, pool);
-if (guard.blocked) { /* ... */ }
-// 加 bench 保護 helper（球形盾牌等）
-const benchGuard = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-effect');
-if (benchGuard.blocked) { /* ... */ }
-```
-
-**適用範圍**：所有「bench 目標」類 resolver：
-- dragapult-snipe（幻影奇襲 / 飛來橫禍 等）
-- bench-hit-N（已正確使用）
-- cursed-bomb（咒詛炸彈）
-- 任何 picker.type === 'opp-bench-choose' / 'damage-distribute' / 'snipe-*' 的 resolver
-
----
-
-### Rule 17: 所有 defense check 必須走 `canApplyEffectToTarget` 統一 helper
-
-**背景**：v4.5 Phase 1 引入 `canApplyEffectToTarget` 統一 helper（defense.ts）後，
-v4.54、v4.57、v4.58 反覆踩到「舊 caller 用錯 helper 導致 kind 弄錯」的雷：
-
-- v4.54：4 個招式（捲入伏特/群起瞄準/墜擊射/冰凍羽擊）卡面是「N 點傷害」(attack-damage)，
-  但用 `canApplyAttackEffectToTarget` 過度擋（薄霧/抵抗之幕/皇帝之勢這些只擋 effect 不擋 damage）
-- v4.57：虛無歸零（150 點傷害）同類 bug
-- v4.58：大沙風暴（雙方備戰 +40 點傷害）同類 bug
-
-**禁止寫法（新 caller 不可使用）**：
-
-```ts
-// ❌ canApplyAttackEffectToTarget — bench 漏球形盾牌等
-const guard = canApplyAttackEffectToTarget(state, aIdx, target, card, pool);
-
-// ❌ resolveBenchGuard — 漏薄霧 / 光之翼
-const guard = resolveBenchGuard(state, pool, aIdx, card, 'attack-effect');
-
-// ❌ isBenchProtected — 只擋對戰圓形，漏其他 21 條
-if (isBenchProtected(state, pool)) { ... }
-```
-
-舊 3 個 helper 已加 `@deprecated` JSDoc，IDE 會劃刪除線提醒。
-
-**正確寫法**：
-
-```ts
-import { canApplyEffectToTarget } from './defense';
-
-const guard = canApplyEffectToTarget(state, aIdx, target, card, kind, pool, { isBench });
-if (guard.blocked) {
-  state = addLog(state, `XX：${targetCard?.name ?? '?'} ${guard.reason}`, aIdx);
-  return state;
-}
-```
-
-**`kind` 對齊 JSON 卡面 cheat sheet**：
-
-| JSON 卡面寫法 | kind |
-|---|---|
-| 「N 點傷害」+「不計弱抗」 | `'attack-damage'` |
-| 「放置 N 個傷害指示物」 | `'attack-effect'` |
-| 招式內「將寶可夢【睡眠/中毒/灼傷/麻痺/混亂】」 | `'attack-effect'` |
-| 招式內「將寶可夢【昏厥】」 | `'attack-effect'` |
-| 招式內「將能量卡丟棄/回手」 | `'attack-effect'` |
-| **特性**內任何效果（必殺手裡劍/咒詛炸彈/揚沙/侵蝕詛咒/凹洞/黑暗脈衝 等） | `'ability-effect'` |
-
-**`isBench` 判定**：caller 已知 target 是 bench 寶可夢時傳 `true`，是 active 時傳 `false`。
-不確定時可省略，helper 內部會 fallback 判斷（但 caller 自己判斷比較準）。
-
-**已有 defense（不用 caller 額外 check，unified 內部自動處理）**：
-- ATTACK_EFFECT_IMMUNITY 類：薄霧能量 / 抵抗之幕 / 皇帝之勢 / 全能硬殼 / 硬岩能量 / 化石類
-- bench-only defense：對戰圓形 / 球形盾牌 / 花之帷幔 / 藏隱 / 深度下潛 / 羽毛化石 / 太晶 / 中立中心
-- ability-effect immunity：光之翼（超級皮可西ex）
-
-**例外（仍可直接呼叫舊 helper）**：
-- defense.ts 內部 dispatch（by design）
-- 既有 ~30 處舊 callers（v4.58 audit 確認都用法正確，留著不動以避免 regression）
-
-新增任何「對對手寶可夢造成傷害 / 放置指示物 / 改狀態 / KO」的 source resolver
-**必須**用 `canApplyEffectToTarget`。Rule 16 已併入本規則。
-
----
-
-## 完整版
-
-完整 SKILL.md（含 Python git plumbing pipeline 範本、pre-flight checklist、
-common failure patterns）放在 `outputs/ptcg-push/SKILL.md`。本檔僅同步 Iron Rules
-section。
+3. 寫 gate / 補實作時，按 
