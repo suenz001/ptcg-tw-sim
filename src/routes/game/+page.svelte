@@ -90,6 +90,8 @@
   let p1DeckId = $state('');
   let p2DeckId = $state('');
   let p1Name = $state('玩家 1');
+  // v5.005 admin matchRecords — 防同場多次 fire POST /api/match-result
+  let recordedMatchId = $state<string | null>(null);
   // v4.994: 下拉內是否顯示內建預組 optgroup — 預設關閉，玩家需要時打勾顯示
   let showPresetDecksInDropdown = $state(false);
   let p2Name = $state('AI 對手');
@@ -1249,6 +1251,86 @@
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     floatingRetreatMenu = { x: rect.left + rect.width / 2, y: rect.top };
   }
+  // v5.005 admin matchRecords — game-over 時 fire POST 永久紀錄到 Oracle MongoDB
+  //   防多次 fire：用 recordedMatchId state + game.id（同場 game.id 一致）
+  //   線上模式只 P1 (mySeatIdx === 0) fire；本機模式唯一 client fire
+  //   admin spy (isAdminMode) 跳過，避免污染統計
+  $effect(() => {
+    if (!game || game.phase !== 'game-over') return;
+    if (recordedMatchId === game.id) return;  // 已記錄
+    if (isAdminMode) return;                  // admin spy 不寫
+    // 線上模式：只 P1 fire（P2 / spectator 跳過）
+    if (mode === 'online' && mySeatIdx !== 0) return;
+    recordedMatchId = game.id;
+    fireMatchRecord(game);
+  });
+
+  // v5.005 匯出對戰紀錄到 Oracle backend (matchRecords collection)
+  //   email source：線上 → roomData.seats[0/1].email；本機 → P1 用 firebaseUser?.email
+  //   cardIds aggregate：deck/hand/bench/active/discard/prizes + evolvedFromStack 去重
+  async function fireMatchRecord(g: GameState) {
+    const apiUrl = (((import.meta as unknown) as { env?: { VITE_ORACLE_API_URL?: string } }).env?.VITE_ORACLE_API_URL) || '';
+    if (!apiUrl) return;  // 只 Oracle build 記錄；GitHub Pages build 跳過
+    // Aggregate unique cardId from all zones (deck/hand/bench/active/discard/prizes + evolvedFromStack)
+    function collectCardIds(p: GameState['players'][0]): string[] {
+      const set = new Set<string>();
+      const visit = (c: CardInstance | null | undefined): void => {
+        if (!c) return;
+        set.add(c.cardId);
+        for (const e of c.evolvedFromStack ?? []) set.add(e.cardId);
+      };
+      for (const c of p.deck) visit(c);
+      for (const c of p.hand) visit(c);
+      for (const c of p.bench) visit(c);
+      visit(p.active);
+      for (const c of p.discard) visit(c);
+      for (const c of p.prizes) visit(c);
+      return [...set];
+    }
+    // email source 分流：online 用 roomData.seats，local 用 firebaseUser（P1 only）
+    let p1Email: string | null = null;
+    let p2Email: string | null = null;
+    if (mode === 'online' && roomData?.seats) {
+      p1Email = roomData.seats[0]?.email ?? null;
+      p2Email = roomData.seats[1]?.email ?? null;
+    } else {
+      // 本機模式：P1 = current login user, P2 = AI/匿名對手
+      p1Email = firebaseUser?.email ?? null;
+    }
+    const payload = {
+      matchId: g.id,
+      roomCode: roomCode || null,
+      mode: mode === 'online' ? 'online' : 'local',
+      vsAI: aiPlayerIndex !== null,
+      aiSide: aiPlayerIndex,
+      winner: g.winner ?? null,
+      winReason: g.winReason ?? '',
+      finalTurn: g.turn,
+      durationMs: g.gameStartTime ? (Date.now() - g.gameStartTime) : 0,
+      startedAt: g.gameStartTime ?? null,
+      endedAt: Date.now(),
+      p1: {
+        name: g.players[0]?.name ?? 'P1',
+        email: p1Email,
+        cardIds: collectCardIds(g.players[0]),
+      },
+      p2: {
+        name: g.players[1]?.name ?? 'P2',
+        email: p2Email,
+        cardIds: collectCardIds(g.players[1]),
+      },
+    };
+    try {
+      await fetch(`${apiUrl}/api/match-result`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // 統計失敗不影響遊戲，靜默處理
+    }
+  }
+
   function onGlobalKey(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       // v2.129：lightbox 最上層，Esc 先關 lightbox
