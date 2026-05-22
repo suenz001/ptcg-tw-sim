@@ -697,15 +697,24 @@
   function enterAttCard(e: PointerEvent, cardId: string) {
     if (dragging) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    // v5.027：偵測 viewport 頂端空間 — 預覽大圖約 480px 高，<480 時改顯示在卡下方避免飛出畫面
-    const PREVIEW_HEIGHT = 480;
-    const showBelow = rect.top < PREVIEW_HEIGHT;
+    // v5.028：viewport-aware 雙向 clamp
+    //   - 預設預覽在卡上方（preview bottom 對齊 rect.top）
+    //   - 上方空間 < PH 時改顯示在下方
+    //   - 兩邊都不夠時 clamp 到視窗邊緣，避免預覽切到視窗外
+    const PH = 480;
+    const vh = (typeof window !== 'undefined') ? window.innerHeight : 768;
+    const spaceAbove = rect.top;
+    const spaceBelow = vh - rect.bottom;
+    let below: boolean;
+    if (spaceAbove >= PH) below = false;
+    else if (spaceBelow >= PH) below = true;
+    else below = spaceBelow > spaceAbove;  // 都不夠 — 選空間較大那邊
+    let y: number;
+    if (below) y = Math.min(rect.bottom + 8, Math.max(8, vh - PH - 8));
+    else y = Math.max(rect.top, PH + 8);  // 上方時：保證 preview top (= y-PH) >= 8
     hoverAttCardId = cardId;
-    hoverAttBelow = showBelow;
-    hoverAttAnchor = {
-      x: rect.left + rect.width / 2,
-      y: showBelow ? rect.bottom + 8 : rect.top,
-    };
+    hoverAttBelow = below;
+    hoverAttAnchor = { x: rect.left + rect.width / 2, y };
   }
   function leaveAttCard() {
     hoverAttCardId = null;
@@ -3157,13 +3166,13 @@
   function attachedCardsOf(inst: CardInstance | null | undefined): Array<{ cardId: string; iid: string; kind: 'energy' | 'tool' | 'evo' }> {
     if (!inst) return [];
     const out: Array<{ cardId: string; iid: string; kind: 'energy' | 'tool' | 'evo' }> = [];
-    // v5.027 排序：能量 → 進化堆 → 道具（玩家要求「能量永遠在最上面，進化鏈永遠在最上面」）
-    //   index 越小 = z-index 越高（蓋住後面的）= 露出的部分越靠近寶可夢
-    //   寶可夢本體 z=99 永遠最上層；attached 由近到遠依序是 energy / evo / tool
-    for (const e of inst.energyAttached) out.push({ cardId: e.cardId, iid: e.iid, kind: 'energy' });
+    // v5.028 排序：進化堆 → 道具 → 能量（玩家最終決定的順序）
+    //   index 越小 = z-index 越高 = 越靠近寶可夢；寶可夢本體 z=99 永遠最上層
+    //   進化最近 → 道具次 → 能量最遠（露出最多）
     for (const ev of inst.evolvedFromStack ?? []) out.push({ cardId: ev.cardId, iid: ev.iid, kind: 'evo' });
     if (inst.toolAttached) out.push({ cardId: inst.toolAttached.cardId, iid: inst.toolAttached.iid, kind: 'tool' });
     for (const et of inst.extraTools ?? []) out.push({ cardId: et.cardId, iid: et.iid, kind: 'tool' });
+    for (const e of inst.energyAttached) out.push({ cardId: e.cardId, iid: e.iid, kind: 'energy' });
     return out;
   }
   function evoOptionsFor(fromIid: string): CardInstance[] {
@@ -5572,7 +5581,7 @@
                 <div class="bench-name">{bc?.name}</div>
                 <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
                 <div class="bench-middle">
-                  <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable"/>
+                  <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable" onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>
                   <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
                   {#if battleLayout === 'tabletop'}
                     {@const _attOB = attachedCardsOf(b)}
@@ -5628,7 +5637,7 @@
               style={attackFx && oppPlayer.active && attackFx.defenderIid === oppPlayer.active.iid ? `--flash-color:${ENERGY_COLOR[attackFx.energyType]}` : undefined}
               out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
             >
-              <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)}/>
+              <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)} onpointerenter={(e)=>enterAttCard(e, oppPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>
               <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
               {#if battleLayout === 'tabletop'}
                 {@const _attOA = attachedCardsOf(oppPlayer.active)}
@@ -5671,6 +5680,7 @@
               <div class="active-hpbar-bottom">
                 <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(oppPlayer.active)?hpRemaining(oppPlayer.active)/hpTotal(oppPlayer.active)*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),hpTotal(oppPlayer.active))}"></div></div>
                 <span class="active-hp-text">HP {hpRemaining(oppPlayer.active)}/{hpTotal(oppPlayer.active)}</span>
+                {#if battleLayout === 'tabletop'}<div class="active-name-tt">{ac?.name ?? '?'}</div>{/if}
               </div>
             </div>
           {/if}
@@ -5902,7 +5912,8 @@
             onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
             <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
-              onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}/>
+              onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}
+              onpointerenter={(e)=>enterAttCard(e, myPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>
             <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
             {#if battleLayout === 'tabletop'}
               {@const _attMA = attachedCardsOf(myPlayer.active)}
@@ -5946,6 +5957,7 @@
             <div class="active-hpbar-bottom">
               <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(myPlayer.active)?hpRemaining(myPlayer.active)/hpTotal(myPlayer.active)*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),hpTotal(myPlayer.active))}"></div></div>
               <span class="active-hp-text">HP {hpRemaining(myPlayer.active)}/{hpTotal(myPlayer.active)}</span>
+              {#if battleLayout === 'tabletop'}<div class="active-name-tt">{ac?.name ?? '?'}</div>{/if}
             </div>
             {#if evoOpts.length>0&&!pendingSelection&&isMyTurn()}
               <div class="evo-wrap">
@@ -5989,7 +6001,8 @@
               <div class="bench-middle">
                 <img src={bc?.imageUrl} alt={bc?.name}
                   class:zoomable={!selectedEnergyIid}
-                  onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}/>
+                  onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}
+                  onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>
                 <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
                 {#if battleLayout === 'tabletop'}
                   {@const _attMB = attachedCardsOf(b)}
@@ -8163,6 +8176,56 @@
   }
   /* 9854 line .evo-wrap bottom:1.85rem → 桌墊版不留底部空間 */
   .playmat.layout-tabletop .active-card .evo-wrap{ bottom:.4rem !important; }
+
+  /* === v5.028 active 名稱左欄（HP bar 下方） + 字放大 === */
+  .playmat.layout-tabletop .active-card .active-name-tt{
+    font-size:.9rem; font-weight:700; color:#fff;
+    text-align:center; line-height:1.15;
+    margin-top:4px;
+    word-break:keep-all; overflow-wrap:anywhere;
+    text-shadow:0 1px 2px rgba(0,0,0,.85);
+    max-width:100%;
+  }
+  /* HP 字也放大 */
+  .playmat.layout-tabletop .active-card .active-hpbar-bottom .active-hp-text{
+    font-size:.92rem; font-weight:700;
+  }
+  /* tabletop 隱藏右側 active-info 內的原 active-name（避免重複顯示） */
+  .playmat.layout-tabletop .active-card .active-info .active-name{ display:none; }
+
+  /* === v5.028 bench 名稱+HP 提到頂層（z-index > stack 50），字放大 === */
+  .playmat.layout-tabletop .bench-slot .bench-name{
+    position:relative; z-index:200;
+    font-size:.92rem; font-weight:700; color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,.85);
+    background:rgba(0,0,0,.55); border-radius:3px;
+    padding:1px 3px; line-height:1.15;
+  }
+  .playmat.layout-tabletop .bench-slot .bench-stat{
+    position:relative; z-index:200;
+    font-size:.85rem; font-weight:600; color:#cfe;
+    text-shadow:0 1px 2px rgba(0,0,0,.85);
+    background:rgba(0,0,0,.5); border-radius:3px;
+    padding:1px 3px; line-height:1.15;
+  }
+  /* bench hp-bar 也提到頂層（不被 attached 蓋） */
+  .playmat.layout-tabletop .bench-slot > .hp-bar-wrap{
+    position:relative; z-index:200;
+  }
+
+  /* === v5.028 hover 高亮 — 卡片外框亮 + 微微放大 + 升 z-index === */
+  .playmat.layout-tabletop .att-card:hover{
+    border-color:#ffd44a !important;
+    box-shadow:0 0 14px rgba(255,212,74,.9), 0 2px 6px rgba(0,0,0,.6);
+    z-index:80 !important;  /* 浮到所有 attached 之上（但仍低於 Pokemon z=99） */
+    transition:border-color .12s, box-shadow .12s;
+  }
+  /* Pokemon 圖 hover 亮邊（active + bench） */
+  .playmat.layout-tabletop .active-card .active-img:hover,
+  .playmat.layout-tabletop .bench-slot .bench-middle img:hover{
+    filter:brightness(1.12) drop-shadow(0 0 8px rgba(255,212,74,.7));
+    transition:filter .12s;
+  }
 
   /* === 隱藏舊 pip / chip（被疊放小卡圖取代） === */
   .playmat.layout-tabletop .active-card .active-nrg-col,

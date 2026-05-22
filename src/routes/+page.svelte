@@ -265,6 +265,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.028</span> 🎨 桌墊版 — 寶可夢 hover 預覽 + 疊牌新順序 + bench 名稱頂層 + 預覽雙向 clamp + 卡片亮邊</summary>
+        <ul>
+          <li><b>寶可夢圖 hover 預覽</b>：active 和 bench 寶可夢圖也綁 enterAttCard，hover 顯示原寸大圖（最上層的那張牌不再是死的）。</li>
+          <li><b>疊牌新順序</b>：attachedCardsOf 改為 進化堆 → 道具 → 能量（玩家最終決定的順序），index 越小 z-index 越高 = 越靠近寶可夢。</li>
+          <li><b>bench 名稱+血量 頂層顯示</b>：bench-name / bench-stat / hp-bar-wrap 加 <code>z-index:200</code>，蓋過 attached cards (z=50)；加深色背景圓角 + 字放大 (.85-.92rem) + 黑色 text-shadow。</li>
+          <li><b>active 名稱左欄</b>：在 HP bar 下方新增 <code>.active-name-tt</code> 顯示寶可夢名（原右側 active-info 內的 active-name 在桌墊版隱藏避免重複）。字放大到 .9rem。</li>
+          <li><b>HP 字放大</b>：active 從 .7rem → .92rem。</li>
+          <li><b>預覽雙向 clamp</b>：viewport 偵測上下空間，自動選 above/below；都不夠時 clamp 到視窗邊緣，預覽不會被切到。中間位置的戰鬥場卡也能完整顯示預覽。</li>
+          <li><b>卡片 hover 亮邊</b>：附加卡 hover 亮黃邊 + 發光 + 升 z-index 80（蓋過其他 attached）；寶可夢圖 hover 也加 brightness 1.12 + 黃光 drop-shadow。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c/11d（Python pipeline）／Rule 14（template 加 6 個 hover handler + 2 個 name 元素 + CSS 區塊擴充）。桌機 classic 與手機 portrait 完全不影響。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.027</span> 🎨 桌墊版多項優化 — 疊牌順序/HP bar 加長/bench grid 對齊/hover 防溢/獎賞按鈕避免位移</summary>
         <ul>
           <li><b>疊牌順序</b>：attachedCardsOf 重排為 能量 → 進化堆 → 道具（玩家要求「能量永遠在最上面，進化鏈永遠在最上面」），index 越小 z-index 越高（越靠近寶可夢）。</li>
