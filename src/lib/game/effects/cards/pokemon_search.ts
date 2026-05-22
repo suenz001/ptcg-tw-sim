@@ -106,9 +106,18 @@ regR('bench-named-basic-from-deck', (st, idx, iids, params, pool) => {
         evolvedFromStack: undefined,
         evolvedThisTurn: undefined,
       }));
-    const remaining = p.deck.filter(c => !validIids.includes(c.iid));
-    // v3.78：用 getOwnBenchLimit
-    const bench = [...p.bench, ...selected].slice(0, getOwnBenchLimit(st, idx, pool));
+    // v5.010：原本 .slice(0, limit) 會截掉超出備戰的卡 → 寶可夢從 deck 拿出來但被丟失。
+    //   改成：按 slots 分配，多餘的 selected 與 unselected 一起放回 remaining 重洗。
+    const benchLimit = getOwnBenchLimit(st, idx, pool);
+    const slots = Math.max(0, benchLimit - p.bench.length);
+    const toBench = selected.slice(0, slots);
+    const overflow = selected.slice(slots).map(c => ({
+      ...c, justPlaced: undefined, damage: 0, status: undefined, secondaryStatus: undefined,
+      energyAttached: [], toolAttached: undefined, extraTools: [], evolvedFromStack: undefined,
+      evolvedThisTurn: undefined,
+    }));
+    const remaining = [...p.deck.filter(c => !validIids.includes(c.iid)), ...overflow];
+    const bench = [...p.bench, ...toBench];
     return { ...p, deck: shuffle(remaining), bench };
   });
   return applyBenchPlaceSideEffects(st, idx, validIids, pool);
@@ -153,9 +162,18 @@ regR('bench-basic-from-deck', (st, idx, iids, params, pool) => {
         evolvedFromStack: undefined,
         evolvedThisTurn: undefined,
       }));
-    const remaining = p.deck.filter(c => !effIids.includes(c.iid));
-    // v3.78：用 getOwnBenchLimit 支援零之大空洞（5→8 格）
-    const bench = [...p.bench, ...selected].slice(0, getOwnBenchLimit(st, idx, pool));
+    // v5.010：原本 .slice(0, limit) 會截掉超出備戰的卡 → 寶可夢從 deck 拿出來但被丟失。
+    //   改成：按 slots 分配，多餘的 selected 與 unselected 一起放回 remaining 重洗。
+    const benchLimit2 = getOwnBenchLimit(st, idx, pool);
+    const slots2 = Math.max(0, benchLimit2 - p.bench.length);
+    const toBench2 = selected.slice(0, slots2);
+    const overflow2 = selected.slice(slots2).map(c => ({
+      ...c, justPlaced: undefined, damage: 0, status: undefined, secondaryStatus: undefined,
+      energyAttached: [], toolAttached: undefined, extraTools: [], evolvedFromStack: undefined,
+      evolvedThisTurn: undefined,
+    }));
+    const remaining = [...p.deck.filter(c => !effIids.includes(c.iid)), ...overflow2];
+    const bench = [...p.bench, ...toBench2];
     return { ...p, deck: shuffle(remaining), bench };
   });
   // v2.119：觸發「放到備戰」的被動場地卡效果（險惡廢墟等）

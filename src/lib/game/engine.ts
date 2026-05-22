@@ -3406,6 +3406,20 @@ function handlePlaying(
     if (!attacker.active) return state;
     if (!defender.active) return state;
 
+    // v5.010：bench-fill 招式（呼朋引伴等）defense-in-depth — UI 沒灰透過 sim/AI 仍可送來，
+    //   此處擋下避免 resolver `.slice` 截斷把寶可夢丟失。
+    {
+      const atkCard0 = pool.get(attacker.active.cardId);
+      const atkList0 = getEffectiveAttacks(state, attacker.active, pool);
+      const atk0 = atkList0[action.attackIndex]?.atk;
+      if (atk0 && BENCH_FILL_ATTACK_NAMES.has(atk0.name)) {
+        const benchLimit0 = getBenchLimit(state, aIdx, pool);
+        if (attacker.bench.length >= benchLimit0) {
+          return addLog(state, `${atkCard0?.name ?? '?'}｜${atk0.name}：備戰區已滿，無法使用此招式`, aIdx);
+        }
+      }
+    }
+
     const atkNameForStatus = pool.get(attacker.active.cardId)?.name ?? '?';
 
     // 特殊狀態：睡眠 — 無法攻擊
@@ -6522,6 +6536,14 @@ export function getEffectiveAttacks(
   return result;
 }
 
+/**
+ * v5.010：bench-fill 招式名清單 — 備戰滿時禁用宣告。
+ *   含「呼朋引伴」(31+ 張卡共用同名招式 — 毒電嬰/大嘴娃/火狐狸/伊布/花舞鳥/巨翅飛魚/
+ *   電飛鼠/小山豬/N的迷你冰/波波/袋獸/呆火駝/燭光靈/向尾喵/粉蝶蟲/謎擬Q/大顎蟻 等)
+ *   未來其他「強制把寶可夢放備戰」類招式可加進來。
+ */
+const BENCH_FILL_ATTACK_NAMES = new Set<string>(['呼朋引伴']);
+
 /** 列出目前行動玩家可使用的招式（已滿足能量需求 + 未被狀態/效果封鎖的） */
 export function getAvailableAttacks(
   state: GameState,
@@ -6564,6 +6586,14 @@ export function getAvailableAttacks(
       if (SECOND_PLAYER_FIRST_TURN_ONLY.has(atk.name)) {
         const isSecondPlayer = state.activePlayerIndex !== state.firstPlayerIdx;
         if (!state.isFirstTurn || !isSecondPlayer) return -1;
+      }
+      // v5.010：bench-fill 類招式（如「呼朋引伴」放基礎寶可夢到備戰）— 備戰滿時禁用
+      //   原本只在 regPost 內做檢查（attack 已 fire、log「備戰區已滿」），
+      //   但 UI 按鈕沒灰 → 玩家以為能用、點下去攻擊發動了但什麼也沒發生 → 困惑。
+      //   此處在 UI 層直接擋下，類似「好友寶芬」item guard 行為。
+      if (BENCH_FILL_ATTACK_NAMES.has(atk.name)) {
+        const benchLimit = getBenchLimit(state, state.activePlayerIndex, pool);
+        if (player.bench.length >= benchLimit) return -1;
       }
       // v2.103：大竺葵繁茂 / 燃火能量倍率（傳 state+activePlayerIndex）
       // v2.127：傳 atk.name 讓 canAffordAttack 能套用 酋雷姆｜反等離子 條件式減費

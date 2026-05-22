@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.010</span> 🔧 修「呼朋引伴」備戰滿仍可使用、找到的寶可夢被丟失</summary>
+        <ul>
+          <li><b>玩家回報</b>：「呼朋引伴」招式（從牌庫挑【基礎】寶可夢放備戰）在備戰滿時仍能宣告使用，找到的寶可夢進備戰前被丟掉。</li>
+          <li><b>規則</b>：類似「好友寶芬」物品卡，備戰滿時應該無法宣告招式（按鈕灰掉）— 不能查看牌庫、不能選卡。</li>
+          <li><b>Root cause（兩層 bug）</b>：(1) <b>UI 缺 gate</b> — getAvailableAttacks 沒檢查 bench-fill 類招式的備戰滿條件，按鈕沒灰；(2) <b>resolver 截斷</b> — pokemon_search.ts 的 <code>[...bench, ...selected].slice(0, limit)</code> 會直接丟掉超出 slots 的寶可夢（從 deck 拿出但又被 truncate），造成「卡片消失」的玩家觀察。</li>
+          <li><b>修法</b>：(1) engine.ts 加 <code>BENCH_FILL_ATTACK_NAMES</code> set（含「呼朋引伴」），getAvailableAttacks 與 ATTACK action handler 雙層 gate，備戰滿時按鈕灰掉、繞 UI 也擋下；(2) resolver 改成「按 slots 分配，多餘的 selected 與 unselected 一起放回 remaining 重洗」— 防禦性修正，永遠不會丟卡。</li>
+          <li><b>影響範圍</b>：31+ 張卡共用「呼朋引伴」招式名（毒電嬰 / 大嘴娃 / 火狐狸 / 伊布 / 花舞鳥 / 巨翅飛魚 / 電飛鼠 / 小山豬 / N的迷你冰 / 波波 / 袋獸 / 呆火駝 / 燭光靈 / 向尾喵 / 粉蝶蟲 / 謎擬Q / 大顎蟻 等），全部一次修正。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline — engine.ts 是核心 + 大檔，必走）／Rule 4（tsc verify）／Rule 14（最小 patch — 加 set 常數 + 2 處 gate + resolver 邏輯修正）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.009</span> 🎴 桌墊版對戰布局（齒輪切換，opt-in 測試）</summary>
         <ul>
           <li><b>玩家回饋</b>：實體 PTCG 對戰時 Active 寶可夢放正中央，但本站對戰版面 Active 放在最左、Bench 往右延伸，跟實體不一樣，新手第一眼會搞錯位置。</li>
