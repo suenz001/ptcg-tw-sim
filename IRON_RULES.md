@@ -12,37 +12,6 @@ push 失敗的 incident。違反任何一條都會讓推上去的版本崩潰、
 
 ---
 
-## Meta Rule: 新增鐵律時必須同步加 audit grep 到 `scripts/iron-rules-audit.sh`
-
-**背景**：v4.944 建了 GitHub Actions CI 自動跑鐵律 audit grep — 每次 push 自動 check 違規。
-如果鐵律加了但沒同步加 audit grep，**自動防護網等於不存在** — 跟沒加一樣。
-
-**規則**：每次新增 / 強化 / 修改本檔內任一條鐵律時，必須：
-
-1. **能 grep 的鐵律** → 在 `scripts/iron-rules-audit.sh` 加對應 check（用該鐵律附的 grep 指令）
-2. **不能 grep 的鐵律**（如 Rule 7c「先查 JSON」這種行為規範）→ 在本檔的鐵律本身註明 `[audit:N/A 行為規範]`
-3. **誤觸風險高的鐵律** → 用 warn-only（print_warning）而非 print_violation，列出供人工 review
-
-**為什麼這條獨立成 meta rule**：人類 / AI 都會忘 — 加新鐵律時很容易只更新本檔，忘了同步更新 audit script。
-把這條放最開頭，每次讀 IRON_RULES 就會看到提醒。
-
-**Audit script 結構**：
-```bash
-# scripts/iron-rules-audit.sh
-echo "── Rule N: <一行描述>"
-matches=$(grep -rn '<grep pattern>' <scope> 2>/dev/null || true)
-if [ -n "$matches" ]; then
-  print_violation "N" "<違規說明>" "$matches"
-else
-  echo -e "${GREEN}✓ Rule N clean${NC}"
-fi
-```
-
-**Phase A → B 升級時機**：建 audit 後先 `continue-on-error: true` 跑 1-2 週，觀察哪些是真誤觸；校準後移除
-`continue-on-error` 進入 Phase B（違規真正擋 deploy）。
-
----
-
 ## CRITICAL iron rules — these have ALL been violated in past pushes
 
 ### Rule 1: Svelte template special characters MUST be HTML-entity escaped
@@ -408,6 +377,75 @@ for path in changed_files:
 
 **為什麼這條值得獨立成鐵律**：tsc / svelte-parse 都不抓，過了所有「本地驗證」但 GitHub Actions 必炸。這個 silent 漏網是最危險的失敗模式 — 改一行小字串應該萬無一失，卻能把整個 deploy 炸掉。
 
+### Rule 11c: Edit/Write 對既有檔的「中段截斷」失敗模式（v5.008 災難）
+
+Rule 11 把 Edit/Write 截斷描述成「truncate 至 HEAD size」— v5.008 揭露了更陰險的另一種模式：
+**中段截斷（mid-stream truncation）** — 檔案 size 看起來正常甚至略大，但 Edit point 之後的內
+容被 silently 丟掉。
+
+**v5.008 事故全紀錄**：
+- 用 Edit 工具把 `src/routes/game/+page.svelte` 的 `.manual-code` CSS 區塊改寫，加 v5.008
+  新樣式 ~40 行
+- Edit 報告「success」，`tsc --noEmit` 通過 exit=0
+- push 後 GitHub Pages build 失敗
+- 比對 git diff 才發現：從 `.pv-overlay` 開始的 130 行 CSS（含 `.pv-close` / `.auth-modal`
+  / `.auth-tabs` 等）全部消失，檔尾停在 `z-index: 100;` 沒有 `}`、沒有 `</style>`
+- 檔案 size：HEAD 549,151 bytes → Edit 後 549,152 bytes（差 1 byte，**沒被截到 HEAD size**，
+  Rule 11 audit 抓不到）
+- vite-plugin-svelte 找不到 `</style>` → fatal build error
+
+**為什麼 tsc 沒抓**：`tsc --noEmit` 只 type-check `.ts` / `.svelte` 的 `<script>` 區塊，不
+解析 `<style>` 區塊的 CSS。`<style>` 缺 `</style>` tsc 完全看不到。
+
+**為什麼 svelte-check 沒抓**：本地沙箱有 binary 相容問題跑不起來；正常環境會抓但很慢。
+
+**為什麼比例高發於 game/+page.svelte**：該檔 549KB，是 repo 最大的單一 source file。任何
+對它的 Edit 都應該優先用 Python pipeline。
+
+**檢測方式（push 前必跑）— 適用於 .svelte / .html 含 `<style>` 或 `<script>` tag 的檔案**：
+
+```python
+# 對所有改過的 .svelte / .html 確認標籤對稱
+for path in changed_svelte_html_files:
+    with open(path, 'rb') as f:
+        content = f.read()
+    # <style>...</style> 對稱
+    style_open = content.count(b'<style')
+    style_close = content.count(b'</style>')
+    assert style_open == style_close, f'{path}: <style>={style_open} </style>={style_close}'
+    # <script>...</script> 對稱（不含 <script src=...> module link）
+    # 略 — Svelte file 通常正好 1 對
+```
+
+**更可靠的 tail anchor check**：
+
+```python
+# 對 game/+page.svelte 這種大檔，確認結尾有 expected sentinel
+TAIL_ANCHORS = {
+    'src/routes/game/+page.svelte': b'</style>',  # 最末必須是 </style>
+    'src/routes/+page.svelte': b'</style>',
+    'oracle-admin/admin.html': b'</html>',
+    'oracle-admin/server_admin_patch.js': b'// === ORACLE ADMIN PATCH END ===',
+}
+for path, anchor in TAIL_ANCHORS.items():
+    if not os.path.exists(path): continue
+    with open(path, 'rb') as f:
+        tail = f.read()[-2000:]  # 最後 2KB
+    assert anchor in tail, f'{path} tail missing {anchor!r} — file truncated?'
+```
+
+**正確 workflow**（重申 Rule 11）：
+1. **任何 .svelte / .ts / .html / .sh 既有檔的修改 → 一律走 Python pipeline**（用 git HEAD blob
+   + `str.replace` + `safe_write`）— 不用 Edit/Write
+2. **跑 tsc 還不夠** — 大檔的 `<style>` 區塊 tsc 不檢查
+3. **必跑 tail anchor check** + `<style>` 對稱 check（grep -c）
+4. **理想 workflow**：寫一個 `scripts/pre-push-audit.py` 含上述所有 check，每次 push 前 run
+
+**Rule 11 vs Rule 11c 差別**：
+- Rule 11: 「Edit 後 disk size <= HEAD size 且有新內容」→ 整尾截斷至 HEAD size
+- Rule 11c: 「Edit 後 disk size 接近正常」但**中段內容遺失** → 不靠 size 抓，要靠標籤對稱 / tail anchor
+
+
 ### Rule 12: Wave/cards 子檔案禁止 module top-level 對 effects.ts 內 Map 做 .set()
 
 **症狀**: 瀏覽器 console 報 `ReferenceError: Cannot access 'go' before initialization`
@@ -590,39 +628,6 @@ return withPending(state, {
 玩家可藉此推測對手獎賞卡、規劃下回合策略。Short-circuit 移除此資訊揭露機會，違反 PTCG
 資訊揭露精神（同 Rule 8 揭示資訊規則的延伸）。
 
-**v4.942 強化 — `minCount: hasX ? 1 : 0` 是違規寫法**：
-
-```ts
-// ❌ 違規：牌庫有候選時 minCount=1 強迫玩家選 1 張
-const hasPoke = p.deck.some(c => pool.get(c.cardId)?.supertype === 'Pokemon');
-return withPending(state, {
-  type: 'deck-search', filter: 'Pokemon',
-  minCount: hasPoke ? 1 : 0,  // ← 違規！
-  maxCount: 1, ...
-});
-```
-
-玩家應**永遠**可以 Pass（minCount: 0）— 即使牌庫有符合 filter 的卡，玩家可能想：
-- 保留該卡在牌庫（避免被特定特性翻牌偷走）
-- 只是想看牌庫剩餘資訊推測對手獎賞
-- 戰術上不想此時拿那張卡
-
-**正確寫法**：
-```ts
-return withPending(state, {
-  type: 'deck-search', filter: 'Pokemon',
-  minCount: 0,  // ← 永遠 0
-  maxCount: 1, ...
-});
-```
-
-**Audit 工具**：
-```bash
-grep -rnE 'minCount:\s*has\w+\s*\?\s*1\s*:\s*0' src/lib/game/
-```
-應該零結果。若有 match，全部改 `minCount: 0`。
-
-
 **例外**：「棄牌區搜尋」類玩家本來就能看到棄牌堆（公開資訊），short-circuit return OK；
 但建議保持一致性，棄牌類也走 picker。「對手場上 / 對手能量」搜尋類則不適用（資訊封閉）。
 
@@ -777,229 +782,6 @@ if (guard.blocked) {
 
 新增任何「對對手寶可夢造成傷害 / 放置指示物 / 改狀態 / KO」的 source resolver
 **必須**用 `canApplyEffectToTarget`。Rule 16 已併入本規則。
-
----
-
-## Rule 18: Colorless 寶可夢特性 direct-scan 必須加火箭隊的監視塔 gate
-
-來自 v4.921 / v4.922 audit 發現：
-
-**規則背景**：火箭隊的監視塔 stadium 在場時，雙方所有 Colorless 寶可夢的特性（含主動 + 被動）全部消除。引擎主路徑（USE_ABILITY / getUsableAbilities / on-play / on-evolve / passive maps）都已透過 `isColorlessAbilityBlocked()` 自動 gate。
-
-**漏洞模式**：當 helper / resolver 直接寫 `card.abilities?.some(a => a.name === 'XX')` 偵測特定特性時，會繞過引擎的 gate。如果該特性的持有者是 Colorless，就會在監視塔在場時誤判「特性仍生效」。
-
-**已知 case**：
-- v4.921：`hasOakEye()` 漏 gate → 探探鼠 (Colorless) 監視之眼在監視塔下仍阻擋指示物移放
-- v4.922：`isLazyTraitBlockingAttack()` 漏 gate → 請假王ex (Colorless) 懶怠個性在監視塔下仍阻擋攻擊
-
-### Audit 方法論（新增 Colorless 特性時必跑）
-
-1. 用 Python 從 `static/cards/*.json` 撈所有 `pokemonType === 'Colorless'` 寶可夢的 abilities
-2. `grep -rn "abilities?.some(a => a.name ===" src/lib/game/` 找所有 direct-scan
-3. 交叉比對：每個 direct-scan 的 ability name 是否在 Colorless 特性清單
-4. 若是 → 必須在 helper 內加 stadium gate
-
-### 標準 gate 寫法
-
-```ts
-// 用字面值 '火箭隊的監視塔' 比對 — 不從 effects/cards/stadiums.ts import
-// 因為 _shared.ts 是更底層的模組，反向 import 會循環依賴。
-const stadiumCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : undefined;
-const rocketWatchtower = stadiumCard?.name === '火箭隊的監視塔';
-
-// 在 iterate ability holders 時 short-circuit
-if (rocketWatchtower && card.pokemonType === 'Colorless') continue;
-
-// 或在 helper 開頭整個 short-circuit（如果只有一個持有者且為 Colorless）
-if (rocketWatchtower && atkCard.pokemonType === 'Colorless') return false;
-```
-
-### 新增 Colorless 特性時的 checklist
-
-- [ ] 該特性是否走「集中註冊表」（PASSIVE_* maps / ABILITY_EFFECTS / USE_ABILITY）？→ 已自動 gate ✓
-- [ ] 該特性是否新寫 helper 用 direct-scan？→ 必須加 inline stadium gate
-- [ ] 該特性是否新寫 AI preflight？→ ai.ts 對應點同步加 gate
-
----
-
-## Rule 19: Item 鎖 source 新增時必須同步加到 PLAY_FOSSIL handler + getPlayableFossils
-
-**背景**：v4.936 玩家回報 — 含羞苞 使用「癢癢花粉」（在下個對手回合，對手無法從手牌使出物品卡）後，對手仍可使出化石類卡（陳舊的甲蓋化石 / 鰭之化石 等）。
-
-**根因**：化石卡走 `PLAY_FOSSIL` action（不走 `PLAY_TRAINER`，因為化石上場後變成 Pokémon），engine handler 只有 `isOppItemPlayBlocked`（海之詛咒）的 gate，沒有同步 `cantPlayItemThisTurn`（含羞苞癢癢花粉 / 吼叫尾ex 絕叫 / 電蜘蛛ex 雷擊石）+ 威迫目光（班基拉斯特性）的 gate。`getPlayableFossils` UI filter 同 bug。
-
-**規則**：新增任何「對手無法從手牌使出物品卡」類效果時（不論是招式 effect → `cantPlayItemThisTurn` flag、特性 → opp active ability check、還是其他機制），必須同步加 gate 到：
-
-1. `src/lib/game/engine.ts` `PLAY_TRAINER` action 的 `subtype === 'Item'` 分支（既有 anchor）
-2. `src/lib/game/engine.ts` `PLAY_FOSSIL` action handler（化石走獨立 action，需獨立加）
-3. `src/lib/game/engine.ts` `getPlayableFossils()` UI filter（AI / 拖拽 hover 都用此 helper）
-
-**Audit 工具**：
-```bash
-# 找所有 Item 鎖 source（用 subtype === 'Item' + 變數名稱關鍵字）
-grep -n "subtype === 'Item' &&" src/lib/game/engine.ts
-```
-
-結果該列出 PLAY_TRAINER 的 `subtype === 'Item' && X` 條件。每條 X 都要對應一個 `if (X) return [];` 在 `getPlayableFossils()` 與一個 `if (X) return addLog(...)` 在 `PLAY_FOSSIL` handler。
-
-**為什麼這條獨立成鐵律**：v3.821 已修過一次（海之詛咒），但 audit 沒擴展到 cantPlayItemThisTurn / 威迫目光等其他 source — v4.936 再次踩坑。
-
----
-
-## Rule 20: 「後攻玩家的最初回合」限定卡 gate 用 `state.turn === 1`，不要用 `!state.isFirstTurn`
-
-**背景**：v4.940 玩家回報 — 幫忙鈴（卡面「只可在後攻玩家的最初回合使用」）永遠不能用。
-
-**根因**：`state.isFirstTurn` 的語意 = **「先攻方第 1 動作回合」**，不是「對戰第 1 回合」。
-engine.ts:6260 在先攻方 `END_TURN` 時就把 `isFirstTurn` 設為 false。後攻方的第 1 動作回合
-開始時 `isFirstTurn` 已是 false → 用 `!state.isFirstTurn` gate 永遠 fail → 卡永遠不能用。
-
-**正確判定後攻方第 1 回合的方法**（同 engine.ts:2076-2078 註解）：
-
-```ts
-// state.turn 只在後攻方 END_TURN 才 +1，所以 turn === 1 同時涵蓋雙方第 1 動作回合
-regG('幫忙鈴', (st, idx, _pool) => {
-  if (st.turn !== 1) return false;  // 雙方第 1 動作回合
-  if (st.activePlayerIndex === st.firstPlayerIdx) return false;  // 排除先攻方
-  return st.players[idx].deck.length > 0;
-});
-```
-
-**禁止寫法**：
-```ts
-if (!st.isFirstTurn) return false;  // ❌ 後攻方第 1 動作回合 isFirstTurn 已是 false
-```
-
-**影響的卡（v4.940 已修）**：幫忙鈴、悠哉尾草棒。未來新增「後攻最初回合」限定卡務必用 `turn === 1`。
-
-**JSON 卡面關鍵字**：「**後攻玩家的最初回合**」/「**後攻方的最初回合**」/「**只可在後攻**」
-
-**Audit 工具**：
-```bash
-# JSON 找所有「後攻」+「最初回合」卡
-python3 -c "import json,glob
-for fp in glob.glob('static/cards/*.json'):
-    d=json.load(open(fp,encoding='utf-8'))
-    if not isinstance(d,list): continue
-    for c in d:
-        t=(c.get('rulesText') or '')
-        if '後攻' in t and '最初回合' in t:
-            print(c.get('name'),'|',c.get('setCode'))"
-
-# 找 src 內錯誤 gate
-grep -rn '!st.isFirstTurn\|!state.isFirstTurn' src/lib/game/effects/
-```
-結果每條都要對照卡面，若是「後攻最初回合」類就改 `state.turn !== 1`。
-
----
-
-## Rule 21: peek-N-cards 機制必須用 `filter: 'X:TOP<digit>'` + `top<digit>Iids` 固定命名
-
-**背景**：v4.942 黑暗球（查看牌庫下方 7 張，從中選 1 張寶可夢）— 玩家回報 picker 沒列出 7 張中
-非寶可夢的卡。v4.940 我用 `filter: 'Pokemon:TOP_N'` + `params.topIids`（dynamic N） — 不符合既有
-UI 慣例導致功能失效。
-
-**根因**：picker UI 的「🔍 查看翻到的其他」collapsible block（`+page.svelte:6069`）用兩個固定慣例：
-
-1. **filter 正則** `/:TOP\d+$/` — 必須是 `:TOP` 後跟「**數字**」(`:TOP4` / `:TOP5` / `:TOP7` / `:TOP8`)，**不接受 `:TOP_N` / `:TOPN`**
-2. **params key** 必須是 `top4Iids` / `top6Iids` / `top7Iids` / `top8Iids` — 不接受 `topIids` / `peekIids` 等通用名稱
-
-**正確寫法（黑暗球範例）**：
-```ts
-// ✅ 用 spec'd N（即使可能 < 7，仍用 7 命名）+ top7Iids param key
-const bottom = st.players[idx].deck.slice(-Math.min(7, deckLen));
-return withPending(state, {
-  type: 'deck-search',
-  filter: 'Pokemon:TOP7',           // ← 固定 N，符合 :TOP<digit>$ 正則
-  minCount: 0, maxCount: 1,
-  effectKey: 'search-pokemon-to-hand',
-  params: {
-    top7Iids: bottom.map(c => c.iid),  // ← top7Iids 命名（即使內容是 bottom）
-    titleOverride: '...',
-  },
-});
-```
-
-**禁止寫法**：
-```ts
-filter: 'Pokemon:TOP_N',  // ❌ _N 不是數字，UI block 不觸發
-params: { topIids: ... }  // ❌ 通用 key，UI block 找不到
-```
-
-**例外**：杜若 / 拉普拉斯ex 的 `Pokemon:TOP_N` / `Energy:TOP_N` / `Trainer:TOP_N` / `Basic:TOP_N`
-  — 這些是 dynamic N 的「peek 後選擇」，刻意不顯示「翻到的其他」UI（卡面行為不同）。新卡若需要顯示
-  「翻到的其他」就用 spec'd N 命名；若刻意不顯示就保持 `:TOP_N`。
-
-**既有 spec'd N 範例可參考**：
-- 寶可裝置3.0: `Supporter:TOP7` + `top7Iids`
-- 配樂之笛: `Basic:TOP5` + `top5Iids`
-- 米立龍｜集客: `Supporter:TOP6` + `top6Iids`
-- 越橘的一步棋: `DarknessPokemon:TOP7` + `top7Iids`
-- 金屬怪: `BasicMetalEnergy:TOP4` + `top4Iids`
-- 捕蟲組合: `GrassBasicOrGrassEnergy:TOP7` + `top7Iids`
-- 黑暗球: `Pokemon:TOP7` + `top7Iids`（v4.942 加）
-
----
-
-## Rule 22: 新增 deck-search filter 必須同步加 `+page.svelte:selectionItems` 對應 clause
-
-**背景**：v4.941 玩家回報 — 呱呱泡蛙「群聚」（從牌庫選最多 2 張「呱呱泡蛙」放備戰）picker 顯示
-**所有**基礎寶可夢，沒限定同名。
-
-**根因**：`deckSameNameBenchPost` helper 用 `filter: 'Basic'` + `params: { validIids, targetName }`，
-**期待** picker 端會用 `validIids` 過濾。但 `+page.svelte:1936` 的 `'Basic'` filter clause 只 check
-`isBasicPokemonCard(card)` — **沒讀 `params.validIids` 也沒讀 `params.targetName`** → 範圍限制完全失效。
-
-**規則**：新增（或客製化）任何 deck-search filter 時，**必須兩處同步**：
-
-1. `src/lib/game/effects/...` — `withPending({ type: 'deck-search', filter: '...', params: {...} })`
-2. `src/routes/game/+page.svelte:selectionItems` — `if (f === '...') { return src.deck.filter(...) }`
-
-**正確 pattern**：filter name 用獨特字串（如 `'Basic:SameName'`），picker 端讀 params 過濾。
-
-```ts
-// effects 端
-filter: 'Basic:SameName',
-params: { targetName: cardName, validIids: cand.map(c => c.iid) },
-
-// +page.svelte:selectionItems
-if (f === 'Basic:SameName') {
-  const targetName = pendingSelection.params?.targetName as string | undefined;
-  return src.deck.filter(c => {
-    const card = pool.get(c.cardId);
-    if (!card || !isBasicPokemonCard(card)) return false;
-    if (targetName && card.name !== targetName) return false;
-    return true;
-  });
-}
-```
-
-**禁止寫法**：
-```ts
-// ❌ 用通用 filter（'Basic' / 'Pokemon' / 'Energy' 等）+ 期待 params 過濾，但 picker 不讀
-filter: 'Basic',
-params: { validIids: ... }  // picker 'Basic' clause 沒讀這個！
-```
-
-**Resolver 端 defense-in-depth**：picker 雖然有過濾，但**惡意 client 可繞 UI 送任意 iid**
-（線上對戰安全考量）。Resolver 應再用 `params.targetName` / `validIids` 過濾一次：
-
-```ts
-regR('bench-basic-from-deck', (st, idx, iids, params, pool) => {
-  const targetName = params?.targetName as string | undefined;
-  let effIids = iids;
-  if (targetName) {
-    effIids = iids.filter(iid => {
-      const inst = st.players[idx].deck.find(c => c.iid === iid);
-      return inst && pool.get(inst.cardId)?.name === targetName;
-    });
-  }
-  // ... 使用 effIids 而非原始 iids
-});
-```
-
-**影響的卡（v4.941 已修）**：呱呱泡蛙｜群聚、強顎雞母蟲｜群聚、一家鼠｜家族行軍、蟲電寶｜並排 —
-  全用 `deckSameNameBenchPost` helper，改 filter 'Basic' → 'Basic:SameName' + picker clause。
 
 ---
 
