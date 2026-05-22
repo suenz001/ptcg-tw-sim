@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.017</span> 🔧 修 泡沫【水】能量 漏擋自身睡眠（吼鯨王ex|摔落）+ 雙邊中央 sweep 兜底</summary>
+        <ul>
+          <li><b>玩家回饋</b>：吼鯨王ex 身上附 泡沫【水】能量 後使用「摔落」(自身睡眠)，仍進入睡眠狀態。卡面：「附有這張卡的【水】寶可夢不會陷入特殊狀態」— 應免疫。</li>
+          <li><b>根因</b>：<code>selfStatusPost</code>（攻擊者自身受狀態類，3 張卡共用：吼鯨王ex|摔落、卡比獸|倒下、章魚桶|暴走）只查祭典會場 immunity，<b>沒查 SPECIAL_ENERGY_STATUS_IMMUNE</b>（statusPost 對對手版本有查、selfStatusPost 漏）。</li>
+          <li><b>主修</b>：在 selfStatusPost 補 <code>checkSpecialEnergyStatusImmune</code> check（與 statusPost 一致），命中時 log「⚡ 免疫【睡眠】」並阻擋 status 寫入。順手換 applyStatusToActive 正確處理雙格共存。</li>
+          <li><b>副修（防禦深度）</b>：鏡 v5.013 祭典會場中央 sweep 模式，在 engine.ts applyAction 末端對雙邊呼叫 <code>clearSpecialEnergyProtectedStatuses</code> — 兜底清掉任何漏網的特殊狀態（20+ 處直接 <code>status:'xxx'</code> 賦值卡片都被攔截）。</li>
+          <li><b>影響卡</b>：泡沫【水】能量 對 5 種特殊狀態（中毒/灼傷/睡眠/混亂/麻痺）全免疫；磁鐵【鋼】未來有狀態免疫類同效應自動享受 sweep。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 14（最小 patch — 加 check + 中央 sweep，不重寫 helper）／Rule 15（直接查 M4.json 卡面 source of truth）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.016</span> 🎨 桌墊版 4 項 UX 微調 — log 反向 / bench 真縮 / 撤退鈕整合 / 手牌貼近</summary>
         <ul>
           <li><b>遊戲 log 反向</b>：聊天室慣例 — 新訊息在底、舊訊息在頂。CSS flex-direction:column-reverse 達成，捲軸自動 anchor 在最新訊息。</li>

@@ -8875,10 +8875,18 @@ export function selfStatusPost(status: SpecialCondition): AttackPostFn {
     const statusLabelMap: Record<string, string> = {
       poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
     };
+    // v5.017：補 SPECIAL_ENERGY_STATUS_IMMUNE 免疫 check（泡沫【水】能量 等）
+    //   玩家回報：吼鯨王ex（水）附 泡沫【水】能量 後使用「摔落」自身睡眠，
+    //   仍進入睡眠狀態 — 因 selfStatusPost 漏檢查（statusPost 對對手有，selfStatusPost 沒有）。
+    const immune = checkSpecialEnergyStatusImmune(att.active, status, pool);
+    if (immune.immune) {
+      return addLog(state, `${attName}｜${immune.energyName}：免疫【${statusLabelMap[status]}】`, aIdx);
+    }
     if (isFestivalVenueStatusProtected(state, att.active, pool)) {
       return addLog(state, `${attName}｜祭典會場：免疫【${statusLabelMap[status]}】`, aIdx);
     }
-    att.active = { ...att.active, status };
+    // v5.017：用 applyStatusToActive 正確處理 status / secondaryStatus 雙格共存（與 statusPost 一致）
+    att.active = applyStatusToActive(att.active, status);
     players[aIdx] = att;
     return addLog({ ...state, players }, `${attName} 陷入【${statusLabelMap[status]}】`, aIdx);
   };

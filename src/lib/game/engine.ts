@@ -6477,6 +6477,17 @@ export function applyAction(
     next = clearFestivalVenueProtectedStatuses(next, pool);
   }
 
+  // v5.017：SPECIAL_ENERGY_STATUS_IMMUNE 雙邊 sweep（泡沫【水】能量 等）
+  //   玩家回報：吼鯨王ex（水）附 泡沫【水】能量 用「摔落」自身睡眠，仍睡了。
+  //   主修在 selfStatusPost 補 check，但同樣有 20+ 路徑直接 `status: 'xxx'` 繞過
+  //   checkSpecialEnergyStatusImmune（與 v5.013 祭典會場同類問題）。
+  //   中央 sweep 在 dispatcher 末端雙邊 sweep — 兜底清掉任何漏網 status。
+  //   clearSpecialEnergyProtectedStatuses 是 idempotent — 無命中時 return state unchanged。
+  if (next.phase === 'playing') {
+    next = clearSpecialEnergyProtectedStatuses(next, 0, pool);
+    next = clearSpecialEnergyProtectedStatuses(next, 1, pool);
+  }
+
   return next;
 }
 
