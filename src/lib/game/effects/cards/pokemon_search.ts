@@ -283,47 +283,38 @@ regR('search-pokemon-to-hand', (st, idx, iids, _params, pool) => {
   });
 });
 
-// 小剛的發掘（Supporter）— 先選至多 2 隻基礎寶可夢加手牌；若 0 隻不選，則改選 1 隻進化寶可夢加手牌
-// 兩段式：
-//   第一段 deck-search Basic 0~2 → effectKey: 'brocks-dig-basic'
-//   resolver：若選了 ≥1 張 → 加手牌，結束；若選 0 → 開第二段 deck-search Evolution 0~1 → search-pokemon-to-hand
+// 小剛的發掘（Supporter）— v5.014 統一 picker：同 modal 顯示基礎+進化
+// 卡面：「從自己的牌庫選擇最多 2 張【基礎】寶可夢卡，或者 1 張進化寶可夢卡，在給對手看過後加入手牌」
+// 動態規則（picker UI 端 enforce）：
+//   - 點 Basic → 可再點 Basic（最多 2）/ Evolution 變灰
+//   - 點 Evolution → 其他全變灰（最多 1 隻）
+// effectKey 'brocks-dig-unified' 是 UI 端 brocksDigPickState 的判別 key
 reg('小剛的發掘', (st, idx) => {
-  st = addLog(st, '小剛的發掘：從牌庫選最多 2 隻基礎寶可夢加手牌（若不選則可改選 1 隻進化寶可夢）', idx);
+  st = addLog(st, '小剛的發掘：從牌庫選最多 2 隻【基礎】寶可夢卡，或 1 隻進化寶可夢卡加手牌', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Basic',
+    filter: 'Pokemon',
     minCount: 0, maxCount: 2,
-    effectKey: 'brocks-dig-basic',
+    effectKey: 'brocks-dig-unified',
   });
 });
 
-regR('brocks-dig-basic', (st, idx, iids, _params, pool) => {
-  if (iids.length > 0) {
-    // 玩家選了至少 1 隻基礎寶可夢 → 加手牌，結束
-    const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
-    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    // v2.96：卡面「給對手看過」→ 公開卡名
-    st = addLog(st, `小剛的發掘：搜到 ${names} 加入手牌`, idx);
-    return updatePlayer(st, idx, (p) => {
-      const picked = p.deck.filter(c => iids.includes(c.iid));
-      const remaining = p.deck.filter(c => !iids.includes(c.iid));
-      return { ...p, deck: shuffle(remaining), hand: [...p.hand, ...picked] };
-    });
-  }
-  // 玩家選了 0 張 → 開第二段：選 1 隻進化寶可夢
-  const hasEvolution = st.players[idx].deck.length > 0;
-  if (!hasEvolution) {
+regR('brocks-dig-unified', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) {
     st = updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) }));
-    return addLog(st, '小剛的發掘：未選基礎寶可夢，且牌庫中無進化寶可夢，結束', idx);
+    return addLog(st, '小剛的發掘：未選擇任何寶可夢；重洗牌庫結束', idx);
   }
-  st = addLog(st, '小剛的發掘：未選基礎寶可夢 → 改選 1 隻進化寶可夢加手牌', idx);
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Evolution',
-    minCount: 0, maxCount: 1,
-    effectKey: 'search-pokemon-to-hand',
+  // 玩家選的 iid 在 UI 端已驗證符合卡面規則（同類 Basic ≤2 或 單張 Evolution）
+  // resolver 不再做 type-check，避免 server / sim 端 reject 後 UI 卻顯示成功的不一致
+  const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
+  const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  // 卡面「給對手看過」→ 公開卡名
+  st = addLog(st, `小剛的發掘：搜到 ${names} 加入手牌`, idx);
+  return updatePlayer(st, idx, (p) => {
+    const picked = p.deck.filter(c => iids.includes(c.iid));
+    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+    return { ...p, deck: shuffle(remaining), hand: [...p.hand, ...picked] };
   });
 });
 

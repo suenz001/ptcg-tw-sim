@@ -2516,6 +2516,36 @@
     });
     return new Set(types).size < types.length;
   });
+
+  // v5.014：小剛的發掘 — 同 modal 顯示基礎+進化的動態選擇規則
+  //   點 Basic 後只能繼續點 Basic（最多 2）；點 Evolution 後不能再點任何
+  const brocksDigPickState = $derived.by(() => {
+    if (!pendingSelection || pendingSelection.effectKey !== 'brocks-dig-unified') {
+      return { hasBasic: false, hasEvolution: false, basicCount: 0 };
+    }
+    let hasBasic = false, hasEvolution = false, basicCount = 0;
+    for (const iid of selectionPicked) {
+      const item = selectionItems.find(it => it.iid === iid);
+      if (!item) continue;
+      const card = getCard(item.cardId);
+      if (!card) continue;
+      if (card.evolvesFrom) hasEvolution = true;
+      else { hasBasic = true; basicCount++; }
+    }
+    return { hasBasic, hasEvolution, basicCount };
+  });
+  // 給單一 iid 用 — 是否該 disable 點擊（保留：已選的 iid 永遠可點以取消選擇）
+  function isBrocksDigDisabled(item: CardInstance): boolean {
+    if (!pendingSelection || pendingSelection.effectKey !== 'brocks-dig-unified') return false;
+    if (selectionPicked.has(item.iid)) return false;  // 已選 → 允許取消
+    const card = getCard(item.cardId);
+    if (!card) return false;
+    const isEvo = !!card.evolvesFrom;
+    if (brocksDigPickState.hasEvolution) return true;     // 已選 Evolution → 全擋
+    if (brocksDigPickState.basicCount >= 2) return true;  // 已選 2 Basic → 全擋
+    if (brocksDigPickState.hasBasic && isEvo) return true; // Basic 已選 → 擋 Evolution
+    return false;
+  }
   // damage-distribute 本批次加總的 counter 數（= 各 iid 的 count 之和）
   const selectionBatchSum = $derived.by(() => {
     let s = 0;
@@ -2525,6 +2555,12 @@
   const selectionValid = $derived.by(() => {
     if (!pendingSelection) return false;
     if (akamatsuSameTypeBlocked) return false;
+    // v5.014：小剛的發掘 — 拒絕同時混選 Basic + Evolution；Evolution 最多 1；Basic 最多 2
+    if (pendingSelection.effectKey === 'brocks-dig-unified') {
+      if (brocksDigPickState.hasBasic && brocksDigPickState.hasEvolution) return false;
+      if (brocksDigPickState.hasEvolution && selectionPicked.size > 1) return false;
+      if (brocksDigPickState.basicCount > 2) return false;
+    }
     if (pendingSelection.type === 'damage-distribute') {
       const n = selectionBatchSum;
       return n >= pendingSelection.minCount && n <= pendingSelection.maxCount;
@@ -4140,6 +4176,11 @@
     dispatch(GameActions.attachEnergy(selectedEnergyIid, targetIid));
   }
   function toggleSelection(iid: string) {
+    // v5.014：小剛的發掘 — defense-in-depth refuse disabled iids（即使 UI 沒擋）
+    if (pendingSelection?.effectKey === 'brocks-dig-unified') {
+      const item = selectionItems.find(it => it.iid === iid);
+      if (item && isBrocksDigDisabled(item)) return;
+    }
     const next = new Set(selectionPicked);
     if (next.has(iid)) {
       // 點已選 → 取消
@@ -6222,7 +6263,8 @@
           <div class="sel-grid">
             {#each selectionItems as item}{@const c=getCard(item.cardId)}
               {#if c}
-                <div class="sel-card-wrap" class:sel-picked={selectionPicked.has(item.iid)} class:sel-concealed={concealed}>
+                {@const _bdDisabled = isBrocksDigDisabled(item)}
+                <div class="sel-card-wrap" class:sel-picked={selectionPicked.has(item.iid)} class:sel-concealed={concealed} class:bd-disabled={_bdDisabled}>
                   {#if !concealed}
                     {#if isEnergyPicker && energyOwnerMap.has(item.iid)}
                       {@const _zOwner = energyOwnerMap.get(item.iid)!}
@@ -6235,7 +6277,9 @@
                         onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
                     {/if}
                   {/if}
-                  <button class="sel-card" onclick={()=>toggleSelection(item.iid)}>
+                  <button class="sel-card" disabled={_bdDisabled}
+                    title={_bdDisabled ? '依小剛的發掘規則，此卡目前不可選（Basic+Evolution 不可混選；Evolution 最多 1）' : ''}
+                    onclick={()=>toggleSelection(item.iid)}>
                     {#if concealed}
                       <!-- v3.9998：concealed 模式（精神出局等「不看正面」）— 卡背 + 卡名隱藏 -->
                       <div class="sel-card-back"><div class="sel-card-back-icon">🎴</div><div class="sel-card-back-q">?</div></div>
@@ -9350,6 +9394,10 @@
   /* deck-search / generic selection：放大鏡 + 挑選按鈕的 wrapper */
   .sel-card-wrap{ position:relative; display:flex; flex-direction:column; }
   .sel-card-wrap.sel-picked .sel-card{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }
+  /* v5.014：小剛的發掘 — 動態 disabled 卡（混選/超限時灰掉） */
+  .sel-card-wrap.bd-disabled{ opacity:.35; }
+  .sel-card-wrap.bd-disabled .sel-card{ cursor:not-allowed; filter:grayscale(.6); border-color:#3a3a3a; }
+  .sel-card-wrap.bd-disabled .sel-card:hover{ border-color:#3a3a3a; box-shadow:none; }
   .sel-zoom{ position:absolute; top:.2rem; right:.2rem; z-index:2; background:rgba(0,0,0,.72); border:1px solid #6aaa6a; color:#cfc; font-size:.7rem; line-height:1; padding:.18rem .32rem; border-radius:4px; cursor:pointer; }
   .sel-zoom:hover{ background:rgba(74,138,74,.9); color:#fff; }
   .sel-card img{ width:64px; border-radius:3px; }

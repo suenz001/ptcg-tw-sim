@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.014</span> ✨ 小剛的發掘 統一 picker — 基礎+進化同 modal 動態選擇</summary>
+        <ul>
+          <li><b>玩家回饋</b>：小剛的發掘卡面寫「選最多 2 張【基礎】寶可夢 <b>或</b> 1 張進化寶可夢」，原本實作是兩段式 picker — 先選 Basic 不選才會進到 Evolution，玩家在同一張卡的兩種選項間切換不便。</li>
+          <li><b>改版</b>：合併成單一 picker 同時顯示牌庫中所有寶可夢（Basic + Stage1 + Stage2），加動態選擇規則：(1) 點 Basic 後可再點 Basic（最多 2），但 Evolution 變灰；(2) 點 Evolution 後其他全變灰（最多 1）。違規組合 OK 按鈕也會 disabled。</li>
+          <li><b>實作</b>：(a) effects 端 reg('小剛的發掘') 改成單一 deck-search filter='Pokemon'，effectKey 'brocks-dig-unified'；(b) +page.svelte 加 <code>brocksDigPickState</code> derived 算當前 Basic/Evo 數量、<code>isBrocksDigDisabled(item)</code> helper 依規則 disable iid；(c) picker UI 加 disabled 屬性 + 灰底樣式；(d) toggleSelection defense-in-depth refuse disabled iids；(e) selectionValid 拒絕混選。</li>
+          <li><b>不變</b>：「給對手看過」→ 公開卡名（log）；重洗牌庫；卡片資料 / cost / 限制。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline — 550KB 大檔）／Rule 4（tsc verify）／Rule 14（最小 patch — reg/regR 重寫 + derived state + picker UI 加 disabled class）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.013</span> 🔧 修「祭典會場」保護漏洞 — 附能量寶可夢仍會陷入特殊狀態</summary>
         <ul>
           <li><b>玩家回報</b>：場上有「祭典會場」競技場時，附能量的寶可夢仍會陷入特殊狀態（卡面：「雙方所有身上附有能量卡的寶可夢不會陷入特殊狀態，並將受到的特殊狀態全部恢復」）。</li>
