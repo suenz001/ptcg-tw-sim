@@ -156,7 +156,11 @@
   let myDeckId    = $state('');           // 在房間內選牌組用
   let roomNameInput = $state('');         // 建房時的房間名稱
   /** 'choose' → 選建立/加入；'create' → 填資料建房間；'join' → 輸入房號；'room' → 房間等待中 */
-  let onlineStep  = $state<'choose' | 'create' | 'join' | 'room'>('choose');
+  // v5.008：合併 choose/join 為單一大廳頁面，create 表單改為大廳內 inline 展開
+  //   'choose' 保留在 union 是為了向後相容（外部任何狀態變化都會被 effect normalize 成 'join'）
+  let onlineStep  = $state<'choose' | 'create' | 'join' | 'room'>('join');
+  // v5.008：大廳內「建立新房間」按鈕的折疊狀態（false=只顯示按鈕，true=展開表單）
+  let showCreateForm = $state(false);
 
   // v3.96 再來一局（對稱設計）— 雙方各自獨立按按鈕，從 roomData 取得雙方 ready 狀態
   //   myRematchReady: 我端已按下「再來一局」
@@ -3773,7 +3777,7 @@
       stopHeartbeat();
       await deleteRoom(roomCode);
       game = null; roomCode = ''; roomData = null;
-      onlineStep = 'choose';
+      onlineStep = 'join'; showCreateForm = false;
       mode = null;
     } catch (err: any) {
       onlineError = err?.message ?? '解散房間失敗';
@@ -4079,7 +4083,7 @@
     }
     chatMessages = []; chatInput = '';
     game = null; roomCode = ''; roomData = null;
-    onlineStep = 'choose'; onlineError = ''; myPlayerIndex = null; mySeatIdx = -1;
+    onlineStep = 'join'; showCreateForm = false; onlineError = ''; myPlayerIndex = null; mySeatIdx = -1;
     roomNameInput = ''; myDeckId = '';
     mode = null;
   }
@@ -4917,7 +4921,7 @@
     <!-- v2.276：'room' step 不顯示返回鈕（避免使用者跳離但沒呼叫 leaveRoom，造成空房殘留）；
          在房間內要走右上「離開房間」按鈕（onclick=leaveOnlineGame）才會清座位 -->
     {#if onlineStep !== 'room'}
-      <button class="back-btn" onclick={() => { mode=null; onlineStep='choose'; onlineError=''; }}>← 返回</button>
+      <button class="back-btn" onclick={() => { mode=null; onlineStep='join'; showCreateForm=false; onlineError=''; }}>← 返回</button>
     {/if}
     <!-- v4.918 登入狀態 dashboard（同 v4.913 模式選擇畫面；v4.924 開放 Oracle build） -->
     {#if firebaseUser}
@@ -4940,49 +4944,51 @@
     {/if}
     <h1>🌐 線上連線對戰</h1>
 
-    {#if onlineStep === 'choose'}
-      <p class="muted">選擇你的身份：</p>
-      <div class="mode-cards compact">
-        <button class="mode-card" onclick={() => onlineStep='create'}>
-          <div class="mode-icon">🏠</div>
-          <div class="mode-title">建立房間</div>
-          <div class="mode-desc">產生房號，等對手加入</div>
-        </button>
-        <button class="mode-card online" onclick={() => onlineStep='join'}>
-          <div class="mode-icon">🚪</div>
-          <div class="mode-title">加入房間</div>
-          <div class="mode-desc">輸入對方的房號</div>
-        </button>
-      </div>
+    {#if onlineStep === 'join' || onlineStep === 'choose' || onlineStep === 'create'}
+      <!-- v5.008：統一大廳頁面 — 建立 / 加入 / 房間列表 合併單頁顯示 -->
+      <div class="online-form lobby-unified">
+        <label class="name-row">
+          <span class="name-label">玩家名稱</span>
+          <input class="name-input" placeholder="輸入你的名稱" bind:value={myName} />
+        </label>
 
-    {:else if onlineStep === 'create'}
-      <div class="online-form">
-        <h2>建立房間</h2>
-        <label>玩家名稱<input class="name-input" placeholder="輸入你的名稱" bind:value={myName} /></label>
-        <label>房間名稱<input class="name-input" placeholder="輸入房間名稱" bind:value={roomNameInput} /></label>
-        <!-- v4.75 練習模式：勾選後此房雙方可請求悔棋（對手同意制）。預設不勾。 -->
-        <label class="check-row">
-          <input type="checkbox" bind:checked={roomAllowUndoInput} />
-          <span>🎯 練習模式（允許悔棋）— 對戰中雙方可請求悔棋，需對手同意才會生效</span>
-        </label>
-        <!-- v5.003 私密房：勾選後不會出現在大廳列表，朋友需透過房號加入 -->
-        <label class="check-row">
-          <input type="checkbox" bind:checked={roomPrivateInput} />
-          <span>🔒 私密房 — 不在大廳列表公開顯示，朋友需透過分享房號才能加入</span>
-        </label>
-        {#if onlineError}<p class="warn">{onlineError}</p>{/if}
-        <div class="form-btns">
-          <button class="btn-primary" onclick={handleCreateRoom} disabled={onlineLoading}>
-            {onlineLoading ? '建立中…' : '建立房間'}
-          </button>
-          <button class="btn-secondary" onclick={() => { onlineStep='choose'; onlineError=''; }}>取消</button>
+        <!-- 建立新房間：折疊式 inline 表單（預設收合，點按鈕展開）-->
+        <div class="create-room-block" class:expanded={showCreateForm}>
+          {#if !showCreateForm}
+            <button class="btn-create-room-cta" onclick={() => { showCreateForm = true; onlineError=''; }}>
+              <span class="cri-icon">🏠</span>
+              <span class="cri-text">
+                <span class="cri-title">建立新房間</span>
+                <span class="cri-sub">產生房號等對手加入（可選練習 / 私密房）</span>
+              </span>
+              <span class="cri-chevron">▾</span>
+            </button>
+          {:else}
+            <div class="create-room-inline">
+              <div class="cri-header">
+                <h3>🏠 建立新房間</h3>
+                <button class="btn-link cri-collapse" onclick={() => { showCreateForm = false; onlineError=''; }} title="收合表單">▴ 收合</button>
+              </div>
+              <label>房間名稱<input class="name-input" placeholder="輸入房間名稱" bind:value={roomNameInput} /></label>
+              <!-- v4.75 練習模式：勾選後此房雙方可請求悔棋（對手同意制）。預設不勾。 -->
+              <label class="check-row">
+                <input type="checkbox" bind:checked={roomAllowUndoInput} />
+                <span>🎯 練習模式（允許悔棋）— 對戰中雙方可請求悔棋，需對手同意才會生效</span>
+              </label>
+              <!-- v5.003 私密房：勾選後不會出現在大廳列表，朋友需透過房號加入 -->
+              <label class="check-row">
+                <input type="checkbox" bind:checked={roomPrivateInput} />
+                <span>🔒 私密房 — 不在大廳列表公開顯示，朋友需透過分享房號才能加入</span>
+              </label>
+              {#if onlineError}<p class="warn">{onlineError}</p>{/if}
+              <div class="form-btns">
+                <button class="btn-primary" onclick={handleCreateRoom} disabled={onlineLoading}>
+                  {onlineLoading ? '建立中…' : '建立房間'}
+                </button>
+              </div>
+            </div>
+          {/if}
         </div>
-      </div>
-
-    {:else if onlineStep === 'join'}
-      <div class="online-form">
-        <h2>加入房間</h2>
-        <label>玩家名稱<input class="name-input" placeholder="輸入你的名稱" bind:value={myName} /></label>
 
         <!-- v3.992 公開房間列表：分兩區（等待中可加入 + 對戰中可觀戰）-->
         <div class="open-rooms-section">
@@ -4991,7 +4997,7 @@
             <p class="warn small">⚠️ {openRoomsErr}</p>
           {/if}
           {#if lobbyRooms.length === 0 && !openRoomsErr}
-            <p class="muted small">目前無等待中的房間。可請對方建立後再刷新，或改用下方手動房號輸入。</p>
+            <p class="muted small">目前無等待中的房間 — 可請對方建立後再刷新，或自己點上方「🏠 建立新房間」開房。</p>
           {:else if lobbyRooms.length > 0}
             <ul class="open-room-list">
               {#each lobbyRooms as r (r.roomId)}
@@ -5042,10 +5048,7 @@
           </button>
         </details>
 
-        {#if onlineError}<p class="warn">{onlineError}</p>{/if}
-        <div class="form-btns">
-          <button class="btn-secondary" onclick={() => { onlineStep='choose'; onlineError=''; }}>取消</button>
-        </div>
+        {#if onlineError && !showCreateForm}<p class="warn">{onlineError}</p>{/if}
       </div>
 
     {:else if onlineStep === 'room'}
@@ -7798,6 +7801,40 @@
   .manual-code label{ margin-top:.5rem; }
   .manual-code button{ margin-top:.5rem; }
 
+  /* v5.008 統一大廳 — 名稱欄 + 建立房間 CTA + inline 表單 */
+  .online-form.lobby-unified{ max-width:560px; }
+  .lobby-unified .name-row{ flex-direction:row; align-items:center; gap:.6rem; background:#162616; border:1px solid #2a4a2a; border-radius:8px; padding:.6rem .85rem; }
+  .lobby-unified .name-label{ font-size:.88rem; color:#aaffcc; font-weight:600; min-width:64px; }
+  .lobby-unified .name-row .name-input{ flex:1; }
+  .create-room-block{ display:flex; flex-direction:column; }
+  /* 收合狀態：大型 CTA 按鈕（沒人開房時最顯眼） */
+  .btn-create-room-cta{
+    display:flex; align-items:center; gap:.8rem;
+    background:linear-gradient(135deg,#2a5a2a 0%,#1e3e1e 100%);
+    border:1px solid #4a8a4a; border-radius:10px;
+    padding:.85rem 1rem; cursor:pointer; color:#f0f0f0;
+    font:inherit; text-align:left; transition:background .15s, transform .1s;
+  }
+  .btn-create-room-cta:hover{ background:linear-gradient(135deg,#3a7a3a 0%,#286028 100%); }
+  .btn-create-room-cta:active{ transform:translateY(1px); }
+  .btn-create-room-cta .cri-icon{ font-size:1.8rem; line-height:1; }
+  .btn-create-room-cta .cri-text{ display:flex; flex-direction:column; gap:.15rem; flex:1; }
+  .btn-create-room-cta .cri-title{ font-size:1rem; font-weight:700; color:#aaffaa; }
+  .btn-create-room-cta .cri-sub{ font-size:.78rem; color:#bcd; }
+  .btn-create-room-cta .cri-chevron{ font-size:1.2rem; color:#aaffaa; }
+  /* 展開狀態：完整 inline 表單 */
+  .create-room-inline{
+    background:#1e2e1e; border:1px solid #4a8a4a; border-radius:10px;
+    padding:.85rem 1rem; display:flex; flex-direction:column; gap:.65rem;
+    animation:cri-expand .18s ease-out;
+  }
+  @keyframes cri-expand{ from{opacity:0; transform:translateY(-4px)} to{opacity:1; transform:translateY(0)} }
+  .cri-header{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; }
+  .cri-header h3{ margin:0; color:#aaffaa; font-size:1rem; }
+  .btn-link{ background:none; border:none; color:#8ad48a; font:inherit; font-size:.85rem; cursor:pointer; padding:.2rem .4rem; border-radius:4px; }
+  .btn-link:hover{ background:rgba(138,212,138,.1); color:#aaffaa; }
+  .cri-collapse{ font-size:.82rem; }
+
   /* 等待室 — 舊版（已不使用，但保留以防其他地方引用） */
   .room-waiting{ display:flex; flex-direction:column; align-items:center; gap:1.25rem; padding:2rem; }
   .room-code-display{ text-align:center; background:#1e2e1e; border:1px solid #3a5a3a; border-radius:12px; padding:1.5rem 2rem; }
@@ -10036,130 +10073,3 @@
     inset: 0;
     background: rgba(0, 0, 0, 0.72);
     z-index: 100;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 1rem;
-    padding-top: calc(env(safe-area-inset-top, 2rem) + 1rem);
-    cursor: zoom-out;
-  }
-  .pv-inner {
-    background: #fff;
-    color: #222;
-    border-radius: 12px;
-    max-width: 1170px;
-    width: 100%;
-    max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem);
-    margin: auto;
-    overflow-y: auto;
-    position: relative;
-    padding: 1.5rem;
-    cursor: default;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-  }
-  .pv-close {
-    position: absolute;
-    top: 1.25rem;
-    right: 1.25rem;
-    width: 2.6rem;
-    height: 2.6rem;
-    border-radius: 50%;
-    border: 1px solid #ddd;
-    background: #f4f4f4;
-    color: #222;
-    font-size: 1.45rem;
-    line-height: 1;
-    cursor: pointer;
-    z-index: 1;
-  }
-  .pv-close:hover { background: #e8e8e8; }
-
-  /* Auth modal */
-  .auth-modal { max-width: 420px; }
-  .modal-title { margin: 0 0 0.5rem; font-size: 1.1rem; color: #222; }
-  .auth-tabs {
-    display: flex;
-    gap: 0;
-    border-bottom: 2px solid #eee;
-    margin-bottom: 1rem;
-  }
-  .auth-tabs button {
-    flex: 1;
-    background: none;
-    border: none;
-    padding: 0.5rem;
-    font: inherit;
-    font-size: 0.88rem;
-    cursor: pointer;
-    color: #888;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-  }
-  .auth-tabs button.active {
-    color: #0066cc;
-    border-bottom-color: #0066cc;
-    font-weight: 600;
-  }
-  .auth-desc {
-    font-size: 0.88rem;
-    color: #555;
-    margin: 0 0 1rem;
-  }
-  .auth-form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
-  .auth-form input {
-    padding: 0.5rem 0.65rem;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font: inherit;
-    font-size: 0.95rem;
-    color: #222;
-    background: #fff;
-  }
-  .auth-form input:focus { outline: 2px solid #4a7fd4; border-color: transparent; }
-  .auth-form button.small {
-    padding: 0.5rem 0.8rem;
-    font-size: 0.95rem;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    background: #f4f4f4;
-    color: #222;
-    cursor: pointer;
-  }
-  .auth-form button.small.primary {
-    background: #0066cc;
-    color: #fff;
-    border-color: #0066cc;
-  }
-  .auth-form button.small.primary:hover:not(:disabled) { background: #0055aa; }
-  .auth-form button.small.primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  .auth-link {
-    background: none;
-    border: none;
-    color: #4a90e2;
-    text-decoration: underline;
-    font-size: 0.9em;
-    padding: 4px 0;
-    cursor: pointer;
-    text-align: center;
-  }
-  .auth-link:hover { color: #2d6cc0; }
-  .auth-success {
-    color: #2d8d3e;
-    background: #e8f5ea;
-    padding: 8px 10px;
-    border-radius: 6px;
-    border: 1px solid #b8e0c0;
-    font-size: 0.9em;
-    margin: 4px 0;
-  }
-  .auth-error {
-    margin: 0;
-    color: #c00;
-    font-size: 0.85rem;
-  }
-
-</style>
