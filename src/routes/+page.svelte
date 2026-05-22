@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.007</span> 🔧 修青銅鐘｜進化妨礙者 漏擋神奇糖果</summary>
+        <ul>
+          <li><b>玩家回報</b>：青銅鐘的招式「進化妨礙者」效果寫明「對手無法從【手牌】使出寶可夢並完成進化」。但實測對手下回合用神奇糖果還是能從手牌打 Stage 2 上場完成進化。</li>
+          <li><b>規則</b>：神奇糖果效果是「從手牌使出 Stage 2 寶可夢直接放到基礎寶可夢身上完成進化」— 屬於『從手牌完成進化』的範疇，應該被擋。賽吉、壯偉碩木這類「從牌庫拿進化卡」的效果則不被擋（卡面只限手牌）。</li>
+          <li><b>Root cause</b>：cantEvolveThisTurn 旗標只在 engine.ts 的 EVOLVE action（直接手牌進化按鈕）+ getEvolvableTargets UI mirror 兩處檢查，神奇糖果走獨立的 guard / resolver chain（effects.ts:1245-1383）完全沒檢查 → 漏擋。</li>
+          <li><b>修法</b>：神奇糖果 guard 開頭加 <code>if (p.cantEvolveThisTurn) return false;</code> — guard 返回 false 表「該卡不可打出」，手牌按鈕灰掉，AI 也不選。單一閘門點即可（picker / resolver 觸發不到就沒問題）。</li>
+          <li><b>不影響</b>：賽吉（從牌庫拿進化卡）、壯偉碩木（從牌庫拿 1 階進化卡）等「從牌庫進化」路徑不檢查 cantEvolveThisTurn，符合卡面只限制「從手牌」進化的條文。</li>
+          <li><b>Iron Rules</b>：Rule 14（最小 patch — 單一 if 行）／Rule 11（Python pipeline）／Rule 4（tsc verify）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.006</span> 🔧 修胖嘟嘟ex｜力量壓制 條件 +80 觸發門檻錯誤</summary>
         <ul>
           <li><b>玩家回報</b>：胖嘟嘟ex 身上附 4 個能量打「力量壓制 80+」（招式效果：能量比 cost 多 2 個 → +80），實測只造成 80 傷害，未觸發 +80。</li>

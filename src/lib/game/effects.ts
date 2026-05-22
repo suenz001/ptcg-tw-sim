@@ -1242,8 +1242,13 @@ regR('heal-120-bench', (st, idx, iids, _params, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 神奇糖果 Guard：手牌中有「Stage2」且場上有其對應 Basic 目標才可打出
+// v5.007：青銅鐘｜進化妨礙者 鎖「從手牌使出寶可夢並完成進化」— 神奇糖果效果是從手牌
+//        打 Stage 2 上場進化，屬於同一機制，必須一起擋。卡面文字相符：玩家從手牌使出
+//        進化卡（Stage 2）放置於 Basic 寶可夢身上 = 從手牌完成進化。
 regG('神奇糖果', (st, idx, pool) => {
   const p = st.players[idx];
+  // v5.007：青銅鐘｜進化妨礙者 / 其他 cantEvolve 機制 — 鎖手牌進化
+  if (p.cantEvolveThisTurn) return false;
   const isStage2 = (c?: Card) => {
     if (!c || c.supertype !== 'Pokemon' || !c.evolvesFrom) return false;
     for (const x of pool.values()) {
