@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.006</span> 🔧 修胖嘟嘟ex｜力量壓制 條件 +80 觸發門檻錯誤</summary>
+        <ul>
+          <li><b>玩家回報</b>：胖嘟嘟ex 身上附 4 個能量打「力量壓制 80+」（招式效果：能量比 cost 多 2 個 → +80），實測只造成 80 傷害，未觸發 +80。</li>
+          <li><b>規則</b>：力量壓制 cost 為【超】+【無】共 2 個能量。4 - 2 = 2，「多 2 個」條件成立，應 +80 → 共 160 傷害。</li>
+          <li><b>Root cause</b>：v2600_i_wave10_conditional.ts:213 程式碼寫 <code>selfExtraEnergyPre(80, 80, 3, ...)</code> — 第 3 參數 costCount 誤寫 3（trigger 改成需 cost+2=5 個能量），當初註解寫「卡面查不到 cost，設定為合理值」。</li>
+          <li><b>修法</b>：第 3 參數 3→2。卡面 cost = 2，附 4 能量即觸發 +80（4 ≥ 2+2）。</li>
+          <li><b>Iron Rules</b>：Rule 14（最小 patch — 單一 ts 數字字面量改動）／Rule 11（Python pipeline）／Rule 4（tsc verify）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.001</span> 🔀 修進化鏈搜尋把訓練家冠名與一般寶可夢混一起</summary>
         <ul>
           <li><b>玩家回報</b>：點開「鐵啞鈴」卡牌詳細資料看進化鏈，「大吾的鐵啞鈴 → 大吾的金屬怪 → 大吾的巨金怪ex」也被列在「鐵啞鈴 → 金屬怪 → 巨金怪」同一條鏈裡。</li>

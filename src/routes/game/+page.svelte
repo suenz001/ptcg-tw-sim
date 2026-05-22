@@ -1271,13 +1271,16 @@
   async function fireMatchRecord(g: GameState) {
     const apiUrl = (((import.meta as unknown) as { env?: { VITE_ORACLE_API_URL?: string } }).env?.VITE_ORACLE_API_URL) || '';
     if (!apiUrl) return;  // 只 Oracle build 記錄；GitHub Pages build 跳過
-    // Aggregate unique cardId from all zones (deck/hand/bench/active/discard/prizes + evolvedFromStack)
-    function collectCardIds(p: GameState['players'][0]): string[] {
-      const set = new Set<string>();
+    // v5.006 改：Aggregate cardId → count (deck/hand/bench/active/discard/prizes + evolvedFromStack)
+    // 每個 card instance 算 1 張；evolvedFromStack 內每張歷代進化前也算 1 張（牌組原本就有）。
+    // 用 Record<string, number> 而非 Set，admin 牌組 modal 才能顯示「× N」張數。
+    function collectCardCounts(p: GameState['players'][0]): Record<string, number> {
+      const counts: Record<string, number> = {};
+      const add = (id: string): void => { counts[id] = (counts[id] ?? 0) + 1; };
       const visit = (c: CardInstance | null | undefined): void => {
         if (!c) return;
-        set.add(c.cardId);
-        for (const e of c.evolvedFromStack ?? []) set.add(e.cardId);
+        add(c.cardId);
+        for (const e of c.evolvedFromStack ?? []) add(e.cardId);
       };
       for (const c of p.deck) visit(c);
       for (const c of p.hand) visit(c);
@@ -1285,7 +1288,7 @@
       visit(p.active);
       for (const c of p.discard) visit(c);
       for (const c of p.prizes) visit(c);
-      return [...set];
+      return counts;
     }
     // email source 分流：online 用 roomData.seats，local 用 firebaseUser（P1 only）
     let p1Email: string | null = null;
@@ -1312,12 +1315,12 @@
       p1: {
         name: g.players[0]?.name ?? 'P1',
         email: p1Email,
-        cardIds: collectCardIds(g.players[0]),
+        cardCounts: collectCardCounts(g.players[0]),
       },
       p2: {
         name: g.players[1]?.name ?? 'P2',
         email: p2Email,
-        cardIds: collectCardIds(g.players[1]),
+        cardCounts: collectCardCounts(g.players[1]),
       },
     };
     try {
