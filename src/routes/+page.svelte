@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.015</span> 🔧 修手機版 攻擊 KO 對手後 結束按鈕點不動 — 按鈕鎖 + 等待提示</summary>
+        <ul>
+          <li><b>玩家回饋</b>：手機版攻擊 KO 對手戰鬥場、取完獎賞後，UI 顯示「對手戰鬥場空」但結束回合按鈕點下去沒反應，誤以為遊戲卡住。</li>
+          <li><b>根因</b>：手機直式版（MobilePortraitBattle）的結束回合按鈕條件只查 pendingPrizes 與 pendingSelection，沒查 defender.active 是否為 null，所以按鈕顯示但 engine 拒絕（要等對手送新戰鬥寶可夢）。桌機版本來就正確（canEndTurn 走 hasPendingActions 含 active=null 三閘），手機版漏判。</li>
+          <li><b>修正</b>：手機版加 needSendActiveMine／needSendActiveOpp derived state — (a) 自方 active=null + 有備戰 → 結束鈕灰且 title「請先從備戰區派出新的戰鬥寶可夢」；(b) 對手 active=null + 有備戰 → 結束鈕灰且 title「等待對手送出新戰鬥寶可夢」。Top bar 下方加 alert banner 同步顯示，避免玩家盯著按鈕困惑。</li>
+          <li><b>線上對戰</b>：攻擊方裝置看到「等待對手送出新戰鬥寶可夢」alert；防守方裝置照舊彈 send-new-active modal（與桌機共用，無 bug）。本機雙人切到防守方視角即可看到 modal。</li>
+          <li><b>不變</b>：桌機版 UI（已正確）／engine END_TURN gate／線上同步機制／本機雙人 myIdx 切換邏輯。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline — MobilePortraitBattle 雖非超大檔仍走保險路徑）／Rule 4（tsc verify）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.014</span> ✨ 小剛的發掘 統一 picker — 基礎+進化同 modal 動態選擇</summary>
         <ul>
           <li><b>玩家回饋</b>：小剛的發掘卡面寫「選最多 2 張【基礎】寶可夢 <b>或</b> 1 張進化寶可夢」，原本實作是兩段式 picker — 先選 Basic 不選才會進到 Evolution，玩家在同一張卡的兩種選項間切換不便。</li>

@@ -164,6 +164,16 @@
   let isSetup = $derived(game.phase === 'setup');
   let isPlaying = $derived(game.phase === 'playing');
   let canEndTurn = $derived(isPlaying && game.turnPhase === 'end' && isMyTurn);
+  // v5.015：偵測「需要送出新戰鬥寶可夢」狀態 — 結束回合按鈕鎖 + alert 提示
+  //   needSendActiveMine：自方 active=null + 有備戰（被特性/中毒/反傷 KO，自己需補位）
+  //   needSendActiveOpp：對手 active=null + 有備戰（剛被我 KO，等對手送）
+  //   桌機版 +page.svelte 已正確 hide 按鈕 + 顯 alert，本變數補手機版同等 UX。
+  let needSendActiveMine = $derived(
+    isPlaying && myPlayer.active === null && myPlayer.bench.length > 0 && !pendingSelection
+  );
+  let needSendActiveOpp = $derived(
+    isPlaying && oppPlayer.active === null && oppPlayer.bench.length > 0 && !pendingSelection
+  );
   let canRetreatNow = $derived(isPlaying && isMyTurn && isMainPhase && engineCanRetreat(game, pool));
   let evolvableTargets = $derived(isPlaying && isMyTurn && isMainPhase ? getEvolvableTargets(game, pool) : []);
   let usableAbilities = $derived(isPlaying && isMyTurn && isMainPhase && !pendingSelection ? getUsableAbilities(game, pool) : []);
@@ -640,7 +650,14 @@
     {:else if isMyTurn && isPlaying && !pendingSelection && (game.pendingPrizes?.[0] ?? 0) === 0 && (game.pendingPrizes?.[1] ?? 0) === 0}
       <!-- v2.289：不限 turnPhase==='end'，主階段也顯示（等同「跳過攻擊 + 結束回合」合一）
            engine END_TURN 自帶 pendingPrizes / defender.active=null 雙重 gate -->
-      <button class="mp-end-btn" onclick={() => onAction(GameActions.endTurn())}>⏭ 結束回合</button>
+      <!-- v5.015：補 active=null 顯示 disabled — 之前按鈕顯示但 engine 拒絕，玩家以為按鈕壞掉 -->
+      {#if needSendActiveMine}
+        <button class="mp-end-btn" disabled title="請先從備戰區派出新的戰鬥寶可夢">⏭ 結束回合</button>
+      {:else if needSendActiveOpp}
+        <button class="mp-end-btn" disabled title="等待對手送出新戰鬥寶可夢">⏭ 結束回合</button>
+      {:else}
+        <button class="mp-end-btn" onclick={() => onAction(GameActions.endTurn())}>⏭ 結束回合</button>
+      {/if}
     {/if}
     <button class="mp-icon-btn" onclick={onOpenSettings} title="設定">⚙</button>
   </header>
@@ -654,6 +671,13 @@
       <span class="mp-t-cell" class:mp-t-active={game.activePlayerIndex === 1 && game.phase === 'playing'}>P2 {fmtTimerMs(p1TotalMs)}</span>
       <span class="mp-t-cell mp-t-turn">▶ {fmtTimerMs(liveTurnTimeMs)}</span>
     </div>
+  {/if}
+
+  <!-- v5.015：送出新戰鬥寶可夢的等待提示 — 桌機版 +page.svelte:5641-5662 已有同樣 alert，手機 portrait 需自行渲染 -->
+  {#if needSendActiveMine}
+    <div class="mp-wait-alert mp-wait-warn">⚠️ 你的戰鬥寶可夢已昏厥，請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
+  {:else if needSendActiveOpp && isMyTurn}
+    <div class="mp-wait-alert">⏳ 對手戰鬥場空 — 等待對手送出新戰鬥寶可夢</div>
   {/if}
 
   <!-- ─── 對手 bench ─── -->
@@ -1508,6 +1532,24 @@
     line-height: 1.2;
     padding: 0 2px;
     pointer-events: none;
+  }
+
+  /* v5.015：戰鬥位空缺等待 alert（補手機版桌機已有的對應提示） */
+  .mp-wait-alert {
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    background: linear-gradient(90deg, rgba(80,140,200,0.32), rgba(60,110,170,0.2));
+    border: 1px solid #4a8acc;
+    border-radius: 4px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem; font-weight: 600;
+    color: #aaddff;
+    margin: 4px 10px;
+    text-align: center;
+  }
+  .mp-wait-alert.mp-wait-warn {
+    background: linear-gradient(90deg, rgba(200,120,40,0.35), rgba(180,100,30,0.2));
+    border-color: #c0782a;
+    color: #ffdda0;
   }
 
   /* v2.286：獎賞卡 alert + 競技場能力按鈕 */
