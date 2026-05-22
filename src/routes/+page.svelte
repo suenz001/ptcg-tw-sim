@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.022</span> 🔧 M5 兩張特殊能量改名 + 屬性歸類 + 雷電獸 閃光射線傷害修正</summary>
+        <ul>
+          <li><b>卡名校正</b>：M5 「閃電能量」→「閃電【雷】能量」、「暗影惡能量」→「暗影【惡】能量」，對齊既有特殊能量排版規律（泡沫【水】/ 磁鐵【鋼】/ 燃料【火】/ 硬岩【鬥】/ 增強【草】/ 感應【超】）。</li>
+          <li><b>屬性歸類修正</b>：改名後 name pattern <code>name.includes('【雷】')</code> / <code>'【惡】'</code> 自動命中 — 牌組編輯器、卡牌篩選等 UI 會正確把這兩張歸到對應屬性下。</li>
+          <li><b>麻麻鰻｜電氣發電機 bug 修</b>：玩家回報能從棄牌區挑出「閃電【雷】能量」(Special) 當基本【雷】用 — 違反卡面。根因：discard-search filter chain 漏 <code>BasicEnergy:&lt;Type&gt;</code> generic handler，落到 fallthrough 任意能量都通過。修：加 generic case 與 deck-search 對稱（pokemonType/name 雙重識別 Basic only，Special 一律拒收）。</li>
+          <li><b>超級雷電獸ex｜閃光射線 傷害修正</b>：玩家回報附 3 顆「閃電【雷】能量」只造成 120+20=140；卡面「附有這張卡的雷屬性寶可夢使用招式 +20」依 PTCG 同類加成規則應 per-card 累計（同銀色【鋼】等歷史先例），正確為 120+60=180。engine.ts 從 <code>.some()</code> 一次性改為 <code>.filter().length × 20</code>。</li>
+          <li><b>影響範圍</b>：薩戮德｜暗影鞭打（依賴「暗影【惡】能量」+70 條件）、鍬農炮蟲｜巨型軌道砲（附「閃電【雷】能量」才不失敗）、defense.ts 備戰位免疫（暗影【惡】 惡屬性 bench-only attack-damage immunity）— 全部 name match 一併更新。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline — engine.ts / +page.svelte 大檔）／Rule 14（最小 patch）／Rule 15（M5.json rulesText source of truth verified）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.020</span> 🎨 桌墊版 — 附加卡片改用小卡圖重疊呈現（仿實體桌面）</summary>
         <ul>
           <li><b>玩家要求</b>：把附加在寶可夢身上的能量 / 道具 / 進化堆改用實體 TCG 桌面的「微微重疊小卡圖」呈現，取代原本的彩色 pip + 🔧 文字 chip。</li>

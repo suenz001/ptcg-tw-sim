@@ -785,7 +785,7 @@ const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   '磁鐵【鋼】能量': ['Metal'],
   // v4.87 閃電能量（M5）— 視為 1 個【雷】能量；附加者使用招式對對手戰鬥寶可夢 +20 傷害
   //   (+20 buff 由 engine damage calc inline 套用，weakness 前)
-  '閃電能量': ['Lightning'],
+  '閃電【雷】能量': ['Lightning'],
 };
 
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {
@@ -3744,18 +3744,21 @@ function handlePlaying(
       formula.push({ sign: '+', value: 80, label: '格拉吉歐的決戰' });
     }
 
-    // v4.87 閃電能量（M5 特殊能量）— 附加者為【雷】屬性寶可夢時 +20
+    // v4.87 閃電【雷】能量（M5 特殊能量）— 附加者為【雷】屬性寶可夢時 +20
     //   卡面：「附有這張卡的雷屬性寶可夢使用招式對對手戰鬥寶可夢 +20」
-    //   v4.871 修正：加 attacker.pokemonType === 'Lightning' gate（非雷屬性附了不生效）
-    //   iterate attacker.active.energyAttached → pool 名稱 '閃電能量' → +20
-    //   多張附加只算 1 次（卡面無「每張」字樣）
+    //   v4.871：加 attacker.pokemonType === 'Lightning' gate（非雷屬性附了不生效）
+    //   v5.022 修正：原本 `.some()` 只算 1 次 +20 — 玩家回報「附 3 顆 閃電【雷】只 +20」
+    //     改 per-card stacking — 卡面「附有這張卡的」雖無「每張」字樣，但 PTCG 規則
+    //     歷史對「同類加成型特殊能量」一律 per-card 累計（如銀色鋼能量 +10/張）。
+    //   v5.022 順帶 rename '閃電能量' → '閃電【雷】能量'（卡面排版對齊規律）
     if (baseDamage > 0 && attackerCard.pokemonType === 'Lightning') {
-      const hasLightningSE = attacker.active.energyAttached.some(e => pool.get(e.cardId)?.name === '閃電能量');
-      if (hasLightningSE) {
-        baseDamage += 20;
+      const lightningSECount = attacker.active.energyAttached.filter(e => pool.get(e.cardId)?.name === '閃電【雷】能量').length;
+      if (lightningSECount > 0) {
+        const bonus = 20 * lightningSECount;
+        baseDamage += bonus;
         workingState = addLog(workingState,
-          `${attackerCard.name} 招式傷害 +20（閃電能量加成，【雷】屬性）`, aIdx);
-        formula.push({ sign: '+', value: 20, label: '閃電能量' });
+          `${attackerCard.name} 招式傷害 +${bonus}（閃電【雷】能量 ${lightningSECount} 張 × 20，【雷】屬性）`, aIdx);
+        formula.push({ sign: '+', value: bonus, label: `閃電【雷】能量×${lightningSECount}` });
       }
     }
 

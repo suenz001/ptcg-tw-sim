@@ -2455,6 +2455,24 @@
             // v2.89 波動突刺：只基本【鬥】能量。排除硬岩【鬥】等 Special Energy。
             return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
           }
+          // v5.022：discard-search 補 BasicEnergy:<Type> generic case（mirror deck-search line ~2262）
+          //   bug 根因：玩家回報麻麻鰻｜電氣發電機 從棄牌區挑出「閃電【雷】能量」（Special）— 違反卡面「只能基本【雷】能量」。
+          //   discard-search filter chain 漏 'BasicEnergy:Lightning' handler → 落到 `return true;` → 任意能量都過。
+          //   修：與 deck-search 對稱，加 generic case；pokemonType/name pattern 雙重識別基本能量。
+          if (f.startsWith('BasicEnergy:')) {
+            if (card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+            const t = f.slice('BasicEnergy:'.length);
+            const zhMap: Record<string, string> = {
+              Grass: '草', Fire: '火', Water: '水', Lightning: '雷',
+              Psychic: '超', Fighting: '鬥', Darkness: '惡', Metal: '鋼',
+              Dragon: '龍', Colorless: '無',
+            };
+            const zh = zhMap[t];
+            if (!zh) return false;
+            if (card.pokemonType === t) return true;
+            if (card.name.includes(`【${zh}】`)) return true;
+            return false;
+          }
           if (f === 'FightingPokemonOrBasicFightingEnergy') {
             // v2.117 塔拉剛：【鬥】寶可夢 或 基本【鬥】能量
             if (card.supertype === 'Pokemon' && card.pokemonType === 'Fighting') return true;

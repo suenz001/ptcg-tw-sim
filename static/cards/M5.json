@@ -1022,7 +1022,7 @@
           "Lightning"
         ],
         "damage": "260",
-        "effect": "這隻寶可夢身上若未附有「閃電能量」，則此招式失敗。"
+        "effect": "這隻寶可夢身上若未附有「閃電【雷】能量」，則此招式失敗。"
       }
     ],
     "weakness": {
@@ -2302,7 +2302,7 @@
           "Darkness"
         ],
         "damage": "100＋",
-        "effect": "若自己的備戰寶可夢身上附有「暗影惡能量」，則此招式傷害 +70。"
+        "effect": "若自己的備戰寶可夢身上附有「暗影【惡】能量」，則此招式傷害 +70。"
       }
     ],
     "weakness": {
@@ -3123,7 +3123,7 @@
   },
   {
     "id": "50299",
-    "name": "閃電能量",
+    "name": "閃電【雷】能量",
     "supertype": "Energy",
     "subtype": "Special",
     "setCode": "M5",
@@ -3136,7 +3136,7 @@
   },
   {
     "id": "50300",
-    "name": "暗影惡能量",
+    "name": "暗影【惡】能量",
     "supertype": "Energy",
     "subtype": "Special",
     "setCode": "M5",
@@ -3145,6 +3145,4 @@
     "sourceUrl": "https://www.pokemon-card.com/card-search/details.php/card/50300/regu/all",
     "scrapedAt": "2026-05-18T11:52:03.000Z",
     "rulesText": "這張卡附在寶可夢身上時，作為 1 個惡能量使用。\n\n附有這張卡的惡屬性寶可夢只要在備戰區，就不會受到對手招式的傷害。",
-    "regulationMark": "J"
-  }
-]
+    "regulationMa

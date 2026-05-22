@@ -587,16 +587,17 @@ regPre('銅鏡怪|鏡像攻擊', (state, aIdx, pool) => {
   };
 });
 
-// ── A2. 薩戮德|暗影鞭打 — 100 + 自方備戰任一附「暗影惡能量」+70 ────
-//   卡面：「若自己的備戰寶可夢身上附有『暗影惡能量』，則此招式傷害 +70。」
+// ── A2. 薩戮德|暗影鞭打 — 100 + 自方備戰任一附「暗影【惡】能量」+70 ────
+//   卡面：「若自己的備戰寶可夢身上附有『暗影【惡】能量』，則此招式傷害 +70。」
+//   v5.022 rename：暗影惡能量 → 暗影【惡】能量
 regPre('薩戮德|暗影鞭打', (state, aIdx, pool) => {
   const benchHasShadow = state.players[aIdx].bench.some(b =>
-    b.energyAttached.some(e => pool.get(e.cardId)?.name === '暗影惡能量'),
+    b.energyAttached.some(e => pool.get(e.cardId)?.name === '暗影【惡】能量'),
   );
   const bonus = benchHasShadow ? 70 : 0;
   const dmg = 100 + bonus;
   return {
-    state: addLog(state, `暗影鞭打：自方備戰${benchHasShadow ? '有暗影惡能量 +70' : '無暗影惡能量'} → ${dmg}`, aIdx),
+    state: addLog(state, `暗影鞭打：自方備戰${benchHasShadow ? '有暗影【惡】能量 +70' : '無暗影【惡】能量'} → ${dmg}`, aIdx),
     damage: dmg,
   };
 });
@@ -759,22 +760,23 @@ regPost('獒教父|飛撲頭錘', (state, aIdx) => {
   });
 });
 
-// ── D4. 鍬農炮蟲|巨型軌道砲 — 260 (gate: 自身附閃電能量) ────
-//   卡面：「這隻寶可夢身上若未附有『閃電能量』，則此招式失敗。」
-//   注意：「閃電能量」是 M5 卡名（非「基本【雷】能量」）— strict name match。
+// ── D4. 鍬農炮蟲|巨型軌道砲 — 260 (gate: 自身附 閃電【雷】能量) ────
+//   卡面：「這隻寶可夢身上若未附有『閃電【雷】能量』，則此招式失敗。」
+//   注意：「閃電【雷】能量」是 M5 特殊能量名（非「基本【雷】能量」）— strict name match。
+//   v5.022 rename：閃電能量 → 閃電【雷】能量
 regPre('鍬農炮蟲|巨型軌道砲', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   const hasLightning = att?.energyAttached.some(
-    e => pool.get(e.cardId)?.name === '閃電能量',
+    e => pool.get(e.cardId)?.name === '閃電【雷】能量',
   ) ?? false;
   if (!hasLightning) {
     return {
-      state: addLog(state, '巨型軌道砲：未附「閃電能量」 → 招式失敗', aIdx),
+      state: addLog(state, '巨型軌道砲：未附「閃電【雷】能量」 → 招式失敗', aIdx),
       damage: 0,
     };
   }
   return {
-    state: addLog(state, '巨型軌道砲：附有「閃電能量」 → 260', aIdx),
+    state: addLog(state, '巨型軌道砲：附有「閃電【雷】能量」 → 260', aIdx),
     damage: 260,
   };
 });
