@@ -5551,7 +5551,7 @@
                     {@const _attOB = attachedCardsOf(b)}
                     {#if _attOB.length > 0}
                       <div class="att-card-stack">
-                        {#each _attOB as itm (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*14}px;z-index:{1+i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                       </div>
                     {/if}
                   {/if}
@@ -5607,7 +5607,7 @@
                 {@const _attOA = attachedCardsOf(oppPlayer.active)}
                 {#if _attOA.length > 0}
                   <div class="att-card-stack">
-                    {#each _attOA as itm (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*22}px;z-index:{1+i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                   </div>
                 {/if}
               {/if}
@@ -5881,7 +5881,7 @@
               {@const _attMA = attachedCardsOf(myPlayer.active)}
               {#if _attMA.length > 0}
                 <div class="att-card-stack">
-                  {#each _attMA as itm (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*22}px;z-index:{1+i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                 </div>
               {/if}
             {/if}
@@ -5968,7 +5968,7 @@
                   {@const _attMB = attachedCardsOf(b)}
                   {#if _attMB.length > 0}
                     <div class="att-card-stack">
-                      {#each _attMB as itm (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*14}px;z-index:{1+i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                     </div>
                   {/if}
                 {/if}
@@ -8040,28 +8040,71 @@
      改用 zoom:0.65 — 同步縮 layout + 視覺 → grid row auto 直接縮到 ~133px，省去多餘空間。 */
   .playmat.layout-tabletop .zone-bench{ zoom:0.65; }
 
-  /* v5.020 桌墊版：附加卡片用小卡圖重疊呈現（能量 / 道具 / 進化堆）。
-     仿實體桌面 — 同類卡片靠 margin-left 負值微疊（70% 重疊率）。
+  /* v5.024 桌墊版：附加卡片改「同寶可夢大小、壓在底下、僅露出底部」（仿實體桌面）。
+     + HP bar 從卡底移到左側細長欄，省下垂直空間給手牌上移。
      僅 .playmat.layout-tabletop scope；桌機 classic + 手機 portrait 不受影響。 */
   .playmat.layout-tabletop .active-card,
   .playmat.layout-tabletop .bench-slot{ position:relative; }
+
+  /* === 附加卡疊放：absolute 與寶可夢圖同寬同位置，每張往下偏移 N×offset，z-index 從 1 開始 === */
   .playmat.layout-tabletop .att-card-stack{
-    position:absolute; bottom:4px; left:50%; transform:translateX(-50%);
-    display:flex; align-items:flex-end; z-index:6;
-    pointer-events:none; max-width:92%; overflow:visible;
+    position:absolute; pointer-events:none; overflow:visible;
+    /* width/top/left 由 active vs bench 分別設定（見下） */
   }
   .playmat.layout-tabletop .att-card{
-    width:28px; height:40px; object-fit:cover;
-    margin-left:-20px; flex-shrink:0;
-    border:1px solid rgba(255,255,255,0.45);
-    border-radius:2px;
-    box-shadow:0 1px 3px rgba(0,0,0,0.65);
-    background:#0a160a;
+    position:absolute; left:0; top:0;  /* top 由 inline style 設定 */
+    width:100%; height:auto;
+    border:1px solid rgba(255,255,255,0.35);
+    border-radius:3px;
+    box-shadow:0 2px 4px rgba(0,0,0,0.65);
   }
-  .playmat.layout-tabletop .att-card:first-child{ margin-left:0; }
   .playmat.layout-tabletop .att-card.att-tool{ border-color:#d4a000; }
-  .playmat.layout-tabletop .att-card.att-evo{ border-color:#88aaff; opacity:0.88; }
-  /* 重疊呈現已取代舊 pip / chip — 在桌墊版隱藏原本 active-nrg-col / bench-nrg / tool-chip */
+  .playmat.layout-tabletop .att-card.att-evo{ border-color:#88aaff; }
+
+  /* === active：stack 對齊 active-img（105px 寬） === */
+  /* active-img 升起到上層蓋住 stack，且 stack 對齊其位置 */
+  .playmat.layout-tabletop .active-card .active-img{ position:relative; z-index:20; }
+  .playmat.layout-tabletop .active-card > .att-card-stack{
+    /* active-card 是 flex row：active-img 左側 padding 0.5rem，加上 HP 欄寬 56px + gap 0.45rem
+       才是 active-img 的 left。padding-top 對齊 0.45rem 卡片內距。 */
+    top:.45rem; left:calc(.5rem + 56px + .45rem); width:105px;
+  }
+
+  /* === bench：stack 對齊 bench img（max-width:108px，包在 .bench-middle 內） === */
+  .playmat.layout-tabletop .bench-slot .bench-middle{ position:relative; }
+  .playmat.layout-tabletop .bench-slot .bench-middle img{ position:relative; z-index:20; }
+  .playmat.layout-tabletop .bench-slot .att-card-stack{
+    /* 與 bench-middle 內 img 對齊 — img 預設 width:100% max-width:108px 置中 */
+    top:0; left:50%; transform:translateX(-50%); width:100%; max-width:108px;
+  }
+
+  /* === HP bar 從卡底移到左側細長欄 === */
+  .playmat.layout-tabletop .active-card{
+    padding-left:64px !important;   /* 給左欄 HP 60px + 4px gap */
+    padding-bottom:.45rem !important; /* 取消 9836 line 1.95rem 底部預留 */
+    min-height:140px !important;
+  }
+  .playmat.layout-tabletop .active-card .active-hpbar-bottom{
+    left:.4rem; top:.5rem; right:auto; bottom:auto;
+    width:56px;
+    flex-direction:column; align-items:center; justify-content:flex-start;
+    gap:5px; padding:5px 4px;
+    background:rgba(0,0,0,0.78);
+    border-radius:6px;
+  }
+  .playmat.layout-tabletop .active-card .active-hpbar-bottom .hp-bar-wrap{
+    flex:0 0 auto;
+    width:100%; height:8px;
+    margin:0;
+  }
+  .playmat.layout-tabletop .active-card .active-hpbar-bottom .active-hp-text{
+    font-size:.7rem; line-height:1.1; text-align:center;
+    white-space:normal; word-break:keep-all;
+  }
+  /* 9854 line .evo-wrap bottom:1.85rem → 桌墊版不留底部空間 */
+  .playmat.layout-tabletop .active-card .evo-wrap{ bottom:.4rem !important; }
+
+  /* === 隱藏舊 pip / chip（被疊放小卡圖取代） === */
   .playmat.layout-tabletop .active-card .active-nrg-col,
   .playmat.layout-tabletop .bench-slot .bench-nrg,
   .playmat.layout-tabletop .active-card .tool-chip,
@@ -8071,11 +8114,10 @@
      讓雙方 active 距離更近。:not(.btn-fossil-discard) 避免誤隱藏化石丟棄按鈕（共用 class）。 */
   .playmat.layout-tabletop .my-active-zone .btn-retreat:not(.btn-fossil-discard){ display:none; }
 
-  /* v5.016：手牌列拉近備戰區（桌墊版專屬） — :has() 從 .battle-root 反向選 hand-strip
-     原 padding/min-height 為 1024×600 等中型 viewport 設計；桌墊版可更緊湊。 */
-  .battle-root:has(.playmat.layout-tabletop) .hand-strip{ padding:0 .7rem .1rem; }
-  .battle-root:has(.playmat.layout-tabletop) .hand-strip .hand-label{ margin-bottom:0; }
-  .battle-root:has(.playmat.layout-tabletop) .hand-strip .hand-scroll{ padding:4px 1rem 2px; min-height:130px; }
+  /* v5.024：手牌列再上移（桌墊版專屬，HP bar 移左後上下省更多） — :has() 反向選 hand-strip */
+  .battle-root:has(.playmat.layout-tabletop) .hand-strip{ padding:0 .7rem 0; }
+  .battle-root:has(.playmat.layout-tabletop) .hand-strip .hand-label{ margin-bottom:0; font-size:.65rem; }
+  .battle-root:has(.playmat.layout-tabletop) .hand-strip .hand-scroll{ padding:0 1rem 0; min-height:120px; }
 
   /* === Battle log side panel（漂浮在右邊） === */
   .playmat.layout-tabletop .action-bar > .log-col{

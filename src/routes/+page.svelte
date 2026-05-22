@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.024</span> 🎨 桌墊版 — 附加卡同寸疊放 + HP bar 移左 + 手牌再上移</summary>
+        <ul>
+          <li><b>附加卡疊放改造</b>：原本縮成 28×40px 小卡圖排在底部，改成「同寶可夢大小、壓在底下、每張僅露出下方一條」仿實體桌面風格 — 從現在場上寶可夢開始往下疊（z-index 由 Pokémon 100 起、attached 由 1 開始遞增），每張往下偏移 active 22px / bench 14px。</li>
+          <li><b>HP bar 移到左側</b>：雙方戰鬥位的 HP 60/60 + 綠條從卡底改成左側細長欄（56px 寬，column 排版），上下省出空間。</li>
+          <li><b>手牌再上移</b>：HP bar 不再占卡底空間，min-height 從 130 縮到 120px、padding 全砍到 0，手牌更貼近備戰區。</li>
+          <li><b>scope</b>：完全限於 <code>.playmat.layout-tabletop</code>，桌機 classic 與手機 portrait 完全不影響。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c/11d（Python pipeline — game/+page.svelte 575KB 大檔 + JSON 安全規則）／Rule 14（最小 patch — 4 處 template 加 i index + CSS 區塊替換）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.022</span> 🔧 M5 兩張特殊能量改名 + 屬性歸類 + 雷電獸 閃光射線傷害修正</summary>
         <ul>
           <li><b>卡名校正</b>：M5 「閃電能量」→「閃電【雷】能量」、「暗影惡能量」→「暗影【惡】能量」，對齊既有特殊能量排版規律（泡沫【水】/ 磁鐵【鋼】/ 燃料【火】/ 硬岩【鬥】/ 增強【草】/ 感應【超】）。</li>
