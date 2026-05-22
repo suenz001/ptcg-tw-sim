@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.025</span> 🎨 桌墊版 — 修正附加卡方向：active 横向扇開、bench 縱向扇開，解除 overflow 限制</summary>
+        <ul>
+          <li><b>active 橫向疊牌</b>：附加卡從原本「縱向下方疊」改成「橫向右側扇開」（仿玩家提供的實體桌面圖 1），每張右移 32px、z-index 由近到遠遞減，寶可夢圖 z-index:99 蓋在最上層左側。</li>
+          <li><b>bench 縱向疊牌</b>：維持縱向下方扇開（仿圖 2），但 offset 從 14px 加大到 20px 讓每張更明顯地露出底部一條。</li>
+          <li><b>解除 overflow 限制</b>：根因找到 — <code>.bench-slot</code> 原本就有 <code>overflow:hidden</code>，bench 疊出 slot 底邊被裁掉。tabletop 加 <code>!important</code> 解放；同步放鬆 <code>.zone-bench</code> / <code>.att-card-stack</code> / <code>.bench-middle</code> 都 overflow:visible。</li>
+          <li><b>z-index 反轉</b>：原本後加的卡 z-index 更高（蓋住前面）→ 改成 close-to-Pokémon 的 z-index 更高，每張各自露出一條，符合實體桌面「扇形展開」直覺。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c/11d（Python pipeline）／Rule 14（最小 patch — 純 CSS scope 改動 + inline style 方向調整）。桌機 classic 與手機 portrait 完全不影響。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.024</span> 🎨 桌墊版 — 附加卡同寸疊放 + HP bar 移左 + 手牌再上移</summary>
         <ul>
           <li><b>附加卡疊放改造</b>：原本縮成 28×40px 小卡圖排在底部，改成「同寶可夢大小、壓在底下、每張僅露出下方一條」仿實體桌面風格 — 從現在場上寶可夢開始往下疊（z-index 由 Pokémon 100 起、attached 由 1 開始遞增），每張往下偏移 active 22px / bench 14px。</li>

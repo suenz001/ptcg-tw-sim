@@ -5551,7 +5551,7 @@
                     {@const _attOB = attachedCardsOf(b)}
                     {#if _attOB.length > 0}
                       <div class="att-card-stack">
-                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*14}px;z-index:{1+i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*20}px;z-index:{50-i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                       </div>
                     {/if}
                   {/if}
@@ -5607,7 +5607,7 @@
                 {@const _attOA = attachedCardsOf(oppPlayer.active)}
                 {#if _attOA.length > 0}
                   <div class="att-card-stack">
-                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*22}px;z-index:{1+i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                   </div>
                 {/if}
               {/if}
@@ -5881,7 +5881,7 @@
               {@const _attMA = attachedCardsOf(myPlayer.active)}
               {#if _attMA.length > 0}
                 <div class="att-card-stack">
-                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*22}px;z-index:{1+i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                 </div>
               {/if}
             {/if}
@@ -5968,7 +5968,7 @@
                   {@const _attMB = attachedCardsOf(b)}
                   {#if _attMB.length > 0}
                     <div class="att-card-stack">
-                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*14}px;z-index:{1+i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1)*20}px;z-index:{50-i}" src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                     </div>
                   {/if}
                 {/if}
@@ -8061,22 +8061,28 @@
   .playmat.layout-tabletop .att-card.att-tool{ border-color:#d4a000; }
   .playmat.layout-tabletop .att-card.att-evo{ border-color:#88aaff; }
 
-  /* === active：stack 對齊 active-img（105px 寬） === */
-  /* active-img 升起到上層蓋住 stack，且 stack 對齊其位置 */
-  .playmat.layout-tabletop .active-card .active-img{ position:relative; z-index:20; }
+  /* === active：stack 對齊 active-img — 橫向往右扇開（v5.025 仿實體桌面：玩家圖 1） === */
+  /* active-img 升 z-index:99 蓋住 stack 左側；stack 寬度只佔 1 張卡（105px），
+     裡面 .att-card 用 inline left:N×32px 往右疊出，可超出 stack 寬度 */
+  .playmat.layout-tabletop .active-card .active-img{ position:relative; z-index:99; }
   .playmat.layout-tabletop .active-card > .att-card-stack{
-    /* active-card 是 flex row：active-img 左側 padding 0.5rem，加上 HP 欄寬 56px + gap 0.45rem
-       才是 active-img 的 left。padding-top 對齊 0.45rem 卡片內距。 */
-    top:.45rem; left:calc(.5rem + 56px + .45rem); width:105px;
+    /* active-card 是 flex row：左 padding .5rem + HP 欄 56px + gap .45rem = active-img left */
+    top:.45rem; left:calc(.5rem + 56px + .45rem); width:105px; height:140px;
+    overflow:visible !important;
   }
 
-  /* === bench：stack 對齊 bench img（max-width:108px，包在 .bench-middle 內） === */
-  .playmat.layout-tabletop .bench-slot .bench-middle{ position:relative; }
-  .playmat.layout-tabletop .bench-slot .bench-middle img{ position:relative; z-index:20; }
+  /* === bench：縱向往下扇開（v5.025 仿玩家圖 2） === */
+  /* bench-slot 原本 overflow:hidden（line ~9048）— tabletop 要打開讓 stack 能超出 slot 底邊 */
+  .playmat.layout-tabletop .bench-slot{ overflow:visible !important; }
+  .playmat.layout-tabletop .bench-slot .bench-middle{ position:relative; overflow:visible; }
+  .playmat.layout-tabletop .bench-slot .bench-middle img{ position:relative; z-index:99; }
   .playmat.layout-tabletop .bench-slot .att-card-stack{
-    /* 與 bench-middle 內 img 對齊 — img 預設 width:100% max-width:108px 置中 */
-    top:0; left:50%; transform:translateX(-50%); width:100%; max-width:108px;
+    /* 與 bench img 對齊 — img 預設 width:100% max-width:108px 置中 */
+    top:0; left:50%; transform:translateX(-50%); width:100%; max-width:108px; height:128px;
+    overflow:visible !important;
   }
+  /* zone-bench 也放鬆 overflow（外層 grid 容器） */
+  .playmat.layout-tabletop .zone-bench{ overflow:visible !important; }
 
   /* === HP bar 從卡底移到左側細長欄 === */
   .playmat.layout-tabletop .active-card{
