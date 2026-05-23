@@ -58,7 +58,8 @@ regPre('代歐奇希斯|精神強念', (state, aIdx, pool) => {
 regPre('哲爾尼亞斯|大地之門', (state) => ({ state, damage: 0 }));
 regPost('哲爾尼亞斯|大地之門', (state, aIdx, pool) => {
   const p = state.players[aIdx];
-  const slots = 5 - p.bench.length;
+  // v5.041：bench limit 改 getBenchLimit (5→8)
+  const slots = getBenchLimit(state, aIdx, pool) - p.bench.length;
   if (slots <= 0) return addLog(state, '大地之門：備戰區已滿（5隻）', aIdx);
 
   // 從牌庫過濾出【超】屬性的基礎寶可夢

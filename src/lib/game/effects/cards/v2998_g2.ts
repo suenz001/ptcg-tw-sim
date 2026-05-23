@@ -491,8 +491,9 @@ regA('莉莉艾的蝶結萌虻', 0, (st, idx, pool, _cardInst) => {
   if (candidates.length === 0) {
     return addLog(s, '邀請眨眼：對手手牌沒有【基礎】寶可夢，效果結束', idx);
   }
-  // 對手備戰剩餘空位
-  const slotsLeft = 5 - opp.bench.length;
+  // 對手備戰剩餘空位 — v5.041：bench limit 改 getBenchLimit (5→8)
+  const oppIdx = (1 - idx) as 0 | 1;
+  const slotsLeft = getBenchLimit(s, oppIdx, pool) - opp.bench.length;
   const maxPick = Math.min(candidates.length, slotsLeft);
   s = addLog(s,
     `邀請眨眼：選最多 ${maxPick} 張【基礎】寶可夢放對手備戰區（候選 ${candidates.length} 張）`,
@@ -512,7 +513,8 @@ regR('lillie-ribombee-invite-place', (st, idx, iids, _params, pool) => {
   }
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
-  const slotsLeft = 5 - opp.bench.length;
+  // v5.041：bench limit 改 getBenchLimit (5→8)
+  const slotsLeft = getBenchLimit(st, oppIdx, pool) - opp.bench.length;
   const actualIids = iids.slice(0, slotsLeft);
   const placedInsts: CardInstance[] = [];
   const placedNames: string[] = [];

@@ -43,7 +43,8 @@ SPECIAL_ENERGY_ATTACH.set('感應【超】能量', (st, idx, targetIid, pool) =>
     return st;
   }
   // 備戰空位
-  const benchSlots = 5 - p.bench.length;
+  // v5.041：bench limit 改 getBenchLimit (5→8) 支援零之大空洞 + 太晶
+  const benchSlots = getBenchLimit(st, idx, pool) - p.bench.length;
   if (benchSlots <= 0) {
     return addLog(st, '感應【超】能量：備戰區已滿，略過搜尋', idx);
   }

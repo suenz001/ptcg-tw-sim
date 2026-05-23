@@ -146,9 +146,10 @@ function discardOwnNEnergyFn(n: number, label: string): AttackPostFn {
 
 /** 攻擊後從牌庫選最多 max 張基礎寶可夢放備戰（bench-basic-from-deck resolver） */
 function benchBasicFn(max: number, label: string): AttackPostFn {
-  return (state, aIdx) => {
+  return (state, aIdx, pool) => {
     const player = state.players[aIdx];
-    const slots = 5 - player.bench.length;
+    // v5.041：bench limit 改 getBenchLimit (5→8)
+    const slots = getBenchLimit(state, aIdx, pool) - player.bench.length;
     if (slots <= 0) return addLog(state, `${label}：備戰區已滿`, aIdx);
     if (player.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
     const realMax = Math.min(max, slots);

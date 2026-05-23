@@ -265,6 +265,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.041</span> 🔍 全面 audit 補完 — 零之大空洞 / 太晶 備戰上限漏網 18 處（含貴重手推車）</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.040 修了 6 處 hardcoded bench >= 5，但漏掉「貴重手推車」（ACE SPEC Item，從牌庫選任意數量基礎寶可夢放備戰）— Wilson 點名。立刻做全面深度 audit，發現 effects.ts + 5 個子檔還有 12 處漏網，加上貴重手推車 3 處，本次共修 18 處（v5.040 6 處 + v5.041 18 處 = 累計 24 處）。</li>
+          <li><b>effects.ts 補修 11 處</b>：聒噪鳥｜無伴奏合唱（5396）、向尾喵｜呼朋引伴（5412）、benchBasicFromDeckPost helper（7551）、呆火駝｜呼朋引伴（9133/9138）、deckSearchSameNameBenchPost helper（9265/9268）、discardSameNameBenchPost helper（9287/9290）、bench-from-discard-samename resolver（9306）、刺龍王ex｜王之號召（9578/9584）、火箭隊的瓦斯彈｜警備濁霧 passive（13295）、貴重手推車 regG + reg + resolver（13480/13485/13504）。</li>
+          <li><b>子檔補修 5 個檔 7 處</b>：</li>
+          <li>　・<code>energy_cards.ts:46</code> 感應【超】能量（基本能量發動效果搜基礎寶可夢放備戰）</li>
+          <li>　・<code>v2355_j_mark_batch.ts:61</code> 哲爾尼亞斯｜大地之門</li>
+          <li>　・<code>v2359_j_mark_batch.ts:151</code> benchBasicFn helper（callback signature 漏 pool 也補進去）</li>
+          <li>　・<code>v2998_g2.ts:495/515</code> 邀請眨眼（對手 bench，用 <code>getBenchLimit(state, oppIdx, pool)</code>）</li>
+          <li>　・<code>v3700_audit_orphans.ts:98/99</code> orphans audit helper</li>
+          <li><b>maxCount:5 audit 結果</b>：另查 4 處 <code>maxCount: 5</code>（v2750 用 Pokemon:Types 搜 5 張 / 釣竿MAX 搜 5 張加手牌 / 找 5 張 Tool 加手牌 / 聖灰回 5 張到牌庫）— **全部跟 bench 無關**（屬於「最多 5 張」其他語意），不需修改。</li>
+          <li><b>Callback signature 補強</b>：4 個位置原本 callback 簽名漏 pool 參數（<code>_pool</code> 或省略），改成顯式 <code>pool</code>。EffectFn / TrainerGuardFn / AttackPostFn type 本來就含 pool 參數，省略只是寫法簡化。</li>
+          <li><b>子檔 import 補強</b>：5 個子檔原本沒 import <code>getBenchLimit</code>，4 個沒 engine import → 新增 <code>import { getBenchLimit } from &apos;../../engine&apos;;</code>，1 個（v2359）已有 engine import → 補進現有 import 清單。</li>
+          <li><b>剩下 AI 路徑</b>：<code>ai.ts:93</code> <code>bench.length &lt; 5</code> 是 AI 決策邏輯（決定是否要主動 play basic），不是規則限制 — 即使保留 5 也不會擋玩家動作，僅 AI 不會主動放第 6+ 隻。標 TODO 等後續優化。</li>
+          <li><b>Audit 工具</b>：本次用 <code>grep -rn &quot;bench\.length\s*&gt;=\s*5\b&quot;</code>、<code>&quot;5\s*-\s*\w*\.bench\&quot;</code>、<code>&quot;Math\.min.*5.*bench&quot;</code> 三種 pattern 全 repo 掃，未來可加進 pre-push audit script 防 regression。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 effects.ts 大檔 + 5 個子檔，sentinel + tail anchor 驗）／Rule 14（最小 patch — 18 處 hardcode 換 helper 呼叫，無 logic 重寫）／Rule 15（卡面 source of truth — 零之大空洞效果文本 8 隻為準）／Rule 7（不簡化實裝 — hardcode 5 即是簡化，必須修正）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.040</span> 🐛 修對手發牌動畫方向錯誤 + 零之大空洞 / 太晶 備戰上限漏網點 6 處</summary>
         <ul>
           <li><b>Bug 1：對手發牌動畫往左上方</b> — 玩家回報對手抽牌時動畫從牌庫位置飛到「左上角」，應該像我方一樣由牌庫往中央發。根因：<code>game/+page.svelte</code> drawAnims 對手分支 <code>endY = oppRect.top + 30</code> — 飛到 opponent-row 頂端 30px 處，視覺上往畫面最上方飛；我方分支 <code>endY = handRect.top + handRect.height / 2</code> 是手牌區中心，兩者不對稱。修法：對手 endY 改 <code>oppRect.top + oppRect.height / 2</code>（row 垂直中心），跟我方對稱「由牌庫往中央發」。</li>

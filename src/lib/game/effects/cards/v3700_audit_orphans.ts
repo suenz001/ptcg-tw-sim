@@ -92,11 +92,13 @@ function defCantRetreatNextPost(label: string): AttackPostFn {
  * 鏡射 effects.ts:6955 的 benchBasicFromDeckPost（用既有 resolver 'bench-basic-from-deck'）。
  */
 function benchBasicFromDeckPost(max: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
-    if (p.bench.length >= 5) return addLog(state, `${label}：備戰區已滿`, aIdx);
-    const realMax = Math.min(max, 5 - p.bench.length);
+    // v5.041：bench limit 改 getBenchLimit (5→8)
+    const limit = getBenchLimit(state, aIdx, pool);
+    if (p.bench.length >= limit) return addLog(state, `${label}：備戰區已滿`, aIdx);
+    const realMax = Math.min(max, limit - p.bench.length);
     const s = addLog(state, `${label}：從牌庫選最多 ${realMax} 張【基礎】寶可夢放備戰`, aIdx);
     return withPending(s, {
       type: 'deck-search',
