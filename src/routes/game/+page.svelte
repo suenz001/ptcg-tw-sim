@@ -259,7 +259,10 @@
   //   oppTurnViewIndex: 從 turnActionsLog 末尾算回去看哪一回合 (0=上1回合, 1=上2回合...)
   let oppTurnPanelOpen = $state(false);
   let oppTurnPanelPos = $state({ x: 0, y: 0 });
+  let oppTurnTogglePos = $state({ x: 0, y: 0 });  // v5.057：toggle 按鈕拖曳位置
   let oppTurnViewIndex = $state(0);  // 0 = 最新 (上一回合)
+  // v5.057：拖曳 vs 點擊區分 — 拖移超過 5px 視為拖曳，不觸發 click
+  let oppTurnToggleMoved = $state(false);
 
   // v5.055：對手回合 panel 拖曳 handler
   let oppTurnDragStart: { x: number; y: number; panelX: number; panelY: number } | null = null;
@@ -280,6 +283,40 @@
   function onOppTurnDragEnd(e: PointerEvent) {
     oppTurnDragStart = null;
     try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+  }
+
+  // v5.057：toggle 按鈕拖曳 — 仿 panel header 邏輯但操作 togglePos
+  let oppTurnToggleDragStart: { x: number; y: number; btnX: number; btnY: number } | null = null;
+  function onOppTurnToggleDragStart(e: PointerEvent) {
+    oppTurnToggleDragStart = {
+      x: e.clientX, y: e.clientY,
+      btnX: oppTurnTogglePos.x, btnY: oppTurnTogglePos.y,
+    };
+    oppTurnToggleMoved = false;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function onOppTurnToggleDragMove(e: PointerEvent) {
+    if (!oppTurnToggleDragStart) return;
+    const dx = e.clientX - oppTurnToggleDragStart.x;
+    const dy = e.clientY - oppTurnToggleDragStart.y;
+    if (Math.hypot(dx, dy) > 5) oppTurnToggleMoved = true;  // 超過 5px 算拖曳
+    oppTurnTogglePos = {
+      x: oppTurnToggleDragStart.btnX + dx,
+      y: oppTurnToggleDragStart.btnY + dy,
+    };
+  }
+  function onOppTurnToggleDragEnd(e: PointerEvent) {
+    oppTurnToggleDragStart = null;
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+  }
+  function onOppTurnToggleClick() {
+    // 拖曳結束時也會 fire click — 拖移超過 5px 不觸發 panel 開啟
+    if (oppTurnToggleMoved) {
+      oppTurnToggleMoved = false;
+      return;
+    }
+    oppTurnPanelOpen = true;
+    oppTurnViewIndex = 0;
   }
   let chatPanelPos = $state({ x: 0, y: 0 });
   let chatPanelDragStart: { mx: number; my: number; ox: number; oy: number } | null = null;
@@ -7237,8 +7274,13 @@
     {#if game?.phase === 'playing'
          && (oppPlayer?.turnActionsLog?.length ?? 0) > 0
          && !oppTurnPanelOpen}
-      <button class="opp-turn-toggle-btn" onclick={() => { oppTurnPanelOpen = true; oppTurnViewIndex = 0; }}
-        title="查看對手上回合動作">📜</button>
+      <button class="opp-turn-toggle-btn"
+        style:transform={`translate(${oppTurnTogglePos.x}px, ${oppTurnTogglePos.y}px)`}
+        onpointerdown={onOppTurnToggleDragStart}
+        onpointermove={onOppTurnToggleDragMove}
+        onpointerup={onOppTurnToggleDragEnd}
+        onclick={onOppTurnToggleClick}
+        title="查看對手回合出牌（拖曳移動位置）">📜</button>
     {/if}
 
     <!-- v5.055：對手回合動作 panel 主體 -->
@@ -7257,7 +7299,7 @@
               onclick={() => { oppTurnViewIndex = Math.min(_maxIdx, oppTurnViewIndex + 1); }}
               title="看更早的回合">◀</button>
             <span class="opp-turn-title-text">
-              📜 對手回合 {_currentEntry?.turn ?? '?'}
+              📜 對手回合出牌 {_currentEntry?.turn ?? '?'}
               <span class="opp-turn-title-sub">（上 {_safeIdx + 1} 回合前）</span>
             </span>
             <button class="opp-turn-nav-btn" disabled={_safeIdx <= 0}
@@ -7273,7 +7315,8 @@
             <div class="opp-turn-actions-grid">
               {#each _currentEntry.actions as act}
                 {@const _c = getCard(act.cardId)}
-                <div class="opp-turn-action-item" title={(_c?.name ?? '?') + (act.extra ? ' / ' + act.extra : '')}>
+                <div class="opp-turn-action-item" class:discard={act.type === 'discard'}
+                  title={(_c?.name ?? '?') + (act.extra ? ' / ' + act.extra : '') + (act.type === 'discard' ? '（被丟棄）' : '')}>
                   {#if _c?.imageUrl}
                     <img class="opp-turn-card-img" src={_c.imageUrl} alt={_c?.name ?? '?'}
                       onclick={() => openZoom(act.cardId, null)} />
@@ -7286,6 +7329,8 @@
                     <div class="opp-turn-action-label retreat">🔄 撤退{act.extra ?? ''}</div>
                   {:else if act.type === 'use_ability'}
                     <div class="opp-turn-action-label ability">✨ {act.extra ?? '特性'}</div>
+                  {:else if act.type === 'discard'}
+                    <div class="opp-turn-action-label discard">🗑 丟棄</div>
                   {/if}
                 </div>
               {/each}
@@ -8796,6 +8841,18 @@
   .opp-turn-action-label.attack { background: rgba(180,80,80,.35); color: #ffccaa; }
   .opp-turn-action-label.retreat { background: rgba(180,140,60,.35); color: #ffe0aa; }
   .opp-turn-action-label.ability { background: rgba(120,80,200,.35); color: #ddccff; }
+  .opp-turn-action-label.discard { background: rgba(100,100,100,.4); color: #aaa; }
+
+  /* v5.057：被丟棄的牌 — 灰調 + 半透明區別於主動打出的牌 */
+  .opp-turn-action-item.discard .opp-turn-card-img {
+    opacity: 0.45;
+    filter: grayscale(0.7) brightness(0.85);
+    border-color: #5a5a6a;
+  }
+  .opp-turn-action-item.discard .opp-turn-card-img:hover {
+    opacity: 0.85;
+    filter: grayscale(0.3) brightness(1);
+  }
 
   .opp-turn-empty {
     text-align: center; padding: 1.5rem .5rem;

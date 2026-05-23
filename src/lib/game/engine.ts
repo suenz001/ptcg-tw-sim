@@ -244,8 +244,56 @@ function recordTurnAction(
     }
   }
 
-  if (!rec) return after;
-  return pushCurrentTurnAction(after, aIdx, rec);
+  // v5.055：先 push 主要 action record（如果有）
+  let state = rec ? pushCurrentTurnAction(after, aIdx, rec) : after;
+
+  // v5.057：偵測「該 action 引起的棄牌」— 比對 before/after aIdx player 的 discard pile
+  //   排除已被主 action 記錄為 play_hand 的 cardId（避免 trainer 自己進棄牌重複顯示）
+  state = recordDiscardDiff(before, state, aIdx);
+  return state;
+}
+
+/**
+ * v5.057：偵測動作執行者自己 discard pile 該 action 新增的 cards，
+ * push 為 type:'discard' record。排除已在 currentTurnActions 內被 play_hand
+ * 記錄過的 cardId（i.e. trainer 自己進棄牌不重複顯示）。
+ */
+function recordDiscardDiff(before: GameState, after: GameState, aIdx: 0 | 1): GameState {
+  const beforeDiscard = before.players[aIdx].discard ?? [];
+  const afterDiscard = after.players[aIdx].discard ?? [];
+  if (afterDiscard.length <= beforeDiscard.length) return after;
+
+  const beforeIids = new Set(beforeDiscard.map(c => c.iid));
+  const newDiscards = afterDiscard.filter(c => !beforeIids.has(c.iid));
+  if (newDiscards.length === 0) return after;
+
+  // 已被 play_hand 記錄的 cardId（去重避免 trainer 卡自己進棄牌重複）
+  const playedCardIds = new Map<string, number>();
+  for (const r of (after.players[aIdx].currentTurnActions ?? [])) {
+    if (r.type === 'play_hand') {
+      playedCardIds.set(r.cardId, (playedCardIds.get(r.cardId) ?? 0) + 1);
+    }
+  }
+
+  const newRecords: ActionRecord[] = [];
+  for (const inst of newDiscards) {
+    // 如果這 cardId 已被 play_hand 記錄過 N 次，跳過 N 次（之後仍計入 discard）
+    const remaining = playedCardIds.get(inst.cardId) ?? 0;
+    if (remaining > 0) {
+      playedCardIds.set(inst.cardId, remaining - 1);
+      continue;
+    }
+    newRecords.push({ type: 'discard', cardId: inst.cardId });
+  }
+
+  if (newRecords.length === 0) return after;
+  const players = [...after.players] as [PlayerState, PlayerState];
+  const p = players[aIdx];
+  players[aIdx] = {
+    ...p,
+    currentTurnActions: [...(p.currentTurnActions ?? []), ...newRecords],
+  };
+  return { ...after, players };
 }
 
 /**

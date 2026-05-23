@@ -265,6 +265,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.057</span> 🎴 對手回合 panel 三項調整 — toggle 按鈕可拖、標題改名、加棄牌顯示</summary>
+        <ul>
+          <li><b>玩家回報 3 項</b>：</li>
+          <li>　1. toggle 按鈕無法拖曳 — 想像對話按鈕一樣可拖移位置</li>
+          <li>　2. 標題「對手回合」→「對手回合出牌」更精確</li>
+          <li>　3. 該回合棄掉的牌也顯示（如高級球用完進棄牌、招式效果棄能量），但色調暗一點區別主動打出的牌</li>
+          <li><b>修法 1 — toggle 按鈕拖曳</b>：加 <code>oppTurnTogglePos</code> state + 3 個 pointer handler（<code>onOppTurnToggleDragStart/Move/End</code>）+ click 區分邏輯（拖移 &gt; 5px 不觸發 panel 開啟）。視覺位置用 <code>transform: translate(x, y)</code> 帶 togglePos。</li>
+          <li><b>修法 2 — 標題改名</b>：template 內「📜 對手回合 N」→「📜 對手回合出牌 N」一處改。</li>
+          <li><b>修法 3 — 棄牌記錄</b>：</li>
+          <li>　・<code>types.ts</code> <code>ActionRecord.type</code> union 加 <code>&apos;discard&apos;</code></li>
+          <li>　・<code>engine.ts</code> 加 <code>recordDiscardDiff</code> helper — 在 <code>recordTurnAction</code> 末尾呼叫，比對 before/after aIdx player 的 discard pile 找新增的 cards，push 為 type:&apos;discard&apos; record。<strong>排除邏輯</strong>：如果該 cardId 已在 currentTurnActions 內被 play_hand 記錄過 N 次（i.e. trainer 自己進棄牌），跳過 N 次避免重複（用 Map count 計數）。</li>
+          <li>　・UI 加 discard label「🗑 丟棄」+ <code>class:discard</code> 灰調樣式：<code>opacity:.45 + filter:grayscale(.7) brightness(.85)</code>，hover 時部分恢復 (<code>opacity:.85 + grayscale(.3)</code>)</li>
+          <li><b>實際情境</b>：對手用「研究員之招集」棄全手牌再抽 7 → panel 顯示「研究員之招集」(play_hand) + 8 張被棄手牌（discard 灰調）；對手用「高級球」→ panel 顯示「高級球」(play_hand，不重複顯示為 discard 因為 trainer 自己進棄牌已 play_hand 記錄)；對手攻擊招效果讓對手棄能量 → 顯示「招式」(attack) + 「能量卡」(discard 灰調)。</li>
+          <li><b>scope</b>：純記錄動作執行者「自己的 discard」新增 cards（不跨玩家 — 如對方招式讓我方棄能量不歸對方 panel 顯示）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 engine.ts 大檔）／Rule 14（最小 patch — 1 helper + 3 UI 改動）／Rule 13（discard records 仍在 currentTurnActions array 內，無 nested array）／Rule 11e（Write tool patch）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.056</span> 🐛 修對手回合 panel 慢一回合 — 改用 activePlayerIndex 偵測切換</summary>
         <ul>
           <li><b>玩家回報</b>：自己的回合結束才看到對手的上回合動作，慢了一回合。應該是自己回合期間就能看到對手剛剛做了什麼。</li>

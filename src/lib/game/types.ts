@@ -929,7 +929,7 @@ export interface EffectScript {
 // v5.055：對手回合動作 panel 用的資料結構（Rule 13 nested array safe）
 export interface ActionRecord {
   /** 動作類型 */
-  type: 'play_hand' | 'attack' | 'retreat' | 'use_ability';
+  type: 'play_hand' | 'attack' | 'retreat' | 'use_ability' | 'discard';
   /** 卡片 cardId — UI 抓 imageUrl 用 */
   cardId: string;
   /** 補強說明：attack→招式名 / retreat→換誰上場 / use_ability→特性名 */
