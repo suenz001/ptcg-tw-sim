@@ -265,6 +265,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.063</span> 🎯 v5.060 backlog 完整實裝 — 32 個「若希望」招式補 binary-yes-no 玩家抉擇 prompt</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.060 修了吃吼霸ex 極限俯衝 / 巨金怪 金屬之錘 等 3 個「若希望」招式，但留下 34 個 backlog 還沒做完整實裝。</li>
+          <li><b>本次處理範圍</b>：34 個 backlog 中扣除 2 個原本就沒實作 reg* 的（自爆磁怪|磁力抵制、大比鳥ex|狂風呼嘯，留 backlog 之後實作），共補完 32 個招式 binary-yes-no prompt。G 標卡跳過實裝原則：所有 32 個招式都有非 G 印刷（H/I/J/M5 等仍合法），招式名共用 → 全部仍需實裝。</li>
+
+          <li><b>修法統一範本</b>：(a) 在 <code>effects.ts</code> 結尾集中加 32 個 <code>ATTACK_PRE_DISCARD_CHOICE.set</code>（binary-yes-no spec + 中文 prompt + Yes/No label）；(b) 每個招式的 <code>regPost</code>（櫻花魚漸強波是 <code>regPre</code>）callback 用 <code>const _cb: AttackPostFn = CB</code> 法 wrap，前面加 yes/no guard — 玩家選「否」<code>addLog</code> 跳過效果直接 return，選「是」呼叫原 callback。AI 預設 yes（<code>chosenIids === undefined</code>），不影響 vs AI 對戰。</li>
+
+          <li><b>32 個招式分 8 類</b>：</li>
+          <li>　・<b>抽牌類 (8 張)</b>：狐大盜|貪慾狩獵、夢妖魔ex|六之魔法、竹蘭的烈咬陸鯊ex|螺旋俯衝、代歐奇希斯|精神高速、霓虹魚|報恩、幸福蛋ex|報恩、差不多娃娃|報恩、摩托蜥ex|鋯石之路</li>
+          <li>　・<b>自身互換戰鬥/備戰 (4 張)</b>：超級拉帝亞斯ex|狡兔三窟、古劍豹|狡兔三窟、沙漠蜻蜓ex|風暴返、音波龍ex|狡兔三窟</li>
+          <li>　・<b>對手互換戰鬥/備戰 (1 張)</b>：蓋歐卡ex|蜿蜒浪</li>
+          <li>　・<b>丟競技場 (2 張)</b>：毛辮羊|搗碎、毛毛角羊|搗碎</li>
+          <li>　・<b>對手戰鬥能量改附對手備戰 (3 張)</b>：超能妙喵|戲法舞步、耿鬼ex|戲法舞步、火箭隊的閃電鳥|阻礙之翼</li>
+          <li>　・<b>對手能量回對手手牌 (4 張)</b>：高傲雉雞|反轉之風、帕底亞 肯泰羅|上搗角擊、章魚桶|水流清洗、呆呆王|付諸東流</li>
+          <li>　・<b>牌庫搜手牌 (4 張)</b>：詛咒娃娃|人偶捕捉、君主蛇ex|青草命令、甲賀忍蛙ex|忍之利刃、貓頭夜鷹|鉤爪搜尋</li>
+          <li>　・<b>其他特殊 (6 張)</b>：信使鳥|幸福禮物（雙方各 ≤3 附能）、賽富豪|賽富迴旋（自身回牌庫）、火箭隊的貓老大ex|高傲指令（複製對手招式）、櫻花魚|漸強波（附【水】能後 ×30 增傷）、魔牆人偶|相仿秀（複製對手手牌支援者）、好啦魷|惡作劇觸手（重洗對手牌庫）</li>
+
+          <li><b>實際情境</b>：v5.063 起，玩家使用這 32 個招式時，UI 會跳出 binary modal「是 / 否」讓玩家選。例如「霓虹魚 報恩」+20 傷害後跳「是否抽到 6 / 否」— 選「否」就純打 20 不抽牌（手牌已多時不想超過 7 張可選否）；「毛辮羊 搗碎」打 30 後跳「是否丟競技場 / 否」— 對手有對自方有利的競技場時選否保留。</li>
+
+          <li><b>Iron Rules</b>：Rule 8（純抉擇不揭示資訊）／Rule 11/11c（Python pipeline 改 12 個檔 + 集中 set 區）／Rule 12（cards/* 子檔走 _shared 鏡像 — <code>AttackPostFn / AttackPreFn</code> import 從 <code>'../_shared'</code>）／Rule 14（最小 patch — wrap 既有 callback 不重寫邏輯）／Rule 15（卡面 source of truth — prompt 完全照 JSON effect 文字）／Rule 11e（Write tool 寫 patch）／Rule 11f（push 前 3 道 ASSERT）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+
+          <li><b>剩餘 backlog (2 個)</b>：自爆磁怪|磁力抵制（卡面：「若希望，將對手的戰鬥寶可夢與備戰寶可夢互換」）、大比鳥ex|狂風呼嘯（卡面：「若希望，將場上的競技場卡丟棄」）— 兩張原本就沒 <code>reg*</code>，需先實作對應 yes 邏輯才能加 prompt。下次 patch 處理。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.062</span> 🐛 修對戰圓形競技場誤擋戰鬥位 — caller 漏傳 isBench 預設走 bench guard（玩家回報抹茶旋轉打不到戰鬥位）</summary>
         <ul>
           <li><b>玩家回報</b>：用「來悲粗茶 抹茶旋轉」(M5) 攻擊，場上有「對戰圓形競技場」(M2 079/080) 時，對手戰鬥寶可夢仍被擋下不受招式效果（沒被放傷害指示物）。但卡面寫的是「雙方的所有<strong>備戰</strong>寶可夢，不會因對手的招式與特性的效果而被放置傷害指示物」— 戰鬥位應該照樣中招才對，bug 反過來保護到戰鬥位。</li>

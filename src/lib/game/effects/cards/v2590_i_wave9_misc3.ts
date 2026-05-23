@@ -344,10 +344,24 @@ regPost('龍捲雲|玉樹臨風', (state, aIdx, pool) => {
 // 簡化：默認執行（玩家通常會選）
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('夢妖魔ex|六之魔法', (s) => ({ state: s, damage: 150 }));
-regPost('夢妖魔ex|六之魔法', drawToFull6Post('六之魔法'));
+regPost('夢妖魔ex|六之魔法', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '六之魔法：選擇「否」 — 跳過抽牌', aIdx);
+  const _cb: AttackPostFn = drawToFull6Post('六之魔法');
+  return _cb(state, aIdx, pool);
+});
 
 regPre('差不多娃娃|報恩', (s) => ({ state: s, damage: 30 }));
-regPost('差不多娃娃|報恩', drawToFull6Post('報恩'));
+regPost('差不多娃娃|報恩', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '報恩：選擇「否」 — 跳過抽牌', aIdx);
+  const _cb: AttackPostFn = drawToFull6Post('報恩');
+  return _cb(state, aIdx, pool);
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // L. 若希望搜牌庫加手 (1 張)
@@ -355,7 +369,12 @@ regPost('差不多娃娃|報恩', drawToFull6Post('報恩'));
 // 簡化：自動搜（玩家會用）— 用 deck-search picker 讓玩家自選
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('君主蛇ex|青草命令', (s) => ({ state: s, damage: 150 }));
-regPost('君主蛇ex|青草命令', (state, aIdx, _pool) => {
+regPost('君主蛇ex|青草命令', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '青草命令：選擇「否」 — 跳過搜尋', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, _pool) => {
   const player = state.players[aIdx];
   if (player.deck.length === 0) return addLog(state, '青草命令：牌庫已空', aIdx);
   const max = Math.min(3, player.deck.length);
@@ -371,6 +390,8 @@ regPost('君主蛇ex|青草命令', (state, aIdx, _pool) => {
       effectKey: 'wave9-take-any-from-deck',
     },
   };
+};
+  return _cb(state, aIdx, pool);
 });
 
 import { regR } from '../_shared';

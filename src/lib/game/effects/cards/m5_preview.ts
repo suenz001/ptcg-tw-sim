@@ -1203,7 +1203,12 @@ regR('m5-tropius-fruit-aroma', (state, aIdx, iids) => {
 
 // ── C2. 詛咒娃娃|人偶捕捉 — 80 + 若希望牌庫選 1 任意卡加手牌 ────
 //   卡面：「若希望，從自己的牌庫選擇 1 張任意卡，加入手牌。然後重洗牌庫。」
-regPost('詛咒娃娃|人偶捕捉', (state, aIdx) => {
+regPost('詛咒娃娃|人偶捕捉', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '人偶捕捉：選擇「否」 — 跳過搜尋', aIdx);
+  const _cb: AttackPostFn = (state, aIdx) => {
   const p = state.players[aIdx];
   if (p.deck.length === 0) return addLog(state, '人偶捕捉：牌庫為空，效果略過', aIdx);
   return withPending(
@@ -1216,6 +1221,8 @@ regPost('詛咒娃娃|人偶捕捉', (state, aIdx) => {
       effectKey: 'm5-shuppet-doll-capture',
     },
   );
+};
+  return _cb(state, aIdx, pool);
 });
 regR('m5-shuppet-doll-capture', (state, aIdx, iids) => {
   if (iids.length === 0) {

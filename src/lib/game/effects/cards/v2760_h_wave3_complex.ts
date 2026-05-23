@@ -328,7 +328,12 @@ regPost('熔蟻獸|滑燒火焰', (state, aIdx, _pool) => {
 // 15. 魔牆人偶|相仿秀 — 查對手手牌 + 若希望，選 1 張支援者作為此招使用
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('魔牆人偶|相仿秀', (s) => ({ state: s, damage: 0 }));
-regPost('魔牆人偶|相仿秀', (state, aIdx, pool) => {
+regPost('魔牆人偶|相仿秀', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '相仿秀：選擇「否」 — 跳過複製', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppHand = state.players[dIdx].hand;
   const supps = oppHand.filter(c => pool.get(c.cardId)?.subtype === 'Supporter');
@@ -346,6 +351,8 @@ regPost('魔牆人偶|相仿秀', (state, aIdx, pool) => {
     }
   }
   return s;
+};
+  return _cb(state, aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -491,7 +498,12 @@ regR('h-wave3-devolve', (state, aIdx, iids, _params, pool) => {
 // gate：卡面限 2 階進化，非 2 階則 picker 不開。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('帕底亞 肯泰羅|上搗角擊', (s) => ({ state: s, damage: 30 }));
-regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool) => {
+regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '上搗角擊：選擇「否」 — 不放回對手能量', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = state.players[dIdx].active;
   if (!da) return state;
@@ -511,6 +523,8 @@ regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool) => {
     effectKey: 'v327-tauros-thrust',
     params: { titleOverride: `選擇要放回對手手牌的能量（0∼${cap} 張）` },
   });
+};
+  return _cb(state, aIdx, pool);
 });
 regR('v327-tauros-thrust', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(st, '上搗角擊：玩家選擇不發動效果', idx);
@@ -574,7 +588,12 @@ regPost('塗標客|惡作劇作畫', (state, aIdx, pool) => {
 // v3.27：從自動取末端改為 picker；minCount=0 對應「若希望」可選 0∼2 張。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('呆呆王|付諸東流', (s) => ({ state: s, damage: 70 }));
-regPost('呆呆王|付諸東流', (state, aIdx, pool) => {
+regPost('呆呆王|付諸東流', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '付諸東流：選擇「否」 — 不放回對手能量', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = state.players[dIdx].active;
   if (!da || da.energyAttached.length === 0) return addLog(state, '付諸東流：對手戰鬥無能量', aIdx);
@@ -591,6 +610,8 @@ regPost('呆呆王|付諸東流', (state, aIdx, pool) => {
     effectKey: 'v327-slowking-flush',
     params: { titleOverride: `選擇要放回對手手牌的能量（0∼${cap} 張）` },
   });
+};
+  return _cb(state, aIdx, pool);
 });
 regR('v327-slowking-flush', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(st, '付諸東流：玩家選擇不發動效果', idx);

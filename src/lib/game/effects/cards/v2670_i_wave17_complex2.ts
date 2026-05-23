@@ -254,7 +254,12 @@ regR('wave17-rocket-mirror', (state, aIdx, iids, _params, _pool) => {
 //   能量 picker，sourcePlayerIdx=dIdx）→ bench-choose（對手備戰，sourcePlayerIdx=dIdx）。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('火箭隊的閃電鳥|阻礙之翼', (s) => ({ state: s, damage: 30 }));
-regPost('火箭隊的閃電鳥|阻礙之翼', (state, aIdx, _pool) => {
+regPost('火箭隊的閃電鳥|阻礙之翼', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '阻礙之翼：選擇「否」 — 不改附對手能量', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
   if (!opp.active || opp.active.energyAttached.length === 0 || opp.bench.length === 0) {
@@ -267,6 +272,8 @@ regPost('火箭隊的閃電鳥|阻礙之翼', (state, aIdx, _pool) => {
     effectKey: 'v3140-zapdos-jamming-pick-energy',
     params: { titleOverride: '選擇要改附的對手能量' },
   });
+};
+  return _cb(state, aIdx, pool);
 });
 regR('v3140-zapdos-jamming-pick-energy', (state, aIdx, iids) => {
   const energyIid = iids[0];

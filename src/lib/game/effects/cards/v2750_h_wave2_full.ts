@@ -1614,7 +1614,14 @@ regPost('遠古巨蜓|陀螺音波', selfSwapPostInline('陀螺音波'));
 
 // 音波龍ex|狡兔三窟 50 — 若希望，自互
 regPre('音波龍ex|狡兔三窟', (s) => ({ state: s, damage: 50 }));
-regPost('音波龍ex|狡兔三窟', selfSwapPostInline('狡兔三窟'));
+regPost('音波龍ex|狡兔三窟', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '狡兔三窟：選擇「否」 — 不互換', aIdx);
+  const _cb: AttackPostFn = selfSwapPostInline('狡兔三窟');
+  return _cb(state, aIdx, pool);
+});
 
 // 流氓熊貓|拉扯 — 對手 1 備戰換戰鬥
 regPre('流氓熊貓|拉扯', (s) => ({ state: s, damage: 0 }));
@@ -1668,7 +1675,12 @@ regR('h-wave2-force-opp-swap-by-self', (state, dIdx, iids, _params, _pool) => {
 // 蓋歐卡ex|蜿蜒浪 80 — 若希望對手互換（對手選）
 //   簡化：必中（若希望省略，預設使用希望）
 regPre('蓋歐卡ex|蜿蜒浪', (s) => ({ state: s, damage: 80 }));
-regPost('蓋歐卡ex|蜿蜒浪', (state, aIdx, pool) => {
+regPost('蓋歐卡ex|蜿蜒浪', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '蜿蜒浪：選擇「否」 — 不強制換對手', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) return state;
   return withPending(addLog(state, '蜿蜒浪：對手戰鬥/備戰互換（對手選）', aIdx), {
@@ -1677,6 +1689,8 @@ regPost('蓋歐卡ex|蜿蜒浪', (state, aIdx, pool) => {
     minCount: 1, maxCount: 1,
     effectKey: 'h-wave2-force-opp-swap-by-self',
   });
+};
+  return _cb(state, aIdx, pool);
 });
 
 // 鐵包袱|內部噴射 60 — 自互 + 對手互換
@@ -2137,7 +2151,12 @@ regPost('鐵荊棘|壊死壓榨', tetsuibaraDeathSqueezePost('壊死壓榨'));
 
 // 好啦魷|惡作劇觸手 — 看對手牌庫上方 1 張 + 若希望重洗
 regPre('好啦魷|惡作劇觸手', (s) => ({ state: s, damage: 0 }));
-regPost('好啦魷|惡作劇觸手', (state, aIdx, pool) => {
+regPost('好啦魷|惡作劇觸手', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '惡作劇觸手：選擇「否」 — 不重洗對手牌庫', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
   if (opp.deck.length === 0) return state;
@@ -2148,6 +2167,8 @@ regPost('好啦魷|惡作劇觸手', (state, aIdx, pool) => {
   // 玩家未必想重洗 — 簡化自動重洗（多數情況下都想攪亂）
   s = updatePlayer(s, dIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   return addLog(s, '惡作劇觸手：重洗對手牌庫', aIdx);
+};
+  return _cb(state, aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

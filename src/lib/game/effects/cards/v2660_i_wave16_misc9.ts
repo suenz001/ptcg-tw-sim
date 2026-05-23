@@ -459,7 +459,12 @@ regR('wave16-bench-to-hand', (state, aIdx, iids, _params, pool) => {
 // v3.27：從自動取末端升級為玩家挑選（active-energy-discard picker / sourcePlayerIdx=dIdx，改 resolver：回對手手牌）。
 // minCount=0 → 玩家可直接選 0 張等於「否」；1 張傳給 resolver 放回對手手牌。
 regPre('章魚桶|水流清洗', (s) => ({ state: s, damage: 20 }));
-regPost('章魚桶|水流清洗', (state, aIdx, _pool) => {
+regPost('章魚桶|水流清洗', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '水流清洗：選擇「否」 — 不放回對手能量', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const dp = state.players[dIdx];
   if (!dp.active || dp.active.energyAttached.length === 0) {
@@ -473,6 +478,8 @@ regPost('章魚桶|水流清洗', (state, aIdx, _pool) => {
     effectKey: 'v327-octopus-water-clean',
     params: { titleOverride: '選擇要放回對手手牌的能量（0∼1 張）' },
   });
+};
+  return _cb(state, aIdx, pool);
 });
 // resolver：將選中的對手戰鬥位能量移除 + 放入對手手牌（非棄牌！）。
 regR('v327-octopus-water-clean', (st, idx, iids, _params, pool) => {

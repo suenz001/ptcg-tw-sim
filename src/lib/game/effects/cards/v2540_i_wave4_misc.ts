@@ -390,7 +390,14 @@ regR('wave4-deck-pick-any', (state, aIdx, iids, _params, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 超級拉帝亞斯ex|狡兔三窟 40 + 自身與備戰互換
 regPre('超級拉帝亞斯ex|狡兔三窟', (s) => ({ state: s, damage: 40 }));
-regPost('超級拉帝亞斯ex|狡兔三窟', selfSwapPost('狡兔三窟'));
+regPost('超級拉帝亞斯ex|狡兔三窟', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '狡兔三窟：選擇「否」 — 不互換', aIdx);
+  const _cb: AttackPostFn = selfSwapPost('狡兔三窟');
+  return _cb(state, aIdx, pool);
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 統計：A 擲幣+N (11) + B 擲N×K (13) + C force opp swap (3) + D coin force swap (1)

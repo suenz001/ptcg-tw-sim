@@ -42,6 +42,7 @@ import {
   addLog, updatePlayer, withPending, shuffle,
   ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
+import type { AttackPostFn } from '../_shared';
 import { isBasicEnergyOfType } from '../../engine';
 import { flipCoinsWithLog, canApplyAttackEffectToTarget, countOneEnergy} from '../../effects';
 
@@ -216,7 +217,12 @@ regPost('伊裴爾塔爾ex|黑暗打擊', (state, aIdx, _pool) => {
 
 // ── 09. 古劍豹｜狡兔三窟 — 20 + 自選交換備戰（self-swap） ──────────────────
 regPre('古劍豹|狡兔三窟', (s, _a, _p) => ({ state: s, damage: 20 }));
-regPost('古劍豹|狡兔三窟', (state, aIdx, _pool) => {
+regPost('古劍豹|狡兔三窟', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '狡兔三窟：選擇「否」 — 不互換', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, _pool) => {
   const p = state.players[aIdx];
   if (p.bench.length === 0) {
     return addLog(state, '狡兔三窟：備戰區無寶可夢，無法互換', aIdx);
@@ -229,6 +235,8 @@ regPost('古劍豹|狡兔三窟', (state, aIdx, _pool) => {
     effectKey: 'self-swap-active-bench',
     params: { label: '狡兔三窟' },
   });
+};
+  return _cb(state, aIdx, pool);
 });
 
 // ── 10. 掘地兔｜地震 — 140 + 自己備戰各 30 ───────────────────────────────────
@@ -579,7 +587,12 @@ function luckyGiftDistribute(
 }
 
 regPre('信使鳥|幸福禮物', (s, _a, _p) => ({ state: s, damage: 0 }));
-regPost('信使鳥|幸福禮物', (state, aIdx, pool) => {
+regPost('信使鳥|幸福禮物', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '幸福禮物：選擇「否」 — 跳過禮物', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   // 對手手牌是否有基本能量？無 → 跳過對手側
   const oppHandHasBasic = state.players[dIdx].hand.some(c => {
@@ -608,6 +621,8 @@ regPost('信使鳥|幸福禮物', (state, aIdx, pool) => {
   }
   // 對手無基本能量 → 直接到我方
   return luckyGiftSelfPickPhase(state, aIdx, pool);
+};
+  return _cb(state, aIdx, pool);
 });
 
 // Phase 1 resolver — 對手 hand-discard 完成 → 移能量到 opp.discard 暫存 → 進 Phase 2 distribute

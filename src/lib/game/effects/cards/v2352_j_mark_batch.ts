@@ -1,5 +1,6 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { addLog, regPost, regPre, regR, shuffle, updatePlayer, withPending } from '../_shared';
+import type { AttackPostFn } from '../_shared';
 
 function cardName(pool: Map<string, any>, inst?: CardInstance | null): string {
   return inst ? (pool.get(inst.cardId)?.name ?? '?') : '?';
@@ -109,7 +110,14 @@ deckEnergyToActivePost('代歐奇希斯|基因充能', 'Psychic', '【超】', 2
 
 // 代歐奇希斯｜精神高速：30，若希望抽到手牌滿 5（自動執行可選抽牌）。
 regPre('代歐奇希斯|精神高速', (state) => ({ state, damage: 30 }));
-regPost('代歐奇希斯|精神高速', (state, aIdx) => drawUntilHandSize(state, aIdx, 5, '精神高速'));
+regPost('代歐奇希斯|精神高速', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '精神高速：選擇「否」 — 跳過抽牌', aIdx);
+  const _cb: AttackPostFn = (state, aIdx) => drawUntilHandSize(state, aIdx, 5, '精神高速');
+  return _cb(state, aIdx, pool);
+});
 
 // 冰岩怪｜冰山崩裂：丟牌庫上方 6 張，基本【水】能量張數 ×60。
 regPre('冰岩怪|冰山崩裂', (state, aIdx, pool) => {

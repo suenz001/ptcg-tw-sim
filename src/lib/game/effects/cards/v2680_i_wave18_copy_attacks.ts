@@ -213,12 +213,19 @@ regPre('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
   }
   return copyAttackPre(s, aIdx, pool, copiedKey, '高傲指令', picked.damage, dispatchAction);
 });
-regPost('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool) => {
+regPost('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '高傲指令：選擇「否」 — 跳過複製對手招式', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, pool) => {
   // 重洗對手牌庫（卡面要求「翻到正面的卡放回牌庫並重洗」）
   const dIdx = (1 - aIdx) as 0 | 1;
   let s = updatePlayer(state, dIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   s = addLog(s, '高傲指令：對手牌庫重洗', aIdx);
   return copyAttackPost(s, aIdx, pool);
+};
+  return _cb(state, aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

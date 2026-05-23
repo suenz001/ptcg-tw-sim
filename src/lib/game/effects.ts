@@ -4378,7 +4378,14 @@ export function drawNPost(n: number, attackName: string): AttackPostFn {
     });
   };
 }
-regPost('摩托蜥ex|鋯石之路', drawNPost(5, '鋯石之路'));
+regPost('摩托蜥ex|鋯石之路', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '鋯石之路：選擇「否」 — 跳過抽牌', aIdx);
+  const _cb: AttackPostFn = drawNPost(5, '鋯石之路');
+  return _cb(state, aIdx, pool);
+});
 regPost('蟲滾泥|呼喚', drawNPost(1, '呼喚'));
 regPost('蟲甲聖|三重抽出', drawNPost(3, '三重抽出'));
 regPost('斑斑馬|叼', drawNPost(1, '叼'));
@@ -5240,7 +5247,12 @@ regPre('夠讚狗ex|瘋狂連鎖', (state, aIdx, _pool) => {
 
 // 貓頭夜鷹|鉤爪搜尋 — 70 + 若希望從牌庫任選最多 2 張加手牌（重洗）
 // v2.159：升級為 deck-search 讓玩家自選（之前簡化為固定抽 2 張）
-regPost('貓頭夜鷹|鉤爪搜尋', (state, aIdx, _pool) => {
+regPost('貓頭夜鷹|鉤爪搜尋', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '鉤爪搜尋：選擇「否」 — 跳過搜尋', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, _pool) => {
   const player = state.players[aIdx];
   if (player.deck.length === 0) return addLog(state, '鉤爪搜尋：牌庫為空', aIdx);
   const max = Math.min(2, player.deck.length);
@@ -5252,6 +5264,8 @@ regPost('貓頭夜鷹|鉤爪搜尋', (state, aIdx, _pool) => {
     minCount: 0, maxCount: max,
     effectKey: 'search-to-hand-reshuffle',
   });
+};
+  return _cb(state, aIdx, pool);
 });
 
 // 皮卡丘|電磁電光 — 對對手任一寶可夢（含備戰）造成 10 傷害
@@ -7315,7 +7329,12 @@ regPost('鐵轍跡|路徑輪', returnSelfActiveEnergyPost(1, false, '路徑輪')
 // v3.27：原 returnOppActiveEnergyPost(2, ...) 為自動取末端 N 張（違反 Rule 7「若希望」必須玩家選）。
 //   改為 active-energy-discard picker（sourcePlayerIdx=dIdx + minCount=0 + 自訂 resolver 把能量放對手手）。
 regPre('高傲雉雞|反轉之風', (state, _aIdx, _pool) => ({ state, damage: 70 }));
-regPost('高傲雉雞|反轉之風', (state, aIdx, pool) => {
+regPost('高傲雉雞|反轉之風', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '反轉之風：選擇「否」 — 不放回對手能量', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = state.players[dIdx].active;
   if (!da || da.energyAttached.length === 0) return addLog(state, '反轉之風：對手戰鬥無能量', aIdx);
@@ -7332,6 +7351,8 @@ regPost('高傲雉雞|反轉之風', (state, aIdx, pool) => {
     effectKey: 'v327-unfezant-reverse-wind',
     params: { titleOverride: `選擇要放回對手手牌的能量（0∼${cap} 張）` },
   });
+};
+  return _cb(state, aIdx, pool);
 });
 regR('v327-unfezant-reverse-wind', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(st, '反轉之風：玩家選擇不發動效果', idx);
@@ -7506,11 +7527,25 @@ regPost('無極汰那|世界之末', discardStadiumPost('世界之末', false));
 
 // 8. 毛辮羊|搗碎 — 30 + 可選丟棄競技場（AI 永遠丟）
 regPre('毛辮羊|搗碎', (state, _aIdx, _pool) => ({ state, damage: 30 }));
-regPost('毛辮羊|搗碎', discardStadiumPost('搗碎', false));
+regPost('毛辮羊|搗碎', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '搗碎：選擇「否」 — 不丟競技場', aIdx);
+  const _cb: AttackPostFn = discardStadiumPost('搗碎', false);
+  return _cb(state, aIdx, pool);
+});
 
 // 9. 毛毛角羊|搗碎 — 70 + 可選丟棄競技場（AI 永遠丟）
 regPre('毛毛角羊|搗碎', (state, _aIdx, _pool) => ({ state, damage: 70 }));
-regPost('毛毛角羊|搗碎', discardStadiumPost('搗碎', false));
+regPost('毛毛角羊|搗碎', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '搗碎：選擇「否」 — 不丟競技場', aIdx);
+  const _cb: AttackPostFn = discardStadiumPost('搗碎', false);
+  return _cb(state, aIdx, pool);
+});
 
 // 10-11. peek opp hand 類（僅 log，真實 reveal UI 另做）
 regPre('咕咕|靜默之翼', (state, _aIdx, _pool) => ({ state, damage: 20 }));
@@ -7716,7 +7751,14 @@ regPre('醜醜魚|躍起逃走', (state, _aIdx, _pool) => ({ state, damage: 0 })
 regPost('醜醜魚|躍起逃走', selfSwapPost('躍起逃走'));
 
 regPre('沙漠蜻蜓ex|風暴返', (state, _aIdx, _pool) => ({ state, damage: 130 }));
-regPost('沙漠蜻蜓ex|風暴返', selfSwapPost('風暴返'));
+regPost('沙漠蜻蜓ex|風暴返', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '風暴返：選擇「否」 — 不互換', aIdx);
+  const _cb: AttackPostFn = selfSwapPost('風暴返');
+  return _cb(state, aIdx, pool);
+});
 
 regPre('鍬農炮蟲|伏特替換', (state, _aIdx, _pool) => ({ state, damage: 90 }));
 regPost('鍬農炮蟲|伏特替換', selfSwapPost('伏特替換'));
@@ -9194,7 +9236,12 @@ regPost('破破袋|酸液炸彈', (state, aIdx, pool) => {
 
 // ── (K) 抽卡到 6 張 ──────────────────────────────────────────────────
 // 狐大盜｜貪慾狩獵 20 + 從牌庫抽到手牌滿 6
-regPost('狐大盜|貪慾狩獵', (state, aIdx, _pool) => {
+regPost('狐大盜|貪慾狩獵', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '貪慾狩獵：選擇「否」 — 跳過抽牌', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, _pool) => {
   const p = state.players[aIdx];
   const need = Math.max(0, 6 - p.hand.length);
   if (need === 0) return addLog(state, '貪慾狩獵：手牌已滿 6 張', aIdx);
@@ -9202,6 +9249,8 @@ regPost('狐大盜|貪慾狩獵', (state, aIdx, _pool) => {
   if (drawn === 0) return addLog(state, '貪慾狩獵：牌庫為空', aIdx);
   const s = addLog(state, `貪慾狩獵：抽到手牌滿 6（補 ${drawn} 張）`, aIdx);
   return drawCards(s, aIdx, drawn);
+};
+  return _cb(state, aIdx, pool);
 });
 
 
@@ -9450,10 +9499,24 @@ regPre('狙射樹梟|羽毛庫存', (state, _aIdx, _pool) => ({ state, damage: 0
 regPost('狙射樹梟|羽毛庫存', drawToHandPost(7, '羽毛庫存'));
 
 regPre('霓虹魚|報恩', (state, _aIdx, _pool) => ({ state, damage: 20 }));
-regPost('霓虹魚|報恩', drawToHandPost(6, '報恩'));
+regPost('霓虹魚|報恩', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '報恩：選擇「否」 — 跳過抽牌', aIdx);
+  const _cb: AttackPostFn = drawToHandPost(6, '報恩');
+  return _cb(state, aIdx, pool);
+});
 
 regPre('幸福蛋ex|報恩', (state, _aIdx, _pool) => ({ state, damage: 180 }));
-regPost('幸福蛋ex|報恩', drawToHandPost(6, '報恩'));
+regPost('幸福蛋ex|報恩', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '報恩：選擇「否」 — 跳過抽牌', aIdx);
+  const _cb: AttackPostFn = drawToHandPost(6, '報恩');
+  return _cb(state, aIdx, pool);
+});
 
 // ── (B) 牌庫搜 Item / Supporter（需搭配 UI 新 filter） ────────────────────
 regPre('海地鼠|挖到寶', (state, _aIdx, _pool) => ({ state, damage: 0 }));
@@ -10161,7 +10224,12 @@ regPost('喵喵ex|夾尾巴逃跑', selfReturnToHandPost('夾尾巴逃跑'));
 // 賽富豪｜賽富迴旋 — 100 + 「若希望」自身回牌庫
 //   v2.220：升級為 modal-choice — 玩家在 POST 階段選「回 / 不回」
 regPre('賽富豪|賽富迴旋', (state, _a, _p) => ({ state, damage: 100 }));
-regPost('賽富豪|賽富迴旋', (state, aIdx, _pool) => {
+regPost('賽富豪|賽富迴旋', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '賽富迴旋：選擇「否」 — 不回牌庫', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, _pool) => {
   const p = state.players[aIdx];
   if (!p.active) return state;
   const s = addLog(state, '賽富迴旋：選擇是否將自身（含附加）放回牌庫並重洗', aIdx);
@@ -10178,6 +10246,8 @@ regPost('賽富豪|賽富迴旋', (state, aIdx, _pool) => {
       ],
     },
   });
+};
+  return _cb(state, aIdx, pool);
 });
 regR('sigorhof-back-choice', (state, aIdx, iids, _params, pool) => {
   if (iids[0] === 'return') {
@@ -11518,7 +11588,14 @@ reg('百萬噸吹風機', (st, idx, pool) => {
 
 // ── 1. 螺旋俯衝 — 100 傷害 + 抽到滿 6 ────────────────────────────────────────
 // v2.22：卡名統一（pool.ts loadSet strip <>），只登錄純名稱即可
-regPost('竹蘭的烈咬陸鯊ex|螺旋俯衝', drawToHandPost(6, '螺旋俯衝'));
+regPost('竹蘭的烈咬陸鯊ex|螺旋俯衝', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '螺旋俯衝：選擇「否」 — 跳過抽牌', aIdx);
+  const _cb: AttackPostFn = drawToHandPost(6, '螺旋俯衝');
+  return _cb(state, aIdx, pool);
+});
 
 // ── 2. 龍之爆發 — 260 傷害 + 自己全部能量丟棄 ─────────────────────────────
 regPost('竹蘭的烈咬陸鯊ex|龍之爆發', selfDiscardAllEnergyPost('龍之爆發'));
@@ -12543,7 +12620,12 @@ regPre('甲賀忍蛙ex|變幻手裏劍', coinPlusDmg(100, 100));
 
 // ── 2) 甲賀忍蛙ex (SV5a)｜忍之利刃 170 — 若希望，從牌庫任選 1 張卡加手牌（重洗）
 regPre('甲賀忍蛙ex|忍之利刃', (state, _aIdx, _pool) => ({ state, damage: 170 }));
-regPost('甲賀忍蛙ex|忍之利刃', (state, aIdx, pool) => {
+regPost('甲賀忍蛙ex|忍之利刃', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '忍之利刃：選擇「否」 — 跳過搜尋', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, pool) => {
   if (state.players[aIdx].deck.length === 0) {
     return addLog(state, '忍之利刃：牌庫已空，跳過搜尋', aIdx);
   }
@@ -12555,6 +12637,8 @@ regPost('甲賀忍蛙ex|忍之利刃', (state, aIdx, pool) => {
     minCount: 0, maxCount: 1,
     effectKey: 'greninja-ninja-blade-search',
   });
+};
+  return _cb(state, aIdx, pool);
 });
 regR('greninja-ninja-blade-search', (state, aIdx, selectedIids, _params, pool) => {
   const picks = state.players[aIdx].deck.filter(c => selectedIids.includes(c.iid));
@@ -14724,7 +14808,12 @@ regR('electro-shot-discard', (st, idx, iids, params, pool) => {
 // 費用：[惡][惡] / 傷害：160
 // 效果：「若希望，選擇1個對手的戰鬥寶可夢身上附加的能量，改附於對手的備戰寶可夢身上。」
 regPre('耿鬼ex|戲法舞步', (state, _aIdx, _pool) => ({ state, damage: 160 }));
-regPost('耿鬼ex|戲法舞步', (state, aIdx, pool) => {
+regPost('耿鬼ex|戲法舞步', (state, aIdx, pool, action) => {
+  // v5.063：若希望 binary-yes-no guard
+  const _chosenIids = action?.discardedEnergyIids;
+  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
+  if (!_choseYes) return addLog(state, '戲法舞步：選擇「否」 — 不改附對手能量', aIdx);
+  const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
   // 對手active上要有能量才能移
@@ -14749,6 +14838,8 @@ regPost('耿鬼ex|戲法舞步', (state, aIdx, pool) => {
       })),
     },
   });
+};
+  return _cb(state, aIdx, pool);
 });
 regR('trick-step-energy', (st, idx, iids, _params, pool) => {
   // idx = 攻擊方（發動方）
@@ -15123,3 +15214,263 @@ registerV3080DeferredWaveC();
 //   - 鰭之化石整合進 v3080_deferred_wave_c.ts 的 isImmuneToOppSupporter（單獨 patch）
 import { registerV3210Ordiga } from './effects/cards/v3210_ordiga';
 registerV3210Ordiga();
+
+// ============================================================================
+// v5.063 — 「若希望」binary-yes-no prompt 集中註冊（32 個招式）
+// ============================================================================
+
+ATTACK_PRE_DISCARD_CHOICE.set('狐大盜|貪慾狩獵', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 40, damagePerEnergy: 0,
+  choicePrompt: '是否從牌庫抽卡直到自己的手牌滿 6 張為止？',
+  choiceYesLabel: '是（抽到 6）',
+  choiceNoLabel: '否（跳過抽牌）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('夢妖魔ex|六之魔法', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 150, damagePerEnergy: 0,
+  choicePrompt: '是否從牌庫抽卡直到自己的手牌滿 6 張為止？',
+  choiceYesLabel: '是（抽到 6）',
+  choiceNoLabel: '否（跳過抽牌）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('竹蘭的烈咬陸鯊ex|螺旋俯衝', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 0, damagePerEnergy: 0,
+  choicePrompt: '是否從牌庫抽卡直到自己的手牌滿 6 張為止？',
+  choiceYesLabel: '是（抽到 6）',
+  choiceNoLabel: '否（跳過抽牌）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('代歐奇希斯|精神高速', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 30, damagePerEnergy: 0,
+  choicePrompt: '是否從牌庫抽卡直到自己的手牌滿 5 張為止？',
+  choiceYesLabel: '是（抽到 5）',
+  choiceNoLabel: '否（跳過抽牌）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('霓虹魚|報恩', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 20, damagePerEnergy: 0,
+  choicePrompt: '是否從牌庫抽卡直到自己的手牌滿 6 張為止？',
+  choiceYesLabel: '是（抽到 6）',
+  choiceNoLabel: '否（跳過抽牌）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('幸福蛋ex|報恩', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 180, damagePerEnergy: 0,
+  choicePrompt: '是否從牌庫抽卡直到自己的手牌滿 6 張為止？',
+  choiceYesLabel: '是（抽到 6）',
+  choiceNoLabel: '否（跳過抽牌）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('差不多娃娃|報恩', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 30, damagePerEnergy: 0,
+  choicePrompt: '是否從牌庫抽卡直到自己的手牌滿 6 張為止？',
+  choiceYesLabel: '是（抽到 6）',
+  choiceNoLabel: '否（跳過抽牌）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('摩托蜥ex|鋯石之路', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 0, damagePerEnergy: 0,
+  choicePrompt: '是否從自己的牌庫抽出 5 張卡？',
+  choiceYesLabel: '是（抽 5）',
+  choiceNoLabel: '否（跳過抽牌）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('超級拉帝亞斯ex|狡兔三窟', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 40, damagePerEnergy: 0,
+  choicePrompt: '是否將這隻寶可夢與備戰寶可夢互換？',
+  choiceYesLabel: '是（換到備戰）',
+  choiceNoLabel: '否（留在戰鬥位）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('古劍豹|狡兔三窟', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 20, damagePerEnergy: 0,
+  choicePrompt: '是否將這隻寶可夢與備戰寶可夢互換？',
+  choiceYesLabel: '是（換到備戰）',
+  choiceNoLabel: '否（留在戰鬥位）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('沙漠蜻蜓ex|風暴返', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 130, damagePerEnergy: 0,
+  choicePrompt: '是否將這隻寶可夢與備戰寶可夢互換？',
+  choiceYesLabel: '是（換到備戰）',
+  choiceNoLabel: '否（留在戰鬥位）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('音波龍ex|狡兔三窟', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 50, damagePerEnergy: 0,
+  choicePrompt: '是否將這隻寶可夢與備戰寶可夢互換？',
+  choiceYesLabel: '是（換到備戰）',
+  choiceNoLabel: '否（留在戰鬥位）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('蓋歐卡ex|蜿蜒浪', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 80, damagePerEnergy: 0,
+  choicePrompt: '是否將對手的戰鬥寶可夢與備戰寶可夢互換？（由對手選擇放置於戰鬥場的寶可夢）',
+  choiceYesLabel: '是（強制換對手）',
+  choiceNoLabel: '否（不換對手）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('毛辮羊|搗碎', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 30, damagePerEnergy: 0,
+  choicePrompt: '是否將場上的競技場卡丟棄？',
+  choiceYesLabel: '是（丟棄競技場）',
+  choiceNoLabel: '否（保留競技場）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('毛毛角羊|搗碎', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 70, damagePerEnergy: 0,
+  choicePrompt: '是否將場上的競技場卡丟棄？',
+  choiceYesLabel: '是（丟棄競技場）',
+  choiceNoLabel: '否（保留競技場）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('超能妙喵|戲法舞步', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 80, damagePerEnergy: 0,
+  choicePrompt: '是否選擇 1 個對手戰鬥寶可夢身上附加的能量，改附於對手的備戰寶可夢身上？',
+  choiceYesLabel: '是（改附對手能量）',
+  choiceNoLabel: '否（不改附）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('耿鬼ex|戲法舞步', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 160, damagePerEnergy: 0,
+  choicePrompt: '是否選擇 1 個對手戰鬥寶可夢身上附加的能量，改附於對手的備戰寶可夢身上？',
+  choiceYesLabel: '是（改附對手能量）',
+  choiceNoLabel: '否（不改附）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的閃電鳥|阻礙之翼', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 30, damagePerEnergy: 0,
+  choicePrompt: '是否選擇 1 個對手戰鬥寶可夢身上附加的能量，改附於對手的備戰寶可夢身上？',
+  choiceYesLabel: '是（改附對手能量）',
+  choiceNoLabel: '否（不改附）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('高傲雉雞|反轉之風', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 70, damagePerEnergy: 0,
+  choicePrompt: '是否選擇 2 個對手戰鬥寶可夢身上附加的能量，放回對手的手牌？',
+  choiceYesLabel: '是（放回 2 顆能量）',
+  choiceNoLabel: '否（不放回）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('帕底亞 肯泰羅|上搗角擊', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 30, damagePerEnergy: 0,
+  choicePrompt: '是否選擇 2 個對手戰鬥場的【2階進化】寶可夢身上附加的能量，放回對手的手牌？',
+  choiceYesLabel: '是（放回 2 顆能量）',
+  choiceNoLabel: '否（不放回）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('章魚桶|水流清洗', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 20, damagePerEnergy: 0,
+  choicePrompt: '是否選擇 1 個對手戰鬥寶可夢身上附加的能量，放回對手的手牌？',
+  choiceYesLabel: '是（放回 1 顆能量）',
+  choiceNoLabel: '否（不放回）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('呆呆王|付諸東流', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 70, damagePerEnergy: 0,
+  choicePrompt: '是否選擇 2 個對手戰鬥寶可夢身上附加的能量，放回對手的手牌？',
+  choiceYesLabel: '是（放回 2 顆能量）',
+  choiceNoLabel: '否（不放回）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('詛咒娃娃|人偶捕捉', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 0, damagePerEnergy: 0,
+  choicePrompt: '是否從自己的牌庫選擇 1 張任意卡加入手牌？（然後重洗牌庫）',
+  choiceYesLabel: '是（搜 1 張）',
+  choiceNoLabel: '否（跳過搜尋）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('君主蛇ex|青草命令', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 150, damagePerEnergy: 0,
+  choicePrompt: '是否從自己的牌庫任意選擇最多 3 張卡加入手牌？（並且重洗牌庫）',
+  choiceYesLabel: '是（搜 ≤3 張）',
+  choiceNoLabel: '否（跳過搜尋）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('甲賀忍蛙ex|忍之利刃', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 170, damagePerEnergy: 0,
+  choicePrompt: '是否從自己的牌庫任意選擇 1 張卡加入手牌？（並且重洗牌庫）',
+  choiceYesLabel: '是（搜 1 張）',
+  choiceNoLabel: '否（跳過搜尋）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('貓頭夜鷹|鉤爪搜尋', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 0, damagePerEnergy: 0,
+  choicePrompt: '是否從自己的牌庫任意選擇最多 2 張卡加入手牌？（並且重洗牌庫）',
+  choiceYesLabel: '是（搜 ≤2 張）',
+  choiceNoLabel: '否（跳過搜尋）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('信使鳥|幸福禮物', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 0, damagePerEnergy: 0,
+  choicePrompt: '是否雙方各從手牌選擇最多 3 張基本能量卡附給自己的寶可夢？（對手先選）',
+  choiceYesLabel: '是（執行禮物交換）',
+  choiceNoLabel: '否（跳過）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('賽富豪|賽富迴旋', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 100, damagePerEnergy: 0,
+  choicePrompt: '是否將這隻寶可夢與附加的卡全部放回自己的牌庫並重洗？',
+  choiceYesLabel: '是（自身回牌庫）',
+  choiceNoLabel: '否（留在戰鬥位）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的貓老大ex|高傲指令', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 0, damagePerEnergy: 0,
+  choicePrompt: '是否選擇對手牌庫上方 10 張其中 1 個寶可夢持有的招式，作為這個招式使用？',
+  choiceYesLabel: '是（複製招式）',
+  choiceNoLabel: '否（跳過複製）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('櫻花魚|漸強波', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 0, damagePerEnergy: 0,
+  choicePrompt: '是否在造成傷害前，從手牌選擇任意數量的基本【水】能量卡，附於這隻寶可夢身上？',
+  choiceYesLabel: '是（附【水】能再算傷害）',
+  choiceNoLabel: '否（用當前能量算傷害）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('魔牆人偶|相仿秀', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 0, damagePerEnergy: 0,
+  choicePrompt: '是否查看對手手牌並選擇 1 張支援者卡，將其效果作為這個招式使用？',
+  choiceYesLabel: '是（複製對手手牌支援者）',
+  choiceNoLabel: '否（跳過）',
+});
+
+ATTACK_PRE_DISCARD_CHOICE.set('好啦魷|惡作劇觸手', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 0, damagePerEnergy: 0,
+  choicePrompt: '是否重洗對手的牌庫？',
+  choiceYesLabel: '是（重洗對手牌庫）',
+  choiceNoLabel: '否（不重洗）',
+});
