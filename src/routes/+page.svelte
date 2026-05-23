@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.035</span> 🎨 桌墊版 — active 名稱框突破 88px 寬度限制 + z-index 最高層</summary>
+        <ul>
+          <li><b>玩家回報</b>：桌墊版戰鬥場寶可夢名稱稍長時被截斷或被疊牌 / 道具 chip 覆蓋。例如「赫普的蒼響ex」「派帕的獒教父ex」「火箭隊的黑暗鴉」等都會撞到 88px HP column 寬度上限。</li>
+          <li><b>根因</b>：v5.028 把 active 名稱（<code>.active-name-tt</code>）放進 <code>.active-hpbar-bottom</code> 容器（桌墊版設成 <code>width:88px</code> 的直立 column），名字 width 被父限制；<code>z-index</code> 繼承 hpbar-bottom 的 10，遇上 attached cards hover 升 z 或 tool-chip 等場合可能被遮。</li>
+          <li><b>修法</b>：<code>.active-name-tt</code> 改 <code>position:absolute</code> 突破父 88px 寬度限制 — <code>top:100%</code>（接 hpbar-bottom 底部）／<code>left:50%</code> + <code>transform:translateX(-50%)</code> 水平居中／<code>width:140px</code>（左右各延伸 26px，預留未來更長名字）／<code>z-index:100</code>（高過 attached hover z 上限 80、tool-chip z=5、hpbar-bottom z=10）。加 <code>background</code> + <code>padding</code> + <code>border-radius</code> + <code>box-shadow</code> 做 chip 視覺、<code>pointer-events:none</code> 不擋下層 hover。</li>
+          <li><b>不變</b>：父 <code>.active-hpbar-bottom</code> 88px 寬度不動（血條 / HP 文字維持原寬，視覺穩定）；<code>.bench-name</code> v5.030 已另解（absolute on Pokémon img 中央），這次只改 active 名稱。桌機 classic / 手機 portrait 完全不受影響（純 <code>.playmat.layout-tabletop</code> scope）。</li>
+          <li><b>未來預防</b>：140px 容量約可放 8 個中文字 + 「ex」尾綴 — 即使未來出現更長名字（10+ 字）<code>word-break:keep-all; overflow-wrap:anywhere</code> 也能自動換行不溢出，z-index:100 確保不被任何層遮。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte 大檔，tail anchor + style 對稱驗）／Rule 14（最小 patch — 純 CSS 區塊替換，無 logic 改）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.034</span> 🌐 GitHub Pages 還原成 beta 測試站 + 加 BETA 標記</summary>
         <ul>
           <li><b>背景</b>：v4.935 之後 GitHub Pages 站 (suenz001.github.io/ptcg-tw-sim) 的「🌐 線上連線對戰」按鈕被加了強制 redirect 跳到 www.ptcg-tw-sim.com — 目的是把 Firebase 重度玩家導向 Oracle backend 省額度。現在玩家都搬完了，github.io 失去 redirect 目的，正好還原成 beta 測試站。</li>

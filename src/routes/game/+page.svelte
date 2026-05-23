@@ -8169,14 +8169,28 @@
   /* 9854 line .evo-wrap bottom:1.85rem → 桌墊版不留底部空間 */
   .playmat.layout-tabletop .active-card .evo-wrap{ bottom:.4rem !important; }
 
-  /* === v5.028 active 名稱左欄（HP bar 下方） + 字放大 === */
+  /* === v5.028 active 名稱左欄（HP bar 下方） + 字放大 ===
+     v5.035：突破父 .active-hpbar-bottom 88px 寬度限制 — 改 absolute 定位、
+     往兩邊各延伸 26px（總寬 140px），z-index 拉到 100 確保任何時候都在最上層
+     （高過 attached(z≤80) / tool-chip(z=5) / 父 hpbar-bottom(z=10)），
+     pointer-events:none 不擋下層 hover 事件。預留 140px 寬給未來更長名字。 */
   .playmat.layout-tabletop .active-card .active-name-tt{
-    font-size:.9rem; font-weight:700; color:#fff;
-    text-align:center; line-height:1.15;
+    position:absolute;
+    top:100%;                /* 從 hpbar-bottom 底部接續 */
+    left:50%;
+    transform:translateX(-50%);
+    width:140px;             /* 突破父 88px，左右各延伸 26px */
     margin-top:4px;
+    z-index:100;             /* 任何狀態都在最上層 */
+    font-size:.9rem; font-weight:700; color:#fff;
+    text-align:center; line-height:1.2;
+    background:rgba(0,0,0,0.82);
+    padding:3px 6px;
+    border-radius:4px;
     word-break:keep-all; overflow-wrap:anywhere;
-    text-shadow:0 1px 2px rgba(0,0,0,.85);
-    max-width:100%;
+    text-shadow:0 1px 2px rgba(0,0,0,.95);
+    pointer-events:none;
+    box-shadow:0 2px 4px rgba(0,0,0,.4);
   }
   /* HP 字也放大 */
   .playmat.layout-tabletop .active-card .active-hpbar-bottom .active-hp-text{
