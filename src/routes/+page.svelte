@@ -265,6 +265,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.058</span> 🔧 修 version.ts silent-fail — 網頁標題版本號回正（從 v5.053 跳到 v5.058）</summary>
+        <ul>
+          <li><b>玩家回報</b>：網頁標題顯示「PTCG 實體賽事演練 v5.053」沒更新（實際 push 已到 v5.057）。</li>
+          <li><b>根因 1 — v5.054 commit 是 empty commit</b>：當時 patch_v5054.py 跑完 push 雖然 returncode 0，但 GitHub 上的 v5.054 commit (<code>aab07086</code>) 用 <code>git diff-tree</code> 看 <strong>0 個檔案變動</strong>。即 patch 寫 disk 後，<code>hash_object</code> 拿到的 blob 跟 PARENT 上同檔案的 blob 一樣 → <code>write-tree</code> 出來的 tree 跟 PARENT tree 一樣 → commit empty。原因不明（可能 disk read 拿到 OS cache 的舊內容、mount sync 延遲、或 Python file descriptor 跟 git subprocess 看到的 disk view 不同步）。</li>
+          <li><b>根因 2 — 連鎖 silent fail</b>：v5.055 patch 用 v5.054 commit 當 PARENT，從 <code>head_blob</code> 拿 version.ts 仍是 5.053（因 v5.054 empty）。但 patch 寫的是 <code>v.replace(&quot;VERSION = &apos;5.054&apos;&quot;, &quot;VERSION = &apos;5.055&apos;&quot;)</code> — OLD pattern 是 5.054，<strong>在 5.053 字串裡找不到</strong>，<code>str.replace</code> 找不到時 silently 回原字串，不報錯。所以 v5.055/56/57 patch 的 version.ts 都還是 5.053。</li>
+          <li><b>差別檔案</b>：+page.svelte changelog 用 ANCHOR_OLD 抓「<code>v5.054 details open</code>」 — 因為 v5.055 patch 的 +page.svelte 寫的是新增 v5.055 details + 同時補 v5.054 details（v5.054 empty commit 後 main 上沒有 v5.054 changelog）。anchor 是 v5.053 details open（PARENT 上 v5.053 是最新），這個 OLD pattern 在 PARENT 上找得到 → replace 成功。所以 +page.svelte 沒 silent fail，每個版本的 changelog 都有進去 — 只是版本號從未 bump。</li>
+          <li><b>修法 1</b>：version.ts 直接從 5.053 補正跳到 5.058（跳過從未真正寫入 git 的 5.054~5.057）。網頁標題立刻變「v5.058」。</li>
+          <li><b>修法 2 — push pipeline 防再犯</b>：v5.058 patch script 加 3 道 ASSERT — (a) <code>safe_write</code> 寫完立刻 re-read 驗 disk 內容真的是 new value；(b) 拿 PARENT 上同檔案 blob hash 跟新 blob hash 比對，若相同直接 abort；(c) <code>write-tree</code> 出來的 tree 跟 PARENT tree 比對，若相同 abort（防 empty commit）。三道 ASSERT 任一失敗都停止 push，不會再 silent-fail。</li>
+          <li><b>備註</b>：v5.054~v5.057 的「實際 code 改動」(engine.ts / types.ts / game/+page.svelte) 都 push 成功且生效 — silent fail 只影響 version.ts 字串顯示，不影響功能（對手回合 panel、棄牌顯示、寶可裝置3.0 揭示 log 等都正常運作）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 14（最小 hotfix patch — 只動 2 個檔案）／<strong>新加 Rule 11f</strong>（push 前必須驗 blob hash != PARENT blob hash 防 silent fail / empty commit — 寫進 IRON_RULES.md 待下個 patch 補）／Rule 11e（Write tool patch）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.057</span> 🎴 對手回合 panel 三項調整 — toggle 按鈕可拖、標題改名、加棄牌顯示</summary>
         <ul>
           <li><b>玩家回報 3 項</b>：</li>
