@@ -10,6 +10,7 @@
  */
 
 import type { CardInstance, SpecialCondition } from '../../types';
+import { getBenchLimit } from '../../engine';
 import {
   SPECIAL_ENERGY_ATTACH,
   SPECIAL_ENERGY_HP_BONUS,

@@ -26,6 +26,7 @@
  */
 
 import { regPre, regPost, addLog, updatePlayer, withPending } from '../_shared';
+import { getBenchLimit } from '../../engine';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import type { PlayerState } from '../../types';
 import {

@@ -34,7 +34,7 @@
 
 import type { GameState, PlayerState } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
-import { isRulePokemon } from '../../engine';
+import { isRulePokemon, getBenchLimit } from '../../engine';
 import {
   addLog,
   regPost,

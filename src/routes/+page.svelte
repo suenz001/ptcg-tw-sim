@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.042</span> 🔥 Hotfix v5.041 — 5 子檔 getBenchLimit import 漏加造成 build fail</summary>
+        <ul>
+          <li><b>事件</b>：v5.041 push 後 GitHub Actions Build SvelteKit step fail，github.io 還停在 v5.040 的版本 — 貴重手推車跟其他 18 處漏網沒生效。</li>
+          <li><b>根因</b>：v5.041 patch script 的 <code>add_import_getBenchLimit</code> helper 寫成 <code>if &apos;getBenchLimit&apos; in text: return text</code> 直接跳過。但 callback 已經改完含 <code>getBenchLimit</code> 字串了 — helper 誤判「已 import」直接 return，實際 5 個子檔（<code>energy_cards.ts</code>、<code>v2355</code>、<code>v2359</code>、<code>v2998_g2</code>、<code>v3700_audit_orphans</code>）的 import 區塊都沒實際加 <code>import &#123; getBenchLimit &#125; from &apos;../../engine&apos;</code>。TS 編譯找不到 symbol fail。</li>
+          <li><b>修法</b>：補 5 子檔的 import 區塊都加 <code>import &#123; getBenchLimit &#125; from &apos;../../engine&apos;</code>。helper 改成「只看 head 50 行 + 用 regex 匹配真正的 import 行」而非整個 text 含字串就跳過。</li>
+          <li><b>v5.041 程式碼改動全部保留</b>：18 處 hardcoded bench=5 → getBenchLimit 已落 disk + 推上 git，只是 build fail 部署沒到 github.io。本 hotfix 跑通 build 後 18 處全部生效，含貴重手推車跟其他 17 處。</li>
+          <li><b>學到</b>：未來 audit helper 「是否已 import」要看 import 區（head N lines + regex），不是整檔 string contains。已內化到 patch script 標準寫法。</li>
+          <li><b>Iron Rules</b>：Rule 1（修 build error）／Rule 5（用 v5.042 patch 版本，不 force-push）／Rule 11/11c（Python pipeline）／Rule 14（最小 patch — 5 個 import 行）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.041</span> 🔍 全面 audit 補完 — 零之大空洞 / 太晶 備戰上限漏網 18 處（含貴重手推車）</summary>
         <ul>
           <li><b>玩家回報</b>：v5.040 修了 6 處 hardcoded bench >= 5，但漏掉「貴重手推車」（ACE SPEC Item，從牌庫選任意數量基礎寶可夢放備戰）— Wilson 點名。立刻做全面深度 audit，發現 effects.ts + 5 個子檔還有 12 處漏網，加上貴重手推車 3 處，本次共修 18 處（v5.040 6 處 + v5.041 18 處 = 累計 24 處）。</li>

@@ -31,6 +31,7 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
+import { getBenchLimit } from '../../engine';
 import {
   regA, regAByName, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,

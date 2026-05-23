@@ -12,6 +12,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { getBenchLimit } from '../../engine';
 import {
   addLog,
   regPost,
