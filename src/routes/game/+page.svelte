@@ -905,13 +905,22 @@
           endX = handRect ? handRect.left + handRect.width / 2 : window.innerWidth / 2;
           endY = handRect ? handRect.top  + handRect.height / 2 : window.innerHeight - 80;
         } else {
-          // v5.040：原本 endY = oppRect.top + 30 → 對手發牌動畫飛到 row 頂端，視覺上
-          //         「從牌庫位置往左上方」。改為 row 垂直中心 (top + height/2)，跟我方
-          //         「飛到 handStrip 中心」對稱，視覺上「由牌庫往中央發」。
-          const oppRowEl = document.querySelector('.opponent-row') as HTMLElement | null;
-          const oppRect = oppRowEl?.getBoundingClientRect();
-          endX = oppRect ? oppRect.left + oppRect.width / 2 : window.innerWidth / 2;
-          endY = oppRect ? oppRect.top  + oppRect.height / 2 : 60;
+          // v5.047：v5.040 改 endY 沒效 — 桌墊版下 .field-row 用 display:contents (line 8057)，
+          //         .opponent-row 本身不渲染 box，getBoundingClientRect() 返回的 bbox 在
+          //         Chrome 內可能 == 0 或 union origin 偏 (0,0) 角，造成動畫飛到視窗左上。
+          //         改用 .opponent-row .zone-active (對手戰鬥場區，DOM child 不受 display:contents
+          //         影響) 作為 endpoint，跟我方 handStrip 中心對稱「由牌庫往對手戰鬥場中央發」。
+          const oppActiveEl = (document.querySelector('.opponent-row .zone-active')
+                            ?? document.querySelector('.opponent-row')) as HTMLElement | null;
+          const oppRect = oppActiveEl?.getBoundingClientRect();
+          if (oppRect && oppRect.width > 0 && oppRect.height > 0) {
+            endX = oppRect.left + oppRect.width / 2;
+            endY = oppRect.top  + oppRect.height / 2;
+          } else {
+            // fallback：bbox 仍不可靠時飛到視窗水平中心 + 上半部 1/4 高度
+            endX = window.innerWidth / 2;
+            endY = window.innerHeight / 4;
+          }
         }
         capturedNew.forEach((iid, i) => {
           const id = Date.now() + Math.random() + i * 0.001;

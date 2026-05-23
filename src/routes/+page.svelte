@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.047</span> 🛠️ 對手發牌動畫真正修好 + 新增 fix-git-lock.bat 自助清 lock</summary>
+        <ul>
+          <li><b>修法 1 — fix-git-lock.bat</b>：每次 Claude push 完 GitHub Pages 上 push 都會在本地產生 <code>.git/refs/remotes/origin/main.lock</code>（sandbox 端權限刪不掉），導致本地 git fetch / pull / IDE git 面板撞「Another git process seems to be running」錯誤。新增 <code>E:\ptcg-tw-sim\fix-git-lock.bat</code> 雙擊即可清除（含 <code>%~dp0</code> 自動 cd 到 repo root，可放任何位置 — 連結 / 桌面捷徑都行）。</li>
+          <li><b>修法 2 — 對手發牌動畫真正修好</b>：v5.040 改了 <code>endY = oppRect.top + oppRect.height/2</code> 想用 row 中心，但 Wilson 回報還是往左上方。深入查發現 <strong>根因 v5.040 修錯方向</strong>：桌墊版下 <code>.field-row</code> 套 <code>display:contents</code>（line 8057）讓 row 變透明 grid items，所以 <code>.opponent-row</code> 本身不渲染 box — Chrome 對 <code>display:contents</code> 元素的 <code>getBoundingClientRect()</code> 行為不一致，可能返回 zero rect 或 union origin 偏 (0,0)，動畫起點 OK（牌庫真實位置）但 endpoint 飛到視窗左上角。</li>
+          <li><b>修法</b>：endpoint 改用 <code>.opponent-row .zone-active</code>（對手戰鬥場區 DOM child，<strong>不受 display:contents 影響</strong>），getBoundingClientRect 返回真實 bbox。同時加 fallback：若 bbox 還不可靠（width/height==0），fallback 飛到 <code>window.innerWidth/2</code> + <code>innerHeight/4</code>（畫面水平中心、上半部 1/4 高度）。視覺上「由牌庫往對手戰鬥場中央發」，跟我方「由牌庫往 handStrip 中央發」對稱。</li>
+          <li><b>查找 bug 過程</b>：v5.040 沒注意到 layout-tabletop 那段 display:contents 設定 — 它在 line 8057 用 <code>!important</code> 強制套用，是為了讓 row 變透明把子孫直接 attach 到 .playmat grid。我當時只看 endY 算式邏輯，沒驗 <code>oppRowEl.getBoundingClientRect()</code> 真實返回值。現在用 <code>.zone-active</code>（grid-area:activeO 直接 attach 到 playmat grid 的真實元素）作 endpoint 才穩定。</li>
+          <li><b>學到</b>：carrying state via DOM bbox 要小心 <code>display:contents</code> / <code>visibility:hidden</code> / <code>position:absolute</code> 等改變 box model 的 CSS。任何 <code>getBoundingClientRect</code> 都該驗 <code>width &gt; 0 &amp;&amp; height &gt; 0</code> 否則 fallback。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 14（最小 patch — endpoint selector 改 + fallback）／Rule 1（changelog audit 通過）。Pre-push 跑了強化版 Rule 1 audit + 本地 tsc + push 後等 Step A/B build verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.046</span> 🎨 3 項：IRON_RULES Rule 1 audit 強化 + 零之大空洞 bench 伸展 + 桌墊版按鈕分組間距</summary>
         <ul>
           <li><b>修法 1 — IRON_RULES.md Rule 1 audit 範圍強化</b>：把 v5.045 教訓寫進規則本身。新 audit regex 抓「<code>&lt;code&gt;</code> 內部中間含 <code>&#123; identifier &#125;</code>」全 pattern（不只開頭）；補充驗證層次說明（esbuild / tsc / Iron Rules Audit / Deploy 全 success 都 ≠ runtime success）；補充 lazy node chunks audit 步驟（從 app entry 挖 chunk hash）。</li>
