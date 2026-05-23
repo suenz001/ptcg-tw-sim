@@ -265,6 +265,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.059</span> 🐛 修小霞的元氣 + 螺釘地鼠呼喚同伴 — 卡面敘述對齊 + bench-cap 防誤觸發清場</summary>
+        <ul>
+          <li><b>Bug 1 — 小霞的元氣（Supporter）卡面敘述錯誤 + 實裝範圍過寬</b></li>
+          <li>　舊敘述：「從自己的牌庫選擇最多 4 張『基本能量』...」— filter 允許草/火/水/雷/超/鬥/惡/鋼 任意基本能量。</li>
+          <li>　正確：應限定「基本【水】能量」(Basic Water Energy) — 小霞為水系專屬訓練家。</li>
+          <li>　修法：<code>static/cards/M5.json</code> rulesText 改為「基本【水】能量」；<code>m5_preview.ts</code> 的 <code>reg('小霞的元氣')</code> filter 從 <code>'BasicEnergy'</code> 改為 <code>'BasicEnergy:Water'</code>，所有 addLog 文字一併改為「基本【水】能量」。</li>
+          <li>　影響：v5.059 起小霞的元氣只能搜基本【水】能量，符合卡面敘述。其他卡面（如沐淨）filter 不受影響。</li>
+          <li><b>Bug 2 — 螺釘地鼠｜呼喚同伴 在零之大空洞滿備戰時誤觸發清場</b>（玩家回報）</li>
+          <li>　現象：場上有零之大空洞、自己備戰 8 隻（滿）時用呼喚同伴，被搜出來的寶可夢被「零之大空洞被破壞」效果丟掉消失。</li>
+          <li>　根因：<code>regPost('螺釘地鼠|呼喚同伴')</code> 沒做 bench-cap check，<code>regR</code> resolver 直接 <code>bench: [...p.bench, ...picked]</code> 純 append。8 + 2 = 10 隻超過 limit。引擎末尾的 <code>enforceBenchLimit</code>（<code>engine.ts:338</code>）每次 dispatch 後自動跑，看到 <code>bench.length &gt; limit</code> 就觸發「零之大空洞效果失去：選 2 隻備戰寶可夢丟棄」pending —— 這個函數本來是給「零之大空洞 stadium 被換掉、limit 從 8 變回 5」用的，被誤觸發 → 剛搜出來的寶可夢被當「超出部分」丟掉。</li>
+          <li>　修法：<code>m5_preview.ts</code> import 加 <code>getOwnBenchLimit</code> from <code>'../_shared'</code>（Rule 12：子檔走 _shared 鏡像避免 TDZ）；regPost 開頭算 <code>remainingSlots = limit - bench.length</code>，若 ≤ 0 直接 addLog「備戰區已滿」return；maxCount 動態 = <code>min(2, remainingSlots)</code> 給 picker；regR resolver 加 safety trim — picked 數量超過 slots 用 <code>picked.slice(0, slotsAvail)</code> 防呆。</li>
+          <li>　影響：v5.059 起呼喚同伴在備戰滿時直接擋下，剩 1 空位時 picker 只給選 1 張，不會再誤觸發清場。</li>
+          <li><b>同類 audit</b>：本次只修玩家點名的螺釘地鼠｜呼喚同伴。<code>謎擬Q|呼朋引伴</code>（effects.ts L1448）原本就有 <code>getOwnBenchLimit</code> check 是 OK 的。其他 <code>benchBasicFromDeckPost</code> 系列（共用 helper）也應該檢查 helper 內部有沒有 cap，但本次先 fix 玩家命中的這張，其他若再有回報再批次處理（Rule 14 最小 patch）。</li>
+          <li><b>Iron Rules</b>：Rule 8（揭示資訊不影響本次）／Rule 11/11c（Python pipeline 改子檔）／Rule 12（cards/* 子檔用 _shared 鏡像 helper 避 TDZ — 本次新加的 <code>getOwnBenchLimit</code> 從 <code>'../_shared'</code> import）／Rule 14（最小 patch — 2 個 bug 修補，不重寫 resolver）／Rule 15（JSON 卡面 source of truth — 但本次反向：JSON 自己錯了，連同實作一起修對）／Rule 11e（Write tool 寫 patch）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.058</span> 🔧 修 version.ts silent-fail — 網頁標題版本號回正（從 v5.053 跳到 v5.058）</summary>
         <ul>
           <li><b>玩家回報</b>：網頁標題顯示「PTCG 實體賽事演練 v5.053」沒更新（實際 push 已到 v5.057）。</li>

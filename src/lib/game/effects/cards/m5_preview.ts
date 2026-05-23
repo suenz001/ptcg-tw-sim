@@ -56,6 +56,7 @@ import {
   withPending,
   getAllAttachedTools,
   shuffle,
+  getOwnBenchLimit,  // v5.059：螺釘地鼠|呼喚同伴 補 bench-cap check（防零之大空洞被誤觸發破壞）
   ATTACK_PRE,
   ATTACK_POST,
 } from '../_shared';
@@ -457,19 +458,40 @@ regR('m5-silvally-air-slash', (state, aIdx, iids) => {
 
 // ── 螺釘地鼠|呼喚同伴 — 從自己牌庫選 ≤2 張基礎寶可夢，放置於備戰區
 //   卡面：「從自己的牌庫選擇最多 2 張【基礎】寶可夢，放置於備戰區。然後重洗牌庫。」
+//
+// v5.059 bug fix（玩家回報）：場上有零之大空洞 + 備戰已滿（8 隻）時用呼喚同伴
+//   會誤觸發「零之大空洞被破壞」的清場效果 → 寶可夢被丟棄消失。
+//
+// 根因：原 regPost 沒做 bench-cap check，resolver 直接 `bench: [...p.bench, ...picked]`
+//   純 append。若 bench 8 隻 + picked 2 隻 = 10 隻，超過 limit。引擎末尾的
+//   `enforceBenchLimit`（engine.ts:338）每次 dispatch 後自動跑，看到 bench.length > limit
+//   就觸發「零之大空洞效果失去：選 2 隻備戰寶可夢丟棄」pending —
+//   這個函數本來是設計給「零之大空洞 stadium 被換掉、limit 從 8 變回 5」用的，
+//   被誤觸發 → 玩家剛搜出來的寶可夢被當「超出部分」丟掉。
+//
+// 修法：
+//   (a) regPost 開頭算 remainingSlots = limit - bench.length；若 ≤ 0 直接 addLog「備戰區已滿」return
+//   (b) maxCount 動態 = min(2, remainingSlots) 給 picker
+//   (c) resolver 加 safety trim：若 iids.length > remainingSlots（picker 漏 cap）→ trim 到 remainingSlots
 regPre('螺釘地鼠|呼喚同伴', (state) => ({ state, damage: 0 }));
-regPost('螺釘地鼠|呼喚同伴', (state, aIdx) => {
+regPost('螺釘地鼠|呼喚同伴', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   if (p.deck.length === 0) return addLog(state, '呼喚同伴：牌庫為空', aIdx);
-  return withPending(addLog(state, '呼喚同伴：從牌庫選 ≤2 張【基礎】寶可夢放備戰（可選 0 張）', aIdx), {
+  // v5.059：bench-cap check（同 effects.ts L1450 謎擬Q|呼朋引伴 寫法）
+  const limit = getOwnBenchLimit(state, aIdx, pool);
+  const remainingSlots = limit - p.bench.length;
+  if (remainingSlots <= 0) return addLog(state, '呼喚同伴:備戰區已滿', aIdx);
+  const maxN = Math.min(2, remainingSlots);
+  return withPending(addLog(state, `呼喚同伴：從牌庫選 ≤${maxN} 張【基礎】寶可夢放備戰（可選 0 張）`, aIdx), {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'Basic',
-    minCount: 0, maxCount: 2,
+    minCount: 0, maxCount: maxN,
     effectKey: 'm5-screwdriller-call-allies',
+    params: { benchLimitAtPick: limit },  // 帶到 resolver 做 safety trim
   });
 });
-regR('m5-screwdriller-call-allies', (state, aIdx, iids) => {
+regR('m5-screwdriller-call-allies', (state, aIdx, iids, params) => {
   if (iids.length === 0) {
     // 跳過：仍重洗牌庫（卡面：「然後重洗牌庫」是搜尋完成的固定動作）
     return updatePlayer(addLog(state, '呼喚同伴：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
@@ -482,10 +504,14 @@ regR('m5-screwdriller-call-allies', (state, aIdx, iids) => {
     const remaining = p.deck.filter(c => !iids.includes(c.iid));
     // 重洗剩餘牌庫
     const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+    // v5.059：safety trim — picker 漏 cap 防呆，避免觸發 enforceBenchLimit 清場
+    const benchLimitAtPick = (params?.benchLimitAtPick as number | undefined) ?? 5;
+    const slotsAvail = Math.max(0, benchLimitAtPick - p.bench.length);
+    const safePicked = picked.slice(0, slotsAvail);
     return {
       ...p,
       deck: shuffled,
-      bench: [...p.bench, ...picked],
+      bench: [...p.bench, ...safePicked],
     };
   });
 });
@@ -1283,7 +1309,7 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 //   4. 沐淨（Supporter，棄手牌中 ≤2 張非規則寶可夢 → 抽 N×3 張）
 //   5. 暗黑鈴（Item，雙方戰鬥位混亂；惡屬性寶可夢除外）
 //   6. 鏽蝕組的手下（Supporter，picker 對手場 1 隻寶可夢身上選 1 個能量丟）
-//   7. 小霞的元氣（Supporter，牌庫選 ≤4 張基本能量附給自己 1 隻 + 強制 END_TURN）
+//   7. 小霞的元氣（Supporter，牌庫選 ≤4 張基本【水】能量附給自己 1 隻 + 強制 END_TURN）
 //
 // 留 deferred 的（需動 engine.ts 或新引擎機制）：
 //   - 化隱特性 6 張 + 3 依賴招式 — 需 canApplyEffectToTarget 加 ability gate
@@ -1542,8 +1568,10 @@ regR('m5-trainer-rust-henchman-pick-energy', (state, aIdx, iids, params) => {
   });
 });
 
-// ── 7. 小霞的元氣（Supporter）─ 牌庫選 ≤4 張基本能量 + 1 隻附 + END_TURN ─
-//   卡面：「使用這張卡時，自己的回合結束。從自己的牌庫選擇最多 4 張「基本能量」，
+// ── 7. 小霞的元氣（Supporter）─ 牌庫選 ≤4 張基本【水】能量 + 1 隻附 + END_TURN ─
+//   v5.059 bug fix：原實作 filter='BasicEnergy' 允許任意基本能量（草/火/水/雷/...）。
+//   卡面正確敘述為「基本【水】能量」(Basic Water Energy)，限定水屬性。
+//   卡面：「使用這張卡時，自己的回合結束。從自己的牌庫選擇最多 4 張『基本【水】能量』，
 //          附給自己 1 隻寶可夢。然後重洗牌庫。」
 reg('小霞的元氣', (st, idx) => {
   const p = st.players[idx];
@@ -1562,11 +1590,11 @@ reg('小霞的元氣', (st, idx) => {
   }
   const maxN = Math.min(4, p.deck.length);
   return withPending(
-    addLog(st, `小霞的元氣：從牌庫選 ≤${maxN} 張基本能量（使用後回合結束）`, idx),
+    addLog(st, `小霞的元氣：從牌庫選 ≤${maxN} 張基本【水】能量（使用後回合結束）`, idx),
     {
       type: 'deck-search',
       actorIdx: idx, sourcePlayerIdx: idx,
-      filter: 'BasicEnergy',
+      filter: 'BasicEnergy:Water',
       minCount: 0, maxCount: maxN,
       effectKey: 'm5-trainer-karunari-vigor-pick',
     },
@@ -1576,7 +1604,7 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
   if (iids.length === 0) {
     // 沒選能量 — 仍重洗牌庫 + 強制 END_TURN
     return withPending(
-      updatePlayer(addLog(state, '小霞的元氣：選 0 張能量，僅重洗牌庫 + 結束回合', aIdx), aIdx, p => ({
+      updatePlayer(addLog(state, '小霞的元氣：選 0 張【水】能量，僅重洗牌庫 + 結束回合', aIdx), aIdx, p => ({
         ...p, deck: [...p.deck].sort(() => Math.random() - 0.5),
       })),
       {
@@ -1597,13 +1625,13 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
   if (allOwn.length === 0) {
     // 場上無寶可夢可附（極罕見 edge case）— 直接結束回合
     return updatePlayer(
-      addLog(state, '小霞的元氣：場上無寶可夢可附，能量回牌庫', aIdx),
+      addLog(state, '小霞的元氣：場上無寶可夢可附，【水】能量回牌庫', aIdx),
       aIdx,
       pl => ({ ...pl, deck: [...pl.deck].sort(() => Math.random() - 0.5) }),
     );
   }
   return withPending(
-    addLog(state, `小霞的元氣：選 1 隻自己寶可夢，將 ${iids.length} 張基本能量全附給它`, aIdx),
+    addLog(state, `小霞的元氣：選 1 隻自己寶可夢，將 ${iids.length} 張基本【水】能量全附給它`, aIdx),
     {
       type: 'heal-target',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -1611,7 +1639,7 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
       effectKey: 'm5-trainer-karunari-vigor-attach',
       params: {
         energyIids: iids,
-        titleOverride: `小霞的元氣：選擇要附 ${iids.length} 張基本能量的寶可夢`,
+        titleOverride: `小霞的元氣：選擇要附 ${iids.length} 張基本【水】能量的寶可夢`,
         endTurnAfter: true,  // 附完後強制結束回合
       },
     },
@@ -1623,7 +1651,7 @@ regR('m5-trainer-karunari-vigor-attach', (state, aIdx, iids, params) => {
   const energyIids = (params?.energyIids as string[] | undefined) ?? [];
   if (energyIids.length === 0) return state;
   return updatePlayer(
-    addLog(state, `小霞的元氣：${energyIids.length} 張基本能量附給選中寶可夢 + 重洗牌庫`, aIdx),
+    addLog(state, `小霞的元氣：${energyIids.length} 張基本【水】能量附給選中寶可夢 + 重洗牌庫`, aIdx),
     aIdx,
     p => {
       const picked = p.deck.filter(c => energyIids.includes(c.iid));
