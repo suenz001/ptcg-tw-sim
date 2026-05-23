@@ -905,21 +905,22 @@
           endX = handRect ? handRect.left + handRect.width / 2 : window.innerWidth / 2;
           endY = handRect ? handRect.top  + handRect.height / 2 : window.innerHeight - 80;
         } else {
-          // v5.047：v5.040 改 endY 沒效 — 桌墊版下 .field-row 用 display:contents (line 8057)，
-          //         .opponent-row 本身不渲染 box，getBoundingClientRect() 返回的 bbox 在
-          //         Chrome 內可能 == 0 或 union origin 偏 (0,0) 角，造成動畫飛到視窗左上。
-          //         改用 .opponent-row .zone-active (對手戰鬥場區，DOM child 不受 display:contents
-          //         影響) 作為 endpoint，跟我方 handStrip 中心對稱「由牌庫往對手戰鬥場中央發」。
-          const oppActiveEl = (document.querySelector('.opponent-row .zone-active')
-                            ?? document.querySelector('.opponent-row')) as HTMLElement | null;
-          const oppRect = oppActiveEl?.getBoundingClientRect();
-          if (oppRect && oppRect.width > 0 && oppRect.height > 0) {
-            endX = oppRect.left + oppRect.width / 2;
-            endY = oppRect.top  + oppRect.height / 2;
+          // v5.049：對手發牌應該飛到「畫面正上方中線」(模擬對手手牌位置 — 對手坐你對面，
+          //         他的手牌在他面前 = 你的視角畫面頂部中央)。
+          //         v5.047 用對手戰鬥場 (zone-active) 不對 — 那是「對手寶可夢出場位置」
+          //         不是「對手手牌位置」。Wilson 回報「怎麼會發向戰鬥寶可夢」。
+          // 算法：endX = playmat 水平中心 (用 playmat 不用 viewport，避免 log panel 等
+          //       佔右邊空間造成偏左)。endY = playmat top + 20px (頂部下方一點，避開
+          //       BETA banner / migration banner 但仍在「頂部中線」視覺)。
+          const playmatEl = document.querySelector('.playmat') as HTMLElement | null;
+          const playmatRect = playmatEl?.getBoundingClientRect();
+          if (playmatRect && playmatRect.width > 0) {
+            endX = playmatRect.left + playmatRect.width / 2;
+            endY = Math.max(playmatRect.top + 20, 40);  // 至少距 viewport 頂 40px
           } else {
-            // fallback：bbox 仍不可靠時飛到視窗水平中心 + 上半部 1/4 高度
+            // fallback：viewport 水平中心 + 頂部 40px
             endX = window.innerWidth / 2;
-            endY = window.innerHeight / 4;
+            endY = 40;
           }
         }
         capturedNew.forEach((iid, i) => {

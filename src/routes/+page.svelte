@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.049</span> 🎬 對手發牌動畫終於對了 — 飛到「畫面正上方中線」(模擬對手手牌位置)</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.047 改成飛到「對手戰鬥場 (zone-active)」中心，Wilson 回報「怎麼會發向戰鬥寶可夢」— 應該是飛向畫面正上方中線（對手手牌位置）。</li>
+          <li><b>修對的方向</b>：實體桌游時對手坐你對面，他的手牌在他面前 = 你的視角畫面**正上方中央**（你看不到對手手牌正面但能感覺它在那）。<strong>不是</strong>對手戰鬥場（那是「對手寶可夢出場位置」，不同概念）。</li>
+          <li><b>修法</b>：endpoint 改算式 — endX = <code>playmat 水平中心</code>（用 <code>.playmat</code> bbox，不用 viewport，避免右側 log panel 佔位造成偏左）；endY = <code>playmatRect.top + 20px</code>（playmat 頂部下方一點，視覺上是「畫面正上方中線」，至少 <code>Math.max(..., 40)</code> 避開 BETA banner / migration banner）。</li>
+          <li><b>fallback</b>：若 playmat bbox 不可用，飛到 <code>window.innerWidth/2</code> + <code>40px</code> 從頂部（純 viewport 計算）。</li>
+          <li><b>不變</b>：我方發牌仍飛到 <code>handStrip 中心</code>（卡片飛進手牌區）— 兩邊各對應自己「手牌應該在的位置」，符合實體桌游視覺。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline + tail anchor）／Rule 14（最小 patch — 純算式改 + fallback）／Rule 1（changelog audit 通過）。Pre-push 跑了強化 audit + 本地 tsc + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.048</span> 🎨 桌墊版對手備戰 slot 縮高 — 釋出沒用的下方空白，疊牌不再容易撐版面</summary>
         <ul>
           <li><b>玩家回報</b>：桌墊版對手備戰區的卡牌框框下方有大塊空白，卡牌往上半部擠，下方完全沒用。疊牌（往上 fan）多了之後甚至會撐出版面。</li>
