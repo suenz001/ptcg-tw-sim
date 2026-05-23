@@ -265,6 +265,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.062</span> 🐛 修對戰圓形競技場誤擋戰鬥位 — caller 漏傳 isBench 預設走 bench guard（玩家回報抹茶旋轉打不到戰鬥位）</summary>
+        <ul>
+          <li><b>玩家回報</b>：用「來悲粗茶 抹茶旋轉」(M5) 攻擊，場上有「對戰圓形競技場」(M2 079/080) 時，對手戰鬥寶可夢仍被擋下不受招式效果（沒被放傷害指示物）。但卡面寫的是「雙方的所有<strong>備戰</strong>寶可夢，不會因對手的招式與特性的效果而被放置傷害指示物」— 戰鬥位應該照樣中招才對，bug 反過來保護到戰鬥位。</li>
+
+          <li><b>根因</b>：<code>defense.ts canApplyEffectToTarget</code> 的 <code>options.isBench</code> 參數 — 文件寫「caller 已知 target 在 bench 時傳 true」，但實際內部判定是「caller 沒傳 isBench → 預設走 bench-only defense（含對戰圓形/球形盾牌/花之帷幔 等 bench-only 規則）」。<code>m5_preview.ts</code> 兩處 caller 把 active + bench 都丟進 helper 但漏傳 isBench：先 <code>[def.active, ...def.bench].filter(...)</code> 然後 for loop 每個 target 都呼叫 helper 卻沒第 7 參數 → 對手戰鬥位也誤走 bench guard → 對戰圓形擋下。</li>
+
+          <li><b>Audit</b>：scripts 全 game 目錄 grep 45 個 <code>canApplyEffectToTarget</code> caller。40 個有傳 <code>isBench</code> ✓；2 個漏傳且 caller pattern 有 active+bench mix（嫌疑 bug） ✗；3 個是 JSDoc 範例非實際 caller。2 個 bug caller 都在 <code>m5_preview.ts</code>：(a) 抹茶旋轉 L1716 regPost、(b) 花岩怪|靈魂終結 resolver <code>m5-runerigus-soul-end</code> L1773（玩家選擇對手 active 或 bench 寶可夢做指示物 ×4）。</li>
+
+          <li><b>修法 1 — caller 端 (m5_preview.ts)</b>：兩處都加 <code>const isBench = target.iid !== def.active?.iid;</code> 動態判 + 傳給 helper 第 7 參數 &#123; isBench &#125;。對手戰鬥位走 active-side defense，備戰走 bench-side defense。</li>
+
+          <li><b>修法 2 — helper 端防呆 (defense.ts)</b>：<code>canApplyEffectToTarget</code> 內部加 fallback — 若 caller 漏傳 <code>isBench</code>，自動用 <code>target.iid</code> 比對 <code>state.players[defIdx].active.iid</code>，若是 active 自動視為 isBench false。caller 若明確傳值仍以 caller 為主。這道防呆保護未來新 caller 又漏傳 — 同 v5.061 三道防線思路。</li>
+
+          <li><b>實際情境</b>：v5.062 起，玩家用抹茶旋轉攻擊有對戰圓形競技場場面時，對手戰鬥位會正確收到 4 個傷害指示物，備戰位才被對戰圓形擋下不受效果。同 修法 也修補 花岩怪 靈魂終結 — 對手戰鬥位若被選為 ×4 目標，不再被對戰圓形誤擋。</li>
+
+          <li><b>影響範圍 — Active-target 也被 bench-only 誤擋的其他 defense</b>：除對戰圓形外，這個 caller bug 也順帶誤套用了 球形盾牌 / 花之帷幔 / 藏隱 / 深度下潛 / 羽毛化石 / 太晶 / 中立中心 等 bench-only defense 到戰鬥位 — v5.062 修後全部正確。</li>
+
+          <li><b>JSON 卡面 source of truth</b>：M2.json L3108 對戰圓形競技場 rulesText：「雙方的所有<strong>備戰</strong>寶可夢，不會因對手的招式與特性的效果而被放置傷害指示物。[會受到招式的傷害。]」— 戰鬥位 / 備戰位都收得到傷害，但備戰位免「效果」（指示物 / 狀態）。修後實作完全對齊。</li>
+
+          <li><b>Iron Rules</b>：Rule 8（揭示資訊本次無關）／Rule 11/11c（Python pipeline 改子檔 + defense.ts）／Rule 14（最小 patch — 2 caller + 1 helper 防呆，不重寫 dispatch table）／Rule 15（JSON 卡面 source of truth — 卡面寫「備戰」就只擋備戰，戰鬥位不該保護）／Rule 11e（Write tool 寫 patch）／Rule 11f（push 前 3 道 ASSERT 全過）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.061</span> 🐛 修 17 個 bench-fill 招式 UI 沒灰 — BENCH_FILL_ATTACK_NAMES 補齊（呼喚同伴等同 v5.059 螺釘地鼠 bug 第二層）</summary>
         <ul>
           <li><b>玩家回報</b>：v5.059 修了 螺釘地鼠｜呼喚同伴 在備戰滿時的「零之大空洞清場」誤觸發 bug（regPost 內補 cap check），但發現按鈕還是可以點下去 — 應該要像「呼朋引伴」一樣 UI 變暗無法點擊。</li>

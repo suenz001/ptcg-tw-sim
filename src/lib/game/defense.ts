@@ -208,7 +208,23 @@ export function canApplyEffectToTarget(
   //    - 中立中心競技場 (Stadium, attack-damage, attacker rule)
   //
   //    options.isBench === false 時 caller 已確定 target 在 active → 跳過 bench-only check
-  if (options?.isBench !== false) {
+  //
+  //    v5.062 防呆：caller 沒傳 isBench 時，用 target.iid 自動判 — 若 target 是
+  //    對手 active，跳過 bench-only defense（避免對戰圓形競技場/球形盾牌 等
+  //    bench-only 規則誤套用到戰鬥位目標）。
+  //    起源：m5_preview.ts 抹茶旋轉/靈魂終結 caller 沒傳 isBench，對手戰鬥位被
+  //    對戰圓形誤擋 → 抹茶旋轉打不到戰鬥位 ( v5.062 玩家回報 bug)。
+  //    這個 internal-fallback 設計成「caller 漏傳時自動正確判斷」，但 caller
+  //    若明確傳 isBench: false/true 仍以 caller 為主。
+  let effectiveIsBench = options?.isBench;
+  if (effectiveIsBench === undefined) {
+    const defIdx = (1 - actorIdx) as 0 | 1;
+    const defActive = state.players[defIdx].active;
+    if (defActive && defActive.iid === target.iid) {
+      effectiveIsBench = false;
+    }
+  }
+  if (effectiveIsBench !== false) {
     const r = resolveBenchGuard(state, pool, actorIdx, targetCard, kind);
     if (r.blocked) return r;
   }

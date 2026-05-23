@@ -1725,7 +1725,10 @@ regPost('來悲粗茶|抹茶旋轉', (state, aIdx, pool) => {
   const targets = [def.active, ...def.bench].filter((x): x is import('../../types').CardInstance => x !== null);
   for (const t of targets) {
     const tCard = pool.get(t.cardId);
-    const r = canApplyEffectToTarget(s, aIdx, t, tCard, 'attack-effect', pool);
+    // v5.062：明確傳 isBench 給 helper — 否則預設走 bench-only defense（含對戰圓形競技場）
+    //   會誤把對手戰鬥位也擋下。玩家回報用抹茶旋轉打對戰圓形場面，戰鬥位反被保護。
+    const isBench = t.iid !== def.active?.iid;
+    const r = canApplyEffectToTarget(s, aIdx, t, tCard, 'attack-effect', pool, { isBench });
     if (r.blocked) {
       s = addLog(s, `抹茶旋轉：${tCard?.name ?? '?'} 被 ${r.reason} 擋下，跳過`, aIdx);
       continue;
@@ -1780,8 +1783,10 @@ regR('m5-runerigus-soul-end', (state, aIdx, iids, _params, pool) => {
     const target = allOpp.find(c => c.iid === targetIid);
     if (!target) continue;
     const tCard = pool.get(target.cardId);
+    // v5.062：明確傳 isBench — 同抹茶旋轉 caller 修法。
+    const isBench = target.iid !== dPlayer.active?.iid;
     // 化隱 / 球形盾牌 等 effect 免疫 per-target check
-    const r = canApplyEffectToTarget(s, aIdx, target, tCard, 'attack-effect', pool);
+    const r = canApplyEffectToTarget(s, aIdx, target, tCard, 'attack-effect', pool, { isBench });
     if (r.blocked) {
       s = addLog(s, `靈魂終結：${tCard?.name ?? '?'} 被 ${r.reason} 擋下，跳過`, aIdx);
       continue;
