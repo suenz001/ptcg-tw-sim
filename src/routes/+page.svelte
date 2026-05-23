@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.048</span> 🎨 桌墊版對手備戰 slot 縮高 — 釋出沒用的下方空白，疊牌不再容易撐版面</summary>
+        <ul>
+          <li><b>玩家回報</b>：桌墊版對手備戰區的卡牌框框下方有大塊空白，卡牌往上半部擠，下方完全沒用。疊牌（往上 fan）多了之後甚至會撐出版面。</li>
+          <li><b>根因</b>：base CSS <code>.bench-slot</code> height:205px 為了給「特性按鈕」(<code>.ability-btn-sm</code>) 騰空間，但對手 bench Pokemon 永遠不會在我方回合 render 特性按鈕（<code>getUsableAbilities</code> 用 <code>state.activePlayerIndex</code> 過濾 → 只 render 自己的）。對手視角下這 50px 預留空間 100% 沒用。</li>
+          <li><b>修法</b>：layout-tabletop scope 加 <code>.playmat.layout-tabletop .opponent-row .bench-slot &#123; height: 155px !important; &#125;</code> 縮短 50px。my-row 不動，保留 ability-btn 空間。對手 bench Pokemon 視覺上 img + name + hp + tool-chip 緊湊堆疊到 slot 底，下方不再留白；疊牌往上 fan 也不會被切到。</li>
+          <li><b>scope</b>：純 <code>.playmat.layout-tabletop .opponent-row</code>，桌機 classic / 手機 portrait / 我方 row 完全不動。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline + tail anchor）／Rule 14（最小 patch — 純 1 個 CSS rule 新增）／Rule 1（changelog 文字 audit 通過：&lt;code&gt; 內含 &#123; &#125; 用 HTML entity escape）。Pre-push 跑了強化版 Rule 1 audit + 本地 tsc + push 後等 Step A/B build verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.047</span> 🛠️ 對手發牌動畫真正修好 + 新增 fix-git-lock.bat 自助清 lock</summary>
         <ul>
           <li><b>修法 1 — fix-git-lock.bat</b>：每次 Claude push 完 GitHub Pages 上 push 都會在本地產生 <code>.git/refs/remotes/origin/main.lock</code>（sandbox 端權限刪不掉），導致本地 git fetch / pull / IDE git 面板撞「Another git process seems to be running」錯誤。新增 <code>E:\ptcg-tw-sim\fix-git-lock.bat</code> 雙擊即可清除（含 <code>%~dp0</code> 自動 cd 到 repo root，可放任何位置 — 連結 / 桌面捷徑都行）。</li>

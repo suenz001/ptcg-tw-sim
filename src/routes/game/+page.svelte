@@ -8159,6 +8159,16 @@
      img 被 align-items:center 垂直置中，但 stack top:0 是錨在 bench-middle 頂，
      導致兩者沒對齊。改 grid 讓 img + stack 在同一 grid cell place-items:center，自動對齊。 */
   .playmat.layout-tabletop .bench-slot{ overflow:visible !important; }
+
+  /* v5.048：對手備戰 slot 縮高 — 對手不會在我方回合 render ability-btn-sm（特性按鈕），
+     base bench-slot height:205px 預留給 ability-btn 的下方空間對對手永遠用不到，造成
+     img 在 slot 上半部、下方大塊空白。疊牌往上 fan 又會撐版面。
+     修法：opponent-row scope 把 bench-slot height 從 205 縮到 155px (省 50px)。
+     對手 bench Pokemon 仍可有特性，只是在對手回合才會發動，那時對手視角自己的 my-row
+     可看到 ability-btn — 我方視角永遠不看對手特性按鈕。my-row 不動保留 ability 空間。 */
+  .playmat.layout-tabletop .opponent-row .bench-slot{
+    height: 155px !important;
+  }
   .playmat.layout-tabletop .bench-slot .bench-middle{
     display:grid; place-items:center;
     position:relative; overflow:visible;
