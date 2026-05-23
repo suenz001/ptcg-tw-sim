@@ -20,9 +20,8 @@ import {
   reg, regR, regG, regA,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, clearActiveEffects, drawCards,
   healResolver, sameEvoName,
-  addPendingPrize,
-} from '../_shared';
-import { getBenchLimit, isBasicPokemonCard } from '../../engine';
+  addPendingPrize, getOwnBenchLimit} from '../_shared';
+import { isBasicPokemonCard } from '../../engine';
 import type { CardInstance, PlayerState } from '../../types';
 import type { Card } from '$lib/cards/types';
 
@@ -803,7 +802,7 @@ regG('配樂之笛', (st, idx, pool) => {
   const opp = st.players[oppIdx2];
   // v5.040：原本 hardcode 5「保險用 5」實際違反 PTCG 規則 — 零之大空洞 + 對手有太晶
   //         寶可夢時對手備戰上限 8。改用 getBenchLimit 精確判定。
-  return opp.deck.length > 0 && opp.bench.length < getBenchLimit(st, oppIdx2, pool);
+  return opp.deck.length > 0 && opp.bench.length < getOwnBenchLimit(st, oppIdx2, pool);
 });
 reg('配樂之笛', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
@@ -812,7 +811,7 @@ reg('配樂之笛', (st, idx, pool) => {
   const top5Iids = top5.map(c => c.iid);
   st = addLog(st, '配樂之笛：翻開對手牌庫上方 5 張，選任意數量基礎寶可夢放對手備戰', idx);
   // 算對手能放幾隻（受備戰上限）
-  const limit = getBenchLimit(st, oppIdx, pool);
+  const limit = getOwnBenchLimit(st, oppIdx, pool);
   const space = Math.max(0, limit - opp.bench.length);
   const basicsInTop5 = top5.filter(c => isBasicPokemonCard(pool.get(c.cardId)));
   const maxN = Math.min(space, basicsInTop5.length);

@@ -34,15 +34,14 @@
 
 import type { GameState, PlayerState } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
-import { isRulePokemon, getBenchLimit } from '../../engine';
+import { isRulePokemon } from '../../engine';
 import {
   addLog,
   regPost,
   regPre,
   updatePlayer,
   withPending,
-  countAttachedEnergyAsUnits,
-} from '../_shared';
+  countAttachedEnergyAsUnits, getOwnBenchLimit} from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import { canApplyAttackEffectToTarget, statusPost } from '../../effects';
 
@@ -149,7 +148,7 @@ function benchBasicFn(max: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const player = state.players[aIdx];
     // v5.041：bench limit 改 getBenchLimit (5→8)
-    const slots = getBenchLimit(state, aIdx, pool) - player.bench.length;
+    const slots = getOwnBenchLimit(state, aIdx, pool) - player.bench.length;
     if (slots <= 0) return addLog(state, `${label}：備戰區已滿`, aIdx);
     if (player.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
     const realMax = Math.min(max, slots);

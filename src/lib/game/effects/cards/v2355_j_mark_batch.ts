@@ -12,7 +12,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
-import { getBenchLimit } from '../../engine';
+import { getOwnBenchLimit } from '../_shared';
 import {
   addLog,
   regPost,
@@ -60,7 +60,7 @@ regPre('哲爾尼亞斯|大地之門', (state) => ({ state, damage: 0 }));
 regPost('哲爾尼亞斯|大地之門', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   // v5.041：bench limit 改 getBenchLimit (5→8)
-  const slots = getBenchLimit(state, aIdx, pool) - p.bench.length;
+  const slots = getOwnBenchLimit(state, aIdx, pool) - p.bench.length;
   if (slots <= 0) return addLog(state, '大地之門：備戰區已滿（5隻）', aIdx);
 
   // 從牌庫過濾出【超】屬性的基礎寶可夢

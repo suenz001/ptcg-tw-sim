@@ -265,6 +265,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.044</span> 🔥 Hotfix v5.043 — 6 子檔也改 getOwnBenchLimit 避免循環 TDZ runtime ReferenceError</summary>
+        <ul>
+          <li><b>事件</b>：v5.043 push 後 Build success，但玩家開 github.io 頁面一片空白，Console 顯示 <code>Uncaught (in promise) ReferenceError: getBenchLimit is not defined</code>。tsc 通過、build 通過、runtime 卻炸。</li>
+          <li><b>根因 Rule 12 重現</b>：effects/cards/*.ts 子檔 import <code>getBenchLimit</code> from <code>&apos;../../engine&apos;</code> 在 ESM 評估順序下踩 TDZ — engine.ts → effects.ts → effects/cards/*.ts → 回頭 import engine.ts 時 engine.ts 自己還在 evaluating（尚未跑到 <code>export function getBenchLimit</code> 行），所以 cards/* 拿到的 getBenchLimit 是 undefined。tsc 看到的是 type system 內的 named export 存在；ESM runtime 看到的是評估順序循環 → ReferenceError。</li>
+          <li><b>修法</b>：6 個 cards 子檔（energy_cards / v2355 / v2359 / v2998_g2 / v3700_audit_orphans / v172_hij_batch）全部改用 <code>_shared.ts:559</code> 的 <code>getOwnBenchLimit</code>（內聯 mirror），跟 effects.ts v5.043 改的方向統一。<code>_shared.ts</code> 是純 leaf module（沒有循環依賴），任何子檔 import 都安全。</li>
+          <li>　・<code>energy_cards.ts</code> / <code>v2355</code> / <code>v2998_g2</code> / <code>v3700_audit_orphans</code>: import 從 <code>&apos;../../engine&apos;</code> → <code>&apos;../_shared&apos;</code>，getBenchLimit → getOwnBenchLimit</li>
+          <li>　・<code>v2359_j_mark_batch.ts</code>: 多 import 情況 — 從 engine 的 import 拿掉 getBenchLimit，另加 _shared 的 getOwnBenchLimit import</li>
+          <li>　・<code>v172_hij_batch.ts</code>: 多 import 情況（含 isBasicPokemonCard）— 同樣處理</li>
+          <li><b>Engine.ts 不動</b>：engine.ts 自己內部 5 處用 <code>getBenchLimit</code>（同檔 reference）無循環依賴，保留不改。</li>
+          <li><b>v5.041 程式邏輯仍全保留</b>：24 處 bench=5 → helper 的修正一字未動，只改 helper 名 + import path 解循環。</li>
+          <li><b>內化教訓</b>：(1) Rule 12 不只是「effects.ts ↔ engine.ts」雙向 — <strong>任何 cards/* 子檔 import engine.ts 都可能踩 TDZ</strong>，因為 cards/* 是 effects.ts 的子模組，會被 effects.ts 一併載入。安全規則：cards/* 內凡是用到 engine.ts 的 helper（getBenchLimit / isBasicPokemonCard 等），都應該 import 同名 mirror from <code>_shared</code>。(2) tsc 不抓 runtime TDZ — 必須真正測「打開頁面看 Console」才能驗證生產可用。記憶系統已更新。</li>
+          <li><b>Iron Rules</b>：Rule 1 / 5 / 11/11c / 12（TDZ 二次踩到）／ 14。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.043</span> 🔥 Hotfix v5.041/v5.042 — effects.ts 改 getOwnBenchLimit + 修 oppIdx 重複宣告</summary>
         <ul>
           <li><b>事件</b>：v5.042 修了 5 子檔 import 後 build 還是 fail。本地 tsc 揭露兩個錯誤 — (a) effects.ts 14 處 getBenchLimit reference 找不到 symbol；(b) v2998_g2.ts oppIdx 重複宣告。</li>
