@@ -265,6 +265,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.045</span> 🔥 Hotfix v5.043 — changelog 內 raw 大括號 + getBenchLimit 被 Svelte 當 expression evaluate</summary>
+        <ul>
+          <li><b>事件</b>：v5.044 build success deploy success，但無痕模式打開仍空白 + Console 顯示 <code>ReferenceError: getBenchLimit is not defined</code>。排除 Service Worker cache 嫌疑後（無痕沒 cache），追蹤 lazy chunk <code>nodes/2.D1e9WO4N.js</code>（root +page.svelte 編譯 chunk），grep 到 34 次 getBenchLimit 字串。</li>
+          <li><b>根因 Rule 1 二次踩到</b>：<code>+page.svelte:324</code>（v5.043 changelog 描述 v5.041 修法）寫了 <code>新增 &lt;code&gt;import &#123; getBenchLimit &#125; from ../../engine&lt;/code&gt;</code> — 用 raw ASCII <code>&#123;</code> <code>&#125;</code> 而非 HTML entity。Svelte template parser 對 <code>&lt;code&gt;</code> 內遇到 <code>&#123; identifier &#125;</code> 這種 simple expression pattern 會認真 evaluate 它當 Svelte expression — getBenchLimit 不在 component scope → ReferenceError → root <code>+page.svelte</code> render 整個炸 → 首頁空白。</li>
+          <li><b>為何之前 audit 沒抓到</b>：v5.041 / v5.043 changelog 推送前我的 Rule 1 audit regex 只抓 <code>&lt;code&gt;&#123;</code> 開頭的（<code>r&apos;&lt;code&gt;\&#123;[^`\$]&apos;</code>），漏抓「中間有 <code>&#123;</code>」的情況。已強化 regex pattern 為 <code>r&apos;&lt;code&gt;([^&lt;]*?\&#123;\s*[a-zA-Z]\w*\s*\&#125;[^&lt;]*?)&lt;/code&gt;&apos;</code>，audit 整個 &lt;code&gt;...&lt;/code&gt; 內部含 simple identifier 包在 &#123;&#125; 的 pattern。</li>
+          <li><b>修法</b>：L324 把 <code>&#123; getBenchLimit &#125;</code> 改成 <code>&amp;#123; getBenchLimit &amp;#125;</code>（HTML entity）。同時 audit 全 changelog 區段找其他相同 pattern 一併修（含 v5.044 changelog 描述 import 時也踩同樣坑）。</li>
+          <li><b>為何 v5.043 / v5.044 build success</b>：esbuild build 只做 syntax check，<code>&lt;code&gt;</code> 內 expression 解析錯誤是 Svelte runtime 行為，build 不會 fail。要 runtime hydrate 時才炸。所以 build success ≠ runtime success。</li>
+          <li><b>排查時序</b>：(1) 以為 Service Worker cache → Wilson 試無痕仍空白 → 排除 (2) fetch GitHub Pages chunks grep getBenchLimit → 主 chunks 0 次但漏看 lazy node chunks (3) fetch <code>nodes/2.D1e9WO4N.js</code> 找到 34 次 + line 14 col 73885 看到 <code>textContent=`import $&#123;getBenchLimit</code> → 確認是 changelog 內 raw 大括號 (4) grep source 第 324 行揪出。</li>
+          <li><b>內化教訓</b>：(1) Rule 1 audit 不能只抓 <code>&lt;code&gt;</code> 開頭的 raw <code>&#123;</code>，必須 audit 整個 <code>&lt;code&gt;...&lt;/code&gt;</code> 內部。已更新 audit script。(2) 「build success + tsc no errors」不代表 runtime 不炸 — Svelte template runtime evaluation 是另一層需要驗證的。(3) 排查 runtime ReferenceError 從 lazy chunks 著手不夠，要找 minified bundle 內字面字串 + line/col 對應原 source。</li>
+          <li><b>v5.040~v5.044 累積成果全部保留</b>：24 處 hardcoded bench=5 → getOwnBenchLimit 修正一字未動，本 hotfix 只改 changelog 文字 escape。貴重手推車與其他 23 處全部支援零之大空洞 + 太晶 (5→8)。</li>
+          <li><b>Iron Rules</b>：Rule 1（修違規 + audit regex 強化）／Rule 5（patch 版本不 force-push）／Rule 11/11c（Python pipeline）／Rule 14（最小 patch — 純文字 escape）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.044</span> 🔥 Hotfix v5.043 — 6 子檔也改 getOwnBenchLimit 避免循環 TDZ runtime ReferenceError</summary>
         <ul>
           <li><b>事件</b>：v5.043 push 後 Build success，但玩家開 github.io 頁面一片空白，Console 顯示 <code>Uncaught (in promise) ReferenceError: getBenchLimit is not defined</code>。tsc 通過、build 通過、runtime 卻炸。</li>
@@ -321,7 +336,7 @@
           <li>　・<code>v3700_audit_orphans.ts:98/99</code> orphans audit helper</li>
           <li><b>maxCount:5 audit 結果</b>：另查 4 處 <code>maxCount: 5</code>（v2750 用 Pokemon:Types 搜 5 張 / 釣竿MAX 搜 5 張加手牌 / 找 5 張 Tool 加手牌 / 聖灰回 5 張到牌庫）— **全部跟 bench 無關**（屬於「最多 5 張」其他語意），不需修改。</li>
           <li><b>Callback signature 補強</b>：4 個位置原本 callback 簽名漏 pool 參數（<code>_pool</code> 或省略），改成顯式 <code>pool</code>。EffectFn / TrainerGuardFn / AttackPostFn type 本來就含 pool 參數，省略只是寫法簡化。</li>
-          <li><b>子檔 import 補強</b>：5 個子檔原本沒 import <code>getBenchLimit</code>，4 個沒 engine import → 新增 <code>import { getBenchLimit } from &apos;../../engine&apos;;</code>，1 個（v2359）已有 engine import → 補進現有 import 清單。</li>
+          <li><b>子檔 import 補強</b>：5 個子檔原本沒 import <code>getBenchLimit</code>，4 個沒 engine import → 新增 <code>import &#123; getBenchLimit &#125; from &apos;../../engine&apos;;</code>，1 個（v2359）已有 engine import → 補進現有 import 清單。</li>
           <li><b>剩下 AI 路徑</b>：<code>ai.ts:93</code> <code>bench.length &lt; 5</code> 是 AI 決策邏輯（決定是否要主動 play basic），不是規則限制 — 即使保留 5 也不會擋玩家動作，僅 AI 不會主動放第 6+ 隻。標 TODO 等後續優化。</li>
           <li><b>Audit 工具</b>：本次用 <code>grep -rn &quot;bench\.length\s*&gt;=\s*5\b&quot;</code>、<code>&quot;5\s*-\s*\w*\.bench\&quot;</code>、<code>&quot;Math\.min.*5.*bench&quot;</code> 三種 pattern 全 repo 掃，未來可加進 pre-push audit script 防 regression。</li>
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 effects.ts 大檔 + 5 個子檔，sentinel + tail anchor 驗）／Rule 14（最小 patch — 18 處 hardcode 換 helper 呼叫，無 logic 重寫）／Rule 15（卡面 source of truth — 零之大空洞效果文本 8 隻為準）／Rule 7（不簡化實裝 — hardcode 5 即是簡化，必須修正）。</li>
@@ -1556,7 +1571,7 @@
         <summary><span class="ver-badge">v4.920</span> 💬 觀戰通知改寫到聊天室（不汙染對戰 log）</summary>
         <ul>
           <li><b>設計調整</b>：v4.919 把「📺 xxx 加入/離開觀戰」寫到 <code>game.log</code>，但對戰 log 應該只記錄招式/特性/抽牌等純對戰事件 — 觀戰者進出是 meta-game 社交訊息，放聊天室更合適。</li>
-          <li><b>實作改動</b>：把 <code>handleRoomUpdate</code> 內的 spectator diff 邏輯，從「push <code>game.log</code> + <code>pushGameState</code>」改為「<code>sendMessage(roomCode, '📺 系統', '${name} 加入/離開觀戰')</code>」。</li>
+          <li><b>實作改動</b>：把 <code>handleRoomUpdate</code> 內的 spectator diff 邏輯，從「push <code>game.log</code> + <code>pushGameState</code>」改為「<code>sendMessage(roomCode, '📺 系統', '$&#123;name&#125; 加入/離開觀戰')</code>」。</li>
           <li><b>觸發條件放寬</b>：v4.919 限 <code>game.phase === 'playing'</code>，現在 lobby 階段也會通知（聊天室沒這限制）。</li>
           <li><b>單端寫入機制不變</b>：依然只有 P1 (<code>mySeatIdx === 0</code>) 觸發 <code>sendMessage</code>，雙方+其他觀戰者透過 <code>subscribeMessages</code> 同步收到。</li>
           <li><b>不影響對戰回放</b>：對戰 log 維持純淨；export log 不會夾雜觀戰者紀錄。</li>
