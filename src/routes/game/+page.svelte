@@ -108,8 +108,7 @@
     battleLogOpen = !battleLogOpen;
     try { localStorage.setItem('ptcg_battle_log_open', battleLogOpen ? '1' : '0'); } catch { /* ignore */ }
   }
-  // v4.994: 下拉內是否顯示內建預組 optgroup — 預設關閉，玩家需要時打勾顯示
-  let showPresetDecksInDropdown = $state(false);
+  // v5.051: 預組永遠顯示在下拉內（移除 toggle） — Android Chrome 對動態 {#if} optgroup 有 bug
   let p2Name = $state('AI 對手');
   // v3.75：本機/AI 模式先後攻偏好（贏擲幣時生效；AI 模式直接生效）
   let p1FirstPref = $state<'random' | 'first' | 'second'>('random');
@@ -4963,11 +4962,7 @@
     {/if}
     <h1>🖥️ 本機雙人對戰</h1>
     <p class="lobby-subtitle">遊戲開始時會擲硬幣決定先後手</p>
-    <!-- v4.994: 預組 toggle — 預設關閉，玩家需要時打勾顯示 -->
-    <label class="preset-toggle-row">
-      <input type="checkbox" bind:checked={showPresetDecksInDropdown} />
-      <span>📂 在下拉選單顯示內建預組</span>
-    </label>
+    <!-- v5.051: 移除預組 toggle — Android Chrome select bug 改永遠顯示 -->
     <div class="player-setup">
       <div class="setup-card">
         <h2>玩家 1</h2>
@@ -4978,8 +4973,8 @@
           {#if decks.length > 0}
             <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
-          <!-- v4.994: 預組 optgroup（toggle 控制） -->
-          {#if PRESET_DECKS.length > 0 && showPresetDecksInDropdown}
+          <!-- v5.051: 預組永遠顯示（移除 toggle） — Android Chrome native select 對動態 {#if} optgroup 有 reconciliation bug，玩家勾選後 picker 點不開 -->
+          {#if PRESET_DECKS.length > 0}
             <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
         </select>
@@ -5022,8 +5017,8 @@
           {#if decks.length > 0}
             <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
-          <!-- v4.994: 預組 optgroup（toggle 控制） -->
-          {#if PRESET_DECKS.length > 0 && showPresetDecksInDropdown}
+          <!-- v5.051: 預組永遠顯示（移除 toggle） — Android Chrome native select 對動態 {#if} optgroup 有 reconciliation bug，玩家勾選後 picker 點不開 -->
+          {#if PRESET_DECKS.length > 0}
             <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
           {/if}
         </select>
@@ -5217,11 +5212,7 @@
               <span>✅ 允許觀戰（讓其他玩家在大廳的「對戰中房間」看到此房）</span>
             </label>
           </div>
-          <!-- v4.994: 線上對戰也加預組 toggle（同本機 lobby）-->
-          <label class="preset-toggle-row">
-            <input type="checkbox" bind:checked={showPresetDecksInDropdown} />
-            <span>📂 在下拉選單顯示內建預組</span>
-          </label>
+          <!-- v5.051: 移除線上 lobby 預組 toggle — 同本機 lobby -->
         {/if}
 
         <!-- v2.73 殭屍房警示 + 解散按鈕 -->
@@ -5262,8 +5253,8 @@
                         {#if decks.length > 0}
                           <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
                         {/if}
-                        <!-- v4.994: 預組 optgroup（toggle 控制） -->
-                        {#if PRESET_DECKS.length > 0 && showPresetDecksInDropdown}
+                        <!-- v5.051: 預組永遠顯示（移除 toggle） — Android Chrome native select bug -->
+                        {#if PRESET_DECKS.length > 0}
                           <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
                         {/if}
                       </select>

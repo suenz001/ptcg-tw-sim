@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.051</span> 🐛 修 Android 手機版 lobby select 點不開 — 移除預組 toggle 預組永遠顯示</summary>
+        <ul>
+          <li><b>玩家回報</b>：Android 手機版本機 / 線上兩個 lobby 都遇到 — 勾選「在下拉選單顯示內建預組」checkbox 後，點「選擇牌組」select 完全沒反應 / picker 不彈出。</li>
+          <li><b>根因猜測（Rule 15 audit）</b>：Svelte template <code>&#123;#if PRESET_DECKS.length &gt; 0 &amp;&amp; showPresetDecksInDropdown&#125;</code> 包 <code>&lt;optgroup&gt;</code> — checkbox toggle 觸發 <code>$state</code> 改 → Svelte 對 <code>&lt;select&gt;</code> 內 child 動態 mount/unmount optgroup。Android Chrome native select 對 picker 開啟期間 / 期前 select children DOM 結構動態變更有已知 reconciliation 問題，導致再次點 select 時 picker handler 失效（picker 不彈）。</li>
+          <li><b>修法</b>：移除 toggle 機制，預組 optgroup 永遠 render（前提 PRESET_DECKS.length &gt; 0）。三處 select 條件改為純 <code>&#123;#if PRESET_DECKS.length &gt; 0&#125;</code>；兩處 toggle checkbox UI 移除；<code>showPresetDecksInDropdown</code> $state 宣告清掉。lobby select 內 DOM 結構從此穩定不動，picker 100% 能用。</li>
+          <li><b>UX 取捨</b>：原 v4.994 設計 toggle 是為了 lobby 簡潔（玩家通常用自己的牌組）。新設計 lobby 永遠看到「📁 我的牌組」+「🎴 內建預組」兩個 optgroup，視覺略雜但保證能用。修 critical bug &gt; UX cosmetic 整潔。</li>
+          <li><b>scope</b>：本機雙人 lobby（line 4975, 5019）+ 線上對戰 lobby 我的座位（line 5256）— 三處 select 都改；對應的兩個 toggle checkbox 區塊（line 4967, 5221）移除。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline + tail anchor）／Rule 14（最小 patch — 三處 condition 簡化 + 2 處 toggle 移除 + 1 處 state 移除）／Rule 15（audit 卡面 + 程式碼為 source of truth 找根因）。Pre-push tsc + Rule 1 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.050</span> 🎨 桌墊版間距調整 — 戰鬥場↔備戰區更近 + 上下 padding 拉開避免疊牌出邊界</summary>
         <ul>
           <li><b>玩家回報</b>：桌墊版上戰鬥場和備戰區之間間距太鬆散；對手備戰區又離 viewport 頂太近，疊牌往上 fan 多了會被切到上邊界。</li>
