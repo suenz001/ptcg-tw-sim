@@ -265,6 +265,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.061</span> 🐛 修 17 個 bench-fill 招式 UI 沒灰 — BENCH_FILL_ATTACK_NAMES 補齊（呼喚同伴等同 v5.059 螺釘地鼠 bug 第二層）</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.059 修了 螺釘地鼠｜呼喚同伴 在備戰滿時的「零之大空洞清場」誤觸發 bug（regPost 內補 cap check），但發現按鈕還是可以點下去 — 應該要像「呼朋引伴」一樣 UI 變暗無法點擊。</li>
+          <li><b>根因</b>：v5.010 引擎加了 <code>BENCH_FILL_ATTACK_NAMES</code> Set 機制，<code>engine.ts:6749</code> 內列出該 set；UI 層在 <code>getAvailableAttacks</code> 內檢查 — 若招式名在 set 且備戰滿則 return -1（按鈕灰）；<code>applyAction</code> 內也有同樣 check 攔截 dispatch（雙層防線）。但 set 內只有「呼朋引伴」一個招式名，其他 17 個同模式 bench-fill 招式（牌庫搜尋/查看牌庫上方 → 把基礎或特定寶可夢放備戰）都沒進去 — 包括玩家點名的「呼喚同伴」。</li>
+          <li><b>同 v5.059 螺釘地鼠 bug 第二層</b>：v5.059 只在 regPost 內補了 cap check（第 3 道防線），UI 層 + engine.ts dispatch 攔截層都還是漏。實際 audit 後發現所有 17 個招式的 regPost 內部 helper（<code>deckSameNameBenchPost / deckTopPeekPokemonToBenchPost / deckSearchPokemonToBenchPost / deckSearchBasicToBenchPost / benchBasicFromDeckPost</code>）都已有 <code>getOwnBenchLimit</code> cap check（v5.041 修過）— 不會誤觸發 enforceBenchLimit 清場。但 UI 沒灰 → 玩家還能點 → 點下去看 log 才知道無效，體驗困惑。</li>
+
+          <li><b>Audit 全 JSON</b>：grep 所有含「放置於備戰區」+「基礎寶可夢/牌庫」的招式 effect 共 40 個 candidate，過濾掉純對手互換 / 改附能量 / 對手備戰被打傷的偽陽性後得到 17 個真正 bench-fill 同模式招式（不含「呼朋引伴」已實裝）。本次一次補完。</li>
+
+          <li><b>修法</b>：<code>engine.ts:6749 BENCH_FILL_ATTACK_NAMES</code> 改成多行陣列，加 17 個招式名：呼喚同伴（玩家點名 / 螺釘地鼠 M5）、呼喚夥伴（同卡日文版翻譯）、並排（蟲電寶 SV7）、傳喚之門（人造細胞卵 SV5K）、召集標誌（大吾的天秤偶 SVOD）、增光（燈火幽靈 M5）、大地之門（哲爾尼亞斯 M1S）、家族行軍（一家鼠 SV8）、急速信號（電螢蟲 SV6）、戲法傳送門（超級妖火紅狐ex M-P-J）、招花（莉莉艾的花療環環 MC）、洛托呼喚（洛托姆 M2a）、無伴奏合唱（聒噪鳥 MC）、硃砂誘餌（米立龍ex SV8）、組成陣形（列陣兵 SV7）、群聚（呱呱泡蛙 SV5a/強顎雞母蟲 SV5M）、邀請之吻（迷唇姐 SV6）、香味（狗仔包 MC）。</li>
+
+          <li><b>實際情境</b>：v5.061 起，玩家備戰滿時這 17 個招式按鈕全部會變暗（同呼朋引伴），點不下去；對手 sim/AI 透過引擎 dispatch 強送也會被 <code>engine.ts:3592 applyAction</code> 內 BENCH_FILL_ATTACK_NAMES 第二道防線擋下，log「備戰區已滿，無法使用此招式」。第 3 道 regPost 內部 cap check 也維持作為冗餘保險。</li>
+
+          <li><b>三道防線總結</b>：(1) UI 層 <code>getAvailableAttacks</code>：set 內招式 + 備戰滿 → 按鈕灰（玩家點不下去）。(2) Engine 層 <code>applyAction</code>：set 內招式 + 備戰滿 → 攻擊宣告但 return 不執行 regPre/regPost（防 sim/AI 跳過 UI）。(3) Effect 層 helper 內部：<code>getOwnBenchLimit</code> check（防 set 漏改）。v5.061 補齊 set 後三層都生效。</li>
+
+          <li><b>排除（不該進 set）</b>：擲幣才放備戰類（送達挑戰、配送挑戰）— 即使備戰滿玩家仍可宣告攻擊，傷害會打到，只是擲到正面也沒地方放；對手備戰受傷類（激流水泵、音波拆裂）— 不關自方備戰；改附能量到對手備戰類 — 不放新寶可夢。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 engine.ts 大檔）／Rule 14（最小 patch — 純 set 加 17 個 string entries，不動 logic）／Rule 15（卡面 source of truth — 全部 candidate 從 JSON effect 字串 audit 出來）／Rule 11e（Write tool 寫 patch）／Rule 11f（push 前 3 道 ASSERT 全過）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.060</span> 🐛 修「若希望」漏實裝 — 吃吼霸ex 極限俯衝、巴布土撥 怒氣拳、克雷色利亞 弦月光芒 補玩家抉擇 prompt</summary>
         <ul>
           <li><b>玩家回報</b>：吃吼霸ex「極限俯衝」(120+) 卡面「若希望，增加120點傷害。這個情況下，這隻寶可夢也受到50點傷害。」現在程式直接強制使用「希望」(240 + 自殘 50)，沒給玩家選不選的機會。</li>
