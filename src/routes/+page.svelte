@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.032</span> 🔧 手機版 modal 避開 iOS 動態島 / 瀏海</summary>
+        <ul>
+          <li><b>玩家回報</b>：iOS 手機使用高級球（或其他 pendingSelection picker）時，跳出的 modal 頂端壓到 Dynamic Island。</li>
+          <li><b>根因</b>：v4.969 為了讓 modal 不擋背景手牌，把手機直屏 <code>.selection-overlay</code> 改 <code>align-items:flex-start</code> + <code>padding-top:0.4rem</code>，但 0.4rem 完全沒考慮 iOS safe-area。</li>
+          <li><b>修法</b>：<code>padding-top: calc(env(safe-area-inset-top, 0px) + 0.4rem)</code>，自動把 Dynamic Island / 瀏海高度納入，modal 永遠在 safe area 內。同步加 <code>padding-bottom</code> 避開 home indicator。</li>
+          <li><b>同類 audit</b>：<code>.zoom-overlay</code> / <code>.lightbox-overlay</code> / <code>.pv-overlay</code> 已有 safe-area 處理。<code>.gameover-modal</code> 手機 <code>max-height:92vh</code> 加上 top:50% 居中時也可能壓到動態島 → 改 <code>calc(100vh - safe-area-top - safe-area-bottom - 24px)</code>。</li>
+          <li><b>不變</b>：桌機 / 手機橫屏 不受影響（修改全在 <code>@media (max-width: 600px) and (orientation: portrait)</code> scope 內）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 14（最小 patch — 純 CSS 兩處改）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.031</span> 🔧 修閃焰王牌｜瞬間爆發力 — 手機版 setup 階段無法放戰鬥場</summary>
         <ul>
           <li><b>玩家回報</b>：擁有「瞬間爆發力」特性的閃焰王牌，依官方 Q&amp;A 應該能在 setup 階段（手牌沒基礎寶可夢時）放上戰鬥場，但實際無法。</li>

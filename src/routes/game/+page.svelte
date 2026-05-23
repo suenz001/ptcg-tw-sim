@@ -8625,7 +8625,12 @@
   .gameover-modal-body .rematch-hint { font-size: 0.78rem; margin-top: 0.4rem; }
   .gameover-modal-body .back-home-link { display: inline-block; margin-top: 0.6rem; font-size: 0.8rem; color: #88aacc; }
   @media (max-width: 600px) and (orientation: portrait) {
-    .gameover-modal { width: 92vw; max-height: 92vh; }
+    /* v5.032：max-height 從 92vh 縮到 calc(100vh - safe-area-top - safe-area-bottom - 24px)
+       避免 modal 上緣壓到 iOS 動態島 / 瀏海，下緣壓到 home indicator。 */
+    .gameover-modal {
+      width: 92vw;
+      max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
+    }
     .gameover-modal-body { padding: 1rem 1.2rem 1.4rem; }
     .gameover-modal-body .gameover-icon { font-size: 2.8rem; }
     .gameover-modal-body .gameover-title { font-size: 1.7rem; }
@@ -10133,12 +10138,15 @@
     /* v4.969: 手機直屏 selection-overlay 不擋背景 touch — 玩家可同時看 modal
        並橫向滑動手牌瀏覽。半透明背景仍有視覺區隔；modal 本體 pointer-events:auto
        維持正常互動。靠上對齊讓下方手牌區 free。
-       此規則同時嘉惠 send-new-active modal（被昏厥後選備戰）+ pendingSelection picker。 */
+       此規則同時嘉惠 send-new-active modal（被昏厥後選備戰）+ pendingSelection picker。
+       v5.032：原 padding-top 0.4rem 太小，iOS 動態島 / 瀏海會壓到 modal 頂端。
+       改用 calc(env(safe-area-inset-top) + 0.4rem) 讓 modal 完整避開 safe area。 */
     .selection-overlay {
       background: rgba(0, 0, 0, 0.4);
       pointer-events: none;
       align-items: flex-start;
-      padding-top: 0.4rem;
+      padding-top: calc(env(safe-area-inset-top, 0px) + 0.4rem);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
     .selection-overlay .selection-modal {
       pointer-events: auto;
