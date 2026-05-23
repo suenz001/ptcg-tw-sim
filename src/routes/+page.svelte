@@ -265,6 +265,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.050</span> 🎨 桌墊版間距調整 — 戰鬥場↔備戰區更近 + 上下 padding 拉開避免疊牌出邊界</summary>
+        <ul>
+          <li><b>玩家回報</b>：桌墊版上戰鬥場和備戰區之間間距太鬆散；對手備戰區又離 viewport 頂太近，疊牌往上 fan 多了會被切到上邊界。</li>
+          <li><b>修法</b>：</li>
+          <li>　・<code>.playmat.layout-tabletop</code> <code>gap: 12px 8px</code> → <code>5px 8px</code>（row-gap 從 12 縮到 5px，4 zone 之間更緊湊，戰鬥場與備戰區距離縮短）</li>
+          <li>　・<code>padding: 4px 8px</code> → <code>24px 8px</code>（垂直 padding 從 4 拉到 24px，上下各多 20px 空間 — 對手 bench 離 viewport 頂部更遠，疊牌 fan 上去不會被切；我方 bench 對稱拉開）</li>
+          <li><b>淨效果</b>：4 zone 群組整體往畫面中央集中，上下兩端釋出 padding 給疊牌 buffer。原本 v5.038 為「4 zone 間距平均」改 gap=12，現在 Wilson 反饋更需要「上下緩衝」&gt; 「均勻間距」— 修正方向。</li>
+          <li><b>對比</b>：v5.038 改的均勻分配（gap:12 padding:4）總垂直占用 4*content + 36px (3 個 gap) + 8 (padding) = ~44px overhead；v5.050 緊湊 + 緩衝（gap:5 padding:24）總 overhead = 15 + 48 = ~63px，但分布在上下 buffer 而非 zone 之間。視覺更像真實桌游布局。</li>
+          <li><b>scope</b>：純 <code>.playmat.layout-tabletop</code>，桌機 classic / 手機 portrait 完全不動。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline + tail anchor）／Rule 14（最小 patch — 兩個 CSS 值改）／Rule 1（changelog audit 通過）。Pre-push tsc + Rule 1 強化 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.049</span> 🎬 對手發牌動畫終於對了 — 飛到「畫面正上方中線」(模擬對手手牌位置)</summary>
         <ul>
           <li><b>玩家回報</b>：v5.047 改成飛到「對手戰鬥場 (zone-active)」中心，Wilson 回報「怎麼會發向戰鬥寶可夢」— 應該是飛向畫面正上方中線（對手手牌位置）。</li>

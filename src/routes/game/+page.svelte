@@ -8051,10 +8051,12 @@
       "chipO   pilesO    stadium   .         activeO   prizesO"
       "chipMe  prizesMe  stadium   actions   activeMe  pilesMe"
       ".       .         .         .         benchMe   .";
-    /* v5.038：row-gap 從 2px 拉到 12px — 拿掉「對手出場/我的出場」label 後釋出的
-       垂直空間平均分配給 4 個 zone（對方備戰 / 對方戰鬥場 / 我方戰鬥場 / 我方備戰）。 */
-    gap:12px 8px;
-    padding:4px 8px;
+    /* v5.038→v5.050：row-gap 12→5px (戰鬥場↔備戰區更近，視覺上整體更緊湊)。
+       padding-top 4→24px / padding-bottom 4→24px — 對手 bench 離 viewport 頂部更遠，
+       給疊牌往上 fan 留空間不被切；我方 bench 同樣對稱拉開。
+       水平 padding 維持 8px。 */
+    gap:5px 8px;
+    padding:24px 8px;
     align-items:center;
     /* 預留右側 log panel 空間（log 開啟時） */
     margin-right:0;
