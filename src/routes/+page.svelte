@@ -265,6 +265,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.036</span> 🔥 Hotfix — 修 v5.034 changelog 違反 Rule 1 造成 build fail</summary>
+        <ul>
+          <li><b>事件</b>：v5.034 跟 v5.035 push 後 GitHub Actions「Build SvelteKit app」step 都 fail，玩家在 https://suenz001.github.io/ptcg-tw-sim/ 看到的還是 v5.033 的版本 — 含舊的「線上連線對戰 → 強制 redirect .com」邏輯。GitHub Pages 沒部署新版。</li>
+          <li><b>根因</b>：v5.034 changelog 的 Iron Rules 那行寫了 raw <code>&lt;code&gt;｛｝&lt;/code&gt;</code>（用 ASCII <code>&#123;</code> 跟 <code>&#125;</code>）— Svelte template parser 把 <code>&#123;&#125;</code> 當空 expression 解析直接拋 syntax error。Rule 1 早就警告過這種寫法會炸，結果我自己寫 v5.034 changelog 描述 BETA banner 沒違反 Rule 1 時，反而在自己描述文字裡踩了 Rule 1。</li>
+          <li><b>修法</b>：把違規那行的 <code>&lt;code&gt;｛｝&lt;/code&gt;</code> 改成 <code>&lt;code&gt;&amp;#123;&amp;#125;&lt;/code&gt;</code>（HTML entity）。Svelte parser 看到 entity 不會當 expression 解析。</li>
+          <li><b>Audit</b>：grep 全 changelog 區段找其他 raw <code>&#123;</code> <code>&#125;</code> 出現 — 其他位置都是 <code>$&#123;var&#125;</code>（JS template literal）或 <code>&#123;`...`&#125;</code>（Svelte expression 內含 backtick string），都不違規（v5.033 build 過證明）。只有 L287 這一處違規。</li>
+          <li><b>修完同時帶上 v5.034 + v5.035</b>：之前 v5.034（移除 github.io 強制 redirect、加 BETA banner）跟 v5.035（桌墊版 active 名稱框突破 88px）的程式碼改動都還在 disk 上，v5.036 build 通過後一次 deploy 三個版本的累積成果。</li>
+          <li><b>學到的事</b>：Rule 1 例外不只是「寫 BETA banner template 時要 escape」— 連 changelog 內描述「我有 escape」這句話本身都要 escape。已把這次教訓加入 [[feedback-iron-rules]] 記憶。寫 changelog 時凡是要在 <code>&lt;code&gt;</code> 內顯示大括號，**永遠用 HTML entity 或全形｛｝**，不能寫 ASCII <code>&amp;#123;</code><code>&amp;#125;</code>。</li>
+          <li><b>Iron Rules</b>：Rule 1（修違規）／Rule 5（用 v5.036 patch 版本，不 force-push）／Rule 11/11c（Python pipeline + tail anchor + style 對稱驗）／Rule 14（最小 patch — 改一處字元）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.035</span> 🎨 桌墊版 — active 名稱框突破 88px 寬度限制 + z-index 最高層</summary>
         <ul>
           <li><b>玩家回報</b>：桌墊版戰鬥場寶可夢名稱稍長時被截斷或被疊牌 / 道具 chip 覆蓋。例如「赫普的蒼響ex」「派帕的獒教父ex」「火箭隊的黑暗鴉」等都會撞到 88px HP column 寬度上限。</li>
@@ -284,7 +297,7 @@
           <li><b>新增 BETA 標記</b>：<code>+layout.svelte</code> 加一條黃色細 banner，只在 hostname 含 <code>github.io</code> 時顯示「⚠️ BETA 測試版 · 正式站：www.ptcg-tw-sim.com」，跟既有「我們搬家了」綠色 banner 共存（綠色可 dismiss 7 天 / 黃色不可 dismiss）。</li>
           <li><b>保留</b>：「我們搬家了」遷移 banner（v4.938）繼續顯示，提醒誤入玩家正式站位置；SEO canonical / og:url / sitemap.xml 維持指向 .com（搜尋引擎優先索引正式站）；<code>decks/+page.svelte</code> 的「Oracle API 未設定」alert 維持原樣（github.io 點到時的提示合理）。</li>
           <li><b>新流程</b>：開發 → <code>git push</code>（自動觸發 GitHub Actions build） → github.io 自動部署 beta → 測試 OK → 跑 <code>oracle-admin/redeploy-oracle.bat</code>（必要時加 <code>update-admin-full.bat</code>）→ www.ptcg-tw-sim.com 正式站更新。</li>
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + +layout.svelte + +page.svelte，tail anchor + style 對稱驗）／Rule 14（最小 patch — 函式 body 4 行 → 1 行、layout 加 BETA banner 區段）／Rule 1（BETA banner 文字無 raw <code>{}</code>/<code>&lt;</code>/<code>&gt;</code>）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + +layout.svelte + +page.svelte，tail anchor + style 對稱驗）／Rule 14（最小 patch — 函式 body 4 行 → 1 行、layout 加 BETA banner 區段）／Rule 1（BETA banner 文字無 raw <code>&#123;&#125;</code>/<code>&lt;</code>/<code>&gt;</code>）。</li>
         </ul>
       </details>
 
