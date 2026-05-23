@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.033</span> 🔧 修 蒼響ex 無畏斬 / 烈火爆進 等「鎖招」型招式 — 退到備戰區後仍鎖</summary>
+        <ul>
+          <li><b>玩家回報</b>：赫普的蒼響ex 用完「無畏斬」（240 傷，下回合無法再用），下回合即使退到備戰區再回到戰鬥場，仍然不能用。依 PTCG 規則只要回到備戰區就會清除所有狀態（含招式無法使用 flag），回到戰鬥場時應該可用。</li>
+          <li><b>同類 audit</b>：所有用 <code>blockedAttackNamesNextTurn</code> 機制的招式都中同一個 bug — 共 7 張 recharge 招（利歐路加速突刺、自爆磁怪閃光伏特、雪暴馬冰霜颱風、赫普的蒼響ex 無畏斬、厄鬼椪 碧草面具 鬼之錘、派帕的獒教父ex 大佬頭擊、棄世猴衝擊打擊）+ 破空焰ex 烈火爆進（離開戰鬥場前無法再用）+ 天仙石 / 路卡利歐 超級勇氣 / 龍之強襲 / 光明角擊 / 黑暗打擊 / 招式竊賊系列等共約 16 處註冊位置全部受影響。</li>
+          <li><b>根因</b>：<code>clearActiveEffects()</code> helper（<code>src/lib/game/effects/_shared.ts</code>）負責統一處理「退到備戰區清狀態」— 設計用意明確（註解就有提到「烈火爆進等離開戰鬥場前無法使用該招式」），但實際清除列表漏列 <code>blockedAttackNamesNextTurn</code> 與 <code>blockedAttackNamesThisTurn</code> 這兩個招名鎖 flag，只清了 cantAttackPending / cantAttackThisTurn（鎖整隻），所以 single-attack 鎖完全沒被清。</li>
+          <li><b>修法</b>：在 <code>clearActiveEffects()</code> 補兩行 — <code>blockedAttackNamesNextTurn: undefined</code> 與 <code>blockedAttackNamesThisTurn: undefined</code>。一處修法、全部 16+ 個註冊點同時受惠（含對自己鎖、對對手鎖、招式竊賊複製鎖等）。撤退 / 寶可夢交替 / 急進開關 / 頂尖捕捉器 / 衝浪手 / 支配鎖鏈 等所有走 helper 的換場路徑都自動正確。</li>
+          <li><b>不變</b>：engine 端 promote NextTurn → ThisTurn 流程不動；對手在自己場上鎖的招式（火箭隊的黑暗鴉 無理取鬧等）撤退後解鎖 — 這正是 PTCG 規則允許的對策，非 regression。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 _shared.ts + +page.svelte 大檔，tail anchor + style 對稱驗）／Rule 14（最小 patch — 1 個 helper 補 2 行）／Rule 15（JSON 卡面 + helper 註解兩相對照確認本就是 helper 設計缺漏）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.032</span> 🔧 手機版 modal 避開 iOS 動態島 / 瀏海</summary>
         <ul>
           <li><b>玩家回報</b>：iOS 手機使用高級球（或其他 pendingSelection picker）時，跳出的 modal 頂端壓到 Dynamic Island。</li>

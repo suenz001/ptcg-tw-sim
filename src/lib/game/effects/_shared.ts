@@ -788,6 +788,9 @@ export function withPending(state: GameState, sel: PendingSelection): GameState 
  *   - 灼傷/中毒/睡眠/混亂/麻痺 跟著到備戰區
  *   - 烈火爆進等「此寶可夢離開戰鬥場前無法使用該招式」的 cantAttackPending/ThisTurn
  *     即使撤退換回來也還在
+ * v5.033：補清 blockedAttackNamesNextTurn / blockedAttackNamesThisTurn —
+ *   蒼響ex 無畏斬 / 烈火爆進 / 天仙石 / 超級勇氣 / 7 張 recharge 等所有「鎖招名」型
+ *   effect，退到備戰區後仍鎖（玩家回報）。卡面 PTCG 規則一致：退場清狀態。
  * 統一用這個 helper 處理。
  */
 export function clearActiveEffects(poke: CardInstance): CardInstance {
@@ -814,6 +817,12 @@ export function clearActiveEffects(poke: CardInstance): CardInstance {
     deferredPrizeBonusThisTurn: undefined,
     deferredPrizeBonusNextTurn: undefined,
     movedToActiveThisTurn: undefined,
+    // v5.033：鎖招名 flag — 蒼響ex 無畏斬 / 破空焰ex 烈火爆進 / 天仙石 / 超級勇氣 /
+    // 龍之強襲 / 光明角擊 / 7 張 recharge 等所有 blockedAttackNamesNextTurn 機制
+    // 卡面文義為「下回合此寶可夢無法用此招」或「離開戰鬥場前無法用此招」—
+    // PTCG 規則：寶可夢退到備戰區清除所有狀態（含招式鎖）。
+    blockedAttackNamesNextTurn: undefined,
+    blockedAttackNamesThisTurn: undefined,
   };
 }
 
