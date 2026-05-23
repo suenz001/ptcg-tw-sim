@@ -8,6 +8,7 @@ import {
   regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS,
   getOwnBenchLimit,
+  ATTACK_PRE_DISCARD_CHOICE,  // v5.060：克雷色利亞|弦月光芒 補若希望 prompt
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
@@ -133,14 +134,30 @@ regPre('艾姆利多|神之爆炸', (state, aIdx, pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 6. 克雷色利亞|弦月光芒 80+ — 翻 1 張自方反面獎賞 → +80
+// 6. 克雷色利亞|弦月光芒 80+ — v5.060 補 binary-yes-no（原簡化自動翻獎賞）
+//   卡面：「若希望，選擇1張自己的反面朝上的獎賞卡，翻到正面。這個情況下，增加80點傷害。」
+//   Yes → 80+80 = 160（翻 1 獎賞 — 簡化：只增傷不另作 prize-flip state）
+//   No → 80 base，不翻獎賞
+//   注意：「翻到正面維持到對戰結束」屬於 prize-mechanic 未實作 — 仍 best-effort fallback。
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('克雷色利亞|弦月光芒', (state, aIdx, _pool) => {
-  // 自動翻 1 張獎賞 (簡化：直接 +80)
-  if (state.players[aIdx].prizes.length === 0) return { state, damage: 80 };
-  return { state: addLog(state, '弦月光芒：翻 1 張獎賞 → 80+80 = 160', aIdx), damage: 160 };
+ATTACK_PRE_DISCARD_CHOICE.set('克雷色利亞|弦月光芒', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 80, damagePerEnergy: 0,
+  choicePrompt: '是否選擇 1 張自己反面朝上的獎賞卡翻到正面（增加 80 點傷害）？',
+  choiceYesLabel: '是（翻 1 獎賞 / +80 傷害）',
+  choiceNoLabel: '否（僅 80 傷害）',
 });
-// 卡面說「翻到正面」維持到對戰結束，無精確機制，不另作 state 操作
+regPre('克雷色利亞|弦月光芒', (state, aIdx, _pool, action) => {
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  // 沒獎賞可翻 → 即使選 yes 也只能 80 base
+  if (state.players[aIdx].prizes.length === 0) {
+    return { state: addLog(state, '弦月光芒：場上無獎賞可翻 → 80 base', aIdx), damage: 80 };
+  }
+  if (!choseYes) return { state: addLog(state, '弦月光芒：選擇「否」 → 80 base', aIdx), damage: 80 };
+  return { state: addLog(state, '弦月光芒：選擇「是」 → 翻 1 獎賞 → 80+80 = 160', aIdx), damage: 160 };
+});
+// 卡面說「翻到正面」維持到對戰結束，prize-flip state 未實作（best-effort fallback）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 7. 長毛巨魔|影繩結 50× — 對手戰鬥場撤退費數 ×50

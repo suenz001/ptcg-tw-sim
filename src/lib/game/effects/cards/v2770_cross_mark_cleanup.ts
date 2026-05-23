@@ -114,9 +114,32 @@ regPost('小霞的暴鯉龍|嘩啦嘩啦恐慌', (state, aIdx, _pool) => {
 });
 
 // 吃吼霸ex|極限俯衝 120+ — 若希望 +120 + 自殘 50
-//   簡化：自動使用「希望」(預設 240 damage + 自殘 50)
-regPre('吃吼霸ex|極限俯衝', (s) => ({ state: s, damage: 240 }));
-regPost('吃吼霸ex|極限俯衝', selfHitPost(50, '極限俯衝'));
+//   v5.060：補 binary-yes-no 玩家抉擇（範本：蚊香泳士|跳躍衝天）
+//   卡面：「若希望，增加120點傷害。這個情況下，這隻寶可夢也受到50點傷害。」
+//   Yes → 240 damage + 自殘 50；No → 120 base 不自殘
+//   玩家點名 bug：原強制使用「希望」沒給選擇權。
+ATTACK_PRE_DISCARD_CHOICE.set('吃吼霸ex|極限俯衝', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 120, damagePerEnergy: 0,  // damagePerEnergy 不適用 binary-yes-no（僅 placeholder）
+  choicePrompt: '是否增加 120 點傷害？這個情況下，這隻寶可夢也受到 50 點傷害。',
+  choiceYesLabel: '是（+120 傷害 / 自殘 50）',
+  choiceNoLabel: '否（僅 120 傷害 / 不自殘）',
+});
+regPre('吃吼霸ex|極限俯衝', (state, aIdx, _pool, action) => {
+  const chosenIids = action?.discardedEnergyIids;
+  // length>=1 = yes（+120），length=0 = no
+  // AI fallback（chosenIids === undefined）→ 預設 yes 最大化攻擊
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) return { state: addLog(state, '極限俯衝：選擇「否」 → 120 base 不自殘', aIdx), damage: 120 };
+  return { state: addLog(state, '極限俯衝：選擇「是」 → 240 傷害 + 自殘 50', aIdx), damage: 240 };
+});
+regPost('吃吼霸ex|極限俯衝', (state, aIdx, pool, action) => {
+  // 同步 PRE 的 yes/no — 只有 yes 才自殘
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) return state;
+  return selfHitPost(50, '極限俯衝')(state, aIdx, pool);
+});
 
 // 佛烈托斯|鐵之震動 20 — 自方場上鋼能量任意改附自方寶可夢
 //   v2.79 用 damage-distribute 風格 picker（玩家點選目標寶可夢分配次數 = 能量數）

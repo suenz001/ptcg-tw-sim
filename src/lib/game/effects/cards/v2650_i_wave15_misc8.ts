@@ -490,11 +490,26 @@ regPost('捷拉奧拉|閃電急襲', (state, aIdx, pool) => {
 // 5. 自殘 + 狀態（2 張）
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 巴布土撥｜怒氣拳 130 — 自殘 60, 對手戰鬥麻痺（簡化必中，無「若希望」UI）
+// 巴布土撥｜怒氣拳 130 — v5.060 補 binary-yes-no（原註解「簡化必中無若希望 UI」漏實裝）
+//   卡面：「若希望，這隻寶可夢也受到60點傷害，將對手的戰鬥寶可夢【麻痺】。」
+//   Yes → 130 damage + 自殘 60 + 對手麻痺；No → 130 damage 純傷害無麻痺
+//   注意：base damage 不變（130 都會打到），yes/no 影響的是自殘+麻痺加值。
+ATTACK_PRE_DISCARD_CHOICE.set('巴布土撥|怒氣拳', {
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 130, damagePerEnergy: 0,
+  choicePrompt: '是否讓這隻寶可夢自身受 60 點傷害並將對手的戰鬥寶可夢【麻痺】？',
+  choiceYesLabel: '是（自殘 60 + 麻痺對手）',
+  choiceNoLabel: '否（僅 130 傷害，不自殘不麻痺）',
+});
 regPre('巴布土撥|怒氣拳', (s) => ({ state: s, damage: 130 }));
-regPost('巴布土撥|怒氣拳', (state, aIdx, pool) => {
+regPost('巴布土撥|怒氣拳', (state, aIdx, pool, action) => {
+  // 玩家選「否」（或 length=0）→ 不自殘不麻痺；AI 預設 yes
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
+  if (!choseYes) return addLog(state, '怒氣拳：選擇「否」 → 純 130 傷害，不自殘不麻痺', aIdx);
   let s = selfHitPost(60, '怒氣拳')(state, aIdx, pool);
-  return statusPost('paralyzed')(s, aIdx, pool);
+  s = statusPost('paralyzed')(s, aIdx, pool);
+  return s;
 });
 
 // 奇樹的頑皮雷彈｜怦怦炸彈 — 自殘 100, 擲幣正面對手戰鬥昏厥（直接 KO，簡化）

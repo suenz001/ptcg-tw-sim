@@ -265,6 +265,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.060</span> 🐛 修「若希望」漏實裝 — 吃吼霸ex 極限俯衝、巴布土撥 怒氣拳、克雷色利亞 弦月光芒 補玩家抉擇 prompt</summary>
+        <ul>
+          <li><b>玩家回報</b>：吃吼霸ex「極限俯衝」(120+) 卡面「若希望，增加120點傷害。這個情況下，這隻寶可夢也受到50點傷害。」現在程式直接強制使用「希望」(240 + 自殘 50)，沒給玩家選不選的機會。</li>
+          <li><b>範本</b>：「巨金怪 M4 059/083 J | 金屬之錘」之前 v4.46 修過 — 用 <code>ATTACK_PRE_DISCARD_CHOICE</code> + <code>scope: &apos;binary-yes-no&apos;</code> 系統，搭配 <code>regPre</code> 讀 <code>action.discardedEnergyIids</code> 長度判 yes/no（length≥1 = yes，length=0 = no，undefined = AI fallback yes）。也類比「蚊香泳士|跳躍衝天」(SV6 025/101) 純 binary 抉擇範本。</li>
+
+          <li><b>修法 1（玩家點名）— 吃吼霸ex|極限俯衝</b>（v2770_cross_mark_cleanup.ts）：補 <code>ATTACK_PRE_DISCARD_CHOICE.set</code> binary-yes-no spec；regPre 看 chosenIids 判 yes/no — Yes → 240 傷害，No → 120 base；regPost selfHitPost(50) 也加 yes 條件 — Yes → 自殘 50，No → 不自殘。</li>
+
+          <li><b>修法 2 同類 audit — 巴布土撥|怒氣拳</b>（v2650_i_wave15_misc8.ts）：原註解明寫「簡化必中，無『若希望』UI」— 確認漏實裝。卡面「若希望，這隻寶可夢也受到60點傷害，將對手的戰鬥寶可夢【麻痺】。」補 prompt — Yes → 自殘 60 + 對手麻痺，No → 純 130 傷害無自殘無麻痺。base damage 130 不變。</li>
+
+          <li><b>修法 3 同類 audit — 克雷色利亞|弦月光芒</b>（v2760_h_wave3_complex.ts）：原寫「自動翻 1 張獎賞 (簡化：直接 +80)」— 沒給選擇權。補 prompt — Yes → 80+80 = 160（簡化只算傷害，prize-flip state 仍未實作）；No → 80 base 不翻獎賞。同檔案 import 加 <code>ATTACK_PRE_DISCARD_CHOICE</code>。</li>
+
+          <li><b>Audit 整體結果</b>：scripts grep 全 JSON 卡面 effect 含「若希望」共 116 個招式去重後 57 卡面，已實裝 prompt 20 個 (✓)，遺漏 37 個 (✗)。本次 v5.060 修 3 個（玩家點名 + 同模式自殘換 buff + 增傷類），剩餘 34 個多為「純效果無增傷」類（搬位 / 抽牌 / 互換戰鬥位 / 棄競技場 / 改附能量等），這些招式現實作普遍是 regPost 自動執行 yes 行為，玩家沒選不執行權 — 之後另一個 patch 批次處理（避違 Rule 14 最小 patch）。</li>
+
+          <li><b>Backlog（34 個漏 yes/no UI 純效果類）</b>：狐大盜|貪慾狩獵、超級拉帝亞斯ex|狡兔三窟、夢妖魔ex|六之魔法、竹蘭的烈咬陸鯊ex|螺旋俯衝、古劍豹|狡兔三窟、信使鳥|幸福禮物、代歐奇希斯|精神高速、超能妙喵|戲法舞步、詛咒娃娃|人偶捕捉、君主蛇ex|青草命令、霓虹魚|報恩、耿鬼ex|戲法舞步、賽富豪|賽富迴旋、火箭隊的貓老大ex|高傲指令、幸福蛋ex|報恩、差不多娃娃|報恩、櫻花魚|漸強波、火箭隊的閃電鳥|阻礙之翼、甲賀忍蛙ex|忍之利刃、貓頭夜鷹|鉤爪搜尋、魔牆人偶|相仿秀、高傲雉雞|反轉之風、好啦魷|惡作劇觸手、毛辮羊|搗碎、毛毛角羊|搗碎、沙漠蜻蜓ex|風暴返、摩托蜥ex|鋯石之路、帕底亞 肯泰羅|上搗角擊、章魚桶|水流清洗、大比鳥ex|狂風呼嘯、呆呆王|付諸東流、蓋歐卡ex|蜿蜒浪、音波龍ex|狡兔三窟、自爆磁怪|磁力抵制（共 34，留 backlog）。</li>
+
+          <li><b>實際情境</b>：v5.060 起對手用吃吼霸ex 極限俯衝時，UI 會跳出「是 (240+ 自殘 50) / 否 (120 不自殘)」選擇 modal — 玩家可依血量自選；同樣 巴布土撥 怒氣拳、克雷色利亞 弦月光芒 也會跳 prompt。AI 預設選 yes 最大化傷害（chosenIids === undefined 行為），不影響 vs AI 對戰。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改子檔）／Rule 14（最小 patch — 玩家命中 1 + 同模式 audit 命中 2，不批次修 34 個無傷害變化的）／Rule 15（卡面 source of truth — 全 3 卡的 binary-yes-no spec 完全照卡面 effect 文字）／Rule 11e（Write tool 寫 patch）／Rule 11f（push 前 3 道 ASSERT）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.059</span> 🐛 修小霞的元氣 + 螺釘地鼠呼喚同伴 — 卡面敘述對齊 + bench-cap 防誤觸發清場</summary>
         <ul>
           <li><b>Bug 1 — 小霞的元氣（Supporter）卡面敘述錯誤 + 實裝範圍過寬</b></li>
