@@ -576,10 +576,36 @@ print(f'All {len(glob.glob("static/cards/*.json"))} JSON files OK')
 | 11b | 任何檔（縮短字串） | 檔尾 NUL byte padding | `b'\x00' in content` 檢查 |
 | 11c | `.svelte` / `.ts` / `.html` | 中段截斷（標籤遺失） | tail anchor + `<style>` 對稱 |
 | 11d | `.json`（特別是 static/cards/） | 中段截斷（檔尾 cut off） | `json.load()` parse |
+| 11e | **Push script 自身** (patch_v*.py / push_v*.py) | Edit 增量改 script 自身會被截斷 | 一次性 heredoc 完整寫入，禁止 Edit 增量 |
 
 **關鍵教訓**：
 
 > Edit 工具改任何「資料檔」（JSON、YAML、CSV、SQL dump 等）都當作「可能截斷」處理。Python pipeline 是唯一安全路徑。改完 disk 後 **必須再 `json.load()` 從 disk 讀回來驗一次** — 不能信「Edit 報告 success」、不能信「剛在記憶體 parse 過的 text」。
+
+---
+
+### Rule 11e: Push script 自身寫法 — 一次性 heredoc，不用 Edit 增量改
+
+v5.022 自食其果案例：用 Edit 增量改自己的 push_v5022.py 加新 replace 段時尾巴被截斷（Rule 11c 套到 script 自身上）。整段 push 流程崩潰。本 session（v5.029~v5.052）全程遵守此規則沒踩到。
+
+**正確寫法**（heredoc marker 用獨特字串）：
+
+```
+cat > /tmp/patch_NNN.py << 'MY_UNIQUE_MARKER'
+... 整段 Python script 一次寫完 ...
+MY_UNIQUE_MARKER
+python3 /tmp/patch_NNN.py
+```
+
+每次 push 都重寫整段 script — heredoc 是一次性寫入，繞過 Edit 截斷風險。
+
+**禁止寫法**：
+- 已存在的 patch_NNN.py 用 Edit 增量加 replace 段
+- Write tool 覆寫某段（可能截斷）
+
+**heredoc marker 衝突 trap (v5.052 踩到)**：bash heredoc end marker 比對寬鬆 — script 內含的字面字串只要等於 marker 就會被誤判 end。例：marker 用 PYEOF 但 docstring 內也寫 PYEOF → 提早結束 heredoc，後面 Python code 被當 shell command 執行 syntax error。**對策：用獨特 marker（如 MY_UNIQUE_MARKER），或改用 Write tool 直接寫檔避開 bash 解析**。
+
+**驗證**：script 寫完後 `wc -l /tmp/patch_NNN.py` 或 `tail -3` 確認 EOF 完整。
 
 ---
 

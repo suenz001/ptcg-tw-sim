@@ -265,6 +265,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.052</span> 🛠️ 新增卡名 audit script + 抓到 2 個 silent broken regPre + IRON_RULES Rule 11e</summary>
+        <ul>
+          <li><b>背景</b>：v5.022 卡名 rename 災難啟示 — JSON 改卡名後 TS source 內 reg* 函式仍 reference 舊卡名會 silent broken（regPre / regPost / regA key match 不到，整個招式 / 特性無效但不報錯）。新增 <code>scripts/audit-card-names.py</code> 防呆工具。</li>
+          <li><b>Audit 機制</b>：(1) 掃 <code>static/cards/*.json</code> 拿所有卡名集合；(2) 掃 <code>src/lib/game/**/*.ts</code> 內 <code>regA / regAByName / regPre / regPost / regG / reg</code> first arg 拆「卡名|招名」取卡名部分；(3) 對比 source 內 reference 是否都存在 JSON 內。CJK 過濾排除 effectKey（純英文 resolver key）。</li>
+          <li><b>抓到 2 個現有 silent broken</b>：</li>
+          <li>　1. <code>v2760_h_wave3_complex.ts:43</code> 喵喵|亂抓 — 卡名前有<strong>隱形 ZWNJ 字元 U+200C</strong>（zero-width non-joiner，肉眼看不到）。JSON 是純「喵喵」沒 ZWNJ → regPre 永遠 match 不到 → <strong>喵喵的「亂抓」招式 (擲 3 次硬幣×20) 整個沒實際註冊</strong>。</li>
+          <li>　2. <code>effects.ts:4337</code> 貓鼠斬|連斬 — <strong>錯字！</strong>JSON 卡名是「貓<strong>鼬</strong>斬」（鼬 yòu，黃鼠狼）不是「貓<strong>鼠</strong>斬」。→ 整個「貓鼬斬」這張卡的「連斬」招式 (擲 3 次硬幣，1正+20/2正+50/3正+80) 沒實際註冊。</li>
+          <li><b>修法</b>：(1) v2760 ZWNJ 移除 (str.replace U+200C → 空); (2) effects.ts 全檔 「貓鼠斬」→「貓鼬斬」replace。修完重跑 audit 通過。</li>
+          <li><b>對玩家影響</b>：「喵喵」(MC/SV8) 用「亂抓」+「貓鼬斬」(MC/SV8) 用「連斬」之前都不會走擲幣 logic + 傷害計算。現在兩張都能正常運作。</li>
+          <li><b>IRON_RULES Rule 11e</b>：「Push script 自身寫法 — 一次性 heredoc 不用 Edit 增量」明文化。v5.022 自食其果案例 + 本 session 全程隱性遵守的 cat &gt; /tmp/x.py &lt;&lt;MARKER 寫法寫進規則。順手紀錄 heredoc marker 衝突 trap。</li>
+          <li><b>未來保護</b>：建議把 audit script 接進 GitHub Actions iron-rules-audit.yml pipeline 或 pre-push hook。本次先 standalone <code>python3 scripts/audit-card-names.py</code> 手動跑。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 effects.ts 大檔 + v2760）／<strong>Rule 11e（新加！）</strong>／Rule 14（最小 patch — 2 處錯字 + 1 新 script + 規則文件補章節）／Rule 15（JSON 卡面為 source of truth，對比找出 source 錯字）。Pre-push tsc + Rule 1 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.051</span> 🐛 修 Android 手機版 lobby select 點不開 — 移除預組 toggle 預組永遠顯示</summary>
         <ul>
           <li><b>玩家回報</b>：Android 手機版本機 / 線上兩個 lobby 都遇到 — 勾選「在下拉選單顯示內建預組」checkbox 後，點「選擇牌組」select 完全沒反應 / picker 不彈出。</li>

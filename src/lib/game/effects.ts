@@ -4333,8 +4333,8 @@ regPre('銅鏡怪|盾牌攻擊', coinPlusPre(20, 20, '盾牌攻擊'));
 regPre('一對鼠|嬉鬧', coinPlusPre(10, 10, '嬉鬧'));
 regPre('普隆隆姆|擊飛', coinPlusPre(90, 90, '擊飛'));
 
-// 貓鼠斬｜連斬 — 擲 3 次硬幣，1 正 +20 / 2 正 +50 / 3 正 +80
-regPre('貓鼠斬|連斬', (state, aIdx, _pool) => {
+// 貓鼬斬｜連斬 — 擲 3 次硬幣，1 正 +20 / 2 正 +50 / 3 正 +80
+regPre('貓鼬斬|連斬', (state, aIdx, _pool) => {
   const r = flipCoinsWithLog(state, 3, '連斬', aIdx);
   const bonus = r.heads === 3 ? 80 : r.heads === 2 ? 50 : r.heads === 1 ? 20 : 0;
   const dmg = 10 + bonus;
