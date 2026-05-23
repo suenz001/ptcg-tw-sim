@@ -32,7 +32,51 @@ Inside any `<script>`-less area of `src/routes/**/*.svelte` (the rendered templa
 
 Or use full-width CJK forms: `｛｝＜＞`. Either works.
 
-This rule has been violated in v2.461, v2.733, and v2.82 (each of which required a follow-up patch). When writing a changelog with code-like fragments — generics, type signatures, comparison operators, object literals — assume the parser will choke and escape proactively.
+This rule has been violated in v2.461, v2.733, v2.82, **v5.043 / v5.045** (each of which required a follow-up patch). When writing a changelog with code-like fragments — generics, type signatures, comparison operators, object literals — assume the parser will choke and escape proactively.
+
+**v5.045 教訓 — audit 範圍必須擴大**：
+
+之前 Rule 1 audit 只抓 `<code>` 開頭含 `{` 的 pattern（regex `<code>\{`），漏掉「`<code>` 內部中間含 `{ identifier }`」的情況。v5.043 changelog 寫了 `<code>import { getBenchLimit } from '../../engine'</code>`，Svelte template parser 把 `<code>` 內 `{ getBenchLimit }` 當 simple expression evaluate → runtime ReferenceError → 整個首頁空白。tsc / esbuild / GitHub Actions Iron Rules Audit / Deploy 全部 success — 但 runtime 炸。
+
+**強化 audit regex（pre-push 必跑）**：
+
+```python
+# 抓 <code>...</code> 內部含 simple identifier 包在 { } 的 pattern
+import re
+with open('src/routes/+page.svelte', encoding='utf-8') as f:
+    content = f.read()
+violations = []
+for m in re.finditer(r'<code>([^<]*?)</code>', content):
+    inner = m.group(1)
+    if '`' in inner: continue  # template literal 內合法
+    for cm in re.finditer(r'\{\s*([a-zA-Z]\w*)\s*\}', inner):
+        line_no = content[:m.start() + cm.start()].count('\n') + 1
+        violations.append((line_no, cm.group(1), inner[:80]))
+if violations:
+    for v in violations: print(f'L{v[0]} {{ {v[1]} }} in: {v[2]}')
+    raise SystemExit('Rule 1 violation')
+```
+
+**驗證層次（v5.045 學到）**：
+1. **esbuild build success** ≠ runtime success — esbuild 只做 syntax check
+2. **tsc no errors** ≠ runtime success — tsc 不檢查 .svelte template expression scope
+3. **GitHub Actions Iron Rules Audit success** ≠ runtime success — 只跑 grep
+4. **GitHub Actions Deploy success** ≠ runtime success — build 通過但 hydrate 仍可能炸
+5. **真正驗證**：fetch GitHub Pages 真實 bundle（含 lazy node chunks）grep 危險 pattern `\$\{identifier`
+
+**lazy chunks audit**（push 完必做）：
+
+```bash
+# 找 app entry，挖出 nodes/N.HASH.js（route 編譯 chunk）
+APP=$(curl -sS "https://suenz001.github.io/ptcg-tw-sim/" | grep -oE "_app/immutable/entry/app\.[a-zA-Z0-9_-]+\.js" | head -1)
+NODES=$(curl -sS "https://suenz001.github.io/ptcg-tw-sim/$APP" | grep -oE 'nodes/[0-9]+\.[a-zA-Z0-9_-]+\.js')
+for n in $NODES; do
+  COUNT=$(curl -sS "https://suenz001.github.io/ptcg-tw-sim/_app/immutable/$n" | grep -c '\${[a-zA-Z]')
+  echo "$n: $COUNT dangerous \${identifier} patterns"
+done
+```
+
+任何 `$\{identifier}` 出現 = 潛在 ReferenceError（除非 identifier 真實存在 scope 內）。
 
 ### Rule 2: Don't run `git status`, `git add`, or `git commit` directly
 

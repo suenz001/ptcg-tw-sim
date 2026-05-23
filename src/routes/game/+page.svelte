@@ -8085,7 +8085,21 @@
   }
   .playmat.layout-tabletop .action-bar > .action-btns{
     grid-area:actions; align-self:center; justify-self:center;
-    display:flex; flex-direction:column; gap:3px; max-width:140px;
+    /* v5.046：gap:3 → 2 — 招式按鈕之間近，跨類別按鈕用 margin-top 額外撐開避免誤按 */
+    display:flex; flex-direction:column; gap:2px; max-width:140px;
+  }
+  /* v5.046：桌墊版 action-btns 內按鈕分組間距
+     - 招式（.btn-act.atk）之間 gap:2 (近，同一寶可夢的 2 個招式不誤按)
+     - 跨類別（招式→跳過/stadium/撤退/結束回合/悔棋）→ margin-top:14px 撐開避免誤按 */
+  .playmat.layout-tabletop .action-bar > .action-btns > .btn-act.secondary,
+  .playmat.layout-tabletop .action-bar > .action-btns > .btn-act.stadium-btn,
+  .playmat.layout-tabletop .action-bar > .action-btns > .btn-act.btn-retreat-mirror,
+  .playmat.layout-tabletop .action-bar > .action-btns > .btn-act.btn-undo{
+    margin-top: 14px !important;
+  }
+  /* primary 結束回合 — 跟前面隔開（除非自己是第一個如 setup 階段「準備完成」） */
+  .playmat.layout-tabletop .action-bar > .action-btns > .btn-act.primary:not(:first-child){
+    margin-top: 14px !important;
   }
   .playmat.layout-tabletop .action-bar > .alerts-col{
     /* 跟 actions 同欄但上方堆疊 */
@@ -9256,6 +9270,25 @@
   .zone-bench.bench-extended .bench-slot img {
     max-width: 92px;
     max-height: 110px;
+  }
+
+  /* v5.046：桌墊版下 bench-extended slot 放寬 — 不要縮成一團，利用旁邊空位 */
+  .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot,
+  .playmat.layout-tabletop .zone-bench.bench-extended .bench-empty {
+    flex: 1 1 110px !important;
+    min-width: 100px !important;
+    max-width: 160px !important;
+  }
+  .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot img {
+    max-width: 120px !important;
+    max-height: 145px !important;
+  }
+  /* 桌墊版下 zone-bench 利用整個 grid column 寬度，bench-extended 不再 overflow scroll */
+  .playmat.layout-tabletop .zone-bench.bench-extended {
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    justify-content: center;
+    gap: 4px;
   }
   /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
      避免撐大 zone-bench 把下方手牌擠出 viewport。

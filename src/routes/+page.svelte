@@ -265,6 +265,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.046</span> 🎨 3 項：IRON_RULES Rule 1 audit 強化 + 零之大空洞 bench 伸展 + 桌墊版按鈕分組間距</summary>
+        <ul>
+          <li><b>修法 1 — IRON_RULES.md Rule 1 audit 範圍強化</b>：把 v5.045 教訓寫進規則本身。新 audit regex 抓「<code>&lt;code&gt;</code> 內部中間含 <code>&#123; identifier &#125;</code>」全 pattern（不只開頭）；補充驗證層次說明（esbuild / tsc / Iron Rules Audit / Deploy 全 success 都 ≠ runtime success）；補充 lazy node chunks audit 步驟（從 app entry 挖 chunk hash）。</li>
+          <li><b>修法 2 — 零之大空洞 bench 區寬度伸展</b>：玩家回報桌墊版下零之大空洞 6-8 隻備戰縮成一團、旁邊還有空位卻不用。根因：base CSS <code>.zone-bench.bench-extended .bench-slot</code> max-width:112px 是為非桌墊版 1280×720 等較窄螢幕設計；桌墊版 zoom:0.65 額外縮 65% 後 slot 實際視覺寬度只剩約 73px，跟周邊空間嚴重不協調。修法：桌墊版 scope 補 override — slot max-width 放寬到 160px、min-width:100px、flex-basis:110px；img max-width:120px / max-height:145px；overflow-x 改 visible（不再 scroll，因為 slot 已能自然伸展）；gap:2 → 4。</li>
+          <li><b>修法 3 — 桌墊版按鈕分組間距</b>：玩家回報撤退按鈕跟招式/跳過攻擊距離太近容易誤按。根因：<code>action-btns</code> flex column gap:3px 對所有按鈕一視同仁，沒區分「同類（招式之間）vs 跨類（招式↔跳過↔撤退）」。修法：</li>
+          <li>　・gap 從 3 → 2px（同類招式按鈕之間更近，符合「同寶可夢 2 個招式可以近」需求）</li>
+          <li>　・跨類別按鈕（<code>.btn-act.secondary</code> 跳過攻擊 / <code>.stadium-btn</code> 場地 / <code>.btn-retreat-mirror</code> 撤退 / <code>.btn-undo</code> 悔棋 / 第二個 <code>.primary</code> 結束回合）加 <code>margin-top:14px</code> 撐開避免誤按</li>
+          <li><b>分組邏輯</b>：按鈕按出現順序，招式→跳過→stadium→撤退→結束→悔棋。同類（招式間）2px 近，跨類別 14px 遠。視覺上把功能分成「攻擊區」「輔助動作」「結束/取消」三個 cluster。</li>
+          <li><b>不變</b>：桌機 classic / 手機 portrait 完全不受影響（純 <code>.playmat.layout-tabletop</code> scope）；按鈕本身 size / padding 不動（玩家回報「撤退按鈕太大」其實是因為與旁按鈕距離太近的視覺錯覺，間距拉開後改善）。</li>
+          <li><b>Iron Rules</b>：Rule 1（強化 audit 範圍 + 寫進 IRON_RULES.md）／Rule 11/11c（Python pipeline + tail anchor）／Rule 14（最小 patch — 純 CSS 區塊 + 文件補充，無 logic 改）。Pre-push audit 跑了強化版 regex 通過。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.045</span> 🔥 Hotfix v5.043 — changelog 內 raw 大括號 + getBenchLimit 被 Svelte 當 expression evaluate</summary>
         <ul>
           <li><b>事件</b>：v5.044 build success deploy success，但無痕模式打開仍空白 + Console 顯示 <code>ReferenceError: getBenchLimit is not defined</code>。排除 Service Worker cache 嫌疑後（無痕沒 cache），追蹤 lazy chunk <code>nodes/2.D1e9WO4N.js</code>（root +page.svelte 編譯 chunk），grep 到 34 次 getBenchLimit 字串。</li>
