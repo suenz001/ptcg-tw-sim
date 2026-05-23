@@ -711,7 +711,9 @@
     else below = spaceBelow > spaceAbove;  // 都不夠 — 選空間較大那邊
     let y: number;
     if (below) y = Math.min(rect.bottom + 8, Math.max(8, vh - PH - 8));
-    else y = Math.max(rect.top, PH + 8);  // 上方時：保證 preview top (= y-PH) >= 8
+    // v5.039：上方時 preview top 距 viewport 頂至少 40px（原 8px 太貼頂玩家回報），
+    //         戰鬥場 / 高位 attached 卡都不會切到 viewport 頂緣
+    else y = Math.max(rect.top, PH + 40);  // 上方時：保證 preview top (= y-PH) >= 40
     hoverAttCardId = cardId;
     hoverAttBelow = below;
     hoverAttAnchor = { x: rect.left + rect.width / 2, y };
@@ -8216,23 +8218,23 @@
   .playmat.layout-tabletop .bench-slot .bench-name{
     position:absolute; left:4px; right:4px; top:38%;
     z-index:200; pointer-events:none;
-    /* v5.038：放大 .82 → 1rem + 強化背景對比 — 玩家要求備戰區字更大 */
-    font-size:1rem; font-weight:700; color:#fff;
+    /* v5.038→v5.039：放大 .82 → 1rem → 1.05rem，再大一點點 */
+    font-size:1.05rem; font-weight:700; color:#fff;
     text-align:center; line-height:1.1;
     text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95);
-    background:rgba(0,0,0,.72); border-radius:3px;
+    background:rgba(0,0,0,.75); border-radius:3px;
     padding:1px 3px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .playmat.layout-tabletop .bench-slot .bench-stat{
     position:absolute; left:4px; right:4px; top:calc(38% + 22px);
     z-index:200; pointer-events:none;
-    /* v5.038：放大 .78 → .92rem + padding 加大 + 背景加深 */
-    font-size:.92rem; font-weight:700; color:#cfe;
+    /* v5.038→v5.039：放大 .78 → .92 → 1.1rem (HP 長度有限可大幅放大) */
+    font-size:1.1rem; font-weight:700; color:#cfe;
     text-align:center; line-height:1.15;
     text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95);
-    background:rgba(0,0,0,.78); border-radius:3px;
-    padding:2px 5px;
+    background:rgba(0,0,0,.82); border-radius:3px;
+    padding:2px 6px;
   }
   /* bench hp-bar 仍在 slot 底部、保持 z-index 高（不被 attached 蓋） */
   .playmat.layout-tabletop .bench-slot > .hp-bar-wrap{
@@ -8246,6 +8248,45 @@
     margin-top:.18rem !important;
     border-radius:4px !important;
     font-weight:600;
+  }
+
+  /* === v5.039 戰鬥場特性按鈕釘在名字框下方（緊鄰下邊界） ===
+     原本 .ability-btn 跟著 .active-info 在 active-card 右側 flow 排列 — 桌墊版
+     視覺位置奇怪。改 absolute 釘在 active-card 左側 HP column 下方，跟
+     .active-name-tt (v5.035 設 width:140px, top:100% from hpbar-bottom) 同寬同列，
+     視覺上「在名字框正下方緊接」。
+     top 計算依當前 hpbar-bottom 與 name-tt 預估高度 ~ 88px from active-card top
+     （hpbar top:.5rem 8 + 內容 ~45 + name-tt margin 4 + name-tt height ~28 + gap 3）。 */
+  .playmat.layout-tabletop .active-card{
+    padding-bottom:.9rem !important;  /* 騰 ability-btn 空間 — 沒有 ability 也不影響 */
+  }
+  .playmat.layout-tabletop .active-card .ability-btn{
+    position:absolute;
+    left:.4rem;
+    width:140px;             /* 跟 .active-name-tt 同寬 */
+    top:90px;                /* 緊鄰 name-tt 下方（hpbar 8 + 內容 ~45 + name margin+height ~32 = ~85，+ gap 5） */
+    z-index:60;              /* 高過 active-info(2) + attached cards(50~80)，低於 name-tt(100) */
+    margin:0;                /* 蓋掉 base .ability-btn margin-top:.2rem */
+    padding:.25rem .4rem;
+    font-size:.72rem; font-weight:600;
+    background:#3a1a5a; color:#e0a0ff;
+    border:1px solid #7a4aaa; border-radius:4px;
+    cursor:pointer; text-align:center;
+    box-shadow:0 2px 4px rgba(0,0,0,.4);
+  }
+  .playmat.layout-tabletop .active-card .ability-btn:hover{
+    background:#5a2a8a;
+  }
+
+  /* === v5.039 戰鬥場中線對齊備戰第 3 隻中線 ===
+     根因：active-card padding-left:148px (HP column 140 + gap 8) 造成 card 內 pokemon
+     img 中心比 card 視覺中心偏右 ~74px；card 用 justify-self:center 對齊 grid column
+     中央時，img 中心就偏離 column 中央 74px → 跟 bench 5 隻置中時的第 3 隻中心不一致。
+     修法：對雙方 zone-active 加 transform:translateX(-74px)，把 active 整體往左拉，
+     讓 pokemon img 中心精準對齊 grid column 中央（同 bench 第 3 隻中心）。 */
+  .playmat.layout-tabletop .opponent-row > .zone-active,
+  .playmat.layout-tabletop .my-row > .zone-active{
+    transform:translateX(-74px);
   }
 
   /* === v5.038 拿掉「對手出場」「我的出場」label — 釋出 4 zone 間距空間 ===

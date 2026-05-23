@@ -265,6 +265,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.039</span> 🎨 桌墊版微調 — 備戰字再放大 / 戰鬥特性按鈕 / hover 預覽 / 中線對齊</summary>
+        <ul>
+          <li><b>玩家回報 1</b>：v5.038 把備戰字放大後仍想再大一點點 — bench-name 1rem → 1.05rem。HP 數字長度有限（最多 4-5 字元如「HP 280/280」）可大幅放大 — bench-stat .92rem → 1.1rem，加 padding。</li>
+          <li><b>玩家回報 2</b>：戰鬥場寶可夢的特性按鈕在桌墊版位置不對 — 應該緊鄰在名字框的下邊界。修法：<code>.ability-btn</code> 在 <code>.playmat.layout-tabletop</code> 改 <code>position:absolute</code>，<code>left:.4rem</code> + <code>width:140px</code> 跟 <code>.active-name-tt</code> 同寬同列，<code>top:90px</code> 釘在名字框正下方（hpbar 內容約 53px + name-tt margin+height 約 32px + gap 5px = 90px）。<code>z-index:60</code> 在 active-info(2) + attached(50-80) 之上、name-tt(100) 之下。<code>active-card padding-bottom</code> 從 .45rem → .9rem 騰空間給按鈕。</li>
+          <li><b>玩家回報 3</b>：戰鬥場 hover 預覽切齊 viewport 上邊界看不清。修法：<code>enterAttCard()</code> 內 <code>y = Math.max(rect.top, PH + 8)</code> 改為 <code>PH + 40</code> — preview top 距 viewport 頂至少 40px，戰鬥場 / 高位 attached 卡 hover 都有舒適 padding 不貼頂。</li>
+          <li><b>玩家回報 4</b>：戰鬥場寶可夢應該對齊備戰區 5 隻寶可夢中第 3 隻（中間）的中線，符合實體卡牌排版。根因：<code>active-card padding-left:148px</code>（給 HP column 140 + gap 8）造成 card 內 pokemon img 中心比 card 視覺中心偏右約 74px；card 用 <code>justify-self:center</code> 對齊 grid column 中央時，img 中心就偏離 column 中央 74px。修法：對雙方 <code>.zone-active</code> 加 <code>transform:translateX(-74px)</code>，把 active 整體往左拉，pokemon img 中心精準對齊 grid column 中央（即 bench 第 3 隻中心）。</li>
+          <li><b>不變</b>：桌機 classic / 手機 portrait 完全不受影響（純 <code>.playmat.layout-tabletop</code> scope）；<code>.ability-btn</code> 在其他 layout 維持 flow 渲染；hover preview 在「下方顯示」分支不動（只改上方分支）。</li>
+          <li><b>注意</b>：translateX(-74px) 是依當前 HP column 寬度 140px 估算的近似值；若未來 HP column 寬度再變動，需相應調整偏移量（公式：offset ≈ -(padding-left + content_offset)/2，目前 ≈ -148/2 ≈ -74）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte 大檔，tail anchor + style 對稱驗）／Rule 14（純 CSS 區塊新增 + 1 行 JS 數值改）／Rule 1（changelog 文字無 raw 符號 — code tag 內全形或 HTML entity）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.038</span> 🎨 桌墊版 5 項調整 — 血條對齊名字、備戰字放大、疊牌動態密度、拿掉 zone 標籤</summary>
         <ul>
           <li><b>玩家回報</b>：桌墊版 5 個視覺優化要求 — 戰鬥場血條比名字框窄看起來不對齊；備戰區字 / HP / 特性按鈕字偏小；疊太多附加卡會把備戰區拉太長；「對手出場」「我的出場」字是冗餘提示（跟實體配置一致玩家一看就懂），佔上下空間造成 4 zone 間距不平均。</li>
