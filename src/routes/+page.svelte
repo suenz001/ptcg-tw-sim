@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.029</span> 🎨 桌墊版 — hover 不再彈出 z-index + 附加卡可點開 zoom 詳情</summary>
+        <ul>
+          <li><b>hover 不再彈出</b>：移除 <code>.att-card:hover z-index:80</code>。原因：能量是疊牌的最外層（z 較低），hover 跳到 z=80 看起來像「能量蓋住其他卡」；進化鏈本來 z 就高，視覺差異小。為一致改成都不調 z-index，hover 純粹亮邊 + 黃光，stacking 維持。</li>
+          <li><b>附加卡可點開詳情</b>：每張 <code>.att-card</code>（能量 / 道具 / 進化堆）加 <code>onclick</code> 觸發 <code>openZoom(cardId)</code>，被疊在底下的卡可以點開看完整卡面，與點寶可夢圖一致。</li>
+          <li><b>不變</b>：hover 預覽（v5.026/v5.027/v5.028）、Pokemon img onclick zoom、其他疊牌邏輯。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c/11d（Python pipeline）／Rule 14（純 CSS 改動 + 4 處 inline onclick）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.028</span> 🎨 桌墊版 — 寶可夢 hover 預覽 + 疊牌新順序 + bench 名稱頂層 + 預覽雙向 clamp + 卡片亮邊</summary>
         <ul>
           <li><b>寶可夢圖 hover 預覽</b>：active 和 bench 寶可夢圖也綁 enterAttCard，hover 顯示原寸大圖（最上層的那張牌不再是死的）。</li>

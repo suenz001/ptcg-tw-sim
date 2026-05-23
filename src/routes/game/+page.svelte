@@ -5587,7 +5587,7 @@
                     {@const _attOB = attachedCardsOf(b)}
                     {#if _attOB.length > 0}
                       <div class="att-card-stack">
-                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                       </div>
                     {/if}
                   {/if}
@@ -5643,7 +5643,7 @@
                 {@const _attOA = attachedCardsOf(oppPlayer.active)}
                 {#if _attOA.length > 0}
                   <div class="att-card-stack">
-                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                   </div>
                 {/if}
               {/if}
@@ -5919,7 +5919,7 @@
               {@const _attMA = attachedCardsOf(myPlayer.active)}
               {#if _attMA.length > 0}
                 <div class="att-card-stack">
-                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                 </div>
               {/if}
             {/if}
@@ -6008,7 +6008,7 @@
                   {@const _attMB = attachedCardsOf(b)}
                   {#if _attMB.length > 0}
                     <div class="att-card-stack">
-                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                     </div>
                   {/if}
                 {/if}
@@ -8213,11 +8213,13 @@
     position:relative; z-index:200;
   }
 
-  /* === v5.028 hover 高亮 — 卡片外框亮 + 微微放大 + 升 z-index === */
+  /* === v5.029 hover 高亮 — 只亮邊 + 發光，不再改 z-index === */
+  /* 玩家反映：原本 z-index:80 讓能量（最外側 z 較低的卡）hover 時跳到最前面、
+     覆蓋上層內容；進化鏈本來 z 就高所以視覺差異小。為一致改成都不調 z-index，
+     hover 僅用亮邊 + 黃光，原 stacking 維持不變。 */
   .playmat.layout-tabletop .att-card:hover{
     border-color:#ffd44a !important;
     box-shadow:0 0 14px rgba(255,212,74,.9), 0 2px 6px rgba(0,0,0,.6);
-    z-index:80 !important;  /* 浮到所有 attached 之上（但仍低於 Pokemon z=99） */
     transition:border-color .12s, box-shadow .12s;
   }
   /* Pokemon 圖 hover 亮邊（active + bench） */
