@@ -40,7 +40,8 @@
     getEffectiveAttacks, getAvailableAttacks, getEvolvableTargets, getPlayableTrainers,
     getPlayableBasics, getPlayableFossils, getUsableAbilities,
     canRetreat as engineCanRetreat, getRetreatCost, getBenchLimit,
-    getEffectiveHP
+    getEffectiveHP,
+    canBeInitialActiveCard
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   // v3.02：log 著色 + 卡名可點連結
@@ -344,10 +345,6 @@
     if (isBasicMon(c)) {
       const canPlayBasic = playableBasicIids.has(iid) || (isSetup && !myPlayer.active);
       // v3.64：用 myBenchLimit（已 derive 自 getBenchLimit）取代 hardcoded 5
-      //   零之大空洞 + 太晶寶可夢時上限 8；舊邏輯卡在 5，導致延伸位置（6/7/8）
-      //   雖然有畫出格子但 hand action sheet 不顯示「放到備戰區」按鈕。
-      //   playableBasicIids 由 engine getPlayableBasics 計算（已正確套用 getBenchLimit），
-      //   playing 階段走那條 path 沒問題；setup 階段這裡 hardcode 5 是 bug。
       const canPlayBench = (isSetup && myPlayer.bench.length < myBenchLimit) || playableBasicIids.has(iid);
       if (canPlayBasic && !myPlayer.active) {
         out.push({ label: '🃏 放到戰鬥場', action: () => playBasicToActive(iid), primary: true });
@@ -355,6 +352,10 @@
       if (canPlayBench && myPlayer.bench.length < myBenchLimit) {
         out.push({ label: '📥 放到備戰區', action: () => playBasicToBench(iid) });
       }
+    } else if (isSetup && !myPlayer.active && c && canBeInitialActiveCard(c)) {
+      // v5.031 閃焰王牌｜瞬間爆發力 — 起手 setup 階段無 active 時，非基礎也可放戰鬥場（卡面特性）
+      //   官方 Q&A：手牌只有閃焰王牌時，可因「瞬間爆發力」放於戰鬥場開始對戰
+      out.push({ label: '🃏 放到戰鬥場（瞬間爆發力）', action: () => playBasicToActive(iid), primary: true });
     }
     // 化石 Item
     if (playableFossilIids.has(iid)) {
@@ -882,7 +883,9 @@
           playableTrainerIids.has(inst.iid) || playableFossilIids.has(inst.iid) ||
           (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection) ||
           /* v2.287 修：setup 階段基礎寶可夢可放（不分先後手） */
-          (isSetup && !game.setupDone[myIdx] && isBasicMon(c) && (!myPlayer.active || myPlayer.bench.length < myBenchLimit))
+          (isSetup && !game.setupDone[myIdx] && isBasicMon(c) && (!myPlayer.active || myPlayer.bench.length < myBenchLimit)) ||
+          /* v5.031：setup 階段「瞬間爆發力」類非基礎卡（閃焰王牌）— 無 active 時可放戰鬥場 */
+          (isSetup && !game.setupDone[myIdx] && !myPlayer.active && !!c && canBeInitialActiveCard(c) && !isBasicMon(c))
         )}
         {@const isPlayableTrainer = playableTrainerIids.has(inst.iid) && !!c && (c.supertype === 'Trainer')}
         <button class="mp-hand-card" class:mp-playable={playable} onclick={() => tapHand(inst)} title={c?.name}>

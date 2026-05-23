@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.031</span> 🔧 修閃焰王牌｜瞬間爆發力 — 手機版 setup 階段無法放戰鬥場</summary>
+        <ul>
+          <li><b>玩家回報</b>：擁有「瞬間爆發力」特性的閃焰王牌，依官方 Q&amp;A 應該能在 setup 階段（手牌沒基礎寶可夢時）放上戰鬥場，但實際無法。</li>
+          <li><b>根因</b>：手機 portrait 版 (MobilePortraitBattle.svelte) 的 <code>isBasicMon</code> 嚴格定義為「supertype===Pokemon AND !evolvesFrom」，閃焰王牌是 Stage 2（有 evolvesFrom 騰蹴小將）→ 「放戰鬥場 / 放備戰」選項根本不出現，玩家點不到。桌機版有 <code>canSetupActiveSpecial</code> 例外，沒這問題。</li>
+          <li><b>修法</b>：手機版 <code>handActions</code> 加 <code>else if</code> 分支處理「setup + 無 active + canBeInitialActiveCard」狀況，顯示「🃏 放到戰鬥場（瞬間爆發力）」按鈕；同步補 hand-card 的 <code>playable</code> highlight。</li>
+          <li><b>不變</b>：engine 端 <code>canBeInitialActiveCard</code>（已實裝 v2.42）+ 桌機版 <code>canSetupActiveSpecial</code>（已實裝）— 兩處都正確支援；只是手機版漏改。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline — MobilePortraitBattle 是中型檔）／Rule 14（最小 patch — 加 else-if + import）／Rule 15（JSON M1L 13974 卡面 + 官方 Q&amp;A 為 source of truth）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.030</span> 🎨 桌墊版 — bench 名稱+HP 改疊在 Pokémon 圖上，釋出上方空間給 attached 卡 hover</summary>
         <ul>
           <li><b>問題</b>：v5.028 把 bench-name / bench-stat 留在 slot 頂部加 <code>z-index:200</code>，雖然視覺上不被 attached 卡蓋，但占據了 slot 頂部區，attached 卡在那裡 hover 事件被 name/stat 區擋住，玩家無法 hover 預覽。</li>
