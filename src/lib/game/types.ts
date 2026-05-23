@@ -346,6 +346,17 @@ export type SpecialCondition =
 
 export interface PlayerState {
   name: string;
+  /**
+   * v5.055：對手回合動作 panel — 記錄此玩家「本回合做了哪些動作」buffer。
+   * END_TURN 時搬到 turnActionsLog，currentTurnActions 清空。
+   */
+  currentTurnActions?: ActionRecord[];
+  /**
+   * v5.055：對手回合動作 panel — 歷史回合動作紀錄（保留最近 5 回合）。
+   * UI 從這 array 讀取顯示「對手上 1/2/3/4/5 回合做了什麼」。
+   * Rule 13 safe：array 元素是 TurnActionLog (object)，不是 array of array。
+   */
+  turnActionsLog?: TurnActionLog[];
   /** 手牌區（未出場） */
   hand: CardInstance[];
   /** 牌組（隨機排序，頂部 = index 0） */
@@ -913,4 +924,21 @@ export interface EffectScript {
     actorIndex: 0 | 1,
     params?: Record<string, unknown>
   ) => GameState;
+}
+
+// v5.055：對手回合動作 panel 用的資料結構（Rule 13 nested array safe）
+export interface ActionRecord {
+  /** 動作類型 */
+  type: 'play_hand' | 'attack' | 'retreat' | 'use_ability';
+  /** 卡片 cardId — UI 抓 imageUrl 用 */
+  cardId: string;
+  /** 補強說明：attack→招式名 / retreat→換誰上場 / use_ability→特性名 */
+  extra?: string;
+}
+
+export interface TurnActionLog {
+  /** 該回合編號（state.turn 當時的值） */
+  turn: number;
+  /** 該回合按序執行的所有 ActionRecord */
+  actions: ActionRecord[];
 }

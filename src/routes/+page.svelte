@@ -265,6 +265,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.055</span> 🎴 新功能：對手回合動作 panel（MVP）— 浮動按鈕點開看對手最近 5 回合做了什麼</summary>
+        <ul>
+          <li><b>玩家建議</b>：對戰中希望提供簡潔資訊欄顯示對手上回合出的卡片順序（純卡圖），玩家上廁所回來就能快速知道對手做了什麼，不必去讀複雜 log。</li>
+          <li><b>UI</b>：右下角浮動圓形按鈕 📜（chat-toggle 上方），點開後 360×460 浮動 panel 仿 chat-panel 樣式（可拖曳 / mobile 全螢幕 modal）。Panel 含翻頁按鈕（◀ 看更早 / ▶ 看更新）+ 卡圖 grid + 文字補強（attack 顯示「⚔️ 招式名」、retreat「🔄 撤退 → 新 active」、use_ability「✨ 特性名」）。</li>
+          <li><b>記錄範圍 MVP 7 類</b>：PLAY_TRAINER / ATTACH_ENERGY / PLAY_BASIC / EVOLVE / ATTACK / RETREAT / USE_ABILITY。次要動作（化石丟棄 / 抽牌 / 自動結算）不記錄保持簡潔。</li>
+          <li><b>記錄機制</b>：<code>applyAction</code> wrapper 末尾加 <code>recordTurnAction(before, after, action, pool)</code> helper — 比對 before/after 後依 action.type 自動 push ActionRecord 到 <code>player.currentTurnActions</code> buffer。回合切換時 <code>maybePushTurnLog</code> 自動搬到 <code>turnActionsLog</code>（保留最近 5 回合）。</li>
+          <li><b>資料結構 (Rule 13 nested array safe)</b>：<code>turnActionsLog: TurnActionLog[]</code> 元素是 object（非 array），<code>actions: ActionRecord[]</code> 是 object 內的 array — Firestore 序列化合法。</li>
+          <li><b>體積</b>：每回合 ~8 ActionRecord × 50 bytes × 5 回合 × 2 玩家 = 4KB，遠低 Firestore 1MB 上限。線上對戰 / 觀戰透過既有 <code>pushGameState</code> 自動同步。</li>
+          <li><b>Gate (Rule 9)</b>：toggle 只在 <code>game.phase === &apos;playing&apos;</code> + <code>oppPlayer.turnActionsLog.length &gt; 0</code> 才顯示（首回合不擋玩家）。</li>
+          <li><b>不影響</b>：對戰 log 既有功能保留；AI 決策不變；本機 + 線上 + 觀戰都自動 work。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 11e（Write tool 寫 patch）／Rule 13（array of object 結構）／Rule 12（無循環依賴）／Rule 14（一個版本 push 完整 feature）／Rule 15（卡圖用 <code>pool.get(cardId)?.imageUrl</code>）／Rule 9（toggle gate）／Rule 1（changelog audit）／Rule 4（tsc + Rule 1 + 卡名 audit + Step A/B）。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.054</span> 🧹 Admin 後台拿掉 3 處 hard limit 300 — Oracle 主機沒額度限制不需要</summary>
+        <ul>
+          <li><b>玩家回報</b>：admin 後台 Oracle 對戰紀錄只顯示最新 300 個。之前用 Firebase 怕資料量太大設了上限，現在搬到 Oracle 主機應該拿掉。</li>
+          <li><b>3 處 server hard limit 拿掉</b>：(1) <code>server_admin_patch.js:354</code> Oracle rooms 列表 limit 300 → 無上限；(2) <code>server_admin_patch.js:427</code> Firebase rooms 列表 limit 300 → 無上限（admin server-side firebase-admin SDK 不吃 client quota）；(3) <code>server_admin_patch.js:689</code> matchRecords endpoint default 300 → 無 default 上限（client 仍 pagination limit=50）。</li>
+          <li><b>保留</b>：messages limit 500 / Firestore batch delete limit 400（硬性 500 ops 限制）/ admin.html slice(0, N) Top N 統計 UI 設計。</li>
+          <li><b>版本</b>：server_admin_patch v0.19 → v0.20、admin.html v0.90 → v0.91。<strong>需跑 oracle-admin/update-admin-full.bat</strong> 部署到 Oracle VM。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c、Rule 14、Rule 11e。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v5.053</span> 🔧 修寶可裝置3.0 Rule 8 揭示資訊違規 — 對戰 log 補揭示對方選中的支援者卡名</summary>
         <ul>
           <li><b>玩家回報</b>：對手使用寶可裝置3.0 後，對戰 log 看不到對方選擇了哪一張卡。</li>

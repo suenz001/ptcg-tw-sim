@@ -252,6 +252,35 @@
   //   chatPanelPos: 拖曳偏移（桌機）— mobile portrait 走 CSS 全螢幕 modal 樣式忽略此值
   //   lastSeenChatCount: 已看到的訊息數，差額即為未讀
   let chatPanelOpen = $state(false);
+
+  // v5.055：對手回合動作 panel — 仿 chat-panel pattern
+  //   oppTurnPanelOpen: 是否展開
+  //   oppTurnPanelPos: 拖曳位置 offset
+  //   oppTurnViewIndex: 從 turnActionsLog 末尾算回去看哪一回合 (0=上1回合, 1=上2回合...)
+  let oppTurnPanelOpen = $state(false);
+  let oppTurnPanelPos = $state({ x: 0, y: 0 });
+  let oppTurnViewIndex = $state(0);  // 0 = 最新 (上一回合)
+
+  // v5.055：對手回合 panel 拖曳 handler
+  let oppTurnDragStart: { x: number; y: number; panelX: number; panelY: number } | null = null;
+  function onOppTurnDragStart(e: PointerEvent) {
+    oppTurnDragStart = {
+      x: e.clientX, y: e.clientY,
+      panelX: oppTurnPanelPos.x, panelY: oppTurnPanelPos.y,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function onOppTurnDragMove(e: PointerEvent) {
+    if (!oppTurnDragStart) return;
+    oppTurnPanelPos = {
+      x: oppTurnDragStart.panelX + (e.clientX - oppTurnDragStart.x),
+      y: oppTurnDragStart.panelY + (e.clientY - oppTurnDragStart.y),
+    };
+  }
+  function onOppTurnDragEnd(e: PointerEvent) {
+    oppTurnDragStart = null;
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+  }
   let chatPanelPos = $state({ x: 0, y: 0 });
   let chatPanelDragStart: { mx: number; my: number; ox: number; oy: number } | null = null;
   let lastSeenChatCount = $state(0);
@@ -7204,6 +7233,70 @@
   <!-- v3.97 對戰中聊天室（floating panel + 手機 modal）─────────────────────── -->
   <!-- 只在連線模式 + 已進入 game（避開 lobby — lobby 已有 chat-area） -->
   {#if mode === 'online' && game && roomCode}
+    <!-- v5.055：對手回合動作 panel — toggle 按鈕 -->
+    {#if game?.phase === 'playing'
+         && (oppPlayer?.turnActionsLog?.length ?? 0) > 0
+         && !oppTurnPanelOpen}
+      <button class="opp-turn-toggle-btn" onclick={() => { oppTurnPanelOpen = true; oppTurnViewIndex = 0; }}
+        title="查看對手上回合動作">📜</button>
+    {/if}
+
+    <!-- v5.055：對手回合動作 panel 主體 -->
+    {#if oppTurnPanelOpen && oppPlayer}
+      {@const _log = oppPlayer.turnActionsLog ?? []}
+      {@const _maxIdx = Math.max(0, _log.length - 1)}
+      {@const _safeIdx = Math.min(oppTurnViewIndex, _maxIdx)}
+      {@const _currentEntry = _log.length > 0 ? _log[_log.length - 1 - _safeIdx] : null}
+      <div class="opp-turn-panel" style:transform={`translate(${oppTurnPanelPos.x}px, ${oppTurnPanelPos.y}px)`}>
+        <div class="opp-turn-panel-header"
+          onpointerdown={onOppTurnDragStart}
+          onpointermove={onOppTurnDragMove}
+          onpointerup={onOppTurnDragEnd}>
+          <span class="opp-turn-panel-title">
+            <button class="opp-turn-nav-btn" disabled={_safeIdx >= _maxIdx}
+              onclick={() => { oppTurnViewIndex = Math.min(_maxIdx, oppTurnViewIndex + 1); }}
+              title="看更早的回合">◀</button>
+            <span class="opp-turn-title-text">
+              📜 對手回合 {_currentEntry?.turn ?? '?'}
+              <span class="opp-turn-title-sub">（上 {_safeIdx + 1} 回合前）</span>
+            </span>
+            <button class="opp-turn-nav-btn" disabled={_safeIdx <= 0}
+              onclick={() => { oppTurnViewIndex = Math.max(0, oppTurnViewIndex - 1); }}
+              title="看更新的回合">▶</button>
+          </span>
+          <button class="opp-turn-panel-close"
+            onpointerdown={(e) => e.stopPropagation()}
+            onclick={() => oppTurnPanelOpen = false} aria-label="關閉">✕</button>
+        </div>
+        <div class="opp-turn-panel-body">
+          {#if _currentEntry && _currentEntry.actions.length > 0}
+            <div class="opp-turn-actions-grid">
+              {#each _currentEntry.actions as act}
+                {@const _c = getCard(act.cardId)}
+                <div class="opp-turn-action-item" title={(_c?.name ?? '?') + (act.extra ? ' / ' + act.extra : '')}>
+                  {#if _c?.imageUrl}
+                    <img class="opp-turn-card-img" src={_c.imageUrl} alt={_c?.name ?? '?'}
+                      onclick={() => openZoom(act.cardId, null)} />
+                  {:else}
+                    <div class="opp-turn-card-placeholder">?</div>
+                  {/if}
+                  {#if act.type === 'attack'}
+                    <div class="opp-turn-action-label attack">⚔️ {act.extra ?? '招式'}</div>
+                  {:else if act.type === 'retreat'}
+                    <div class="opp-turn-action-label retreat">🔄 撤退{act.extra ?? ''}</div>
+                  {:else if act.type === 'use_ability'}
+                    <div class="opp-turn-action-label ability">✨ {act.extra ?? '特性'}</div>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <div class="opp-turn-empty">（此回合無記錄）</div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+
     {#if !chatPanelOpen}
       <!-- v3.98 收合：圓形按鈕可拖曳（pointer events 區分 click vs drag）-->
       <button class="chat-fab"
@@ -8615,6 +8708,116 @@
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 2px 4px rgba(0,0,0,.3);
   }
+  /* v5.055：對手回合動作 panel — 仿 .chat-panel 樣式 */
+  .opp-turn-toggle-btn {
+    position: fixed; right: 18px; bottom: 80px; z-index: 8990;
+    width: 48px; height: 48px; border-radius: 50%;
+    background: #3a3a5a; color: #ffcc66;
+    border: 2px solid #5a5a7a;
+    font-size: 22px; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,.45);
+    transition: background .15s, transform .1s;
+  }
+  .opp-turn-toggle-btn:hover { background: #4a4a7a; transform: translateY(-2px); }
+  .opp-turn-toggle-btn:active { transform: translateY(0); }
+
+  .opp-turn-panel {
+    position: fixed; right: 18px; bottom: 80px; z-index: 9001;
+    width: 360px; max-height: 460px;
+    background: #1a1a24; border: 2px solid #5a4a7a; border-radius: 10px;
+    display: flex; flex-direction: column;
+    box-shadow: 0 6px 24px rgba(0,0,0,.5);
+    overflow: hidden;
+  }
+  .opp-turn-panel-header {
+    background: #2a253a; padding: .55rem .55rem .55rem .85rem;
+    font-size: .85rem; font-weight: 600; color: #ddccff;
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: move; user-select: none; touch-action: none;
+    border-bottom: 1px solid #4a3a5a;
+  }
+  .opp-turn-panel-title {
+    display: flex; align-items: center; gap: 6px;
+    flex: 1; min-width: 0;
+  }
+  .opp-turn-title-text { flex: 1; text-align: center; }
+  .opp-turn-title-sub { font-size: .72rem; color: #aa99cc; font-weight: 400; }
+  .opp-turn-nav-btn {
+    background: rgba(255,255,255,.08); border: 1px solid #5a4a7a;
+    color: #ccddff; width: 24px; height: 24px; border-radius: 4px;
+    cursor: pointer; font-size: .8rem; flex-shrink: 0;
+    transition: background .15s;
+  }
+  .opp-turn-nav-btn:hover:not(:disabled) { background: rgba(255,255,255,.18); }
+  .opp-turn-nav-btn:disabled { opacity: .3; cursor: not-allowed; }
+  .opp-turn-panel-close {
+    background: none; border: none; color: #aaa;
+    font-size: 1.2rem; cursor: pointer; padding: 0 .3rem;
+    flex-shrink: 0;
+  }
+  .opp-turn-panel-close:hover { color: #fff; }
+
+  .opp-turn-panel-body {
+    flex: 1; overflow-y: auto;
+    padding: .6rem;
+    background: #15151f;
+  }
+  .opp-turn-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: .4rem;
+  }
+  .opp-turn-action-item {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 2px;
+  }
+  .opp-turn-card-img {
+    width: 100%; max-width: 80px;
+    border-radius: 4px; cursor: zoom-in;
+    transition: transform .12s;
+    border: 1px solid #3a3a4a;
+  }
+  .opp-turn-card-img:hover {
+    transform: scale(1.06);
+    border-color: #aa88ff;
+  }
+  .opp-turn-card-placeholder {
+    width: 80px; height: 112px;
+    background: #2a2a3a; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    color: #555; font-size: 1.5rem;
+  }
+  .opp-turn-action-label {
+    font-size: .65rem; text-align: center;
+    padding: 1px 4px; border-radius: 3px;
+    line-height: 1.2;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .opp-turn-action-label.attack { background: rgba(180,80,80,.35); color: #ffccaa; }
+  .opp-turn-action-label.retreat { background: rgba(180,140,60,.35); color: #ffe0aa; }
+  .opp-turn-action-label.ability { background: rgba(120,80,200,.35); color: #ddccff; }
+
+  .opp-turn-empty {
+    text-align: center; padding: 1.5rem .5rem;
+    color: #777; font-size: .85rem;
+  }
+
+  /* Mobile RWD — 全螢幕 modal */
+  @media (max-width: 600px) and (orientation: portrait) {
+    .opp-turn-toggle-btn {
+      right: 2.5vw; bottom: max(env(safe-area-inset-bottom, 12px) + 60px, 70px);
+    }
+    .opp-turn-panel {
+      right: 2.5vw; left: 2.5vw;
+      top: max(env(safe-area-inset-top, 20px), 40px);
+      bottom: max(env(safe-area-inset-bottom, 12px), 12px);
+      width: auto; height: auto;
+      max-height: 80vh;
+      transform: none !important;
+    }
+    .opp-turn-panel-header { cursor: default; }
+  }
+
   .chat-panel {
     position: fixed; right: 18px; bottom: 18px; z-index: 9000;
     width: 350px; height: 450px;

@@ -11,8 +11,7 @@
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
 import type {
   GameState, GameAction, CardInstance,
-  PlayerState, LogEntry, TurnPhase, GamePhase
-} from './types';
+  PlayerState, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
 import { RULE_BOX_SUBTYPES } from './types';
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
@@ -148,6 +147,127 @@ export function getBenchLimit(state: GameState, idx: 0 | 1, pool: Map<string, Ca
   const all = [player.active, ...player.bench].filter((c): c is CardInstance => !!c);
   const hasTera = all.some(c => pool.get(c.cardId)?.tags?.includes('太晶'));
   return hasTera ? 8 : 5;
+}
+
+/**
+ * v5.055：透過 iid 在 player 的所有 zone（hand/active/bench/discard/deck）找對應 CardInstance，
+ * 回傳 cardId 給對手回合動作 panel 用。找不到回 null（不應該發生，但 safety net）。
+ */
+function findCardIdByIid(state: GameState, idx: 0 | 1, iid: string | undefined | null): string | null {
+  if (!iid) return null;
+  const p = state.players[idx];
+  const all: CardInstance[] = [
+    ...(p.hand ?? []),
+    ...(p.active ? [p.active] : []),
+    ...(p.bench ?? []),
+    ...(p.discard ?? []),
+    ...(p.deck ?? []),
+    ...(p.prizes ?? []),
+  ];
+  return all.find(c => c.iid === iid)?.cardId ?? null;
+}
+
+/**
+ * v5.055：把單一 ActionRecord push 到 player.currentTurnActions buffer。
+ * 不可變 — 回傳新 state（GameState 是 immutable）。
+ */
+function pushCurrentTurnAction(state: GameState, idx: 0 | 1, rec: ActionRecord): GameState {
+  if (!rec.cardId) return state;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const p = players[idx];
+  players[idx] = {
+    ...p,
+    currentTurnActions: [...(p.currentTurnActions ?? []), rec],
+  };
+  return { ...state, players };
+}
+
+/**
+ * v5.055：applyAction wrapper — 比對 before/after state，依 action.type 自動 push
+ * 對應的 ActionRecord 到 currentTurnActions。只記錄 7 類玩家主動動作（MVP scope）。
+ * Rule 9（特性 gate）: 只在 phase === 'playing' 且 state 真的變了才記錄。
+ */
+function recordTurnAction(
+  before: GameState,
+  after: GameState,
+  action: GameAction,
+  pool: Map<string, Card>,
+): GameState {
+  // state 沒變 = action failed / gate 擋住 → 不記錄
+  if (before === after) return after;
+  if (after.phase !== 'playing') return after;
+  const aIdx = before.activePlayerIndex;
+
+  let rec: ActionRecord | null = null;
+
+  if (action.type === 'PLAY_TRAINER') {
+    const cardId = findCardIdByIid(before, aIdx, action.iid);
+    if (cardId) rec = { type: 'play_hand', cardId };
+  } else if (action.type === 'ATTACH_ENERGY') {
+    // 只在能量是從手牌附時記錄（其他來源如「能量回收」走 resolver 不算此路徑）
+    const inHand = (before.players[aIdx].hand ?? []).some(c => c.iid === action.energyIid);
+    if (inHand) {
+      const cardId = findCardIdByIid(before, aIdx, action.energyIid);
+      if (cardId) rec = { type: 'play_hand', cardId };
+    }
+  } else if (action.type === 'PLAY_BASIC') {
+    const cardId = findCardIdByIid(before, aIdx, action.iid);
+    if (cardId) rec = { type: 'play_hand', cardId };
+  } else if (action.type === 'EVOLVE') {
+    // 進化卡是 toIid（手牌內進化卡）
+    const cardId = findCardIdByIid(before, aIdx, action.toIid);
+    if (cardId) rec = { type: 'play_hand', cardId };
+  } else if (action.type === 'ATTACK') {
+    const active = before.players[aIdx].active;
+    if (active) {
+      const card = pool.get(active.cardId);
+      const atkName = card?.attacks?.[action.attackIndex]?.name;
+      rec = { type: 'attack', cardId: active.cardId, extra: atkName };
+    }
+  } else if (action.type === 'RETREAT') {
+    const oldActive = before.players[aIdx].active;
+    if (oldActive) {
+      const newActiveInst = (before.players[aIdx].bench ?? []).find(c => c.iid === action.newActiveIid);
+      const newActiveName = newActiveInst ? pool.get(newActiveInst.cardId)?.name : undefined;
+      rec = {
+        type: 'retreat',
+        cardId: oldActive.cardId,
+        extra: newActiveName ? `→ ${newActiveName}` : undefined,
+      };
+    }
+  } else if (action.type === 'USE_ABILITY') {
+    const cardId = findCardIdByIid(before, aIdx, action.iid);
+    if (cardId) {
+      const card = pool.get(cardId);
+      const abName = card?.abilities?.[action.abilityIndex]?.name;
+      rec = { type: 'use_ability', cardId, extra: abName };
+    }
+  }
+
+  if (!rec) return after;
+  return pushCurrentTurnAction(after, aIdx, rec);
+}
+
+/**
+ * v5.055：state.turn 切換時把雙方 currentTurnActions 搬到 turnActionsLog（保留近 5 回合）。
+ * 在 applyAction wrapper 末尾呼叫，自動偵測 before.turn !== after.turn 才觸發。
+ */
+function maybePushTurnLog(before: GameState, after: GameState): GameState {
+  if (before.turn === after.turn) return after;
+  // 回合切換了 — 把雙方 currentTurnActions 搬到 turnActionsLog
+  const players = [...after.players] as [PlayerState, PlayerState];
+  for (const idx of [0, 1] as const) {
+    const p = players[idx];
+    const current = p.currentTurnActions ?? [];
+    if (current.length === 0) continue;
+    const history = (p.turnActionsLog ?? []).slice(-4);  // 保留最近 4 回合，加新 1 = 5 回合
+    players[idx] = {
+      ...p,
+      turnActionsLog: [...history, { turn: before.turn, actions: current }],
+      currentTurnActions: [],
+    };
+  }
+  return { ...after, players };
 }
 
 // 當零之大空洞被換掉/失去太晶時，玩家的備戰上限掉回 5；超出的部分要由玩家自選棄置。
@@ -6407,6 +6527,11 @@ export function applyAction(
 
   // v4.43：偵測寶可夢 damage 減少 → 標記 healedThisTurn（用於活潑鮮花 / 活潑針等條件）
   next = markHealsByDamageDecrease(state, next);
+
+  // v5.055：對手回合動作 panel — 比對 before/after 後 push 對應 ActionRecord
+  next = recordTurnAction(state, next, action, pool);
+  // v5.055：回合切換時把 currentTurnActions 搬到 turnActionsLog（歷史紀錄保留 5 回合）
+  next = maybePushTurnLog(state, next);
 
   // v4.47 P2：花之帷幔 attack-time snapshot 跨 deferred picker 後的最終清理
   //   若 RESOLVE_SELECTION 完成且 pending 已消，但 snapshot 仍殘留（attack 結束邏輯沒進）→ wrapper 統一清
