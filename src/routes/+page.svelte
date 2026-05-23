@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.056</span> 🐛 修對手回合 panel 慢一回合 — 改用 activePlayerIndex 偵測切換</summary>
+        <ul>
+          <li><b>玩家回報</b>：自己的回合結束才看到對手的上回合動作，慢了一回合。應該是自己回合期間就能看到對手剛剛做了什麼。</li>
+          <li><b>根因</b>：v5.055 <code>maybePushTurnLog</code> 用 <code>before.turn !== after.turn</code> 偵測切換 — 但 PTCG 規則裡 <code>state.turn</code> 是「整個 round」概念（先攻+後攻各 1 回合 = <code>state.turn</code> 1），雙方輪一次才 +1。所以對手 END_TURN 時 turn 沒變，我方做動作期間對手的 <code>currentTurnActions</code> 還沒搬到 <code>turnActionsLog</code> → 我方看不到。直到我方 END_TURN 才一起搬，但這時對手又開始新一回合了。</li>
+          <li><b>修法</b>：改用 <code>before.activePlayerIndex !== after.activePlayerIndex</code> 偵測「單一玩家回合切換」(每次 END_TURN 都觸發)。同時只搬「剛結束玩家」(<code>endedIdx = before.activePlayerIndex</code>) 的 <code>currentTurnActions</code>，不動我方的 buffer。</li>
+          <li><b>修後正確時序</b>：對手 END_TURN → activePlayerIndex 切到我方 → maybePushTurnLog trigger → 對手 currentTurnActions 搬到 turnActionsLog → 我方 panel 立刻能看到對手剛剛的動作 ✓</li>
+          <li><b>不變</b>：保留近 5 回合歷史、體積估算、Firestore 同步等都不變；只是 push 時機從「state.turn 變」改成「activePlayerIndex 變」更精準。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 engine.ts 大檔）／Rule 14（最小 patch — 純 helper function 內部邏輯改）／Rule 11e（Write tool 寫 patch）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.055</span> 🎴 新功能：對手回合動作 panel（MVP）— 浮動按鈕點開看對手最近 5 回合做了什麼</summary>
         <ul>
           <li><b>玩家建議</b>：對戰中希望提供簡潔資訊欄顯示對手上回合出的卡片順序（純卡圖），玩家上廁所回來就能快速知道對手做了什麼，不必去讀複雜 log。</li>

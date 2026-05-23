@@ -249,24 +249,31 @@ function recordTurnAction(
 }
 
 /**
- * v5.055：state.turn 切換時把雙方 currentTurnActions 搬到 turnActionsLog（保留近 5 回合）。
- * 在 applyAction wrapper 末尾呼叫，自動偵測 before.turn !== after.turn 才觸發。
+ * v5.055→v5.056：activePlayerIndex 切換時把「剛結束玩家」的 currentTurnActions 搬到 turnActionsLog。
+ *
+ * v5.055 bug：原本用 state.turn 變化偵測，但 PTCG state.turn 是「整個 round」概念
+ * （先攻+後攻各 1 回合 = state.turn 1），雙方輪一次才 +1。導致我方整個回合期間
+ * 對手剛剛的動作還沒搬進 turnActionsLog，我方按 END_TURN 才一起搬。慢一個玩家回合。
+ *
+ * v5.056 修法：改用 before.activePlayerIndex !== after.activePlayerIndex 偵測單一玩家
+ * 回合切換 — 對手 END_TURN 後立刻搬對手的 currentTurnActions，我方下回合一開始
+ * 就能看到對手剛剛的動作。同時只搬「剛結束玩家」（endedIdx = before.activePlayerIndex），
+ * 不動我方的 currentTurnActions。
  */
 function maybePushTurnLog(before: GameState, after: GameState): GameState {
-  if (before.turn === after.turn) return after;
-  // 回合切換了 — 把雙方 currentTurnActions 搬到 turnActionsLog
+  if (before.activePlayerIndex === after.activePlayerIndex) return after;
+  // activePlayerIndex 改變 = 單一玩家回合結束
+  const endedIdx = before.activePlayerIndex;
   const players = [...after.players] as [PlayerState, PlayerState];
-  for (const idx of [0, 1] as const) {
-    const p = players[idx];
-    const current = p.currentTurnActions ?? [];
-    if (current.length === 0) continue;
-    const history = (p.turnActionsLog ?? []).slice(-4);  // 保留最近 4 回合，加新 1 = 5 回合
-    players[idx] = {
-      ...p,
-      turnActionsLog: [...history, { turn: before.turn, actions: current }],
-      currentTurnActions: [],
-    };
-  }
+  const p = players[endedIdx];
+  const current = p.currentTurnActions ?? [];
+  if (current.length === 0) return after;
+  const history = (p.turnActionsLog ?? []).slice(-4);  // 保留近 4 回合，加新 1 = 5 回合
+  players[endedIdx] = {
+    ...p,
+    turnActionsLog: [...history, { turn: before.turn, actions: current }],
+    currentTurnActions: [],
+  };
   return { ...after, players };
 }
 
