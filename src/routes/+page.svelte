@@ -265,6 +265,34 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.064</span> 💰 tracking.ts 加 24h localStorage throttle — 降 Firebase 寫入量 70-90%（玩家功能 0 影響）</summary>
+        <ul>
+          <li><b>玩家觀察</b>：Wilson 查 Firebase usage — 對戰已搬到 Oracle 後讀取下降 -89%（5/16 12萬/日 → 5/22 接近 0），但<strong>寫入維持 2.7 萬/日（超免費額度 6,786）</strong>。整月專案費用 $42 TWD。</li>
+
+          <li><b>根因 audit</b>：codebase grep 全部 Firestore 寫入點（<code>setDoc / updateDoc / addDoc / deleteDoc / runTransaction</code>）發現 5 個來源：(1) <code>tracking.ts</code> users/uid 父文件 setDoc — 每個 page load 寫 1 次 ⚠ (2) <code>room.ts</code> rooms/code 對戰（beta 站還在 Firebase）(3) <code>decks/cloud.ts</code> users/uid/decks/id 子集合（玩家儲牌組）(4) <code>+page.svelte</code> feedbacks addDoc (5) admin 後台 update/delete feedback。</li>
+
+          <li><b>關鍵發現 1</b>：<code>vite.config.js</code> 的 oracle-room-swap 只 swap <code>room.ts</code>（對戰路徑）— <code>tracking.ts</code> 不在 swap 範圍。所以 Oracle 正式站玩家 page load 仍會跑 tracking.ts 並寫 Firebase users 集合。這就是寫入沒降但讀取降的根因 — 對戰 onSnapshot 訂閱大幅降但 tracking setDoc 跟對戰無關。</li>
+
+          <li><b>關鍵發現 2</b>：tracking.ts 寫入的欄位（<code>lastLoginAt / loginCount / deviceId / userAgent</code>）<strong>實際上沒有被 admin 後台讀取</strong> — <code>server_admin_patch.js</code> L497 的 <code>/api/admin/firebase/users</code> endpoint 用的是 <code>adminAuth.listUsers()</code> 拿 Firebase Auth 內建 metadata（<code>creationTime / lastSignInTime</code>），不讀 Firestore users 集合欄位。等於 tracking 是「寫了沒人看」的死資料。</li>
+
+          <li><b>修法（方案 B — localStorage throttle）</b>：<code>tracking.ts</code> 加 24h throttle — 同一個 device 每 24 小時最多寫一次 users/uid。首次訪客 <code>lastTrackAt=0</code> 仍會建立 user doc。寫入成功才更新 <code>localStorage.ptcg_last_track_at</code>（失敗下次可重試）。</li>
+
+          <li><b>玩家功能影響分析</b>：</li>
+          <li>　・<b>匿名/Google 登入</b>：✓ 完全正常（Firebase Auth 服務不寫 Firestore，跟 throttle 無關）</li>
+          <li>　・<b>設定/編輯/刪除/載入牌組</b>：✓ 完全正常（走 users/uid/decks 子集合，由 <code>decks/cloud.ts</code> 控制，Firestore 子集合可獨立寫入不需父 doc 存在）</li>
+          <li>　・<b>線上對戰</b>：✓ 完全正常（走 rooms 集合，跟 users 無關）</li>
+          <li>　・<b>送 feedback</b>：✓ 完全正常（走 feedbacks 集合）</li>
+          <li>　・<b>tracking 失真</b>：loginCount 變成「24h 區間數」、lastLoginAt 變成「24h 解析度」— 但 admin 不讀這些欄位，0 影響觀測。</li>
+
+          <li><b>預期效果</b>：Firebase 寫入量估降 70-90%（從每 PV 1 次 → 每 device 每 24h 1 次）。下月應能回到免費額度內（2 萬/日以下）。Wilson 可繼續觀察 Firebase usage 截圖。若仍超 → 加碼上方案 C 整體停 tracking setDoc。</li>
+
+          <li><b>備用方案</b>：A 把 tracking 搬 Oracle（工程量大但資料保留）／C 直接停 tracking（最徹底但失去 deviceId/userAgent — 雖然目前沒人讀）— v5.064 採方案 B 最低風險最大降幅優先。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 14（最小 patch — 加 6 行 throttle check，0 改其他邏輯）／Rule 11e（Write tool 寫 patch）／Rule 11f（push 前 3 道 ASSERT）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.063</span> 🎯 v5.060 backlog 完整實裝 — 32 個「若希望」招式補 binary-yes-no 玩家抉擇 prompt</summary>
         <ul>
           <li><b>玩家回報</b>：v5.060 修了吃吼霸ex 極限俯衝 / 巨金怪 金屬之錘 等 3 個「若希望」招式，但留下 34 個 backlog 還沒做完整實裝。</li>
