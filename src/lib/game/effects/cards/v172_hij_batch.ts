@@ -798,9 +798,12 @@ regR('tym-step2-guess-hp', (st, oppIdx, iids, params, _pool) => {
 //     重組完整 deck 後 shuffle，符合卡面「將剩餘卡放回牌庫並重洗」）
 //
 // gate：對手牌庫至少 1 張 + 對手備戰未滿（否則放不下）
-regG('配樂之笛', (st, idx, _pool) => {
-  const opp = st.players[(1 - idx) as 0 | 1];
-  return opp.deck.length > 0 && opp.bench.length < 5; // 對手備戰上限 5（v2.146 後零之大空洞下 8，但保險用 5）
+regG('配樂之笛', (st, idx, pool) => {
+  const oppIdx2 = (1 - idx) as 0 | 1;
+  const opp = st.players[oppIdx2];
+  // v5.040：原本 hardcode 5「保險用 5」實際違反 PTCG 規則 — 零之大空洞 + 對手有太晶
+  //         寶可夢時對手備戰上限 8。改用 getBenchLimit 精確判定。
+  return opp.deck.length > 0 && opp.bench.length < getBenchLimit(st, oppIdx2, pool);
 });
 reg('配樂之笛', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;

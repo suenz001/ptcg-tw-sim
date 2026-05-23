@@ -1444,9 +1444,10 @@ regPost('拉帝亞斯ex|無限之刃', (state, aIdx, _pool) => {
 // ── MBD 謎擬Q ─────────────────────────────────────────────────────────────────
 
 // 呼朋引伴 — 從牌庫選 1 隻基礎寶可夢放備戰（POST；無傷害）
+// v5.040：bench >= 5 改 getBenchLimit 支援零之大空洞 + 太晶 (5→8)
 regPost('謎擬Q|呼朋引伴', (state, aIdx, pool) => {
   const player = state.players[aIdx];
-  if (player.bench.length >= 5) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
+  if (player.bench.length >= getBenchLimit(state, aIdx, pool)) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
   if (player.deck.length === 0) return addLog(state, '呼朋引伴：牌庫為空', aIdx);
   // v2.993：卡面寫「選擇 1 張」mandatory；若牌庫無基礎寶可夢則允許 Pass
   const hasBasic = player.deck.some(c => {

@@ -2881,8 +2881,9 @@ function handlePlaying(
     }
 
     // v2.171 深缽鎮 — 雙方每回合 1 次：從牌庫選 1 張【基礎】寶可夢（非規則）放備戰並重洗
+    // v5.040：bench >= 5 改 getBenchLimit 支援零之大空洞 + 太晶 (5→8)
     if (stadiumCard.name === '深缽鎮') {
-      if (newState.players[aIdx].bench.length >= 5) {
+      if (newState.players[aIdx].bench.length >= getBenchLimit(newState, aIdx, pool)) {
         const revert: [boolean, boolean] = [used[0], used[1]];
         return addLog({ ...state, stadiumUsedThisTurn: revert }, '深缽鎮：備戰區已滿', aIdx);
       }
@@ -2984,8 +2985,9 @@ function handlePlaying(
     }
 
     // v2.172 密阿雷市（J）— 雙方每回合 1 次：牌庫搜 1 基礎放備戰，使用後回合結束
+    // v5.040：bench >= 5 改 getBenchLimit 支援零之大空洞 + 太晶 (5→8)
     if (stadiumCard.name === '密阿雷市') {
-      if (newState.players[aIdx].bench.length >= 5) {
+      if (newState.players[aIdx].bench.length >= getBenchLimit(newState, aIdx, pool)) {
         const revert: [boolean, boolean] = [used[0], used[1]];
         return addLog({ ...state, stadiumUsedThisTurn: revert }, '密阿雷市：備戰區已滿', aIdx);
       }
@@ -7246,9 +7248,10 @@ export function getUsableAbilities(
       // 搜尋點心（莫魯貝可，v2.95 實裝）：牌庫不空（要看牌庫頂 1 張）
       if (ab.name === '搜尋點心' && player.deck.length === 0) return;
       // 增長繭（甲殼繭）：本回合進化 + 備戰未滿（要從牌庫搜進化形態放備戰）
+      // v5.040：bench >= 5 改 getBenchLimit 支援零之大空洞 + 太晶 (5→8)
       if (ab.name === '增長繭') {
         if (!pk.evolvedThisTurn) return;
-        if (player.bench.length >= 5) return;
+        if (player.bench.length >= getBenchLimit(state, state.activePlayerIndex, pool)) return;
         if (player.deck.length === 0) return;
       }
       // v2.133 沉雪 額外 gate：場上沒有競技場卡時無意義
@@ -7578,9 +7581,10 @@ export function getUsableAbilities(
         if (player.deck.length === 0) return;
       }
       // 保母曼波｜溫柔鰭：戰鬥場 + 備戰未滿 + 棄牌區有 HP≤70 基礎寶可夢
+      // v5.040：bench >= 5 改 getBenchLimit 支援零之大空洞 + 太晶 (5→8)
       if (ab.name === '溫柔鰭') {
         if (player.active?.iid !== pk.iid) return;
-        if (player.bench.length >= 5) return;
+        if (player.bench.length >= getBenchLimit(state, state.activePlayerIndex, pool)) return;
         const hasCand = player.discard.some(c => {
           const cc = pool.get(c.cardId);
           if (!cc || cc.supertype !== 'Pokemon') return false;
@@ -7626,7 +7630,8 @@ export function getUsableAbilities(
       if (ab.name === '瞄準獵物') {
         const oppIdx = (1 - state.activePlayerIndex) as 0 | 1;
         const opp = state.players[oppIdx];
-        if (opp.bench.length >= 5) return;
+        // v5.040：bench >= 5 改 getBenchLimit 支援零之大空洞 + 太晶 (5→8)
+        if (opp.bench.length >= getBenchLimit(state, oppIdx, pool)) return;
         const hasCand = opp.hand.some(c => {
           const cc = pool.get(c.cardId);
           if (!cc || cc.supertype !== 'Pokemon') return false;

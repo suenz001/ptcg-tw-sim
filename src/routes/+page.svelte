@@ -265,6 +265,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.040</span> 🐛 修對手發牌動畫方向錯誤 + 零之大空洞 / 太晶 備戰上限漏網點 6 處</summary>
+        <ul>
+          <li><b>Bug 1：對手發牌動畫往左上方</b> — 玩家回報對手抽牌時動畫從牌庫位置飛到「左上角」，應該像我方一樣由牌庫往中央發。根因：<code>game/+page.svelte</code> drawAnims 對手分支 <code>endY = oppRect.top + 30</code> — 飛到 opponent-row 頂端 30px 處，視覺上往畫面最上方飛；我方分支 <code>endY = handRect.top + handRect.height / 2</code> 是手牌區中心，兩者不對稱。修法：對手 endY 改 <code>oppRect.top + oppRect.height / 2</code>（row 垂直中心），跟我方對稱「由牌庫往中央發」。</li>
+          <li><b>Bug 2：零之大空洞 + 太晶寶可夢場上時仍只能放 5 隻備戰</b> — 玩家回報，且懷疑是桌墊版 bug。根因 audit：<code>engine.ts:142</code> <code>getBenchLimit()</code> 已正確實作（場上零之大空洞 + 任一寶可夢有「太晶」tag → 8 隻），但 6 處仍 hardcoded <code>bench.length &gt;= 5</code> 沒走 helper，導致這些路徑下備戰上限被卡在 5。修法：6 處全部改 <code>getBenchLimit</code> — </li>
+          <li>　・<code>engine.ts</code> 深缽鎮 stadium 效果</li>
+          <li>　・<code>engine.ts</code> 密阿雷市 stadium 效果</li>
+          <li>　・<code>engine.ts</code> 增長繭 特性 gate</li>
+          <li>　・<code>engine.ts</code> 保母曼波 溫柔鰭 特性 gate</li>
+          <li>　・<code>engine.ts</code> 瞄準獵物 特性 gate（對手 bench，用 <code>getBenchLimit(state, oppIdx, pool)</code>）</li>
+          <li>　・<code>effects.ts</code> 謎擬Q 呼朋引伴 招式 POST（補 import getBenchLimit）</li>
+          <li>　・<code>v172_hij_batch.ts</code> 配樂之笛 gate（原本註解就寫「保險用 5」實際違反 PTCG 規則，修正為 getBenchLimit；補 import）</li>
+          <li><b>非桌墊版獨有 bug</b>：經過 audit 發現此問題實際是 engine logic bug，所有 layout（桌墊版 / 經典版 / 手機 portrait）受同樣影響。但 PLAY_BASIC 主路徑跟 UI bench-slot 渲染（已支援 5-8 動態）正確，所以絕大多數玩家不會碰到 — 只有用到上述 6 個特定卡 / 招式時才會踩雷。</li>
+          <li><b>不變</b>：<code>getBenchLimit()</code> 函式本身、UI bench-slot 渲染邏輯（已動態 1-8）、PLAY_BASIC 主路徑、PLAY_FOSSIL 路徑全部不動。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 engine.ts / effects.ts / v172 / game 4 個檔，sentinel + tail anchor 驗）／Rule 14（最小 patch — 6 處 hardcode 改 helper，1 處動畫 endY 算式改）／Rule 15（卡面 source of truth — 零之大空洞效果文本明確「太晶寶可夢」備戰 8 隻為準，hardcode 5 違反卡面）／Rule 7（不簡化實裝 — 註解寫「保險用 5」即是簡化，必須修正）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.039</span> 🎨 桌墊版微調 — 備戰字再放大 / 戰鬥特性按鈕 / hover 預覽 / 中線對齊</summary>
         <ul>
           <li><b>玩家回報 1</b>：v5.038 把備戰字放大後仍想再大一點點 — bench-name 1rem → 1.05rem。HP 數字長度有限（最多 4-5 字元如「HP 280/280」）可大幅放大 — bench-stat .92rem → 1.1rem，加 padding。</li>

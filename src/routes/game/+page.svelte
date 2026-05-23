@@ -905,10 +905,13 @@
           endX = handRect ? handRect.left + handRect.width / 2 : window.innerWidth / 2;
           endY = handRect ? handRect.top  + handRect.height / 2 : window.innerHeight - 80;
         } else {
+          // v5.040：原本 endY = oppRect.top + 30 → 對手發牌動畫飛到 row 頂端，視覺上
+          //         「從牌庫位置往左上方」。改為 row 垂直中心 (top + height/2)，跟我方
+          //         「飛到 handStrip 中心」對稱，視覺上「由牌庫往中央發」。
           const oppRowEl = document.querySelector('.opponent-row') as HTMLElement | null;
           const oppRect = oppRowEl?.getBoundingClientRect();
           endX = oppRect ? oppRect.left + oppRect.width / 2 : window.innerWidth / 2;
-          endY = oppRect ? oppRect.top  + 30 : 60;
+          endY = oppRect ? oppRect.top  + oppRect.height / 2 : 60;
         }
         capturedNew.forEach((iid, i) => {
           const id = Date.now() + Math.random() + i * 0.001;
