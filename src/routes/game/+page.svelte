@@ -5578,8 +5578,11 @@
                   {#if battleLayout === 'tabletop'}
                     {@const _attOB = attachedCardsOf(b)}
                     {#if _attOB.length > 0}
+                      <!-- v5.038：疊牌動態間距 — 越多張疊得越密，避免疊太長
+                           公式：step = max(12, 32 - length * 3) → 1張:29 / 4張:20 / 6張:14 / 7+:12 -->
+                      {@const _stepOB = Math.max(12, 32 - _attOB.length * 3)}
                       <div class="att-card-stack">
-                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1) * _stepOB}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                       </div>
                     {/if}
                   {/if}
@@ -5859,7 +5862,7 @@
 
       <div class="zone-active my-active-zone">
         <div class="zone-label-sm">
-          我的出場
+          <span class="zone-label-text">我的出場</span>
           {#if !pendingSelection&&isMyTurn()&&!myPlayer?.active?.fossilOnField&&myPlayer?.active&&(myPlayer?.bench?.length??0)>0&&game?.phase==='playing'&&game?.turnPhase==='main'}
             {#if canRetreatNow}
               <button class="btn-retreat" onclick={(e)=>openFloatingRetreat(e)}>
@@ -5999,8 +6002,10 @@
                 {#if battleLayout === 'tabletop'}
                   {@const _attMB = attachedCardsOf(b)}
                   {#if _attMB.length > 0}
+                    <!-- v5.038：疊牌動態間距 — 越多張疊得越密（同對手 bench 邏輯） -->
+                    {@const _stepMB = Math.max(12, 32 - _attMB.length * 3)}
                     <div class="att-card-stack">
-                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1) * _stepMB}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                     </div>
                   {/if}
                 {/if}
@@ -8031,7 +8036,9 @@
       "chipO   pilesO    stadium   .         activeO   prizesO"
       "chipMe  prizesMe  stadium   actions   activeMe  pilesMe"
       ".       .         .         .         benchMe   .";
-    gap:2px 8px;
+    /* v5.038：row-gap 從 2px 拉到 12px — 拿掉「對手出場/我的出場」label 後釋出的
+       垂直空間平均分配給 4 個 zone（對方備戰 / 對方戰鬥場 / 我方戰鬥場 / 我方備戰）。 */
+    gap:12px 8px;
     padding:4px 8px;
     align-items:center;
     /* 預留右側 log panel 空間（log 開啟時） */
@@ -8114,8 +8121,8 @@
   /* === active：stack 對齊 active-img — 橫向往右扇開 === */
   .playmat.layout-tabletop .active-card .active-img{ position:relative; z-index:99; }
   .playmat.layout-tabletop .active-card > .att-card-stack{
-    /* v5.027 HP bar 加長：padding-left 64→96，HP 欄 56→88px，stack 跟著右移對齊 img */
-    top:.45rem; left:calc(.5rem + 88px + .45rem); width:105px; height:140px;
+    /* v5.038：HP 欄 88→140px → stack 跟著右移對齊 img */
+    top:.45rem; left:calc(.5rem + 140px + .45rem); width:105px; height:140px;
     overflow:visible !important;
   }
 
@@ -8143,15 +8150,17 @@
   /* === v5.027 att-preview 在 viewport 頂部 → 改顯示在卡下方（transform 翻轉） === */
   .hand-preview-float.att-preview-below{ transform:translate(-50%, 0); }
 
-  /* === HP bar 從卡底移到左側 — v5.027 延長：column 56→88px（玩家要求往左延長） === */
+  /* === HP bar 從卡底移到左側 — v5.027 延長：column 56→88px（玩家要求往左延長）
+     v5.038：再延長到 140px — 跟 .active-name-tt 等寬（v5.035 設的 140px），血條視覺
+     寬度與名字框完全對齊；padding-left 從 96px 跟著加到 148px (140 + 4gap + 4pad) === */
   .playmat.layout-tabletop .active-card{
-    padding-left:96px !important;   /* 88px HP 欄 + 4 gap + 4 padding */
+    padding-left:148px !important;  /* 140px HP 欄 + 4 gap + 4 padding */
     padding-bottom:.45rem !important;
     min-height:140px !important;
   }
   .playmat.layout-tabletop .active-card .active-hpbar-bottom{
     left:.4rem; top:.5rem; right:auto; bottom:auto;
-    width:88px;
+    width:140px;                    /* v5.038：對齊 .active-name-tt 寬度 */
     flex-direction:column; align-items:center; justify-content:flex-start;
     gap:5px; padding:5px 4px;
     background:rgba(0,0,0,0.78);
@@ -8207,26 +8216,47 @@
   .playmat.layout-tabletop .bench-slot .bench-name{
     position:absolute; left:4px; right:4px; top:38%;
     z-index:200; pointer-events:none;
-    font-size:.82rem; font-weight:700; color:#fff;
+    /* v5.038：放大 .82 → 1rem + 強化背景對比 — 玩家要求備戰區字更大 */
+    font-size:1rem; font-weight:700; color:#fff;
     text-align:center; line-height:1.1;
     text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95);
-    background:rgba(0,0,0,.62); border-radius:3px;
+    background:rgba(0,0,0,.72); border-radius:3px;
     padding:1px 3px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .playmat.layout-tabletop .bench-slot .bench-stat{
-    position:absolute; left:4px; right:4px; top:calc(38% + 18px);
+    position:absolute; left:4px; right:4px; top:calc(38% + 22px);
     z-index:200; pointer-events:none;
-    font-size:.78rem; font-weight:700; color:#cfe;
-    text-align:center; line-height:1.1;
+    /* v5.038：放大 .78 → .92rem + padding 加大 + 背景加深 */
+    font-size:.92rem; font-weight:700; color:#cfe;
+    text-align:center; line-height:1.15;
     text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95);
-    background:rgba(0,0,0,.55); border-radius:3px;
-    padding:1px 3px;
+    background:rgba(0,0,0,.78); border-radius:3px;
+    padding:2px 5px;
   }
   /* bench hp-bar 仍在 slot 底部、保持 z-index 高（不被 attached 蓋） */
   .playmat.layout-tabletop .bench-slot > .hp-bar-wrap{
     position:relative; z-index:200;
   }
+
+  /* === v5.038 ability-btn-sm 在桌墊版備戰區放大（玩家回報太小不好點） === */
+  .playmat.layout-tabletop .bench-slot .ability-btn-sm{
+    font-size:.72rem !important;
+    padding:.22rem .35rem !important;
+    margin-top:.18rem !important;
+    border-radius:4px !important;
+    font-weight:600;
+  }
+
+  /* === v5.038 拿掉「對手出場」「我的出場」label — 釋出 4 zone 間距空間 ===
+     對手 label 是純文字 div（class="zone-label-sm opp-label"），整個 hide；
+     我的 label div 內含撤退按鈕，只 hide 內層 .zone-label-text span（v5.038 新加），
+     保留按鈕並讓 div 高度降到只剩按鈕。 */
+  .playmat.layout-tabletop .zone-label-sm.opp-label{ display:none; }
+  .playmat.layout-tabletop .my-active-zone > .zone-label-sm{
+    margin:0; padding:0; min-height:0;
+  }
+  .playmat.layout-tabletop .zone-label-sm .zone-label-text{ display:none; }
 
   /* === v5.029 hover 高亮 — 只亮邊 + 發光，不再改 z-index === */
   /* 玩家反映：原本 z-index:80 讓能量（最外側 z 較低的卡）hover 時跳到最前面、

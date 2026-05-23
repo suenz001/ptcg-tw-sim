@@ -265,6 +265,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.038</span> 🎨 桌墊版 5 項調整 — 血條對齊名字、備戰字放大、疊牌動態密度、拿掉 zone 標籤</summary>
+        <ul>
+          <li><b>玩家回報</b>：桌墊版 5 個視覺優化要求 — 戰鬥場血條比名字框窄看起來不對齊；備戰區字 / HP / 特性按鈕字偏小；疊太多附加卡會把備戰區拉太長；「對手出場」「我的出場」字是冗餘提示（跟實體配置一致玩家一看就懂），佔上下空間造成 4 zone 間距不平均。</li>
+          <li><b>修法 1（血條對齊名字寬度）</b>：<code>.active-hpbar-bottom</code> width 從 88px → 140px、<code>.active-card</code> padding-left 96px → 148px (140 + 4 gap + 4 pad)，跟 v5.035 設的 <code>.active-name-tt</code> width:140px 對齊。<code>.att-card-stack</code> 的 left calc 也跟著從 88px → 140px。</li>
+          <li><b>修法 2（備戰區字 / HP / 特性按鈕放大）</b>：<code>.bench-name</code> 字 .82 → 1rem、<code>.bench-stat</code> 字 .78 → .92rem 並補 padding，<code>.ability-btn-sm</code> 在桌墊版備戰區字 .56 → .72rem + padding 加大，全部加 <code>!important</code> override base 樣式。</li>
+          <li><b>修法 3（Bench 疊牌動態密度）</b>：兩處 bench attached card stack（對手 + 我方）加 <code>@const _step</code>，依當前疊牌數動態縮間距 — 1 張 29px、4 張 20px、6 張 14px、7+ 鎖 12px。疊越多越密，避免疊到 6-8 張時垂直長度爆出 zone。Active 區疊牌仍橫向 32px 不動（橫向不會爆）。</li>
+          <li><b>修法 4 + 5（拿掉 zone 標籤 + 4 zone 間距平均）</b>：對手出場 label 整個 <code>display:none</code>（用 <code>.opp-label</code> class 精準鎖定）；我的出場 label 內含撤退按鈕不能整個 hide，把純文字節點包進 <code>span class=&quot;zone-label-text&quot;</code> 然後 CSS hide 此 span，保留撤退按鈕。<code>.playmat.layout-tabletop</code> 的 <code>grid gap</code> 從 <code>2px 8px</code> 改為 <code>12px 8px</code>，row-gap 拉開讓 4 個 zone（對方備戰 / 對方戰鬥場 / 我方戰鬥場 / 我方備戰）之間視覺上等距分配。</li>
+          <li><b>不變</b>：桌機 classic / 手機 portrait 完全不受影響（純 <code>.playmat.layout-tabletop</code> scope）；獎勵 zone 的 zone-label-sm（沒 opp-label class）不受 hide 規則影響；active 區疊牌動態間距不動（橫向 32px 固定）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte 大檔，tail anchor + style 對稱驗）／Rule 14（最小 patch — CSS 區塊替換 + 2 處 template 加 @const）／Rule 1（changelog 文字 audit — span 屬性用 HTML entity，CSS 屬性放在 code tag 內無 raw 符號）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.037</span> 🧹 Admin 後台 — 補 Firebase 房間刪除功能（清 zombie ended 房）</summary>
         <ul>
           <li><b>玩家／管理員回報</b>：Firebase 對戰資料庫長期累積一筆 ended 狀態的房間（如 VJ4N — 大直道館線上分部，P1 口糊權威 / P2 新莊N），玩家都已搬到 Oracle 站，但這筆 Firebase 房間因 firestore rules v2.81 規定「ended 房永久保留供 admin 查歷史對戰」而無刪除路徑，admin.html 的 Firebase 對戰 tab 也沒有刪除按鈕。</li>
