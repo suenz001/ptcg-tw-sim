@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.034</span> 🌐 GitHub Pages 還原成 beta 測試站 + 加 BETA 標記</summary>
+        <ul>
+          <li><b>背景</b>：v4.935 之後 GitHub Pages 站 (suenz001.github.io/ptcg-tw-sim) 的「🌐 線上連線對戰」按鈕被加了強制 redirect 跳到 www.ptcg-tw-sim.com — 目的是把 Firebase 重度玩家導向 Oracle backend 省額度。現在玩家都搬完了，github.io 失去 redirect 目的，正好還原成 beta 測試站。</li>
+          <li><b>修法</b>：<code>src/routes/game/+page.svelte</code> 的 <code>onClickOnlineMode</code> 移除 github.io 偵測那段，直接 <code>mode = &apos;online&apos;</code>。build-time <code>ORACLE_MODE</code>（由 <code>VITE_ORACLE_API_URL</code> 環境變數控制）自動切後端：github.io build 沒設此變數 → Firebase backend；Oracle build 有設 → Oracle backend。兩個站資料庫完全不互通，beta 測試房間絕對不影響正式站玩家。</li>
+          <li><b>新增 BETA 標記</b>：<code>+layout.svelte</code> 加一條黃色細 banner，只在 hostname 含 <code>github.io</code> 時顯示「⚠️ BETA 測試版 · 正式站：www.ptcg-tw-sim.com」，跟既有「我們搬家了」綠色 banner 共存（綠色可 dismiss 7 天 / 黃色不可 dismiss）。</li>
+          <li><b>保留</b>：「我們搬家了」遷移 banner（v4.938）繼續顯示，提醒誤入玩家正式站位置；SEO canonical / og:url / sitemap.xml 維持指向 .com（搜尋引擎優先索引正式站）；<code>decks/+page.svelte</code> 的「Oracle API 未設定」alert 維持原樣（github.io 點到時的提示合理）。</li>
+          <li><b>新流程</b>：開發 → <code>git push</code>（自動觸發 GitHub Actions build） → github.io 自動部署 beta → 測試 OK → 跑 <code>oracle-admin/redeploy-oracle.bat</code>（必要時加 <code>update-admin-full.bat</code>）→ www.ptcg-tw-sim.com 正式站更新。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + +layout.svelte + +page.svelte，tail anchor + style 對稱驗）／Rule 14（最小 patch — 函式 body 4 行 → 1 行、layout 加 BETA banner 區段）／Rule 1（BETA banner 文字無 raw <code>{}</code>/<code>&lt;</code>/<code>&gt;</code>）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.033</span> 🔧 修 蒼響ex 無畏斬 / 烈火爆進 等「鎖招」型招式 — 退到備戰區後仍鎖</summary>
         <ul>
           <li><b>玩家回報</b>：赫普的蒼響ex 用完「無畏斬」（240 傷，下回合無法再用），下回合即使退到備戰區再回到戰鬥場，仍然不能用。依 PTCG 規則只要回到備戰區就會清除所有狀態（含招式無法使用 flag），回到戰鬥場時應該可用。</li>

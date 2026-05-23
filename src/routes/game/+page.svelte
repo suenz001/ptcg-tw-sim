@@ -1245,19 +1245,11 @@
     arr.sort((a, b) => b.length - a.length);
     return arr;
   });
-  // v4.935 Firebase 額度分流 — 「線上連線對戰」按鈕點擊處理。
-  //   策略：GitHub Pages 站 (suenz001.github.io) → redirect 到 Oracle 站 (www.ptcg-tw-sim.com)。
-  //   理由：Firestore 重度路徑（房間 + heartbeat + gameState 同步）改走 Oracle backend，
-  //         省 Firebase 額度；本機 / AI 對戰 / 卡牌資料庫 / 牌組編輯器留在 GitHub Pages。
-  //   gate：
-  //     - ORACLE_MODE = true → 已在 Oracle 站，留地（避免 self-redirect）
-  //     - hostname 不含 'github.io' → 本機 dev 或自定義部署，留地
-  //     - 否則 → window.location.assign 跳轉，帶 ?mode=online 讓對方 auto-enter
+  // v5.034：beta 站還原 — 移除 v4.935 加的 github.io → .com 強制 redirect。
+  //   現況：github.io 當 beta 測試站（Firebase backend），.com 當正式站（Oracle backend）。
+  //   build-time ORACLE_MODE 已自動切後端，按鈕只需切 mode='online' 即可。
+  //   兩個站資料庫不互通 — beta 測試房間不會影響正式站玩家，正是設計上想要的隔離。
   function onClickOnlineMode() {
-    if (typeof window !== 'undefined' && !ORACLE_MODE && /github\.io/.test(window.location.hostname)) {
-      window.location.assign('https://www.ptcg-tw-sim.com/game?mode=online');
-      return;
-    }
     mode = 'online';
   }
 

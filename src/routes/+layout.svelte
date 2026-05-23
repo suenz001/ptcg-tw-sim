@@ -7,6 +7,9 @@
   // v4.938：遷移 banner — 只在 github.io 顯示（.com / localhost 都不顯示）。
   //   localStorage 記住「暫時不要」決定 — 7 天後再次顯示。
   let showMigrationBanner = $state(false);
+  // v5.034：BETA 標記 — 跟 migration banner 共存，但不可 dismiss。
+  //   提醒站長 / 玩家：github.io 是測試站（Firebase backend），.com 才是正式站（Oracle backend）。
+  let isBetaSite = $state(false);
   const MIGRATION_DISMISS_KEY = 'ptcg-migration-banner-dismissed-until';
   const MIGRATION_TARGET = 'https://www.ptcg-tw-sim.com';
 
@@ -40,8 +43,21 @@
   onMount(() => {
     initTracking();
     showMigrationBanner = shouldShowMigrationBanner();
+    // v5.034：BETA 偵測 — 同 migration banner 條件（github.io），不可 dismiss
+    if (typeof window !== 'undefined' && /github\.io/.test(window.location.hostname)) {
+      isBetaSite = true;
+    }
   });
 </script>
+
+{#if isBetaSite}
+  <div class="beta-banner" role="region" aria-label="BETA 測試站標記">
+    <span class="beta-icon">⚠️</span>
+    <span class="beta-text">
+      <strong>BETA 測試版</strong> · 正式站：<a href={MIGRATION_TARGET} class="beta-link">www.ptcg-tw-sim.com</a>
+    </span>
+  </div>
+{/if}
 
 {#if showMigrationBanner}
   <div class="migration-banner" role="region" aria-label="網站遷移通知">
@@ -68,6 +84,31 @@
   :global(body) {
     margin: 0;
     background: #f4f4f6;
+  }
+
+  /* v5.034：BETA 標記 banner — 黃色細條，github.io 才顯示，不可 dismiss */
+  .beta-banner {
+    background: #fff3c4;
+    color: #5a3e00;
+    padding: 4px 12px;
+    font-size: 12px;
+    text-align: center;
+    border-bottom: 1px solid #e6c870;
+    line-height: 1.4;
+  }
+  .beta-icon {
+    margin-right: 4px;
+  }
+  .beta-link {
+    color: #8b4513;
+    font-weight: bold;
+    text-decoration: underline;
+  }
+  .beta-link:hover {
+    color: #5a2a0a;
+  }
+  @media (max-width: 600px) {
+    .beta-banner { font-size: 11px; padding: 3px 8px; }
   }
 
   /* v4.938：遷移 banner — 黏在頁面頂端，所有頁面共用 */
