@@ -12316,9 +12316,17 @@ reg('寶可裝置3.0', (st, idx) => {
     params: { top7Iids: top7.map(c => c.iid) },
   });
 });
-regR('pokegear-fetch-supporter', (st, idx, iids, params, _pool) => {
+regR('pokegear-fetch-supporter', (st, idx, iids, params, pool) => {
   const top7Iids = (params?.top7Iids as string[]) ?? [];
-  return updatePlayer(st, idx, (p) => {
+  // v5.053 Rule 8 揭示資訊：卡面「在給對手看過後加入手牌」— 必須公開揭示卡名（addLog 非 addPrivateLog）
+  // 玩家回報「對手用寶可裝置3.0 後 log 看不到對方選了哪張卡」— 修補揭示。
+  const p0 = st.players[idx];
+  const chosenInsts = p0.deck.filter(c => top7Iids.includes(c.iid) && iids.includes(c.iid));
+  const chosenNames = chosenInsts.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  const s0 = chosenNames
+    ? addLog(st, `寶可裝置3.0：選擇了「${chosenNames}」加入手牌（公開）`, idx)
+    : addLog(st, '寶可裝置3.0：未選擇任何支援者，重洗牌庫', idx);
+  return updatePlayer(s0, idx, (p) => {
     const top7 = p.deck.filter(c => top7Iids.includes(c.iid));
     const rest = p.deck.filter(c => !top7Iids.includes(c.iid));
     const chosen = top7.filter(c => iids.includes(c.iid));

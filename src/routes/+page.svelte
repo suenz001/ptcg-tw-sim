@@ -265,6 +265,19 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.053</span> 🔧 修寶可裝置3.0 Rule 8 揭示資訊違規 — 對戰 log 補揭示對方選中的支援者卡名</summary>
+        <ul>
+          <li><b>玩家回報</b>：對手使用寶可裝置3.0 後，對戰 log 看不到對方選擇了哪一張卡。</li>
+          <li><b>Rule 15 audit JSON 卡面</b>：「查看自己的牌庫上方7張卡，從其中選擇1張支援者卡，<strong>在給對手看過後</strong>加入手牌。將剩餘卡放回牌庫並重洗。」 — 「給對手看過」字樣明確觸發 Rule 8 揭示資訊規則。</li>
+          <li><b>根因</b>：<code>regR(&apos;pokegear-fetch-supporter&apos;, ...)</code> resolver 純做 state 操作（從牌庫搬卡到手牌 + 重洗），<strong>完全沒呼叫 addLog 公開揭示卡名</strong>。線上對戰時對手看不到我方選中支援者卡 — 違反 PTCG 規則「給對手看過」防作弊驗證機制（Rule 8 揭示資訊規則）。</li>
+          <li><b>修法</b>：resolver callback signature 從 <code>(st, idx, iids, params, _pool)</code> 改為 <code>(st, idx, iids, params, pool)</code>（使用 pool）；補 addLog：「<code>寶可裝置3.0：選擇了「XX」加入手牌（公開）</code>」。未選任何卡時也加 log：「<code>未選擇任何支援者，重洗牌庫</code>」。</li>
+          <li><b>對玩家影響</b>：v5.053 起對手用寶可裝置3.0 選了哪張支援者卡，我方 log 會公開顯示卡名。符合實體 PTCG「在給對手看過」防作弊機制（對手能確認你選的真的是支援者卡，且知道是哪張）。</li>
+          <li><b>未來建議</b>：把 audit 擴大 — 找所有「給對手看過」JSON 卡面 vs resolver 沒 addLog 揭示的對應關係（同 Rule 8 audit 工具）。本次先處理玩家點名的寶可裝置3.0，其他類似 bug 累積觸發再批次處理。</li>
+          <li><b>Iron Rules</b>：Rule 15（JSON 卡面 source of truth — 「給對手看過」字樣鎖定為公開揭示）／Rule 8（揭示資訊規則 — addLog 公開卡名而非 addPrivateLog）／Rule 11/11c（Python pipeline 改 effects.ts 大檔）／Rule 14（最小 patch — 純 resolver 補 addLog，無 logic 重寫）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.052</span> 🛠️ 新增卡名 audit script + 抓到 2 個 silent broken regPre + IRON_RULES Rule 11e</summary>
         <ul>
           <li><b>背景</b>：v5.022 卡名 rename 災難啟示 — JSON 改卡名後 TS source 內 reg* 函式仍 reference 舊卡名會 silent broken（regPre / regPost / regA key match 不到，整個招式 / 特性無效但不報錯）。新增 <code>scripts/audit-card-names.py</code> 防呆工具。</li>
