@@ -492,8 +492,8 @@ regA('莉莉艾的蝶結萌虻', 0, (st, idx, pool, _cardInst) => {
   if (candidates.length === 0) {
     return addLog(s, '邀請眨眼：對手手牌沒有【基礎】寶可夢，效果結束', idx);
   }
-  // 對手備戰剩餘空位 — v5.041：bench limit 改 getBenchLimit (5→8)
-  const oppIdx = (1 - idx) as 0 | 1;
+  // 對手備戰剩餘空位 — v5.041 → v5.043：bench limit 改 getBenchLimit (5→8)
+  // oppIdx 在本 function 上面已宣告（line 477）不再重複宣告
   const slotsLeft = getBenchLimit(s, oppIdx, pool) - opp.bench.length;
   const maxPick = Math.min(candidates.length, slotsLeft);
   s = addLog(s,

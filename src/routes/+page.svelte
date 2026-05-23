@@ -265,6 +265,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.043</span> 🔥 Hotfix v5.041/v5.042 — effects.ts 改 getOwnBenchLimit + 修 oppIdx 重複宣告</summary>
+        <ul>
+          <li><b>事件</b>：v5.042 修了 5 子檔 import 後 build 還是 fail。本地 tsc 揭露兩個錯誤 — (a) effects.ts 14 處 getBenchLimit reference 找不到 symbol；(b) v2998_g2.ts oppIdx 重複宣告。</li>
+          <li><b>根因 (a)</b>：effects.ts 不能 import engine.ts 的 getBenchLimit — 兩者已雙向 import (engine → effects 拿 ATTACK_PRE/POST/ABILITY_EFFECTS) 會形成循環依賴觸發 Rule 12。所以 _shared.ts:559 早就準備了 mirror function <code>getOwnBenchLimit</code>（註解明確寫「內聯實作避免 effects → engine 循環 import」+「與 engine.ts:getBenchLimit 保持邏輯同步」）。我 v5.040/v5.041 patch 想當然用 getBenchLimit 沒查到本地 mirror，每次 import 都加不進去（其實是 _shared 用 getOwnBenchLimit）。</li>
+          <li><b>根因 (b)</b>：v5.041 v2998_g2.ts 邀請眨眼 (D1) 那段我加了 <code>const oppIdx = (1 - idx) as 0 | 1;</code>，但 function 開頭 line 477 已有 oppIdx 宣告，TS scope 衝突。</li>
+          <li><b>修法</b>：</li>
+          <li>　1. effects.ts 全部 14 處 <code>getBenchLimit(state, aIdx, pool)</code> regex 替換為 <code>getOwnBenchLimit(state, aIdx, pool)</code>，並補 <code>getOwnBenchLimit</code> 進現有 <code>from &apos;./effects/_shared&apos;</code> import 清單。</li>
+          <li>　2. v2998_g2.ts 移除我加的重複 oppIdx 宣告（直接用 function 既有的 oppIdx）。</li>
+          <li><b>v5.041 程式邏輯仍全部保留</b>：18 處 hardcoded bench=5 改 helper 的修正一字未動，只是把 helper 名換成正確的 getOwnBenchLimit / 修 scope 衝突。貴重手推車與其他 17 處 + v5.040 6 處 = 累計 24 處全部支援零之大空洞 + 太晶 (5→8)。</li>
+          <li><b>本地 tsc 驗證</b>：本次 patch 後跑 <code>npx tsc --noEmit -p .</code> 應該無 error。push 後 GitHub Actions Build SvelteKit step 應 success。</li>
+          <li><b>內化教訓</b>：(1) effects.ts 改 bench limit 一定用 _shared.ts 的 getOwnBenchLimit，不是 engine.ts 的 getBenchLimit（雙向 import 循環依賴）。(2) push 前必跑本地 tsc 驗 — esbuild build 可能允許未定義 identifier 通過（runtime 才炸）但 tsc 會抓 — 純依賴 GitHub Actions 「Iron Rules Audit」success 不夠，「Deploy to GitHub Pages」build step 才是真的 type check。記憶系統補進這條教訓。</li>
+          <li><b>Iron Rules</b>：Rule 1 / 5 / 11/11c / 14 / 12（循環依賴 — 本次正面踩到）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.042</span> 🔥 Hotfix v5.041 — 5 子檔 getBenchLimit import 漏加造成 build fail</summary>
         <ul>
           <li><b>事件</b>：v5.041 push 後 GitHub Actions Build SvelteKit step fail，github.io 還停在 v5.040 的版本 — 貴重手推車跟其他 18 處漏網沒生效。</li>

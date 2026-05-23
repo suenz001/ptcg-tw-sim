@@ -46,7 +46,7 @@ import {
   applyBenchPlaceSideEffects,
   getEnergyDiscardUnits,
   triggerOakeyeMillIfApplicable,
-} from './effects/_shared';
+  getOwnBenchLimit,} from './effects/_shared';
 
 // re-export helper 給 engine.ts / 其他 resolver 用
 export { applyBenchPlaceSideEffects };
@@ -1447,7 +1447,7 @@ regPost('拉帝亞斯ex|無限之刃', (state, aIdx, _pool) => {
 // v5.040：bench >= 5 改 getBenchLimit 支援零之大空洞 + 太晶 (5→8)
 regPost('謎擬Q|呼朋引伴', (state, aIdx, pool) => {
   const player = state.players[aIdx];
-  if (player.bench.length >= getBenchLimit(state, aIdx, pool)) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
+  if (player.bench.length >= getOwnBenchLimit(state, aIdx, pool)) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
   if (player.deck.length === 0) return addLog(state, '呼朋引伴：牌庫為空', aIdx);
   // v2.993：卡面寫「選擇 1 張」mandatory；若牌庫無基礎寶可夢則允許 Pass
   const hasBasic = player.deck.some(c => {
@@ -5394,7 +5394,7 @@ regPre('聒噪鳥|無伴奏合唱', (state, _aIdx, _pool) => ({ state, damage: 0
 regPost('聒噪鳥|無伴奏合唱', (state, aIdx, pool) => {
   const player = state.players[aIdx];
   // v5.041：bench limit 改用 getBenchLimit 支援零之大空洞 + 太晶 (5→8)
-  const benchRoom = getBenchLimit(state, aIdx, pool) - player.bench.length;
+  const benchRoom = getOwnBenchLimit(state, aIdx, pool) - player.bench.length;
   if (benchRoom <= 0) return addLog(state, '無伴奏合唱：備戰區已滿', aIdx);
   let s = addLog(state, '無伴奏合唱：從牌庫選最多 3 張基礎寶可夢放備戰', aIdx);
   return withPending(s, {
@@ -5411,7 +5411,7 @@ regPre('向尾喵|呼朋引伴', (state, _aIdx, _pool) => ({ state, damage: 0 })
 regPost('向尾喵|呼朋引伴', (state, aIdx, pool) => {
   const player = state.players[aIdx];
   // v5.041：bench limit 改 getBenchLimit (5→8)
-  if (player.bench.length >= getBenchLimit(state, aIdx, pool)) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
+  if (player.bench.length >= getOwnBenchLimit(state, aIdx, pool)) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
   let s = addLog(state, '呼朋引伴：從牌庫選 1 張基礎寶可夢放備戰', aIdx);
   return withPending(s, {
     type: 'deck-search',
@@ -7551,7 +7551,7 @@ function benchBasicFromDeckPost(max: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const player = state.players[aIdx];
     // v5.041：bench limit 改 getBenchLimit (5→8)
-    const limit = getBenchLimit(state, aIdx, pool);
+    const limit = getOwnBenchLimit(state, aIdx, pool);
     if (player.bench.length >= limit) return addLog(state, `${label}：備戰區已滿`, aIdx);
     const slots = limit - player.bench.length;
     const takeMax = Math.min(max, slots);
@@ -9135,7 +9135,7 @@ regPost('呆火駝|呼朋引伴', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   if (p.deck.length === 0) return addLog(state, '呼朋引伴：牌庫為空', aIdx);
   // v5.041：bench limit 改 getBenchLimit (5→8)
-  const limit = getBenchLimit(state, aIdx, pool);
+  const limit = getOwnBenchLimit(state, aIdx, pool);
   if (p.bench.length >= limit) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
   const s = addLog(state, '呼朋引伴：從牌庫選最多 2 隻基礎寶可夢放備戰', aIdx);
   return withPending(s, {
@@ -9269,7 +9269,7 @@ function deckSameNameBenchPost(max: number, cardName: string, label: string): At
     const p = state.players[aIdx];
     if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
     // v5.041：bench limit 改 getBenchLimit (5→8)
-    const limit = getBenchLimit(state, aIdx, pool);
+    const limit = getOwnBenchLimit(state, aIdx, pool);
     if (p.bench.length >= limit) return addLog(state, `${label}：備戰區已滿`, aIdx);
     const cand = p.deck.filter(c => pool.get(c.cardId)?.name === cardName);
     if (cand.length === 0) return addLog(state, `${label}：牌庫無「${cardName}」`, aIdx);
@@ -9293,7 +9293,7 @@ function discardSameNameBenchPost(max: number, cardName: string, label: string):
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     // v5.041：bench limit 改 getBenchLimit (5→8)
-    const limit = getBenchLimit(state, aIdx, pool);
+    const limit = getOwnBenchLimit(state, aIdx, pool);
     if (p.bench.length >= limit) return addLog(state, `${label}：備戰區已滿`, aIdx);
     const cand = p.discard.filter(c => pool.get(c.cardId)?.name === cardName);
     if (cand.length === 0) return addLog(state, `${label}：棄牌區無「${cardName}」`, aIdx);
@@ -9314,7 +9314,7 @@ regR('bench-from-discard-samename', (st, idx, iids, params, pool) => {
   const picked = p.discard.filter(c => iids.includes(c.iid));
   if (picked.length === 0) return addLog(st, `${label}：未選擇`, idx);
   // v5.041：bench limit 改 getBenchLimit (5→8)
-  const slots = getBenchLimit(st, idx, pool) - p.bench.length;
+  const slots = getOwnBenchLimit(st, idx, pool) - p.bench.length;
   const take = picked.slice(0, slots).map(c => ({ ...c, damage: 0, energyAttached: [], justPlaced: true } as CardInstance));
   const names = take.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   let s = addLog(st, `${label}：從棄牌區放置 ${take.length} 張「${targetName}」到備戰（${names}）`, idx);
@@ -9587,14 +9587,14 @@ regPre('刺龍王ex|王之號召', (state, _aIdx, _pool) => ({ state, damage: 0 
 regPost('刺龍王ex|王之號召', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   // v5.041：bench limit 改 getBenchLimit (5→8)
-  if (p.bench.length >= getBenchLimit(state, aIdx, pool)) return addLog(state, '王之號召：備戰區已滿', aIdx);
+  if (p.bench.length >= getOwnBenchLimit(state, aIdx, pool)) return addLog(state, '王之號召：備戰區已滿', aIdx);
   const cand = p.discard.filter(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Pokemon' && card.pokemonType === 'Water';
   });
   if (cand.length === 0) return addLog(state, '王之號召：棄牌區無【水】寶可夢', aIdx);
   // v5.041：bench limit 改 getBenchLimit (5→8)
-  const slots = Math.min(3, getBenchLimit(state, aIdx, pool) - p.bench.length, cand.length);
+  const slots = Math.min(3, getOwnBenchLimit(state, aIdx, pool) - p.bench.length, cand.length);
   const s = addLog(state, `王之號召：從棄牌區選最多 ${slots} 張【水】寶可夢放備戰`, aIdx);
   return withPending(s, {
     type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -13306,7 +13306,7 @@ export const PASSIVE_ON_DAMAGED = new Map<string, PassiveOnDamagedFn>([
   // v5.041：bench limit 改 getBenchLimit (5→8)
   ['警備濁霧', (state, dIdx, _aIdx, pool, _defCard) => {
     const me = state.players[dIdx];
-    const slots = getBenchLimit(state, dIdx, pool) - me.bench.length;
+    const slots = getOwnBenchLimit(state, dIdx, pool) - me.bench.length;
     if (slots <= 0) return addLog(state, '警備濁霧：備戰區已滿', dIdx);
     if (me.deck.length === 0) return addLog(state, '警備濁霧：牌庫為空', dIdx);
     const s = addLog(state,
@@ -13492,13 +13492,13 @@ regG('貴重手推車', (st, idx, pool) => {
   // 牌庫有基礎寶可夢 + 備戰未滿
   // v5.041：bench limit 改 getBenchLimit (5→8)
   const p = st.players[idx];
-  if (p.bench.length >= getBenchLimit(st, idx, pool)) return false;
+  if (p.bench.length >= getOwnBenchLimit(st, idx, pool)) return false;
   return p.deck.length > 0;
 });
 reg('貴重手推車', (st, idx, pool) => {
   // v5.041：bench limit 改 getBenchLimit (5→8)
   const p = st.players[idx];
-  const slots = getBenchLimit(st, idx, pool) - p.bench.length;
+  const slots = getOwnBenchLimit(st, idx, pool) - p.bench.length;
   if (slots <= 0) return addLog(st, '貴重手推車：備戰區已滿', idx);
   st = addLog(st, `貴重手推車：從牌庫選 0~${slots} 張基礎寶可夢卡放置於備戰區`, idx);
   return withPending(st, {
@@ -13517,7 +13517,7 @@ regR('precious-cart-bench', (state, aIdx, selectedIids, _params, pool) => {
   p.deck = shuffle(p.deck.filter(c => !selectedIids.includes(c.iid)));
   const placedNames: string[] = [];
   // v5.041：bench limit 改 getBenchLimit (5→8)
-  const benchLimit = getBenchLimit(s, aIdx, pool);
+  const benchLimit = getOwnBenchLimit(s, aIdx, pool);
   for (const pk of picks) {
     if (p.bench.length >= benchLimit) break;
     const card = pool.get(pk.cardId);
