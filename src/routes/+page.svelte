@@ -265,6 +265,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.037</span> 🧹 Admin 後台 — 補 Firebase 房間刪除功能（清 zombie ended 房）</summary>
+        <ul>
+          <li><b>玩家／管理員回報</b>：Firebase 對戰資料庫長期累積一筆 ended 狀態的房間（如 VJ4N — 大直道館線上分部，P1 口糊權威 / P2 新莊N），玩家都已搬到 Oracle 站，但這筆 Firebase 房間因 firestore rules v2.81 規定「ended 房永久保留供 admin 查歷史對戰」而無刪除路徑，admin.html 的 Firebase 對戰 tab 也沒有刪除按鈕。</li>
+          <li><b>根因</b>：admin.html 的 <code>showDelete</code> 寫 <code>source === &apos;oracle&apos;</code>，只有 Oracle 房有刪除按鈕；server_admin_patch.js 只實作 <code>DELETE /api/admin/oracle/rooms/:code</code>，沒有 Firebase 對等 endpoint。zombie ended Firebase 房間累積時無法清理（雖然儲存成本極低，但長期不乾淨）。</li>
+          <li><b>修法</b>：</li>
+          <li>　1. <code>oracle-admin/server_admin_patch.js</code> 補 <code>DELETE /api/admin/firebase/rooms/:code</code> endpoint — 用 firebase-admin SDK 繞過 client-side rules（admin 全權限），先 batch 刪 messages 子集合（每批 400 doc，符合 Firestore 500 ops/batch 限制），再刪 room doc 本身（Firestore 不會自動 cascade）。</li>
+          <li>　2. <code>oracle-admin/admin.html</code> 改 <code>showDelete = true</code>（兩處）— Oracle 跟 Firebase tab 都顯示刪除按鈕。新增 <code>deleteFirebaseRoom(code)</code> 與 <code>deleteRoomBySource(code, source)</code> 統一入口函式，按 source 分流呼叫 oracle 或 firebase 的 DELETE endpoint。</li>
+          <li><b>Bug 線索</b>：Firebase 房間 <code>updatedAt</code> 持續更新的可能原因 — <code>src/lib/game/room.ts:917</code> <code>pushGameState()</code> 沒檢查 <code>status === &apos;ended&apos;</code> gate，如果玩家分頁背景開著（onSnapshot listener 仍 active），任何 UI 互動觸發 dispatchAction 都會再次 <code>updateDoc</code>，雖然 status 寫的還是 ended，但 updatedAt 會被 serverTimestamp 刷新。這是次要 bug，未來可在 pushGameState 加 status guard 修正；本次先補 admin 刪除能力作為治標方案。</li>
+          <li><b>版本</b>：admin v0.89 → v0.90、server_admin_patch v0.18 → v0.19、+page.svelte v5.037。需跑 <code>oracle-admin/update-admin-full.bat</code> 把 admin.html + server_admin_patch.js 部署到 Oracle VM 才生效。</li>
+          <li><b>注意</b>：<code>oracle-admin/</code> 整個目錄未被 git 追蹤（含 <code>firebase-admin-key.json</code> service account key，故意不 commit），所以本次 admin / server 改動只在 disk 上，commit 只含 <code>version.ts</code> + <code>+page.svelte</code>。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 admin.html / server_admin_patch.js 中型檔，disk read base + sentinel 驗）／Rule 14（最小 patch — 純新增 endpoint + UI 按鈕分流，無 logic 改）／Rule 1（changelog 文字 audit raw 符號 — 全形「」括起識別字、HTML entity escape 字串 literal）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.036</span> 🔥 Hotfix — 修 v5.034 changelog 違反 Rule 1 造成 build fail</summary>
         <ul>
           <li><b>事件</b>：v5.034 跟 v5.035 push 後 GitHub Actions「Build SvelteKit app」step 都 fail，玩家在 https://suenz001.github.io/ptcg-tw-sim/ 看到的還是 v5.033 的版本 — 含舊的「線上連線對戰 → 強制 redirect .com」邏輯。GitHub Pages 沒部署新版。</li>
