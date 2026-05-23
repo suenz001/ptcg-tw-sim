@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.030</span> 🎨 桌墊版 — bench 名稱+HP 改疊在 Pokémon 圖上，釋出上方空間給 attached 卡 hover</summary>
+        <ul>
+          <li><b>問題</b>：v5.028 把 bench-name / bench-stat 留在 slot 頂部加 <code>z-index:200</code>，雖然視覺上不被 attached 卡蓋，但占據了 slot 頂部區，attached 卡在那裡 hover 事件被 name/stat 區擋住，玩家無法 hover 預覽。</li>
+          <li><b>修法</b>：改 <code>position:absolute</code> 疊在 Pokémon 圖中央偏上區（top:38%）+ <code>pointer-events:none</code> 讓 hover/click 事件穿透到下方 img 與 attached 卡。</li>
+          <li><b>樣式</b>：保留深色半透明背景 + 黑色 text-shadow + ellipsis 過長名稱，視覺與 v5.028 接近但不阻擋互動。</li>
+          <li><b>不變</b>：bench 底部 <code>.hp-bar-wrap</code> 綠條維持原位 + z-index:200（沒被 attached 蓋）；active 卡的 name/HP 仍在左側欄。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c/11d（Python pipeline）／Rule 14（純 CSS 區塊替換）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.029</span> 🎨 桌墊版 — hover 不再彈出 z-index + 附加卡可點開 zoom 詳情</summary>
         <ul>
           <li><b>hover 不再彈出</b>：移除 <code>.att-card:hover z-index:80</code>。原因：能量是疊牌的最外層（z 較低），hover 跳到 z=80 看起來像「能量蓋住其他卡」；進化鏈本來 z 就高，視覺差異小。為一致改成都不調 z-index，hover 純粹亮邊 + 黃光，stacking 維持。</li>

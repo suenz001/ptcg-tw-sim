@@ -8193,22 +8193,31 @@
   /* tabletop 隱藏右側 active-info 內的原 active-name（避免重複顯示） */
   .playmat.layout-tabletop .active-card .active-info .active-name{ display:none; }
 
-  /* === v5.028 bench 名稱+HP 提到頂層（z-index > stack 50），字放大 === */
+  /* === v5.030 bench 名稱+HP 改 absolute 疊在 Pokemon 圖中央上方 === */
+  /* 原本 (v5.028) name/stat 在 bench-slot flex 頂部，z-index:200 浮在 attached 之上 —
+     但占據了 slot 頂部空間，attached 卡疊到上方時被 name/stat 區擋住 hover 事件，
+     玩家無法 hover 預覽。改 absolute 疊在 Pokemon 圖中央偏上區、pointer-events:none
+     讓事件穿透到下方的 img + attached 卡。 */
   .playmat.layout-tabletop .bench-slot .bench-name{
-    position:relative; z-index:200;
-    font-size:.92rem; font-weight:700; color:#fff;
-    text-shadow:0 1px 2px rgba(0,0,0,.85);
-    background:rgba(0,0,0,.55); border-radius:3px;
-    padding:1px 3px; line-height:1.15;
+    position:absolute; left:4px; right:4px; top:38%;
+    z-index:200; pointer-events:none;
+    font-size:.82rem; font-weight:700; color:#fff;
+    text-align:center; line-height:1.1;
+    text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95);
+    background:rgba(0,0,0,.62); border-radius:3px;
+    padding:1px 3px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .playmat.layout-tabletop .bench-slot .bench-stat{
-    position:relative; z-index:200;
-    font-size:.85rem; font-weight:600; color:#cfe;
-    text-shadow:0 1px 2px rgba(0,0,0,.85);
-    background:rgba(0,0,0,.5); border-radius:3px;
-    padding:1px 3px; line-height:1.15;
+    position:absolute; left:4px; right:4px; top:calc(38% + 18px);
+    z-index:200; pointer-events:none;
+    font-size:.78rem; font-weight:700; color:#cfe;
+    text-align:center; line-height:1.1;
+    text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.95);
+    background:rgba(0,0,0,.55); border-radius:3px;
+    padding:1px 3px;
   }
-  /* bench hp-bar 也提到頂層（不被 attached 蓋） */
+  /* bench hp-bar 仍在 slot 底部、保持 z-index 高（不被 attached 蓋） */
   .playmat.layout-tabletop .bench-slot > .hp-bar-wrap{
     position:relative; z-index:200;
   }
