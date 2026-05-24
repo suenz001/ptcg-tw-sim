@@ -1027,8 +1027,7 @@ regR('snipe-120', (st, actorIdx, selectedIids, _params, pool) => {
   }
 
   const newDmg = target.damage + 120;
-  const targetHP = targetCard?.hp ?? 0;
-
+  const targetHP = effectiveHPInline(target, pool, st);  // v5.091
   if (targetHP > 0 && newDmg >= targetHP) {
     // 擊倒目標
     const koDiscard: CardInstance[] = [
@@ -5410,7 +5409,7 @@ regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
     }
   }
   const newDmg = target.damage + 60;
-  const targetHP = targetCard?.hp ?? 0;
+  const targetHP = effectiveHPInline(target, pool, st);  // v5.091
   if (targetHP > 0 && newDmg >= targetHP) {
     const koDiscard: CardInstance[] = [
       { ...target, damage: newDmg },
@@ -5566,8 +5565,7 @@ regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
   }
 
   const newDmg = target.damage + 10;
-  const targetHP = targetCard?.hp ?? 0;
-
+  const targetHP = effectiveHPInline(target, pool, st);  // v5.091
   if (targetHP > 0 && newDmg >= targetHP) {
     const koDiscard: CardInstance[] = [
       { ...target, damage: newDmg },
@@ -5640,7 +5638,7 @@ function applyDamageToAllOpp(
   if (defender.active && (!onlyDamaged || defender.active.damage > 0)) {
     const defCard = pool.get(defender.active.cardId);
     const newDmg = defender.active.damage + amount;
-    const hp = defCard?.hp ?? 0;
+    const hp = effectiveHPInline(defender.active, pool, s);  // v5.091
     if (hp > 0 && newDmg >= hp) {
       const koDiscard: CardInstance[] = [
         { ...defender.active, damage: newDmg },
@@ -5673,7 +5671,7 @@ function applyDamageToAllOpp(
       continue;
     }
     const newDmg = b.damage + amount;
-    const hp = card?.hp ?? 0;
+    const hp = effectiveHPInline(b, pool, s);  // v5.091
     if (hp > 0 && newDmg >= hp) {
       const koDiscard: CardInstance[] = [
         { ...b, damage: newDmg },
@@ -5744,7 +5742,7 @@ regPost('綿綿泡芙|悄聲加害', (state, aIdx, pool) => {
     // 僅 active 可選，直接施加
     const defCard = pool.get(defender.active.cardId);
     const newDmg = defender.active.damage + 20;
-    const hp = defCard?.hp ?? 0;
+    const hp = effectiveHPInline(defender.active, pool, state);  // v5.091
     const players = [...state.players] as [PlayerState, PlayerState];
     if (hp > 0 && newDmg >= hp) {
       const ko: CardInstance[] = [
@@ -5792,7 +5790,7 @@ regR('snipe-20', (st, actorIdx, selectedIids, _params, pool) => {
   }
   const targetCard = pool.get(target.cardId);
   const newDmg = target.damage + 20;
-  const hp = targetCard?.hp ?? 0;
+  const hp = effectiveHPInline(target, pool, st);  // v5.091
   if (hp > 0 && newDmg >= hp) {
     const ko: CardInstance[] = [
       { ...target, damage: newDmg },
@@ -6185,7 +6183,7 @@ regPost('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
   if (defender.bench.length === 0 && defender.active) {
     const defCard = pool.get(defender.active.cardId);
     const newDmg = defender.active.damage + dmg;
-    const hp = defCard?.hp ?? 0;
+    const hp = effectiveHPInline(defender.active, pool, state);  // v5.091
     const players = [...state.players] as [PlayerState, PlayerState];
     if (hp > 0 && newDmg >= hp) {
       const ko: CardInstance[] = [
@@ -6721,7 +6719,7 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
   // apply damage to new active
   if (!newDefender.active) return s;
   const newDmg = newDefender.active.damage + dmg;
-  const hp = newActiveCard?.hp ?? 0;
+  const hp = effectiveHPInline(newDefender.active, pool, s);  // v5.091
   if (hp > 0 && newDmg >= hp) {
     const koList: CardInstance[] = [
       { ...newDefender.active, damage: newDmg },
@@ -8207,7 +8205,7 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       continue;
     }
     const newDmg = target.damage + dmg;
-    const hp = targetCard?.hp ?? 0;
+    const hp = effectiveHPInline(target, pool, st);  // v5.091
     if (hp > 0 && newDmg >= hp) {
       const ko: CardInstance[] = [
         { ...target, damage: newDmg },
@@ -9433,7 +9431,7 @@ function snipeAllOppExPost(dmg: number, filterType: 'ex' | 'ex-or-v', label: str
       const cur = isActive ? defender.active : defender.bench.find(c => c.iid === t.iid);
       if (!cur) continue;
       const card = pool.get(cur.cardId);
-      const hp = card?.hp ?? 0;
+      const hp = effectiveHPInline(cur, pool, state);  // v5.091
       const newDmg = cur.damage + dmg;
       if (hp > 0 && newDmg >= hp) {
         const ko: CardInstance[] = [
@@ -11023,7 +11021,7 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
     }
     return s;
   }
-  const tHp = targetCard?.hp ?? 0;
+  const tHp = effectiveHPInline(target, pool, st);  // v5.091
   const newDmg = target.damage + addDmg;
   let s: GameState = st;
   if (tHp > 0 && newDmg >= tHp) {

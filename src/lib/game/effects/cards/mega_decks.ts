@@ -20,7 +20,7 @@ import {
   TOOL_ATTACK_BONUS, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
   JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
 } from '../../effects';
-import { isBasicEnergyOfType } from '../../engine';
+import { isBasicEnergyOfType, getEffectiveHP } from '../../engine';  // v5.091
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
 import { addPendingPrize } from '../_shared';
 
@@ -645,7 +645,7 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
     s = addLog(s, `${label}：${targetCard?.name ?? '?'} 受 ${count}×${counterDamage}=${baseAmt}${buffLog} 傷害`, actorIdx);
 
     const newDmg = target.damage + finalDmg;
-    const tHp = targetCard?.hp ?? 0;
+    const tHp = getEffectiveHP(target, pool, st);  // v5.091
 
     if (tHp > 0 && newDmg >= tHp) {
       // KO

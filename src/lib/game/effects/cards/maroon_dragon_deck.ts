@@ -33,6 +33,7 @@ import {
   koPrizeCount,
   isBenchProtected,
 } from '../../effects';
+import { getEffectiveHP } from '../../engine';  // v5.091
 import { addPendingPrize } from '../_shared';
 
 // ── 喵喵ex｜殺手鐧捕捉 — v2.320 改為 promptPlayAbilities 互動提示 ──────────
@@ -255,7 +256,8 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
       `腎上腺腦力：${targetCard?.name ?? '?'} ${_adrenalGuard.reason}（已回復來源傷害）`,
       actorIdx);
   }
-  const tHp = targetCard?.hp ?? 0;
+  // v5.091: 用 getEffectiveHP 含夠讚狗腎上腺力量等 +HP 修正
+  const tHp = getEffectiveHP(target, pool, st);
   const amount = (params?.amount as number) ?? 30;
   const newDmg = target.damage + amount;
   let s: GameState = st;

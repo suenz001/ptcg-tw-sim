@@ -265,6 +265,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.091</span> 🐛 10 處 KO 判定漏 +HP 修正（夠讚狗 腎上腺力量 / 道具 +HP / 太鼓防壁 全部被誤算）</summary>
+        <ul>
+          <li><b>玩家回報</b>：願增猿｜腎上腺腦力 把 20 傷害指示物搬到夠讚狗 SV6 064/101，被誤判 KO。夠讚狗的特性「腎上腺力量」附【惡】能量時最大 HP +100（130 → 230），實際不該死。</li>
+
+          <li><b>根因</b>：<code>maroon_dragon_deck.ts L258</code> 腎上腺腦力 + 同類 9 處 KO 判定全用 base HP：</li>
+          <li><pre><code>const tHp = targetCard?.hp ?? 0;
+if (tHp &gt; 0 &amp;&amp; newDmg &gt;= tHp) &#123; ...KO... &#125;</code></pre></li>
+          <li>完全忽略 max-HP 修正類來源（10+ 種）：腎上腺力量（夠讚狗 +100 附惡能量）／太鼓防壁（拉帝奧斯ex）／健次郎的研究筆記 +30 HP 道具／防護斗篷 / 守護斗篷／對戰圓形等。</li>
+
+          <li><b>Audit 結果 — 全部 10 處 KO 判定漏</b>：</li>
+          <li>　・<code>effects.ts</code> 8 處（+120 / +60 / +10 / +20 / +amount / +dmg / +addDmg 各類招式/特性 KO check）</li>
+          <li>　・<code>maroon_dragon_deck.ts:258</code> 願增猿｜腎上腺腦力（Wilson 回報）</li>
+          <li>　・<code>mega_decks.ts:648</code> +finalDmg KO check（megaEvolve 系列）</li>
+
+          <li><b>修法</b>：</li>
+          <li>　・<code>effects.ts</code> 8 處改用內部 <code>effectiveHPInline(target, pool, st)</code></li>
+          <li>　・<code>maroon_dragon_deck.ts</code> + <code>mega_decks.ts</code> 從 engine import <code>getEffectiveHP</code> 替換</li>
+
+          <li><b>實際影響</b>：v5.091 起 — 所有「直接放傷害指示物」類 KO 判定（招式 snipe / 特性轉傷 / 道具放指示物 等）會正確套用 +HP 修正。夠讚狗 / 拉帝奧斯ex / 帶 +HP 道具的寶可夢、超量傷害觸發誤 KO 全修。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 effects.ts + maroon_dragon_deck.ts + mega_decks.ts + version + changelog）／Rule 14（同類 audit 一次修完 10 處，避免後續類似 bug）／Rule 15（卡面 source of truth — KO 判定必須包含所有 +HP 修正類來源）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.090</span> 🐛 N的象徵鳥｜勝利象徵 沒觸發終局 + log 匯出 cardLink 亂碼</summary>
         <ul>
           <li><b>Bug 1 — 勝利象徵 我方剩 1 張獎賞時應直接獲勝，但 AI 對手仍繼續行動（玩家回報）</b></li>
