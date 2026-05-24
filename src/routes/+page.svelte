@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.087</span> 🔧 Hotfix — v5.086 changelog code block 違反 Rule 1（raw &#123;&#125; 沒 escape 導致 build 失敗）</summary>
+        <ul>
+          <li><b>事件</b>：v5.086 push 後 GitHub Actions Deploy 失敗 — vite-plugin-svelte build error。</li>
+          <li><b>根因</b>：v5.086 changelog 內加的 <code>&lt;pre&gt;&lt;code&gt;</code> code block 含程式碼的 <code>if (...) &#123;</code> 和 <code>for (...) &#123;</code> 大括號（raw <code>&#123;</code> / <code>&#125;</code>）。Svelte 模板區域內所有 <code>&#123;...&#125;</code> 都會被當作 JavaScript expression 解析 → 直接 build fail。</li>
+          <li><b>修法</b>：v5.086 code block 內所有 raw <code>&#123;</code> 改 <code>&amp;#123;</code>、<code>&#125;</code> 改 <code>&amp;#125;</code>（HTML entity）。</li>
+          <li><b>教訓</b>：ptcg-push skill iron rule 1 早就規範過 — 「Svelte 模板特殊字元（<code>&#123; &#125; &lt; &gt;</code>）必須 HTML-entity escape」，本來該寫 changelog 時就 escape 但漏了 audit code block 內部。歷史上 v2.461 / v2.733 / v2.82 / v5.036 / v5.045 都犯過同類 bug，已寫入 IRON_RULES.md Rule 1 audit 範圍。</li>
+          <li><b>實際影響</b>：v5.086 的 4 處重力之玉疊加修補本身正確（commit ea28a17 已 merge），只是 deploy step 因 changelog HTML 問題卡住。v5.087 hotfix 修 changelog 後 deploy 應通過。</li>
+          <li><b>Iron Rules</b>：Rule 1（escape Svelte 特殊字元）／Rule 11/11c（Python pipeline）／Rule 11e（Write tool）／Rule 11f（push 前 tsc）。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v5.086</span> 🐛 重力之玉效果疊加 — 雙方各 1 張應 +2 而非 +1（4 處全修）</summary>
         <ul>
           <li><b>玩家回報</b>：雙方寶可夢都附有重力之玉時，撤退能量應該再加 1 變成 +2（疊加效果），但實作只 +1。</li>
@@ -279,14 +291,14 @@
 
           <li><b>修法</b>：4 處全改 per-instance count 累加 —</li>
           <li><pre><code>let gravityCount = 0;
-if (!toolsJammed) {
-  for (const t of getAllAttachedTools(self.active)) {
+if (!toolsJammed) &#123;
+  for (const t of getAllAttachedTools(self.active)) &#123;
     if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(...)) gravityCount++;
-  }
-  for (const t of getAllAttachedTools(opp.active)) {
+  &#125;
+  for (const t of getAllAttachedTools(opp.active)) &#123;
     if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(...)) gravityCount++;
-  }
-}
+  &#125;
+&#125;
 cost += gravityCount;</code></pre></li>
 
           <li><b>實際影響</b>：v5.086 起 —</li>
