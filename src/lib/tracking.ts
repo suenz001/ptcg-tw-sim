@@ -47,7 +47,28 @@ export function initTracking() {
 
   onAuthStateChanged(auth, async (user) => {
     if (user) {
+      // v5.072 (C1)：匿名 user 完全跳過 setDoc — 不寫 users/{uid} doc
+      //
+      // 起源：v5.064 加 24h localStorage throttle 後寫入量仍維持 36k/日。
+      // Firebase Console users collection audit 顯示 ~15-20 個新匿名 user/15min
+      // (~1.6K/日)，大量來自 Facebook In-App Browser (FBAN/FBIOS, FB_IAB)
+      // — 這類瀏覽器不持久化 IndexedDB / localStorage，每次重新打開都
+      // signInAnonymously() 拿新 uid → throttle key 也是新的 → setDoc 仍觸發。
+      //
+      // C1 策略：匿名身份完全不在 Firestore users collection 留紀錄。
+      // 不影響：
+      //   - 牌組（users/{uid}/decks 子集合 — Firestore 父 doc 不存在仍可讀寫）
+      //   - 對戰（正式站走 Oracle / BETA 走 Firestore rooms 頂層集合）
+      //   - feedback (頂層 collection)
+      //   - AI 練習對戰（純前端）
+      //   - 匿名升級 Google（linkWithCredential，本 callback 仍跑 — 此時 isAnonymous=false 過關）
+      // admin 後台統計改用 Firebase Auth metadata（server_admin_patch.js L264-285
+      // adminAuth.listUsers() 拿 uid/email/creationTime/lastSignInTime — 已支援，
+      // 不計 Firestore 配額），失去欄位只剩 deviceId / userAgent / loginCount
+      // (admin 後台 stats endpoint 不讀這幾個欄位)。
+      if (user.isAnonymous) return;
       // v5.064：24h 內已寫過 — 跳過 setDoc（仍保留 anonymous auth 邏輯）
+      // 註：v5.072 後此 throttle 只對 Google 登入會員生效（匿名已早退）
       if (isThrottled) return;
       try {
         const userRef = doc(db, 'users', user.uid);

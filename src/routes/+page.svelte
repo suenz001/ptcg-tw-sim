@@ -265,6 +265,39 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.072</span> 🔥 Firebase 寫入量根因解決（方案 C1）— 匿名 user 完全不寫 users doc</summary>
+        <ul>
+          <li><b>背景：v5.064 後 Firebase 寫入仍維持 36k/日</b></li>
+          <li>　・v5.064 加了 24h localStorage throttle 後預期降寫入 80%，但實測仍 38k+/日（超出 20k 免費額度近 2 倍）。</li>
+          <li>　・Wilson 在 Firebase Console 撈 <code>users</code> collection 排序 createdAt 降冪截圖：<strong>16 分鐘內出現 18+ 個全新匿名 user</strong>，loginCount=1（全部首次寫入），UA 大量是 Facebook In-App Browser（<code>FBAN/FBIOS</code>、<code>FB_IAB</code>），且有 4 秒內同一裝置兩個 uid 的紀錄。</li>
+
+          <li><b>根因：Facebook In-App Browser 不持久化 IndexedDB / localStorage</b></li>
+          <li>　・FB IAB 沙箱化儲存空間 — 每次從 FB 訊息點 PTCG 連結 → IndexedDB 重置 → Firebase Auth <code>signInAnonymously()</code> 重跑 → <strong>產生全新 uid</strong>。</li>
+          <li>　・<code>ptcg_last_track_at</code> localStorage key 也跟著清光 → <code>isThrottled = false</code> → setDoc 仍觸發。<strong>v5.064 的 throttle 對 FB IAB 玩家完全失效</strong>。</li>
+          <li>　・<code>ptcg_device_id</code> 同樣是 localStorage → 每次都是「新裝置」紀錄。</li>
+
+          <li><b>方案決策：C1 vs C2（Lazy Write）</b></li>
+          <li>　・<b>C2（Gemini 建議）</b>：保留匿名追蹤，但延後到「實際動作」（建房、開戰、儲牌組）才寫 — 仍會被 FB IAB 灌水（玩家每次開遊戲就寫）。降幅約 50-70%。</li>
+          <li>　・<b>C1（採用）</b>：匿名 user 完全不寫 users doc。admin 統計改用 Firebase Auth metadata（<code>adminAuth.listUsers()</code> 已支援，不計 Firestore 配額）。降幅預估 80-90%。</li>
+          <li>　・C1 唯一失去：<code>deviceId</code> / <code>userAgent</code> / <code>loginCount</code> 三欄位（admin stats endpoint 本來就不讀這三欄）。</li>
+
+          <li><b>修法</b>：<code>tracking.ts onAuthStateChanged</code> 在 throttle check 之前加 <code>if (user.isAnonymous) return;</code> 早退。匿名身份完全不走 setDoc 路徑。</li>
+
+          <li><b>不影響的功能（已逐項 trace 確認）</b>：</li>
+          <li>　・<b>牌組儲存 / 編輯 / 雲端同步</b>：走 <code>users/&#123;uid&#125;/decks/&#123;deckId&#125;</code> 子集合，Firestore 允許父 doc 不存在仍讀寫子集合（官方支援的設計模式）— ✓</li>
+          <li>　・<b>正式站對戰</b>：走 Oracle MongoDB，與 Firestore 完全無關 — ✓</li>
+          <li>　・<b>BETA 對戰</b>：走 <code>rooms</code> 頂層集合，不依賴 users — ✓</li>
+          <li>　・<b>feedback 提交</b>：頂層 <code>feedbacks</code> collection — ✓</li>
+          <li>　・<b>AI 對戰練習</b>：純前端，不碰 Firebase — ✓</li>
+          <li>　・<b>匿名升級為 Google 會員</b>：<code>linkWithCredential</code> 後 user.isAnonymous=false → callback 過關，正常寫入 — ✓</li>
+
+          <li><b>觀察方式</b>：v5.072 上線 24-48 小時後檢查 Firebase Console「用量」頁面的「寫入次數」曲線。預期 36k/日 → 5-7k/日。若仍偏高，下一步查 <code>feedbacks</code>、<code>users/&#123;uid&#125;/decks</code> 子集合的寫入分佈。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 tracking.ts + +page.svelte + version.ts，只 3 個檔案）／Rule 14（最小 patch — 一行 <code>if (user.isAnonymous) return;</code> 解決，不重寫流程、不動 admin、不動 deck 路徑）／Rule 13（不動 Firestore data shape — users collection schema 不變，只少寫新匿名 doc）／Rule 11e（Write tool 寫 patch_v5072.py 避開 heredoc）／Rule 11f（push 前 3 道 ASSERT 防 silent fail）。Pre-push tsc + Rule 1 audit。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.071</span> 🐛 修手機版詳細卡彈窗 + 主畫面 active chip 雙狀態顯示（灼傷+混亂只看到混亂）</summary>
         <ul>
           <li><b>玩家回報</b>：手機版（iPhone）對戰時，場上寶可夢同時有【灼傷】+【混亂】（如被「危險光線」打中），詳細卡彈窗的「📍 場上狀態 → 異常」row 只顯示「😵 混亂」沒顯示「🔥 燒傷」；主畫面 active 卡的小 chip 也只顯示「confused」（且是英文原字串，沒中文 label）。</li>
