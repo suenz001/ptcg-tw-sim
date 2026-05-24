@@ -265,6 +265,40 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.086</span> 🐛 重力之玉效果疊加 — 雙方各 1 張應 +2 而非 +1（4 處全修）</summary>
+        <ul>
+          <li><b>玩家回報</b>：雙方寶可夢都附有重力之玉時，撤退能量應該再加 1 變成 +2（疊加效果），但實作只 +1。</li>
+
+          <li><b>卡面</b>（SV7 095/102）：「只要附有這張卡的寶可夢在戰鬥場上，雙方的戰鬥寶可夢【撤退】所需的能量各增加 1 個。」<b>「附有這張卡的寶可夢」是每張卡獨立計算</b>，雙方各 1 張 → 各 +1 = +2。</li>
+
+          <li><b>根因</b>：4 處撤退費計算全用 <code>bothPlusFromSelf || bothPlusFromOpp → cost += 1</code>（boolean OR）— 任一方有就只 +1，沒疊加。</li>
+          <li>　・<code>engine.ts L2470-2476</code> RETREAT handler — 實際撤退時</li>
+          <li>　・<code>engine.ts L7188-7196</code> getRetreatCost — UI canRetreat check</li>
+          <li>　・<code>engine.ts L7268-7278</code> computeActiveRetreatCostFor — v5.082 加的，幻影迷宮算傷害用</li>
+          <li>　・<code>game/+page.svelte L3204-3226</code> retreatCostOf — v5.084 加的 UI 顯示</li>
+
+          <li><b>修法</b>：4 處全改 per-instance count 累加 —</li>
+          <li><pre><code>let gravityCount = 0;
+if (!toolsJammed) {
+  for (const t of getAllAttachedTools(self.active)) {
+    if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(...)) gravityCount++;
+  }
+  for (const t of getAllAttachedTools(opp.active)) {
+    if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(...)) gravityCount++;
+  }
+}
+cost += gravityCount;</code></pre></li>
+
+          <li><b>實際影響</b>：v5.086 起 —</li>
+          <li>　・雙方各帶 1 張重力之玉 → 雙方撤退費 +2（之前 +1）</li>
+          <li>　・多重轉接特性下單一寶可夢帶 2 張重力之玉 → 該方撤退費 +2（之前 +1）</li>
+          <li>　・幻影迷宮（超級水晶燈火靈ex）對對手戰鬥位算傷害時也正確套用（+50 × 增加的能量數）</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 engine.ts + game/+page.svelte + version + changelog）／Rule 14（最小 patch — 同個概念 4 處鏡射，保留現有 helper 結構不抽新 helper；雖然有些重複但 4 處變數名不同 helper 抽取會 churn 較大）／Rule 15（卡面 source of truth — 「附有這張卡的寶可夢」=每張獨立計算）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.085</span> 🐛 蟲電寶｜並排 picker modal 空白（一家鼠｜家族行軍 同 bug）</summary>
         <ul>
           <li><b>玩家回報</b>：用蟲電寶｜並排 招式時 picker modal 顯示空白；但下回合用寶可平板看牌庫，確實有 3 張蟲電寶。</li>

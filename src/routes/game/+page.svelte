@@ -3201,28 +3201,32 @@
     const toolsJammedR = stadiumNameRetreatT ? JAMMING_TOWER_STADIUMS.has(stadiumNameRetreatT) : false;
     const hasBalloon = !toolsJammedR && allTools.some(t => getCard(t.cardId)?.name === '氣球');
     if (hasBalloon) cost = Math.max(0, cost - 2);
-    // v5.084：重力之玉（TOOL_BOTH_SIDES_RETREAT_PLUS）— 雙方 active 任一帶 → 雙方撤退 +1
+    // v5.084：重力之玉（TOOL_BOTH_SIDES_RETREAT_PLUS）— 每張獨立貢獻 +1
     //   鏡射 engine.ts L7187-7196；阻礙之塔時失效。
-    //   v5.082 修了 engine 但這個 UI helper 沒同步 → 玩家看到 cost 與實際撤退費不一致
-    //   （對手帶重力之玉，UI 顯示舊 cost、按按鈕後 engine 卻擋住） — 玩家回報「按鈕消失」之一因。
+    //   v5.086：原 v5.084 `boolean || boolean → +1` 違反卡面 — 「附有這張卡的寶可夢…」
+    //     是每張卡獨立計算。雙方各 1 張應 +2，玩家回報。改 per-instance count 累加。
     if (!toolsJammedR && game) {
       // 找撤退者所屬 owner（通常 inst 是自己 active，但保險起見從場上實體查）
       let ownerIdx: 0 | 1 = 0;
       if (game.players[1].active?.iid === inst.iid) ownerIdx = 1;
       const oppIdx = (1 - ownerIdx) as 0 | 1;
-      // 自身帶重力之玉
-      const ownHasGrav = allTools.some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(getCard(t.cardId)?.name ?? ''));
-      // 對手 active 帶重力之玉
-      let oppHasGrav = false;
+      let gravityCountUI = 0;
+      // 自身上的所有重力之玉
+      for (const t of allTools) {
+        if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(getCard(t.cardId)?.name ?? '')) gravityCountUI++;
+      }
+      // 對手 active 上的所有重力之玉
       const oppAct = game.players[oppIdx].active;
       if (oppAct) {
         const oppTools = [
           ...(oppAct.toolAttached ? [oppAct.toolAttached] : []),
           ...(oppAct.extraTools ?? []),
         ];
-        oppHasGrav = oppTools.some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(getCard(t.cardId)?.name ?? ''));
+        for (const t of oppTools) {
+          if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(getCard(t.cardId)?.name ?? '')) gravityCountUI++;
+        }
       }
-      if (ownHasGrav || oppHasGrav) cost += 1;
+      cost += gravityCountUI;
     }
     // v2.96：天空徑線（拉帝亞斯ex）— 自己場上有拉帝亞斯ex 時基礎寶可夢撤退 0
     // 鏡射 engine canRetreat 的 hook；UI 按鈕顯示「撤退（0⚡）」

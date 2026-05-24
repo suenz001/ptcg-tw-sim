@@ -2467,13 +2467,22 @@ function handlePlaying(
         if (r.reduceBy) retreatCost = Math.max(0, retreatCost - r.reduceBy);
       }
     }
-    // 重力之玉：雙方 active 任一帶此道具 → 雙方撤退 +1（阻礙之塔時失效）
-    // v3.20 多重轉接：任一道具觸發即可
-    const bothPlusFromSelf = !toolsJammedR
-      && getAllAttachedTools(attacker.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
-    const bothPlusFromOpp = !toolsJammedR && defender.active
-      && getAllAttachedTools(defender.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
-    if (bothPlusFromSelf || bothPlusFromOpp) retreatCost += 1;
+    // 重力之玉：每張獨立貢獻 +1（阻礙之塔時失效）
+    // v3.20 多重轉接：iterate 所有道具（單一寶可夢可附多張）
+    // v5.086：原 `boolean || boolean → +1` 違反卡面 — 卡面「附有這張卡的寶可夢…」
+    //   是每張卡獨立計算。雙方各 1 張 → 各 +1 = +2，玩家回報。改 per-instance count 累加。
+    let gravityCountR = 0;
+    if (!toolsJammedR) {
+      for (const t of getAllAttachedTools(attacker.active)) {
+        if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? '')) gravityCountR++;
+      }
+      if (defender.active) {
+        for (const t of getAllAttachedTools(defender.active)) {
+          if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? '')) gravityCountR++;
+        }
+      }
+    }
+    retreatCost += gravityCountR;
     // 被動特性：天空徑線（拉帝亞斯ex）— 基礎寶可夢免費撤退
     const hasSkyPathR = [
       ...(attacker.active ? [attacker.active] : []),
@@ -7185,13 +7194,23 @@ export function computeActiveRetreatCostFor(
     if (zeroSet2) cost = 0;
     else if (totalReduce2 > 0) cost = Math.max(0, cost - totalReduce2);
   }
-  // 重力之玉：雙方 active 任一帶 → 雙方撤退 +1
+  // 重力之玉：每張獨立貢獻 +1（卡面「附有這張卡的寶可夢…」每張卡獨立計算）
+  // v5.086：原 `boolean || boolean → +1` 違反卡面 — 雙方各 1 張應 +2。改 per-instance count 累加。
   const opp = state.players[(1 - playerIdx) as 0 | 1];
-  const bothPlusFromSelf = !toolsJammedCanR
-    && getAllAttachedTools(player.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
-  const bothPlusFromOpp = !toolsJammedCanR && opp.active
-    && getAllAttachedTools(opp.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
-  if (bothPlusFromSelf || bothPlusFromOpp) cost += 1;
+  let gravityCountC = 0;
+  if (!toolsJammedCanR) {
+    if (player.active) {
+      for (const t of getAllAttachedTools(player.active)) {
+        if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? '')) gravityCountC++;
+      }
+    }
+    if (opp.active) {
+      for (const t of getAllAttachedTools(opp.active)) {
+        if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? '')) gravityCountC++;
+      }
+    }
+  }
+  cost += gravityCountC;
   // 天空徑線
   const hasSkyPath = [
     ...(player.active ? [player.active] : []),
@@ -7264,14 +7283,21 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
     if (zeroSet2) cost = 0;
     else if (totalReduce2 > 0) cost = Math.max(0, cost - totalReduce2);
   }
-  // 重力之玉：雙方 active 任一帶此道具 → 雙方撤退 +1（阻礙之塔時失效）
+  // 重力之玉：每張獨立貢獻 +1（卡面「附有這張卡的寶可夢…」每張卡獨立計算）
+  // v5.086：原 `boolean || boolean → +1` 違反卡面 — 雙方各 1 張應 +2。改 per-instance count 累加。
   const opp = state.players[(1 - state.activePlayerIndex) as 0 | 1];
-  // v3.20 多重轉接：任一道具觸發即可
-  const bothPlusFromSelf = !toolsJammedCanR
-    && getAllAttachedTools(player.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
-  const bothPlusFromOpp = !toolsJammedCanR && opp.active
-    && getAllAttachedTools(opp.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
-  if (bothPlusFromSelf || bothPlusFromOpp) cost += 1;
+  let gravityCountG = 0;
+  if (!toolsJammedCanR) {
+    for (const t of getAllAttachedTools(player.active)) {
+      if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? '')) gravityCountG++;
+    }
+    if (opp.active) {
+      for (const t of getAllAttachedTools(opp.active)) {
+        if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? '')) gravityCountG++;
+      }
+    }
+  }
+  cost += gravityCountG;
   // 被動特性：天空徑線（拉帝亞斯ex）— 所有基礎寶可夢免費撤退
   const hasSkyPath = [
     ...(player.active ? [player.active] : []),
