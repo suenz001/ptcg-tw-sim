@@ -8383,10 +8383,7 @@
 
   /* === Bench 縮小 65%（讓 1366×768 不滾動）=== */
   /* v5.016：transform:scale 不影響 layout 框 → 浪費 72px 垂直空間（玩家回饋）。
-     改用 zoom:0.65 — 同步縮 layout + 視覺 → grid row auto 直接縮到 ~133px，省去多餘空間。
-     v5.093 試過 0.78 但 bench-slot height:205px base 預留 HP/ability 空間，
-     zoom 放大 → slot 黑底空白也跟著大 + 整 row 高度撐爆讓 hand 跑到 viewport 外，
-     v5.094 撤回回 0.65（玩家回報，純撤回方案）。 */
+     改用 zoom:0.65 — 同步縮 layout + 視覺 → grid row auto 直接縮到 ~133px，省去多餘空間。 */
   .playmat.layout-tabletop .zone-bench{ zoom:0.65; }
 
   /* v5.024 桌墊版：附加卡片改「同寶可夢大小、壓在底下、僅露出底部」（仿實體桌面）。
@@ -8414,8 +8411,6 @@
   .playmat.layout-tabletop .att-card.att-evo{ border-color:#88aaff; }
 
   /* === active：stack 對齊 active-img — 橫向往右扇開 === */
-  /* v5.094：撤回 v5.093 桌墊版 width:125px 改動 — 配 bench zoom 撤回，
-     active-img 回 base 105px (L9312 全模式共用)。 */
   .playmat.layout-tabletop .active-card .active-img{ position:relative; z-index:99; }
   .playmat.layout-tabletop .active-card > .att-card-stack{
     /* v5.038：HP 欄 88→140px → stack 跟著右移對齊 img */

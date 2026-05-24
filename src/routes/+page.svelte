@@ -265,6 +265,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.095</span> 🔧 game/+page.svelte 完全 hard reset 到 v5.092 byte-identical（修 CDN/browser 殘留樣式問題）</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.094 仍覺得「備戰區和戰鬥場間隔距離拉超大」，要求復原到 v5.092 狀態。</li>
+
+          <li><b>實測 v5.094 vs v5.092</b>：<code>game/+page.svelte</code> <code>git diff</code> 顯示 <b>純 6 行註解差別</b>，CSS rules byte-identical（v5.094 已正確撤回 zoom 0.78 + active-img 125）。</li>
+
+          <li><b>可能根因</b>：CDN / browser cache —</li>
+          <li>　・GitHub Pages CDN 可能還沒清掉 v5.093 chunk hash</li>
+          <li>　・Safari / iOS aggressive cache，Ctrl+Shift+R 沒清乾淨</li>
+          <li>　・<code>zone-bench zoom:0.78</code> CSS 殘留 → bench-slot 整體放大顯得「間隔大」</li>
+
+          <li><b>修法（保險 hard reset）</b>：</li>
+          <li>　・用 <code>git cat-file -p 8c132ea:src/routes/game/+page.svelte</code>（v5.092 commit）直接覆蓋 — 連 v5.094 加的 6 行註解都不留</li>
+          <li>　・bump v5.095 強制觸發新 chunk hash，bypass CDN cache</li>
+
+          <li><b>玩家請執行</b>：</li>
+          <li>　1. 等 GitHub Actions Deploy ✅ 完成（1-3 分鐘）</li>
+          <li>　2. <b>強制清快取</b>：Ctrl+Shift+R（Windows / Linux）或 Cmd+Shift+R（Mac）；iOS Safari 需到「設定 → Safari → 清除歷史紀錄與網站資料」</li>
+          <li>　3. 確認頁面右上 badge 顯示 v5.095</li>
+          <li>　4. 若仍覺間隔大 — 請截圖比對讓我能精準看出哪兩個元素間距太大（grid row gap / padding-top / zone-bench / etc）</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 14（最小 patch — game/+page.svelte 已 byte-identical，本版只 bump version + changelog）／Rule 11e（Write tool）／Rule 11f（ASSERT diff 為空）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.094</span> 🔧 撤回 v5.093 桌墊版卡片放大（bench-slot 外框太大 + 手牌跑到 viewport 外）</summary>
         <ul>
           <li><b>玩家回報</b>：v5.093 桌墊版調整效果不好 — bench-slot 卡圖只佔上半，下半大片黑空白；畫面變太長，手牌跑到 viewport 下方需上下滾動才能看到。</li>
