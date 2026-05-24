@@ -265,6 +265,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.092</span> 🔧 Firebase deck 寫入再降低 — debounce 1.5s → 5s + dirty-check 跳過重複內容</summary>
+        <ul>
+          <li><b>Audit 確認</b>：Wilson 跑 firestore-write-audit 確認 1h ~2000 writes/hr 中 <code>(group) decks</code> 4894 docs（無 createdAt timestamp 顯示 err），對應玩家編輯 deck 是寫入主因。v5.078 已加 1.5s debounce，但仍高。</li>
+
+          <li><b>修法（Wilson 選 5s 方案）</b>：</li>
+          <li>　・<code>PUSH_DEBOUNCE_MS</code> <code>1500</code> → <code>5000</code> ms — 連續編輯 5s 內所有變更合併成 1 個 <code>setDoc</code></li>
+          <li>　・加 <code>lastPushedSnapshot</code> <code>Map&lt;deckId, jsonString&gt;</code> dirty-check —</li>
+          <li>　　・<b>進場 check</b>：<code>pushDeck</code> 開始就 compare，snapshot 跟上次成功推送完全相同 + 無 pending timer → 整個排程跳過</li>
+          <li>　　・<b>timer fire check</b>：5 秒後 timer fire 時 final snapshot 跟上次推送比；若玩家 <code>add→remove</code> 又 revert 回原狀 → skip <code>setDoc</code></li>
+          <li>　　・<b>beforeunload 也套</b>：<code>flushPendingPushes</code> 也加 snapshot compare，沒變更不寫</li>
+
+          <li><b>預期效果</b>：</li>
+          <li>　・連續編輯 30 張卡（1 分鐘）：原 1.5s 可能寫 5-10 次 → 5s + dirty-check 可能只 1-2 次 setDoc</li>
+          <li>　・預估 deck 寫入再減 70%+，總 Firebase 寫入接近 audit visible 的 ~110/hr 基線</li>
+
+          <li><b>防丟資料</b>：addCard/removeCard 本就先寫 localStorage upsertDeck（同步），重整頁面不丟；beforeunload 仍 flush 所有 pending；5s 內 reload 從 local 還原。</li>
+
+          <li><b>未來規劃（v5.10x 候選）</b>：若 5s + dirty-check 後仍超 Firebase quota，再考慮搬到 Oracle endpoint POST /api/decks/save — 完全脫離 Firebase 寫額度，但需 auth 機制重構（中等工程量）。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 decks/+page.svelte + version + changelog）／Rule 14（最小 patch — 純擴展既有 pushDeck/flushPendingPushes）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.091</span> 🐛 10 處 KO 判定漏 +HP 修正（夠讚狗 腎上腺力量 / 道具 +HP / 太鼓防壁 全部被誤算）</summary>
         <ul>
           <li><b>玩家回報</b>：願增猿｜腎上腺腦力 把 20 傷害指示物搬到夠讚狗 SV6 064/101，被誤判 KO。夠讚狗的特性「腎上腺力量」附【惡】能量時最大 HP +100（130 → 230），實際不該死。</li>

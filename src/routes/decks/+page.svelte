@@ -376,20 +376,33 @@
     }
   }
 
-  // v5.078：Firebase 寫入暴量元兇 — addCard/removeCard 每次都 setDoc，
-  //   玩家組 30 張卡 = 30 setDoc。Firebase Console 觀察到 ~2000 writes/hr，
-  //   audit visible 只 ~110/hr → 差 1900/hr 全是 decks updates。
-  // 修法：每次 pushDeck 排程 1.5 秒後執行 actualPushDeck；1.5 秒內又改
-  //   → reset timer（連續編輯 30 張卡 → 只 1 個 setDoc，降 90%+）。
-  // 防丟資料：(a) addCard/removeCard 本就先寫 localStorage upsertDeck（同步），
-  //          所以即使 cloud push 還沒跑，重整頁面也不丟；
-  //          (b) beforeunload event flush 所有 pending push 立即送出。
-  const PUSH_DEBOUNCE_MS = 1500;
+  // v5.078 / v5.092：Firebase 寫入暴量元兇 — addCard/removeCard 每次都 setDoc。
+  //   v5.078 加 1.5s debounce 後仍高（1h ~2000 writes，~1900 是 decks）。
+  //   v5.092（Wilson 選 5s）：
+  //     (1) PUSH_DEBOUNCE_MS 1500 → 5000ms（更激進 debounce — 連續編輯 5s 內所有變更合併成 1 個 setDoc）
+  //     (2) 加 lastPushedSnapshot 比對 — JSON.stringify(deck) 跟上次寫入完全相同就 skip
+  //         （防玩家 add→remove→add 同卡時 timer fire，內容沒實質變但仍誤寫；或頁面切換
+  //          觸發 reactive 重算 deck 物件 ref 變但內容沒變）
+  //   預期再減 70%+ deck 寫入。
+  // 防丟資料：
+  //   (a) addCard/removeCard 本就先寫 localStorage upsertDeck（同步）→ 重整頁面不丟
+  //   (b) beforeunload event flush 所有 pending push 立即送出
+  //   (c) 5s 內 reload → 從 local 還原
+  const PUSH_DEBOUNCE_MS = 5000;  // v5.092: 1500 → 5000
   const pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const pendingPushes = new Map<string, Deck>();
+  // v5.092: 紀錄每個 deck 上次成功推送的 snapshot（JSON 化），用於 dirty-check
+  const lastPushedSnapshot = new Map<string, string>();
 
   function pushDeck(deck: Deck) {
     if (!firebaseUser) return;
+    // v5.092 dirty-check：snapshot 跟上次成功推送完全一樣就 skip 整個排程
+    //   注意：必須跟「上次成功推送」比，不能跟 pendingPushes 比 — 那是「下次要推」
+    const snapshot = JSON.stringify(deck);
+    if (lastPushedSnapshot.get(deck.id) === snapshot && !pushTimers.has(deck.id)) {
+      // 沒 pending timer + 內容跟上次推送相同 → 完全不用動
+      return;
+    }
     // 取消舊 timer，存最新版本
     const existingTimer = pushTimers.get(deck.id);
     if (existingTimer) clearTimeout(existingTimer);
@@ -399,7 +412,21 @@
       const finalDeck = pendingPushes.get(deck.id);
       pendingPushes.delete(deck.id);
       pushTimers.delete(deck.id);
-      if (finalDeck) actualPushDeck(finalDeck);
+      if (!finalDeck) return;
+      // v5.092 dirty-check (二次)：timer fire 時 final snapshot 跟上次 push 比
+      //   若玩家 add→remove 又 revert 回原狀 → 沒實質變更就 skip setDoc
+      const finalSnapshot = JSON.stringify(finalDeck);
+      if (lastPushedSnapshot.get(finalDeck.id) === finalSnapshot) {
+        // 內容跟上次推送相同 — 直接 skip setDoc（避免無謂寫入）
+        syncStatus = 'synced';
+        return;
+      }
+      actualPushDeck(finalDeck).then(() => {
+        // 推送成功才記 snapshot
+        lastPushedSnapshot.set(finalDeck.id, finalSnapshot);
+      }).catch(() => {
+        // 失敗不 set snapshot — 下次仍會 push
+      });
     }, PUSH_DEBOUNCE_MS);
     pushTimers.set(deck.id, timer);
   }
@@ -410,9 +437,12 @@
       clearTimeout(timer);
       const deck = pendingPushes.get(deckId);
       if (deck) {
-        // fire-and-forget — beforeunload 時可能等不到 await，但 Firebase SDK
-        // 內部會用 sendBeacon-like 機制盡量送出（不保證 100% 成功，但比不送好）
+        // v5.092 dirty-check 也套用 — 內容沒變則 beforeunload 也跳過
+        const snapshot = JSON.stringify(deck);
+        if (lastPushedSnapshot.get(deckId) === snapshot) continue;
+        // fire-and-forget — beforeunload 時可能等不到 await
         actualPushDeck(deck);
+        lastPushedSnapshot.set(deckId, snapshot);
       }
     }
     pushTimers.clear();
