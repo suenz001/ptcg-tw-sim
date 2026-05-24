@@ -265,6 +265,45 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.080</span> 🐛 撤回重力之玉 ACE SPEC 錯標 + 強制丟能量 5 處 + 7 張「受傷時」道具補 KO 觸發（含龐克頭盔）</summary>
+        <ul>
+          <li><b>修法 0 — 撤回 v5.079 AI 幻覺（嚴重違反 Rule 15）</b></li>
+          <li>　・<b>重力之玉</b>（SV7 095/102）：卡面僅寫「撤退所需的能量各增加 1 個」— 純撤退費道具，<b>不是 ACE SPEC</b>。v5.079 我擅自標 ACE SPEC，撤回。</li>
+          <li>　・<b>秘密箱</b>（SV6 092/101）：玩家親自確認是 ACE SPEC，v5.079 標的保留。</li>
+          <li>　・<b>教訓</b>：Rule 15 卡面 source of truth — AI 無法純從 rulesText 判斷 ACE SPEC（卡框屬性）。Audit 必須以「玩家親自確認 OR PTCG 官方公開清單」為準，AI 推測 = 幻覺。</li>
+
+          <li><b>修法 1 — 強制丟能量招式 5 處 min=0 漏（玩家回報火山流星）</b></li>
+          <li>　・<code>effects.ts L6793 registerSelfDiscardMultiply</code> 把 <code>min: 0</code> 寫死，對「per=0 強制 N 個 cost」型招式 bug。加 <code>min: number = 0</code> 參數。</li>
+          <li>　・5 個 per=0 caller 修：</li>
+          <li>　　1. <b>超級噴火駝ex｜火山流星</b>「選擇 2 個」→ min=2</li>
+          <li>　　2. <b>千面避役｜水射擊</b>「選擇 1 個」→ min=1</li>
+          <li>　　3. <b>雷吉艾斯ex｜冰之牢籠</b>「將 2 個 ... 丟棄」→ min=2</li>
+          <li>　　4. <b>頓甲｜防守回轉</b>「選擇 2 個」→ min=2</li>
+          <li>　　5. <b>鋼炮臂蝦｜水之發射器</b>「全部丟棄」→ <code>forceAll=true</code></li>
+
+          <li><b>修法 2 — 7 張「受到傷害時」道具補 KO 觸發（玩家回報手持循環扇 + audit 同類）</b></li>
+          <li>　・<b>玩家回報</b>：附「手持循環扇」的寶可夢被 KO 時，沒觸發改附能量效果。卡面「受到對手的寶可夢招式的傷害時」依 PTCG 規則<b>含 KO 情境</b>。</li>
+          <li>　・<b>Audit 結果</b>：全 TOOL_ON_DAMAGED 道具 7 張，rulesText 全寫「受到 ... 招式的傷害時」— 全部漏 KO 觸發：</li>
+          <li>　　・<b>幸運頭盔</b>（抽 2 張）</li>
+          <li>　　・<b>凸凸頭盔</b>（攻擊方放 2 個指示物 +20）</li>
+          <li>　　・<b>火箭隊的催眠裝置</b>（攻擊方睡眠）</li>
+          <li>　　・<b>逆境保險</b>（弱點屬性匹配抽 3 張）</li>
+          <li>　　・<b>奢華炸彈</b>（攻擊方放 12 指示物 +120）</li>
+          <li>　　・<b>手持循環扇</b>（改附攻擊方能量到備戰）</li>
+          <li>　　・<b>豪華炸彈</b>「造成 240 點以上傷害時」— 需 baseDamage 條件，v5.081 處理 TOOL_ON_KO signature 擴展</li>
+          <li>　・<b>修法</b>：<code>tools.ts</code> 加 <code>registerToolOnDamagedAndKO(name, fn)</code> helper，6 張卡（豪華炸彈跳過）改用 helper — 同一 fn 同時註冊 TOOL_ON_DAMAGED + TOOL_ON_KO。KO 路徑 damage=0 dummy（這 6 張不依賴 damage 值）。</li>
+
+          <li><b>修法 3 — 龐克頭盔 KO 分支補反擊（engine.ts hardcoded）</b></li>
+          <li>　・<b>根因</b>：龐克頭盔反彈邏輯在 <code>engine.ts L5043</code>，位於 <code>else if (!preventedKO)</code> 分支內 — 只在沒 KO 時跑。holder 被 KO 時跳過。</li>
+          <li>　・<b>修法</b>：在 <code>L4937 TOOL_ON_KO loop 完跑後</code>、<code>L4940 bench-empty 終局判定前</code>插入同邏輯：將 punkReflectDamage (40 點) 加到攻擊方 active。雙 KO 邊緣案例（反彈傷害把攻擊方也打死）交給後續 sanityKOSweep 處理。<code>punkReflectDamage</code> 已在 L4639 預先計算，不論 KO 與否都算為 40。</li>
+
+          <li><b>實際影響</b>：v5.080 起 — (a) 火山流星等 5 招式按下後 picker 強制要選 max=min 張能量才能 confirm，不能 0 略過；(b) holder 被 KO 時，6 張「受傷時」道具（含龐克頭盔反擊）全部正確觸發。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 effects.ts + tools.ts + engine.ts + +page.svelte + SV7.json + version.ts）／Rule 11d（JSON 卡面修正 — 撤回重力之玉錯標）／Rule 14（最小 patch — helper 加 optional 參數向後相容；6 處卡改用 helper；龐克頭盔複製 18 行套用邏輯到 KO 分支）／Rule 15（卡面 source of truth — 火山流星「選擇 2 個」=強制；「受到傷害時」含 KO；重力之玉純撤退費非 ACE SPEC）／Rule 11e（Write tool）／Rule 11f（push 前 9 道 ASSERT 防 silent fail）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.079</span> 🐛 修蓋諾賽克特｜ACE消弭 擋不到 ACE SPEC 能量 + 秘密箱/重力之玉 補 ACE SPEC 標記</summary>
         <ul>
           <li><b>玩家回報</b>：自己場上有蓋諾賽克特（非 ex 版本）+ 附「氣球」道具，理應觸發特性「ACE消弭」擋對手 ACE SPEC 卡。但對手仍能使出「新衝天能量」（ACE SPEC 特殊能量）。卡面：「若這隻寶可夢附有『寶可夢道具』卡，則對手無法從手牌使出『【ACE SPEC】』卡。」</li>

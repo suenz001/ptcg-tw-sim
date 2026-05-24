@@ -259,7 +259,19 @@ TOOL_PRIZE_BONUS.set('莉莉艾的珍珠', (card) => {
 });
 
 // ── 受傷（未 KO）觸發 ──────────────────────────────────────────────────────
-TOOL_ON_DAMAGED.set('幸運頭盔', (state, dIdx) => {
+// v5.080：通用 helper — 卡面「受到傷害時」依 PTCG 規則含 KO 情境，
+//   同一 fn 同時註冊到 TOOL_ON_DAMAGED + TOOL_ON_KO。
+//   damage 參數在 KO 路徑傳 0（適用於不依賴 damage 值的道具；
+//   依賴 baseDamage 的「豪華炸彈」240 點以上條件未來 v5.081 處理）。
+function registerToolOnDamagedAndKO(
+  name: string,
+  fn: (state: import('../../types').GameState, dIdx: 0|1, aIdx: 0|1, damage: number, pool: Map<string, import('$lib/cards/types').Card>) => import('../../types').GameState,
+): void {
+  TOOL_ON_DAMAGED.set(name, fn);
+  TOOL_ON_KO.set(name, (state, dIdx, aIdx, pool, _koInst) => fn(state, dIdx, aIdx, 0, pool));
+}
+
+registerToolOnDamagedAndKO('幸運頭盔', (state, dIdx) => {
   state = addLog(state, '幸運頭盔：抽 2 張', dIdx);
   return updatePlayer(state, dIdx, p => {
     const taken = p.deck.slice(0, 2);
@@ -267,14 +279,14 @@ TOOL_ON_DAMAGED.set('幸運頭盔', (state, dIdx) => {
   });
 });
 // v2.170 凸凸頭盔：受傷時對攻擊方 +20 傷害（2 個傷害指示物）
-TOOL_ON_DAMAGED.set('凸凸頭盔', (state, _dIdx, aIdx) => {
+registerToolOnDamagedAndKO('凸凸頭盔', (state, _dIdx, aIdx) => {
   return updatePlayer(addLog(state, '凸凸頭盔：對攻擊方放置 2 個傷害指示物（+20）', null), aIdx, p => {
     if (!p.active) return p;
     return { ...p, active: { ...p.active, damage: p.active.damage + 20 } };
   });
 });
 // v2.170 火箭隊的催眠裝置：受傷時若 holder 為「火箭隊的」寶可夢，將攻擊方睡眠
-TOOL_ON_DAMAGED.set('火箭隊的催眠裝置', (state, dIdx, aIdx, _dmg, pool) => {
+registerToolOnDamagedAndKO('火箭隊的催眠裝置', (state, dIdx, aIdx, _dmg, pool) => {
   const dp = state.players[dIdx];
   const holder = dp.active;
   if (!holder) return state;
@@ -286,7 +298,7 @@ TOOL_ON_DAMAGED.set('火箭隊的催眠裝置', (state, dIdx, aIdx, _dmg, pool) 
   });
 });
 // v2.170 逆境保險：受傷時若 holder 弱點屬性 = 攻擊方屬性，從牌庫抽 3 張
-TOOL_ON_DAMAGED.set('逆境保險', (state, dIdx, aIdx, _dmg, pool) => {
+registerToolOnDamagedAndKO('逆境保險', (state, dIdx, aIdx, _dmg, pool) => {
   const dp = state.players[dIdx];
   const ap = state.players[aIdx];
   if (!dp.active || !ap.active) return state;
@@ -300,7 +312,7 @@ TOOL_ON_DAMAGED.set('逆境保險', (state, dIdx, aIdx, _dmg, pool) => {
     return { ...p, deck: p.deck.slice(taken.length), hand: [...p.hand, ...taken] };
   });
 });
-TOOL_ON_DAMAGED.set('奢華炸彈', (state, dIdx, aIdx) => {
+registerToolOnDamagedAndKO('奢華炸彈', (state, dIdx, aIdx) => {
   // 反彈 120 傷害到攻擊方，且道具丟棄
   state = updatePlayer(state, dIdx, p => {
     if (!p.active || !p.active.toolAttached) return p;
@@ -373,7 +385,7 @@ TOOL_ON_DAMAGED.set('豪華炸彈', (state, dIdx, aIdx, baseDamage, pool) => {
 // 兩段 pending：
 //   1. modal-choice：列出 attacker.active 的能量為 options
 //   2. opp-bench-choose：選 attacker 備戰寶可夢
-TOOL_ON_DAMAGED.set('手持循環扇', (state, dIdx, aIdx, _dmg, pool) => {
+registerToolOnDamagedAndKO('手持循環扇', (state, dIdx, aIdx, _dmg, pool) => {
   const ap = state.players[aIdx];
   if (!ap.active || ap.active.energyAttached.length === 0) {
     // 攻擊方戰鬥位無能量 → 無效果

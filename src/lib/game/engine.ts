@@ -4948,6 +4948,28 @@ function handlePlaying(
         }
       }
 
+      // v5.080：龐克頭盔反擊 — 卡面「受到傷害時」依 PTCG 規則含 KO 情境，
+      //   原 L5043 PUNK reflect 套用只在「沒 KO」分支跑（else if !preventedKO），
+      //   holder 被 KO 時漏觸發。複製套用邏輯到 KO 分支（在 TOOL_ON_KO 之後）。
+      //   注意：punkReflectDamage 已在 L4639 預先計算（不論 KO 與否都算 40）。
+      //   雙 KO 邊緣案例（反彈把 attacker 也打死）：交給後續 sanityKOSweep 處理。
+      if (!toolsJammed && punkReflectDamage > 0) {
+        const refPlayers = [...newState.players] as [PlayerState, PlayerState];
+        const atkP = { ...refPlayers[aIdx] };
+        if (atkP.active) {
+          const atkNewDmg = atkP.active.damage + punkReflectDamage;
+          atkP.active = { ...atkP.active, damage: atkNewDmg };
+          refPlayers[aIdx] = atkP;
+          newState = addLog(
+            { ...newState, players: refPlayers },
+            `🔧 龐克頭盔（holder KO）：${attackerCard.name} 受到 ${punkReflectDamage} 傷害反擊！`,
+            null,
+          );
+        }
+        // 套用後 punkReflectDamage 置 0 避免 L5043 非 KO 分支重複套用（雖然 KO/非 KO 互斥但保險）
+        punkReflectDamage = 0;
+      }
+
       // 無備戰寶可夢 → 直接終局，不需送出新寶可夢
       if (defenderState.bench.length === 0) {
         return {

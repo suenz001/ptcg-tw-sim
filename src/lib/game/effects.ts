@@ -6801,10 +6801,13 @@ function registerSelfDiscardMultiply(
   //   用於卡面寫「全部丟棄」的招式（席多藍恩 鋼鐵爆炸 / 電蜘蛛 放電）。
   //   forceAll=false（預設）保持 picker 行為，用於「最多 N 張」型。
   forceAll: boolean = false,
+  // v5.080: min 強制最少丟 N 張（=max 即「強制丟剛好 N 張」型，卡面寫「選擇 N 個」）。
+  //   per=0「強制 N 個 cost」型招式（火山流星/水射擊/冰之牢籠/防守回轉等）必須傳 min=max。
+  min: number = 0,
 ) {
   if (!forceAll) {
     ATTACK_PRE_DISCARD_CHOICE.set(key, {
-      min: 0,
+      min,
       max,
       scope: 'attacker',
       baseDamage,
@@ -8984,7 +8987,7 @@ regPost('花岩怪|崩山', millOppDeckTopPost(1, '崩山'));
 
 // 頓甲｜防守回轉 120 — 自己丟 2 張能量（作為成本）+ 下回合受招式傷害 -100
 // 先登 ATTACK_PRE_DISCARD_CHOICE 讓 UI 彈窗，再在 PRE 執行丟棄與傷害，POST 設置減傷旗標
-registerSelfDiscardMultiply('頓甲|防守回轉', '防守回轉', 120, 0, 2, 'all');
+registerSelfDiscardMultiply('頓甲|防守回轉', '防守回轉', 120, 0, 2, 'all', false, 2);  // v5.080: min=2
 regPost('頓甲|防守回轉', selfDmgReducePost(100));
 
 // 古劍豹｜冰柱閉環 120 — 選 1 張自身能量放回手牌
@@ -9143,16 +9146,16 @@ regPost('銅鏡怪|鐵壁', coinHeadsSelfImmuneNextPost('鐵壁'));
 
 // ── (B) registerSelfDiscardMultiply 補完（自身丟能量為 cost） ─────────────
 // 千面避役｜水射擊 110 — 丟 1 自身能量（cost）
-registerSelfDiscardMultiply('千面避役|水射擊', '水射擊', 110, 0, 1, 'all');
+registerSelfDiscardMultiply('千面避役|水射擊', '水射擊', 110, 0, 1, 'all', false, 1);  // v5.080: min=1
 
 // 超級噴火駝ex｜火山流星 280 — 丟 2 自身能量
-registerSelfDiscardMultiply('超級噴火駝ex|火山流星', '火山流星', 280, 0, 2, 'all');
+registerSelfDiscardMultiply('超級噴火駝ex|火山流星', '火山流星', 280, 0, 2, 'all', false, 2);  // v5.080: min=2
 
 // 鋼炮臂蝦｜水之發射器 210 — 丟所有自身能量
-registerSelfDiscardMultiply('鋼炮臂蝦|水之發射器', '水之發射器', 210, 0, 99, 'all');
+registerSelfDiscardMultiply('鋼炮臂蝦|水之發射器', '水之發射器', 210, 0, 99, 'all', true);  // v5.080: forceAll=true 卡面「全部丟棄」
 
 // 雷吉艾斯ex｜冰之牢籠 140 — 丟 2 自身能量 + 對手【麻痺】
-registerSelfDiscardMultiply('雷吉艾斯ex|冰之牢籠', '冰之牢籠', 140, 0, 2, 'all');
+registerSelfDiscardMultiply('雷吉艾斯ex|冰之牢籠', '冰之牢籠', 140, 0, 2, 'all', false, 2);  // v5.080: min=2
 regPost('雷吉艾斯ex|冰之牢籠', statusPost('paralyzed'));
 
 // ── (C) selfHealPost 補完 ────────────────────────────────────────────────
