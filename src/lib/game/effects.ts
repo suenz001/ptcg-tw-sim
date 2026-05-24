@@ -10956,7 +10956,18 @@ export function selfKOInstance(
   return s;
 }
 
-/** 找本回合已觸發特性且 cardName 符合的 CardInstance iid（regA 內部用）。*/
+/**
+ * 找本回合已觸發特性且 cardName 符合的 CardInstance iid（regA 內部用）。
+ *
+ * ⚠️ v5.074 DEPRECATED：此 helper 在「同回合多隻同名寶可夢同時用特性」時會壞掉。
+ *   找的是「第一個有 abilityUsedThisTurn=true 的」— 2~N 隻時掃到第 1 隻就 return，
+ *   後續觸發都被誤歸到第 1 隻（玩家回報 3 隻火箭隊的操陷蛛｜充能 能量全附第 1 隻）。
+ *
+ * 正確做法：engine.ts L3329 已把觸發的 CardInstance 當第 4 參數傳給 abilityFn，
+ *   regA callback 直接接 `(st, idx, pool, cardInst) => ...` 用 cardInst.iid 即可。
+ *   v5.074 已把 4 處 caller（操陷蛛、彷徨夜靈、三合一磁怪、黑夜魔靈）改用第 4 參數，
+ *   helper 保留只是防 import 破壞，新註冊請勿使用。
+ */
 export function findAbilityUserIid(
   state: GameState,
   aIdx: 0 | 1,
@@ -11187,8 +11198,9 @@ function overvoltAttackPost(label: string): AttackPostFn {
 // 彷徨夜靈｜咒詛炸彈（5 counter）— 正統 ability 路徑
 // v2.95：JSON migration 後 abilities[0]={name:'咒詛炸彈'} 穩定存在，attack-style
 // ZWJ 變體註冊全部移除（見 v2.95 commit）。
-regA('彷徨夜靈', 0, (st, aIdx, pool) => {
-  const userIid = findAbilityUserIid(st, aIdx, '彷徨夜靈', pool);
+// v5.074：用第 4 參數 cardInst.iid 取代 findAbilityUserIid（同回合 2 隻彷徨夜靈時不誤判）
+regA('彷徨夜靈', 0, (st, aIdx, pool, cardInst) => {
+  const userIid = cardInst?.iid;
   if (!userIid) return st;
   const dIdx = (1 - aIdx) as 0 | 1;
   const dp = st.players[dIdx];
@@ -11209,9 +11221,10 @@ regA('彷徨夜靈', 0, (st, aIdx, pool) => {
 // 三合一磁怪｜過度放電（自身 KO + 從棄牌選 1-3 張基本【雷】能量附自己【雷】寶可夢）
 // v2.95：JSON migration 後從 attack-style 改為正統 ability 路徑。
 // 行為對齊原 overvoltAttackPost（維持相同 semantics，不改既有 filter 規則）。
-regA('三合一磁怪', 0, (st, aIdx, pool) => {
+// v5.074：用第 4 參數 cardInst.iid 取代 findAbilityUserIid（同回合 2 隻時不誤判）
+regA('三合一磁怪', 0, (st, aIdx, pool, cardInst) => {
   const label = '過度放電';
-  const userIid = findAbilityUserIid(st, aIdx, '三合一磁怪', pool);
+  const userIid = cardInst?.iid;
   if (!userIid) return st;
   // 可達鴨｜濕氣：自身 KO 類特性被消除
   if (hasPsyduckDamp(st, pool)) {
@@ -12241,8 +12254,11 @@ regPre('火箭隊的急凍鳥|暗黑冰霜', (state, aIdx, pool) => {
 // ---- v2.57：火箭隊的超夢 預組 特性實裝 --------------------------------------
 // 操陷蛛｜充能（主動）：1 回合 1 次，從棄牌區選 1 張基本能量附於此寶可夢。
 // 實裝方式：regA → discard-search filter=BasicEnergy → 自訂 resolver 附於觸發源。
-regA('火箭隊的操陷蛛', 0, (st, idx, pool) => {
-  const userIid = findAbilityUserIid(st, idx, '火箭隊的操陷蛛', pool);
+// v5.074 (Wilson 玩家回報根因)：用第 4 參數 cardInst.iid 取代 findAbilityUserIid。
+//   原 helper 在 3 隻同回合用「充能」時掃到第 1 隻已標記的就 return，導致後續觸發
+//   都把能量誤附到第 1 隻。改用 engine 傳的觸發 CardInstance 直接讀正確的 iid。
+regA('火箭隊的操陷蛛', 0, (st, idx, pool, cardInst) => {
+  const userIid = cardInst?.iid;
   if (!userIid) return st;
   const p = st.players[idx];
   const cand = p.discard.filter(c => {

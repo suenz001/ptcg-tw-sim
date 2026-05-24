@@ -265,6 +265,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.074</span> 🐛 修 3 隻同名寶可夢用特性時，能量/效果全跑到第 1 隻（findAbilityUserIid 共 4 處）</summary>
+        <ul>
+          <li><b>玩家回報</b>：場上有 3 隻火箭隊的操陷蛛（SV10 009/098, Stage1 草），3 隻都用特性「充能」（在自己的回合時可使用 1 次，從棄牌區選 1 張基本能量附於這隻寶可夢身上）後，3 張能量都附到同一隻寶可夢，違反「附於這隻寶可夢」的卡面語意。</li>
+
+          <li><b>根因 — <code>findAbilityUserIid</code> helper 在同回合多隻同名同特性時誤判</b></li>
+          <li>　・<code>effects.ts L10960 findAbilityUserIid(state, aIdx, cardName, pool)</code> 掃 <code>[active, ...bench]</code> 找第 1 個 <code>abilityUsedThisTurn === true</code> 且卡名相符的 iid。</li>
+          <li>　・3 隻火箭隊的操陷蛛同回合各用過 1 次 → 3 隻都 <code>abilityUsedThisTurn=true</code> → helper 永遠回傳第 1 隻的 iid（陣列順序的第 1 個 match）→ 3 次能量全附第 1 隻。</li>
+
+          <li><b>修法 — engine 早就傳了正確的觸發 CardInstance，4 處 caller 改用第 4 參數</b></li>
+          <li>　・<code>engine.ts L3329</code>：<code>return abilityFn(newState, aIdx, pool, targetPoke);</code> — 第 4 參數就是觸發此特性的 <code>CardInstance</code>（pre-markUsed 版本，但 iid 一樣）。</li>
+          <li>　・<code>EffectFn type</code>（<code>_shared.ts L28</code>）早就支援 <code>(state, actorIdx, pool, cardInst?: CardInstance) =&gt; GameState</code>。</li>
+          <li>　・4 處 regA 改用 <code>(st, idx, pool, cardInst) =&gt; &#123; const userIid = cardInst?.iid; ... &#125;</code> 直接讀觸發的 iid，根本不用掃場。</li>
+
+          <li><b>Audit 結果（4 處全部一起改）</b>：</li>
+          <li>　・<code>effects.ts L12244</code> <b>火箭隊的操陷蛛｜充能</b>（不自身 KO，3 隻可同回合用 → Wilson 回報的 bug）✅ 改完</li>
+          <li>　・<code>effects.ts L11190</code> <b>彷徨夜靈｜咒詛炸彈</b>（自身 KO，同回合 2+ 隻機率低但理論有同 bug）✅ 改完</li>
+          <li>　・<code>effects.ts L11212</code> <b>三合一磁怪｜過度放電</b>（自身 KO，同 bug）✅ 改完</li>
+          <li>　・<code>maroon_dragon_deck.ts L66</code> <b>黑夜魔靈｜咒詛炸彈 13 counter</b>（自身 KO，同 bug）✅ 改完</li>
+          <li>　・<code>findAbilityUserIid</code> helper 加 <code>⚠️ DEPRECATED</code> 註解但保留（maroon_dragon_deck.ts 的 import 仍存在；新註冊請直接用第 4 參數，未來可移除）</li>
+
+          <li><b>實際影響</b>：v5.074 起 — 3 隻火箭隊的操陷蛛各自用「充能」會把能量正確附到自己身上；彷徨夜靈 / 黑夜魔靈 / 三合一磁怪 在罕見的「同回合多隻發動」邊緣案例也不再誤掛第 1 隻。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 effects.ts + maroon_dragon_deck.ts + +page.svelte + version.ts）／Rule 14（最小 patch — 每處 3 行替換 fn 簽名 + 改 userIid 來源；engine 端 0 改動，因 callsite 早就傳了第 4 參數）／Rule 15（卡面「附於這隻寶可夢」明確指觸發者，不是同名第 1 隻）／Rule 11e（Write tool 寫 patch_v5074.py 避開 heredoc）／Rule 11f（push 前 ASSERT 4 處 regA 替換完成）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.073</span> 🐛 修琉琪亞的展示無法選對方基礎 ex 寶可夢</summary>
         <ul>
           <li><b>玩家回報</b>：使用支援者「琉琪亞的展示」(SV7a 063/064 H 標) 時，picker 沒列出對方備戰區的基礎 ex 寶可夢，只能選非 ex 的基礎寶可夢。卡面：「選擇 1 隻對手的備戰區的【基礎】寶可夢，與戰鬥寶可夢互換。然後，將新上場的寶可夢【混亂】。」「【基礎】」沒排除 ex，理應可選基礎 ex。</li>

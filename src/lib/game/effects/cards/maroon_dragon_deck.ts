@@ -63,8 +63,9 @@ regA('喵喵ex', 0, (st, aIdx, pool, inst) => {
 // ── 黑夜魔靈｜咒詛炸彈 — 13 counter ──────────────────────────────────────────
 // v2.95：JSON migration 後 abilities[0]={name:'咒詛炸彈'} 統一存在，attack-style
 // ZWJ 變體註冊全數移除。
-regA('黑夜魔靈', 0, (st, aIdx, pool) => {
-  const userIid = findAbilityUserIid(st, aIdx, '黑夜魔靈', pool);
+// v5.074：用第 4 參數 cardInst.iid 取代 findAbilityUserIid（同回合 2 隻時不誤判）
+regA('黑夜魔靈', 0, (st, aIdx, pool, cardInst) => {
+  const userIid = cardInst?.iid;
   if (!userIid) return st;
   const dIdx = (1 - aIdx) as 0 | 1;
   const dp = st.players[dIdx];
