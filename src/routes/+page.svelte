@@ -265,6 +265,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.084</span> 🐛 UI 撤退費顯示鏡射重力之玉 + mirror 按鈕能量不夠改 disabled 不消失</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.082 修了幻影迷宮 + 對手撤退花費的能量正確了，但介面上顯示需要的撤退能量數量錯誤，撤退按鈕還會莫名其妙消失（正常應該都會顯示，就算能量不夠也只是變暗）。</li>
+
+          <li><b>根因 1 — UI <code>retreatCostOf</code> 沒鏡射重力之玉</b></li>
+          <li>　・<code>game/+page.svelte L3182</code> 的 <code>retreatCostOf</code> 既有 v3.20 道具迴圈只 hardcode 氣球，沒 iterate <code>TOOL_BOTH_SIDES_RETREAT_PLUS</code>（重力之玉）。</li>
+          <li>　・v5.082 修了 <code>engine.ts</code> <code>getRetreatCost</code> + 新增 <code>computeActiveRetreatCostFor</code>，但 UI 這個 helper 沒同步 → 對手帶重力之玉時 engine cost=1 但 UI 顯示舊 cost=0。</li>
+          <li>　・<b>修法</b>：補 <code>TOOL_BOTH_SIDES_RETREAT_PLUS</code> 邏輯（鏡射 engine.ts L7187-7196）— 雙方 active 任一帶重力之玉 → +1；阻礙之塔時失效（也順便補 isToolsJammed gate to 氣球）。並補樂園度假地 -1 給可達鴨（之前漏）。</li>
+
+          <li><b>根因 2 — action-bar mirror 撤退按鈕能量不夠時消失</b></li>
+          <li>　・mirror 按鈕（<code>L5882</code>）的 <code>{`#if`}</code> 條件含 <code>canRetreatNow</code>。<code>canRetreatNow = canRetreat(game, pool)</code> 內部會 check 能量是否足夠（<code>totalEnergyUnits &gt;= cost</code>）；能量不夠 → false → 按鈕直接從 DOM 消失。</li>
+          <li>　・但同個情境下，<code>zone-active</code> 內的按鈕（<code>L5968</code>）有 if/else 兩態 — 能量不夠仍顯示 disabled（🚫 + tooltip 說明原因）。</li>
+          <li>　・兩個按鈕行為不一致是 v3.93 加 mirror 時偷懶造成。重力之玉觸發後 cost +1 容易超過自身能量 → mirror 按鈕消失，玩家誤以為系統 bug。</li>
+          <li>　・<b>修法</b>：mirror 按鈕改 if/else 兩態，鏡射 zone-active L5969-5980 — <code>canRetreatNow</code> true 顯示正常按鈕；false 顯示 🚫 disabled + <code>getRetreatBlockReason</code> tooltip。</li>
+
+          <li><b>實際影響</b>：v5.084 起，對手帶重力之玉時 UI 顯示的撤退費 = engine 實際撤退費；能量不夠時兩個撤退按鈕（mirror + zone-active）都顯示 disabled 不消失，玩家可以看到 tooltip 知道原因。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + version.ts + +page.svelte changelog）／Rule 14（最小 patch — retreatCostOf 補 1 個 block；mirror button if/else 鏡射 zone-active）／Rule 15（卡面 source of truth — 重力之玉「雙方撤退能量各增加 1 個」）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.083</span> 🐛 花岩怪|怨恨旋渦 field-wide + 化隱擋冰冷之帳 + 細胞球/細胞卵 direct-evolve picker</summary>
         <ul>
           <li><b>修法 1 — 花岩怪｜怨恨旋渦 在備戰時完全沒觸發（玩家回報）</b></li>

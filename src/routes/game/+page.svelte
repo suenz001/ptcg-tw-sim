@@ -23,7 +23,8 @@
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD } from '$lib/game/effects';
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS } from '$lib/game/effects';
+  import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
   import { auth } from '$lib/firebase';
@@ -3187,8 +3188,34 @@
       ...(inst.toolAttached ? [inst.toolAttached] : []),
       ...(inst.extraTools ?? []),
     ];
-    const hasBalloon = allTools.some(t => getCard(t.cardId)?.name === '氣球');
+    // v5.084 阻礙之塔 gate — 道具失效時不套用任何 TOOL_RETREAT_MOD（鏡射 engine.ts L7104 / L7269）
+    const stadiumNameRetreatT = game?.activeStadium ? getCard(game.activeStadium.cardId)?.name : undefined;
+    const toolsJammedR = stadiumNameRetreatT ? JAMMING_TOWER_STADIUMS.has(stadiumNameRetreatT) : false;
+    const hasBalloon = !toolsJammedR && allTools.some(t => getCard(t.cardId)?.name === '氣球');
     if (hasBalloon) cost = Math.max(0, cost - 2);
+    // v5.084：重力之玉（TOOL_BOTH_SIDES_RETREAT_PLUS）— 雙方 active 任一帶 → 雙方撤退 +1
+    //   鏡射 engine.ts L7187-7196；阻礙之塔時失效。
+    //   v5.082 修了 engine 但這個 UI helper 沒同步 → 玩家看到 cost 與實際撤退費不一致
+    //   （對手帶重力之玉，UI 顯示舊 cost、按按鈕後 engine 卻擋住） — 玩家回報「按鈕消失」之一因。
+    if (!toolsJammedR && game) {
+      // 找撤退者所屬 owner（通常 inst 是自己 active，但保險起見從場上實體查）
+      let ownerIdx: 0 | 1 = 0;
+      if (game.players[1].active?.iid === inst.iid) ownerIdx = 1;
+      const oppIdx = (1 - ownerIdx) as 0 | 1;
+      // 自身帶重力之玉
+      const ownHasGrav = allTools.some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(getCard(t.cardId)?.name ?? ''));
+      // 對手 active 帶重力之玉
+      let oppHasGrav = false;
+      const oppAct = game.players[oppIdx].active;
+      if (oppAct) {
+        const oppTools = [
+          ...(oppAct.toolAttached ? [oppAct.toolAttached] : []),
+          ...(oppAct.extraTools ?? []),
+        ];
+        oppHasGrav = oppTools.some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(getCard(t.cardId)?.name ?? ''));
+      }
+      if (ownHasGrav || oppHasGrav) cost += 1;
+    }
     // v2.96：天空徑線（拉帝亞斯ex）— 自己場上有拉帝亞斯ex 時基礎寶可夢撤退 0
     // 鏡射 engine canRetreat 的 hook；UI 按鈕顯示「撤退（0⚡）」
     if (cost > 0 && card && !card.evolvesFrom && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && myPlayer) {
@@ -3200,6 +3227,11 @@
     if (cost > 0 && card?.name?.startsWith('N的') && game?.activeStadium) {
       const stadiumName = getCard(game.activeStadium.cardId)?.name;
       if (stadiumName === 'N的城堡') cost = 0;
+    }
+    // v5.084：樂園度假地（Stadium）— 可達鴨撤退 -1（鏡射 engine.ts L7274）
+    if (cost > 0 && card?.name === '可達鴨' && game?.activeStadium) {
+      const stadiumName = getCard(game.activeStadium.cardId)?.name;
+      if (stadiumName === '樂園度假地') cost = Math.max(0, cost - 1);
     }
     // v5.075：補鏡射 SPECIAL_ENERGY_RETREAT_MOD（磁鐵【鋼】能量 等）
     //   engine RETREAT handler L2458 + getRetreatCost (v5.075 補) 都套了，
@@ -5879,10 +5911,21 @@
             </button>
           {/if}
           <!-- v3.93：action-bar 內加 mirror 撤退按鈕（玩家視線常駐區，避免在不同解析度找不到）-->
-          {#if !pendingSelection && isMyTurn() && myPlayer?.active && !myPlayer.active.fossilOnField && (myPlayer.bench?.length??0) > 0 && game.phase==='playing' && game.turnPhase==='main' && canRetreatNow}
-            <button class="btn-act btn-retreat-mirror" onclick={(e)=>openFloatingRetreat(e)} title="撤退戰鬥場寶可夢到備戰，換另一隻上場">
-              🔄 撤退（{retreatCostOf(myPlayer.active)}⚡）
-            </button>
+          <!-- v5.084：能量不夠時改顯示 disabled 態（鏡射 zone-active L5969-5980） —
+               原 v3.93 只在 canRetreatNow=true 時 render → 對手帶重力之玉等情境讓
+               cost +1 超過自身能量時，按鈕「消失」，玩家誤以為系統 bug。
+               改 if/else 兩態，行為一致 zone-active 按鈕。 -->
+          {#if !pendingSelection && isMyTurn() && myPlayer?.active && !myPlayer.active.fossilOnField && (myPlayer.bench?.length??0) > 0 && game.phase==='playing' && game.turnPhase==='main'}
+            {#if canRetreatNow}
+              <button class="btn-act btn-retreat-mirror" onclick={(e)=>openFloatingRetreat(e)} title="撤退戰鬥場寶可夢到備戰，換另一隻上場">
+                🔄 撤退（{retreatCostOf(myPlayer.active)}⚡）
+              </button>
+            {:else}
+              <button class="btn-act btn-retreat-mirror" disabled
+                title={getRetreatBlockReason(game!, pool) ?? '無法撤退（未知原因）'}>
+                🚫 撤退（{retreatCostOf(myPlayer.active)}⚡）
+              </button>
+            {/if}
           {/if}
           {#if canEndTurn}
             <button class="btn-act primary" onclick={()=>dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
