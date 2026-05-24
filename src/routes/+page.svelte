@@ -265,6 +265,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.090</span> 🐛 N的象徵鳥｜勝利象徵 沒觸發終局 + log 匯出 cardLink 亂碼</summary>
+        <ul>
+          <li><b>Bug 1 — 勝利象徵 我方剩 1 張獎賞時應直接獲勝，但 AI 對手仍繼續行動（玩家回報）</b></li>
+          <li>　・<b>卡面</b>（SV7a）：「使用這個招式時，若自己剩餘獎賞卡的張數為 1 張，則這場對戰己方獲勝。」</li>
+          <li>　・<b>根因</b>：<code>v2650_i_wave15_misc8.ts L977-987</code> 原實作只 <code>prizes: []</code> 清空獎賞，<b>沒設 <code>phase: &apos;game-over&apos;</code> / <code>winner</code> / <code>winReason</code></b> → engine 不會自動 detect 獎賞清空為勝利條件，回合結束後 AI 對手照常抽牌行動。</li>
+          <li>　・<b>修法</b>：仿 <code>engine.ts L5025-5034</code> KO 勝利 pattern — 直接回 <code>&#123; ...state, phase: &apos;game-over&apos;, winner: aIdx, winReason: &apos;勝利象徵特殊勝利條件達成&apos; &#125;</code>，並 push 終局 log line。</li>
+
+          <li><b>Bug 2 — 匯出 log 內含 cardLink marker 亂碼（玩家回報）</b></li>
+          <li>　・<b>現象</b>：匯出 .txt log 看到「<code>?hkylp7ik 呆呆獸 進化為 ?hkylp7ik 呆呆王</code>」等 PUA 字元 + iid 亂碼。</li>
+          <li>　・<b>根因</b>：v4.934 在 log 訊息內加 <code>cardLink(iid, name)</code> marker（<code>\uE100&lt;iid&gt;\uE101&lt;name&gt;\uE102</code> PUA chars），UI 端 <code>tokenizeWithMarkers</code> 解析顯示為 button；但 <code>exportLogAs</code>（<code>game/+page.svelte L1255</code>）直接拼 <code>e.message</code>，沒 strip marker → 純文字檔保留 PUA 字元 + iid + name，文字編輯器顯示成「?」+ 亂碼。</li>
+          <li>　・<b>修法</b>：加 <code>stripCardLinkMarkers</code> helper — regex replace marker → 純 name（capture group <code>$1</code>）。txt + json 兩 path 都套用；JSON 也清，玩家看 export json 與 UI 顯示一致。</li>
+
+          <li><b>實際影響</b>：v5.090 起 —</li>
+          <li>　・呆呆王借耀閃挑戰使「N的象徵鳥｜勝利象徵」+ 自方獎賞剩 1 張 → 立即終局，AI 不再繼續動作</li>
+          <li>　・匯出 .txt / .json log 純顯示卡名，不再有 PUA 亂碼字元（過往的 log 也可重新匯出修正）</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 v2650 + game/+page.svelte + version + changelog）／Rule 14（最小 patch — 勝利象徵 5 行改寫；exportLog 加 1 個 helper fn 兩 path 共用）／Rule 15（卡面 source of truth — 「則這場對戰己方獲勝」=set phase=game-over）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.089</span> 🐛 ACE 消弭時手牌 ACE SPEC 能量黃邊框 UI gate（鏡射 v5.079 engine 修補）</summary>
         <ul>
           <li><b>玩家回報</b>：v5.079 修了蓋諾賽克特｜ACE消弭 擋 ACE SPEC 能量（engine ATTACH_ENERGY L3487 已 gate），但手牌仍顯示黃色邊框（可使用標示）→ 玩家以為可附但按下去 engine 擋住，UX 不一致。</li>

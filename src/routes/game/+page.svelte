@@ -1252,6 +1252,14 @@
   }
 
   // 對戰結束後匯出 log（.txt 給玩家肉眼復盤；.json 給外部工具分析）
+  // v5.090：strip cardLink marker（\uE100<iid>\uE101<name>\uE102 PUA 字元）→ 純 name。
+  //   匯出 log 時若不處理，PUA 字元在文字編輯器顯示「?」+ 後續 iid 亂碼（玩家回報）。
+  //   tokenizer 在 UI 端正常解析 marker 顯示卡名 button，但匯出純文字檔需手動 strip。
+  function stripCardLinkMarkers(s: string): string {
+    if (!s) return s;
+    // capture group 1 = name；group 0 = 整個 marker（含 iid + PUA boundary）
+    return s.replace(/\uE100[^\uE100\uE101\uE102]+\uE101([^\uE100\uE101\uE102]+)\uE102/g, '$1');
+  }
   function exportLogAs(format: 'txt' | 'json') {
     if (!game) return;
     const ts = new Date();
@@ -1278,11 +1286,17 @@
                   : `[T${e.turn} —]`;
         // v2.130：玩家匯出時自己看私有訊息；對手看公開版
         const text = (e.privateMessage && e.playerIndex === myIdx) ? e.privateMessage : e.message;
-        lines.push(`${who} ${text}`);
+        lines.push(`${who} ${stripCardLinkMarkers(text ?? '')}`);
       }
       blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
       filename = `ptcg-log-${stamp}.txt`;
     } else {
+      // v5.090：JSON 匯出也 strip 一份 message（保留原 message 做 raw 欄位，新增 messageDisplay 為純文字）
+      const cleanLog = (game.log ?? []).map(e => ({
+        ...e,
+        message: stripCardLinkMarkers(e.message ?? ''),
+        ...(e.privateMessage ? { privateMessage: stripCardLinkMarkers(e.privateMessage) } : {}),
+      }));
       const payload = {
         meta: {
           exportedAt: ts.toISOString(),
@@ -1293,7 +1307,7 @@
           winReason: reason,
           finalTurn: game.turn,
         },
-        log: game.log ?? [],
+        log: cleanLog,
       };
       blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
       filename = `ptcg-log-${stamp}.json`;

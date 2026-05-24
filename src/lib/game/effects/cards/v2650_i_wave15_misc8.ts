@@ -977,11 +977,21 @@ regPre("N的象徵鳥|勝利象徵", (s) => ({ state: s, damage: 0 }));
 regPost('N的象徵鳥|勝利象徵', (state, aIdx, _pool) => {
   const myPrizes = state.players[aIdx].prizes.length;
   if (myPrizes === 1) {
-    // 觸發勝利：將自方獎賞清空模擬「取走最後 1 張勝利」
-    return updatePlayer(
-      addLog(state, '勝利象徵：自方獎賞剩 1 張 → 觸發勝利', aIdx),
-      aIdx, p => ({ ...p, prizes: [] }),
-    );
+    // v5.090：直接 set phase='game-over' + winner + winReason（鏡射 engine.ts L5025 KO 勝利 pattern）。
+    //   原 v2.65 只清空 prizes 但 engine 不會自動 detect 獎賞清空，AI 對手會繼續行動。
+    //   卡面：「則這場對戰己方獲勝」應立即終局。
+    const winnerName = state.players[aIdx].name;
+    const s = addLog(state, '勝利象徵：自方獎賞剩 1 張 → 觸發勝利', aIdx);
+    return {
+      ...s,
+      phase: 'game-over' as const,
+      winner: aIdx,
+      winReason: '勝利象徵特殊勝利條件達成',
+      log: [
+        ...s.log,
+        { turn: s.turn, playerIndex: null as null, message: `勝利象徵：${winnerName} 觸發特殊勝利條件，獲勝！` },
+      ],
+    };
   }
   return addLog(state, `勝利象徵：自方獎賞剩 ${myPrizes} 張，未滿足條件`, aIdx);
 });
