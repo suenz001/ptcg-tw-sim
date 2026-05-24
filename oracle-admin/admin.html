@@ -1,0 +1,2408 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PTCG Oracle Admin v0.90</title>
+<!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
+<meta name="theme-color" content="#6B3E9C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PTCG Admin">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png?v=5.0021">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png?v=5.0021">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=5.0021">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png?v=5.0021">
+<link rel="manifest" href="manifest.webmanifest?v=5.0021">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', -apple-system, sans-serif; background: #f5f7fa; color: #1a2332; margin: 0; padding: 0; }
+  header { background: #ffffff; padding: 14px 24px; border-bottom: 2px solid #5b8def; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  header h1 { margin: 0; color: #5b8def; font-size: 18px; }
+  .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  button { background: #5b8def; color: white; border: none; padding: 7px 14px; cursor: pointer; border-radius: 4px; font-size: 13px; font-weight: 500; }
+  button:hover { background: #4a7de0; }
+  button.danger { background: #e63946; }
+  button.danger:hover { background: #ef5350; }
+  button.ghost { background: transparent; color: #5b8def; border: 1px solid #5b8def; }
+  button.tiny { padding: 4px 8px; font-size: 11px; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .tabs { display: flex; background: #ffffff; padding: 0 24px; border-bottom: 1px solid #c5cdd7; overflow-x: auto; }
+  .tab { padding: 12px 18px; cursor: pointer; color: #8b96a3; border-bottom: 3px solid transparent; white-space: nowrap; font-size: 14px; }
+  .tab:hover { color: #5a6878; }
+  .tab.active { color: #5b8def; border-bottom-color: #5b8def; font-weight: 600; }
+  .tab .badge { margin-left: 4px; background: #c5cdd7; padding: 2px 6px; border-radius: 8px; font-size: 10px; }
+  /* v0.7：桌機版加寬到 1920px（原 1500px 留太多側白邊）；padding 也微調讓內容更貼近邊緣 */
+  main { padding: 18px 28px; max-width: 1920px; margin: 0 auto; }
+  h2 { color: #5b8def; margin: 0 0 16px; font-size: 17px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .stat-card { background: #ffffff; border: 1px solid #e3e8ef; padding: 14px; border-radius: 6px; }
+  .stat-label { color: #9aa3b0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 26px; font-weight: bold; color: #5b8def; margin-top: 2px; }
+  .stat-card.firebase { border-color: #fb8c00; }
+  .stat-card.firebase .stat-value { color: #fa6; }
+  .stat-section-label { color: #9aa3b0; font-size: 11px; text-transform: uppercase; margin: 8px 0 4px; letter-spacing: 1px; }
+  table { width: 100%; border-collapse: collapse; background: #ffffff; border-radius: 6px; overflow: hidden; }
+  th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid #e3e8ef; font-size: 12px; vertical-align: middle; }
+  th { background: #e3e8ef; color: #5b8def; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+  tr:hover { background: #f1f3f7; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+  .pill.lobby { background: #e3f2fd; color: #6b87cf; }
+  .pill.playing { background: #c8e6c9; color: #4caf50; }
+  .pill.ended { background: #c5cdd7; color: #7a8898; }
+  /* v0.3 status badge with icon + label */
+  .status-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .status-badge.status-playing { background: #c8e6c9; color: #4caf50; }
+  .status-badge.status-lobby { background: #fff8e1; color: #fb6; }
+  .status-badge.status-ended { background: #e3e8ef; color: #7a8898; }
+  /* P1/P2 winner highlight */
+  .winner-cell { color: #fa0; font-weight: bold; background: rgba(255, 170, 0, 0.08); }
+  /* Deck / message buttons */
+  .btn-deck { background: #2e7d32; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .btn-deck:hover { background: #43a047; }
+  .btn-msg { background: #7c4dff; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .btn-msg:hover { background: #9575cd; }
+  .btn-msg.empty { background: #c5cdd7; color: #9aa3b0; }
+  .btn-msg.empty:hover { background: #a3acb8; color: #7a8898; }
+  .btn-msg.has-msg { background: #7c4dff; }
+  .num-cell { text-align: center; }
+  /* Chat modal */
+  .chat-list { max-height: 60vh; overflow-y: auto; padding: 4px; }
+  .chat-line { background: #eef1f5; padding: 10px 12px; margin: 6px 0; border-radius: 6px; border-left: 3px solid #7c4dff; }
+  .chat-meta { font-size: 11px; color: #7a8898; margin-bottom: 4px; }
+  .chat-text { font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+  /* v0.72：聊天紀錄按角色分色 — P1 藍 / P2 橙 / 觀戰 紫 */
+  .chat-line.chat-p1 { background: #e3f2fd; border-left-color: #5b8def; }
+  .chat-line.chat-p2 { background: #fff4e3; border-left-color: #fb8c00; }
+  .chat-line.chat-spec { background: #f5e9ff; border-left-color: #9c70d8; }
+  .chat-role-badge { display: inline-block; padding: 1px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; margin-right: 6px; vertical-align: middle; }
+  .chat-role-badge.role-p1 { background: #5b8def; color: white; }
+  .chat-role-badge.role-p2 { background: #fb8c00; color: white; }
+  .chat-role-badge.role-spec { background: #9c70d8; color: white; }
+  /* v0.32: sortable column headers */
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { background: #d5dce5; }
+  .sort-arrow { font-size: 10px; }
+  .sort-arrow.inactive { color: #7a8898; }
+  .sort-arrow.active { color: #5b8def; font-weight: bold; }
+  .actions { display: flex; gap: 5px; }
+  .small { font-size: 10px; color: #9aa3b0; }
+  .mono { font-family: 'Cascadia Code', Consolas, monospace; }
+  /* v0.7：桌機版加寬後，各欄位 max-width 也放大讓內容少被截斷（房間名 / 玩家名 / email 等） */
+  .truncate { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* v0.31: td 內 wrapping div 才能真的截斷超長字串（單 td max-width 在 table-auto 下常被忽略） */
+  .trunc-inner { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+  .trunc-inner.wide { max-width: 320px; }
+  /* v0.71/v0.73/v0.74：對戰房間表格 — 縮欄距、放大字體、固定欄位真正 shrink-to-fit。
+     關鍵技巧：`width: 1%` + `nowrap` = 瀏覽器把欄寬縮到剛好容納內容（1% 太小被內容撐開到 min），
+     剩餘空間全部分給沒設 width 的欄位（房間名稱 / P1 / P2）。
+     v0.74：字體再放大到 17px、padding 拉到 14px vertical，每列 ~85px → 一頁約 8 列。 */
+  .match-table th, .match-table td { padding: 14px 10px; font-size: 17px; white-space: nowrap; width: 1%; }
+  .match-table th { font-size: 13px; padding: 12px 10px; }  /* 表頭略小但加粗，padding 略小於 td */
+  /* 房間名稱(2) / P1(3) / P2(4) — 取消 width:1% 改 auto，吃掉所有剩餘空間 */
+  .match-table th:nth-child(2), .match-table td:nth-child(2),
+  .match-table th:nth-child(3), .match-table td:nth-child(3),
+  .match-table th:nth-child(4), .match-table td:nth-child(4) { width: auto; white-space: normal; }
+  /* match-table 內的 .trunc-inner 改 240px / 340px — 字體放大後同步調整截斷上限 */
+  .match-table .trunc-inner { max-width: 240px; }
+  .match-table .trunc-inner.wide { max-width: 340px; }
+  /* v0.74：放大表格內的 badge / pill / button 等元素，避免字大但 badge 還是 11px */
+  .match-table .status-badge { font-size: 13px; padding: 5px 12px; }
+  .match-table .pill { font-size: 13px; padding: 3px 10px; }
+  .match-table button { font-size: 13px; padding: 6px 12px; }
+  .match-table .small { font-size: 12px; }
+  .detail-panel { background: #eef1f5; padding: 14px; margin: 8px 0 16px; border-radius: 6px; border: 1px solid #e3e8ef; white-space: pre-wrap; font-family: 'Cascadia Code', Consolas, monospace; font-size: 11px; max-height: 480px; overflow: auto; line-height: 1.5; }
+  .modal-bg { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal { background: #ffffff; border: 1px solid #5b8def; border-radius: 8px; max-width: 90vw; max-height: 90vh; overflow: auto; padding: 24px; min-width: 600px; }
+  .modal h3 { color: #5b8def; margin: 0 0 16px; }
+  .deck-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .deck-col { background: #eef1f5; padding: 12px; border-radius: 6px; }
+  .deck-col h4 { color: #5b8def; margin: 0 0 8px; font-size: 14px; }
+  .deck-entry { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; border-bottom: 1px solid #e3e8ef; }
+  .deck-count { color: #5b8def; font-weight: bold; min-width: 30px; text-align: right; }
+  .login-page { max-width: 460px; margin: 80px auto; padding: 32px; background: #ffffff; border-radius: 8px; border: 1px solid #e3e8ef; }
+  .login-page h1 { color: #5b8def; margin: 0 0 8px; }
+  .login-page p { color: #7a8898; margin: 0 0 18px; font-size: 13px; }
+  .login-page label { display: block; color: #7a8898; font-size: 12px; margin: 12px 0 4px; }
+  .login-page input { width: 100%; padding: 10px; background: #f5f7fa; border: 1px solid #5b8def; color: white; font-family: monospace; border-radius: 4px; font-size: 13px; }
+  .login-page button { width: 100%; padding: 11px; font-size: 14px; margin-top: 16px; }
+  .login-error { color: #ff8a80; font-size: 12px; margin-top: 8px; min-height: 1em; }
+  .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .search-box { flex: 1; min-width: 200px; padding: 7px 10px; background: #ffffff; border: 1px solid #e3e8ef; color: white; border-radius: 4px; font-size: 12px; }
+  .filter-btn { padding: 5px 10px; background: #ffffff; border: 1px solid #e3e8ef; color: #5a6878; cursor: pointer; border-radius: 4px; font-size: 12px; }
+  .filter-btn.active { background: #5b8def; color: white; border-color: #5b8def; }
+  .empty { padding: 32px; text-align: center; color: #5a6878; }
+  .deck-card { background: #ffffff; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #e3e8ef; }
+  .feedback-item { background: #ffffff; padding: 14px; margin: 8px 0; border-radius: 6px; border-left: 3px solid #5b8def; }
+  .feedback-meta { color: #9aa3b0; font-size: 11px; margin-bottom: 6px; }
+  .feedback-text { white-space: pre-wrap; line-height: 1.5; font-size: 13px; }
+  /* v0.4 feedback reply/delete */
+  .reply-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 10px; font-size: 10px; background: #c8e6c9; color: #4caf50; font-weight: 600; }
+  .unreply-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 10px; font-size: 10px; background: #fff8e1; color: #fb6; font-weight: 600; }
+  .reply-shown { background: #e8f5e9; padding: 10px 12px; margin: 10px 0; border-left: 3px solid #4caf50; border-radius: 4px; }
+  .reply-shown-header { font-size: 11px; color: #7a8898; margin-bottom: 4px; }
+  .reply-shown-text { white-space: pre-wrap; font-size: 13px; line-height: 1.5; color: #1a2332; }
+  .reply-input { width: 100%; margin-top: 10px; padding: 8px; background: #eef1f5; border: 1px solid #e3e8ef; color: #1a2332; border-radius: 4px; font-family: inherit; font-size: 13px; resize: vertical; }
+  .reply-input:focus { outline: none; border-color: #5b8def; }
+  .feedback-actions { margin-top: 10px; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .btn-submit-reply { background: #2e7d32; color: white; border: none; padding: 7px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; }
+  .btn-submit-reply:hover { background: #43a047; }
+  .btn-submit-reply:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-edit-reply { background: #90caf9; color: white; border: none; padding: 7px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; }
+  .btn-edit-reply:hover { background: #5b8def; }
+  .btn-delete-fb { background: #c62828; color: white; border: none; padding: 7px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; }
+  .btn-delete-fb:hover { background: #e53935; }
+  .ua-details { margin-top: 6px; }
+  .ua-details summary { cursor: pointer; color: #9aa3b0; }
+
+  /* ──────────────────────────────────────────────────────────────────
+     v0.4 RWD — 手機 / 平板版面（≤768px）
+     ────────────────────────────────────────────────────────────────── */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; border-radius: 6px; }
+  .table-wrap table { min-width: 720px; }  /* 表格至少 720px，超過就橫向捲動 */
+
+  @media (max-width: 768px) {
+    body { font-size: 13px; }
+    header { padding: 10px 14px; }
+    header h1 { font-size: 15px; }
+    .header-actions { gap: 6px; }
+    .header-actions .last-update,
+    .header-actions .my-email { display: none; }  /* 手機隱藏這兩個資訊（占空間） */
+    button { padding: 6px 10px; font-size: 12px; }
+    .tabs { padding: 0 12px; }
+    .tab { padding: 10px 12px; font-size: 13px; }
+    main { padding: 12px 14px; }
+    h2 { font-size: 15px; margin-bottom: 10px; }
+
+    /* Stats grid 一行一個 */
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat-card { padding: 10px 12px; }
+    .stat-value { font-size: 22px; }
+    .stat-label { font-size: 10px; }
+
+    /* Toolbar 緊湊 */
+    .toolbar { gap: 6px; }
+    .toolbar .filter-btn { padding: 4px 8px; font-size: 11px; }
+    .search-box { min-width: 160px; font-size: 12px; }
+
+    /* 表格內元素 */
+    th, td { padding: 7px 6px; font-size: 11px; }
+    .trunc-inner { max-width: 100px; }
+    .trunc-inner.wide { max-width: 130px; }
+    .btn-deck, .btn-msg { padding: 4px 8px; font-size: 10px; }
+    .status-badge { padding: 3px 6px; font-size: 10px; }
+
+    /* Modal 手機適應 */
+    .modal { min-width: auto !important; max-width: 95vw !important; padding: 16px; max-height: 88vh; }
+    .modal h3 { font-size: 15px; margin-bottom: 12px; }
+    .deck-grid { grid-template-columns: 1fr; gap: 12px; }  /* 牌組對比改單欄 */
+    .deck-entry { font-size: 11px; }
+
+    /* 意見回饋手機版緊湊 */
+    .feedback-item { padding: 12px; }
+    .feedback-meta { font-size: 10px; }
+    .feedback-text { font-size: 12px; }
+    .reply-input { font-size: 12px; }
+    .feedback-actions { gap: 6px; }
+    .feedback-actions button { font-size: 11px; padding: 6px 10px; }
+
+    /* 詳情面板手機 */
+    .detail-panel { font-size: 10px; padding: 10px; max-height: 50vh; }
+
+    /* Login page */
+    .login-page { margin: 30px auto; padding: 24px; max-width: 92vw; }
+    .login-page h1 { font-size: 18px; }
+  }
+
+  @media (max-width: 480px) {
+    .stats-grid { grid-template-columns: 1fr; }
+    header h1 { font-size: 13px; }
+    .tab { padding: 9px 10px; font-size: 12px; }
+  }
+  .last-update { color: #9aa3b0; font-size: 11px; }
+  .my-email { color: #9aa3b0; font-size: 11px; }
+  .winner-trophy { color: #fa0; font-weight: bold; }
+  .log-line { padding: 2px 0; line-height: 1.4; }
+  .log-p0 { color: #6b9bef; }
+  .log-p1 { color: #fc6; }
+  .log-system { color: #8b96a3; }
+
+  /* v0.6 明亮主題微調：補強對比 + soft shadows */
+  body { background: #f5f7fa !important; color: #1a2332 !important; }
+  header { box-shadow: 0 1px 3px rgba(50, 80, 130, 0.06); }
+  .tabs { background: #ffffff; border-bottom: 1px solid #e3e8ef; }
+  .tab { color: #5a6878; }
+  .tab:hover { background: #f1f3f7; color: #5b8def; }
+  .tab.active { color: #5b8def; border-bottom: 3px solid #5b8def; background: #ffffff; }
+  .tab-content { background: #ffffff; }
+  table { background: #ffffff; }
+  thead tr { background: #f5f7fa; border-bottom: 1px solid #e3e8ef; }
+  thead th { color: #5a6878; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; }
+  tbody tr { border-bottom: 1px solid #f1f3f7; }
+  tbody tr:hover { background: #f8fafc; }
+  tbody td { padding: 10px 12px; color: #1a2332; }
+  button { background: #5b8def; color: #ffffff; box-shadow: 0 1px 2px rgba(91, 141, 239, 0.2); transition: all 0.15s; }
+  button:hover { background: #4a7de0; box-shadow: 0 2px 4px rgba(91, 141, 239, 0.3); transform: translateY(-1px); }
+  button.danger { background: #e63946; }
+  button.danger:hover { background: #d52d3a; }
+  button.ghost { background: transparent; color: #5b8def; border: 1px solid #5b8def; box-shadow: none; }
+  button.ghost:hover { background: #eaf1fc; color: #4a7de0; }
+  .stat-card { background: #ffffff; border: 1px solid #e3e8ef; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(50, 80, 130, 0.04); }
+  .stat-card:hover { box-shadow: 0 2px 8px rgba(50, 80, 130, 0.08); transform: translateY(-2px); transition: all 0.2s; }
+  .stat-label { color: #7a8898 !important; font-size: 12px; font-weight: 500; }
+  .stat-value { color: #1a2332 !important; font-size: 28px; font-weight: 700; }
+  .status-playing { background: #e8f5e9; color: #2e7d32; padding: 3px 8px; border-radius: 12px; font-weight: 500; font-size: 11px; }
+  .status-lobby { background: #fff8e1; color: #f57c00; padding: 3px 8px; border-radius: 12px; font-weight: 500; font-size: 11px; }
+  .status-ended { background: #f1f3f7; color: #5a6878; padding: 3px 8px; border-radius: 12px; font-weight: 500; font-size: 11px; }
+  .winner-cell { background: #fff3e0 !important; }
+  .winner-trophy { color: #f57c00; font-weight: 600; }
+  .filter-btn { background: #ffffff; color: #5a6878; border: 1px solid #e3e8ef; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .filter-btn:hover { background: #f8fafc; border-color: #5b8def; color: #5b8def; }
+  .filter-btn.active { background: #5b8def; color: #ffffff; border-color: #5b8def; }
+  .search-box { background: #ffffff; border: 1px solid #e3e8ef; color: #1a2332; padding: 6px 10px; border-radius: 6px; }
+  .search-box:focus { border-color: #5b8def; outline: none; box-shadow: 0 0 0 3px rgba(91, 141, 239, 0.15); }
+  .small { color: #7a8898; }
+  .empty { color: #7a8898; text-align: center; padding: 40px; background: #f8fafc; border-radius: 8px; }
+  a { color: #5b8def; }
+  a:hover { color: #4a7de0; }
+  code { background: #f1f3f7; color: #c62828; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+  .btn-msg, .btn-deck { background: #ffffff; color: #5b8def; border: 1px solid #e3e8ef; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; box-shadow: none; }
+  .btn-msg:hover, .btn-deck:hover { background: #eaf1fc; border-color: #5b8def; transform: none; box-shadow: none; }
+  /* v0.80 對戰歷史 — 勝者塗色 + 點玩家名字看牌組 */
+  .winner-cell { background: rgba(76, 175, 80, 0.16) !important; }
+  .winner-cell .player-name { color: #2e7d32; font-weight: 700; }
+  .player-name { color: #5b8def; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
+  .player-name:hover { color: #4a7de0; }
+  .player-email { color: #7a8898; font-size: 13px; margin-left: 4px; }
+  /* v0.81: deck modal 勝者一欄背景染綠 — 沿用 Oracle deck modal 的 .deck-col / .deck-entry 樣式 */
+  .deck-col.winner-side { background: rgba(76, 175, 80, 0.12); border: 1px solid rgba(76, 175, 80, 0.4); }
+  .deck-col.winner-side h4 { color: #2e7d32; }
+  /* v0.82：對戰歷史 mode badge — 區分 線上 vs 本機 */
+  .mode-badge { display: inline-block; font-size: 14px; line-height: 1; margin-right: 2px; }
+  .mode-badge.mode-online { color: #5b8def; }
+  .mode-badge.mode-local { color: #ff9800; }
+  /* v0.83 統計 tab — 八區 sub-section 樣式 */
+  .stats-section { margin-bottom: 24px; }
+  .stats-section h3 { color: #1a2332; margin: 0 0 12px; font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .stats-section h3 button { font-size: 12px; }
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; }
+  .stats-box { background: #f8fafc; border: 1px solid #e3e8ef; border-radius: 8px; padding: 12px 14px; }
+  .stats-box-title { font-weight: 600; margin-bottom: 8px; color: #1a2332; }
+  .stat-card .stat-pct { margin-left: 6px; font-size: 12px; color: #7a8898; font-weight: normal; }
+  /* first-mover prismatic bars */
+  .fm-table { display: flex; flex-direction: column; gap: 12px; }
+  .fm-row { display: grid; grid-template-columns: 180px 1fr 200px; align-items: center; gap: 10px; }
+  .fm-label { font-weight: 600; color: #1a2332; }
+  .fm-bars { display: flex; height: 28px; border-radius: 4px; overflow: hidden; background: #e3e8ef; }
+  .fm-bar { display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 600; }
+  .fm-bar.fm-p1 { background: #5b8def; }
+  .fm-bar.fm-p2 { background: #ff9800; }
+  .fm-bar.fm-draw { background: #9aa3b0; }
+  .fm-detail { color: #7a8898; font-size: 12px; }
+  /* histogram rows */
+  .histo-row { display: grid; grid-template-columns: 140px 1fr 160px; align-items: center; gap: 8px; padding: 3px 0; }
+  .histo-lbl { font-size: 13px; color: #1a2332; }
+  .histo-bar { height: 16px; background: linear-gradient(90deg, #5b8def, #4a7de0); border-radius: 3px; transition: width .25s; min-width: 2px; }
+  .histo-bar.special { background: linear-gradient(90deg, #b39ddb, #9575cd); }
+  .histo-cnt { font-size: 12px; color: #7a8898; text-align: right; }
+  /* top-card numeric lists */
+  .topcard-list { margin: 0; padding-left: 24px; font-size: 13px; line-height: 1.7; }
+  .topcard-list li { padding: 1px 0; }
+  .topcard-stat { color: #7a8898; font-size: 12px; }
+  /* support tag button */
+  .tag-btn { background: #ffffff; border: 1px solid #e3e8ef; color: #7a8898; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; }
+  .tag-btn:hover { border-color: #5b8def; }
+  .tag-btn.tagged { background: #fff3e0; border-color: #ff9800; color: #e65100; font-weight: 600; }
+  /* v0.83 多版本 badge — 同名同效合併時的提示 */
+  .ver-multi { display: inline-block; background: #e8eaf6; color: #3f51b5; font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 600; vertical-align: middle; }
+  /* v0.84 Phase 2b — 玩家戰績 / heatmap / trends 樣式 */
+  .result-win { background: #c8e6c9; color: #2e7d32; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600; }
+  .result-loss { background: #ffcdd2; color: #c62828; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600; }
+  .result-draw { background: #e0e0e0; color: #424242; padding: 2px 8px; border-radius: 3px; font-size: 12px; }
+  .side-p1 { background: #bbdefb; color: #0d47a1; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+  .side-p2 { background: #ffe0b2; color: #e65100; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+  /* heatmap */
+  .heatmap-table { border-collapse: collapse; font-size: 11px; }
+  .heatmap-table th { background: #f8fafc; color: #5a6878; font-weight: 500; padding: 3px 4px; }
+  .heatmap-table .hm-hour { min-width: 26px; text-align: center; }
+  .heatmap-table .hm-day { min-width: 28px; text-align: center; background: #eef1f5; }
+  .heatmap-table .hm-cell { width: 30px; height: 26px; text-align: center; border: 1px solid #ffffff; color: #1a2332; font-size: 10px; }
+  /* trends */
+  .trend-row { display: grid; grid-template-columns: 100px 1fr 220px; align-items: center; gap: 8px; padding: 3px 0; }
+  .trend-bucket { font-family: monospace; font-size: 12px; color: #1a2332; }
+  .trend-bar { height: 18px; background: #5b8def; border-radius: 3px; position: relative; min-width: 2px; }
+  .trend-bar-online { height: 100%; background: #4a7de0; border-radius: 3px 0 0 3px; }
+  .trend-cnt { font-size: 12px; color: #1a2332; }
+  .btn-msg.has-msg { background: #fff3e0; color: #ef6c00; border-color: #ffcc80; }
+  .btn-msg.empty { color: #9aa3b0; }
+  .modal-bg { background: rgba(26, 35, 50, 0.5); }
+  .modal { background: #ffffff !important; color: #1a2332; border: 1px solid #e3e8ef; box-shadow: 0 10px 40px rgba(50, 80, 130, 0.15); border-radius: 12px; }
+  .modal h3 { color: #1a2332; }
+  .my-email { color: #5a6878 !important; }
+  h1, h2, h3 { color: #1a2332; }
+  header h1 { color: #5b8def !important; }
+
+</style>
+</head>
+<body>
+
+<!-- Login page -->
+<div id="login-section" class="login-page" style="display:none;">
+  <h1>🛠️ PTCG Oracle Admin</h1>
+  <p>用 Firebase 帳號登入。只有白名單 email 可進入。</p>
+  <label>Email</label>
+  <input type="email" id="login-email" autocomplete="username" placeholder="your@email.com" />
+  <label>Password</label>
+  <input type="password" id="login-password" autocomplete="current-password" placeholder="••••••••" />
+  <button onclick="doLogin()">Login</button>
+  <div class="login-error" id="login-error"></div>
+</div>
+
+<!-- Main app -->
+<div id="app-section" style="display:none;">
+  <header>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.89</span></h1>
+    <div class="header-actions">
+      <span class="my-email" id="my-email"></span>
+      <span class="last-update" id="last-update"></span>
+      <button class="ghost" onclick="loadActive(true)">🔄 Refresh</button>
+      <button class="ghost" onclick="doLogout()">Logout</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="overview" onclick="switchTab('overview')">📊 總覽</div>
+    <div class="tab" data-tab="oracle-rooms" onclick="switchTab('oracle-rooms')">🎮 Oracle 對戰</div>
+    <div class="tab" data-tab="firebase-rooms" onclick="switchTab('firebase-rooms')">🔥 Firebase 對戰</div>
+    <div class="tab" data-tab="users" onclick="switchTab('users')">👤 玩家帳號</div>
+    <div class="tab" data-tab="feedback" onclick="switchTab('feedback')">💬 意見回饋</div>
+    <div class="tab" data-tab="matches" onclick="switchTab('matches')">📜 對戰歷史</div>
+    <div class="tab" data-tab="stats" onclick="switchTab('stats')">📊 統計</div>
+  </div>
+
+  <main>
+    <div id="tab-overview" class="tab-content"></div>
+    <div id="tab-oracle-rooms" class="tab-content" style="display:none;"></div>
+    <div id="tab-firebase-rooms" class="tab-content" style="display:none;"></div>
+    <div id="tab-users" class="tab-content" style="display:none;"></div>
+    <div id="tab-feedback" class="tab-content" style="display:none;"></div>
+    <div id="tab-matches" class="tab-content" style="display:none;"></div>
+    <div id="tab-stats" class="tab-content" style="display:none;"></div>
+  </main>
+</div>
+
+<!-- Modal container -->
+<div id="modal-container"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyAH5IsKlGyHWWCWKKliDIvOqfevJQW8qhs',
+  authDomain: 'ptcg-tw-sim.firebaseapp.com',
+  projectId: 'ptcg-tw-sim',
+  storageBucket: 'ptcg-tw-sim.firebasestorage.app',
+  messagingSenderId: '180930993953',
+  appId: '1:180930993953:web:df843feb3fbfba9de66860'
+};
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+
+let currentUser = null;
+let currentTab = 'overview';
+let allUsers = [];
+// v0.5: uid → email 快取，供對戰紀錄 P1/P2 欄反查使用
+const uidEmailMap = new Map();
+function rebuildUidEmailMap() {
+  uidEmailMap.clear();
+  for (const u of allUsers) {
+    if (u.uid && u.email) uidEmailMap.set(u.uid, u.email);
+  }
+}
+// v0.5: 確保 uid→email map 至少嘗試載入過一次（不阻塞房間 tab 渲染）
+let _emailMapPrimed = false;
+async function primeEmailMap() {
+  if (_emailMapPrimed) return;
+  // v0.77 修：原本 `_emailMapPrimed = true` 設在 try 外是 fail-fast — 首次 API
+  //   失敗（例如 v0.76 之前的 stale token 拿 403）會永久 disable，導致對戰紀錄
+  //   永遠顯示「(匿名)」。改為「成功才 set primed；失敗 return 不 set，下次可重試」。
+  try {
+    // v0.5b: 修 endpoint 為 /api/admin/firebase/users 並處理 pagination
+    let pageToken = null;
+    const collected = [];  // v0.77: 不污染 global allUsers 直到全部成功
+    while (true) {
+      const url = '/api/admin/firebase/users' + (pageToken ? '?pageToken=' + encodeURIComponent(pageToken) : '');
+      const data = await api(url);
+      if (!data || data.error) {
+        console.warn('[admin] primeEmailMap fetch failed:', data && data.error, '— 下次 polling 會重試');
+        return;  // 不 set primed=true，下次能 retry
+      }
+      if (Array.isArray(data.users)) collected.push(...data.users);
+      pageToken = data.pageToken;
+      if (!pageToken) break;
+    }
+    allUsers = collected;
+    _emailMapPrimed = true;
+    rebuildUidEmailMap();
+    console.log('[admin] primeEmailMap: 載入', allUsers.length, 'users，uidEmailMap.size =', uidEmailMap.size);
+    // 若房間表已渲染，重新渲染讓新 email 反映上去
+    if (typeof oracleRoomsCache !== 'undefined' && oracleRoomsCache.length > 0) {
+      const el = document.getElementById('tab-oracle-rooms');
+      if (el && el.innerHTML) renderRoomsTab(el, 'oracle', oracleRoomsCache);
+    }
+    if (typeof firebaseRoomsCache !== 'undefined' && firebaseRoomsCache.length > 0) {
+      const el = document.getElementById('tab-firebase-rooms');
+      if (el && el.innerHTML) renderRoomsTab(el, 'firebase', firebaseRoomsCache);
+    }
+  } catch (e) {
+    console.warn('[admin] primeEmailMap failed', e);
+    // 不 set primed=true，下次能 retry
+  }
+}
+let usersPageToken = null;
+
+// ── Card index loader (lazy, fetch from GitHub Pages canonical) ─────
+// v4.91：改用 GitHub Pages 絕對 URL，避免 Oracle web/ 落後於主站 push 時
+// 卡牌資料庫不同步（M5 卡顯示為 #50265 數字 ID 的 root cause）。
+// GitHub Pages 在每次 git push 後自動 deploy，永遠是最新版本。
+const CARDS_BASE = 'https://suenz001.github.io/ptcg-tw-sim/cards';
+let cardInfoMap = {};
+let cardCanonicalMap = new Map();  // v0.83: canonicalKey → [cardId, ...]（同名同效不同版本聚合）
+let _cardLoadPromise = null;
+
+// v0.83 canonical key：同名 + 同 supertype/subtype + 同 attacks + 同 abilities + 同 rulesText = 同一張卡
+//   不同版本（不同 setCode/collectorNumber/art）會合併為同一個邏輯卡，避免統計重複計算同卡。
+function computeCanonicalKey(c) {
+  if (!c) return '';
+  const attacksKey = (c.attacks || []).map(a =>
+    `${a.name || ''}|${a.damage || ''}|${(a.effect || '').slice(0, 150)}`
+  ).sort().join('||');
+  const abilitiesKey = (c.abilities || []).map(a =>
+    `${a.name || ''}|${(a.effect || '').slice(0, 150)}`
+  ).sort().join('||');
+  const rulesKey = (c.rulesText || '').slice(0, 150);
+  return `${c.supertype || ''}|${c.subtype || ''}|${c.name || ''}|A:${attacksKey}|B:${abilitiesKey}|R:${rulesKey}`;
+}
+async function ensureCardIndex() {
+  if (_cardLoadPromise) return _cardLoadPromise;
+  _cardLoadPromise = (async () => {
+    try {
+      const sets = await (await fetch(CARDS_BASE + '/index.json')).json();
+      const map = {};
+      const canonicalMap = new Map();  // canonicalKey → [cardId, ...]（v0.83 同名同效合併）
+      await Promise.all(sets.map(async (s) => {
+        try {
+          const cards = await (await fetch(CARDS_BASE + '/' + s.code + '.json')).json();
+          for (const c of cards) {
+            // v0.83 擴充：加 supertype/subtype/pokemonType 供統計分群用 + 預計算 canonicalKey
+            const canonicalKey = computeCanonicalKey(c);
+            map[c.id] = {
+              name: c.name,
+              setCode: c.setCode || s.code,
+              collectorNumber: c.collectorNumber || '',
+              regulationMark: c.regulationMark || '',
+              supertype: c.supertype || '',
+              subtype: c.subtype || '',
+              pokemonType: c.pokemonType || '',
+              canonicalKey,
+            };
+            if (!canonicalMap.has(canonicalKey)) canonicalMap.set(canonicalKey, []);
+            canonicalMap.get(canonicalKey).push(String(c.id));
+          }
+        } catch {}
+      }));
+      cardCanonicalMap = canonicalMap;
+      cardInfoMap = map;
+      console.log('[admin] card index loaded:', Object.keys(map).length, 'cards');
+    } catch (err) {
+      console.error('[admin] card index load failed:', err);
+    }
+  })();
+  return _cardLoadPromise;
+}
+
+function cardLabel(cardId, count) {
+  const info = cardInfoMap[cardId];
+  if (!info) return `#${cardId} × ${count}`;
+  const parts = [info.name, info.setCode];
+  if (info.collectorNumber) parts.push('· ' + info.collectorNumber);
+  if (info.regulationMark) parts.push('· ' + info.regulationMark);
+  return parts.join(' ') + ' × ' + count;
+}
+let oracleRoomsCache = [];
+let firebaseRoomsCache = [];
+let statusFilter = 'all'; // all | lobby | playing | ended
+
+// Auth state listener
+// v0.76: onAuthStateChanged 改 async，每次切 user 都先 force-refresh idToken。
+//   理由：firebase SDK 內部偶有 cross-tab anonymous user cache 污染 — currentUser
+//   顯示是 admin email 但 cached idToken 還是 anonymous user 的（無 email claim）。
+//   force-refresh 強制 Firebase 拿這個 user 的全新 token，避免拿到污染後的 cached token。
+onAuthStateChanged(auth, async (user) => {
+  currentUser = user;
+  _forbiddenAlerted = false;  // v0.3: 換帳號 / 重新登入時 reset
+  if (user) {
+    // v0.76: 在 showApp 之前 force-refresh，確保第一次 API call 帶到 fresh email claim
+    try {
+      await user.getIdToken(true);
+    } catch (e) {
+      console.warn('[admin] init token refresh failed:', e.message);
+    }
+    document.getElementById('my-email').textContent = user.email || '(無 email)';
+    // v0.81 (main v4.985): 設 localStorage flag，告知同 origin 的 game/decks 分頁
+    //   不要觸發匿名 sign-in（避免覆蓋 IndexedDB 內 admin user，導致 polling 拿 anonymous token → 403）。
+    //   只有 password provider + 有 email 時才設，避免 anonymous 也設此 flag。
+    if (user.email && user.providerData && user.providerData.some(p => p.providerId === 'password')) {
+      try { localStorage.setItem('ptcg_admin_active', user.email); } catch (e) { /* ignore quota */ }
+    }
+    showApp();
+  } else {
+    // v0.81: 登出 / token 失效 → 清掉 flag，game/decks 分頁恢復正常匿名 sign-in
+    try { localStorage.removeItem('ptcg_admin_active'); } catch (e) { /* ignore */ }
+    showLogin();
+  }
+});
+
+window.doLogin = async function() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  if (!email || !password) { errEl.textContent = 'Email + password required'; return; }
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    // v0.76: signInWithEmailAndPassword 後立刻 force-refresh 一次 — Firebase 偶有
+    //   cached anonymous token 還未隨 sign-in 同步更新的情況。
+    //   onAuthStateChanged 的 user.getIdToken(true) 也會跑，這裡是雙保險。
+    if (auth.currentUser) {
+      try { await auth.currentUser.getIdToken(true); } catch (e) { /* ignore — onAuthStateChanged 會處理 */ }
+    }
+    // onAuthStateChanged will fire and show app
+  } catch (err) {
+    errEl.textContent = '登入失敗：' + (err.code || err.message);
+  }
+};
+
+window.doLogout = async function() {
+  await signOut(auth);
+};
+
+function showLogin() {
+  document.getElementById('login-section').style.display = 'block';
+  document.getElementById('app-section').style.display = 'none';
+}
+
+function showApp() {
+  document.getElementById('login-section').style.display = 'none';
+  document.getElementById('app-section').style.display = 'block';
+  loadActive();
+  // Auto refresh every 30s while tab visible
+  // v0.21: 不自動刷新 users / feedback / firebase-rooms tab（內容相對靜態，避免無限循環）
+  if (!window._adminInterval) {
+    window._adminInterval = setInterval(() => {
+      if (document.visibilityState !== 'visible' || !currentUser) return;
+      // 只自動刷新動態 tab
+      if (currentTab === 'overview' || currentTab === 'oracle-rooms') {
+        loadActive();
+      }
+    }, 30000);
+  }
+}
+
+// ── API wrapper (Firebase ID token) ──────────────────────────────
+let _forbiddenAlerted = false;  // v0.3: 只在第一次 403 跳 alert，避免連環彈窗
+// v0.75: 閒置後 polling 偶有 stale idToken → server 回 403 'no email'。
+//   修法：401/403 時先 force-refresh token 重試一次，只有 retry 後仍 403 才警報。
+async function api(path, options = {}) {
+  if (!currentUser) return { error: 'not logged in' };
+  async function fetchWithToken(forceRefresh) {
+    const idToken = await currentUser.getIdToken(forceRefresh);
+    return fetch(path, {
+      ...options,
+      headers: {
+        'Authorization': 'Bearer ' + idToken,
+        ...(options.headers || {}),
+      },
+    });
+  }
+  try {
+    let res = await fetchWithToken(false);
+    // v0.75: 401/403 → 先 force-refresh token 重試一次。
+    //   stale token 場合 retry 會成功；若 user 真的 sign out / revoke → retry 也會 401/403。
+    if (res.status === 401 || res.status === 403) {
+      try {
+        res = await fetchWithToken(true);
+      } catch (refreshErr) {
+        // force refresh 失敗（network 斷 / token revoked）— 走原 401/403 處理
+        console.warn('[admin] token force-refresh failed:', refreshErr.message);
+      }
+    }
+    if (res.status === 401 || res.status === 403) {
+      const text = await res.text();
+      console.error('Auth error', res.status, text, '(retried with force-refresh)');
+      if (res.status === 403 && !_forbiddenAlerted) {
+        _forbiddenAlerted = true;
+        // v0.76: 把 token payload decode 出來，讓玩家截圖回報。
+        //   常見原因：cross-tab 污染、anonymous user contamination、provider 沒 email claim。
+        let tokenDebug = '';
+        try {
+          const tok = await currentUser.getIdToken(false);
+          const parts = tok.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+            tokenDebug = '\n\n[Debug] Token claims：'
+              + '\n  email: ' + (payload.email || '(none)')
+              + '\n  uid: ' + (payload.user_id || payload.sub || '(none)')
+              + '\n  provider: ' + (payload.firebase && payload.firebase.sign_in_provider || '(none)')
+              + '\n  iat: ' + new Date((payload.iat || 0) * 1000).toLocaleString('zh-TW')
+              + '\n  exp: ' + new Date((payload.exp || 0) * 1000).toLocaleString('zh-TW')
+              + '\n  client currentUser.email: ' + (currentUser.email || '(none)')
+              + '\n  client currentUser.uid: ' + (currentUser.uid || '(none)');
+          }
+        } catch (e) {
+          tokenDebug = '\n\n[Debug] Token decode 失敗：' + e.message;
+        }
+        alert('您的 email (' + (currentUser.email || '?') + ') 不在 admin 白名單。\n\nServer 訊息：' + text + tokenDebug + '\n\n請聯絡管理員加入白名單，或登出後改用授權帳號登入。');
+        // 403 表示 email 不對，直接登出避免後續一直叫
+        await doLogout();
+      }
+      return { error: text };
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      return { error: text };
+    }
+    return await res.json();
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+// ── Tab switching ────────────────────────────────────────────────
+window.switchTab = function(name) {
+  currentTab = name;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.style.display = c.id === 'tab-' + name ? 'block' : 'none');
+  loadActive();
+};
+
+window.loadActive = function(forceRefresh = false) {
+  if (currentTab === 'overview') loadOverview();
+  else if (currentTab === 'oracle-rooms') loadOracleRooms();
+  else if (currentTab === 'firebase-rooms') loadFirebaseRooms();
+  else if (currentTab === 'users') loadUsers(forceRefresh);  // v0.21: 切 tab 用 cache，按 Refresh 才 reset
+  else if (currentTab === 'feedback') loadFeedback();
+  else if (currentTab === 'matches') loadMatchRecords(forceRefresh);  // v0.80: 對戰歷史
+  else if (currentTab === 'stats') loadStats(forceRefresh);  // v0.83: Phase 2a 統計
+  document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString('zh-TW');
+};
+
+// ── Tab: Overview (v0.4 三大類別) ────────────────────────────────
+async function loadOverview() {
+  const el = document.getElementById('tab-overview');
+  el.innerHTML = '<h2>📊 系統總覽</h2><div class="empty">Loading…（用戶 / 對戰 / 意見回饋統計，約 5-10 秒）</div>';
+  const stats = await api('/api/admin/stats');
+  if (!stats || stats.error) { el.innerHTML = '<div class="empty">Error: ' + (stats?.error || 'unknown') + '</div>'; return; }
+  const u = stats.users || {};
+  const fb = stats.firebase || {};
+  const fbk = stats.feedback || {};
+  const o = stats.oracle || {};
+  // 對戰統計：firebase 主站 + oracle 試營運 合計
+  const battleTotal = (fb.total ?? 0) + (o.total ?? 0);
+  const battlePlaying = (fb.playing ?? 0) + (o.playing ?? 0);
+  const battleLobby = (fb.lobby ?? 0) + (o.lobby ?? 0);
+  const battleEnded = (fb.ended ?? 0) + (o.ended ?? 0);
+  const battleNew24h = (fb.new24h ?? 0) + (o.new24h ?? 0);
+  el.innerHTML = `
+    <h2>📊 系統總覽</h2>
+
+    <div class="stat-section-label">👤 用戶統計</div>
+    ${u.enabled === false || u.error ? `<div class="empty">${u.error || 'Firebase auth 未初始化'}</div>` : `
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">總人數 (Unique UID)</div><div class="stat-value">${u.total ?? '?'}</div></div>
+        <div class="stat-card"><div class="stat-label">會員 (有 Email)</div><div class="stat-value">${u.members ?? '?'}</div></div>
+        <div class="stat-card"><div class="stat-label">匿名</div><div class="stat-value">${u.anonymous ?? '?'}</div></div>
+        <div class="stat-card"><div class="stat-label">過去 24h 登入</div><div class="stat-value">${u.active24h ?? '?'}</div></div>
+      </div>
+    `}
+
+    <div class="stat-section-label">⚔️ 對戰統計（Firebase 主站 + Oracle 試營運 合計）</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">線上對戰總次數</div><div class="stat-value">${battleTotal}</div></div>
+      <div class="stat-card"><div class="stat-label">⚔️ 進行中</div><div class="stat-value">${battlePlaying}</div></div>
+      <div class="stat-card"><div class="stat-label">🏠 等待中</div><div class="stat-value">${battleLobby}</div></div>
+      <div class="stat-card"><div class="stat-label">✅ 已結束</div><div class="stat-value">${battleEnded}</div></div>
+      <div class="stat-card"><div class="stat-label">過去 24h 新增</div><div class="stat-value">${battleNew24h}</div></div>
+    </div>
+    <div class="small" style="color:#9aa3b0; margin: -10px 0 16px;">
+      ※ 拆分：Firebase ${fb.total ?? 0} 場 / Oracle ${o.total ?? 0} 場 · Oracle 累計訊息：${o.messages ?? 0}
+    </div>
+
+    <div class="stat-section-label">💬 意見回饋</div>
+    ${fbk.enabled === false || fbk.error ? `<div class="empty">${fbk.error || 'Firebase feedbacks 未初始化'}</div>` : `
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">意見總數</div><div class="stat-value">${fbk.total ?? '?'}</div></div>
+        <div class="stat-card ${fbk.unreplied > 0 ? 'firebase' : ''}"><div class="stat-label">未回覆數</div><div class="stat-value">${fbk.unreplied ?? '?'}</div></div>
+        <div class="stat-card"><div class="stat-label">過去 24h 新增</div><div class="stat-value">${fbk.new24h ?? '?'}</div></div>
+      </div>
+    `}
+
+    <div class="stat-section-label" style="margin-top:1.5rem">🔍 Firestore 寫入 Audit（定位寫入暴量元兇）</div>
+    <button class="btn btn-primary" onclick="runFirestoreAudit()" style="margin-bottom:0.5rem">執行 Audit（讀 ~30 個 aggregate query）</button>
+    <div id="write-audit-result" class="small" style="color:#888">點按鈕後列出各 collection 過去 1 小時 / 24 小時的寫入分佈。</div>
+  `;
+}
+
+// v0.92: Firestore 寫入 audit — 列各 collection 過去 1h / 24h 新增/更新 doc 數
+window.runFirestoreAudit = async function() {
+  const el = document.getElementById('write-audit-result');
+  if (!el) return;
+  el.innerHTML = '<div class="empty">執行中…（約 5-15 秒）</div>';
+  const data = await api('/api/admin/firestore-write-audit');
+  if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
+  const fmt = (v) => {
+    if (v === null || v === undefined) return '-';
+    if (typeof v === 'object' && v.error) return '<span style="color:#a44" title="' + v.error.replace(/"/g, '&quot;') + '">err</span>';
+    if (typeof v === 'number') return v.toLocaleString();
+    return v;
+  };
+  const rows = data.results.map(r => `
+    <tr>
+      <td><b>${r.collection}</b></td>
+      <td>${fmt(r.total)}</td>
+      <td>${fmt(r.createdAt_1h)}</td>
+      <td>${fmt(r.createdAt_24h)}</td>
+      <td>${fmt(r.updatedAt_1h)}</td>
+      <td>${fmt(r.updatedAt_24h)}</td>
+    </tr>
+  `).join('');
+  el.innerHTML = `
+    <p class="small" style="color:#888">at ${new Date(data.at).toLocaleString('zh-TW')} · 排序：過去 1h 寫入最多在前</p>
+    <table class="data-table" style="font-size:0.85rem">
+      <thead>
+        <tr>
+          <th>Collection</th>
+          <th>Total docs</th>
+          <th>createdAt &gt; 1h</th>
+          <th>createdAt &gt; 24h</th>
+          <th>updatedAt &gt; 1h</th>
+          <th>updatedAt &gt; 24h</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p class="small" style="color:#888;margin-top:0.5rem">提示：1h 寫入 &gt; 100 的 collection 即元兇。createdAt 計新建、updatedAt 計更新；某 collection 缺對應 timestamp 欄位顯示「err」。</p>
+  `;
+};
+
+// ── Tab: Oracle Rooms ────────────────────────────────────────────
+async function loadOracleRooms() {
+  primeEmailMap();  // v0.5 不 await：背景預熱 email map
+  const el = document.getElementById('tab-oracle-rooms');
+  if (!oracleRoomsCache.length) el.innerHTML = '<h2>🎮 Oracle 對戰</h2><div class="empty">Loading…</div>';
+  const data = await api('/api/admin/oracle/rooms');
+  if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
+  oracleRoomsCache = data.rooms;
+  renderRoomsTab(el, 'oracle', oracleRoomsCache);
+}
+
+async function loadFirebaseRooms() {
+  primeEmailMap();  // v0.5 不 await：背景預熱 email map
+  const el = document.getElementById('tab-firebase-rooms');
+  if (!firebaseRoomsCache.length) el.innerHTML = '<h2>🔥 Firebase 對戰</h2><div class="empty">Loading…</div>';
+  const data = await api('/api/admin/firebase/rooms');
+  if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
+  firebaseRoomsCache = data.rooms;
+  renderRoomsTab(el, 'firebase', firebaseRoomsCache);
+}
+
+function renderRoomsTab(el, source, rooms) {
+  const counts = { lobby: 0, playing: 0, ended: 0 };
+  for (const r of rooms) counts[r.status] = (counts[r.status] || 0) + 1;
+  const filtered = statusFilter === 'all' ? rooms : rooms.filter(r => r.status === statusFilter);
+  const sourceLabel = source === 'oracle' ? '🎮 Oracle 對戰' : '🔥 Firebase 對戰';
+  // v0.90: Firebase rooms 也可刪 — 解決 zombie ended 房無法清理問題
+  const showDelete = true;
+  el.innerHTML = `
+    <h2>${sourceLabel} <span class="small">(共 ${rooms.length})</span></h2>
+    <div class="toolbar">
+      <span class="filter-btn ${statusFilter === 'all' ? 'active' : ''}" onclick="setStatusFilter('all', '${source}')">全部 (${rooms.length})</span>
+      <span class="filter-btn ${statusFilter === 'playing' ? 'active' : ''}" onclick="setStatusFilter('playing', '${source}')">⚔️ 進行中 (${counts.playing || 0})</span>
+      <span class="filter-btn ${statusFilter === 'lobby' ? 'active' : ''}" onclick="setStatusFilter('lobby', '${source}')">🏠 等待中 (${counts.lobby || 0})</span>
+      <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${counts.ended || 0})</span>
+      <input class="search-box" placeholder="搜尋 房號 / 玩家名" oninput="filterRoomsBySearch(this.value, '${source}')" />
+    </div>
+    <div class="table-wrap"><table class="match-table"><thead><tr>
+      <th>房號</th><th>房間名稱</th><th>P1</th><th>P2</th><th>狀態</th>
+      <th>回合</th><th>最後更新</th><th>牌組</th><th>訊息</th><th>觀戰</th>${showDelete ? '<th></th>' : ''}
+    </tr></thead><tbody id="${source}-rooms-tbody">
+    ${filtered.map(r => renderRoomRow(r, source)).join('')}
+    </tbody></table></div>
+  `;
+}
+
+// v0.5: Admin 隱身觀戰 — 新分頁開玩家前端，帶 ?spectate=ROOM&admin=1
+//   玩家前端會驗證當前登入 email 是否在 ADMIN_EMAILS 白名單，通過才啟動偷看模式。
+//   不寫 seat、不發 chat、bypass allowSpectate gate。
+window.openSpyWindow = function(roomCode, source) {
+  // v0.5c: source-aware base URL + base64 admin email token
+  //   Oracle build 的 game 頁 (www.ptcg-tw-sim.com) 只能訂 Oracle backend 房間
+  //   Firebase build 的 game 頁 (suenz001.github.io) 只能訂 Firestore 房間
+  //   admin email 用 base64 編進 URL，game 頁 decode 後比對 ADMIN_EMAILS 白名單。
+  //   這樣 game 頁不需要登入 admin 帳號（只在 admin.html 登入即可）。
+  if (!currentUser || !currentUser.email) {
+    alert('請先登入 admin 帳號');
+    return;
+  }
+  const base = source === 'firebase'
+    ? 'https://suenz001.github.io/ptcg-tw-sim/game'
+    : 'https://www.ptcg-tw-sim.com/game';
+  const adminToken = btoa(currentUser.email);
+  const url = base + '?spectate=' + encodeURIComponent(roomCode) + '&admin=' + encodeURIComponent(adminToken);
+  window.open(url, '_blank', 'noopener,noreferrer');
+};
+
+window.setStatusFilter = function(s, source) {
+  statusFilter = s;
+  if (source === 'oracle') renderRoomsTab(document.getElementById('tab-oracle-rooms'), 'oracle', oracleRoomsCache);
+  else renderRoomsTab(document.getElementById('tab-firebase-rooms'), 'firebase', firebaseRoomsCache);
+};
+
+window.filterRoomsBySearch = function(q, source) {
+  const rooms = source === 'oracle' ? oracleRoomsCache : firebaseRoomsCache;
+  const lc = q.toLowerCase();
+  const filtered = rooms.filter(r => {
+    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    if (!q) return true;
+    if (r._id.toLowerCase().includes(lc)) return true;
+    if ((r.roomName || '').toLowerCase().includes(lc)) return true;
+    return (r.seats || []).some(s => s?.name && s.name.toLowerCase().includes(lc));
+  });
+  document.getElementById(source + '-rooms-tbody').innerHTML = filtered.map(r => renderRoomRow(r, source)).join('');
+};
+
+function renderRoomRow(r, source) {
+  const updated = r.updatedAt ? new Date(r.updatedAt) : null;
+  const ageMin = updated ? Math.round((Date.now() - r.updatedAt) / 60000) : null;
+  const updatedStr = updated ? updated.toLocaleString('zh-TW') : '-';
+  const p1 = r.seats?.[0];
+  const p2 = r.seats?.[1];
+  const gs = r.gameStateSummary;
+  const winnerIdx = (gs && gs.winner != null) ? gs.winner : null;
+  const p1Class = winnerIdx === 0 ? 'winner-cell' : '';
+  const p2Class = winnerIdx === 1 ? 'winner-cell' : '';
+  // v0.5: 顯示「暱稱 (email)」，匿名玩家無 email 則只顯示暱稱
+  // v0.77: 查無 email 時改顯示 uid 前 8 碼方便辨識
+  // v0.78: 優先用 server enrich 的 seat.email
+  // v0.79: server 認 'anon_*' 為 session-anon provider（client 自產的訪客 id，非 firebase
+  //   auth uid），改顯示「🎲 訪客 anon_xxx…」而非誤導的「已刪除」。
+  function seatLabel(seat) {
+    if (!seat?.uid) return '<span class="small">（空）</span>';
+    const nm = escapeHtml(seat.name || '?');
+    // (1) server enrich 給了 email — 最準確
+    if (seat.email) {
+      return nm + '<div class="small" style="color:#7aa3ef;font-size:10px">' + escapeHtml(seat.email) + '</div>';
+    }
+    // (2) v0.79: session anon (client 自產 anon_xxx，非 firebase auth uid)
+    if (seat.provider === 'session-anon') {
+      const uidShort = escapeHtml(String(seat.uid).slice(0, 12));
+      return nm + '<div class="small" style="color:#9aa3b0;font-size:10px">🎲 訪客 ' + uidShort + '…</div>';
+    }
+    // (3) server enrich 但這個 user 是真匿名 firebase auth user
+    if (seat.isAnonymous === true) {
+      const uidShort = escapeHtml(String(seat.uid).slice(0, 8));
+      return nm + '<div class="small" style="color:#9aa3b0;font-size:10px">🕶️ 匿名 ' + uidShort + '…</div>';
+    }
+    // (4) server enrich provider='not-found' — Firebase Auth 真的刪過此 user
+    if (seat.provider === 'not-found') {
+      const uidShort = escapeHtml(String(seat.uid).slice(0, 8));
+      return nm + '<div class="small" style="color:#c87a7a;font-size:10px">⚠️ 已刪除 ' + uidShort + '…</div>';
+    }
+    // (5) Fallback：server 沒 enrich（舊版 server），用 client uidEmailMap
+    const em = uidEmailMap.get(seat.uid);
+    if (em) return nm + '<div class="small" style="color:#7aa3ef;font-size:10px">' + escapeHtml(em) + '</div>';
+    const uidPrefix = escapeHtml(String(seat.uid).slice(0, 8));
+    return nm + '<div class="small" style="color:#9aa3b0;font-size:10px">' + uidPrefix + '… (查無)</div>';
+  }
+  const p1Name = seatLabel(p1);
+  const p2Name = seatLabel(p2);
+  const turn = (gs?.turn != null) ? gs.turn : '<span class="small">-</span>';
+  // v0.90: Firebase rooms 也可刪
+  const showDelete = true;
+  // 狀態 badge with icon + Chinese
+  let statusBadge;
+  if (r.status === 'playing') statusBadge = '<span class="status-badge status-playing">⚔️ 進行中</span>';
+  else if (r.status === 'lobby') statusBadge = '<span class="status-badge status-lobby">🏠 等待中</span>';
+  else statusBadge = '<span class="status-badge status-ended">✅ 已結束</span>';
+  // 訊息按鈕 + 計數 badge
+  const msgCount = r.messageCount;
+  let msgBtn;
+  if (msgCount === undefined) {
+    msgBtn = `<button class="btn-msg" onclick="showMessagesModal('${r._id}', '${source}')">💬 訊息</button>`;
+  } else if (msgCount === 0) {
+    msgBtn = `<button class="btn-msg empty" onclick="showMessagesModal('${r._id}', '${source}')">💬 0</button>`;
+  } else {
+    msgBtn = `<button class="btn-msg has-msg" onclick="showMessagesModal('${r._id}', '${source}')">💬 ${msgCount}則</button>`;
+  }
+  // v0.31: 用 trunc-inner div 包住，避免長名字撐爆 row
+  const p1FullName = p1?.uid ? (p1.name || '?') : '';
+  const p2FullName = p2?.uid ? (p2.name || '?') : '';
+  const roomNameFull = r.roomName || '';
+  return `
+    <tr>
+      <td class="mono"><b>${r._id}</b></td>
+      <td title="${escapeHtml(roomNameFull)}"><div class="trunc-inner">${escapeHtml(roomNameFull)}</div></td>
+      <td class="${p1Class}" title="${escapeHtml(p1FullName)}"><div class="trunc-inner">${p1Name}</div></td>
+      <td class="${p2Class}" title="${escapeHtml(p2FullName)}"><div class="trunc-inner">${p2Name}</div></td>
+      <td>${statusBadge}</td>
+      <td class="num-cell">${turn}</td>
+      <td>${updatedStr}${ageMin !== null ? `<div class="small">${ageMin}m ago</div>` : ''}</td>
+      <td><button class="btn-deck" onclick="showDeckModal('${r._id}', '${source}')">🃏 牌組</button></td>
+      <td>${msgBtn}</td>
+      <td>${r.status === 'playing' ? `<button class="btn-deck" style="background:#1976d2;color:#ffffff" onclick="openSpyWindow('${r._id}', '${source}')" title="Admin 隱身觀戰">\ud83d\udd0d 偷看</button>` : '<span class="small">-</span>'}</td>
+      ${showDelete ? `<td><button class="tiny danger" onclick="deleteRoomBySource('${r._id}', '${source}')" title="${source === 'firebase' ? '刪除 Firebase 房間（含 messages 子集合）' : '刪除 Oracle 房間'}">刪除</button></td>` : ''}
+    </tr>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+}
+
+// ── Deck modal (room decks) ──────────────────────────────────────
+window.showDeckModal = async function(code, source) {
+  // 先彈窗顯示 loading，再等卡片資料 + 房間資料
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal"><h3>🃏 房間 ${code} 的牌組</h3><div class="empty">Loading…</div></div>
+    </div>
+  `;
+  const [room] = await Promise.all([
+    api('/api/admin/' + source + '/rooms/' + code).then(d => d?.room),
+    ensureCardIndex(),
+  ]);
+  if (!room) { document.getElementById('modal-container').innerHTML = ''; alert('Room not found'); return; }
+  const s0 = room.seats?.[0];
+  const s1 = room.seats?.[1];
+  const renderDeck = (seat) => {
+    if (!seat?.uid) return '<div class="empty">空位</div>';
+    const entries = seat.deckEntries || [];
+    if (!entries.length) return '<div class="empty">尚未選牌組</div>';
+    const total = entries.reduce((sum, e) => sum + (e.count || 0), 0);
+    return `
+      <div class="small" style="margin-bottom:6px;">共 ${total} 張 / 種類 ${entries.length}</div>
+      ${entries.map(e => `<div class="deck-entry"><span>${escapeHtml(cardLabel(e.cardId, e.count))}</span></div>`).join('')}
+    `;
+  };
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <h3>🃏 房間 ${code} 的牌組</h3>
+        <div class="deck-grid">
+          <div class="deck-col">
+            <h4>P1 — ${escapeHtml(s0?.name || '空')}</h4>
+            ${renderDeck(s0)}
+          </div>
+          <div class="deck-col">
+            <h4>P2 — ${escapeHtml(s1?.name || '空')}</h4>
+            ${renderDeck(s1)}
+          </div>
+        </div>
+        <div style="margin-top:16px; text-align:right;">
+          <button onclick="closeModal()">關閉</button>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
+window.closeModal = function() {
+  document.getElementById('modal-container').innerHTML = '';
+};
+
+// ── Messages modal (chat only, no game log) ─────────────────────
+window.showMessagesModal = async function(code, source) {
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal"><h3>💬 房間 ${code} 的聊天紀錄</h3><div class="empty">Loading…</div></div>
+    </div>
+  `;
+  const [msgsData, roomData] = await Promise.all([
+    api('/api/admin/' + source + '/messages/' + code),
+    api('/api/admin/' + source + '/rooms/' + code),
+  ]);
+  const messages = msgsData?.messages || [];
+  const room = roomData?.room;
+  // 建 uid → 玩家名稱 map（從 room.seats）
+  const uidToName = {};
+  // v0.72：建 uid → 角色 map（seats[0]=P1 / seats[1]=P2 / 其他=觀戰）
+  const uidToRole = {};
+  const seats = room?.seats || [];
+  for (let i = 0; i < seats.length; i++) {
+    const s = seats[i];
+    if (s?.uid && s?.name) uidToName[s.uid] = s.name;
+    if (s?.uid) {
+      if (i === 0) uidToRole[s.uid] = 'p1';
+      else if (i === 1) uidToRole[s.uid] = 'p2';
+    }
+  }
+  const roleLabel = { p1: 'P1', p2: 'P2', spec: '觀戰' };
+  const body = messages.length === 0
+    ? '<div class="empty">（無聊天紀錄）</div>'
+    : `<div class="chat-list">${messages.map(m => {
+        const t = m.createdAt ? new Date(m.createdAt).toLocaleString('zh-TW') : '-';
+        const name = uidToName[m.uid] || (m.uid?.slice(0, 8) + '…' ?? '?');
+        const role = uidToRole[m.uid] || 'spec';
+        return `
+          <div class="chat-line chat-${role}">
+            <div class="chat-meta"><span class="chat-role-badge role-${role}">${roleLabel[role]}</span><b>${escapeHtml(name)}</b> <span class="small">${t}</span></div>
+            <div class="chat-text">${escapeHtml(m.text || '')}</div>
+          </div>
+        `;
+      }).join('')}</div>`;
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="min-width:520px;max-width:700px;">
+        <h3>💬 房間 ${code} 的聊天紀錄（${messages.length}）</h3>
+        ${body}
+        <div style="margin-top:16px; text-align:right;">
+          <button onclick="closeModal()">關閉</button>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
+window.deleteOracleRoom = async function(code) {
+  if (!confirm('Delete oracle room ' + code + ' and its messages?')) return;
+  await api('/api/admin/oracle/rooms/' + code, { method: 'DELETE' });
+  loadOracleRooms();
+};
+
+// v0.90: 刪除 Firebase 房間（含 messages 子集合）
+window.deleteFirebaseRoom = async function(code) {
+  if (!confirm('刪除 Firebase 房間 ' + code + ' 與其所有訊息？\n此動作無法復原。')) return;
+  const res = await api('/api/admin/firebase/rooms/' + code, { method: 'DELETE' });
+  if (!res || res.error) {
+    alert('刪除失敗：' + (res?.error || 'unknown'));
+    return;
+  }
+  if (res.deletedMessages !== undefined) {
+    console.log('[admin] deleted firebase room', code, 'with', res.deletedMessages, 'messages');
+  }
+  firebaseRoomsCache = firebaseRoomsCache.filter(r => r._id !== code);
+  loadFirebaseRooms();
+};
+
+// v0.90: 按 source 分流刪除 — 統一入口
+window.deleteRoomBySource = function(code, source) {
+  if (source === 'oracle') deleteOracleRoom(code);
+  else if (source === 'firebase') deleteFirebaseRoom(code);
+};
+
+// ── Tab: Users (auto-load all pages, with re-entry guard) ───────
+let _loadingUsers = false;
+let _usersLoaded = false;  // 已載入過就 cache，不重複載
+// v0.32: 排序狀態
+let usersSortKey = 'lastSignIn';  // 預設依最後登入時間排序
+let usersSortDir = 'desc';         // desc=新到舊, asc=舊到新
+async function loadUsers(reset = false) {
+  const el = document.getElementById('tab-users');
+  // v0.21: re-entry guard 防止 setInterval 自動刷新 + manual click 同時觸發
+  if (_loadingUsers) {
+    console.log('[admin] loadUsers already in progress, skipping');
+    return;
+  }
+  // v0.21: 已載入過則使用 cache（除非明確要求 reset，但 switchTab 不該強制 reset）
+  if (_usersLoaded && !reset && allUsers.length > 0) {
+    renderUsers(el);
+    return;
+  }
+  _loadingUsers = true;
+  try {
+    if (reset || allUsers.length === 0) {
+      allUsers = [];
+      usersPageToken = null;
+      el.innerHTML = '<h2>👤 玩家帳號</h2><div class="empty">Loading…</div>';
+    }
+    while (true) {
+      const url = '/api/admin/firebase/users' + (usersPageToken ? '?pageToken=' + encodeURIComponent(usersPageToken) : '');
+      const data = await api(url);
+      if (!data || data.error) {
+        el.innerHTML = '<h2>👤 玩家帳號</h2><div class="empty">Error: ' + (data?.error || 'unknown') + '</div>';
+        return;
+      }
+      allUsers = allUsers.concat(data.users);
+      usersPageToken = data.pageToken;
+      if (!usersPageToken) break;
+      el.innerHTML = `<h2>👤 玩家帳號</h2><div class="empty">Loading... ${allUsers.length} loaded so far</div>`;
+    }
+    _usersLoaded = true;
+    renderUsers(el);
+  } finally {
+    _loadingUsers = false;
+  }
+}
+
+function renderUsers(el) {
+  const total = allUsers.length;
+  const named = allUsers.filter(u => !u.anonymous).length;
+  rebuildUidEmailMap();  // v0.5: users 載入完成 → 更新 email map
+  const sorted = sortUsers(allUsers);
+  el.innerHTML = `
+    <h2>👤 玩家帳號（共 ${total} 個，註冊 ${named}，匿名 ${total - named}）</h2>
+    <div class="toolbar">
+      <input class="search-box" placeholder="搜尋 email / uid / displayName" oninput="filterUsers(this.value)" />
+      <span class="small" style="color:#9aa3b0;">點欄位標題可排序</span>
+    </div>
+    <div class="table-wrap"><table><thead><tr>
+      <th class="sortable" onclick="sortUsersBy('email')">Email${sortArrow('email')}</th>
+      <th class="sortable" onclick="sortUsersBy('uid')">UID${sortArrow('uid')}</th>
+      <th class="sortable" onclick="sortUsersBy('type')">Type${sortArrow('type')}</th>
+      <th class="sortable" onclick="sortUsersBy('lastSignIn')">Last Sign-in${sortArrow('lastSignIn')}</th>
+      <th class="sortable" onclick="sortUsersBy('createdAt')">Created${sortArrow('createdAt')}</th>
+      <th>Actions</th>
+    </tr></thead><tbody id="users-tbody">
+    ${renderUsersRows(sorted)}
+    </tbody></table></div>
+  `;
+}
+
+// v0.32: 排序函數
+function sortUsers(users) {
+  const arr = [...users];
+  const dir = usersSortDir === 'asc' ? 1 : -1;
+  const cmp = (a, b) => {
+    let va, vb;
+    if (usersSortKey === 'email') { va = (a.email || '').toLowerCase(); vb = (b.email || '').toLowerCase(); }
+    else if (usersSortKey === 'uid') { va = a.uid; vb = b.uid; }
+    else if (usersSortKey === 'type') {
+      // 排序權重：emailVerified=0, emailUnverified=1, anonymous=2
+      const w = (u) => u.anonymous ? 2 : (u.emailVerified ? 0 : 1);
+      va = w(a); vb = w(b);
+    }
+    else if (usersSortKey === 'lastSignIn') { va = a.lastSignIn ? new Date(a.lastSignIn).getTime() : 0; vb = b.lastSignIn ? new Date(b.lastSignIn).getTime() : 0; }
+    else if (usersSortKey === 'createdAt') { va = a.createdAt ? new Date(a.createdAt).getTime() : 0; vb = b.createdAt ? new Date(b.createdAt).getTime() : 0; }
+    else { va = 0; vb = 0; }
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return 0;
+  };
+  return arr.sort(cmp);
+}
+
+window.sortUsersBy = function(key) {
+  if (usersSortKey === key) {
+    usersSortDir = usersSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    usersSortKey = key;
+    usersSortDir = 'desc';
+  }
+  renderUsers(document.getElementById('tab-users'));
+};
+
+function sortArrow(key) {
+  if (usersSortKey !== key) return '<span class="sort-arrow inactive"> ⇅</span>';
+  return '<span class="sort-arrow active"> ' + (usersSortDir === 'asc' ? '↑' : '↓') + '</span>';
+}
+
+function renderUsersRows(users) {
+  return users.map(u => {
+    // v0.32: Type 欄位明確化
+    let typeCell;
+    if (u.anonymous) {
+      typeCell = '<span class="small" title="匿名登入（沒綁 email/password）">匿名</span>';
+    } else if (u.emailVerified) {
+      typeCell = '<span style="color:#4caf50;" title="已用 email/password 註冊並完成信箱驗證">✓ 已驗證</span>';
+    } else {
+      typeCell = '<span style="color:#fa6;" title="已用 email/password 註冊但尚未點擊驗證信中的連結">⚠ 信箱未驗證</span>';
+    }
+    return `
+      <tr>
+        <td title="${escapeHtml(u.email || '')}"><div class="trunc-inner">${escapeHtml(u.email || '')}${u.email ? '' : '<span class="small">(匿名)</span>'}</div></td>
+        <td class="mono small">${u.uid.slice(0, 12)}…</td>
+        <td>${typeCell}</td>
+        <td class="small">${u.lastSignIn ? new Date(u.lastSignIn).toLocaleString('zh-TW') : '-'}</td>
+        <td class="small">${u.createdAt ? new Date(u.createdAt).toLocaleString('zh-TW') : '-'}</td>
+        <td><button class="tiny ghost" onclick="viewUserDecks('${u.uid}', '${escapeHtml((u.email || u.uid.slice(0, 8)).replace(/'/g, '&apos;'))}')">查看牌組</button></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+window.filterUsers = function(q) {
+  const tbody = document.getElementById('users-tbody');
+  const lc = q.toLowerCase();
+  const filtered = allUsers.filter(u =>
+    (u.email && u.email.toLowerCase().includes(lc)) ||
+    u.uid.toLowerCase().includes(lc) ||
+    (u.displayName && u.displayName.toLowerCase().includes(lc))
+  );
+  tbody.innerHTML = renderUsersRows(filtered);
+};
+
+window.viewUserDecks = async function(uid, label) {
+  // 彈窗 modal，跟房間牌組一致
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal"><h3>🃏 ${escapeHtml(label)} 的牌組</h3><div class="empty">Loading…</div></div>
+    </div>
+  `;
+  const [data] = await Promise.all([
+    api('/api/admin/firebase/users/' + uid + '/decks'),
+    ensureCardIndex(),
+  ]);
+  if (!data || data.error) {
+    document.getElementById('modal-container').innerHTML = `
+      <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+        <div class="modal"><h3>🃏 ${escapeHtml(label)} 的牌組</h3>
+        <div class="empty">Error: ${escapeHtml(data?.error || 'unknown')}</div>
+        <div style="text-align:right;margin-top:12px;"><button onclick="closeModal()">關閉</button></div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  const decks = data.decks || [];
+  const body = decks.length === 0 ? '<div class="empty">沒有雲端牌組</div>' :
+    decks.map(d => `
+      <div class="deck-card">
+        <div><b>${escapeHtml(d.name || '(無名稱)')}</b> <span class="small">(${d.entryCount} 張)</span></div>
+        <div class="small">更新：${d.updatedAt ? new Date(d.updatedAt).toLocaleString('zh-TW') : '-'}</div>
+        <details>
+          <summary class="small" style="cursor:pointer;color:#5b8def;margin-top:6px;">查看內容</summary>
+          <div class="detail-panel">${(d.entries || []).map(e => escapeHtml(cardLabel(e.cardId, e.count))).join('\n')}</div>
+        </details>
+      </div>
+    `).join('');
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="min-width:520px;max-width:780px;">
+        <h3>🃏 ${escapeHtml(label)} 的牌組（${decks.length}）</h3>
+        ${body}
+        <div style="margin-top:16px; text-align:right;">
+          <button onclick="closeModal()">關閉</button>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
+// ── Tab: Feedback (v0.4 with reply + delete) ─────────────────────
+let feedbackList = [];
+async function loadFeedback() {
+  const el = document.getElementById('tab-feedback');
+  el.innerHTML = '<h2>💬 意見回饋</h2><div class="empty">Loading…</div>';
+  const data = await api('/api/admin/firebase/feedback');
+  if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
+  feedbackList = data.feedback || [];
+  renderFeedback(el);
+}
+
+function renderFeedback(el) {
+  if (!feedbackList.length) { el.innerHTML = '<h2>💬 意見回饋</h2><div class="empty">No feedback</div>'; return; }
+  const unreplied = feedbackList.filter(f => !f.reply).length;
+  el.innerHTML = `
+    <h2>💬 意見回饋（${feedbackList.length}，未回覆 ${unreplied}）</h2>
+    <div class="small" style="color:#9aa3b0; margin-bottom:12px;">
+      💡 玩家在主站打開意見回饋視窗時，會看到自己提交過的歷史回饋與你在這裡寫的回覆。送出/編輯/刪除回覆會即時同步到玩家端。
+    </div>
+    <div id="feedback-list">
+      ${feedbackList.map(f => renderFeedbackItem(f)).join('')}
+    </div>
+  `;
+}
+
+function renderFeedbackItem(f) {
+  const created = f.createdAt ? new Date(f.createdAt).toLocaleString('zh-TW') : '-';
+  const replied = f.repliedAt ? new Date(f.repliedAt).toLocaleString('zh-TW') : null;
+  const uidShort = (f.uid || f.deviceId || 'unknown').slice(0, 16);
+  const deviceShort = (f.deviceId || '').slice(0, 8);
+  const hasReply = !!f.reply;
+  const userAgent = f.userAgent || '';
+  return `
+    <div class="feedback-item" data-fbid="${f.id}">
+      <div class="feedback-meta">
+        📅 <b>${created}</b>
+        · <span class="mono small">UID: ${uidShort}…</span>
+        ${deviceShort ? ' · <span class="mono small">device: ' + deviceShort + '</span>' : ''}
+        ${hasReply ? '<span class="reply-badge">✓ 已回覆</span>' : '<span class="unreply-badge">⏳ 待回覆</span>'}
+      </div>
+      <div class="feedback-text">${escapeHtml(f.content || f.text || f.message || '')}</div>
+      ${userAgent ? `<details class="ua-details"><summary class="small">▶ User Agent</summary><div class="small mono" style="margin-top:4px;color:#7a8898;">${escapeHtml(userAgent)}</div></details>` : ''}
+
+      ${hasReply ? `
+        <div class="reply-shown">
+          <div class="reply-shown-header">
+            💬 你的回覆 <span class="small">${replied || ''} ${f.repliedBy ? '· by ' + escapeHtml(f.repliedBy) : ''}</span>
+          </div>
+          <div class="reply-shown-text">${escapeHtml(f.reply)}</div>
+        </div>
+      ` : ''}
+
+      <textarea class="reply-input" id="reply-${f.id}" placeholder="${hasReply ? '編輯回覆內容…' : '輸入回覆內容…'}" rows="3">${hasReply ? escapeHtml(f.reply) : ''}</textarea>
+
+      <div class="feedback-actions">
+        ${hasReply ? `<button class="btn-edit-reply" onclick="loadReplyDraft('${f.id}', ${JSON.stringify(f.reply || '').replace(/"/g, '&quot;')})">📝 編輯既有回覆</button>` : ''}
+        <button class="btn-submit-reply" id="btn-reply-${f.id}" onclick="submitReply('${f.id}')">${hasReply ? '更新回覆' : '送出回覆'}</button>
+        <button class="btn-delete-fb" onclick="deleteFeedback('${f.id}')">🗑️ 刪除</button>
+      </div>
+    </div>
+  `;
+}
+
+window.loadReplyDraft = function(fbId, replyText) {
+  const ta = document.getElementById('reply-' + fbId);
+  if (ta) {
+    ta.value = replyText;
+    ta.focus();
+  }
+};
+
+window.submitReply = async function(fbId) {
+  const ta = document.getElementById('reply-' + fbId);
+  if (!ta) return;
+  const reply = ta.value.trim();
+  if (!reply) { alert('回覆內容不能空白'); return; }
+  const btn = document.getElementById('btn-reply-' + fbId);
+  if (btn) { btn.disabled = true; btn.textContent = '送出中…'; }
+  const res = await api('/api/admin/firebase/feedbacks/' + fbId + '/reply', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reply }),
+  });
+  if (!res || res.error) {
+    alert('送出失敗：' + (res?.error || 'unknown'));
+    if (btn) { btn.disabled = false; btn.textContent = '送出回覆'; }
+    return;
+  }
+  await loadFeedback();  // 重新拉資料更新顯示
+};
+
+window.deleteFeedback = async function(fbId) {
+  if (!confirm('確定要刪除這筆意見回饋嗎？此動作無法復原。')) return;
+  const res = await api('/api/admin/firebase/feedbacks/' + fbId, { method: 'DELETE' });
+  if (!res || res.error) { alert('刪除失敗：' + (res?.error || 'unknown')); return; }
+  await loadFeedback();
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v0.80 Tab: Match Records (對戰歷史) — server v0.9 提供的 GET /api/admin/match-records
+//   - 表格顯示：時間 / 房號 / 先攻(綠底=勝者) / 後攻(綠底=勝者) / 結束原因 / 回合 / 時長
+//   - 點玩家名字 → modal 顯示這場用的牌組（lazy-load /cards/<set>.json 解析卡名）
+//   - email filter（查特定玩家戰績）
+//   - 分頁：50 筆 / 頁，按「載入更多」append
+// ══════════════════════════════════════════════════════════════════════════════
+let matchRecordsCache = [];
+let matchRecordsTotal = 0;
+let matchRecordsFilter = '';
+let matchRecordsModeFilter = 'all';  // v0.82: 'all' | 'online' | 'local'（線上=有 roomCode，本機=無）
+let matchRecordsLoading = false;
+// v0.81: 不再用獨立 cardByIdPool — 共用既有的 cardInfoMap / ensureCardIndex (line 413)
+
+async function loadMatchRecords(reset = false) {
+  const el = document.getElementById('tab-matches');
+  if (matchRecordsLoading) return;
+  matchRecordsLoading = true;
+  try {
+    if (reset || matchRecordsCache.length === 0) {
+      matchRecordsCache = [];
+      matchRecordsTotal = 0;
+      el.innerHTML = '<h2>📜 對戰歷史</h2><div class="empty">Loading…</div>';
+    }
+    const params = new URLSearchParams({ limit: '50', skip: String(matchRecordsCache.length) });
+    if (matchRecordsFilter) params.set('email', matchRecordsFilter);
+    // v0.82：mode filter — 用 server 端 ?mode= 過濾，server v0.11 起 'online' / 'local' 對應 roomCode 有無
+    if (matchRecordsModeFilter === 'online' || matchRecordsModeFilter === 'local') {
+      params.set('mode', matchRecordsModeFilter);
+    }
+    const data = await api('/api/admin/match-records?' + params.toString());
+    if (!data || data.error) {
+      el.innerHTML = '<h2>📜 對戰歷史</h2><div class="empty">Error: ' + (data?.error || 'unknown') + '</div>';
+      return;
+    }
+    matchRecordsCache = matchRecordsCache.concat(data.records || []);
+    matchRecordsTotal = data.total ?? matchRecordsCache.length;
+    renderMatchRecords(el);
+  } finally {
+    matchRecordsLoading = false;
+  }
+}
+
+window.filterMatchRecordsByEmail = function(v) {
+  matchRecordsFilter = (v || '').trim();
+  matchRecordsCache = [];
+  loadMatchRecords(true);
+};
+
+// v0.82：mode filter 切換（全部 / 線上 / 本機）
+window.setMatchRecordsModeFilter = function(m) {
+  if (m !== 'all' && m !== 'online' && m !== 'local') return;
+  matchRecordsModeFilter = m;
+  matchRecordsCache = [];
+  loadMatchRecords(true);
+};
+
+// v0.82：刪除單筆對戰紀錄（測試資料清理用）
+window.deleteMatchRecord = async function(matchId) {
+  if (!matchId) return;
+  if (!confirm('確定要刪除這筆對戰紀錄嗎？此動作無法復原。\n\nmatchId: ' + matchId)) return;
+  try {
+    const res = await api('/api/admin/match-records/' + encodeURIComponent(matchId), { method: 'DELETE' });
+    if (!res || res.error) { alert('刪除失敗：' + (res?.error || 'unknown')); return; }
+    // 從 cache 移除這筆 → 重新 render（不重打 API）
+    const before = matchRecordsCache.length;
+    matchRecordsCache = matchRecordsCache.filter(r => r._id !== matchId);
+    matchRecordsTotal = Math.max(0, matchRecordsTotal - (before - matchRecordsCache.length));
+    renderMatchRecords(document.getElementById('tab-matches'));
+  } catch (err) {
+    alert('刪除失敗：' + (err?.message || 'unknown'));
+  }
+};
+
+function fmtMatchTime(ms) {
+  if (!ms) return '-';
+  const d = new Date(ms);
+  return d.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+}
+
+function fmtMatchDuration(ms) {
+  if (!ms || ms < 0) return '-';
+  const sec = Math.floor(ms / 1000);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m + ':' + (s < 10 ? '0' + s : s);
+}
+
+function renderMatchRecords(el) {
+  const records = matchRecordsCache;
+  const rows = records.map(r => {
+    const p1Win = r.winner === 0;
+    const p2Win = r.winner === 1;
+    const p1Cls = p1Win ? 'winner-cell' : '';
+    const p2Cls = p2Win ? 'winner-cell' : '';
+    const p1Email = r.p1?.email ? escapeHtml(r.p1.email) : '<span style="color:#bbb;">匿名</span>';
+    const p2Email = r.p2?.email ? escapeHtml(r.p2.email) : '<span style="color:#bbb;">匿名</span>';
+    const mid = escapeHtml(r._id || '');
+    // v0.82：「📍 線上」/「🏠 本機」標籤靠 roomCode 判斷（有=線上、無=本機）
+    const isOnline = !!r.roomCode;
+    const modeBadge = isOnline
+      ? '<span class="mode-badge mode-online" title="線上對戰">🌐</span>'
+      : '<span class="mode-badge mode-local" title="本機雙人對戰">🏠</span>';
+    return `<tr>
+      <td>${fmtMatchTime(r.endedAt)}</td>
+      <td>${modeBadge} <code>${escapeHtml(r.roomCode || '本機')}</code></td>
+      <td class="${p1Cls}">
+        <span class="player-name" onclick="showMatchDeck('${mid}')">${escapeHtml(r.p1?.name || '先攻')}</span>
+        <span class="player-email">${p1Email}</span>
+      </td>
+      <td class="${p2Cls}">
+        <span class="player-name" onclick="showMatchDeck('${mid}')">${escapeHtml(r.p2?.name || '後攻')}</span>
+        <span class="player-email">${p2Email}</span>
+      </td>
+      <td>${escapeHtml(r.winReason || '-')}</td>
+      <td>${r.finalTurn ?? '-'}</td>
+      <td>${fmtMatchDuration(r.durationMs)}</td>
+      <td><button class="tiny danger" onclick="deleteMatchRecord('${mid}')" title="刪除此筆紀錄（測試資料清理用）">🗑</button></td>
+    </tr>`;
+  }).join('');
+  const hasMore = matchRecordsCache.length < matchRecordsTotal;
+  el.innerHTML = `
+    <h2>📜 對戰歷史 <span class="small">(共 ${matchRecordsTotal} 場${matchRecordsFilter ? ' · email: ' + escapeHtml(matchRecordsFilter) : ''}${matchRecordsModeFilter !== 'all' ? ' · ' + (matchRecordsModeFilter === 'online' ? '🌐 線上' : '🏠 本機') : ''})</span></h2>
+    <div class="toolbar">
+      <span class="filter-btn ${matchRecordsModeFilter === 'all' ? 'active' : ''}" onclick="setMatchRecordsModeFilter('all')">全部</span>
+      <span class="filter-btn ${matchRecordsModeFilter === 'online' ? 'active' : ''}" onclick="setMatchRecordsModeFilter('online')">🌐 線上對戰</span>
+      <span class="filter-btn ${matchRecordsModeFilter === 'local' ? 'active' : ''}" onclick="setMatchRecordsModeFilter('local')">🏠 本機雙人</span>
+      <span style="flex:1"></span>
+      <input class="search-box" placeholder="Filter by email" value="${escapeHtml(matchRecordsFilter)}"
+        style="max-width:240px;"
+        onkeydown="if(event.key==='Enter')filterMatchRecordsByEmail(this.value)" />
+      <button onclick="filterMatchRecordsByEmail(document.querySelector('#tab-matches .search-box').value)">套用</button>
+      <button class="ghost" onclick="filterMatchRecordsByEmail('')">清除</button>
+    </div>
+    <div class="small" style="margin: 4px 0 12px; color: #7a8898;">點玩家名字 → 看這場用的牌組（勝者綠底）· 🗑 刪除測試紀錄</div>
+    ${records.length === 0 ? '<div class="empty">尚無對戰紀錄（符合目前 filter 條件）</div>' : `
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th>結束時間</th>
+          <th>模式 / 房號</th>
+          <th>先攻 (email)</th>
+          <th>後攻 (email)</th>
+          <th>結束原因</th>
+          <th>回合數</th>
+          <th>對戰時長</th>
+          <th>操作</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      <div class="toolbar" style="margin-top:16px; justify-content:center;">
+        ${hasMore ? `<button onclick="loadMatchRecords(false)">載入更多 (${records.length}/${matchRecordsTotal})</button>` : `<span class="small">已顯示全部 ${records.length} 筆</span>`}
+      </div>
+    `}
+  `;
+}
+
+// v0.81：showMatchDeck 重設計 — 仿 Oracle 對戰 deck modal 格式
+//   - 兩欄並排：先攻 / 後攻
+//   - 使用既有 ensureCardIndex / cardLabel infrastructure（保持風格一致）
+//   - 讀 cardCounts (v5.006+ 新格式 Record<id,count>) 或 cardIds (v5.005 舊格式 fallback 視為 ×1)
+//   - 「📋 複製全部牌組」按鈕 — 把兩邊牌組文字格式 copy to clipboard
+window.showMatchDeck = async function(matchId) {
+  const record = matchRecordsCache.find(r => r._id === matchId);
+  if (!record) { alert('找不到該場紀錄'); return; }
+  // 先彈窗顯示 loading
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="min-width:520px;"><h3>🃏 對戰牌組</h3><div class="empty">載入卡牌資料中…</div></div>
+    </div>`;
+  await ensureCardIndex();
+
+  // 從 record.p1/p2 抽出 entries: [{ cardId, count }]，按 count 降序、name asc 排序
+  const buildEntries = (player) => {
+    if (!player) return [];
+    let raw = {};
+    if (player.cardCounts && typeof player.cardCounts === 'object' && !Array.isArray(player.cardCounts)) {
+      raw = player.cardCounts;
+    } else if (Array.isArray(player.cardIds)) {
+      // 舊格式 fallback：每張卡視為 1
+      for (const id of player.cardIds) raw[String(id)] = 1;
+    }
+    const entries = Object.entries(raw).map(([cardId, count]) => ({ cardId: String(cardId), count: Number(count) || 0 }));
+    // 排序：count 多 → 少，同 count 用 cardLabel 字母排
+    entries.sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      const la = cardLabel(a.cardId, 1).toLowerCase();
+      const lb = cardLabel(b.cardId, 1).toLowerCase();
+      return la.localeCompare(lb, 'zh-Hant');
+    });
+    return entries;
+  };
+
+  const e1 = buildEntries(record.p1);
+  const e2 = buildEntries(record.p2);
+
+  // 文字格式（給 copy 用）— 仿 Oracle 對戰 modal 看到的列表格式
+  const formatSide = (label, player, entries) => {
+    const total = entries.reduce((s, e) => s + e.count, 0);
+    const lines = [`${label} — ${player?.name || '?'}`, `共 ${total} 張 / 種類 ${entries.length}`];
+    for (const e of entries) lines.push(cardLabel(e.cardId, e.count));
+    return lines.join('\n');
+  };
+  const copyText = formatSide('先攻', record.p1, e1) + '\n\n' + formatSide('後攻', record.p2, e2);
+  // 存在 dataset 給複製按鈕用（avoid escape hell）
+  window._lastMatchCopyText = copyText;
+
+  // 渲染單側 HTML
+  const renderSide = (label, player, entries, win) => {
+    const total = entries.reduce((s, e) => s + e.count, 0);
+    const emailLine = player?.email ? `<span class="player-email">(${escapeHtml(player.email)})</span>` : '<span class="player-email">(匿名)</span>';
+    const winBadge = win ? '<span style="background:#4caf50;color:white;padding:2px 8px;border-radius:4px;font-size:12px;margin-left:6px;">勝</span>' : '';
+    if (!entries.length) return `
+      <div class="deck-col${win ? ' winner-side' : ''}">
+        <h4>${label} — ${escapeHtml(player?.name || '?')} ${emailLine}${winBadge}</h4>
+        <div class="empty">無牌組資料</div>
+      </div>`;
+    return `
+      <div class="deck-col${win ? ' winner-side' : ''}">
+        <h4>${label} — ${escapeHtml(player.name)} ${emailLine}${winBadge}</h4>
+        <div class="small" style="margin-bottom:6px;">共 ${total} 張 / 種類 ${entries.length}</div>
+        ${entries.map(e => `<div class="deck-entry">${escapeHtml(cardLabel(e.cardId, e.count))}</div>`).join('')}
+      </div>`;
+  };
+
+  const p1Win = record.winner === 0;
+  const p2Win = record.winner === 1;
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="min-width:720px;">
+        <h3>🃏 房間 ${escapeHtml(record.roomCode || '-')} 的牌組</h3>
+        <div class="deck-grid">
+          ${renderSide('先攻', record.p1, e1, p1Win)}
+          ${renderSide('後攻', record.p2, e2, p2Win)}
+        </div>
+        <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
+          <button onclick="copyMatchDeck()">📋 複製全部牌組（文字）</button>
+          <button onclick="closeModal()">關閉</button>
+        </div>
+      </div>
+    </div>`;
+};
+
+// 複製對戰牌組到 clipboard
+window.copyMatchDeck = async function() {
+  const text = window._lastMatchCopyText || '';
+  if (!text) { alert('沒有可複製的內容'); return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    // 簡單的視覺回饋：找到剛按的按鈕暫時改文字
+    const btns = document.querySelectorAll('.modal button');
+    for (const b of btns) {
+      if (b.textContent.includes('複製')) {
+        const original = b.textContent;
+        b.textContent = '✓ 已複製到剪貼簿';
+        setTimeout(() => { b.textContent = original; }, 1500);
+        break;
+      }
+    }
+  } catch (err) {
+    // fallback: 用舊版 execCommand
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      alert('已複製到剪貼簿（fallback 模式）');
+    } catch (e2) {
+      alert('複製失敗：' + (err.message || e2.message));
+    }
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v0.83 Phase 2a Tier 1 統計 tab
+//   8 sub-sections: 1.1 對戰總覽 / 1.2 先攻後攻勝率 / 1.3 對戰時長 / 1.4 勝因 /
+//                   1.5 卡牌使用率 / 1.6 熱門寶可夢+tag / 1.7 熱門訓練家 / 1.8 能量類型
+//   data: server /api/admin/stats/overview + /api/admin/stats/cards + /api/admin/cards/tags
+// ══════════════════════════════════════════════════════════════════════════════
+let statsOverviewCache = null;
+let statsCardsCache = null;
+let cardTagsCache = {};         // { cardId: ['support', ...] }
+let statsLoading = false;
+let pokemonFilterMode = 'all';  // 'all' | 'main' | 'support'
+let statsMode = 'online';       // v0.83: 全局 mode filter — 預設 '線上' (排除本機測試)
+// v0.84 Phase 2b caches
+let statsPlayersCache = null;
+let statsWinrateCache = null;
+let statsHeatmapCache = null;
+let statsTrendsCache = null;
+let trendsGranularity = 'day';  // 'day' | 'week' | 'month'
+let trendsDays = 30;            // 30 | 90 | 365
+let winrateFilterMode = 'all';  // 'all' | 'main' | 'support'（同 1.6）
+
+async function loadStats(reset = false) {
+  if (statsLoading) return;
+  statsLoading = true;
+  try {
+    const el = document.getElementById('tab-stats');
+    if (statsOverviewCache && statsCardsCache && !reset) {
+      renderStats(el);
+      return;
+    }
+    el.innerHTML = '<h2>📊 統計</h2><div class="empty">Loading… (aggregate matchRecords + 載入卡牌資料，約 5-15 秒)</div>';
+    await ensureCardIndex();
+    // v0.83 全局 mode filter — 傳給 server，過濾本機測試資料
+    const modeQ = (statsMode !== 'all') ? '?mode=' + statsMode : '';
+    const cardsQ = (statsMode !== 'all') ? '?mode=' + statsMode + '&limit=500' : '?limit=500';
+    // v0.84 Phase 2b 額外 endpoints
+    //   players: 排除 AI（玩家排行不算 AI 對手）
+    //   winrate: 預設排除 AI（excludeAI=true）
+    const playersQ = modeQ + (modeQ ? '&' : '?') + 'excludeAI=true';
+    const winrateQ = modeQ + (modeQ ? '&' : '?') + 'minDecks=5';
+    const trendsQ = modeQ + (modeQ ? '&' : '?') + 'days=' + trendsDays + '&granularity=' + trendsGranularity;
+    const [overview, cards, tags, players, winrate, heatmap, trends] = await Promise.all([
+      api('/api/admin/stats/overview' + modeQ),
+      api('/api/admin/stats/cards' + cardsQ),
+      api('/api/admin/cards/tags'),
+      api('/api/admin/stats/players' + playersQ),
+      api('/api/admin/stats/cards/winrate' + winrateQ),
+      api('/api/admin/stats/heatmap' + modeQ),
+      api('/api/admin/stats/trends' + trendsQ),
+    ]);
+    if (overview?.error) { el.innerHTML = '<h2>📊 統計</h2><div class="empty">Error overview: ' + overview.error + '</div>'; return; }
+    if (cards?.error) { el.innerHTML = '<h2>📊 統計</h2><div class="empty">Error cards: ' + cards.error + '</div>'; return; }
+    if (tags?.error) console.warn('cardTags load failed:', tags.error);
+    if (players?.error) console.warn('players load failed:', players.error);
+    if (winrate?.error) console.warn('winrate load failed:', winrate.error);
+    if (heatmap?.error) console.warn('heatmap load failed:', heatmap.error);
+    if (trends?.error) console.warn('trends load failed:', trends.error);
+    statsOverviewCache = overview;
+    statsCardsCache = cards;
+    cardTagsCache = (tags?.tags) || {};
+    statsPlayersCache = players;
+    statsWinrateCache = winrate;
+    statsHeatmapCache = heatmap;
+    statsTrendsCache = trends;
+    renderStats(el);
+  } finally {
+    statsLoading = false;
+  }
+}
+
+function renderStats(el) {
+  if (!statsOverviewCache || !statsCardsCache) return;
+  const modeLabel = statsMode === 'online' ? '🌐 線上對戰' : (statsMode === 'local' ? '🏠 本機（含 AI）' : '全部資料');
+  el.innerHTML = `
+    <h2>📊 統計 <span class="small muted">— ${modeLabel}</span> <button class="ghost" onclick="loadStats(true)">🔄 重新整理</button></h2>
+    <div class="toolbar" style="margin-bottom:20px; background:#eaf1fc; border:1px solid #c5d4f0; padding:10px 14px; border-radius:8px;">
+      <span style="font-weight:600; color:#1a2332;">資料範圍：</span>
+      <span class="filter-btn ${statsMode === 'all' ? 'active' : ''}" onclick="setStatsMode('all')">全部資料</span>
+      <span class="filter-btn ${statsMode === 'online' ? 'active' : ''}" onclick="setStatsMode('online')">🌐 線上對戰</span>
+      <span class="filter-btn ${statsMode === 'local' ? 'active' : ''}" onclick="setStatsMode('local')">🏠 本機（含 AI 測試）</span>
+      <span class="small muted" style="margin-left:auto;">建議用「🌐 線上對戰」過濾本機測試資料</span>
+    </div>
+    ${renderStatsOverview(statsOverviewCache)}
+    ${renderFirstMover(statsOverviewCache)}
+    ${renderDurationTurns(statsOverviewCache)}
+    ${renderWinReasons(statsOverviewCache)}
+    ${renderTopCards(statsCardsCache)}
+    ${renderTopPokemon(statsCardsCache)}
+    ${renderTopTrainers(statsCardsCache)}
+    ${renderEnergyDistribution(statsCardsCache)}
+    ${renderPlayerRanking(statsPlayersCache)}
+    ${renderCardWinrate(statsWinrateCache)}
+    ${renderHeatmap(statsHeatmapCache)}
+    ${renderTrends(statsTrendsCache)}
+  `;
+}
+
+// v0.83 全局 mode filter 切換 — 全部 / 線上 / 本機
+window.setStatsMode = function(m) {
+  if (m !== 'all' && m !== 'online' && m !== 'local') return;
+  if (statsMode === m) return;
+  statsMode = m;
+  // 清 cache 強制重新 fetch（含 Phase 2b 的 4 個）
+  statsOverviewCache = null;
+  statsCardsCache = null;
+  statsPlayersCache = null;
+  statsWinrateCache = null;
+  statsHeatmapCache = null;
+  statsTrendsCache = null;
+  loadStats(true);
+};
+
+// v0.84 trends granularity / 範圍切換
+window.setTrendsGranularity = function(g) {
+  if (!['day', 'week', 'month'].includes(g)) return;
+  if (trendsGranularity === g) return;
+  trendsGranularity = g;
+  statsTrendsCache = null;
+  loadStats(true);
+};
+window.setTrendsDays = function(d) {
+  d = parseInt(d) || 30;
+  if (trendsDays === d) return;
+  trendsDays = d;
+  statsTrendsCache = null;
+  loadStats(true);
+};
+window.setWinrateFilter = function(m) {
+  if (!['all', 'main', 'support'].includes(m)) return;
+  winrateFilterMode = m;
+  renderStats(document.getElementById('tab-stats'));
+};
+
+// 1.1 對戰總覽 — 全部模式才顯示 線上/本機 breakdown；filter 時只顯示 vsAI 比例
+function renderStatsOverview(s) {
+  const t = s.total || {};
+  const total = t.all || 0;
+  const pct = (n) => total > 0 ? Math.round(n / total * 100) : 0;
+  const showModeBreakdown = (statsMode === 'all');
+  return `
+    <section class="stats-section">
+      <h3>📊 1.1 對戰總覽</h3>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">總場次</div><div class="stat-value">${total}</div></div>
+        ${showModeBreakdown ? `
+          <div class="stat-card"><div class="stat-label">🌐 線上</div><div class="stat-value">${t.online || 0}<span class="stat-pct">${pct(t.online)}%</span></div></div>
+          <div class="stat-card"><div class="stat-label">🏠 本機</div><div class="stat-value">${t.local || 0}<span class="stat-pct">${pct(t.local)}%</span></div></div>
+        ` : ''}
+        <div class="stat-card"><div class="stat-label">🤖 vs AI</div><div class="stat-value">${t.vsAI || 0}<span class="stat-pct">${pct(t.vsAI)}%</span></div></div>
+        <div class="stat-card"><div class="stat-label">👥 真人對戰</div><div class="stat-value">${t.humanOnly || 0}</div></div>
+        <div class="stat-card"><div class="stat-label">近 24h</div><div class="stat-value">${s.new24h || 0}</div></div>
+        <div class="stat-card"><div class="stat-label">近 7 天</div><div class="stat-value">${s.new7d || 0}</div></div>
+        <div class="stat-card"><div class="stat-label">近 30 天</div><div class="stat-value">${s.new30d || 0}</div></div>
+      </div>
+    </section>
+  `;
+}
+
+// 1.2 先攻 vs 後攻勝率（三組 filter）
+function renderFirstMover(s) {
+  const fm = s.firstMover || {};
+  const sub = (label, d) => {
+    d = d || {};
+    const t = (d.p1Win || 0) + (d.p2Win || 0) + (d.draws || 0);
+    if (t === 0) return `<div class="fm-row"><span class="fm-label">${label}</span><span class="muted">（無資料）</span><span></span></div>`;
+    const p1Pct = Math.round(d.p1Win / t * 100);
+    const p2Pct = Math.round(d.p2Win / t * 100);
+    const drawPct = Math.max(0, 100 - p1Pct - p2Pct);
+    return `
+      <div class="fm-row">
+        <div class="fm-label">${label}<div class="small muted">${t} 場</div></div>
+        <div class="fm-bars">
+          <div class="fm-bar fm-p1" style="width:${p1Pct}%" title="先攻勝 ${d.p1Win} (${p1Pct}%)">${p1Pct > 8 ? p1Pct + '%' : ''}</div>
+          <div class="fm-bar fm-p2" style="width:${p2Pct}%" title="後攻勝 ${d.p2Win} (${p2Pct}%)">${p2Pct > 8 ? p2Pct + '%' : ''}</div>
+          ${d.draws > 0 ? `<div class="fm-bar fm-draw" style="width:${drawPct}%" title="平局 ${d.draws}">${drawPct > 8 ? drawPct + '%' : ''}</div>` : ''}
+        </div>
+        <div class="fm-detail">先攻 ${d.p1Win} / 後攻 ${d.p2Win}${d.draws > 0 ? ' / 平 ' + d.draws : ''}</div>
+      </div>
+    `;
+  };
+  return `
+    <section class="stats-section">
+      <h3>👑 1.2 先攻 vs 後攻勝率</h3>
+      <div class="fm-table">
+        ${sub('全部對戰', fm.all)}
+        ${sub('排除 AI（含本機真人）', fm.humanOnly)}
+        ${sub('只看線上真人', fm.onlineHumanOnly)}
+      </div>
+    </section>
+  `;
+}
+
+// 1.3 對戰時長 / 回合數
+function renderDurationTurns(s) {
+  const fmtMs = (ms) => { if (!ms) return '-'; const sec = Math.floor(ms / 1000); const m = Math.floor(sec / 60); const ss = sec % 60; return m + ':' + (ss < 10 ? '0' + ss : ss); };
+  const d = s.duration || {};
+  const t = s.turns || {};
+  const dh = d.histogram || [];
+  const dhMax = Math.max(1, ...dh.map(x => x.count));
+  const dhLabels = { 0: '0-5 分', 300000: '5-10 分', 600000: '10-15 分', 900000: '15-20 分', 1200000: '20-25 分', 1500000: '25-30 分', 1800000: '30-40 分', 2400000: '40-50 分', 3000000: '50-60 分' };
+  const td = t.distribution || [];
+  const tdMax = Math.max(1, ...td.map(x => x.count));
+  return `
+    <section class="stats-section">
+      <h3>⏱ 1.3 對戰時長 / 回合數</h3>
+      <div class="stats-row">
+        <div class="stats-box">
+          <div class="stats-box-title">對戰時長（平均 ${fmtMs(d.avgMs)} / ${d.sampleCount || 0} 場）</div>
+          ${dh.map(bin => {
+            const label = bin._id === '60+' ? '60+ 分' : (dhLabels[bin._id] || (bin._id + ''));
+            const pct = Math.round(bin.count / dhMax * 100);
+            return `<div class="histo-row"><span class="histo-lbl">${label}</span><div class="histo-bar" style="width:${pct}%"></div><span class="histo-cnt">${bin.count} 場</span></div>`;
+          }).join('')}
+        </div>
+        <div class="stats-box">
+          <div class="stats-box-title">回合數（平均 ${(t.avg || 0).toFixed(1)} 回合 / ${t.sampleCount || 0} 場）</div>
+          ${td.map(b => {
+            const pct = Math.round(b.count / tdMax * 100);
+            return `<div class="histo-row"><span class="histo-lbl">第 ${b._id} 回合結束</span><div class="histo-bar" style="width:${pct}%"></div><span class="histo-cnt">${b.count} 場</span></div>`;
+          }).join('')}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+// 1.4 勝因分佈
+function renderWinReasons(s) {
+  const wr = s.winReasons || [];
+  const total = wr.reduce((sum, x) => sum + x.count, 0);
+  if (total === 0) return '<section class="stats-section"><h3>🏁 1.4 勝因分佈</h3><div class="empty">無資料</div></section>';
+  const maxCount = wr[0]?.count || 1;
+  return `
+    <section class="stats-section">
+      <h3>🏁 1.4 勝因分佈 <span class="small muted">（共 ${total} 場）</span></h3>
+      <div class="stats-box">
+        ${wr.slice(0, 15).map(x => {
+          const pct = (x.count / total * 100).toFixed(1);
+          const barPct = Math.round(x.count / maxCount * 100);
+          return `<div class="histo-row" style="grid-template-columns: 280px 1fr 140px;"><span class="histo-lbl">${escapeHtml(x.reason || '(空)')}</span><div class="histo-bar" style="width:${barPct}%"></div><span class="histo-cnt">${x.count} (${pct}%)</span></div>`;
+        }).join('')}
+      </div>
+    </section>
+  `;
+}
+
+// v0.83 將 server 回的 raw cardId stats 依 canonicalKey 合併（同名同效不同版本算同一張）
+//   注意：deckCount 是各 cardId 的簡單加總，若同副牌組同時收錄兩種版本會 double-count，
+//   但實務上極罕見，先接受這個誤差。
+function groupCardsByCanonical(cards) {
+  const groups = new Map();
+  for (const card of (cards || [])) {
+    const info = cardInfoMap[card.cardId];
+    if (!info?.canonicalKey) continue;
+    const key = info.canonicalKey;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        canonicalKey: key,
+        repInfo: info,
+        repCardId: card.cardId,
+        cardIds: [],
+        totalCount: 0,
+        deckCount: 0,
+        variants: 0,
+      });
+    }
+    const g = groups.get(key);
+    g.cardIds.push(card.cardId);
+    g.totalCount += card.totalCount;
+    g.deckCount += card.deckCount;
+    g.variants++;
+    // 用 deckCount 最多的版本當代表（最常被牌組採用的版本）
+    if (card.deckCount > (g.repDeckCount ?? -1)) {
+      g.repInfo = info;
+      g.repCardId = card.cardId;
+      g.repDeckCount = card.deckCount;
+    }
+  }
+  return [...groups.values()].sort((a, b) => b.totalCount - a.totalCount);
+}
+
+// 1.5 卡牌使用率 Top 30（同名同效合併）
+function renderTopCards(c) {
+  const groups = groupCardsByCanonical(c.cards).slice(0, 30);
+  if (!groups.length) return '<section class="stats-section"><h3>🃏 1.5 卡牌使用率 Top 30</h3><div class="empty">無資料</div></section>';
+  return `
+    <section class="stats-section">
+      <h3>🃏 1.5 卡牌使用率 Top 30 <span class="small muted">（含全部 supertype；同名同效不同版本合併；共 ${c.totalDecks} 副牌組樣本）</span></h3>
+      <div class="stats-box" style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>#</th><th>卡牌</th><th>類型</th><th>總張數</th><th>出現牌組</th><th>牌組覆蓋率</th></tr></thead>
+          <tbody>
+            ${groups.map((g, i) => {
+              const info = g.repInfo;
+              const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本合併計算">${g.variants} 版本</span>` : '';
+              const name = `${escapeHtml(info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}${info.regulationMark ? '·' + info.regulationMark : ''}</span>`;
+              const supertype = info?.supertype || '?';
+              const coverage = c.totalDecks > 0 ? (g.deckCount / c.totalDecks * 100).toFixed(1) : '0';
+              return `<tr><td>${i + 1}</td><td>${name}</td><td><span class="small muted">${supertype}</span></td><td>${g.totalCount}</td><td>${g.deckCount}</td><td>${coverage}%</td></tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+// 1.6 熱門寶可夢 Top 50 + 主力/支援型 tag（同名同效合併）
+function renderTopPokemon(c) {
+  // 先 group，再 filter 寶可夢類別
+  const allGroups = groupCardsByCanonical(c.cards).filter(g => g.repInfo?.supertype === 'Pokemon');
+  // tag 判斷：group 內任一 cardId 被標 support 就視為整個 group 是支援型
+  const groupHasSupport = (g) => g.cardIds.some(id => (cardTagsCache[id] || []).includes('support'));
+  let filtered = allGroups;
+  if (pokemonFilterMode === 'main') filtered = allGroups.filter(g => !groupHasSupport(g));
+  else if (pokemonFilterMode === 'support') filtered = allGroups.filter(g => groupHasSupport(g));
+  const supportCount = allGroups.filter(groupHasSupport).length;
+  filtered = filtered.slice(0, 50);
+  return `
+    <section class="stats-section">
+      <h3>🎴 1.6 熱門寶可夢 Top 50 <span class="small muted">（同名同效不同版本合併）</span></h3>
+      <div class="toolbar" style="margin-bottom:10px;">
+        <span class="filter-btn ${pokemonFilterMode === 'all' ? 'active' : ''}" onclick="setPokemonFilter('all')">全部 (${allGroups.length})</span>
+        <span class="filter-btn ${pokemonFilterMode === 'main' ? 'active' : ''}" onclick="setPokemonFilter('main')">⚔️ 主力打手 (${allGroups.length - supportCount})</span>
+        <span class="filter-btn ${pokemonFilterMode === 'support' ? 'active' : ''}" onclick="setPokemonFilter('support')">⭐ 支援型 (${supportCount})</span>
+        <span class="small muted" style="margin-left:auto;">點右側 ⭐/☆ 切換「支援型」tag — 自動同步到同卡所有版本</span>
+      </div>
+      <div class="stats-box" style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>#</th><th>寶可夢</th><th>類型</th><th>總張數</th><th>出現牌組</th><th>標記</th></tr></thead>
+          <tbody>
+            ${filtered.map((g, i) => {
+              const info = g.repInfo;
+              const isSupport = groupHasSupport(g);
+              const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本合併計算">${g.variants} 版本</span>` : '';
+              const tagBtn = `<button class="tag-btn ${isSupport ? 'tagged' : ''}" onclick="toggleSupportTag('${escapeHtml(g.repCardId)}')" title="${isSupport ? '取消支援型' : '標為支援型'}">${isSupport ? '⭐ 支援型' : '☆ 標支援型'}</button>`;
+              return `<tr><td>${i + 1}</td><td>${escapeHtml(info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}${info.regulationMark ? '·' + info.regulationMark : ''}</span></td><td><span class="small muted">${info.subtype || ''}</span></td><td>${g.totalCount}</td><td>${g.deckCount}</td><td>${tagBtn}</td></tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+// 1.7 熱門訓練家 Top 20 — 依 subtype 分群（同名同效合併）
+function renderTopTrainers(c) {
+  // 先 canonical group，再 filter Trainer
+  const allTrainerGroups = groupCardsByCanonical(c.cards).filter(g => g.repInfo?.supertype === 'Trainer');
+  const buckets = {
+    Supporter: { label: '👥 支援者', items: [] },
+    Item: { label: '🎒 物品', items: [] },
+    Stadium: { label: '🏟 競技場', items: [] },
+    'Pokemon Tool': { label: '🔧 寶可夢道具', items: [] },
+  };
+  for (const g of allTrainerGroups) {
+    const sub = g.repInfo?.subtype || 'Item';
+    (buckets[sub] || buckets['Item']).items.push(g);
+  }
+  return `
+    <section class="stats-section">
+      <h3>🎫 1.7 熱門訓練家 Top 20（依類型分群；同名同效合併）</h3>
+      <div class="stats-row">
+        ${Object.values(buckets).filter(b => b.items.length > 0).map(b => `
+          <div class="stats-box">
+            <div class="stats-box-title">${b.label} Top ${Math.min(20, b.items.length)}</div>
+            <ol class="topcard-list">
+              ${b.items.slice(0, 20).map(g => {
+                const info = g.repInfo;
+                const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本合併">${g.variants} 版</span>` : '';
+                return `<li><b>${escapeHtml(info.name)}</b>${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}</span> <span class="topcard-stat">×${g.totalCount} / ${g.deckCount} 副</span></li>`;
+              }).join('')}
+            </ol>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
+
+// 1.8 能量類型分佈
+function renderEnergyDistribution(c) {
+  const energy = (c.cards || []).filter(x => cardInfoMap[x.cardId]?.supertype === 'Energy');
+  const basicByType = {};
+  let specialTotal = 0, specialDecks = 0;
+  for (const e of energy) {
+    const info = cardInfoMap[e.cardId];
+    if (!info) continue;
+    if (info.subtype === 'Special' || info.subtype === 'Special Energy') {
+      specialTotal += e.totalCount; specialDecks += e.deckCount;
+    } else if (info.pokemonType) {
+      if (!basicByType[info.pokemonType]) basicByType[info.pokemonType] = { totalCount: 0, deckCount: 0 };
+      basicByType[info.pokemonType].totalCount += e.totalCount;
+      basicByType[info.pokemonType].deckCount += e.deckCount;
+    }
+  }
+  const TYPE_LABELS = { Grass: '🌿 草', Fire: '🔥 火', Water: '💧 水', Lightning: '⚡ 雷', Psychic: '👻 超', Fighting: '✊ 鬥', Darkness: '🌑 惡', Metal: '⚙️ 鋼', Dragon: '🐲 龍', Fairy: '🧚 妖', Colorless: '⭐ 無' };
+  const entries = Object.entries(basicByType).sort((a, b) => b[1].totalCount - a[1].totalCount);
+  const maxCount = Math.max(1, ...entries.map(([, v]) => v.totalCount), specialTotal);
+  return `
+    <section class="stats-section">
+      <h3>⚡ 1.8 能量類型分佈</h3>
+      <div class="stats-box">
+        ${entries.length === 0 && specialTotal === 0 ? '<div class="empty">無能量卡資料</div>' : entries.map(([type, v]) => {
+          const pct = Math.round(v.totalCount / maxCount * 100);
+          const label = TYPE_LABELS[type] || type;
+          return `<div class="histo-row"><span class="histo-lbl">${label}</span><div class="histo-bar" style="width:${pct}%"></div><span class="histo-cnt">${v.totalCount} 張 / ${v.deckCount} 副</span></div>`;
+        }).join('')}
+        ${specialTotal > 0 ? `<div class="histo-row"><span class="histo-lbl">🌈 特殊能量</span><div class="histo-bar special" style="width:${Math.round(specialTotal/maxCount*100)}%"></div><span class="histo-cnt">${specialTotal} 張 / ${specialDecks} 副</span></div>` : ''}
+      </div>
+    </section>
+  `;
+}
+
+window.setPokemonFilter = function(m) {
+  if (m !== 'all' && m !== 'main' && m !== 'support') return;
+  pokemonFilterMode = m;
+  renderStats(document.getElementById('tab-stats'));
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// v0.84 Phase 2b render functions
+// ────────────────────────────────────────────────────────────────────────────
+
+// 2.1 玩家排行榜（v0.86：name 為主鍵 + email 為附資訊；點玩家名看個人戰績）
+//   - server 端用 email || name 為複合 key 分組
+//   - 多數匿名玩家無 email，仍能依 name 出現在排行（接受不同人同名會合併的次要瑕疵）
+function renderPlayerRanking(p) {
+  if (!p) return '<section class="stats-section"><h3>👤 2.1 玩家排行榜</h3><div class="empty">無資料</div></section>';
+  const players = p.players || [];
+  const debug = p.debug || {};
+  if (!players.length) {
+    const db = debug.dataBreakdown || {};
+    const q = debug.query || {};
+    const sample = debug.sampleAfterBaseMatch;
+    return `<section class="stats-section"><h3>👤 2.1 玩家排行榜</h3>
+      <div class="empty" style="text-align:left;">
+        無玩家對戰資料
+        <div class="small" style="margin-top:12px; color:#555;">
+          <b>📊 資料庫實際內容（v0.87 完整 diagnostic）</b><br>
+          當前查詢：<code>mode=${q.mode || '?'} excludeAI=${q.excludeAI ?? '?'}</code><br>
+          <br>
+          <b>整體 matchRecords：</b> ${db.totalRecords ?? '?'} 筆<br>
+          ├─ 線上對戰（roomCode 有值）：${db.onlineRecords ?? '?'} 筆<br>
+          ├─ 本機（roomCode = null）：${db.localRecords ?? '?'} 筆<br>
+          ├─ vs AI 場：${db.vsAIRecords ?? '?'} 筆<br>
+          └─ 非 AI 場：${db.nonAIRecords ?? '?'} 筆<br>
+          <br>
+          <b>經過當前 filter 後：</b> ${db.afterBaseMatchFilter ?? '?'} 筆<br>
+          ├─ asP1 (有 p1.name)：${debug.asP1Count ?? '?'}<br>
+          ├─ asP2 (有 p2.name)：${debug.asP2Count ?? '?'}<br>
+          ├─ 合併後：${debug.mergedCount ?? '?'} 位玩家<br>
+          └─ 含 email：${debug.withEmail ?? '?'} 位<br>
+          <br>
+          ${sample ? `<b>最新 1 筆 sample：</b><br><code style="font-size:11px; display:block; padding:6px; background:#f5f5f5; border-radius:4px; margin-top:4px; word-break:break-all;">${escapeHtml(JSON.stringify(sample))}</code>` : '<b>樣本：</b>無'}
+          <br><br>
+          <b>解讀：</b> 若 afterBaseMatchFilter > 0 但 asP1+asP2 = 0，則 p1.name / p2.name 都是空 — 需要查 matchRecord 寫入端。
+          若 afterBaseMatchFilter = 0，則當前 mode/excludeAI 過濾掉全部 — 試著切換上方的「全部資料」/「線上對戰」/「本機」按鈕。
+        </div>
+      </div>
+    </section>`;
+  }
+  const top = players.slice(0, 50);
+  const withEmailCount = players.filter(x => x.email).length;
+  return `
+    <section class="stats-section">
+      <h3>👤 2.1 玩家排行榜 <span class="small muted">（共 ${players.length} 位玩家；已排除 AI；含 email ${withEmailCount} 位 / 匿名 ${players.length - withEmailCount} 位；點玩家名看個人戰績）</span></h3>
+      <div class="stats-box" style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>#</th><th>玩家</th><th>Email / 身份</th><th>場次</th><th>勝</th><th>負</th><th>平</th><th>勝率</th></tr></thead>
+          <tbody>
+            ${top.map((row, i) => {
+              const wr = row.winRate;
+              const wrText = (wr === null || wr === undefined) ? '-' : (wr * 100).toFixed(1) + '%';
+              const wrColor = wr === null ? '#7a8898' : (wr > 0.55 ? '#2e7d32' : (wr < 0.45 ? '#c62828' : '#1a2332'));
+              // v0.86: key 為點擊 detail 用的識別碼（email 或 "name:xxx"）；UI 顯示優先 email
+              const idForDetail = row.email || row.key || row.name;
+              const idDisplay = row.email
+                ? `<a href="#" class="player-name" onclick="showPlayerDetail('${escapeHtml(idForDetail).replace(/'/g, '&apos;')}'); return false;">${escapeHtml(row.email)}</a>`
+                : `<span class="small muted">（匿名）</span>`;
+              return `<tr>
+                <td>${i + 1}</td>
+                <td><a href="#" class="player-name" onclick="showPlayerDetail('${escapeHtml(idForDetail).replace(/'/g, '&apos;')}'); return false;">${escapeHtml(row.name || '-')}</a></td>
+                <td>${idDisplay}</td>
+                <td>${row.matches}</td>
+                <td>${row.wins}</td>
+                <td>${row.losses}</td>
+                <td>${row.draws}</td>
+                <td style="color:${wrColor}; font-weight:600;">${wrText}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        ${players.length > 50 ? `<div class="small muted" style="margin-top:6px;">（顯示前 50 名，共 ${players.length} 位）</div>` : ''}
+      </div>
+    </section>
+  `;
+}
+
+// 2.2 個人戰績 — modal popup（click 玩家 email 觸發）
+window.showPlayerDetail = async function(email) {
+  if (!email) return;
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="min-width:720px;"><h3>🧑 玩家戰績</h3><div class="empty">Loading…</div></div>
+    </div>`;
+  const data = await api('/api/admin/stats/players/' + encodeURIComponent(email) + '?recent=30');
+  if (!data || data.error) { document.getElementById('modal-container').innerHTML = ''; alert('讀取失敗：' + (data?.error || '?')); return; }
+  await ensureCardIndex();
+  const s = data.summary || {};
+  const wr = s.winRate;
+  const wrText = (wr === null || wr === undefined) ? '-' : (wr * 100).toFixed(1) + '%';
+  const fmtTime = (ms) => {
+    if (!ms) return '-';
+    const d = new Date(ms);
+    return d.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+  };
+  // 最近對戰 row 渲染
+  const recentRows = (data.recentMatches || []).map(m => {
+    const isP1 = m.p1?.email === email;
+    const me = isP1 ? m.p1 : m.p2;
+    const opp = isP1 ? m.p2 : m.p1;
+    const win = (isP1 && m.winner === 0) || (!isP1 && m.winner === 1);
+    const loss = (isP1 && m.winner === 1) || (!isP1 && m.winner === 0);
+    const resultTag = win ? '<span class="result-win">勝</span>' : (loss ? '<span class="result-loss">負</span>' : '<span class="result-draw">平</span>');
+    const sideTag = isP1 ? '<span class="side-p1">先攻</span>' : '<span class="side-p2">後攻</span>';
+    return `<tr>
+      <td>${fmtTime(m.endedAt)}</td>
+      <td>${sideTag}</td>
+      <td>${resultTag}</td>
+      <td>${escapeHtml(opp?.name || '-')} <span class="small muted">${opp?.email ? '(' + escapeHtml(opp.email) + ')' : '(匿名/AI)'}</span></td>
+      <td><code>${escapeHtml(m.roomCode || '本機')}</code></td>
+      <td>${m.finalTurn ?? '-'}</td>
+    </tr>`;
+  }).join('');
+  // Top cards
+  const topCards = (data.topCards || []).slice(0, 20);
+  const cardRows = topCards.map((card, i) => {
+    const info = cardInfoMap[card.cardId];
+    const name = info ? `${escapeHtml(info.name)} <span class="small muted">${info.setCode}·${info.collectorNumber}</span>` : `<code>#${card.cardId}</code>`;
+    return `<tr><td>${i + 1}</td><td>${name}</td><td>${card.totalCount}</td><td>${card.deckCount}</td></tr>`;
+  }).join('');
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="min-width:720px; max-width:900px; max-height:88vh; overflow-y:auto;">
+        <h3>🧑 玩家戰績：${escapeHtml(email)}</h3>
+        <div class="stats-grid" style="margin-bottom:16px;">
+          <div class="stat-card"><div class="stat-label">總場次</div><div class="stat-value">${s.matches || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">勝</div><div class="stat-value" style="color:#2e7d32;">${s.wins || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">負</div><div class="stat-value" style="color:#c62828;">${s.losses || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">平局</div><div class="stat-value">${s.draws || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">勝率</div><div class="stat-value">${wrText}</div></div>
+        </div>
+        <h4 style="margin:12px 0 8px;">最近 30 場對戰</h4>
+        <div class="stats-box" style="overflow-x:auto; padding:8px;">
+          ${recentRows ? `<table><thead><tr><th>時間</th><th>位置</th><th>結果</th><th>對手</th><th>房號</th><th>回合</th></tr></thead><tbody>${recentRows}</tbody></table>` : '<div class="empty">無資料</div>'}
+        </div>
+        <h4 style="margin:16px 0 8px;">常用卡 Top 20</h4>
+        <div class="stats-box" style="padding:8px;">
+          ${cardRows ? `<table><thead><tr><th>#</th><th>卡牌</th><th>累計使用張數</th><th>出現牌組</th></tr></thead><tbody>${cardRows}</tbody></table>` : '<div class="empty">無資料</div>'}
+        </div>
+        <div style="margin-top:16px; text-align:right;">
+          <button onclick="closeModal()">關閉</button>
+        </div>
+      </div>
+    </div>`;
+};
+
+// 2.3 卡牌勝率（依 canonical key 合併版本；filter 主力/支援型）
+function renderCardWinrate(w) {
+  if (!w) return '<section class="stats-section"><h3>🏆 2.3 卡牌勝率</h3><div class="empty">無資料</div></section>';
+  // canonical group：合併同名同效不同版本
+  const cards = (w.cards || []).map(c => ({
+    cardId: c.cardId,
+    totalCount: c.totalDecks,
+    deckCount: c.totalDecks,
+    winDecks: c.winDecks,
+  }));
+  const groups = groupCardsByCanonical(cards.map(c => ({ cardId: c.cardId, totalCount: c.totalCount, deckCount: c.deckCount })));
+  // 把 winDecks 也累加進去
+  const winByCardId = new Map(cards.map(c => [c.cardId, c.winDecks]));
+  for (const g of groups) {
+    g.winDecks = 0;
+    g.totalDecksAgg = 0;
+    for (const id of g.cardIds) {
+      g.winDecks += winByCardId.get(id) || 0;
+      g.totalDecksAgg += cards.find(c => c.cardId === id)?.totalCount || 0;
+    }
+    g.winRate = g.totalDecksAgg > 0 ? g.winDecks / g.totalDecksAgg : 0;
+  }
+  // filter（沿用 1.6 的 main/support 分類用同 cardTagsCache）
+  const groupHasSupport = (g) => g.cardIds.some(id => (cardTagsCache[id] || []).includes('support'));
+  let filtered = groups;
+  if (winrateFilterMode === 'main') filtered = groups.filter(g => !groupHasSupport(g));
+  else if (winrateFilterMode === 'support') filtered = groups.filter(g => groupHasSupport(g));
+  // 重排：勝率降序
+  filtered.sort((a, b) => b.winRate - a.winRate || b.totalDecksAgg - a.totalDecksAgg);
+  const top = filtered.slice(0, 50);
+  return `
+    <section class="stats-section">
+      <h3>🏆 2.3 卡牌勝率 Top 50 <span class="small muted">（至少 ${w.minDecks} 副；排除 AI 對戰；同名同效合併）</span></h3>
+      <div class="toolbar" style="margin-bottom:10px;">
+        <span class="filter-btn ${winrateFilterMode === 'all' ? 'active' : ''}" onclick="setWinrateFilter('all')">全部 (${groups.length})</span>
+        <span class="filter-btn ${winrateFilterMode === 'main' ? 'active' : ''}" onclick="setWinrateFilter('main')">⚔️ 主力打手</span>
+        <span class="filter-btn ${winrateFilterMode === 'support' ? 'active' : ''}" onclick="setWinrateFilter('support')">⭐ 支援型</span>
+        <span class="small muted" style="margin-left:auto;">勝率 = 勝方牌組出現次數 / 所有牌組出現次數</span>
+      </div>
+      <div class="stats-box" style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>#</th><th>卡牌</th><th>類型</th><th>出現牌組</th><th>勝方牌組</th><th>勝率</th></tr></thead>
+          <tbody>
+            ${top.map((g, i) => {
+              const info = g.repInfo;
+              if (!info) return '';
+              const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本">${g.variants} 版本</span>` : '';
+              const wrPct = (g.winRate * 100).toFixed(1);
+              const wrColor = g.winRate > 0.55 ? '#2e7d32' : (g.winRate < 0.45 ? '#c62828' : '#1a2332');
+              return `<tr>
+                <td>${i + 1}</td>
+                <td>${escapeHtml(info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}</span></td>
+                <td><span class="small muted">${info.supertype || ''}</span></td>
+                <td>${g.totalDecksAgg}</td>
+                <td>${g.winDecks}</td>
+                <td style="color:${wrColor}; font-weight:600;">${wrPct}%</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+// 2.4 時段熱力圖（24 小時 × 7 星期幾）
+function renderHeatmap(h) {
+  if (!h || !h.cells) return '<section class="stats-section"><h3>🕐 2.4 時段熱力圖</h3><div class="empty">無資料</div></section>';
+  const cells = h.cells;
+  // MongoDB $dayOfWeek: 1=Sunday, 2=Monday, ..., 7=Saturday
+  const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
+  // build grid: grid[day-1][hour] = count
+  const grid = [];
+  for (let d = 0; d < 7; d++) {
+    grid[d] = [];
+    for (let hr = 0; hr < 24; hr++) grid[d][hr] = 0;
+  }
+  let maxCount = 0;
+  for (const c of cells) {
+    const dIdx = (c.day - 1) % 7;
+    const hr = c.hour;
+    if (dIdx >= 0 && dIdx < 7 && hr >= 0 && hr < 24) {
+      grid[dIdx][hr] = c.count;
+      if (c.count > maxCount) maxCount = c.count;
+    }
+  }
+  if (maxCount === 0) return '<section class="stats-section"><h3>🕐 2.4 時段熱力圖</h3><div class="empty">無對戰資料</div></section>';
+  // render grid
+  const rows = grid.map((row, dIdx) => {
+    const cells = row.map((cnt, hr) => {
+      const intensity = cnt / maxCount;
+      const bg = cnt === 0 ? '#f0f3f7' : `rgba(91, 141, 239, ${Math.max(0.08, intensity)})`;
+      return `<td class="hm-cell" style="background:${bg};" title="${dayLabels[dIdx]} ${hr}:00 — ${cnt} 場">${cnt > 0 ? cnt : ''}</td>`;
+    }).join('');
+    return `<tr><th class="hm-day">${dayLabels[dIdx]}</th>${cells}</tr>`;
+  }).join('');
+  const hourHeaders = Array.from({ length: 24 }, (_, hr) => `<th class="hm-hour">${hr}</th>`).join('');
+  return `
+    <section class="stats-section">
+      <h3>🕐 2.4 時段熱力圖 <span class="small muted">（Asia/Taipei 時區；max ${maxCount} 場/格）</span></h3>
+      <div class="stats-box" style="overflow-x:auto;">
+        <table class="heatmap-table">
+          <thead><tr><th></th>${hourHeaders}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="small muted" style="margin-top:8px;">深色 = 對戰量多；hover 看詳細數字</div>
+      </div>
+    </section>
+  `;
+}
+
+// 2.5 對戰量趨勢（折線圖以 horizontal bars 取代，避免外部 lib）
+function renderTrends(t) {
+  if (!t || !t.buckets) return '<section class="stats-section"><h3>📈 2.5 對戰量趨勢</h3><div class="empty">無資料</div></section>';
+  const buckets = t.buckets || [];
+  if (!buckets.length) return '<section class="stats-section"><h3>📈 2.5 對戰量趨勢</h3><div class="empty">該期間無對戰</div></section>';
+  const maxTotal = Math.max(...buckets.map(b => b.total), 1);
+  return `
+    <section class="stats-section">
+      <h3>📈 2.5 對戰量趨勢 <span class="small muted">（近 ${t.days} 天；按${t.granularity === 'day' ? '日' : (t.granularity === 'week' ? '週' : '月')}分桶）</span></h3>
+      <div class="toolbar" style="margin-bottom:10px;">
+        <span style="font-weight:600;">範圍：</span>
+        <span class="filter-btn ${trendsDays === 7 ? 'active' : ''}" onclick="setTrendsDays(7)">7 天</span>
+        <span class="filter-btn ${trendsDays === 30 ? 'active' : ''}" onclick="setTrendsDays(30)">30 天</span>
+        <span class="filter-btn ${trendsDays === 90 ? 'active' : ''}" onclick="setTrendsDays(90)">90 天</span>
+        <span class="filter-btn ${trendsDays === 365 ? 'active' : ''}" onclick="setTrendsDays(365)">1 年</span>
+        <span style="margin-left:14px; font-weight:600;">分桶：</span>
+        <span class="filter-btn ${trendsGranularity === 'day' ? 'active' : ''}" onclick="setTrendsGranularity('day')">日</span>
+        <span class="filter-btn ${trendsGranularity === 'week' ? 'active' : ''}" onclick="setTrendsGranularity('week')">週</span>
+        <span class="filter-btn ${trendsGranularity === 'month' ? 'active' : ''}" onclick="setTrendsGranularity('month')">月</span>
+      </div>
+      <div class="stats-box" style="overflow-x:auto;">
+        ${buckets.map(b => {
+          const pct = Math.round(b.total / maxTotal * 100);
+          // mini stacked bar：online + local
+          const onlinePct = b.total > 0 ? Math.round(b.online / b.total * 100) : 0;
+          return `<div class="trend-row">
+            <span class="trend-bucket">${b.bucket}</span>
+            <div class="trend-bar" style="width:${pct}%;">
+              <div class="trend-bar-online" style="width:${onlinePct}%;" title="線上 ${b.online}"></div>
+            </div>
+            <span class="trend-cnt">${b.total} 場 <span class="small muted">(🌐 ${b.online} / 🏠 ${b.local}${b.vsAI ? ' · 🤖 ' + b.vsAI : ''})</span></span>
+          </div>`;
+        }).join('')}
+      </div>
+    </section>
+  `;
+}
+
+window.toggleSupportTag = async function(cardId) {
+  if (!cardId) return;
+  // v0.83: 找出同 canonicalKey 的所有版本 cardId，一起 toggle（同名同效卡視為同一張）
+  const info = cardInfoMap[cardId];
+  const sameGroupIds = info?.canonicalKey ? (cardCanonicalMap.get(info.canonicalKey) || [cardId]) : [cardId];
+  const isSupport = (cardTagsCache[cardId] || []).includes('support');
+  const action = isSupport ? 'remove' : 'add';
+  try {
+    // 對 group 內所有 cardId 平行 POST
+    await Promise.all(sameGroupIds.map(id => api('/api/admin/cards/tags/' + encodeURIComponent(id), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag: 'support', action }),
+    }).then(res => {
+      if (res && !res.error) cardTagsCache[id] = res.tags || [];
+    })));
+    renderStats(document.getElementById('tab-stats'));
+  } catch (err) {
+    alert('Tag 失敗：' + (err?.message || '?'));
+  }
+};
+</script>
+</body>
+</html>
