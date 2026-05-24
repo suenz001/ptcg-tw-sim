@@ -265,6 +265,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.069</span> 🐛 修甲殼刺自動選對手能量 + 炙燒對灼傷狀態漏 +160 + 沉重接力棒 UX 改善</summary>
+        <ul>
+          <li><b>Bug 1：爆焰龜獸ex｜甲殼刺（M3 056/080 特性）自動選對手能量丟棄</b></li>
+          <li>　・<b>玩家回報</b>：受到對手寶可夢招式傷害時，甲殼刺自動選對手戰鬥位最後一張能量丟，無玩家選擇。卡面：「這隻寶可夢在戰鬥場上受到對手的寶可夢招式的傷害時，<b>選擇</b>1個使用招式的寶可夢身上附加的能量，將其丟棄。」「選擇」= 玩家自選（卡面 source of truth）。</li>
+          <li>　・<b>根因</b>：<code>effects.ts L3293 PASSIVE_ON_DAMAGED</code> 簡化實裝直接取 <code>energyAttached[length-1]</code> 自動丟。註解寫「引擎沒有對手回合內讓被動反擊發 pendingSelection 的設計」— 但 v5.066 龐克頭盔反擊、v5.067 沉重接力棒已證明引擎支援。</li>
+          <li>　・<b>修法</b>：改 <code>type:&apos;active-energy-discard&apos;</code> pending（<code>actorIdx=dIdx</code> 爆焰龜獸 owner / <code>sourcePlayerIdx=aIdx</code> 對手 active / <code>minCount=maxCount=1</code>）。加 <code>params.titleOverride</code> 顯示「甲殼刺：選擇 1 張對手 X 身上的能量丟棄」。新建 <code>RESOLVERS.set(&apos;spike-shell-discard&apos;, ...)</code> resolver：把選中能量從對手 active.energyAttached 移到對手 discard。</li>
+
+          <li><b>Bug 2：超級噴火駝ex｜炙燒（M2a Stage1 230HP，Fire）對灼傷對手沒 +160</b></li>
+          <li>　・<b>玩家回報</b>：對手灼傷狀態下使用炙燒，沒打出預期的 240（80+160）。卡面：「80+。若對手戰鬥寶可夢【灼傷】，這個招式的傷害+160。」</li>
+          <li>　・<b>根因</b>：<code>m2_dragon_charizard_batch.ts L208</code> 只 check <code>status === &apos;burned&apos;</code>。但特殊狀態可疊加（如「灼傷+混亂」會把灼傷存到 <code>secondaryStatus</code>，<code>status=&apos;confused&apos;</code>）— 雙狀態時主 status 槽是 confused，burned 落到 secondaryStatus 沒被讀到。</li>
+          <li>　・<b>修法</b>：改 <code>act?.status === &apos;burned&apos; || act?.secondaryStatus === &apos;burned&apos;</code>。同時修 <code>effects.ts L2259 defStatusBonus</code> helper（影響 <b>熔岩蟲｜炙燒、卡璞・蝶蝶｜心靈粉碎、晶光花｜毒液衝擊</b>三招） — 全部補 secondaryStatus 同檢查邏輯。</li>
+
+          <li><b>Bug 3：沉重接力棒被 KO 時觸發後似乎卡住</b></li>
+          <li>　・<b>玩家回報</b>：寶可夢被 KO 時，使用沉重接力棒效果時，似乎會卡住。</li>
+          <li>　・<b>Audit 結果</b>：完整 trace 沉重接力棒 pending 流程 — TOOL_ON_KO (engine.ts L4934) → withPending discard-search → 玩家選 energies → resolver heavy-baton-pick-energies → 多 bench 時 chain heal-target distribute → resolver 完成後 pendingSelection 清除 → defenderPlayer.active===null + !pendingSelection → SEND_NEW_ACTIVE modal 開啟。<b>邏輯 trace 完整無漏洞</b>，未能定位明確 freeze 點。可能 cause：(1) UI 顯示「從棄牌區選擇」標題不明確讓玩家誤以為遊戲卡住；(2) ATTACK_POST 接著開的 chain pending 等待 attacker 操作，期間 defender 看到 SEND_NEW_ACTIVE 被 block；(3) 線上模式 Firestore sync 延遲。</li>
+          <li>　・<b>修法（UX 改善）</b>：(a) discard-search pending 加 titleOverride「沉重接力棒：選擇 0∼N 張基本能量改附於備戰寶可夢」— 標題明確；(b) 多 bench 分配時 heal-target pending 加 titleOverride「沉重接力棒：選擇要附第 K/N 張能量的備戰寶可夢」— 進度可見。<b>若改善後仍 freeze，請玩家提供具體 repro</b>（哪隻寶可夢、哪個招式 KO、bench 配置）以利進一步診斷。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 effects.ts + m2_dragon_charizard_batch.ts + tools.ts + version.ts）／Rule 14（最小 patch — 甲殼刺改 picker 用既有 active-energy-discard pattern 不重寫 dispatch、炙燒只加 OR 條件、沉重接力棒只補 titleOverride）／Rule 15（M3 甲殼刺「選擇」卡面 source of truth、M2a 炙燒「灼傷」卡面 source of truth）／Rule 11e（Write tool 寫 patch_v5069.py 避開 heredoc）／Rule 11f（push 前 3 道 ASSERT 防 silent fail）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.068</span> 🎴 對戰 log 加時間戳 [mm:ss] + 經典版排序對齊桌墊版（新訊息在下）</summary>
         <ul>
           <li><b>玩家建議 1 — 對戰 log 加時間戳</b>：每筆 log 開頭顯示「[mm:ss]」相對對戰開始的時間。例：「[00:30] AI 對手 將能量附加到 斯魔茶」代表對戰開始 30 秒時 AI 做的動作。</li>

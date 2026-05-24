@@ -2259,13 +2259,37 @@ regPost('鐵骨土人|蠻力', (state, aIdx, pool, action) => {
 function defStatusBonus(base: number, condition: 'poisoned'|'burned'|'asleep'|'confused'|'paralyzed', bonus: number): AttackPreFn {
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
-    const hasStatus = state.players[dIdx].active?.status === condition;
+    // v5.069：補 secondaryStatus 同檢查（特殊狀態可疊加，如「灼傷+混亂」存在 status='confused'
+    //   + secondaryStatus='burned'）。原本只 check status 漏判 secondaryStatus 攜帶狀態的情形。
+    const act = state.players[dIdx].active;
+    const hasStatus = act?.status === condition || act?.secondaryStatus === condition;
     return { state, damage: base + (hasStatus ? bonus : 0) };
   };
 }
 regPre('熔岩蟲|炙燒', defStatusBonus(10, 'burned', 40));
 regPre('卡璞・蝶蝶|心靈粉碎', defStatusBonus(90, 'confused', 90));
 regPre('晶光花|毒液衝擊', defStatusBonus(30, 'poisoned', 100));
+
+// v5.069: spike-shell-discard resolver — 甲殼刺 picker 解析器
+RESOLVERS.set('spike-shell-discard', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return st;
+  const oppIdx = (1 - idx) as 0 | 1;
+  const opp = st.players[oppIdx];
+  if (!opp.active) return st;
+  const set = new Set(iids);
+  const removed = opp.active.energyAttached.filter(e => set.has(e.iid));
+  if (removed.length === 0) return st;
+  const names = removed.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
+  const attName = pool.get(opp.active.cardId)?.name ?? '?';
+  const s = addLog(st, `甲殼刺：丟棄 ${attName} 身上的 ${names}`, idx);
+  return updatePlayer(s, oppIdx, pl => ({
+    ...pl,
+    active: pl.active
+      ? { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => !set.has(e.iid)) }
+      : pl.active,
+    discard: [...pl.discard, ...removed],
+  }));
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 31 H4 — 簡單訓練家（抽牌、搜尋、回血等）
@@ -3289,21 +3313,25 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
   }],
   // 爆焰龜獸｜甲殼刺 (M3 Basic 120HP, Fire)
   // 卡面：「這隻寶可夢在戰鬥場上受到對手的寶可夢招式的傷害時，選擇 1 個使用招式的寶可夢身上附加的能量，將其丟棄。」
-  // 自動丟最後一張能量（簡化選擇 — 引擎沒有「對手回合內讓被動反擊發 pendingSelection」的設計）
+  // v5.069：完整實裝 — 改 picker（v5.066 龐克頭盔反擊、v5.067 沉重接力棒
+  //   證明引擎支援「對手回合內 defender 觸發 pendingSelection」）。actorIdx=dIdx
+  //   (爆焰龜獸 owner)，sourcePlayerIdx=aIdx (對手戰鬥位)，picker 顯示對手 active
+  //   的全部 energyAttached，玩家選 1 張丟。卡面寫「選擇」=玩家自選，符合 Rule 15。
   ['甲殼刺', (state, dIdx, pool) => {
     const aIdx = (1 - dIdx) as 0 | 1;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const att = { ...players[aIdx] };
-    if (!att.active || att.active.energyAttached.length === 0) return state;
-    const removed = att.active.energyAttached[att.active.energyAttached.length - 1];
-    const removedCard = pool.get(removed.cardId);
-    att.active = { ...att.active, energyAttached: att.active.energyAttached.slice(0, -1) };
-    att.discard = [...att.discard, removed];
-    players[aIdx] = att;
-    const attName = pool.get(att.active.cardId)?.name ?? '?';
-    return addLog({ ...state, players },
-      `甲殼刺：丟棄 ${attName} 身上的 ${removedCard?.name ?? '能量'}`,
+    const att = state.players[aIdx].active;
+    if (!att || att.energyAttached.length === 0) return state;
+    const attName = pool.get(att.cardId)?.name ?? '?';
+    const s = addLog(state,
+      `甲殼刺：請選擇 ${attName} 身上 1 張能量丟棄`,
       dIdx);
+    return withPending(s, {
+      type: 'active-energy-discard',
+      actorIdx: dIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'spike-shell-discard',
+      params: { titleOverride: `甲殼刺：選擇 1 張對手 ${attName} 身上的能量丟棄` },
+    });
   }],
   // 超級頭巾混混ex｜反擊雞冠 (M2a Stage1 330HP, Darkness)
   // 卡面：「這隻寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置 5 個傷害指示物。」

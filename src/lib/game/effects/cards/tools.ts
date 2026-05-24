@@ -202,13 +202,18 @@ TOOL_ON_KO.set('沉重接力棒', (state, dIdx, _aIdx, pool, koInst) => {
   if (candidateIids.length === 0) return state;
   state = addLog(state,
     `沉重接力棒：選最多 ${candidateIids.length} 張基本能量改附於備戰寶可夢`, dIdx);
+  // v5.069 UX：加 titleOverride 讓 picker 標題明確「沉重接力棒：選擇基本能量」
+  //   而非預設「從棄牌區選擇」— 玩家清楚知道 modal 是 KO 反擊觸發，不會誤以為遊戲卡住
   return withPending(state, {
     type: 'discard-search',
     actorIdx: dIdx, sourcePlayerIdx: dIdx,
     filter: 'BasicEnergy',
     minCount: 0, maxCount: candidateIids.length,
     effectKey: 'heavy-baton-pick-energies',
-    params: { validIids: candidateIids },
+    params: {
+      validIids: candidateIids,
+      titleOverride: `沉重接力棒：選擇 0∼${candidateIids.length} 張基本能量改附於備戰寶可夢`,
+    },
   });
 });
 regR('heavy-baton-pick-energies', (st, idx, energyIids, _params, pool) => {
@@ -234,6 +239,7 @@ regR('heavy-baton-pick-energies', (st, idx, energyIids, _params, pool) => {
     }));
   }
   // 多隻備戰 → 逐張分配（同 v2.221 過度放電 / v2.225 合金建造 pattern）
+  // v5.069 UX：加 titleOverride 標明這是「沉重接力棒：分配第 1 張能量」
   return withPending(st, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
@@ -241,6 +247,7 @@ regR('heavy-baton-pick-energies', (st, idx, energyIids, _params, pool) => {
     params: {
       energyIids, validIids: benchPokes.map(c => c.iid),
       totalCount: energyIids.length, placedCount: 0,
+      titleOverride: `沉重接力棒：選擇要附第 1/${energyIids.length} 張能量的備戰寶可夢`,
     },
   });
 });
@@ -279,6 +286,7 @@ regR('heavy-baton-distribute', (st, idx, iids, params, pool) => {
         energyIids: restIids,
         validIids: s.players[idx].bench.map(c => c.iid),
         totalCount, placedCount: placedCount + 1,
+        titleOverride: `沉重接力棒：選擇要附第 ${placedCount + 2}/${totalCount} 張能量的備戰寶可夢`,
       },
     });
   }

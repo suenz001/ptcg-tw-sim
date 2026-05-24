@@ -205,9 +205,12 @@ regR('exciting-turbo-commit', (st, idx, iids, params, pool) => {
 
 // ── 超級噴火駝ex｜炙燒 ─────────────────────────────────────────────────────
 // 80+；若對手戰鬥寶可夢【灼傷】，+160。
+// v5.069：補 secondaryStatus check — 雙狀態時主 status 槽是其他狀態（如混亂），
+//         burned 落到 secondaryStatus 沒被讀到。修法同 defStatusBonus helper。
 regPre('超級噴火駝ex|炙燒', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  const burned = state.players[dIdx].active?.status === 'burned';
+  const act = state.players[dIdx].active;
+  const burned = act?.status === 'burned' || act?.secondaryStatus === 'burned';
   return { state, damage: burned ? 240 : 80 };
 });
 
