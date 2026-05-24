@@ -265,6 +265,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.088</span> 🎨 撤退按鈕 disabled 變暗樣式統一 + 加強視覺</summary>
+        <ul>
+          <li><b>玩家回報</b>：撤退按鈕還在，但不能撤退時應該變暗（目前只顯示 🚫 emoji 但按鈕本身沒視覺變暗）。</li>
+          <li><b>根因</b>：</li>
+          <li>　・mirror 按鈕（action-bar 那個 <code>.btn-act.btn-retreat-mirror</code>）v5.084 加了 <code>disabled</code> 屬性但<b>沒對應 :disabled CSS rule</b>。紅橘背景 <code>#d97a2a</code> 蓋掉瀏覽器預設 disabled 變暗 → 視覺沒變</li>
+          <li>　・zone-active 按鈕（<code>.btn-retreat-blocked</code>）原 v3.37 有 <code>opacity:.55</code> + 紅暗色，但 dim 效果太弱（玩家看不出來，只能靠 🚫 emoji 判斷）</li>
+
+          <li><b>修法</b>：合併兩個 selector 套相同 disabled 視覺 —</li>
+          <li>　・<code>opacity:.45</code>（v3.37 .55 → 加強 .45）</li>
+          <li>　・<code>filter:grayscale(.5)</code>（新增 — 變灰更直觀）</li>
+          <li>　・<code>background:#4a3030</code>（v3.37 #5a3a3a → 加深）</li>
+          <li>　・<code>box-shadow:none</code> + <code>cursor:not-allowed</code> + hover 不改色</li>
+
+          <li><b>實際影響</b>：v5.088 起 — 撤退按鈕不可按時（能量不夠 / 麻痺 / 睡眠 / 撤退鎖 / 已撤退過等），mirror + zone-active 兩個按鈕都明確變暗變灰，玩家一眼看出狀態，不再只靠 🚫 emoji。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + version + changelog）／Rule 14（最小 patch — 只動 CSS rule）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.087</span> 🔧 Hotfix — v5.086 changelog code block 違反 Rule 1（raw &#123;&#125; 沒 escape 導致 build 失敗）</summary>
         <ul>
           <li><b>事件</b>：v5.086 push 後 GitHub Actions Deploy 失敗 — vite-plugin-svelte build error。</li>

@@ -9888,9 +9888,25 @@
   .btn-retreat{ padding:.25rem .55rem; font-size:.78rem; font-weight:600; background:#d97a2a; border:1px solid #f4a040; border-radius:5px; color:#fff; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.3); transition:background .15s, transform .1s; }
   .btn-retreat:hover{ background:#e89432; transform:translateY(-1px); }
   .btn-retreat:active{ transform:translateY(0); }
-  /* v3.37：不能撤退時的 disabled 樣式（紅暗色，hover 不變） */
-  .btn-retreat-blocked{ opacity:.55; cursor:not-allowed; background:#5a3a3a; border-color:#aa6a6a; color:#fcc; }
-  .btn-retreat-blocked:hover{ background:#5a3a3a; }
+  /* v3.37 + v5.088：不能撤退時的 disabled 樣式（紅暗色 + grayscale 變灰，hover 不變）
+     v5.088：玩家回報只有 🚫 emoji 沒視覺變暗 — 加強 opacity (.55→.45) + filter:grayscale。
+     同時把 mirror 按鈕 (.btn-act.btn-retreat-mirror) :disabled 套用同 dim 樣式
+     （原 v5.084 加了 disabled 屬性但沒對應 CSS — 紅橘背景蓋掉預設 disabled 變暗）。 */
+  .btn-retreat-blocked,
+  .btn-act.btn-retreat-mirror:disabled{
+    opacity:.45;
+    cursor:not-allowed;
+    background:#4a3030;
+    border-color:#8a5a5a;
+    color:#dcc;
+    box-shadow:none;
+    filter:grayscale(.5);
+  }
+  .btn-retreat-blocked:hover,
+  .btn-act.btn-retreat-mirror:disabled:hover{
+    background:#4a3030;
+    transform:none;
+  }
   /* v3.93：action-bar 內 mirror 撤退按鈕 — 沿用 btn-act 基底但配色一致為橘黃顯眼 */
   .btn-act.btn-retreat-mirror{ background:#d97a2a; color:#fff; border:1px solid #f4a040; box-shadow:0 1px 3px rgba(0,0,0,.3); }
   .btn-act.btn-retreat-mirror:hover{ background:#e89432; transform:translateY(-1px); }
