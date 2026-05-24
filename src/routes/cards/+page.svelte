@@ -114,6 +114,9 @@
     '感應【超】能量': ['Psychic', 'Colorless'],
     '硬岩【鬥】能量': ['Fighting', 'Colorless'],
     '磁鐵【鋼】能量': ['Metal', 'Colorless'],
+    // v5.065：閃電【雷】能量、暗影【惡】能量（之前漏加，玩家報無法用屬性篩選找到）
+    '閃電【雷】能量': ['Lightning', 'Colorless'],
+    '暗影【惡】能量': ['Darkness', 'Colorless'],
     // 雙屬性特殊能量
     '火箭隊能量': ['Psychic', 'Darkness'],
     // 無色/效果型特殊能量（只提供無色能量）

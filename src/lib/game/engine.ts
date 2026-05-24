@@ -961,6 +961,12 @@ const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   // v4.87 閃電能量（M5）— 視為 1 個【雷】能量；附加者使用招式對對手戰鬥寶可夢 +20 傷害
   //   (+20 buff 由 engine damage calc inline 套用，weakness 前)
   '閃電【雷】能量': ['Lightning'],
+  // v5.065 暗影【惡】能量（M5）— 視為 1 個【惡】能量；附加者在備戰位免疫對手招式傷害
+  //   (備戰位免疫由 defense.ts canApplyEffectToTarget 1c 處理；惡屬性限定)
+  //   起源：v5.022 改名「暗影惡能量」→「暗影【惡】能量」但 SPECIAL_ENERGY_TYPES 表
+  //   漏加 entry，導致對戰時 fallback 到 ['Colorless'] → 玩家附了也無法滿足
+  //   惡屬性招式能量需求（玩家 v5.064 後回報）。
+  '暗影【惡】能量': ['Darkness'],
 };
 
 export function getEnergyProvided(cardId: string, pool: Map<string, Card>): EnergyType[] {

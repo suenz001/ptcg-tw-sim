@@ -265,6 +265,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.065</span> 🐛 修暗影【惡】能量無法用惡屬性招式 + 補閃電【雷】/ 暗影【惡】屬性篩選分類</summary>
+        <ul>
+          <li><b>玩家回報</b>：寶可夢附上「暗影【惡】能量」(M5)，但<strong>不能使用惡屬性的招式</strong>。應該要像磁鐵【鋼】能量一樣，視為 1 個【惡】能量供使用。</li>
+
+          <li><b>根因 — 3 處表都漏</b>：</li>
+          <li>　1. <code>engine.ts L933 SPECIAL_ENERGY_TYPES</code>（對戰能量計算）：缺「暗影【惡】能量」entry → <code>getEnergyUnits</code> fallback 到 <code>['Colorless']</code> → 附了暗影能量也只算 1 個無能量，無法滿足惡屬性招式需求。**這就是玩家點名的 bug。**</li>
+          <li>　2. <code>cards/+page.svelte ENERGY_TYPE_MAP</code>（卡牌資料庫篩選）：缺「閃電【雷】」+「暗影【惡】」</li>
+          <li>　3. <code>decks/+page.svelte ENERGY_TYPE_MAP</code>（牌組編輯器篩選）：缺「閃電【雷】」+「暗影【惡】」</li>
+
+          <li><b>歷史脈絡</b>：v5.022 把 M5 兩張特殊能量改名（「閃電能量」→「閃電【雷】能量」、「暗影惡能量」→「暗影【惡】能量」），當時 engine.ts 只更新了「閃電【雷】」entry，「暗影【惡】」忘了改名/加 entry — silent fail 一直沒被發現。兩個 UI 篩選表也同樣只更新了部分。</li>
+
+          <li><b>修法 1（玩家命中 bug）— engine.ts SPECIAL_ENERGY_TYPES</b>：加 <code>&apos;暗影【惡】能量&apos;: [&apos;Darkness&apos;]</code> entry（範本同 <code>&apos;磁鐵【鋼】能量&apos;: [&apos;Metal&apos;]</code>）。v5.065 起暗影【惡】能量在對戰中正確視為 1 個【惡】能量，可滿足惡屬性招式能量需求。</li>
+
+          <li><b>修法 2 — 兩個 UI 篩選表</b>：<code>cards/+page.svelte</code> + <code>decks/+page.svelte</code> 各加 2 個 entries — 「閃電【雷】」: <code>[&apos;Lightning&apos;,&apos;Colorless&apos;]</code> + 「暗影【惡】」: <code>[&apos;Darkness&apos;,&apos;Colorless&apos;]</code>（範本同 <code>磁鐵【鋼】能量: [&apos;Metal&apos;,&apos;Colorless&apos;]</code>）。玩家在「牌組編輯器」或「卡牌資料庫」勾選「惡」屬性 + 「特殊能量」分類即可找到暗影【惡】能量；勾選「雷」+ 「特殊能量」即可找到閃電【雷】能量。</li>
+
+          <li><b>表結構差異說明</b>：engine.ts <code>SPECIAL_ENERGY_TYPES</code> 是「實際提供的能量單位」(磁鐵【鋼】 = 純 1 個 Metal unit，不含 Colorless)；routes UI <code>ENERGY_TYPE_MAP</code> 是「篩選 tag 命中表」(磁鐵【鋼】 = 'Metal' + 'Colorless' 為了「無色」篩選也命中)。修法依各表既有規律處理。</li>
+
+          <li><b>實際影響</b>：v5.065 起 — (a) 對戰時附「暗影【惡】能量」的寶可夢可正常使用惡屬性招式（例如達克萊伊ex 黑暗風暴等需要【惡】能量的招式）；(b) 玩家在牌組編輯器篩選「惡」屬性 + 「特殊能量」可找到暗影【惡】能量並加入牌組；(c) 卡牌資料庫對應屬性篩選也正確命中。</li>
+
+          <li><b>同類 audit 提醒</b>：scraper 沒給特殊能量 <code>pokemonType</code> 欄位是已知問題（PDF II-C C-09 內提到特殊能量「視為提供 N 屬性能量」是 rulesText 規則）。本批已修 M5 兩張漏網之魚；後續若有新特殊能量加入需同步在 engine.ts SPECIAL_ENERGY_TYPES + 2 個 UI ENERGY_TYPE_MAP 都加 entry。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 engine.ts 大檔 + 2 個 svelte）／Rule 14（最小 patch — 純表 entry 加 2-3 行）／Rule 15（JSON 卡面 source of truth — M5 rulesText 「作為 1 個惡能量使用」+「惡屬性寶可夢備戰免疫」對齊實作）／Rule 11e（Write tool patch）／Rule 11f（push 前 3 道 ASSERT）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.064</span> 💰 tracking.ts 加 24h localStorage throttle — 降 Firebase 寫入量 70-90%（玩家功能 0 影響）</summary>
         <ul>
           <li><b>玩家觀察</b>：Wilson 查 Firebase usage — 對戰已搬到 Oracle 後讀取下降 -89%（5/16 12萬/日 → 5/22 接近 0），但<strong>寫入維持 2.7 萬/日（超免費額度 6,786）</strong>。整月專案費用 $42 TWD。</li>
