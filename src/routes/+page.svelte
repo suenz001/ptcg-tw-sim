@@ -265,6 +265,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.081</span> 🐛 阿響熔岩爆炸 picker + 11 個「受傷時」特性補 KO 觸發（甲殼刺等）</summary>
+        <ul>
+          <li><b>修法 1 — 阿響的熔岩蝸牛｜熔岩爆炸 picker（玩家回報）</b></li>
+          <li>　・<b>卡面</b>（M2a/SV9a 019/）：「將最多 5 張這隻寶可夢身上附加的【火】能量卡丟棄，造成其張數×70 點傷害。」「最多 5 張」涵蓋玩家自選 0~5 張。</li>
+          <li>　・<b>根因</b>：<code>v2580_i_wave8_misc2.ts L416-452</code> 舊版自動取全部火能量丟（沒 picker），違反卡面玩家自選語意。</li>
+          <li>　・<b>修法</b>：仿火箭隊的超夢ex｜擦除球 pattern — <code>ATTACK_PRE_DISCARD_CHOICE.set(..., &#123; min:0, max:5, scope:&apos;attacker&apos;, baseDamage:0, damagePerEnergy:70, energyTypeFilter:&apos;Fire&apos; &#125;)</code> 開 picker，<code>regPre</code> 讀 <code>action?.discardedEnergyIids</code>，<code>regPost</code> 丟玩家選的能量。</li>
+
+          <li><b>修法 2 — 11 個「受到傷害時」特性被 KO 漏觸發（玩家回報甲殼刺 + audit 同類）</b></li>
+          <li>　・<b>玩家回報</b>：爆焰龜獸的特性「甲殼刺」附在被 KO 寶可夢身上時沒觸發（v5.080 已修 7 張道具同問題，但漏 audit PASSIVE 特性）。</li>
+          <li>　・<b>Audit 結果</b>：engine.ts L5230 PASSIVE_RETALIATION + L5241 PASSIVE_ON_DAMAGED 都在<code>else if (!preventedKO)</code>非 KO 分支內，<b>holder 被 KO 時全部漏觸發</b>。</li>
+          <li>　・<b>受影響特性（11 個）</b>：</li>
+          <li>　　・<b>PASSIVE_RETALIATION (10 個)</b>：毒刺（毒薔薇/羅絲雷朵 → 中毒）、灼熱之軀（席多藍恩 → 灼傷）、反擊（磨牙彩皮魚 +30）、尖刺盔甲（布里卡隆 +N×30）、怨恨旋渦（花岩怪 +10）、<b>甲殼刺</b>（爆焰龜獸 picker 丟 1 能量）、反擊雞冠（超級頭巾混混ex +50）、自動用武（鐵脖頸 +30）、反擊針（赫普的啪嚓海膽ex +30）、快掃拳返（拖拖蚓ex N×20）</li>
+          <li>　　・<b>PASSIVE_ON_DAMAGED (1 個)</b>：警備濁霧（火箭隊的瓦斯彈 — 牌庫搜瓦斯彈到備戰）</li>
+          <li>　・<b>修法</b>：engine.ts L4937 TOOL_ON_KO loop 之後、L4940 bench-empty check 之前，加 11 行 PASSIVE 觸發 loop（鏡射 L5230-L5247 邏輯）。光之翼擋條件同非 KO 分支（attacker 持光之翼時對手特性反擊免疫）。</li>
+
+          <li><b>實際影響</b>：v5.081 起 — (a) 熔岩爆炸開 picker 讓玩家選 0~5 張火能量；(b) holder 被 KO 時 11 個「受傷時」特性都正確觸發（甲殼刺仍走 v5.069 的 active-energy-discard picker pattern，pendingSelection 入 chain queue 由防守方先解）。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 effects/cards/v2580_i_wave8_misc2.ts + engine.ts + +page.svelte + version.ts）／Rule 14（最小 patch — 熔岩爆炸用既有 ATTACK_PRE_DISCARD_CHOICE pattern 不重寫 dispatch；KO 分支 11 行 PASSIVE loop 鏡射既有非 KO 分支邏輯）／Rule 15（卡面 source of truth — 熔岩爆炸「最多 5 張」=可選 0~5；「受到傷害時」依 PTCG 規則含 KO）／Rule 11e（Write tool）／Rule 11f（push 前 4 道 ASSERT 防 silent fail）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.080</span> 🐛 撤回重力之玉 ACE SPEC 錯標 + 強制丟能量 5 處 + 7 張「受傷時」道具補 KO 觸發（含龐克頭盔）</summary>
         <ul>
           <li><b>修法 0 — 撤回 v5.079 AI 幻覺（嚴重違反 Rule 15）</b></li>

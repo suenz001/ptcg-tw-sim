@@ -24,7 +24,7 @@ import { countOneEnergy } from '../../effects';
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
-  getOwnBenchLimit,
+  getOwnBenchLimit, ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 
@@ -412,43 +412,42 @@ regPost('洛托姆|洛托呼喚', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // N. 棄自身能量倍率 (1 張)
 // 阿響的熔岩蝸牛|熔岩爆炸 70× 棄自身火能量數（最多 5）
+// v5.081：改 picker — 卡面「將最多 5 張」可選 0~5 張（仿擦除球 pattern）
+//   原 v2.58 自動取全部火能量丟，違反卡面玩家自選語意。
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('阿響的熔岩蝸牛|熔岩爆炸', (state, aIdx, pool) => {
+ATTACK_PRE_DISCARD_CHOICE.set('阿響的熔岩蝸牛|熔岩爆炸', {
+  min: 0, max: 5, scope: 'attacker', baseDamage: 0, damagePerEnergy: 70,
+  energyTypeFilter: 'Fire',
+});
+regPre('阿響的熔岩蝸牛|熔岩爆炸', (state, aIdx, pool, action) => {
   const a = state.players[aIdx].active;
   if (!a) return { state, damage: 0 };
-  // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量
-  const fireCount = countOneEnergy(a, 'Fire', pool);
-  const discardCount = Math.min(5, fireCount);
-  const dmg = discardCount * 70;
-  const s = addLog(state, `熔岩爆炸：自身火能量 ${fireCount} 個（最多棄 5 → ${discardCount}），${discardCount}×70 = ${dmg}`, aIdx);
+  // v5.081: 用玩家選的 iids（picker 透過 ATTACK_PRE_DISCARD_CHOICE 收集）
+  const chosenIids = action?.discardedEnergyIids;
+  const fireEnergies = a.energyAttached.filter(e => isEnergyOfType(pool.get(e.cardId), 'Fire'));
+  const allowed = new Set(fireEnergies.map(e => e.iid));
+  const selectedIids = (chosenIids ?? []).filter(id => allowed.has(id)).slice(0, 5);
+  const count = selectedIids.length;
+  const dmg = count * 70;
+  const s = addLog(state, `熔岩爆炸：丟 ${count} 張火能量 → ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
 
-regPost('阿響的熔岩蝸牛|熔岩爆炸', (state, aIdx, pool) => {
-  // 從尾端棄火能量最多 5 個
-  const a = state.players[aIdx].active;
-  if (!a) return state;
-  let toDiscard = 5;
-  const newEnergies: CardInstance[] = [];
-  const discarded: CardInstance[] = [];
-  for (let i = a.energyAttached.length - 1; i >= 0; i--) {
-    const e = a.energyAttached[i];
-    if (toDiscard > 0 && isEnergyOfType(pool.get(e.cardId), 'Fire')) {
-      discarded.unshift(e);
-      toDiscard--;
-    } else {
-      newEnergies.unshift(e);
-    }
-  }
-  if (discarded.length === 0) return state;
-  return updatePlayer(
-    addLog(state, `熔岩爆炸：自身丟棄 ${discarded.length} 張火能量到棄牌區`, aIdx),
-    aIdx, p => ({
+regPost('阿響的熔岩蝸牛|熔岩爆炸', (state, aIdx, _pool, action) => {
+  // v5.081: 丟玩家選的能量（不是自動從尾端取）
+  const chosenIids = action?.discardedEnergyIids ?? [];
+  if (chosenIids.length === 0) return state;
+  return updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    const idSet = new Set(chosenIids);
+    const discarded = p.active.energyAttached.filter(e => idSet.has(e.iid));
+    if (discarded.length === 0) return p;
+    return {
       ...p,
-      active: p.active ? { ...p.active, energyAttached: newEnergies } : null,
+      active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => !idSet.has(e.iid)) },
       discard: [...p.discard, ...discarded],
-    }),
-  );
+    };
+  });
 });
 
 // 輔助：unused import 防護

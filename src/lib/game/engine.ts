@@ -4970,6 +4970,24 @@ function handlePlaying(
         punkReflectDamage = 0;
       }
 
+      // v5.081：PASSIVE_RETALIATION + PASSIVE_ON_DAMAGED 補 KO 觸發
+      //   卡面「受到對手寶可夢招式的傷害時」依 PTCG 規則含 KO 情境。
+      //   原 L5230 / L5241 套用只在「沒 KO」分支跑，holder 被 KO 時漏觸發。
+      //   涵蓋特性（PASSIVE_RETALIATION 10 個）：
+      //     毒刺/灼熱之軀/反擊/尖刺盔甲/怨恨旋渦/甲殼刺/反擊雞冠/自動用武/反擊針/快掃拳返
+      //   + PASSIVE_ON_DAMAGED（警備濁霧）
+      //   光之翼擋（attacker 持有時免疫對手特性反擊）— 同非 KO 分支邏輯
+      if (!_v456KoMagicalShine && baseDamage > 0 && defenderCard.abilities) {
+        for (const ab of defenderCard.abilities) {
+          const retal = PASSIVE_RETALIATION.get(ab.name);
+          if (retal) newState = retal(newState, dIdx, pool);
+        }
+        for (const ab of defenderCard.abilities) {
+          const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
+          if (fnOD) newState = fnOD(newState, dIdx, aIdx, pool, defenderCard);
+        }
+      }
+
       // 無備戰寶可夢 → 直接終局，不需送出新寶可夢
       if (defenderState.bench.length === 0) {
         return {
