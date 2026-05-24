@@ -265,6 +265,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.079</span> 🐛 修蓋諾賽克特｜ACE消弭 擋不到 ACE SPEC 能量 + 秘密箱/重力之玉 補 ACE SPEC 標記</summary>
+        <ul>
+          <li><b>玩家回報</b>：自己場上有蓋諾賽克特（非 ex 版本）+ 附「氣球」道具，理應觸發特性「ACE消弭」擋對手 ACE SPEC 卡。但對手仍能使出「新衝天能量」（ACE SPEC 特殊能量）。卡面：「若這隻寶可夢附有『寶可夢道具』卡，則對手無法從手牌使出『【ACE SPEC】』卡。」</li>
+
+          <li><b>根因 1（核心 bug）</b>：<code>engine.ts L2699 PLAY_TRAINER handler</code> 早就有 ACE 消弭 gate：<br/><code>if (trainerCard.tags?.includes(&apos;ACE SPEC&apos;) &amp;&amp; isAceCancelActive(state, aIdx, pool)) return state;</code><br/>但 <code>ATTACH_ENERGY handler L3464</code><b>完全沒有 ACE SPEC check</b> — 玩家附 ACE SPEC 特殊能量（新衝天 / 古舊 / 富裕等）走 ATTACH_ENERGY 不走 PLAY_TRAINER，gate 漏掉。</li>
+
+          <li><b>修法 1</b>：<code>engine.ts L3471</code> 在 isEnergy check 之後加：</li>
+          <li>　<code>if (energyCardObj?.tags?.includes(&apos;ACE SPEC&apos;) &amp;&amp; isAceCancelActive(state, aIdx, pool)) return addLog(..., &apos;因對手 ACE消弭 效果，無法附加 ACE SPEC 能量&apos;);</code></li>
+
+          <li><b>根因 2（資料漏標）</b>：「秘密箱」(SV6 092/101 Item)、「重力之玉」(SV7 095/102 PokemonTool) 在 PTCG 官方為 ACE SPEC，但 JSON tags 都是空的 — scraper 沒從圖框抓出 ACE SPEC 屬性。</li>
+
+          <li><b>修法 2</b>：兩張卡 tags 補 <code>[&apos;ACE SPEC&apos;]</code>。Audit 結果：目前資料庫已標 ACE SPEC 共 <b>28 張 unique 卡名</b>（不公印章、倖存鍛鍊器、危險光線、古舊能量、大師球、奇跡耳麥、奢華炸彈、富裕能量、寶可生機劑A、希望護身符、急進開關、新衝天能量、極限腰帶、珍寶配件、璀璨結晶、百萬噸吹風機、能量輸送PRO、英雄斗篷、覺醒戰鼓、貴重手推車、重新啟動箱、釣竿MAX、頂尖捕捉器、高級香氛、壯偉碩木、中立中心、完全體攪拌器、寶可夢旋風回收機）。v5.079 後 + 秘密箱 + 重力之玉 = <b>30 張</b>。</li>
+
+          <li><b>Audit 範圍</b>：grep 全 cards/*.json 看 rulesText 含「ACE SPEC」但 tags 沒標 = 0 張（ACE SPEC 在 PTCG 是卡框屬性，rules 內不會寫；scraper 抓不到要手動標）。Wilson 玩家回報是目前最可靠的識別方式。若未來發現其他漏標，可單張補 tags。</li>
+
+          <li><b>實際影響</b>：v5.079 起 — 場上有附道具的蓋諾賽克特時，對手「使出 ACE SPEC trainer」(原本已擋) 跟「附加 ACE SPEC 能量」(新擋) 都會被擋。秘密箱 + 重力之玉 識別為 ACE SPEC，每副牌組最多 1 張 limit 生效 + 被 ACE 消弭擋。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 engine.ts + SV6.json + SV7.json + +page.svelte + version.ts）／Rule 14（最小 patch — engine 端只加一個 if block 鏡射既有 trainer gate；JSON 端只加 1 個 tag）／Rule 15（卡面 source of truth — 「ACE 消弭」未限 trainer，泛指所有 ACE SPEC 卡；秘密箱 / 重力之玉 PTCG 官方為 ACE SPEC）／Rule 11e（Write tool 寫 patch_v5079.py 避開 heredoc）／Rule 11f（push 前 5 道 ASSERT 防 silent fail）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.078</span> 🔥 Firebase 寫入暴量根因解決 — decks 編輯器 setDoc debounce 1.5s（降 90%+）</summary>
         <ul>
           <li><b>背景</b>：v5.072 C1 修匿名 user 寫入後，users collection 寫入降 90%（從 ~1.6K/day → ~250/day），但 Firebase Console 顯示總寫入仍 <b>~2,000/hr</b>（48k/day，超免費額度 20k/day 2.4 倍）。</li>

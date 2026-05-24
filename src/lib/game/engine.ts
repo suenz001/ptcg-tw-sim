@@ -3470,6 +3470,18 @@ function handlePlaying(
     const energyCard = attacker.hand[eIdx];
     if (!isEnergy(energyCard.cardId, pool)) return state;
 
+    // v5.079：蓋諾賽克特|ACE消弭 — 對手有附道具的蓋諾賽克特時，不能附 ACE SPEC 能量
+    //   原 L2699 只擋 PLAY_TRAINER 路徑的 ACE SPEC trainer 卡，沒擋 ATTACH_ENERGY
+    //   路徑的 ACE SPEC 能量（新衝天能量 / 古舊能量 / 富裕能量等），玩家回報。
+    {
+      const energyCardObj = pool.get(energyCard.cardId);
+      if (energyCardObj?.tags?.includes('ACE SPEC') && isAceCancelActive(state, aIdx, pool)) {
+        return addLog(state,
+          `${attacker.name} 因對手「ACE消弭」效果，無法附加 ACE SPEC 能量「${energyCardObj.name}」`,
+          aIdx);
+      }
+    }
+
     // 找目標寶可夢（出場或備戰）
     let target: CardInstance | null = null;
     if (attacker.active?.iid === action.targetIid) {

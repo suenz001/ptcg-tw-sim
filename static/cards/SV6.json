@@ -3983,7 +3983,10 @@
     "scrapedAt": "2026-04-16T07:54:08.173Z",
     "rulesText": "這張卡必須將自己的3張手牌丟棄才可使用。\n\n從自己的牌庫選擇「物品」「寶可夢道具」「支援者」「競技場」卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
     "illustrator": "Toyste Beach",
-    "regulationMark": "H"
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ]
   },
   {
     "id": "10507",
