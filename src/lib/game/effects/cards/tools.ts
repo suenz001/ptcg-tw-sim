@@ -75,8 +75,12 @@ export const TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY = new Map<string, (
 export const TOOL_PREVENT_KO = new Map<string, (
   holderInst: CardInstance, holderCard: Card, incomingDamage: number
 ) => { prevent: boolean; leaveHP: number }>();
+// v5.067：signature 加 koInst 參數 — 讓 callback 能直接從 koInst.energyAttached 撈
+//   被 KO 寶可夢身上的能量，避免從 discard 倒序撈時撞到工具卡/進化卡誤 break。
+//   起源：吼鯨王ex 附沉重接力棒被 KO 時，舊邏輯「discard 倒序遇非基本能量就 break」
+//   會在第一張（沉重接力棒自己）就 break → 抓不到能量 → 反擊效果不觸發（玩家回報）。
 export const TOOL_ON_KO = new Map<string, (
-  state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, pool: Map<string, Card>
+  state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, pool: Map<string, Card>, koInst: CardInstance
 ) => GameState>();
 export const TOOL_PRIZE_BONUS = new Map<string, (holderCard: Card) => number>();
 export const TOOL_ON_DAMAGED = new Map<string, (
@@ -159,7 +163,7 @@ TOOL_PREVENT_KO.set('倖存鍛鍊器', (inst, card) => {
 // v2.232 升級為 deck-search pending（不再簡化）；原版固定抽頂 3 張是錯的。
 //   卡面實際是「從牌庫任意選擇最多 3 張卡加入手牌，並重洗牌庫」— 應讓玩家自選。
 //   actorIdx = dIdx（被 KO 方的玩家做選擇）。共用 search-to-hand-reshuffle。
-TOOL_ON_KO.set('希望護身符', (state, dIdx) => {
+TOOL_ON_KO.set('希望護身符', (state, dIdx, _aIdx, _pool, _koInst) => {
   if (state.players[dIdx].deck.length === 0) {
     return addLog(state, '希望護身符：牌庫為空', dIdx);
   }
@@ -180,18 +184,19 @@ TOOL_ON_KO.set('希望護身符', (state, dIdx) => {
 //     2. 開 discard-search pending（filter='Any', minCount=0, maxCount=N，
 //        validIids 限定候選池）讓玩家挑要附的張數
 //     3. resolver 逐張開 heal-target pending（validIids 限備戰）讓玩家分配
-TOOL_ON_KO.set('沉重接力棒', (state, dIdx, _aIdx, pool) => {
+TOOL_ON_KO.set('沉重接力棒', (state, dIdx, _aIdx, pool, koInst) => {
   const player = state.players[dIdx];
   if (player.bench.length === 0) return state;
-  // 從棄牌區倒序撈剛被 KO 寶可夢身上的基本能量（最多 3 張）
+  // v5.067：直接從 koInst.energyAttached snapshot 撈基本能量（最多 3 張）
+  //   舊邏輯「discard 倒序遇非基本能量就 break」會在第一張工具卡（沉重接力棒自己）
+  //   就 break，導致吼鯨王ex 等附工具卡的寶可夢的能量都撈不到 → 反擊效果不觸發。
+  //   新邏輯直接讀 koInst 的能量 snapshot，不依賴 discard 順序，正確且穩定。
   const candidateIids: string[] = [];
-  for (let i = player.discard.length - 1; i >= 0 && candidateIids.length < 3; i--) {
-    const c = player.discard[i];
-    const card = pool.get(c.cardId);
-    if (card?.supertype === 'Energy' && card.subtype === 'Basic') {
-      candidateIids.push(c.iid);
-    } else {
-      break;
+  for (const e of koInst.energyAttached) {
+    if (candidateIids.length >= 3) break;
+    const ec = pool.get(e.cardId);
+    if (ec?.supertype === 'Energy' && ec.subtype === 'Basic') {
+      candidateIids.push(e.iid);
     }
   }
   if (candidateIids.length === 0) return state;

@@ -4926,10 +4926,12 @@ function handlePlaying(
 
       // 道具：被 KO 時觸發（希望護身符 / 沉重接力棒）— 阻礙之塔時失效
       // v3.20 多重轉接：iterate 所有道具
+      // v5.067：傳 updatedActive (koInst) 第 5 參數讓 callback 直接讀 KO 寶可夢的
+      //   energyAttached snapshot，不依賴 discard 順序。
       if (!toolsJammed) {
         for (const c of onKOToolNames) {
           const fn = TOOL_ON_KO.get(c.name);
-          if (fn) newState = fn(newState, dIdx, aIdx, pool);
+          if (fn) newState = fn(newState, dIdx, aIdx, pool, updatedActive);
         }
       }
 

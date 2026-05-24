@@ -1,5 +1,5 @@
 import type { GameState, PlayerState, CardInstance, SpecialCondition } from '../../types';
-import { addLog, clearActiveEffects, regPost, regPre, updatePlayer } from '../_shared';
+import { addLog, clearActiveEffects, regPost, regPre, updatePlayer, withPending } from '../_shared';
 
 const statusLabel: Record<SpecialCondition, string> = {
   poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
@@ -75,11 +75,23 @@ regPre('瑪力露|躲藏', (state) => ({ state, damage: 0 }));
 regPost('瑪力露|躲藏', selfImmuneOnHeads('躲藏'));
 
 // 焰后蜥ex｜剋命銳爪：100，對手中毒+灼傷，自己與備戰互換。
+// v5.067：原 selfSwitchToFirstBench 自動換 bench[0] 改為 bench-choose picker
+//   讓玩家自選備戰寶可夢（玩家回報）。同 selfSwapPost 範本 — 中毒+灼傷先執行，
+//   然後開 bench-choose pending 讓玩家選；玩家選完後 do-switch resolver 完成互換。
 regPre('焰后蜥ex|剋命銳爪', (state) => ({ state, damage: 100 }));
 regPost('焰后蜥ex|剋命銳爪', (state, aIdx) => {
   let s = applyDefStatuses(state, aIdx, ['poisoned', 'burned'], '剋命銳爪');
-  s = selfSwitchToFirstBench(s, aIdx, '剋命銳爪');
-  return s;
+  const player = s.players[aIdx];
+  if (!player.active || player.bench.length === 0) {
+    return addLog(s, '剋命銳爪：備戰區沒有寶可夢，無法切換', aIdx);
+  }
+  s = addLog(s, '剋命銳爪：選擇換入的備戰寶可夢', aIdx);
+  return withPending(s, {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'do-switch',
+  });
 });
 
 // 龍王蠍｜危害之尾：100，自身 70，對手中毒+麻痺。

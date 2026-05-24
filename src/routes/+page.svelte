@@ -265,6 +265,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.067</span> 🐛 修沉重接力棒不觸發 + 焰后蜥ex 剋命銳爪自動指定備戰（改 picker）</summary>
+        <ul>
+          <li><b>Bug 1：沉重接力棒（SV5M 066/071 PokemonTool）被 KO 時不觸發</b></li>
+          <li>　・<b>玩家回報</b>：吼鯨王ex（撤退費 4 個【無】）附沉重接力棒，被 KO 後沒能選擇基本能量改附給備戰寶可夢。卡面：「附有這張卡的【撤退】所需的能量為4個的寶可夢，在戰鬥場上受到對手的寶可夢招式的傷害而【昏厥】時，選擇最多3張那隻寶可夢身上附加的基本能量卡，以任意方式改附於自己的備戰寶可夢身上。」</li>
+          <li>　・<b>根因</b>：<code>TOOL_ON_KO.set(&apos;沉重接力棒&apos;, ...)</code> callback 內從 discard 倒序撈基本能量，但「遇到非基本能量就 <code>break</code>」。實際 KO 時 discard 排序是 <code>[koInst, ...能量, ...工具, ...進化卡]</code> — 倒序撈時**第一張就遇到工具卡（沉重接力棒自己）→ break → 撈不到下面的能量** → 反擊永遠不觸發。</li>
+          <li>　・<b>修法</b>：</li>
+          <li>　　1. <code>TOOL_ON_KO</code> signature 加第 5 參數 <code>koInst: CardInstance</code></li>
+          <li>　　2. engine.ts L4929 call site 傳 <code>updatedActive</code>（KO 前 snapshot）</li>
+          <li>　　3. 沉重接力棒 callback 改成<strong>直接從 <code>koInst.energyAttached</code> 撈基本能量</strong>（snapshot 是 KO 前 active 的能量），不依賴 discard 順序 — 正確且穩定。希望護身符 callback 加 <code>_koInst</code> 參數忽略（不需用）。</li>
+
+          <li><b>Bug 2：焰后蜥ex 剋命銳爪（M3 057/080）自動指定備戰換位</b></li>
+          <li>　・<b>玩家回報</b>：用剋命銳爪後系統自動把第 1 隻備戰換上戰鬥位，沒給玩家選擇。卡面：「將對手的戰鬥寶可夢【中毒】與【灼傷】。將這隻寶可夢與備戰寶可夢互換。」 PTCG 規則上玩家應可自選備戰。</li>
+          <li>　・<b>根因</b>：<code>v2348_j_mark_batch.ts</code> 內 <code>selfSwitchToFirstBench</code> helper 簡易版自動換 <code>bench[0]</code>，沒開 picker。</li>
+          <li>　・<b>修法</b>：改成 <code>selfSwapPost</code> 同範本 — 開 <code>type:&apos;bench-choose&apos;</code> pending + <code>effectKey:&apos;do-switch&apos;</code> 讓玩家自選。對手中毒+灼傷先執行（不變），然後 pending 玩家選備戰寶可夢，玩家選完後 <code>do-switch</code> resolver 完成互換。</li>
+
+          <li><b>Audit 結果（同類「自身互換」招式）</b>：scripts grep 所有 JSON 招式 effect 含「將這隻寶可夢與備戰寶可夢互換」共 <strong>22 個 unique 招式</strong>。分類：</li>
+          <li>　・<b>1 個簡易實作（需修）</b>：焰后蜥ex|剋命銳爪 ← v5.067 修</li>
+          <li>　・<b>11 個用 <code>selfSwapPost</code> / <code>selfSwapPostInline</code> helper（picker 版）</b>：原蓋海龜飛濺迴轉、粉蝶蛹走來走去、醜醜魚躍起逃走、伏特替換、鐵面忍者急速折返、凱西瞬間移動攻擊、土龍弟弟交替、盾甲繭交替、風妖精急速折返、拉普拉斯ex水炮迴旋、遠古巨蜓陀螺音波、鐵包袱內部噴射 ✓</li>
+          <li>　・<b>10 個 inline picker 寫法（picker 但沒用 helper）</b>：捲捲耳雀躍、坦克臭鼬粉碎迴轉、超級捷拉奧拉ex瞬間移轉、藍鱷逆向噴射、敏捷蟲褪殼猛毒、超級拉帝亞斯ex狡兔三窟、古劍豹狡兔三窟、大電海燕ex迴旋充能、沙漠蜻蜓ex風暴返、音波龍ex狡兔三窟 ✓（全都有 <code>type:&apos;bench-choose&apos;</code> pending）</li>
+
+          <li><b>實際影響</b>：v5.067 起 — (a) 沉重接力棒對附 4 撤退費的寶可夢正確觸發，玩家選最多 3 張基本能量改附給備戰寶可夢；(b) 焰后蜥ex 剋命銳爪後彈出 bench-choose modal 讓玩家自選備戰寶可夢換上戰鬥位。</li>
+
+          <li><b>Iron Rules</b>：Rule 8（不適用）／Rule 11/11c（Python pipeline 改 engine.ts + tools.ts + 1 個 cards 子檔）／Rule 14（最小 patch — 沉重接力棒改 koInst 直接讀、焰后蜥ex 改 picker，不重寫 dispatch）／Rule 15（SV5M.json L2806 沉重接力棒 + M3.json L637 剋命銳爪 rulesText 完全對齊）／Rule 11e（Write tool patch）／Rule 11f（push 前 3 道 ASSERT）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.066</span> 🐛 修龐克頭盔對甲賀忍蛙ex 分身連打沒反擊 — clone-strike-multi-hit resolver 補 punk reflect</summary>
         <ul>
           <li><b>玩家回報</b>：惡屬性寶可夢附「龐克頭盔」(MBG 018/022)，被甲賀忍蛙ex 招式「分身連打」(SV5a 045/066) 打中時，沒在甲賀忍蛙身上放 4 個傷害指示物。卡面：「附有這張卡的【惡】寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置 4 個傷害指示物。」</li>
