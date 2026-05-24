@@ -9344,6 +9344,11 @@ function handAttachEnergyPost(
 // ── Helper: deckSameNameBenchPost — 從牌庫選最多 N 張「同名卡」放備戰 ─────
 // v4.941：filter 'Basic' → 'Basic:SameName' — 原 'Basic' picker UI 沒讀 params.validIids，
 //   顯示所有基礎寶可夢（規則違反）；新 filter 用 params.targetName 限定只顯示同名卡。
+// v5.085：filter 名稱保留 'Basic:SameName' 向後相容，但 UI 已拿掉 isBasicPokemonCard
+//   限制 — 蟲電寶|並排（蟲電寶 Stage1）+ 一家鼠|家族行軍（一家鼠 Stage1）卡面寫
+//   「放置於備戰區」是規則例外，允許直接放 Stage1+ 同名卡到備戰（卡牌效果優先於
+//   「備戰只能放基礎」通則）。語意上更接近 'Pokemon:SameName'，但 rename 影響範圍
+//   大（4 處 callsites + UI），先用註解標明語意演化。
 function deckSameNameBenchPost(max: number, cardName: string, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];

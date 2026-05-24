@@ -265,6 +265,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.085</span> 🐛 蟲電寶｜並排 picker modal 空白（一家鼠｜家族行軍 同 bug）</summary>
+        <ul>
+          <li><b>玩家回報</b>：用蟲電寶｜並排 招式時 picker modal 顯示空白；但下回合用寶可平板看牌庫，確實有 3 張蟲電寶。</li>
+
+          <li><b>根因</b>：<code>game/+page.svelte L2104-2112</code> 'Basic:SameName' picker filter 過度限制為 <code>isBasicPokemonCard(card)</code> — 但蟲電寶 SV7 是 <b>Stage1</b>（evolvesFrom=強顎雞母蟲），<code>isBasicPokemonCard</code> 回 false → picker 把所有 3 張蟲電寶 filter 掉 → 顯示空白。</li>
+
+          <li><b>卡面 vs PTCG 通則</b>：PTCG 通則「備戰區只能放基礎寶可夢」，但<b>卡牌效果優先於通則</b> — 並排卡面寫「從自己的牌庫選擇最多 3 張『蟲電寶』，放置於備戰區」可直接放 Stage1 同名卡。Engine resolver <code>bench-basic-from-deck</code>（<code>pokemon_search.ts L126</code>）沒做 Basic check，只有 UI filter 過度限制。</li>
+
+          <li><b>Audit 結果</b>：所有用 <code>deckSameNameBenchPost</code> helper 的 4 張卡：</li>
+          <li>　・呱呱泡蛙｜群聚 — Basic ✅ OK</li>
+          <li>　・強顎雞母蟲｜群聚 — Basic ✅ OK</li>
+          <li>　・<b>蟲電寶｜並排 — Stage1 ❌ bug（Wilson 回報）</b></li>
+          <li>　・<b>一家鼠｜家族行軍 — Stage1 ❌ 同 bug（未回報，audit 找到，一併修）</b></li>
+
+          <li><b>修法</b>：UI 'Basic:SameName' filter 拿掉 <code>isBasicPokemonCard</code> 限制，改用 <code>params.validIids</code> 為主 filter（server-side <code>deckSameNameBenchPost</code> 已 narrow 到牌庫實體同名卡）；保留 <code>targetName</code> 為 defense-in-depth；保留 <code>card.supertype === 'Pokemon'</code> 防呆。filter 名稱保留 'Basic:SameName' 向後相容（4 處 callsites 不動），語意演化標於 helper 註解。</li>
+
+          <li><b>實際影響</b>：v5.085 起 — 蟲電寶｜並排 + 一家鼠｜家族行軍 picker 正確顯示牌庫中的同名 Stage1 寶可夢，玩家可選 0~3 張放備戰（兩張原本一直壞，這次一起修）。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + effects.ts 註解 + version + changelog）／Rule 14（最小 patch — UI 拿 1 個 check + 加 validIids；filter 名稱不 rename 避免 4 處 callsites 影響）／Rule 15（卡面 source of truth — 並排/家族行軍卡面寫直接放備戰，效果優先於 PTCG「備戰只能放基礎」通則）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.084</span> 🐛 UI 撤退費顯示鏡射重力之玉 + mirror 按鈕能量不夠改 disabled 不消失</summary>
         <ul>
           <li><b>玩家回報</b>：v5.082 修了幻影迷宮 + 對手撤退花費的能量正確了，但介面上顯示需要的撤退能量數量錯誤，撤退按鈕還會莫名其妙消失（正常應該都會顯示，就算能量不夠也只是變暗）。</li>

@@ -2100,12 +2100,20 @@
             return !!card && card.supertype === 'Trainer';
           });
         }
-        // v4.941 同名群聚（呱呱泡蛙 / 強顎雞母蟲 / 一家鼠 / 蟲電寶 等）：限定同名基礎寶可夢
+        // v4.941 同名群聚（呱呱泡蛙 / 強顎雞母蟲 / 一家鼠 / 蟲電寶 等）：限定同名寶可夢
+        // v5.085：原 v4.941 過度限制為 isBasicPokemonCard — 但蟲電寶/一家鼠 SV7 是
+        //   Stage1，被 isBasicPokemonCard 濾掉 → picker 顯示空白（玩家回報）。
+        //   卡面「放置於備戰區」是規則例外，可直接放同名 Stage1+。
+        //   改用 params.validIids（server-side deckSameNameBenchPost 已 narrow 到牌庫
+        //   實體同名卡）為主 filter；保留 targetName 為 defense-in-depth。
+        //   filter 名稱保留 'Basic:SameName' 向後相容（effects.ts L9360 同步註解）。
         if (f === 'Basic:SameName') {
+          const validIids = pendingSelection.params?.validIids as string[] | undefined;
           const targetName = pendingSelection.params?.targetName as string | undefined;
           return src.deck.filter(c => {
+            if (validIids && !validIids.includes(c.iid)) return false;
             const card = pool.get(c.cardId);
-            if (!card || !isBasicPokemonCard(card)) return false;
+            if (!card || card.supertype !== 'Pokemon') return false;
             if (targetName && card.name !== targetName) return false;
             return true;
           });
