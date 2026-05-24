@@ -265,6 +265,38 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.075</span> 🐛 修磁鐵【鋼】能量撤退費未生效 + audit 一身輕 / 混亂撤退規則</summary>
+        <ul>
+          <li><b>玩家回報 3 個撤退相關 bug，audit 結果如下</b>：</li>
+
+          <li><b>Bug 3：磁鐵【鋼】能量 附於鋼屬性寶可夢撤退仍需能量（真實 bug，已修）</b></li>
+          <li>　・<b>玩家回報</b>：鋼屬性寶可夢附「磁鐵【鋼】能量」(M4 094/100 特殊能量) 後，撤退時 UI 仍顯示原撤退費，按下後 engine 內實際撤退費 0（因為 SPECIAL_ENERGY_RETREAT_MOD 有處理），但 UI 顯示誤導讓玩家以為效果沒生效。卡面：「提供 1 個【鋼】能量。附於【鋼】寶可夢時，撤退所需能量為 0。」</li>
+          <li>　・<b>根因</b>：v3.37 寫 <code>engine.ts L7029 getRetreatCost()</code> 時漏套 <code>SPECIAL_ENERGY_RETREAT_MOD</code> hook（RETREAT handler L2458-2469 有套，這個 UI 顯示函式漏）。UI 端 <code>game/+page.svelte L3210 retreatCostOf()</code> 同樣漏鏡射。雙處顯示 cost 都沒考慮磁鐵【鋼】能量的「附鋼寶可夢撤退 0」效果。</li>
+          <li>　・<b>修法</b>：(a) <code>engine.ts L7083</code> 在 ABILITY_RETREAT_MOD 之前插入 SPECIAL_ENERGY 迭代邏輯（同 RETREAT handler L2458）；(b) <code>game/+page.svelte L3210</code> import 並鏡射 <code>SPECIAL_ENERGY_RETREAT_MOD</code> 處理。</li>
+
+          <li><b>Bug 1：小火龍｜一身輕 身上沒能量時還是要付撤退費（audit 未找到擋邏輯）</b></li>
+          <li>　・<b>玩家回報</b>：小火龍（M-P-I / M2 兩張，I 標）特性「若這隻寶可夢身上沒有附加能量卡，則這隻寶可夢【撤退】所需的能量全部消除」— 玩家測試時無法不耗能量撤退。</li>
+          <li>　・<b>audit 結果</b>：完整 trace —</li>
+          <li>　　1. <code>effects.ts L3162 ABILITY_RETREAT_MOD&#91;&apos;一身輕&apos;&#93;</code>：iid 比對 + energyAttached.length===0 → return &#123; zero: true &#125; ✓ 邏輯正確</li>
+          <li>　　2. <code>engine.ts L7085 getRetreatCost</code> 套 applyAbilityRetreatMod → cost=0 ✓</li>
+          <li>　　3. <code>game/+page.svelte L3210 retreatCostOf</code> 鏡射 ABILITY_RETREAT_MOD → cost=0 ✓</li>
+          <li>　　4. RETREAT handler 同步走 cost=0 通路 ✓</li>
+          <li>　・<b>結論</b>：找不到擋邏輯。請玩家提供具體 repro 步驟（牌組、場上狀態、操作順序、版本號 chip）以利進一步診斷。可能的「假 bug」原因：(a) 玩家測試的是其他版本沒一身輕的小火龍（MC J 標 / SVQL G 標 — 兩張都無此特性，撤退費 1）；(b) 小火龍實際進化成火恐龍時測試（火恐龍無此特性，撤退費 2）。</li>
+
+          <li><b>Bug 2：寶可夢混亂狀態時無法撤退（audit 未找到擋邏輯）</b></li>
+          <li>　・<b>玩家回報</b>：依 <a href="https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/" target="_blank">PTCG 官方規則</a>，混亂 / 灼傷 / 中毒等特殊狀態都可以撤退。但 simulator 內混亂寶可夢無法撤退。</li>
+          <li>　・<b>audit 結果</b>：grep 全 <code>src/lib/game/engine.ts</code> 跟 effects/ 目錄 — <b>找不到任何 confused 擋撤退的 code</b>。實際擋鎖：</li>
+          <li>　　・<code>L2408 RETREAT handler</code> 只擋 <code>asleep / paralyzed</code> ✓ 符合規則</li>
+          <li>　　・<code>L7034 getRetreatCost</code> 同樣只擋 asleep/paralyzed ✓</li>
+          <li>　　・<code>L7112 getRetreatBlockReason</code> 同上 ✓</li>
+          <li>　・<b>最可能解釋</b>：玩家撞到「強勁磁場」(自爆磁怪招式 effects.ts L6638) 等同時加「混亂 + cantRetreatNextTurn (下回合無法撤退)」的招式 — 真正擋鎖是 cantRetreatNextTurn flag，玩家把兩個現象連在一起以為「混亂導致無法撤退」。或者撤退費 &gt; 身上能量，被「能量不足」擋。</li>
+          <li>　・<b>修法</b>：(a) <code>engine.ts L7034</code> 加防禦註解明示「只擋 asleep/paralyzed，confused/poisoned/burned 皆可撤退」+ 列出官方規則 URL，防止未來維護者誤改；(b) 請玩家若仍見此問題，提供 disabled 撤退按鈕的 hover tooltip 文字（<code>getRetreatBlockReason</code> 會顯示真正擋鎖原因），協助診斷。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 engine.ts + game/+page.svelte + +page.svelte + version.ts）／Rule 14（最小 patch — Bug 3 只補既有 hook 鏡射；Bug 1/2 不動 code 只加防禦註解 + 寫詳細 audit 解釋給玩家確認）／Rule 15（PTCG 官方規則 source of truth — basic_rules07 明確列出僅 asleep/paralyzed 禁撤退；磁鐵【鋼】能量卡面「撤退所需能量為 0」）／Rule 11e（Write tool 寫 patch_v5075.py 避開 heredoc）／Rule 11f（push 前 5 道 ASSERT 防 silent fail）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.074</span> 🐛 修 3 隻同名寶可夢用特性時，能量/效果全跑到第 1 隻（findAbilityUserIid 共 4 處）</summary>
         <ul>
           <li><b>玩家回報</b>：場上有 3 隻火箭隊的操陷蛛（SV10 009/098, Stage1 草），3 隻都用特性「充能」（在自己的回合時可使用 1 次，從棄牌區選 1 張基本能量附於這隻寶可夢身上）後，3 張能量都附到同一隻寶可夢，違反「附於這隻寶可夢」的卡面語意。</li>

@@ -7030,7 +7030,12 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return null;
   const player = state.players[state.activePlayerIndex];
   if (player.retreatedThisTurn || !player.active || player.bench.length === 0) return null;
-  // 睡眠和麻痺時無法撤退
+  // 睡眠和麻痺時無法撤退（PTCG 規則）
+  // v5.075 防禦註解：根據官方規則 https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/
+  //   只有【睡眠】跟【麻痺】禁止撤退。【混亂】【中毒】【灼傷】皆可撤退。
+  //   若玩家回報「混亂無法撤退」幾乎都是搞混以下兩種：
+  //     (a)「強勁磁場」(自爆磁怪) 等招式同時加混亂 + cantRetreatNextTurn → 真正擋鎖在 cantRetreatNextTurn
+  //     (b) 能量不足以付撤退費 → getRetreatBlockReason 會顯示「能量不足」
   if (player.active.status === 'asleep' || player.active.status === 'paralyzed') return null;
   // v3.37：「下個對手回合無法撤退」(cantRetreatNextTurn) — 鏡射 RETREAT handler L1870 的擋鎖。
   // 設此旗標的招式（懶人獺 悠哉、束縛纏繞、鬼盜衝撞 等）會讓擁有者下回合開始時無法撤退；
@@ -7081,6 +7086,20 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
   if (stadiumNameCR === 'N的城堡' && card?.name?.startsWith('N的')) cost = 0;
   // v2.177 樂園度假地：可達鴨撤退 -1（UI 鏡射）
   if (stadiumNameCR === '樂園度假地' && card?.name === '可達鴨') cost = Math.max(0, cost - 1);
+  // v5.075：補套 SPECIAL_ENERGY_RETREAT_MOD（鏡射 RETREAT handler L2458-2469）
+  //   原 v3.37 寫此函式時漏加，導致鋼屬性寶可夢附「磁鐵【鋼】能量」時 UI 仍顯示原撤退費，
+  //   按下按鈕後 engine 實際 cost=0 撤退成功，但 UI 誤導玩家以為要丟能量。
+  if (card) {
+    for (const e of player.active.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (!ec) continue;
+      const fn = SPECIAL_ENERGY_RETREAT_MOD.get(ec.name);
+      if (!fn) continue;
+      const r = fn(card, player.active);
+      if (r.zero) { cost = 0; break; }
+      if (r.reduceBy) cost = Math.max(0, cost - r.reduceBy);
+    }
+  }
   // v2.277 Wave 3：套用 ABILITY_RETREAT_MOD（一身輕 / 溶化流動 / 鋼之橋 / 森林秘道 / 大網）
   cost = applyAbilityRetreatMod(state, player.active, card, state.activePlayerIndex, cost, pool);
   return cost;

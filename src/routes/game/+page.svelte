@@ -23,7 +23,7 @@
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, ABILITY_RETREAT_MOD } from '$lib/game/effects';
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD } from '$lib/game/effects';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
   import { auth } from '$lib/firebase';
@@ -3200,6 +3200,20 @@
     if (cost > 0 && card?.name?.startsWith('N的') && game?.activeStadium) {
       const stadiumName = getCard(game.activeStadium.cardId)?.name;
       if (stadiumName === 'N的城堡') cost = 0;
+    }
+    // v5.075：補鏡射 SPECIAL_ENERGY_RETREAT_MOD（磁鐵【鋼】能量 等）
+    //   engine RETREAT handler L2458 + getRetreatCost (v5.075 補) 都套了，
+    //   但這個 UI 顯示 helper 之前漏 → 玩家撤退按鈕顯示 cost 不正確（誤判「磁鐵【鋼】能量沒生效」）
+    if (card) {
+      for (const e of inst.energyAttached) {
+        const ec = getCard(e.cardId);
+        if (!ec) continue;
+        const fn = SPECIAL_ENERGY_RETREAT_MOD.get(ec.name);
+        if (!fn) continue;
+        const r = fn(card, inst);
+        if (r.zero) { cost = 0; break; }
+        if (r.reduceBy) cost = Math.max(0, cost - r.reduceBy);
+      }
     }
     // ── v4.916：鏡射 engine.ts ABILITY_RETREAT_MOD（撤退費修飾特性）──────────────
     // 修玩家回報「咒縛之炎」沒生效 — root cause 是這個 UI 顯示 helper 沒鏡射
