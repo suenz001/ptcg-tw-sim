@@ -199,20 +199,20 @@ regR('sari-search', (st, idx, iids, _params, pool) => {
 });
 
 // ── 琉琪亞的展示（Supporter / H）── 對手戰↔備戰換 + 新上場混亂
+// v5.073：改用 isBasicPokemonCard helper — 原本 subtype === 'Basic' 會把基礎 ex
+//   寶可夢全部漏掉（基礎 ex 的 subtype='ex'，不是 'Basic'；資料源 319 張）。
+//   卡面寫「【基礎】寶可夢」未排除 ex，正確判定 = supertype Pokemon + !evolvesFrom + 非 Stage1/2。
 regG('琉琪亞的展示', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
-  // 對手必須有戰鬥場 + 至少 1 隻基礎備戰
+  // 對手必須有戰鬥場 + 至少 1 隻基礎備戰（含基礎 ex）
   if (!st.players[dIdx].active) return false;
-  return st.players[dIdx].bench.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.subtype === 'Basic';
-  });
+  return st.players[dIdx].bench.some(c => isBasicPokemonCard(pool.get(c.cardId)));
 });
 reg('琉琪亞的展示', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const validIids = dp.bench
-    .filter(c => pool.get(c.cardId)?.subtype === 'Basic')
+    .filter(c => isBasicPokemonCard(pool.get(c.cardId)))
     .map(c => c.iid);
   if (validIids.length === 0 || !dp.active) {
     return addLog(st, '琉琪亞的展示：對手備戰無基礎寶可夢', idx);

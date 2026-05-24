@@ -265,6 +265,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.073</span> 🐛 修琉琪亞的展示無法選對方基礎 ex 寶可夢</summary>
+        <ul>
+          <li><b>玩家回報</b>：使用支援者「琉琪亞的展示」(SV7a 063/064 H 標) 時，picker 沒列出對方備戰區的基礎 ex 寶可夢，只能選非 ex 的基礎寶可夢。卡面：「選擇 1 隻對手的備戰區的【基礎】寶可夢，與戰鬥寶可夢互換。然後，將新上場的寶可夢【混亂】。」「【基礎】」沒排除 ex，理應可選基礎 ex。</li>
+
+          <li><b>根因</b>：<code>v172_hij_batch.ts L208 + L215</code> 用 <code>card?.subtype === &apos;Basic&apos;</code> 過濾。但資料源中**基礎 ex 寶可夢的 <code>subtype = &apos;ex&apos;</code>（不是 <code>&apos;Basic&apos;</code>）**：</li>
+          <li>　・全 cards/*.json 掃描結果：<strong>319 張基礎 ex 寶可夢的 subtype 是 &apos;ex&apos;</strong>（拉普拉斯ex、花舞鳥ex、洛托姆ex、超級噴火駝ex、吼鯨王ex…）</li>
+          <li>　・正確判定 = <code>supertype === &apos;Pokemon&apos; &amp;&amp; !evolvesFrom &amp;&amp; subtype !== &apos;Stage1&apos; &amp;&amp; subtype !== &apos;Stage2&apos;</code>（不只看 subtype）</li>
+          <li>　・<code>engine.ts L557 isBasicPokemonCard()</code> helper 早就存在且 v172_hij_batch.ts L24 也 import 過 — 但琉琪亞的展示沒用，誤用了 raw subtype check</li>
+
+          <li><b>修法</b>：把 L208 L215 兩處的 <code>card?.subtype === &apos;Basic&apos;</code> 改為 <code>isBasicPokemonCard(card)</code>。</li>
+
+          <li><b>Audit 結果（同檔其他卡 + 其他檔案）</b>：grep 全 effects/ 目錄的 <code>subtype === &apos;Basic&apos;</code> 用法：</li>
+          <li>　・基本能量判定（<code>supertype === &apos;Energy&apos; + subtype === &apos;Basic&apos;</code>）：v2353/v2610/v2660/v2750/v2999/six_decks 等多處，<b>都是正確</b>（基本能量 vs 特殊能量，跟寶可夢無關）✓</li>
+          <li>　・<code>items_misc.ts L777 巢穴球</code>：有同樣寫法但僅是 dead code（<code>hasBasic</code> 變數沒被使用，picker 走 svelte 端 filter=&apos;Basic&apos; 已正確用 isBasic 判定），功能不受影響</li>
+          <li>　・G 標卡（v2996/v2998）：Wilson 指示 G 標跳過實裝，本版本不動</li>
+
+          <li><b>實際影響（v5.073 起）</b>：琉琪亞的展示 picker 現在能列出對手備戰區的 <b>所有基礎寶可夢（含基礎 ex）</b>。例：對手備戰有 拉普拉斯ex / 一般皮卡丘，現在兩隻都可選；之前只有一般皮卡丘可選。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 v172_hij_batch.ts + +page.svelte + version.ts）／Rule 14（最小 patch — 兩行條件改 helper，不重寫邏輯）／Rule 15（卡面 source of truth — 「【基礎】」涵蓋 ex；資料源 subtype=&apos;ex&apos; 不代表非基礎）／Rule 11e（Write tool 寫 patch_v5073.py 避開 heredoc）／Rule 11f（push 前 3 道 ASSERT 防 silent fail）。Pre-push tsc + Rule 1 audit。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.072</span> 🔥 Firebase 寫入量根因解決（方案 C1）— 匿名 user 完全不寫 users doc</summary>
         <ul>
           <li><b>背景：v5.064 後 Firebase 寫入仍維持 36k/日</b></li>
