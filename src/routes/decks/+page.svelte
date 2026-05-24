@@ -363,7 +363,8 @@
     ]);
   }
 
-  async function pushDeck(deck: Deck) {
+  // v5.078：actualPushDeck 是真正的 cloud setDoc 動作（被 pushDeck debounce 包覆）
+  async function actualPushDeck(deck: Deck) {
     if (!firebaseUser) return;
     syncStatus = 'syncing';
     try {
@@ -373,6 +374,49 @@
       syncStatus = 'error';
       syncError = e instanceof Error ? e.message : String(e);
     }
+  }
+
+  // v5.078：Firebase 寫入暴量元兇 — addCard/removeCard 每次都 setDoc，
+  //   玩家組 30 張卡 = 30 setDoc。Firebase Console 觀察到 ~2000 writes/hr，
+  //   audit visible 只 ~110/hr → 差 1900/hr 全是 decks updates。
+  // 修法：每次 pushDeck 排程 1.5 秒後執行 actualPushDeck；1.5 秒內又改
+  //   → reset timer（連續編輯 30 張卡 → 只 1 個 setDoc，降 90%+）。
+  // 防丟資料：(a) addCard/removeCard 本就先寫 localStorage upsertDeck（同步），
+  //          所以即使 cloud push 還沒跑，重整頁面也不丟；
+  //          (b) beforeunload event flush 所有 pending push 立即送出。
+  const PUSH_DEBOUNCE_MS = 1500;
+  const pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const pendingPushes = new Map<string, Deck>();
+
+  function pushDeck(deck: Deck) {
+    if (!firebaseUser) return;
+    // 取消舊 timer，存最新版本
+    const existingTimer = pushTimers.get(deck.id);
+    if (existingTimer) clearTimeout(existingTimer);
+    pendingPushes.set(deck.id, deck);
+    syncStatus = 'syncing';  // 立即顯示同步中（UI 反饋）
+    const timer = setTimeout(() => {
+      const finalDeck = pendingPushes.get(deck.id);
+      pendingPushes.delete(deck.id);
+      pushTimers.delete(deck.id);
+      if (finalDeck) actualPushDeck(finalDeck);
+    }, PUSH_DEBOUNCE_MS);
+    pushTimers.set(deck.id, timer);
+  }
+
+  /** 立即執行所有 pending push（beforeunload / onDestroy 用）。 */
+  function flushPendingPushes() {
+    for (const [deckId, timer] of pushTimers) {
+      clearTimeout(timer);
+      const deck = pendingPushes.get(deckId);
+      if (deck) {
+        // fire-and-forget — beforeunload 時可能等不到 await，但 Firebase SDK
+        // 內部會用 sendBeacon-like 機制盡量送出（不保證 100% 成功，但比不送好）
+        actualPushDeck(deck);
+      }
+    }
+    pushTimers.clear();
+    pendingPushes.clear();
   }
 
   async function dropDeck(deckId: string) {
@@ -505,7 +549,20 @@
       }
     });
 
-    return () => unsubAuth();
+    // v5.078：beforeunload 強制 flush pending decks push（防玩家關 tab 丟改動）
+    const handleBeforeUnload = () => flushPendingPushes();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    }
+
+    return () => {
+      unsubAuth();
+      // v5.078：cleanup — flush 待推 + 移除 beforeunload listener
+      flushPendingPushes();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      }
+    };
   });
 
   // ── Deck actions ───────────────────────────────────────────────────────

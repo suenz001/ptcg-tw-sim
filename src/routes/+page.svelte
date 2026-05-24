@@ -265,6 +265,34 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.078</span> 🔥 Firebase 寫入暴量根因解決 — decks 編輯器 setDoc debounce 1.5s（降 90%+）</summary>
+        <ul>
+          <li><b>背景</b>：v5.072 C1 修匿名 user 寫入後，users collection 寫入降 90%（從 ~1.6K/day → ~250/day），但 Firebase Console 顯示總寫入仍 <b>~2,000/hr</b>（48k/day，超免費額度 20k/day 2.4 倍）。</li>
+
+          <li><b>Audit 結果（admin v0.21 endpoint）</b>：visible 寫入 ~111/hr（users 9 + feedbacks 2 + decks 新建 ~100），跟 Console 實測 2,000/hr 差 <b>~1,900/hr 寫入完全看不到</b>。</li>
+
+          <li><b>根因 trace</b>：<code>decks/+page.svelte</code> 11 處 <code>pushDeck()</code> call site 全是 fire-and-forget setDoc，<b>每次 addCard / removeCard / renameActive 都立即 setDoc</b>。玩家組牌平均改 30 張卡 → <b>30 次 setDoc</b>。對 ~70 個活躍編輯玩家/hr × 30 卡 = <b>2,100/hr</b>，完美對上 Console 實測。</li>
+
+          <li><b>修法 — debounce 1.5 秒 + beforeunload flush</b>：</li>
+          <li>　1. <code>actualPushDeck()</code>：拆出真正的 cloud setDoc 動作</li>
+          <li>　2. <code>pushDeck()</code> 改 debounced：每次 call 排程 1.5 秒後執行 actualPushDeck；1.5 秒內又 call → reset timer（連續編輯 30 張卡 → 只 1 個 setDoc）</li>
+          <li>　3. <code>flushPendingPushes()</code>：立即執行所有 pending push</li>
+          <li>　4. <code>beforeunload</code> event listener：玩家關 tab 時強制 flush（防最後改動丟失）</li>
+          <li>　5. onMount cleanup 同樣 flush + remove listener</li>
+
+          <li><b>不丟資料的雙保險</b>：</li>
+          <li>　・(a) <code>addCard / removeCard / renameActive</code> 本就先呼叫 <code>upsertDeck()</code> 寫 localStorage（同步立即），即使 cloud push 還沒跑，玩家重整頁面也不丟；</li>
+          <li>　・(b) <code>beforeunload</code> 強制 flush 把 pending 寫雲端（Firebase SDK 內部有 sendBeacon-like 機制，盡量送出）。</li>
+
+          <li><b>11 處 pushDeck call site 自動受惠</b>：createDeck / renameActive / addCard / removeCard / clearDeck / copyPresetToMine / loadDecksFromCloud 後 first deck / import / active deck setter / etc. 全部不用改，<code>pushDeck()</code> 內部 debounce。</li>
+
+          <li><b>預估降幅</b>：addCard/removeCard 從 30/編輯次 → 1-2/編輯次 = <b>降 90-95%</b>。Hourly 寫入估從 2,000 → <b>~150-300</b>。Daily 估從 48k → <b>~5,000</b>（遠低於 20k 免費額度）。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 decks/+page.svelte + +page.svelte + version.ts）／Rule 14（最小 patch — 只動 pushDeck 函式 + 加 flushPendingPushes，11 處 call site 0 改動）／Rule 13（Firestore data shape 完全不變 — 只調寫入頻率不改 schema）／Rule 11e（Write tool 寫 patch_v5078.py 避開 heredoc）／Rule 11f（push 前 4 道 ASSERT 防 silent fail）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.077</span> 🎴 米立龍ex 硃砂誘餌 / 傳喚之門 / 杜若 等 peek 招式補揭示其他翻到的非目標類卡</summary>
         <ul>
           <li><b>玩家要求</b>：米立龍ex 第二招「硃砂誘餌」（翻牌庫頂 10 張選任意數量寶可夢放備戰）發動時，picker 雖列出寶可夢卡可選，但<b>其他 7 張非寶可夢卡（訓練家 / 能量）也要列出來讓玩家確認</b>（看到全部 10 張），參考寶可裝置3.0 的揭示作法。</li>
