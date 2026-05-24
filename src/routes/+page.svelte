@@ -265,6 +265,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.094</span> 🔧 撤回 v5.093 桌墊版卡片放大（bench-slot 外框太大 + 手牌跑到 viewport 外）</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.093 桌墊版調整效果不好 — bench-slot 卡圖只佔上半，下半大片黑空白；畫面變太長，手牌跑到 viewport 下方需上下滾動才能看到。</li>
+
+          <li><b>根因</b>：</li>
+          <li>　・<code>bench-slot</code> base <code>height:205px</code>（<code>L9709</code> 全模式共用）預留 bottom HP bar / 特性按鈕空間</li>
+          <li>　・v5.093 <code>zone-bench zoom:0.78</code>（+20%）→ slot 視覺高度 ~160px（vs 0.65 = 133px）+27px，<b>黑底空白也跟著放大</b></li>
+          <li>　・<code>active-img</code> 105→125px → active-card row 也 +20px</li>
+          <li>　・兩 row 加起來 +45px 撐 grid 整體高度 → <code>hand-strip</code> 被推到 viewport 外</li>
+
+          <li><b>修法（Wilson 選完全撤回）</b>：</li>
+          <li>　・<code>.playmat.layout-tabletop .active-card .active-img</code>：拿掉 <code>width:125px !important</code> override，回到 base 105px</li>
+          <li>　・<code>.playmat.layout-tabletop .zone-bench</code>：<code>zoom:0.78</code> → <code>0.65</code> 撤回</li>
+
+          <li><b>後續</b>：若仍要「桌墊版卡片大一點」，需另外規劃 — 縮 <code>bench-slot height base</code> 桌墊版專用 override（讓黑底空白不擴張），或用 <code>transform:scale</code> 不影響 layout 但要處理跨元素重疊。v5.094 純撤回先恢復可用狀態。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + version + changelog）／Rule 14（最小 patch — 純撤回 v5.093 兩處 CSS）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.093</span> 🎨 桌墊版卡片放大 ~15%（玩家回報太小）</summary>
         <ul>
           <li><b>玩家回報</b>：桌墊版卡片希望再大一點。</li>
