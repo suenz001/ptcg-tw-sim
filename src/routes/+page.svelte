@@ -265,6 +265,38 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.066</span> 🐛 修龐克頭盔對甲賀忍蛙ex 分身連打沒反擊 — clone-strike-multi-hit resolver 補 punk reflect</summary>
+        <ul>
+          <li><b>玩家回報</b>：惡屬性寶可夢附「龐克頭盔」(MBG 018/022)，被甲賀忍蛙ex 招式「分身連打」(SV5a 045/066) 打中時，沒在甲賀忍蛙身上放 4 個傷害指示物。卡面：「附有這張卡的【惡】寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置 4 個傷害指示物。」</li>
+
+          <li><b>根因 — clone-strike-multi-hit resolver 漏 punk reflect</b>：</li>
+          <li>　1. <code>分身連打</code> JSON <code>damage: &quot;&quot;</code>（空字串）+ effect 寫「對手的2隻寶可夢各受到120點傷害」— engine.ts 主路徑 <code>baseDamage = 0</code>。</li>
+          <li>　2. engine.ts L4630 的龐克頭盔反擊邏輯 trigger 條件是 <code>baseDamage &gt; 0</code> — 分身連打不滿足，主路徑 punk reflect 不觸發。</li>
+          <li>　3. 實際傷害透過 <code>clone-strike-multi-hit</code> resolver (effects.ts L12718) 對每個 target 各自計算 120 dmg，但 resolver 完全沒包含 punk reflect 邏輯 → 反擊永遠不會觸發。</li>
+
+          <li><b>同類影響範圍</b>：clone-strike-multi-hit resolver 被 3 個招式共用 — 甲賀忍蛙ex|分身連打、吼叫尾|大吼大叫、超級沙奈朵ex|三色炮（effects.ts L4280 / L6433 / L12711 三處呼叫）。修法統一 — 三個招式打到附龐克頭盔的【惡】寶可夢戰鬥場目標都會觸發反擊。</li>
+
+          <li><b>修法</b>：<code>clone-strike-multi-hit</code> resolver 內：</li>
+          <li>　・宣告 <code>punkReflectDamage</code> 累計變數（迴圈外）</li>
+          <li>　・loop 內對 <code>isActive</code> target 檢查 <code>targetTool?.name === &apos;龐克頭盔&apos; && targetCard?.pokemonType === &apos;Darkness&apos;</code> + <code>dmg &gt; 0</code> → <code>punkReflectDamage += 40</code></li>
+          <li>　・loop 結束後對 attacker apply punkReflectDamage（同 engine.ts 主路徑做法 — 防被 KO 處理覆蓋 attacker state）；若 attacker 被反擊打死也即時做 KO 處理 + 加獎勵牌 + 判斷 game-over</li>
+
+          <li><b>規則對齊</b>：依 PDF II-C C-07「放置●個傷害指示物」— 反擊不算傷害（不計弱抗 / 不受附加效果影響），純放 4 個指示物 = 40 點數值。本實作直接 +40 到 <code>active.damage</code> 是等價處理（與 engine.ts L5029 ~ L5043 主路徑 punk reflect 邏輯一致）。</li>
+
+          <li><b>觸發限制（卡面 source of truth）</b>：</li>
+          <li>　・「在戰鬥場」— 只 isActive target 觸發（備戰位即使附龐克頭盔也不觸發）</li>
+          <li>　・「【惡】寶可夢」— targetCard.pokemonType === 'Darkness' 才觸發（其他屬性附了不生效）</li>
+          <li>　・「受到對手的寶可夢招式的傷害時」— dmg &gt; 0 才觸發（招式宣告但被阻擋無傷害時不觸發）</li>
+
+          <li><b>實際情境</b>：v5.066 起 — 自己惡屬性寶可夢戰鬥場附龐克頭盔，被甲賀忍蛙ex 分身連打打中 → 甲賀忍蛙ex 受到 40 點傷害；同樣對吼叫尾 大吼大叫、超級沙奈朵ex 三色炮等其他多目標招式也會反擊。</li>
+
+          <li><b>Iron Rules</b>：Rule 8（揭示資訊 — 不適用本次）／Rule 11/11c（Python pipeline 改 effects.ts 大檔）／Rule 14（最小 patch — resolver inline 補 punk reflect，不重寫 dispatch）／Rule 15（卡面 source of truth — MBG.json L522 龐克頭盔 rulesText、SV5a.json L1965 分身連打 effect 完全對齊）／Rule 11e（Write tool patch）／Rule 11f（push 前 3 道 ASSERT）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+
+          <li><b>未來 audit 提醒</b>：其他 multi-target / snipe resolver（如 <code>bench-hit-N</code> / <code>opp-bench-snipe</code> 等）若有打到戰鬥場目標的 case 也應該檢查 punk reflect。本次先修玩家命中的 clone-strike-multi-hit，其他若有回報再批次處理。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.065</span> 🐛 修暗影【惡】能量無法用惡屬性招式 + 補閃電【雷】/ 暗影【惡】屬性篩選分類</summary>
         <ul>
           <li><b>玩家回報</b>：寶可夢附上「暗影【惡】能量」(M5)，但<strong>不能使用惡屬性的招式</strong>。應該要像磁鐵【鋼】能量一樣，視為 1 個【惡】能量供使用。</li>
