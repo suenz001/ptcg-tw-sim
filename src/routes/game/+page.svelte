@@ -7774,14 +7774,22 @@
                 {#if toolC}
                   <div class="state-row"><span class="state-k">🔧 道具</span><span class="state-v"><button class="state-tool clickable" title="點擊放大：{toolC.name}" onclick={() => openZoom(zoomInst!.toolAttached!.cardId, null)}>{toolC.name} 🔍</button></span></div>
                 {/if}
-                {#if zoomInst.status}
-                  <div class="state-row"><span class="state-k">異常</span><span class="state-v">{
+                <!-- v5.071：補 secondaryStatus 雙狀態同顯（如「灼傷+混亂」時 status='confused' / secondaryStatus='burned'，
+                     原本只顯示 status 漏掉 secondaryStatus；玩家手機回報只看到「混亂」沒看到「灼傷」）。 -->
+                {#if zoomInst.status || zoomInst.secondaryStatus}
+                  <div class="state-row"><span class="state-k">異常</span><span class="state-v">{#if zoomInst.status}<span class="status-piece">{
                     zoomInst.status==='poisoned'?'☠️ 中毒':
                     zoomInst.status==='burned'?'🔥 燒傷':
                     zoomInst.status==='asleep'?'💤 睡眠':
                     zoomInst.status==='confused'?'😵 混亂':
                     zoomInst.status==='paralyzed'?'⚡ 麻痺':zoomInst.status
-                  }</span></div>
+                  }</span>{/if}{#if zoomInst.status && zoomInst.secondaryStatus}<span class="status-sep"> + </span>{/if}{#if zoomInst.secondaryStatus}<span class="status-piece">{
+                    zoomInst.secondaryStatus==='poisoned'?'☠️ 中毒':
+                    zoomInst.secondaryStatus==='burned'?'🔥 燒傷':
+                    zoomInst.secondaryStatus==='asleep'?'💤 睡眠':
+                    zoomInst.secondaryStatus==='confused'?'😵 混亂':
+                    zoomInst.secondaryStatus==='paralyzed'?'⚡ 麻痺':zoomInst.secondaryStatus
+                  }</span>{/if}</span></div>
                 {/if}
                 {#if zoomInst.evolvedFromStack && zoomInst.evolvedFromStack.length>0}
                   <div class="state-row">

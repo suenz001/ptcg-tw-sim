@@ -265,6 +265,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.071</span> 🐛 修手機版詳細卡彈窗 + 主畫面 active chip 雙狀態顯示（灼傷+混亂只看到混亂）</summary>
+        <ul>
+          <li><b>玩家回報</b>：手機版（iPhone）對戰時，場上寶可夢同時有【灼傷】+【混亂】（如被「危險光線」打中），詳細卡彈窗的「📍 場上狀態 → 異常」row 只顯示「😵 混亂」沒顯示「🔥 燒傷」；主畫面 active 卡的小 chip 也只顯示「confused」（且是英文原字串，沒中文 label）。</li>
+
+          <li><b>根因 — 雙狀態存兩個欄位，UI 只讀其一</b>：</li>
+          <li>　1. <code>CardInstance</code> 有 <code>status?: SpecialCondition</code> 與 <code>secondaryStatus?: SpecialCondition</code> 兩個欄位（v2.163 引入用於支援「危險光線 — 灼傷+混亂」「炎舞剋星 — 灼傷+中毒」等同時兩狀態的招式）。</li>
+          <li>　2. <code>game/+page.svelte L7777</code> zoom 詳細卡 modal 的「異常」row 只 <code>&#123;#if zoomInst.status&#125;</code> 沒讀 <code>secondaryStatus</code> — 雙狀態時其中一個落到 secondaryStatus 槽就漏顯示。</li>
+          <li>　3. <code>MobilePortraitBattle.svelte L761 + L810</code> 對手 / 我方 active 卡的小 chip <code>&lt;span class=&quot;mp-status&quot;&gt;&#123;inst.status&#125;&lt;/span&gt;</code> — 直接顯示英文原字串（沒翻譯成「☠️ 中毒 / 🔥 燒傷」等中文 label），且只讀 status 不讀 secondaryStatus。對比 <code>game/+page.svelte L5745 L6022</code> 桌墊版 / 經典版 active chip 都正確處理（v2.163 已加 secondaryStatus 分支）— 只有手機直式 + zoom modal 兩處漏。</li>
+
+          <li><b>修法</b>：</li>
+          <li>　1. <code>game/+page.svelte zoom modal 異常 row</code>：改為 <code>&#123;#if zoomInst.status || zoomInst.secondaryStatus&#125;</code>，兩個都有時用「+」分隔（如「🔥 燒傷 + 😵 混亂」），單一狀態時只顯示一個。</li>
+          <li>　2. <code>MobilePortraitBattle.svelte 雙處 mp-status chip</code>：(a) 中文 label 翻譯（同桌墊版邏輯，poisoned→「☠️ 中毒」/ burned→「🔥 燒傷」/ asleep→「💤 睡眠」/ confused→「😵 混亂」/ paralyzed→「⚡ 麻痺」）；(b) 補 <code>&#123;#if inst.secondaryStatus&#125;</code> 第二個 chip — 雙狀態時兩個 chip 並排顯示。class 加 <code>mp-status-chip-X</code> 留作未來 per-status 上色用。</li>
+
+          <li><b>實際影響（v5.071 起）</b>：</li>
+          <li>　・手機版主畫面 active 卡 chip：原「confused」變成「😵 混亂」；雙狀態時並排顯示「🔥 燒傷」+「😵 混亂」兩個 chip。</li>
+          <li>　・手機 / 桌機詳細卡彈窗（zoom modal）：原只顯示其中一個狀態，現在「🔥 燒傷 + 😵 混亂」一行內完整呈現。</li>
+          <li>　・桌墊版 / 經典版主畫面：原本 v2.163 已修對，本版本不變動（兩處 active-info status-chip 各自獨立判斷 status + secondaryStatus）。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + MobilePortraitBattle.svelte + +page.svelte + version.ts）／Rule 14（最小 patch — 只改影響顯示的條件 + 加 secondaryStatus 分支，不動 engine 狀態結構也不重寫 status 渲染流程）／Rule 11e（Write tool 寫 patch_v5071.py 避開 heredoc）／Rule 11f（push 前 3 道 ASSERT 防 silent fail，含 mp-status chip 必須有 2 次出現的 count check）。Pre-push tsc + Rule 1 audit。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.070</span> 🎴 沉重接力棒 UI 顯示能量類型 + iOS 平板最上排 UI 重疊修正</summary>
         <ul>
           <li><b>玩家建議 1：沉重接力棒分配能量時，modal 應顯示能量類型（火/水/雷等）</b></li>

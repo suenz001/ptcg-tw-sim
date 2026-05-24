@@ -758,7 +758,21 @@
                 </span>
               {/if}
               {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
-              {#if inst.status}<span class="mp-status">{inst.status}</span>{/if}
+              <!-- v5.071：顯示中文 label + emoji，並補 secondaryStatus 雙狀態同顯 -->
+              {#if inst.status}<span class="mp-status mp-status-chip-{inst.status}">{
+                inst.status==='poisoned'?'☠️ 中毒':
+                inst.status==='burned'?'🔥 燒傷':
+                inst.status==='asleep'?'💤 睡眠':
+                inst.status==='confused'?'😵 混亂':
+                inst.status==='paralyzed'?'⚡ 麻痺':inst.status
+              }</span>{/if}
+              {#if inst.secondaryStatus}<span class="mp-status mp-status-chip-{inst.secondaryStatus}">{
+                inst.secondaryStatus==='poisoned'?'☠️ 中毒':
+                inst.secondaryStatus==='burned'?'🔥 燒傷':
+                inst.secondaryStatus==='asleep'?'💤 睡眠':
+                inst.secondaryStatus==='confused'?'😵 混亂':
+                inst.secondaryStatus==='paralyzed'?'⚡ 麻痺':inst.secondaryStatus
+              }</span>{/if}
             </div>
           </div>
         </button>
@@ -807,7 +821,21 @@
               </span>
             {/if}
             {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
-            {#if inst.status}<span class="mp-status">{inst.status}</span>{/if}
+            <!-- v5.071：顯示中文 label + emoji，並補 secondaryStatus 雙狀態同顯 -->
+              {#if inst.status}<span class="mp-status mp-status-chip-{inst.status}">{
+                inst.status==='poisoned'?'☠️ 中毒':
+                inst.status==='burned'?'🔥 燒傷':
+                inst.status==='asleep'?'💤 睡眠':
+                inst.status==='confused'?'😵 混亂':
+                inst.status==='paralyzed'?'⚡ 麻痺':inst.status
+              }</span>{/if}
+              {#if inst.secondaryStatus}<span class="mp-status mp-status-chip-{inst.secondaryStatus}">{
+                inst.secondaryStatus==='poisoned'?'☠️ 中毒':
+                inst.secondaryStatus==='burned'?'🔥 燒傷':
+                inst.secondaryStatus==='asleep'?'💤 睡眠':
+                inst.secondaryStatus==='confused'?'😵 混亂':
+                inst.secondaryStatus==='paralyzed'?'⚡ 麻痺':inst.secondaryStatus
+              }</span>{/if}
             {#if isPlaying && isMyTurn && isMainPhase}
               <span class="mp-tap-hint">👆 點開動作</span>
             {/if}
