@@ -697,6 +697,7 @@ export function addLog(
       turn: state.turn,
       playerIndex: playerIdx,
       message: msg,
+      timestamp: Date.now(),  // v5.068：UI 計算 [mm:ss] 對戰相對時間
       ...(sourceIid && { sourceIid }),
     }],
   };
@@ -722,6 +723,7 @@ export function addPrivateLog(
       playerIndex: playerIdx,
       message: publicMsg,
       privateMessage: privateMsg,
+      timestamp: Date.now(),  // v5.068：UI 計算 [mm:ss] 對戰相對時間
     }],
   };
 }

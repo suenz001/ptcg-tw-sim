@@ -1463,6 +1463,7 @@ function addLog(
       turn: state.turn,
       playerIndex,
       message,
+      timestamp: Date.now(),  // v5.068：UI 計算 [mm:ss] 對戰相對時間
       ...(sourceIid && { sourceIid }),
     }]
   };
@@ -1898,7 +1899,7 @@ function applyAutoDraw(state: GameState): GameState {
       winner: dIdx,
       winReason: `${player.name} 牌組耗盡，無法抽牌`,
       log: [...state.log, { turn: state.turn, playerIndex: null,
-        message: `${player.name} 無法抽牌，${state.players[dIdx].name} 獲勝！` }],
+        message: `${player.name} 無法抽牌，${state.players[dIdx].name} 獲勝！`, timestamp: Date.now() }],
     };
   }
   const drawn = player.deck[0];
@@ -3445,7 +3446,7 @@ function handlePlaying(
         ...state, phase: 'game-over',
         winner: dIdx,
         winReason: `${attacker.name} 牌組耗盡，無法抽牌`,
-        log: [...state.log, { turn: state.turn, playerIndex: null, message: `${attacker.name} 無法抽牌，${defender.name} 獲勝！` }]
+        log: [...state.log, { turn: state.turn, playerIndex: null, message: `${attacker.name} 無法抽牌，${defender.name} 獲勝！`, timestamp: Date.now() }]
       };
     }
     const drawn = attacker.deck[0];
@@ -5322,7 +5323,7 @@ function handlePlaying(
         phase: 'game-over',
         winner: ownerIdx,
         winReason: `${taker.name} 取得所有獎勵牌`,
-        log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${taker.name} 取得所有獎勵牌，獲勝！` }]
+        log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${taker.name} 取得所有獎勵牌，獲勝！`, timestamp: Date.now() }]
       };
     }
 
@@ -7947,6 +7948,6 @@ RESOLVERS.set('retreat-energy-discard', (state, actorIdx, selectedIids, params, 
   return {
     ...state,
     players,
-    log: [...state.log, { turn: state.turn, playerIndex: actorIdx, message: msg }],
+    log: [...state.log, { turn: state.turn, playerIndex: actorIdx, message: msg, timestamp: Date.now() }],
   };
 });

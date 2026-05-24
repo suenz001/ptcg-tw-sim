@@ -81,6 +81,21 @@
   const allDecks = $derived([...PRESET_DECKS, ...decks]);
 
   // ── 遊戲狀態 ────────────────────────────────────────────────────────────────
+  // v5.068：對戰 log 時間戳 — 顯示「[mm:ss] 訊息」相對對戰開始時間
+  //   來源：玩家建議。例：「[00:30] AI 對手 將能量附加到 斯魔茶」
+  //   gameStartTime 由 engine.ts 在 setup→playing transition 設（v4.24）；
+  //   timestamp 由 addLog 在 LogEntry 創建時記（v5.068）。
+  //   兩者皆為 epoch 毫秒；若任一未設則 fallback 空字串（setup 階段 / 舊 save 不顯示）。
+  function formatLogTime(entry: { timestamp?: number }, gameStartTime: number | undefined): string {
+    if (!entry.timestamp || !gameStartTime) return '';
+    const elapsedMs = entry.timestamp - gameStartTime;
+    if (elapsedMs < 0) return '';
+    const totalSec = Math.floor(elapsedMs / 1000);
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    return `[${mm}:${ss}]`;
+  }
+
   let game = $state<GameState | null>(null);
 
   // ── 模式：null=未選、local=本機、online=線上 ────────────────────────────────
@@ -5907,6 +5922,7 @@
           {@const _lineCls = logLineClass(_msgText ?? '')}
           {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted)}
           <div class="log-line {_lineCls}" class:log-sys={entry.playerIndex===null} class:log-latest={i===0} class:log-private={_isPrivate}>
+            {#if formatLogTime(entry, game?.gameStartTime)}<span class="log-time">{formatLogTime(entry, game?.gameStartTime)}</span>{/if}
             {#if _isPrivate}<span class="log-private-icon" title="只有你看得到">🔒</span>{/if}
             {#each _tokens as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" title="點擊查看 {tok.text} 卡片詳情" onclick={() => openZoomByName(tok.text, tok.iid ?? entry.sourceIid, entry.playerIndex)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
           </div>
@@ -9727,11 +9743,18 @@
   .log-col{ width:380px; max-height:100%; min-height:0; overflow-y:auto; font-size:.8rem; line-height:1.35;
     background:rgba(0,0,0,.45); border:1px solid #2a4a2a; border-radius:6px; padding:.3rem .55rem;
     align-self:stretch;
-    scrollbar-width:thin; scrollbar-color:#4a6a4a rgba(0,0,0,.3); }
+    scrollbar-width:thin; scrollbar-color:#4a6a4a rgba(0,0,0,.3);
+    /* v5.068：經典版同桌墊版 — 新訊息在底、舊訊息在頂（聊天室慣例）。
+       data 已 .reverse()（newest first），column-reverse 把首項翻到視覺底部。
+       桌墊版的 .playmat.layout-tabletop .action-bar > .log-col 仍 override 為 fixed
+       position，但 flex-direction 一致（皆 column-reverse）— 兩種版型視覺對齊。 */
+    display:flex; flex-direction:column-reverse; }
   .log-col::-webkit-scrollbar{ width:8px; }
   .log-col::-webkit-scrollbar-thumb{ background:#3a5a3a; border-radius:4px; }
   .log-col::-webkit-scrollbar-thumb:hover{ background:#5a7a5a; }
   .log-line{ color:#9ab89a; padding:.2rem 0; border-bottom:1px solid rgba(42,74,42,.4); white-space:normal; word-break:break-all; }
+  /* v5.068：log 時間戳 [mm:ss] 樣式 — 灰色淡化、固定寬度，不擾干主訊息 */
+  .log-line .log-time { color:#6a8a6a; font-size:.72rem; margin-right:.3rem; font-variant-numeric:tabular-nums; opacity:.75; }
   .log-line:last-child{ border-bottom:none; }
   .log-sys{ color:#aaffcc; font-weight:600; }
   .log-latest{ background:rgba(170,255,204,.06); padding-left:.3rem; border-left:2px solid #aaffcc; }

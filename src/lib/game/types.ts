@@ -865,6 +865,12 @@ export interface LogEntry {
    * 解決同名多版本卡（謝米 70HP/80HP 等）誤匹配問題。
    */
   sourceIid?: string;
+  /**
+   * v5.068：log 產生時的 epoch 毫秒（Date.now()）。
+   * UI 端配合 state.gameStartTime 計算「[mm:ss] 訊息」顯示對戰相對時間。
+   * Optional — 舊 saved state / 沒設 gameStartTime 的 setup 階段 log 跳過時間戳。
+   */
+  timestamp?: number;
 }
 
 // ── 動作 ────────────────────────────────────────────────────────────────────

@@ -265,6 +265,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.068</span> 🎴 對戰 log 加時間戳 [mm:ss] + 經典版排序對齊桌墊版（新訊息在下）</summary>
+        <ul>
+          <li><b>玩家建議 1 — 對戰 log 加時間戳</b>：每筆 log 開頭顯示「[mm:ss]」相對對戰開始的時間。例：「[00:30] AI 對手 將能量附加到 斯魔茶」代表對戰開始 30 秒時 AI 做的動作。</li>
+
+          <li><b>修法 1</b>：</li>
+          <li>　・<code>types.ts LogEntry</code> 加 optional <code>timestamp?: number</code> 欄位（epoch 毫秒）</li>
+          <li>　・全部 LogEntry 創建處（<code>effects/_shared.ts addLog + addPrivateLog</code> + <code>engine.ts addLog</code> 函數 + 4 處 inline log push）共 <strong>6 處</strong>加 <code>timestamp: Date.now()</code></li>
+          <li>　・UI 加 <code>formatLogTime(entry, gameStartTime)</code> helper — 計算 <code>(entry.timestamp - gameStartTime) / 1000</code> 秒，格式 <code>[mm:ss]</code></li>
+          <li>　・<code>log-line</code> 內 prepend <code>&lt;span class=&quot;log-time&quot;&gt;</code> 顯示時間戳</li>
+          <li>　・CSS <code>.log-time</code>: 灰色淡化 / 0.72rem / tabular-nums 等寬數字 / opacity .75 — 不擾干主訊息閱讀</li>
+          <li>　・容錯：<code>!entry.timestamp || !gameStartTime</code> 時 return 空字串 — setup 階段 / 舊 saved state / 線上對戰 sync 邊界 case 都安全 fallback 不顯示</li>
+
+          <li><b>狀態欄位來源</b>：<code>state.gameStartTime</code> 由 engine.ts v4.24 在 setup→playing transition 時設（已存在 GameState 內）；<code>LogEntry.timestamp</code> 為 v5.068 新加。兩者皆為 epoch 毫秒。</li>
+
+          <li><b>玩家建議 2 — 經典版 log 排序對齊桌墊版</b>：經典版的對戰 log 新訊息在頂、舊訊息在底（不直覺，玩家要往上翻找最新動作）；桌墊版已是聊天室慣例「新訊息在下、舊訊息在上」（v5.016 加的 <code>flex-direction:column-reverse</code>）。請統一兩種版型。</li>
+
+          <li><b>修法 2</b>：default <code>.log-col</code> CSS 加 <code>display:flex; flex-direction:column-reverse;</code>（同桌墊版 v5.016 做法）。data 仍 <code>.reverse()</code>（newest first），<code>column-reverse</code> 把首項翻到視覺底部，<code>overflow-y:auto</code> 配合自動 anchor 在底部最新訊息。桌墊版的 <code>.playmat.layout-tabletop .action-bar &gt; .log-col</code> 仍 override 為 fixed position，但 <code>flex-direction</code> 一致 — 兩種版型視覺對齊。</li>
+
+          <li><b>實際情境</b>：v5.068 起 — (a) 對戰 log 每筆開頭顯示「[mm:ss]」例如「[01:23] 你 對戰鬥場 達克萊伊ex 使用招式 黑暗風暴」；(b) 經典版 log 與桌墊版排序統一，最新訊息都在底部，向上滾動看歷史。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 types/engine/effects 大檔 + svelte UI）／Rule 14（最小 patch — LogEntry 加 optional 欄位向後相容、UI 用 helper fn 不重寫 tokenize 邏輯）／Rule 13（timestamp 為 primitive number，Firestore-safe）／Rule 11e（Write tool patch）／Rule 11f（push 前 3 道 ASSERT）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.067</span> 🐛 修沉重接力棒不觸發 + 焰后蜥ex 剋命銳爪自動指定備戰（改 picker）</summary>
         <ul>
           <li><b>Bug 1：沉重接力棒（SV5M 066/071 PokemonTool）被 KO 時不觸發</b></li>
