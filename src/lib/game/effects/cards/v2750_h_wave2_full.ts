@@ -833,33 +833,40 @@ regR('v311-deck-peek-energy-to-any-stage2', (state, aIdx, picked, params, pool) 
   return addLog({ ...state, players: newPlayers }, `${label}：${energyNames}（${energies.length} 張）附到 ${targetName} 身上（剩餘洗回）`, aIdx);
 });
 
-// v3.11 看牌庫頂 N 張，從中選任意數量基礎寶可夢卡放置於備戰區（剩餘洗回）
+// v3.11 看牌庫頂 N 張，從中選任意數量寶可夢卡放置於備戰區（剩餘洗回）
 //   米立龍ex|硃砂誘餌（peek 10）/ 人造細胞卵|傳喚之門（peek 8）使用
-//   注意：卡面寫「寶可夢卡」（不限 Basic）— 但放備戰只能放基礎；非基礎類無法直接 set
-//   採折衷：filter 用 Basic:TOP_N，只列基礎，非基礎自動洗回（與卡面意圖最一致）
+//   卡面：「查看自己的牌庫上方 N 張卡，從其中選擇任意數量的寶可夢卡，放置於備戰區。
+//          將剩餘卡放回牌庫並重洗。」
+//   v5.076：原 v3.11 用「折衷」filter Basic:TOP_N 只列基礎寶可夢，違反卡面「寶可夢卡」
+//          （未限制階段）。改成 Pokemon:TOP_N，列所有寶可夢（含 Stage1/Stage2/ex）。
+//          這是 special placement —「強制放置」招式不走進化路徑，直接放上備戰，
+//          非基礎寶可夢可以這樣放（PTCG 規則「就是這張卡形態」放上去）。
+//   v5.076 順手修 bench limit 5 → getOwnBenchLimit（支援零之大空洞 +3 上限 8）
 function deckTopPeekPokemonToBenchPost(peekN: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
     const top = p.deck.slice(0, peekN);
     const topIids = top.map(c => c.iid);
-    const basicsInTop = top.filter(c => {
+    // v5.076：列所有寶可夢（不限 Basic）— 卡面寫「寶可夢卡」未限制階段
+    const pokemonsInTop = top.filter(c => {
       const card = pool.get(c.cardId);
-      return card?.supertype === 'Pokemon' && !card.evolvesFrom;
+      return card?.supertype === 'Pokemon';
     });
-    if (basicsInTop.length === 0) {
-      return updatePlayer(addLog(state, `${label}：牌庫頂 ${top.length} 張內無基礎寶可夢；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    if (pokemonsInTop.length === 0) {
+      return updatePlayer(addLog(state, `${label}：牌庫頂 ${top.length} 張內無寶可夢卡；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
     }
-    const benchLimit = 5;
+    // v5.076：bench limit 5 → getOwnBenchLimit（零之大空洞 +3 = 8）
+    const benchLimit = getOwnBenchLimit(state, aIdx, pool);
     const space = Math.max(0, benchLimit - p.bench.length);
-    const realMax = Math.min(space, basicsInTop.length);
+    const realMax = Math.min(space, pokemonsInTop.length);
     if (realMax === 0) {
       return updatePlayer(addLog(state, `${label}：備戰區已滿；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
     }
-    return withPending(addLog(state, `${label}：查看牌庫頂 ${top.length} 張，選 0~${realMax} 隻基礎寶可夢放備戰（剩餘洗回）`, aIdx), {
+    return withPending(addLog(state, `${label}：查看牌庫頂 ${top.length} 張，選 0~${realMax} 隻寶可夢卡放備戰（剩餘洗回）`, aIdx), {
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: 'Basic:TOP_N',
+      filter: 'Pokemon:TOP_N',
       minCount: 0, maxCount: realMax,
       effectKey: 'v311-deck-peek-basic-to-bench',
       params: { label, topIids, peekN: top.length },
@@ -876,8 +883,9 @@ regR('v311-deck-peek-basic-to-bench', (state, aIdx, iids, params, _pool) => {
   const chosenSet = new Set(iids);
   const chosen = p.deck.filter(c => chosenSet.has(c.iid));
   const restDeck = p.deck.filter(c => !chosenSet.has(c.iid));
+  // v5.076：去掉「基礎」字樣，現在可放任意階段寶可夢（含 Stage1/Stage2/ex）
   const benchAdd = chosen.map(c => ({ ...c, justPlaced: true }));
-  return updatePlayer(addLog(state, `${label}：放 ${chosen.length} 隻基礎寶可夢到備戰（剩餘洗回）`, aIdx), aIdx, pl => ({
+  return updatePlayer(addLog(state, `${label}：放 ${chosen.length} 隻寶可夢到備戰（剩餘洗回）`, aIdx), aIdx, pl => ({
     ...pl,
     bench: [...pl.bench, ...benchAdd],
     deck: shuffle(restDeck),

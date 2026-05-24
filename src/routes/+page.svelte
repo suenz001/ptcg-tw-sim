@@ -265,6 +265,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.076</span> 🐛 修米立龍ex｜硃砂誘餌 + 人造細胞卵｜傳喚之門 候選池只列基礎寶可夢（折衷修正）</summary>
+        <ul>
+          <li><b>玩家回報</b>：米立龍ex（SV8 081/106 H 標）第二招「硃砂誘餌」發動時，卡面寫「查看自己的牌庫上方 10 張卡，從其中選擇任意數量的<b>寶可夢卡</b>，放置於備戰區」— 但 simulator 內 picker 只列出基礎寶可夢，1 階 / 2 階 / ex 進化等被自動排除（明明應該都可選）。</li>
+
+          <li><b>根因</b>：<code>v2750_h_wave2_full.ts L838-839 deckTopPeekPokemonToBenchPost</code> helper 自註解明寫：「<b>折衷：filter 用 Basic:TOP_N，只列基礎，非基礎自動洗回（與卡面意圖最一致）</b>」— 這是 v3.11 寫的時候錯誤判斷，認為「放備戰只能放基礎，非基礎類無法直接 set」。實際上 PTCG 規則：這類「強制放置」招式是 special placement，不走進化路徑，直接放上備戰<b>什麼階段的寶可夢都可以</b>（就是該卡本身的形態）。</li>
+
+          <li><b>修法</b>：</li>
+          <li>　1. helper 內 candidate filter 從 <code>!card.evolvesFrom</code>（只 Basic）改成 <code>card.supertype === &apos;Pokemon&apos;</code>（任意寶可夢卡）</li>
+          <li>　2. pending filter 從 <code>&apos;Basic:TOP_N&apos;</code> 改成 <code>&apos;Pokemon:TOP_N&apos;</code>（UI 端 L2085 既有支援，無需動）</li>
+          <li>　3. resolver 邏輯本來就沒檢查 <code>evolvesFrom</code>，所以放上去後沒問題 — 只改 log 文字「基礎寶可夢」→「寶可夢」</li>
+          <li>　4. <b>順手修</b>：bench limit hardcoded <code>5</code> → <code>getOwnBenchLimit(state, aIdx, pool)</code> — 零之大空洞場上 max=8 時也能正確算可放空間</li>
+
+          <li><b>同檔還有一張連帶受影響</b>：<b>人造細胞卵｜傳喚之門</b>（SV5K，peek 8 張）— 卡面同樣寫「寶可夢卡」沒限基礎，共用同一個 helper，v5.076 起兩張一起修正。</li>
+
+          <li><b>實際影響（v5.076 起）</b>：</li>
+          <li>　・米立龍ex｜硃砂誘餌：picker 列出牌庫頂 10 張內<b>所有寶可夢卡</b>（含 1 階 / 2 階 / ex 進化等），玩家自選任意數量放備戰</li>
+          <li>　・人造細胞卵｜傳喚之門：picker 列出牌庫頂 8 張內<b>所有寶可夢卡</b></li>
+          <li>　・零之大空洞場上時，可放數量上限自動從 5 變 8（之前 hardcoded 5）</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 v2750_h_wave2_full.ts + +page.svelte + version.ts，<b>UI 端不動</b>因 Pokemon:TOP_N filter 早就有支援）／Rule 14（最小 patch — 只改 filter / candidate / log 文字，resolver 完全不動）／Rule 15（卡面 source of truth — 「寶可夢卡」明確未限基礎；非基礎直接放備戰屬 PTCG 規則允許的 special placement）／Rule 11e（Write tool 寫 patch_v5076.py 避開 heredoc）／Rule 11f（push 前 3 道 ASSERT 防 silent fail）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.075</span> 🐛 修磁鐵【鋼】能量撤退費未生效 + audit 一身輕 / 混亂撤退規則</summary>
         <ul>
           <li><b>玩家回報 3 個撤退相關 bug，audit 結果如下</b>：</li>
