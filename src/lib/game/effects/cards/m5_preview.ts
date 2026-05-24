@@ -76,7 +76,7 @@ import {
   isConfusionImmune,
   checkSpecialEnergyStatusImmune,
 } from '../../effects';
-import { getEnergyUnits } from '../../engine';
+import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 
@@ -1039,8 +1039,14 @@ regR('m5-inkay-procurement', (state, aIdx, iids) => {
 regPre('超級水晶燈火靈ex|幻影迷宮', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defActive = state.players[dIdx].active;
-  const defCard = defActive ? pool.get(defActive.cardId) : null;
-  const retreatCount = defCard?.retreatCost?.length ?? 0;
+  if (!defActive) {
+    return { state: addLog(state, '幻影迷宮：對手戰鬥位無寶可夢 → 130', aIdx), damage: 130 };
+  }
+  // v5.082：用 computeActiveRetreatCostFor 取得「有效撤退費」，
+  // 涵蓋咒縛之炎（自身特性 +1）/ 重力之玉（雙方道具 +1）/ 天空徑線 / 磁鐵【鋼】能量 /
+  // N的城堡 / 樂園度假地 / TOOL_RETREAT_MOD / ABILITY_RETREAT_MOD 全部修正。
+  // 舊版只用 defCard.retreatCost.length（base）— 違反卡面「撤退所需的能量數」（最終值）。
+  const retreatCount = computeActiveRetreatCostFor(state, dIdx, pool);
   const bonus = retreatCount * 50;
   const dmg = 130 + bonus;
   return {

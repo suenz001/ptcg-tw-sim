@@ -7076,6 +7076,89 @@ function applyAbilityRetreatMod(
 }
 
 /**
+ * v5.082：計算指定玩家戰鬥場寶可夢的「有效撤退費」（不檢查狀態鎖、能量是否足夠）。
+ *
+ * 與 getRetreatCost 差異：
+ *   - getRetreatCost 只看 state.activePlayerIndex（行動玩家）+ 會檢查狀態鎖（睡眠 / 麻痺 / cantRetreat）
+ *     並回 null 表示「不能撤退」。
+ *   - computeActiveRetreatCostFor 接受任一 playerIdx + 永遠回數字（即使該玩家 active 沒撤退費也回 0）。
+ *
+ * 用途：傷害計算需要「對手撤退所需能量」(超級水晶燈火靈ex|幻影迷宮)。
+ *
+ * 套用所有撤退費修正（與 getRetreatCost 完全鏡射）：
+ *   1. base retreatCost.length
+ *   2. TOOL_RETREAT_MOD（氣球 / 緊急滑板 等；阻礙之塔失效）
+ *   3. TOOL_BOTH_SIDES_RETREAT_PLUS（重力之玉）— 雙方 active 任一帶就 +1
+ *   4. 天空徑線（拉帝亞斯ex）— 自己場上基礎寶可夢免費撤退
+ *   5. N的城堡 / 樂園度假地 競技場
+ *   6. SPECIAL_ENERGY_RETREAT_MOD（磁鐵【鋼】能量）
+ *   7. ABILITY_RETREAT_MOD（咒縛之炎 / 一身輕 / 溶化流動 / 鋼之橋 / 森林秘道 / 大網）
+ *
+ * 改動本函式時務必同步 getRetreatCost（L7081）— 兩處邏輯必須一致。
+ */
+export function computeActiveRetreatCostFor(
+  state: GameState,
+  playerIdx: 0 | 1,
+  pool: Map<string, Card>,
+): number {
+  const player = state.players[playerIdx];
+  if (!player.active) return 0;
+  const card = pool.get(player.active.cardId);
+  let cost = card?.retreatCost?.length ?? 0;
+  const toolsJammedCanR = isToolsJammed(state, pool);
+  // TOOL_RETREAT_MOD（多重轉接 iterate 所有道具）
+  if (!toolsJammedCanR && card) {
+    let zeroSet2 = false;
+    let totalReduce2 = 0;
+    for (const t of getAllAttachedTools(player.active)) {
+      const tool = pool.get(t.cardId);
+      if (!tool) continue;
+      const mod = TOOL_RETREAT_MOD.get(tool.name);
+      if (!mod) continue;
+      const r = mod(card, player.active);
+      if (r.zero) { zeroSet2 = true; break; }
+      if (r.reduceBy) totalReduce2 += r.reduceBy;
+    }
+    if (zeroSet2) cost = 0;
+    else if (totalReduce2 > 0) cost = Math.max(0, cost - totalReduce2);
+  }
+  // 重力之玉：雙方 active 任一帶 → 雙方撤退 +1
+  const opp = state.players[(1 - playerIdx) as 0 | 1];
+  const bothPlusFromSelf = !toolsJammedCanR
+    && getAllAttachedTools(player.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
+  const bothPlusFromOpp = !toolsJammedCanR && opp.active
+    && getAllAttachedTools(opp.active).some(t => TOOL_BOTH_SIDES_RETREAT_PLUS.has(pool.get(t.cardId)?.name ?? ''));
+  if (bothPlusFromSelf || bothPlusFromOpp) cost += 1;
+  // 天空徑線
+  const hasSkyPath = [
+    ...(player.active ? [player.active] : []),
+    ...player.bench,
+  ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
+  if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
+  // 競技場
+  const stadiumNameCR = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
+  if (stadiumNameCR === 'N的城堡' && card?.name?.startsWith('N的')) cost = 0;
+  if (stadiumNameCR === '樂園度假地' && card?.name === '可達鴨') cost = Math.max(0, cost - 1);
+  // SPECIAL_ENERGY_RETREAT_MOD（磁鐵【鋼】能量）
+  if (card) {
+    for (const e of player.active.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (!ec) continue;
+      const fn = SPECIAL_ENERGY_RETREAT_MOD.get(ec.name);
+      if (!fn) continue;
+      const r = fn(card, player.active);
+      if (r.zero) { cost = 0; break; }
+      if (r.reduceBy) cost = Math.max(0, cost - r.reduceBy);
+    }
+  }
+  // ABILITY_RETREAT_MOD（咒縛之炎、一身輕、溶化流動、鋼之橋、森林秘道、大網）
+  if (player.active) {
+    cost = applyAbilityRetreatMod(state, player.active, card, playerIdx, cost, pool);
+  }
+  return cost;
+}
+
+/**
  * 目前行動玩家是否可以撤退出場寶可夢。
  */
 export function getRetreatCost(state: GameState, pool: Map<string, Card>): number | null {

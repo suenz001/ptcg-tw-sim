@@ -265,6 +265,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.082</span> 🐛 幻影迷宮算上撤退費修正 + 3 張覺醒招式改直接進化</summary>
+        <ul>
+          <li><b>修法 1 — 超級水晶燈火靈ex｜幻影迷宮 傷害計算未含撤退費修正（玩家回報）</b></li>
+          <li>　・<b>卡面</b>：「對手的戰鬥寶可夢撤退所需的能量數 × 50 點，追加傷害。」「撤退所需的能量數」=最終值（含修正）。</li>
+          <li>　・<b>根因</b>：<code>m5_preview.ts L1043</code> 用 <code>defCard?.retreatCost?.length</code> 只算 base，沒套用咒縛之炎（自身特性 opp active 撤退 +1）/ 重力之玉（道具 雙方 +1）/ 天空徑線 / 磁鐵【鋼】能量 / N的城堡 / 樂園度假地 / 其他 TOOL_RETREAT_MOD / ABILITY_RETREAT_MOD。</li>
+          <li>　・<b>修法</b>：<code>engine.ts</code> 加 export <code>computeActiveRetreatCostFor(state, playerIdx, pool)</code> helper（鏡射 <code>getRetreatCost</code> L7081 的成本計算邏輯，但支援任一 playerIdx + 永遠回數字）；幻影迷宮改用此 helper 取對手撤退費。</li>
+          <li>　・<b>實際影響</b>：v5.082 起 — 超級水晶燈火靈ex 自己場上時 + 對手有重力之玉時，幻影迷宮會正確加上 50 額外傷害。</li>
+
+          <li><b>修法 2 — 3 張覺醒招式應直接進化卻誤實裝為「加手」（玩家回報夢妖 + audit）</b></li>
+          <li>　・<b>玩家回報</b>：夢妖｜覺醒 把進化卡拿到手上，而非直接進化（卡面寫「放置於這隻寶可夢身上完成進化」）。</li>
+          <li>　・<b>Audit 結果</b>：所有「從牌庫選1張從這隻寶可夢進化而來的卡，放置於這隻寶可夢身上完成進化」的招式：</li>
+          <li>　　・<b>石居蟹｜覺醒</b>（M2a/SV9a）✅ 已正確直接進化（v2370）</li>
+          <li>　　・<b>伊布｜覺醒</b>（SV5a 050/066）✅ 已正確直接進化（v2750 v4.0 已修）</li>
+          <li>　　・<b>夢妖｜覺醒</b>（M2a 067/193）❌ 錯 — 在 EVOLVE_SEARCH 走「加手」</li>
+          <li>　　・<b>火箭隊的沙基拉斯｜爆裂覺醒</b>（SV10 049/098, 30 dmg）❌ 錯 — 同上</li>
+          <li>　　・<b>蛋蛋｜早熟進化</b>（SV7a 001/064, 先攻第一回合限定）❌ 錯 — v2750 用 deckPickOnePokemonToHandPost</li>
+          <li>　・<b>修法</b>：3 張全改 direct-evolve（仿伊布｜覺醒 pattern）— filter validIids=<code>deck.filter(c =&gt; pool.get(c.cardId)?.evolvesFrom === baseName)</code>，resolver 把該卡放戰鬥場完成進化（保留 damage / energy / tool / 推進 evolvedFromStack）+ 重洗牌庫。</li>
+
+          <li><b>暫不處理（複雜 — 留 v5.083）</b></li>
+          <li>　・<b>雙卵細胞球｜細胞進化</b>（SV11B）：「選擇自己的1隻場上寶可夢進化而來的卡」— 需 picker 任一場上寶可夢（active 或備戰），目前簡化為「加手」。</li>
+          <li>　・<b>人造細胞卵｜細胞覺醒</b>（SV11B）：「選擇自己的所有備戰寶可夢進化而來的卡各1張」— multi-target 全備戰進化，目前簡化為「加手」。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 engine.ts + m5_preview.ts + v2650 + v2750 + version.ts + +page.svelte）／Rule 14（最小 patch — 新增 computeActiveRetreatCostFor export 不重構 getRetreatCost；3 張覺醒共用一份 DIRECT_EVOLVE_AWAKEN 表）／Rule 15（卡面 source of truth — 「撤退所需的能量數」=最終值；「放置於這隻寶可夢身上完成進化」=直接進化）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.081</span> 🐛 阿響熔岩爆炸 picker + 11 個「受傷時」特性補 KO 觸發（甲殼刺等）</summary>
         <ul>
           <li><b>修法 1 — 阿響的熔岩蝸牛｜熔岩爆炸 picker（玩家回報）</b></li>

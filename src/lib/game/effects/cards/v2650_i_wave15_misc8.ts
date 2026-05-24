@@ -181,9 +181,11 @@ function snipeOneOppBenchPost(amount: number, label: string, exOnly: boolean = f
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 進化牌庫搜尋（5 張）— 全部簡化為「從牌庫挑 1 張寶可夢加手牌」（玩家手動進化）
 // ══════════════════════════════════════════════════════════════════════════════
+// v5.082：夢妖|覺醒 + 火箭隊的沙基拉斯|爆裂覺醒 移到下面 direct-evolve 區塊（仿伊布|覺醒）。
+// 雙卵細胞球|細胞進化 + 人造細胞卵|細胞覺醒 仍簡化為「加手」— deferred v5.083：
+//   - 雙卵細胞球需要 picker「任一場上寶可夢」
+//   - 人造細胞卵 需要 multi-target「所有備戰」
 const EVOLVE_SEARCH: Array<[string, number]> = [
-  ['夢妖|覺醒', 0],
-  ['火箭隊的沙基拉斯|爆裂覺醒', 30],
   ['雙卵細胞球|細胞進化', 0],
   // 火箭隊的尼多娜|惡之覺醒 — v4.38 提升為 2-stage chain（自方【惡】base × deck evolve）
   ['人造細胞卵|細胞覺醒', 0],
@@ -193,6 +195,118 @@ for (const [key, dmg] of EVOLVE_SEARCH) {
   regPre(key, (s) => ({ state: s, damage: dmg }));
   regPost(key, deckPickOnePokemonToHandPost(atkName));
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v5.082：夢妖|覺醒 + 火箭隊的沙基拉斯|爆裂覺醒 直接進化（仿伊布|覺醒 / 石居蟹|覺醒）
+//   卡面：「從自己的牌庫選擇1張從這隻寶可夢進化而來的卡，放置於這隻寶可夢身上完成進化。」
+//   舊版 EVOLVE_SEARCH 簡化為「加手」違反卡面（Rule 15）。
+//   pattern: filter validIids=deck 中 evolvesFrom=base 名稱的進化卡，resolver 把該卡
+//   放戰鬥場完成進化（保留 damage / energy / tool / 推進 evolvedFromStack）+ 重洗牌庫。
+// ══════════════════════════════════════════════════════════════════════════════
+const DIRECT_EVOLVE_AWAKEN: Array<[string, string, number, string]> = [
+  // [attackKey, baseName, damage, effectKey]
+  ['夢妖|覺醒',                  '夢妖',             0,  'misdreavus-awaken-evolve'],
+  ['火箭隊的沙基拉斯|爆裂覺醒',   '火箭隊的沙基拉斯',  30, 'tr-larvitar-awaken-evolve'],
+];
+for (const [attackKey, baseName, dmg, effectKey] of DIRECT_EVOLVE_AWAKEN) {
+  regPre(attackKey, (s) => ({ state: s, damage: dmg }));
+  regPost(attackKey, (state, aIdx, pool) => {
+    const player = state.players[aIdx];
+    if (!player.active) {
+      return addLog(state, `${attackKey.split('|')[1]}：戰鬥場無寶可夢`, aIdx);
+    }
+    const activeCard = pool.get(player.active.cardId);
+    if (activeCard?.name !== baseName) {
+      // 戰鬥場已非該 base（例如被招式換走 — 罕見）— 改重洗
+      return updatePlayer(
+        addLog(state, `${attackKey.split('|')[1]}：戰鬥場已非「${baseName}」，僅重洗牌庫`, aIdx),
+        aIdx, p => ({ ...p, deck: shuffle(p.deck) }),
+      );
+    }
+    // 從牌庫挑「evolvesFrom === baseName」的進化卡
+    const validIids = player.deck
+      .filter(c => pool.get(c.cardId)?.evolvesFrom === baseName)
+      .map(c => c.iid);
+    const s = addLog(state,
+      validIids.length > 0
+        ? `${attackKey.split('|')[1]}：從牌庫選 1 張從「${baseName}」進化而來的卡，立即進化於自身`
+        : `${attackKey.split('|')[1]}：牌庫內無對應的進化卡（仍進行搜尋並重洗）`,
+      aIdx);
+    return withPending(s, {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Evolution',
+      minCount: 0, maxCount: 1,
+      effectKey,
+      params: { validIids, baseName },
+    });
+  });
+  // resolver：把 evolution 直接進化於戰鬥場（仿石居蟹|覺醒 / 伊布|覺醒）
+  regR(effectKey, (state, aIdx, iids, params, pool) => {
+    const baseN = (params?.baseName as string | undefined) ?? baseName;
+    const player = state.players[aIdx];
+    if (iids.length === 0 || !player.active) {
+      return updatePlayer(state, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+    }
+    const evoIid = iids[0];
+    const evoIdx = player.deck.findIndex(c => c.iid === evoIid);
+    if (evoIdx < 0) {
+      return addLog(state, `${attackKey.split('|')[1]}：找不到所選進化卡，僅重洗牌庫`, aIdx);
+    }
+    const evoInst = player.deck[evoIdx];
+    const evoCard = pool.get(evoInst.cardId);
+    if (!evoCard?.evolvesFrom || evoCard.evolvesFrom !== baseN) {
+      return addLog(state, `${attackKey.split('|')[1]}：所選非從「${baseN}」進化的卡，僅重洗牌庫`, aIdx);
+    }
+    const activeCard = pool.get(player.active.cardId);
+    if (activeCard?.name !== baseN) {
+      return addLog(state, `${attackKey.split('|')[1]}：戰鬥場已非「${baseN}」，僅重洗牌庫`, aIdx);
+    }
+    const base = player.active;
+    const evolved: CardInstance = {
+      ...evoInst,
+      iid: base.iid,
+      damage: base.damage,
+      energyAttached: base.energyAttached,
+      toolAttached: base.toolAttached,
+      status: base.status,
+      evolvedFromStack: [
+        ...(base.evolvedFromStack ?? []),
+        // chain entry 不帶 base 的 transient turn flags（同 engine.ts baseBare 修法）
+        {
+          iid: `${base.iid}_base_${base.cardId}_${Math.random().toString(36).slice(2, 8)}`,
+          cardId: base.cardId,
+          damage: 0,
+          energyAttached: [],
+          toolAttached: undefined,
+          extraTools: [],
+          evolvedFromStack: undefined,
+        },
+      ],
+      evolvedThisTurn: true,
+      justPlaced: undefined,
+      movedToActiveThisTurn: undefined,
+      cantAttackThisTurn: undefined,
+      cantAttackPending: undefined,
+      cantRetreatNextTurn: undefined,
+      cantRetreatPendingSelf: undefined,
+      damageBonusThisTurn: undefined,
+      damageBonusPending: undefined,
+      damageReduceNextHit: undefined,
+      blockedAttackNamesThisTurn: undefined,
+      blockedAttackNamesNextTurn: undefined,
+      abilityUsedThisTurn: undefined,
+    };
+    let s = state;
+    s = updatePlayer(s, aIdx, p => ({
+      ...p,
+      active: evolved,
+      deck: shuffle(p.deck.filter((_, i) => i !== evoIdx)),
+    }));
+    return addLog(s, `${attackKey.split('|')[1]}：${evoCard.name} 進化於戰鬥場的「${baseN}」，並重洗牌庫`, aIdx);
+  });
+}
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1b. 火箭隊的尼多娜｜惡之覺醒（v4.38 完整實裝 — 2-stage × 2-base chain）

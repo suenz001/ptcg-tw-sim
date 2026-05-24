@@ -1900,17 +1900,94 @@ regR('eevee-awaken-evolve', (state, aIdx, iids, _params, pool) => {
   return addLog(s, `覺醒：${evoCard.name} 進化於戰鬥場的伊布，並重洗牌庫`, aIdx);
 });
 
-// 蛋蛋|早熟進化 — 先攻第一回合限定（同邏輯處理）
+// 蛋蛋|早熟進化 — 直接進化（先攻第一回合限定由 engine firstTurnOnly flag 處理）
+// v5.082 修 Rule 15：原 v2.75 簡化為「加手」違反卡面「放置於這隻寶可夢身上完成進化」。
+//   改為仿伊布|覺醒 / 石居蟹|覺醒 pattern — filter validIids=deck 中 evolvesFrom='蛋蛋'
+//   的進化卡（椰蛋樹 / 阿羅拉椰蛋樹ex），resolver 把該卡放戰鬥場完成進化。
 regPre('蛋蛋|早熟進化', (s) => ({ state: s, damage: 0 }));
-regPost('蛋蛋|早熟進化', (state, aIdx, _pool) => {
-  if (state.players[aIdx].deck.length === 0) return state;
-  return withPending(addLog(state, '早熟進化：從牌庫挑 1 張進化卡加手（玩家手動進化；重洗）', aIdx), {
+regPost('蛋蛋|早熟進化', (state, aIdx, pool) => {
+  const player = state.players[aIdx];
+  if (!player.active) return addLog(state, '早熟進化：戰鬥場無寶可夢', aIdx);
+  const activeCard = pool.get(player.active.cardId);
+  if (activeCard?.name !== '蛋蛋') {
+    return updatePlayer(addLog(state, '早熟進化：戰鬥場已非「蛋蛋」，僅重洗牌庫', aIdx),
+      aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
+  const validIids = player.deck
+    .filter(c => pool.get(c.cardId)?.evolvesFrom === '蛋蛋')
+    .map(c => c.iid);
+  const s = addLog(state,
+    validIids.length > 0
+      ? '早熟進化：從牌庫選 1 張從「蛋蛋」進化而來的卡，立即進化於自身'
+      : '早熟進化：牌庫內無對應的進化卡（仍進行搜尋並重洗）',
+    aIdx);
+  return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Pokemon',
+    filter: 'Evolution',
     minCount: 0, maxCount: 1,
-    effectKey: 'wave13-deck-take-any',
+    effectKey: 'exeggcute-precoition-evolve',
+    params: { validIids },
   });
+});
+regR('exeggcute-precoition-evolve', (state, aIdx, iids, _params, pool) => {
+  const player = state.players[aIdx];
+  if (iids.length === 0 || !player.active) {
+    return updatePlayer(state, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
+  const evoIid = iids[0];
+  const evoIdx = player.deck.findIndex(c => c.iid === evoIid);
+  if (evoIdx < 0) return addLog(state, '早熟進化：找不到所選進化卡，僅重洗牌庫', aIdx);
+  const evoInst = player.deck[evoIdx];
+  const evoCard = pool.get(evoInst.cardId);
+  if (!evoCard?.evolvesFrom || evoCard.evolvesFrom !== '蛋蛋') {
+    return addLog(state, '早熟進化：所選非從蛋蛋進化的卡，僅重洗牌庫', aIdx);
+  }
+  const activeCard = pool.get(player.active.cardId);
+  if (activeCard?.name !== '蛋蛋') {
+    return addLog(state, '早熟進化：戰鬥場已非蛋蛋，僅重洗牌庫', aIdx);
+  }
+  const base = player.active;
+  const evolved: CardInstance = {
+    ...evoInst,
+    iid: base.iid,
+    damage: base.damage,
+    energyAttached: base.energyAttached,
+    toolAttached: base.toolAttached,
+    status: base.status,
+    evolvedFromStack: [
+      ...(base.evolvedFromStack ?? []),
+      {
+        iid: `${base.iid}_base_${base.cardId}_${Math.random().toString(36).slice(2, 8)}`,
+        cardId: base.cardId,
+        damage: 0,
+        energyAttached: [],
+        toolAttached: undefined,
+        extraTools: [],
+        evolvedFromStack: undefined,
+      },
+    ],
+    evolvedThisTurn: true,
+    justPlaced: undefined,
+    movedToActiveThisTurn: undefined,
+    cantAttackThisTurn: undefined,
+    cantAttackPending: undefined,
+    cantRetreatNextTurn: undefined,
+    cantRetreatPendingSelf: undefined,
+    damageBonusThisTurn: undefined,
+    damageBonusPending: undefined,
+    damageReduceNextHit: undefined,
+    blockedAttackNamesThisTurn: undefined,
+    blockedAttackNamesNextTurn: undefined,
+    abilityUsedThisTurn: undefined,
+  };
+  let s = state;
+  s = updatePlayer(s, aIdx, p => ({
+    ...p,
+    active: evolved,
+    deck: shuffle(p.deck.filter((_, i) => i !== evoIdx)),
+  }));
+  return addLog(s, `早熟進化：${evoCard.name} 進化於戰鬥場的蛋蛋，並重洗牌庫`, aIdx);
 });
 
 // 電螢蟲|急速信號 — 先攻第一回 + 從牌庫挑 ≤2 基礎放備戰
