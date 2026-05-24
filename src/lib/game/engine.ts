@@ -4987,6 +4987,29 @@ function handlePlaying(
           if (fnOD) newState = fnOD(newState, dIdx, aIdx, pool, defenderCard);
         }
       }
+      // v5.083：花岩怪|怨恨旋渦 field-wide — 「只要這隻寶可夢在場上」涵蓋備戰。
+      //   既有 PASSIVE_RETALIATION 主 loop 只 scan defenderCard.abilities，
+      //   花岩怪在備戰時觸發不到（玩家回報「完全沒觸發」）。
+      //   gate：defender.active.pokemonType === 'Darkness'（自方戰鬥場必為【惡】）。
+      //   避免雙重：active 花岩怪自己被打 → 已在 main loop 觸發過此 ability；
+      //             這裡只 scan defender.bench 上的花岩怪（持有者在備戰 + active 是其他【惡】）。
+      //   光之翼亦擋（同 PASSIVE_RETALIATION 既有準則）。
+      if (!_v456KoMagicalShine && baseDamage > 0) {
+        const defActiveKO = newState.players[dIdx].active;
+        const defActiveCardKO = defActiveKO ? pool.get(defActiveKO.cardId) : null;
+        if (defActiveCardKO?.pokemonType === 'Darkness') {
+          for (const benchInst of newState.players[dIdx].bench) {
+            const benchCard = pool.get(benchInst.cardId);
+            if (!benchCard?.abilities) continue;
+            for (const ab of benchCard.abilities) {
+              if (ab.name === '怨恨旋渦') {
+                const fn = PASSIVE_RETALIATION.get('怨恨旋渦');
+                if (fn) newState = fn(newState, dIdx, pool);
+              }
+            }
+          }
+        }
+      }
 
       // 無備戰寶可夢 → 直接終局，不需送出新寶可夢
       if (defenderState.bench.length === 0) {
@@ -5261,6 +5284,29 @@ function handlePlaying(
       for (const ab of defenderCard.abilities) {
         const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
         if (fnOD) newState = fnOD(newState, dIdx, aIdx, pool, defenderCard);
+      }
+    }
+
+    // v5.083：花岩怪|怨恨旋渦 field-wide — 「只要這隻寶可夢在場上」涵蓋備戰。
+    //   既有 PASSIVE_RETALIATION 主 loop 只 scan defenderCard.abilities，
+    //   花岩怪在備戰時觸發不到（玩家回報「完全沒觸發」）。
+    //   gate：defender.active.pokemonType === 'Darkness'（自方戰鬥場必為【惡】）。
+    //   只 scan defender.bench 上的花岩怪（active 花岩怪已在主 loop 觸發過此 ability）。
+    //   光之翼亦擋（同 PASSIVE_RETALIATION 既有準則）。
+    if (baseDamage > 0 && !attackerHasMagicalShine) {
+      const defActiveNK = newState.players[dIdx].active;
+      const defActiveCardNK = defActiveNK ? pool.get(defActiveNK.cardId) : null;
+      if (defActiveCardNK?.pokemonType === 'Darkness') {
+        for (const benchInst of newState.players[dIdx].bench) {
+          const benchCard = pool.get(benchInst.cardId);
+          if (!benchCard?.abilities) continue;
+          for (const ab of benchCard.abilities) {
+            if (ab.name === '怨恨旋渦') {
+              const fn = PASSIVE_RETALIATION.get('怨恨旋渦');
+              if (fn) newState = fn(newState, dIdx, pool);
+            }
+          }
+        }
       }
     }
 
@@ -5693,6 +5739,13 @@ function handlePlaying(
         if (hasMagicalShine(card)) return false;  // 光之翼免疫
         return true;
       };
+      // v5.083：化隱（斯魔茶 / 來悲粗茶 / 怨影娃娃 / 詛咒娃娃）— 卡面：
+      //   「這隻寶可夢不會受到對手的招式或特性的效果。」冰冷之帳是「特性效果」必擋。
+      //   per-target gate：化隱寶可夢只受 own frosmoth（自家雪妖女），不受 opp frosmoth。
+      //   套用點在下方 dispatch loop 計算 counter 時。
+      const hasHuayinAbility = (card: Card | undefined): boolean => {
+        return card?.abilities?.some(a => a.name === '化隱') ?? false;
+      };
       const affectedNames: string[] = [];
       // [ownerIdx → prizes they owe to opponent]
       const koPrizesByOwner: [number, number] = [0, 0];
@@ -5707,11 +5760,15 @@ function handlePlaying(
         // 備戰：對戰圓形啟動 → 對手 frosmoth 被擋，只剩自家 frosmoth
         const benchCounters = benchProtected ? ownFrosmoth : (ownFrosmoth + oppFrosmoth);
         // 戰鬥區
-        if (pl.active && isFrosmothCheckupTarget(pl.active) && activeCounters > 0) {
-          const newDmg = pl.active.damage + activeCounters * 10;
+        // v5.083：per-target counter — 化隱寶可夢只算自家雪妖女（擋對手雪妖女特性效果）
+        if (pl.active && isFrosmothCheckupTarget(pl.active)) {
+          const activeCardC = pool.get(pl.active.cardId);
+          const effectiveActiveCounters = hasHuayinAbility(activeCardC) ? ownFrosmoth : activeCounters;
+          if (effectiveActiveCounters > 0) {
+          const newDmg = pl.active.damage + effectiveActiveCounters * 10;
           const card = pool.get(pl.active.cardId);
           const hp = getEffectiveHP(pl.active, pool, state);
-          affectedNames.push(`${card?.name ?? '?'}(-${activeCounters * 10})`);
+          affectedNames.push(`${card?.name ?? '?'}(-${effectiveActiveCounters * 10}${hasHuayinAbility(activeCardC) ? ' 化隱擋對手' : ''})`);
           if (hp > 0 && newDmg >= hp) {
             const koDiscard: CardInstance[] = [
               { ...pl.active, damage: newDmg },
@@ -5726,16 +5783,22 @@ function handlePlaying(
           } else {
             pl.active = { ...pl.active, damage: newDmg };
           }
+          }  // close v5.083 effectiveActiveCounters > 0 block
         }
         // 備戰區 — 對戰圓形啟動時 benchCounters 可能 = ownFrosmoth 或 0
+        // v5.083：per-target — 化隱寶可夢只算 ownFrosmoth（擋對手）
         const newBench: CardInstance[] = [];
         for (const b of pl.bench) {
           if (!isFrosmothCheckupTarget(b)) { newBench.push(b); continue; }
-          if (benchCounters === 0) { newBench.push(b); continue; }  // 對戰圓形擋光 → 不放指示物
-          const newDmg = b.damage + benchCounters * 10;
+          const benchCardC = pool.get(b.cardId);
+          const effBenchCounters = hasHuayinAbility(benchCardC)
+            ? (benchProtected ? ownFrosmoth : ownFrosmoth)  // 化隱：擋對手 frosmoth 兩種情境都只算自家
+            : benchCounters;
+          if (effBenchCounters === 0) { newBench.push(b); continue; }
+          const newDmg = b.damage + effBenchCounters * 10;
           const card = pool.get(b.cardId);
           const hp = getEffectiveHP(b, pool, state);
-          affectedNames.push(`${card?.name ?? '?'}(-${benchCounters * 10})`);
+          affectedNames.push(`${card?.name ?? '?'}(-${effBenchCounters * 10}${hasHuayinAbility(benchCardC) ? ' 化隱擋對手' : ''})`);
           if (hp > 0 && newDmg >= hp) {
             const koDiscard: CardInstance[] = [
               { ...b, damage: newDmg },

@@ -182,19 +182,238 @@ function snipeOneOppBenchPost(amount: number, label: string, exOnly: boolean = f
 // 1. 進化牌庫搜尋（5 張）— 全部簡化為「從牌庫挑 1 張寶可夢加手牌」（玩家手動進化）
 // ══════════════════════════════════════════════════════════════════════════════
 // v5.082：夢妖|覺醒 + 火箭隊的沙基拉斯|爆裂覺醒 移到下面 direct-evolve 區塊（仿伊布|覺醒）。
-// 雙卵細胞球|細胞進化 + 人造細胞卵|細胞覺醒 仍簡化為「加手」— deferred v5.083：
-//   - 雙卵細胞球需要 picker「任一場上寶可夢」
-//   - 人造細胞卵 需要 multi-target「所有備戰」
-const EVOLVE_SEARCH: Array<[string, number]> = [
-  ['雙卵細胞球|細胞進化', 0],
-  // 火箭隊的尼多娜|惡之覺醒 — v4.38 提升為 2-stage chain（自方【惡】base × deck evolve）
-  ['人造細胞卵|細胞覺醒', 0],
-];
+// v5.083：雙卵細胞球|細胞進化 + 人造細胞卵|細胞覺醒 移到下方 chain picker 區塊。
+// EVOLVE_SEARCH 目前為空 — 保留 array 容器避免破壞 import / 結構，未來新卡可加回。
+// 火箭隊的尼多娜|惡之覺醒 — v4.38 提升為 2-stage chain（自方【惡】base × deck evolve）
+const EVOLVE_SEARCH: Array<[string, number]> = [];
 for (const [key, dmg] of EVOLVE_SEARCH) {
   const atkName = key.split('|')[1];
   regPre(key, (s) => ({ state: s, damage: dmg }));
   regPost(key, deckPickOnePokemonToHandPost(atkName));
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v5.083：雙卵細胞球|細胞進化 — direct-evolve picker（任一自方場上寶可夢）
+// 卡面：「從自己的牌庫選擇1張自己的1隻場上寶可夢進化而來的卡，放置於那隻寶可夢身上完成進化。
+//        並且重洗牌庫。」
+// pattern：仿惡之覺醒 2-stage（單 base 版本）—
+//   Phase A: bench-choose（includeActive=true，無屬性限制）選自方任一場上寶可夢
+//   Phase B: deck-search 從牌庫挑該寶可夢的進化卡 → 進化於 base 身上
+// ══════════════════════════════════════════════════════════════════════════════
+regPre('雙卵細胞球|細胞進化', (s) => ({ state: s, damage: 0 }));
+regPost('雙卵細胞球|細胞進化', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  const fieldPokemon: CardInstance[] = [
+    ...(p.active ? [p.active] : []),
+    ...p.bench,
+  ];
+  // 過濾「牌庫中有對應進化卡」的場上寶可夢（避免選了卻沒得搜 — UX 提示）
+  const validIids = fieldPokemon
+    .filter(c => {
+      const card = pool.get(c.cardId);
+      if (!card) return false;
+      return p.deck.some(d => {
+        const dc = pool.get(d.cardId);
+        return dc?.evolvesFrom && sameEvoName(dc.evolvesFrom, card.name);
+      });
+    })
+    .map(c => c.iid);
+  if (validIids.length === 0) {
+    return updatePlayer(addLog(state, '細胞進化：場上無可進化寶可夢；重洗牌庫', aIdx),
+      aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const s = addLog(state, '細胞進化：選擇 1 隻自方場上寶可夢進化（可跳過）', aIdx);
+  return withPending(s, {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 0, maxCount: 1,
+    effectKey: 'twin-cell-evolve-pick-base',
+    params: {
+      includeActive: true,
+      validIids,
+      titleOverride: '細胞進化：選擇 1 隻自方場上寶可夢進化（可跳過）',
+    },
+  });
+});
+regR('twin-cell-evolve-pick-base', (st, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) {
+    return updatePlayer(addLog(st, '細胞進化：不選擇任何寶可夢進化；重洗牌庫', aIdx),
+      aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
+  const baseIid = iids[0];
+  const p = st.players[aIdx];
+  const base = p.active?.iid === baseIid ? p.active : p.bench.find(c => c.iid === baseIid);
+  if (!base) {
+    return updatePlayer(addLog(st, '細胞進化：找不到所選的基礎；重洗牌庫', aIdx),
+      aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const baseCard = pool.get(base.cardId);
+  if (!baseCard) {
+    return updatePlayer(addLog(st, '細胞進化：基礎卡資料異常；重洗牌庫', aIdx),
+      aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const validEvoIids = p.deck.filter(c => {
+    const card = pool.get(c.cardId);
+    if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
+    return sameEvoName(card.evolvesFrom, baseCard.name);
+  }).map(c => c.iid);
+  if (validEvoIids.length === 0) {
+    return updatePlayer(addLog(st, `細胞進化：牌庫中無「${baseCard.name}」的進化卡；重洗牌庫`, aIdx),
+      aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const s = addLog(st, `細胞進化：從牌庫選「${baseCard.name}」的進化卡（可跳過）`, aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'EvilAwakening:EvolveFrom',  // 復用既有 filter（同樣 base name 搜進化）
+    minCount: 0, maxCount: 1,
+    effectKey: 'twin-cell-evolve-do',
+    params: {
+      baseIid, baseName: baseCard.name,
+      titleOverride: `細胞進化：從牌庫選「${baseCard.name}」的進化卡（可跳過）`,
+    },
+  });
+});
+regR('twin-cell-evolve-do', (st, aIdx, iids, params, pool) => {
+  const baseIid = params?.baseIid as string | undefined;
+  const baseName = (params?.baseName as string | undefined) ?? '?';
+  let s = st;
+  if (iids.length > 0 && baseIid) {
+    const evoIid = iids[0];
+    const p = s.players[aIdx];
+    const evoInst = p.deck.find(c => c.iid === evoIid);
+    const base = p.active?.iid === baseIid ? p.active : p.bench.find(c => c.iid === baseIid);
+    if (evoInst && base) {
+      const evoCard = pool.get(evoInst.cardId);
+      if (evoCard) {
+        const isActive = p.active?.iid === baseIid;
+        const prevStack = base.evolvedFromStack ?? [];
+        const baseBare: CardInstance = {
+          ...base, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined,
+        };
+        const evolved: CardInstance = {
+          ...evoInst,
+          damage: base.damage,
+          energyAttached: base.energyAttached,
+          toolAttached: base.toolAttached,
+          status: base.status,
+          evolvedFromIid: base.iid,
+          evolvedFromStack: [...prevStack, baseBare],
+          evolvedThisTurn: true,
+          justPlaced: false, playedFromHand: false,
+        };
+        s = updatePlayer(s, aIdx, x => ({
+          ...x,
+          deck: x.deck.filter(c => c.iid !== evoIid),
+          active: isActive ? evolved : x.active,
+          bench: isActive ? x.bench : x.bench.map(c => c.iid === baseIid ? evolved : c),
+        }));
+        s = addLog(s, `細胞進化：「${baseName}」進化為「${evoCard.name}」`, aIdx);
+      }
+    }
+  } else {
+    s = addLog(s, `細胞進化：玩家不選擇「${baseName}」的進化卡`, aIdx);
+  }
+  return updatePlayer(addLog(s, '細胞進化：重洗牌庫', aIdx),
+    aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v5.083：人造細胞卵|細胞覺醒 — 所有備戰逐一進化（chain）
+// 卡面：「從自己的牌庫，選擇自己的所有備戰寶可夢進化而來的卡各1張，放置於各自身上完成進化。
+//        並且重洗牌庫。」
+// pattern：chain — 逐隻備戰開 deck-search picker，挑該寶可夢進化卡 → 進化 → 進下隻
+//   - benchIdx 0..N-1 依序處理；params 紀錄當前 index + baseIid
+//   - 收尾：所有備戰處理完 → 重洗牌庫
+// ══════════════════════════════════════════════════════════════════════════════
+function cellAwakeningStep(
+  s: GameState, aIdx: 0 | 1, pool: Map<string, Card>, benchIdx: number,
+): GameState {
+  const p = s.players[aIdx];
+  if (benchIdx >= p.bench.length) {
+    // 全部備戰處理完，重洗牌庫
+    return updatePlayer(addLog(s, '細胞覺醒：所有備戰處理完，重洗牌庫', aIdx),
+      aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  const base = p.bench[benchIdx];
+  const baseCard = pool.get(base.cardId);
+  if (!baseCard) return cellAwakeningStep(s, aIdx, pool, benchIdx + 1);
+  // 牌庫中有可進化的卡嗎？
+  const validEvoIids = p.deck.filter(c => {
+    const card = pool.get(c.cardId);
+    if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
+    return sameEvoName(card.evolvesFrom, baseCard.name);
+  }).map(c => c.iid);
+  if (validEvoIids.length === 0) {
+    s = addLog(s, `細胞覺醒：牌庫中無「${baseCard.name}」的進化卡（跳過）`, aIdx);
+    return cellAwakeningStep(s, aIdx, pool, benchIdx + 1);
+  }
+  s = addLog(s, `細胞覺醒：從牌庫選「${baseCard.name}」的進化卡（可跳過；第 ${benchIdx + 1} 隻備戰）`, aIdx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'EvilAwakening:EvolveFrom',
+    minCount: 0, maxCount: 1,
+    effectKey: 'cell-awaken-evolve-step',
+    params: {
+      baseIid: base.iid,
+      baseName: baseCard.name,
+      benchIdx,
+      titleOverride: `細胞覺醒：從牌庫選「${baseCard.name}」的進化卡（可跳過）`,
+    },
+  });
+}
+regPre('人造細胞卵|細胞覺醒', (s) => ({ state: s, damage: 0 }));
+regPost('人造細胞卵|細胞覺醒', (state, aIdx, pool) => {
+  const p = state.players[aIdx];
+  if (p.bench.length === 0) {
+    return updatePlayer(addLog(state, '細胞覺醒：備戰區無寶可夢；重洗牌庫', aIdx),
+      aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  return cellAwakeningStep(state, aIdx, pool, 0);
+});
+regR('cell-awaken-evolve-step', (st, aIdx, iids, params, pool) => {
+  const baseIid = params?.baseIid as string | undefined;
+  const baseName = (params?.baseName as string | undefined) ?? '?';
+  const benchIdx = (params?.benchIdx as number | undefined) ?? 0;
+  let s = st;
+  if (iids.length > 0 && baseIid) {
+    const evoIid = iids[0];
+    const p = s.players[aIdx];
+    const evoInst = p.deck.find(c => c.iid === evoIid);
+    const base = p.bench.find(c => c.iid === baseIid);
+    if (evoInst && base) {
+      const evoCard = pool.get(evoInst.cardId);
+      if (evoCard) {
+        const prevStack = base.evolvedFromStack ?? [];
+        const baseBare: CardInstance = {
+          ...base, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined,
+        };
+        const evolved: CardInstance = {
+          ...evoInst,
+          damage: base.damage,
+          energyAttached: base.energyAttached,
+          toolAttached: base.toolAttached,
+          status: base.status,
+          evolvedFromIid: base.iid,
+          evolvedFromStack: [...prevStack, baseBare],
+          evolvedThisTurn: true,
+          justPlaced: false, playedFromHand: false,
+        };
+        s = updatePlayer(s, aIdx, x => ({
+          ...x,
+          deck: x.deck.filter(c => c.iid !== evoIid),
+          bench: x.bench.map(c => c.iid === baseIid ? evolved : c),
+        }));
+        s = addLog(s, `細胞覺醒：「${baseName}」進化為「${evoCard.name}」`, aIdx);
+      }
+    }
+  } else {
+    s = addLog(s, `細胞覺醒：玩家跳過「${baseName}」`, aIdx);
+  }
+  // 進下一隻備戰
+  return cellAwakeningStep(s, aIdx, pool, benchIdx + 1);
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // v5.082：夢妖|覺醒 + 火箭隊的沙基拉斯|爆裂覺醒 直接進化（仿伊布|覺醒 / 石居蟹|覺醒）

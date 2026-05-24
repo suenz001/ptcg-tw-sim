@@ -265,6 +265,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.083</span> 🐛 花岩怪|怨恨旋渦 field-wide + 化隱擋冰冷之帳 + 細胞球/細胞卵 direct-evolve picker</summary>
+        <ul>
+          <li><b>修法 1 — 花岩怪｜怨恨旋渦 在備戰時完全沒觸發（玩家回報）</b></li>
+          <li>　・<b>卡面</b>：「只要這隻寶可夢在場上，自己戰鬥場的【惡】寶可夢受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置 1 個傷害指示物。」</li>
+          <li>　・<b>根因</b>：<code>engine.ts</code> PASSIVE_RETALIATION dispatch (L4980 KO 分支 + L5248 非 KO 分支) 只 iterate <code>defenderCard.abilities</code> — 花岩怪在備戰時 dispatch 完全不會跑該特性。</li>
+          <li>　・<b>修法</b>：兩處 dispatch 後加 field-wide loop scan <code>defender.bench</code> 上的花岩怪|怨恨旋渦，gate by <code>defender.active.pokemonType === &apos;Darkness&apos;</code>（卡面「自己戰鬥場的【惡】」前置條件）。光之翼亦擋（同 PASSIVE_RETALIATION 既有準則）。Active 花岩怪自己被打維持由主 loop 觸發，避免雙重。</li>
+
+          <li><b>修法 2 — 化隱寶可夢仍受雪妖女｜冰冷之帳傷害（玩家回報）</b></li>
+          <li>　・<b>化隱卡面</b>：「這隻寶可夢不會受到對手的招式或特性的效果。」冰冷之帳是「特性效果」必擋。</li>
+          <li>　・<b>根因</b>：<code>engine.ts L5675+</code> 冰冷之帳 dispatch 沒走 <code>canApplyEffectToTarget</code> unified helper（直接 inline 套用），<code>isFrosmothCheckupTarget</code> 只 check 光之翼 + 雪妖女本體，沒 check 化隱。</li>
+          <li>　・<b>修法</b>：加 <code>hasHuayinAbility</code> helper；dispatch loop 內 per-target gate — 化隱寶可夢只算 own frosmoth（擋對手雪妖女特性效果，自家不擋）；非化隱照舊 <code>ownFrosmoth + oppFrosmoth</code>。Active + bench 兩處同步修。Log 加「化隱擋對手」標記讓玩家確認。</li>
+
+          <li><b>修法 3 — 雙卵細胞球｜細胞進化 direct-evolve picker</b></li>
+          <li>　・<b>卡面</b>：「從自己的牌庫選擇 1 張自己的 1 隻場上寶可夢進化而來的卡，放置於那隻寶可夢身上完成進化。」</li>
+          <li>　・<b>修法</b>：v5.082 deferred；本版仿惡之覺醒 2-stage chain（單 base 版本）— Phase A bench-choose（<code>includeActive:true</code>，<code>validIids</code> 過濾「牌庫中有對應進化卡」的場上寶可夢）；Phase B deck-search 從牌庫挑該寶可夢的進化卡 → 進化於 base 身上（保留 damage / energy / tool / 推進 <code>evolvedFromStack</code>）。</li>
+
+          <li><b>修法 4 — 人造細胞卵｜細胞覺醒 multi-target direct-evolve（chain）</b></li>
+          <li>　・<b>卡面</b>：「從自己的牌庫，選擇自己的所有備戰寶可夢進化而來的卡各 1 張，放置於各自身上完成進化。」</li>
+          <li>　・<b>修法</b>：v5.082 deferred；chain — <code>cellAwakeningStep(s, aIdx, pool, benchIdx)</code> 遞迴逐隻備戰處理。每隻備戰開 deck-search picker（<code>validEvoIids</code> 過濾該寶可夢進化卡），玩家選 1 張進化（可跳過）→ 進下隻。所有備戰處理完重洗牌庫。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 engine.ts + v2650 + version.ts + +page.svelte）／Rule 14（最小 patch — 怨恨旋渦補 field-wide loop 不重構 PASSIVE_RETALIATION map；化隱 inline gate 加在現有 frosmoth dispatch 內；細胞球/細胞卵仿惡之覺醒既有 chain pattern）／Rule 15（卡面 source of truth — 怨恨旋渦「只要這隻寶可夢在場上」=含備戰；化隱「不受對手特性效果」涵蓋冰冷之帳；「放置於那隻寶可夢身上完成進化」=直接進化）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.082</span> 🐛 幻影迷宮算上撤退費修正 + 3 張覺醒招式改直接進化</summary>
         <ul>
           <li><b>修法 1 — 超級水晶燈火靈ex｜幻影迷宮 傷害計算未含撤退費修正（玩家回報）</b></li>
