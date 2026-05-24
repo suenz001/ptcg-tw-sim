@@ -265,6 +265,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.077</span> 🎴 米立龍ex 硃砂誘餌 / 傳喚之門 / 杜若 等 peek 招式補揭示其他翻到的非目標類卡</summary>
+        <ul>
+          <li><b>玩家要求</b>：米立龍ex 第二招「硃砂誘餌」（翻牌庫頂 10 張選任意數量寶可夢放備戰）發動時，picker 雖列出寶可夢卡可選，但<b>其他 7 張非寶可夢卡（訓練家 / 能量）也要列出來讓玩家確認</b>（看到全部 10 張），參考寶可裝置3.0 的揭示作法。</li>
+
+          <li><b>現況</b>：<code>game/+page.svelte L6549</code> 早就有「peek-top-N 的非目標類剩餘卡」UI 區塊（玩家可展開 <code>&lt;details&gt;</code> 看翻到但本次不可選的其他卡），<b>但 regex <code>/:TOP\d+$/</code> 只匹配純數字後綴</b>（<code>:TOP6 / :TOP7 / :TOP9</code> 等）。v5.076 改用的 <code>Pokemon:TOP_N</code> 含底線 <code>_N</code> 不匹配 → 此 UI 沒觸發。</li>
+
+          <li><b>修法（2 行改動）</b>：</li>
+          <li>　1. regex <code>/:TOP\d+$/</code> → <code>/:TOP(\d+|_N)$/</code> — 同時匹配純數字 + 通用 TOP_N</li>
+          <li>　2. <code>peekIids</code> fallback chain 補 <code>topIids</code>（通用 TOP_N filter 用的 param 名）— 之前只有 <code>top4Iids / top6Iids / top7Iids / top8Iids / top9Iids</code> 5 種寫死 name</li>
+
+          <li><b>連帶受惠（自動有「翻到的其他 N 張」揭示 UI）</b>：</li>
+          <li>　・<b>米立龍ex｜硃砂誘餌</b> (Pokemon:TOP_N, peek 10) — Wilson 回報的</li>
+          <li>　・<b>人造細胞卵｜傳喚之門</b> (Pokemon:TOP_N, peek 8)</li>
+          <li>　・<b>杜若 支援者</b> (Pokemon:TOP_N + Trainer:TOP_N, peek N)</li>
+          <li>　・<b>拉普拉斯ex｜海紋石之雨</b> (Energy:TOP_N, peek N)</li>
+          <li>　・未來任何新加的 <code>X:TOP_N</code> filter 招式都自動啟用</li>
+
+          <li><b>實際 UI（v5.077 起）</b>：picker modal 內，候選池上方仍是可選的目標卡（如硃砂誘餌的寶可夢卡）；<b>下方多一個 <code>&lt;details&gt;</code> 可展開「🔍 查看翻到的其他 N 張（本次不可選，僅供參考）」</b>，列出非候選類的卡名 + 放大鏡。卡名點開可放大查看。註解明示「結束後會洗回牌庫重新洗牌（位置不會外洩）」— 防玩家擔心暴露牌庫資訊。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + +page.svelte + version.ts）／Rule 14（最小 patch — 2 行改動，<b>不動既有揭示邏輯</b>只擴 regex + fallback）／Rule 15（卡面 source of truth — 硃砂誘餌「查看自己的牌庫上方 10 張卡」明確含揭示語意，玩家有權看到全部 10 張）／Rule 11e（Write tool 寫 patch_v5077.py 避開 heredoc）／Rule 11f（push 前 3 道 ASSERT 防 silent fail）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.076</span> 🐛 修米立龍ex｜硃砂誘餌 + 人造細胞卵｜傳喚之門 候選池只列基礎寶可夢（折衷修正）</summary>
         <ul>
           <li><b>玩家回報</b>：米立龍ex（SV8 081/106 H 標）第二招「硃砂誘餌」發動時，卡面寫「查看自己的牌庫上方 10 張卡，從其中選擇任意數量的<b>寶可夢卡</b>，放置於備戰區」— 但 simulator 內 picker 只列出基礎寶可夢，1 階 / 2 階 / ex 進化等被自動排除（明明應該都可選）。</li>

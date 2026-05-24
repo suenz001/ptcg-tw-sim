@@ -6545,8 +6545,11 @@
 
         <!-- peek-top-N 的「非目標類」剩餘卡 — 例：米立龍「集客」(Supporter:TOP6) 顯示非支援者 3 張
              玩家看過但本次無法挑選；洗回牌庫會重新洗牌，不外洩其他位置資訊。
-             篩選條件：filter 形如 "Supporter:TOP6" / 其他 "X:TOPN" —— 純 TOP6 / TOP8（全範圍可選）不進這個分支。 -->
-        {#if pendingSelection.type==='deck-search' && game && /:TOP\d+$/.test(pendingSelection.filter ?? '')}
+             篩選條件：filter 形如 "Supporter:TOP6" / "Pokemon:TOP_N" / 其他 "X:TOPN" — 純 TOP6 / TOP8 不進此分支。
+             v5.077：regex 補 :TOP_N 後綴（通用 TOP_N filter）+ peekIids fallback 補 topIids — 讓
+                     杜若 / 拉普拉斯ex|海紋石之雨 / 米立龍ex|硃砂誘餌 / 人造細胞卵|傳喚之門
+                     等用 Pokemon/Energy/Trainer:TOP_N filter 的招式也能揭示翻到的其他類卡。 -->
+        {#if pendingSelection.type==='deck-search' && game && /:TOP(\d+|_N)$/.test(pendingSelection.filter ?? '')}
           {@const srcP2 = game.players[pendingSelection.sourcePlayerIdx]}
           {@const peekIids = new Set<string>(
             (pendingSelection.params?.top4Iids as string[] | undefined)
@@ -6554,6 +6557,7 @@
             ?? (pendingSelection.params?.top7Iids as string[] | undefined)
             ?? (pendingSelection.params?.top8Iids as string[] | undefined)
             ?? (pendingSelection.params?.top9Iids as string[] | undefined)
+            ?? (pendingSelection.params?.topIids as string[] | undefined)
             ?? []
           )}
           {@const pickableIids = new Set(selectionItems.map(c => c.iid))}
