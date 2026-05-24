@@ -296,6 +296,30 @@
   function isBasicMon(c: Card | null): boolean { return !!c && c.supertype === 'Pokemon' && !c.evolvesFrom; }
   function isEvoMon(c: Card | null): boolean { return !!c && c.supertype === 'Pokemon' && !!c.evolvesFrom; }
 
+  // v5.089: 鏡射 engine.ts L122 isAceCancelActive — 對手場上是否有「附道具的蓋諾賽克特 + ACE消弭」
+  //   給手牌 sheet 動作 + playable highlight gate（鏡射 engine ATTACH_ENERGY L3487 已擋的邏輯）
+  const aceCancelActiveLocal = $derived.by(() => {
+    if (!game) return false;
+    const opp = oppPlayer;
+    if (!opp) return false;
+    const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
+    return allOpp.some(pk => {
+      const c = pool.get(pk.cardId);
+      if (!c) return false;
+      if (c.name !== '蓋諾賽克特') return false;
+      if (!c.abilities?.some(a => a.name === 'ACE消弭')) return false;
+      const allTools = [
+        ...(pk.toolAttached ? [pk.toolAttached] : []),
+        ...(pk.extraTools ?? []),
+      ];
+      return allTools.length > 0;
+    });
+  });
+  // ACE SPEC 能量 helper：手牌某張卡是否為 ACE SPEC 能量
+  function isAceSpecEnergyCard(c: Card | null): boolean {
+    return !!c && c.supertype === 'Energy' && !!c.tags?.includes('ACE SPEC');
+  }
+
   // 手牌動作 dispatch
   async function playBasicToActive(iid: string) {
     closeSheet();
@@ -380,7 +404,7 @@
       out.push({ label: tLabel, action: () => playTrainer(iid), primary: true });
     }
     // 能量卡
-    if (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection) {
+    if (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection && !(isAceSpecEnergyCard(c) && aceCancelActiveLocal)) {
       out.push({ label: '⚡ 附加能量到…', action: () => { sheet = { type: 'pick-energy-target', energyIid: iid }; }, primary: true });
     }
     // v3.07 Deferred Wave D — 手牌觸發特性（誘導之尾 / 熱浪鱗粉 / 緊急迴轉）
@@ -909,7 +933,7 @@
         {@const playable = (
           playableBasicIids.has(inst.iid) || playableEvoIids.has(inst.iid) ||
           playableTrainerIids.has(inst.iid) || playableFossilIids.has(inst.iid) ||
-          (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection) ||
+          (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection && !(isAceSpecEnergyCard(c) && aceCancelActiveLocal)) ||
           /* v2.287 修：setup 階段基礎寶可夢可放（不分先後手） */
           (isSetup && !game.setupDone[myIdx] && isBasicMon(c) && (!myPlayer.active || myPlayer.bench.length < myBenchLimit)) ||
           /* v5.031：setup 階段「瞬間爆發力」類非基礎卡（閃焰王牌）— 無 active 時可放戰鬥場 */

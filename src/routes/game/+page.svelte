@@ -1779,6 +1779,27 @@
   const playableEvoIids = $derived(
     new Set<string>(evolvableTargets.flatMap(e => e.toIids))
   );
+  // v5.089: 鏡射 engine.ts L122 isAceCancelActive — 對手場上是否有「附道具的蓋諾賽克特 + ACE消弭」
+  //   給手牌渲染 canEnergy gate 用（鏡射 engine ATTACH_ENERGY L3487 已擋的邏輯）
+  //   v5.079 已修 engine 端，但 UI 手牌仍顯示黃邊框 → 玩家誤以為可用結果按了無反應
+  const aceCancelActiveLocal = $derived.by(() => {
+    if (!game || !poolReady) return false;
+    const oppIdxLocal = (1 - myIdx) as 0 | 1;
+    const opp = game.players[oppIdxLocal];
+    if (!opp) return false;
+    const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
+    return allOpp.some(pk => {
+      const c = getCard(pk.cardId);
+      if (!c) return false;
+      if (c.name !== '蓋諾賽克特') return false;
+      if (!c.abilities?.some(a => a.name === 'ACE消弭')) return false;
+      const allTools = [
+        ...(pk.toolAttached ? [pk.toolAttached] : []),
+        ...(pk.extraTools ?? []),
+      ];
+      return allTools.length > 0;
+    });
+  });
   // v2.981：任一方有待領獎賞時，鎖住所有 main-phase 動作（除了取獎賞按鈕）
   // 確保獎賞流程順序：取完才能攻擊、使用競技場、特性、撤退、附能量等
   const anyPendingPrize = $derived(
@@ -6252,7 +6273,7 @@
           {@const isTrainerCard=c.supertype==='Trainer'}
           {@const isToolCard=c.supertype === 'Trainer' && c.subtype === 'PokemonTool'}
           {@const isEvolutionCard=c.supertype==='Pokemon'&&!!c.evolvesFrom}
-          {@const canEnergy=isEnergyCard&&game?.phase==='playing'&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()}
+          {@const canEnergy=isEnergyCard&&game?.phase==='playing'&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()&&!(c.tags?.includes('ACE SPEC')&&aceCancelActiveLocal)}
           {@const canBasicPlay=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()&&game?.phase==='playing'}
           {@const canBasicSetup=isBasicCard&&game?.phase==='setup'&&!game?.setupDone[myIdx]&&isMyTurn()}
           <!-- v2.42 閃焰王牌｜瞬間爆發力 — 起手 setup 可放戰鬥場（不限基礎） -->

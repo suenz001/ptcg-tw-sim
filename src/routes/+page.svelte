@@ -265,6 +265,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.089</span> 🐛 ACE 消弭時手牌 ACE SPEC 能量黃邊框 UI gate（鏡射 v5.079 engine 修補）</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.079 修了蓋諾賽克特｜ACE消弭 擋 ACE SPEC 能量（engine ATTACH_ENERGY L3487 已 gate），但手牌仍顯示黃色邊框（可使用標示）→ 玩家以為可附但按下去 engine 擋住，UX 不一致。</li>
+
+          <li><b>根因</b>：UI 黃邊框 gate 沒鏡射 engine ACE 消弭 check —</li>
+          <li>　・<code>game/+page.svelte L6255</code>：<code>canEnergy</code> 條件僅含 main phase + energyAttachedThisTurn + isMyTurn，沒查 ACE SPEC tag + isAceCancelActive</li>
+          <li>　・<code>MobilePortraitBattle.svelte L383 + L912</code>：手機直版兩處 <code>isEnergy()</code> check（sheet 動作 + playable highlight）同樣漏</li>
+
+          <li><b>修法</b>：兩檔分別加 <code>aceCancelActiveLocal</code> <code>$derived</code>（鏡射 <code>engine.ts L122 isAceCancelActive</code> — 對手場上有「蓋諾賽克特 + ACE消弭 特性 + 附道具」即觸發）；canEnergy / isEnergy gate 加 <code>&amp;&amp; !(c.tags?.includes(&apos;ACE SPEC&apos;) &amp;&amp; aceCancelActiveLocal)</code>。</li>
+
+          <li><b>實際影響</b>：v5.089 起 — 對手場上有附道具的蓋諾賽克特時，自己手牌的 ACE SPEC 能量（新衝天 / 古舊 / 富裕等）不再顯示黃邊框，桌墊版/經典版/手機直版 三版同步。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + MobilePortraitBattle + version + changelog）／Rule 14（最小 patch — UI 鏡射既有 engine helper 純 gate，無新邏輯）／Rule 15（卡面 source of truth — ACE 消弭「對手無法從手牌使出 ACE SPEC」涵蓋能量，與 v5.079 engine 修補對齊）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.088</span> 🎨 撤退按鈕 disabled 變暗樣式統一 + 加強視覺</summary>
         <ul>
           <li><b>玩家回報</b>：撤退按鈕還在，但不能撤退時應該變暗（目前只顯示 🚫 emoji 但按鈕本身沒視覺變暗）。</li>
