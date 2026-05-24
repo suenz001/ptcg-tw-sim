@@ -265,6 +265,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.093</span> 🎨 桌墊版卡片放大 ~15%（玩家回報太小）</summary>
+        <ul>
+          <li><b>玩家回報</b>：桌墊版卡片希望再大一點。</li>
+
+          <li><b>調整（Wilson 選小幅 +15% 方案）</b>：</li>
+          <li>　・<b>active 寶可夢圖</b>：<code>.playmat.layout-tabletop .active-card .active-img</code> 加 override <code>width:125px !important</code>（base <code>.active-img</code> 全模式共用 105px → 桌墊版 +19%）</li>
+          <li>　・<b>bench 縮放</b>：<code>.playmat.layout-tabletop .zone-bench</code> <code>zoom:0.65</code> → <code>zoom:0.78</code>（+20%）。bench 字、HP 字、特性按鈕跟著 zoom 等比例變大</li>
+
+          <li><b>不動</b>：</li>
+          <li>　・<code>translateX(-74px)</code> active 中線對齊 bench 第 3 隻的修正不變 — <code>active-card padding-left:148px</code> 沒變、卡內元素 gap 沒變，「視覺中心 vs img 中心」差距仍 ~74px</li>
+          <li>　・<code>active-card padding-left:148px / HP column 寬 140px / name-tt width:140px</code> 不動 — v5.038/v5.039 已調過的 HP/name UI 元件保持原樣</li>
+
+          <li><b>解析度相容</b>：1366×768 仍不滾動 — bench 5 隻 ~108px/隻 = 540px，在 grid <code>1fr</code> bench column 內仍夠（之前 0.65 = 90px/隻 = 450px 寬太鬆，本來就還有空間）</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + version + changelog）／Rule 14（最小 patch — 純 CSS override 2 行，無 layout 結構改動）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.092</span> 🔧 Firebase deck 寫入再降低 — debounce 1.5s → 5s + dirty-check 跳過重複內容</summary>
         <ul>
           <li><b>Audit 確認</b>：Wilson 跑 firestore-write-audit 確認 1h ~2000 writes/hr 中 <code>(group) decks</code> 4894 docs（無 createdAt timestamp 顯示 err），對應玩家編輯 deck 是寫入主因。v5.078 已加 1.5s debounce，但仍高。</li>

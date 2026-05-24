@@ -8381,10 +8381,12 @@
   }
   .playmat.layout-tabletop .action-bar > .alerts-col > *{ pointer-events:auto; }
 
-  /* === Bench 縮小 65%（讓 1366×768 不滾動）=== */
+  /* === Bench 縮小 v5.016 0.65 → v5.093 0.78（玩家回報桌墊版卡片太小） === */
   /* v5.016：transform:scale 不影響 layout 框 → 浪費 72px 垂直空間（玩家回饋）。
-     改用 zoom:0.65 — 同步縮 layout + 視覺 → grid row auto 直接縮到 ~133px，省去多餘空間。 */
-  .playmat.layout-tabletop .zone-bench{ zoom:0.65; }
+     改用 zoom:0.65 — 同步縮 layout + 視覺 → grid row auto 直接縮到 ~133px，省去多餘空間。
+     v5.093：玩家進一步反映桌墊版卡片小，bench zoom 0.65→0.78 (+20%)，搭配 active-img
+     105→125px 同步放大。1366×768 仍不滾（5 隻 bench ~108px/隻 = 540px 在 grid column 內）。 */
+  .playmat.layout-tabletop .zone-bench{ zoom:0.78; }
 
   /* v5.024 桌墊版：附加卡片改「同寶可夢大小、壓在底下、僅露出底部」（仿實體桌面）。
      + HP bar 從卡底移到左側細長欄，省下垂直空間給手牌上移。
@@ -8411,7 +8413,11 @@
   .playmat.layout-tabletop .att-card.att-evo{ border-color:#88aaff; }
 
   /* === active：stack 對齊 active-img — 橫向往右扇開 === */
-  .playmat.layout-tabletop .active-card .active-img{ position:relative; z-index:99; }
+  /* v5.093：桌墊版 active-img 加大 105→125px (+19%) — 玩家回報卡片太小。
+     base .active-img L9312 width:105px 全模式共用 → 桌墊版 override。
+     translateX(-74px) 中線修正不動：active-card padding-left:148px + gap 沒變，
+     「視覺中心 vs img 中心」差距仍 ~74px (= padding-left/2)，img 寬變不影響此差距。 */
+  .playmat.layout-tabletop .active-card .active-img{ position:relative; z-index:99; width:125px !important; }
   .playmat.layout-tabletop .active-card > .att-card-stack{
     /* v5.038：HP 欄 88→140px → stack 跟著右移對齊 img */
     top:.45rem; left:calc(.5rem + 140px + .45rem); width:105px; height:140px;
