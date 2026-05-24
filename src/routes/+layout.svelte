@@ -87,10 +87,13 @@
   }
 
   /* v5.034：BETA 標記 banner — 黃色細條，github.io 才顯示，不可 dismiss */
+  /* v5.070：padding-top 加 env(safe-area-inset-top) — 避開 iOS 動態島 / 瀏海。
+     非 iOS 裝置 inset=0 → padding 維持 4px；iPad/iPhone 自動補上動態島高度。
+     viewport-fit=cover 已在 app.html，env() 才有值。 */
   .beta-banner {
     background: #fff3c4;
     color: #5a3e00;
-    padding: 4px 12px;
+    padding: calc(4px + env(safe-area-inset-top, 0px)) 12px 4px 12px;
     font-size: 12px;
     text-align: center;
     border-bottom: 1px solid #e6c870;

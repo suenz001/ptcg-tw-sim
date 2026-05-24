@@ -35,6 +35,8 @@ import {
 } from '../_shared';
 // v3.66：規則寶可夢統一判定 helper
 import { isRulePokemon } from '../../engine';
+// v5.070：沉重接力棒分配能量改用 startEnergyChain — UI 顯示能量類型 + 同屬性 +/- counter
+import { startEnergyChain } from './v158_energy_chain';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 33 — 寶可夢道具（Tool）效果登錄表
@@ -220,78 +222,24 @@ regR('heavy-baton-pick-energies', (st, idx, energyIids, _params, pool) => {
   if (energyIids.length === 0) {
     return addLog(st, '沉重接力棒：未選擇能量', idx);
   }
-  const benchPokes = st.players[idx].bench;
-  if (benchPokes.length === 0) {
-    return addLog(st, '沉重接力棒：場上無備戰寶可夢，能量留在棄牌區', idx);
-  }
-  // 1 隻備戰：直接全附
-  if (benchPokes.length === 1) {
-    const target = benchPokes[0];
-    const tName = pool.get(target.cardId)?.name ?? '?';
-    const energies = st.players[idx].discard.filter(c => energyIids.includes(c.iid));
-    let s = addLog(st, `沉重接力棒：將 ${energies.length} 張基本能量附於 ${tName}`, idx);
-    return updatePlayer(s, idx, p => ({
-      ...p,
-      discard: p.discard.filter(c => !energyIids.includes(c.iid)),
-      bench: p.bench.map(c => c.iid === target.iid
-        ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
-        : c),
-    }));
-  }
-  // 多隻備戰 → 逐張分配（同 v2.221 過度放電 / v2.225 合金建造 pattern）
-  // v5.069 UX：加 titleOverride 標明這是「沉重接力棒：分配第 1 張能量」
-  return withPending(st, {
-    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'heavy-baton-distribute',
-    params: {
-      energyIids, validIids: benchPokes.map(c => c.iid),
-      totalCount: energyIids.length, placedCount: 0,
-      titleOverride: `沉重接力棒：選擇要附第 1/${energyIids.length} 張能量的備戰寶可夢`,
-    },
-  });
+  // v5.070：改用 startEnergyChain helper（v2.158 通用能量分配 chain，X啟動 / 燃燒充能 /
+  //   金屬製造者 等都共用此 pattern）。自動處理：
+  //   - 0 bench → 能量留 discard（startEnergyChain 內建 leftover log）
+  //   - 1 bench → 直接全附（避免反覆彈 UI）
+  //   - 同屬性多 bench → 開 energy-distribute pending 用 +/- counter UI（UI 顯示 【火】能量 等）
+  //   - 混屬性多 bench → 按 type 分波（先全部【火】後全部【水】），每波 +/- counter
+  //   爲 v3.57 wave-by-type pattern，UI 標題清楚顯示「分配【X】能量到 N 個合法目標」。
+  //   source='discard'（能量在 KO 時已搬到 dIdx 的 discard）；
+  //   scope='bench-only'（卡面「附於自己的備戰寶可夢身上」— 不含戰鬥位）；
+  //   filterType='Any'（不限備戰寶可夢屬性）。
+  return startEnergyChain(st, idx, energyIids, {
+    label: '沉重接力棒',
+    source: 'discard',
+    scope: 'bench-only',
+    filterType: 'Any',
+  }, pool);
 });
-regR('heavy-baton-distribute', (st, idx, iids, params, pool) => {
-  const energyIids = (params?.energyIids as string[]) ?? [];
-  const totalCount = (params?.totalCount as number) ?? energyIids.length;
-  const placedCount = (params?.placedCount as number) ?? 0;
-  if (energyIids.length === 0) return st;
-  const targetIid = iids[0];
-  const p = st.players[idx];
-  const target = p.bench.find(c => c.iid === targetIid);
-  if (!target) return st;
-  const tCard = pool.get(target.cardId);
-  const currentEnergyIid = energyIids[0];
-  const restIids = energyIids.slice(1);
-  const energy = p.discard.find(c => c.iid === currentEnergyIid);
-  if (!energy) return st;
-  let s = addLog(st,
-    `沉重接力棒：將第 ${placedCount + 1}/${totalCount} 張基本能量附於 ${tCard?.name ?? '?'}`, idx);
-  s = updatePlayer(s, idx, pl => ({
-    ...pl,
-    discard: pl.discard.filter(c => c.iid !== currentEnergyIid),
-    bench: pl.bench.map(c => c.iid === targetIid
-      ? { ...c, energyAttached: [...c.energyAttached, energy] }
-      : c),
-  }));
-  if (restIids.length > 0) {
-    if (s.players[idx].bench.length === 0) {
-      return addLog(s, '沉重接力棒：備戰已空，剩餘能量留在棄牌區', idx);
-    }
-    return withPending(s, {
-      type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'heavy-baton-distribute',
-      params: {
-        energyIids: restIids,
-        validIids: s.players[idx].bench.map(c => c.iid),
-        totalCount, placedCount: placedCount + 1,
-        titleOverride: `沉重接力棒：選擇要附第 ${placedCount + 2}/${totalCount} 張能量的備戰寶可夢`,
-      },
-    });
-  }
-  return s;
-});
+// v5.070：原 heavy-baton-distribute resolver 已被 startEnergyChain 取代，移除以避免代碼分歧
 
 // ── 被擊倒時對手多獲 1 張獎賞 ─────────────────────────────────────────────
 TOOL_PRIZE_BONUS.set('豪華斗篷', (card) => {

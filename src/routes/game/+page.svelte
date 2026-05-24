@@ -9054,7 +9054,11 @@
      header 額外多 26-30px×N → 撐高 .battle-root 超過視窗，右側出滾輪。
      改 nowrap + overflow-x:auto 後 chip 太多時水平捲動（桌機通常很寬，正常 1080p 不會觸發），
      header 高度永遠是 1 行，setup vs playing 視覺一致。flex-shrink:0 防 chip 內容被壓扁。 */
-  .battle-header{ display:flex; align-items:center; gap:0.6rem; background:#0a180a; padding:0.35rem 0.75rem; border-bottom:1px solid #2a4a2a; flex-shrink:0; flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; }
+  /* v5.070：padding-top 加 env(safe-area-inset-top) — 避開 iOS 動態島 / 瀏海。
+     正式站 (.com) 沒有上方 banner，battle-header 是第一個元素直接觸頂；
+     iOS Safari / iPad 在橫向時動態島 / status bar 會蓋住最上排 chip（v、設定、全螢幕）。
+     viewport-fit=cover 已在 app.html 啟用，env() 才有值。 */
+  .battle-header{ display:flex; align-items:center; gap:0.6rem; background:#0a180a; padding:calc(0.35rem + env(safe-area-inset-top, 0px)) 0.75rem 0.35rem 0.75rem; border-bottom:1px solid #2a4a2a; flex-shrink:0; flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; }
   .battle-header > *{ flex-shrink:0; }
   .small-back{ color:#88ccff; text-decoration:none; font-size:0.82rem; background:none; border:none; cursor:pointer; padding:0; }
   .small-back:hover{ text-decoration:underline; }
@@ -10633,7 +10637,8 @@
        header 6vh + field 30vh×2 + hand 16vh + action 12vh = 94vh（剩 6vh buffer）。
        每個 row flex:0 0 <vh> + overflow:hidden 確保內容超出時不擠到別 row。 */
     .battle-root{ height:100vh; height:100dvh; min-height:0; overflow:hidden; }
-    .battle-header{ flex:0 0 auto; max-height:7vh; padding:0.1rem 0.4rem; gap:0.2rem; font-size:0.66rem;
+    /* v5.070：mobile portrait — padding-top 同樣加 env(safe-area-inset-top) */
+    .battle-header{ flex:0 0 auto; max-height:7vh; padding:calc(0.1rem + env(safe-area-inset-top, 0px)) 0.4rem 0.1rem 0.4rem; gap:0.2rem; font-size:0.66rem;
                     overflow-x:auto; overflow-y:hidden; flex-wrap:nowrap; white-space:nowrap; }
     .battle-header > *{ flex-shrink:0; }
     .field-row{ flex:0 0 30vh; max-height:30vh; min-height:0; overflow:hidden;

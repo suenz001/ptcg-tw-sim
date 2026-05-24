@@ -265,6 +265,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.070</span> 🎴 沉重接力棒 UI 顯示能量類型 + iOS 平板最上排 UI 重疊修正</summary>
+        <ul>
+          <li><b>玩家建議 1：沉重接力棒分配能量時，modal 應顯示能量類型（火/水/雷等）</b></li>
+          <li>　・<b>背景</b>：v5.067 把沉重接力棒從「自動丟最後 N 張基本能量」升級為玩家自選 picker，v5.069 再加 titleOverride 改善 UX。但 picker 自身顯示的只是「第 K/N 張能量」抽象計數 — 玩家不知道每張是什麼能量（火?水?雷?）。Wilson 建議參考「大吾的巨金怪ex｜X啟動」的分配方式，UI 顯示能量類型。</li>
+          <li>　・<b>X啟動的設計</b>：用 <code>startEnergyChain</code> helper（<code>v158_energy_chain.ts</code>），裡面 v2.87 偵測同屬性 → 開 <code>energy-distribute</code> +/- counter UI（顯示「分配【X】能量到 N 隻寶可夢」）；v3.57 混屬性 → 按 type 分波 picker（先全部【火】再全部【水】）。UI 標題、log 訊息都帶屬性名。X啟動 / 燃燒充能 / 金屬製造者 / 玻璃喇叭 等 6+ 招式都共用此 pattern。</li>
+          <li>　・<b>修法</b>：把 <code>tools.ts heavy-baton-pick-energies</code> resolver 從「自己 chain 開 heal-target picker 逐張附」改成<strong>直接呼叫 <code>startEnergyChain(st, dIdx, energyIids, &#123; label: &apos;沉重接力棒&apos;, source: &apos;discard&apos;, scope: &apos;bench-only&apos;, filterType: &apos;Any&apos; &#125;, pool)</code></strong>。能量已在 KO 時搬到 discard（source=discard 直接讀），scope=bench-only（卡面「附於自己的備戰寶可夢身上」不含戰鬥位）。原 <code>heavy-baton-distribute</code> resolver 移除（不再使用）。</li>
+          <li>　・<b>實際 UI（v5.070 起）</b>：</li>
+          <li>　　1. 同屬性多備戰（例選 3 張水能量分到 3 隻備戰）→ +/- counter 顯示「已附加 N/3 張【水】能量」、目標寶可夢卡上加 ×N 數字標籤</li>
+          <li>　　2. 混屬性多備戰（例選 1 水 + 2 火）→ 先彈「分配【水】能量到 N 個合法目標（共 1 張，之後還有 1 種屬性待分配）」picker；按完後再彈「接著分配【火】能量到 N 個合法目標（共 2 張）」picker</li>
+          <li>　　3. 1 隻備戰 → 自動全附（避免反覆彈 UI，內建在 startEnergyChain）</li>
+          <li>　　4. 0 隻備戰 → 能量留棄牌區（內建 leftover log）</li>
+
+          <li><b>玩家回報 2：iOS 平板介面最上排會點不到，且和時間訊息有 UI 重疊</b></li>
+          <li>　・<b>根因</b>：<code>game/+page.svelte L9057 .battle-header</code> 的 padding 是固定 <code>0.35rem 0.75rem</code>，沒考慮 iOS 動態島 / 瀏海 / 狀態列。正式站（www.ptcg-tw-sim.com）沒有上方 migration banner / BETA banner，<code>.battle-header</code> 是第一個元素直接觸頂 → iPad 橫向時動態島 / status bar 會覆蓋最上排 chips（版本號、設定、全螢幕 等按鈕）造成「點不到」、和 timer chips 視覺重疊。</li>
+          <li>　・<b>對比已修正的元件</b>：<code>+layout.svelte L124 .migration-banner</code> 用 <code>padding: calc(10px + env(safe-area-inset-top, 0px))</code>（v4.946 已加），<code>cards/+page.svelte</code>、<code>decks/+page.svelte</code> 都有處理；只有 <code>.battle-header</code> 跟 <code>.beta-banner</code> 漏掉。</li>
+          <li>　・<b>修法</b>：</li>
+          <li>　　1. <code>game/+page.svelte .battle-header</code> padding 改 <code>calc(0.35rem + env(safe-area-inset-top, 0px)) 0.75rem 0.35rem 0.75rem</code> — 一般裝置 inset=0 維持原樣，iOS 自動補動態島高度（~47px）</li>
+          <li>　　2. mobile-portrait media query 的 <code>.battle-header</code> 同步改 <code>padding: calc(0.1rem + env(safe-area-inset-top, 0px)) 0.4rem 0.1rem 0.4rem</code></li>
+          <li>　　3. <code>+layout.svelte .beta-banner</code> padding 改 <code>calc(4px + env(safe-area-inset-top, 0px)) 12px 4px 12px</code> — github.io BETA 站也避開動態島</li>
+          <li>　・<b>實際情境</b>：v5.070 起 — iPad 橫向 / iPhone 動態島機型，battle-header 自動下推到 safe-area 內，最上排 chips 不會被狀態列覆蓋，點得到。一般桌機 / Android 裝置 inset=0 完全沒影響。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 tools.ts + +layout.svelte + game/+page.svelte + +page.svelte + version.ts）／Rule 14（最小 patch — 沉重接力棒復用既有 startEnergyChain helper 不重寫；iOS 修正只動 CSS padding 不動 layout flow）／Rule 15（卡面 source of truth — 沉重接力棒「附於自己的備戰寶可夢身上」對應 scope=&apos;bench-only&apos;）／Rule 11e（Write tool 寫 patch_v5070.py 避開 heredoc）／Rule 11f（push 前 3 道 ASSERT 防 silent fail）。Pre-push tsc + Rule 1 audit + 卡名 audit + push 後 Step A/B verify。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.069</span> 🐛 修甲殼刺自動選對手能量 + 炙燒對灼傷狀態漏 +160 + 沉重接力棒 UX 改善</summary>
         <ul>
           <li><b>Bug 1：爆焰龜獸ex｜甲殼刺（M3 056/080 特性）自動選對手能量丟棄</b></li>
