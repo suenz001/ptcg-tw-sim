@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.21 (admin v0.92 — 加 GET /api/admin/firestore-write-audit 列各 collection 1h/24h 寫入數，定位 Firebase 寫入暴量元兇)
+// === ORACLE ADMIN ENDPOINTS === v0.22 (admin v0.92 — audit endpoint timestamp 比對加 ISO string fallback，讓 client 寫的 collection (如 decks) 也能 count)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
 //
 // Changes:
@@ -315,11 +315,17 @@ import('firebase-admin').then(async ({ default: admin }) => {
   // 列各 top-level collection 的 total + 過去 1h / 24h 內新增/更新 doc 數
   // 用 aggregate count() query，每個 query 只算 1 read，總成本約 5×N reads
   // 目的：定位寫入暴量元兇（v5.072 後 users 不應該再寫，但寫入仍高 → 找其他 collection）
+  //
+  // v0.22：timestamp query 加 ISO string fallback — decks 等 client 寫的 collection
+  //   schema 用 new Date().toISOString() 而非 serverTimestamp → 直接 Timestamp 比對 fail
+  //   ISO string lex sort 跟時間順序一致，string '>' compare 完全 work
   app.get('/api/admin/firestore-write-audit', requireFirebaseAdmin, requireFb, async (req, res) => {
     try {
       const now = Date.now();
-      const h1 = admin.firestore.Timestamp.fromMillis(now - 3600000);
-      const h24 = admin.firestore.Timestamp.fromMillis(now - 86400000);
+      const h1Ts = admin.firestore.Timestamp.fromMillis(now - 3600000);
+      const h24Ts = admin.firestore.Timestamp.fromMillis(now - 86400000);
+      const h1Iso = new Date(now - 3600000).toISOString();
+      const h24Iso = new Date(now - 86400000).toISOString();
 
       async function tryCount(query) {
         try {
@@ -330,13 +336,24 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
       }
 
+      // v0.22：嘗試兩種 timestamp 比對 — Timestamp 失敗 fallback 試 ISO string
+      async function tryCountWithFallback(collRef, field, tsValue, isoValue) {
+        const r1 = await tryCount(collRef.where(field, '>', tsValue));
+        if (typeof r1 === 'number') return r1;
+        // Timestamp 比對失敗 → 嘗試 ISO string 比對
+        const r2 = await tryCount(collRef.where(field, '>', isoValue));
+        if (typeof r2 === 'number') return r2;
+        // 兩種都失敗（field 不存在 / 其他錯誤）
+        return r1;
+      }
+
       async function auditCollection(collRef, name) {
         const row = { collection: name };
         row.total = await tryCount(collRef);
-        row.createdAt_1h = await tryCount(collRef.where('createdAt', '>', h1));
-        row.createdAt_24h = await tryCount(collRef.where('createdAt', '>', h24));
-        row.updatedAt_1h = await tryCount(collRef.where('updatedAt', '>', h1));
-        row.updatedAt_24h = await tryCount(collRef.where('updatedAt', '>', h24));
+        row.createdAt_1h = await tryCountWithFallback(collRef, 'createdAt', h1Ts, h1Iso);
+        row.createdAt_24h = await tryCountWithFallback(collRef, 'createdAt', h24Ts, h24Iso);
+        row.updatedAt_1h = await tryCountWithFallback(collRef, 'updatedAt', h1Ts, h1Iso);
+        row.updatedAt_24h = await tryCountWithFallback(collRef, 'updatedAt', h24Ts, h24Iso);
         return row;
       }
 
