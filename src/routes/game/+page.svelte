@@ -8498,9 +8498,9 @@
     padding-bottom:.45rem !important;
     min-height:140px !important;
   }
-  /* v5.111: HP column top 35px → .5rem 移回原值 (v5.109 為避 bench fan 改 35, 但 row-gap 25 已解決) */
+  /* v5.112: HP column 垂直置中 (玩家要求大約置中位置) */
   .playmat.layout-tabletop .active-card .active-hpbar-bottom{
-    left:.4rem; top:.5rem; right:auto; bottom:auto;
+    left:.4rem; top:50%; transform:translateY(-50%); right:auto; bottom:auto;
     width:140px;
     flex-direction:column; align-items:center; justify-content:flex-start;
     gap:5px; padding:5px 4px;
@@ -8654,19 +8654,24 @@
   .playmat.layout-tabletop .active-card{
     padding-bottom:.9rem !important;  /* 騰 ability-btn 空間 — 沒有 ability 也不影響 */
   }
+  /* v5.112: ability-btn 移到 active-img (卡圖) 上方文字說明區位置, 用 right 對齊 active-card 右側
+     active-img width:105 在 active-card 右側 (padding-left:148 之後). 卡圖內部文字 effect 區大約在
+     上方 ~60% 位置 (卡牌設計: 上半圖, 下半 attacks/effect)。
+     用 right:8px + top:75px 把按鈕放到卡圖中下文字區位置, z-index 200 最頂層。 */
   .playmat.layout-tabletop .active-card .ability-btn{
     position:absolute;
-    left:.4rem;
-    width:140px;             /* 跟 .active-name-tt 同寬 */
-    top:90px;                /* v5.111: 跟 HP column 移回原值 .5rem → ability-btn 也回 90 */
-    z-index:60;              /* 高過 active-info(2) + attached cards(50~80)，低於 name-tt(100) */
-    margin:0;                /* 蓋掉 base .ability-btn margin-top:.2rem */
-    padding:.25rem .4rem;
-    font-size:.72rem; font-weight:600;
-    background:#3a1a5a; color:#e0a0ff;
-    border:1px solid #7a4aaa; border-radius:4px;
+    right:8px;
+    width:90px;
+    top:75px;                /* 卡圖約 50-60% 高度位置 = 文字說明開始 */
+    z-index:200;             /* 最頂層, 高過 active-img(99) + attached(50~80) + name-tt(100) */
+    margin:0;
+    padding:.3rem .4rem;
+    font-size:.75rem; font-weight:700;
+    background:rgba(58, 26, 90, .92); color:#fff;
+    border:1px solid #b070dd; border-radius:5px;
     cursor:pointer; text-align:center;
-    box-shadow:0 2px 4px rgba(0,0,0,.4);
+    box-shadow:0 2px 6px rgba(0,0,0,.7), 0 0 8px rgba(176,112,221,.5);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   .playmat.layout-tabletop .active-card .ability-btn:hover{
     background:#5a2a8a;

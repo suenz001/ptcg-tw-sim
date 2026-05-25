@@ -265,6 +265,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.112</span> 🎨 戰鬥場 HP bar 垂直置中 + 特性按鈕移到卡圖上方文字區（玩家拍拍手後微調）</summary>
+        <ul>
+          <li><b>玩家滿意 v5.111 layout</b>，要求微調：</li>
+          <li>　1. <b>HP bar + HP 文字往下到置中位置</b>（之前 top:.5rem 在 active-card 上邊）</li>
+          <li>　2. <b>特性按鈕移到戰鬥場卡片上方</b>，大約文字說明開始的位置（卡圖中下區）+ 上推到最頂層</li>
+
+          <li><b>修法</b>：</li>
+          <li>　1. <code>.active-hpbar-bottom top:.5rem → top:50% transform:translateY(-50%)</code> 垂直置中 active-card。<code>.active-name-tt</code> 自動跟隨（top:100% from hpbar-bottom）。</li>
+          <li>　2. <code>.ability-btn</code> 從 active-card 左側 HP column 下方移到 active-img 上方：</li>
+          <li>　　・<code>right:8px width:90px top:75px</code>（active-img 在 active-card 右側，卡圖約 50-60% 高度 = 文字 effect 開始位置）</li>
+          <li>　　・<code>z-index:200</code>（最頂層，高過 active-img(99)+attached(50~80)+name-tt(100)）</li>
+          <li>　　・配色加深 + 半透明背景 + box-shadow + glow 確保卡圖上仍可讀</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c／Rule 14（純 CSS 2 處）／Rule 1（changelog audit pass）／Rule 11e／Rule 11f。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.111</span> 🎨 縮小 active-card 內部空白 + row-gap 25→15 fit viewport</summary>
         <ul>
           <li><b>玩家回報</b>：v5.110 row-gap 25 後整頁太長需 scroll，無法一頁容納；active-card 內部上下空白浪費；我方對方 active 距離太遠。</li>
