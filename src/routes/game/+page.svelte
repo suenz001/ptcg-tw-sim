@@ -8464,8 +8464,14 @@
        v5.027：actions column 從 auto → 固定 160px，避免 alerts-col 內 prize-alert 出現時撐寬 column
        把整個戰鬥場往右擠 — 玩家反映「就像真的桌游一樣不該抖動桌子」 */
     grid-template-columns:32px auto auto 160px 1fr auto;
-    /* 4 rows: opp-bench / opp-active / self-active / self-bench */
-    grid-template-rows:auto auto auto auto;
+    /* 4 rows: opp-bench / opp-active / self-active / self-bench
+       v5.136 終極修間隙：auto auto auto auto → fixed 205/300/300/205。
+       Wilson 連回報 3 次「塡能/放競技場後 active-bench 間隙拉大」(v5.131/v5.134/v5.135 均失敗)。
+       真根因：auto row 被子元素撐高 → align-self:end 的 bench 黏父 row 底部跟著下移
+       → active (上 row 頂) 跟 bench (下 row 底) 視覺距離擴大。
+       fixed px 鎖死 4 個 row 高度，任何內容變化都不影響 grid layout。
+       300px 容得下 active-card (HP bar 88, 招式按鈕 4×40, 卡圖 145, padding) + buffer。 */
+    grid-template-rows:205px 300px 300px 205px;
     grid-template-areas:
       ".       .         .         .         benchO    ."
       "chipO   pilesO    stadium   .         activeO   prizesO"

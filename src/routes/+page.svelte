@@ -265,6 +265,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.136</span> 🔒 終極修桌墊版間隙 (連修 4 次後根治)</summary>
+        <ul>
+          <li><b>玩家回報</b>：「我方備戰寶可夢和戰鬥寶可夢中間區域的間隙，塡能後就被莫名其妙地撐大了，如果再放上競技場就會更大… 這個問題你修了好幾次了!!!!請確實解決!!!」</li>
+          <li><b>連修 4 次失敗紀錄</b>：v5.131（zone-bench min-height:205）／ v5.134（zone-bench height/min/max 三鎖死）— 都鎖了 bench row 但沒鎖 active row。</li>
+          <li><b>真根因（這次徹底 audit）</b>：<code>.playmat.layout-tabletop</code> 用 <code>grid-template-rows:auto auto auto auto</code>。4 row 都是 auto → 任何子元素撐高就撐大 row。Row 1/4（bench）已固定 205，但 Row 2/3（active）還是 auto。塡能時 active-card 內元素（如 evo-wrap、ability-btn、attached att-card-stack）撐高 active-card → Row 3 隨之撐高 → Row 4（bench）整體被推下 → bench <code>align-self:end</code> 黏 Row 4 底部跟著下移 → active（Row 3 頂）和 bench（Row 4 底）視覺距離拉大！放競技場後 stadium-display 雖鎖 138 但跨 Row 2-3，跨 row 也加碼撐高效應。</li>
+          <li><b>終極修法</b>：<code>grid-template-rows: 205px 300px 300px 205px</code>。完全鎖死 4 個 row 高度，內容超過時 overflow 但 grid row 不變。300px = HP bar 88 + 招式 4×40 + 卡圖 145 + padding 容得下。</li>
+
+          <li><b>玩家補規則（mulligan 第 3 條）— 留 v5.137 處理</b>：不需重抽方在對方 mulligan 後可補抽，補抽後手牌中有基礎寶可夢可選擇放備戰。實作要審視 <code>setupDone</code> / <code>mulliganRevealConfirmed</code> / <code>pendingMulliganDraw</code> 三者交互，需考慮「補抽後重置 setupDone[me]=false 開放 BENCH_POKEMON 一次再 finishSetup」的設計，避免破壞其他 setup gate。先記錄需求，下版實作前會徵詢 Wilson 確認流程。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 1 處 exact-match）／14（最小 patch — 純 1 行 CSS：auto auto auto auto → 205px 300px 300px 205px）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.135</span> 🚨 hotfix: v5.134 mulligan gate 兩個問題</summary>
         <ul>
           <li><b>玩家回報</b>：AI 對戰時 log 不停 spam「🤖 AI 對手 重抽過，需等對手先放好戰鬥場寶可夢」。</li>
