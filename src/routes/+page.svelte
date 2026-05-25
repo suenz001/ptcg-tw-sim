@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.119</span> 🔧 Hotfix v5.118 仍 build fail — 移除 HTML 注釋 raw entity + Map 泛型</summary>
+        <ul>
+          <li><b>v5.118 也 fail</b>：reduce 寫法已避開 statement，但仍 build fail。再 audit 後找出兩個潛在原因：</li>
+          <li>　1. HTML 注釋內含 raw <code>&#123;@const&#125;</code> 文字 — Svelte parser 仍解析 HTML 注釋內的 Svelte syntax</li>
+          <li>　2. <code>new Map&lt;string, &#123;...&#125;&gt;()</code> 泛型在 svelte template 內 — <code>&lt;string,</code> 可能被誤判為 HTML tag 開頭</li>
+          <li><b>修法</b>：(a) 刪掉解釋注釋；(b) 拿掉 <code>Map&lt;...&gt;</code> 泛型直接寫 <code>new Map()</code>，TypeScript 自動推斷 OK。</li>
+          <li><b>教訓</b>：Svelte template 內任何位置都不能有 raw special chars，包含「HTML 注釋」；TypeScript 泛型 <code>&lt;</code> 在 attr/expr 位置也會跟 HTML parser 衝突。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（1 處 exact-match）／14（移除 2 處衝突）／1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.118</span> 🔧 Hotfix v5.116 棄牌區 IIFE 違反 Svelte &#123;@const&#125; 規則導致 build fail</summary>
         <ul>
           <li><b>v5.116/v5.117 Deploy fail</b>：玩家發現 Beta 站未更新。GitHub Actions log：build SvelteKit app step failure（admin 沒權限 download log，但根因可推：Svelte <code>&#123;@const expr&#125;</code> 只允許 expression，不允許 statement）。</li>
