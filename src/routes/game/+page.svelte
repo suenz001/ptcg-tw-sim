@@ -8582,38 +8582,37 @@
   /* v5.129：桌墊版 stadium 加 max-height + 縮小 img — 避免場地卡上場後撐大父 row
      讓上下版面框架保持穩定 */
   .playmat.layout-tabletop .action-bar > .stadium-display{
-    grid-area:stadium; grid-row:2 / span 2; align-self:center; justify-self:center;
-    /* v5.143 終極修：position:absolute 浮層（Wilson 提案「類似 word 文繞圖」）。
-       v5.141 三鎖死 height 仍撐開 — CSS Grid spec 中，spanning item 的 size
-       仍會分配到各 row track 影響 sizing。即使 height 鎖 138，row track 仍
-       contribute min-height 138/2=69px，imp load 前後 layout 重算撐瞬間擴大。
-
-       Spec：「An absolutely-positioned child of a grid container has its
-       containing block become the grid area defined by grid-area, and does
-       NOT contribute to track sizing.」
-       → stadium 仍顯示在原 grid area 中央，但 grid row sizing 完全不算它。 */
+    /* v5.143：position:absolute 浮層（Wilson 提案「類似 word 文繞圖」），不貢獻
+       row track sizing — Spec 保證 absolute item 即使有 grid-area 也不撐 grid。
+       v5.157：拿掉 grid-area / grid-row（不必需，absolute item 在 grid 中本就
+       不撐 row）。改用 right/top 從 .playmat（v5.143 已 position:relative）量定位
+       到右側對手 prizes/piles col 6 左方。放大 96/138 → 120/168 (1.25x)。 */
     position:absolute;
+    right:150px;            /* v5.157 移到右側 (留對手 prizes/piles 區 ~140px) */
+    top:50%;
+    transform:translateY(-50%);
     /* 顯示與 flex layout（內部 label/img/name 垂直排列） */
     display:flex; flex-direction:column; align-items:center;
     background:rgba(26,42,74,.6); border:1px solid #3a5a8a; border-radius:6px;
     cursor:pointer;
-    width:96px;
-    height:138px;
-    padding:.18rem .25rem; gap:.12rem;
+    width:120px;            /* v5.157: 96→120 放大 */
+    height:168px;           /* v5.157: 138→168 等比 (96:138 ≈ 120:172, 取 168) */
+    padding:.25rem .3rem; gap:.18rem;
     overflow:hidden;
     z-index:5;  /* 浮在 grid items 之上但不蓋 modal */
   }
   .playmat.layout-tabletop .action-bar > .stadium-display img{
-    width:64px;  /* v5.129: 92→64，縮小不撐大 */
-    /* v5.141：加 height 鎖死 — 不依賴 intrinsic ratio（卡片 96:135 → 64×90），
-       避免 img 載入前後 size 改變撐大父 stadium-display 進而影響 grid row。 */
-    height:90px; object-fit:contain;
+    /* v5.157: 64/90 → 84/118 等比放大 (卡片 96:135 比例) */
+    width:84px;
+    height:118px;
+    object-fit:contain;
   }
+  /* v5.157: 字體放大配合 width 增 */
   .playmat.layout-tabletop .action-bar > .stadium-display .stadium-display-label{
-    font-size:.62rem;
+    font-size:.75rem;
   }
   .playmat.layout-tabletop .action-bar > .stadium-display .stadium-display-name{
-    font-size:.66rem; max-width:90px;
+    font-size:.78rem; max-width:112px;
   }
   .playmat.layout-tabletop .action-bar > .action-btns{
     grid-area:actions; align-self:center; justify-self:center;

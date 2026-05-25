@@ -265,6 +265,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.157</span> 🎯 場地卡放大 + 移到右側對手獎賞/牌庫左方</summary>
+        <ul>
+          <li><b>Wilson 要求</b>：「現在的場地卡位置有點奇怪又太小，請幫我放大後，移動到右側，對手獎賞卡與牌庫圖案的左方。切記不要又不小心調整到框架，造成整體版面大小又有變動」</li>
+          <li><b>修法</b>（基於 v5.143 stadium 已 <code>position:absolute</code> 不貢獻 grid sizing 的設計）：</li>
+          <li>　・拿掉 <code>grid-area/grid-row</code>（absolute item 在 grid 中本就不撐 row，移除後 containing block 變 <code>.playmat</code>，可用 right/top 自由定位）</li>
+          <li>　・<code>right:150px; top:50%; transform:translateY(-50%)</code> → 移到 .playmat 右側（對手 prizes/piles col 6 左方）垂直置中</li>
+          <li>　・尺寸放大 <code>96/138 → 120/168</code>（1.25x，保 96:135 卡片比例）</li>
+          <li>　・img 放大 <code>64/90 → 84/118</code>，label/name 字體放大 <code>.62/.66rem → .75/.78rem</code></li>
+          <li><b>不影響版面框架</b>：仍 position:absolute → CSS Grid Spec 保證不貢獻 row track sizing → 整體版面框架完全不變。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 3 處 exact-match）／14（最小 patch — 純 CSS 3 處改）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.156</span> 🐛 扣殺能量被 KO 漏觸發 + 化石丟棄按鈕放大</summary>
         <ul>
           <li><b>Wilson 截圖確認</b>：岩殿居蟹（附扣殺能量、薄霧能量、英雄斗篷）被巨金怪「金屬之錘」300 點傷害昏厥，**扣殺能量沒觸發** — log 無扣殺紀錄、攻擊方沒被 +20 反擊。</li>
