@@ -173,7 +173,10 @@ regA('超級袋獸ex', 0, (st, idx) => {
 //   舊版合併寫一行「擲到反面前正面 N 次」會被 UI parser 誤判成單次 heads 動畫，
 //   且 heads=0 時 message 仍含「正面」字樣 → 顯示錯誤面。
 regPre('超級袋獸ex|機關槍合擊', (state, aIdx) => {
-  let s = state;
+  // v5.164：設 coinFlippedThisAttack=true（重試徽章 ATTACK 末端 modal trigger 依賴此 flag）。
+  //   原本用 raw Math.random 沒走 flipCoinsWithLog helper → flag 沒被設 → 重試徽章 modal
+  //   不 popup。動態次數擲幣（直到反面）無法用 flipCoinsWithLog（固定次數）helper，故 inline 設。
+  let s: GameState = { ...state, coinFlippedThisAttack: true };
   let heads = 0;
   let count = 0;
   for (let i = 0; i < 20; i++) {

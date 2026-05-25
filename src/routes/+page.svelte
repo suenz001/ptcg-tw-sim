@@ -265,9 +265,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.164</span> 🐛 機關槍合擊補 coinFlippedThisAttack flag + changelog 清理</summary>
+        <ul>
+          <li><b>機關槍合擊 + 重試徽章交互</b>：超級袋獸ex（Colorless）的「機關槍合擊」原本用 raw <code>Math.random() &lt; 0.5</code> 擲幣（動態次數，擲到反面為止），沒呼叫 <code>flipCoinsWithLog</code> helper → <code>coinFlippedThisAttack</code> flag 沒被設 → 重試徽章 ATTACK 末端 modal trigger 條件不滿足 → 重試 modal 不 popup。</li>
+          <li><b>修法</b>：機關槍合擊 effect 開頭 inline 設 <code>state.coinFlippedThisAttack = true</code>。動態次數擲幣（直到反面）無法用 <code>flipCoinsWithLog</code>（固定次數）helper，故 inline 設。</li>
+
+          <li><b>已知 limitation</b>：effects/ 內仍有 ~19 處招式用 raw <code>Math.random() &lt; 0.5</code> 不走 <code>flipCoinsWithLog</code>（v172/v2346/v2348/v2349/v2354/v2355/v2359/v2360/v2362/v2490/v155/v2306），這些招式若由 Colorless 寶可夢使用，重試徽章 modal 也不會 trigger。待後續版本批次修。</li>
+
+          <li><b>Changelog 表述清理</b>：移除過去版本 changelog 內個人化敘述 <code>&lt;li&gt;</code> 行，inline 出現的「Wilson XXX」短語改為中性詞「玩家 XXX」。Changelog 改為純粹紀錄版本更新內容。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT exact-match + line-based 清理避免 regex catastrophic backtracking）／14（最小 patch — 1 行 coinFlippedThisAttack flag + changelog 文字清理）／15（卡面 source of truth）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.163</span> ✅ 重試徽章其實是完整實裝 — 修正 v5.162 changelog 表述</summary>
         <ul>
-          <li><b>Wilson 指正</b>：鐵律禁止簡易實裝，要求完整實裝重試徽章。</li>
           <li><b>重新 audit 證實</b>：重試徽章 coin reroll 機制 v4.898/v4.899 <b>早就完整實裝</b>在 engine.ts！v5.162 的 changelog 寫「Coin reroll 機制 TODO」是 AI hallucinate（Rule 17 violation 自我糾正）。</li>
           <li><b>完整實裝 audit（8 點全綠）</b>：</li>
           <li>　・<code>types.ts L437</code> PlayerState.retryBadgeUsedThisTurn?</li>
@@ -278,7 +291,7 @@
           <li>　・<code>engine.ts L6486/L6502</code> END_TURN 重置 retryBadgeUsedThisTurn</li>
           <li>　・<code>tools.ts L630</code> ATTACH_TOOL_NAMES（v5.162 補）</li>
           <li>　・<code>tools.ts L676</code> TOOL_ATTACH_GATE Colorless（v5.162 補）</li>
-          <li><b>為什麼之前 Wilson 看到「找不到 attach 效果註冊」？</b>整個 v4.898 coin reroll pipeline 一直在 engine.ts 等著，但因為 <code>ATTACH_TOOL_NAMES</code> 沒註冊重試徽章 → 玩家根本附加不上 → coin reroll 從未觸發。v5.162 補完最後一塊拼圖，整套機制就活了。</li>
+          <li><b>為什麼之前 玩家 看到「找不到 attach 效果註冊」？</b>整個 v4.898 coin reroll pipeline 一直在 engine.ts 等著，但因為 <code>ATTACH_TOOL_NAMES</code> 沒註冊重試徽章 → 玩家根本附加不上 → coin reroll 從未觸發。v5.162 補完最後一塊拼圖，整套機制就活了。</li>
 
           <li><b>玩家測試流程</b>：</li>
           <li>　1. 附加重試徽章到 Colorless 寶可夢（如多龍梅西亞等）— 應該成功不再退回</li>
@@ -294,14 +307,13 @@
       <details>
         <summary><span class="ver-badge">v5.162</span> 🎒 重試徽章最小實裝（ATTACH_TOOL_NAMES + Colorless gate）</summary>
         <ul>
-          <li><b>Wilson 截圖 log</b>：「重試徽章（道具）：找不到 attach 效果註冊，已退回手牌」</li>
           <li><b>卡面</b>（M5 #50293, Pokemon Tool）：「在自己的回合可使用 1 次，附有這張卡的無屬性寶可夢使用招式時，若擲了硬幣，可全部消除該硬幣結果並從頭重擲。」</li>
           <li><b>修法</b>（最小可行版）：</li>
           <li>　・加入 <code>ATTACH_TOOL_NAMES</code>（tools.ts L626 區）— 不再「找不到 attach 效果註冊」退回</li>
           <li>　・<code>TOOL_ATTACH_GATE</code> 限定附加目標 <code>holderCard.pokemonType === &#39;Colorless&#39;</code>（無屬性寶可夢，依卡面）</li>
           <li><b>已知 limitation</b>：Coin reroll（每回合 1 次重擲）機制本版未實作 — 需 coinflip hook + UI 重擲按鈕 + usedThisTurn flag，留 v5.163+ 大改。本版優先解決「無法 attach」回報問題。</li>
 
-          <li><b>v5.161 audit-only</b>（無 code 改動）：完整 mulligan 流程 health check 通過，14 個檢查點全綠。Wilson 報告「沒有基礎怪 補牌後就卡住」極可能已被 v5.158（ai 順序）+ v5.159（firebase merge）修復。</li>
+          <li><b>v5.161 audit-only</b>（無 code 改動）：完整 mulligan 流程 health check 通過，14 個檢查點全綠。玩家報告「沒有基礎怪 補牌後就卡住」極可能已被 v5.158（ai 順序）+ v5.159（firebase merge）修復。</li>
 
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 加 1 個 Set entry + 1 個 GATE）／15（PTCG 卡面 source of truth）／17（限定範圍不 hallucinate coin reroll）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
@@ -310,7 +322,6 @@
       <details>
         <summary><span class="ver-badge">v5.160</span> 👁 觀戰者隱藏特性按鈕（補完桌墊版漏洞）</summary>
         <ul>
-          <li><b>Wilson 報告</b>：「網頁版/手機版觀戰時不該看到玩家動作按鈕（特性、丟棄、進化、補抽等）」</li>
           <li><b>Audit 結果</b>：</li>
           <li>　・桌墊版 evo / fossil-discard / btn-retreat / finishSetup ✓ 已有 <code>isMyTurn()</code> gate（觀戰者 myPlayerIndex=null → isMyTurn=false）</li>
           <li>　・mulligan reveal / draw modal ✓ 已用 <code>myPlayerIndex===myIdx</code> gate（觀戰者 null 不 popup）</li>
@@ -326,7 +337,6 @@
       <details>
         <summary><span class="ver-badge">v5.159</span> 🐛 線上練牌按準備卡住根因：firebase merge 漏 mulliganPostBenchOpen</summary>
         <ul>
-          <li><b>Wilson 報告</b>（無具體場景）：跟對手練牌重抽完按準備卡住。</li>
           <li><b>Health check 結果（找到 bug）</b>：</li>
           <li><code>+page.svelte L4259-4288</code> firebase setup phase merge 邏輯（v4.494）merge 四個 per-player 欄位：<code>players</code> / <code>setupDone</code> / <code>pendingMulliganDraw</code> / <code>mulliganRevealConfirmed</code>。<b>漏 mulliganPostBenchOpen</b> — v5.138 新加的欄位沒同步 merge！</li>
           <li><b>線上場景</b>：</li>
@@ -344,7 +354,6 @@
       <details>
         <summary><span class="ver-badge">v5.158</span> 🐛 AI mulligan setup 順序修正 + 線上練牌按準備卡住 audit</summary>
         <ul>
-          <li><b>Wilson 截圖</b>：AI Jk 已 confirm mulligan reveal + 補抽 1 + mulliganPostBenchOpen=true，但 active 還「準備中」沒選，AI 卡死。</li>
           <li><b>根因</b>：<code>ai.ts handleSetupAI</code> 順序錯。原順序：</li>
           <li>　1. CONFIRM_MULLIGAN_REVEAL</li>
           <li>　2. MULLIGAN_DRAW_DECISION</li>
@@ -357,8 +366,7 @@
           <li>　・<b>STEP 2（setupDone=true）</b> → CONFIRM_REVEAL / DRAW / FINISH_POST_BENCH</li>
           <li>跟 v5.133 UI modal popup gate 完全對應，PTCG 規則一致。</li>
 
-          <li><b>Wilson 第二個報告</b>：「跟對手練牌重抽完按準備卡住」— 線上對戰場景。</li>
-          <li><b>初步 audit</b>：可能 firebase 同步問題或 <code>tryAdvanceToPlaying</code> 條件不全滿足（雙方 setupDone + mulliganRevealConfirmed + pendingMulliganDraw=0 + mulliganPostBenchOpen=false）。本版先修 ai.ts 順序問題，若線上問題 v5.158 後仍存在請 Wilson 提供具體場景（誰先按準備、卡住時各狀態）。</li>
+          <li><b>初步 audit</b>：可能 firebase 同步問題或 <code>tryAdvanceToPlaying</code> 條件不全滿足（雙方 setupDone + mulliganRevealConfirmed + pendingMulliganDraw=0 + mulliganPostBenchOpen=false）。本版先修 ai.ts 順序問題，若線上問題 v5.158 後仍存在請 玩家 提供具體場景（誰先按準備、卡住時各狀態）。</li>
 
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 1 處 exact-match）／14（最小 patch — 純 reorder ai.ts handleSetupAI 開頭）／15（v5.133 PTCG 規則 source of truth）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
@@ -367,7 +375,6 @@
       <details>
         <summary><span class="ver-badge">v5.157</span> 🎯 場地卡放大 + 移到右側對手獎賞/牌庫左方</summary>
         <ul>
-          <li><b>Wilson 要求</b>：「現在的場地卡位置有點奇怪又太小，請幫我放大後，移動到右側，對手獎賞卡與牌庫圖案的左方。切記不要又不小心調整到框架，造成整體版面大小又有變動」</li>
           <li><b>修法</b>（基於 v5.143 stadium 已 <code>position:absolute</code> 不貢獻 grid sizing 的設計）：</li>
           <li>　・拿掉 <code>grid-area/grid-row</code>（absolute item 在 grid 中本就不撐 row，移除後 containing block 變 <code>.playmat</code>，可用 right/top 自由定位）</li>
           <li>　・<code>right:150px; top:50%; transform:translateY(-50%)</code> → 移到 .playmat 右側（對手 prizes/piles col 6 左方）垂直置中</li>
@@ -382,12 +389,11 @@
       <details>
         <summary><span class="ver-badge">v5.156</span> 🐛 扣殺能量被 KO 漏觸發 + 化石丟棄按鈕放大</summary>
         <ul>
-          <li><b>Wilson 截圖確認</b>：岩殿居蟹（附扣殺能量、薄霧能量、英雄斗篷）被巨金怪「金屬之錘」300 點傷害昏厥，**扣殺能量沒觸發** — log 無扣殺紀錄、攻擊方沒被 +20 反擊。</li>
           <li><b>根因</b>：<code>engine.ts L5057</code> SPECIAL_ENERGY_ON_DAMAGED hook 在 <code>else if (!preventedKO)</code> 分支內（未 KO 才跑）。其他類似 hook 已有 KO 補觸發（<code>v5.080 punkReflect</code>、<code>v5.081 PASSIVE_RETALIATION + PASSIVE_ON_DAMAGED</code>），但 SPECIAL_ENERGY_ON_DAMAGED 漏補 → 扣殺能量 holder 被 KO 時不反擊。</li>
           <li><b>卡面源</b>（MC #17208）：「附有這張卡的寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置 2 個傷害指示物」— 沒寫「未昏厥才觸發」限制，依 PTCG 規則 KO 也應觸發。</li>
           <li><b>修法 1</b>：engine KO 分支補 SPECIAL_ENERGY_ON_DAMAGED 觸發（鏡射 v5.081 PASSIVE_ON_DAMAGED 模式）。從 <code>koInst.energyAttached</code> 抓 KO 前 snapshot iterate 觸發 hook。</li>
 
-          <li><b>UX 2 — 桌墊版化石丟棄按鈕放大</b>：Wilson「現在的太小了」。原 <code>.evo-btn-sm</code> 字體 <code>.56rem</code>（L10105）太小不好點。</li>
+          <li><b>UX 2 — 桌墊版化石丟棄按鈕放大</b>：玩家「現在的太小了」。原 <code>.evo-btn-sm</code> 字體 <code>.56rem</code>（L10105）太小不好點。</li>
           <li><b>修法 2</b>：<code>.fossil-discard-btn</code> 桌墊版 CSS 加 <code>font-size:.82rem + padding:.3rem .45rem + font-weight:600 + min-height:28px</code>（鏡射 ability-btn-sm v5.098 規格）。</li>
 
           <li><b>同類保護</b>：未來其他「on damaged」反擊類特殊能量（若有）都受益於 KO 分支補觸發。</li>
@@ -399,11 +405,11 @@
       <details>
         <summary><span class="ver-badge">v5.155</span> 🐛 化石採掘場 filter + 扣殺能量多目標觸發</summary>
         <ul>
-          <li><b>Bug 1 — 化石採掘場 modal 沒 filter</b>：Wilson「modal 要只顯示名稱含『陳舊的』物品卡」。</li>
+          <li><b>Bug 1 — 化石採掘場 modal 沒 filter</b>：玩家「modal 要只顯示名稱含『陳舊的』物品卡」。</li>
           <li><b>根因</b>：<code>engine.ts L2989</code> 設 filter <code>NameContains:陳舊的</code>，但 UI <code>selectionItems</code> deck-search switch 完全沒有 <code>NameContains:</code> 分支 → fallback inner block 沒匹配 → 顯示空白或全部 deck。</li>
           <li><b>修法 1</b>：UI <code>selectionItems</code> 加 <code>NameContains:X</code> filter 分支：限定 Trainer/Item subtype + 卡名含 X 字串。</li>
 
-          <li><b>Bug 2 — 扣殺能量多目標招式沒觸發</b>：Wilson「扣殺能量未完整實裝沒有效果」。卡面（MC #17208）：「附有這張卡的寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置 2 個傷害指示物」。</li>
+          <li><b>Bug 2 — 扣殺能量多目標招式沒觸發</b>：玩家「扣殺能量未完整實裝沒有效果」。卡面（MC #17208）：「附有這張卡的寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置 2 個傷害指示物」。</li>
           <li><b>Audit 結果</b>：</li>
           <li>　・✓ effect 實裝（<code>energy_cards.ts L119</code> SPECIAL_ENERGY_ON_DAMAGED）</li>
           <li>　・✓ 主 engine attack path 觸發 hook（<code>engine.ts L5057-5064</code>）</li>
@@ -418,8 +424,7 @@
       <details>
         <summary><span class="ver-badge">v5.154</span> 🎯 撤回 my-row active z-index 讓 bench 疊牌可見</summary>
         <ul>
-          <li><b>Wilson 回報</b>：桌墊版備戰寶可夢的疊牌被戰鬥場框架蓋住，請把備戰疊牌移到上層。</li>
-          <li><b>根因</b>：v5.146 我把 <code>.my-row &gt; .zone-active</code> z-index 拉到 250（高於 bench 200）解決「進化按鈕被疊牌蓋住」— 但這個改動讓 active-card 整個框架蓋過 bench att-card 往上 fan 進 active row 的部分。Wilson 現在優先要 bench 疊牌可見。</li>
+          <li><b>根因</b>：v5.146 我把 <code>.my-row &gt; .zone-active</code> z-index 拉到 250（高於 bench 200）解決「進化按鈕被疊牌蓋住」— 但這個改動讓 active-card 整個框架蓋過 bench att-card 往上 fan 進 active row 的部分。玩家 現在優先要 bench 疊牌可見。</li>
           <li><b>修法</b>：撤回 v5.146 my-row zone-active z-index:250，回到不設 z-index（預設 auto≈1）。bench (z=200) 蓋過 active (z=1)，bench 疊牌可見。</li>
           <li><b>evo-btn 不影響</b>：v5.149 後 evo-wrap top:110px 已疊在 active-img 中下方。bench att-card-stack 往上 fan 大概在 active row 下半部，少數重疊但不影響玩家操作。</li>
 
@@ -436,7 +441,6 @@
       <details>
         <summary><span class="ver-badge">v5.153</span> 🐛 多目標招式 active 補套弱抗+猛攻手鐲</summary>
         <ul>
-          <li><b>Wilson 回報</b>：呆呆王｜耀閃挑戰 學三重冰霜，對對手戰鬥場 ex 沒算到猛攻手鐲 +30，也沒算屬性相剋（弱抗）。</li>
           <li><b>Audit 結果</b>（卡面 source of truth）：所有「對 N 隻寶可夢各 X 傷害」多目標招式（三重冰霜/分身連打/激流水泵/雙刃劍/出奇一擊/音波拆裂/幽靈拳）都有同樣註解：「[在備戰區不計算弱點・抵抗力。]」— 暗示**戰鬥場要計算**。</li>
           <li><b>實作分析</b>：</li>
           <li>　・<code>snipe-multi</code> resolver (effects.ts L8182)：完全沒套 mod。用於：三重冰霜、雙刃劍、出奇一擊。</li>
@@ -453,7 +457,6 @@
       <details>
         <summary><span class="ver-badge">v5.152</span> 🐛 撤回 v5.125 錯誤的脫殼忍者進化鏈 (AI 幻覺糾正)</summary>
         <ul>
-          <li><b>Wilson 怒</b>：「系統弄反 — 把土居忍士被視為進化、脫殼忍者被視為基礎，請依鐵律處理，務必以 static/cards 敘述為準」</li>
           <li><b>根因追溯</b>：v5.125 task #287「Bug 2: 脫殼忍者進化鏈漏 evolvesFrom=&#39;土居忍士&#39;」是 AI 幻覺。我加了 evolvesFrom=&#39;土居忍士&#39; 到 M1S.json 兩個脫殼忍者 (id=14063 + id=14219)，**違反 PTCG 實際規則**。</li>
           <li><b>正確 PTCG 規則（M1S.json source of truth）</b>：</li>
           <li>　・土居忍士 (#14027): Basic, evolvesFrom=null ✓</li>
@@ -472,7 +475,6 @@
       <details>
         <summary><span class="ver-badge">v5.151</span> 🐛 朽木妖｜詛咒根後 AI 卡死修正</summary>
         <ul>
-          <li><b>Wilson 回報</b>：朽木妖使用招式「詛咒根」後，對方 AI 經常卡掉。</li>
           <li><b>卡面 source of truth</b>（M4.json #18459）：朽木妖｜詛咒根：cost=[Psychic] 30 傷。「在下個對手的回合，受到這個招式的寶可夢，無法附上從手牌使出的能量卡」。</li>
           <li><b>現有實作 audit</b>：</li>
           <li>　・✓ effect 已實裝（v2353_j_mark_batch.ts L421-435）：設 <code>cantAttachEnergyNextTurn:true</code> 在對方 active</li>
@@ -495,7 +497,6 @@
       <details>
         <summary><span class="ver-badge">v5.150</span> 🗑 刪除 active-card 卡圖下方空白</summary>
         <ul>
-          <li><b>Wilson 怒</b>：「卡片下方有一大片空白占用版面，造成無法以網頁的一頁來顯示」 — 對方戰鬥寶可夢也比照辦理。</li>
           <li><b>根因</b>：</li>
           <li>　・v5.112 設 <code>padding-bottom:.9rem</code> 是為了「騰 ability-btn 空間」(舊版 flow 排列需空間)，但 v5.097 已把 ability-btn 改 absolute → padding 不再需要</li>
           <li>　・v5.147 active-card height:175 包含原 padding-bottom 的空間 + active-img 147 比例 → 卡圖下方有 ~13px 空白</li>
@@ -518,10 +519,10 @@
       <details>
         <summary><span class="ver-badge">v5.149</span> 🎯 進化按鈕疊卡圖 + actions/alerts absolute 完全脫離 grid sizing</summary>
         <ul>
-          <li><b>A. 進化按鈕位置不對</b>：Wilson「我要疊在寶可夢上面（只要不和特性按鈕重疊就好），而不是放在卡片下面造成佔用版面」。</li>
+          <li><b>A. 進化按鈕位置不對</b>：玩家「我要疊在寶可夢上面（只要不和特性按鈕重疊就好），而不是放在卡片下面造成佔用版面」。</li>
           <li><b>修法 A</b>：<code>.evo-wrap</code> 改 <code>position:absolute; top:110px; right:8px; width:90px</code> — 疊在 active-img 上方，緊跟 ability-btn（top:75, height ~30）下方 5px gap。<code>z-index:201</code> 高於 ability-btn 200，兩者都可點不衝突。evo-btn 填滿 wrap 寬，font-size .85rem, padding 加大。</li>
 
-          <li><b>B. active row 仍撐大</b>：v5.147 鎖死 active-card height:175 但 row 3 還有 <code>actions</code> 跟 <code>alerts-col</code> 兩個 grid items 撐 row 高度。Wilson 報告「進化/附加能量/道具後撐大、下一動作回復」— 是動態按鈕變化（進化完成 confirm 按鈕 / 附加完成 alert msg）撐 row 3 高度。</li>
+          <li><b>B. active row 仍撐大</b>：v5.147 鎖死 active-card height:175 但 row 3 還有 <code>actions</code> 跟 <code>alerts-col</code> 兩個 grid items 撐 row 高度。玩家報告「進化/附加能量/道具後撐大、下一動作回復」— 是動態按鈕變化（進化完成 confirm 按鈕 / 附加完成 alert msg）撐 row 3 高度。</li>
           <li><b>修法 B</b>（鏡射 v5.143 stadium absolute）：</li>
           <li>　・<code>.alerts-col</code> 加 <code>position:absolute</code>（保留 grid-area:actions 為 containing block）</li>
           <li>　・<code>.action-btns</code> 加 <code>position:absolute</code></li>
@@ -535,8 +536,6 @@
       <details>
         <summary><span class="ver-badge">v5.148</span> 🚨 mulligan 順序: 較多次方需等較少次方先放</summary>
         <ul>
-          <li><b>Wilson 觀察（log）</b>：玩家 mulligan 2 次 / AI 3 次（AI 較多），但 AI 先選出場寶可夢 + 完成準備，玩家後選 — 順序不對。</li>
-          <li><b>Wilson 規則</b>：「玩家是無基礎寶可夢次數較少的，因此應該要先等玩家選擇完出場寶可夢後，AI 對手才能在下一步選擇出場寶可夢」</li>
           <li><b>根因</b>：v5.134/v5.135 設的 gate 只擋 <code>myMul &gt; 0 &amp;&amp; oppMul === 0</code>（單方 mulligan 場景），雙方都 mulligan 時不擋 → AI 較多 mulligan 也可同時放。</li>
           <li><b>修法</b>：</li>
           <li>　・<code>engine.ts</code> PLACE_ACTIVE gate 條件 <code>oppMul === 0</code> → <code>oppMul &lt; myMul</code>（任何較多方都擋）</li>
@@ -547,18 +546,18 @@
           <li>　・myMul === oppMul → 雙方同時可放（不擋，包含雙方都 0 也包含雙方都 N）</li>
           <li>　・myMul &gt; oppMul → 我方等對手 setupDone（擋）</li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純條件 &gt;0 ===0 → &gt; oppMul）／15（Wilson 補正 PTCG 規則 source of truth）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純條件 &gt;0 ===0 → &gt; oppMul）／15（規則補正 PTCG 規則 source of truth）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.147</span> 🔒 active-card height 鎖死 + 撤退 modal 能量需求進度</summary>
         <ul>
-          <li><b>Bug 1 — 附加能量後 active row 瞬間撐大</b>：Wilson 報告附加能量瞬間雙方戰鬥寶可夢間隙撐大，下一動作回復。</li>
+          <li><b>Bug 1 — 附加能量後 active row 瞬間撐大</b>：玩家報告附加能量瞬間雙方戰鬥寶可夢間隙撐大，下一動作回復。</li>
           <li><b>根因</b>：<code>.active-card</code> 只設 <code>min-height:140</code> 沒設 max/fix，內元素變化（能量 chip 動畫、att-card-stack 重排、ability-btn 出現等）瞬時撐高 active-card → grid row 3/2 auto 跟著撐 → bench 因 align-self 黏外側 → 視覺距離瞬間擴大。</li>
           <li><b>修法</b>：<code>.active-card</code> 改 <code>height/min-height/max-height: 175</code> 三鎖死 + <code>overflow:visible</code>（evo-wrap / ability-btn 等 absolute 元素仍可溢出顯示）。內元素變化都不撐父，grid row 永遠穩定。</li>
 
-          <li><b>UX 2 — 撤退 modal 加能量需求進度</b>：Wilson 要「順便顯示能量需求與點選後達成狀況，方便玩家選擇」。</li>
+          <li><b>UX 2 — 撤退 modal 加能量需求進度</b>：玩家 要「順便顯示能量需求與點選後達成狀況，方便玩家選擇」。</li>
           <li><b>修法</b>：撤退能量 picker（<code>retreat-energy-discard</code>）<code>sel-hint</code> 加一行「⚡ 撤退能量需求：X/Y 單位」。X = 已選能量 units 總和（host-aware，燃火/新衝天 on 進化已正確倍率），Y = retreatCost。達標時綠色 ✓，未達標時黃色提示繼續選擇。</li>
 
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純 CSS 三鎖死 + 1 個 svelte block 加進度）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
@@ -568,7 +567,6 @@
       <details>
         <summary><span class="ver-badge">v5.146</span> 🎯 桌墊版 active 進化按鈕上推 + 放大</summary>
         <ul>
-          <li><b>玩家回報</b>：桌墊版戰鬥寶可夢的進化小按鈕會被疊牌/寶可夢蓋在下面，按鈕也太小。</li>
           <li><b>根因</b>：<code>.active-card</code> 有 <code>isolation:isolate</code>（自身 stacking context），<code>zone-active</code> 預設 <code>z-index:1</code>。v5.109 設 <code>zone-bench z-index:200</code> 蓋過 active 所有元素。v5.138 我方 bench align-self:start → bench att-card 往上 fan 跨進 row 3 active 區 → 蓋住 active 的 <code>evo-wrap</code> 按鈕。</li>
           <li><b>修法</b>：</li>
           <li>　・<code>.my-row &gt; .zone-active</code> 加 <code>z-index:250</code>（高於 bench 200，我方 active 整體浮在 bench 之上，進化按鈕可點）</li>
@@ -583,7 +581,6 @@
       <details>
         <summary><span class="ver-badge">v5.145</span> 🐛 新衝天能量撤退 host-aware 補完（火箭隊已確認無 bug）</summary>
         <ul>
-          <li><b>Wilson 提醒</b>：「新衝天能量、火箭隊能量也有可能有類似的 bug，請一併確認」</li>
           <li><b>Audit 結果</b>：</li>
           <li>　・<b>火箭隊能量</b> ✓ 沒 bug：<code>SPECIAL_ENERGY_TYPES[&#39;火箭隊能量&#39;] = [&#39;Psychic&#39;, &#39;Darkness&#39;]</code> → <code>getEnergyUnits</code> 回 2 units（恆定 2），<code>totalEnergyUnits</code> 正確算 2。</li>
           <li>　・<b>新衝天能量</b> ✗ 有 bug（同燃火模式）：<code>SPECIAL_ENERGY_TYPES[&#39;新衝天能量&#39;] = [&#39;Colorless&#39;]</code> → <code>getEnergyUnits</code> 回 1 unit。卡面：on Stage2 = 2 個所有屬性能量。<code>canAffordAttack</code> L1293 有 inline 處理 Stage2 倍率，但 <b>v5.125 修 <code>totalEnergyUnits</code> host-aware 時只加燃火，沒加新衝天</b> → 撤退時新衝天 on Stage2 只算 1 unit。</li>
@@ -600,10 +597,9 @@
       <details>
         <summary><span class="ver-badge">v5.144</span> 🐛 浩大鯨撤退燃火能量 UI host-aware 補完</summary>
         <ul>
-          <li><b>玩家回報</b>：浩大鯨（Stage1，撤退費 3）附 1 張燃火能量 + 1 張水能量，picker「確定」灰色無法按。卡面：燃火能量 on 進化寶可夢視為 3 個【無】能量，單張應夠撤退費 3。</li>
           <li><b>根因 audit（精確）</b>：v5.125 已修 <code>totalEnergyUnits()</code> 加可選 <code>hostInst</code> 參數，host on Stage1/Stage2 時燃火 = 3 units。engine.ts 撤退路徑所有 caller 都已補（L2572 / L8244 / L7420 / L7447）。**但 <code>+page.svelte UI selectionValid 兩個 caller</code>（L2909 sum / L2916 essential check）沒補 hostInst** → host=undefined → hostIsEvolution=false → 燃火 sum 1 unit &lt; retreatCost 3 → 確定灰色卡死。</li>
           <li><b>修法 1</b>：<code>+page.svelte UI selectionValid</code> 兩處 <code>totalEnergyUnits()</code> 呼叫都補 <code>game.players[actorIdxR].active</code> 為 host。</li>
-          <li><b>修法 2</b>：engine.ts auto-discard loop（單一屬性自動丟，~L2620）也補燃火 host-aware（鏡射 totalEnergyUnits v5.125 邏輯）。此 path 只在 sigs.size===1 走（Wilson 場景是 sigs=2 走 picker），但防禦單張燃火場景。</li>
+          <li><b>修法 2</b>：engine.ts auto-discard loop（單一屬性自動丟，~L2620）也補燃火 host-aware（鏡射 totalEnergyUnits v5.125 邏輯）。此 path 只在 sigs.size===1 走（玩家 場景是 sigs=2 走 picker），但防禦單張燃火場景。</li>
 
           <li><b>對應 PTCG 規則</b>：燃火能量於 Stage1/Stage2 進化寶可夢提供 3 個【無】能量。一張燃火 = 撤退費 3 的進化寶可夢可撤退。</li>
 
@@ -614,10 +610,8 @@
       <details>
         <summary><span class="ver-badge">v5.143</span> 🪟 場地卡終極修：position:absolute 浮層</summary>
         <ul>
-          <li><b>玩家怒</b>：「場地卡的問題還是一樣，仍然會撐開間隙…你不能直接把場地卡改成類似 word 的文繞圖顯示嗎？」</li>
           <li><b>連修失敗紀錄</b>：v5.129 max-height:138 → 撐開／v5.141 三鎖死 height/min/max:138 + img height:90 → 仍撐開。問題不在 stadium 自身高度，而在 CSS Grid spec：spanning item 的 size 仍分配到各 row track 影響 sizing。</li>
           <li><b>真根因</b>：CSS Grid spec — 「spanning item 的 height 分配到 cross-row tracks 各 1/N」。stadium 跨 row 2-3 height:138 → row 2/3 各 min 69px。img 載入前後 layout 重算瞬間觸發 row track 擴張。</li>
-          <li><b>Wilson 提案 = 正確解</b>：「類似 word 文繞圖，框架在後」= CSS <code>position:absolute</code>。</li>
           <li><b>修法</b>：</li>
           <li>　・<code>.playmat.layout-tabletop</code> 加 <code>position:relative</code>（containing block fallback）</li>
           <li>　・<code>.stadium-display</code> 加 <code>position:absolute</code>，保留 <code>grid-area:stadium + grid-row:2/span 2 + align/justify-self:center</code></li>
@@ -631,7 +625,6 @@
       <details>
         <summary><span class="ver-badge">v5.142</span> 🎴 赤松 UI 語意依卡面倒過來</summary>
         <ul>
-          <li><b>玩家回報</b>：「赤松的正確作法依據卡牌敘述，應該是先決定哪一張能量卡要放入手牌，然後把另外一個能量卡附於寶可夢身上」。</li>
           <li><b>卡面敘述</b>（SV7 #10992/#11018）：「從自己的牌庫選擇最多 2 張各不同屬性的基本能量卡，在給對手看過後，<b>其中 1 張加入手牌，剩餘的能量卡附於自己的寶可夢身上</b>。並且重洗牌庫。」</li>
           <li><b>原實作問題</b>（v2.13~v5.141）：UI 語意倒反。第二個 modal 標題顯示「選 1 張能量附加到寶可夢（未選的留在手牌）」，跟卡面敘述順序「先決定入手牌的」相反，造成玩家認知混淆。</li>
           <li><b>修法</b>（只改 UI 語意 + 對應 resolver 邏輯倒過來）：</li>
@@ -640,18 +633,18 @@
           <li>　・<code>akamatsu-attach</code> heal-target <code>titleOverride</code>：「選擇要附加 X 的寶可夢」→「請將<b>剩餘的</b> X 附於寶可夢身上」</li>
           <li><b>只選 1 張時邏輯不變</b>：v3.53 已強制加入手牌（卡面「剩餘 = 0 張」沒得附加），這個 case 沒變動。</li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純 UI 標題改 + 1 處 resolver 邏輯顛倒）／15（PTCG 卡面語意 source of truth — Wilson 對照卡面糾正）／1（changelog audit pass + 本機 TS compile pre-check）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純 UI 標題改 + 1 處 resolver 邏輯顛倒）／15（PTCG 卡面語意 source of truth — 玩家 對照卡面糾正）／1（changelog audit pass + 本機 TS compile pre-check）。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.141</span> 🔒 場地卡鎖死高度 + 獎賞動畫 stagger 加長</summary>
         <ul>
-          <li><b>Bug — 場地卡放上瞬間撐開 active 間隙</b>：Wilson 截圖場地卡放上去那瞬間 active 之間間隙撐開，做別動作後恢復。</li>
+          <li><b>Bug — 場地卡放上瞬間撐開 active 間隙</b>：玩家截圖場地卡放上去那瞬間 active 之間間隙撐開，做別動作後恢復。</li>
           <li><b>根因</b>：<code>.stadium-display</code> 跨 <code>grid-row:2/span 2</code>，原 <code>max-height:138</code> + img <code>width:64</code>（<code>height:auto</code>）。max-height 是「上限」非「精確值」，grid track sizing 計算 row 高度時仍可能用 intrinsic content size，特別 img 載入前後 size 改變會撐大 row（尤其首次掛載 img 還沒 dimensions）。</li>
           <li><b>修法</b>：<code>.stadium-display</code> 改 <code>height:138 + min-height:138 + max-height:138</code> 三鎖死（同 bench 已 v5.134 修法）；img 加 <code>height:90 + object-fit:contain</code> 不依賴 intrinsic ratio。grid track sizing 拿到精確 138 高度，不論 img 載入狀態。</li>
 
-          <li><b>UX — 多張獎賞動畫 stagger 加長</b>：v5.137 設 250ms 太短，Wilson 反應第一張跑完前第二張就出來。</li>
+          <li><b>UX — 多張獎賞動畫 stagger 加長</b>：v5.137 設 250ms 太短，玩家反應第一張跑完前第二張就出來。</li>
           <li><b>修法</b>：stagger 250ms → <code>600ms</code>。第一張動畫主體（1.4s）跑了 0.6s 後第二張才啟，第二張啟動時第一張仍視覺可見但已接近終點，視覺節奏「一張接一張」清楚分離。</li>
 
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 3 處 exact-match）／14（最小 patch — 純 CSS 鎖死 + 1 個數字改）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
@@ -661,11 +654,11 @@
       <details>
         <summary><span class="ver-badge">v5.140</span> 🐛 撤退 picker maxCount 修正 + 手機版附加能量顯示道具</summary>
         <ul>
-          <li><b>Bug — 撤退能量 picker maxCount 數量錯</b>：Wilson 截圖呱呱泡蛙撤退費 1，但 picker 顯示「選 1~2 張・已選 2」誤導。</li>
+          <li><b>Bug — 撤退能量 picker maxCount 數量錯</b>：玩家截圖呱呱泡蛙撤退費 1，但 picker 顯示「選 1~2 張・已選 2」誤導。</li>
           <li><b>根因</b>：engine.ts L2536 <code>maxCount: attacker.active.energyAttached.length</code>，attached=2 → maxCount=2 → picker label 顯示「選 1~2 張」。<code>selectionValid</code> 雖有 v3.823 essential check 擋多丟（確定按鈕 disabled），但 label 仍誤導玩家。</li>
           <li><b>修法</b>：<code>maxCount</code> 改為 <code>Math.min(attached.length, retreatCost)</code>。對呱呱泡蛙：<code>min(2, 1)=1</code> → picker label 變「選 1~1 張」精準。最壞情況每張 1 unit，最多需 retreatCost 張，限 attached 上限。Essential check 仍擋特殊邊界。</li>
 
-          <li><b>UX — 手機版附加能量目標顯示道具</b>：原顯示「呱呱泡蛙（HP 60/70 · ⚡2）」，Wilson 要加道具方便辨識避免選錯。</li>
+          <li><b>UX — 手機版附加能量目標顯示道具</b>：原顯示「呱呱泡蛙（HP 60/70 · ⚡2）」，玩家 要加道具方便辨識避免選錯。</li>
           <li><b>修法</b>：<code>pick-energy-target</code> sheet 從 <code>toolAttached + extraTools</code> 提取道具名稱合併顯示。範例：「呱呱泡蛙（HP 60/70 · ⚡2 · 🔧月光面具）」。多個道具用「、」分隔（洛托姆ex 多重轉接場景）。</li>
 
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純條件改 + UI 加 chip）／15（PTCG 規則：撤退丟剛好不能多）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
@@ -675,7 +668,6 @@
       <details>
         <summary><span class="ver-badge">v5.139</span> 🚨 hotfix: v5.138 mulligan post-bench 卡住</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.138 流程跑到「玩家 1 可選擇將補抽到的基礎寶可夢加入備戰」就卡住，沒有可以點擊完成的按鈕。</li>
           <li><b>根因</b>：<code>isMyTurn()</code> setup 階段條件 <code>!setupDone[me]</code>。v5.138 流程中此時 setupDone=true，<code>isMyTurn()</code> 回 false → 我加的按鈕 gate <code>game.phase===&#39;setup&#39; &amp;&amp; isMyTurn() &amp;&amp; mulliganPostBenchOpen?.[myIdx]</code> 永遠 false → 按鈕不顯示。</li>
           <li><b>修法</b>：<code>isMyTurn()</code> setup 階段條件改為 <code>!setupDone[me] || !!mulliganPostBenchOpen?.[me]</code>。兩處（線上 + AI 模式）都修。</li>
 
@@ -686,11 +678,10 @@
       <details>
         <summary><span class="ver-badge">v5.138</span> 🎯 撤回 v5.136 fix-px + mulligan 補抽後加備戰</summary>
         <ul>
-          <li><b>玩家怒</b>：「桌墊版對戰介面越修越差了，現在戰鬥場與備戰區的間隙超級無敵大，完全無法以 1 頁顯示!!!!」</li>
           <li><b>v5.136 錯誤分析</b>：用 <code>grid-template-rows:205px 300px 300px 205px</code>（合計 1010px + gap 45 + padding 16 = 1071px）撐爆 viewport（可用 ~800-900px）→ 版面下移、無法一頁顯示。我設 300px 是「最壞情況 buffer」但沒測量實際 viewport — 嚴重失誤。</li>
           <li><b>v5.138 真根因 + 修法</b>：問題不在 row 高度，而在 <code>align-self</code> 方向。原 bench 黏「外側」(對手 bench 黏頂、我方 bench 黏底)、active 黏「內側」(對手 active 黏底、我方 active 黏頂)。Row 3 active 撐高時 → benchMe 跟著外移、activeMe 黏不動 → active-bench 距離拉大。改：bench 改黏「內側」(靠近 active)、active 改黏「外側」(靠近 bench)。bench-active 永遠貼 gap 15px，不論 row 高度怎變。<code>grid-template-rows</code> 回 auto，stadium-display 跨 Row 2-3 在中間自然填充。</li>
 
-          <li><b>Mulligan 第 3 條規則實裝（Wilson 確認流程）</b>：</li>
+          <li><b>Mulligan 第 3 條規則實裝（已確認流程）</b>：</li>
           <li>　・流程 (a)：不需重抽方按準備完成 → 對方 mulligan reveal 確認 → 補抽 N&gt;0 張 → 重新開放 BENCH placement → 按「完成」進 playing</li>
           <li>　・規則 (b)：只能加備戰（不能換 active、不能再 FINISH_SETUP）</li>
           <li>　・規則 (c)：補抽 0 張（雙方都 mulligan / 對手沒 mulligan）跳過此流程</li>
@@ -701,20 +692,18 @@
           <li>　・<code>ai.ts</code>: AI 簡化策略，直接 FINISH（不再加備戰）</li>
           <li>　・<code>+page.svelte</code>: <code>canBasicSetup</code> 條件 + 按鈕 UI + shouldAct 兩處 (tickAI + $effect)</li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 跨 5 檔）／11e（Write tool）／11f（push 前 ASSERT 13 處 exact-match）／14（最小 patch — 純條件+state+UI 加減）／15（PTCG 規則 source of truth — Wilson 補正）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 跨 5 檔）／11e（Write tool）／11f（push 前 ASSERT 13 處 exact-match）／14（最小 patch — 純條件+state+UI 加減）／15（PTCG 規則 source of truth — 規則補正）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.137</span> 🎬 對手獎賞卡背 + 多張動畫放慢</summary>
         <ul>
-          <li><b>玩家回報 1</b>：「對手的獎賞卡內容不該展示給我方看，現在的獎賞卡動畫會把獎賞卡牌翻出來給大家看，在對手領獎的動畫，我方應該是看到卡牌的背面才對」— PTCG 隱私規則：對手手牌/獎賞內容對玩家不可見。</li>
           <li><b>修法 1</b>：<code>PrizePickAnim</code> type 加 <code>isMine: boolean</code> 欄位。創建 anim 時從 effect 內 <code>isMine</code> 變數帶入。UI 渲染條件：<code>p.isMine</code> true → 顯示 <code>pc.imageUrl</code> 卡圖正面；false → 顯示 <code>.card-back .prize-pick-back</code> div（CSS 漸層卡背 + <code>?</code> mark）。新增 <code>.prize-pick-back</code> CSS rule 讓卡背填滿 prize-pick-card 框。</li>
 
-          <li><b>玩家回報 2</b>：「2 張以上的獎賞卡動畫還是稍微快了一點有點看不清楚，請再放慢一些」</li>
           <li><b>修法 2</b>：v5.134 設多張時 <code>effDur = 1.0s</code>（從單張 1.6s 縮）— 太快看不清。改 multi 時 <code>1.4s</code>，仍比單張 1.6s 略快但 2-3 張看得清晰。stagger 250ms 維持。</li>
 
-          <li><b>mulligan 第 3 條規則（v5.136 留下）— 留 v5.138 處理</b>：流程複雜，跨 engine/types/actions/ai/UI 6 個檔案，需獨立 patch 安全做。Wilson 已確認流程細節：(a) 不需重抽方按準備完成 → 對方 mulligan reveal → 補抽 N&gt;0 → 重新開放 BENCH_POKEMON → 按「完成」進 playing；(b) 只能加備戰，不能換 active；(c) 補抽 0 張就跳過。</li>
+          <li><b>mulligan 第 3 條規則（v5.136 留下）— 留 v5.138 處理</b>：流程複雜，跨 engine/types/actions/ai/UI 6 個檔案，需獨立 patch 安全做。玩家 已確認流程細節：(a) 不需重抽方按準備完成 → 對方 mulligan reveal → 補抽 N&gt;0 → 重新開放 BENCH_POKEMON → 按「完成」進 playing；(b) 只能加備戰，不能換 active；(c) 補抽 0 張就跳過。</li>
 
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 4 處 exact-match）／14（最小 patch — 純 type+渲染+CSS）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
@@ -723,12 +712,11 @@
       <details>
         <summary><span class="ver-badge">v5.136</span> 🔒 終極修桌墊版間隙 (連修 4 次後根治)</summary>
         <ul>
-          <li><b>玩家回報</b>：「我方備戰寶可夢和戰鬥寶可夢中間區域的間隙，塡能後就被莫名其妙地撐大了，如果再放上競技場就會更大… 這個問題你修了好幾次了!!!!請確實解決!!!」</li>
           <li><b>連修 4 次失敗紀錄</b>：v5.131（zone-bench min-height:205）／ v5.134（zone-bench height/min/max 三鎖死）— 都鎖了 bench row 但沒鎖 active row。</li>
           <li><b>真根因（這次徹底 audit）</b>：<code>.playmat.layout-tabletop</code> 用 <code>grid-template-rows:auto auto auto auto</code>。4 row 都是 auto → 任何子元素撐高就撐大 row。Row 1/4（bench）已固定 205，但 Row 2/3（active）還是 auto。塡能時 active-card 內元素（如 evo-wrap、ability-btn、attached att-card-stack）撐高 active-card → Row 3 隨之撐高 → Row 4（bench）整體被推下 → bench <code>align-self:end</code> 黏 Row 4 底部跟著下移 → active（Row 3 頂）和 bench（Row 4 底）視覺距離拉大！放競技場後 stadium-display 雖鎖 138 但跨 Row 2-3，跨 row 也加碼撐高效應。</li>
           <li><b>終極修法</b>：<code>grid-template-rows: 205px 300px 300px 205px</code>。完全鎖死 4 個 row 高度，內容超過時 overflow 但 grid row 不變。300px = HP bar 88 + 招式 4×40 + 卡圖 145 + padding 容得下。</li>
 
-          <li><b>玩家補規則（mulligan 第 3 條）— 留 v5.137 處理</b>：不需重抽方在對方 mulligan 後可補抽，補抽後手牌中有基礎寶可夢可選擇放備戰。實作要審視 <code>setupDone</code> / <code>mulliganRevealConfirmed</code> / <code>pendingMulliganDraw</code> 三者交互，需考慮「補抽後重置 setupDone[me]=false 開放 BENCH_POKEMON 一次再 finishSetup」的設計，避免破壞其他 setup gate。先記錄需求，下版實作前會徵詢 Wilson 確認流程。</li>
+          <li><b>玩家補規則（mulligan 第 3 條）— 留 v5.137 處理</b>：不需重抽方在對方 mulligan 後可補抽，補抽後手牌中有基礎寶可夢可選擇放備戰。實作要審視 <code>setupDone</code> / <code>mulliganRevealConfirmed</code> / <code>pendingMulliganDraw</code> 三者交互，需考慮「補抽後重置 setupDone[me]=false 開放 BENCH_POKEMON 一次再 finishSetup」的設計，避免破壞其他 setup gate。先記錄需求，下版實作前會徵詢 已確認流程。</li>
 
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 1 處 exact-match）／14（最小 patch — 純 1 行 CSS：auto auto auto auto → 205px 300px 300px 205px）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
@@ -737,34 +725,30 @@
       <details>
         <summary><span class="ver-badge">v5.135</span> 🚨 hotfix: v5.134 mulligan gate 兩個問題</summary>
         <ul>
-          <li><b>玩家回報</b>：AI 對戰時 log 不停 spam「🤖 AI 對手 重抽過，需等對手先放好戰鬥場寶可夢」。</li>
-          <li><b>問題 A — 規則不精準</b>：v5.134 gate 條件為「對手放好戰鬥場 (<code>!players[oppIdx].active</code>)」。Wilson 補充正確規則：應等「不用重抽方按下準備完成 (<code>!setupDone[oppIdx]</code>)」才能設置。實體賽事規則：沒重抽方先完整擺好戰鬥場+備戰+確認，重抽方依對方手牌資訊判斷是否補抽，故必須等對方完成 setup。</li>
+          <li><b>問題 A — 規則不精準</b>：v5.134 gate 條件為「對手放好戰鬥場 (<code>!players[oppIdx].active</code>)」。玩家 補充正確規則：應等「不用重抽方按下準備完成 (<code>!setupDone[oppIdx]</code>)」才能設置。實體賽事規則：沒重抽方先完整擺好戰鬥場+備戰+確認，重抽方依對方手牌資訊判斷是否補抽，故必須等對方完成 setup。</li>
           <li><b>修法 A</b>：engine.ts gate 條件 <code>!players[oppIdx].active</code> → <code>!state.setupDone[oppIdx]</code>；log 文字「需等對手先放好戰鬥場寶可夢」→「需等對手按下準備完成才能設置」。</li>
 
           <li><b>問題 B — AI scheduler 無限 retry</b>：v5.134 engine 加 gate 但 AI ai.ts 沒同步檢查 → AI 重抽方一直送 PLACE_ACTIVE → 被 engine reject + addLog → game state 變 (log 新增) → <code>$effect</code> 再 trigger AI → 又送 → 死循環 log spam。</li>
           <li><b>修法 B</b>：ai.ts setup PLACE_ACTIVE 前自己檢查同樣 gate (<code>myMul&gt;0 + oppMul=0 + !setupDone[oppIdx]</code>) → blocked 時 <code>return null</code>。AI 不送 action → game 不變 → $effect 不 retrigger。直到對方 setupDone 後 game 變 → $effect 重跑 → AI 重新評估 → 通過 gate → 設置。</li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純條件改 + AI 前置檢查）／15（PTCG 規則 source of truth — Wilson 補正）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純條件改 + AI 前置檢查）／15（PTCG 規則 source of truth — 規則補正）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.134</span> 🎯 3 項：桌墊版鎖框 + 多張獎賞動畫 + mulligan 重抽方等待</summary>
         <ul>
-          <li><b>玩家回報 1</b>：使用感應超能量召出備戰寶可夢，自己戰鬥場與備戰區間隙又出現。</li>
           <li><b>修法 1</b>：v5.131 用 <code>min-height:205px</code> 但仍有間隙。改 <code>height:205px + min-height:205px + max-height:205px</code> 完全鎖死 zone-bench，所有 layout shift 都不會撐變化。</li>
 
-          <li><b>玩家回報 2</b>：一次取 2 張或 3 張獎賞卡時只播一張動畫。</li>
           <li><b>修法 2</b>：<code>prizePickAnims</code> 加 stagger delay — 多張時每張間隔 <code>250ms</code> push，且 duration 從 <code>1.6s</code> 縮為 <code>1.0s</code>，2-3 張連續播又快又看得清。</li>
 
-          <li><b>玩家回報 3</b>：mulligan 順序 — 重抽方應等對方放好基礎寶可夢到戰鬥場（證明對方確實有基礎）後，才能設置自己的戰鬥場。現程式允許自己重抽決定後馬上設置，順序錯。</li>
           <li><b>修法 3</b>：engine.ts <code>PLACE_ACTIVE</code> handler 加 gate — 自己 mulligan 次數&gt;0 + 對手 mulligan 次數=0 + 對手 active=null → 拒絕並 log「重抽過，需等對手先放好戰鬥場寶可夢」。雙方都 mulligan 時不擋（任一方都可先放）。</li>
 
-          <li><b>朽木妖 終極吸取 AI 卡死（暫緩 — 需 Wilson 補細節）</b>：</li>
+          <li><b>朽木妖 終極吸取 AI 卡死（暫緩 — 需 玩家 補細節）</b>：</li>
           <li>　・卡面 source of truth（M4/MC/SV6 JSON）：「<code>終極吸取 50</code>，將這隻寶可夢恢復對對手的戰鬥寶可夢造成的傷害相同數值的 HP」</li>
           <li>　・實作 <code>selfHealByDealtPost</code>（effects.ts L7674）用 <code>state.lastDealtDamage</code> 計回血，邏輯純淨</li>
           <li>　・AI scheduling 對 KO 後送 active / 取獎賞已有 auto-handle（+page.svelte L1546/1550/1556）</li>
-          <li>　・<b>無法定位 bug 位置</b> — 不可 hallucinate，請 Wilson 提供：誰用朽木妖（玩家還是 AI）？打死誰？卡在哪一步？是否有 console 錯誤？</li>
+          <li>　・<b>無法定位 bug 位置</b> — 不可 hallucinate，請 玩家 提供：誰用朽木妖（玩家還是 AI）？打死誰？卡在哪一步？是否有 console 錯誤？</li>
 
           <li><b>本機 svelte.compile pre-check</b>：通過 (changelog + game/+page.svelte)</li>
 
@@ -823,11 +807,9 @@
       <details>
         <summary><span class="ver-badge">v5.131</span> 🎨 桌墊版備戰鎖框架 + 取得獎賞卡動畫差別化</summary>
         <ul>
-          <li><b>玩家回報 1</b>：桌墊版場上有競技場卡時，備戰區放寶可夢仍會撐出間隙，要求鎖死框架。</li>
           <li><b>根因</b>：<code>.zone-bench</code> 沒設 <code>min-height</code>，沒 bench 寶可夢時 row 高度=0（grid-template-rows: auto），放第一隻時撐到 205px → 視覺上「撐出間隙」。</li>
           <li><b>修法</b>：桌墊版 <code>.zone-bench</code> 加 <code>min-height:205px</code> 預留空間，沒寶可夢時也是 205px → 放第一隻不撐 row。</li>
 
-          <li><b>玩家回報 2</b>：v5.129 改的獎賞動畫是「開局發 6 張」階段的，但玩家真正要的是「<b>取得獎賞</b>」（KO 後取走）的動畫 — 飛中央 → 變大 → 轉一圈 → 回手牌。</li>
           <li><b>修法</b>：</li>
           <li>　1. 加 <code>prevPrizesIids</code> snapshot — 偵測 prizes.length 減少時計算「被取走的 iid」</li>
           <li>　2. 新 <code>prizePickAnims</code> state — 從 prize 位置飛到螢幕中央 + scale 2.5 + rotate 360° + 縮回 hand-strip，1.6s 內結束</li>
@@ -846,7 +828,6 @@
       <details>
         <summary><span class="ver-badge">v5.130</span> 🐛 離開房間應回大廳而非首頁</summary>
         <ul>
-          <li><b>玩家回報</b>：在「線上連線對戰房間」按「離開房間」後 redirect 到首頁（「開始對戰」選本機/線上）。期望應該回到大廳（房間列表），這樣就不用重新點「線上連線對戰」按鈕。</li>
           <li><b>根因</b>：<code>leaveOnlineGame()</code> L4410 設 <code>mode = null</code> → 整個線上對戰 UI 收起 → 跳回首頁。雖然 <code>onlineStep = &#39;join&#39;</code> 已經會顯示大廳，但被 <code>mode=null</code> 蓋掉。</li>
           <li><b>修法</b>：<code>mode = null</code> → <code>mode = &#39;online&#39;</code>，保留線上對戰 UI，<code>onlineStep=&#39;join&#39;</code> 顯示大廳房間列表。玩家可直接看其他等待中/對戰中的房間，不用回首頁重點按鈕。</li>
           <li><b>離開房間流程不變</b>：unsubRoom + stopHeartbeat + await leaveRoom + 清 chatMessages / game / roomCode / roomData / mySeatIdx 等 state — 完整 cleanup 仍照舊，只是不重設 mode。</li>
@@ -908,7 +889,7 @@
           <li><b>影響面</b>：</li>
           <li>　・第 1 個加入房間的玩家 → P1（房主已坐）→ 還是觀戰位...等等 P1 就是房主自己。新加入的會是 P2 對戰位（若空）→ 正確</li>
           <li>　・第 2 個加入（已有 P2 但 P1 / P2 都坐了）→ 觀戰位 ✓</li>
-          <li>　・房主已在 P1，新玩家入房 → P2（對戰位）✓ Wilson 期望</li>
+          <li>　・房主已在 P1，新玩家入房 → P2（對戰位）✓ 玩家 期望</li>
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 只對調 lobby 階段順序，playing 階段 + 殘留座位邏輯 + 訊息系統皆不動）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
       </details>
@@ -916,7 +897,6 @@
       <details>
         <summary><span class="ver-badge">v5.126</span> 🐛 補大宇怪進化鏈 evolvesFrom=小灰怪</summary>
         <ul>
-          <li><b>Wilson 確認</b>：大宇怪由小灰怪進化。</li>
           <li><b>Audit 驗證</b>（依鐵律不可 hallucinate）：
             <ul>
               <li>小灰怪：MC / SV11B（2 筆）/ svhm，共 4 筆均為 Basic ✓</li>
@@ -924,37 +904,34 @@
             </ul>
           </li>
           <li><b>修法</b>：4 個 JSON 補 <code>evolvesFrom: &quot;小灰怪&quot;</code></li>
-          <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（4 處 JSON exact-match）／14（最小 JSON 欄位修）／15（卡面 source of truth — Wilson 確認進化來源 + JSON audit 驗證小灰怪存在）／1（changelog audit pass）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（4 處 JSON exact-match）／14（最小 JSON 欄位修）／15（卡面 source of truth — 已確認進化來源 + JSON audit 驗證小灰怪存在）／1（changelog audit pass）。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.125</span> 🐛 燃火能量撤退 = 3 個能量沒生效 + 脫殼忍者進化鏈漏土居忍士</summary>
         <ul>
-          <li><b>玩家回報 Bug 1</b>：燃火能量無法當 3 顆能量供撤退使用。</li>
           <li><b>根因</b>：<code>totalEnergyUnits</code>（撤退/招式判定能量總和的 helper）用 <code>getEnergyUnits(cardId, pool)</code>，但 <code>getEnergyUnits</code> 簽名只有 cardId 沒 host 資訊 → 燃火能量走 fallback 1 個 Colorless unit，沒考慮卡面「附於進化寶可夢提供 3 個」倍率。</li>
           <li><b>對照</b>：<code>canAffordAttack</code> 已正確處理（L1024-1029 內 inline），但 <code>totalEnergyUnits</code>（撤退用）漏。</li>
           <li><b>修法</b>：<code>totalEnergyUnits</code> 加 <code>hostInst?: CardInstance</code> 可選參數 + inline 判斷進化倍率（仿 L1100 大竺葵繁茂 pattern）。6 處 caller 補傳 host（engine.ts 撤退 / 招式門檻 4 處 + v154_decks.ts 2 處）。</li>
 
-          <li><b>玩家回報 Bug 2</b>：脫殼忍者進化鏈漏「從土居忍士進化」設定。</li>
           <li><b>根因</b>：M1S.json 內脫殼忍者（2 個版本：043/063 + 072/063）<code>evolvesFrom</code> 欄位為 <code>None</code>（scraper 漏抓）。</li>
           <li><b>修法</b>：直接修 JSON 補 <code>evolvesFrom: &quot;土居忍士&quot;</code>。</li>
-          <li><b>Audit 全資料庫</b>：找出其他 Stage1/2 漏 evolvesFrom 的卡，但 <b>不擅自填入</b>（避免 hallucinate）。實際 audit 結果 — 真實卡庫漏：MC.json「大宇怪」(Stage1)；M5_translate/M5_raw 是 scrape 中間檔不影響運行。建議 Wilson 確認大宇怪進化來源後一併補。</li>
+          <li><b>Audit 全資料庫</b>：找出其他 Stage1/2 漏 evolvesFrom 的卡，但 <b>不擅自填入</b>（避免 hallucinate）。實際 audit 結果 — 真實卡庫漏：MC.json「大宇怪」(Stage1)；M5_translate/M5_raw 是 scrape 中間檔不影響運行。建議 已確認大宇怪進化來源後一併補。</li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 7 處 exact-match）／14（最小 patch — 加 1 個 optional 參數 + 補 6 處 caller + 修 2 個 JSON 欄位）／15（卡面 source of truth — 燃火能量 rulesText 直接抽；脫殼忍者進化鏈依 PTCG 規則 + Wilson 確認）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 7 處 exact-match）／14（最小 patch — 加 1 個 optional 參數 + 補 6 處 caller + 修 2 個 JSON 欄位）／15（卡面 source of truth — 燃火能量 rulesText 直接抽；脫殼忍者進化鏈依 PTCG 規則 + 已確認）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.124</span> 🐛 打爆無視閃光射線免疫 + 等待開戰標籤加底色</summary>
         <ul>
-          <li><b>玩家回報 Bug</b>：上回合超級雷電獸ex 用閃光射線（下回合此卡不受【基礎】寶可夢招式傷害），對方厄鬼椪礎石面具ex 用打爆（不計算對手身上附加效果）應該無視此免疫造成 140 傷害，但實測沒傷害。</li>
 
           <li><b>根因</b>：engine.ts L4155-4161 處理 <code>immuneToBasicAttackThisTurn</code>（閃光射線/塗層攻擊 設的 flag）沒檢查 <code>skipDefEffects</code>，直接 <code>baseDamage = 0</code>。打爆已聲明 <code>skipDefEffects: true</code> 但被忽略。</li>
 
           <li><b>Audit 同類 defender 身上 immune flag</b>：共 7 處全部漏 <code>!skipDefEffects</code> gate：</li>
           <li>　・L4127 防護代碼（密勒頓 immuneToExAttackTagThisTurn）</li>
-          <li>　・L4155 <b>閃光射線 / 塗層攻擊</b>（immuneToBasicAttackThisTurn）— Wilson 報告主角</li>
+          <li>　・L4155 <b>閃光射線 / 塗層攻擊</b>（immuneToBasicAttackThisTurn）— 玩家報告主角</li>
           <li>　・L4169 阿塞蘿拉惡作劇（immuneToExAttackThisTurn）</li>
           <li>　・L4191 精神防護（代歐奇希斯 immuneToAbilityPokemonThisTurn）</li>
           <li>　・L4199 要害斬（具甲武者 immuneToAllAttackThisTurn）</li>
@@ -974,11 +951,11 @@
       <details>
         <summary><span class="ver-badge">v5.123</span> 🔧 Hotfix v5.122 changelog 文案 hallucinate 卡名</summary>
         <ul>
-          <li><b>玩家發現</b>：v5.122 changelog 寫「涵蓋 MC 全 7 隻莉莉艾的寶可夢（皮皮ex / 皮可西 / 花療環環 / 等）」— Wilson 立刻反應「沒有莉莉艾的皮可西這隻寶可夢吧」。</li>
+          <li><b>玩家發現</b>：v5.122 changelog 寫「涵蓋 MC 全 7 隻莉莉艾的寶可夢（皮皮ex / 皮可西 / 花療環環 / 等）」— 玩家 立刻反應「沒有莉莉艾的皮可西這隻寶可夢吧」。</li>
           <li><b>實際 JSON audit（不可幻覺）</b>：全資料庫 <code>name.startsWith(&#39;莉莉艾的&#39;) &amp;&amp; supertype===&#39;Pokemon&#39;</code> 只有 4 隻：莉莉艾的皮皮ex / 莉莉艾的花療環環 / 莉莉艾的萌虻 / 莉莉艾的蝶結萌虻。<b>沒有「莉莉艾的皮可西」</b>。</li>
           <li><b>來源</b>：撰寫 v5.122 changelog 時誤把「皮可西」（超級皮可西ex 等其他角色）誤植到列表，且「7 隻」也是憑空估算（grep <code>name.*莉莉艾的</code> 抓到的字面 7 處包含 effect text 內提到「莉莉艾的」的非寶可夢卡）。</li>
           <li><b>修法</b>：直接 Edit v5.122 changelog 改成正確列表（4 隻）。v5.122 程式碼修法（<code>startsWith(&#39;莉莉艾的&#39;)</code>）邏輯本來就正確涵蓋全 4 隻，僅文案誤導。</li>
-          <li><b>長期記憶教訓再次驗證</b>：<code>[[feedback-no-ace-spec-hallucination]]</code> 已記錄「Wilson 對 AI 幻覺零容忍」。本次再犯 — 列舉「具體卡名」時務必先跑實際 JSON audit，不可從記憶或 grep 噪音猜測。</li>
+          <li><b>長期記憶教訓再次驗證</b>：<code>[[feedback-no-ace-spec-hallucination]]</code> 已記錄「玩家 對 AI 幻覺零容忍」。本次再犯 — 列舉「具體卡名」時務必先跑實際 JSON audit，不可從記憶或 grep 噪音猜測。</li>
           <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（1 處 exact-match）／14（最小 1 行文案修）／15（JSON 為 source of truth — 列舉前必驗）／1（changelog audit pass）。</li>
         </ul>
       </details>
@@ -986,7 +963,6 @@
       <details>
         <summary><span class="ver-badge">v5.122</span> 🐛 莉莉艾的珍珠 + 莉莉艾的花療環環獎賞 -1 失效</summary>
         <ul>
-          <li><b>玩家回報</b>：莉莉艾的花療環環 附有 莉莉艾的珍珠，被對手 KO 時對手獲得的獎賞應為 1-1=0，但實際拿到 1 張。</li>
           <li><b>根因</b>：tools.ts L256 用 <code>isRulePokemon(card)</code> 判斷（即 ex/V/VMAX），但卡面實際條件是「莉莉艾的寶可夢」（卡名前綴「莉莉艾的」）。兩個完全不同條件 — 花療環環 subtype=Basic 非 ex → isRulePokemon=false → 返回 0 → 無 -1 效果。</li>
           <li><b>卡面 source of truth</b>（MC.json L28547）：「附有這張卡的『莉莉艾的寶可夢』受到對手的寶可夢招式的傷害而【昏厥】時，被獲得的獎賞卡減少 1 張。」</li>
           <li><b>修法</b>：改用 <code>card?.name?.startsWith(&#39;莉莉艾的&#39;)</code>。實際 JSON audit 涵蓋全 4 隻莉莉艾的寶可夢：莉莉艾的皮皮ex（基礎 ex）／莉莉艾的花療環環（基礎，本 bug 主角）／莉莉艾的萌虻（基礎）／莉莉艾的蝶結萌虻（進化）。</li>
@@ -1084,7 +1060,6 @@
       <details>
         <summary><span class="ver-badge">v5.115</span> 🐛 大地之門/詛咒言語/太鼓防壁/駭浪/pre-discard UI 5 bug 修</summary>
         <ul>
-          <li><b>玩家回報 5 個 bug + 1 個待確認（盈溢祈願）</b>：</li>
           <li>　1. <b>哲爾尼亞斯｜大地之門</b>抓出基礎以外的寶可夢</li>
           <li>　2. <b>超級沙奈朵ex｜盈溢祈願</b>備戰滿只填 4 能（待確認卡面版本 — 暫緩本版）</li>
           <li>　3. <b>詛咒娃娃｜詛咒言語</b>應為對手選 3 張，現實作系統隨機選</li>
@@ -1154,7 +1129,7 @@
         <ul>
           <li><b>3 個玩家回報的 bug</b>：</li>
           <li>　1. <b>胡地｜奇異駭入</b>：原只 statusPost(&#39;confused&#39;) 戰鬥位混亂，卡面 Part 2「選擇任意數量對手場上指示物以任意方式改放」整段完全沒實裝 → 招式效果消失直接結束回合</li>
-          <li>　2. <b>對戰圓形 + 轉移指示物方向性</b>：Wilson 規則指南 — bench → active 允許（active 不受對戰圓形擋）／active 或 bench → bench 應擋。Audit 發現「死神棺｜伸長的傷害棺材」目標可選對手 active 或 bench，但實作沒對戰圓形 gate</li>
+          <li>　2. <b>對戰圓形 + 轉移指示物方向性</b>：玩家 規則指南 — bench → active 允許（active 不受對戰圓形擋）／active 或 bench → bench 應擋。Audit 發現「死神棺｜伸長的傷害棺材」目標可選對手 active 或 bench，但實作沒對戰圓形 gate</li>
           <li>　3. <b>爆焰龜獸｜甲殼刺</b>：v5.069 改 picker、v5.081 補 KO 觸發後，KO 情境下重複觸發 2 次（玩家被 KO 時被丟 2 張能量）</li>
 
           <li><b>根因分析</b>：</li>
@@ -1201,7 +1176,6 @@
       <details>
         <summary><span class="ver-badge">v5.111</span> 🎨 縮小 active-card 內部空白 + row-gap 25→15 fit viewport</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.110 row-gap 25 後整頁太長需 scroll，無法一頁容納；active-card 內部上下空白浪費；我方對方 active 距離太遠。</li>
           <li><b>修法</b>：</li>
           <li>　1. <code>.active-card min-height: 170 → 140</code>（v5.109 加大為給 bench fan 緩衝，row-gap 解決後不需）</li>
           <li>　2. <code>.active-hpbar-bottom top: 35px → .5rem</code> 移回原值（HP column / name-tt 自動跟隨）</li>
@@ -1217,7 +1191,6 @@
       <details>
         <summary><span class="ver-badge">v5.110</span> 🎨 grid row-gap 5→25px 對手 bench-active 距離正常化</summary>
         <ul>
-          <li><b>玩家回報</b>（圖 1 對手 1 隻基礎卡 vs 圖 2 對手有進化堆）：「對方備戰區離戰鬥場太近，應該分一點給對方」；圖 2 有進化堆 fan 進 row 2 占據空白看起來「距離正常」。Wilson 要一開始就是圖 2 的排版。</li>
           <li><b>根因</b>：grid row-gap 5px（v5.050 為了「對手 active 往上靠近 bench」改的）對沒進化堆的情境太小；有進化堆 fan 進 active 上方 35px 緩衝區（v5.109）才看起來「滿」。</li>
           <li><b>修法</b>：拉大 row-gap 5px → 25px。row 1 對手 bench 跟 row 2 對手 active 之間、row 2 跟 row 3 之間、row 3 我方 active 跟 row 4 我方 bench 之間，全部加 20px 視覺距離。</li>
           <li><b>不動</b>：active-card 內部 HP column / name / ability 位置（v5.109 已調 35px 下移），col-gap (8px) 不變。</li>
@@ -1263,7 +1236,6 @@
       <details>
         <summary><span class="ver-badge">v5.107</span> 🔧 bench-slot + zone-bench 加 contain:layout 強制 sizing 隔離</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.106 後框架仍變動（圖 1 貼能量前 / 圖 2 貼能量後）。</li>
           <li><b>修法</b>：<code>.bench-slot</code> 加 <code>contain: layout style</code>、<code>.zone-bench</code> 加 <code>contain: layout</code>。CSS containment 強制 isolate — children layout/style 不影響父 sizing。防止 zoom:0.65 + absolute children 視覺溢出 + 某些瀏覽器 reflow side-effect。</li>
         </ul>
       </details>
@@ -1279,7 +1251,6 @@
       <details>
         <summary><span class="ver-badge">v5.105</span> 🔧 att-card-stack 寬度受限 cell 寬不撐爆相鄰 bench-slot</summary>
         <ul>
-          <li><b>玩家回報</b>：我方備戰寶可夢疊牌時整個框架往上擠。</li>
           <li><b>真正根因</b>：不是 bench-slot 框架被擠，而是 <code>.att-card-stack</code> v5.098 設 <code>height:100% + aspect-ratio:96/135 + width:auto + max-width:none</code> → width = height × (96/135) = 205 × 0.71 ≈ 146px 撐爆 cell ~95px 寬，att-card width:100% 跟著撐爆視覺溢出相鄰 bench-slot 上方。</li>
           <li><b>修法</b>：改 <code>width:100% + max-width:100% + aspect-ratio + height:auto</code>，寬度受 cell 限制 ~95px，高度按 96/135 比例自動 ~134px。</li>
         </ul>
@@ -1297,7 +1268,6 @@
       <details>
         <summary><span class="ver-badge">v5.103</span> 🎨 恢復 v5.097/v5.098 桌墊版 bench 卡圖放大（routes/+page.svelte 保持 v5.095 純 HTML）</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.094 仍覺得「備戰區和戰鬥場間隔距離拉超大」，要求復原到 v5.092 狀態。</li>
 
           <li><b>實測 v5.094 vs v5.092</b>：<code>game/+page.svelte</code> <code>git diff</code> 顯示 <b>純 6 行註解差別</b>，CSS rules byte-identical（v5.094 已正確撤回 zoom 0.78 + active-img 125）。</li>
 
@@ -1323,7 +1293,6 @@
       <details>
         <summary><span class="ver-badge">v5.094</span> 🔧 撤回 v5.093 桌墊版卡片放大（bench-slot 外框太大 + 手牌跑到 viewport 外）</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.093 桌墊版調整效果不好 — bench-slot 卡圖只佔上半，下半大片黑空白；畫面變太長，手牌跑到 viewport 下方需上下滾動才能看到。</li>
 
           <li><b>根因</b>：</li>
           <li>　・<code>bench-slot</code> base <code>height:205px</code>（<code>L9709</code> 全模式共用）預留 bottom HP bar / 特性按鈕空間</li>
@@ -1331,7 +1300,7 @@
           <li>　・<code>active-img</code> 105→125px → active-card row 也 +20px</li>
           <li>　・兩 row 加起來 +45px 撐 grid 整體高度 → <code>hand-strip</code> 被推到 viewport 外</li>
 
-          <li><b>修法（Wilson 選完全撤回）</b>：</li>
+          <li><b>修法（玩家 選完全撤回）</b>：</li>
           <li>　・<code>.playmat.layout-tabletop .active-card .active-img</code>：拿掉 <code>width:125px !important</code> override，回到 base 105px</li>
           <li>　・<code>.playmat.layout-tabletop .zone-bench</code>：<code>zoom:0.78</code> → <code>0.65</code> 撤回</li>
 
@@ -1344,9 +1313,8 @@
       <details>
         <summary><span class="ver-badge">v5.093</span> 🎨 桌墊版卡片放大 ~15%（玩家回報太小）</summary>
         <ul>
-          <li><b>玩家回報</b>：桌墊版卡片希望再大一點。</li>
 
-          <li><b>調整（Wilson 選小幅 +15% 方案）</b>：</li>
+          <li><b>調整（玩家 選小幅 +15% 方案）</b>：</li>
           <li>　・<b>active 寶可夢圖</b>：<code>.playmat.layout-tabletop .active-card .active-img</code> 加 override <code>width:125px !important</code>（base <code>.active-img</code> 全模式共用 105px → 桌墊版 +19%）</li>
           <li>　・<b>bench 縮放</b>：<code>.playmat.layout-tabletop .zone-bench</code> <code>zoom:0.65</code> → <code>zoom:0.78</code>（+20%）。bench 字、HP 字、特性按鈕跟著 zoom 等比例變大</li>
 
@@ -1363,9 +1331,9 @@
       <details>
         <summary><span class="ver-badge">v5.092</span> 🔧 Firebase deck 寫入再降低 — debounce 1.5s → 5s + dirty-check 跳過重複內容</summary>
         <ul>
-          <li><b>Audit 確認</b>：Wilson 跑 firestore-write-audit 確認 1h ~2000 writes/hr 中 <code>(group) decks</code> 4894 docs（無 createdAt timestamp 顯示 err），對應玩家編輯 deck 是寫入主因。v5.078 已加 1.5s debounce，但仍高。</li>
+          <li><b>Audit 確認</b>：玩家 跑 firestore-write-audit 確認 1h ~2000 writes/hr 中 <code>(group) decks</code> 4894 docs（無 createdAt timestamp 顯示 err），對應玩家編輯 deck 是寫入主因。v5.078 已加 1.5s debounce，但仍高。</li>
 
-          <li><b>修法（Wilson 選 5s 方案）</b>：</li>
+          <li><b>修法（玩家 選 5s 方案）</b>：</li>
           <li>　・<code>PUSH_DEBOUNCE_MS</code> <code>1500</code> → <code>5000</code> ms — 連續編輯 5s 內所有變更合併成 1 個 <code>setDoc</code></li>
           <li>　・加 <code>lastPushedSnapshot</code> <code>Map&lt;deckId, jsonString&gt;</code> dirty-check —</li>
           <li>　　・<b>進場 check</b>：<code>pushDeck</code> 開始就 compare，snapshot 跟上次成功推送完全相同 + 無 pending timer → 整個排程跳過</li>
@@ -1387,7 +1355,6 @@
       <details>
         <summary><span class="ver-badge">v5.091</span> 🐛 10 處 KO 判定漏 +HP 修正（夠讚狗 腎上腺力量 / 道具 +HP / 太鼓防壁 全部被誤算）</summary>
         <ul>
-          <li><b>玩家回報</b>：願增猿｜腎上腺腦力 把 20 傷害指示物搬到夠讚狗 SV6 064/101，被誤判 KO。夠讚狗的特性「腎上腺力量」附【惡】能量時最大 HP +100（130 → 230），實際不該死。</li>
 
           <li><b>根因</b>：<code>maroon_dragon_deck.ts L258</code> 腎上腺腦力 + 同類 9 處 KO 判定全用 base HP：</li>
           <li><pre><code>const tHp = targetCard?.hp ?? 0;
@@ -1396,7 +1363,7 @@ if (tHp &gt; 0 &amp;&amp; newDmg &gt;= tHp) &#123; ...KO... &#125;</code></pre><
 
           <li><b>Audit 結果 — 全部 10 處 KO 判定漏</b>：</li>
           <li>　・<code>effects.ts</code> 8 處（+120 / +60 / +10 / +20 / +amount / +dmg / +addDmg 各類招式/特性 KO check）</li>
-          <li>　・<code>maroon_dragon_deck.ts:258</code> 願增猿｜腎上腺腦力（Wilson 回報）</li>
+          <li>　・<code>maroon_dragon_deck.ts:258</code> 願增猿｜腎上腺腦力（玩家回報）</li>
           <li>　・<code>mega_decks.ts:648</code> +finalDmg KO check（megaEvolve 系列）</li>
 
           <li><b>修法</b>：</li>
@@ -1433,7 +1400,6 @@ if (tHp &gt; 0 &amp;&amp; newDmg &gt;= tHp) &#123; ...KO... &#125;</code></pre><
       <details>
         <summary><span class="ver-badge">v5.089</span> 🐛 ACE 消弭時手牌 ACE SPEC 能量黃邊框 UI gate（鏡射 v5.079 engine 修補）</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.079 修了蓋諾賽克特｜ACE消弭 擋 ACE SPEC 能量（engine ATTACH_ENERGY L3487 已 gate），但手牌仍顯示黃色邊框（可使用標示）→ 玩家以為可附但按下去 engine 擋住，UX 不一致。</li>
 
           <li><b>根因</b>：UI 黃邊框 gate 沒鏡射 engine ACE 消弭 check —</li>
           <li>　・<code>game/+page.svelte L6255</code>：<code>canEnergy</code> 條件僅含 main phase + energyAttachedThisTurn + isMyTurn，沒查 ACE SPEC tag + isAceCancelActive</li>
@@ -1450,7 +1416,6 @@ if (tHp &gt; 0 &amp;&amp; newDmg &gt;= tHp) &#123; ...KO... &#125;</code></pre><
       <details>
         <summary><span class="ver-badge">v5.088</span> 🎨 撤退按鈕 disabled 變暗樣式統一 + 加強視覺</summary>
         <ul>
-          <li><b>玩家回報</b>：撤退按鈕還在，但不能撤退時應該變暗（目前只顯示 🚫 emoji 但按鈕本身沒視覺變暗）。</li>
           <li><b>根因</b>：</li>
           <li>　・mirror 按鈕（action-bar 那個 <code>.btn-act.btn-retreat-mirror</code>）v5.084 加了 <code>disabled</code> 屬性但<b>沒對應 :disabled CSS rule</b>。紅橘背景 <code>#d97a2a</code> 蓋掉瀏覽器預設 disabled 變暗 → 視覺沒變</li>
           <li>　・zone-active 按鈕（<code>.btn-retreat-blocked</code>）原 v3.37 有 <code>opacity:.55</code> + 紅暗色，但 dim 效果太弱（玩家看不出來，只能靠 🚫 emoji 判斷）</li>
@@ -1482,7 +1447,6 @@ if (tHp &gt; 0 &amp;&amp; newDmg &gt;= tHp) &#123; ...KO... &#125;</code></pre><
       <details open>
         <summary><span class="ver-badge">v5.086</span> 🐛 重力之玉效果疊加 — 雙方各 1 張應 +2 而非 +1（4 處全修）</summary>
         <ul>
-          <li><b>玩家回報</b>：雙方寶可夢都附有重力之玉時，撤退能量應該再加 1 變成 +2（疊加效果），但實作只 +1。</li>
 
           <li><b>卡面</b>（SV7 095/102）：「只要附有這張卡的寶可夢在戰鬥場上，雙方的戰鬥寶可夢【撤退】所需的能量各增加 1 個。」<b>「附有這張卡的寶可夢」是每張卡獨立計算</b>，雙方各 1 張 → 各 +1 = +2。</li>
 
@@ -1516,7 +1480,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.085</span> 🐛 蟲電寶｜並排 picker modal 空白（一家鼠｜家族行軍 同 bug）</summary>
         <ul>
-          <li><b>玩家回報</b>：用蟲電寶｜並排 招式時 picker modal 顯示空白；但下回合用寶可平板看牌庫，確實有 3 張蟲電寶。</li>
 
           <li><b>根因</b>：<code>game/+page.svelte L2104-2112</code> 'Basic:SameName' picker filter 過度限制為 <code>isBasicPokemonCard(card)</code> — 但蟲電寶 SV7 是 <b>Stage1</b>（evolvesFrom=強顎雞母蟲），<code>isBasicPokemonCard</code> 回 false → picker 把所有 3 張蟲電寶 filter 掉 → 顯示空白。</li>
 
@@ -1525,7 +1488,7 @@ cost += gravityCount;</code></pre></li>
           <li><b>Audit 結果</b>：所有用 <code>deckSameNameBenchPost</code> helper 的 4 張卡：</li>
           <li>　・呱呱泡蛙｜群聚 — Basic ✅ OK</li>
           <li>　・強顎雞母蟲｜群聚 — Basic ✅ OK</li>
-          <li>　・<b>蟲電寶｜並排 — Stage1 ❌ bug（Wilson 回報）</b></li>
+          <li>　・<b>蟲電寶｜並排 — Stage1 ❌ bug（玩家回報）</b></li>
           <li>　・<b>一家鼠｜家族行軍 — Stage1 ❌ 同 bug（未回報，audit 找到，一併修）</b></li>
 
           <li><b>修法</b>：UI 'Basic:SameName' filter 拿掉 <code>isBasicPokemonCard</code> 限制，改用 <code>params.validIids</code> 為主 filter（server-side <code>deckSameNameBenchPost</code> 已 narrow 到牌庫實體同名卡）；保留 <code>targetName</code> 為 defense-in-depth；保留 <code>card.supertype === 'Pokemon'</code> 防呆。filter 名稱保留 'Basic:SameName' 向後相容（4 處 callsites 不動），語意演化標於 helper 註解。</li>
@@ -1539,7 +1502,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.084</span> 🐛 UI 撤退費顯示鏡射重力之玉 + mirror 按鈕能量不夠改 disabled 不消失</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.082 修了幻影迷宮 + 對手撤退花費的能量正確了，但介面上顯示需要的撤退能量數量錯誤，撤退按鈕還會莫名其妙消失（正常應該都會顯示，就算能量不夠也只是變暗）。</li>
 
           <li><b>根因 1 — UI <code>retreatCostOf</code> 沒鏡射重力之玉</b></li>
           <li>　・<code>game/+page.svelte L3182</code> 的 <code>retreatCostOf</code> 既有 v3.20 道具迴圈只 hardcode 氣球，沒 iterate <code>TOOL_BOTH_SIDES_RETREAT_PLUS</code>（重力之玉）。</li>
@@ -1674,7 +1636,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.079</span> 🐛 修蓋諾賽克特｜ACE消弭 擋不到 ACE SPEC 能量 + 秘密箱/重力之玉 補 ACE SPEC 標記</summary>
         <ul>
-          <li><b>玩家回報</b>：自己場上有蓋諾賽克特（非 ex 版本）+ 附「氣球」道具，理應觸發特性「ACE消弭」擋對手 ACE SPEC 卡。但對手仍能使出「新衝天能量」（ACE SPEC 特殊能量）。卡面：「若這隻寶可夢附有『寶可夢道具』卡，則對手無法從手牌使出『【ACE SPEC】』卡。」</li>
 
           <li><b>根因 1（核心 bug）</b>：<code>engine.ts L2699 PLAY_TRAINER handler</code> 早就有 ACE 消弭 gate：<br/><code>if (trainerCard.tags?.includes(&apos;ACE SPEC&apos;) &amp;&amp; isAceCancelActive(state, aIdx, pool)) return state;</code><br/>但 <code>ATTACH_ENERGY handler L3464</code><b>完全沒有 ACE SPEC check</b> — 玩家附 ACE SPEC 特殊能量（新衝天 / 古舊 / 富裕等）走 ATTACH_ENERGY 不走 PLAY_TRAINER，gate 漏掉。</li>
 
@@ -1685,7 +1646,7 @@ cost += gravityCount;</code></pre></li>
 
           <li><b>修法 2</b>：兩張卡 tags 補 <code>[&apos;ACE SPEC&apos;]</code>。Audit 結果：目前資料庫已標 ACE SPEC 共 <b>28 張 unique 卡名</b>（不公印章、倖存鍛鍊器、危險光線、古舊能量、大師球、奇跡耳麥、奢華炸彈、富裕能量、寶可生機劑A、希望護身符、急進開關、新衝天能量、極限腰帶、珍寶配件、璀璨結晶、百萬噸吹風機、能量輸送PRO、英雄斗篷、覺醒戰鼓、貴重手推車、重新啟動箱、釣竿MAX、頂尖捕捉器、高級香氛、壯偉碩木、中立中心、完全體攪拌器、寶可夢旋風回收機）。v5.079 後 + 秘密箱 + 重力之玉 = <b>30 張</b>。</li>
 
-          <li><b>Audit 範圍</b>：grep 全 cards/*.json 看 rulesText 含「ACE SPEC」但 tags 沒標 = 0 張（ACE SPEC 在 PTCG 是卡框屬性，rules 內不會寫；scraper 抓不到要手動標）。Wilson 玩家回報是目前最可靠的識別方式。若未來發現其他漏標，可單張補 tags。</li>
+          <li><b>Audit 範圍</b>：grep 全 cards/*.json 看 rulesText 含「ACE SPEC」但 tags 沒標 = 0 張（ACE SPEC 在 PTCG 是卡框屬性，rules 內不會寫；scraper 抓不到要手動標）。玩家 玩家回報是目前最可靠的識別方式。若未來發現其他漏標，可單張補 tags。</li>
 
           <li><b>實際影響</b>：v5.079 起 — 場上有附道具的蓋諾賽克特時，對手「使出 ACE SPEC trainer」(原本已擋) 跟「附加 ACE SPEC 能量」(新擋) 都會被擋。秘密箱 + 重力之玉 識別為 ACE SPEC，每副牌組最多 1 張 limit 生效 + 被 ACE 消弭擋。</li>
 
@@ -1733,7 +1694,7 @@ cost += gravityCount;</code></pre></li>
           <li>　2. <code>peekIids</code> fallback chain 補 <code>topIids</code>（通用 TOP_N filter 用的 param 名）— 之前只有 <code>top4Iids / top6Iids / top7Iids / top8Iids / top9Iids</code> 5 種寫死 name</li>
 
           <li><b>連帶受惠（自動有「翻到的其他 N 張」揭示 UI）</b>：</li>
-          <li>　・<b>米立龍ex｜硃砂誘餌</b> (Pokemon:TOP_N, peek 10) — Wilson 回報的</li>
+          <li>　・<b>米立龍ex｜硃砂誘餌</b> (Pokemon:TOP_N, peek 10) — 玩家回報的</li>
           <li>　・<b>人造細胞卵｜傳喚之門</b> (Pokemon:TOP_N, peek 8)</li>
           <li>　・<b>杜若 支援者</b> (Pokemon:TOP_N + Trainer:TOP_N, peek N)</li>
           <li>　・<b>拉普拉斯ex｜海紋石之雨</b> (Energy:TOP_N, peek N)</li>
@@ -1748,7 +1709,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.076</span> 🐛 修米立龍ex｜硃砂誘餌 + 人造細胞卵｜傳喚之門 候選池只列基礎寶可夢（折衷修正）</summary>
         <ul>
-          <li><b>玩家回報</b>：米立龍ex（SV8 081/106 H 標）第二招「硃砂誘餌」發動時，卡面寫「查看自己的牌庫上方 10 張卡，從其中選擇任意數量的<b>寶可夢卡</b>，放置於備戰區」— 但 simulator 內 picker 只列出基礎寶可夢，1 階 / 2 階 / ex 進化等被自動排除（明明應該都可選）。</li>
 
           <li><b>根因</b>：<code>v2750_h_wave2_full.ts L838-839 deckTopPeekPokemonToBenchPost</code> helper 自註解明寫：「<b>折衷：filter 用 Basic:TOP_N，只列基礎，非基礎自動洗回（與卡面意圖最一致）</b>」— 這是 v3.11 寫的時候錯誤判斷，認為「放備戰只能放基礎，非基礎類無法直接 set」。實際上 PTCG 規則：這類「強制放置」招式是 special placement，不走進化路徑，直接放上備戰<b>什麼階段的寶可夢都可以</b>（就是該卡本身的形態）。</li>
 
@@ -1772,7 +1732,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.075</span> 🐛 修磁鐵【鋼】能量撤退費未生效 + audit 一身輕 / 混亂撤退規則</summary>
         <ul>
-          <li><b>玩家回報 3 個撤退相關 bug，audit 結果如下</b>：</li>
 
           <li><b>Bug 3：磁鐵【鋼】能量 附於鋼屬性寶可夢撤退仍需能量（真實 bug，已修）</b></li>
           <li>　・<b>玩家回報</b>：鋼屬性寶可夢附「磁鐵【鋼】能量」(M4 094/100 特殊能量) 後，撤退時 UI 仍顯示原撤退費，按下後 engine 內實際撤退費 0（因為 SPECIAL_ENERGY_RETREAT_MOD 有處理），但 UI 顯示誤導讓玩家以為效果沒生效。卡面：「提供 1 個【鋼】能量。附於【鋼】寶可夢時，撤退所需能量為 0。」</li>
@@ -1804,7 +1763,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.074</span> 🐛 修 3 隻同名寶可夢用特性時，能量/效果全跑到第 1 隻（findAbilityUserIid 共 4 處）</summary>
         <ul>
-          <li><b>玩家回報</b>：場上有 3 隻火箭隊的操陷蛛（SV10 009/098, Stage1 草），3 隻都用特性「充能」（在自己的回合時可使用 1 次，從棄牌區選 1 張基本能量附於這隻寶可夢身上）後，3 張能量都附到同一隻寶可夢，違反「附於這隻寶可夢」的卡面語意。</li>
 
           <li><b>根因 — <code>findAbilityUserIid</code> helper 在同回合多隻同名同特性時誤判</b></li>
           <li>　・<code>effects.ts L10960 findAbilityUserIid(state, aIdx, cardName, pool)</code> 掃 <code>[active, ...bench]</code> 找第 1 個 <code>abilityUsedThisTurn === true</code> 且卡名相符的 iid。</li>
@@ -1816,7 +1774,7 @@ cost += gravityCount;</code></pre></li>
           <li>　・4 處 regA 改用 <code>(st, idx, pool, cardInst) =&gt; &#123; const userIid = cardInst?.iid; ... &#125;</code> 直接讀觸發的 iid，根本不用掃場。</li>
 
           <li><b>Audit 結果（4 處全部一起改）</b>：</li>
-          <li>　・<code>effects.ts L12244</code> <b>火箭隊的操陷蛛｜充能</b>（不自身 KO，3 隻可同回合用 → Wilson 回報的 bug）✅ 改完</li>
+          <li>　・<code>effects.ts L12244</code> <b>火箭隊的操陷蛛｜充能</b>（不自身 KO，3 隻可同回合用 → 玩家回報的 bug）✅ 改完</li>
           <li>　・<code>effects.ts L11190</code> <b>彷徨夜靈｜咒詛炸彈</b>（自身 KO，同回合 2+ 隻機率低但理論有同 bug）✅ 改完</li>
           <li>　・<code>effects.ts L11212</code> <b>三合一磁怪｜過度放電</b>（自身 KO，同 bug）✅ 改完</li>
           <li>　・<code>maroon_dragon_deck.ts L66</code> <b>黑夜魔靈｜咒詛炸彈 13 counter</b>（自身 KO，同 bug）✅ 改完</li>
@@ -1831,7 +1789,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.073</span> 🐛 修琉琪亞的展示無法選對方基礎 ex 寶可夢</summary>
         <ul>
-          <li><b>玩家回報</b>：使用支援者「琉琪亞的展示」(SV7a 063/064 H 標) 時，picker 沒列出對方備戰區的基礎 ex 寶可夢，只能選非 ex 的基礎寶可夢。卡面：「選擇 1 隻對手的備戰區的【基礎】寶可夢，與戰鬥寶可夢互換。然後，將新上場的寶可夢【混亂】。」「【基礎】」沒排除 ex，理應可選基礎 ex。</li>
 
           <li><b>根因</b>：<code>v172_hij_batch.ts L208 + L215</code> 用 <code>card?.subtype === &apos;Basic&apos;</code> 過濾。但資料源中**基礎 ex 寶可夢的 <code>subtype = &apos;ex&apos;</code>（不是 <code>&apos;Basic&apos;</code>）**：</li>
           <li>　・全 cards/*.json 掃描結果：<strong>319 張基礎 ex 寶可夢的 subtype 是 &apos;ex&apos;</strong>（拉普拉斯ex、花舞鳥ex、洛托姆ex、超級噴火駝ex、吼鯨王ex…）</li>
@@ -1843,7 +1800,7 @@ cost += gravityCount;</code></pre></li>
           <li><b>Audit 結果（同檔其他卡 + 其他檔案）</b>：grep 全 effects/ 目錄的 <code>subtype === &apos;Basic&apos;</code> 用法：</li>
           <li>　・基本能量判定（<code>supertype === &apos;Energy&apos; + subtype === &apos;Basic&apos;</code>）：v2353/v2610/v2660/v2750/v2999/six_decks 等多處，<b>都是正確</b>（基本能量 vs 特殊能量，跟寶可夢無關）✓</li>
           <li>　・<code>items_misc.ts L777 巢穴球</code>：有同樣寫法但僅是 dead code（<code>hasBasic</code> 變數沒被使用，picker 走 svelte 端 filter=&apos;Basic&apos; 已正確用 isBasic 判定），功能不受影響</li>
-          <li>　・G 標卡（v2996/v2998）：Wilson 指示 G 標跳過實裝，本版本不動</li>
+          <li>　・G 標卡（v2996/v2998）：玩家 指示 G 標跳過實裝，本版本不動</li>
 
           <li><b>實際影響（v5.073 起）</b>：琉琪亞的展示 picker 現在能列出對手備戰區的 <b>所有基礎寶可夢（含基礎 ex）</b>。例：對手備戰有 拉普拉斯ex / 一般皮卡丘，現在兩隻都可選；之前只有一般皮卡丘可選。</li>
 
@@ -1856,7 +1813,7 @@ cost += gravityCount;</code></pre></li>
         <ul>
           <li><b>背景：v5.064 後 Firebase 寫入仍維持 36k/日</b></li>
           <li>　・v5.064 加了 24h localStorage throttle 後預期降寫入 80%，但實測仍 38k+/日（超出 20k 免費額度近 2 倍）。</li>
-          <li>　・Wilson 在 Firebase Console 撈 <code>users</code> collection 排序 createdAt 降冪截圖：<strong>16 分鐘內出現 18+ 個全新匿名 user</strong>，loginCount=1（全部首次寫入），UA 大量是 Facebook In-App Browser（<code>FBAN/FBIOS</code>、<code>FB_IAB</code>），且有 4 秒內同一裝置兩個 uid 的紀錄。</li>
+          <li>　・玩家 在 Firebase Console 撈 <code>users</code> collection 排序 createdAt 降冪截圖：<strong>16 分鐘內出現 18+ 個全新匿名 user</strong>，loginCount=1（全部首次寫入），UA 大量是 Facebook In-App Browser（<code>FBAN/FBIOS</code>、<code>FB_IAB</code>），且有 4 秒內同一裝置兩個 uid 的紀錄。</li>
 
           <li><b>根因：Facebook In-App Browser 不持久化 IndexedDB / localStorage</b></li>
           <li>　・FB IAB 沙箱化儲存空間 — 每次從 FB 訊息點 PTCG 連結 → IndexedDB 重置 → Firebase Auth <code>signInAnonymously()</code> 重跑 → <strong>產生全新 uid</strong>。</li>
@@ -1887,7 +1844,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.071</span> 🐛 修手機版詳細卡彈窗 + 主畫面 active chip 雙狀態顯示（灼傷+混亂只看到混亂）</summary>
         <ul>
-          <li><b>玩家回報</b>：手機版（iPhone）對戰時，場上寶可夢同時有【灼傷】+【混亂】（如被「危險光線」打中），詳細卡彈窗的「📍 場上狀態 → 異常」row 只顯示「😵 混亂」沒顯示「🔥 燒傷」；主畫面 active 卡的小 chip 也只顯示「confused」（且是英文原字串，沒中文 label）。</li>
 
           <li><b>根因 — 雙狀態存兩個欄位，UI 只讀其一</b>：</li>
           <li>　1. <code>CardInstance</code> 有 <code>status?: SpecialCondition</code> 與 <code>secondaryStatus?: SpecialCondition</code> 兩個欄位（v2.163 引入用於支援「危險光線 — 灼傷+混亂」「炎舞剋星 — 灼傷+中毒」等同時兩狀態的招式）。</li>
@@ -1911,7 +1867,7 @@ cost += gravityCount;</code></pre></li>
         <summary><span class="ver-badge">v5.070</span> 🎴 沉重接力棒 UI 顯示能量類型 + iOS 平板最上排 UI 重疊修正</summary>
         <ul>
           <li><b>玩家建議 1：沉重接力棒分配能量時，modal 應顯示能量類型（火/水/雷等）</b></li>
-          <li>　・<b>背景</b>：v5.067 把沉重接力棒從「自動丟最後 N 張基本能量」升級為玩家自選 picker，v5.069 再加 titleOverride 改善 UX。但 picker 自身顯示的只是「第 K/N 張能量」抽象計數 — 玩家不知道每張是什麼能量（火?水?雷?）。Wilson 建議參考「大吾的巨金怪ex｜X啟動」的分配方式，UI 顯示能量類型。</li>
+          <li>　・<b>背景</b>：v5.067 把沉重接力棒從「自動丟最後 N 張基本能量」升級為玩家自選 picker，v5.069 再加 titleOverride 改善 UX。但 picker 自身顯示的只是「第 K/N 張能量」抽象計數 — 玩家不知道每張是什麼能量（火?水?雷?）。玩家 建議參考「大吾的巨金怪ex｜X啟動」的分配方式，UI 顯示能量類型。</li>
           <li>　・<b>X啟動的設計</b>：用 <code>startEnergyChain</code> helper（<code>v158_energy_chain.ts</code>），裡面 v2.87 偵測同屬性 → 開 <code>energy-distribute</code> +/- counter UI（顯示「分配【X】能量到 N 隻寶可夢」）；v3.57 混屬性 → 按 type 分波 picker（先全部【火】再全部【水】）。UI 標題、log 訊息都帶屬性名。X啟動 / 燃燒充能 / 金屬製造者 / 玻璃喇叭 等 6+ 招式都共用此 pattern。</li>
           <li>　・<b>修法</b>：把 <code>tools.ts heavy-baton-pick-energies</code> resolver 從「自己 chain 開 heal-target picker 逐張附」改成<strong>直接呼叫 <code>startEnergyChain(st, dIdx, energyIids, &#123; label: &apos;沉重接力棒&apos;, source: &apos;discard&apos;, scope: &apos;bench-only&apos;, filterType: &apos;Any&apos; &#125;, pool)</code></strong>。能量已在 KO 時搬到 discard（source=discard 直接讀），scope=bench-only（卡面「附於自己的備戰寶可夢身上」不含戰鬥位）。原 <code>heavy-baton-distribute</code> resolver 移除（不再使用）。</li>
           <li>　・<b>實際 UI（v5.070 起）</b>：</li>
@@ -1920,7 +1876,6 @@ cost += gravityCount;</code></pre></li>
           <li>　　3. 1 隻備戰 → 自動全附（避免反覆彈 UI，內建在 startEnergyChain）</li>
           <li>　　4. 0 隻備戰 → 能量留棄牌區（內建 leftover log）</li>
 
-          <li><b>玩家回報 2：iOS 平板介面最上排會點不到，且和時間訊息有 UI 重疊</b></li>
           <li>　・<b>根因</b>：<code>game/+page.svelte L9057 .battle-header</code> 的 padding 是固定 <code>0.35rem 0.75rem</code>，沒考慮 iOS 動態島 / 瀏海 / 狀態列。正式站（www.ptcg-tw-sim.com）沒有上方 migration banner / BETA banner，<code>.battle-header</code> 是第一個元素直接觸頂 → iPad 橫向時動態島 / status bar 會覆蓋最上排 chips（版本號、設定、全螢幕 等按鈕）造成「點不到」、和 timer chips 視覺重疊。</li>
           <li>　・<b>對比已修正的元件</b>：<code>+layout.svelte L124 .migration-banner</code> 用 <code>padding: calc(10px + env(safe-area-inset-top, 0px))</code>（v4.946 已加），<code>cards/+page.svelte</code>、<code>decks/+page.svelte</code> 都有處理；只有 <code>.battle-header</code> 跟 <code>.beta-banner</code> 漏掉。</li>
           <li>　・<b>修法</b>：</li>
@@ -2010,7 +1965,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.066</span> 🐛 修龐克頭盔對甲賀忍蛙ex 分身連打沒反擊 — clone-strike-multi-hit resolver 補 punk reflect</summary>
         <ul>
-          <li><b>玩家回報</b>：惡屬性寶可夢附「龐克頭盔」(MBG 018/022)，被甲賀忍蛙ex 招式「分身連打」(SV5a 045/066) 打中時，沒在甲賀忍蛙身上放 4 個傷害指示物。卡面：「附有這張卡的【惡】寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置 4 個傷害指示物。」</li>
 
           <li><b>根因 — clone-strike-multi-hit resolver 漏 punk reflect</b>：</li>
           <li>　1. <code>分身連打</code> JSON <code>damage: &quot;&quot;</code>（空字串）+ effect 寫「對手的2隻寶可夢各受到120點傷害」— engine.ts 主路徑 <code>baseDamage = 0</code>。</li>
@@ -2042,7 +1996,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.065</span> 🐛 修暗影【惡】能量無法用惡屬性招式 + 補閃電【雷】/ 暗影【惡】屬性篩選分類</summary>
         <ul>
-          <li><b>玩家回報</b>：寶可夢附上「暗影【惡】能量」(M5)，但<strong>不能使用惡屬性的招式</strong>。應該要像磁鐵【鋼】能量一樣，視為 1 個【惡】能量供使用。</li>
 
           <li><b>根因 — 3 處表都漏</b>：</li>
           <li>　1. <code>engine.ts L933 SPECIAL_ENERGY_TYPES</code>（對戰能量計算）：缺「暗影【惡】能量」entry → <code>getEnergyUnits</code> fallback 到 <code>['Colorless']</code> → 附了暗影能量也只算 1 個無能量，無法滿足惡屬性招式需求。**這就是玩家點名的 bug。**</li>
@@ -2068,7 +2021,7 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.064</span> 💰 tracking.ts 加 24h localStorage throttle — 降 Firebase 寫入量 70-90%（玩家功能 0 影響）</summary>
         <ul>
-          <li><b>玩家觀察</b>：Wilson 查 Firebase usage — 對戰已搬到 Oracle 後讀取下降 -89%（5/16 12萬/日 → 5/22 接近 0），但<strong>寫入維持 2.7 萬/日（超免費額度 6,786）</strong>。整月專案費用 $42 TWD。</li>
+          <li><b>玩家觀察</b>：玩家 查 Firebase usage — 對戰已搬到 Oracle 後讀取下降 -89%（5/16 12萬/日 → 5/22 接近 0），但<strong>寫入維持 2.7 萬/日（超免費額度 6,786）</strong>。整月專案費用 $42 TWD。</li>
 
           <li><b>根因 audit</b>：codebase grep 全部 Firestore 寫入點（<code>setDoc / updateDoc / addDoc / deleteDoc / runTransaction</code>）發現 5 個來源：(1) <code>tracking.ts</code> users/uid 父文件 setDoc — 每個 page load 寫 1 次 ⚠ (2) <code>room.ts</code> rooms/code 對戰（beta 站還在 Firebase）(3) <code>decks/cloud.ts</code> users/uid/decks/id 子集合（玩家儲牌組）(4) <code>+page.svelte</code> feedbacks addDoc (5) admin 後台 update/delete feedback。</li>
 
@@ -2085,7 +2038,7 @@ cost += gravityCount;</code></pre></li>
           <li>　・<b>送 feedback</b>：✓ 完全正常（走 feedbacks 集合）</li>
           <li>　・<b>tracking 失真</b>：loginCount 變成「24h 區間數」、lastLoginAt 變成「24h 解析度」— 但 admin 不讀這些欄位，0 影響觀測。</li>
 
-          <li><b>預期效果</b>：Firebase 寫入量估降 70-90%（從每 PV 1 次 → 每 device 每 24h 1 次）。下月應能回到免費額度內（2 萬/日以下）。Wilson 可繼續觀察 Firebase usage 截圖。若仍超 → 加碼上方案 C 整體停 tracking setDoc。</li>
+          <li><b>預期效果</b>：Firebase 寫入量估降 70-90%（從每 PV 1 次 → 每 device 每 24h 1 次）。下月應能回到免費額度內（2 萬/日以下）。玩家 可繼續觀察 Firebase usage 截圖。若仍超 → 加碼上方案 C 整體停 tracking setDoc。</li>
 
           <li><b>備用方案</b>：A 把 tracking 搬 Oracle（工程量大但資料保留）／C 直接停 tracking（最徹底但失去 deviceId/userAgent — 雖然目前沒人讀）— v5.064 採方案 B 最低風險最大降幅優先。</li>
 
@@ -2096,7 +2049,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.063</span> 🎯 v5.060 backlog 完整實裝 — 32 個「若希望」招式補 binary-yes-no 玩家抉擇 prompt</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.060 修了吃吼霸ex 極限俯衝 / 巨金怪 金屬之錘 等 3 個「若希望」招式，但留下 34 個 backlog 還沒做完整實裝。</li>
           <li><b>本次處理範圍</b>：34 個 backlog 中扣除 2 個原本就沒實作 reg* 的（自爆磁怪|磁力抵制、大比鳥ex|狂風呼嘯，留 backlog 之後實作），共補完 32 個招式 binary-yes-no prompt。G 標卡跳過實裝原則：所有 32 個招式都有非 G 印刷（H/I/J/M5 等仍合法），招式名共用 → 全部仍需實裝。</li>
 
           <li><b>修法統一範本</b>：(a) 在 <code>effects.ts</code> 結尾集中加 32 個 <code>ATTACK_PRE_DISCARD_CHOICE.set</code>（binary-yes-no spec + 中文 prompt + Yes/No label）；(b) 每個招式的 <code>regPost</code>（櫻花魚漸強波是 <code>regPre</code>）callback 用 <code>const _cb: AttackPostFn = CB</code> 法 wrap，前面加 yes/no guard — 玩家選「否」<code>addLog</code> 跳過效果直接 return，選「是」呼叫原 callback。AI 預設 yes（<code>chosenIids === undefined</code>），不影響 vs AI 對戰。</li>
@@ -2122,7 +2074,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.062</span> 🐛 修對戰圓形競技場誤擋戰鬥位 — caller 漏傳 isBench 預設走 bench guard（玩家回報抹茶旋轉打不到戰鬥位）</summary>
         <ul>
-          <li><b>玩家回報</b>：用「來悲粗茶 抹茶旋轉」(M5) 攻擊，場上有「對戰圓形競技場」(M2 079/080) 時，對手戰鬥寶可夢仍被擋下不受招式效果（沒被放傷害指示物）。但卡面寫的是「雙方的所有<strong>備戰</strong>寶可夢，不會因對手的招式與特性的效果而被放置傷害指示物」— 戰鬥位應該照樣中招才對，bug 反過來保護到戰鬥位。</li>
 
           <li><b>根因</b>：<code>defense.ts canApplyEffectToTarget</code> 的 <code>options.isBench</code> 參數 — 文件寫「caller 已知 target 在 bench 時傳 true」，但實際內部判定是「caller 沒傳 isBench → 預設走 bench-only defense（含對戰圓形/球形盾牌/花之帷幔 等 bench-only 規則）」。<code>m5_preview.ts</code> 兩處 caller 把 active + bench 都丟進 helper 但漏傳 isBench：先 <code>[def.active, ...def.bench].filter(...)</code> 然後 for loop 每個 target 都呼叫 helper 卻沒第 7 參數 → 對手戰鬥位也誤走 bench guard → 對戰圓形擋下。</li>
 
@@ -2145,7 +2096,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.061</span> 🐛 修 17 個 bench-fill 招式 UI 沒灰 — BENCH_FILL_ATTACK_NAMES 補齊（呼喚同伴等同 v5.059 螺釘地鼠 bug 第二層）</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.059 修了 螺釘地鼠｜呼喚同伴 在備戰滿時的「零之大空洞清場」誤觸發 bug（regPost 內補 cap check），但發現按鈕還是可以點下去 — 應該要像「呼朋引伴」一樣 UI 變暗無法點擊。</li>
           <li><b>根因</b>：v5.010 引擎加了 <code>BENCH_FILL_ATTACK_NAMES</code> Set 機制，<code>engine.ts:6749</code> 內列出該 set；UI 層在 <code>getAvailableAttacks</code> 內檢查 — 若招式名在 set 且備戰滿則 return -1（按鈕灰）；<code>applyAction</code> 內也有同樣 check 攔截 dispatch（雙層防線）。但 set 內只有「呼朋引伴」一個招式名，其他 17 個同模式 bench-fill 招式（牌庫搜尋/查看牌庫上方 → 把基礎或特定寶可夢放備戰）都沒進去 — 包括玩家點名的「呼喚同伴」。</li>
           <li><b>同 v5.059 螺釘地鼠 bug 第二層</b>：v5.059 只在 regPost 內補了 cap check（第 3 道防線），UI 層 + engine.ts dispatch 攔截層都還是漏。實際 audit 後發現所有 17 個招式的 regPost 內部 helper（<code>deckSameNameBenchPost / deckTopPeekPokemonToBenchPost / deckSearchPokemonToBenchPost / deckSearchBasicToBenchPost / benchBasicFromDeckPost</code>）都已有 <code>getOwnBenchLimit</code> cap check（v5.041 修過）— 不會誤觸發 enforceBenchLimit 清場。但 UI 沒灰 → 玩家還能點 → 點下去看 log 才知道無效，體驗困惑。</li>
 
@@ -2166,7 +2116,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.060</span> 🐛 修「若希望」漏實裝 — 吃吼霸ex 極限俯衝、巴布土撥 怒氣拳、克雷色利亞 弦月光芒 補玩家抉擇 prompt</summary>
         <ul>
-          <li><b>玩家回報</b>：吃吼霸ex「極限俯衝」(120+) 卡面「若希望，增加120點傷害。這個情況下，這隻寶可夢也受到50點傷害。」現在程式直接強制使用「希望」(240 + 自殘 50)，沒給玩家選不選的機會。</li>
           <li><b>範本</b>：「巨金怪 M4 059/083 J | 金屬之錘」之前 v4.46 修過 — 用 <code>ATTACK_PRE_DISCARD_CHOICE</code> + <code>scope: &apos;binary-yes-no&apos;</code> 系統，搭配 <code>regPre</code> 讀 <code>action.discardedEnergyIids</code> 長度判 yes/no（length≥1 = yes，length=0 = no，undefined = AI fallback yes）。也類比「蚊香泳士|跳躍衝天」(SV6 025/101) 純 binary 抉擇範本。</li>
 
           <li><b>修法 1（玩家點名）— 吃吼霸ex|極限俯衝</b>（v2770_cross_mark_cleanup.ts）：補 <code>ATTACK_PRE_DISCARD_CHOICE.set</code> binary-yes-no spec；regPre 看 chosenIids 判 yes/no — Yes → 240 傷害，No → 120 base；regPost selfHitPost(50) 也加 yes 條件 — Yes → 自殘 50，No → 不自殘。</li>
@@ -2206,7 +2155,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.058</span> 🔧 修 version.ts silent-fail — 網頁標題版本號回正（從 v5.053 跳到 v5.058）</summary>
         <ul>
-          <li><b>玩家回報</b>：網頁標題顯示「PTCG 實體賽事演練 v5.053」沒更新（實際 push 已到 v5.057）。</li>
           <li><b>根因 1 — v5.054 commit 是 empty commit</b>：當時 patch_v5054.py 跑完 push 雖然 returncode 0，但 GitHub 上的 v5.054 commit (<code>aab07086</code>) 用 <code>git diff-tree</code> 看 <strong>0 個檔案變動</strong>。即 patch 寫 disk 後，<code>hash_object</code> 拿到的 blob 跟 PARENT 上同檔案的 blob 一樣 → <code>write-tree</code> 出來的 tree 跟 PARENT tree 一樣 → commit empty。原因不明（可能 disk read 拿到 OS cache 的舊內容、mount sync 延遲、或 Python file descriptor 跟 git subprocess 看到的 disk view 不同步）。</li>
           <li><b>根因 2 — 連鎖 silent fail</b>：v5.055 patch 用 v5.054 commit 當 PARENT，從 <code>head_blob</code> 拿 version.ts 仍是 5.053（因 v5.054 empty）。但 patch 寫的是 <code>v.replace(&quot;VERSION = &apos;5.054&apos;&quot;, &quot;VERSION = &apos;5.055&apos;&quot;)</code> — OLD pattern 是 5.054，<strong>在 5.053 字串裡找不到</strong>，<code>str.replace</code> 找不到時 silently 回原字串，不報錯。所以 v5.055/56/57 patch 的 version.ts 都還是 5.053。</li>
           <li><b>差別檔案</b>：+page.svelte changelog 用 ANCHOR_OLD 抓「<code>v5.054 details open</code>」 — 因為 v5.055 patch 的 +page.svelte 寫的是新增 v5.055 details + 同時補 v5.054 details（v5.054 empty commit 後 main 上沒有 v5.054 changelog）。anchor 是 v5.053 details open（PARENT 上 v5.053 是最新），這個 OLD pattern 在 PARENT 上找得到 → replace 成功。所以 +page.svelte 沒 silent fail，每個版本的 changelog 都有進去 — 只是版本號從未 bump。</li>
@@ -2220,7 +2168,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.057</span> 🎴 對手回合 panel 三項調整 — toggle 按鈕可拖、標題改名、加棄牌顯示</summary>
         <ul>
-          <li><b>玩家回報 3 項</b>：</li>
           <li>　1. toggle 按鈕無法拖曳 — 想像對話按鈕一樣可拖移位置</li>
           <li>　2. 標題「對手回合」→「對手回合出牌」更精確</li>
           <li>　3. 該回合棄掉的牌也顯示（如高級球用完進棄牌、招式效果棄能量），但色調暗一點區別主動打出的牌</li>
@@ -2239,7 +2186,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.056</span> 🐛 修對手回合 panel 慢一回合 — 改用 activePlayerIndex 偵測切換</summary>
         <ul>
-          <li><b>玩家回報</b>：自己的回合結束才看到對手的上回合動作，慢了一回合。應該是自己回合期間就能看到對手剛剛做了什麼。</li>
           <li><b>根因</b>：v5.055 <code>maybePushTurnLog</code> 用 <code>before.turn !== after.turn</code> 偵測切換 — 但 PTCG 規則裡 <code>state.turn</code> 是「整個 round」概念（先攻+後攻各 1 回合 = <code>state.turn</code> 1），雙方輪一次才 +1。所以對手 END_TURN 時 turn 沒變，我方做動作期間對手的 <code>currentTurnActions</code> 還沒搬到 <code>turnActionsLog</code> → 我方看不到。直到我方 END_TURN 才一起搬，但這時對手又開始新一回合了。</li>
           <li><b>修法</b>：改用 <code>before.activePlayerIndex !== after.activePlayerIndex</code> 偵測「單一玩家回合切換」(每次 END_TURN 都觸發)。同時只搬「剛結束玩家」(<code>endedIdx = before.activePlayerIndex</code>) 的 <code>currentTurnActions</code>，不動我方的 buffer。</li>
           <li><b>修後正確時序</b>：對手 END_TURN → activePlayerIndex 切到我方 → maybePushTurnLog trigger → 對手 currentTurnActions 搬到 turnActionsLog → 我方 panel 立刻能看到對手剛剛的動作 ✓</li>
@@ -2266,7 +2212,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.054</span> 🧹 Admin 後台拿掉 3 處 hard limit 300 — Oracle 主機沒額度限制不需要</summary>
         <ul>
-          <li><b>玩家回報</b>：admin 後台 Oracle 對戰紀錄只顯示最新 300 個。之前用 Firebase 怕資料量太大設了上限，現在搬到 Oracle 主機應該拿掉。</li>
           <li><b>3 處 server hard limit 拿掉</b>：(1) <code>server_admin_patch.js:354</code> Oracle rooms 列表 limit 300 → 無上限；(2) <code>server_admin_patch.js:427</code> Firebase rooms 列表 limit 300 → 無上限（admin server-side firebase-admin SDK 不吃 client quota）；(3) <code>server_admin_patch.js:689</code> matchRecords endpoint default 300 → 無 default 上限（client 仍 pagination limit=50）。</li>
           <li><b>保留</b>：messages limit 500 / Firestore batch delete limit 400（硬性 500 ops 限制）/ admin.html slice(0, N) Top N 統計 UI 設計。</li>
           <li><b>版本</b>：server_admin_patch v0.19 → v0.20、admin.html v0.90 → v0.91。<strong>需跑 oracle-admin/update-admin-full.bat</strong> 部署到 Oracle VM。</li>
@@ -2277,7 +2222,6 @@ cost += gravityCount;</code></pre></li>
       <details open>
         <summary><span class="ver-badge">v5.053</span> 🔧 修寶可裝置3.0 Rule 8 揭示資訊違規 — 對戰 log 補揭示對方選中的支援者卡名</summary>
         <ul>
-          <li><b>玩家回報</b>：對手使用寶可裝置3.0 後，對戰 log 看不到對方選擇了哪一張卡。</li>
           <li><b>Rule 15 audit JSON 卡面</b>：「查看自己的牌庫上方7張卡，從其中選擇1張支援者卡，<strong>在給對手看過後</strong>加入手牌。將剩餘卡放回牌庫並重洗。」 — 「給對手看過」字樣明確觸發 Rule 8 揭示資訊規則。</li>
           <li><b>根因</b>：<code>regR(&apos;pokegear-fetch-supporter&apos;, ...)</code> resolver 純做 state 操作（從牌庫搬卡到手牌 + 重洗），<strong>完全沒呼叫 addLog 公開揭示卡名</strong>。線上對戰時對手看不到我方選中支援者卡 — 違反 PTCG 規則「給對手看過」防作弊驗證機制（Rule 8 揭示資訊規則）。</li>
           <li><b>修法</b>：resolver callback signature 從 <code>(st, idx, iids, params, _pool)</code> 改為 <code>(st, idx, iids, params, pool)</code>（使用 pool）；補 addLog：「<code>寶可裝置3.0：選擇了「XX」加入手牌（公開）</code>」。未選任何卡時也加 log：「<code>未選擇任何支援者，重洗牌庫</code>」。</li>
@@ -2306,7 +2250,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.051</span> 🐛 修 Android 手機版 lobby select 點不開 — 移除預組 toggle 預組永遠顯示</summary>
         <ul>
-          <li><b>玩家回報</b>：Android 手機版本機 / 線上兩個 lobby 都遇到 — 勾選「在下拉選單顯示內建預組」checkbox 後，點「選擇牌組」select 完全沒反應 / picker 不彈出。</li>
           <li><b>根因猜測（Rule 15 audit）</b>：Svelte template <code>&#123;#if PRESET_DECKS.length &gt; 0 &amp;&amp; showPresetDecksInDropdown&#125;</code> 包 <code>&lt;optgroup&gt;</code> — checkbox toggle 觸發 <code>$state</code> 改 → Svelte 對 <code>&lt;select&gt;</code> 內 child 動態 mount/unmount optgroup。Android Chrome native select 對 picker 開啟期間 / 期前 select children DOM 結構動態變更有已知 reconciliation 問題，導致再次點 select 時 picker handler 失效（picker 不彈）。</li>
           <li><b>修法</b>：移除 toggle 機制，預組 optgroup 永遠 render（前提 PRESET_DECKS.length &gt; 0）。三處 select 條件改為純 <code>&#123;#if PRESET_DECKS.length &gt; 0&#125;</code>；兩處 toggle checkbox UI 移除；<code>showPresetDecksInDropdown</code> $state 宣告清掉。lobby select 內 DOM 結構從此穩定不動，picker 100% 能用。</li>
           <li><b>UX 取捨</b>：原 v4.994 設計 toggle 是為了 lobby 簡潔（玩家通常用自己的牌組）。新設計 lobby 永遠看到「📁 我的牌組」+「🎴 內建預組」兩個 optgroup，視覺略雜但保證能用。修 critical bug &gt; UX cosmetic 整潔。</li>
@@ -2318,11 +2261,10 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.050</span> 🎨 桌墊版間距調整 — 戰鬥場↔備戰區更近 + 上下 padding 拉開避免疊牌出邊界</summary>
         <ul>
-          <li><b>玩家回報</b>：桌墊版上戰鬥場和備戰區之間間距太鬆散；對手備戰區又離 viewport 頂太近，疊牌往上 fan 多了會被切到上邊界。</li>
           <li><b>修法</b>：</li>
           <li>　・<code>.playmat.layout-tabletop</code> <code>gap: 12px 8px</code> → <code>5px 8px</code>（row-gap 從 12 縮到 5px，4 zone 之間更緊湊，戰鬥場與備戰區距離縮短）</li>
           <li>　・<code>padding: 4px 8px</code> → <code>24px 8px</code>（垂直 padding 從 4 拉到 24px，上下各多 20px 空間 — 對手 bench 離 viewport 頂部更遠，疊牌 fan 上去不會被切；我方 bench 對稱拉開）</li>
-          <li><b>淨效果</b>：4 zone 群組整體往畫面中央集中，上下兩端釋出 padding 給疊牌 buffer。原本 v5.038 為「4 zone 間距平均」改 gap=12，現在 Wilson 反饋更需要「上下緩衝」&gt; 「均勻間距」— 修正方向。</li>
+          <li><b>淨效果</b>：4 zone 群組整體往畫面中央集中，上下兩端釋出 padding 給疊牌 buffer。原本 v5.038 為「4 zone 間距平均」改 gap=12，現在 玩家 反饋更需要「上下緩衝」&gt; 「均勻間距」— 修正方向。</li>
           <li><b>對比</b>：v5.038 改的均勻分配（gap:12 padding:4）總垂直占用 4*content + 36px (3 個 gap) + 8 (padding) = ~44px overhead；v5.050 緊湊 + 緩衝（gap:5 padding:24）總 overhead = 15 + 48 = ~63px，但分布在上下 buffer 而非 zone 之間。視覺更像真實桌游布局。</li>
           <li><b>scope</b>：純 <code>.playmat.layout-tabletop</code>，桌機 classic / 手機 portrait 完全不動。</li>
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline + tail anchor）／Rule 14（最小 patch — 兩個 CSS 值改）／Rule 1（changelog audit 通過）。Pre-push tsc + Rule 1 強化 audit + push 後 Step A/B verify。</li>
@@ -2332,7 +2274,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.049</span> 🎬 對手發牌動畫終於對了 — 飛到「畫面正上方中線」(模擬對手手牌位置)</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.047 改成飛到「對手戰鬥場 (zone-active)」中心，Wilson 回報「怎麼會發向戰鬥寶可夢」— 應該是飛向畫面正上方中線（對手手牌位置）。</li>
           <li><b>修對的方向</b>：實體桌游時對手坐你對面，他的手牌在他面前 = 你的視角畫面**正上方中央**（你看不到對手手牌正面但能感覺它在那）。<strong>不是</strong>對手戰鬥場（那是「對手寶可夢出場位置」，不同概念）。</li>
           <li><b>修法</b>：endpoint 改算式 — endX = <code>playmat 水平中心</code>（用 <code>.playmat</code> bbox，不用 viewport，避免右側 log panel 佔位造成偏左）；endY = <code>playmatRect.top + 20px</code>（playmat 頂部下方一點，視覺上是「畫面正上方中線」，至少 <code>Math.max(..., 40)</code> 避開 BETA banner / migration banner）。</li>
           <li><b>fallback</b>：若 playmat bbox 不可用，飛到 <code>window.innerWidth/2</code> + <code>40px</code> 從頂部（純 viewport 計算）。</li>
@@ -2344,7 +2285,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.048</span> 🎨 桌墊版對手備戰 slot 縮高 — 釋出沒用的下方空白，疊牌不再容易撐版面</summary>
         <ul>
-          <li><b>玩家回報</b>：桌墊版對手備戰區的卡牌框框下方有大塊空白，卡牌往上半部擠，下方完全沒用。疊牌（往上 fan）多了之後甚至會撐出版面。</li>
           <li><b>根因</b>：base CSS <code>.bench-slot</code> height:205px 為了給「特性按鈕」(<code>.ability-btn-sm</code>) 騰空間，但對手 bench Pokemon 永遠不會在我方回合 render 特性按鈕（<code>getUsableAbilities</code> 用 <code>state.activePlayerIndex</code> 過濾 → 只 render 自己的）。對手視角下這 50px 預留空間 100% 沒用。</li>
           <li><b>修法</b>：layout-tabletop scope 加 <code>.playmat.layout-tabletop .opponent-row .bench-slot &#123; height: 155px !important; &#125;</code> 縮短 50px。my-row 不動，保留 ability-btn 空間。對手 bench Pokemon 視覺上 img + name + hp + tool-chip 緊湊堆疊到 slot 底，下方不再留白；疊牌往上 fan 也不會被切到。</li>
           <li><b>scope</b>：純 <code>.playmat.layout-tabletop .opponent-row</code>，桌機 classic / 手機 portrait / 我方 row 完全不動。</li>
@@ -2356,7 +2296,7 @@ cost += gravityCount;</code></pre></li>
         <summary><span class="ver-badge">v5.047</span> 🛠️ 對手發牌動畫真正修好 + 新增 fix-git-lock.bat 自助清 lock</summary>
         <ul>
           <li><b>修法 1 — fix-git-lock.bat</b>：每次 Claude push 完 GitHub Pages 上 push 都會在本地產生 <code>.git/refs/remotes/origin/main.lock</code>（sandbox 端權限刪不掉），導致本地 git fetch / pull / IDE git 面板撞「Another git process seems to be running」錯誤。新增 <code>E:\ptcg-tw-sim\fix-git-lock.bat</code> 雙擊即可清除（含 <code>%~dp0</code> 自動 cd 到 repo root，可放任何位置 — 連結 / 桌面捷徑都行）。</li>
-          <li><b>修法 2 — 對手發牌動畫真正修好</b>：v5.040 改了 <code>endY = oppRect.top + oppRect.height/2</code> 想用 row 中心，但 Wilson 回報還是往左上方。深入查發現 <strong>根因 v5.040 修錯方向</strong>：桌墊版下 <code>.field-row</code> 套 <code>display:contents</code>（line 8057）讓 row 變透明 grid items，所以 <code>.opponent-row</code> 本身不渲染 box — Chrome 對 <code>display:contents</code> 元素的 <code>getBoundingClientRect()</code> 行為不一致，可能返回 zero rect 或 union origin 偏 (0,0)，動畫起點 OK（牌庫真實位置）但 endpoint 飛到視窗左上角。</li>
+          <li><b>修法 2 — 對手發牌動畫真正修好</b>：v5.040 改了 <code>endY = oppRect.top + oppRect.height/2</code> 想用 row 中心，但 玩家回報還是往左上方。深入查發現 <strong>根因 v5.040 修錯方向</strong>：桌墊版下 <code>.field-row</code> 套 <code>display:contents</code>（line 8057）讓 row 變透明 grid items，所以 <code>.opponent-row</code> 本身不渲染 box — Chrome 對 <code>display:contents</code> 元素的 <code>getBoundingClientRect()</code> 行為不一致，可能返回 zero rect 或 union origin 偏 (0,0)，動畫起點 OK（牌庫真實位置）但 endpoint 飛到視窗左上角。</li>
           <li><b>修法</b>：endpoint 改用 <code>.opponent-row .zone-active</code>（對手戰鬥場區 DOM child，<strong>不受 display:contents 影響</strong>），getBoundingClientRect 返回真實 bbox。同時加 fallback：若 bbox 還不可靠（width/height==0），fallback 飛到 <code>window.innerWidth/2</code> + <code>innerHeight/4</code>（畫面水平中心、上半部 1/4 高度）。視覺上「由牌庫往對手戰鬥場中央發」，跟我方「由牌庫往 handStrip 中央發」對稱。</li>
           <li><b>查找 bug 過程</b>：v5.040 沒注意到 layout-tabletop 那段 display:contents 設定 — 它在 line 8057 用 <code>!important</code> 強制套用，是為了讓 row 變透明把子孫直接 attach 到 .playmat grid。我當時只看 endY 算式邏輯，沒驗 <code>oppRowEl.getBoundingClientRect()</code> 真實返回值。現在用 <code>.zone-active</code>（grid-area:activeO 直接 attach 到 playmat grid 的真實元素）作 endpoint 才穩定。</li>
           <li><b>學到</b>：carrying state via DOM bbox 要小心 <code>display:contents</code> / <code>visibility:hidden</code> / <code>position:absolute</code> 等改變 box model 的 CSS。任何 <code>getBoundingClientRect</code> 都該驗 <code>width &gt; 0 &amp;&amp; height &gt; 0</code> 否則 fallback。</li>
@@ -2386,7 +2326,7 @@ cost += gravityCount;</code></pre></li>
           <li><b>為何之前 audit 沒抓到</b>：v5.041 / v5.043 changelog 推送前我的 Rule 1 audit regex 只抓 <code>&lt;code&gt;&#123;</code> 開頭的（<code>r&apos;&lt;code&gt;\&#123;[^`\$]&apos;</code>），漏抓「中間有 <code>&#123;</code>」的情況。已強化 regex pattern 為 <code>r&apos;&lt;code&gt;([^&lt;]*?\&#123;\s*[a-zA-Z]\w*\s*\&#125;[^&lt;]*?)&lt;/code&gt;&apos;</code>，audit 整個 &lt;code&gt;...&lt;/code&gt; 內部含 simple identifier 包在 &#123;&#125; 的 pattern。</li>
           <li><b>修法</b>：L324 把 <code>&#123; getBenchLimit &#125;</code> 改成 <code>&amp;#123; getBenchLimit &amp;#125;</code>（HTML entity）。同時 audit 全 changelog 區段找其他相同 pattern 一併修（含 v5.044 changelog 描述 import 時也踩同樣坑）。</li>
           <li><b>為何 v5.043 / v5.044 build success</b>：esbuild build 只做 syntax check，<code>&lt;code&gt;</code> 內 expression 解析錯誤是 Svelte runtime 行為，build 不會 fail。要 runtime hydrate 時才炸。所以 build success ≠ runtime success。</li>
-          <li><b>排查時序</b>：(1) 以為 Service Worker cache → Wilson 試無痕仍空白 → 排除 (2) fetch GitHub Pages chunks grep getBenchLimit → 主 chunks 0 次但漏看 lazy node chunks (3) fetch <code>nodes/2.D1e9WO4N.js</code> 找到 34 次 + line 14 col 73885 看到 <code>textContent=`import $&#123;getBenchLimit</code> → 確認是 changelog 內 raw 大括號 (4) grep source 第 324 行揪出。</li>
+          <li><b>排查時序</b>：(1) 以為 Service Worker cache → 玩家 試無痕仍空白 → 排除 (2) fetch GitHub Pages chunks grep getBenchLimit → 主 chunks 0 次但漏看 lazy node chunks (3) fetch <code>nodes/2.D1e9WO4N.js</code> 找到 34 次 + line 14 col 73885 看到 <code>textContent=`import $&#123;getBenchLimit</code> → 確認是 changelog 內 raw 大括號 (4) grep source 第 324 行揪出。</li>
           <li><b>內化教訓</b>：(1) Rule 1 audit 不能只抓 <code>&lt;code&gt;</code> 開頭的 raw <code>&#123;</code>，必須 audit 整個 <code>&lt;code&gt;...&lt;/code&gt;</code> 內部。已更新 audit script。(2) 「build success + tsc no errors」不代表 runtime 不炸 — Svelte template runtime evaluation 是另一層需要驗證的。(3) 排查 runtime ReferenceError 從 lazy chunks 著手不夠，要找 minified bundle 內字面字串 + line/col 對應原 source。</li>
           <li><b>v5.040~v5.044 累積成果全部保留</b>：24 處 hardcoded bench=5 → getOwnBenchLimit 修正一字未動，本 hotfix 只改 changelog 文字 escape。貴重手推車與其他 23 處全部支援零之大空洞 + 太晶 (5→8)。</li>
           <li><b>Iron Rules</b>：Rule 1（修違規 + audit regex 強化）／Rule 5（patch 版本不 force-push）／Rule 11/11c（Python pipeline）／Rule 14（最小 patch — 純文字 escape）。</li>
@@ -2440,7 +2380,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.041</span> 🔍 全面 audit 補完 — 零之大空洞 / 太晶 備戰上限漏網 18 處（含貴重手推車）</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.040 修了 6 處 hardcoded bench >= 5，但漏掉「貴重手推車」（ACE SPEC Item，從牌庫選任意數量基礎寶可夢放備戰）— Wilson 點名。立刻做全面深度 audit，發現 effects.ts + 5 個子檔還有 12 處漏網，加上貴重手推車 3 處，本次共修 18 處（v5.040 6 處 + v5.041 18 處 = 累計 24 處）。</li>
           <li><b>effects.ts 補修 11 處</b>：聒噪鳥｜無伴奏合唱（5396）、向尾喵｜呼朋引伴（5412）、benchBasicFromDeckPost helper（7551）、呆火駝｜呼朋引伴（9133/9138）、deckSearchSameNameBenchPost helper（9265/9268）、discardSameNameBenchPost helper（9287/9290）、bench-from-discard-samename resolver（9306）、刺龍王ex｜王之號召（9578/9584）、火箭隊的瓦斯彈｜警備濁霧 passive（13295）、貴重手推車 regG + reg + resolver（13480/13485/13504）。</li>
           <li><b>子檔補修 5 個檔 7 處</b>：</li>
           <li>　・<code>energy_cards.ts:46</code> 感應【超】能量（基本能量發動效果搜基礎寶可夢放備戰）</li>
@@ -2478,10 +2417,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.039</span> 🎨 桌墊版微調 — 備戰字再放大 / 戰鬥特性按鈕 / hover 預覽 / 中線對齊</summary>
         <ul>
-          <li><b>玩家回報 1</b>：v5.038 把備戰字放大後仍想再大一點點 — bench-name 1rem → 1.05rem。HP 數字長度有限（最多 4-5 字元如「HP 280/280」）可大幅放大 — bench-stat .92rem → 1.1rem，加 padding。</li>
-          <li><b>玩家回報 2</b>：戰鬥場寶可夢的特性按鈕在桌墊版位置不對 — 應該緊鄰在名字框的下邊界。修法：<code>.ability-btn</code> 在 <code>.playmat.layout-tabletop</code> 改 <code>position:absolute</code>，<code>left:.4rem</code> + <code>width:140px</code> 跟 <code>.active-name-tt</code> 同寬同列，<code>top:90px</code> 釘在名字框正下方（hpbar 內容約 53px + name-tt margin+height 約 32px + gap 5px = 90px）。<code>z-index:60</code> 在 active-info(2) + attached(50-80) 之上、name-tt(100) 之下。<code>active-card padding-bottom</code> 從 .45rem → .9rem 騰空間給按鈕。</li>
-          <li><b>玩家回報 3</b>：戰鬥場 hover 預覽切齊 viewport 上邊界看不清。修法：<code>enterAttCard()</code> 內 <code>y = Math.max(rect.top, PH + 8)</code> 改為 <code>PH + 40</code> — preview top 距 viewport 頂至少 40px，戰鬥場 / 高位 attached 卡 hover 都有舒適 padding 不貼頂。</li>
-          <li><b>玩家回報 4</b>：戰鬥場寶可夢應該對齊備戰區 5 隻寶可夢中第 3 隻（中間）的中線，符合實體卡牌排版。根因：<code>active-card padding-left:148px</code>（給 HP column 140 + gap 8）造成 card 內 pokemon img 中心比 card 視覺中心偏右約 74px；card 用 <code>justify-self:center</code> 對齊 grid column 中央時，img 中心就偏離 column 中央 74px。修法：對雙方 <code>.zone-active</code> 加 <code>transform:translateX(-74px)</code>，把 active 整體往左拉，pokemon img 中心精準對齊 grid column 中央（即 bench 第 3 隻中心）。</li>
           <li><b>不變</b>：桌機 classic / 手機 portrait 完全不受影響（純 <code>.playmat.layout-tabletop</code> scope）；<code>.ability-btn</code> 在其他 layout 維持 flow 渲染；hover preview 在「下方顯示」分支不動（只改上方分支）。</li>
           <li><b>注意</b>：translateX(-74px) 是依當前 HP column 寬度 140px 估算的近似值；若未來 HP column 寬度再變動，需相應調整偏移量（公式：offset ≈ -(padding-left + content_offset)/2，目前 ≈ -148/2 ≈ -74）。</li>
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte 大檔，tail anchor + style 對稱驗）／Rule 14（純 CSS 區塊新增 + 1 行 JS 數值改）／Rule 1（changelog 文字無 raw 符號 — code tag 內全形或 HTML entity）。</li>
@@ -2491,7 +2426,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.038</span> 🎨 桌墊版 5 項調整 — 血條對齊名字、備戰字放大、疊牌動態密度、拿掉 zone 標籤</summary>
         <ul>
-          <li><b>玩家回報</b>：桌墊版 5 個視覺優化要求 — 戰鬥場血條比名字框窄看起來不對齊；備戰區字 / HP / 特性按鈕字偏小；疊太多附加卡會把備戰區拉太長；「對手出場」「我的出場」字是冗餘提示（跟實體配置一致玩家一看就懂），佔上下空間造成 4 zone 間距不平均。</li>
           <li><b>修法 1（血條對齊名字寬度）</b>：<code>.active-hpbar-bottom</code> width 從 88px → 140px、<code>.active-card</code> padding-left 96px → 148px (140 + 4 gap + 4 pad)，跟 v5.035 設的 <code>.active-name-tt</code> width:140px 對齊。<code>.att-card-stack</code> 的 left calc 也跟著從 88px → 140px。</li>
           <li><b>修法 2（備戰區字 / HP / 特性按鈕放大）</b>：<code>.bench-name</code> 字 .82 → 1rem、<code>.bench-stat</code> 字 .78 → .92rem 並補 padding，<code>.ability-btn-sm</code> 在桌墊版備戰區字 .56 → .72rem + padding 加大，全部加 <code>!important</code> override base 樣式。</li>
           <li><b>修法 3（Bench 疊牌動態密度）</b>：兩處 bench attached card stack（對手 + 我方）加 <code>@const _step</code>，依當前疊牌數動態縮間距 — 1 張 29px、4 張 20px、6 張 14px、7+ 鎖 12px。疊越多越密，避免疊到 6-8 張時垂直長度爆出 zone。Active 區疊牌仍橫向 32px 不動（橫向不會爆）。</li>
@@ -2532,7 +2466,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.035</span> 🎨 桌墊版 — active 名稱框突破 88px 寬度限制 + z-index 最高層</summary>
         <ul>
-          <li><b>玩家回報</b>：桌墊版戰鬥場寶可夢名稱稍長時被截斷或被疊牌 / 道具 chip 覆蓋。例如「赫普的蒼響ex」「派帕的獒教父ex」「火箭隊的黑暗鴉」等都會撞到 88px HP column 寬度上限。</li>
           <li><b>根因</b>：v5.028 把 active 名稱（<code>.active-name-tt</code>）放進 <code>.active-hpbar-bottom</code> 容器（桌墊版設成 <code>width:88px</code> 的直立 column），名字 width 被父限制；<code>z-index</code> 繼承 hpbar-bottom 的 10，遇上 attached cards hover 升 z 或 tool-chip 等場合可能被遮。</li>
           <li><b>修法</b>：<code>.active-name-tt</code> 改 <code>position:absolute</code> 突破父 88px 寬度限制 — <code>top:100%</code>（接 hpbar-bottom 底部）／<code>left:50%</code> + <code>transform:translateX(-50%)</code> 水平居中／<code>width:140px</code>（左右各延伸 26px，預留未來更長名字）／<code>z-index:100</code>（高過 attached hover z 上限 80、tool-chip z=5、hpbar-bottom z=10）。加 <code>background</code> + <code>padding</code> + <code>border-radius</code> + <code>box-shadow</code> 做 chip 視覺、<code>pointer-events:none</code> 不擋下層 hover。</li>
           <li><b>不變</b>：父 <code>.active-hpbar-bottom</code> 88px 寬度不動（血條 / HP 文字維持原寬，視覺穩定）；<code>.bench-name</code> v5.030 已另解（absolute on Pokémon img 中央），這次只改 active 名稱。桌機 classic / 手機 portrait 完全不受影響（純 <code>.playmat.layout-tabletop</code> scope）。</li>
@@ -2556,7 +2489,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.033</span> 🔧 修 蒼響ex 無畏斬 / 烈火爆進 等「鎖招」型招式 — 退到備戰區後仍鎖</summary>
         <ul>
-          <li><b>玩家回報</b>：赫普的蒼響ex 用完「無畏斬」（240 傷，下回合無法再用），下回合即使退到備戰區再回到戰鬥場，仍然不能用。依 PTCG 規則只要回到備戰區就會清除所有狀態（含招式無法使用 flag），回到戰鬥場時應該可用。</li>
           <li><b>同類 audit</b>：所有用 <code>blockedAttackNamesNextTurn</code> 機制的招式都中同一個 bug — 共 7 張 recharge 招（利歐路加速突刺、自爆磁怪閃光伏特、雪暴馬冰霜颱風、赫普的蒼響ex 無畏斬、厄鬼椪 碧草面具 鬼之錘、派帕的獒教父ex 大佬頭擊、棄世猴衝擊打擊）+ 破空焰ex 烈火爆進（離開戰鬥場前無法再用）+ 天仙石 / 路卡利歐 超級勇氣 / 龍之強襲 / 光明角擊 / 黑暗打擊 / 招式竊賊系列等共約 16 處註冊位置全部受影響。</li>
           <li><b>根因</b>：<code>clearActiveEffects()</code> helper（<code>src/lib/game/effects/_shared.ts</code>）負責統一處理「退到備戰區清狀態」— 設計用意明確（註解就有提到「烈火爆進等離開戰鬥場前無法使用該招式」），但實際清除列表漏列 <code>blockedAttackNamesNextTurn</code> 與 <code>blockedAttackNamesThisTurn</code> 這兩個招名鎖 flag，只清了 cantAttackPending / cantAttackThisTurn（鎖整隻），所以 single-attack 鎖完全沒被清。</li>
           <li><b>修法</b>：在 <code>clearActiveEffects()</code> 補兩行 — <code>blockedAttackNamesNextTurn: undefined</code> 與 <code>blockedAttackNamesThisTurn: undefined</code>。一處修法、全部 16+ 個註冊點同時受惠（含對自己鎖、對對手鎖、招式竊賊複製鎖等）。撤退 / 寶可夢交替 / 急進開關 / 頂尖捕捉器 / 衝浪手 / 支配鎖鏈 等所有走 helper 的換場路徑都自動正確。</li>
@@ -2568,7 +2500,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.032</span> 🔧 手機版 modal 避開 iOS 動態島 / 瀏海</summary>
         <ul>
-          <li><b>玩家回報</b>：iOS 手機使用高級球（或其他 pendingSelection picker）時，跳出的 modal 頂端壓到 Dynamic Island。</li>
           <li><b>根因</b>：v4.969 為了讓 modal 不擋背景手牌，把手機直屏 <code>.selection-overlay</code> 改 <code>align-items:flex-start</code> + <code>padding-top:0.4rem</code>，但 0.4rem 完全沒考慮 iOS safe-area。</li>
           <li><b>修法</b>：<code>padding-top: calc(env(safe-area-inset-top, 0px) + 0.4rem)</code>，自動把 Dynamic Island / 瀏海高度納入，modal 永遠在 safe area 內。同步加 <code>padding-bottom</code> 避開 home indicator。</li>
           <li><b>同類 audit</b>：<code>.zoom-overlay</code> / <code>.lightbox-overlay</code> / <code>.pv-overlay</code> 已有 safe-area 處理。<code>.gameover-modal</code> 手機 <code>max-height:92vh</code> 加上 top:50% 居中時也可能壓到動態島 → 改 <code>calc(100vh - safe-area-top - safe-area-bottom - 24px)</code>。</li>
@@ -2580,7 +2511,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.031</span> 🔧 修閃焰王牌｜瞬間爆發力 — 手機版 setup 階段無法放戰鬥場</summary>
         <ul>
-          <li><b>玩家回報</b>：擁有「瞬間爆發力」特性的閃焰王牌，依官方 Q&amp;A 應該能在 setup 階段（手牌沒基礎寶可夢時）放上戰鬥場，但實際無法。</li>
           <li><b>根因</b>：手機 portrait 版 (MobilePortraitBattle.svelte) 的 <code>isBasicMon</code> 嚴格定義為「supertype===Pokemon AND !evolvesFrom」，閃焰王牌是 Stage 2（有 evolvesFrom 騰蹴小將）→ 「放戰鬥場 / 放備戰」選項根本不出現，玩家點不到。桌機版有 <code>canSetupActiveSpecial</code> 例外，沒這問題。</li>
           <li><b>修法</b>：手機版 <code>handActions</code> 加 <code>else if</code> 分支處理「setup + 無 active + canBeInitialActiveCard」狀況，顯示「🃏 放到戰鬥場（瞬間爆發力）」按鈕；同步補 hand-card 的 <code>playable</code> highlight。</li>
           <li><b>不變</b>：engine 端 <code>canBeInitialActiveCard</code>（已實裝 v2.42）+ 桌機版 <code>canSetupActiveSpecial</code>（已實裝）— 兩處都正確支援；只是手機版漏改。</li>
@@ -2754,7 +2684,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.013</span> 🔧 修「祭典會場」保護漏洞 — 附能量寶可夢仍會陷入特殊狀態</summary>
         <ul>
-          <li><b>玩家回報</b>：場上有「祭典會場」競技場時，附能量的寶可夢仍會陷入特殊狀態（卡面：「雙方所有身上附有能量卡的寶可夢不會陷入特殊狀態，並將受到的特殊狀態全部恢復」）。</li>
           <li><b>Root cause</b>：statusPost helper 正確 check 了祭典會場 immunity，但 20+ 個卡片檔案直接寫 <code>status: 'xxx'</code> 繞過 helper（six_decks / tools / v172_hij_batch / v2346 / v2348 / v2370 / v2570 / v2670 / v2750 / v2995 / v2998 / v3070 / m5_preview 等）。<code>clearFestivalVenueProtectedStatuses</code> 過去只在 stadium-play / energy-attach 兩處呼叫，沒涵蓋每次 dispatch。</li>
           <li><b>修法</b>：在 engine.ts 中央 dispatcher <code>applyAction</code> 末端加一行 <code>next = clearFestivalVenueProtectedStatuses(next, pool);</code> sweep。任何 action（攻擊、特性、物品、撤退等）結束時都會自動清掉違反規則的 status。一勞永逸 — 含未來新卡。</li>
           <li><b>為什麼用中央 sweep 而非個別修每個卡片</b>：(1) 個別改 20+ 檔 patch 太大、audit 困難；(2) 未來新卡若直接寫 status: 'xxx' 又會漏網；(3) sweep 函式已是 idempotent — 無祭典會場時 return state unchanged，效能 cost 極低。</li>
@@ -2778,7 +2707,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.011</span> 🔧 hotfix — 對戰版面切換整合到既有設定面板（移除左上獨立齒輪）</summary>
         <ul>
-          <li><b>玩家回報</b>：v5.009 加的左上角獨立齒輪按鈕點不開（破掉），且應該整合到既有右上角「⚙️ 設定」面板（裡面有背景音樂、音效、畫面縮放）。</li>
           <li><b>修法</b>：(1) 移除左上 layout-gear-wrap 按鈕 + popup + 相關 CSS；(2) 在既有 showSettingsModal 內加新 section「🎴 對戰版面（測試）」， select 選 經典版 / 桌墊版。整合後位置一致：所有設定都在同一個齒輪面板。</li>
           <li><b>不變</b>：localStorage 記憶 / 預設經典版 / 窄螢幕 fallback / 桌墊版實作邏輯 — 全部保留。只是把 UI 入口換位置。</li>
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 4（tsc verify）／Rule 14（最小 patch — 純 UI 重組）。</li>
@@ -2788,7 +2716,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.010</span> 🔧 修「呼朋引伴」備戰滿仍可使用、找到的寶可夢被丟失</summary>
         <ul>
-          <li><b>玩家回報</b>：「呼朋引伴」招式（從牌庫挑【基礎】寶可夢放備戰）在備戰滿時仍能宣告使用，找到的寶可夢進備戰前被丟掉。</li>
           <li><b>規則</b>：類似「好友寶芬」物品卡，備戰滿時應該無法宣告招式（按鈕灰掉）— 不能查看牌庫、不能選卡。</li>
           <li><b>Root cause（兩層 bug）</b>：(1) <b>UI 缺 gate</b> — getAvailableAttacks 沒檢查 bench-fill 類招式的備戰滿條件，按鈕沒灰；(2) <b>resolver 截斷</b> — pokemon_search.ts 的 <code>[...bench, ...selected].slice(0, limit)</code> 會直接丟掉超出 slots 的寶可夢（從 deck 拿出但又被 truncate），造成「卡片消失」的玩家觀察。</li>
           <li><b>修法</b>：(1) engine.ts 加 <code>BENCH_FILL_ATTACK_NAMES</code> set（含「呼朋引伴」），getAvailableAttacks 與 ATTACK action handler 雙層 gate，備戰滿時按鈕灰掉、繞 UI 也擋下；(2) resolver 改成「按 slots 分配，多餘的 selected 與 unselected 一起放回 remaining 重洗」— 防禦性修正，永遠不會丟卡。</li>
@@ -2824,7 +2751,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.007</span> 🔧 修青銅鐘｜進化妨礙者 漏擋神奇糖果</summary>
         <ul>
-          <li><b>玩家回報</b>：青銅鐘的招式「進化妨礙者」效果寫明「對手無法從【手牌】使出寶可夢並完成進化」。但實測對手下回合用神奇糖果還是能從手牌打 Stage 2 上場完成進化。</li>
           <li><b>規則</b>：神奇糖果效果是「從手牌使出 Stage 2 寶可夢直接放到基礎寶可夢身上完成進化」— 屬於『從手牌完成進化』的範疇，應該被擋。賽吉、壯偉碩木這類「從牌庫拿進化卡」的效果則不被擋（卡面只限手牌）。</li>
           <li><b>Root cause</b>：cantEvolveThisTurn 旗標只在 engine.ts 的 EVOLVE action（直接手牌進化按鈕）+ getEvolvableTargets UI mirror 兩處檢查，神奇糖果走獨立的 guard / resolver chain（effects.ts:1245-1383）完全沒檢查 → 漏擋。</li>
           <li><b>修法</b>：神奇糖果 guard 開頭加 <code>if (p.cantEvolveThisTurn) return false;</code> — guard 返回 false 表「該卡不可打出」，手牌按鈕灰掉，AI 也不選。單一閘門點即可（picker / resolver 觸發不到就沒問題）。</li>
@@ -2836,7 +2762,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.006</span> 🔧 修胖嘟嘟ex｜力量壓制 條件 +80 觸發門檻錯誤</summary>
         <ul>
-          <li><b>玩家回報</b>：胖嘟嘟ex 身上附 4 個能量打「力量壓制 80+」（招式效果：能量比 cost 多 2 個 → +80），實測只造成 80 傷害，未觸發 +80。</li>
           <li><b>規則</b>：力量壓制 cost 為【超】+【無】共 2 個能量。4 - 2 = 2，「多 2 個」條件成立，應 +80 → 共 160 傷害。</li>
           <li><b>Root cause</b>：v2600_i_wave10_conditional.ts:213 程式碼寫 <code>selfExtraEnergyPre(80, 80, 3, ...)</code> — 第 3 參數 costCount 誤寫 3（trigger 改成需 cost+2=5 個能量），當初註解寫「卡面查不到 cost，設定為合理值」。</li>
           <li><b>修法</b>：第 3 參數 3→2。卡面 cost = 2，附 4 能量即觸發 +80（4 ≥ 2+2）。</li>
@@ -2847,7 +2772,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.001</span> 🔀 修進化鏈搜尋把訓練家冠名與一般寶可夢混一起</summary>
         <ul>
-          <li><b>玩家回報</b>：點開「鐵啞鈴」卡牌詳細資料看進化鏈，「大吾的鐵啞鈴 → 大吾的金屬怪 → 大吾的巨金怪ex」也被列在「鐵啞鈴 → 金屬怪 → 巨金怪」同一條鏈裡。</li>
           <li><b>規則</b>：PTCG 把「訓練家冠名」（大吾的XX / 火箭隊的XX / 莉莉艾的XX 等）視為獨立卡名 + 獨立進化鏈，跟普通版完全無關。</li>
           <li><b>Root cause</b>：evolutionChain helper 用 <code>name.includes(query)</code> 找 seeds，「鐵啞鈴」query 同時 match「鐵啞鈴」+「大吾的鐵啞鈴」兩個 seed → 兩條鏈各自 BFS 後合併到同一個結果。</li>
           <li><b>修法</b>：seed search 改用 <code>startsWith</code> — 「鐵啞鈴」只 match 自己開頭的卡（不含「大吾的」前綴），「大吾的鐵啞鈴」只 match「大吾的」開頭的。兩條鏈天然完全隔離。</li>
@@ -2858,7 +2782,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.000</span> 🎉 邁入 5.0 — nav 按鈕完整放 modal 內側</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.999 加 overflow-x: hidden 後，左右翻 nav 按鈕用 transform 偏移到 modal 邊緣造成外側半圓被切掉。</li>
           <li><b>修法</b>：button position 改成完全放在 modal 內側 16px，移除 transform 偏移只保留 <code>translateY(-50%)</code> 垂直置中。按鈕整顆完整顯示。</li>
           <li><b>代價</b>：button 壓到 modal content 左/右邊緣約 32-58px 範圍（卡圖左邊緣 / info 右邊緣），但按鈕本身有陰影 + hover 變色，視覺辨識仍清楚。</li>
           <li><b>版本</b>：累計 60+ 次 push 後正式進入 v5.x 系列，紀念里程碑。</li>
@@ -2868,7 +2791,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.999</span> 🔧 hotfix — modal 水平 scrollbar 強制阻擋</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.998 用 transform 改寫 nav button position 後 reload 仍看到水平 scrollbar。</li>
           <li><b>修法</b>：直接在 modalInner / pv-inner 明確設 <code>overflow-x: hidden</code>，強制阻擋水平 scrollbar 出現。即使 transform 在某些瀏覽器仍被算進 overflow extent，也會被 hidden 攔下不顯示。雙保險策略。</li>
           <li><b>視覺影響</b>：若 nav button 真的超出 modal 邊界，外側被切掉，內側半圓仍顯示在 modal 邊緣（跟 v4.998 設計初衷一致）。</li>
         </ul>
@@ -2877,7 +2799,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.998</span> 🧹 修桌機版 modal 多餘水平 scrollbar</summary>
         <ul>
-          <li><b>玩家回報</b>：桌機網頁版卡牌詳細資料 modal 下方出現水平 scrollbar，但內容沒寬到需要 scroll。</li>
           <li><b>Root cause</b>：v4.989 加左右翻按鈕用 <code>left: -22px / right: -22px</code> negative offset 把 absolute child 推到 modal 邊界外，瀏覽器自動把 modal 的 overflow-x 從 visible 升 auto → 產生 scrollbar。</li>
           <li><b>修法</b>：改用 <code>transform: translate(±50%, -50%)</code> 把按鈕中心對齊 modal 邊緣 — transform 是 GPU 合成階段，不影響 parent 的 layout extent，scrollbar 消失但視覺完全一樣（按鈕仍是一半 in 一半 out）。</li>
           <li><b>範圍</b>：cards 資料庫 .modal-nav + decks 編輯器 .pv-nav 兩處都修；手機板既有「按鈕完整放 modal 內側」邏輯維持不變。</li>
@@ -2887,7 +2808,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.997</span> 🐛 修感應【超】能量 / 好友寶芬 等從牌庫拉寶可夢一上場被 KO bug</summary>
         <ul>
-          <li><b>玩家回報</b>：感應【超】能量觸發後從牌庫選破破舵輪到備戰區，剛放上就被「系統擊倒檢查」判定昏厥（傷害 200/240 ≥ HP 140），對手白賺 2 張獎勵牌。</li>
           <li><b>Root cause</b>：bench-basic-from-deck 跟 bench-named-basic-from-deck 兩個 resolver（好友寶芬 / 赫普的包包 / 感應【超】能量 / 赫普 prefix 系列共用）把 deck 內 inst 拉到 bench 時只 set <code>justPlaced: true</code>，<b>沒重置</b> damage / status / 能量 / 道具 / 進化棧。如果 deck 內某 inst 因某 path 殘留 damage（罕見但顯然會發生），新放上 bench 直接被 sanityKOSweep 判 KO。</li>
           <li><b>修法</b>：兩個 resolver 內 spread 時強制 reset 所有 fresh-state fields（仿寶可夢旋風回收機 mainBare 模式）— damage=0、status/secondaryStatus/toolAttached/evolvedFromStack 全清。新從 deck 拉出來的寶可夢一律是乾淨狀態。</li>
           <li><b>影響卡片</b>：好友寶芬 / 赫普的包包 / 感應【超】能量 / 赫普 prefix 訓練家系列 — 都用同一個 resolver，本次一起修。</li>
@@ -2907,7 +2827,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.995</span> 🫧 修泡沫【水】能量免疫範圍 — 全 5 種特殊狀態（不只灼傷+中毒）</summary>
         <ul>
-          <li><b>玩家回報</b>：泡沫【水】能量附在【水】寶可夢身上仍會陷入特殊狀態。</li>
           <li><b>Root cause</b>：實裝的 SPECIAL_ENERGY_STATUS_IMMUNE 註冊只回傳「灼傷+中毒」兩種狀態的 set，但卡面實際是「不會陷入特殊狀態」(全 5 種免疫)。玩家附泡沫後仍被睡眠/混亂/麻痺擊中。</li>
           <li><b>修</b>：set 改成 5 種全擋（poisoned, burned, asleep, confused, paralyzed）。statusPost / coinStatusPost / 多數招式 path 自動受益。</li>
           <li><b>後續工作</b>：卡面後半「將受到的特殊狀態全部恢復」(on-attach 全清) 暫未實裝；另約 20 處直接 set status 沒過 immunity gate 的散落位置 (主要是熔岩地域 / 漩渦言靈 / 一些攻擊招式) 也留 v4.996+ audit。本 push 已 cover statusPost path 主流 case。</li>
@@ -2927,7 +2846,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.993</span> 🔄 修 v4.992 新 icon iOS 主畫面看不到（cache 卡舊版）</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.992 換了新精靈球 icon，但 iOS 加入主畫面仍看到舊墨綠版。</li>
           <li><b>Root cause</b>：iOS Safari 對 apple-touch-icon URL 有極頑固的 cache。binary 換了但 URL 沒變 → iOS 直接用 cached 舊版。</li>
           <li><b>修法</b>：app.html 內 5 個 icon link tag URL + manifest.json icons.src 都加 <code>?v=4.993</code> query 強制 cache invalidation，URL 不同迫使 iOS / browser 重新 fetch。</li>
           <li><b>使用方式</b>：iOS 主畫面舊 icon 先移除，再 Safari 開站 → 分享 → 加入主畫面，這次會看到新精靈球 icon。瀏覽器 favicon 也會在 reload 後更新。</li>
@@ -2946,7 +2864,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.991</span> 🔧 修攻擊 KO 對手後對戰卡死 bug — 結束按鈕無效</summary>
         <ul>
-          <li><b>玩家回報</b>：用招式 KO 對手戰鬥位後（特別是幻影奇襲類連帶 POST picker 的招式），取完獎勵 + 對手補位後點「結束」按鈕無效，對戰卡死雙方都無法操作。</li>
           <li><b>Root cause</b>：engine 的 ATTACK 處理流程內，只有「沒 KO」分支設定回合進入 end 階段，KO 分支跳過了此設定。當招式 KO 對手 active 時，turnPhase 維持 main 階段；玩家點「結束」按鈕觸發 END_TURN，但 handler 內部 check turnPhase==='end' 失敗直接 return → 無動作 → 卡死。</li>
           <li><b>修法</b>：ATTACK 流程 POST 跑完後無條件 set turnPhase='end'，所有路徑（KO / 沒 KO / preventedKO）統一進入 end 階段。已 game-over 的 case 早已 return 不受影響。</li>
           <li><b>影響範圍</b>：所有「攻擊招式 KO 對手 + POST 開 picker」的場景都自動受益 — 含幻影奇襲、油之機關槍、各種 KO 後觸發效果的招式。</li>
@@ -2956,7 +2873,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.990</span> 🔧 修多龍巴魯托ex 幻影奇襲 對化隱寶可夢卡 picker bug</summary>
         <ul>
-          <li><b>玩家回報</b>：幻影奇襲攻擊有「化隱」特性的寶可夢後卡住不能動。</li>
           <li><b>Root cause</b>：v4.917 dragapult-snipe migrate 到統一 helper 新增了化隱 gate，但 (1) POST 開 picker 沒 dry-run 過濾免疫目標 (2) damage-distribute picker UI 沒讀 validIids。如果全 bench 都化隱／球形盾牌／對戰圓形保護，玩家點哪都被擋，picker minCount=6 永遠湊不到 advance → 卡死。</li>
           <li><b>修法</b>：(A) POST 先 dry-run 過濾免疫目標，全 blocked 直接 log 作廢、部分 blocked 傳 validIids；(B) resolver 第二輪 picker 也重新 dry-run（KO 後 bench 可能變動）；(C) game/+page.svelte damage-distribute case 加 validIids filter，picker UI 自動過濾 immune 目標。</li>
           <li><b>影響卡片</b>：幻影奇襲（多龍巴魯托ex）+ 共用 dragapult-snipe 的招式都會自動受益。</li>
@@ -3014,7 +2930,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.984</span> 🔧 修對戰頁「匿名 建立帳號」auth pill 閃爍循環</summary>
         <ul>
-          <li><b>玩家回報</b>：本機雙人對戰 lobby 上方 auth 狀態 pill「匿名 建立帳號」會「出現 消失 出現 消失」反覆循環。</li>
           <li><b>Root cause</b>：game 頁 onMount 內有兩處冗餘的匿名 sign-in — 一處在 onAuthStateChanged callback（v4.937 加，登出後重登），一處在主流程（admin fix 加）。兩者並行觸發產生兩個不同 anonymous user 互相覆蓋 → firebaseUser 反覆 toggle → dashboard 閃爍。</li>
           <li><b>修</b>：刪掉 onMount 主流程冗餘 sign-in block，只留 callback 內單一 source-of-truth（含 isAdminSpyURL 保護邏輯已備齊）。Oracle build / 卡池載入 不依賴 firebase user ready，所以拿掉 await 不影響後續流程。</li>
         </ul>
@@ -3031,7 +2946,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.982</span> 🎨 牌組編輯器 — 左側 rail + 右側搜尋 panel 對齊整理</summary>
         <ul>
-          <li><b>玩家回報</b>：左側「我的牌組」三個按鈕高度不一致；右側搜尋 panel 各 chip row label 起點不齊。</li>
           <li><b>左側 rail</b>：rail-head 改 column 排列 — label 第一行、按鈕第二行 grid 3 欄等寬等高；長卡名（含預組）自動 truncate 加 ellipsis 不再 wrap 成兩行。</li>
           <li><b>右側搜尋</b>：pk-label 固定寬 3.2em + 右對齊，「標籤」「屬性」「階段」「賽季」「卡包」所有 label 起點對齊；補上之前漏的「分類：」label，所有 chip row 視覺整齊。</li>
           <li><b>不動</b>：搜尋邏輯 / chip 行為 / 牌組功能，純佈局與對齊改動。</li>
@@ -3041,7 +2955,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.981</span> 🎨 牌組編輯器表頭整理 — grid 佈局 + 手機板 2 欄滿寬</summary>
         <ul>
-          <li><b>玩家回報</b>：表頭凌亂 — 「9/60」垂直大字佔位、按鈕高度不一致、寬度不夠時中文字被擠成垂直堆，視覺混亂。</li>
           <li><b>桌機改善</b>：deck-header 改 grid 佈局 — 牌組名稱 + 數量 badge 第一列、操作按鈕第二列 wrap；數量改淡藍 pill badge 樣式（超過 60 紅）；按鈕加 nowrap 防中文垂直堆。</li>
           <li><b>手機板改善</b>：≤600px viewport 按鈕區改 grid 2 欄滿寬，每顆按鈕撐滿欄位置中；「清空」獨佔一整行作危險動作視覺強調。</li>
           <li><b>視覺分組</b>：給沒 emoji 的 5 個按鈕加 prefix 易辨識 — 🖼️ 匯出文字/圖片、📝 匯入文字、💾 匯出 JSON、📂 匯入 JSON、🗑️ 清空。配合既有 🎫 / 📤 / 🔒 形成完整視覺。</li>
@@ -3073,7 +2986,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.978</span> 🪶 修自主換場後特性「振翅高飛/潔淨支援/金屬之路」沒亮 — 統一補 6 處 movedToActiveThisTurn flag</summary>
         <ul>
-          <li><b>玩家回報</b>：寶可夢旋風回收機回收 active 後從備戰上場、或凱西的瞬間移動 等自主換場後，遠古巨蜓ex 特性「振翅高飛」（gate：在自己的回合，從備戰區放置於戰鬥場）沒亮。</li>
           <li><b>Audit</b>：6 處自主換場 resolver 都漏 set <code>movedToActiveThisTurn</code> flag — 引擎主路徑（手動撤退/被昏厥補位/衝浪海灘/迅速游標 等）有正確 set，但「自主 swap」類全漏。</li>
           <li><b>影響範圍</b>：<code>do-switch</code>（寶可夢交替 + 共用 selfSwapPost 的 10+ 招式）/ <code>rush-switch-pick-bench</code>（急進開關）/ <code>v155-self-swap-active</code>（捲捲耳｜雀躍）/ <code>h-wave2-self-swap</code>（h 標 wave2 swap）/ <code>m5-zeraora-teleport</code>（超級捷拉奧拉ex｜瞬間移轉）/ <code>sakaki-self-swap</code>（火箭隊的坂木）。</li>
           <li><b>修</b>：每處 <code>newActive</code> 統一加 <code>movedToActiveThisTurn: true</code>。一次補完，振翅高飛 / 超級拉帝亞斯ex 潔淨支援 / 勾帕路衛 金屬之路 等所有「在自己的回合從備戰上場」特性都會正確觸發。</li>
@@ -3104,7 +3016,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.975</span> 🛡️ 修飛翔 vs 分身連打 + 統一 active 招式傷害 gate</summary>
         <ul>
-          <li><b>玩家回報</b>：喇叭啄鳥｜飛翔擲幣正面後（應免疫所有招式傷害），下回合仍會受到甲賀忍蛙ex｜分身連打的傷害。</li>
           <li><b>根因</b>：分身連打走的是「多目標 resolver」(clone-strike-multi-hit，同 resolver 也被大吼大叫 / 三色炮共用)，這條 path 只 check 備戰守護，<b>完全沒檢 active 8 個免疫 flag</b>（飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 / 防護代碼 / 塗層攻擊）。</li>
           <li><b>修法</b>：defense.ts 加 <code>resolveActiveAttackGuard</code> helper 集中這 8 個 flag check；統一入口 <code>canApplyEffectToTarget</code> 接通 — 任何招式傷害打 active 都會自動 check。clone-strike-multi-hit resolver 改用統一入口。</li>
           <li><b>影響範圍</b>：同步修飛翔 vs（分身連打 / 大吼大叫 / 三色炮）3 個共用 resolver 招式。其他可能也漏 check 的多目標 resolver 留下次 audit migrate（Phase 2）。</li>
@@ -3115,7 +3026,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.974</span> 📋 「匯出為官網代碼」改成 modal — 可直接複製代碼</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.973 匯出成功用 native <code>alert()</code> 顯示代碼，但 alert 內容不能選取/複製，等於是看得到拿不到。</li>
           <li><b>改</b>：成功後彈出專屬 modal，大字 monospace 顯示代碼（可直接選取），下方「📋 複製代碼」按鈕 + 「🔗 在官網查看」連結。複製成功 button 文字切「✓ 已複製」，2 秒後恢復可再次複製。</li>
           <li><b>自動複製</b>：modal 開啟時仍會嘗試在 user-gesture context 內自動寫剪貼簿；如失敗（HTTPS 受限 / iframe），玩家可點 modal 內按鈕（必為 user-click）— 多一條後備路徑用 <code>document.execCommand('copy')</code>。</li>
         </ul>
@@ -3135,7 +3045,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.972</span> 🔧 修官網代碼匯入「saveDecks is not defined」+ 隱藏舊「🔖 從官方匯入」按鈕</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.971 修了 pool/poolById bug 後可成功匯入 60 張牌，但仍跳訊息「匯入失敗：saveDecks is not defined」。</li>
           <li><b>根因</b>：我 v4.970 內呼叫 <code>saveDecks(decks)</code> 但 module top 沒 import 此 helper（同檔內其他地方都走 dynamic import）。</li>
           <li><b>修</b>：改用 dynamic import + <code>pushDeck(updated)</code>（仿 line 374 pattern），同步存 localStorage + cloud。</li>
           <li><b>順帶整理</b>：新「🎫 官網代碼匯入」更直覺、不需要設定書籤，所以隱藏舊「🔖 從官方匯入」按鈕（書籤工具版）。code 保留作備用，未來如官網爬蟲被擋還能 fall back。</li>
@@ -3145,7 +3054,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.971</span> 🔧 hotfix — v4.970 官網代碼匯入用錯變數導致「.get is not a function」</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.970 剛上線就遇「匯入失敗：e(...).get is not a function」。</li>
           <li><b>根因</b>：decks/+page.svelte 內 <code>pool</code> 是 Card[] array（沒 .get），<code>poolById</code> 才是 Map。我 v4.970 誤寫 <code>pool.get(cardId)</code>。</li>
           <li><b>修</b>：改用 <code>poolById.get(cardId)</code>。</li>
         </ul>
@@ -3166,7 +3074,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.969</span> 📱 修手機直屏 modal 蓋住手牌橫向滑動</summary>
         <ul>
-          <li><b>玩家回報</b>：手機板手牌過多時可橫向滑動瀏覽，但寶可夢被昏厥跳出「選備戰寶可夢」modal 時，遮罩擋住手牌，無法同時瀏覽 + 操作 modal。</li>
           <li><b>根因</b>：<code>.selection-overlay</code> 全螢幕遮罩 <code>pointer-events: auto</code> 攔截所有 touchmove，背景 <code>.mp-hand</code> 的 pan-x（橫向滑動手牌）touch 被擋。桌機已有 v2.44 拖曳邏輯讓 overlay 變透明，但手機板用戶不知道也不直覺。</li>
           <li><b>修法</b>：手機直屏 (<code>≤600px portrait</code>) media query 內讓 selection-overlay 半透明 (alpha 0.4) + <code>pointer-events: none</code> + 靠上對齊；modal 本體 <code>pointer-events: auto</code> 互動照常。純 CSS 不動 svelte template。</li>
           <li><b>涵蓋場景</b>：自 KO 後選備戰（玩家報告核心）/ pendingSelection picker / mulligan reveal / 起手選 active — 所有 selection-overlay 共用 modal 都會獲益。</li>
@@ -3186,7 +3093,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.967</span> 🔊 音效 A 級升級 — 抽多張卡 stagger + 紙牌落桌 place-card 音</summary>
         <ul>
-          <li><b>玩家回報</b>：莉莉艾決意抽 6~8 張 / 起手發 7 張只響一聲太單薄；放卡到備戰只有 UI click 沒「啪」一聲落桌感。</li>
           <li><b>抽多張 stagger</b>：DRAW_CARD / MULLIGAN_DRAW_DECISION / PLAY_TRAINER / RESOLVE_SELECTION 改用 handDelta 算抽張數，stagger N 次（每張間隔 90ms，音量遞減 0.85→0.40 營造「前重後輕」連續發牌感）。涵蓋莉莉艾決意 / 博士的研究 / 月見的呼喚 / 抽 7 張 supporter / 各種 item 抽卡等。</li>
           <li><b>起手發牌 stagger</b>：lobby→setup 觸發 ready-go 後（v4.964）350ms 起 stagger 播 7 張 deal 音（間隔 110ms，總 660ms）— 與 ready-go 並進營造「啟動 + 發牌」儀式感。</li>
           <li><b>place-card 新音</b>：PLAY_BASIC / BENCH_POKEMON / SEND_NEW_ACTIVE 改用 place-card（中頻 noise burst + 低頻 thud，~80ms），跟 click（UI 切 tab）有明確區別 — 紙牌「啪」一聲落桌感。</li>
@@ -3198,7 +3104,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.965</span> 🐛 修暗黑鈴覆蓋原中毒狀態 + 加 applyStatusToActive helper（連帶修 statusPost / coinStatusPost）</summary>
         <ul>
-          <li><b>玩家回報</b>：使用暗黑鈴造成寶可夢混亂時，會把寶可夢原本的中毒狀態蓋掉。</li>
           <li><b>規則</b>：PTCG 規則 + 引擎約定（types.ts:90-103）：行動類狀態（睡眠/混亂/麻痺）三者互斥放 status 主格；傷害類（中毒/灼傷）兩者互斥；1 行動 + 1 傷害**可共存**（中毒+混亂、灼傷+睡眠等）。</li>
           <li><b>根因</b>：m5_preview.ts 暗黑鈴 reg 內直接 <code>status: 'confused'</code> 覆蓋原狀態，沒處理「行動 + 傷害並存」規則。Audit 連帶發現 effects.ts statusPost (L2032) 與 coinStatusPost (L2566) 同類 bug — 6+ 個招式（人造細胞卵腦力震動 / 魔牆人偶不祥波動 / 優雅貓擺尾蠱惑 / 願增猿精神歪曲 / 火斑喵擊掌奇襲 等）都會誤把對手的中毒蓋掉。</li>
           <li><b>修法</b>：① effects.ts 加 export <code>applyStatusToActive(active, newStatus)</code> helper — 統一封裝狀態共存規則 ② statusPost / coinStatusPost 改用 helper ③ 暗黑鈴 reg 用 helper + 加憨憨臉 / 薄霧能量等 immune checks（對齊 statusPost）。一個 helper 同時修了 7+ 個 effect 的同類 bug。</li>
@@ -3209,7 +3114,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.964</span> 🔊 「ready-go」音效時機調整 — 雙方準備完成那一刻播，不再等起手結束</summary>
         <ul>
-          <li><b>玩家回報</b>：ready-go 音效播得太晚，雙方在房間按下「準備完成」後沒聲，要等起手放完 Active/Bench 才響，直覺像「回合開始時」才聽到。</li>
           <li><b>修法</b>：時機從 <code>setup→playing</code> 改到 <code>lobby→setup</code>：① 觸發 startGame 那方 createGame 後立刻播 ② onSnapshot 第一次收到 game（對手先觸發那方）→ 播。雙端時機差約一個 firestore round-trip。</li>
           <li><b>移除</b>：FINISH_SETUP dispatch / state-diff 偵測 setup→playing 不再播 ready-go（FINISH_SETUP 改回純 click 音）。</li>
           <li><b>Iron Rules</b>：Rule 11（Python pipeline — game/+page.svelte 9956 行大檔）/ Rule 4（tsc verify）。</li>
@@ -3231,7 +3135,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.962</span> 🐛 修 白海獅｜沖刷 特性無法觸發（基本【水】能量誤判）</summary>
         <ul>
-          <li><b>玩家回報</b>：白海獅特性「沖刷」看起來沒實裝（卡面：可不限次數使用，選 1 個自己備戰寶可夢身上附加的【水】能量，改附於戰鬥寶可夢身上）。實際上代碼已實裝，但邏輯誤判導致永遠 gate 失敗。</li>
           <li><b>根本原因</b>：「找備戰水能量」用嚴格的 <code>pokemonType==='Water'</code> 判斷，但基本【水】能量的 <code>pokemonType</code> 在 JSON 內為 <code>null</code>（scraper 對基本能量留空，type 從卡名【水】推斷）— 永遠 false → 「備戰區無【水】能量可改附」誤判。</li>
           <li><b>修法</b>：3 處 strict pokemonType check 加 <code>/【水】/.test(name)</code> fallback：① v2380 找備戰水能量 ② v2380 picker 多張水能量篩選 ③ engine.ts 特性 gate hasWaterOnBench。涵蓋率：基本【水】+ 泡沫【水】等卡名含【水】的能量。</li>
           <li><b>已知限制</b>：新衝天 / 稜鏡 / 古舊 / 夜光等「視為任意屬性」能量 name 不含【水】，本版保守不認（PTCG ruling 嚴格上應認；玩家若有實際需求再擴展）。</li>
@@ -3266,7 +3169,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.958</span> 🐛 修 妖火紅狐｜能量風暴 沒認新衝天能量 on Stage2 = 2 個</summary>
         <ul>
-          <li><b>玩家回報</b>：能量風暴（雙方全場能量 × 30）沒把附於 Stage2 寶可夢的新衝天能量算 2 個 — 妖火紅狐自己就是 Stage2，附 1 張新衝天能量本應算 2 個能量（+60 傷害），但實際只算 1 個（+30 傷害）。</li>
           <li><b>規則</b>：新衝天能量卡面明文「若附於 2 階進化寶可夢身上，視為提供 2 個所有屬性的能量」— 是計數 override（非屬性 splitting），所以計算「能量數」時算 2 個。</li>
           <li><b>修法</b>：在 <code>v2306_meta_pokemon.ts</code> 的 妖火紅狐｜能量風暴 regPre 內 inline 處理 — 一般能量算 1 個，新衝天能量 on Stage2 host 算 2 個。log 也顯示「（含 N 張新衝天能量 on Stage2 × 2）」標示，方便玩家確認。</li>
           <li><b>規則邊界</b>：火箭隊能量 / 燃火能量 雖然卡面也寫「視為提供 N 個」，但分別是「屬性 splitting」與「attach cost 規則」，PTCG 官方裁定計「能量數」時仍算 1 張 — 不在此 override 範圍。</li>
@@ -3278,7 +3180,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.957</span> 🦊 修 超級妖火紅狐ex 進化鏈 — 同位階 Stage2（從長尾火狐進化），非 Stage3</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.952 加新卡時把 超級妖火紅狐ex 的 evolvesFrom 設成「妖火紅狐」(Stage2)，變成不存在的 Stage3 進化階段。實際上 超級妖火紅狐ex 應和 妖火紅狐 / 妖火紅狐ex 同屬 Stage2，從 Stage1 「長尾火狐」進化。</li>
           <li><b>規則背景</b>：PTCG 規則中所有 Mega ex（超級...ex）都是 Stage2，且從 Stage1 中間階段進化（非從 Stage2 同名 ex 進化）。例如：超級噴火龍Yex → 火恐龍、超級耿鬼ex → 鬼斯通、超級快龍ex → 哈克龍、超級沙奈朵ex → 奇魯莉安。超級妖火紅狐ex 是這次 audit 唯一寫錯的。</li>
           <li><b>進化線</b>（妖火紅狐線）：火狐狸（Basic）→ 長尾火狐（Stage1）→ 妖火紅狐 / 妖火紅狐ex / 超級妖火紅狐ex（皆 Stage2，皆 evo from 長尾火狐）。</li>
           <li><b>影響</b>：修前玩家會被牌組驗證引導去備「妖火紅狐」當墊腳石（實際上場用不上）。修後從 長尾火狐 即可直接進化超級妖火紅狐ex，符合 PTCG 卡面實際規則。</li>
@@ -3289,7 +3190,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.956</span> 🔧 修 Cloudflare cache 卡舊版 — fetch URL 加 ?v=&#123;VERSION&#125; 自動 invalidate</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.952 新增的兩張 M-P-J 特典卡（古歷 + 超級妖火紅狐ex）在 卡牌資料庫 / 牌組編輯器 都看不到。</li>
           <li><b>根本原因</b>：Cloudflare 邊緣 cache rule <code>/cards/*</code> 設了 7 天 Edge TTL（v4.939）。v4.953/4.954/4.955 都沒動 cards JSON，邊緣節點不知道 origin 有更新（v4.952 加的新卡），繼續服務舊版。</li>
           <li><b>診斷證據</b>：cf-cache-status: HIT, age: 26830s, M-P-J.json content-length 35016（35 張）；直連 GitHub Pages 則是 36791（37 張，含新卡）。</li>
           <li><b>修法</b>：在 <code>pool.ts</code> 與 <code>cards/+page.ts</code> 所有 fetch cards JSON 加 <code>?v=&#123;VERSION&#125;</code> query string。每次版本 bump，URL 自動改變 → Cloudflare 認為是不同資源 → cache miss → 從 origin 抓最新。</li>
@@ -3301,7 +3201,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.955</span> 🐛 修 力之沙漏 + 招式 KO 對手後 — 扭轉乾坤 / 不公印章 等 gate 失效</summary>
         <ul>
-          <li><b>玩家回報</b>：A 用 猛雷鼓ex 帶力之沙漏，極降駕 KO 對手寶可夢 → 力之沙漏結算填能量 → 換 B 上場 → B 想用扭轉乾坤 / 不公印章 等「上回合自己寶可夢被昏厥」gate 的特性 / 道具發現觸發不了。</li>
           <li><b>根本原因</b>：END_TURN 流程在 力之沙漏 hook 暫停前，snapshot 區塊已 rotate 「oppAttackKOdMeThisTurn → InLastOppTurn」（記為 1）並 reset thisTurn=0。玩家選完能量後 END_TURN 被 re-dispatch，因為 endTurnSkipCheckup 沒設，snapshot 區塊又跑一次 → 用「已歸零的 thisTurn」覆蓋了正確的 InLastOppTurn → 對手 gate 看到 0 → 拒絕觸發。</li>
           <li><b>修法</b>：在 engine.ts 力之沙漏 hook 設 pendingSelection 時同步設 <code>endTurnSkipCheckup: true</code>。re-dispatch END_TURN 時就會跳過 snapshot rotation 和 checkup 重跑（中毒 / 灼傷扣血也不會重複觸發）。finalize 區塊會清掉旗標，後續正常 turn 不受影響。</li>
           <li><b>受影響的卡</b>：不公印章、吉雉雞ex 扭轉乾坤、八朔ex、阿波羅、寶寶暴龍 勃然大怒（透過古空棘魚 潛入記憶 路徑也算）等 — 所有依賴 oppAttackKOdMeInLastOppTurn / oppAbilityKOdMeInLastOppTurn 的 14+ 處 gate 都會被治好。</li>
@@ -3332,7 +3231,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.952</span> 🦊 新增 M-P-J 特典卡：古歷（支援者）+ 超級妖火紅狐ex（爬 HK 官網）</summary>
         <ul>
-          <li><b>玩家回報</b>：2 張 M-P 特典卡（J 標）未在牌組資料庫也未實裝。爬 HK 官網拿原文（TW 官網未發布）— <code>asia.pokemon-card.com/hk/card-search/detail/18969</code>（古歷）+ <code>/18965</code>（超級妖火紅狐ex）。</li>
           <li><b>新加 2 張卡到 M-P-J.json + index.json 同步統計</b>：35 → 37 張，Pokemon 31 → 32 / Trainer 1 → 2。</li>
           <li><b>古歷</b>（Supporter）：「將雙方的所有寶可夢各恢復「50」HP」。實裝走全場 heal 邏輯，雙方 active + bench 都扣 50 damage 下限 0。</li>
           <li><b>超級妖火紅狐ex</b>（Stage2 Mega ex / HP 350 / Fire，evo from 妖火紅狐）兩個招式：
@@ -3360,7 +3258,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.950</span> 🔥 修紅蓮鎧騎 M5 烈焰軍團 JSON 翻譯誤譯 + 實裝改限定火能量</summary>
         <ul>
-          <li><b>玩家回報</b>：紅蓮鎧騎 M5 烈焰軍團 — 原 JSON 翻譯「身上附有能量的自己備戰寶可夢數」是日文誤譯，應為「附有火能量」（限定火屬性）。</li>
           <li><b>修 JSON</b>：<code>static/cards/M5.json</code> effect 改為「增加附有火能量的自己的備戰寶可夢的數量 × 40 點傷害。」</li>
           <li><b>修實裝</b>：<code>m5_preview.ts</code> 加 <code>providesFireEnergy()</code> helper（基本【火】OR 名稱含「【火】」的特殊能量，pattern 同 m2_dragon_charizard_batch.ts 既有寫法）+ 改 <code>countSelfBenchWithEnergy</code> → <code>countSelfBenchWithFireEnergy</code>，filter 只算備戰中附有「火能量」的寶可夢。</li>
           <li><b>傷害公式（修正後）</b>：base 40 + N × 40，N = 備戰中附有<b>火能量</b>的寶可夢數。例：備戰 5 隻其中 2 隻附火能量 → 40 + 2×40 = 120 點。其他屬性能量不算。</li>
@@ -3405,7 +3302,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.946</span> 📱 修遷移 banner 在 iPhone 動態島 / 瀏海下被擋</summary>
         <ul>
-          <li><b>玩家回報</b>：手機版（iPhone 動態島機種）GitHub Pages 站打開時，v4.938 加的遷移 banner 跟動態島疊在一起，「立即切換」按鈕被遮住。</li>
           <li><b>修法</b>：CSS <code>padding-top</code> 加 <code>env(safe-area-inset-top, 0px)</code> 動態 inset — 一般裝置 inset=0 維持原樣，iPhone 動態島自動加 ~50px 推 banner 內容下移避開。viewport-fit=cover 已在 app.html 設好（v4.491 手機版適配時加的），env() 才有值。</li>
           <li><b>影響</b>：純 CSS 一行改動，桌機 / Android / 一般 iPhone 都不受影響。</li>
           <li><b>Iron Rules</b>：Rule 11 / Rule 4。</li>
@@ -3450,7 +3346,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.942</span> 🎯 全 audit 牌庫搜尋類允許「不選」(13 處) + 黑暗球顯示 7 張全部</summary>
         <ul>
-          <li><b>玩家回報</b>：幫忙鈴 / 黑暗球 使用後玩家應可選擇不選（牌庫有候選時 picker 還是強制選 1 張）；黑暗球沒列出 7 張中非寶可夢的卡。</li>
           <li><b>Bug 1（13 處 minCount audit）</b>：deck-search 用 <code>minCount: hasX ? 1 : 0</code> — 牌庫有候選時 minCount=1 強制選。違反 Iron Rule 14（玩家應永遠可看牌庫剩餘 + 跳過）。全部改 <code>minCount: 0</code>。</li>
           <li><b>影響的卡</b>：好友寶芬類、大師球、巢穴球、幫忙鈴、勝利之證、甜蜜球、超級球類、黑暗球、阿克羅瑪 step1/2、能量轉移搜尋、通用 search-pokemon-to-hand × 2 — 共 13 處全部允許不選。</li>
           <li><b>Bug 2（黑暗球不顯示 7 張全部）</b>：v4.940 用 filter <code>'Pokemon:TOP_N'</code>，但 picker UI 的「🔍 查看翻到的其他」block 用正則 <code>/:TOP\d+$/</code> 偵測（要 :TOP 後跟「數字」），<code>TOP_N</code> 的 <code>_N</code> 不是數字 → block 不觸發。修法：filter 改 <code>'Pokemon:TOP7'</code> + param <code>top7Iids</code>（UI block 抓此 key）— 符合既有 spec'd TOP-N 慣例（如寶可裝置3.0 的 Supporter:TOP7 / 配樂之笛的 Basic:TOP5）。加新 picker clause <code>'Pokemon:TOP7'</code>。</li>
@@ -3461,7 +3356,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.941</span> 🐸 修「同名群聚」類招式 picker 沒限定同名（呱呱泡蛙 群聚 等 4 張卡）</summary>
         <ul>
-          <li><b>玩家回報</b>：呱呱泡蛙 SV5a 招式「群聚」（從牌庫選最多 2 張「呱呱泡蛙」放備戰），實際 picker 顯示**所有**基礎寶可夢，玩家可選任意基礎寶可夢上場（規則違反）。</li>
           <li><b>Root cause</b>：<code>deckSameNameBenchPost</code> helper 用 <code>filter: 'Basic'</code>，但 game/+page.svelte 的 picker 'Basic' filter 只 check <code>isBasicPokemonCard</code>，沒讀 helper 已塞進去的 <code>params.validIids</code> 或 <code>params.targetName</code> → 同名限制完全失效。</li>
           <li><b>修法</b>：加新 picker filter <code>'Basic:SameName'</code>，用 <code>params.targetName</code> 過濾只顯示同名卡。<code>deckSameNameBenchPost</code> 改用此新 filter。Resolver 加 defense-in-depth — 用 <code>targetName</code> 對 <code>iids</code> 再過濾一次，防惡意 client 繞 picker UI。</li>
           <li><b>影響範圍（4 張卡同步修好）</b>：呱呱泡蛙｜群聚（max=2）、強顎雞母蟲｜群聚（max=2）、一家鼠｜家族行軍（max=2）、蟲電寶｜並排（max=3）— 全部用同個 helper，這次一次修好。</li>
@@ -3472,7 +3366,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.940</span> 🔔 修「幫忙鈴」永遠不能用 + 「黑暗球」範圍未限定 bottom 7</summary>
         <ul>
-          <li><b>玩家回報</b>：幫忙鈴 / 黑暗球 未完整實裝。依鐵律 7c 查 JSON 卡面原文後確認兩條 bug。</li>
           <li><b>Bug 1 (幫忙鈴 / 悠哉尾草棒)</b>：gate 用 <code>!state.isFirstTurn</code> 永遠擋到後攻方第 1 回合（engine 端 <code>isFirstTurn</code> 在後攻方行動段已是 false，僅涵蓋先攻方第 1 動作回合）。修法：改用 <code>state.turn !== 1</code>（turn 只在後攻方 END_TURN +1，turn===1 涵蓋雙方第 1 動作回合）+ <code>activePlayerIndex !== firstPlayerIdx</code> 排除先攻方。</li>
           <li><b>Bug 2 (黑暗球)</b>：卡面寫「查看牌庫下方 7 張，從其中選 1 張寶可夢」但實作 <code>filter: 'Pokemon'</code> 沒限定範圍 → 玩家可從整個牌庫挑寶可夢（規則違反）。修法：改用既有 <code>'Pokemon:TOP_N'</code> filter + <code>params.topIids = bottom7 iids</code>，限定 picker 候選只在牌庫下方 7 張寶可夢內。加 <code>addPrivateLog</code> 揭示 bottom 7 內容（自己看具體卡名 / 對手只看「查看 N 張」）。</li>
           <li><b>順帶</b>：「悠哉尾草棒」同樣「後攻最初回合」限定 + 同個 gate bug，一併修好。</li>
@@ -3504,7 +3397,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.937</span> 🔁 修登出後 dashboard 完全消失（沒退到匿名狀態）</summary>
         <ul>
-          <li><b>玩家回報</b>：在對戰演練頁登入帳號時 dashboard 正常顯示，點「登出」後 dashboard 完全消失（不顯示匿名狀態，也沒「建立帳號」按鈕）。</li>
           <li><b>Root cause</b>：<code>game/+page.svelte</code> 的 <code>onAuthStateChanged</code> callback 漏「<code>if (!u) signInAnonymously()</code>」分支。Firebase 登出後 callback 觸發帶 <code>u=null</code> → <code>firebaseUser=null</code> → 3 處 <code>&#123;#if firebaseUser&#125;</code> 都不渲染 → dashboard 整個消失。<code>handleSignOut</code> 的 confirm 文字寫「登出後將以匿名模式繼續使用」但實作從未真正以匿名重登 — 文字與行為不符。</li>
           <li><b>對比</b>：牌組編輯器 <code>decks/+page.svelte:411-414</code> 已有正確的「<code>if (!user) signInAnonymously</code>」分支 — 牌組編輯器登出後會正常顯示匿名狀態。對戰演練頁漏抄這段。</li>
           <li><b>修法</b>：對戰演練頁 callback 開頭加入：u=null 時呼叫 <code>signInAnonymously(auth)</code>。signInAnonymously 觸發 callback 二次帶 anonymous user → firebaseUser 設定 → dashboard 顯示「👤 匿名 / 建立帳號」按鈕。</li>
@@ -3516,7 +3408,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.936</span> 🦴 修「含羞苞 癢癢花粉」未擋化石類物品卡</summary>
         <ul>
-          <li><b>玩家回報</b>：含羞苞 使用「癢癢花粉」（讓對手下回合無法從手牌使出物品卡）後，對手仍能使出化石類卡（陳舊的甲蓋化石 / 鰭之化石 / 羽毛化石 / 背蓋化石 / 顎之化石 / 琥珀化石 / 根狀化石）。</li>
           <li><b>Root cause</b>：化石卡走 <code>PLAY_FOSSIL</code> action（不走 <code>PLAY_TRAINER</code>，因為化石上場後變成 Pokémon），handler 只有「海之詛咒」一個 Item 鎖 gate，沒同步 <code>cantPlayItemThisTurn</code>（癢癢花粉 / 吼叫尾ex 絕叫 / 電蜘蛛ex 雷擊石）+ 威迫目光（班基拉斯特性）。<code>getPlayableFossils</code> UI filter 同 bug — AI 也會傻傻一直選。</li>
           <li><b>修法</b>：<code>PLAY_FOSSIL</code> handler + <code>getPlayableFossils</code> 補上 3 個 Item 鎖 gate（與 <code>PLAY_TRAINER</code> Item 分支同條件）：<code>cantPlayItemThisTurn</code> / 威迫目光 / 海之詛咒。</li>
           <li><b>同類修補</b>：吼叫尾ex 絕叫、電蜘蛛ex 雷擊石（用同個 <code>cantPlayItemThisTurn</code> flag）— 之後對手出化石也都會被擋。</li>
@@ -3560,7 +3451,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.933</span> 🐉 修「多龍巴魯托ex 幻影奇襲 vs 手持循環扇」pending 覆蓋 bug</summary>
         <ul>
-          <li><b>玩家回報</b>：多龍巴魯托ex 用招式「幻影奇襲」攻擊裝備「手持循環扇」的寶可夢，分配完 6 個傷害指示物後，挪動能量的效果不會出現。</li>
           <li><b>Root cause</b>：ATTACK handler 內順序為（1）套 200 點傷害 →（2）<code>TOOL_ON_DAMAGED</code>(手持循環扇) <code>withPending</code> 開「選 attacker 能量」modal →（3）<code>ATTACK_POST</code> regPost(幻影奇襲) 又 <code>withPending</code> 開「分配 6 個 counter」modal。但 <code>withPending</code> 只是 <code>&#123; ...state, pendingSelection: sel &#125;</code>——直接覆蓋掉 (2)！玩家解完 (3) 的 6-counter modal 後 <code>pendingSelection</code> 變 <code>undefined</code>，cycle-fan 從未出現。</li>
           <li><b>修法</b>：加 <code>pendingChainQueue?: PendingSelection[]</code> 到 <code>GameState</code>。<code>withPending</code> 偵測既有 pending 時改 push 到 queue。<code>RESOLVE_SELECTION</code> resolver 跑完後若 <code>pendingSelection</code> 為空且 queue 有東西，自動 pop 一筆設為新 pending。玩家先看 cycle-fan modal → 解完後接 dragapult-snipe → 解完後正常結束。</li>
           <li><b>順帶好處</b>：所有「同一 ATTACK 內 TOOL_ON_DAMAGED + ATTACK_POST 都觸發 pending」的組合都自動修好（不只 dragapult vs cycle-fan，其他將來新增的工具/招式組合也安全）。</li>
@@ -3572,7 +3462,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.932</span> 🔔 修線上對戰先按準備方聽不到 ready-go</summary>
         <ul>
-          <li><b>玩家回報</b>：線上對戰沒聽到 ready go.wav 開戰音。</li>
           <li><b>Root cause</b>：v4.929 把 ready-go 觸發放在 <code>dispatchSfxForAction</code> 的 <code>FINISH_SETUP</code> setup→playing 分支，但這只在「玩家自己 dispatch」時觸發。先按準備那一方 dispatch 時 phase 還是 setup（對手未按）→ 走 else 分支播 click。後按那方 dispatch 時 phase 才 setup→playing → 觸發 ready-go（自己聽得到）。先按那方收到對手 sync 走 <code>handleRoomUpdate</code>，但 <code>detectSpectatorStateDiffSfx</code> 沒偵測 phase 轉換 → 聽不到。</li>
           <li><b>修法</b>：<code>detectSpectatorStateDiffSfx</code> 加 phase setup → playing 偵測，播 ready-go。100ms throttle 已防雙端 (dispatch + handleRoomUpdate) 重播。</li>
           <li><b>順帶好處</b>：觀戰者進入對戰中房間後若房間從 setup 進 playing 也會聽到開戰音。</li>
@@ -3592,7 +3481,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.930</span> 🪟 設定面板可滑動 + 區塊可摺疊</summary>
         <ul>
-          <li><b>玩家回報</b>：設定面板放太多東西又無法滑動/拖曳，看不到底部選項。</li>
           <li><b>修法 1（滑動）</b>：<code>.settings-modal</code> 加 <code>max-height: 85vh</code> + <code>overflow-y: auto</code> + <code>-webkit-overflow-scrolling: touch</code>，桌機滑鼠滾輪、手機手指滑動都可。</li>
           <li><b>修法 2（摺疊）</b>：4 個 settings 區塊改用 HTML <code>&lt;details&gt;</code> 元素，每個區塊預設展開、可點標題收起。瀏覽器原生支援，零 JS。</li>
           <li><b>UX 細節</b>：摺疊箭頭 ▶ 用 CSS 旋轉表示開合，<code>summary:hover</code> 變綠色 highlight。</li>
@@ -3603,7 +3491,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.929</span> 🔊 觀戰音效 + Ready Go 開戰通知 + 後台播放選項</summary>
         <ul>
-          <li><b>玩家回報</b>：觀戰時聽不到音效；掛網等對手時不知道對戰已開始。</li>
           <li><b>觀戰音效修補</b>：handleRoomUpdate 內 game state 變化時，自動偵測「換回合 / KO / 拿獎賞 / 抽牌 / 狀態 / 對局結束」等事件 → 播對應音效。觀戰者跟線上對手 action 同步來也都有音效（之前線上對戰收到對手 action 也漏音）。</li>
           <li><b>Ready Go 開戰通知</b>：雙方都 FINISH_SETUP 進入 playing 階段時播 <code>ready-go.wav</code>（取代原 coin 音）— 即使瀏覽器頁籤切到背景也聽得到，讓掛網等對手的玩家用聽覺判斷對戰開始。</li>
           <li><b>新設定</b>：音效面板加「畫面不在對戰中也有音效」勾選（預設打勾）— 取消後切到背景頁籤就 mute。</li>
@@ -3626,7 +3513,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.925</span> 🔄 對戰演練頁跟帳號切換同步雲端牌組</summary>
         <ul>
-          <li><b>玩家回報</b>：「⚔️ 開始對戰」頁面常常使用暫存區內容，沒讀到帳號最新狀態。例：A 帳號登入看到 A 牌組 → A 登出 + B 登入後仍顯示 A 牌組，必須跳回牌組編輯器才會更新。</li>
           <li><b>Root cause</b>：<code>game/+page.svelte</code> 的 <code>onMount</code> 只跑一次 <code>decks = loadDecks()</code>（純讀 localStorage），沒有跟著 <code>onAuthStateChanged</code> 重載。對比 <code>decks/+page.svelte</code> 的 callback 內有完整的「<code>loadDecksFromCloud(uid)</code> 從 Firestore 拉 → 跟 localStorage merge by updatedAt → saveDecks 寫回」流程。</li>
           <li><b>修法</b>：把 decks 頁那套雲端 sync 邏輯 port 到 game 頁的 <code>onAuthStateChanged</code> callback。每次 user 變化（登入 / 登出 / 切帳號）都會：(1) 從 Firestore 拉新 user 的牌組；(2) 跟本地 localStorage merge（newer wins by updatedAt）；(3) 更新 game 頁的 <code>decks</code> state + saveDecks 寫回 localStorage。</li>
           <li><b>匿名 user 處理</b>：匿名身份沒有雲端牌組概念，只讀 localStorage。</li>
@@ -3638,7 +3524,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.924</span> 🔐 Oracle 站對戰演練頁顯示登入 dashboard（修 v4.65 漏網）</summary>
         <ul>
-          <li><b>玩家回報</b>：Oracle 站（www.ptcg-tw-sim.com）的對戰演練頁沒顯示登入帳號 dashboard，跟 GitHub Pages 站不一致。但牌組編輯器頁是正常顯示的。</li>
           <li><b>Root cause</b>：<code>game/+page.svelte:2419-2430</code> 在 v4.65 加了 <code>if (ORACLE_MODE) oracleAuth() else onAuthStateChanged(...)</code> 二擇一分流，把 Firebase auth 流程在 Oracle build 下整個繞掉 → <code>firebaseUser</code> 永遠是 <code>null</code> → dashboard 三處 <code>!ORACLE_MODE && firebaseUser</code> 條件不渲染。</li>
           <li><b>關鍵發現</b>：vite oracleSwapPlugin 只 swap <code>$lib/game/room</code> → <code>room-oracle.ts</code>，<b>沒有 swap <code>$lib/firebase</code></b>。Firebase Auth SDK 在 Oracle build 下完全可用（牌組編輯器頁就是這樣跑的，可以正常登入顯示帳號）。v4.65 的二擇一是 over-reach。</li>
           <li><b>修法</b>：拆掉二擇一分流，改成「Firebase auth 永遠初始化（給 dashboard 用）+ Oracle build 額外取 Oracle JWT（給房間 API 用）」。<code>myUid</code> 在 ORACLE_MODE 下仍走 Oracle JWT uid（保線上對戰房間 memberUid 對得上）；Firebase build 下 <code>myUid</code> 走 Firebase uid。並拆三處 <code>&#123;#if !ORACLE_MODE && firebaseUser&#125;</code> 改為 <code>&#123;#if firebaseUser&#125;</code>。</li>
@@ -3673,7 +3558,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.921</span> 🔧 修探探鼠｜監視之眼 沒被火箭隊的監視塔擋</summary>
         <ul>
-          <li><b>玩家回報</b>：探探鼠 (pokemonType=Colorless) 的「監視之眼」特性，在場上有 火箭隊的監視塔 時依然生效。但 PTCG 規則：火箭隊的監視塔 封鎖雙方所有 Colorless 寶可夢的特性（含主動/被動）。</li>
           <li><b>Root cause</b>：<code>effects/_shared.ts</code> 的 <code>hasOakEye()</code> helper（v2.372 引入）掃描雙方場上找 監視之眼 ability holders，但沒檢查 stadium。<code>isAbilityBlockedByOakEye()</code> 都建在 <code>hasOakEye</code> 之上，所以同步漏了。</li>
           <li><b>修法</b>：<code>hasOakEye()</code> 內查 <code>state.activeStadium</code>，名稱為 火箭隊的監視塔 時跳過所有 Colorless 持有者；其他屬性照常觸發。<code>ai.ts</code> preflight 同步加同樣 gate。</li>
           <li><b>不從 stadiums.ts import 常數</b>：<code>effects/cards/stadiums.ts</code> 已 import 自 <code>_shared.ts</code>，反向 import 會循環。改用字面值 '火箭隊的監視塔' 比對 — 字串穩定，未來新增 Colorless ability blocker stadium 再擴充。</li>
@@ -3706,7 +3590,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.918</span> 🔐 補登入狀態 dashboard 到本機 / 連線 lobby（v4.913 漏網）</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.913 只在「⚔️ 開始對戰」模式選擇畫面顯示登入狀態 dashboard，但點進「🖥️ 本機雙人對戰」「🌐 線上連線對戰」兩個子頁面後 dashboard 就消失了。</li>
           <li><b>修法</b>：把同一段 dashboard svelte 區塊（<code>&#123;#if !ORACLE_MODE &amp;&amp; firebaseUser&#125;</code> 包住 sync-pill + 匿名／已登入分支）複製到本機 lobby 和線上 lobby 兩個 sub-page，插在「← 返回」按鈕和 h1 標題之間。</li>
           <li><b>無新邏輯</b>：純 UI port，state / function / modal 都沿用 v4.913 已導入的（一份 state 三個畫面共用），不必再加 import 或新函式。</li>
         </ul>
@@ -3715,7 +3598,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.917</span> 🛡️ 修化隱免疫被幻影奇襲穿透（dragapult-snipe 改用 unified canApplyEffectToTarget）</summary>
         <ul>
-          <li><b>玩家回報</b>：詛咒娃娃／怨影娃娃 等具「化隱」特性的寶可夢，被多龍巴魯托ex 幻影奇襲 6 個傷害指示物還是會打到（UI log 沒顯示「免疫」訊息）。</li>
           <li><b>Root cause</b>：<code>dragapult-snipe</code> resolver 還在用 v2.89 / v4.4999 時代的舊散裝 helper（<code>canApplyAttackEffectToTarget</code> + <code>resolveBenchGuard</code> 兩段分開查），不走 v4.5 系列建立的 unified <code>canApplyEffectToTarget</code> 入口。化隱特性註冊在 defense.ts line 140 的 1b 分支，只有 unified 入口才會檢查。</li>
           <li><b>修法</b>：把 dragapult-snipe 內兩段散裝 helper 合併成一個 <code>canApplyEffectToTarget(s, actorIdx, target, targetCard, 'attack-effect', pool, &#123; isBench: true &#125;)</code> 呼叫，自動涵蓋：化隱 / 光之翼 / 薄霧 / 硬岩 / 皇帝之勢 / 抵抗之幕 / 全能硬殼 / 陳舊背蓋化石 / 對戰圓形 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 太晶 / 中立中心。</li>
           <li><b>影響範圍</b>：dragapult-snipe 同時被多龍巴魯托ex 幻影奇襲、米立龍ex 飛來橫禍、其他 spread-counters 攻擊復用（all routed through 'dragapult-snipe' effectKey）。一次修補所有 6-counter 類攻擊。</li>
@@ -3726,7 +3608,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.916</span> 🔧 修 咒縛之炎 等撤退費特性 UI 顯示不對</summary>
         <ul>
-          <li><b>玩家回報</b>：超級水晶燈火靈ex 特性「咒縛之炎」（對手戰鬥場撤退費 +1）沒生效。</li>
           <li><b>Root cause</b>：engine.ts 的 <code>applyAbilityRetreatMod</code> 邏輯正確（撤退時會 +1），但 game/+page.svelte 的 UI helper <code>retreatCostOf()</code> 沒鏡射 ABILITY_RETREAT_MOD —— 按鈕上顯示 base cost（如「撤退 0⚡」），玩家點下去 engine 卻要求 1 能量被擋掉，誤以為特性沒生效。</li>
           <li><b>影響範圍</b>：不只 咒縛之炎，所有 ABILITY_RETREAT_MOD 註冊的撤退費特性都有同樣 UI 顯示 bug：
             <ul>
@@ -3761,7 +3642,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.914</span> 🔧 修 杜若 簡化實裝（minCount 強制 1 張）</summary>
         <ul>
-          <li><b>玩家回報</b>：支援者卡片「杜若」疑似簡化實裝。</li>
           <li><b>卡面</b>：查看自己的牌庫上方 7 張卡，從其中選擇<b>寶可夢卡與訓練家卡各 1 張</b>，在給對手看過後加入手牌。將剩餘卡放回牌庫並重洗。</li>
           <li><b>原實裝問題</b>（<code>v169_supporters.ts</code>）：兩階段 picker 都用 <code>minCount: 0</code>，玩家可以「跳過不選」 — 違反卡面「各 1 張」的強制語意。</li>
           <li><b>修法</b>：仿照 <code>大師球</code> 的 <code>hasPoke</code> gate 模式：
@@ -4435,7 +4315,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.811</span> 🚨 critical hotfix — 對戰演練頁進不去 / v2360 強力蒸汽 ReferenceError</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.81 部署後對戰演練頁進不去（白屏 / runtime error）。</li>
           <li><b>真因 1（m5_preview.ts 棄世猴幽靈拳）</b>：我把 <code>hitBenchPickPost</code> 當作 factory 用 <code>hitBenchPickPost(50, &#39;幽靈拳&#39;)</code>，但它實際簽名是 <code>(state, aIdx, targetSide, count, amount, label) → GameState</code>（直接處理 state，不是 factory）。TypeScript 報 TS2554 + TS2345，runtime 則是注入 effects 模組時 throw → 全模組載入失敗 → 對戰頁載入失敗。</li>
           <li><b>真因 2（v2360_j_mark_batch.ts 強力蒸汽 ReferenceError）</b>：v4.797 修補強力蒸汽 pokemonType=null 時改用 <code>countEnergy</code>，但 push 腳本的 import 注入 regex 沒匹配 v2360（該檔本來就沒 effects/engine import）→ countEnergy 變 undefined → 強力蒸汽 ATTACK_PRE 觸發時拋 ReferenceError。</li>
           <li><b>修法</b>：
@@ -4531,7 +4410,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.798</span> 🚨 hotfix — 修 v4.797 push 腳本的 import 插入位置 bug</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.797 deploy 失敗，網頁版號還停在 v4.796。</li>
           <li><b>真因</b>：v4.797 push 腳本的 import 注入 regex 用 <code>(?:^import [^\n]+\n)+</code>，誤把 v2402_mega_gardevoir.ts 的 multiline import 從中間切開 — 新 <code>import &#123; countEnergy &#125;</code> 插在 <code>import &#123;</code>（行首）和 <code>regPre, ...</code>（後續行）之間，產生 syntax error「Expected &quot;as&quot; but found &quot;&#123;&quot;」。</li>
           <li><b>修法</b>：手動把斷掉的 import 重新合併，再把 countEnergy import 放到 import block 結束之後（單獨一行）。</li>
           <li><b>檢討（同 v4.795 教訓）</b>：push 腳本對 multiline import 的 regex 不夠嚴謹。以後 import 注入應該偵測「是否在 multiline import 內部」才決定插入位置。已透過 esbuild 在 sandbox 中加入驗證 — 這次抓到了，但是在 push 後才驗證。應該 push 前就跑 esbuild。</li>
@@ -4596,7 +4474,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.795</span> 🚨 critical hotfix — 巨型花束 ATTACK_PRE 拋 ReferenceError（countOneEnergy 沒 import）</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.794 部署成功後，超級大竺葵ex 的「巨型花束」攻擊按鈕<b>按了沒反應</b>。</li>
           <li><b>真因</b>：v4.791 寫 push 腳本時，detection logic <code>if &#39;countOneEnergy&#39; in v155_new</code> 判斷字串是否存在文件全篇 — 但 countOneEnergy 字串確實存在（在我新加的註解 + 函式 body），導致 script 誤判為「已 import」<b>跳過加入 import block 的步驟</b>。結果 production 上 v155_attacks.ts 用了 countOneEnergy 但沒 import → 執行 ATTACK_PRE 時 throw <code>ReferenceError: countOneEnergy is not defined</code> → engine ATTACK handler 沒 try/catch → dispatch 整個中斷 → UI 完全沒反應。</li>
           <li><b>為何 build 沒 fail</b>：esbuild 在 bundle 階段把所有 cards/*.ts 合在一起，看到 effects.ts 已 export countOneEnergy，符號可解析成功，build 通過。執行時才在 v155_attacks.ts 的 scope 找不到該 binding → runtime error。TypeScript noImplicitAny 也沒擋到（可能 unknown global fallback）。</li>
           <li><b>修法</b>：在 v155_attacks.ts 的 effects.ts import block 加 <code>countOneEnergy</code>。</li>
@@ -4628,7 +4505,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.793</span> 🚨 hotfix — v4.79 / v4.791 deploy 失敗真因（三個 helper 漏 export）</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.79 和 v4.791 兩版 GitHub Actions deploy 都失敗，網頁版號還停在 v4.78。</li>
           <li><b>真因（違反 Rule 4 — 沒做 build 驗證就 push）</b>：v4.79 新增的 <code>m5_preview.ts</code> 從 effects.ts 引入了三個 helper（<code>drawNPost</code> / <code>millOppDeckTopPost</code> / <code>selfStatusPost</code>），但這三個在 effects.ts 內<b>都沒加 export</b>（只是 module-private function），vite build 階段 import 失敗。</li>
           <li><b>為何沒被 svelte-check 抓到</b>：開發機沙箱 svelte-check 失敗於 rolldown 原生 binding 不相容，無法執行完整型別檢查；應該額外跑 <code>npm run build</code> 才能模擬 GitHub Actions 環境抓到 missing export。</li>
           <li><b>修法</b>：在 effects.ts 內三個 helper 前加 <code>export</code>：
@@ -4708,7 +4584,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.78</span> 🌐 M5 深淵之瞳全卡重翻譯（從日文原文重寫，修日文殘留）</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.77 上的 M5 翻譯版本有大量日文假名殘留（48/81 張卡含日文），閱讀體驗很差。</li>
           <li><b>修法</b>：以日文 raw 為 source，從頭重新翻譯所有 81 張卡的內容（寶可夢分類 / 招式名 / 招式效果 / 特性名 / 特性效果 / 訓練家規則文）。</li>
           <li><b>翻譯規範</b>：(1) 用 PTCG 標準術語（牌庫、棄牌區、戰鬥場、備戰、獎賞、傷害指示物 等）；(2) 寶可夢用台灣官方譯名；(3) 招式名沿用既有官方翻譯；(4) 規則文句式與其他中文卡一致。</li>
           <li><b>結果</b>：所有卡內容已純繁中，無假名殘留（「弱點・抵抗力」中的「・」是繁中卡面標準標點，不是日文殘留）。</li>
@@ -4729,7 +4604,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.76</span> 🐛 修叉字蝠 SV6a 怨影使者 — 在備戰位時按鈕沒出現</summary>
         <ul>
-          <li><b>玩家回報</b>：使出阿杏的秘招後，叉字蝠的怨影使者按鈕沒出現。</li>
           <li><b>根因</b>：v4.4995 實裝時違反 Rule 15（JSON 是 source of truth），憑腦補加了「戰鬥場限制」gate。但 JSON 卡面只寫「在自己的回合時可使用 1 次」<b>沒寫</b>「在戰鬥場時」。叉字蝠在備戰位時被誤擋。</li>
           <li><b>PTCG 規則</b>：寶可夢的特性可在 active 或 bench 使用，除非卡面明確限定。</li>
           <li><b>修法</b>：移除 engine.ts:6691 和 v2306_meta_pokemon.ts:118 的 active gate。同時把 abilityUsedThisTurn 標記改成不論 inst 在 active 或 bench 都能正確標。</li>
@@ -4774,7 +4648,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.73</span> 🐛 修「對方戰鬥場唯一寶可夢昏厥後沒有結束比賽」bug（AI 對戰常見）</summary>
         <ul>
-          <li><b>玩家回報</b>：與 AI 對戰時，對方戰鬥場的唯一寶可夢昏厥後遊戲沒有結束（active=null + bench=0 卻仍 phase=playing）。卡在那邊無法繼續。</li>
           <li><b>根因 trace</b>：engine.ts <code>applyAction</code> wrapper 末尾有一道「active=null + bench=0 → game-over」保險網（v2.135 加入），但被 <code>!next.pendingSelection</code> gate 鎖住。若某條 KO 路徑在 KO 同時殘留 pendingSelection（multi-stage attack 開 picker / resolver 鏈未結束等），這道保險網就失效、game-over 永遠 fire 不了。</li>
           <li><b>修法</b>：移除 <code>!pendingSelection</code> gate — active=null + bench=0 是無可挽回的終局狀態，無論 pending 是否存在都該強制 game-over。觸發時順手清 <code>pendingSelection: undefined</code> 確保 UI 的 game-over modal 不被 picker 擋住。</li>
           <li><b>不影響</b>：sanityKOSweep 那層（line 6109）仍保留 pendingSelection gate — sweep 處理 zombie 寶可夢需謹慎避免影響進行中的 picker；但 game-over 終局判定獨立、不該被同個 gate 綁住。</li>
@@ -4785,7 +4658,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.72</span> 🐛 修「全部丟棄」型招式不該開 picker（席多藍恩 鋼鐵爆炸 / 電蜘蛛 放電）</summary>
         <ul>
-          <li><b>玩家回報</b>：v4.71 修了鋼鐵爆炸傷害 0 的 bug，但仍開 picker 讓玩家選丟幾顆 — 卡面明確寫「全部丟棄」是<b>強制執行</b>，玩家沒得選。</li>
           <li><b>JSON 卡面</b>：「將這隻寶可夢身上附加的【鋼】能量卡<b>全部</b>丟棄，造成其張數×50 點傷害」（電蜘蛛|放電同樣 wording）。</li>
           <li><b>區分原則</b>：「全部丟棄」=強制；「最多 N 張」「任意數量」=玩家可選。</li>
           <li><b>修法</b>：<code>registerSelfDiscardMultiply</code> helper 加 <code>forceAll</code> 旗標。<code>true</code> 時跳過 picker 註冊，<code>regPre</code> 直接丟全部 eligible 能量。</li>
@@ -4797,7 +4669,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.71</span> 🐛 修席多藍恩鋼鐵爆炸 + 巨鉗螳螂ex 十字破壞 — 基本能量 pokemonType 漏網</summary>
         <ul>
-          <li><b>玩家回報</b>：席多藍恩｜鋼鐵爆炸 把所有鋼能量都丟了，傷害仍是 0。</li>
           <li><b>根因</b>：基本【鋼】能量 JSON <b>沒 pokemonType 欄位</b>（只有 supertype=Energy、subtype=Basic、name=「基本【鋼】能量」）。<code>registerSelfDiscardMultiply</code> helper 的 eligible filter 只認 <code>c.pokemonType === 'Metal'</code> → 基本鋼能量永遠不被視為 eligible → discarded.length=0 → 傷害=0×50=0。</li>
           <li><b>影響</b>：用此 helper + <code>typeFilter</code> 不是 'all' 的招式 — <b>席多藍恩｜鋼鐵爆炸</b>、<b>巨鉗螳螂ex｜十字破壞</b>。固拉多｜熔岩光芒 用 'all' filter 不受影響。烈獄狂火X 不用此 helper（已用 name 判定）不受影響。</li>
           <li><b>修法</b>：加 TYPE_TO_TAG map（EnergyType → 「【火】」「【鋼】」等中文 tag）。filter 改成 <code>c.pokemonType === typeFilter || c.name.includes(TYPE_TO_TAG[typeFilter])</code>。picker 那邊也補 <code>energyTypeFilter</code> 設定（避免玩家選到非該屬性能量造成混淆）。</li>
@@ -4823,7 +4694,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.69</span> 🐛 修烈獄狂火X 丟掉燃料【火】能量沒回手 bug（依 M4 081/083 卡面規則）</summary>
         <ul>
-          <li><b>玩家回報</b>：超級噴火龍Xex｜烈獄狂火X 丟掉自己身上的燃料【火】能量後，能量直接進棄牌堆，沒按卡面回手。</li>
           <li><b>JSON 卡面（M4 081/083）</b>：「若因附有這張卡的【火】寶可夢使用的招式的效果使這張卡被丟棄，則在招式的傷害與效果的影響之後，這張卡放回手牌。」</li>
           <li><b>回手 3 條件</b>：(1) 是燃料【火】能量、(2) 該能量原附在攻擊者身上、(3) 攻擊者 types 含【火】。</li>
           <li><b>傷害計算</b>：用「總丟棄張數（含回手）」— 卡面寫「在傷害與效果之後放回」表示先當被丟計入傷害，事後再放回手牌，不影響傷害數字。</li>
@@ -5110,7 +4980,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.4999</span> 🛠️ 修幻影奇襲沒擋蟲甲聖球形盾牌 + 補鐵律 Rule 15 / 16</summary>
         <ul>
-          <li><b>玩家回報</b>：蟲甲聖｜球形盾牌無法防禦多龍巴魯托ex 幻影奇襲放置 6 個傷害指示物的招式效果。</li>
           <li><b>JSON 卡面</b>：蟲甲聖 球形盾牌「自己所有備戰寶可夢不受對手寶可夢招式的傷害與效果影響」、多龍巴魯托ex 幻影奇襲是「將 6 個傷害指示物放置於對手備戰」(招式效果)。理論上應被擋。</li>
           <li><b>Root cause</b>：<code>effects.ts dragapult-snipe</code> resolver per-target check 用 <code>canApplyAttackEffectToTarget</code>（只查 ATTACK_EFFECT_IMMUNITY map = 薄霧能量類 attacker-side 免疫），缺 <code>resolveBenchGuard</code>（球形盾牌、藏隱、深度下潛、羽毛化石、太晶 等 bench 防護在此）。對比 <code>bench-hit-N</code> resolver 已正確使用兩個 helper，dragapult-snipe 漏了。</li>
           <li><b>修法</b>：dragapult-snipe resolver 加 <code>resolveBenchGuard(... 'attack-effect')</code> per-target check。同時涵蓋幻影奇襲、飛來橫禍 等所有使用此 resolver 的招式。</li>
@@ -5165,7 +5034,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.4994</span> 🛠️ 修叉字蝠 SV6a 怨影使者誤跑「夜間工作」邏輯</summary>
         <ul>
-          <li><b>玩家回報</b>：叉字蝠 SV6a · 029/064 的特性點下後跑「夜間工作」邏輯（從牌庫挑 1 張放牌庫頂）。經查 JSON 卡面：SV6a 叉字蝠是「<b>怨影使者</b>」(若手牌出了「阿杏的秘招」則可用 1 次抽到滿 8 張)、M4 / M-P-J 才是「<b>夜間工作</b>」— 同名卡兩種完全不同 ability，確實是 bug 不是誤報。</li>
           <li><b>Root cause</b>：<code>ABILITY_EFFECTS</code> map 用 <code>cardName|abilityIndex</code> 當 key 註冊特性實作（架構假設「同名卡共享 ability」）。叉字蝠是違反此假設的特例 — <code>叉字蝠|0</code> 一個 key 對映了兩個不同 ability。UI 顯示「怨影使者」(從 JSON 對) 但點下跑「夜間工作」邏輯。</li>
           <li><b>修法 A</b>：<code>v2306_meta_pokemon.ts</code> regA fn 內 defensive check — 若 <code>ability.name !== '夜間工作'</code> 就 silent return（log 提示「該版本特性未實裝」）。避免 SV6a 叉字蝠跑錯邏輯。</li>
           <li><b>修法 B</b>：<code>engine.ts getUsableAbilities</code> 加 hard-code skip — <code>「怨影使者」</code>未實裝 → 不顯示「使用特性」按鈕。玩家不會誤點。</li>
@@ -5176,7 +5044,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.4993</span> 🛠️ 修激流水泵選 3 能量後 picker 不開 + log 字眼「棄」改「放」</summary>
         <ul>
-          <li><b>玩家回報</b>：手機版測試厄鬼椪 水井面具ex 激流水泵，選 3 顆能量後沒出現選傷害後排的介面。log 寫「棄 3 個能量回自身牌庫並重洗」— 卡面是「放回牌庫」，「棄」字誤導（像丟棄牌區）。</li>
           <li><b>Root cause</b>：<code>v155_attacks.ts:625-629</code> PRE 階段已把選的能量從 <code>active.energyAttached</code> 移到 <code>deck</code> 並 shuffle。但 POST 階段（line 643-645）仍從 <code>active.energyAttached</code> 找 <code>chosenIids</code> — 找不到 → <code>chosenUnits = 0 &lt; required</code> → return state、picker 不開。</li>
           <li><b>修法 A</b>：POST 改在 <code>deck</code> 內找 <code>chosenIids</code>（iid 不變、inst 仍在，只是位置從 attached 變 deck，units 計算等價）。</li>
           <li><b>修法 B</b>：PRE log「棄 N 個能量」改「放 N 個能量」（卡面是「放回牌庫」非丟棄；符合 v3.48 verb='return-to-deck' 設定）。「未棄滿」改「未選滿」一致用「放」/「選」字眼。</li>
@@ -5198,7 +5065,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.4991</span> 🛠️ 鎖鏈糬 +40 沒套用 + 秋明/瘋狂連鎖 同類漏判修補</summary>
         <ul>
-          <li><b>玩家回報</b>：超級巨牙鯊ex 中毒、附鎖鏈糬，「貪心之牙」70 傷害沒套 +40 增傷。</li>
           <li><b>Root cause</b>：PTCG 雙狀態系統 — <code>status</code>（asleep/confused/paralyzed 行動類）vs <code>secondaryStatus</code>（poisoned/burned 傷害類）。「中毒」實際存在 <code>secondaryStatus</code>，<code>status === 'poisoned'</code> 只在「純中毒、未疊行動狀態」才成立。<code>tools.ts:109</code> 鎖鏈糬只判 <code>status</code>，常見中毒+麻痺 / 中毒+睡眠 完全沒套 +40。</li>
           <li><b>全面 audit</b>：grep <code>.status === 'poisoned'</code> 全掃，找到 3 處同類漏判：</li>
           <li>　1. <code>tools.ts:109</code> 鎖鏈糬 +40（玩家回報）</li>
@@ -5234,7 +5100,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.497</span> 🛠️ 修引力山岳進場應立即 KO 超 HP 寶可夢</summary>
         <ul>
-          <li><b>玩家回報</b>：竹蘭的烈咬陸鯊ex（2 階 370HP）剩 20HP，下引力山岳（雙方 2 階 -30HP）後應立即昏厥（effective HP 340 ≤ damage 350），但實際沒昏厥，要等下一個動作（特性）才觸發系統擊倒檢查。</li>
           <li><b>Root cause</b>：<code>engine.ts:2487</code> PLAY_TRAINER Stadium branch 設 <code>activeStadium</code> 後直接 return，<b>沒呼叫 KO check</b>。<code>getEffectiveHP</code> 動態套 Stadium HP 修飾（line 583-596）是對的，但 zombie 寶可夢必須等 <code>sanityKOSweep</code> 主動掃才會 KO，<code>sanityKOSweep</code> 目前只在 attack 後呼叫。</li>
           <li><b>修法</b>：Stadium 進場後雙邊各呼叫一次 <code>sanityKOSweep</code> — 場地影響雙方場上，prize 各自歸屬：</li>
           <li>　1. 掃對手 (dIdx)，prize 歸我 aIdx</li>
@@ -5246,7 +5111,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.496</span> 🛠️ 修 bench 寶可夢 HP 顯示被卡蓋住</summary>
         <ul>
-          <li><b>玩家回報</b>：iPad 觀戰時，土龍節節 HP 140/140、超級甲賀忍蛙ex HP 350/350 等 bench 寶可夢的 HP 文字被卡片蓋住看不清楚。之前嘗試「把 HP 放到最上層」但沒成功。</li>
           <li><b>Root cause</b>：v4.07 只修了戰鬥場 active card 的 HP 顯示（用 absolute 浮起來 + z-index:10 避開 tool-chip）。<code>.bench-stat</code> 仍是 column flex 的純文字，無背景、無 z-index — 與卡片插圖頂部「卡片本身印製的 HP 區塊」視覺重疊，特別是高 HP 卡（140/350 等）多 1 位數時更擠。</li>
           <li><b>修法</b>：比照 <code>.active-hpbar-bottom</code> 設計，給 <code>.bench-stat</code> 和 <code>.bench-name</code> 加 <code>background:rgba(0,0,0,.7)</code> + <code>padding</code> + <code>border-radius:3px</code> + <code>z-index:12</code>（高過 <code>tool-chip(5)</code> 與 <code>hp-bar-wrap(2)</code>）。HP 數字和寶可夢名字以「暗背景 chip」形式浮在卡片圖上方，永遠清楚可讀。</li>
           <li><b>影響</b>：桌機 + tablet-layout 的 bench 寶可夢 HP / 名字 UI 風格與戰鬥場統一。手機直立模式（MobilePortraitBattle）有獨立 UI，不受此 patch 影響。</li>
@@ -5256,7 +5120,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.495</span> 🛠️ 修岩石投擲類招式錯算抵抗力（連弱點也忽略 bug）</summary>
         <ul>
-          <li><b>玩家回報</b>：竹蘭的圓陸鯊「岩石投擲」卡面寫「不計算抵抗力」（並沒說不計算弱點），攻擊喵喵ex 應該還是有雙倍傷害（喵喵ex 弱點為鬥）。</li>
           <li><b>Root cause</b>：引擎只有 1 個 <code>skipWeakRes</code> flag（同時跳弱點+抵抗力），對應「卡面不計算弱點・抵抗力」（恰雷姆瑜伽踢類）。但有 9 張卡面只說「不計算抵抗力」，被誤套 skipWeakRes 連弱點也忽略。另有 1 張（激怒咒詛）卡面只說「不計算弱點」，反向誤套。</li>
           <li><b>修法</b>：</li>
           <li>　1. 引擎新增 <code>skipResistance</code> + <code>skipWeakness</code> 兩個獨立 flag。</li>
@@ -5270,7 +5133,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.494</span> 🛠️ 修連線對戰雙方準備完成卡死 bug</summary>
         <ul>
-          <li><b>玩家回報</b>：線上對戰雙方都擺好基礎寶可夢、按「完成準備」後對戰無法開始（卡在 setup 畫面）。</li>
           <li><b>Root cause</b>：<code>+page.svelte:3213</code> 的 v3.39 setup merge 有 2 個漏洞：</li>
           <li>　(1) merge 後沒重新評估 phase 推進。雙方近似同時按完成準備時，兩端各自 dispatch FINISH_SETUP 後 setupDone 是 (me=T, op=F)，tryAdvance fail；收到對方 incoming 後 merge 成 (T,T) 但 phase 仍 setup。原本 v3.39 註解假設「後 finish 者 dispatch 自動轉 playing」—— 但兩端都已 dispatch 過，且 engine.ts 擋掉重複 FINISH_SETUP → 兩端永遠卡死。</li>
           <li>　(2) <code>mulliganRevealConfirmed</code> 沒做 per-player merge。雙方都有重抽懲罰時，各自 confirm 對方揭示會被 incoming 整顆 confirmed 陣列覆蓋洗掉，永遠湊不到雙方都 confirmed。</li>
@@ -5334,7 +5196,6 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v4.48</span> 🛠️ 修甲賀忍蛙ex 分身連打 — PRE 漏實作能量丟棄</summary>
         <ul>
-          <li><b>玩家回報</b>：甲賀忍蛙ex 用分身連打時，身上有 2 顆水能量、picker 可以選，但回合結束後能量<b>不會被丟掉</b>。</li>
           <li><b>JSON 原文</b>：「<b>將 2 個這隻寶可夢身上附加的能量丟棄</b>，對手的 2 隻寶可夢各受到 120 點傷害。[在備戰區不計算弱點・抵抗力。]」</li>
           <li><b>根因</b>：effects.ts:12192 PRE 函式只是 <code>return &#123; state, damage: 0 &#125;</code> — 完全沒讀 <code>action.discardedEnergyIids</code> 也沒實作能量丟棄。ATTACK_PRE_DISCARD_CHOICE 設了正確 spec 讓 UI 開 picker，但玩家所選永遠不會被處理。</li>
           <li><b>對比</b>：超級快龍ex 龍之滑翔（v4.13 同 pattern）正確讀 action.discardedEnergyIids 並執行能量丟棄 — 分身連打漏抄這段。</li>
@@ -6148,11 +6009,9 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v3.998</span> 🦴 修冰雪龍進化鏈（fossilOnField 卡住）+ 手機版補化石丟棄按鈕</summary>
         <ul>
-          <li><b>玩家回報 1：冰雪龍無法進化成冰雪巨龍（手機版）</b></li>
           <li>進化鏈：陳舊的鰭之化石（Item）→ 冰雪龍（Stage1）→ 冰雪巨龍（Stage2）</li>
           <li><b>根因</b>：EVOLVE handler 創建 evolved CardInstance 時 <code>spread ...basePoke</code> 繼承所有欄位，但沒明確 override <code>fossilOnField</code>。化石進化成冰雪龍後 inst.fossilOnField 仍 <code>true</code> → UI 把冰雪龍當化石處理 → 進化選項判定 + 顯示「🦴 丟棄化石」按鈕 都會誤動作。</li>
           <li><b>修法 1</b>：engine.ts EVOLVE handler 在 evolved inst 加 <code>fossilOnField: false</code> 明確 override（化石進化成 Stage1 後該 inst 已是真寶可夢，不再是化石）。</li>
-          <li><b>玩家回報 2：化石無法從場上直接丟棄（手機版）</b></li>
           <li>桌機 v2.189 已有「🦴 丟棄化石」按鈕（active + bench 兩處），但 <code>MobilePortraitBattle.svelte</code> 的 <code>activeActions</code> / <code>benchActions</code> 漏這個 UX。卡面明寫「若在自己的回合中，則可將場上的這張卡丟棄」— 丟棄與昏厥不同：對手不抽獎賞牌、戰鬥場丟棄需從備戰補 1 隻。</li>
           <li><b>修法 2</b>：手機版 activeActions / benchActions 內加 fossilOnField 條件 → 在自己回合 main phase 顯示「🦴 丟棄化石」按鈕，dispatch <code>GameActions.discardFossil(iid)</code>。</li>
           <li>tsc 0 errors。</li>
