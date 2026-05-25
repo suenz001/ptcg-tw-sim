@@ -1883,18 +1883,18 @@ function handleSetup(
   const players = [...state.players] as [PlayerState, PlayerState];
 
   if (action.type === 'PLACE_ACTIVE') {
-    // v5.134 / v5.135：依 PTCG 規則，自己有 mulligan 過 + 對手沒 mulligan
-    //   → 需等對手「按了準備完成」(setupDone=true) 才能開始設置自己。
-    //   實體賽事規則：沒重抽方先完整擺好戰鬥場 + 備戰 + 確認，重抽方依
-    //   對方手牌資訊判斷是否補抽，故必須等對方完成 setup。
-    //   雙方都 mulligan 的情況不擋（任一方都可先放）。
+    // v5.134 / v5.135 / v5.148：依 PTCG 規則，mulligan 次數較多的一方需等
+    //   對方先放好戰鬥場（按準備完成）。實體賽事規則：mulligan 較少方先擺
+    //   戰鬥場 + 備戰 + 確認，較多方依對方手牌資訊判斷是否補抽，故必須等。
+    //   v5.148：原 v5.134 gate 只擋 oppMul===0（單方 mulligan 場景），但雙方都
+    //   mulligan 時也應比次數 — 較多方等較少方。改 myMul > oppMul 觸發擋。
     {
       const myMul = state.mulliganCounts?.[pIdx] ?? 0;
       const oppIdx = (1 - pIdx) as 0 | 1;
       const oppMul = state.mulliganCounts?.[oppIdx] ?? 0;
-      if (myMul > 0 && oppMul === 0 && !state.setupDone[oppIdx]) {
+      if (myMul > oppMul && !state.setupDone[oppIdx]) {
         return addLog(state,
-          `${state.players[pIdx].name} 重抽過，需等對手按下準備完成才能設置`, pIdx);
+          `${state.players[pIdx].name} 重抽次數較多（${myMul} > ${oppMul}），需等對手按下準備完成才能設置`, pIdx);
       }
     }
     const iidx = player.hand.findIndex((c) => c.iid === action.iid);

@@ -356,13 +356,15 @@ function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): 
 
   // 先選出場（選 HP 最高的基礎；含 ex 基礎）
   if (!player.active) {
-    // v5.135：mulligan 重抽方需等對手按準備完成 — AI 自己檢查 gate，
+    // v5.135 / v5.148：mulligan 較多方需等對手先按準備完成 — AI 自己檢查 gate，
     //   blocked 時 return null，避免 engine reject + AI scheduler 不停 retry → log spam。
+    //   v5.148：原 v5.135 gate 只擋 oppMul===0；改 myMul > oppMul 涵蓋雙方都 mulligan
+    //   時較多方也要等的場景（Wilson 報告 玩家 2 / AI 3 時 AI 仍先放的 bug）。
     {
       const myMul = state.mulliganCounts?.[pIdx] ?? 0;
       const oppIdx = (1 - pIdx) as 0 | 1;
       const oppMul = state.mulliganCounts?.[oppIdx] ?? 0;
-      if (myMul > 0 && oppMul === 0 && !state.setupDone[oppIdx]) {
+      if (myMul > oppMul && !state.setupDone[oppIdx]) {
         return null;
       }
     }

@@ -265,6 +265,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.148</span> 🚨 mulligan 順序: 較多次方需等較少次方先放</summary>
+        <ul>
+          <li><b>Wilson 觀察（log）</b>：玩家 mulligan 2 次 / AI 3 次（AI 較多），但 AI 先選出場寶可夢 + 完成準備，玩家後選 — 順序不對。</li>
+          <li><b>Wilson 規則</b>：「玩家是無基礎寶可夢次數較少的，因此應該要先等玩家選擇完出場寶可夢後，AI 對手才能在下一步選擇出場寶可夢」</li>
+          <li><b>根因</b>：v5.134/v5.135 設的 gate 只擋 <code>myMul &gt; 0 &amp;&amp; oppMul === 0</code>（單方 mulligan 場景），雙方都 mulligan 時不擋 → AI 較多 mulligan 也可同時放。</li>
+          <li><b>修法</b>：</li>
+          <li>　・<code>engine.ts</code> PLACE_ACTIVE gate 條件 <code>oppMul === 0</code> → <code>oppMul &lt; myMul</code>（任何較多方都擋）</li>
+          <li>　・<code>ai.ts</code> handleSetupAI gate 同步改 <code>myMul &gt; oppMul &amp;&amp; !setupDone[oppIdx]</code></li>
+          <li>　・log 文字改「重抽次數較多（X &gt; Y）」更精準</li>
+          <li><b>新邏輯總結</b>：</li>
+          <li>　・myMul &lt; oppMul → 我方先放（不擋）</li>
+          <li>　・myMul === oppMul → 雙方同時可放（不擋，包含雙方都 0 也包含雙方都 N）</li>
+          <li>　・myMul &gt; oppMul → 我方等對手 setupDone（擋）</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純條件 &gt;0 ===0 → &gt; oppMul）／15（Wilson 補正 PTCG 規則 source of truth）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.147</span> 🔒 active-card height 鎖死 + 撤退 modal 能量需求進度</summary>
         <ul>
           <li><b>Bug 1 — 附加能量後 active row 瞬間撐大</b>：Wilson 報告附加能量瞬間雙方戰鬥寶可夢間隙撐大，下一動作回復。</li>
