@@ -11174,6 +11174,23 @@
   .open-room-row.practice-room {
     border-left: 3px solid #f59e0b;
   }
+  /* v5.124 lobby 等待開戰 badge — 仿練習 pattern，改用青藍漸層區分 */
+  .or-waiting-tag {
+    background: linear-gradient(180deg, #06b6d4, #0891b2);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 6px;
+  }
+  .open-room-row.room-full {
+    border-left: 3px solid #06b6d4;
+  }
+  /* room-full 同時是 practice 時左邊框優先顯示等待開戰青色（更重要的訊息） */
+  .open-room-row.room-full.practice-room {
+    border-left: 3px solid #06b6d4;
+  }
   .check-row {
     display: flex;
     align-items: center;

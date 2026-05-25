@@ -4124,7 +4124,8 @@ function handlePlaying(
     // v2.78 密勒頓｜防護代碼 — 若 defender 有 immuneToExAttackTagThisTurn，
     //   且 attacker 是 ex + 帶有對應 tag，傷害變 0
     // v3.67：改用 isRulePokemon helper（涵蓋未來新規則寶可夢類型）
-    if (baseDamage > 0 && defender.active.immuneToExAttackTagThisTurn) {
+    // v5.124：打爆類「不計算 defender 身上附加效果」應 bypass — 加 !skipDefEffects gate
+    if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToExAttackTagThisTurn) {
       const targetTag = defender.active.immuneToExAttackTagThisTurn;
       const attackerIsEx = isRulePokemon(attackerCard);
       const attackerHasTag = attackerCard.tags?.includes(targetTag);
@@ -4150,9 +4151,12 @@ function handlePlaying(
         formula.push({ sign: '-', value: Math.abs(resistDelta), label: '屬性相剋' });
       }
     }
-    // v2.101：鋁鋼橋龍｜塗層攻擊 — 本回合此卡不受【基礎】寶可夢招式傷害
+    // v2.101：鋁鋼橋龍｜塗層攻擊 / 超級雷電獸ex｜閃光射線
+    //   本回合此卡不受【基礎】寶可夢招式傷害
     // 攻擊方 stage=Basic 且 defender 有 immuneToBasicAttackThisTurn → 傷害歸零（招式仍觸發其他 post 效果）
-    if (baseDamage > 0
+    // v5.124：打爆類「不計算 defender 身上附加效果」應 bypass — 加 !skipDefEffects gate
+    //   玩家回報：厄鬼椪礎石面具ex|打爆 vs 超級雷電獸ex|閃光射線 沒造成傷害
+    if (!skipDefEffects && baseDamage > 0
         && defender.active.immuneToBasicAttackThisTurn
         && (attackerCard.stage ?? attackerCard.subtype) === 'Basic') {
       workingState = addLog(workingState,
@@ -4166,7 +4170,8 @@ function handlePlaying(
     // 若未來新加只擋傷害不擋效果（純 C-16）或反之的卡，請拆成兩個獨立旗標。
     // v3.67：改用 isRulePokemon helper（涵蓋未來新規則寶可夢類型）
     const attackerIsEx = isRulePokemon(attackerCard);
-    if (baseDamage > 0
+    // v5.124：加 !skipDefEffects gate（打爆類 bypass）
+    if (!skipDefEffects && baseDamage > 0
         && defender.active.immuneToExAttackThisTurn
         && attackerIsEx) {
       workingState = addLog(workingState,
@@ -4188,7 +4193,8 @@ function handlePlaying(
     // v2.174 鐵之防禦強化 — 自己【鋼】寶可夢本回合受招式 -30
     // v2.360 代歐奇希斯｜精神防護 — 攻擊方擁有特性時，傷害歸零
     // 攻擊方 card 有 abilities（且陣列非空）+ defender 有 immuneToAbilityPokemonThisTurn → 傷害歸零
-    if (baseDamage > 0
+    // v5.124：加 !skipDefEffects gate
+    if (!skipDefEffects && baseDamage > 0
         && defender.active.immuneToAbilityPokemonThisTurn
         && attackerCard.abilities && attackerCard.abilities.length > 0) {
       workingState = addLog(workingState,
@@ -4196,7 +4202,8 @@ function handlePlaying(
       baseDamage = 0;
     }
     // v2.360 具甲武者｜要害斬 — 完全免疫（傷害歸零 + 跳過防守效果）
-    if (baseDamage > 0 && defender.active.immuneToAllAttackThisTurn) {
+    // v5.124：加 !skipDefEffects gate
+    if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToAllAttackThisTurn) {
       workingState = addLog(workingState,
         `${defenderCard.name} 因要害斬效果，不受招式的傷害與效果影響`, dIdx);
       baseDamage = 0;
@@ -4205,7 +4212,8 @@ function handlePlaying(
 
     // v4.87 雷電獸｜閃光屏障（M5）— defender 不受「進化寶可夢」招式傷害
     //   進化判定：stage Stage1/Stage2 或 evolvesFrom 有值
-    if (baseDamage > 0 && defender.active.immuneToEvolutionAttackThisTurn) {
+    // v5.124：加 !skipDefEffects gate
+    if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToEvolutionAttackThisTurn) {
       const atkStage = attackerCard.stage ?? attackerCard.subtype;
       const isEvolution = atkStage === 'Stage1' || atkStage === 'Stage2' || !!attackerCard.evolvesFrom;
       if (isEvolution) {
@@ -4216,7 +4224,8 @@ function handlePlaying(
     }
 
     // v4.87 席多藍恩｜熔岩之壁（M5）— defender 不受【灼傷】狀態 attacker 招式傷害
-    if (baseDamage > 0 && defender.active.immuneToBurnedAttackerThisTurn) {
+    // v5.124：加 !skipDefEffects gate
+    if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToBurnedAttackerThisTurn) {
       const atkBurned = attacker.active.status === 'burned' || attacker.active.secondaryStatus === 'burned';
       if (atkBurned) {
         workingState = addLog(workingState,

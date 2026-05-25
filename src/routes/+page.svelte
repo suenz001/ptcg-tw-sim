@@ -265,6 +265,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.124</span> 🐛 打爆無視閃光射線免疫 + 等待開戰標籤加底色</summary>
+        <ul>
+          <li><b>玩家回報 Bug</b>：上回合超級雷電獸ex 用閃光射線（下回合此卡不受【基礎】寶可夢招式傷害），對方厄鬼椪礎石面具ex 用打爆（不計算對手身上附加效果）應該無視此免疫造成 140 傷害，但實測沒傷害。</li>
+
+          <li><b>根因</b>：engine.ts L4155-4161 處理 <code>immuneToBasicAttackThisTurn</code>（閃光射線/塗層攻擊 設的 flag）沒檢查 <code>skipDefEffects</code>，直接 <code>baseDamage = 0</code>。打爆已聲明 <code>skipDefEffects: true</code> 但被忽略。</li>
+
+          <li><b>Audit 同類 defender 身上 immune flag</b>：共 7 處全部漏 <code>!skipDefEffects</code> gate：</li>
+          <li>　・L4127 防護代碼（密勒頓 immuneToExAttackTagThisTurn）</li>
+          <li>　・L4155 <b>閃光射線 / 塗層攻擊</b>（immuneToBasicAttackThisTurn）— Wilson 報告主角</li>
+          <li>　・L4169 阿塞蘿拉惡作劇（immuneToExAttackThisTurn）</li>
+          <li>　・L4191 精神防護（代歐奇希斯 immuneToAbilityPokemonThisTurn）</li>
+          <li>　・L4199 要害斬（具甲武者 immuneToAllAttackThisTurn）</li>
+          <li>　・L4208 閃光屏障（雷電獸 M5 immuneToEvolutionAttackThisTurn）</li>
+          <li>　・L4219 熔岩之壁（席多藍恩 M5 immuneToBurnedAttackerThisTurn）</li>
+
+          <li><b>修法</b>：7 處 immune check 全部加 <code>!skipDefEffects</code> gate（與 L4577 既有 damageReduceNextHit 相同 pattern）。打爆 / 高速星星 / 音波刀鋒 / 突襲水泵 / 打垮 / 堅硬猛擊 / 撕裂 等所有「不計算附加效果」招式皆同步生效。</li>
+          <li><b>不加 gate 的 case</b>：L4228 太鼓防壁（護城龍 bench-aura）— source 在 bench 寶可夢身上，非 defender.active 身上，不算「附加效果」範圍。</li>
+
+          <li><b>UX 玩家提議</b>：「⏳ 等待開戰」標籤太低調，要加底色（仿練習標籤）。</li>
+          <li><b>修法</b>：仿 <code>.or-practice-tag</code> 橘色漸層 pattern，新增 <code>.or-waiting-tag</code> 青藍漸層（<code>#06b6d4 → #0891b2</code>）區分；<code>.open-room-row.room-full</code> 加 3px 青藍左 border。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 8 處 exact-match）／14（最小 patch — 7 處 inline gate + 1 處新 CSS class）／15（卡面 source of truth — SV6/SV8a 閃光射線 / 打爆 JSON 直接抽 effect text）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.123</span> 🔧 Hotfix v5.122 changelog 文案 hallucinate 卡名</summary>
         <ul>
           <li><b>玩家發現</b>：v5.122 changelog 寫「涵蓋 MC 全 7 隻莉莉艾的寶可夢（皮皮ex / 皮可西 / 花療環環 / 等）」— Wilson 立刻反應「沒有莉莉艾的皮可西這隻寶可夢吧」。</li>
