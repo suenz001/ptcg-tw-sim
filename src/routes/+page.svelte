@@ -265,6 +265,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.128</span> 🎨 手機版棄牌區合併同名卡（v5.120 revert 後重做 — script helper 版）</summary>
+        <ul>
+          <li><b>玩家再次提議</b>：手機版垃圾桶 icon 點開後應該合併相同卡名與數量，方便檢索。</li>
+          <li><b>歷史</b>：v5.116~v5.120 嘗試 5 次都 build fail，當時用 template 內 IIFE / reduce / 移除 generic / 移除 HTML 注釋等都不行 → v5.120 完全 revert。v5.121 才發現真正根因是<b>另一處 changelog 的 raw <code>&#123;@const&#125;</code> 文字</b>，不是本 feature 程式碼的問題。</li>
+          <li><b>本次更安全做法</b>：在 script 區寫 <code>groupDiscardList()</code> helper function，template 直接呼叫，避開所有 Svelte template 邊界 case：</li>
+          <li>　・避開 <code>&#123;@const&#125;</code> 規則限制（不能含 statement / generic）</li>
+          <li>　・避開 generic <code>Map&lt;...&gt;</code> 跟 HTML parser 衝突</li>
+          <li>　・避開 IIFE 在 expression-only 位置的限制</li>
+
+          <li><b>實作</b>：</li>
+          <li>　1. <code>script</code> 區加 <code>groupDiscardList(list)</code> helper — 用 Map 按 cardId 累計 count，按 count desc 排序</li>
+          <li>　2. template each 改 <code>&#123;#each groupDiscardList(sheet.list) as g (g.cardId)&#125;</code></li>
+          <li>　3. row 顯示「卡名 ×N」（N=1 時不顯示 ×1）</li>
+
+          <li><b>Sheet title</b> 仍顯示總張數「<code>sheet.list.length</code> 張」（含重複），玩家可同時看到「種類數」（row 數）與「總張數」</li>
+
+          <li><b>pre-check</b>：本機 svelte.compile 預先驗證 changelog + MobilePortraitBattle 兩個檔案，全部通過再 push（從 v5.122 起的標準流程）</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 加 1 個 script helper + 改 1 段 template，不動 sheet 結構）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.127</span> 🎨 房間默認加入對戰位（非觀戰）+ 不發加入觀戰訊息</summary>
         <ul>
           <li><b>玩家提議</b>：當對戰的 2 個座位有空，新加入房間的玩家請默認直接進入對戰座位（不顯示「加入觀戰」於對話紀錄，因為他加入的是對戰座位）。</li>

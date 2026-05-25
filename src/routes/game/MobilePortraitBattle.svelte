@@ -289,6 +289,32 @@
     sheet = { type: 'discard', list: [...list].reverse(), owner };
   }
 
+  // ── v5.128：棄牌區合併同名卡 helper（script 區 — 避開 {@const} 規則限制）─
+  //   同 cardId 視為同張卡（同名 + 同版本），count 累加；按數量降序排。
+  //   sheet.list 變動時 template 重新呼叫此函式，無 reactivity 問題。
+  //   v5.116~v5.120 曾用 template 內 IIFE / reduce 嘗試 5 次 build fail，
+  //   v5.121 才發現是另處 changelog raw {@const} 造成。本版用 script helper 最安全。
+  type DiscardGroup = { cardId: string; inst: CardInstance; count: number; name: string; supertype: string | undefined };
+  function groupDiscardList(list: CardInstance[]): DiscardGroup[] {
+    const m = new Map<string, DiscardGroup>();
+    for (const inst of list) {
+      const existing = m.get(inst.cardId);
+      if (existing) {
+        existing.count++;
+      } else {
+        const c = pool.get(inst.cardId);
+        m.set(inst.cardId, {
+          cardId: inst.cardId,
+          inst,
+          count: 1,
+          name: c?.name ?? '?',
+          supertype: c?.supertype,
+        });
+      }
+    }
+    return [...m.values()].sort((a, b) => b.count - a.count);
+  }
+
   // ── Hand tap：依卡類型決定 sheet 內容 ──────────────────────────────
   function tapHand(inst: CardInstance) {
     sheet = { type: 'hand', inst };
@@ -1032,12 +1058,11 @@
       {:else if sheet.type === 'discard'}
         <div class="mp-sheet-title">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
         <div class="mp-discard-list">
-          {#each sheet.list as inst (inst.iid)}
-            {@const c = pool.get(inst.cardId)}
+          {#each groupDiscardList(sheet.list) as g (g.cardId)}
             <div class="mp-discard-row">
-              <span class="mp-discard-name">{c?.name ?? '?'}</span>
-              <span class="mp-discard-type">{c?.supertype === 'Pokemon' ? '🐾' : c?.supertype === 'Energy' ? '⚡' : '🃏'}</span>
-              <button class="mp-discard-zoom" onclick={() => { closeSheet(); onOpenZoom(inst.cardId, inst); }} title="放大查看">🔍</button>
+              <span class="mp-discard-name">{g.name}{g.count > 1 ? ` ×${g.count}` : ''}</span>
+              <span class="mp-discard-type">{g.supertype === 'Pokemon' ? '🐾' : g.supertype === 'Energy' ? '⚡' : '🃏'}</span>
+              <button class="mp-discard-zoom" onclick={() => { closeSheet(); onOpenZoom(g.cardId, g.inst); }} title="放大查看">🔍</button>
             </div>
           {/each}
         </div>
