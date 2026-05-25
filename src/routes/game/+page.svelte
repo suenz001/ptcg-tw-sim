@@ -1652,7 +1652,8 @@
     const shouldAct = (() => {
       const ai = aiPlayerIndex;
       const g = game!;
-      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0;
+      // v5.138：mulliganPostBenchOpen=true 時 AI 也要行動（送 FINISH_MULLIGAN_POST_BENCH）
+      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0 || !!g.mulliganPostBenchOpen?.[ai];
       if (g.phase !== 'playing') return false;
 
       // 取獎勵牌或選擇 — 由誰的行動決定
@@ -1740,7 +1741,8 @@
     if (g.phase === 'game-over') { aiThinking = false; return; }
 
     const shouldAct = (() => {
-      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0;
+      // v5.138：mulliganPostBenchOpen=true 時也要 scheduleAI
+      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0 || !!g.mulliganPostBenchOpen?.[ai];
       if (g.phase !== 'playing') return false;
       if ((g.pendingPrizes?.[ai] ?? 0) > 0) return true;
       if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
@@ -6071,6 +6073,13 @@
             onclick={()=>dispatch(GameActions.finishSetup(myIdx))}>
             ✅ 準備完成
           </button>
+        {:else if game.phase==='setup' && isMyTurn() && game.mulliganPostBenchOpen?.[myIdx]}
+          <!-- v5.138：mulligan 補抽後加備戰完成（PTCG 規則：不需重抽方補抽後可選擇加備戰） -->
+          <div class="alert info-alert" style="margin-bottom:6px">📝 補抽完成！可從手牌加新基礎寶可夢到備戰（限自由選擇）</div>
+          <button class="btn-act primary"
+            onclick={()=>dispatch(GameActions.finishMulliganPostBench(myIdx))}>
+            ✅ 完成補抽後設置
+          </button>
         {:else if isMyTurn() && !anyPendingPrize}
           {#if game.turnPhase==='main' && activePlayer?.active}
             {@const eff=getEffectiveAttacks(game, activePlayer.active, pool)}
@@ -6425,7 +6434,8 @@
           {@const isEvolutionCard=c.supertype==='Pokemon'&&!!c.evolvesFrom}
           {@const canEnergy=isEnergyCard&&game?.phase==='playing'&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()&&!(c.tags?.includes('ACE SPEC')&&aceCancelActiveLocal)}
           {@const canBasicPlay=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()&&game?.phase==='playing'}
-          {@const canBasicSetup=isBasicCard&&game?.phase==='setup'&&!game?.setupDone[myIdx]&&isMyTurn()}
+          <!-- v5.138：mulligan 補抽後也允許加備戰（限基礎，與 setup 一致；engine BENCH_POKEMON gate 把關） -->
+          {@const canBasicSetup=isBasicCard&&game?.phase==='setup'&&isMyTurn()&&(!game?.setupDone[myIdx] || !!game?.mulliganPostBenchOpen?.[myIdx])}
           <!-- v2.42 閃焰王牌｜瞬間爆發力 — 起手 setup 可放戰鬥場（不限基礎） -->
           {@const canSetupActiveSpecial=!isBasicCard&&canBeInitialActiveCard(c)&&game?.phase==='setup'&&!game?.setupDone[myIdx]&&isMyTurn()&&!myPlayer?.active}
           {@const canBasic=canBasicPlay||canBasicSetup||canSetupActiveSpecial}
@@ -8473,13 +8483,13 @@
        把整個戰鬥場往右擠 — 玩家反映「就像真的桌游一樣不該抖動桌子」 */
     grid-template-columns:32px auto auto 160px 1fr auto;
     /* 4 rows: opp-bench / opp-active / self-active / self-bench
-       v5.136 終極修間隙：auto auto auto auto → fixed 205/300/300/205。
-       Wilson 連回報 3 次「塡能/放競技場後 active-bench 間隙拉大」(v5.131/v5.134/v5.135 均失敗)。
-       真根因：auto row 被子元素撐高 → align-self:end 的 bench 黏父 row 底部跟著下移
-       → active (上 row 頂) 跟 bench (下 row 底) 視覺距離擴大。
-       fixed px 鎖死 4 個 row 高度，任何內容變化都不影響 grid layout。
-       300px 容得下 active-card (HP bar 88, 招式按鈕 4×40, 卡圖 145, padding) + buffer。 */
-    grid-template-rows:205px 300px 300px 205px;
+       v5.136 用 fix 300/300 撐爆 viewport (~1010px 超過可用 800-900) → 撤回為 auto。
+       v5.138 真根因：align-self 方向錯。bench 原黏「外側」、active 原黏「內側」→
+       active row 撐高時 bench 跟著外移、active 黏不動 → 視覺距離拉大。
+       新解：bench 改黏「內側」(靠近 active)、active 改黏「外側」(靠近 bench) →
+       bench-active 永遠貼 gap 15px，不論 row 高度怎麼變。
+       stadium-display 跨 Row 2-3 在中間自然填充。 */
+    grid-template-rows:auto auto auto auto;
     grid-template-areas:
       ".       .         .         .         benchO    ."
       "chipO   pilesO    stadium   .         activeO   prizesO"
@@ -8509,10 +8519,13 @@
   }
   .playmat.layout-tabletop .opponent-row > .zone-bench{
     grid-area:benchO; display:flex; justify-content:center; flex-wrap:nowrap; gap:2px;
-    /* v5.098：黏 row 上邊（接近 viewport 頂部）— 對手 bench 改往下 fan 後不需上方空間 */
-    align-self:start;
+    /* v5.138：改 align-self:end — bench 黏 Row 1 底，靠近 activeO，
+       active 撐高時 bench 跟著移動，視覺貼齊不撐間隙 (Wilson 連 4 次回報修正) */
+    align-self:end;
   }
-  .playmat.layout-tabletop .opponent-row > .zone-active{ grid-area:activeO; justify-self:center; align-self:end; }
+  /* v5.138：active 改黏「外側」(靠近 bench) — align-self:end → start，
+     讓 active-bench 視覺貼齊 gap 15px，不論 row 高度。 */
+  .playmat.layout-tabletop .opponent-row > .zone-active{ grid-area:activeO; justify-self:center; align-self:start; }
   .playmat.layout-tabletop .opponent-row > .zone-prizes{ grid-area:prizesO; }
 
   /* === 我方 row（注意：prize / piles 左右互換）=== */
@@ -8520,10 +8533,13 @@
   .playmat.layout-tabletop .my-row > .zone-prizes{ grid-area:prizesMe; }  /* 互換：prize 在左 */
   .playmat.layout-tabletop .my-row > .zone-bench{
     grid-area:benchMe; display:flex; justify-content:center; flex-wrap:nowrap; gap:2px;
-    /* v5.098：黏 row 下邊（接近手牌）— 留更多空間給 active row */
-    align-self:end;
+    /* v5.138：改 align-self:start — bench 黏 Row 4 頂，靠近 activeMe，
+       active 撐高時 bench 跟著移動，視覺貼齊不撐間隙 (Wilson 連 4 次回報修正) */
+    align-self:start;
   }
-  .playmat.layout-tabletop .my-row > .zone-active{ grid-area:activeMe; justify-self:center; align-self:start; }
+  /* v5.138：active 改黏「外側」(靠近 bench) — align-self:start → end，
+     讓 active-bench 視覺貼齊 gap 15px，不論 row 高度。 */
+  .playmat.layout-tabletop .my-row > .zone-active{ grid-area:activeMe; justify-self:center; align-self:end; }
   .playmat.layout-tabletop .my-row > .zone-pile{
     grid-area:pilesMe; display:flex; flex-direction:column; gap:3px;  /* 互換：piles 在右 */
   }

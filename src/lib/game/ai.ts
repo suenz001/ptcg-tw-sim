@@ -346,6 +346,11 @@ function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): 
   if (aiPendingMulli > 0) {
     return { type: 'MULLIGAN_DRAW_DECISION', count: aiPendingMulli, senderIdx: pIdx };
   }
+  // v5.138：mulligan 補抽後加備戰 — AI 簡化策略，直接 FINISH（不再加備戰，
+  //   因 setup 階段 AI 已盡量放 3 隻備戰，補抽後新基礎策略價值低）。
+  if (state.mulliganPostBenchOpen?.[pIdx]) {
+    return { type: 'FINISH_MULLIGAN_POST_BENCH', senderIdx: pIdx };
+  }
   if (state.setupDone[pIdx]) return null;
   const player = state.players[pIdx];
 

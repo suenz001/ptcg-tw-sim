@@ -1677,6 +1677,8 @@ export function createGame(
     stadiumPlayedThisTurn: [false, false],
     // v3.85: 本回合打過「稜鏡塔」flag（給昂主花葉蒂 gate 用）
     prismTowerPlayedThisTurn: [false, false],
+    // v5.138: mulligan 補抽後加備戰 flag — 初始 [false, false]
+    mulliganPostBenchOpen: [false, false],
   };
 
   let st = addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
@@ -1751,6 +1753,8 @@ export function tryAdvanceToPlaying(state: GameState): GameState {
   if (!state.setupDone[0] || !state.setupDone[1]) return state;
   if (state.pendingMulliganDraw[0] !== 0 || state.pendingMulliganDraw[1] !== 0) return state;
   if (!state.mulliganRevealConfirmed[0] || !state.mulliganRevealConfirmed[1]) return state;
+  // v5.138：任一方還在 post-bench 階段（補抽後加備戰中）→ 不進 playing
+  if (state.mulliganPostBenchOpen?.[0] || state.mulliganPostBenchOpen?.[1]) return state;
   // v4.24 對戰計時器 — setup→playing 時起算
   const timerStart = Date.now();
   let next: GameState = {
@@ -1779,7 +1783,8 @@ function handleSetup(
     action.type !== 'BENCH_POKEMON' &&
     action.type !== 'FINISH_SETUP' &&
     action.type !== 'MULLIGAN_DRAW_DECISION' &&
-    action.type !== 'CONFIRM_MULLIGAN_REVEAL'
+    action.type !== 'CONFIRM_MULLIGAN_REVEAL' &&
+    action.type !== 'FINISH_MULLIGAN_POST_BENCH'  // v5.138
   ) {
     return state;
   }
@@ -1818,7 +1823,32 @@ function handleSetup(
     };
     next = addLog(next, msg, pIdx);
 
+    // v5.138：補抽 N>0 → 重新開放 BENCH placement 一次（玩家可加新基礎到備戰），
+    //   按 FINISH_MULLIGAN_POST_BENCH 後才進 playing。
+    //   補抽 0 張（requested=0）跳過此流程（直接 tryAdvanceToPlaying）。
+    if (requested > 0) {
+      const newPostBench = [
+        ...(next.mulliganPostBenchOpen ?? [false, false]),
+      ] as [boolean, boolean];
+      newPostBench[pIdx] = true;
+      next = { ...next, mulliganPostBenchOpen: newPostBench };
+      next = addLog(next, `${player.name} 可選擇將補抽到的基礎寶可夢加入備戰`, pIdx);
+    }
+
     // v3.74：抽 helper — 雙方都完成 setup + mulligan 補抽決定 + 揭示確認 → 進入 playing
+    next = tryAdvanceToPlaying(next);
+    return next;
+  }
+
+  // v5.138：mulligan 補抽後加備戰完成
+  if (action.type === 'FINISH_MULLIGAN_POST_BENCH') {
+    if (!state.mulliganPostBenchOpen?.[pIdx]) return state;
+    const newPostBench = [
+      ...(state.mulliganPostBenchOpen ?? [false, false]),
+    ] as [boolean, boolean];
+    newPostBench[pIdx] = false;
+    let next: GameState = { ...state, mulliganPostBenchOpen: newPostBench };
+    next = addLog(next, `${state.players[pIdx].name} 完成補抽後備戰設置`, pIdx);
     next = tryAdvanceToPlaying(next);
     return next;
   }
@@ -1836,7 +1866,12 @@ function handleSetup(
   }
 
   // 已完成 setup 的玩家不能再操作（place/bench/finish）
-  if (state.setupDone[pIdx]) return state;
+  // v5.138 例外：mulliganPostBenchOpen=true 時允許 BENCH_POKEMON（其他仍擋）
+  if (state.setupDone[pIdx]) {
+    if (!(state.mulliganPostBenchOpen?.[pIdx] && action.type === 'BENCH_POKEMON')) {
+      return state;
+    }
+  }
   const player = { ...state.players[pIdx] };
   const players = [...state.players] as [PlayerState, PlayerState];
 

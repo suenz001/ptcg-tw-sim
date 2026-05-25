@@ -638,6 +638,16 @@ export interface GameState {
    * 對方沒 mulligan 則自動為 true（無需確認）；雙方都 true 才能進 playing phase。
    */
   mulliganRevealConfirmed: [boolean, boolean];
+  /**
+   * v5.138：mulligan 補抽後重開 BENCH placement flag。
+   * 流程：不需重抽方按準備完成 → 對手 mulligan reveal 確認 → 補抽 N>0 →
+   *   設此 flag=true → UI 顯示「補抽後可加備戰」+「完成」按鈕 →
+   *   按完成 → flag=false → tryAdvanceToPlaying。
+   * Wilson 提供 PTCG 規則：非重抽方補抽後手牌可能有新基礎寶可夢，可選擇加備戰。
+   * 補抽 0 張（雙方都 mulligan 或對手沒 mulligan）跳過此流程（不設 true）。
+   * 只允許 BENCH_POKEMON（不能換 active、不能再 FINISH_SETUP）。
+   */
+  mulliganPostBenchOpen?: [boolean, boolean];
   /** 行動紀錄（給 UI 顯示用） */
   log: LogEntry[];
   /** 勝者（game-over 時填入） */
@@ -884,6 +894,8 @@ export type GameAction =
   | { type: 'MULLIGAN_DRAW_DECISION'; count: number; senderIdx: 0 | 1 }
   /** v3.74：玩家確認對方的 mulligan 揭示（看完 modal 後按確認）。設 mulliganRevealConfirmed[senderIdx]=true */
   | { type: 'CONFIRM_MULLIGAN_REVEAL'; senderIdx: 0 | 1 }
+  /** v5.138：mulligan 補抽後加備戰完成（從 mulliganPostBenchOpen=true 進 playing） */
+  | { type: 'FINISH_MULLIGAN_POST_BENCH'; senderIdx: 0 | 1 }
 
   // 正式對戰
   | { type: 'DRAW_CARD' }

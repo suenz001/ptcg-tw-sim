@@ -265,6 +265,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.138</span> 🎯 撤回 v5.136 fix-px + mulligan 補抽後加備戰</summary>
+        <ul>
+          <li><b>玩家怒</b>：「桌墊版對戰介面越修越差了，現在戰鬥場與備戰區的間隙超級無敵大，完全無法以 1 頁顯示!!!!」</li>
+          <li><b>v5.136 錯誤分析</b>：用 <code>grid-template-rows:205px 300px 300px 205px</code>（合計 1010px + gap 45 + padding 16 = 1071px）撐爆 viewport（可用 ~800-900px）→ 版面下移、無法一頁顯示。我設 300px 是「最壞情況 buffer」但沒測量實際 viewport — 嚴重失誤。</li>
+          <li><b>v5.138 真根因 + 修法</b>：問題不在 row 高度，而在 <code>align-self</code> 方向。原 bench 黏「外側」(對手 bench 黏頂、我方 bench 黏底)、active 黏「內側」(對手 active 黏底、我方 active 黏頂)。Row 3 active 撐高時 → benchMe 跟著外移、activeMe 黏不動 → active-bench 距離拉大。改：bench 改黏「內側」(靠近 active)、active 改黏「外側」(靠近 bench)。bench-active 永遠貼 gap 15px，不論 row 高度怎變。<code>grid-template-rows</code> 回 auto，stadium-display 跨 Row 2-3 在中間自然填充。</li>
+
+          <li><b>Mulligan 第 3 條規則實裝（Wilson 確認流程）</b>：</li>
+          <li>　・流程 (a)：不需重抽方按準備完成 → 對方 mulligan reveal 確認 → 補抽 N&gt;0 張 → 重新開放 BENCH placement → 按「完成」進 playing</li>
+          <li>　・規則 (b)：只能加備戰（不能換 active、不能再 FINISH_SETUP）</li>
+          <li>　・規則 (c)：補抽 0 張（雙方都 mulligan / 對手沒 mulligan）跳過此流程</li>
+          <li><b>實作</b>（跨 5 個檔案）：</li>
+          <li>　・<code>types.ts</code>: <code>GameState.mulliganPostBenchOpen</code> + 新 <code>GameAction.FINISH_MULLIGAN_POST_BENCH</code></li>
+          <li>　・<code>actions.ts</code>: <code>finishMulliganPostBench</code> helper</li>
+          <li>　・<code>engine.ts</code>: <code>createGame</code> 初始 <code>[false, false]</code>；<code>tryAdvanceToPlaying</code> 加 check（任一方 true 不進 playing）；<code>MULLIGAN_DRAW_DECISION</code> 後 if requested&gt;0 → set true；新 <code>FINISH_MULLIGAN_POST_BENCH</code> handler；<code>setupDone</code> gate 改條件（mulliganPostBenchOpen=true + action=BENCH_POKEMON 才允許）</li>
+          <li>　・<code>ai.ts</code>: AI 簡化策略，直接 FINISH（不再加備戰）</li>
+          <li>　・<code>+page.svelte</code>: <code>canBasicSetup</code> 條件 + 按鈕 UI + shouldAct 兩處 (tickAI + $effect)</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 跨 5 檔）／11e（Write tool）／11f（push 前 ASSERT 13 處 exact-match）／14（最小 patch — 純條件+state+UI 加減）／15（PTCG 規則 source of truth — Wilson 補正）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.137</span> 🎬 對手獎賞卡背 + 多張動畫放慢</summary>
         <ul>
           <li><b>玩家回報 1</b>：「對手的獎賞卡內容不該展示給我方看，現在的獎賞卡動畫會把獎賞卡牌翻出來給大家看，在對手領獎的動畫，我方應該是看到卡牌的背面才對」— PTCG 隱私規則：對手手牌/獎賞內容對玩家不可見。</li>

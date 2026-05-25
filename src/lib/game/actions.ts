@@ -14,6 +14,9 @@ export const GameActions = {
   // v3.74：玩家確認對方的 mulligan 揭示
   confirmMulliganReveal: (senderIdx: 0 | 1): GameAction =>
                        ({ type: 'CONFIRM_MULLIGAN_REVEAL', senderIdx }),
+  // v5.138：mulligan 補抽後加備戰完成
+  finishMulliganPostBench: (senderIdx: 0 | 1): GameAction =>
+                       ({ type: 'FINISH_MULLIGAN_POST_BENCH', senderIdx }),
   drawCard:          (): GameAction => ({ type: 'DRAW_CARD' }),
   attachEnergy:      (energyIid: string, targetIid: string): GameAction =>
                        ({ type: 'ATTACH_ENERGY', energyIid, targetIid }),
