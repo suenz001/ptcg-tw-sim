@@ -265,6 +265,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.126</span> 🐛 補大宇怪進化鏈 evolvesFrom=小灰怪</summary>
+        <ul>
+          <li><b>Wilson 確認</b>：大宇怪由小灰怪進化。</li>
+          <li><b>Audit 驗證</b>（依鐵律不可 hallucinate）：
+            <ul>
+              <li>小灰怪：MC / SV11B（2 筆）/ svhm，共 4 筆均為 Basic ✓</li>
+              <li>大宇怪：MC / SV11B（2 筆）/ svhm，共 4 筆均為 Stage1 但 <code>evolvesFrom=None</code></li>
+            </ul>
+          </li>
+          <li><b>修法</b>：4 個 JSON 補 <code>evolvesFrom: &quot;小灰怪&quot;</code></li>
+          <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（4 處 JSON exact-match）／14（最小 JSON 欄位修）／15（卡面 source of truth — Wilson 確認進化來源 + JSON audit 驗證小灰怪存在）／1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.125</span> 🐛 燃火能量撤退 = 3 個能量沒生效 + 脫殼忍者進化鏈漏土居忍士</summary>
         <ul>
           <li><b>玩家回報 Bug 1</b>：燃火能量無法當 3 顆能量供撤退使用。</li>

@@ -2040,7 +2040,8 @@
     "species": "腦寶可夢",
     "illustrator": "Aya Kusube",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "小灰怪"
   },
   {
     "id": "13733",
@@ -5732,7 +5733,8 @@
     "species": "腦寶可夢",
     "illustrator": "Apios",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "小灰怪"
   },
   {
     "id": "13912",

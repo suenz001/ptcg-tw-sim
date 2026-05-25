@@ -287,7 +287,8 @@
     ],
     "pokedexNumber": 606,
     "species": "腦寶可夢",
-    "illustrator": "Shinya Komatsu"
+    "illustrator": "Shinya Komatsu",
+    "evolvesFrom": "小灰怪"
   },
   {
     "id": "10083",

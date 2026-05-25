@@ -14103,7 +14103,8 @@
     "species": "腦寶可夢",
     "illustrator": "Shinya Komatsu",
     "regulationMark": "H",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "小灰怪"
   },
   {
     "id": "16799",
