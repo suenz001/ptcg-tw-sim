@@ -265,12 +265,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.123</span> 🔧 Hotfix v5.122 changelog 文案 hallucinate 卡名</summary>
+        <ul>
+          <li><b>玩家發現</b>：v5.122 changelog 寫「涵蓋 MC 全 7 隻莉莉艾的寶可夢（皮皮ex / 皮可西 / 花療環環 / 等）」— Wilson 立刻反應「沒有莉莉艾的皮可西這隻寶可夢吧」。</li>
+          <li><b>實際 JSON audit（不可幻覺）</b>：全資料庫 <code>name.startsWith(&#39;莉莉艾的&#39;) &amp;&amp; supertype===&#39;Pokemon&#39;</code> 只有 4 隻：莉莉艾的皮皮ex / 莉莉艾的花療環環 / 莉莉艾的萌虻 / 莉莉艾的蝶結萌虻。<b>沒有「莉莉艾的皮可西」</b>。</li>
+          <li><b>來源</b>：撰寫 v5.122 changelog 時誤把「皮可西」（超級皮可西ex 等其他角色）誤植到列表，且「7 隻」也是憑空估算（grep <code>name.*莉莉艾的</code> 抓到的字面 7 處包含 effect text 內提到「莉莉艾的」的非寶可夢卡）。</li>
+          <li><b>修法</b>：直接 Edit v5.122 changelog 改成正確列表（4 隻）。v5.122 程式碼修法（<code>startsWith(&#39;莉莉艾的&#39;)</code>）邏輯本來就正確涵蓋全 4 隻，僅文案誤導。</li>
+          <li><b>長期記憶教訓再次驗證</b>：<code>[[feedback-no-ace-spec-hallucination]]</code> 已記錄「Wilson 對 AI 幻覺零容忍」。本次再犯 — 列舉「具體卡名」時務必先跑實際 JSON audit，不可從記憶或 grep 噪音猜測。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（1 處 exact-match）／14（最小 1 行文案修）／15（JSON 為 source of truth — 列舉前必驗）／1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.122</span> 🐛 莉莉艾的珍珠 + 莉莉艾的花療環環獎賞 -1 失效</summary>
         <ul>
           <li><b>玩家回報</b>：莉莉艾的花療環環 附有 莉莉艾的珍珠，被對手 KO 時對手獲得的獎賞應為 1-1=0，但實際拿到 1 張。</li>
           <li><b>根因</b>：tools.ts L256 用 <code>isRulePokemon(card)</code> 判斷（即 ex/V/VMAX），但卡面實際條件是「莉莉艾的寶可夢」（卡名前綴「莉莉艾的」）。兩個完全不同條件 — 花療環環 subtype=Basic 非 ex → isRulePokemon=false → 返回 0 → 無 -1 效果。</li>
           <li><b>卡面 source of truth</b>（MC.json L28547）：「附有這張卡的『莉莉艾的寶可夢』受到對手的寶可夢招式的傷害而【昏厥】時，被獲得的獎賞卡減少 1 張。」</li>
-          <li><b>修法</b>：改用 <code>card?.name?.startsWith(&#39;莉莉艾的&#39;)</code>。涵蓋 MC 全 7 隻莉莉艾的寶可夢（皮皮ex / 皮可西 / 花療環環 / 等）。</li>
+          <li><b>修法</b>：改用 <code>card?.name?.startsWith(&#39;莉莉艾的&#39;)</code>。實際 JSON audit 涵蓋全 4 隻莉莉艾的寶可夢：莉莉艾的皮皮ex（基礎 ex）／莉莉艾的花療環環（基礎，本 bug 主角）／莉莉艾的萌虻（基礎）／莉莉艾的蝶結萌虻（進化）。</li>
           <li><b>Bug A 追蹤（pre-discard 0 張綠按鈕）</b>：v5.115 已修 <code>exactOk = pickedAmount &gt;= req</code>，HEAD 內 L7175 確認生效。玩家截圖右下角顯示 v5.114 — 是在 Oracle 主站測試，<b>v5.115~v5.121 都還沒部署到 Oracle</b>。請跑 update bat 把 v5.122 同步到 www.ptcgtw-sim.com 即可看到修法生效。</li>
           <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 1 處 exact-match）／14（最小 1 行修：isRulePokemon → startsWith）／15（卡面 source of truth — MC 莉莉艾的珍珠 JSON 直接抽 rulesText）／1（changelog audit pass）。</li>
         </ul>
