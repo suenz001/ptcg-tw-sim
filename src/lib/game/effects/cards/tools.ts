@@ -248,14 +248,15 @@ TOOL_PRIZE_BONUS.set('豪華斗篷', (card) => {
 });
 
 // ── 莉莉艾的珍珠（Pokemon Tool） ────────────────────────────────────────────
-// 裝備者若為「擁有規則」寶可夢（ex / 超級ex），被擊倒時對手取得的獎勵牌 -1。
-// 實作：TOOL_PRIZE_BONUS 回傳負值（已由 engine Math.max(0, ...) clamp）。
-// 其他寶可夢裝備時無效果（回 0）。
-// v2.09：從 effects.ts 底部搬到這，統一讓自動登記區塊處理 attach effect，
-// 不需原先的 if (!TRAINER_EFFECTS.has(...)) guard。
+// v5.122 卡面修正：「附有這張卡的『莉莉艾的寶可夢』受到對手的寶可夢招式的傷害而
+//   【昏厥】時，被獲得的獎賞卡減少 1 張。」
+//   → 條件是「卡名前綴『莉莉艾的』」，不是 isRulePokemon（ex/V/VMAX）！
+//   玩家回報：莉莉艾的花療環環（Basic 非 ex）+ 莉莉艾的珍珠 → 對手獎賞沒 -1。
+//   根因：原 v3.66 誤用 isRulePokemon → 花療環環不是規則寶可夢 → 返回 0。
+//   修法：改用 card.name.startsWith('莉莉艾的')
+//   涵蓋（MC 全部 7 隻）：莉莉艾的皮皮ex / 莉莉艾的皮可西 / 莉莉艾的花療環環 / etc.
 TOOL_PRIZE_BONUS.set('莉莉艾的珍珠', (card) => {
-  // v3.66：改用 isRulePokemon helper
-  return isRulePokemon(card) ? -1 : 0;
+  return card?.name?.startsWith('莉莉艾的') ? -1 : 0;
 });
 
 // ── 受傷（未 KO）觸發 ──────────────────────────────────────────────────────
