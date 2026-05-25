@@ -265,6 +265,39 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.165</span> 🎯 重試徽章重設計：modal 顯示擲幣明細 + 玩家確認後才套傷害</summary>
+        <ul>
+          <li><b>問題</b>：v5.164 機關槍合擊 + 重試徽章雖然 modal 會跳，但傷害「先套用後才問」——玩家在 modal 看到對手 HP 已扣血，且 modal 沒顯示前次擲幣明細。</li>
+
+          <li><b>新流程設計</b>（PTCG 「玩家確認後才結算」精神）：
+            <ol>
+              <li>regPre 擲幣 + 把每次正反面結果存到 <code>state._machineGunLastFlips</code> 陣列</li>
+              <li>ATTACK 末端 trigger modal 時 engine 把整個 newState <b>rollback 回攻擊前狀態</b>（對手 HP 未變），同時把 coinFlips 副資料傳到 modal params</li>
+              <li>modal 顯示「前次擲幣結果（共 N 次）」明細列表，選「保留」/「重擲」</li>
+              <li>選「保留」→ 重跑 ATTACK 並透過 <code>action._retryInjectedFlips</code> 注入既定擲幣結果（regPre 跳過 random）→ 套用傷害</li>
+              <li>選「重擲」→ 設 retryBadgeUsedThisTurn=true + 重跑 ATTACK（regPre 重新 random）→ 套用新傷害</li>
+              <li>兩條路徑都帶 <code>action._retryBadgeAlreadyAsked=true</code> 避免末端再次 trigger modal（無限循環防護）</li>
+            </ol>
+          </li>
+
+          <li><b>UI 強化</b>：modal-choice 自動偵測 <code>params.coinFlips</code>，若有則顯示擲幣明細 grid（每格「第 N 次 → 正面/反面」，反面標「（停止）」），底部說明傷害公式。</li>
+
+          <li><b>變更</b>：
+            <ul>
+              <li>types.ts：GameState 加 <code>_machineGunLastFlips?: string[]</code>；ATTACK 加 <code>_retryInjectedFlips?</code> 與 <code>_retryBadgeAlreadyAsked?</code></li>
+              <li>slowking_lucario_deck.ts：機關槍合擊 regPre 改 inject-aware，把擲幣結果 push 到 flips 陣列存到 state</li>
+              <li>engine.ts ATTACK 開頭：clear <code>_machineGunLastFlips</code></li>
+              <li>engine.ts 重試 resolver：keep / retry 雙路徑都呼叫 handlePlaying 重跑 ATTACK</li>
+              <li>engine.ts ATTACK 末端 trigger：rollback newState + 傳 coinFlips 到 modal params</li>
+              <li>game/+page.svelte：modal-choice 加擲幣明細 UI + CSS</li>
+            </ul>
+          </li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 8 處 exact-match）／14（最小 patch — 不動其他擲幣招式，只 specialize 機關槍合擊；UI 變更為加值而非替換）／15（卡面 source of truth）／17（不做 AI 幻覺——所有 inject/rollback 邏輯都有明確 PTCG 規則依據）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.164</span> 🐛 機關槍合擊補 coinFlippedThisAttack flag + changelog 清理</summary>
         <ul>
           <li><b>機關槍合擊 + 重試徽章交互</b>：超級袋獸ex（Colorless）的「機關槍合擊」原本用 raw <code>Math.random() &lt; 0.5</code> 擲幣（動態次數，擲到反面為止），沒呼叫 <code>flipCoinsWithLog</code> helper → <code>coinFlippedThisAttack</code> flag 沒被設 → 重試徽章 ATTACK 末端 modal trigger 條件不滿足 → 重試 modal 不 popup。</li>

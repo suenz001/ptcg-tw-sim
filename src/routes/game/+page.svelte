@@ -6954,6 +6954,25 @@
             <p class="sel-hint stepper-hint">範圍 {stepper.min}–{stepper.max} · 每次 ±{stepper.step}</p>
           {:else}
             {@const opts = (pendingSelection.params?.options as Array<{id:string;text:string;disabled?:boolean}>) ?? []}
+            {@const coinFlips = (pendingSelection.params?.coinFlips as string[] | undefined) ?? []}
+            <!-- v5.165 重試徽章 modal — 顯示前次擲幣明細 -->
+            {#if coinFlips.length > 0}
+              <div class="modal-coin-flips">
+                <div class="modal-coin-flips-title">🎲 前次擲幣結果（共 {coinFlips.length} 次）</div>
+                <ul class="modal-coin-flips-list">
+                  {#each coinFlips as flip, idx}
+                    <li>
+                      第 <strong>{idx + 1}</strong> 次 →
+                      <strong class:heads={flip === '正面'} class:tails={flip !== '正面'}>{flip}</strong>
+                      {#if flip !== '正面'}<span class="stop-tag">（停止）</span>{/if}
+                    </li>
+                  {/each}
+                </ul>
+                <div class="modal-coin-flips-note">
+                  ※ 機關槍合擊：擲幣直到「反面」為止；總「正面」次數 × 50 加在基礎 200 傷害上。
+                </div>
+              </div>
+            {/if}
             <div class="modal-choice-list">
               {#each opts as opt}
                 <button class="btn-act modal-choice-btn"
@@ -10663,6 +10682,15 @@
   /* v2.201 modal-choice stepper：泰姆猜 HP 等需要數字輸入的場景 — Leon 規則「戰鬥畫面只用滑鼠」
      置中橫排：[−] [當前值] [+] [✓ 確認]，按鈕為大圓鈕方便手機/平板觸控 */
   .modal-choice-stepper{ display:flex; align-items:center; justify-content:center; gap:.6rem; padding:.6rem 0; flex-wrap:wrap; }
+  /* v5.165 重試徽章 modal — 前次擲幣明細顯示區 */
+  .modal-coin-flips{ margin:.5rem 0 .8rem; padding:.6rem .8rem; background:#0e1a0e; border:1px solid #2a4a6a; border-radius:8px; }
+  .modal-coin-flips-title{ font-size:.95rem; font-weight:700; color:#aacfff; margin-bottom:.4rem; text-align:center; }
+  .modal-coin-flips-list{ list-style:none; padding:0; margin:0 0 .4rem; display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:.25rem .8rem; }
+  .modal-coin-flips-list li{ font-size:.9rem; color:#ccc; padding:.2rem .4rem; background:#1a2a1a; border-radius:4px; }
+  .modal-coin-flips-list .heads{ color:#ffd54a; }
+  .modal-coin-flips-list .tails{ color:#aaa; }
+  .modal-coin-flips-list .stop-tag{ color:#888; font-size:.8rem; }
+  .modal-coin-flips-note{ font-size:.75rem; color:#888; text-align:center; }
   .stepper-btn{ width:2.6rem; height:2.6rem; border-radius:50%; border:1px solid #4a6a4a; background:#1e3a1e; color:#fff; font-size:1.4rem; font-weight:700; cursor:pointer; user-select:none; }
   .stepper-btn:hover:not(:disabled){ background:#2a4a2a; border-color:#5a8a5a; }
   .stepper-btn:disabled{ opacity:.35; cursor:not-allowed; }

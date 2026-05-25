@@ -172,20 +172,40 @@ regA('超級袋獸ex', 0, (st, idx) => {
 // v2.252：每次擲幣 1 行 log（「第 N 次擲硬幣 — 正面/反面」），UI 逐個排隊播放動畫。
 //   舊版合併寫一行「擲到反面前正面 N 次」會被 UI parser 誤判成單次 heads 動畫，
 //   且 heads=0 時 message 仍含「正面」字樣 → 顯示錯誤面。
-regPre('超級袋獸ex|機關槍合擊', (state, aIdx) => {
+regPre('超級袋獸ex|機關槍合擊', (state, aIdx, _pool, action) => {
   // v5.164：設 coinFlippedThisAttack=true（重試徽章 ATTACK 末端 modal trigger 依賴此 flag）。
-  //   原本用 raw Math.random 沒走 flipCoinsWithLog helper → flag 沒被設 → 重試徽章 modal
-  //   不 popup。動態次數擲幣（直到反面）無法用 flipCoinsWithLog（固定次數）helper，故 inline 設。
+  //   動態次數擲幣（直到反面）無法用 flipCoinsWithLog（固定次數）helper，故 inline 設。
+  // v5.165：擲幣明細存到 state._machineGunLastFlips 供 retry-badge modal 顯示；
+  //         若 action._retryInjectedFlips 有值（玩家選「保留前次結果」時 engine 重跑帶入）
+  //         → 跳過 random，用既定陣列依序判定（語義：玩家確認後才正式套用此次擲幣結果）。
   let s: GameState = { ...state, coinFlippedThisAttack: true };
   let heads = 0;
   let count = 0;
-  for (let i = 0; i < 20; i++) {
-    count++;
-    const isHeads = Math.random() < 0.5;
-    s = addLog(s, `機關槍合擊：第 ${count} 次擲硬幣 — ${isHeads ? '正面' : '反面（停止）'}`, aIdx);
-    if (isHeads) heads++;
-    else break;
+  const flips: string[] = [];
+  // v5.165 ATTACK 帶 _retryInjectedFlips → 用既定結果重現（玩家選「保留前次結果」路徑）
+  const injected = (action as { _retryInjectedFlips?: string[] } | undefined)?._retryInjectedFlips;
+  if (injected && injected.length > 0) {
+    for (const flip of injected) {
+      count++;
+      const isHeads = flip === '正面';
+      flips.push(flip);
+      s = addLog(s, `機關槍合擊：第 ${count} 次擲硬幣 — ${flip}${isHeads ? '' : '（停止）'} 〔重試徽章：使用前次擲幣結果〕`, aIdx);
+      if (isHeads) heads++;
+      else break;
+    }
+  } else {
+    for (let i = 0; i < 20; i++) {
+      count++;
+      const isHeads = Math.random() < 0.5;
+      const label = isHeads ? '正面' : '反面';
+      flips.push(label);
+      s = addLog(s, `機關槍合擊：第 ${count} 次擲硬幣 — ${label}${isHeads ? '' : '（停止）'}`, aIdx);
+      if (isHeads) heads++;
+      else break;
+    }
   }
+  // v5.165 把擲幣明細存到 state 供 ATTACK 末端 retry-badge modal 讀取
+  s = { ...s, _machineGunLastFlips: flips };
   const dmg = 200 + heads * 50;
   s = addLog(s, `機關槍合擊：${heads} 次正面 → 基礎 200 + ${heads}×50 = ${dmg} 傷害`, aIdx);
   return { state: s, damage: dmg };

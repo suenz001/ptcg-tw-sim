@@ -583,6 +583,12 @@ export interface GameState {
    * Outside-of-ATTACK 擲幣（sleep/burn checkup）也會 set，但 ATTACK 沒讀 → 無影響。
    */
   coinFlippedThisAttack?: boolean;
+  /**
+   * v5.165 重試徽章 — 動態次數擲幣招式（機關槍合擊等）每次擲完把結果陣列
+   * 暫存於此（如 ['正面','正面','反面']），供 ATTACK 末端 retry-badge modal
+   * 顯示擲幣明細給玩家。Setter: 對應 regPre；Resetter: ATTACK 開頭 clear。
+   */
+  _machineGunLastFlips?: string[];
   phase: GamePhase;
   /** 正式對戰階段的回合小分段 */
   turnPhase: TurnPhase;
@@ -919,6 +925,17 @@ export type GameAction =
        * 轉接到被複製招式的 PRE/POST。無傳值時 fallback 為自動挑最高傷害招式。
        */
       copyAttackChoice?: { pokeIid: string; attackIndex: number };
+      /**
+       * v5.165 重試徽章 — 玩家選「保留前次結果」時，engine 用既定的擲幣結果
+       * 重跑 ATTACK（透過此欄位 inject 給 regPre，避免重新 random）。
+       * regPre（如機關槍合擊）讀取此陣列依序判定 正面/反面。
+       */
+      _retryInjectedFlips?: string[];
+      /**
+       * v5.165 重試徽章 — 重跑 ATTACK 時設 true，避免 ATTACK 末端再次 trigger
+       * 重試徽章 modal（無限循環防護）。
+       */
+      _retryBadgeAlreadyAsked?: boolean;
     }
   | { type: 'TAKE_PRIZES'; count: number; playerIdx: 0 | 1; senderIdx?: 0 | 1 }
   | { type: 'SEND_NEW_ACTIVE'; iid: string; senderIdx?: 0 | 1 }

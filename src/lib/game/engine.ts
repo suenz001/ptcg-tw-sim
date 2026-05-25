@@ -2102,30 +2102,52 @@ function handlePlaying(
       newState = resolver(newState, actorIdx, action.selectedIids, params, pool);
     }
     // v4.898 重試徽章 — inline handler（無 regR 註冊；直接在此特判）
-    //   選 'keep' → 不重擲，維持 newState（attack damage/POST 已套用）
-    //   選 'retry' → revert preAttackState + 設 retryBadgeUsedThisTurn=true
-    //                + 呼叫 handlePlaying 重跑原 ATTACK action（新擲幣 + 新 damage）
+    // v5.165 重設計：modal popup 時 engine 已 rollback state（傷害未套）；玩家確認後
+    //   才正式套用——符合 PTCG 「玩家先決定使否使用徽章再套傷害」精神。
+    //   選 'keep'  → 用 stored coinFlips inject 給 regPre 重跑 ATTACK（產生相同 heads/damage）
+    //   選 'retry' → 設 retryBadgeUsedThisTurn=true + 重跑 ATTACK（不 inject = 重新 random）
+    //   兩條路徑都帶 _retryBadgeAlreadyAsked=true 避免末端再次 trigger modal（無限循環防護）。
     if (effectKey === 'm5-retry-badge-decide') {
       const choice = action.selectedIids[0];
       const preAttackState = params?.preAttackState as GameState | undefined;
       const originalAction = params?.originalAction as GameAction | undefined;
-      if (choice === 'retry' && preAttackState && originalAction) {
-        const revPlayers = [...preAttackState.players] as [PlayerState, PlayerState];
-        revPlayers[actorIdx] = {
-          ...revPlayers[actorIdx],
-          retryBadgeUsedThisTurn: true,
-        };
-        const reverted: GameState = {
-          ...preAttackState,
-          players: revPlayers,
-          coinFlippedThisAttack: false,
-        };
-        // 在 log 加一條提示玩家正在重擲
-        const withLog = addLog(reverted, '🎲 重試徽章：消除上次擲幣結果，重新擲幣！', actorIdx);
-        return handlePlaying(withLog, originalAction, pool);
-      } else {
-        // 'keep' 或 fallback：維持 newState，attack damage 不變
-        newState = addLog(newState, '🎲 重試徽章：玩家選擇保留本次擲幣結果（未發動）', actorIdx);
+      const coinFlips = params?.coinFlips as string[] | undefined;
+      if (preAttackState && originalAction) {
+        if (choice === 'keep') {
+          // 不消耗徽章——「保留前次結果」未動用 reroll。重跑 ATTACK 並 inject 既定擲幣結果。
+          const injectedAction: GameAction = {
+            ...originalAction,
+            _retryInjectedFlips: coinFlips,
+            _retryBadgeAlreadyAsked: true,
+          };
+          const reverted: GameState = {
+            ...preAttackState,
+            coinFlippedThisAttack: false,
+            _machineGunLastFlips: undefined,
+          };
+          const flipsStr = (coinFlips ?? []).map((f, i) => `第${i + 1}次→${f}`).join('、');
+          const withLog = addLog(reverted, `🎲 重試徽章：玩家選擇保留前次擲幣結果（${flipsStr}），開始套用傷害`, actorIdx);
+          return handlePlaying(withLog, injectedAction, pool);
+        } else if (choice === 'retry') {
+          // 消耗徽章 + 重新擲幣（不 inject = 走原 random path）+ 避免再次 trigger modal
+          const revPlayers = [...preAttackState.players] as [PlayerState, PlayerState];
+          revPlayers[actorIdx] = {
+            ...revPlayers[actorIdx],
+            retryBadgeUsedThisTurn: true,
+          };
+          const reverted: GameState = {
+            ...preAttackState,
+            players: revPlayers,
+            coinFlippedThisAttack: false,
+            _machineGunLastFlips: undefined,
+          };
+          const injectedAction: GameAction = {
+            ...originalAction,
+            _retryBadgeAlreadyAsked: true,
+          };
+          const withLog = addLog(reverted, '🎲 重試徽章：消除前次擲幣結果，重新擲幣！', actorIdx);
+          return handlePlaying(withLog, injectedAction, pool);
+        }
       }
     }
     // v4.933：resolver 跑完後若 pendingSelection 為空但 chain queue 仍有東西
@@ -3890,8 +3912,9 @@ function handlePlaying(
 
     // v4.898 重試徽章：snapshot pre-ATTACK 狀態（用於玩家選「重擲」時 revert）
     // 並 clear coinFlippedThisAttack flag（flipCoinsWithLog 若被呼叫會設回 true）
+    // v5.165：同時 clear _machineGunLastFlips（避免上一招式殘留誤觸 modal 顯示）
     const preAttackStateForRetry: GameState = state;
-    state = { ...state, coinFlippedThisAttack: false };
+    state = { ...state, coinFlippedThisAttack: false, _machineGunLastFlips: undefined };
     players[aIdx] = state.players[aIdx];
     players[(1-aIdx) as 0|1] = state.players[(1-aIdx) as 0|1];
 
@@ -5474,26 +5497,35 @@ function handlePlaying(
     newState = startFestivalDanceSecondAttackWindow(newState, aIdx, pool);
 
     // v4.898/v4.899 重試徽章 — ATTACK 末端條件 check（位置已修為 ATTACK handler 內）
-    //   - state.coinFlippedThisAttack === true（本次 ATTACK 有擲幣）
-    //   - attacker active 還存在
-    //   - attacker pokemonType === 'Colorless'（卡面「無屬性寶可夢」）
-    //   - attacker 身上有 重試徽章 工具
-    //   - 攻擊方未在本回合用過 重試徽章
-    //   - 無其他 pending selection 占用
-    // → 開 modal-choice picker（保留 preAttackStateForRetry 用於 revert）
+    // v5.165 重設計：modal popup 時 engine **rollback state 回 preAttackStateForRetry**，
+    //   讓玩家看到 modal 時對手 HP 還未變——確認後 (keep / retry) 才透過 handlePlaying 重跑
+    //   ATTACK 正式套傷害。符合 Wilson 反饋與 PTCG 「玩家確認後才結算」精神。
+    //   觸發條件：
+    //     - state.coinFlippedThisAttack === true（本次 ATTACK 有擲幣）
+    //     - attacker active 還存在
+    //     - attacker pokemonType === 'Colorless'（卡面「無屬性寶可夢」）
+    //     - attacker 身上有 重試徽章 工具
+    //     - 攻擊方未在本回合用過 重試徽章
+    //     - 無其他 pending selection 占用
+    //     - action._retryBadgeAlreadyAsked !== true（避免重跑時無限循環）
     if (
       newState.coinFlippedThisAttack === true
       && newState.players[aIdx].active
       && !newState.players[aIdx].retryBadgeUsedThisTurn
       && !newState.pendingSelection
+      && action._retryBadgeAlreadyAsked !== true
     ) {
       const atkInst = newState.players[aIdx].active!;
       const atkCard = pool.get(atkInst.cardId);
       const isColorless = atkCard?.pokemonType === 'Colorless';
       const hasRetryBadge = getAllAttachedTools(atkInst).some(t => pool.get(t.cardId)?.name === '重試徽章');
       if (isColorless && hasRetryBadge) {
+        // v5.165 rollback：擷取 coinFlips 副資料給 modal，把 state revert 回攻擊前
+        const coinFlips = newState._machineGunLastFlips ?? [];
         newState = {
-          ...newState,
+          ...preAttackStateForRetry,
+          coinFlippedThisAttack: false,
+          _machineGunLastFlips: undefined,
           pendingSelection: {
             type: 'modal-choice',
             actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -5503,9 +5535,10 @@ function handlePlaying(
               label: '重試徽章',
               preAttackState: preAttackStateForRetry,
               originalAction: action,
+              coinFlips,
               options: [
-                { id: 'keep', text: '不重擲（使用此次結果）' },
-                { id: 'retry', text: '重擲（消除此次硬幣結果並從頭重擲）— 本回合 1 次' },
+                { id: 'keep', text: '✅ 不重擲（使用前次擲幣結果，套用傷害）' },
+                { id: 'retry', text: '🔄 重擲（消除前次擲幣結果，重新擲幣）— 本回合 1 次' },
               ],
             },
           },
