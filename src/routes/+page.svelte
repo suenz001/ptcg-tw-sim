@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.139</span> 🚨 hotfix: v5.138 mulligan post-bench 卡住</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.138 流程跑到「玩家 1 可選擇將補抽到的基礎寶可夢加入備戰」就卡住，沒有可以點擊完成的按鈕。</li>
+          <li><b>根因</b>：<code>isMyTurn()</code> setup 階段條件 <code>!setupDone[me]</code>。v5.138 流程中此時 setupDone=true，<code>isMyTurn()</code> 回 false → 我加的按鈕 gate <code>game.phase===&#39;setup&#39; &amp;&amp; isMyTurn() &amp;&amp; mulliganPostBenchOpen?.[myIdx]</code> 永遠 false → 按鈕不顯示。</li>
+          <li><b>修法</b>：<code>isMyTurn()</code> setup 階段條件改為 <code>!setupDone[me] || !!mulliganPostBenchOpen?.[me]</code>。兩處（線上 + AI 模式）都修。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純條件補 mulliganPostBenchOpen）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.138</span> 🎯 撤回 v5.136 fix-px + mulligan 補抽後加備戰</summary>
         <ul>
           <li><b>玩家怒</b>：「桌墊版對戰介面越修越差了，現在戰鬥場與備戰區的間隙超級無敵大，完全無法以 1 頁顯示!!!!」</li>

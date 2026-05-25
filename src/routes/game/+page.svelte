@@ -2144,7 +2144,8 @@
     // 線上模式：只有輪到 myPlayerIndex 才能行動（必須優先於 AI 判斷）
     if (mode === 'online') {
       if (myPlayerIndex === null) return false;
-      if (game.phase === 'setup') return !game.setupDone[myPlayerIndex];
+      // v5.139: setup 階段同時看 mulliganPostBenchOpen — 補抽後加備戰也是「我的回合」
+      if (game.phase === 'setup') return !game.setupDone[myPlayerIndex] || !!game.mulliganPostBenchOpen?.[myPlayerIndex];
       if (game.pendingSelection) return game.pendingSelection.actorIdx === myPlayerIndex;
       if (game.turnPhase === 'end' && game.players[myPlayerIndex].active === null) return true;
       return game.activePlayerIndex === myPlayerIndex;
@@ -2152,7 +2153,8 @@
     // AI 模式：只有輪到人類時才能手動操作
     if (aiPlayerIndex !== null) {
       const hIdx = (1 - aiPlayerIndex) as 0 | 1;
-      if (game.phase === 'setup') return !game.setupDone[hIdx];
+      // v5.139: setup 階段同時看 mulliganPostBenchOpen — 補抽後加備戰也是「我的回合」
+      if (game.phase === 'setup') return !game.setupDone[hIdx] || !!game.mulliganPostBenchOpen?.[hIdx];
       if (game.pendingSelection) return game.pendingSelection.actorIdx === hIdx;
       if (game.turnPhase === 'end' && game.players[hIdx].active === null) return true;
       // v2.98：取獎賞由 owner 決定（pendingPrizes[hIdx] > 0 即可取，不論誰的回合）
