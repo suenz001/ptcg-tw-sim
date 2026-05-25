@@ -265,6 +265,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.142</span> 🎴 赤松 UI 語意依卡面倒過來</summary>
+        <ul>
+          <li><b>玩家回報</b>：「赤松的正確作法依據卡牌敘述，應該是先決定哪一張能量卡要放入手牌，然後把另外一個能量卡附於寶可夢身上」。</li>
+          <li><b>卡面敘述</b>（SV7 #10992/#11018）：「從自己的牌庫選擇最多 2 張各不同屬性的基本能量卡，在給對手看過後，<b>其中 1 張加入手牌，剩餘的能量卡附於自己的寶可夢身上</b>。並且重洗牌庫。」</li>
+          <li><b>原實作問題</b>（v2.13~v5.141）：UI 語意倒反。第二個 modal 標題顯示「選 1 張能量附加到寶可夢（未選的留在手牌）」，跟卡面敘述順序「先決定入手牌的」相反，造成玩家認知混淆。</li>
+          <li><b>修法</b>（只改 UI 語意 + 對應 resolver 邏輯倒過來）：</li>
+          <li>　・<code>akamatsu-split</code> hand-choose <code>titleOverride</code>：「選 1 張能量附加到寶可夢」→「選 1 張能量<b>放入手牌</b>（剩餘附給寶可夢）」</li>
+          <li>　・<code>akamatsu-pick-attach</code> resolver 邏輯：<code>iids[0]</code> 從「要附加的」改成「要留手牌的」；從 <code>validIids</code> 找「另一張」(≠ iids[0]) 才是要附加的</li>
+          <li>　・<code>akamatsu-attach</code> heal-target <code>titleOverride</code>：「選擇要附加 X 的寶可夢」→「請將<b>剩餘的</b> X 附於寶可夢身上」</li>
+          <li><b>只選 1 張時邏輯不變</b>：v3.53 已強制加入手牌（卡面「剩餘 = 0 張」沒得附加），這個 case 沒變動。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純 UI 標題改 + 1 處 resolver 邏輯顛倒）／15（PTCG 卡面語意 source of truth — Wilson 對照卡面糾正）／1（changelog audit pass + 本機 TS compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.141</span> 🔒 場地卡鎖死高度 + 獎賞動畫 stagger 加長</summary>
         <ul>
           <li><b>Bug — 場地卡放上瞬間撐開 active 間隙</b>：Wilson 截圖場地卡放上去那瞬間 active 之間間隙撐開，做別動作後恢復。</li>

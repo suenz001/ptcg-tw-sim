@@ -108,9 +108,10 @@ regR('akamatsu-split', (st, idx, iids, _params, pool) => {
     return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, energy] }));
   }
 
-  // 2 張 → 兩張先進手牌，讓玩家用 hand-choose 挑 1 張附加；未挑的那張自然留手牌
+  // 2 張 → 兩張先進手牌，讓玩家用 hand-choose 挑 1 張「留手牌」；未挑的那張自動附給寶可夢
+  // v5.142：UI 語意依卡面敘述「其中 1 張加入手牌，剩餘的能量卡附於寶可夢」— 玩家先決定入手牌的。
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  st = addLog(st, `赤松：${names} 暫時加入手牌，請選 1 張能量附加到寶可夢`, idx);
+  st = addLog(st, `赤松：${names} 暫時加入手牌，請選 1 張能量留在手牌（剩餘附給寶可夢）`, idx);
   st = updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, ...picked] }));
   return withPending(st, {
     type: 'hand-choose',
@@ -119,34 +120,46 @@ regR('akamatsu-split', (st, idx, iids, _params, pool) => {
     effectKey: 'akamatsu-pick-attach',
     params: {
       validIids: picked.map(c => c.iid),
-      titleOverride: '赤松：選 1 張能量附加到寶可夢（未選的留在手牌）',
+      titleOverride: '赤松：選 1 張能量放入手牌（剩餘附給寶可夢）',
     },
   });
 });
 
-// 二階段：hand-choose 後挑出要附加的能量，再進 heal-target 選寶可夢
+// 二階段：hand-choose 後 — v5.142 邏輯倒過來：iids[0] = 玩家選擇「留手牌」的，
+//   另一張（validIids 內 ≠ iids[0]）才是「要附加給寶可夢」的。
+//   依卡面「其中 1 張加入手牌，剩餘的能量卡附於寶可夢」。
 regR('akamatsu-pick-attach', (st, idx, iids, _params, pool) => {
-  const energyIid = iids[0];
-  if (!energyIid) return st;
-  const energy = st.players[idx].hand.find(c => c.iid === energyIid);
-  if (!energy) return st;
+  const keepInHandIid = iids[0];
+  if (!keepInHandIid) return st;
+  // 從 hand-choose params 拿 validIids（兩張能量的 iid）
+  const validIids = (_params?.validIids as string[]) ?? [];
+  // 「另一張」≠ keepInHandIid → 要附加給寶可夢的
+  const attachIid = validIids.find(v => v !== keepInHandIid);
+  if (!attachIid) {
+    // 邊界：找不到另一張（理論不會發生）→ keepInHandIid 那張留手牌結束
+    return addLog(st, '赤松：找不到另一張能量，流程結束', idx);
+  }
+  const energyToAttach = st.players[idx].hand.find(c => c.iid === attachIid);
+  if (!energyToAttach) return st;
   const pokes = [st.players[idx].active, ...st.players[idx].bench]
     .filter((c): c is CardInstance => !!c);
   if (pokes.length === 0) {
     // 邊界：選擇途中寶可夢離場（實際不會發生，pending 阻塞其他行動）— 保守 fallback
     return addLog(st, '赤松：場上無寶可夢可附加，能量留在手牌', idx);
   }
-  const eName = pool.get(energy.cardId)?.name ?? '?';
-  st = addLog(st, `赤松：選 1 隻己方寶可夢附加 ${eName}（未選能量留手牌）`, idx);
+  const eName = pool.get(energyToAttach.cardId)?.name ?? '?';
+  const keepCard = st.players[idx].hand.find(c => c.iid === keepInHandIid);
+  const keepName = keepCard ? (pool.get(keepCard.cardId)?.name ?? '?') : '?';
+  st = addLog(st, `赤松：${keepName} 留在手牌，請選 1 隻寶可夢附加 ${eName}`, idx);
   return withPending(st, {
     type: 'heal-target',
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'akamatsu-attach',
     params: {
-      energyIid,  // ← 告訴 resolver 從手牌取
+      energyIid: attachIid,  // ← 要附加的（從手牌取走）
       validIids: pokes.map(c => c.iid),
-      titleOverride: `赤松：選擇要附加 ${eName} 的寶可夢`,
+      titleOverride: `赤松：請將剩餘的 ${eName} 附於寶可夢身上`,
     },
   });
 });
