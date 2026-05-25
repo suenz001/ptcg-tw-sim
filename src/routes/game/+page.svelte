@@ -780,6 +780,7 @@
     startX: number; startY: number;
     endX: number;   endY: number;
     duration: number;
+    isMine: boolean;  // v5.137：對手取獎賞顯示卡背，我方取獎賞顯示正面
   };
   let prizePickAnims = $state<PrizePickAnim[]>([]);
   let prizePickIids = $state<Set<string>>(new Set());  // 防 draw-fly 雙觸發
@@ -836,8 +837,9 @@
           endY = pmRect ? Math.max(pmRect.top + 20, 40) : 40;
         }
         // v5.134：多張獎賞 stagger delay + 一次多張時加快每張動畫速度
+        // v5.137：multi 時 1.0s→1.4s（Wilson 反應太快看不清）
         const multi = capturedPicks.length;
-        const effDur = multi > 1 ? 1000 : PRIZE_PICK_DUR;  // 多張時 1.6s→1.0s
+        const effDur = multi > 1 ? 1400 : PRIZE_PICK_DUR;  // 多張時 1.6s→1.4s（略快但看得清）
         const stagger = multi > 1 ? 250 : 0;  // 每張間隔 250ms
         capturedPicks.forEach((p, i) => {
           const id = Date.now() + Math.random() + i * 0.001;
@@ -848,6 +850,7 @@
               id, cardId: p.cardId, iid: p.iid,
               startX, startY, endX, endY,
               duration: effDur,
+              isMine,  // v5.137：對手取獎賞顯示卡背，我方取獎賞顯示正面
             };
             prizePickAnims = [...prizePickAnims, anim];
           }, startDelay);
@@ -8156,7 +8159,12 @@
             --dy:{p.endY - p.startY}px;
             animation-duration:{p.duration}ms;
           ">
-          {#if pc?.imageUrl}<img src={pc.imageUrl} alt={pc.name}/>{/if}
+          <!-- v5.137：對手取獎賞只顯示卡背，不暴露對手手牌（PTCG 隱私規則） -->
+          {#if p.isMine && pc?.imageUrl}
+            <img src={pc.imageUrl} alt={pc.name}/>
+          {:else}
+            <div class="card-back prize-pick-back"><span class="card-back-mark">?</span></div>
+          {/if}
         </div>
       {/each}
     </div>
@@ -9936,6 +9944,11 @@
     animation-timing-function:cubic-bezier(.2,.9,.35,1.15);
     animation-fill-mode:both;
     transform-origin:center;
+  }
+  /* v5.137：對手取獎賞時顯示卡背填滿動畫卡框 */
+  .prize-pick-back{
+    width:100%; height:100%;
+    border-radius:8px;
   }
   .prize-pick-card img{
     width:100%; height:100%; object-fit:contain;

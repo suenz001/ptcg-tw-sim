@@ -265,6 +265,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.137</span> 🎬 對手獎賞卡背 + 多張動畫放慢</summary>
+        <ul>
+          <li><b>玩家回報 1</b>：「對手的獎賞卡內容不該展示給我方看，現在的獎賞卡動畫會把獎賞卡牌翻出來給大家看，在對手領獎的動畫，我方應該是看到卡牌的背面才對」— PTCG 隱私規則：對手手牌/獎賞內容對玩家不可見。</li>
+          <li><b>修法 1</b>：<code>PrizePickAnim</code> type 加 <code>isMine: boolean</code> 欄位。創建 anim 時從 effect 內 <code>isMine</code> 變數帶入。UI 渲染條件：<code>p.isMine</code> true → 顯示 <code>pc.imageUrl</code> 卡圖正面；false → 顯示 <code>.card-back .prize-pick-back</code> div（CSS 漸層卡背 + <code>?</code> mark）。新增 <code>.prize-pick-back</code> CSS rule 讓卡背填滿 prize-pick-card 框。</li>
+
+          <li><b>玩家回報 2</b>：「2 張以上的獎賞卡動畫還是稍微快了一點有點看不清楚，請再放慢一些」</li>
+          <li><b>修法 2</b>：v5.134 設多張時 <code>effDur = 1.0s</code>（從單張 1.6s 縮）— 太快看不清。改 multi 時 <code>1.4s</code>，仍比單張 1.6s 略快但 2-3 張看得清晰。stagger 250ms 維持。</li>
+
+          <li><b>mulligan 第 3 條規則（v5.136 留下）— 留 v5.138 處理</b>：流程複雜，跨 engine/types/actions/ai/UI 6 個檔案，需獨立 patch 安全做。Wilson 已確認流程細節：(a) 不需重抽方按準備完成 → 對方 mulligan reveal → 補抽 N&gt;0 → 重新開放 BENCH_POKEMON → 按「完成」進 playing；(b) 只能加備戰，不能換 active；(c) 補抽 0 張就跳過。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 4 處 exact-match）／14（最小 patch — 純 type+渲染+CSS）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.136</span> 🔒 終極修桌墊版間隙 (連修 4 次後根治)</summary>
         <ul>
           <li><b>玩家回報</b>：「我方備戰寶可夢和戰鬥寶可夢中間區域的間隙，塡能後就被莫名其妙地撐大了，如果再放上競技場就會更大… 這個問題你修了好幾次了!!!!請確實解決!!!」</li>
