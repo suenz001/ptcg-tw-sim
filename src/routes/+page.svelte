@@ -265,6 +265,35 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.133</span> 🎯 mulligan 順序改符合 PTCG 規則（先放戰鬥場，後 mulligan 補抽）</summary>
+        <ul>
+          <li><b>玩家提議</b>：依實體 PTCG 規則，正確 mulligan 流程是「先擲幣 → 抽 7 → 有基礎放戰鬥場 → 對方如沒基礎才開始 mulligan 補抽」。現系統卻是先 mulligan 補抽，再放戰鬥場。</li>
+          <li><b>規則 source of truth（不可 hallucinate）</b>：</li>
+          <li>　<b>PTCG_RULES.md Q173</b>：「依照以下順序操作：1.充分洗牌組放右上 2.抽 7 張作手牌 3.<b>從手牌中將基礎寶可夢放置於中央的戰鬥場上</b> 4.若還有基礎可放備戰 5.放置獎賞卡」</li>
+          <li>　<b>PTCG_RULES.md Q170</b>：「手牌中有基礎寶可夢後，放置獎賞卡，<b>對手玩家可以將最多與自己重抽手牌次數相同張數的卡牌從牌庫抽卡至手牌中</b>」</li>
+
+          <li><b>實作 audit</b>：</li>
+          <li>　・<code>createGame()</code> 自動 mulligan loop 直到雙方有基礎 ✓（規則正確）</li>
+          <li>　・但 UI 在 setup 一進入就 popup「對手 mulligan 揭示 modal」（L6921）強制看完才能放戰鬥場 ❌（順序錯）</li>
+          <li>　・後續補抽 modal 依賴 <code>mulliganRevealConfirmed</code>，所以連帶被卡住</li>
+
+          <li><b>修法</b>：mulligan reveal modal show condition 加 <code>setupDone?.[myIdx]</code> gate — 自己先放戰鬥場 + bench + 按準備（setupDone=true），才看對手 mulligan 揭示 + 補抽決定。</li>
+
+          <li><b>正確新流程</b>：</li>
+          <li>　1. 擲幣決定先後攻（既有 v3.75）</li>
+          <li>　2. 雙方各自 mulligan 直到有基礎（既有 <code>createGame</code> auto）</li>
+          <li>　3. 雙方放戰鬥場 + 備戰 + 按準備 (setupDone=true)</li>
+          <li>　4. 對手 mulligan 揭示 modal popup（v5.133 新 gate）</li>
+          <li>　5. 補抽決定 modal popup（已依賴 mulliganRevealConfirmed）</li>
+          <li>　6. 進 playing 第一回合</li>
+
+          <li><b>本機 svelte.compile pre-check</b>：通過。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 1 處 exact-match）／14（最小 patch — 加 1 個 gate 條件，不動 modal UI / engine flow）／15（規則 source of truth — PTCG_RULES.md Q170/Q173 直接抽）／1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.132</span> 🔧 Hotfix v5.131 取獎賞動畫沒觸發</summary>
         <ul>
           <li><b>玩家測試</b>：昏厥對手寶可夢後點取得獎賞卡，v5.131 新動畫流程沒出現。</li>

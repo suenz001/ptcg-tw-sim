@@ -7016,8 +7016,13 @@
     </div>
   {/if}
 
-  <!-- v3.74 Mulligan 揭示：對手起手無基礎重抽時，揭示每次重抽的 7 張手牌給玩家確認（PTCG 官方規則）-->
+  <!-- v3.74 Mulligan 揭示：對手起手無基礎重抽時，揭示每次重抽的 7 張手牌給玩家確認（PTCG 官方規則）
+       v5.133：加 setupDone[myIdx] gate — 依 PTCG 規則 (PDF Q173)，
+       自己先放戰鬥場 + bench + 按準備（setupDone=true），才看對手 mulligan 揭示。
+       原 v3.74 玩家一進 setup 就 popup mulligan reveal modal，強制看完才能放
+       戰鬥場 — 順序違反 PTCG 規則「先放基礎到戰鬥場」。 -->
   {#if game && game.phase==='setup'
+       && game.setupDone?.[myIdx]
        && (((oppIdx === 0 ? game.mulliganRevealedHands?.p1 : game.mulliganRevealedHands?.p2)?.length ?? 0) > 0)
        && !game.mulliganRevealConfirmed?.[myIdx]
        && (
