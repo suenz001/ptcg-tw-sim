@@ -260,18 +260,20 @@ export async function joinRoom(
     return { ...(data as RoomData), seats: newSeats, roomId: snap.id };
   }
 
-  // 找第一個空觀戰位（seats[2..9]）
+  // v5.127：lobby 階段優先填對戰位 P1/P2（玩家加入默認當對戰者，非觀戰）。
+  //   原 v3.992 邏輯先填觀戰位導致每次玩家都要手動點「移到對戰位」。
+  //   playing 階段保持只能坐觀戰位（PTCG 規則：對戰中不可中途接手）。
   let targetIdx = -1;
-  for (let i = 2; i < seats.length; i++) {
-    if (seats[i].uid === null) { targetIdx = i; break; }
+  if (data.status === 'lobby') {
+    // lobby：優先填 P1/P2
+    for (let i = 0; i < 2; i++) {
+      if (seats[i].uid === null) { targetIdx = i; break; }
+    }
   }
-  // v3.992：lobby 階段觀戰位都滿 → 試 P1/P2 空位（觀戰者可升級為玩家）
-  //   playing 階段強制只能坐觀戰位（不可佔玩家位），且觀戰位滿則拒絕
+  // 找第一個空觀戰位（seats[2..9]）— lobby 對戰位都滿 / playing 階段才走此路
   if (targetIdx === -1) {
-    if (data.status === 'lobby') {
-      for (let i = 0; i < 2; i++) {
-        if (seats[i].uid === null) { targetIdx = i; break; }
-      }
+    for (let i = 2; i < seats.length; i++) {
+      if (seats[i].uid === null) { targetIdx = i; break; }
     }
   }
   if (targetIdx === -1) throw new Error(data.status === 'playing' ? '觀戰位已滿' : '房間已滿');

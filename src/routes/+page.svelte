@@ -265,6 +265,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.127</span> 🎨 房間默認加入對戰位（非觀戰）+ 不發加入觀戰訊息</summary>
+        <ul>
+          <li><b>玩家提議</b>：當對戰的 2 個座位有空，新加入房間的玩家請默認直接進入對戰座位（不顯示「加入觀戰」於對話紀錄，因為他加入的是對戰座位）。</li>
+          <li><b>根因</b>：<code>room.ts</code> L263-275 / <code>room-oracle.ts</code> L141-150 <code>joinRoom</code> 邏輯<b>先找空觀戰位</b>（seats[2..9]），全滿才回頭找 P1/P2。玩家每次都要手動點「移到對戰位」。</li>
+          <li><b>修法</b>：lobby 階段順序對調 — 優先填 P1/P2，再 fallback 觀戰位。playing 階段保持只能坐觀戰位（PTCG 規則：對戰中不可中途接手）。</li>
+          <li><b>聊天室訊息</b>：<code>game/+page.svelte</code> L4143 <code>currentMap</code> 只含 <code>seat.role === &#39;spectator&#39;</code> 的座位 → 新玩家進對戰位 <code>role=player</code> 不會被加入 currentMap → 不發「加入觀戰」訊息 ✓ 本修法自動連帶解決，不需動聊天室邏輯。</li>
+          <li><b>影響面</b>：</li>
+          <li>　・第 1 個加入房間的玩家 → P1（房主已坐）→ 還是觀戰位...等等 P1 就是房主自己。新加入的會是 P2 對戰位（若空）→ 正確</li>
+          <li>　・第 2 個加入（已有 P2 但 P1 / P2 都坐了）→ 觀戰位 ✓</li>
+          <li>　・房主已在 P1，新玩家入房 → P2（對戰位）✓ Wilson 期望</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 只對調 lobby 階段順序，playing 階段 + 殘留座位邏輯 + 訊息系統皆不動）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.126</span> 🐛 補大宇怪進化鏈 evolvesFrom=小灰怪</summary>
         <ul>
           <li><b>Wilson 確認</b>：大宇怪由小灰怪進化。</li>

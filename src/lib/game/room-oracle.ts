@@ -138,13 +138,17 @@ export async function joinRoom(roomCode: string, guestName: string): Promise<Roo
       const newSeats = seats.map((s, i) => i === existingIdx ? { ...s, name: guestName } : s);
       return { ...cur, seats: newSeats, memberUids: computeMemberUids(newSeats) };
     }
-    // 找第一個空 spectator 位
+    // v5.127：lobby 階段優先填對戰位 P1/P2（同 room.ts 修法）
     let targetIdx = -1;
-    for (let i = 2; i < seats.length; i++) {
-      if (seats[i].uid === null) { targetIdx = i; break; }
-    }
-    if (targetIdx === -1 && cur.status === 'lobby') {
+    if (cur.status === 'lobby') {
+      // lobby：優先填 P1/P2
       for (let i = 0; i < 2; i++) {
+        if (seats[i].uid === null) { targetIdx = i; break; }
+      }
+    }
+    // 找第一個空觀戰位（lobby 對戰位都滿 / playing 階段才走此路）
+    if (targetIdx === -1) {
+      for (let i = 2; i < seats.length; i++) {
         if (seats[i].uid === null) { targetIdx = i; break; }
       }
     }
