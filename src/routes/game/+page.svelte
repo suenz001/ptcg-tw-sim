@@ -8899,8 +8899,13 @@
     box-shadow:0 2px 4px rgba(0,0,0,.5);
   }
   /* v5.097：化石丟棄按鈕也 absolute 浮層 */
+  /* v5.156：字體放大 — Wilson 反應原 .56rem 太小（繼承自 .evo-btn-sm L10105）。 */
   .playmat.layout-tabletop .bench-slot .evo-btn-sm.fossil-discard-btn{
     bottom:48px;
+    font-size:.82rem !important;
+    padding:.3rem .45rem !important;
+    font-weight:600;
+    min-height:28px;
   }
   /* v5.097：tool-chip / ab-used-chip / status-chip-sm 改 absolute 浮層
      tool-chip：在 hp-bar 上方

@@ -265,6 +265,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.156</span> 🐛 扣殺能量被 KO 漏觸發 + 化石丟棄按鈕放大</summary>
+        <ul>
+          <li><b>Wilson 截圖確認</b>：岩殿居蟹（附扣殺能量、薄霧能量、英雄斗篷）被巨金怪「金屬之錘」300 點傷害昏厥，**扣殺能量沒觸發** — log 無扣殺紀錄、攻擊方沒被 +20 反擊。</li>
+          <li><b>根因</b>：<code>engine.ts L5057</code> SPECIAL_ENERGY_ON_DAMAGED hook 在 <code>else if (!preventedKO)</code> 分支內（未 KO 才跑）。其他類似 hook 已有 KO 補觸發（<code>v5.080 punkReflect</code>、<code>v5.081 PASSIVE_RETALIATION + PASSIVE_ON_DAMAGED</code>），但 SPECIAL_ENERGY_ON_DAMAGED 漏補 → 扣殺能量 holder 被 KO 時不反擊。</li>
+          <li><b>卡面源</b>（MC #17208）：「附有這張卡的寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置 2 個傷害指示物」— 沒寫「未昏厥才觸發」限制，依 PTCG 規則 KO 也應觸發。</li>
+          <li><b>修法 1</b>：engine KO 分支補 SPECIAL_ENERGY_ON_DAMAGED 觸發（鏡射 v5.081 PASSIVE_ON_DAMAGED 模式）。從 <code>koInst.energyAttached</code> 抓 KO 前 snapshot iterate 觸發 hook。</li>
+
+          <li><b>UX 2 — 桌墊版化石丟棄按鈕放大</b>：Wilson「現在的太小了」。原 <code>.evo-btn-sm</code> 字體 <code>.56rem</code>（L10105）太小不好點。</li>
+          <li><b>修法 2</b>：<code>.fossil-discard-btn</code> 桌墊版 CSS 加 <code>font-size:.82rem + padding:.3rem .45rem + font-weight:600 + min-height:28px</code>（鏡射 ability-btn-sm v5.098 規格）。</li>
+
+          <li><b>同類保護</b>：未來其他「on damaged」反擊類特殊能量（若有）都受益於 KO 分支補觸發。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — KO 分支加 hook 觸發 + CSS 4 屬性放大）／15（PTCG 卡面 source of truth）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.155</span> 🐛 化石採掘場 filter + 扣殺能量多目標觸發</summary>
         <ul>
           <li><b>Bug 1 — 化石採掘場 modal 沒 filter</b>：Wilson「modal 要只顯示名稱含『陳舊的』物品卡」。</li>

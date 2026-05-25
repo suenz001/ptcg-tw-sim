@@ -5092,6 +5092,19 @@ function handlePlaying(
           if (fnOD) newState = fnOD(newState, dIdx, aIdx, pool, defenderCard);
         }
       }
+      // v5.156：SPECIAL_ENERGY_ON_DAMAGED 補 KO 觸發（鏡射 v5.080 / v5.081 模式）
+      //   Wilson 截圖確認：扣殺能量 holder 被 KO 時漏觸發 — 卡面「受到對手寶可夢
+      //   招式的傷害時」依 PTCG 規則含 KO 情境（卡面無「未昏厥」限制）。
+      //   原 L5057 SPECIAL_ENERGY_ON_DAMAGED 只在 else (!preventedKO) 分支跑，
+      //   holder 被 KO 時漏觸發。從 koInst.energyAttached 抓 KO 前 snapshot 觸發。
+      if (baseDamage > 0 && koInst && koInst.energyAttached.length > 0) {
+        for (const e of koInst.energyAttached) {
+          const ec = pool.get(e.cardId);
+          if (!ec) continue;
+          const fn = SPECIAL_ENERGY_ON_DAMAGED.get(ec.name);
+          if (fn) newState = fn(newState, dIdx, aIdx, baseDamage, pool);
+        }
+      }
       // v5.083：花岩怪|怨恨旋渦 field-wide — 「只要這隻寶可夢在場上」涵蓋備戰。
       //   既有 PASSIVE_RETALIATION 主 loop 只 scan defenderCard.abilities，
       //   花岩怪在備戰時觸發不到（玩家回報「完全沒觸發」）。
