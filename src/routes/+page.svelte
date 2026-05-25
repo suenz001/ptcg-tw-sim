@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.101</span> 🚨 接續 v5.100 救火：backtick 內仍有 raw &#123;&#125; 漏 escape</summary>
+        <ul>
+          <li><b>v5.100 Deploy 失敗</b>：vite-plugin-svelte build error。我 v5.100 的 escape script 保留了 backtick <code>&#96;...&#96;</code> 內的 <code>&#123;...&#125;</code>，但 Svelte template 不認 backtick — backtick 內的 <code>&#123;</code> 還是會被當 expression 解析。</li>
+          <li><b>修法</b>：拿掉 backtick protection rule，所有 raw <code>&#123;</code> <code>&#125;</code>（含 backtick 內）一律 escape 成 HTML entity。只保留 svelte syntax <code>&#123;#if&#125;</code> <code>&#123;@const&#125;</code> 等真正必要的。</li>
+          <li><b>Iron Rules</b>：Rule 1 確實執行（backtick 不算 escape）／Rule 11/11c／Rule 11e／Rule 11f。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.100</span> 🚨 救白畫面：changelog raw &#123;(i+1) * _stepOB&#125; 違反 Rule 1（再犯，已 audit）</summary>
         <ul>
           <li><b>根因確認</b>：v5.099 hard reset 後仍白畫面，截控制台 console 看 chunk <code>2.DJ8QhyCt.js</code> 是 <code>routes/+page.svelte</code> 編譯 chunk。fetch 線上 chunk 確認 — v5.098 我加的 changelog 這行：</li>
@@ -6115,7 +6124,7 @@ cost += gravityCount;</code></pre></li>
             <ul>
               <li>touchmove 在「<code>.mp</code> 外（瀏覽器邊界區）」或「非 scrollable 內部」全部 <code>preventDefault</code></li>
               <li>scrollable 內部（<code>.mp-row / .mp-hand / .mp-log / .mp-chips / .mp-sheet</code>）+ modal overlay 區放行，內部捲動正常</li>
-              <li><code>&#123;`{passive: false}`&#125;</code> 確保 preventDefault 有效</li>
+              <li><code>&#123;`&#123;passive: false&#125;`&#125;</code> 確保 preventDefault 有效</li>
             </ul>
           </li>
           <li><b>限制</b>：iOS Safari pull-to-refresh 無法 100% 禁用（瀏覽器層級行為）— 只能用 JS 強化擋。最徹底的方案是讓使用者把網站<b>加到 iPhone 主畫面</b>（成為 PWA standalone mode），那時沒有任何瀏覽器 chrome，完全沒下拉刷新。</li>
@@ -6274,7 +6283,7 @@ cost += gravityCount;</code></pre></li>
           <li><b>根因</b>：原本 3 個格式 regex（mId / mFull / mSimple）全都要求 <code>^(\d+)\s+...</code> 開頭數字。漏「張數」的行三個都不匹配 → 落到 <code>errors.push('無法解析：...')</code>。</li>
           <li><b>修法</b>：
             <ul>
-              <li><b>新增 Format D</b>「&#123;`{name} {setCode} {collectorNumber}`&#125;」regex，<b>允許無張數</b>。匹配後預設 count=1 + 加入 ambiguities 警示「自動補 1 張，匯入後請手動調整數量」</li>
+              <li><b>新增 Format D</b>「&#123;`&#123;name&#125; &#123;setCode&#125; &#123;collectorNumber&#125;`&#125;」regex，<b>允許無張數</b>。匹配後預設 count=1 + 加入 ambiguities 警示「自動補 1 張，匯入後請手動調整數量」</li>
               <li>order：mId → mFull → mSimple → mNoCount（最後 fallback，避免吃到正常含張數的格式）</li>
               <li>error message 改成具體提示：<code>無法解析：「&#123;line&#125;」 → 每行需以「張數」開頭，例如：4 呱呱泡蛙 M-P-J 089/M-P</code></li>
             </ul>
@@ -6540,7 +6549,7 @@ cost += gravityCount;</code></pre></li>
         <ul>
           <li>玩家回報：呱呱泡蛙從手牌放到備戰區 → 衝浪海灘把它換到戰鬥場 → 居然可以進化（違規）。</li>
           <li><b>PTCG 規則</b>：當回合從手牌打出的寶可夢，無論在備戰區或戰鬥場都不能進化（活力森林等特殊條件除外）。</li>
-          <li><b>根因</b>：多處「純位置交換」程式碼用 <code>&#123;`{...bench[idx], justPlaced:false, playedFromHand:false}`&#125;</code> 硬清旗標，等同把「本回合進場」狀態洗掉，繞過進化 gate。</li>
+          <li><b>根因</b>：多處「純位置交換」程式碼用 <code>&#123;`&#123;...bench[idx], justPlaced:false, playedFromHand:false&#125;`&#125;</code> 硬清旗標，等同把「本回合進場」狀態洗掉，繞過進化 gate。</li>
           <li><b>系統性修法</b>：審視全 codebase，找出 9 處同樣 pattern bug，全部改為保留原始旗標（純位置交換不該動 justPlaced / playedFromHand）：
             <ul>
               <li><code>stadiums.ts</code>：衝浪海灘 surf-beach-swap</li>
