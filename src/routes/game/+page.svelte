@@ -8382,9 +8382,22 @@
   }
 
   /* === action-bar children — Stadium 跨兩 row（centerline align）=== */
+  /* v5.129：桌墊版 stadium 加 max-height + 縮小 img — 避免場地卡上場後撐大父 row
+     讓上下版面框架保持穩定 */
   .playmat.layout-tabletop .action-bar > .stadium-display{
     grid-area:stadium; grid-row:2 / span 2; align-self:center; justify-self:center;
-    max-width:120px;
+    max-width:96px; max-height:138px;  /* v5.129: 鎖死高度 */
+    padding:.18rem .25rem; gap:.12rem;
+    overflow:hidden;
+  }
+  .playmat.layout-tabletop .action-bar > .stadium-display img{
+    width:64px;  /* v5.129: 92→64，縮小不撐大 */
+  }
+  .playmat.layout-tabletop .action-bar > .stadium-display .stadium-display-label{
+    font-size:.62rem;
+  }
+  .playmat.layout-tabletop .action-bar > .stadium-display .stadium-display-name{
+    font-size:.66rem; max-width:90px;
   }
   .playmat.layout-tabletop .action-bar > .action-btns{
     grid-area:actions; align-self:center; justify-self:center;
@@ -9379,11 +9392,15 @@
   .prize-card.my-prize{ background:linear-gradient(135deg,#2a6a1a,#3a8a2a); border-color:#5aaa4a; }
   .prize-card.prize-gone{ background:transparent; border-color:#2a3a2a; opacity:.25; animation:none !important; }
   /* 獎賞卡放置動畫：從上方 fly-in + rotate + scale，by animation-delay 錯開 */
-  .prize-card.prize-anim{ animation:prize-deal .45s cubic-bezier(.2,.9,.35,1.15) both; transform-origin:center; }
+  /* v5.129：獎賞卡動畫差別化 — 跟一般發牌（draw-fly）區隔
+     改 1.2s + 大 zoom + rotate 360°，並加金色 glow 凸顯特殊性 */
+  .prize-card.prize-anim{ animation:prize-deal 1.2s cubic-bezier(.2,.9,.35,1.15) both; transform-origin:center; }
   @keyframes prize-deal{
-    0%{ transform:translate(-60px,-40px) rotate(-18deg) scale(.5); opacity:0; box-shadow:0 8px 16px rgba(0,0,0,.6); }
-    60%{ transform:translate(2px,3px) rotate(4deg) scale(1.05); opacity:1; box-shadow:0 4px 10px rgba(0,0,0,.55); }
-    100%{ transform:none; opacity:1; box-shadow:none; }
+    0%   { transform:scale(0) rotate(0deg); opacity:0; box-shadow:0 0 0 rgba(255,215,0,0); }
+    25%  { transform:scale(2.4) rotate(180deg); opacity:1; box-shadow:0 0 30px rgba(255,215,0,.9); }
+    55%  { transform:scale(2.0) rotate(360deg); opacity:1; box-shadow:0 0 36px rgba(255,215,0,.7); }
+    85%  { transform:scale(1.18) rotate(360deg); opacity:1; box-shadow:0 0 14px rgba(255,215,0,.4); }
+    100% { transform:none; opacity:1; box-shadow:none; }
   }
   .zone-label-sm{ font-size:.62rem; color:#888; text-align:center; white-space:nowrap; }
   .opp-label{ color:#aa8888; }
@@ -10667,8 +10684,19 @@
   .stadium-chip{ background:#1a2a4a; color:#88aaff; border-color:#3a5a8a; }
   .clickable-chip{ cursor:pointer; font-family:inherit; }
   .clickable-chip:hover{ background:#2a3a5a; color:#fff; }
-  .btn-act.stadium-btn{ background:#1a2a4a; color:#88aaff; border:1px solid #3a5a8a; }
-  .btn-act.stadium-btn:hover{ background:#2a3a6a; }
+  /* v5.129：原 #1a2a4a 深藍底+淺藍字視覺像 disabled，玩家以為不可按。
+     改鮮明青藍漸層 + 白字 + glow，辨識「可用」；hover 更鮮 */
+  .btn-act.stadium-btn{
+    background:linear-gradient(180deg, #3b82f6, #2563eb);
+    color:#fff;
+    border:1px solid #60a5fa;
+    box-shadow:0 0 8px rgba(96, 165, 250, 0.45);
+    font-weight:600;
+  }
+  .btn-act.stadium-btn:hover{
+    background:linear-gradient(180deg, #60a5fa, #3b82f6);
+    box-shadow:0 0 14px rgba(96, 165, 250, 0.75);
+  }
 
   /* ── 特性按鈕 ── */
   .ability-btn{ display:block; width:100%; margin-top:.2rem; padding:.2rem .3rem; font-size:.65rem; background:#3a1a5a; color:#e0a0ff; border:1px solid #7a4aaa; border-radius:4px; cursor:pointer; text-align:center; }

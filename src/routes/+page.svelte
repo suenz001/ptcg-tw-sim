@@ -265,6 +265,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.129</span> 🎨 4 個玩家提議：桌墊版場地卡 / 棄牌區圖片 / 場地按鈕亮 / 獎賞動畫</summary>
+        <ul>
+          <li><b>玩家提議 1</b>：桌墊版加入場地卡後撐大上下版面，要求保持框架穩定</li>
+          <li><b>修法</b>：<code>.playmat.layout-tabletop .stadium-display</code> 加 <code>max-height:138px</code> + <code>overflow:hidden</code>；img <code>92→64px</code>；padding/font-size 縮小。場地卡上場/換場時不再撐大父 row。</li>
+
+          <li><b>玩家提議 2</b>：手機版棄牌區改成圖片 + 數字（截圖示意）</li>
+          <li><b>修法</b>：v5.128 文字 list 改成 <code>grid auto-fill 78px</code>，每格顯示卡圖縮圖 + 右下角紅色 ×N badge（白邊框 + drop shadow 凸顯）。tap cell 仍打開放大查看。</li>
+
+          <li><b>玩家提議 3</b>：場地卡按鈕視覺像 disabled（深藍底淺藍字），可用時應該亮才對</li>
+          <li><b>修法</b>：<code>.btn-act.stadium-btn</code> 原 <code>background:#1a2a4a; color:#88aaff</code> 太暗。改 <code>linear-gradient(180deg, #3b82f6, #2563eb)</code> 鮮藍漸層 + 白字 + glow box-shadow。hover 更鮮。</li>
+
+          <li><b>玩家提議 4</b>：獎賞卡發牌動畫要跟一般發牌差別化（飛中央、變大、轉一轉、再回原位）</li>
+          <li><b>修法</b>：<code>@keyframes prize-deal</code> 改 <code>1.2s</code>（0.45s→1.2s）+ <code>scale 2.4 → rotate 360deg</code> + 金色 glow（rgba(255,215,0)）。差別化於 v5.049 牌庫→手牌的 <code>draw-fly</code> 動畫。</li>
+
+          <li><b>pre-check</b>：本機 svelte.compile 預先驗證 changelog + MobilePortraitBattle + game/+page.svelte，3 個檔案皆通過再 push（從 v5.122 起的標準流程）。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 共 5 處 exact-match）／14（最小 patch — 純 CSS / template，不動 game logic）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.128</span> 🎨 手機版棄牌區合併同名卡（v5.120 revert 後重做 — script helper 版）</summary>
         <ul>
           <li><b>玩家再次提議</b>：手機版垃圾桶 icon 點開後應該合併相同卡名與數量，方便檢索。</li>

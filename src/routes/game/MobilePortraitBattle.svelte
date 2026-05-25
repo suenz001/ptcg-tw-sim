@@ -1057,13 +1057,18 @@
         {/each}
       {:else if sheet.type === 'discard'}
         <div class="mp-sheet-title">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
-        <div class="mp-discard-list">
+        <!-- v5.129：改 grid 顯示「卡圖縮圖 + 右下角紅色數字」，更易檢索 -->
+        <div class="mp-discard-grid">
           {#each groupDiscardList(sheet.list) as g (g.cardId)}
-            <div class="mp-discard-row">
-              <span class="mp-discard-name">{g.name}{g.count > 1 ? ` ×${g.count}` : ''}</span>
-              <span class="mp-discard-type">{g.supertype === 'Pokemon' ? '🐾' : g.supertype === 'Energy' ? '⚡' : '🃏'}</span>
-              <button class="mp-discard-zoom" onclick={() => { closeSheet(); onOpenZoom(g.cardId, g.inst); }} title="放大查看">🔍</button>
-            </div>
+            {@const gc = pool.get(g.cardId)}
+            <button class="mp-discard-cell" onclick={() => { closeSheet(); onOpenZoom(g.cardId, g.inst); }} title="放大查看 {g.name}">
+              {#if gc?.imageUrl}
+                <img src={gc.imageUrl} alt={g.name} class="mp-discard-img"/>
+              {:else}
+                <div class="mp-discard-placeholder">{g.name}</div>
+              {/if}
+              <span class="mp-discard-count">×{g.count}</span>
+            </button>
           {/each}
         </div>
       {/if}
@@ -1567,7 +1572,67 @@
     margin-top: 0.3rem;
   }
 
-  /* v2.297：棄牌區清單 sheet */
+  /* v5.129：棄牌區 grid（圖片 + 右下角數字 badge）— 取代既有 list 為主視覺
+     舊 .mp-discard-list 樣式保留為 fallback（罕用） */
+  .mp-discard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+    gap: 6px;
+    padding: 4px;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .mp-discard-cell {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid #444;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    aspect-ratio: 5 / 7;
+  }
+  .mp-discard-cell:active {
+    background: rgba(255, 255, 255, 0.15);
+  }
+  .mp-discard-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .mp-discard-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: #ccc;
+    font-size: 0.7rem;
+    padding: 4px;
+    text-align: center;
+  }
+  /* 右下角紅色大數字 badge */
+  .mp-discard-count {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    background: rgba(220, 38, 38, 0.95);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 800;
+    padding: 1px 8px;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    min-width: 28px;
+    text-align: center;
+    line-height: 1.1;
+  }
+
+  /* v2.297：棄牌區清單 sheet — 舊樣式保留 fallback */
   .mp-discard-list {
     display: flex; flex-direction: column;
     gap: 2px;
