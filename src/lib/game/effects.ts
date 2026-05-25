@@ -8277,7 +8277,36 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       s = addLog(s, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
       continue;
     }
-    const newDmg = target.damage + dmg;
+    // v5.153：active 補套 weakness/resistance/猛攻手鐲等攻擊方 tool（卡面註解「備戰區不計
+    //   弱點抵抗力」暗示戰鬥場要計算）。Wilson 回報耀閃挑戰學三重冰霜對 ex 沒算 +30。
+    let effDmg = dmg;
+    if (isActive) {
+      const attacker = s.players[actorIdx].active;
+      const attackerCard = attacker ? pool.get(attacker.cardId) : null;
+      // weakness ×2
+      if (attackerCard?.pokemonType && targetCard?.weakness?.type
+          && attackerCard.pokemonType === targetCard.weakness.type) {
+        effDmg *= 2;
+      }
+      // resistance（通常 -30）
+      if (attackerCard?.pokemonType && targetCard?.resistance?.type
+          && attackerCard.pokemonType === targetCard.resistance.type) {
+        const rv = parseInt(String(targetCard.resistance.value ?? '0').replace(/[^-\d]/g, ''), 10);
+        if (!isNaN(rv)) effDmg = Math.max(0, effDmg + rv);  // resistance.value 是負數
+      }
+      // TOOL_ATTACK_BONUS（猛攻手鐲等）— iterate 攻擊方所有道具
+      if (attacker && attackerCard) {
+        for (const t of getAllAttachedTools(attacker)) {
+          const atkTool = pool.get(t.cardId);
+          if (!atkTool) continue;
+          const fn = TOOL_ATTACK_BONUS.get(atkTool.name);
+          if (!fn) continue;
+          const bonus = fn(attackerCard, attacker, targetCard ?? attackerCard, target);
+          if (bonus > 0) effDmg += bonus;
+        }
+      }
+    }
+    const newDmg = target.damage + effDmg;
     const hp = effectiveHPInline(target, pool, st);  // v5.091
     if (hp > 0 && newDmg >= hp) {
       const ko: CardInstance[] = [
@@ -8301,7 +8330,7 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       if (isActive) newDefender.active = { ...target, damage: newDmg };
       else newDefender.bench = defender.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
       players[dIdx] = newDefender;
-      s = addLog({ ...s, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${dmg} 傷害`, actorIdx);
+      s = addLog({ ...s, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害`, actorIdx);
     }
   }
   // 檢查 KO 後的狀態
@@ -12875,6 +12904,27 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
         && targetCard?.weakness?.type
         && attackerCard.pokemonType === targetCard.weakness.type) {
       dmg *= 2;
+    }
+    // v5.153：active 補套 resistance + 攻擊方 tool（猛攻手鐲）
+    //   Wilson 回報多目標招式對戰鬥場 ex 沒算 +30。
+    if (isActive) {
+      // resistance（通常 -30）
+      if (attackerCard?.pokemonType && targetCard?.resistance?.type
+          && attackerCard.pokemonType === targetCard.resistance.type) {
+        const rv = parseInt(String(targetCard.resistance.value ?? '0').replace(/[^-\d]/g, ''), 10);
+        if (!isNaN(rv)) dmg = Math.max(0, dmg + rv);
+      }
+      // TOOL_ATTACK_BONUS — iterate 攻擊方所有道具
+      if (attacker && attackerCard) {
+        for (const t of getAllAttachedTools(attacker)) {
+          const atkTool = pool.get(t.cardId);
+          if (!atkTool) continue;
+          const fn = TOOL_ATTACK_BONUS.get(atkTool.name);
+          if (!fn) continue;
+          const bonus = fn(attackerCard, attacker, targetCard ?? attackerCard, target);
+          if (bonus > 0) dmg += bonus;
+        }
+      }
     }
     // v5.066：龐克頭盔反擊 — 戰鬥場且 target 為【惡】寶可夢且附「龐克頭盔」
     //   卡面只在「戰鬥場」觸發（備戰位不算），故僅 isActive 走此分支。

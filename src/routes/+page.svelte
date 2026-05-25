@@ -265,6 +265,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.153</span> 🐛 多目標招式 active 補套弱抗+猛攻手鐲</summary>
+        <ul>
+          <li><b>Wilson 回報</b>：呆呆王｜耀閃挑戰 學三重冰霜，對對手戰鬥場 ex 沒算到猛攻手鐲 +30，也沒算屬性相剋（弱抗）。</li>
+          <li><b>Audit 結果</b>（卡面 source of truth）：所有「對 N 隻寶可夢各 X 傷害」多目標招式（三重冰霜/分身連打/激流水泵/雙刃劍/出奇一擊/音波拆裂/幽靈拳）都有同樣註解：「[在備戰區不計算弱點・抵抗力。]」— 暗示**戰鬥場要計算**。</li>
+          <li><b>實作分析</b>：</li>
+          <li>　・<code>snipe-multi</code> resolver (effects.ts L8182)：完全沒套 mod。用於：三重冰霜、雙刃劍、出奇一擊。</li>
+          <li>　・<code>clone-strike-multi-hit</code> resolver (effects.ts L12768)：有套 weakness ×2 + 龐克頭盔反擊，但**沒套 TOOL_ATTACK_BONUS / resistance**。用於：分身連打、激流水泵、音波拆裂。</li>
+          <li><b>修法</b>（兩個 resolver active target 補套，bench 不動）：</li>
+          <li>　・<code>snipe-multi</code>: active 補 weakness ×2 + resistance + <code>TOOL_ATTACK_BONUS</code>（猛攻手鐲等）</li>
+          <li>　・<code>clone-strike-multi-hit</code>: active 補 resistance + <code>TOOL_ATTACK_BONUS</code>（weakness 已有不動）</li>
+          <li><b>N 的索羅亞克ex｜暗黑底牌</b>：學備戰寶可夢招式，走主 engine path → 已套全部 mod，不在本次範圍。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 3 處 exact-match）／14（最小 patch — 兩個 resolver 加 mod inline）／15（卡面註解 source of truth）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.152</span> 🐛 撤回 v5.125 錯誤的脫殼忍者進化鏈 (AI 幻覺糾正)</summary>
         <ul>
           <li><b>Wilson 怒</b>：「系統弄反 — 把土居忍士被視為進化、脫殼忍者被視為基礎，請依鐵律處理，務必以 static/cards 敘述為準」</li>
