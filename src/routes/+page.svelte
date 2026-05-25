@@ -265,6 +265,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.096</span> 🐛 萬花筒華爾滋能量強制附自身 + 虛無歸零漏算力量蛋白飲 +30</summary>
+        <ul>
+          <li><b>Bug 1 — 超級差不多娃娃ex｜萬花筒華爾滋 從牌庫選的基本能量只附自己 active（玩家回報）</b></li>
+          <li>　・<b>卡面</b>：「擲 3 次硬幣，從自己的牌庫選擇最多正面次數×2 張相同數量的基本能量卡，<b>以任意方式附於自己的寶可夢身上</b>」</li>
+          <li>　・「自己的寶可夢」= active 或備戰任一隻（玩家自選分配），不是只 active</li>
+          <li>　・<b>根因</b>：<code>v2349_j_mark_batch.ts L184-188</code> 用內部 helper <code>attachBasicEnergyFromDeckToActive</code> 強制全附 active</li>
+          <li>　・<b>修法</b>：改用 v2.158 <code>startEnergyChain</code>（玩家逐張選目標 picker）— <code>source:&apos;deck&apos;</code>, <code>scope:&apos;any-own&apos;</code>, <code>filterType:&apos;Any&apos;</code>。先從牌庫挑前 N 張基本能量，後續玩家依次選每張要附給誰</li>
+
+          <li><b>Bug 2 — 超級基格爾德ex｜虛無歸零 對手戰鬥位漏算力量蛋白飲 +30（玩家回報，依官方 QA）</b></li>
+          <li>　・<b>卡面</b>：「對手的所有寶可夢各自擲 1 次硬幣，所有出現正面的寶可夢各受到 150 點傷害」</li>
+          <li>　・<b>官方 QA Q4</b>：「使用力量蛋白飲 的回合，使用虛無歸零，對戰鬥寶可夢擲正面 → +30」<b>會 +30</b>；對備戰寶可夢不 +30（力量蛋白飲只生效於對戰鬥寶可夢的傷害）</li>
+          <li>　・<b>官方 QA Q2</b>：對戰鬥寶可夢「也要擲硬幣」（非自動命中，仍走擲幣機率）— 既有實作正確</li>
+          <li>　・<b>官方 QA Q1</b>：擲幣**前**就要 declare target = 對手戰鬥寶可夢（PTCG 規則層面，與既有 UI dispatch 一致）</li>
+          <li>　・<b>根因</b>：<code>v2349_j_mark_batch.ts L46-75 damageAllOppByCoin</code> 所有目標固定 150 傷害，沒分 active/bench，沒套用 <code>damageBoostFightingThisTurn</code>（力量蛋白飲累計 boost）</li>
+          <li>　・<b>修法</b>：function 內讀 <code>attackerCard?.pokemonType === &apos;Fighting&apos; &amp;&amp; state.players[aIdx].damageBoostFightingThisTurn</code> 取 boost；loop 內每隻擲幣後，<code>isActiveTarget</code> 為 true 才把 <code>finalAmount = 150 + boost</code>，bench 維持 150</li>
+
+          <li><b>實際影響</b>：</li>
+          <li>　・萬花筒華爾滋：可挑選附給備戰隊友（之前 100% 附自己 active）— 開新 picker 流程</li>
+          <li>　・虛無歸零：用過力量蛋白飲後，對手戰鬥位正面 → 180 傷害（150+30）；備戰仍 150；不影響卡面其他規則</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 v2349 + version + changelog）／Rule 14（最小 patch — 改 helper 兩 callsite 不動其他）／Rule 15（卡面 source of truth + 引用官方 QA）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.095</span> 🔧 game/+page.svelte 完全 hard reset 到 v5.092 byte-identical（修 CDN/browser 殘留樣式問題）</summary>
         <ul>
           <li><b>玩家回報</b>：v5.094 仍覺得「備戰區和戰鬥場間隔距離拉超大」，要求復原到 v5.092 狀態。</li>
