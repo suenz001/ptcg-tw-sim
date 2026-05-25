@@ -148,16 +148,23 @@ export function getAIAction(
       const mainAttackers = findMainAttackers(allMyPokemon, null, pool);
       // 過濾「能量已滿」的主打手（避免無謂堆能量）
       const needyMains = mainAttackers.filter(inst => {
+        // v5.151：朽木妖|詛咒根等鎖能量招式設 cantAttachEnergyThisTurn → 過濾，避免 AI 無限 retry
+        if (inst.cantAttachEnergyThisTurn) return false;
         const card = pool.get(inst.cardId);
         if (!card?.attacks?.length) return false;
         const maxCost = Math.max(...card.attacks.map(a => a.cost?.length ?? 0));
         return inst.energyAttached.length < maxCost;
       });
       // 目標：能量最少的主打手 / fallback active
-      const target: CardInstance = needyMains.length > 0
+      // v5.151：fallback active 若被鎖能量，視為無 needy target，跳過 attach
+      const fallbackActive = player.active && !player.active.cantAttachEnergyThisTurn ? player.active : null;
+      const target: CardInstance | null = needyMains.length > 0
         ? needyMains.reduce((min, c) =>
             c.energyAttached.length < min.energyAttached.length ? c : min)
-        : player.active;
+        : fallbackActive;
+      if (!target) {
+        // v5.151：找不到合法 attach target（active 被鎖+無 needy bench）→ 跳出 attach 邏輯進 trainer
+      } else {
       const targetCard = pool.get(target.cardId);
       const targetType = targetCard?.pokemonType;
       // 从手牌中找能量：有匹配属性优先，否则随便拿一张
@@ -172,6 +179,7 @@ export function getAIAction(
       if (energyInHand) {
         return { type: 'ATTACH_ENERGY', energyIid: energyInHand.iid, targetIid: target.iid };
       }
+      } // v5.151: close target null check else block
     }
     } // close non-dragapult else
   }
@@ -1110,6 +1118,7 @@ function dragapultEnergyAction(
         ...allMine.filter(p => pool.get(p.cardId)?.name === '多龍奇'),
       ];
       for (const t of dragons) {
+        if (t.cantAttachEnergyThisTurn) continue;  // v5.151 詛咒根等鎖能量
         const f = countOn(t, 'Fire'), p = countOn(t, 'Psychic');
         if (f >= 1 && p >= 1) continue; // 已滿 1F+1P
         if (isFire && f < 1) return { type: 'ATTACH_ENERGY', energyIid: eInst.iid, targetIid: t.iid };
@@ -1119,6 +1128,7 @@ function dragapultEnergyAction(
       // 惡 → 願增猿（1 顆即可，腎上腺腦力觸發條件）
       for (const t of allMine) {
         if (pool.get(t.cardId)?.name !== '願增猿') continue;
+        if (t.cantAttachEnergyThisTurn) continue;  // v5.151 詛咒根等鎖能量
         if (countOn(t, 'Darkness') >= 1) continue;
         return { type: 'ATTACH_ENERGY', energyIid: eInst.iid, targetIid: t.iid };
       }
@@ -1127,8 +1137,10 @@ function dragapultEnergyAction(
 
   // v3.71 P2b fallback：多龍巴魯托ex 在 active 且能量 0 → 附任意能量打噴射頭擊 (1C, 70)
   //   情境：剛上場 active；手上只有 C 能量。不附 = 空在 active；附 1 顆 = 至少 70 點輸出。
+  //   v5.151：active 被鎖能量（詛咒根等）→ skip 防無限 retry
   if (player.active && pool.get(player.active.cardId)?.name === '多龍巴魯托ex'
       && player.active.energyAttached.length === 0
+      && !player.active.cantAttachEnergyThisTurn
       && energies.length > 0) {
     return { type: 'ATTACH_ENERGY', energyIid: energies[0].iid, targetIid: player.active.iid };
   }

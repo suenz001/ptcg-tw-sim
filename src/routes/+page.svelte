@@ -265,6 +265,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.151</span> 🐛 朽木妖｜詛咒根後 AI 卡死修正</summary>
+        <ul>
+          <li><b>Wilson 回報</b>：朽木妖使用招式「詛咒根」後，對方 AI 經常卡掉。</li>
+          <li><b>卡面 source of truth</b>（M4.json #18459）：朽木妖｜詛咒根：cost=[Psychic] 30 傷。「在下個對手的回合，受到這個招式的寶可夢，無法附上從手牌使出的能量卡」。</li>
+          <li><b>現有實作 audit</b>：</li>
+          <li>　・✓ effect 已實裝（v2353_j_mark_batch.ts L421-435）：設 <code>cantAttachEnergyNextTurn:true</code> 在對方 active</li>
+          <li>　・✓ engine ATTACH_ENERGY gate 已存在（engine.ts L3503）：<code>if (target.cantAttachEnergyThisTurn) return state;</code></li>
+          <li>　・✓ engine end-turn promote（L6325）：<code>cantAttachEnergyNextTurn → ThisTurn</code></li>
+          <li>　・✗ <b>AI 沒檢查此 flag</b> — 5 處 ATTACH_ENERGY return 點都沒過濾</li>
+          <li><b>根因</b>：AI 送 ATTACH_ENERGY → engine reject（return state 沒 addLog） → state 引用不變 → $effect 不 trigger，但 tickAI 內 scheduleAI() 不論結果都 call → tickAI 再叫 getAIAction → 同樣 ATTACH_ENERGY → 無限 loop。</li>
+          <li><b>修法</b>（ai.ts 5 處 ATTACH_ENERGY 加 filter）：</li>
+          <li>　・主邏輯 needyMains filter 加 <code>!inst.cantAttachEnergyThisTurn</code>，fallback active 同 check</li>
+          <li>　・多龍 dragons loop：<code>if (t.cantAttachEnergyThisTurn) continue</code></li>
+          <li>　・願增猿 loop：同</li>
+          <li>　・多龍巴魯托ex fallback：<code>!player.active.cantAttachEnergyThisTurn</code></li>
+
+          <li><b>同類招式 audit</b>：晶光花｜侵蝕碎塊（cantAttachEnergyThisTurn 同 flag）也屬此修法保護範圍。其他「鎖對手能量」招式如有都受益。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 5 處 exact-match）／14（最小 patch — 純加 filter，不重構）／15（卡面 + engine flag 設計 source of truth）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.150</span> 🗑 刪除 active-card 卡圖下方空白</summary>
         <ul>
           <li><b>Wilson 怒</b>：「卡片下方有一大片空白占用版面，造成無法以網頁的一頁來顯示」 — 對方戰鬥寶可夢也比照辦理。</li>
