@@ -6336,6 +6336,7 @@
             class:draggable={dragKind!==null}
             class:hover-peek={hoverHandIid===inst.iid}
             class:arriving={arrivingIids.has(inst.iid)}
+            class:just-arrived={justArrivedIids.has(inst.iid)}
             style="--fan-rot:{rot}deg;--fan-lift:{liftY}px;"
             in:fly={{ x: 220, y: -40, duration: game?.phase === 'setup' ? 480 : 220, delay: (game?.phase === 'setup' ? i * 150 : i * 40), easing: cubicOut }}
             out:fly={{ y: -220, duration: 220, easing: cubicOut }}

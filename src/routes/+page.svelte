@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.117</span> 🔧 Hotfix v5.116 抽牌 just-arrived halo 沒套用</summary>
+        <ul>
+          <li><b>v5.116 漏補</b>：patch_v5116 自動補 hand-card class binding 的 regex 沒匹配（既有 binding 跨多行寫法 pattern 不同），導致 <code>class:just-arrived</code> 沒加到 hand-card 上 → halo 動畫 CSS 寫好但沒元素套用 → 抽牌動畫加強沒效果。</li>
+          <li><b>修法</b>：直接 Edit 在 L6338 <code>class:arriving</code> 後補一行 <code>class:just-arrived</code>。其他 v5.116 改動（duration 拉長 / state / CSS keyframes / cleanup timer）已正確套用。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（1 處 exact-match）／14（1 行補丁）／1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.116</span> 🎨 5 玩家優化：等待開戰標籤 / 觀戰開關 host-only / 手機觀戰 read-only / 棄牌區合併 / 抽牌動畫加強</summary>
         <ul>
           <li><b>玩家提出 5 個優化建議</b>：</li>
