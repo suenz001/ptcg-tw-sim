@@ -265,6 +265,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.097</span> 🎨 桌墊版 bench-slot 卡圖放大到框架尺寸（特性按鈕 absolute 浮層）</summary>
+        <ul>
+          <li><b>Wilson 想法</b>（v5.093~v5.095 撤回後新方向）：卡圖直接放大到 bench-slot 框架尺寸，HP bar / 特性按鈕 / 進化按鈕 / 化石丟棄按鈕全部仿 v5.030 <code>bench-name</code>/<code>bench-stat</code> 的 absolute pattern 浮在卡圖上層。layout 框架不變、卡圖視覺最大化、可點按鈕仍在原位置。</li>
+
+          <li><b>修法（純 CSS override 桌墊版專用）</b>：</li>
+          <li>　1. <code>.bench-middle</code> 改 <code>position:absolute; inset:0</code> 撐滿 bench-slot 整個框架（之前是 flex 內中央區）</li>
+          <li>　2. <code>.bench-middle &gt; img</code> 改 <code>height:100% width:auto object-fit:contain</code>（保比例最大化撐滿）</li>
+          <li>　3. <code>.hp-bar-wrap</code> 改 <code>absolute bottom:4px z-index:200</code></li>
+          <li>　4. <code>.ability-btn-sm</code> 改 <code>absolute bottom:22px z-index:201</code>（高過 hp-bar，可點擊）</li>
+          <li>　5. <code>.evo-btn-sm</code> 改 <code>absolute bottom:48px z-index:201</code></li>
+          <li>　6. <code>.tool-chip.sm</code> 改 <code>absolute bottom:38px</code>；<code>.ab-used-chip.sm</code> 右上角；<code>.status-chip-sm</code> 左上角；<code>.attach-hint</code> 卡圖正中央</li>
+
+          <li><b>不動</b>：</li>
+          <li>　・<code>bench-slot</code> base <code>height:205px</code> 不變（框架尺寸 / row 高度不變）</li>
+          <li>　・<code>zone-bench zoom:0.65</code> 不變（整體比例不變，1366×768 不會撐爆 viewport）</li>
+          <li>　・<code>bench-name</code> / <code>bench-stat</code> 既有 absolute 不動</li>
+
+          <li><b>實際影響</b>：</li>
+          <li>　・桌墊版備戰寶可夢卡圖視覺面積 ~+40%（原本只佔上半 ~60%，現佔滿框架 ~95%）</li>
+          <li>　・所有按鈕原位置不變（hp-bar 底部 / 特性按鈕底部上方）</li>
+          <li>　・bench-slot height:205px / zoom 0.65 不變 → 不會撐爆 viewport，手牌仍在原位置</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + version + changelog）／Rule 14（最小 patch — 純 CSS override 桌墊版 scope，無 HTML 結構改動）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.096</span> 🐛 萬花筒華爾滋能量強制附自身 + 虛無歸零漏算力量蛋白飲 +30</summary>
         <ul>
           <li><b>Bug 1 — 超級差不多娃娃ex｜萬花筒華爾滋 從牌庫選的基本能量只附自己 active（玩家回報）</b></li>

@@ -8433,15 +8433,24 @@
   .playmat.layout-tabletop .opponent-row .bench-slot{
     height: 155px !important;
   }
+  /* v5.097：bench-middle 撐滿整個 bench-slot 框架，卡圖跟著 height:100% 最大化。
+     原本 (v5.030 之前) bench-middle 是 flex 內中央區，留下方 HP bar/特性按鈕空間。
+     改成所有按鈕都 absolute 浮層 → bench-middle 可獨佔整 slot，卡圖視覺最大化。 */
   .playmat.layout-tabletop .bench-slot .bench-middle{
     display:grid; place-items:center;
-    position:relative; overflow:visible;
+    position:absolute; inset:0;        /* v5.097: 撐滿 bench-slot */
+    overflow:visible;
   }
   .playmat.layout-tabletop .bench-slot .bench-middle > img,
   .playmat.layout-tabletop .bench-slot .bench-middle > .att-card-stack{
     grid-column:1; grid-row:1;  /* 同 cell 重疊 */
   }
-  .playmat.layout-tabletop .bench-slot .bench-middle img{ z-index:99; }
+  .playmat.layout-tabletop .bench-slot .bench-middle img{
+    z-index:99;
+    /* v5.097: 卡圖放大到 slot 高度，object-fit:contain 保比例不變形 */
+    height:100%; width:auto; max-width:100%; max-height:100%;
+    object-fit:contain;
+  }
   .playmat.layout-tabletop .bench-slot .att-card-stack{
     position:relative;
     width:100%; max-width:108px; height:128px;
@@ -8536,18 +8545,70 @@
     background:rgba(0,0,0,.82); border-radius:3px;
     padding:2px 6px;
   }
-  /* bench hp-bar 仍在 slot 底部、保持 z-index 高（不被 attached 蓋） */
+  /* v5.097：bench hp-bar 改 absolute 浮在 slot 底部（讓 bench-middle 卡圖撐滿） */
   .playmat.layout-tabletop .bench-slot > .hp-bar-wrap{
-    position:relative; z-index:200;
+    position:absolute; left:4px; right:4px; bottom:4px;
+    z-index:200;
   }
 
-  /* === v5.038 ability-btn-sm 在桌墊版備戰區放大（玩家回報太小不好點） === */
+  /* === v5.038 ability-btn-sm 在桌墊版備戰區放大；v5.097 改 absolute 浮層 ===
+     v5.097：原本 flow 內占空間 → 改 absolute 浮在卡圖底部上方（仿 bench-name/bench-stat
+     pattern），不再撐高 bench-slot；bench-middle 卡圖可撐滿整個框架。 */
   .playmat.layout-tabletop .bench-slot .ability-btn-sm{
+    position:absolute; left:4px; right:4px; bottom:22px;
+    z-index:201;                       /* 高過 hp-bar(200) + 卡圖(99) */
     font-size:.72rem !important;
     padding:.22rem .35rem !important;
-    margin-top:.18rem !important;
+    margin:0 !important;
     border-radius:4px !important;
     font-weight:600;
+    box-shadow:0 2px 4px rgba(0,0,0,.5);
+  }
+  /* v5.097：evo-btn-sm 也 absolute 浮層（在 ability-btn 上方一層） */
+  .playmat.layout-tabletop .bench-slot .evo-btn-sm{
+    position:absolute; left:4px; right:4px; bottom:48px;
+    z-index:201;
+    margin:0 !important;
+    box-shadow:0 2px 4px rgba(0,0,0,.5);
+  }
+  /* v5.097：化石丟棄按鈕也 absolute 浮層 */
+  .playmat.layout-tabletop .bench-slot .evo-btn-sm.fossil-discard-btn{
+    bottom:48px;
+  }
+  /* v5.097：tool-chip / ab-used-chip / status-chip-sm 改 absolute 浮層
+     tool-chip：在 hp-bar 上方
+     ab-used-chip：右上角小圖示
+     status-chip-sm：左上角（罕見） */
+  .playmat.layout-tabletop .bench-slot .tool-chip.sm{
+    position:absolute; left:4px; right:4px; bottom:38px;
+    z-index:201; margin:0;
+    font-size:.7rem; padding:1px 4px;
+    text-align:center;
+    background:rgba(180,140,0,.85); color:#fff;
+    border-radius:3px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    box-shadow:0 1px 3px rgba(0,0,0,.5);
+  }
+  .playmat.layout-tabletop .bench-slot .ab-used-chip.sm{
+    position:absolute; right:4px; top:4px;
+    z-index:201; margin:0;
+    background:rgba(160,160,160,.85); color:#222;
+    font-size:.7rem; padding:1px 4px; border-radius:3px;
+  }
+  .playmat.layout-tabletop .bench-slot .status-chip-sm{
+    position:absolute; left:4px; top:4px;
+    z-index:201; margin:0;
+    font-size:.8rem; padding:0 3px; border-radius:3px;
+  }
+  /* v5.097：attach-hint 浮在卡圖正中央 */
+  .playmat.layout-tabletop .bench-slot .attach-hint{
+    position:absolute; left:50%; top:50%;
+    transform:translate(-50%, -50%);
+    z-index:202; margin:0;
+    font-size:1.4rem;
+    background:rgba(0,0,0,.78); color:#ffeb3b;
+    padding:6px 12px; border-radius:8px;
+    box-shadow:0 0 12px rgba(255,235,59,.7);
   }
 
   /* === v5.039 戰鬥場特性按鈕釘在名字框下方（緊鄰下邊界） ===
