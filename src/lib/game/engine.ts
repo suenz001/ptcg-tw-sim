@@ -2594,8 +2594,12 @@ function handlePlaying(
             sourcePlayerIdx: aIdx,
             // v2.69：改為 units-aware — minCount/maxCount 僅控制卡片張數邊界，
             // 實際「總單位數 ≥ retreatCost」由 UI selectionValid 檢查 params.retreatCost。
+            // v5.140：maxCount 改 min(attached.length, retreatCost) — Wilson 反應
+            //   picker label「選 1~2 張」+「已選 2」誤導（呱呱泡蛙 retreatCost=1）。
+            //   修法精確：最壞情況每張 1 unit，最多需 retreatCost 張，限 attached 上限。
+            //   selectionValid (v3.823 essential check) 仍會嚴格擋多丟，但 label 不再誤導。
             minCount: 1,
-            maxCount: attacker.active.energyAttached.length,
+            maxCount: Math.min(attacker.active.energyAttached.length, retreatCost),
             effectKey: 'retreat-energy-discard',
             params: { newActiveIid: action.newActiveIid, retreatCost },
           },

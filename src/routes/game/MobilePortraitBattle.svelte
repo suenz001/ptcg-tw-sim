@@ -1034,8 +1034,10 @@
         <div class="mp-sheet-title">⚡ 選擇附加目標</div>
         {#each energyTargets() as tinst}
           {@const c = cardOf(tinst)}
+          {@const allTools = [...(tinst.toolAttached ? [tinst.toolAttached] : []), ...(tinst.extraTools ?? [])]}
+          {@const toolNames = allTools.map(t => pool.get(t.cardId)?.name ?? '?').filter(Boolean).join('、')}
           <button class="mp-sheet-btn primary" onclick={() => attachEnergy(sheet!.type === 'pick-energy-target' ? sheet!.energyIid : '', tinst.iid)}>
-            {c?.name ?? '?'}（HP {hpRemaining(tinst)}/{hpMax(tinst)} · ⚡{tinst.energyAttached.length}）
+            {c?.name ?? '?'}（HP {hpRemaining(tinst)}/{hpMax(tinst)} · ⚡{tinst.energyAttached.length}{toolNames ? ` · 🔧${toolNames}` : ''}）
           </button>
         {/each}
       {:else if sheet.type === 'pick-evolve-target'}

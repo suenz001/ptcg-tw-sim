@@ -265,6 +265,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.140</span> 🐛 撤退 picker maxCount 修正 + 手機版附加能量顯示道具</summary>
+        <ul>
+          <li><b>Bug — 撤退能量 picker maxCount 數量錯</b>：Wilson 截圖呱呱泡蛙撤退費 1，但 picker 顯示「選 1~2 張・已選 2」誤導。</li>
+          <li><b>根因</b>：engine.ts L2536 <code>maxCount: attacker.active.energyAttached.length</code>，attached=2 → maxCount=2 → picker label 顯示「選 1~2 張」。<code>selectionValid</code> 雖有 v3.823 essential check 擋多丟（確定按鈕 disabled），但 label 仍誤導玩家。</li>
+          <li><b>修法</b>：<code>maxCount</code> 改為 <code>Math.min(attached.length, retreatCost)</code>。對呱呱泡蛙：<code>min(2, 1)=1</code> → picker label 變「選 1~1 張」精準。最壞情況每張 1 unit，最多需 retreatCost 張，限 attached 上限。Essential check 仍擋特殊邊界。</li>
+
+          <li><b>UX — 手機版附加能量目標顯示道具</b>：原顯示「呱呱泡蛙（HP 60/70 · ⚡2）」，Wilson 要加道具方便辨識避免選錯。</li>
+          <li><b>修法</b>：<code>pick-energy-target</code> sheet 從 <code>toolAttached + extraTools</code> 提取道具名稱合併顯示。範例：「呱呱泡蛙（HP 60/70 · ⚡2 · 🔧月光面具）」。多個道具用「、」分隔（洛托姆ex 多重轉接場景）。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純條件改 + UI 加 chip）／15（PTCG 規則：撤退丟剛好不能多）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.139</span> 🚨 hotfix: v5.138 mulligan post-bench 卡住</summary>
         <ul>
           <li><b>玩家回報</b>：v5.138 流程跑到「玩家 1 可選擇將補抽到的基礎寶可夢加入備戰」就卡住，沒有可以點擊完成的按鈕。</li>
