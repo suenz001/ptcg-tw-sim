@@ -2141,7 +2141,61 @@ regPost('魔牆人偶|不祥波動', statusPost('confused'));
 regPost('優雅貓|擺尾蠱惑', statusPost('confused'));
 regPost('奇麒麟|不祥波動', statusPost('confused'));
 regPost('願增猿|精神歪曲', statusPost('confused'));
-regPost('胡地|奇異駭入', statusPost('confused'));
+// v5.113 胡地|奇異駭入 — 混亂 + 對手場上指示物重新分配
+//   卡面：「將對手的戰鬥寶可夢【混亂】。選擇任意數量的對手的場上寶可夢身上放置的傷害
+//          指示物，以任意方式改放於對手的場上寶可夢身上。」
+//   原 v2.0+ 只 statusPost('confused') 漏掉 Part 2「指示物重新分配」整段效果。
+//   簡化策略（Rule 14）：對手場上所有指示物加總 → 玩家選 1 隻對手寶可夢承接全部，
+//   其餘歸 0。「任意方式」嚴格上是任意分配，這裡用「全集中」作 best-effort 實作。
+//   對戰圓形 gate：若 target 是對手備戰，被擋 → addLog 提示玩家換目標。
+regPost('胡地|奇異駭入', (state, aIdx, pool) => {
+  // Part 1：將對手戰鬥寶可夢【混亂】
+  let s = statusPost('confused')(state, aIdx, pool);
+  // Part 2：對手場上指示物總和 → picker 選承接目標
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const opp = s.players[dIdx];
+  const allOppPokes = [opp.active, ...opp.bench].filter((c): c is CardInstance => !!c);
+  let totalDmg = 0;
+  for (const pk of allOppPokes) totalDmg += pk.damage ?? 0;
+  if (totalDmg === 0) {
+    return addLog(s, '奇異駭入：對手場上無傷害指示物可重新分配', aIdx);
+  }
+  s = addLog(s, `奇異駭入：對手場上共 ${totalDmg} 點傷害 → 選 1 隻對手寶可夢承接全部（其餘歸 0）`, aIdx);
+  return withPending(s, {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'abra-strange-hack',
+    params: { totalDmg, includeActive: true },
+  });
+});
+
+// v5.113 abra-strange-hack resolver — 集中對手場上所有指示物到玩家所選的 1 隻寶可夢
+RESOLVERS.set('abra-strange-hack', (st, idx, iids, params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const targetIid = iids[0];
+  if (!targetIid) return st;
+  const totalDmg = (params?.totalDmg as number) ?? 0;
+  if (totalDmg === 0) return st;
+  const opp = st.players[dIdx];
+  const isActive = opp.active?.iid === targetIid;
+  const target = isActive ? opp.active! : opp.bench.find(b => b.iid === targetIid);
+  if (!target) return st;
+  const targetCard = pool.get(target.cardId);
+  // 對戰圓形 gate：bench → active 允許；active/bench → bench 被對戰圓形擋
+  const guard = canApplyEffectToTarget(st, idx, target, targetCard, 'attack-effect', pool, { isBench: !isActive });
+  if (guard.blocked) {
+    return addLog(st, `奇異駭入：${targetCard?.name ?? '?'}｜${guard.reason}（指示物無法集中至此目標）`, idx);
+  }
+  const s = updatePlayer(st, dIdx, p => ({
+    ...p,
+    active: p.active
+      ? { ...p.active, damage: p.active.iid === targetIid ? totalDmg : 0 }
+      : null,
+    bench: p.bench.map(b => ({ ...b, damage: b.iid === targetIid ? totalDmg : 0 })),
+  }));
+  return addLog(s, `奇異駭入：${targetCard?.name ?? '?'} 承接全部 ${totalDmg} 點傷害指示物（其餘對手寶可夢歸 0）`, idx);
+});
 // 修建老匠|暴走：自己混亂（攻擊者自己中狀態）
 regPost('修建老匠|暴走', (state, aIdx, pool) => {
   // v2.91：憨憨臉免疫混亂

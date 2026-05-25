@@ -265,6 +265,37 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.113</span> 🐛 胡地奇異駭入補實裝 + 死神棺缺對戰圓形 gate + 甲殼刺 KO 時重複觸發修</summary>
+        <ul>
+          <li><b>3 個玩家回報的 bug</b>：</li>
+          <li>　1. <b>胡地｜奇異駭入</b>：原只 statusPost(&#39;confused&#39;) 戰鬥位混亂，卡面 Part 2「選擇任意數量對手場上指示物以任意方式改放」整段完全沒實裝 → 招式效果消失直接結束回合</li>
+          <li>　2. <b>對戰圓形 + 轉移指示物方向性</b>：Wilson 規則指南 — bench → active 允許（active 不受對戰圓形擋）／active 或 bench → bench 應擋。Audit 發現「死神棺｜伸長的傷害棺材」目標可選對手 active 或 bench，但實作沒對戰圓形 gate</li>
+          <li>　3. <b>爆焰龜獸｜甲殼刺</b>：v5.069 改 picker、v5.081 補 KO 觸發後，KO 情境下重複觸發 2 次（玩家被 KO 時被丟 2 張能量）</li>
+
+          <li><b>根因分析</b>：</li>
+          <li>　1. effects.ts L2144 <code>regPost</code> 只實裝混亂，整段「指示物重新分配」漏掉</li>
+          <li>　2. v2670 wave17-coffin-step2 resolver 直接 updatePlayer 加 damage 到 target，沒先跑 canApplyEffectToTarget gate</li>
+          <li>　3. engine.ts L4989（v5.081 加的 KO branch PASSIVE_RETALIATION dispatch）+ L5280（共用版分支結束後）<b>雙跑</b> → KO 時甲殼刺 picker 開 2 次</li>
+
+          <li><b>修法</b>：</li>
+          <li>　1. 改 <code>regPost(胡地|奇異駭入)</code>：Part 1 keep statusPost(confused)，Part 2 開 opp-poke-choose picker → resolver(<code>abra-strange-hack</code>) 把對手場上指示物總和集中到玩家選的 1 隻寶可夢身上（含 canApplyEffectToTarget gate）</li>
+          <li>　2. v2670 wave17-coffin-step2 resolver 在套用 damage 前加 canApplyEffectToTarget gate（target=bench 時擋）</li>
+          <li>　3. engine.ts 共用版 L5280/L5292/L5305 三 block 加 <code>_v5113RanInKoBranch = wouldBeKO &amp;&amp; !preventedKO</code> gate — KO branch 已跑就跳過共用版</li>
+
+          <li><b>Audit 同類招式（轉移指示物）</b>：</li>
+          <li>　・九尾｜九尾狐搬動：目標固定對手 active → 已有 attack-effect gate ✓</li>
+          <li>　・振翼髮｜蠱惑挪移：目標固定對手 active ✓</li>
+          <li>　・勾魂眼｜傷害集結：目標固定對手 active ✓</li>
+          <li>　・火箭隊的果然翁｜火箭鏡面 / 火箭隊的以歐路普｜火箭頭擊：目標固定對手 active ✓</li>
+          <li>　・願增猿｜腎上腺腦力（特性）：已有 ability-effect gate ✓</li>
+          <li>　・死神棺｜伸長的傷害棺材：目標可 active 或 bench → <b>本版補 gate</b></li>
+          <li>　・胡地｜奇異駭入：本版新實裝即含 gate</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python plumbing）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT 三處 exact-match replace）／Rule 14（最小 patch 4 處）／Rule 15（卡面 source of truth - SV6/SV8a 胡地、M3 爆焰龜獸、MC 死神棺 JSON）／Rule 1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.112</span> 🎨 戰鬥場 HP bar 垂直置中 + 特性按鈕移到卡圖上方文字區（玩家拍拍手後微調）</summary>
         <ul>
           <li><b>玩家滿意 v5.111 layout</b>，要求微調：</li>

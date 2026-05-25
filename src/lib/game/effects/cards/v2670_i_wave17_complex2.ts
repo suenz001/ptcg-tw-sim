@@ -22,6 +22,8 @@
  */
 
 import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+// v5.113 對戰圓形 gate import
+import { canApplyEffectToTarget } from '../../defense';
 // v3.10 import 修 bug 用的兩個 helper（原本 wave17 內自己 inline 寫成「加手」）
 import { deckSearchAttachToAnyPost, discardSearchAttachToBenchPost } from './v2750_h_wave2_full';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -184,7 +186,7 @@ regR('wave17-coffin-step1', (state, aIdx, iids, _params, _pool) => {
     params: { sourceIid },
   });
 });
-regR('wave17-coffin-step2', (state, aIdx, iids, params, _pool) => {
+regR('wave17-coffin-step2', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const sourceIid = params?.sourceIid as string | undefined;
   const targetIid = iids[0];
@@ -194,6 +196,16 @@ regR('wave17-coffin-step2', (state, aIdx, iids, params, _pool) => {
   const sourceBench = state.players[aIdx].bench.find(b => b.iid === sourceIid);
   const moveDmg = sourceBench?.damage ?? 0;
   if (moveDmg === 0) return state;
+  // v5.113 對戰圓形 gate：target 是對手 bench 時被擋
+  const opp = state.players[dIdx];
+  const isActive = opp.active?.iid === targetIid;
+  const targetInst = isActive ? opp.active! : opp.bench.find(b => b.iid === targetIid);
+  if (!targetInst) return state;
+  const targetCard = pool.get(targetInst.cardId);
+  const guard = canApplyEffectToTarget(state, aIdx, targetInst, targetCard, 'attack-effect', pool, { isBench: !isActive });
+  if (guard.blocked) {
+    return addLog(state, `伸長的傷害棺材：${targetCard?.name ?? '?'}｜${guard.reason}（指示物無法移轉至此目標）`, aIdx);
+  }
   // 清 source damage
   let s = updatePlayer(state, aIdx, p => ({
     ...p,

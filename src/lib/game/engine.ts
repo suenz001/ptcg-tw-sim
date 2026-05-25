@@ -5276,20 +5276,25 @@ function handlePlaying(
 
     // ── 被動反擊特性（毒刺、灼熱之軀、反擊等）— 只對有實際傷害的招式觸發 ──
     // v2.387：超級皮可西ex｜光之翼 — 攻擊方持有此特性時，免疫對手特性反擊效果。
+    // v5.113 KO 重複觸發修：v5.081 已在 KO branch (L4989) 補跑 PASSIVE_RETALIATION，
+    //   共用版只在「沒走 KO branch」時跑（即 !wouldBeKO || preventedKO），
+    //   否則甲殼刺/毒刺/灼熱之軀等會在 KO 時觸發 2 次（玩家回報）。
     const attackerHasMagicalShine = attackerCard?.abilities?.some(a => a.name === '光之翼') ?? false;
-    if (baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
+    const _v5113RanInKoBranch = wouldBeKO && !preventedKO;
+    if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
       for (const ab of defenderCard.abilities) {
         const retal = PASSIVE_RETALIATION.get(ab.name);
         if (retal) newState = retal(newState, dIdx, pool);
       }
-    } else if (baseDamage > 0 && defenderCard.abilities && attackerHasMagicalShine) {
+    } else if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities && attackerHasMagicalShine) {
       newState = addLog(newState,
         `光之翼：${attackerCard?.name ?? '?'} 不受對手特性效果影響（${defenderCard.abilities.map(a => a.name).join('、')} 無效）`,
         aIdx);
     }
 
     // v2.992 PASSIVE_ON_DAMAGED（火箭隊的瓦斯彈 警備濁霧）— 受傷觸發 deck search
-    if (baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
+    // v5.113 KO 重複觸發修：v5.081 KO branch L4994 已跑過，這裡共用版加 KO gate
+    if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
       for (const ab of defenderCard.abilities) {
         const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
         if (fnOD) newState = fnOD(newState, dIdx, aIdx, pool, defenderCard);
@@ -5302,7 +5307,8 @@ function handlePlaying(
     //   gate：defender.active.pokemonType === 'Darkness'（自方戰鬥場必為【惡】）。
     //   只 scan defender.bench 上的花岩怪（active 花岩怪已在主 loop 觸發過此 ability）。
     //   光之翼亦擋（同 PASSIVE_RETALIATION 既有準則）。
-    if (baseDamage > 0 && !attackerHasMagicalShine) {
+    // v5.113 KO 重複觸發修：v5.083 KO branch L5006 已跑過，這裡共用版加 KO gate
+    if (!_v5113RanInKoBranch && baseDamage > 0 && !attackerHasMagicalShine) {
       const defActiveNK = newState.players[dIdx].active;
       const defActiveCardNK = defActiveNK ? pool.get(defActiveNK.cardId) : null;
       if (defActiveCardNK?.pokemonType === 'Darkness') {
