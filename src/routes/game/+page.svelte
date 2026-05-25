@@ -5761,8 +5761,9 @@
                       <!-- v5.038：疊牌動態間距 — 越多張疊得越密，避免疊太長
                            公式：step = max(12, 32 - length * 3) → 1張:29 / 4張:20 / 6張:14 / 7+:12 -->
                       {@const _stepOB = Math.max(12, 32 - _attOB.length * 3)}
+                      <!-- v5.098：對手 bench 堆疊方向改往下（top 正值），玩家回報 -->
                       <div class="att-card-stack">
-                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1) * _stepOB}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1) * _stepOB}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                       </div>
                     {/if}
                   {/if}
@@ -8312,12 +8313,11 @@
       "chipO   pilesO    stadium   .         activeO   prizesO"
       "chipMe  prizesMe  stadium   actions   activeMe  pilesMe"
       ".       .         .         .         benchMe   .";
-    /* v5.038→v5.050：row-gap 12→5px (戰鬥場↔備戰區更近，視覺上整體更緊湊)。
-       padding-top 4→24px / padding-bottom 4→24px — 對手 bench 離 viewport 頂部更遠，
-       給疊牌往上 fan 留空間不被切；我方 bench 同樣對稱拉開。
-       水平 padding 維持 8px。 */
+    /* v5.038→v5.050：row-gap 12→5px (戰鬥場↔備戰區更近)。
+       padding 24px 已沒必要 — v5.097 後卡圖撐滿框架不再往外 fan；v5.098 對手 bench 改往下 fan。
+       padding-top/bottom 縮回 8px 讓 bench 更靠 viewport 邊緣，opp 上推 + my 下推。 */
     gap:5px 8px;
-    padding:24px 8px;
+    padding:8px 8px;
     align-items:center;
     /* 預留右側 log panel 空間（log 開啟時） */
     margin-right:0;
@@ -8336,6 +8336,8 @@
   }
   .playmat.layout-tabletop .opponent-row > .zone-bench{
     grid-area:benchO; display:flex; justify-content:center; flex-wrap:nowrap; gap:2px;
+    /* v5.098：黏 row 上邊（接近 viewport 頂部）— 對手 bench 改往下 fan 後不需上方空間 */
+    align-self:start;
   }
   .playmat.layout-tabletop .opponent-row > .zone-active{ grid-area:activeO; justify-self:center; align-self:end; }
   .playmat.layout-tabletop .opponent-row > .zone-prizes{ grid-area:prizesO; }
@@ -8345,6 +8347,8 @@
   .playmat.layout-tabletop .my-row > .zone-prizes{ grid-area:prizesMe; }  /* 互換：prize 在左 */
   .playmat.layout-tabletop .my-row > .zone-bench{
     grid-area:benchMe; display:flex; justify-content:center; flex-wrap:nowrap; gap:2px;
+    /* v5.098：黏 row 下邊（接近手牌）— 留更多空間給 active row */
+    align-self:end;
   }
   .playmat.layout-tabletop .my-row > .zone-active{ grid-area:activeMe; justify-self:center; align-self:start; }
   .playmat.layout-tabletop .my-row > .zone-pile{
@@ -8433,18 +8437,28 @@
   .playmat.layout-tabletop .opponent-row .bench-slot{
     height: 155px !important;
   }
+  /* v5.097：bench-middle 撐滿整個 bench-slot 框架，卡圖跟著 height:100% 最大化。
+     原本 (v5.030 之前) bench-middle 是 flex 內中央區，留下方 HP bar/特性按鈕空間。
+     改成所有按鈕都 absolute 浮層 → bench-middle 可獨佔整 slot，卡圖視覺最大化。 */
   .playmat.layout-tabletop .bench-slot .bench-middle{
     display:grid; place-items:center;
-    position:relative; overflow:visible;
+    position:absolute; inset:0;        /* v5.097: 撐滿 bench-slot */
+    overflow:visible;
   }
   .playmat.layout-tabletop .bench-slot .bench-middle > img,
   .playmat.layout-tabletop .bench-slot .bench-middle > .att-card-stack{
     grid-column:1; grid-row:1;  /* 同 cell 重疊 */
   }
-  .playmat.layout-tabletop .bench-slot .bench-middle img{ z-index:99; }
+  .playmat.layout-tabletop .bench-slot .bench-middle img{
+    z-index:99;
+    /* v5.097: 卡圖放大到 slot 高度，object-fit:contain 保比例不變形 */
+    height:100%; width:auto; max-width:100%; max-height:100%;
+    object-fit:contain;
+  }
+  /* v5.098：att-card-stack 跟著卡圖等比放大 — 卡圖 height:100% 後堆疊也要跟上 */
   .playmat.layout-tabletop .bench-slot .att-card-stack{
     position:relative;
-    width:100%; max-width:108px; height:128px;
+    height:100%; aspect-ratio:96/135; width:auto; max-width:none;
     overflow:visible !important;
   }
   .playmat.layout-tabletop .zone-bench{ overflow:visible !important; }
@@ -8536,18 +8550,73 @@
     background:rgba(0,0,0,.82); border-radius:3px;
     padding:2px 6px;
   }
-  /* bench hp-bar 仍在 slot 底部、保持 z-index 高（不被 attached 蓋） */
+  /* v5.097：bench hp-bar 改 absolute 浮在 slot 底部（讓 bench-middle 卡圖撐滿） */
   .playmat.layout-tabletop .bench-slot > .hp-bar-wrap{
-    position:relative; z-index:200;
+    position:absolute; left:4px; right:4px; bottom:4px;
+    z-index:200;
   }
 
-  /* === v5.038 ability-btn-sm 在桌墊版備戰區放大（玩家回報太小不好點） === */
+  /* === v5.038 ability-btn-sm 在桌墊版備戰區放大；v5.097 改 absolute 浮層；v5.098 加高 ===
+     v5.097：原本 flow 內占空間 → 改 absolute 浮在卡圖底部上方（仿 bench-name/bench-stat
+     pattern），不再撐高 bench-slot；bench-middle 卡圖可撐滿整個框架。
+     v5.098：padding .22 → .35rem、font .72 → .82rem，按鈕高度更明顯，玩家更好點。
+     bottom 從 22 → 26 對應加高，仍在 hp-bar 上方。 */
   .playmat.layout-tabletop .bench-slot .ability-btn-sm{
-    font-size:.72rem !important;
-    padding:.22rem .35rem !important;
-    margin-top:.18rem !important;
+    position:absolute; left:4px; right:4px; bottom:26px;
+    z-index:201;                       /* 高過 hp-bar(200) + 卡圖(99) */
+    font-size:.82rem !important;
+    padding:.35rem .45rem !important;
+    margin:0 !important;
     border-radius:4px !important;
     font-weight:600;
+    box-shadow:0 2px 4px rgba(0,0,0,.5);
+    min-height:28px;
+  }
+  /* v5.097：evo-btn-sm 也 absolute 浮層（在 ability-btn 上方一層） */
+  .playmat.layout-tabletop .bench-slot .evo-btn-sm{
+    position:absolute; left:4px; right:4px; bottom:48px;
+    z-index:201;
+    margin:0 !important;
+    box-shadow:0 2px 4px rgba(0,0,0,.5);
+  }
+  /* v5.097：化石丟棄按鈕也 absolute 浮層 */
+  .playmat.layout-tabletop .bench-slot .evo-btn-sm.fossil-discard-btn{
+    bottom:48px;
+  }
+  /* v5.097：tool-chip / ab-used-chip / status-chip-sm 改 absolute 浮層
+     tool-chip：在 hp-bar 上方
+     ab-used-chip：右上角小圖示
+     status-chip-sm：左上角（罕見） */
+  .playmat.layout-tabletop .bench-slot .tool-chip.sm{
+    position:absolute; left:4px; right:4px; bottom:38px;
+    z-index:201; margin:0;
+    font-size:.7rem; padding:1px 4px;
+    text-align:center;
+    background:rgba(180,140,0,.85); color:#fff;
+    border-radius:3px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    box-shadow:0 1px 3px rgba(0,0,0,.5);
+  }
+  .playmat.layout-tabletop .bench-slot .ab-used-chip.sm{
+    position:absolute; right:4px; top:4px;
+    z-index:201; margin:0;
+    background:rgba(160,160,160,.85); color:#222;
+    font-size:.7rem; padding:1px 4px; border-radius:3px;
+  }
+  .playmat.layout-tabletop .bench-slot .status-chip-sm{
+    position:absolute; left:4px; top:4px;
+    z-index:201; margin:0;
+    font-size:.8rem; padding:0 3px; border-radius:3px;
+  }
+  /* v5.097：attach-hint 浮在卡圖正中央 */
+  .playmat.layout-tabletop .bench-slot .attach-hint{
+    position:absolute; left:50%; top:50%;
+    transform:translate(-50%, -50%);
+    z-index:202; margin:0;
+    font-size:1.4rem;
+    background:rgba(0,0,0,.78); color:#ffeb3b;
+    padding:6px 12px; border-radius:8px;
+    box-shadow:0 0 12px rgba(255,235,59,.7);
   }
 
   /* === v5.039 戰鬥場特性按鈕釘在名字框下方（緊鄰下邊界） ===

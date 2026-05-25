@@ -265,7 +265,7 @@
     <div class="changelog-list">
 
       <details open>
-        <summary><span class="ver-badge">v5.102</span> 🚨 修復白畫面：v5.098 changelog 內 raw &#123;...&#125; 觸發 ReferenceError，直接 reset +page.svelte 到 v5.095 commit byte-identical</summary>
+        <summary><span class="ver-badge">v5.103</span> 🎨 恢復 v5.097/v5.098 桌墊版 bench 卡圖放大（routes/+page.svelte 保持 v5.095 純 HTML）</summary>
         <ul>
           <li><b>玩家回報</b>：v5.094 仍覺得「備戰區和戰鬥場間隔距離拉超大」，要求復原到 v5.092 狀態。</li>
 
