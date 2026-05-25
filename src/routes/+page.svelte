@@ -265,6 +265,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.098</span> 🎨 桌墊版 bench 後續細調：堆疊放大 / 按鈕加高 / 對手上推+下方堆疊 / 我方下推</summary>
+        <ul>
+          <li><b>玩家回報（v5.097 之後）</b>：</li>
+          <li>　1. 底下堆疊的能量/道具/進化卡大小沒跟著卡圖放大</li>
+          <li>　2. 特性按鈕高度再加高一點</li>
+          <li>　3. 我方備戰寶可夢與手牌之間有大空間，可再靠下</li>
+          <li>　4. 對手備戰寶可夢與頂部之間有大空間，可再靠上</li>
+          <li>　5. 對手備戰寶可夢堆疊方向改成往下（不再往上 fan）</li>
+
+          <li><b>修法</b>：</li>
+          <li>　1. <code>.bench-slot .att-card-stack</code>：<code>width:100% max-width:108px height:128px</code> → <code>height:100% aspect-ratio:96/135 width:auto max-width:none</code>。stack 跟卡圖等比放大，<code>.att-card width:100%</code> 也跟著大</li>
+          <li>　2. <code>.ability-btn-sm</code>：<code>padding</code> <code>.22 → .35rem</code>、<code>font</code> <code>.72 → .82rem</code>、加 <code>min-height:28px</code>、<code>bottom 22 → 26</code> 對應加高</li>
+          <li>　3. 桌墊版 <code>padding-top/bottom 24 → 8</code>（v5.097 後卡圖撐滿框架不再往外 fan；對手 bench 改往下 fan 後不需 padding-top 預留）</li>
+          <li>　4. <code>.opponent-row &gt; .zone-bench</code> 加 <code>align-self:start</code>（黏 row 上邊 / 接近 viewport 頂）；<code>.my-row &gt; .zone-bench</code> 加 <code>align-self:end</code>（黏 row 下邊 / 接近手牌）</li>
+          <li>　5. 對手 bench svelte template loop <code>top:{(i+1) * _stepOB}px</code>（正值 = 往下 fan）；我方 bench 維持往上 fan 不動</li>
+
+          <li><b>實際影響</b>：</li>
+          <li>　・底下堆疊小卡圖視覺等比例放大 ~+40%（跟著 bench-middle 高度）</li>
+          <li>　・特性按鈕高度約 +50%，更好點擊</li>
+          <li>　・對手 bench 上推、我方 bench 下推 → active row 中央區更大、log/UI 顯示更舒服</li>
+          <li>　・對手 bench 卡圖底下會看到能量等堆疊（往下 fan）— 一致 PTCG 實體對戰視角</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + version + changelog）／Rule 14（最小 patch — 4 處 CSS + 1 行 svelte template inline style）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.097</span> 🎨 桌墊版 bench-slot 卡圖放大到框架尺寸（特性按鈕 absolute 浮層）</summary>
         <ul>
           <li><b>Wilson 想法</b>（v5.093~v5.095 撤回後新方向）：卡圖直接放大到 bench-slot 框架尺寸，HP bar / 特性按鈕 / 進化按鈕 / 化石丟棄按鈕全部仿 v5.030 <code>bench-name</code>/<code>bench-stat</code> 的 absolute pattern 浮在卡圖上層。layout 框架不變、卡圖視覺最大化、可點按鈕仍在原位置。</li>
