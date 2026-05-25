@@ -1,6 +1,6 @@
 # PTCG-tw-sim Iron Rules（鐵律）
 
-> 最後更新：v2.9992（2026-05-08）
+> 最後更新：v5.103（2026-05-25）— Rule 1 audit regex 強化（v5.098~v5.102 連續 4 次同類事故）
 > 同步自：`/sessions/.../mnt/outputs/ptcg-push/SKILL.md`
 
 這份文件記錄 ptcg-tw-sim 專案中經過慘痛教訓得到的鐵律。每條都對應一個或多個過去
@@ -32,7 +32,75 @@ Inside any `<script>`-less area of `src/routes/**/*.svelte` (the rendered templa
 
 Or use full-width CJK forms: `｛｝＜＞`. Either works.
 
-This rule has been violated in v2.461, v2.733, v2.82, **v5.043 / v5.045** (each of which required a follow-up patch). When writing a changelog with code-like fragments — generics, type signatures, comparison operators, object literals — assume the parser will choke and escape proactively.
+This rule has been violated in v2.461, v2.733, v2.82, **v5.043 / v5.045 / v5.087 / v5.098 / v5.100 / v5.101** (every push that touches changelog needs a follow-up patch). When writing a changelog with code-like fragments — generics, type signatures, comparison operators, object literals — assume the parser will choke and escape proactively.
+
+**v5.098~v5.102 4 次連續事故 — 教訓**：
+
+v5.098 changelog 我寫了 `<code>top:{(i+1) * _stepOB}px</code>` —
+- esbuild build pass、tsc pass、Iron Rules Audit pass、Deploy pass ✓
+- 但 runtime evaluate `{(i+1) * _stepOB}` 當 expression，`i` / `_stepOB` 在 +page.svelte scope 不存在 → ReferenceError 白畫面
+
+v5.100 hotfix 用 regex auto-escape，**保留 backtick `` ` ` `` 內 `{}`** — 結果 Svelte 不認 backtick 為 escape，build fail。
+
+v5.101 拿掉 backtick protection 全 escape — 但 regex 觸碰到別處結構，build fail。
+
+v5.102 直接 `git cat-file -p` 拿 v5.095 commit byte-identical 覆蓋整個 +page.svelte → 才救活。
+
+**根本原因**：舊 Rule 1 audit regex `\{\s*([a-zA-Z]\w*)\s*\}` 只抓 simple identifier `{foo}`，沒抓 expression `{(i+1) * step}` / `{obj.prop}` / `{fn(x)}` 等。**任何 `<code>...</code>` 內含 raw `{` 都該 flag**，不論內部是 identifier 還是 expression。
+
+**REVISED audit regex（v5.103 加強）**：
+
+```python
+import re
+with open('src/routes/+page.svelte', encoding='utf-8') as f:
+    content = f.read()
+
+# 抓 changelog-list 區段
+match = re.search(r'<div class="changelog-list">(.*?)</div>\s*</details>\s*</section>',
+                  content, flags=re.DOTALL)
+if not match:
+    raise SystemExit('changelog-list section not found — abort')
+section = match.group(1)
+
+# 保留合法 svelte syntax + 既有 HTML entity，剩餘 raw {} 全 flag
+PROTECTED = [
+    r'\{#(?:if|each|key|await)\s[^}]*\}',  # {#if} {#each} {#key} {#await}
+    r'\{/(?:if|each|key|await)\}',          # {/if} {/each} ...
+    r'\{:else(?:\s[^}]*)?\}',               # {:else} {:else if ...}
+    r'\{:catch[^}]*\}',                     # {:catch}
+    r'\{:then[^}]*\}',                      # {:then}
+    r'\{@const\s[^}]*\}',                   # {@const ...}
+    r'\{@html\s[^}]*\}',                    # {@html ...}
+    r'&#123;|&#125;',                       # 既有 entity
+]
+cleaned = section
+for pat in PROTECTED:
+    cleaned = re.sub(pat, '', cleaned)
+# 剩餘 raw { } 全是 Rule 1 違規
+raw_open = cleaned.count('{')
+raw_close = cleaned.count('}')
+if raw_open or raw_close:
+    print(f'❌ Rule 1 violation: raw {{ = {raw_open}, }} = {raw_close}')
+    # show context (first 200 chars of cleaned that has {)
+    idx = cleaned.find('{') if '{' in cleaned else cleaned.find('}')
+    print(f'context: ...{cleaned[max(0,idx-80):idx+120]}...')
+    raise SystemExit('Rule 1 violation — escape all raw { } before push')
+print(f'✓ Rule 1 audit pass — no raw {{ or }} in changelog section')
+```
+
+**強制 pre-push 跑此 audit**（與 tsc 同等優先級）。**注意：禁用 backtick `` ` ` `` 包覆 raw `{}`** — Svelte template parser 不認 backtick 為 escape，必須直接用 `&#123;` / `&#125;` HTML entity。
+
+**lazy chunk fetch audit**（已 push 後額外保險）：
+
+```bash
+# 找 routes chunk 跟首頁 lazy node（含 changelog 渲染）
+NODES=$(curl -sS "https://www.ptcgtw-sim.com/" | grep -oE 'nodes/[0-9]+\.[A-Za-z0-9_-]+\.js')
+for n in $NODES; do
+  # fetch 線上 chunk，grep 危險 pattern：raw ${identifier} 或 raw {identifier} 在 minified output
+  COUNT=$(curl -sS "https://www.ptcgtw-sim.com/_app/immutable/$n" 2>/dev/null | grep -cE '\$\{[a-z_]')
+  [ "$COUNT" -gt 0 ] && echo "⚠️ $n: $COUNT suspicious \${identifier}"
+done
+```
 
 **v5.045 教訓 — audit 範圍必須擴大**：
 
@@ -752,83 +820,4 @@ grep -nE ':\s*\[.*\[\]|:\s*\w+\[\]\[\]' src/lib/game/types.ts
 
 **檢查清單 — 任何 GameState type 改動都跑一遍**:
 - [ ] 新增的欄位 type 是否含 `[][]` 或 tuple 內含 array？→ 改 object pattern
-- [ ] 是否 push 到 Firestore（`pushGameState` / `setDoc(rooms/...)` 路徑會碰到）？
-- [ ] 連線對戰實測（兩個瀏覽器分頁）跑一次 setup → main turn，無「卡住」現象？
-
----
-
-### Rule 14: 牌庫搜尋類必須開 picker — 即使「無候選符合 filter」也不能 short-circuit
-
-PTCG 規則 + 玩家明確要求：
-
-> 「就算牌庫內沒有超能量也一樣，不能省略這個步驟。因為玩家可以藉此檢索牌庫剩餘的卡牌內容，這是很重要的資訊。」
-
-**禁止寫法**：
-```ts
-const cand = p.deck.filter(c => /* 條件 */);
-if (cand.length === 0) {
-  return addLog(state, '某卡：牌庫沒有符合的卡', aIdx);  // ← 違規！
-}
-// 開 picker...
-```
-
-**正確寫法**：
-```ts
-const cand = p.deck.filter(c => /* 條件 */);
-// 即使 cand=0 也直接開 picker，玩家可在 UI「📖 查看牌庫剩餘全部」摺疊區查看
-// （resolver 端要處理 iids.length === 0 → reshuffle + 結束）
-const realMax = Math.min(N, cand.length);  // cand=0 時 maxCount=0，picker 開但無可選
-return withPending(state, {
-  type: 'deck-search',
-  filter: '...',
-  minCount: 0, maxCount: realMax,
-  effectKey: '...',
-  // ...
-});
-```
-
-**為什麼**：PTCG 規則允許玩家「搜尋牌庫」時看牌庫全部 — 線上版透過 picker 模擬此機制。
-玩家可藉此推測對手獎賞卡、規劃下回合策略。Short-circuit 移除此資訊揭露機會，違反 PTCG
-資訊揭露精神（同 Rule 8 揭示資訊規則的延伸）。
-
-**例外**：「棄牌區搜尋」類玩家本來就能看到棄牌堆（公開資訊），short-circuit return OK；
-但建議保持一致性，棄牌類也走 picker。「對手場上 / 對手能量」搜尋類則不適用（資訊封閉）。
-
-**v3.853 修補的 5 處**：
-- 永生綻放（v2353:503）
-- abra_mawile_deck helper（line 189）
-- 進化指引/哈克龍（m2:124）
-- 考驗之旅/樹才怪（v2354:256）
-- 大地之門/哲爾尼亞斯（v2355:71）
-- 猛毒筋力/夠讚狗ex（v2750:1223）
-
-**Audit 工具**：
-```bash
-grep -rn "p\.deck\.filter\|player\.deck\.filter\|attacker\.deck\.filter" src/lib/game/effects/cards/ -A 5 | grep -B 1 "cand\.length === 0"
-```
-若有 match，逐個審視是否該移除 short-circuit。
-
----
-
-### Rule 15: JSON 卡面是 source of truth — 不要信任 audit agent 結論或現有 fn 內邏輯
-
-**背景**：v4.4997~v4.4998 教訓（瑪力露麗ex 收集泡泡 case）：
-
-1. **audit agent 可能腦補**：spawn 的 subagent 報告「卡面要求 active 是瑪力露麗ex」— 實際 JSON 卡面沒這條件
-2. **現有 regA fn 本身可能寫錯**：v2380 line 150 強制 `player.active.name === '瑪力露麗ex'` — 違反卡面
-3. **連鎖 bug**：JSON 真相 → 早期實作者抄錯 → audit agent 看 fn body 推「卡面條件」 → 我 gate 抄錯
-4. 一個錯誤源頭傳到 3 個地方，全都偏離 JSON 真相
-
-**鐵律**：
-
-> 修任何「特性條件 / 招式效果 / picker filter / immunity gate」之前，**必須直接查 `static/cards/*.json`** 的 `abilities[i].effect` 或 `attacks[i].effect`，不能：
-> - 信任 audit agent 報告的卡面摘要
-> - 信任現有 regA / regPost fn body 內的邏輯
-> - 信任 comment 註解內描述的卡面（註解可能過時或錯誤）
-
-**正確流程**（即使只是「在 gate 加 1 行 check」）：
-
-```
-1. grep JSON 找 abilities[].effect / attacks[].effect 原文
-2. 對照現況 fn body — 兩者有差就是 bug
-3. 寫 gate / 補實作時，按 
+- [ ] 是否 push 到 Fir
