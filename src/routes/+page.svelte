@@ -265,6 +265,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.132</span> 🔧 Hotfix v5.131 取獎賞動畫沒觸發</summary>
+        <ul>
+          <li><b>玩家測試</b>：昏厥對手寶可夢後點取得獎賞卡，v5.131 新動畫流程沒出現。</li>
+          <li><b>根因</b>：兩個 <code>$effect</code> 都依賴 <code>game</code>，Svelte 5 順序執行：</li>
+          <li>　1. Effect 1（開局 0→6 偵測）先跑 → 把 <code>prevPrizesIids</code> 更新成 current</li>
+          <li>　2. Effect 2（取獎賞偵測）後跑 → <code>prev === current</code> → picked iids 永遠空 → 動畫永遠不觸發</li>
+
+          <li><b>修法</b>：</li>
+          <li>　1. Effect 1 移除 <code>prevPrizesIids[i] = new Set(...)</code> 更新 — 讓 Effect 2 看得到「真正的前一次」</li>
+          <li>　2. Effect 2 在計算完 pickedIids 後立即更新 <code>prevPrizesIids[pIdx] = curIids</code>，下次 run 才能正確比對</li>
+          <li>　3. 加 <code>wasInit</code> 旗標（<code>prev.size &gt; 0</code>）— 第一次 prev 是空（初始化），跳過避免誤觸發</li>
+
+          <li><b>本機 svelte.compile pre-check</b>：通過。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（2 處 exact-match）／14（最小 patch — 動兩個 effect 的順序邏輯，沒動 overlay UI / CSS / 動畫 keyframes）／1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.131</span> 🎨 桌墊版備戰鎖框架 + 取得獎賞卡動畫差別化</summary>
         <ul>
           <li><b>玩家回報 1</b>：桌墊版場上有競技場卡時，備戰區放寶可夢仍會撐出間隙，要求鎖死框架。</li>

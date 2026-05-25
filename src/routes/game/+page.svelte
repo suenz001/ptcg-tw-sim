@@ -762,7 +762,9 @@
         changed = true;
       }
       prevPrizesLen[i] = cur;
-      prevPrizesIids[i] = new Set(game.players[i].prizes.map(c => c.iid));
+      // v5.132：不在這裡更新 prevPrizesIids（移到取獎賞 effect 末尾）—
+      //   原 v5.131 在此提前更新 → 取獎賞 effect 跑時 prev===current → picked 永遠空
+      //   → 動畫永遠不觸發。Wilson 測試發現 bug。
     }
     if (changed) prizeAnimKey = next;
   });
@@ -794,6 +796,12 @@
       // 找出「上次有但現在沒有」= 被取走的 iid
       const pickedIids: string[] = [];
       for (const iid of prevIids) if (!curIids.has(iid)) pickedIids.push(iid);
+      // v5.132：先更新 prevPrizesIids 再判斷是否觸發動畫，
+      //   下次 effect run 才能拿到正確 prev。同時記下 prev 是否曾經 init（避免第一次誤觸發）
+      const wasInit = prevIids.size > 0;
+      prevPrizesIids[pIdx] = curIids;
+      // 第一次 prev 是空（初始化），不觸發動畫；之後 prev>0 且 picked>0 才觸發
+      if (!wasInit) continue;
       if (pickedIids.length === 0) continue;
       // 標記 — draw-fly skip 這些 iid
       const newSet = new Set(prizePickIids);
