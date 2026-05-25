@@ -265,6 +265,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.121</span> 🔧 終於找到 v5.116~v5.120 連續 5 版 build fail 根因（local svelte compiler 報錯）</summary>
+        <ul>
+          <li><b>v5.116~v5.120 連續 5 版 Deploy fail</b>：beta 站從 v5.115 後沒更新近 6 版。多次 hotfix 嘗試（移除 IIFE、reduce、generic、HTML 注釋、revert Opt5）全部仍 build fail。</li>
+          <li><b>關鍵突破</b>：本機跑 <code>svelte.compile</code> 直接拿到精準錯誤訊息：</li>
+          <li>　<code>&#123;@const&#125; must be the immediate child of &#123;#snippet&#125;, &#123;#if&#125;, &#123;:else if&#125;, &#123;:else&#125;, &#123;#each&#125;, &#123;:then&#125;, &#123;:catch&#125;, &lt;svelte:fragment&gt;, &lt;svelte:boundary&gt; or &lt;Component&gt;</code></li>
+          <li><b>根因</b>：v5.116 entry 內字面寫 <code>&lt;code&gt;&#123;@const c = pool.get(inst.cardId)&#125;&lt;/code&gt;</code> 解釋既有實作，但 raw <code>&#123;@const&#125;</code> 被 Svelte parser 認真解析為 const tag，而 <code>&lt;li&gt;</code> 不在合法 parent 列表 → build fail。連 5 版繼承同 bug。</li>
+          <li><b>修法</b>：把該處 raw <code>&#123;@const&#125;</code> 改 HTML entity escape。</li>
+          <li><b>audit regex 問題</b>：原 Rule 1 audit PROTECTED 規則匹配到 <code>&#123;@const ...&#125;</code> 就跳過視為合法 syntax，但實際情況是「字面引用」也會被 Svelte parser 認真解析。audit regex 需強化：<code>&lt;code&gt;</code> 內 raw <code>&#123;</code> 也要算違規。</li>
+          <li><b>教訓</b>：v5.100/v5.101 之後寫的「pre-push Rule 1 audit」對「<code>&lt;code&gt;</code> 內字面 svelte syntax」失效。下個 patch 要更新 audit regex 把任何 raw <code>&#123;</code> 都當違規（除非真的是 <code>&#123;#each&#125;</code> 等流程控制）。</li>
+          <li><b>本機驗證</b>：用 <code>node -e</code> 跑 <code>svelte.compile</code> 在本機可直接抓出錯誤行 + 行號，比 GitHub Actions log 還精準。未來 push 前要先本機跑此 check。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（1 處 exact-match）／14（最小 1 行修）／1（changelog audit pass — 雖然原規則沒抓到，但實質符合）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.120</span> 🔧 暫時 revert Opt 5 棄牌區合併 — 救 v5.116~v5.119 連續 4 版 build fail</summary>
         <ul>
           <li><b>v5.116/v5.117/v5.118/v5.119 連續 4 版 Deploy fail</b>：beta 站從 v5.115 後沒更新。多次 hotfix 嘗試（移除 IIFE、移除 generic、移除 HTML 注釋）仍 build fail。</li>
@@ -322,7 +337,7 @@
           <li>　2. v5.049 既有「牌庫→手牌飛卡動畫」（偵測手牌新 iid 自動播）但 520ms 過快且無 highlight，玩家不易察覺</li>
           <li>　3. v3.992 設計 P1+P2 都可改觀戰開關，造成 P2 可推翻房主決定</li>
           <li>　4. MobilePortraitBattle 沒接收 <code>isSpectator</code> prop，<code>isMyTurn = game.activePlayerIndex === myIdx</code> 只看 myIdx（觀戰者視角的 0 或 1），按鈕仍顯示。網頁版 +page.svelte 已用 isSpectator gate 各個 button，手機版獨立元件沒涵蓋</li>
-          <li>　5. discard list 每張一行 <code>{@const c = pool.get(inst.cardId)}</code>，60 張牌組打到後期可能 20+ 張卡，捲動疲勞</li>
+          <li>　5. discard list 每張一行 <code>&#123;@const c = pool.get(inst.cardId)&#125;</code>，60 張牌組打到後期可能 20+ 張卡，捲動疲勞</li>
 
           <li><b>修法</b>：</li>
           <li>　1. lobbyRooms li 加 <code>_bothSeated</code> 判斷顯示「⏳ 等待開戰」橘色標籤 + 按鈕文字變「👁 觀戰」</li>
