@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.118</span> 🔧 Hotfix v5.116 棄牌區 IIFE 違反 Svelte &#123;@const&#125; 規則導致 build fail</summary>
+        <ul>
+          <li><b>v5.116/v5.117 Deploy fail</b>：玩家發現 Beta 站未更新。GitHub Actions log：build SvelteKit app step failure（admin 沒權限 download log，但根因可推：Svelte <code>&#123;@const expr&#125;</code> 只允許 expression，不允許 statement）。</li>
+          <li><b>根因</b>：v5.116 棄牌區合併同名卡用 IIFE <code>(() =&gt; &#123; const m = new Map(); for (...) ...; return [...]; &#125;)()</code> — 內含 <code>const</code>/<code>for</code>/<code>return</code> statement，Svelte parser 拒絕。</li>
+          <li><b>修法</b>：改用 <code>Array.reduce</code> 純 expression：<code>[...sheet.list.reduce((m, inst) =&gt; m.set(...), new Map())].sort(...)</code>，等效但純函式式無 statement。</li>
+          <li><b>教訓</b>：Svelte <code>&#123;@const&#125;</code> 限制 expression-only（這跟 JS arrow function body 不同）。寫複雜運算前要記得：(a) reduce / map 純 expression，(b) 在 script 區寫 derived state 然後 reference。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（1 處 exact-match）／14（最小 1 行替換）／1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.117</span> 🔧 Hotfix v5.116 抽牌 just-arrived halo 沒套用</summary>
         <ul>
           <li><b>v5.116 漏補</b>：patch_v5116 自動補 hand-card class binding 的 regex 沒匹配（既有 binding 跨多行寫法 pattern 不同），導致 <code>class:just-arrived</code> 沒加到 hand-card 上 → halo 動畫 CSS 寫好但沒元素套用 → 抽牌動畫加強沒效果。</li>

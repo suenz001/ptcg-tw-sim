@@ -1031,18 +1031,8 @@
         {/each}
       {:else if sheet.type === 'discard'}
         <div class="mp-sheet-title">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
-        <!-- v5.116：合併同名卡為一行「名×N」，玩家更易檢索 -->
-        {@const _groups = (() => {
-          const m = new Map<string, { name: string; cardId: string; inst: CardInstance; supertype?: string; count: number }>();
-          for (const inst of sheet.list) {
-            const c = pool.get(inst.cardId);
-            const key = inst.cardId;  // 同 cardId = 同名同版本，可堆疊
-            const existing = m.get(key);
-            if (existing) existing.count++;
-            else m.set(key, { name: c?.name ?? '?', cardId: inst.cardId, inst, supertype: c?.supertype, count: 1 });
-          }
-          return [...m.values()].sort((a, b) => b.count - a.count);
-        })()}
+        <!-- v5.118：合併同名卡為一行「名×N」；改用 reduce 純 expression（Svelte {@const} 不允許 statement） -->
+        {@const _groups = [...sheet.list.reduce((m, inst) => m.set(inst.cardId, { cardId: inst.cardId, inst, count: (m.get(inst.cardId)?.count ?? 0) + 1, name: pool.get(inst.cardId)?.name ?? '?', supertype: pool.get(inst.cardId)?.supertype }), new Map<string, { cardId: string; inst: CardInstance; count: number; name: string; supertype?: string }>()).values()].sort((a, b) => b.count - a.count)}
         <div class="mp-discard-list">
           {#each _groups as g (g.cardId)}
             <div class="mp-discard-row">
