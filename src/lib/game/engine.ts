@@ -1092,13 +1092,27 @@ export function totalEnergyUnits(
   pool: Map<string, Card>,
   state?: GameState,
   ownerIdx?: 0 | 1,
+  hostInst?: CardInstance,
 ): number {
   const hasBloom = hasBloomAbilityOnField(state, ownerIdx, pool);
+  // v5.125：燃火能量倍率 — 卡面「若附於進化寶可夢身上，則視為提供 3 個【無】能量」。
+  //   原 getEnergyUnits 簽名只有 cardId 沒 host 資訊 → 燃火能量走 fallback 1 unit，
+  //   撤退用此函式時沒考慮倍率（玩家回報撤退用燃火能量只算 1 個）。
+  //   修法：caller 傳 hostInst（如 attacker.active），inline 判斷進化倍率。
+  const hostCard = hostInst ? pool.get(hostInst.cardId) : null;
+  const hostIsEvolution = !!(hostCard && (hostCard.evolvesFrom
+    || hostCard.stage === 'Stage1' || hostCard.stage === 'Stage2'
+    || hostCard.subtype === 'Stage1' || hostCard.subtype === 'Stage2'));
   let n = 0;
   for (const e of attached) {
     const ec = pool.get(e.cardId);
     if (hasBloom && isBasicEnergyOfType(ec, 'Grass')) {
       n += 2;
+      continue;
+    }
+    // v5.125 燃火能量倍率
+    if (ec?.name === '燃火能量') {
+      n += hostIsEvolution ? 3 : 1;
       continue;
     }
     const units = getEnergyUnits(e.cardId, pool);
@@ -2506,7 +2520,7 @@ function handlePlaying(
     }
     // v2.69：撤退成本用「能量單位」比對，不是卡片張數。火箭隊能量 1 張 = 2 units。
     // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
-    if (totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx) < retreatCost) return state;
+    if (totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx, attacker.active) < retreatCost) return state;
 
     // v2.63：若撤退需丟 ≥1 個能量，且附加能量包含多種屬性（或不同單位結構的特殊能量），
     // 開 pendingSelection 讓玩家選要丟哪幾個能量；否則沿用自動丟棄。
@@ -7350,7 +7364,7 @@ export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
   const player = state.players[state.activePlayerIndex];
   // v2.69：以能量單位計算（火箭隊能量 1 張 = 2 units）。
   // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
-  return totalEnergyUnits(player.active!.energyAttached, pool, state, state.activePlayerIndex) >= cost;
+  return totalEnergyUnits(player.active!.energyAttached, pool, state, state.activePlayerIndex, player.active!) >= cost;
 }
 
 /**
@@ -7377,7 +7391,7 @@ export function getRetreatBlockReason(state: GameState, pool: Map<string, Card>)
   // 計算能量是否足夠（重用 getRetreatCost 的 cost 與 canRetreat 的能量比對）
   const cost = getRetreatCost(state, pool);
   if (cost === null) return '無法計算撤退費（未知原因 — 請回報）';
-  const have = totalEnergyUnits(player.active.energyAttached, pool, state, state.activePlayerIndex);
+  const have = totalEnergyUnits(player.active.energyAttached, pool, state, state.activePlayerIndex, player.active);
   if (have < cost) return `能量不足（撤退需 ${cost} 顆，現有 ${have} 顆）`;
   return null;
 }
@@ -8174,7 +8188,7 @@ RESOLVERS.set('retreat-energy-discard', (state, actorIdx, selectedIids, params, 
   // 計算選中能量的總單位數
   // v2.108：傳 state+actorIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
   const pickedInsts = attacker.active.energyAttached.filter(e => picked.has(e.iid));
-  if (totalEnergyUnits(pickedInsts, pool, state, actorIdx) < retreatCost) return state;
+  if (totalEnergyUnits(pickedInsts, pool, state, actorIdx, attacker.active) < retreatCost) return state;
 
   const bIdx = attacker.bench.findIndex(c => c.iid === newActiveIid);
   if (bIdx < 0) return state;

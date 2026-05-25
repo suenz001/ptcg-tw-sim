@@ -1789,7 +1789,8 @@
     "species": "空殼寶可夢",
     "illustrator": "IKEDA Saki",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "土居忍士"
   },
   {
     "id": "14064",
@@ -2840,7 +2841,8 @@
     },
     "illustrator": "Tetsu Kayama",
     "regulationMark": "I",
-    "stage": "Stage1"
+    "stage": "Stage1",
+    "evolvesFrom": "土居忍士"
   },
   {
     "id": "14220",

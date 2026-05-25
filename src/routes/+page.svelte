@@ -265,6 +265,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.125</span> 🐛 燃火能量撤退 = 3 個能量沒生效 + 脫殼忍者進化鏈漏土居忍士</summary>
+        <ul>
+          <li><b>玩家回報 Bug 1</b>：燃火能量無法當 3 顆能量供撤退使用。</li>
+          <li><b>根因</b>：<code>totalEnergyUnits</code>（撤退/招式判定能量總和的 helper）用 <code>getEnergyUnits(cardId, pool)</code>，但 <code>getEnergyUnits</code> 簽名只有 cardId 沒 host 資訊 → 燃火能量走 fallback 1 個 Colorless unit，沒考慮卡面「附於進化寶可夢提供 3 個」倍率。</li>
+          <li><b>對照</b>：<code>canAffordAttack</code> 已正確處理（L1024-1029 內 inline），但 <code>totalEnergyUnits</code>（撤退用）漏。</li>
+          <li><b>修法</b>：<code>totalEnergyUnits</code> 加 <code>hostInst?: CardInstance</code> 可選參數 + inline 判斷進化倍率（仿 L1100 大竺葵繁茂 pattern）。6 處 caller 補傳 host（engine.ts 撤退 / 招式門檻 4 處 + v154_decks.ts 2 處）。</li>
+
+          <li><b>玩家回報 Bug 2</b>：脫殼忍者進化鏈漏「從土居忍士進化」設定。</li>
+          <li><b>根因</b>：M1S.json 內脫殼忍者（2 個版本：043/063 + 072/063）<code>evolvesFrom</code> 欄位為 <code>None</code>（scraper 漏抓）。</li>
+          <li><b>修法</b>：直接修 JSON 補 <code>evolvesFrom: &quot;土居忍士&quot;</code>。</li>
+          <li><b>Audit 全資料庫</b>：找出其他 Stage1/2 漏 evolvesFrom 的卡，但 <b>不擅自填入</b>（避免 hallucinate）。實際 audit 結果 — 真實卡庫漏：MC.json「大宇怪」(Stage1)；M5_translate/M5_raw 是 scrape 中間檔不影響運行。建議 Wilson 確認大宇怪進化來源後一併補。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 7 處 exact-match）／14（最小 patch — 加 1 個 optional 參數 + 補 6 處 caller + 修 2 個 JSON 欄位）／15（卡面 source of truth — 燃火能量 rulesText 直接抽；脫殼忍者進化鏈依 PTCG 規則 + Wilson 確認）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.124</span> 🐛 打爆無視閃光射線免疫 + 等待開戰標籤加底色</summary>
         <ul>
           <li><b>玩家回報 Bug</b>：上回合超級雷電獸ex 用閃光射線（下回合此卡不受【基礎】寶可夢招式傷害），對方厄鬼椪礎石面具ex 用打爆（不計算對手身上附加效果）應該無視此免疫造成 140 傷害，但實測沒傷害。</li>
