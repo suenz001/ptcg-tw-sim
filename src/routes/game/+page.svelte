@@ -8610,6 +8610,9 @@
   .playmat.layout-tabletop .action-bar > .action-btns{
     grid-area:actions; align-self:center; justify-self:center;
     /* v5.046：gap:3 → 2 — 招式按鈕之間近，跨類別按鈕用 margin-top 額外撐開避免誤按 */
+    /* v5.149：position:absolute — 動態按鈕變化（進化/附加完成後 confirm 按鈕等）
+       不貢獻 row sizing，row 3 高度由 active-card (鎖死 175) 決定。 */
+    position:absolute;
     display:flex; flex-direction:column; gap:2px; max-width:140px;
   }
   /* v5.046：桌墊版 action-btns 內按鈕分組間距
@@ -8626,8 +8629,11 @@
     margin-top: 14px !important;
   }
   .playmat.layout-tabletop .action-bar > .alerts-col{
-    /* 跟 actions 同欄但上方堆疊 */
-    grid-area:actions; align-self:start;
+    /* 跟 actions 同欄但上方堆疊
+       v5.149：position:absolute — 不貢獻 row track sizing（鏡射 v5.143 stadium）。
+       alerts 內動態訊息瞬間出現/消失不撐 row 3 高度。 */
+    grid-area:actions; align-self:start; justify-self:center;
+    position:absolute;
     z-index:5; pointer-events:none;  /* alerts 內部按鈕需 re-enable */
   }
   .playmat.layout-tabletop .action-bar > .alerts-col > *{ pointer-events:auto; }
@@ -8776,13 +8782,23 @@
     font-size:.7rem; line-height:1.1; text-align:center;
     white-space:normal; word-break:keep-all;
   }
-  /* 9854 line .evo-wrap bottom:1.85rem → 桌墊版不留底部空間 */
-  /* v5.146：evo-wrap 自身也提高 z-index，雙重保險 (active-card stacking 內最頂層) */
-  .playmat.layout-tabletop .active-card .evo-wrap{ bottom:.4rem !important; z-index:200; }
-  /* v5.146：桌墊版進化按鈕放大 — 原 evo-btn font-size:.62rem 太小，加 padding */
+  /* v5.149：evo-wrap 改疊在 active-img 上（卡圖內 ability-btn 下方），不再放卡片底部佔版面。
+     Wilson：進化按鈕要疊在寶可夢卡圖上不要佔版面，且不能跟特性按鈕重疊。
+     ability-btn 位置：right:8 top:75 width:90 height ~30。evo-wrap 放 ability-btn 下方 5px。
+     z-index:201 高於 ability-btn 200，確保兩者都可點。 */
+  .playmat.layout-tabletop .active-card .evo-wrap{
+    position:absolute;
+    bottom:auto !important;
+    top:110px;          /* ability-btn top:75 + height ~30 + gap 5 */
+    right:8px;
+    width:90px;
+    z-index:201;
+  }
+  /* v5.146/v5.149：桌墊版進化按鈕字體放大 + 填滿 evo-wrap 寬 */
   .playmat.layout-tabletop .active-card .evo-btn{
+    width:100% !important;
     font-size:.85rem !important;
-    padding:.3rem .6rem !important;
+    padding:.3rem .5rem !important;
     font-weight:bold;
   }
 

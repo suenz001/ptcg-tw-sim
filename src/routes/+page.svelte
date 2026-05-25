@@ -265,6 +265,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.149</span> 🎯 進化按鈕疊卡圖 + actions/alerts absolute 完全脫離 grid sizing</summary>
+        <ul>
+          <li><b>A. 進化按鈕位置不對</b>：Wilson「我要疊在寶可夢上面（只要不和特性按鈕重疊就好），而不是放在卡片下面造成佔用版面」。</li>
+          <li><b>修法 A</b>：<code>.evo-wrap</code> 改 <code>position:absolute; top:110px; right:8px; width:90px</code> — 疊在 active-img 上方，緊跟 ability-btn（top:75, height ~30）下方 5px gap。<code>z-index:201</code> 高於 ability-btn 200，兩者都可點不衝突。evo-btn 填滿 wrap 寬，font-size .85rem, padding 加大。</li>
+
+          <li><b>B. active row 仍撐大</b>：v5.147 鎖死 active-card height:175 但 row 3 還有 <code>actions</code> 跟 <code>alerts-col</code> 兩個 grid items 撐 row 高度。Wilson 報告「進化/附加能量/道具後撐大、下一動作回復」— 是動態按鈕變化（進化完成 confirm 按鈕 / 附加完成 alert msg）撐 row 3 高度。</li>
+          <li><b>修法 B</b>（鏡射 v5.143 stadium absolute）：</li>
+          <li>　・<code>.alerts-col</code> 加 <code>position:absolute</code>（保留 grid-area:actions 為 containing block）</li>
+          <li>　・<code>.action-btns</code> 加 <code>position:absolute</code></li>
+          <li>　・CSS Grid Spec：absolute item with grid-area 不貢獻 track sizing，containing block 是 grid area</li>
+          <li>　・row 3 高度從此只由 active-card 決定（已 v5.147 鎖死 175）→ 任何動作都不撐 row</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 3 處 exact-match）／14（最小 patch — evo-wrap 位置改 + 兩個 position:absolute）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.148</span> 🚨 mulligan 順序: 較多次方需等較少次方先放</summary>
         <ul>
           <li><b>Wilson 觀察（log）</b>：玩家 mulligan 2 次 / AI 3 次（AI 較多），但 AI 先選出場寶可夢 + 完成準備，玩家後選 — 順序不對。</li>
