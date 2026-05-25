@@ -2237,6 +2237,14 @@
             return !!card && card.supertype === 'Pokemon';
           });
         }
+        // v5.155 化石採掘場：NameContains:X — 牌庫中名稱含 X 的物品卡（Trainer/Item）
+        if (f.startsWith('NameContains:')) {
+          const sub = f.slice('NameContains:'.length);
+          return src.deck.filter(c => {
+            const card = pool.get(c.cardId);
+            return !!card && card.supertype === 'Trainer' && card.subtype === 'Item' && card.name.includes(sub);
+          });
+        }
         // v4.942 黑暗球：bottom 7（用 top7Iids 名義 reuse 既有 spec'd TOP-N 機制）中的寶可夢卡
         if (f === 'Pokemon:TOP7') {
           const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);

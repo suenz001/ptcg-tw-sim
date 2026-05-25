@@ -8306,6 +8306,17 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
         }
       }
     }
+    // v5.155 active target 受擊 → 觸發扣殺能量等 SPECIAL_ENERGY_ON_DAMAGED + TOOL_ON_DAMAGED
+    //   主 engine attack path 有觸發此 hook (L5057-5064)，但 multi-target resolver 漏。
+    //   Wilson 報告扣殺能量「沒效果」可能是被多目標招式攻擊時沒觸發。
+    if (isActive && effDmg > 0) {
+      for (const e of target.energyAttached) {
+        const ec = pool.get(e.cardId);
+        if (!ec) continue;
+        const fn = SPECIAL_ENERGY_ON_DAMAGED.get(ec.name);
+        if (fn) s = fn(s, (1 - actorIdx) as 0 | 1, actorIdx, effDmg, pool);
+      }
+    }
     const newDmg = target.damage + effDmg;
     const hp = effectiveHPInline(target, pool, st);  // v5.091
     if (hp > 0 && newDmg >= hp) {
@@ -12933,6 +12944,16 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
       const targetTool = target.toolAttached ? pool.get(target.toolAttached.cardId) : null;
       if (targetTool?.name === '龐克頭盔' && targetCard?.pokemonType === 'Darkness') {
         punkReflectDamage += 40;
+      }
+    }
+    // v5.155 active target 受擊 → 觸發扣殺能量等 SPECIAL_ENERGY_ON_DAMAGED
+    //   主 engine attack path 有觸發此 hook，但 multi-target resolver 漏。
+    if (isActive && dmg > 0) {
+      for (const e of target.energyAttached) {
+        const ec = pool.get(e.cardId);
+        if (!ec) continue;
+        const fn = SPECIAL_ENERGY_ON_DAMAGED.get(ec.name);
+        if (fn) s = fn(s, (1 - actorIdx) as 0 | 1, actorIdx, dmg, pool);
       }
     }
     const newDmg = target.damage + dmg;

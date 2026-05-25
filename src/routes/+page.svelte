@@ -265,6 +265,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.155</span> 🐛 化石採掘場 filter + 扣殺能量多目標觸發</summary>
+        <ul>
+          <li><b>Bug 1 — 化石採掘場 modal 沒 filter</b>：Wilson「modal 要只顯示名稱含『陳舊的』物品卡」。</li>
+          <li><b>根因</b>：<code>engine.ts L2989</code> 設 filter <code>NameContains:陳舊的</code>，但 UI <code>selectionItems</code> deck-search switch 完全沒有 <code>NameContains:</code> 分支 → fallback inner block 沒匹配 → 顯示空白或全部 deck。</li>
+          <li><b>修法 1</b>：UI <code>selectionItems</code> 加 <code>NameContains:X</code> filter 分支：限定 Trainer/Item subtype + 卡名含 X 字串。</li>
+
+          <li><b>Bug 2 — 扣殺能量多目標招式沒觸發</b>：Wilson「扣殺能量未完整實裝沒有效果」。卡面（MC #17208）：「附有這張卡的寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置 2 個傷害指示物」。</li>
+          <li><b>Audit 結果</b>：</li>
+          <li>　・✓ effect 實裝（<code>energy_cards.ts L119</code> SPECIAL_ENERGY_ON_DAMAGED）</li>
+          <li>　・✓ 主 engine attack path 觸發 hook（<code>engine.ts L5057-5064</code>）</li>
+          <li>　・✗ **多目標 resolver**（<code>snipe-multi</code> + <code>clone-strike-multi-hit</code>）漏觸發 hook</li>
+          <li><b>修法 2</b>：兩個 multi-target resolver 內 active target 受擊（dmg&gt;0）時 iterate <code>target.energyAttached</code> 觸發 <code>SPECIAL_ENERGY_ON_DAMAGED</code> hook，讓扣殺能量在被三重冰霜/分身連打/激流水泵等招式打中時也能反擊 +20。</li>
+          <li><b>同類保護</b>：未來其他 SPECIAL_ENERGY_ON_DAMAGED 註冊的特殊能量都受益。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 3 處 exact-match）／14（最小 patch — UI 新 filter 分支 + 兩 resolver 加 hook 觸發）／15（PTCG 卡面 source of truth）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.154</span> 🎯 撤回 my-row active z-index 讓 bench 疊牌可見</summary>
         <ul>
           <li><b>Wilson 回報</b>：桌墊版備戰寶可夢的疊牌被戰鬥場框架蓋住，請把備戰疊牌移到上層。</li>
