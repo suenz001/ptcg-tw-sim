@@ -8313,10 +8313,11 @@
       "chipO   pilesO    stadium   .         activeO   prizesO"
       "chipMe  prizesMe  stadium   actions   activeMe  pilesMe"
       ".       .         .         .         benchMe   .";
-    /* v5.038→v5.050：row-gap 12→5px (戰鬥場↔備戰區更近)。
-       padding 24px 已沒必要 — v5.097 後卡圖撐滿框架不再往外 fan；v5.098 對手 bench 改往下 fan。
-       padding-top/bottom 縮回 8px 讓 bench 更靠 viewport 邊緣，opp 上推 + my 下推。 */
-    gap:5px 8px;
+    /* v5.038→v5.050→v5.110：row-gap 12→5→25px。
+       玩家回報對手 active 離 bench 太近，視覺不對稱。row-gap 拉大讓 row 1-2 + row 2-3 + row 3-4 之間有
+       明顯距離，bench 跟 active 視覺分隔清楚。
+       padding-top/bottom 維持 8px (v5.098)。 */
+    gap:25px 8px;
     padding:8px 8px;
     align-items:center;
     /* 預留右側 log panel 空間（log 開啟時） */

@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.110</span> 🎨 grid row-gap 5→25px 對手 bench-active 距離正常化</summary>
+        <ul>
+          <li><b>玩家回報</b>（圖 1 對手 1 隻基礎卡 vs 圖 2 對手有進化堆）：「對方備戰區離戰鬥場太近，應該分一點給對方」；圖 2 有進化堆 fan 進 row 2 占據空白看起來「距離正常」。Wilson 要一開始就是圖 2 的排版。</li>
+          <li><b>根因</b>：grid row-gap 5px（v5.050 為了「對手 active 往上靠近 bench」改的）對沒進化堆的情境太小；有進化堆 fan 進 active 上方 35px 緩衝區（v5.109）才看起來「滿」。</li>
+          <li><b>修法</b>：拉大 row-gap 5px → 25px。row 1 對手 bench 跟 row 2 對手 active 之間、row 2 跟 row 3 之間、row 3 我方 active 跟 row 4 我方 bench 之間，全部加 20px 視覺距離。</li>
+          <li><b>不動</b>：active-card 內部 HP column / name / ability 位置（v5.109 已調 35px 下移），col-gap (8px) 不變。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 14（最小 patch — 純 1 行 CSS gap 值）／Rule 1（changelog audit pass）／Rule 11e／Rule 11f。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.109</span> 🎨 對手疊牌 z-index 用 stacking context 拉高 + active 內部元素整體下移避免被 fan 蓋</summary>
         <ul>
           <li><b>玩家三個訴求</b>（v5.108 仍有問題）：</li>
