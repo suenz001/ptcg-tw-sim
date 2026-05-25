@@ -8437,17 +8437,12 @@
   .playmat.layout-tabletop .opponent-row .bench-slot{
     height: 155px !important;
   }
-  /* v5.097：bench-middle 撐滿整個 bench-slot 框架，卡圖跟著 height:100% 最大化。
-     原本 (v5.030 之前) bench-middle 是 flex 內中央區，留下方 HP bar/特性按鈕空間。
-     改成所有按鈕都 absolute 浮層 → bench-middle 可獨佔整 slot，卡圖視覺最大化。 */
+  /* v5.097：bench-middle 撐滿 bench-slot 框架。v5.106 簡化 grid → flex
+     stack 已改 absolute 脫離 layout，img 是唯一 layout 內容，用 flex center 對齊即可。 */
   .playmat.layout-tabletop .bench-slot .bench-middle{
-    display:grid; place-items:center;
-    position:absolute; inset:0;        /* v5.097: 撐滿 bench-slot */
+    display:flex; align-items:center; justify-content:center;
+    position:absolute; inset:0;
     overflow:visible;
-  }
-  .playmat.layout-tabletop .bench-slot .bench-middle > img,
-  .playmat.layout-tabletop .bench-slot .bench-middle > .att-card-stack{
-    grid-column:1; grid-row:1;  /* 同 cell 重疊 */
   }
   .playmat.layout-tabletop .bench-slot .bench-middle img{
     z-index:99;
@@ -8455,16 +8450,20 @@
     height:100%; width:auto; max-width:100%; max-height:100%;
     object-fit:contain;
   }
-  /* v5.098：att-card-stack 跟著卡圖等比放大 — 卡圖 height:100% 後堆疊也要跟上
-     v5.105：width:auto + aspect-ratio 會讓 stack 寬度 = height × ratio (146px) 撐爆 cell (95px)
-     → att-card 寬度跟著撐爆，視覺溢出擠相鄰 bench-slot。
-     改 width:100% (受 cell 限制 ~95px) + height:auto + aspect-ratio → 寬度受限 + 高自動。
-     stack 中心對齊 cell 中央時跟卡圖視覺尺寸重合，att-card width:100% 也跟卡圖同寬。 */
+  /* v5.098 → v5.105 → v5.106 演進：
+     - v5.098: height:100% + aspect-ratio + width:auto → 寬度撐爆 146px > cell 95px
+     - v5.105: width:100% + height:auto + aspect-ratio → 變 grid item, stack 仍影響 cell layout
+     - v5.106: 改 position:absolute + 中央定位完全脫離 grid layout，
+       att-card 視覺往上 fan 出框架外，框架尺寸不變（玩家要求「框架鎖死」）
+     att-card 內仍 position:absolute top:-N，從 stack 頂往上偏移視覺溢出 bench-slot。 */
   .playmat.layout-tabletop .bench-slot .att-card-stack{
-    position:relative;
+    position:absolute;
+    top:50%; left:50%;
+    transform:translate(-50%, -50%);
     width:100%; max-width:100%;
     aspect-ratio:96/135; height:auto;
     overflow:visible !important;
+    pointer-events:none;  /* att-card 個別 pointer-events:auto 仍可 hover */
   }
   .playmat.layout-tabletop .zone-bench{ overflow:visible !important; }
 
