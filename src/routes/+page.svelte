@@ -265,6 +265,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.134</span> 🎯 3 項：桌墊版鎖框 + 多張獎賞動畫 + mulligan 重抽方等待</summary>
+        <ul>
+          <li><b>玩家回報 1</b>：使用感應超能量召出備戰寶可夢，自己戰鬥場與備戰區間隙又出現。</li>
+          <li><b>修法 1</b>：v5.131 用 <code>min-height:205px</code> 但仍有間隙。改 <code>height:205px + min-height:205px + max-height:205px</code> 完全鎖死 zone-bench，所有 layout shift 都不會撐變化。</li>
+
+          <li><b>玩家回報 2</b>：一次取 2 張或 3 張獎賞卡時只播一張動畫。</li>
+          <li><b>修法 2</b>：<code>prizePickAnims</code> 加 stagger delay — 多張時每張間隔 <code>250ms</code> push，且 duration 從 <code>1.6s</code> 縮為 <code>1.0s</code>，2-3 張連續播又快又看得清。</li>
+
+          <li><b>玩家回報 3</b>：mulligan 順序 — 重抽方應等對方放好基礎寶可夢到戰鬥場（證明對方確實有基礎）後，才能設置自己的戰鬥場。現程式允許自己重抽決定後馬上設置，順序錯。</li>
+          <li><b>修法 3</b>：engine.ts <code>PLACE_ACTIVE</code> handler 加 gate — 自己 mulligan 次數&gt;0 + 對手 mulligan 次數=0 + 對手 active=null → 拒絕並 log「重抽過，需等對手先放好戰鬥場寶可夢」。雙方都 mulligan 時不擋（任一方都可先放）。</li>
+
+          <li><b>朽木妖 終極吸取 AI 卡死（暫緩 — 需 Wilson 補細節）</b>：</li>
+          <li>　・卡面 source of truth（M4/MC/SV6 JSON）：「<code>終極吸取 50</code>，將這隻寶可夢恢復對對手的戰鬥寶可夢造成的傷害相同數值的 HP」</li>
+          <li>　・實作 <code>selfHealByDealtPost</code>（effects.ts L7674）用 <code>state.lastDealtDamage</code> 計回血，邏輯純淨</li>
+          <li>　・AI scheduling 對 KO 後送 active / 取獎賞已有 auto-handle（+page.svelte L1546/1550/1556）</li>
+          <li>　・<b>無法定位 bug 位置</b> — 不可 hallucinate，請 Wilson 提供：誰用朽木妖（玩家還是 AI）？打死誰？卡在哪一步？是否有 console 錯誤？</li>
+
+          <li><b>本機 svelte.compile pre-check</b>：通過 (changelog + game/+page.svelte)</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 4 處）／14（最小 patch — 純 CSS / state / engine gate）／15（PTCG 規則 source of truth）／1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.133</span> 🎯 mulligan 順序改符合 PTCG 規則（先放戰鬥場，後 mulligan 補抽）</summary>
         <ul>
           <li><b>玩家提議</b>：依實體 PTCG 規則，正確 mulligan 流程是「先擲幣 → 抽 7 → 有基礎放戰鬥場 → 對方如沒基礎才開始 mulligan 補抽」。現系統卻是先 mulligan 補抽，再放戰鬥場。</li>

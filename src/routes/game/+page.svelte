@@ -835,20 +835,31 @@
           endX = pmRect ? pmRect.left + pmRect.width / 2 : window.innerWidth / 2;
           endY = pmRect ? Math.max(pmRect.top + 20, 40) : 40;
         }
+        // v5.134：多張獎賞 stagger delay + 一次多張時加快每張動畫速度
+        const multi = capturedPicks.length;
+        const effDur = multi > 1 ? 1000 : PRIZE_PICK_DUR;  // 多張時 1.6s→1.0s
+        const stagger = multi > 1 ? 250 : 0;  // 每張間隔 250ms
         capturedPicks.forEach((p, i) => {
           const id = Date.now() + Math.random() + i * 0.001;
-          const anim: PrizePickAnim = {
-            id, cardId: p.cardId, iid: p.iid,
-            startX, startY, endX, endY,
-            duration: PRIZE_PICK_DUR,
-          };
-          prizePickAnims = [...prizePickAnims, anim];
+          const startDelay = i * stagger;
+          // 等 startDelay 後 push 動畫
+          const startTimer = setTimeout(() => {
+            const anim: PrizePickAnim = {
+              id, cardId: p.cardId, iid: p.iid,
+              startX, startY, endX, endY,
+              duration: effDur,
+            };
+            prizePickAnims = [...prizePickAnims, anim];
+          }, startDelay);
+          prizePickTimers.push(startTimer);
+          // 動畫結束清除
+          const total = startDelay + effDur + 80;
           const timerId = setTimeout(() => {
             prizePickAnims = prizePickAnims.filter(d => d.id !== id);
             const next = new Set(prizePickIids);
             next.delete(p.iid);
             prizePickIids = next;
-          }, PRIZE_PICK_DUR + 80);
+          }, total);
           prizePickTimers.push(timerId);
         });
       });
@@ -8633,14 +8644,17 @@
      v5.109: z-index:200 拉高過 active-card(z=auto)，修對手 bench 往下 fan 被 active 蓋
      對手 bench 在 row 1, fan 進 row 2 對手 active 區。同 DOM order 後者(active)堆疊在上
      → bench att-card 被蓋。z-index:200 在 zone-bench 整體建立 stacking context 之上。
-     v5.131: 加 min-height:205px — 鎖死 bench-row 高度，沒 bench 寶可夢時也預留空間，
-     放第一隻時不會撐大父 row（玩家回報「放寶可夢撐出間隙」）。 */
+     v5.131: 加 min-height:205px — 鎖死 bench-row 高度，沒 bench 寶可夢時也預留空間。
+     v5.134: min-height → fixed height:205 + max-height:205 — 玩家回報 v5.131 後仍有間隙，
+     可能 bench-slot 內容 + height:auto 導致變化。改 fixed height 完全鎖死所有 layout shift。 */
   .playmat.layout-tabletop .zone-bench{
     overflow:visible !important;
     contain: layout;
     position:relative;
     z-index:200;
+    height:205px;
     min-height:205px;
+    max-height:205px;
   }
   /* v5.109: zone-active z-index 明確設定 1, 低於 zone-bench(200) */
   .playmat.layout-tabletop .zone-active{
