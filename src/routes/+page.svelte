@@ -265,136 +265,7 @@
     <div class="changelog-list">
 
       <details open>
-        <summary><span class="ver-badge">v5.101</span> 🚨 接續 v5.100 救火：backtick 內仍有 raw &#123;&#125; 漏 escape</summary>
-        <ul>
-          <li><b>v5.100 Deploy 失敗</b>：vite-plugin-svelte build error。我 v5.100 的 escape script 保留了 backtick <code>&#96;...&#96;</code> 內的 <code>&#123;...&#125;</code>，但 Svelte template 不認 backtick — backtick 內的 <code>&#123;</code> 還是會被當 expression 解析。</li>
-          <li><b>修法</b>：拿掉 backtick protection rule，所有 raw <code>&#123;</code> <code>&#125;</code>（含 backtick 內）一律 escape 成 HTML entity。只保留 svelte syntax <code>&#123;#if&#125;</code> <code>&#123;@const&#125;</code> 等真正必要的。</li>
-          <li><b>Iron Rules</b>：Rule 1 確實執行（backtick 不算 escape）／Rule 11/11c／Rule 11e／Rule 11f。</li>
-        </ul>
-      </details>
-
-      <details>
-        <summary><span class="ver-badge">v5.100</span> 🚨 救白畫面：changelog raw &#123;(i+1) * _stepOB&#125; 違反 Rule 1（再犯，已 audit）</summary>
-        <ul>
-          <li><b>根因確認</b>：v5.099 hard reset 後仍白畫面，截控制台 console 看 chunk <code>2.DJ8QhyCt.js</code> 是 <code>routes/+page.svelte</code> 編譯 chunk。fetch 線上 chunk 確認 — v5.098 我加的 changelog 這行：</li>
-          <li><pre><code>&lt;li&gt;　5. 對手 bench svelte template loop &lt;code&gt;top:&#123;(i+1) * _stepOB&#125;px&lt;/code&gt;...</code></pre></li>
-          <li><b>Svelte 把 raw <code>&#123;(i+1) * _stepOB&#125;</code> 當成 JS expression evaluate</b>，<code>i</code> / <code>_stepOB</code> 在 <code>+page.svelte</code> 範圍不存在 → <code>ReferenceError: i is not defined</code>。</li>
-
-          <li><b>違反鐵律 Rule 1</b>（ptcg-push skill 寫得很清楚）：「Svelte template 內所有 <code>&#123;</code> <code>&#125;</code> 必須 HTML-entity escape」。歷史上 v2.461 / v2.733 / v2.82 / v5.036 / v5.045 / v5.087 都犯過，這次又犯（v5.098 + 累積殘留共 8 行）。</li>
-
-          <li><b>修法</b>：Python regex 掃 <code>changelog-list</code> 區段，把所有 raw <code>&#123;</code> <code>&#125;</code> 改 HTML entity，跳過：</li>
-          <li>　・<code>&#123;#if&#125;</code> <code>&#123;#each&#125;</code> <code>&#123;/if&#125;</code> <code>&#123;:else&#125;</code> <code>&#123;@const&#125;</code> 等 svelte syntax</li>
-          <li>　・既有 <code>&amp;#123;</code> <code>&amp;#125;</code> entity（不重複 escape）</li>
-          <li>　・<code>&#96;&#123;...&#125;&#96;</code> backtick template literal 包覆者（已保護）</li>
-
-          <li><b>後續</b>：玩家原回報 bug（萬花筒華爾滋能量分配 / 虛無歸零 +30 / 桌墊版 bench 放大）仍 hold；確認 v5.100 上線後可進入網頁，再重做這些 patch。<b>注意：寫 changelog 時 raw <code>&#123;...&#125;</code> 必須用 backtick <code>&#96;&#96;</code> 包或改 entity</b>，這次再犯後加強 audit 流程。</li>
-
-          <li><b>Iron Rules</b>：Rule 1（escape Svelte 特殊字元 — 這次主犯）／Rule 11/11c（Python pipeline）／Rule 14（最小 patch — regex 自動 escape）／Rule 11e（Write tool）／Rule 11f（ASSERT fix count &gt; 0）。</li>
-        </ul>
-      </details>
-
-      <details>
-        <summary><span class="ver-badge">v5.099</span> 🚨 緊急 revert v5.096~v5.098 — 白畫面 ReferenceError 救援</summary>
-        <ul>
-          <li><b>玩家回報</b>：網頁變白畫面，控制台 <code>Uncaught (in promise) ReferenceError: i is not defined</code> 在 <code>2.zI_mCuGg.js:24</code>（minified chunk）。</li>
-
-          <li><b>緊急處置</b>：把 <code>game/+page.svelte</code> + <code>v2349_j_mark_batch.ts</code> hard reset 到 v5.095 commit（<code>a2368bb</code>）byte-identical。三個 patch 全部撤回：</li>
-          <li>　・<b>v5.096</b> 萬花筒華爾滋（startEnergyChain）+ 虛無歸零（力量蛋白飲 +30）</li>
-          <li>　・<b>v5.097</b> 桌墊版 bench 卡圖放大到框架 + 按鈕 absolute 浮層</li>
-          <li>　・<b>v5.098</b> bench 細調（att-card-stack aspect-ratio / 按鈕加高 / opp 上推下方堆疊 / my 下推）</li>
-
-          <li><b>待查根因</b>：</li>
-          <li>　・<code>2.zI_mCuGg.js</code> 是某個 v 系列 effects chunk，minified 後 <code>i</code> 變數未定義</li>
-          <li>　・最可能：v5.096 加 <code>import startEnergyChain</code> 從 <code>v158_energy_chain</code> 造成 circular import 在 production minified 後 evaluate 順序問題（dev mode 沒爆，build pass，runtime 才爆）</li>
-          <li>　・v5.097 + v5.098 純 CSS + 1 行 svelte template 改動，理論上不會造成 JS ReferenceError，但保險一起撤回</li>
-
-          <li><b>後續</b>：v5.099 上線確認玩家可進入後，分別追查 v5.096 / v5.097 / v5.098 的問題；玩家回報的 bug（萬花筒華爾滋 / 虛無歸零 / 桌墊版 bench 放大）暫時 hold，等找到 chunk error 根因再個別重作。</li>
-
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 version + changelog；兩個受影響檔已用 <code>git cat-file -p</code> hard reset 到 v5.095 byte-identical）／Rule 14（最小 patch — 純 revert，不嘗試新修法）／Rule 11e（Write tool）／Rule 11f（ASSERT diff 為空）。</li>
-        </ul>
-      </details>
-
-      <details>
-        <summary><span class="ver-badge">v5.098</span> 🎨 桌墊版 bench 後續細調：堆疊放大 / 按鈕加高 / 對手上推+下方堆疊 / 我方下推</summary>
-        <ul>
-          <li><b>玩家回報（v5.097 之後）</b>：</li>
-          <li>　1. 底下堆疊的能量/道具/進化卡大小沒跟著卡圖放大</li>
-          <li>　2. 特性按鈕高度再加高一點</li>
-          <li>　3. 我方備戰寶可夢與手牌之間有大空間，可再靠下</li>
-          <li>　4. 對手備戰寶可夢與頂部之間有大空間，可再靠上</li>
-          <li>　5. 對手備戰寶可夢堆疊方向改成往下（不再往上 fan）</li>
-
-          <li><b>修法</b>：</li>
-          <li>　1. <code>.bench-slot .att-card-stack</code>：<code>width:100% max-width:108px height:128px</code> → <code>height:100% aspect-ratio:96/135 width:auto max-width:none</code>。stack 跟卡圖等比放大，<code>.att-card width:100%</code> 也跟著大</li>
-          <li>　2. <code>.ability-btn-sm</code>：<code>padding</code> <code>.22 → .35rem</code>、<code>font</code> <code>.72 → .82rem</code>、加 <code>min-height:28px</code>、<code>bottom 22 → 26</code> 對應加高</li>
-          <li>　3. 桌墊版 <code>padding-top/bottom 24 → 8</code>（v5.097 後卡圖撐滿框架不再往外 fan；對手 bench 改往下 fan 後不需 padding-top 預留）</li>
-          <li>　4. <code>.opponent-row &gt; .zone-bench</code> 加 <code>align-self:start</code>（黏 row 上邊 / 接近 viewport 頂）；<code>.my-row &gt; .zone-bench</code> 加 <code>align-self:end</code>（黏 row 下邊 / 接近手牌）</li>
-          <li>　5. 對手 bench svelte template loop <code>top:&#123;(i+1) * _stepOB&#125;px</code>（正值 = 往下 fan）；我方 bench 維持往上 fan 不動</li>
-
-          <li><b>實際影響</b>：</li>
-          <li>　・底下堆疊小卡圖視覺等比例放大 ~+40%（跟著 bench-middle 高度）</li>
-          <li>　・特性按鈕高度約 +50%，更好點擊</li>
-          <li>　・對手 bench 上推、我方 bench 下推 → active row 中央區更大、log/UI 顯示更舒服</li>
-          <li>　・對手 bench 卡圖底下會看到能量等堆疊（往下 fan）— 一致 PTCG 實體對戰視角</li>
-
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + version + changelog）／Rule 14（最小 patch — 4 處 CSS + 1 行 svelte template inline style）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
-        </ul>
-      </details>
-
-      <details>
-        <summary><span class="ver-badge">v5.097</span> 🎨 桌墊版 bench-slot 卡圖放大到框架尺寸（特性按鈕 absolute 浮層）</summary>
-        <ul>
-          <li><b>Wilson 想法</b>（v5.093~v5.095 撤回後新方向）：卡圖直接放大到 bench-slot 框架尺寸，HP bar / 特性按鈕 / 進化按鈕 / 化石丟棄按鈕全部仿 v5.030 <code>bench-name</code>/<code>bench-stat</code> 的 absolute pattern 浮在卡圖上層。layout 框架不變、卡圖視覺最大化、可點按鈕仍在原位置。</li>
-
-          <li><b>修法（純 CSS override 桌墊版專用）</b>：</li>
-          <li>　1. <code>.bench-middle</code> 改 <code>position:absolute; inset:0</code> 撐滿 bench-slot 整個框架（之前是 flex 內中央區）</li>
-          <li>　2. <code>.bench-middle &gt; img</code> 改 <code>height:100% width:auto object-fit:contain</code>（保比例最大化撐滿）</li>
-          <li>　3. <code>.hp-bar-wrap</code> 改 <code>absolute bottom:4px z-index:200</code></li>
-          <li>　4. <code>.ability-btn-sm</code> 改 <code>absolute bottom:22px z-index:201</code>（高過 hp-bar，可點擊）</li>
-          <li>　5. <code>.evo-btn-sm</code> 改 <code>absolute bottom:48px z-index:201</code></li>
-          <li>　6. <code>.tool-chip.sm</code> 改 <code>absolute bottom:38px</code>；<code>.ab-used-chip.sm</code> 右上角；<code>.status-chip-sm</code> 左上角；<code>.attach-hint</code> 卡圖正中央</li>
-
-          <li><b>不動</b>：</li>
-          <li>　・<code>bench-slot</code> base <code>height:205px</code> 不變（框架尺寸 / row 高度不變）</li>
-          <li>　・<code>zone-bench zoom:0.65</code> 不變（整體比例不變，1366×768 不會撐爆 viewport）</li>
-          <li>　・<code>bench-name</code> / <code>bench-stat</code> 既有 absolute 不動</li>
-
-          <li><b>實際影響</b>：</li>
-          <li>　・桌墊版備戰寶可夢卡圖視覺面積 ~+40%（原本只佔上半 ~60%，現佔滿框架 ~95%）</li>
-          <li>　・所有按鈕原位置不變（hp-bar 底部 / 特性按鈕底部上方）</li>
-          <li>　・bench-slot height:205px / zoom 0.65 不變 → 不會撐爆 viewport，手牌仍在原位置</li>
-
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte + version + changelog）／Rule 14（最小 patch — 純 CSS override 桌墊版 scope，無 HTML 結構改動）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
-        </ul>
-      </details>
-
-      <details>
-        <summary><span class="ver-badge">v5.096</span> 🐛 萬花筒華爾滋能量強制附自身 + 虛無歸零漏算力量蛋白飲 +30</summary>
-        <ul>
-          <li><b>Bug 1 — 超級差不多娃娃ex｜萬花筒華爾滋 從牌庫選的基本能量只附自己 active（玩家回報）</b></li>
-          <li>　・<b>卡面</b>：「擲 3 次硬幣，從自己的牌庫選擇最多正面次數×2 張相同數量的基本能量卡，<b>以任意方式附於自己的寶可夢身上</b>」</li>
-          <li>　・「自己的寶可夢」= active 或備戰任一隻（玩家自選分配），不是只 active</li>
-          <li>　・<b>根因</b>：<code>v2349_j_mark_batch.ts L184-188</code> 用內部 helper <code>attachBasicEnergyFromDeckToActive</code> 強制全附 active</li>
-          <li>　・<b>修法</b>：改用 v2.158 <code>startEnergyChain</code>（玩家逐張選目標 picker）— <code>source:&apos;deck&apos;</code>, <code>scope:&apos;any-own&apos;</code>, <code>filterType:&apos;Any&apos;</code>。先從牌庫挑前 N 張基本能量，後續玩家依次選每張要附給誰</li>
-
-          <li><b>Bug 2 — 超級基格爾德ex｜虛無歸零 對手戰鬥位漏算力量蛋白飲 +30（玩家回報，依官方 QA）</b></li>
-          <li>　・<b>卡面</b>：「對手的所有寶可夢各自擲 1 次硬幣，所有出現正面的寶可夢各受到 150 點傷害」</li>
-          <li>　・<b>官方 QA Q4</b>：「使用力量蛋白飲 的回合，使用虛無歸零，對戰鬥寶可夢擲正面 → +30」<b>會 +30</b>；對備戰寶可夢不 +30（力量蛋白飲只生效於對戰鬥寶可夢的傷害）</li>
-          <li>　・<b>官方 QA Q2</b>：對戰鬥寶可夢「也要擲硬幣」（非自動命中，仍走擲幣機率）— 既有實作正確</li>
-          <li>　・<b>官方 QA Q1</b>：擲幣**前**就要 declare target = 對手戰鬥寶可夢（PTCG 規則層面，與既有 UI dispatch 一致）</li>
-          <li>　・<b>根因</b>：<code>v2349_j_mark_batch.ts L46-75 damageAllOppByCoin</code> 所有目標固定 150 傷害，沒分 active/bench，沒套用 <code>damageBoostFightingThisTurn</code>（力量蛋白飲累計 boost）</li>
-          <li>　・<b>修法</b>：function 內讀 <code>attackerCard?.pokemonType === &apos;Fighting&apos; &amp;&amp; state.players[aIdx].damageBoostFightingThisTurn</code> 取 boost；loop 內每隻擲幣後，<code>isActiveTarget</code> 為 true 才把 <code>finalAmount = 150 + boost</code>，bench 維持 150</li>
-
-          <li><b>實際影響</b>：</li>
-          <li>　・萬花筒華爾滋：可挑選附給備戰隊友（之前 100% 附自己 active）— 開新 picker 流程</li>
-          <li>　・虛無歸零：用過力量蛋白飲後，對手戰鬥位正面 → 180 傷害（150+30）；備戰仍 150；不影響卡面其他規則</li>
-
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 v2349 + version + changelog）／Rule 14（最小 patch — 改 helper 兩 callsite 不動其他）／Rule 15（卡面 source of truth + 引用官方 QA）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT）。Pre-push tsc。</li>
-        </ul>
-      </details>
-
-      <details>
-        <summary><span class="ver-badge">v5.095</span> 🔧 game/+page.svelte 完全 hard reset 到 v5.092 byte-identical（修 CDN/browser 殘留樣式問題）</summary>
+        <summary><span class="ver-badge">v5.102</span> 🚨 修復白畫面：v5.098 changelog 內 raw &#123;...&#125; 觸發 ReferenceError，直接 reset +page.svelte 到 v5.095 commit byte-identical</summary>
         <ul>
           <li><b>玩家回報</b>：v5.094 仍覺得「備戰區和戰鬥場間隔距離拉超大」，要求復原到 v5.092 狀態。</li>
 
@@ -646,7 +517,7 @@ cost += gravityCount;</code></pre></li>
           <li>　・<b>修法</b>：補 <code>TOOL_BOTH_SIDES_RETREAT_PLUS</code> 邏輯（鏡射 engine.ts L7187-7196）— 雙方 active 任一帶重力之玉 → +1；阻礙之塔時失效（也順便補 isToolsJammed gate to 氣球）。並補樂園度假地 -1 給可達鴨（之前漏）。</li>
 
           <li><b>根因 2 — action-bar mirror 撤退按鈕能量不夠時消失</b></li>
-          <li>　・mirror 按鈕（<code>L5882</code>）的 <code>&#123;`#if`&#125;</code> 條件含 <code>canRetreatNow</code>。<code>canRetreatNow = canRetreat(game, pool)</code> 內部會 check 能量是否足夠（<code>totalEnergyUnits &gt;= cost</code>）；能量不夠 → false → 按鈕直接從 DOM 消失。</li>
+          <li>　・mirror 按鈕（<code>L5882</code>）的 <code>{`#if`}</code> 條件含 <code>canRetreatNow</code>。<code>canRetreatNow = canRetreat(game, pool)</code> 內部會 check 能量是否足夠（<code>totalEnergyUnits &gt;= cost</code>）；能量不夠 → false → 按鈕直接從 DOM 消失。</li>
           <li>　・但同個情境下，<code>zone-active</code> 內的按鈕（<code>L5968</code>）有 if/else 兩態 — 能量不夠仍顯示 disabled（🚫 + tooltip 說明原因）。</li>
           <li>　・兩個按鈕行為不一致是 v3.93 加 mirror 時偷懶造成。重力之玉觸發後 cost +1 容易超過自身能量 → mirror 按鈕消失，玩家誤以為系統 bug。</li>
           <li>　・<b>修法</b>：mirror 按鈕改 if/else 兩態，鏡射 zone-active L5969-5980 — <code>canRetreatNow</code> true 顯示正常按鈕；false 顯示 🚫 disabled + <code>getRetreatBlockReason</code> tooltip。</li>
@@ -2983,7 +2854,7 @@ cost += gravityCount;</code></pre></li>
               <li>正確插入到 ATTACK handler 末端（在 <code>startFestivalDanceSecondAttackWindow</code> 後、<code>return newState</code> 前）— 此處 <code>preAttackStateForRetry</code> 仍在同一 block scope</li>
             </ul>
           </li>
-          <li><b>學到的教訓</b>：Python pipeline 多錨點 patch 必須精確驗證 anchor 落點。原本以 <code>return maybeResumeFestivalDanceSecondAttack(newState, pool); &#125;</code> + 註解作 anchor，這個 pattern 在 ATTACK / TAKE_PRIZES 都有用到，誤匹配第 2 處（TAKE_PRIZES）。改用「<code>startFestivalDanceSecondAttackWindow</code> + 註解 + <code>return newState</code>」三段組合 anchor 才能唯一識別 ATTACK 末端。</li>
+          <li><b>學到的教訓</b>：Python pipeline 多錨點 patch 必須精確驗證 anchor 落點。原本以 <code>return maybeResumeFestivalDanceSecondAttack(newState, pool); }</code> + 註解作 anchor，這個 pattern 在 ATTACK / TAKE_PRIZES 都有用到，誤匹配第 2 處（TAKE_PRIZES）。改用「<code>startFestivalDanceSecondAttackWindow</code> + 註解 + <code>return newState</code>」三段組合 anchor 才能唯一識別 ATTACK 末端。</li>
           <li><b>遵守 Iron Rules</b>：Rule 11（hotfix 走 Python pipeline）/ Rule 4（push 前其實應該先跑 tsc — v4.898 push 後 tsc 才報錯，記取教訓）。</li>
         </ul>
       </details>
@@ -5803,7 +5674,7 @@ cost += gravityCount;</code></pre></li>
                   <li>全 pool 第一個同名（離場 / 牌庫深處）</li>
                 </ol>
               </li>
-              <li><b>log 渲染 button</b>：<code>onclick=&#123;() => openZoomByName(tok.text, entry.sourceIid, entry.playerIndex)&#125;</code>（兩處 — +page.svelte + MobilePortraitBattle.svelte）</li>
+              <li><b>log 渲染 button</b>：<code>onclick={() => openZoomByName(tok.text, entry.sourceIid, entry.playerIndex)}</code>（兩處 — +page.svelte + MobilePortraitBattle.svelte）</li>
             </ul>
           </li>
           <li><b>同名多版本場景測試</b>：場上有 70HP 謝米 + 對手有 80HP 謝米。Log「我方 X 使用 Y → 對手謝米受傷」— playerIndex = 我方，sourceIid = X.iid，名字「謝米」與 X 不符（fallthrough）→ 掃 hintPlayer 場上的「謝米」（我方 70HP）→ 找到，但這是 actor side... 嗯這 case 還是會抓錯。</li>
@@ -6124,7 +5995,7 @@ cost += gravityCount;</code></pre></li>
             <ul>
               <li>touchmove 在「<code>.mp</code> 外（瀏覽器邊界區）」或「非 scrollable 內部」全部 <code>preventDefault</code></li>
               <li>scrollable 內部（<code>.mp-row / .mp-hand / .mp-log / .mp-chips / .mp-sheet</code>）+ modal overlay 區放行，內部捲動正常</li>
-              <li><code>&#123;`&#123;passive: false&#125;`&#125;</code> 確保 preventDefault 有效</li>
+              <li><code>{`{passive: false}`}</code> 確保 preventDefault 有效</li>
             </ul>
           </li>
           <li><b>限制</b>：iOS Safari pull-to-refresh 無法 100% 禁用（瀏覽器層級行為）— 只能用 JS 強化擋。最徹底的方案是讓使用者把網站<b>加到 iPhone 主畫面</b>（成為 PWA standalone mode），那時沒有任何瀏覽器 chrome，完全沒下拉刷新。</li>
@@ -6137,7 +6008,7 @@ cost += gravityCount;</code></pre></li>
         <ul>
           <li>玩家回報：本機雙人模式換人時，有時手牌沒顯示；發動特性補牌後就正常。</li>
           <li><b>推測根因</b>：myIdx 在本機雙人 playing 階段隨 <code>activePlayerIndex</code> 切換。END_TURN dispatch 後 game state + myIdx 同時變化，Svelte 5 的 <code>$derived(game.players[myIdx])</code> 在某些 race 場景沒立即觸發 hand 元素重 render。特性補牌觸發新 dispatch → hand.length 變化 → reactive 再觸發 → 顯示正常。</li>
-          <li><b>修法</b>：desktop <code>hand-scroll</code> + mobile <code>mp-hand</code> 兩處用 <code>&#123;`{#key myIdx}`&#125;</code> 包整段 each 區塊。<code>key</code> 變化時 Svelte 強制 destroy + recreate 內部所有元素 — 完全繞過 reactive race。</li>
+          <li><b>修法</b>：desktop <code>hand-scroll</code> + mobile <code>mp-hand</code> 兩處用 <code>{`{#key myIdx}`}</code> 包整段 each 區塊。<code>key</code> 變化時 Svelte 強制 destroy + recreate 內部所有元素 — 完全繞過 reactive race。</li>
           <li>代價：每次換人會 destroy + recreate 全部手牌卡 DOM（一次性，無持續性能影響）。換來「保證一定顯示」的可靠性。</li>
           <li>tsc 0 errors。</li>
         </ul>
@@ -6283,7 +6154,7 @@ cost += gravityCount;</code></pre></li>
           <li><b>根因</b>：原本 3 個格式 regex（mId / mFull / mSimple）全都要求 <code>^(\d+)\s+...</code> 開頭數字。漏「張數」的行三個都不匹配 → 落到 <code>errors.push('無法解析：...')</code>。</li>
           <li><b>修法</b>：
             <ul>
-              <li><b>新增 Format D</b>「&#123;`&#123;name&#125; &#123;setCode&#125; &#123;collectorNumber&#125;`&#125;」regex，<b>允許無張數</b>。匹配後預設 count=1 + 加入 ambiguities 警示「自動補 1 張，匯入後請手動調整數量」</li>
+              <li><b>新增 Format D</b>「{`{name} {setCode} {collectorNumber}`}」regex，<b>允許無張數</b>。匹配後預設 count=1 + 加入 ambiguities 警示「自動補 1 張，匯入後請手動調整數量」</li>
               <li>order：mId → mFull → mSimple → mNoCount（最後 fallback，避免吃到正常含張數的格式）</li>
               <li>error message 改成具體提示：<code>無法解析：「&#123;line&#125;」 → 每行需以「張數」開頭，例如：4 呱呱泡蛙 M-P-J 089/M-P</code></li>
             </ul>
@@ -6549,7 +6420,7 @@ cost += gravityCount;</code></pre></li>
         <ul>
           <li>玩家回報：呱呱泡蛙從手牌放到備戰區 → 衝浪海灘把它換到戰鬥場 → 居然可以進化（違規）。</li>
           <li><b>PTCG 規則</b>：當回合從手牌打出的寶可夢，無論在備戰區或戰鬥場都不能進化（活力森林等特殊條件除外）。</li>
-          <li><b>根因</b>：多處「純位置交換」程式碼用 <code>&#123;`&#123;...bench[idx], justPlaced:false, playedFromHand:false&#125;`&#125;</code> 硬清旗標，等同把「本回合進場」狀態洗掉，繞過進化 gate。</li>
+          <li><b>根因</b>：多處「純位置交換」程式碼用 <code>{`{...bench[idx], justPlaced:false, playedFromHand:false}`}</code> 硬清旗標，等同把「本回合進場」狀態洗掉，繞過進化 gate。</li>
           <li><b>系統性修法</b>：審視全 codebase，找出 9 處同樣 pattern bug，全部改為保留原始旗標（純位置交換不該動 justPlaced / playedFromHand）：
             <ul>
               <li><code>stadiums.ts</code>：衝浪海灘 surf-beach-swap</li>
