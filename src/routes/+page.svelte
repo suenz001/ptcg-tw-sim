@@ -265,6 +265,41 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.114</span> 🚀 牌組編輯器改純手動 Firebase 同步（預期 decks writes 降 80-130×）</summary>
+        <ul>
+          <li><b>玩家提議</b>：既然牌組編輯器已有「💾 存檔 / 📥 讀取」按鈕，能否改成「玩家按存檔才寫 Firebase，按讀取才讀」？徹底降低 Firebase 寫入次數</li>
+
+          <li><b>背景</b>：</li>
+          <li>　・v5.078 加 1.5s debounce 後 1h ~1900 decks writes</li>
+          <li>　・v5.092 改 5s debounce + dirty-check 仍有 ~500-800 估</li>
+          <li>　・v5.114 純手動：1h 預估 ~6 writes（按玩家手動存檔頻率），<b>降幅 80-130 倍</b></li>
+
+          <li><b>修法</b>：</li>
+          <li>　1. 加 <code>dirtyDeckIds: Set&lt;string&gt;</code> state — 牌組編輯後標 dirty，不觸發 setDoc</li>
+          <li>　2. 新增 <code>setDirty(deckId)</code> helper — 取代 pushDeck 在編輯場景</li>
+          <li>　3. 13 處 <code>pushDeck()</code> 改 <code>setDirty()</code>：createDeck / renameActive / addCard / removeCard / clearDeck / copyPresetToMine / importJson / twCodeImport / importTextDeck / 首次建 deck</li>
+          <li>　4. <code>saveAllDecksToCloud()</code> 改成只推 dirty 的牌組（不再 push all）+ 推完清 dirty</li>
+          <li>　5. <code>loadAllDecksFromCloud()</code> 載入後清 dirty（cloud 已是 source of truth）</li>
+          <li>　6. <code>handleBeforeUnload</code> 改 <code>dirtyDeckIds.size &gt; 0</code> 才觸發瀏覽器原生「離開頁面」warning</li>
+          <li>　7. UI 紅點：「💾 存檔 ●」按鈕脈動紅光 + sync-pill 顯「📝 未存檔 (N)」橘色提示</li>
+          <li>　8. <code>pushDeck</code> / <code>flushPendingPushes</code> / <code>PUSH_DEBOUNCE_MS</code> 保留無 caller（將來 fallback）</li>
+
+          <li><b>防丟資料 3 道防護</b>：</li>
+          <li>　・localStorage <code>saveDecks</code> 同步寫（既有 v5.078 機制）→ 重整不丟</li>
+          <li>　・beforeunload 紅旗 → 未存檔時瀏覽器原生 prompt「未儲存變更，確定離開？」</li>
+          <li>　・UI 紅點 + 「未存檔」橘色 pill 持續提醒玩家</li>
+
+          <li><b>dropDeck (刪除牌組)</b> 保持立即寫 cloud（刪除是不可復原動作；量低且明確）</li>
+
+          <li><b>UX 取捨</b>：</li>
+          <li>　・優點：寫入量大幅下降；玩家清楚知道何時 sync</li>
+          <li>　・缺點：跨裝置不同步前須先按讀取；玩家若忽略紅點且使用 close-tab 強制 (no-prompt) 仍可能漏存</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT 13 處 exact-match replace）／Rule 14（最小 patch — 不動 cloud.ts，不動 storage layer，純編輯器 wrapper 改造）／Rule 1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.113</span> 🐛 胡地奇異駭入補實裝 + 死神棺缺對戰圓形 gate + 甲殼刺 KO 時重複觸發修</summary>
         <ul>
           <li><b>3 個玩家回報的 bug</b>：</li>

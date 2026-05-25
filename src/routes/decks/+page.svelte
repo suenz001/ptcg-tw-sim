@@ -43,6 +43,11 @@
   // ── Firebase / cloud state ─────────────────────────────────────────────
   let firebaseUser = $state<User | null>(null);
   let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  // v5.114：dirty tracking — 牌組編輯後標 dirty，等手動「💾 存檔」才推 cloud
+  //   取代 v5.078/v5.092 的自動 debounce push（每次編輯都 setDoc）。
+  //   預期 1h decks writes 從 ~500-800 降到 ~6（按玩家手動存檔頻率）。
+  //   防丟資料：localStorage 既有 saveDecks 同步寫；beforeunload dirty 才警告。
+  let dirtyDeckIds = $state<Set<string>>(new Set());
   let syncError = $state<string | null>(null);
 
   // ── Auth modal state ───────────────────────────────────────────────────
@@ -431,7 +436,18 @@
     pushTimers.set(deck.id, timer);
   }
 
-  /** 立即執行所有 pending push（beforeunload / onDestroy 用）。 */
+  // v5.114：setDirty — 取代 pushDeck 在編輯場景的呼叫。
+  //   只標記為「待存檔」，不觸發 Firebase setDoc。玩家必須按「💾 存檔」才推 cloud。
+  //   localStorage 仍同步寫（upsertDeck/saveDecks 是同步），重整頁面不丟。
+  function setDirty(deckId: string) {
+    if (!firebaseUser) return;  // 未登入無 cloud sync 概念
+    if (dirtyDeckIds.has(deckId)) return;  // 已 dirty 不重複（避免 reactive 重渲染）
+    dirtyDeckIds = new Set([...dirtyDeckIds, deckId]);
+  }
+
+  /** 立即執行所有 pending push（beforeunload / onDestroy 用）。
+   *  v5.114 後：pushTimers 永遠空（編輯場景已改 setDirty），這個函式變成 no-op。
+   *  保留以防將來想啟用 auto-push fallback。 */
   function flushPendingPushes() {
     for (const [deckId, timer] of pushTimers) {
       clearTimeout(timer);
@@ -461,18 +477,23 @@
     }
   }
 
-  /** Save ALL current decks to Firebase (explicit manual save). */
+  /** v5.114：手動存檔 — 只推 dirty 的牌組（不再 push all）。 */
   async function saveAllDecksToCloud() {
     if (!firebaseUser) { alert('尚未登入，無法存檔。'); return; }
+    const dirtyList = decks.filter(d => dirtyDeckIds.has(d.id));
+    if (dirtyList.length === 0) {
+      alert('沒有需要存檔的變更。');
+      return;
+    }
     syncStatus = 'syncing';
     try {
-      for (const d of decks) {
+      for (const d of dirtyList) {
         await withTimeout(syncDeckToCloud(firebaseUser.uid, d));
       }
-      // Also persist locally
       import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
+      dirtyDeckIds = new Set();  // 清空 dirty（紅點消失）
       syncStatus = 'synced';
-      alert('所有牌組已成功存檔至雲端！');
+      alert(`已存檔 ${dirtyList.length} 個牌組至雲端！`);
     } catch (e) {
       syncStatus = 'error';
       syncError = e instanceof Error ? e.message : String(e);
@@ -495,6 +516,7 @@
       decks = cloud.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
       activeId = decks[0]?.id ?? null;
+      dirtyDeckIds = new Set();  // v5.114：cloud 已是 source of truth，清 dirty
       syncStatus = 'synced';
       alert(`已從雲端載入 ${cloud.length} 個牌組。`);
     } catch (e) {
@@ -572,15 +594,24 @@
       if (decks.length === 0) {
         const first = newDeck('我的第一個牌組');
         decks = upsertDeck(first);
-        pushDeck(first);
+        setDirty(first.id);  // v5.114
         activeId = first.id;
       } else {
         activeId = decks[0].id;
       }
     });
 
-    // v5.078：beforeunload 強制 flush pending decks push（防玩家關 tab 丟改動）
-    const handleBeforeUnload = () => flushPendingPushes();
+    // v5.114：beforeunload 改成「未存檔 dirty 才警告離開」。
+    //   原 v5.078 是 flush pending push（auto-debounce 時代）。改純手動後，dirty
+    //   表示玩家編輯後沒按存檔；觸發瀏覽器原生「未儲存變更，確定離開？」prompt。
+    //   localStorage 已 sync 寫過 → 重整不丟，僅警告 cloud 同步缺失。
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (dirtyDeckIds.size > 0) {
+        e.preventDefault();
+        e.returnValue = '';  // 瀏覽器顯示原生 prompt
+        return '';
+      }
+    };
     if (typeof window !== 'undefined') {
       window.addEventListener('beforeunload', handleBeforeUnload);
     }
@@ -600,7 +631,7 @@
     const d = newDeck(`牌組 ${decks.length + 1}`);
     decks = upsertDeck(d);
     activeId = d.id;
-    pushDeck(d);
+    setDirty(d.id);  // v5.114
   }
 
   function removeDeck(id: string) {
@@ -614,7 +645,7 @@
     if (!active || isPresetActive) return;
     const updated = { ...active, name };
     decks = upsertDeck(updated);
-    pushDeck(updated);
+    setDirty(updated.id);  // v5.114
   }
 
   function addCard(card: Card) {
@@ -639,7 +670,7 @@
     else entries.push({ cardId: card.id, count: 1 });
     const updated = { ...active, entries };
     decks = upsertDeck(updated);
-    pushDeck(updated);
+    setDirty(updated.id);  // v5.114
   }
 
   function removeCard(cardId: string) {
@@ -649,7 +680,7 @@
       .filter((e) => e.count > 0);
     const updated = { ...active, entries };
     decks = upsertDeck(updated);
-    pushDeck(updated);
+    setDirty(updated.id);  // v5.114
   }
 
   function clearDeck() {
@@ -657,7 +688,7 @@
     if (!confirm('清空此牌組？')) return;
     const updated = { ...active, entries: [] };
     decks = upsertDeck(updated);
-    pushDeck(updated);
+    setDirty(updated.id);  // v5.114
   }
 
   /** 從內建預組複製一份到使用者牌組（可編輯） */
@@ -670,7 +701,7 @@
     };
     decks = upsertDeck(copy);
     activeId = copy.id;
-    pushDeck(copy);
+    setDirty(copy.id);  // v5.114
   }
 
   // ── Import / export ────────────────────────────────────────────────────
@@ -702,7 +733,7 @@
       };
       decks = upsertDeck(incoming);
       activeId = incoming.id;
-      pushDeck(incoming);
+      setDirty(incoming.id);  // v5.114
     } catch (e) {
       alert(`匯入失敗：${e instanceof Error ? e.message : String(e)}`);
     }
@@ -933,7 +964,7 @@
       const updated = { ...active!, entries: matched, updatedAt: Date.now() };
       decks = decks.map(d => d.id === active!.id ? updated : d);
       import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
-      pushDeck(updated);
+      setDirty(updated.id);  // v5.114
       const totalCards = matched.reduce((s, e) => s + e.count, 0);
       const cachedNote = data.cached ? '（cache hit）' : '';
       alert(`✅ 從官網代碼 ${code} 匯入 ${matched.length} 種卡 / 共 ${totalCards} 張 ${cachedNote}`);
@@ -1188,7 +1219,7 @@
     const d = { ...newDeck(deckName || '匯入牌組'), entries };
     decks = upsertDeck(d);
     activeId = d.id;
-    pushDeck(d);
+    setDirty(d.id);  // v5.114
     showTextModal = false;
     importTextInput = '';
   }
@@ -1377,8 +1408,8 @@
     <a href="{base}/" class="back">← 首頁</a>
     <h1>牌組編輯器 <span class="version-tag">v{VERSION}</span></h1>
     <span class="hint">Standard · H / I / J 標</span>
-    <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
-      {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
+    <span class="sync-pill sync-{dirtyDeckIds.size > 0 ? 'unsaved' : syncStatus}" title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組未存檔（按 💾 存檔 推到雲端）` : (syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : '')}>
+      {#if dirtyDeckIds.size > 0}📝 未存檔 ({dirtyDeckIds.size}){:else if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
     </span>
     <!-- Auth status -->
     {#if firebaseUser}
@@ -1407,7 +1438,7 @@
         <strong>我的牌組</strong>
         <div class="rail-actions">
           <button class="small" onclick={createDeck}>+ 新增</button>
-          <button class="small cloud-btn" onclick={saveAllDecksToCloud} title="將所有牌組存檔至雲端">💾 存檔</button>
+          <button class="small cloud-btn" class:has-dirty={dirtyDeckIds.size > 0} onclick={saveAllDecksToCloud} title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組待存檔` : '將變更存檔至雲端（無變更時無動作）'}>💾 存檔{#if dirtyDeckIds.size > 0} ●{/if}</button>
           <button class="small cloud-btn" onclick={loadAllDecksFromCloud} title="從雲端重新讀取牌組">📥 讀取</button>
         </div>
       </div>
@@ -2175,6 +2206,26 @@
   .cloud-btn:hover {
     background: #0052a3 !important;
     border-color: #0052a3 !important;
+  }
+  /* v5.114：未存檔時 💾 存檔 按鈕脈動紅光（提示玩家未存檔） */
+  .cloud-btn.has-dirty {
+    background: #d93838 !important;
+    border-color: #d93838 !important;
+    animation: dirty-pulse 1.6s ease-in-out infinite;
+  }
+  .cloud-btn.has-dirty:hover {
+    background: #b32828 !important;
+    border-color: #b32828 !important;
+  }
+  @keyframes dirty-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 80, 80, 0.75); }
+    50%      { box-shadow: 0 0 0 5px rgba(255, 80, 80, 0); }
+  }
+  /* v5.114：sync-pill 未存檔狀態（橘色提示） */
+  .sync-pill.sync-unsaved {
+    background: #f5a623 !important;
+    color: #fff !important;
+    border-color: #f5a623 !important;
   }
   .deck-list {
     list-style: none;
