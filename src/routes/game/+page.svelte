@@ -7148,11 +7148,12 @@
     {@const dmgPicked = isUnits && spec.max !== null ? Math.min(pickedAmount, spec.max) : pickedAmount}
     {@const estDmg = spec.baseDamage + dmgPicked * spec.damagePerEnergy}
     {@const req = preAttackDiscard.exactRequired}
-    {@const exactOk = req === undefined ? true : (pickedAmount === 0 || pickedAmount >= req)}
+    {@const exactOk = req === undefined ? true : pickedAmount >= req}
     {@const confirmEnabled = minOk && maxOk && exactOk}
-    <!-- v4.23：移除 `=== req` 冗餘 clause。exactOk 已含 `0 || >= req` 邏輯，再加 === req 會
-         擋住 atomic 超過（新衝天 2 units > req=1）。toggle gate 已 enforce 最小組合，max
-         也已限制卡數上限，這個額外 clause 是 dead weight 反而擋住合法操作。 -->
+    <!-- v5.115：移除「pickedAmount === 0 旁路」— 玩家回報「就算沒選能量也能按綠色按鈕」。
+         原 v4.23 邏輯允許 0 張當「跳過」path，但 footer 已有 secondary「不啟用追加效果」按鈕
+         專門走 0 張，primary「啟用追加效果」應只在 pickedAmount >= req 時 enable，
+         否則 disabled 並提示「目前 X/req」。 -->
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">

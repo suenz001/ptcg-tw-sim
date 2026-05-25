@@ -265,6 +265,39 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.115</span> 🐛 大地之門/詛咒言語/太鼓防壁/駭浪/pre-discard UI 5 bug 修</summary>
+        <ul>
+          <li><b>玩家回報 5 個 bug + 1 個待確認（盈溢祈願）</b>：</li>
+          <li>　1. <b>哲爾尼亞斯｜大地之門</b>抓出基礎以外的寶可夢</li>
+          <li>　2. <b>超級沙奈朵ex｜盈溢祈願</b>備戰滿只填 4 能（待確認卡面版本 — 暫緩本版）</li>
+          <li>　3. <b>詛咒娃娃｜詛咒言語</b>應為對手選 3 張，現實作系統隨機選</li>
+          <li>　4. <b>護城龍｜太鼓防壁</b>對手有火箭隊能量/燃火能量等仍判攻擊無傷害</li>
+          <li>　5. <b>大力鱷｜駭浪</b>下回合無法用其他招式（含古空棘魚｜潛入記憶提供的進化前招式）</li>
+          <li>　6. <b>激流水泵/分身連打/水井面具ex</b> pre-discard modal 未選能量也能按綠色「啟用追加效果」</li>
+
+          <li><b>根因分析</b>：</li>
+          <li>　1. <code>bench-basic-from-deck</code> resolver 完全沒讀 <code>params.validIids</code>，picker UI <code>filter:&#39;Pokemon&#39;</code> 只過濾「寶可夢類」，玩家選任意進化寶可夢都過</li>
+          <li>　3. v2630 簡化用隨機選，違反卡面「對手選擇」字樣</li>
+          <li>　4. defense.ts L182 用 <code>energyAttached.length</code>（卡張數）判斷，卡面「2 個以下」應為能量單位數（火箭隊能量提供 2 個、燃火能量進化版提供 3 個）</li>
+          <li>　5. effects.ts L2777 駭浪用 <code>selfCantAttackNextPost()</code> 設 <code>cantAttackPending: true</code> 全擋，但卡面只說「無法使用『駭浪』」單擋。同類問題：飛天螳螂｜猛擊在地</li>
+          <li>　6. game/+page.svelte L7151 <code>exactOk</code> 允許 <code>pickedAmount === 0</code> 旁路 → 0 張時 primary button 仍 enabled。但 footer 已有 secondary「不啟用追加效果」專走 0 張</li>
+
+          <li><b>修法</b>：</li>
+          <li>　1. <code>bench-basic-from-deck</code> resolver 補 <code>validIids</code> server-side gate（仿既有 <code>targetName</code> defense-in-depth pattern）</li>
+          <li>　3. v2630 改 opponent picker：<code>type:&#39;hand-discard&#39; actorIdx:dIdx min=max=3</code> + 新 resolver <code>curse-doll-curse-words</code> 把選的 iids 從對手手牌移到牌庫並重洗</li>
+          <li>　4. defense.ts L182 改用 <code>totalEnergyUnits(attacker.active.energyAttached, pool, state, actorIdx)</code> 計算能量單位（含特殊能量提供值）</li>
+          <li>　5. effects.ts 新增 <code>selfBlockSpecificAttackNextPost(name)</code> helper 仿哲爾尼亞斯｜光明角擊 pattern，駭浪/猛擊在地改用此；瑪力露麗｜力量衝撞、斗笠菇｜關節衝擊、鐵斑葉ex｜稜鏡刀鋒 卡面是「無法使用招式」全擋 → 保持 <code>cantAttackPending</code></li>
+          <li>　6. game/+page.svelte L7151 <code>exactOk</code> 改 <code>pickedAmount &gt;= req</code>（移除 <code>=== 0</code> 旁路）；玩家想跳過走 secondary 按鈕</li>
+
+          <li><b>Audit 同類招式</b>：</li>
+          <li>　・single-attack 類（只擋這招）：駭浪、猛擊在地、光明角擊（既有）</li>
+          <li>　・all-attacks 類（擋所有招式）：力量衝撞、關節衝擊、稜鏡刀鋒</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT 6 處 exact-match replace）／Rule 14（最小 patch — 不動 UI picker 內部，純資料層補 gate；driver helper 新增 1 個）／Rule 15（卡面 source of truth — M1S 哲爾尼亞斯、MC/SV9 詛咒娃娃、M5 護城龍、MC/SV5K/SV8a 大力鱷、M5 飛天螳螂 JSON 直接抽 effect text）／Rule 1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.114</span> 🚀 牌組編輯器改純手動 Firebase 同步（預期 decks writes 降 80-130×）</summary>
         <ul>
           <li><b>玩家提議</b>：既然牌組編輯器已有「💾 存檔 / 📥 讀取」按鈕，能否改成「玩家按存檔才寫 Firebase，按讀取才讀」？徹底降低 Firebase 寫入次數</li>

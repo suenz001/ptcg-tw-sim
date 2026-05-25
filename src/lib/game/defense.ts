@@ -179,8 +179,16 @@ export function canApplyEffectToTarget(
     });
     if (hasTaikoBari) {
       const attacker = state.players[actorIdx];
-      if (attacker.active && attacker.active.energyAttached.length <= 2) {
-        return { blocked: true, reason: `太鼓防壁 免疫附加能量 ${attacker.active.energyAttached.length} 張（≤2）的對手招式傷害` };
+      if (attacker.active) {
+        // v5.115：卡面「能量為 2 個以下」是「能量單位數」，非卡張數！
+        //   原 v4.891 用 energyAttached.length 計卡張數會誤擋：
+        //     - 1 張火箭隊能量（提供 2 個【超】【惡】）= 卡張 1 但能量 2 個
+        //     - 1 張火箭隊能量 + 1 張基本【超】能量 = 卡張 2 但能量 3 個（應可攻擊但被擋）
+        //   改用 totalEnergyUnits 正確計算能量單位數（含特殊能量提供值、繁茂 etc）。
+        const energyUnits = totalEnergyUnits(attacker.active.energyAttached, pool, state, actorIdx);
+        if (energyUnits <= 2) {
+          return { blocked: true, reason: `太鼓防壁 免疫能量 ${energyUnits} 個（≤2）的對手招式傷害` };
+        }
       }
     }
   }

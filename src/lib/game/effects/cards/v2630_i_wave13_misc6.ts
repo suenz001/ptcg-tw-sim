@@ -528,8 +528,11 @@ regPre('龐岩怪|復仇加農炮', (state, aIdx, pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 13. 對手選 3 張手牌回牌庫 (1 張) — 詛咒娃娃|詛咒言語
-// 簡化：隨機選 3 張對手手牌回牌庫並重洗
+// 13. 對手選 3 張自己的手牌回牌庫 — 詛咒娃娃|詛咒言語
+// 卡面：「對手選擇3張對手自己的手牌，放回牌庫並重洗。」
+// v5.115：原 v2.63 簡化用隨機選 3 張，違反卡面「對手選擇」字樣。
+//   修法：opponent picker (actorIdx=dIdx, hand-discard min=max=pickCount)
+//   → resolver 'curse-doll-curse-words' 把 picked iids 從對手手牌移到牌庫並重洗。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('詛咒娃娃|詛咒言語', (s) => ({ state: s, damage: 0 }));
 regPost('詛咒娃娃|詛咒言語', (state, aIdx, _pool) => {
@@ -537,21 +540,27 @@ regPost('詛咒娃娃|詛咒言語', (state, aIdx, _pool) => {
   const opp = state.players[dIdx];
   if (opp.hand.length === 0) return addLog(state, '詛咒言語：對手手牌為空', aIdx);
   const pickCount = Math.min(3, opp.hand.length);
-  // 隨機選 pickCount 張
-  const idxs = [...Array(opp.hand.length).keys()];
-  for (let i = idxs.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [idxs[i], idxs[j]] = [idxs[j], idxs[i]];
-  }
-  const pickedSet = new Set(idxs.slice(0, pickCount));
-  return updatePlayer(
-    addLog(state, `詛咒言語：對手隨機選 ${pickCount} 張手牌放回牌庫並重洗`, aIdx),
-    dIdx, p => {
-      const picked = p.hand.filter((_, i) => pickedSet.has(i));
-      const remaining = p.hand.filter((_, i) => !pickedSet.has(i));
-      return { ...p, hand: remaining, deck: shuffle([...p.deck, ...picked]) };
-    },
-  );
+  const s = addLog(state, `詛咒言語：請對手選擇 ${pickCount} 張自己的手牌放回牌庫並重洗`, aIdx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: dIdx, sourcePlayerIdx: dIdx,
+    minCount: pickCount, maxCount: pickCount,
+    effectKey: 'curse-doll-curse-words',
+    params: { titleOverride: `詛咒言語：選擇 ${pickCount} 張自己的手牌放回牌庫（並重洗）` },
+  });
+});
+
+// v5.115 curse-doll-curse-words resolver — 對手選擇的手牌 → 放回牌庫並重洗
+regR('curse-doll-curse-words', (state, idx, iids, _params, _pool) => {
+  // idx 是 actor = dIdx（被作用的對手，自己選自己的牌）
+  if (iids.length === 0) return addLog(state, '詛咒言語：未選擇任何手牌（取消）', idx);
+  const iidSet = new Set(iids);
+  const next = updatePlayer(state, idx, p => {
+    const picked = p.hand.filter(c => iidSet.has(c.iid));
+    const remaining = p.hand.filter(c => !iidSet.has(c.iid));
+    return { ...p, hand: remaining, deck: shuffle([...p.deck, ...picked]) };
+  });
+  return addLog(next, `詛咒言語：對手選擇 ${iids.length} 張手牌放回牌庫並重洗`, idx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -2828,9 +2828,28 @@ function selfCantAttackNextPost(): AttackPostFn {
     return { ...state, players };
   };
 }
-regPost('大力鱷|駭浪', selfCantAttackNextPost());
+// v5.115：卡面區分「無法使用招式（全擋）」vs「無法使用『這招』（單擋）」兩類。
+//   single-attack 類用 blockedAttackNamesNextTurn:[name]（仿哲爾尼亞斯|光明角擊 pattern），
+//   讓下回合仍可用其他招式（含古空棘魚|潛入記憶提供的進化前招式）。
+//   all-attacks 類保持 cantAttackPending 全擋。
+function selfBlockSpecificAttackNextPost(attackName: string): AttackPostFn {
+  return (state, aIdx) => {
+    const players = [...state.players] as [PlayerState, PlayerState];
+    const att = { ...players[aIdx] };
+    if (att.active) {
+      const cur = att.active.blockedAttackNamesNextTurn ?? [];
+      att.active = { ...att.active, blockedAttackNamesNextTurn: [...cur, attackName] };
+    }
+    players[aIdx] = att;
+    return { ...state, players };
+  };
+}
+// 卡面「無法使用『駭浪』」— 只擋這招（下回合仍可用其他招式 + 潛入記憶招式）
+regPost('大力鱷|駭浪', selfBlockSpecificAttackNextPost('駭浪'));
+// 卡面「無法使用『猛擊在地』」— 同上
+regPost('飛天螳螂|猛擊在地', selfBlockSpecificAttackNextPost('猛擊在地'));
+// 卡面「無法使用招式」— 全擋（含進化前招式）
 regPost('瑪力露麗|力量衝撞', selfCantAttackNextPost());
-regPost('飛天螳螂|猛擊在地', selfCantAttackNextPost());
 regPost('斗笠菇|關節衝擊', selfCantAttackNextPost());
 regPost('鐵斑葉ex|稜鏡刀鋒', selfCantAttackNextPost());
 

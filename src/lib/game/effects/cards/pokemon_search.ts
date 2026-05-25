@@ -135,6 +135,15 @@ regR('bench-basic-from-deck', (st, idx, iids, params, pool) => {
       return inst && pool.get(inst.cardId)?.name === targetName;
     });
   }
+  // v5.115 defense-in-depth #2：若 params 有 validIids（如哲爾尼亞斯|大地之門限定【超】基礎），
+  //   過濾 iids 只保留 validIids 中的卡。玩家回報大地之門抓出基礎以外寶可夢 —
+  //   picker UI filter:'Pokemon' 只過濾「寶可夢類」，沒過濾 Stage1/Stage2/超屬性。
+  //   caller 已傳 validIids 限制候選，但本 resolver 之前沒驗證 → 修補 server-side gate。
+  const validIids = params?.validIids as string[] | undefined;
+  if (validIids && validIids.length > 0) {
+    const validSet = new Set(validIids);
+    effIids = effIids.filter(iid => validSet.has(iid));
+  }
   // 公開資訊：放到備戰區本來就對對手可見，順便記到 log 方便追蹤
   const chosen = st.players[idx].deck.filter(c => effIids.includes(c.iid));
   if (chosen.length > 0) {
