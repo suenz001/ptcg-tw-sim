@@ -6577,6 +6577,16 @@
               · 已選 {selectionPicked.size}
               {#if isPokePicker}· 點放大鏡 🔍 查看詳情{/if}
             </p>
+            <!-- v5.147：撤退能量 picker 加能量需求進度顯示 (Wilson 要求 X/Y 格式) -->
+            {#if pendingSelection.type === 'active-energy-discard' && pendingSelection.effectKey === 'retreat-energy-discard'}
+              {@const _retreatCost = (pendingSelection.params?.retreatCost as number | undefined) ?? 0}
+              {@const _pickedInstsForHint = selectionItems.filter(it => selectionPicked.has(it.iid))}
+              {@const _hostForHint = game?.players[pendingSelection.actorIdx as 0|1].active ?? undefined}
+              {@const _currentUnits = totalEnergyUnits(_pickedInstsForHint, pool, game ?? undefined, pendingSelection.actorIdx as 0|1, _hostForHint)}
+              <p class="sel-hint" style="color:{_currentUnits >= _retreatCost ? '#88e088' : '#ffd54a'};font-weight:bold;">
+                ⚡ 撤退能量需求：{_currentUnits}/{_retreatCost} 單位 {_currentUnits >= _retreatCost ? '✓ 已達標' : '（請繼續選擇）'}
+              </p>
+            {/if}
           {/if}
         </div>
         {#if isPokePicker}
@@ -8734,11 +8744,19 @@
      v5.038：再延長到 140px — 跟 .active-name-tt 等寬（v5.035 設的 140px），血條視覺
      寬度與名字框完全對齊；padding-left 從 96px 跟著加到 148px (140 + 4gap + 4pad) === */
   /* v5.111: min-height 170 → 140 縮回 (玩家回報 active-card 內部上下空白浪費)。
-     row-gap 25px 已給 bench/active 之間視覺距離, active-card 不需再加內部緩衝。 */
+     row-gap 25px 已給 bench/active 之間視覺距離, active-card 不需再加內部緩衝。
+     v5.147：min-height → fixed height:175 三鎖死。Wilson 報告附加能量後 active row
+     瞬間撐大、下一動作回復 — 是 active-card 內元素瞬時變化（能量 chip 動畫 / att-card
+     重排 / ability-btn 出現等）撐 active-card 進而撐 grid row 3/2。
+     固定 height 完全鎖死，內元素變化都不撐父；overflow:visible 確保 evo-wrap/ability-btn
+     等 absolute 元素仍可溢出顯示。 */
   .playmat.layout-tabletop .active-card{
     padding-left:148px !important;  /* 140px HP 欄 + 4 gap + 4 padding */
     padding-bottom:.45rem !important;
-    min-height:140px !important;
+    height:175px !important;
+    min-height:175px !important;
+    max-height:175px !important;
+    overflow:visible;
   }
   /* v5.112: HP column 垂直置中 (玩家要求大約置中位置) */
   .playmat.layout-tabletop .active-card .active-hpbar-bottom{

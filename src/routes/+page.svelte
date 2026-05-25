@@ -265,6 +265,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.147</span> 🔒 active-card height 鎖死 + 撤退 modal 能量需求進度</summary>
+        <ul>
+          <li><b>Bug 1 — 附加能量後 active row 瞬間撐大</b>：Wilson 報告附加能量瞬間雙方戰鬥寶可夢間隙撐大，下一動作回復。</li>
+          <li><b>根因</b>：<code>.active-card</code> 只設 <code>min-height:140</code> 沒設 max/fix，內元素變化（能量 chip 動畫、att-card-stack 重排、ability-btn 出現等）瞬時撐高 active-card → grid row 3/2 auto 跟著撐 → bench 因 align-self 黏外側 → 視覺距離瞬間擴大。</li>
+          <li><b>修法</b>：<code>.active-card</code> 改 <code>height/min-height/max-height: 175</code> 三鎖死 + <code>overflow:visible</code>（evo-wrap / ability-btn 等 absolute 元素仍可溢出顯示）。內元素變化都不撐父，grid row 永遠穩定。</li>
+
+          <li><b>UX 2 — 撤退 modal 加能量需求進度</b>：Wilson 要「順便顯示能量需求與點選後達成狀況，方便玩家選擇」。</li>
+          <li><b>修法</b>：撤退能量 picker（<code>retreat-energy-discard</code>）<code>sel-hint</code> 加一行「⚡ 撤退能量需求：X/Y 單位」。X = 已選能量 units 總和（host-aware，燃火/新衝天 on 進化已正確倍率），Y = retreatCost。達標時綠色 ✓，未達標時黃色提示繼續選擇。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純 CSS 三鎖死 + 1 個 svelte block 加進度）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.146</span> 🎯 桌墊版 active 進化按鈕上推 + 放大</summary>
         <ul>
           <li><b>玩家回報</b>：桌墊版戰鬥寶可夢的進化小按鈕會被疊牌/寶可夢蓋在下面，按鈕也太小。</li>
