@@ -1031,13 +1031,13 @@
         {/each}
       {:else if sheet.type === 'discard'}
         <div class="mp-sheet-title">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
-        {@const _groups = [...sheet.list.reduce((m, inst) => m.set(inst.cardId, { cardId: inst.cardId, inst, count: (m.get(inst.cardId)?.count ?? 0) + 1, name: pool.get(inst.cardId)?.name ?? '?', supertype: pool.get(inst.cardId)?.supertype }), new Map()).values()].sort((a, b) => b.count - a.count)}
         <div class="mp-discard-list">
-          {#each _groups as g (g.cardId)}
+          {#each sheet.list as inst (inst.iid)}
+            {@const c = pool.get(inst.cardId)}
             <div class="mp-discard-row">
-              <span class="mp-discard-name">{g.name}{g.count > 1 ? ` ×${g.count}` : ''}</span>
-              <span class="mp-discard-type">{g.supertype === 'Pokemon' ? '🐾' : g.supertype === 'Energy' ? '⚡' : '🃏'}</span>
-              <button class="mp-discard-zoom" onclick={() => { closeSheet(); onOpenZoom(g.cardId, g.inst); }} title="放大查看">🔍</button>
+              <span class="mp-discard-name">{c?.name ?? '?'}</span>
+              <span class="mp-discard-type">{c?.supertype === 'Pokemon' ? '🐾' : c?.supertype === 'Energy' ? '⚡' : '🃏'}</span>
+              <button class="mp-discard-zoom" onclick={() => { closeSheet(); onOpenZoom(inst.cardId, inst); }} title="放大查看">🔍</button>
             </div>
           {/each}
         </div>

@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.120</span> 🔧 暫時 revert Opt 5 棄牌區合併 — 救 v5.116~v5.119 連續 4 版 build fail</summary>
+        <ul>
+          <li><b>v5.116/v5.117/v5.118/v5.119 連續 4 版 Deploy fail</b>：beta 站從 v5.115 後沒更新。多次 hotfix 嘗試（移除 IIFE、移除 generic、移除 HTML 注釋）仍 build fail。</li>
+          <li><b>決定</b>：暫時完全 revert Opt 5 手機版棄牌區合併同名卡功能，回到 v5.115 baseline（每張一行）。先讓其他 4 個優化（等待開戰標籤 / 抽牌動畫加強 / 觀戰開關 host-only / 手機觀戰 read-only）能順利上 production。</li>
+          <li><b>Opt 5 後續</b>：未來改用「在 script 區寫 <code>$derived</code> 計算 grouped list」的方式（避免 svelte template inline 複雜 reduce 觸發 parser 邊界），先不急著重做。</li>
+          <li><b>教訓</b>：Svelte template <code>&#123;@const&#125;</code> 是 expression-only 沒錯，但即使換 reduce 純 expression，當該 expression 含 generic / complex chained method call 時也可能觸發 parser bug。複雜運算最安全是 script 區 derived。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（1 處 exact-match）／14（最小 revert）／1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.119</span> 🔧 Hotfix v5.118 仍 build fail — 移除 HTML 注釋 raw entity + Map 泛型</summary>
         <ul>
           <li><b>v5.118 也 fail</b>：reduce 寫法已避開 statement，但仍 build fail。再 audit 後找出兩個潛在原因：</li>
