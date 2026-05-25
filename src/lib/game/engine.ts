@@ -1841,16 +1841,18 @@ function handleSetup(
   const players = [...state.players] as [PlayerState, PlayerState];
 
   if (action.type === 'PLACE_ACTIVE') {
-    // v5.134：依 PTCG 邏輯，自己有 mulligan 過 + 對手沒 mulligan + 對手還沒放戰鬥場
-    //   → 需等對手先放戰鬥場（證明對手確實有基礎）才能設置自己的戰鬥場。
+    // v5.134 / v5.135：依 PTCG 規則，自己有 mulligan 過 + 對手沒 mulligan
+    //   → 需等對手「按了準備完成」(setupDone=true) 才能開始設置自己。
+    //   實體賽事規則：沒重抽方先完整擺好戰鬥場 + 備戰 + 確認，重抽方依
+    //   對方手牌資訊判斷是否補抽，故必須等對方完成 setup。
     //   雙方都 mulligan 的情況不擋（任一方都可先放）。
     {
       const myMul = state.mulliganCounts?.[pIdx] ?? 0;
       const oppIdx = (1 - pIdx) as 0 | 1;
       const oppMul = state.mulliganCounts?.[oppIdx] ?? 0;
-      if (myMul > 0 && oppMul === 0 && !state.players[oppIdx].active) {
+      if (myMul > 0 && oppMul === 0 && !state.setupDone[oppIdx]) {
         return addLog(state,
-          `${state.players[pIdx].name} 重抽過，需等對手先放好戰鬥場寶可夢`, pIdx);
+          `${state.players[pIdx].name} 重抽過，需等對手按下準備完成才能設置`, pIdx);
       }
     }
     const iidx = player.hand.findIndex((c) => c.iid === action.iid);

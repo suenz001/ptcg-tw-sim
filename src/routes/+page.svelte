@@ -265,6 +265,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.135</span> 🚨 hotfix: v5.134 mulligan gate 兩個問題</summary>
+        <ul>
+          <li><b>玩家回報</b>：AI 對戰時 log 不停 spam「🤖 AI 對手 重抽過，需等對手先放好戰鬥場寶可夢」。</li>
+          <li><b>問題 A — 規則不精準</b>：v5.134 gate 條件為「對手放好戰鬥場 (<code>!players[oppIdx].active</code>)」。Wilson 補充正確規則：應等「不用重抽方按下準備完成 (<code>!setupDone[oppIdx]</code>)」才能設置。實體賽事規則：沒重抽方先完整擺好戰鬥場+備戰+確認，重抽方依對方手牌資訊判斷是否補抽，故必須等對方完成 setup。</li>
+          <li><b>修法 A</b>：engine.ts gate 條件 <code>!players[oppIdx].active</code> → <code>!state.setupDone[oppIdx]</code>；log 文字「需等對手先放好戰鬥場寶可夢」→「需等對手按下準備完成才能設置」。</li>
+
+          <li><b>問題 B — AI scheduler 無限 retry</b>：v5.134 engine 加 gate 但 AI ai.ts 沒同步檢查 → AI 重抽方一直送 PLACE_ACTIVE → 被 engine reject + addLog → game state 變 (log 新增) → <code>$effect</code> 再 trigger AI → 又送 → 死循環 log spam。</li>
+          <li><b>修法 B</b>：ai.ts setup PLACE_ACTIVE 前自己檢查同樣 gate (<code>myMul&gt;0 + oppMul=0 + !setupDone[oppIdx]</code>) → blocked 時 <code>return null</code>。AI 不送 action → game 不變 → $effect 不 retrigger。直到對方 setupDone 後 game 變 → $effect 重跑 → AI 重新評估 → 通過 gate → 設置。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純條件改 + AI 前置檢查）／15（PTCG 規則 source of truth — Wilson 補正）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.134</span> 🎯 3 項：桌墊版鎖框 + 多張獎賞動畫 + mulligan 重抽方等待</summary>
         <ul>
           <li><b>玩家回報 1</b>：使用感應超能量召出備戰寶可夢，自己戰鬥場與備戰區間隙又出現。</li>

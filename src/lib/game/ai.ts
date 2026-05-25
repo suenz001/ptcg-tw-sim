@@ -351,6 +351,16 @@ function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): 
 
   // 先選出場（選 HP 最高的基礎；含 ex 基礎）
   if (!player.active) {
+    // v5.135：mulligan 重抽方需等對手按準備完成 — AI 自己檢查 gate，
+    //   blocked 時 return null，避免 engine reject + AI scheduler 不停 retry → log spam。
+    {
+      const myMul = state.mulliganCounts?.[pIdx] ?? 0;
+      const oppIdx = (1 - pIdx) as 0 | 1;
+      const oppMul = state.mulliganCounts?.[oppIdx] ?? 0;
+      if (myMul > 0 && oppMul === 0 && !state.setupDone[oppIdx]) {
+        return null;
+      }
+    }
     const basics = player.hand.filter(c => isBasicPokemonCard(pool.get(c.cardId)));
     // v3.43 魔靈多龍：含羞苞優先擺戰鬥場（用癢癢花粉爭取多龍進化時間）
     if (basics.length > 0 && isMarruneDragapult(player, pool)) {
