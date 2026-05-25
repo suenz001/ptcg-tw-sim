@@ -265,6 +265,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.111</span> 🎨 縮小 active-card 內部空白 + row-gap 25→15 fit viewport</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.110 row-gap 25 後整頁太長需 scroll，無法一頁容納；active-card 內部上下空白浪費；我方對方 active 距離太遠。</li>
+          <li><b>修法</b>：</li>
+          <li>　1. <code>.active-card min-height: 170 → 140</code>（v5.109 加大為給 bench fan 緩衝，row-gap 解決後不需）</li>
+          <li>　2. <code>.active-hpbar-bottom top: 35px → .5rem</code> 移回原值（HP column / name-tt 自動跟隨）</li>
+          <li>　3. <code>.ability-btn top: 120px → 90px</code> 移回</li>
+          <li>　4. <code>gap: 25px → 15px</code>（row-gap）拉近 active 距離 + fit viewport</li>
+
+          <li><b>整 grid 高度節省</b>：active min-height -60（×2 row）+ row-gap -30（×3 gap）= -90px，恢復 1366×768 一頁可容納，不需上下捲動。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c／Rule 14（純 CSS 3 處）／Rule 1（changelog audit pass）／Rule 11e／Rule 11f。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.110</span> 🎨 grid row-gap 5→25px 對手 bench-active 距離正常化</summary>
         <ul>
           <li><b>玩家回報</b>（圖 1 對手 1 隻基礎卡 vs 圖 2 對手有進化堆）：「對方備戰區離戰鬥場太近，應該分一點給對方」；圖 2 有進化堆 fan 進 row 2 占據空白看起來「距離正常」。Wilson 要一開始就是圖 2 的排版。</li>

@@ -8313,11 +8313,11 @@
       "chipO   pilesO    stadium   .         activeO   prizesO"
       "chipMe  prizesMe  stadium   actions   activeMe  pilesMe"
       ".       .         .         .         benchMe   .";
-    /* v5.038→v5.050→v5.110：row-gap 12→5→25px。
-       玩家回報對手 active 離 bench 太近，視覺不對稱。row-gap 拉大讓 row 1-2 + row 2-3 + row 3-4 之間有
-       明顯距離，bench 跟 active 視覺分隔清楚。
+    /* v5.038→v5.050→v5.110→v5.111：row-gap 12→5→25→15px。
+       玩家回報 v5.110 25px 撐爆 viewport 需要 scroll，且我方對方 active 距離太遠。
+       縮回 15px：保留 bench-active 視覺分隔，又能 fit 1366×768。
        padding-top/bottom 維持 8px (v5.098)。 */
-    gap:25px 8px;
+    gap:15px 8px;
     padding:8px 8px;
     align-items:center;
     /* 預留右側 log panel 空間（log 開啟時） */
@@ -8491,15 +8491,16 @@
   /* === HP bar 從卡底移到左側 — v5.027 延長：column 56→88px（玩家要求往左延長）
      v5.038：再延長到 140px — 跟 .active-name-tt 等寬（v5.035 設的 140px），血條視覺
      寬度與名字框完全對齊；padding-left 從 96px 跟著加到 148px (140 + 4gap + 4pad) === */
-  /* v5.109: min-height 加大 140→170 給上方留白給 bench fan 進入時不蓋 HP/name/ability */
+  /* v5.111: min-height 170 → 140 縮回 (玩家回報 active-card 內部上下空白浪費)。
+     row-gap 25px 已給 bench/active 之間視覺距離, active-card 不需再加內部緩衝。 */
   .playmat.layout-tabletop .active-card{
     padding-left:148px !important;  /* 140px HP 欄 + 4 gap + 4 padding */
     padding-bottom:.45rem !important;
-    min-height:170px !important;
+    min-height:140px !important;
   }
-  /* v5.109: HP column top:.5rem → 35px 往下推, 上方留 35px 空白給 bench fan 進場不蓋 */
+  /* v5.111: HP column top 35px → .5rem 移回原值 (v5.109 為避 bench fan 改 35, 但 row-gap 25 已解決) */
   .playmat.layout-tabletop .active-card .active-hpbar-bottom{
-    left:.4rem; top:35px; right:auto; bottom:auto;
+    left:.4rem; top:.5rem; right:auto; bottom:auto;
     width:140px;
     flex-direction:column; align-items:center; justify-content:flex-start;
     gap:5px; padding:5px 4px;
@@ -8657,7 +8658,7 @@
     position:absolute;
     left:.4rem;
     width:140px;             /* 跟 .active-name-tt 同寬 */
-    top:120px;               /* v5.109: 跟 HP column 下移 30px → 90+30=120 */
+    top:90px;                /* v5.111: 跟 HP column 移回原值 .5rem → ability-btn 也回 90 */
     z-index:60;              /* 高過 active-info(2) + attached cards(50~80)，低於 name-tt(100) */
     margin:0;                /* 蓋掉 base .ability-btn margin-top:.2rem */
     padding:.25rem .4rem;
