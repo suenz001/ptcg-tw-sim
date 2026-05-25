@@ -265,6 +265,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.143</span> 🪟 場地卡終極修：position:absolute 浮層</summary>
+        <ul>
+          <li><b>玩家怒</b>：「場地卡的問題還是一樣，仍然會撐開間隙…你不能直接把場地卡改成類似 word 的文繞圖顯示嗎？」</li>
+          <li><b>連修失敗紀錄</b>：v5.129 max-height:138 → 撐開／v5.141 三鎖死 height/min/max:138 + img height:90 → 仍撐開。問題不在 stadium 自身高度，而在 CSS Grid spec：spanning item 的 size 仍分配到各 row track 影響 sizing。</li>
+          <li><b>真根因</b>：CSS Grid spec — 「spanning item 的 height 分配到 cross-row tracks 各 1/N」。stadium 跨 row 2-3 height:138 → row 2/3 各 min 69px。img 載入前後 layout 重算瞬間觸發 row track 擴張。</li>
+          <li><b>Wilson 提案 = 正確解</b>：「類似 word 文繞圖，框架在後」= CSS <code>position:absolute</code>。</li>
+          <li><b>修法</b>：</li>
+          <li>　・<code>.playmat.layout-tabletop</code> 加 <code>position:relative</code>（containing block fallback）</li>
+          <li>　・<code>.stadium-display</code> 加 <code>position:absolute</code>，保留 <code>grid-area:stadium + grid-row:2/span 2 + align/justify-self:center</code></li>
+          <li><b>Spec 保證</b>：「An absolutely-positioned child of a grid container has its containing block become the grid area defined by grid-area, and does NOT contribute to track sizing.」→ stadium 仍視覺在原位置（grid area 中央），但 row sizing 完全不算它的 height，img 載入過程也不會撐 row。</li>
+          <li><b>動作按鈕無需挪</b>：stadium 仍在 col 3 area，actions 仍在 col 4，視覺位置不變。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 加 position 兩處 + display:flex 補回視覺）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.142</span> 🎴 赤松 UI 語意依卡面倒過來</summary>
         <ul>
           <li><b>玩家回報</b>：「赤松的正確作法依據卡牌敘述，應該是先決定哪一張能量卡要放入手牌，然後把另外一個能量卡附於寶可夢身上」。</li>

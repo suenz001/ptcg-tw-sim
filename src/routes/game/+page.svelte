@@ -8481,6 +8481,10 @@
      ═══════════════════════════════════════════════════════════════════ */
   .playmat.layout-tabletop{
     display:grid !important;
+    /* v5.143：加 position:relative — 給 stadium-display absolute 用作 containing block fallback。
+       stadium 改 absolute 後（含 grid-area:stadium）containing block 是 grid area，但若瀏覽器
+       fallback 行為，position:relative 提供穩定 anchor。 */
+    position:relative;
     /* 6 cols：chip | piles-or-prize-side | stadium | actions | center(active+bench) | prize-or-piles-side
        v5.027：actions column 從 auto → 固定 160px，避免 alerts-col 內 prize-alert 出現時撐寬 column
        把整個戰鬥場往右擠 — 玩家反映「就像真的桌游一樣不該抖動桌子」 */
@@ -8552,14 +8556,25 @@
      讓上下版面框架保持穩定 */
   .playmat.layout-tabletop .action-bar > .stadium-display{
     grid-area:stadium; grid-row:2 / span 2; align-self:center; justify-self:center;
-    /* v5.141：max-height → 三鎖死 (height/min/max)。Wilson 反應「場地卡放上瞬間
-       撐開 active 間隙」— 推測 max-height 是上限，grid track sizing 仍可能用
-       intrinsic content size 撐大 row（特別是 img 載入前後 size 改變）。
-       改 height:138 + min-height:138 + max-height:138 完全鎖死 grid 計算用的高度。 */
-    width:96px; max-width:96px;
-    height:138px; min-height:138px; max-height:138px;
+    /* v5.143 終極修：position:absolute 浮層（Wilson 提案「類似 word 文繞圖」）。
+       v5.141 三鎖死 height 仍撐開 — CSS Grid spec 中，spanning item 的 size
+       仍會分配到各 row track 影響 sizing。即使 height 鎖 138，row track 仍
+       contribute min-height 138/2=69px，imp load 前後 layout 重算撐瞬間擴大。
+
+       Spec：「An absolutely-positioned child of a grid container has its
+       containing block become the grid area defined by grid-area, and does
+       NOT contribute to track sizing.」
+       → stadium 仍顯示在原 grid area 中央，但 grid row sizing 完全不算它。 */
+    position:absolute;
+    /* 顯示與 flex layout（內部 label/img/name 垂直排列） */
+    display:flex; flex-direction:column; align-items:center;
+    background:rgba(26,42,74,.6); border:1px solid #3a5a8a; border-radius:6px;
+    cursor:pointer;
+    width:96px;
+    height:138px;
     padding:.18rem .25rem; gap:.12rem;
     overflow:hidden;
+    z-index:5;  /* 浮在 grid items 之上但不蓋 modal */
   }
   .playmat.layout-tabletop .action-bar > .stadium-display img{
     width:64px;  /* v5.129: 92→64，縮小不撐大 */
