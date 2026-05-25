@@ -8560,11 +8560,11 @@
   }
   /* v5.138：active 改黏「外側」(靠近 bench) — align-self:start → end，
      讓 active-bench 視覺貼齊 gap 15px，不論 row 高度。
-     v5.146：z-index:250 高於 bench 200 — 修我方 bench att-card 往上 fan 蓋住 active 進化按鈕。
-       對手 zone-active 不動（v5.109 對手 bench 往下 fan 蓋對手 active 的視覺保留）。 */
+     v5.146→v5.154：撤回 z-index:250。Wilson 反饋 bench 疊牌被 active 框架蓋住，
+     優先讓 bench att-card-stack 可見。bench (z=200) 蓋 active (z=1) 是正確視覺層。
+     evo-wrap 在 active-img 上方（v5.149 top:110）已足夠，少數重疊不影響可點。 */
   .playmat.layout-tabletop .my-row > .zone-active{
     grid-area:activeMe; justify-self:center; align-self:end;
-    z-index:250;
   }
   .playmat.layout-tabletop .my-row > .zone-pile{
     grid-area:pilesMe; display:flex; flex-direction:column; gap:3px;  /* 互換：piles 在右 */

@@ -265,6 +265,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.154</span> 🎯 撤回 my-row active z-index 讓 bench 疊牌可見</summary>
+        <ul>
+          <li><b>Wilson 回報</b>：桌墊版備戰寶可夢的疊牌被戰鬥場框架蓋住，請把備戰疊牌移到上層。</li>
+          <li><b>根因</b>：v5.146 我把 <code>.my-row &gt; .zone-active</code> z-index 拉到 250（高於 bench 200）解決「進化按鈕被疊牌蓋住」— 但這個改動讓 active-card 整個框架蓋過 bench att-card 往上 fan 進 active row 的部分。Wilson 現在優先要 bench 疊牌可見。</li>
+          <li><b>修法</b>：撤回 v5.146 my-row zone-active z-index:250，回到不設 z-index（預設 auto≈1）。bench (z=200) 蓋過 active (z=1)，bench 疊牌可見。</li>
+          <li><b>evo-btn 不影響</b>：v5.149 後 evo-wrap top:110px 已疊在 active-img 中下方。bench att-card-stack 往上 fan 大概在 active row 下半部，少數重疊但不影響玩家操作。</li>
+
+          <li><b>連環修法軌跡</b>：</li>
+          <li>　・v5.146：active z-index:250 解決 evo-btn 被蓋（但意外蓋了 bench 疊牌）</li>
+          <li>　・v5.149：evo-wrap top:75→110 疊在 active-img 上（不放卡片底部）</li>
+          <li>　・v5.150：active-card 縮到 160 刪空白</li>
+          <li>　・<b>v5.154：撤回 v5.146 z-index — bench 疊牌恢復可見</b></li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 1 處 exact-match）／14（最小 patch — 刪 1 行 z-index）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.153</span> 🐛 多目標招式 active 補套弱抗+猛攻手鐲</summary>
         <ul>
           <li><b>Wilson 回報</b>：呆呆王｜耀閃挑戰 學三重冰霜，對對手戰鬥場 ex 沒算到猛攻手鐲 +30，也沒算屬性相剋（弱抗）。</li>
