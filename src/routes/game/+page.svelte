@@ -8426,7 +8426,13 @@
   /* 根因：原本 bench-middle 是 flex column，flex 高度可能 > img 高（被 bench-slot 撐開），
      img 被 align-items:center 垂直置中，但 stack top:0 是錨在 bench-middle 頂，
      導致兩者沒對齊。改 grid 讓 img + stack 在同一 grid cell place-items:center，自動對齊。 */
-  .playmat.layout-tabletop .bench-slot{ overflow:visible !important; }
+  /* v5.107: contain:layout 強制 layout containment — children layout 不影響父 sizing。
+     防止 stack absolute children 視覺溢出時某些瀏覽器 reflow 父 row。
+     height:205px 仍 fixed (base CSS), 但 contain 確保此 fix 不被 break。 */
+  .playmat.layout-tabletop .bench-slot{
+    overflow:visible !important;
+    contain: layout style;
+  }
 
   /* v5.048：對手備戰 slot 縮高 — 對手不會在我方回合 render ability-btn-sm（特性按鈕），
      base bench-slot height:205px 預留給 ability-btn 的下方空間對對手永遠用不到，造成
@@ -8465,7 +8471,11 @@
     overflow:visible !important;
     pointer-events:none;  /* att-card 個別 pointer-events:auto 仍可 hover */
   }
-  .playmat.layout-tabletop .zone-bench{ overflow:visible !important; }
+  /* v5.107: zone-bench 也加 contain:layout 隔離 — 雙保險 */
+  .playmat.layout-tabletop .zone-bench{
+    overflow:visible !important;
+    contain: layout;
+  }
 
   /* === v5.027 att-preview 在 viewport 頂部 → 改顯示在卡下方（transform 翻轉） === */
   .hand-preview-float.att-preview-below{ transform:translate(-50%, 0); }
