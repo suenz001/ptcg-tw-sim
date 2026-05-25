@@ -265,6 +265,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.144</span> 🐛 浩大鯨撤退燃火能量 UI host-aware 補完</summary>
+        <ul>
+          <li><b>玩家回報</b>：浩大鯨（Stage1，撤退費 3）附 1 張燃火能量 + 1 張水能量，picker「確定」灰色無法按。卡面：燃火能量 on 進化寶可夢視為 3 個【無】能量，單張應夠撤退費 3。</li>
+          <li><b>根因 audit（精確）</b>：v5.125 已修 <code>totalEnergyUnits()</code> 加可選 <code>hostInst</code> 參數，host on Stage1/Stage2 時燃火 = 3 units。engine.ts 撤退路徑所有 caller 都已補（L2572 / L8244 / L7420 / L7447）。**但 <code>+page.svelte UI selectionValid 兩個 caller</code>（L2909 sum / L2916 essential check）沒補 hostInst** → host=undefined → hostIsEvolution=false → 燃火 sum 1 unit &lt; retreatCost 3 → 確定灰色卡死。</li>
+          <li><b>修法 1</b>：<code>+page.svelte UI selectionValid</code> 兩處 <code>totalEnergyUnits()</code> 呼叫都補 <code>game.players[actorIdxR].active</code> 為 host。</li>
+          <li><b>修法 2</b>：engine.ts auto-discard loop（單一屬性自動丟，~L2620）也補燃火 host-aware（鏡射 totalEnergyUnits v5.125 邏輯）。此 path 只在 sigs.size===1 走（Wilson 場景是 sigs=2 走 picker），但防禦單張燃火場景。</li>
+
+          <li><b>對應 PTCG 規則</b>：燃火能量於 Stage1/Stage2 進化寶可夢提供 3 個【無】能量。一張燃火 = 撤退費 3 的進化寶可夢可撤退。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純補 caller 參數，函式本身已 v5.125 正確）／15（PTCG 卡面 source of truth — 燃火 on 進化 = 3 units）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.143</span> 🪟 場地卡終極修：position:absolute 浮層</summary>
         <ul>
           <li><b>玩家怒</b>：「場地卡的問題還是一樣，仍然會撐開間隙…你不能直接把場地卡改成類似 word 的文繞圖顯示嗎？」</li>

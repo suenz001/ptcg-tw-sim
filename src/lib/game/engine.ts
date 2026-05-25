@@ -2611,6 +2611,11 @@ function handlePlaying(
     // v2.69：從後方取，累積 units 直到 ≥ retreatCost；火箭隊能量 1 張 = 2 units。
     // v2.108：大竺葵繁茂時，基本【草】能量 1 張 = 2 units。
     const bloomOnR = hasBloomAbilityOnField(state, aIdx, pool);
+    // v5.144：判 active 是否進化（給燃火能量倍率用 — 鏡射 totalEnergyUnits v5.125 邏輯）
+    const activeCardForR = pool.get(attacker.active.cardId);
+    const isActiveEvolutionForR = !!(activeCardForR && (activeCardForR.evolvesFrom
+      || activeCardForR.stage === 'Stage1' || activeCardForR.stage === 'Stage2'
+      || activeCardForR.subtype === 'Stage1' || activeCardForR.subtype === 'Stage2'));
     let paidUnits = 0;
     const keepE: CardInstance[] = [];
     const discardE: CardInstance[] = [];
@@ -2621,6 +2626,9 @@ function handlePlaying(
         const ec = pool.get(e.cardId);
         if (bloomOnR && isBasicEnergyOfType(ec, 'Grass')) {
           paidUnits += 2;
+        } else if (ec?.name === '燃火能量' && isActiveEvolutionForR) {
+          // v5.144：燃火能量 on 進化寶可夢 = 3 units
+          paidUnits += 3;
         } else {
           const units = getEnergyUnits(e.cardId, pool);
           paidUnits += units.length === 0 ? 1 : units.length;

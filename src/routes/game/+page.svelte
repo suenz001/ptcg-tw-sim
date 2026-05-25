@@ -2905,15 +2905,19 @@
       if (selectionPicked.size === 0) return false;
       const pickedInsts = selectionItems.filter(it => selectionPicked.has(it.iid));
       const actorIdxR = pendingSelection.actorIdx as 0 | 1;
+      // v5.144：取 host (attacker.active) 給 totalEnergyUnits 判定燃火能量 on 進化 = 3 units。
+      //   v5.125 已修 totalEnergyUnits 加 hostInst 參數但 UI 沒補 → 浩大鯨 (Stage1) 附燃火能量
+      //   時 sum 算 1 unit < retreatCost 3 → 確定按鈕灰色卡死。
+      const hostForRetreat = game?.players[actorIdxR].active ?? undefined;
       // v3.35：totalEnergyUnits 接受 GameState | undefined；game ($state) 為 GameState | null，做 ?? undefined 轉換
-      const total = totalEnergyUnits(pickedInsts, pool, game ?? undefined, actorIdxR);
+      const total = totalEnergyUnits(pickedInsts, pool, game ?? undefined, actorIdxR, hostForRetreat);
       if (total < retreatCost) return false;
       // v3.823：essential 檢查 — 每張 picked 卡都必要（拿掉它就不足）
       //   範例：picked = [雙倍渦輪(2)] + retreatCost=1 → 拿掉雙倍渦輪 0<1 → essential ✓ 合法
       //         picked = [草(1), 火(1)] + retreatCost=1 → 拿掉草 1≥1 → 草非 essential ✗ 不合法
       for (const inst of pickedInsts) {
         const remaining = pickedInsts.filter(x => x.iid !== inst.iid);
-        const remainingUnits = totalEnergyUnits(remaining, pool, game ?? undefined, actorIdxR);
+        const remainingUnits = totalEnergyUnits(remaining, pool, game ?? undefined, actorIdxR, hostForRetreat);
         if (remainingUnits >= retreatCost) return false;  // 多丟了
       }
       return true;
