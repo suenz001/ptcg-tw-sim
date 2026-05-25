@@ -6318,11 +6318,14 @@
                 <button class="evo-btn" onclick={(e)=>{e.stopPropagation();openFloatingEvo(myPlayer!.active!.iid,evoOpts,e);}}>進化▲</button>
               </div>
             {/if}
-            {#each usableAbilities.filter(a=>a.iid===myPlayer!.active!.iid) as ab}
-              <button class="ability-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>
-                ✨{ab.abilityName}
-              </button>
-            {/each}
+            <!-- v5.160：觀戰者隱藏特性按鈕（isMyTurn 對觀戰者永遠 false） -->
+            {#if isMyTurn()}
+              {#each usableAbilities.filter(a=>a.iid===myPlayer!.active!.iid) as ab}
+                <button class="ability-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>
+                  ✨{ab.abilityName}
+                </button>
+              {/each}
+            {/if}
           </div>
         {:else}
           <div class="active-card active-empty"
@@ -6391,9 +6394,12 @@
               {#if evoOptsB.length>0&&!pendingSelection&&isMyTurn()}
                 <button class="evo-btn-sm" onclick={(e)=>{e.stopPropagation();openFloatingEvo(b.iid,evoOptsB,e);}}>進化</button>
               {/if}
-              {#each usableAbilities.filter(a=>a.iid===b.iid) as ab}
-                <button class="ability-btn-sm" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>✨{ab.abilityName}</button>
-              {/each}
+              <!-- v5.160：觀戰者隱藏特性按鈕（isMyTurn 對觀戰者永遠 false） -->
+              {#if isMyTurn()}
+                {#each usableAbilities.filter(a=>a.iid===b.iid) as ab}
+                  <button class="ability-btn-sm" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>✨{ab.abilityName}</button>
+                {/each}
+              {/if}
               <!-- v2.189 化石卡【丟棄】按鈕：備戰版本 -->
               {#if b.fossilOnField && isMyTurn() && game?.phase==='playing' && game?.turnPhase==='main' && !pendingSelection}
                 <button class="evo-btn-sm fossil-discard-btn"

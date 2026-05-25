@@ -265,6 +265,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.160</span> 👁 觀戰者隱藏特性按鈕（補完桌墊版漏洞）</summary>
+        <ul>
+          <li><b>Wilson 報告</b>：「網頁版/手機版觀戰時不該看到玩家動作按鈕（特性、丟棄、進化、補抽等）」</li>
+          <li><b>Audit 結果</b>：</li>
+          <li>　・桌墊版 evo / fossil-discard / btn-retreat / finishSetup ✓ 已有 <code>isMyTurn()</code> gate（觀戰者 myPlayerIndex=null → isMyTurn=false）</li>
+          <li>　・mulligan reveal / draw modal ✓ 已用 <code>myPlayerIndex===myIdx</code> gate（觀戰者 null 不 popup）</li>
+          <li>　・<b>桌墊版 ability-btn / ability-btn-sm 沒 gate</b> — 觀戰者也看到特性按鈕</li>
+          <li>　・手機版 MobilePortraitBattle ✓ v5.116 已用 <code>isSpectator</code> prop → isMyTurn 永遠 false → 全 read-only</li>
+          <li><b>修法</b>：桌墊版兩個 ability-btn 區塊加 isMyTurn 條件 wrap（active L6178 + bench L6251）。觀戰者 isMyTurn() 回 false，特性按鈕不渲染。</li>
+          <li><b>觀戰者體驗</b>：所有動作按鈕（特性 / 進化 / 丟棄 / 補抽 / 撤退 / 招式 / 結束回合）皆 hide，純粹 read-only 看戲。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 加 if isMyTurn wrap）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.159</span> 🐛 線上練牌按準備卡住根因：firebase merge 漏 mulliganPostBenchOpen</summary>
         <ul>
           <li><b>Wilson 報告</b>（無具體場景）：跟對手練牌重抽完按準備卡住。</li>
