@@ -627,6 +627,7 @@ export const ATTACH_TOOL_NAMES = new Set<string>([
   '璀璨結晶',          // engine.ts: 太晶寶可夢使用招式 cost -1
   '反擊增幅器',        // engine.ts: 自方獎賞 > 對手時 cost -1【無】
   '力之沙漏',          // engine.ts: 持有方回合結束時觸發棄能量附加
+  '重試徽章',          // v5.162: M5 #50293 — 無屬性寶可夢可重擲招式硬幣 (gate 用 TOOL_ATTACH_GATE, coin reroll 功能 TODO)
   ...TOOL_HP_BONUS.keys(),
   ...TOOL_ATTACK_BONUS.keys(),
   ...TOOL_DEFENSE_REDUCE_BY_TYPE.keys(),
@@ -733,6 +734,15 @@ regPost('招式學習器 螢石|螢石', (state, aIdx, pool) => {
 //     350 base damage 由 attack.damage 處理（engine 自動讀）
 TOOL_ATTACH_GATE.set('核心記憶碟', (holderCard) => holderCard.name === '超級基格爾德ex');
 reg('核心記憶碟', toolAttachEffect('核心記憶碟'));
+
+// v5.162 重試徽章（M5 #50293, Pokemon Tool）—————————————————————————————————
+// 卡面：「在自己的回合可使用 1 次，附有這張卡的無屬性寶可夢使用招式時，
+//        若擲了硬幣，可全部消除該硬幣結果並從頭重擲。」
+// 實裝範圍（最小可行版）：
+//   ✓ ATTACH_TOOL_NAMES 已加（上方）→ 不再「找不到 attach 效果註冊」退回
+//   ✓ TOOL_ATTACH_GATE：只能附「無屬性」(Colorless) 寶可夢
+//   ✗ Coin reroll 機制（每回合 1 次重擲）— 大改未實作
+TOOL_ATTACH_GATE.set('重試徽章', (holderCard) => holderCard.pokemonType === 'Colorless');
 
 regPost('核心記憶碟|大地光炮', (state, aIdx, pool) => {
   const players = [...state.players] as [import('../../types').PlayerState, import('../../types').PlayerState];

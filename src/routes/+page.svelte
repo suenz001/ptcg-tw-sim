@@ -265,6 +265,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.162</span> 🎒 重試徽章最小實裝（ATTACH_TOOL_NAMES + Colorless gate）</summary>
+        <ul>
+          <li><b>Wilson 截圖 log</b>：「重試徽章（道具）：找不到 attach 效果註冊，已退回手牌」</li>
+          <li><b>卡面</b>（M5 #50293, Pokemon Tool）：「在自己的回合可使用 1 次，附有這張卡的無屬性寶可夢使用招式時，若擲了硬幣，可全部消除該硬幣結果並從頭重擲。」</li>
+          <li><b>修法</b>（最小可行版）：</li>
+          <li>　・加入 <code>ATTACH_TOOL_NAMES</code>（tools.ts L626 區）— 不再「找不到 attach 效果註冊」退回</li>
+          <li>　・<code>TOOL_ATTACH_GATE</code> 限定附加目標 <code>holderCard.pokemonType === &#39;Colorless&#39;</code>（無屬性寶可夢，依卡面）</li>
+          <li><b>已知 limitation</b>：Coin reroll（每回合 1 次重擲）機制本版未實作 — 需 coinflip hook + UI 重擲按鈕 + usedThisTurn flag，留 v5.163+ 大改。本版優先解決「無法 attach」回報問題。</li>
+
+          <li><b>v5.161 audit-only</b>（無 code 改動）：完整 mulligan 流程 health check 通過，14 個檢查點全綠。Wilson 報告「沒有基礎怪 補牌後就卡住」極可能已被 v5.158（ai 順序）+ v5.159（firebase merge）修復。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 加 1 個 Set entry + 1 個 GATE）／15（PTCG 卡面 source of truth）／17（限定範圍不 hallucinate coin reroll）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.160</span> 👁 觀戰者隱藏特性按鈕（補完桌墊版漏洞）</summary>
         <ul>
           <li><b>Wilson 報告</b>：「網頁版/手機版觀戰時不該看到玩家動作按鈕（特性、丟棄、進化、補抽等）」</li>
