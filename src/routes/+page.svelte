@@ -265,6 +265,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.152</span> 🐛 撤回 v5.125 錯誤的脫殼忍者進化鏈 (AI 幻覺糾正)</summary>
+        <ul>
+          <li><b>Wilson 怒</b>：「系統弄反 — 把土居忍士被視為進化、脫殼忍者被視為基礎，請依鐵律處理，務必以 static/cards 敘述為準」</li>
+          <li><b>根因追溯</b>：v5.125 task #287「Bug 2: 脫殼忍者進化鏈漏 evolvesFrom=&#39;土居忍士&#39;」是 AI 幻覺。我加了 evolvesFrom=&#39;土居忍士&#39; 到 M1S.json 兩個脫殼忍者 (id=14063 + id=14219)，**違反 PTCG 實際規則**。</li>
+          <li><b>正確 PTCG 規則（M1S.json source of truth）</b>：</li>
+          <li>　・土居忍士 (#14027): Basic, evolvesFrom=null ✓</li>
+          <li>　・<b>鐵面忍者 (#14028/#14212): Stage1, evolvesFrom=&#39;土居忍士&#39; ✓（這個才是正確的進化鏈）</b></li>
+          <li>　・脫殼忍者 (#14063/#14219): Stage1, evolvesFrom=null（不從進化獲得）</li>
+          <li><b>脫殼忍者的特殊機制</b>：鐵面忍者進化時觸發特性「脫殼」，從牌庫選 1 張脫殼忍者放置於備戰區（<code>v2306_meta_pokemon.ts L312</code> 已正確實裝）— 不是從土居忍士直接進化。</li>
+          <li><b>修法</b>：M1S.json 兩處脫殼忍者（不同 illustrator anchor 確保 unique）精準 string replace 撤回 <code>evolvesFrom</code> 欄位 + 前面逗號，恢復原始 scraper 抓的狀態。</li>
+          <li><b>Verify</b>：JSON 仍可解析 + 脫殼忍者 evolvesFrom=null + 鐵面忍者 evolvesFrom=土居忍士 保留不動。</li>
+
+          <li><b>教訓</b>：Rule 15（PTCG 卡面 source of truth）+ Rule 17（禁 AI 幻覺）— task 標題「脫殼忍者進化鏈漏」當時我沒對照 static/cards 確認就 hallucinate，本次糾正。未來凡進化鏈相關修法都要對照 JSON。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match + JSON 解析 verify）／14（最小 patch — 純 JSON 撤回 2 欄位）／15（PTCG static/cards source of truth）／17（撤回 AI 幻覺）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.151</span> 🐛 朽木妖｜詛咒根後 AI 卡死修正</summary>
         <ul>
           <li><b>Wilson 回報</b>：朽木妖使用招式「詛咒根」後，對方 AI 經常卡掉。</li>
