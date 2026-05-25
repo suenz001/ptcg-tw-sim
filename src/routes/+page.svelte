@@ -265,6 +265,34 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.116</span> 🎨 5 玩家優化：等待開戰標籤 / 觀戰開關 host-only / 手機觀戰 read-only / 棄牌區合併 / 抽牌動畫加強</summary>
+        <ul>
+          <li><b>玩家提出 5 個優化建議</b>：</li>
+          <li>　1. 等待房間兩位子都有人時加「等待開戰」標籤，讓其他玩家知道不要再進（除非觀戰）</li>
+          <li>　2. 抽牌/檢索效果加入手牌時加動畫，現在不易察覺</li>
+          <li>　3. 「允許觀戰」開關應只有房主（1p）能改</li>
+          <li>　4. 觀戰擁有跟對戰一樣的 UI（手機版可點「結束回合」），網頁版正常</li>
+          <li>　5. 手機版棄牌區清單太長，建議合併同名卡</li>
+
+          <li><b>根因分析</b>：</li>
+          <li>　1. lobbyRooms 渲染時沒判斷 <code>seats[0].uid &amp;&amp; seats[1].uid</code></li>
+          <li>　2. v5.049 既有「牌庫→手牌飛卡動畫」（偵測手牌新 iid 自動播）但 520ms 過快且無 highlight，玩家不易察覺</li>
+          <li>　3. v3.992 設計 P1+P2 都可改觀戰開關，造成 P2 可推翻房主決定</li>
+          <li>　4. MobilePortraitBattle 沒接收 <code>isSpectator</code> prop，<code>isMyTurn = game.activePlayerIndex === myIdx</code> 只看 myIdx（觀戰者視角的 0 或 1），按鈕仍顯示。網頁版 +page.svelte 已用 isSpectator gate 各個 button，手機版獨立元件沒涵蓋</li>
+          <li>　5. discard list 每張一行 <code>{@const c = pool.get(inst.cardId)}</code>，60 張牌組打到後期可能 20+ 張卡，捲動疲勞</li>
+
+          <li><b>修法</b>：</li>
+          <li>　1. lobbyRooms li 加 <code>_bothSeated</code> 判斷顯示「⏳ 等待開戰」橘色標籤 + 按鈕文字變「👁 觀戰」</li>
+          <li>　2. DRAW_ANIM_DUR 520→650ms + 新 <code>justArrivedIids</code> state — hand-card 動畫結束後加 <code>.just-arrived</code> class 1500ms，黃光 halo pulse + scale 1.05 動畫</li>
+          <li>　3. 觀戰開關 <code>mySeatIdx === 0</code>（房主）才能改，P2 顯示唯讀狀態「✅ 房主已允許觀戰」/「🚫 房主已停用觀戰」</li>
+          <li>　4. MobilePortraitBattle 加 <code>isSpectator?: boolean</code> prop；<code>isMyTurn = !isSpectator &amp;&amp; game.activePlayerIndex === myIdx</code> — 因為所有 derived state（canEndTurn / canRetreatNow / usableAbilities / playableTrainerIids / etc）都 gate 在 isMyTurn，這一刀全部 read-only。setup 「✅ 準備」按鈕額外加 <code>!isSpectator</code> 包覆</li>
+          <li>　5. 棄牌區 list 改 <code>groupBy(cardId)</code> + count 顯示「名×N」，按 count desc 排序</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／Rule 11e（Write tool）／Rule 11f（push 前 ASSERT 共 9 處 exact-match replace）／Rule 14（最小 patch — 不動既有 +page.svelte spectator dispatch gate 機制，僅補 MobilePortraitBattle prop；既有 v5.049 動畫機制保留只加強視覺）／Rule 1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.115</span> 🐛 大地之門/詛咒言語/太鼓防壁/駭浪/pre-discard UI 5 bug 修</summary>
         <ul>
           <li><b>玩家回報 5 個 bug + 1 個待確認（盈溢祈願）</b>：</li>

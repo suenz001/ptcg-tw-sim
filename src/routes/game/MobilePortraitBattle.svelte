@@ -62,6 +62,8 @@
     version: string;
     pendingPrizes?: number;
     canUseStadium?: boolean;
+    // v5.116 觀戰模式：true 時整個 UI 進入唯讀（按鈕全 gate 掉，純看不操作）
+    isSpectator?: boolean;
     // Callbacks
     onAction: (action: ReturnType<(typeof GameActions)[keyof typeof GameActions]>) => void | Promise<void>;
     onInitiateAttack: (attackIndex: number) => void;
@@ -76,6 +78,7 @@
     aiThinking, isSyncing, version,
     pendingPrizes = 0,
     canUseStadium = false,
+    isSpectator = false,  // v5.116
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
   }: Props = $props();
 
@@ -160,7 +163,8 @@
       return p.count > 1 ? `${lbl}${p.count}` : lbl;
     }).join('');
   }
-  let isMyTurn = $derived(game.activePlayerIndex === myIdx);
+  // v5.116：觀戰者 isSpectator=true → isMyTurn 永遠 false → 所有按鈕 / popup actions / dispatch gate 全部失效（read-only 模式）
+  let isMyTurn = $derived(!isSpectator && game.activePlayerIndex === myIdx);
   let isMainPhase = $derived(game.turnPhase === 'main');
   let isSetup = $derived(game.phase === 'setup');
   let isPlaying = $derived(game.phase === 'playing');
@@ -668,8 +672,9 @@
     <span class="mp-spacer"></span>
     {#if aiThinking}<span class="mp-tag">🤖</span>{/if}
     {#if isSyncing}<span class="mp-tag">⏳</span>{/if}
-    {#if isSetup && !game.setupDone[myIdx]}
+    {#if isSetup && !game.setupDone[myIdx] && !isSpectator}
       <!-- v2.287 修：setup 階段雙方各自準備，不依 isMyTurn 判定（後手玩家 isMyTurn=false 會看不到按鈕） -->
+      <!-- v5.116：觀戰者不顯示準備按鈕 -->
       <button class="mp-end-btn" disabled={!myPlayer.active}
         onclick={() => onAction(GameActions.finishSetup(myIdx))}>✅ 準備</button>
     {:else if isMyTurn && isPlaying && !pendingSelection && (game.pendingPrizes?.[0] ?? 0) === 0 && (game.pendingPrizes?.[1] ?? 0) === 0}
@@ -1026,13 +1031,24 @@
         {/each}
       {:else if sheet.type === 'discard'}
         <div class="mp-sheet-title">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
+        <!-- v5.116：合併同名卡為一行「名×N」，玩家更易檢索 -->
+        {@const _groups = (() => {
+          const m = new Map<string, { name: string; cardId: string; inst: CardInstance; supertype?: string; count: number }>();
+          for (const inst of sheet.list) {
+            const c = pool.get(inst.cardId);
+            const key = inst.cardId;  // 同 cardId = 同名同版本，可堆疊
+            const existing = m.get(key);
+            if (existing) existing.count++;
+            else m.set(key, { name: c?.name ?? '?', cardId: inst.cardId, inst, supertype: c?.supertype, count: 1 });
+          }
+          return [...m.values()].sort((a, b) => b.count - a.count);
+        })()}
         <div class="mp-discard-list">
-          {#each sheet.list as inst (inst.iid)}
-            {@const c = pool.get(inst.cardId)}
+          {#each _groups as g (g.cardId)}
             <div class="mp-discard-row">
-              <span class="mp-discard-name">{c?.name ?? '?'}</span>
-              <span class="mp-discard-type">{c?.supertype === 'Pokemon' ? '🐾' : c?.supertype === 'Energy' ? '⚡' : '🃏'}</span>
-              <button class="mp-discard-zoom" onclick={() => { closeSheet(); onOpenZoom(inst.cardId, inst); }} title="放大查看">🔍</button>
+              <span class="mp-discard-name">{g.name}{g.count > 1 ? ` ×${g.count}` : ''}</span>
+              <span class="mp-discard-type">{g.supertype === 'Pokemon' ? '🐾' : g.supertype === 'Energy' ? '⚡' : '🃏'}</span>
+              <button class="mp-discard-zoom" onclick={() => { closeSheet(); onOpenZoom(g.cardId, g.inst); }} title="放大查看">🔍</button>
             </div>
           {/each}
         </div>

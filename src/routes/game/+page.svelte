@@ -942,8 +942,12 @@
   let arrivingIids = $state<Set<string>>(new Set());
   const prevHandIids: [Set<string>, Set<string>] = [new Set(), new Set()];
   const drawAnimTimers: ReturnType<typeof setTimeout>[] = [];
-  const DRAW_ANIM_DUR = 520;
+  const DRAW_ANIM_DUR = 650;  // v5.116：520 → 650ms 拉長讓動畫更明顯
   const DRAW_STAGGER  = 130;
+  // v5.116：just-arrived halo — 飛行動畫結束後維持 1500ms glow pulse，玩家更易察覺新卡
+  let justArrivedIids = $state<Set<string>>(new Set());
+  const JUST_ARRIVED_HOLD_MS = 1500;
+  const justArrivedTimers: ReturnType<typeof setTimeout>[] = [];
 
   $effect(() => {
     if (!game) {
@@ -1021,6 +1025,16 @@
               const next = new Set(arrivingIids);
               next.delete(iid);
               arrivingIids = next;
+              // v5.116：飛行結束後標 just-arrived，hand-card 顯示 glow halo 1500ms
+              const ja = new Set(justArrivedIids);
+              ja.add(iid);
+              justArrivedIids = ja;
+              const haloTimer = setTimeout(() => {
+                const ja2 = new Set(justArrivedIids);
+                ja2.delete(iid);
+                justArrivedIids = ja2;
+              }, JUST_ARRIVED_HOLD_MS);
+              justArrivedTimers.push(haloTimer);
             }
           }, total);
           drawAnimTimers.push(timerId);
@@ -1032,6 +1046,7 @@
   onDestroy(() => {
     for (const t of shuffleTimers) clearTimeout(t);
     for (const t of discardTimers) clearTimeout(t);
+    for (const t of justArrivedTimers) clearTimeout(t);  // v5.116
     for (const t of drawAnimTimers) clearTimeout(t);
   });
 
@@ -5309,13 +5324,15 @@
           {:else if lobbyRooms.length > 0}
             <ul class="open-room-list">
               {#each lobbyRooms as r (r.roomId)}
-                <li class="open-room-row" class:practice-room={r.allowUndo}>
+                {@const _bothSeated = !!(r.seats?.[0]?.uid && r.seats?.[1]?.uid)}
+                <li class="open-room-row" class:practice-room={r.allowUndo} class:room-full={_bothSeated}>
                   <span class="or-host">🎮 {r.roomName ?? r.hostName}</span>
                   {#if r.allowUndo}<span class="or-practice-tag" title="此房為練習模式 — 雙方同意可悔棋">🎯 練習</span>{/if}
+                  {#if _bothSeated}<span class="or-waiting-tag" title="雙方就坐，等待開戰中 — 進去只能加入觀戰位">⏳ 等待開戰</span>{/if}
                   <span class="or-host-name">房主：{r.hostName}</span>
                   <span class="or-code">房號 {r.roomId}</span>
                   <button class="btn-sm primary" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim()}>
-                    加入
+                    {_bothSeated ? '👁 觀戰' : '加入'}
                   </button>
                 </li>
               {/each}
@@ -5370,8 +5387,8 @@
           <button class="btn-secondary" onclick={leaveOnlineGame}>離開房間</button>
         </div>
 
-        <!-- v3.992 觀戰開關（P1/P2 可改）-->
-        {#if mySeatIdx === 0 || mySeatIdx === 1}
+        <!-- v3.992 觀戰開關（v5.116：只有房主 P1 可改）-->
+        {#if mySeatIdx === 0}
           <div class="spectator-toggle-row">
             <label class="spectator-toggle">
               <input
@@ -5385,6 +5402,11 @@
               />
               <span>✅ 允許觀戰（讓其他玩家在大廳的「對戰中房間」看到此房）</span>
             </label>
+          </div>
+        {:else if mySeatIdx === 1}
+          <!-- v5.116 P2 唯讀顯示 -->
+          <div class="spectator-toggle-row">
+            <span class="muted small">{roomData?.spectatorsAllowed !== false ? '✅ 房主已允許觀戰' : '🚫 房主已停用觀戰'}（由房主決定）</span>
           </div>
           <!-- v5.051: 移除線上 lobby 預組 toggle — 同本機 lobby -->
         {/if}
@@ -5585,6 +5607,7 @@
       {aiThinking}
       {isSyncing}
       {canUseStadium}
+      {isSpectator}
       pendingPrizes={myPendingPrizes}
       version={VERSION}
       onAction={dispatch}
@@ -9739,6 +9762,16 @@
   /* v2.45：overlay 飛行期間 hand-card opacity:0，overlay 落地才淡入 */
   .hand-card.arriving{ opacity:0; pointer-events:none; }
   .hand-card:not(.arriving){ transition: opacity .18s ease-out; }
+  /* v5.116：剛抽到/檢索到的新卡 halo pulse 1.5s 讓玩家更易察覺 */
+  .hand-card.just-arrived {
+    animation: hand-card-arrived 1.5s ease-out;
+  }
+  @keyframes hand-card-arrived {
+    0%   { box-shadow: 0 0 0 3px rgba(255, 230, 80, 0.9), 0 0 20px 6px rgba(255, 200, 60, 0.7); transform: scale(1.05); }
+    30%  { box-shadow: 0 0 0 3px rgba(255, 230, 80, 0.85), 0 0 24px 8px rgba(255, 200, 60, 0.6); transform: scale(1.05); }
+    70%  { box-shadow: 0 0 0 2px rgba(255, 230, 80, 0.5), 0 0 14px 4px rgba(255, 200, 60, 0.4); transform: scale(1.02); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 230, 80, 0); transform: scale(1); }
+  }
 
   .zone-bench{ flex:1; display:flex; gap:.35rem; overflow:visible; min-width:0; }
 
