@@ -265,6 +265,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.163</span> ✅ 重試徽章其實是完整實裝 — 修正 v5.162 changelog 表述</summary>
+        <ul>
+          <li><b>Wilson 指正</b>：鐵律禁止簡易實裝，要求完整實裝重試徽章。</li>
+          <li><b>重新 audit 證實</b>：重試徽章 coin reroll 機制 v4.898/v4.899 <b>早就完整實裝</b>在 engine.ts！v5.162 的 changelog 寫「Coin reroll 機制 TODO」是 AI hallucinate（Rule 17 violation 自我糾正）。</li>
+          <li><b>完整實裝 audit（8 點全綠）</b>：</li>
+          <li>　・<code>types.ts L437</code> PlayerState.retryBadgeUsedThisTurn?</li>
+          <li>　・<code>effects.ts L4334</code> flipCoinsWithLog 設 coinFlippedThisAttack=true</li>
+          <li>　・<code>engine.ts L3807</code> ATTACK handler 開頭 snapshot preAttackStateForRetry + 清 flag</li>
+          <li>　・<code>engine.ts L5369-5398</code> ATTACK 末端 trigger modal-choice picker（條件：Colorless + 有重試徽章 + 未用過 + 已擲過幣 + 無其他 pending）</li>
+          <li>　・<code>engine.ts L2038</code> m5-retry-badge-decide handler：retry → revert preAttackState + 設 used=true；keep → 保留結果</li>
+          <li>　・<code>engine.ts L6486/L6502</code> END_TURN 重置 retryBadgeUsedThisTurn</li>
+          <li>　・<code>tools.ts L630</code> ATTACH_TOOL_NAMES（v5.162 補）</li>
+          <li>　・<code>tools.ts L676</code> TOOL_ATTACH_GATE Colorless（v5.162 補）</li>
+          <li><b>為什麼之前 Wilson 看到「找不到 attach 效果註冊」？</b>整個 v4.898 coin reroll pipeline 一直在 engine.ts 等著，但因為 <code>ATTACH_TOOL_NAMES</code> 沒註冊重試徽章 → 玩家根本附加不上 → coin reroll 從未觸發。v5.162 補完最後一塊拼圖，整套機制就活了。</li>
+
+          <li><b>玩家測試流程</b>：</li>
+          <li>　1. 附加重試徽章到 Colorless 寶可夢（如多龍梅西亞等）— 應該成功不再退回</li>
+          <li>　2. 該寶可夢使用含擲幣的招式</li>
+          <li>　3. 擲幣後系統會 popup 「重試徽章」選擇 modal — 選「重擲」消除結果重新擲，選「不重擲」保留結果</li>
+          <li>　4. 重擲後 retryBadgeUsedThisTurn=true，同回合不能再重擲</li>
+          <li>　5. END_TURN 後 flag 重置，下回合可再用 1 次</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT）／14（最小 patch — 純 changelog 修正表述）／15（v4.898/v4.899 已完整實裝是 source of truth）／<b>17（自我糾正 v5.162 hallucinate 表述）</b>／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.162</span> 🎒 重試徽章最小實裝（ATTACH_TOOL_NAMES + Colorless gate）</summary>
         <ul>
           <li><b>Wilson 截圖 log</b>：「重試徽章（道具）：找不到 attach 效果註冊，已退回手牌」</li>
