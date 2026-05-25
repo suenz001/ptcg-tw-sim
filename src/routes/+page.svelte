@@ -265,6 +265,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.109</span> 🎨 對手疊牌 z-index 用 stacking context 拉高 + active 內部元素整體下移避免被 fan 蓋</summary>
+        <ul>
+          <li><b>玩家三個訴求</b>（v5.108 仍有問題）：</li>
+          <li>　1. 對手備戰疊牌仍被戰鬥場框架蓋（v5.108 只改 att-card inline z-index:110 不夠）</li>
+          <li>　2. 切換回合時框架稍微變動（暫 hold，需更多截圖定位）</li>
+          <li>　3. 雙方戰鬥場特性按鈕 / 血條 / 名稱往下擺避免被 bench 疊牌覆蓋</li>
+
+          <li><b>修法 1 — zone-bench stacking context 拉高</b>：</li>
+          <li>　・之前只改 att-card 自身 inline z-index，但 active-card 是後續 DOM order render，stacking context 不同。改 <code>.zone-bench</code> 整體加 <code>position:relative + z-index:200</code> 建立 stacking context 之上；<code>.zone-active</code> 加 <code>z-index:1</code>。</li>
+          <li>　・現在 zone-bench 整體在 zone-active 上方 — bench att-card fan 進 active 區永遠不被覆蓋。</li>
+
+          <li><b>修法 2 — active-card 內部元素整體下移 ~30px</b>：</li>
+          <li>　・<code>.active-hpbar-bottom top:.5rem → 35px</code>（往下 ~30px）</li>
+          <li>　・<code>.active-name-tt</code> 自動跟隨（top:100% from hpbar-bottom）</li>
+          <li>　・<code>.ability-btn top:90px → 120px</code>（跟著推）</li>
+          <li>　・<code>.active-card min-height:140 → 170</code>（給上方留白空間）</li>
+          <li>　・上方留 ~35px 空白給 bench fan 進場時看不到 HP/name/ability，視覺乾淨</li>
+
+          <li><b>暫 hold（Bug 1 切換回合框架變動）</b>：圖 1 對手回合 vs 圖 2 我方回合確實有稍微變動，但需要 audit action-bar chip 顯示有無（AI 思考中 / 計時器 / 主階段 chip）造成的 layout shift。下版 v5.110+ 處理。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 game/+page.svelte CSS + version + changelog）／Rule 14（最小 patch — 3 處 CSS）／Rule 1（changelog 自動 audit raw &#123;&#125; = 0）／Rule 11e（Write tool）／Rule 11f（tsc）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.108</span> 🎨 對手 bench 對稱 + 疊牌 z-index 修 + 補 v5.104~v5.108 changelog</summary>
         <ul>
           <li><b>三件事</b>：</li>

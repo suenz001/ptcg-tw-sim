@@ -8468,10 +8468,20 @@
     overflow:visible !important;
     pointer-events:none;  /* att-card 個別 pointer-events:auto 仍可 hover */
   }
-  /* v5.107: zone-bench 也加 contain:layout 隔離 — 雙保險 */
+  /* v5.107: zone-bench 也加 contain:layout 隔離 — 雙保險
+     v5.109: z-index:200 拉高過 active-card(z=auto)，修對手 bench 往下 fan 被 active 蓋
+     對手 bench 在 row 1, fan 進 row 2 對手 active 區。同 DOM order 後者(active)堆疊在上
+     → bench att-card 被蓋。z-index:200 在 zone-bench 整體建立 stacking context 之上。 */
   .playmat.layout-tabletop .zone-bench{
     overflow:visible !important;
     contain: layout;
+    position:relative;
+    z-index:200;
+  }
+  /* v5.109: zone-active z-index 明確設定 1, 低於 zone-bench(200) */
+  .playmat.layout-tabletop .zone-active{
+    position:relative;
+    z-index:1;
   }
 
   /* === v5.027 att-preview 在 viewport 頂部 → 改顯示在卡下方（transform 翻轉） === */
@@ -8480,14 +8490,16 @@
   /* === HP bar 從卡底移到左側 — v5.027 延長：column 56→88px（玩家要求往左延長）
      v5.038：再延長到 140px — 跟 .active-name-tt 等寬（v5.035 設的 140px），血條視覺
      寬度與名字框完全對齊；padding-left 從 96px 跟著加到 148px (140 + 4gap + 4pad) === */
+  /* v5.109: min-height 加大 140→170 給上方留白給 bench fan 進入時不蓋 HP/name/ability */
   .playmat.layout-tabletop .active-card{
     padding-left:148px !important;  /* 140px HP 欄 + 4 gap + 4 padding */
     padding-bottom:.45rem !important;
-    min-height:140px !important;
+    min-height:170px !important;
   }
+  /* v5.109: HP column top:.5rem → 35px 往下推, 上方留 35px 空白給 bench fan 進場不蓋 */
   .playmat.layout-tabletop .active-card .active-hpbar-bottom{
-    left:.4rem; top:.5rem; right:auto; bottom:auto;
-    width:140px;                    /* v5.038：對齊 .active-name-tt 寬度 */
+    left:.4rem; top:35px; right:auto; bottom:auto;
+    width:140px;
     flex-direction:column; align-items:center; justify-content:flex-start;
     gap:5px; padding:5px 4px;
     background:rgba(0,0,0,0.78);
@@ -8644,7 +8656,7 @@
     position:absolute;
     left:.4rem;
     width:140px;             /* 跟 .active-name-tt 同寬 */
-    top:90px;                /* 緊鄰 name-tt 下方（hpbar 8 + 內容 ~45 + name margin+height ~32 = ~85，+ gap 5） */
+    top:120px;               /* v5.109: 跟 HP column 下移 30px → 90+30=120 */
     z-index:60;              /* 高過 active-info(2) + attached cards(50~80)，低於 name-tt(100) */
     margin:0;                /* 蓋掉 base .ability-btn margin-top:.2rem */
     padding:.25rem .4rem;
