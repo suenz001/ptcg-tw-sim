@@ -265,6 +265,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.150</span> 🗑 刪除 active-card 卡圖下方空白</summary>
+        <ul>
+          <li><b>Wilson 怒</b>：「卡片下方有一大片空白占用版面，造成無法以網頁的一頁來顯示」 — 對方戰鬥寶可夢也比照辦理。</li>
+          <li><b>根因</b>：</li>
+          <li>　・v5.112 設 <code>padding-bottom:.9rem</code> 是為了「騰 ability-btn 空間」(舊版 flow 排列需空間)，但 v5.097 已把 ability-btn 改 absolute → padding 不再需要</li>
+          <li>　・v5.147 active-card height:175 包含原 padding-bottom 的空間 + active-img 147 比例 → 卡圖下方有 ~13px 空白</li>
+          <li><b>修法</b>：</li>
+          <li>　・<code>active-card</code> height 175 → <b>160</b>（active-img 147 + padding 上下 .45rem*2 = 161，視覺完美貼合）</li>
+          <li>　・<code>padding-bottom</code> .9rem → .45rem（鏡射 padding-top，刪除 ability-btn 預留空間）</li>
+          <li>　・<code>evo-wrap top</code> 110 → 100（active-card 縮 15px，evo 位置跟著上移到 ability-btn 下方）</li>
+          <li>　・對手 active-card 同步縮（CSS selector 跨雙方）</li>
+
+          <li><b>連環修法回顧</b>：</li>
+          <li>　・v5.143 stadium absolute</li>
+          <li>　・v5.147 active-card 三鎖死</li>
+          <li>　・v5.149 actions/alerts absolute</li>
+          <li>　・v5.150 active-card 刪卡圖下空白（縮到 160）</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 3 處 exact-match）／14（最小 patch — 純 px 改 + padding）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.149</span> 🎯 進化按鈕疊卡圖 + actions/alerts absolute 完全脫離 grid sizing</summary>
         <ul>
           <li><b>A. 進化按鈕位置不對</b>：Wilson「我要疊在寶可夢上面（只要不和特性按鈕重疊就好），而不是放在卡片下面造成佔用版面」。</li>

@@ -8754,14 +8754,16 @@
      v5.147：min-height → fixed height:175 三鎖死。Wilson 報告附加能量後 active row
      瞬間撐大、下一動作回復 — 是 active-card 內元素瞬時變化（能量 chip 動畫 / att-card
      重排 / ability-btn 出現等）撐 active-card 進而撐 grid row 3/2。
-     固定 height 完全鎖死，內元素變化都不撐父；overflow:visible 確保 evo-wrap/ability-btn
-     等 absolute 元素仍可溢出顯示。 */
+     v5.150：175 → 160（Wilson 怒「卡圖下方一大片空白佔版面」）。
+       active-img 卡圖 96:135 比例 width:105 → height ≈ 147 + padding 上下 .45rem*2 ≈ 14 = 161。
+       設 160 視覺接近完美貼合，刪除卡圖下方多餘 ~13px 空白。
+       overflow:visible 仍可讓 evo-wrap (top:100) 溢出 1-2px 不影響。 */
   .playmat.layout-tabletop .active-card{
     padding-left:148px !important;  /* 140px HP 欄 + 4 gap + 4 padding */
     padding-bottom:.45rem !important;
-    height:175px !important;
-    min-height:175px !important;
-    max-height:175px !important;
+    height:160px !important;
+    min-height:160px !important;
+    max-height:160px !important;
     overflow:visible;
   }
   /* v5.112: HP column 垂直置中 (玩家要求大約置中位置) */
@@ -8783,13 +8785,14 @@
     white-space:normal; word-break:keep-all;
   }
   /* v5.149：evo-wrap 改疊在 active-img 上（卡圖內 ability-btn 下方），不再放卡片底部佔版面。
+     v5.150：active-card 縮到 160，evo-wrap top 110 → 100（仍在 ability-btn 75+30 下方）。
      Wilson：進化按鈕要疊在寶可夢卡圖上不要佔版面，且不能跟特性按鈕重疊。
      ability-btn 位置：right:8 top:75 width:90 height ~30。evo-wrap 放 ability-btn 下方 5px。
      z-index:201 高於 ability-btn 200，確保兩者都可點。 */
   .playmat.layout-tabletop .active-card .evo-wrap{
     position:absolute;
     bottom:auto !important;
-    top:110px;          /* ability-btn top:75 + height ~30 + gap 5 */
+    top:100px;          /* v5.150: ability-btn top:75 + height ~25 + gap (active-card 縮到 160) */
     right:8px;
     width:90px;
     z-index:201;
@@ -8934,8 +8937,10 @@
      視覺上「在名字框正下方緊接」。
      top 計算依當前 hpbar-bottom 與 name-tt 預估高度 ~ 88px from active-card top
      （hpbar top:.5rem 8 + 內容 ~45 + name-tt margin 4 + name-tt height ~28 + gap 3）。 */
+  /* v5.150：padding-bottom .9rem → .45rem。v5.112 原預留 ability-btn flow 空間，
+     但 v5.097 已把 ability-btn 改 absolute，不再需要 padding 預留。刪掉多餘空白。 */
   .playmat.layout-tabletop .active-card{
-    padding-bottom:.9rem !important;  /* 騰 ability-btn 空間 — 沒有 ability 也不影響 */
+    padding-bottom:.45rem !important;
   }
   /* v5.112: ability-btn 移到 active-img (卡圖) 上方文字說明區位置, 用 right 對齊 active-card 右側
      active-img width:105 在 active-card 右側 (padding-left:148 之後). 卡圖內部文字 effect 區大約在
