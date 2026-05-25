@@ -4399,6 +4399,13 @@
           mulliganRevealConfirmed: (me === 0
             ? [game.mulliganRevealConfirmed[0], incoming.mulliganRevealConfirmed[1]]
             : [incoming.mulliganRevealConfirmed[0], game.mulliganRevealConfirmed[1]]) as [boolean, boolean],
+          // v5.159：mulliganPostBenchOpen 也 per-player merge（v5.138 新欄位，原 v4.494 漏）
+          //   Wilson 報告線上練牌按準備卡住 — firebase merge 沒處理此欄位 → 雙端 state
+          //   不一致 → tryAdvanceToPlaying 條件不滿足 → 卡住。鏡射 mulliganRevealConfirmed
+          //   per-player merge 模式（自己端用 game[me]，對方端用 incoming[opp]）。
+          mulliganPostBenchOpen: (me === 0
+            ? [game.mulliganPostBenchOpen?.[0] ?? false, incoming.mulliganPostBenchOpen?.[1] ?? false]
+            : [incoming.mulliganPostBenchOpen?.[0] ?? false, game.mulliganPostBenchOpen?.[1] ?? false]) as [boolean, boolean],
         };
         // v4.494：merge 完評估能否進 playing（雙方都 setupDone+confirmed+mulliganDraw=0）
         const advanced = tryAdvanceToPlaying(merged);

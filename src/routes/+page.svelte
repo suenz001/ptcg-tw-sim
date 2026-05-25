@@ -265,6 +265,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.159</span> 🐛 線上練牌按準備卡住根因：firebase merge 漏 mulliganPostBenchOpen</summary>
+        <ul>
+          <li><b>Wilson 報告</b>（無具體場景）：跟對手練牌重抽完按準備卡住。</li>
+          <li><b>Health check 結果（找到 bug）</b>：</li>
+          <li><code>+page.svelte L4259-4288</code> firebase setup phase merge 邏輯（v4.494）merge 四個 per-player 欄位：<code>players</code> / <code>setupDone</code> / <code>pendingMulliganDraw</code> / <code>mulliganRevealConfirmed</code>。<b>漏 mulliganPostBenchOpen</b> — v5.138 新加的欄位沒同步 merge！</li>
+          <li><b>線上場景</b>：</li>
+          <li>　1. 玩家 A 補抽 N&gt;0 → engine 設 <code>mulliganPostBenchOpen[A]=true</code> (local)</li>
+          <li>　2. A push firebase</li>
+          <li>　3. 玩家 B 收到 incoming → setup merge **不處理 mulliganPostBenchOpen** → 此欄位被 incoming 整顆覆蓋（incoming 來自 A 推送時的 snapshot，B 端自己的 mulliganPostBenchOpen 可能不一致）</li>
+          <li>　4. 後續 FINISH_MULLIGAN_POST_BENCH 設 false 後 push，兩端 state 因 merge 不對稱永遠不一致</li>
+          <li>　5. <code>tryAdvanceToPlaying</code> 需要雙方 mulliganPostBenchOpen 都 false → 條件不滿足 → 卡住</li>
+          <li><b>修法</b>：firebase setup merge 加 <code>mulliganPostBenchOpen</code> per-player merge（鏡射 mulliganRevealConfirmed v4.494 模式）：自己端用 <code>game[me]</code>，對方端用 <code>incoming[opp]</code>。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 1 處 exact-match）／14（最小 patch — 加 1 個 per-player merge 區塊）／15（線上對戰雙端 state 同步必須對稱）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.158</span> 🐛 AI mulligan setup 順序修正 + 線上練牌按準備卡住 audit</summary>
         <ul>
           <li><b>Wilson 截圖</b>：AI Jk 已 confirm mulligan reveal + 補抽 1 + mulliganPostBenchOpen=true，但 active 還「準備中」沒選，AI 卡死。</li>
