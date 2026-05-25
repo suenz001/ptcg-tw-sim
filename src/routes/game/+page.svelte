@@ -5763,7 +5763,7 @@
                       {@const _stepOB = Math.max(12, 32 - _attOB.length * 3)}
                       <!-- v5.098：對手 bench 堆疊方向改往下（top 正值），玩家回報 -->
                       <div class="att-card-stack">
-                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1) * _stepOB}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1) * _stepOB}px;z-index:{110-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                       </div>
                     {/if}
                   {/if}
@@ -8434,14 +8434,11 @@
     contain: layout style;
   }
 
-  /* v5.048：對手備戰 slot 縮高 — 對手不會在我方回合 render ability-btn-sm（特性按鈕），
-     base bench-slot height:205px 預留給 ability-btn 的下方空間對對手永遠用不到，造成
-     img 在 slot 上半部、下方大塊空白。疊牌往上 fan 又會撐版面。
-     修法：opponent-row scope 把 bench-slot height 從 205 縮到 155px (省 50px)。
-     對手 bench Pokemon 仍可有特性，只是在對手回合才會發動，那時對手視角自己的 my-row
-     可看到 ability-btn — 我方視角永遠不看對手特性按鈕。my-row 不動保留 ability 空間。 */
+  /* v5.108：對手 bench-slot height 回 205 跟我方對稱（玩家回報：對手距離較近）。
+     原 v5.048 縮 155 為省 50px，但 v5.097 後卡圖撐滿框架，bench-slot 高度直接決定卡圖大小
+     → 對手卡圖比我方小 → 不對稱視覺。v5.108 統一 205px 對稱。 */
   .playmat.layout-tabletop .opponent-row .bench-slot{
-    height: 155px !important;
+    height: 205px !important;
   }
   /* v5.097：bench-middle 撐滿 bench-slot 框架。v5.106 簡化 grid → flex
      stack 已改 absolute 脫離 layout，img 是唯一 layout 內容，用 flex center 對齊即可。 */

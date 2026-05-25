@@ -265,6 +265,50 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.108</span> 🎨 對手 bench 對稱 + 疊牌 z-index 修 + 補 v5.104~v5.108 changelog</summary>
+        <ul>
+          <li><b>三件事</b>：</li>
+          <li>　1. <b>對手 bench-slot height 155→205 對稱我方</b>（玩家回報距離不對稱）。原 v5.048 縮 155 是為了省垂直空間（對手不顯 ability button），但 v5.097 後卡圖撐滿框架，高度直接決定卡圖大小 → 對手卡圖較小造成視覺不對稱。統一 205px。</li>
+          <li>　2. <b>對手 bench att-card z-index 50→110 拉高過 active-img(99)</b>（玩家回報對手疊牌被 active 框架蓋）。對手 bench 改往下 fan 後（v5.098），fan 越過 row gap 進入 active row 區，原 z-index:50 低於 active-img:99 被蓋。改 z-index 110。</li>
+          <li>　3. <b>補 v5.104~v5.108 changelog</b>（玩家回報沒寫）。v5.099 之後我為了避免 raw &#123;...&#125; 再次觸發白畫面，跳過寫 changelog；這次嚴格用 HTML entity escape 補回。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.107</span> 🔧 bench-slot + zone-bench 加 contain:layout 強制 sizing 隔離</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.106 後框架仍變動（圖 1 貼能量前 / 圖 2 貼能量後）。</li>
+          <li><b>修法</b>：<code>.bench-slot</code> 加 <code>contain: layout style</code>、<code>.zone-bench</code> 加 <code>contain: layout</code>。CSS containment 強制 isolate — children layout/style 不影響父 sizing。防止 zoom:0.65 + absolute children 視覺溢出 + 某些瀏覽器 reflow side-effect。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.106</span> 🔧 att-card-stack 完全 absolute 脫離 layout（框架鎖死）</summary>
+        <ul>
+          <li><b>玩家要求</b>：「框架就讓他鎖死不要變動，牌讓他疊超出框架沒關係」。</li>
+          <li><b>修法</b>：<code>.att-card-stack</code> 改 <code>position:absolute</code> + <code>top:50% left:50% transform:translate(-50%,-50%)</code> 中央定位，完全脫離 bench-middle grid/flex layout，不影響父尺寸。att-card 視覺往上/下 fan 出 bench-slot 框架，框架仍 height:205px 不變。<code>.bench-middle</code> 從 grid 簡化成 flex（stack 已脫離 layout，只剩 img）。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.105</span> 🔧 att-card-stack 寬度受限 cell 寬不撐爆相鄰 bench-slot</summary>
+        <ul>
+          <li><b>玩家回報</b>：我方備戰寶可夢疊牌時整個框架往上擠。</li>
+          <li><b>真正根因</b>：不是 bench-slot 框架被擠，而是 <code>.att-card-stack</code> v5.098 設 <code>height:100% + aspect-ratio:96/135 + width:auto + max-width:none</code> → width = height × (96/135) = 205 × 0.71 ≈ 146px 撐爆 cell ~95px 寬，att-card width:100% 跟著撐爆視覺溢出相鄰 bench-slot 上方。</li>
+          <li><b>修法</b>：改 <code>width:100% + max-width:100% + aspect-ratio + height:auto</code>，寬度受 cell 限制 ~95px，高度按 96/135 比例自動 ~134px。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.104</span> 📋 IRON_RULES.md Rule 1 audit regex 強化（v5.098~v5.102 事故教訓）</summary>
+        <ul>
+          <li><b>背景</b>：v5.098 changelog 我寫 raw <code>&#123;(i+1) * _stepOB&#125;</code> 含未 escape 表達式。Svelte 把它當 JS expression evaluate，<code>i</code> 在 +page.svelte scope 不存在 → ReferenceError 白畫面。v5.100/v5.101 連續 hotfix 兩次仍 build fail，v5.102 才 hard reset 救活。</li>
+          <li><b>強化 audit regex</b>：抓 changelog-list 區段內任何 raw <code>&#123;</code> <code>&#125;</code>（除合法 svelte syntax + 已 entity），pre-push 必跑。寫入 <code>IRON_RULES.md</code> Rule 1 章節 + 長期記憶 <code>feedback-rule1-changelog-audit.md</code>。</li>
+          <li><b>四金句教訓</b>：(1) build pass ≠ runtime safe；(2) backtick 不算 escape；(3) GitHub Actions Audit pass ≠ safe；(4) 唯一可靠檢測 = pre-push 跑 Python regex audit。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.103</span> 🎨 恢復 v5.097/v5.098 桌墊版 bench 卡圖放大（routes/+page.svelte 保持 v5.095 純 HTML）</summary>
         <ul>
           <li><b>玩家回報</b>：v5.094 仍覺得「備戰區和戰鬥場間隔距離拉超大」，要求復原到 v5.092 狀態。</li>
