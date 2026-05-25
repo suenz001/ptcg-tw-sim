@@ -8455,10 +8455,15 @@
     height:100%; width:auto; max-width:100%; max-height:100%;
     object-fit:contain;
   }
-  /* v5.098：att-card-stack 跟著卡圖等比放大 — 卡圖 height:100% 後堆疊也要跟上 */
+  /* v5.098：att-card-stack 跟著卡圖等比放大 — 卡圖 height:100% 後堆疊也要跟上
+     v5.105：width:auto + aspect-ratio 會讓 stack 寬度 = height × ratio (146px) 撐爆 cell (95px)
+     → att-card 寬度跟著撐爆，視覺溢出擠相鄰 bench-slot。
+     改 width:100% (受 cell 限制 ~95px) + height:auto + aspect-ratio → 寬度受限 + 高自動。
+     stack 中心對齊 cell 中央時跟卡圖視覺尺寸重合，att-card width:100% 也跟卡圖同寬。 */
   .playmat.layout-tabletop .bench-slot .att-card-stack{
     position:relative;
-    height:100%; aspect-ratio:96/135; width:auto; max-width:none;
+    width:100%; max-width:100%;
+    aspect-ratio:96/135; height:auto;
     overflow:visible !important;
   }
   .playmat.layout-tabletop .zone-bench{ overflow:visible !important; }
