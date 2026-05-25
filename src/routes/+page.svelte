@@ -265,6 +265,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.145</span> 🐛 新衝天能量撤退 host-aware 補完（火箭隊已確認無 bug）</summary>
+        <ul>
+          <li><b>Wilson 提醒</b>：「新衝天能量、火箭隊能量也有可能有類似的 bug，請一併確認」</li>
+          <li><b>Audit 結果</b>：</li>
+          <li>　・<b>火箭隊能量</b> ✓ 沒 bug：<code>SPECIAL_ENERGY_TYPES[&#39;火箭隊能量&#39;] = [&#39;Psychic&#39;, &#39;Darkness&#39;]</code> → <code>getEnergyUnits</code> 回 2 units（恆定 2），<code>totalEnergyUnits</code> 正確算 2。</li>
+          <li>　・<b>新衝天能量</b> ✗ 有 bug（同燃火模式）：<code>SPECIAL_ENERGY_TYPES[&#39;新衝天能量&#39;] = [&#39;Colorless&#39;]</code> → <code>getEnergyUnits</code> 回 1 unit。卡面：on Stage2 = 2 個所有屬性能量。<code>canAffordAttack</code> L1293 有 inline 處理 Stage2 倍率，但 <b>v5.125 修 <code>totalEnergyUnits</code> host-aware 時只加燃火，沒加新衝天</b> → 撤退時新衝天 on Stage2 只算 1 unit。</li>
+          <li><b>修法</b>（鏡射 v5.144 燃火模式）：</li>
+          <li>　・<code>totalEnergyUnits()</code> 加新衝天 host-aware：host Stage2 → 2 units，否則 1 unit</li>
+          <li>　・auto-discard loop 加新衝天 host-aware（鏡射 v5.144 燃火）</li>
+
+          <li><b>對應 PTCG 規則</b>：新衝天能量 (ACE SPEC) 於 2 階進化寶可夢提供 2 個所有屬性能量，可滿足撤退費 2 的 Stage2 寶可夢單張撤退。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 鏡射燃火加新衝天分支）／15（PTCG 卡面 source of truth — 新衝天 on Stage2 = 2 units）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.144</span> 🐛 浩大鯨撤退燃火能量 UI host-aware 補完</summary>
         <ul>
           <li><b>玩家回報</b>：浩大鯨（Stage1，撤退費 3）附 1 張燃火能量 + 1 張水能量，picker「確定」灰色無法按。卡面：燃火能量 on 進化寶可夢視為 3 個【無】能量，單張應夠撤退費 3。</li>

@@ -1115,6 +1115,13 @@ export function totalEnergyUnits(
       n += hostIsEvolution ? 3 : 1;
       continue;
     }
+    // v5.145 新衝天能量倍率 — 卡面「若附於 2 階進化寶可夢，視為提供 2 個所有屬性能量」
+    //   原 SPECIAL_ENERGY_TYPES 只算 1 unit，沒考慮 host stage → 撤退時 Stage2 新衝天只算 1
+    if (ec?.name === '新衝天能量') {
+      const hostIsStage2 = !!(hostCard && (hostCard.stage === 'Stage2' || hostCard.subtype === 'Stage2'));
+      n += hostIsStage2 ? 2 : 1;
+      continue;
+    }
     const units = getEnergyUnits(e.cardId, pool);
     n += units.length === 0 ? 1 : units.length;
   }
@@ -2616,6 +2623,8 @@ function handlePlaying(
     const isActiveEvolutionForR = !!(activeCardForR && (activeCardForR.evolvesFrom
       || activeCardForR.stage === 'Stage1' || activeCardForR.stage === 'Stage2'
       || activeCardForR.subtype === 'Stage1' || activeCardForR.subtype === 'Stage2'));
+    // v5.145：判 active 是否 Stage2（給新衝天能量倍率用）
+    const isActiveStage2ForR = !!(activeCardForR && (activeCardForR.stage === 'Stage2' || activeCardForR.subtype === 'Stage2'));
     let paidUnits = 0;
     const keepE: CardInstance[] = [];
     const discardE: CardInstance[] = [];
@@ -2629,6 +2638,9 @@ function handlePlaying(
         } else if (ec?.name === '燃火能量' && isActiveEvolutionForR) {
           // v5.144：燃火能量 on 進化寶可夢 = 3 units
           paidUnits += 3;
+        } else if (ec?.name === '新衝天能量' && isActiveStage2ForR) {
+          // v5.145：新衝天能量 on Stage2 寶可夢 = 2 units
+          paidUnits += 2;
         } else {
           const units = getEnergyUnits(e.cardId, pool);
           paidUnits += units.length === 0 ? 1 : units.length;
