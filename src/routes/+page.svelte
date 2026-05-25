@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.130</span> 🐛 離開房間應回大廳而非首頁</summary>
+        <ul>
+          <li><b>玩家回報</b>：在「線上連線對戰房間」按「離開房間」後 redirect 到首頁（「開始對戰」選本機/線上）。期望應該回到大廳（房間列表），這樣就不用重新點「線上連線對戰」按鈕。</li>
+          <li><b>根因</b>：<code>leaveOnlineGame()</code> L4410 設 <code>mode = null</code> → 整個線上對戰 UI 收起 → 跳回首頁。雖然 <code>onlineStep = &#39;join&#39;</code> 已經會顯示大廳，但被 <code>mode=null</code> 蓋掉。</li>
+          <li><b>修法</b>：<code>mode = null</code> → <code>mode = &#39;online&#39;</code>，保留線上對戰 UI，<code>onlineStep=&#39;join&#39;</code> 顯示大廳房間列表。玩家可直接看其他等待中/對戰中的房間，不用回首頁重點按鈕。</li>
+          <li><b>離開房間流程不變</b>：unsubRoom + stopHeartbeat + await leaveRoom + 清 chatMessages / game / roomCode / roomData / mySeatIdx 等 state — 完整 cleanup 仍照舊，只是不重設 mode。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 1 處 exact-match）／14（最小 1 行修：<code>null → &#39;online&#39;</code>）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.129</span> 🎨 4 個玩家提議：桌墊版場地卡 / 棄牌區圖片 / 場地按鈕亮 / 獎賞動畫</summary>
         <ul>
           <li><b>玩家提議 1</b>：桌墊版加入場地卡後撐大上下版面，要求保持框架穩定</li>

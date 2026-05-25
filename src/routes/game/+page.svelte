@@ -4407,7 +4407,10 @@
     game = null; roomCode = ''; roomData = null;
     onlineStep = 'join'; showCreateForm = false; onlineError = ''; myPlayerIndex = null; mySeatIdx = -1;
     roomNameInput = ''; myDeckId = '';
-    mode = null;
+    // v5.130：保留 mode='online' — 玩家離開房間後留在線上對戰大廳（看其他房間列表），
+    //   不要跳回首頁逼玩家重新點「線上連線對戰」按鈕。
+    //   onlineStep='join' 已會顯示大廳房間列表。
+    mode = 'online';
   }
 
   // v2.272：發送聊天訊息
