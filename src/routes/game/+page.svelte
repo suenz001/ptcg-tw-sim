@@ -8549,8 +8549,13 @@
     align-self:start;
   }
   /* v5.138：active 改黏「外側」(靠近 bench) — align-self:start → end，
-     讓 active-bench 視覺貼齊 gap 15px，不論 row 高度。 */
-  .playmat.layout-tabletop .my-row > .zone-active{ grid-area:activeMe; justify-self:center; align-self:end; }
+     讓 active-bench 視覺貼齊 gap 15px，不論 row 高度。
+     v5.146：z-index:250 高於 bench 200 — 修我方 bench att-card 往上 fan 蓋住 active 進化按鈕。
+       對手 zone-active 不動（v5.109 對手 bench 往下 fan 蓋對手 active 的視覺保留）。 */
+  .playmat.layout-tabletop .my-row > .zone-active{
+    grid-area:activeMe; justify-self:center; align-self:end;
+    z-index:250;
+  }
   .playmat.layout-tabletop .my-row > .zone-pile{
     grid-area:pilesMe; display:flex; flex-direction:column; gap:3px;  /* 互換：piles 在右 */
   }
@@ -8754,7 +8759,14 @@
     white-space:normal; word-break:keep-all;
   }
   /* 9854 line .evo-wrap bottom:1.85rem → 桌墊版不留底部空間 */
-  .playmat.layout-tabletop .active-card .evo-wrap{ bottom:.4rem !important; }
+  /* v5.146：evo-wrap 自身也提高 z-index，雙重保險 (active-card stacking 內最頂層) */
+  .playmat.layout-tabletop .active-card .evo-wrap{ bottom:.4rem !important; z-index:200; }
+  /* v5.146：桌墊版進化按鈕放大 — 原 evo-btn font-size:.62rem 太小，加 padding */
+  .playmat.layout-tabletop .active-card .evo-btn{
+    font-size:.85rem !important;
+    padding:.3rem .6rem !important;
+    font-weight:bold;
+  }
 
   /* === v5.028 active 名稱左欄（HP bar 下方） + 字放大 ===
      v5.035：突破父 .active-hpbar-bottom 88px 寬度限制 — 改 absolute 定位、

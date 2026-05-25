@@ -265,6 +265,21 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.146</span> 🎯 桌墊版 active 進化按鈕上推 + 放大</summary>
+        <ul>
+          <li><b>玩家回報</b>：桌墊版戰鬥寶可夢的進化小按鈕會被疊牌/寶可夢蓋在下面，按鈕也太小。</li>
+          <li><b>根因</b>：<code>.active-card</code> 有 <code>isolation:isolate</code>（自身 stacking context），<code>zone-active</code> 預設 <code>z-index:1</code>。v5.109 設 <code>zone-bench z-index:200</code> 蓋過 active 所有元素。v5.138 我方 bench align-self:start → bench att-card 往上 fan 跨進 row 3 active 區 → 蓋住 active 的 <code>evo-wrap</code> 按鈕。</li>
+          <li><b>修法</b>：</li>
+          <li>　・<code>.my-row &gt; .zone-active</code> 加 <code>z-index:250</code>（高於 bench 200，我方 active 整體浮在 bench 之上，進化按鈕可點）</li>
+          <li>　・<code>.active-card .evo-wrap</code> 加 <code>z-index:200</code>（active-card stacking context 內雙重保險）</li>
+          <li>　・<code>.active-card .evo-btn</code> font-size <code>.62rem→.85rem</code>、padding 加大、加粗 — 玩家更好點</li>
+          <li>　・對手 row 不動（保留 v5.109 對手 bench fan 蓋對手 active 的視覺）</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match）／14（最小 patch — 純 CSS z-index + 字體 padding）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.145</span> 🐛 新衝天能量撤退 host-aware 補完（火箭隊已確認無 bug）</summary>
         <ul>
           <li><b>Wilson 提醒</b>：「新衝天能量、火箭隊能量也有可能有類似的 bug，請一併確認」</li>
