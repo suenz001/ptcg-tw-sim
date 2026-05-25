@@ -1,9 +1,7 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
-import type { Card } from '$lib/cards/types';
 import { canApplyEffectToTarget } from '../../defense';
 import { addLog, regPost, regPre, regR, shuffle, updatePlayer, withPending } from '../_shared';
 import { canApplyAttackEffectToTarget } from '../../effects';
-import { startEnergyChain } from './v158_energy_chain';  // v5.096
 
 function flipFixed(state: GameState, aIdx: 0 | 1, label: string, count: number): { state: GameState; heads: number } {
   let s = state;
@@ -55,14 +53,6 @@ function damageAllOppByCoin(
   const dIdx = 1 - aIdx as 0 | 1;
   let s = state;
   const targets = [s.players[dIdx].active, ...s.players[dIdx].bench].filter((c): c is CardInstance => !!c);
-  // v5.096：依官方 QA — 力量蛋白飲對「對手戰鬥寶可夢的傷害」生效（含虛無歸零），備戰不生效
-  //   attacker.damageBoostFightingThisTurn 是玩家級累積 +N（每張力量蛋白飲 +30）
-  //   只在 attacker pokemon 是 Fighting 屬性時生效（主 attack pipeline engine.ts L4041 同邏輯）
-  const attackerInst = s.players[aIdx].active;
-  const attackerCard = pool && attackerInst ? pool.get(attackerInst.cardId) : null;
-  const fightingBoost = (
-    attackerCard?.pokemonType === 'Fighting' && s.players[aIdx].damageBoostFightingThisTurn
-  ) ? s.players[aIdx].damageBoostFightingThisTurn : 0;
   for (const t of targets) {
     const isHeads = Math.random() < 0.5;
     s = addLog(s, `${label}：對 ${t.iid} 擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
@@ -79,15 +69,9 @@ function damageAllOppByCoin(
         continue;
       }
     }
-    // v5.096：active target 套用力量蛋白飲 +bonus（QA Q4），bench 不套
-    const isActiveTarget = t.iid === s.players[dIdx].active?.iid;
-    const finalAmount = amount + (isActiveTarget ? fightingBoost : 0);
-    if (isActiveTarget && fightingBoost > 0) {
-      s = addLog(s, `${label}：對手戰鬥寶可夢套用「力量蛋白飲」+${fightingBoost} → ${finalAmount} 傷害`, aIdx);
-    }
-    s = damageOneNoKo(s, dIdx, t.iid, finalAmount);
+    s = damageOneNoKo(s, dIdx, t.iid, amount);
   }
-  return addLog(s, `${label}：正面且未被擋下的對手寶可夢各受到傷害（戰鬥位若有【鬥】系修正會額外加上）`, aIdx);
+  return addLog(s, `${label}：正面且未被擋下的對手寶可夢各受到 ${amount} 傷害`, aIdx);
 }
 
 function attachBasicEnergyFromDeckToActive(state: GameState, aIdx: 0 | 1, pool: Map<string, any>, maxCount: number, label: string): GameState {
@@ -196,33 +180,9 @@ regPost('托戈德瑪爾ex|尖尖回轉', (state, aIdx) => updatePlayer(state, a
   active: { ...p.active, pointySpinNextTurn: true, pointySpinThisTurn: undefined },
 } : p));
 
-// 超級差不多娃娃ex｜萬花筒華爾滋：擲 3 次，正面×2 張基本能量「附於自己的寶可夢身上」。
-// v5.096：原 attachBasicEnergyFromDeckToActive 把所有能量強制附到自己 active，違反卡面
-//   「附於自己的寶可夢身上」（玩家自選任一隻）。改用 startEnergyChain 玩家逐張選目標。
+// 超級差不多娃娃ex｜萬花筒華爾滋：擲 3 次，正面×2 張基本能量自動附到自身。
 regPre('超級差不多娃娃ex|萬花筒華爾滋', (state) => ({ state, damage: 0 }));
 regPost('超級差不多娃娃ex|萬花筒華爾滋', (state, aIdx, pool) => {
   const r = flipFixed(state, aIdx, '萬花筒華爾滋', 3);
-  const maxCount = r.heads * 2;
-  if (maxCount <= 0) {
-    return addLog(r.state, '萬花筒華爾滋：0 次正面，未附加能量', aIdx);
-  }
-  const p = r.state.players[aIdx];
-  // 從牌庫前 N 張基本能量挑出
-  const picked: string[] = [];
-  for (const c of p.deck) {
-    const card = pool.get(c.cardId);
-    if (picked.length >= maxCount) break;
-    if (card?.supertype === 'Energy' && card?.subtype === 'Basic') picked.push(c.iid);
-  }
-  if (picked.length === 0) {
-    return updatePlayer(addLog(r.state, '萬花筒華爾滋：牌庫無基本能量；重洗牌庫', aIdx),
-      aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
-  }
-  let s = addLog(r.state, `萬花筒華爾滋：從牌庫挑 ${picked.length} 張基本能量，玩家逐張選擇附加目標`, aIdx);
-  return startEnergyChain(s, aIdx, picked, {
-    label: '萬花筒華爾滋',
-    source: 'deck',
-    scope: 'any-own',
-    filterType: 'Any',
-  }, pool as Map<string, Card>);
+  return attachBasicEnergyFromDeckToActive(r.state, aIdx, pool, r.heads * 2, '萬花筒華爾滋');
 });

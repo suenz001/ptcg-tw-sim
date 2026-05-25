@@ -265,6 +265,27 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.099</span> 🚨 緊急 revert v5.096~v5.098 — 白畫面 ReferenceError 救援</summary>
+        <ul>
+          <li><b>玩家回報</b>：網頁變白畫面，控制台 <code>Uncaught (in promise) ReferenceError: i is not defined</code> 在 <code>2.zI_mCuGg.js:24</code>（minified chunk）。</li>
+
+          <li><b>緊急處置</b>：把 <code>game/+page.svelte</code> + <code>v2349_j_mark_batch.ts</code> hard reset 到 v5.095 commit（<code>a2368bb</code>）byte-identical。三個 patch 全部撤回：</li>
+          <li>　・<b>v5.096</b> 萬花筒華爾滋（startEnergyChain）+ 虛無歸零（力量蛋白飲 +30）</li>
+          <li>　・<b>v5.097</b> 桌墊版 bench 卡圖放大到框架 + 按鈕 absolute 浮層</li>
+          <li>　・<b>v5.098</b> bench 細調（att-card-stack aspect-ratio / 按鈕加高 / opp 上推下方堆疊 / my 下推）</li>
+
+          <li><b>待查根因</b>：</li>
+          <li>　・<code>2.zI_mCuGg.js</code> 是某個 v 系列 effects chunk，minified 後 <code>i</code> 變數未定義</li>
+          <li>　・最可能：v5.096 加 <code>import startEnergyChain</code> 從 <code>v158_energy_chain</code> 造成 circular import 在 production minified 後 evaluate 順序問題（dev mode 沒爆，build pass，runtime 才爆）</li>
+          <li>　・v5.097 + v5.098 純 CSS + 1 行 svelte template 改動，理論上不會造成 JS ReferenceError，但保險一起撤回</li>
+
+          <li><b>後續</b>：v5.099 上線確認玩家可進入後，分別追查 v5.096 / v5.097 / v5.098 的問題；玩家回報的 bug（萬花筒華爾滋 / 虛無歸零 / 桌墊版 bench 放大）暫時 hold，等找到 chunk error 根因再個別重作。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline 改 version + changelog；兩個受影響檔已用 <code>git cat-file -p</code> hard reset 到 v5.095 byte-identical）／Rule 14（最小 patch — 純 revert，不嘗試新修法）／Rule 11e（Write tool）／Rule 11f（ASSERT diff 為空）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.098</span> 🎨 桌墊版 bench 後續細調：堆疊放大 / 按鈕加高 / 對手上推+下方堆疊 / 我方下推</summary>
         <ul>
           <li><b>玩家回報（v5.097 之後）</b>：</li>
