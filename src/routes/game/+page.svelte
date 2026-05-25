@@ -838,9 +838,10 @@
         }
         // v5.134：多張獎賞 stagger delay + 一次多張時加快每張動畫速度
         // v5.137：multi 時 1.0s→1.4s（Wilson 反應太快看不清）
+        // v5.141：stagger 250ms → 600ms（Wilson 反應第一張跑完前第二張就出來，要再延遲）
         const multi = capturedPicks.length;
         const effDur = multi > 1 ? 1400 : PRIZE_PICK_DUR;  // 多張時 1.6s→1.4s（略快但看得清）
-        const stagger = multi > 1 ? 250 : 0;  // 每張間隔 250ms
+        const stagger = multi > 1 ? 600 : 0;  // 每張間隔 600ms（第一張主體跑完再啟第二張）
         capturedPicks.forEach((p, i) => {
           const id = Date.now() + Math.random() + i * 0.001;
           const startDelay = i * stagger;
@@ -8551,12 +8552,20 @@
      讓上下版面框架保持穩定 */
   .playmat.layout-tabletop .action-bar > .stadium-display{
     grid-area:stadium; grid-row:2 / span 2; align-self:center; justify-self:center;
-    max-width:96px; max-height:138px;  /* v5.129: 鎖死高度 */
+    /* v5.141：max-height → 三鎖死 (height/min/max)。Wilson 反應「場地卡放上瞬間
+       撐開 active 間隙」— 推測 max-height 是上限，grid track sizing 仍可能用
+       intrinsic content size 撐大 row（特別是 img 載入前後 size 改變）。
+       改 height:138 + min-height:138 + max-height:138 完全鎖死 grid 計算用的高度。 */
+    width:96px; max-width:96px;
+    height:138px; min-height:138px; max-height:138px;
     padding:.18rem .25rem; gap:.12rem;
     overflow:hidden;
   }
   .playmat.layout-tabletop .action-bar > .stadium-display img{
     width:64px;  /* v5.129: 92→64，縮小不撐大 */
+    /* v5.141：加 height 鎖死 — 不依賴 intrinsic ratio（卡片 96:135 → 64×90），
+       避免 img 載入前後 size 改變撐大父 stadium-display 進而影響 grid row。 */
+    height:90px; object-fit:contain;
   }
   .playmat.layout-tabletop .action-bar > .stadium-display .stadium-display-label{
     font-size:.62rem;

@@ -265,6 +265,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.141</span> 🔒 場地卡鎖死高度 + 獎賞動畫 stagger 加長</summary>
+        <ul>
+          <li><b>Bug — 場地卡放上瞬間撐開 active 間隙</b>：Wilson 截圖場地卡放上去那瞬間 active 之間間隙撐開，做別動作後恢復。</li>
+          <li><b>根因</b>：<code>.stadium-display</code> 跨 <code>grid-row:2/span 2</code>，原 <code>max-height:138</code> + img <code>width:64</code>（<code>height:auto</code>）。max-height 是「上限」非「精確值」，grid track sizing 計算 row 高度時仍可能用 intrinsic content size，特別 img 載入前後 size 改變會撐大 row（尤其首次掛載 img 還沒 dimensions）。</li>
+          <li><b>修法</b>：<code>.stadium-display</code> 改 <code>height:138 + min-height:138 + max-height:138</code> 三鎖死（同 bench 已 v5.134 修法）；img 加 <code>height:90 + object-fit:contain</code> 不依賴 intrinsic ratio。grid track sizing 拿到精確 138 高度，不論 img 載入狀態。</li>
+
+          <li><b>UX — 多張獎賞動畫 stagger 加長</b>：v5.137 設 250ms 太短，Wilson 反應第一張跑完前第二張就出來。</li>
+          <li><b>修法</b>：stagger 250ms → <code>600ms</code>。第一張動畫主體（1.4s）跑了 0.6s 後第二張才啟，第二張啟動時第一張仍視覺可見但已接近終點，視覺節奏「一張接一張」清楚分離。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 3 處 exact-match）／14（最小 patch — 純 CSS 鎖死 + 1 個數字改）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.140</span> 🐛 撤退 picker maxCount 修正 + 手機版附加能量顯示道具</summary>
         <ul>
           <li><b>Bug — 撤退能量 picker maxCount 數量錯</b>：Wilson 截圖呱呱泡蛙撤退費 1，但 picker 顯示「選 1~2 張・已選 2」誤導。</li>
