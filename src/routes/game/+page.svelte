@@ -745,10 +745,12 @@
     coinFlipTimers.push(setTimeout(() => { coinFlipStage = 'done'; }, 3800));
   });
 
-  // ── 獎賞卡放置動畫 ─────────────────────────────────────────────────────────
+  // ── 獎賞卡放置動畫（開局發牌 0→6）────────────────────────────────────────
   // 偵測雙方 prizes 從 0 → 6 的瞬間，觸發 stagger 動畫重播
   let prizeAnimKey = $state<[number, number]>([0, 0]);
   const prevPrizesLen: [number, number] = [0, 0];
+  // v5.131：取獎賞 iid snapshot — 偵測 prizes.length 減少 + 對應 iid 進手牌
+  const prevPrizesIids: [Set<string>, Set<string>] = [new Set(), new Set()];
   $effect(() => {
     if (!game) return;
     let changed = false;
@@ -760,8 +762,89 @@
         changed = true;
       }
       prevPrizesLen[i] = cur;
+      prevPrizesIids[i] = new Set(game.players[i].prizes.map(c => c.iid));
     }
     if (changed) prizeAnimKey = next;
+  });
+
+  // v5.131：取得獎賞卡動畫 — prizes 減少 + 對應 iid 進手牌時觸發特殊動畫
+  //   差別化 v5.049 一般 draw-fly：從 prize 位置 → 飛到螢幕中央 + scale 2.5 + rotate 360°
+  //   → 縮小飛回 hand-strip → 落地隱藏。1.6s 內結束。
+  //   同時把 prize 來源 iid 從 arrivingIids 移除（draw-fly 不再觸發），避免雙動畫。
+  type PrizePickAnim = {
+    id: number;
+    cardId: string;
+    iid: string;
+    startX: number; startY: number;
+    endX: number;   endY: number;
+    duration: number;
+  };
+  let prizePickAnims = $state<PrizePickAnim[]>([]);
+  let prizePickIids = $state<Set<string>>(new Set());  // 防 draw-fly 雙觸發
+  const prizePickTimers: ReturnType<typeof setTimeout>[] = [];
+  const PRIZE_PICK_DUR = 1600;
+
+  $effect(() => {
+    if (!game) return;
+    if (coinFlipStage !== 'done') return;
+    for (const pIdx of [0, 1] as const) {
+      const curPrizes = game.players[pIdx].prizes;
+      const curIids = new Set(curPrizes.map(c => c.iid));
+      const prevIids = prevPrizesIids[pIdx];
+      // 找出「上次有但現在沒有」= 被取走的 iid
+      const pickedIids: string[] = [];
+      for (const iid of prevIids) if (!curIids.has(iid)) pickedIids.push(iid);
+      if (pickedIids.length === 0) continue;
+      // 標記 — draw-fly skip 這些 iid
+      const newSet = new Set(prizePickIids);
+      for (const iid of pickedIids) newSet.add(iid);
+      prizePickIids = newSet;
+      // 找對應 cardId（從新進入 hand 的 iid 內找）
+      const handByIid = new Map(game.players[pIdx].hand.map(c => [c.iid, c.cardId]));
+      const capturedPicks = pickedIids
+        .map(iid => ({ iid, cardId: handByIid.get(iid) }))
+        .filter((x): x is { iid: string; cardId: string } => !!x.cardId);
+      if (capturedPicks.length === 0) continue;
+      // queueMicrotask 等 DOM 渲染後 measure prize zone & hand-strip 位置
+      queueMicrotask(() => {
+        const isMine = (pIdx as number) === myIdx;
+        const prizeEl = document.querySelector(
+          isMine ? '.my-row .zone-prizes' : '.opponent-row .zone-prizes'
+        ) as HTMLElement | null;
+        if (!prizeEl) return;
+        const prizeRect = prizeEl.getBoundingClientRect();
+        const startX = prizeRect.left + prizeRect.width / 2;
+        const startY = prizeRect.top + prizeRect.height / 2;
+        let endX: number, endY: number;
+        if (isMine) {
+          const handEl = document.querySelector('.hand-strip') as HTMLElement | null;
+          const handRect = handEl?.getBoundingClientRect();
+          endX = handRect ? handRect.left + handRect.width / 2 : window.innerWidth / 2;
+          endY = handRect ? handRect.top + handRect.height / 2 : window.innerHeight - 80;
+        } else {
+          const playmatEl = document.querySelector('.playmat') as HTMLElement | null;
+          const pmRect = playmatEl?.getBoundingClientRect();
+          endX = pmRect ? pmRect.left + pmRect.width / 2 : window.innerWidth / 2;
+          endY = pmRect ? Math.max(pmRect.top + 20, 40) : 40;
+        }
+        capturedPicks.forEach((p, i) => {
+          const id = Date.now() + Math.random() + i * 0.001;
+          const anim: PrizePickAnim = {
+            id, cardId: p.cardId, iid: p.iid,
+            startX, startY, endX, endY,
+            duration: PRIZE_PICK_DUR,
+          };
+          prizePickAnims = [...prizePickAnims, anim];
+          const timerId = setTimeout(() => {
+            prizePickAnims = prizePickAnims.filter(d => d.id !== id);
+            const next = new Set(prizePickIids);
+            next.delete(p.iid);
+            prizePickIids = next;
+          }, PRIZE_PICK_DUR + 80);
+          prizePickTimers.push(timerId);
+        });
+      });
+    }
   });
 
   function enterHandCard(e: PointerEvent, iid: string) {
@@ -962,7 +1045,10 @@
       const currIids = new Set(curr.map(c => c.iid));
       const prev = prevHandIids[pIdx];
       const newIids: string[] = [];
-      for (const inst of curr) if (!prev.has(inst.iid)) newIids.push(inst.iid);
+      for (const inst of curr) {
+        // v5.131：來自獎賞卡的 iid 跳過 draw-fly（改走 prize-pick 大動畫）
+        if (!prev.has(inst.iid) && !prizePickIids.has(inst.iid)) newIids.push(inst.iid);
+      }
       prevHandIids[pIdx] = currIids;
       if (newIids.length === 0) continue;
       // 先把新 iid 標記為 arriving（hand-card opacity:0）— 自己的手牌才有 DOM
@@ -1047,6 +1133,7 @@
     for (const t of shuffleTimers) clearTimeout(t);
     for (const t of discardTimers) clearTimeout(t);
     for (const t of justArrivedTimers) clearTimeout(t);  // v5.116
+    for (const t of prizePickTimers) clearTimeout(t);  // v5.131
     for (const t of drawAnimTimers) clearTimeout(t);
   });
 
@@ -8032,6 +8119,25 @@
     </div>
   {/if}
 
+  <!-- ══ v5.131 取得獎賞卡動畫 overlay — 從 prize → 中央 → 手牌 ══ -->
+  {#if prizePickAnims.length > 0}
+    <div class="prize-pick-overlay">
+      {#each prizePickAnims as p (p.id)}
+        {@const pc = pool.get(p.cardId)}
+        <div class="prize-pick-card"
+          style="
+            left:{p.startX - 60}px;
+            top:{p.startY - 84}px;
+            --dx:{p.endX - p.startX}px;
+            --dy:{p.endY - p.startY}px;
+            animation-duration:{p.duration}ms;
+          ">
+          {#if pc?.imageUrl}<img src={pc.imageUrl} alt={pc.name}/>{/if}
+        </div>
+      {/each}
+    </div>
+  {/if}
+
   <!-- v2.129：全螢幕卡牌放大 lightbox（鏡射 /cards 樣式）—— 從 zoom-img 點擊或 ImageButton 觸發 -->
   {#if lightboxUrl}
     <div class="lightbox-overlay" role="dialog" aria-modal="true" aria-label="放大卡牌圖片"
@@ -8513,12 +8619,15 @@
   /* v5.107: zone-bench 也加 contain:layout 隔離 — 雙保險
      v5.109: z-index:200 拉高過 active-card(z=auto)，修對手 bench 往下 fan 被 active 蓋
      對手 bench 在 row 1, fan 進 row 2 對手 active 區。同 DOM order 後者(active)堆疊在上
-     → bench att-card 被蓋。z-index:200 在 zone-bench 整體建立 stacking context 之上。 */
+     → bench att-card 被蓋。z-index:200 在 zone-bench 整體建立 stacking context 之上。
+     v5.131: 加 min-height:205px — 鎖死 bench-row 高度，沒 bench 寶可夢時也預留空間，
+     放第一隻時不會撐大父 row（玩家回報「放寶可夢撐出間隙」）。 */
   .playmat.layout-tabletop .zone-bench{
     overflow:visible !important;
     contain: layout;
     position:relative;
     z-index:200;
+    min-height:205px;
   }
   /* v5.109: zone-active z-index 明確設定 1, 低於 zone-bench(200) */
   .playmat.layout-tabletop .zone-active{
@@ -9778,6 +9887,43 @@
     12%  { opacity:1; transform:translate(calc(var(--dx) * .05), calc(var(--dy) * .05)) rotate(-6deg) scale(.78); }
     70%  { opacity:1; transform:translate(calc(var(--dx) * .88), calc(var(--dy) * .88)) rotate(-2deg) scale(.98); }
     100% { transform:translate(var(--dx), var(--dy)) rotate(0) scale(1.02); opacity:0; }
+  }
+
+  /* v5.131：取得獎賞卡動畫 overlay — face-up 卡圖飛到螢幕中央 + 變大 + 轉一圈 + 飛回手牌 */
+  .prize-pick-overlay{
+    position:fixed; inset:0; pointer-events:none; z-index:9000;
+  }
+  .prize-pick-card{
+    position:absolute;
+    width:120px; height:168px;
+    border-radius:8px;
+    overflow:hidden;
+    box-shadow:0 4px 20px rgba(0,0,0,.6);
+    animation-name:prize-pick;
+    animation-timing-function:cubic-bezier(.2,.9,.35,1.15);
+    animation-fill-mode:both;
+    transform-origin:center;
+  }
+  .prize-pick-card img{
+    width:100%; height:100%; object-fit:contain;
+    display:block;
+    border-radius:8px;
+  }
+  /* 0%: prize 位置原大小（120x168） → 30%: 中央 scale 2.5 + 半圈 → 60%: 中央 scale 2.5 + 整圈 →
+     85%: 飛向 hand-strip scale .8 → 100%: 到 hand-strip 縮小消失 */
+  @keyframes prize-pick{
+    0%   { transform:translate(0,0) scale(1) rotate(0); opacity:0;
+           box-shadow:0 0 0 rgba(255,215,0,0); }
+    15%  { transform:translate(calc(var(--dx) * .3), calc(var(--dy) * .15)) scale(2.0) rotate(180deg); opacity:1;
+           box-shadow:0 0 30px rgba(255,215,0,.85); }
+    50%  { transform:translate(calc(var(--dx) * .3), calc(var(--dy) * .25)) scale(2.5) rotate(360deg); opacity:1;
+           box-shadow:0 0 40px rgba(255,215,0,.9); }
+    70%  { transform:translate(calc(var(--dx) * .5), calc(var(--dy) * .5)) scale(2.0) rotate(360deg); opacity:1;
+           box-shadow:0 0 30px rgba(255,215,0,.7); }
+    95%  { transform:translate(calc(var(--dx) * .92), calc(var(--dy) * .92)) scale(.85) rotate(360deg); opacity:.85;
+           box-shadow:0 0 10px rgba(255,215,0,.3); }
+    100% { transform:translate(var(--dx), var(--dy)) scale(.4) rotate(360deg); opacity:0;
+           box-shadow:none; }
   }
 
   /* v2.45：overlay 飛行期間 hand-card opacity:0，overlay 落地才淡入 */

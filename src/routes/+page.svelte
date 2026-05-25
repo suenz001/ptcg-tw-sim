@@ -265,6 +265,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.131</span> 🎨 桌墊版備戰鎖框架 + 取得獎賞卡動畫差別化</summary>
+        <ul>
+          <li><b>玩家回報 1</b>：桌墊版場上有競技場卡時，備戰區放寶可夢仍會撐出間隙，要求鎖死框架。</li>
+          <li><b>根因</b>：<code>.zone-bench</code> 沒設 <code>min-height</code>，沒 bench 寶可夢時 row 高度=0（grid-template-rows: auto），放第一隻時撐到 205px → 視覺上「撐出間隙」。</li>
+          <li><b>修法</b>：桌墊版 <code>.zone-bench</code> 加 <code>min-height:205px</code> 預留空間，沒寶可夢時也是 205px → 放第一隻不撐 row。</li>
+
+          <li><b>玩家回報 2</b>：v5.129 改的獎賞動畫是「開局發 6 張」階段的，但玩家真正要的是「<b>取得獎賞</b>」（KO 後取走）的動畫 — 飛中央 → 變大 → 轉一圈 → 回手牌。</li>
+          <li><b>修法</b>：</li>
+          <li>　1. 加 <code>prevPrizesIids</code> snapshot — 偵測 prizes.length 減少時計算「被取走的 iid」</li>
+          <li>　2. 新 <code>prizePickAnims</code> state — 從 prize 位置飛到螢幕中央 + scale 2.5 + rotate 360° + 縮回 hand-strip，1.6s 內結束</li>
+          <li>　3. overlay 顯示真實卡圖（face-up，玩家看得到拿到什麼）</li>
+          <li>　4. 既有 v5.049 <code>draw-fly</code> effect 內加 <code>prizePickIids</code> skip — 來自獎賞的 iid 不走 draw-fly，避免雙動畫</li>
+          <li>　5. CSS keyframes <code>prize-pick</code> 6 steps：原位 → 中央 scale 2 + 半圈 → 中央 scale 2.5 + 整圈 → 飛向 hand → 落地縮小消失，含金色 box-shadow glow</li>
+
+          <li><b>v5.129 開局發牌動畫保留</b>：那個還是有意義（雙方獎賞區從 0 變 6 視覺強化），跟 v5.131 新動畫是兩個獨立 trigger，互不衝突。</li>
+
+          <li><b>本機 svelte.compile pre-check</b>：通過 changelog + game/+page.svelte（從 v5.122 起的標準流程）</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 7 處 exact-match）／14（最小 patch — zone-bench 加 1 行 + prize-pick 新功能 self-contained）／1（changelog audit pass + 本機 pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.130</span> 🐛 離開房間應回大廳而非首頁</summary>
         <ul>
           <li><b>玩家回報</b>：在「線上連線對戰房間」按「離開房間」後 redirect 到首頁（「開始對戰」選本機/線上）。期望應該回到大廳（房間列表），這樣就不用重新點「線上連線對戰」按鈕。</li>
