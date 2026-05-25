@@ -265,6 +265,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.158</span> 🐛 AI mulligan setup 順序修正 + 線上練牌按準備卡住 audit</summary>
+        <ul>
+          <li><b>Wilson 截圖</b>：AI Jk 已 confirm mulligan reveal + 補抽 1 + mulliganPostBenchOpen=true，但 active 還「準備中」沒選，AI 卡死。</li>
+          <li><b>根因</b>：<code>ai.ts handleSetupAI</code> 順序錯。原順序：</li>
+          <li>　1. CONFIRM_MULLIGAN_REVEAL</li>
+          <li>　2. MULLIGAN_DRAW_DECISION</li>
+          <li>　3. FINISH_MULLIGAN_POST_BENCH (v5.138)</li>
+          <li>　4. setupDone check</li>
+          <li>　5. PLACE_ACTIVE / BENCH / FINISH_SETUP</li>
+          <li>step 1-3 在 setup placement 之前 → AI 一進 setup 就先做 mulligan flow + 設 <code>mulliganPostBenchOpen=true</code>，但**還沒 PLACE_ACTIVE**。違反 v5.133 PTCG 規則「先 setup 完成才看對手揭示+補抽」（UI modal popup 已此 gate，但 ai.ts 沒同步）。</li>
+          <li><b>修法</b>：reorder ai.ts handleSetupAI：</li>
+          <li>　・<b>STEP 1（setupDone=false）</b> → PLACE_ACTIVE / BENCH / FINISH_SETUP</li>
+          <li>　・<b>STEP 2（setupDone=true）</b> → CONFIRM_REVEAL / DRAW / FINISH_POST_BENCH</li>
+          <li>跟 v5.133 UI modal popup gate 完全對應，PTCG 規則一致。</li>
+
+          <li><b>Wilson 第二個報告</b>：「跟對手練牌重抽完按準備卡住」— 線上對戰場景。</li>
+          <li><b>初步 audit</b>：可能 firebase 同步問題或 <code>tryAdvanceToPlaying</code> 條件不全滿足（雙方 setupDone + mulliganRevealConfirmed + pendingMulliganDraw=0 + mulliganPostBenchOpen=false）。本版先修 ai.ts 順序問題，若線上問題 v5.158 後仍存在請 Wilson 提供具體場景（誰先按準備、卡住時各狀態）。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 1 處 exact-match）／14（最小 patch — 純 reorder ai.ts handleSetupAI 開頭）／15（v5.133 PTCG 規則 source of truth）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.157</span> 🎯 場地卡放大 + 移到右側對手獎賞/牌庫左方</summary>
         <ul>
           <li><b>Wilson 要求</b>：「現在的場地卡位置有點奇怪又太小，請幫我放大後，移動到右側，對手獎賞卡與牌庫圖案的左方。切記不要又不小心調整到框架，造成整體版面大小又有變動」</li>

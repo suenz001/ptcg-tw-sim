@@ -345,21 +345,35 @@ export function getAIAction(
 // ── Setup 階段 AI ─────────────────────────────────────────────────────────────
 
 function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): GameAction | null {
-  // v3.74：AI 自動確認對方的 mulligan 揭示（無需互動）
-  if (!state.mulliganRevealConfirmed[pIdx]) {
-    return { type: 'CONFIRM_MULLIGAN_REVEAL', senderIdx: pIdx };
+  // v5.158：順序重整 — PTCG 規則：先 setup placement (PLACE_ACTIVE/BENCH/FINISH_SETUP)
+  //   才看對手 mulligan reveal + 補抽決定 + mulliganPostBenchOpen flow。
+  //   v5.133 修了 UI modal popup gate 但 ai.ts 沒同步，造成 AI 一進 setup 就先
+  //   confirm reveal + draw + 設 mulliganPostBenchOpen=true，卻還沒 PLACE_ACTIVE。
+  //   Wilson 截圖 AI 卡在 mulligan flow 之後沒進 PLACE_ACTIVE — 順序錯。
+  //
+  // 修法（STEP 1 → STEP 2）：
+  //   STEP 1（setupDone[pIdx]=false）：placement (PLACE_ACTIVE/BENCH/FINISH_SETUP)
+  //   STEP 2（setupDone[pIdx]=true） ：mulligan reveal/draw/post-bench flow
+  //
+  // ──── STEP 2 邏輯（setupDone[pIdx]=true 才執行） ────
+  if (state.setupDone[pIdx]) {
+    // v3.74：AI 自動確認對方的 mulligan 揭示（無需互動）
+    if (!state.mulliganRevealConfirmed[pIdx]) {
+      return { type: 'CONFIRM_MULLIGAN_REVEAL', senderIdx: pIdx };
+    }
+    // Mulligan 補抽決定（v4.923）：AI 一律拿滿（補抽零風險，有的拿沒理由不拿）
+    const aiPendingMulli = state.pendingMulliganDraw?.[pIdx] ?? 0;
+    if (aiPendingMulli > 0) {
+      return { type: 'MULLIGAN_DRAW_DECISION', count: aiPendingMulli, senderIdx: pIdx };
+    }
+    // v5.138：mulligan 補抽後加備戰 — AI 簡化策略，直接 FINISH（不再加備戰，
+    //   因 setup 階段 AI 已盡量放 3 隻備戰，補抽後新基礎策略價值低）。
+    if (state.mulliganPostBenchOpen?.[pIdx]) {
+      return { type: 'FINISH_MULLIGAN_POST_BENCH', senderIdx: pIdx };
+    }
+    return null;
   }
-  // Mulligan 補抽決定（v4.923）：AI 一律拿滿（補抽零風險，有的拿沒理由不拿）
-  const aiPendingMulli = state.pendingMulliganDraw?.[pIdx] ?? 0;
-  if (aiPendingMulli > 0) {
-    return { type: 'MULLIGAN_DRAW_DECISION', count: aiPendingMulli, senderIdx: pIdx };
-  }
-  // v5.138：mulligan 補抽後加備戰 — AI 簡化策略，直接 FINISH（不再加備戰，
-  //   因 setup 階段 AI 已盡量放 3 隻備戰，補抽後新基礎策略價值低）。
-  if (state.mulliganPostBenchOpen?.[pIdx]) {
-    return { type: 'FINISH_MULLIGAN_POST_BENCH', senderIdx: pIdx };
-  }
-  if (state.setupDone[pIdx]) return null;
+  // ──── STEP 1 邏輯（setupDone[pIdx]=false → placement） ────
   const player = state.players[pIdx];
 
   // 先選出場（選 HP 最高的基礎；含 ex 基礎）
