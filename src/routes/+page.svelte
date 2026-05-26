@@ -265,6 +265,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.186</span> Bug：火箭隊的急凍鳥 抵抗之幕 被 KO 後對備戰失效</summary>
+        <ul>
+          <li>玩家回報：多龍巴魯托ex 幻影奇襲 攻擊戰鬥位火箭隊的急凍鳥 → 急凍鳥被傷害 KO → 同招式 6 個傷害指示物還是放到備戰寶可夢身上。規則上「招式效果同時 resolve」攻擊宣告當時抵抗之幕仍有效，備戰「火箭隊的」基礎寶可夢應免疫此招式效果</li>
+          <li>根因：effects.ts L344 <code>hasRocketVeil(state, ...)</code> 是即時查當前場上有沒有抵抗之幕來源。急凍鳥被同招式 KO 後 state 已沒抵抗之幕來源 → 返 false → 備戰失去保護 → 6 個指示物照放</li>
+          <li>修法（完全仿照 v3.892 花之帷幔 pattern）：加 <code>_attackTimeOppRocketVeil</code> attack-time snapshot — 攻擊宣告當時就記錄對手場上有沒有急凍鳥，POST 階段讀 snapshot 而非即時 state
+            <ul>
+              <li>types.ts L848 加 <code>_attackTimeOppRocketVeil?: boolean</code> field（transient，每次 attack 後 clear）</li>
+              <li>engine.ts L23 import 補 <code>hasRocketVeil</code></li>
+              <li>engine.ts ATTACK handler L3875 加 snapshot：<code>_attackTimeOppRocketVeil = hasRocketVeil(state, dIdx, pool)</code></li>
+              <li>engine.ts L5209+L6726 attack flow 結束 + applyAction wrapper 兩處 cleanup 同步清除</li>
+              <li>effects.ts L344 <code>canApplyAttackEffectToTarget</code> 改用 <code>(hasRocketVeil(...) || state._attackTimeOppRocketVeil) &amp;&amp; isRocketBasicTarget(targetCard)</code> OR fallback</li>
+            </ul>
+          </li>
+          <li>規則對應：跟 v3.892 花之帷幔（謝米 KO 後仍擋備戰傷害）原理完全相同——「招式效果同時 resolve」原則。snapshot 是 transient，attack flow 結束自動清，不影響其他回合的判斷</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 6 處 ASSERT exact-match）／14（最小 patch — 完全仿照既有 hasFlowerVeil snapshot pattern，邏輯結構一致）／17（不做 AI 幻覺 — grep 確認 hasRocketVeil 既存於 effects.ts L235、isRocketBasicTarget 既存於 L255，pattern 完全比照 v3.892）／1（changelog audit pass + 本機 svelte.compile pre-check）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.185</span> Hotfix：本機雙人 setup 又卡死 — myIdx 邏輯漏 mulliganRevealConfirmed 優先</summary>
         <ul>
           <li>玩家回報截圖：v5.184 單機雙人對局，log 顯示「AI 對手 已確認對方的 mulligan 揭示」但畫面沒任何按鈕可按、對手戰鬥場「未揭曉」</li>

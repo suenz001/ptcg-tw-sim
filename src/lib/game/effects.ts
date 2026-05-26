@@ -341,7 +341,10 @@ export function resolveBenchGuard(
     // v2.57：火箭隊的急凍鳥「抵抗之幕」— 我方基礎火箭隊寶可夢不受對手【招式的效果】影響。
     // 因 resolveBenchGuard 僅在 target 為 bench 時被呼叫，這裡檢查備戰區上的目標即可。
     const defenderIdx = (1 - actorIdx) as 0 | 1;
-    if (hasRocketVeil(state, defenderIdx, pool) && isRocketBasicTarget(targetCard)) {
+    // v5.186：加 attack-time snapshot fallback — 急凍鳥被同招式 KO 後 state 已沒急凍鳥，
+    //   但 _attackTimeOppRocketVeil snapshot 仍記得宣告當時有，per-target 仍擋。
+    //   仿 v3.892 花之帷幔 pattern。
+    if ((hasRocketVeil(state, defenderIdx, pool) || state._attackTimeOppRocketVeil) && isRocketBasicTarget(targetCard)) {
       return { blocked: true, reason: '火箭隊的急凍鳥 抵抗之幕 效果' };
     }
   }

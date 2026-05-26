@@ -21,6 +21,8 @@ import {
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   hasFlowerVeil,
+  // v5.186：抵抗之幕 attack-time snapshot 仿 v3.892 花之帷幔 pattern
+  hasRocketVeil,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_END_TURN_DISCARD,
   ABILITY_RETREAT_MOD,
@@ -3984,6 +3986,11 @@ function handlePlaying(
     //   故需 snapshot 一個 transient flag 給 hitBenchPickPost / hitBenchAll 讀。
     const attackTimeOppFlowerVeil = hasFlowerVeil(state, dIdx, pool);
     workingState = { ...workingState, _attackTimeOppFlowerVeil: attackTimeOppFlowerVeil };
+    // v5.186：抵抗之幕 同 pattern — 玩家回報多龍巴魯托ex 幻影奇襲 對戰急凍鳥時
+    //   急凍鳥被 KO 後 6 個指示物還能放到備戰；規則上同招式 resolve 視為同時，
+    //   攻擊宣告當時抵抗之幕生效，備戰「火箭隊的」基礎寶可夢仍應免疫此招式效果。
+    const attackTimeOppRocketVeil = hasRocketVeil(state, dIdx, pool);
+    workingState = { ...workingState, _attackTimeOppRocketVeil: attackTimeOppRocketVeil };
 
     // v3.03：preFn 可額外回傳 breakdown，把內部多步加法（如赫月瘋狂啃咬 7×30+100）
     //        展開為多個 term，UI 顯示更易懂。
@@ -5343,6 +5350,12 @@ function handlePlaying(
     if (newState._attackTimeOppFlowerVeil !== undefined && !newState.pendingSelection) {
       const cleared = { ...newState };
       delete cleared._attackTimeOppFlowerVeil;
+      newState = cleared;
+    }
+    // v5.186：抵抗之幕 snapshot 同步清除
+    if (newState._attackTimeOppRocketVeil !== undefined && !newState.pendingSelection) {
+      const cleared = { ...newState };
+      delete cleared._attackTimeOppRocketVeil;
       newState = cleared;
     }
 
@@ -6876,6 +6889,12 @@ export function applyAction(
   if (next._attackTimeOppFlowerVeil !== undefined && !next.pendingSelection) {
     const cleared = { ...next };
     delete cleared._attackTimeOppFlowerVeil;
+    next = cleared;
+  }
+  // v5.186：抵抗之幕 snapshot 同步清除（跨 deferred picker 後最終清理）
+  if (next._attackTimeOppRocketVeil !== undefined && !next.pendingSelection) {
+    const cleared = { ...next };
+    delete cleared._attackTimeOppRocketVeil;
     next = cleared;
   }
 

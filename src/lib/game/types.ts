@@ -862,6 +862,13 @@ export interface GameState {
    * Transient：每次 attack flow 後 clear，不持久化（連線對戰 / 存檔不需考慮）。
    */
   _attackTimeOppFlowerVeil?: boolean;
+  /**
+   * v5.186：抵抗之幕 attack-time snapshot — 攻擊宣告時對手場上是否有火箭隊的急凍鳥（抵抗之幕）。
+   * 仿花之帷幔 pattern：規則上「招式效果同時 resolve」，急凍鳥被同招式 KO 後備戰仍應免疫此招式效果。
+   * canApplyAttackEffectToTarget 內 OR fallback 讀此 snapshot。
+   * Transient：每次 attack flow 後 clear。
+   */
+  _attackTimeOppRocketVeil?: boolean;
 }
 
 export interface LogEntry {
