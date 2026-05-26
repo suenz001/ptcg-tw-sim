@@ -752,10 +752,11 @@ regA('奇樹的電肚蛙ex', 0, (st, idx, pool, _cardInst) => {
   if (lightningIids.length === 0) return addLog(st, '電氣流：手牌沒有基本【雷】能量', idx);
 
   const all: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
+  // v5.184：詛咒根擋手牌附能 — filter 受詛咒根影響的「奇樹的」寶可夢
   const kitreeIids = all
-    .filter(c => pool.get(c.cardId)?.name?.startsWith('奇樹的') ?? false)
+    .filter(c => (pool.get(c.cardId)?.name?.startsWith('奇樹的') ?? false) && !c.cantAttachEnergyThisTurn)
     .map(c => c.iid);
-  if (kitreeIids.length === 0) return addLog(st, '電氣流：場上沒有「奇樹的」寶可夢', idx);
+  if (kitreeIids.length === 0) return addLog(st, '電氣流：場上沒有可附能的「奇樹的」寶可夢', idx);
 
   const s = addLog(st, '電氣流：選 1 張基本【雷】能量', idx);
   return withPending(s, {

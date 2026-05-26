@@ -40,6 +40,10 @@ regA('蜜集大蛇ex', 0, (st, idx, pool) => {
   const grassIdx = p.hand.findIndex(c => isBasicEnergyOfType(pool.get(c.cardId), 'Grass'));
   if (grassIdx < 0) return addLog(st, '熟成充能：手牌無基本【草】能量', idx);
   if (!p.active && p.bench.length === 0) return addLog(st, '熟成充能：場上無寶可夢', idx);
+  // v5.184：詛咒根擋手牌附能 — filter 可附能的場上寶可夢
+  const allField: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
+  const validIids = allField.filter(c => !c.cantAttachEnergyThisTurn).map(c => c.iid);
+  if (validIids.length === 0) return addLog(st, '熟成充能：場上寶可夢全數受詛咒根影響，無法附加能量', idx);
   const energyInst = p.hand[grassIdx];
   let s = addLog(st, '熟成充能：選 1 隻寶可夢，附上基本【草】能量並回 30 HP', idx);
   return withPending(s, {
@@ -47,7 +51,7 @@ regA('蜜集大蛇ex', 0, (st, idx, pool) => {
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'serperior-mature-charge',
-    params: { energyIid: energyInst.iid, titleOverride: '熟成充能：選擇要附能量+回 30 HP 的寶可夢' },
+    params: { energyIid: energyInst.iid, validIids, titleOverride: '熟成充能：選擇要附能量+回 30 HP 的寶可夢' },
   });
 });
 

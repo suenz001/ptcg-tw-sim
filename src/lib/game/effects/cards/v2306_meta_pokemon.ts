@@ -40,6 +40,8 @@ regA('厄鬼椪 碧草面具ex', 0, (state, aIdx, pool, inst) => {
     return card?.supertype === 'Energy' && card?.subtype === 'Basic' && (card.pokemonType === 'Grass' || card.name.includes('【草】'));
   });
   if (!hasGrass) return addLog(state, '碧綠之舞：手牌沒有基本【草】能量，無法使用', aIdx);
+  // v5.184：詛咒根擋手牌附能 — 自身受詛咒根影響時，無法附加能量
+  if (inst.cantAttachEnergyThisTurn) return addLog(state, '碧綠之舞：受詛咒根影響，本回合無法從手牌附加能量', aIdx);
   let s = addLog(state, '厄鬼椪 碧草面具ex：使用特性「碧綠之舞」，選擇手牌的 1 張基本【草】能量', aIdx);
   const instInPlay = s.players[aIdx].active?.iid === inst.iid 
     ? s.players[aIdx].active 

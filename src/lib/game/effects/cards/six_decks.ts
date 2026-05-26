@@ -459,8 +459,9 @@ regA('龜足巨鎧', 0, (st, idx, pool) => {
   if (!hasFighting) return addLog(st, '岩石武裝：手牌無基本【鬥】能量', idx);
   const p = st.players[idx];
   const allMy = [...(p.active ? [p.active] : []), ...p.bench];
-  const fightPokes = allMy.filter(c => pool.get(c.cardId)?.pokemonType === 'Fighting');
-  if (fightPokes.length === 0) return addLog(st, '岩石武裝：場上無【鬥】寶可夢', idx);
+  // v5.184：詛咒根擋手牌附能 — filter 受詛咒根影響的【鬥】寶可夢
+  const fightPokes = allMy.filter(c => pool.get(c.cardId)?.pokemonType === 'Fighting' && !c.cantAttachEnergyThisTurn);
+  if (fightPokes.length === 0) return addLog(st, '岩石武裝：場上無可附能的【鬥】寶可夢', idx);
   st = addLog(st, '岩石武裝：選擇 1 隻【鬥】寶可夢，從手牌附 1 張基本【鬥】能量', idx);
   return withPending(st, {
     type: 'heal-target',

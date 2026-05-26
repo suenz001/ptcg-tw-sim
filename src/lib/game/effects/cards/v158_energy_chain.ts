@@ -245,7 +245,13 @@ export function startEnergyChain(
     if (player.active) candidates.push(player.active);
   }
   for (const b of player.bench) candidates.push(b);
-  const validTargets = candidates.filter(c => pokemonMatchesType(pool.get(c.cardId), filterType));
+  // v5.184：詛咒根擋手牌附能 — source='hand' 時排除受詛咒根影響的目標
+  //   （詛咒根只擋「從手牌附能」；deck/discard source 不受影響）
+  const validTargets = candidates.filter(c => {
+    if (!pokemonMatchesType(pool.get(c.cardId), filterType)) return false;
+    if (source === 'hand' && c.cantAttachEnergyThisTurn) return false;
+    return true;
+  });
 
   if (validTargets.length === 0) {
     // 場上無合法目標 → 能量留在 discard

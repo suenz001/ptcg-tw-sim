@@ -265,6 +265,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.184</span> Bug 5: 朽木妖詛咒根擋手牌附能 — 8 卡 picker 過濾</summary>
+        <ul>
+          <li>玩家回報：朽木妖｜詛咒根 卡面寫「下個對手的回合，受這個招式的寶可夢無法附上從手牌使出的能量」，但下列招式/特性都會繞過 flag：碧綠之舞、吃飽先、嫩葉之恩、熟成充能、充溢之力、烈火亂舞、電氣流、岩石武裝</li>
+          <li>根因 audit：8 張卡（含共用 helper 後實際 9 處實作）全部用自己的 regR resolver 直接 mutate energyAttached，繞過 engine.ts 的 ATTACH_ENERGY action gate（該 gate 才有讀 cantAttachEnergyThisTurn）。0/8 張卡有檢查 flag</li>
+          <li>修法（選項 A：picker 端過濾，PTCG 規則精確 + 玩家友善）：在每張卡開 picker 前 filter validIids 排除受詛咒根影響的目標；若 filter 後合法目標 = 0 → addLog 警告 + 跳過整個 ability/招式 post-effect（手牌能量不消耗）</li>
+          <li>9 個 patch points：
+            <ul>
+              <li><b>碧綠之舞 × 2</b>（v2306_meta_pokemon.ts + effects.ts 舊版）— 自附類，check inst/src 的 cantAttachEnergyThisTurn</li>
+              <li><b>吃飽先</b>（effects.ts selfActiveHandAttachHealPost）— active 受影響時走「只回血」分支，符合 PTCG「能做的部分做」</li>
+              <li><b>嫩葉之恩</b>（effects.ts benchHandAttachFullHealPost + bench-hand-attach-fullheal-pick-energy resolver）— filter bench + 傳 benchValidIids 到 resolver</li>
+              <li><b>熟成充能</b>（lopunny_serperior_flareon_festival.ts）— filter active+bench，validIids 傳到 picker</li>
+              <li><b>充溢之力 + 滿載心田 + 幸運貼附 + 熱帶狂燒</b>（v158_energy_chain.ts startEnergyChain）— 在共用 helper filter validTargets，只在 source=hand 時擋（deck/discard source 不受影響）</li>
+              <li><b>烈火亂舞</b>（effects.ts inferno-fandango-pick-energy）— 在「移除手牌能量之前」先 filter field，避免能量誤丟</li>
+              <li><b>電氣流</b>（v2996_g4_wave2.ts）— filter「奇樹的」寶可夢時加 !cantAttachEnergyThisTurn</li>
+              <li><b>岩石武裝</b>（six_decks.ts）— filter【鬥】寶可夢時加 !cantAttachEnergyThisTurn</li>
+            </ul>
+          </li>
+          <li>規則對應：詛咒根的 cantAttachEnergyThisTurn 是 per-instance（跟著 iid），同方其他寶可夢不受影響；目標若被換到備戰位 flag 仍跟著走</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 9 處 ASSERT exact-match）／14（最小 patch — 9 處純 filter / gate，邏輯不動）／17（不做 AI 幻覺 — audit 8 張卡 + 共用 helper 後確認 0/8 命中）／1（changelog audit pass + 本機 svelte.compile pre-check）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.183</span> 修返回房間 3 處 — status lobby + 本機 game=null</summary>
         <ul>
           <li>玩家回報線上模式: 對方同意提議返回房間後並沒有返回, 還跳「提議返回房間失敗：game not in progress」</li>

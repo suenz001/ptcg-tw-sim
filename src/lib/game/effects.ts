@@ -9872,9 +9872,14 @@ function selfActiveHandAttachHealPost(heal: number, label: string): AttackPostFn
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (!p.active) return state;
-    const cand = p.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+    // v5.184：詛咒根擋手牌附能 — 戰鬥位受詛咒根影響時，走「只回血」分支（PTCG: 招式效果分階段）
+    const cantAttachActive = p.active.cantAttachEnergyThisTurn === true;
+    const cand = cantAttachActive ? [] : p.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+    if (cantAttachActive) {
+      state = addLog(state, `${label}：戰鬥位受詛咒根影響，無法附加能量；改為直接執行回血`, aIdx);
+    }
     if (cand.length === 0) {
-      // 沒能量 → 只回血
+      // 沒能量 (或詛咒根擋) → 只回血
       const tname = pool.get(p.active.cardId)?.name ?? '?';
       const newDmg = Math.max(0, p.active.damage - heal);
       const healed = p.active.damage - newDmg;
@@ -9924,6 +9929,9 @@ function benchHandAttachFullHealPost(typeFilter: EnergyType | null, label: strin
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (p.bench.length === 0) return addLog(state, `${label}：無備戰寶可夢`, aIdx);
+    // v5.184：詛咒根擋手牌附能 — filter 可接受能量的備戰
+    const validBench = p.bench.filter(c => !c.cantAttachEnergyThisTurn);
+    if (validBench.length === 0) return addLog(state, `${label}：備戰寶可夢全數受詛咒根影響，無法附加能量`, aIdx);
     const cand = p.hand.filter(c => {
       const card = pool.get(c.cardId);
       if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
@@ -9937,7 +9945,7 @@ function benchHandAttachFullHealPost(typeFilter: EnergyType | null, label: strin
       type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx,
       filter: filterStr, minCount: 1, maxCount: 1,
       effectKey: 'bench-hand-attach-fullheal-pick-energy',
-      params: { label, validIids: cand.map(c => c.iid) },
+      params: { label, validIids: cand.map(c => c.iid), benchValidIids: validBench.map(c => c.iid) },
     });
   };
 }
@@ -9945,15 +9953,18 @@ regR('bench-hand-attach-fullheal-pick-energy', (st, idx, iids, params, _pool) =>
   const label = (params?.label as string) ?? '附能+全回復';
   const p = st.players[idx];
   if (p.bench.length === 0) return st;
-  if (p.bench.length === 1) {
-    // 只有 1 隻備戰，自動選定
-    return applyBenchAttachFullHeal(st, idx, iids, p.bench[0].iid, label);
+  // v5.184：用 benchValidIids（gate 端已過濾詛咒根）；fallback 給舊 caller
+  const benchValidIids = (params?.benchValidIids as string[] | undefined) ?? p.bench.map(c => c.iid);
+  if (benchValidIids.length === 0) return st;
+  if (benchValidIids.length === 1) {
+    // 只有 1 隻合法備戰，自動選定
+    return applyBenchAttachFullHeal(st, idx, iids, benchValidIids[0], label);
   }
   return withPending(st, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'bench-hand-attach-fullheal-commit',
-    params: { energyIids: iids, label, validIids: p.bench.map(c => c.iid) },
+    params: { energyIids: iids, label, validIids: benchValidIids },
   });
 });
 regR('bench-hand-attach-fullheal-commit', (st, idx, iids, params, _pool) => {
@@ -12276,6 +12287,8 @@ regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool, cardInst) => {
         return card?.name === '厄鬼椪 碧草面具ex' && c.abilityUsedThisTurn === true;
       });
   if (!src) return st;
+  // v5.184：詛咒根擋手牌附能 — 自身受詛咒根影響時，無法附加能量
+  if (src.cantAttachEnergyThisTurn) return addLog(st, '碧綠之舞：受詛咒根影響，本回合無法從手牌附加能量', idx);
   // 手牌需有基本草能量
   const grassEnergyInst = p.hand.find(c => {
     const card = pool.get(c.cardId);
@@ -14588,16 +14601,20 @@ regR('inferno-fandango-pick-energy', (st, idx, iids, _params, pool) => {
   const energyInst = player.hand.find(c => c.iid === energyIid);
   if (!energyInst) return st;
   const energyName = pool.get(energyInst.cardId)?.name ?? '能量';
+  // v5.184：詛咒根擋手牌附能 — filter 場上可附目標（在移除手牌能量之前先驗證）
+  const field = [
+    ...(player.active ? [player.active] : []),
+    ...player.bench,
+  ].filter(c => !c.cantAttachEnergyThisTurn);
+  if (field.length === 0) {
+    return addLog(st, `烈火亂舞：場上寶可夢全數受詛咒根影響，無法附加 ${energyName}`, idx);
+  }
   // 從手牌移除能量（暫存 params）並要求選附加目標
   st = updatePlayer(st, idx, p => ({
     ...p,
     hand: p.hand.filter(c => c.iid !== energyIid),
   }));
   st = addLog(st, `烈火亂舞：選擇要附加 ${energyName} 的寶可夢`, idx);
-  const field = [
-    ...(player.active ? [player.active] : []),
-    ...player.bench,
-  ];
   return withPending(st, {
     type: 'heal-target',
     actorIdx: idx, sourcePlayerIdx: idx,
