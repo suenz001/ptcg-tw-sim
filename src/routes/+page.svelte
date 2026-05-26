@@ -265,6 +265,36 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.195</span> 手機版悔棋按鈕加底色 + 可用手牌黃框加強</summary>
+        <ul>
+          <li><b>1. 手機版悔棋按鈕加底色 + 加寬</b>（玩家反映 v5.194 按鈕不明顯）
+            <ul>
+              <li>原 .mp-undo-btn 只加亮色字 (#ffd44a)，仍走 .mp-icon-btn 透明背景 1px 邊框 → 在手機上看不到</li>
+              <li>修：橘黃底漸層 <code>linear-gradient(180deg, #c88a2a, #a86a1a)</code> + 白字 + 1px 橘邊框 + padding 加寬 (3px 12px)，鏡射綠底「結束回合」按鈕的明顯度</li>
+              <li>選橘黃色而非綠色：與結束回合區隔，橘黃直覺表達「警示/回復」操作</li>
+              <li>:active 狀態加深漸層提供按下反饋</li>
+            </ul>
+          </li>
+          <li><b>2. 手機版可使用手牌黃框加強</b>（玩家反映不夠明顯）
+            <ul>
+              <li>原 .mp-hand-card.mp-playable border 1px #e0b030 + box-shadow 0 0 8px 微發光 → 手機上看不到</li>
+              <li>修：border 加粗到 3px (#ffd44a) + 雙層 box-shadow（外發光 12-20px + 內發光 6-10px）+ <code>mp-playable-pulse</code> 1.4s 脈動 animation</li>
+              <li>玩家在小螢幕也能一眼看到本回合可使用的手牌</li>
+            </ul>
+          </li>
+          <li><b>3. 卡牌上「人頭影子」icon — Audit 中</b>（待 Wilson 提供更多資訊）
+            <ul>
+              <li>Audit 結果：codebase 0 個 <code>&lt;svg&gt;</code>，0 個 👤 在 zoom-modal 範圍內，不在 MobilePortraitBattle 元件</li>
+              <li>懷疑可能來源：(a) Chrome Android &lt;img&gt; 載入失敗的 broken-image placeholder（人形 silhouette）；(b) zoom-modal 上某 emoji（如 🔍 放大鏡）在某些手機字體下渲染類似人形</li>
+              <li>建議 Wilson 用 Chrome DevTools 遠端 inspect（或長按該 icon 看 alt text）回報該元素的具體 tag 名稱 / 截圖更清晰 → 才能精準修</li>
+              <li>本次先 ship #1 + #2，#3 留待更多資訊</li>
+            </ul>
+          </li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 3 處 ASSERT exact-match）／14（最小 patch — 純 CSS 改造）／17（不做 AI 幻覺 — #3 無法定位元素就如實報告，不亂修）／1（changelog audit + svelte.compile pre-check pass）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.194</span> 手機版 4 改進 + 挖掘崩塌 log 顯示卡名</summary>
         <ul>
           <li><b>1. 手機橫放也鎖定走手機 layout</b>（玩家反映橫放會跳到網頁版）

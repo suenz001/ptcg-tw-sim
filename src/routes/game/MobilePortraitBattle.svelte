@@ -1203,13 +1203,24 @@
     border-bottom: 1px solid #2a4a2a;
     font-size: 0.72rem;
   }
-  /* v5.194：悔棋按鈕加亮色提示玩家可用 */
-  .mp-undo-btn { color: #ffd44a !important; font-weight: 700; }
-
   .mp-icon-btn {
     background: transparent; color: #8cf;
     border: 1px solid #2a4a6a; border-radius: 4px;
     padding: 2px 8px; font-size: 0.78rem; cursor: pointer;
+  }
+  /* v5.195：悔棋按鈕改成橘黃底漸層 + 加寬，鏡射綠底結束回合按鈕的明顯度
+     (與綠色結束回合區隔，橘黃讓玩家直覺「警示/回復」操作) */
+  .mp-undo-btn {
+    background: linear-gradient(180deg, #c88a2a, #a86a1a) !important;
+    color: #fff !important;
+    border: 1px solid #d8a040 !important;
+    padding: 3px 12px !important;
+    font-size: 0.78rem !important;
+    font-weight: 700;
+    box-shadow: 0 0 4px rgba(255,180,80,0.4);
+  }
+  .mp-undo-btn:active {
+    background: linear-gradient(180deg, #a86a1a, #884a0a) !important;
   }
   .mp-turn-text { color: #cef; font-weight: 600; }
   .mp-phase { color: #ffd44a; font-size: 0.7rem; }
@@ -1524,9 +1535,26 @@
     object-fit: cover;
     pointer-events: none;
   }
+  /* v5.195：可使用手牌黃框加強 — 加粗到 3px + 強發光 + pulse animation
+     原 1px border + 微弱發光在手機螢幕上不顯眼，玩家容易漏看 */
   .mp-hand-card.mp-playable {
-    border-color: #e0b030;
-    box-shadow: 0 0 8px rgba(255,212,74,0.5);
+    border: 3px solid #ffd44a;
+    box-shadow:
+      0 0 12px rgba(255,212,74,0.85),
+      inset 0 0 6px rgba(255,212,74,0.4);
+    animation: mp-playable-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes mp-playable-pulse {
+    0%, 100% {
+      box-shadow:
+        0 0 12px rgba(255,212,74,0.85),
+        inset 0 0 6px rgba(255,212,74,0.4);
+    }
+    50% {
+      box-shadow:
+        0 0 20px rgba(255,212,74,1.0),
+        inset 0 0 10px rgba(255,212,74,0.6);
+    }
   }
   .mp-hand-card:active { transform: scale(0.95); }
 
