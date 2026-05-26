@@ -265,6 +265,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.173</span> setup phase 卡死修補 - myIdx 邏輯漏 mulliganPostBenchOpen 優先</summary>
+        <ul>
+          <li>玩家回報：v5.172 雙方 setupDone+mulligan 全完成但 phase 卡死</li>
+          <li>根因：myIdx 本機雙人 setup 切換邏輯只看 pendingMulliganDraw 和 setupDone，漏 mulliganPostBenchOpen。玩家1 setupDone+mulliganPostBenchOpen[0]=true 時，pendingMulliganDraw 都 0 → myIdx 切到對手視角 (setupDone[0]?1:0=1)，玩家1 看不到「完成補抽備戰」按鈕 → 旗標永不清除 → tryAdvanceToPlaying 卡 → phase 永卡 setup</li>
+          <li>修法：myIdx 邏輯加 mulliganPostBenchOpen 優先級——任一方 postBench 開放時 myIdx 切到該方</li>
+          <li>Iron Rules: 11/11c/11e/11f/14/17/1</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.172</span> 🔧 hotfix v5.171 — import 來源錯 (build fail 2 連發)</summary>
         <ul>
           <li><b>問題</b>：v5.171 import 來源寫錯：
