@@ -1297,6 +1297,13 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
     return addLog(state, '深淵之瞳：對手戰鬥位不處於特殊狀態 → 效果失敗', aIdx);
   }
   const defCard = pool.get(def.cardId);
+  // v5.168：深淵之瞳「使昏厥」屬於招式效果（attack-effect），需 canApplyEffectToTarget guard。
+  //   薄霧能量「附有此能量的寶可夢，不會受到對手的寶可夢的招式效果」應 100% 擋下昏厥效果。
+  //   同類保護：皇帝之勢、抵抗之幕、全能硬殼、化石 等 attack-effect immunity。
+  const guard = canApplyEffectToTarget(state, aIdx, def, defCard, 'attack-effect', pool, { isBench: false });
+  if (guard.blocked) {
+    return addLog(state, `深淵之瞳：${defCard?.name ?? '?'} 因${guard.reason} → 效果失敗（招式效果免疫）`, aIdx);
+  }
   const hp = defCard?.hp ?? 0;
   if (hp <= 0) return addLog(state, '深淵之瞳：對手戰鬥位無 HP 資訊', aIdx);
   // 設 damage = HP，sanityKOSweep 會處理擊倒 + 獎賞

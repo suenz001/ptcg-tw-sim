@@ -214,16 +214,17 @@ regR('wave6-snipe-any-opp-flat', (state, aIdx, iids, params, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 9. 雪絨蛾|冰凍羽擊 對手所有寶可夢各 20 + 對手戰鬥場睡眠（不計弱抗）
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('雪絨蛾|冰凍羽擊', (s) => ({ state: s, damage: 0 }));
+// v5.168 重設計：active +20 走 mainline ATTACK 管線（含弱點 / 抵抗力 / 攻擊方道具 猛攻手鐲 等
+//   完整加成），bench +20 維持 regPost 自己手動套（卡面「對備戰不計算弱點抵抗力 + 不算道具」）。
+//   原 regPre damage=0 + regPost 手動 active+20 → 完全跳過 mainline → 弱點/道具都漏 → bug。
+//   Wilson 補充 v5.168：active 要算弱點+道具，bench 才不算 → regPre 不設 skipWeakRes / skipDefEffects。
+regPre('雪絨蛾|冰凍羽擊', (s) => ({ state: s, damage: 20 }));
 regPost('雪絨蛾|冰凍羽擊', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  let s = addLog(state, '冰凍羽擊：對手所有寶可夢各受到 20 點傷害（不計弱抗）+ 對手戰鬥場睡眠', aIdx);
-  // v4.54：卡面 20 傷害 = attack-damage (薄霧/抵抗之幕/皇帝之勢/全能硬殼/硬岩 不該擋傷害)；
-  //   睡眠 = attack-effect (走 statusPost 已有 check)。
-  //   原 v2.92 把整個 20 傷害都套 effect immunity → 錯。
-  //   active 不擋；bench 走 resolveBenchGuard('attack-damage') 只擋球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔/太晶 等真擋傷害的卡。
+  let s = addLog(state, '冰凍羽擊：對手備戰寶可夢各受到 20 點傷害（不計弱抗）+ 對手戰鬥場睡眠', aIdx);
+  // active 的 20 傷害 + tool bonus 已由 mainline ATTACK handler 套用（含猛攻手鐲、活力頭帶 等）。
+  // 此處只處理 bench +20（卡面「不計弱抗」故 raw +20）+ bench guard（球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔/太晶）。
   const opp = s.players[dIdx];
-  const blockedActive = false;  // active 的 attack-damage 不該被 effect immunity 擋
   const benchBlocked = new Set<string>();
   for (const b of opp.bench) {
     const g = canApplyEffectToTarget(s, aIdx, b, pool.get(b.cardId), 'attack-damage', pool, { isBench: true });
@@ -232,13 +233,10 @@ regPost('雪絨蛾|冰凍羽擊', (state, aIdx, pool) => {
       s = addLog(s, `冰凍羽擊：${pool.get(b.cardId)?.name ?? '?'}｜${g.reason}（不受傷害）`, aIdx);
     }
   }
-  s = updatePlayer(s, dIdx, p => {
-    const newActive = p.active
-      ? { ...p.active, damage: (p.active.damage ?? 0) + (blockedActive ? 0 : 20) }
-      : null;
-    const newBench = p.bench.map(b => ({ ...b, damage: (b.damage ?? 0) + (benchBlocked.has(b.iid) ? 0 : 20) }));
-    return { ...p, active: newActive, bench: newBench };
-  });
+  s = updatePlayer(s, dIdx, p => ({
+    ...p,
+    bench: p.bench.map(b => ({ ...b, damage: (b.damage ?? 0) + (benchBlocked.has(b.iid) ? 0 : 20) })),
+  }));
   // 睡眠走 statusPost — 內含薄霧 / 硬岩 / 皇帝之勢 / 抵抗之幕 / 泡沫 / 祭典會場 / 憨憨臉 全套檢查
   s = statusPost('asleep')(s, aIdx, pool);
   return s;

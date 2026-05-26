@@ -7593,7 +7593,9 @@
           {/each}
         </div>
         <div class="sel-footer">
-          <button class="btn-act" onclick={skipRocketCommand}>不複製（傷害 0）</button>
+          <!-- v5.168：移除「不複製（傷害 0）」按鈕——玩家可任意取消改打然後翻 10 張無限資訊的問題。
+               卡面「若希望」原本允許 0 damage，但實作上玩家若已 commit 招式應強制選 1 招使用。
+               若不想複製可按「取消（改用其他招式）」回去選別的招式。 -->
           <button class="btn-act secondary" onclick={cancelRocketCommand}>取消（改用其他招式）</button>
         </div>
       </div>
@@ -9454,6 +9456,8 @@
     display: flex; flex-direction: column;
     box-shadow: 0 6px 24px rgba(0,0,0,.5);
     overflow: hidden;
+    /* v5.168：手機雙擊不放大瀏覽器頁面（玩家回報雙擊後 viewport zoom 卡住關不掉） */
+    touch-action: manipulation;
   }
   .chat-panel-header {
     background: #252535; padding: .55rem .85rem;
@@ -9461,10 +9465,14 @@
     display: flex; justify-content: space-between; align-items: center;
     cursor: move; user-select: none; touch-action: none;
     border-bottom: 1px solid #3a3a4a;
+    /* v5.168：sticky top 確保 header (含 X 按鈕) 永遠在頂部不被內容捲走 */
+    position: sticky; top: 0; z-index: 50; flex-shrink: 0;
   }
   .chat-panel-close {
     background: none; border: none; color: #aabbcc; font-size: 1.4rem;
     cursor: pointer; padding: 0 .3rem; line-height: 1;
+    /* v5.168：確保 X 按鈕永遠在最上層，玩家絕對點得到 */
+    position: relative; z-index: 100;
   }
   .chat-panel-close:hover { color: #fff; }
   .chat-panel-messages {
@@ -9486,11 +9494,11 @@
       top: max(env(safe-area-inset-top, 20px), 40px);
       bottom: max(env(safe-area-inset-bottom, 12px), 12px);
       width: auto; height: auto;
-      max-height: 80vh;
+      /* v5.168：80vh → 55vh — 玩家回報手機版聊天室太高擋到牌面 */
+      max-height: 55vh;
       border-radius: 12px;
       border: 2px solid #4a4a6a;
-      /* 取消拖曳偏移：手機固定置中 */
-      transform: none !important;
+      /* v5.168：移除 transform: none !important — 允許手機版拖曳（與桌機同步） */
     }
     .chat-panel-header {
       cursor: default;

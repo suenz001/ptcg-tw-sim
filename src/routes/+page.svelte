@@ -265,6 +265,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.168</span> 🛠 4 bug 修補（Bug 2 / 4 / 7 / 8）— 深淵之瞳薄霧 / 高傲指令必選 / 冰凍羽擊管線 / 手機聊天室卡住</summary>
+        <ul>
+          <li><b>Bug 2 — 超級達克萊伊ex｜深淵之瞳忽略薄霧能量</b>：「使昏厥」是招式效果（attack-effect），但原 regPost 沒過 <code>canApplyEffectToTarget</code> guard。修：開頭加 guard，被擋時 log「招式效果免疫」。同類保護：皇帝之勢 / 抵抗之幕 / 全能硬殼 / 化石 都會擋。</li>
+
+          <li><b>Bug 4 — 火箭隊的貓老大ex｜高傲指令翻 10 張可取消</b>：UI 提供「不複製（傷害 0）」按鈕讓玩家可看完對手牌庫後選擇不打，等同無 cost 偷看對手牌庫 10 張 → abuse。修：移除該按鈕。玩家若不想複製可按「取消（改用其他招式）」回去選別的招式（不會洩漏資訊）。</li>
+
+          <li><b>Bug 7 — 雪絨蛾｜冰凍羽擊漏算道具+弱點</b>：原實作 regPre damage=0 + regPost 手動 active +20 → 完全跳過 mainline ATTACK 管線 → 寶可夢道具（猛攻手鐲對 ex +30）沒套。修：regPre 改 <code>damage=20 skipWeakRes=true</code>，active 走 mainline（自動含 tool bonus / 攻擊方加成）；regPost 只處理 bench +20（卡面「不計弱抗」故 raw）+ 對手戰鬥場睡眠。</li>
+
+          <li><b>Bug 8 — 手機聊天室雙擊放大卡住關不掉</b>：根因為瀏覽器雙擊縮放（zoom）導致 chat-panel 比 viewport 大、X 按鈕被截到螢幕外。修：
+            <ul>
+              <li><code>.chat-panel</code> 加 <code>touch-action: manipulation</code> — 禁用瀏覽器雙擊縮放（保留垂直滾動）</li>
+              <li><code>.chat-panel-header</code> 加 <code>position: sticky; top: 0; z-index: 50</code> — header（含 X 按鈕）永遠在頂部不被內容捲走</li>
+              <li><code>.chat-panel-close</code> 加 <code>position: relative; z-index: 100</code> — X 按鈕絕對在最上層可點</li>
+              <li>手機版 <code>max-height: 80vh → 55vh</code> — 玩家回報太高擋到牌面</li>
+              <li>手機版移除 <code>transform: none !important</code> — 允許手機版拖曳聊天室位置（與桌機同步）</li>
+            </ul>
+          </li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 7 處 ASSERT exact-match）／14（最小 patch — 每個 bug 只動必要區塊）／15（卡面 source of truth — Bug 2 薄霧/Bug 7 不計弱抗 都從卡面確認）／17（不做 AI 幻覺——所有修法都基於既有 helper：canApplyEffectToTarget、mainline ATTACK pipeline）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+
+          <li><b>剩餘 4 bug（v5.169+ 處理）</b>：Bug 1 AI 龐克練肌、Bug 3 蒼響ex 太晶、Bug 5 詛咒根 8 卡範圍、Bug 6 皮可西揮指 picker — 牽涉 ai.ts / 多卡 audit / 複製招式 picker 改寫，需更深 audit 後分批修。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.167</span> 🔧 revert v5.166 elseif — 修單機雙人 setup 卡住</summary>
         <ul>
           <li><b>玩家回報</b>：v5.166 更新後，單機雙人模式（兩個玩家都由真人操控）setup 完成後卡在「⏳ 等待對手完成設置 / mulligan 補抽…」提示，無法繼續。</li>
