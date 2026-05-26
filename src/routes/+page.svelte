@@ -304,6 +304,39 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.212</span> 祭典樂舞 pending UI 端視覺禁用 — 卡片直接灰、不可拖曳（接續 v5.211）</summary>
+        <ul>
+          <li><b>玩家反映</b>：v5.211 在 engine 端擋住 pending 期間的非 ATTACK/END_TURN 動作（dispatch 後 reject + log），但 UI 上卡片仍可點/拖。玩家要的是「視覺上就不能用」— 灰按鈕、不可拖曳。</li>
+          <li><b>修法</b>：在 6 個 UI helper 入口加 pending gate（return empty/false），UI 自動繼承「灰按鈕」狀態：
+            <ol>
+              <li><code>canRetreat</code>：撤退按鈕灰</li>
+              <li><code>getEvolvableTargets</code>：進化卡灰</li>
+              <li><code>getPlayableTrainers</code>：所有 trainer / 物品 / 道具 / 場地卡灰</li>
+              <li><code>getPlayableBasics</code>：基礎寶可夢不可放備戰</li>
+              <li><code>getPlayableFossils</code>：化石卡灰</li>
+              <li><code>getUsableAbilities</code>：所有特性按鈕灰</li>
+            </ol>
+            另外 <code>src/routes/game/+page.svelte</code> 兩處 UI inline derived 也加 gate：
+            <ol>
+              <li><code>canUseStadium</code> derived：🏟 使用場地按鈕灰</li>
+              <li>手牌 <code>canEnergy</code> inline：能量卡不可拖曳/click 附能</li>
+            </ol>
+          </li>
+          <li><b>視覺結果</b>：pending 期間玩家手牌、active/bench 特性按鈕、撤退按鈕、場地按鈕全灰；只有招式按鈕可點（且只能點同 attackIndex）+ 結束回合按鈕可點。</li>
+          <li><b>engine 端 v5.211 reject + log 保留</b>：作為 defense-in-depth；萬一 UI gate 漏一個地方仍會被 engine 擋下。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 14（單一 root cause）：6 個 engine helper 用同一個 pending check pattern</li>
+              <li>Rule 15（鏡射既有結構）：每個 helper 都仿照既有 pendingSelection / pendingPrize gate 位置寫</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
+              <li>Rule 4（tsc verify）</li>
+              <li>Rule 1（changelog 內 <code>&lt;</code> / <code>&gt;</code> / <code>&amp;&amp;</code> / <code>&#123;&#125;</code> 跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.211</span> 祭典樂舞改「手動」+ pending 期間鎖其他動作（撤回 v5.201 atomic 自動連打）</summary>
         <ul>
           <li><b>玩家反映</b>：v5.201 把祭典樂舞改成「第 1 次打完系統自動執行第 2 次」，但玩家其實可以選擇不打第 2 次。需求：第 1 次打完後玩家只能「再用相同招式 1 次」或「跳過攻擊（END_TURN）」，其他動作（附能、用支援者、場地、物品、道具、放寶可夢、撤退、進化、特性）全鎖。</li>

@@ -2206,7 +2206,9 @@
     game?.phase === 'playing' && game.turnPhase === 'main' &&
     !!game.activeStadium && !game.pendingSelection &&
     !(game.stadiumUsedThisTurn ?? [false,false])[myIdx] &&
-    !(stadiumCard && PASSIVE_STADIUMS.has(stadiumCard.name))
+    !(stadiumCard && PASSIVE_STADIUMS.has(stadiumCard.name)) &&
+    // v5.212：祭典樂舞 pending 期間禁用場地卡
+    !(game.festivalDancePendingSecondAttack && game.festivalDancePendingSecondAttack.idx === myIdx)
   );
 
   // 線上模式 / AI 模式：是否輪到玩家行動
@@ -6624,7 +6626,7 @@
           {@const isTrainerCard=c.supertype==='Trainer'}
           {@const isToolCard=c.supertype === 'Trainer' && c.subtype === 'PokemonTool'}
           {@const isEvolutionCard=c.supertype==='Pokemon'&&!!c.evolvesFrom}
-          {@const canEnergy=isEnergyCard&&game?.phase==='playing'&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()&&!(c.tags?.includes('ACE SPEC')&&aceCancelActiveLocal)}
+          {@const canEnergy=isEnergyCard&&game?.phase==='playing'&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()&&!(c.tags?.includes('ACE SPEC')&&aceCancelActiveLocal)&&!(game?.festivalDancePendingSecondAttack && game.festivalDancePendingSecondAttack.idx===myIdx)}
           {@const canBasicPlay=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()&&game?.phase==='playing'}
           <!-- v5.138：mulligan 補抽後也允許加備戰（限基礎，與 setup 一致；engine BENCH_POKEMON gate 把關） -->
           {@const canBasicSetup=isBasicCard&&game?.phase==='setup'&&isMyTurn()&&(!game?.setupDone[myIdx] || !!game?.mulliganPostBenchOpen?.[myIdx])}

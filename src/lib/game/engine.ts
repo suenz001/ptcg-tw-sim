@@ -7262,6 +7262,9 @@ export function getEvolvableTargets(
   pool: Map<string, Card>
 ): Array<{ fromIid: string; toIids: string[] }> {
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
+  // v5.212：祭典樂舞第 2 次招式 pending 期間禁止進化
+  if (state.festivalDancePendingSecondAttack
+      && state.festivalDancePendingSecondAttack.idx === state.activePlayerIndex) return [];
   const player = state.players[state.activePlayerIndex];
 
   // v2.264：UI/AI 鏡射 engine 的 cantEvolveThisTurn gate（line 1314）。
@@ -7599,6 +7602,9 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
 }
 
 export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
+  // v5.212：祭典樂舞第 2 次招式 pending 期間禁止撤退
+  if (state.festivalDancePendingSecondAttack
+      && state.festivalDancePendingSecondAttack.idx === state.activePlayerIndex) return false;
   const cost = getRetreatCost(state, pool);
   if (cost === null) return false;
   const player = state.players[state.activePlayerIndex];
@@ -7642,6 +7648,9 @@ export function getRetreatBlockReason(state: GameState, pool: Map<string, Card>)
 export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): string[] {
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
   if (state.pendingSelection) return [];
+  // v5.212：祭典樂舞第 2 次招式 pending 期間禁止使用 trainer 卡（支援者/物品/道具/場地）
+  if (state.festivalDancePendingSecondAttack
+      && state.festivalDancePendingSecondAttack.idx === state.activePlayerIndex) return [];
   const player = state.players[state.activePlayerIndex];
   return player.hand
     .filter(inst => {
@@ -7708,6 +7717,9 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
 export function getPlayableBasics(state: GameState, pool: Map<string, Card>): string[] {
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
   if (state.pendingSelection) return [];
+  // v5.212：祭典樂舞第 2 次招式 pending 期間禁止放基礎寶可夢到備戰
+  if (state.festivalDancePendingSecondAttack
+      && state.festivalDancePendingSecondAttack.idx === state.activePlayerIndex) return [];
   const player = state.players[state.activePlayerIndex];
   // v2.136 零之大空洞：場上有太晶寶可夢時上限可達 8
   if (player.bench.length >= getBenchLimit(state, state.activePlayerIndex, pool)) return [];
@@ -7729,6 +7741,9 @@ export function getPlayableBasics(state: GameState, pool: Map<string, Card>): st
  */
 export function getPlayableFossils(state: GameState, pool: Map<string, Card>): string[] {
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
+  // v5.212：祭典樂舞第 2 次招式 pending 期間禁止放化石
+  if (state.festivalDancePendingSecondAttack
+      && state.festivalDancePendingSecondAttack.idx === state.activePlayerIndex) return [];
   if (state.pendingSelection) return [];
   const aIdx = state.activePlayerIndex;
   const player = state.players[aIdx];
@@ -7762,6 +7777,9 @@ export function getUsableAbilities(
 ): Array<{ iid: string; abilityIndex: number; pokemonName: string; abilityName: string }> {
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return [];
   if (state.pendingSelection) return [];
+  // v5.212：祭典樂舞第 2 次招式 pending 期間禁止使用特性
+  if (state.festivalDancePendingSecondAttack
+      && state.festivalDancePendingSecondAttack.idx === state.activePlayerIndex) return [];
   const player = state.players[state.activePlayerIndex];
   const allPokes: CardInstance[] = [
     ...(player.active ? [player.active] : []),
