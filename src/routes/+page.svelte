@@ -304,6 +304,45 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.214</span> 4 bug 集中修：卡娜莉 filter / 麻麻羅網 雷能量 / 急速飛行 first-turn / 詛咒根 AI 卡死</summary>
+        <ul>
+          <li><b>Bug 1 — 卡娜莉</b>：可任選 4 隻寶可夢，卡面應限【雷】屬性。
+            <ul>
+              <li><b>根因</b>：reg <code>validIids</code> 算法正確，但 UI <code>+page.svelte</code> <code>f === 'Pokemon'</code> filter 沒套 <code>validIids</code> intersect。</li>
+              <li><b>修法</b>：仿 Evolution 分支加 <code>validIids</code> intersect。</li>
+            </ul>
+          </li>
+          <li><b>Bug 2 — 電蜘蛛 麻麻羅網</b>：附【雷】能量仍只 50 點（應 +80 = 130）。
+            <ul>
+              <li><b>根因</b>：regPre 用 <code>pokemonType === 'Lightning'</code>，但能量卡 JSON <code>pokemonType = null</code> → 永遠 false。</li>
+              <li><b>修法</b>：改用既有 <code>isEnergyOfType</code> helper（含【X】name fallback）。</li>
+            </ul>
+          </li>
+          <li><b>Bug 3 — 急速飛行 first-turn</b>：卡璞・鳴鳴急速飛行 + 信使鳥急速之禮應該先攻第 1 回合也可用。
+            <ul>
+              <li><b>audit 結果</b>：全卡池此標記共 2 招。原 engine first-turn bypass 只看美洛耶塔ex。</li>
+              <li><b>修法</b>：新增 <code>FIRST_TURN_USABLE_ATTACKS</code> Set 白名單；engine ATTACK + getAvailableAttacks 雙路徑加白名單 bypass。</li>
+            </ul>
+          </li>
+          <li><b>Bug 4 — 朽木妖詛咒根 vs 烏鴉頭頭 AI 死循環</b>：AI 卡住。
+            <ul>
+              <li><b>根因</b>：詛咒根設 <code>cantAttachEnergyThisTurn</code>，engine ATTACH_ENERGY reject 但 ai.ts L160 主路徑（dragapult else）<b>沒檢查此 flag</b>。v5.151 已修 fire/psy/dark/dragapult fallback 3 處，漏這個主路徑。</li>
+              <li><b>修法</b>：L160 attach 加 <code>!target.cantAttachEnergyThisTurn</code> check。</li>
+            </ul>
+          </li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 17（按卡面/規則驗證）：4 bug 修法都基於 JSON 卡面 + 既有 helper</li>
+              <li>Rule 14（單一 root cause）：Bug 4 補 v5.151 漏掉的最後一處路徑</li>
+              <li>Rule 15（鏡射既有結構）：Bug 1 仿 Evolution / Bug 2 用 isEnergyOfType / Bug 3 仿 hasMeloettaExDebut / Bug 4 仿 v5.151</li>
+              <li>Rule 7c（同類 audit）：Bug 3 全卡池 audit 確認只 2 招符合；Bug 4 audit AI 所有 ATTACH_ENERGY 入口</li>
+              <li>Rule 11/11c（Python pipeline / 不 git status）/ Rule 4（tsc verify）/ Rule 1（changelog 跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.213</span> 化隱漏擋中毒等狀態附加 — statusPost 改用 unified defense helper</summary>
         <ul>
           <li><b>玩家報告</b>：擁有特性「化隱」的詛咒娃娃，被對手「火箭隊的小拉達｜險惡門牙」攻擊後仍被【中毒】。化隱卡面：「這隻寶可夢不會受到對手的招式或特性的效果。」狀態（中毒/灼傷/睡眠/混亂/麻痺）屬於招式效果，應被擋。</li>

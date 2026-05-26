@@ -2486,7 +2486,13 @@
             return true;
           }
           if (f === 'PsychicBasic') return card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Psychic';
-          if (f === 'Pokemon')    return card.supertype === 'Pokemon';
+          if (f === 'Pokemon') {
+            if (card.supertype !== 'Pokemon') return false;
+            // v5.214 Bug 1：卡娜莉等用 filter='Pokemon'+validIids 限制屬性 — 加 intersect (仿 v4.976 Evolution 分支)
+            const validIidsPoke = pendingSelection?.params?.validIids as string[] | undefined;
+            if (validIidsPoke && !validIidsPoke.includes(c.iid)) return false;
+            return true;
+          }
           if (f === 'Energy')     return card.supertype === 'Energy';
           if (f === 'BasicEnergy') return card.supertype === 'Energy' && card.subtype === 'Basic';
           // v2.162：基本能量但已選的屬性要排除（伊布｜鮮豔捕捉）

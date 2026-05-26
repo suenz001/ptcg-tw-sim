@@ -176,7 +176,9 @@ export function getAIAction(
         return ec.pokemonType === targetType ||
           ec.name.includes(`【${targetType}】`);
       }) ?? energyCandidates[0]; // 没有匹配的就用第一张
-      if (energyInHand) {
+      // v5.214 Bug 4：target 有 cantAttachEnergyThisTurn (詛咒根等) → 跳過避免 AI 死循環
+      //   v5.151 已修 fire/psy/dark/dragapult fallback 3 處，這個主路徑漏修。
+      if (energyInHand && !target.cantAttachEnergyThisTurn) {
         return { type: 'ATTACH_ENERGY', energyIid: energyInHand.iid, targetIid: target.iid };
       }
       } // v5.151: close target null check else block

@@ -236,6 +236,14 @@ export function canTogekissMiracleKissTrigger(
 // hook：engine.ts ATTACK handler 與 getAvailableAttacks 的 first-turn gate，
 //   增加 bypass：attacker.active 是美洛耶塔ex 且擁有「出道演出」特性 → 解除限制。
 // ════════════════════════════════════════════════════════════════════════════
+// v5.214 Bug 3：招式名稱白名單 — 卡面標記「這個招式在先攻玩家的最初回合也可使用」
+//   audit 全卡池共 2 招：信使鳥|急速之禮 + 卡璞・鳴鳴|急速飛行。
+//   engine.ts ATTACK + getAvailableAttacks 雙路徑檢查此白名單，bypass first-turn gate。
+export const FIRST_TURN_USABLE_ATTACKS = new Set<string>([
+  '急速之禮',    // 信使鳥
+  '急速飛行',    // 卡璞・鳴鳴
+]);
+
 export function hasMeloettaExDebut(
   inst: CardInstance | null | undefined,
   pool: Map<string, Card> | undefined,

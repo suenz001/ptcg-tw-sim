@@ -5206,10 +5206,12 @@ regPre('師父鼬|疾風迴旋', (state, aIdx, _pool) => {
 });
 
 // 若這隻寶可夢身上附有【雷】能量卡 → +80
+// v5.214 Bug 2：原 pokemonType==='Lightning' 永遠 false（能量卡 JSON pokemonType=null）。
+//   改用既有 isEnergyOfType helper（含「【X】」name fallback），基本/特殊雷能量都正確識別。
 regPre('電蜘蛛|麻麻羅網', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 50 };
-  const has = att.energyAttached.some(e => pool.get(e.cardId)?.pokemonType === 'Lightning');
+  const has = att.energyAttached.some(e => isEnergyOfType(pool.get(e.cardId), 'Lightning'));
   if (has) {
     return { state: addLog(state, '麻麻羅網：附有【雷】能量 → +80', aIdx), damage: 130 };
   }

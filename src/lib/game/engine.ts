@@ -69,6 +69,7 @@ import {
   canRelicanthDiverCatchTrigger,
   canTogekissMiracleKissTrigger,
   hasMeloettaExDebut,
+  FIRST_TURN_USABLE_ATTACKS,
   magearnaAutoHealAmount,
 } from './effects/cards/v3000_g3_wave2';
 // v3.08 Deferred Wave C helpers — 古空棘魚｜潛入記憶（進化前招式擴展）
@@ -3799,7 +3800,14 @@ function handlePlaying(
     // v3.0 美洛耶塔ex｜出道演出 — 此寶可夢可在先手第 1 回合使用招式（解除限制）
     const meloettaBypassFirstTurn = state.isFirstTurn && aIdx === state.firstPlayerIdx
       && hasMeloettaExDebut(attacker.active, pool);
-    if (state.isFirstTurn && aIdx === state.firstPlayerIdx && !meloettaBypassFirstTurn) return state; // 先手第 1 回合不能攻擊
+    // v5.214 Bug 3：招式自身標記「在先攻玩家的最初回合也可使用」（信使鳥|急速之禮 / 卡璞・鳴鳴|急速飛行）
+    let attackBypassFirstTurn = false;
+    if (state.isFirstTurn && aIdx === state.firstPlayerIdx && attacker.active) {
+      const atks_ft = getEffectiveAttacks(state, attacker.active, pool);
+      const atkName_ft = atks_ft[action.attackIndex]?.atk.name ?? '';
+      if (FIRST_TURN_USABLE_ATTACKS.has(atkName_ft)) attackBypassFirstTurn = true;
+    }
+    if (state.isFirstTurn && aIdx === state.firstPlayerIdx && !meloettaBypassFirstTurn && !attackBypassFirstTurn) return state; // 先手第 1 回合不能攻擊
     if (!attacker.active) return state;
     if (!defender.active) return state;
 
@@ -7193,9 +7201,18 @@ export function getAvailableAttacks(
 ): number[] {
   if (state.turnPhase !== 'main') return [];
   // v3.0 美洛耶塔ex｜出道演出 — 此寶可夢可在先手第 1 回合使用招式（解除 UI 限制）
+  // v5.214 Bug 3：招式名稱白名單（信使鳥|急速之禮 / 卡璞・鳴鳴|急速飛行）也能用
   if (state.isFirstTurn && state.activePlayerIndex === state.firstPlayerIdx) {
     const player0 = state.players[state.activePlayerIndex];
-    if (!hasMeloettaExDebut(player0.active, pool)) return [];
+    if (!hasMeloettaExDebut(player0.active, pool)) {
+      // 非美洛耶塔 — 只允許白名單招式 indices
+      if (!player0.active) return [];
+      const atks_uft = getEffectiveAttacks(state, player0.active, pool);
+      const whitelistIdx = atks_uft
+        .map((e, i) => FIRST_TURN_USABLE_ATTACKS.has(e.atk.name) ? i : -1)
+        .filter(i => i >= 0);
+      return whitelistIdx;
+    }
   }
   const player = state.players[state.activePlayerIndex];
   if (!player.active) return [];
