@@ -19,6 +19,8 @@ import {
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard,
   TOOL_ATTACK_BONUS, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
   JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
+  // v5.190：中立中心對非規則寶可夢免疫招式傷害（玩家回報奧利瓦ex 油之機關槍）
+  wouldNeutralCenterBlock,
 } from '../../effects';
 import { isBasicEnergyOfType, getEffectiveHP } from '../../engine';  // v5.091
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
@@ -624,6 +626,18 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
     //   油之機關槍卡面：「不計算弱點・抵抗力，造成其選擇次數×20 點傷害」— 屬於【招式傷害 attack-damage】，
     //   不是【招式效果 attack-effect】。薄霧能量 / 對戰圓形 / 皇帝之勢 / 硬岩能量 / 抵抗之幕 等只擋招式效果，不擋傷害。
     //   玩家回報：奧利瓦 vs 附【薄霧能量】寶可夢 → 油之機關槍對其無效（誤判）。
+    // v5.190：加中立中心 check — 對 active+bench 都擋（奧利瓦ex 是規則寶可夢，對非規則寶可夢應該擋）
+    //   玩家回報：場上有中立中心時，奧利瓦ex 油之機關槍應該對非規則寶可夢都不會受到傷害
+    //   既有實作 active target 完全沒檢查中立中心 → bug
+    const attackerInst = s.players[actorIdx].active;
+    const attackerCard = attackerInst ? pool.get(attackerInst.cardId) : undefined;
+    if (wouldNeutralCenterBlock(s, pool, attackerCard, targetCard)) {
+      if (!blockedTargetsOO.has(iid)) {
+        blockedTargetsOO.add(iid);
+        s = addLog(s, `${label}：${targetCard?.name ?? '?'} 中立中心競技場 效果（免疫此招式傷害）`, actorIdx);
+      }
+      continue;
+    }
     // v3.993 招式傷害免疫（attack-damage — only bench；active 不受花之帷幔保護）
     if (defender.active?.iid !== iid) {
       const guardOOdmg = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-damage');

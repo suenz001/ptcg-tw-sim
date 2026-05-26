@@ -265,6 +265,36 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.190</span> 3 Bug：道具拆除器只能選 1 張 + 不公印章重洗 log + 油之機關槍中立中心免疫</summary>
+        <ul>
+          <li><b>Bug A：道具拆除器只能選 1 張</b>
+            <ul>
+              <li>玩家回報：道具拆除器卡面「選擇最多 2 張」但系統只能選 1 張</li>
+              <li>根因：effects.ts L14328 entry <code>params.picksLeft: 1</code>，resolver L14386 計算 <code>(1 ?? 1) - 1 = 0</code> → L14387 <code>if (picksLeft &gt;= 1)</code> 不觸發 → 第 2 個 modal 不開</li>
+              <li>修：<code>picksLeft: 1 → 2</code>。第 1 張 pick 完 <code>2-1=1</code> 觸發 chain；第 2 張 pick 完從 <code>sec modal picksLeft: 0</code> 計算 <code>0-1=-1</code> 結束</li>
+            </ul>
+          </li>
+          <li><b>Bug B：不公印章「沒重洗」</b>
+            <ul>
+              <li>玩家回報：前一回合用暗碼迷的解讀放 2 張到牌庫上方，使用不公印章後還是抽到那兩張</li>
+              <li>audit：items_misc.ts L482-490 reg + _shared.ts L748-754 returnHandToDeck 使用 Fisher-Yates shuffle（engine.ts L511 / _shared.ts L651），邏輯實際正確有打散</li>
+              <li>原因推測：玩家 5 張抽到原本暗碼迷放的 2 張造成主觀「沒重洗」印象</li>
+              <li>修法：加詳細 log 顯示「自己手牌 N 張 + 牌庫 M 張 → 重洗為 X 張牌庫」+「對手手牌 N 張 + 牌庫 M 張 → 重洗為 X 張牌庫」，讓玩家在對戰 log 看到確實有重洗</li>
+            </ul>
+          </li>
+          <li><b>Bug C：中立中心 + 油之機關槍對非規則寶可夢沒擋</b>
+            <ul>
+              <li>玩家回報：場上有中立中心時，對手奧利瓦ex 油之機關槍應該對我方所有非規則寶可夢都不會受到傷害</li>
+              <li>卡面對應：中立中心「自方所有非規則寶可夢不受對手寶可夢招式的傷害」+ 油之機關槍「不計算弱點抵抗力，造成其選擇次數×20 點傷害」屬 attack-damage</li>
+              <li>根因：mega_decks.ts olive-oil-distribute resolver L628 只在 <code>defender.active?.iid !== iid</code> 條件下跑 resolveBenchGuard。active target 完全沒檢查中立中心 → 中立中心對 active 非規則寶可夢沒擋</li>
+              <li>修：import wouldNeutralCenterBlock + 在 active+bench 兩種 target 都先檢查中立中心。奧利瓦ex 是規則寶可夢，對非規則 target 必擋傷害</li>
+            </ul>
+          </li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 4 處 ASSERT exact-match）／14（最小 patch — A: 1 處數字改；B: 加 log；C: 1 處 import + 1 個 check block）／17（不做 AI 幻覺 — A: 卡面「最多 2 張」字面確認 + 流程追到 picksLeft 計算 bug；B: audit Fisher-Yates shuffle 邏輯確認正確，但加 log 排除玩家誤會；C: grep wouldNeutralCenterBlock 確認既存 helper 不重新實作）／1（changelog audit + svelte.compile pre-check pass）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.189</span> Hotfix：手機版 mulligan 補抽完手牌後卡住</summary>
         <ul>
           <li>玩家反饋：手機版補抽完手牌後卡住，沒有任何按鈕可按</li>

@@ -481,9 +481,17 @@ regG('不公印章', (st, idx) => {
 });
 reg('不公印章', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
-  st = addLog(st, '不公印章：雙方洗手牌重抽（自己 5 張，對手 2 張）', idx);
+  // v5.190：加詳細 log 顯示重洗前後牌庫張數，方便玩家確認確實有重洗
+  //   (玩家回報「沒重洗」— audit shuffle Fisher-Yates 邏輯正確，加 log 排除誤會)
+  const myHandBefore = st.players[idx].hand.length;
+  const myDeckBefore = st.players[idx].deck.length;
+  const oppHandBefore = st.players[oppIdx].hand.length;
+  const oppDeckBefore = st.players[oppIdx].deck.length;
+  st = addLog(st, '不公印章：雙方手牌洗回牌庫並重洗，然後自己抽 5 張、對手抽 2 張', idx);
   st = returnHandToDeck(st, idx);
+  st = addLog(st, `不公印章：自己手牌 ${myHandBefore} 張 + 牌庫 ${myDeckBefore} 張 → 重洗為 ${st.players[idx].deck.length} 張牌庫`, idx);
   st = returnHandToDeck(st, oppIdx);
+  st = addLog(st, `不公印章：對手手牌 ${oppHandBefore} 張 + 牌庫 ${oppDeckBefore} 張 → 重洗為 ${st.players[oppIdx].deck.length} 張牌庫`, idx);
   st = drawCards(st, idx, 5);
   st = drawCards(st, oppIdx, 2);
   return st;

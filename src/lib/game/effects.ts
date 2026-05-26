@@ -14473,7 +14473,10 @@ reg('道具拆除器', (st, idx, pool) => {
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'tool-remover-pick',
-    params: { label: '道具拆除器（第 1 張）', options: opts, picksLeft: 1 },
+    // v5.190：picksLeft: 1 → 2 (卡面「最多 2 張」)
+    //   原 1 → resolver L14386 (1-1=0) → if (picksLeft >= 1) 不觸發 → 第 2 個 modal 不開
+    //   2 → 第 1 張 pick 完 picksLeft=1 → 開第 2 個 modal → 第 2 張 pick 完 0 結束
+    params: { label: '道具拆除器（第 1 張，最多 2 張）', options: opts, picksLeft: 2 },
   });
 });
 regR('tool-remover-pick', (state, aIdx, iids, params, pool) => {
