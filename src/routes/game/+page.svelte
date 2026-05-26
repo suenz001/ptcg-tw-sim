@@ -5768,7 +5768,11 @@
                 {@const s = roomData.seats[i]}
                 {@const isMine = mySeatIdx === i}
                 {@const myDeckCount = countDeckCards(s.deckEntries)}
-                {@const hasValidDeck = myDeckCount === 60}
+                <!-- v5.217：線上 seat 也加 G 標驗證（依現行 PTCG 規則，validateDeck 含 reprint exception） -->
+                {@const seatDeckObj = ({ id: '', name: '', entries: s.deckEntries } as Deck)}
+                {@const seatIssues = (myDeckCount === 60 && pool.size > 0) ? validateDeck(seatDeckObj, pool).issues : []}
+                {@const seatHasIllegalMark = seatIssues.some(x => /為 [A-Z]+ 標/.test(x))}
+                {@const hasValidDeck = myDeckCount === 60 && !seatHasIllegalMark}
                 <div class="seat battle-seat {s.uid ? 'taken' : 'empty'} {isMine ? 'mine' : ''} {s.ready ? 'ready' : ''}">
                   <div class="seat-label">對戰玩家 {i + 1}</div>
                   {#if s.uid}
@@ -5791,6 +5795,9 @@
                       </select>
                       {#if hasValidDeck}
                         <div class="seat-deck-info">✓ 牌組已套用（60 張）</div>
+                      {:else if myDeckCount === 60 && seatHasIllegalMark}
+                        <!-- v5.217：60 張到位但含 G 標等非標準賽卡 → 黃字警告 -->
+                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 含有 G 標</div>
                       {:else if myDeckId && myDeckCount === 0}
                         <div class="seat-deck-info" style="color:#ffcc66;">套用中⋯</div>
                       {:else if myDeckId && myDeckCount < 60}
@@ -5813,9 +5820,12 @@
                         <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="second" checked={s.firstChoicePreference === 'second'} disabled={s.ready} onchange={() => roomCode && setSeatFirstChoice(roomCode, 'second').catch(console.error)} /><span>🛡️ 後攻</span></label>
                       </div>
                     {:else}
-                      <!-- 別人坐：只顯示狀態（v3.38：補張數警告） -->
+                      <!-- 別人坐：只顯示狀態（v3.38：補張數警告；v5.217：補 G 標警告） -->
                       {#if hasValidDeck}
                         <div class="seat-deck-info">✓ 已選牌組（60 張）</div>
+                      {:else if myDeckCount === 60 && seatHasIllegalMark}
+                        <!-- v5.217：60 張到位但含 G 標等非標準賽卡 → 黃字警告 -->
+                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 牌組含有 G 標</div>
                       {:else if myDeckCount > 0 && myDeckCount < 60}
                         <div class="seat-deck-info" style="color:#ff8866;">⚠ 牌組不足 60 張（{myDeckCount} 張）</div>
                       {:else if myDeckCount > 60}

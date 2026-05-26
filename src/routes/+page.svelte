@@ -304,6 +304,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.217</span> 線上對戰房間 seat 也加 G 標警告（接續 v5.216 本機 lobby）</summary>
+        <ul>
+          <li><b>玩家報告</b>：v5.216 本機/AI lobby 加了「⚠ 含有 G 標」黃字警告，但線上對戰房間的 seat（顯示「✓ 牌組已套用（60 張）」處）漏修，玩家可帶 G 標牌組進對戰。</li>
+          <li><b>修法</b>：
+            <ol>
+              <li>seat <code>{@const}</code> 區塊新增 <code>seatDeckObj</code> / <code>seatIssues</code> / <code>seatHasIllegalMark</code></li>
+              <li><code>hasValidDeck</code> 加上 <code>&amp;&amp; !seatHasIllegalMark</code> → 「準備完成」按鈕同步 block</li>
+              <li>自己 seat UI 加分支：60 張到位 + G 標 → <code>⚠ 含有 G 標</code></li>
+              <li>別人 seat UI 加分支：對手帶 G 標牌組時顯示「⚠ 牌組含有 G 標」</li>
+            </ol>
+          </li>
+          <li><b>例外保留</b>：基本能量 + Reprint exception 10 張仍合法（依現行 PTCG 規則，與 v5.216 邏輯一致）。</li>
+          <li><b>影響</b>：線上連線對戰房間的兩個 seat 都會即時顯示，「準備完成」按鈕在含 G 標時被 disabled。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 14（單一 root cause）：複用 validateDeck issues + 同 regex「為 X 標」偵測</li>
+              <li>Rule 15（鏡射既有結構）：完全沿用 v5.216 本機 lobby 的 derive + UI 模式</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）/ Rule 4（tsc verify）/ Rule 1（changelog 跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.216</span> 牌組選擇下方加 G 標警告（黃字）— 鏡射「不足 60 張」UI 樣式</summary>
         <ul>
           <li><b>玩家澄清</b>：v5.215 把驗證加在「對戰開始」按下後的 alert，但實際需求是「選牌組時下方那塊 ✓ 60 張 顯示框」就要顯示 G 標警告（黃字），跟「⚠ 不足 60 張」一樣的位置與樣式。</li>
