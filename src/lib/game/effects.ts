@@ -7079,19 +7079,14 @@ regPre('多龍巴魯托ex|幻影奇襲', (state, _aIdx, _pool) => ({ state, dama
 regPost('多龍巴魯托ex|幻影奇襲', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) return state;
-  // v4.990: 先 dry-run 過濾 immune bench iids（化隱 / 球形盾牌 / 對戰圓形 / 太晶 等）
-  //   避免 minCount=6 但全部 blocked → picker 永遠湊不到 advance → 卡死。
+  // v5.187：拿掉 entry pre-filter — 玩家反饋希望「即使被免疫也能放指示物，只是不造成傷害」。
+  //   原 v4.990 pre-filter（化隱 / 球形盾牌 / 對戰圓形 / 太晶 等）會讓 modal 不出現 → UX 不佳。
+  //   resolver L7084 已有 per-target check（v4.917）：immune target counter 消耗 + 不放 + log「無效」。
+  //   minCount=6 即使全免疫也不會卡死（counter 計入 placedThisBatch，v3.91 邏輯）。
+  //   picker UI 因此顯示所有 bench；玩家可選任何一隻，免疫者照 counter 消耗、實際 damage=0。
   const defender = state.players[dIdx];
-  const validIids: string[] = [];
-  for (const b of defender.bench) {
-    const bCard = pool.get(b.cardId);
-    const g = canApplyEffectToTarget(state, aIdx, b, bCard, 'attack-effect', pool, { isBench: true });
-    if (!g.blocked) validIids.push(b.iid);
-  }
-  if (validIids.length === 0) {
-    return addLog(state, '幻影奇襲：對手備戰全部免疫指示物放置，6 個指示物作廢', aIdx);
-  }
-  const s = addLog(state, '幻影奇襲：將 6 個傷害指示物自由分配到對手備戰寶可夢（必須全部放完，KO 後溢出指示物消耗）', aIdx);
+  const validIids: string[] = defender.bench.map(c => c.iid);
+  const s = addLog(state, '幻影奇襲：將 6 個傷害指示物自由分配到對手備戰寶可夢（必須全部放完，KO/免疫後溢出指示物消耗）', aIdx);
   return withPending(s, {
     type: 'damage-distribute',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
@@ -7233,16 +7228,8 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
   //   但保險起見仍把 minCount 改成跟 maxCount 相同，避免任何邊界 case 玩家少放。
   const nextRemaining = totalCounters - placedAfter;
   if (nextRemaining > 0 && s.players[dIdx].bench.length > 0) {
-    // v4.990: 重開 picker 前重新 dry-run filter（KO 後 bench 可能變動）
-    const reValidIids: string[] = [];
-    for (const b of s.players[dIdx].bench) {
-      const bCard = pool.get(b.cardId);
-      const g = canApplyEffectToTarget(s, actorIdx, b, bCard, 'attack-effect', pool, { isBench: true });
-      if (!g.blocked) reValidIids.push(b.iid);
-    }
-    if (reValidIids.length === 0) {
-      return addLog(s, `${label}：剩 ${nextRemaining} 個指示物無合法目標（全部免疫），作廢`, actorIdx);
-    }
+    // v5.187：拿掉 re-filter — 同 entry 邏輯，玩家可放在任何 bench，免疫者照 counter 消耗。
+    const reValidIids: string[] = s.players[dIdx].bench.map(c => c.iid);
     return withPending(s, {
       type: 'damage-distribute',
       actorIdx, sourcePlayerIdx: dIdx,
@@ -7253,7 +7240,7 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
         placedCounters: placedAfter,
         counterDamage,
         label,
-        validIids: reValidIids,  // v4.990
+        validIids: reValidIids,
       },
     });
   }

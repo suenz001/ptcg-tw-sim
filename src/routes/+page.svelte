@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.187</span> 修 v5.186：幻影奇襲 modal 應該開，免疫者照消耗 counter 但不造傷</summary>
+        <ul>
+          <li>玩家反饋 v5.186：「應該還是要能放傷害指示物（啟動 modal），只是放了沒辦法造成傷害而已，不用特別擋掉」</li>
+          <li>根因：effects.ts L7005-7016 幻影奇襲 entry 在開 picker 前對 bench 跑 canApplyEffectToTarget pre-filter。v5.186 抵抗之幕 snapshot 啟用後，急凍鳥 KO 時所有 Basic「火箭隊的」備戰全部被擋 → validIids=[] → entry 直接 return「全部免疫作廢」→ picker 不開</li>
+          <li>修法：拿掉 entry + chain 兩處 pre-filter，picker 永遠開（除非 bench 空）。resolver L7084 既有 per-target check（v4.917）會在 apply 時擋免疫 target — counter 仍計入 placedThisBatch 消耗，但 damage 不放、log「該指示物無效」</li>
+          <li>效果：玩家用幻影奇襲打急凍鳥 → 急凍鳥被招式 KO → modal 開出 6 個指示物 picker → 任意分配到備戰 → 落到「火箭隊的」基礎寶可夢身上的指示物因 snapshot 仍記得抵抗之幕生效，counter 消耗但不傷；落到其他 Pokemon 正常造成 10 傷害</li>
+          <li>v5.186 的 <code>_attackTimeOppRocketVeil</code> snapshot infrastructure 保留（types/engine/effects 不動）— 只動 entry pre-filter，最小變動</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — 只動 entry/chain pre-filter，per-target apply 邏輯不動）／17（不做 AI 幻覺 — 確認 resolver L7084 v4.917 per-target check 已存在 + L7090 counter 消耗邏輯已存在 → 拿掉 entry pre-filter 行為自然如玩家期望）／1（changelog audit pass + svelte.compile pre-check）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.186</span> Bug：火箭隊的急凍鳥 抵抗之幕 被 KO 後對備戰失效</summary>
         <ul>
           <li>玩家回報：多龍巴魯托ex 幻影奇襲 攻擊戰鬥位火箭隊的急凍鳥 → 急凍鳥被傷害 KO → 同招式 6 個傷害指示物還是放到備戰寶可夢身上。規則上「招式效果同時 resolve」攻擊宣告當時抵抗之幕仍有效，備戰「火箭隊的」基礎寶可夢應免疫此招式效果</li>
