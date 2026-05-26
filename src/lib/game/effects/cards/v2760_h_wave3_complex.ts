@@ -99,10 +99,24 @@ regPre('皮可西|揮指', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = state.players[dIdx].active;
   if (!da) return { state: addLog(state, '揮指：對手戰鬥場無寶可夢', aIdx), damage: 0 };
-  const best = pickHighestAttack([da], pool, '皮可西|揮指');
+  // v5.178：讀 action.copyAttackChoice (UI rocketCommandPicker 帶) 讓玩家自選
+  //   - 有 choice + 匹配 da.iid + 招式有效 → 用該招式
+  //   - 否則 fallback 自動挑印刷最高（同高傲指令 v2680 L184-200 模式）
+  const choice = (action as { copyAttackChoice?: { pokeIid: string; attackIndex: number } } | undefined)?.copyAttackChoice;
+  let best: { cardName: string; attackName: string; damage: number } | null = null;
+  if (choice && choice.pokeIid === da.iid && choice.attackIndex >= 0) {
+    const daCard = pool.get(da.cardId);
+    const atk = daCard?.attacks?.[choice.attackIndex];
+    if (daCard && atk && atk.name && atk.name !== '揮指') {
+      const m = (atk.damage ?? '').match(/^(\d+)/);
+      best = { cardName: daCard.name!, attackName: atk.name, damage: m ? parseInt(m[1], 10) : 0 };
+    }
+  }
+  if (!best) best = pickHighestAttack([da], pool, '皮可西|揮指');
   if (!best) return { state: addLog(state, '揮指：對手戰鬥場無可複製招式', aIdx), damage: 0 };
   const copiedKey = `${best.cardName}|${best.attackName}`;
-  let s = addLog(state, `揮指：複製「${copiedKey}」`, aIdx);
+  const pickMode = choice ? '玩家選擇' : '自動挑印刷最高';
+  let s = addLog(state, `揮指：${pickMode}「${copiedKey}」`, aIdx);
   s = { ...s, pendingCopyAttackKey: copiedKey };
   const copiedPre = ATTACK_PRE.get(copiedKey);
   if (copiedPre) {

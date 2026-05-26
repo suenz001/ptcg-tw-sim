@@ -265,6 +265,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.178</span> Bug 6 修 皮可西|揮指 / 阿響的樹才怪|試著模仿 picker</summary>
+        <ul>
+          <li>玩家回報: 皮可西|揮指 / 試著模仿 簡易實裝 (自動挑印刷最高傷害招式), 玩家無法自選對手戰鬥場招式</li>
+          <li>修法 1 (engine 端): regPre 加 action.copyAttackChoice 讀取邏輯 (仿高傲指令 v2680 L184-200)。choice 匹配 da.iid + attackIndex 有效 → 用該招式; 否則 fallback 自動挑最高 (相容 AI 與舊客戶端)</li>
+          <li>修法 2 (UI 端): L3713 之前加 揮指/試著模仿 intercept, reuse rocketCommandPicker UI (pokeList=[對手戰鬥場 1 寶可夢]):
+            <ul>
+              <li>對手戰鬥場無寶可夢 / 無可複製招式 → dispatch (engine fail)</li>
+              <li>對手只 1 招 → 自動填跳過 picker</li>
+              <li>多招式 → 開 picker 讓玩家選</li>
+            </ul>
+          </li>
+          <li>試著模仿特殊: 擲幣若反面 → 0 傷害 (玩家選的 choice 浪費), 跟卡面語義一致</li>
+          <li>高傲指令已修 (v4.39+v5.174+v5.175 已完整), 此次只補揮指 / 試著模仿</li>
+          <li>Iron Rules: 11/11c/11e/11f/14/15(卡面「選擇 1 個...招式」=玩家選)/17/1</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.177</span> hotfix v5.176 - 補 canApplyEffectToTarget import</summary>
         <ul>
           <li>v5.176 wave3a-snipe-bench resolver 用 canApplyEffectToTarget 但 v2490 沒 import → vite build fail</li>

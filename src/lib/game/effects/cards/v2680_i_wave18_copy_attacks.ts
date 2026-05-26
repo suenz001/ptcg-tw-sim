@@ -95,10 +95,23 @@ regPre('阿響的樹才怪|試著模仿', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = r.state.players[dIdx].active;
   if (!da) return { state: addLog(r.state, '試著模仿：正面但對手戰鬥場無寶可夢', aIdx), damage: 0 };
-  const best = pickHighestAttack([da], pool, '阿響的樹才怪|試著模仿');
+  // v5.178：讀 action.copyAttackChoice (UI 端 picker 帶) 讓玩家自選
+  const choice = (action as { copyAttackChoice?: { pokeIid: string; attackIndex: number } } | undefined)?.copyAttackChoice;
+  let best: { cardName: string; attackName: string; damage: number } | null = null;
+  if (choice && choice.pokeIid === da.iid && choice.attackIndex >= 0) {
+    const daCard = pool.get(da.cardId);
+    const atk = daCard?.attacks?.[choice.attackIndex];
+    if (daCard && atk && atk.name && atk.name !== '試著模仿') {
+      const m = (atk.damage ?? '').match(/^(\d+)/);
+      best = { cardName: daCard.name!, attackName: atk.name, damage: m ? parseInt(m[1], 10) : 0 };
+    }
+  }
+  if (!best) best = pickHighestAttack([da], pool, '阿響的樹才怪|試著模仿');
   if (!best) return { state: addLog(r.state, '試著模仿：對手戰鬥場無可複製招式', aIdx), damage: 0 };
   const copiedKey = `${best.cardName}|${best.attackName}`;
-  return copyAttackPre(r.state, aIdx, pool, copiedKey, '試著模仿', best.damage, action);
+  const pickMode = choice ? '玩家選擇' : '自動挑印刷最高';
+  const sLog = addLog(r.state, `試著模仿：${pickMode}「${copiedKey}」`, aIdx);
+  return copyAttackPre(sLog, aIdx, pool, copiedKey, '試著模仿', best.damage, action);
 });
 regPost('阿響的樹才怪|試著模仿', copyAttackPost);
 

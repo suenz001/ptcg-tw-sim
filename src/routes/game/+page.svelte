@@ -3706,6 +3706,38 @@
       };
       return;
     }
+    // v5.178 皮可西|揮指 / 阿響的樹才怪|試著模仿 intercept：開 picker 讓玩家選對手戰鬥場招式
+    //   reuse rocketCommandPicker UI（pokeList = [對手戰鬥場 1 寶可夢]）
+    //   試著模仿擲幣後正面才用 choice，反面 0 傷害 (玩家選了但浪費)
+    if ((atk.name === '揮指' && sourceCardName === '皮可西') ||
+        (atk.name === '試著模仿' && sourceCardName === '阿響的樹才怪')) {
+      if (!game) return;
+      const oppActive = game.players[1 - myIdx].active;
+      if (!oppActive) {
+        dispatch(GameActions.attack(attackIndex));
+        return;
+      }
+      const oppCard = getCard(oppActive.cardId);
+      const oppAttacks = (oppCard?.attacks ?? []).filter(a => a.name && a.name !== atk.name);
+      if (oppAttacks.length === 0) {
+        dispatch(GameActions.attack(attackIndex));
+        return;
+      }
+      if (oppAttacks.length === 1) {
+        // 單一招式 → 自動填，跳過 picker
+        const idx = oppCard!.attacks!.findIndex(a => a.name === oppAttacks[0].name);
+        dispatch(GameActions.attack(attackIndex, undefined, { pokeIid: oppActive.iid, attackIndex: idx }));
+        return;
+      }
+      // 多招式 → 開 picker (含 top10All=[oppActive] 純展示)
+      rocketCommandPicker = {
+        sourceAttackIndex: attackIndex,
+        pokeList: [{ inst: oppActive, card: oppCard! }],
+        top10All: [{ inst: oppActive, card: oppCard! }],
+        revealOnly: false,
+      };
+      return;
+    }
     // v4.39 火箭隊的貓老大ex|高傲指令 intercept：peek 對手牌庫頂 10 張 → 列寶可夢的招式讓玩家選
     //   - 0 寶可夢 → 直接 dispatch（engine PRE 出 fail log）
     //   - 1 寶可夢 1 招 → 自動帶 copyAttackChoice（避免單一選項浪費 UX）
