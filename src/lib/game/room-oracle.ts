@@ -470,7 +470,8 @@ export async function checkAndAcceptReturnToRoom(roomCode: string): Promise<bool
       didReset = true;
       return {
         ...data,
-        status: 'waiting',
+        // v5.183: status 'waiting' → 'lobby' (同 rematch path, onRoom L4187 偵測)
+        status: 'lobby',
         gameState: null,
         seats: newSeats,
         returnRoomProposed: null,

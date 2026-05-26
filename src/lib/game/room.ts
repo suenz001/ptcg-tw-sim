@@ -768,8 +768,10 @@ export async function checkAndAcceptReturnToRoom(roomCode: string): Promise<bool
       if (!p[0] || !p[1]) return false;
       // 清空 gameState + 雙方 ready=false + status=waiting → 回房間選牌組介面
       const newSeats = data.seats.map(s => ({ ...s, ready: false }));
+      // v5.183: status 改 'lobby' 而非 'waiting' — onRoom L4187 偵測 status==='lobby' && !gameState
+      //   才會自動 game=null (跟 rematch 同 path)。'waiting' 會讓玩家卡死。
       tx.update(ref, {
-        status: 'waiting',
+        status: 'lobby',
         gameState: deleteField(),
         seats: newSeats,
         returnRoomProposed: deleteField(),

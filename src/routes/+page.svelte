@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.183</span> 修返回房間 3 處 — status lobby + 本機 game=null</summary>
+        <ul>
+          <li>玩家回報線上模式: 對方同意提議返回房間後並沒有返回, 還跳「提議返回房間失敗：game not in progress」</li>
+          <li>根因: v5.180 checkAndAcceptReturnToRoom 把 status 設 'waiting', 但 +page.svelte L4187 偵測的是 status==='lobby' && !gameState 才會自動 game=null (這是 rematch path)。'waiting' 偵測不到 → game 沒被清 → 玩家又點按鈕觸發 proposeReturnToRoom → status === 'playing' 已被改為 'waiting' → throw 'game not in progress'</li>
+          <li>修法 1: room.ts + room-oracle.ts checkAndAcceptReturnToRoom status 'waiting' → 'lobby' (同 rematch path)</li>
+          <li>修法 2: 本機/AI handleProposeReturnRoomButton 改 game=null (而非 navigate 回首頁)。Wilson 要求回到「本機雙人對戰 選牌組」介面 — game=null 後 game route 自動顯示對應 lobby (含選牌組)</li>
+          <li>確認 Oracle: room-oracle.ts 同步修, 仿 oracleTx pattern</li>
+          <li>Iron Rules: 11/11c/11e/11f/14(仿 rematch path)/17/1</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.182</span> hotfix v5.180 - room-oracle.ts 補 4 functions (Oracle build fail)</summary>
         <ul>
           <li>玩家報: Oracle redeploy fail: "proposeReturnToRoom" is not exported by room-oracle.ts</li>

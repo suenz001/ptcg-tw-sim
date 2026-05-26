@@ -4222,10 +4222,12 @@
         alert('提議返回房間失敗：' + (e?.message ?? e));
       });
     } else {
-      if (!confirm('確定要返回首頁重新選擇對戰模式嗎？目前對戰將結束。')) return;
+      // v5.183: 本機/AI 改 game=null 讓 game route 自動顯示對應 lobby (本機雙人選牌組 / AI lobby)
+      //   而非 navigate 回首頁。Wilson 要求回到「本機雙人對戰 選牌組」介面。
+      if (!confirm('確定要返回對戰模式選擇介面嗎？目前對戰將結束，可重新選擇牌組。')) return;
       aiThinking = false;
       if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; }
-      window.location.href = `${base}/`;
+      game = null;
     }
   }
   function handleAcceptOppReturnRoom() {
