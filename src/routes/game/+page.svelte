@@ -7593,10 +7593,12 @@
           {/each}
         </div>
         <div class="sel-footer">
-          <!-- v5.168：移除「不複製（傷害 0）」按鈕——玩家可任意取消改打然後翻 10 張無限資訊的問題。
-               卡面「若希望」原本允許 0 damage，但實作上玩家若已 commit 招式應強制選 1 招使用。
-               若不想複製可按「取消（改用其他招式）」回去選別的招式。 -->
-          <button class="btn-act secondary" onclick={cancelRocketCommand}>取消（改用其他招式）</button>
+          <!-- v5.169 修正 v5.168 — 玩家補充正確需求：
+               「不複製」必須保留：翻出 10 張可能沒寶可夢可選，或玩家不喜歡也應允許 0 傷害結束招式。
+               「取消（改用其他招式）」要拿掉：可回未攻擊狀態 → 翻 10 張偷看後改打別招 → abuse。
+               PTCG「若希望」= 「攻擊已宣告 → 看到結果 → 可選擇不複製（攻擊算完, damage=0）」
+               不能回到未攻擊狀態。 -->
+          <button class="btn-act" onclick={skipRocketCommand}>不複製（傷害 0，攻擊結束）</button>
         </div>
       </div>
     </div>

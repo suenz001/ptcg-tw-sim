@@ -265,6 +265,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.169</span> 🔧 修正 v5.168 — 高傲指令 picker 按鈕方向錯</summary>
+        <ul>
+          <li><b>玩家補充正確需求</b>：v5.168 移除「不複製」+ 保留「取消」是反的。正確應該：
+            <ul>
+              <li><b>保留</b>「不複製（傷害 0，攻擊結束）」：翻出 10 張可能無寶可夢 / 玩家不喜歡時必須有出口；damage=0 但攻擊已算完，符合 PTCG「若希望」語義。</li>
+              <li><b>移除</b>「取消（改用其他招式）」：此按鈕讓玩家回到未攻擊狀態 → 翻 10 張偷看後改打別招 → abuse 偷牌庫資訊。</li>
+            </ul>
+          </li>
+
+          <li><b>差異</b>：「不複製」= 攻擊已宣告，看到結果後選擇 0 damage 結束 ✓；「取消」= 回到未攻擊，能再選其他招式 ✗。前者符合 PTCG「若希望」語義，後者允許資訊洩漏。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純按鈕對調）／17（不做 AI 幻覺——基於玩家補充的精確需求，承認 v5.168 推測錯方向）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.168</span> 🛠 4 bug 修補（Bug 2 / 4 / 7 / 8）— 深淵之瞳薄霧 / 高傲指令必選 / 冰凍羽擊管線 / 手機聊天室卡住</summary>
         <ul>
           <li><b>Bug 2 — 超級達克萊伊ex｜深淵之瞳忽略薄霧能量</b>：「使昏厥」是招式效果（attack-effect），但原 regPost 沒過 <code>canApplyEffectToTarget</code> guard。修：開頭加 guard，被擋時 log「招式效果免疫」。同類保護：皇帝之勢 / 抵抗之幕 / 全能硬殼 / 化石 都會擋。</li>
