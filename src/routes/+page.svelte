@@ -304,6 +304,41 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.211</span> 祭典樂舞改「手動」+ pending 期間鎖其他動作（撤回 v5.201 atomic 自動連打）</summary>
+        <ul>
+          <li><b>玩家反映</b>：v5.201 把祭典樂舞改成「第 1 次打完系統自動執行第 2 次」，但玩家其實可以選擇不打第 2 次。需求：第 1 次打完後玩家只能「再用相同招式 1 次」或「跳過攻擊（END_TURN）」，其他動作（附能、用支援者、場地、物品、道具、放寶可夢、撤退、進化、特性）全鎖。</li>
+          <li><b>卡面再讀</b>（M5/SV6.json）：「若場上有『祭典會場』，則這隻寶可夢可使用持有的招式 2 次。」「使用」並非「必須使用」— 第 2 次玩家可選擇不打。</li>
+          <li><b>修法</b>：
+            <ol>
+              <li><code>tryAutoSecondAttack</code> 改名 <code>tryPromoteToMainForFestival</code>，移除 <code>applyAction(ATTACK)</code> 自動 dispatch 邏輯。只 set <code>turnPhase='main'</code> 讓玩家手動點</li>
+              <li>4 個 hook 點（ATTACK / RESOLVE_SELECTION / TAKE_PRIZES / SEND_NEW_ACTIVE）統一改 call 新 helper（行為改不 dispatch）</li>
+              <li><code>handlePlaying</code> L2157 加新 gate：<code>festivalDancePendingSecondAttack</code> 存在時，只允許 ATTACK / END_TURN / RESOLVE_SELECTION / TAKE_PRIZES / SEND_NEW_ACTIVE / DRAW_CARD，其他全 reject + log「第 2 次招式 pending 期間，只能再用相同招式或結束回合」</li>
+              <li>ATTACK handler 入口加同 <code>attackIndex</code> check：若 <code>action.attackIndex !== pending.attackIndex</code> → reject + log「第 2 次必須使用相同招式」</li>
+              <li><code>startFestivalDanceSecondAttackWindow</code> 第 2 次結算分支同時清 pending flag（玩家成功完成第 2 次後 pending 解除）</li>
+            </ol>
+          </li>
+          <li><b>保留 v5.201 例外中斷邏輯</b>：攻擊者反擊被 KO / 身分變化（進化解除）/ 失去祭典特性 / 祭典會場被換掉 / 狀態異常（睡眠 / 麻痺）→ 自動清 pending + log 中斷原因。</li>
+          <li><b>流程對照</b>：
+            <ul>
+              <li>第 1 次攻擊結算 → 設 pending flag → turnPhase='end' → 場地 / 對手換場等 hook → tryPromote → turnPhase='main'（玩家可手動操作）</li>
+              <li>玩家點同招式 → ATTACK handler 過 attackIndex check → 結算 → startFestival 第 2 次分支 → 設 used2=true + 清 pending</li>
+              <li>玩家不想打 → 點 END_TURN → 已有 v5.201 END_TURN 清 pending 邏輯 → 跳到對手回合</li>
+              <li>玩家試圖附能 / 用支援者等 → handlePlaying gate 擋下 → log 提示</li>
+            </ul>
+          </li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 17（按卡面/規則驗證）：「使用 2 次」改為「可用 2 次」更精準解讀</li>
+              <li>Rule 14（單一 root cause）：撤回 v5.201 atomic 自動 + 加 pending gate 一次到位</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
+              <li>Rule 4（tsc verify）</li>
+              <li>Rule 1（changelog 內 <code>&lt;</code> / <code>&gt;</code> / <code>&amp;&amp;</code> / <code>&#123;&#125;</code> 跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.210</span> Changelog 中性化整理 — 統一行文風格、移除冗餘表述</summary>
         <ul>
           <li><b>動機</b>：歷次 changelog 累積一些非必要的工具相關表述（emoji 前綴、開發流程細節等），不影響玩家理解修改內容；本次統一整理為純粹的「玩家視角」描述。</li>

@@ -1523,8 +1523,8 @@ function canResumeFestivalDanceSecondAttack(
  * v5.201 改寫：祭典樂舞「若場上有『祭典會場』，則這隻寶可夢可使用持有的招式 2 次。」
  *
  * 第 1 次招式剛打完：設 festivalDancePendingSecondAttack pending field 後
- * 立即 call tryAutoSecondAttack — atomic 自動執行第 2 次（玩家無機會介入）。
- * 若有 pendingSelection / pendingPrize / 對手 active=null，tryAutoSecondAttack
+ * 立即 call tryPromoteToMainForFestival — atomic 自動執行第 2 次（玩家無機會介入）。
+ * 若有 pendingSelection / pendingPrize / 對手 active=null，tryPromoteToMainForFestival
  * 留 flag 等下次 hook（ATTACK / RESOLVE_SELECTION / TAKE_PRIZES / SEND_NEW_ACTIVE）re-try。
  */
 function startFestivalDanceSecondAttackWindow(
@@ -1541,16 +1541,17 @@ function startFestivalDanceSecondAttackWindow(
   if (state.festivalDanceSecondAttackUsed?.[idx]) return state;
 
   // 第 2 次招式才剛打完（flag1 已 true）→ set flag2 標記「窗已關閉」
+  // v5.211：同時清 pending flag（第 2 次成功完成，不再 pending）
   if (state.festivalDanceUsedThisTurn?.[idx]) {
     const used2: [boolean, boolean] = [...(state.festivalDanceSecondAttackUsed ?? [false, false])] as [boolean, boolean];
     used2[idx] = true;
-    return { ...state, festivalDanceSecondAttackUsed: used2 };
+    return { ...state, festivalDanceSecondAttackUsed: used2, festivalDancePendingSecondAttack: null };
   }
 
   // 第 1 次招式剛打完
   // v5.201 修法：依卡面語義，第 1 跟第 2 次屬同一回合的 atomic 操作 — 玩家中間不能介入。
   //   舊邏輯把 turnPhase 改回 main 讓玩家手動再點，違反卡面「使用持有的招式 2 次」連續性。
-  //   新邏輯：設 festivalDancePendingSecondAttack pending field，立即 tryAutoSecondAttack；
+  //   新邏輯：設 festivalDancePendingSecondAttack pending field，立即 tryPromoteToMainForFestival；
   //   無 pending → 同步 atomic dispatch；有 pending → 留 flag 等 hook re-try。
   const flag: [boolean, boolean] = [...(state.festivalDanceUsedThisTurn ?? [false, false])] as [boolean, boolean];
   flag[idx] = true;
@@ -1565,12 +1566,18 @@ function startFestivalDanceSecondAttackWindow(
       originalCardId: attacker.cardId,
     },
   };
-  next = addLog(next, `祭典樂舞：場上有「祭典會場」— 將自動使用第 2 次招式`, idx);
-  return tryAutoSecondAttack(next, pool);
+  // v5.211：依玩家反映改為「手動選擇」— 玩家可再用同招式 1 次或跳過攻擊（END_TURN）。
+  //   pending 期間其他動作（附能、用支援者、放寶可夢、撤退、進化等）全被 handlePlaying gate 擋掉。
+  next = addLog(next, `祭典樂舞：場上有「祭典會場」— 可再用相同招式 1 次或結束回合（其他動作禁止）`, idx);
+  return tryPromoteToMainForFestival(next, pool);
 }
 
 /**
- * v5.201：祭典樂舞「自動執行第 2 次招式」核心 helper。
+ * v5.211：祭典樂舞「promote 到 main phase」核心 helper（前身 v5.201 tryPromoteToMainForFestival）。
+ *
+ * 改動：依玩家反映，第 2 次招式不再 atomic 自動執行 — 玩家可選「再用相同招式」或「跳過攻擊
+ * （END_TURN）」。pending 期間其他動作（附能 / 進化 / 用支援者 / 場地 / 道具 / 放寶可夢 /
+ * 撤退）由 handlePlaying L2157 gate 擋掉。
  *
  * 觸發點：所有可能解鎖 pending 的 hook 末端（ATTACK 結算 / RESOLVE_SELECTION /
  * TAKE_PRIZES / SEND_NEW_ACTIVE）。
@@ -1579,12 +1586,9 @@ function startFestivalDanceSecondAttackWindow(
  *   1. 無 pending field → no-op
  *   2. 仍有 pendingSelection / pendingPrize / 對手 active=null → 留 flag 等下次 hook
  *   3. 中斷例外（攻擊者反擊 KO / 身分變化 / 失去祭典特性 / 場地換掉 / 狀態異常）→ 清 flag + log
- *   4. 否則 turnPhase 設 main + atomic dispatch ATTACK（玩家無機會介入）
- *
- * 因為玩家在 pending 期間 UI 本就被 modal / send-new-active 鎖住，不會有「中間附能 / 換場 /
- * 用支援者」的機會。第 1 跟第 2 次的對手減傷 snapshot / 我方增傷 ThisTurn flag 因此一致。
+ *   4. 否則 turnPhase 設 main 讓玩家手動操作（不再 dispatch ATTACK）
  */
-function tryAutoSecondAttack(
+function tryPromoteToMainForFestival(
   state: GameState,
   pool: Map<string, Card>,
 ): GameState {
@@ -1620,20 +1624,11 @@ function tryAutoSecondAttack(
     return abortFestivalSecondAttack(state, `狀態異常（${sName}）`);
   }
 
-  // (4) 可執行第 2 次：清 pending → turnPhase=main → dispatch ATTACK
-  let s: GameState = {
-    ...state,
-    festivalDancePendingSecondAttack: null,
-    turnPhase: 'main' as const,
-  };
-  s = addLog(s, `祭典樂舞：自動執行第 2 次招式`, pending.idx);
-  const after = applyAction(s, { type: 'ATTACK', attackIndex: pending.attackIndex }, pool);
-
-  // ATTACK gate 失敗（能量不足等）→ state identity 不變 = no-op
-  if (after === s) {
-    return abortFestivalSecondAttack(s, '能量不足或攻擊條件不符');
-  }
-  return after;
+  // (4) 可進行第 2 次：turnPhase 切 main 讓玩家手動點同招式或 END_TURN
+  //   pending flag 保留 — 由 ATTACK 第 2 次成功（startFestival used2 分支清）或 END_TURN（清旗標）負責清除
+  let s: GameState = { ...state, turnPhase: 'main' as const };
+  s = addLog(s, `祭典樂舞：請使用相同招式或點結束回合跳過第 2 次（其他動作禁止）`, pending.idx);
+  return s;
 }
 
 function abortFestivalSecondAttack(state: GameState, reason: string): GameState {
@@ -2155,6 +2150,22 @@ function handlePlaying(
     && action.type !== 'RESOLVE_SELECTION'
   ) return state;
 
+  // ── v5.211 祭典樂舞第 2 次招式 pending — 只允許 ATTACK / END_TURN / mid-flow actions ──
+  // 卡面語意：第 1 次後玩家只能「再用相同招式」或「跳過攻擊」（END_TURN）。
+  // pending 期間禁止：附能 / 進化 / 用支援者 / 場地 / 道具 / 放寶可夢 / 撤退 / 特性。
+  // 例外：RESOLVE_SELECTION / TAKE_PRIZES / SEND_NEW_ACTIVE（mid-flow flush）+ DRAW_CARD（防呆）。
+  if (
+    state.festivalDancePendingSecondAttack
+    && action.type !== 'ATTACK'
+    && action.type !== 'END_TURN'
+    && action.type !== 'RESOLVE_SELECTION'
+    && action.type !== 'TAKE_PRIZES'
+    && action.type !== 'SEND_NEW_ACTIVE'
+    && action.type !== 'DRAW_CARD'
+  ) {
+    return addLog(state, '祭典樂舞：第 2 次招式 pending 期間，只能再用相同招式或結束回合', state.activePlayerIndex);
+  }
+
   // ── 選擇解析 ──────────────────────────────────────────────────────────────
   if (action.type === 'RESOLVE_SELECTION') {
     if (!state.pendingSelection) return state;
@@ -2234,7 +2245,7 @@ function handlePlaying(
     }
     // v2.132：resolver 也可能 leave zombie（damage ≥ HP 卻沒移到棄牌）— sanity sweep 對手側
     newState = sanityKOSweep(newState, actorIdx, pool);
-    newState = tryAutoSecondAttack(newState, pool);
+    newState = tryPromoteToMainForFestival(newState, pool);
     return newState;
   }
 
@@ -3779,6 +3790,12 @@ function handlePlaying(
   // ── 宣告招式 ──────────────────────────────────────────────────────────────
   if (action.type === 'ATTACK') {
     if (state.turnPhase !== 'main') return state;
+    // v5.211：祭典樂舞第 2 次必須使用相同招式（卡面「使用持有的招式 2 次」）
+    if (state.festivalDancePendingSecondAttack
+        && state.festivalDancePendingSecondAttack.idx === aIdx
+        && action.attackIndex !== state.festivalDancePendingSecondAttack.attackIndex) {
+      return addLog(state, '祭典樂舞：第 2 次必須使用相同招式（或點結束回合跳過）', aIdx);
+    }
     // v3.0 美洛耶塔ex｜出道演出 — 此寶可夢可在先手第 1 回合使用招式（解除限制）
     const meloettaBypassFirstTurn = state.isFirstTurn && aIdx === state.firstPlayerIdx
       && hasMeloettaExDebut(attacker.active, pool);
@@ -5669,7 +5686,7 @@ function handlePlaying(
       };
     }
 
-    return tryAutoSecondAttack(newState, pool);
+    return tryPromoteToMainForFestival(newState, pool);
   }
 
   // ── 對手送出新的出場寶可夢（被擊倒後） ──────────────────────────────────
@@ -5717,7 +5734,7 @@ function handlePlaying(
     }
 
     // 勝利條件：對手無法送出寶可夢（在送出前就要先檢查，這裡是送出後）
-    return tryAutoSecondAttack(newState, pool);
+    return tryPromoteToMainForFestival(newState, pool);
   }
 
   // ── 結束回合 ──────────────────────────────────────────────────────────────
@@ -6359,7 +6376,7 @@ function handlePlaying(
       newFlag2[aIdx] = false;
       state = { ...state, festivalDanceSecondAttackUsed: newFlag2 };
     }
-    // v5.201：END_TURN 也清 pending field（理論上 tryAutoSecondAttack 已清，防呆）
+    // v5.201：END_TURN 也清 pending field（理論上 tryPromoteToMainForFestival 已清，防呆）
     if (state.festivalDancePendingSecondAttack && state.festivalDancePendingSecondAttack.idx === aIdx) {
       state = { ...state, festivalDancePendingSecondAttack: null };
     }
