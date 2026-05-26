@@ -9698,20 +9698,24 @@
     color: #777; font-size: .85rem;
   }
 
-  /* Mobile RWD — 全螢幕 modal */
-  @media (max-width: 600px) and (orientation: portrait) {
+  /* Mobile RWD — v5.196：自適應內容 + 保留拖曳
+     原 (orientation: portrait) 強制 left/right/top/bottom 填滿螢幕 → 卡片少時下方大片空白；
+       且 transform: none !important 讓拖曳完全失效。
+     v5.196 改：拿掉 orientation gate（手機橫放也套用），max-width: min(360px, 92vw) 
+       讓 panel 自然依內容大小；保留 transform 讓玩家可拖移到不擋視線的位置。 */
+  @media (max-width: 600px) {
     .opp-turn-toggle-btn {
       right: 2.5vw; bottom: max(env(safe-area-inset-bottom, 12px) + 60px, 70px);
     }
     .opp-turn-panel {
-      right: 2.5vw; left: 2.5vw;
-      top: max(env(safe-area-inset-top, 20px), 40px);
-      bottom: max(env(safe-area-inset-bottom, 12px), 12px);
-      width: auto; height: auto;
-      max-height: 80vh;
-      transform: none !important;
+      /* 自然大小，依內容自適應；上限 92vw / 75vh 避免超出螢幕 */
+      width: min(360px, 92vw);
+      max-width: 92vw;
+      max-height: 75vh;
+      /* 不固定位置 — 用桌面預設的 right: 18px; bottom: 80px; 並保留 transform 給拖曳 */
     }
-    .opp-turn-panel-header { cursor: default; }
+    /* v5.196：手機版仍要可拖（移除 cursor: default 覆蓋 + 不再 transform: none） */
+    .opp-turn-panel-header { cursor: move; }
   }
 
   .chat-panel {

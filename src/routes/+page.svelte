@@ -265,6 +265,37 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.196</span> 對手回合出牌 modal 手機版自適應 + 可拖曳</summary>
+        <ul>
+          <li><b>玩家回報 3 個問題（圖1+圖2+圖3）</b>：
+            <ol>
+              <li>對手回合出牌 modal 框框太大 — 下方留大片黑色空白（不依卡片數量自動調整）</li>
+              <li>手機所有 modal 都應可拖（手機版面小避免按不到東西卡住）</li>
+              <li>手牌列右側「紅色放大鏡」破圖 — 暫不影響功能，Wilson 表示先跳過</li>
+            </ol>
+          </li>
+          <li><b>修法 — opp-turn-panel 手機 CSS 改造</b>：
+            <ul>
+              <li>原 media query <code>(max-width: 600px) and (orientation: portrait)</code> → 拿掉 orientation gate，讓手機橫放（v5.194 後也走 MobilePortraitBattle）也套用</li>
+              <li>原 CSS 強制 <code>left: 2.5vw; right: 2.5vw; top: ...; bottom: ...;</code> 幾乎填滿螢幕 → 改 <code>width: min(360px, 92vw)</code> + <code>max-height: 75vh</code>，panel 依內容自然大小</li>
+              <li>原 <code>transform: none !important</code> 讓拖曳完全失效 → 移除，保留 transform 給拖曳定位</li>
+              <li>原 <code>.opp-turn-panel-header cursor: default</code> 暗示不可拖 → 改 <code>cursor: move</code>，與桌面一致；pointerdown handler 一直有綁定（L7857）</li>
+            </ul>
+          </li>
+          <li><b>效果</b>：
+            <ul>
+              <li>對手只出 2 張卡時，panel 自然縮到小框，不再留大片黑色空白</li>
+              <li>手機版 panel 標題列可長按拖曳到不擋戰場的位置（鏡射桌面拖曳體驗）</li>
+              <li>panel 預設位置 right: 18px / bottom: 80px（桌面預設），玩家可自行拖移</li>
+            </ul>
+          </li>
+          <li><b>跳過項目（Wilson 確認）</b>：手牌列右側「紅色放大鏡」破圖 — 不影響功能，本次不修。Audit 結果：可能來源（chat-fab / opp-turn-toggle-btn / mp-sheet-zoom 殘留）需 Wilson 確認 mode（AI 或 online）+ DevTools inspect 才能精準定位</li>
+          <li><b>未做（範圍較大）</b>：「所有手機 modal 都要可拖」— mp-sheet（bottom sheet）原本就附在螢幕底部，拖曳意義不大；其他 selection-overlay modal 已支援拖曳（v2.44 .sel-header onpointerdown）；本次只動 opp-turn-panel 即 cover 主要痛點。若還有其他卡住的 modal 請 Wilson 截圖回報</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純 CSS 改造 1 段 media query）／17（不做 AI 幻覺 — 紅放大鏡無法精準定位就如實報告不亂修）／1（changelog audit + svelte.compile pre-check pass）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.195</span> 手機版悔棋按鈕加底色 + 可用手牌黃框加強</summary>
         <ul>
           <li><b>1. 手機版悔棋按鈕加底色 + 加寬</b>（玩家反映 v5.194 按鈕不明顯）
