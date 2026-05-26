@@ -304,6 +304,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.206</span> Push trigger 救援 — GitHub Actions 對 v5.205 commit 沒派發 push event</summary>
+        <ul>
+          <li><b>現象</b>：v5.205 commit <code>56b9273</code> push 成功，<code>git ls-remote</code> 跟 GitHub REST API <code>/commits/main</code> 都確認 HEAD 是這個 SHA，但 <code>/actions/runs?head_sha=56b92735</code> 回 <code>total_count: 0</code> — GitHub 沒派發 workflow run。</li>
+          <li><b>診斷</b>：歷史 push (v5.197~v5.204) 都正常觸發，唯 v5.205 失靈。<code>deploy.yml</code> 設定 <code>on: push: branches: &#91;main&#93;</code> 沒 path filter。最可能是 GitHub 端 push event delivery 偶發 bug。</li>
+          <li><b>修法</b>：再 push v5.206 nominal change（version bump + 此 changelog entry）強制觸發 workflow。新 SHA 會 trigger fresh push event。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 11c（不 git status）/ Rule 4（驗 push 後狀態才發現問題）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.205</span> 手機版 picker 可拖曳 + 能量分屬性顯示（接續 v5.200 三類卡圖網格）</summary>
         <ul>
           <li><b>玩家報告</b>：v5.200 的手機版 3 個 picker（撤退/附能/進化）：(1) 沒辦法拖曳，玩家想看後面場上狀況決定選哪隻很卡 (2) 能量都用 ⚡ 統一代表，希望分屬性顯示（惡2 / 超1 / 水3 etc.）。</li>
