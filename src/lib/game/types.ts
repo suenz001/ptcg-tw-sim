@@ -728,6 +728,24 @@ export interface GameState {
    */
   festivalDanceSecondAttackUsed?: [boolean, boolean];
   /**
+   * v5.201：祭典樂舞第 2 次招式 pending state。
+   *
+   * 第 1 次招式打完且場上有「祭典會場」+ attacker 仍有祭典樂舞特性 → 設此 field
+   * 記錄要重打的 attackIndex 與當下 attacker 身分（防中途進化解除 / 變身）。
+   *
+   * tryAutoSecondAttack helper 在所有可能解鎖時機（ATTACK 結算 / RESOLVE_SELECTION /
+   * TAKE_PRIZES / SEND_NEW_ACTIVE）後嘗試自動 re-dispatch ATTACK：
+   *   - 若 pendingSelection / pendingPrize / 對手 active=null 仍存在 → 留 flag 等下次 hook
+   *   - 若 attacker 反擊被 KO / 身分變化 / 失去祭典特性 / 場地卡換掉 / 狀態異常 → 清 flag + log 中斷
+   *   - 否則 turnPhase 切 main 後 atomic dispatch ATTACK（玩家無機會介入）
+   *
+   * 玩家在此 flag 存在期間，UI 自然被 pendingSelection modal / 對手送新寶可夢 alert / turnPhase=end
+   * 鎖住，無法附能 / 換場 / 用支援者 → 第 1 跟第 2 次屬於同一原子操作，within-turn buff 一致。
+   *
+   * END_TURN 與 festivalDanceUsedThisTurn / festivalDanceSecondAttackUsed 一同清除。
+   */
+  festivalDancePendingSecondAttack?: { idx: 0 | 1; attackIndex: number; originalCardId: string } | null;
+  /**
    * 我方上次結束自己回合時，對手剩餘獎賞張數的快照 [P1 側快照, P2 側快照]。
    * 比較 snapshot vs 目前 opp 獎賞張數差即可得知「對手上個回合是否取得過獎賞（= 自己寶可夢是否在對手回合被擊倒）」。
    * 用於「不公印章」等需要『前一回合對手取過獎賞』判定的卡牌。

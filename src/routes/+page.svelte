@@ -304,6 +304,49 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.201</span> 祭典樂舞 atomic 自動連打 — 第 1 跟第 2 次屬同回合操作，玩家中間不可介入</summary>
+        <ul>
+          <li><b>玩家報告</b>：「祭典樂舞」特性生效後的第 2 次攻擊，bug 三點：(a) 對手減傷 / 我方增傷狀態沒延續到第 2 次；(b) 第 1 跟第 2 次之間玩家可以使用任何卡片（違反卡面語義「只能再攻擊一次」）；(c) 應該由系統自動執行第 2 次。</li>
+          <li><b>根因</b>：<code>engine.ts startFestivalDanceSecondAttackWindow</code> 第 1 次招式打完後把 <code>turnPhase</code> 從 <code>'end'</code> 改回 <code>'main'</code>，把玩家放回自由操作階段 — 違反 PTCG 卡面「使用持有的招式 2 次」atomic 連續性。玩家中間可附能 / 進化 / 用支援者 → 第 2 次 snapshot 抓的狀態 ≠ 第 1 次。</li>
+          <li><b>修法</b>：
+            <ol>
+              <li>types.ts 新增 <code>festivalDancePendingSecondAttack</code> field 記錄 <code>&#123; idx, attackIndex, originalCardId &#125;</code></li>
+              <li>engine.ts 改寫 <code>startFestivalDanceSecondAttackWindow</code>：第 1 次打完後設 pending field，<b>不再改 turnPhase 回 main</b>，立刻 call 新 helper <code>tryAutoSecondAttack</code></li>
+              <li>新 helper <code>tryAutoSecondAttack</code>：
+                <ul>
+                  <li>有 pendingSelection / pendingPrize / 對手 active=null → 留 flag 等下次 hook re-try</li>
+                  <li>例外中斷（attacker 反擊 KO / 身分變化 / 失去祭典特性 / 場地換掉 / 狀態異常 / 能量不足）→ 清 flag + log「中斷（原因）」</li>
+                  <li>否則 turnPhase 切 main + atomic dispatch ATTACK 第 2 次（玩家無機會介入）</li>
+                </ul>
+              </li>
+              <li>4 個既有 resume hook（ATTACK 結算 / RESOLVE_SELECTION / TAKE_PRIZES / SEND_NEW_ACTIVE）統一改 call <code>tryAutoSecondAttack</code>，取代舊的 <code>maybeResumeFestivalDanceSecondAttack</code></li>
+              <li>END_TURN 也清 pending field（防呆）</li>
+            </ol>
+          </li>
+          <li><b>為什麼 within-turn buff 自動延續</b>：ThisTurn flag（演練、特殊能量加傷等）<b>END_TURN 才清</b>，第 2 次 attack 進新 handler 時仍存在；玩家中間不能附能 / 換場 → 對手減傷 snapshot 也跟第 1 次抓的一致。</li>
+          <li><b>例外中斷案例</b>（清 flag + 不執行第 2 次）：
+            <ul>
+              <li>攻擊者被反擊招式 / 咒咽語手套 / 咒詛炸彈擊倒（active=null）</li>
+              <li>攻擊者進化被解除（cardId 變了）</li>
+              <li>奇異駭入 / 現象反轉 等變身效果改變了攻擊者身分</li>
+              <li>祭典會場被換掉（虛無歸零 / 蒙忽道之毒 / 另放場地卡）</li>
+              <li>狀態異常（睡眠 / 麻痺 — 雖然第 1 次後通常不會中這狀態，防呆）</li>
+              <li>能量不足以再次支付招式成本（依 Wilson ruling）</li>
+            </ul>
+          </li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 14（單一 root cause）：三個 bug（buff 沒延續 / 玩家可介入 / 不自動）統一在「atomic auto-second-attack」一套機制</li>
+              <li>Rule 17（不 AI 幻覺）：所有設計基於 <code>static/cards/SV6.json</code> L494 卡面 + engine.ts L1500-1556 既有 state machine</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
+              <li>Rule 7c（同名特性疊加）：祭典樂舞同名特性，但 active 只有一隻 → 無疊加問題</li>
+              <li>Rule 1（changelog 內 <code>&amp;#123;&amp;#125;</code> 跳脫物件字面量）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.200</span> 手機版三類 picker 改卡圖網格（撤退 / 附能 / 進化 — 鏡射桌面送新戰鬥位 modal）</summary>
         <ul>
           <li><b>玩家建議</b>：手機版撤退 / 附加能量 / 進化的目標選擇 modal 之前都是純文字按鈕清單，希望改成像「戰鬥寶可夢被昏厥時派出新寶可夢」那種卡圖網格 UI（介面最清楚）。</li>
