@@ -6102,15 +6102,12 @@
             onclick={()=>dispatch(GameActions.finishMulliganPostBench(myIdx))}>
             ✅ 完成補抽後設置
           </button>
-        {:else if game.phase==='setup' && game.setupDone[myIdx]}
-          <!-- v5.166：玩家已 setupDone 但對手還未完成 / mulligan 未解 → 顯示等候提示
-               避免落到下面 elseif 渲染對戰按鈕（setup phase 不該顯示） -->
-          <span class="waiting-msg">⏳ 等待對手完成設置 / mulligan 補抽…</span>
         {:else if isMyTurn() && !anyPendingPrize}
           <!-- v5.166：加 game.phase==='playing' gate — 避免 setup phase 邊界情況下
-               (例如 mulligan 中對手未揭曉但玩家 setupDone=true) 顯示招式 + 跳過攻擊
-               按鈕但 disabled (因 pendingSelection 殘留 / 對方 pending 占用)。
-               setup phase 應一律不顯示對戰用按鈕。 -->
+               招式 / 跳過攻擊按鈕 disabled 但仍 render。
+               v5.167：移除 v5.166「等待對手」elseif — 它在 setup phase 雙人模式下
+               覆蓋 P2 視角操作 UI (myIdx 切到 P2 後 setupDone[P2]=true 即 match 等待)，
+               讓 P2 無法按「準備完成」/「確認 mulligan 揭示」。phase gate 已足夠。 -->
           {#if game.turnPhase==='main' && activePlayer?.active && game.phase==='playing'}
             {@const eff=getEffectiveAttacks(game, activePlayer.active, pool)}
             {#each eff as { atk, sourceCardName, isFromTool }, i}

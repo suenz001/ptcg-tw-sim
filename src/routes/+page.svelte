@@ -265,6 +265,36 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.167</span> 🔧 revert v5.166 elseif — 修單機雙人 setup 卡住</summary>
+        <ul>
+          <li><b>玩家回報</b>：v5.166 更新後，單機雙人模式（兩個玩家都由真人操控）setup 完成後卡在「⏳ 等待對手完成設置 / mulligan 補抽…」提示，無法繼續。</li>
+
+          <li><b>根因</b>：v5.166 新增的 elseif 條件 <code>game.phase==='setup' &amp;&amp; setupDone[myIdx]</code> 過早 match。本機雙人模式下，myIdx 會根據 setupDone 自動切換到對手視角（L1985-2008 myIdx derived）：
+            <ul>
+              <li>P1 setupDone=true → myIdx 切到 P2 (=1)</li>
+              <li>P2 視角下 setupDone[P2]=true 也可能成立（如 AI 已完成準備、剩 mulligan 揭示確認）</li>
+              <li>→ v5.166 elseif 即 match 顯示「等待對手」訊息</li>
+              <li>→ 覆蓋掉原本應該 fall through 到 L5957「準備完成」按鈕 / mulligan reveal modal</li>
+              <li>→ P2 無法操作 → 卡住</li>
+            </ul>
+          </li>
+
+          <li><b>修法</b>：完全移除 v5.166 新增的 elseif 分支。回到 v5.165 結構：
+            <ul>
+              <li>L5957 <code>&#123;#if phase==='setup' &amp;&amp; isMyTurn() &amp;&amp; !setupDone[myIdx]&#125;</code> 顯示「準備完成」（其中 <code>!setupDone[myIdx]</code> 防漏）</li>
+              <li>L5962 <code>&#123;:else if isMyTurn() &amp;&amp; !anyPendingPrize&#125;</code> 顯示對戰按鈕（內 if 已加 <code>phase==='playing'</code> gate）</li>
+              <li>L6028 <code>&#123;:else if pendingSelection&#125;</code> 顯示「等待對手選擇」</li>
+            </ul>
+            v5.166 的 inner if phase gate + 跳過攻擊 disabled 細化都<b>保留</b>。
+          </li>
+
+          <li><b>原 bug（v5.165 跳過攻擊按鈕按不下去）未實際 reproduce</b>：可能跟特定 game state（pendingSelection 殘留 + mulligan 卡住）有關，需更精準 audit。先把 v5.167 revert 推上，避免影響單機雙人正常 setup；後續再針對「跳過攻擊 disabled」真正情境精準修。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純 revert 一個 elseif，不動其他邏輯）／1（changelog audit pass + 本機 svelte.compile pre-check）／17（不做 AI 幻覺——v5.166 修法基於對截圖的推測，實際造成 setup phase 雙人 regression；revert 是正確的退路）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.166</span> 🛡 防禦修：招式 / 跳過攻擊按鈕加 phase 與 disabled gate</summary>
         <ul>
           <li><b>玩家回報情境</b>：第 1 回合開戰，對手戰鬥場顯示「戰鬥中（未揭曉）」（紅卡背），玩家側「跳過攻擊 →」按鈕看得到但按不下去。</li>
