@@ -304,6 +304,37 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.219</span> 招式前置能量挑選 picker 加放大鏡 — 看擁有此能量的寶可夢詳情</summary>
+        <ul>
+          <li><b>玩家需求</b>：招式【極降駕】需要選自己場上多隻寶可夢身上的能量丟棄；玩家想看每隻寶可夢的詳細狀況（HP / 其他能量 / 道具 / 狀態）再決定要丟哪隻的能量。希望加放大鏡。</li>
+          <li><b>audit 全卡池同類招式</b>（filter「自己的場上寶可夢身上 + 能量 + 丟棄」）：
+            <ul>
+              <li>猛雷鼓ex｜極降駕（基本能量 任意 × 70）</li>
+              <li>超級噴火龍Xex｜烈獄狂火X（【火】能量 任意 × 90）</li>
+              <li>來悲粗茶｜傾瀉茶（【草】能量 最多 3 × 70）</li>
+              <li>固拉多｜熔岩光芒（能量 最多 4 × 60）</li>
+            </ul>
+            4 招都走相同 picker UI <code>preAttackDiscard</code>（不是 pendingSelection），修一處全部受惠。
+          </li>
+          <li><b>修法</b>：<code>game/+page.svelte</code> L7649 把 <code>.sel-card</code> 包進 <code>.sel-card-wrap</code> div，旁邊加 <code>.sel-zoom</code> 放大鏡按鈕：
+            <ul>
+              <li>每個能量旁顯示 🔍 按鈕，點擊 zoom 擁有此能量的寶可夢（用既有 <code>e.hostInst</code>）</li>
+              <li>hand-* scope（手牌能量 / 火箭隊支援者 / 道具）沒 hostInst → 隱藏放大鏡（用 <code>!isHandDiscard &amp;&amp; e.hostInst</code> gate）</li>
+              <li>沿用既有 <code>.sel-card-wrap</code> / <code>.sel-zoom</code> CSS（v4.28 建立，已用於 selection-modal）— 視覺與 active-energy-discard picker 一致</li>
+            </ul>
+          </li>
+          <li><b>影響範圍</b>：所有用 <code>ATTACK_PRE_DISCARD_CHOICE</code> 的招式都受惠（除了 4 招 audit 出來的之外，還包含激流水泵 / 蜿蜒割裂 / 災厄風暴 / 蠻力 / 跳躍衝天 / 災難衝擊 / 叢林鞭打 / 擦除球 / 丟棄等 30+ 個前置能量 picker 招式）。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 14（單一 root cause）：4 招同一個 picker UI，改一處 cover 全部</li>
+              <li>Rule 15（鏡射既有結構）：用既有 sel-card-wrap / sel-zoom pattern（v4.28 建立）</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）/ Rule 4（pre-push svelte.compile audit）/ Rule 1（changelog 跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.218</span> Hotfix v5.217 — changelog 內 raw <code>&#123;@const&#125;</code> 違反 Rule 1 導致 build 失敗</summary>
         <ul>
           <li><b>根因</b>：v5.217 changelog 用 <code>&lt;code&gt;&#123;@const&#125;&lt;/code&gt;</code> 描述 svelte 語法，但 <code>&#123;</code> <code>&#125;</code> 是 svelte template 特殊字元，parser 把它當成真實 directive，報 <code>expected_whitespace</code> error → GitHub Actions build fail。</li>

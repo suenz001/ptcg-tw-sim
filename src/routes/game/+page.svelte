@@ -7647,12 +7647,20 @@
             {#if ec}
               {@const picked = preAttackDiscard.picked.has(e.iid)}
               {@const eUnits = isUnits ? getEnergyDiscardUnits(e.cardId, e.hostInst, pool) : 1}
-              <button class="sel-card" class:sel-picked={picked} onclick={() => togglePreAttackEnergy(e.iid)}>
-                <img src={ec.imageUrl} alt={ec.name}/>
-                <span class="sel-name">{ec.name}{isUnits && eUnits > 1 ? `（${eUnits}個）` : ''}</span>
-                <span class="sel-hp">{isHandDiscard ? '在手牌中' : `附於 ${e.ownerName}`}</span>
-                {#if picked}<span class="sel-check">✓</span>{/if}
-              </button>
+              <!-- v5.219：能量旁加放大鏡 — 玩家可看擁有此能量的寶可夢詳情（HP/能量/狀態），決定要丟哪隻的能量。
+                   hand-* scope 沒 hostInst（能量還在手牌）→ 隱藏放大鏡。 -->
+              <div class="sel-card-wrap" class:sel-picked={picked}>
+                {#if !isHandDiscard && e.hostInst}
+                  <button class="sel-zoom" title="放大檢視擁有此能量的寶可夢：{e.ownerName}"
+                    onclick={(e2) => { e2.stopPropagation(); openZoom(e.hostInst.cardId, e.hostInst); }}>🔍</button>
+                {/if}
+                <button class="sel-card" class:sel-picked={picked} onclick={() => togglePreAttackEnergy(e.iid)}>
+                  <img src={ec.imageUrl} alt={ec.name}/>
+                  <span class="sel-name">{ec.name}{isUnits && eUnits > 1 ? `（${eUnits}個）` : ''}</span>
+                  <span class="sel-hp">{isHandDiscard ? '在手牌中' : `附於 ${e.ownerName}`}</span>
+                  {#if picked}<span class="sel-check">✓</span>{/if}
+                </button>
+              </div>
             {/if}
           {/each}
           {#if energies.length === 0}
