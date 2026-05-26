@@ -936,6 +936,25 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       return { type: 'RESOLVE_SELECTION', selectedIids: [...candIids] };
     }
 
+    // v5.188 AI 處理 energy-distribute (龐克練肌 / 烈火亂舞 / 充溢之力 / 熱帶狂燒 / 滿載心田 等)
+    //   原本 AI 沒此 case → 走 default → selectedIids: [] → resolver 早 return → 能量不附
+    //   修：round-robin 平均分配能量到 validIids（簡化策略，不挑最佳目標）
+    //   selectedIids 長度 = totalCount，每個元素 = 該張能量要附給哪一隻 validIid
+    case 'energy-distribute': {
+      const validIids = (sel.params?.validIids as string[] | undefined) ?? [];
+      const totalCount = (sel.params?.totalCount as number | undefined) ?? sel.maxCount;
+      if (validIids.length === 0 || totalCount <= 0) {
+        return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      }
+      // round-robin：把 totalCount 個 counter 平均散在 validIids 上
+      // （AI 簡化：不挑「最該附能的主打手」— 先求能跑完 chain，後續優化見 TODO）
+      const out: string[] = [];
+      for (let i = 0; i < totalCount; i++) {
+        out.push(validIids[i % validIids.length]);
+      }
+      return { type: 'RESOLVE_SELECTION', selectedIids: out };
+    }
+
     // v3.43 魔靈多龍 幻影奇襲 (200 + 6 個傷害指示物自由分配對手備戰)
     case 'damage-distribute': {
       const totalCounters = (sel.params?.totalCounters as number) ?? 6;

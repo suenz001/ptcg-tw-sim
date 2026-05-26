@@ -135,15 +135,24 @@ export function hasBugAegislashShield(
 // hook：engine.ts 的「灼傷 newBurnDmg = damage + 20」計算處；
 //   當 oIdx（=對手 / 灼傷加害方）場上有鴨嘴炎獸時，回傳 +30 額外傷害。
 //
-// 疊加：場上多隻鴨嘴炎獸時，卡面未寫「不重複」— 但 PTCG 通則「相同名稱被動只算 1 次」
-//   保守按「不疊加」（has-not-count）— 與灰塵山 / 守護之鐘 同模式。
+// 疊加：v5.188 玩家回報應該疊加 — 卡面「只要『這隻』寶可夢在場上...指示物的數量增加 3 個」
+//   「這隻」表示每隻獨立計算，2 隻 = +6 指示物 = +60 傷害，與灰塵山「不重複」明文無關。
+//   修法：count 場上鴨嘴炎獸數量 × 30 (= 3 個指示物)
 // ════════════════════════════════════════════════════════════════════════════
 export function magmarFlowingBurnBonus(
   state: GameState | undefined,
   oppIdx: 0 | 1 | undefined,  // 灼傷加害方（鴨嘴炎獸的擁有者）
   pool: Map<string, Card> | undefined,
 ): number {
-  return hasAbilityOnSide(state, oppIdx, pool, '熔岩波動') ? 30 : 0;
+  if (!state || oppIdx == null || !pool) return 0;
+  const owner = state.players[oppIdx];
+  const all = [...(owner.active ? [owner.active] : []), ...owner.bench];
+  let count = 0;
+  for (const c of all) {
+    const card = pool.get(c.cardId);
+    if (card?.abilities?.some(a => a.name === '熔岩波動')) count++;
+  }
+  return count * 30;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

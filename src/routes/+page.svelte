@@ -265,6 +265,39 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.188</span> 2 Bug：鴨嘴炎獸熔岩波動應疊加 + AI 龐克練肌不會填能</summary>
+        <ul>
+          <li><b>Bug A：鴨嘴炎獸熔岩波動疊加</b>
+            <ul>
+              <li>玩家回報：場上 2 隻鴨嘴炎獸時，灼傷傷害仍只 +30（一隻效果）— 應該疊加</li>
+              <li>卡面：「只要『這隻』寶可夢在場上，對手的【灼傷】的寶可夢因【灼傷】而放置的傷害指示物的數量增加 3 個」— 「這隻」明確指每隻獨立計算</li>
+              <li>根因：v3000_g3_wave2.ts L146 magmarFlowingBurnBonus 用 hasAbilityOnSide 只回 true/false → 固定 +30</li>
+              <li>修：改用 count 場上鴨嘴炎獸數量 × 30，N 隻 = N×30 傷害（2 隻 = +60，3 隻 = +90）</li>
+              <li>差異於灰塵山 / 守護之鐘：那兩張卡面明文有「不重複」，本卡無此明文 → 默認疊加才符合 PTCG 規則</li>
+            </ul>
+          </li>
+          <li><b>Bug 1：AI 龐克練肌進化時不會搜惡能量填能</b>（從 backlog 拉出）
+            <ul>
+              <li>玩家回報：AI 使用瑪俐的長毛巨魔ex 進化時不會用龐克練肌特性填惡能量</li>
+              <li>根因 audit（流程追蹤）：
+                <ol>
+                  <li>AI EVOLVE → engine 後置 promptPlayAbilities 開 modal-choice（yes/no）</li>
+                  <li>AI 處理 modal-choice 走 ai.ts L846 → 預設第一個 non-disabled = yes ✓</li>
+                  <li>yes → resolve-play-ability-prompt → punk-training regA → 開 deck-search（filter=Energy:Darkness）</li>
+                  <li>AI deck-search 抓 5 張惡能量 → punk-training-attach resolver 跑</li>
+                  <li>多隻瑪俐寶可夢 → 開 energy-distribute（effectKey=v87-energy-distribute-flat）</li>
+                  <li>❌ ai.ts switch(sel.type) <b>缺 case 'energy-distribute'</b> → 走 default → selectedIids: [] → resolver L111 早 return「未分配任何能量」→ 能量留 discard → 特性形同未發動</li>
+                </ol>
+              </li>
+              <li>修：ai.ts 加 case 'energy-distribute' — round-robin 平均分配（AI 簡化策略：把 totalCount 個 counter 散到 validIids 上）</li>
+              <li>連帶受惠：烈火亂舞 / 充溢之力 / 滿載心田 / 幸運貼附 / 熱帶狂燒 等所有走 energy-distribute pending 的招式/特性，AI 都能正確分配能量</li>
+            </ul>
+          </li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — A: 純 count 邏輯；1: AI switch 加 1 case）／17（不做 AI 幻覺 — A: 卡面「這隻」字面確認每隻獨立；1: 順流程追到 default fallback 是真實 bug，非腦補）／1（changelog audit + svelte.compile pre-check pass）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.187</span> 修 v5.186：幻影奇襲 modal 應該開，免疫者照消耗 counter 但不造傷</summary>
         <ul>
           <li>玩家反饋 v5.186：「應該還是要能放傷害指示物（啟動 modal），只是放了沒辦法造成傷害而已，不用特別擋掉」</li>
