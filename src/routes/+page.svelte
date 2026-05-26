@@ -304,6 +304,36 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.215</span> 對戰開始 gate 加完整牌組驗證（G 標 / ACE SPEC / 同名 4 張 / ≥1 基礎）</summary>
+        <ul>
+          <li><b>需求</b>：對戰開始前除了 60 張總數，也要驗牌組是否含 G 標等非標準賽卡。</li>
+          <li><b>現狀 audit</b>：
+            <ul>
+              <li>對戰開始 gate（<code>game/+page.svelte</code> L4278）只 check 60 張</li>
+              <li>牌組編輯器用 <code>validateDeck</code> 含完整邏輯（60 張 + 無 G 標 + ACE SPEC ≤1 + 同名 ≤4 + ≥1 基礎寶可夢）+ 兩類例外（基本能量 / Reprint exception 10 張卡：寶可夢交替 / 寶可裝置3.0 / 寶可夢捕捉器 / 高級球 / 粉碎之錘 / 能量轉移 / 老大的指令 / 裁判 / 神奇糖果 / 能量回收）</li>
+            </ul>
+          </li>
+          <li><b>修法</b>（鏡射既有架構 — Rule 15）：
+            <ol>
+              <li><code>game/+page.svelte</code> import <code>validateDeck</code></li>
+              <li><code>p1DeckValid</code> / <code>p2DeckValid</code> derived 改 <code>$derived.by</code>：先 check 60 張，再 call <code>validateDeck</code> 看 issues.length === 0；pool 還沒 load 完時 fallback 用 60 張簡易檢查避免 UI 卡按鈕</li>
+              <li><code>startLocalGame</code> 最終 gate：alert 改成列出兩位玩家的所有 issues（含 60 張 / G 標 / ACE SPEC / 同名 / 基礎寶可夢全部錯誤類型）</li>
+            </ol>
+          </li>
+          <li><b>規則精準度</b>：依現行 PTCG 規則 — G 標卡禁用但 reprint exception 名單例外（這些舊卡在 H/I/J 有重印版，舊版仍合法）。與 PTCG 官方標準賽規則一致。</li>
+          <li><b>影響範圍</b>：本機 / AI 模式對戰開始（線上 lobby 用獨立 derive hasValidDeck，後續另 audit）。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 17（按卡面/規則驗證）：依 PTCG 官方標準賽規則執行驗證</li>
+              <li>Rule 14（單一 root cause）：對戰開始 gate 直接調用既有 <code>validateDeck</code>，不重複實作</li>
+              <li>Rule 15（鏡射既有結構）：完全沿用牌組編輯器的 validation pipeline</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）/ Rule 4（tsc verify）/ Rule 1（changelog 跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.214</span> 4 bug 集中修：卡娜莉 filter / 麻麻羅網 雷能量 / 急速飛行 first-turn / 詛咒根 AI 卡死</summary>
         <ul>
           <li><b>Bug 1 — 卡娜莉</b>：可任選 4 隻寶可夢，卡面應限【雷】屬性。

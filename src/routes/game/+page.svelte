@@ -11,6 +11,7 @@
   import { loadDecksFromCloud } from '$lib/decks/cloud';
   import type { Deck } from '$lib/decks/types';
   import { PRESET_DECKS } from '$lib/decks/presets';
+  import { validateDeck } from '$lib/decks/validation';
   import {
     createGame, applyAction,
     getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
@@ -158,8 +159,18 @@
   const p2DeckObj = $derived(allDecks.find(d => d.id === p2DeckId));
   const p1DeckCount = $derived(p1DeckObj ? countDeckCards(p1DeckObj.entries) : 0);
   const p2DeckCount = $derived(p2DeckObj ? countDeckCards(p2DeckObj.entries) : 0);
-  const p1DeckValid = $derived(!!p1DeckId && p1DeckCount === 60);
-  const p2DeckValid = $derived(!!p2DeckId && p2DeckCount === 60);
+  // v5.215：本機 lobby 牌組驗證加上 validateDeck 完整檢查（60 張 / 無 G 標 / ACE SPEC ≤1 /
+  //   同名 ≤4 / ≥1 基礎寶可夢）。pool 還沒 load 完時 fallback 用 60 張簡易檢查避免 UI 卡按鈕。
+  const p1DeckValid = $derived.by(() => {
+    if (!p1DeckId || p1DeckCount !== 60) return false;
+    if (!p1DeckObj || pool.size === 0) return p1DeckCount === 60;  // pool 還沒 load
+    return validateDeck(p1DeckObj, pool).issues.length === 0;
+  });
+  const p2DeckValid = $derived.by(() => {
+    if (!p2DeckId || p2DeckCount !== 60) return false;
+    if (!p2DeckObj || pool.size === 0) return p2DeckCount === 60;
+    return validateDeck(p2DeckObj, pool).issues.length === 0;
+  });
 
   // ── 線上模式狀態（v2.269 座位制重構） ──────────────────────────────────
   let myUid       = $state<string | null>(null);
@@ -4272,10 +4283,20 @@
     const d2 = allDecks.find(d => d.id === p2DeckId);
     if (!d1 || !d2) return;
     // v3.38：60 張規則最終 gate（雙重保險，UI button 已 disabled）
+    // v5.215：改用 validateDeck 完整驗證（60 張 / 無 G 標 / ACE SPEC ≤1 / 同名 ≤4 /
+    //   ≥1 基礎寶可夢 + reprint exception 名單例外）。任一玩家有 issues 即 alert 列出。
     const c1 = countDeckCards(d1.entries);
     const c2 = countDeckCards(d2.entries);
-    if (c1 !== 60 || c2 !== 60) {
-      alert(`牌組必須恰好 60 張才能開始對戰。\n玩家 1：${c1} 張\n玩家 2：${c2} 張`);
+    const v1 = validateDeck(d1, pool);
+    const v2 = validateDeck(d2, pool);
+    if (v1.issues.length > 0 || v2.issues.length > 0) {
+      const lines: string[] = ['牌組不合法，無法開始對戰：', ''];
+      lines.push(`玩家 1（${c1} 張）：`);
+      if (v1.issues.length === 0) lines.push('  ✓ 合法'); else v1.issues.forEach(s => lines.push(`  • ${s}`));
+      lines.push('');
+      lines.push(`玩家 2（${c2} 張）：`);
+      if (v2.issues.length === 0) lines.push('  ✓ 合法'); else v2.issues.forEach(s => lines.push(`  • ${s}`));
+      alert(lines.join('\n'));
       return;
     }
     aiThinking = false;
