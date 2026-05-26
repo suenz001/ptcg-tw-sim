@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.177</span> hotfix v5.176 - 補 canApplyEffectToTarget import</summary>
+        <ul>
+          <li>v5.176 wave3a-snipe-bench resolver 用 canApplyEffectToTarget 但 v2490 沒 import → vite build fail</li>
+          <li>修: 從 ../../defense 補 import canApplyEffectToTarget</li>
+          <li>Iron Rules: 11/11c/11e/11f/14/17/1</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.176</span> Bug 3 修: wave3a-snipe-bench resolver 加 bench immunity guard</summary>
         <ul>
           <li>玩家回報: 剎那斬 (赫普的蒼響ex 第一招) 對備戰太晶寶可夢造成 30 傷害, 違反 PTCG 規則 (太晶在備戰位免疫招式傷害, effects.ts L676 v2.260)</li>

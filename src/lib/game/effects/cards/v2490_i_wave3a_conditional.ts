@@ -25,6 +25,8 @@ import {
   addLog, updatePlayer,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
+// v5.177：補 import (v5.176 hotfix wave3a-snipe-bench resolver 用此 helper 但漏 import)
+import { canApplyEffectToTarget } from '../../defense';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: A 擲 N 次硬幣，正面數 × K 傷害（damage='Nx30+' 等）
