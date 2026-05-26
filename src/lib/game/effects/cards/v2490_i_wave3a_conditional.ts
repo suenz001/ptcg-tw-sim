@@ -177,13 +177,24 @@ function snipeAllBothBenchPost(amount: number, label: string): AttackPostFn {
 
 // resolver for snipe one
 import { regR } from '../_shared';
-regR('wave3a-snipe-bench', (state, aIdx, iids, params, _pool) => {
+regR('wave3a-snipe-bench', (state, aIdx, iids, params, pool) => {
   const amount = (params?.amount as number | undefined) ?? 0;
   const label = (params?.label as string | undefined) ?? '狙擊';
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const targetIid = iids[0];
-  return updatePlayer(state, dIdx, p => ({
+  // v5.176：加 canApplyEffectToTarget('attack-damage') guard
+  // 修 Bug 3：原本沒 guard → 太晶寶可夢在備戰位被打到（規則：太晶在備戰免疫招式傷害）
+  // 同時也擋 球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔 等 bench immunity
+  let s = state;
+  const target = s.players[dIdx].bench.find(b => b.iid === targetIid);
+  if (!target) return s;
+  const targetCard = pool.get(target.cardId);
+  const guard = canApplyEffectToTarget(s, aIdx, target, targetCard, 'attack-damage', pool, { isBench: true });
+  if (guard.blocked) {
+    return addLog(s, `${label}：${targetCard?.name ?? '?'} 因 ${guard.reason} 不受傷害`, aIdx);
+  }
+  return updatePlayer(s, dIdx, p => ({
     ...p,
     bench: p.bench.map(b => b.iid === targetIid
       ? { ...b, damage: (b.damage ?? 0) + amount }

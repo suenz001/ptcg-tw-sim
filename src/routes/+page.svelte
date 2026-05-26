@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.176</span> Bug 3 修: wave3a-snipe-bench resolver 加 bench immunity guard</summary>
+        <ul>
+          <li>玩家回報: 剎那斬 (赫普的蒼響ex 第一招) 對備戰太晶寶可夢造成 30 傷害, 違反 PTCG 規則 (太晶在備戰位免疫招式傷害, effects.ts L676 v2.260)</li>
+          <li>根因: v2490 wave3a-snipe-bench resolver 直接 +amount damage 沒過 canApplyEffectToTarget guard → 對備戰太晶 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 花之帷幔 等 immune target 都會誤打</li>
+          <li>修法: 仿 effects.ts L8182 snipe-multi resolver 加 canApplyEffectToTarget(attack-damage, isBench:true) guard, blocked 時 addLog 跳過</li>
+          <li>影響範圍 (用 wave3a-snipe-bench effectKey 的招式 — 一次 cover): 巨石丁|岩石踢, 長耳兔|魯莽踢, 雪暴馬|冰之射擊, 赫普的蒼響ex|剎那斬, 波皇子|瞄準俯衝, 騰蹴小將|跳踢</li>
+          <li>Iron Rules: 11/11c/11e/11f/14/15(太晶規則)/17/1</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.175</span> 高傲指令 picker 加「翻到的其他卡」下拉揭示</summary>
         <ul>
           <li>玩家補充: v5.174 已修「0 寶可夢時 modal 揭示」, 但「有寶可夢時」其他翻到的卡 (支援者/能量/物品/道具) 也是重要資訊 — 對方應該都能看到 top10 全部內容, 不只是寶可夢部分</li>
