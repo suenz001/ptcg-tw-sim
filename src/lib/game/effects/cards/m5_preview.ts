@@ -86,7 +86,8 @@ import {
 } from '../../effects';
 import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
-import type { CardInstance, GameState, Card } from '../../types';  // v5.203 hotfix: type-only import
+import type { CardInstance, GameState } from '../../types';  // v5.203 hotfix: type-only import
+import type { Card } from '$lib/cards/types';  // v5.204 hotfix: Card 從 cards/types 而非 game/types
 import { canApplyEffectToTarget } from '../../defense';
 
 // ── M5 helper: 自傷（這隻寶可夢也受到 N 傷害）─────────────────────────

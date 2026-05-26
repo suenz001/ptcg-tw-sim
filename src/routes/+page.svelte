@@ -304,6 +304,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.204</span> Hotfix v5.203 — <code>Card</code> import 路徑修正（從 <code>$lib/cards/types</code>）</summary>
+        <ul>
+          <li><b>根因</b>：<code>Card</code> 型別不在 <code>game/types.ts</code>，而在 <code>$lib/cards/types</code>（看 draw_supporters.ts L22 範本）。</li>
+          <li><b>修法</b>：把 <code>Card</code> 從 type-only import 移到單獨一行 <code>import type &#123; Card &#125; from '$lib/cards/types'</code>。</li>
+          <li><b>Iron Rules</b>：11 / 11c / 4 / 1。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.203</span> Hotfix v5.202 — m5_preview type-only import 修 verbatimModuleSyntax 編譯錯誤</summary>
         <ul>
           <li><b>根因</b>：v5.202 patch script auto-import 加 <code>CardInstance</code> 進 <code>import &#123; RULE_BOX_SUBTYPES, CardInstance &#125; from '../../types'</code>，但 <code>tsconfig</code> 啟用 <code>verbatimModuleSyntax</code> 要求 type 必須用 <code>import type</code>；同時 <code>mokujouCandidates</code> helper signature 用了 <code>GameState</code>/<code>Card</code> 也沒 import。</li>
