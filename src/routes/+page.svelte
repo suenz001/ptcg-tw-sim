@@ -305,6 +305,24 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.198</span> AI 對戰 setup 卡死修補（補抽完雙方都 mulligan 時 AI 不確認揭示）</summary>
+        <ul>
+          <li><b>玩家報告</b>：單機 AI 對戰，手機版補抽完手牌後右上空白卡住，log 停在「玩家 1 完成補抽後備戰設置」。</li>
+          <li><b>根因</b>：<code>game/+page.svelte</code> 的 AI scheduler <code>shouldAct</code> setup 階段條件漏判 <code>!g.mulliganRevealConfirmed?.&#91;ai&#93;</code>。當雙方都 mulligan 但張數不等（例 Wilson m1=1、AI m2=2，<code>pendingMulliganDraw=&#91;1,0&#93;</code>）：
+            <ul>
+              <li>Wilson 看完 AI 揭示 → 補抽 → finish post-bench → log「完成補抽後備戰設置」</li>
+              <li><code>tryAdvanceToPlaying</code> 卡在 <code>mulliganRevealConfirmed&#91;1&#93;=false</code> → 停留 setup 階段</li>
+              <li>AI 的 shouldAct 三項都 false（<code>setupDone&#91;ai&#93;=true</code>、<code>pendingDraw&#91;ai&#93;=0</code>、<code>postBench&#91;ai&#93;=false</code>）→ AI 永遠不 fire</li>
+              <li>AI 永遠不 dispatch <code>CONFIRM_MULLIGAN_REVEAL</code> → 卡死</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：<code>tickAI()</code> L1714 與 $effect L1803 兩處 shouldAct 都補上 <code>|| !g.mulliganRevealConfirmed?.&#91;ai&#93;</code>。AI 該確認時 shouldAct=true → 進 handleSetupAI STEP 2 → 第一行就是「未確認 → return CONFIRM_MULLIGAN_REVEAL」→ AI 自動確認 → tryAdvance 解鎖。</li>
+          <li><b>為什麼之前沒爆</b>：之前都是其中一方 mulligan=0 時 <code>mulliganRevealConfirmed&#91;非mulligan方&#93;</code> 初始就 true（engine.ts L1626 <code>const mulliganRevealConfirmed = &#91;m2 === 0, m1 === 0&#93;</code>）。只有雙方都 mulligan ≥ 1 且張數不等才會觸發；單機 AI 才有此 bug，線上模式雙方都會手動點 confirm 不受影響。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 11c（不 git status）/ Rule 14（單一 root cause 修法）/ Rule 17（不 AI 幻覺 — 從 engine.ts L1626 / ai.ts L347-373 推得根因）/ Rule 1（changelog 內 <code>&amp;#91;</code> / <code>&amp;#93;</code> 跳脫陣列括號避開 Svelte parser）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.197</span> 首頁加「強制更新版本」按鈕（iOS PWA cache 解套）</summary>
         <ul>
           <li><b>玩家回報</b>：iOS Safari「加入主畫面」做成 PWA 後，網站改版常無法跟上新版本，關 app 重開仍是舊版本。希望加按鈕讓玩家點擊後強制刷新（類似桌面 Ctrl+Shift+R）</li>

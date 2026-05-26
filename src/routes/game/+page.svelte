@@ -1711,7 +1711,7 @@
       const ai = aiPlayerIndex;
       const g = game!;
       // v5.138：mulliganPostBenchOpen=true 時 AI 也要行動（送 FINISH_MULLIGAN_POST_BENCH）
-      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0 || !!g.mulliganPostBenchOpen?.[ai];
+      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0 || !!g.mulliganPostBenchOpen?.[ai] || !g.mulliganRevealConfirmed?.[ai]; // v5.198 補 mulliganRevealConfirmed gate (雙方都 mulligan 時 AI 卡死)
       if (g.phase !== 'playing') return false;
 
       // 取獎勵牌或選擇 — 由誰的行動決定
@@ -1800,7 +1800,7 @@
 
     const shouldAct = (() => {
       // v5.138：mulliganPostBenchOpen=true 時也要 scheduleAI
-      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0 || !!g.mulliganPostBenchOpen?.[ai];
+      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0 || !!g.mulliganPostBenchOpen?.[ai] || !g.mulliganRevealConfirmed?.[ai]; // v5.198 補 mulliganRevealConfirmed gate (雙方都 mulligan 時 AI 卡死)
       if (g.phase !== 'playing') return false;
       if ((g.pendingPrizes?.[ai] ?? 0) > 0) return true;
       if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
