@@ -703,6 +703,12 @@
       <!-- v5.116：觀戰者不顯示準備按鈕 -->
       <button class="mp-end-btn" disabled={!myPlayer.active}
         onclick={() => onAction(GameActions.finishSetup(myIdx))}>✅ 準備</button>
+    {:else if isSetup && game.mulliganPostBenchOpen?.[myIdx] && !isSpectator}
+      <!-- v5.189：手機版補抽後設置按鈕（補桌面版 +page.svelte L6248 對應分支）
+           玩家補抽完手牌後 mulliganPostBenchOpen=true，需此按鈕進入 playing phase
+           不依 isMyTurn — myIdx 已由 +page.svelte L2151 myIdx 切換邏輯處理（v5.185 補 mulliganPostBenchOpen 優先級）-->
+      <button class="mp-end-btn"
+        onclick={() => onAction(GameActions.finishMulliganPostBench(myIdx))}>✅ 完成補抽</button>
     {:else if isMyTurn && isPlaying && !pendingSelection && (game.pendingPrizes?.[0] ?? 0) === 0 && (game.pendingPrizes?.[1] ?? 0) === 0}
       <!-- v2.289：不限 turnPhase==='end'，主階段也顯示（等同「跳過攻擊 + 結束回合」合一）
            engine END_TURN 自帶 pendingPrizes / defender.active=null 雙重 gate -->

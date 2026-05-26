@@ -265,6 +265,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.189</span> Hotfix：手機版 mulligan 補抽完手牌後卡住</summary>
+        <ul>
+          <li>玩家反饋：手機版補抽完手牌後卡住，沒有任何按鈕可按</li>
+          <li>根因：MobilePortraitBattle.svelte L701-705 setup 階段只處理「準備」按鈕（setupDone），完全沒處理 <code>mulliganPostBenchOpen</code> 階段的「完成補抽後設置」按鈕</li>
+          <li>PTCG mulligan 流程：
+            <ol>
+              <li>玩家按「準備」→ setupDone[myIdx]=true</li>
+              <li>對手揭示 confirm → mulligan reveal modal</li>
+              <li>補抽 modal 選張數 → pendingMulliganDraw=0</li>
+              <li><b>mulliganPostBenchOpen[myIdx]=true → 玩家可選擇加新基礎到備戰</b></li>
+              <li>玩家按「完成補抽後設置」→ finishMulliganPostBench → 進 playing phase</li>
+            </ol>
+            手機版步驟 4 完全沒按鈕 → 卡死
+          </li>
+          <li>桌面版 (game/+page.svelte L6248-6254) 早就有對應分支 — 手機版漏掉沒同步</li>
+          <li>修法：模仿桌面版邏輯，在 L701 setup「準備」按鈕後加 elseif 處理 mulliganPostBenchOpen，按鈕文字「✅ 完成補抽」+ dispatch finishMulliganPostBench(myIdx)</li>
+          <li>不依 isMyTurn 判定（同 setup 準備按鈕邏輯） — myIdx 已由 +page.svelte L2151 myIdx 切換邏輯處理（v5.185 補 mulliganPostBenchOpen 優先級）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純加 1 個 elseif 分支）／17（不做 AI 幻覺 — grep 確認桌面版有此按鈕、手機版沒有，根因明確）／1（changelog audit + svelte.compile pre-check pass）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.188</span> 2 Bug：鴨嘴炎獸熔岩波動應疊加 + AI 龐克練肌不會填能</summary>
         <ul>
           <li><b>Bug A：鴨嘴炎獸熔岩波動疊加</b>
