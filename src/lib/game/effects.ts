@@ -7713,8 +7713,10 @@ export function millOppDeckTopPost(n: number, label: string): AttackPostFn {
     const p = state.players[dIdx];
     if (p.deck.length === 0) return addLog(state, `${label}：對手牌庫為空`, aIdx);
     const taken = p.deck.slice(0, n);
+    // v5.194：log 加上實際丟棄的卡名（玩家可確認 mill 到什麼牌），仿枇琶 log pattern
+    const takenNames = taken.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
     let s = updatePlayer(
-      addLog(state, `${label}：對手牌庫頂 ${taken.length} 張丟入棄牌區`, aIdx),
+      addLog(state, `${label}：對手牌庫頂 ${taken.length} 張丟入棄牌區 — ${takenNames}`, aIdx),
       dIdx,
       pl => ({ ...pl, deck: pl.deck.slice(taken.length), discard: [...pl.discard, ...taken] }),
     );

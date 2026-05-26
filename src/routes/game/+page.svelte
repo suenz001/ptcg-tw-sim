@@ -688,7 +688,10 @@
       const h = window.innerHeight;
       
       // 手機直式 (MobilePortraitBattle)
-      isPortraitMobile = w <= 600 && h > w;
+      // v5.194：手機橫放也走手機 layout — 改成 min(w, h) <= 600
+      //   原條件只在 portrait（h>w）才切手機版，玩家不小心橫放會跳到桌機版
+      //   新條件：任一邊 ≤ 600px 就視為手機（含手機橫放、平板大小手機）
+      isPortraitMobile = Math.min(w, h) <= 600;
       
       // 極小手機橫屏（交給原本的 @media max-width: 950px and orientation: landscape 處理）
       const isLandscapeMobile = w <= 950 && w > h;
@@ -5901,10 +5904,11 @@
       onOpenZoom={openZoom}
       onOpenSettings={() => showSettingsModal = true}
       onLeave={() => {
-        // v2.288 修：本機模式必須同時清 game 才能脫離 battle template（頂層條件是 {#if !game}）
         if (mode === 'online') leaveOnlineGame();
         else { game = null; mode = null; }
       }}
+      undoAvailable={!!undoSnapshot && !undoAwaitingResponse && !undoDeniedThisSnapshot}
+      onUndo={performUndo}
     />
   {:else}
 

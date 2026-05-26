@@ -265,6 +265,48 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.194</span> 手機版 4 改進 + 挖掘崩塌 log 顯示卡名</summary>
+        <ul>
+          <li><b>1. 手機橫放也鎖定走手機 layout</b>（玩家反映橫放會跳到網頁版）
+            <ul>
+              <li>+page.svelte L691 原條件 <code>w &lt;= 600 &amp;&amp; h &gt; w</code>（只在 portrait 觸發）→ 改 <code>Math.min(w, h) &lt;= 600</code>（任一邊 ≤ 600px 都算手機，含橫放）</li>
+              <li>效果：手機不論直立/橫放都走 MobilePortraitBattle 元件</li>
+            </ul>
+          </li>
+          <li><b>2. 手機版 log 加 timestamp + 改正序顯示</b>（鏡射桌面版）
+            <ul>
+              <li>原 L849 用 <code>.reverse()</code> 顯示最新在上 → 改 <code>.slice(-30)</code> 保留正序（最舊在上、最新在下）</li>
+              <li>每行 log 加 <code>[mm:ss]</code> 時間戳（鏡射桌面版 formatLogTime）</li>
+              <li>加 mpLogEl bind ref + $effect 自動 scroll 到底部（log 變化即觸發）</li>
+              <li>加 .log-time CSS 樣式（鏡射桌面版）</li>
+            </ul>
+          </li>
+          <li><b>3. 手機版補悔棋按鈕</b>（玩家反映沒按鈕）
+            <ul>
+              <li>+page.svelte 傳 <code>undoAvailable</code> + <code>onUndo</code> props 給 MobilePortraitBattle</li>
+              <li>MobilePortraitBattle top bar 「離開」按鈕旁加 ↶ 悔棋按鈕（亮黃色 #ffd44a 提示可用）</li>
+              <li>顯示條件：undoAvailable=true（鏡射桌面版 performUndo gate）+ 非觀戰</li>
+            </ul>
+          </li>
+          <li><b>4. 挖掘崩塌 log 顯示丟棄卡名</b>（鏡射枇琶 log pattern）
+            <ul>
+              <li>effects.ts millOppDeckTopPost helper L7653 原 log「對手牌庫頂 N 張丟入棄牌區」→ 改加 <code>— 卡名1、卡名2</code>，玩家可確認 mill 到什麼牌</li>
+              <li>影響範圍：超級龍頭地鼠ex|挖掘崩塌 + 其他用此 helper 的 mill 招式</li>
+              <li>枇琶 L228 + 牌庫類丟棄招式：已有 log 顯示卡名 ✓（grep audit 過）</li>
+            </ul>
+          </li>
+          <li><b>未完成 / 報告 — 撤退/附能 modal 改用「派新寶可夢上場」樣式</b>
+            <ul>
+              <li>需 UI 重做，範圍較大（撤退能量丟棄 picker + 附能 picker 兩個獨立流程）</li>
+              <li>建議分階段：先看 KO modal 樣式 → 抽出通用元件 → 撤退/附能套用</li>
+              <li>待 Wilson 確認優先級後另案處理</li>
+            </ul>
+          </li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 8 處 ASSERT exact-match）／14（最小 patch — 條件改 1 行 / props 新增 / log 鏡射桌面版）／15（source of truth — 鏡射既有桌面版 formatLogTime / performUndo / log 樣式）／17（不做 AI 幻覺 — 全 audit 後實作既有 pattern）／1（changelog audit + svelte.compile pre-check pass）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.193</span> 同名特性疊加 Rule 7c 全卡池 audit</summary>
         <ul>
           <li><b>Audit 起因</b>：玩家發現 v5.188 修了鴨嘴炎獸熔岩波動的疊加 bug，要求 audit 同類特性是否還有漏</li>

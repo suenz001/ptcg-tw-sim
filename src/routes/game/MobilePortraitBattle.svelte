@@ -70,6 +70,9 @@
     onOpenZoom: (cardId: string, inst: CardInstance | null) => void;
     onOpenSettings: () => void;
     onLeave: () => void;
+    // v5.194：手機版補悔棋按鈕（鏡射桌面版 performUndo）
+    undoAvailable?: boolean;
+    onUndo?: () => void;
   }
 
   let {
@@ -80,7 +83,33 @@
     canUseStadium = false,
     isSpectator = false,  // v5.116
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
+    undoAvailable = false,
+    onUndo,
   }: Props = $props();
+
+  // v5.194：手機版 log timestamp helper（鏡射 +page.svelte formatLogTime）
+  function formatLogTimeShort(entry: { timestamp?: number }, gameStartTime: number | undefined): string {
+    if (!entry.timestamp || !gameStartTime) return '';
+    const elapsedMs = entry.timestamp - gameStartTime;
+    if (elapsedMs < 0) return '';
+    const totalSec = Math.floor(elapsedMs / 1000);
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    return `[${mm}:${ss}]`;
+  }
+
+  // v5.194：log 容器 ref + scroll 到底部
+  let mpLogEl: HTMLElement | null = $state(null);
+  $effect(() => {
+    // 任何 log 變化都自動 scroll 到底部
+    const _logLen = game.log?.length;  // 觸發 reactivity
+    void _logLen;
+    if (mpLogEl) {
+      requestAnimationFrame(() => {
+        if (mpLogEl) mpLogEl.scrollTop = mpLogEl.scrollHeight;
+      });
+    }
+  });
 
   // ── Derived state ─────────────────────────────────────────────────
   let myPlayer = $derived(game.players[myIdx]);
@@ -688,6 +717,10 @@
   <!-- ─── Top bar：1 行 ─── -->
   <header class="mp-top">
     <button class="mp-icon-btn" onclick={onLeave} title="離開">←</button>
+    <!-- v5.194：手機版悔棋按鈕（只當 undoAvailable=true 顯示，鏡射桌面版邏輯） -->
+    {#if undoAvailable && onUndo && !isSpectator}
+      <button class="mp-icon-btn mp-undo-btn" onclick={onUndo} title="悔棋（回到上一步）">↶</button>
+    {/if}
     <span class="mp-turn-text">回合 {game.turn}</span>
     <span class="mp-phase">
       {#if isSetup}🎴 設置
@@ -845,13 +878,16 @@
 
   <!-- ─── Log（撐空間） ─── -->
   <!-- v3.02：套 +page.svelte 同款 tokenize + 卡名可點 -->
-  <section class="mp-log">
-    {#each [...(game.log ?? [])].reverse().slice(0, 30) as entry, i (i + (entry.message ?? ''))}
+  <!-- v5.194：log 改為正序顯示（最舊在上、最新在下）+ 顯示 timestamp [mm:ss]，鏡射桌面版 -->
+  <section class="mp-log" bind:this={mpLogEl}>
+    {#each ((game.log ?? []).slice(-30)) as entry, i (i + (entry.message ?? ''))}
       {@const _isPrivate = !!(entry.privateMessage && entry.playerIndex === myIdx)}
       {@const _msgText = _isPrivate ? entry.privateMessage : entry.message}
       {@const _lineCls = logLineClass(_msgText ?? '')}
       {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted)}
-      <div class="mp-log-line {_lineCls}" class:latest={i === 0} class:sys={entry.playerIndex === null} class:private={_isPrivate}>
+      {@const _ts = formatLogTimeShort(entry, game?.gameStartTime)}
+      <div class="mp-log-line {_lineCls}" class:latest={i === ((game.log ?? []).length - 1) || i === (Math.min((game.log ?? []).length, 30) - 1)} class:sys={entry.playerIndex === null} class:private={_isPrivate}>
+        {#if _ts}<span class="log-time">{_ts}</span>{/if}
         {#if _isPrivate}<span class="log-private-icon" title="只有你看得到">🔒</span>{/if}
         {#each _tokens as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" title="點擊查看 {tok.text} 卡片詳情" onclick={() => openZoomByName(tok.text, tok.iid ?? entry.sourceIid, entry.playerIndex)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
       </div>
@@ -1167,6 +1203,9 @@
     border-bottom: 1px solid #2a4a2a;
     font-size: 0.72rem;
   }
+  /* v5.194：悔棋按鈕加亮色提示玩家可用 */
+  .mp-undo-btn { color: #ffd44a !important; font-weight: 700; }
+
   .mp-icon-btn {
     background: transparent; color: #8cf;
     border: 1px solid #2a4a6a; border-radius: 4px;
@@ -1418,6 +1457,8 @@
     border-bottom: 1px solid rgba(255,255,255,0.05);
     display: flex; flex-direction: column;
   }
+  /* v5.194：log timestamp 樣式（鏡射桌面版 .log-line .log-time） */
+  .mp-log-line .log-time { color:#6a8a6a; font-size:.68rem; margin-right:.3rem; font-variant-numeric:tabular-nums; opacity:.75; }
   .mp-log-line {
     padding: 1px 0;
     border-bottom: 1px solid rgba(255,255,255,0.04);
