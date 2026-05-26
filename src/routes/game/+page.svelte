@@ -171,6 +171,16 @@
     if (!p2DeckObj || pool.size === 0) return p2DeckCount === 60;
     return validateDeck(p2DeckObj, pool).issues.length === 0;
   });
+  // v5.216：deck-count-info UI 用 — 判定是否有 G 標違規（依 validateDeck issue 字串「為 X 標」匹配）
+  //   含 G/F/E 等任何非 H/I/J 標卡（剔除基本能量與 reprint exception 名單後）— 全部歸類「含 G 標」訊息
+  const p1DeckHasIllegalMark = $derived.by(() => {
+    if (!p1DeckObj || pool.size === 0) return false;
+    return validateDeck(p1DeckObj, pool).issues.some(s => /為 [A-Z]+ 標/.test(s));
+  });
+  const p2DeckHasIllegalMark = $derived.by(() => {
+    if (!p2DeckObj || pool.size === 0) return false;
+    return validateDeck(p2DeckObj, pool).issues.some(s => /為 [A-Z]+ 標/.test(s));
+  });
 
   // ── 線上模式狀態（v2.269 座位制重構） ──────────────────────────────────
   let myUid       = $state<string | null>(null);
@@ -5487,7 +5497,10 @@
           {/if}
         </select>
         {#if p1DeckId}
-          {#if p1DeckCount === 60}
+          {#if p1DeckCount === 60 && p1DeckHasIllegalMark}
+            <!-- v5.216：60 張到位但含 G 標等非標準賽卡 → 黃字警告 -->
+            <div class="deck-count-info bad">⚠ 含有 G 標</div>
+          {:else if p1DeckCount === 60}
             <div class="deck-count-info ok">✓ 60 張</div>
           {:else if p1DeckCount < 60}
             <div class="deck-count-info bad">⚠ 不足 60 張（目前 {p1DeckCount} 張）</div>
@@ -5531,7 +5544,10 @@
           {/if}
         </select>
         {#if p2DeckId}
-          {#if p2DeckCount === 60}
+          {#if p2DeckCount === 60 && p2DeckHasIllegalMark}
+            <!-- v5.216：60 張到位但含 G 標等非標準賽卡 → 黃字警告 -->
+            <div class="deck-count-info bad">⚠ 含有 G 標</div>
+          {:else if p2DeckCount === 60}
             <div class="deck-count-info ok">✓ 60 張</div>
           {:else if p2DeckCount < 60}
             <div class="deck-count-info bad">⚠ 不足 60 張（目前 {p2DeckCount} 張）</div>

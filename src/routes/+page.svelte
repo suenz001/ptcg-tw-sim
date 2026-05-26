@@ -304,6 +304,29 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.216</span> 牌組選擇下方加 G 標警告（黃字）— 鏡射「不足 60 張」UI 樣式</summary>
+        <ul>
+          <li><b>玩家澄清</b>：v5.215 把驗證加在「對戰開始」按下後的 alert，但實際需求是「選牌組時下方那塊 ✓ 60 張 顯示框」就要顯示 G 標警告（黃字），跟「⚠ 不足 60 張」一樣的位置與樣式。</li>
+          <li><b>修法</b>：
+            <ol>
+              <li>新增 derive <code>p1DeckHasIllegalMark</code> / <code>p2DeckHasIllegalMark</code>：用 <code>validateDeck</code> 的 issues 配 regex <code>/為 [A-Z]+ 標/</code> 偵測（含 G/F/E 等任何非 H/I/J 標）</li>
+              <li>UI <code>deck-count-info</code> block 加分支：60 張到位但有非法標 → <code>&lt;div class="deck-count-info bad"&gt;⚠ 含有 G 標&lt;/div&gt;</code></li>
+              <li>沿用既有 <code>.bad</code> CSS（color #fc8 橙黃 / 紅底）— 視覺與「⚠ 不足 60 張」「⚠ 超過 60 張」一致</li>
+            </ol>
+          </li>
+          <li><b>例外保留</b>：基本能量（任何標）+ Reprint exception 10 張卡（寶可夢交替 / 寶可裝置3.0 等）不算違規，與 PTCG 規則一致（validateDeck 內已 baked-in）。</li>
+          <li><b>影響</b>：本機/AI 對戰 lobby 選牌組時即時顯示。對戰開始按鈕 disabled 邏輯（v5.215）+ alert 列出完整 issues 同時生效（雙重防護）。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 14（單一 root cause）：複用 validateDeck 的 issues 字串，不重複實作 G 標判定</li>
+              <li>Rule 15（鏡射既有結構）：UI 沿用 deck-count-info / .bad class</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）/ Rule 4（tsc verify）/ Rule 1（changelog 跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.215</span> 對戰開始 gate 加完整牌組驗證（G 標 / ACE SPEC / 同名 4 張 / ≥1 基礎）</summary>
         <ul>
           <li><b>需求</b>：對戰開始前除了 60 張總數，也要驗牌組是否含 G 標等非標準賽卡。</li>
