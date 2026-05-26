@@ -7628,6 +7628,27 @@
             </div>
           {/each}
         </div>
+        {#if rocketCommandPicker.top10All && rocketCommandPicker.top10All.length > 0}
+          <!-- v5.175：揭示其他翻到的卡 (非寶可夢 / 無招式寶可夢) - 仿寶可裝置3.0 details 下拉
+               對玩家來說是重要資訊：得知對手牌庫頂 10 張內容 (含支援者/能量/物品/道具) -->
+          {@const _pickableIids = new Set(rocketCommandPicker.pokeList.map(p => p.inst.iid))}
+          {@const _peekedOthers = rocketCommandPicker.top10All.filter(p => !_pickableIids.has(p.inst.iid))}
+          {#if _peekedOthers.length > 0}
+            <details class="full-deck-view" open>
+              <summary>🔍 翻到的其他 {_peekedOthers.length} 張（公開揭示，本次不可複製招式）</summary>
+              <div class="full-deck-note">※ 高傲指令翻到正面 10 張全部公開揭示給雙方看；確認後放回牌庫並重洗</div>
+              <div class="full-deck-list">
+                {#each _peekedOthers as p (p.inst.iid)}
+                  <div class="deck-item">
+                    <span class="deck-item-name" title={p.card.name}>{p.card.name}</span>
+                    <button class="deck-item-zoom" title="放大查看：{p.card.name}"
+                      onclick={(e)=>{e.stopPropagation();openZoom(p.inst.cardId, p.inst);}}>🔍</button>
+                  </div>
+                {/each}
+              </div>
+            </details>
+          {/if}
+        {/if}
         {/if}
         <div class="sel-footer">
           {#if rocketCommandPicker.revealOnly}

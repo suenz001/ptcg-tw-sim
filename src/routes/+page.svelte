@@ -265,6 +265,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.175</span> 高傲指令 picker 加「翻到的其他卡」下拉揭示</summary>
+        <ul>
+          <li>玩家補充: v5.174 已修「0 寶可夢時 modal 揭示」, 但「有寶可夢時」其他翻到的卡 (支援者/能量/物品/道具) 也是重要資訊 — 對方應該都能看到 top10 全部內容, 不只是寶可夢部分</li>
+          <li>修法: 仿寶可裝置3.0 / 米立龍集客 的 <code>&lt;details class="full-deck-view"&gt;</code> 下拉 — picker 在寶可夢列表下方加「翻到的其他 N 張」下拉, 列出 top10All 中不在 pokeList 的卡 (含放大鏡 🔍 查看)</li>
+          <li>Iron Rules: 11/11c/11e/11f/14/15(卡面「翻到正面」=雙方都能看)/17/1</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.174</span> 高傲指令 0 寶可夢時也要 modal 揭示 top10 (參考寶可裝置3.0)</summary>
         <ul>
           <li>玩家回報: 高傲指令 翻 10 張無寶可夢時直接 log「對手牌庫頂 10 張無寶可夢」+ 0 傷害, 沒 modal 給對方看, 違反卡面「將對手的牌庫上方10張卡翻到正面」公開揭示精神</li>
