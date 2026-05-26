@@ -177,15 +177,25 @@ export function steelixPalaceReduce(
 // 卡面：「只要這隻寶可夢在場上，自己的所有寶可夢受到對手的寶可夢招式的傷害『-10』點。」
 //
 // 範圍：場上有任一青銅鐘（active 或 bench）→ 自方所有寶可夢受傷 -10。
-// 疊加：卡面未寫「不重複」，但保守按「不疊加」實作（has-not-count）— 與
-//   灰塵山 / 冰雪巨龍 同樣保守處理；若未來規則確認可疊加，可改成 count。
+// 疊加：v5.193 玩家要求 audit — 卡面未寫「不重複」 → 改為 count × 10 疊加
+//   （N 隻青銅鐘 → -10×N 傷害；與鴨嘴炎獸熔岩波動 v5.188 同邏輯）。
+//   參考 PTCG 通則：未明文「不重複」的同名 passive 預設疊加。
 // ════════════════════════════════════════════════════════════════════════════
 export function bronzongShelterReduce(
   state: GameState | undefined,
   defenderIdx: 0 | 1 | undefined,
   pool: Map<string, Card> | undefined,
 ): number {
-  return hasAbilityOnSide(state, defenderIdx, pool, '守護之鐘') ? 10 : 0;
+  // v5.193：count × 10（場上有 N 隻青銅鐘 → -10×N 傷害）
+  if (!state || defenderIdx == null || !pool) return 0;
+  const owner = state.players[defenderIdx];
+  const all = [...(owner.active ? [owner.active] : []), ...owner.bench];
+  let count = 0;
+  for (const c of all) {
+    const card = pool.get(c.cardId);
+    if (card?.abilities?.some(a => a.name === '守護之鐘')) count++;
+  }
+  return count * 10;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -198,7 +208,8 @@ export function bronzongShelterReduce(
 //   - 持有者：場上有齒輪怪 + ability=齒輪塗層。
 //   - 受惠：受傷者（defender.active）身上必須附有【鋼】能量卡（基本【鋼】能量
 //     或 pokemonType=Metal 的特殊能量；古舊/夜光能量視為全屬性也算）。
-// 疊加：保守按「不疊加」（has-not-count）。
+// 疊加：v5.193 玩家要求 audit — 卡面未寫「不重複」 → 改為 count × 20 疊加
+//   （N 隻齒輪怪 → -20×N 傷害；受惠者仍需附【鋼】能量）。
 // ════════════════════════════════════════════════════════════════════════════
 export function gearCoatingReduce(
   state: GameState | undefined,
@@ -206,8 +217,7 @@ export function gearCoatingReduce(
   defenderInst: CardInstance | null | undefined,
   pool: Map<string, Card> | undefined,
 ): number {
-  if (!hasAbilityOnSide(state, defenderIdx, pool, '齒輪塗層')) return 0;
-  if (!defenderInst || !pool) return 0;
+  if (!state || defenderIdx == null || !pool || !defenderInst) return 0;
   // 受傷者身上必須附【鋼】能量
   const hasMetal = defenderInst.energyAttached.some(e => {
     const ec = pool.get(e.cardId);
@@ -217,7 +227,16 @@ export function gearCoatingReduce(
     if (ec.name === '古舊能量' || ec.name === '夜光能量') return true;
     return false;
   });
-  return hasMetal ? 20 : 0;
+  if (!hasMetal) return 0;
+  // v5.193：count × 20（場上有 N 隻齒輪怪 → -20×N 傷害）
+  const owner = state.players[defenderIdx];
+  const all = [...(owner.active ? [owner.active] : []), ...owner.bench];
+  let count = 0;
+  for (const c of all) {
+    const card = pool.get(c.cardId);
+    if (card?.abilities?.some(a => a.name === '齒輪塗層')) count++;
+  }
+  return count * 20;
 }
 
 

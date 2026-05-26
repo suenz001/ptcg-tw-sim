@@ -265,6 +265,39 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.193</span> 同名特性疊加 Rule 7c 全卡池 audit</summary>
+        <ul>
+          <li><b>Audit 起因</b>：玩家發現 v5.188 修了鴨嘴炎獸熔岩波動的疊加 bug，要求 audit 同類特性是否還有漏</li>
+          <li><b>Audit 方法</b>：
+            <ol>
+              <li>JSON grep「不重複」+「無論有多少」+「不會重複」字樣 → 找出明寫不疊加的 10 個特性</li>
+              <li>grep 既有 <code>hasAbilityOnSide</code> 用法（只回 true/false，不疊加）→ 找出 9 處</li>
+              <li>對照卡面 → 看是否與規則一致</li>
+              <li>grep PASSIVE_* maps → audit 攻擊加成/減傷/反擊類</li>
+            </ol>
+          </li>
+          <li><b>Audit 結果 — 已正確分類（不需修）</b>：
+            <ul>
+              <li>明寫「不重複」9 卡：繁茂／黏滑失足／奇跡之吻／影藏／凍原堡壘／生機森巴／黑暗脈衝／岩石宮殿／大方 — 均正確不疊加 ✓</li>
+              <li>「卡面未寫但疊加無意義」3 卡：球形盾牌（完全免疫，疊加無效）／潛者捕捉（KO 後全部水能回手，疊加等效 1 次）／熔岩地域（灼傷狀態，疊加重複施加等效）✓</li>
+              <li>PASSIVE_ATTACK_BONUS engine loop（per-source 疊加）：輝煌聲援／鈷藍指令／力之鹽／皇家聲援 已疊加 ✓；大方／激動力量／大將／複眼 在 NO_STACK 名單已 dedup ✓</li>
+              <li>凹洞（火箭隊的三地鼠）：v3001 L428-440 已正確計數 × 2 ✓</li>
+              <li>熔岩波動：v5.188 已修為 count × 30 ✓</li>
+              <li>PASSIVE_DAMAGE_REDUCE/RETALIATION/PREVENT_KO 等：per-defender 特性，疊加問題 N/A</li>
+            </ul>
+          </li>
+          <li><b>本次修正 — 找出 2 個漏疊加的 bug</b>：
+            <ul>
+              <li><b>守護之鐘（青銅鐘）</b> — 卡面「自己的所有寶可夢受到對手的寶可夢招式的傷害『-10』點」<b>未寫「不重複」</b>。原 v2999_g3_wave1.ts L188 用 hasAbilityOnSide → 固定 -10。改為 count × 10：場上 2 隻青銅鐘 → -20，3 隻 → -30</li>
+              <li><b>齒輪塗層（齒輪怪）</b> — 卡面「自己的所有身上附有【鋼】能量卡的寶可夢，受到對手的寶可夢招式的傷害『-20』點」<b>未寫「不重複」</b>。原 L209 同類問題 → 固定 -20。改為 count × 20：場上 2 隻齒輪怪 → -40（仍需受惠者附【鋼】能量）</li>
+            </ul>
+          </li>
+          <li><b>規則對應</b>：PTCG 通則 — 未明文「不重複」的同名 passive 預設 per-source 疊加（與 v5.188 熔岩波動同邏輯）。其他正確的「不疊加」實作都是因為卡面有明文，或效果類型本身疊加無意義（狀態、完全免疫、trigger-once）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — 純 count 邏輯改造）／7c（同類 bug 全 audit — 14 個特性逐一對照卡面確認）／15（source of truth — JSON 卡面字面確認「不重複」字樣存在與否）／17（不做 AI 幻覺 — 全 audit 後只找出 2 個真實 bug，其他都已正確處理）／1（changelog audit + svelte.compile pre-check pass）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.192</span> 致死毒/燒傷 log 動態化 + 小木靈怨恨進化最初回合 gate</summary>
         <ul>
           <li><b>Bug A：中毒/灼傷 log 兩個問題</b>（玩家回報）
