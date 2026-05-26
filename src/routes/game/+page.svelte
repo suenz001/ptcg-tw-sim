@@ -48,6 +48,8 @@
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom,
     setRematchReady, checkAndAcceptRematch,
     proposeRestart, respondRestart, cancelRestart, checkAndAcceptRestart,
+    // v5.180 提議返回房間
+    proposeReturnToRoom, respondReturnToRoom, cancelReturnToRoom, checkAndAcceptReturnToRoom,
     setSpectatorsAllowed,
     findMySeatIdx, bothPlayersReady, countDeckCards,
     sendMessage, subscribeMessages,
@@ -251,6 +253,58 @@
     } else {
       if (restartCountdownTimer) { clearInterval(restartCountdownTimer); restartCountdownTimer = null; }
       restartCountdown = 30;
+    }
+  });
+
+  // v5.180 propose-return-to-room state (仿 restart pattern)
+  const myReturnRoomProposed = $derived(
+    roomData && mySeatIdx >= 0 && mySeatIdx <= 1
+      ? !!(roomData.returnRoomProposed?.[mySeatIdx])
+      : false
+  );
+  const oppReturnRoomProposed = $derived(
+    roomData && mySeatIdx >= 0 && mySeatIdx <= 1
+      ? !!(roomData.returnRoomProposed?.[1 - mySeatIdx]) && !myReturnRoomProposed
+      : false
+  );
+  let returnRoomCountdown = $state(30);
+  let returnRoomRejectedToast = $state(false);
+  let lastSeenReturnRoomRejectedAt = $state<number | null>(null);
+  const canProposeReturnRoom = $derived(
+    mode === 'online'
+      ? !myReturnRoomProposed && !oppReturnRoomProposed
+      : true
+  );
+  let returnRoomCountdownTimer: ReturnType<typeof setInterval> | null = null;
+  $effect(() => {
+    const proposedAt = roomData?.returnRoomProposedAt;
+    if (proposedAt && (myReturnRoomProposed || oppReturnRoomProposed)) {
+      if (returnRoomCountdownTimer) clearInterval(returnRoomCountdownTimer);
+      const tick = () => {
+        const elapsed = Math.floor((Date.now() - proposedAt) / 1000);
+        returnRoomCountdown = Math.max(0, 30 - elapsed);
+        if (returnRoomCountdown === 0) {
+          if (returnRoomCountdownTimer) { clearInterval(returnRoomCountdownTimer); returnRoomCountdownTimer = null; }
+          if (myReturnRoomProposed && roomCode) {
+            cancelReturnToRoom(roomCode).catch((e: unknown) => console.warn('[cancelReturnToRoom timeout]', e));
+          } else if (oppReturnRoomProposed && roomCode) {
+            respondReturnToRoom(roomCode, false).catch((e: unknown) => console.warn('[respondReturnToRoom timeout]', e));
+          }
+        }
+      };
+      tick();
+      returnRoomCountdownTimer = setInterval(tick, 500);
+    } else {
+      if (returnRoomCountdownTimer) { clearInterval(returnRoomCountdownTimer); returnRoomCountdownTimer = null; }
+      returnRoomCountdown = 30;
+    }
+  });
+  $effect(() => {
+    const rejectedAt = roomData?.returnRoomRejectedAt;
+    if (rejectedAt && rejectedAt !== lastSeenReturnRoomRejectedAt) {
+      lastSeenReturnRoomRejectedAt = rejectedAt;
+      returnRoomRejectedToast = true;
+      setTimeout(() => returnRoomRejectedToast = false, 3000);
     }
   });
 
@@ -4155,6 +4209,36 @@
     if (!roomCode) return;
     respondRestart(roomCode, false).catch((e: any) => alert('拒絕失敗：' + (e?.message ?? e)));
   }
+  // v5.180 提議返回房間 handlers
+  function handleProposeReturnRoomButton() {
+    showSettingsModal = false;
+    if (!game) return;
+    if (mode === 'online') {
+      if (!roomCode) return;
+      if (!canProposeReturnRoom) return;
+      if (!confirm('向對手提議返回房間？\n雙方同意後將回到房間選牌組介面 (30 秒回應時間)。')) return;
+      proposeReturnToRoom(roomCode).catch((e: any) => {
+        alert('提議返回房間失敗：' + (e?.message ?? e));
+      });
+    } else {
+      if (!confirm('確定要返回首頁重新選擇對戰模式嗎？目前對戰將結束。')) return;
+      aiThinking = false;
+      if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; }
+      window.location.href = `${base}/`;
+    }
+  }
+  function handleAcceptOppReturnRoom() {
+    if (!roomCode) return;
+    respondReturnToRoom(roomCode, true).catch((e: any) => alert('接受失敗：' + (e?.message ?? e)));
+  }
+  function handleRejectOppReturnRoom() {
+    if (!roomCode) return;
+    respondReturnToRoom(roomCode, false).catch((e: any) => alert('拒絕失敗：' + (e?.message ?? e)));
+  }
+  function handleCancelMyReturnRoom() {
+    if (!roomCode) return;
+    cancelReturnToRoom(roomCode).catch((e: any) => alert('取消失敗：' + (e?.message ?? e)));
+  }
   function handleCancelMyRestart() {
     if (!roomCode) return;
     cancelRestart(roomCode).catch((e: unknown) => console.warn('[cancelRestart] failed:', e));
@@ -4352,6 +4436,11 @@
     const rp = room.restartProposed ?? {};
     if (rp[0] && rp[1] && roomCode) {
       checkAndAcceptRestart(roomCode, pool).catch((e: unknown) => console.warn('[checkAndAcceptRestart] failed:', e));
+    }
+    // v5.180 propose-return-to-room trigger (both sides true)
+    const rrp = room.returnRoomProposed ?? {};
+    if (rrp[0] && rrp[1] && roomCode) {
+      checkAndAcceptReturnToRoom(roomCode).catch((e: unknown) => console.warn('[checkAndAcceptReturnToRoom] failed:', e));
     }
 
     // v3.96 再來一局（對稱）：雙方都 ready → 任一方 trigger checkAndAcceptRematch
@@ -8111,6 +8200,27 @@
               將清空目前盤面，從擲幣決定先攻重新開始
             {/if}
           </div>
+          <!-- v5.180 提議返回房間 (仿提議重新開局, 雙方同意後回房間選牌組) -->
+          <div class="setting-row">
+            <button class="toggle-btn restart-game-btn"
+                    onclick={handleProposeReturnRoomButton}
+                    disabled={mode === 'online' && !canProposeReturnRoom}>
+              🚪 提議返回房間
+            </button>
+          </div>
+          <div class="setting-hint">
+            {#if mode === 'online'}
+              {#if myReturnRoomProposed}
+                ⏳ 等待對方同意中... 倒數 {returnRoomCountdown}s
+              {:else if oppReturnRoomProposed}
+                ⚠️ 對方已提議返回房間，請於彈出視窗回應
+              {:else}
+                雙方同意後回到房間選牌組介面 (需對手同意)
+              {/if}
+            {:else}
+              回到首頁重新選擇對戰模式
+            {/if}
+          </div>
         </details>
         {/if}
       </div>
@@ -8144,6 +8254,32 @@
   {#if restartRejectedToast}
     <div class="restart-rejected-toast">
       ❌ 對方拒絕了重新開局的提議
+    </div>
+  {/if}
+
+  <!-- v5.180 提議返回房間 modal/strip/toast -->
+  {#if oppReturnRoomProposed && mode === 'online'}
+    <div class="zoom-overlay restart-proposal-overlay">
+      <div class="restart-proposal-modal" onclick={(e)=>e.stopPropagation()}>
+        <h3>🚪 對手提議返回房間</h3>
+        <p>對方希望結束目前對戰返回房間，雙方可重新選擇牌組。是否同意？</p>
+        <p class="restart-countdown-text">倒數 {returnRoomCountdown}s 後自動拒絕</p>
+        <div class="restart-proposal-actions">
+          <button class="restart-btn-accept" onclick={handleAcceptOppReturnRoom}>✅ 同意</button>
+          <button class="restart-btn-reject" onclick={handleRejectOppReturnRoom}>❌ 拒絕</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+  {#if myReturnRoomProposed && mode === 'online'}
+    <div class="restart-waiting-strip">
+      <span>⏳ 等待對方同意返回房間... ({returnRoomCountdown}s)</span>
+      <button class="restart-cancel-btn" onclick={handleCancelMyReturnRoom}>取消</button>
+    </div>
+  {/if}
+  {#if returnRoomRejectedToast}
+    <div class="restart-rejected-toast">
+      ❌ 對方拒絕了返回房間的提議
     </div>
   {/if}
 

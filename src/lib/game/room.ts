@@ -99,6 +99,11 @@ export interface RoomData {
   restartProposedAt?: number;
   restartProposalCount?: number;
   restartRejectedAt?: number;
+  // v5.180 propose-return-to-room symmetric flow (回房間選牌組)
+  returnRoomProposed?: { [seatIdx: number]: boolean };
+  returnRoomProposedAt?: number;
+  returnRoomProposalCount?: number;
+  returnRoomRejectedAt?: number;
   /**
    * v4.75 練習模式：host 開房時可勾選「允許悔棋」(預設 false)。
    * 雙方都在此房 = 雙方都同意此房為練習房。對戰中可請求悔棋（對手同意制）。
@@ -681,6 +686,102 @@ export async function cancelRestart(roomCode: string): Promise<void> {
       updatedAt: serverTimestamp(),
     });
   });
+}
+
+// ── v5.180 propose-return-to-room (回房間選牌組) ── 仿 proposeRestart pattern ───
+export async function proposeReturnToRoom(roomCode: string): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('not logged in');
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  return await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('room missing');
+    const data = snap.data() as RoomData;
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('only P1/P2 can propose');
+    if (data.status !== 'playing' || !data.gameState) throw new Error('game not in progress');
+    const count = data.returnRoomProposalCount ?? 0;
+    const cur = data.returnRoomProposed ?? {};
+    if (cur[myIdx] || cur[1 - myIdx]) throw new Error('proposal already in progress');
+    const newProposed = { ...cur, [myIdx]: true };
+    tx.update(ref, {
+      returnRoomProposed: newProposed,
+      returnRoomProposedAt: Date.now(),
+      returnRoomProposalCount: count + 1,
+      returnRoomRejectedAt: deleteField(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function respondReturnToRoom(roomCode: string, accept: boolean): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('not logged in');
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  return await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('room missing');
+    const data = snap.data() as RoomData;
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('only P1/P2 can respond');
+    const cur = data.returnRoomProposed ?? {};
+    if (!cur[1 - myIdx]) throw new Error('opponent did not propose');
+    if (accept) {
+      tx.update(ref, {
+        returnRoomProposed: { ...cur, [myIdx]: true },
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      tx.update(ref, {
+        returnRoomProposed: deleteField(),
+        returnRoomProposedAt: deleteField(),
+        returnRoomRejectedAt: Date.now(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  });
+}
+
+export async function cancelReturnToRoom(roomCode: string): Promise<void> {
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  return await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+    const data = snap.data() as RoomData;
+    if (!data.returnRoomProposed) return;
+    tx.update(ref, {
+      returnRoomProposed: deleteField(),
+      returnRoomProposedAt: deleteField(),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export async function checkAndAcceptReturnToRoom(roomCode: string): Promise<boolean> {
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return false;
+      const data = snap.data() as RoomData;
+      const p = data.returnRoomProposed ?? {};
+      if (!p[0] || !p[1]) return false;
+      // 清空 gameState + 雙方 ready=false + status=waiting → 回房間選牌組介面
+      const newSeats = data.seats.map(s => ({ ...s, ready: false }));
+      tx.update(ref, {
+        status: 'waiting',
+        gameState: deleteField(),
+        seats: newSeats,
+        returnRoomProposed: deleteField(),
+        returnRoomProposedAt: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+      return true;
+    });
+  } catch (err) {
+    console.error('[checkAndAcceptReturnToRoom] failed:', err);
+    return false;
+  }
 }
 
 export async function checkAndAcceptRestart(roomCode: string, pool: Map<string, Card>): Promise<boolean> {

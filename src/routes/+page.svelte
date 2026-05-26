@@ -265,6 +265,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.180</span> 新增「提議返回房間」按鈕 (仿提議重新開局)</summary>
+        <ul>
+          <li>玩家建議: 對局控制下拉選單中, 在「提議重新開局」按鈕下方增加「提議返回房間」按鈕。雙方同意後線上回到房間選牌組介面, 單機則回首頁重選對戰模式</li>
+          <li>Engine 端 (room.ts) 仿 proposeRestart pattern 加 4 個 functions:
+            <ul>
+              <li>proposeReturnToRoom / respondReturnToRoom / cancelReturnToRoom / checkAndAcceptReturnToRoom</li>
+              <li>RoomData 加 4 欄位: returnRoomProposed / returnRoomProposedAt / returnRoomProposalCount / returnRoomRejectedAt</li>
+              <li>checkAndAcceptReturnToRoom: 雙方同意 → 清空 gameState + 雙方 ready=false + status=waiting → 房間返回選牌組介面</li>
+            </ul>
+          </li>
+          <li>UI 端 (+page.svelte):
+            <ul>
+              <li>設定 modal「對局控制」加按鈕「🚪 提議返回房間」在重新開局下方</li>
+              <li>derived state + 30s countdown + 拒絕 toast (仿 restart pattern)</li>
+              <li>對方提議 modal popup (同意/拒絕) + 我方等待 strip (取消)</li>
+              <li>polling checkAndAcceptReturnToRoom 雙方同意觸發</li>
+              <li>線上 status=waiting 後 onRoom 訂閱會自動偵測 → UI 自然回到房間 ready 介面</li>
+              <li>本機/AI 模式直接 window.location.href={`${'$'}{base}/`} 回首頁</li>
+            </ul>
+          </li>
+          <li>差異: 重新開局 = 直接 createGame(同 deckEntries) 從擲幣重啟; 返回房間 = 清空 game state 回房間, 雙方重選牌組</li>
+          <li>Iron Rules: 11/11c/11e/11f/14(仿既有 pattern, 不重造輪子)/17/1</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.179</span> 火箭隊的喵喵|占為己有 完整實裝</summary>
         <ul>
           <li>玩家回報: 占為己有 未完整實裝, 應該要選擇後揭示 (查看) 那張牌再放回牌庫</li>
