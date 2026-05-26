@@ -304,12 +304,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.218</span> Hotfix v5.217 — changelog 內 raw <code>&#123;@const&#125;</code> 違反 Rule 1 導致 build 失敗</summary>
+        <ul>
+          <li><b>根因</b>：v5.217 changelog 用 <code>&lt;code&gt;&#123;@const&#125;&lt;/code&gt;</code> 描述 svelte 語法，但 <code>&#123;</code> <code>&#125;</code> 是 svelte template 特殊字元，parser 把它當成真實 directive，報 <code>expected_whitespace</code> error → GitHub Actions build fail。</li>
+          <li><b>修法</b>：把 <code>&#123;</code> / <code>&#125;</code> 跳脫成 <code>&amp;#123;</code> / <code>&amp;#125;</code>。</li>
+          <li><b>教訓</b>：這是 v5.121 已踩過的同個雷（feedback-rule1-changelog-audit）。每次寫 changelog 提到 <code>&#123;@const&#125;</code> / <code>&#123;#if&#125;</code> / <code>&#123;#each&#125;</code> 等 svelte directive 都要記得跳脫 — 我這次失誤，應該 pre-push 跑 svelte.compile 而非只 tsc。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 1（changelog 內 <code>&lt;</code> / <code>&gt;</code> / <code>&#123;</code> / <code>&#125;</code> 全跳脫）— 本次失守</li>
+              <li>Rule 4（pre-push compile verify）— 本次只 tsc 沒 svelte.compile，下次補上</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.217</span> 線上對戰房間 seat 也加 G 標警告（接續 v5.216 本機 lobby）</summary>
         <ul>
           <li><b>玩家報告</b>：v5.216 本機/AI lobby 加了「⚠ 含有 G 標」黃字警告，但線上對戰房間的 seat（顯示「✓ 牌組已套用（60 張）」處）漏修，玩家可帶 G 標牌組進對戰。</li>
           <li><b>修法</b>：
             <ol>
-              <li>seat <code>{@const}</code> 區塊新增 <code>seatDeckObj</code> / <code>seatIssues</code> / <code>seatHasIllegalMark</code></li>
+              <li>seat <code>&#123;@const&#125;</code> 區塊新增 <code>seatDeckObj</code> / <code>seatIssues</code> / <code>seatHasIllegalMark</code></li>
               <li><code>hasValidDeck</code> 加上 <code>&amp;&amp; !seatHasIllegalMark</code> → 「準備完成」按鈕同步 block</li>
               <li>自己 seat UI 加分支：60 張到位 + G 標 → <code>⚠ 含有 G 標</code></li>
               <li>別人 seat UI 加分支：對手帶 G 標牌組時顯示「⚠ 牌組含有 G 標」</li>
