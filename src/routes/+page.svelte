@@ -265,6 +265,33 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.172</span> 🔧 hotfix v5.171 — import 來源錯 (build fail 2 連發)</summary>
+        <ul>
+          <li><b>問題</b>：v5.171 import 來源寫錯：
+            <ul>
+              <li><code>prizesForKOLocal</code>：在 effects.ts L4887 但<b>沒 export</b>（file-internal function）</li>
+              <li><code>canApplyAttackEffectToTarget</code>：在 effects.ts L1881，**不在** defense.ts（defense.ts 只內部 import 它沒 re-export）</li>
+              <li><code>recordOppKO</code> + <code>addPendingPrize</code>：在 _shared.ts，**不在** effects.ts</li>
+            </ul>
+            → v5.171 build 全 fail。
+          </li>
+
+          <li><b>修法</b>：
+            <ol>
+              <li>effects.ts L4887 加 <code>export</code> 給 prizesForKOLocal</li>
+              <li>m5_preview.ts defense import 拿掉 canApplyAttackEffectToTarget（回 v5.170 前）</li>
+              <li>m5_preview.ts effects import 加 canApplyAttackEffectToTarget + prizesForKOLocal</li>
+              <li>m5_preview.ts _shared import 加 recordOppKO + addPendingPrize</li>
+            </ol>
+          </li>
+
+          <li><b>教訓</b>：寫 patch 時直接編譯前要先用 grep 確認每個 helper 的<b>export 來源</b>（grep <code>^export function NAME</code>），而非從 use site 推測。v5.171 patch script 雖然有 WARN missing import 但我當時誤判已加上。</li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 4 處 ASSERT exact-match）／14（最小 patch — 純 import 修正）／17（不做 AI 幻覺——v5.171 時推測 import 來源是錯的，現用 grep 確認 export 處）／1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.171</span> 🔧 hotfix v5.170 build — 補 m5_preview.ts 4 個缺失 imports</summary>
         <ul>
           <li><b>問題</b>：v5.170 深淵之瞳手動 KO 模式引用 <code>canApplyAttackEffectToTarget</code>、<code>prizesForKOLocal</code>、<code>recordOppKO</code>、<code>addPendingPrize</code> 4 個 helper，但 <code>m5_preview.ts</code> import block 沒同步補上 → vite build 應該會 fail（雖然 Iron Rules Audit svelte-compile 沒抓到，但 tsc/vite production build 一定 fail）。</li>

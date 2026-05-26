@@ -59,6 +59,9 @@ import {
   getOwnBenchLimit,  // v5.059：螺釘地鼠|呼喚同伴 補 bench-cap check（防零之大空洞被誤觸發破壞）
   ATTACK_PRE,
   ATTACK_POST,
+  // v5.172：深淵之瞳手動 KO 模式（recordOppKO / addPendingPrize 都在 _shared.ts）
+  recordOppKO,
+  addPendingPrize,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import {
@@ -75,14 +78,15 @@ import {
   applyStatusToActive,
   isConfusionImmune,
   checkSpecialEnergyStatusImmune,
-  // v5.171：深淵之瞳手動 KO 模式仿棄世猴|同命戰鬥
+  // v5.172：深淵之瞳手動 KO 模式仿棄世猴|同命戰鬥
+  //   canApplyAttackEffectToTarget 在 effects.ts L1881
+  //   prizesForKOLocal v5.172 加 export
+  canApplyAttackEffectToTarget,
   prizesForKOLocal,
-  recordOppKO,
-  addPendingPrize,
 } from '../../effects';
 import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
-import { canApplyEffectToTarget, canApplyAttackEffectToTarget } from '../../defense';
+import { canApplyEffectToTarget } from '../../defense';
 
 // ── M5 helper: 自傷（這隻寶可夢也受到 N 傷害）─────────────────────────
 // 引擎沒有現成的 selfDamagePost helper（v2380 之前用 inline pattern）

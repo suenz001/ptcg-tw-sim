@@ -4957,7 +4957,8 @@ function isExCard(c: Card | undefined): boolean {
   return isRulePokemon(c);
 }
 /** 與 engine.prizesForKO 同邏輯（避開 import cycle），統一給 effects.ts 內 KO 流程用。 */
-function prizesForKOLocal(c: Card | undefined): number {
+// v5.172：加 export 給 m5_preview.ts 的深淵之瞳手動 KO 模式使用
+export function prizesForKOLocal(c: Card | undefined): number {
   if (!c) return 1;
   if (!isExCard(c)) return 1;
   // 超級進化寶可夢 ex（Mega ex）取 3 張獎賞（與 engine.prizesForKO 同步）
