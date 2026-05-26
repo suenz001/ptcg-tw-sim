@@ -1900,6 +1900,11 @@ export function canApplyAttackEffectToTarget(
       return { blocked: true, reason: '陳舊的背蓋化石 免疫招式效果' };
     }
   }
+  // v5.213：化隱（M5 詛咒娃娃 / 斯魔茶 / 來悲粗茶 / 怨影娃娃）— 不受招式效果（含狀態）
+  //   defense.ts L139 unified entry 已有此 check；legacy helper 補一份避免漏 caller。
+  if (targetCard?.abilities?.some(a => a.name === '化隱')) {
+    return { blocked: true, reason: '化隱 免疫招式效果' };
+  }
   const dIdx = (1 - atkIdx) as 0 | 1;
   for (const [name, rule] of ATTACK_EFFECT_IMMUNITY) {
     if (rule.kind === 'energy-on-target') {
@@ -2095,11 +2100,14 @@ export function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused'
     if (status === 'asleep' && isSleepImmune(def.active, pool)) {
       return addLog(state, `${defName}｜不眠：免疫【睡眠】`, aIdx);
     }
-    // v2.91：統一走 canApplyAttackEffectToTarget — 涵蓋薄霧能量 / 硬岩【鬥】能量 /
+    // v2.91：統一走 attack-effect immunity helper — 涵蓋薄霧能量 / 硬岩【鬥】能量 /
     // 皇帝之勢 / 抵抗之幕（基礎火箭隊）。
+    // v5.213：改用 unified canApplyEffectToTarget(kind='attack-effect') — legacy
+    //   canApplyAttackEffectToTarget 沒包含化隱 check，導致 M5 詛咒娃娃/斯魔茶等
+    //   被狀態 attack（如險惡門牙）攻擊時化隱沒擋住中毒等狀態附加（Wilson 報告）。
     if (def.active) {
       const defCardForGuard = pool.get(def.active.cardId);
-      const guardSP = canApplyAttackEffectToTarget(state, aIdx, def.active, defCardForGuard, pool);
+      const guardSP = canApplyEffectToTarget(state, aIdx, def.active, defCardForGuard, 'attack-effect', pool);
       if (guardSP.blocked) {
         const defName2 = pool.get(def.active.cardId)?.name ?? '?';
         return addLog(state, `${defName2}｜${guardSP.reason}`, aIdx);

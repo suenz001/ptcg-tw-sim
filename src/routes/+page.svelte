@@ -304,6 +304,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.213</span> 化隱漏擋中毒等狀態附加 — statusPost 改用 unified defense helper</summary>
+        <ul>
+          <li><b>玩家報告</b>：擁有特性「化隱」的詛咒娃娃，被對手「火箭隊的小拉達｜險惡門牙」攻擊後仍被【中毒】。化隱卡面：「這隻寶可夢不會受到對手的招式或特性的效果。」狀態（中毒/灼傷/睡眠/混亂/麻痺）屬於招式效果，應被擋。</li>
+          <li><b>根因</b>：<code>effects.ts</code> <code>statusPost</code> 在 L2102 用的是 <b>legacy</b> helper <code>canApplyAttackEffectToTarget</code>（L1884），這個 legacy helper 只查 <code>ATTACK_EFFECT_IMMUNITY</code> map（薄霧能量 / 硬岩【鬥】能量 / 皇帝之勢 / 抵抗之幕等），<b>不知道化隱</b>。化隱實作在 <code>defense.ts</code> L139 unified entry <code>canApplyEffectToTarget</code> 內，statusPost 沒走這條路徑 → 漏擋。</li>
+          <li><b>修法</b>（雙保險）：
+            <ol>
+              <li><b>主修</b>：<code>statusPost</code> L2102 改用 unified <code>canApplyEffectToTarget(state, aIdx, def.active, defCard, 'attack-effect', pool)</code> — 鏡射 effects.ts L2189 既有 pattern。</li>
+              <li><b>defense-in-depth</b>：legacy <code>canApplyAttackEffectToTarget</code> 也加 inline 化隱 check，避免其他舊 caller 漏。</li>
+            </ol>
+          </li>
+          <li><b>影響範圍</b>：所有用 <code>statusPost</code> 的招式都受惠 — 險惡門牙、毒之氣息、毒液一擊、劇毒牙、噴毒、腦力震動 等 20+ 狀態類招式對化隱寶可夢的免疫一致生效。</li>
+          <li><b>同類風險檢查</b>：<code>statusPost</code> 之外的 attack POST helpers（damagePost / drawPost / discardPost 等）若也用 legacy helper 而非 unified entry，可能有類似漏洞 — 本次先修 statusPost（Wilson 直接點名場景）。後續可全 audit。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 17（按卡面/規則驗證）：化隱卡面「不受招式或特性的效果」明確涵蓋狀態附加</li>
+              <li>Rule 14（單一 root cause）：主修 statusPost 路徑 + 補 legacy helper 化隱 check（兩處同源 bug 一次到位）</li>
+              <li>Rule 15（鏡射既有結構）：用 defense.ts unified entry 取代 legacy helper，符合 v4.5 統一架構方向</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
+              <li>Rule 4（tsc verify）</li>
+              <li>Rule 1（changelog 內 <code>&lt;</code> / <code>&gt;</code> / <code>&amp;&amp;</code> / <code>&#123;&#125;</code> 跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.212</span> 祭典樂舞 pending UI 端視覺禁用 — 卡片直接灰、不可拖曳（接續 v5.211）</summary>
         <ul>
           <li><b>玩家反映</b>：v5.211 在 engine 端擋住 pending 期間的非 ATTACK/END_TURN 動作（dispatch 後 reject + log），但 UI 上卡片仍可點/拖。玩家要的是「視覺上就不能用」— 灰按鈕、不可拖曳。</li>
