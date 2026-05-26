@@ -203,11 +203,51 @@
       feedbackSubmitting = false;
     }
   }
+
+  // v5.197：強制更新按鈕 — 解套 iOS PWA「加入主畫面」cache 不更新問題
+  //   玩家回報 iOS 加入主畫面後 app cache 卡舊版，關 app 重開仍是舊版本。
+  //   解法：卸載 Service Workers + 清空 Cache API + 加 timestamp query param 強制 reload。
+  //   不清 localStorage / IndexedDB → 牌組與帳號資料保留 ✓
+  let hardRefreshing = $state(false);
+  async function hardRefresh() {
+    if (hardRefreshing) return;
+    const ok = confirm('將清除瀏覽器快取並重新載入網頁，取得最新版本。\n\n✅ 您的牌組與帳號資料會保留\n❌ 暫存的網頁 / 程式 / 圖檔會清除\n\n確定要強制更新嗎？');
+    if (!ok) return;
+    hardRefreshing = true;
+    try {
+      // 1. 卸載所有 Service Workers
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister().catch(() => false)));
+      }
+      // 2. 清空 Cache API 所有 caches
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map(n => caches.delete(n).catch(() => false)));
+      }
+    } catch (e) {
+      console.warn('[hardRefresh] cleanup error:', e);
+    }
+    // 3. 加 timestamp query param 強制 fresh HTML (bypass browser HTTP cache)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('_v', String(Date.now()));
+      window.location.replace(url.toString());
+    }
+  }
 </script>
 
 <main>
   <h1>PTCG 實體賽事演練 <span class="version">v{VERSION}</span></h1>
   <p class="subtitle">寶可夢集換式卡牌模擬器</p>
+  <!-- v5.197：強制更新按鈕（手機 PWA 解套快取問題；桌面也可用） -->
+  <p class="hard-refresh-row">
+    <button class="hard-refresh-btn" onclick={hardRefresh} disabled={hardRefreshing}
+      title="清快取並重新載入網頁（iOS PWA 加入主畫面後若卡舊版，點此可強制更新）">
+      {hardRefreshing ? '⏳ 更新中…' : '🔄 強制更新版本（清快取）'}
+    </button>
+    <span class="hard-refresh-hint">📱 iOS 加入主畫面卡舊版時點此</span>
+  </p>
   <p class="tagline">Deck building testing and card database 牌組構築測試與卡牌資料庫</p>
 
   <section>
@@ -265,6 +305,26 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.197</span> 首頁加「強制更新版本」按鈕（iOS PWA cache 解套）</summary>
+        <ul>
+          <li><b>玩家回報</b>：iOS Safari「加入主畫面」做成 PWA 後，網站改版常無法跟上新版本，關 app 重開仍是舊版本。希望加按鈕讓玩家點擊後強制刷新（類似桌面 Ctrl+Shift+R）</li>
+          <li><b>根因</b>：iOS WebKit 的 PWA cache 機制非常頑固，標準的 reload 動作不會清 cache。即使刪除 service worker（本站目前未註冊 SW），WebKit HTTP cache 仍會用舊版 HTML / JS / 圖檔</li>
+          <li><b>修法</b>：首頁版本號下方加「🔄 強制更新版本（清快取）」按鈕。點擊後：
+            <ol>
+              <li>confirm 對話框告知玩家：「會保留牌組與帳號，會清快取的網頁/程式/圖檔」</li>
+              <li>卸載所有 Service Workers（若有 — 未來新增 SW 也適用）</li>
+              <li>清空 Cache API 所有 caches</li>
+              <li>加 timestamp query param 強制 fresh HTML（bypass HTTP cache）</li>
+              <li>用 <code>window.location.replace</code> reload 避免 history 累積</li>
+            </ol>
+          </li>
+          <li><b>不清</b>：localStorage / IndexedDB / cookies → 玩家的牌組與帳號資料保留 ✓</li>
+          <li><b>視覺</b>：按鈕橘紅底色（與「結束回合」綠底/「悔棋」橘黃色區隔），顯眼但不像危險操作；旁邊小字提示「📱 iOS 加入主畫面卡舊版時點此」</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 3 處 ASSERT exact-match）／14（最小 patch — 1 個 function + 1 個按鈕 + 1 段 CSS）／17（不做 AI 幻覺 — confirm 訊息誠實列出會清/不會清的項目）／1（changelog audit + svelte.compile pre-check pass）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.196</span> 對手回合出牌 modal 手機版自適應 + 可拖曳</summary>
         <ul>
           <li><b>玩家回報 3 個問題（圖1+圖2+圖3）</b>：
@@ -10833,6 +10893,30 @@ cost += gravityCount;</code></pre></li>
 </main>
 
 <style>
+
+  /* v5.197：強制更新按鈕 — 顯眼的橘紅底色，提示 iOS PWA 玩家可一鍵清快取 */
+  .hard-refresh-row {
+    display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+    margin: .4rem 0 1rem 0;
+  }
+  .hard-refresh-btn {
+    background: linear-gradient(180deg, #d97a2a, #b85a1a);
+    color: #fff;
+    border: 1px solid #e89a3a;
+    border-radius: 6px;
+    padding: .5rem 1rem;
+    font-size: .9rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,.3);
+    transition: transform .1s, background .15s;
+  }
+  .hard-refresh-btn:hover { background: linear-gradient(180deg, #e98a3a, #c86a2a); }
+  .hard-refresh-btn:active { transform: scale(0.97); }
+  .hard-refresh-btn:disabled { opacity: .6; cursor: wait; }
+  .hard-refresh-hint {
+    color: #aaa; font-size: .75rem;
+  }
 
   .version { font-size: 0.75rem; font-weight: 400; color: #888; font-family: monospace; vertical-align: middle; margin-left: 0.3rem; background: #e8e4ee; padding: 0.1rem 0.4rem; border-radius: 3px; }
   main {
