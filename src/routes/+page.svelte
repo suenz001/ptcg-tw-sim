@@ -265,6 +265,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.171</span> 🔧 hotfix v5.170 build — 補 m5_preview.ts 4 個缺失 imports</summary>
+        <ul>
+          <li><b>問題</b>：v5.170 深淵之瞳手動 KO 模式引用 <code>canApplyAttackEffectToTarget</code>、<code>prizesForKOLocal</code>、<code>recordOppKO</code>、<code>addPendingPrize</code> 4 個 helper，但 <code>m5_preview.ts</code> import block 沒同步補上 → vite build 應該會 fail（雖然 Iron Rules Audit svelte-compile 沒抓到，但 tsc/vite production build 一定 fail）。</li>
+
+          <li><b>修法</b>：
+            <ul>
+              <li><code>canApplyAttackEffectToTarget</code> 從 <code>../../defense</code> 補（已有 canApplyEffectToTarget 同 module）</li>
+              <li><code>prizesForKOLocal</code> / <code>recordOppKO</code> / <code>addPendingPrize</code> 從 <code>../../effects</code> 補（multi-line import block 內加 3 行）</li>
+            </ul>
+          </li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — 純 import 補齊，邏輯不動）／17（不做 AI 幻覺——v5.170 漏 import 的事實由 patch script 自己 WARN 出來，但我當時沒處理）／1（changelog audit pass）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.170</span> 🔧 修正 v5.168 深淵之瞳 — 改用棄世猴同命戰鬥手動 KO 模式</summary>
         <ul>
           <li><b>玩家指正</b>：深淵之瞳是「招式效果使對手昏厥」，不該用 <code>damage=HP</code> 變相「造成 N 傷害」處理。應該參考棄世猴｜同命戰鬥（effects.ts L6877）的純效果 KO 模式。</li>

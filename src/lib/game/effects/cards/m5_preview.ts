@@ -75,10 +75,14 @@ import {
   applyStatusToActive,
   isConfusionImmune,
   checkSpecialEnergyStatusImmune,
+  // v5.171：深淵之瞳手動 KO 模式仿棄世猴|同命戰鬥
+  prizesForKOLocal,
+  recordOppKO,
+  addPendingPrize,
 } from '../../effects';
 import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
-import { canApplyEffectToTarget } from '../../defense';
+import { canApplyEffectToTarget, canApplyAttackEffectToTarget } from '../../defense';
 
 // ── M5 helper: 自傷（這隻寶可夢也受到 N 傷害）─────────────────────────
 // 引擎沒有現成的 selfDamagePost helper（v2380 之前用 inline pattern）
