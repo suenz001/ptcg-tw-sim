@@ -192,6 +192,40 @@
       return p.count > 1 ? `${lbl}${p.count}` : lbl;
     }).join('');
   }
+  // v5.205：mp-sheet 拖曳支援（仿桌面 modal） — 玩家可拖開 picker 看後面場上資訊再決定
+  let sheetOffset = $state<{ x: number; y: number }>({ x: 0, y: 0 });
+  let sheetDragged = $state(false);
+  let sheetDragStart: { sx: number; sy: number; ox: number; oy: number } | null = null;
+  function onSheetHeaderPointerDown(e: PointerEvent) {
+    const t = e.target as HTMLElement | null;
+    if (!t) return;
+    // 按到 header 內的 button / icon 不觸發拖曳
+    if (t.closest('button, input, select, textarea, a, [role="button"]')) return;
+    sheetDragStart = {
+      sx: e.clientX, sy: e.clientY,
+      ox: sheetOffset.x, oy: sheetOffset.y,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  }
+  function onSheetHeaderPointerMove(e: PointerEvent) {
+    if (!sheetDragStart) return;
+    const dx = e.clientX - sheetDragStart.sx;
+    const dy = e.clientY - sheetDragStart.sy;
+    sheetOffset = { x: sheetDragStart.ox + dx, y: sheetDragStart.oy + dy };
+    if (!sheetDragged && Math.abs(dx) + Math.abs(dy) > 3) sheetDragged = true;
+  }
+  function onSheetHeaderPointerUp(_e: PointerEvent) {
+    sheetDragStart = null;
+  }
+  // 切換 sheet（sheet 物件變化）時自動 reset offset
+  $effect(() => {
+    if (sheet === null || sheet) {
+      sheetOffset = { x: 0, y: 0 };
+      sheetDragged = false;
+    }
+  });
+
   // v5.116：觀戰者 isSpectator=true → isMyTurn 永遠 false → 所有按鈕 / popup actions / dispatch gate 全部失效（read-only 模式）
   let isMyTurn = $derived(!isSpectator && game.activePlayerIndex === myIdx);
   let isMainPhase = $derived(game.turnPhase === 'main');
@@ -1025,14 +1059,15 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <div class="mp-sheet-overlay" onclick={closeSheet} role="presentation">
+  <!-- v5.205：拖曳時 overlay 加 .dragged → 背景透明 + pointer-events: none（仿桌面 modal）-->
+  <div class="mp-sheet-overlay" class:dragged={sheetDragged} onclick={closeSheet} role="presentation">
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div class="mp-sheet" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+    <div class="mp-sheet" style:transform={`translate(${sheetOffset.x}px, ${sheetOffset.y}px)`} onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
       {#if sheet.type === 'hand'}
         {@const acts = handActions(sheet.inst)}
         {@const c = cardOf(sheet.inst)}
-        <div class="mp-sheet-title">{c?.name ?? '?'}</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">{c?.name ?? '?'}</div>
         {#if acts.length === 0}
           <div class="mp-sheet-empty">本回合無可執行動作</div>
         {/if}
@@ -1041,7 +1076,7 @@
         {/each}
       {:else if sheet.type === 'active'}
         {@const acts = activeActions()}
-        <div class="mp-sheet-title">戰鬥寶可夢動作</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">戰鬥寶可夢動作</div>
         {#if acts.length === 0}
           <div class="mp-sheet-empty">本回合無可執行動作</div>
         {/if}
@@ -1063,13 +1098,13 @@
       {:else if sheet.type === 'bench'}
         {@const acts = benchActions(sheet.inst)}
         {@const c = cardOf(sheet.inst)}
-        <div class="mp-sheet-title">{c?.name ?? '?'}</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">{c?.name ?? '?'}</div>
         {#each acts as a}
           <button class="mp-sheet-btn" class:primary={a.primary} onclick={a.action}>{a.label}</button>
         {/each}
       {:else if sheet.type === 'pick-energy-target'}
         <!-- v5.200：附加能量目標改卡圖網格（鏡射桌面送新戰鬥位 modal UX）-->
-        <div class="mp-sheet-title">⚡ 選擇附加目標</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">⚡ 選擇附加目標</div>
         <div class="mp-pick-grid">
           {#each energyTargets() as tinst}
             {@const c = cardOf(tinst)}
@@ -1082,7 +1117,13 @@
                 {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name} loading="lazy"/>{/if}
                 <div class="mp-pick-name">{c?.name ?? '?'}</div>
                 <div class="mp-pick-meta">HP {hpRemaining(tinst)}/{hpMax(tinst)}</div>
-                <div class="mp-pick-meta">⚡{tinst.energyAttached.length}{toolCnt > 0 ? ` · 🔧${toolCnt}` : ''}</div>
+                <div class="mp-pick-pips">
+                  {#each energyPips(tinst) as pip}
+                    <span class="mp-pip mp-pip-sm" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
+                  {/each}
+                  {#if tinst.energyAttached.length === 0}<span class="mp-pick-noenergy">無能量</span>{/if}
+                </div>
+                {#if toolCnt > 0}<div class="mp-pick-meta">🔧 {toolCnt}</div>{/if}
                 {#if tinst.status}<div class="mp-pick-status">⚠️ {tinst.status === 'poisoned' ? '☠️' : tinst.status === 'burned' ? '🔥' : tinst.status === 'asleep' ? '💤' : tinst.status === 'confused' ? '😵' : tinst.status === 'paralyzed' ? '⚡' : tinst.status}</div>{/if}
               </button>
             </div>
@@ -1090,7 +1131,7 @@
         </div>
       {:else if sheet.type === 'pick-evolve-target'}
         <!-- v5.200：進化目標改卡圖網格 -->
-        <div class="mp-sheet-title">🔺 選擇進化目標</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">🔺 選擇進化目標</div>
         <div class="mp-pick-grid">
           {#each (sheet.type === 'pick-evolve-target' ? sheet.candidates : []) as fromIid}
             {@const inst = [...(myPlayer.active ? [myPlayer.active] : []), ...myPlayer.bench].find(x => x.iid === fromIid)}
@@ -1105,7 +1146,13 @@
                   {#if ic?.imageUrl}<img src={ic.imageUrl} alt={ic.name} loading="lazy"/>{/if}
                   <div class="mp-pick-name">{ic?.name ?? '?'}</div>
                   <div class="mp-pick-meta">HP {hpRemaining(inst)}/{hpMax(inst)}</div>
-                  <div class="mp-pick-meta">⚡{inst.energyAttached.length}{toolCnt > 0 ? ` · 🔧${toolCnt}` : ''}</div>
+                  <div class="mp-pick-pips">
+                    {#each energyPips(inst) as pip}
+                      <span class="mp-pip mp-pip-sm" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
+                    {/each}
+                    {#if inst.energyAttached.length === 0}<span class="mp-pick-noenergy">無能量</span>{/if}
+                  </div>
+                  {#if toolCnt > 0}<div class="mp-pick-meta">🔧 {toolCnt}</div>{/if}
                   {#if inst.status}<div class="mp-pick-status">⚠️ {inst.status === 'poisoned' ? '☠️' : inst.status === 'burned' ? '🔥' : inst.status === 'asleep' ? '💤' : inst.status === 'confused' ? '😵' : inst.status === 'paralyzed' ? '⚡' : inst.status}</div>{/if}
                 </button>
               </div>
@@ -1114,7 +1161,7 @@
         </div>
       {:else if sheet.type === 'pick-retreat-target'}
         <!-- v5.200：撤退選備戰改卡圖網格（鏡射桌面送新戰鬥位 modal）-->
-        <div class="mp-sheet-title">🔄 選擇換入的寶可夢{currentRetreatCost !== null ? `（撤退費 -${currentRetreatCost}）` : ''}</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">🔄 選擇換入的寶可夢{currentRetreatCost !== null ? `（撤退費 -${currentRetreatCost}）` : ''}</div>
         <div class="mp-pick-grid">
           {#each myPlayer.bench as b}
             {@const bc = cardOf(b)}
@@ -1127,14 +1174,20 @@
                 {#if bc?.imageUrl}<img src={bc.imageUrl} alt={bc.name} loading="lazy"/>{/if}
                 <div class="mp-pick-name">{bc?.name ?? '?'}</div>
                 <div class="mp-pick-meta">HP {hpRemaining(b)}/{hpMax(b)}</div>
-                <div class="mp-pick-meta">⚡{b.energyAttached.length}{toolCnt > 0 ? ` · 🔧${toolCnt}` : ''}</div>
+                <div class="mp-pick-pips">
+                {#each energyPips(b) as pip}
+                  <span class="mp-pip mp-pip-sm" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
+                {/each}
+                {#if b.energyAttached.length === 0}<span class="mp-pick-noenergy">無能量</span>{/if}
+              </div>
+              {#if toolCnt > 0}<div class="mp-pick-meta">🔧 {toolCnt}</div>{/if}
                 {#if b.status}<div class="mp-pick-status">⚠️ {b.status === 'poisoned' ? '☠️' : b.status === 'burned' ? '🔥' : b.status === 'asleep' ? '💤' : b.status === 'confused' ? '😵' : b.status === 'paralyzed' ? '⚡' : b.status}</div>{/if}
               </button>
             </div>
           {/each}
         </div>
       {:else if sheet.type === 'discard'}
-        <div class="mp-sheet-title">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
         <!-- v5.129：改 grid 顯示「卡圖縮圖 + 右下角紅色數字」，更易檢索 -->
         <div class="mp-discard-grid">
           {#each groupDiscardList(sheet.list) as g (g.cardId)}
@@ -1671,6 +1724,45 @@
   }
   .mp-sheet-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .mp-sheet-btn:active:not(:disabled) { transform: scale(0.98); }
+
+  /* v5.205：mp-sheet 拖曳支援 — overlay.dragged 透明化讓玩家看到底下場上 */
+  .mp-sheet-overlay.dragged {
+    background: transparent;
+    pointer-events: none;
+  }
+  .mp-sheet-overlay.dragged .mp-sheet {
+    pointer-events: auto;
+    box-shadow: 0 6px 28px rgba(0,0,0,0.7);
+  }
+  .mp-sheet-drag-handle {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .mp-sheet-drag-handle:active { cursor: grabbing; }
+
+  /* v5.205：picker 卡片內能量分屬性顯示（取代原 ⚡N 統一顯示） */
+  .mp-pick-pips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5px;
+    justify-content: center;
+    padding: 0.05rem 0;
+    line-height: 1;
+  }
+  .mp-pick-pips .mp-pip {
+    min-width: 13px;
+    height: 13px;
+    font-size: 0.52rem;
+    padding: 0 2px;
+    margin: 0;
+  }
+  .mp-pick-noenergy {
+    font-size: 0.55rem;
+    color: #888;
+    font-style: italic;
+  }
 
   /* v5.200：手機版選目標 picker 卡圖網格（撤退 / 附能 / 進化共用）
      設計目標：80px 卡寬 + auto-fit + max-height 55vh + 內捲。

@@ -304,6 +304,39 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.205</span> 手機版 picker 可拖曳 + 能量分屬性顯示（接續 v5.200 三類卡圖網格）</summary>
+        <ul>
+          <li><b>玩家報告</b>：v5.200 的手機版 3 個 picker（撤退/附能/進化）：(1) 沒辦法拖曳，玩家想看後面場上狀況決定選哪隻很卡 (2) 能量都用 ⚡ 統一代表，希望分屬性顯示（惡2 / 超1 / 水3 etc.）。</li>
+          <li><b>修法 1（拖曳）</b>：仿桌面 modal 的拖曳機制（<code>+page.svelte</code> L740-760 <code>onModalHeaderPointerDown/Move/Up</code>），在 MobilePortraitBattle 加 <code>sheetOffset</code> state + <code>onSheetHeaderPointerDown/Move/Up</code>。
+            <ul>
+              <li><code>.mp-sheet-title</code> 統一加 <code>mp-sheet-drag-handle</code> class 與 pointer handlers，變成抓手</li>
+              <li>拖曳期間 <code>.mp-sheet-overlay</code> 加 <code>.dragged</code> class → 背景透明 + pointer-events: none，讓玩家看到底下場上資訊</li>
+              <li><code>.mp-sheet</code> 套 <code>style:transform</code> 跟著手指移動</li>
+              <li>切換 sheet（<code>$effect</code> 偵測 <code>sheet</code> 變化）時自動 reset offset</li>
+            </ul>
+          </li>
+          <li><b>修法 2（能量分屬性）</b>：三個 mp-pick-card 內的 <code>⚡N</code> 換成 <code>energyPips(inst)</code> 遍歷渲染。
+            <ul>
+              <li>每個能量類型 1 個 <code>.mp-pip.mp-pip-sm</code> chip（中文字 + 顏色 + 數量）</li>
+              <li>已有 helper：<code>energyPips()</code> 從 inst.energyAttached 分類，<code>ENERGY_LABEL</code> 中文字，<code>ENERGY_COLOR</code> 配色（與場上能量 chip 視覺一致）</li>
+              <li>例：[惡2][超1][水3] 三個 chip 並排，每個約 13px 寬，80px 卡內塞得下 4-5 種</li>
+              <li>新加 <code>.mp-pick-pips</code> flex container 自動 wrap，&gt;5 種能量會自動換行</li>
+              <li>無能量時顯示「無能量」灰字提示</li>
+              <li>道具拆獨立一行 <code>🔧 N</code></li>
+            </ul>
+          </li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 14（不重複造輪子）：拖曳機制鏡射桌面 modal、能量 chip 鏡射 active/bench 的 mp-pip-sm</li>
+              <li>Rule 17（不 AI 幻覺）：所有 helper（energyPips / ENERGY_LABEL / ENERGY_COLOR）都是現有實作，沒新發明</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
+              <li>Rule 1（changelog 內 <code>&lt;</code> / <code>&gt;</code> / <code>&amp;&amp;</code> 跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.204</span> Hotfix v5.203 — <code>Card</code> import 路徑修正（從 <code>$lib/cards/types</code>）</summary>
         <ul>
           <li><b>根因</b>：<code>Card</code> 型別不在 <code>game/types.ts</code>，而在 <code>$lib/cards/types</code>（看 draw_supporters.ts L22 範本）。</li>
