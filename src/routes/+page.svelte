@@ -304,6 +304,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.200</span> 手機版三類 picker 改卡圖網格（撤退 / 附能 / 進化 — 鏡射桌面送新戰鬥位 modal）</summary>
+        <ul>
+          <li><b>玩家建議</b>：手機版撤退 / 附加能量 / 進化的目標選擇 modal 之前都是純文字按鈕清單，希望改成像「戰鬥寶可夢被昏厥時派出新寶可夢」那種卡圖網格 UI（介面最清楚）。</li>
+          <li><b>修法</b>：在 <code>MobilePortraitBattle.svelte</code> 內三類 picker 統一改用 <code>.mp-pick-grid</code>：
+            <ol>
+              <li>新增 sheet type <code>pick-retreat-target</code>，<code>activeActions</code> 撤退改成單一「🔄 撤退（-N）…」按鈕，點下後彈卡圖網格選備戰（取代之前每隻備戰一個文字按鈕）</li>
+              <li><code>pick-energy-target</code> / <code>pick-evolve-target</code> 既有 sheet type 也改 render：卡圖 + 名字 + HP + ⚡N + 🔧N + 狀態 emoji（與桌面 <code>retreat-grid</code> 視覺等效）</li>
+              <li>每張卡左上 🔍 副按鈕可開放大鏡（鏡射桌面 send-new-active modal 模式）</li>
+            </ol>
+          </li>
+          <li><b>適應性處理</b>：用 CSS <code>grid-template-columns: repeat(auto-fit, minmax(80px, 1fr))</code> 自動排版 — 80px 卡寬，560px 手機可塞 5-7 卡 / 行（涵蓋零之大空洞 8 隻備戰場景）。配 <code>max-height: 55vh; overflow-y: auto</code>，極端情況自動內捲。<b>不需要 JS 偵測數量</b>，純 CSS 向量化處理任意寶可夢數量。</li>
+          <li><b>資訊密度設計</b>：卡圖 80px 寬下 4 行 meta 字級分別 0.62rem（名字）/ 0.58rem（HP / 能量 / 狀態），透過 <code>white-space: nowrap; overflow: hidden; text-overflow: ellipsis</code> 處理長名截斷。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 11c（不 git status）/ Rule 14（三類 picker 統一同套 grid UI，不重複造輪子） / Rule 17（不亂改 engine 邏輯，只重構 svelte render） / Rule 1（changelog 內 <code>&lt;</code> / 陣列括號都跳脫）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.199</span> 觀戰者隱藏取得獎賞按鈕 + 首頁強制更新按鈕配色 / 小字優化</summary>
         <ul>
           <li><b>Bug 1（玩家報告）</b>：手機版觀戰者仍可看到「取得獎賞牌」按鈕（雖點下去 dispatch L3589 已擋，但 UX 不該顯示）。

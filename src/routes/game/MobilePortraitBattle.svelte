@@ -307,6 +307,7 @@
     | { type: 'bench'; inst: CardInstance }
     | { type: 'pick-energy-target'; energyIid: string }
     | { type: 'pick-evolve-target'; evoIid: string; candidates: string[] }
+    | { type: 'pick-retreat-target' }  // v5.200 撤退改卡圖網格 picker
     | { type: 'discard'; list: CardInstance[]; owner: string }
     | null;
   let sheet = $state<SheetState>(null);
@@ -573,20 +574,13 @@
         });
       });
     }
-    // 撤退
+    // 撤退 — v5.200 改成單一按鈕，點下後彈卡圖網格 picker（沿用送新戰鬥位 modal UX）
     if (canRetreatNow && myPlayer.bench.length > 0) {
-      myPlayer.bench.forEach(b => {
-        const c = cardOf(b);
-        const costLabel = currentRetreatCost !== null ? ` (-${currentRetreatCost})` : '';
-        // v4.49：撤退 picker label 加能量摘要（玩家反映已有放大鏡仍希望直接看到）
-        const eText = energyLabelText(b);
-        const ePart = eText ? ` [${eText}]` : '';
-        out.push({
-          label: `🔄 撤退${costLabel} → ${c?.name ?? '?'}${ePart}`,
-          action: () => retreatTo(b.iid),
-          // v3.32 撤退選項加 zoomIid，UI 顯示 🔍 副按鈕讓玩家先看備戰寶可夢狀態
-          zoomIid: b.iid,
-        });
+      const costLabel = currentRetreatCost !== null ? `（-${currentRetreatCost}）` : '';
+      out.push({
+        label: `🔄 撤退${costLabel}…`,
+        action: () => { sheet = { type: 'pick-retreat-target' }; },
+        primary: true,
       });
     }
     // 特性
@@ -1074,32 +1068,71 @@
           <button class="mp-sheet-btn" class:primary={a.primary} onclick={a.action}>{a.label}</button>
         {/each}
       {:else if sheet.type === 'pick-energy-target'}
+        <!-- v5.200：附加能量目標改卡圖網格（鏡射桌面送新戰鬥位 modal UX）-->
         <div class="mp-sheet-title">⚡ 選擇附加目標</div>
-        {#each energyTargets() as tinst}
-          {@const c = cardOf(tinst)}
-          {@const allTools = [...(tinst.toolAttached ? [tinst.toolAttached] : []), ...(tinst.extraTools ?? [])]}
-          {@const toolNames = allTools.map(t => pool.get(t.cardId)?.name ?? '?').filter(Boolean).join('、')}
-          <button class="mp-sheet-btn primary" onclick={() => attachEnergy(sheet!.type === 'pick-energy-target' ? sheet!.energyIid : '', tinst.iid)}>
-            {c?.name ?? '?'}（HP {hpRemaining(tinst)}/{hpMax(tinst)} · ⚡{tinst.energyAttached.length}{toolNames ? ` · 🔧${toolNames}` : ''}）
-          </button>
-        {/each}
+        <div class="mp-pick-grid">
+          {#each energyTargets() as tinst}
+            {@const c = cardOf(tinst)}
+            {@const allTools = [...(tinst.toolAttached ? [tinst.toolAttached] : []), ...(tinst.extraTools ?? [])]}
+            {@const toolCnt = allTools.length}
+            <div class="mp-pick-card">
+              <button class="mp-pick-zoom" title="放大檢視：{c?.name ?? '?'}"
+                onclick={(e) => { e.stopPropagation(); closeSheet(); onOpenZoom(tinst.cardId, tinst); }}>🔍</button>
+              <button class="mp-pick-btn" onclick={() => attachEnergy(sheet!.type === 'pick-energy-target' ? sheet!.energyIid : '', tinst.iid)}>
+                {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name} loading="lazy"/>{/if}
+                <div class="mp-pick-name">{c?.name ?? '?'}</div>
+                <div class="mp-pick-meta">HP {hpRemaining(tinst)}/{hpMax(tinst)}</div>
+                <div class="mp-pick-meta">⚡{tinst.energyAttached.length}{toolCnt > 0 ? ` · 🔧${toolCnt}` : ''}</div>
+                {#if tinst.status}<div class="mp-pick-status">⚠️ {tinst.status === 'poisoned' ? '☠️' : tinst.status === 'burned' ? '🔥' : tinst.status === 'asleep' ? '💤' : tinst.status === 'confused' ? '😵' : tinst.status === 'paralyzed' ? '⚡' : tinst.status}</div>{/if}
+              </button>
+            </div>
+          {/each}
+        </div>
       {:else if sheet.type === 'pick-evolve-target'}
+        <!-- v5.200：進化目標改卡圖網格 -->
         <div class="mp-sheet-title">🔺 選擇進化目標</div>
-        {#each (sheet.type === 'pick-evolve-target' ? sheet.candidates : []) as fromIid}
-          {@const inst = [...(myPlayer.active ? [myPlayer.active] : []), ...myPlayer.bench].find(x => x.iid === fromIid)}
-          <!-- v3.722 進化目標加 🔍 zoom 副按鈕（與撤退 picker 同模式），玩家可先看寶可夢狀態再決定 -->
-          <div class="mp-sheet-row">
-            <button class="mp-sheet-btn mp-sheet-btn-flex primary" onclick={() => evolveTo(fromIid, (sheet as { evoIid: string }).evoIid)}>
-              {nameOfIid(fromIid)}{inst ? `（HP ${hpRemaining(inst)}/${hpMax(inst)} · ⚡${inst.energyAttached.length}）` : ''}
-            </button>
+        <div class="mp-pick-grid">
+          {#each (sheet.type === 'pick-evolve-target' ? sheet.candidates : []) as fromIid}
+            {@const inst = [...(myPlayer.active ? [myPlayer.active] : []), ...myPlayer.bench].find(x => x.iid === fromIid)}
             {#if inst}
-              <button class="mp-sheet-zoom" title="放大檢視" onclick={() => {
-                closeSheet();
-                onOpenZoom(inst.cardId, inst);
-              }}>🔍</button>
+              {@const ic = cardOf(inst)}
+              {@const allTools = [...(inst.toolAttached ? [inst.toolAttached] : []), ...(inst.extraTools ?? [])]}
+              {@const toolCnt = allTools.length}
+              <div class="mp-pick-card">
+                <button class="mp-pick-zoom" title="放大檢視：{ic?.name ?? '?'}"
+                  onclick={(e) => { e.stopPropagation(); closeSheet(); onOpenZoom(inst.cardId, inst); }}>🔍</button>
+                <button class="mp-pick-btn" onclick={() => evolveTo(fromIid, (sheet as { evoIid: string }).evoIid)}>
+                  {#if ic?.imageUrl}<img src={ic.imageUrl} alt={ic.name} loading="lazy"/>{/if}
+                  <div class="mp-pick-name">{ic?.name ?? '?'}</div>
+                  <div class="mp-pick-meta">HP {hpRemaining(inst)}/{hpMax(inst)}</div>
+                  <div class="mp-pick-meta">⚡{inst.energyAttached.length}{toolCnt > 0 ? ` · 🔧${toolCnt}` : ''}</div>
+                  {#if inst.status}<div class="mp-pick-status">⚠️ {inst.status === 'poisoned' ? '☠️' : inst.status === 'burned' ? '🔥' : inst.status === 'asleep' ? '💤' : inst.status === 'confused' ? '😵' : inst.status === 'paralyzed' ? '⚡' : inst.status}</div>{/if}
+                </button>
+              </div>
             {/if}
-          </div>
-        {/each}
+          {/each}
+        </div>
+      {:else if sheet.type === 'pick-retreat-target'}
+        <!-- v5.200：撤退選備戰改卡圖網格（鏡射桌面送新戰鬥位 modal）-->
+        <div class="mp-sheet-title">🔄 選擇換入的寶可夢{currentRetreatCost !== null ? `（撤退費 -${currentRetreatCost}）` : ''}</div>
+        <div class="mp-pick-grid">
+          {#each myPlayer.bench as b}
+            {@const bc = cardOf(b)}
+            {@const allTools = [...(b.toolAttached ? [b.toolAttached] : []), ...(b.extraTools ?? [])]}
+            {@const toolCnt = allTools.length}
+            <div class="mp-pick-card">
+              <button class="mp-pick-zoom" title="放大檢視：{bc?.name ?? '?'}"
+                onclick={(e) => { e.stopPropagation(); closeSheet(); onOpenZoom(b.cardId, b); }}>🔍</button>
+              <button class="mp-pick-btn" onclick={() => retreatTo(b.iid)}>
+                {#if bc?.imageUrl}<img src={bc.imageUrl} alt={bc.name} loading="lazy"/>{/if}
+                <div class="mp-pick-name">{bc?.name ?? '?'}</div>
+                <div class="mp-pick-meta">HP {hpRemaining(b)}/{hpMax(b)}</div>
+                <div class="mp-pick-meta">⚡{b.energyAttached.length}{toolCnt > 0 ? ` · 🔧${toolCnt}` : ''}</div>
+                {#if b.status}<div class="mp-pick-status">⚠️ {b.status === 'poisoned' ? '☠️' : b.status === 'burned' ? '🔥' : b.status === 'asleep' ? '💤' : b.status === 'confused' ? '😵' : b.status === 'paralyzed' ? '⚡' : b.status}</div>{/if}
+              </button>
+            </div>
+          {/each}
+        </div>
       {:else if sheet.type === 'discard'}
         <div class="mp-sheet-title">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
         <!-- v5.129：改 grid 顯示「卡圖縮圖 + 右下角紅色數字」，更易檢索 -->
@@ -1638,6 +1671,92 @@
   }
   .mp-sheet-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .mp-sheet-btn:active:not(:disabled) { transform: scale(0.98); }
+
+  /* v5.200：手機版選目標 picker 卡圖網格（撤退 / 附能 / 進化共用）
+     設計目標：80px 卡寬 + auto-fit + max-height 55vh + 內捲。
+     用 CSS auto-fit minmax 取代 JS 偵測，向量化處理任意數量寶可夢。 */
+  .mp-pick-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 0.45rem;
+    max-height: 55vh;
+    overflow-y: auto;
+    padding: 0.3rem 0.15rem;
+    margin-bottom: 0.3rem;
+  }
+  .mp-pick-card {
+    position: relative;
+    display: flex;
+  }
+  .mp-pick-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.12rem;
+    background: rgba(40, 60, 40, 0.85);
+    color: #f0f0f0;
+    border: 1.5px solid #4a8a4a;
+    border-radius: 8px;
+    padding: 0.25rem 0.18rem 0.35rem;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s;
+    overflow: hidden;
+  }
+  .mp-pick-btn:hover { background: rgba(60, 90, 60, 0.95); border-color: #6aaa6a; }
+  .mp-pick-btn:active { transform: scale(0.96); }
+  .mp-pick-btn img {
+    width: 100%;
+    aspect-ratio: 2.5 / 3.5;
+    object-fit: cover;
+    border-radius: 4px;
+    display: block;
+  }
+  .mp-pick-name {
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #ffe680;
+  }
+  .mp-pick-meta {
+    font-size: 0.58rem;
+    text-align: center;
+    color: #d0d0d0;
+    line-height: 1.15;
+  }
+  .mp-pick-status {
+    font-size: 0.58rem;
+    text-align: center;
+    color: #ffaa66;
+    line-height: 1.15;
+    font-weight: 600;
+  }
+  .mp-pick-zoom {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 2;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(80, 60, 100, 0.92);
+    color: #fff;
+    border: 1px solid #5a4a7a;
+    cursor: pointer;
+    font-size: 0.7rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mp-pick-zoom:hover { background: rgba(120, 90, 150, 1); }
+  .mp-pick-zoom:active { background: rgba(60, 40, 80, 1); }
+
   .mp-sheet-cancel {
     width: 100%;
     background: rgba(60,40,40,0.6);
