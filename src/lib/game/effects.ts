@@ -14440,7 +14440,8 @@ regG('道具拆除器', (st) => {
   return allTools.length > 0;
 });
 function buildToolRemoverOptions(st: GameState, pool: Map<string, Card>) {
-  const opts: { id: string; text: string }[] = [];
+  // v5.191：每個 opt 加 inspectIid + inspectPlayerIdx，讓 UI 渲染放大鏡按鈕
+  const opts: { id: string; text: string; inspectIid?: string; inspectPlayerIdx?: 0 | 1 }[] = [];
   for (const idx of [0, 1] as const) {
     const p = st.players[idx];
     const sideLabel = idx === st.activePlayerIndex ? '我方' : '對手';
@@ -14458,6 +14459,8 @@ function buildToolRemoverOptions(st: GameState, pool: Map<string, Card>) {
         opts.push({
           id: `${idx}:${inst.iid}:${t.iid}`,
           text: `🔧 ${sideLabel} ${pos} ${ownerName} 的「${toolName}」`,
+          inspectIid: inst.iid,
+          inspectPlayerIdx: idx,
         });
       }
     }

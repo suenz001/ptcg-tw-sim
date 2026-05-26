@@ -7112,7 +7112,7 @@
             </div>
             <p class="sel-hint stepper-hint">範圍 {stepper.min}–{stepper.max} · 每次 ±{stepper.step}</p>
           {:else}
-            {@const opts = (pendingSelection.params?.options as Array<{id:string;text:string;disabled?:boolean}>) ?? []}
+            {@const opts = (pendingSelection.params?.options as Array<{id:string;text:string;disabled?:boolean;inspectIid?:string;inspectPlayerIdx?:0|1}>) ?? []}
             {@const coinFlips = (pendingSelection.params?.coinFlips as string[] | undefined) ?? []}
             <!-- v5.165 重試徽章 modal — 顯示前次擲幣明細 -->
             {#if coinFlips.length > 0}
@@ -7134,11 +7134,30 @@
             {/if}
             <div class="modal-choice-list">
               {#each opts as opt}
-                <button class="btn-act modal-choice-btn"
-                  disabled={!!opt.disabled}
-                  onclick={() => { selectionPicked = new Set([opt.id]); confirmSelection(); }}>
-                  {opt.text}
-                </button>
+                <!-- v5.191：道具拆除器等需要查看寶可夢的場景，若 opt 有 inspectIid 則旁邊渲染放大鏡按鈕 -->
+                {#if opt.inspectIid !== undefined && opt.inspectPlayerIdx !== undefined && game}
+                  {@const _ip = game.players[opt.inspectPlayerIdx]}
+                  {@const _inst = _ip.active?.iid === opt.inspectIid ? _ip.active : _ip.bench.find(b => b.iid === opt.inspectIid)}
+                  <div class="modal-choice-row">
+                    <button class="btn-act modal-choice-btn modal-choice-btn-flex"
+                      disabled={!!opt.disabled}
+                      onclick={() => { selectionPicked = new Set([opt.id]); confirmSelection(); }}>
+                      {opt.text}
+                    </button>
+                    <button class="btn-act modal-choice-inspect"
+                      title="查看寶可夢詳情"
+                      disabled={!_inst}
+                      onclick={() => { if (_inst) openZoom(_inst.cardId, _inst); }}>
+                      🔍
+                    </button>
+                  </div>
+                {:else}
+                  <button class="btn-act modal-choice-btn"
+                    disabled={!!opt.disabled}
+                    onclick={() => { selectionPicked = new Set([opt.id]); confirmSelection(); }}>
+                    {opt.text}
+                  </button>
+                {/if}
               {/each}
             </div>
           {/if}
@@ -10938,6 +10957,18 @@
   .sel-header:active{ cursor:grabbing; }
   .sel-header h3{ margin:0 0 .2rem; font-size:1.1rem; color:#aaffaa; }
   .sel-hint{ margin:0; font-size:.85rem; color:#aaa; }
+  /* v5.191 modal-choice 行內放大鏡（道具拆除器等需查看寶可夢的場景） */
+  .modal-choice-row{ display:flex; align-items:stretch; gap:.35rem; width:100%; }
+  .modal-choice-btn-flex{ flex:1; }
+  .modal-choice-inspect{
+    flex: 0 0 auto;
+    padding: .35rem .55rem;
+    font-size: 1rem;
+    line-height: 1;
+    min-width: 2.3rem;
+  }
+  .modal-choice-inspect[disabled]{ opacity:.45; cursor:not-allowed; }
+
   /* v2.201 modal-choice stepper：泰姆猜 HP 等需要數字輸入的場景 — Leon 規則「戰鬥畫面只用滑鼠」
      置中橫排：[−] [當前值] [+] [✓ 確認]，按鈕為大圓鈕方便手機/平板觸控 */
   .modal-choice-stepper{ display:flex; align-items:center; justify-content:center; gap:.6rem; padding:.6rem 0; flex-wrap:wrap; }

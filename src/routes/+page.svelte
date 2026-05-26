@@ -265,6 +265,28 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.191</span> 道具拆除器 modal 放大鏡 + 脫殼忍者進化鏈重補</summary>
+        <ul>
+          <li><b>道具拆除器 modal 加放大鏡 🔍</b>（玩家建議）
+            <ul>
+              <li>玩家反映：選項只顯示文字，看不到寶可夢狀態難以判斷拆哪張</li>
+              <li>修：effects.ts buildToolRemoverOptions 每 opt 加 inspectIid + inspectPlayerIdx；UI modal-choice 渲染若 opt 有 inspectIid 則旁邊加放大鏡按鈕，點擊 openZoom 顯示該寶可夢詳細卡牌</li>
+              <li>不影響其他 modal-choice 卡（沒 inspectIid 走原本單一按鈕分支）</li>
+            </ul>
+          </li>
+          <li><b>脫殼忍者進化鏈重補</b>（Wilson 親自確認規則）
+            <ul>
+              <li>Wilson 直接確認：「土居忍士→脫殼忍者 / 土居忍士→鐵面忍者 是雙重進化鏈，類似艾路雷朵和沙奈朵那種」</li>
+              <li>歷史：v5.125 加 evolvesFrom → v5.152 因誤判 AI 幻覺撤回 → 本次 Wilson 親自確認規則正確，重新加上</li>
+              <li>修：M1S.json 兩處脫殼忍者（id=14063 + id=14219）evolvesFrom 設為「土居忍士」。鐵面忍者既有 evolvesFrom 不動</li>
+              <li>效果：場上有土居忍士時，手牌脫殼忍者可進化（與鐵面忍者並列為兩種 Stage1 選項）</li>
+            </ul>
+          </li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 5 處 ASSERT exact-match）／14（最小 patch — A: 1 field 擴充 + 1 UI 分支; B: 純 JSON 欄位補）／15（source of truth — Wilson 親自確認 + grep 鐵面忍者 evolvesFrom 已存在）／17（不做 AI 幻覺 — v5.152 撤回判斷錯誤，這次 Wilson 直接指示）／1（changelog audit + svelte.compile pre-check pass）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.190</span> 3 Bug：道具拆除器只能選 1 張 + 不公印章重洗 log + 油之機關槍中立中心免疫</summary>
         <ul>
           <li><b>Bug A：道具拆除器只能選 1 張</b>
