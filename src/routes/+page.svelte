@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.174</span> 高傲指令 0 寶可夢時也要 modal 揭示 top10 (參考寶可裝置3.0)</summary>
+        <ul>
+          <li>玩家回報: 高傲指令 翻 10 張無寶可夢時直接 log「對手牌庫頂 10 張無寶可夢」+ 0 傷害, 沒 modal 給對方看, 違反卡面「將對手的牌庫上方10張卡翻到正面」公開揭示精神</li>
+          <li>根因: UI L3720 pokeList=0 直接 dispatch → engine PRE log 失敗 → 對手看不到 top10 內容</li>
+          <li>修法 (參考寶可裝置3.0 reveal 模式): 改開 rocketCommandPicker 含 top10All (全 10 張含非寶可夢) + revealOnly=true flag。Modal UI 偵測 revealOnly → 顯示 top10All 全部卡圖 (純展示, 無招式按鈕) + 「✓ 確認」按鈕 → dispatch skip sentinel → engine 走 0 傷害 + 重洗對手牌庫流程。</li>
+          <li>線上 mulligan 流程 audit: v5.139 已給 isMyTurn online 補 mulliganPostBenchOpen check, 線上 myIdx=myPlayerIndex 固定 (不像本機雙人切視角), 故 v5.173 本機雙人 myIdx 切換 bug 不影響線上模式。</li>
+          <li>Iron Rules: 11/11c/11e/11f/14/15(卡面為準, 翻到正面=公開揭示)/17/1</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.173</span> setup phase 卡死修補 - myIdx 邏輯漏 mulliganPostBenchOpen 優先</summary>
         <ul>
           <li>玩家回報：v5.172 雙方 setupDone+mulligan 全完成但 phase 卡死</li>

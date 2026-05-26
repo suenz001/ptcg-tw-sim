@@ -3717,8 +3717,17 @@
       const pokeList = top10
         .map(inst => ({ inst, card: getCard(inst.cardId) }))
         .filter(x => x.card?.supertype === 'Pokemon' && (x.card?.attacks?.length ?? 0) > 0) as Array<{ inst: CardInstance; card: Card }>;
+      // v5.174：top10 全 10 張 (含非寶可夢) 給 modal 揭示用 — 參考寶可裝置3.0「公開揭示」精神
+      const top10All = top10.map(inst => ({ inst, card: getCard(inst.cardId) })).filter(x => x.card) as Array<{ inst: CardInstance; card: Card }>;
       if (pokeList.length === 0) {
-        dispatch(GameActions.attack(attackIndex));
+        // v5.174：0 寶可夢時不直接 dispatch；改開 picker (revealOnly=true) 揭示 top10 給玩家看
+        //   過去 (v4.39) 直接 dispatch → engine log「無寶可夢」但玩家沒 modal → 不公開
+        rocketCommandPicker = {
+          sourceAttackIndex: attackIndex,
+          pokeList: [],
+          top10All,
+          revealOnly: true,
+        };
         return;
       }
       // 單一寶可夢 + 單招 → 自動填，跳過 picker
@@ -3729,6 +3738,8 @@
       rocketCommandPicker = {
         sourceAttackIndex: attackIndex,
         pokeList,
+        top10All,
+        revealOnly: false,
       };
       return;
     }
@@ -3872,6 +3883,9 @@
   let rocketCommandPicker = $state<{
     sourceAttackIndex: number;
     pokeList: Array<{ inst: CardInstance; card: Card }>;
+    // v5.174：top10All = 對手牌庫頂 10 張全部（含非寶可夢），revealOnly=true 時 modal 改純揭示
+    top10All?: Array<{ inst: CardInstance; card: Card }>;
+    revealOnly?: boolean;
   } | null>(null);
   function resolveRocketCommand(pokeIid: string, attackIndex: number) {
     if (!rocketCommandPicker) return;
@@ -7570,9 +7584,25 @@
     <div class="selection-overlay">
       <div class="selection-modal copy-attack-modal">
         <div class="sel-header">
-          <h3>高傲指令：選擇要使用的招式</h3>
-          <p class="sel-hint">對手牌庫上方 10 張卡翻到正面，下列為其中持有招式的寶可夢。請選擇 1 個招式作為這個招式使用（若不希望可按「不複製」）。翻到正面的卡將放回牌庫並重洗。</p>
+          {#if rocketCommandPicker.revealOnly}
+            <h3>高傲指令：對手牌庫頂 10 張無寶可夢（公開揭示）</h3>
+            <p class="sel-hint">依照卡面規則，翻到正面的 10 張卡全部公開揭示給對手看。下方為對手牌庫上方 10 張卡的內容（無寶可夢可複製）。確認後放回牌庫並重洗，本次招式 0 傷害。</p>
+          {:else}
+            <h3>高傲指令：選擇要使用的招式</h3>
+            <p class="sel-hint">對手牌庫上方 10 張卡翻到正面，下列為其中持有招式的寶可夢。請選擇 1 個招式作為這個招式使用（若不希望可按「不複製」）。翻到正面的卡將放回牌庫並重洗。</p>
+          {/if}
         </div>
+        {#if rocketCommandPicker.revealOnly && rocketCommandPicker.top10All}
+          <!-- v5.174：revealOnly 模式 — 純展示 top10 全部卡圖（含非寶可夢） -->
+          <div class="copy-attack-list rocket-command-scroll" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:.5rem">
+            {#each rocketCommandPicker.top10All as p (p.inst.iid)}
+              <div class="copy-attack-poke" style="flex-direction:column;align-items:center;text-align:center">
+                <img src={p.card.imageUrl} alt={p.card.name} class="copy-attack-img" style="max-width:110px"/>
+                <div class="copy-attack-name" style="font-size:.78rem">{p.card.name}</div>
+              </div>
+            {/each}
+          </div>
+        {:else}
         <div class="copy-attack-list rocket-command-scroll">
           {#each rocketCommandPicker.pokeList as p (p.inst.iid)}
             <div class="copy-attack-poke">
@@ -7598,13 +7628,15 @@
             </div>
           {/each}
         </div>
+        {/if}
         <div class="sel-footer">
-          <!-- v5.169 修正 v5.168 — 玩家補充正確需求：
-               「不複製」必須保留：翻出 10 張可能沒寶可夢可選，或玩家不喜歡也應允許 0 傷害結束招式。
-               「取消（改用其他招式）」要拿掉：可回未攻擊狀態 → 翻 10 張偷看後改打別招 → abuse。
-               PTCG「若希望」= 「攻擊已宣告 → 看到結果 → 可選擇不複製（攻擊算完, damage=0）」
-               不能回到未攻擊狀態。 -->
-          <button class="btn-act" onclick={skipRocketCommand}>不複製（傷害 0，攻擊結束）</button>
+          {#if rocketCommandPicker.revealOnly}
+            <!-- v5.174：揭示確認 — 等同 skip (傷害 0 + 重洗對手牌庫) -->
+            <button class="btn-act primary" onclick={skipRocketCommand}>✓ 確認（已揭示，重洗對手牌庫，本招式 0 傷害）</button>
+          {:else}
+            <!-- v5.169：「不複製」按鈕 (skip 但攻擊算完) -->
+            <button class="btn-act" onclick={skipRocketCommand}>不複製（傷害 0，攻擊結束）</button>
+          {/if}
         </div>
       </div>
     </div>
