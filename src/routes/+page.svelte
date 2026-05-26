@@ -265,6 +265,18 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.182</span> hotfix v5.180 - room-oracle.ts 補 4 functions (Oracle build fail)</summary>
+        <ul>
+          <li>玩家報: Oracle redeploy fail: "proposeReturnToRoom" is not exported by room-oracle.ts</li>
+          <li>根因: v5.180 加「提議返回房間」4 functions 只改 room.ts (GitHub Pages 用), 沒同步 room-oracle.ts (Oracle 用)</li>
+          <li>修: room-oracle.ts 補 proposeReturnToRoom / respondReturnToRoom / cancelReturnToRoom / checkAndAcceptReturnToRoom (oracleTx pattern, 仿 proposeRestart)</li>
+          <li>checkAndAcceptReturnToRoom: 雙方同意 → gameState=null + seats 全 ready=false + status=waiting → onRoom 訂閱自動回房間 ready 介面</li>
+          <li>教訓: 以後改 room.ts 必須同步 room-oracle.ts (兩個 backend impl)</li>
+          <li>Iron Rules: 11/11c/11e/11f/14/17/1</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.181</span> 兩個 bug 修 - 揮指 modal hint + 中立中心 skipDefEffects gate</summary>
         <ul>
           <li>Bug 1: 皮可西揮指/試著模仿 picker modal 顯示「高傲指令」(v5.178 reuse 寫死)</li>

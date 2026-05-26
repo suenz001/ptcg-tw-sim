@@ -408,6 +408,82 @@ export async function checkAndAcceptRestart(roomCode: string, pool: Map<string, 
   }
 }
 
+// ── v5.182 propose-return-to-room (回房間選牌組) — Oracle 版仿 restart pattern ─
+
+export async function proposeReturnToRoom(roomCode: string): Promise<void> {
+  const uid = await getMyUid();
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('only P1/P2 can propose');
+    if (data.status !== 'playing' || !data.gameState) throw new Error('game not in progress');
+    const count = data.returnRoomProposalCount ?? 0;
+    const cur = data.returnRoomProposed ?? {};
+    if (cur[myIdx] || cur[1 - myIdx]) throw new Error('proposal already in progress');
+    const newProposed = { ...cur, [myIdx]: true };
+    return {
+      ...data,
+      returnRoomProposed: newProposed,
+      returnRoomProposedAt: Date.now(),
+      returnRoomProposalCount: count + 1,
+      returnRoomRejectedAt: null,
+    } as unknown as RoomData;
+  });
+}
+
+export async function respondReturnToRoom(roomCode: string, accept: boolean): Promise<void> {
+  const uid = await getMyUid();
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('only P1/P2 can respond');
+    const cur = data.returnRoomProposed ?? {};
+    if (!cur[1 - myIdx]) throw new Error('opponent did not propose');
+    if (accept) {
+      return { ...data, returnRoomProposed: { ...cur, [myIdx]: true } } as unknown as RoomData;
+    }
+    return {
+      ...data,
+      returnRoomProposed: null,
+      returnRoomProposedAt: null,
+      returnRoomRejectedAt: Date.now(),
+    } as unknown as RoomData;
+  });
+}
+
+export async function cancelReturnToRoom(roomCode: string): Promise<void> {
+  try {
+    await oracleTx(roomCode.toUpperCase(), (data) => {
+      if (!data.returnRoomProposed) return data;
+      return { ...data, returnRoomProposed: null, returnRoomProposedAt: null } as unknown as RoomData;
+    });
+  } catch (err) {
+    console.warn('[cancelReturnToRoom]', err);
+  }
+}
+
+export async function checkAndAcceptReturnToRoom(roomCode: string): Promise<boolean> {
+  try {
+    let didReset = false;
+    await oracleTx(roomCode.toUpperCase(), (data) => {
+      const p = data.returnRoomProposed ?? {};
+      if (!p[0] || !p[1]) return data;
+      const newSeats = data.seats.map(s => ({ ...s, ready: false }));
+      didReset = true;
+      return {
+        ...data,
+        status: 'waiting',
+        gameState: null,
+        seats: newSeats,
+        returnRoomProposed: null,
+        returnRoomProposedAt: null,
+      } as unknown as RoomData;
+    });
+    return didReset;
+  } catch (err) {
+    console.error('[checkAndAcceptReturnToRoom] failed:', err);
+    return false;
+  }
+}
+
 // ── Game flow ───────────────────────────────────────────────────────────────
 
 export async function startGame(roomCode: string, gameState: GameState): Promise<boolean> {
