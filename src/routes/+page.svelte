@@ -265,6 +265,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.185</span> Hotfix：本機雙人 setup 又卡死 — myIdx 邏輯漏 mulliganRevealConfirmed 優先</summary>
+        <ul>
+          <li>玩家回報截圖：v5.184 單機雙人對局，log 顯示「AI 對手 已確認對方的 mulligan 揭示」但畫面沒任何按鈕可按、對手戰鬥場「未揭曉」</li>
+          <li>狀態分析：phase=setup、雙方 setupDone=true、pendingMulliganDraw=[0,0]、mulliganPostBenchOpen=[false,false]、mulliganRevealConfirmed=[false, true]（玩家 1 還沒看 AI 揭示，但 AI 已看完玩家 1 揭示）</li>
+          <li>根因：myIdx 本機雙人切換邏輯只看 pendingMulliganDraw → mulliganPostBenchOpen → setupDone，漏掉中間的 mulliganRevealConfirmed。當前述三個 flag 都不觸發時走 fallback `setupDone[0]?1:0` → myIdx=1（切到對手視角）→ 對手揭示 modal 條件 `!mulliganRevealConfirmed[myIdx]` = `!true` = false → modal 不顯示 → 卡死</li>
+          <li>修法：myIdx 優先級補入 mulliganRevealConfirmed 兩層（在 PostBench 之前）：
+            <ul>
+              <li>p2 有揭示且 player1 沒 confirm → myIdx=0（讓 player1 看到 AI 揭示 modal）</li>
+              <li>p1 有揭示且 player2 沒 confirm → myIdx=1</li>
+            </ul>
+          </li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純 myIdx 優先級插入兩層）／17（不做 AI 幻覺 — 從截圖 + log 推 state，grep mulligan reveal modal 顯示條件 L6924 確認）／1（changelog audit pass + 本機 svelte.compile pre-check）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.184</span> Bug 5: 朽木妖詛咒根擋手牌附能 — 8 卡 picker 過濾</summary>
         <ul>
           <li>玩家回報：朽木妖｜詛咒根 卡面寫「下個對手的回合，受這個招式的寶可夢無法附上從手牌使出的能量」，但下列招式/特性都會繞過 flag：碧綠之舞、吃飽先、嫩葉之恩、熟成充能、充溢之力、烈火亂舞、電氣流、岩石武裝</li>

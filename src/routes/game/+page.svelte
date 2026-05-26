@@ -2158,18 +2158,24 @@
     ) :
     aiPlayerIndex !== null ? ((1 - aiPlayerIndex) as 0 | 1) :
     (game?.phase === 'setup' && myPlayerIndex === null
-      // 本機雙人 setup：優先 mulligan 補抽，再 mulliganPostBenchOpen，再 setup 完成狀態
-      // v5.173：補 mulliganPostBenchOpen 優先級——玩家1 setupDone+postBench=true 時需顯示「完成補抽備戰」按鈕
-      //   若漏這層 myIdx 會切到對手視角（setupDone[0]?1:0），玩家1 看不到按鈕 → 卡死
+      // 本機雙人 setup：優先級 pendingMulliganDraw → mulliganRevealConfirmed → mulliganPostBenchOpen → setupDone
+      // v5.173：補 mulliganPostBenchOpen 優先級
+      // v5.185：補 mulliganRevealConfirmed 優先 — 若哪邊還沒 confirm 對方揭示就切到那邊
+      //   不然 setupDone[0]?1:0 會把 myIdx 切到對手視角，揭示 modal 條件 !mulliganRevealConfirmed[myIdx] 失敗 → 卡死
+      //   插入順序：pendingMulliganDraw（最高）→ mulliganRevealConfirmed → mulliganPostBenchOpen → setupDone
       ? (((game.pendingMulliganDraw?.[0] ?? 0) > 0
           ? 0
           : (game.pendingMulliganDraw?.[1] ?? 0) > 0
             ? 1
-            : game.mulliganPostBenchOpen?.[0] === true
+            : ((game.mulliganRevealedHands?.p2 ?? []).length > 0 && !game.mulliganRevealConfirmed?.[0])
               ? 0
-              : game.mulliganPostBenchOpen?.[1] === true
+              : ((game.mulliganRevealedHands?.p1 ?? []).length > 0 && !game.mulliganRevealConfirmed?.[1])
                 ? 1
-                : (game.setupDone[0] ? 1 : 0)) as 0 | 1)
+                : game.mulliganPostBenchOpen?.[0] === true
+                  ? 0
+                  : game.mulliganPostBenchOpen?.[1] === true
+                    ? 1
+                    : (game.setupDone[0] ? 1 : 0)) as 0 | 1)
       // v3.81：本機雙人 playing — pendingPrizes 在哪邊就 switch 到那邊（讓對手能點「取得」按鈕）
       //   修咒詛炸彈自身 KO 後對手卡死的問題（pendingPrizes 在非 activePlayer 那邊，UI 看不到 button）。
       //   只在 myPlayerIndex===null 的本機雙人才適用；線上 / AI 模式 myPlayerIndex 永遠有值，走另一條路徑。
