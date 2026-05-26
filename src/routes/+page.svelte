@@ -304,6 +304,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.203</span> Hotfix v5.202 — m5_preview type-only import 修 verbatimModuleSyntax 編譯錯誤</summary>
+        <ul>
+          <li><b>根因</b>：v5.202 patch script auto-import 加 <code>CardInstance</code> 進 <code>import &#123; RULE_BOX_SUBTYPES, CardInstance &#125; from '../../types'</code>，但 <code>tsconfig</code> 啟用 <code>verbatimModuleSyntax</code> 要求 type 必須用 <code>import type</code>；同時 <code>mokujouCandidates</code> helper signature 用了 <code>GameState</code>/<code>Card</code> 也沒 import。</li>
+          <li><b>修法</b>：拆成兩行 import：value-only 留 <code>RULE_BOX_SUBTYPES</code>，新增 <code>import type &#123; CardInstance, GameState, Card &#125;</code>。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）/ Rule 4（push 後 tsc verify → 補 hotfix）/ Rule 1（changelog 內 <code>&amp;#123;&amp;#125;</code> 跳脫）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.202</span> 沐淨 2 bug 修補 — 手牌無候選不可使用 + 強制至少丟 1 張</summary>
         <ul>
           <li><b>玩家報告</b>：「沐淨」這張支援者：(1) 手上沒有非規則寶可夢時不應該能使用（卡片消耗但無效果，違反 PTCG「支援者無可解效果不能使用」規則）；(2) 使用之後不可以不點選寶可夢，強制至少要選 1 隻。</li>
