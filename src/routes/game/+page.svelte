@@ -6102,8 +6102,16 @@
             onclick={()=>dispatch(GameActions.finishMulliganPostBench(myIdx))}>
             ✅ 完成補抽後設置
           </button>
+        {:else if game.phase==='setup' && game.setupDone[myIdx]}
+          <!-- v5.166：玩家已 setupDone 但對手還未完成 / mulligan 未解 → 顯示等候提示
+               避免落到下面 elseif 渲染對戰按鈕（setup phase 不該顯示） -->
+          <span class="waiting-msg">⏳ 等待對手完成設置 / mulligan 補抽…</span>
         {:else if isMyTurn() && !anyPendingPrize}
-          {#if game.turnPhase==='main' && activePlayer?.active}
+          <!-- v5.166：加 game.phase==='playing' gate — 避免 setup phase 邊界情況下
+               (例如 mulligan 中對手未揭曉但玩家 setupDone=true) 顯示招式 + 跳過攻擊
+               按鈕但 disabled (因 pendingSelection 殘留 / 對方 pending 占用)。
+               setup phase 應一律不顯示對戰用按鈕。 -->
+          {#if game.turnPhase==='main' && activePlayer?.active && game.phase==='playing'}
             {@const eff=getEffectiveAttacks(game, activePlayer.active, pool)}
             {#each eff as { atk, sourceCardName, isFromTool }, i}
               {@const _shinyOn = isShinyCrystalActive(activePlayer.active, atk.cost)}
@@ -6116,7 +6124,11 @@
                 <span class="atk-dmg">{atk.damage||'—'}</span>
               </button>
             {/each}
-            <button class="btn-act secondary" disabled={!!pendingSelection}
+            <!-- v5.166：disabled 改為精確判定 — 只在「自己有 pending modal 顯示中」
+                 才 disabled；對方 pending 不擋（理論上 isMyTurn() 已 gate，但雙保險）。
+                 PTCG 「跳過攻擊」= 自己選擇放棄本回合攻擊直接結束，應永遠可按。 -->
+            <button class="btn-act secondary"
+              disabled={!!pendingSelection && pendingSelection.actorIdx === myIdx}
               onclick={()=>dispatch(GameActions.endTurn())}>跳過攻擊 →</button>
           {/if}
           {#if canUseStadium && isMyTurn()}

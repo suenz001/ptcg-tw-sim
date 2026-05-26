@@ -265,6 +265,25 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.166</span> 🛡 防禦修：招式 / 跳過攻擊按鈕加 phase 與 disabled gate</summary>
+        <ul>
+          <li><b>玩家回報情境</b>：第 1 回合開戰，對手戰鬥場顯示「戰鬥中（未揭曉）」（紅卡背），玩家側「跳過攻擊 →」按鈕看得到但按不下去。</li>
+
+          <li><b>根因 audit</b>：「未揭曉」UI 只在 <code>oppHidden = game.phase === 'setup'</code> 為 true 時 render，但「跳過攻擊」按鈕的外層條件 <code>isMyTurn() &amp;&amp; !anyPendingPrize</code> 在 setup phase 某些邊界情境（mulliganReveal 未確認 / pendingMulliganDraw &gt; 0 但 setupDone=true 等）也可能成立 → 按鈕渲染但 disabled 條件 <code>!!pendingSelection</code> 擋住 click。</li>
+
+          <li><b>修法</b>：
+            <ol>
+              <li>action-btns 招式按鈕 inner <code>&#123;#if&#125;</code> 加 <code>game.phase==='playing'</code> gate：保證招式 / 跳過攻擊 / 撤退按鈕只在 playing phase 出現，setup phase 不顯示。</li>
+              <li>新增 elseif 分支：<code>game.phase==='setup' &amp;&amp; setupDone[myIdx]</code> → 顯示「⏳ 等待對手完成設置 / mulligan 補抽…」提示，取代之前可能 leak 的對戰按鈕。</li>
+              <li>「跳過攻擊」disabled 改為精確判定 <code>pendingSelection?.actorIdx === myIdx</code>（只在自己 pending modal 中才 disabled，對方 pending 不擋）。雙保險 + 符合 PTCG「跳過攻擊」即放棄本回合的語義。</li>
+            </ol>
+          </li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 3 處 ASSERT exact-match）／14（最小 patch — 加 gate / disabled 細化 / wait 提示）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.165</span> 🎯 重試徽章重設計：modal 顯示擲幣明細 + 玩家確認後才套傷害</summary>
         <ul>
           <li><b>問題</b>：v5.164 機關槍合擊 + 重試徽章雖然 modal 會跳，但傷害「先套用後才問」——玩家在 modal 看到對手 HP 已扣血，且 modal 沒顯示前次擲幣明細。</li>
