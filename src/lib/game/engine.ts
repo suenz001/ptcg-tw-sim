@@ -5732,8 +5732,12 @@ function handlePlaying(
       const hasDominatingPoisonOnActive = oActiveCard?.abilities?.some(a => a.name === '劇毒支配') ?? false;
       if (hasDominatingPoisonOnActive) poisonBonus += 50;
       const poisonBaseDamage = poisonPlayer.active.poisonDamagePerCheckup ?? 10;
-      const newDmg = poisonPlayer.active.damage + poisonBaseDamage + poisonBonus;
+      const poisonTotalDmg = poisonBaseDamage + poisonBonus;
+      const newDmg = poisonPlayer.active.damage + poisonTotalDmg;
       const poisonedHP = getEffectiveHP(poisonPlayer.active, pool, state);
+      // v5.192：致死分支前先 addLog 顯示實際傷害（避免玩家看不到飄字直接跳 KO）
+      //   原本致死直接走 KO log，玩家無法確認致死猛毒等強化中毒的實際傷害值
+      state = addLog({ ...state, players }, `中毒：${pool.get(poisonPlayer.active.cardId)?.name ?? '?'} 受到 ${poisonTotalDmg} 傷害！`, null);
       if (poisonedHP > 0 && newDmg >= poisonedHP) {
         // 被毒死 → KO；獎賞給「中毒方的對手」(oIdx)
         const koDiscard2: CardInstance[] = [
@@ -5769,7 +5773,7 @@ function handlePlaying(
       } else {
         poisonPlayer.active = { ...poisonPlayer.active, damage: newDmg };
         players[tIdx] = poisonPlayer;
-        state = addLog({ ...state, players }, `中毒：${pool.get(poisonPlayer.active.cardId)?.name ?? '?'} 受到 10 傷害！`, null);
+        // v5.192：log 已在致死前統一 addLog，此處不再重複（避免雙重 log）
       }
     }
 
@@ -5783,12 +5787,15 @@ function handlePlaying(
       const burnedCard = pool.get(burnedPlayer.active.cardId);
       // v3.0 鴨嘴炎獸｜熔岩波動 — 對手場上有此卡時，灼傷指示物 +3（=+30 傷害）。
       const burnBonus = magmarFlowingBurnBonus(state, oIdx, pool);
-      const newBurnDmg = burnedPlayer.active.damage + 20 + burnBonus;
+      const burnTotalDmg = 20 + burnBonus;
+      const newBurnDmg = burnedPlayer.active.damage + burnTotalDmg;
       const burnedHP = getEffectiveHP(burnedPlayer.active, pool, state);
       if (burnBonus > 0) {
         state = addLog(state, `「熔岩波動」啟動：灼傷傷害 +${burnBonus}`, oIdx);
       }
+      // v5.192：致死分支前先 addLog 顯示實際傷害（同中毒）
       if (burnedHP > 0 && newBurnDmg >= burnedHP) {
+        state = addLog({ ...state, players }, `燒傷：${burnedCard?.name ?? '?'} 受到 ${burnTotalDmg} 傷害！`, null);
         // 燒傷致死 → KO；獎賞給對手 oIdx
         const koDiscard3: CardInstance[] = [
           { ...burnedPlayer.active, damage: newBurnDmg },
@@ -5831,7 +5838,7 @@ function handlePlaying(
           }
         }
         players[tIdx] = burnedPlayer;
-        state = addLog({ ...state, players }, `燒傷：${burnedCard?.name ?? '?'} 受到 20 傷害 → ${burnCoin ? '正面：燒傷解除' : '反面：燒傷持續'}`, null);
+        state = addLog({ ...state, players }, `燒傷：${burnedCard?.name ?? '?'} 受到 ${burnTotalDmg} 傷害 → ${burnCoin ? '正面：燒傷解除' : '反面：燒傷持續'}`, null);
       }
     }
 
@@ -7790,8 +7797,11 @@ export function getUsableAbilities(
       if (ab.name === '頸傘發電') {
         if (!player.carnelliPlayedThisTurn) return;
       }
-      // P1：小木靈 | 怨恨進化 — 手牌有對應進化卡
+      // P1：小木靈 | 怨恨進化 — 手牌有對應進化卡 + v5.192 加「無法在自己的最初回合使用」gate
       if (ab.name === '怨恨進化') {
+        // v5.192：state.turn === 1 涵蓋雙方最初回合（先攻 turn 1 / 後攻 turn 1，
+        //   因為 turn 只在後攻 END_TURN 才 +1；turn ≥ 2 表示雙方都不再是最初回合）
+        if (state.turn === 1) return;
         const thisCard = pool.get(pk.cardId);
         if (!thisCard) return;
         const hasEvo = player.hand.some(c => {

@@ -265,6 +265,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.192</span> 致死毒/燒傷 log 動態化 + 小木靈怨恨進化最初回合 gate</summary>
+        <ul>
+          <li><b>Bug A：中毒/灼傷 log 兩個問題</b>（玩家回報）
+            <ul>
+              <li>玩家反映：超級毒藻龍ex 致死猛毒（16 個指示物 = 160 傷害）打對手後，寶可夢檢查階段「沒有跳傷害出來」+ 文字記錄顯示錯誤</li>
+              <li>根因 1（致死分支沒 log）：engine.ts L5574 中毒致死分支直接走 KO log（「被中毒傷害擊倒」）→ 跳過了「受到 N 傷害」的飄字 log → 玩家看不到實際毒傷值</li>
+              <li>根因 2（log 寫死 10）：L5609 中毒 log 寫死「受到 10 傷害」，沒讀實際 <code>poisonBaseDamage + poisonBonus</code>（致死猛毒應顯示 160，搭配劇毒支配/危險密林 還要再加成）</li>
+              <li>修：致死分支前先 addLog 顯示實際傷害「中毒：X 受到 N 傷害！」再進 KO；非致死分支移除重複 log（已在致死前 addLog 過）</li>
+              <li>順便修灼傷同類問題：L5671 灼傷 log 寫死「受到 20 傷害」沒讀 burnBonus（熔岩波動 +30）；致死分支也補 log</li>
+            </ul>
+          </li>
+          <li><b>Bug B：小木靈 怨恨進化 最初回合 gate</b>（玩家回報）
+            <ul>
+              <li>卡面：「無法在自己的最初回合使用。」（M-P-J #18513 + M4 #18458）</li>
+              <li>根因：engine.ts L7625 getUsableAbilities 對「怨恨進化」沒檢查最初回合 → UI 特性按鈕在 turn 1 仍可按；effects.ts v2360 regA 也沒擋</li>
+              <li>修：engine.ts L7625 + v2360_j_mark_batch.ts regA 都加 <code>state.turn === 1</code> gate（雙重防護）</li>
+              <li>判斷規則：<code>state.turn === 1</code> 涵蓋雙方最初回合（先攻 turn 1 / 後攻 turn 1；engine L6612 turn 只在後攻 END_TURN 才 +1，turn ≥ 2 表示雙方都不再是最初回合）</li>
+              <li>Audit 結果：全卡池中只有「小木靈 怨恨進化」一張帶此限制（M-P-J + M4 兩個版本），其他卡無需 audit。從手牌拖曳進化已被 engine.ts L2273 isFirstTurn gate 擋，但小木靈是「特性主動觸發進化」走自訂 regA，繞過正常進化 gate</li>
+            </ul>
+          </li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 6 處 ASSERT exact-match）／14（最小 patch — A: log 字串調整 + 抽 var；B: 1 gate × 2 處）／15（source of truth — JSON 卡面確認「無法在自己的最初回合使用」+ 既有 isFirstTurn pattern）／17（不做 AI 幻覺 — audit 全卡池確認只有小木靈一張，state.turn 計法查 engine L6612 確認）／1（changelog audit + svelte.compile pre-check pass）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.191</span> 道具拆除器 modal 放大鏡 + 脫殼忍者進化鏈重補</summary>
         <ul>
           <li><b>道具拆除器 modal 加放大鏡 🔍</b>（玩家建議）

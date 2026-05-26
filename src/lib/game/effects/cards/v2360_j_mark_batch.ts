@@ -207,6 +207,10 @@ regPost('具甲武者|要害斬', (state, aIdx) => {
 
 regA('小木靈', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state; // 型別安全
+  // v5.192：「無法在自己的最初回合使用」gate（defense-in-depth；engine getUsableAbilities 已 gate）
+  if (state.turn === 1) {
+    return addLog(state, '怨恨進化：無法在自己的最初回合使用', aIdx);
+  }
   const p = state.players[aIdx];
   const thisCard = pool.get(inst.cardId);
   if (!thisCard) return state;
