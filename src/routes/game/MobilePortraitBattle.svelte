@@ -959,7 +959,8 @@
     {/if}
   </div>
 
-  {#if (pendingPrizes ?? 0) > 0}
+  <!-- v5.199：補 !isSpectator gate — 觀戰者不該看到「取得」按鈕（雖 dispatch L3589 已擋，但 UX 不該顯示） -->
+  {#if (pendingPrizes ?? 0) > 0 && !isSpectator}
     <div class="mp-prize-alert">
       🏆 取 {pendingPrizes} 張獎勵牌
       <button class="mp-prize-btn" onclick={() => onAction(GameActions.takePrizes(pendingPrizes!, myIdx, myIdx))}>取得</button>

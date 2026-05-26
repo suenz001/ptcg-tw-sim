@@ -1761,8 +1761,9 @@
 
   // v3.81：監聽 myPendingPrizes — 出現時啟動 10s 倒數，timeout 後自動取
   //   修本機雙人模式 take-prize 卡死（自身 KO 後 pendingPrizes 在對手側，玩家若沒點就無限等）
+  // v5.199：觀戰者跳過 — 不該幫他人自動取獎賞
   $effect(() => {
-    if (!game) return;
+    if (!game || isSpectator) return;
     const pending = myPendingPrizes;
     if (pending > 0) {
       if (takePrizeTimerId === null) {
@@ -6201,7 +6202,7 @@
             {/if}
           {/if}
         {/if}
-        {#if myPendingPrizes > 0}
+        {#if myPendingPrizes > 0 && !isSpectator}
           <div class="alert prize-alert">
             🏆 取 {myPendingPrizes} 張獎勵牌
             {#if takePrizeCountdown > 0}

@@ -246,7 +246,6 @@
       title="清快取並重新載入網頁（iOS PWA 加入主畫面後若卡舊版，點此可強制更新）">
       {hardRefreshing ? '⏳ 更新中…' : '🔄 強制更新版本（清快取）'}
     </button>
-    <span class="hard-refresh-hint">📱 iOS 加入主畫面卡舊版時點此</span>
   </p>
   <p class="tagline">Deck building testing and card database 牌組構築測試與卡牌資料庫</p>
 
@@ -305,6 +304,32 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.199</span> 觀戰者隱藏取得獎賞按鈕 + 首頁強制更新按鈕配色 / 小字優化</summary>
+        <ul>
+          <li><b>Bug 1（玩家報告）</b>：手機版觀戰者仍可看到「取得獎賞牌」按鈕（雖點下去 dispatch L3589 已擋，但 UX 不該顯示）。
+            <ul>
+              <li><b>根因</b>：<code>MobilePortraitBattle.svelte</code> L962 prize-alert 條件只有 <code>(pendingPrizes ?? 0) &gt; 0</code>，沒 <code>!isSpectator</code> gate。桌面版 <code>game/+page.svelte</code> L6204 同樣漏判。</li>
+              <li><b>修法</b>：兩處都補 <code>&amp;&amp; !isSpectator</code>。另外 L1762 的 10s 自動取獎賞 <code>$effect</code> 也補 <code>isSpectator</code> early return，避免觀戰者那邊跑無謂計時器。</li>
+              <li><b>關聯</b>：延續 v5.116 / v5.160「觀戰者隱藏動作按鈕」系列，補先前漏掉的 prize-alert。</li>
+            </ul>
+          </li>
+          <li><b>UX 2（Wilson 反映）</b>：首頁「🔄 強制更新版本（清快取）」按鈕的橘紅底（v5.197）跟首頁淡白底配色衝突，下方小字「📱 iOS 加入主畫面卡舊版時點此」也多餘。
+            <ul>
+              <li><b>修法</b>：
+                <ol>
+                  <li>移除 <code>.hard-refresh-hint</code> span 跟對應 CSS</li>
+                  <li>按鈕配色改為跟首頁卡牌資料庫區塊一致的淡藍系：底色 <code>#f5f9ff</code>、邊框 <code>#c8d8f0</code>、字色 <code>#2563eb</code>；hover 加深</li>
+                  <li>字級從 .9rem 降到 .85rem，padding 縮，整體更低調</li>
+                </ol>
+              </li>
+              <li><b>原則</b>：按鈕功能性說明已在 <code>title</code> tooltip，hover 即可看到，UI 不需要永久曝光。</li>
+            </ul>
+          </li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 11c（不 git status）/ Rule 14（兩 bug 同 root cause 一次修：「觀戰者 UX gate」） / Rule 1（changelog 內 <code>&amp;&amp;</code> / <code>&gt;</code> 都跳脫）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.198</span> AI 對戰 setup 卡死修補（補抽完雙方都 mulligan 時 AI 不確認揭示）</summary>
         <ul>
           <li><b>玩家報告</b>：單機 AI 對戰，手機版補抽完手牌後右上空白卡住，log 停在「玩家 1 完成補抽後備戰設置」。</li>
@@ -10912,29 +10937,29 @@ cost += gravityCount;</code></pre></li>
 
 <style>
 
-  /* v5.197：強制更新按鈕 — 顯眼的橘紅底色，提示 iOS PWA 玩家可一鍵清快取 */
+  /* v5.199：強制更新按鈕 — 改用淺色低調風，跟首頁淡灰白底搭配 */
   .hard-refresh-row {
     display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
     margin: .4rem 0 1rem 0;
   }
   .hard-refresh-btn {
-    background: linear-gradient(180deg, #d97a2a, #b85a1a);
-    color: #fff;
-    border: 1px solid #e89a3a;
+    background: #f5f9ff;
+    color: #2563eb;
+    border: 1px solid #c8d8f0;
     border-radius: 6px;
-    padding: .5rem 1rem;
-    font-size: .9rem;
-    font-weight: 700;
+    padding: .42rem .9rem;
+    font-size: .85rem;
+    font-weight: 600;
     cursor: pointer;
-    box-shadow: 0 2px 6px rgba(0,0,0,.3);
-    transition: transform .1s, background .15s;
+    transition: background .15s, border-color .15s, color .15s;
   }
-  .hard-refresh-btn:hover { background: linear-gradient(180deg, #e98a3a, #c86a2a); }
-  .hard-refresh-btn:active { transform: scale(0.97); }
-  .hard-refresh-btn:disabled { opacity: .6; cursor: wait; }
-  .hard-refresh-hint {
-    color: #aaa; font-size: .75rem;
+  .hard-refresh-btn:hover {
+    background: #e8edf5;
+    border-color: #3b82f6;
+    color: #1d4ed8;
   }
+  .hard-refresh-btn:active { transform: scale(0.98); }
+  .hard-refresh-btn:disabled { opacity: .55; cursor: wait; }
 
   .version { font-size: 0.75rem; font-weight: 400; color: #888; font-family: monospace; vertical-align: middle; margin-left: 0.3rem; background: #e8e4ee; padding: 0.1rem 0.4rem; border-radius: 3px; }
   main {
