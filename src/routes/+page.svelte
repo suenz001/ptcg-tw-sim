@@ -304,6 +304,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.210</span> Changelog 中性化整理 — 統一行文風格、移除冗餘表述</summary>
+        <ul>
+          <li><b>動機</b>：歷次 changelog 累積一些非必要的工具相關表述（emoji 前綴、開發流程細節等），不影響玩家理解修改內容；本次統一整理為純粹的「玩家視角」描述。</li>
+          <li><b>調整</b>：
+            <ol>
+              <li>移除 7 處 summary 前綴的 emoji（保留標題文字本身）</li>
+              <li>Rule 17 表述全面改為「按卡面/規則驗證」「按既有實作驗證」（更精準描述 audit 行為）</li>
+              <li>其他細節用詞中性化</li>
+            </ol>
+          </li>
+          <li><b>不影響</b>：所有歷史版本的 bug 修法、卡片實作、Iron Rules 規則編號（11/11c/14/17/1 等）一律保留。本次純文字編輯，無程式碼修改。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 11c（不 git status）/ Rule 1（changelog 內特殊字元跳脫）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.209</span> 護城龍｜太鼓防壁 active target case 補修 — 大竺葵繁茂等倍率能量正確處理</summary>
         <ul>
           <li><b>玩家報告</b>：場上有大竺葵（繁茂特性，基本草視為 2 個草）+ 對手有護城龍時，攻擊方 active 身上 2 張基本草 (= 4 units) 仍被護城龍誤判「能量 ≤2」擋傷害。</li>
@@ -334,7 +350,7 @@
           <li><b>為什麼之前沒爆</b>：v4.891 時測 case 多半單獨基本能量，length === units，沒踩到差異。v5.115 修 defense.ts 時遺漏 engine.ts 平行路徑（兩處應同步用 helper，這是 Rule 14 教訓）。</li>
           <li><b>Iron Rules</b>：
             <ul>
-              <li>Rule 17（不 AI 幻覺）：卡面「能量為 2 個以下」+ PTCG「個 = unit」直接推得；v4.891 原註解「按張數」是錯的，已在 v5.115 + 本次更正</li>
+              <li>Rule 17（按卡面/規則驗證）：卡面「能量為 2 個以下」+ PTCG「個 = unit」直接推得；v4.891 原註解「按張數」是錯的，已在 v5.115 + 本次更正</li>
               <li>Rule 14（單一 root cause）：兩處原本應該同步用 helper，這次補上漏掉的 active path</li>
               <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
               <li>Rule 4（tsc verify）</li>
@@ -364,7 +380,7 @@
           <li><b>Iron Rules</b>：
             <ul>
               <li>Rule 14（單一 root cause）：3 bug 集中修，主要 fix 在 onclick handler（其他兩個是衍生 cosmetic）</li>
-              <li>Rule 17（不 AI 幻覺）：root cause 從 confirmSelection L4764 early return + Svelte 5 reactive 模型直接推得</li>
+              <li>Rule 17（按卡面/規則驗證）：root cause 從 confirmSelection L4764 early return + Svelte 5 reactive 模型直接推得</li>
               <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
               <li>Rule 4（修法後 tsc verify）</li>
               <li>Rule 1（changelog 內 <code>&lt;</code> / <code>&gt;</code> / <code>&amp;&amp;</code> / <code>&#123;&#125;</code> 都跳脫）</li>
@@ -396,7 +412,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           <li><b>同類卡比對</b>：人造細胞卵 / 雙卵細胞球（v5.083）也是 direct-evolve，但採「玩家先選目標再選進化卡」順序；賽吉採「先選進化卡再選目標」更貼近卡面字面，picker 順序差異不需統一。</li>
           <li><b>Iron Rules</b>：
             <ul>
-              <li>Rule 17（不 AI 幻覺）：依卡面「選擇 1 隻場上寶可夢」必須給玩家選擇權</li>
+              <li>Rule 17（按卡面/規則驗證）：依卡面「選擇 1 隻場上寶可夢」必須給玩家選擇權</li>
               <li>Rule 14（單一 root cause）：抽 helper 後兩個 regR 共用，不重複 evolve logic</li>
               <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
               <li>Rule 1（changelog 內 <code>&lt;</code> / <code>&gt;</code> / <code>&amp;&amp;</code> / <code>&#123;&#125;</code> 跳脫）</li>
@@ -440,7 +456,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           <li><b>Iron Rules</b>：
             <ul>
               <li>Rule 14（不重複造輪子）：拖曳機制鏡射桌面 modal、能量 chip 鏡射 active/bench 的 mp-pip-sm</li>
-              <li>Rule 17（不 AI 幻覺）：所有 helper（energyPips / ENERGY_LABEL / ENERGY_COLOR）都是現有實作，沒新發明</li>
+              <li>Rule 17（按卡面/規則驗證）：所有 helper（energyPips / ENERGY_LABEL / ENERGY_COLOR）都是現有實作，沒新發明</li>
               <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
               <li>Rule 1（changelog 內 <code>&lt;</code> / <code>&gt;</code> / <code>&amp;&amp;</code> 跳脫）</li>
             </ul>
@@ -490,7 +506,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           <li><b>Iron Rules</b>：
             <ul>
               <li>Rule 14（單一 root cause）：兩個 bug 共同源頭都是「沒做 gate」，統一用 <code>regG</code> + <code>minCount</code> 修</li>
-              <li>Rule 17（不 AI 幻覺）：卡面敘述 / regG 範本（draw_supporters.ts L110/L273）/ RULE_BOX_SUBTYPES 全部交叉驗證</li>
+              <li>Rule 17（按卡面/規則驗證）：卡面敘述 / regG 範本（draw_supporters.ts L110/L273）/ RULE_BOX_SUBTYPES 全部交叉驗證</li>
               <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
               <li>Rule 7c（同名特性）：不適用（非特性，是訓練家卡）</li>
               <li>Rule 1（changelog 內 <code>&gt;=</code> 跳脫）</li>
@@ -533,7 +549,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           <li><b>Iron Rules</b>：
             <ul>
               <li>Rule 14（單一 root cause）：三個 bug（buff 沒延續 / 玩家可介入 / 不自動）統一在「atomic auto-second-attack」一套機制</li>
-              <li>Rule 17（不 AI 幻覺）：所有設計基於 <code>static/cards/SV6.json</code> L494 卡面 + engine.ts L1500-1556 既有 state machine</li>
+              <li>Rule 17（按卡面/規則驗證）：所有設計基於 <code>static/cards/SV6.json</code> L494 卡面 + engine.ts L1500-1556 既有 state machine</li>
               <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
               <li>Rule 7c（同名特性疊加）：祭典樂舞同名特性，但 active 只有一隻 → 無疊加問題</li>
               <li>Rule 1（changelog 內 <code>&amp;#123;&amp;#125;</code> 跳脫物件字面量）</li>
@@ -599,7 +615,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           </li>
           <li><b>修法</b>：<code>tickAI()</code> L1714 與 $effect L1803 兩處 shouldAct 都補上 <code>|| !g.mulliganRevealConfirmed?.&#91;ai&#93;</code>。AI 該確認時 shouldAct=true → 進 handleSetupAI STEP 2 → 第一行就是「未確認 → return CONFIRM_MULLIGAN_REVEAL」→ AI 自動確認 → tryAdvance 解鎖。</li>
           <li><b>為什麼之前沒爆</b>：之前都是其中一方 mulligan=0 時 <code>mulliganRevealConfirmed&#91;非mulligan方&#93;</code> 初始就 true（engine.ts L1626 <code>const mulliganRevealConfirmed = &#91;m2 === 0, m1 === 0&#93;</code>）。只有雙方都 mulligan ≥ 1 且張數不等才會觸發；單機 AI 才有此 bug，線上模式雙方都會手動點 confirm 不受影響。</li>
-          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 11c（不 git status）/ Rule 14（單一 root cause 修法）/ Rule 17（不 AI 幻覺 — 從 engine.ts L1626 / ai.ts L347-373 推得根因）/ Rule 1（changelog 內 <code>&amp;#91;</code> / <code>&amp;#93;</code> 跳脫陣列括號避開 Svelte parser）。</li>
+          <li><b>Iron Rules</b>：Rule 11（Python pipeline）/ Rule 11c（不 git status）/ Rule 14（單一 root cause 修法）/ Rule 17（不 推測錯誤 — 從 engine.ts L1626 / ai.ts L347-373 推得根因）/ Rule 1（changelog 內 <code>&amp;#91;</code> / <code>&amp;#93;</code> 跳脫陣列括號避開 Svelte parser）。</li>
         </ul>
       </details>
 
@@ -619,7 +635,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           </li>
           <li><b>不清</b>：localStorage / IndexedDB / cookies → 玩家的牌組與帳號資料保留 ✓</li>
           <li><b>視覺</b>：按鈕橘紅底色（與「結束回合」綠底/「悔棋」橘黃色區隔），顯眼但不像危險操作；旁邊小字提示「📱 iOS 加入主畫面卡舊版時點此」</li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 3 處 ASSERT exact-match）／14（最小 patch — 1 個 function + 1 個按鈕 + 1 段 CSS）／17（不做 AI 幻覺 — confirm 訊息誠實列出會清/不會清的項目）／1（changelog audit + svelte.compile pre-check pass）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 3 處 ASSERT exact-match）／14（最小 patch — 1 個 function + 1 個按鈕 + 1 段 CSS）／17（按既有實作驗證 — confirm 訊息誠實列出會清/不會清的項目）／1（changelog audit + svelte.compile pre-check pass）</li>
         </ul>
       </details>
 
@@ -650,7 +666,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           </li>
           <li><b>跳過項目（Wilson 確認）</b>：手牌列右側「紅色放大鏡」破圖 — 不影響功能，本次不修。Audit 結果：可能來源（chat-fab / opp-turn-toggle-btn / mp-sheet-zoom 殘留）需 Wilson 確認 mode（AI 或 online）+ DevTools inspect 才能精準定位</li>
           <li><b>未做（範圍較大）</b>：「所有手機 modal 都要可拖」— mp-sheet（bottom sheet）原本就附在螢幕底部，拖曳意義不大；其他 selection-overlay modal 已支援拖曳（v2.44 .sel-header onpointerdown）；本次只動 opp-turn-panel 即 cover 主要痛點。若還有其他卡住的 modal 請 Wilson 截圖回報</li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純 CSS 改造 1 段 media query）／17（不做 AI 幻覺 — 紅放大鏡無法精準定位就如實報告不亂修）／1（changelog audit + svelte.compile pre-check pass）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純 CSS 改造 1 段 media query）／17（按既有實作驗證 — 紅放大鏡無法精準定位就如實報告不亂修）／1（changelog audit + svelte.compile pre-check pass）</li>
         </ul>
       </details>
 
@@ -680,7 +696,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
               <li>本次先 ship #1 + #2，#3 留待更多資訊</li>
             </ul>
           </li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 3 處 ASSERT exact-match）／14（最小 patch — 純 CSS 改造）／17（不做 AI 幻覺 — #3 無法定位元素就如實報告，不亂修）／1（changelog audit + svelte.compile pre-check pass）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 3 處 ASSERT exact-match）／14（最小 patch — 純 CSS 改造）／17（按既有實作驗證 — #3 無法定位元素就如實報告，不亂修）／1（changelog audit + svelte.compile pre-check pass）</li>
         </ul>
       </details>
 
@@ -722,7 +738,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
               <li>待 Wilson 確認優先級後另案處理</li>
             </ul>
           </li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 8 處 ASSERT exact-match）／14（最小 patch — 條件改 1 行 / props 新增 / log 鏡射桌面版）／15（source of truth — 鏡射既有桌面版 formatLogTime / performUndo / log 樣式）／17（不做 AI 幻覺 — 全 audit 後實作既有 pattern）／1（changelog audit + svelte.compile pre-check pass）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 8 處 ASSERT exact-match）／14（最小 patch — 條件改 1 行 / props 新增 / log 鏡射桌面版）／15（source of truth — 鏡射既有桌面版 formatLogTime / performUndo / log 樣式）／17（按既有實作驗證 — 全 audit 後實作既有 pattern）／1（changelog audit + svelte.compile pre-check pass）</li>
         </ul>
       </details>
 
@@ -755,7 +771,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
             </ul>
           </li>
           <li><b>規則對應</b>：PTCG 通則 — 未明文「不重複」的同名 passive 預設 per-source 疊加（與 v5.188 熔岩波動同邏輯）。其他正確的「不疊加」實作都是因為卡面有明文，或效果類型本身疊加無意義（狀態、完全免疫、trigger-once）</li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — 純 count 邏輯改造）／7c（同類 bug 全 audit — 14 個特性逐一對照卡面確認）／15（source of truth — JSON 卡面字面確認「不重複」字樣存在與否）／17（不做 AI 幻覺 — 全 audit 後只找出 2 個真實 bug，其他都已正確處理）／1（changelog audit + svelte.compile pre-check pass）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — 純 count 邏輯改造）／7c（同類 bug 全 audit — 14 個特性逐一對照卡面確認）／15（source of truth — JSON 卡面字面確認「不重複」字樣存在與否）／17（按既有實作驗證 — 全 audit 後只找出 2 個真實 bug，其他都已正確處理）／1（changelog audit + svelte.compile pre-check pass）</li>
         </ul>
       </details>
 
@@ -780,7 +796,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
               <li>Audit 結果：全卡池中只有「小木靈 怨恨進化」一張帶此限制（M-P-J + M4 兩個版本），其他卡無需 audit。從手牌拖曳進化已被 engine.ts L2273 isFirstTurn gate 擋，但小木靈是「特性主動觸發進化」走自訂 regA，繞過正常進化 gate</li>
             </ul>
           </li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 6 處 ASSERT exact-match）／14（最小 patch — A: log 字串調整 + 抽 var；B: 1 gate × 2 處）／15（source of truth — JSON 卡面確認「無法在自己的最初回合使用」+ 既有 isFirstTurn pattern）／17（不做 AI 幻覺 — audit 全卡池確認只有小木靈一張，state.turn 計法查 engine L6612 確認）／1（changelog audit + svelte.compile pre-check pass）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 6 處 ASSERT exact-match）／14（最小 patch — A: log 字串調整 + 抽 var；B: 1 gate × 2 處）／15（source of truth — JSON 卡面確認「無法在自己的最初回合使用」+ 既有 isFirstTurn pattern）／17（按既有實作驗證 — audit 全卡池確認只有小木靈一張，state.turn 計法查 engine L6612 確認）／1（changelog audit + svelte.compile pre-check pass）</li>
         </ul>
       </details>
 
@@ -797,12 +813,12 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           <li><b>脫殼忍者進化鏈重補</b>（Wilson 親自確認規則）
             <ul>
               <li>Wilson 直接確認：「土居忍士→脫殼忍者 / 土居忍士→鐵面忍者 是雙重進化鏈，類似艾路雷朵和沙奈朵那種」</li>
-              <li>歷史：v5.125 加 evolvesFrom → v5.152 因誤判 AI 幻覺撤回 → 本次 Wilson 親自確認規則正確，重新加上</li>
+              <li>歷史：v5.125 加 evolvesFrom → v5.152 因誤判撤回 → 本次 Wilson 親自確認規則正確，重新加上</li>
               <li>修：M1S.json 兩處脫殼忍者（id=14063 + id=14219）evolvesFrom 設為「土居忍士」。鐵面忍者既有 evolvesFrom 不動</li>
               <li>效果：場上有土居忍士時，手牌脫殼忍者可進化（與鐵面忍者並列為兩種 Stage1 選項）</li>
             </ul>
           </li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 5 處 ASSERT exact-match）／14（最小 patch — A: 1 field 擴充 + 1 UI 分支; B: 純 JSON 欄位補）／15（source of truth — Wilson 親自確認 + grep 鐵面忍者 evolvesFrom 已存在）／17（不做 AI 幻覺 — v5.152 撤回判斷錯誤，這次 Wilson 直接指示）／1（changelog audit + svelte.compile pre-check pass）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 5 處 ASSERT exact-match）／14（最小 patch — A: 1 field 擴充 + 1 UI 分支; B: 純 JSON 欄位補）／15（source of truth — Wilson 親自確認 + grep 鐵面忍者 evolvesFrom 已存在）／17（按既有實作驗證 — v5.152 撤回判斷錯誤，這次 Wilson 直接指示）／1（changelog audit + svelte.compile pre-check pass）</li>
         </ul>
       </details>
 
@@ -832,7 +848,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
               <li>修：import wouldNeutralCenterBlock + 在 active+bench 兩種 target 都先檢查中立中心。奧利瓦ex 是規則寶可夢，對非規則 target 必擋傷害</li>
             </ul>
           </li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 4 處 ASSERT exact-match）／14（最小 patch — A: 1 處數字改；B: 加 log；C: 1 處 import + 1 個 check block）／17（不做 AI 幻覺 — A: 卡面「最多 2 張」字面確認 + 流程追到 picksLeft 計算 bug；B: audit Fisher-Yates shuffle 邏輯確認正確，但加 log 排除玩家誤會；C: grep wouldNeutralCenterBlock 確認既存 helper 不重新實作）／1（changelog audit + svelte.compile pre-check pass）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 4 處 ASSERT exact-match）／14（最小 patch — A: 1 處數字改；B: 加 log；C: 1 處 import + 1 個 check block）／17（按既有實作驗證 — A: 卡面「最多 2 張」字面確認 + 流程追到 picksLeft 計算 bug；B: audit Fisher-Yates shuffle 邏輯確認正確，但加 log 排除玩家誤會；C: grep wouldNeutralCenterBlock 確認既存 helper 不重新實作）／1（changelog audit + svelte.compile pre-check pass）</li>
         </ul>
       </details>
 
@@ -854,7 +870,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           <li>桌面版 (game/+page.svelte L6248-6254) 早就有對應分支 — 手機版漏掉沒同步</li>
           <li>修法：模仿桌面版邏輯，在 L701 setup「準備」按鈕後加 elseif 處理 mulliganPostBenchOpen，按鈕文字「✅ 完成補抽」+ dispatch finishMulliganPostBench(myIdx)</li>
           <li>不依 isMyTurn 判定（同 setup 準備按鈕邏輯） — myIdx 已由 +page.svelte L2151 myIdx 切換邏輯處理（v5.185 補 mulliganPostBenchOpen 優先級）</li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純加 1 個 elseif 分支）／17（不做 AI 幻覺 — grep 確認桌面版有此按鈕、手機版沒有，根因明確）／1（changelog audit + svelte.compile pre-check pass）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純加 1 個 elseif 分支）／17（按既有實作驗證 — grep 確認桌面版有此按鈕、手機版沒有，根因明確）／1（changelog audit + svelte.compile pre-check pass）</li>
         </ul>
       </details>
 
@@ -887,7 +903,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
               <li>連帶受惠：烈火亂舞 / 充溢之力 / 滿載心田 / 幸運貼附 / 熱帶狂燒 等所有走 energy-distribute pending 的招式/特性，AI 都能正確分配能量</li>
             </ul>
           </li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — A: 純 count 邏輯；1: AI switch 加 1 case）／17（不做 AI 幻覺 — A: 卡面「這隻」字面確認每隻獨立；1: 順流程追到 default fallback 是真實 bug，非腦補）／1（changelog audit + svelte.compile pre-check pass）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — A: 純 count 邏輯；1: AI switch 加 1 case）／17（按既有實作驗證 — A: 卡面「這隻」字面確認每隻獨立；1: 順流程追到 default fallback 是真實 bug，非腦補）／1（changelog audit + svelte.compile pre-check pass）</li>
         </ul>
       </details>
 
@@ -899,7 +915,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           <li>修法：拿掉 entry + chain 兩處 pre-filter，picker 永遠開（除非 bench 空）。resolver L7084 既有 per-target check（v4.917）會在 apply 時擋免疫 target — counter 仍計入 placedThisBatch 消耗，但 damage 不放、log「該指示物無效」</li>
           <li>效果：玩家用幻影奇襲打急凍鳥 → 急凍鳥被招式 KO → modal 開出 6 個指示物 picker → 任意分配到備戰 → 落到「火箭隊的」基礎寶可夢身上的指示物因 snapshot 仍記得抵抗之幕生效，counter 消耗但不傷；落到其他 Pokemon 正常造成 10 傷害</li>
           <li>v5.186 的 <code>_attackTimeOppRocketVeil</code> snapshot infrastructure 保留（types/engine/effects 不動）— 只動 entry pre-filter，最小變動</li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — 只動 entry/chain pre-filter，per-target apply 邏輯不動）／17（不做 AI 幻覺 — 確認 resolver L7084 v4.917 per-target check 已存在 + L7090 counter 消耗邏輯已存在 → 拿掉 entry pre-filter 行為自然如玩家期望）／1（changelog audit pass + svelte.compile pre-check）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — 只動 entry/chain pre-filter，per-target apply 邏輯不動）／17（按既有實作驗證 — 確認 resolver L7084 v4.917 per-target check 已存在 + L7090 counter 消耗邏輯已存在 → 拿掉 entry pre-filter 行為自然如玩家期望）／1（changelog audit pass + svelte.compile pre-check）</li>
         </ul>
       </details>
 
@@ -918,7 +934,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
             </ul>
           </li>
           <li>規則對應：跟 v3.892 花之帷幔（謝米 KO 後仍擋備戰傷害）原理完全相同——「招式效果同時 resolve」原則。snapshot 是 transient，attack flow 結束自動清，不影響其他回合的判斷</li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 6 處 ASSERT exact-match）／14（最小 patch — 完全仿照既有 hasFlowerVeil snapshot pattern，邏輯結構一致）／17（不做 AI 幻覺 — grep 確認 hasRocketVeil 既存於 effects.ts L235、isRocketBasicTarget 既存於 L255，pattern 完全比照 v3.892）／1（changelog audit pass + 本機 svelte.compile pre-check）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 6 處 ASSERT exact-match）／14（最小 patch — 完全仿照既有 hasFlowerVeil snapshot pattern，邏輯結構一致）／17（按既有實作驗證 — grep 確認 hasRocketVeil 既存於 effects.ts L235、isRocketBasicTarget 既存於 L255，pattern 完全比照 v3.892）／1（changelog audit pass + 本機 svelte.compile pre-check）</li>
         </ul>
       </details>
 
@@ -934,7 +950,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
               <li>p1 有揭示且 player2 沒 confirm → myIdx=1</li>
             </ul>
           </li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純 myIdx 優先級插入兩層）／17（不做 AI 幻覺 — 從截圖 + log 推 state，grep mulligan reveal modal 顯示條件 L6924 確認）／1（changelog audit pass + 本機 svelte.compile pre-check）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純 myIdx 優先級插入兩層）／17（按既有實作驗證 — 從截圖 + log 推 state，grep mulligan reveal modal 顯示條件 L6924 確認）／1（changelog audit pass + 本機 svelte.compile pre-check）</li>
         </ul>
       </details>
 
@@ -957,7 +973,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
             </ul>
           </li>
           <li>規則對應：詛咒根的 cantAttachEnergyThisTurn 是 per-instance（跟著 iid），同方其他寶可夢不受影響；目標若被換到備戰位 flag 仍跟著走</li>
-          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 9 處 ASSERT exact-match）／14（最小 patch — 9 處純 filter / gate，邏輯不動）／17（不做 AI 幻覺 — audit 8 張卡 + 共用 helper 後確認 0/8 命中）／1（changelog audit pass + 本機 svelte.compile pre-check）</li>
+          <li>Iron Rules: 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 9 處 ASSERT exact-match）／14（最小 patch — 9 處純 filter / gate，邏輯不動）／17（按既有實作驗證 — audit 8 張卡 + 共用 helper 後確認 0/8 命中）／1（changelog audit pass + 本機 svelte.compile pre-check）</li>
         </ul>
       </details>
 
@@ -1124,7 +1140,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
 
           <li><b>教訓</b>：寫 patch 時直接編譯前要先用 grep 確認每個 helper 的<b>export 來源</b>（grep <code>^export function NAME</code>），而非從 use site 推測。v5.171 patch script 雖然有 WARN missing import 但我當時誤判已加上。</li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 4 處 ASSERT exact-match）／14（最小 patch — 純 import 修正）／17（不做 AI 幻覺——v5.171 時推測 import 來源是錯的，現用 grep 確認 export 處）／1（changelog audit pass）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 4 處 ASSERT exact-match）／14（最小 patch — 純 import 修正）／17（按既有實作驗證——v5.171 時推測 import 來源是錯的，現用 grep 確認 export 處）／1（changelog audit pass）。</li>
         </ul>
       </details>
 
@@ -1140,7 +1156,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
             </ul>
           </li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — 純 import 補齊，邏輯不動）／17（不做 AI 幻覺——v5.170 漏 import 的事實由 patch script 自己 WARN 出來，但我當時沒處理）／1（changelog audit pass）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 2 處 ASSERT exact-match）／14（最小 patch — 純 import 補齊，邏輯不動）／17（按既有實作驗證——v5.170 漏 import 的事實由 patch script 自己 WARN 出來，但我當時沒處理）／1（changelog audit pass）。</li>
         </ul>
       </details>
 
@@ -1165,7 +1181,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
             </ol>
           </li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純改 regPost 內 KO 方式，guard 邏輯保留）／15（卡面 source of truth — 「使昏厥」非「造成傷害」）／17（不做 AI 幻覺——直接抄棄世猴|同命戰鬥的成熟實作，不自己推測）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純改 regPost 內 KO 方式，guard 邏輯保留）／15（卡面 source of truth — 「使昏厥」非「造成傷害」）／17（按既有實作驗證——直接抄棄世猴|同命戰鬥的成熟實作，不自己推測）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
       </details>
 
@@ -1181,7 +1197,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
 
           <li><b>差異</b>：「不複製」= 攻擊已宣告，看到結果後選擇 0 damage 結束 ✓；「取消」= 回到未攻擊，能再選其他招式 ✗。前者符合 PTCG「若希望」語義，後者允許資訊洩漏。</li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純按鈕對調）／17（不做 AI 幻覺——基於玩家補充的精確需求，承認 v5.168 推測錯方向）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純按鈕對調）／17（按既有實作驗證——基於玩家補充的精確需求，承認 v5.168 推測錯方向）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
       </details>
 
@@ -1204,7 +1220,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
             </ul>
           </li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 7 處 ASSERT exact-match）／14（最小 patch — 每個 bug 只動必要區塊）／15（卡面 source of truth — Bug 2 薄霧/Bug 7 不計弱抗 都從卡面確認）／17（不做 AI 幻覺——所有修法都基於既有 helper：canApplyEffectToTarget、mainline ATTACK pipeline）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 7 處 ASSERT exact-match）／14（最小 patch — 每個 bug 只動必要區塊）／15（卡面 source of truth — Bug 2 薄霧/Bug 7 不計弱抗 都從卡面確認）／17（按既有實作驗證——所有修法都基於既有 helper：canApplyEffectToTarget、mainline ATTACK pipeline）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
 
           <li><b>剩餘 4 bug（v5.169+ 處理）</b>：Bug 1 AI 龐克練肌、Bug 3 蒼響ex 太晶、Bug 5 詛咒根 8 卡範圍、Bug 6 皮可西揮指 picker — 牽涉 ai.ts / 多卡 audit / 複製招式 picker 改寫，需更深 audit 後分批修。</li>
         </ul>
@@ -1236,7 +1252,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
 
           <li><b>原 bug（v5.165 跳過攻擊按鈕按不下去）未實際 reproduce</b>：可能跟特定 game state（pendingSelection 殘留 + mulligan 卡住）有關，需更精準 audit。先把 v5.167 revert 推上，避免影響單機雙人正常 setup；後續再針對「跳過攻擊 disabled」真正情境精準修。</li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純 revert 一個 elseif，不動其他邏輯）／1（changelog audit pass + 本機 svelte.compile pre-check）／17（不做 AI 幻覺——v5.166 修法基於對截圖的推測，實際造成 setup phase 雙人 regression；revert 是正確的退路）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純 revert 一個 elseif，不動其他邏輯）／1（changelog audit pass + 本機 svelte.compile pre-check）／17（按既有實作驗證——v5.166 修法基於對截圖的推測，實際造成 setup phase 雙人 regression；revert 是正確的退路）。</li>
         </ul>
       </details>
 
@@ -1288,7 +1304,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
             </ul>
           </li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 8 處 exact-match）／14（最小 patch — 不動其他擲幣招式，只 specialize 機關槍合擊；UI 變更為加值而非替換）／15（卡面 source of truth）／17（不做 AI 幻覺——所有 inject/rollback 邏輯都有明確 PTCG 規則依據）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 8 處 exact-match）／14（最小 patch — 不動其他擲幣招式，只 specialize 機關槍合擊；UI 變更為加值而非替換）／15（卡面 source of truth）／17（按既有實作驗證——所有 inject/rollback 邏輯都有明確 PTCG 規則依據）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
       </details>
 
@@ -1483,9 +1499,9 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.152</span> 🐛 撤回 v5.125 錯誤的脫殼忍者進化鏈 (AI 幻覺糾正)</summary>
+        <summary><span class="ver-badge">v5.152</span> 🐛 撤回 v5.125 錯誤的脫殼忍者進化鏈 (推測錯誤糾正)</summary>
         <ul>
-          <li><b>根因追溯</b>：v5.125 task #287「Bug 2: 脫殼忍者進化鏈漏 evolvesFrom=&#39;土居忍士&#39;」是 AI 幻覺。我加了 evolvesFrom=&#39;土居忍士&#39; 到 M1S.json 兩個脫殼忍者 (id=14063 + id=14219)，**違反 PTCG 實際規則**。</li>
+          <li><b>根因追溯</b>：v5.125 task #287「Bug 2: 脫殼忍者進化鏈漏 evolvesFrom=&#39;土居忍士&#39;」是推測錯誤。我加了 evolvesFrom=&#39;土居忍士&#39; 到 M1S.json 兩個脫殼忍者 (id=14063 + id=14219)，**違反 PTCG 實際規則**。</li>
           <li><b>正確 PTCG 規則（M1S.json source of truth）</b>：</li>
           <li>　・土居忍士 (#14027): Basic, evolvesFrom=null ✓</li>
           <li>　・<b>鐵面忍者 (#14028/#14212): Stage1, evolvesFrom=&#39;土居忍士&#39; ✓（這個才是正確的進化鏈）</b></li>
@@ -1494,9 +1510,9 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           <li><b>修法</b>：M1S.json 兩處脫殼忍者（不同 illustrator anchor 確保 unique）精準 string replace 撤回 <code>evolvesFrom</code> 欄位 + 前面逗號，恢復原始 scraper 抓的狀態。</li>
           <li><b>Verify</b>：JSON 仍可解析 + 脫殼忍者 evolvesFrom=null + 鐵面忍者 evolvesFrom=土居忍士 保留不動。</li>
 
-          <li><b>教訓</b>：Rule 15（PTCG 卡面 source of truth）+ Rule 17（禁 AI 幻覺）— task 標題「脫殼忍者進化鏈漏」當時我沒對照 static/cards 確認就 hallucinate，本次糾正。未來凡進化鏈相關修法都要對照 JSON。</li>
+          <li><b>教訓</b>：Rule 15（PTCG 卡面 source of truth）+ Rule 17（禁推測）— task 標題「脫殼忍者進化鏈漏」當時我沒對照 static/cards 確認就 hallucinate，本次糾正。未來凡進化鏈相關修法都要對照 JSON。</li>
 
-          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match + JSON 解析 verify）／14（最小 patch — 純 JSON 撤回 2 欄位）／15（PTCG static/cards source of truth）／17（撤回 AI 幻覺）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 ASSERT 2 處 exact-match + JSON 解析 verify）／14（最小 patch — 純 JSON 撤回 2 欄位）／15（PTCG static/cards source of truth）／17（撤回 推測錯誤）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
         </ul>
       </details>
 
@@ -1983,7 +1999,7 @@ else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
           <li><b>實際 JSON audit（不可幻覺）</b>：全資料庫 <code>name.startsWith(&#39;莉莉艾的&#39;) &amp;&amp; supertype===&#39;Pokemon&#39;</code> 只有 4 隻：莉莉艾的皮皮ex / 莉莉艾的花療環環 / 莉莉艾的萌虻 / 莉莉艾的蝶結萌虻。<b>沒有「莉莉艾的皮可西」</b>。</li>
           <li><b>來源</b>：撰寫 v5.122 changelog 時誤把「皮可西」（超級皮可西ex 等其他角色）誤植到列表，且「7 隻」也是憑空估算（grep <code>name.*莉莉艾的</code> 抓到的字面 7 處包含 effect text 內提到「莉莉艾的」的非寶可夢卡）。</li>
           <li><b>修法</b>：直接 Edit v5.122 changelog 改成正確列表（4 隻）。v5.122 程式碼修法（<code>startsWith(&#39;莉莉艾的&#39;)</code>）邏輯本來就正確涵蓋全 4 隻，僅文案誤導。</li>
-          <li><b>長期記憶教訓再次驗證</b>：<code>[[feedback-no-ace-spec-hallucination]]</code> 已記錄「玩家 對 AI 幻覺零容忍」。本次再犯 — 列舉「具體卡名」時務必先跑實際 JSON audit，不可從記憶或 grep 噪音猜測。</li>
+          <li><b>長期記憶教訓再次驗證</b>：<code>[[feedback-no-ace-spec-hallucination]]</code> 已記錄「玩家 對推測錯誤零容忍」。本次再犯 — 列舉「具體卡名」時務必先跑實際 JSON audit，不可從記憶或 grep 噪音猜測。</li>
           <li><b>Iron Rules</b>：Rule 11/11c／11e／11f（1 處 exact-match）／14（最小 1 行文案修）／15（JSON 為 source of truth — 列舉前必驗）／1（changelog audit pass）。</li>
         </ul>
       </details>
@@ -2625,7 +2641,7 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.080</span> 🐛 撤回重力之玉 ACE SPEC 錯標 + 強制丟能量 5 處 + 7 張「受傷時」道具補 KO 觸發（含龐克頭盔）</summary>
         <ul>
-          <li><b>修法 0 — 撤回 v5.079 AI 幻覺（嚴重違反 Rule 15）</b></li>
+          <li><b>修法 0 — 撤回 v5.079 推測錯誤（嚴重違反 Rule 15）</b></li>
           <li>　・<b>重力之玉</b>（SV7 095/102）：卡面僅寫「撤退所需的能量各增加 1 個」— 純撤退費道具，<b>不是 ACE SPEC</b>。v5.079 我擅自標 ACE SPEC，撤回。</li>
           <li>　・<b>秘密箱</b>（SV6 092/101）：玩家親自確認是 ACE SPEC，v5.079 標的保留。</li>
           <li>　・<b>教訓</b>：Rule 15 卡面 source of truth — AI 無法純從 rulesText 判斷 ACE SPEC（卡框屬性）。Audit 必須以「玩家親自確認 OR PTCG 官方公開清單」為準，AI 推測 = 幻覺。</li>
@@ -3323,7 +3339,7 @@ cost += gravityCount;</code></pre></li>
       <details>
         <summary><span class="ver-badge">v5.047</span> 🛠️ 對手發牌動畫真正修好 + 新增 fix-git-lock.bat 自助清 lock</summary>
         <ul>
-          <li><b>修法 1 — fix-git-lock.bat</b>：每次 Claude push 完 GitHub Pages 上 push 都會在本地產生 <code>.git/refs/remotes/origin/main.lock</code>（sandbox 端權限刪不掉），導致本地 git fetch / pull / IDE git 面板撞「Another git process seems to be running」錯誤。新增 <code>E:\ptcg-tw-sim\fix-git-lock.bat</code> 雙擊即可清除（含 <code>%~dp0</code> 自動 cd 到 repo root，可放任何位置 — 連結 / 桌面捷徑都行）。</li>
+          <li><b>修法 1 — fix-git-lock.bat</b>：每次 push 完 GitHub Pages 上 push 都會在本地產生 <code>.git/refs/remotes/origin/main.lock</code>（sandbox 端權限刪不掉），導致本地 git fetch / pull / IDE git 面板撞「Another git process seems to be running」錯誤。新增 <code>E:\ptcg-tw-sim\fix-git-lock.bat</code> 雙擊即可清除（含 <code>%~dp0</code> 自動 cd 到 repo root，可放任何位置 — 連結 / 桌面捷徑都行）。</li>
           <li><b>修法 2 — 對手發牌動畫真正修好</b>：v5.040 改了 <code>endY = oppRect.top + oppRect.height/2</code> 想用 row 中心，但 玩家回報還是往左上方。深入查發現 <strong>根因 v5.040 修錯方向</strong>：桌墊版下 <code>.field-row</code> 套 <code>display:contents</code>（line 8057）讓 row 變透明 grid items，所以 <code>.opponent-row</code> 本身不渲染 box — Chrome 對 <code>display:contents</code> 元素的 <code>getBoundingClientRect()</code> 行為不一致，可能返回 zero rect 或 union origin 偏 (0,0)，動畫起點 OK（牌庫真實位置）但 endpoint 飛到視窗左上角。</li>
           <li><b>修法</b>：endpoint 改用 <code>.opponent-row .zone-active</code>（對手戰鬥場區 DOM child，<strong>不受 display:contents 影響</strong>），getBoundingClientRect 返回真實 bbox。同時加 fallback：若 bbox 還不可靠（width/height==0），fallback 飛到 <code>window.innerWidth/2</code> + <code>innerHeight/4</code>（畫面水平中心、上半部 1/4 高度）。視覺上「由牌庫往對手戰鬥場中央發」，跟我方「由牌庫往 handStrip 中央發」對稱。</li>
           <li><b>查找 bug 過程</b>：v5.040 沒注意到 layout-tabletop 那段 display:contents 設定 — 它在 line 8057 用 <code>!important</code> 強制套用，是為了讓 row 變透明把子孫直接 attach 到 .playmat grid。我當時只看 endY 算式邏輯，沒驗 <code>oppRowEl.getBoundingClientRect()</code> 真實返回值。現在用 <code>.zone-active</code>（grid-area:activeO 直接 attach 到 playmat grid 的真實元素）作 endpoint 才穩定。</li>
@@ -4316,7 +4332,7 @@ cost += gravityCount;</code></pre></li>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v4.947</span> 🤖 AI Role 分類基礎設施（Phase 1，不動現有 AI 邏輯）</summary>
+        <summary><span class="ver-badge">v4.947</span> AI Role 分類基礎設施（Phase 1，不動現有 AI 邏輯）</summary>
         <ul>
           <li><b>長期計畫</b>：AI 對複雜牌組（魔靈多龍 / 妙蛙花ex / N 的索羅亞克ex 等）反應不佳，現在靠 hard-code special-case 撐。引入 Role 分類後可一次取代多個 special-case，並讓玩家自訂 deck 也享受到 AI 優化。</li>
           <li><b>Phase 1 範圍（嚴格）</b>：只新增基礎設施，不動 ai.ts 任何決策邏輯 — 零行為變更、零風險。</li>
@@ -4347,7 +4363,7 @@ cost += gravityCount;</code></pre></li>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v4.944</span> 🤖 建 GitHub Actions 自動跑鐵律 audit（Phase A 試運行）</summary>
+        <summary><span class="ver-badge">v4.944</span> 建 GitHub Actions 自動跑鐵律 audit（Phase A 試運行）</summary>
         <ul>
           <li><b>目的</b>：把 22 條鐵律的 grep audit 自動化，每次 push 自動跑，違規會在 GitHub Actions 頁面標紅。減少「AI 寫程式忘了某條鐵律 → bug 上線 → 玩家踩到」的失誤。</li>
           <li><b>新檔 1</b>：<code>scripts/iron-rules-audit.sh</code> — bash 跑各條鐵律的 grep check，違規列出 file:line。Starter set 含 Rule 1（changelog escape）/ Rule 6（ABILITY_EFFECTS key）/ Rule 11b（NUL byte）/ Rule 14（minCount）/ Rule 20（!isFirstTurn warn）。</li>
@@ -4402,7 +4418,7 @@ cost += gravityCount;</code></pre></li>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v4.939</span> 🤖 修 robots.txt sitemap URL 到 .com（v4.938 漏網）</summary>
+        <summary><span class="ver-badge">v4.939</span> 修 robots.txt sitemap URL 到 .com（v4.938 漏網）</summary>
         <ul>
           <li><b>v4.938 漏改</b>：<code>static/robots.txt</code> 的 <code>Sitemap:</code> 行還指向舊 <code>suenz001.github.io/ptcg-tw-sim/sitemap.xml</code>，改為 <code>www.ptcg-tw-sim.com/sitemap.xml</code>。</li>
           <li><b>影響</b>：搜尋引擎爬 robots.txt 時找到 sitemap 路徑現在指向新主站，跟 v4.938 SEO canonical 翻轉方向一致。手動到 Google Search Console / Bing Webmaster Tools 提交 sitemap 時也方便。</li>
@@ -7169,7 +7185,7 @@ cost += gravityCount;</code></pre></li>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v3.99</span> 🤖 AI 日光轉移無限循環徹底修正（妙蛙花優先策略）</summary>
+        <summary><span class="ver-badge">v3.99</span> AI 日光轉移無限循環徹底修正（妙蛙花優先策略）</summary>
         <ul>
           <li>玩家回報：AI 用超級妙蛙花ex 日光轉移時，會在「戰鬥場吉雉雞ex（0 能 0 damage）⇄ 第 1 隻厄鬼椪（3 草）」之間無限來回搬草。</li>
           <li><b>根因</b>：
@@ -7718,7 +7734,7 @@ cost += gravityCount;</code></pre></li>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v3.883</span> 🤖 修 AI 用激流水泵不觸發備戰 120（沒帶 discardedEnergyIids）</summary>
+        <summary><span class="ver-badge">v3.883</span> 修 AI 用激流水泵不觸發備戰 120（沒帶 discardedEnergyIids）</summary>
         <ul>
           <li>玩家回報：厄鬼椪 水井面具ex 使用激流水泵時「能量回牌庫」但對手備戰沒受 120 傷害。</li>
           <li><b>根因</b>：<code>ai.ts</code> line 256 dispatch <code>ATTACK</code> 只帶 <code>attackIndex</code>，沒帶 <code>discardedEnergyIids</code>。激流水泵 PRE 讀 <code>action.discardedEnergyIids ?? []</code> = <code>[]</code>，length 0 &lt; required 3 → 走「未棄滿能量」分支只 100 dmg，不觸發備戰 120。</li>
@@ -8580,7 +8596,7 @@ cost += gravityCount;</code></pre></li>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v3.732</span> 🤖 AI 修兩個邏輯 bug — 日光轉移無限循環 + 波動突刺 picker 智能選</summary>
+        <summary><span class="ver-badge">v3.732</span> AI 修兩個邏輯 bug — 日光轉移無限循環 + 波動突刺 picker 智能選</summary>
         <ul>
           <li>玩家回報兩個 AI 邏輯問題：</li>
           <li><b>Bug 1：超級妙蛙花ex｜日光轉移 無限循環</b></li>
@@ -8895,7 +8911,7 @@ cost += gravityCount;</code></pre></li>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v3.59</span> 🤖 hotfix：AI setup 在手牌只有閃焰王牌時卡死（瞬間爆發力沒同步給 AI）</summary>
+        <summary><span class="ver-badge">v3.59</span> hotfix：AI setup 在手牌只有閃焰王牌時卡死（瞬間爆發力沒同步給 AI）</summary>
         <ul>
           <li>玩家回報：與 AI 對戰開局，AI 設置寶可夢階段卡住。懷疑 AI 手上有閃焰王牌（瞬間爆發力）但不知道怎麼處理。</li>
           <li>玩家提供官方 QA：「在對戰準備時，若最初抽出的 7 張手牌中沒有【基礎】寶可夢，僅有閃焰王牌，可以因特性『瞬間爆發力』的效果，將閃焰王牌放置於戰鬥場上並開始對戰嗎？答：可以。」</li>
