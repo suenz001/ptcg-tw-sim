@@ -264,7 +264,50 @@ regPre('長尾怪手|驚嚇', (s) => ({ state: s, damage: 20 }));
 regPost('長尾怪手|驚嚇', returnOppHandRandomToDeckPost(1, '驚嚇'));
 
 regPre('火箭隊的喵喵|占為己有', (s) => ({ state: s, damage: 0 }));
-regPost('火箭隊的喵喵|占為己有', returnOppHandRandomToDeckPost(1, '占為己有'));
+// v5.179 Bug 2 完整實裝: 卡面「在不看正面的情況下, 從對手手牌選 1 張, 查看那張卡的正面後
+// 放回對手牌庫並重洗」 — 改為 hand-discard picker (concealed mode 防揭露對手其他手牌),
+// 玩家選 1 張背面 → resolver 揭示卡名 (公開 addLog) + 放回對手牌庫 + 重洗。
+// 原 v2.x 用 returnOppHandRandomToDeckPost(1) 隨機選 + 不揭示, 違反卡面 (Rule 15)
+regPost('火箭隊的喵喵|占為己有', (state, aIdx) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const opp = state.players[dIdx];
+  if (opp.hand.length === 0) {
+    return addLog(state, '占為己有：對手手牌為空', aIdx);
+  }
+  const s = addLog(state, '占為己有：從對手手牌選 1 張背面卡 (盲選, 查看正面後放回牌庫並重洗)', aIdx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: aIdx,
+    sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'meowth-thievery-reveal-return',
+    params: { concealed: true, label: '占為己有' },
+  });
+});
+regR('meowth-thievery-reveal-return', (state, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const opp = state.players[dIdx];
+  const pickedIid = iids[0];
+  const pickedInst = opp.hand.find(c => c.iid === pickedIid);
+  if (!pickedInst) return state;
+  const pickedCard = pool.get(pickedInst.cardId);
+  const cardName = pickedCard?.name ?? '?';
+  // 卡面「查看那張卡的正面」→ 公開揭示卡名 (addLog 全域可見)
+  let s = addLog(state, `占為己有：查看到「${cardName}」, 放回對手牌庫並重洗`, aIdx);
+  // 放回對手牌庫並重洗
+  s = updatePlayer(s, dIdx, p => {
+    const remaining = p.hand.filter(c => c.iid !== pickedIid);
+    const newDeck = [...p.deck, pickedInst];
+    // shuffle
+    for (let i = newDeck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newDeck[i], newDeck[j]] = [newDeck[j], newDeck[i]];
+    }
+    return { ...p, hand: remaining, deck: newDeck };
+  });
+  return s;
+});
 
 regPre('酷豹|拍落', (s) => ({ state: s, damage: 50 }));
 regPost('酷豹|拍落', discardOppHandRandomPost(1, '拍落'));

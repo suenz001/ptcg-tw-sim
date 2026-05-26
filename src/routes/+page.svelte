@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.179</span> 火箭隊的喵喵|占為己有 完整實裝</summary>
+        <ul>
+          <li>玩家回報: 占為己有 未完整實裝, 應該要選擇後揭示 (查看) 那張牌再放回牌庫</li>
+          <li>卡面 (MC/SV10): 「在不看正面的情況下, 從對手的手牌選擇1張, 查看那張卡的正面後放回對手的牌庫並重洗」</li>
+          <li>原實作 (v2.x): returnOppHandRandomToDeckPost(1) — 完全簡化, 隨機選 + 不揭示, 違反卡面 Rule 15</li>
+          <li>修法: 改為 hand-discard picker (concealed mode), actor 選 1 張對手手牌背面 → resolver 揭示卡名 (公開 addLog) + 放回對手牌庫 + 重洗。仿 v3.9998 枇琶 concealed pattern</li>
+          <li>Iron Rules: 11/11c/11e/11f/14/15(卡面為準)/17/1</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.178</span> Bug 6 修 皮可西|揮指 / 阿響的樹才怪|試著模仿 picker</summary>
         <ul>
           <li>玩家回報: 皮可西|揮指 / 試著模仿 簡易實裝 (自動挑印刷最高傷害招式), 玩家無法自選對手戰鬥場招式</li>
