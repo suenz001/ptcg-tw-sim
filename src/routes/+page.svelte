@@ -304,6 +304,35 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.208</span> 道具拆除器第 2 張「結束」按鈕點不下去 + UI 誤顯示「沒有符合條件」</summary>
+        <ul>
+          <li><b>玩家報告</b>：道具拆除器第 2 張的「✋ 結束（不丟第 2 張）」按鈕點不下去。截圖額外顯示誤導訊息「（沒有符合條件的卡牌）」。</li>
+          <li><b>根因 1（核心 bug）</b>：<code>+page.svelte</code> L7167 modal-choice button onclick 模式：
+            <pre>onclick=&#123;() =&gt; &#123; selectionPicked = new Set(&#91;opt.id&#93;); confirmSelection(); &#125;&#125;</pre>
+            <code>confirmSelection()</code> 第一行 <code>if (!selectionValid) return;</code> 早退，而 <code>selectionValid</code> 是 <code>$derived</code> 依賴 <code>selectionPicked.size</code> — Svelte 5 對 Set 物件替換 + 立即 read 的 derive 計算順序不可靠（特別是新 modal 開啟後 selectionPicked 剛被 reset 為空 Set 的 frame）。導致 set + immediate confirmSelection 流程內 selectionValid 仍是舊值 false → early return → 沒 dispatch。</li>
+          <li><b>根因 2（UI cosmetic）</b>：L6886 <code>&#123;:else&#125;</code> fallback 區塊內的 <code>sel-empty</code> 「（沒有符合條件的卡牌）」訊息對所有非特定 picker type 都 render，<b>包含 modal-choice</b>。但 modal-choice 不用 selectionItems，永遠 length===0 → 永遠顯示此誤導訊息。</li>
+          <li><b>根因 3（resolver log）</b>：<code>effects.ts</code> L14538 <code>regR('tool-remover-pick')</code> 對 <code>iids=&#91;'end'&#93;</code> 沒 early return → 走 <code>'end'.split(':')</code> 得 <code>&#91;'end'&#93;</code> → parseInt='NaN' → 找不到 active/bench → L14584 log「找不到目標道具」誤導。</li>
+          <li><b>修法</b>：
+            <ol>
+              <li>UI：modal-choice 兩個 onclick handler（btn / btn-flex）改成「直接 dispatch resolveSelection 帶 [opt.id]」繞過 confirmSelection，避開 selectionValid 早退陷阱。reset selectionPicked / selectionCounts 在 dispatch 後</li>
+              <li>UI：L6950 sel-empty 加 <code>&amp;&amp; pendingSelection.type !== 'modal-choice'</code> gate</li>
+              <li>effects.ts resolver：<code>if (choice === 'end') return addLog(state, '道具拆除器：玩家選擇不丟第 2 張', aIdx)</code> early return</li>
+            </ol>
+          </li>
+          <li><b>影響範圍</b>：修法 1 是 modal-choice 通用 — 所有用 modal-choice picker 的卡牌的所有 option（含「end」「skip」等）都受惠。修法 2/3 主要解決道具拆除器 specific UX。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 14（單一 root cause）：3 bug 集中修，主要 fix 在 onclick handler（其他兩個是衍生 cosmetic）</li>
+              <li>Rule 17（不 AI 幻覺）：root cause 從 confirmSelection L4764 early return + Svelte 5 reactive 模型直接推得</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
+              <li>Rule 4（修法後 tsc verify）</li>
+              <li>Rule 1（changelog 內 <code>&lt;</code> / <code>&gt;</code> / <code>&amp;&amp;</code> / <code>&#123;&#125;</code> 都跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.207</span> 賽吉多目標 picker — 多隻同名底寶可夢時讓玩家選</summary>
         <ul>
           <li><b>玩家報告</b>：戰鬥場 + 備戰區都有多龍奇時，賽吉強制進化戰鬥場的，玩家無法自行選擇。</li>

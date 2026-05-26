@@ -6947,7 +6947,8 @@
                 </div>
               {/if}
             {/each}
-            {#if selectionItems.length===0}<p class="sel-empty">（沒有符合條件的卡牌）</p>{/if}
+            <!-- v5.208：加 type gate 避免在 modal-choice（如道具拆除器）誤顯示「沒有符合條件」-->
+            {#if selectionItems.length===0 && pendingSelection.type !== 'modal-choice'}<p class="sel-empty">（沒有符合條件的卡牌）</p>{/if}
           </div>
         {/if}
 
@@ -7146,7 +7147,14 @@
                   <div class="modal-choice-row">
                     <button class="btn-act modal-choice-btn modal-choice-btn-flex"
                       disabled={!!opt.disabled}
-                      onclick={() => { selectionPicked = new Set([opt.id]); confirmSelection(); }}>
+                      onclick={() => {
+                        // v5.208：modal-choice 直接 dispatch payload，避開 confirmSelection 內 selectionValid 早退
+                        //   (Svelte 5 state replace 與 derived 同步順序不可靠，single-click flow 易踩)
+                        const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
+                        dispatch(GameActions.resolveSelection([opt.id], sid));
+                        selectionPicked = new Set();
+                        selectionCounts = {};
+                      }}>
                       {opt.text}
                     </button>
                     <button class="btn-act modal-choice-inspect"
@@ -7159,7 +7167,13 @@
                 {:else}
                   <button class="btn-act modal-choice-btn"
                     disabled={!!opt.disabled}
-                    onclick={() => { selectionPicked = new Set([opt.id]); confirmSelection(); }}>
+                    onclick={() => {
+                      // v5.208：modal-choice 直接 dispatch (同上)
+                      const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
+                      dispatch(GameActions.resolveSelection([opt.id], sid));
+                      selectionPicked = new Set();
+                      selectionCounts = {};
+                    }}>
                     {opt.text}
                   </button>
                 {/if}

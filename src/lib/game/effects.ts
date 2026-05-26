@@ -14537,6 +14537,11 @@ reg('道具拆除器', (st, idx, pool) => {
 regR('tool-remover-pick', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const choice = iids[0];
+  // v5.208：「結束（不丟第 2 張）」option id='end' early return — 不走 split + iid 解析路徑
+  //   舊版走到 L14584 「找不到目標道具」誤導 log；現改正確 log
+  if (choice === 'end') {
+    return addLog(state, '道具拆除器：玩家選擇不丟第 2 張', aIdx);
+  }
   // v3.20 多重轉接：選項 ID 從 'pIdx:instIid' 改為 'pIdx:instIid:toolIid' 以區分主道具與 extraTools
   const segs = choice.split(':');
   const pIdxStr = segs[0];
