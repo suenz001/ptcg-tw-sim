@@ -304,6 +304,38 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.207</span> 賽吉多目標 picker — 多隻同名底寶可夢時讓玩家選</summary>
+        <ul>
+          <li><b>玩家報告</b>：戰鬥場 + 備戰區都有多龍奇時，賽吉強制進化戰鬥場的，玩家無法自行選擇。</li>
+          <li><b>卡面</b>（<code>SV5M.json</code> #9909 / <code>MC.json</code> #17185）：「從自己的牌庫選擇 1 張自己的 1 隻場上寶可夢進化而來的卡（擁有特性的寶可夢除外），放置於那隻寶可夢身上完成進化。」</li>
+          <li><b>根因</b>：<code>effects.ts</code> L2455 <code>regR('sage-evolve')</code> 內 hardcode「active 優先」邏輯：
+            <pre>let evolvedActive = tryEvolve(p.active);
+if (evolvedActive) &#123; p.active = evolvedActive; &#125;
+else &#123; benchIdx = p.bench.findIndex(...); ... &#125;</pre>
+            場上有匹配 active → 直接進化 active，跳過 bench。違反卡面「選擇 1 隻」的玩家選擇權。</li>
+          <li><b>修法</b>：
+            <ol>
+              <li>抽 helper <code>_sageEvolveApply(state, aIdx, evoIid, targetIid, pool)</code> — 套進化到指定 iid，DRY 重用</li>
+              <li>resolver 先計算所有匹配目標 <code>targetIids[]</code></li>
+              <li>0 目標 → log 中斷</li>
+              <li>1 目標 → <b>自動進化</b>（不必煩玩家）</li>
+              <li>≥ 2 目標 → 開第二層 <code>bench-choose</code> picker（<code>includeActive: true</code>、<code>validIids</code>）讓玩家選</li>
+              <li>新增 <code>regR('sage-evolve-pick-target')</code> 處理第二層 picker 完成後的進化</li>
+            </ol>
+          </li>
+          <li><b>同類卡比對</b>：人造細胞卵 / 雙卵細胞球（v5.083）也是 direct-evolve，但採「玩家先選目標再選進化卡」順序；賽吉採「先選進化卡再選目標」更貼近卡面字面，picker 順序差異不需統一。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 17（不 AI 幻覺）：依卡面「選擇 1 隻場上寶可夢」必須給玩家選擇權</li>
+              <li>Rule 14（單一 root cause）：抽 helper 後兩個 regR 共用，不重複 evolve logic</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
+              <li>Rule 1（changelog 內 <code>&lt;</code> / <code>&gt;</code> / <code>&amp;&amp;</code> / <code>&#123;&#125;</code> 跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.206</span> Push trigger 救援 — GitHub Actions 對 v5.205 commit 沒派發 push event</summary>
         <ul>
           <li><b>現象</b>：v5.205 commit <code>56b9273</code> push 成功，<code>git ls-remote</code> 跟 GitHub REST API <code>/commits/main</code> 都確認 HEAD 是這個 SHA，但 <code>/actions/runs?head_sha=56b92735</code> 回 <code>total_count: 0</code> — GitHub 沒派發 workflow run。</li>

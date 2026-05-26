@@ -2509,68 +2509,118 @@ reg('賽吉', (st, idx, pool) => {
     params: { validIids },
   });
 });
+// v5.207：賽吉 helper — 把進化卡套到指定 targetIid（active 或 bench 任一）
+//   舊版 regR 內 hardcode「active 優先」，多隻同名底時玩家無法選 bench，違反卡面「選擇 1 隻」語意。
+//   新版抽 helper + 1/多目標分流：1 目標自動 / ≥ 2 目標開第二層 picker 讓玩家選。
+function _sageEvolveApply(state: GameState, aIdx: 0 | 1, evoIid: string, targetIid: string, pool: Map<string, Card>): GameState {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const p = { ...players[aIdx] };
+  const evoIdx = p.deck.findIndex(c => c.iid === evoIid);
+  if (evoIdx < 0) return addLog(state, '賽吉：找不到進化卡', aIdx);
+  const evoInst = p.deck[evoIdx];
+  const evoCard = pool.get(evoInst.cardId);
+  if (!evoCard?.evolvesFrom) return addLog(state, '賽吉：所選非進化卡', aIdx);
+
+  const doEvolve = (target: CardInstance): CardInstance => ({
+    ...evoInst,
+    iid: target.iid,
+    damage: target.damage,
+    energyAttached: target.energyAttached,
+    toolAttached: target.toolAttached,
+    extraTools: target.extraTools,
+    status: target.status,
+    evolvedFromStack: [...(target.evolvedFromStack ?? []), { ...target,
+      iid: `${target.iid}_base_${target.cardId}_${Math.random().toString(36).slice(2, 8)}`,
+      toolAttached: undefined, extraTools: [], energyAttached: [], evolvedFromStack: undefined }],
+    evolvedThisTurn: true,
+    // 賽吉特殊：覆寫 justPlaced（卡面註明對戰準備時 / 本回合剛使出的寶可夢也可使用）
+    justPlaced: undefined, playedFromHand: undefined,
+    movedToActiveThisTurn: undefined,
+    cantAttackThisTurn: undefined, cantAttackPending: undefined,
+    cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
+    damageBonusThisTurn: undefined, damageBonusPending: undefined,
+    damageReduceNextHit: undefined,
+    blockedAttackNamesThisTurn: undefined, blockedAttackNamesNextTurn: undefined,
+    abilityUsedThisTurn: undefined,
+  });
+
+  if (p.active && p.active.iid === targetIid) {
+    if (pool.get(p.active.cardId)?.name !== evoCard.evolvesFrom) {
+      return addLog(state, '賽吉：目標非對應底寶可夢', aIdx);
+    }
+    p.active = doEvolve(p.active);
+  } else {
+    const benchIdx = p.bench.findIndex(b => b.iid === targetIid);
+    if (benchIdx < 0) return addLog(state, '賽吉：找不到進化目標', aIdx);
+    const bTarget = p.bench[benchIdx];
+    if (pool.get(bTarget.cardId)?.name !== evoCard.evolvesFrom) {
+      return addLog(state, '賽吉：目標非對應底寶可夢', aIdx);
+    }
+    const newBench = [...p.bench];
+    newBench[benchIdx] = doEvolve(bTarget);
+    p.bench = newBench;
+  }
+  p.deck = shuffle(p.deck.filter((_, i) => i !== evoIdx));
+  players[aIdx] = p;
+  const targetName = evoCard.evolvesFrom ?? '?';
+  return addLog({ ...state, players }, `賽吉：將 ${evoCard.name} 進化於場上的「${targetName}」並重洗牌庫`, aIdx);
+}
+
 regR('sage-evolve', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) {
     return addLog(state, '賽吉：未選擇進化卡', aIdx);
   }
   const evoIid = iids[0];
-  let s = state;
-  const players = [...s.players] as [PlayerState, PlayerState];
-  const p = { ...players[aIdx] };
-  // 從牌庫取出進化卡
-  const evoIdx = p.deck.findIndex(c => c.iid === evoIid);
-  if (evoIdx < 0) return addLog(state, '賽吉：找不到所選進化卡', aIdx);
-  const evoInst = p.deck[evoIdx];
+  const p = state.players[aIdx];
+  const evoInst = p.deck.find(c => c.iid === evoIid);
+  if (!evoInst) return addLog(state, '賽吉：找不到所選進化卡', aIdx);
   const evoCard = pool.get(evoInst.cardId);
   if (!evoCard?.evolvesFrom) return addLog(state, '賽吉：所選非進化卡', aIdx);
 
-  // 找場上能進化的目標 — active 優先
-  const tryEvolve = (target: CardInstance | null): CardInstance | null => {
-    if (!target) return null;
-    if (pool.get(target.cardId)?.name !== evoCard.evolvesFrom) return null;
-    return {
-      ...evoInst,
-      iid: target.iid,
-      damage: target.damage,
-      energyAttached: target.energyAttached,
-      toolAttached: target.toolAttached,
-      extraTools: target.extraTools,
-      status: target.status,
-      evolvedFromStack: [...(target.evolvedFromStack ?? []), { ...target,
-        iid: `${target.iid}_base_${target.cardId}_${Math.random().toString(36).slice(2, 8)}`,
-        toolAttached: undefined, extraTools: [], energyAttached: [], evolvedFromStack: undefined }],
-      evolvedThisTurn: true,
-      // 賽吉特殊：覆寫 justPlaced（賽吉允許剛上場立刻進化）
-      justPlaced: undefined, playedFromHand: undefined,
-      movedToActiveThisTurn: undefined,
-      cantAttackThisTurn: undefined,
-      cantAttackPending: undefined,
-      cantRetreatNextTurn: undefined,
-      cantRetreatPendingSelf: undefined,
-      damageBonusThisTurn: undefined,
-      damageBonusPending: undefined,
-      damageReduceNextHit: undefined,
-      blockedAttackNamesThisTurn: undefined,
-      blockedAttackNamesNextTurn: undefined,
-      abilityUsedThisTurn: undefined,
-    };
-  };
-  let evolvedActive = tryEvolve(p.active);
-  if (evolvedActive) {
-    p.active = evolvedActive;
-  } else {
-    const benchIdx = p.bench.findIndex(b => pool.get(b.cardId)?.name === evoCard.evolvesFrom);
-    if (benchIdx < 0) return addLog(state, `賽吉：場上無「${evoCard.evolvesFrom}」可進化`, aIdx);
-    const evolved = tryEvolve(p.bench[benchIdx]);
-    if (!evolved) return addLog(state, '賽吉：進化處理失敗', aIdx);
-    p.bench = [...p.bench];
-    p.bench[benchIdx] = evolved;
+  // v5.207：找場上所有可進化目標（active + bench 中底名 = evoCard.evolvesFrom）
+  //   舊版 hardcode active 優先 → 多隻同名時玩家無法選 bench (Wilson 報告：多龍奇)
+  //   新版：1 目標自動 / ≥ 2 目標開第二層 bench-choose picker
+  const targetIids: string[] = [];
+  if (p.active && pool.get(p.active.cardId)?.name === evoCard.evolvesFrom) {
+    targetIids.push(p.active.iid);
   }
-  // 從牌庫移除進化卡 + 重洗
-  p.deck = shuffle(p.deck.filter((_, i) => i !== evoIdx));
-  players[aIdx] = p;
-  s = { ...s, players };
-  return addLog(s, `賽吉：將 ${evoCard.name} 進化於場上的「${evoCard.evolvesFrom}」並重洗牌庫`, aIdx);
+  p.bench.forEach(b => {
+    if (pool.get(b.cardId)?.name === evoCard.evolvesFrom) {
+      targetIids.push(b.iid);
+    }
+  });
+
+  if (targetIids.length === 0) {
+    return addLog(state, `賽吉：場上無「${evoCard.evolvesFrom}」可進化`, aIdx);
+  }
+  if (targetIids.length === 1) {
+    // 只 1 隻 → 自動進化（不必煩玩家）
+    return _sageEvolveApply(state, aIdx, evoIid, targetIids[0], pool);
+  }
+  // ≥ 2 → 開第二層 picker
+  const s2 = addLog(state, `賽吉：場上有 ${targetIids.length} 隻「${evoCard.evolvesFrom}」，請選擇要進化哪一隻`, aIdx);
+  return withPending(s2, {
+    type: 'bench-choose',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'sage-evolve-pick-target',
+    params: {
+      includeActive: true,
+      validIids: targetIids,
+      evoIid,
+      titleOverride: `賽吉：選擇要進化的「${evoCard.evolvesFrom}」`,
+    },
+  });
+});
+
+// v5.207：賽吉第二層 picker resolver — 玩家從多隻同名底寶中選 1 後套進化
+regR('sage-evolve-pick-target', (state, aIdx, iids, params, pool) => {
+  const targetIid = iids[0];
+  const evoIid = (params?.evoIid as string | undefined) ?? '';
+  if (!targetIid || !evoIid) {
+    return addLog(state, '賽吉：picker 資料缺失，進化中斷', aIdx);
+  }
+  return _sageEvolveApply(state, aIdx, evoIid, targetIid, pool);
 });
 
 // 八朔（支援者）— 上個對手的回合自己的寶可夢昏厥了才可用，看牌庫頂 8 選 3
