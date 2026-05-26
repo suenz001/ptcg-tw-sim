@@ -4421,17 +4421,24 @@ function handlePlaying(
     //   卡面：「只要這隻寶可夢在備戰區，自己場上所有寶可夢不會受到身上附加能量為
     //          2 個以下的對手寶可夢的招式傷害。」
     //   範圍：active target case（本處）+ bench-snipe target case（defense.ts 統一 helper 內）。
-    //   「能量 2 個以下」= 攻擊方 active 身上附加能量「卡張數」≤ 2（不是能量單位）。
+    //   v5.209 修法：active target case 同步 defense.ts v5.115 修法，改用 totalEnergyUnits 算
+    //   能量「unit 數」而非張數。PTCG 規則「能量 N 個」= N units（大竺葵繁茂 1 張草 = 2 units，
+    //   火箭隊能量 1 張 = 2 units，燃火能量於進化卡 = 3 units，新衝天於 2 階 = 2 units）。
+    //   原 length 算法漏算所有 multi-unit 倍率能量，玩家用大竺葵繁茂 + 2 張草仍被誤擋。
     if (baseDamage > 0) {
       const hasTaikoBari = defender.bench.some(b => {
         const c = pool.get(b.cardId);
         return c?.abilities?.some(a => a.name === '太鼓防壁');
       });
-      if (hasTaikoBari && attacker.active.energyAttached.length <= 2) {
-        workingState = addLog(workingState,
-          `${defenderCard.name} 因 護城龍｜太鼓防壁 效果，不受附加能量 ${attacker.active.energyAttached.length} 張（≤2）的對手招式傷害`,
-          dIdx);
-        baseDamage = 0;
+      if (hasTaikoBari) {
+        // v5.209: 傳 hostInst 讓燃火 / 新衝天倍率正確計算
+        const atkUnits = totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx, attacker.active);
+        if (atkUnits <= 2) {
+          workingState = addLog(workingState,
+            `${defenderCard.name} 因 護城龍｜太鼓防壁 效果，不受附加能量 ${atkUnits} 個（≤2）的對手招式傷害`,
+            dIdx);
+          baseDamage = 0;
+        }
       }
     }
 

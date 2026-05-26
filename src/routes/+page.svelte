@@ -304,6 +304,47 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.209</span> 護城龍｜太鼓防壁 active target case 補修 — 大竺葵繁茂等倍率能量正確處理</summary>
+        <ul>
+          <li><b>玩家報告</b>：場上有大竺葵（繁茂特性，基本草視為 2 個草）+ 對手有護城龍時，攻擊方 active 身上 2 張基本草 (= 4 units) 仍被護城龍誤判「能量 ≤2」擋傷害。</li>
+          <li><b>卡面對照</b>：
+            <ul>
+              <li><b>護城龍｜太鼓防壁</b>（M5 #50279）：「自己場上所有寶可夢不會受到身上附加能量為 <b>2 個以下</b>的對手寶可夢的招式傷害」</li>
+              <li><b>大竺葵｜繁茂</b>（M-P-I #17971 / M1S #14025）：「自己的所有寶可夢身上附加的『基本【草】能量』卡，視為各提供 <b>2 個【草】能量</b>」</li>
+            </ul>
+            PTCG 「能量個數」一律按 unit 計算（不是張數）。
+          </li>
+          <li><b>根因</b>：v4.891 引入太鼓防壁時兩處 hardcode 用 <code>energyAttached.length</code>（張數）：
+            <ol>
+              <li><code>defense.ts</code> L182 bench-snipe target case — <b>v5.115 已修為 <code>totalEnergyUnits</code></b></li>
+              <li><code>engine.ts</code> L4430 active target case — <b>本次補修</b>，v5.115 漏改</li>
+            </ol>
+            Wilson 場景是 active 打 active 走 engine 路徑，因此 bug 持續到 v5.208。
+          </li>
+          <li><b>影響範圍</b>：active target case 涵蓋所有打對手戰鬥位的招式（壓倒性最常見路徑）。修法後下列 multi-unit 能量都正確處理：
+            <ul>
+              <li>大竺葵繁茂下基本草（1 張 = 2 units）</li>
+              <li>火箭隊能量（1 張 = 2 units）</li>
+              <li>燃火能量（附於進化卡 = 3 units）</li>
+              <li>新衝天能量（附於 2 階 = 2 units）</li>
+              <li>暗影【惡】/ 磁鐵【鋼】/ 閃電【雷】等屬性能量</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：engine.ts L4430 改用既有 <code>totalEnergyUnits(attached, pool, state, ownerIdx, hostInst)</code> helper，且傳 <code>hostInst=attacker.active</code> 讓燃火 / 新衝天倍率也正確處理。log 訊息從「N 張」改「N 個」符合 PTCG 用詞。</li>
+          <li><b>為什麼之前沒爆</b>：v4.891 時測 case 多半單獨基本能量，length === units，沒踩到差異。v5.115 修 defense.ts 時遺漏 engine.ts 平行路徑（兩處應同步用 helper，這是 Rule 14 教訓）。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 17（不 AI 幻覺）：卡面「能量為 2 個以下」+ PTCG「個 = unit」直接推得；v4.891 原註解「按張數」是錯的，已在 v5.115 + 本次更正</li>
+              <li>Rule 14（單一 root cause）：兩處原本應該同步用 helper，這次補上漏掉的 active path</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
+              <li>Rule 4（tsc verify）</li>
+              <li>Rule 1（changelog 內 <code>&lt;</code> / <code>&gt;</code> / <code>&amp;&amp;</code> / <code>&#123;&#125;</code> 都跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.208</span> 道具拆除器第 2 張「結束」按鈕點不下去 + UI 誤顯示「沒有符合條件」</summary>
         <ul>
           <li><b>玩家報告</b>：道具拆除器第 2 張的「✋ 結束（不丟第 2 張）」按鈕點不下去。截圖額外顯示誤導訊息「（沒有符合條件的卡牌）」。</li>
