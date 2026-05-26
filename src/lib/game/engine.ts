@@ -4294,7 +4294,9 @@ function handlePlaying(
     //   卡面：「雙方的所有寶可夢（『擁有規則的寶可夢』除外），
     //         不會受到對手的『寶可夢【ex】・【V】』招式的傷害。」
     //   active target 在此處檢查；bench target 在 resolveBenchGuard 內檢查。
-    if (baseDamage > 0 && wouldNeutralCenterBlock(workingState, pool, attackerCard, defenderCard)) {
+    // v5.181: 加 !skipDefEffects gate — 玩家規則理解 中立中心場地視作「寶可夢身上的附加效果」
+    //         skipDefEffects 招式 (不計算對方寶可夢身上的附加效果) 應繞過 immunity
+    if (baseDamage > 0 && !skipDefEffects && wouldNeutralCenterBlock(workingState, pool, attackerCard, defenderCard)) {
       workingState = addLog(workingState,
         `${defenderCard.name} 因中立中心競技場效果，不受規則寶可夢招式傷害`, dIdx);
       baseDamage = 0;

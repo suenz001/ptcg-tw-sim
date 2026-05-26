@@ -265,6 +265,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.181</span> 兩個 bug 修 - 揮指 modal hint + 中立中心 skipDefEffects gate</summary>
+        <ul>
+          <li>Bug 1: 皮可西揮指/試著模仿 picker modal 顯示「高傲指令」(v5.178 reuse 寫死)</li>
+          <li>修法 1: rocketCommandPicker state 加 sourceAttackName 動態欄位, modal hint 用 inline ?? expression 動態顯示 (避開 svelte 5 &#123;@const&#125; placement rule)。試著模仿額外加擲幣提示</li>
+          <li>Bug 2: 中立中心 (Neutralization Zone) 規則理解 — 玩家視作寶可夢身上附加效果, skipDefEffects 招式應繞過</li>
+          <li>修法 2: engine.ts L4182 wouldNeutralCenterBlock check 加 !skipDefEffects gate</li>
+          <li>Iron Rules: 11/11c/11e/11f/14(高傲指令邏輯不動)/15(中立中心規則)/17/1</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.180</span> 新增「提議返回房間」按鈕 (仿提議重新開局)</summary>
         <ul>
           <li>玩家建議: 對局控制下拉選單中, 在「提議重新開局」按鈕下方增加「提議返回房間」按鈕。雙方同意後線上回到房間選牌組介面, 單機則回首頁重選對戰模式</li>

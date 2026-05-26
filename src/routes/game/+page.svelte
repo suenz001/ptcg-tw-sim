@@ -3778,17 +3778,17 @@
         return;
       }
       if (oppAttacks.length === 1) {
-        // 單一招式 → 自動填，跳過 picker
         const idx = oppCard!.attacks!.findIndex(a => a.name === oppAttacks[0].name);
         dispatch(GameActions.attack(attackIndex, undefined, { pokeIid: oppActive.iid, attackIndex: idx }));
         return;
       }
-      // 多招式 → 開 picker (含 top10All=[oppActive] 純展示)
+      // v5.181：sourceAttackName 動態, modal hint 不再顯示「高傲指令」
       rocketCommandPicker = {
         sourceAttackIndex: attackIndex,
         pokeList: [{ inst: oppActive, card: oppCard! }],
         top10All: [{ inst: oppActive, card: oppCard! }],
         revealOnly: false,
+        sourceAttackName: atk.name,
       };
       return;
     }
@@ -3806,17 +3806,15 @@
       // v5.174：top10 全 10 張 (含非寶可夢) 給 modal 揭示用 — 參考寶可裝置3.0「公開揭示」精神
       const top10All = top10.map(inst => ({ inst, card: getCard(inst.cardId) })).filter(x => x.card) as Array<{ inst: CardInstance; card: Card }>;
       if (pokeList.length === 0) {
-        // v5.174：0 寶可夢時不直接 dispatch；改開 picker (revealOnly=true) 揭示 top10 給玩家看
-        //   過去 (v4.39) 直接 dispatch → engine log「無寶可夢」但玩家沒 modal → 不公開
         rocketCommandPicker = {
           sourceAttackIndex: attackIndex,
           pokeList: [],
           top10All,
           revealOnly: true,
+          sourceAttackName: '高傲指令',
         };
         return;
       }
-      // 單一寶可夢 + 單招 → 自動填，跳過 picker
       if (pokeList.length === 1 && (pokeList[0].card.attacks?.length ?? 0) === 1) {
         dispatch(GameActions.attack(attackIndex, undefined, { pokeIid: pokeList[0].inst.iid, attackIndex: 0 }));
         return;
@@ -3826,6 +3824,7 @@
         pokeList,
         top10All,
         revealOnly: false,
+        sourceAttackName: '高傲指令',
       };
       return;
     }
@@ -3972,6 +3971,8 @@
     // v5.174：top10All = 對手牌庫頂 10 張全部（含非寶可夢），revealOnly=true 時 modal 改純揭示
     top10All?: Array<{ inst: CardInstance; card: Card }>;
     revealOnly?: boolean;
+    // v5.181：sourceAttackName — 揮指/試著模仿/高傲指令 共用 modal, hint 動態
+    sourceAttackName?: string;
   } | null>(null);
   function resolveRocketCommand(pokeIid: string, attackIndex: number) {
     if (!rocketCommandPicker) return;
@@ -7705,12 +7706,16 @@
     <div class="selection-overlay">
       <div class="selection-modal copy-attack-modal">
         <div class="sel-header">
+          <!-- v5.181：sourceAttackName 動態 (高傲指令/揮指/試著模仿). 用 inline ?? 避開 svelte 5 @const placement rule -->
           {#if rocketCommandPicker.revealOnly}
-            <h3>高傲指令：對手牌庫頂 10 張無寶可夢（公開揭示）</h3>
+            <h3>{rocketCommandPicker.sourceAttackName ?? '高傲指令'}：對手牌庫頂 10 張無寶可夢（公開揭示）</h3>
             <p class="sel-hint">依照卡面規則，翻到正面的 10 張卡全部公開揭示給對手看。下方為對手牌庫上方 10 張卡的內容（無寶可夢可複製）。確認後放回牌庫並重洗，本次招式 0 傷害。</p>
-          {:else}
+          {:else if (rocketCommandPicker.sourceAttackName ?? '高傲指令') === '高傲指令'}
             <h3>高傲指令：選擇要使用的招式</h3>
             <p class="sel-hint">對手牌庫上方 10 張卡翻到正面，下列為其中持有招式的寶可夢。請選擇 1 個招式作為這個招式使用（若不希望可按「不複製」）。翻到正面的卡將放回牌庫並重洗。</p>
+          {:else}
+            <h3>{rocketCommandPicker.sourceAttackName}：選擇要複製的招式</h3>
+            <p class="sel-hint">對手戰鬥場寶可夢持有的招式如下，請選擇 1 個作為此招式使用。{#if rocketCommandPicker.sourceAttackName === '試著模仿'}（注意：必須擲幣為正面才實際生效，反面則 0 傷害）{/if}</p>
           {/if}
         </div>
         {#if rocketCommandPicker.revealOnly && rocketCommandPicker.top10All}
