@@ -1291,26 +1291,37 @@ regPost('西獅海壬|水流回歸', (state, aIdx) => {
 regPre('超級達克萊伊ex|深淵之瞳', (state) => ({ state, damage: 0 }));
 regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  if (!def) return addLog(state, '深淵之瞳：對手無戰鬥位', aIdx);
+  let s = state;
+  const def = s.players[dIdx].active;
+  if (!def) return addLog(s, '深淵之瞳：對手無戰鬥位', aIdx);
   if (!def.status) {
-    return addLog(state, '深淵之瞳：對手戰鬥位不處於特殊狀態 → 效果失敗', aIdx);
+    return addLog(s, '深淵之瞳：對手戰鬥位不處於特殊狀態 → 效果失敗', aIdx);
   }
   const defCard = pool.get(def.cardId);
-  // v5.168：深淵之瞳「使昏厥」屬於招式效果（attack-effect），需 canApplyEffectToTarget guard。
-  //   薄霧能量「附有此能量的寶可夢，不會受到對手的寶可夢的招式效果」應 100% 擋下昏厥效果。
-  //   同類保護：皇帝之勢、抵抗之幕、全能硬殼、化石 等 attack-effect immunity。
-  const guard = canApplyEffectToTarget(state, aIdx, def, defCard, 'attack-effect', pool, { isBench: false });
-  if (guard.blocked) {
-    return addLog(state, `深淵之瞳：${defCard?.name ?? '?'} 因${guard.reason} → 效果失敗（招式效果免疫）`, aIdx);
+  // v5.168/v5.170：深淵之瞳「使昏厥」屬招式效果（attack-effect）。仿棄世猴|同命戰鬥
+  //   (effects.ts L6877) 用 canApplyAttackEffectToTarget guard 擋 薄霧能量 / 皇帝之勢 /
+  //   抵抗之幕 / 全能硬殼 / 化石 等 attack-effect immunity。
+  const guardKO = canApplyAttackEffectToTarget(s, aIdx, def, defCard, pool);
+  if (guardKO.blocked) {
+    return addLog(s, `深淵之瞳：${defCard?.name ?? '?'}｜${guardKO.reason}（不昏厥對手）`, aIdx);
   }
-  const hp = defCard?.hp ?? 0;
-  if (hp <= 0) return addLog(state, '深淵之瞳：對手戰鬥位無 HP 資訊', aIdx);
-  // 設 damage = HP，sanityKOSweep 會處理擊倒 + 獎賞
-  return updatePlayer(addLog(state, `深淵之瞳：對手戰鬥位處於【${def.status}】 → 直接昏厥`, aIdx), dIdx, p => {
-    if (!p.active) return p;
-    return { ...p, active: { ...p.active, damage: hp } };
-  });
+  // v5.170：仿棄世猴|同命戰鬥手動 KO 模式（取代 v5.168 的 damage=HP+sanityKOSweep）。
+  //   原 v5.168 設 damage=HP 是「造成 N 傷害」的變相 → 會誤觸 damage 相關 hook
+  //   (PASSIVE_ON_DAMAGED / 扣殺能量 / SPECIAL_ENERGY_ON_DAMAGED 等)。
+  //   正確：「使昏厥」是 effect-level KO — 直接搬到棄牌 + addPendingPrize，不走 damage 管線。
+  const ko: CardInstance[] = [
+    { ...def, damage: (defCard?.hp ?? 0) },
+    ...def.energyAttached,
+    ...getAllAttachedTools(def),
+    ...(def.evolvedFromStack ?? []),
+  ];
+  const players = [...s.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...s.players[dIdx], active: null, discard: [...s.players[dIdx].discard, ...ko] };
+  const prizes = defCard ? prizesForKOLocal(defCard) : 1;
+  s = addLog({ ...s, players }, `深淵之瞳：${defCard?.name ?? '?'} 處於【${def.status}】 → 直接昏厥！+${prizes} 張獎勵牌（仿同命戰鬥手動 KO，不走 damage 管線）`, aIdx);
+  s = recordOppKO(s, dIdx, defCard, 'attack');
+  s = addPendingPrize(s, aIdx, prizes);
+  return s;
 });
 
 // ════════════════════════════════════════════════════════════════════════════

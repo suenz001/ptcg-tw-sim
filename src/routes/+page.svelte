@@ -265,6 +265,31 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.170</span> 🔧 修正 v5.168 深淵之瞳 — 改用棄世猴同命戰鬥手動 KO 模式</summary>
+        <ul>
+          <li><b>玩家指正</b>：深淵之瞳是「招式效果使對手昏厥」，不該用 <code>damage=HP</code> 變相「造成 N 傷害」處理。應該參考棄世猴｜同命戰鬥（effects.ts L6877）的純效果 KO 模式。</li>
+
+          <li><b>v5.168 錯誤</b>：設 <code>active.damage = HP</code> + 等 <code>sanityKOSweep</code> 移到 discard。問題：
+            <ul>
+              <li>damage 累加會誤觸 damage hook：<code>PASSIVE_ON_DAMAGED</code>、扣殺能量、<code>SPECIAL_ENERGY_ON_DAMAGED</code> 等都會以為「受到傷害」而 trigger</li>
+              <li>實際上 PTCG「使昏厥」= effect-level KO，跟「造成 N 傷害」性質完全不同</li>
+            </ul>
+          </li>
+
+          <li><b>v5.170 修法</b>：仿棄世猴｜同命戰鬥手動 KO 模式
+            <ol>
+              <li><code>canApplyAttackEffectToTarget</code> guard — 擋住薄霧能量 / 皇帝之勢 / 抵抗之幕 / 全能硬殼 / 化石 等 attack-effect immunity</li>
+              <li>手動 KO：<code>active</code>、能量、道具、進化堆全搬到 <code>discard</code></li>
+              <li><code>recordOppKO</code> 記錄 + <code>addPendingPrize</code> 給攻擊方獎勵牌</li>
+              <li>完全不走 damage 管線 → 不會誤觸 damage hook</li>
+            </ol>
+          </li>
+
+          <li><b>Iron Rules</b>：Rule 11/11c（Python pipeline）／11e（Write tool）／11f（push 前 1 處 ASSERT exact-match）／14（最小 patch — 純改 regPost 內 KO 方式，guard 邏輯保留）／15（卡面 source of truth — 「使昏厥」非「造成傷害」）／17（不做 AI 幻覺——直接抄棄世猴|同命戰鬥的成熟實作，不自己推測）／1（changelog audit pass + 本機 svelte.compile pre-check）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.169</span> 🔧 修正 v5.168 — 高傲指令 picker 按鈕方向錯</summary>
         <ul>
           <li><b>玩家補充正確需求</b>：v5.168 移除「不複製」+ 保留「取消」是反的。正確應該：
