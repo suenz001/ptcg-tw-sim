@@ -304,6 +304,39 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.202</span> 沐淨 2 bug 修補 — 手牌無候選不可使用 + 強制至少丟 1 張</summary>
+        <ul>
+          <li><b>玩家報告</b>：「沐淨」這張支援者：(1) 手上沒有非規則寶可夢時不應該能使用（卡片消耗但無效果，違反 PTCG「支援者無可解效果不能使用」規則）；(2) 使用之後不可以不點選寶可夢，強制至少要選 1 隻。</li>
+          <li><b>卡面</b>（<code>M5.json</code> #50297）：「從自己的手牌將寶可夢（『擁有規則的寶可夢』除外）最多丟棄 2 張，丟棄張數 × 3 張，從牌庫抽卡。」</li>
+          <li><b>根因</b>：
+            <ul>
+              <li>Bug 1：<code>m5_preview.ts</code> L1432 <code>reg('沐淨', ...)</code> 內判斷「候選 0 張時 <code>addLog 略過</code>」，但仍正常進入 effect path（卡片照樣消耗），且沒有對應的 <code>regG</code> gate → UI 不會灰按鈕、engine PLAY_SUPPORTER 也不會 reject</li>
+              <li>Bug 2：<code>minCount: 0</code> 讓玩家「點 0 張確認跳過」也算合法，違反卡面「最多 2 張」隱含的「至少 1 張」（既然使用就要有效果）</li>
+            </ul>
+          </li>
+          <li><b>修法</b>：
+            <ol>
+              <li>抽出 helper <code>mokujouCandidates(st, idx, pool)</code> — DRY 不重複寫候選 filter</li>
+              <li>加 <code>regG('沐淨', (st, idx, pool) =&gt; mokujouCandidates(...).length &gt;= 1)</code> — UI 灰按鈕 + engine reject 雙重 gate</li>
+              <li><code>minCount: 0 → 1</code>：強制至少選 1 隻</li>
+              <li>標題與訊息從「≤2 張」「可選 0 張跳過」改成「1~2 張」明確語意</li>
+              <li>defensive 分支保留（reg 內 length 0 / resolver iids.length===0 都有 fallback log，但 regG + min=1 雙保險下不會走到）</li>
+            </ol>
+          </li>
+          <li><b>同類卡 audit 建議</b>：其他「丟手牌類」支援者（伊塔貝里的 X、鳴依的勉勵等）若有「候選空時仍可使用」bug 可一併修；本次先就 Wilson 點名的沐淨。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 14（單一 root cause）：兩個 bug 共同源頭都是「沒做 gate」，統一用 <code>regG</code> + <code>minCount</code> 修</li>
+              <li>Rule 17（不 AI 幻覺）：卡面敘述 / regG 範本（draw_supporters.ts L110/L273）/ RULE_BOX_SUBTYPES 全部交叉驗證</li>
+              <li>Rule 11（Python pipeline）/ Rule 11c（不 git status）</li>
+              <li>Rule 7c（同名特性）：不適用（非特性，是訓練家卡）</li>
+              <li>Rule 1（changelog 內 <code>&gt;=</code> 跳脫）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.201</span> 祭典樂舞 atomic 自動連打 — 第 1 跟第 2 次屬同回合操作，玩家中間不可介入</summary>
         <ul>
           <li><b>玩家報告</b>：「祭典樂舞」特性生效後的第 2 次攻擊，bug 三點：(a) 對手減傷 / 我方增傷狀態沒延續到第 2 次；(b) 第 1 跟第 2 次之間玩家可以使用任何卡片（違反卡面語義「只能再攻擊一次」）；(c) 應該由系統自動執行第 2 次。</li>

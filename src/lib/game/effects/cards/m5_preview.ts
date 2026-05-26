@@ -62,7 +62,7 @@ import {
   // v5.172：深淵之瞳手動 KO 模式（recordOppKO / addPendingPrize 都在 _shared.ts）
   recordOppKO,
   addPendingPrize,
-} from '../_shared';
+  regG} from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import {
   statusPost,
@@ -85,7 +85,7 @@ import {
   prizesForKOLocal,
 } from '../../effects';
 import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
-import { RULE_BOX_SUBTYPES } from '../../types';
+import { RULE_BOX_SUBTYPES, CardInstance} from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 
 // ── M5 helper: 自傷（這隻寶可夢也受到 N 傷害）─────────────────────────
@@ -1452,35 +1452,46 @@ regR('m5-warlord-destroy-headbutt', (state, aIdx, iids) => {
   });
 });
 
-// ── 4. 沐淨（Supporter）─ 棄 ≤2 張非規則寶可夢 → 抽 N×3 張
+// ── 4. 沐淨（Supporter）─ 棄 1~2 張非規則寶可夢 → 抽 N×3 張
 //   卡面：「從自己的手牌將寶可夢（『擁有規則的寶可夢』除外）最多丟棄 2 張，
 //          丟棄張數 × 3 張，從牌庫抽卡。」
-reg('沐淨', (st, idx, pool) => {
-  const p = st.players[idx];
-  // 找手牌中非規則寶可夢的候選 iid
-  const candidates = p.hand.filter(c => {
+//   v5.202 兩 bug 修補（玩家報告）：
+//     (1) 手牌無「非規則寶可夢」時不應該能使用 → 加 regG gate
+//     (2) 使用後必須至少選 1 隻 → minCount 0 → 1（玩家「點 0 張確認跳過」沒意義）
+//   PTCG 規則：支援者無可解效果不能使用；既然要使用就必須丟 ≥1 張產生效果。
+function mokujouCandidates(st: GameState, idx: 0 | 1, pool: Map<string, Card>): CardInstance[] {
+  return st.players[idx].hand.filter(c => {
     const card = pool.get(c.cardId);
     if (!card || card.supertype !== 'Pokemon') return false;
     if (RULE_BOX_SUBTYPES.has(card.subtype ?? '')) return false;
     return true;
   });
+}
+// v5.202 Bug 1: 手牌無非規則寶可夢時 regG 回 false → UI 灰按鈕 + engine PLAY_SUPPORTER reject
+regG('沐淨', (st, idx, pool) => mokujouCandidates(st, idx, pool).length >= 1);
+
+reg('沐淨', (st, idx, pool) => {
+  const candidates = mokujouCandidates(st, idx, pool);
+  // defensive: regG 已擋，此分支理論上不會走到；保留作雙重防護
   if (candidates.length === 0) {
     return addLog(st, '沐淨：手牌中無非規則寶可夢可丟，效果略過', idx);
   }
   const validIids = candidates.map(c => c.iid);
   return withPending(
-    addLog(st, `沐淨：從手牌選 ≤2 張非規則寶可夢丟棄（候選 ${candidates.length} 張，可選 0 張跳過）`, idx),
+    addLog(st, `沐淨：從手牌選 1~2 張非規則寶可夢丟棄（候選 ${candidates.length} 張）`, idx),
     {
       type: 'hand-discard',
       actorIdx: idx, sourcePlayerIdx: idx,
-      minCount: 0, maxCount: Math.min(2, candidates.length),
+      // v5.202 Bug 2: minCount 0 → 1（強制至少選 1 隻才能確認）
+      minCount: 1, maxCount: Math.min(2, candidates.length),
       effectKey: 'm5-trainer-mokujou',
-      params: { validIids, titleOverride: '沐淨：選擇 ≤2 張非規則寶可夢丟棄' },
+      params: { validIids, titleOverride: '沐淨：選擇 1~2 張非規則寶可夢丟棄' },
     },
   );
 });
 regR('m5-trainer-mokujou', (state, aIdx, iids) => {
-  if (iids.length === 0) return addLog(state, '沐淨：玩家丟 0 張 → 無抽牌效果', aIdx);
+  // v5.202: minCount=1 後 iids.length === 0 不再可能；保留 defensive 分支
+  if (iids.length === 0) return addLog(state, '沐淨：玩家丟 0 張（不應發生，防呆 log）', aIdx);
   return updatePlayer(addLog(state, `沐淨：丟 ${iids.length} 張非規則寶 → 抽 ${iids.length * 3} 張`, aIdx), aIdx, p => {
     const toDiscard = p.hand.filter(c => iids.includes(c.iid));
     const remaining = p.hand.filter(c => !iids.includes(c.iid));
