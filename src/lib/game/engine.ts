@@ -5449,10 +5449,26 @@ function handlePlaying(
         `陳舊的背蓋化石：免疫招式的附加效果（傷害仍正常結算）`, dIdx);
     }
     // v2.78 純樸 — defender immuneToAttackEffectsThisTurn → skip ATTACK_POST 附加效果
-    const postBlocked = newState.players[dIdx].active?.immuneToAttackEffectsThisTurn ?? false;
+    // v5.238 擴展：
+    //   - 飛翔（喇叭啄鳥/咕咕鴿）/ 要害斬（具甲武者）— 卡面「不受招式的傷害和效果」
+    //     → immuneToAllAttackThisTurn 同時擋 POST。
+    //     玩家回報：飛翔正面後，下回合受胡地手之力量攻擊，傷害指示物仍被放上。
+    //   - 阿賽蘿拉的惡作劇 — 卡面「不受【ex】寶可夢的招式的傷害與效果」
+    //     → immuneToExAttackThisTurn 在 attacker is ex 時擋 POST。
+    //   - 中立中心/精神防護/閃光屏障/塗層攻擊 卡面只擋「傷害」不寫「效果」，POST 不擋。
+    const defActiveForPost = newState.players[dIdx].active;
+    const postNuetralImmune = defActiveForPost?.immuneToAttackEffectsThisTurn ?? false;
+    const postAllImmune = defActiveForPost?.immuneToAllAttackThisTurn ?? false;
+    const postExImmune = (defActiveForPost?.immuneToExAttackThisTurn ?? false)
+                          && isRulePokemon(attackerCard);
+    const postBlocked = postNuetralImmune || postAllImmune || postExImmune;
     const postFn = (!shellFossilImmune && !postBlocked) ? ATTACK_POST.get(effectKey) : undefined;
-    if (postBlocked) {
+    if (postNuetralImmune) {
       newState = addLog(newState, '[純樸]defender 不受招式效果影響（傷害仍正常結算）', dIdx);
+    } else if (postAllImmune) {
+      newState = addLog(newState, `${defenderCard?.name ?? '?'} 完全免疫招式（飛翔/要害斬效果）— 跳過附加效果`, dIdx);
+    } else if (postExImmune) {
+      newState = addLog(newState, `${defenderCard?.name ?? '?'} 不受【ex】招式效果影響（阿賽蘿拉的惡作劇）`, dIdx);
     }
     if (postFn) {
       // v2.156：把 action 也傳給 POST，讓「PRE/POST 共享 chosenIids」的 option 招式
