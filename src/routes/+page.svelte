@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.233</span> 桌墊版備戰 8 隻時不再捲動 — 自然展開</summary>
+        <ul>
+          <li>桌墊版觸發零之大空洞（備戰擴張到 8 隻）時，前一版會出現橫向捲動軸，但其實桌面寬度本來就夠 — 改為讓備戰區自然展開到 8 隻卡的總寬度，從中央往兩側均勻擴張，不再出現捲動條，也不會縮小卡牌。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.232</span> 桌墊版零之大空洞觸發時 — 卡牌不再縮小</summary>
         <ul>
           <li>玩家反映：觸發零之大空洞（備戰區可放 8 隻）時，我方備戰區卡牌會變小，跟對手備戰區（5 隻）大小不一致。</li>

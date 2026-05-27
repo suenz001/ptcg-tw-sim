@@ -10723,12 +10723,16 @@
     max-width: 108px !important;
     max-height: 128px !important;
   }
-  /* v5.232：桌墊版 bench-extended 改回 overflow-x: auto + justify-content: flex-start
-     允許超出 grid column 時橫向捲動，slot 不被擠縮。 */
+  /* v5.233：桌墊版橫向寬度絕對夠寬，不需要捲動 — width: max-content 讓 bench
+     容器自然展開到 8 隻卡牌總寬，即使溢出 grid cell 也照樣顯示 (overflow: visible)，
+     不縮卡牌也不出捲軸。justify-self: center 讓它從 grid cell 中心向外均勻擴展，
+     兩側 overflow 對稱。 */
   .playmat.layout-tabletop .zone-bench.bench-extended {
-    overflow-x: auto !important;
-    overflow-y: visible !important;
-    justify-content: flex-start;
+    overflow: visible !important;
+    width: max-content !important;
+    min-width: 100% !important;
+    justify-self: center;
+    justify-content: center;
     gap: 4px;
   }
   /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
