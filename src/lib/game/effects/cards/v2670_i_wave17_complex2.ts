@@ -30,6 +30,8 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost } from '../../effects';
+// v5.229: 招式效果免疫 gate（涵蓋薄霧/硬岩/化隱/抵抗之幕/球形盾牌 等所有防護）
+import { canApplyEffectToTarget } from '../../defense';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper
@@ -326,26 +328,44 @@ regR('v3140-zapdos-jamming-attach', (state, aIdx, iids, params, pool) => {
 //   Stage 2: opp-bench-choose includeActive=true + validIids 排除 source ownerIid
 //     → 玩家看到對手寶可夢卡片（含 active + bench，排除來源），可放大檢視
 regPre('小灰怪|挪動一下', (s) => ({ state: s, damage: 0 }));
-regPost('小灰怪|挪動一下', (state, aIdx, _pool) => {
+regPost('小灰怪|挪動一下', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
   // 蒐集對手場上所有能量總數 + 場上寶可夢總數
   const allPokes: CardInstance[] = [];
   if (opp.active) allPokes.push(opp.active);
   for (const b of opp.bench) allPokes.push(b);
-  const totalEnergies = allPokes.reduce((sum, pk) => sum + pk.energyAttached.length, 0);
-  // 至少 1 顆能量 + 至少 2 隻場上寶可夢（source + target）才能挪
-  if (totalEnergies === 0 || allPokes.length < 2) {
-    return addLog(state, '挪動一下：條件不足（對手場上無能量或場上不足 2 隻）', aIdx);
+  // v5.229：過濾「不受招式效果影響」的寶可夢（薄霧/硬岩/化隱/抵抗之幕/球形盾牌 等）
+  //   挪動一下是純招式效果（無傷害），source 端 + target 端都應該被擋。
+  const unprotectedPokes = allPokes.filter(pk => {
+    const card = pool.get(pk.cardId);
+    const isBench = opp.active?.iid !== pk.iid;
+    const guard = canApplyEffectToTarget(state, aIdx, pk, card, 'attack-effect', pool, { isBench });
+    return !guard.blocked;
+  });
+  // 來源（source）必須是「可被拿走能量」的對手寶可夢 + 身上要有能量
+  const sourceCandidates = unprotectedPokes.filter(pk => pk.energyAttached.length > 0);
+  if (sourceCandidates.length === 0) {
+    return addLog(state, '挪動一下：對手場上無「身上有能量且不受招式效果影響」的寶可夢', aIdx);
   }
-  return withPending(addLog(state, '挪動一下：選擇要改附的對手能量（場上任一隻寶可夢）', aIdx), {
+  // 目標（target）：可附加的合法位置至少要有 2 隻不同對手寶可夢（source ≠ target）
+  if (unprotectedPokes.length < 2) {
+    return addLog(state, '挪動一下：對手場上不足 2 隻「不受招式效果影響」的寶可夢', aIdx);
+  }
+  // 限制 source picker 只顯示 unprotectedPokes 身上的能量
+  const validEnergyIids: string[] = [];
+  for (const pk of sourceCandidates) {
+    for (const e of pk.energyAttached) validEnergyIids.push(e.iid);
+  }
+  return withPending(addLog(state, '挪動一下：選擇要改附的對手能量（不受招式效果影響的寶可夢）', aIdx), {
     type: 'active-energy-discard',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'minccino-shuffle-pick-energy-anywhere',
     params: {
       scope: 'all-opp',
-      titleOverride: '挪動一下：選擇要改附的對手能量（場上任一隻）',
+      validIids: validEnergyIids,  // v5.229: 限定能量 picker 候選
+      titleOverride: '挪動一下：選擇要改附的對手能量',
     },
   });
 });
@@ -360,10 +380,19 @@ regR('minccino-shuffle-pick-energy-anywhere', (state, aIdx, iids, _params, _pool
   for (const b of opp.bench) allPokes.push(b);
   const owner = allPokes.find(pk => pk.energyAttached.some(e => e.iid === energyIid));
   if (!owner) return addLog(state, '挪動一下：找不到能量擁有者', aIdx);
-  // Stage 2：選對手「其他」寶可夢（排除 source）— 用 opp-bench-choose includeActive
-  const validTargets = allPokes.filter(pk => pk.iid !== owner.iid).map(pk => pk.iid);
+  // Stage 2：選對手「其他」寶可夢（排除 source + 排除「不受招式效果影響」者）
+  // v5.229: 過濾 target 端的招式效果免疫者（薄霧/硬岩/化隱 等）
+  const validTargets = allPokes
+    .filter(pk => pk.iid !== owner.iid)
+    .filter(pk => {
+      const card = _pool.get(pk.cardId);
+      const isBench = opp.active?.iid !== pk.iid;
+      const guard = canApplyEffectToTarget(state, aIdx, pk, card, 'attack-effect', _pool, { isBench });
+      return !guard.blocked;
+    })
+    .map(pk => pk.iid);
   if (validTargets.length === 0) {
-    return addLog(state, '挪動一下：對手場上無其他可附加目標，效果結束', aIdx);
+    return addLog(state, '挪動一下：對手場上無其他「可附加且不受招式效果影響」的目標，效果結束', aIdx);
   }
   return withPending(addLog(state, '挪動一下：選擇要附加能量的對手寶可夢（不可為來源寶可夢）', aIdx), {
     type: 'opp-bench-choose',
