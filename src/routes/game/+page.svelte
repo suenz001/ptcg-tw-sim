@@ -10710,27 +10710,30 @@
     max-height: 110px;
   }
 
-  /* v5.232：桌墊版 bench-extended slot 保持跟 5 隻時一樣大 (90px/128px)，
-     寧可橫向捲動也不縮卡牌大小（玩家明確要求）。
-     原 v5.046 想「拉寬」但 grid column 1fr 不夠寬時 flex shrink 反而擠小。 */
+  /* v5.234：桌墊版 bench-extended slot 固定寬度 128px (不 flex grow / 不 shrink)。
+     原因：1366 viewport 下 grid 1fr column 約 834px，扣 gap 後 8 卡 distribute
+     每個只有 100px (沒到 max-width 128)；改 flex:0 0 128px 強制每個剛好 128，
+     容器自然撐到 128*8+gap=1052px 溢出 1fr cell — 配合下方 width:max-content
+     讓 zone-bench 自然展開不被 cell 限制。 */
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot,
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-empty {
-    flex: 1 1 90px !important;
-    min-width: 90px !important;
+    flex: 0 0 128px !important;
+    width: 128px !important;
+    min-width: 128px !important;
     max-width: 128px !important;
   }
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot img {
     max-width: 108px !important;
     max-height: 128px !important;
   }
-  /* v5.233：桌墊版橫向寬度絕對夠寬，不需要捲動 — width: max-content 讓 bench
-     容器自然展開到 8 隻卡牌總寬，即使溢出 grid cell 也照樣顯示 (overflow: visible)，
-     不縮卡牌也不出捲軸。justify-self: center 讓它從 grid cell 中心向外均勻擴展，
-     兩側 overflow 對稱。 */
+  /* v5.234：桌墊版 bench 容器純 width: max-content — 8 個固定 128px slot 自然撐成
+     128*8 + gap*7 = 1052px。拿掉 v5.233 的 min-width:100% 因為它會強迫容器至少 = 1fr cell
+     寬 (~834px @ 1366viewport)，然後 flex distribute 把 slot 縮成 100px。純 max-content 後
+     容器寬 = 1052px 溢出 cell，但 overflow:visible + justify-self:center 讓它從 cell 中心
+     向兩側擴展、視覺對稱、不需捲動。 */
   .playmat.layout-tabletop .zone-bench.bench-extended {
     overflow: visible !important;
     width: max-content !important;
-    min-width: 100% !important;
     justify-self: center;
     justify-content: center;
     gap: 4px;
