@@ -304,6 +304,50 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.221</span> 暗夜羽擊全域 audit (Rule 7c 接續 v5.220) — 補 4 個對手戰鬥位特性</summary>
+        <ul>
+          <li><b>背景</b>：v5.220 只修了 <code>hasPsyduckDamp</code>（可達鴨｜濕氣 1 個特性）。Wilson 提醒：濕氣只是被壓制的「其中一種」特性，振翼髮｜暗夜羽擊 (passive) 應該消除對手戰鬥位的<b>所有</b>特性（暗夜羽擊本身除外）。</li>
+          <li><b>audit 結果 — 4 個漏點</b>：
+            <ul>
+              <li><b>A. <code>hasAbilityOnActive</code> helper</b>（v3001_g3_wave3.ts L76）— 通用 helper，被 3 個對手特性 helper 共用：
+                <ul>
+                  <li><code>isOppStadiumPlayBlocked</code>（爆大身軀 — 大王銅象 — 擋對手競技場）</li>
+                  <li><code>isOppEvilEyeBlocking</code>（瞪眼效用 — 火箭隊的阿柏怪 — 擋對手放置有特性的寶可夢）</li>
+                  <li><code>isOppItemPlayBlocked</code>（海之詛咒 — 胖嘟嘟ex — 擋對手物品 + 道具）</li>
+                </ul>
+                修 1 處 helper 自動 cover 3 個對手特性。
+              </li>
+              <li><b>B. engine.ts 4 處 inline 威迫目光 check</b>（班基拉斯）：
+                <ul>
+                  <li>L2328 <code>handlePlaying</code> 化石 item gate</li>
+                  <li>L2889 <code>PLAY_TRAINER</code> item gate</li>
+                  <li>L7717 UI <code>getPlayableTrainers</code> item gate</li>
+                  <li>L7775 UI <code>getPlayableFossils</code></li>
+                </ul>
+                全部原本只查 <code>abilityNullifiedThisTurn</code>（招式版暗夜羽擊），沒查 passive 振翼髮。改用 <code>isAbilityNullifiedByPassive</code> helper。
+              </li>
+            </ul>
+          </li>
+          <li><b>修法</b>：
+            <ul>
+              <li>A. <code>hasAbilityOnActive</code> 加 <code>isOppActiveAbilityNullifiedByMoonsenne</code> check，命中時回 false（視為無此特性）</li>
+              <li>B. engine.ts 4 處 inline 加 <code>!isAbilityNullifiedByPassive(...)</code> AND 條件</li>
+            </ul>
+          </li>
+          <li><b>影響範圍</b>：我方戰鬥場有振翼髮時，對手戰鬥位的這 4 個特性<b>全部</b>失效：爆大身軀 / 瞪眼效用 / 海之詛咒 / 威迫目光。加 v5.220 修的濕氣 → 共 5 個對手戰鬥位特性正確受 passive 暗夜羽擊壓制。</li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 7c（audit 同類）— v5.220 漏 audit 暗夜羽擊的「其他特性」，本次補上</li>
+              <li>Rule 14（單一 root cause）— A 修 1 處 helper cover 3 個對手特性</li>
+              <li>Rule 15（鏡射既有結構）— 全部用既有 <code>isAbilityNullifiedByPassive</code> helper</li>
+              <li>Rule 17（不推測）— 全部依 v3001_g3_wave3.ts 既有 passive 機制實作</li>
+              <li>Rule 11 / 11c / 11e / 11f（Python git plumbing + GIT_INDEX_FILE 繞 broken index）/ Rule 1（changelog HTML 跳脫）/ Rule 4（pre-push svelte.compile audit）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.220</span> 兩 bug 修 — 抵抗之幕 KO 後備戰防護 (defense-in-depth) + 暗夜羽擊壓制濕氣後可自爆</summary>
         <ul>
           <li><b>Bug 1：抵抗之幕 vs 幻影奇襲 KO 後備戰失效（接續 v5.186）</b>

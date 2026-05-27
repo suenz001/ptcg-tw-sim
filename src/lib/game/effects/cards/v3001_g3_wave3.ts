@@ -85,7 +85,12 @@ function hasAbilityOnActive(
   // v2.362：abilityNullifiedThisTurn 旗標 → 暫時被消除，視為無此特性
   if (a.abilityNullifiedThisTurn) return false;
   const card = pool.get(a.cardId);
-  return !!card?.abilities?.some(ab => ab.name === abilityName);
+  if (!card?.abilities?.some(ab => ab.name === abilityName)) return false;
+  // v5.221 (Rule 7c)：passive 振翼髮｜暗夜羽擊 — 對手戰鬥位特性被消除時，
+  //   isOppStadiumPlayBlocked (爆大身軀) / isOppEvilEyeBlocking (瞪眼效用) /
+  //   isOppItemPlayBlocked (海之詛咒) 全部應視為無效。修 1 處 cover 3 個 helper。
+  if (isOppActiveAbilityNullifiedByMoonsenne(state, ownerIdx, card, abilityName, pool)) return false;
+  return true;
 }
 
 /** 玩家 idx 備戰是否有指定 ability holder。 */
