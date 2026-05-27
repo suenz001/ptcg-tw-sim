@@ -379,6 +379,7 @@
   // v5.057：toggle 按鈕拖曳 — 仿 panel header 邏輯但操作 togglePos
   let oppTurnToggleDragStart: { x: number; y: number; btnX: number; btnY: number } | null = null;
   function onOppTurnToggleDragStart(e: PointerEvent) {
+    e.stopPropagation();  // v5.231 防止穿透點到下面的卡
     oppTurnToggleDragStart = {
       x: e.clientX, y: e.clientY,
       btnX: oppTurnTogglePos.x, btnY: oppTurnTogglePos.y,
@@ -387,6 +388,7 @@
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
   function onOppTurnToggleDragMove(e: PointerEvent) {
+    e.stopPropagation();  // v5.231 防止穿透
     if (!oppTurnToggleDragStart) return;
     const dx = e.clientX - oppTurnToggleDragStart.x;
     const dy = e.clientY - oppTurnToggleDragStart.y;
@@ -397,6 +399,7 @@
     };
   }
   function onOppTurnToggleDragEnd(e: PointerEvent) {
+    e.stopPropagation();  // v5.231 防止穿透
     oppTurnToggleDragStart = null;
     try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
   }
@@ -515,11 +518,13 @@
   }
 
   function onFabPointerDown(e: PointerEvent) {
+    e.stopPropagation();  // v5.231 防止穿透點到下面的卡
     chatFabDragStart = { mx: e.clientX, my: e.clientY, ox: chatFabPos.x, oy: chatFabPos.y };
     chatFabDragged = false;
     (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
   }
   function onFabPointerMove(e: PointerEvent) {
+    e.stopPropagation();  // v5.231 防止穿透
     if (!chatFabDragStart) return;
     const dx = e.clientX - chatFabDragStart.mx;
     const dy = e.clientY - chatFabDragStart.my;
@@ -530,7 +535,8 @@
       chatFabPos = { x: chatFabDragStart.ox + dx, y: chatFabDragStart.oy + dy };
     }
   }
-  function onFabPointerUp(_e: PointerEvent) {
+  function onFabPointerUp(e: PointerEvent) {
+    e.stopPropagation();  // v5.231 防止穿透
     if (!chatFabDragStart) return;
     if (!chatFabDragged) {
       // 沒拖曳 → 視為 click，開 panel
@@ -3583,16 +3589,37 @@
   }
   // v5.020 桌墊版 — 列出 inst 身上所有 attached cards（能量 / 道具 / 進化堆）扁平陣列。
   // 用於 .att-card-stack 重疊呈現；kind 影響 border 顏色區分種類。
+  // v5.231 排序（由下到上 = z-index 低到高 = array 由後到前）：
+  //   1. 普通能量（最下，最早 render，最大露出）
+  //   2. 特殊能量
+  //   3. 寶可夢道具
+  //   4. 基礎寶可夢（evolvedFromStack[0]）
+  //   5. 1 階寶可夢（evolvedFromStack[1...]）
+  //   6. 寶可夢本體（z=99，最上）
+  //   實作：array index 小 = z-index 高 = 越靠近本體 = 渲染在上層
+  //   推入順序（由本體往外推）：進化堆反序 → 道具 → 特殊能量 → 普通能量
   function attachedCardsOf(inst: CardInstance | null | undefined): Array<{ cardId: string; iid: string; kind: 'energy' | 'tool' | 'evo' }> {
     if (!inst) return [];
     const out: Array<{ cardId: string; iid: string; kind: 'energy' | 'tool' | 'evo' }> = [];
-    // v5.028 排序：進化堆 → 道具 → 能量（玩家最終決定的順序）
-    //   index 越小 = z-index 越高 = 越靠近寶可夢；寶可夢本體 z=99 永遠最上層
-    //   進化最近 → 道具次 → 能量最遠（露出最多）
-    for (const ev of inst.evolvedFromStack ?? []) out.push({ cardId: ev.cardId, iid: ev.iid, kind: 'evo' });
+    // 進化堆反序：[基礎, 1階] → 推入順序為 [1階(靠近本體), 基礎(最遠)]
+    const evoStack = inst.evolvedFromStack ?? [];
+    for (let i = evoStack.length - 1; i >= 0; i--) {
+      const ev = evoStack[i];
+      out.push({ cardId: ev.cardId, iid: ev.iid, kind: 'evo' });
+    }
+    // 寶可夢道具
     if (inst.toolAttached) out.push({ cardId: inst.toolAttached.cardId, iid: inst.toolAttached.iid, kind: 'tool' });
     for (const et of inst.extraTools ?? []) out.push({ cardId: et.cardId, iid: et.iid, kind: 'tool' });
-    for (const e of inst.energyAttached) out.push({ cardId: e.cardId, iid: e.iid, kind: 'energy' });
+    // 能量：特殊能量先（上層）、普通能量後（最下層）
+    const specialEnergies: typeof inst.energyAttached = [];
+    const basicEnergies: typeof inst.energyAttached = [];
+    for (const e of inst.energyAttached) {
+      const card = getCard(e.cardId);
+      if (card?.subtype === 'Special') specialEnergies.push(e);
+      else basicEnergies.push(e);
+    }
+    for (const e of specialEnergies) out.push({ cardId: e.cardId, iid: e.iid, kind: 'energy' });
+    for (const e of basicEnergies) out.push({ cardId: e.cardId, iid: e.iid, kind: 'energy' });
     return out;
   }
   function evoOptionsFor(fromIid: string): CardInstance[] {

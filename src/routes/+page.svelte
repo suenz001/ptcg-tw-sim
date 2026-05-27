@@ -304,6 +304,23 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.231</span> 手機版 popup 按鈕修補 + 桌墊版疊牌順序調整</summary>
+        <ul>
+          <li><b>手機版穿透 bug 修補</b>：點擊聊天室、對手回合動作通知等漂浮按鈕時，點擊會穿透到下面的卡片。本次補上事件阻擋，不會再誤觸卡。</li>
+          <li><b>桌墊版疊牌順序調整</b>：寶可夢身上附加的卡片疊放順序由下到上改為：
+            <ol>
+              <li>普通能量（最下）</li>
+              <li>特殊能量</li>
+              <li>寶可夢道具</li>
+              <li>基礎寶可夢</li>
+              <li>1 階寶可夢</li>
+              <li>2 階寶可夢（最上，本體）</li>
+            </ol>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.230</span> 緊急修補 v5.229 部署失敗</summary>
         <ul>
           <li>v5.229 修補小灰怪｜挪動一下時加了一個原本就存在的程式 import，造成編譯失敗無法上線。本次移除多餘的 import，挪動一下的修補正式生效。</li>
