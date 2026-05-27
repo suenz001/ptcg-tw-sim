@@ -695,6 +695,7 @@ import {
   hasRocketTyranitarSandstorm,
   getOppRetreatTriggers,
   hasRocketAmpharosDarkPulse,
+  hasAbilityOnActive,  // v5.222 Plan A: 統一查「對手戰鬥位特性是否生效」
 } from './effects/cards/v3001_g3_wave3';
 
 // v3.05 Deferred Wave A — 自身寶可夢從戰鬥場回備戰時觸發類（ON_RETREAT_TO_BENCH）
@@ -2322,18 +2323,10 @@ function handlePlaying(
         `${attacker.name} 本回合無法從手牌使出物品卡（化石不可使出）`, aIdx);
     }
     //   b. 對手戰鬥場 威迫目光（班基拉斯特性）— 未被消除時擋 Item
-    //   v5.221：加 passive 振翼髮｜暗夜羽擊 check (Rule 7c)
-    {
-      const oppIdxFI = (1 - aIdx) as 0 | 1;
-      const oppActFI = state.players[oppIdxFI].active;
-      if (oppActFI && !oppActFI.abilityNullifiedThisTurn) {
-        const oppActCardFI = pool.get(oppActFI.cardId);
-        if (oppActCardFI?.abilities?.some(a => a.name === '威迫目光')
-            && !isAbilityNullifiedByPassive(state, oppIdxFI, oppActFI, oppActCardFI, '威迫目光', 'active', pool)) {
-          return addLog(state,
-            `${attacker.name} 因對手「威迫目光」效果，無法從手牌使出化石（物品卡）`, aIdx);
-        }
-      }
+    //   v5.222：改用 hasAbilityOnActive helper (cover 招式版+passive 暗夜羽擊，Rule 18)
+    if (hasAbilityOnActive(state, (1 - aIdx) as 0 | 1, pool, '威迫目光')) {
+      return addLog(state,
+        `${attacker.name} 因對手「威迫目光」效果，無法從手牌使出化石（物品卡）`, aIdx);
     }
     //   c. v3.821：對手戰鬥場 海之詛咒（胖嘟嘟ex特性）— 鎖物品
     //      卡面：「對手無法從手牌使出『物品』卡」— 化石 Item 屬於物品卡
@@ -2885,15 +2878,10 @@ function handlePlaying(
     if (trainerCard.subtype === 'Item' && attacker.cantPlayItemThisTurn) return state;
     if (trainerCard.subtype === 'Supporter' && attacker.cantPlaySupporterThisTurn) return state;
     // v2.362 班基拉斯｜威迫目光 — 對手戰鬥場有此特性（且未被消除）時，本方無法使出物品卡
-    // v5.221：加 passive 振翼髮｜暗夜羽擊 check (Rule 7c)
-    if (trainerCard.subtype === 'Item') {
-      const oppIdxIT = (1 - aIdx) as 0 | 1;
-      const oppActIT = state.players[oppIdxIT].active;
-      if (oppActIT && !oppActIT.abilityNullifiedThisTurn) {
-        const oppActCardIT = pool.get(oppActIT.cardId);
-        if (oppActCardIT?.abilities?.some(a => a.name === '威迫目光')
-            && !isAbilityNullifiedByPassive(state, oppIdxIT, oppActIT, oppActCardIT, '威迫目光', 'active', pool)) return state;
-      }
+    // v5.222：改用 hasAbilityOnActive helper (Rule 18)
+    if (trainerCard.subtype === 'Item'
+        && hasAbilityOnActive(state, (1 - aIdx) as 0 | 1, pool, '威迫目光')) {
+      return state;
     }
     // v2.322：蓋諾賽克特｜ACE消弭 — 對手有附道具的蓋諾賽克特時，不能打 ACE SPEC
     if (trainerCard.tags?.includes('ACE SPEC') && isAceCancelActive(state, aIdx, pool)) return state;
@@ -7715,15 +7703,10 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       if (c.subtype === 'Stadium' && state.players[state.activePlayerIndex].cantPlayStadiumThisTurn) return false;
       if (c.subtype === 'Stadium' && isOppStadiumPlayBlocked(state, state.activePlayerIndex, pool)) return false;
       // v2.362 班基拉斯｜威迫目光 — 對手戰鬥場有此特性時，物品卡不可打出
-      // v5.221：加 passive 振翼髮｜暗夜羽擊 check (Rule 7c)
-      if (c.subtype === 'Item') {
-        const oppIdxUI = (1 - state.activePlayerIndex) as 0 | 1;
-        const oppActUI = state.players[oppIdxUI].active;
-        if (oppActUI && !oppActUI.abilityNullifiedThisTurn) {
-          const oppActCardUI = pool.get(oppActUI.cardId);
-          if (oppActCardUI?.abilities?.some(a => a.name === '威迫目光')
-              && !isAbilityNullifiedByPassive(state, oppIdxUI, oppActUI, oppActCardUI, '威迫目光', 'active', pool)) return false;
-        }
+      // v5.222：改用 hasAbilityOnActive helper (Rule 18)
+      if (c.subtype === 'Item'
+          && hasAbilityOnActive(state, (1 - state.activePlayerIndex) as 0 | 1, pool, '威迫目光')) {
+        return false;
       }
       // v2.322：蓋諾賽克特｜ACE消弭 — 對手有附道具的蓋諾賽克特時，不能打 ACE SPEC
       if (c.tags?.includes('ACE SPEC') && isAceCancelActive(state, state.activePlayerIndex, pool)) return false;
@@ -7776,16 +7759,8 @@ export function getPlayableFossils(state: GameState, pool: Map<string, Card>): s
   //   a. attacker.cantPlayItemThisTurn — 含羞苞癢癢花粉 / 吼叫尾ex / 電蜘蛛ex 等鎖
   if (player.cantPlayItemThisTurn) return [];
   //   b. 對手戰鬥場 威迫目光（班基拉斯特性）— 未被消除時擋 Item
-  //   v5.221：加 passive 振翼髮｜暗夜羽擊 check (Rule 7c)
-  {
-    const oppIdxF = (1 - aIdx) as 0 | 1;
-    const oppActF = state.players[oppIdxF].active;
-    if (oppActF && !oppActF.abilityNullifiedThisTurn) {
-      const oppActCardF = pool.get(oppActF.cardId);
-      if (oppActCardF?.abilities?.some(a => a.name === '威迫目光')
-          && !isAbilityNullifiedByPassive(state, oppIdxF, oppActF, oppActCardF, '威迫目光', 'active', pool)) return [];
-    }
-  }
+  //   v5.222：改用 hasAbilityOnActive helper (Rule 18)
+  if (hasAbilityOnActive(state, (1 - aIdx) as 0 | 1, pool, '威迫目光')) return [];
   //   c. v3.821：對手戰鬥場 海之詛咒（胖嘟嘟ex特性）— 鎖物品
   if (isOppItemPlayBlocked(state, aIdx, pool)) return [];
   return player.hand

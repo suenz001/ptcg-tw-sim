@@ -821,3 +821,62 @@ grep -nE ':\s*\[.*\[\]|:\s*\w+\[\]\[\]' src/lib/game/types.ts
 **檢查清單 — 任何 GameState type 改動都跑一遍**:
 - [ ] 新增的欄位 type 是否含 `[][]` 或 tuple 內含 array？→ 改 object pattern
 - [ ] 是否 push 到 Fir
+
+---
+
+## Rule 18: 讀對手寶可夢特性必須用 hasActiveAbility helper
+
+**強制要求**：所有「對手戰鬥位是否擁有指定 ability」邏輯都要用 `hasAbilityOnActive(state, oppIdx, pool, '特性名')` helper（在 `v3001_g3_wave3.ts` 內 export）。**禁止 inline check**：
+
+```ts
+// ❌ 禁止 — inline check，未來「對手特性消除」機制新增時容易漏改
+if (oppAct && !oppAct.abilityNullifiedThisTurn) {
+  const card = pool.get(oppAct.cardId);
+  if (card?.abilities?.some(a => a.name === 'X')) { ... }
+}
+
+// ✅ 正確 — 走 helper，未來新增 nullification 邏輯只改 helper 1 處
+if (hasAbilityOnActive(state, oppIdx, pool, 'X')) { ... }
+```
+
+**為什麼**：對手戰鬥位特性會被多個機制壓制（招式版暗夜羽擊、passive 振翼髮、火箭隊監視塔、未來會加的 X）。inline check 每次都得手動覆蓋所有 nullification 機制，每加一個新機制就要全 codebase audit。helper 內部統一處理，零維護成本。
+
+**起源**：v5.220 修了濕氣，但漏修同樣被暗夜羽擊壓制的爆大身軀/瞪眼效用/海之詛咒/威迫目光 → v5.221 補修 → v5.222 refactor 改用 helper 統一處理。
+
+**Audit pattern**:
+```bash
+# 找所有 inline check 嫌疑（應該 = 0）
+grep -rE "abilityNullifiedThisTurn[^|]*abilities\?\.some" src/
+```
+
+---
+
+## Rule 19: 首頁 changelog 給玩家看，禁止寫程式碼/檔名/行號/Iron Rules 編號
+
+`src/routes/+page.svelte` 內 `<section class="changelog-section">` 區塊是**公開給玩家看**的版本記錄。內容必須：
+
+**禁止**:
+- `<pre>` 程式碼區塊
+- `<code>FunctionName</code>` 等英文 identifier（程式名）
+- 「`effects.ts L1234`」「`engine.ts L7717`」等檔名 + 行號
+- 「Iron Rules: 11/11c/14/15/...」開發者 metadata
+- 變數名、API 名、commit SHA、git 指令
+
+**允許**:
+- 卡牌名（中文）、招式名、特性名
+- 玩家視角的 bug 描述（「XX 招式打不出來」「YY 特性沒生效」）
+- 修補影響範圍（「現在可以正常使用」「不會再卡住」）
+- 版本號（v5.XXX）+ 簡短說明
+
+**為什麼**:
+1. **資安**：程式碼 / 檔案結構 / 內部 API 名稱外洩給玩家或被爬取後可能被 reverse engineering。
+2. **可讀性**：玩家不在乎 helper 名稱、行號，只在乎「我之前不能用的招式現在能用了沒」。
+3. **專業形象**：commercial-grade 產品的 changelog 都是玩家視角，不是 developer notes。
+
+**開發者 metadata（Iron Rules / 檔名 / 修法細節）寫在哪**：
+- commit message
+- 本檔案（IRON_RULES.md）
+- 長期記憶（spaces/.../memory/）
+- 內部文件 / 註解（程式碼 inline comment OK）
+
+**起源**：v5.222 — Wilson 看到 changelog 內 `<code>hasPsyduckDamp</code>` / `engine.ts L2328` 等，要求全面清理 + 訂規。

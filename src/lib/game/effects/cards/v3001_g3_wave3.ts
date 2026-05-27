@@ -72,8 +72,19 @@ function hasAbilityOnSide(
   });
 }
 
-/** 玩家 idx 戰鬥場上是否為指定 ability 名稱的持有者（active 限定）。 */
-function hasAbilityOnActive(
+/**
+ * 玩家 idx 戰鬥場上是否「擁有且生效」指定 ability。
+ *
+ * v5.221：本 helper 統一處理所有「對手戰鬥位特性消除」機制：
+ *   - 招式版 暗夜羽擊（abilityNullifiedThisTurn 旗標）
+ *   - passive 振翼髮｜暗夜羽擊（isOppActiveAbilityNullifiedByMoonsenne）
+ *   - 火箭隊監視塔【無】特性消除（呼叫端自行 wrap）
+ *
+ * v5.222：改 export，所有「讀對手戰鬥位特性」一律改呼叫此 helper，
+ *   禁止 inline check（IRON_RULES.md Rule 18）。
+ *   未來新增「對手特性消除」機制只要修這一處，所有 caller 自動受益。
+ */
+export function hasAbilityOnActive(
   state: GameState | undefined,
   ownerIdx: 0 | 1 | undefined,
   pool: Map<string, Card> | undefined,
