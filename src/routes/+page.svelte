@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.232</span> 桌墊版零之大空洞觸發時 — 卡牌不再縮小</summary>
+        <ul>
+          <li>玩家反映：觸發零之大空洞（備戰區可放 8 隻）時，我方備戰區卡牌會變小，跟對手備戰區（5 隻）大小不一致。</li>
+          <li>本次修補：桌墊版備戰區擴展到 8 隻時，卡牌保持跟 5 隻時相同大小，必要時改為橫向捲動。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.231</span> 手機版 popup 按鈕修補 + 桌墊版疊牌順序調整</summary>
         <ul>
           <li><b>手機版穿透 bug 修補</b>：點擊聊天室、對手回合動作通知等漂浮按鈕時，點擊會穿透到下面的卡片。本次補上事件阻擋，不會再誤觸卡。</li>

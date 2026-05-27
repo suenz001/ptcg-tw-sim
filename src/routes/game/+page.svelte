@@ -10710,22 +10710,25 @@
     max-height: 110px;
   }
 
-  /* v5.046：桌墊版下 bench-extended slot 放寬 — 不要縮成一團，利用旁邊空位 */
+  /* v5.232：桌墊版 bench-extended slot 保持跟 5 隻時一樣大 (90px/128px)，
+     寧可橫向捲動也不縮卡牌大小（玩家明確要求）。
+     原 v5.046 想「拉寬」但 grid column 1fr 不夠寬時 flex shrink 反而擠小。 */
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot,
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-empty {
-    flex: 1 1 110px !important;
-    min-width: 100px !important;
-    max-width: 160px !important;
+    flex: 1 1 90px !important;
+    min-width: 90px !important;
+    max-width: 128px !important;
   }
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot img {
-    max-width: 120px !important;
-    max-height: 145px !important;
+    max-width: 108px !important;
+    max-height: 128px !important;
   }
-  /* 桌墊版下 zone-bench 利用整個 grid column 寬度，bench-extended 不再 overflow scroll */
+  /* v5.232：桌墊版 bench-extended 改回 overflow-x: auto + justify-content: flex-start
+     允許超出 grid column 時橫向捲動，slot 不被擠縮。 */
   .playmat.layout-tabletop .zone-bench.bench-extended {
-    overflow-x: visible !important;
+    overflow-x: auto !important;
     overflow-y: visible !important;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 4px;
   }
   /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
