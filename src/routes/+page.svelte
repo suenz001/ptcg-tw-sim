@@ -304,10 +304,18 @@
     <div class="changelog-list">
 
       <details open>
-        <summary><span class="ver-badge">v5.222</span> 體質強化：對手特性消除機制改成統一處理</summary>
+        <summary><span class="ver-badge">v5.223</span> 版本記錄全面玩家化 — 30 條近期更新重寫，舊版本摺疊收納</summary>
         <ul>
-          <li>整理「對手特性消除類」（如振翼髮的暗夜羽擊）的處理邏輯，把分散在各處的檢查合併成單一入口。</li>
-          <li>玩家不會直接感受到變化，但<b>未來新增同類效果時不會再有遺漏</b>，過去 v5.220、v5.221 修補的同類 bug 都更不容易再發生。</li>
+          <li>把 v5.193 以後 30 條更新記錄全部改寫成玩家看得懂的描述，移除工程師術語。</li>
+          <li>v5.192 以前的舊版本收進「歷史版本」摺疊區，預設關閉。想看歷史記錄的玩家點開即可。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.222</span> 體質強化：對手特性消除機制統一處理</summary>
+        <ul>
+          <li>整理「對手特性消除類」（如振翼髮的暗夜羽擊）邏輯，把分散在各處的檢查合併。</li>
+          <li>玩家不會直接感受到變化，但未來新增同類效果時不會再有遺漏，過去 v5.220、v5.221 修補的同類 bug 都更不容易再發生。</li>
         </ul>
       </details>
 
@@ -334,621 +342,207 @@
         </ul>
       </details>
 
-<details>
-        <summary><span class="ver-badge">v5.219</span> 招式前置能量挑選 picker 加放大鏡 — 看擁有此能量的寶可夢詳情</summary>
+      <details>
+        <summary><span class="ver-badge">v5.219</span> 招式前選能量丟棄時加上放大鏡</summary>
         <ul>
-          <li><b>玩家需求</b>：招式【極降駕】需要選自己場上多隻寶可夢身上的能量丟棄；玩家想看每隻寶可夢的詳細狀況（HP / 其他能量 / 道具 / 狀態）再決定要丟哪隻的能量。希望加放大鏡。</li>
-          <li><b>audit 全卡池同類招式</b>（filter「自己的場上寶可夢身上 + 能量 + 丟棄」）：
-            <ul>
-              <li>猛雷鼓ex｜極降駕（基本能量 任意 × 70）</li>
-              <li>超級噴火龍Xex｜烈獄狂火X（【火】能量 任意 × 90）</li>
-              <li>來悲粗茶｜傾瀉茶（【草】能量 最多 3 × 70）</li>
-              <li>固拉多｜熔岩光芒（能量 最多 4 × 60）</li>
-            </ul>
-            4 招都走相同 picker UI （不是 pendingSelection），修一處全部受惠。
-          </li>
-          <li><b>修法</b>：<code>game/+page.svelte</code>  把 <code>.sel-card</code> 包進 <code>.sel-card-wrap</code> div，旁邊加 <code>.sel-zoom</code> 放大鏡按鈕：
-            <ul>
-              <li>每個能量旁顯示 🔍 按鈕，點擊 zoom 擁有此能量的寶可夢（用既有 ）</li>
-              <li>hand-* scope（手牌能量 / 火箭隊支援者 / 道具）沒 hostInst → 隱藏放大鏡（用 <code>!isHandDiscard &amp;&amp; e.hostInst</code> gate）</li>
-              <li>沿用既有 <code>.sel-card-wrap</code> / <code>.sel-zoom</code> CSS（v4.28 建立，已用於 selection-modal）— 視覺與 active-energy-discard picker 一致</li>
-            </ul>
-          </li>
-          <li><b>影響範圍</b>：所有用  的招式都受惠（除了 4 招 audit 出來的之外，還包含激流水泵 / 蜿蜒割裂 / 災厄風暴 / 蠻力 / 跳躍衝天 / 災難衝擊 / 叢林鞭打 / 擦除球 / 丟棄等 30+ 個前置能量 picker 招式）。</li>
-
+          <li>使用「極降駕」「烈獄狂火X」「傾瀉茶」「熔岩光芒」等需要丟自己場上能量的招式時，每張能量旁邊加上 🔍 放大鏡按鈕，可查看擁有此能量的寶可夢狀態（HP、其他能量、道具、狀態），再決定要丟哪隻的能量。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.218</span> Hotfix v5.217 — changelog 內 raw <code>&#123;@const&#125;</code> 違反 Rule 1 導致 build 失敗</summary>
+        <summary><span class="ver-badge">v5.218</span> 內部技術修補</summary>
         <ul>
-          <li><b>根因</b>：v5.217 changelog 用 <code>&lt;code&gt;&#123;@const&#125;&lt;/code&gt;</code> 描述 svelte 語法，但 <code>&#123;</code> <code>&#125;</code> 是 svelte template 特殊字元，parser 把它當成真實 directive，報  error → GitHub Actions build fail。</li>
-          <li><b>修法</b>：把 <code>&#123;</code> / <code>&#125;</code> 跳脫成 <code>&amp;#123;</code> / <code>&amp;#125;</code>。</li>
-          <li><b>教訓</b>：這是 v5.121 已踩過的同個雷（feedback-rule1-changelog-audit）。每次寫 changelog 提到 <code>&#123;@const&#125;</code> / <code>&#123;#if&#125;</code> / <code>&#123;#each&#125;</code> 等 svelte directive 都要記得跳脫 — 我這次失誤，應該 pre-push 跑 svelte.compile 而非只 tsc。</li>
-
+          <li>修補 v5.217 部署失敗問題。玩家無感。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.217</span> 線上對戰房間 seat 也加 G 標警告（接續 v5.216 本機 lobby）</summary>
+        <summary><span class="ver-badge">v5.217</span> 線上對戰房間也顯示 G 標牌警告</summary>
         <ul>
-          <li><b>玩家報告</b>：v5.216 本機/AI lobby 加了「⚠ 含有 G 標」黃字警告，但線上對戰房間的 seat（顯示「✓ 牌組已套用（60 張）」處）漏修，玩家可帶 G 標牌組進對戰。</li>
-          <li><b>修法</b>：
-            <ol>
-              <li>seat <code>&#123;@const&#125;</code> 區塊新增  /  / </li>
-              <li> 加上 <code>&amp;&amp; !seatHasIllegalMark</code> → 「準備完成」按鈕同步 block</li>
-              <li>自己 seat UI 加分支：60 張到位 + G 標 → <code>⚠ 含有 G 標</code></li>
-              <li>別人 seat UI 加分支：對手帶 G 標牌組時顯示「⚠ 牌組含有 G 標」</li>
-            </ol>
-          </li>
-          <li><b>例外保留</b>：基本能量 + Reprint exception 10 張仍合法（依現行 PTCG 規則，與 v5.216 邏輯一致）。</li>
-          <li><b>影響</b>：線上連線對戰房間的兩個 seat 都會即時顯示，「準備完成」按鈕在含 G 標時被 disabled。</li>
-
+          <li>接續 v5.216，線上對戰房間的雙方對戰位下方也會顯示「牌組包含不可使用的 G 標牌」黃字警告。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.216</span> 牌組選擇下方加 G 標警告（黃字）— 鏡射「不足 60 張」UI 樣式</summary>
+        <summary><span class="ver-badge">v5.216</span> 牌組選擇下方加 G 標警告</summary>
         <ul>
-          <li><b>玩家澄清</b>：v5.215 把驗證加在「對戰開始」按下後的 alert，但實際需求是「選牌組時下方那塊 ✓ 60 張 顯示框」就要顯示 G 標警告（黃字），跟「⚠ 不足 60 張」一樣的位置與樣式。</li>
-          <li><b>修法</b>：
-            <ol>
-              <li>新增 derive  / ：用  的 issues 配 regex <code>/為 [A-Z]+ 標/</code> 偵測（含 G/F/E 等任何非 H/I/J 標）</li>
-              <li>UI  block 加分支：60 張到位但有非法標 → <code>&lt;div class="deck-count-info bad"&gt;⚠ 含有 G 標&lt;/div&gt;</code></li>
-              <li>沿用既有 <code>.bad</code> CSS（color #fc8 橙黃 / 紅底）— 視覺與「⚠ 不足 60 張」「⚠ 超過 60 張」一致</li>
-            </ol>
-          </li>
-          <li><b>例外保留</b>：基本能量（任何標）+ Reprint exception 10 張卡（寶可夢交替 / 寶可裝置3.0 等）不算違規，與 PTCG 規則一致（validateDeck 內已 baked-in）。</li>
-          <li><b>影響</b>：本機/AI 對戰 lobby 選牌組時即時顯示。對戰開始按鈕 disabled 邏輯（v5.215）+ alert 列出完整 issues 同時生效（雙重防護）。</li>
-
+          <li>本機對戰選牌組時，下方顯示牌組是否合法的黃字提示。包含 G 標牌時提醒玩家。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.215</span> 對戰開始 gate 加完整牌組驗證（G 標 / ACE SPEC / 同名 4 張 / ≥1 基礎）</summary>
+        <summary><span class="ver-badge">v5.215</span> 對戰開始前完整牌組驗證</summary>
         <ul>
-          <li><b>需求</b>：對戰開始前除了 60 張總數，也要驗牌組是否含 G 標等非標準賽卡。</li>
-          <li><b>現狀 audit</b>：
-            <ul>
-              <li>對戰開始 gate（<code>game/+page.svelte</code> ）只 check 60 張</li>
-              <li>牌組編輯器用  含完整邏輯（60 張 + 無 G 標 + ACE SPEC ≤1 + 同名 ≤4 + ≥1 基礎寶可夢）+ 兩類例外（基本能量 / Reprint exception 10 張卡：寶可夢交替 / 寶可裝置3.0 / 寶可夢捕捉器 / 高級球 / 粉碎之錘 / 能量轉移 / 老大的指令 / 裁判 / 神奇糖果 / 能量回收）</li>
-            </ul>
-          </li>
-          <li><b>修法</b>（鏡射既有架構 — Rule 15）：
-            <ol>
-              <li><code>game/+page.svelte</code> import </li>
-              <li> /  derived 改 <code>$derived.by</code>：先 check 60 張，再 call  看 issues.length === 0；pool 還沒 load 完時 fallback 用 60 張簡易檢查避免 UI 卡按鈕</li>
-              <li> 最終 gate：alert 改成列出兩位玩家的所有 issues（含 60 張 / G 標 / ACE SPEC / 同名 / 基礎寶可夢全部錯誤類型）</li>
-            </ol>
-          </li>
-          <li><b>規則精準度</b>：依現行 PTCG 規則 — G 標卡禁用但 reprint exception 名單例外（這些舊卡在 H/I/J 有重印版，舊版仍合法）。與 PTCG 官方標準賽規則一致。</li>
-          <li><b>影響範圍</b>：本機 / AI 模式對戰開始（線上 lobby 用獨立 derive hasValidDeck，後續另 audit）。</li>
-
+          <li>按下「開始對戰」前完整檢查牌組合法性：60 張、G 標牌、ACE SPEC 卡多張、同名超 4 張、至少 1 隻基礎寶可夢等。違反時跳警告，避免進對戰才發現問題。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.214</span> 4 bug 集中修：卡娜莉 filter / 麻麻羅網 雷能量 / 急速飛行 first-turn / 詛咒根 AI 卡死</summary>
+        <summary><span class="ver-badge">v5.214</span> 4 個 bug 集中修補</summary>
         <ul>
-          <li><b>Bug 1 — 卡娜莉</b>：可任選 4 隻寶可夢，卡面應限【雷】屬性。
-            <ul>
-              <li><b>根因</b>：reg  算法正確，但 UI <code>+page.svelte</code> <code>f === 'Pokemon'</code> filter 沒套  intersect。</li>
-              <li><b>修法</b>：仿 Evolution 分支加  intersect。</li>
-            </ul>
-          </li>
-          <li><b>Bug 2 — 電蜘蛛 麻麻羅網</b>：附【雷】能量仍只 50 點（應 +80 = 130）。
-            <ul>
-              <li><b>根因</b>：regPre 用 <code>pokemonType === 'Lightning'</code>，但能量卡 JSON <code>pokemonType = null</code> → 永遠 false。</li>
-              <li><b>修法</b>：改用既有  helper（含【X】name fallback）。</li>
-            </ul>
-          </li>
-          <li><b>Bug 3 — 急速飛行 first-turn</b>：卡璞・鳴鳴急速飛行 + 信使鳥急速之禮應該先攻第 1 回合也可用。
-            <ul>
-              <li><b>audit 結果</b>：全卡池此標記共 2 招。原 engine first-turn bypass 只看美洛耶塔ex。</li>
-              <li><b>修法</b>：新增  Set 白名單；engine ATTACK + getAvailableAttacks 雙路徑加白名單 bypass。</li>
-            </ul>
-          </li>
-          <li><b>Bug 4 — 朽木妖詛咒根 vs 烏鴉頭頭 AI 死循環</b>：AI 卡住。
-            <ul>
-              <li><b>根因</b>：詛咒根設 ，engine ATTACH_ENERGY reject 但  主路徑（dragapult else）<b>沒檢查此 flag</b>。v5.151 已修 fire/psy/dark/dragapult fallback 3 處，漏這個主路徑。</li>
-              <li><b>修法</b>： attach 加 <code>!target.cantAttachEnergyThisTurn</code> check。</li>
-            </ul>
-          </li>
-
+          <li>卡娜莉支援者：手牌沒有雷能量時不能使用。</li>
+          <li>電蜘蛛｜麻麻羅網：雷屬性能量正確算入傷害加成。</li>
+          <li>卡璞・鳴鳴｜急速飛行 等先攻第一回合可用招式：先攻方第一回合可正常使用。</li>
+          <li>朽木妖｜詛咒根 vs 烏鴉頭頭：AI 不再卡死。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.213</span> 化隱漏擋中毒等狀態附加 — statusPost 改用 unified defense helper</summary>
+        <summary><span class="ver-badge">v5.213</span> 化隱特性補擋對手狀態附加</summary>
         <ul>
-          <li><b>玩家報告</b>：擁有特性「化隱」的詛咒娃娃，被對手「火箭隊的小拉達｜險惡門牙」攻擊後仍被【中毒】。化隱卡面：「這隻寶可夢不會受到對手的招式或特性的效果。」狀態（中毒/灼傷/睡眠/混亂/麻痺）屬於招式效果，應被擋。</li>
-          <li><b>根因</b>：  在  用的是 <b>legacy</b> helper （），這個 legacy helper 只查  map（薄霧能量 / 硬岩【鬥】能量 / 皇帝之勢 / 抵抗之幕等），<b>不知道化隱</b>。化隱實作在   unified entry  內，statusPost 沒走這條路徑 → 漏擋。</li>
-          <li><b>修法</b>（雙保險）：
-            <ol>
-              <li><b>主修</b>：  改用 unified <code>canApplyEffectToTarget(state, aIdx, def.active, defCard, 'attack-effect', pool)</code> — 鏡射  既有 pattern。</li>
-              <li><b>defense-in-depth</b>：legacy  也加 inline 化隱 check，避免其他舊 caller 漏。</li>
-            </ol>
-          </li>
-          <li><b>影響範圍</b>：所有用  的招式都受惠 — 險惡門牙、毒之氣息、毒液一擊、劇毒牙、噴毒、腦力震動 等 20+ 狀態類招式對化隱寶可夢的免疫一致生效。</li>
-          <li><b>同類風險檢查</b>： 之外的 attack POST helpers（damagePost / drawPost / discardPost 等）若也用 legacy helper 而非 unified entry，可能有類似漏洞 — 本次先修 statusPost（Wilson 直接點名場景）。後續可全 audit。</li>
-
+          <li>擁有「化隱」特性的寶可夢（斯魔茶、來悲粗茶、怨影娃娃、詛咒娃娃）原本沒擋對手中毒、灼傷、混亂、麻痺等狀態。本次修補後正確阻擋。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.212</span> 祭典樂舞 pending UI 端視覺禁用 — 卡片直接灰、不可拖曳（接續 v5.211）</summary>
+        <summary><span class="ver-badge">v5.212</span> 祭典樂舞發動時無關卡片視覺鎖定</summary>
         <ul>
-          <li><b>玩家反映</b>：v5.211 在 engine 端擋住 pending 期間的非 ATTACK/END_TURN 動作（dispatch 後 reject + log），但 UI 上卡片仍可點/拖。玩家要的是「視覺上就不能用」— 灰按鈕、不可拖曳。</li>
-          <li><b>修法</b>：在 6 個 UI helper 入口加 pending gate（return empty/false），UI 自動繼承「灰按鈕」狀態：
-            <ol>
-              <li>：撤退按鈕灰</li>
-              <li>：進化卡灰</li>
-              <li>：所有 trainer / 物品 / 道具 / 場地卡灰</li>
-              <li>：基礎寶可夢不可放備戰</li>
-              <li>：化石卡灰</li>
-              <li>：所有特性按鈕灰</li>
-            </ol>
-            另外 <code>src/routes/game/+page.svelte</code> 兩處 UI inline derived 也加 gate：
-            <ol>
-              <li> derived：🏟 使用場地按鈕灰</li>
-              <li>手牌  inline：能量卡不可拖曳/click 附能</li>
-            </ol>
-          </li>
-          <li><b>視覺結果</b>：pending 期間玩家手牌、active/bench 特性按鈕、撤退按鈕、場地按鈕全灰；只有招式按鈕可點（且只能點同 attackIndex）+ 結束回合按鈕可點。</li>
-          <li><b>engine 端 v5.211 reject + log 保留</b>：作為 defense-in-depth；萬一 UI gate 漏一個地方仍會被 engine 擋下。</li>
-
+          <li>觸發祭典樂舞後第二次攻擊選擇期間，手牌中無關的卡片（能量、進化、支援者）會直接灰色不可拖曳，避免玩家誤點。接續 v5.211 改進。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.211</span> 祭典樂舞改「手動」+ pending 期間鎖其他動作（撤回 v5.201 atomic 自動連打）</summary>
+        <summary><span class="ver-badge">v5.211</span> 祭典樂舞改為「手動」</summary>
         <ul>
-          <li><b>玩家反映</b>：v5.201 把祭典樂舞改成「第 1 次打完系統自動執行第 2 次」，但玩家其實可以選擇不打第 2 次。需求：第 1 次打完後玩家只能「再用相同招式 1 次」或「跳過攻擊（END_TURN）」，其他動作（附能、用支援者、場地、物品、道具、放寶可夢、撤退、進化、特性）全鎖。</li>
-          <li><b>卡面再讀</b>（M5/SV6.json）：「若場上有『祭典會場』，則這隻寶可夢可使用持有的招式 2 次。」「使用」並非「必須使用」— 第 2 次玩家可選擇不打。</li>
-          <li><b>修法</b>：
-            <ol>
-              <li> 改名 ，移除 <code>applyAction(ATTACK)</code> 自動 dispatch 邏輯。只 set <code>turnPhase='main'</code> 讓玩家手動點</li>
-              <li>4 個 hook 點（ATTACK / RESOLVE_SELECTION / TAKE_PRIZES / SEND_NEW_ACTIVE）統一改 call 新 helper（行為改不 dispatch）</li>
-              <li>  加新 gate： 存在時，只允許 ATTACK / END_TURN / RESOLVE_SELECTION / TAKE_PRIZES / SEND_NEW_ACTIVE / DRAW_CARD，其他全 reject + log「第 2 次招式 pending 期間，只能再用相同招式或結束回合」</li>
-              <li>ATTACK handler 入口加同  check：若 <code>action.attackIndex !== pending.attackIndex</code> → reject + log「第 2 次必須使用相同招式」</li>
-              <li> 第 2 次結算分支同時清 pending flag（玩家成功完成第 2 次後 pending 解除）</li>
-            </ol>
-          </li>
-          <li><b>保留 v5.201 例外中斷邏輯</b>：攻擊者反擊被 KO / 身分變化（進化解除）/ 失去祭典特性 / 祭典會場被換掉 / 狀態異常（睡眠 / 麻痺）→ 自動清 pending + log 中斷原因。</li>
-          <li><b>流程對照</b>：
-            <ul>
-              <li>第 1 次攻擊結算 → 設 pending flag → turnPhase='end' → 場地 / 對手換場等 hook → tryPromote → turnPhase='main'（玩家可手動操作）</li>
-              <li>玩家點同招式 → ATTACK handler 過 attackIndex check → 結算 → startFestival 第 2 次分支 → 設 used2=true + 清 pending</li>
-              <li>玩家不想打 → 點 END_TURN → 已有 v5.201 END_TURN 清 pending 邏輯 → 跳到對手回合</li>
-              <li>玩家試圖附能 / 用支援者等 → handlePlaying gate 擋下 → log 提示</li>
-            </ul>
-          </li>
-
+          <li>祭典樂舞觸發後的第二次攻擊改為玩家手動點選（撤回 v5.201 的自動連打）。玩家反映希望可以選擇不打第二下。</li>
+          <li>第二次攻擊選擇期間，鎖住其他動作（附能、用支援者、撤退等），避免不公平操作。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.210</span> Changelog 中性化整理 — 統一行文風格、移除冗餘表述</summary>
+        <summary><span class="ver-badge">v5.210</span> 內部行文整理</summary>
         <ul>
-          <li><b>動機</b>：歷次 changelog 累積一些非必要的工具相關表述（emoji 前綴、開發流程細節等），不影響玩家理解修改內容；本次統一整理為純粹的「玩家視角」描述。</li>
-          <li><b>調整</b>：
-            <ol>
-              <li>移除 7 處 summary 前綴的 emoji（保留標題文字本身）</li>
-              <li>Rule 17 表述全面改為「按卡面/規則驗證」「按既有實作驗證」（更精準描述 audit 行為）</li>
-              <li>其他細節用詞中性化</li>
-            </ol>
-          </li>
-
+          <li>版本記錄整理。玩家無感。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.209</span> 護城龍｜太鼓防壁 active target case 補修 — 大竺葵繁茂等倍率能量正確處理</summary>
+        <summary><span class="ver-badge">v5.209</span> 護城龍｜太鼓防壁能量倍率計算修正</summary>
         <ul>
-          <li><b>玩家報告</b>：場上有大竺葵（繁茂特性，基本草視為 2 個草）+ 對手有護城龍時，攻擊方 active 身上 2 張基本草 (= 4 units) 仍被護城龍誤判「能量 ≤2」擋傷害。</li>
-          <li><b>卡面對照</b>：
-            <ul>
-              <li><b>護城龍｜太鼓防壁</b>（M5 #50279）：「自己場上所有寶可夢不會受到身上附加能量為 <b>2 個以下</b>的對手寶可夢的招式傷害」</li>
-              <li><b>大竺葵｜繁茂</b>（M-P-I #17971 / M1S #14025）：「自己的所有寶可夢身上附加的『基本【草】能量』卡，視為各提供 <b>2 個【草】能量</b>」</li>
-            </ul>
-            PTCG 「能量個數」一律按 unit 計算（不是張數）。
-          </li>
-          <li><b>根因</b>：v4.891 引入太鼓防壁時兩處 hardcode 用 （張數）：
-            <ol>
-              <li>  bench-snipe target case — <b>v5.115 已修為 </b></li>
-              <li>  active target case — <b>本次補修</b>，v5.115 漏改</li>
-            </ol>
-            Wilson 場景是 active 打 active 走 engine 路徑，因此 bug 持續到 v5.208。
-          </li>
-          <li><b>影響範圍</b>：active target case 涵蓋所有打對手戰鬥位的招式（壓倒性最常見路徑）。修法後下列 multi-unit 能量都正確處理：
-            <ul>
-              <li>大竺葵繁茂下基本草（1 張 = 2 units）</li>
-              <li>火箭隊能量（1 張 = 2 units）</li>
-              <li>燃火能量（附於進化卡 = 3 units）</li>
-              <li>新衝天能量（附於 2 階 = 2 units）</li>
-              <li>暗影【惡】/ 磁鐵【鋼】/ 閃電【雷】等屬性能量</li>
-            </ul>
-          </li>
-          <li><b>修法</b>： 改用既有 <code>totalEnergyUnits(attached, pool, state, ownerIdx, hostInst)</code> helper，且傳 <code>hostInst=attacker.active</code> 讓燃火 / 新衝天倍率也正確處理。log 訊息從「N 張」改「N 個」符合 PTCG 用詞。</li>
-          <li><b>為什麼之前沒爆</b>：v4.891 時測 case 多半單獨基本能量，length === units，沒踩到差異。v5.115 修 defense.ts 時遺漏 engine.ts 平行路徑（兩處應同步用 helper，這是 Rule 14 教訓）。</li>
-
+          <li>對手戰鬥位是護城龍時，自方寶可夢上「大竺葵繁茂」這類倍率能量被太鼓防壁無視的判定修正。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.208</span> 道具拆除器第 2 張「結束」按鈕點不下去 + UI 誤顯示「沒有符合條件」</summary>
+        <summary><span class="ver-badge">v5.208</span> 道具拆除器選第 2 張時無法結束</summary>
         <ul>
-          <li><b>玩家報告</b>：道具拆除器第 2 張的「✋ 結束（不丟第 2 張）」按鈕點不下去。截圖額外顯示誤導訊息「（沒有符合條件的卡牌）」。</li>
-          <li><b>根因 1（核心 bug）</b>：<code>+page.svelte</code>  modal-choice button onclick 模式：
-
-             第一行 <code>if (!selectionValid) return;</code> 早退，而  是 <code>$derived</code> 依賴  — Svelte 5 對 Set 物件替換 + 立即 read 的 derive 計算順序不可靠（特別是新 modal 開啟後 selectionPicked 剛被 reset 為空 Set 的 frame）。導致 set + immediate confirmSelection 流程內 selectionValid 仍是舊值 false → early return → 沒 dispatch。</li>
-          <li><b>根因 2（UI cosmetic）</b>： <code>&#123;:else&#125;</code> fallback 區塊內的  「（沒有符合條件的卡牌）」訊息對所有非特定 picker type 都 render，<b>包含 modal-choice</b>。但 modal-choice 不用 selectionItems，永遠 length===0 → 永遠顯示此誤導訊息。</li>
-          <li><b>根因 3（resolver log）</b>：  <code>regR('tool-remover-pick')</code> 對 <code>iids=&#91;'end'&#93;</code> 沒 early return → 走 <code>'end'.split(':')</code> 得 <code>&#91;'end'&#93;</code> → parseInt='NaN' → 找不到 active/bench →  log「找不到目標道具」誤導。</li>
-          <li><b>修法</b>：
-            <ol>
-              <li>UI：modal-choice 兩個 onclick handler（btn / btn-flex）改成「直接 dispatch resolveSelection 帶 [opt.id]」繞過 confirmSelection，避開 selectionValid 早退陷阱。reset selectionPicked / selectionCounts 在 dispatch 後</li>
-              <li>UI： sel-empty 加 <code>&amp;&amp; pendingSelection.type !== 'modal-choice'</code> gate</li>
-              <li>effects.ts resolver：<code>if (choice === 'end') return addLog(state, '道具拆除器：玩家選擇不丟第 2 張', aIdx)</code> early return</li>
-            </ol>
-          </li>
-          <li><b>影響範圍</b>：修法 1 是 modal-choice 通用 — 所有用 modal-choice picker 的卡牌的所有 option（含「end」「skip」等）都受惠。修法 2/3 主要解決道具拆除器 specific UX。</li>
-
+          <li>道具拆除器選擇第 2 張時，「結束」按鈕點不下去 + UI 誤顯示「沒有符合條件」。本次修補後可正常結束選擇。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.207</span> 賽吉多目標 picker — 多隻同名底寶可夢時讓玩家選</summary>
+        <summary><span class="ver-badge">v5.207</span> 賽吉支援者多目標選擇</summary>
         <ul>
-          <li><b>玩家報告</b>：戰鬥場 + 備戰區都有多龍奇時，賽吉強制進化戰鬥場的，玩家無法自行選擇。</li>
-          <li><b>卡面</b>（ #9909 /  #17185）：「從自己的牌庫選擇 1 張自己的 1 隻場上寶可夢進化而來的卡（擁有特性的寶可夢除外），放置於那隻寶可夢身上完成進化。」</li>
-          <li><b>根因</b>：  <code>regR('sage-evolve')</code> 內 hardcode「active 優先」邏輯：
-
-            場上有匹配 active → 直接進化 active，跳過 bench。違反卡面「選擇 1 隻」的玩家選擇權。</li>
-          <li><b>修法</b>：
-            <ol>
-              <li>抽 helper <code>_sageEvolveApply(state, aIdx, evoIid, targetIid, pool)</code> — 套進化到指定 iid，DRY 重用</li>
-              <li>resolver 先計算所有匹配目標 <code>targetIids[]</code></li>
-              <li>0 目標 → log 中斷</li>
-              <li>1 目標 → <b>自動進化</b>（不必煩玩家）</li>
-              <li>≥ 2 目標 → 開第二層  picker（<code>includeActive: true</code>、）讓玩家選</li>
-              <li>新增 <code>regR('sage-evolve-pick-target')</code> 處理第二層 picker 完成後的進化</li>
-            </ol>
-          </li>
-          <li><b>同類卡比對</b>：人造細胞卵 / 雙卵細胞球（v5.083）也是 direct-evolve，但採「玩家先選目標再選進化卡」順序；賽吉採「先選進化卡再選目標」更貼近卡面字面，picker 順序差異不需統一。</li>
-
+          <li>使用賽吉時，場上有多隻同名底寶可夢（如多隻多龍奇）時，讓玩家自己選要進化哪一隻，不再強制進化戰鬥位。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.206</span> Push trigger 救援 — GitHub Actions 對 v5.205 commit 沒派發 push event</summary>
+        <summary><span class="ver-badge">v5.206</span> 內部部署救援</summary>
         <ul>
-          <li><b>現象</b>：v5.205 commit <code>56b9273</code> push 成功，<code>git ls-remote</code> 跟 GitHub REST API <code>/commits/main</code> 都確認 HEAD 是這個 SHA，但 <code>/actions/runs?head_sha=56b92735</code> 回 <code>total_count: 0</code> — GitHub 沒派發 workflow run。</li>
-          <li><b>診斷</b>：歷史 push (v5.197~v5.204) 都正常觸發，唯 v5.205 失靈。 設定 <code>on: push: branches: &#91;main&#93;</code> 沒 path filter。最可能是 GitHub 端 push event delivery 偶發 bug。</li>
-          <li><b>修法</b>：再 push v5.206 nominal change（version bump + 此 changelog entry）強制觸發 workflow。新 SHA 會 trigger fresh push event。</li>
-
+          <li>v5.205 部署沒觸發，本次救援。玩家無感。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.205</span> 手機版 picker 可拖曳 + 能量分屬性顯示（接續 v5.200 三類卡圖網格）</summary>
+        <summary><span class="ver-badge">v5.205</span> 手機版選擇 modal 可拖曳 + 能量分屬性</summary>
         <ul>
-          <li><b>玩家報告</b>：v5.200 的手機版 3 個 picker（撤退/附能/進化）：(1) 沒辦法拖曳，玩家想看後面場上狀況決定選哪隻很卡 (2) 能量都用 ⚡ 統一代表，希望分屬性顯示（惡2 / 超1 / 水3 etc.）。</li>
-          <li><b>修法 1（拖曳）</b>：仿桌面 modal 的拖曳機制（<code>+page.svelte</code> -760 <code>onModalHeaderPointerDown/Move/Up</code>），在 MobilePortraitBattle 加  state + <code>onSheetHeaderPointerDown/Move/Up</code>。
-            <ul>
-              <li><code>.mp-sheet-title</code> 統一加  class 與 pointer handlers，變成抓手</li>
-              <li>拖曳期間 <code>.mp-sheet-overlay</code> 加 <code>.dragged</code> class → 背景透明 + pointer-events: none，讓玩家看到底下場上資訊</li>
-              <li><code>.mp-sheet</code> 套 <code>style:transform</code> 跟著手指移動</li>
-              <li>切換 sheet（<code>$effect</code> 偵測  變化）時自動 reset offset</li>
-            </ul>
-          </li>
-          <li><b>修法 2（能量分屬性）</b>：三個 mp-pick-card 內的 <code>⚡N</code> 換成 <code>energyPips(inst)</code> 遍歷渲染。
-            <ul>
-              <li>每個能量類型 1 個 <code>.mp-pip.mp-pip-sm</code> chip（中文字 + 顏色 + 數量）</li>
-              <li>已有 helper： 從 inst.energyAttached 分類， 中文字， 配色（與場上能量 chip 視覺一致）</li>
-              <li>例：[惡2][超1][水3] 三個 chip 並排，每個約 13px 寬，80px 卡內塞得下 4-5 種</li>
-              <li>新加 <code>.mp-pick-pips</code> flex container 自動 wrap，&gt;5 種能量會自動換行</li>
-              <li>無能量時顯示「無能量」灰字提示</li>
-              <li>道具拆獨立一行 <code>🔧 N</code></li>
-            </ul>
-          </li>
-
+          <li>手機版撤退 / 附能 / 進化的選擇 modal 可以拖曳調整位置。</li>
+          <li>能量顯示按屬性分類（火、水、雷等各自顯示對應符號），不再全用閃電符號代表。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.204</span> Hotfix v5.203 —  import 路徑修正（從 <code>$lib/cards/types</code>）</summary>
+        <summary><span class="ver-badge">v5.204</span> 內部技術修補</summary>
         <ul>
-          <li><b>根因</b>： 型別不在 <code>game/types.ts</code>，而在 <code>$lib/cards/types</code>（看 draw_supporters.ts L22 範本）。</li>
-          <li><b>修法</b>：把  從 type-only import 移到單獨一行 <code>import type &#123; Card &#125; from '$lib/cards/types'</code>。</li>
-
+          <li>修補 v5.203 的小錯誤。玩家無感。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.203</span> Hotfix v5.202 — m5_preview type-only import 修 verbatimModuleSyntax 編譯錯誤</summary>
+        <summary><span class="ver-badge">v5.203</span> 內部技術修補</summary>
         <ul>
-          <li><b>根因</b>：v5.202 patch script auto-import 加  進 <code>import &#123; RULE_BOX_SUBTYPES, CardInstance &#125; from '../../types'</code>，但  啟用  要求 type 必須用 <code>import type</code>；同時  helper signature 用了 / 也沒 import。</li>
-          <li><b>修法</b>：拆成兩行 import：value-only 留 ，新增 <code>import type &#123; CardInstance, GameState, Card &#125;</code>。</li>
-
+          <li>修補 v5.202 的小錯誤。玩家無感。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.202</span> 沐淨 2 bug 修補 — 手牌無候選不可使用 + 強制至少丟 1 張</summary>
+        <summary><span class="ver-badge">v5.202</span> 沐淨特性 2 個 bug 修補</summary>
         <ul>
-          <li><b>玩家報告</b>：「沐淨」這張支援者：(1) 手上沒有非規則寶可夢時不應該能使用（卡片消耗但無效果，違反 PTCG「支援者無可解效果不能使用」規則）；(2) 使用之後不可以不點選寶可夢，強制至少要選 1 隻。</li>
-          <li><b>卡面</b>（ #50297）：「從自己的手牌將寶可夢（『擁有規則的寶可夢』除外）最多丟棄 2 張，丟棄張數 × 3 張，從牌庫抽卡。」</li>
-          <li><b>根因</b>：
-            <ul>
-              <li>Bug 1：  <code>reg('沐淨', ...)</code> 內判斷「候選 0 張時 <code>addLog 略過</code>」，但仍正常進入 effect path（卡片照樣消耗），且沒有對應的  gate → UI 不會灰按鈕、engine PLAY_SUPPORTER 也不會 reject</li>
-              <li>Bug 2：<code>minCount: 0</code> 讓玩家「點 0 張確認跳過」也算合法，違反卡面「最多 2 張」隱含的「至少 1 張」（既然使用就要有效果）</li>
-            </ul>
-          </li>
-          <li><b>修法</b>：
-            <ol>
-              <li>抽出 helper <code>mokujouCandidates(st, idx, pool)</code> — DRY 不重複寫候選 filter</li>
-              <li>加 <code>regG('沐淨', (st, idx, pool) =&gt; mokujouCandidates(...).length &gt;= 1)</code> — UI 灰按鈕 + engine reject 雙重 gate</li>
-              <li><code>minCount: 0 → 1</code>：強制至少選 1 隻</li>
-              <li>標題與訊息從「≤2 張」「可選 0 張跳過」改成「1~2 張」明確語意</li>
-              <li>defensive 分支保留（reg 內 length 0 / resolver iids.length===0 都有 fallback log，但 regG + min=1 雙保險下不會走到）</li>
-            </ol>
-          </li>
-          <li><b>同類卡 audit 建議</b>：其他「丟手牌類」支援者（伊塔貝里的 X、鳴依的勉勵等）若有「候選空時仍可使用」bug 可一併修；本次先就 Wilson 點名的沐淨。</li>
-
+          <li>手牌沒有非規則寶可夢時，不再亮按鈕讓玩家誤用沐淨。</li>
+          <li>使用沐淨後一定要丟一張（不再允許「使用後不選任何卡」白賺）。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.201</span> 祭典樂舞 atomic 自動連打 — 第 1 跟第 2 次屬同回合操作，玩家中間不可介入</summary>
+        <summary><span class="ver-badge">v5.201</span> 祭典樂舞自動連打（後被 v5.211 撤回）</summary>
         <ul>
-          <li><b>玩家報告</b>：「祭典樂舞」特性生效後的第 2 次攻擊，bug 三點：(a) 對手減傷 / 我方增傷狀態沒延續到第 2 次；(b) 第 1 跟第 2 次之間玩家可以使用任何卡片（違反卡面語義「只能再攻擊一次」）；(c) 應該由系統自動執行第 2 次。</li>
-          <li><b>根因</b>：<code>engine.ts startFestivalDanceSecondAttackWindow</code> 第 1 次招式打完後把  從 <code>'end'</code> 改回 <code>'main'</code>，把玩家放回自由操作階段 — 違反 PTCG 卡面「使用持有的招式 2 次」atomic 連續性。玩家中間可附能 / 進化 / 用支援者 → 第 2 次 snapshot 抓的狀態 ≠ 第 1 次。</li>
-          <li><b>修法</b>：
-            <ol>
-              <li>types.ts 新增  field 記錄 <code>&#123; idx, attackIndex, originalCardId &#125;</code></li>
-              <li>engine.ts 改寫 ：第 1 次打完後設 pending field，<b>不再改 turnPhase 回 main</b>，立刻 call 新 helper </li>
-              <li>新 helper ：
-                <ul>
-                  <li>有 pendingSelection / pendingPrize / 對手 active=null → 留 flag 等下次 hook re-try</li>
-                  <li>例外中斷（attacker 反擊 KO / 身分變化 / 失去祭典特性 / 場地換掉 / 狀態異常 / 能量不足）→ 清 flag + log「中斷（原因）」</li>
-                  <li>否則 turnPhase 切 main + atomic dispatch ATTACK 第 2 次（玩家無機會介入）</li>
-                </ul>
-              </li>
-              <li>4 個既有 resume hook（ATTACK 結算 / RESOLVE_SELECTION / TAKE_PRIZES / SEND_NEW_ACTIVE）統一改 call ，取代舊的 </li>
-              <li>END_TURN 也清 pending field（防呆）</li>
-            </ol>
-          </li>
-          <li><b>為什麼 within-turn buff 自動延續</b>：ThisTurn flag（演練、特殊能量加傷等）<b>END_TURN 才清</b>，第 2 次 attack 進新 handler 時仍存在；玩家中間不能附能 / 換場 → 對手減傷 snapshot 也跟第 1 次抓的一致。</li>
-          <li><b>例外中斷案例</b>（清 flag + 不執行第 2 次）：
-            <ul>
-              <li>攻擊者被反擊招式 / 咒咽語手套 / 咒詛炸彈擊倒（active=null）</li>
-              <li>攻擊者進化被解除（cardId 變了）</li>
-              <li>奇異駭入 / 現象反轉 等變身效果改變了攻擊者身分</li>
-              <li>祭典會場被換掉（虛無歸零 / 蒙忽道之毒 / 另放場地卡）</li>
-              <li>狀態異常（睡眠 / 麻痺 — 雖然第 1 次後通常不會中這狀態，防呆）</li>
-              <li>能量不足以再次支付招式成本（依 Wilson ruling）</li>
-            </ul>
-          </li>
-
+          <li>祭典樂舞觸發後第二次攻擊改為自動連打。後因玩家反映希望保留選擇權，於 v5.211 改回手動。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.200</span> 手機版三類 picker 改卡圖網格（撤退 / 附能 / 進化 — 鏡射桌面送新戰鬥位 modal）</summary>
+        <summary><span class="ver-badge">v5.200</span> 手機版三類 modal 改卡圖網格</summary>
         <ul>
-          <li><b>玩家建議</b>：手機版撤退 / 附加能量 / 進化的目標選擇 modal 之前都是純文字按鈕清單，希望改成像「戰鬥寶可夢被昏厥時派出新寶可夢」那種卡圖網格 UI（介面最清楚）。</li>
-          <li><b>修法</b>：在  內三類 picker 統一改用 <code>.mp-pick-grid</code>：
-            <ol>
-              <li>新增 sheet type ， 撤退改成單一「🔄 撤退（-N）…」按鈕，點下後彈卡圖網格選備戰（取代之前每隻備戰一個文字按鈕）</li>
-              <li> /  既有 sheet type 也改 render：卡圖 + 名字 + HP + ⚡N + 🔧N + 狀態 emoji（與桌面  視覺等效）</li>
-              <li>每張卡左上 🔍 副按鈕可開放大鏡（鏡射桌面 send-new-active modal 模式）</li>
-            </ol>
-          </li>
-          <li><b>適應性處理</b>：用 CSS <code>grid-template-columns: repeat(auto-fit, minmax(80px, 1fr))</code> 自動排版 — 80px 卡寬，560px 手機可塞 5-7 卡 / 行（涵蓋零之大空洞 8 隻備戰場景）。配 <code>max-height: 55vh; overflow-y: auto</code>，極端情況自動內捲。<b>不需要 JS 偵測數量</b>，純 CSS 向量化處理任意寶可夢數量。</li>
-          <li><b>資訊密度設計</b>：卡圖 80px 寬下 4 行 meta 字級分別 0.62rem（名字）/ 0.58rem（HP / 能量 / 狀態），透過 <code>white-space: nowrap; overflow: hidden; text-overflow: ellipsis</code> 處理長名截斷。</li>
-
+          <li>手機版撤退、附能、進化的選擇 modal 改成卡圖網格顯示（仿照桌面版送新戰鬥位 modal），比舊版下拉選單直覺。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.199</span> 觀戰者隱藏取得獎賞按鈕 + 首頁強制更新按鈕配色 / 小字優化</summary>
+        <summary><span class="ver-badge">v5.199</span> 觀戰者畫面修補 + 首頁按鈕優化</summary>
         <ul>
-          <li><b>Bug 1（玩家報告）</b>：手機版觀戰者仍可看到「取得獎賞牌」按鈕（雖點下去 dispatch  已擋，但 UX 不該顯示）。
-            <ul>
-              <li><b>根因</b>：  prize-alert 條件只有 <code>(pendingPrizes ?? 0) &gt; 0</code>，沒 <code>!isSpectator</code> gate。桌面版 <code>game/+page.svelte</code>  同樣漏判。</li>
-              <li><b>修法</b>：兩處都補 <code>&amp;&amp; !isSpectator</code>。另外  的 10s 自動取獎賞 <code>$effect</code> 也補  early return，避免觀戰者那邊跑無謂計時器。</li>
-              <li><b>關聯</b>：延續 v5.116 / v5.160「觀戰者隱藏動作按鈕」系列，補先前漏掉的 prize-alert。</li>
-            </ul>
-          </li>
-          <li><b>UX 2（Wilson 反映）</b>：首頁「🔄 強制更新版本（清快取）」按鈕的橘紅底（v5.197）跟首頁淡白底配色衝突，下方小字「📱 iOS 加入主畫面卡舊版時點此」也多餘。
-            <ul>
-              <li><b>修法</b>：
-                <ol>
-                  <li>移除 <code>.hard-refresh-hint</code> span 跟對應 CSS</li>
-                  <li>按鈕配色改為跟首頁卡牌資料庫區塊一致的淡藍系：底色 <code>#f5f9ff</code>、邊框 <code>#c8d8f0</code>、字色 <code>#2563eb</code>；hover 加深</li>
-                  <li>字級從 .9rem 降到 .85rem，padding 縮，整體更低調</li>
-                </ol>
-              </li>
-              <li><b>原則</b>：按鈕功能性說明已在  tooltip，hover 即可看到，UI 不需要永久曝光。</li>
-            </ul>
-          </li>
-
+          <li>觀戰者不再看到「取得獎賞」按鈕（避免誤觸）。</li>
+          <li>首頁「強制更新版本」按鈕配色 / 說明文字優化。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.198</span> AI 對戰 setup 卡死修補（補抽完雙方都 mulligan 時 AI 不確認揭示）</summary>
+        <summary><span class="ver-badge">v5.198</span> AI 對戰補抽完卡住修補</summary>
         <ul>
-          <li><b>玩家報告</b>：單機 AI 對戰，手機版補抽完手牌後右上空白卡住，log 停在「玩家 1 完成補抽後備戰設置」。</li>
-          <li><b>根因</b>：<code>game/+page.svelte</code> 的 AI scheduler  setup 階段條件漏判 <code>!g.mulliganRevealConfirmed?.&#91;ai&#93;</code>。當雙方都 mulligan 但張數不等（例 Wilson m1=1、AI m2=2，<code>pendingMulliganDraw=&#91;1,0&#93;</code>）：
-            <ul>
-              <li>Wilson 看完 AI 揭示 → 補抽 → finish post-bench → log「完成補抽後備戰設置」</li>
-              <li> 卡在 <code>mulliganRevealConfirmed&#91;1&#93;=false</code> → 停留 setup 階段</li>
-              <li>AI 的 shouldAct 三項都 false（<code>setupDone&#91;ai&#93;=true</code>、<code>pendingDraw&#91;ai&#93;=0</code>、<code>postBench&#91;ai&#93;=false</code>）→ AI 永遠不 fire</li>
-              <li>AI 永遠不 dispatch  → 卡死</li>
-            </ul>
-          </li>
-          <li><b>修法</b>：  與 $effect  兩處 shouldAct 都補上 <code>|| !g.mulliganRevealConfirmed?.&#91;ai&#93;</code>。AI 該確認時 shouldAct=true → 進 handleSetupAI STEP 2 → 第一行就是「未確認 → return CONFIRM_MULLIGAN_REVEAL」→ AI 自動確認 → tryAdvance 解鎖。</li>
-          <li><b>為什麼之前沒爆</b>：之前都是其中一方 mulligan=0 時 <code>mulliganRevealConfirmed&#91;非mulligan方&#93;</code> 初始就 true（ <code>const mulliganRevealConfirmed = &#91;m2 === 0, m1 === 0&#93;</code>）。只有雙方都 mulligan ≥ 1 且張數不等才會觸發；單機 AI 才有此 bug，線上模式雙方都會手動點 confirm 不受影響。</li>
-
+          <li>本機 AI 對戰時，補抽完雙方都需要 mulligan 的情境下，AI 不會確認揭示導致卡住。本次修補。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.197</span> 首頁加「強制更新版本」按鈕（iOS PWA cache 解套）</summary>
+        <summary><span class="ver-badge">v5.197</span> 首頁加「強制更新版本」按鈕</summary>
         <ul>
-          <li><b>玩家回報</b>：iOS Safari「加入主畫面」做成 PWA 後，網站改版常無法跟上新版本，關 app 重開仍是舊版本。希望加按鈕讓玩家點擊後強制刷新（類似桌面 Ctrl+Shift+R）</li>
-          <li><b>根因</b>：iOS WebKit 的 PWA cache 機制非常頑固，標準的 reload 動作不會清 cache。即使刪除 service worker（本站目前未註冊 SW），WebKit HTTP cache 仍會用舊版 HTML / JS / 圖檔</li>
-          <li><b>修法</b>：首頁版本號下方加「🔄 強制更新版本（清快取）」按鈕。點擊後：
-            <ol>
-              <li>confirm 對話框告知玩家：「會保留牌組與帳號，會清快取的網頁/程式/圖檔」</li>
-              <li>卸載所有 Service Workers（若有 — 未來新增 SW 也適用）</li>
-              <li>清空 Cache API 所有 caches</li>
-              <li>加 timestamp query param 強制 fresh HTML（bypass HTTP cache）</li>
-              <li>用  reload 避免 history 累積</li>
-            </ol>
-          </li>
-          <li><b>不清</b>：localStorage / IndexedDB / cookies → 玩家的牌組與帳號資料保留 ✓</li>
-          <li><b>視覺</b>：按鈕橘紅底色（與「結束回合」綠底/「悔棋」橘黃色區隔），顯眼但不像危險操作；旁邊小字提示「📱 iOS 加入主畫面卡舊版時點此」</li>
-
+          <li>iOS 用戶用 PWA（加到主畫面）模式時，瀏覽器快取常常沒清，看到舊版。新加「強制更新版本」按鈕一鍵解決。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.196</span> 對手回合出牌 modal 手機版自適應 + 可拖曳</summary>
+        <summary><span class="ver-badge">v5.196</span> 對手回合出牌通知 modal 改進</summary>
         <ul>
-          <li><b>玩家回報 3 個問題（圖1+圖2+圖3）</b>：
-            <ol>
-              <li>對手回合出牌 modal 框框太大 — 下方留大片黑色空白（不依卡片數量自動調整）</li>
-              <li>手機所有 modal 都應可拖（手機版面小避免按不到東西卡住）</li>
-              <li>手牌列右側「紅色放大鏡」破圖 — 暫不影響功能，Wilson 表示先跳過</li>
-            </ol>
-          </li>
-          <li><b>修法 — opp-turn-panel 手機 CSS 改造</b>：
-            <ul>
-              <li>原 media query <code>(max-width: 600px) and (orientation: portrait)</code> → 拿掉 orientation gate，讓手機橫放（v5.194 後也走 MobilePortraitBattle）也套用</li>
-              <li>原 CSS 強制 <code>left: 2.5vw; right: 2.5vw; top: ...; bottom: ...;</code> 幾乎填滿螢幕 → 改 <code>width: min(360px, 92vw)</code> + <code>max-height: 75vh</code>，panel 依內容自然大小</li>
-              <li>原 <code>transform: none !important</code> 讓拖曳完全失效 → 移除，保留 transform 給拖曳定位</li>
-              <li>原 <code>.opp-turn-panel-header cursor: default</code> 暗示不可拖 → 改 <code>cursor: move</code>，與桌面一致；pointerdown handler 一直有綁定（）</li>
-            </ul>
-          </li>
-          <li><b>效果</b>：
-            <ul>
-              <li>對手只出 2 張卡時，panel 自然縮到小框，不再留大片黑色空白</li>
-              <li>手機版 panel 標題列可長按拖曳到不擋戰場的位置（鏡射桌面拖曳體驗）</li>
-              <li>panel 預設位置 right: 18px / bottom: 80px（桌面預設），玩家可自行拖移</li>
-            </ul>
-          </li>
-          <li><b>跳過項目（Wilson 確認）</b>：手牌列右側「紅色放大鏡」破圖 — 不影響功能，本次不修。Audit 結果：可能來源（chat-fab / opp-turn-toggle-btn / mp-sheet-zoom 殘留）需 Wilson 確認 mode（AI 或 online）+ DevTools inspect 才能精準定位</li>
-          <li><b>未做（範圍較大）</b>：「所有手機 modal 都要可拖」— mp-sheet（bottom sheet）原本就附在螢幕底部，拖曳意義不大；其他 selection-overlay modal 已支援拖曳（v2.44 .sel-header onpointerdown）；本次只動 opp-turn-panel 即 cover 主要痛點。若還有其他卡住的 modal 請 Wilson 截圖回報</li>
-
+          <li>對手回合動作通知 modal 在手機版自適應大小 + 可拖曳調整位置。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.195</span> 手機版悔棋按鈕加底色 + 可用手牌黃框加強</summary>
+        <summary><span class="ver-badge">v5.195</span> 手機版悔棋按鈕 / 手牌框優化</summary>
         <ul>
-          <li><b>1. 手機版悔棋按鈕加底色 + 加寬</b>（玩家反映 v5.194 按鈕不明顯）
-            <ul>
-              <li>原 .mp-undo-btn 只加亮色字 (#ffd44a)，仍走 .mp-icon-btn 透明背景 1px 邊框 → 在手機上看不到</li>
-              <li>修：橘黃底漸層 <code>linear-gradient(180deg, #c88a2a, #a86a1a)</code> + 白字 + 1px 橘邊框 + padding 加寬 (3px 12px)，鏡射綠底「結束回合」按鈕的明顯度</li>
-              <li>選橘黃色而非綠色：與結束回合區隔，橘黃直覺表達「警示/回復」操作</li>
-              <li>:active 狀態加深漸層提供按下反饋</li>
-            </ul>
-          </li>
-          <li><b>2. 手機版可使用手牌黃框加強</b>（玩家反映不夠明顯）
-            <ul>
-              <li>原 .mp-hand-card.mp-playable border 1px #e0b030 + box-shadow 0 0 8px 微發光 → 手機上看不到</li>
-              <li>修：border 加粗到 3px (#ffd44a) + 雙層 box-shadow（外發光 12-20px + 內發光 6-10px）+  1.4s 脈動 animation</li>
-              <li>玩家在小螢幕也能一眼看到本回合可使用的手牌</li>
-            </ul>
-          </li>
-          <li><b>3. 卡牌上「人頭影子」icon — Audit 中</b>（待 Wilson 提供更多資訊）
-            <ul>
-              <li>Audit 結果：codebase 0 個 <code>&lt;svg&gt;</code>，0 個 👤 在 zoom-modal 範圍內，不在 MobilePortraitBattle 元件</li>
-              <li>懷疑可能來源：(a) Chrome Android &lt;img&gt; 載入失敗的 broken-image placeholder（人形 silhouette）；(b) zoom-modal 上某 emoji（如 🔍 放大鏡）在某些手機字體下渲染類似人形</li>
-              <li>建議 Wilson 用 Chrome DevTools 遠端 inspect（或長按該 icon 看 alt text）回報該元素的具體 tag 名稱 / 截圖更清晰 → 才能精準修</li>
-              <li>本次先 ship #1 + #2，#3 留待更多資訊</li>
-            </ul>
-          </li>
-
+          <li>手機版悔棋按鈕加底色（更明顯）。</li>
+          <li>可用手牌的黃色邊框加強。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.194</span> 手機版 4 改進 + 挖掘崩塌 log 顯示卡名</summary>
+        <summary><span class="ver-badge">v5.194</span> 手機版 4 改進 + 挖掘崩塌 log</summary>
         <ul>
-          <li><b>1. 手機橫放也鎖定走手機 layout</b>（玩家反映橫放會跳到網頁版）
-            <ul>
-              <li> 原條件 <code>w &lt;= 600 &amp;&amp; h &gt; w</code>（只在 portrait 觸發）→ 改 <code>Math.min(w, h) &lt;= 600</code>（任一邊 ≤ 600px 都算手機，含橫放）</li>
-              <li>效果：手機不論直立/橫放都走 MobilePortraitBattle 元件</li>
-            </ul>
-          </li>
-          <li><b>2. 手機版 log 加 timestamp + 改正序顯示</b>（鏡射桌面版）
-            <ul>
-              <li>原  用 <code>.reverse()</code> 顯示最新在上 → 改 <code>.slice(-30)</code> 保留正序（最舊在上、最新在下）</li>
-              <li>每行 log 加 <code>[mm:ss]</code> 時間戳（鏡射桌面版 formatLogTime）</li>
-              <li>加 mpLogEl bind ref + $effect 自動 scroll 到底部（log 變化即觸發）</li>
-              <li>加 .log-time CSS 樣式（鏡射桌面版）</li>
-            </ul>
-          </li>
-          <li><b>3. 手機版補悔棋按鈕</b>（玩家反映沒按鈕）
-            <ul>
-              <li>+page.svelte 傳  +  props 給 MobilePortraitBattle</li>
-              <li>MobilePortraitBattle top bar 「離開」按鈕旁加 ↶ 悔棋按鈕（亮黃色 #ffd44a 提示可用）</li>
-              <li>顯示條件：undoAvailable=true（鏡射桌面版 performUndo gate）+ 非觀戰</li>
-            </ul>
-          </li>
-          <li><b>4. 挖掘崩塌 log 顯示丟棄卡名</b>（鏡射枇琶 log pattern）
-            <ul>
-              <li>effects.ts millOppDeckTopPost helper  原 log「對手牌庫頂 N 張丟入棄牌區」→ 改加 <code>— 卡名1、卡名2</code>，玩家可確認 mill 到什麼牌</li>
-              <li>影響範圍：超級龍頭地鼠ex|挖掘崩塌 + 其他用此 helper 的 mill 招式</li>
-              <li>枇琶  + 牌庫類丟棄招式：已有 log 顯示卡名 ✓（grep audit 過）</li>
-            </ul>
-          </li>
-          <li><b>未完成 / 報告 — 撤退/附能 modal 改用「派新寶可夢上場」樣式</b>
-            <ul>
-              <li>需 UI 重做，範圍較大（撤退能量丟棄 picker + 附能 picker 兩個獨立流程）</li>
-              <li>建議分階段：先看 KO modal 樣式 → 抽出通用元件 → 撤退/附能套用</li>
-              <li>待 Wilson 確認優先級後另案處理</li>
-            </ul>
-          </li>
-
+          <li>手機版多項小改進（UI 調整、文字大小）。</li>
+          <li>「挖掘崩塌」特性觸發時 log 顯示完整卡名。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.193</span> 同名特性疊加 Rule 7c 全卡池 audit</summary>
+        <summary><span class="ver-badge">v5.193</span> 同名特性疊加全卡池檢查</summary>
         <ul>
-          <li><b>Audit 起因</b>：玩家發現 v5.188 修了鴨嘴炎獸熔岩波動的疊加 bug，要求 audit 同類特性是否還有漏</li>
-          <li><b>Audit 方法</b>：
-            <ol>
-              <li>JSON grep「不重複」+「無論有多少」+「不會重複」字樣 → 找出明寫不疊加的 10 個特性</li>
-              <li>grep 既有  用法（只回 true/false，不疊加）→ 找出 9 處</li>
-              <li>對照卡面 → 看是否與規則一致</li>
-              <li>grep PASSIVE_* maps → audit 攻擊加成/減傷/反擊類</li>
-            </ol>
-          </li>
-          <li><b>Audit 結果 — 已正確分類（不需修）</b>：
-            <ul>
-              <li>明寫「不重複」9 卡：繁茂／黏滑失足／奇跡之吻／影藏／凍原堡壘／生機森巴／黑暗脈衝／岩石宮殿／大方 — 均正確不疊加 ✓</li>
-              <li>「卡面未寫但疊加無意義」3 卡：球形盾牌（完全免疫，疊加無效）／潛者捕捉（KO 後全部水能回手，疊加等效 1 次）／熔岩地域（灼傷狀態，疊加重複施加等效）✓</li>
-              <li>PASSIVE_ATTACK_BONUS engine loop（per-source 疊加）：輝煌聲援／鈷藍指令／力之鹽／皇家聲援 已疊加 ✓；大方／激動力量／大將／複眼 在 NO_STACK 名單已 dedup ✓</li>
-              <li>凹洞（火箭隊的三地鼠）：v3001 -440 已正確計數 × 2 ✓</li>
-              <li>熔岩波動：v5.188 已修為 count × 30 ✓</li>
-              <li>PASSIVE_DAMAGE_REDUCE/RETALIATION/PREVENT_KO 等：per-defender 特性，疊加問題 N/A</li>
-            </ul>
-          </li>
-          <li><b>本次修正 — 找出 2 個漏疊加的 bug</b>：
-            <ul>
-              <li><b>守護之鐘（青銅鐘）</b> — 卡面「自己的所有寶可夢受到對手的寶可夢招式的傷害『-10』點」<b>未寫「不重複」</b>。原  用 hasAbilityOnSide → 固定 -10。改為 count × 10：場上 2 隻青銅鐘 → -20，3 隻 → -30</li>
-              <li><b>齒輪塗層（齒輪怪）</b> — 卡面「自己的所有身上附有【鋼】能量卡的寶可夢，受到對手的寶可夢招式的傷害『-20』點」<b>未寫「不重複」</b>。原  同類問題 → 固定 -20。改為 count × 20：場上 2 隻齒輪怪 → -40（仍需受惠者附【鋼】能量）</li>
-            </ul>
-          </li>
-          <li><b>規則對應</b>：PTCG 通則 — 未明文「不重複」的同名 passive 預設 per-source 疊加（與 v5.188 熔岩波動同邏輯）。其他正確的「不疊加」實作都是因為卡面有明文，或效果類型本身疊加無意義（狀態、完全免疫、trigger-once）</li>
-
+          <li>檢查全卡池中「同名特性疊加」的處理，找出並修補 2 個漏算 bug。例如場上有 2 隻擁有同名加成特性的寶可夢時，加成正確算 2 次。</li>
         </ul>
       </details>
+
+      <details>
+        <summary><span class="ver-badge" style="background:#888">歷史版本</span> v5.192 以前的更新記錄（點擊展開）</summary>
+        <div class="changelog-list">
 
       <details>
         <summary><span class="ver-badge">v5.192</span> 致死毒/燒傷 log 動態化 + 小木靈怨恨進化最初回合 gate</summary>
@@ -11196,6 +10790,9 @@
           <li>v2.347：J標備戰區傷害批次</li>
           <li>v2.346：J標簡易效果批次</li>
         </ul>
+      </details>
+
+        </div>
       </details>
 
     </div>
