@@ -24,6 +24,8 @@ import type { CardInstance, PlayerState } from '../../types';
 import { regPre } from '../_shared';
 import { addLog } from '../_shared';
 import type { AttackPreFn } from '../_shared';
+// v5.227: 引入 totalEnergyUnits 處理燃火/新衝天/大竺葵繁茂等 host-aware 能量倍率
+import { totalEnergyUnits } from '../../engine';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: 對手中毒條件 +N
@@ -121,13 +123,17 @@ function selfEnergyMinPre(
 }
 
 // helper: 自身能量比 cost 多 2 → +K
+// v5.227 修：改用 totalEnergyUnits 算「能量單位」而非 energyAttached.length（卡張數）。
+//   原邏輯：燃火能量 on 進化寶可夢應視為 3 個無能量，但因為只算卡張數 → 算 1
+//   → 玩家回報胖嘟嘟ex (Stage1) 身上 2 感應超+1 燃火 力量壓制只有 80（應該 160）。
+//   修法：對齊撤退/招式 cost 判定一律用 totalEnergyUnits。
 function selfExtraEnergyPre(
   base: number, bonus: number, costCount: number, label: string,
 ): AttackPreFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const a = state.players[aIdx].active;
     if (!a) return { state, damage: base };
-    const have = a.energyAttached.length;
+    const have = totalEnergyUnits(a.energyAttached, pool, state, aIdx, a);
     const cond = have >= costCount + 2;
     const dmg = base + (cond ? bonus : 0);
     const s = addLog(state, `${label}：自身能量 ${have} 個（cost+2 = ${costCount + 2}）${cond ? `→ +${bonus}` : '不足'} = ${dmg}`, aIdx);
