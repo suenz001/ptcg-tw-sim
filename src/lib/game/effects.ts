@@ -1930,7 +1930,14 @@ export function canApplyAttackEffectToTarget(
         const card = pool.get(c.cardId);
         return card?.abilities?.some(a => a.name === name);
       });
-      if (!hasFieldAbility) continue;
+      // v5.220 Bug 1: 抵抗之幕 attack-time snapshot fallback (defense-in-depth)
+      //   持有者(火箭隊的急凍鳥)被同招式 KO 後 state 已沒持有者 → hasFieldAbility=false，
+      //   但 _attackTimeOppRocketVeil snapshot 仍記得宣告當時有 → 仍應擋。
+      //   v5.186 已在 resolveBenchGuard L347 加過，但本 legacy helper 有 17+ direct
+      //   callers (一同爆炸 / 詛咒水滴 / 雪喵的咒文 / etc.) bypass unified
+      //   canApplyEffectToTarget → snapshot 不會被讀到。本次補在這邊一致行為。
+      const snapshotFallback = name === '抵抗之幕' && state._attackTimeOppRocketVeil === true;
+      if (!hasFieldAbility && !snapshotFallback) continue;
       // 檢查 targetFilter
       if (rule.targetFilter === 'BasicRocket') {
         if (!isRocketBasicTarget(targetCard)) continue;
@@ -11245,16 +11252,28 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
  * 可達鴨｜濕氣 — 內嵌判定（避免循環 import）。
  * 只要任一方場上有可達鴨（active 或 bench），所有「將自己昏厥」類效果
  * （ability / [特性]招式）全部不觸發。
+ *
+ * v5.220 Bug 2 修補：原本只純檢查名為 '濕氣' 的 ability，沒檢查該 ability 是否被消除。
+ *   PTCG 規則：特性被「無視」(暗夜羽擊 / 黏著束縛 等) 時就不存在 → 不應再
+ *   擋自我 KO 招式。修法：iterate 時逐隻檢查特性消除狀態：
+ *     (1) inst.abilityNullifiedThisTurn — 招式版 暗夜羽擊 (v2.362 promote)
+ *     (2) isAbilityNullifiedByPassive — passive 振翼髮｜暗夜羽擊 (v3.01) /
+ *         海兔獸｜黏著束縛 (v3.01) 等同類「對手特性消除」passive
+ *   被消除的 濕氣 跳過不算，繼續找下一隻；全部都被消除才回 false (放行自爆)。
  */
 function hasPsyduckDamp(state: GameState, pool: Map<string, Card>): boolean {
-  for (const p of state.players) {
-    const allPokes: CardInstance[] = [
-      ...(p.active ? [p.active] : []),
-      ...p.bench,
-    ];
-    for (const pk of allPokes) {
-      const card = pool.get(pk.cardId);
-      if (card?.abilities?.some(a => a.name === '濕氣')) return true;
+  for (const ownerIdx of [0, 1] as const) {
+    const p = state.players[ownerIdx];
+    const allPokes: Array<{ inst: CardInstance; loc: 'active' | 'bench' }> = [];
+    if (p.active) allPokes.push({ inst: p.active, loc: 'active' });
+    for (const b of p.bench) allPokes.push({ inst: b, loc: 'bench' });
+    for (const { inst, loc } of allPokes) {
+      const card = pool.get(inst.cardId);
+      if (!card?.abilities?.some(a => a.name === '濕氣')) continue;
+      // v5.220 Bug 2: 濕氣被消除時不算這隻
+      if (inst.abilityNullifiedThisTurn) continue;
+      if (isAbilityNullifiedByPassive(state, ownerIdx, inst, card, '濕氣', loc, pool)) continue;
+      return true;
     }
   }
   return false;
@@ -15499,7 +15518,7 @@ registerV3000G3W2Passives();
 // 同 lazy register pattern：本波無對 effects.ts 內 Map 的 .set() 需要做，
 //   但保留模板以利未來擴充。helpers 全部由 engine.ts 直接 import 使用。
 // 對手不能使出 X / 對手特性消除 / 寶可夢檢查指示物 / 撤退觸發 / 進化觸發 等 hook 全部 inline 在 engine.ts。
-import { registerV3001G3W3Passives } from './effects/cards/v3001_g3_wave3';
+import { registerV3001G3W3Passives, isAbilityNullifiedByPassive } from './effects/cards/v3001_g3_wave3';
 registerV3001G3W3Passives();
 
 // v3.05 Deferred Wave A — 5 張需新 hook 特性卡（Phase 1 兩張本波實裝）

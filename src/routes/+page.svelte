@@ -304,6 +304,48 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.220</span> 兩 bug 修 — 抵抗之幕 KO 後備戰防護 (defense-in-depth) + 暗夜羽擊壓制濕氣後可自爆</summary>
+        <ul>
+          <li><b>Bug 1：抵抗之幕 vs 幻影奇襲 KO 後備戰失效（接續 v5.186）</b>
+            <ul>
+              <li><b>玩家回報</b>：火箭隊的急凍鳥被多龍巴魯托ex 幻影奇襲 KO 後，剩下的 6 個傷害指示物仍然能對自方備戰的「火箭隊的」基礎寶可夢造成傷害。v5.186 雖加過 attack-time snapshot 但仍漏。</li>
+              <li><b>根因</b>：v5.186 只在 <code>resolveBenchGuard</code> L347 加 <code>_attackTimeOppRocketVeil</code> snapshot fallback；但 <code>effects.ts</code> 的 legacy helper <code>canApplyAttackEffectToTarget</code>（L1925 ATTACK_EFFECT_IMMUNITY field-ability 分支）有 <b>17+ 個 direct callers</b>（隨風球｜一同爆炸、來悲粗茶｜詛咒水滴、雪喵的咒文等），這些 caller 完全 bypass unified <code>canApplyEffectToTarget</code> 入口 → snapshot 不會被讀到，急凍鳥 KO 後 <code>hasFieldAbility=false</code> → 不擋。</li>
+              <li><b>修法</b>：在 legacy helper 的 field-ability 分支補 snapshot fallback（defense-in-depth，鏡射 v5.213 化隱在 legacy + unified 兩處同步 check 的 pattern）：
+                <pre>const snapshotFallback = name === '抵抗之幕' &amp;&amp; state._attackTimeOppRocketVeil === true;
+if (!hasFieldAbility &amp;&amp; !snapshotFallback) continue;</pre>
+              </li>
+            </ul>
+          </li>
+          <li><b>Bug 2：振翼髮｜暗夜羽擊 (passive) 壓制不了可達鴨｜濕氣</b>
+            <ul>
+              <li><b>玩家回報</b>：我方振翼髮在戰鬥場（特性「暗夜羽擊」消除對手戰鬥位特性），對手戰鬥場是可達鴨（濕氣消除「使自己昏厥的招式效果」）。照理說濕氣應被暗夜羽擊消除，所以我方黑夜魔靈｜咒詛炸彈、過度放電等自爆類招式應可使用；實際上仍被擋下。</li>
+              <li><b>根因</b>：<code>effects.ts hasPsyduckDamp</code>（L11249）只純 iterate 場上寶可夢找名為「濕氣」的 ability，<b>沒檢查該 inst 的特性是否被消除</b>。v2.362 招式版「暗夜羽擊」設的 <code>abilityNullifiedThisTurn</code> flag、v3.01 passive 振翼髮｜暗夜羽擊 + 海兔獸｜黏著束縛 的 <code>isAbilityNullifiedByPassive</code> helper 都沒套用。</li>
+              <li><b>修法</b>：<code>hasPsyduckDamp</code> iterate 時逐隻檢查特性消除狀態，被消除的「濕氣」跳過不算：
+                <pre>if (inst.abilityNullifiedThisTurn) continue;
+if (isAbilityNullifiedByPassive(state, ownerIdx, inst, card, '濕氣', loc, pool)) continue;</pre>
+              </li>
+              <li><b>影響範圍</b>：使用 <code>hasPsyduckDamp</code> 的 3 個自爆 helper 全部受惠：
+                <ul>
+                  <li><code>cursedBombAttackPost</code>（咒詛炸彈 — 黑夜魔靈、密勒頓等）</li>
+                  <li><code>overvoltAttackPost</code>（過度放電 — 雷電獸 等）</li>
+                  <li>其他 <code>hasPsyduckDamp</code> caller（self-KO 類）</li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+          <li><b>Iron Rules</b>：
+            <ul>
+              <li>Rule 7c（audit 同類）：Bug 1 補在 legacy helper 同步 cover 17+ 個 direct caller；Bug 2 改 hasPsyduckDamp 一個 helper cover 3+ 個自爆招式</li>
+              <li>Rule 14（單一 root cause）：Bug 1 加 1 行 fallback 解決所有 direct caller；Bug 2 改 helper 解決所有自爆招式</li>
+              <li>Rule 15（鏡射既有結構）：Bug 1 鏡射 v5.213 化隱 defense-in-depth pattern；Bug 2 用既有 <code>isAbilityNullifiedByPassive</code> helper</li>
+              <li>Rule 17（不推測）：兩 bug 都根據 static/cards JSON 卡面敘述 + 既有 helper 邏輯實作，不憑記憶</li>
+              <li>Rule 11 / 11c / 11e / 11f（Python git pipeline 不 git status）/ Rule 1（changelog HTML 跳脫 &amp;amp; &amp;lt; &amp;gt; &amp;#123; &amp;#125;）/ Rule 4（pre-push svelte.compile audit）</li>
+            </ul>
+          </li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.219</span> 招式前置能量挑選 picker 加放大鏡 — 看擁有此能量的寶可夢詳情</summary>
         <ul>
           <li><b>玩家需求</b>：招式【極降駕】需要選自己場上多隻寶可夢身上的能量丟棄；玩家想看每隻寶可夢的詳細狀況（HP / 其他能量 / 道具 / 狀態）再決定要丟哪隻的能量。希望加放大鏡。</li>
