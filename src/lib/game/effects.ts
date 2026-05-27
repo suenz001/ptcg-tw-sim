@@ -325,9 +325,15 @@ export function resolveBenchGuard(
   //   範圍涵蓋 attack-damage（招式直傷至 bench）+ attack-effect（招式效果 → bench 放指示物 / 狀態 等）。
   //   不擋 ability-effect（卡面明文「招式」），故 ability-effect 走原 isBenchProtected 路徑即可。
   //   resolveBenchGuard caller 已保證 target 在 bench，故無需再判斷 bench-only。
+  //
+  // v5.237：加 attack-time snapshot fallback — 蟲甲聖被同招式 KO 後 state 已沒蟲甲聖，
+  //   但 _attackTimeOppBugShield snapshot 仍記得宣告當時有，per-target 仍擋。
+  //   仿 v5.186 抵抗之幕 + v3.892 花之帷幔 pattern。
+  //   情境：對手戰鬥位蟲甲聖（球形盾牌）被「幻影奇襲」類 AOE 招式擊倒後，
+  //         備戰寶可夢仍應免疫此招式放置的指示物效果。
   if (kind === 'attack-damage' || kind === 'attack-effect') {
     const defenderIdxBA = (1 - actorIdx) as 0 | 1;
-    if (hasBugAegislashShield(state, defenderIdxBA, pool)) {
+    if (hasBugAegislashShield(state, defenderIdxBA, pool) || state._attackTimeOppBugShield) {
       return { blocked: true, reason: '蟲甲聖 球形盾牌 效果' };
     }
   }
@@ -477,6 +483,8 @@ import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v3.0 Group 3 Wave 2 helper — 用於 resolveBenchGuard 蟲甲聖球形盾牌
 import { hasBugAegislashShield } from './effects/cards/v3000_g3_wave2';
+// v5.237：re-export 給 engine.ts 用於 attack-time snapshot
+export { hasBugAegislashShield };
 // v3.06 Deferred Wave B helper — 在備戰時免疫對手招式（藏隱 / 深度下潛）
 import {
   hasBenchAttackImmunityAbility as _v3060BenchImmAbil,

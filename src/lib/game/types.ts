@@ -887,6 +887,13 @@ export interface GameState {
    * Transient：每次 attack flow 後 clear。
    */
   _attackTimeOppRocketVeil?: boolean;
+  /**
+   * v5.237：球形盾牌 attack-time snapshot — 攻擊宣告時對手場上是否有蟲甲聖（球形盾牌）。
+   * 仿花之帷幔 / 抵抗之幕 pattern：規則上「招式效果同時 resolve」，蟲甲聖被同招式 KO
+   * 後備戰仍應免疫此招式的傷害與效果。resolveBenchGuard 內 OR fallback 讀此 snapshot。
+   * Transient：每次 attack flow 後 clear。
+   */
+  _attackTimeOppBugShield?: boolean;
 }
 
 export interface LogEntry {

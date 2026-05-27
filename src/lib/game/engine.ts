@@ -23,6 +23,8 @@ import {
   hasFlowerVeil,
   // v5.186：抵抗之幕 attack-time snapshot 仿 v3.892 花之帷幔 pattern
   hasRocketVeil,
+  // v5.237：球形盾牌 attack-time snapshot 同 pattern
+  hasBugAegislashShield,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_END_TURN_DISCARD,
   ABILITY_RETREAT_MOD,
@@ -4093,6 +4095,11 @@ function handlePlaying(
     //   攻擊宣告當時抵抗之幕生效，備戰「火箭隊的」基礎寶可夢仍應免疫此招式效果。
     const attackTimeOppRocketVeil = hasRocketVeil(state, dIdx, pool);
     workingState = { ...workingState, _attackTimeOppRocketVeil: attackTimeOppRocketVeil };
+    // v5.237：球形盾牌 同 pattern — 對手戰鬥位蟲甲聖被幻影奇襲類 AOE 招式 KO 後，
+    //   state 已沒蟲甲聖 → hasBugAegislashShield 返 false → 備戰失去保護。
+    //   snapshot 攻擊宣告當時是否有球形盾牌 holder，resolveBenchGuard 內 OR fallback 讀。
+    const attackTimeOppBugShield = hasBugAegislashShield(state, dIdx, pool);
+    workingState = { ...workingState, _attackTimeOppBugShield: attackTimeOppBugShield };
 
     // v3.03：preFn 可額外回傳 breakdown，把內部多步加法（如赫月瘋狂啃咬 7×30+100）
     //        展開為多個 term，UI 顯示更易懂。
@@ -5474,6 +5481,12 @@ function handlePlaying(
     if (newState._attackTimeOppRocketVeil !== undefined && !newState.pendingSelection) {
       const cleared = { ...newState };
       delete cleared._attackTimeOppRocketVeil;
+      newState = cleared;
+    }
+    // v5.237：球形盾牌 snapshot 同步清除
+    if (newState._attackTimeOppBugShield !== undefined && !newState.pendingSelection) {
+      const cleared = { ...newState };
+      delete cleared._attackTimeOppBugShield;
       newState = cleared;
     }
 
@@ -7025,6 +7038,12 @@ export function applyAction(
   if (next._attackTimeOppRocketVeil !== undefined && !next.pendingSelection) {
     const cleared = { ...next };
     delete cleared._attackTimeOppRocketVeil;
+    next = cleared;
+  }
+  // v5.237：球形盾牌 snapshot 同步清除（跨 deferred picker 後最終清理）
+  if (next._attackTimeOppBugShield !== undefined && !next.pendingSelection) {
+    const cleared = { ...next };
+    delete cleared._attackTimeOppBugShield;
     next = cleared;
   }
 
