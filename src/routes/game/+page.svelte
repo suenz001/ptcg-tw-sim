@@ -10710,33 +10710,28 @@
     max-height: 110px;
   }
 
-  /* v5.234：桌墊版 bench-extended slot 固定寬度 128px (不 flex grow / 不 shrink)。
-     原因：1366 viewport 下 grid 1fr column 約 834px，扣 gap 後 8 卡 distribute
-     每個只有 100px (沒到 max-width 128)；改 flex:0 0 128px 強制每個剛好 128，
-     容器自然撐到 128*8+gap=1052px 溢出 1fr cell — 配合下方 width:max-content
-     讓 zone-bench 自然展開不被 cell 限制。 */
+  /* v5.235：桌墊版 bench-extended 真正修法 (Wilson 思路) —
+     slot 設定完全用 5 卡時的基底 (flex:1 1 90px / max:128px)，
+     只把 bench 容器從原本的 grid-area 1fr cell 改成 grid-column: 1 / -1
+     橫跨整個 playmat 寬度 (~1350px @ 1366 viewport)。
+     這樣 1fr 不再限制容器，flex grow 8 卡可以到 max-width:128 停，
+     跟 5 卡完全一致。justify-content: center 中央對齊。 */
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot,
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-empty {
-    flex: 0 0 128px !important;
-    width: 128px !important;
-    min-width: 128px !important;
+    flex: 1 1 90px !important;
+    min-width: 90px !important;
     max-width: 128px !important;
   }
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot img {
     max-width: 108px !important;
     max-height: 128px !important;
   }
-  /* v5.234：桌墊版 bench 容器純 width: max-content — 8 個固定 128px slot 自然撐成
-     128*8 + gap*7 = 1052px。拿掉 v5.233 的 min-width:100% 因為它會強迫容器至少 = 1fr cell
-     寬 (~834px @ 1366viewport)，然後 flex distribute 把 slot 縮成 100px。純 max-content 後
-     容器寬 = 1052px 溢出 cell，但 overflow:visible + justify-self:center 讓它從 cell 中心
-     向兩側擴展、視覺對稱、不需捲動。 */
   .playmat.layout-tabletop .zone-bench.bench-extended {
+    grid-column: 1 / -1 !important;
     overflow: visible !important;
-    width: max-content !important;
-    justify-self: center;
     justify-content: center;
-    gap: 4px;
+    width: auto !important;
+    min-width: 0 !important;
   }
   /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
      避免撐大 zone-bench 把下方手牌擠出 viewport。
