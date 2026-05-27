@@ -104,6 +104,50 @@ export function hasAbilityOnActive(
   return true;
 }
 
+/**
+ * v5.224 統一 helper：寶可夢 inst 的指定 ability 目前是否「實際生效」（不被任何機制消除）?
+ *
+ * 統一處理所有「特性消除」機制：
+ *   1. 招式版暗夜羽擊 — inst.abilityNullifiedThisTurn 旗標（active only）
+ *   2. passive 振翼髮｜暗夜羽擊 — 對手戰鬥場有振翼髮 → 自方戰鬥位特性失效
+ *   3. 海兔獸｜黏著束縛 — 雙方備戰 2 階寶可夢特性失效
+ *   4. 火箭隊的監視塔 — 【無】屬性寶可夢特性失效（caller 自行 wrap）
+ *
+ * 使用情境：所有「對手場上特性 holder 提供保護」邏輯都應 iterate 每個 holder
+ * 並用此 helper 過濾掉被消除的 holder（field-ability 類如花之帷幔/抵抗之幕/球形盾牌；
+ * self-ability 類如化隱/全能硬殼/緊張感/融合為雪）。
+ *
+ * @param holderInst 持有此特性的寶可夢 inst
+ * @param holderCard 對應的 Card（caller 已 pool.get）
+ * @param holderOwnerIdx 持有者所屬玩家 idx
+ * @param abilityName 要檢查的特性名（用於暗夜羽擊豁免）
+ * @param location 持有者在 'active' 或 'bench'
+ * @returns true → 特性實際生效；false → 特性被消除應跳過
+ */
+export function isAbilityHolderEffective(
+  state: GameState | undefined,
+  holderInst: CardInstance | null | undefined,
+  holderCard: Card | null | undefined,
+  holderOwnerIdx: 0 | 1 | undefined,
+  abilityName: string | undefined,
+  location: 'active' | 'bench',
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (!state || !holderInst || !holderCard || holderOwnerIdx == null || !abilityName || !pool) return false;
+  // 1. 招式版暗夜羽擊 — 只 active 位置才有此旗標
+  if (location === 'active' && holderInst.abilityNullifiedThisTurn) return false;
+  // 2. passive 振翼髮｜暗夜羽擊 — 對手戰鬥場有振翼髮 → active 位置的特性失效
+  if (location === 'active'
+      && isOppActiveAbilityNullifiedByMoonsenne(state, holderOwnerIdx, holderCard, abilityName, pool)) {
+    return false;
+  }
+  // 3. 海兔獸｜黏著束縛 — bench 2 階特性失效
+  if (location === 'bench' && isAbilityNullifiedBySticky(state, holderInst, holderCard, true, pool)) {
+    return false;
+  }
+  return true;
+}
+
 /** 玩家 idx 備戰是否有指定 ability holder。 */
 function hasAbilityOnBench(
   state: GameState | undefined,

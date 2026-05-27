@@ -212,13 +212,15 @@ export function hasFlowerVeil(
   pool: Map<string, Card>,
 ): boolean {
   const defender = state.players[defenderIdx];
-  const cards = [defender.active, ...defender.bench].filter((c): c is CardInstance => !!c);
-  for (const c of cards) {
-    const card = pool.get(c.cardId);
-    if (!card?.abilities) continue;
-    for (const a of card.abilities) {
-      if (a.name === '花之帷幔') return true;
-    }
+  const allHolders: Array<{ inst: CardInstance; loc: 'active' | 'bench' }> = [];
+  if (defender.active) allHolders.push({ inst: defender.active, loc: 'active' });
+  for (const b of defender.bench) allHolders.push({ inst: b, loc: 'bench' });
+  for (const { inst, loc } of allHolders) {
+    const card = pool.get(inst.cardId);
+    if (!card?.abilities?.some(a => a.name === '花之帷幔')) continue;
+    // v5.224：holder 在 active 位置時，若被振翼髮暗夜羽擊壓制 → 特性失效，跳過
+    if (!isAbilityHolderEffective(state, inst, card, defenderIdx, '花之帷幔', loc, pool)) continue;
+    return true;
   }
   return false;
 }
@@ -238,13 +240,15 @@ export function hasRocketVeil(
   pool: Map<string, Card>,
 ): boolean {
   const defender = state.players[defenderIdx];
-  const cards = [defender.active, ...defender.bench].filter((c): c is CardInstance => !!c);
-  for (const c of cards) {
-    const card = pool.get(c.cardId);
-    if (!card?.abilities) continue;
-    for (const a of card.abilities) {
-      if (a.name === '抵抗之幕') return true;
-    }
+  const allHolders: Array<{ inst: CardInstance; loc: 'active' | 'bench' }> = [];
+  if (defender.active) allHolders.push({ inst: defender.active, loc: 'active' });
+  for (const b of defender.bench) allHolders.push({ inst: b, loc: 'bench' });
+  for (const { inst, loc } of allHolders) {
+    const card = pool.get(inst.cardId);
+    if (!card?.abilities?.some(a => a.name === '抵抗之幕')) continue;
+    // v5.224：holder 在 active 位置時，若被振翼髮暗夜羽擊壓制 → 特性失效，跳過
+    if (!isAbilityHolderEffective(state, inst, card, defenderIdx, '抵抗之幕', loc, pool)) continue;
+    return true;
   }
   return false;
 }
@@ -1902,8 +1906,14 @@ export function canApplyAttackEffectToTarget(
   }
   // v5.213：化隱（M5 詛咒娃娃 / 斯魔茶 / 來悲粗茶 / 怨影娃娃）— 不受招式效果（含狀態）
   //   defense.ts L139 unified entry 已有此 check；legacy helper 補一份避免漏 caller。
+  // v5.224：加 holder 位置 + 振翼髮暗夜羽擊壓制 check（target 在對手戰鬥場時若被壓制 → 失效）
   if (targetCard?.abilities?.some(a => a.name === '化隱')) {
-    return { blocked: true, reason: '化隱 免疫招式效果' };
+    const dIdxForHy = (1 - atkIdx) as 0 | 1;
+    const defActiveHy = state.players[dIdxForHy].active;
+    const locHy: 'active' | 'bench' = (defActiveHy && defActiveHy.iid === target.iid) ? 'active' : 'bench';
+    if (isAbilityHolderEffective(state, target, targetCard, dIdxForHy, '化隱', locHy, pool)) {
+      return { blocked: true, reason: '化隱 免疫招式效果' };
+    }
   }
   const dIdx = (1 - atkIdx) as 0 | 1;
   for (const [name, rule] of ATTACK_EFFECT_IMMUNITY) {
@@ -1920,22 +1930,26 @@ export function canApplyAttackEffectToTarget(
         if (name === '全能硬殼') {
           if (!_v3060AttackerHasSE(state, atkIdx, pool)) continue;
         }
+        // v5.224：target 在對手戰鬥場時若被振翼髮暗夜羽擊壓制 → 特性失效
+        const defActiveSelf = state.players[dIdx].active;
+        const locSelf: 'active' | 'bench' = (defActiveSelf && defActiveSelf.iid === target.iid) ? 'active' : 'bench';
+        if (!isAbilityHolderEffective(state, target, targetCard, dIdx, name, locSelf, pool)) continue;
         return { blocked: true, reason: `${name} 免疫招式效果` };
       }
     } else if (rule.kind === 'field-ability') {
       // defender 場上有此名稱特性 + 目標符合 targetFilter
+      // v5.224：iterate 每個 holder 並過濾被振翼髮暗夜羽擊等機制壓制者
       const defender = state.players[dIdx];
-      const allDef = [defender.active, ...defender.bench].filter((c): c is CardInstance => !!c);
-      const hasFieldAbility = allDef.some(c => {
-        const card = pool.get(c.cardId);
-        return card?.abilities?.some(a => a.name === name);
+      const allDef: Array<{ inst: CardInstance; loc: 'active' | 'bench' }> = [];
+      if (defender.active) allDef.push({ inst: defender.active, loc: 'active' });
+      for (const b of defender.bench) allDef.push({ inst: b, loc: 'bench' });
+      const hasFieldAbility = allDef.some(({ inst, loc }) => {
+        const card = pool.get(inst.cardId);
+        if (!card?.abilities?.some(a => a.name === name)) return false;
+        // v5.224：holder 被壓制（含 active 位置振翼髮）→ 該 holder 不算
+        return isAbilityHolderEffective(state, inst, card, dIdx, name, loc, pool);
       });
-      // v5.220 Bug 1: 抵抗之幕 attack-time snapshot fallback (defense-in-depth)
-      //   持有者(火箭隊的急凍鳥)被同招式 KO 後 state 已沒持有者 → hasFieldAbility=false，
-      //   但 _attackTimeOppRocketVeil snapshot 仍記得宣告當時有 → 仍應擋。
-      //   v5.186 已在 resolveBenchGuard L347 加過，但本 legacy helper 有 17+ direct
-      //   callers (一同爆炸 / 詛咒水滴 / 雪喵的咒文 / etc.) bypass unified
-      //   canApplyEffectToTarget → snapshot 不會被讀到。本次補在這邊一致行為。
+      // v5.220：抵抗之幕 attack-time snapshot fallback (KO 後 holder 已消失)
       const snapshotFallback = name === '抵抗之幕' && state._attackTimeOppRocketVeil === true;
       if (!hasFieldAbility && !snapshotFallback) continue;
       // 檢查 targetFilter
@@ -15518,7 +15532,7 @@ registerV3000G3W2Passives();
 // 同 lazy register pattern：本波無對 effects.ts 內 Map 的 .set() 需要做，
 //   但保留模板以利未來擴充。helpers 全部由 engine.ts 直接 import 使用。
 // 對手不能使出 X / 對手特性消除 / 寶可夢檢查指示物 / 撤退觸發 / 進化觸發 等 hook 全部 inline 在 engine.ts。
-import { registerV3001G3W3Passives, isAbilityNullifiedByPassive } from './effects/cards/v3001_g3_wave3';
+import { registerV3001G3W3Passives, isAbilityNullifiedByPassive, isAbilityHolderEffective } from './effects/cards/v3001_g3_wave3';
 registerV3001G3W3Passives();
 
 // v3.05 Deferred Wave A — 5 張需新 hook 特性卡（Phase 1 兩張本波實裝）

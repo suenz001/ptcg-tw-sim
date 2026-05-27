@@ -1,3 +1,4 @@
+import { isAbilityHolderEffective } from './effects/cards/v3001_g3_wave3';
 /**
  * Defense 統一架構檔（v4.5 Phase 1 引入，v4.59 補完文件）
  *
@@ -142,7 +143,13 @@ export function canApplyEffectToTarget(
   //     注意：跟舊 v3.06「藏隱」名稱相近但機制不同（藏隱是 bench-only + 含招式傷害）。
   if (kind === 'attack-effect' || kind === 'ability-effect') {
     if (targetCard?.abilities?.some(a => a.name === '化隱')) {
-      return { blocked: true, reason: '化隱 免疫對手招式效果與特性效果' };
+      // v5.224：target 在對手戰鬥場時若被振翼髮暗夜羽擊壓制 → 化隱失效
+      const dIdxHy = (1 - actorIdx) as 0 | 1;
+      const defActHy = state.players[dIdxHy].active;
+      const locHy: 'active' | 'bench' = (defActHy && defActHy.iid === target.iid) ? 'active' : 'bench';
+      if (isAbilityHolderEffective(state, target, targetCard, dIdxHy, '化隱', locHy, pool)) {
+        return { blocked: true, reason: '化隱 免疫對手招式效果與特性效果' };
+      }
     }
   }
 

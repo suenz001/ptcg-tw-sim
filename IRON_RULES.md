@@ -843,6 +843,20 @@ if (hasAbilityOnActive(state, oppIdx, pool, 'X')) { ... }
 
 **起源**：v5.220 修了濕氣，但漏修同樣被暗夜羽擊壓制的爆大身軀/瞪眼效用/海之詛咒/威迫目光 → v5.221 補修 → v5.222 refactor 改用 helper 統一處理。
 
+**v5.224 擴充**：不只「對手戰鬥位是否擁有某特性」要走 helper，**任何「對手場上特性 holder 提供保護」的 iterate 邏輯**（field-ability 類如花之帷幔/抵抗之幕/球形盾牌/廣域堡壘；self-ability 類如化隱/全能硬殼/緊張感/融合為雪）每一筆 holder 都要透過 `isAbilityHolderEffective(state, inst, card, ownerIdx, abilityName, location, pool)` 過濾。helper 統一處理招式版+passive 暗夜羽擊+海兔獸黏著束縛+abilityNullifiedThisTurn 等所有「特性消除」機制。
+
+```ts
+// ❌ 禁止 — iterate 沒檢查 holder 是否被壓制
+const hasField = [active, ...bench].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === 'X'));
+
+// ✅ 正確 — 每筆 holder 都過 isAbilityHolderEffective
+const hasField = allHolders.some(({ inst, loc }) => {
+  const card = pool.get(inst.cardId);
+  if (!card?.abilities?.some(a => a.name === 'X')) return false;
+  return isAbilityHolderEffective(state, inst, card, ownerIdx, 'X', loc, pool);
+});
+```
+
 **Audit pattern**:
 ```bash
 # 找所有 inline check 嫌疑（應該 = 0）
