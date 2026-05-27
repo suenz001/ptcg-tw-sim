@@ -1500,6 +1500,27 @@ function hasFestivalDanceActive(state: GameState, idx: 0 | 1, pool: Map<string, 
   return card?.abilities?.some(a => a.name === '祭典樂舞') ?? false;
 }
 
+/**
+ * v5.226 偵測「本次攻擊是祭典樂舞會觸發第二次的第一次攻擊」。
+ * 用於 attack pipeline 內保留一次性 flag（鐵羽毛 / 下回合加傷 等）給第二次攻擊。
+ * 條件：攻擊者有祭典樂舞特性 + 場上祭典會場 + 還沒記為 used + 還沒用過 second attack。
+ */
+function _isFestivalDanceFirstAttack(
+  state: GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>,
+): boolean {
+  const attacker = state.players[aIdx].active;
+  if (!attacker) return false;
+  const card = pool.get(attacker.cardId);
+  if (!card?.abilities?.some(a => a.name === '祭典樂舞')) return false;
+  const stadiumCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
+  if (stadiumCard?.name !== '祭典會場') return false;
+  if (state.festivalDanceUsedThisTurn?.[aIdx]) return false;
+  if (state.festivalDanceSecondAttackUsed?.[aIdx]) return false;
+  return true;
+}
+
 function hasFestivalVenue(state: GameState, pool: Map<string, Card>): boolean {
   const stadium = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
   return stadium?.name === '祭典會場';
@@ -4110,7 +4131,10 @@ function handlePlaying(
       const dmgBonus = attacker.active.damageBonusThisTurn;
       baseDamage += dmgBonus;
       const newAtk = { ...attacker.active };
-      delete newAtk.damageBonusThisTurn;
+      // v5.226：祭典樂舞第一次攻擊不消耗 flag，留給第二次攻擊同樣套用
+      if (!_isFestivalDanceFirstAttack(state, aIdx, pool)) {
+        delete newAtk.damageBonusThisTurn;
+      }
       players[aIdx] = { ...players[aIdx], active: newAtk };
       workingState = { ...workingState, players };
       const atkName = pool.get(newAtk.cardId)?.name ?? '?';
@@ -4129,7 +4153,10 @@ function handlePlaying(
       const penalty = attacker.active.nextOwnAttackPenalty;
       baseDamage = Math.max(0, baseDamage - penalty);
       const newAtk = { ...attacker.active };
-      delete newAtk.nextOwnAttackPenalty;
+      // v5.226：祭典樂舞第一次攻擊不消耗
+      if (!_isFestivalDanceFirstAttack(state, aIdx, pool)) {
+        delete newAtk.nextOwnAttackPenalty;
+      }
       players[aIdx] = { ...players[aIdx], active: newAtk };
       workingState = { ...workingState, players };
       const atkName2 = pool.get(newAtk.cardId)?.name ?? '?';
@@ -4794,7 +4821,10 @@ function handlePlaying(
       const drBefore = baseDamage;
       baseDamage = Math.max(0, baseDamage - defenderState.active.damageReduceNextHit);
       formula.push({ sign: '-', value: drBefore - baseDamage, label: '下次被擊減傷' });
-      defenderState.active = { ...defenderState.active, damageReduceNextHit: undefined };
+      // v5.226：祭典樂舞第一次攻擊不消耗 — 第二次攻擊也能套用「鐵羽毛」等減傷
+      if (!_isFestivalDanceFirstAttack(state, aIdx, pool)) {
+        defenderState.active = { ...defenderState.active, damageReduceNextHit: undefined };
+      }
     }
     // v2.385 BUG FIX：移除 v2.384 加的重複「陳舊的顎之化石 -30」hook
     //   （v2.190 line 2903 早已實裝過，v2.384 audit 失誤導致重複扣傷害 60）
