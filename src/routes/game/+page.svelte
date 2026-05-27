@@ -46,7 +46,7 @@
   import { ORACLE_MODE, oracleAuth } from '$lib/game/oracle-client';
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
-    takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom,
+    takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom, claimOpponentForfeit,
     setRematchReady, checkAndAcceptRematch,
     proposeRestart, respondRestart, cancelRestart, checkAndAcceptRestart,
     // v5.180 提議返回房間
@@ -4402,6 +4402,55 @@
     return isSeatStale(roomData, oppIdx, HEARTBEAT_STALE_MS);
   })());
 
+  // v5.225 對手回合 3 分鐘無動作 → 顯示棄權按鈕（純 client inactivity timer）
+  //   gate：線上對戰 + 對戰位 + playing + 對手回合
+  //   重置條件：game.log.length 任何變化（任一 action）→ effect 重跑 → 清舊 timer + 起新 timer
+  let oppInactivityWarn = $state(false);
+  let showForfeitConfirm = $state(false);
+  let _oppInactivityTimer: ReturnType<typeof setTimeout> | null = null;
+  const OPP_INACTIVITY_MS = 3 * 60 * 1000; // 3 分鐘
+
+  $effect(() => {
+    // 清舊 timer + 重置 banner
+    if (_oppInactivityTimer !== null) {
+      clearTimeout(_oppInactivityTimer);
+      _oppInactivityTimer = null;
+    }
+    oppInactivityWarn = false;
+
+    // gate
+    if (!roomCode) return;                                    // 非線上對戰
+    if (mySeatIdx !== 0 && mySeatIdx !== 1) return;           // 非對戰位（觀戰）
+    if (!game || game.phase !== 'playing') return;            // 非遊戲中
+    if (game.activePlayerIndex === mySeatIdx) return;         // 自己回合不算
+
+    // 觸發 effect re-run 的 dep — log.length 是 reactive proxy
+    const _logLen = game.log?.length ?? 0;
+    void _logLen;
+
+    _oppInactivityTimer = setTimeout(() => {
+      oppInactivityWarn = true;
+    }, OPP_INACTIVITY_MS);
+  });
+
+  async function onClickClaimForfeit() {
+    showForfeitConfirm = true;
+  }
+
+  async function confirmClaimForfeit() {
+    if (!roomCode || (mySeatIdx !== 0 && mySeatIdx !== 1)) {
+      showForfeitConfirm = false;
+      return;
+    }
+    try {
+      await claimOpponentForfeit(roomCode, mySeatIdx as 0 | 1);
+    } catch (e) {
+      console.warn('[claimOpponentForfeit] failed:', e);
+    }
+    showForfeitConfirm = false;
+    oppInactivityWarn = false;
+  }
+
   async function dismissZombieRoom() {
     if (!roomCode || !roomData) return;
     if (!confirm('確定要解散此房間嗎？\n\n偵測到對方已離線超過 5 分鐘，房間將被刪除，雙方都會回到大廳。')) return;
@@ -6065,7 +6114,30 @@
   </header>
 
   <!-- ── Play Mat ── -->
-  <div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'} class:log-collapsed={battleLayout === 'tabletop' && !battleLogOpen}>
+  
+<!-- v5.225 對手 3 分鐘無動作警告 banner —— fixed 在頂部 -->
+{#if oppInactivityWarn && game?.phase === 'playing' && (mySeatIdx === 0 || mySeatIdx === 1)}
+  <div class="opp-inactive-banner">
+    <span class="opp-inactive-text">⚠️ 對手已 3 分鐘無回應</span>
+    <button class="opp-inactive-btn" onclick={onClickClaimForfeit}>宣告對手棄權獲勝</button>
+  </div>
+{/if}
+
+<!-- v5.225 確認 modal —— 點按鈕後二次確認 -->
+{#if showForfeitConfirm}
+  <div class="forfeit-modal-backdrop" onclick={() => showForfeitConfirm = false} role="presentation">
+    <div class="forfeit-modal" onclick={(e) => e.stopPropagation()} role="dialog">
+      <h3 class="forfeit-title">確定宣告對手棄權？</h3>
+      <p class="forfeit-desc">對手已 3 分鐘無回應。確認後系統會立刻判定你獲勝，無法撤回。</p>
+      <div class="forfeit-actions">
+        <button class="forfeit-confirm" onclick={confirmClaimForfeit}>確定獲勝</button>
+        <button class="forfeit-cancel" onclick={() => showForfeitConfirm = false}>再等等</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'} class:log-collapsed={battleLayout === 'tabletop' && !battleLogOpen}>
     <!-- v5.012：桌墊版專用 battle log toggle 按鈕（漂在右邊） -->
     {#if battleLayout === 'tabletop'}
       <button class="log-toggle-btn" onclick={toggleBattleLog}
@@ -8777,8 +8849,87 @@
     </div>
   </div>
 {/if}
-
 <style>
+  /* v5.225 對手掛機警告 banner */
+  .opp-inactive-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: #fbbf24;
+    color: #1f1f1f;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+  .opp-inactive-text { font-size: 15px; }
+  .opp-inactive-btn {
+    padding: 6px 14px;
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .opp-inactive-btn:hover { background: #b91c1c; }
+
+  /* v5.225 確認 modal */
+  .forfeit-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .forfeit-modal {
+    background: #fff;
+    padding: 24px 28px;
+    border-radius: 8px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+  .forfeit-title {
+    margin: 0 0 12px;
+    font-size: 18px;
+    color: #1f1f1f;
+  }
+  .forfeit-desc {
+    margin: 0 0 20px;
+    font-size: 14px;
+    color: #4b5563;
+    line-height: 1.5;
+  }
+  .forfeit-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+  }
+  .forfeit-confirm {
+    padding: 8px 16px;
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .forfeit-confirm:hover { background: #b91c1c; }
+  .forfeit-cancel {
+    padding: 8px 16px;
+    background: #e5e7eb;
+    color: #1f1f1f;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .forfeit-cancel:hover { background: #d1d5db; }
   /* v2.144：html + body 背景色改由頂端 svelte:head 動態注入，避免污染其他頁面 */
 
   /* v2.164 reorder-deck-top — 排序牌庫頂 N 張 UI */

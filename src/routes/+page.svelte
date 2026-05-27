@@ -304,6 +304,17 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.225</span> 對手 3 分鐘無回應 — 可宣告對手棄權獲勝</summary>
+        <ul>
+          <li>玩家反應：線上對戰時對手不動作，不知道是不是已經關掉網頁離開了，只能空等。</li>
+          <li>本次新增：對手回合超過 3 分鐘沒任何動作 → 我方畫面頂部跳出黃色警告條 + 「宣告對手棄權獲勝」按鈕。</li>
+          <li>點按鈕跳確認視窗，確定後立刻判定你獲勝。</li>
+          <li>對手若回來動作，警告條自動消失重置計時。</li>
+          <li>觀戰者不會看到此提示。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.224</span> 暗夜羽擊深層 audit — 8 個 holder 保護類特性全面修補</summary>
         <ul>
           <li>玩家提出深層問題：「對手戰鬥場是火箭隊的急凍鳥（抵抗之幕），我方振翼髮（暗夜羽擊）發動飛來橫禍，可以放對手備戰火箭隊嗎？」</li>

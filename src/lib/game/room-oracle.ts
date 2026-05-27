@@ -238,6 +238,39 @@ export async function setSpectatorsAllowed(roomCode: string, allowed: boolean): 
   });
 }
 
+/**
+ * v5.225 宣告對手棄權 — Oracle 版本，鏡射 room.ts 同名函式。
+ */
+export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): Promise<void> {
+  const uid = oracleCurrentUid();
+  if (!uid) return;
+  const code = roomCode.toUpperCase();
+  try {
+    await oracleTx(code, (cur) => {
+      if (cur.status !== 'playing' || !cur.gameState) return cur;
+      const myIdx = findMySeatIdx(cur.seats, uid);
+      if (myIdx !== mySeatIdx) return cur;
+      const myGs = cur.gameState;
+      const oppIdx = (1 - mySeatIdx) as 0 | 1;
+      const oppName = myGs.players?.[oppIdx]?.name ?? ('P' + (oppIdx + 1));
+      const myName = myGs.players?.[mySeatIdx]?.name ?? ('P' + (mySeatIdx + 1));
+      const forfeitGame = {
+        ...myGs,
+        phase: 'game-over' as const,
+        winner: mySeatIdx,
+        winReason: oppName + ' 3 分鐘無回應，被宣告棄權',
+        log: [
+          ...(myGs.log ?? []),
+          { turn: myGs.turn, playerIndex: null, message: oppName + ' 3 分鐘無回應，' + myName + ' 宣告對手棄權獲勝' },
+        ],
+      };
+      return { ...cur, gameState: JSON.parse(JSON.stringify(forfeitGame)), status: 'ended' };
+    });
+  } catch (err) {
+    console.warn('[oracle claimOpponentForfeit]', err);
+  }
+}
+
 export async function leaveRoom(roomCode: string): Promise<void> {
   const uid = oracleCurrentUid();
   if (!uid) return;

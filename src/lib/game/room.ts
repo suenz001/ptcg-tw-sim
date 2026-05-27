@@ -497,6 +497,42 @@ export async function clearUndoRequest(roomCode: string): Promise<void> {
  *   會殘留但因為 room doc 沒了也不會被 list；下次同房號生成時舊訊息可能干擾，
  *   但房號是 4 碼隨機 + 排除易混字，撞號機率極低，先不處理。
  */
+/**
+ * v5.225 宣告對手棄權 — 玩家手動觸發（對手 3 分鐘無動作後出現按鈕）。
+ * 鏡射 leaveRoom 的 forfeit 邏輯但 winner = 自己（mySeatIdx）。
+ * 寫入 status='ended' + gameState.phase='game-over' + winner=自己。
+ */
+export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return;
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const data = snap.data() as RoomData;
+  if (data.status !== 'playing' || !data.gameState) return;
+  const myIdx = findMySeatIdx(data.seats, uid);
+  if (myIdx !== mySeatIdx) return; // 防呆：呼叫者必須是 mySeatIdx 本人
+  const myGs = data.gameState;
+  const oppIdx = (1 - mySeatIdx) as 0 | 1;
+  const oppName = myGs.players?.[oppIdx]?.name ?? `P${oppIdx + 1}`;
+  const myName = myGs.players?.[mySeatIdx]?.name ?? `P${mySeatIdx + 1}`;
+  const forfeitGame = {
+    ...myGs,
+    phase: 'game-over' as const,
+    winner: mySeatIdx,
+    winReason: `${oppName} 3 分鐘無回應，被宣告棄權`,
+    log: [
+      ...(myGs.log ?? []),
+      { turn: myGs.turn, playerIndex: null, message: `${oppName} 3 分鐘無回應，${myName} 宣告對手棄權獲勝` },
+    ],
+  };
+  await updateDoc(ref, {
+    gameState: JSON.parse(JSON.stringify(forfeitGame)),
+    status: 'ended',
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function leaveRoom(roomCode: string): Promise<void> {
   const uid = auth.currentUser?.uid;
   if (!uid) return;
