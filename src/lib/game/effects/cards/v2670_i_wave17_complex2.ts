@@ -30,8 +30,8 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost } from '../../effects';
-// v5.229: 招式效果免疫 gate（涵蓋薄霧/硬岩/化隱/抵抗之幕/球形盾牌 等所有防護）
-import { canApplyEffectToTarget } from '../../defense';
+// v5.230 註：v5.229 加 canApplyEffectToTarget import 但已存在 L26 (v5.113 加的)，
+//   重複 import 造成 build fail，本次移除我新加的這行（L26 既有 import 就夠用）。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper

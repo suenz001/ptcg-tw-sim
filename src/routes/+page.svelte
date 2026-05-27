@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.230</span> 緊急修補 v5.229 部署失敗</summary>
+        <ul>
+          <li>v5.229 修補小灰怪｜挪動一下時加了一個原本就存在的程式 import，造成編譯失敗無法上線。本次移除多餘的 import，挪動一下的修補正式生效。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.229</span> 小灰怪｜挪動一下 — 加上「不受招式效果影響」的判定</summary>
         <ul>
           <li>玩家反映：挪動一下屬於招式效果，但目前實作沒檢查對手寶可夢是否受招式效果保護。</li>
