@@ -254,12 +254,86 @@ reg('玻璃喇叭', (st, idx, pool) => {
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'BasicEnergy',
     minCount: 0, maxCount: Math.min(max, energyCount),
-    effectKey: 'v158-energy-chain-start',
-    params: {
-      label: '玻璃喇叭',
-      source: 'discard',
-      scope: 'bench-only',
-      filterType: 'Colorless',
-    },
+    // v5.228：改用專屬 resolver 強制「每隻備戰最多 1 張」(卡面「各 1 張」)
+    effectKey: 'glass-trumpet-start',
+    params: { label: '玻璃喇叭' },
   });
 });
+
+// v5.228 glass-trumpet-start: 玩家挑完 0-2 張基本能量後，逐張開 picker 附給不同【無】備戰
+//   pickedIids = 玩家挑的能量 iid 陣列（仍在 discard 中）
+regR('glass-trumpet-start', (st, idx, pickedIids, _params, pool) => {
+  if (pickedIids.length === 0) return addLog(st, '玻璃喇叭：未挑選能量', idx);
+  return openGlassTrumpetPicker(st, idx, pickedIids, [], pool);
+});
+
+// v5.228 glass-trumpet-attach: picker 選 1 隻【無】備戰 → 附 1 張能量 → 開下一個
+//   params: { energyIid, remaining, usedTargetIids }
+regR('glass-trumpet-attach', (st, idx, iids, params, pool) => {
+  if (iids.length === 0) return addLog(st, '玻璃喇叭：未選目標', idx);
+  const energyIid = String(params?.energyIid ?? '');
+  const remaining = (params?.remaining as string[]) ?? [];
+  const usedTargetIids = (params?.usedTargetIids as string[]) ?? [];
+  const targetIid = iids[0];
+
+  // 附 1 張能量
+  const target = st.players[idx].bench.find(b => b.iid === targetIid);
+  const energy = st.players[idx].discard.find(e => e.iid === energyIid);
+  if (!target || !energy) {
+    return addLog(st, '玻璃喇叭：目標或能量遺失，略過', idx);
+  }
+  st = updatePlayer(st, idx, p => ({
+    ...p,
+    discard: p.discard.filter(e => e.iid !== energyIid),
+    bench: p.bench.map(b => b.iid === targetIid
+      ? { ...b, energyAttached: [...b.energyAttached, energy] }
+      : b),
+  }));
+  const tname = pool.get(target.cardId)?.name ?? '?';
+  const ename = pool.get(energy.cardId)?.name ?? '能量';
+  st = addLog(st, `玻璃喇叭：將「${ename}」附到 ${tname}`, idx);
+
+  // 還有剩餘能量 → 開下一個 picker，排除已用 target
+  const newUsed = [...usedTargetIids, targetIid];
+  if (remaining.length === 0) return st;
+  return openGlassTrumpetPicker(st, idx, remaining, newUsed, pool);
+});
+
+function openGlassTrumpetPicker(
+  st: GameState,
+  idx: 0 | 1,
+  remainingEnergies: string[],
+  usedTargetIids: string[],
+  pool: Map<string, Card>,
+): GameState {
+  // 候選備戰 = 【無】屬性 + 不在 usedTargetIids 內
+  const candidates = st.players[idx].bench.filter(b => {
+    if (usedTargetIids.includes(b.iid)) return false;
+    return pool.get(b.cardId)?.pokemonType === 'Colorless';
+  });
+  if (candidates.length === 0) {
+    return addLog(st,
+      `玻璃喇叭：場上已無可附【無】備戰（剩 ${remainingEnergies.length} 張能量留在棄牌區）`,
+      idx);
+  }
+  const nextEnergyIid = remainingEnergies[0];
+  const rest = remainingEnergies.slice(1);
+  const energyInst = st.players[idx].discard.find(e => e.iid === nextEnergyIid);
+  const ename = energyInst ? (pool.get(energyInst.cardId)?.name ?? '能量') : '能量';
+  return withPending(
+    addLog(st, `玻璃喇叭：選 1 隻【無】備戰附「${ename}」（剩 ${remainingEnergies.length} 張待附）`, idx),
+    {
+      type: 'bench-choose',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'glass-trumpet-attach',
+      params: {
+        energyIid: nextEnergyIid,
+        remaining: rest,
+        usedTargetIids,
+        validIids: candidates.map(c => c.iid),
+        titleOverride: `玻璃喇叭：將「${ename}」附到哪一隻【無】備戰？`,
+      },
+    },
+  );
+}

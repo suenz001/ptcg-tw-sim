@@ -1544,12 +1544,17 @@ reg('暗黑鈴', (st, idx, pool) => {
 
 // ── 6. 鏽蝕組的手下（Supporter）─ picker 對手場 1 隻寶可夢丟 1 能量 ─
 //   卡面：「從對手場上 1 隻寶可夢身上選擇 1 個能量，丟棄。」
-//   gate（rulesText）：「這張卡只有在上個對手回合自己的寶可夢未昏厥時才能使用。」
-//   — 此 gate 較複雜（需追蹤跨回合昏厥史），暫時 deferred 不做 gate（仍可使用）。
+//   gate（rulesText）：「這張卡只有在上個對手回合自己的寶可夢【昏厥】時才能使用。」
+//   v5.228：原 JSON 誤譯「未昏厥」+ deferred 不做 gate，本次更正並實裝 gate。
 reg('鏽蝕組的手下', (st, idx, pool) => {
+  // v5.228 gate — 上個對手回合自己無寶可夢 KO → 不能用
+  const attackKOd = (st.oppAttackKOdMeInLastOppTurn?.[idx] ?? 0) > 0;
+  const abilityKOd = (st.oppAbilityKOdMeInLastOppTurn?.[idx] ?? 0) > 0;
+  if (!attackKOd && !abilityKOd) {
+    return addLog(st, '鏽蝕組的手下：上個對手回合自己的寶可夢未昏厥，不能使用', idx);
+  }
   const dIdx = (1 - idx) as 0 | 1;
   const opp = st.players[dIdx];
-  // 候選 = 對手場上有能量的寶可夢
   const allOpp: import('../../types').CardInstance[] = [
     ...(opp.active ? [opp.active] : []),
     ...opp.bench,
