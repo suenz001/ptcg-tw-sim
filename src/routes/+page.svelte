@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.236</span> 桌墊版備戰 8 隻調整暫時撤回</summary>
+        <ul>
+          <li>v5.232 / v5.233 / v5.234 / v5.235 四次嘗試讓 8 隻備戰跟 5 隻一樣大都沒成功 — 我方備戰區受限於版面結構，CSS 規則套上但實際寬度沒拿到。本次<b>暫時撤回所有調整</b>，回到原本的處理方式：8 隻備戰時卡牌會自動縮小，並提供橫向捲動軸。後續會重新規劃。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.235</span> 桌墊版備戰 8 隻終於跟 5 隻一樣大</summary>
         <ul>
           <li>連續修了 v5.232 / v5.233 / v5.234 三次，卡牌都還是縮小。<b>真正根因</b>：原本備戰區只佔桌面中間一條（5 隻剛好放得下），但 8 隻塞不進這條空間，所以被擠縮。</li>

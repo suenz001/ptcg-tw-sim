@@ -10710,29 +10710,6 @@
     max-height: 110px;
   }
 
-  /* v5.235：桌墊版 bench-extended 真正修法 (Wilson 思路) —
-     slot 設定完全用 5 卡時的基底 (flex:1 1 90px / max:128px)，
-     只把 bench 容器從原本的 grid-area 1fr cell 改成 grid-column: 1 / -1
-     橫跨整個 playmat 寬度 (~1350px @ 1366 viewport)。
-     這樣 1fr 不再限制容器，flex grow 8 卡可以到 max-width:128 停，
-     跟 5 卡完全一致。justify-content: center 中央對齊。 */
-  .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot,
-  .playmat.layout-tabletop .zone-bench.bench-extended .bench-empty {
-    flex: 1 1 90px !important;
-    min-width: 90px !important;
-    max-width: 128px !important;
-  }
-  .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot img {
-    max-width: 108px !important;
-    max-height: 128px !important;
-  }
-  .playmat.layout-tabletop .zone-bench.bench-extended {
-    grid-column: 1 / -1 !important;
-    overflow: visible !important;
-    justify-content: center;
-    width: auto !important;
-    min-width: 0 !important;
-  }
   /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
      避免撐大 zone-bench 把下方手牌擠出 viewport。
      v2.51：加寬 slot（115→140px），能量 pip 移到右側垂直排列。
