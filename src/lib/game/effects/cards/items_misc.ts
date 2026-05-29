@@ -170,13 +170,14 @@ regR('rush-switch-energy-transfer', (st, idx, iids, params, pool) => {
   const fromName = pool.get(src.cardId)?.name ?? '?';
   const toName = pool.get(p.active.cardId)?.name ?? '?';
   const s = addLog(st, `急進開關：從 ${fromName} 轉移 ${toMove.length} 張能量到 ${toName}`, idx);
-  return updatePlayer(s, idx, pl => ({
+  // v5.244：急進開關能量轉移完成後 ON_PROMOTE_TO_ACTIVE prompt
+  return tryPromptPromoteActive(updatePlayer(s, idx, pl => ({
     ...pl,
     active: pl.active ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...toMove] } : null,
     bench: pl.bench.map(b => b.iid === fromIid
       ? { ...b, energyAttached: b.energyAttached.filter(e => !energySet.has(e.iid)) }
       : b),
-  }));
+  })), idx, pool);
 });
 
 

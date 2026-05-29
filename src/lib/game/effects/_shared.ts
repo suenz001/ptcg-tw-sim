@@ -1188,6 +1188,8 @@ export function tryPromptPromoteActive(
   if (state.pendingSelection) return state;
   const actInst = state.players[pIdx].active;
   if (!actInst || actInst.abilityUsedThisTurn) return state;
+  // v5.244：嚴格遵守卡面「從備戰區將這隻寶可夢放置於戰鬥場時」— 必須剛上場才觸發
+  if (!actInst.movedToActiveThisTurn) return state;
   const actCard = pool.get(actInst.cardId);
   if (!actCard?.abilities) return state;
   for (let i = 0; i < actCard.abilities.length; i++) {

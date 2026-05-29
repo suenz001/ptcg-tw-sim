@@ -32,6 +32,7 @@
  *   - 揭示資訊：所有結果用 addLog（公開 log），治癒/狀態/互換都是場上可見效果
  */
 
+import { tryPromptPromoteActive } from '../_shared';
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
   regA, regAByName, regR,
@@ -486,7 +487,11 @@ regR('teleporter-promote', (st, idx, iids, _params, pool) => {
   newBench.splice(bIdx, 1);
   const name = pool.get(newActive.cardId)?.name ?? '?';
   const s = addLog(st, `瞬間移動者：${name} 上場`, idx);
-  return updatePlayer(s, idx, pl => ({ ...pl, active: newActive, bench: newBench }));
+  // v5.244：自方換位 ON_PROMOTE_TO_ACTIVE prompt（凱西|瞬間移動者是特性）
+  return tryPromptPromoteActive(
+    updatePlayer(s, idx, pl => ({ ...pl, active: newActive, bench: newBench })),
+    idx, pool,
+  );
 });
 
 // ── 13. 大力鱷｜奔流之心 ─────────────────────────────────────────────────────

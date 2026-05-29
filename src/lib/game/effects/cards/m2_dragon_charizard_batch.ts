@@ -9,6 +9,7 @@
  * - 超級噴火駝ex｜炙燒
  * - 火恐龍 SVQL｜大字爆炎（user explicitly requested this G-reg card）
  */
+import { tryPromptPromoteActive } from '../_shared';
 import type { Card } from '$lib/cards/types';
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
@@ -86,7 +87,11 @@ regR('sky-carry-switch', (st, idx, iids, _params, pool) => {
   const newBench = [...p.bench];
   newBench[bIdx] = oldActive;
   const s = addLog(st, `天空搬運：${cardName(pool, newActive)} 與 ${cardName(pool, oldActive)} 互換`, idx);
-  return updatePlayer(s, idx, pl => ({ ...pl, active: newActive, bench: newBench }));
+  // v5.244：自方換位 ON_PROMOTE_TO_ACTIVE prompt（超級快龍ex|天空搬運是特性）
+  return tryPromptPromoteActive(
+    updatePlayer(s, idx, pl => ({ ...pl, active: newActive, bench: newBench })),
+    idx, pool,
+  );
 });
 
 // ── 超級快龍ex｜龍之滑翔 ─────────────────────────────────────────────────────

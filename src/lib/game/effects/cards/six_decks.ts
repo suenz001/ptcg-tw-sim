@@ -9,6 +9,7 @@
  *     蓋諾賽克特｜ACE消弭（canPlayTrainer gate）
  *   - 特殊能量（engine canAffordAttack inline）：稜鏡能量 / 新衝天能量
  */
+import { tryPromptPromoteActive } from '../_shared';
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 import type { Card } from '$lib/cards/types';
@@ -1030,7 +1031,9 @@ regR('az-peace-swap', (state, aIdx, selectedIids, _params, pool) => {
   const oldActive = p.active;
   const oldBench = p.bench[bIdx];
   p.bench = p.bench.map((b, i) => i === bIdx ? { ...oldActive } : b);
-  p.active = { ...oldBench };
+  // v5.244：補設 movedToActiveThisTurn flag — 之前漏設導致疾風直撞類條件招式無法觸發 bonus,
+  //   也是 ON_PROMOTE_TO_ACTIVE prompt 的必要 gate
+  p.active = { ...oldBench, movedToActiveThisTurn: true };
   // 若戰鬥 → 備戰（swapped out）為 ex，回 80
   const movedOutCard = pool.get(oldActive.cardId);
   if (movedOutCard?.subtype === 'ex') {
@@ -1038,7 +1041,11 @@ regR('az-peace-swap', (state, aIdx, selectedIids, _params, pool) => {
     state = addLog(state, `AZ的平和：${movedOutCard.name} 換入備戰，回復 80 HP`, aIdx);
   }
   players[aIdx] = p;
-  return addLog({ ...state, players }, 'AZ的平和：戰鬥↔備戰互換完成', aIdx);
+  // v5.244：自方換位 ON_PROMOTE_TO_ACTIVE prompt（AZ的平和是 Supporter）
+  return tryPromptPromoteActive(
+    addLog({ ...state, players }, 'AZ的平和：戰鬥↔備戰互換完成', aIdx),
+    aIdx, pool,
+  );
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
