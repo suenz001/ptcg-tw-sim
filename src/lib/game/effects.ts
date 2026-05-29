@@ -699,12 +699,16 @@ function _applyBenchAbilityReduce(
   victim: CardInstance,
   victimCard: Card,
   defenderIdx: 0 | 1,
+  attackerIdx: 0 | 1,  // v5.294: 取 attacker active 推 attackerCard (供 BY_ATTACKER 用)
   pool: Map<string, Card>,
   baseDamage: number,
 ): { amount: number; logs: string[] } {
   let dmg = baseDamage;
   const logs: string[] = [];
   const defender = state.players[defenderIdx];
+  // v5.294: 取攻擊方 active 推 attackerCard, 供屬性條件減傷判定 (厚脂肪等)
+  const attackerActive = state.players[attackerIdx].active;
+  const attackerCard = attackerActive ? pool.get(attackerActive.cardId) : undefined;
 
   // local inline isColorlessAbilityBlocked (engine.ts 內未 export, 為避免循環依賴 inline)
   const _colorlessBlocked = (card: Card | undefined): boolean => {
@@ -728,6 +732,16 @@ function _applyBenchAbilityReduce(
       const condFn = PASSIVE_DAMAGE_REDUCE_COND.get(ab.name);
       if (condFn) {
         const r = condFn(victim, victimCard);
+        if (r > 0) {
+          const before = dmg;
+          dmg = Math.max(0, dmg - r);
+          if (before > dmg) logs.push(`${ab.name} -${before - dmg}`);
+        }
+      }
+      // v5.294: 依攻擊者屬性條件減傷 (厚脂肪等)
+      const atkFn = PASSIVE_DAMAGE_REDUCE_BY_ATTACKER.get(ab.name);
+      if (atkFn) {
+        const r = atkFn(victim, victimCard, attackerCard);
         if (r > 0) {
           const before = dmg;
           dmg = Math.max(0, dmg - r);
@@ -882,10 +896,10 @@ function hitBenchAll(
       newBench.push(c);
       continue;
     }
-    // v5.293 bench 招式傷害套特性減傷 (PTCG 規則: bench 不算弱抵, 但特性減傷適用)
+    // v5.293/v5.294 bench 招式傷害套特性減傷 (含厚脂肪等 BY_ATTACKER)
     let perAmt = amount;
     if (perAmt > 0 && card) {
-      const r = _applyBenchAbilityReduce(state, c, card, targetIdx, pool, perAmt);
+      const r = _applyBenchAbilityReduce(state, c, card, targetIdx, attackerIdx, pool, perAmt);
       perAmt = r.amount;
       if (r.logs.length > 0) {
         reduceLogs.push(`${card.name}：${r.logs.join('、')}`);
@@ -1023,10 +1037,10 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
         continue;
       }
     }
-    // v5.293 bench 招式傷害套特性減傷 (同 hitBenchAll)
+    // v5.293/v5.294 bench 招式傷害套特性減傷 (含厚脂肪等 BY_ATTACKER)
     let perAmt = amount;
     if (perAmt > 0 && card) {
-      const r = _applyBenchAbilityReduce(st, c, card, targetIdx, pool, perAmt);
+      const r = _applyBenchAbilityReduce(st, c, card, targetIdx, actorIdx, pool, perAmt);
       perAmt = r.amount;
       if (r.logs.length > 0) {
         benchReduceLogs.push(`${card.name}：${r.logs.join('、')}`);
@@ -13846,6 +13860,25 @@ export const PASSIVE_DAMAGE_REDUCE_COND = new Map<string, (
 ) => number>([
   // 雷吉洛克(I) | 岩石盔甲 — 附能量時受招式傷害 -30
   ['岩石盔甲', (inst) => inst.energyAttached.length > 0 ? 30 : 0],
+]);
+
+/**
+ * v5.294: 依攻擊者屬性條件的被動受傷減免：fn(victim_inst, victim_card, attacker_card) => 要減的點數.
+ * 套用點: engine.ts (active 防守) + effects.ts _applyBenchAbilityReduce (bench 防守).
+ *
+ * 與 PASSIVE_DAMAGE_REDUCE_COND 區別：本 map 額外接 attacker_card 用以判定屬性條件
+ *   (如「受到【火】或【水】寶可夢招式」這種屬性限制)
+ */
+export const PASSIVE_DAMAGE_REDUCE_BY_ATTACKER = new Map<string, (
+  inst: CardInstance, card: Card, attackerCard: Card | undefined,
+) => number>([
+  // 白海獅(M2) | 厚脂肪 — 對手【火】或【水】寶可夢招式 -30
+  // JSON: 「這隻寶可夢受到對手的【火】或者【水】寶可夢招式的傷害『-30』點。」
+  ['厚脂肪', (_inst, _card, atk) => {
+    if (!atk || atk.supertype !== 'Pokemon') return 0;
+    const t = atk.pokemonType;
+    return (t === 'Fire' || t === 'Water') ? 30 : 0;
+  }],
 ]);
 
 /** 受招式傷害時擲硬幣免傷 */

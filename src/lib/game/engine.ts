@@ -16,7 +16,8 @@ import { RULE_BOX_SUBTYPES } from './types';
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
   PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
-  PASSIVE_DAMAGE_REDUCE_COND, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
+  PASSIVE_DAMAGE_REDUCE_COND,
+  PASSIVE_DAMAGE_REDUCE_BY_ATTACKER, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
   PASSIVE_ON_DAMAGED, PASSIVE_PREVENT_PRIZE, PASSIVE_ATTACKER_BUFF,
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
@@ -4585,6 +4586,16 @@ function handlePlaying(
             if (before > baseDamage) formula.push({ sign: '-', value: before - baseDamage, label: ab.name });
           }
         }
+        // v5.294 依攻擊者屬性條件減傷 (白海獅 厚脂肪 等)
+        const atkFn = PASSIVE_DAMAGE_REDUCE_BY_ATTACKER.get(ab.name);
+        if (atkFn && defender.active) {
+          const reduceN = atkFn(defender.active, defenderCard, attackerCard);
+          if (reduceN > 0) {
+            const before = baseDamage;
+            baseDamage = Math.max(0, baseDamage - reduceN);
+            if (before > baseDamage) formula.push({ sign: '-', value: before - baseDamage, label: ab.name });
+          }
+        }
       }
     }
 
@@ -7957,7 +7968,8 @@ export function getUsableAbilities(
       //   - 飢餓衝刺 (莫魯貝可 SV8a) — 未實裝
       //   regAByName 用 ability name 分流後，這些 ability 走 by-name 沒命中也不會 fallback 跑錯邏輯
       //   （另一個 ability name 的 regA 已遷移到 regAByName，by-index fallback 已不再有衝突 fn）
-      if (ab.name === '生機森巴' || ab.name === '雜草魂' || ab.name === '厚脂肪' || ab.name === '飢餓衝刺') return;
+      // v5.294 拿掉 '厚脂肪' (已實裝為 PASSIVE_DAMAGE_REDUCE_BY_ATTACKER)
+      if (ab.name === '生機森巴' || ab.name === '雜草魂' || ab.name === '飢餓衝刺') return;
       // v4.4997：audit 補 11 個缺 gate 的特性 — 條件不符時不顯示「使用特性」按鈕（玩家規則）
       // ──────────────────────────────────────────────────────────────────────
       // P0：白海獅 | 沖刷 — 戰鬥場 + 備戰有【水】能量

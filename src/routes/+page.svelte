@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.294</span> 白海獅 厚脂肪 完整實裝</summary>
+        <ul>
+          <li>實裝：白海獅特性「厚脂肪」（這隻寶可夢受到對手的【火】或者【水】寶可夢招式的傷害 -30 點）。原本系統跳過未實裝，現在已完整實作。</li>
+          <li>同樣依 v5.293 的設計，戰鬥位與備戰位都會觸發（卡面未限定位置）。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.293</span> 備戰寶可夢受招式傷害也套用「特性減傷」</summary>
         <ul>
           <li>修正：原本系統對備戰寶可夢的招式傷害（例：三重冰霜對備戰各 30 傷害）完全沒套任何特性減傷，導致以下卡牌的減傷效果在備戰位失效。本次依 PTCG 規則「特性減傷無位置限制者，備戰位也適用」全面修正：</li>
