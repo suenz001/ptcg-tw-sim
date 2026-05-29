@@ -517,6 +517,8 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         }
         if (f === 'Basic')           return isBasicPokemonCard(card);
         if (f === 'Basic:HP70')      return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
+        // v5.254：BasicPokemon (毒電嬰/大嘴娃/火狐狸 呼朋引伴等同義 filter, UI 端為 +page.svelte:2674)
+        if (f === 'BasicPokemon')    return isBasicPokemonCard(card);
         // v2.132：用 stage 欄位（含 ex 進化），不靠 subtype — ex 寶可夢 subtype='ex' 會被排除
         if (f === 'Stage1')          return card.supertype === 'Pokemon' && (card.stage ?? card.subtype) === 'Stage1';
         if (f === 'Stage2')          return card.supertype === 'Pokemon' && (card.stage ?? card.subtype) === 'Stage2';

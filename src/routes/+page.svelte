@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.254</span> 呼朋引伴限制基礎寶可夢</summary>
+        <ul>
+          <li>玩家反映：毒電嬰招式「呼朋引伴」（從牌庫挑最多 2 張基礎寶可夢到備戰）可以挑到進階寶可夢（違反卡面）。</li>
+          <li>本次修補：呼朋引伴在 AI 選牌與後端結算兩處都補上「只能挑基礎寶可夢」的判斷，進階寶可夢會被自動剔除並留在牌庫重洗。同類招式（大嘴娃、火狐狸、白方塊等呼朋引伴族）也一併適用。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.253</span> 萬花筒華爾滋完整實裝</summary>
         <ul>
           <li>玩家反映：超級差不多娃娃ex 招式「萬花筒華爾滋」是簡易實裝，無法選能量屬性，也不能選分配給誰，全部自動附到差不多娃娃自己身上。</li>

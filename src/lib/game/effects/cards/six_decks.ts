@@ -198,8 +198,21 @@ regPost('毒電嬰|呼朋引伴', (state, aIdx, pool) => {
 regR('recruit-to-bench', (state, aIdx, selectedIids, _params, pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
-  const picks = p.deck.filter(c => selectedIids.includes(c.iid));
-  p.deck = p.deck.filter(c => !selectedIids.includes(c.iid));
+  // v5.254：server-side guard — 剔除非基礎寶可夢 (防 client picker 漏 filter / AI fall-through)
+  //   卡面: 呼朋引伴只能放「基礎」寶可夢到備戰
+  const rawPicks = p.deck.filter(c => selectedIids.includes(c.iid));
+  const picks: typeof rawPicks = [];
+  const rejected: string[] = [];
+  for (const pk of rawPicks) {
+    if (isBasicPokemonCard(pool.get(pk.cardId))) {
+      picks.push(pk);
+    } else {
+      rejected.push(pool.get(pk.cardId)?.name ?? '?');
+    }
+  }
+  // 從 deck 移除「實際採用的」 picks (rejected 留在 deck 等重洗)
+  const acceptedIids = new Set(picks.map(c => c.iid));
+  p.deck = p.deck.filter(c => !acceptedIids.has(c.iid));
   const actuallyPlacedIids: string[] = [];
   // v3.78：用 getOwnBenchLimit
   const benchLimit = getOwnBenchLimit(state, aIdx, pool);
