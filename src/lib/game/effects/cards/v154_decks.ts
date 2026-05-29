@@ -202,11 +202,17 @@ regR('metal-maker-attach', (st, idx, energyIids, params, pool) => {
 regG('超大冰淇淋', (st, idx, pool) => {
   const active = st.players[idx].active;
   if (!active) return false;
+  // v5.251：補 damage > 0 gate — 滿血時無治療效果不可使用 (PDF §II-E-1-k-iv)
+  if (active.damage <= 0) return false;
   return totalEnergyUnits(active.energyAttached, pool, st, idx, active) >= 3;
 });
 reg('超大冰淇淋', (st, idx, pool) => {
   const p = st.players[idx];
   if (!p.active) return addLog(st, '超大冰淇淋：戰鬥位無寶可夢', idx);
+  // v5.251：defensive gate — 滿血時無效果
+  if (p.active.damage <= 0) {
+    return addLog(st, '超大冰淇淋：戰鬥寶可夢已滿血，無治療對象', idx);
+  }
   if (totalEnergyUnits(p.active.energyAttached, pool, st, idx, p.active) < 3) {
     return addLog(st, '超大冰淇淋：戰鬥寶可夢身上不足 3 個能量', idx);
   }
