@@ -770,7 +770,7 @@
            不依 isMyTurn — myIdx 已由 +page.svelte L2151 myIdx 切換邏輯處理（v5.185 補 mulliganPostBenchOpen 優先級）-->
       <button class="mp-end-btn"
         onclick={() => onAction(GameActions.finishMulliganPostBench(myIdx))}>✅ 完成補抽</button>
-    {:else if isMyTurn && isPlaying && !pendingSelection && (game.pendingPrizes?.[0] ?? 0) === 0 && (game.pendingPrizes?.[1] ?? 0) === 0}
+    {:else if isMyTurn && isPlaying && !pendingSelection && !sheet && (game.pendingPrizes?.[0] ?? 0) === 0 && (game.pendingPrizes?.[1] ?? 0) === 0}
       <!-- v2.289：不限 turnPhase==='end'，主階段也顯示（等同「跳過攻擊 + 結束回合」合一）
            engine END_TURN 自帶 pendingPrizes / defender.active=null 雙重 gate -->
       <!-- v5.015：補 active=null 顯示 disabled — 之前按鈕顯示但 engine 拒絕，玩家以為按鈕壞掉 -->
@@ -1795,7 +1795,10 @@
     padding: 0.25rem 0.18rem 0.35rem;
     cursor: pointer;
     transition: transform 0.1s, background 0.15s;
-    overflow: hidden;
+    /* v5.277: 拿掉 overflow:hidden, 改 visible + min-height 確保能量 pips/狀態 icon 完整顯示
+       (滿場 8 隻寶可夢時, max-height 55vh container 自帶 overflow-y scroll, 整個 picker 仍可捲) */
+    overflow: visible;
+    min-height: 0;
   }
   .mp-pick-btn:hover { background: rgba(60, 90, 60, 0.95); border-color: #6aaa6a; }
   .mp-pick-btn:active { transform: scale(0.96); }
