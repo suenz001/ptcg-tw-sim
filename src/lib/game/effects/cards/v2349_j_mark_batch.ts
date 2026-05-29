@@ -193,9 +193,144 @@ regPost('托戈德瑪爾ex|尖尖回轉', (state, aIdx) => updatePlayer(state, a
   active: { ...p.active, pointySpinNextTurn: true, pointySpinThisTurn: undefined },
 } : p));
 
-// 超級差不多娃娃ex｜萬花筒華爾滋：擲 3 次，正面×2 張基本能量自動附到自身。
+// 超級差不多娃娃ex｜萬花筒華爾滋：擲 3 次，正面×2 張基本能量
+//   v5.253：完整實裝 (玩家選類型 + 任意分配自己場上寶可夢)
+//   流程: flipFixed(3) → deck-search picker (filter='BasicEnergy') → energy-distribute picker → commit
 regPre('超級差不多娃娃ex|萬花筒華爾滋', (state) => ({ state, damage: 0 }));
 regPost('超級差不多娃娃ex|萬花筒華爾滋', (state, aIdx, pool) => {
   const r = flipFixed(state, aIdx, '萬花筒華爾滋', 3);
-  return attachBasicEnergyFromDeckToActive(r.state, aIdx, pool, r.heads * 2, '萬花筒華爾滋');
+  const maxN = r.heads * 2;
+  if (maxN <= 0) {
+    return addLog(r.state, '萬花筒華爾滋：0 次正面，未附加能量', aIdx);
+  }
+  // v5.253 stage 1: 開 deck-search picker — 玩家從牌庫選最多 maxN 張基本能量 (任何屬性)
+  const p = r.state.players[aIdx];
+  const cand = p.deck.filter(c => {
+    const card = pool.get(c.cardId);
+    return !!card && card.supertype === 'Energy' && card.subtype === 'Basic';
+  });
+  const realMax = Math.min(maxN, cand.length);
+  const s = addLog(
+    r.state,
+    `萬花筒華爾滋：${r.heads} 正面 → 從牌庫選最多 ${realMax} 張基本能量 (任何屬性), 任意分配自己場上寶可夢`,
+    aIdx,
+  );
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx,
+    sourcePlayerIdx: aIdx,
+    filter: 'BasicEnergy',
+    minCount: 0,
+    maxCount: realMax,
+    effectKey: 'kaleido-waltz-distribute-stage1',
+    params: { label: '萬花筒華爾滋' },
+  });
+});
+
+/**
+ * v5.253 stage 2 resolver: 收到玩家從 deck 選的能量 iids → 開 energy-distribute picker.
+ *   分配範圍: 自己所有寶可夢 (active + bench) — 卡面「附於自己的寶可夢身上」(無備戰限制).
+ */
+regR('kaleido-waltz-distribute-stage1', (state, aIdx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '萬花筒華爾滋';
+  const p = state.players[aIdx];
+
+  if (iids.length === 0) {
+    return updatePlayer(
+      addLog(state, `${label}：未選擇任何能量，重洗牌庫`, aIdx),
+      aIdx,
+      pl => ({ ...pl, deck: shuffle(pl.deck) }),
+    );
+  }
+
+  // 卡面: 「自己的寶可夢」— active + bench 皆可
+  const validIids: string[] = [];
+  if (p.active) validIids.push(p.active.iid);
+  for (const b of p.bench) validIids.push(b.iid);
+
+  if (validIids.length === 0) {
+    // 無寶可夢可附 (理論上不可能, 至少 active 存在才能用招式)
+    return updatePlayer(
+      addLog(state, `${label}：場上無寶可夢可附能量，重洗牌庫`, aIdx),
+      aIdx,
+      pl => ({ ...pl, deck: shuffle(pl.deck) }),
+    );
+  }
+
+  // 開 energy-distribute picker — 玩家用 +/- 分配
+  return withPending(
+    addLog(state, `${label}：選擇將 ${iids.length} 張基本能量以任意方式分配到自己場上寶可夢`, aIdx),
+    {
+      type: 'energy-distribute',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: iids.length, maxCount: iids.length,
+      effectKey: 'kaleido-waltz-commit',
+      params: {
+        label,
+        energyIids: iids,            // 能量 iid (仍在 deck, commit 時搬走)
+        validIids,                   // 候選 iid (active + bench)
+        totalCount: iids.length,
+        placedCount: 0,
+        energyTypeName: '基本',      // 通用標籤 (混合屬性)
+      },
+    },
+  );
+});
+
+/**
+ * v5.253 commit resolver: 依玩家分配把能量從 deck 搬到各寶可夢身上 (含戰鬥場).
+ *   selectedIids: 長度 = totalCount, 每個元素 = 該張能量的目標寶可夢 iid.
+ *   仿永生綻放 j-2353-florges-distribute pattern, 但加 active 分支.
+ */
+regR('kaleido-waltz-commit', (state, aIdx, selectedIids, params, pool) => {
+  const label = (params?.label as string) ?? '萬花筒華爾滋';
+  const energyIids = ((params?.energyIids as string[] | undefined) ?? []).slice();
+
+  if (selectedIids.length === 0 || energyIids.length === 0) {
+    return updatePlayer(
+      addLog(state, `${label}：未分配，重洗牌庫`, aIdx),
+      aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }),
+    );
+  }
+
+  const useCount = Math.min(selectedIids.length, energyIids.length);
+  const tally = new Map<string, number>();
+  let s: GameState = state;
+
+  for (let i = 0; i < useCount; i++) {
+    const targetIid = selectedIids[i];
+    const energyIid = energyIids[i];
+    const pCur = s.players[aIdx];
+    const energyInst = pCur.deck.find(c => c.iid === energyIid);
+    if (!energyInst) continue;
+    s = updatePlayer(s, aIdx, pl => {
+      const restDeck = pl.deck.filter(c => c.iid !== energyIid);
+      // v5.253 差別於永生綻放: 同時支援附到 active 或 bench
+      let newActive = pl.active;
+      if (pl.active && pl.active.iid === targetIid) {
+        newActive = { ...pl.active, energyAttached: [...pl.active.energyAttached, energyInst] };
+      }
+      const newBench = pl.bench.map(b => b.iid === targetIid
+        ? { ...b, energyAttached: [...b.energyAttached, energyInst] }
+        : b);
+      return { ...pl, deck: restDeck, active: newActive, bench: newBench };
+    });
+    tally.set(targetIid, (tally.get(targetIid) ?? 0) + 1);
+  }
+
+  // 全部分配完成 → 重洗牌庫 (卡面明文)
+  s = updatePlayer(s, aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+
+  const parts: string[] = [];
+  for (const [iid, n] of tally) {
+    const player = s.players[aIdx];
+    const inst = player.active?.iid === iid ? player.active : player.bench.find(b => b.iid === iid);
+    const name = inst ? (pool.get(inst.cardId)?.name ?? '?') : '?';
+    parts.push(`${name}×${n}`);
+  }
+  return addLog(
+    s,
+    `${label}：${parts.join('、')} 共 ${useCount} 張基本能量 (重洗牌庫)`,
+    aIdx,
+  );
 });
