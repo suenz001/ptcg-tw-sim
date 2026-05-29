@@ -894,3 +894,42 @@ grep -rE "abilityNullifiedThisTurn[^|]*abilities\?\.some" src/
 - 內部文件 / 註解（程式碼 inline comment OK）
 
 **起源**：v5.222 — Wilson 看到 changelog 內 `<code>hasPsyduckDamp</code>` / `engine.ts L2328` 等，要求全面清理 + 訂規。
+
+---
+
+### Rule 22: grep audit 禁 head 截斷 + patch 後必重 grep
+
+**Background**: v5.268 / v5.271 / v5.272 連續 3 個版本誤判「重試徽章 attach 端無 Colorless gate」。每次 grep `TOOL_ATTACH_GATE.set` 看到第一行「核心記憶碟」就下結論「只有這一個」，沒看到 line 753 還有 `TOOL_ATTACH_GATE.set('重試徽章', Colorless)`。Wilson 三次糾正才追到真根因。
+
+**根因**：
+1. grep `| head -10` 截斷後，看到「1 match」就決定「沒別人 set」
+2. patch 加程式碼改變 line offset 後，沒重新 grep verify，沿用上輪舊判斷
+3. multi-version 連續修同一 bug 但仍報「沒修」時，沒退回做 全檔重 audit
+
+**鐵律**：
+
+> 當 audit 「全域註冊機制」(`Map.set` / `regG` / `regPost` / `regPre` / `regA` / `TRAINER_GUARDS` / `TOOL_ATTACH_GATE` / `ATTACK_PRE` / `ATTACK_POST` / `ABILITY_EFFECTS` 等)：
+> 1. **禁用 `head -N` 截斷 grep 結果**。預設 `head -250` 或不加 head_limit。
+> 2. **先跑 `grep -c` 確認總 match 數**，再決定要不要看全部。
+> 3. **patch 改動後若改變了 line 數量，必重新 grep verify**，不可沿用舊判斷。
+> 4. **multi-version 連續修同一 bug 但仍報「沒修」時，必須全檔重 audit**，不可假設「之前 audit 完整」。
+
+**反例（v5.268 我犯的錯）**：
+
+```bash
+grep -rn "TOOL_ATTACH_GATE.set" src/ | head -10
+# 結果只顯示 1 行「核心記憶碟」 → 錯誤結論「沒別人 set」
+```
+
+**正例**：
+
+```bash
+grep -rc "TOOL_ATTACH_GATE.set" src/  # 先看總數
+# 結果: tools.ts: 2 行 → 知道還有 1 行沒看到 → 不加 head, 看完全部
+
+grep -n "TOOL_ATTACH_GATE.set" src/lib/game/effects/cards/tools.ts
+# 完整結果: line 733 核心記憶碟 + line 753 重試徽章 ← 真根因
+```
+
+**自查觸發**：每次 grep + `head -N` 之前，問自己「會不會漏掉？」如果不確定，先跑 `grep -c` 或 `wc -l`。
+

@@ -603,12 +603,18 @@ export function recordOppKO(
   if (state.activePlayerIndex === victimIdx) return state;
   const isRocket = victimCard?.supertype === 'Pokemon'
     && (victimCard.name?.startsWith('火箭隊的') ?? false);
+  // v5.274 赫普家族 — 給「赫普的朽木妖|恐怖復仇」用 (卡面只計「赫普的」KO)
+  const isHop = victimCard?.supertype === 'Pokemon'
+    && (victimCard.name?.startsWith('赫普的') ?? false);
   const fieldKey: keyof GameState = cause === 'attack'
     ? 'oppAttackKOdMeThisTurn'
     : 'oppAbilityKOdMeThisTurn';
   const rocketKey: keyof GameState = cause === 'attack'
     ? 'oppAttackKOdMyRocketThisTurn'
     : 'oppAbilityKOdMyRocketThisTurn';
+  const hopKey: keyof GameState = cause === 'attack'
+    ? 'oppAttackKOdMyHopThisTurn'
+    : 'oppAbilityKOdMyHopThisTurn';
   const cur = ((state[fieldKey] as [number, number] | undefined) ?? [0, 0]);
   const next: [number, number] = [cur[0], cur[1]];
   next[victimIdx]++;
@@ -618,6 +624,12 @@ export function recordOppKO(
     const nextR: [number, number] = [curR[0], curR[1]];
     nextR[victimIdx]++;
     s = { ...s, [rocketKey]: nextR };
+  }
+  if (isHop) {
+    const curH = ((s[hopKey] as [number, number] | undefined) ?? [0, 0]);
+    const nextH: [number, number] = [curH[0], curH[1]];
+    nextH[victimIdx]++;
+    s = { ...s, [hopKey]: nextH };
   }
   return s;
 }

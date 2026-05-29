@@ -791,11 +791,18 @@ export interface GameState {
   oppAbilityKOdMeThisTurn?: [number, number];    // 對手用主動特性 KO 我方寶可夢的計數
   oppAttackKOdMyRocketThisTurn?: [number, number];  // 同上但只計火箭隊寶可夢
   oppAbilityKOdMyRocketThisTurn?: [number, number]; // 同上但只計火箭隊寶可夢
+  // v5.274 赫普家族專屬計數 — 給「赫普的朽木妖|恐怖復仇」用
+  //   卡面: 「若自己的『赫普的寶可夢』因招式的傷害而【昏厥】了」 → 必須只計「赫普的」KO
+  oppAttackKOdMyHopThisTurn?: [number, number];
+  oppAbilityKOdMyHopThisTurn?: [number, number];
   // 對手剛結束回合的 snapshot（在 END_TURN 開頭、checkup 之前 snap）
   oppAttackKOdMeInLastOppTurn?: [number, number];
   oppAbilityKOdMeInLastOppTurn?: [number, number];
   oppAttackKOdMyRocketInLastOppTurn?: [number, number];
   oppAbilityKOdMyRocketInLastOppTurn?: [number, number];
+  // v5.274 赫普家族 snapshot
+  oppAttackKOdMyHopInLastOppTurn?: [number, number];
+  oppAbilityKOdMyHopInLastOppTurn?: [number, number];
   /**
    * v2.245：對手剛結束回合的「主回合結束時」（寶可夢檢查 *之前*）的對手獎賞張數快照 [P1, P2]。
    *

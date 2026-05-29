@@ -1765,10 +1765,16 @@ export function createGame(
     oppAbilityKOdMeThisTurn: [0, 0],
     oppAttackKOdMyRocketThisTurn: [0, 0],
     oppAbilityKOdMyRocketThisTurn: [0, 0],
+    // v5.274 赫普家族
+    oppAttackKOdMyHopThisTurn: [0, 0],
+    oppAbilityKOdMyHopThisTurn: [0, 0],
     oppAttackKOdMeInLastOppTurn: [0, 0],
     oppAbilityKOdMeInLastOppTurn: [0, 0],
     oppAttackKOdMyRocketInLastOppTurn: [0, 0],
     oppAbilityKOdMyRocketInLastOppTurn: [0, 0],
+    // v5.274 赫普家族 snapshot
+    oppAttackKOdMyHopInLastOppTurn: [0, 0],
+    oppAbilityKOdMyHopInLastOppTurn: [0, 0],
     stadiumPlayedThisTurn: [false, false],
     // v3.85: 本回合打過「稜鏡塔」flag（給昂主花葉蒂 gate 用）
     prismTowerPlayedThisTurn: [false, false],
@@ -5891,10 +5897,15 @@ function handlePlaying(
         oppAbilityKOdMeInLastOppTurn: state.oppAbilityKOdMeThisTurn ?? [0, 0],
         oppAttackKOdMyRocketInLastOppTurn: state.oppAttackKOdMyRocketThisTurn ?? [0, 0],
         oppAbilityKOdMyRocketInLastOppTurn: state.oppAbilityKOdMyRocketThisTurn ?? [0, 0],
+        // v5.274 赫普家族 snapshot
+        oppAttackKOdMyHopInLastOppTurn: state.oppAttackKOdMyHopThisTurn ?? [0, 0],
+        oppAbilityKOdMyHopInLastOppTurn: state.oppAbilityKOdMyHopThisTurn ?? [0, 0],
         oppAttackKOdMeThisTurn: [0, 0],
         oppAbilityKOdMeThisTurn: [0, 0],
         oppAttackKOdMyRocketThisTurn: [0, 0],
         oppAbilityKOdMyRocketThisTurn: [0, 0],
+        oppAttackKOdMyHopThisTurn: [0, 0],
+        oppAbilityKOdMyHopThisTurn: [0, 0],
       };
     }
 
