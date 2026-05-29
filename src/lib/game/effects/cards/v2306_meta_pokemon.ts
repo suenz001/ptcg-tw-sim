@@ -581,12 +581,18 @@ regPre('盾甲繭|交替', (state, aIdx, pool) => ({ state, damage: 0 }));
 regPost('盾甲繭|交替', selfSwapPost('交替'));
 
 // ── 象牙豬ex (Mamoswine ex)
-regA('象牙豬ex', 0, deckSearchToHandA(1, 'Pokemon:Any', '毛象搬運'));
+// v5.291 修毛象搬運 filter: 'Pokemon:Any' 整 codebase 沒對應 picker case → fallthrough
+//        return true 顯示整副牌庫. JSON 卡面只說「寶可夢卡」, 改 'Pokemon' (line 2510 處理).
+regA('象牙豬ex', 0, deckSearchToHandA(1, 'Pokemon', '毛象搬運'));
+// v5.291 修雷鳴行進: 原寫 subtype === 'Stage 2' 雙重錯誤:
+//        (a) subtype 是 'ex'/'Basic'/... 不是 stage info; (b) JSON stage 值是 'Stage2' (無空格)
+//        改 (card?.stage ?? card?.subtype) === 'Stage2' 仿 picker line 2501 標準寫法.
 regPre('象牙豬ex|雷鳴行進', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const count = p.bench.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.subtype === 'Stage 2';
+    if (!card || card.supertype !== 'Pokemon') return false;
+    return (card.stage ?? card.subtype) === 'Stage2';
   }).length;
   const bonus = count * 40;
   return { state: addLog(state, `雷鳴行進：備戰區有 ${count} 隻【2階進化】寶可夢 → 增加 ${bonus} 傷害`, aIdx), damage: 180 + bonus };
