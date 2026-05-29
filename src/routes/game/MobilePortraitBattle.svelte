@@ -894,6 +894,12 @@
                 inst.secondaryStatus==='asleep'?'💤 睡眠':
                 inst.secondaryStatus==='confused'?'😵 混亂':
                 inst.secondaryStatus==='paralyzed'?'⚡ 麻痺':inst.secondaryStatus
+              }</span>{/if}{#if inst.tertiaryStatus}<span class="mp-status mp-status-chip-{inst.tertiaryStatus}">{
+                inst.tertiaryStatus==='poisoned' || inst.tertiaryStatus === 'poisoned'?'☠️ 中毒':
+                inst.tertiaryStatus==='burned' || inst.tertiaryStatus === 'burned'?'🔥 燒傷':
+                inst.tertiaryStatus==='asleep'?'💤 睡眠':
+                inst.tertiaryStatus==='confused'?'😵 混亂':
+                inst.tertiaryStatus==='paralyzed'?'⚡ 麻痺':inst.tertiaryStatus
               }</span>{/if}
             </div>
           </div>
@@ -960,6 +966,12 @@
                 inst.secondaryStatus==='asleep'?'💤 睡眠':
                 inst.secondaryStatus==='confused'?'😵 混亂':
                 inst.secondaryStatus==='paralyzed'?'⚡ 麻痺':inst.secondaryStatus
+              }</span>{/if}{#if inst.tertiaryStatus}<span class="mp-status mp-status-chip-{inst.tertiaryStatus}">{
+                inst.tertiaryStatus==='poisoned' || inst.tertiaryStatus === 'poisoned'?'☠️ 中毒':
+                inst.tertiaryStatus==='burned' || inst.tertiaryStatus === 'burned'?'🔥 燒傷':
+                inst.tertiaryStatus==='asleep'?'💤 睡眠':
+                inst.tertiaryStatus==='confused'?'😵 混亂':
+                inst.tertiaryStatus==='paralyzed'?'⚡ 麻痺':inst.tertiaryStatus
               }</span>{/if}
             {#if isPlaying && isMyTurn && isMainPhase}
               <span class="mp-tap-hint">👆 點開動作</span>

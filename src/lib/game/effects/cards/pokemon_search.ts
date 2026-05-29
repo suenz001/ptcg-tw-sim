@@ -100,6 +100,7 @@ regR('bench-named-basic-from-deck', (st, idx, iids, params, pool) => {
         damage: 0,
         status: undefined,
         secondaryStatus: undefined,
+        tertiaryStatus: undefined,
         energyAttached: [],
         toolAttached: undefined,
         extraTools: [],
@@ -112,7 +113,7 @@ regR('bench-named-basic-from-deck', (st, idx, iids, params, pool) => {
     const slots = Math.max(0, benchLimit - p.bench.length);
     const toBench = selected.slice(0, slots);
     const overflow = selected.slice(slots).map(c => ({
-      ...c, justPlaced: undefined, damage: 0, status: undefined, secondaryStatus: undefined,
+      ...c, justPlaced: undefined, damage: 0, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
       energyAttached: [], toolAttached: undefined, extraTools: [], evolvedFromStack: undefined,
       evolvedThisTurn: undefined,
     }));
@@ -165,6 +166,7 @@ regR('bench-basic-from-deck', (st, idx, iids, params, pool) => {
         damage: 0,
         status: undefined,
         secondaryStatus: undefined,
+        tertiaryStatus: undefined,
         energyAttached: [],
         toolAttached: undefined,
         extraTools: [],
@@ -177,7 +179,7 @@ regR('bench-basic-from-deck', (st, idx, iids, params, pool) => {
     const slots2 = Math.max(0, benchLimit2 - p.bench.length);
     const toBench2 = selected.slice(0, slots2);
     const overflow2 = selected.slice(slots2).map(c => ({
-      ...c, justPlaced: undefined, damage: 0, status: undefined, secondaryStatus: undefined,
+      ...c, justPlaced: undefined, damage: 0, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
       energyAttached: [], toolAttached: undefined, extraTools: [], evolvedFromStack: undefined,
       evolvedThisTurn: undefined,
     }));

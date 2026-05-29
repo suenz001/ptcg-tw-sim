@@ -148,7 +148,7 @@ regPost('烈腿蝗|跳躍射擊', (state, aIdx, _pool) => {
       const a = p.active;
       const returning: CardInstance[] = [
         { ...a, damage: 0, energyAttached: [], toolAttached: undefined,
-          status: undefined, secondaryStatus: undefined,
+          status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
           evolvedFromStack: undefined, evolvedThisTurn: undefined,
           justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
           damageBonusThisTurn: undefined, damageReduceNextHit: undefined,

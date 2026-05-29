@@ -140,7 +140,7 @@ function selfReturnToHandPost(label: string): AttackPostFn {
         // Pokémon card 本體回手
         const newHand: CardInstance[] = [...p.hand, {
           ...a, damage: 0, energyAttached: [], toolAttached: undefined,
-          status: undefined, secondaryStatus: undefined,
+          status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
           evolvedFromStack: undefined, evolvedThisTurn: undefined,
           justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
           damageBonusThisTurn: undefined, damageReduceNextHit: undefined,

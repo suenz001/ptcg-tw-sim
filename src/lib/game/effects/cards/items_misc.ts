@@ -646,18 +646,20 @@ reg('派帕的三明治', (st, idx, pool) => {
 regG('密阿雷格雷派餅', (st, idx) => {
   const a = st.players[idx].active;
   if (!a) return false;
-  return a.damage > 0 || !!a.status || !!a.secondaryStatus;
+  return a.damage > 0 || !!a.status || !!a.secondaryStatus || !!a.tertiaryStatus;
 });
 reg('密阿雷格雷派餅', (st, idx, pool) => {
   if (!st.players[idx].active) return st;
   const a = st.players[idx].active!;
   const name = pool.get(a.cardId)?.name ?? '?';
-  // 決定要清哪個 status
+  // v5.296: 三槽清除 (中毒+灼傷+混亂可共存, 萬靈藥類只清 1 個依優先順序)
   let clearedLabel = '';
   let nextStatus = a.status;
   let nextSecondary = a.secondaryStatus;
+  let nextTertiary = a.tertiaryStatus;
   if (a.status) { clearedLabel = a.status; nextStatus = undefined; }
   else if (a.secondaryStatus) { clearedLabel = a.secondaryStatus; nextSecondary = undefined; }
+  else if (a.tertiaryStatus) { clearedLabel = a.tertiaryStatus; nextTertiary = undefined; }
   const heal = Math.min(20, a.damage);
   const bits: string[] = [];
   if (heal > 0) bits.push(`恢復 ${heal} HP`);
@@ -672,6 +674,7 @@ reg('密阿雷格雷派餅', (st, idx, pool) => {
         damage: Math.max(0, p.active.damage - 20),
         status: nextStatus,
         secondaryStatus: nextSecondary,
+        tertiaryStatus: nextTertiary,
       },
     };
   });
@@ -1765,6 +1768,7 @@ function doOddClockDevolve(
     // v2.261 清狀態 + 跨回合 flag（PDF §II-C-13 消除物）
     status: undefined,
     secondaryStatus: undefined,
+    tertiaryStatus: undefined,
     cantAttackThisTurn: undefined,
     cantAttackPending: undefined,
     cantRetreatNextTurn: undefined,

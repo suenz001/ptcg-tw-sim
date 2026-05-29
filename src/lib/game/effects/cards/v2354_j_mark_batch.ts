@@ -133,6 +133,7 @@ regPost('念力土偶|退化光線', (state, aIdx, pool) => {
     evolvedThisTurn: true, // 退化後本回合不可再進化
     status: undefined,
     secondaryStatus: undefined,
+    tertiaryStatus: undefined,
     cantAttackThisTurn: undefined,
     cantAttackPending: undefined,
     cantRetreatNextTurn: undefined,

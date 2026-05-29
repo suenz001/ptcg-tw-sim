@@ -6330,11 +6330,19 @@
                 }</div>{/if}
                 <!-- v2.163：同時兩狀態（如危險光線 灼傷+混亂） -->
                 {#if oppPlayer.active.secondaryStatus}<div class="status-chip status-{oppPlayer.active.secondaryStatus}">{
-                  oppPlayer.active.secondaryStatus === 'poisoned' || oppPlayer.active.tertiaryStatus === 'poisoned' ? '☠️ 中毒' :
-                  oppPlayer.active.secondaryStatus === 'burned' || oppPlayer.active.tertiaryStatus === 'burned' ? '🔥 燒傷' :
+                  oppPlayer.active.secondaryStatus === 'poisoned' ? '☠️ 中毒' :
+                  oppPlayer.active.secondaryStatus === 'burned' ? '🔥 燒傷' :
                   oppPlayer.active.secondaryStatus === 'asleep' ? '💤 睡眠' :
                   oppPlayer.active.secondaryStatus === 'confused' ? '😵 混亂' :
                   oppPlayer.active.secondaryStatus === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.secondaryStatus
+                }</div>{/if}
+                <!-- v5.295/v5.296：三狀態並存獨立第三 chip (中毒+灼傷+混亂) -->
+                {#if oppPlayer.active.tertiaryStatus}<div class="status-chip status-{oppPlayer.active.tertiaryStatus}">{
+                  oppPlayer.active.tertiaryStatus === 'poisoned' ? '☠️ 中毒' :
+                  oppPlayer.active.tertiaryStatus === 'burned' ? '🔥 燒傷' :
+                  oppPlayer.active.tertiaryStatus === 'asleep' ? '💤 睡眠' :
+                  oppPlayer.active.tertiaryStatus === 'confused' ? '😵 混亂' :
+                  oppPlayer.active.tertiaryStatus === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.tertiaryStatus
                 }</div>{/if}
               </div>
               <!-- v2.130：血條移到卡牌最下方，避免被特性按鈕等 UI 蓋住（雙方統一） -->
@@ -6634,11 +6642,19 @@
               }</div>{/if}
               <!-- v2.163：同時兩狀態（如危險光線 灼傷+混亂） -->
               {#if myPlayer.active.secondaryStatus}<div class="status-chip status-{myPlayer.active.secondaryStatus}">{
-                myPlayer.active.secondaryStatus === 'poisoned' || myPlayer.active.tertiaryStatus === 'poisoned' ? '☠️ 中毒' :
-                myPlayer.active.secondaryStatus === 'burned' || myPlayer.active.tertiaryStatus === 'burned' ? '🔥 燒傷' :
+                myPlayer.active.secondaryStatus === 'poisoned' ? '☠️ 中毒' :
+                myPlayer.active.secondaryStatus === 'burned' ? '🔥 燒傷' :
                 myPlayer.active.secondaryStatus === 'asleep' ? '💤 睡眠' :
                 myPlayer.active.secondaryStatus === 'confused' ? '😵 混亂' :
                 myPlayer.active.secondaryStatus === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.secondaryStatus
+              }</div>{/if}
+              <!-- v5.295/v5.296：三狀態並存獨立第三 chip (中毒+灼傷+混亂) -->
+              {#if myPlayer.active.tertiaryStatus}<div class="status-chip status-{myPlayer.active.tertiaryStatus}">{
+                myPlayer.active.tertiaryStatus === 'poisoned' ? '☠️ 中毒' :
+                myPlayer.active.tertiaryStatus === 'burned' ? '🔥 燒傷' :
+                myPlayer.active.tertiaryStatus === 'asleep' ? '💤 睡眠' :
+                myPlayer.active.tertiaryStatus === 'confused' ? '😵 混亂' :
+                myPlayer.active.tertiaryStatus === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.tertiaryStatus
               }</div>{/if}
               {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡ 點此附加</div>{/if}
             </div>

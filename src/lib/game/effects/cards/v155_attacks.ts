@@ -436,6 +436,7 @@ regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
         // v3.9998 清狀態 + 跨回合 flag（PDF §II-C-13 消除物）
         status: undefined,
         secondaryStatus: undefined,
+        tertiaryStatus: undefined,
         cantAttackThisTurn: undefined,
         cantAttackPending: undefined,
         cantRetreatNextTurn: undefined,

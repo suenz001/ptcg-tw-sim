@@ -100,7 +100,7 @@ reg('短褲小子', (st, idx) => {
 // ── 寶可夢中心的姐姐 — 選 1 寶可夢 +60 HP + 解全狀態 ─────────────────────
 regG('寶可夢中心的姐姐', (st, idx) => {
   const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
-  return all.some(c => c.damage > 0 || !!c.status || !!c.secondaryStatus);
+  return all.some(c => c.damage > 0 || !!c.status || !!c.secondaryStatus || !!c.tertiaryStatus);
 });
 reg('寶可夢中心的姐姐', (st, idx) => {
   st = addLog(st, '寶可夢中心的姐姐：選 1 隻寶可夢回 60 HP 並解除所有特殊狀態', idx);

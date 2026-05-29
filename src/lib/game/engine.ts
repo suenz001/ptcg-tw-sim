@@ -2323,7 +2323,7 @@ function handlePlaying(
     // Bug fix (#17 擔架): 從手牌放出時清除任何殘留的戰鬥狀態
     // (正常流程不應有殘留，但若卡片曾透過擔架從棄牌取回，防禦性清除)
     const placed = { ...inst, justPlaced: true, playedFromHand: true,
-      status: undefined, secondaryStatus: undefined,
+      status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
       damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
       evolvedFromStack: undefined };
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
@@ -2405,7 +2405,7 @@ function handlePlaying(
       const fossilName = card?.name ?? '化石';
       // 把化石（含附加的能量、道具）整組丟棄
       const discardEntries: CardInstance[] = [
-        { ...attacker.active, fossilOnField: undefined, status: undefined, secondaryStatus: undefined,
+        { ...attacker.active, fossilOnField: undefined, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
           energyAttached: [], toolAttached: undefined, extraTools: [] },
         ...attacker.active.energyAttached,
         ...getAllAttachedTools(attacker.active),
@@ -2424,7 +2424,7 @@ function handlePlaying(
     const benchCard = pool.get(benchInst.cardId);
     const fossilName = benchCard?.name ?? '化石';
     const discardEntries: CardInstance[] = [
-      { ...benchInst, fossilOnField: undefined, status: undefined, secondaryStatus: undefined,
+      { ...benchInst, fossilOnField: undefined, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
         energyAttached: [], toolAttached: undefined, extraTools: [] },
       ...benchInst.energyAttached,
       ...getAllAttachedTools(benchInst),
@@ -5066,6 +5066,7 @@ function handlePlaying(
           evolvedFromStack: undefined,
           status: undefined,
           secondaryStatus: undefined,
+          tertiaryStatus: undefined,
         };
         // 其餘附件（能量、道具、進化堆）丟到棄牌
         const ancillaryDiscard: CardInstance[] = [

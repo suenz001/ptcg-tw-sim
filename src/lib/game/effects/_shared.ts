@@ -812,6 +812,7 @@ export function clearActiveEffects(poke: CardInstance): CardInstance {
     ...poke,
     status: undefined,
     secondaryStatus: undefined,
+    tertiaryStatus: undefined,
     poisonDamagePerCheckup: undefined,
     cantAttackThisTurn: undefined,
     cantAttackPending: undefined,

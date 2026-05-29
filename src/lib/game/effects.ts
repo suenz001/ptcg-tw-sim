@@ -10938,6 +10938,7 @@ regR('sylveon-skystone-bounce', (state, aIdx, iids, _params, pool) => {
       toolAttached: undefined, extraTools: [],
       status: undefined,
       secondaryStatus: undefined,
+      tertiaryStatus: undefined,
       evolvedFromStack: undefined,
       evolvedThisTurn: undefined,
       justPlaced: undefined,

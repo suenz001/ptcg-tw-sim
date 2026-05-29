@@ -132,6 +132,7 @@ regR('hugin-allmight-swap', (st, idx, iids, params, pool) => {
     damage: 0,
     status: undefined,
     secondaryStatus: undefined,
+    tertiaryStatus: undefined,
     toolAttached: undefined,
     evolvedFromStack: undefined,
     evolvedFromIid: undefined,
