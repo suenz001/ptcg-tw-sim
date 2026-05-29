@@ -3568,6 +3568,14 @@ export const ABILITY_RETREAT_MOD = new Map<string, (
     return { zero: true };
   }],
 
+  // v5.297 莫魯貝可（SV8a）｜飢餓衝刺 — 同一身輕邏輯
+  //   「若這隻寶可夢身上沒有附加能量卡，則這隻寶可夢【撤退】所需的能量全部消除。」
+  ['飢餓衝刺', (p) => {
+    if (p.holderInst.iid !== p.retreatingInst.iid) return {};
+    if (p.retreatingInst.energyAttached.length > 0) return {};
+    return { zero: true };
+  }],
+
   // 阿響的熔岩蝸牛｜溶化流動（M2a/SV9a）— 與一身輕同效果
   ['溶化流動', (p) => {
     if (p.holderInst.iid !== p.retreatingInst.iid) return {};

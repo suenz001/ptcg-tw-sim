@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.297</span> 莫魯貝可 飢餓衝刺 完整實裝</summary>
+        <ul>
+          <li>實裝：莫魯貝可特性「飢餓衝刺」（若這隻寶可夢身上沒有附加能量卡，則這隻寶可夢撤退所需的能量全部消除）。原本系統跳過未實裝，現在已完整實作（與小火龍「一身輕」、阿響的熔岩蝸牛「溶化流動」同邏輯）。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.296</span> 三狀態並存後續完善 (UI/萬靈藥/撤退進化清狀態)</summary>
         <ul>
           <li>UI：戰鬥寶可夢卡片現在會同時顯示最多 3 個狀態圖示（中毒、灼傷、混亂並存時）。手機版與桌機版（含桌墊版）都已支援。</li>

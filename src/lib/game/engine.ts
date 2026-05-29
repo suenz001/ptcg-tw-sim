@@ -7967,12 +7967,12 @@ export function getUsableAbilities(
       // v4.4996：4 組撞 key 卡的另一個 ability — 都是 passive HP 修飾或未實裝，不該顯示「使用特性」按鈕
       //   - 生機森巴 (樂天河童 SV9/MC) — passive +40 HP，自動套用 getEffectiveHP
       //   - 雜草魂 (怖納噬草 SV8a) — passive 對手獎賞×50 HP，自動套用
-      //   - 厚脂肪 (白海獅 M2) — passive 抗火/冰減傷，未實裝
-      //   - 飢餓衝刺 (莫魯貝可 SV8a) — 未實裝
+      //   - 厚脂肪 (白海獅 M2) — v5.294 已實裝 (PASSIVE_DAMAGE_REDUCE_BY_ATTACKER)
+      //   - 飢餓衝刺 (莫魯貝可 SV8a) — v5.297 已實裝 (ABILITY_RETREAT_MOD)
       //   regAByName 用 ability name 分流後，這些 ability 走 by-name 沒命中也不會 fallback 跑錯邏輯
       //   （另一個 ability name 的 regA 已遷移到 regAByName，by-index fallback 已不再有衝突 fn）
-      // v5.294 拿掉 '厚脂肪' (已實裝為 PASSIVE_DAMAGE_REDUCE_BY_ATTACKER)
-      if (ab.name === '生機森巴' || ab.name === '雜草魂' || ab.name === '飢餓衝刺') return;
+      // v5.294/v5.297 拿掉 '厚脂肪'/'飢餓衝刺' (兩者都已實裝為 passive, 不需特性按鈕)
+      if (ab.name === '生機森巴' || ab.name === '雜草魂') return;
       // v4.4997：audit 補 11 個缺 gate 的特性 — 條件不符時不顯示「使用特性」按鈕（玩家規則）
       // ──────────────────────────────────────────────────────────────────────
       // P0：白海獅 | 沖刷 — 戰鬥場 + 備戰有【水】能量
