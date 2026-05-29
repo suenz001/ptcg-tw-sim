@@ -481,6 +481,8 @@ import './effects/cards/v3700_audit_orphans';
 import './effects/cards/m5_preview';
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
+// v5.246：effects.ts 內部 reg 用 (烏栗 / 衝浪手 / 鐵斑葉ex 等)
+import { tryPromptPromoteActive } from './effects/_shared';
 // v3.0 Group 3 Wave 2 helper — 用於 resolveBenchGuard 蟲甲聖球形盾牌
 import { hasBugAegislashShield } from './effects/cards/v3000_g3_wave2';
 // v5.237：re-export 給 engine.ts 用於 attack-time snapshot
@@ -1709,12 +1711,14 @@ regR('surfer-switch', (st, idx, iids, _params, pool) => {
   const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
   const oldName = prevPlayer.active ? (pool.get(prevPlayer.active.cardId)?.name ?? '?') : '?';
   st = addLog(st, `衝浪手：將 ${oldName} 換到備戰區，派出 ${newName} 到戰鬥場`, idx);
-  return updatePlayer(st, idx, p => {
+  // v5.246：補設 movedToActiveThisTurn flag + ON_PROMOTE_TO_ACTIVE prompt
+  return tryPromptPromoteActive(updatePlayer(st, idx, p => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
     // v3.812：preserve justPlaced
-    const newActive = { ...p.bench[bIdx] };
+    // v5.246：補 movedToActiveThisTurn flag — 疾風直撞類條件招式 + ON_PROMOTE prompt gate
+    const newActive = { ...p.bench[bIdx], movedToActiveThisTurn: true };
     const newBench = [...p.bench];
     // v2.08：離開戰鬥場清狀態旗標
     newBench[bIdx] = clearActiveEffects(p.active);
@@ -1724,7 +1728,7 @@ regR('surfer-switch', (st, idx, iids, _params, pool) => {
       ...p, active: newActive, bench: newBench,
       hand: [...p.hand, ...taken], deck: p.deck.slice(drawN),
     };
-  });
+  }), idx, pool);
 });
 
 // 精靈球 — 擲硬幣，正面則從牌庫選 1 張寶可夢加手牌（物品）
@@ -14094,12 +14098,13 @@ regR('unruda-choice', (state, aIdx, iids, _params, _pool) => {
       return addLog(state, '烏栗：備戰區無寶可夢，互換失敗', aIdx);
     }
     if (p.bench.length === 1) {
-      return updatePlayer(addLog(state, '烏栗：自方戰鬥↔備戰互換', aIdx), aIdx, pl => {
+      // v5.246：補 movedToActiveThisTurn + ON_PROMOTE prompt
+      return tryPromptPromoteActive(updatePlayer(addLog(state, '烏栗：自方戰鬥↔備戰互換', aIdx), aIdx, pl => {
         if (!pl.active) return pl;
         const old = pl.active;
         const newActive = pl.bench[0];
-        return { ...pl, active: { ...newActive, status: undefined }, bench: [old] };
-      });
+        return { ...pl, active: { ...newActive, status: undefined, movedToActiveThisTurn: true }, bench: [old] };
+      }), aIdx, _pool);
     }
     state = addLog(state, '烏栗：選 1 隻備戰寶可夢與戰鬥互換', aIdx);
     return withPending(state, {
@@ -14119,9 +14124,10 @@ regR('unruda-choice', (state, aIdx, iids, _params, _pool) => {
   }
   return state;
 });
-regR('unruda-swap', (state, aIdx, iids, _params, _pool) => {
+regR('unruda-swap', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
-  return updatePlayer(state, aIdx, pl => {
+  // v5.246：補 movedToActiveThisTurn + ON_PROMOTE prompt
+  return tryPromptPromoteActive(updatePlayer(state, aIdx, pl => {
     if (!pl.active) return pl;
     const idx = pl.bench.findIndex(c => c.iid === iids[0]);
     if (idx < 0) return pl;
@@ -14129,8 +14135,8 @@ regR('unruda-swap', (state, aIdx, iids, _params, _pool) => {
     const newBench = [...pl.bench];
     newBench.splice(idx, 1);
     newBench.push(pl.active);
-    return { ...pl, active: { ...newActive, status: undefined }, bench: newBench };
-  });
+    return { ...pl, active: { ...newActive, status: undefined, movedToActiveThisTurn: true }, bench: newBench };
+  }), aIdx, pool);
 });
 
 
