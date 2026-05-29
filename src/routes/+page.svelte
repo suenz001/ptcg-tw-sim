@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.264</span> 首頁聲明更新</summary>
+        <ul>
+          <li>更新首頁底部「本站使用須知與免責聲明」內容，重組為標題＋六個小節：推廣教育性質、資料來源、版權與智慧財產權、支持官方數位生態系、權利人聯絡管道，敘述更完整、態度更明確。</li>
+          <li>原訓練家網站連結與聯絡 Email 保留不變。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.263</span> 重試徽章說明文字改動態（不再硬寫機關槍合擊）</summary>
         <ul>
           <li>玩家反映：使用「飛翔」招式時，重試徽章詢問視窗顯示「機關槍合擊：擲幣直到反面為止…」這段固定說明，不對招。</li>
@@ -11252,9 +11260,23 @@
   {/if}
 
   <footer class="disclaimer">
-    <p>本站為熱愛 PTCG 的粉絲自製非營利專案，旨在推廣寶可夢集換式卡牌實體遊戲。</p>
-    <p>所有卡牌圖像、文字與商標之智慧財產權均歸屬 The Pokémon Company、Nintendo、Creatures Inc. 及 GAME FREAK inc. 所有。<br/>本站之卡牌資料皆取自於 <a href="https://asia.pokemon-card.com/tw/" target="_blank" rel="noopener noreferrer">寶可夢集換式卡牌遊戲官方主頁「訓練家網站」in 台灣</a>。</p>
-    <p>本站絕無意侵犯官方權益，若版權方認為有任何不妥，請透過 <a href="mailto:suenz001@yahoo.com.tw">聯絡我們</a> 告知，本站將立即配合下架修改。</p>
+    <h3 class="disclaimer-title">本站使用須知與免責聲明</h3>
+    <p>本網站（以下簡稱「本站」）為非官方、非營利之寶可夢集換式卡牌遊戲（PTCG）愛好者社群交流與規則演練工具。</p>
+
+    <h4 class="disclaimer-section">推廣與教育性質</h4>
+    <p>本站建立之初衷，旨在提供台灣及繁體中文圈新手玩家學習實體卡牌的正確規則與對戰流程，並協助實體賽事玩家進行策略模擬，本站積極鼓勵並引導玩家購買官方正版實體卡牌、參與官方認證之實體賽事，共同維護並繁榮台灣 PTCG 實體玩家生態圈。</p>
+
+    <h4 class="disclaimer-section">資料來源聲明</h4>
+    <p>本站所使用之卡牌資訊與數據，皆轉載、引用自<a href="https://asia.pokemon-card.com/tw/" target="_blank" rel="noopener noreferrer">寶可夢集換式卡牌遊戲官方主頁「訓練家網站」in 台灣</a>。本站不對其內容進行任何未授權之營利或竄改。</p>
+
+    <h4 class="disclaimer-section">版權與智慧財產權聲明</h4>
+    <p>本站所使用之卡牌美術圖面、卡片文字、商標、標誌及遊戲規則等相關數位資產，其智慧財產權、著作權與商標權皆屬於 The Pokémon Company、Nintendo、Creatures Inc.、GAME FREAK 及各該權利人所有，本站不擁有任何上述版權物之所有權，亦無意侵害任何相關權利人之合法權益。</p>
+
+    <h4 class="disclaimer-section">支持官方數位生態系</h4>
+    <p>本站作為台灣實體卡牌環境的輔助演練工具，旨在彌補當前跨區域數位推廣之局限，未來若官方於台灣市場正式推出相關系統或應用程式（App），本站將於第一時間立即自主關閉並停止營運。</p>
+
+    <h4 class="disclaimer-section">權利人聯絡管道</h4>
+    <p>若版權方或相關權利人認為本站之運作有任何不妥之處，或認為特定內容侵害了您的權益，請隨時透過 <a href="mailto:suenz001@yahoo.com.tw">聯絡電子郵件：suenz001@yahoo.com.tw</a> 與我們聯絡。我們將抱持最高誠意，全力配合進行內容修正、移除或關閉相關功能。</p>
   </footer>
 </main>
 
@@ -11472,6 +11494,20 @@
   }
   .disclaimer p {
     margin: 0.3rem 0;
+  }
+  .disclaimer-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #555;
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px dashed #ccc;
+  }
+  .disclaimer-section {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #666;
+    margin: 0.85rem 0 0.25rem;
   }
   .disclaimer a {
     color: #0066cc;
