@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.302</span> 卡包名稱顯示官方版「深淵之瞳」</summary>
+        <ul>
+          <li>修正：「卡牌資料庫」內 M5 卡包名稱仍顯示「深淵之瞳（日版搶先・自譯）」，已更新為官方版「深淵之瞳」。卡包列表、卡片詳細彈窗「出自於卡包【XXX】」等位置都同步更新。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.300</span> 「深淵之瞳」(M5) 系列台灣官方版本上線</summary>
         <ul>
           <li>套用台灣官方寶可夢卡牌網站的 M5 全 81 張卡牌資料：卡名、卡號、卡圖、效果文字全部使用官方中文版。</li>

@@ -577,7 +577,7 @@
   },
   {
     "code": "M5",
-    "name": "深淵之瞳（日版搶先・自譯）",
+    "name": "深淵之瞳",
     "regulationMark": "J",
     "cardCount": 81,
     "supertypeCounts": {
@@ -586,7 +586,7 @@
       "Energy": 2
     },
     "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m5/assets/images/ogp.png",
-    "scrapedAt": "2026-05-18T12:39:00.000Z",
+    "scrapedAt": "2026-05-29T21:55:00.000Z",
     "releaseDate": "2026-05",
     "count": 81
   }
