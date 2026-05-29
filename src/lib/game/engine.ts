@@ -5729,6 +5729,7 @@ function handlePlaying(
       && !newState.players[aIdx].retryBadgeUsedThisTurn
       && !newState.pendingSelection
       && action._retryBadgeAlreadyAsked !== true
+      && !isToolsJammed(newState, pool)  /* v5.304: 阻礙之塔下道具失效, 重試徽章不發動 */
     ) {
       const atkInst = newState.players[aIdx].active!;
       const atkCard = pool.get(atkInst.cardId);

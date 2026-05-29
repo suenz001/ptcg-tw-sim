@@ -1888,28 +1888,36 @@
     max-height: 60vh;
     overflow-y: auto;
   }
+  /* v5.304: aspect-ratio: 5/7 在 iOS Safari grid item 內 row height 計算偶發失準,
+     row 與 row 之間出現 vertical overlap (玩家截圖反應 — 棄牌區 25 張時最明顯).
+     改用 padding-bottom: 140% 老古典 trick (寬 100% → 高 100% × 7/5 = 140%),
+     內層 img/placeholder 改 absolute inset:0 鋪滿. */
   .mp-discard-cell {
     position: relative;
     display: block;
     width: 100%;
-    padding: 0;
+    height: 0;
+    padding: 0 0 140% 0;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid #444;
     border-radius: 6px;
     overflow: hidden;
     cursor: pointer;
-    aspect-ratio: 5 / 7;
   }
   .mp-discard-cell:active {
     background: rgba(255, 255, 255, 0.15);
   }
   .mp-discard-img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: contain;
     display: block;
   }
   .mp-discard-placeholder {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1919,6 +1927,7 @@
     font-size: 0.7rem;
     padding: 4px;
     text-align: center;
+    box-sizing: border-box;
   }
   /* 右下角紅色大數字 badge */
   .mp-discard-count {
