@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.303</span> M5 招式/特性名稱補齊台版官方翻譯</summary>
+        <ul>
+          <li>修正：v5.300 改成 M5 台版時只更新寶可夢卡名，但忘了同步招式名稱與特性名稱（共 74 個招式 + 8 個特性差異）。導致破破舵輪「悔念錨」、棄世猴「幽靈打擊」、戰槌龍ex「亂暴錘」等所有 M5 招式的特殊效果計算（傷害+N、特殊條件等）通通失效，只剩印刷傷害。本次全 codebase 同步官方版招式名／特性名，所有 M5 卡的招式特性效果恢復正常。</li>
+          <li>玩家回報的具體案例：破破舵輪「悔念錨」在棄牌區有 ≥4 張化隱寶可夢時應 +140 傷害，原本系統因招式名不對沒套用。本次修復。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.302</span> 卡包名稱顯示官方版「深淵之瞳」</summary>
         <ul>
           <li>修正：「卡牌資料庫」內 M5 卡包名稱仍顯示「深淵之瞳（日版搶先・自譯）」，已更新為官方版「深淵之瞳」。卡包列表、卡片詳細彈窗「出自於卡包【XXX】」等位置都同步更新。</li>
@@ -3417,7 +3425,7 @@
           <li>　影響：v5.059 起小霞的朝氣只能搜基本【水】能量，符合卡面敘述。其他卡面（如沐淨）filter 不受影響。</li>
           <li><b>Bug 2 — 螺釘地鼠｜呼喚同伴 在零之大空洞滿備戰時誤觸發清場</b>（玩家回報）</li>
           <li>　現象：場上有零之大空洞、自己備戰 8 隻（滿）時用呼喚同伴，被搜出來的寶可夢被「零之大空洞被破壞」效果丟掉消失。</li>
-          <li>　根因：<code>regPost('螺釘地鼠|呼喚同伴')</code> 沒做 bench-cap check， resolver 直接 <code>bench: [...p.bench, ...picked]</code> 純 append。8 + 2 = 10 隻超過 limit。引擎末尾的 （<code>engine.ts:338</code>）每次 dispatch 後自動跑，看到 <code>bench.length &gt; limit</code> 就觸發「零之大空洞效果失去：選 2 隻備戰寶可夢丟棄」pending —— 這個函數本來是給「零之大空洞 stadium 被換掉、limit 從 8 變回 5」用的，被誤觸發 → 剛搜出來的寶可夢被當「超出部分」丟掉。</li>
+          <li>　根因：<code>regPost('螺釘地鼠|呼朋引伴')</code> 沒做 bench-cap check， resolver 直接 <code>bench: [...p.bench, ...picked]</code> 純 append。8 + 2 = 10 隻超過 limit。引擎末尾的 （<code>engine.ts:338</code>）每次 dispatch 後自動跑，看到 <code>bench.length &gt; limit</code> 就觸發「零之大空洞效果失去：選 2 隻備戰寶可夢丟棄」pending —— 這個函數本來是給「零之大空洞 stadium 被換掉、limit 從 8 變回 5」用的，被誤觸發 → 剛搜出來的寶可夢被當「超出部分」丟掉。</li>
           <li>　修法： import 加  from <code>'../_shared'</code>（Rule 12：子檔走 _shared 鏡像避免 TDZ）；regPost 開頭算 <code>remainingSlots = limit - bench.length</code>，若 ≤ 0 直接 addLog「備戰區已滿」return；maxCount 動態 = <code>min(2, remainingSlots)</code> 給 picker；regR resolver 加 safety trim — picked 數量超過 slots 用 <code>picked.slice(0, slotsAvail)</code> 防呆。</li>
           <li>　影響：v5.059 起呼喚同伴在備戰滿時直接擋下，剩 1 空位時 picker 只給選 1 張，不會再誤觸發清場。</li>
           <li><b>同類 audit</b>：本次只修玩家點名的螺釘地鼠｜呼喚同伴。<code>謎擬Q|呼朋引伴</code>（）原本就有  check 是 OK 的。其他  系列（共用 helper）也應該檢查 helper 內部有沒有 cap，但本次先 fix 玩家命中的這張，其他若再有回報再批次處理（Rule 14 最小 patch）。</li>

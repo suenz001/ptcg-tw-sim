@@ -188,7 +188,7 @@ export function canApplyEffectToTarget(
     const defender = state.players[defIdx];
     const hasTaikoBari = defender.bench.some(b => {
       const c = pool.get(b.cardId);
-      return c?.abilities?.some(a => a.name === '太鼓防壁');
+      return c?.abilities?.some(a => a.name === '太古防壁');
     });
     if (hasTaikoBari) {
       const attacker = state.players[actorIdx];

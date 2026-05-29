@@ -4516,7 +4516,7 @@ function handlePlaying(
     if (baseDamage > 0) {
       const hasTaikoBari = defender.bench.some(b => {
         const c = pool.get(b.cardId);
-        return c?.abilities?.some(a => a.name === '太鼓防壁');
+        return c?.abilities?.some(a => a.name === '太古防壁');
       });
       if (hasTaikoBari) {
         // v5.209: 傳 hostInst 讓燃火 / 新衝天倍率正確計算

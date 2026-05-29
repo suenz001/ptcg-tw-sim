@@ -113,22 +113,22 @@ regPost('強顎雞母蟲|吐絲', coinStatusPost('paralyzed'));
 regPost('偽螳草|突擊', m5SelfDamagePost(10, '突擊'));
 
 // ── 007 席多藍恩｜燒灼 — 對手【灼傷】───────────────────────────────
-regPost('席多藍恩|燒灼', statusPost('burned'));
+regPost('席多藍恩|灼熱', statusPost('burned'));
 
 // ── 008 燒火蚣｜野火 — mill 對手牌庫頂 1 張 ───────────────────────
-regPost('燒火蚣|野火', millOppDeckTopPost(1, '野火'));
+regPost('燒火蚣|燒荒', millOppDeckTopPost(1, '野火'));
 
 // ── 009 焚焰蚣｜野火 — mill 對手牌庫頂 2 張 ───────────────────────
-regPost('焚焰蚣|野火', millOppDeckTopPost(2, '野火'));
+regPost('焚焰蚣|燒荒', millOppDeckTopPost(2, '野火'));
 
 // ── 009 焚焰蚣｜熱情衝撞 — 自傷 30 ────────────────────────────────
-regPost('焚焰蚣|熱情衝撞', m5SelfDamagePost(30, '熱情衝撞'));
+regPost('焚焰蚣|熱力衝撞', m5SelfDamagePost(30, '熱情衝撞'));
 
 // ── 015 吼鯨王ex｜摔落 — 自身【睡眠】──────────────────────────────
-regPost('吼鯨王ex|摔落', selfStatusPost('asleep'));
+regPost('吼鯨王ex|摔下', selfStatusPost('asleep'));
 
 // ── 022 落雷獸｜拿來 — 抽 1 張 ────────────────────────────────────
-regPost('落雷獸|拿來', drawNPost(1, '拿來'));
+regPost('落雷獸|呼喚', drawNPost(1, '拿來'));
 
 // ── 027 密勒頓｜打雷 — 自傷 30 ─────────────────────────────────────
 regPost('密勒頓|打雷', m5SelfDamagePost(30, '打雷'));
@@ -136,8 +136,8 @@ regPost('密勒頓|打雷', m5SelfDamagePost(30, '打雷'));
 // ── 028 呆呆獸｜徹底丟棄 — picker：選任意數量手牌丟棄 ─────────────
 //   卡面：「從自己的手牌選擇任意數量的卡，全部丟棄。」
 //   不會強制丟，玩家可選 0 張（pickerCount min=0）
-regPre('呆呆獸|徹底丟棄', (state, aIdx, _pool, _action) => ({ state, damage: 0 }));
-regPost('呆呆獸|徹底丟棄', (state, aIdx, _pool) => {
+regPre('呆呆獸|丟到飽', (state, aIdx, _pool, _action) => ({ state, damage: 0 }));
+regPost('呆呆獸|丟到飽', (state, aIdx, _pool) => {
   const p = state.players[aIdx];
   if (p.hand.length === 0) {
     return addLog(state, '徹底丟棄：手牌為空，無可丟', aIdx);
@@ -170,15 +170,15 @@ regR('m5-slowpoke-discard-all', (state, aIdx, iids, _params, _pool) => {
 });
 
 // ── 030 迷唇姐｜精神力 — 擲幣正面→對手【麻痺】────────────────────
-regPost('迷唇姐|精神力', coinStatusPost('paralyzed'));
+regPost('迷唇姐|念力', coinStatusPost('paralyzed'));
 
 // ── 050 烏賊王｜蠱惑 — 對手【混亂】───────────────────────────────
 regPost('烏賊王|蠱惑', statusPost('confused'));
 
 // ── 053 莫魯貝可ex｜輪盤抽牌 — 手牌全洗回牌庫 + 抽 6 張 ─────────
 //   卡面：「將自己的手牌全部放回牌庫並重洗。之後，從牌庫抽 6 張卡。」
-regPre('莫魯貝可ex|輪盤抽牌', (state, _aIdx, _pool, _action) => ({ state, damage: 0 }));
-regPost('莫魯貝可ex|輪盤抽牌', (state, aIdx, _pool) => {
+regPre('莫魯貝可ex|轉輪抽出', (state, _aIdx, _pool, _action) => ({ state, damage: 0 }));
+regPost('莫魯貝可ex|轉輪抽出', (state, aIdx, _pool) => {
   const p = state.players[aIdx];
   // 手牌合併入牌庫 + 重洗
   const combinedDeck = [...p.deck, ...p.hand];
@@ -200,7 +200,7 @@ regPost('莫魯貝可ex|輪盤抽牌', (state, aIdx, _pool) => {
 });
 
 // ── 063 超級龍頭地鼠ex｜挖掘崩塌 — mill 對手牌庫頂 2 張 ──────────
-regPost('超級龍頭地鼠ex|挖掘崩塌', millOppDeckTopPost(2, '挖掘崩塌'));
+regPost('超級龍頭地鼠ex|挖垮', millOppDeckTopPost(2, '挖掘崩塌'));
 
 // ════════════════════════════════════════════════════════════════════════════
 // Phase 1 結束（14 個招式，涵蓋 13 張卡）。
@@ -275,7 +275,7 @@ function countSelfBenchByNameContains(
 // ── 紅蓮鎧騎|烈焰軍團 — 40 + N×40（N=自方備戰附「火能量」寶可夢數）
 //   卡面（v4.950 修譯）：「增加附有火能量的自己的備戰寶可夢的數量 × 40 點傷害。」
 //   注意：限定火能量（基本【火】或名稱含「【火】」的特殊能量），不算其他屬性。
-regPre('紅蓮鎧騎|烈焰軍團', (state, aIdx, pool) => {
+regPre('紅蓮鎧騎|火焰軍團', (state, aIdx, pool) => {
   const n = countSelfBenchWithFireEnergy(state, aIdx, pool);
   const dmg = 40 + n * 40;
   return {
@@ -286,7 +286,7 @@ regPre('紅蓮鎧騎|烈焰軍團', (state, aIdx, pool) => {
 
 // ── 古空棘魚|化石節拍 — 10 + N×30（N=自方備戰中名含「陳舊的」數）
 //   卡面：「名稱含有『陳舊的』的自己備戰寶可夢張數 × 30 點，追加傷害。」
-regPre('古空棘魚|化石節拍', (state, aIdx, pool) => {
+regPre('古空棘魚|化石律動', (state, aIdx, pool) => {
   const n = countSelfBenchByNameContains(state, aIdx, pool, '陳舊的');
   const dmg = 10 + n * 30;
   return {
@@ -297,7 +297,7 @@ regPre('古空棘魚|化石節拍', (state, aIdx, pool) => {
 
 // ── 海豚俠|正義之拳 — 80 +200（當對手剩餘獎賞=1）
 //   卡面：「若對手剩餘獎賞牌為 1 張，則此招式傷害 +200。」
-regPre('海豚俠|正義之拳', (state, aIdx) => {
+regPre('海豚俠|正義拳擊', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppPrizes = state.players[dIdx].prizes.length;
   const bonus = oppPrizes === 1 ? 200 : 0;
@@ -311,7 +311,7 @@ regPre('海豚俠|正義之拳', (state, aIdx) => {
 
 // ── 呆殼獸|空空如也 — 50 +160（當自方手牌=0）
 //   卡面：「若自己的手牌為 0 張,則此招式傷害 +160。」
-regPre('呆殼獸|空空如也', (state, aIdx) => {
+regPre('呆殼獸|一乾二淨', (state, aIdx) => {
   const handN = state.players[aIdx].hand.length;
   const bonus = handN === 0 ? 160 : 0;
   const dmg = 50 + bonus;
@@ -324,7 +324,7 @@ regPre('呆殼獸|空空如也', (state, aIdx) => {
 
 // ── 故勒頓|戰鬥利爪 — 30 +30（當對手戰鬥位為進化寶可夢）
 //   卡面：「若對手的戰鬥寶可夢為進化寶可夢,則此招式傷害 +30。」
-regPre('故勒頓|戰鬥利爪', (state, aIdx, pool) => {
+regPre('故勒頓|戰鬥爪', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defActive = state.players[dIdx].active;
   const defCard = defActive ? pool.get(defActive.cardId) : null;
@@ -340,7 +340,7 @@ regPre('故勒頓|戰鬥利爪', (state, aIdx, pool) => {
 
 // ── 莫魯貝可ex|飢餓轟炸 — 40 + N×40（N=自身傷害指示物數，即 damage/10）
 //   卡面：「這隻寶可夢身上的傷害指示物數 × 40 點，追加傷害。」
-regPre('莫魯貝可ex|飢餓轟炸', (state, aIdx) => {
+regPre('莫魯貝可ex|空腹轟炸', (state, aIdx) => {
   const att = state.players[aIdx].active;
   const counters = att ? Math.floor((att.damage ?? 0) / 10) : 0;
   const bonus = counters * 40;
@@ -368,7 +368,7 @@ regPre('古玉魚|嫉妒漩渦', (state, aIdx) => {
 
 // ── 銃嘴大鳥|羽毛迴旋 — 60 + N×20（N=雙方備戰寶可夢合計數）
 //   卡面：「雙方備戰寶可夢數合計 × 20 點，追加傷害。」
-regPre('銃嘴大鳥|羽毛迴旋', (state, aIdx) => {
+regPre('銃嘴大鳥|羽毛輪舞', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const n = state.players[aIdx].bench.length + state.players[dIdx].bench.length;
   const dmg = 60 + n * 20;
@@ -393,7 +393,7 @@ regPost('波普海豚|吸取鰭', selfHealPost(20, '吸取鰭'));
 // ── 蘭螳花ex|葉片防護 — 140，下個對手回合這隻寶可夢受招式傷害 -50
 //   卡面：「下個對手的回合，這隻寶可夢受到的招式傷害「-50」。」
 //   實裝：用既有 damageReduceNextHit flag（defender 端，自己被打 -N）
-regPost('蘭螳花ex|葉片防護', (state, aIdx) => {
+regPost('蘭螳花ex|葉子防守', (state, aIdx) => {
   return updatePlayer(addLog(state, '葉片防護：下個對手回合受招 -50', aIdx), aIdx, p => {
     if (!p.active) return p;
     return { ...p, active: { ...p.active, damageReduceNextHit: 50 } };
@@ -408,7 +408,7 @@ regPost('蘭螳花ex|葉片防護', (state, aIdx) => {
 //   卡面：「在對手的戰鬥寶可夢身上，放置 1 個傷害指示物。」
 //   注意：「放置傷害指示物」屬「招式效果」（非招式傷害），需走 Rule 17 unified defense check。
 //   參考 statusPost 模式 — 不過此處放指示物簡單實作，sanityKOSweep 會處理超 HP KO。
-regPost('斯魔茶|悄悄放上', (state, aIdx) => {
+regPost('斯魔茶|無聲加害', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   return updatePlayer(addLog(state, '悄悄放上：對手戰鬥位 +1 傷害指示物', aIdx), dIdx, p => {
     if (!p.active) return p;
@@ -420,15 +420,15 @@ regPost('斯魔茶|悄悄放上', (state, aIdx) => {
 //   卡面：「在對手 1 隻備戰寶可夢身上，放置 5 個傷害指示物。」
 //   實裝：hitBenchPickPost 的簽名是 (state, aIdx, targetSide, count, amount, label) → state
 //   用 inline AttackPostFn 包裝
-regPost('棄世猴|幽靈拳', (state, aIdx) => hitBenchPickPost(state, aIdx, 'opp', 1, 50, '幽靈拳'));
+regPost('棄世猴|幽靈打擊', (state, aIdx) => hitBenchPickPost(state, aIdx, 'opp', 1, 50, '幽靈拳'));
 
 // ── 頭蓋龍|撞飛 — 70+強制對手戰鬥位與備戰位互換（對手選新戰鬥位）
 //   卡面：「將對手的戰鬥寶可夢與備戰寶可夢互換。（送上戰鬥場的寶可夢由對手選擇。）」
-regPost('頭蓋龍|撞飛', forceOppSwapPost('撞飛'));
+regPost('頭蓋龍|推倒', forceOppSwapPost('撞飛'));
 
 // ── 小篤兒|二連啄 — 擲 2 次硬幣 × 10 點傷害
 //   卡面：「擲 2 次硬幣，正面數 × 10 點傷害。」
-regPre('小篤兒|二連啄', coinHeadsMultiplyPre(2, 10, '二連啄'));
+regPre('小篤兒|二連撞', coinHeadsMultiplyPre(2, 10, '二連啄'));
 
 // ── 銀伴戰獸|空氣斬 — 130+自身丟 1 能量
 //   卡面：「從這隻寶可夢身上選擇 1 個能量，丟棄。」
@@ -483,8 +483,8 @@ regR('m5-silvally-air-slash', (state, aIdx, iids) => {
 //   (a) regPost 開頭算 remainingSlots = limit - bench.length；若 ≤ 0 直接 addLog「備戰區已滿」return
 //   (b) maxCount 動態 = min(2, remainingSlots) 給 picker
 //   (c) resolver 加 safety trim：若 iids.length > remainingSlots（picker 漏 cap）→ trim 到 remainingSlots
-regPre('螺釘地鼠|呼喚同伴', (state) => ({ state, damage: 0 }));
-regPost('螺釘地鼠|呼喚同伴', (state, aIdx, pool) => {
+regPre('螺釘地鼠|呼朋引伴', (state) => ({ state, damage: 0 }));
+regPost('螺釘地鼠|呼朋引伴', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   if (p.deck.length === 0) return addLog(state, '呼喚同伴：牌庫為空', aIdx);
   // v5.059：bench-cap check（同 effects.ts L1450 謎擬Q|呼朋引伴 寫法）
@@ -530,8 +530,8 @@ regR('m5-screwdriller-call-allies', (state, aIdx, iids, params) => {
 //   卡面：「從自己的牌庫選擇最多 3 張『燈火幽靈』，放置於備戰區。然後重洗牌庫。」
 //   實裝：用 'Name:燈火幽靈' filter — 但 deck-search filter 是否認此 pattern 需確認；
 //   採取 picker + resolver 內 filter by name 的保險作法。
-regPre('燈火幽靈|增光', (state) => ({ state, damage: 0 }));
-regPost('燈火幽靈|增光', (state, aIdx, pool) => {
+regPre('燈火幽靈|亮光增長', (state) => ({ state, damage: 0 }));
+regPost('燈火幽靈|亮光增長', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   if (p.deck.length === 0) return addLog(state, '增光：牌庫為空', aIdx);
   // 預先 filter 牌庫中「燈火幽靈」可選候選
@@ -610,7 +610,7 @@ function m5ClearTurnFlags(c: import('../../types').CardInstance): import('../../
 //   卡面：「若對手的戰鬥寶可夢為寶可夢，則此招式傷害 +30。」
 //   注意：戰鬥位永遠是 Pokemon（不可能空白），這個條件實際上一定 true。
 //   仍嚴格判斷以對應卡面文字。
-regPre('銅鏡怪|鏡像攻擊', (state, aIdx, pool) => {
+regPre('銅鏡怪|鏡面攻擊', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defActive = state.players[dIdx].active;
   const defCard = defActive ? pool.get(defActive.cardId) : null;
@@ -642,7 +642,7 @@ regPre('薩戮德|暗影鞭打', (state, aIdx, pool) => {
 //   卡面：「若這隻寶可夢身上附加的能量數，比此招式所需能量數多 2 個以上，則此招式傷害 +130。」
 //   注意：「能量數」指 units，需用 engine.getEnergyUnits 算 (例：新衝天能量 on Stage2 = 2 units)
 //   cost 從 JSON 取 = 3 (1 鬥 + 2 無)，所以 ≥ 5 觸發。
-regPre('超級龍頭地鼠ex|最大鑽頭', (state, aIdx, pool) => {
+regPre('超級龍頭地鼠ex|極限鑽', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 200 };
   const totalUnits = att.energyAttached.reduce(
@@ -663,7 +663,7 @@ regPre('超級龍頭地鼠ex|最大鑽頭', (state, aIdx, pool) => {
 //   卡面：「這隻寶可夢身上附加的能量數 × 60 點傷害。」
 //   解讀：energy card 張數（非 units）。雖然新衝天 on Stage2 = 2 units，
 //   但這裡用「能量數」按物理張數最直觀。同 H 標卡常規實作。
-regPre('超級捷拉奧拉ex|雷電拳', (state, aIdx) => {
+regPre('超級捷拉奧拉ex|閃電拳', (state, aIdx) => {
   const att = state.players[aIdx].active;
   const n = att?.energyAttached.length ?? 0;
   const dmg = n * 60;
@@ -675,7 +675,7 @@ regPre('超級捷拉奧拉ex|雷電拳', (state, aIdx) => {
 
 // ── A5. 超級達克萊伊ex|暗夜突襲 — 110 + 自方備戰有受傷指示物 +110 ──
 //   卡面：「若自己的備戰寶可夢身上有傷害指示物，則此招式傷害 +110。」
-regPre('超級達克萊伊ex|暗夜突襲', (state, aIdx) => {
+regPre('超級達克萊伊ex|暗夜襲擊', (state, aIdx) => {
   const hasInjured = state.players[aIdx].bench.some(b => (b.damage ?? 0) > 0);
   const bonus = hasInjured ? 110 : 0;
   const dmg = 110 + bonus;
@@ -689,7 +689,7 @@ regPre('超級達克萊伊ex|暗夜突襲', (state, aIdx) => {
 // ── A6. 蘭螳花ex|活力切割器 — 60 + 本回合自身曾回過 HP +200 ─────
 //   卡面：「在這個回合中，若這隻寶可夢曾恢復過 HP，則此招式傷害 +200。」
 //   實裝：engine v4.43 已自動標 healedThisTurn（damage 減少時觸發），END_TURN 清除。
-regPre('蘭螳花ex|活力切割器', (state, aIdx) => {
+regPre('蘭螳花ex|活潑刀', (state, aIdx) => {
   const att = state.players[aIdx].active;
   const healed = att?.healedThisTurn === true;
   const bonus = healed ? 200 : 0;
@@ -704,7 +704,7 @@ regPre('蘭螳花ex|活力切割器', (state, aIdx) => {
 // ── A7. 雷電獸|音速之刃 — 110 + skipDefEffects ──────────────────
 //   卡面：「此招式的傷害不計算對手戰鬥寶可夢身上承受的效果。」
 //   實裝：用既有 skipDefEffects flag（跳躍扣殺 等同款）— 跳過 defender 端的招式效果削減。
-regPre('雷電獸|音速之刃', (state) => ({
+regPre('雷電獸|音波刀鋒', (state) => ({
   state, damage: 110, skipDefEffects: true,
 }));
 
@@ -729,11 +729,11 @@ regPre('烏賊王|腦核粉碎', (state, aIdx) => {
 // ── C1. 炭小侍|全力拳擊 — 40 + 擲 1 幣反面則失敗 ────────────
 //   卡面：「擲 1 次硬幣，若為反面，此招式失敗。」
 //   實裝：等同 coinHeadsMultiplyPre(1, 40) — 正面 → 1×40=40，反面 → 0
-regPre('炭小侍|全力拳擊', coinHeadsMultiplyPre(1, 40, '全力拳擊'));
+regPre('炭小侍|全力拳', coinHeadsMultiplyPre(1, 40, '全力拳擊'));
 
 // ── D1. 盾甲龍|碎裂 — 50 + 對手戰鬥位丟 1 能量 picker ────────
 //   卡面：「從對手的戰鬥寶可夢身上選擇 1 個能量，丟棄。」
-regPost('盾甲龍|碎裂', (state, aIdx) => {
+regPost('盾甲龍|碎', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
   if (!def || def.energyAttached.length === 0) {
@@ -766,7 +766,7 @@ regR('m5-bastiodon-shatter', (state, aIdx, iids) => {
 
 // ── D2. 故勒頓|大地衝擊 — 190 + 自身全部能量丟棄 ──────────
 //   卡面：「將這隻寶可夢身上附加的所有能量全部丟棄。」
-regPost('故勒頓|大地衝擊', (state, aIdx) => {
+regPost('故勒頓|蓋亞衝擊', (state, aIdx) => {
   return updatePlayer(addLog(state, '大地衝擊：自身全能量丟棄', aIdx), aIdx, p => {
     if (!p.active) return p;
     const allEnergy = p.active.energyAttached;
@@ -783,7 +783,7 @@ regPost('故勒頓|大地衝擊', (state, aIdx) => {
 //   卡面：「下個對手的回合，這隻寶可夢受到的招式傷害「+100」。」
 //   實裝：用既有 takeExtraDamageNextTurn flag — 在自己 END_TURN 時 promote → ThisTurn，
 //   對手攻擊時讀 ThisTurn。
-regPost('獒教父|飛撲頭錘', (state, aIdx) => {
+regPost('獒教父|撲身頭擊', (state, aIdx) => {
   return updatePlayer(addLog(state, '飛撲頭錘：下個對手回合自身受傷 +100', aIdx), aIdx, p => {
     if (!p.active) return p;
     return {
@@ -800,7 +800,7 @@ regPost('獒教父|飛撲頭錘', (state, aIdx) => {
 //   卡面：「這隻寶可夢身上若未附有『伏特【雷】能量』，則此招式失敗。」
 //   注意：「伏特【雷】能量」是 M5 特殊能量名（非「基本【雷】能量」）— strict name match。
 //   v5.022 rename：閃電能量 → 伏特【雷】能量
-regPre('鍬農炮蟲|巨型軌道砲', (state, aIdx, pool) => {
+regPre('鍬農炮蟲|終極磁軌炮', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   const hasLightning = att?.energyAttached.some(
     e => pool.get(e.cardId)?.name === '伏特【雷】能量',
@@ -819,7 +819,7 @@ regPre('鍬農炮蟲|巨型軌道砲', (state, aIdx, pool) => {
 
 // ── D5. 超級捷拉奧拉ex|瞬間移轉 — 150 + 自身與備戰互換 picker ─
 //   卡面：「將這隻寶可夢與備戰寶可夢互換。」
-regPost('超級捷拉奧拉ex|瞬間移轉', (state, aIdx) => {
+regPost('超級捷拉奧拉ex|介秒迴轉', (state, aIdx) => {
   const p = state.players[aIdx];
   if (p.bench.length === 0) return addLog(state, '瞬間移轉：備戰區無寶可夢可換', aIdx);
   return withPending(addLog(state, '瞬間移轉：選 1 隻備戰寶可夢與戰鬥位互換', aIdx), {
@@ -850,8 +850,8 @@ regR('m5-zeraora-teleport', (state, aIdx, iids) => {
 // ── E1. 金魚王|水流射擊 — 對對手 1 隻寶可夢 × 自身能量數 × 30 (bench 不計弱抗) ─
 //   卡面：「對對手 1 隻寶可夢，造成這隻寶可夢身上附加的能量數 × 30 點傷害。
 //          （備戰寶可夢不計算弱點・抵抗力。）」
-regPre('金魚王|水流射擊', (state) => ({ state, damage: 0 }));
-regPost('金魚王|水流射擊', (state, aIdx) => {
+regPre('金魚王|水炮射', (state) => ({ state, damage: 0 }));
+regPost('金魚王|水炮射', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defender = state.players[dIdx];
   if (!defender.active && defender.bench.length === 0) {
@@ -892,8 +892,8 @@ regR('m5-seaking-water-shot', (state, aIdx, iids, params) => {
 
 // ── E2. 鍬農炮蟲|急速潛行 — 對對手 1 隻寶可夢 50 (bench 不計弱抗) ─
 //   卡面：「對對手 1 隻寶可夢造成 50 點傷害。（備戰寶可夢不計算弱點・抵抗力。）」
-regPre('鍬農炮蟲|急速潛行', (state) => ({ state, damage: 0 }));
-regPost('鍬農炮蟲|急速潛行', (state, aIdx) => {
+regPre('鍬農炮蟲|快速俯衝', (state) => ({ state, damage: 0 }));
+regPost('鍬農炮蟲|快速俯衝', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defender = state.players[dIdx];
   if (!defender.active && defender.bench.length === 0) {
@@ -928,8 +928,8 @@ regR('m5-kuwaganon-dash', (state, aIdx, iids, params) => {
 
 // ── E3. 禿鷹娜|骨頭狙擊 — 對對手 1 隻附特殊能量寶可夢 70 (bench 不計弱抗) ─
 //   卡面：「對附有特殊能量的對手 1 隻寶可夢造成 70 點傷害。（備戰寶可夢不計算弱點・抵抗力。）」
-regPre('禿鷹娜|骨頭狙擊', (state) => ({ state, damage: 0 }));
-regPost('禿鷹娜|骨頭狙擊', (state, aIdx, pool) => {
+regPre('禿鷹娜|骨棒狙擊', (state) => ({ state, damage: 0 }));
+regPost('禿鷹娜|骨棒狙擊', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defender = state.players[dIdx];
   // 候選 = 對手場上有附特殊能量的寶可夢
@@ -974,7 +974,7 @@ regR('m5-mandibuzz-bone-snipe', (state, aIdx, iids, params) => {
 // ── E4. 瑪夏多|影結 — 對手戰鬥位撤退所需能量數 × 30 ────────
 //   卡面：「對手戰鬥寶可夢撤退所需的能量數 × 30 點傷害。」
 //   實裝：讀對手戰鬥位卡片 JSON 的 retreatCost.length（直接打對手戰鬥位，非 picker）
-regPre('瑪夏多|影結', (state, aIdx, pool) => {
+regPre('瑪夏多|影繩結', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defActive = state.players[dIdx].active;
   const defCard = defActive ? pool.get(defActive.cardId) : null;
@@ -988,8 +988,8 @@ regPre('瑪夏多|影結', (state, aIdx, pool) => {
 
 // ── F1. 好啦魷|調達 — 從自己牌庫選 1 張物品，給對手看後加手牌 ─
 //   卡面：「從自己的牌庫選擇 1 張物品，給對手看過後，加入手牌。然後重洗牌庫。」
-regPre('好啦魷|調達', (state) => ({ state, damage: 0 }));
-regPost('好啦魷|調達', (state, aIdx) => {
+regPre('好啦魷|籌備', (state) => ({ state, damage: 0 }));
+regPost('好啦魷|籌備', (state, aIdx) => {
   const p = state.players[aIdx];
   if (p.deck.length === 0) return addLog(state, '調達：牌庫為空', aIdx);
   return withPending(
@@ -1070,7 +1070,7 @@ regPre('超級水晶燈火靈ex|幻影迷宮', (state, aIdx, pool) => {
 //   卡面：「下個自己的回合，這隻寶可夢使用招式對對手戰鬥寶可夢造成的傷害「+150」。」
 //   實裝：在 attacker.active 上設 damageBonusPending=150，
 //   engine 在自己 END_TURN 時 promote 給 damageBonusThisTurn（下個自己回合生效）。
-regPost('戰槌龍ex|暴走之槌', (state, aIdx) => {
+regPost('戰槌龍ex|亂暴錘', (state, aIdx) => {
   return updatePlayer(addLog(state, '暴走之槌：下個自己回合自身招式 +150', aIdx), aIdx, p => {
     if (!p.active) return p;
     return {
@@ -1136,8 +1136,8 @@ regPre('喇叭啄鳥|飛翔', (state, aIdx) => {
 // ── B2. 下石鳥|配送挑戰 — 2 次擲幣全正面 → 牌庫選 1 寶可夢到備戰 ─
 //   卡面：「擲 2 次硬幣，若全部為正面，從自己的牌庫選擇 1 張寶可夢，放置於備戰區。
 //          然後重洗牌庫。」
-regPre('下石鳥|配送挑戰', (state) => ({ state, damage: 0 }));
-regPost('下石鳥|配送挑戰', (state, aIdx) => {
+regPre('下石鳥|親送挑戰', (state) => ({ state, damage: 0 }));
+regPost('下石鳥|親送挑戰', (state, aIdx) => {
   const r = flipCoinsWithLog(state, 2, '配送挑戰', aIdx);
   if (r.heads < 2) {
     return addLog(r.state, `配送挑戰：${r.heads}/2 次正面，效果失敗`, aIdx);
@@ -1219,7 +1219,7 @@ regR('m5-tropius-fruit-aroma', (state, aIdx, iids) => {
 
 // ── C2. 詛咒娃娃|人偶捕捉 — 80 + 若希望牌庫選 1 任意卡加手牌 ────
 //   卡面：「若希望，從自己的牌庫選擇 1 張任意卡，加入手牌。然後重洗牌庫。」
-regPost('詛咒娃娃|人偶捕捉', (state, aIdx, pool, action) => {
+regPost('詛咒娃娃|玩偶捕捉', (state, aIdx, pool, action) => {
   // v5.063：若希望 binary-yes-no guard
   const _chosenIids = action?.discardedEnergyIids;
   const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
@@ -1260,7 +1260,7 @@ regR('m5-shuppet-doll-capture', (state, aIdx, iids) => {
 //   實作：直接把 active 連同 energyAttached/toolAttached/evolvedFromStack 加進 deck，
 //        然後設 active=null。玩家須送新戰鬥位（engine 自動觸發 SEND_NEW_ACTIVE flow）。
 //   POST 而非 PRE — 確保 120 傷害先結算。
-regPost('西獅海壬|水流回歸', (state, aIdx) => {
+regPost('西獅海壬|水迴旋', (state, aIdx) => {
   const p = state.players[aIdx];
   if (!p.active) return addLog(state, '水流回歸：自身已不在戰鬥位', aIdx);
   const att = p.active;
@@ -1419,7 +1419,7 @@ regA('戰槌龍ex', 0, (st, idx, pool, inst) => {
   if (!inst || p.active?.iid !== inst.iid) {
     return addLog(st, '破壞之頭錘：必須在戰鬥場才能使用', idx);
   }
-  const r = flipCoinsWithLog(st, 1, '破壞之頭錘', idx);
+  const r = flipCoinsWithLog(st, 1, '破壞頭錘', idx);
   if (r.heads === 0) return addLog(r.state, '破壞之頭錘：反面，無效果', idx);
   const dIdx = (1 - idx) as 0 | 1;
   const def = st.players[dIdx].active;
@@ -1769,8 +1769,8 @@ function countHuayinInOwnDiscard(
 //   damage = 0；效果為「放置傷害指示物」屬 attack-effect。
 //   per-target 走 canApplyEffectToTarget('attack-effect') — 對手場上若有化隱
 //   寶可夢應被自身免疫（雖然這場景罕見：對手也用化隱牌組）。
-regPre('來悲粗茶|抹茶旋轉', (state) => ({ state, damage: 0 }));
-regPost('來悲粗茶|抹茶旋轉', (state, aIdx, pool) => {
+regPre('來悲粗茶|抹茶旋濺', (state) => ({ state, damage: 0 }));
+regPost('來悲粗茶|抹茶旋濺', (state, aIdx, pool) => {
   const n = countHuayinInOwnDiscard(state, aIdx, pool);
   if (n < 6) {
     return addLog(state, `抹茶旋轉：棄牌區化隱寶可夢 ${n} 張（需 ≥ 6 觸發），效果略過`, aIdx);
@@ -1806,8 +1806,8 @@ regPost('來悲粗茶|抹茶旋轉', (state, aIdx, pool) => {
 //          則選擇對手 2 隻寶可夢，將其身上的傷害指示物以 4 倍的方式放置
 //         （即原數量 × 4）。」
 //   damage = 0；倍化既有指示物（不是新放置）— 視為 attack-effect。
-regPre('花岩怪|靈魂終結', (state) => ({ state, damage: 0 }));
-regPost('花岩怪|靈魂終結', (state, aIdx, pool) => {
+regPre('花岩怪|魂之末', (state) => ({ state, damage: 0 }));
+regPost('花岩怪|魂之末', (state, aIdx, pool) => {
   const n = countHuayinInOwnDiscard(state, aIdx, pool);
   if (n < 13) {
     return addLog(state, `靈魂終結：棄牌區化隱寶可夢 ${n} 張（需 ≥ 13 觸發），效果略過`, aIdx);
@@ -1866,7 +1866,7 @@ regR('m5-runerigus-soul-end', (state, aIdx, iids, _params, pool) => {
 // ── 破破舵輪|怨恨之怒 — 30 + 棄牌區化隱 ≥ 4 → +140 ───────────
 //   卡面：「自己的棄牌區中，若擁有特性『化隱』的寶可夢有 4 張以上，
 //          則此招式傷害 +140。」
-regPre('破破舵輪|怨恨之怒', (state, aIdx, pool) => {
+regPre('破破舵輪|悔念錨', (state, aIdx, pool) => {
   const n = countHuayinInOwnDiscard(state, aIdx, pool);
   const bonus = n >= 4 ? 140 : 0;
   const dmg = 30 + bonus;
@@ -1960,7 +1960,7 @@ regR('m5-westsealion-full-melody', (state, aIdx, iids) => {
 
 // ── 1. 席多藍恩｜熔岩之壁 — 120 + 下個對手回合免疫【灼傷】attacker 招式傷害 ─
 //   卡面：「下個對手的回合，這隻寶可夢不會受到處於【灼傷】狀態的寶可夢的招式傷害。」
-regPost('席多藍恩|熔岩之壁', (state, aIdx) => {
+regPost('席多藍恩|熔岩牆', (state, aIdx) => {
   const att = state.players[aIdx].active;
   if (!att) return state;
   return updatePlayer(
@@ -2034,7 +2034,7 @@ reg('格拉吉歐的決戰', (st, idx) => {
 // 注意「翻為正面的寶可夢卡」涵蓋全部寶可夢卡（包括沒有蟲蟲恐慌招式的寶可夢），
 // 不只是「擁有蟲蟲恐慌」的那幾張。計數 × 50 才限定有此招式者。
 //
-// 同檔 effects.ts: PASSIVE_PREVENT_KO 加 '不朽之軀'（與堅忍之軀邏輯等價，
+// 同檔 effects.ts: PASSIVE_PREVENT_KO 加 '不朽身軀'（與堅忍之軀邏輯等價，
 // engine 既有 wouldBeKO + PASSIVE_PREVENT_KO 路徑自動處理）。
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -2162,7 +2162,7 @@ regPost('迷唇姐|強烈之吻', (state, aIdx, pool) => {
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── 1a. 狐大盜|招式竊賊 PRE — hand=0 gate + 對手寶可夢招式 copy ─────────
-regPre('狐大盜|招式竊賊', (state, aIdx, pool, action) => {
+regPre('狐大盜|技能大盜', (state, aIdx, pool, action) => {
   const p = state.players[aIdx];
 
   // Gate: 自己手牌必須為 0
@@ -2275,7 +2275,7 @@ regPre('狐大盜|招式竊賊', (state, aIdx, pool, action) => {
 });
 
 // ── 1b. 狐大盜|招式竊賊 POST — 轉接 borrowed attack 的 POST ──────────
-regPost('狐大盜|招式竊賊', (state, aIdx, pool) => {
+regPost('狐大盜|技能大盜', (state, aIdx, pool) => {
   const key = state.pendingCopyAttackKey;
   const cleared = { ...state, pendingCopyAttackKey: undefined };
   if (!key) return cleared;

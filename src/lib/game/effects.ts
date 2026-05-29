@@ -3620,7 +3620,7 @@ export const ABILITY_RETREAT_MOD = new Map<string, (
   //   「只要這隻寶可夢在場上，對手的戰鬥寶可夢撤退所需的能量數增加 1 個。」
   //   - 持有者只要在自己場上（active 或 bench）即生效。
   //   - 撤退者必須是對手（無進化條件，所有對手戰鬥場撤退 +1）。
-  ['咒縛之炎', (p) => {
+  ['咒縛火焰', (p) => {
     if (p.holderOwnerIdx === p.retreatingOwnerIdx) return {};
     return { addBy: 1 };
   }],
@@ -13884,7 +13884,7 @@ PASSIVE_PREVENT_KO.set('堅忍之軀', (_inst, _card, _dmg) => {
 //        不會【昏厥】，並以剩餘 HP 為「10」的狀態留在場上。」
 // engine 觸發點：wouldBeKO (baseDamage > 0 由招式傷害) → 走 PASSIVE_PREVENT_KO map，
 // 卡面「因招式傷害而昏厥」這個前提天然成立（engine 不會在特性 KO 或自殺 KO 時呼叫此 hook）。
-PASSIVE_PREVENT_KO.set('不朽之軀', (_inst, _card, _dmg) => {
+PASSIVE_PREVENT_KO.set('不朽身軀', (_inst, _card, _dmg) => {
   const heads = Math.random() < 0.5;
   if (!heads) return { prevent: false, leaveHP: 0 };
   return { prevent: true, leaveHP: 10 };
@@ -14002,7 +14002,7 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
   //       資源（actual 移動）由 m5_preview.ts regR('m5-mirieton-photon-code') 完成。
   // 限制（deferred enhancement）：當 N≥3 張 basic 能量時，目前 auto-pick 前 2 張；
   //       玩家「選哪 2 張」之 UI picker 為 deferred。常見情況 N≤2 行為完全符合卡面。
-  ['光子密碼', (state, dIdx, _aIdx, pool, _defCard, defInst) => {
+  ['光子纜線', (state, dIdx, _aIdx, pool, _defCard, defInst) => {
     if (!defInst) return state;
     const basicEnergyIids = defInst.energyAttached
       .filter(e => {
@@ -16064,7 +16064,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('呆呆王|付諸東流', {
   choiceNoLabel: '否（不放回）',
 });
 
-ATTACK_PRE_DISCARD_CHOICE.set('詛咒娃娃|人偶捕捉', {
+ATTACK_PRE_DISCARD_CHOICE.set('詛咒娃娃|玩偶捕捉', {
   min: 0, max: null, scope: 'binary-yes-no',
   baseDamage: 0, damagePerEnergy: 0,
   choicePrompt: '是否從自己的牌庫選擇 1 張任意卡加入手牌？（然後重洗牌庫）',
