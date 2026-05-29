@@ -304,6 +304,22 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.280</span> 補 v5.279 更新記錄</summary>
+        <ul>
+          <li>補上前一版更新內容如下一條。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.279</span> 對戰圓形不再誤擋小灰怪「挪動一下」</summary>
+        <ul>
+          <li>修正：場上有對戰圓形競技場時，小灰怪的招式「挪動一下」（將對手 1 個能量改附對手另一隻寶可夢）會被誤判為被擋住而無法使用。</li>
+          <li>對戰圓形卡面只擋「放置傷害指示物」類的招式效果，「移動能量」這類非放置指示物的招式效果不該被擋。</li>
+          <li>同時保留個別寶可夢層級的保護（薄霧能量、硬岩【鬥】能量、化隱、抵抗之幕、球形盾牌、藏隱、深度下潛、皇帝之勢、全能硬殼、陳舊的背蓋化石）— 這些對「挪動一下」仍會擋住對應寶可夢。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.278</span> 補 v5.276/v5.277 更新記錄</summary>
         <ul>
           <li>補上前兩版更新內容如下兩條。</li>
