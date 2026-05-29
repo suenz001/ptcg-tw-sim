@@ -4495,6 +4495,7 @@ export function flipCoinsWithLog(
   count: number,
   label: string,
   aIdx: 0 | 1,
+  injectedFlips?: string[],  // v5.257：可選注入既定擲幣結果（重試徽章「保留前次結果」用）
 ): { state: GameState; heads: number } {
   let s = state;
   // v4.898 重試徽章：標記本次 ATTACK action 中已擲過幣（ATTACK 末端用此判定是否開 modal）。
@@ -4502,19 +4503,32 @@ export function flipCoinsWithLog(
   //       不影響邏輯。ATTACK 開頭會清此 flag。
   if (count > 0) s = { ...s, coinFlippedThisAttack: true };
   let heads = 0;
+  // v5.257：擲幣明細存到 state._machineGunLastFlips 供 retry-badge modal 顯示
+  const recordedFlips: string[] = [];
   for (let i = 0; i < count; i++) {
-    const isHeads = Math.random() < 0.5;
+    // v5.257：若 injectedFlips 有對應位置 → 用既定結果（玩家選「保留前次擲幣結果」路徑）
+    const injected = injectedFlips && i < injectedFlips.length ? injectedFlips[i] : undefined;
+    const isHeads = injected !== undefined ? (injected === '正面') : (Math.random() < 0.5);
     const prefix = count === 1 ? '' : `第 ${i + 1} 次`;
-    s = addLog(s, `${label}：${prefix}擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
+    const suffix = injected !== undefined ? '〔重試徽章：使用前次擲幣結果〕' : '';
+    s = addLog(s, `${label}：${prefix}擲硬幣 — ${isHeads ? '正面' : '反面'}${suffix}`, aIdx);
     if (isHeads) heads++;
+    recordedFlips.push(isHeads ? '正面' : '反面');
+  }
+  // v5.257：append 到 state._machineGunLastFlips（累加；同 ATTACK 內多次擲幣場景）
+  if (count > 0) {
+    const existing = s._machineGunLastFlips ?? [];
+    s = { ...s, _machineGunLastFlips: [...existing, ...recordedFlips] };
   }
   return { state: s, heads };
 }
 
 /** 簡易 coin flip +N helper：基礎傷害 + (正面 ? N : 0) */
 function coinPlusPre(base: number, bonus: number, attackName: string): AttackPreFn {
-  return (state, aIdx, _pool) => {
-    const r = flipCoinsWithLog(state, 1, attackName, aIdx);
+  return (state, aIdx, _pool, action) => {
+    // v5.257：forward action._retryInjectedFlips 給 flipCoinsWithLog
+    const injected = (action as { _retryInjectedFlips?: string[] } | undefined)?._retryInjectedFlips;
+    const r = flipCoinsWithLog(state, 1, attackName, aIdx, injected);
     const dmg = base + (r.heads ? bonus : 0);
     const s = addLog(r.state, `${attackName}：${r.heads ? `+${bonus} 傷害` : '無加成'} → ${dmg}`, aIdx);
     return { state: s, damage: dmg };
@@ -4868,8 +4882,10 @@ regPost('懶人獺|悠哉', (state, aIdx) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 export function coinHeadsMultiplyPre(flips: number, perHead: number, attackName: string): AttackPreFn {
-  return (state, aIdx, _pool) => {
-    const r = flipCoinsWithLog(state, flips, attackName, aIdx);
+  return (state, aIdx, _pool, action) => {
+    // v5.257：forward action._retryInjectedFlips
+    const injected = (action as { _retryInjectedFlips?: string[] } | undefined)?._retryInjectedFlips;
+    const r = flipCoinsWithLog(state, flips, attackName, aIdx, injected);
     const dmg = r.heads * perHead;
     const s = addLog(r.state, `${attackName}：${r.heads}/${flips} 次正面 → ${r.heads}×${perHead} = ${dmg} 傷害`, aIdx);
     return { state: s, damage: dmg };
@@ -4910,8 +4926,10 @@ regPre('袋獸|迷昏拳', coinHeadsMultiplyPre(2, 90, '迷昏拳'));
 
 // ── (A) coin-tails-fail helper + 4 張 ─────────────────────────────────────
 function coinTailsFailPre(base: number, attackName: string): AttackPreFn {
-  return (state, aIdx, _pool) => {
-    const r = flipCoinsWithLog(state, 1, attackName, aIdx);
+  return (state, aIdx, _pool, action) => {
+    // v5.257：forward action._retryInjectedFlips
+    const injected = (action as { _retryInjectedFlips?: string[] } | undefined)?._retryInjectedFlips;
+    const r = flipCoinsWithLog(state, 1, attackName, aIdx, injected);
     if (!r.heads) {
       return { state: addLog(r.state, `${attackName}：反面 → 招式失敗`, aIdx), damage: 0 };
     }
