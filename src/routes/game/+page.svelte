@@ -10730,24 +10730,24 @@
     max-height: 110px;
   }
 
-  /* v5.285 桌墊版 bench-extended v3 真修法 — 恢復 zoom 繼承 + slot flex 平分
-     v5.283 用 zoom:1 + slot fixed 100x142 後 Wilson 回報 2 個問題:
-     (1) 字體放太大 (HP / 寶可夢名稱) — 根因: 拿掉 zoom:0.65 後字體 px 不再縮放
-     (2) 疊牌位置跑掉 — 根因: .att-card-stack width:100% 基於 slot 寬,
-         slot 從 flex base 改 fixed 100px, stack 寬計算錯位
-     v3 修法:
-     (a) 保留 long-form `grid-area: 1/1/2/-1` (opp) / `4/1/5/-1` (my) 跨整 row
-     (b) 不動 .zone-bench base 的 `zoom:0.65` — 8 卡時跟 5 卡同步縮放字體 / 卡圖
-     (c) slot 改 `flex:1 1 0; min-width:0; max-width:192px` 平分整 row 寬
-         min-width:0 必要 — override base `min-width:90px` (8*90=720 撐爆 cell)
-     (d) img / att-card-stack 用 base 設定 (不 override), 維持原本疊牌定位 */
+  /* v5.287 桌墊版 bench-extended v4 — slot fixed 100px (跟 5 卡 base 視覺接近, 不平分)
+     v5.285 用 flex:1 1 0 + max:192px 後 Wilson 截圖三大問題:
+     (1) 對手 3 卡撐到 max:192 視覺過大 — 少量卡 grow 撐滿
+     (2) opp + my active 疊在一起 — max:192 撐爆 grid 內部 layout 計算, 1fr cell 寬被搶
+     (3) Wilson 要求: 8 卡單張寬度應跟 5 卡 base slot 一致, 不要平分整 row
+     v4 修法:
+     (a) slot 改 fixed `flex:0 0 100px; width:100px` — 不 grow/shrink, 跟 5 卡視覺一致
+         (5 卡 base 90~128 layout * zoom 0.65 ~ 58~83 視覺; 8 卡 fixed 100 視覺 65 中間值)
+     (b) grid-area: 1/1/2/-1 / 4/1/5/-1 仍跨整 row (突破 1fr cell 限制讓 8 卡放得下)
+         但因 slot fixed 100, container 寬度 = 8*100+gap = ~830 固定, 不撐爆其他 cells
+     (c) justify-content: center 少量卡 (3 卡) 集中, 不撐滿整 row */
   .playmat.layout-tabletop .opponent-row > .zone-bench.bench-extended {
     grid-area: 1 / 1 / 2 / -1 !important;
-    justify-self: stretch !important;
+    justify-self: center !important;
   }
   .playmat.layout-tabletop .my-row > .zone-bench.bench-extended {
     grid-area: 4 / 1 / 5 / -1 !important;
-    justify-self: stretch !important;
+    justify-self: center !important;
   }
   .playmat.layout-tabletop .zone-bench.bench-extended {
     overflow-x: visible !important;
@@ -10756,17 +10756,16 @@
     flex-wrap: nowrap !important;
     justify-content: center !important;
     gap: 4px !important;
-    width: 100% !important;
+    width: max-content !important;
     max-width: none !important;
   }
-  /* slot 平分整 row 寬: 8 卡平分 ~960px → ~120px layout, zoom 0.65 後視覺 ~78px
-     跟 5 卡時 slot ~88px 視覺相近 (略小但同 zoom 文字 / 卡圖比例完全一致) */
+  /* slot fixed 100px — 跟 5 卡 base 視覺接近, 不 grow / shrink, 不平分整 row */
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot,
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-empty {
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    max-width: 192px !important;
-    width: auto !important;
+    flex: 0 0 100px !important;
+    width: 100px !important;
+    min-width: 100px !important;
+    max-width: 100px !important;
   }
 
   /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
