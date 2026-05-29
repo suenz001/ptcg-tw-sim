@@ -304,6 +304,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.250</span> 帝牙海獅「凍結獠牙」AI 攻擊失敗無限迴圈修正</summary>
+        <ul>
+          <li>玩家反映：被帝牙海獅「凍結獠牙」打到後（下回合能量 ≤ 2 的寶可夢無法使用招式），AI 在含羞苞戰鬥場時會卡住，反覆嘗試攻擊形成無限迴圈。</li>
+          <li>根因：凍結獠牙的攻擊封鎖效果觸發時，原本只擋下攻擊但沒強制結束回合 → AI 反覆嘗試 → 無限迴圈。</li>
+          <li>修補：被凍結獠牙鎖住時自動進入結束階段，AI 會接著選結束回合，不再卡住。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.249</span> 莉佳的蔓藤怪「百花齊放」特性修正</summary>
         <ul>
           <li>玩家反映：莉佳的蔓藤怪「百花齊放」特性可以從牌庫挑任何寶可夢，違反卡面（只能挑「莉佳的」寶可夢）。</li>

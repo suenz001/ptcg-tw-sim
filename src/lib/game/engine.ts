@@ -4016,7 +4016,10 @@ function handlePlaying(
     // v2.78 凍結獠牙 — 全場低能量鎖招（player-level）
     if (state.lowEnergyCantAttackThisTurn?.[aIdx]
         && attacker.active.energyAttached.length <= 2) {
-      return addLog(state, '[凍結獠牙]能量 ≤ 2 的寶可夢無法使用招式（鎖在 lowEnergyCantAttackThisTurn）', aIdx);
+      // v5.250：必須設 turnPhase='end' 強制進入 end phase，否則 AI 反覆 retry attack 造成無限迴圈
+      //   玩家回報：對手用含羞苞癢癢花粉後 AI 想攻擊但能量 ≤ 2 觸發凍結獠牙 lock → 卡住
+      return addLog({ ...state, turnPhase: 'end' as const },
+        '[凍結獠牙]能量 ≤ 2 的寶可夢無法使用招式（自動進入結束階段）', aIdx);
     }
     if (!canAffordAttack(attacker.active, attack.cost, pool, state, aIdx, attack.name)) return state;
 
