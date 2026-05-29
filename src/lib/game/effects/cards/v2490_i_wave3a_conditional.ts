@@ -149,31 +149,55 @@ function snipeOneBenchPost(amount: number, label: string): AttackPostFn {
 }
 
 // 對手所有備戰每隻 +N
+// v5.268: per-bench 走 canApplyEffectToTarget('attack-damage', isBench:true)
+//   修花之帷幔/球形盾牌/藏隱/深度下潛/羽毛化石/太晶/中立中心/暗影【惡】能量 等備戰免傷.
 function snipeAllOppBenchPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const opp = state.players[dIdx];
     if (opp.bench.length === 0) {
       return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
     }
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const newOpp = { ...opp };
-    newOpp.bench = opp.bench.map(b => ({ ...b, damage: (b.damage ?? 0) + amount }));
-    players[dIdx] = newOpp;
-    return addLog({ ...state, players }, `${label}：對手所有備戰寶可夢各受到 ${amount} 點傷害`, aIdx);
+    let s = state;
+    const newBench = opp.bench.map(b => {
+      const card = pool.get(b.cardId);
+      const guard = canApplyEffectToTarget(s, aIdx, b, card, 'attack-damage', pool, { isBench: true });
+      if (guard.blocked) {
+        s = addLog(s, `${label}：${card?.name ?? '?'} 因 ${guard.reason} 不受傷害`, aIdx);
+        return b;
+      }
+      return { ...b, damage: (b.damage ?? 0) + amount };
+    });
+    const players = [...s.players] as [PlayerState, PlayerState];
+    players[dIdx] = { ...opp, bench: newBench };
+    return addLog({ ...s, players }, `${label}：對手備戰寶可夢各受到 ${amount} 點傷害（未被擋者）`, aIdx);
   };
 }
 
 // 雙方所有備戰每隻 +N
+// v5.268: 對手側 per-bench 走 canApplyEffectToTarget guard (花之帷幔等可擋);
+//   自方側不走 guard (自傷不應受花之帷幔保護, 卡面如此).
 function snipeAllBothBenchPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const players = [...state.players] as [PlayerState, PlayerState];
+  return (state, aIdx, pool) => {
+    let s = state;
+    const players = [...s.players] as [PlayerState, PlayerState];
     for (const i of [0, 1] as const) {
       const p = { ...players[i] };
-      p.bench = p.bench.map(b => ({ ...b, damage: (b.damage ?? 0) + amount }));
+      const isOppSide = i !== aIdx;
+      p.bench = p.bench.map(b => {
+        if (isOppSide) {
+          const card = pool.get(b.cardId);
+          const guard = canApplyEffectToTarget(s, aIdx, b, card, 'attack-damage', pool, { isBench: true });
+          if (guard.blocked) {
+            s = addLog(s, `${label}：${card?.name ?? '?'} 因 ${guard.reason} 不受傷害`, aIdx);
+            return b;
+          }
+        }
+        return { ...b, damage: (b.damage ?? 0) + amount };
+      });
       players[i] = p;
     }
-    return addLog({ ...state, players }, `${label}：雙方所有備戰寶可夢各受到 ${amount} 點傷害`, aIdx);
+    return addLog({ ...s, players }, `${label}：雙方備戰寶可夢各受到 ${amount} 點傷害（未被擋者）`, aIdx);
   };
 }
 

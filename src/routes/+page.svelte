@@ -303,14 +303,6 @@
     <summary><h2>📋 版本更新記錄</h2></summary>
     <div class="changelog-list">
 
-      <details open>
-        <summary><span class="ver-badge">v5.267</span> 首頁聯絡資訊與更新記錄整理</summary>
-        <ul>
-          <li>首頁底部聯絡連結改為「點此聯絡我們」（不再直接顯示信箱）。</li>
-          <li>最近 30 個版本的更新記錄全面整理為玩家視角，移除技術細節，只保留 bug 修補與功能變更內容。</li>
-        </ul>
-      </details>
-
       <details>
         <summary><span class="ver-badge">v5.263</span> 重試徽章詢問視窗訊息修正</summary>
         <ul>

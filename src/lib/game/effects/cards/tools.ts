@@ -631,6 +631,10 @@ export const ATTACH_TOOL_NAMES = new Set<string>([
   '璀璨結晶',          // engine.ts: 太晶寶可夢使用招式 cost -1
   '反擊增幅器',        // engine.ts: 自方獎賞 > 對手時 cost -1【無】
   '力之沙漏',          // engine.ts: 持有方回合結束時觸發棄能量附加
+  // v5.268 重試徽章 — engine.ts inline handler 處理 modal trigger,
+  //   但 attach 機制仍走 toolAttachEffect (檔尾 auto-register loop 會抓此 Set).
+  //   不設 TOOL_ATTACH_GATE → 可附任何屬性寶可夢 (卡面只限制「效果端」對【無】生效).
+  '重試徽章',
   '重試徽章',          // v5.162: M5 #50293 — 無屬性寶可夢可重擲招式硬幣 (gate 用 TOOL_ATTACH_GATE, coin reroll 功能 TODO)
   ...TOOL_HP_BONUS.keys(),
   ...TOOL_ATTACK_BONUS.keys(),
