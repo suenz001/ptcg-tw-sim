@@ -5733,6 +5733,7 @@ function handlePlaying(
               preAttackState: preAttackStateForRetry,
               originalAction: action,
               coinFlips,
+              attackName: attack.name,  // v5.263: 動態 attackName 讓 modal 顯示對應招式
               options: [
                 { id: 'keep', text: '✅ 不重擲（使用剛才擲幣結果，套用傷害）' },
                 { id: 'retry', text: '🔄 重擲（消除剛才擲幣結果，重新擲幣）— 本回合 1 次' },

@@ -7279,21 +7279,24 @@
           {:else}
             {@const opts = (pendingSelection.params?.options as Array<{id:string;text:string;disabled?:boolean;inspectIid?:string;inspectPlayerIdx?:0|1}>) ?? []}
             {@const coinFlips = (pendingSelection.params?.coinFlips as string[] | undefined) ?? []}
-            <!-- v5.165 重試徽章 modal — 顯示前次擲幣明細 -->
+            {@const retryAttackName = (pendingSelection.params?.attackName as string | undefined) ?? '本次招式'}
+            <!-- v5.263: 機關槍合擊類「擲幣直到反面為止」才顯示「停止」標籤 -->
+            {@const isUntilTailsAttack = retryAttackName === '機關槍合擊' || retryAttackName === '滾球' || retryAttackName === '連續舞步' || retryAttackName === '奔進' || retryAttackName === '螺旋衝刺' || retryAttackName === '連續火焰'}
+            <!-- v5.263 重試徽章 modal — 顯示本次擲幣明細 -->
             {#if coinFlips.length > 0}
               <div class="modal-coin-flips">
-                <div class="modal-coin-flips-title">🎲 本次擲幣結果（共 {coinFlips.length} 次）</div>
+                <div class="modal-coin-flips-title">🎲 本次擲幣結果 [{retryAttackName}]（共 {coinFlips.length} 次）</div>
                 <ul class="modal-coin-flips-list">
                   {#each coinFlips as flip, idx}
                     <li>
                       第 <strong>{idx + 1}</strong> 次 →
                       <strong class:heads={flip === '正面'} class:tails={flip !== '正面'}>{flip}</strong>
-                      {#if flip !== '正面'}<span class="stop-tag">（停止）</span>{/if}
+                      {#if isUntilTailsAttack && flip !== '正面' && idx === coinFlips.length - 1}<span class="stop-tag">（停止）</span>{/if}
                     </li>
                   {/each}
                 </ul>
                 <div class="modal-coin-flips-note">
-                  ※ 機關槍合擊：擲幣直到「反面」為止；總「正面」次數 × 50 加在基礎 200 傷害上。
+                  ※ 本次招式：「{retryAttackName}」的擲幣結果如上。重試徽章可選擇保留或重擲；保留則套用此結果，重擲則本回合不可再用徽章。
                 </div>
               </div>
             {/if}
