@@ -304,6 +304,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.288</span> 補 v5.287 更新記錄</summary>
+        <ul>
+          <li>補上前一版更新內容如下一條。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.287</span> 桌墊版零之大空洞備戰寬度與位置修正</summary>
+        <ul>
+          <li>修正：v5.285 後出現三個問題 — (1) 對手只有少量備戰時卡片被撐到過大；(2) 我方與對方戰鬥場垂直疊在中央；(3) 8 卡寬度跟 5 卡時不一致。本次調整成每張備戰卡寬度固定，跟一般沒有零之大空洞時的單張寬度相近，少量備戰時自動置中不撐滿。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.286</span> 補 v5.285 更新記錄</summary>
         <ul>
           <li>補上前一版更新內容如下一條。</li>
