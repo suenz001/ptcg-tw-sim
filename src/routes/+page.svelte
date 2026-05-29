@@ -304,10 +304,10 @@
     <div class="changelog-list">
 
       <details open>
-        <summary><span class="ver-badge">v5.266</span> 首頁聯絡資訊與更新記錄整理</summary>
+        <summary><span class="ver-badge">v5.267</span> 首頁聯絡資訊與更新記錄整理</summary>
         <ul>
           <li>首頁底部聯絡連結改為「點此聯絡我們」（不再直接顯示信箱）。</li>
-          <li>v5.192 之後的版本更新記錄全面整理為玩家視角，移除技術細節，只保留 bug 修補與功能變更內容。</li>
+          <li>最近 30 個版本的更新記錄全面整理為玩家視角，移除技術細節，只保留 bug 修補與功能變更內容。</li>
         </ul>
       </details>
 
@@ -321,7 +321,7 @@
       <details>
         <summary><span class="ver-badge">v5.262</span> 重試徽章「不重擲」實際還是重擲修正</summary>
         <ul>
-          <li>修正：擲反面後選「不重擲」，戰鬥訊息卻又擲了一次的問題。現在所有擲幣招式（飛翔、咬碎、雙重戲法、亂抓、舔舔颶風、二連擊…等 30+ 張）的「保留剛才擲幣結果」都會正確套用，不會重新隨機。</li>
+          <li>修正：擲反面後選「不重擲」，戰鬥訊息卻又擲了一次的問題。現在所有擲幣招式（飛翔、咬碎、亂抓、舔舔颶風、二連擊等 30+ 張）的「保留剛才擲幣結果」都會正確套用，不會重新隨機。</li>
         </ul>
       </details>
 
@@ -329,21 +329,21 @@
         <summary><span class="ver-badge">v5.259</span> 探險家的嚮導強制選 2 張 + 重試徽章措辭釐清</summary>
         <ul>
           <li>探險家的嚮導：依卡面強制選 2 張（牌庫剩 1 張時才允許少選），不能再略過。</li>
-          <li>重試徽章詢問視窗的「前次擲幣結果」字眼改為「剛才擲幣結果」，避免被誤解為上一回合的擲幣。</li>
+          <li>重試徽章詢問視窗「前次擲幣結果」改為「剛才擲幣結果」，避免被誤解為上一回合的擲幣。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.258</span> 上場補場時保險清狀態（防殘留鎖招）</summary>
         <ul>
-          <li>玩家反映：N的索羅亞克ex 用暗黑底牌借「亂暴閃電」後撤退再上場仍不能攻擊。本次修補：補場時統一清除「無法攻擊／傷害加成／鎖招」等戰鬥位專屬標記，撤退－再上場場景不再殘留鎖招。</li>
+          <li>玩家反映：N的索羅亞克ex 用暗黑底牌借「亂暴閃電」後撤退再上場仍不能攻擊。本次修補：補場時統一清除「無法攻擊／傷害加成／鎖招」等戰鬥位專屬標記，撤退－再上場場景不再殘留。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.257</span> 重試徽章支援所有擲幣招式</summary>
         <ul>
-          <li>原本只有「機關槍合擊」類動態次數招式能完整使用重試徽章；本次修補後，所有用共用擲幣工具的固定次數擲幣招式（連續攻擊、亂抓、舔舔颶風、二連擊…共 60+ 張）也都能正確使用重試徽章的「保留/重擲」選項。</li>
+          <li>原本只有「機關槍合擊」類動態次數招式能完整使用重試徽章；本次修補後，所有用共用擲幣工具的固定次數擲幣招式（連續攻擊、亂抓、舔舔颶風、二連擊等 60+ 張）也都能正確使用重試徽章。</li>
         </ul>
       </details>
 
@@ -357,21 +357,21 @@
       <details>
         <summary><span class="ver-badge">v5.255</span> 巨型花束漏算繁茂×2</summary>
         <ul>
-          <li>超級大竺葵ex 招式「巨型花束」（70 + 自身【草】能量×50），場上有大竺葵「繁茂」特性時，基本【草】能量改算 2 個。例如自身有 3 張基本【草】，傷害正確算為 70+50×6=370。</li>
+          <li>超級大竺葵ex 招式「巨型花束」場上有大竺葵「繁茂」特性時，基本【草】能量改算 2 個。例如自身有 3 張基本【草】，傷害正確算為 70+50×6=370。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.254</span> 呼朋引伴限制基礎寶可夢</summary>
         <ul>
-          <li>毒電嬰、大嘴娃、火狐狸等「呼朋引伴」族招式依卡面限定只能挑【基礎】寶可夢加入備戰，AI 與後端皆已修正。</li>
+          <li>毒電嬰、大嘴娃、火狐狸等「呼朋引伴」族招式依卡面限定只能挑【基礎】寶可夢加入備戰。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.253</span> 萬花筒華爾滋完整實裝</summary>
         <ul>
-          <li>超級差不多娃娃ex 招式「萬花筒華爾滋」改為兩階段選擇：先從牌庫挑能量（任何屬性、最多 正面數×2 張），再分配給自己場上任何寶可夢（含戰鬥場與備戰），最後重洗牌庫。</li>
+          <li>超級差不多娃娃ex 招式「萬花筒華爾滋」改為兩階段選擇：先從牌庫挑能量（任何屬性、最多 正面數×2 張），再分配給自己場上任何寶可夢，最後重洗牌庫。</li>
         </ul>
       </details>
 
@@ -392,19 +392,19 @@
       <details>
         <summary><span class="ver-badge">v5.250</span> 帝牙海獅「凍結獠牙」AI 攻擊失敗無限迴圈修正</summary>
         <ul>
-          <li>玩家反映：被「凍結獠牙」鎖招後 AI 在含羞苞戰鬥場時會反覆嘗試攻擊形成無限迴圈。本次修補：被凍結獠牙鎖住時自動進入結束階段，AI 自然會結束回合不再卡住。</li>
+          <li>玩家反映：被「凍結獠牙」鎖招後 AI 在含羞苞戰鬥場時會反覆嘗試攻擊形成無限迴圈。本次修補：被凍結獠牙鎖住時自動進入結束階段。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.249</span> 莉佳的蔓藤怪「百花齊放」特性修正</summary>
         <ul>
-          <li>依卡面「莉佳的寶可夢」過濾，特性「百花齊放」彈出的牌庫挑選介面現在只顯示牌庫內的「莉佳的」寶可夢可選。</li>
+          <li>特性「百花齊放」彈出的牌庫挑選介面現在只顯示牌庫內的「莉佳的」寶可夢可選。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.248</span> 上場特性詢問補完 — 大劍鬼/直衝熊/魔幻假面喵</summary>
+        <summary><span class="ver-badge">v5.248</span> 上場特性詢問補完 — 大劍鬼／直衝熊／魔幻假面喵</summary>
         <ul>
           <li>大劍鬼「激流旋渦」、直衝熊「激動衝刺」、魔幻假面喵「表演時間」這幾個上場時可使用 1 次的特性，在自己回合內透過特性／道具／支援者換上戰鬥場時也會跳出使用詢問。</li>
         </ul>
@@ -413,7 +413,7 @@
       <details>
         <summary><span class="ver-badge">v5.247</span> 上場特性詢問補完 — 桃歹郎ex「支配鎖鏈」</summary>
         <ul>
-          <li>桃歹郎ex「支配鎖鏈」換位後新戰鬥位的上場特性詢問現在也會跳出，並補上「本回合換上來」標記讓疾風直撞類條件招式對它生效。</li>
+          <li>桃歹郎ex「支配鎖鏈」換位後新戰鬥位的上場特性詢問現在也會跳出。</li>
         </ul>
       </details>
 
@@ -432,23 +432,23 @@
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.244</span> 上場特性詢問補完 — 寶可夢交替/急進開關/AZ的平和/超級快龍ex「天空搬運」</summary>
+        <summary><span class="ver-badge">v5.244</span> 上場特性詢問補完 — 寶可夢交替／急進開關／AZ的平和／超級快龍ex「天空搬運」</summary>
         <ul>
-          <li>透過上述換位類道具／支援者／招式換上戰鬥場時，新戰鬥寶可夢的上場特性詢問現在都會跳出（如鐵斑葉「迅速游標」、遠古巨蜓ex「失準軌跡」等）。</li>
+          <li>透過上述換位類道具／支援者／招式換上戰鬥場時，新戰鬥寶可夢的上場特性詢問現在都會跳出。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.243</span> 上場特性詢問機制重設計（共用 helper）</summary>
+        <summary><span class="ver-badge">v5.243</span> 上場特性詢問機制重設計</summary>
         <ul>
-          <li>把「換上戰鬥場時可使用 1 次的特性」詢問機制集中到單一共用流程；任何換位路徑都會正確跳出詢問。</li>
+          <li>把「換上戰鬥場時可使用 1 次的特性」詢問機制集中處理，任何換位路徑都會正確跳出詢問。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.240</span> 鐵斑葉「迅速游標」/ 遠古巨蜓ex「失準軌跡」上場詢問</summary>
         <ul>
-          <li>從備戰換到戰鬥場時，鐵斑葉「迅速游標」與遠古巨蜓ex「失準軌跡」會跳出「是否使用」詢問，不再被略過。</li>
+          <li>從備戰換到戰鬥場時，鐵斑葉「迅速游標」與遠古巨蜓ex「失準軌跡」會跳出「是否使用」詢問。</li>
         </ul>
       </details>
 
@@ -456,17 +456,16 @@
         <summary><span class="ver-badge">v5.239</span> 5 個 bug 集合修</summary>
         <ul>
           <li>章魚桶「墨汁噴射」對手戰鬥場附【薄霧能量】時應不觸發鎖招效果。</li>
-          <li>招式「飛翔」/「要害斬」/「阿塞蘿拉的惡作劇」下回合不受招式效果現在也擋住對手的「指示物」等附加效果。</li>
+          <li>招式「飛翔」/「要害斬」/「阿塞蘿拉的惡作劇」下回合不受招式效果現在也擋住對手的附加效果。</li>
           <li>預設牌組「土龍弟弟」由 G 標改為 I 標。</li>
-          <li>球形盾牌等「擋備戰指示物」類道具的 KO 後 snapshot 機制補完。</li>
-          <li>幾項其他卡面文字 / 訊息誤標修正。</li>
+          <li>幾項其他卡面文字/訊息修正。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.238</span> 飛翔／要害斬／阿塞蘿拉惡作劇 完整擋對手招式效果</summary>
         <ul>
-          <li>玩家回報：飛翔擲正面後，下回合受胡地「手之力量」攻擊，傷害指示物仍被放上。本次修補後，這類「不受招式傷害和效果」的效果會同時擋住對手招式的附加效果（如放指示物、改狀態），符合卡面。</li>
+          <li>「不受招式傷害和效果」的效果現在也擋住對手招式的附加效果（如放指示物、改狀態），符合卡面。</li>
         </ul>
       </details>
 
@@ -477,226 +476,418 @@
         </ul>
       </details>
 
+
       <details>
-        <summary><span class="ver-badge">v5.236</span> 桌墊版備戰擴展回穩定版（撤回 v5.232~v5.235）</summary>
+        <summary><span class="ver-badge">v5.236</span> 桌墊版備戰 8 隻調整暫時撤回</summary>
         <ul>
-          <li>零之大空洞 8 位備戰展開時，多版本嘗試調整 CSS 但都會導致縮小或捲動異常，本次撤回至最穩定的 5 隻備戰 grid，先確保版面正常。</li>
+          <li>v5.232 / v5.233 / v5.234 / v5.235 四次嘗試讓 8 隻備戰跟 5 隻一樣大都沒成功 — 我方備戰區受限於版面結構，CSS 規則套上但實際寬度沒拿到。本次<b>暫時撤回所有調整</b>，回到原本的處理方式：8 隻備戰時卡牌會自動縮小，並提供橫向捲動軸。後續會重新規劃。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.231</span> 手機版彈窗點擊穿透 + 桌墊版疊牌順序</summary>
+        <summary><span class="ver-badge">v5.235</span> 桌墊版備戰 8 隻終於跟 5 隻一樣大</summary>
         <ul>
-          <li>手機版若彈出選擇視窗，點到視窗外不再會誤觸到底下的牌、按鈕或寶可夢。</li>
-          <li>桌墊版備戰寶可夢身上能量／道具的疊牌順序調整，視覺更整齊。</li>
+          <li>連續修了 v5.232 / v5.233 / v5.234 三次，卡牌都還是縮小。<b>真正根因</b>：原本備戰區只佔桌面中間一條（5 隻剛好放得下），但 8 隻塞不進這條空間，所以被擠縮。</li>
+          <li>本次改法 — 觸發零之大空洞時，<b>備戰區整列橫跨整個桌面寬度</b>（不再被中間那條限制），8 隻卡有充足空間自然展開到跟 5 隻一樣的尺寸，從中央居中，不需要橫向捲動。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.229</span> 小灰怪「挪動一下」改 attack-effect gate</summary>
+        <summary><span class="ver-badge">v5.234</span> 桌墊版備戰 8 隻時保持原尺寸 — 真修法</summary>
         <ul>
-          <li>小灰怪「挪動一下」屬於招式效果（attack-effect），對手場上的對應免疫（如冰冷之帳、太晶等）會正確擋下。</li>
+          <li>前一版（v5.233）改成自然展開後，卡牌還是看起來變小。<b>真正根因</b>：桌墊版預設備戰區寬度依賴外框分配，當 8 隻卡硬塞進來時，每張會被擠到約 100px（比 5 隻時的 128px 縮 22%）。</li>
+          <li>本次改成 <b>每張備戰卡固定 128px 寬，不再隨外框擠壓</b>。8 隻卡的總寬度（約 1050px）會自然溢出原本的備戰區，但維持卡牌大小一致，從中央向兩側對稱展開，不需要橫向捲動。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.228</span> 鏽蝕組翻譯／玻璃喇叭 picker</summary>
+        <summary><span class="ver-badge">v5.233</span> 桌墊版備戰 8 隻時不再捲動 — 自然展開</summary>
         <ul>
-          <li>鏽蝕組的手下（道具）依官方翻譯修正卡面文字。</li>
-          <li>玻璃喇叭從備戰挑能量改為 picker 介面，避免自動選錯。</li>
+          <li>桌墊版觸發零之大空洞（備戰擴張到 8 隻）時，前一版會出現橫向捲動軸，但其實桌面寬度本來就夠 — 改為讓備戰區自然展開到 8 隻卡的總寬度，從中央往兩側均勻擴張，不再出現捲動條，也不會縮小卡牌。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.227</span> 胖嘟嘟ex「力量壓制」能量單位計算</summary>
+        <summary><span class="ver-badge">v5.232</span> 桌墊版零之大空洞觸發時 — 卡牌不再縮小</summary>
         <ul>
-          <li>胖嘟嘟ex 招式「力量壓制」傷害計算改用「能量單位」(unit count)，火箭隊能量等多 unit 特殊能量會正確計入。</li>
+          <li>玩家反映：觸發零之大空洞（備戰區可放 8 隻）時，我方備戰區卡牌會變小，跟對手備戰區（5 隻）大小不一致。</li>
+          <li>本次修補：桌墊版備戰區擴展到 8 隻時，卡牌保持跟 5 隻時相同大小，必要時改為橫向捲動。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.226</span> 祭典樂舞同回合 flag 保留</summary>
+        <summary><span class="ver-badge">v5.231</span> 手機版 popup 按鈕修補 + 桌墊版疊牌順序調整</summary>
         <ul>
-          <li>祭典樂舞第 2 次招式使用時，第 1 次招式設下的「下回合自己 / 對手」flag 仍保留有效，符合卡面「同回合內」語意。</li>
+          <li><b>手機版穿透 bug 修補</b>：點擊聊天室、對手回合動作通知等漂浮按鈕時，點擊會穿透到下面的卡片。本次補上事件阻擋，不會再誤觸卡。</li>
+          <li><b>桌墊版疊牌順序調整</b>：寶可夢身上附加的卡片疊放順序由下到上改為：
+            <ol>
+              <li>普通能量（最下）</li>
+              <li>特殊能量</li>
+              <li>寶可夢道具</li>
+              <li>基礎寶可夢</li>
+              <li>1 階寶可夢</li>
+              <li>2 階寶可夢（最上，本體）</li>
+            </ol>
+          </li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.225</span> 對手掛機 3 分鐘宣告勝利</summary>
+        <summary><span class="ver-badge">v5.230</span> 緊急修補 v5.229 部署失敗</summary>
         <ul>
-          <li>線上對戰時若對手 3 分鐘沒有任何動作，可宣告勝利結束對戰（避免被掛機困住）。</li>
+          <li>v5.229 修補小灰怪｜挪動一下時加了一個原本就存在的程式 import，造成編譯失敗無法上線。本次移除多餘的 import，挪動一下的修補正式生效。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.220</span> 暗夜羽擊「自我 KO」流程修補</summary>
+        <summary><span class="ver-badge">v5.229</span> 小灰怪｜挪動一下 — 加上「不受招式效果影響」的判定</summary>
         <ul>
-          <li>玩家報的「暗夜羽擊 vs 對手有濕氣／自我 KO 類特性」流程修補，符合「招式效果同時結算」官方規則。</li>
-          <li>抵抗之幕 vs 幻影奇襲 KO 後對備戰失效的 snapshot 修補。</li>
+          <li>玩家反映：挪動一下屬於招式效果，但目前實作沒檢查對手寶可夢是否受招式效果保護。</li>
+          <li>本次修補：對手寶可夢身上有薄霧能量 / 硬岩【鬥】能量 / 化隱 / 球形盾牌 / 抵抗之幕 等任何「不受招式效果影響」的保護時，那隻寶可夢不能被選為來源（能量被拿走），也不能被選為目標（能量改附過來）。</li>
+          <li>若對手場上完全無合法目標 → 招式效果直接略過。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.219</span> 招式前置能量挑選 picker 加放大鏡</summary>
+        <summary><span class="ver-badge">v5.228</span> 兩張卡修補 — 鏽蝕組的手下翻譯 / 玻璃喇叭規則</summary>
         <ul>
-          <li>極降駕、烈獄狂火X、傾瀉茶、熔岩光芒等「丟自己場上能量造成傷害」的招式，能量挑選介面旁加放大鏡，可看每隻寶可夢的詳細狀況再決定丟哪隻的能量。</li>
+          <li><b>鏽蝕組的手下（支援者）翻譯與功能修正</b>：原本卡面翻譯「上個對手回合自己的寶可夢『未昏厥』時才能使用」是錯的，正確應為「『昏厥』時才能使用」（comeback 卡）。本次同步修正：
+            <ul>
+              <li>卡面文字改為正確翻譯</li>
+              <li>實裝加上判定：只有上個對手回合自己有寶可夢昏厥才能使用</li>
+            </ul>
+          </li>
+          <li><b>玻璃喇叭（物品）規則修正</b>：原本可以把 2 張能量附到同一隻寶可夢，但卡面明訂「最多 2 隻備戰區的【無】寶可夢，各 1 張」。本次修正：
+            <ul>
+              <li>強制第二次選的寶可夢不能跟第一次相同</li>
+              <li>場上只剩 1 隻【無】備戰寶可夢時，第二張能量留在棄牌區（不可重複附）</li>
+            </ul>
+          </li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.217</span> 線上對戰房間 G 標警告</summary>
+        <summary><span class="ver-badge">v5.227</span> 胖嘟嘟ex 力量壓制 / 電擊魔獸ex 高電壓壓制 — 燃火能量倍率修正</summary>
         <ul>
-          <li>線上對戰房間的對手 / 自己 seat 也會顯示牌組 G 標警告（黃字），鏡射本機 lobby 樣式。</li>
+          <li>玩家反映：胖嘟嘟ex 身上有 2 個感應【超】能量 + 1 個燃火能量，使出「力量壓制」傷害只有 80。</li>
+          <li>根因：原計算只看「能量卡張數」（3 張），沒考慮燃火能量附在進化寶可夢身上要視為 3 個【無】能量的規則。</li>
+          <li>修補後：胖嘟嘟ex 是 Stage1 進化，所以身上的能量數應算 2(感應超) + 3(燃火於進化) = 5 個，比招式需求 (2) 多 3 個 → 觸發 +80，傷害變 160。</li>
+          <li>同類招式「電擊魔獸ex｜高電壓壓制」也一併修正（兩張卡共用同一個計算邏輯）。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.226</span> 祭典樂舞第二次攻擊修補 — 同回合狀態效果保留</summary>
+        <ul>
+          <li>玩家反映：場上有祭典會場時，祭典樂舞觸發的第二次攻擊，對手的「下次被擊 -60」（鐵羽毛等減傷）沒生效。</li>
+          <li>本次修補：祭典樂舞兩次攻擊判定為同一回合的攻擊，下面這幾個一次性狀態效果在兩次攻擊都會套用：
+            <ul>
+              <li>對手的「下次被擊減傷」（鐵羽毛 等）</li>
+              <li>我方的「下回合加傷」（巨金怪彗星拳 / 大電海燕風力充能 等）</li>
+              <li>我方的「受招致削傷」（叫聲 / 吠 / 咆哮 等）</li>
+            </ul>
+          </li>
+          <li>第二次攻擊用完才正式消耗這些 flag；若玩家跳過第二次攻擊，回合結束時也會正常清除。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.225</span> 對手 3 分鐘無回應 — 可宣告對手棄權獲勝</summary>
+        <ul>
+          <li>玩家反應：線上對戰時對手不動作，不知道是不是已經關掉網頁離開了，只能空等。</li>
+          <li>本次新增：對手回合超過 3 分鐘沒任何動作 → 我方畫面頂部跳出黃色警告條 + 「宣告對手棄權獲勝」按鈕。</li>
+          <li>點按鈕跳確認視窗，確定後立刻判定你獲勝。</li>
+          <li>對手若回來動作，警告條自動消失重置計時。</li>
+          <li>觀戰者不會看到此提示。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.224</span> 暗夜羽擊深層 audit — 8 個 holder 保護類特性全面修補</summary>
+        <ul>
+          <li>玩家提出深層問題：「對手戰鬥場是火箭隊的急凍鳥（抵抗之幕），我方振翼髮（暗夜羽擊）發動飛來橫禍，可以放對手備戰火箭隊嗎？」</li>
+          <li>規則上應該<b>可以</b>（急凍鳥的抵抗之幕在戰鬥位被暗夜羽擊消除），但 v5.220 / v5.221 之前都漏修這個情境。</li>
+          <li>本次補修 8 個「靠 holder 在場提供保護」的特性，遇到 holder 在對手戰鬥位被壓制時正確失效：
+            <ul>
+              <li>抵抗之幕（火箭隊的急凍鳥）</li>
+              <li>花之帷幔（謝米）</li>
+              <li>球形盾牌（蟲甲聖）</li>
+              <li>廣域堡壘（超甲狂犀）</li>
+              <li>化隱（斯魔茶 / 來悲粗茶 / 怨影娃娃 / 詛咒娃娃）</li>
+              <li>全能硬殼（肋骨海龜）</li>
+              <li>緊張感（斧牙龍）</li>
+              <li>融合為雪（浩大鯨ex）</li>
+            </ul>
+          </li>
+          <li>修補後：對手戰鬥位上的這 8 個特性 holder 若被我方振翼髮暗夜羽擊消除，所有保護效果同時失效；備戰位的 holder 不受影響仍正常生效。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.223</span> 版本記錄全面玩家化 — 30 條近期更新重寫，舊版本摺疊收納</summary>
+        <ul>
+          <li>把 v5.193 以後 30 條更新記錄全部改寫成玩家看得懂的描述，移除工程師術語。</li>
+          <li>v5.192 以前的舊版本收進「歷史版本」摺疊區，預設關閉。想看歷史記錄的玩家點開即可。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.222</span> 體質強化：對手特性消除機制統一處理</summary>
+        <ul>
+          <li>整理「對手特性消除類」（如振翼髮的暗夜羽擊）邏輯，把分散在各處的檢查合併。</li>
+          <li>玩家不會直接感受到變化，但未來新增同類效果時不會再有遺漏，過去 v5.220、v5.221 修補的同類 bug 都更不容易再發生。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.221</span> 暗夜羽擊全面修補 — 接續 v5.220</summary>
+        <ul>
+          <li>v5.220 只修了濕氣 1 個特性受暗夜羽擊壓制的情形。本次補上其餘 4 個對手戰鬥位特性都會正確被壓制：
+            <ul>
+              <li>爆大身軀（大王銅象）— 擋對手競技場</li>
+              <li>瞪眼效用（火箭隊的阿柏怪）— 擋對手放置有特性的寶可夢</li>
+              <li>海之詛咒（胖嘟嘟ex）— 擋對手物品和道具</li>
+              <li>威迫目光（班基拉斯）— 擋對手物品</li>
+            </ul>
+          </li>
+          <li>加上 v5.220 修的濕氣，振翼髮的暗夜羽擊現在會正確消除對手戰鬥位的 5 個特性。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.220</span> 兩個 bug 修補</summary>
+        <ul>
+          <li><b>火箭隊的急凍鳥｜抵抗之幕</b>：被多龍巴魯托ex 幻影奇襲昏厥後，剩下的傷害指示物仍然可以對備戰的「火箭隊的」基礎寶可夢造成傷害。v5.186 雖然修過但仍有漏網之魚。本次補上防護層，急凍鳥被同招式昏厥後備戰一樣受保護。</li>
+          <li><b>振翼髮｜暗夜羽擊 vs 可達鴨｜濕氣</b>：振翼髮在戰鬥場時應該消除對手戰鬥位的特性（含濕氣），所以自爆類招式（咒詛炸彈、過度放電等）應該可用，但實際上仍被擋。本次修補後正確判定濕氣被壓制狀態。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.219</span> 招式前選能量丟棄時加上放大鏡</summary>
+        <ul>
+          <li>使用「極降駕」「烈獄狂火X」「傾瀉茶」「熔岩光芒」等需要丟自己場上能量的招式時，每張能量旁邊加上 🔍 放大鏡按鈕，可查看擁有此能量的寶可夢狀態（HP、其他能量、道具、狀態），再決定要丟哪隻的能量。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.218</span> 內部技術修補</summary>
+        <ul>
+          <li>修補 v5.217 部署失敗問題。玩家無感。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.217</span> 線上對戰房間也顯示 G 標牌警告</summary>
+        <ul>
+          <li>接續 v5.216，線上對戰房間的雙方對戰位下方也會顯示「牌組包含不可使用的 G 標牌」黃字警告。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.216</span> 牌組選擇下方加 G 標警告</summary>
         <ul>
-          <li>牌組選擇下方加黃色 G 標警告，鏡射「不足 60 張」UI 樣式，提醒玩家此牌組含 G 標卡牌。</li>
+          <li>本機對戰選牌組時，下方顯示牌組是否合法的黃字提示。包含 G 標牌時提醒玩家。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.215</span> 對戰開始 gate 加完整牌組驗證</summary>
+        <summary><span class="ver-badge">v5.215</span> 對戰開始前完整牌組驗證</summary>
         <ul>
-          <li>對戰開始前自動驗證牌組：60 張 / G 標 / ACE SPEC / 同名 4 張上限 / 至少 1 張基礎寶可夢。若不符合會擋下開戰並提示原因。</li>
+          <li>按下「開始對戰」前完整檢查牌組合法性：60 張、G 標牌、ACE SPEC 卡多張、同名超 4 張、至少 1 隻基礎寶可夢等。違反時跳警告，避免進對戰才發現問題。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.214</span> 4 個 bug 集中修</summary>
+        <summary><span class="ver-badge">v5.214</span> 4 個 bug 集中修補</summary>
         <ul>
-          <li>卡娜莉 picker 加上正確的 filter，不再挑到不該挑的卡。</li>
-          <li>電蜘蛛「麻麻羅網」自身有【雷】能量時招式傷害正確加算。</li>
-          <li>卡璞・鳴鳴「急速飛行」等「先攻第一回合也可用」類招式 first-turn gate 修正。</li>
-          <li>對手戰鬥場是火箭隊烏鴉頭頭時，AI 用朽木妖「詛咒根」不再卡死。</li>
+          <li>卡娜莉支援者：手牌沒有雷能量時不能使用。</li>
+          <li>電蜘蛛｜麻麻羅網：雷屬性能量正確算入傷害加成。</li>
+          <li>卡璞・鳴鳴｜急速飛行 等先攻第一回合可用招式：先攻方第一回合可正常使用。</li>
+          <li>朽木妖｜詛咒根 vs 烏鴉頭頭：AI 不再卡死。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.213</span> 化隱漏擋中毒等狀態附加</summary>
+        <summary><span class="ver-badge">v5.213</span> 化隱特性補擋對手狀態附加</summary>
         <ul>
-          <li>化隱特性（受身上沒附能量的招式時免疫）現在同時擋下對手招式的狀態附加（中毒、燒傷、麻痺等），不再只擋傷害。</li>
+          <li>擁有「化隱」特性的寶可夢（斯魔茶、來悲粗茶、怨影娃娃、詛咒娃娃）原本沒擋對手中毒、灼傷、混亂、麻痺等狀態。本次修補後正確阻擋。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.212</span> 祭典樂舞 pending UI 視覺禁用</summary>
+        <summary><span class="ver-badge">v5.212</span> 祭典樂舞發動時無關卡片視覺鎖定</summary>
         <ul>
-          <li>祭典樂舞第 2 次招式等待中，其他卡片會直接變灰且不可拖曳，玩家不會誤觸。</li>
+          <li>觸發祭典樂舞後第二次攻擊選擇期間，手牌中無關的卡片（能量、進化、支援者）會直接灰色不可拖曳，避免玩家誤點。接續 v5.211 改進。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.211</span> 祭典樂舞改「手動」+ pending 期間鎖其他動作</summary>
+        <summary><span class="ver-badge">v5.211</span> 祭典樂舞改為「手動」</summary>
         <ul>
-          <li>祭典樂舞第 1 次招式後玩家可選擇是否再用第 2 次（不再自動連打）；pending 期間擋住附能 / 進化 / 用支援者 / 場地 / 道具 / 放寶可夢 / 撤退 / 特性等動作，只能再用相同招式或結束回合。</li>
+          <li>祭典樂舞觸發後的第二次攻擊改為玩家手動點選（撤回 v5.201 的自動連打）。玩家反映希望可以選擇不打第二下。</li>
+          <li>第二次攻擊選擇期間，鎖住其他動作（附能、用支援者、撤退等），避免不公平操作。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.209</span> 護城龍｜太鼓防壁 active target case 補修</summary>
+        <summary><span class="ver-badge">v5.210</span> 內部行文整理</summary>
         <ul>
-          <li>護城龍「太鼓防壁」特殊能量計數修補；大竺葵繁茂等倍率能量在戰鬥場 active target 場景下會正確計算。</li>
+          <li>版本記錄整理。玩家無感。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.208</span> 道具拆除器第 2 張選擇介面修正</summary>
+        <summary><span class="ver-badge">v5.209</span> 護城龍｜太鼓防壁能量倍率計算修正</summary>
         <ul>
-          <li>道具拆除器第 2 張選擇時的「結束」按鈕點不下去、UI 誤顯示「沒有符合條件」問題修正。</li>
+          <li>對手戰鬥位是護城龍時，自方寶可夢上「大竺葵繁茂」這類倍率能量被太鼓防壁無視的判定修正。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.207</span> 賽吉多目標 picker</summary>
+        <summary><span class="ver-badge">v5.208</span> 道具拆除器選第 2 張時無法結束</summary>
         <ul>
-          <li>賽吉（支援者）對方場上有多隻同名底寶可夢時，現在會讓玩家選要對哪隻發動。</li>
+          <li>道具拆除器選擇第 2 張時，「結束」按鈕點不下去 + UI 誤顯示「沒有符合條件」。本次修補後可正常結束選擇。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.205</span> 手機版 picker 可拖曳 + 能量分屬性顯示</summary>
+        <summary><span class="ver-badge">v5.207</span> 賽吉支援者多目標選擇</summary>
         <ul>
-          <li>手機版各種選擇介面（picker）可拖曳移動，避免擋到下方視覺。</li>
-          <li>寶可夢身上的能量在 picker 內依屬性分類顯示，方便辨識。</li>
+          <li>使用賽吉時，場上有多隻同名底寶可夢（如多隻多龍奇）時，讓玩家自己選要進化哪一隻，不再強制進化戰鬥位。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.202</span> 沐淨 2 bug 修補</summary>
+        <summary><span class="ver-badge">v5.206</span> 內部部署救援</summary>
         <ul>
-          <li>沐淨（支援者）手牌無候選時不可使用；強制至少丟 1 張，符合卡面。</li>
+          <li>v5.205 部署沒觸發，本次救援。玩家無感。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.200</span> 手機版三類 picker 改卡圖網格</summary>
+        <summary><span class="ver-badge">v5.205</span> 手機版選擇 modal 可拖曳 + 能量分屬性</summary>
         <ul>
-          <li>手機版撤退 / 附能 / 進化選擇介面改為卡圖網格顯示（與桌面送新戰鬥位視窗一致），更易辨識。</li>
+          <li>手機版撤退 / 附能 / 進化的選擇 modal 可以拖曳調整位置。</li>
+          <li>能量顯示按屬性分類（火、水、雷等各自顯示對應符號），不再全用閃電符號代表。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.199</span> 觀戰者隱藏取得獎賞按鈕 + 強制更新按鈕優化</summary>
+        <summary><span class="ver-badge">v5.204</span> 內部技術修補</summary>
         <ul>
-          <li>觀戰模式時不會誤顯示「取得獎賞」按鈕。</li>
-          <li>首頁強制更新按鈕配色與小字優化。</li>
+          <li>修補 v5.203 的小錯誤。玩家無感。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.198</span> AI 對戰 setup 卡死修補</summary>
+        <summary><span class="ver-badge">v5.203</span> 內部技術修補</summary>
         <ul>
-          <li>雙方都重抽起手且 AI 為較少重抽方時，AI 不確認對方揭示導致對戰卡在 setup 的問題修補。</li>
+          <li>修補 v5.202 的小錯誤。玩家無感。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.202</span> 沐淨特性 2 個 bug 修補</summary>
+        <ul>
+          <li>手牌沒有非規則寶可夢時，不再亮按鈕讓玩家誤用沐淨。</li>
+          <li>使用沐淨後一定要丟一張（不再允許「使用後不選任何卡」白賺）。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.201</span> 祭典樂舞自動連打（後被 v5.211 撤回）</summary>
+        <ul>
+          <li>祭典樂舞觸發後第二次攻擊改為自動連打。後因玩家反映希望保留選擇權，於 v5.211 改回手動。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.200</span> 手機版三類 modal 改卡圖網格</summary>
+        <ul>
+          <li>手機版撤退、附能、進化的選擇 modal 改成卡圖網格顯示（仿照桌面版送新戰鬥位 modal），比舊版下拉選單直覺。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.199</span> 觀戰者畫面修補 + 首頁按鈕優化</summary>
+        <ul>
+          <li>觀戰者不再看到「取得獎賞」按鈕（避免誤觸）。</li>
+          <li>首頁「強制更新版本」按鈕配色 / 說明文字優化。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.198</span> AI 對戰補抽完卡住修補</summary>
+        <ul>
+          <li>本機 AI 對戰時，補抽完雙方都需要 mulligan 的情境下，AI 不會確認揭示導致卡住。本次修補。</li>
         </ul>
       </details>
 
       <details>
         <summary><span class="ver-badge">v5.197</span> 首頁加「強制更新版本」按鈕</summary>
         <ul>
-          <li>解決 iOS PWA 加入主畫面後 app cache 卡舊版的問題：清除瀏覽器快取並重新載入，牌組與帳號資料會保留。</li>
+          <li>iOS 用戶用 PWA（加到主畫面）模式時，瀏覽器快取常常沒清，看到舊版。新加「強制更新版本」按鈕一鍵解決。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.196</span> 對手回合出牌視窗手機版自適應 + 可拖曳</summary>
+        <summary><span class="ver-badge">v5.196</span> 對手回合出牌通知 modal 改進</summary>
         <ul>
-          <li>對手回合的動作顯示視窗手機版可自適應視窗大小且可拖曳。</li>
+          <li>對手回合動作通知 modal 在手機版自適應大小 + 可拖曳調整位置。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.195</span> 手機版悔棋按鈕加底色 + 可用手牌黃框加強</summary>
+        <summary><span class="ver-badge">v5.195</span> 手機版悔棋按鈕 / 手牌框優化</summary>
         <ul>
-          <li>手機版悔棋按鈕加上明顯底色；可使用的手牌外框加強為黃色，更易看出哪些卡可打。</li>
+          <li>手機版悔棋按鈕加底色（更明顯）。</li>
+          <li>可用手牌的黃色邊框加強。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.194</span> 手機版 4 項改進 + 挖掘崩塌 log 顯示卡名</summary>
+        <summary><span class="ver-badge">v5.194</span> 手機版 4 改進 + 挖掘崩塌 log</summary>
         <ul>
-          <li>手機版多項操作體驗改進。</li>
-          <li>挖掘崩塌（招式）的戰鬥訊息會顯示被棄的具體卡名。</li>
+          <li>手機版多項小改進（UI 調整、文字大小）。</li>
+          <li>「挖掘崩塌」特性觸發時 log 顯示完整卡名。</li>
         </ul>
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.193</span> 同名特性疊加全卡池 audit (Rule 7c)</summary>
+        <summary><span class="ver-badge">v5.193</span> 同名特性疊加全卡池檢查</summary>
         <ul>
-          <li>依官方規則「同名特性效果不重複疊加」全卡池 audit，多項特性的疊加判定修正。</li>
+          <li>檢查全卡池中「同名特性疊加」的處理，找出並修補 2 個漏算 bug。例如場上有 2 隻擁有同名加成特性的寶可夢時，加成正確算 2 次。</li>
         </ul>
       </details>
+
+      <details>
+        <summary><span class="ver-badge" style="background:#888">歷史版本</span> v5.192 以前的更新記錄（點擊展開）</summary>
+        <div class="changelog-list">
 
       <details>
         <summary><span class="ver-badge">v5.192</span> 致死毒/燒傷 log 動態化 + 小木靈怨恨進化最初回合 gate</summary>
         <ul>
-          <li>致死毒、燒傷等狀態的戰鬥訊息改為動態顯示實際傷害數值，更直觀。</li>
-          <li>小木靈「怨恨進化」首回合不可使用 gate 修補。</li>
+          <li><b>Bug A：中毒/灼傷 log 兩個問題</b>（玩家回報）
+            <ul>
+              <li>玩家反映：超級毒藻龍ex 致死猛毒（16 個指示物 = 160 傷害）打對手後，寶可夢檢查階段「沒有跳傷害出來」+ 文字記錄顯示錯誤</li>
+              <li>根因 1（致死分支沒 log）： 中毒致死分支直接走 KO log（「被中毒傷害擊倒」）→ 跳過了「受到 N 傷害」的飄字 log → 玩家看不到實際毒傷值</li>
+              <li>根因 2（log 寫死 10）： 中毒 log 寫死「受到 10 傷害」，沒讀實際 <code>poisonBaseDamage + poisonBonus</code>（致死猛毒應顯示 160，搭配劇毒支配/危險密林 還要再加成）</li>
+              <li>修：致死分支前先 addLog 顯示實際傷害「中毒：X 受到 N 傷害！」再進 KO；非致死分支移除重複 log（已在致死前 addLog 過）</li>
+              <li>順便修灼傷同類問題： 灼傷 log 寫死「受到 20 傷害」沒讀 burnBonus（熔岩波動 +30）；致死分支也補 log</li>
+            </ul>
+          </li>
+          <li><b>Bug B：小木靈 怨恨進化 最初回合 gate</b>（玩家回報）
+            <ul>
+              <li>卡面：「無法在自己的最初回合使用。」（M-P-J #18513 + M4 #18458）</li>
+              <li>根因： getUsableAbilities 對「怨恨進化」沒檢查最初回合 → UI 特性按鈕在 turn 1 仍可按；effects.ts v2360 regA 也沒擋</li>
+              <li>修： + v2360_j_mark_batch.ts regA 都加 <code>state.turn === 1</code> gate（雙重防護）</li>
+              <li>判斷規則：<code>state.turn === 1</code> 涵蓋雙方最初回合（先攻 turn 1 / 後攻 turn 1；engine  turn 只在後攻 END_TURN 才 +1，turn ≥ 2 表示雙方都不再是最初回合）</li>
+              <li>Audit 結果：全卡池中只有「小木靈 怨恨進化」一張帶此限制（M-P-J + M4 兩個版本），其他卡無需 audit。從手牌拖曳進化已被  isFirstTurn gate 擋，但小木靈是「特性主動觸發進化」走自訂 regA，繞過正常進化 gate</li>
+            </ul>
+          </li>
+
         </ul>
       </details>
-
 
       <details>
         <summary><span class="ver-badge">v5.191</span> 道具拆除器 modal 放大鏡 + 脫殼忍者進化鏈重補</summary>
