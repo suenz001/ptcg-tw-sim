@@ -80,10 +80,39 @@ regPre('超級長耳兔ex|跳躍扣殺', (state) => ({
 regPre('超級大竺葵ex|巨型花束', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 70 };
-  const grassCount = countEnergy(att, pool).get('Grass') ?? 0;
+  // v5.255：補 bloom (大竺葵|繁茂) inline 計算 — 自方場上有繁茂時, 基本【草】能量算 2 個
+  //   countEnergy() 內建 host-aware 特殊能量 (稜鏡/新衝天/燃火), 但不認繁茂.
+  //   修法仿 effects.ts:6243 selfAllEnergyMultiplyPre 的 inline bloom 邏輯.
+  const a = state.players[aIdx];
+  const allOwn = [...(a.active ? [a.active] : []), ...a.bench];
+  const bloom = allOwn.some(c => pool.get(c.cardId)?.abilities?.some(ab => ab.name === '繁茂'));
+  let grassCount = 0;
+  if (!bloom) {
+    grassCount = countEnergy(att, pool).get('Grass') ?? 0;
+  } else {
+    // bloom 啟用: iterate 自身 energyAttached, 基本【草】 +2, 其他依 countEnergy 提供的【草】數 +N
+    //   single-energy host-aware: 每張 energy 看 countEnergy 對單張的【草】貢獻
+    //   單張 inst: 套用 host-aware 後的【草】數 (e.g. 稜鏡 on Basic = 1 草; 新衝天 on Stage2 = 2 草)
+    for (const e of att.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (!ec || ec.supertype !== 'Energy') continue;
+      // 是否為基本【草】 (pokemonType=Grass 或 name 含【草】)
+      const isBasicGrass = ec.subtype === 'Basic'
+        && (ec.pokemonType === 'Grass' || /【草】/.test(ec.name ?? ''));
+      if (isBasicGrass) {
+        grassCount += 2;  // bloom: 基本【草】算 2
+      } else {
+        // 非基本【草】: 用單張 host-aware 計算對【草】貢獻
+        //   暫用模擬 single-energy CardInstance 算 countEnergy
+        const singleInst = { ...att, energyAttached: [e] };
+        grassCount += countEnergy(singleInst, pool).get('Grass') ?? 0;
+      }
+    }
+  }
   const bonus = grassCount * 50;
   const dmg = 70 + bonus;
-  const s = addLog(state, `巨型花束：自身【草】能量 ${grassCount} 個（含特殊能量提供的草單位）→ 70 + ${bonus} = ${dmg}`, aIdx);
+  const bloomLog = bloom ? '（繁茂×2 套用基本【草】）' : '';
+  const s = addLog(state, `巨型花束：自身【草】能量 ${grassCount} 個${bloomLog} → 70 + ${bonus} = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
 
