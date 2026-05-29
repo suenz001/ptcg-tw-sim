@@ -574,8 +574,16 @@ export function getOwnBenchLimit(
 export function sameEvoName(a: string | undefined, b: string | undefined): boolean {
   if (!a || !b) return false;
   if (a === b) return true;
-  const stripEx = (s: string) => (s.endsWith('ex') ? s.slice(0, -2) : s);
-  return stripEx(a) === stripEx(b);
+  // v5.307: PTCG TW 規則 — 「超級XXXex」(Mega Evolution ex) 與對應「XXXex」/「XXX」 屬同一進化階變體,
+  //   進化判定 + 同名比對應視為同名. 例: 「超級龍頭地鼠ex / 龍頭地鼠ex / 龍頭地鼠」都同 Stage1.
+  //   strip 順序: 先 strip 'ex' suffix, 再 strip '超級' prefix.
+  const normalize = (s: string) => {
+    let r = s;
+    if (r.endsWith('ex')) r = r.slice(0, -2);
+    if (r.startsWith('超級')) r = r.slice(2);
+    return r;
+  };
+  return normalize(a) === normalize(b);
 }
 
 /**
