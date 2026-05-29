@@ -2621,7 +2621,7 @@ function handlePlaying(
     // v2.174 霍米加的演奏 — 對手玩家在我方下個回合的中毒寶可夢無法撤退
     // 套用點：actor 自己的 cantRetreatIfPoisonedThisTurn + active 中毒（含 secondaryStatus）→ 阻擋
     if (attacker.cantRetreatIfPoisonedThisTurn
-        && (attacker.active.status === 'poisoned' || attacker.active.secondaryStatus === 'poisoned')) {
+        && (attacker.active.status === 'poisoned' || attacker.active.secondaryStatus === 'poisoned' || attacker.active.tertiaryStatus === 'poisoned')) {
       return state;
     }
 
@@ -4497,7 +4497,7 @@ function handlePlaying(
     // v4.87 席多藍恩｜熔岩之壁（M5）— defender 不受【灼傷】狀態 attacker 招式傷害
     // v5.124：加 !skipDefEffects gate
     if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToBurnedAttackerThisTurn) {
-      const atkBurned = attacker.active.status === 'burned' || attacker.active.secondaryStatus === 'burned';
+      const atkBurned = attacker.active.status === 'burned' || attacker.active.secondaryStatus === 'burned' || attacker.active.tertiaryStatus === 'burned';
       if (atkBurned) {
         workingState = addLog(workingState,
           `${defenderCard.name} 因熔岩之壁效果，不受【灼傷】狀態寶可夢招式傷害`, dIdx);
@@ -5939,7 +5939,8 @@ function handlePlaying(
       const oIdx = (1 - tIdx) as 0 | 1;
       const poisonPlayer = { ...players[tIdx] };
       // v2.163：同時兩狀態（如危險光線）— 中毒可能落在 secondaryStatus 格。
-      if (poisonPlayer.active?.status !== 'poisoned' && poisonPlayer.active?.secondaryStatus !== 'poisoned') {
+      // v5.295: 加 tertiaryStatus 掃描 (PTCG 規則允許中毒+灼傷+混亂並存)
+      if (poisonPlayer.active?.status !== 'poisoned' && poisonPlayer.active?.secondaryStatus !== 'poisoned' && poisonPlayer.active?.tertiaryStatus !== 'poisoned') {
         continue;
       }
       const poisonedCard = pool.get(poisonPlayer.active.cardId);
@@ -6000,7 +6001,8 @@ function handlePlaying(
     for (const tIdx of [aIdx, dIdx] as const) {
       const oIdx = (1 - tIdx) as 0 | 1;
       const burnedPlayer = { ...players[tIdx] };
-      if (burnedPlayer.active?.status !== 'burned' && burnedPlayer.active?.secondaryStatus !== 'burned') {
+      // v5.295: 加 tertiaryStatus 掃描
+      if (burnedPlayer.active?.status !== 'burned' && burnedPlayer.active?.secondaryStatus !== 'burned' && burnedPlayer.active?.tertiaryStatus !== 'burned') {
         continue;
       }
       const burnedCard = pool.get(burnedPlayer.active.cardId);
@@ -6052,7 +6054,7 @@ function handlePlaying(
           // v2.163：燒傷可能在 status 也可能在 secondaryStatus；只清掉燒傷那格。
           if (burnedPlayer.active.status === 'burned') {
             burnedPlayer.active = { ...burnedPlayer.active, status: undefined };
-          } else if (burnedPlayer.active.secondaryStatus === 'burned') {
+          } else if (burnedPlayer.active.secondaryStatus === 'burned' || burnedPlayer.active.tertiaryStatus === 'burned') {
             burnedPlayer.active = { ...burnedPlayer.active, secondaryStatus: undefined };
           }
         }
@@ -7677,7 +7679,7 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
   if (player.active.cantRetreatNextTurn) return null;
   // v2.174 霍米加的演奏：自己的中毒寶可夢本回合無法撤退
   if (player.cantRetreatIfPoisonedThisTurn
-      && (player.active.status === 'poisoned' || player.active.secondaryStatus === 'poisoned')) {
+      && (player.active.status === 'poisoned' || player.active.secondaryStatus === 'poisoned' || player.active.tertiaryStatus === 'poisoned')) {
     return null;
   }
   const card = pool.get(player.active.cardId);
@@ -7776,7 +7778,7 @@ export function getRetreatBlockReason(state: GameState, pool: Map<string, Card>)
   if (player.active.status === 'paralyzed') return '戰鬥場寶可夢麻痺中（PTCG 規則：無法撤退）';
   if (player.active.cantRetreatNextTurn) return '對手招式效果鎖定撤退（懶人獺 悠哉 / 束縛 / 鬼盜衝撞 等）';
   if (player.cantRetreatIfPoisonedThisTurn
-      && (player.active.status === 'poisoned' || player.active.secondaryStatus === 'poisoned')) {
+      && (player.active.status === 'poisoned' || player.active.secondaryStatus === 'poisoned' || player.active.tertiaryStatus === 'poisoned')) {
     return '霍米加的演奏：本回合中毒的戰鬥場寶可夢無法撤退';
   }
   // 計算能量是否足夠（重用 getRetreatCost 的 cost 與 canRetreat 的能量比對）

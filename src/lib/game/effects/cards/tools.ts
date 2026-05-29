@@ -113,7 +113,7 @@ TOOL_ATTACK_BONUS.set('極限腰帶', (_a, _ai, defCard) => {
   return isRulePokemon(defCard) ? 50 : 0;
 });
 // v4.4991 fix：中毒實際存 secondaryStatus（status 只在純中毒、無行動狀態時為 'poisoned'）
-TOOL_ATTACK_BONUS.set('鎖鏈糬', (_a, atkInst) => (atkInst.status === 'poisoned' || atkInst.secondaryStatus === 'poisoned') ? 40 : 0);
+TOOL_ATTACK_BONUS.set('鎖鏈糬', (_a, atkInst) => (atkInst.status === 'poisoned' || atkInst.secondaryStatus === 'poisoned' || atkInst.tertiaryStatus === 'poisoned') ? 40 : 0);
 TOOL_ATTACK_BONUS.set('驅勁能量 未來', () => 20);
 // v2.133 電氣球：附有的「皮卡丘ex」對對手戰鬥場的「寶可夢ex」+50
 TOOL_ATTACK_BONUS.set('電氣球', (attCard, _ai, defCard) => {

@@ -358,7 +358,7 @@ regPre('樹才怪|岩石投擲', (s, _a, _p) => ({ state: s, damage: 30, skipRes
 regPre('千針魚|毒液衝擊', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
-  const isPoisoned = def?.status === 'poisoned' || def?.secondaryStatus === 'poisoned';
+  const isPoisoned = def?.status === 'poisoned' || def?.secondaryStatus === 'poisoned' || def?.tertiaryStatus === 'poisoned';
   return { state, damage: 30 + (isPoisoned ? 50 : 0) };
 });
 

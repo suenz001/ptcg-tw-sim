@@ -889,8 +889,8 @@
                 inst.status==='paralyzed'?'⚡ 麻痺':inst.status
               }</span>{/if}
               {#if inst.secondaryStatus}<span class="mp-status mp-status-chip-{inst.secondaryStatus}">{
-                inst.secondaryStatus==='poisoned'?'☠️ 中毒':
-                inst.secondaryStatus==='burned'?'🔥 燒傷':
+                inst.secondaryStatus==='poisoned' || inst.tertiaryStatus === 'poisoned'?'☠️ 中毒':
+                inst.secondaryStatus==='burned' || inst.tertiaryStatus === 'burned'?'🔥 燒傷':
                 inst.secondaryStatus==='asleep'?'💤 睡眠':
                 inst.secondaryStatus==='confused'?'😵 混亂':
                 inst.secondaryStatus==='paralyzed'?'⚡ 麻痺':inst.secondaryStatus
@@ -955,8 +955,8 @@
                 inst.status==='paralyzed'?'⚡ 麻痺':inst.status
               }</span>{/if}
               {#if inst.secondaryStatus}<span class="mp-status mp-status-chip-{inst.secondaryStatus}">{
-                inst.secondaryStatus==='poisoned'?'☠️ 中毒':
-                inst.secondaryStatus==='burned'?'🔥 燒傷':
+                inst.secondaryStatus==='poisoned' || inst.tertiaryStatus === 'poisoned'?'☠️ 中毒':
+                inst.secondaryStatus==='burned' || inst.tertiaryStatus === 'burned'?'🔥 燒傷':
                 inst.secondaryStatus==='asleep'?'💤 睡眠':
                 inst.secondaryStatus==='confused'?'😵 混亂':
                 inst.secondaryStatus==='paralyzed'?'⚡ 麻痺':inst.secondaryStatus

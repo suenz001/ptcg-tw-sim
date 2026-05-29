@@ -201,7 +201,7 @@ regPre('蛇紋熊|偷襲', coinTailsFailPre(30, '偷襲'));
 regPre('噴火駝|炙燒灼傷', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
-  const cond = !!def && (def.status === 'burned' || def.secondaryStatus === 'burned');
+  const cond = !!def && (def.status === 'burned' || def.secondaryStatus === 'burned' || def.tertiaryStatus === 'burned');
   if (!cond) {
     return { state: addLog(state, '炙燒灼傷：對手戰鬥寶可夢未【灼傷】，招式失敗', aIdx), damage: 0 };
   }

@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.295</span> 中毒、灼傷、混亂三種特殊狀態可共存</summary>
+        <ul>
+          <li>修正：依 PTCG 規則手冊（特殊狀態章節），中毒、灼傷、混亂三種狀態可以同時存在於同一隻寶可夢身上。原本系統只支援 2 個狀態並存，第三個會覆蓋掉前面的。本次新增第三槽，允許行動類（睡眠/麻痺/混亂三者互斥）+ 中毒 + 灼傷 共 3 種狀態同時存在。</li>
+          <li>同步修正：寶可夢檢查階段（每回合結束時）的中毒、灼傷判定，及全 codebase 18+ 處讀取狀態的程式，全部加上第三槽的掃描。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.294</span> 白海獅 厚脂肪 完整實裝</summary>
         <ul>
           <li>實裝：白海獅特性「厚脂肪」（這隻寶可夢受到對手的【火】或者【水】寶可夢招式的傷害 -30 點）。原本系統跳過未實裝，現在已完整實作。</li>
@@ -6288,7 +6296,7 @@
           <li>　1. <code>tools.ts:109</code> 鎖鏈糬 +40（玩家回報）</li>
           <li>　2. <code>effects.ts:3569</code> 秋明 supporter gate（對手中毒可用）</li>
           <li>　3. <code>effects.ts:5069</code> 夠讚狗ex 瘋狂連鎖 +130（自身中毒）</li>
-          <li><b>修法</b>：3 處統一補 OR 檢查 — <code>inst.status === 'poisoned' || inst.secondaryStatus === 'poisoned'</code>。其他出現點（engine.ts 2134/4981/6413/6488、v2380/v2600 等）已正確使用此 pattern。</li>
+          <li><b>修法</b>：3 處統一補 OR 檢查 — <code>inst.status === 'poisoned' || inst.secondaryStatus === 'poisoned' || inst.tertiaryStatus === 'poisoned'</code>。其他出現點（engine.ts 2134/4981/6413/6488、v2380/v2600 等）已正確使用此 pattern。</li>
         </ul>
       </details>
 

@@ -6330,8 +6330,8 @@
                 }</div>{/if}
                 <!-- v2.163：同時兩狀態（如危險光線 灼傷+混亂） -->
                 {#if oppPlayer.active.secondaryStatus}<div class="status-chip status-{oppPlayer.active.secondaryStatus}">{
-                  oppPlayer.active.secondaryStatus === 'poisoned' ? '☠️ 中毒' :
-                  oppPlayer.active.secondaryStatus === 'burned' ? '🔥 燒傷' :
+                  oppPlayer.active.secondaryStatus === 'poisoned' || oppPlayer.active.tertiaryStatus === 'poisoned' ? '☠️ 中毒' :
+                  oppPlayer.active.secondaryStatus === 'burned' || oppPlayer.active.tertiaryStatus === 'burned' ? '🔥 燒傷' :
                   oppPlayer.active.secondaryStatus === 'asleep' ? '💤 睡眠' :
                   oppPlayer.active.secondaryStatus === 'confused' ? '😵 混亂' :
                   oppPlayer.active.secondaryStatus === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.secondaryStatus
@@ -6634,8 +6634,8 @@
               }</div>{/if}
               <!-- v2.163：同時兩狀態（如危險光線 灼傷+混亂） -->
               {#if myPlayer.active.secondaryStatus}<div class="status-chip status-{myPlayer.active.secondaryStatus}">{
-                myPlayer.active.secondaryStatus === 'poisoned' ? '☠️ 中毒' :
-                myPlayer.active.secondaryStatus === 'burned' ? '🔥 燒傷' :
+                myPlayer.active.secondaryStatus === 'poisoned' || myPlayer.active.tertiaryStatus === 'poisoned' ? '☠️ 中毒' :
+                myPlayer.active.secondaryStatus === 'burned' || myPlayer.active.tertiaryStatus === 'burned' ? '🔥 燒傷' :
                 myPlayer.active.secondaryStatus === 'asleep' ? '💤 睡眠' :
                 myPlayer.active.secondaryStatus === 'confused' ? '😵 混亂' :
                 myPlayer.active.secondaryStatus === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.secondaryStatus
@@ -8575,8 +8575,8 @@
                     zoomInst.status==='confused'?'😵 混亂':
                     zoomInst.status==='paralyzed'?'⚡ 麻痺':zoomInst.status
                   }</span>{/if}{#if zoomInst.status && zoomInst.secondaryStatus}<span class="status-sep"> + </span>{/if}{#if zoomInst.secondaryStatus}<span class="status-piece">{
-                    zoomInst.secondaryStatus==='poisoned'?'☠️ 中毒':
-                    zoomInst.secondaryStatus==='burned'?'🔥 燒傷':
+                    zoomInst.secondaryStatus==='poisoned' || zoomInst.tertiaryStatus === 'poisoned'?'☠️ 中毒':
+                    zoomInst.secondaryStatus==='burned' || zoomInst.tertiaryStatus === 'burned'?'🔥 燒傷':
                     zoomInst.secondaryStatus==='asleep'?'💤 睡眠':
                     zoomInst.secondaryStatus==='confused'?'😵 混亂':
                     zoomInst.secondaryStatus==='paralyzed'?'⚡ 麻痺':zoomInst.secondaryStatus

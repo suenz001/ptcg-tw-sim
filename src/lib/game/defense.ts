@@ -356,7 +356,7 @@ export function resolveActiveAttackGuard(
   // 8. 熔岩之壁（席多藍恩 M5）— 不受【灼傷】attacker 招式
   if (defender.immuneToBurnedAttackerThisTurn) {
     const attacker = state.players[actorIdx].active;
-    if (attacker && (attacker.status === 'burned' || attacker.secondaryStatus === 'burned')) {
+    if (attacker && (attacker.status === 'burned' || attacker.secondaryStatus === 'burned' || attacker.tertiaryStatus === 'burned')) {
       return { blocked: true, reason: '熔岩之壁免疫【灼傷】寶可夢招式傷害' };
     }
   }

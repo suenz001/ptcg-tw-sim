@@ -89,18 +89,25 @@ export interface CardInstance {
   /** 強化中毒每次寶可夢檢查放置的傷害量；未設定則一般中毒 10。 */
   poisonDamagePerCheckup?: number;
   /**
-   * v2.163：第二個特殊狀態，專供「同時陷入兩種狀態」的招式使用（例：危險光線
-   * 同時灼傷+混亂）。PTCG 規則：行動類狀態（睡眠/混亂/麻痺）三者互斥，傷害類
-   * 狀態（中毒/灼傷）兩者互斥，但 1 個行動類 + 1 個傷害類可以共存。
+   * v5.295 重新整理 PTCG 規則（手冊 line 130/415）:
+   *   - 行動類 (asleep/paralyzed/confused) 三者互斥 (同樣翻卡標記)
+   *   - 傷害類 (poisoned/burned) 可共存 (不同 marker)
+   *   - 行動類 + 傷害類 可共存
+   * 最大組合: 行動類 1 + 中毒 + 灼傷 = 3 並存 → 需要 3 個槽
    *
-   * 約定：行動類狀態（asleep/confused/paralyzed）放 status；傷害類狀態
-   * （poisoned/burned）優先放 status（向下相容單狀態卡），若 status 已被
-   * 行動類佔用則改放 secondaryStatus。
+   * v2.163 (舊): status + secondaryStatus 雙槽 (容不下中毒+灼傷+混亂)
+   * v5.295 (新): + tertiaryStatus 第三槽
    *
-   * Engine checkup（中毒/灼傷）會同時掃描 status 與 secondaryStatus 兩格；
-   * 攻擊前的睡眠/麻痺/混亂判定只看 status（行動類永遠在主格）。
+   * 約定:
+   *   - 行動類永遠在 status (互斥替換)
+   *   - poisoned/burned 在 secondaryStatus + tertiaryStatus 任一 (找空槽)
+   *
+   * Engine checkup (中毒/灼傷): 掃 status + secondaryStatus + tertiaryStatus 三槽
+   * 攻擊前的睡眠/麻痺/混亂判定: 只看 status (行動類永遠主格)
    */
   secondaryStatus?: SpecialCondition;
+  /** v5.295: 第三個特殊狀態槽 (允許中毒+灼傷+混亂三者並存) */
+  tertiaryStatus?: SpecialCondition;
   /**
    * 本回合剛從手牌打出到備戰區（PLAY_BASIC），不可進化。
    * 在 END_TURN 時清除。

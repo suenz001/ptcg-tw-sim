@@ -215,7 +215,7 @@ regR('exciting-turbo-commit', (st, idx, iids, params, pool) => {
 regPre('超級噴火駝ex|炙燒', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const act = state.players[dIdx].active;
-  const burned = act?.status === 'burned' || act?.secondaryStatus === 'burned';
+  const burned = act?.status === 'burned' || act?.secondaryStatus === 'burned' || act?.tertiaryStatus === 'burned';
   return { state, damage: burned ? 240 : 80 };
 });
 

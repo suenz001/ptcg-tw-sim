@@ -34,7 +34,7 @@ function oppPoisonedConditionPre(base: number, bonus: number, label: string): At
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
-    const cond = !!def && (def.status === 'poisoned' || def.secondaryStatus === 'poisoned');
+    const cond = !!def && (def.status === 'poisoned' || def.secondaryStatus === 'poisoned' || def.tertiaryStatus === 'poisoned');
     const dmg = base + (cond ? bonus : 0);
     const s = addLog(state, `${label}：對手戰鬥寶可夢 ${cond ? `中毒 → +${bonus}` : '無中毒'} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };

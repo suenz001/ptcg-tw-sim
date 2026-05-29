@@ -2304,24 +2304,55 @@ export function clearSpecialEnergyProtectedStatuses(
  * 用法：`active = applyStatusToActive(active, 'confused');`
  */
 export function applyStatusToActive(active: CardInstance, newStatus: SpecialCondition): CardInstance {
+  // v5.295: 三槽配置 — PTCG 規則允許行動類+中毒+灼傷 3 個並存
   const isNewAction = newStatus === 'asleep' || newStatus === 'confused' || newStatus === 'paralyzed';
+  const isNewDamage = newStatus === 'poisoned' || newStatus === 'burned';
   const prev = active.status;
   const prevSec = active.secondaryStatus;
-  const isPrevAction = prev === 'asleep' || prev === 'confused' || prev === 'paralyzed';
-  const isPrevDamage = prev === 'poisoned' || prev === 'burned';
+  const prevTer = active.tertiaryStatus;
 
   if (isNewAction) {
-    // 新狀態行動類 — 放 status 主格；原 status 若是傷害類搬到 secondaryStatus 保留
-    const newSecondary = isPrevDamage ? prev : prevSec;
-    return { ...active, status: newStatus, secondaryStatus: newSecondary };
-  } else {
-    // 新狀態傷害類 — 優先 status；若 status 被行動類佔則放 secondaryStatus 保留行動類
+    // 行動類三者互斥 — 替換現有行動類 (status 主格), 保留傷害類兩槽
+    // 若 prev 是傷害類 → 把 prev 搬到空的傷害槽 (避免覆蓋)
+    const isPrevAction = prev === 'asleep' || prev === 'confused' || prev === 'paralyzed';
     if (isPrevAction) {
-      return { ...active, secondaryStatus: newStatus };
-    } else {
-      return { ...active, status: newStatus, secondaryStatus: prevSec };
+      // 簡單替換 status, 傷害類兩槽 (sec/ter) 都不動
+      return { ...active, status: newStatus, secondaryStatus: prevSec, tertiaryStatus: prevTer };
     }
+    // prev 是傷害類或空 → 把 prev 搬到任一空的傷害槽 (sec 優先)
+    if (prev) {
+      if (!prevSec) {
+        return { ...active, status: newStatus, secondaryStatus: prev, tertiaryStatus: prevTer };
+      } else if (!prevTer) {
+        return { ...active, status: newStatus, secondaryStatus: prevSec, tertiaryStatus: prev };
+      }
+      // 兩傷害槽都滿 (理論不該發生因為只有 poisoned/burned 兩種) — 直接覆蓋 prev
+    }
+    return { ...active, status: newStatus, secondaryStatus: prevSec, tertiaryStatus: prevTer };
   }
+
+  if (isNewDamage) {
+    // 傷害類: 三槽掃描 — 若已有同名狀態, 不重複加
+    if (prev === newStatus || prevSec === newStatus || prevTer === newStatus) {
+      return active;
+    }
+    // 找空槽優先順序: status (若無行動類佔位) > secondaryStatus > tertiaryStatus
+    if (!prev) {
+      return { ...active, status: newStatus };
+    }
+    // status 被行動類或別的傷害類佔
+    if (!prevSec) {
+      return { ...active, secondaryStatus: newStatus };
+    }
+    if (!prevTer) {
+      return { ...active, tertiaryStatus: newStatus };
+    }
+    // 三槽都滿 — 理論不該發生 (最多 1 行動類 + 2 傷害類, 已 3 槽), fallback: 不變
+    return active;
+  }
+
+  // 其他 (不該到), fallback
+  return active;
 }
 
 export function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused' | 'paralyzed'): AttackPostFn {
@@ -4117,7 +4148,7 @@ reg('寇沙', (st, idx) => {
 // v4.4991 fix：對手中毒實際存 secondaryStatus，補 OR 檢查
 regG('秋明', (st, idx) => {
   const opp = st.players[(1-idx) as 0|1].active;
-  return opp?.status === 'poisoned' || opp?.secondaryStatus === 'poisoned';
+  return opp?.status === 'poisoned' || opp?.secondaryStatus === 'poisoned' || opp?.tertiaryStatus === 'poisoned';
 });
 reg('秋明', (st, idx) => {
   st = addLog(st, '秋明：手牌洗回，抽 7 張', idx);
@@ -5661,7 +5692,7 @@ regPre('故勒頓|原生亂打', (state, aIdx, pool) => {
 regPre('夠讚狗ex|瘋狂連鎖', (state, aIdx, _pool) => {
   const att = state.players[aIdx].active;
   // v4.4991 fix：中毒實際存 secondaryStatus，補 OR 檢查
-  const isSelfPoisoned = !!att && (att.status === 'poisoned' || att.secondaryStatus === 'poisoned');
+  const isSelfPoisoned = !!att && (att.status === 'poisoned' || att.secondaryStatus === 'poisoned' || att.tertiaryStatus === 'poisoned');
   if (isSelfPoisoned) {
     // v3.03：breakdown 拆「130(基礎) + 130(自身中毒)」
     return {
