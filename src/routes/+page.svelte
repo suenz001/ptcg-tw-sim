@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.289</span> 桌墊版戰鬥寶可夢位置與備戰疊牌空間調整</summary>
+        <ul>
+          <li>調整：桌墊版下，對手的戰鬥寶可夢卡片改為靠下擺放、我方戰鬥寶可夢改為靠上擺放，讓對手與我方備戰寶可夢身上的能量／道具疊牌往戰鬥場方向延伸時，有足夠空白區域，不會擋到戰鬥場上的卡片。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.288</span> 補 v5.287 更新記錄</summary>
         <ul>
           <li>補上前一版更新內容如下一條。</li>
