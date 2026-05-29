@@ -259,7 +259,9 @@
   });
   // v4.988: 目前 modal 卡的進化鏈分階（用 setCards 為 pool；跨 set 鏈需切「全部卡包」）
   const selectedChain = $derived.by(() => {
-    if (!selected || selected.supertype !== 'Pokemon') return [];
+    if (!selected) return [];
+    // v5.273: 拿掉 supertype==='Pokemon' gate, 讓化石卡 (Trainer/Item)
+    //   也走 chain logic (evolutionChain.ts v5.271 seeds 已支援化石起點)
     return getEvolutionChainGrouped(selected.name, setCards);
   });
   // v4.989: 目前 modal 卡的同名變體（pool = setCards；跨 set 變體需切「全部卡包」）
