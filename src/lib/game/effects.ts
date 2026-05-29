@@ -483,6 +483,8 @@ import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v3.0 Group 3 Wave 2 helper — 用於 resolveBenchGuard 蟲甲聖球形盾牌
 import { hasBugAegislashShield } from './effects/cards/v3000_g3_wave2';
+// v5.241：統一 promote-to-active prompt helper
+import { tryPromptPromoteActive } from './effects/cards/v3050_deferred_wave_a';
 // v5.237：re-export 給 engine.ts 用於 attack-time snapshot
 export { hasBugAegislashShield };
 // v3.06 Deferred Wave B helper — 在備戰時免疫對手招式（藏隱 / 深度下潛）
@@ -10795,8 +10797,10 @@ regR('force-opp-swap', (st, actorIdx, iids, params, pool) => {
   const newActive: CardInstance = { ...p.bench[bIdx], movedToActiveThisTurn: true };
   const players = [...st.players] as [PlayerState, PlayerState];
   players[actorIdx] = { ...p, active: newActive, bench: newBench };
-  return addLog({ ...st, players },
+  const afterSt = addLog({ ...st, players },
     `${label}：${oldActiveName} 退回備戰區，${newActiveName} 上場`, attackerIdx);
+  // v5.241：換位後 ON_PROMOTE_TO_ACTIVE prompt（被換場方 = actorIdx）
+  return tryPromptPromoteActive(afterSt, actorIdx, pool);
 });
 
 regR('force-opp-swap-then-damage', (st, actorIdx, iids, params, pool) => {
@@ -12296,6 +12300,7 @@ regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
   st = updatePlayer(st, idx, pl => {
     if (!pl.active) return pl;
     // v4.978：set movedToActiveThisTurn — 振翅高飛/潔淨支援/金屬之路 等特性 gate 需要
+    // v5.241：set 後本檔 caller 自己負責呼叫 tryPromptPromoteActive（caller 較複雜，逐一檢視）
     const newActive = { ...benchPick, movedToActiveThisTurn: true };
     // v2.49：離開戰鬥場清狀態旗標（修 sakaki-self-swap 的 bench status leak）
     const cleared = clearActiveEffects(pl.active);
