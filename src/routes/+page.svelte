@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.261</span> AI 起手無基礎卡死診斷訊息</summary>
+        <ul>
+          <li>玩家反映：跟電腦 AI 對戰時，AI 起手沒有基礎寶可夢，玩家補抽後 AI 卡死，沒有下一個動作的按鈕。本地測試無法重現。</li>
+          <li>本次先在「對戰進入判斷」流程加上開發者診斷訊息（瀏覽器 Console 可看），列出每個 gate 的狀態（雙方準備完成、補抽張數、揭示確認、補抽後備戰），玩家若再遇卡死可開 F12 Console 截圖回報，方便定位根因。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.260</span> 故勒頓「輪番狂攻」加診斷訊息</summary>
         <ul>
           <li>玩家反映：猛雷鼓ex「極降駕」攻擊後，下回合故勒頓「輪番狂攻」沒有得到+150 增傷。本地測試正常觸發，根因尚未確定。</li>

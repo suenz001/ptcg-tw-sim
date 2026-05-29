@@ -1845,11 +1845,22 @@ function dealOpeningHand(
 // v4.494：export 給 +page.svelte 在線上 setup merge 後重新評估（修兩端同時 finish 卡死 bug）
 export function tryAdvanceToPlaying(state: GameState): GameState {
   if (state.phase !== 'setup') return state;
-  if (!state.setupDone[0] || !state.setupDone[1]) return state;
-  if (state.pendingMulliganDraw[0] !== 0 || state.pendingMulliganDraw[1] !== 0) return state;
-  if (!state.mulliganRevealConfirmed[0] || !state.mulliganRevealConfirmed[1]) return state;
+  // v5.261 audit: 若無法 advance, 記下原因 (debug Bug 14 AI 起手無基礎玩家補抽後卡死)
+  const auditFail = (reason: string) => {
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn(`[tryAdvanceToPlaying blocked] ${reason}`,
+        'setupDone:', state.setupDone,
+        'pendingMulliganDraw:', state.pendingMulliganDraw,
+        'mulliganRevealConfirmed:', state.mulliganRevealConfirmed,
+        'mulliganPostBenchOpen:', state.mulliganPostBenchOpen);
+    }
+    return state;
+  };
+  if (!state.setupDone[0] || !state.setupDone[1]) return auditFail(`setup 未完成: P1=${state.setupDone[0]}, P2=${state.setupDone[1]}`);
+  if (state.pendingMulliganDraw[0] !== 0 || state.pendingMulliganDraw[1] !== 0) return auditFail(`pendingMulliganDraw 未處理: [${state.pendingMulliganDraw[0]}, ${state.pendingMulliganDraw[1]}]`);
+  if (!state.mulliganRevealConfirmed[0] || !state.mulliganRevealConfirmed[1]) return auditFail(`mulliganRevealConfirmed 未完成: [${state.mulliganRevealConfirmed[0]}, ${state.mulliganRevealConfirmed[1]}]`);
   // v5.138：任一方還在 post-bench 階段（補抽後加備戰中）→ 不進 playing
-  if (state.mulliganPostBenchOpen?.[0] || state.mulliganPostBenchOpen?.[1]) return state;
+  if (state.mulliganPostBenchOpen?.[0] || state.mulliganPostBenchOpen?.[1]) return auditFail(`mulliganPostBenchOpen 未完成: [${state.mulliganPostBenchOpen?.[0]}, ${state.mulliganPostBenchOpen?.[1]}]`);
   // v4.24 對戰計時器 — setup→playing 時起算
   const timerStart = Date.now();
   let next: GameState = {
