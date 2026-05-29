@@ -304,6 +304,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.282</span> 補 v5.281 更新記錄</summary>
+        <ul>
+          <li>補上前一版更新內容如下一條。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.281</span> 桌墊版零之大空洞備戰卡片不再縮小</summary>
+        <ul>
+          <li>修正：桌墊版啟動零之大空洞（備戰可放 8 張寶可夢）時，備戰卡片寬度會被擠小變得不易辨識。現在 8 張時的卡片寬度跟原本 5 張時完全一樣（自動跨整個版面寬度顯示）。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.280</span> 補 v5.279 更新記錄</summary>
         <ul>
           <li>補上前一版更新內容如下一條。</li>
