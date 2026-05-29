@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.292</span> 吹火人正確限制只能搜基本【火】能量</summary>
+        <ul>
+          <li>修正：吹火人從牌庫搜尋時原本顯示整副牌庫的所有基本能量（含水、草、雷、超等），玩家可錯誤拿到非火屬性能量。現在依卡面正確限制只能選基本【火】能量卡（最多 7 張）。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.291</span> 象牙豬ex 毛象搬運 + 雷鳴行進修正</summary>
         <ul>
           <li>修正：象牙豬ex 特性「毛象搬運」原本搜尋牌庫時顯示整副牌庫（含訓練家卡與能量卡），現在改為依卡面正確只顯示寶可夢卡。</li>

@@ -236,21 +236,22 @@ regR('waitress-attach', (st, idx, iids, params, pool) => {
 
 // ── 吹火人 — 牌庫搜 ≤7 基本【火】能量加手 ──────────────────────────────────
 regG('', (st, idx) => st.players[idx].deck.length > 0);
+// v5.292 修吹火人: filter='BasicEnergy' 沒限定屬性, picker line 2518 不讀 validIids,
+//        玩家可選任意基本能量. 改 'BasicEnergy:Fire' 由 picker line 2662 startsWith
+//        分支處理, isBasicEnergyOfType(card, 'Fire') 雙重檢查 (pokemonType==='Fire' OR name 含「【火】」).
 reg('吹火人', (st, idx, pool) => {
-  const validIids = st.players[idx].deck
+  const candCount = st.players[idx].deck
     .filter(c => {
       const card = pool.get(c.cardId);
       return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name?.includes('【火】');
-    })
-    .map(c => c.iid);
-  st = addLog(st, `吹火人：從牌庫選最多 7 張基本【火】能量加手（候選 ${validIids.length} 張）`, idx);
+    }).length;
+  st = addLog(st, `吹火人：從牌庫選最多 7 張基本【火】能量加手（候選 ${candCount} 張）`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'BasicEnergy',
-    minCount: 0, maxCount: Math.min(7, validIids.length),
+    filter: 'BasicEnergy:Fire',
+    minCount: 0, maxCount: 7,
     effectKey: 'firebreather-pick',
-    params: { validIids },
   });
 });
 regR('firebreather-pick', (st, idx, iids, _params, pool) => {
