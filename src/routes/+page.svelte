@@ -304,6 +304,30 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.278</span> 補 v5.276/v5.277 更新記錄</summary>
+        <ul>
+          <li>補上前兩版更新內容如下兩條。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.277</span> 手機版選擇視窗體驗修正</summary>
+        <ul>
+          <li>修正：手機版打開附加能量目標視窗後，畫面右上角還會顯示「結束回合」按鈕（附加道具/支援者/物品則不會），改成所有選擇視窗開啟時都會隱藏結束回合按鈕，避免誤點。</li>
+          <li>修正：手機版備戰滿場（8 隻寶可夢）時，選擇視窗內每張寶可夢卡的能量、HP、異常狀態圖示部分被裁切到框外，現在資訊完整顯示。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.276</span> 手機版附加能量視窗大小 + 願增猿毀棋卡死 + 後台對戰列表翻頁</summary>
+        <ul>
+          <li>修正：手機版當場上只有 1 隻寶可夢時，附加能量／進化／撤退的選擇視窗會撐滿整個版面，現在改成固定卡寬置中顯示，視窗大小與附加道具一致。</li>
+          <li>修正：使用願增猿的「腎上腺腦力」特性將傷害指示物移到對手寶可夢造成擊倒後，按下毀棋會卡死的問題。</li>
+          <li>新增：管理後台 Oracle／Firebase 對戰分頁加上翻頁功能，每頁 50 筆，支援上下一頁、跳第一/最後頁、輸入頁數跳頁。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.275</span> 首頁文字微調 + 補上 v5.272~v5.274 更新記錄</summary>
         <ul>
           <li>首頁「對戰演練」按鈕說明改為「牌組實戰測試及規則學習」（凸顯本站學習推廣性質）。</li>
