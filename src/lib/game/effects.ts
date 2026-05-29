@@ -84,6 +84,8 @@ export {
 // 月光丘陵）以及 JAMMING_TOWER_STADIUMS / ROCKET_WATCHTOWER_STADIUMS 兩個
 // 引擎側 hook 集合（道具無效 / 【無】寶可夢特性無效）。
 import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS } from './effects/cards/stadiums';
+// v5.293: import field-wide damage-reduce helpers for bench damage path
+import { steelixPalaceReduce, bronzongShelterReduce, gearCoatingReduce } from './effects/cards/v2999_g3_wave1';
 export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS };
 
 /**
@@ -667,6 +669,166 @@ function effectiveHPInline(
  *
  * 注意：bench 被 KO 不會 set pendingSelection；攻擊方累計取獎後照流程進行。
  */
+/**
+ * v5.293: 對 bench victim 套用「招式傷害特性減傷」(active 也走 engine.ts 的對應 pipeline).
+ *
+ * PTCG 規則:
+ *   - 弱點 / 抵抗力: 只對戰鬥場寶可夢生效 (此 helper 不處理, bench 不算)
+ *   - 特性減傷: 按卡面條件無位置限制者, active + bench 都觸發
+ *   - 道具減傷: 同樣按卡面
+ *
+ * 涵蓋:
+ *   self-only PASSIVE_DAMAGE_REDUCE (鑽石膜/堅硬身軀/密林之軀/堅硬甲殼/堅堅之軀/
+ *     泥巴膜/毛皮大衣/柔軟羊毛/爆炸頭防守 等)
+ *   self-only 條件式 PASSIVE_DAMAGE_REDUCE_COND (雷吉洛克 岩石盔甲)
+ *   field-wide:
+ *     - 大吾的小碎鑽|岩石宮殿 (-30 對「大吾的」)
+ *     - 青銅鐘|守護之鐘 (-10 對所有自方)
+ *     - 齒輪怪|齒輪塗層 (-20 對附鋼能量)
+ *     - 爆炸頭水牛|捲牆 (-60 對【無】基礎; ≥2 隻爆炸頭水牛 active+bench 計入)
+ *     - 冰雪巨龍|凍原堡壘 (-50 對附水能量)
+ *   stadium:
+ *     - 全金屬實驗室 (-30 對【鋼】)
+ *     - 石之洞窟 (-30 對「大吾的」)
+ *
+ * 不涵蓋 (戰鬥位 only, 卡面明確):
+ *   - 火炎獅|威嚇之牙 / 灰塵山|垃圾洩氣
+ */
+function _applyBenchAbilityReduce(
+  state: GameState,
+  victim: CardInstance,
+  victimCard: Card,
+  defenderIdx: 0 | 1,
+  pool: Map<string, Card>,
+  baseDamage: number,
+): { amount: number; logs: string[] } {
+  let dmg = baseDamage;
+  const logs: string[] = [];
+  const defender = state.players[defenderIdx];
+
+  // local inline isColorlessAbilityBlocked (engine.ts 內未 export, 為避免循環依賴 inline)
+  const _colorlessBlocked = (card: Card | undefined): boolean => {
+    if (!card || card.pokemonType !== 'Colorless') return false;
+    const sd = state.activeStadium;
+    if (!sd) return false;
+    const sdCard = pool.get(sd.cardId);
+    if (!sdCard) return false;
+    return ROCKET_WATCHTOWER_STADIUMS.has(sdCard.name);
+  };
+
+  // === self-only PASSIVE_DAMAGE_REDUCE + COND ===
+  if (dmg > 0 && victimCard.abilities && !_colorlessBlocked(victimCard)) {
+    for (const ab of victimCard.abilities) {
+      const reduceN = PASSIVE_DAMAGE_REDUCE.get(ab.name);
+      if (reduceN) {
+        const before = dmg;
+        dmg = Math.max(0, dmg - reduceN);
+        if (before > dmg) logs.push(`${ab.name} -${before - dmg}`);
+      }
+      const condFn = PASSIVE_DAMAGE_REDUCE_COND.get(ab.name);
+      if (condFn) {
+        const r = condFn(victim, victimCard);
+        if (r > 0) {
+          const before = dmg;
+          dmg = Math.max(0, dmg - r);
+          if (before > dmg) logs.push(`${ab.name} -${before - dmg}`);
+        }
+      }
+    }
+  }
+  // === field-wide: 大吾的小碎鑽|岩石宮殿 ===
+  if (dmg > 0) {
+    const r = steelixPalaceReduce(state, defenderIdx, victimCard, pool);
+    if (r > 0) {
+      const before = dmg;
+      dmg = Math.max(0, dmg - r);
+      if (before > dmg) logs.push(`岩石宮殿 -${before - dmg}`);
+    }
+  }
+  // === field-wide: 青銅鐘|守護之鐘 ===
+  if (dmg > 0) {
+    const r = bronzongShelterReduce(state, defenderIdx, pool);
+    if (r > 0) {
+      const before = dmg;
+      dmg = Math.max(0, dmg - r);
+      if (before > dmg) logs.push(`守護之鐘 -${before - dmg}`);
+    }
+  }
+  // === field-wide: 齒輪怪|齒輪塗層 ===
+  if (dmg > 0) {
+    const r = gearCoatingReduce(state, defenderIdx, victim, pool);
+    if (r > 0) {
+      const before = dmg;
+      dmg = Math.max(0, dmg - r);
+      if (before > dmg) logs.push(`齒輪塗層 -${before - dmg}`);
+    }
+  }
+  // === field-wide: 爆炸頭水牛|捲牆 (≥2 隻 + 【無】基礎) ===
+  if (dmg > 0) {
+    const defAll: CardInstance[] = [
+      ...(defender.active ? [defender.active] : []),
+      ...defender.bench,
+    ];
+    const buffaloCount = defAll.filter(c => {
+      const card = pool.get(c.cardId);
+      if (card?.name !== '爆炸頭水牛') return false;
+      if (!card.abilities?.some(a => a.name === '捲牆')) return false;
+      if (_colorlessBlocked(card)) return false;
+      return true;
+    }).length;
+    if (buffaloCount >= 2) {
+      const isColorless = victimCard.pokemonType === 'Colorless';
+      const isBasic = !victimCard.evolvesFrom && victimCard.stage !== 'Stage1' && victimCard.stage !== 'Stage2';
+      if (isColorless && isBasic) {
+        const before = dmg;
+        dmg = Math.max(0, dmg - 60);
+        if (before > dmg) logs.push(`爆炸頭水牛 捲牆 -${before - dmg}`);
+      }
+    }
+  }
+  // === field-wide: 冰雪巨龍|凍原堡壘 (victim 附水能量) ===
+  if (dmg > 0) {
+    const defAll: CardInstance[] = [
+      ...(defender.active ? [defender.active] : []),
+      ...defender.bench,
+    ];
+    const hasFrost = defAll.some(c => {
+      const card = pool.get(c.cardId);
+      return card?.name === '冰雪巨龍' && card?.abilities?.some(a => a.name === '凍原堡壘');
+    });
+    if (hasFrost) {
+      const hasWaterE = victim.energyAttached.some(e => {
+        const ec = pool.get(e.cardId);
+        if (!ec || ec.supertype !== 'Energy') return false;
+        if (ec.subtype === 'Basic' && (ec.pokemonType === 'Water' || /【水】/.test(ec.name))) return true;
+        if (ec.pokemonType === 'Water') return true;
+        return false;
+      });
+      if (hasWaterE) {
+        const before = dmg;
+        dmg = Math.max(0, dmg - 50);
+        if (before > dmg) logs.push(`凍原堡壘 -${before - dmg}`);
+      }
+    }
+  }
+  // === stadium: 全金屬實驗室 (-30 對【鋼】) ===
+  if (dmg > 0) {
+    const sd = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
+    if (sd?.name === '全金屬實驗室' && victimCard.pokemonType === 'Metal') {
+      const before = dmg;
+      dmg = Math.max(0, dmg - 30);
+      if (before > dmg) logs.push(`全金屬實驗室 -${before - dmg}`);
+    }
+    // === stadium: 石之洞窟 (-30 對「大吾的」) ===
+    if (sd?.name === '石之洞窟' && victimCard.name.startsWith('大吾的')) {
+      const before = dmg;
+      dmg = Math.max(0, dmg - 30);
+      if (before > dmg) logs.push(`石之洞窟 -${before - dmg}`);
+    }
+  }
+  return { amount: dmg, logs };
+}
+
 function hitBenchAll(
   state: GameState,
   attackerIdx: 0 | 1,
@@ -687,6 +849,7 @@ function hitBenchAll(
   const koNames: string[] = [];
   const koCards: (Card | undefined)[] = [];  // v2.246 KO cause tracking
   const teraImmunNames: string[] = [];        // v2.260 Bug #3 太晶備戰免疫名單
+  const reduceLogs: string[] = [];            // v5.293 特性減傷 log 累積
 
   for (const c of target.bench) {
     const card = pool.get(c.cardId);
@@ -719,7 +882,16 @@ function hitBenchAll(
       newBench.push(c);
       continue;
     }
-    const newDmg = c.damage + amount;
+    // v5.293 bench 招式傷害套特性減傷 (PTCG 規則: bench 不算弱抵, 但特性減傷適用)
+    let perAmt = amount;
+    if (perAmt > 0 && card) {
+      const r = _applyBenchAbilityReduce(state, c, card, targetIdx, pool, perAmt);
+      perAmt = r.amount;
+      if (r.logs.length > 0) {
+        reduceLogs.push(`${card.name}：${r.logs.join('、')}`);
+      }
+    }
+    const newDmg = c.damage + perAmt;
     const hp = effectiveHPInline(c, pool, state);
     if (hp > 0 && newDmg >= hp) {
       koDiscards.push({ ...c, damage: newDmg });
@@ -745,6 +917,10 @@ function hitBenchAll(
   const who = targetIdx === attackerIdx ? '自己' : '對手';
   let s: GameState = { ...state, players };
   s = addLog(s, `${attackLabel}：對${who}所有備戰寶可夢各造成 ${amount} 傷害`, attackerIdx);
+  // v5.293 特性減傷 log
+  if (reduceLogs.length > 0) {
+    s = addLog(s, `${attackLabel} 特性減傷：${reduceLogs.join('；')}`, attackerIdx);
+  }
   // v2.260 Bug #3：太晶寶可夢備戰免疫日誌
   if (teraImmunNames.length > 0) {
     s = addLog(s, `${attackLabel}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);
@@ -821,6 +997,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   const koNames: string[] = [];
   const koCards: (Card | undefined)[] = [];  // v2.246 KO cause tracking
   const teraImmunNames: string[] = [];        // v2.260 Bug #3 太晶備戰免疫名單
+  const benchReduceLogs: string[] = [];       // v5.293 特性減傷 log
   const hitSet = new Set(selectedIids);
 
   // v3.888：每隻 hit target 各別 check resolveBenchGuard（花之帷幔 / 抵抗之幕 / 藏隱 / 深度下潛 / 球形盾牌 / 羽毛化石 等）
@@ -846,7 +1023,16 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
         continue;
       }
     }
-    const newDmg = c.damage + amount;
+    // v5.293 bench 招式傷害套特性減傷 (同 hitBenchAll)
+    let perAmt = amount;
+    if (perAmt > 0 && card) {
+      const r = _applyBenchAbilityReduce(st, c, card, targetIdx, pool, perAmt);
+      perAmt = r.amount;
+      if (r.logs.length > 0) {
+        benchReduceLogs.push(`${card.name}：${r.logs.join('、')}`);
+      }
+    }
+    const newDmg = c.damage + perAmt;
     const hp = effectiveHPInline(c, pool, st);
     if (hp > 0 && newDmg >= hp) {
       koDiscards.push({ ...c, damage: newDmg });
@@ -873,6 +1059,10 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   }
   if (hitNames.length > 0) {
     s = addLog(s, `${label}：對 ${hitNames.join('、')} 造成 ${amount} 傷害`, actorIdx);
+  }
+  // v5.293 特性減傷 log
+  if (benchReduceLogs.length > 0) {
+    s = addLog(s, `${label} 特性減傷：${benchReduceLogs.join('；')}`, actorIdx);
   }
   // v2.260 Bug #3：太晶寶可夢備戰免疫日誌
   if (teraImmunNames.length > 0) {
