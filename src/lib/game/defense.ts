@@ -125,6 +125,12 @@ export function canApplyEffectToTarget(
   options?: {
     /** target 是否在 bench（caller 知道時應傳）；不傳會內部判斷 */
     isBench?: boolean;
+    /**
+     * v5.279: 跳過 stadium-level 防護 (對戰圓形/中立中心).
+     * 用於非「放指示物」類招式效果 (例: 挪動一下移動能量, 換位).
+     * 卡面對戰圓形只擋「放傷害指示物」, 不擋移動能量這種招式效果.
+     */
+    skipStadium?: boolean;
   },
 ): DefenseCheckResult {
   // 1. 光之翼（超級皮可西ex 特性）— ability-effect 全攔
@@ -241,7 +247,11 @@ export function canApplyEffectToTarget(
   }
   if (effectiveIsBench !== false) {
     const r = resolveBenchGuard(state, pool, actorIdx, targetCard, kind);
-    if (r.blocked) return r;
+    if (r.blocked) {
+      // v5.279: skipStadium=true 時跳過「對戰圓形」(stadium-level), 其他個別寶可夢級防護維持
+      const isStadiumReason = r.reason === '對戰圓形競技場效果' || r.reason === '中立中心競技場 效果';
+      if (!(options?.skipStadium && isStadiumReason)) return r;
+    }
   }
 
   // 4. v4.975：active target 招式傷害 — 統一 8 個 active-side immune flag

@@ -337,10 +337,12 @@ regPost('小灰怪|挪動一下', (state, aIdx, pool) => {
   for (const b of opp.bench) allPokes.push(b);
   // v5.229：過濾「不受招式效果影響」的寶可夢（薄霧/硬岩/化隱/抵抗之幕/球形盾牌 等）
   //   挪動一下是純招式效果（無傷害），source 端 + target 端都應該被擋。
+  // v5.279: skipStadium=true — 對戰圓形/中立中心 (stadium-level) 只擋「放指示物」, 不擋移動能量
+  //   只保留個別寶可夢級防護 (薄霧/硬岩/化隱/抵抗之幕/球形盾牌/藏隱/深度下潛/皇帝之勢/全能硬殼/陳舊的背蓋化石)
   const unprotectedPokes = allPokes.filter(pk => {
     const card = pool.get(pk.cardId);
     const isBench = opp.active?.iid !== pk.iid;
-    const guard = canApplyEffectToTarget(state, aIdx, pk, card, 'attack-effect', pool, { isBench });
+    const guard = canApplyEffectToTarget(state, aIdx, pk, card, 'attack-effect', pool, { isBench, skipStadium: true });
     return !guard.blocked;
   });
   // 來源（source）必須是「可被拿走能量」的對手寶可夢 + 身上要有能量
