@@ -1388,17 +1388,30 @@ regPre('故勒頓|輪番狂攻', (state, aIdx, pool) => {
     if (!card?.tags?.includes('古代')) return false;
     return inst.attackUsedLastSelfTurn !== undefined;
   });
+  // v5.260：audit log — 列出場上古代寶可夢 + LastSelfTurn flag, 方便玩家 debug
+  const ancients = others.filter(inst => pool.get(inst.cardId)?.tags?.includes('古代'));
+  let s: GameState = state;
+  if (ancients.length === 0) {
+    s = addLog(s, '輪番狂攻 audit: 場上其他寶可夢中無「古代」屬性', aIdx);
+  } else {
+    const detail = ancients.map(inst => {
+      const c = pool.get(inst.cardId);
+      const used = inst.attackUsedLastSelfTurn ?? '(無)';
+      return `${c?.name ?? '?'}=${used}`;
+    }).join(' / ');
+    s = addLog(s, `輪番狂攻 audit: 場上其他古代寶可夢及其上回合招式: ${detail}`, aIdx);
+  }
   if (triggered) {
     const tCard = pool.get(triggered.cardId);
     return {
-      state: addLog(state,
+      state: addLog(s,
         `輪番狂攻：上個自己的回合「${tCard?.name ?? '?'}」（古代）使用了「${triggered.attackUsedLastSelfTurn}」 → 30 + 150 = 180`,
         aIdx),
       damage: 180,
     };
   }
   return {
-    state: addLog(state,
+    state: addLog(s,
       '輪番狂攻：上個自己的回合無其他古代寶可夢使用招式 → 30',
       aIdx),
     damage: 30,
