@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.252</span> 神聖護符觸發補上提示文字</summary>
+        <ul>
+          <li>玩家反映：神聖護符「未實裝」。其實效果已生效（對手寶可夢有特性時傷害 -30），但戰鬥訊息沒有顯示觸發痕跡，傷害計算明細也不會把這 -30 列出，玩家看不出來。</li>
+          <li>本次修補：神聖護符觸發時加上「神聖護符：XX（擁有特性）招式傷害 -30」訊息，傷害計算公式也會把這 -30 顯示出來。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.251</span> 超大冰淇淋 滿血禁用</summary>
         <ul>
           <li>玩家反映：戰鬥寶可夢滿血時，超大冰淇淋還是可以使用（無意義浪費）。依官方規則，治療類道具沒有治療對象時不可使用。</li>

@@ -4751,6 +4751,10 @@ function handlePlaying(
           const reduce = abilFn(attackerCard);
           if (reduce > 0) {
             baseDamage = Math.max(0, baseDamage - reduce);
+            // v5.252：補 addLog + formula 揭示觸發 (例如神聖護符 -30)
+            workingState = addLog(workingState,
+              `${defTool.name}：${attackerCard.name}（擁有特性）招式傷害 -${reduce}`, dIdx);
+            formula.push({ sign: '-', value: reduce, label: defTool.name });
           }
         }
       }
