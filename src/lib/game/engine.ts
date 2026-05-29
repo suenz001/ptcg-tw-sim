@@ -5727,9 +5727,11 @@ function handlePlaying(
       newState.coinFlippedThisAttack === true
       && newState.players[aIdx].active
       && !newState.players[aIdx].retryBadgeUsedThisTurn
-      && !newState.pendingSelection
       && action._retryBadgeAlreadyAsked !== true
       && !isToolsJammed(newState, pool)  /* v5.304: 阻礙之塔下道具失效, 重試徽章不發動 */
+      /* v5.306: 拿掉 !newState.pendingSelection 守門 — 招式 POST 開了 picker (例如親送挑戰 2 正面後選寶可夢)
+         也必須先彈 retry modal 讓玩家決定; retry block 內已用 spread ...preAttackStateForRetry revert state
+         + 覆蓋 pendingSelection 為 retry modal, 玩家選 keep 重 run 時 POST 會再次 set picker. */
     ) {
       const atkInst = newState.players[aIdx].active!;
       const atkCard = pool.get(atkInst.cardId);
