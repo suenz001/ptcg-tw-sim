@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.305</span> M5 化石進化鏈修補</summary>
+        <ul>
+          <li>修正：M5 深淵之瞳的「頭蓋龍、盾甲龍」進化關係欄位在台版上線時遺漏，導致無法從化石進化。已補回正確的進化來源（頭蓋龍 ← 陳舊的頭蓋化石、盾甲龍 ← 陳舊的盾甲化石），化石採掘場路徑現可正確進化。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.304</span> 棄牌區手機 UI／重試徽章 3 連修</summary>
         <ul>
           <li>修正：手機版棄牌區彈窗在卡片種類較多時，每列卡片會與下一列上下重疊，導致部分卡片看不見。改用更穩定的版面計算方式，讓所有卡片正確排列、不再相互覆蓋。</li>

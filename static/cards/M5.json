@@ -1769,7 +1769,8 @@
     ],
     "pokedexNumber": 408,
     "species": "頭錘寶可夢",
-    "illustrator": "Hideki Ishikawa"
+    "illustrator": "Hideki Ishikawa",
+    "evolvesFrom": "陳舊的頭蓋化石"
   },
   {
     "id": "19187",
@@ -2518,7 +2519,8 @@
     ],
     "pokedexNumber": 410,
     "species": "護盾寶可夢",
-    "illustrator": "Kurata So"
+    "illustrator": "Kurata So",
+    "evolvesFrom": "陳舊的盾甲化石"
   },
   {
     "id": "19204",
