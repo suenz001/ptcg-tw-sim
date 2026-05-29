@@ -5196,6 +5196,12 @@
     floatingEvoMenu = null;
     floatingRetreatMenu = null;
     selectedEnergyIid = null;
+    // v5.276: defensive reset — 悔棋回到「特性觸發前」state 後, 殘留的 UI animation
+    //   key 可能還對應 KO 後的 prize 狀態, 造成 prize 動畫卡住或重抓獎賞 modal 不關.
+    //   bump prizeAnimKey 強迫 reactive 重算; clear arriving/justArrived 動畫 set.
+    prizeAnimKey = [prizeAnimKey[0] + 1, prizeAnimKey[1] + 1];
+    arrivingIids = new Set();
+    justArrivedIids = new Set();
     console.log('[undo] 已悔棋一步（本機）');
   }
 

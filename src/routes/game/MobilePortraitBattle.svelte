@@ -1769,7 +1769,9 @@
      用 CSS auto-fit minmax 取代 JS 偵測，向量化處理任意數量寶可夢。 */
   .mp-pick-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    /* v5.276: 改 fixed-width 110px 卡 + center 對齊, 場上只 1 隻寶可夢時不撐滿整個 sheet */
+    grid-template-columns: repeat(auto-fit, 110px);
+    justify-content: center;
     gap: 0.45rem;
     max-height: 55vh;
     overflow-y: auto;

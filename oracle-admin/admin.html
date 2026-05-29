@@ -825,6 +825,25 @@ function renderRoomsTab(el, source, rooms) {
   const sourceLabel = source === 'oracle' ? '🎮 Oracle 對戰' : '🔥 Firebase 對戰';
   // v0.90: Firebase rooms 也可刪 — 解決 zombie ended 房無法清理問題
   const showDelete = true;
+  // v5.276: 翻頁 — 50 筆/頁
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ROOMS_PAGE_SIZE));
+  const curPage = source === 'oracle' ? oracleRoomsPage : firebaseRoomsPage;
+  const page = Math.min(Math.max(1, curPage), totalPages);
+  if (source === 'oracle') oracleRoomsPage = page; else firebaseRoomsPage = page;
+  const start = (page - 1) * ROOMS_PAGE_SIZE;
+  const pageRooms = filtered.slice(start, start + ROOMS_PAGE_SIZE);
+  const pagerHtml = totalPages > 1 ? `
+    <div class="rooms-pager" style="display:flex;gap:0.4rem;align-items:center;justify-content:center;margin:0.6rem 0;flex-wrap:wrap">
+      <button class="ghost" onclick="setRoomsPage(1, '${source}')" ${page === 1 ? 'disabled' : ''}>« 第一頁</button>
+      <button class="ghost" onclick="setRoomsPage(${page - 1}, '${source}')" ${page === 1 ? 'disabled' : ''}>‹ 上一頁</button>
+      <span style="font-size:0.9rem;color:#9bbcef">第 ${page} / ${totalPages} 頁 (共 ${filtered.length} 筆)</span>
+      <button class="ghost" onclick="setRoomsPage(${page + 1}, '${source}')" ${page === totalPages ? 'disabled' : ''}>下一頁 ›</button>
+      <button class="ghost" onclick="setRoomsPage(${totalPages}, '${source}')" ${page === totalPages ? 'disabled' : ''}>最後一頁 »</button>
+      <span style="margin-left:0.4rem;font-size:0.85rem;color:#bbb">跳至：</span>
+      <input id="rooms-page-input-${source}" type="number" min="1" max="${totalPages}" value="${page}" style="width:4.5rem;padding:0.2rem 0.3rem;background:#222;color:#eee;border:1px solid #555;border-radius:4px" onkeydown="if(event.key==='Enter')jumpRoomsPage('${source}')" />
+      <button class="ghost" onclick="jumpRoomsPage('${source}')">跳頁</button>
+    </div>
+  ` : '';
   el.innerHTML = `
     <h2>${sourceLabel} <span class="small">(共 ${rooms.length})</span></h2>
     <div class="toolbar">
@@ -834,12 +853,14 @@ function renderRoomsTab(el, source, rooms) {
       <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${counts.ended || 0})</span>
       <input class="search-box" placeholder="搜尋 房號 / 玩家名" oninput="filterRoomsBySearch(this.value, '${source}')" />
     </div>
+    ${pagerHtml}
     <div class="table-wrap"><table class="match-table"><thead><tr>
       <th>房號</th><th>房間名稱</th><th>P1</th><th>P2</th><th>狀態</th>
       <th>回合</th><th>最後更新</th><th>牌組</th><th>訊息</th><th>觀戰</th>${showDelete ? '<th></th>' : ''}
     </tr></thead><tbody id="${source}-rooms-tbody">
-    ${filtered.map(r => renderRoomRow(r, source)).join('')}
+    ${pageRooms.map(r => renderRoomRow(r, source)).join('')}
     </tbody></table></div>
+    ${pagerHtml}
   `;
 }
 
@@ -864,14 +885,37 @@ window.openSpyWindow = function(roomCode, source) {
   window.open(url, '_blank', 'noopener,noreferrer');
 };
 
+// v5.276: 翻頁 state (per source) + PAGE_SIZE
+const ROOMS_PAGE_SIZE = 50;
+let oracleRoomsPage = 1;
+let firebaseRoomsPage = 1;
+window.setRoomsPage = function(p, source) {
+  if (source === 'oracle') oracleRoomsPage = Math.max(1, p);
+  else firebaseRoomsPage = Math.max(1, p);
+  if (source === 'oracle') renderRoomsTab(document.getElementById('tab-oracle-rooms'), 'oracle', oracleRoomsCache);
+  else renderRoomsTab(document.getElementById('tab-firebase-rooms'), 'firebase', firebaseRoomsCache);
+};
+window.jumpRoomsPage = function(source) {
+  const inp = document.getElementById('rooms-page-input-' + source);
+  if (!inp) return;
+  const p = parseInt(inp.value, 10);
+  if (Number.isFinite(p) && p >= 1) window.setRoomsPage(p, source);
+};
+
 window.setStatusFilter = function(s, source) {
   statusFilter = s;
+  if (source === 'oracle') oracleRoomsPage = 1;  // v5.276: 切 filter 重置頁碼
+  else firebaseRoomsPage = 1;
   if (source === 'oracle') renderRoomsTab(document.getElementById('tab-oracle-rooms'), 'oracle', oracleRoomsCache);
   else renderRoomsTab(document.getElementById('tab-firebase-rooms'), 'firebase', firebaseRoomsCache);
 };
 
 window.filterRoomsBySearch = function(q, source) {
+  // v5.276: 搜尋也走翻頁 — 完整 re-render (含 pager) 而非只更新 tbody
+  if (source === 'oracle') oracleRoomsPage = 1;
+  else firebaseRoomsPage = 1;
   const rooms = source === 'oracle' ? oracleRoomsCache : firebaseRoomsCache;
+  // 過濾 cache 內 rooms 後重 render. statusFilter + search 都套用.
   const lc = q.toLowerCase();
   const filtered = rooms.filter(r => {
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
@@ -880,7 +924,8 @@ window.filterRoomsBySearch = function(q, source) {
     if ((r.roomName || '').toLowerCase().includes(lc)) return true;
     return (r.seats || []).some(s => s?.name && s.name.toLowerCase().includes(lc));
   });
-  document.getElementById(source + '-rooms-tbody').innerHTML = filtered.map(r => renderRoomRow(r, source)).join('');
+  // tbody-only 更新 (不重 render pager — 搜尋當下不換頁碼避免閃爍)
+  document.getElementById(source + '-rooms-tbody').innerHTML = filtered.slice(0, ROOMS_PAGE_SIZE).map(r => renderRoomRow(r, source)).join('');
 };
 
 function renderRoomRow(r, source) {
