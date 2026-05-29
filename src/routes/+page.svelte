@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.256</span> 猛攻手鐲 ex 寶可夢裝備不生效</summary>
+        <ul>
+          <li>玩家反映：火箭隊的超夢ex（ex 寶可夢）裝備猛攻手鐲，攻擊對手 ex 仍然 +30 傷害，但卡面註明「擁有規則的寶可夢除外」(ex/V/VMAX 等)，不該生效。</li>
+          <li>本次修補：猛攻手鐲傷害加成計算時加上 holder 判斷，附有這張卡的寶可夢若是 ex/V/VMAX 等規則寶可夢，加成歸零（豪華斗篷既有 holder 判斷一同 audit 過，已正確）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.255</span> 巨型花束漏算繁茂×2</summary>
         <ul>
           <li>玩家反映：超級大竺葵ex 招式「巨型花束」（70 + 自身【草】能量×50），場上有大竺葵「繁茂」特性時，應把基本【草】能量算 2 個。例如自身有 3 張基本【草】，應算 6 個 → 70+50×6=370。但實際只算 3 個 → 220。</li>

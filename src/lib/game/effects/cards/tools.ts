@@ -122,7 +122,11 @@ TOOL_ATTACK_BONUS.set('電氣球', (attCard, _ai, defCard) => {
   return isRulePokemon(defCard) ? 50 : 0;
 });
 // ── 猛攻手鐲（Tool）— 對對手戰鬥場 ex +30 ───────────────────────────────────
-TOOL_ATTACK_BONUS.set('猛攻手鐲', (_a, _ai, defCard) => {
+//   卡面: 「附有這張卡的寶可夢（『擁有規則的寶可夢』除外）」
+//   v5.256: 補 holder gate — attackerCard 是 rule pokemon (ex/V/VMAX 等) 時不生效.
+TOOL_ATTACK_BONUS.set('猛攻手鐲', (attackerCard, _ai, defCard) => {
+  // v5.256：holder 是擁有規則的寶可夢 → 不該生效 (卡面除外條款)
+  if (isRulePokemon(attackerCard)) return 0;
   // v3.67：改用 isRulePokemon helper
   return isRulePokemon(defCard) ? 30 : 0;
 });
