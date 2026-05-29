@@ -304,6 +304,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.286</span> 補 v5.285 更新記錄</summary>
+        <ul>
+          <li>補上前一版更新內容如下一條。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.285</span> 桌墊版零之大空洞備戰卡片字體與疊牌位置修正</summary>
+        <ul>
+          <li>修正：v5.283 把 8 張備戰卡撐開時，HP 與寶可夢名稱字體放太大、附在身上的能量／道具疊牌位置跑掉。本次改成讓 8 卡跟 5 卡用相同的縮放比例，字體和疊牌位置都跟原本 5 卡時視覺一致，只是 8 張時自然會略小一點。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.284</span> 補 v5.283 更新記錄</summary>
         <ul>
           <li>補上前一版更新內容如下一條。</li>
