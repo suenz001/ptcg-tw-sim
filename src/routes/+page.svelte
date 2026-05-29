@@ -269,7 +269,7 @@
     <h2>⚔️ 對戰演練</h2>
     <p>
       <a href="{base}/game">開始演練 →</a>
-      <span class="hint">（牌組實戰測試）</span>
+      <span class="hint">（牌組實戰測試及規則學習）</span>
     </p>
   </section>
 
@@ -304,6 +304,37 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.275</span> 首頁文字微調 + 補上 v5.272~v5.274 更新記錄</summary>
+        <ul>
+          <li>首頁「對戰演練」按鈕說明改為「牌組實戰測試及規則學習」（凸顯本站學習推廣性質）。</li>
+          <li>補上之前漏寫的 v5.272/v5.273/v5.274 更新記錄如下三條。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.274</span> 赫普的朽木妖「恐怖復仇」傷害條件修正</summary>
+        <ul>
+          <li>修正：恐怖復仇之前任何自方寶可夢在對手上回合被招式擊倒都會 +100 傷害，違反卡面。卡面要求「自己的『赫普的寶可夢』因招式的傷害而昏厥」才觸發。</li>
+          <li>現在 engine 新增赫普家族 KO 計數欄位，恐怖復仇只認赫普家族在對手上回合被招式 KO 的情況，30 → 130；其他寶可夢被 KO 不再加。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.273</span> 化石卡進化鏈顯示真根因 + 重試徽章可附加到所有屬性寶可夢</summary>
+        <ul>
+          <li>修正：卡牌資料庫與牌組編輯器點化石卡（陳舊的根狀化石／背蓋化石／羽毛化石／顎之化石／鰭之化石／盾牌化石／頭蓋化石）的詳細視窗，現在會完整顯示「化石 → Stage1 寶可夢 → Stage2」進化鏈。</li>
+          <li>修正：重試徽章先前限制只能附在【無】屬性寶可夢身上（手牌沒亮黃框），實際上跟氣球一樣可以附在任何屬性的寶可夢身上。效果（重擲擲幣結果）仍依卡面只對【無】屬性寶可夢生效。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.272</span> 道具附加目標視窗標題改清楚</summary>
+        <ul>
+          <li>附加重試徽章等寶可夢道具時，選擇目標視窗的標題從通用的「選擇目標寶可夢」改為「為『道具名』選擇要附加的寶可夢」，玩家一眼可看出是附加流程。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.271</span> 化石卡進化鏈顯示 + 毒電嬰呼朋引伴可跳過</summary>
         <ul>
           <li>新增：卡牌資料庫與牌組編輯器的「進化鏈」現在會顯示化石卡（陳舊的根狀化石、背蓋化石、羽毛化石、顎之化石、鰭之化石、盾牌化石、頭蓋化石）→ 對應寶可夢的完整進化鏈。</li>
