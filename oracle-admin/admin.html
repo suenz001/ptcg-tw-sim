@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v0.90</title>
+<title>PTCG Oracle Admin v0.91</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -362,7 +362,7 @@
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.89</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.91</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1445,6 +1445,9 @@ let matchRecordsTotal = 0;
 let matchRecordsFilter = '';
 let matchRecordsModeFilter = 'all';  // v0.82: 'all' | 'online' | 'local'（線上=有 roomCode，本機=無）
 let matchRecordsLoading = false;
+// v0.91: 真正翻頁取代「載入更多」append 模式
+const MATCH_PAGE_SIZE = 50;
+let matchRecordsPage = 0;  // 0-indexed; UI 顯示為「第 N+1 頁」
 // v0.81: 不再用獨立 cardByIdPool — 共用既有的 cardInfoMap / ensureCardIndex (line 413)
 
 async function loadMatchRecords(reset = false) {
@@ -1452,14 +1455,20 @@ async function loadMatchRecords(reset = false) {
   if (matchRecordsLoading) return;
   matchRecordsLoading = true;
   try {
-    if (reset || matchRecordsCache.length === 0) {
+    if (reset) {
+      matchRecordsPage = 0;
       matchRecordsCache = [];
       matchRecordsTotal = 0;
+    }
+    if (matchRecordsCache.length === 0) {
       el.innerHTML = '<h2>📜 對戰歷史</h2><div class="empty">Loading…</div>';
     }
-    const params = new URLSearchParams({ limit: '50', skip: String(matchRecordsCache.length) });
+    // v0.91: 真正翻頁 — skip = page × 50 (取代 cache.length append)
+    const params = new URLSearchParams({
+      limit: String(MATCH_PAGE_SIZE),
+      skip: String(matchRecordsPage * MATCH_PAGE_SIZE),
+    });
     if (matchRecordsFilter) params.set('email', matchRecordsFilter);
-    // v0.82：mode filter — 用 server 端 ?mode= 過濾，server v0.11 起 'online' / 'local' 對應 roomCode 有無
     if (matchRecordsModeFilter === 'online' || matchRecordsModeFilter === 'local') {
       params.set('mode', matchRecordsModeFilter);
     }
@@ -1468,13 +1477,29 @@ async function loadMatchRecords(reset = false) {
       el.innerHTML = '<h2>📜 對戰歷史</h2><div class="empty">Error: ' + (data?.error || 'unknown') + '</div>';
       return;
     }
-    matchRecordsCache = matchRecordsCache.concat(data.records || []);
+    // v0.91: 直接 replace cache (不 concat) — 一頁 50 筆顯示
+    matchRecordsCache = data.records || [];
     matchRecordsTotal = data.total ?? matchRecordsCache.length;
     renderMatchRecords(el);
   } finally {
     matchRecordsLoading = false;
   }
 }
+
+// v0.91: 翻頁 helpers
+window.gotoMatchPage = function(page) {
+  const totalPages = Math.max(1, Math.ceil((matchRecordsTotal || 0) / MATCH_PAGE_SIZE));
+  const p = Math.max(0, Math.min(totalPages - 1, page | 0));
+  if (p === matchRecordsPage) return;
+  matchRecordsPage = p;
+  loadMatchRecords(false);
+};
+window.jumpMatchPage = function(inputEl) {
+  const val = parseInt(inputEl?.value ?? '1', 10);
+  if (!Number.isFinite(val)) return;
+  // 使用者輸入 1-indexed → 內部 0-indexed
+  window.gotoMatchPage(val - 1);
+};
 
 window.filterMatchRecordsByEmail = function(v) {
   matchRecordsFilter = (v || '').trim();
@@ -1521,6 +1546,58 @@ function fmtMatchDuration(ms) {
   return m + ':' + (s < 10 ? '0' + s : s);
 }
 
+// v0.91: 翻頁 UI helper
+function renderMatchPagination() {
+  const total = matchRecordsTotal || 0;
+  const pageSize = MATCH_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const curPage = matchRecordsPage;
+  const curPage1 = curPage + 1;  // 顯示用 1-indexed
+  const startN = total === 0 ? 0 : curPage * pageSize + 1;
+  const endN = Math.min((curPage + 1) * pageSize, total);
+
+  // 算要顯示哪些頁碼按鈕 (限制 7 個避免太長): 第 1 / 上 N / 當前 / 下 N / 最後
+  const pageBtns = [];
+  const addBtn = (p, label = null) => {
+    const active = p === curPage;
+    pageBtns.push(
+      '<button onclick="gotoMatchPage(' + p + ')"' +
+      (active ? ' style="background:#3a6a3a;color:#fff;border-color:#5aaa5a;"' : ' class="ghost"') +
+      '>' + (label || (p + 1)) + '</button>'
+    );
+  };
+  const addEllipsis = () => pageBtns.push('<span style="padding:0 4px;color:#7a8898;">…</span>');
+
+  if (totalPages <= 7) {
+    for (let i = 0; i < totalPages; i++) addBtn(i);
+  } else {
+    addBtn(0);
+    if (curPage > 3) addEllipsis();
+    const from = Math.max(1, curPage - 2);
+    const to = Math.min(totalPages - 2, curPage + 2);
+    for (let i = from; i <= to; i++) addBtn(i);
+    if (curPage < totalPages - 4) addEllipsis();
+    addBtn(totalPages - 1);
+  }
+
+  const prevDisabled = curPage === 0 ? 'disabled' : '';
+  const nextDisabled = curPage >= totalPages - 1 ? 'disabled' : '';
+
+  return `
+    <div style="font-size:0.85rem; color:#9aaaaa; margin-right:10px;">
+      第 ${startN}–${endN} 筆 / 共 ${total} 筆 (第 ${curPage1} / ${totalPages} 頁)
+    </div>
+    <button class="ghost" ${prevDisabled} onclick="gotoMatchPage(${curPage - 1})">‹ 上一頁</button>
+    ${pageBtns.join('')}
+    <button class="ghost" ${nextDisabled} onclick="gotoMatchPage(${curPage + 1})">下一頁 ›</button>
+    <span style="margin-left:10px; font-size:0.85rem;">跳至：</span>
+    <input type="number" min="1" max="${totalPages}" value="${curPage1}"
+      style="width:60px; padding:4px; background:#1a2630; color:#fff; border:1px solid #3a5a5a; border-radius:4px;"
+      onkeydown="if(event.key==='Enter')jumpMatchPage(this)" />
+    <button onclick="jumpMatchPage(this.previousElementSibling)">跳頁</button>
+  `;
+}
+
 function renderMatchRecords(el) {
   const records = matchRecordsCache;
   const rows = records.map(r => {
@@ -1553,7 +1630,6 @@ function renderMatchRecords(el) {
       <td><button class="tiny danger" onclick="deleteMatchRecord('${mid}')" title="刪除此筆紀錄（測試資料清理用）">🗑</button></td>
     </tr>`;
   }).join('');
-  const hasMore = matchRecordsCache.length < matchRecordsTotal;
   el.innerHTML = `
     <h2>📜 對戰歷史 <span class="small">(共 ${matchRecordsTotal} 場${matchRecordsFilter ? ' · email: ' + escapeHtml(matchRecordsFilter) : ''}${matchRecordsModeFilter !== 'all' ? ' · ' + (matchRecordsModeFilter === 'online' ? '🌐 線上' : '🏠 本機') : ''})</span></h2>
     <div class="toolbar">
@@ -1582,8 +1658,8 @@ function renderMatchRecords(el) {
         </tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
-      <div class="toolbar" style="margin-top:16px; justify-content:center;">
-        ${hasMore ? `<button onclick="loadMatchRecords(false)">載入更多 (${records.length}/${matchRecordsTotal})</button>` : `<span class="small">已顯示全部 ${records.length} 筆</span>`}
+      <div class="toolbar" style="margin-top:16px; justify-content:center; gap: 6px; flex-wrap: wrap;">
+        ${renderMatchPagination()}
       </div>
     `}
   `;

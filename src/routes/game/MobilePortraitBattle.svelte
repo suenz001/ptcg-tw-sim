@@ -1785,8 +1785,8 @@
     grid-template-columns: repeat(auto-fit, 110px);
     justify-content: center;
     gap: 0.45rem;
-    max-height: 55vh;
-    overflow-y: auto;
+    /* v5.298: 拿掉 max-height + overflow-y — 跟外層 .mp-sheet (70vh + overflow-y:auto) 雙層滑捲
+       在手機觸控時衝突, 內層卡片底部能量資訊永遠看不到. 改由 sheet 統一負責滑捲. */
     padding: 0.3rem 0.15rem;
     margin-bottom: 0.3rem;
   }

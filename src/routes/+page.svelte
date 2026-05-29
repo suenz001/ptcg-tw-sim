@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.298</span> 手機版 picker 卡片資訊不被裁切 + 後台對戰歷史翻頁</summary>
+        <ul>
+          <li>修正：手機版備戰寶可夢滿場時（含戰鬥場 6 隻），開啟附加道具／能量等 picker 時，卡片框下方的能量資訊與名稱會被裁切看不見。本次拿掉 picker 卡片的 overflow hidden 限制，內容自然顯示。</li>
+          <li>後台升級：對戰歷史頁面新增完整翻頁功能（每頁 50 筆 + 翻頁按鈕 + 跳頁輸入框），可從約 5000 筆對戰資料中快速跳轉到指定頁。Admin 版本同步更新為 v0.91。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.297</span> 莫魯貝可 飢餓衝刺 完整實裝</summary>
         <ul>
           <li>實裝：莫魯貝可特性「飢餓衝刺」（若這隻寶可夢身上沒有附加能量卡，則這隻寶可夢撤退所需的能量全部消除）。原本系統跳過未實裝，現在已完整實作（與小火龍「一身輕」、阿響的熔岩蝸牛「溶化流動」同邏輯）。</li>
