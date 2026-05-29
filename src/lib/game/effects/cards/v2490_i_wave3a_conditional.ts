@@ -210,16 +210,17 @@ regR('wave3a-snipe-bench', (state, aIdx, iids, params, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const targetIid = iids[0];
   // v5.176：加 canApplyEffectToTarget('attack-damage') guard
-  // 修 Bug 3：原本沒 guard → 太晶寶可夢在備戰位被打到（規則：太晶在備戰免疫招式傷害）
-  // 同時也擋 球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔 等 bench immunity
+  // v5.270：增強 audit log — 明確顯示 guard 是否觸發, 方便玩家對帳 (花之帷幔/球形盾牌等)
   let s = state;
   const target = s.players[dIdx].bench.find(b => b.iid === targetIid);
   if (!target) return s;
   const targetCard = pool.get(target.cardId);
   const guard = canApplyEffectToTarget(s, aIdx, target, targetCard, 'attack-damage', pool, { isBench: true });
   if (guard.blocked) {
-    return addLog(s, `${label}：${targetCard?.name ?? '?'} 因 ${guard.reason} 不受傷害`, aIdx);
+    return addLog(s, `✋ ${label}：${targetCard?.name ?? '?'} 受到 ${guard.reason} 保護, 不受 ${amount} 點招式傷害`, aIdx);
   }
+  // v5.270: guard 未觸發 — 確認套用前寫一條 audit log (讓玩家從 log 對帳)
+  s = addLog(s, `🎯 ${label}：對 ${targetCard?.name ?? '?'} 造成 ${amount} 點傷害 (guard 未觸發)`, aIdx);
   return updatePlayer(s, dIdx, p => ({
     ...p,
     bench: p.bench.map(b => b.iid === targetIid

@@ -12,6 +12,7 @@
 import { tryPromptPromoteActive } from '../_shared';
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
+import { isBasicPokemonCard } from '../../engine';  // v5.270: 毒電嬰呼朋引伴 pre-scan basic
 import type { Card } from '$lib/cards/types';
 import { regPre, regPost, regA, reg, regR, regG, addLog, addPrivateLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
 } from '../_shared';
@@ -182,16 +183,25 @@ regR('lie-cheat-to-deck-bottom', (state, aIdx, selectedIids, _params, pool) => {
 });
 
 // 毒電嬰｜呼朋引伴 — 牌庫搜 ≤2【基礎】寶可夢放備戰
+// v5.270: 牌庫內有 basic 可選時 minCount=min(maxN,1) (至少選 1, 不可跳過);
+//   牌庫沒有 basic 時直接 log 跳過 (避免手機版 picker maxCount=1+minCount=0 卡確認 button)
 regPost('毒電嬰|呼朋引伴', (state, aIdx, pool) => {
   // v3.78：支援零之大空洞
   const limit = getOwnBenchLimit(state, aIdx, pool);
   if (state.players[aIdx].bench.length >= limit) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
   const maxN = Math.min(2, limit - state.players[aIdx].bench.length);
-  return withPending(addLog(state, `呼朋引伴：從牌庫選 ≤${maxN} 張基礎寶可夢放備戰`, aIdx), {
+  // v5.270: pre-scan 牌庫是否有 basic 可選, 沒有就 log 跳過
+  const hasBasicInDeck = state.players[aIdx].deck.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && isBasicPokemonCard(card);
+  });
+  if (!hasBasicInDeck) return addLog(state, '呼朋引伴：牌庫內無可選的基礎寶可夢', aIdx);
+  const minCount = Math.min(maxN, 1);  // v5.270: 至少必選 1
+  return withPending(addLog(state, `呼朋引伴：從牌庫選 ${minCount}~${maxN} 張基礎寶可夢放備戰`, aIdx), {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'BasicPokemon',
-    minCount: 0, maxCount: maxN,
+    minCount, maxCount: maxN,
     effectKey: 'recruit-to-bench',
   });
 });
