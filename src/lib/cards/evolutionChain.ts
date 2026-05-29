@@ -19,19 +19,18 @@ export function getEvolutionChainNames(query: string, pool: Card[]): Set<string>
   if (!q || pool.length === 0) return new Set<string>();
 
   // Step 1: seeds — 名字以 query 開頭的卡
-  // v5.001 修：之前用 includes 會把「大吾的鐵啞鈴」也納入「鐵啞鈴」query 的 seed，
-  //   導致 訓練家冠名鏈 跟 一般鏈 混在一起。PTCG 規則上兩者是獨立卡名 + 獨立鏈。
-  //   改 startsWith 後：「鐵啞鈴」只 match 自己（不含「大吾的」prefix），
-  //   「大吾的鐵啞鈴」只 match「大吾的」prefix 的，兩條鏈天然隔離。
-  //   「甲賀忍蛙」query 仍能 match「甲賀忍蛙ex」(startsWith)；「超級甲賀忍蛙ex」雖不直接 match，
-  //   但 BFS 從「呱頭蛙」root 仍會找到它（它 evolvesFrom 呱頭蛙 = 普通鏈的 Stage1）。
-  const seeds = pool.filter(c => c.supertype === 'Pokemon' && c.name.toLowerCase().startsWith(q));
+  // v5.001 修：startsWith 隔離訓練家冠名與一般鏈
+  // v5.271：seeds 也接受 Trainer/化石 卡 (有 stage2 寶可夢 evolvesFrom===化石名 的 chain)
+  const seeds = pool.filter(c =>
+    (c.supertype === 'Pokemon' || (c.supertype === 'Trainer' && c.subtype === 'Item'))
+    && c.name.toLowerCase().startsWith(q));
   if (seeds.length === 0) return new Set<string>();
 
   // name → Card[] 索引（多印刷 / ex 版本同名）
+  // v5.271: 加 Trainer/Item 卡 (化石) — 寶可夢 evolvesFrom===化石名 時可查到 fossil root
   const byName = new Map<string, Card[]>();
   for (const c of pool) {
-    if (c.supertype !== 'Pokemon') continue;
+    if (c.supertype !== 'Pokemon' && !(c.supertype === 'Trainer' && c.subtype === 'Item')) continue;
     const arr = byName.get(c.name) ?? [];
     arr.push(c);
     byName.set(c.name, arr);
@@ -107,6 +106,9 @@ export function getEvolutionChainGrouped(query: string, pool: Card[]): Evolution
       stage = card.stage;
     } else if (card?.subtype === 'Stage1' || card?.subtype === 'Stage2' || card?.subtype === 'Basic') {
       stage = card.subtype;
+    } else if (card?.supertype === 'Trainer' && card?.subtype === 'Item') {
+      // v5.271: 化石卡標 Basic stage (作為進化鏈起點)
+      stage = 'Basic';
     } else {
       // card 缺失或 subtype 非標準（如 'ex'）→ 由 evolvesFrom 判斷
       stage = card?.evolvesFrom ? 'Stage1' : 'Basic';

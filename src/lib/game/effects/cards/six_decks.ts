@@ -196,12 +196,13 @@ regPost('毒電嬰|呼朋引伴', (state, aIdx, pool) => {
     return card?.supertype === 'Pokemon' && isBasicPokemonCard(card);
   });
   if (!hasBasicInDeck) return addLog(state, '呼朋引伴：牌庫內無可選的基礎寶可夢', aIdx);
-  const minCount = Math.min(maxN, 1);  // v5.270: 至少必選 1
-  return withPending(addLog(state, `呼朋引伴：從牌庫選 ${minCount}~${maxN} 張基礎寶可夢放備戰`, aIdx), {
+  // v5.271: revert minCount 回 0 — 卡面「最多 2 張」, 玩家可選 0~2 (跳過合法).
+  //   v5.270 改 minCount=1 違反卡面 (Wilson 明確要求 revert).
+  return withPending(addLog(state, `呼朋引伴：從牌庫選 0~${maxN} 張基礎寶可夢放備戰`, aIdx), {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'BasicPokemon',
-    minCount, maxCount: maxN,
+    minCount: 0, maxCount: maxN,
     effectKey: 'recruit-to-bench',
   });
 });
