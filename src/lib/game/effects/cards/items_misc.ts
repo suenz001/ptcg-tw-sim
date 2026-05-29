@@ -28,6 +28,7 @@ import {
   healResolver,
   getOwnBenchLimit,
 } from '../_shared';
+import { tryPromptPromoteActive } from '../_shared';
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
 // v3.08 美納斯｜平穩境地 — 阻擋對手寶可夢/附加卡 → 對手手牌
@@ -68,7 +69,8 @@ regR('do-switch', (st, idx, iids, _params, pool) => {
   const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
   const oldName = prevPlayer.active ? (pool.get(prevPlayer.active.cardId)?.name ?? '?') : '?';
   st = addLog(st, `→ 將 ${oldName} 換到備戰區，派出 ${newName} 到戰鬥場`, idx);
-  return updatePlayer(st, idx, (p) => {
+  // v5.243：包 tryPromptPromoteActive — 自方換位 ON_PROMOTE_TO_ACTIVE prompt
+  return tryPromptPromoteActive(updatePlayer(st, idx, (p) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
@@ -79,7 +81,7 @@ regR('do-switch', (st, idx, iids, _params, pool) => {
     // v2.08：離開戰鬥場清狀態旗標
     newBench[bIdx] = clearActiveEffects(p.active);
     return { ...p, active: newActive, bench: newBench };
-  });
+  }), idx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

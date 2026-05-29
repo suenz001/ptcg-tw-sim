@@ -18,6 +18,7 @@
 
 import { regR, updatePlayer, shuffle, addLog, clearActiveEffects, getOwnBenchLimit,
 } from '../_shared';
+import { tryPromptPromoteActive } from '../_shared';
 
 // ── 神秘花園（Stadium）──────────────────────────────────────────────────────
 // 丟 1 張超能量 → 抽到手牌數 = 己方場上超屬寶可夢數量
@@ -94,7 +95,8 @@ regR('surf-beach-swap', (st, idx, iids, _params, pool) => {
   const newName = pool.get(p.bench[benchIdx].cardId)?.name ?? '?';
   const oldName = pool.get(p.active.cardId)?.name ?? '?';
   st = addLog(st, `衝浪海灘：${oldName} ↔ ${newName}（戰鬥/備戰互換）`, idx);
-  return updatePlayer(st, idx, pl => {
+  // v5.243：包 tryPromptPromoteActive — 自方換位 ON_PROMOTE_TO_ACTIVE prompt
+  return tryPromptPromoteActive(updatePlayer(st, idx, pl => {
     if (!pl.active) return pl;
     const newBench = [...pl.bench];
     // v3.812 Bug fix：bench → active 純位置交換，preserve justPlaced + playedFromHand
@@ -103,7 +105,7 @@ regR('surf-beach-swap', (st, idx, iids, _params, pool) => {
     const newActive = { ...pl.bench[benchIdx], movedToActiveThisTurn: true };
     newBench[benchIdx] = clearActiveEffects(pl.active);
     return { ...pl, active: newActive, bench: newBench };
-  });
+  }), idx, pool);
 });
 
 // ── v2.172 密阿雷市（Stadium / J）── 牌庫搜 1 基礎放備戰 + 回合結束 ──────

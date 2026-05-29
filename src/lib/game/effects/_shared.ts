@@ -1076,3 +1076,126 @@ export function reconcileMultiToolRelay(
   }
   return s;
 }
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// v5.243 — 「從備戰區放置於戰鬥場時」可發動 1 次的特性 — 統一 helper
+//
+// 卡面字面：「在自己的回合，從備戰區將這隻寶可夢放置於戰鬥場時，可使用 1 次。」
+//
+// 觸發路徑（自己回合內、自方換位）：
+//   - 撤退 (RETREAT) + 撤退能量 picker (retreat-energy-discard)
+//   - 寶可夢交替 / 急進開關 / 衝浪海灘 等 trainer 道具
+//   - 自方招式的「自身互換」效果 (雀躍 / 瞬間移轉 / 瞬間移動者 / 天空搬運 / h-wave2 等)
+//   - 鐵斑葉ex 迅速游標 self-promote (特性自身換位)
+//
+// 排除：
+//   - KO 後補位 (SEND_NEW_ACTIVE) — 不算換位行為
+//   - 對手強制我方換場 / 我方招式強制對手換場 — 卡面要求「自己的回合」，跨回合不觸發
+//
+// 放在 _shared.ts 因為這檔是 leaf module（只 import types），所有需要 import
+// 此 helper 的 caller（effects.ts / engine.ts / cards/*.ts）都不會造成 circular import。
+// ════════════════════════════════════════════════════════════════════════════
+
+/** 「從備戰區放置於戰鬥場時」可發動 1 次的特性名稱 */
+export const ON_PROMOTE_TO_ACTIVE_ABILITIES = new Set([
+  '振翅高飛',     // 遠古巨蜓ex — 從牌庫選最多 3 張基本【草】能量附身
+  '潔淨支援',     // 拉帝歐斯 — 場上其他寶可夢能量改附給戰鬥位（特定條件）
+  '金屬之路',     // 勾帕路翁ex — 場上【鋼】能量改附給自身
+  '超光速位元',   // 鐵武者ex — 對手 1 隻寶可夢放 2 個傷害指示物（待實作）
+  '熱流反應者',   // 鐵毒蛾 — 場上【火】能量改附給自身（待實作）
+]);
+
+/**
+ * 詢問玩家是否使用「從備戰區放置於戰鬥場時」的特性。
+ * 仿 askUsePlayAbility / askUseRetreatToBenchAbility pattern。
+ */
+export function askUsePromoteActiveAbility(
+  state: GameState,
+  idx: 0 | 1,
+  inst: CardInstance,
+  abilityName: string,
+  abilityKey: string,
+  cardName: string,
+): GameState {
+  return withPending(state, {
+    type: 'modal-choice',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'resolve-promote-active-ability-prompt',
+    params: {
+      label: `${cardName} 上場：是否使用「${abilityName}」特性？`,
+      options: [
+        { id: 'yes', text: '✅ 使用特性' },
+        { id: 'no', text: '❌ 不使用' },
+      ],
+      abilityKey,
+      targetIid: inst.iid,
+    },
+  });
+}
+
+// resolve-promote-active-ability-prompt resolver — 玩家選 yes 後執行對應 ABILITY_EFFECTS
+regR('resolve-promote-active-ability-prompt', (state, actorIdx, selectedIids, params, pool) => {
+  const choice = selectedIids[0] ?? 'no';
+  if (choice !== 'yes') return state;
+  const abilityKey = params?.abilityKey as string;
+  const targetIid = params?.targetIid as string;
+  if (!abilityKey || !targetIid) return state;
+
+  const fn = ABILITY_EFFECTS.get(abilityKey);
+  if (!fn) return state;
+
+  const player = state.players[actorIdx];
+  // 寶可夢已在 active；fallback 找 bench 防 edge case
+  const inst = player.active?.iid === targetIid
+    ? player.active
+    : player.bench.find(c => c.iid === targetIid);
+  if (!inst) return state;
+
+  // 標記「本回合特性已用」— 卡面「可使用 1 次」限制
+  const markedState = updatePlayer(state, actorIdx, pl => ({
+    ...pl,
+    active: pl.active?.iid === targetIid
+      ? { ...pl.active, abilityUsedThisTurn: true }
+      : pl.active,
+    bench: pl.bench.map(c => c.iid === targetIid
+      ? { ...c, abilityUsedThisTurn: true } : c),
+  }));
+
+  return fn(markedState, actorIdx, pool, inst);
+});
+
+/**
+ * 統一 helper：所有「自方換位」(promote bench → active in own turn) 路徑用此 auto-prompt。
+ *
+ * pIdx = 寶可夢擁有方（換場目標方）。
+ * Gate：
+ *   - pendingSelection 已存在 → 跳過（避免覆蓋既有 picker）
+ *   - active.abilityUsedThisTurn → 跳過（本回合已用過）
+ *   - active card 的 abilities 內無 ON_PROMOTE_TO_ACTIVE_ABILITIES 成員 → 跳過
+ *   - ABILITY_EFFECTS 未註冊對應 fn → 跳過（特性還沒實裝）
+ *
+ * 同一寶可夢通常只有 1 個觸發特性，遇到第一個就 return。
+ *
+ * Caller 必須在 active 已 set 完 + movedToActiveThisTurn=true 後呼叫。
+ */
+export function tryPromptPromoteActive(
+  state: GameState,
+  pIdx: 0 | 1,
+  pool: Map<string, Card>,
+): GameState {
+  if (state.pendingSelection) return state;
+  const actInst = state.players[pIdx].active;
+  if (!actInst || actInst.abilityUsedThisTurn) return state;
+  const actCard = pool.get(actInst.cardId);
+  if (!actCard?.abilities) return state;
+  for (let i = 0; i < actCard.abilities.length; i++) {
+    const ab = actCard.abilities[i];
+    if (!ON_PROMOTE_TO_ACTIVE_ABILITIES.has(ab.name)) continue;
+    const abilityKey = `${actCard.name}|${i}`;
+    if (!hasAbilityFn(actCard.name, ab.name, i)) continue;
+    return askUsePromoteActiveAbility(state, pIdx, actInst, ab.name, abilityKey, actCard.name);
+  }
+  return state;
+}
