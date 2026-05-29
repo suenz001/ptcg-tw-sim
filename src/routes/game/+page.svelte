@@ -4990,6 +4990,12 @@
     if (type === 'heal-target') {
       const override2 = pendingSelection?.params?.titleOverride;
       if (typeof override2 === 'string' && override2.length > 0) return override2;
+      // v5.272: attach-tool effectKey 顯示明確 title (避免玩家誤以為是別的 modal)
+      if (pendingSelection?.effectKey === 'attach-tool') {
+        const toolInstAtt = pendingSelection?.params?.toolInst as { cardId: string } | undefined;
+        const toolCardAtt = toolInstAtt ? getCard(toolInstAtt.cardId) : null;
+        return toolCardAtt ? `為「${toolCardAtt.name}」選擇要附加的寶可夢` : '選擇要附加的寶可夢';
+      }
       // v3.33 改通用標題：heal-target picker 同時用於回復、進化、附能量、退化、互換目標等情境
       //   先前「選擇回復的寶可夢」字面只描述其中一種用途，造成 UI 文字與實際情境不符
       return '選擇目標寶可夢';
