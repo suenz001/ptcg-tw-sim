@@ -276,12 +276,14 @@ reg('探險家的嚮導', (st, idx) => {
   if (top6Iids.length === 0) {
     return addLog(st, '探險家的嚮導：牌庫為空', idx);
   }
-  st = addLog(st, '探險家的嚮導：查看牌庫頂 6 張，選最多 2 張', idx);
+  // v5.259: 卡面強制「選擇 2 張」，minCount = min(2, 可選數) (牌庫不足才允許 N<2)
+  const requiredMin = Math.min(2, top6Iids.length);
+  st = addLog(st, `探險家的嚮導：查看牌庫頂 ${top6Iids.length} 張，需強制選 ${requiredMin} 張`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'TOP6',
-    minCount: 0, maxCount: 2,
+    minCount: requiredMin, maxCount: 2,
     effectKey: 'explorer-guide',
     params: { top6Iids },
   });

@@ -7282,7 +7282,7 @@
             <!-- v5.165 重試徽章 modal — 顯示前次擲幣明細 -->
             {#if coinFlips.length > 0}
               <div class="modal-coin-flips">
-                <div class="modal-coin-flips-title">🎲 前次擲幣結果（共 {coinFlips.length} 次）</div>
+                <div class="modal-coin-flips-title">🎲 本次擲幣結果（共 {coinFlips.length} 次）</div>
                 <ul class="modal-coin-flips-list">
                   {#each coinFlips as flip, idx}
                     <li>

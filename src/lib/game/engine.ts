@@ -2230,7 +2230,7 @@ function handlePlaying(
             _machineGunLastFlips: undefined,
           };
           const flipsStr = (coinFlips ?? []).map((f, i) => `第${i + 1}次→${f}`).join('、');
-          const withLog = addLog(reverted, `🎲 重試徽章：玩家選擇保留前次擲幣結果（${flipsStr}），開始套用傷害`, actorIdx);
+          const withLog = addLog(reverted, `🎲 重試徽章：玩家選擇保留剛才擲幣結果（${flipsStr}），開始套用傷害`, actorIdx);
           return handlePlaying(withLog, injectedAction, pool);
         } else if (choice === 'retry') {
           // 消耗徽章 + 重新擲幣（不 inject = 走原 random path）+ 避免再次 trigger modal
@@ -2249,7 +2249,7 @@ function handlePlaying(
             ...originalAction,
             _retryBadgeAlreadyAsked: true,
           };
-          const withLog = addLog(reverted, '🎲 重試徽章：消除前次擲幣結果，重新擲幣！', actorIdx);
+          const withLog = addLog(reverted, '🎲 重試徽章：消除剛才擲幣結果，重新擲幣！', actorIdx);
           return handlePlaying(withLog, injectedAction, pool);
         }
       }
@@ -5711,8 +5711,8 @@ function handlePlaying(
               originalAction: action,
               coinFlips,
               options: [
-                { id: 'keep', text: '✅ 不重擲（使用前次擲幣結果，套用傷害）' },
-                { id: 'retry', text: '🔄 重擲（消除前次擲幣結果，重新擲幣）— 本回合 1 次' },
+                { id: 'keep', text: '✅ 不重擲（使用剛才擲幣結果，套用傷害）' },
+                { id: 'retry', text: '🔄 重擲（消除剛才擲幣結果，重新擲幣）— 本回合 1 次' },
               ],
             },
           },
