@@ -10730,43 +10730,56 @@
     max-height: 110px;
   }
 
-  /* v5.281 桌墊版 bench-extended 真修法 — 跨整個 playmat 寬度 + slot 回 5 卡基底.
-     v5.232~v5.235 全失敗根因: `grid-area:benchMe/benchO` 是 shorthand,
-     單獨 `grid-column:1/-1` 不會覆寫 row 部分 (my-row 在 v5.235 沒套到的真因).
-     正確修法: `grid-area: unset !important` 解除綁定 + 顯式設 grid-row:1 (opp) /
-     grid-row:4 (my) + grid-column:1/-1. slot 回 v5.046 前的 5 卡基底
-     (flex:1 1 90px / max:128) 跟 5 卡完全一致, 容器寬度突破 1fr cell 到整個
-     playmat 寬, flex grow 自然撐到 max:128 停. */
+  /* v5.283 桌墊版 bench-extended v2 — long-form grid-area + zoom unset (重做 v5.281)
+     v5.281 改 `grid-area: unset` 後接 grid-row/column 沒生效 (Wilson 實測仍縮小靠左).
+     根因猜測: Svelte scoped CSS 對 unset + 後續 shorthand 的 cascade 處理異常,
+              或 zoom:0.65 在 grid item 上 width:100% 計算錯誤.
+     v5.283 雙保險:
+     (a) 用 long-form number form 一行搞定 grid-area: row-start/col-start/row-end/col-end
+     (b) bench-extended 桌墊版 zoom: 1 拿掉縮放 (5 卡 vs 8 卡用同樣 zoom 不同 slot 寬, 視覺一致)
+     (c) slot 直接 fixed 100px (不 flex grow), 跨整 row 自然 fit 8 個 */
   .playmat.layout-tabletop .opponent-row > .zone-bench.bench-extended {
-    grid-area: unset !important;
-    grid-column: 1 / -1 !important;
-    grid-row: 1 !important;
-    justify-self: center;
+    grid-area: 1 / 1 / 2 / -1 !important;
+    justify-self: stretch !important;
+    zoom: 1 !important;
   }
   .playmat.layout-tabletop .my-row > .zone-bench.bench-extended {
-    grid-area: unset !important;
-    grid-column: 1 / -1 !important;
-    grid-row: 4 !important;
-    justify-self: center;
+    grid-area: 4 / 1 / 5 / -1 !important;
+    justify-self: stretch !important;
+    zoom: 1 !important;
   }
   .playmat.layout-tabletop .zone-bench.bench-extended {
     overflow-x: visible !important;
     overflow-y: visible !important;
-    justify-content: center;
-    gap: 4px;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    justify-content: center !important;
+    gap: 4px !important;
     width: 100% !important;
     max-width: none !important;
   }
-  /* slot 用 5 卡基底 (flex:1 1 90px / max:128), 跟 .bench-slot base 同 */
+  /* slot 桌墊 5 卡視覺寬 ~ (1fr_width / 5) * 0.65 ~ 85~110px, 取 100px 跟 5 卡視覺接近.
+     拿掉 zoom 後 layout 寬 = 視覺寬, 直接用 100px fixed. */
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot,
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-empty {
-    flex: 1 1 90px !important;
-    min-width: 90px !important;
-    max-width: 128px !important;
+    flex: 0 0 100px !important;
+    width: 100px !important;
+    min-width: 100px !important;
+    max-width: 100px !important;
+    height: 142px !important;  /* 5 卡時 205 * 0.65 ~ 133 視覺高, 取 142 略大讓內部能完整顯示 */
   }
   .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot img {
-    max-width: 108px !important;
-    max-height: 128px !important;
+    max-width: 96px !important;
+    max-height: 130px !important;
+  }
+  /* zoom unset 後 active 跟 bench 距離可能變遠, 給 bench-extended 加負 margin 拉近.
+     opp bench-extended 上方多餘空間 → margin-bottom 拉下接近 activeO
+     my bench-extended 下方多餘空間 → margin-top 拉上接近 activeMe */
+  .playmat.layout-tabletop .opponent-row > .zone-bench.bench-extended {
+    margin-bottom: -10px;
+  }
+  .playmat.layout-tabletop .my-row > .zone-bench.bench-extended {
+    margin-top: -10px;
   }
 
   /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
