@@ -9102,9 +9102,7 @@
        新解：bench 改黏「內側」(靠近 active)、active 改黏「外側」(靠近 bench) →
        bench-active 永遠貼 gap 15px，不論 row 高度怎麼變。
        stadium-display 跨 Row 2-3 在中間自然填充。 */
-    /* v5.289: row 2/3 (opp/my active) min-height 240px 給 align-self end/start 有效空間.
-       active 卡片高 ~160px, 加 80px 空間給 bench 疊牌往 active 方向扇開不擋 active. */
-    grid-template-rows: auto minmax(240px, auto) minmax(240px, auto) auto;
+    grid-template-rows:auto auto auto auto;
     grid-template-areas:
       ".       .         .         .         benchO    ."
       "chipO   pilesO    stadium   .         activeO   prizesO"
@@ -9140,8 +9138,7 @@
   }
   /* v5.138：active 改黏「外側」(靠近 bench) — align-self:end → start，
      讓 active-bench 視覺貼齊 gap 15px，不論 row 高度。 */
-  /* v5.289: align-self start → end. 對手 active 黏 row 2 底, 遠離 row 1 bench, 騰出空間給對手 bench 疊牌往下扇開不擋 active. */
-  .playmat.layout-tabletop .opponent-row > .zone-active{ grid-area:activeO; justify-self:center; align-self:end; }
+  .playmat.layout-tabletop .opponent-row > .zone-active{ grid-area:activeO; justify-self:center; align-self:start; }
   .playmat.layout-tabletop .opponent-row > .zone-prizes{ grid-area:prizesO; }
 
   /* === 我方 row（注意：prize / piles 左右互換）=== */
@@ -9158,9 +9155,8 @@
      v5.146→v5.154：撤回 z-index:250。Wilson 反饋 bench 疊牌被 active 框架蓋住，
      優先讓 bench att-card-stack 可見。bench (z=200) 蓋 active (z=1) 是正確視覺層。
      evo-wrap 在 active-img 上方（v5.149 top:110）已足夠，少數重疊不影響可點。 */
-  /* v5.289: align-self end → start. 我方 active 黏 row 3 頂, 遠離 row 4 bench, 騰出空間給我方 bench 疊牌往上扇開不擋 active. */
   .playmat.layout-tabletop .my-row > .zone-active{
-    grid-area:activeMe; justify-self:center; align-self:start;
+    grid-area:activeMe; justify-self:center; align-self:end;
   }
   .playmat.layout-tabletop .my-row > .zone-pile{
     grid-area:pilesMe; display:flex; flex-direction:column; gap:3px;  /* 互換：piles 在右 */
