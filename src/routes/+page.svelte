@@ -304,6 +304,20 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.284</span> 補 v5.283 更新記錄</summary>
+        <ul>
+          <li>補上前一版更新內容如下一條。</li>
+        </ul>
+      </details>
+
+      <details>
+        <summary><span class="ver-badge">v5.283</span> 桌墊版零之大空洞備戰卡片不縮小（真修法）</summary>
+        <ul>
+          <li>修正：桌墊版啟動零之大空洞時，備戰卡片之前實測仍縮小且靠左對齊。本次改用 long-form grid 數字座標 + 取消 0.65 縮放，讓備戰區跨整個版面顯示且卡片不縮，跟原本 5 張時視覺一致。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.282</span> 補 v5.281 更新記錄</summary>
         <ul>
           <li>補上前一版更新內容如下一條。</li>
