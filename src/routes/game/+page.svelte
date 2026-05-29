@@ -11823,6 +11823,13 @@
     }
     .sel-header h3 { font-size: 0.95rem; }
     .sel-hint { font-size: 0.7rem; }
+    /* v5.299: 手機版拿掉 retreat-grid 內層 max-height + overflow-y, 解雙層滑捲衝突
+       (附加道具/能量等 modal 滿場時, 內層 grid 滑捲在手機觸控被外層 selection-modal 截掉,
+       導致下半部寶可夢的能量資訊看不見) */
+    .retreat-grid {
+      max-height: none !important;
+      overflow-y: visible !important;
+    }
     .sel-grid {
       grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)) !important;
       gap: 0.25rem;

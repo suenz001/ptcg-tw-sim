@@ -304,10 +304,14 @@
     <div class="changelog-list">
 
       <details open>
-        <summary><span class="ver-badge">v5.298</span> 手機版 picker 卡片資訊不被裁切 + 後台對戰歷史翻頁</summary>
+        <summary><span class="ver-badge">v5.299</span> 手機版附加道具選擇介面修正</summary>
         <ul>
-          <li>修正：手機版備戰寶可夢滿場時（含戰鬥場 6 隻），開啟附加道具／能量等 picker 時，卡片框下方的能量資訊與名稱會被裁切看不見。本次拿掉 picker 卡片的 overflow hidden 限制，內容自然顯示。</li>
-          <li>後台升級：對戰歷史頁面新增完整翻頁功能（每頁 50 筆 + 翻頁按鈕 + 跳頁輸入框），可從約 5000 筆對戰資料中快速跳轉到指定頁。Admin 版本同步更新為 v0.91。</li>
+          <li>修正：手機版備戰寶可夢滿場時（戰鬥場 1 隻 + 備戰 5 隻），開啟附加寶可夢道具的選擇介面，下半部寶可夢的能量資訊與狀態會被裁切看不見。本次拿掉選擇介面內層滑捲限制，讓彈窗能完整滑捲到底，看到所有寶可夢的完整資訊。</li>
+        </ul>
+            <details>
+        <summary><span class="ver-badge">v5.298</span> 手機版附加能量 picker 卡片資訊不被裁切</summary>
+        <ul>
+          <li>修正：手機版備戰寶可夢滿場時（含戰鬥場 6 隻），開啟附加能量 picker 時，卡片框下方的能量資訊與名稱會被裁切看不見。本次拿掉 picker 卡片的 overflow hidden 限制，內容自然顯示。</li>
         </ul>
       </details>
 
