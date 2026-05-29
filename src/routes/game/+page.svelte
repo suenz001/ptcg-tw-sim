@@ -2866,7 +2866,7 @@
             return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
           }
           // v5.022：discard-search 補 BasicEnergy:<Type> generic case（mirror deck-search line ~2262）
-          //   bug 根因：玩家回報麻麻鰻｜電氣發電機 從棄牌區挑出「閃電【雷】能量」（Special）— 違反卡面「只能基本【雷】能量」。
+          //   bug 根因：玩家回報麻麻鰻｜電氣發電機 從棄牌區挑出「伏特【雷】能量」（Special）— 違反卡面「只能基本【雷】能量」。
           //   discard-search filter chain 漏 'BasicEnergy:Lightning' handler → 落到 `return true;` → 任意能量都過。
           //   修：與 deck-search 對稱，加 generic case；pokemonType/name pattern 雙重識別基本能量。
           if (f.startsWith('BasicEnergy:')) {

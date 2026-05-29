@@ -659,7 +659,7 @@ export const FOSSIL_ITEM_NAMES = new Set<string>([
   //   v4.896：原譯「古老的」校正為「陳舊的」與既有 5 張化石（陳舊的根狀/背蓋/羽毛/
   //           顎之/鰭之化石）命名一致。
   '陳舊的頭蓋化石',
-  '陳舊的盾牌化石',
+  '陳舊的盾甲化石',
 ]);
 
 export function isFossilItemCard(card: Card | undefined): boolean {
@@ -969,7 +969,7 @@ const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   '磁鐵【鋼】能量': ['Metal'],
   // v4.87 閃電能量（M5）— 視為 1 個【雷】能量；附加者使用招式對對手戰鬥寶可夢 +20 傷害
   //   (+20 buff 由 engine damage calc inline 套用，weakness 前)
-  '閃電【雷】能量': ['Lightning'],
+  '伏特【雷】能量': ['Lightning'],
   // v5.065 暗影【惡】能量（M5）— 視為 1 個【惡】能量；附加者在備戰位免疫對手招式傷害
   //   (備戰位免疫由 defense.ts canApplyEffectToTarget 1c 處理；惡屬性限定)
   //   起源：v5.022 改名「暗影惡能量」→「暗影【惡】能量」但 SPECIAL_ENERGY_TYPES 表
@@ -4218,21 +4218,21 @@ function handlePlaying(
       formula.push({ sign: '+', value: 80, label: '格拉吉歐的決戰' });
     }
 
-    // v4.87 閃電【雷】能量（M5 特殊能量）— 附加者為【雷】屬性寶可夢時 +20
+    // v4.87 伏特【雷】能量（M5 特殊能量）— 附加者為【雷】屬性寶可夢時 +20
     //   卡面：「附有這張卡的雷屬性寶可夢使用招式對對手戰鬥寶可夢 +20」
     //   v4.871：加 attacker.pokemonType === 'Lightning' gate（非雷屬性附了不生效）
     //   v5.022 修正：原本 `.some()` 只算 1 次 +20 — 玩家回報「附 3 顆 閃電【雷】只 +20」
     //     改 per-card stacking — 卡面「附有這張卡的」雖無「每張」字樣，但 PTCG 規則
     //     歷史對「同類加成型特殊能量」一律 per-card 累計（如銀色鋼能量 +10/張）。
-    //   v5.022 順帶 rename '閃電能量' → '閃電【雷】能量'（卡面排版對齊規律）
+    //   v5.022 順帶 rename '閃電能量' → '伏特【雷】能量'（卡面排版對齊規律）
     if (baseDamage > 0 && attackerCard.pokemonType === 'Lightning') {
-      const lightningSECount = attacker.active.energyAttached.filter(e => pool.get(e.cardId)?.name === '閃電【雷】能量').length;
+      const lightningSECount = attacker.active.energyAttached.filter(e => pool.get(e.cardId)?.name === '伏特【雷】能量').length;
       if (lightningSECount > 0) {
         const bonus = 20 * lightningSECount;
         baseDamage += bonus;
         workingState = addLog(workingState,
-          `${attackerCard.name} 招式傷害 +${bonus}（閃電【雷】能量 ${lightningSECount} 張 × 20，【雷】屬性）`, aIdx);
-        formula.push({ sign: '+', value: bonus, label: `閃電【雷】能量×${lightningSECount}` });
+          `${attackerCard.name} 招式傷害 +${bonus}（伏特【雷】能量 ${lightningSECount} 張 × 20，【雷】屬性）`, aIdx);
+        formula.push({ sign: '+', value: bonus, label: `伏特【雷】能量×${lightningSECount}` });
       }
     }
 

@@ -37,7 +37,7 @@
  *   Phase 2（v4.80）：條件 +N 傷害 / 自身回血 / picker 類（25 張）
  *   Phase 3（v4.81）：「化隱」特性 6 張（新獨立 immunity flag）
  *   Phase 4（v4.82）：超進化 ex 大招（深淵之瞳 / 咒縛之炎 / 暴走之槌+150 等 8 張）
- *   Phase 5（v4.83）：訓練家 + 能量規則（小霞的元氣 / 沐淨 / 化石採掘場 等）
+ *   Phase 5（v4.83）：訓練家 + 能量規則（小霞的朝氣 / 沐淨 / 化石採掘場 等）
  *
  * 鐵律遵守：
  *   - Rule 7c：所有效果以 JSON M5_raw.json 的日文 `effect_jp` 為 source
@@ -796,23 +796,23 @@ regPost('獒教父|飛撲頭錘', (state, aIdx) => {
   });
 });
 
-// ── D4. 鍬農炮蟲|巨型軌道砲 — 260 (gate: 自身附 閃電【雷】能量) ────
-//   卡面：「這隻寶可夢身上若未附有『閃電【雷】能量』，則此招式失敗。」
-//   注意：「閃電【雷】能量」是 M5 特殊能量名（非「基本【雷】能量」）— strict name match。
-//   v5.022 rename：閃電能量 → 閃電【雷】能量
+// ── D4. 鍬農炮蟲|巨型軌道砲 — 260 (gate: 自身附 伏特【雷】能量) ────
+//   卡面：「這隻寶可夢身上若未附有『伏特【雷】能量』，則此招式失敗。」
+//   注意：「伏特【雷】能量」是 M5 特殊能量名（非「基本【雷】能量」）— strict name match。
+//   v5.022 rename：閃電能量 → 伏特【雷】能量
 regPre('鍬農炮蟲|巨型軌道砲', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   const hasLightning = att?.energyAttached.some(
-    e => pool.get(e.cardId)?.name === '閃電【雷】能量',
+    e => pool.get(e.cardId)?.name === '伏特【雷】能量',
   ) ?? false;
   if (!hasLightning) {
     return {
-      state: addLog(state, '巨型軌道砲：未附「閃電【雷】能量」 → 招式失敗', aIdx),
+      state: addLog(state, '巨型軌道砲：未附「伏特【雷】能量」 → 招式失敗', aIdx),
       damage: 0,
     };
   }
   return {
-    state: addLog(state, '巨型軌道砲：附有「閃電【雷】能量」 → 260', aIdx),
+    state: addLog(state, '巨型軌道砲：附有「伏特【雷】能量」 → 260', aIdx),
     damage: 260,
   };
 });
@@ -1034,7 +1034,7 @@ regR('m5-inkay-procurement', (state, aIdx, iids) => {
 //    戰槌龍ex|暴走之槌（150 + 下個自己回合自身 +150，用 damageBonusPending）
 // B. 擲幣 + immune / picker（2）：
 //    喇叭啄鳥|飛翔（30 + 反面失敗；正面 → 下回合不受招式傷害和效果）
-//    拋鳥|配送挑戰（2 次擲幣全正面 → 牌庫選 1 寶可夢到備戰）
+//    下石鳥|配送挑戰（2 次擲幣全正面 → 牌庫選 1 寶可夢到備戰）
 // C. picker 牌庫搜尋（2）：
 //    熱帶龍|果實香氣（牌庫頂 6 張選任意數量寶可夢加手牌，給對手看過後）
 //    詛咒娃娃|人偶捕捉（80 + 若希望牌庫選 1 任意卡加手牌）
@@ -1133,11 +1133,11 @@ regPre('喇叭啄鳥|飛翔', (state, aIdx) => {
   return { state: s, damage: 30 };
 });
 
-// ── B2. 拋鳥|配送挑戰 — 2 次擲幣全正面 → 牌庫選 1 寶可夢到備戰 ─
+// ── B2. 下石鳥|配送挑戰 — 2 次擲幣全正面 → 牌庫選 1 寶可夢到備戰 ─
 //   卡面：「擲 2 次硬幣，若全部為正面，從自己的牌庫選擇 1 張寶可夢，放置於備戰區。
 //          然後重洗牌庫。」
-regPre('拋鳥|配送挑戰', (state) => ({ state, damage: 0 }));
-regPost('拋鳥|配送挑戰', (state, aIdx) => {
+regPre('下石鳥|配送挑戰', (state) => ({ state, damage: 0 }));
+regPost('下石鳥|配送挑戰', (state, aIdx) => {
   const r = flipCoinsWithLog(state, 2, '配送挑戰', aIdx);
   if (r.heads < 2) {
     return addLog(r.state, `配送挑戰：${r.heads}/2 次正面，效果失敗`, aIdx);
@@ -1349,8 +1349,8 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 // 訓練家（reg / regG 機制）：
 //   4. 沐淨（Supporter，棄手牌中 ≤2 張非規則寶可夢 → 抽 N×3 張）
 //   5. 暗黑鈴（Item，雙方戰鬥位混亂；惡屬性寶可夢除外）
-//   6. 鏽蝕組的手下（Supporter，picker 對手場 1 隻寶可夢身上選 1 個能量丟）
-//   7. 小霞的元氣（Supporter，牌庫選 ≤4 張基本【水】能量附給自己 1 隻 + 強制 END_TURN）
+//   6. 鏽蝕組手下（Supporter，picker 對手場 1 隻寶可夢身上選 1 個能量丟）
+//   7. 小霞的朝氣（Supporter，牌庫選 ≤4 張基本【水】能量附給自己 1 隻 + 強制 END_TURN）
 //
 // 留 deferred 的（需動 engine.ts 或新引擎機制）：
 //   - 化隱特性 6 張 + 3 依賴招式 — 需 canApplyEffectToTarget 加 ability gate
@@ -1362,7 +1362,7 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 //   - 超級水晶燈火靈ex|咒縛之炎 — 需動 engine retreat cost 計算
 //   - 格拉吉歐的決戰 — 需 player flag nonRuleAttackBonusThisTurn
 //   - 陳舊的頭蓋/盾牌化石 + 化石採掘場 — 需動既有化石機制 (v3.21) 擴充
-//   - 豪華炸彈、重試徽章 — 需新 tool hook
+//   - 豪邁炸彈、重試徽章 — 需新 tool hook
 //   - 閃電能量 — 需動既有 SPECIAL_ENERGY_TYPES + attack bonus hook
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -1542,16 +1542,16 @@ reg('暗黑鈴', (st, idx, pool) => {
   return s;
 });
 
-// ── 6. 鏽蝕組的手下（Supporter）─ picker 對手場 1 隻寶可夢丟 1 能量 ─
+// ── 6. 鏽蝕組手下（Supporter）─ picker 對手場 1 隻寶可夢丟 1 能量 ─
 //   卡面：「從對手場上 1 隻寶可夢身上選擇 1 個能量，丟棄。」
 //   gate（rulesText）：「這張卡只有在上個對手回合自己的寶可夢【昏厥】時才能使用。」
 //   v5.228：原 JSON 誤譯「未昏厥」+ deferred 不做 gate，本次更正並實裝 gate。
-reg('鏽蝕組的手下', (st, idx, pool) => {
+reg('鏽蝕組手下', (st, idx, pool) => {
   // v5.228 gate — 上個對手回合自己無寶可夢 KO → 不能用
   const attackKOd = (st.oppAttackKOdMeInLastOppTurn?.[idx] ?? 0) > 0;
   const abilityKOd = (st.oppAbilityKOdMeInLastOppTurn?.[idx] ?? 0) > 0;
   if (!attackKOd && !abilityKOd) {
-    return addLog(st, '鏽蝕組的手下：上個對手回合自己的寶可夢未昏厥，不能使用', idx);
+    return addLog(st, '鏽蝕組手下：上個對手回合自己的寶可夢未昏厥，不能使用', idx);
   }
   const dIdx = (1 - idx) as 0 | 1;
   const opp = st.players[dIdx];
@@ -1561,11 +1561,11 @@ reg('鏽蝕組的手下', (st, idx, pool) => {
   ];
   const candidates = allOpp.filter(c => c.energyAttached.length > 0);
   if (candidates.length === 0) {
-    return addLog(st, '鏽蝕組的手下：對手場上無附能寶可夢', idx);
+    return addLog(st, '鏽蝕組手下：對手場上無附能寶可夢', idx);
   }
   const validIids = candidates.map(c => c.iid);
   return withPending(
-    addLog(st, `鏽蝕組的手下：選對手 1 隻附能寶可夢（候選 ${candidates.length} 隻）`, idx),
+    addLog(st, `鏽蝕組手下：選對手 1 隻附能寶可夢（候選 ${candidates.length} 隻）`, idx),
     {
       type: 'opp-poke-choose',
       actorIdx: idx, sourcePlayerIdx: dIdx,
@@ -1581,7 +1581,7 @@ regR('m5-trainer-rust-henchman', (state, aIdx, iids) => {
   const targetIid = iids[0];
   // 第 2 階段：picker 對手場該寶可夢的 1 個能量丟棄
   return withPending(
-    addLog(state, '鏽蝕組的手下：選擇要丟的能量', aIdx),
+    addLog(state, '鏽蝕組手下：選擇要丟的能量', aIdx),
     {
       // 用 active-energy-discard 但 sourcePlayerIdx=dIdx + params 帶 targetIid 找的寶可夢
       // 但 active-energy-discard 只認 active；改用一般 picker 機制 — 寫專屬 resolver
@@ -1589,7 +1589,7 @@ regR('m5-trainer-rust-henchman', (state, aIdx, iids) => {
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 1, maxCount: 1,
       effectKey: 'm5-trainer-rust-henchman-pick-energy',
-      params: { titleOverride: '鏽蝕組的手下：選擇 1 個能量丟棄', targetPokeIid: targetIid },
+      params: { titleOverride: '鏽蝕組手下：選擇 1 個能量丟棄', targetPokeIid: targetIid },
     },
   );
 });
@@ -1597,7 +1597,7 @@ regR('m5-trainer-rust-henchman-pick-energy', (state, aIdx, iids, params) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const targetPokeIid = params?.targetPokeIid as string | undefined;
-  return updatePlayer(addLog(state, '鏽蝕組的手下：丟 1 能量', aIdx), dIdx, p => {
+  return updatePlayer(addLog(state, '鏽蝕組手下：丟 1 能量', aIdx), dIdx, p => {
     const removeFromInst = (c: import('../../types').CardInstance) => {
       if (c.iid !== targetPokeIid) return c;
       const toDiscard = c.energyAttached.filter(e => iids.includes(e.iid));
@@ -1625,17 +1625,17 @@ regR('m5-trainer-rust-henchman-pick-energy', (state, aIdx, iids, params) => {
   });
 });
 
-// ── 7. 小霞的元氣（Supporter）─ 牌庫選 ≤4 張基本【水】能量 + 1 隻附 + END_TURN ─
+// ── 7. 小霞的朝氣（Supporter）─ 牌庫選 ≤4 張基本【水】能量 + 1 隻附 + END_TURN ─
 //   v5.059 bug fix：原實作 filter='BasicEnergy' 允許任意基本能量（草/火/水/雷/...）。
 //   卡面正確敘述為「基本【水】能量」(Basic Water Energy)，限定水屬性。
 //   卡面：「使用這張卡時，自己的回合結束。從自己的牌庫選擇最多 4 張『基本【水】能量』，
 //          附給自己 1 隻寶可夢。然後重洗牌庫。」
-reg('小霞的元氣', (st, idx) => {
+reg('小霞的朝氣', (st, idx) => {
   const p = st.players[idx];
   if (p.deck.length === 0) {
     // 即使牌庫空，「使用後回合結束」仍生效
     return withPending(
-      addLog(st, '小霞的元氣：牌庫為空，僅結束回合', idx),
+      addLog(st, '小霞的朝氣：牌庫為空，僅結束回合', idx),
       {
         type: 'modal-choice',
         actorIdx: idx, sourcePlayerIdx: idx,
@@ -1647,7 +1647,7 @@ reg('小霞的元氣', (st, idx) => {
   }
   const maxN = Math.min(4, p.deck.length);
   return withPending(
-    addLog(st, `小霞的元氣：從牌庫選 ≤${maxN} 張基本【水】能量（使用後回合結束）`, idx),
+    addLog(st, `小霞的朝氣：從牌庫選 ≤${maxN} 張基本【水】能量（使用後回合結束）`, idx),
     {
       type: 'deck-search',
       actorIdx: idx, sourcePlayerIdx: idx,
@@ -1661,7 +1661,7 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
   if (iids.length === 0) {
     // 沒選能量 — 仍重洗牌庫 + 強制 END_TURN
     return withPending(
-      updatePlayer(addLog(state, '小霞的元氣：選 0 張【水】能量，僅重洗牌庫 + 結束回合', aIdx), aIdx, p => ({
+      updatePlayer(addLog(state, '小霞的朝氣：選 0 張【水】能量，僅重洗牌庫 + 結束回合', aIdx), aIdx, p => ({
         ...p, deck: [...p.deck].sort(() => Math.random() - 0.5),
       })),
       {
@@ -1682,13 +1682,13 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
   if (allOwn.length === 0) {
     // 場上無寶可夢可附（極罕見 edge case）— 直接結束回合
     return updatePlayer(
-      addLog(state, '小霞的元氣：場上無寶可夢可附，【水】能量回牌庫', aIdx),
+      addLog(state, '小霞的朝氣：場上無寶可夢可附，【水】能量回牌庫', aIdx),
       aIdx,
       pl => ({ ...pl, deck: [...pl.deck].sort(() => Math.random() - 0.5) }),
     );
   }
   return withPending(
-    addLog(state, `小霞的元氣：選 1 隻自己寶可夢，將 ${iids.length} 張基本【水】能量全附給它`, aIdx),
+    addLog(state, `小霞的朝氣：選 1 隻自己寶可夢，將 ${iids.length} 張基本【水】能量全附給它`, aIdx),
     {
       type: 'heal-target',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -1696,7 +1696,7 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
       effectKey: 'm5-trainer-karunari-vigor-attach',
       params: {
         energyIids: iids,
-        titleOverride: `小霞的元氣：選擇要附 ${iids.length} 張基本【水】能量的寶可夢`,
+        titleOverride: `小霞的朝氣：選擇要附 ${iids.length} 張基本【水】能量的寶可夢`,
         endTurnAfter: true,  // 附完後強制結束回合
       },
     },
@@ -1708,7 +1708,7 @@ regR('m5-trainer-karunari-vigor-attach', (state, aIdx, iids, params) => {
   const energyIids = (params?.energyIids as string[] | undefined) ?? [];
   if (energyIids.length === 0) return state;
   return updatePlayer(
-    addLog(state, `小霞的元氣：${energyIids.length} 張基本【水】能量附給選中寶可夢 + 重洗牌庫`, aIdx),
+    addLog(state, `小霞的朝氣：${energyIids.length} 張基本【水】能量附給選中寶可夢 + 重洗牌庫`, aIdx),
     aIdx,
     p => {
       const picked = p.deck.filter(c => energyIids.includes(c.iid));
@@ -2017,7 +2017,7 @@ reg('格拉吉歐的決戰', (st, idx) => {
 // Phase 8a 結束。
 // 累計：71 (P1-P7) + 2 immune regPost + 1 supporter reg + 閃電能量 = 75 個項目 / 81 張卡。
 // 剩餘 deferred (Phase 8b+)：咒縛之炎 / 太鼓防壁 / 蟲蟲恐慌 / 不朽之軀 / 光子密碼 /
-//   化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈/重試徽章) /
+//   化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪邁炸彈/重試徽章) /
 //   強烈之吻 / 招式竊賊
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -2097,7 +2097,7 @@ regPost('燒火蚣|蟲蟲恐慌', (state, aIdx, pool) => {
 // 累計：75 (P1-Phase8a) + 1 (Phase 8b 咒縛之炎) + 1 (不朽之軀) + 1 (蟲蟲恐慌)
 //      = 78 個項目 / 81 張卡（~96% coverage）。
 // 剩餘 deferred (Phase 8d+)：太鼓防壁 / 光子密碼 / 強烈之吻 / 招式竊賊 /
-//   化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈/重試徽章)。
+//   化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪邁炸彈/重試徽章)。
 // ════════════════════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2144,7 +2144,7 @@ regPost('迷唇姐|強烈之吻', (state, aIdx, pool) => {
 // 累計：78 (P1-8c) + 1 (Phase 8d 太鼓防壁) + 1 (Phase 8e 強烈之吻)
 //      = 80 個項目 / 81 張卡（~99% coverage）。
 // 剩餘 deferred (Phase 8f+)：光子密碼 / 招式竊賊 / 化石卡 + 化石採掘場 /
-//   工具卡 (豪華炸彈 / 重試徽章)。
+//   工具卡 (豪邁炸彈 / 重試徽章)。
 // ════════════════════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2335,7 +2335,7 @@ regR('m5-mirieton-photon-code', (state, aIdx, iids, params, pool) => {
 // 累計：80 (P1-8e) + 1 (招式竊賊) + 1 (光子密碼) = 82 個項目（已超 81 張卡因部分卡有
 //   多 effect，例如 護城龍 既有招式 又有 太鼓防壁 特性都各算一個 effect 記）。
 // 81 張卡 effect coverage：80 → 81 → 完成（剩化石卡與工具卡兩組需要新引擎機制）。
-// 剩餘 deferred：化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪華炸彈 / 重試徽章)
+// 剩餘 deferred：化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪邁炸彈 / 重試徽章)
 // ════════════════════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2343,7 +2343,7 @@ regR('m5-mirieton-photon-code', (state, aIdx, iids, params, pool) => {
 //
 // 1. 陳舊的頭蓋化石（Item）— FOSSIL_ITEM_NAMES 加入；走既有 PLAY_FOSSIL 路徑
 //    （直接從手牌 → 備戰，視為 HP60【無】Basic 寶可夢）
-// 2. 陳舊的盾牌化石（Item）— 同上
+// 2. 陳舊的盾甲化石（Item）— 同上
 // 3. 化石採掘場（Stadium）— 每回合 1 次，從牌庫搜尋 ≤2 張「陳舊的」物品卡放備戰
 //    引擎：engine.ts USE_STADIUM 加 '化石採掘場' branch；本檔 regR 實際移動 + 設 fossil flag。
 // ════════════════════════════════════════════════════════════════════════════
@@ -2404,7 +2404,7 @@ regR('m5-fossil-excavation', (state, aIdx, iids, _params, pool) => {
 // ════════════════════════════════════════════════════════════════════════════
 // Phase 8g 結束。化石卡組 3 張完整實裝。
 // 累計：82 (P1-8f) + 2 fossil items + 1 stadium = 85 個項目
-// 剩餘 deferred：工具卡（豪華炸彈 on-damaged retaliation / 重試徽章 coin re-roll
+// 剩餘 deferred：工具卡（豪邁炸彈 on-damaged retaliation / 重試徽章 coin re-roll
 //   — 兩者皆需 engine 級新 hook）。
 // ════════════════════════════════════════════════════════════════════════════
 

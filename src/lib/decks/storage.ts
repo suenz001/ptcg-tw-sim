@@ -2,6 +2,7 @@
 // later without touching callers by keeping this API stable.
 
 import type { Deck } from './types';
+import { migrateCardId } from './cardIdMigration';
 
 const KEY = 'ptcg-tw-sim:decks';
 
@@ -14,6 +15,10 @@ function browserOnly<T>(fallback: T, fn: () => T): T {
   }
 }
 
+// v5.300: cardId migration helper — load 時自動 map M5 jp_id → tw_id
+function migrateDeck(d: Deck): Deck {
+  return { ...d, entries: d.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) })) };
+}
 export function loadDecks(): Deck[] {
   return browserOnly<Deck[]>([], () => {
     const raw = localStorage.getItem(KEY);
@@ -36,7 +41,7 @@ export function upsertDeck(deck: Deck): Deck[] {
   if (i >= 0) decks[i] = next;
   else decks.push(next);
   saveDecks(decks);
-  return decks;
+  return decks.map(migrateDeck);
 }
 
 export function deleteDeck(id: string): Deck[] {

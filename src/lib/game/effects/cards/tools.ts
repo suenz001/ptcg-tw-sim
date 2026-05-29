@@ -267,7 +267,7 @@ TOOL_PRIZE_BONUS.set('莉莉艾的珍珠', (card) => {
 // v5.080：通用 helper — 卡面「受到傷害時」依 PTCG 規則含 KO 情境，
 //   同一 fn 同時註冊到 TOOL_ON_DAMAGED + TOOL_ON_KO。
 //   damage 參數在 KO 路徑傳 0（適用於不依賴 damage 值的道具；
-//   依賴 baseDamage 的「豪華炸彈」240 點以上條件未來 v5.081 處理）。
+//   依賴 baseDamage 的「豪邁炸彈」240 點以上條件未來 v5.081 處理）。
 function registerToolOnDamagedAndKO(
   name: string,
   fn: (state: import('../../types').GameState, dIdx: 0|1, aIdx: 0|1, damage: number, pool: Map<string, import('$lib/cards/types').Card>) => import('../../types').GameState,
@@ -331,7 +331,7 @@ registerToolOnDamagedAndKO('奢華炸彈', (state, dIdx, aIdx) => {
   return addLog(state, '奢華炸彈：反彈 120 傷害！', null);
 });
 
-// v4.897 豪華炸彈（M5 PokemonTool）— 240+ 超級進化ex 招式傷害 → 反擊 12 指示物
+// v4.897 豪邁炸彈（M5 PokemonTool）— 240+ 超級進化ex 招式傷害 → 反擊 12 指示物
 // 卡面：「附有這張卡的寶可夢（『超級進化ex』除外），在戰鬥場受到對手『超級進化ex』
 //        的招式造成 240 點以上傷害時，在使用招式的寶可夢身上放置 12 個傷害指示物。
 //        之後將這張卡丟棄。」
@@ -339,8 +339,8 @@ registerToolOnDamagedAndKO('奢華炸彈', (state, dIdx, aIdx) => {
 //   1. baseDamage >= 240
 //   2. 攻擊方為 超級進化ex（name 以「超級」開頭且結尾 'ex'，同 engine.ts prizesForKO）
 //   3. 防守方非 超級進化ex（卡面「超級進化ex 除外」）
-// 注意：iterate getAllAttachedTools 找特定的「豪華炸彈」instance 並丟棄（單張 fire；多張不疊加）
-TOOL_ON_DAMAGED.set('豪華炸彈', (state, dIdx, aIdx, baseDamage, pool) => {
+// 注意：iterate getAllAttachedTools 找特定的「豪邁炸彈」instance 並丟棄（單張 fire；多張不疊加）
+TOOL_ON_DAMAGED.set('豪邁炸彈', (state, dIdx, aIdx, baseDamage, pool) => {
   // Gate 1: 傷害門檻
   if (baseDamage < 240) return state;
   const dPlayer = state.players[dIdx];
@@ -354,13 +354,13 @@ TOOL_ON_DAMAGED.set('豪華炸彈', (state, dIdx, aIdx, baseDamage, pool) => {
   const dCard = pool.get(dPlayer.active.cardId);
   const isDefenderMegaEx = !!dCard && dCard.name.endsWith('ex') && dCard.name.startsWith('超級');
   if (isDefenderMegaEx) return state;
-  // 找出 defender 身上對應的「豪華炸彈」instance（含 toolAttached + extraTools）
+  // 找出 defender 身上對應的「豪邁炸彈」instance（含 toolAttached + extraTools）
   const allTools: CardInstance[] = [];
   if (dPlayer.active.toolAttached) allTools.push(dPlayer.active.toolAttached);
   if (dPlayer.active.extraTools) allTools.push(...dPlayer.active.extraTools);
-  const luxuryBombInst = allTools.find(t => pool.get(t.cardId)?.name === '豪華炸彈');
+  const luxuryBombInst = allTools.find(t => pool.get(t.cardId)?.name === '豪邁炸彈');
   if (!luxuryBombInst) return state;
-  // 1. 把該 豪華炸彈 從 defender 移到棄牌堆
+  // 1. 把該 豪邁炸彈 從 defender 移到棄牌堆
   state = updatePlayer(state, dIdx, p => {
     if (!p.active) return p;
     let active = p.active;
@@ -377,7 +377,7 @@ TOOL_ON_DAMAGED.set('豪華炸彈', (state, dIdx, aIdx, baseDamage, pool) => {
     return { ...p, active: { ...p.active, damage: p.active.damage + 120 } };
   });
   return addLog(state,
-    `豪華炸彈：${aCard?.name ?? '?'} 受到 ${baseDamage} 點超級進化ex 招式傷害（≥240） → 放 12 個傷害指示物（+120）！道具丟棄`,
+    `豪邁炸彈：${aCard?.name ?? '?'} 受到 ${baseDamage} 點超級進化ex 招式傷害（≥240） → 放 12 個傷害指示物（+120）！道具丟棄`,
     null);
 });
 

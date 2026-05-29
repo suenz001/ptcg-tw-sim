@@ -146,7 +146,7 @@
     '泡沫【水】能量': ['Water','Colorless'], '感應【超】能量': ['Psychic','Colorless'],
     '硬岩【鬥】能量': ['Fighting','Colorless'], '磁鐵【鋼】能量': ['Metal','Colorless'],
     // v5.065：閃電【雷】、暗影【惡】（之前漏加，牌組編輯器篩選找不到）
-    '閃電【雷】能量': ['Lightning','Colorless'], '暗影【惡】能量': ['Darkness','Colorless'],
+    '伏特【雷】能量': ['Lightning','Colorless'], '暗影【惡】能量': ['Darkness','Colorless'],
     '火箭隊能量': ['Psychic','Darkness'],
     '富裕能量': ['Colorless'], '燃火能量': ['Colorless'], '噴射能量': ['Colorless'],
     '回力鏢能量': ['Colorless'], '扣殺能量': ['Colorless'], '薄霧能量': ['Colorless'],

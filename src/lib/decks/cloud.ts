@@ -17,6 +17,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db } from '$lib/firebase';
+import { migrateCardId } from './cardIdMigration';
 import type { Deck } from './types';
 
 /** Push a single deck to Firestore (create or overwrite). */

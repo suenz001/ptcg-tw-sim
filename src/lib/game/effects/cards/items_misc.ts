@@ -1812,7 +1812,7 @@ const FOSSIL_NAMES_LOCAL = [
   // PLAY_TRAINER 路徑使用，化石只能走 PLAY_FOSSIL 或 化石採掘場 resolver 路徑）
   // v4.896：原譯「古老的」校正為「陳舊的」與既有命名一致。
   '陳舊的頭蓋化石',
-  '陳舊的盾牌化石',
+  '陳舊的盾甲化石',
 ];
 for (const name of FOSSIL_NAMES_LOCAL) {
   // 永遠 false：阻擋 Item 路徑（拖到 PLAY_TRAINER 不能用）

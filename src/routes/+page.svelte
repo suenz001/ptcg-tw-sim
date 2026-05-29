@@ -304,6 +304,16 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.300</span> 「深淵之瞳」(M5) 系列台灣官方版本上線</summary>
+        <ul>
+          <li>套用台灣官方寶可夢卡牌網站的 M5 全 81 張卡牌資料：卡名、卡號、卡圖、效果文字全部使用官方中文版。</li>
+          <li>之前用日文版搶先實裝的 6 張卡名同步更新為官方翻譯：「拋鳥→下石鳥」、「陳舊的盾牌化石→陳舊的盾甲化石」、「豪華炸彈→豪邁炸彈」、「小霞的元氣→小霞的朝氣」、「鏽蝕組的手下→鏽蝕組手下」、「閃電【雷】能量→伏特【雷】能量」。</li>
+          <li>所有招式 / 特性的功能完全保留，先前搶先在日文版實裝並校對的內容直接套用到中文官方版。</li>
+          <li>玩家先前用日文版組好的牌組會自動連結到中文官方版顯示，無需手動重組（每張卡會自動對應到官網新編號，後續可正常使用官網牌組編碼）。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.299</span> 手機版附加道具選擇介面修正</summary>
         <ul>
           <li>修正：手機版備戰寶可夢滿場時（戰鬥場 1 隻 + 備戰 5 隻），開啟附加寶可夢道具的選擇介面，下半部寶可夢的能量資訊與狀態會被裁切看不見。本次拿掉選擇介面內層滑捲限制，讓彈窗能完整滑捲到底，看到所有寶可夢的完整資訊。</li>
@@ -773,9 +783,9 @@
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.228</span> 兩張卡修補 — 鏽蝕組的手下翻譯 / 玻璃喇叭規則</summary>
+        <summary><span class="ver-badge">v5.228</span> 兩張卡修補 — 鏽蝕組手下翻譯 / 玻璃喇叭規則</summary>
         <ul>
-          <li><b>鏽蝕組的手下（支援者）翻譯與功能修正</b>：原本卡面翻譯「上個對手回合自己的寶可夢『未昏厥』時才能使用」是錯的，正確應為「『昏厥』時才能使用」（comeback 卡）。本次同步修正：
+          <li><b>鏽蝕組手下（支援者）翻譯與功能修正</b>：原本卡面翻譯「上個對手回合自己的寶可夢『未昏厥』時才能使用」是錯的，正確應為「『昏厥』時才能使用」（comeback 卡）。本次同步修正：
             <ul>
               <li>卡面文字改為正確翻譯</li>
               <li>實裝加上判定：只有上個對手回合自己有寶可夢昏厥才能使用</li>
@@ -2899,8 +2909,8 @@
           <li>　　・<b>逆境保險</b>（弱點屬性匹配抽 3 張）</li>
           <li>　　・<b>奢華炸彈</b>（攻擊方放 12 指示物 +120）</li>
           <li>　　・<b>手持循環扇</b>（改附攻擊方能量到備戰）</li>
-          <li>　　・<b>豪華炸彈</b>「造成 240 點以上傷害時」— 需 baseDamage 條件，v5.081 處理 TOOL_ON_KO signature 擴展</li>
-          <li>　・<b>修法</b>： 加 <code>registerToolOnDamagedAndKO(name, fn)</code> helper，6 張卡（豪華炸彈跳過）改用 helper — 同一 fn 同時註冊 TOOL_ON_DAMAGED + TOOL_ON_KO。KO 路徑 damage=0 dummy（這 6 張不依賴 damage 值）。</li>
+          <li>　　・<b>豪邁炸彈</b>「造成 240 點以上傷害時」— 需 baseDamage 條件，v5.081 處理 TOOL_ON_KO signature 擴展</li>
+          <li>　・<b>修法</b>： 加 <code>registerToolOnDamagedAndKO(name, fn)</code> helper，6 張卡（豪邁炸彈跳過）改用 helper — 同一 fn 同時註冊 TOOL_ON_DAMAGED + TOOL_ON_KO。KO 路徑 damage=0 dummy（這 6 張不依賴 damage 值）。</li>
 
           <li><b>修法 3 — 龐克頭盔 KO 分支補反擊（engine.ts hardcoded）</b></li>
           <li>　・<b>根因</b>：龐克頭盔反彈邏輯在 <code></code>，位於 <code>else if (!preventedKO)</code> 分支內 — 只在沒 KO 時跑。holder 被 KO 時跳過。</li>
@@ -3265,11 +3275,11 @@
           <li>　2. <code>cards/+page.svelte ENERGY_TYPE_MAP</code>（卡牌資料庫篩選）：缺「閃電【雷】」+「暗影【惡】」</li>
           <li>　3. <code>decks/+page.svelte ENERGY_TYPE_MAP</code>（牌組編輯器篩選）：缺「閃電【雷】」+「暗影【惡】」</li>
 
-          <li><b>歷史脈絡</b>：v5.022 把 M5 兩張特殊能量改名（「閃電能量」→「閃電【雷】能量」、「暗影惡能量」→「暗影【惡】能量」），當時 engine.ts 只更新了「閃電【雷】」entry，「暗影【惡】」忘了改名/加 entry — silent fail 一直沒被發現。兩個 UI 篩選表也同樣只更新了部分。</li>
+          <li><b>歷史脈絡</b>：v5.022 把 M5 兩張特殊能量改名（「閃電能量」→「伏特【雷】能量」、「暗影惡能量」→「暗影【惡】能量」），當時 engine.ts 只更新了「閃電【雷】」entry，「暗影【惡】」忘了改名/加 entry — silent fail 一直沒被發現。兩個 UI 篩選表也同樣只更新了部分。</li>
 
           <li><b>修法 1（玩家命中 bug）— engine.ts SPECIAL_ENERGY_TYPES</b>：加 <code>&apos;暗影【惡】能量&apos;: [&apos;Darkness&apos;]</code> entry（範本同 <code>&apos;磁鐵【鋼】能量&apos;: [&apos;Metal&apos;]</code>）。v5.065 起暗影【惡】能量在對戰中正確視為 1 個【惡】能量，可滿足惡屬性招式能量需求。</li>
 
-          <li><b>修法 2 — 兩個 UI 篩選表</b>：<code>cards/+page.svelte</code> + <code>decks/+page.svelte</code> 各加 2 個 entries — 「閃電【雷】」: <code>[&apos;Lightning&apos;,&apos;Colorless&apos;]</code> + 「暗影【惡】」: <code>[&apos;Darkness&apos;,&apos;Colorless&apos;]</code>（範本同 <code>磁鐵【鋼】能量: [&apos;Metal&apos;,&apos;Colorless&apos;]</code>）。玩家在「牌組編輯器」或「卡牌資料庫」勾選「惡」屬性 + 「特殊能量」分類即可找到暗影【惡】能量；勾選「雷」+ 「特殊能量」即可找到閃電【雷】能量。</li>
+          <li><b>修法 2 — 兩個 UI 篩選表</b>：<code>cards/+page.svelte</code> + <code>decks/+page.svelte</code> 各加 2 個 entries — 「閃電【雷】」: <code>[&apos;Lightning&apos;,&apos;Colorless&apos;]</code> + 「暗影【惡】」: <code>[&apos;Darkness&apos;,&apos;Colorless&apos;]</code>（範本同 <code>磁鐵【鋼】能量: [&apos;Metal&apos;,&apos;Colorless&apos;]</code>）。玩家在「牌組編輯器」或「卡牌資料庫」勾選「惡」屬性 + 「特殊能量」分類即可找到暗影【惡】能量；勾選「雷」+ 「特殊能量」即可找到伏特【雷】能量。</li>
 
           <li><b>表結構差異說明</b>：engine.ts  是「實際提供的能量單位」(磁鐵【鋼】 = 純 1 個 Metal unit，不含 Colorless)；routes UI  是「篩選 tag 命中表」(磁鐵【鋼】 = 'Metal' + 'Colorless' 為了「無色」篩選也命中)。修法依各表既有規律處理。</li>
 
@@ -3391,13 +3401,13 @@
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.059</span> 🐛 修小霞的元氣 + 螺釘地鼠呼喚同伴 — 卡面敘述對齊 + bench-cap 防誤觸發清場</summary>
+        <summary><span class="ver-badge">v5.059</span> 🐛 修小霞的朝氣 + 螺釘地鼠呼喚同伴 — 卡面敘述對齊 + bench-cap 防誤觸發清場</summary>
         <ul>
-          <li><b>Bug 1 — 小霞的元氣（Supporter）卡面敘述錯誤 + 實裝範圍過寬</b></li>
+          <li><b>Bug 1 — 小霞的朝氣（Supporter）卡面敘述錯誤 + 實裝範圍過寬</b></li>
           <li>　舊敘述：「從自己的牌庫選擇最多 4 張『基本能量』...」— filter 允許草/火/水/雷/超/鬥/惡/鋼 任意基本能量。</li>
           <li>　正確：應限定「基本【水】能量」(Basic Water Energy) — 小霞為水系專屬訓練家。</li>
-          <li>　修法：<code>static/cards/M5.json</code> rulesText 改為「基本【水】能量」； 的 <code>reg('小霞的元氣')</code> filter 從 <code>'BasicEnergy'</code> 改為 <code>'BasicEnergy:Water'</code>，所有 addLog 文字一併改為「基本【水】能量」。</li>
-          <li>　影響：v5.059 起小霞的元氣只能搜基本【水】能量，符合卡面敘述。其他卡面（如沐淨）filter 不受影響。</li>
+          <li>　修法：<code>static/cards/M5.json</code> rulesText 改為「基本【水】能量」； 的 <code>reg('小霞的朝氣')</code> filter 從 <code>'BasicEnergy'</code> 改為 <code>'BasicEnergy:Water'</code>，所有 addLog 文字一併改為「基本【水】能量」。</li>
+          <li>　影響：v5.059 起小霞的朝氣只能搜基本【水】能量，符合卡面敘述。其他卡面（如沐淨）filter 不受影響。</li>
           <li><b>Bug 2 — 螺釘地鼠｜呼喚同伴 在零之大空洞滿備戰時誤觸發清場</b>（玩家回報）</li>
           <li>　現象：場上有零之大空洞、自己備戰 8 隻（滿）時用呼喚同伴，被搜出來的寶可夢被「零之大空洞被破壞」效果丟掉消失。</li>
           <li>　根因：<code>regPost('螺釘地鼠|呼喚同伴')</code> 沒做 bench-cap check， resolver 直接 <code>bench: [...p.bench, ...picked]</code> 純 append。8 + 2 = 10 隻超過 limit。引擎末尾的 （<code>engine.ts:338</code>）每次 dispatch 後自動跑，看到 <code>bench.length &gt; limit</code> 就觸發「零之大空洞效果失去：選 2 隻備戰寶可夢丟棄」pending —— 這個函數本來是給「零之大空洞 stadium 被換掉、limit 從 8 變回 5」用的，被誤觸發 → 剛搜出來的寶可夢被當「超出部分」丟掉。</li>
@@ -3856,11 +3866,11 @@
       <details>
         <summary><span class="ver-badge">v5.022</span> 🔧 M5 兩張特殊能量改名 + 屬性歸類 + 雷電獸 閃光射線傷害修正</summary>
         <ul>
-          <li><b>卡名校正</b>：M5 「閃電能量」→「閃電【雷】能量」、「暗影惡能量」→「暗影【惡】能量」，對齊既有特殊能量排版規律（泡沫【水】/ 磁鐵【鋼】/ 燃料【火】/ 硬岩【鬥】/ 增強【草】/ 感應【超】）。</li>
+          <li><b>卡名校正</b>：M5 「閃電能量」→「伏特【雷】能量」、「暗影惡能量」→「暗影【惡】能量」，對齊既有特殊能量排版規律（泡沫【水】/ 磁鐵【鋼】/ 燃料【火】/ 硬岩【鬥】/ 增強【草】/ 感應【超】）。</li>
           <li><b>屬性歸類修正</b>：改名後 name pattern <code>name.includes('【雷】')</code> / <code>'【惡】'</code> 自動命中 — 牌組編輯器、卡牌篩選等 UI 會正確把這兩張歸到對應屬性下。</li>
-          <li><b>麻麻鰻｜電氣發電機 bug 修</b>：玩家回報能從棄牌區挑出「閃電【雷】能量」(Special) 當基本【雷】用 — 違反卡面。根因：discard-search filter chain 漏 <code>BasicEnergy:&lt;Type&gt;</code> generic handler，落到 fallthrough 任意能量都通過。修：加 generic case 與 deck-search 對稱（pokemonType/name 雙重識別 Basic only，Special 一律拒收）。</li>
-          <li><b>超級雷電獸ex｜閃光射線 傷害修正</b>：玩家回報附 3 顆「閃電【雷】能量」只造成 120+20=140；卡面「附有這張卡的雷屬性寶可夢使用招式 +20」依 PTCG 同類加成規則應 per-card 累計（同銀色【鋼】等歷史先例），正確為 120+60=180。engine.ts 從 <code>.some()</code> 一次性改為 <code>.filter().length × 20</code>。</li>
-          <li><b>影響範圍</b>：薩戮德｜暗影鞭打（依賴「暗影【惡】能量」+70 條件）、鍬農炮蟲｜巨型軌道砲（附「閃電【雷】能量」才不失敗）、defense.ts 備戰位免疫（暗影【惡】 惡屬性 bench-only attack-damage immunity）— 全部 name match 一併更新。</li>
+          <li><b>麻麻鰻｜電氣發電機 bug 修</b>：玩家回報能從棄牌區挑出「伏特【雷】能量」(Special) 當基本【雷】用 — 違反卡面。根因：discard-search filter chain 漏 <code>BasicEnergy:&lt;Type&gt;</code> generic handler，落到 fallthrough 任意能量都通過。修：加 generic case 與 deck-search 對稱（pokemonType/name 雙重識別 Basic only，Special 一律拒收）。</li>
+          <li><b>超級雷電獸ex｜閃光射線 傷害修正</b>：玩家回報附 3 顆「伏特【雷】能量」只造成 120+20=140；卡面「附有這張卡的雷屬性寶可夢使用招式 +20」依 PTCG 同類加成規則應 per-card 累計（同銀色【鋼】等歷史先例），正確為 120+60=180。engine.ts 從 <code>.some()</code> 一次性改為 <code>.filter().length × 20</code>。</li>
+          <li><b>影響範圍</b>：薩戮德｜暗影鞭打（依賴「暗影【惡】能量」+70 條件）、鍬農炮蟲｜巨型軌道砲（附「伏特【雷】能量」才不失敗）、defense.ts 備戰位免疫（暗影【惡】 惡屬性 bench-only attack-damage immunity）— 全部 name match 一併更新。</li>
 
         </ul>
       </details>
@@ -5051,10 +5061,10 @@
       </details>
 
       <details>
-        <summary><span class="ver-badge">v4.897</span> 💣 M5 Phase 8h — 豪華炸彈（重試徽章 deferred）</summary>
+        <summary><span class="ver-badge">v4.897</span> 💣 M5 Phase 8h — 豪邁炸彈（重試徽章 deferred）</summary>
         <ul>
-          <li><b>實裝 1 張 deferred</b>：豪華炸彈（PokemonTool，on-damaged 反擊）。</li>
-          <li><b>豪華炸彈</b>：
+          <li><b>實裝 1 張 deferred</b>：豪邁炸彈（PokemonTool，on-damaged 反擊）。</li>
+          <li><b>豪邁炸彈</b>：
             <ul>
               <li>卡面：「附有這張卡的寶可夢（『超級進化ex』除外），在戰鬥場受到對手『超級進化ex』的招式造成 240 點以上傷害時，在使用招式的寶可夢身上放置 12 個傷害指示物。之後將這張卡丟棄。」</li>
               <li><b>實裝</b>： hook（同 奢華炸彈 / 凸凸頭盔 family），engine 在 attack pipeline 受傷後自動 dispatch。</li>
@@ -5065,8 +5075,8 @@
                   <li>防守方非 超級進化ex（卡面「『超級進化ex』除外」）</li>
                 </ul>
               </li>
-              <li><b>效果</b>：把該豪華炸彈 instance 從 defender 移到棄牌堆 + 攻擊方 +120 傷害（12 指示物）。</li>
-              <li>支援  array（v3.20 多重轉接）— 找對應 iid 的豪華炸彈 instance 移除，不影響其他 tool。</li>
+              <li><b>效果</b>：把該豪邁炸彈 instance 從 defender 移到棄牌堆 + 攻擊方 +120 傷害（12 指示物）。</li>
+              <li>支援  array（v3.20 多重轉接）— 找對應 iid 的豪邁炸彈 instance 移除，不影響其他 tool。</li>
             </ul>
           </li>
           <li><b>重試徽章 — deferred（需 engine 級新機制）</b>：
@@ -5102,7 +5112,7 @@
             </ul>
           </li>
 
-          <li><b>剩餘 deferred</b>：工具卡（豪華炸彈 / 重試徽章 — 需 engine 級新 hook）。</li>
+          <li><b>剩餘 deferred</b>：工具卡（豪邁炸彈 / 重試徽章 — 需 engine 級新 hook）。</li>
         </ul>
       </details>
 
@@ -5127,7 +5137,7 @@
             </ul>
           </li>
 
-          <li><b>剩餘 deferred</b>：工具卡（<b>豪華炸彈</b> — 240+ Mega-ex 傷害反擊 12 指示物 / <b>重試徽章</b> — 無屬性寶可夢擲幣可重擲）。兩者皆需 engine 級新 hook（on-damaged retaliation + coin re-roll mechanism）。</li>
+          <li><b>剩餘 deferred</b>：工具卡（<b>豪邁炸彈</b> — 240+ Mega-ex 傷害反擊 12 指示物 / <b>重試徽章</b> — 無屬性寶可夢擲幣可重擲）。兩者皆需 engine 級新 hook（on-damaged retaliation + coin re-roll mechanism）。</li>
         </ul>
       </details>
 
@@ -5174,7 +5184,7 @@
             </ul>
           </li>
 
-          <li><b>剩餘 deferred</b>：化石卡（古老的頭蓋/盾牌 + 化石採掘場 Stadium）/ 工具卡（豪華炸彈 retaliation hook、重試徽章 coin re-roll）— 都需更大引擎工程。</li>
+          <li><b>剩餘 deferred</b>：化石卡（古老的頭蓋/盾牌 + 化石採掘場 Stadium）/ 工具卡（豪邁炸彈 retaliation hook、重試徽章 coin re-roll）— 都需更大引擎工程。</li>
         </ul>
       </details>
 
@@ -5210,7 +5220,7 @@
             </ul>
           </li>
 
-          <li><b>剩餘 deferred</b>：光子密碼（on-KO move energy，需擴 PassiveOnKoFn 簽名 + 2-stage picker）/ 招式竊賊（attack copy，需 UI picker）/ 化石卡 + 化石採掘場 / 工具卡（豪華炸彈 / 重試徽章）。</li>
+          <li><b>剩餘 deferred</b>：光子密碼（on-KO move energy，需擴 PassiveOnKoFn 簽名 + 2-stage picker）/ 招式竊賊（attack copy，需 UI picker）/ 化石卡 + 化石採掘場 / 工具卡（豪邁炸彈 / 重試徽章）。</li>
         </ul>
       </details>
 
@@ -5233,7 +5243,7 @@
             </ul>
           </li>
 
-          <li><b>剩餘 deferred</b>：光子密碼（on-KO move energy，需擴 PassiveOnKoFn 簽名 + 2-stage picker）/ 強烈之吻（delayed KO，需 cross-turn flag + END_TURN hook）/ 招式竊賊（attack copy，需 UI picker）/ 化石卡 + 化石採掘場 / 工具卡（豪華炸彈 / 重試徽章 — 需 engine 級 coin re-roll hook）。</li>
+          <li><b>剩餘 deferred</b>：光子密碼（on-KO move energy，需擴 PassiveOnKoFn 簽名 + 2-stage picker）/ 強烈之吻（delayed KO，需 cross-turn flag + END_TURN hook）/ 招式竊賊（attack copy，需 UI picker）/ 化石卡 + 化石採掘場 / 工具卡（豪邁炸彈 / 重試徽章 — 需 engine 級 coin re-roll hook）。</li>
         </ul>
       </details>
 
@@ -5257,7 +5267,7 @@
             </ul>
           </li>
 
-          <li><b>剩餘 deferred</b>：太鼓防壁（passive bench-aura defense）/ 光子密碼（on-KO move energy）/ 強烈之吻（delayed KO）/ 招式竊賊（attack copy）/ 化石卡 + 化石採掘場 / 工具卡（豪華炸彈 / 重試徽章 — 需 engine 級 coin re-roll hook）。</li>
+          <li><b>剩餘 deferred</b>：太鼓防壁（passive bench-aura defense）/ 光子密碼（on-KO move energy）/ 強烈之吻（delayed KO）/ 招式竊賊（attack copy）/ 化石卡 + 化石採掘場 / 工具卡（豪邁炸彈 / 重試徽章 — 需 engine 級 coin re-roll hook）。</li>
         </ul>
       </details>
 
@@ -5273,7 +5283,7 @@
             </ul>
           </li>
 
-          <li><b>剩餘 deferred</b>：太鼓防壁 / 不朽之軀 / 光子密碼 / 蟲蟲恐慌 / 強烈之吻 / 招式竊賊 / 化石卡（古老的頭蓋/盾牌 + 化石採掘場）/ 工具卡（豪華炸彈 / 重試徽章）。後續分階段續做。</li>
+          <li><b>剩餘 deferred</b>：太鼓防壁 / 不朽之軀 / 光子密碼 / 蟲蟲恐慌 / 強烈之吻 / 招式竊賊 / 化石卡（古老的頭蓋/盾牌 + 化石採掘場）/ 工具卡（豪邁炸彈 / 重試徽章）。後續分階段續做。</li>
         </ul>
       </details>
 
@@ -5422,7 +5432,7 @@
           <li><b>格拉吉歐的決戰（Supporter）</b>：reg 內 hand=0 gate（卡剛出手後手牌應剩 0 張即「卡面唯一 1 張」條件）。設 。Engine：本回合非規則寶可夢（!isRulePokemon）的招式對對手戰鬥場 +80 傷害。</li>
           <li><b>閃電能量</b>：附加者使用招式對對手戰鬥場 +20（單張存在即觸發，無「每張」字樣，多張不疊加）。同時 ENERGY_TYPES 認 1【雷】。</li>
 
-          <li><b>剩餘 deferred</b>：咒縛之炎 / 太鼓防壁（passives）/ 不朽之軀（on-KO survive）/ 光子密碼（on-KO move energy）/ 蟲蟲恐慌（top7 count）/ 強烈之吻（delayed KO）/ 招式竊賊（copy）/ 化石卡 + 化石採掘場 / 工具卡（豪華炸彈 / 重試徽章）。</li>
+          <li><b>剩餘 deferred</b>：咒縛之炎 / 太鼓防壁（passives）/ 不朽之軀（on-KO survive）/ 光子密碼（on-KO move energy）/ 蟲蟲恐慌（top7 count）/ 強烈之吻（delayed KO）/ 招式竊賊（copy）/ 化石卡 + 化石採掘場 / 工具卡（豪邁炸彈 / 重試徽章）。</li>
         </ul>
       </details>
 
@@ -5431,15 +5441,15 @@
         <ul>
           <li><b>校正中文翻譯</b>：M5 卡包前次匯入時三位主角採用日文音譯，本版改為 PTCG 台灣官方譯名。
             <ul>
-              <li>卡娜莉的元氣 → <b>小霞的元氣</b>（角色 = Misty，台版正式譯名為「小霞」）</li>
+              <li>卡娜莉的元氣 → <b>小霞的朝氣</b>（角色 = Misty，台版正式譯名為「小霞」）</li>
               <li>灰瀨的決戰 → <b>格拉吉歐的決戰</b>（角色 = Gladion，「灰瀨」為日文音譯「ハイレ」誤譯）</li>
-              <li>鏽組的手下 → <b>鏽蝕組的手下</b>（敵對組織「Rust Team」台版譯名為「鏽蝕組」）</li>
+              <li>鏽組的手下 → <b>鏽蝕組手下</b>（敵對組織「Rust Team」台版譯名為「鏽蝕組」）</li>
             </ul>
           </li>
           <li><b>影響檔案</b>：
             <ul>
               <li><code>static/cards/M5.json</code>：3 個 name 欄位</li>
-              <li><code>src/lib/game/effects/cards/m5_preview.ts</code>：reg() key（鏽蝕組的手下 / 小霞的元氣）+ 所有 log 字串 + 註解</li>
+              <li><code>src/lib/game/effects/cards/m5_preview.ts</code>：reg() key（鏽蝕組手下 / 小霞的朝氣）+ 所有 log 字串 + 註解</li>
               <li>歷史 changelog 內 v4.85 deferred list 的「灰瀨的決戰」字樣同步校正</li>
             </ul>
           </li>
@@ -5471,7 +5481,7 @@
             </ul>
           </li>
 
-          <li><b>剩餘 deferred</b>：6 個複雜特性（光子密碼 / 不朽之軀 / 太鼓防壁 / 咒縛之炎）/ 5 個複雜招式（強烈之吻 / 招式竊賊 / 蟲蟲恐慌 / 閃光屏障 / 熔岩之壁）/ 化石卡（古老的頭蓋/盾牌 + 化石採掘場）/ 工具卡（豪華炸彈/重試徽章）/ 格拉吉歐的決戰 / 閃電能量。</li>
+          <li><b>剩餘 deferred</b>：6 個複雜特性（光子密碼 / 不朽之軀 / 太鼓防壁 / 咒縛之炎）/ 5 個複雜招式（強烈之吻 / 招式竊賊 / 蟲蟲恐慌 / 閃光屏障 / 熔岩之壁）/ 化石卡（古老的頭蓋/盾牌 + 化石採掘場）/ 工具卡（豪邁炸彈/重試徽章）/ 格拉吉歐的決戰 / 閃電能量。</li>
         </ul>
       </details>
 
@@ -5530,7 +5540,7 @@
               <li>強烈之吻（delayed KO）/ 招式竊賊（copy attack）/ 蟲蟲恐慌（牌庫底 7 翻面）</li>
               <li>閃光屏障、熔岩之壁（conditional immunity）</li>
               <li>古老的頭蓋 / 盾牌化石 + 化石採掘場（化石機制擴充）</li>
-              <li>豪華炸彈 / 重試徽章（工具卡）+ 灰瀨的決戰（非規則 +80）+ 閃電能量（+20）</li>
+              <li>豪邁炸彈 / 重試徽章（工具卡）+ 灰瀨的決戰（非規則 +80）+ 閃電能量（+20）</li>
             </ul>
           </li>
         </ul>
@@ -5549,7 +5559,7 @@
           <li><b>Group B — 擲幣 + immune / picker（2 個）</b>：
             <ul>
               <li>喇叭啄鳥｜飛翔（30 + 擲 1 幣：反面失敗 / 正面 → 下回合不受招式傷害和效果，用既有 immuneToAllAttackNextTurn flag）</li>
-              <li>拋鳥｜配送挑戰（2 次擲幣全正面 → 牌庫選 1 寶可夢到備戰 + 重洗）</li>
+              <li>下石鳥｜配送挑戰（2 次擲幣全正面 → 牌庫選 1 寶可夢到備戰 + 重洗）</li>
             </ul>
           </li>
           <li><b>Group C — picker 牌庫搜尋（2 個）</b>：
