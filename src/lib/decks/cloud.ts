@@ -17,7 +17,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db } from '$lib/firebase';
-import { migrateCardId } from './cardIdMigration';
+import { migrateDeck } from './cardIdMigration';
 import type { Deck } from './types';
 
 /** Push a single deck to Firestore (create or overwrite). */
@@ -36,5 +36,6 @@ export async function removeDeckFromCloud(uid: string, deckId: string): Promise<
 /** Fetch all decks for a user from Firestore. Returns [] if none. */
 export async function loadDecksFromCloud(uid: string): Promise<Deck[]> {
   const snap = await getDocs(collection(db, 'users', uid, 'decks'));
-  return snap.docs.map((d) => d.data() as Deck);
+  // v5.301: 自動 jp_id → tw_id migration (M5 等已從日版升級為台版)
+  return snap.docs.map((d) => migrateDeck(d.data() as Deck));
 }

@@ -2,7 +2,7 @@
 // later without touching callers by keeping this API stable.
 
 import type { Deck } from './types';
-import { migrateCardId } from './cardIdMigration';
+import { migrateCardId, migrateDeck } from './cardIdMigration';
 
 const KEY = 'ptcg-tw-sim:decks';
 
@@ -15,16 +15,17 @@ function browserOnly<T>(fallback: T, fn: () => T): T {
   }
 }
 
-// v5.300: cardId migration helper — load 時自動 map M5 jp_id → tw_id
-function migrateDeck(d: Deck): Deck {
-  return { ...d, entries: d.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) })) };
-}
+// v5.301: cardId migration helper 已搬到 cardIdMigration.ts (migrateDeck export)
+//   v5.300 在 storage.ts 內定義 migrateDeck 但 loadDecks 沒呼叫 → 玩家舊牌組仍顯示 jp_id
+//   v5.301 修法: 改 import migrateDeck, loadDecks 內 return 時自動 map
 export function loadDecks(): Deck[] {
   return browserOnly<Deck[]>([], () => {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // v5.301: 自動 jp_id → tw_id migration (M5 等已從日版升級為台版)
+    return parsed.map(migrateDeck);
   });
 }
 

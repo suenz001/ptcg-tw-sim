@@ -95,3 +95,10 @@ export const M5_JP_TO_TW_ID: Record<string, string> = {
 export function migrateCardId(cardId: string): string {
   return M5_JP_TO_TW_ID[cardId] ?? cardId;
 }
+
+
+/** v5.301: 統一 migrateDeck helper (storage.ts + cloud.ts 共用) — load deck 時自動 map jp→tw cardId */
+import type { Deck } from './types';
+export function migrateDeck(d: Deck): Deck {
+  return { ...d, entries: d.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) })) };
+}
