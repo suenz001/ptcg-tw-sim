@@ -545,6 +545,10 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'CynthiaPokemon') {
           return card.supertype === 'Pokemon' && card.name.includes('竹蘭的');
         }
+        // v5.249：莉佳的蔓藤怪|百花齊放
+        if (f === 'ErikaPokemon') {
+          return card.supertype === 'Pokemon' && card.name.startsWith('莉佳的');
+        }
         if (f === 'FightingBasicOrFightingEnergy') {
           if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
           if (card.supertype === 'Energy' && card.subtype === 'Basic') {

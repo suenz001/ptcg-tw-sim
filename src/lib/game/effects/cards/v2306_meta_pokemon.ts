@@ -677,6 +677,9 @@ regPost('芳香精|踩踏', (state, aIdx, pool) => {
 });
 
 // ── 莉佳的蔓藤怪 (Erika's Tangela) ───────────────────────
+// v5.249：加 filter: 'ErikaPokemon' (picker UI 只顯示「莉佳的」寶可夢，符合卡面)
+//   仿竹蘭的尖牙陸鯊|王者呼聲 pattern，改用通用 search-generic-to-hand resolver
+//   既有 erikas-tangela-hundred-flowers resolver 仍保留作 fallback (v5.249 之前舊 state)
 regA('莉佳的蔓藤怪', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
@@ -684,8 +687,10 @@ regA('莉佳的蔓藤怪', 0, (state, aIdx, pool, inst) => {
   if (instInPlay) instInPlay.abilityUsedThisTurn = true;
   let s = addLog(state, '莉佳的蔓藤怪：使用特性「百花齊放」，從牌庫選擇 1 張「莉佳的」寶可夢加入手牌', aIdx);
   return withPending(s, {
-    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    effectKey: 'erikas-tangela-hundred-flowers', params: { titleOverride: '選擇 1 張「莉佳的」寶可夢加入手牌' }
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'ErikaPokemon',
+    minCount: 0, maxCount: 1,
+    effectKey: 'search-generic-to-hand',
   });
 });
 regR('erikas-tangela-hundred-flowers', (state, actorIdx, selectedIids, params, pool) => {

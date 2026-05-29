@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.249</span> 莉佳的蔓藤怪「百花齊放」特性修正</summary>
+        <ul>
+          <li>玩家反映：莉佳的蔓藤怪「百花齊放」特性可以從牌庫挑任何寶可夢，違反卡面（只能挑「莉佳的」寶可夢）。</li>
+          <li>本次修補：picker 加上「莉佳的寶可夢」過濾，玩家只會看到牌庫內的莉佳的寶可夢可選。仿竹蘭的尖牙陸鯊「王者呼聲」既有實作。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.248</span> 上場特性詢問補完 — 大劍鬼/直衝熊/魔幻假面喵</summary>
         <ul>
           <li>第三輪 audit 又抓到 3 張漏掉的特性卡（之前我 grep 範圍漏看，誤判為「未實作」）：</li>

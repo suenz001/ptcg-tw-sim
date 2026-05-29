@@ -2556,6 +2556,10 @@
           if (f === 'MarniePokemon') {
             return card.supertype === 'Pokemon' && card.name.startsWith('瑪俐的');
           }
+          // v5.249：莉佳的蔓藤怪|百花齊放 — 「莉佳的」寶可夢
+          if (f === 'ErikaPokemon') {
+            return card.supertype === 'Pokemon' && card.name.startsWith('莉佳的');
+          }
           if (f === 'FightingBasicOrFightingEnergy') {
             // 基本【鬥】寶可夢：pokemonType === 'Fighting' 且為基礎
             if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
@@ -5045,6 +5049,7 @@
       'TeraPokemon':                   '「太晶」寶可夢',
       'MarniePokemon':                 '瑪俐的寶可夢',
       'CynthiaPokemon':                '竹蘭的寶可夢',
+      'ErikaPokemon':                  '莉佳的寶可夢',
       'FightingBasicOrFightingEnergy': '基礎【鬥】寶可夢或【鬥】能量',
       'FightingPokemonOrBasicFightingEnergy': '【鬥】寶可夢或基本【鬥】能量',
       'GrassBasicOrGrassEnergy':       '基礎【草】寶可夢或【草】能量',
