@@ -5716,6 +5716,13 @@ function handlePlaying(
       const atkCard = pool.get(atkInst.cardId);
       const isColorless = atkCard?.pokemonType === 'Colorless';
       const hasRetryBadge = getAllAttachedTools(atkInst).some(t => pool.get(t.cardId)?.name === '重試徽章');
+      // v5.265：玩家提示 — 重試徽章可附在任何寶可夢身上, 但效果僅對【無】屬性寶可夢生效.
+      //   若 holder 不是【無】, 寫 log 告知玩家此次未觸發 (避免誤以為附加無效).
+      if (!isColorless && hasRetryBadge) {
+        newState = addLog(newState,
+          `🎒 重試徽章：附在 ${atkCard?.name ?? '?'}（非【無】屬性）→ 本次效果不觸發 (卡面僅對【無】屬性寶可夢生效)`,
+          aIdx);
+      }
       if (isColorless && hasRetryBadge) {
         // v5.165 rollback：擷取 coinFlips 副資料給 modal，把 state revert 回攻擊前
         const coinFlips = newState._machineGunLastFlips ?? [];
