@@ -2229,16 +2229,18 @@ function handlePlaying(
       const coinFlips = params?.coinFlips as string[] | undefined;
       if (preAttackState && originalAction) {
         if (choice === 'keep') {
-          // 不消耗徽章——「保留前次結果」未動用 reroll。重跑 ATTACK 並 inject 既定擲幣結果。
+          // v5.262：把 inject 設到 state._retryInjectedFlipsQueue, flipCoinsWithLog 自己 consume.
+          //   解決 v5.165/v5.257 「inline caller 沒 forward action._retryInjectedFlips 進 helper」的 bug.
           const injectedAction: GameAction = {
             ...originalAction,
-            _retryInjectedFlips: coinFlips,
+            _retryInjectedFlips: coinFlips,  // legacy (v5.257 helper-based caller 仍 read)
             _retryBadgeAlreadyAsked: true,
           };
           const reverted: GameState = {
             ...preAttackState,
             coinFlippedThisAttack: false,
             _machineGunLastFlips: undefined,
+            _retryInjectedFlipsQueue: coinFlips ? [...coinFlips] : undefined,  // v5.262 state queue
           };
           const flipsStr = (coinFlips ?? []).map((f, i) => `第${i + 1}次→${f}`).join('、');
           const withLog = addLog(reverted, `🎲 重試徽章：玩家選擇保留剛才擲幣結果（${flipsStr}），開始套用傷害`, actorIdx);
@@ -4038,7 +4040,17 @@ function handlePlaying(
     // 並 clear coinFlippedThisAttack flag（flipCoinsWithLog 若被呼叫會設回 true）
     // v5.165：同時 clear _machineGunLastFlips（避免上一招式殘留誤觸 modal 顯示）
     const preAttackStateForRetry: GameState = state;
-    state = { ...state, coinFlippedThisAttack: false, _machineGunLastFlips: undefined };
+    // v5.262：ATTACK 開頭 clear coinFlippedThisAttack + _machineGunLastFlips
+    //   _retryInjectedFlipsQueue 在「玩家選 keep 重跑」路徑由 keep handler 已設好, 此處 ATTACK 開頭
+    //   只清 queue 若不是 retry-replay (action._retryBadgeAlreadyAsked !== true).
+    const isRetryReplay = action._retryBadgeAlreadyAsked === true;
+    state = {
+      ...state,
+      coinFlippedThisAttack: false,
+      _machineGunLastFlips: undefined,
+      // 重跑時保留 queue; 一般攻擊清空殘留 queue (防呆)
+      _retryInjectedFlipsQueue: isRetryReplay ? state._retryInjectedFlipsQueue : undefined,
+    };
     players[aIdx] = state.players[aIdx];
     players[(1-aIdx) as 0|1] = state.players[(1-aIdx) as 0|1];
 

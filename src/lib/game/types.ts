@@ -589,6 +589,12 @@ export interface GameState {
    * 顯示擲幣明細給玩家。Setter: 對應 regPre；Resetter: ATTACK 開頭 clear。
    */
   _machineGunLastFlips?: string[];
+  /**
+   * v5.262 重試徽章 — 玩家選「保留剛才擲幣結果」時, engine 把要 inject 的擲幣結果
+   * 放到此 queue, flipCoinsWithLog 每次擲幣前從 queue.shift() 取一個 inject,
+   * queue 空就 random. ATTACK 結束時 clear. 解決 inline caller 沒 forward action 進 helper 的問題.
+   */
+  _retryInjectedFlipsQueue?: string[];
   phase: GamePhase;
   /** 正式對戰階段的回合小分段 */
   turnPhase: TurnPhase;

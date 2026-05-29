@@ -4495,25 +4495,35 @@ export function flipCoinsWithLog(
   count: number,
   label: string,
   aIdx: 0 | 1,
-  injectedFlips?: string[],  // v5.257：可選注入既定擲幣結果（重試徽章「保留前次結果」用）
+  injectedFlips?: string[],  // v5.257：可選注入既定擲幣結果（已 deprecated, v5.262 改用 state queue）
 ): { state: GameState; heads: number } {
   let s = state;
   // v4.898 重試徽章：標記本次 ATTACK action 中已擲過幣（ATTACK 末端用此判定是否開 modal）。
-  // 注意：outside-of-ATTACK 擲幣（status checkup / 撤退黏滑失足 等）也會 set，但 ATTACK 不讀，
-  //       不影響邏輯。ATTACK 開頭會清此 flag。
   if (count > 0) s = { ...s, coinFlippedThisAttack: true };
   let heads = 0;
-  // v5.257：擲幣明細存到 state._machineGunLastFlips 供 retry-badge modal 顯示
   const recordedFlips: string[] = [];
+  // v5.262：state queue consume — 比 caller 傳的 injectedFlips 優先
+  //   queue 由 engine.ts ATTACK keep path 設定. 每次擲幣前 shift 一個出來 inject.
+  //   queue 空 → 用 caller 傳的 injectedFlips (legacy) → 都沒 → random.
+  let queue: string[] | undefined = s._retryInjectedFlipsQueue ? [...s._retryInjectedFlipsQueue] : undefined;
   for (let i = 0; i < count; i++) {
-    // v5.257：若 injectedFlips 有對應位置 → 用既定結果（玩家選「保留前次擲幣結果」路徑）
-    const injected = injectedFlips && i < injectedFlips.length ? injectedFlips[i] : undefined;
+    // 優先順序: state queue > caller injectedFlips > random
+    let injected: string | undefined = undefined;
+    if (queue && queue.length > 0) {
+      injected = queue.shift();
+    } else if (injectedFlips && i < injectedFlips.length) {
+      injected = injectedFlips[i];
+    }
     const isHeads = injected !== undefined ? (injected === '正面') : (Math.random() < 0.5);
     const prefix = count === 1 ? '' : `第 ${i + 1} 次`;
-    const suffix = injected !== undefined ? '〔重試徽章：使用前次擲幣結果〕' : '';
+    const suffix = injected !== undefined ? '〔重試徽章：使用剛才擲幣結果〕' : '';
     s = addLog(s, `${label}：${prefix}擲硬幣 — ${isHeads ? '正面' : '反面'}${suffix}`, aIdx);
     if (isHeads) heads++;
     recordedFlips.push(isHeads ? '正面' : '反面');
+  }
+  // 同步更新 state queue (consume 後剩下的)
+  if (queue !== undefined) {
+    s = { ...s, _retryInjectedFlipsQueue: queue.length > 0 ? queue : undefined };
   }
   // v5.257：append 到 state._machineGunLastFlips（累加；同 ATTACK 內多次擲幣場景）
   if (count > 0) {
