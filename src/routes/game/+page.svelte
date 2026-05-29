@@ -10730,6 +10730,45 @@
     max-height: 110px;
   }
 
+  /* v5.281 桌墊版 bench-extended 真修法 — 跨整個 playmat 寬度 + slot 回 5 卡基底.
+     v5.232~v5.235 全失敗根因: `grid-area:benchMe/benchO` 是 shorthand,
+     單獨 `grid-column:1/-1` 不會覆寫 row 部分 (my-row 在 v5.235 沒套到的真因).
+     正確修法: `grid-area: unset !important` 解除綁定 + 顯式設 grid-row:1 (opp) /
+     grid-row:4 (my) + grid-column:1/-1. slot 回 v5.046 前的 5 卡基底
+     (flex:1 1 90px / max:128) 跟 5 卡完全一致, 容器寬度突破 1fr cell 到整個
+     playmat 寬, flex grow 自然撐到 max:128 停. */
+  .playmat.layout-tabletop .opponent-row > .zone-bench.bench-extended {
+    grid-area: unset !important;
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    justify-self: center;
+  }
+  .playmat.layout-tabletop .my-row > .zone-bench.bench-extended {
+    grid-area: unset !important;
+    grid-column: 1 / -1 !important;
+    grid-row: 4 !important;
+    justify-self: center;
+  }
+  .playmat.layout-tabletop .zone-bench.bench-extended {
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    justify-content: center;
+    gap: 4px;
+    width: 100% !important;
+    max-width: none !important;
+  }
+  /* slot 用 5 卡基底 (flex:1 1 90px / max:128), 跟 .bench-slot base 同 */
+  .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot,
+  .playmat.layout-tabletop .zone-bench.bench-extended .bench-empty {
+    flex: 1 1 90px !important;
+    min-width: 90px !important;
+    max-width: 128px !important;
+  }
+  .playmat.layout-tabletop .zone-bench.bench-extended .bench-slot img {
+    max-width: 108px !important;
+    max-height: 128px !important;
+  }
+
   /* v2.47：bench-slot 高度鎖定 — 不管有 tool/特性用過/狀態/能量多少，高度固定，
      避免撐大 zone-bench 把下方手牌擠出 viewport。
      v2.51：加寬 slot（115→140px），能量 pip 移到右側垂直排列。
