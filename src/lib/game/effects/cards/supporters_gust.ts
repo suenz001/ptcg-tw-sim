@@ -10,6 +10,7 @@
  * 注意：同機制的物品卡「頂尖捕捉器」放在 items_misc.ts（item vs supporter 分開分類）。
  */
 
+import { tryPromptPromoteActive } from '../_shared';
 import {
   reg, regR, regG,
   addLog, updatePlayer, withPending,
@@ -69,7 +70,7 @@ regR('gust-opp', (st, idx, iids, _params, pool) => {
   const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
   const oldName = oppPlayer.active ? (pool.get(oppPlayer.active.cardId)?.name ?? '?') : '?';
   st = addLog(st, `將對手戰鬥場的 ${oldName} 換到備戰區，呼叫 ${newName} 到對手戰鬥場`, idx);
-  return updatePlayer(st, oppIdx, (p) => {
+  const afterSt = updatePlayer(st, oppIdx, (p) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
@@ -79,4 +80,8 @@ regR('gust-opp', (st, idx, iids, _params, pool) => {
     // v3.812：preserve justPlaced + playedFromHand
     return { ...p, active: { ...p.bench[bIdx] }, bench: newBench };
   });
+  // v5.245：自方換位 ON_PROMOTE_TO_ACTIVE prompt（火箭隊的坂木自換 + 對換場景：
+  //   self-swap 已 set 自方 active.movedToActiveThisTurn=true，gust-opp 完成後 prompt 自方特性。
+  //   老大的指令場景：自方 active 沒換場 → helper 內 movedToActiveThisTurn check 會 skip）
+  return tryPromptPromoteActive(afterSt, idx, pool);
 });
