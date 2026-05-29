@@ -319,7 +319,8 @@ regR('samurott-vortex-self', (st, idx, iids, _params, pool) => {
   const bIdx = p.bench.findIndex(b => b.iid === targetIid);
   if (bIdx < 0) return st;
   const oldActive = clearActiveEffects(p.active);
-  const newActive = p.bench[bIdx];
+  // v5.248：補 movedToActiveThisTurn flag
+  const newActive = { ...p.bench[bIdx], movedToActiveThisTurn: true };
   const newBench = [...p.bench];
   newBench[bIdx] = oldActive;
   const oldName = pool.get(p.active.cardId)?.name ?? '?';
@@ -330,9 +331,10 @@ regR('samurott-vortex-self', (st, idx, iids, _params, pool) => {
   // 接著由對手互換戰↔備戰
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
-  if (!dp.active) return addLog(st, '激流旋渦：對手戰鬥場無寶可夢，跳過', idx);
+  // v5.248：對手沒備戰可換的兩條 return 出口前先 prompt (此時 pendingSelection 未 set)
+  if (!dp.active) return tryPromptPromoteActive(addLog(st, '激流旋渦：對手戰鬥場無寶可夢，跳過', idx), idx, pool);
   if (dp.bench.length === 0) {
-    return addLog(st, '激流旋渦：對手備戰區無寶可夢可互換', idx);
+    return tryPromptPromoteActive(addLog(st, '激流旋渦：對手備戰區無寶可夢可互換', idx), idx, pool);
   }
   st = addLog(st, '激流旋渦：對手選 1 隻自方備戰寶可夢與戰鬥場互換', idx);
   return withPending(st, {
@@ -358,7 +360,14 @@ regR('samurott-vortex-opp', (st, _origIdx, iids, _params, pool) => {
   const oldName = pool.get(dp.active.cardId)?.name ?? '?';
   const newName = pool.get(newActive.cardId)?.name ?? '?';
   st = addLog(st, `激流旋渦：對手 ${oldName} ↔ ${newName} 互換完成`, dIdx);
-  return updatePlayer(st, dIdx, pl => ({ ...pl, active: newActive, bench: newBench }));
+  // v5.248：對手換場完成後 prompt 大劍鬼方 (= 1 - dIdx) 的上場特性
+  //   (大劍鬼方在 samurott-vortex-self 階段已 set movedToActiveThisTurn=true,
+  //    helper 內 check 仍 true → 觸發 prompt)
+  const sajuIdx = (1 - dIdx) as 0 | 1;
+  return tryPromptPromoteActive(
+    updatePlayer(st, dIdx, pl => ({ ...pl, active: newActive, bench: newBench })),
+    sajuIdx, pool,
+  );
 });
 
 // ── 10. 直衝熊｜激動衝刺 ─────────────────────────────────────────────────────
@@ -381,13 +390,18 @@ regA('直衝熊', 0, (st, idx, pool, cardInst) => {
   if (!hasMegaEx) return addLog(st, '激動衝刺：場上沒有超級進化【ex】', idx);
 
   const oldActive = clearActiveEffects(p.active);
-  const newActive = p.bench[bIdx];
+  // v5.248：補 movedToActiveThisTurn flag
+  const newActive = { ...p.bench[bIdx], movedToActiveThisTurn: true };
   const newBench = [...p.bench];
   newBench[bIdx] = oldActive;
   const oldName = pool.get(p.active.cardId)?.name ?? '?';
   const newName = pool.get(newActive.cardId)?.name ?? '?';
   const s = addLog(st, `激動衝刺：${newName} 上場（與 ${oldName} 互換）`, idx);
-  return updatePlayer(s, idx, pl => ({ ...pl, active: newActive, bench: newBench }));
+  // v5.248：自方換位 ON_PROMOTE_TO_ACTIVE prompt (直衝熊|激動衝刺是特性)
+  return tryPromptPromoteActive(
+    updatePlayer(s, idx, pl => ({ ...pl, active: newActive, bench: newBench })),
+    idx, pool,
+  );
 });
 
 // ── 11. 魔幻假面喵｜表演時間 ─────────────────────────────────────────────────
@@ -401,13 +415,18 @@ regA('魔幻假面喵', 0, (st, idx, pool, cardInst) => {
   if (bIdx < 0) return addLog(st, '表演時間：魔幻假面喵不在備戰區', idx);
 
   const oldActive = clearActiveEffects(p.active);
-  const newActive = p.bench[bIdx];
+  // v5.248：補 movedToActiveThisTurn flag
+  const newActive = { ...p.bench[bIdx], movedToActiveThisTurn: true };
   const newBench = [...p.bench];
   newBench[bIdx] = oldActive;
   const oldName = pool.get(p.active.cardId)?.name ?? '?';
   const newName = pool.get(newActive.cardId)?.name ?? '?';
   const s = addLog(st, `表演時間：${newName} 上場（與 ${oldName} 互換）`, idx);
-  return updatePlayer(s, idx, pl => ({ ...pl, active: newActive, bench: newBench }));
+  // v5.248：自方換位 ON_PROMOTE_TO_ACTIVE prompt (魔幻假面喵|表演時間是特性)
+  return tryPromptPromoteActive(
+    updatePlayer(s, idx, pl => ({ ...pl, active: newActive, bench: newBench })),
+    idx, pool,
+  );
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
