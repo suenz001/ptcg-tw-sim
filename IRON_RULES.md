@@ -933,3 +933,46 @@ grep -n "TOOL_ATTACH_GATE.set" src/lib/game/effects/cards/tools.ts
 
 **自查觸發**：每次 grep + `head -N` 之前，問自己「會不會漏掉？」如果不確定，先跑 `grep -c` 或 `wc -l`。
 
+
+---
+
+### Rule 23: 一個修法只能 bump 一個版本號 — 禁拆兩版
+
+**背景**：v5.281~v5.288 連 4 次違反同類問題：
+
+| 修法 | code 版 | changelog 版 | 浪費 |
+|------|---------|---------|------|
+| 桌墊版 bench-extended v1 (grid-area unset) | v5.281 | v5.282 | +1 版 |
+| 桌墊版 bench-extended v2 (long-form grid-area + zoom:1) | v5.283 | v5.284 | +1 版 |
+| 桌墊版 bench-extended v3 (zoom 繼承 + flex 平分) | v5.285 | v5.286 | +1 版 |
+| 桌墊版 bench-extended v4 (slot fixed 100px) | v5.287 | v5.288 | +1 版 |
+
+Wilson v5.288 質疑：「為什麼一次更新都是 2 個版本？這有必要嗎？一個版本是專門補 changelog？」
+
+**錯誤的擔憂（已糾正）**：之前我擔心「build 失敗 changelog 白寫」所以分兩步驟先 push code 等 build verify 才補 changelog。實際 build 失敗時 code + changelog 都跟著被 revert，不存在白寫。Wilson 看 changelog 是部署（跑 redeploy-oracle.bat）之後的事，不是 GitHub Actions build 通過後才寫。
+
+**鐵律**：
+
+> 每次修 bug / UI / feature，**只能 bump 一個版本號**。`bump version + code change + changelog` 三件事必須在**同一個 Python git plumbing patch + 同一次 push** 完成。
+
+**禁止做法**：
+- 先 push code (v5.N) → 等 build verify → 再 push changelog (v5.N+1) → 又一輪 build
+- 任何「v5.N+1 補 v5.N changelog」這種 commit message 都是違反
+
+**正確 patch_v5XXX.py 結構**：
+
+```python
+# 三個檔案的 hash-object 都要在同一個 commit
+shas = {}
+shas['src/lib/version.ts'] = hash_object_stdin(ver_txt_with_bumped_VERSION)
+shas['src/lib/game/...'] = hash_object_stdin(code_with_fix)
+shas['src/routes/+page.svelte'] = hash_object_stdin(home_with_new_changelog_block)
+
+# update-index + write-tree + commit-tree + 寫 refs/heads/main + push
+```
+
+**例外**：純 hotfix 修上一版自身的 bug（例如 Rule 1 raw `{}` build 失敗、import path 錯）可以單獨 bump 一個 hotfix 版。但這是「修上一版 bug」不是「補 changelog」，commit message 必須寫清楚根因。
+
+**自查觸發**：寫 `patch_v5XXX.py` 之前問自己「下一版會不會只是補 changelog？」如果會 → 把 changelog 一併放進這版。
+
+關聯：[[feedback-one-version-per-fix]] [[feedback-push-pipeline]] [[feedback-deploy-flow]]
