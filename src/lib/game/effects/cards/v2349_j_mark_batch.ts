@@ -26,11 +26,24 @@ function flipUntilTails(state: GameState, aIdx: 0 | 1, label: string): { state: 
   return { state: s, heads };
 }
 
-function setDefenderAttackFailure(state: GameState, aIdx: 0 | 1, flips: number, label: string): GameState {
+function setDefenderAttackFailure(
+  state: GameState, aIdx: 0 | 1, flips: number, label: string,
+  pool?: Map<string, import('../../types').Card>,
+): GameState {
   const dIdx = 1 - aIdx as 0 | 1;
   const players = [...state.players] as [PlayerState, PlayerState];
   const d = { ...players[dIdx] };
   if (!d.active) return state;
+  // v5.239：加 attack-effect immunity gate — 涵蓋薄霧能量 / 抵抗之幕 / 球形盾牌 /
+  //   化隱 / 太晶 / 全能硬殼 等。若 defender active 免疫招式效果，flag 不該被 set。
+  //   玩家回報：章魚桶墨汁噴射打附有薄霧能量的寶可夢，下回合仍被要求擲 2 次硬幣 — 違反卡面。
+  if (pool) {
+    const tCard = pool.get(d.active.cardId);
+    const guard = canApplyEffectToTarget(state, aIdx, d.active, tCard, 'attack-effect', pool, { isBench: false });
+    if (guard.blocked) {
+      return addLog(state, `${label}：${tCard?.name ?? '?'}｜${guard.reason}（不受招式效果，跳過擲幣干擾）`, aIdx);
+    }
+  }
   d.active = { ...d.active, attackFailureFlipCountPending: flips };
   players[dIdx] = d;
   return addLog({ ...state, players }, `${label}：下個對手回合，受到此招式的寶可夢使用招式前需擲 ${flips} 次硬幣`, aIdx);
@@ -104,9 +117,9 @@ function countOwnNamed(state: GameState, aIdx: 0 | 1, pool: Map<string, any>, na
 
 // 沙河馬｜潑沙、章魚桶｜墨汁噴射：下回合目標使用招式前擲幣，反面則失敗。
 regPre('沙河馬|潑沙', (state) => ({ state, damage: 10 }));
-regPost('沙河馬|潑沙', (state, aIdx) => setDefenderAttackFailure(state, aIdx, 1, '潑沙'));
+regPost('沙河馬|潑沙', (state, aIdx, pool) => setDefenderAttackFailure(state, aIdx, 1, '潑沙', pool));
 regPre('章魚桶|墨汁噴射', (state) => ({ state, damage: 30 }));
-regPost('章魚桶|墨汁噴射', (state, aIdx) => setDefenderAttackFailure(state, aIdx, 2, '墨汁噴射'));
+regPost('章魚桶|墨汁噴射', (state, aIdx, pool) => setDefenderAttackFailure(state, aIdx, 2, '墨汁噴射', pool));
 
 // 超級基格爾德ex｜虛無歸零：對手所有寶可夢各擲 1 次，正面各 150。
 regPre('超級基格爾德ex|虛無歸零', (state) => ({ state, damage: 0 }));
