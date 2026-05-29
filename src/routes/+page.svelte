@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.247</span> 上場特性詢問補完 — 桃歹郎ex「支配鎖鏈」</summary>
+        <ul>
+          <li>第二輪 audit 又抓到一個漏掉的特性：桃歹郎ex「支配鎖鏈」（從備戰挑 1 隻【惡】寶可夢與戰鬥位互換、讓新上場的中毒）。它跟烏栗、衝浪手一樣藏在大檔的反例位置，被我的 grep 範圍漏看了。</li>
+          <li>本次修補：支配鎖鏈換位後也會跳出新戰鬥位的上場特性詢問；同時也補設「本回合換上來」的標記，讓疾風直撞類條件招式對它生效。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.246</span> 上場特性詢問補完 — 烏栗 + 衝浪手</summary>
         <ul>
           <li>玩家反映：用「烏栗」把備戰寶可夢換到戰鬥場後沒跳出「振翅高飛」之類的上場特性詢問。</li>

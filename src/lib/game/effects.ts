@@ -1561,17 +1561,19 @@ regR('dominance-chain', (st, idx, iids, params, pool) => {
   const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
   const oldName = st.players[idx].active ? (pool.get(st.players[idx].active!.cardId)?.name ?? '?') : '?';
   st = addLog(st, `支配鎖鏈：將 ${oldName} 換到備戰區，派出 ${newName} 到戰鬥場（中毒）`, idx);
-  return updatePlayer(st, idx, (p) => {
+  // v5.247：補設 movedToActiveThisTurn + ON_PROMOTE_TO_ACTIVE prompt (自方換位特性)
+  return tryPromptPromoteActive(updatePlayer(st, idx, (p) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === targetIid);
     if (bIdx < 0) return p;
     // v3.812：preserve justPlaced（位置交換不該清除剛打出 flag）；status='poisoned' 由招式效果加上
-    const newActive = { ...p.bench[bIdx], status: 'poisoned' as const };
+    // v5.247：補 movedToActiveThisTurn flag
+    const newActive = { ...p.bench[bIdx], status: 'poisoned' as const, movedToActiveThisTurn: true };
     const newBench = [...p.bench];
     // v2.08：離開戰鬥場清狀態旗標（新上場 active 的中毒已在 newActive 設定）
     newBench[bIdx] = clearActiveEffects(p.active);
     return { ...p, active: newActive, bench: newBench };
-  });
+  }), idx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
