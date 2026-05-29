@@ -14811,6 +14811,22 @@ export const ON_RETREAT_TO_BENCH_ABILITIES = new Set([
 ]);
 
 /**
+ * v5.240 — 「從備戰區放置於戰鬥場時」可發動 1 次的特性名稱。
+ * 觸發時機：寶可夢從備戰區被 promote 到戰鬥場（撤退選新戰鬥位、KO 後選新戰鬥位、
+ *           招式效果換場、特性效果換場、風扇呼喚、玻璃喇叭等）。
+ * 本波先 hook 在 RETREAT 路徑；其他路徑後續逐一補上（v5.241+）。
+ *
+ * 配合 movedToActiveThisTurn flag — engine 已在多處 set 此 flag，本機制再加 auto-prompt。
+ */
+export const ON_PROMOTE_TO_ACTIVE_ABILITIES = new Set([
+  '振翅高飛',     // 遠古巨蜓ex — 從牌庫選最多 3 張基本【草】能量附身
+  '潔淨支援',     // 拉帝歐斯 — 場上其他寶可夢能量改附給戰鬥位（特定條件）
+  '金屬之路',     // 勾帕路翁ex — 場上【鋼】能量改附給自身
+  '超光速位元',   // 鐵武者ex — 對手 1 隻寶可夢放 2 個傷害指示物（待實作）
+  '熱流反應者',   // 鐵毒蛾 — 場上【火】能量改附給自身（待實作）
+]);
+
+/**
  * v3.07 Deferred Wave D — 「從手牌將 1 張指定卡丟棄則觸發場上特性」的 trigger holder 名稱
  * → effect fn 對應表。Key = trigger holder 卡名（場上有此卡才能用）。
  *

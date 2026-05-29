@@ -315,6 +315,69 @@ regR('resolve-retreat-to-bench-ability-prompt', (state, actorIdx, selectedIids, 
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// v5.240：詢問是否使用「從備戰區放置於戰鬥場時」可發動 1 次的特性 — modal-choice prompt
+//
+// 仿 askUseRetreatToBenchAbility 模式。engine.ts RETREAT handler 末端呼叫此 helper。
+// 玩家選「是」→ 走 resolve-promote-active-ability-prompt resolver → 執行 ABILITY_EFFECTS。
+// ════════════════════════════════════════════════════════════════════════════
+
+export function askUsePromoteActiveAbility(
+  state: GameState,
+  idx: 0 | 1,
+  inst: CardInstance,
+  abilityName: string,
+  abilityKey: string,
+  cardName: string,
+): GameState {
+  return withPending(state, {
+    type: 'modal-choice',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'resolve-promote-active-ability-prompt',
+    params: {
+      label: `${cardName} 上場：是否使用「${abilityName}」特性？`,
+      options: [
+        { id: 'yes', text: '✅ 使用特性' },
+        { id: 'no', text: '❌ 不使用' },
+      ],
+      abilityKey,
+      targetIid: inst.iid,
+    },
+  });
+}
+
+// resolve-promote-active-ability-prompt resolver — 玩家選 yes 後執行對應 ABILITY_EFFECTS
+regR('resolve-promote-active-ability-prompt', (state, actorIdx, selectedIids, params, pool) => {
+  const choice = selectedIids[0] ?? 'no';
+  if (choice !== 'yes') return state;
+  const abilityKey = params?.abilityKey as string;
+  const targetIid = params?.targetIid as string;
+  if (!abilityKey || !targetIid) return state;
+
+  const fn = _ABILITY_EFFECTS_FOR_RETREAT_HOOK.get(abilityKey);
+  if (!fn) return state;
+
+  const player = state.players[actorIdx];
+  // 寶可夢已在 active；fallback 找 bench 防 edge case（玩家選 yes 後可能再換場）
+  const inst = player.active?.iid === targetIid
+    ? player.active
+    : player.bench.find(c => c.iid === targetIid);
+  if (!inst) return state;
+
+  // 標記「本回合特性已用」— 卡面「可使用 1 次」的限制
+  const markedState = updatePlayer(state, actorIdx, pl => ({
+    ...pl,
+    active: pl.active?.iid === targetIid
+      ? { ...pl.active, abilityUsedThisTurn: true }
+      : pl.active,
+    bench: pl.bench.map(c => c.iid === targetIid
+      ? { ...c, abilityUsedThisTurn: true } : c),
+  }));
+
+  return fn(markedState, actorIdx, pool, inst);
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // register pattern（Iron Rule 12）
 //
 // 本檔的 regA / regR 都安全（_shared.ts 是 leaf module，無 TDZ 風險）。
