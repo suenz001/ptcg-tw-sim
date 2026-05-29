@@ -5773,7 +5773,14 @@ function handlePlaying(
     // 若是因對手回合 KO 後被迫補場（sendingIdx ≠ activePlayerIndex），則不設，
     // 避免下一自己回合疾風直撞 +170 誤觸發。
     const isOwnTurn = sendingIdx === state.activePlayerIndex;
-    const newActive = { ...sendingPlayer.bench[benchIdx], ...(isOwnTurn ? { movedToActiveThisTurn: true } : {}) };
+    // v5.258 defensive: 從 bench → active 時用 clearActiveEffects 清 active-only flags
+    //   理論上 bench inst 不該帶 cantAttackPending/cantAttackThisTurn 等 (應在退場時已清),
+    //   但若某 swap/retreat resolver 漏走 clearActiveEffects, 新 active 會殘留導致不能攻擊.
+    //   重複清不會造成任何 bug (clearActiveEffects 只動 active-only flags, 不動 energy/tool).
+    //   保留 movedToActiveThisTurn (本回合補場 flag 是 SEND_NEW_ACTIVE 後才加的).
+    const benchInst = sendingPlayer.bench[benchIdx];
+    const cleanedInst = clearActiveEffects(benchInst);
+    const newActive = { ...cleanedInst, ...(isOwnTurn ? { movedToActiveThisTurn: true } : {}) };
     sendingPlayer.bench = sendingPlayer.bench.filter((_, i) => i !== benchIdx);
     sendingPlayer.active = newActive;
 
