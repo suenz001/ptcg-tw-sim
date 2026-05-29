@@ -346,32 +346,6 @@ export function askUsePromoteActiveAbility(
   });
 }
 
-// v5.241 — 統一 helper：所有「換位」(promote bench → active) 路徑用此 helper auto-prompt。
-//   pIdx = 寶可夢擁有方（不是觸發換場的攻擊方）。
-//   gate：pendingSelection 已存在 / abilityUsedThisTurn / ON_PROMOTE_TO_ACTIVE_ABILITIES set / ABILITY_EFFECTS 有註冊。
-//   caller 在 active 已 set 完 + movedToActiveThisTurn=true 後呼叫。
-import { ON_PROMOTE_TO_ACTIVE_ABILITIES, hasAbilityFn } from '../../effects';
-
-export function tryPromptPromoteActive(
-  state: GameState,
-  pIdx: 0 | 1,
-  pool: Map<string, Card>,
-): GameState {
-  if (state.pendingSelection) return state;
-  const actInst = state.players[pIdx].active;
-  if (!actInst || actInst.abilityUsedThisTurn) return state;
-  const actCard = pool.get(actInst.cardId);
-  if (!actCard?.abilities) return state;
-  for (let i = 0; i < actCard.abilities.length; i++) {
-    const ab = actCard.abilities[i];
-    if (!ON_PROMOTE_TO_ACTIVE_ABILITIES.has(ab.name)) continue;
-    const abilityKey = `${actCard.name}|${i}`;
-    if (!hasAbilityFn(actCard.name, ab.name, i)) continue;
-    return askUsePromoteActiveAbility(state, pIdx, actInst, ab.name, abilityKey, actCard.name);
-  }
-  return state;
-}
-
 // resolve-promote-active-ability-prompt resolver — 玩家選 yes 後執行對應 ABILITY_EFFECTS
 regR('resolve-promote-active-ability-prompt', (state, actorIdx, selectedIids, params, pool) => {
   const choice = selectedIids[0] ?? 'no';

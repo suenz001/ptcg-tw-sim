@@ -704,7 +704,7 @@ import {
 //   ON_RETREAT_TO_BENCH_ABILITIES：白名單 Set，列出有此觸發機制的特性名（卡面文義「從戰鬥場回到備戰區時，可使用 1 次」）
 //   askUseRetreatToBenchAbility：開 modal-choice 詢問玩家是否使用該特性（仿 askUsePlayAbility）
 import { ON_RETREAT_TO_BENCH_ABILITIES, ON_PROMOTE_TO_ACTIVE_ABILITIES, isBenchProtected } from './effects';
-import { askUseRetreatToBenchAbility, askUsePromoteActiveAbility, tryPromptPromoteActive } from './effects/cards/v3050_deferred_wave_a';
+import { askUseRetreatToBenchAbility, askUsePromoteActiveAbility } from './effects/cards/v3050_deferred_wave_a';
 
 // v3.07 Deferred Wave D — 3 張需要手牌 UI 元件層 hook 的特性
 //   ON_DISCARD_FROM_HAND_ABILITIES: trigger holder 卡名 → effect fn
@@ -2871,8 +2871,33 @@ function handlePlaying(
         }
       }
     }
-    // v5.241 — 改用統一 helper：所有換位路徑都走 tryPromptPromoteActive
-    retreatState = tryPromptPromoteActive(retreatState, aIdx, pool);
+    // v5.240 — 自方寶可夢從備戰區 promote 到戰鬥場時觸發類特性（ON_PROMOTE_TO_ACTIVE）
+    //   觸發點：newActive 已從 bench 上到 active；此時詢問玩家是否使用對應特性。
+    //   範圍：遠古巨蜓ex|振翅高飛、勾帕路翁ex|金屬之路、拉帝歐斯|潔淨支援 等。
+    //   注意：newActive 在 active 中（refresh from retreatState 取最新副本）；
+    //         需檢查 abilityUsedThisTurn 旗標避免同回合再觸發。
+    //   若 ON_RETREAT_TO_BENCH 已開 pendingSelection（同 turn 退場+上場兩特性都觸發），
+    //         本 prompt 因 pendingSelection 已 set 而被 withPending 自動 skip → 由玩家
+    //         自行手動點戰鬥場新寶可夢的特性按鈕使用（仍可用，因 movedToActiveThisTurn=true）。
+    {
+      const curP = retreatState.players[aIdx];
+      const actInst = curP.active;
+      if (actInst && !actInst.abilityUsedThisTurn && !retreatState.pendingSelection) {
+        const actCard = pool.get(actInst.cardId);
+        if (actCard?.abilities) {
+          for (let i = 0; i < actCard.abilities.length; i++) {
+            const ab = actCard.abilities[i];
+            if (!ON_PROMOTE_TO_ACTIVE_ABILITIES.has(ab.name)) continue;
+            const abilityKey = `${actCard.name}|${i}`;
+            // 確認 ABILITY_EFFECTS 有註冊（避免無對應 fn 也彈 modal）
+            if (!hasAbilityFn(actCard.name, ab.name, i)) continue;
+            retreatState = askUsePromoteActiveAbility(
+              retreatState, aIdx, actInst, ab.name, abilityKey, actCard.name);
+            break;
+          }
+        }
+      }
+    }
     return retreatState;
   }
 
@@ -8546,11 +8571,9 @@ RESOLVERS.set('retreat-energy-discard', (state, actorIdx, selectedIids, params, 
     ? `${prefix}（丟棄：${discardNames}），${newActiveCard?.name ?? '?'} 上場！`
     : `${prefix}，${newActiveCard?.name ?? '?'} 上場！`;
 
-  const afterState: GameState = {
+  return {
     ...state,
     players,
     log: [...state.log, { turn: state.turn, playerIndex: actorIdx, message: msg, timestamp: Date.now() }],
   };
-  // v5.241：換位後 ON_PROMOTE_TO_ACTIVE prompt
-  return tryPromptPromoteActive(afterState, actorIdx, pool);
 });

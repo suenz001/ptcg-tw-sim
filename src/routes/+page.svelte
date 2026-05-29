@@ -304,6 +304,15 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.242</span> 緊急撤回 v5.241 改動（線上版部署失敗）</summary>
+        <ul>
+          <li>v5.241 推上去後發生網站部署失敗，無法上線。原因是程式內部的檔案引用造成循環相依（兩個檔案互相 import），讓建置工具拒絕編譯。</li>
+          <li>本次先把 v5.241 的所有換位特性 prompt 擴大改動撤回，回到 v5.240 的穩定版本。功能上：撤退（自願換位）時的 prompt 仍然保留。</li>
+          <li>後續會用更乾淨的設計重做（把共用 helper 搬到沒有循環風險的底層檔），預計 v5.243+ 重新推出。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.241</span> 上場特性詢問範圍擴大 — 撤退能量選擇路徑 + 強制換場路徑</summary>
         <ul>
           <li>承 v5.240 的「上場時自動詢問特性」機制，本次將觸發範圍擴大：</li>
