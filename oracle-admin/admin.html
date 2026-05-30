@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.04</title>
+<title>PTCG Oracle Admin v1.05</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.04</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.05</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2682,7 +2682,7 @@ window.showCardArchetype = async function(idsCSV) {
   for (const c of (data.cards || [])) {
     const info = cardInfoMap[c.cardId];
     if (!info) continue;
-    const key = info.name;  // v1.03：依「卡名」合併 — 同名卡跨版本/效果共用 4 張上限（PTCG 規則），修同名重複出現
+    const key = info.displayName || info.name;  // v1.05：依「去括號卡名」合併（對齊全站 displayName/computeCanonicalKey 正規化）— 同名卡跨版本/效果/插畫共用 4 張上限
     let g = byCanon.get(key);
     if (!g) { g = { info, deckCount: 0, distMap: new Map(), repCardId: c.cardId, repDeckCount: 0 }; byCanon.set(key, g); }
     g.deckCount += c.deckCount;
