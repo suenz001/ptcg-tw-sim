@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.332</span> 修正「神奇糖果」有機率讓進化卡消失</summary>
+        <ul>
+          <li>修正：使用「神奇糖果」進化時，若選定的基礎寶可夢在結算前已被其他動作改變（例如另一次進化、撤退換位、被效果移走），原本會把要進化的 2 階寶可夢從手牌移除卻沒放到場上，導致進化卡憑空消失。已改為：偵測到進化目標已不在場上時，取消這次進化並把進化卡保留在手牌，不會再弄丟卡片。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.331</span> 修正常用卡牌雲端存檔/讀取的權限錯誤</summary>
         <ul>
           <li>修正：在牌組編輯器點「存檔／讀取」時，常用卡牌部分會出現「Missing or insufficient permissions（權限不足）」而失敗——原因是雲端權限規則漏放行常用卡牌的儲存路徑，已補上。另外把常用卡牌的雲端存／讀改成獨立處理，就算常用部分出問題，也不會害牌組的存檔／讀取一起失敗。</li>

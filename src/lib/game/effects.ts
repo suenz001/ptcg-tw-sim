@@ -1562,14 +1562,20 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
   const targetIid = picked[0];
   const stage2Iid = params?.stage2Iid as string;
 
-  // 補 log：記錄基礎→2 階的進化（原本只有構造 logMsg 但未呼叫 addLog）
   const prevPlayer = st.players[idx];
   const stage2InstPrev = prevPlayer.hand.find(i => i.iid === stage2Iid);
-  const stage2Name = stage2InstPrev ? (pool.get(stage2InstPrev.cardId)?.name ?? '?') : '?';
   const baseInstPrev = prevPlayer.active?.iid === targetIid
     ? prevPlayer.active
     : prevPlayer.bench.find(b => b.iid === targetIid);
-  const baseName = baseInstPrev ? (pool.get(baseInstPrev.cardId)?.name ?? '?') : '?';
+  // v5.332 防呆：pending 設定後，進化目標基礎寶可夢可能已被其他動作進化/換位/移除（進化會把
+  //   場上 instance 換成新 iid → 原 targetIid 失效）。此時 stage2InstPrev 或 baseInstPrev 為空，
+  //   原邏輯仍會把 Stage2 從手牌移除卻沒放上場 → 進化卡憑空消失（玩家回報根因）。
+  //   修法：任一不存在 → 中止進化且「不移除手牌 Stage2」，進化卡保留在手牌。
+  if (!stage2InstPrev || !baseInstPrev) {
+    return addLog(st, '神奇糖果：進化目標已不在場上，取消進化（進化卡保留在手牌）', idx);
+  }
+  const stage2Name = pool.get(stage2InstPrev.cardId)?.name ?? '?';
+  const baseName = pool.get(baseInstPrev.cardId)?.name ?? '?';
   st = addLog(st, `神奇糖果：${baseName} 直接進化為 ${stage2Name}！`, idx);
 
   let result = updatePlayer(st, idx, p => {
