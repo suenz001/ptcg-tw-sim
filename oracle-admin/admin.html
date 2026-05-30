@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.03</title>
+<title>PTCG Oracle Admin v1.04</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.03</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.04</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2210,6 +2210,30 @@ function renderTopCards(c) {
   `;
 }
 
+// v1.04：1.6 熱門寶可夢 即時搜尋
+let pokemonSearch = '';
+let _pokemonGroups = [];
+function topPokemonRowHtml(g, i) {
+  const info = g.repInfo;
+  const isSupport = g.cardIds.some(id => (cardTagsCache[id] || []).includes('support'));
+  const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本合併計算">${g.variants} 版本</span>` : '';
+  const tagBtn = `<button class="tag-btn ${isSupport ? 'tagged' : ''}" onclick="toggleSupportTag('${escapeHtml(g.repCardId)}')" title="${isSupport ? '取消支援型' : '標為支援型'}">${isSupport ? '⭐ 支援型' : '☆ 標支援型'}</button>`;
+  return `<tr><td>${i + 1}</td><td>${escapeHtml(info.displayName || info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}${info.regulationMark ? '·' + info.regulationMark : ''}</span></td><td><span class="small muted">${info.subtype || ''}</span></td><td>${g.totalCount}</td><td>${g.deckCount}</td><td>${tagBtn}</td></tr>`;
+}
+function topPokemonRowsHtml(groups) {
+  const q = (pokemonSearch || '').trim().toLowerCase();
+  let list = groups;
+  if (q) list = groups.filter(g => (((g.repInfo && (g.repInfo.displayName || g.repInfo.name)) || '').toLowerCase().includes(q)));
+  const shown = q ? list.slice(0, 200) : list.slice(0, 50);
+  if (shown.length === 0) return '<tr><td colspan="6" class="empty" style="text-align:center; padding:18px;">查無符合寶可夢</td></tr>';
+  return shown.map((g, i) => topPokemonRowHtml(g, i)).join('');
+}
+window.filterTopPokemon = function(q) {
+  pokemonSearch = q;
+  const tb = document.getElementById('pokemon-tbody');
+  if (tb) tb.innerHTML = topPokemonRowsHtml(_pokemonGroups);
+};
+
 // 1.6 熱門寶可夢 Top 50 + 主力/支援型 tag（同名同效合併）
 function renderTopPokemon(c) {
   // 先 group，再 filter 寶可夢類別
@@ -2220,7 +2244,7 @@ function renderTopPokemon(c) {
   if (pokemonFilterMode === 'main') filtered = allGroups.filter(g => !groupHasSupport(g));
   else if (pokemonFilterMode === 'support') filtered = allGroups.filter(g => groupHasSupport(g));
   const supportCount = allGroups.filter(groupHasSupport).length;
-  filtered = filtered.slice(0, 50);
+  _pokemonGroups = filtered;  // v1.04：模式過濾後(未切50)全部給搜尋用
   return `
     <section class="stats-section">
       <h3>🎴 1.6 熱門寶可夢 Top 50 <span class="small muted">（同名同效不同版本合併）</span></h3>
@@ -2230,17 +2254,14 @@ function renderTopPokemon(c) {
         <span class="filter-btn ${pokemonFilterMode === 'support' ? 'active' : ''}" onclick="setPokemonFilter('support')">⭐ 支援型 (${supportCount})</span>
         <span class="small muted" style="margin-left:auto;">點右側 ⭐/☆ 切換「支援型」tag — 自動同步到同卡所有版本</span>
       </div>
+      <div style="margin-bottom:8px;">
+        <input id="pokemon-search" class="search-box" placeholder="🔎 搜尋寶可夢名稱…" value="${escapeHtml(pokemonSearch)}" oninput="filterTopPokemon(this.value)" style="padding:6px 10px; min-width:240px;" />
+      </div>
       <div class="stats-box" style="overflow-x:auto;">
         <table>
           <thead><tr><th>#</th><th>寶可夢</th><th>類型</th><th>總張數</th><th>出現牌組</th><th>標記</th></tr></thead>
-          <tbody>
-            ${filtered.map((g, i) => {
-              const info = g.repInfo;
-              const isSupport = groupHasSupport(g);
-              const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本合併計算">${g.variants} 版本</span>` : '';
-              const tagBtn = `<button class="tag-btn ${isSupport ? 'tagged' : ''}" onclick="toggleSupportTag('${escapeHtml(g.repCardId)}')" title="${isSupport ? '取消支援型' : '標為支援型'}">${isSupport ? '⭐ 支援型' : '☆ 標支援型'}</button>`;
-              return `<tr><td>${i + 1}</td><td>${escapeHtml(info.displayName || info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}${info.regulationMark ? '·' + info.regulationMark : ''}</span></td><td><span class="small muted">${info.subtype || ''}</span></td><td>${g.totalCount}</td><td>${g.deckCount}</td><td>${tagBtn}</td></tr>`;
-            }).join('')}
+          <tbody id="pokemon-tbody">
+            ${topPokemonRowsHtml(filtered)}
           </tbody>
         </table>
       </div>
@@ -2372,6 +2393,41 @@ window.setPokemonFilter = function(m) {
 // v0.84 Phase 2b render functions
 // ────────────────────────────────────────────────────────────────────────────
 
+// v1.04：2.1 玩家排行榜 即時搜尋（依玩家名 + email）
+let playerSearch = '';
+let _playerRows = [];
+function playerRankRowHtml(row, i) {
+  const wr = row.winRate;
+  const wrText = (wr === null || wr === undefined) ? '-' : (wr * 100).toFixed(1) + '%';
+  const wrColor = wr === null ? '#7a8898' : (wr > 0.55 ? '#2e7d32' : (wr < 0.45 ? '#c62828' : '#1a2332'));
+  const idForDetail = row.email || row.key || row.name;
+  const idDisplay = row.email
+    ? `<a href="#" class="player-name" onclick="showPlayerDetail('${escapeHtml(idForDetail).replace(/'/g, '&apos;')}'); return false;">${escapeHtml(row.email)}</a>`
+    : `<span class="small muted">（匿名）</span>`;
+  return `<tr>
+    <td>${i + 1}</td>
+    <td><a href="#" class="player-name" onclick="showPlayerDetail('${escapeHtml(idForDetail).replace(/'/g, '&apos;')}'); return false;">${escapeHtml(row.name || '-')}</a></td>
+    <td>${idDisplay}</td>
+    <td>${row.matches}</td>
+    <td>${row.wins}</td>
+    <td>${row.losses}</td>
+    <td style="color:${wrColor}; font-weight:600;">${wrText}</td>
+  </tr>`;
+}
+function playerRankRowsHtml(rows) {
+  const q = (playerSearch || '').trim().toLowerCase();
+  let list = rows;
+  if (q) list = rows.filter(r => ((r.name || '').toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q)));
+  const shown = q ? list.slice(0, 200) : list.slice(0, 50);
+  if (shown.length === 0) return '<tr><td colspan="7" class="empty" style="text-align:center; padding:18px;">查無符合玩家</td></tr>';
+  return shown.map((row, i) => playerRankRowHtml(row, i)).join('');
+}
+window.filterPlayers = function(q) {
+  playerSearch = q;
+  const tb = document.getElementById('player-rank-tbody');
+  if (tb) tb.innerHTML = playerRankRowsHtml(_playerRows);
+};
+
 // 2.1 玩家排行榜（v0.86：name 為主鍵 + email 為附資訊；點玩家名看個人戰績）
 //   - server 端用 email || name 為複合 key 分組
 //   - 多數匿名玩家無 email，仍能依 name 出現在排行（接受不同人同名會合併的次要瑕疵）
@@ -2418,11 +2474,14 @@ function renderPlayerRanking(p) {
     if (va == null) return 1; if (vb == null) return -1;
     return String(va).localeCompare(String(vb), 'zh-Hant') * dir;
   });
-  const top = sortedPlayers.slice(0, 50);
+  _playerRows = sortedPlayers;  // v1.04：全部排序後給搜尋用
   const withEmailCount = players.filter(x => x.email).length;
   return `
     <section class="stats-section">
       <h3>👤 2.1 玩家排行榜 <span class="small muted">（共 ${players.length} 位玩家；已排除 AI；含 email ${withEmailCount} 位 / 匿名 ${players.length - withEmailCount} 位；點玩家名看個人戰績）</span></h3>
+      <div style="margin-bottom:8px;">
+        <input id="player-search" class="search-box" placeholder="🔎 搜尋玩家名稱 / email…" value="${escapeHtml(playerSearch)}" oninput="filterPlayers(this.value)" style="padding:6px 10px; min-width:260px;" />
+      </div>
       <div class="stats-box" style="overflow-x:auto;">
         <table>
           <thead><tr>
@@ -2434,25 +2493,8 @@ function renderPlayerRanking(p) {
             <th class="sortable-th" onclick="setPlayerRankSort('losses')">負${playerRankSort==='losses'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
             <th class="sortable-th" onclick="setPlayerRankSort('winRate')">勝率${playerRankSort==='winRate'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
           </tr></thead>
-          <tbody>
-            ${top.map((row, i) => {
-              const wr = row.winRate;
-              const wrText = (wr === null || wr === undefined) ? '-' : (wr * 100).toFixed(1) + '%';
-              const wrColor = wr === null ? '#7a8898' : (wr > 0.55 ? '#2e7d32' : (wr < 0.45 ? '#c62828' : '#1a2332'));
-              const idForDetail = row.email || row.key || row.name;
-              const idDisplay = row.email
-                ? `<a href="#" class="player-name" onclick="showPlayerDetail('${escapeHtml(idForDetail).replace(/'/g, '&apos;')}'); return false;">${escapeHtml(row.email)}</a>`
-                : `<span class="small muted">（匿名）</span>`;
-              return `<tr>
-                <td>${i + 1}</td>
-                <td><a href="#" class="player-name" onclick="showPlayerDetail('${escapeHtml(idForDetail).replace(/'/g, '&apos;')}'); return false;">${escapeHtml(row.name || '-')}</a></td>
-                <td>${idDisplay}</td>
-                <td>${row.matches}</td>
-                <td>${row.wins}</td>
-                <td>${row.losses}</td>
-                <td style="color:${wrColor}; font-weight:600;">${wrText}</td>
-              </tr>`;
-            }).join('')}
+          <tbody id="player-rank-tbody">
+            ${playerRankRowsHtml(sortedPlayers)}
           </tbody>
         </table>
         ${players.length > 50 ? `<div class="small muted" style="margin-top:6px;">（顯示前 50 名，共 ${players.length} 位）</div>` : ''}
