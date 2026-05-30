@@ -1801,14 +1801,6 @@
             <li class:previewing={pickerPreview?.id === card.id}>
               <button class="pick-thumb" onclick={() => openPreview(card)} title="查看詳情">
                 <img src={card.imageUrl} alt={card.name} loading="lazy" />
-                <!-- v5.310: 常用卡牌角標 (右上小星星) -->
-                <span class="pick-fav-corner" class:active={isFavorite(card.id)}
-                  role="button" tabindex="0"
-                  title={isFavorite(card.id) ? '取消常用' : '標記常用'}
-                  onclick={(e) => { e.stopPropagation(); toggleFavorite(card.id); }}
-                  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleFavorite(card.id); } }}>
-                  {isFavorite(card.id) ? '⭐' : '☆'}
-                </span>
               </button>
               <button class="pick-meta" onclick={() => openPreview(card)}>
                 <div class="pick-name">{card.name}</div>
@@ -1819,6 +1811,12 @@
                   {/if}
                 </div>
               </button>
+              <!-- v5.312: ⭐ 常用按鈕移到 + 加入按鈕左邊 (Wilson 嫌右上角標擋圖) -->
+              <button
+                class="icon pick-fav-btn" class:active={isFavorite(card.id)}
+                onclick={(e) => { e.stopPropagation(); toggleFavorite(card.id); }}
+                title={isFavorite(card.id) ? '取消常用' : '標記為常用卡牌'}
+                aria-label={isFavorite(card.id) ? '取消常用' : '標記常用'}>{isFavorite(card.id) ? '⭐' : '☆'}</button>
               <button
                 class="icon add-btn"
                 onclick={() => addCard(card)}
@@ -2659,23 +2657,10 @@
   .deck-list li.drag-source { opacity: 0.4; }
   .deck-list li.drag-over { border-top: 2px solid #ffd700; }
 
-  /* v5.310: 常用卡牌 favorites UI */
-  .pick-fav-corner {
-    position: absolute; top: 2px; right: 2px;
-    width: 22px; height: 22px;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(0, 0, 0, 0.55);
-    border: 1px solid rgba(255, 215, 0, 0.4);
-    border-radius: 50%;
-    font-size: 0.85rem;
-    color: #ccc;
-    cursor: pointer;
-    z-index: 3;
-    transition: all 0.15s;
-  }
-  .pick-fav-corner:hover { background: rgba(255, 215, 0, 0.25); color: #ffd700; }
-  .pick-fav-corner.active { color: #ffd700; border-color: #ffd700; background: rgba(80, 60, 0, 0.7); }
-  .pick-thumb { position: relative; }
+  /* v5.312: 常用卡牌 ⭐ 按鈕 — 放在 + 加入按鈕左邊 (取代 v5.310 卡圖角標, 避免擋圖) */
+  .pick-fav-btn { color: #888; transition: color 0.15s, background 0.15s, border-color 0.15s; }
+  .pick-fav-btn:hover { color: #ffd700; background: rgba(255, 215, 0, 0.12); }
+  .pick-fav-btn.active { color: #ffd700; border-color: rgba(255, 215, 0, 0.6); background: rgba(80, 60, 0, 0.35); }
   .pv-fav-btn {
     margin-left: 0.5rem;
     background: rgba(0, 0, 0, 0.35);

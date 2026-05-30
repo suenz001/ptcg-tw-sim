@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.312</span> 常用星標位置調整</summary>
+        <ul>
+          <li>調整：牌組編輯器搜尋結果的「常用 ⭐」按鈕從卡圖右上角搬到「+」加入按鈕的左邊，不再遮擋卡片圖片，按起來也比較大顆好點。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.311</span> 牌組拖曳排序 + 鏽蝕組手下 / 萬花筒華爾滋 / 連線名稱記憶</summary>
         <ul>
           <li>新增：牌組編輯器左欄「我的牌組」列表可上下拖曳排序。每個牌組左邊有拖曳把手（⠿），按住拖到想要的位置即可，順序自動存檔。手機觸控與桌機滑鼠都支援。</li>
