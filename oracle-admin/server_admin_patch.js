@@ -1301,14 +1301,21 @@ import('firebase-admin').then(async ({ default: admin }) => {
           { $limit: 10000 },
         ];
         const cards = await db.collection('matchRecords').aggregate(pipeline).toArray();
-        // v0.94: diagnostic — 找 root cause 為何數字小
+        // v0.97: 完整 diagnostic — 顯示資料源 breakdown
+        //   (Wilson v0.94 diag 看到 totalMatchRecords=8 才發現是排除 AI 後樣本太少,
+        //    不是統計 bug. 本版加 absolute db 數字 + 各 filter 後數字, 一眼看清)
         let diagnostics = {};
         try {
           const [diag] = await db.collection('matchRecords').aggregate([
-            { $match: baseMatch },
             { $facet: {
-              totalMatches: [{ $count: 'n' }],
-              withCardCounts: [
+              allDb: [{ $count: 'n' }],
+              afterFilter: [{ $match: baseMatch }, { $count: 'n' }],
+              vsAITotal: [{ $match: { vsAI: true } }, { $count: 'n' }],
+              nonAITotal: [{ $match: { vsAI: { $ne: true } } }, { $count: 'n' }],
+              onlineTotal: [{ $match: { roomCode: { $type: 'string' } } }, { $count: 'n' }],
+              localTotal: [{ $match: { roomCode: null } }, { $count: 'n' }],
+              withCardCountsFilter: [
+                { $match: baseMatch },
                 { $match: { $or: [
                   { 'p1.cardCounts': { $exists: true, $not: { $size: 0 } } },
                   { 'p2.cardCounts': { $exists: true, $not: { $size: 0 } } },
@@ -1323,11 +1330,23 @@ import('firebase-admin').then(async ({ default: admin }) => {
             }},
           ]).toArray();
           diagnostics = {
-            totalMatchRecords: diag.totalMatches?.[0]?.n || 0,
-            recordsWithCardCounts: diag.withCardCounts?.[0]?.n || 0,
+            // 資料源 absolute
+            dbTotalAllTime: diag.allDb?.[0]?.n || 0,
+            dbVsAI: diag.vsAITotal?.[0]?.n || 0,
+            dbNonAI: diag.nonAITotal?.[0]?.n || 0,
+            dbOnline: diag.onlineTotal?.[0]?.n || 0,
+            dbLocal: diag.localTotal?.[0]?.n || 0,
+            // 當前 filter 後
+            afterFilterCount: diag.afterFilter?.[0]?.n || 0,
+            withCardCountsCount: diag.withCardCountsFilter?.[0]?.n || 0,
+            // 樣本
             sampleP1CardCountSize: diag.sampleP1?.[0]?.sampleSize || 0,
             topCardTotalDecks: cards[0]?.totalDecks || 0,
             cardsReturnedCount: cards.length,
+            // 當前查詢
+            currentMode: req.query.mode || 'all',
+            currentExcludeAI: excludeAI,
+            currentMinDecks: minDecks,
           };
         } catch (de) { diagnostics = { error: de.message }; }
         res.json({ cards, minDecks, mode: req.query.mode || 'all', excludeAI, generatedAt: Date.now(), diagnostics });

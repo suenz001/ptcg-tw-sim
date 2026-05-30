@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v0.96</title>
+<title>PTCG Oracle Admin v0.97</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.96</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.97</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2583,12 +2583,17 @@ function renderCardWinrate(w) {
   return `
     <section class="stats-section">
       <h3>🏆 2.3 卡牌勝率 Top 50 <span class="small muted">（至少 ${w.minDecks} 副；排除 AI 對戰；同名同效合併）</span></h3>
-      ${w.diagnostics ? `<div class="small muted" style="margin-bottom:8px; padding:6px 10px; background:#f0f7ff; border-radius:4px;">
-        🔍 診斷：matchRecords 總數 <b>${w.diagnostics.totalMatchRecords || 0}</b> 筆 ·
-        含 cardCounts 的 <b>${w.diagnostics.recordsWithCardCounts || 0}</b> 筆 ·
-        sample 牌組卡張類別數 <b>${w.diagnostics.sampleP1CardCountSize || 0}</b> ·
-        Top 卡 totalDecks (server raw) <b>${w.diagnostics.topCardTotalDecks || 0}</b> ·
-        server 回 <b>${w.diagnostics.cardsReturnedCount || 0}</b> 張 (上限 10000)
+      ${w.diagnostics ? `<div class="small" style="margin-bottom:8px; padding:8px 12px; background:#f0f7ff; border:1px solid #cce; border-radius:4px;">
+        <div style="font-weight:600; margin-bottom:4px;">🔍 資料源診斷</div>
+        <div>📊 <b>matchRecords 全 DB</b>：${w.diagnostics.dbTotalAllTime || 0} 筆 ·
+          AI 對戰 <b>${w.diagnostics.dbVsAI || 0}</b> 筆 ·
+          人類對戰 <b>${w.diagnostics.dbNonAI || 0}</b> 筆 ·
+          線上 <b>${w.diagnostics.dbOnline || 0}</b> · 本機 <b>${w.diagnostics.dbLocal || 0}</b></div>
+        <div>🔎 <b>當前 filter</b>：mode=<code>${w.diagnostics.currentMode}</code> excludeAI=<code>${w.diagnostics.currentExcludeAI}</code> minDecks=<code>${w.diagnostics.currentMinDecks}</code>
+          → 符合 <b>${w.diagnostics.afterFilterCount || 0}</b> 筆 (其中有 cardCounts <b>${w.diagnostics.withCardCountsCount || 0}</b> 筆)</div>
+        <div>🃏 <b>樣本</b>：sample 牌組卡張類別數 ${w.diagnostics.sampleP1CardCountSize || 0} ·
+          Top 卡 raw totalDecks ${w.diagnostics.topCardTotalDecks || 0} · server 回 ${w.diagnostics.cardsReturnedCount || 0} 張 (上限 10000)</div>
+        ${w.diagnostics.afterFilterCount < 50 ? `<div style="margin-top:4px; color:#c62828;">⚠️ 樣本數 &lt; 50，勝率統計不具代表性。若要看 AI 對戰，下方 toolbar 加切換（目前還沒做：請改 URL 加 ?excludeAI=false 或等下版 UI toggle）</div>` : ''}
       </div>` : ''}
       <div class="toolbar" style="margin-bottom:10px;">
         <span class="filter-btn ${winrateFilterMode === 'all' ? 'active' : ''}" onclick="setWinrateFilter('all')">全部 (${groups.length})</span>
