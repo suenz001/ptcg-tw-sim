@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.02</title>
+<title>PTCG Oracle Admin v1.03</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.02</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.03</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -514,6 +514,7 @@ async function ensureCardIndex() {
               supertype: c.supertype || '',
               subtype: c.subtype || '',
               pokemonType: c.pokemonType || '',
+              isAceSpec: !!(c.tags && c.tags.includes('ACE SPEC')),  // v1.03：ACE SPEC 整副 1 張上限用
               canonicalKey,
             };
             if (!canonicalMap.has(canonicalKey)) canonicalMap.set(canonicalKey, []);
@@ -2639,11 +2640,11 @@ window.showCardArchetype = async function(idsCSV) {
   for (const c of (data.cards || [])) {
     const info = cardInfoMap[c.cardId];
     if (!info) continue;
-    const key = info.canonicalKey;
+    const key = info.name;  // v1.03：依「卡名」合併 — 同名卡跨版本/效果共用 4 張上限（PTCG 規則），修同名重複出現
     let g = byCanon.get(key);
     if (!g) { g = { info, deckCount: 0, distMap: new Map(), repCardId: c.cardId, repDeckCount: 0 }; byCanon.set(key, g); }
     g.deckCount += c.deckCount;
-    if (c.deckCount > g.repDeckCount) { g.repDeckCount = c.deckCount; g.repCardId = c.cardId; }  // 取最常見版本給 cardLabel
+    if (c.deckCount > g.repDeckCount) { g.repDeckCount = c.deckCount; g.repCardId = c.cardId; g.info = info; }  // 取最常見版本給 cardLabel/setCode
     for (const d of (c.countDist || [])) g.distMap.set(d.cnt, (g.distMap.get(d.cnt) || 0) + d.n);
   }
   const groups = [...byCanon.values()].map(g => {
@@ -2660,12 +2661,21 @@ window.showCardArchetype = async function(idsCSV) {
   const isBasicEnergy = (info) => info.supertype === 'Energy' && info.subtype === 'Basic';
   const picked = [];
   let total = 0;
+  let aceSpecUsed = false;  // v1.03：ACE SPEC 整副牌只能 1 張（跨卡名共用 1 個名額）
   for (const g of groups) {
     if (total >= 60) break;
     let copies = g.modalCount;
-    if (!isBasicEnergy(g.info)) copies = Math.min(copies, 4);
+    if (isBasicEnergy(g.info)) {
+      // 基本能量無張數上限，保留眾數張數
+    } else if (g.info.isAceSpec) {
+      if (aceSpecUsed) continue;   // 已放過 1 張 ACE SPEC → 其餘 ACE SPEC 一律跳過
+      copies = 1;                  // ACE SPEC 每副最多 1 張
+    } else {
+      copies = Math.min(copies, 4);  // 一般卡同名上限 4 張
+    }
     copies = Math.min(copies, 60 - total);
     if (copies <= 0) continue;
+    if (!isBasicEnergy(g.info) && g.info.isAceSpec) aceSpecUsed = true;
     picked.push({ info: g.info, repCardId: g.repCardId, copies, inclusion: g.inclusion });
     total += copies;
   }
@@ -2694,7 +2704,7 @@ window.showCardArchetype = async function(idsCSV) {
       <div class="modal" style="min-width:560px;">
         <h3>🃏 含「${escapeHtml(cardName)}」的代表牌組</h3>
         ${checkboxHtml}
-        <div class="small muted" style="margin-bottom:10px;">資料範圍：<b>${rangeLabel}</b>${archetypeWinnerOnly ? ' · <b>只算獲勝牌組</b>' : ''} · 樣本 <b>${totalDecks}</b> 副${archetypeWinnerOnly ? '獲勝且' : ''}含此卡的牌組 · 合計 <b>${total}</b> 張<br>說明：取「含此卡的所有牌組」中，各卡『被放入比例』最高者，每張採其最常見張數湊成 60 張（聚合代表牌組，僅供參考，非單一真實牌組）。</div>
+        <div class="small muted" style="margin-bottom:10px;">資料範圍：<b>${rangeLabel}</b>${archetypeWinnerOnly ? ' · <b>只算獲勝牌組</b>' : ''} · 樣本 <b>${totalDecks}</b> 副${archetypeWinnerOnly ? '獲勝且' : ''}含此卡的牌組 · 合計 <b>${total}</b> 張<br>說明：取「含此卡的所有牌組」中，各卡『被放入比例』最高者，每張採其最常見張數湊成 60 張（聚合代表牌組，僅供參考，非單一真實牌組）。已依 PTCG 規則套用：同名卡合計上限 4 張、ACE SPEC 每副 1 張、基本能量無上限。</div>
         ${sectionsHtml || '<div class="empty">無足夠卡牌資料</div>'}
         <details style="margin-top:10px;"><summary class="small muted" style="cursor:pointer;">📋 可匯入牌表預覽</summary>
           <pre style="background:#f5f5f5; padding:10px; border-radius:4px; font-family:Consolas,Menlo,monospace; font-size:12px; line-height:1.6; max-height:40vh; overflow:auto; white-space:pre-wrap; user-select:text; margin-top:6px;">${escapeHtml(window._lastArchetypeCopyText)}</pre>
