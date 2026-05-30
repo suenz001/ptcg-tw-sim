@@ -99,18 +99,36 @@
   let _dragPointerId: number | null = null;
   let _dragHandleEl: HTMLElement | null = null;  // 給 cleanup releasePointerCapture
   let _dragMoveHandler: ((e: PointerEvent) => void) | null = null;
-  let _dragUpHandler: ((e: PointerEvent) => void) | null = null;
+  let _dragUpHandler: ((e: Event) => void) | null = null;
   let _dragEscHandler: ((e: KeyboardEvent) => void) | null = null;
+  let _dragSafetyTimer: ReturnType<typeof setTimeout> | null = null;
 
   function _cleanupDrag() {
+    // v5.319: 移除所有 fallback listeners (pointer + mouse + touch)
     if (_dragMoveHandler) {
       window.removeEventListener('pointermove', _dragMoveHandler);
-      window.removeEventListener('pointerup', _dragUpHandler!);
-      window.removeEventListener('pointercancel', _dragUpHandler!);
+      window.removeEventListener('mousemove', _dragMoveHandler as unknown as EventListener);
+      window.removeEventListener('touchmove', _dragMoveHandler as unknown as EventListener);
+    }
+    if (_dragUpHandler) {
+      window.removeEventListener('pointerup', _dragUpHandler);
+      window.removeEventListener('pointercancel', _dragUpHandler);
+      window.removeEventListener('mouseup', _dragUpHandler);
+      window.removeEventListener('touchend', _dragUpHandler);
+      window.removeEventListener('touchcancel', _dragUpHandler);
+      if (_dragHandleEl) {
+        _dragHandleEl.removeEventListener('pointerup', _dragUpHandler);
+        _dragHandleEl.removeEventListener('mouseup', _dragUpHandler);
+        _dragHandleEl.removeEventListener('touchend', _dragUpHandler);
+      }
     }
     if (_dragEscHandler) {
       window.removeEventListener('keydown', _dragEscHandler);
       _dragEscHandler = null;
+    }
+    if (_dragSafetyTimer !== null) {
+      clearTimeout(_dragSafetyTimer);
+      _dragSafetyTimer = null;
     }
     _dragMoveHandler = null; _dragUpHandler = null;
     _dragHandleEl = null; _dragPointerId = null;
@@ -132,20 +150,19 @@
     //   window listener 即使 pointer 離開 ⠿, ev 仍冒泡到 window. Touch 上 touchend 自動 dispatch
     //   到原 touch target 也會冒泡到 window.
     try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15); } catch { /* */ }
-    _dragMoveHandler = (ev: PointerEvent) => {
-      // v5.318: 弱化 — 不 check pointerId. 只要 in drag mode (dragDeckId !== null) 就處理.
-      //   原 pointerId check 在某些瀏覽器 quirks 下可能誤判 → cleanup 不執行 → stuck.
+    _dragMoveHandler = ((ev: PointerEvent | TouchEvent | MouseEvent) => {
       if (!dragDeckId) return;
-      ev.preventDefault();
-      // lifted 跟手指: visual center = layout_center + dragDeltaY, 想 = ev.clientY → dragDeltaY = ev.clientY - layout_center
-      dragDeltaY = ev.clientY - _dragStartY;
-      const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+      // v5.319: 從 ev 取 clientX/Y, 支援 PointerEvent + MouseEvent + TouchEvent
+      const clientX = (ev as PointerEvent).clientX ?? ((ev as TouchEvent).touches?.[0]?.clientX) ?? 0;
+      const clientY = (ev as PointerEvent).clientY ?? ((ev as TouchEvent).touches?.[0]?.clientY) ?? 0;
+      try { ev.preventDefault(); } catch { /* passive listener 內 preventDefault 可能 throw */ }
+      dragDeltaY = clientY - _dragStartY;
+      const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
       const li = el?.closest('li[data-deckid]') as HTMLElement | null;
       const overId = li?.dataset.deckid ?? null;
-      // v5.317: 即時 swap — 不等 pointerup, 玩家拖到位 list 立刻 reorder
       if (overId && overId !== dragDeckId && li) {
         const rect = li.getBoundingClientRect();
-        const insertBefore = ev.clientY < rect.top + rect.height / 2;
+        const insertBefore = clientY < rect.top + rect.height / 2;
         const arr = [...decks];
         const from = arr.findIndex(d => d.id === dragDeckId);
         const to = arr.findIndex(d => d.id === overId);
@@ -162,7 +179,7 @@
         // raf 拿新 li layout rect (暫清 transform 才能拿真正 layout box) →
         // re-anchor _dragStartY = 新 center, 重算 dragDeltaY = ev.clientY - 新 center
         // 讓 lifted li visual 仍貼手指, 不會分離.
-        const _ev = ev;  // closure capture
+        const _capturedY = clientY;
         requestAnimationFrame(() => {
           const newLi = document.querySelector(`li[data-deckid="${dragDeckId}"]`) as HTMLElement | null;
           if (!newLi) return;
@@ -172,28 +189,45 @@
           newLi.style.transform = oldT;
           const newCenter = r.top + r.height / 2;
           _dragStartY = newCenter;
-          dragDeltaY = _ev.clientY - newCenter;
+          dragDeltaY = _capturedY - newCenter;
         });
       }
-    };
-    _dragUpHandler = (ev: PointerEvent) => {
-      // v5.318: 弱化 — 不 check pointerId. dragDeckId !== null 才視為 active.
+    }) as ((e: PointerEvent) => void);
+    _dragUpHandler = ((_ev: Event) => {
+      // v5.319: 弱化 — 不 check pointerId / target. dragDeckId !== null 才視為 active.
+      // 多重 listener (pointerup/mouseup/touchend) 任一 fire 都會跑到此, cleanup 防重複呼叫
+      // 透過 dragDeckId null check.
       if (!dragDeckId) return;
-      // v5.317: swap 已在 pointermove 即時做完, pointerup 只持久化 + cleanup.
       saveDecks(decks);
       _cleanupDrag();
-    };
+    });
     // v5.318: ESC 取消 drag — 玩家 stuck 時可按 ESC 自救
     _dragEscHandler = (kev: KeyboardEvent) => {
       if (kev.key === 'Escape') { _cleanupDrag(); }
     };
+    // v5.319: 多重 fallback listeners — iOS Safari window pointerup 偶發不 fire,
+    //   同步 listen mouseup/touchend/touchcancel 三組 fallback. 任一 fire 都會 cleanup.
     window.addEventListener('pointermove', _dragMoveHandler, { passive: false });
+    window.addEventListener('mousemove', _dragMoveHandler as unknown as EventListener, { passive: false });
+    window.addEventListener('touchmove', _dragMoveHandler as unknown as EventListener, { passive: false });
     window.addEventListener('pointerup', _dragUpHandler);
     window.addEventListener('pointercancel', _dragUpHandler);
+    window.addEventListener('mouseup', _dragUpHandler);
+    window.addEventListener('touchend', _dragUpHandler);
+    window.addEventListener('touchcancel', _dragUpHandler);
+    // v5.319: handle 上也 attach (capture-target fallback)
+    if (_dragHandleEl) {
+      _dragHandleEl.addEventListener('pointerup', _dragUpHandler);
+      _dragHandleEl.addEventListener('mouseup', _dragUpHandler);
+      _dragHandleEl.addEventListener('touchend', _dragUpHandler);
+    }
     window.addEventListener('keydown', _dragEscHandler);
-    // v5.318: 額外 fallback — blur/visibilitychange 也清, 避免換 tab 後 stuck
     const _fallback = () => { if (dragDeckId) _cleanupDrag(); };
     window.addEventListener('blur', _fallback, { once: true });
+    // v5.319: 5 秒 safety timer — 萬一所有 listener 都失效, 強制 cleanup
+    _dragSafetyTimer = setTimeout(() => {
+      if (dragDeckId) { saveDecks(decks); _cleanupDrag(); }
+    }, 5000);
   }
 
   // v5.310: 常用卡牌 (favorites) state — 本地 localStorage, 手動雲端同步
@@ -2746,11 +2780,11 @@
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
     z-index: 100;
     opacity: 0.95;
-    /* v5.316: 整 li 加 pointer-events:none → elementFromPoint 穿透到下方真實 li,
-       才能正確算 dragOverId. 不影響 pointerup — window listener 不靠 li 接 events.
-       (修 v5.315「拖到位置放手沒換」bug) */
+    /* 整 li pointer-events:none → elementFromPoint 穿透下方算 dragOverId */
     pointer-events: none;
   }
+  /* v5.319: ⠿ handle 在 lifted 內仍接 events (給 handle-level fallback listener 收 pointerup) */
+  .deck-list li.drag-source .deck-drag-handle { pointer-events: auto; }
   /* v5.316: 上下半部不同視覺 — drag-over-before 上邊金線, drag-over-after 下邊金線 */
   .deck-list li.drag-over-before { box-shadow: inset 0 3px 0 #ffd700, 0 -2px 0 #ffd700; }
   .deck-list li.drag-over-after { box-shadow: inset 0 -3px 0 #ffd700, 0 2px 0 #ffd700; }
