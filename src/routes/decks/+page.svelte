@@ -115,27 +115,8 @@
     favorites = next;  // Svelte 5: 重新賦值觸發 reactivity
     saveFavorites(next);
   }
-  async function saveFavoritesCloud() {
-    if (!firebaseUser) { alert('請先登入才能將常用卡牌存到雲端'); return; }
-    try {
-      await withTimeout(saveFavoritesToCloud(firebaseUser.uid, favorites));
-      alert(`已將 ${favorites.size} 張常用卡牌存到雲端`);
-    } catch (e) {
-      alert('雲端存檔失敗：' + (e instanceof Error ? e.message : String(e)));
-    }
-  }
-  async function loadFavoritesCloud() {
-    if (!firebaseUser) { alert('請先登入才能從雲端讀取常用卡牌'); return; }
-    if (!confirm('確定要從雲端重新讀取常用卡牌嗎？目前本地未存檔的變更將被覆蓋。')) return;
-    try {
-      const cloud = await withTimeout(loadFavoritesFromCloud(firebaseUser.uid));
-      favorites = cloud;
-      saveFavorites(cloud);
-      alert(`已從雲端載入 ${cloud.size} 張常用卡牌`);
-    } catch (e) {
-      alert('雲端讀取失敗：' + (e instanceof Error ? e.message : String(e)));
-    }
-  }
+  // v5.330：常用卡牌雲端存/讀已合併進「牌組存檔/讀取」按鈕（saveAllDecksToCloud /
+  //   loadAllDecksFromCloud），不再有獨立的常用存/讀函式與按鈕。
 
   // ── Category filter (chip multi-select) ────────────────────────────────
   type CategoryKey = 'Pokemon' | 'Supporter' | 'Item' | 'Tool' | 'Stadium' | 'BasicEnergy' | 'SpecialEnergy';
@@ -536,19 +517,17 @@
   async function saveAllDecksToCloud() {
     if (!firebaseUser) { alert('尚未登入，無法存檔。'); return; }
     const dirtyList = decks.filter(d => dirtyDeckIds.has(d.id));
-    if (dirtyList.length === 0) {
-      alert('沒有需要存檔的變更。');
-      return;
-    }
     syncStatus = 'syncing';
     try {
       for (const d of dirtyList) {
         await withTimeout(syncDeckToCloud(firebaseUser.uid, d));
       }
+      // v5.330：常用卡牌一併存檔（合併原本獨立的「常用」存檔按鈕，避免兩顆存檔）
+      await withTimeout(saveFavoritesToCloud(firebaseUser.uid, favorites));
       import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
       dirtyDeckIds = new Set();  // 清空 dirty（紅點消失）
       syncStatus = 'synced';
-      alert(`已存檔 ${dirtyList.length} 個牌組至雲端！`);
+      alert(`已存檔 ${dirtyList.length} 個牌組 + ${favorites.size} 張常用卡牌至雲端！`);
     } catch (e) {
       syncStatus = 'error';
       syncError = e instanceof Error ? e.message : String(e);
@@ -559,21 +538,22 @@
   /** Force reload all decks from Firebase (discard local changes). */
   async function loadAllDecksFromCloud() {
     if (!firebaseUser) { alert('尚未登入，無法讀取。'); return; }
-    if (!confirm('確定要從雲端重新讀取牌組嗎？目前未存檔的本地變更將會被覆蓋。')) return;
+    if (!confirm('確定要從雲端重新讀取牌組與常用卡牌嗎？目前未存檔的本地變更將會被覆蓋。')) return;
     syncStatus = 'syncing';
     try {
       const cloud = await withTimeout(loadDecksFromCloud(firebaseUser.uid));
-      if (cloud.length === 0) {
-        alert('雲端目前沒有任何牌組資料。');
-        syncStatus = 'synced';
-        return;
+      if (cloud.length > 0) {
+        decks = cloud.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
+        activeId = decks[0]?.id ?? null;
+        dirtyDeckIds = new Set();  // v5.114：cloud 已是 source of truth，清 dirty
       }
-      decks = cloud.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
-      activeId = decks[0]?.id ?? null;
-      dirtyDeckIds = new Set();  // v5.114：cloud 已是 source of truth，清 dirty
+      // v5.330：常用卡牌一併讀取（合併原本獨立的「常用」讀取按鈕）
+      const favCloud = await withTimeout(loadFavoritesFromCloud(firebaseUser.uid));
+      favorites = favCloud;
+      saveFavorites(favCloud);
       syncStatus = 'synced';
-      alert(`已從雲端載入 ${cloud.length} 個牌組。`);
+      alert(`已從雲端載入 ${cloud.length} 個牌組 + ${favCloud.size} 張常用卡牌。`);
     } catch (e) {
       syncStatus = 'error';
       syncError = e instanceof Error ? e.message : String(e);
@@ -1493,16 +1473,12 @@
         <strong>我的牌組</strong>
         <div class="rail-actions">
           <button class="small" onclick={createDeck}>+ 新增</button>
-          <button class="small cloud-btn" class:has-dirty={dirtyDeckIds.size > 0} onclick={saveAllDecksToCloud} title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組待存檔` : '將變更存檔至雲端（無變更時無動作）'}>💾 存檔{#if dirtyDeckIds.size > 0} ●{/if}</button>
-          <button class="small cloud-btn" onclick={loadAllDecksFromCloud} title="從雲端重新讀取牌組">📥 讀取</button>
+          <button class="small cloud-btn" class:has-dirty={dirtyDeckIds.size > 0} onclick={saveAllDecksToCloud} title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組待存檔（連同常用卡牌一起存）` : '將牌組與常用卡牌存檔至雲端'}>💾 存檔{#if dirtyDeckIds.size > 0} ●{/if}</button>
+          <button class="small cloud-btn" onclick={loadAllDecksFromCloud} title="從雲端重新讀取牌組與常用卡牌">📥 讀取</button>
         </div>
-        <!-- v5.310: 常用卡牌雲端同步 (跟 deck cloud 同 UX 手動 💾/📥) -->
+        <!-- v5.330: 常用卡牌雲端存/讀已併入上方「💾 存檔 / 📥 讀取」(牌組+常用一起)；此處只留計數 -->
         <div class="rail-actions" style="margin-top:.3rem;">
-          <span style="font-size:.7rem;color:#aaffcc;">⭐ 常用 ({favorites.size})</span>
-          <button class="small cloud-btn" onclick={saveFavoritesCloud}
-            title="將本地常用卡牌存檔至雲端">💾 存檔</button>
-          <button class="small cloud-btn" onclick={loadFavoritesCloud}
-            title="從雲端重新讀取常用卡牌">📥 讀取</button>
+          <span style="font-size:.7rem;color:#aaffcc;">⭐ 常用 ({favorites.size}) 張（存檔/讀取已併入上方按鈕）</span>
         </div>
       </div>
       <ul class="deck-list">
