@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.322</span> 牌庫 picker 卡片排序同棄牌區</summary>
+        <ul>
+          <li>調整：「查看牌庫剩餘全部 / 查看對手手牌 / 看牌堆其他卡」的下拉清單排序，跟 v5.309 手機版棄牌區一致 —「寶可夢 → 物品 → 支援者 → 場地 → 能量」固定分類順序（同類型內仍按數量或名稱排），方便玩家依用途快速找牌。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.321</span> 線上對戰房名離房後沒記住修正</summary>
         <ul>
           <li>修正：v5.311 雖然加了「房間名稱自動沿用上次輸入」，但離開房間回大廳時系統會清空輸入框，導致下次開房又要重打字。已改為離房後仍會自動填回上次的房間名。</li>

@@ -3380,6 +3380,19 @@
   }
 
   // ── 輔助函式 ────────────────────────────────────────────────────────────────
+  // v5.322: typeRank — 玩家視角排序 (寶可夢→物品→支援者→場地→能量, 同類內 count/name)
+  //   跟 MobilePortraitBattle.svelte groupDiscardList 同邏輯, 給「查看牌庫剩餘」picker 用
+  function cardTypeRank(c: Card | undefined): number {
+    if (!c) return 9;
+    if (c.supertype === 'Pokemon') return 1;
+    if (c.supertype === 'Trainer') {
+      if (c.subtype === 'Supporter') return 3;
+      if (c.subtype === 'Stadium') return 4;
+      return 2;
+    }
+    if (c.supertype === 'Energy') return 5;
+    return 9;
+  }
   function getCard(cardId: string): Card | undefined { return pool.get(cardId); }
   function hpRemaining(inst: CardInstance): number {
     return Math.max(0, getEffectiveHP(inst, pool, game ?? undefined) - inst.damage);
@@ -7169,7 +7182,12 @@
               if (entry) entry.count++;
               else map.set(c.cardId, { name, count: 1, cardId: c.cardId });
             }
-            return [...map.values()].sort((a,b)=>b.count-a.count || a.name.localeCompare(b.name));
+            // v5.322: 同棄牌區排序 — 寶可夢→物品→支援者→場地→能量, 同類內 count desc 再 name
+            return [...map.values()].sort((a,b)=>{
+              const ra = cardTypeRank(pool.get(a.cardId)), rb = cardTypeRank(pool.get(b.cardId));
+              if (ra !== rb) return ra - rb;
+              return b.count - a.count || a.name.localeCompare(b.name);
+            });
           })()}
           <details class="full-deck-view" open={selectionItems.length === 0}>
             <summary>📖 查看牌庫剩餘全部（{srcP.deck.length} 張，推斷獎賞卡）</summary>
@@ -7205,7 +7223,13 @@
             ?? []
           )}
           {@const pickableIids = new Set(selectionItems.map(c => c.iid))}
-          {@const peekedOthers = srcP2.deck.filter(c => peekIids.has(c.iid) && !pickableIids.has(c.iid))}
+          {@const peekedOthers = srcP2.deck.filter(c => peekIids.has(c.iid) && !pickableIids.has(c.iid))
+            .slice().sort((a,b) => {
+              const ca = pool.get(a.cardId), cb = pool.get(b.cardId);
+              const ra = cardTypeRank(ca), rb = cardTypeRank(cb);
+              if (ra !== rb) return ra - rb;
+              return (ca?.name ?? '').localeCompare(cb?.name ?? '');
+            })}
           {@const remainingDeck = srcP2.deck.length - peekIids.size}
           {#if peekedOthers.length > 0}
             <details class="full-deck-view">
@@ -7233,7 +7257,13 @@
           && pendingSelection.params?.concealed !== true}
           {@const srcHand = game.players[pendingSelection.sourcePlayerIdx].hand}
           {@const pickableIidsHD = new Set(selectionItems.map(c => c.iid))}
-          {@const otherHand = srcHand.filter(c => !pickableIidsHD.has(c.iid))}
+          {@const otherHand = srcHand.filter(c => !pickableIidsHD.has(c.iid))
+            .slice().sort((a,b) => {
+              const ca = pool.get(a.cardId), cb = pool.get(b.cardId);
+              const ra = cardTypeRank(ca), rb = cardTypeRank(cb);
+              if (ra !== rb) return ra - rb;
+              return (ca?.name ?? '').localeCompare(cb?.name ?? '');
+            })}
           {#if otherHand.length > 0}
             <details class="full-deck-view">
               <summary>🔍 對手手牌其餘 {otherHand.length} 張（本次不可丟棄，僅供查看）</summary>
@@ -8019,7 +8049,12 @@
           <!-- v5.175：揭示其他翻到的卡 (非寶可夢 / 無招式寶可夢) - 仿寶可裝置3.0 details 下拉
                對玩家來說是重要資訊：得知對手牌庫頂 10 張內容 (含支援者/能量/物品/道具) -->
           {@const _pickableIids = new Set(rocketCommandPicker.pokeList.map(p => p.inst.iid))}
-          {@const _peekedOthers = rocketCommandPicker.top10All.filter(p => !_pickableIids.has(p.inst.iid))}
+          {@const _peekedOthers = rocketCommandPicker.top10All.filter(p => !_pickableIids.has(p.inst.iid))
+            .slice().sort((a,b) => {
+              const ra = cardTypeRank(a.card), rb = cardTypeRank(b.card);
+              if (ra !== rb) return ra - rb;
+              return (a.card?.name ?? '').localeCompare(b.card?.name ?? '');
+            })}
           {#if _peekedOthers.length > 0}
             <details class="full-deck-view" open>
               <summary>🔍 翻到的其他 {_peekedOthers.length} 張（公開揭示，本次不可複製招式）</summary>
