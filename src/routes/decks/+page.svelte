@@ -93,6 +93,7 @@
   //   - pointerup / pointercancel → commit swap + cleanup (window listener 確保 always fire)
   let dragDeckId = $state<string | null>(null);
   let dragOverId = $state<string | null>(null);
+  let dragOverPlacement = $state<'before' | 'after'>('before');  // v5.316: 拖到 target 上半 → 插之前, 下半 → 插之後
   let dragDeltaY = $state(0);
   let _dragStartY = 0;
   let _dragPointerId: number | null = null;
@@ -112,6 +113,7 @@
     _dragMoveHandler = null; _dragUpHandler = null;
     _dragHandleEl = null; _dragPointerId = null;
     dragDeckId = null; dragOverId = null; dragDeltaY = 0;
+    dragOverPlacement = 'before';
   }
 
   function onDragHandlePointerDown(e: PointerEvent, deckId: string) {
@@ -134,18 +136,31 @@
       dragDeltaY = ev.clientY - _dragStartY;
       const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
       const li = el?.closest('li[data-deckid]') as HTMLElement | null;
-      dragOverId = li?.dataset.deckid ?? null;
+      const overId = li?.dataset.deckid ?? null;
+      // v5.316: 排除 self (lifted li 雖 pointer-events:none, 但保險). 上下半部判定 placement.
+      if (overId && overId !== dragDeckId && li) {
+        const rect = li.getBoundingClientRect();
+        const midpoint = rect.top + rect.height / 2;
+        dragOverPlacement = ev.clientY < midpoint ? 'before' : 'after';
+        dragOverId = overId;
+      }
+      // else: keep last dragOverId (玩家若 hover 回 lifted 自己, 不更新)
     };
     _dragUpHandler = (ev: PointerEvent) => {
       if (ev.pointerId !== _dragPointerId) return;
-      // commit swap 若 hover 在不同 deck 上
+      // v5.316: commit swap — 用 placement (before/after) 決定插入位置
       if (dragDeckId && dragOverId && dragDeckId !== dragOverId) {
         const arr = [...decks];
         const from = arr.findIndex(d => d.id === dragDeckId);
         const to = arr.findIndex(d => d.id === dragOverId);
         if (from >= 0 && to >= 0) {
           const [moved] = arr.splice(from, 1);
-          arr.splice(to, 0, moved);
+          // 修正 to index — 若 from < to, 移除後 to 變 to-1
+          let insertIdx = from < to ? to - 1 : to;
+          if (dragOverPlacement === 'after') insertIdx += 1;
+          // clamp
+          insertIdx = Math.max(0, Math.min(arr.length, insertIdx));
+          arr.splice(insertIdx, 0, moved);
           decks = arr;
           saveDecks(arr);
         }
@@ -1562,7 +1577,8 @@
         {#each decks as d (d.id)}
           <li class:active={d.id === activeId}
               class:drag-source={dragDeckId === d.id}
-              class:drag-over={dragDeckId !== null && dragOverId === d.id && dragDeckId !== d.id}
+              class:drag-over-before={dragDeckId !== null && dragOverId === d.id && dragDeckId !== d.id && dragOverPlacement === 'before'}
+              class:drag-over-after={dragDeckId !== null && dragOverId === d.id && dragDeckId !== d.id && dragOverPlacement === 'after'}
               data-deckid={d.id}
               style={dragDeckId === d.id ? `transform: translateY(${dragDeltaY}px) scale(1.04);` : ''}>
             <!-- v5.315: 只有 ⠿ 把手能觸發拖曳, 其他地方一般 click/scroll -->
@@ -2706,14 +2722,14 @@
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
     z-index: 100;
     opacity: 0.95;
-    /* v5.315: 拿掉 pointer-events:none — pointerup 改 window listener 收, lifted li 仍可接 events
-       (避免 v5.313 「拖起來放不回」bug: pointer-events:none → pointerup 永遠不 fire → stuck) */
+    /* v5.316: 整 li 加 pointer-events:none → elementFromPoint 穿透到下方真實 li,
+       才能正確算 dragOverId. 不影響 pointerup — window listener 不靠 li 接 events.
+       (修 v5.315「拖到位置放手沒換」bug) */
+    pointer-events: none;
   }
-  .deck-list li.drag-source * { pointer-events: none; }  /* 內部按鈕不擋 elementFromPoint */
-  .deck-list li.drag-over {
-    border-top: 3px solid #ffd700;
-    box-shadow: inset 0 4px 0 rgba(255, 215, 0, 0.3);
-  }
+  /* v5.316: 上下半部不同視覺 — drag-over-before 上邊金線, drag-over-after 下邊金線 */
+  .deck-list li.drag-over-before { box-shadow: inset 0 3px 0 #ffd700, 0 -2px 0 #ffd700; }
+  .deck-list li.drag-over-after { box-shadow: inset 0 -3px 0 #ffd700, 0 2px 0 #ffd700; }
 
   /* v5.312: 常用卡牌 ⭐ 按鈕 — 放在 + 加入按鈕左邊 (取代 v5.310 卡圖角標, 避免擋圖) */
   .pick-fav-btn { color: #888; transition: color 0.15s, background 0.15s, border-color 0.15s; }

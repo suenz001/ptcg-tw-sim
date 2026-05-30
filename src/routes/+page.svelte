@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.316</span> 牌組拖曳放置位置修正</summary>
+        <ul>
+          <li>修正：拖曳牌組時看似拖到對的位置，放手後順序沒變的 bug。原因是被拉起的牌組元素本身擋住了下方位置偵測。已修為穿透偵測，並依手指位於目標牌組「上半 / 下半」判定要插入到目標之「前 / 後」。</li>
+          <li>新增：拖曳時目標牌組會顯示金色邊線 — 上邊線 = 將插入到此牌組之前；下邊線 = 將插入到此牌組之後，視覺更明確。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.315</span> 牌組拖曳改 ⠿ 把手觸發 + 修拖起放不回</summary>
         <ul>
           <li>修正：v5.313 拖起牌組後放手時牌組卡住放不回的 bug。改寫底層事件處理：拖起後的事件改用全域監聽，即使被拖起的牌組元素暫時不接收滑鼠事件，鬆手也一定會 commit + 復位。</li>
