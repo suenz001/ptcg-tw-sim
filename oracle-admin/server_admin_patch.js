@@ -1301,7 +1301,36 @@ import('firebase-admin').then(async ({ default: admin }) => {
           { $limit: 10000 },
         ];
         const cards = await db.collection('matchRecords').aggregate(pipeline).toArray();
-        res.json({ cards, minDecks, mode: req.query.mode || 'all', excludeAI, generatedAt: Date.now() });
+        // v0.94: diagnostic — 找 root cause 為何數字小
+        let diagnostics = {};
+        try {
+          const [diag] = await db.collection('matchRecords').aggregate([
+            { $match: baseMatch },
+            { $facet: {
+              totalMatches: [{ $count: 'n' }],
+              withCardCounts: [
+                { $match: { $or: [
+                  { 'p1.cardCounts': { $exists: true, $not: { $size: 0 } } },
+                  { 'p2.cardCounts': { $exists: true, $not: { $size: 0 } } },
+                ] } },
+                { $count: 'n' },
+              ],
+              sampleP1: [
+                { $match: { 'p1.cardCounts': { $exists: true } } },
+                { $limit: 1 },
+                { $project: { _id: 0, sampleSize: { $size: { $objectToArray: { $ifNull: ['$p1.cardCounts', {}] } } } } },
+              ],
+            }},
+          ]).toArray();
+          diagnostics = {
+            totalMatchRecords: diag.totalMatches?.[0]?.n || 0,
+            recordsWithCardCounts: diag.withCardCounts?.[0]?.n || 0,
+            sampleP1CardCountSize: diag.sampleP1?.[0]?.sampleSize || 0,
+            topCardTotalDecks: cards[0]?.totalDecks || 0,
+            cardsReturnedCount: cards.length,
+          };
+        } catch (de) { diagnostics = { error: de.message }; }
+        res.json({ cards, minDecks, mode: req.query.mode || 'all', excludeAI, generatedAt: Date.now(), diagnostics });
       } catch (e) {
         console.warn('[stats winrate] error:', e.message);
         res.status(500).json({ error: e.message });
@@ -1311,6 +1340,30 @@ import('firebase-admin').then(async ({ default: admin }) => {
     // 2.4 時段熱力圖 — 24 小時 × 7 星期幾 對戰量分佈
     //   使用 Asia/Taipei 時區（玩家活動時間貼合台灣）
     //   ?mode=online|local
+    // v0.94: 玩家儲存的牌組 list (從 Firestore users/{uid}/decks)
+    app.get('/api/admin/users/by-email/:email/decks', requireFirebaseAdmin, requireFb, async (req, res) => {
+      try {
+        const email = req.params.email;
+        if (!email || !email.includes('@')) return res.status(400).json({ error: 'email 必填' });
+        const user = await adminAuth.getUserByEmail(email).catch(() => null);
+        if (!user) return res.status(404).json({ error: 'Firebase Auth 找不到此 email' });
+        const snap = await adminDb.collection('users').doc(user.uid).collection('decks').get();
+        const decks = snap.docs.map(d => {
+          const data = d.data() || {};
+          return {
+            id: data.id || d.id,
+            name: data.name || '(未命名)',
+            entries: data.entries || [],
+            updatedAt: data.updatedAt || null,
+          };
+        });
+        res.json({ uid: user.uid, decks });
+      } catch (e) {
+        console.warn('[users/decks] error:', e.message);
+        res.status(500).json({ error: e.message });
+      }
+    });
+
     app.get('/api/admin/stats/heatmap', requireFirebaseAdmin, async (req, res) => {
       if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
       const baseMatch = {};

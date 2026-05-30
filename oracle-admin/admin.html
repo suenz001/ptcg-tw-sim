@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v0.93</title>
+<title>PTCG Oracle Admin v0.94</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.93</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.94</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -503,8 +503,11 @@ async function ensureCardIndex() {
           for (const c of cards) {
             // v0.83 擴充：加 supertype/subtype/pokemonType 供統計分群用 + 預計算 canonicalKey
             const canonicalKey = computeCanonicalKey(c);
+            // v0.94: displayName = name strip 括號註解 (「老大的指令（烏羽）」→「老大的指令」)
+            const displayName = (c.name || '').replace(/[（(][^）)]*[）)]/g, '').trim() || c.name;
             map[c.id] = {
               name: c.name,
+              displayName,
               setCode: c.setCode || s.code,
               collectorNumber: c.collectorNumber || '',
               regulationMark: c.regulationMark || '',
@@ -2030,6 +2033,7 @@ function normalizeWinReason(raw) {
   if (/勝利象徵|特殊勝利條件/.test(s)) return '⭐ 特殊勝利條件 (勝利象徵)';
   if (/投降|認輸/.test(s)) return '🏳️ 對手投降';
   if (/超時|逾時|逾過/.test(s)) return '⏰ 對手超時';
+  if (/中途離開|離開房間|斷線|斷開|退出|不在場|disconnect/i.test(s)) return '👋 玩家中途離開';
   return '其他：' + s.slice(0, 30);
 }
 function renderWinReasons(s) {
@@ -2107,7 +2111,7 @@ function renderTopCards(c) {
             ${groups.map((g, i) => {
               const info = g.repInfo;
               const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本合併計算">${g.variants} 版本</span>` : '';
-              const name = `${escapeHtml(info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}${info.regulationMark ? '·' + info.regulationMark : ''}</span>`;
+              const name = `${escapeHtml(info.displayName || info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}${info.regulationMark ? '·' + info.regulationMark : ''}</span>`;
               const supertype = info?.supertype || '?';
               const coverage = c.totalDecks > 0 ? (g.deckCount / c.totalDecks * 100).toFixed(1) : '0';
               return `<tr><td>${i + 1}</td><td>${name}</td><td><span class="small muted">${supertype}</span></td><td>${g.totalCount}</td><td>${g.deckCount}</td><td>${coverage}%</td></tr>`;
@@ -2148,7 +2152,7 @@ function renderTopPokemon(c) {
               const isSupport = groupHasSupport(g);
               const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本合併計算">${g.variants} 版本</span>` : '';
               const tagBtn = `<button class="tag-btn ${isSupport ? 'tagged' : ''}" onclick="toggleSupportTag('${escapeHtml(g.repCardId)}')" title="${isSupport ? '取消支援型' : '標為支援型'}">${isSupport ? '⭐ 支援型' : '☆ 標支援型'}</button>`;
-              return `<tr><td>${i + 1}</td><td>${escapeHtml(info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}${info.regulationMark ? '·' + info.regulationMark : ''}</span></td><td><span class="small muted">${info.subtype || ''}</span></td><td>${g.totalCount}</td><td>${g.deckCount}</td><td>${tagBtn}</td></tr>`;
+              return `<tr><td>${i + 1}</td><td>${escapeHtml(info.displayName || info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}${info.regulationMark ? '·' + info.regulationMark : ''}</span></td><td><span class="small muted">${info.subtype || ''}</span></td><td>${g.totalCount}</td><td>${g.deckCount}</td><td>${tagBtn}</td></tr>`;
             }).join('')}
           </tbody>
         </table>
@@ -2182,7 +2186,7 @@ function renderTopTrainers(c) {
               ${b.items.slice(0, 20).map(g => {
                 const info = g.repInfo;
                 const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本合併">${g.variants} 版</span>` : '';
-                return `<li><b>${escapeHtml(info.name)}</b>${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}</span> <span class="topcard-stat">×${g.totalCount} / ${g.deckCount} 副</span></li>`;
+                return `<li><b>${escapeHtml(info.displayName || info.name)}</b>${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}</span> <span class="topcard-stat">×${g.totalCount} / ${g.deckCount} 副</span></li>`;
               }).join('')}
             </ol>
           </div>
@@ -2397,7 +2401,7 @@ window.showPlayerDetail = async function(email) {
   const topCards = (data.topCards || []).slice(0, 20);
   const cardRows = topCards.map((card, i) => {
     const info = cardInfoMap[card.cardId];
-    const name = info ? `${escapeHtml(info.name)} <span class="small muted">${info.setCode}·${info.collectorNumber}</span>` : `<code>#${card.cardId}</code>`;
+    const name = info ? `${escapeHtml(info.displayName || info.name)} <span class="small muted">${info.setCode}·${info.collectorNumber}</span>` : `<code>#${card.cardId}</code>`;
     return `<tr><td>${i + 1}</td><td>${name}</td><td>${card.totalCount}</td><td>${card.deckCount}</td></tr>`;
   }).join('');
   document.getElementById('modal-container').innerHTML = `
@@ -2419,11 +2423,38 @@ window.showPlayerDetail = async function(email) {
         <div class="stats-box" style="padding:8px;">
           ${cardRows ? `<table><thead><tr><th>#</th><th>卡牌</th><th>累計使用張數</th><th>出現牌組</th></tr></thead><tbody>${cardRows}</tbody></table>` : '<div class="empty">無資料</div>'}
         </div>
+        <!-- v0.94: 玩家儲存的牌組 list (從 Firestore users/{uid}/decks) -->
+        <h4 style="margin:16px 0 8px;">💾 玩家儲存的牌組</h4>
+        <div id="player-decks-section" class="stats-box" style="padding:8px;"><div class="empty">Loading…</div></div>
         <div style="margin-top:16px; text-align:right;">
           <button onclick="closeModal()">關閉</button>
         </div>
       </div>
     </div>`;
+  // v0.94: 載入儲存牌組 list
+  if (email && email.includes('@')) {
+    const decksDiv = document.getElementById('player-decks-section');
+    try {
+      const dRes = await api('/api/admin/users/by-email/' + encodeURIComponent(email) + '/decks');
+      if (dRes?.error) {
+        decksDiv.innerHTML = `<div class="empty">讀取失敗：${escapeHtml(dRes.error)}</div>`;
+      } else if (!dRes?.decks || dRes.decks.length === 0) {
+        decksDiv.innerHTML = '<div class="empty">此玩家無儲存的牌組</div>';
+      } else {
+        const rows = dRes.decks.map((d, i) => {
+          const totalCards = (d.entries || []).reduce((sum, e) => sum + (e.count || 0), 0);
+          return `<tr><td>${i+1}</td><td><b>${escapeHtml(d.name || '(未命名)')}</b></td><td>${totalCards} 張</td><td class="small muted">${escapeHtml(String(d.updatedAt || '-')).slice(0, 19)}</td></tr>`;
+        }).join('');
+        decksDiv.innerHTML = `<table><thead><tr><th>#</th><th>牌組名稱</th><th>卡張數</th><th>更新時間</th></tr></thead><tbody>${rows}</tbody></table>
+          <div class="small muted" style="margin-top:6px;">共 ${dRes.decks.length} 副牌組</div>`;
+      }
+    } catch (e) {
+      decksDiv.innerHTML = `<div class="empty">讀取失敗：${escapeHtml(String(e))}</div>`;
+    }
+  } else {
+    const decksDiv = document.getElementById('player-decks-section');
+    if (decksDiv) decksDiv.innerHTML = '<div class="empty">匿名玩家無 email, 無法查 Firestore 牌組</div>';
+  }
 };
 
 // 2.3 卡牌勝率（依 canonical key 合併版本；filter 主力/支援型）
@@ -2460,6 +2491,13 @@ function renderCardWinrate(w) {
   return `
     <section class="stats-section">
       <h3>🏆 2.3 卡牌勝率 Top 50 <span class="small muted">（至少 ${w.minDecks} 副；排除 AI 對戰；同名同效合併）</span></h3>
+      ${w.diagnostics ? `<div class="small muted" style="margin-bottom:8px; padding:6px 10px; background:#f0f7ff; border-radius:4px;">
+        🔍 診斷：matchRecords 總數 <b>${w.diagnostics.totalMatchRecords || 0}</b> 筆 ·
+        含 cardCounts 的 <b>${w.diagnostics.recordsWithCardCounts || 0}</b> 筆 ·
+        sample 牌組卡張類別數 <b>${w.diagnostics.sampleP1CardCountSize || 0}</b> ·
+        Top 卡 totalDecks (server raw) <b>${w.diagnostics.topCardTotalDecks || 0}</b> ·
+        server 回 <b>${w.diagnostics.cardsReturnedCount || 0}</b> 張 (上限 10000)
+      </div>` : ''}
       <div class="toolbar" style="margin-bottom:10px;">
         <span class="filter-btn ${winrateFilterMode === 'all' ? 'active' : ''}" onclick="setWinrateFilter('all')">全部 (${groups.length})</span>
         <span class="filter-btn ${winrateFilterMode === 'main' ? 'active' : ''}" onclick="setWinrateFilter('main')">⚔️ 主力打手</span>
@@ -2478,7 +2516,7 @@ function renderCardWinrate(w) {
               const wrColor = g.winRate > 0.55 ? '#2e7d32' : (g.winRate < 0.45 ? '#c62828' : '#1a2332');
               return `<tr>
                 <td>${i + 1}</td>
-                <td>${escapeHtml(info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}</span></td>
+                <td>${escapeHtml(info.displayName || info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}</span></td>
                 <td><span class="small muted">${info.supertype || ''}</span></td>
                 <td>${g.totalDecksAgg}</td>
                 <td>${g.winDecks}</td>
