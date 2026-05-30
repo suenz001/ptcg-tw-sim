@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v0.95</title>
+<title>PTCG Oracle Admin v0.96</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.95</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.96</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1069,6 +1069,74 @@ window.showDeckModal = async function(code, source) {
       </div>
     </div>
   `;
+};
+
+// v0.96: 牌組明細 modal — 從玩家儲存牌組 list 觸發
+window.showDeckDetail = async function(deckId) {
+  const deck = window._lastPlayerDecks?.[deckId];
+  if (!deck) { alert('找不到該牌組'); return; }
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="min-width:520px;"><h3>🃏 牌組明細</h3><div class="empty">載入卡牌資料中…</div></div>
+    </div>`;
+  await ensureCardIndex();
+  // 排序: 寶可夢→物品→支援者→場地→能量, 同類內 count desc, 同 count 用 name
+  const typeRank = (info) => {
+    if (!info) return 9;
+    if (info.supertype === 'Pokemon') return 1;
+    if (info.supertype === 'Trainer') {
+      if (info.subtype === 'Supporter') return 3;
+      if (info.subtype === 'Stadium') return 4;
+      return 2;
+    }
+    if (info.supertype === 'Energy') return 5;
+    return 9;
+  };
+  const entries = (deck.entries || []).slice().sort((a, b) => {
+    const ia = cardInfoMap[a.cardId], ib = cardInfoMap[b.cardId];
+    const ra = typeRank(ia), rb = typeRank(ib);
+    if (ra !== rb) return ra - rb;
+    if (b.count !== a.count) return b.count - a.count;
+    return (ia?.name || '').localeCompare(ib?.name || '', 'zh-Hant');
+  });
+  const totalCards = entries.reduce((s, e) => s + (e.count || 0), 0);
+  const typeLabel = (info) => {
+    if (!info) return '?';
+    if (info.supertype === 'Pokemon') return '寶可夢';
+    if (info.supertype === 'Trainer') {
+      if (info.subtype === 'Supporter') return '支援者';
+      if (info.subtype === 'Stadium') return '競技場';
+      if (info.subtype === 'PokemonTool') return '寶可夢道具';
+      return '物品';
+    }
+    if (info.supertype === 'Energy') return info.subtype === 'Basic' ? '基本能量' : '特殊能量';
+    return '?';
+  };
+  const rows = entries.map(e => {
+    const info = cardInfoMap[e.cardId];
+    const name = info ? `${escapeHtml(info.displayName || info.name)} <span class="small muted">${info.setCode}·${info.collectorNumber}${info.regulationMark ? '·' + info.regulationMark : ''}</span>` : `<code>#${escapeHtml(e.cardId)}</code>`;
+    return `<tr><td>×${e.count}</td><td>${name}</td><td><span class="small muted">${typeLabel(info)}</span></td></tr>`;
+  }).join('');
+  // 文字格式給複製用
+  const copyText = entries.map(e => {
+    const info = cardInfoMap[e.cardId];
+    return `${e.count} ${info?.displayName || info?.name || e.cardId}${info ? ' (' + info.setCode + '·' + info.collectorNumber + ')' : ''}`;
+  }).join('\n');
+  window._lastDeckCopyText = `${deck.name || '(未命名)'} — 共 ${totalCards} 張 / 種類 ${entries.length}\n\n` + copyText;
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="min-width:600px; max-width:760px; max-height:88vh; overflow-y:auto;">
+        <h3>🃏 牌組明細：${escapeHtml(deck.name || '(未命名)')}</h3>
+        <div class="small muted" style="margin-bottom:8px;">共 <b>${totalCards}</b> 張 / 種類 <b>${entries.length}</b> · 更新 ${escapeHtml(String(deck.updatedAt || '-')).slice(0, 19)}</div>
+        <div class="stats-box" style="padding:8px;">
+          ${rows ? `<table><thead><tr><th>張數</th><th>卡牌</th><th>類別</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">此牌組無卡牌</div>'}
+        </div>
+        <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+          <button onclick="navigator.clipboard.writeText(window._lastDeckCopyText || ''); this.textContent='✅ 已複製'; setTimeout(()=>this.textContent='📋 複製文字',2000);">📋 複製文字</button>
+          <button onclick="closeModal()">關閉</button>
+        </div>
+      </div>
+    </div>`;
 };
 
 window.closeModal = function() {
@@ -2456,11 +2524,20 @@ window.showPlayerDetail = async function(email) {
       } else if (!dRes?.decks || dRes.decks.length === 0) {
         decksDiv.innerHTML = '<div class="empty">此玩家無儲存的牌組</div>';
       } else {
+        // v0.96: cache 牌組給 showDeckDetail 用; 牌組名稱可點看明細
+        window._lastPlayerDecks = window._lastPlayerDecks || {};
         const rows = dRes.decks.map((d, i) => {
           const totalCards = (d.entries || []).reduce((sum, e) => sum + (e.count || 0), 0);
-          return `<tr><td>${i+1}</td><td><b>${escapeHtml(d.name || '(未命名)')}</b></td><td>${totalCards} 張</td><td class="small muted">${escapeHtml(String(d.updatedAt || '-')).slice(0, 19)}</td></tr>`;
+          const deckIdSafe = String(d.id || ('idx' + i)).replace(/'/g, '&apos;');
+          window._lastPlayerDecks[deckIdSafe] = d;
+          return `<tr>
+            <td>${i+1}</td>
+            <td><a href="#" class="player-name" onclick="showDeckDetail('${deckIdSafe}'); return false;" title="查看牌組明細"><b>${escapeHtml(d.name || '(未命名)')}</b></a></td>
+            <td>${totalCards} 張</td>
+            <td class="small muted">${escapeHtml(String(d.updatedAt || '-')).slice(0, 19)}</td>
+          </tr>`;
         }).join('');
-        decksDiv.innerHTML = `<table><thead><tr><th>#</th><th>牌組名稱</th><th>卡張數</th><th>更新時間</th></tr></thead><tbody>${rows}</tbody></table>
+        decksDiv.innerHTML = `<table><thead><tr><th>#</th><th>牌組名稱（點看明細）</th><th>卡張數</th><th>更新時間</th></tr></thead><tbody>${rows}</tbody></table>
           <div class="small muted" style="margin-top:6px;">共 ${dRes.decks.length} 副牌組</div>`;
       }
     } catch (e) {
