@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.00</title>
+<title>PTCG Oracle Admin v1.01</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.00</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.01</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2067,8 +2067,6 @@ function renderFirstMover(s) {
       <h3>👑 1.2 先攻 vs 後攻勝率</h3>
       <div class="fm-table">
         ${sub('全部對戰', fm.all)}
-        ${sub('排除 AI（含本機真人）', fm.humanOnly)}
-        ${sub('只看線上真人', fm.onlineHumanOnly)}
       </div>
     </section>
   `;
@@ -2578,6 +2576,120 @@ window.showPlayerDetail = async function(email) {
   }
 };
 
+// v1.01：2.3 即時搜尋 + 點卡看代表牌組
+let winrateSearch = '';
+let _winrateGroups = [];
+window.filterWinrate = function(q) {
+  winrateSearch = q;
+  const tb = document.getElementById('winrate-tbody');
+  if (tb) tb.innerHTML = winrateRowsHtml(_winrateGroups);
+};
+function winrateRowHtml(g, i) {
+  const info = g.repInfo;
+  if (!info) return '';
+  const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本">${g.variants} 版本</span>` : '';
+  const wrPct = (g.winRate * 100).toFixed(1);
+  const wrColor = g.winRate > 0.55 ? '#2e7d32' : (g.winRate < 0.45 ? '#c62828' : '#1a2332');
+  const ids = g.cardIds.join(',');
+  return `<tr>
+    <td>${i + 1}</td>
+    <td><span style="color:#1565c0; cursor:pointer; text-decoration:underline dotted;" title="看含此卡的代表牌組" onclick="showCardArchetype('${ids}')">${escapeHtml(info.displayName || info.name)}</span>${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}</span></td>
+    <td><span class="small muted">${info.supertype || ''}</span></td>
+    <td>${g.totalDecksAgg}</td>
+    <td>${g.winDecks}</td>
+    <td style="color:${wrColor}; font-weight:600;">${wrPct}%</td>
+  </tr>`;
+}
+function winrateRowsHtml(groups) {
+  const q = (winrateSearch || '').trim().toLowerCase();
+  let list = groups;
+  if (q) list = groups.filter(g => (((g.repInfo && (g.repInfo.displayName || g.repInfo.name)) || '').toLowerCase().includes(q)));
+  const shown = q ? list.slice(0, 200) : list.slice(0, 50);
+  if (shown.length === 0) return '<tr><td colspan="6" class="empty" style="text-align:center; padding:18px;">查無符合卡牌</td></tr>';
+  return shown.map((g, i) => winrateRowHtml(g, i)).join('');
+}
+
+// v1.01：點 2.3 卡牌 → 聚合「含該卡的牌組」算出代表性 60 張牌組
+window.showCardArchetype = async function(idsCSV) {
+  await ensureCardIndex();
+  const ids = String(idsCSV).split(',').filter(Boolean);
+  const firstInfo = cardInfoMap[ids[0]] || {};
+  const cardName = firstInfo.displayName || firstInfo.name || ids[0];
+  const modeLabelMap = { online: '🌐 線上對戰', local: '🏠 本機（含 AI）', all: '全部資料' };
+  const rangeLabel = modeLabelMap[statsMode] || '全部資料';
+  document.getElementById('modal-container').innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>🃏 含「${escapeHtml(cardName)}」的代表牌組</h3><div class="empty">統計中…</div></div></div>`;
+  const modeQ = statsMode === 'all' ? '' : ('mode=' + statsMode + '&');
+  const data = await api('/api/admin/stats/cards/archetype?' + modeQ + 'ids=' + encodeURIComponent(idsCSV));
+  const close = `<div style="margin-top:16px; text-align:right;"><button onclick="closeModal()">關閉</button></div>`;
+  if (!data || data.error || !data.totalDecks) {
+    document.getElementById('modal-container').innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>🃏 含「${escapeHtml(cardName)}」的代表牌組</h3><div class="empty">樣本不足：在「${rangeLabel}」範圍找到 ${(data && data.totalDecks) || 0} 副含此卡的牌組。${data && data.error ? '<br>錯誤：' + escapeHtml(data.error) : '<br>試著把上方「資料範圍」切到更大的選項。'}</div>${close}</div></div>`;
+    return;
+  }
+  const totalDecks = data.totalDecks;
+  const byCanon = new Map();
+  for (const c of (data.cards || [])) {
+    const info = cardInfoMap[c.cardId];
+    if (!info) continue;
+    const key = info.canonicalKey;
+    let g = byCanon.get(key);
+    if (!g) { g = { info, deckCount: 0, distMap: new Map() }; byCanon.set(key, g); }
+    g.deckCount += c.deckCount;
+    for (const d of (c.countDist || [])) g.distMap.set(d.cnt, (g.distMap.get(d.cnt) || 0) + d.n);
+  }
+  const groups = [...byCanon.values()].map(g => {
+    let bestCnt = 1, bestN = -1;
+    for (const [cnt, n] of g.distMap) { if (n > bestN || (n === bestN && cnt > bestCnt)) { bestN = n; bestCnt = cnt; } }
+    return { info: g.info, deckCount: g.deckCount, inclusion: Math.min(100, Math.round(g.deckCount / totalDecks * 100)), modalCount: bestCnt };
+  });
+  const targetKey = firstInfo.canonicalKey;
+  groups.sort((a, b) => {
+    const at = a.info.canonicalKey === targetKey ? 1 : 0, bt = b.info.canonicalKey === targetKey ? 1 : 0;
+    if (at !== bt) return bt - at;
+    return b.deckCount - a.deckCount;
+  });
+  const isBasicEnergy = (info) => info.supertype === 'Energy' && info.subtype === 'Basic';
+  const picked = [];
+  let total = 0;
+  for (const g of groups) {
+    if (total >= 60) break;
+    let copies = g.modalCount;
+    if (!isBasicEnergy(g.info)) copies = Math.min(copies, 4);
+    copies = Math.min(copies, 60 - total);
+    if (copies <= 0) continue;
+    picked.push({ info: g.info, copies, inclusion: g.inclusion });
+    total += copies;
+  }
+  const typeOrder = (info) => {
+    if (info.supertype === 'Pokemon') return 0;
+    if (info.supertype === 'Trainer') { const st = info.subtype || ''; if (st === 'Supporter') return 2; if (st === 'Stadium') return 3; return 1; }
+    if (info.supertype === 'Energy') return 4;
+    return 5;
+  };
+  picked.sort((a, b) => { const r = typeOrder(a.info) - typeOrder(b.info); if (r) return r; if (b.copies !== a.copies) return b.copies - a.copies; return b.inclusion - a.inclusion; });
+  const SECTIONS = [['🐾 寶可夢', 0], ['🛠️ 物品 / 工具', 1], ['🧑 支援者', 2], ['🏟️ 競技場', 3], ['⚡ 能量', 4]];
+  const sectionsHtml = SECTIONS.map(([label, rank]) => {
+    const rows = picked.filter(p => typeOrder(p.info) === rank);
+    if (!rows.length) return '';
+    const sub = rows.reduce((sx, p) => sx + p.copies, 0);
+    return `<div style="margin-bottom:10px;"><div style="font-weight:600; color:#1a2332; border-bottom:1px solid #e3e8ef; padding-bottom:3px; margin-bottom:4px;">${label}（${sub}）</div>` +
+      rows.map(p => `<div class="deck-entry" style="display:flex; justify-content:space-between; gap:10px;"><span><b>${p.copies}×</b> ${escapeHtml(p.info.displayName || p.info.name)} <span class="small muted">${p.info.setCode || ''}·${p.info.collectorNumber || ''}</span></span><span class="small muted">${p.inclusion}% 牌組採用</span></div>`).join('') +
+      `</div>`;
+  }).join('');
+  const copyText = picked.map(p => `${p.copies} ${p.info.displayName || p.info.name}`).join('\n');
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="min-width:560px;">
+        <h3>🃏 含「${escapeHtml(cardName)}」的代表牌組</h3>
+        <div class="small muted" style="margin-bottom:10px;">資料範圍：<b>${rangeLabel}</b> · 樣本 <b>${totalDecks}</b> 副含此卡的牌組 · 合計 <b>${total}</b> 張<br>說明：取「含此卡的所有牌組」中，各卡『被放入比例』最高者，每張採其最常見張數湊成 60 張（聚合代表牌組，僅供參考，非單一真實牌組）。</div>
+        ${sectionsHtml || '<div class="empty">無足夠卡牌資料</div>'}
+        <details style="margin-top:10px;"><summary class="small muted" style="cursor:pointer;">📋 複製牌表（張數 卡名）</summary>
+          <textarea readonly style="width:100%; height:160px; margin-top:6px; font-family:monospace; font-size:12px;">${escapeHtml(copyText)}</textarea>
+        </details>
+        ${close}
+      </div>
+    </div>`;
+};
+
 // 2.3 卡牌勝率（依 canonical key 合併版本；filter 主力/支援型）
 function renderCardWinrate(w) {
   if (!w) return '<section class="stats-section"><h3>🏆 2.3 卡牌勝率</h3><div class="empty">無資料</div></section>';
@@ -2620,7 +2732,7 @@ function renderCardWinrate(w) {
     va = a[winrateSort] ?? 0; vb = b[winrateSort] ?? 0;
     return (va - vb) * dir;
   });
-  const top = filtered.slice(0, 50);
+  _winrateGroups = filtered;  // v1.01: 給 filterWinrate 即時搜尋用
   return `
     <section class="stats-section">
       <h3>🏆 2.3 卡牌勝率 Top 50 <span class="small muted">（僅寶可夢；至少 ${w.minDecks} 副；排除 AI 對戰（=只算有房號對戰）；同名同效合併）</span></h3>
@@ -2642,6 +2754,10 @@ function renderCardWinrate(w) {
         <span class="filter-btn ${winrateFilterMode === 'support' ? 'active' : ''}" onclick="setWinrateFilter('support')">⭐ 支援型</span>
         <span class="small muted" style="margin-left:auto;">勝率 = 勝方牌組出現次數 / 所有牌組出現次數</span>
       </div>
+      <div style="margin-bottom:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <input id="winrate-search" class="search-box" placeholder="🔎 搜尋卡牌名稱…" value="${escapeHtml(winrateSearch)}" oninput="filterWinrate(this.value)" style="padding:6px 10px; min-width:240px;" />
+        <span class="small muted">💡 點卡牌名稱可看「含該卡的代表牌組」</span>
+      </div>
       <div class="stats-box" style="overflow-x:auto;">
         <table>
           <thead><tr>
@@ -2652,22 +2768,8 @@ function renderCardWinrate(w) {
             <th class="sortable-th" onclick="setWinrateSort('winDecks')">勝方牌組${winrateSort==='winDecks'?(winrateSortDir==='asc'?' ▲':' ▼'):''}</th>
             <th class="sortable-th" onclick="setWinrateSort('winRate')">勝率${winrateSort==='winRate'?(winrateSortDir==='asc'?' ▲':' ▼'):''}</th>
           </tr></thead>
-          <tbody>
-            ${top.map((g, i) => {
-              const info = g.repInfo;
-              if (!info) return '';
-              const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本">${g.variants} 版本</span>` : '';
-              const wrPct = (g.winRate * 100).toFixed(1);
-              const wrColor = g.winRate > 0.55 ? '#2e7d32' : (g.winRate < 0.45 ? '#c62828' : '#1a2332');
-              return `<tr>
-                <td>${i + 1}</td>
-                <td>${escapeHtml(info.displayName || info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}</span></td>
-                <td><span class="small muted">${info.supertype || ''}</span></td>
-                <td>${g.totalDecksAgg}</td>
-                <td>${g.winDecks}</td>
-                <td style="color:${wrColor}; font-weight:600;">${wrPct}%</td>
-              </tr>`;
-            }).join('')}
+          <tbody id="winrate-tbody">
+            ${winrateRowsHtml(filtered)}
           </tbody>
         </table>
       </div>

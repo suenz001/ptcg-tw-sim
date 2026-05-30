@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.22 (admin v0.92 — audit endpoint timestamp 比對加 ISO string fallback，讓 client 寫的 collection (如 decks) 也能 count)
+// === ORACLE ADMIN ENDPOINTS === v0.23 (admin v1.01 — 2.3 卡牌→代表牌組聚合端點 archetype；原 v0.92 — audit endpoint timestamp 比對加 ISO string fallback，讓 client 寫的 collection (如 decks) 也能 count)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
 //
 // Changes:
@@ -1355,6 +1355,59 @@ import('firebase-admin').then(async ({ default: admin }) => {
         res.json({ cards, minDecks, mode: req.query.mode || 'all', excludeAI, generatedAt: Date.now(), diagnostics });
       } catch (e) {
         console.warn('[stats winrate] error:', e.message);
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    // v0.23：2.3 卡牌→代表牌組聚合。給定一組 cardId（同 canonical 的多版本），
+    //   找出「含其中任一張」的所有牌組（p1/p2 cardCounts 任一），聚合每張卡的
+    //   出現牌組數 (deckCount) 與張數分佈 (countDist)，admin 端再依 canonical 合併、
+    //   取眾數張數、貪婪湊成代表性 60 張牌組。mode 與 excludeAI 鏡射 winrate（玩家從
+    //   winrate 表點進來，scope 一致＝只算有房號的對戰）。
+    app.get('/api/admin/stats/cards/archetype', requireFirebaseAdmin, async (req, res) => {
+      if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
+      const idSet = String(req.query.ids || '')
+        .split(',').map(x => x.trim()).filter(Boolean).slice(0, 50);
+      if (idSet.length === 0) return res.status(400).json({ error: 'ids 必填（逗號分隔 cardId）' });
+      const baseMatch = {};
+      if (req.query.mode === 'online') baseMatch.roomCode = { $type: 'string' };
+      else if (req.query.mode === 'local') baseMatch.roomCode = null;
+      const excludeAI = req.query.excludeAI !== 'false';
+      if (excludeAI) baseMatch.roomCode = { $type: 'string' };  // 同 winrate：只算有房號
+      try {
+        const pipeline = [
+          { $match: baseMatch },
+          // 展開 p1 + p2 兩副牌
+          { $project: { decks: [ { cc: '$p1.cardCounts' }, { cc: '$p2.cardCounts' } ] } },
+          { $unwind: '$decks' },
+          { $project: { entries: { $objectToArray: { $ifNull: ['$decks.cc', {}] } } } },
+          // 只保留「含目標卡（任一 variant id）」的牌組
+          { $match: { 'entries.k': { $in: idSet } } },
+          { $facet: {
+            // 符合的牌組總數（樣本數）
+            totalDecks: [ { $count: 'n' } ],
+            // 每張卡 → deckCount + 張數分佈
+            cards: [
+              { $unwind: '$entries' },
+              { $group: { _id: { card: '$entries.k', cnt: '$entries.v' }, n: { $sum: 1 } } },
+              { $group: {
+                _id: '$_id.card',
+                deckCount: { $sum: '$n' },
+                countDist: { $push: { cnt: '$_id.cnt', n: '$n' } },
+              }},
+              { $sort: { deckCount: -1 } },
+              { $limit: 3000 },
+            ],
+          }},
+        ];
+        const [agg] = await db.collection('matchRecords').aggregate(pipeline).toArray();
+        const totalDecks = agg && agg.totalDecks && agg.totalDecks[0] ? agg.totalDecks[0].n : 0;
+        const cards = ((agg && agg.cards) || []).map(c => ({
+          cardId: c._id, deckCount: c.deckCount, countDist: c.countDist,
+        }));
+        res.json({ totalDecks, cards, ids: idSet, mode: req.query.mode || 'all', excludeAI, generatedAt: Date.now() });
+      } catch (e) {
+        console.warn('[stats archetype] error:', e.message);
         res.status(500).json({ error: e.message });
       }
     });
