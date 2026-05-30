@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v0.99</title>
+<title>PTCG Oracle Admin v1.00</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.99</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.00</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -521,6 +521,14 @@ async function ensureCardIndex() {
           }
         } catch {}
       }));
+      // v1.00: M5 JP→TW cardId alias (跟 game src/lib/decks/cardIdMigration.ts 同 table).
+      //   舊 matchRecord / 玩家牌組可能存 JP cardId (50220-50300), v5.300 game 已 migrate but
+      //   admin 直接讀 raw → cardLabel 顯示 #50285. 加 alias 讓 lookup 走 TW info.
+      //   range: 50220-50300 → -31075 → 19145-19225 (81 卡 linear shift)
+      for (let jp = 50220; jp <= 50300; jp++) {
+        const tw = String(jp - 31075);
+        if (map[tw]) map[String(jp)] = map[tw];
+      }
       cardCanonicalMap = canonicalMap;
       cardInfoMap = map;
       console.log('[admin] card index loaded:', Object.keys(map).length, 'cards');
@@ -1103,43 +1111,30 @@ window.showDeckDetail = async function(deckId) {
     return (ia?.name || '').localeCompare(ib?.name || '', 'zh-Hant');
   });
   const totalCards = entries.reduce((s, e) => s + (e.count || 0), 0);
-  const typeLabel = (info) => {
-    if (!info) return '?';
-    if (info.supertype === 'Pokemon') return '寶可夢';
-    if (info.supertype === 'Trainer') {
-      if (info.subtype === 'Supporter') return '支援者';
-      if (info.subtype === 'Stadium') return '競技場';
-      if (info.subtype === 'PokemonTool') return '寶可夢道具';
-      return '物品';
-    }
-    if (info.supertype === 'Energy') return info.subtype === 'Basic' ? '基本能量' : '特殊能量';
-    return '?';
-  };
-  const rows = entries.map(e => {
-    const info = cardInfoMap[e.cardId];
-    const name = info ? `${escapeHtml(info.displayName || info.name)} <span class="small muted">${info.setCode}·${info.collectorNumber}${info.regulationMark ? '·' + info.regulationMark : ''}</span>` : `<code>#${escapeHtml(e.cardId)}</code>`;
-    return `<tr><td>×${e.count}</td><td>${name}</td><td><span class="small muted">${typeLabel(info)}</span></td></tr>`;
-  }).join('');
-  // 文字格式給複製用
-  const copyText = entries.map(e => {
-    const info = cardInfoMap[e.cardId];
-    return `${e.count} ${info?.displayName || info?.name || e.cardId}${info ? ' (' + info.setCode + '·' + info.collectorNumber + ')' : ''}`;
-  }).join('\n');
-  window._lastDeckCopyText = `${deck.name || '(未命名)'} — 共 ${totalCards} 張 / 種類 ${entries.length}\n\n` + copyText;
-  document.getElementById('modal-container').innerHTML = `
+  // v1.00: 改用 cardLabel 統一格式 (同 showMatchDeck 對戰牌組), 玩家可直接複製貼到牌組編輯器匯入
+  //   第一行: 「{牌組名}」
+  //   第二行: 「共 N 張 / 種類 M」
+  //   每張卡: cardLabel(id, count) = 「卡名 setCode · 編號 · 賽季 × N」
+  const headerLines = [
+    `${deck.name || '(未命名)'}`,
+    `共 ${totalCards} 張 / 種類 ${entries.length}`,
+  ];
+  const cardLines = entries.map(e => cardLabel(e.cardId, e.count));
+  const copyText = headerLines.concat(cardLines).join('\n');
+  window._lastDeckCopyText = copyText;
+  // 預覽用 <pre> 顯示原始文字 (跟複製出的內容一致, 玩家直接 select 也可)
+  pushModal(`
     <div class="modal-bg" onclick="if(event.target===this)popModal()">
       <div class="modal" style="min-width:600px; max-width:760px; max-height:88vh; overflow-y:auto;">
         <h3>🃏 牌組明細：${escapeHtml(deck.name || '(未命名)')}</h3>
-        <div class="small muted" style="margin-bottom:8px;">共 <b>${totalCards}</b> 張 / 種類 <b>${entries.length}</b> · 更新 ${escapeHtml(String(deck.updatedAt || '-')).slice(0, 19)}</div>
-        <div class="stats-box" style="padding:8px;">
-          ${rows ? `<table><thead><tr><th>張數</th><th>卡牌</th><th>類別</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">此牌組無卡牌</div>'}
-        </div>
+        <div class="small muted" style="margin-bottom:8px;">共 <b>${totalCards}</b> 張 / 種類 <b>${entries.length}</b> · 更新 ${escapeHtml(String(deck.updatedAt || '-')).slice(0, 19)} · 可貼到牌組編輯器「匯入文字」</div>
+        <pre style="background:#f5f5f5; padding:10px; border-radius:4px; font-family:Consolas,Menlo,monospace; font-size:12px; line-height:1.6; max-height:60vh; overflow:auto; white-space:pre-wrap; user-select:text;">${escapeHtml(copyText)}</pre>
         <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
-          <button onclick="navigator.clipboard.writeText(window._lastDeckCopyText || ''); this.textContent='✅ 已複製'; setTimeout(()=>this.textContent='📋 複製文字',2000);">📋 複製文字</button>
+          <button onclick="navigator.clipboard.writeText(window._lastDeckCopyText || ''); this.textContent='✅ 已複製'; setTimeout(()=>this.textContent='📋 複製全部',2000);">📋 複製全部</button>
           <button onclick="popModal()">關閉</button>
         </div>
       </div>
-    </div>`;
+    </div>`);
 };
 
 // v0.99: modal stack — 跨層 modal (玩家 → 牌組明細 / 對戰牌組) 點關閉回上層
