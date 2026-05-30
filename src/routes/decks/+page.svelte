@@ -86,33 +86,78 @@
   let setFilter = $state<string>('');
   let pickerPreview = $state<Card | null>(null);
 
-  // v5.311: deck list 拖曳排序 state — pointer events (桌機 + 手機觸控)
-  let dragDeckId = $state<string | null>(null);      // 拖中的 deckId
-  let dragOverId = $state<string | null>(null);      // hover 目標 deckId (視覺提示)
-  let dragStartY = 0;                                  // pointerdown 起點 Y
-  let dragActive = false;                              // 是否進入 drag mode (slop > 8px)
+  // v5.313: deck list 拖曳排序 — 長按 350ms 啟動 + lift 視覺 (避免 scroll 誤觸)
+  //   流程: pointerdown 設 timer → 350ms 後啟動 drag (lift 視覺 + 觸覺回饋)
+  //         啟動前 移動 > 10px → clearTimeout (視為 scroll, 不拖)
+  //         啟動後 pointermove → translateY 跟手指, 算 hover 目標
+  //         pointerup → commit swap + cleanup
+  let dragDeckId = $state<string | null>(null);      // 啟動 drag 中的 deckId (null=未啟動)
+  let dragOverId = $state<string | null>(null);      // hover 目標 deckId
+  let dragDeltaY = $state(0);                         // 已拖移動的 Y 距離 (px) 用於 lift translate
+  let _pressTimer: ReturnType<typeof setTimeout> | null = null;
+  let _pressStartY = 0;
+  let _pressDeckId: string | null = null;
+  let _pressPointerId: number | null = null;
+  let _pressTarget: HTMLElement | null = null;
+  const LONG_PRESS_MS = 350;       // 長按啟動 delay
+  const SCROLL_CANCEL_PX = 10;     // 啟動前 >10px 取消 (視為 scroll)
+
+  function _clearPressTimer() {
+    if (_pressTimer !== null) { clearTimeout(_pressTimer); _pressTimer = null; }
+  }
+  function _cancelDrag() {
+    _clearPressTimer();
+    if (_pressTarget && _pressPointerId !== null) {
+      try { _pressTarget.releasePointerCapture(_pressPointerId); } catch { /* */ }
+    }
+    _pressDeckId = null; _pressTarget = null; _pressPointerId = null;
+    dragDeckId = null; dragOverId = null; dragDeltaY = 0;
+  }
+
   function onDeckPointerDown(e: PointerEvent, deckId: string) {
     if (e.button !== undefined && e.button !== 0) return;  // 非左鍵略過
-    dragDeckId = deckId;
-    dragStartY = e.clientY;
-    dragActive = false;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    // 記錄起點, 啟 timer; 不立刻 setPointerCapture (讓玩家可正常 scroll)
+    _pressStartY = e.clientY;
+    _pressDeckId = deckId;
+    _pressTarget = e.currentTarget as HTMLElement;
+    _pressPointerId = e.pointerId;
+    _clearPressTimer();
+    _pressTimer = setTimeout(() => {
+      // 350ms 過了仍按著沒大幅移動 → 啟動 drag mode
+      if (_pressDeckId !== deckId) return;  // 已 cancel
+      dragDeckId = deckId;
+      dragDeltaY = 0;
+      // 啟動後才 setPointerCapture, 接管後續 pointermove
+      try {
+        if (_pressTarget && _pressPointerId !== null) _pressTarget.setPointerCapture(_pressPointerId);
+      } catch { /* */ }
+      // 觸覺回饋 (手機)
+      try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(20); } catch { /* */ }
+    }, LONG_PRESS_MS);
   }
   function onDeckPointerMove(e: PointerEvent) {
-    if (!dragDeckId) return;
-    if (!dragActive && Math.abs(e.clientY - dragStartY) > 8) {
-      dragActive = true;  // 啟動 drag mode
+    // 啟動前: 移動 > SCROLL_CANCEL_PX → 取消長按 (玩家想 scroll)
+    if (!dragDeckId) {
+      if (_pressDeckId && Math.abs(e.clientY - _pressStartY) > SCROLL_CANCEL_PX) {
+        _clearPressTimer();
+        _pressDeckId = null; _pressTarget = null; _pressPointerId = null;
+      }
+      return;
     }
-    if (!dragActive) return;
-    // 計算 hover 在哪個 deck li 上
+    // 啟動後: 阻止 scroll, 跟手指 translate
+    e.preventDefault();
+    dragDeltaY = e.clientY - _pressStartY;
     const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
     const li = el?.closest('li[data-deckid]') as HTMLElement | null;
     dragOverId = li?.dataset.deckid ?? null;
   }
   function onDeckPointerUp(e: PointerEvent) {
-    (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);
-    if (dragActive && dragDeckId && dragOverId && dragDeckId !== dragOverId) {
-      // commit: 把 dragDeckId 搬到 dragOverId 位置
+    _clearPressTimer();
+    // 啟動前 pointerup → 視為一般 click (deck-pick onclick 會處理切換)
+    if (!dragDeckId) { _pressDeckId = null; _pressTarget = null; _pressPointerId = null; return; }
+    // 啟動後 → commit swap
+    try { (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId); } catch { /* */ }
+    if (dragDeckId && dragOverId && dragDeckId !== dragOverId) {
       const arr = [...decks];
       const from = arr.findIndex(d => d.id === dragDeckId);
       const to = arr.findIndex(d => d.id === dragOverId);
@@ -120,10 +165,10 @@
         const [moved] = arr.splice(from, 1);
         arr.splice(to, 0, moved);
         decks = arr;
-        saveDecks(arr);  // 立刻持久化新順序
+        saveDecks(arr);
       }
     }
-    dragDeckId = null; dragOverId = null; dragActive = false;
+    _cancelDrag();
   }
 
   // v5.310: 常用卡牌 (favorites) state — 本地 localStorage, 手動雲端同步
@@ -1529,14 +1574,16 @@
       </div>
       <ul class="deck-list">
         {#each decks as d (d.id)}
-          <li class:active={d.id === activeId} class:drag-source={dragDeckId === d.id}
-              class:drag-over={dragActive && dragOverId === d.id && dragDeckId !== d.id}
+          <li class:active={d.id === activeId}
+              class:drag-source={dragDeckId === d.id}
+              class:drag-over={dragDeckId !== null && dragOverId === d.id && dragDeckId !== d.id}
               data-deckid={d.id}
+              style={dragDeckId === d.id ? `transform: translateY(${dragDeltaY}px) scale(1.04);` : ''}
               onpointerdown={(e) => onDeckPointerDown(e, d.id)}
               onpointermove={onDeckPointerMove}
               onpointerup={onDeckPointerUp}
               onpointercancel={onDeckPointerUp}>
-            <span class="deck-drag-handle" title="拖曳排序" aria-hidden="true">⠿</span>
+            <span class="deck-drag-handle" title="長按拖曳排序" aria-hidden="true">⠿</span>
             <button class="deck-pick" onclick={() => (activeId = d.id)}>
               <span class="deck-name">{d.name || '(未命名)'}</span>
               <span class="deck-size">
@@ -2650,12 +2697,30 @@
     background: #f0f0f0;
   }
 
-  /* v5.311: deck list 拖曳排序視覺 */
-  .deck-list li { display: flex; align-items: center; gap: 4px; user-select: none; touch-action: none; position: relative; }
+  /* v5.313: deck list 拖曳排序視覺 — 長按啟動 + lift visual */
+  .deck-list li {
+    display: flex; align-items: center; gap: 4px;
+    user-select: none;
+    /* v5.313: pan-y 允許玩家用手指 vertical scroll, 長按 350ms 才接管做拖曳 */
+    touch-action: pan-y;
+    position: relative;
+    transition: box-shadow 0.15s, background-color 0.15s;
+    z-index: 1;
+  }
   .deck-drag-handle { color: #4a8a4a; font-size: 1.1rem; padding: 0 4px; cursor: grab; flex: 0 0 auto; line-height: 1; }
   .deck-drag-handle:active { cursor: grabbing; }
-  .deck-list li.drag-source { opacity: 0.4; }
-  .deck-list li.drag-over { border-top: 2px solid #ffd700; }
+  /* v5.313: drag 啟動後的「拉起來」視覺 — translateY 跟手指 + scale + shadow + 變色 */
+  .deck-list li.drag-source {
+    background-color: #2a4a2a !important;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+    z-index: 100;
+    opacity: 0.95;
+    pointer-events: none;  /* 拖中的 li 不擋 elementFromPoint */
+  }
+  .deck-list li.drag-over {
+    border-top: 3px solid #ffd700;
+    box-shadow: inset 0 4px 0 rgba(255, 215, 0, 0.3);
+  }
 
   /* v5.312: 常用卡牌 ⭐ 按鈕 — 放在 + 加入按鈕左邊 (取代 v5.310 卡圖角標, 避免擋圖) */
   .pick-fav-btn { color: #888; transition: color 0.15s, background 0.15s, border-color 0.15s; }
