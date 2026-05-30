@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.323</span> 哲爾尼亞斯「大地風暴」特殊【超】能量也算</summary>
+        <ul>
+          <li>修正：哲爾尼亞斯的招式「大地風暴」原本只統計基本【超】能量，導致附加在自己寶可夢身上的「感應【超】能量」、「古舊能量」、「稜鏡能量」等特殊【超】能量被漏算，傷害低估。已改用 game engine 統一的能量單位查詢，凡是提供【超】屬性的能量卡每張算 1 個，與卡面敘述一致。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.322</span> 牌庫 picker 卡片排序同棄牌區</summary>
         <ul>
           <li>調整：「查看牌庫剩餘全部 / 查看對手手牌 / 看牌堆其他卡」的下拉清單排序，跟 v5.309 手機版棄牌區一致 —「寶可夢 → 物品 → 支援者 → 場地 → 能量」固定分類順序（同類型內仍按數量或名稱排），方便玩家依用途快速找牌。</li>

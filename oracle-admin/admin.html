@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v0.98</title>
+<title>PTCG Oracle Admin v0.99</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.98</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.99</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1073,10 +1073,13 @@ window.showDeckModal = async function(code, source) {
 
 // v0.96: 牌組明細 modal — 從玩家儲存牌組 list 觸發
 window.showDeckDetail = async function(deckId) {
+  // v0.99: push 當前 modal 到 stack (若有), 關閉時 popModal 回上層
+  const _curForStack = document.getElementById('modal-container').innerHTML;
+  if (_curForStack && _curForStack.trim()) window._modalStack.push(_curForStack);
   const deck = window._lastPlayerDecks?.[deckId];
   if (!deck) { alert('找不到該牌組'); return; }
   document.getElementById('modal-container').innerHTML = `
-    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+    <div class="modal-bg" onclick="if(event.target===this)popModal()">
       <div class="modal" style="min-width:520px;"><h3>🃏 牌組明細</h3><div class="empty">載入卡牌資料中…</div></div>
     </div>`;
   await ensureCardIndex();
@@ -1124,7 +1127,7 @@ window.showDeckDetail = async function(deckId) {
   }).join('\n');
   window._lastDeckCopyText = `${deck.name || '(未命名)'} — 共 ${totalCards} 張 / 種類 ${entries.length}\n\n` + copyText;
   document.getElementById('modal-container').innerHTML = `
-    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+    <div class="modal-bg" onclick="if(event.target===this)popModal()">
       <div class="modal" style="min-width:600px; max-width:760px; max-height:88vh; overflow-y:auto;">
         <h3>🃏 牌組明細：${escapeHtml(deck.name || '(未命名)')}</h3>
         <div class="small muted" style="margin-bottom:8px;">共 <b>${totalCards}</b> 張 / 種類 <b>${entries.length}</b> · 更新 ${escapeHtml(String(deck.updatedAt || '-')).slice(0, 19)}</div>
@@ -1133,12 +1136,27 @@ window.showDeckDetail = async function(deckId) {
         </div>
         <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
           <button onclick="navigator.clipboard.writeText(window._lastDeckCopyText || ''); this.textContent='✅ 已複製'; setTimeout(()=>this.textContent='📋 複製文字',2000);">📋 複製文字</button>
-          <button onclick="closeModal()">關閉</button>
+          <button onclick="popModal()">關閉</button>
         </div>
       </div>
     </div>`;
 };
 
+// v0.99: modal stack — 跨層 modal (玩家 → 牌組明細 / 對戰牌組) 點關閉回上層
+window._modalStack = [];
+window.pushModal = function(html) {
+  const cur = document.getElementById('modal-container').innerHTML;
+  if (cur && cur.trim()) window._modalStack.push(cur);
+  document.getElementById('modal-container').innerHTML = html;
+};
+window.popModal = function() {
+  if (window._modalStack.length > 0) {
+    const prev = window._modalStack.pop();
+    document.getElementById('modal-container').innerHTML = prev;
+  } else {
+    closeModal();
+  }
+};
 window.closeModal = function() {
   document.getElementById('modal-container').innerHTML = '';
 };
@@ -1747,6 +1765,9 @@ function renderMatchRecords(el) {
 //   - 讀 cardCounts (v5.006+ 新格式 Record<id,count>) 或 cardIds (v5.005 舊格式 fallback 視為 ×1)
 //   - 「📋 複製全部牌組」按鈕 — 把兩邊牌組文字格式 copy to clipboard
 window.showMatchDeck = async function(matchId) {
+  // v0.99: push 當前 modal 到 stack (若有), 關閉時 popModal 回上層
+  const _curForStack = document.getElementById('modal-container').innerHTML;
+  if (_curForStack && _curForStack.trim()) window._modalStack.push(_curForStack);
   // v0.95: 支援多來源 — matchRecordsCache (對戰歷史 tab) 或 _playerMatchesById (玩家 modal 點房號)
   let record = matchRecordsCache.find(r => r._id === matchId);
   if (!record && window._playerMatchesById) {
@@ -1755,7 +1776,7 @@ window.showMatchDeck = async function(matchId) {
   if (!record) { alert('找不到該場紀錄'); return; }
   // 先彈窗顯示 loading
   document.getElementById('modal-container').innerHTML = `
-    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+    <div class="modal-bg" onclick="if(event.target===this)popModal()">
       <div class="modal" style="min-width:520px;"><h3>🃏 對戰牌組</h3><div class="empty">載入卡牌資料中…</div></div>
     </div>`;
   await ensureCardIndex();
@@ -1817,7 +1838,7 @@ window.showMatchDeck = async function(matchId) {
   const p2Win = record.winner === 1;
 
   document.getElementById('modal-container').innerHTML = `
-    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+    <div class="modal-bg" onclick="if(event.target===this)popModal()">
       <div class="modal" style="min-width:720px;">
         <h3>🃏 房間 ${escapeHtml(record.roomCode || '-')} 的牌組</h3>
         <div class="deck-grid">
@@ -1826,7 +1847,7 @@ window.showMatchDeck = async function(matchId) {
         </div>
         <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
           <button onclick="copyMatchDeck()">📋 複製全部牌組（文字）</button>
-          <button onclick="closeModal()">關閉</button>
+          <button onclick="popModal()">關閉</button>
         </div>
       </div>
     </div>`;
@@ -2321,6 +2342,19 @@ function renderEnergyDistribution(c) {
   `;
 }
 
+// v0.99: 2.3 卡牌勝率 client-side sort state
+let winrateSort = 'winRate';
+let winrateSortDir = 'desc';
+window.setWinrateSort = function(col) {
+  if (winrateSort === col) {
+    winrateSortDir = winrateSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    winrateSort = col;
+    winrateSortDir = col === 'name' ? 'asc' : 'desc';
+  }
+  renderStats(document.getElementById('tab-stats'));
+};
+
 // v0.93: 玩家排行榜 client-side sort state
 let playerRankSort = 'winRate';
 let playerRankSortDir = 'desc';
@@ -2579,7 +2613,18 @@ function renderCardWinrate(w) {
   else if (winrateFilterMode === 'support') filtered = filtered.filter(g => groupHasSupport(g));
   // v0.93: 合併後再 filter minDecks (server 已拿掉 server-side filter)
   filtered = filtered.filter(g => g.totalDecksAgg >= w.minDecks);
-  filtered.sort((a, b) => b.winRate - a.winRate || b.totalDecksAgg - a.totalDecksAgg);
+  // v0.99: client-side sort by selected column
+  filtered.sort((a, b) => {
+    const dir = winrateSortDir === 'asc' ? 1 : -1;
+    let va, vb;
+    if (winrateSort === 'name') {
+      va = a.repInfo?.displayName || a.repInfo?.name || '';
+      vb = b.repInfo?.displayName || b.repInfo?.name || '';
+      return va.localeCompare(vb, 'zh-Hant') * dir;
+    }
+    va = a[winrateSort] ?? 0; vb = b[winrateSort] ?? 0;
+    return (va - vb) * dir;
+  });
   const top = filtered.slice(0, 50);
   return `
     <section class="stats-section">
@@ -2604,7 +2649,14 @@ function renderCardWinrate(w) {
       </div>
       <div class="stats-box" style="overflow-x:auto;">
         <table>
-          <thead><tr><th>#</th><th>卡牌</th><th>類型</th><th>出現牌組</th><th>勝方牌組</th><th>勝率</th></tr></thead>
+          <thead><tr>
+            <th>#</th>
+            <th class="sortable-th" onclick="setWinrateSort('name')">卡牌${winrateSort==='name'?(winrateSortDir==='asc'?' ▲':' ▼'):''}</th>
+            <th>類型</th>
+            <th class="sortable-th" onclick="setWinrateSort('totalDecksAgg')">出現牌組${winrateSort==='totalDecksAgg'?(winrateSortDir==='asc'?' ▲':' ▼'):''}</th>
+            <th class="sortable-th" onclick="setWinrateSort('winDecks')">勝方牌組${winrateSort==='winDecks'?(winrateSortDir==='asc'?' ▲':' ▼'):''}</th>
+            <th class="sortable-th" onclick="setWinrateSort('winRate')">勝率${winrateSort==='winRate'?(winrateSortDir==='asc'?' ▲':' ▼'):''}</th>
+          </tr></thead>
           <tbody>
             ${top.map((g, i) => {
               const info = g.repInfo;
