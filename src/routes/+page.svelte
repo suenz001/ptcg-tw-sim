@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.320</span> 牌組排序改 ⬆️⬇️ 按鈕</summary>
+        <ul>
+          <li>調整：「我的牌組」列表的排序方式由「拖曳」改為「⬆️⬇️ 按鈕」。每個牌組左邊有兩個小箭頭，點 ▲ 上移一格、點 ▼ 下移一格，順序即時存檔。跨裝置 100% 可靠，再也不會有拖起來放不下去之類的問題。對 v5.311~v5.319 多版拖曳折騰致歉。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.319</span> 牌組拖曳放手 stuck 終極修正</summary>
         <ul>
           <li>修正：v5.318 後拖曳牌組仍偶發放手後卡住的問題（特別是 iOS Safari）。改為同時監聽 5 種放手事件（pointerup / pointercancel / mouseup / touchend / touchcancel），並在拖把手與全域同時掛 listener，任一觸發都會放下牌組。加 5 秒安全計時器：萬一所有事件都沒觸發，5 秒後系統會自動釋放。</li>
