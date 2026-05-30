@@ -2726,10 +2726,16 @@ function handlePlaying(
       const typeSig = (iid: string): string => {
         const inst = attacker.active!.energyAttached.find(e => e.iid === iid);
         if (!inst) return '';
+        const card = pool.get(inst.cardId);
+        // v5.324: subtype prefix — 區隔基本 vs 特殊能量, 確保特殊能量(伏特【雷】等)
+        //   即使 unit types 跟基本同 (如伏特【雷】= ['Lightning'] = 基本【雷】)
+        //   也視為不同 signature → sigs.size >= 2 → 開 picker 讓玩家選, 不會被自動丟掉.
+        //   玩家反映: 基本雷 3 + 伏特【雷】 1, 撤退 2 被自動丟 1 基本 + 1 特殊, 應 picker.
+        const subtypePrefix = card?.subtype === 'Special' ? 'S:' : 'B:';
         const units = getEnergyUnits(inst.cardId, pool);
-        if (units.length === 0) return pool.get(inst.cardId)?.name ?? 'unknown';
+        if (units.length === 0) return subtypePrefix + (card?.name ?? 'unknown');
         // 多單位（如火箭隊能量）與單純基本能量視為不同 signature
-        return units.map(u => [...u.types].sort().join(',')).sort().join('|');
+        return subtypePrefix + units.map(u => [...u.types].sort().join(',')).sort().join('|');
       };
       const sigs = new Set(attacker.active.energyAttached.map(e => typeSig(e.iid)));
       if (sigs.size >= 2) {
