@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v0.94</title>
+<title>PTCG Oracle Admin v0.95</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.94</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.95</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1679,7 +1679,11 @@ function renderMatchRecords(el) {
 //   - 讀 cardCounts (v5.006+ 新格式 Record<id,count>) 或 cardIds (v5.005 舊格式 fallback 視為 ×1)
 //   - 「📋 複製全部牌組」按鈕 — 把兩邊牌組文字格式 copy to clipboard
 window.showMatchDeck = async function(matchId) {
-  const record = matchRecordsCache.find(r => r._id === matchId);
+  // v0.95: 支援多來源 — matchRecordsCache (對戰歷史 tab) 或 _playerMatchesById (玩家 modal 點房號)
+  let record = matchRecordsCache.find(r => r._id === matchId);
+  if (!record && window._playerMatchesById) {
+    record = window._playerMatchesById[matchId];
+  }
   if (!record) { alert('找不到該場紀錄'); return; }
   // 先彈窗顯示 loading
   document.getElementById('modal-container').innerHTML = `
@@ -2371,6 +2375,11 @@ window.showPlayerDetail = async function(email) {
   const data = await api('/api/admin/stats/players/' + encodeURIComponent(email) + '?recent=30');
   if (!data || data.error) { document.getElementById('modal-container').innerHTML = ''; alert('讀取失敗：' + (data?.error || '?')); return; }
   await ensureCardIndex();
+  // v0.95: cache recentMatches by _id, 給 showMatchDeck() 跨 modal 查
+  window._playerMatchesById = window._playerMatchesById || {};
+  for (const m of (data.recentMatches || [])) {
+    if (m._id) window._playerMatchesById[String(m._id)] = m;
+  }
   const s = data.summary || {};
   const wr = s.winRate;
   const wrText = (wr === null || wr === undefined) ? '-' : (wr * 100).toFixed(1) + '%';
@@ -2388,12 +2397,18 @@ window.showPlayerDetail = async function(email) {
     const loss = (isP1 && m.winner === 1) || (!isP1 && m.winner === 0);
     const resultTag = win ? '<span class="result-win">勝</span>' : (loss ? '<span class="result-loss">負</span>' : '<span class="result-draw">平</span>');
     const sideTag = isP1 ? '<span class="side-p1">先攻</span>' : '<span class="side-p2">後攻</span>';
+    // v0.95: 房號 cell 改 clickable → 開該場 match detail modal (雙方牌組)
+    const matchIdSafe = String(m._id || '').replace(/'/g, '&apos;');
+    const roomLabel = escapeHtml(m.roomCode || '本機');
+    const roomCell = matchIdSafe
+      ? `<a href="#" class="player-name" onclick="showMatchDeck('${matchIdSafe}'); return false;" title="查看此場雙方牌組"><code>${roomLabel}</code></a>`
+      : `<code>${roomLabel}</code>`;
     return `<tr>
       <td>${fmtTime(m.endedAt)}</td>
       <td>${sideTag}</td>
       <td>${resultTag}</td>
       <td>${escapeHtml(opp?.name || '-')} <span class="small muted">${opp?.email ? '(' + escapeHtml(opp.email) + ')' : '(匿名/AI)'}</span></td>
-      <td><code>${escapeHtml(m.roomCode || '本機')}</code></td>
+      <td>${roomCell}</td>
       <td>${m.finalTurn ?? '-'}</td>
     </tr>`;
   }).join('');
