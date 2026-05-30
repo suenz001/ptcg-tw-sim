@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v0.97</title>
+<title>PTCG Oracle Admin v0.98</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.97</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.98</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2571,18 +2571,19 @@ function renderCardWinrate(w) {
     }
     g.winRate = g.totalDecksAgg > 0 ? g.winDecks / g.totalDecksAgg : 0;
   }
+  // v0.98: 2.3 卡牌勝率只列 Pokemon (其他類型 supertype 沒勝率意義)
+  let filtered = groups.filter(g => g.repInfo?.supertype === 'Pokemon');
   // filter（沿用 1.6 的 main/support 分類用同 cardTagsCache）
   const groupHasSupport = (g) => g.cardIds.some(id => (cardTagsCache[id] || []).includes('support'));
-  let filtered = groups;
-  if (winrateFilterMode === 'main') filtered = groups.filter(g => !groupHasSupport(g));
-  else if (winrateFilterMode === 'support') filtered = groups.filter(g => groupHasSupport(g));
+  if (winrateFilterMode === 'main') filtered = filtered.filter(g => !groupHasSupport(g));
+  else if (winrateFilterMode === 'support') filtered = filtered.filter(g => groupHasSupport(g));
   // v0.93: 合併後再 filter minDecks (server 已拿掉 server-side filter)
   filtered = filtered.filter(g => g.totalDecksAgg >= w.minDecks);
   filtered.sort((a, b) => b.winRate - a.winRate || b.totalDecksAgg - a.totalDecksAgg);
   const top = filtered.slice(0, 50);
   return `
     <section class="stats-section">
-      <h3>🏆 2.3 卡牌勝率 Top 50 <span class="small muted">（至少 ${w.minDecks} 副；排除 AI 對戰；同名同效合併）</span></h3>
+      <h3>🏆 2.3 卡牌勝率 Top 50 <span class="small muted">（僅寶可夢；至少 ${w.minDecks} 副；排除 AI 對戰（=只算有房號對戰）；同名同效合併）</span></h3>
       ${w.diagnostics ? `<div class="small" style="margin-bottom:8px; padding:8px 12px; background:#f0f7ff; border:1px solid #cce; border-radius:4px;">
         <div style="font-weight:600; margin-bottom:4px;">🔍 資料源診斷</div>
         <div>📊 <b>matchRecords 全 DB</b>：${w.diagnostics.dbTotalAllTime || 0} 筆 ·

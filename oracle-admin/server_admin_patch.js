@@ -1264,7 +1264,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
       else if (req.query.mode === 'local') baseMatch.roomCode = null;
       // 預設排除 AI 對戰（AI 勝率不應算入統計）
       const excludeAI = req.query.excludeAI !== 'false';
-      if (excludeAI) baseMatch.vsAI = { $ne: true };
+      // v0.98: 玩家規則 — 「只要有 roomCode 就不是 AI」.
+      //   vsAI field 不可靠 (client 寫入可能誤判), 改用 roomCode 存在判定.
+      //   excludeAI=true 等同 「只算有房號的對戰」(本機 vs 玩家也排除, 因為 client 端不太可靠分辨).
+      if (excludeAI) baseMatch.roomCode = { $type: 'string' };
       const minDecks = Math.max(1, parseInt(req.query.minDecks) || 5);
       try {
         const pipeline = [
