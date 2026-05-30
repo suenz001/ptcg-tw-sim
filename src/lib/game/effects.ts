@@ -2139,6 +2139,23 @@ export function canApplyAttackEffectToTarget(
       return { blocked: true, reason: '化隱 免疫招式效果' };
     }
   }
+  // v5.333：per-turn 招式免疫旗標（飛翔/要害斬/躲藏=immuneToAllAttackThisTurn、純樸=
+  //   immuneToAttackEffectsThisTurn、阿塞蘿拉=immuneToExAttackThisTurn）也納入此 legacy guard，
+  //   與 unified canApplyEffectToTarget 一致 — 因 defCantAttackNextPost / defNextAtkReducePost /
+  //   悄聲加害 等仍走此 helper。此 helper 永遠是 attack-effect 語境，三者皆擋。
+  if (target.immuneToAllAttackThisTurn) {
+    return { blocked: true, reason: '免疫招式的傷害與效果（飛翔/要害斬/躲藏類）' };
+  }
+  if (target.immuneToAttackEffectsThisTurn) {
+    return { blocked: true, reason: '免疫招式的效果（純樸類）' };
+  }
+  if (target.immuneToExAttackThisTurn) {
+    const atkActiveIm = state.players[atkIdx].active;
+    const atkCardIm = atkActiveIm ? pool.get(atkActiveIm.cardId) : undefined;
+    if (atkCardIm && isRulePokemon(atkCardIm)) {
+      return { blocked: true, reason: '免疫【ex】招式的傷害與效果（阿塞蘿拉的惡作劇）' };
+    }
+  }
   const dIdx = (1 - atkIdx) as 0 | 1;
   for (const [name, rule] of ATTACK_EFFECT_IMMUNITY) {
     if (rule.kind === 'energy-on-target') {
@@ -5006,8 +5023,13 @@ regPost('鐵螯龍蝦|喀嚓喀嚓', (state, aIdx, _pool) => {
 
 // ── 輔助：對手戰鬥寶可夢下回合無法撤退（cantRetreatNextTurn）────────────────
 function defCantRetreatNextPost(): AttackPostFn {
-  return (state, aIdx) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
+    // v5.333：免疫招式效果的 active 不受「無法撤退」（C-17 per-target guard）
+    if (state.players[dIdx].active) {
+      const _gr = canApplyEffectToTarget(state, aIdx, state.players[dIdx].active!, pool.get(state.players[dIdx].active!.cardId), 'attack-effect', pool);
+      if (_gr.blocked) return addLog(state, `無法撤退效果：${_gr.reason}`, aIdx);
+    }
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
     if (def.active) def.active = { ...def.active, cantRetreatNextTurn: true };
@@ -7038,6 +7060,11 @@ function coinHeadsOppDiscardEnergyPost(label: string): AttackPostFn {
     if (!def || def.energyAttached.length === 0) {
       return addLog(state, `${label}：正面 → 但對手出場無附加能量`, aIdx);
     }
+    // v5.333：免疫招式效果的 active 不受能量丟棄（C-17 per-target guard）
+    {
+      const _gc = canApplyEffectToTarget(state, aIdx, def, pool.get(def.cardId), 'attack-effect', pool);
+      if (_gc.blocked) return addLog(state, `${label}：${_gc.reason}`, aIdx);
+    }
     const defName = pool.get(def.cardId)?.name ?? '?';
     // 從後往前丟 1 張（最近附加優先）
     const last = def.energyAttached[def.energyAttached.length - 1];
@@ -7196,11 +7223,16 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
 // ── swap-opp + dmg (3 張) ────────────────────────────────────────────────────
 // 共用 pre：不造成戰鬥寶可夢傷害（傷害在 resolver 中施加）
 function oppSwapDmgPost(dmg: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const defender = state.players[dIdx];
     if (!defender.active || defender.bench.length === 0) {
       return addLog(state, `${label}：對手無備戰寶可夢，無法互換`, aIdx);
+    }
+    // v5.333：免疫招式效果的 active 不被互換換下（C-17 per-target guard）
+    {
+      const _gs = canApplyEffectToTarget(state, aIdx, defender.active, pool.get(defender.active.cardId), 'attack-effect', pool);
+      if (_gs.blocked) return addLog(state, `${label}：${_gs.reason}`, aIdx);
     }
     let s = addLog(state, `${label}：選擇對手備戰 1 隻與戰鬥場互換`, aIdx);
     return withPending(s, {
@@ -7644,6 +7676,11 @@ function discardOppActiveEnergyPost(
     const dIdx = (1 - aIdx) as 0 | 1;
     const defender = state.players[dIdx];
     if (!defender.active) return state;
+      // v5.333：免疫招式效果的 active 不受此效果（C-17 per-target guard）
+      {
+        const _g = canApplyEffectToTarget(state, aIdx, defender.active, pool.get(defender.active.cardId), 'attack-effect', pool);
+        if (_g.blocked) return addLog(state, `${label}：${_g.reason}`, aIdx);
+      }
     const defName = pool.get(defender.active.cardId)?.name ?? '?';
     const energies = defender.active.energyAttached;
     if (energies.length === 0) {
@@ -7729,6 +7766,11 @@ function returnOppActiveEnergyPost(n: number, label: string): AttackPostFn {
     const dIdx = (1 - aIdx) as 0 | 1;
     const defender = state.players[dIdx];
     if (!defender.active) return state;
+      // v5.333：免疫招式效果的 active 不受此效果（C-17 per-target guard）
+      {
+        const _g = canApplyEffectToTarget(state, aIdx, defender.active, pool.get(defender.active.cardId), 'attack-effect', pool);
+        if (_g.blocked) return addLog(state, `${label}：${_g.reason}`, aIdx);
+      }
     const defName = pool.get(defender.active.cardId)?.name ?? '?';
     // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋對手能量回對手手牌
     if (_v3080OppHasMenasureCG(state, aIdx, pool)) {

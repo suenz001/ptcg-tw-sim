@@ -159,6 +159,28 @@ export function canApplyEffectToTarget(
     }
   }
 
+  // 1b-2. v5.333：per-turn 招式免疫旗標納入 per-target guard（原本只靠 engine ATTACK_POST
+  //   blanket short-circuit 整段跳過，會誤殺「目標非我方戰鬥位」的效果 — self/備戰snipe/
+  //   對手手牌牌庫/競技場 等）。改為精準：只擋「指向持有此旗標的寶可夢」的招式傷害/效果。
+  //   - immuneToAllAttackThisTurn（飛翔/要害斬/躲藏「不受傷害與效果」）→ 擋 attack-damage + attack-effect
+  //   - immuneToAttackEffectsThisTurn（純樸「不受效果」）→ 只擋 attack-effect
+  //   - immuneToExAttackThisTurn（阿塞蘿拉的惡作劇「不受 ex 招式傷害與效果」）→ attacker 為規則寶可夢時擋兩者
+  if (kind === 'attack-damage' || kind === 'attack-effect') {
+    if (target.immuneToAllAttackThisTurn) {
+      return { blocked: true, reason: '免疫招式的傷害與效果（飛翔/要害斬/躲藏類）' };
+    }
+    if (target.immuneToExAttackThisTurn) {
+      const atkActive = state.players[actorIdx].active;
+      const atkCard = atkActive ? pool.get(atkActive.cardId) : undefined;
+      if (atkCard && isRulePokemon(atkCard)) {
+        return { blocked: true, reason: '免疫【ex】招式的傷害與效果（阿塞蘿拉的惡作劇）' };
+      }
+    }
+  }
+  if (kind === 'attack-effect' && target.immuneToAttackEffectsThisTurn) {
+    return { blocked: true, reason: '免疫招式的效果（純樸類）' };
+  }
+
   // 1c. 暗影【惡】能量（v4.85 / M5 — 特殊能量，備戰位免疫對手招式傷害；惡屬性寶可夢限定）
   //     卡面：「附有這張卡的惡屬性寶可夢只要在備戰區，就不會受到對手招式的傷害。」
   //     範圍：bench-only + attack-damage only；不擋 attack-effect、不擋 ability-effect。

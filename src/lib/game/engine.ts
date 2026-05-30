@@ -5525,14 +5525,19 @@ function handlePlaying(
     const postAllImmune = defActiveForPost?.immuneToAllAttackThisTurn ?? false;
     const postExImmune = (defActiveForPost?.immuneToExAttackThisTurn ?? false)
                           && isRulePokemon(attackerCard);
-    const postBlocked = postNuetralImmune || postAllImmune || postExImmune;
-    const postFn = (!shellFossilImmune && !postBlocked) ? ATTACK_POST.get(effectKey) : undefined;
+    // v5.333：per-turn 免疫旗標不再整段跳過 POST（會誤殺 self/備戰snipe/對手手牌牌庫/競技場 等
+    //   「目標非我方戰鬥位」的效果）。改由 canApplyEffectToTarget per-target guard 精準擋「指向免疫
+    //   active」的效果（defense.ts 1b-2 + 各 defender 效果 POST helper 走 guard）。
+    //   （陳舊的背蓋化石 shellFossilImmune 暫維持 blanket，範圍窄、另由 canApplyAttackEffectToTarget 補。）
+    const postFn = !shellFossilImmune ? ATTACK_POST.get(effectKey) : undefined;
+    // v5.333：以下僅資訊性提示「我方戰鬥寶可夢本回合免疫」；實際擋下由 per-target guard 精準處理
+    //   （只擋指向此 active 的傷害/效果，目標非我方戰鬥位的效果照常執行）。
     if (postNuetralImmune) {
-      newState = addLog(newState, '[純樸]defender 不受招式效果影響（傷害仍正常結算）', dIdx);
+      newState = addLog(newState, `${defenderCard?.name ?? '?'} 免疫招式效果（只擋指向它的效果，其他照常）`, dIdx);
     } else if (postAllImmune) {
-      newState = addLog(newState, `${defenderCard?.name ?? '?'} 完全免疫招式（飛翔/要害斬效果）— 跳過附加效果`, dIdx);
+      newState = addLog(newState, `${defenderCard?.name ?? '?'} 免疫招式傷害與效果（只擋指向它的部分，其他照常）`, dIdx);
     } else if (postExImmune) {
-      newState = addLog(newState, `${defenderCard?.name ?? '?'} 不受【ex】招式效果影響（阿塞蘿拉的惡作劇）`, dIdx);
+      newState = addLog(newState, `${defenderCard?.name ?? '?'} 免疫【ex】招式傷害與效果（只擋指向它的部分，其他照常）`, dIdx);
     }
     if (postFn) {
       // v2.156：把 action 也傳給 POST，讓「PRE/POST 共享 chosenIids」的 option 招式
