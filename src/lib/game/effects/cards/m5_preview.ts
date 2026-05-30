@@ -86,7 +86,7 @@ import {
 } from '../../effects';
 import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
-import type { CardInstance, GameState } from '../../types';  // v5.203 hotfix: type-only import
+import type { CardInstance, GameState, PlayerState } from '../../types';  // v5.203 hotfix: type-only import（v5.326 補 PlayerState）
 import type { Card } from '$lib/cards/types';  // v5.204 hotfix: Card 從 cards/types 而非 game/types
 import { canApplyEffectToTarget } from '../../defense';
 

@@ -6,7 +6,7 @@
  *   相同 precedent — AttackPreFn 同步限制）。
  */
 
-import type { CardInstance, GameAction } from '../../types';
+import type { CardInstance, GameAction, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { RULE_BOX_SUBTYPES } from '../../types';
 import {

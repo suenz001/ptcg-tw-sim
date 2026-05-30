@@ -22,7 +22,7 @@ import type { Card } from '$lib/cards/types';
 import { isRulePokemon } from '../../engine';
 import {
   regPre, regPost,
-  addLog, updatePlayer,
+  addLog, updatePlayer, withPending,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 

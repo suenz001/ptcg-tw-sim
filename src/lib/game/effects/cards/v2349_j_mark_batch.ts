@@ -53,7 +53,7 @@ function flipUntilTails(state: GameState, aIdx: 0 | 1, label: string): { state: 
 
 function setDefenderAttackFailure(
   state: GameState, aIdx: 0 | 1, flips: number, label: string,
-  pool?: Map<string, import('../../types').Card>,
+  pool?: Map<string, import('$lib/cards/types').Card>,
 ): GameState {
   const dIdx = 1 - aIdx as 0 | 1;
   const players = [...state.players] as [PlayerState, PlayerState];

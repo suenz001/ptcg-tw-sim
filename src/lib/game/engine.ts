@@ -2232,7 +2232,7 @@ function handlePlaying(
     if (effectKey === 'm5-retry-badge-decide') {
       const choice = action.selectedIids[0];
       const preAttackState = params?.preAttackState as GameState | undefined;
-      const originalAction = params?.originalAction as GameAction | undefined;
+      const originalAction = params?.originalAction as Extract<GameAction, { type: 'ATTACK' }> | undefined;  // v5.326: 收斂到 ATTACK 變體，retry 欄位 spread 才型別合法
       const coinFlips = params?.coinFlips as string[] | undefined;
       if (preAttackState && originalAction) {
         if (choice === 'keep') {
