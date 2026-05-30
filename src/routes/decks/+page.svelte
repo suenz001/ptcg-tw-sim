@@ -100,15 +100,17 @@
   let _dragHandleEl: HTMLElement | null = null;  // 給 cleanup releasePointerCapture
   let _dragMoveHandler: ((e: PointerEvent) => void) | null = null;
   let _dragUpHandler: ((e: PointerEvent) => void) | null = null;
+  let _dragEscHandler: ((e: KeyboardEvent) => void) | null = null;
 
   function _cleanupDrag() {
-    if (_dragHandleEl && _dragPointerId !== null) {
-      try { _dragHandleEl.releasePointerCapture(_dragPointerId); } catch { /* */ }
-    }
     if (_dragMoveHandler) {
       window.removeEventListener('pointermove', _dragMoveHandler);
       window.removeEventListener('pointerup', _dragUpHandler!);
       window.removeEventListener('pointercancel', _dragUpHandler!);
+    }
+    if (_dragEscHandler) {
+      window.removeEventListener('keydown', _dragEscHandler);
+      _dragEscHandler = null;
     }
     _dragMoveHandler = null; _dragUpHandler = null;
     _dragHandleEl = null; _dragPointerId = null;
@@ -118,20 +120,22 @@
 
   function onDragHandlePointerDown(e: PointerEvent, deckId: string) {
     if (e.button !== undefined && e.button !== 0) return;
-    e.preventDefault();  // 阻止 ⠿ 觸發 page scroll / text selection
-    e.stopPropagation();  // 不冒泡到 li 的 deck-pick click
+    e.preventDefault();
+    e.stopPropagation();
     _dragStartY = e.clientY;
     _dragPointerId = e.pointerId;
     _dragHandleEl = e.currentTarget as HTMLElement;
     dragDeckId = deckId;
     dragDeltaY = 0;
-    // setPointerCapture 在 handle 上 — 後續 events 強制 routed to handle
-    try { _dragHandleEl.setPointerCapture(e.pointerId); } catch { /* */ }
-    // 觸覺回饋
+    // v5.318: 移除 setPointerCapture — 改純 window listener (capture 在 svelte rerender 後可能遺失,
+    //   造成 pointerup 沒 fire → lifted stuck).
+    //   window listener 即使 pointer 離開 ⠿, ev 仍冒泡到 window. Touch 上 touchend 自動 dispatch
+    //   到原 touch target 也會冒泡到 window.
     try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(15); } catch { /* */ }
-    // window-level listeners 確保即使 lifted li pointer-events:none 也能收 move/up
     _dragMoveHandler = (ev: PointerEvent) => {
-      if (ev.pointerId !== _dragPointerId) return;
+      // v5.318: 弱化 — 不 check pointerId. 只要 in drag mode (dragDeckId !== null) 就處理.
+      //   原 pointerId check 在某些瀏覽器 quirks 下可能誤判 → cleanup 不執行 → stuck.
+      if (!dragDeckId) return;
       ev.preventDefault();
       // lifted 跟手指: visual center = layout_center + dragDeltaY, 想 = ev.clientY → dragDeltaY = ev.clientY - layout_center
       dragDeltaY = ev.clientY - _dragStartY;
@@ -173,14 +177,23 @@
       }
     };
     _dragUpHandler = (ev: PointerEvent) => {
-      if (ev.pointerId !== _dragPointerId) return;
+      // v5.318: 弱化 — 不 check pointerId. dragDeckId !== null 才視為 active.
+      if (!dragDeckId) return;
       // v5.317: swap 已在 pointermove 即時做完, pointerup 只持久化 + cleanup.
       saveDecks(decks);
       _cleanupDrag();
     };
+    // v5.318: ESC 取消 drag — 玩家 stuck 時可按 ESC 自救
+    _dragEscHandler = (kev: KeyboardEvent) => {
+      if (kev.key === 'Escape') { _cleanupDrag(); }
+    };
     window.addEventListener('pointermove', _dragMoveHandler, { passive: false });
     window.addEventListener('pointerup', _dragUpHandler);
     window.addEventListener('pointercancel', _dragUpHandler);
+    window.addEventListener('keydown', _dragEscHandler);
+    // v5.318: 額外 fallback — blur/visibilitychange 也清, 避免換 tab 後 stuck
+    const _fallback = () => { if (dragDeckId) _cleanupDrag(); };
+    window.addEventListener('blur', _fallback, { once: true });
   }
 
   // v5.310: 常用卡牌 (favorites) state — 本地 localStorage, 手動雲端同步

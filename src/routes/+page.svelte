@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.318</span> 牌組拖曳放手 stuck 修正</summary>
+        <ul>
+          <li>修正：v5.317 拖曳牌組後放手時偶發牌組仍卡在拉起狀態、無法釋放。改寫底層事件處理：移除可能在重排時遺失的指標捕獲，改純全域事件監聽；放鬆事件比對條件，避免瀏覽器小差異造成沒 cleanup。額外加 ESC 鍵與失焦保險，萬一還是卡住按 ESC 或切換視窗即可解除。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.317</span> 牌組拖曳即時排序</summary>
         <ul>
           <li>修正：拖曳牌組時被拉起的牌組會跟手指 / 滑鼠分離，放手後也沒有放到當下手指的位置。已改為「即時排序」：手指拖到哪，牌組列表就立刻重新排到那個順序，被拉起的牌組永遠貼著手指走，放手後直接停在當前位置。視覺與實際排序完全同步。</li>
