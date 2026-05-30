@@ -914,6 +914,13 @@ export interface GameState {
    * Transient：每次 attack flow 後 clear。
    */
   _attackTimeOppBugShield?: boolean;
+  /**
+   * v5.325：太古防壁 attack-time 能量快照 — 攻擊宣告時攻擊方戰鬥寶可夢的能量單位數。
+   * 太古防壁「能量為 N 個以下」依【發動攻擊宣告時】計，不計入招式自身丟棄（判例）。
+   * engine ATTACK 宣告時 totalEnergyUnits 算一次；engine active 路徑 + defense snipe 路徑共讀。
+   * Transient：每次 attack flow 後 clear。
+   */
+  _attackTimeAttackerEnergyUnits?: number;
 }
 
 export interface LogEntry {

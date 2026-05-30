@@ -4143,6 +4143,10 @@ function handlePlaying(
     //   snapshot 攻擊宣告當時是否有球形盾牌 holder，resolveBenchGuard 內 OR fallback 讀。
     const attackTimeOppBugShield = hasBugAegislashShield(state, dIdx, pool);
     workingState = { ...workingState, _attackTimeOppBugShield: attackTimeOppBugShield };
+    // v5.325 太古防壁 attack-time 能量快照 — 卡面「能量為 N 個以下」依【發動攻擊宣告時】
+    //   攻擊方能量單位數計，不計入招式自身條件丟棄（判例：三重冰霜類自丟能量招式仍以開打前計）。
+    const attackTimeAttackerEnergyUnits = totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx, attacker.active);
+    workingState = { ...workingState, _attackTimeAttackerEnergyUnits: attackTimeAttackerEnergyUnits };
 
     // v3.03：preFn 可額外回傳 breakdown，把內部多步加法（如赫月瘋狂啃咬 7×30+100）
     //        展開為多個 term，UI 顯示更易懂。
@@ -4526,7 +4530,9 @@ function handlePlaying(
       });
       if (hasTaikoBari) {
         // v5.209: 傳 hostInst 讓燃火 / 新衝天倍率正確計算
-        const atkUnits = totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx, attacker.active);
+        // v5.325：依攻擊宣告時快照（不計招式自丟能量）；fallback 為即時計算（理論上必有快照）。
+        const atkUnits = workingState._attackTimeAttackerEnergyUnits
+          ?? totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx, attacker.active);
         if (atkUnits <= 2) {
           workingState = addLog(workingState,
             `${defenderCard.name} 因 護城龍｜太鼓防壁 效果，不受附加能量 ${atkUnits} 個（≤2）的對手招式傷害`,
@@ -5561,6 +5567,12 @@ function handlePlaying(
     if (newState._attackTimeOppBugShield !== undefined && !newState.pendingSelection) {
       const cleared = { ...newState };
       delete cleared._attackTimeOppBugShield;
+      newState = cleared;
+    }
+    // v5.325：太古防壁能量快照 同步清除
+    if (newState._attackTimeAttackerEnergyUnits !== undefined && !newState.pendingSelection) {
+      const cleared = { ...newState };
+      delete cleared._attackTimeAttackerEnergyUnits;
       newState = cleared;
     }
 
@@ -7143,6 +7155,12 @@ export function applyAction(
   if (next._attackTimeOppBugShield !== undefined && !next.pendingSelection) {
     const cleared = { ...next };
     delete cleared._attackTimeOppBugShield;
+    next = cleared;
+  }
+  // v5.325：太古防壁能量快照 同步清除（跨 deferred picker 後最終清理）
+  if (next._attackTimeAttackerEnergyUnits !== undefined && !next.pendingSelection) {
+    const cleared = { ...next };
+    delete cleared._attackTimeAttackerEnergyUnits;
     next = cleared;
   }
 

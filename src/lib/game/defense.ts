@@ -198,7 +198,10 @@ export function canApplyEffectToTarget(
         //     - 1 張火箭隊能量（提供 2 個【超】【惡】）= 卡張 1 但能量 2 個
         //     - 1 張火箭隊能量 + 1 張基本【超】能量 = 卡張 2 但能量 3 個（應可攻擊但被擋）
         //   改用 totalEnergyUnits 正確計算能量單位數（含特殊能量提供值、繁茂 etc）。
-        const energyUnits = totalEnergyUnits(attacker.active.energyAttached, pool, state, actorIdx);
+        // v5.325：依【發動攻擊宣告時】攻擊方能量單位數判定（engine 攻擊宣告時快照），
+        //   不計入招式自身丟棄（判例：三重冰霜類自丟能量招式仍以開打前能量計）。
+        //   snapshot 缺席（理論上 attack-damage 必有）時退回不擋（Infinity）。
+        const energyUnits = state._attackTimeAttackerEnergyUnits ?? Infinity;
         if (energyUnits <= 2) {
           return { blocked: true, reason: `太鼓防壁 免疫能量 ${energyUnits} 個（≤2）的對手招式傷害` };
         }
