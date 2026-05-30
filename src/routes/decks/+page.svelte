@@ -133,38 +133,49 @@
     _dragMoveHandler = (ev: PointerEvent) => {
       if (ev.pointerId !== _dragPointerId) return;
       ev.preventDefault();
+      // lifted 跟手指: visual center = layout_center + dragDeltaY, 想 = ev.clientY → dragDeltaY = ev.clientY - layout_center
       dragDeltaY = ev.clientY - _dragStartY;
       const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
       const li = el?.closest('li[data-deckid]') as HTMLElement | null;
       const overId = li?.dataset.deckid ?? null;
-      // v5.316: 排除 self (lifted li 雖 pointer-events:none, 但保險). 上下半部判定 placement.
+      // v5.317: 即時 swap — 不等 pointerup, 玩家拖到位 list 立刻 reorder
       if (overId && overId !== dragDeckId && li) {
         const rect = li.getBoundingClientRect();
-        const midpoint = rect.top + rect.height / 2;
-        dragOverPlacement = ev.clientY < midpoint ? 'before' : 'after';
+        const insertBefore = ev.clientY < rect.top + rect.height / 2;
+        const arr = [...decks];
+        const from = arr.findIndex(d => d.id === dragDeckId);
+        const to = arr.findIndex(d => d.id === overId);
+        if (from < 0 || to < 0) return;
+        const [moved] = arr.splice(from, 1);
+        let insertIdx = from < to ? to - 1 : to;
+        if (!insertBefore) insertIdx += 1;
+        insertIdx = Math.max(0, Math.min(arr.length, insertIdx));
+        arr.splice(insertIdx, 0, moved);
+        decks = arr;
         dragOverId = overId;
+        dragOverPlacement = insertBefore ? 'before' : 'after';
+        // v5.317: swap 後 list reorder → 我們拖的 li 跑到新 layout 位置.
+        // raf 拿新 li layout rect (暫清 transform 才能拿真正 layout box) →
+        // re-anchor _dragStartY = 新 center, 重算 dragDeltaY = ev.clientY - 新 center
+        // 讓 lifted li visual 仍貼手指, 不會分離.
+        const _ev = ev;  // closure capture
+        requestAnimationFrame(() => {
+          const newLi = document.querySelector(`li[data-deckid="${dragDeckId}"]`) as HTMLElement | null;
+          if (!newLi) return;
+          const oldT = newLi.style.transform;
+          newLi.style.transform = '';
+          const r = newLi.getBoundingClientRect();
+          newLi.style.transform = oldT;
+          const newCenter = r.top + r.height / 2;
+          _dragStartY = newCenter;
+          dragDeltaY = _ev.clientY - newCenter;
+        });
       }
-      // else: keep last dragOverId (玩家若 hover 回 lifted 自己, 不更新)
     };
     _dragUpHandler = (ev: PointerEvent) => {
       if (ev.pointerId !== _dragPointerId) return;
-      // v5.316: commit swap — 用 placement (before/after) 決定插入位置
-      if (dragDeckId && dragOverId && dragDeckId !== dragOverId) {
-        const arr = [...decks];
-        const from = arr.findIndex(d => d.id === dragDeckId);
-        const to = arr.findIndex(d => d.id === dragOverId);
-        if (from >= 0 && to >= 0) {
-          const [moved] = arr.splice(from, 1);
-          // 修正 to index — 若 from < to, 移除後 to 變 to-1
-          let insertIdx = from < to ? to - 1 : to;
-          if (dragOverPlacement === 'after') insertIdx += 1;
-          // clamp
-          insertIdx = Math.max(0, Math.min(arr.length, insertIdx));
-          arr.splice(insertIdx, 0, moved);
-          decks = arr;
-          saveDecks(arr);
-        }
-      }
+      // v5.317: swap 已在 pointermove 即時做完, pointerup 只持久化 + cleanup.
+      saveDecks(decks);
       _cleanupDrag();
     };
     window.addEventListener('pointermove', _dragMoveHandler, { passive: false });

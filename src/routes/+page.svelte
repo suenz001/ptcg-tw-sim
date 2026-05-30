@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.317</span> 牌組拖曳即時排序</summary>
+        <ul>
+          <li>修正：拖曳牌組時被拉起的牌組會跟手指 / 滑鼠分離，放手後也沒有放到當下手指的位置。已改為「即時排序」：手指拖到哪，牌組列表就立刻重新排到那個順序，被拉起的牌組永遠貼著手指走，放手後直接停在當前位置。視覺與實際排序完全同步。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.316</span> 牌組拖曳放置位置修正</summary>
         <ul>
           <li>修正：拖曳牌組時看似拖到對的位置，放手後順序沒變的 bug。原因是被拉起的牌組元素本身擋住了下方位置偵測。已修為穿透偵測，並依手指位於目標牌組「上半 / 下半」判定要插入到目標之「前 / 後」。</li>
