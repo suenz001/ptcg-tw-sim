@@ -1222,3 +1222,19 @@ export function tryPromptPromoteActive(
   }
   return state;
 }
+
+
+/**
+ * v5.334：判斷一張能量卡是否「提供指定屬性」。
+ *   基本能量卡 JSON 無 pokemonType 欄位（null），故須以卡名【X】判定；特殊能量看 pokemonType。
+ *   修正多個「場上/身上的【X】能量 ≥N 則 +傷害」條件招式把基本能量數成 0（pokemonType null）
+ *   導致 +N 永不觸發的 bug（雷公|電氣墜落、水君|水晶墜落 等）。
+ */
+export function energyMatchesType(ec: Card | undefined, type: string): boolean {
+  if (!ec || ec.supertype !== 'Energy') return false;
+  if (ec.pokemonType === type) return true;
+  const m = (ec.name || '').match(/【(.+?)】/);
+  if (!m) return false;
+  const zh: Record<string, string> = { '草': 'Grass', '火': 'Fire', '水': 'Water', '雷': 'Lightning', '超': 'Psychic', '鬥': 'Fighting', '惡': 'Darkness', '鋼': 'Metal', '妖': 'Fairy', '龍': 'Dragon', '無': 'Colorless' };
+  return zh[m[1]] === type;
+}

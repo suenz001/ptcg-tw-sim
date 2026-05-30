@@ -22,6 +22,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { regPre } from '../_shared';
+import { energyMatchesType } from '../_shared';
 import { addLog } from '../_shared';
 import type { AttackPreFn } from '../_shared';
 // v5.227: 引入 totalEnergyUnits 處理燃火/新衝天/大竺葵繁茂等 host-aware 能量倍率
@@ -113,7 +114,7 @@ function selfEnergyMinPre(
     if (!a) return { state, damage: base };
     let count = 0;
     for (const e of a.energyAttached) {
-      if (pool.get(e.cardId)?.pokemonType === energyType) count++;
+      if (energyMatchesType(pool.get(e.cardId), energyType)) count++;
     }
     const cond = count >= threshold;
     const dmg = base + (cond ? bonus : 0);

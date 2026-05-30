@@ -20,6 +20,7 @@
  */
 
 import { regPre, regPost, addLog, updatePlayer } from '../_shared';
+import { energyMatchesType } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -101,7 +102,7 @@ function selfEnergyCountPre(
     if (!a) return { state, damage: base };
     let count = 0;
     for (const e of a.energyAttached) {
-      if (pool.get(e.cardId)?.pokemonType === energyType) count++;
+      if (energyMatchesType(pool.get(e.cardId), energyType)) count++;
     }
     const dmg = base + count * perEnergy;
     return { state: addLog(state, `${label}：自身${energyType}能量 ${count} → ${base}+${count}×${perEnergy} = ${dmg}`, aIdx), damage: dmg };

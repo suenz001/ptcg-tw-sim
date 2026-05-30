@@ -42,6 +42,7 @@ import {
   addLog, updatePlayer, withPending, shuffle,
   ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
+import { energyMatchesType } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 import { isBasicEnergyOfType, getEnergyUnits } from '../../engine';
 import { flipCoinsWithLog, canApplyAttackEffectToTarget, countOneEnergy} from '../../effects';
@@ -409,7 +410,7 @@ function regiChargePost(label: string, energyType: 'Water' | 'Metal') {
     const player = state.players[aIdx];
     const candidates = player.discard.filter(c => {
       const cc = pool.get(c.cardId);
-      return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && cc.pokemonType === energyType;
+      return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && energyMatchesType(cc, energyType);
     });
     if (candidates.length === 0) {
       return addLog(state, `${label}：棄牌區無基本【${energyType === 'Water' ? '水' : '鋼'}】能量`, aIdx);

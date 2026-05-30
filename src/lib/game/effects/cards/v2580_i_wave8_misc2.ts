@@ -26,6 +26,7 @@ import {
   addLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
+import { energyMatchesType } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -51,7 +52,7 @@ function fieldEnergyCountConditionPre(
     let count = 0;
     for (const pk of all) {
       for (const e of pk.energyAttached) {
-        if (pool.get(e.cardId)?.pokemonType === energyType) count++;
+        if (energyMatchesType(pool.get(e.cardId), energyType)) count++;
       }
     }
     const cond = count >= threshold;

@@ -26,6 +26,7 @@
 import type { CardInstance, PlayerState } from '../../types';
 import { countOneEnergy } from '../../effects';
 import { regPre, regPost, addLog, updatePlayer, withPending, regR } from '../_shared';
+import { energyMatchesType } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -81,7 +82,7 @@ function selfReturnNTypeEnergyToHandPost(
     for (let i = a.energyAttached.length - 1; i >= 0; i--) {
       const e = a.energyAttached[i];
       const card = pool.get(e.cardId);
-      if (returnedCount < n && (energyType === 'any' || card?.pokemonType === energyType)) {
+      if (returnedCount < n && (energyType === 'any' || energyMatchesType(card, energyType))) {
         returned.unshift(e);
         returnedCount++;
       } else {

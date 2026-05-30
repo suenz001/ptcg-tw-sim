@@ -24,6 +24,7 @@ import {
   regPre, regPost,
   addLog, updatePlayer,
 } from '../_shared';
+import { energyMatchesType } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 // v5.177：補 import (v5.176 hotfix wave3a-snipe-bench resolver 用此 helper 但漏 import)
 import { canApplyEffectToTarget } from '../../defense';
@@ -54,7 +55,7 @@ function selfEnergyCountPre(
     if (!a) return { state, damage: base };
     let count = 0;
     for (const e of a.energyAttached) {
-      if (pool.get(e.cardId)?.pokemonType === energyType) count++;
+      if (energyMatchesType(pool.get(e.cardId), energyType)) count++;
     }
     const dmg = base + count * perEnergy;
     const s = addLog(state, `${label}：自身${energyType}能量 ${count} 個 → ${base} + ${count}×${perEnergy} = ${dmg}`, aIdx);
@@ -273,7 +274,7 @@ function selfFieldEnergyConditionPre(
     let count = 0;
     for (const pk of allOwn) {
       for (const e of pk.energyAttached) {
-        if (pool.get(e.cardId)?.pokemonType === energyType) count++;
+        if (energyMatchesType(pool.get(e.cardId), energyType)) count++;
       }
     }
     const cond = count >= threshold;
