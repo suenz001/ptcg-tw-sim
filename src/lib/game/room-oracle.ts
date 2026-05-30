@@ -239,6 +239,19 @@ export async function setSpectatorsAllowed(roomCode: string, allowed: boolean): 
 }
 
 /**
+ * v5.329 設定房間「對手閒置判定獲勝」秒數 — Oracle 版（clamp 60~300、snap 30 秒）。
+ */
+export async function setIdleTimeout(roomCode: string, sec: number): Promise<void> {
+  const uid = await getMyUid();
+  const clamped = Math.min(300, Math.max(60, Math.round(sec / 30) * 30));
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('只有 P1/P2 可改閒置判定時間');
+    return { ...data, idleTimeoutSec: clamped };
+  });
+}
+
+/**
  * v5.225 宣告對手棄權 — Oracle 版本，鏡射 room.ts 同名函式。
  */
 export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): Promise<void> {

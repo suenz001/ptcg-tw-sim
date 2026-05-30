@@ -110,6 +110,11 @@ export interface RoomData {
    * Immutable — 開房後不能改（避免戰鬥中切換造成 state 混亂）。
    */
   allowUndo?: boolean;
+  /**
+   * v5.329 房主可設定「對手閒置多久判定獲勝」秒數（60~300，30 秒一格，預設 180 = 3 分鐘）。
+   *   房內 setIdleTimeout 寫入；雙方 client 讀同一欄位當門檻。undefined → fallback 180。
+   */
+  idleTimeoutSec?: number;
   /** v5.003：私密房旗標 — undefined 或 true = 公開（顯示在大廳列表）；
    *  false = 私密（不出現在 subscribeOpenRooms 結果，只能透過房號加入）。 */
   visible?: boolean;
@@ -422,6 +427,26 @@ export async function setSpectatorsAllowed(roomCode: string, allowed: boolean): 
   if (myIdx < 0 || myIdx > 1) throw new Error('只有 P1/P2 可改觀戰開關');
   await updateDoc(ref, {
     spectatorsAllowed: allowed,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * v5.329 設定房間「對手閒置判定獲勝」秒數（只有 P1/P2 可改；clamp 60~300、snap 30 秒）。
+ *   雙方 client 從 roomData.idleTimeoutSec 讀同一門檻；undefined → fallback 180。
+ */
+export async function setIdleTimeout(roomCode: string, sec: number): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('尚未登入');
+  const clamped = Math.min(300, Math.max(60, Math.round(sec / 30) * 30));
+  const ref = doc(db, 'rooms', roomCode.toUpperCase());
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('房間不存在');
+  const data = snap.data() as RoomData;
+  const myIdx = findMySeatIdx(data.seats, uid);
+  if (myIdx < 0 || myIdx > 1) throw new Error('只有 P1/P2 可改閒置判定時間');
+  await updateDoc(ref, {
+    idleTimeoutSec: clamped,
     updatedAt: serverTimestamp(),
   });
 }

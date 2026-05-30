@@ -51,7 +51,7 @@
     proposeRestart, respondRestart, cancelRestart, checkAndAcceptRestart,
     // v5.180 提議返回房間
     proposeReturnToRoom, respondReturnToRoom, cancelReturnToRoom, checkAndAcceptReturnToRoom,
-    setSpectatorsAllowed,
+    setSpectatorsAllowed, setIdleTimeout,
     findMySeatIdx, bothPlayersReady, countDeckCards,
     sendMessage, subscribeMessages,
     heartbeat, isSeatStale, HEARTBEAT_STALE_MS, deleteRoom,
@@ -4468,9 +4468,16 @@
   //       成長（有新 action）才重置計時起點，再用一條持續 interval 判定，免疫 game 重賦值頻率。
   let oppInactivityWarn = $state(false);
   let showForfeitConfirm = $state(false);
-  const OPP_INACTIVITY_MS = 3 * 60 * 1000; // 3 分鐘
   let _lastActionAt = Date.now();
   let _prevLogLen = -1;
+
+  // v5.329 秒數 → m:ss 顯示
+  function fmtMMSS(totalSec: number): string {
+    const t = Math.max(0, Math.round(totalSec));
+    const m = Math.floor(t / 60);
+    const r = t % 60;
+    return m + ':' + r.toString().padStart(2, '0');
+  }
 
   // 「現在這個對局是否在等『對手』動作」— 精準判定，避免我方回合等對手時漏判 / 對手回合卻其實等我方時誤判。
   function isWaitingOnOpponent(g: GameState | null, seat: number): boolean {
@@ -4504,7 +4511,9 @@
     const iv = setInterval(() => {
       if (!roomCode) { oppInactivityWarn = false; return; }
       if (!isWaitingOnOpponent(game, mySeatIdx)) { oppInactivityWarn = false; return; }
-      oppInactivityWarn = (Date.now() - _lastActionAt) >= OPP_INACTIVITY_MS;
+      // v5.329：門檻改讀房間設定（房主可調 1:00~5:00，預設 3:00）；clamp 防呆
+      const thresholdMs = Math.min(300, Math.max(60, roomData?.idleTimeoutSec ?? 180)) * 1000;
+      oppInactivityWarn = (Date.now() - _lastActionAt) >= thresholdMs;
     }, 5000);
     return () => clearInterval(iv);
   });
@@ -5887,6 +5896,28 @@
             <span class="muted small">{roomData?.spectatorsAllowed !== false ? '✅ 房主已允許觀戰' : '🚫 房主已停用觀戰'}（由房主決定）</span>
           </div>
           <!-- v5.051: 移除線上 lobby 預組 toggle — 同本機 lobby -->
+        {/if}
+
+        <!-- v5.329 對手閒置判定獲勝時間（只有房主 P1 可拉；P2 唯讀顯示）-->
+        {#if mySeatIdx === 0}
+          <div class="spectator-toggle-row idle-timeout-row">
+            <div class="idle-timeout-head">⏱️ 對手閒置判定獲勝時間：<strong>{fmtMMSS(roomData?.idleTimeoutSec ?? 180)}</strong></div>
+            <input
+              class="idle-timeout-range"
+              type="range" min="60" max="300" step="30"
+              value={roomData?.idleTimeoutSec ?? 180}
+              onchange={(e) => {
+                if (!roomCode) return;
+                const t = e.currentTarget as HTMLInputElement;
+                setIdleTimeout(roomCode, Number(t.value)).catch(console.error);
+              }}
+            />
+            <span class="muted small">對手輪到動作卻超過此時間沒反應 → 你可宣告獲勝（範圍 1:00 ~ 5:00，預設 3:00）</span>
+          </div>
+        {:else if mySeatIdx === 1}
+          <div class="spectator-toggle-row">
+            <span class="muted small">⏱️ 對手閒置判定獲勝時間：{fmtMMSS(roomData?.idleTimeoutSec ?? 180)}（由房主決定）</span>
+          </div>
         {/if}
 
         <!-- v2.73 殭屍房警示 + 解散按鈕 -->
@@ -9916,6 +9947,11 @@
   .spectator-toggle input[type="checkbox"] {
     width: 18px; height: 18px; cursor: pointer;
   }
+  /* v5.329 對手閒置判定時間 slider */
+  .idle-timeout-row { display: flex; flex-direction: column; gap: .35rem; }
+  .idle-timeout-head { font-size: .9rem; color: #ccddee; }
+  .idle-timeout-head strong { color: #ffd700; }
+  .idle-timeout-range { width: 100%; accent-color: #6a4aaa; cursor: pointer; }
 
   /* v4.24 對戰計時器 chip — battle-header 內 4 個小 chip */
   .timer-chip {
