@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.308</span> 手機版選對手寶可夢 picker 確定鈕看不到</summary>
+        <ul>
+          <li>修正：對手場上有 8 隻寶可夢時（零之大空洞 + 太晶滿備戰），手機版用願增猿「腎上腺腦力」之類選對手任意寶可夢的功能時，視窗內容超出畫面，導致下方「確定」按鈕被擠出可視範圍，按不到。現在視窗可上下滑捲，確定鈕一定看得到。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.307</span> 超級進化 ex 同階規則修正</summary>
         <ul>
           <li>修正：M5 超級龍頭地鼠ex（Stage1）原本進化來源被錯標成「龍頭地鼠ex」（同階），改為正確的上一階「螺釘地鼠」。同理超級水晶燈火靈ex（Stage2）改為「燈火幽靈」。現在從牌組編輯器組牌或場上進化都會走正確路徑。</li>

@@ -11815,10 +11815,15 @@
       box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
     }
     /* selection-modal（pendingSelection 通用 modal） */
+    /* v5.308: 加 overflow-y:auto — 對手 8 隻 (零之大空洞滿備戰) 的 picker
+       (腎上腺腦力 / 任意對手寶可夢 picker) retreat-grid 內容會超出 max-height,
+       v5.299 拿掉內層 grid scroll 後, 沒外層 scroll 會讓 sel-footer (確定鈕) 看不到. */
     .selection-modal {
       width: 96vw; max-width: 96vw;
       padding: 0.6rem; gap: 0.4rem;
       max-height: 88vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
       border-radius: 10px;
     }
     .sel-header h3 { font-size: 0.95rem; }
