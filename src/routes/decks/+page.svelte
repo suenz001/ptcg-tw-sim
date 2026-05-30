@@ -15,6 +15,8 @@
   import type { Deck } from '$lib/decks/types';
   import { validateDeck, maxCopies, isBasicEnergy, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity } from '$lib/decks/validation';
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
+  import { loadFavorites, saveFavorites } from '$lib/decks/favorites';
+  import { saveFavoritesToCloud, loadFavoritesFromCloud } from '$lib/decks/favoritesCloud';
   import { VERSION } from '$lib/version';
   import { auth } from '$lib/firebase';
   import {
@@ -83,6 +85,39 @@
   let keywordScope = $state<'all' | 'attacks' | 'abilities'>('all');
   let setFilter = $state<string>('');
   let pickerPreview = $state<Card | null>(null);
+
+  // v5.310: 常用卡牌 (favorites) state — 本地 localStorage, 手動雲端同步
+  let favorites = $state<Set<string>>(loadFavorites());
+  let favoritesOnly = $state<boolean>(false);  // filter chip toggle
+  function isFavorite(cardId: string): boolean { return favorites.has(cardId); }
+  function toggleFavorite(cardId: string): void {
+    const next = new Set(favorites);
+    if (next.has(cardId)) next.delete(cardId);
+    else next.add(cardId);
+    favorites = next;  // Svelte 5: 重新賦值觸發 reactivity
+    saveFavorites(next);
+  }
+  async function saveFavoritesCloud() {
+    if (!firebaseUser) { alert('請先登入才能將常用卡牌存到雲端'); return; }
+    try {
+      await withTimeout(saveFavoritesToCloud(firebaseUser.uid, favorites));
+      alert(`已將 ${favorites.size} 張常用卡牌存到雲端`);
+    } catch (e) {
+      alert('雲端存檔失敗：' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+  async function loadFavoritesCloud() {
+    if (!firebaseUser) { alert('請先登入才能從雲端讀取常用卡牌'); return; }
+    if (!confirm('確定要從雲端重新讀取常用卡牌嗎？目前本地未存檔的變更將被覆蓋。')) return;
+    try {
+      const cloud = await withTimeout(loadFavoritesFromCloud(firebaseUser.uid));
+      favorites = cloud;
+      saveFavorites(cloud);
+      alert(`已從雲端載入 ${cloud.size} 張常用卡牌`);
+    } catch (e) {
+      alert('雲端讀取失敗：' + (e instanceof Error ? e.message : String(e)));
+    }
+  }
 
   // ── Category filter (chip multi-select) ────────────────────────────────
   type CategoryKey = 'Pokemon' | 'Supporter' | 'Item' | 'Tool' | 'Stadium' | 'BasicEnergy' | 'SpecialEnergy';
@@ -325,6 +360,8 @@
       }
       // Set filter (dropdown)
       if (setFilter && c.setCode !== setFilter) return false;
+      // v5.310: 常用卡牌篩選 (chip toggle)
+      if (favoritesOnly && !favorites.has(c.id)) return false;
       // Search
       if (!q) return true;
       // v4.987: 進化鏈搜尋模式 — 輸入名字顯示整條進化鏈
@@ -1441,6 +1478,14 @@
           <button class="small cloud-btn" class:has-dirty={dirtyDeckIds.size > 0} onclick={saveAllDecksToCloud} title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組待存檔` : '將變更存檔至雲端（無變更時無動作）'}>💾 存檔{#if dirtyDeckIds.size > 0} ●{/if}</button>
           <button class="small cloud-btn" onclick={loadAllDecksFromCloud} title="從雲端重新讀取牌組">📥 讀取</button>
         </div>
+        <!-- v5.310: 常用卡牌雲端同步 (跟 deck cloud 同 UX 手動 💾/📥) -->
+        <div class="rail-actions" style="margin-top:.3rem;">
+          <span style="font-size:.7rem;color:#aaffcc;">⭐ 常用 ({favorites.size})</span>
+          <button class="small cloud-btn" onclick={saveFavoritesCloud}
+            title="將本地常用卡牌存檔至雲端">💾 存檔</button>
+          <button class="small cloud-btn" onclick={loadFavoritesCloud}
+            title="從雲端重新讀取常用卡牌">📥 讀取</button>
+        </div>
       </div>
       <ul class="deck-list">
         {#each decks as d (d.id)}
@@ -1680,6 +1725,13 @@
               onclick={() => toggleRegMark(m)}>{m} 標</button>
           {/each}
         </div>
+        <div class="pk-chip-row" role="group" aria-label="常用">
+          <span class="pk-label">常用：</span>
+          <button class="pk-chip pk-chip-fav" class:active={!favoritesOnly}
+            onclick={() => favoritesOnly = false}>全部</button>
+          <button class="pk-chip pk-chip-fav fav-only" class:active={favoritesOnly}
+            onclick={() => favoritesOnly = true}>⭐ 只看常用（{favorites.size}）</button>
+        </div>
         <div class="pk-chip-row">
           <span class="pk-label">卡包：</span>
           <select class="pk-set-select" bind:value={setFilter}>
@@ -1702,6 +1754,14 @@
             <li class:previewing={pickerPreview?.id === card.id}>
               <button class="pick-thumb" onclick={() => openPreview(card)} title="查看詳情">
                 <img src={card.imageUrl} alt={card.name} loading="lazy" />
+                <!-- v5.310: 常用卡牌角標 (右上小星星) -->
+                <span class="pick-fav-corner" class:active={isFavorite(card.id)}
+                  role="button" tabindex="0"
+                  title={isFavorite(card.id) ? '取消常用' : '標記常用'}
+                  onclick={(e) => { e.stopPropagation(); toggleFavorite(card.id); }}
+                  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleFavorite(card.id); } }}>
+                  {isFavorite(card.id) ? '⭐' : '☆'}
+                </span>
               </button>
               <button class="pick-meta" onclick={() => openPreview(card)}>
                 <div class="pick-name">{card.name}</div>
@@ -1756,7 +1816,15 @@
         </button>
 
         <div class="pv-info">
-          <h2 class="pv-name">{pv.name}</h2>
+          <h2 class="pv-name">
+            {pv.name}
+            <!-- v5.310: 常用卡牌大星按鈕 -->
+            <button class="pv-fav-btn" class:active={isFavorite(pv.id)}
+              onclick={() => toggleFavorite(pv.id)}
+              title={isFavorite(pv.id) ? '取消常用' : '加入常用卡牌'}>
+              {isFavorite(pv.id) ? '⭐' : '☆'}
+            </button>
+          </h2>
           <!-- v4.989: 頂部 +/- 數量按鈕 — 玩家不用 scroll 到底部就能加減牌組 -->
           {#if active && !isPresetActive && !isBasicEnergy(pv)}
             <div class="pv-top-counter">
@@ -2536,6 +2604,40 @@
   .pk-mode-select:hover:not(.keyword) {
     background: #f0f0f0;
   }
+
+  /* v5.310: 常用卡牌 favorites UI */
+  .pick-fav-corner {
+    position: absolute; top: 2px; right: 2px;
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 215, 0, 0.4);
+    border-radius: 50%;
+    font-size: 0.85rem;
+    color: #ccc;
+    cursor: pointer;
+    z-index: 3;
+    transition: all 0.15s;
+  }
+  .pick-fav-corner:hover { background: rgba(255, 215, 0, 0.25); color: #ffd700; }
+  .pick-fav-corner.active { color: #ffd700; border-color: #ffd700; background: rgba(80, 60, 0, 0.7); }
+  .pick-thumb { position: relative; }
+  .pv-fav-btn {
+    margin-left: 0.5rem;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1.5px solid rgba(255, 215, 0, 0.4);
+    border-radius: 8px;
+    color: #888;
+    cursor: pointer;
+    font-size: 1.4rem;
+    padding: 0 0.5rem;
+    line-height: 1.6;
+    vertical-align: middle;
+    transition: all 0.15s;
+  }
+  .pv-fav-btn:hover { background: rgba(255, 215, 0, 0.15); color: #ffd700; }
+  .pv-fav-btn.active { color: #ffd700; border-color: #ffd700; background: rgba(80, 60, 0, 0.55); }
+  .pk-chip-fav.fav-only.active { background: linear-gradient(135deg, #b8860b, #ffd700); color: #1a1a1a; border-color: #ffd700; }
 
   .pk-chip-row {
     display: flex;
