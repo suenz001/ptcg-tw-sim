@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.05</title>
+<title>PTCG Oracle Admin v1.06</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.05</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.06</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2186,11 +2186,13 @@ function groupCardsByCanonical(cards) {
 
 // 1.5 卡牌使用率 Top 30（同名同效合併）
 function renderTopCards(c) {
-  const groups = groupCardsByCanonical(c.cards).slice(0, 30);
+  const groups = groupCardsByCanonical(c.cards)
+    .filter(g => !(g.repInfo && g.repInfo.supertype === 'Energy' && g.repInfo.subtype === 'Basic'))  // v1.06：剔除基本能量（排名無意義）
+    .slice(0, 30);
   if (!groups.length) return '<section class="stats-section"><h3>🃏 1.5 卡牌使用率 Top 30</h3><div class="empty">無資料</div></section>';
   return `
     <section class="stats-section">
-      <h3>🃏 1.5 卡牌使用率 Top 30 <span class="small muted">（含全部 supertype；同名同效不同版本合併；共 ${c.totalDecks} 副牌組樣本）</span></h3>
+      <h3>🃏 1.5 卡牌使用率 Top 30 <span class="small muted">（含全部 supertype；同名同效不同版本合併；已排除基本能量；共 ${c.totalDecks} 副牌組樣本）</span></h3>
       <div class="stats-box" style="overflow-x:auto;">
         <table>
           <thead><tr><th>#</th><th>卡牌</th><th>類型</th><th>總張數</th><th>出現牌組</th><th>牌組覆蓋率</th></tr></thead>
@@ -2213,6 +2215,27 @@ function renderTopCards(c) {
 // v1.04：1.6 熱門寶可夢 即時搜尋
 let pokemonSearch = '';
 let _pokemonGroups = [];
+let pokemonPage = 0;
+const POKEMON_PAGE_SIZE = 50;
+function pokemonFilteredList() {
+  const q = (pokemonSearch || '').trim().toLowerCase();
+  let list = _pokemonGroups;
+  if (q) list = list.filter(g => (((g.repInfo && (g.repInfo.displayName || g.repInfo.name)) || '').toLowerCase().includes(q)));
+  return list;
+}
+function pokemonPagerHtml() {
+  const total = pokemonFilteredList().length;
+  const maxPage = Math.max(0, Math.ceil(total / POKEMON_PAGE_SIZE) - 1);
+  if (pokemonPage > maxPage) pokemonPage = maxPage;
+  const from = total === 0 ? 0 : pokemonPage * POKEMON_PAGE_SIZE + 1;
+  const to = Math.min(total, (pokemonPage + 1) * POKEMON_PAGE_SIZE);
+  return `<div style="display:flex; gap:10px; align-items:center; justify-content:center; margin-top:10px;"><button ${pokemonPage <= 0 ? 'disabled' : ''} onclick="pokemonSetPage(-1)">◀ 上一頁</button><span class="small muted">${from}–${to} / 共 ${total} 隻（第 ${pokemonPage + 1} / ${maxPage + 1} 頁）</span><button ${pokemonPage >= maxPage ? 'disabled' : ''} onclick="pokemonSetPage(1)">下一頁 ▶</button></div>`;
+}
+window.pokemonSetPage = function(delta) {
+  pokemonPage += delta;
+  const tb = document.getElementById('pokemon-tbody'); if (tb) tb.innerHTML = topPokemonRowsHtml();
+  const pg = document.getElementById('pokemon-pager'); if (pg) pg.innerHTML = pokemonPagerHtml();
+};
 function topPokemonRowHtml(g, i) {
   const info = g.repInfo;
   const isSupport = g.cardIds.some(id => (cardTagsCache[id] || []).includes('support'));
@@ -2220,18 +2243,20 @@ function topPokemonRowHtml(g, i) {
   const tagBtn = `<button class="tag-btn ${isSupport ? 'tagged' : ''}" onclick="toggleSupportTag('${escapeHtml(g.repCardId)}')" title="${isSupport ? '取消支援型' : '標為支援型'}">${isSupport ? '⭐ 支援型' : '☆ 標支援型'}</button>`;
   return `<tr><td>${i + 1}</td><td>${escapeHtml(info.displayName || info.name)}${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}${info.regulationMark ? '·' + info.regulationMark : ''}</span></td><td><span class="small muted">${info.subtype || ''}</span></td><td>${g.totalCount}</td><td>${g.deckCount}</td><td>${tagBtn}</td></tr>`;
 }
-function topPokemonRowsHtml(groups) {
-  const q = (pokemonSearch || '').trim().toLowerCase();
-  let list = groups;
-  if (q) list = groups.filter(g => (((g.repInfo && (g.repInfo.displayName || g.repInfo.name)) || '').toLowerCase().includes(q)));
-  const shown = q ? list.slice(0, 200) : list.slice(0, 50);
-  if (shown.length === 0) return '<tr><td colspan="6" class="empty" style="text-align:center; padding:18px;">查無符合寶可夢</td></tr>';
-  return shown.map((g, i) => topPokemonRowHtml(g, i)).join('');
+function topPokemonRowsHtml() {
+  const list = pokemonFilteredList();
+  const maxPage = Math.max(0, Math.ceil(list.length / POKEMON_PAGE_SIZE) - 1);
+  if (pokemonPage > maxPage) pokemonPage = maxPage;
+  if (pokemonPage < 0) pokemonPage = 0;
+  const start = pokemonPage * POKEMON_PAGE_SIZE;
+  const pageItems = list.slice(start, start + POKEMON_PAGE_SIZE);
+  if (pageItems.length === 0) return '<tr><td colspan="6" class="empty" style="text-align:center; padding:18px;">查無符合寶可夢</td></tr>';
+  return pageItems.map((g, idx) => topPokemonRowHtml(g, start + idx)).join('');
 }
 window.filterTopPokemon = function(q) {
-  pokemonSearch = q;
-  const tb = document.getElementById('pokemon-tbody');
-  if (tb) tb.innerHTML = topPokemonRowsHtml(_pokemonGroups);
+  pokemonSearch = q; pokemonPage = 0;
+  const tb = document.getElementById('pokemon-tbody'); if (tb) tb.innerHTML = topPokemonRowsHtml();
+  const pg = document.getElementById('pokemon-pager'); if (pg) pg.innerHTML = pokemonPagerHtml();
 };
 
 // 1.6 熱門寶可夢 Top 50 + 主力/支援型 tag（同名同效合併）
@@ -2245,6 +2270,7 @@ function renderTopPokemon(c) {
   else if (pokemonFilterMode === 'support') filtered = allGroups.filter(g => groupHasSupport(g));
   const supportCount = allGroups.filter(groupHasSupport).length;
   _pokemonGroups = filtered;  // v1.04：模式過濾後(未切50)全部給搜尋用
+  pokemonPage = 0;  // v1.06: 換視圖回第 1 頁
   return `
     <section class="stats-section">
       <h3>🎴 1.6 熱門寶可夢 Top 50 <span class="small muted">（同名同效不同版本合併）</span></h3>
@@ -2261,10 +2287,11 @@ function renderTopPokemon(c) {
         <table>
           <thead><tr><th>#</th><th>寶可夢</th><th>類型</th><th>總張數</th><th>出現牌組</th><th>標記</th></tr></thead>
           <tbody id="pokemon-tbody">
-            ${topPokemonRowsHtml(filtered)}
+            ${topPokemonRowsHtml()}
           </tbody>
         </table>
       </div>
+      <div id="pokemon-pager">${pokemonPagerHtml()}</div>
     </section>
   `;
 }
@@ -2622,10 +2649,31 @@ window.showPlayerDetail = async function(email) {
 // v1.01：2.3 即時搜尋 + 點卡看代表牌組
 let winrateSearch = '';
 let _winrateGroups = [];
+let winratePage = 0;
+const WINRATE_PAGE_SIZE = 50;
+function winrateFilteredList() {
+  const q = (winrateSearch || '').trim().toLowerCase();
+  let list = _winrateGroups;
+  if (q) list = list.filter(g => (((g.repInfo && (g.repInfo.displayName || g.repInfo.name)) || '').toLowerCase().includes(q)));
+  return list;
+}
+function winratePagerHtml() {
+  const total = winrateFilteredList().length;
+  const maxPage = Math.max(0, Math.ceil(total / WINRATE_PAGE_SIZE) - 1);
+  if (winratePage > maxPage) winratePage = maxPage;
+  const from = total === 0 ? 0 : winratePage * WINRATE_PAGE_SIZE + 1;
+  const to = Math.min(total, (winratePage + 1) * WINRATE_PAGE_SIZE);
+  return `<div style="display:flex; gap:10px; align-items:center; justify-content:center; margin-top:10px;"><button ${winratePage <= 0 ? 'disabled' : ''} onclick="winrateSetPage(-1)">◀ 上一頁</button><span class="small muted">${from}–${to} / 共 ${total} 張（第 ${winratePage + 1} / ${maxPage + 1} 頁）</span><button ${winratePage >= maxPage ? 'disabled' : ''} onclick="winrateSetPage(1)">下一頁 ▶</button></div>`;
+}
+window.winrateSetPage = function(delta) {
+  winratePage += delta;
+  const tb = document.getElementById('winrate-tbody'); if (tb) tb.innerHTML = winrateRowsHtml();
+  const pg = document.getElementById('winrate-pager'); if (pg) pg.innerHTML = winratePagerHtml();
+};
 window.filterWinrate = function(q) {
-  winrateSearch = q;
-  const tb = document.getElementById('winrate-tbody');
-  if (tb) tb.innerHTML = winrateRowsHtml(_winrateGroups);
+  winrateSearch = q; winratePage = 0;
+  const tb = document.getElementById('winrate-tbody'); if (tb) tb.innerHTML = winrateRowsHtml();
+  const pg = document.getElementById('winrate-pager'); if (pg) pg.innerHTML = winratePagerHtml();
 };
 function winrateRowHtml(g, i) {
   const info = g.repInfo;
@@ -2643,13 +2691,15 @@ function winrateRowHtml(g, i) {
     <td style="color:${wrColor}; font-weight:600;">${wrPct}%</td>
   </tr>`;
 }
-function winrateRowsHtml(groups) {
-  const q = (winrateSearch || '').trim().toLowerCase();
-  let list = groups;
-  if (q) list = groups.filter(g => (((g.repInfo && (g.repInfo.displayName || g.repInfo.name)) || '').toLowerCase().includes(q)));
-  const shown = q ? list.slice(0, 200) : list.slice(0, 50);
-  if (shown.length === 0) return '<tr><td colspan="6" class="empty" style="text-align:center; padding:18px;">查無符合卡牌</td></tr>';
-  return shown.map((g, i) => winrateRowHtml(g, i)).join('');
+function winrateRowsHtml() {
+  const list = winrateFilteredList();
+  const maxPage = Math.max(0, Math.ceil(list.length / WINRATE_PAGE_SIZE) - 1);
+  if (winratePage > maxPage) winratePage = maxPage;
+  if (winratePage < 0) winratePage = 0;
+  const start = winratePage * WINRATE_PAGE_SIZE;
+  const pageItems = list.slice(start, start + WINRATE_PAGE_SIZE);
+  if (pageItems.length === 0) return '<tr><td colspan="6" class="empty" style="text-align:center; padding:18px;">查無符合卡牌</td></tr>';
+  return pageItems.map((g, idx) => winrateRowHtml(g, start + idx)).join('');
 }
 
 // v1.01：點 2.3 卡牌 → 聚合「含該卡的牌組」算出代表性 60 張牌組
@@ -2802,6 +2852,7 @@ function renderCardWinrate(w) {
     return (va - vb) * dir;
   });
   _winrateGroups = filtered;  // v1.01: 給 filterWinrate 即時搜尋用
+  winratePage = 0;  // v1.06: 換視圖回第 1 頁
   return `
     <section class="stats-section">
       <h3>🏆 2.3 卡牌勝率 Top 50 <span class="small muted">（僅寶可夢；至少 ${w.minDecks} 副；排除 AI 對戰（=只算有房號對戰）；同名同效合併）</span></h3>
@@ -2838,10 +2889,11 @@ function renderCardWinrate(w) {
             <th class="sortable-th" onclick="setWinrateSort('winRate')">勝率${winrateSort==='winRate'?(winrateSortDir==='asc'?' ▲':' ▼'):''}</th>
           </tr></thead>
           <tbody id="winrate-tbody">
-            ${winrateRowsHtml(filtered)}
+            ${winrateRowsHtml()}
           </tbody>
         </table>
       </div>
+      <div id="winrate-pager">${winratePagerHtml()}</div>
     </section>
   `;
 }
@@ -2868,12 +2920,18 @@ function renderHeatmap(h) {
     }
   }
   if (maxCount === 0) return '<section class="stats-section"><h3>🕐 2.4 時段熱力圖</h3><div class="empty">無對戰資料</div></section>';
+  // v1.06：標記「現在」所在格（Asia/Taipei）— 用紅框框起
+  const _nowTpe = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+  const curDay = _nowTpe.getDay();    // 0=日..6=六（對齊 grid dIdx）
+  const curHour = _nowTpe.getHours();  // 0-23
   // render grid
   const rows = grid.map((row, dIdx) => {
     const cells = row.map((cnt, hr) => {
       const intensity = cnt / maxCount;
       const bg = cnt === 0 ? '#f0f3f7' : `rgba(91, 141, 239, ${Math.max(0.08, intensity)})`;
-      return `<td class="hm-cell" style="background:${bg};" title="${dayLabels[dIdx]} ${hr}:00 — ${cnt} 場">${cnt > 0 ? cnt : ''}</td>`;
+      const isNow = (dIdx === curDay && hr === curHour);
+      const nowStyle = isNow ? ' box-shadow: inset 0 0 0 3px #e53935; position: relative; z-index: 1; border-radius: 2px;' : '';
+      return `<td class="hm-cell" style="background:${bg};${nowStyle}" title="${dayLabels[dIdx]} ${hr}:00 — ${cnt} 場${isNow ? '（現在）' : ''}">${cnt > 0 ? cnt : ''}</td>`;
     }).join('');
     return `<tr><th class="hm-day">${dayLabels[dIdx]}</th>${cells}</tr>`;
   }).join('');
@@ -2886,7 +2944,7 @@ function renderHeatmap(h) {
           <thead><tr><th></th>${hourHeaders}</tr></thead>
           <tbody>${rows}</tbody>
         </table>
-        <div class="small muted" style="margin-top:8px;">深色 = 對戰量多；hover 看詳細數字</div>
+        <div class="small muted" style="margin-top:8px;">深色 = 對戰量多；hover 看詳細數字；<span style="display:inline-block; width:11px; height:11px; box-shadow:inset 0 0 0 2px #e53935; vertical-align:middle;"></span> 紅框 = 現在時段（台北時間）</div>
       </div>
     </section>
   `;
