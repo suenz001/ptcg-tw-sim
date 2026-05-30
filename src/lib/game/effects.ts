@@ -9137,22 +9137,11 @@ function setSelfDamageBonusPendingPost(amount: number, label: string): AttackPos
 regPost('巨金怪|彗星拳', setSelfDamageBonusPendingPost(60, '彗星拳'));
 regPost('大電海燕|風力充能', setSelfDamageBonusPendingPost(120, '風力充能'));
 
-// 電蜘蛛｜麻麻羅網 — 既有 50 base + coin heads→poison；再疊加 複眼 +50 若對手戰鬥擁有特性
-// 原 PRE 保留，在既有基礎上加 dmg 前先檢查 + wrap
-const _originalMaMaLuoWangPre = ATTACK_PRE.get('電蜘蛛|麻麻羅網');
-if (_originalMaMaLuoWangPre) {
-  regPre('電蜘蛛|麻麻羅網', (state, aIdx, pool, action) => {
-    const r = _originalMaMaLuoWangPre(state, aIdx, pool, action);
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const def = state.players[dIdx].active;
-    if (!def || r.damage <= 0) return r;
-    const defCard = pool.get(def.cardId);
-    if (!defCard?.abilities || defCard.abilities.length === 0) return r;
-    const dmg = r.damage + 50;
-    const s = addLog(r.state, `複眼：對手擁有特性 → 麻麻羅網 +50 = ${dmg}`, aIdx);
-    return { state: s, damage: dmg };
-  });
-}
+// 電蜘蛛｜麻麻羅網 — 複眼 +50（對「擁有特性」的對手戰鬥寶可夢）由 PASSIVE_ATTACK_BONUS['複眼']
+//   統一處理（見上方 map + NO_STACK），涵蓋電蜘蛛所有招式、在 weakness ×2 前套用，符合卡面
+//   「這隻寶可夢使用的招式」。base 麻麻羅網 regPre（含 +80 雷邏輯）在 L5517。
+//   v5.327：移除原本此處的 inline 複眼 +50 wrapper —— 它與 PASSIVE_ATTACK_BONUS['複眼'] 重複，
+//   兩個 +50 都在 weakness 前套用，屬性相剋時各被 ×2 → 多算 100（玩家回報 460，正解 360）。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 38af v1.82 H 標第 27 波 — KO-check / self-damage / 條件 cantAttackPending
