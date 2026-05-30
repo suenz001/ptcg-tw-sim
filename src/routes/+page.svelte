@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.321</span> 線上對戰房名離房後沒記住修正</summary>
+        <ul>
+          <li>修正：v5.311 雖然加了「房間名稱自動沿用上次輸入」，但離開房間回大廳時系統會清空輸入框，導致下次開房又要重打字。已改為離房後仍會自動填回上次的房間名。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.320</span> 牌組排序改 ⬆️⬇️ 按鈕</summary>
         <ul>
           <li>調整：「我的牌組」列表的排序方式由「拖曳」改為「⬆️⬇️ 按鈕」。每個牌組左邊有兩個小箭頭，點 ▲ 上移一格、點 ▼ 下移一格，順序即時存檔。跨裝置 100% 可靠，再也不會有拖起來放不下去之類的問題。對 v5.311~v5.319 多版拖曳折騰致歉。</li>

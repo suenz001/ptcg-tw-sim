@@ -4823,7 +4823,12 @@
     chatMessages = []; chatInput = '';
     game = null; roomCode = ''; roomData = null;
     onlineStep = 'join'; showCreateForm = false; onlineError = ''; myPlayerIndex = null; mySeatIdx = -1;
-    roomNameInput = ''; myDeckId = '';
+    // v5.321: 不清空 roomNameInput, 從 localStorage 讀回上次值
+    // (v5.311 onMount 讀過, 但 leaveRoom 後若清成空 → 下次建房又要重打字)
+    try {
+      roomNameInput = typeof localStorage !== 'undefined' ? (localStorage.getItem('ptcg-tw-sim:lastRoomName') ?? '') : '';
+    } catch { roomNameInput = ''; }
+    myDeckId = '';
     // v5.130：保留 mode='online' — 玩家離開房間後留在線上對戰大廳（看其他房間列表），
     //   不要跳回首頁逼玩家重新點「線上連線對戰」按鈕。
     //   onlineStep='join' 已會顯示大廳房間列表。
